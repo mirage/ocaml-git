@@ -14,8 +14,8 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-let todo () =
-  failwith "TODO"
+let todo feature =
+  failwith (Printf.sprintf "TODO(%s)" feature)
 
 module type ABSTRACT = sig
   type t
@@ -24,16 +24,27 @@ module type ABSTRACT = sig
 end
 
 module type BLOCK = sig
-  module ID: ABSTRACT
-  type id = ID.t
-  include ABSTRACT
+  module ID : ABSTRACT
+  module HEX: ABSTRACT
+  type id  = ID.t
+  type hex = HEX.t
+  type t
   val dump: t -> unit
+  val to_string: t -> string
+  val of_string: file:string -> string -> t
 end
 
-module Base = struct
+module AbstractString = struct
   type t = string
   let of_string x = x
   let to_string x = x
+end
+
+module Base = struct
+  module ID  = AbstractString
+  module HEX = AbstractString
+  type id  = ID.t
+  type hex = HEX.t
 end
 
 let read_file filename =
@@ -77,9 +88,15 @@ module Zlib = struct
 
 end
 
-let parse_error fmt =
+let parse_error ~file fmt =
   Printf.kprintf (fun str ->
-    Printf.printf "Parse error: %s\n" str;
+    Printf.eprintf
+      "File %s\n\
+       ---\n\
+       %s\n\
+       ---\n\
+       Parse error: %s\n"
+      file (Zlib.inflate (read_file file)) str;
     raise Parsing.Parse_error
   ) fmt
 
@@ -113,15 +130,15 @@ let string_sub orig buf off len =
 
 let kv sep key value = { key; value; sep }
 
-let input_kv sep buf off =
+let input_kv sep ~file buf off =
   let i =
     try String.index_from buf off sp
-    with Not_found -> parse_error "unknonw key." in
+    with Not_found -> parse_error ~file "invalid key." in
   let j =
     try String.index_from buf i sep
-    with Not_found -> parse_error "unknowm value." in
+    with Not_found -> parse_error ~file "invalid value." in
   let key   = string_sub "kv.key"   buf off (i - off) in
-  let value = string_sub "kv.valye" buf (i + 1) (j - i - 1) in
+  let value = string_sub "kv.value" buf (i + 1) (j - i - 1) in
   {key; value; sep}, j+1
 
 
@@ -130,6 +147,13 @@ let kv_lf  = kv lf
 
 let input_kv_nul = input_kv nul
 let input_kv_lf  = input_kv lf
+
+let input_id ~file buf off =
+  let n = 20 in
+  if String.length buf - off >= n then
+    string_sub "id" buf off n, off+20
+  else
+    parse_error ~file "invalid id."
 
 let output_kv buf t =
   Buffer.add_string buf t.key;
@@ -149,13 +173,13 @@ module User = struct
   let to_string t =
     Printf.sprintf "%s <%s> %s" t.name t.email t.date
 
-  let of_string s =
+  let of_string ~file s =
     let i =
       try String.index s '<'
-      with Not_found -> parse_error "invalid user name" in
+      with Not_found -> parse_error ~file "invalid user name" in
     let j =
       try String.index_from s i '>'
-      with Not_found -> parse_error "invalide user email" in
+      with Not_found -> parse_error ~file "invalide user email" in
     let name  = string_sub "user.name"  s 0 (i-1) in
     let email = string_sub "user.email" s (i + 1) (j - i - 1) in
     let date  = string_sub "user.date"  s (j + 2) (String.length s - j - 2) in
@@ -170,22 +194,21 @@ end
 
 module Blob: BLOCK = struct
 
-  module ID = Base
-
-  type id = ID.t
-
   include Base
 
-  let dump x =
-    Printf.printf "%s\n" x
+  type t = string
+
+  let dump x = Printf.printf "%s\n" x
+
+  let to_string t = t
+
+  let of_string ~file s = s
 
 end
 
 module rec Object: BLOCK = struct
 
-   module ID = Base
-
-  type id = ID.t
+  include Base
 
   type t =
     | Blob   of Blob.t
@@ -228,34 +251,33 @@ module rec Object: BLOCK = struct
     Buffer.add_string buf value;
     Zlib.deflate (Buffer.contents buf)
 
-  let of_string s =
+  let of_string ~file s =
     let s = Zlib.inflate s in
-    let kv, off = input_kv_nul s 0 in
+    let kv, off = input_kv_nul ~file s 0 in
     let expected_size =
       try int_of_string kv.value
-      with _ -> parse_error "%s is not a valid integer." kv.value in
+      with _ -> parse_error ~file "%s is not a valid integer." kv.value in
     let actual_size = String.length s - off in
     if expected_size <> actual_size then
-      parse_error "[expected: %d; actual: %d; start='%s']\n"
+      parse_error ~file
+        "[expected: %d; actual: %d; start='%s']\n"
         expected_size actual_size
-        (String.sub s off 10);
+        (let k = min 10 (String.length s) in String.sub s off k);
     let contents = string_sub "object.contents" s off actual_size in
     match kv.key with
-      | "blob"   -> Blob (Blob.of_string contents)
-      | "commit" -> Commit (Commit.of_string contents)
-      | "tag"    -> Tag (Tag.of_string contents)
-      | "tree"   -> Tree (Tree.of_string contents)
-      | x        -> parse_error "%s is not a valid object type." x
+      | "blob"   -> Blob (Blob.of_string ~file contents)
+      | "commit" -> Commit (Commit.of_string ~file contents)
+      | "tag"    -> Tag (Tag.of_string ~file contents)
+      | "tree"   -> Tree (Tree.of_string ~file contents)
+      | x        -> parse_error ~file "%s is not a valid object type." x
 
 end and Commit: BLOCK = struct
 
-  module ID = Base
-
-  type id = ID.t
+  include Base
 
   type t = {
-    tree     : Tree.id;
-    parents  : id list;
+    tree     : Tree.hex;
+    parents  : hex list;
     author   : User.t;
     committer: User.t;
     message  : string;
@@ -268,15 +290,15 @@ end and Commit: BLOCK = struct
       \  author   : %s\n\
       \  committer: %s\n\
       \  message  :\n%s\n"
-      (Tree.ID.to_string t.tree)
+      (Tree.HEX.to_string t.tree)
       (String.concat ", " (List.map ID.to_string t.parents))
       (User.pretty t.author)
       (User.pretty t.committer)
       t.message
 
   let to_string t =
-    let tree = kv_lf "tree" (Tree.ID.to_string t.tree) in
-    let parent id = kv_lf "parent" (Tree.ID.to_string t.tree) in
+    let tree = kv_lf "tree" (Tree.HEX.to_string t.tree) in
+    let parent id = kv_lf "parent" (Tree.HEX.to_string t.tree) in
     let author = kv_lf "author" (User.to_string t.author) in
     let committer = kv_lf "committer" (User.to_string t.committer) in
     let buf = Buffer.create 1024 in
@@ -288,9 +310,9 @@ end and Commit: BLOCK = struct
     Buffer.add_string buf t.message;
     Buffer.contents buf
 
-  let input_parents s off =
+  let input_parents ~file s off =
     let rec aux off parents =
-      let kv, noff = input_kv_lf s off in
+      let kv, noff = input_kv_lf ~file s off in
       if kv.key = "parent" then
         let id = ID.of_string kv.value in
         aux noff (id :: parents)
@@ -298,63 +320,105 @@ end and Commit: BLOCK = struct
         (List.rev parents, off) in
     aux off []
 
-  let of_string s =
-    let tree, off = input_kv_lf s 0 in
-    assert (tree.key = "tree");
-    let parents, off = input_parents s off in
-    let author, off = input_kv_lf s 0 in
-    assert (author.key = "key");
-    let committer, off = input_kv_lf s 0 in
-    assert (committer.key = "committer");
+  let assert_key ~file actual expected =
+    if actual <> expected then
+      parse_error ~file "assert-keys: [actual: %s] [expected: %s]" actual expected
+
+  let of_string ~file s =
+    let tree, off = input_kv_lf ~file s 0 in
+    assert_key ~file tree.key "tree";
+    let parents, off = input_parents ~file s off in
+    let author, off = input_kv_lf ~file s off in
+    assert_key ~file author.key "author";
+    let committer, off = input_kv_lf ~file s off in
+    assert_key ~file committer.key "committer";
     let message = string_sub "commit.message" s (off + 1) (String.length s - off - 1) in
     {
       parents; message;
-      tree      = Tree.ID.of_string tree.value;
-      author    = User.of_string author.value;
-      committer = User.of_string committer.value;
+      tree      = Tree.HEX.of_string tree.value;
+      author    = User.of_string ~file author.value;
+      committer = User.of_string ~file committer.value;
     }
 
 end and Tree: BLOCK = struct
 
-  module ID = Base
-
-  type id = ID.t
+  include Base
 
   type entry = {
-    perm: [`normal|`exec|`link];
+    perm: [`normal|`exec|`link|`dir];
     name: string;
-    sha1: Object.t
+    id  : Object.id
   }
   type t = entry list
 
-  let dump x      = todo ()
-  let to_string t = todo ()
-  let of_string s = todo ()
+  let pretty_perm = function
+    | `normal -> "normal"
+    | `exec   -> "exec"
+    | `link   -> "link"
+    | `dir    -> "dir"
+
+  let perm_of_string ~file = function
+    | "100644" -> `normal
+    | "100755" -> `exec
+    | "120000" -> `normal
+    | "40000"  -> `dir
+    | x -> parse_error ~file "%s is not a valid permission." x
+
+  let string_of_perm = function
+    | `normal -> "100644"
+    | `exec   -> "100755"
+    | `link   -> "120000"
+    | `dir    -> "40000"
+
+  let dump_entry e =
+    Printf.printf
+      "perm: %s\n\
+       name: %s\n\
+       id  : %s\n"
+      (pretty_perm e.perm)
+      e.name
+      (Object.ID.to_string e.id)
+
+  let dump t =
+    List.iter dump_entry t
+
+  let to_string t = todo "tree"
+
+  let of_string ~file buf =
+    let rec entry off entries =
+      if off >= String.length buf then
+        List.rev entries
+      else
+        let kv, off = input_kv_nul ~file buf off in
+        let id, off = input_id ~file buf off in
+        let e = {
+          perm = perm_of_string ~file kv.key;
+          name = kv.value;
+          id   = Object.ID.of_string id;
+        } in
+        entry off (e :: entries) in
+    entry 0 []
 
 end and Tag: BLOCK = struct
 
-  module ID = Base
-
-  type id = ID.t
+  include Base
 
   type t = {
-    commit : Commit.id;
+    commit : Commit.hex;
     tag    : string;
     tagger : User.t;
     message: string;
   }
 
-  let dump x      = todo ()
-  let to_string t = todo ()
-  let of_string s = todo ()
+  let dump x = todo "tree"
+  let to_string t = todo "tree"
+  let of_string ~file s = todo "tree"
 
 end
 
 module Pack: BLOCK = struct
 
-  module ID = Base
-
-  type id = ID.t
+  include Base
 
   type object_id =
     | Blob   of Blob.id
@@ -376,9 +440,9 @@ module Pack: BLOCK = struct
     files  : file array;
   }
 
-  let dump x      = todo ()
-  let to_string t = todo ()
-  let of_string s = todo ()
+  let dump x = todo "pack"
+  let to_string t = todo "pack"
+  let of_string ~file s = todo "pack"
 
 end
 
@@ -389,29 +453,6 @@ type repository = {
   objects: Object.id list;
   refs   : refs;
 }
-*)
-
-(*
-
-type 'a sha1
-
-
-(** Commits *)
-module Commit = struct
-  include ID
-  type t = id entity
-end
-
-mo
-
-(** Blobs *)
-module Blob = struct
-  include ID
-  type t = string
-  let to_string t =
-    Printf.sprintf "blob %d\000%s" (String.length t) t
-  let of_string t =
-
 
 type refs = {
   heads  : (string, commit) list;          (**  Local branches *)

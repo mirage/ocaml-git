@@ -1,9 +1,15 @@
-name      : cagit
-version   : 0.0.1
-synopsis  : Low-level OCaml Git interface
-obuild-ver: 1
+name        : cagit
+version     : 0.0.1
+synopsis    : Low-level OCaml Git interface
+obuild-ver  : 1
 
 library cagit
-  src-dir: src/
-  modules: Git
+  src-dir   : src/
+  modules   : Git
   build-deps: zip
+
+test read
+ src-dir   : test/
+ main-is   : read.ml
+ build-deps: cagit
+ rundir    : .

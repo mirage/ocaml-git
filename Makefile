@@ -1,8 +1,16 @@
-all: dist/setup
+.PHONY: all test
+
+all: build
+	@
+
+build: dist/setup
 	obuild build
 
+test: build
+	obuild test
+
 dist/setup: cagit.obuild
-	obuild configure
+	obuild configure --enable-tests
 
 clean:
 	obuild clean
