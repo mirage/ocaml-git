@@ -64,14 +64,11 @@ OBJECTS
 <TAG_CONTENTS>
 	:	"object" <SP> <HEX_OBJ_ID> <LF>
 		"type" <SP> <OBJ_TYPE> <LF>
-		       "tag" <SP> <TAG_NAME> <LF>
-		       	     "tagger" <SP>
-					<SAFE_NAME> <SP>
-							<LT> <SAFE_EMAIL> <GT> <SP>
-							     		  <GIT_DATE> <LF>
-									  	     <LF>
-											<DATA>
-											;
+		"tag" <SP> <TAG_NAME> <LF>
+		"tagger" <SP> <SAFE_NAME> <SP> <LT> <SAFE_EMAIL> <GT> <SP> <GIT_DATE> <LF>
+		<LF>
+		<DATA>
+	;
 
 <OBJECT_HEADER>
 	:	<OBJ_TYPE> <SP> <DECIMAL_LENGTH> <NUL>
