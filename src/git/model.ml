@@ -261,62 +261,62 @@ and Commit: SIG =
       message  : string;
     }
 
-  let dump t =
-    Printf.printf
-      "  tree     : %s\n\
-      \  parents  : %s\n\
-      \  author   : %s\n\
-      \  committer: %s\n\
-      \  message  :\n%s\n"
-      (Tree.Hex.to_string t.tree)
-      (String.concat ", " (List.map Commit.Hex.to_string t.parents))
-      (User.pretty t.author)
-      (User.pretty t.committer)
-      t.message
+    let dump t =
+      Printf.printf
+        "  tree     : %s\n\
+        \  parents  : %s\n\
+        \  author   : %s\n\
+        \  committer: %s\n\
+        \  message  :\n%s\n"
+        (Tree.Hex.to_string t.tree)
+        (String.concat ", " (List.map Commit.Hex.to_string t.parents))
+        (User.pretty t.author)
+        (User.pretty t.committer)
+        t.message
 
-  let to_string t =
-    let tree = kv_lf "tree" (Tree.Hex.to_string t.tree) in
-    let parent id = kv_lf "parent" (Tree.Hex.to_string t.tree) in
-    let author = kv_lf "author" (User.to_string t.author) in
-    let committer = kv_lf "committer" (User.to_string t.committer) in
-    let buf = Buffer.create 1024 in
-    output_kv buf tree;
-    List.iter (fun id -> output_kv buf (parent id)) t.parents;
-    output_kv buf author;
-    output_kv buf committer;
-    Buffer.add_char   buf lf;
-    Buffer.add_string buf t.message;
-    Buffer.contents buf
+    let to_string t =
+      let tree = kv_lf "tree" (Tree.Hex.to_string t.tree) in
+      let parent id = kv_lf "parent" (Tree.Hex.to_string t.tree) in
+      let author = kv_lf "author" (User.to_string t.author) in
+      let committer = kv_lf "committer" (User.to_string t.committer) in
+      let buf = Buffer.create 1024 in
+      output_kv buf tree;
+      List.iter (fun id -> output_kv buf (parent id)) t.parents;
+      output_kv buf author;
+      output_kv buf committer;
+      Buffer.add_char   buf lf;
+      Buffer.add_string buf t.message;
+      Buffer.contents buf
 
-  let input_parents file s off =
-    let rec aux off parents =
-      let kv, noff = input_kv_lf file s off in
-      if kv.key = "parent" then
-        let id = Commit.Hex.of_string kv.value in
-        aux noff (id :: parents)
-      else
-        (List.rev parents, off) in
-    aux off []
+    let input_parents file s off =
+      let rec aux off parents =
+        let kv, noff = input_kv_lf file s off in
+        if kv.key = "parent" then
+          let id = Commit.Hex.of_string kv.value in
+          aux noff (id :: parents)
+        else
+          (List.rev parents, off) in
+      aux off []
 
-  let assert_key file actual expected =
-    if actual <> expected then
-      parse_error file "assert-keys: [actual: %s] [expected: %s]" actual expected
+    let assert_key file actual expected =
+      if actual <> expected then
+        parse_error file "assert-keys: [actual: %s] [expected: %s]" actual expected
 
-  let of_string file s =
-    let tree, off = input_kv_lf file s 0 in
-    assert_key file tree.key "tree";
-    let parents, off = input_parents file s off in
-    let author, off = input_kv_lf file s off in
-    assert_key file author.key "author";
-    let committer, off = input_kv_lf file s off in
-    assert_key file committer.key "committer";
-    let message = string_sub "commit.message" s (off + 1) (String.length s - off - 1) in
-    {
-      parents; message;
-      tree      = Tree.Hex.of_string tree.value;
-      author    = User.of_string file author.value;
-      committer = User.of_string file committer.value;
-    }
+    let of_string file s =
+      let tree, off = input_kv_lf file s 0 in
+      assert_key file tree.key "tree";
+      let parents, off = input_parents file s off in
+      let author, off = input_kv_lf file s off in
+      assert_key file author.key "author";
+      let committer, off = input_kv_lf file s off in
+      assert_key file committer.key "committer";
+      let message = string_sub "commit.message" s (off + 1) (String.length s - off - 1) in
+      {
+        parents; message;
+        tree      = Tree.Hex.of_string tree.value;
+        author    = User.of_string file author.value;
+        committer = User.of_string file committer.value;
+      }
 
   end)
 
@@ -331,53 +331,53 @@ and Tree: SIG =
     }
     type t = entry list
 
-  let pretty_perm = function
-    | `normal -> "normal"
-    | `exec   -> "exec"
-    | `link   -> "link"
-    | `dir    -> "dir"
+    let pretty_perm = function
+      | `normal -> "normal"
+      | `exec   -> "exec"
+      | `link   -> "link"
+      | `dir    -> "dir"
 
-  let perm_of_string file = function
-    | "100644" -> `normal
-    | "100755" -> `exec
-    | "120000" -> `normal
-    | "40000"  -> `dir
-    | x -> parse_error file "%s is not a valid permission." x
+    let perm_of_string file = function
+      | "100644" -> `normal
+      | "100755" -> `exec
+      | "120000" -> `normal
+      | "40000"  -> `dir
+      | x -> parse_error file "%s is not a valid permission." x
 
-  let string_of_perm = function
-    | `normal -> "100644"
-    | `exec   -> "100755"
-    | `link   -> "120000"
-    | `dir    -> "40000"
+    let string_of_perm = function
+      | `normal -> "100644"
+      | `exec   -> "100755"
+      | `link   -> "120000"
+      | `dir    -> "40000"
 
-  let dump_entry e =
-    Printf.printf
-      "perm: %s\n\
-       name: %s\n\
-       id  : %s\n"
-      (pretty_perm e.perm)
-      e.name
-      (Object.Id.to_string e.id)
+    let dump_entry e =
+      Printf.printf
+        "perm: %s\n\
+         name: %s\n\
+         id  : %s\n"
+        (pretty_perm e.perm)
+        e.name
+        (Object.Id.to_string e.id)
 
     let dump t =
       List.iter dump_entry t
 
-  let to_string t = todo "tree"
+    let to_string t = todo "tree"
 
-  let of_string file buf =
-    let rec entry off entries =
-      if off >= String.length buf then
-        List.rev entries
-      else
-        let kv, off = input_kv_nul file buf off in
-        let id, off = input_id file buf off in
-        let e = {
-          perm = perm_of_string file kv.key;
-          name = kv.value;
-          id   = Object.Id.of_string id;
-        } in
-        entry off (e :: entries) in
-    entry 0 []
+    let of_string file buf =
+      let rec entry off entries =
+        if off >= String.length buf then
+          List.rev entries
+        else
+          let kv, off = input_kv_nul file buf off in
+          let id, off = input_id file buf off in
+          let e = {
+            perm = perm_of_string file kv.key;
+            name = kv.value;
+            id   = Object.Id.of_string id;
+          } in
+          entry off (e :: entries) in
+      entry 0 []
 
   end)
 
@@ -385,16 +385,16 @@ and Tag: SIG =
 
   Make(struct
 
-  type t = {
-    commit : Commit.hex;
-    tag    : string;
-    tagger : User.t;
-    message: string;
-  }
+    type t = {
+      commit : Commit.hex;
+      tag    : string;
+      tagger : User.t;
+      message: string;
+    }
 
-  let dump x = todo "tree"
-  let to_string t = todo "tree"
-  let of_string file s = todo "tree"
+    let dump x = todo "tree"
+    let to_string t = todo "tree"
+    let of_string file s = todo "tree"
 
   end)
 
