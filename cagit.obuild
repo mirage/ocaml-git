@@ -4,9 +4,15 @@ synopsis    : Low-level OCaml Git interface
 obuild-ver  : 1
 
 library cagit
+
+  sub lib
+    src-dir   : src/
+    modules   : Lib
+    build-deps: zip    
+
   src-dir   : src/
   modules   : Git
-  build-deps: zip
+  build-deps: cagit.lib
 
 test read
  src-dir   : test/

@@ -14,78 +14,27 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+open Lib
+
 let todo feature =
   failwith (Printf.sprintf "TODO(%s)" feature)
 
-module type ABSTRACT = sig
-  type t
-  val of_string: string -> t
-  val to_string: t -> string
-end
-
-module type BLOCK = sig
-  module ID : ABSTRACT
-  module HEX: ABSTRACT
-  type id  = ID.t
-  type hex = HEX.t
+module type SIG = sig
+  module Id : Abstract.SIG
+  module Hex: Abstract.SIG
+  type id  = Id.t
+  type hex = Hex.t
   type t
   val dump: t -> unit
   val to_string: t -> string
-  val of_string: file:string -> string -> t
-end
-
-module AbstractString = struct
-  type t = string
-  let of_string x = x
-  let to_string x = x
+  val of_string: file:File.Name.t -> string -> t
 end
 
 module Base = struct
-  module ID  = AbstractString
-  module HEX = AbstractString
-  type id  = ID.t
-  type hex = HEX.t
-end
-
-let read_file filename =
-  let ic = open_in_bin filename in
-  let n = in_channel_length ic in
-  let buf = String.create n in
-  really_input ic buf 0 n;
-  close_in ic;
-  buf
-
-let write_file filename ~contents =
-  let oc = open_out_bin filename in
-  output_string oc contents;
-  close_out oc
-
-module Zlib = struct
-
-  let refil input =
-    let n = String.length input in
-    let toread = ref n in
-    fun buf ->
-      let m =
-        if !toread <= String.length buf then !toread
-        else String.length buf in
-      String.blit input (n - !toread) buf 0 m;
-      toread := !toread - m;
-      m
-
-  let flush output buf len =
-    Buffer.add_substring output buf 0 len
-
-  let deflate input =
-    let output = Buffer.create 1024 in
-    Zlib.compress (refil input) (flush output);
-    Buffer.contents output
-
-  let inflate input =
-    let output = Buffer.create 1024 in
-    Zlib.uncompress (refil input) (flush output);
-    Buffer.contents output
-
+  module Id  = Abstract.String
+  module Hex = Abstract.String
+  type id    = Id.t
+  type hex   = Hex.t
 end
 
 let parse_error ~file fmt =
@@ -96,7 +45,9 @@ let parse_error ~file fmt =
        %s\n\
        ---\n\
        Parse error: %s\n"
-      file (Zlib.inflate (read_file file)) str;
+      (File.Name.to_string file)
+      (Zlib_helpers.inflate_string (File.read file))
+      str;
     raise Parsing.Parse_error
   ) fmt
 
@@ -192,7 +143,7 @@ module User = struct
 
 end
 
-module Blob: BLOCK = struct
+module Blob: SIG = struct
 
   include Base
 
@@ -206,7 +157,7 @@ module Blob: BLOCK = struct
 
 end
 
-module rec Object: BLOCK = struct
+module rec Object: SIG = struct
 
   include Base
 
@@ -249,10 +200,10 @@ module rec Object: BLOCK = struct
     let buf = Buffer.create (2*size) in
     output_kv buf kv;
     Buffer.add_string buf value;
-    Zlib.deflate (Buffer.contents buf)
+    Zlib_helpers.deflate_string (Buffer.contents buf)
 
   let of_string ~file s =
-    let s = Zlib.inflate s in
+    let s = Zlib_helpers.inflate_string s in
     let kv, off = input_kv_nul ~file s 0 in
     let expected_size =
       try int_of_string kv.value
@@ -271,7 +222,7 @@ module rec Object: BLOCK = struct
       | "tree"   -> Tree (Tree.of_string ~file contents)
       | x        -> parse_error ~file "%s is not a valid object type." x
 
-end and Commit: BLOCK = struct
+end and Commit: SIG = struct
 
   include Base
 
@@ -290,15 +241,15 @@ end and Commit: BLOCK = struct
       \  author   : %s\n\
       \  committer: %s\n\
       \  message  :\n%s\n"
-      (Tree.HEX.to_string t.tree)
-      (String.concat ", " (List.map ID.to_string t.parents))
+      (Tree.Hex.to_string t.tree)
+      (String.concat ", " (List.map Id.to_string t.parents))
       (User.pretty t.author)
       (User.pretty t.committer)
       t.message
 
   let to_string t =
-    let tree = kv_lf "tree" (Tree.HEX.to_string t.tree) in
-    let parent id = kv_lf "parent" (Tree.HEX.to_string t.tree) in
+    let tree = kv_lf "tree" (Tree.Hex.to_string t.tree) in
+    let parent id = kv_lf "parent" (Tree.Hex.to_string t.tree) in
     let author = kv_lf "author" (User.to_string t.author) in
     let committer = kv_lf "committer" (User.to_string t.committer) in
     let buf = Buffer.create 1024 in
@@ -314,7 +265,7 @@ end and Commit: BLOCK = struct
     let rec aux off parents =
       let kv, noff = input_kv_lf ~file s off in
       if kv.key = "parent" then
-        let id = ID.of_string kv.value in
+        let id = Id.of_string kv.value in
         aux noff (id :: parents)
       else
         (List.rev parents, off) in
@@ -335,12 +286,12 @@ end and Commit: BLOCK = struct
     let message = string_sub "commit.message" s (off + 1) (String.length s - off - 1) in
     {
       parents; message;
-      tree      = Tree.HEX.of_string tree.value;
+      tree      = Tree.Hex.of_string tree.value;
       author    = User.of_string ~file author.value;
       committer = User.of_string ~file committer.value;
     }
 
-end and Tree: BLOCK = struct
+end and Tree: SIG = struct
 
   include Base
 
@@ -377,7 +328,7 @@ end and Tree: BLOCK = struct
        id  : %s\n"
       (pretty_perm e.perm)
       e.name
-      (Object.ID.to_string e.id)
+      (Object.Id.to_string e.id)
 
   let dump t =
     List.iter dump_entry t
@@ -394,12 +345,12 @@ end and Tree: BLOCK = struct
         let e = {
           perm = perm_of_string ~file kv.key;
           name = kv.value;
-          id   = Object.ID.of_string id;
+          id   = Object.Id.of_string id;
         } in
         entry off (e :: entries) in
     entry 0 []
 
-end and Tag: BLOCK = struct
+end and Tag: SIG = struct
 
   include Base
 
@@ -416,7 +367,7 @@ end and Tag: BLOCK = struct
 
 end
 
-module Pack: BLOCK = struct
+module Pack: SIG = struct
 
   include Base
 

@@ -1,20 +1,13 @@
-let objects dir =
-  let objects = Filename.concat dir "objects" in
-  let subdirs = Sys.readdir objects in
-  let subdirs = List.map (Filename.concat objects) (Array.to_list subdirs) in
-  let objects =
-    List.map (fun dir ->
-      let files = Sys.readdir dir in
-      let files = Array.to_list files in
-      List.map (Filename.concat dir) files
-    ) subdirs in
-  List.flatten objects
+open Lib
 
-let read f =
-  Printf.printf "Reading %s\n%!" f;
-  let x = Git.Object.of_string ~file:f (Git.read_file f) in
-  Git.Object.dump x
+let read (hex, file) =
+  Printf.printf "Reading %s (%s)\n%!"
+    (File.Name.to_string file)
+    (Git.Model.Object.Hex.to_string hex);
+  let x = Git.Model.Object.of_string ~file (File.read file) in
+  Git.Model.Object.dump x
 
 let () =
-  let objects = objects ".git" in
+  let store = Git.Store.create ".git" in
+  let objects = Git.Store.objects store in
   List.iter read objects
