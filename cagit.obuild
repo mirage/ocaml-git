@@ -12,7 +12,7 @@ library cagit
 
   src-dir   : src/
   modules   : Git
-  build-deps: cagit.lib
+  build-deps: cagit.lib, ocamlgraph
 
 test read
  src-dir   : test/

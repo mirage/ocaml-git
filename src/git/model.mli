@@ -18,17 +18,30 @@
 
 open Lib
 
+
+(** File contents. *)
+module type CONTENTS = sig
+  type t
+  val dump: t -> unit
+  val to_string: t -> string
+  val of_string: File.Name.t -> string -> t
+end
+
 (** Each component shares the same signature, containing a binary ID, an hex
    ID, and a content. *)
 module type SIG = sig
   module Id : Abstract.SIG
   module Hex: Abstract.SIG
-  type id  = Id.t
+  module C  : CONTENTS
+  type id = Id.t
   type hex = Hex.t
-  type t
-  val dump: t -> unit
-  val to_string: t -> string
-  val of_string: file:File.Name.t -> string -> t
+  type contents = C.t
+  type t = {
+    hex     : hex;
+    id      : id;
+    contents: contents;
+  }
+  include CONTENTS with type t := t
 end
 
 (** Blob objects. *)
