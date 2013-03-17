@@ -40,10 +40,13 @@ let read root t sha1 =
 
 let read dir =
   let objects = Filename.concat dir "objects" in
-  let subdirs = Sys.readdir objects in
-  let subdirs = List.map
+  let subdirs = Array.to_list (Sys.readdir objects) in
+  let subdirs = List.filter (fun s -> s <> "info" && s <> "pack") subdirs in
+  Printf.printf "subdirs=%s\n" (String.concat ", " subdirs);
+  let subdirs =
+    List.map
       (fun prefix -> (prefix, Filename.concat objects prefix))
-      (Array.to_list subdirs) in
+      subdirs in
   let objects =
     List.map (fun (prefix, dir) ->
       let files = Sys.readdir dir in
@@ -53,4 +56,3 @@ let read dir =
     ) subdirs in
   let objects = List.flatten objects in
   List.fold_left (read dir) empty objects
-

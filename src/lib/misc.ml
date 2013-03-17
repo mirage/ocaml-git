@@ -49,14 +49,19 @@ let hex_encode s =
 
 let hex_decode h =
   let n = String.length h in
-  if n mod 2 <> 0 then raise (Invalid_argument "hex_decode");
+  if n mod 2 <> 0 then (
+    let msg =
+      Printf.sprintf "hex_decode: wrong string size for %S (%d)" h (String.length h) in
+    raise (Invalid_argument msg)
+  );
   let digit c =
     match c with
     | '0'..'9' -> Char.code c - Char.code '0'
     | 'A'..'F' -> Char.code c - Char.code 'A' + 10
     | 'a'..'f' -> Char.code c - Char.code 'a' + 10
-    | _ -> raise (Invalid_argument "hex_decode")
-  in
+    | c ->
+      let msg = Printf.sprintf "hex_decode: %S is invalid" (String.make 1 c) in
+      raise (Invalid_argument msg) in
   let byte i = digit h.[i] lsl 4 + digit h.[i+1] in
   let result = String.create (n / 2) in
   for i = 0 to n/2 - 1 do

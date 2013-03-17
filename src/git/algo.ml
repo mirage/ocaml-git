@@ -20,7 +20,7 @@ open Model
 module G =
   Graph.Imperative.Digraph.ConcreteBidirectionalLabeled
     (struct
-      type t = (SHA1.t * Model.obj)
+      type t = (sha1 * Model.obj)
       let compare (x,_) (y,_) = String.compare (SHA1.to_string x) (SHA1.to_string y)
       let hash (x,_) = Hashtbl.hash (SHA1.to_string x)
       let equal (x,_) (y,_) = (x = y)
@@ -87,8 +87,11 @@ let create_graph t =
   List.iter (fun (sha1, tree) ->
     let src = sha1, Tree tree in
     List.iter (fun e ->
-      let dst = e.sha1, Model.find e.sha1 t in
-      G.add_edge_e g (src, e.file, dst)
+      try
+        let dst = e.sha1, Model.find e.sha1 t in
+        G.add_edge_e g (src, e.file, dst)
+      with Not_found ->
+        ()
     ) tree
   ) t.trees;
 
