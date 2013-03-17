@@ -259,9 +259,9 @@ module Tag: SIG with type t = tag = struct
   let to_string = to_string output
 end
 
-module Object: SIG with type t = git_object = struct
+module Object: SIG with type t = obj = struct
 
-  type t = git_object
+  type t = obj
 
     let dump = function
       | Blob b ->

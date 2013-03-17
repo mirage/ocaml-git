@@ -20,7 +20,7 @@ open Model
 module G =
   Graph.Imperative.Digraph.ConcreteBidirectionalLabeled
     (struct
-      type t = (SHA1.t * git_object)
+      type t = (SHA1.t * Model.obj)
       let compare (x,_) (y,_) = String.compare (SHA1.to_string x) (SHA1.to_string y)
       let hash (x,_) = Hashtbl.hash (SHA1.to_string x)
       let equal (x,_) (y,_) = (x = y)

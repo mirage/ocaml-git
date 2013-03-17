@@ -14,48 +14,42 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+(** Git data-model *)
+
 open Lib
 
-module SHA1 = Abstract.String
+(** Abstrat type for SHA1 strings. *)
+module SHA1:  Abstract.SIG
 
 type sha1 = SHA1.t
 
+(** Abstract type for hexadecimal strings. *)
 module type HEXSIG = sig
   include Abstract.SIG
   val of_sha1: sha1 -> t
   val to_sha1: t -> sha1
 end
 
-module HexString (U: sig end): HEXSIG = struct
-
-  include Abstract.String
-
-  let of_sha1 sha1 =
-    let hex = Misc.hex_encode (SHA1.to_string sha1) in
-    of_string hex
-
-  let to_sha1 hex =
-    let sha1 = Misc.hex_decode (to_string hex) in
-    SHA1.of_string sha1
-
+(** We have an abstract type by underlying object type. *)
+module Hex: sig
+  include HEXSIG
+  module Commit: HEXSIG
+  module Tree  : HEXSIG
 end
 
-module Hex = struct
-  include HexString(struct end)
-  module Commit = HexString(struct end)
-  module Tree   = HexString(struct end)
-end
-
+(** Git user. *)
 type user = {
   name : string;
   email: string;
   date : string;
 }
 
-module Blob = Abstract.String
+(** Git blob. This is just a raw string. *)
+module Blob: Abstract.SIG
 
 type blob = Blob.t
 
+(** Git commit. *)
 type commit = {
   tree     : Hex.Tree.t;
   parents  : Hex.Commit.t list;
@@ -64,14 +58,17 @@ type commit = {
   message  : string;
 }
 
+(** Git tree entry. *)
 type entry = {
   perm: [`normal|`exec|`link|`dir];
   file: string;
   sha1: sha1;
   }
 
+(** A tree is simply a list of entries. *)
 type tree = entry list
 
+(** Git tags. *)
 type tag = {
   commit     : Hex.Commit.t;
   tag        : string;
@@ -79,12 +76,14 @@ type tag = {
   tag_message: string;
 }
 
+(** Git objects. *)
 type obj =
   | Blob   of blob
   | Commit of commit
   | Tag    of tag
   | Tree   of tree
 
+(** Git repository. *)
 type t = {
   blobs  : (sha1 *  blob ) list;
   commits: (sha1 * commit) list;
@@ -92,23 +91,8 @@ type t = {
   tags   : (sha1 *    tag) list;
 }
 
-let empty = {
-  blobs   = [];
-  commits = [];
-  trees   = [];
-  tags    = [];
-}
+(** The empty repository. *)
+val empty: t
 
-let find sha1 t =
-  try Blob (List.assoc sha1 t.blobs)
-  with Not_found ->
-    try Commit (List.assoc sha1 t.commits)
-    with Not_found ->
-      try Tree (List.assoc sha1 t.trees)
-      with Not_found ->
-        Tag (List.assoc sha1 t.tags)
-
-
-
-
-
+(** Find an object, given its sha1. *)
+val find: sha1 -> t -> obj

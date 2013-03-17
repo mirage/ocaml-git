@@ -22,8 +22,8 @@ val inflate_string: string -> string
 (** Deflate a string using ZLIB. *)
 val deflate_string: string -> string
 
-(** Encode a string to base64. *)
+(** Encode a string to base16. *)
 val hex_encode: string -> string
 
-(** Decode a string from base64. *)
+(** Decode a string from base16. *)
 val hex_decode: string -> string
