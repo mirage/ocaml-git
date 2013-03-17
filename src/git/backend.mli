@@ -53,4 +53,7 @@ module Tree: SIG
 module Tag: SIG
 
 (** An object is either a tag/tree/commit/blob. *)
-module Object: SIG
+module Object: SIG with type t = Model.git_object
+
+(** Dump the contents of a git object. *)
+val dump: Model.t -> unit

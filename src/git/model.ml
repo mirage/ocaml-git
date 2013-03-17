@@ -18,10 +18,28 @@ open Lib
 
 module SHA1 = Abstract.String
 
+module HexString (U: sig end): sig
+  include Abstract.SIG
+  val of_sha1: SHA1.t -> t
+  val to_sha1: t -> SHA1.t
+end = struct
+
+  include Abstract.String
+
+  let of_sha1 sha1 =
+    let hex = Misc.hex_encode (SHA1.to_string sha1) in
+    of_string hex
+
+  let to_sha1 hex =
+    let sha1 = Misc.hex_decode (to_string hex) in
+    SHA1.of_string sha1
+
+end
+
 module Hex = struct
-  module Object = Abstract.String
-  module Commit = Abstract.String
-  module Tree = Abstract.String
+  include HexString(struct end)
+  module Commit = HexString(struct end)
+  module Tree   = HexString(struct end)
 end
 
 type user = {
@@ -31,6 +49,8 @@ type user = {
 }
 
 module Blob = Abstract.String
+
+type blob = Blob.t
 
 type commit = {
   tree     : Hex.Tree.t;
@@ -56,12 +76,33 @@ type tag = {
 }
 
 type git_object =
-  | Blob   of Blob.t
+  | Blob   of blob
   | Commit of commit
   | Tag    of tag
   | Tree   of tree
 
+type t = {
+  blobs  : (SHA1.t *  blob ) list;
+  commits: (SHA1.t * commit) list;
+  trees  : (SHA1.t *   tree) list;
+  tags   : (SHA1.t *    tag) list;
+}
 
+let empty = {
+  blobs   = [];
+  commits = [];
+  trees   = [];
+  tags    = [];
+}
+
+let find sha1 t =
+  try Blob (List.assoc sha1 t.blobs)
+  with Not_found ->
+    try Commit (List.assoc sha1 t.commits)
+    with Not_found ->
+      try Tree (List.assoc sha1 t.trees)
+      with Not_found ->
+        Tag (List.assoc sha1 t.tags)
 
 
 

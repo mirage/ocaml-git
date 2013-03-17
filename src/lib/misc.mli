@@ -14,10 +14,16 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** Zlib helper functions. *)
+(** Miscellaneous functions. *)
 
-(** Compress a string. *)
+(** Inflate a string using ZLIB. *)
+val inflate_string: string -> string
+
+(** Deflate a string using ZLIB. *)
 val deflate_string: string -> string
 
-(** Uncompress a string. *)
-val inflate_string: string -> string
+(** Encode a string to base64. *)
+val hex_encode: string -> string
+
+(** Decode a string from base64. *)
+val hex_decode: string -> string

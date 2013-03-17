@@ -20,12 +20,12 @@ open Lib
 open Model
 
 (** Store handle. *)
-type t
+type handle
 
 (** Create a store handle. *)
-val create: string -> t
+val create: string -> handle
 
 (** Return the list of objects files. *)
-val objects: t -> (Hex.Object.t * File.Name.t) list
+val read: handle -> t
 
 

@@ -17,6 +17,5 @@
 (** Manage object graphs. *)
 
 open Lib
-open Model
 
-val to_dot: Hex.Object.t list -> File.Name.t -> unit
+val to_dot: Model.t -> File.Name.t -> unit

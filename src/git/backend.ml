@@ -72,8 +72,6 @@ end = struct
 
   let input buf =
     let buf = IO.update buf "user" in
-    Printf.printf "USER\n";
-    IO.dump_buffer buf;
     let i =
       try IO.index_from buf buf.off lt
       with Not_found -> parse_error buf "invalid user name" in
@@ -159,7 +157,7 @@ module Commit: SIG with type t = commit = struct
       let nbuf, parent = IO.input_delim buf sp in
       if parent = "parent" then
         let nbuf, hex = IO.input_delim nbuf lf in
-        let hex = Hex.Tree.of_string hex in
+        let hex = Hex.Commit.of_string hex in
         aux nbuf (hex :: parents)
       else
         (buf, List.rev parents) in
@@ -171,15 +169,11 @@ module Commit: SIG with type t = commit = struct
       IO.input_delim buf sp in
     if key <> expected then
       parse_error buf "keys: [actual: %s] [expected: %s]" key expected;
-    Printf.printf "KEY=%s\n" key;
-    IO.dump_buffer buf;
     IO.with_subview buf lf input_value
 
   let input buf =
     let buf = IO.update buf "commit" in
     let buf, tree      = input_key_value buf "tree" input_hex_tree in
-    Printf.printf "TREE=%s\n" (Hex.Tree.to_string tree);
-    IO.dump_buffer buf;
     let buf, parents   = input_parents   buf in
     let buf, author    = input_key_value buf "author" User.input in
     let buf, committer = input_key_value buf "committer" User.input in
@@ -218,7 +212,7 @@ module Tree: SIG with type t = tree = struct
     Printf.printf
       "perm: %s\n\
        file: %s\n\
-       sha1: %s\n"
+       sha1: %S\n"
       (pretty_perm e.perm)
       e.file
       (SHA1.to_string e.sha1)
@@ -243,7 +237,7 @@ module Tree: SIG with type t = tree = struct
   let input buf =
     let buf = IO.update buf "entries" in
     let rec aux buf entries =
-      if buf.off >= buf.len then
+      if buf.len <= 0 then
         buf, List.rev entries
       else
         let buf, e = input_entry buf in
@@ -310,13 +304,13 @@ module Object: SIG with type t = git_object = struct
       Buffer.contents buf in
     let deflated =
       (* call zlib directly on the stream interface *)
-      Zlib_helpers.deflate_string inflated in
+      Misc.deflate_string inflated in
     Buffer.add_string buf deflated
 
   let input buf =
     (* XXX call zlib directly on the stream interface *)
     let _, deflated = IO.input_string buf buf.len in
-    let inflated = Zlib_helpers.inflate_string deflated in
+    let inflated = Misc.inflate_string deflated in
     let buf = IO.buffer (IO.file buf) inflated in
     let buf = IO.update buf "object" in
     let buf, obj_type = IO.input_delim buf sp in
@@ -338,6 +332,11 @@ module Object: SIG with type t = git_object = struct
   let to_string = IO.to_string output
 end
 
+let dump t =
+  List.iter (fun (_,b) -> Blob.dump b) t.blobs;
+  List.iter (fun (_,c) -> Commit.dump c) t.commits;
+  List.iter (fun (_,t) -> Tree.dump t) t.trees;
+  List.iter (fun (_,t) -> Tag.dump t) t.tags
 
 (*
 module Pack: SIG = struct

@@ -38,3 +38,28 @@ let inflate_string input =
   Zlib.uncompress (refill_string input) (flush_string output);
   Buffer.contents output
 
+(* From stdlib *)
+let hex_encode s =
+  let n = String.length s in
+  let result = String.create (n*2) in
+  for i = 0 to n-1 do
+    String.blit (Printf.sprintf "%02x" (int_of_char s.[i])) 0 result (2*i) 2;
+  done;
+  result
+
+let hex_decode h =
+  let n = String.length h in
+  if n mod 2 <> 0 then raise (Invalid_argument "hex_decode");
+  let digit c =
+    match c with
+    | '0'..'9' -> Char.code c - Char.code '0'
+    | 'A'..'F' -> Char.code c - Char.code 'A' + 10
+    | 'a'..'f' -> Char.code c - Char.code 'a' + 10
+    | _ -> raise (Invalid_argument "hex_decode")
+  in
+  let byte i = digit h.[i] lsl 4 + digit h.[i+1] in
+  let result = String.create (n / 2) in
+  for i = 0 to n/2 - 1 do
+    result.[i] <- Char.chr (byte (2 * i));
+  done;
+  result
