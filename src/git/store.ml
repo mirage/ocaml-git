@@ -15,6 +15,7 @@
  *)
 
 open Lib
+open Model
 
 type t = string
 
@@ -36,7 +37,7 @@ let objects dir =
     ) subdirs in
   let objects = List.flatten objects in
   List.map (fun (h,f) ->
-    Model.Object.Hex.of_string h,
+    Hex.Object.of_string h,
     File.Name.of_string f
   ) objects
 

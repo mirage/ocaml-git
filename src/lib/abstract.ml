@@ -23,8 +23,26 @@ module type SIG = sig
   val hash: t -> int
 end
 
+module type PHANTOM = sig
+  type 'a t
+  val of_string: string -> 'a t
+  val to_string: 'a t -> string
+  val compare: 'a t -> 'a t -> int
+  val equal: 'a t -> 'a t -> bool
+  val hash: 'a t -> int
+end
+
 module String = struct
   type t = string
+  let of_string x = x
+  let to_string x = x
+  let equal = (=)
+  let compare = String.compare
+  let hash = Hashtbl.hash
+end
+
+module PhantomString = struct
+  type 'a t = string
   let of_string x = x
   let to_string x = x
   let equal = (=)

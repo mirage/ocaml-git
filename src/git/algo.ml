@@ -15,13 +15,15 @@
  *)
 
 open Lib
+open Model
 
-module G = Graph.Imperative.Digraph.ConcreteBidirectional(Model.Object.Hex)
+module G = Graph.Imperative.Digraph.ConcreteBidirectional(Hex.Object)
+
 module Dot = Graph.Graphviz.Dot(struct
     include G
     let graph_attributes _ = []
     let default_vertex_attributes _ = []
-    let vertex_name x = Model.Object.Hex.to_string x
+    let vertex_name x = Hex.Object.to_string x
     let vertex_attributes _ = []
     let get_subgraph _ = None
     let default_edge_attributes _ = []
@@ -30,7 +32,7 @@ module Dot = Graph.Graphviz.Dot(struct
 
 let create_graph objects =
   let g = G.create () in
-  List.iter Model.Object.(fun o -> G.add_vertex g o.hex) objects;
+  List.iter Hex.Object.(fun o -> G.add_vertex g o) objects;
   (* XXX: add the edges *)
   g
 

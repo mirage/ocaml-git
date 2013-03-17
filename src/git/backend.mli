@@ -18,30 +18,26 @@
 
 open Lib
 
-
 (** File contents. *)
-module type CONTENTS = sig
-  type t
-  val dump: t -> unit
-  val to_string: t -> string
-  val of_string: File.Name.t -> string -> t
-end
-
-(** Each component shares the same signature, containing a binary ID, an hex
-   ID, and a content. *)
 module type SIG = sig
-  module Id : Abstract.SIG
-  module Hex: Abstract.SIG
-  module C  : CONTENTS
-  type id = Id.t
-  type hex = Hex.t
-  type contents = C.t
-  type t = {
-    hex     : hex;
-    id      : id;
-    contents: contents;
-  }
-  include CONTENTS with type t := t
+  type t
+
+  (** Dump the contents of the file. *)
+  val dump: t -> unit
+
+  (** Output the file in a buffer. *)
+  val output: Buffer.t -> t -> unit
+
+  (** Output the file in a string. *)
+  val to_string: t -> string
+
+  (** [input file buf off len] reads the file from a string at offset
+     [off] and length [len]. *)
+  val input: IO.buffer -> t IO.result
+
+  (** Read a file from a raw string. *)
+  val of_string: File.Name.t -> string -> t
+
 end
 
 (** Blob objects. *)

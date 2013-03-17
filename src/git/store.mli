@@ -17,6 +17,7 @@
 (** Management of the key/value store. *)
 
 open Lib
+open Model
 
 (** Store handle. *)
 type t
@@ -25,6 +26,6 @@ type t
 val create: string -> t
 
 (** Return the list of objects files. *)
-val objects: t -> (Model.Object.Hex.t * File.Name.t) list
+val objects: t -> (Hex.Object.t * File.Name.t) list
 
 
