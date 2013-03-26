@@ -14,14 +14,20 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** Simplified key/value data-model which looks like GIT. *)
+(** GIT data-model. *)
 
 open Lib
 
 (** Abstract identifiers. *)
 module Node: sig
+
+  (** Generic nodes IDs. *)
   include Abstract.SIG
+
+  (** Commit nodes. *)
   module Commit: Abstract.SIG
+
+  (** Treee nodes. *)
   module Tree  : Abstract.SIG
 
   (** A commit node is also a node. *)
@@ -32,7 +38,7 @@ module Node: sig
 
 end
 
-(** Object IDs. *)
+(** Short-cut to generic object IDs. *)
 type node = Node.t
 
 (** Git user. *)
@@ -51,9 +57,7 @@ type blob = Blob.t
 
 (** A commit is a tree snapshot, with some credentials (eg. we can
    find who created the initial snapshot, and who added it to to
-   store) and a message explaining what the snapshot contains. This
-   does not really have sense when we are not dealing with GIT I
-   guess. *)
+   store) and a message explaining what the snapshot contains. *)
 type commit = {
   tree     : Node.Tree.t;
   parents  : Node.Commit.t list;
@@ -62,8 +66,8 @@ type commit = {
   message  : string;
 }
 
-(** A tree entry. This is either a directory or a file. Again this
-   means that directories cannot contain any data. *)
+(** A tree entry. This is either a directory or a file. As this is
+    supposed to model a filesystem, directory does not contain data. *)
 type entry = {
   perm: [`normal|`exec|`link|`dir];
   file: string;
