@@ -518,10 +518,13 @@ end = struct
         let buf = match List.assoc node idx.lengths with
           | None   -> IO.shift buf offset; buf
           | Some l -> IO.sub buf offset l in
-        if version = 2 then
-          PackedValue2.input buf
-        else
-          PackedValue3.input buf
+        let value =
+          if version = 2 then
+            PackedValue2.input buf
+          else
+            PackedValue3.input buf in
+        Hashtbl.add packs node value;
+        value
       )
 
   let apply_hunk source buf = function
