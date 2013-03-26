@@ -9,6 +9,6 @@ libgit in OCaml.
 ### Build Instructions
 
 ```
-opam install camlzip obuild
+opam install camlzip obuild cryptokit
 make
 ```
