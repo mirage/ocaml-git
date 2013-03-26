@@ -375,7 +375,6 @@ end = struct
   let apply_hunk source buf = function
     | Insert str     -> Buffer.add_string buf str
     | Copy (off,len) ->
-      Printf.eprintf "XXX COPY %d %d\n" off len;
       let view = IO.sub (IO.clone source) off len in
       let str = IO.input_string view None in
       Buffer.add_string buf str
@@ -392,11 +391,23 @@ end = struct
     ) d.hunks
 
   let apply_delta delta =
-    Printf.eprintf "XXX apply_hunks\n";
-    dump_delta delta;
-    let buf = Buffer.create delta.result_length in
+    let source = delta.source in
+    let kind = match IO.input_string_delim source sp with
+      | None   -> parse_error source "missing kind"
+      | Some k -> k in
+    let size = match IO.input_string_delim source nul with
+      | None   -> parse_error source "missing size"
+      | Some s -> try int_of_string s with _ -> -1 in
+    if size <> delta.source_length then
+      parse_error source "size differs: delta:%d source:%d\n" delta.source_length size;
+
+    let buf = Buffer.create (20 + delta.result_length) in
+    Buffer.add_string buf kind;
+    Buffer.add_char   buf sp;
+    Buffer.add_string buf (string_of_int delta.result_length);
+    Buffer.add_char   buf nul;
     List.iter (apply_hunk delta.source buf) delta.hunks;
-    Printf.eprintf "XXX\n";
+
     let str = Buffer.contents buf in
     let buf = IO.of_string (File.Name.of_string "<hunk>") str in
     Value.input_inflated buf
@@ -422,31 +433,26 @@ end = struct
       Insert contents
 
     | _ ->
-      Printf.eprintf "opcode: %x\n" opcode;
       let read bit shift =
-        Printf.eprintf "bit=%d shift=%d set=%b\n" bit shift (isset opcode bit);
         if not (isset opcode bit) then 0
-        else let i = (IO.input_byte buf) lsl shift in
-          Printf.eprintf "i=%d\n" i; i in
+        else IO.input_byte buf lsl shift in
       let offset =
-            (read 0 0)
-        lor (read 1 8)
-        lor (read 2 16)
-        lor (read 3 24) in
+        let o0 = read 0 0 in
+        let o1 = read 1 8 in
+        let o2 = read 2 16 in
+        let o3 = read 3 24 in
+        o0 lor o1 lor o2 lor o3 in
       let length =
-        if M.version = 2 then
-              (read 4 0)
-          lor (read 5 8)
-        else
-              (read 4 0)
-          lor (read 5 8)
-          lor (read 6 16) in
-      let length = if length = 0 then 0x10000 else length in
-      Printf.eprintf "offset:%d length:%d\n" offset length;
+        let l0 = read 4 0 in
+        let l1 = read 5 8 in
+        let l2 = read 6 16 in
+        if M.version = 2 && l2 <> 0 then
+          parse_error buf "result fied set in delta hunk";
+        l0 lor l1 lor l2 in
+      let length =
+        if length = 0 then 0x10000 else length in
       if offset+length > source_length then
         parse_error buf "wrong insert hunk (%d)" source_length;
-      if M.version = 2 && (opcode land 0x40 <> 0) then
-        parse_error buf "result fied set in delta hunk";
       Copy (offset, length)
 
   let input_le_base_128 buf =
@@ -454,15 +460,19 @@ end = struct
     let rec aux i =
       let byte = IO.input_byte buf in
       let more = (byte land 0x80) <> 0 in
-      let i    = ((byte land 0x7f) lsl 7) lor i in
-      if more then aux i
+      let incr = byte land 0x7f in
+      let i = match i with
+        | None   -> incr
+        | Some i ->(incr lsl 7) lor i in
+      if more then aux (Some i)
       else i in
-    aux 0
+    aux None
 
   let input_hunks source buf =
     let buf = IO.push buf "hunks" in
     let source_length = input_le_base_128 buf in
     let result_length = input_le_base_128 buf in
+    Printf.eprintf "source:%d result:%d\n" source_length result_length;
     let rec aux acc =
       if IO.length buf = 0 then List.rev acc
       else aux (input_hunk source_length buf :: acc) in
@@ -506,7 +516,7 @@ end = struct
     | 0b101 -> parse_error   buf "invalid: Reserved"
     | 0b110 ->
       let base  = input_be_modified_base_128 buf in
-      let hunks = with_inflated buf (input_hunks base )in
+      let hunks = with_inflated buf (input_hunks base)in
       off_delta hunks
     | 0b111 ->
       let buf   = IO.push buf "delta-name" in

@@ -134,7 +134,6 @@ let expand t node value =
       Printf.eprintf "Marshaling error: expected:%s actual:%s\n" (to_hex node) (to_hex actual_node);
       failwith "build_packed_object"
     );
-    Printf.eprintf "XXX write %s\n" (to_hex node);
     File.mkdir (File.dirname file);
     let oc = open_out_bin (File.Name.to_string file) in
     let deflated = Misc.deflate_string inflated in
@@ -143,7 +142,6 @@ let expand t node value =
   )
 
 let rec build_packed_object t (pack,idx) node =
-  Printf.eprintf "build_packed_file pack:%s node:%s\n" (to_hex pack) (to_hex node);
   let error offset =
     let idx = List.map snd idx.offsets in
     let idx = String.concat "," (List.map string_of_int idx) in
@@ -161,10 +159,9 @@ let rec build_packed_object t (pack,idx) node =
       | Some l -> IO.sub pbuf offset l in
     let value =
       match input pbuf with
-      | Value v     -> Printf.eprintf "XXX value\n"; v
+      | Value v     -> v
       | Ref_delta d ->
         let source = get_loose_buffer t d.source in
-        Printf.eprintf "XXX ref-delta (%d)\n" (IO.length source);
         Backend.Pack.apply_delta { d with source }
       | Off_delta d ->
         let offset = offset - d.source in
@@ -173,10 +170,8 @@ let rec build_packed_object t (pack,idx) node =
           with Not_found -> error offset in
         let node = build_packed_object t (pack,idx) base in
         let source = get_loose_buffer t node in
-        Printf.eprintf "XXX off-detla (%d)\n" (IO.length source);
         Backend.Pack.apply_delta { d with source } in
     expand t node value;
-    Printf.eprintf "XXX OK\n";
     node
   ) else
     error (-1)
