@@ -14,18 +14,34 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** Management of the key/value store. *)
+(** Mapping of git concepts into the filesystem. *)
 
 open Lib
 open Model
 
-(** Store handle. *)
-type handle
+(** Read a complete repository state. Note: we only load the object
+    references, not their contents. This is because we don't really want
+    to store all the state in memory, especially when you can *huge* pack
+    files. *)
+val create: File.Dirname.t -> t
 
-(** Create a store handle. *)
-val create: string -> handle
+(** Dump the state to stderr. This function is in this module because
+    we need to be aware of the mapping model/filesystem to load file
+    contents on demand. *)
+val dump: t -> unit
 
-(** Return the list of objects files. *)
-val read: handle -> t
+(** Read the contents of a node. The result can be either a normal
+    value or a packed value. *)
+val read: t -> node -> value option
 
+(** Expand a packed object as a loose object. *)
+val expand: t -> node -> value -> unit
 
+(** Return the references. *)
+val refs: t -> (string * node) list
+
+(** List of nodes. *)
+val nodes: t -> node list
+
+(** Successors. *)
+val succ: t -> node -> node list

@@ -16,35 +16,15 @@
 
 open Lib
 
-module SHA1 = Abstract.String
-
-type sha1 = SHA1.t
-
-module type HEXSIG = sig
-  include Abstract.SIG
-  val of_sha1: sha1 -> t
-  val to_sha1: t -> sha1
-end
-
-module HexString (U: sig end): HEXSIG = struct
-
+module Node = struct
   include Abstract.String
-
-  let of_sha1 sha1 =
-    let hex = Misc.hex_encode (SHA1.to_string sha1) in
-    of_string hex
-
-  let to_sha1 hex =
-    let sha1 = Misc.hex_decode (to_string hex) in
-    SHA1.of_string sha1
-
+  module Commit = Abstract.String
+  module Tree   = Abstract.String
+  let commit c = of_string (Commit.to_string c)
+  let tree t = of_string (Tree.to_string t)
 end
 
-module Hex = struct
-  include HexString(struct end)
-  module Commit = HexString(struct end)
-  module Tree   = HexString(struct end)
-end
+type node = Node.t
 
 type user = {
   name : string;
@@ -57,8 +37,8 @@ module Blob = Abstract.String
 type blob = Blob.t
 
 type commit = {
-  tree     : Hex.Tree.t;
-  parents  : Hex.Commit.t list;
+  tree     : Node.Tree.t;
+  parents  : Node.Commit.t list;
   author   : user;
   committer: user;
   message  : string;
@@ -67,49 +47,58 @@ type commit = {
 type entry = {
   perm: [`normal|`exec|`link|`dir];
   file: string;
-  sha1: sha1;
+  node: node;
   }
 
 type tree = entry list
 
 type tag = {
-  commit     : Hex.Commit.t;
+  commit     : Node.Commit.t;
   tag        : string;
   tagger     : user;
   tag_message: string;
 }
 
-type obj =
+type hunk =
+  | Insert of string
+  | Copy of int * int
+
+type 'a delta = {
+  source: 'a;
+  source_length: int;
+  result_length: int;
+  hunks: hunk list;
+}
+
+type value =
   | Blob   of blob
   | Commit of commit
   | Tag    of tag
   | Tree   of tree
 
+type packed_value =
+  | Value     of value
+  | Ref_delta of node delta
+  | Off_delta of int delta
+
+type pack_index = {
+  offsets: (node * int) list;
+  lengths: (node * int option) list;
+}
+
+type pack = (node * packed_value Lazy.t) array
+
+let commit c = Commit c
+let blob b = Blob b
+let tree t = Tree t
+let tag t = Tag t
+
+let value v = Value v
+let ref_delta d = Ref_delta d
+let off_delta d = Off_delta d
 
 type t = {
-  blobs  : (sha1 *  blob ) list;
-  commits: (sha1 * commit) list;
-  trees  : (sha1 *   tree) list;
-  tags   : (sha1 *    tag) list;
+  root   : File.Dirname.t;
+  buffers: (node, IO.buffer) Hashtbl.t;
+  indexes: (node, pack_index) Hashtbl.t;
 }
-
-let empty = {
-  blobs   = [];
-  commits = [];
-  trees   = [];
-  tags    = [];
-}
-
-let find sha1 t =
-  try Blob (List.assoc sha1 t.blobs)
-  with Not_found ->
-    try Commit (List.assoc sha1 t.commits)
-    with Not_found ->
-      try Tree (List.assoc sha1 t.trees)
-      with Not_found ->
-        Tag (List.assoc sha1 t.tags)
-
-
-
-
-

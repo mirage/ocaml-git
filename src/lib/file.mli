@@ -19,8 +19,44 @@
 (** File names. *)
 module Name: Abstract.SIG
 
+(** Directory names. *)
+module Dirname: sig
+  include Abstract.SIG
+
+  (** Basename. *)
+  val basename: t -> string
+end
+
 (** Read a file. *)
 val read: Name.t -> string
 
 (** Write a file. *)
 val write: Name.t -> string -> unit
+
+(** Does a file exists ? *)
+val exists: Name.t -> bool
+
+(** Return the directory name. *)
+val dirname: Name.t -> Dirname.t
+
+(** Return the basename. *)
+val basename: Name.t -> string
+
+(** Create a directory and its parents. *)
+val mkdir: Dirname.t -> unit
+
+(** Return the directories in a path. *)
+val directories: Dirname.t -> Dirname.t list
+
+(** Return the files in a path. *)
+val files: Dirname.t -> Name.t list
+
+(** Return all the file hierarchy in a path. *)
+val rec_files: Dirname.t -> Name.t list
+
+(** Concatenatation. *)
+module OP: sig
+  val (/) : Dirname.t -> string -> Dirname.t
+  val (//): Dirname.t -> string -> Name.t
+end
+

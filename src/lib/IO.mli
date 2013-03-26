@@ -14,64 +14,93 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** IO functions. *)
+(** Optimized input buffers. *)
 
-(** {2 Input functions.} *)
+(** This finally converges to something very similar to the
+    [ocaml-cstruct] library, but with few differences:
 
-(** Debugging context. *)
-type dbg
+    - each input function shift the buffer as a side-effect. This is
+      maybe a bit less efficient but this is much easier to debug and
+      to use.
+
+    - and better context to have nice message: user can push/pop
+      symbol on top of the context stack, and we know the filename as
+      well.
+
+    - we have operation to find a given delimeter in a string (which
+      does not really have sense in the normal cstruct, as everything
+      is binary encoded with a known size/pattern).
+
+    I guess at one point I should merge these changes upstream.
+*)
 
 (** Input buffers. *)
-type buffer = {
-  dbg: dbg;
-  buf: string;
-  off: int;
-  len: int;
-}
+type buffer
 
-(** Create a buffer. *)
-val buffer: File.Name.t -> string -> buffer
+(** Create an input buffer from a file. *)
+val of_file: File.Name.t -> buffer
+
+(** Create an input buffer from a string. *)
+val of_string: File.Name.t -> string -> buffer
 
 (** Dump the buffer. *)
-val dump_buffer: buffer -> unit
+val dump: buffer -> unit
+
+(** {2 Buffer manipulation} *)
+
+(** Push a new symbol on top of the debug context. *)
+val push: buffer -> string -> buffer
 
 (** Return the file associated to the buffer. *)
 val file: buffer -> File.Name.t
 
-(** Result type. *)
-type 'a result = (buffer * 'a)
+(** Shift the buffer. Negative shifting is supported. *)
+val shift: buffer -> int -> unit
 
-(** Sub-strings. *)
-val sub: buffer -> int -> int -> string
+(** Build a subview which share the same contents as the initial
+    buffer but have different bounds. *)
+val sub: buffer -> int -> int -> buffer
 
-(** See [String.index_from]. *)
-val index_from: buffer -> int -> char -> int
+(** Buffer lenght. *)
+val length: buffer -> int
+
+(** Clone a buffer. Only the bounds are copied, not the contents which
+    is still shared. *)
+val clone: buffer -> buffer
+
+(** {2 Input functions} *)
+
+(** All the input function have a side-effect on the buffer: they
+    shift it from the number of read bytes. *)
 
 (** Raise a parsing error. *)
 val parse_error: buffer -> ('a, unit, string, 'b) format4 -> 'a
 
-(** Read a string of a given size. *)
-val input_string: buffer -> int -> string result
+(** See [String.index]. [None] means no result*)
+val index: buffer -> char -> int option
 
-(** Read a string until a given delimiter. *)
-val input_delim: buffer -> char -> string result
+(** Read a string of a given size. If [None] read the full buffer. *)
+val input_string: buffer -> int option -> string
 
-(** {2 Buffer manipulation} *)
+(** Read a byte. *)
+val input_byte: buffer -> int
 
-(** Update the debug context. *)
-val update: buffer -> string -> buffer
+(** Read a big-endian int32. *)
+val input_be_int32: buffer -> int32
 
-(** Shift a buffer. *)
-val shift: buffer -> int -> buffer
+(** Read a big-endian int64. *)
+val input_be_int64: buffer -> int64
 
-(** Apply function to a sub-buffer, by looking at the first occurence
-   of a char. *)
-val with_subview: buffer -> char -> (buffer -> 'a result) -> 'a result
+(** Read a value by looking at the first occurence of a char. *)
+val input_delim: buffer -> char -> (buffer -> 'a)  -> 'a option
 
-(** {2 Conversion functions.} *)
+(** Read a string by looking at the first occurence of a char. *)
+val input_string_delim: buffer -> char -> string option
 
-(** Read from a string. *)
-val of_string: (buffer -> 'a result) -> File.Name.t -> string -> 'a
+(** {2 Compression} *)
 
-(** Write to a string. *)
-val to_string: (Buffer.t -> 'a -> unit) -> 'a -> string
+(** Inflate a buffer. *)
+val inflate: buffer -> buffer
+
+(** Deflate a buffer. *)
+val deflate: buffer -> buffer

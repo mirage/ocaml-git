@@ -18,6 +18,10 @@ open Lib
 open IO
 open Model
 
+let (|>) x f = f x
+
+let (++) f g x = f (g x)
+
 let todo feature =
   failwith (Printf.sprintf "TODO(%s)" feature)
 
@@ -27,40 +31,45 @@ let lf  = '\x0a'
 let lt  = '<'
 let gt  = '>'
 
+let input_hex buf =
+  let buf = IO.push buf "hex-tree" in
+  IO.input_string buf None
+  |> Misc.hex_decode
+
 let input_hex_tree buf =
-  let buf = IO.update buf "hex-tree" in
-  let buf, s = IO.input_string buf buf.len in
-  buf, Hex.Tree.of_string s
+  Node.Tree.of_string (input_hex buf)
 
-let output_hex_tree buf t =
-  Buffer.add_string buf (Hex.Tree.to_string t)
+let input_hex_commit buf =
+  Node.Commit.of_string (input_hex buf)
 
-let input_sha1 buf =
-  let buf = IO.update buf "SHA1" in
-  let buf, s = IO.input_string buf 20 in
-  buf, SHA1.of_string s
+let output_hex buf hex =
+  Buffer.add_string buf (Misc.hex_decode hex)
 
-let output_sha1 buf t =
-  Buffer.add_string buf (SHA1.to_string t)
+let output_hex_commit buf hex =
+  output_hex buf (Node.Commit.to_string hex)
 
-module type SIG = sig
+let output_hex_tree buf hex =
+  output_hex buf (Node.Tree.to_string hex)
+
+let input_node buf =
+  let buf = IO.push buf "node" in
+  IO.input_string buf (Some 20)
+  |> Node.of_string
+
+let output_node buf t =
+  Buffer.add_string buf (Node.to_string t)
+
+module type VALUE = sig
   type t
-
   val dump: t -> unit
-
   val output: Buffer.t -> t -> unit
-  val to_string: t -> string
-
-  val input: IO.buffer -> t IO.result
-  val of_string: File.Name.t -> string -> t
+  val input: IO.buffer -> t
 end
 
 module User: sig
-  include SIG with type t = user
-  val pretty: t -> string
+  include VALUE with type t := user
+  val pretty: user -> string
 end = struct
-
-  type t = user
 
   (* XXX needs to escape name/email/date *)
   let output buf t =
@@ -71,18 +80,20 @@ end = struct
     Buffer.add_string buf t.date
 
   let input buf =
-    let buf = IO.update buf "user" in
-    let i =
-      try IO.index_from buf buf.off lt
-      with Not_found -> parse_error buf "invalid user name" in
-    let j =
-      try IO.index_from buf i gt
-      with Not_found -> parse_error buf "invalide user email" in
-    let update x = IO.update buf x in
-    let name  = IO.sub (update "user.name")  buf.off (i - buf.off - 1) in
-    let email = IO.sub (update "user.email") (i + 1) (j - i - 1) in
-    let date  = IO.sub (update "user.date")  (j + 2) (buf.off + buf.len - j - 2) in
-    IO.shift buf buf.len, { name; email; date }
+    let buf = IO.push buf "user" in
+    let i = match IO.index buf lt with
+      | Some i -> i
+      | None   -> parse_error buf "invalid user name" in
+    let name = IO.input_string buf (Some i) in
+    IO.shift buf 1;
+    let j = match IO.index buf gt with
+      | Some j -> j
+      | None   -> parse_error buf "invalid user email" in
+    let email = IO.input_string buf (Some (j-1)) in
+    (* skip 2 bytes *)
+    IO.shift buf 2;
+    let date = IO.input_string buf None in
+    { name; email; date }
 
   let pretty t =
     Printf.sprintf
@@ -90,104 +101,105 @@ end = struct
       t.name t.email t.date
 
   let dump t =
-    Printf.printf "%s\n" (pretty t)
+    Printf.eprintf "%s\n" (pretty t)
 
-  let of_string = IO.of_string input
-  let to_string = IO.to_string output
 end
 
-module Blob: SIG with type t = Blob.t = struct
-
-  type t = Blob.t
+module Blob: VALUE with type t := Blob.t = struct
 
   let dump t =
-    Printf.printf "%s\n" (Blob.to_string t)
+    Printf.eprintf "%s\n" (Blob.to_string t)
 
   let input buf =
-    let buf = IO.update buf "blob" in
-    let buf, s = IO.input_string buf buf.len in
-    buf, Blob.of_string s
+    let buf = IO.push buf "blob" in
+    IO.input_string buf None
+    |> Blob.of_string
 
   let output buf t =
     Buffer.add_string buf (Blob.to_string t)
 
-  let of_string = IO.of_string input
-  let to_string = IO.to_string output
 end
 
-module Commit: SIG with type t = commit = struct
-
-  type t = commit
+module Commit: VALUE with type t := commit = struct
 
   let dump t =
-    Printf.printf
+    Printf.eprintf
       "  tree     : %s\n\
       \  parents  : %s\n\
       \  author   : %s\n\
       \  committer: %s\n\
       \  message  :\n%s\n"
-      (Hex.Tree.to_string t.tree)
-      (String.concat ", " (List.map Hex.Commit.to_string t.parents))
+      (Misc.hex_encode (Node.Tree.to_string t.tree))
+      (String.concat ", " (List.map (Misc.hex_encode ++ Node.Commit.to_string) t.parents))
       (User.pretty t.author)
       (User.pretty t.committer)
       t.message
 
   let output_parent buf parent =
     Buffer.add_string buf "parent ";
-    Buffer.add_string buf (Hex.Commit.to_string parent);
+    output_hex_commit buf parent;
     Buffer.add_char   buf lf
 
   let output buf t =
     Buffer.add_string buf "tree ";
-    Buffer.add_string buf (Hex.Tree.to_string t.tree);
+    output_hex_tree   buf t.tree;
     Buffer.add_char   buf lf;
     List.iter (output_parent buf) t.parents;
     Buffer.add_string buf "author ";
-    User.output       buf t.author;
+    User.output        buf t.author;
     Buffer.add_char   buf lf;
     Buffer.add_string buf "committer ";
-    User.output       buf t.committer;
+    User.output        buf t.committer;
     Buffer.add_char   buf lf;
     Buffer.add_char   buf lf;
     Buffer.add_string buf t.message
 
   let input_parents buf =
-    let buf = IO.update buf "parents" in
-    let rec aux buf parents =
-      let nbuf, parent = IO.input_delim buf sp in
-      if parent = "parent" then
-        let nbuf, hex = IO.input_delim nbuf lf in
-        let hex = Hex.Commit.of_string hex in
-        aux nbuf (hex :: parents)
-      else
-        (buf, List.rev parents) in
-    aux buf []
+    let buf = IO.push buf "parents" in
+    let rec aux parents =
+      match IO.input_string_delim buf sp with
+      | None   -> List.rev parents
+      | Some p ->
+        if p = "parent" then
+          match IO.input_delim buf lf input_hex_commit with
+          | None   -> parse_error buf "input_parents"
+          | Some h -> aux (h :: parents)
+        else (
+          (* we cancel the shift we've done to input the key *)
+          let n = String.length p in
+          IO.shift buf (-n-1);
+          List.rev parents
+        ) in
+    aux []
 
-  let input_key_value orig_buf expected input_value =
-    let buf, key =
-      let buf = IO.update orig_buf "key" in
-      IO.input_delim buf sp in
+  let input_key_value buf expected input_value =
+    let error actual =
+      parse_error buf "keys: [actual: %s] [expected: %s]" actual expected in
+    let key =
+      let buf = IO.push buf "key" in
+      match IO.input_string_delim buf sp with
+      | None   -> error "<none>"
+      | Some k -> k in
     if key <> expected then
-      parse_error buf "keys: [actual: %s] [expected: %s]" key expected;
-    IO.with_subview buf lf input_value
+      error key
+    else
+      match IO.input_delim buf lf input_value with
+      | None   -> parse_error buf "no value to input"
+      | Some v -> v
 
   let input buf =
-    let buf = IO.update buf "commit" in
-    let buf, tree      = input_key_value buf "tree" input_hex_tree in
-    let buf, parents   = input_parents   buf in
-    let buf, author    = input_key_value buf "author" User.input in
-    let buf, committer = input_key_value buf "committer" User.input in
-    let buf, _         = IO.input_delim  buf lf in
-    let buf, message   = IO.input_string buf buf.len in
-    buf, { parents; message; tree; author; committer }
+    let buf       = IO.push         buf "commit" in
+    let tree      = input_key_value buf "tree" input_hex_tree in
+    let parents   = input_parents   buf in
+    let author    = input_key_value buf "author" User.input in
+    let committer = input_key_value buf "committer" User.input in
+    IO.shift buf 1;
+    let message   = IO.input_string buf None in
+    { parents; message; tree; author; committer }
 
-  let of_string = IO.of_string input
-  let to_string = IO.to_string output
 end
 
-module Tree: SIG with type t = tree = struct
-
-  type t = tree
+module Tree: VALUE with type t := tree = struct
 
   let pretty_perm = function
     | `normal -> "normal"
@@ -209,13 +221,13 @@ module Tree: SIG with type t = tree = struct
     | `dir    -> "40000"
 
   let dump_entry e =
-    Printf.printf
+    Printf.eprintf
       "perm: %s\n\
        file: %s\n\
-       sha1: %S\n"
+       node: %S\n"
       (pretty_perm e.perm)
       e.file
-      (SHA1.to_string e.sha1)
+      (Node.to_string e.node)
 
   let dump t =
     List.iter dump_entry t
@@ -224,58 +236,63 @@ module Tree: SIG with type t = tree = struct
     todo "output-tree"
 
   let input_entry buf =
-    let buf = IO.update buf "entry" in
-    let buf, perm = IO.input_delim buf sp in
-    let buf, file = IO.input_delim buf nul in
-    let buf, sha1 = input_sha1 buf in
+    let buf  = IO.push buf "entry" in
+    let perm = match IO.input_string_delim buf sp with
+      | None      -> parse_error buf "invalid perm"
+      | Some perm -> perm in
+    let file = match IO.input_string_delim buf nul with
+      | None      -> parse_error buf "invalid filename"
+      | Some file -> file in
+    let node = input_node buf in
     let entry = {
       perm = perm_of_string buf perm;
-      file; sha1
+      file; node
     } in
-    buf, entry
+    Some entry
 
   let input buf =
-    let buf = IO.update buf "entries" in
-    let rec aux buf entries =
-      if buf.len <= 0 then
-        buf, List.rev entries
+    let buf = IO.push buf "entries" in
+    let rec aux entries =
+      if IO.length buf <= 0 then
+        List.rev entries
       else
-        let buf, e = input_entry buf in
-        aux buf (e :: entries) in
-    aux buf []
+        match input_entry buf with
+        | None   -> List.rev entries
+        | Some e -> aux (e :: entries) in
+    aux []
 
-  let of_string = IO.of_string input
-  let to_string = IO.to_string output
 end
 
-module Tag: SIG with type t = tag = struct
+module Tag: VALUE with type t := tag = struct
 
   type t = tag
   let dump x = todo "tree"
   let output buf t = todo "tree"
   let input buf = todo "tree"
 
-  let of_string = of_string input
-  let to_string = to_string output
 end
 
-module Object: SIG with type t = obj = struct
+module Value: sig
+  include VALUE with type t := Model.value
+  val input: IO.buffer -> Model.value
+  val input_inflated: IO.buffer -> Model.value
+  val output_inflated: Model.value -> string
+  val output: Model.value -> string
+end = struct
 
-  type t = obj
-
-    let dump = function
-      | Blob b ->
-        Printf.printf "BLOB:\n";
-        Blob.dump b
-      | Commit c ->
-        Printf.printf "COMMIT:\n";
-        Commit.dump c
-      | Tag t ->
-        Printf.printf "TAG:\n";
-        Tag.dump t
-      | Tree t ->
-        Printf.printf "TREE:\n";
-        Tree.dump t
+  let dump = function
+    | Blob b ->
+      Printf.eprintf "BLOB:\n";
+      Blob.dump b
+    | Commit c ->
+      Printf.eprintf "COMMIT:\n";
+      Commit.dump c
+    | Tag t ->
+      Printf.eprintf "TAG:\n";
+      Tag.dump t
+    | Tree t ->
+      Printf.eprintf "TREE:\n";
+      Tree.dump t
 
   let obj_type = function
     | Blob _   -> "blob"
@@ -289,96 +306,305 @@ module Object: SIG with type t = obj = struct
     | Tag t    -> Tag.output buf t
     | Tree t   -> Tree.output buf t
 
-  let output buf t =
+  let output_inflated t =
     let size, contents =
       let buf = Buffer.create 1024 in
       output_contents buf t;
       let size = Buffer.length buf in
       size, buf in
-    let inflated =
-      let buf = Buffer.create size in
-      Buffer.add_string buf (obj_type t);
-      Buffer.add_char   buf sp;
-      Buffer.add_string buf (string_of_int size);
-      Buffer.add_buffer buf contents;
-      Buffer.contents buf in
-    let deflated =
-      (* call zlib directly on the stream interface *)
-      Misc.deflate_string inflated in
-    Buffer.add_string buf deflated
+    let buf = Buffer.create size in
+    Buffer.add_string buf (obj_type t);
+    Buffer.add_char   buf sp;
+    Buffer.add_string buf (string_of_int size);
+    Buffer.add_char   buf nul;
+    Buffer.add_buffer buf contents;
+    Buffer.contents buf
 
-  let input buf =
+  let output t =
+    let inflated = output_inflated t in
+    let deflated = Misc.deflate_string inflated in
+    deflated
+
+  let input_inflated buf =
+    let buf = IO.push buf "value" in
     (* XXX call zlib directly on the stream interface *)
-    let _, deflated = IO.input_string buf buf.len in
-    let inflated = Misc.inflate_string deflated in
-    let buf = IO.buffer (IO.file buf) inflated in
-    let buf = IO.update buf "object" in
-    let buf, obj_type = IO.input_delim buf sp in
-    let buf = IO.update buf "size" in
-    let buf, size = IO.input_delim buf nul in
-    let expected =
-        try int_of_string size
-        with _ -> parse_error buf "%S is not a valid integer." size in
-    if expected <> buf.len then
-      parse_error buf "[expected: %d; actual: %d]\n" expected buf.len;
+    let obj_type =
+      let buf = IO.push buf "type" in
+      match IO.input_string_delim buf sp with
+      | None   -> parse_error buf "value: type"
+      | Some t -> t in
+    let size =
+      let buf = IO.push buf "size" in
+      match IO.input_string_delim buf nul with
+      | None   -> parse_error buf "value: size"
+      | Some s ->
+        try int_of_string s
+        with _ -> parse_error buf "%S is not a valid integer." s in
+    if size <> IO.length buf then
+      parse_error buf "[expected-size: %d; actual-size: %d]\n" size (IO.length buf);
+    let buf = IO.sub buf 0 size in
     match obj_type with
-    | "blob"   -> let buf, b = Blob.input buf   in buf, Blob b
-    | "commit" -> let buf, c = Commit.input buf in buf, Commit c
-    | "tag"    -> let buf, t = Tag.input buf    in buf, Tag t
-    | "tree"   -> let buf, t = Tree.input buf   in buf, Tree t
+    | "blob"   -> Blob.input buf   |> blob
+    | "commit" -> Commit.input buf |> commit
+    | "tag"    -> Tag.input buf    |> tag
+    | "tree"   -> Tree.input buf   |> tree
     | x        -> parse_error buf "%S is not a valid object type." x
 
-  let of_string = IO.of_string input
-  let to_string = IO.to_string output
-end
-
-let dump t =
-  List.iter (fun (_,b) -> Blob.dump b) t.blobs;
-  List.iter (fun (_,c) -> Commit.dump c) t.commits;
-  List.iter (fun (_,t) -> Tree.dump t) t.trees;
-  List.iter (fun (_,t) -> Tag.dump t) t.tags
-
-(*
-module Pack: SIG = struct
-
-  type object_id =
-    | Blob   of Blob.id
-    | Commit of Commit.id
-    | Tag    of Tag.id
-    | Tree   of Tree.id
-
-  type delta = {
-    base : object_id;
-    delta: string;
-  }
-
-  type file =
-    | Delta  of delta
-    | Object of Object.t
-
-  type t = {
-    version: int;
-    files  : file array;
-  }
-
-  let dump x = todo "pack"
-  let to_string t = todo "pack"
-  let of_string file s = todo "pack"
+  let input buf =
+    input_inflated (IO.inflate buf)
 
 end
-*)
 
-(*
-type repository = {
-  head   : string;
-  index  : XXX;
-  objects: Object.id list;
-  refs   : refs;
-}
+module Pack: sig
+  val apply_delta: IO.buffer delta -> value
+  val version: IO.buffer -> int
+end = struct
 
-type refs = {
-  heads  : (string, commit) list;          (**  Local branches *)
-  remotes: (string, commit) list;          (** Remote branches *)
-}
+  let version buf =
+    let buf = IO.clone buf in
+    let buf = IO.push buf "version" in
+    let header = IO.input_string buf (Some 4) in
+    if header <> "PACK" then
+      parse_error buf "wrong header (%s)" header;
+    let version = IO.input_be_int32 buf in
+    if version <> 2l && version <> 3l then
+      parse_error buf "wrong pack version (%ld)" version
+    else
+      Int32.to_int version
 
-*)
+  let apply_hunk source buf = function
+    | Insert str     -> Buffer.add_string buf str
+    | Copy (off,len) ->
+      Printf.eprintf "XXX COPY %d %d\n" off len;
+      let view = IO.sub (IO.clone source) off len in
+      let str = IO.input_string view None in
+      Buffer.add_string buf str
+
+  let dump_delta d =
+    Printf.eprintf
+      "source-length: %d\n\
+       result-length: %d\n"
+      d.source_length
+      d.result_length;
+    List.iter (function
+      | Insert str     -> Printf.eprintf "INSERT %S\n" str
+      | Copy (off,len) -> Printf.eprintf "COPY (%d,%d)\n" off len
+    ) d.hunks
+
+  let apply_delta delta =
+    Printf.eprintf "XXX apply_hunks\n";
+    dump_delta delta;
+    let buf = Buffer.create delta.result_length in
+    List.iter (apply_hunk delta.source buf) delta.hunks;
+    Printf.eprintf "XXX\n";
+    let str = Buffer.contents buf in
+    let buf = IO.of_string (File.Name.of_string "<hunk>") str in
+    Value.input_inflated buf
+
+end
+
+module PackedValue (M: sig val version: int end): sig
+  include VALUE with type t := packed_value
+end = struct
+
+  let isset i bit =
+    (i lsr bit) land 1 <> 0
+
+  let input_hunk source_length buf =
+    let opcode = IO.input_byte buf in
+    if opcode = 0 then
+      parse_error buf "0 as value of the first byte of a hunk is reserved.";
+
+    match opcode land 0x80 with
+
+    | 0 ->
+      let contents = IO.input_string buf (Some opcode) in
+      Insert contents
+
+    | _ ->
+      Printf.eprintf "opcode: %x\n" opcode;
+      let read bit shift =
+        Printf.eprintf "bit=%d shift=%d set=%b\n" bit shift (isset opcode bit);
+        if not (isset opcode bit) then 0
+        else let i = (IO.input_byte buf) lsl shift in
+          Printf.eprintf "i=%d\n" i; i in
+      let offset =
+            (read 0 0)
+        lor (read 1 8)
+        lor (read 2 16)
+        lor (read 3 24) in
+      let length =
+        if M.version = 2 then
+              (read 4 0)
+          lor (read 5 8)
+        else
+              (read 4 0)
+          lor (read 5 8)
+          lor (read 6 16) in
+      let length = if length = 0 then 0x10000 else length in
+      Printf.eprintf "offset:%d length:%d\n" offset length;
+      if offset+length > source_length then
+        parse_error buf "wrong insert hunk (%d)" source_length;
+      if M.version = 2 && (opcode land 0x40 <> 0) then
+        parse_error buf "result fied set in delta hunk";
+      Copy (offset, length)
+
+  let input_le_base_128 buf =
+    let buf = IO.push buf "le-128" in
+    let rec aux i =
+      let byte = IO.input_byte buf in
+      let more = (byte land 0x80) <> 0 in
+      let i    = ((byte land 0x7f) lsl 7) lor i in
+      if more then aux i
+      else i in
+    aux 0
+
+  let input_hunks source buf =
+    let buf = IO.push buf "hunks" in
+    let source_length = input_le_base_128 buf in
+    let result_length = input_le_base_128 buf in
+    let rec aux acc =
+      if IO.length buf = 0 then List.rev acc
+      else aux (input_hunk source_length buf :: acc) in
+    let hunks = aux [] in
+    { source; hunks; source_length; result_length }
+
+  let input_be_modified_base_128 buf =
+    let buf = IO.push buf "be-128" in
+    let rec aux i n =
+      let byte = IO.input_byte buf in
+      let more = (byte land 0x80) <> 0 in
+      let i    = if n >= 2 then i+1 else i in
+      let i    = (i lsl 7) lor (byte land 0x7f) in
+      if more then aux i (n+1)
+      else i in
+    aux 0 1
+
+  let input buf =
+    let buf  = IO.push buf "pack-value" in
+    let byte = IO.input_byte buf in
+    let more = (byte land 0x80) <> 0 in
+    let kind = (byte land 0x70) lsr 4 in
+    let _size =
+      let low = (byte land 0x0f) in
+      if more then
+        let ss = input_le_base_128 buf in
+        low lor (ss lsl 4)
+      else low in
+
+    let with_inflated buf fn =
+      (* XXX: the 2 following lines are very expensive *)
+      let buf = IO.push buf "inflated"in
+      fn (IO.inflate buf) in
+
+    match kind with
+    | 0b000 -> parse_error   buf "invalid: Reserved"
+    | 0b001 -> with_inflated buf Commit.input |> commit |> value
+    | 0b010 -> with_inflated buf Tree.input   |> tree   |> value
+    | 0b011 -> with_inflated buf Blob.input   |> blob   |> value
+    | 0b100 -> with_inflated buf Tag.input    |> tag    |> value
+    | 0b101 -> parse_error   buf "invalid: Reserved"
+    | 0b110 ->
+      let base  = input_be_modified_base_128 buf in
+      let hunks = with_inflated buf (input_hunks base )in
+      off_delta hunks
+    | 0b111 ->
+      let buf   = IO.push buf "delta-name" in
+      let base  = input_node buf in
+      let hunks = with_inflated buf (input_hunks base) in
+      ref_delta hunks
+    | _     -> assert false
+
+  let output buf t =
+    todo "delta"
+
+  let dump t =
+    todo "delta"
+
+end
+
+module PackedValue2 = PackedValue(struct let version = 2 end)
+module PackedValue3 = PackedValue(struct let version = 3 end)
+
+module Idx: VALUE with type t := pack_index = struct
+
+  let lengths offsets =
+    let rec aux acc = function
+      | []    -> List.rev acc
+      | [h,_] -> aux ((h,None)::acc) []
+      | (h1,l1)::((h2,l2)::_ as t) -> aux ((h1,Some (l2-l1))::acc) t in
+    (* Compare the list in increasing offests. *)
+    let l = List.sort (fun (_,x) (_,y) -> compare x y) offsets in
+    aux [] l
+
+  let input buf =
+    let buf = IO.push buf "pack-index" in
+
+    let magic = IO.input_string buf (Some 4) in
+    if magic <> "\255tOc" then
+      parse_error buf "wrong magic index (%S)" magic;
+    let version = IO.input_be_int32 buf in
+    if version <> 2l then
+      parse_error buf "wrong index version (%ld)" version;
+
+    (* Read the fanout *)
+    let fanout =
+      let a = Array.create 256 0l in
+      for i=0 to 255 do
+        a.(i) <- IO.input_be_int32 buf;
+      done;
+      a in
+
+    let nb_objects = Int32.to_int fanout.(255) in
+
+    (* Read the names *)
+    let names =
+      let a = Array.create nb_objects (Node.of_string "") in
+      for i=0 to nb_objects-1 do
+        a.(i) <- input_node buf;
+      done;
+      a in
+
+    (* Read the CRCs *)
+    let _crcs =
+      let a = Array.create nb_objects 0l in
+      for i=0 to nb_objects-1 do
+        a.(i) <- IO.input_be_int32 buf;
+      done;
+      a in
+
+    (* Read the offsets *)
+    let offsets, conts =
+      let a = Array.create nb_objects 0l in
+      let b = Array.create nb_objects false in
+      for i=0 to nb_objects-1 do
+        b.(i) <- (IO.input_byte buf) land 128 <> 0;
+        IO.shift buf (-1);
+        a.(i) <- IO.input_be_int32 buf
+      done;
+      a, b in
+
+    let idx = Array.mapi (fun i name ->
+        let offset = offsets.(i) in
+        let cont = conts.(i) in
+        if cont then (
+          let offset = IO.input_be_int64 buf in
+          (name, Int64.to_int offset)
+        ) else
+          (name, Int32.to_int offset)
+      ) names in
+
+    let _node = input_node buf in
+    let _checksum = input_node buf in
+
+    let offsets = Array.to_list idx in
+    let lengths = lengths offsets in
+    { offsets; lengths }
+
+  let output buf =
+    todo "pack-index"
+
+  let dump buf =
+    todo "pack-index"
+
+end

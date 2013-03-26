@@ -14,46 +14,67 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** Git data-model *)
+(** Git serialization backend. *)
+
+(** In this module, we explain how to serialize/de-serialize git
+    files. All the input and output function takes buffers as parameters,
+    so at one point one needs to map the file system to these buffer. This
+    is done in [Store]. *)
 
 open Lib
 
 (** File contents. *)
-module type SIG = sig
+module type VALUE = sig
   type t
 
-  (** Dump the contents of the file. *)
+  (** Dump the contents to stderr. *)
   val dump: t -> unit
 
   (** Output the file in a buffer. *)
   val output: Buffer.t -> t -> unit
 
-  (** Output the file in a string. *)
-  val to_string: t -> string
-
-  (** [input file buf off len] reads the file from a string at offset
-     [off] and length [len]. *)
-  val input: IO.buffer -> t IO.result
-
-  (** Read a file from a raw string. *)
-  val of_string: File.Name.t -> string -> t
+  (** Read the contents from an input buffer. *)
+  val input: IO.buffer -> t
 
 end
 
 (** Blob objects. *)
-module Blob: SIG
+module Blob: VALUE with type t := Model.blob
 
 (** Commit objects. *)
-module Commit: SIG
+module Commit: VALUE with type t := Model.commit
 
 (** Tree objects. *)
-module Tree: SIG
+module Tree: VALUE with type t := Model.tree
 
 (** Tag objects. *)
-module Tag: SIG
+module Tag: VALUE with type t := Model.tag
 
 (** An object is either a tag/tree/commit/blob. *)
-module Object: SIG with type t = Model.obj
+module Value: sig
+  include VALUE with type t := Model.value
+  val input: IO.buffer -> Model.value
+  val input_inflated: IO.buffer -> Model.value
+  val output_inflated: Model.value -> string
+  val output: Model.value -> string
+end
 
-(** Dump the contents of a git reposity. *)
-val dump: Model.t -> unit
+(** Pack indexes. *)
+module Idx: VALUE with type t := Model.pack_index
+
+(** Pack objects. *)
+module PackedValue2: VALUE with type t := Model.packed_value
+
+(** Pack objects. *)
+module PackedValue3: VALUE with type t := Model.packed_value
+
+(** Packs. *)
+module Pack: sig
+
+  (** Apply a series of hunks to a base object. *)
+  val apply_delta: IO.buffer Model.delta -> Model.value
+
+  (** Check the version of pack. *)
+  val version: IO.buffer -> int
+
+end

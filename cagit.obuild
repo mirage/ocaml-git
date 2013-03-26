@@ -8,11 +8,11 @@ library cagit
   sub lib
     src-dir   : src/
     modules   : Lib
-    build-deps: zip    
+    build-deps: ocplib-endian.bigstring, zip, bigarray
 
   src-dir   : src/
-  modules   : Git
-  build-deps: cagit.lib, ocamlgraph
+  modules   : Git, Database
+  build-deps: cagit.lib, ocamlgraph, cryptokit
 
 test read
  src-dir   : test/

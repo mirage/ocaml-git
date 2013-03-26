@@ -28,16 +28,3 @@ end
 
 (** Abstract strings. *)
 module String: SIG
-
-(** Main signature. *)
-module type PHANTOM = sig
-  type 'a t
-  val of_string: string -> 'a t
-  val to_string: 'a t -> string
-  val compare: 'a t -> 'a t -> int
-  val equal: 'a t -> 'a t -> bool
-  val hash: 'a t -> int
-end
-
-(** Abstract strings. *)
-module PhantomString: PHANTOM
