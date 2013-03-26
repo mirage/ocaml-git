@@ -43,7 +43,7 @@ let input_hex_commit buf =
   Node.Commit.of_string (input_hex buf)
 
 let output_hex buf hex =
-  Buffer.add_string buf (Misc.hex_decode hex)
+  Buffer.add_string buf (Misc.hex_encode hex)
 
 let output_hex_commit buf hex =
   output_hex buf (Node.Commit.to_string hex)
@@ -82,14 +82,14 @@ end = struct
   let input buf =
     let buf = IO.push buf "user" in
     let i = match IO.index buf lt with
-      | Some i -> i
+      | Some i -> i-1
       | None   -> parse_error buf "invalid user name" in
     let name = IO.input_string buf (Some i) in
-    IO.shift buf 1;
+    IO.shift buf 2;
     let j = match IO.index buf gt with
       | Some j -> j
       | None   -> parse_error buf "invalid user email" in
-    let email = IO.input_string buf (Some (j-1)) in
+    let email = IO.input_string buf (Some j) in
     (* skip 2 bytes *)
     IO.shift buf 2;
     let date = IO.input_string buf None in
@@ -97,7 +97,7 @@ end = struct
 
   let pretty t =
     Printf.sprintf
-      "[name : %s] [email: %s] [date : %s]"
+      "[name: %S] [email: %S] [date: %S]"
       t.name t.email t.date
 
   let dump t =
@@ -232,8 +232,12 @@ module Tree: VALUE with type t := tree = struct
   let dump t =
     List.iter dump_entry t
 
-  let output buf t =
-    todo "output-tree"
+  let output_entry buf e =
+    Buffer.add_string buf (string_of_perm e.perm);
+    Buffer.add_char   buf sp;
+    Buffer.add_string buf e.file;
+    Buffer.add_char   buf nul;
+    output_node       buf e.node
 
   let input_entry buf =
     let buf  = IO.push buf "entry" in
@@ -249,6 +253,9 @@ module Tree: VALUE with type t := tree = struct
       file; node
     } in
     Some entry
+
+  let output buf t =
+    List.iter (output_entry buf) t
 
   let input buf =
     let buf = IO.push buf "entries" in
@@ -472,7 +479,6 @@ end = struct
     let buf = IO.push buf "hunks" in
     let source_length = input_le_base_128 buf in
     let result_length = input_le_base_128 buf in
-    Printf.eprintf "source:%d result:%d\n" source_length result_length;
     let rec aux acc =
       if IO.length buf = 0 then List.rev acc
       else aux (input_hunk source_length buf :: acc) in
