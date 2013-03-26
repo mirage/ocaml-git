@@ -125,6 +125,7 @@ let nodes t =
 let expand t node value =
   let file = loose_file t.root node in
   if not (File.exists file) then (
+    Printf.eprintf "Expanding %s\n" (to_hex node);
     let inflated = Backend.Value.output_inflated value in
     let hash = Cryptokit.Hash.sha1 () in
     hash#add_string inflated;

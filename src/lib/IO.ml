@@ -231,12 +231,18 @@ let input_delim buf0 c fn =
 let input_string_delim buf c =
   input_delim buf c (fun buf -> input_string buf None)
 
+let with_stack buf stack =
+  let dbg = { buf.dbg with Debug.stack } in
+  { buf with dbg }
+
 let inflate buf =
   let deflated = input_string buf None in
   let inflated = Misc.inflate_string deflated in
-  of_string (file buf) inflated
+  let res = of_string (file buf) inflated in
+  with_stack res buf.dbg.Debug.stack
 
 let deflate buf =
   let inflated = input_string buf None in
   let deflated = Misc.inflate_string inflated in
-  of_string (file buf) deflated
+  let res = of_string (file buf) deflated in
+  with_stack res buf.dbg.Debug.stack

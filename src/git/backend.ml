@@ -348,7 +348,9 @@ end = struct
         try int_of_string s
         with _ -> parse_error buf "%S is not a valid integer." s in
     if size <> IO.length buf then
-      parse_error buf "[expected-size: %d; actual-size: %d]\n" size (IO.length buf);
+      parse_error buf
+        "[expected-size: %d; actual-size: %d]\n"
+        size (IO.length buf);
     let buf = IO.sub buf 0 size in
     match obj_type with
     | "blob"   -> Blob.input buf   |> blob
@@ -406,7 +408,9 @@ end = struct
       | None   -> parse_error source "missing size"
       | Some s -> try int_of_string s with _ -> -1 in
     if size <> delta.source_length then
-      parse_error source "size differs: delta:%d source:%d\n" delta.source_length size;
+      parse_error source
+        "size differs: delta:%d source:%d\n"
+        delta.source_length size;
 
     let buf = Buffer.create (20 + delta.result_length) in
     Buffer.add_string buf kind;
@@ -459,24 +463,24 @@ end = struct
       let length =
         if length = 0 then 0x10000 else length in
       if offset+length > source_length then
-        parse_error buf "wrong insert hunk (%d)" source_length;
+        parse_error buf
+          "wrong insert hunk (offset:%d length:%d source:%d)"
+          offset length source_length;
       Copy (offset, length)
 
   let input_le_base_128 buf =
     let buf = IO.push buf "le-128" in
-    let rec aux i =
+    let rec aux int shift =
       let byte = IO.input_byte buf in
       let more = (byte land 0x80) <> 0 in
-      let incr = byte land 0x7f in
-      let i = match i with
-        | None   -> incr
-        | Some i ->(incr lsl 7) lor i in
-      if more then aux (Some i)
-      else i in
-    aux None
+      let base = byte land 0x7f in
+      let int  = (base lsl shift) lor int in
+      if more then aux int (shift+7)
+      else int in
+    aux 0 0
 
-  let input_hunks source buf =
-    let buf = IO.push buf "hunks" in
+  let input_hunks size source buf =
+    let buf = IO.push buf (Printf.sprintf "hunks[%d]" size) in
     let source_length = input_le_base_128 buf in
     let result_length = input_le_base_128 buf in
     let rec aux acc =
@@ -501,7 +505,7 @@ end = struct
     let byte = IO.input_byte buf in
     let more = (byte land 0x80) <> 0 in
     let kind = (byte land 0x70) lsr 4 in
-    let _size =
+    let size =
       let low = (byte land 0x0f) in
       if more then
         let ss = input_le_base_128 buf in
@@ -522,12 +526,13 @@ end = struct
     | 0b101 -> parse_error   buf "invalid: Reserved"
     | 0b110 ->
       let base  = input_be_modified_base_128 buf in
-      let hunks = with_inflated buf (input_hunks base)in
+      let buf   = IO.push buf (Printf.sprintf "delta-off[%d]" base) in
+      let hunks = with_inflated buf (input_hunks size base)in
       off_delta hunks
     | 0b111 ->
-      let buf   = IO.push buf "delta-name" in
       let base  = input_node buf in
-      let hunks = with_inflated buf (input_hunks base) in
+      let buf   = IO.push buf "delta-ref" in
+      let hunks = with_inflated buf (input_hunks size base) in
       ref_delta hunks
     | _     -> assert false
 
