@@ -21,6 +21,7 @@ open File.OP
 let create root = {
   root;
   buffers = Hashtbl.create 1024;
+  packs   = Hashtbl.create 1024;
   indexes = Hashtbl.create 1024;
 }
 
@@ -84,23 +85,13 @@ let packed_objects root =
     of_hex p
   ) packs
 
-let get_packed_buffer t node =
-  let file = packed_file t.root node in
-  if File.exists file then
-    let buf = IO.of_file file in
-    Hashtbl.add t.buffers node buf;
-    IO.clone buf
-  else (
-    Printf.eprintf "No file associated with the pack object %s.\n" (to_hex node);
-    failwith "read_file"
-  )
 
 let index_file root node =
   let pack_dir = root / "objects" / "pack" in
   let idx_file = "pack-" ^ (to_hex node) ^ ".idx" in
   pack_dir // idx_file
 
-let read_index t node =
+let get_index_file t node: pack_index =
   if Hashtbl.mem t.indexes node then
     Hashtbl.find t.indexes node
   else
@@ -114,11 +105,28 @@ let read_index t node =
       failwith "read_index"
     )
 
+let get_pack t node: pack =
+  if Hashtbl.mem t.packs node then
+    Hashtbl.find t.packs node
+  else (
+    let file = packed_file t.root node in
+    let index = get_index_file t node in
+    if File.exists file then (
+      let buf = IO.of_file file in
+      let fn = Backend.Pack.input index buf in
+      Hashtbl.add t.packs node fn;
+      fn
+    ) else (
+      Printf.eprintf "No file associated with the pack object %s.\n" (to_hex node);
+      failwith "read_file"
+    )
+  )
+
 let nodes t =
   let objects = loose_objects t.root in
   let packs = packed_objects t.root in
   List.fold_left (fun acc p ->
-    let idx = read_index t p in
+    let idx = get_index_file t p in
     (List.map fst idx.offsets) @ acc
   ) objects packs
 
@@ -150,16 +158,9 @@ let rec build_packed_object t (pack,idx) node =
     failwith "invalid offset" in
   if List.mem_assoc node idx.offsets then (
     let offset = List.assoc node idx.offsets in
-    let pbuf = get_packed_buffer t pack in
-    let version = Backend.Pack.version pbuf in
-    let input =
-      if version = 2 then Backend.PackedValue2.input
-      else Backend.PackedValue3.input in
-    let pbuf = match List.assoc node idx.lengths with
-      | None   -> IO.shift pbuf offset; pbuf
-      | Some l -> IO.sub pbuf offset l in
+    let fn = get_pack t pack in
     let value =
-      match input pbuf with
+      match fn node with
       | Value v     -> v
       | Ref_delta d ->
         let source = get_loose_buffer t d.source in
@@ -181,7 +182,7 @@ let scan_packs t node =
   let rec find = function
     | []    -> None
     | n::ns ->
-      let idx = read_index t n in
+      let idx = get_index_file t n in
       if List.mem_assoc node idx.offsets then
         let node = build_packed_object t (n,idx) node in
         Some (get_loose_buffer t node)

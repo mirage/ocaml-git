@@ -115,7 +115,7 @@ type packed_value =
     the index file (which says which nodes are stored in there) and we
     lazily parse the contents (eg. we fetch the contents on
     demand). *)
-type pack = (node * packed_value Lazy.t) array
+type pack = node -> packed_value
 
 (** Pack indexes. *)
 type pack_index = {
@@ -150,8 +150,9 @@ val off_delta: int delta -> packed_value
 
 (** Git repository. *)
 type t = {
-  root   : File.Dirname.t;
-  buffers: (node, IO.buffer) Hashtbl.t;   (** inflated buffers *)
-  indexes: (node, pack_index) Hashtbl.t;
+  root   : File.Dirname.t;                                (** Git root *)
+  buffers: (node, IO.buffer) Hashtbl.t;  (** Cache of inflated buffers *)
+  packs  : (node, pack) Hashtbl.t;            (** Cache of pack files  *)
+  indexes: (node, pack_index) Hashtbl.t;      (** Cache of index files *)
 }
 

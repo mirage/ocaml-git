@@ -86,7 +86,7 @@ type pack_index = {
   lengths: (node * int option) list;
 }
 
-type pack = (node * packed_value Lazy.t) array
+type pack = node -> packed_value
 
 let commit c = Commit c
 let blob b = Blob b
@@ -100,5 +100,6 @@ let off_delta d = Off_delta d
 type t = {
   root   : File.Dirname.t;
   buffers: (node, IO.buffer) Hashtbl.t;
+  packs  : (node, pack) Hashtbl.t;
   indexes: (node, pack_index) Hashtbl.t;
 }

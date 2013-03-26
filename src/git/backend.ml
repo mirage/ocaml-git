@@ -364,67 +364,6 @@ end = struct
 
 end
 
-module Pack: sig
-  val apply_delta: IO.buffer delta -> value
-  val version: IO.buffer -> int
-end = struct
-
-  let version buf =
-    let buf = IO.clone buf in
-    let buf = IO.push buf "version" in
-    let header = IO.input_string buf (Some 4) in
-    if header <> "PACK" then
-      parse_error buf "wrong header (%s)" header;
-    let version = IO.input_be_int32 buf in
-    if version <> 2l && version <> 3l then
-      parse_error buf "wrong pack version (%ld)" version
-    else
-      Int32.to_int version
-
-  let apply_hunk source buf = function
-    | Insert str     -> Buffer.add_string buf str
-    | Copy (off,len) ->
-      let view = IO.sub (IO.clone source) off len in
-      let str = IO.input_string view None in
-      Buffer.add_string buf str
-
-  let dump_delta d =
-    Printf.eprintf
-      "source-length: %d\n\
-       result-length: %d\n"
-      d.source_length
-      d.result_length;
-    List.iter (function
-      | Insert str     -> Printf.eprintf "INSERT %S\n" str
-      | Copy (off,len) -> Printf.eprintf "COPY (%d,%d)\n" off len
-    ) d.hunks
-
-  let apply_delta delta =
-    let source = delta.source in
-    let kind = match IO.input_string_delim source sp with
-      | None   -> parse_error source "missing kind"
-      | Some k -> k in
-    let size = match IO.input_string_delim source nul with
-      | None   -> parse_error source "missing size"
-      | Some s -> try int_of_string s with _ -> -1 in
-    if size <> delta.source_length then
-      parse_error source
-        "size differs: delta:%d source:%d\n"
-        delta.source_length size;
-
-    let buf = Buffer.create (20 + delta.result_length) in
-    Buffer.add_string buf kind;
-    Buffer.add_char   buf sp;
-    Buffer.add_string buf (string_of_int delta.result_length);
-    Buffer.add_char   buf nul;
-    List.iter (apply_hunk delta.source buf) delta.hunks;
-
-    let str = Buffer.contents buf in
-    let buf = IO.of_string (File.Name.of_string "<hunk>") str in
-    Value.input_inflated buf
-
-end
-
 module PackedValue (M: sig val version: int end): sig
   include VALUE with type t := packed_value
 end = struct
@@ -546,6 +485,94 @@ end
 
 module PackedValue2 = PackedValue(struct let version = 2 end)
 module PackedValue3 = PackedValue(struct let version = 3 end)
+
+
+module Pack: sig
+  include VALUE with type t := pack
+  val input: pack_index -> IO.buffer -> pack
+  val apply_delta: IO.buffer delta -> value
+end = struct
+
+  let input idx orig_buf =
+
+    let buf = IO.clone orig_buf in
+    let buf = IO.push buf "version" in
+
+    let header = IO.input_string buf (Some 4) in
+    if header <> "PACK" then
+      parse_error buf "wrong header (%s)" header;
+
+    let version = Int32.to_int (IO.input_be_int32 buf) in
+    if version <> 2 && version <> 3 then
+      parse_error buf "wrong pack version (%d)" version;
+
+    let size = Int32.to_int (IO.input_be_int32 buf) in
+
+    let packs = Hashtbl.create size in
+    fun node ->
+      if Hashtbl.mem packs node then
+        Hashtbl.find packs node
+      else (
+        let offset = List.assoc node idx.offsets in
+        let buf = IO.clone orig_buf in
+        let buf = match List.assoc node idx.lengths with
+          | None   -> IO.shift buf offset; buf
+          | Some l -> IO.sub buf offset l in
+        if version = 2 then
+          PackedValue2.input buf
+        else
+          PackedValue3.input buf
+      )
+
+  let apply_hunk source buf = function
+    | Insert str     -> Buffer.add_string buf str
+    | Copy (off,len) ->
+      let view = IO.sub (IO.clone source) off len in
+      let str = IO.input_string view None in
+      Buffer.add_string buf str
+
+  let dump_delta d =
+    Printf.eprintf
+      "source-length: %d\n\
+       result-length: %d\n"
+      d.source_length
+      d.result_length;
+    List.iter (function
+      | Insert str     -> Printf.eprintf "INSERT %S\n" str
+      | Copy (off,len) -> Printf.eprintf "COPY (%d,%d)\n" off len
+    ) d.hunks
+
+  let apply_delta delta =
+    let source = delta.source in
+    let kind = match IO.input_string_delim source sp with
+      | None   -> parse_error source "missing kind"
+      | Some k -> k in
+    let size = match IO.input_string_delim source nul with
+      | None   -> parse_error source "missing size"
+      | Some s -> try int_of_string s with _ -> -1 in
+    if size <> delta.source_length then
+      parse_error source
+        "size differs: delta:%d source:%d\n"
+        delta.source_length size;
+
+    let buf = Buffer.create (20 + delta.result_length) in
+    Buffer.add_string buf kind;
+    Buffer.add_char   buf sp;
+    Buffer.add_string buf (string_of_int delta.result_length);
+    Buffer.add_char   buf nul;
+    List.iter (apply_hunk delta.source buf) delta.hunks;
+
+    let str = Buffer.contents buf in
+    let buf = IO.of_string (File.Name.of_string "<hunk>") str in
+    Value.input_inflated buf
+
+  let output _ =
+    todo "pack"
+
+  let dump _ =
+    todo "pack"
+
+end
 
 module Idx: VALUE with type t := pack_index = struct
 

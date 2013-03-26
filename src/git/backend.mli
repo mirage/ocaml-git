@@ -71,10 +71,12 @@ module PackedValue3: VALUE with type t := Model.packed_value
 (** Packs. *)
 module Pack: sig
 
+  include VALUE with type t := Model.pack
+
+  (** Read a pack, given the associated pack index. *)
+  val input: Model.pack_index -> IO.buffer -> Model.pack
+
   (** Apply a series of hunks to a base object. *)
   val apply_delta: IO.buffer Model.delta -> Model.value
-
-  (** Check the version of pack. *)
-  val version: IO.buffer -> int
 
 end
