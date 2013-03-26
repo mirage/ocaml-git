@@ -73,7 +73,6 @@ let packed_file root node =
   let pack_file = "pack-" ^ (to_hex node) ^ ".pack" in
   pack_dir // pack_file
 
-
 let packed_objects root =
   let packs = root / "objects" / "pack" in
   let packs = File.files packs in
@@ -84,7 +83,6 @@ let packed_objects root =
     let p = String.sub p 5 (String.length p - 5) in
     of_hex p
   ) packs
-
 
 let index_file root node =
   let pack_dir = root / "objects" / "pack" in
@@ -216,11 +214,14 @@ let refs t =
   ) files
 
 let succ root node =
+  let nolabel s = ("", s) in
   match read root node with
   | None            -> []
   | Some (Blob _)   -> []
-  | Some (Commit c) -> Node.tree c.tree :: List.map Node.commit c.parents
+  | Some (Commit c) ->
+    nolabel (Node.tree c.tree)
+    :: List.map (fun c -> nolabel (Node.commit c)) c.parents
   | Some (Tag t)    ->
-    [Node.commit t.commit]
+    [t.tag, Node.commit t.commit]
   | Some (Tree t)   ->
-    List.map (fun e -> e.node) t
+    List.map (fun e -> (e.file, e.node)) t

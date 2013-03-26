@@ -74,8 +74,8 @@ let create_graph t =
 
   List.iter (fun (id, obj as src) ->
     let succs = Store.succ t id in
-    List.iter (fun succ ->
-      G.add_edge g src (succ, read succ)
+    List.iter (fun (l, succ) ->
+      G.add_edge_e g (src, l, (succ, read succ))
     ) succs
   ) nodes;
 

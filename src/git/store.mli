@@ -43,5 +43,5 @@ val refs: t -> (string * node) list
 (** List of nodes. *)
 val nodes: t -> node list
 
-(** Successors. *)
-val succ: t -> node -> node list
+(** Successors (with labels). *)
+val succ: t -> node -> (string * node) list
