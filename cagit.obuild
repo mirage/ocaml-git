@@ -7,7 +7,7 @@ library cagit
   sub lib
     src-dir   : src/
     modules   : Lib
-    build-deps: ocplib-endian.bigstring, zip, bigarray, re.pcre
+    build-deps: ocplib-endian.bigstring, zip, bigarray, re.pcre, cstruct
   src-dir   : src/
   modules   : Git, Database
   build-deps: cagit.lib, ocamlgraph, cryptokit, uri

@@ -45,13 +45,18 @@ module B = struct
   (* same type as Core.Bigstring.t *)
   type t = (char, Bigarray.int8_unsigned_elt, Bigarray.c_layout) Bigarray.Array1.t
 
+  external unsafe_blit_string_to_bigstring:
+    string -> int -> t -> int -> int -> unit = "caml_blit_string_to_bigstring"
+      "noalloc"
+
+  external unsafe_blit_bigstring_to_string:
+    t -> int -> string -> int -> int -> unit = "caml_blit_bigstring_to_string"
+      "noalloc"
+
   let sub buf off len =
-    let s = String.create len in
-    (* XXX: very inefficient *)
-    for i = 0 to len-1 do
-      s.[i] <- buf.{off+i}
-    done;
-    s
+    let dst = String.create len in
+    unsafe_blit_bigstring_to_string buf off dst 0 len;
+    dst
 
   let length buf =
     Bigarray.Array1.dim buf
@@ -83,15 +88,11 @@ module B = struct
       off len (length buf) size;
     Printf.eprintf "%S\n" (sub buf off size)
 
-  let of_string s =
-    let len = String.length s in
-    let buf = Bigarray.Array1.create Bigarray.char Bigarray.c_layout len in
-    (* XXX: very ineficient *)
-    for i = 0 to len-1 do
-      buf.{i} <- s.[i]
-    done;
-    buf
-
+  let of_string src =
+    let len = String.length src in
+    let dst = Bigarray.Array1.create Bigarray.char Bigarray.c_layout len in
+    unsafe_blit_string_to_bigstring src 0 dst 0 len;
+    dst
 
 end
 
