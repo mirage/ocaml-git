@@ -480,13 +480,13 @@ let clone t ?(write=false) ?deepen address =
     match Listing.head listing with
     | None    -> Init.close oc
     | Some id ->
-      Printf.printf "PHASE1\n%!";
+      debug "PHASE1";
       let _shallows = Upload.phase1 ?deepen (ic,oc) [id] in
 
-      Printf.printf "PHASE2\n%!";
+      debug "PHASE2";
       Upload.phase2 (ic,oc) [];
 
-      Printf.printf "PHASE3\n%!";
+      debug "PHASE3";
 
       let raw = Misc.string_of_in_channel ic in
       let buf = IO.of_string (File.Name.of_string "<network>") raw in
@@ -505,5 +505,8 @@ let clone t ?(write=false) ?deepen address =
         node in
 
       let nodes = Backend.Pack.unpack_all ~read ~write buf in
-      Printf.printf "NEW OBJECTS:\n";
-      List.iter (fun n -> Printf.printf "%s\n%!" (to_hex n)) nodes
+      match nodes with
+      | [] -> debug "NO NEW OBJECTS"
+      | _  ->
+        debug "NEW OBJECTS";
+        List.iter (fun n -> debug "%s" (to_hex n)) nodes
