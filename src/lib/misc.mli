@@ -16,14 +16,36 @@
 
 (** Miscellaneous functions. *)
 
-(** Inflate a string using ZLIB. *)
-val inflate_string: string -> string
+(** Inflate a string using ZLIB. Return the exact size of the origin
+    string. *)
+(* val inflate_string: string -> int * string *)
 
 (** Deflate a string using ZLIB. *)
 val deflate_string: string -> string
+
+(** Uncompress a string and return the size of the original compressed
+    string. *)
+val uncompress:
+  ?header:bool -> (int -> unit) -> (string -> int) -> (string -> int -> unit) -> unit
 
 (** Encode a string to base16. *)
 val hex_encode: string -> string
 
 (** Decode a string from base16. *)
 val hex_decode: string -> string
+
+(** {2 Strings} *)
+
+(** Cut a string at the first occurence of a character, starting from
+    the left. *)
+val cut_at: string -> char -> (string * string) option
+
+(** Cut a string at the first occurence of a character, starting from
+    the right. *)
+val rcut_at: string -> char -> (string * string) option
+
+(** Split a string using a given char. *)
+val split: string -> char -> string list
+
+(** Return the contents of an inchannel. *)
+val string_of_in_channel: in_channel -> string

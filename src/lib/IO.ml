@@ -130,6 +130,9 @@ let dump buf =
 let length buf =
   !(buf.len)
 
+let offset buf =
+  !(buf.off)
+
 let clone buf =
   { buf with len = ref !(buf.len);
              off = ref !(buf.off) }
@@ -235,14 +238,28 @@ let with_stack buf stack =
   let dbg = { buf.dbg with Debug.stack } in
   { buf with dbg }
 
-let inflate buf =
-  let deflated = input_string buf None in
-  let inflated = Misc.inflate_string deflated in
-  let res = of_string (file buf) inflated in
-  with_stack res buf.dbg.Debug.stack
-
 let deflate buf =
   let inflated = input_string buf None in
-  let deflated = Misc.inflate_string inflated in
+  let deflated = Misc.deflate_string inflated in
   let res = of_string (file buf) deflated in
+  with_stack res buf.dbg.Debug.stack
+
+let inflate orig_buf =
+  let buf = clone orig_buf in
+  let output = Buffer.create 1024 in
+  let used_in = ref 0 in
+  let incr_used_in n =
+    used_in := !used_in + n in
+  let refill input =
+    let n = min (length buf) (String.length input) in
+    let s = input_string buf (Some n) in
+    (* XXX: we could directly blit the bigarray into the string *)
+    String.blit s 0 input 0 n;
+    n in
+  let flush buf len =
+    Buffer.add_substring output buf 0 len in
+  Misc.uncompress incr_used_in refill flush;
+  let size, inflated = !used_in, Buffer.contents output in
+  let res = of_string (file buf) inflated in
+  shift orig_buf size;
   with_stack res buf.dbg.Debug.stack

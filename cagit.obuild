@@ -4,15 +4,18 @@ synopsis    : Low-level OCaml Git interface
 obuild-ver  : 1
 
 library cagit
-
   sub lib
     src-dir   : src/
     modules   : Lib
-    build-deps: ocplib-endian.bigstring, zip, bigarray
-
+    build-deps: ocplib-endian.bigstring, zip, bigarray, re.pcre
   src-dir   : src/
   modules   : Git, Database
-  build-deps: cagit.lib, ocamlgraph, cryptokit
+  build-deps: cagit.lib, ocamlgraph, cryptokit, uri
+
+executable cagit
+  src-dir   : src/
+  main-is   : cagit.ml
+  build-deps: cmdliner, cagit
 
 test read
  src-dir   : test/

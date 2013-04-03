@@ -62,7 +62,7 @@ module Dot = Graph.Graphviz.Dot(struct
 let create_graph t =
 
   let g = G.create () in
-  let nodes = Store.nodes t in
+  let nodes = Store.list t in
   let read n =
     match Store.read t n with
     | None   -> failwith (Printf.sprintf "Cannot find %s" (to_string n))
@@ -87,3 +87,8 @@ let to_dot t file =
   let g = create_graph t in
   Dot.output_graph oc g;
   close_out oc
+
+let current file =
+  let t = Store.create (File.Dirname.of_string ".git") in
+  Store.dump t;
+  to_dot t file

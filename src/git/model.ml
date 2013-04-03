@@ -22,6 +22,11 @@ module Node = struct
   module Tree   = Abstract.String
   let commit c = of_string (Commit.to_string c)
   let tree t = of_string (Tree.to_string t)
+
+  let sha1 str =
+    let hash = Cryptokit.Hash.sha1 () in
+    hash#add_string str;
+    of_string hash#result
 end
 
 type node = Node.t

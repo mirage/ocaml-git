@@ -36,6 +36,9 @@ module Node: sig
   (** A tree node is also a node. *)
   val tree: Tree.t -> t
 
+  (** Build a node from a raw string. *)
+  val sha1: string -> t
+
 end
 
 (** Short-cut to generic object IDs. *)
@@ -159,4 +162,3 @@ type t = {
   packs  : (node, pack) Hashtbl.t;            (** Cache of pack files  *)
   indexes: (node, pack_index) Hashtbl.t;      (** Cache of index files *)
 }
-

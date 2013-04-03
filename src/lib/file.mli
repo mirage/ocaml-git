@@ -27,6 +27,9 @@ module Dirname: sig
   val basename: t -> string
 end
 
+(** The current directory. *)
+val cwd: unit -> Dirname.t
+
 (** Read a file. *)
 val read: Name.t -> string
 
@@ -59,4 +62,3 @@ module OP: sig
   val (/) : Dirname.t -> string -> Dirname.t
   val (//): Dirname.t -> string -> Name.t
 end
-

@@ -1,0 +1,28 @@
+let () =
+  try Topdirs.dir_directory (Sys.getenv "OCAML_TOPLEVEL_PATH")
+  with Not_found -> ()
+;;
+#use "topfind"
+
+#require "unix";;
+(* redirect stderr to stdout *)
+let () =
+  Unix.close Unix.stderr;
+  ignore (Unix.dup Unix.stdout)
+;;
+
+#require "zip";;
+#require "cryptokit";;
+#require "ocamlgraph";;
+#require "ocplib-endian.bigstring";;
+#require "uri";;
+#require "re.pcre";;
+
+let () =
+  let pwd = Sys.getcwd () in
+  Topdirs.dir_directory (Printf.sprintf "%s/dist/build/lib-cagit.lib" pwd);
+  Topdirs.dir_directory (Printf.sprintf "%s/dist/build/lib-cagit" pwd)
+;;
+
+#load "lib.cmo";;
+#load "git.cmo";;

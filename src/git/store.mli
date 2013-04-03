@@ -25,6 +25,9 @@ open Model
     files. *)
 val create: File.Dirname.t -> t
 
+(** Create a store from the current directory. *)
+val current: unit -> t
+
 (** Dump the state to stderr. This function is in this module because
     we need to be aware of the mapping model/filesystem to load file
     contents on demand. *)
@@ -34,14 +37,20 @@ val dump: t -> unit
     value or a packed value. *)
 val read: t -> node -> value option
 
-(** Expand a packed object as a loose object. *)
-val expand: t -> node -> value -> unit
-
 (** Return the references. *)
 val refs: t -> (string * node) list
 
 (** List of nodes. *)
-val nodes: t -> node list
+val list: t -> node list
 
 (** Successors (with labels). *)
 val succ: t -> node -> (string * node) list
+
+(** Write a value. *)
+val write: t -> value -> node
+
+(** Write a value. *)
+val write_and_check_inflated: t -> node -> string -> unit
+
+(** Write a reference. *)
+val write_reference: t -> string -> node -> unit

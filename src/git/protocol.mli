@@ -14,12 +14,4 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** Manage object graphs. *)
-
-open Lib
-
-(** Display any repository. *)
-val to_dot: Model.t -> File.Name.t -> unit
-
-(** Display the current repository. *)
-val current: File.Name.t -> unit
+val clone: Model.t -> ?write:bool -> ?deepen:int -> string -> unit

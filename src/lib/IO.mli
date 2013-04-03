@@ -64,6 +64,9 @@ val sub: buffer -> int -> int -> buffer
 (** Buffer lenght. *)
 val length: buffer -> int
 
+(** Buffer offset. *)
+val offset: buffer -> int
+
 (** Clone a buffer. Only the bounds are copied, not the contents which
     is still shared. *)
 val clone: buffer -> buffer

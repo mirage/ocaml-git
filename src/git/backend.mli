@@ -76,7 +76,24 @@ module Pack: sig
   (** Read a pack, given the associated pack index. *)
   val input: Model.pack_index -> IO.buffer -> Model.pack
 
-  (** Apply a series of hunks to a base object. *)
-  val apply_delta: IO.buffer Model.delta -> Model.value
+  (** Unpack a packed value. The [read] and [write] function are used
+      to read and write node contents (to the disk or in memory, depending
+      on their implementation).
+
+      Usage: [unpack ~read ~write idx offset packed_value]
+
+      [offset] is the position of [packed_value] into the pack file:
+      this is useful of delta offsets.  *)
+  val unpack:
+    read:(Model.node -> IO.buffer) ->
+    write:(Model.value -> Model.node) -> (Model.node * int) list ->
+    int -> Model.packed_value -> Model.node
+
+  (** Unpack a whole pack file. Useful when we have no index file,
+      eg. after a fetch. *)
+  val unpack_all:
+    read:(Model.node -> IO.buffer) ->
+    write:(Model.value -> Model.node) ->
+    IO.buffer -> Model.node list
 
 end

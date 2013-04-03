@@ -486,43 +486,55 @@ end
 module PackedValue2 = PackedValue(struct let version = 2 end)
 module PackedValue3 = PackedValue(struct let version = 3 end)
 
+let lengths offsets =
+  let rec aux acc = function
+    | []    -> List.rev acc
+    | [h,_] -> aux ((h,None)::acc) []
+    | (h1,l1)::((h2,l2)::_ as t) -> aux ((h1,Some (l2-l1))::acc) t in
+  (* Compare the list in increasing offests. *)
+  let l = List.sort (fun (_,x) (_,y) -> compare x y) offsets in
+  aux [] l
 
 module Pack: sig
   include VALUE with type t := pack
   val input: pack_index -> IO.buffer -> pack
-  val apply_delta: IO.buffer delta -> value
+  val unpack:
+    read:(node -> IO.buffer) -> write:(value -> node) ->
+    (node * int) list -> int -> packed_value -> node
+  val unpack_all:
+    read:(node -> IO.buffer) -> write:(value -> node) ->
+    IO.buffer -> node list
 end = struct
 
-  let input idx orig_buf =
-
-    let buf = IO.clone orig_buf in
+  let input_header buf =
     let buf = IO.push buf "version" in
-
     let header = IO.input_string buf (Some 4) in
     if header <> "PACK" then
       parse_error buf "wrong header (%s)" header;
-
     let version = Int32.to_int (IO.input_be_int32 buf) in
     if version <> 2 && version <> 3 then
       parse_error buf "wrong pack version (%d)" version;
+    version, Int32.to_int (IO.input_be_int32 buf)
 
-    let size = Int32.to_int (IO.input_be_int32 buf) in
+  let input_packed_value version buf =
+    if version = 2 then PackedValue2.input buf
+    else PackedValue3.input buf
 
+  let input idx buf =
+    let version, size = input_header (IO.clone buf) in
     let packs = Hashtbl.create size in
     fun node ->
       if Hashtbl.mem packs node then
         Hashtbl.find packs node
       else (
         let offset = List.assoc node idx.offsets in
-        let buf = IO.clone orig_buf in
+        let buf = IO.clone buf in
         let buf = match List.assoc node idx.lengths with
-          | None   -> IO.shift buf offset; buf
+          | None   ->
+            IO.shift buf offset;
+            IO.sub buf 0 (IO.length buf - 20)
           | Some l -> IO.sub buf offset l in
-        let value =
-          if version = 2 then
-            PackedValue2.input buf
-          else
-            PackedValue3.input buf in
+        let value = input_packed_value version buf in
         Hashtbl.add packs node value;
         value
       )
@@ -569,6 +581,43 @@ end = struct
     let buf = IO.of_string (File.Name.of_string "<hunk>") str in
     Value.input_inflated buf
 
+  let unpack ~read ~write idx offset packed_value =
+    let value = match packed_value with
+      | Value v     -> v
+      | Ref_delta d ->
+        let source = read d.source in
+        apply_delta { d with source }
+      | Off_delta d ->
+        let offset = offset - d.source in
+        let base, _ =
+          try List.find (fun (_,o) -> o=offset) idx
+          with Not_found ->
+            let msg = Printf.sprintf
+                "inflate: cannot find any object starting at offset %d"
+                offset in
+            failwith msg in
+        let source = read base in
+        apply_delta { d with source } in
+    write value
+
+  let unpack_all ~read ~write buf =
+    Printf.eprintf "UNPACK-ALL\n%!";
+    let version, size = input_header buf in
+    Printf.eprintf "version=%d size=%d\n%!" version size;
+
+    let next_packed_value () =
+      input_packed_value version buf in
+
+    let idx = ref [] in
+    for i = 0 to size - 1 do
+      Printf.eprintf "UNPACK [%d/%d]\n%!" (i+1) size;
+      let offset = IO.offset buf in
+      let packed_value = next_packed_value () in
+      let node = unpack ~read ~write !idx offset packed_value in
+      idx := (node, offset) :: !idx
+    done;
+    List.map fst !idx
+
   let output _ =
     todo "pack"
 
@@ -578,15 +627,6 @@ end = struct
 end
 
 module Idx: VALUE with type t := pack_index = struct
-
-  let lengths offsets =
-    let rec aux acc = function
-      | []    -> List.rev acc
-      | [h,_] -> aux ((h,None)::acc) []
-      | (h1,l1)::((h2,l2)::_ as t) -> aux ((h1,Some (l2-l1))::acc) t in
-    (* Compare the list in increasing offests. *)
-    let l = List.sort (fun (_,x) (_,y) -> compare x y) offsets in
-    aux [] l
 
   let input buf =
     let buf = IO.push buf "pack-index" in

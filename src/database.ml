@@ -44,7 +44,10 @@ module type BACKEND = sig
   val write: t -> value -> node
 
   (** Read a node contents. *)
-  val read: t -> node -> value
+  val read: t -> node -> value option
+
+  (** List all the nodes. *)
+  val list: t -> node list
 
   (** Get the node corresponding to a given key for a given revision.
       In case the node does not exists, return None.*)

@@ -80,6 +80,9 @@ let rec_files dir =
     List.fold_left aux (f @ accu) d in
   aux [] dir
 
+let cwd () =
+  Dirname.of_string (Sys.getcwd ())
+
 module OP = struct
 
   let concat dir string =
