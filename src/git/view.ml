@@ -75,6 +75,10 @@ let create_graph t =
   List.iter (fun (id, obj as src) ->
     let succs = Store.succ t id in
     List.iter (fun (l, succ) ->
+      let l = match l with
+        | `parent -> ""
+        | `tag t  -> "TAG-" ^ t
+        | `file f -> f in
       G.add_edge_e g (src, l, (succ, read succ))
     ) succs
   ) nodes;

@@ -57,16 +57,18 @@ let clone =
       "Create a shallow clone with a history truncated to the specified number \
        of revisions. Refer to $(b,git clone --help) for more information."
       Arg.(some int) None in
+  let bare =
+    mk_flag ["bare"] "Do not expand the filesystem." in
   let address =
     arg_list "ADDRESS" "Address of the remote repository." Arg.string in
-  let clone deepen = function
+  let clone deepen bare = function
     | [a] ->
       let name = Filename.basename a in
       let name = Filename.chop_extension name in
       let t = Git.Store.create (File.Dirname.of_string name) in
       Git.Protocol.clone t ~write:true ?deepen a; `Ok ()
     | _   -> `Error (true, "Too many address") in
-  Term.(ret (pure clone $ depth $ address)),
+  Term.(ret (pure clone $ depth $ bare $ address)),
   term_info "clone" ~doc ~man
 
 (* GRAPH *)

@@ -465,7 +465,7 @@ let connect address port =
 let todo msg =
   failwith ("TODO: " ^ msg)
 
-let clone t ?(write=false) ?deepen address =
+let clone ?(write=false) ?(bare=false) ?deepen t address =
   let r = Init.create address in
   match Init.host r with
   | None   -> todo "no-host"
@@ -479,9 +479,9 @@ let clone t ?(write=false) ?deepen address =
     ) (Listing.references listing);
     match Listing.head listing with
     | None    -> Init.close oc
-    | Some id ->
+    | Some head ->
       debug "PHASE1";
-      let _shallows = Upload.phase1 ?deepen (ic,oc) [id] in
+      let _shallows = Upload.phase1 ?deepen (ic,oc) [head] in
 
       debug "PHASE2";
       Upload.phase2 (ic,oc) [];
@@ -505,8 +505,16 @@ let clone t ?(write=false) ?deepen address =
         node in
 
       let nodes = Backend.Pack.unpack_all ~read ~write buf in
-      match nodes with
-      | [] -> debug "NO NEW OBJECTS"
-      | _  ->
-        debug "NEW OBJECTS";
-        List.iter (fun n -> debug "%s" (to_hex n)) nodes
+      begin match nodes with
+        | [] -> debug "NO NEW OBJECTS"
+        | _  ->
+          debug "NEW OBJECTS";
+          List.iter (fun n -> debug "%s" (to_hex n)) nodes
+      end;
+      if not bare then (
+        debug "EXPANDING THE FILESYSTEM";
+        match Filesystem.init t (Model.Node.to_commit head) with
+        | None      -> failwith "filesystem"
+        | Some tree -> Filesystem.write t tree
+      ) else
+        debug "BARE REPOSITORY"

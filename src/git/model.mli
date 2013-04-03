@@ -30,11 +30,21 @@ module Node: sig
   (** Treee nodes. *)
   module Tree  : Abstract.SIG
 
+  (** Blob nodes. *)
+  module Blob: Abstract.SIG
+
   (** A commit node is also a node. *)
   val commit: Commit.t -> t
 
+  (** A node can be casted to a commit. WARNING: this is not
+      type-safe, use it carrefuly! *)
+  val to_commit: t -> Commit.t
+
   (** A tree node is also a node. *)
   val tree: Tree.t -> t
+
+  (** A blob node is also a node. *)
+  val blob: Blob.t -> t
 
   (** Build a node from a raw string. *)
   val sha1: string -> t

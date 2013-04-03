@@ -44,7 +44,7 @@ val refs: t -> (string * node) list
 val list: t -> node list
 
 (** Successors (with labels). *)
-val succ: t -> node -> (string * node) list
+val succ: t -> node -> ([`parent|`tag of string|`file of string] * node) list
 
 (** Write a value. *)
 val write: t -> value -> node

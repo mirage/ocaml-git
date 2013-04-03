@@ -19,7 +19,6 @@ open Model
 open File.OP
 
 let create root =
-  let root = root / ".git" in
   {
     root;
     buffers = Hashtbl.create 1024;
@@ -42,7 +41,7 @@ module Loose = struct
     let hex = to_hex node in
     let prefix = String.sub hex 0 2 in
     let suffix = String.sub hex 2 (String.length hex - 2) in
-    root / "objects" / prefix // suffix
+    root / ".git" / "objects" / prefix // suffix
 
   let read_inflated t node =
     if Hashtbl.mem t.buffers node then
@@ -93,12 +92,12 @@ module Loose = struct
     write_and_check_inflated t node inflated
 
   let list root =
-    let objects = root / "objects" in
+    let objects = root / ".git" / "objects" in
     let objects = File.directories objects in
     let objects = List.map File.Dirname.basename objects in
     let objects = List.filter (fun s -> (s <> "info") && (s <> "pack")) objects in
     List.fold_left (fun acc prefix ->
-      let dir = root / "objects" / prefix in
+      let dir = root / ".git" / "objects" / prefix in
       let suffixes = File.files dir in
       let suffixes = List.map File.basename suffixes in
       let objects = List.map (fun suffix ->
@@ -112,12 +111,12 @@ end
 module Packed = struct
 
   let file root node =
-    let pack_dir = root / "objects" / "pack" in
+    let pack_dir = root / ".git" / "objects" / "pack" in
     let pack_file = "pack-" ^ (to_hex node) ^ ".pack" in
     pack_dir // pack_file
 
   let list root =
-    let packs = root / "objects" / "pack" in
+    let packs = root / ".git" / "objects" / "pack" in
     let packs = File.files packs in
     let packs = List.map File.basename packs in
     let packs = List.filter (fun f -> Filename.check_suffix f ".idx") packs in
@@ -128,7 +127,7 @@ module Packed = struct
     ) packs
 
   let index root node =
-    let pack_dir = root / "objects" / "pack" in
+    let pack_dir = root / ".git" / "objects" / "pack" in
     let idx_file = "pack-" ^ (to_hex node) ^ ".idx" in
     pack_dir // idx_file
 
@@ -222,7 +221,7 @@ let dump root =
   ) nodes
 
 let refs t =
-  let refs = t.root / "refs" in
+  let refs = t.root / ".git" / "refs" in
   let files = File.rec_files refs in
   let n = String.length (File.Dirname.to_string t.root) in
   List.map (fun file ->
@@ -232,17 +231,14 @@ let refs t =
   ) files
 
 let succ root node =
-  let nolabel s = ("", s) in
+  let parent c = (`parent, Node.commit c) in
+  let tag t = (`tag t.tag, Node.commit t.commit) in
   match read root node with
   | None            -> []
   | Some (Blob _)   -> []
-  | Some (Commit c) ->
-    nolabel (Node.tree c.tree)
-    :: List.map (fun c -> nolabel (Node.commit c)) c.parents
-  | Some (Tag t)    ->
-    [t.tag, Node.commit t.commit]
-  | Some (Tree t)   ->
-    List.map (fun e -> (e.file, e.node)) t
+  | Some (Commit c) -> (`file "", Node.tree c.tree) :: List.map parent c.parents
+  | Some (Tag t)    -> [tag t]
+  | Some (Tree t)   -> List.map (fun e -> (`file e.file, e.node)) t
 
 let write t value =
   Loose.write t value
@@ -257,7 +253,7 @@ let write_and_check_inflated t node inflated =
   Loose.write_and_check_inflated t node inflated
 
 let write_reference t name node =
-  let file = t.root // name in
+  let file = t.root / ".git" // name in
   File.mkdir (File.dirname file);
   let oc = open_out_bin (File.Name.to_string file) in
   output_string oc (to_hex node);

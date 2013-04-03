@@ -14,9 +14,15 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** Clone/Fecth/Push protocol *)
+(** Map the object tree into a hierarchy of files. *)
 
-(** Clone a remote repository. *)
-val clone:
-  ?write:bool -> ?bare:bool -> ?deepen:int ->
-  Model.t -> string -> unit
+open Lib
+
+(** A filesystem is a lazy tree. *)
+type t = (string, Model.blob) Trie.t
+
+(** Build a filesystem in memory, starting at a given revision. *)
+val init: Model.t -> Model.Node.Commit.t -> t option
+
+(** Write a file hierarchy to the disk. *)
+val write: Model.t -> t -> unit

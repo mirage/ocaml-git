@@ -20,8 +20,12 @@ module Node = struct
   include Abstract.String
   module Commit = Abstract.String
   module Tree   = Abstract.String
+  module Blob   = Abstract.String
+
   let commit c = of_string (Commit.to_string c)
+  let to_commit n = Commit.of_string (to_string n)
   let tree t = of_string (Tree.to_string t)
+  let blob b = of_string (Blob.to_string b)
 
   let sha1 str =
     let hash = Cryptokit.Hash.sha1 () in
