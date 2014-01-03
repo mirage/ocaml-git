@@ -1,2 +1,5 @@
-dist/
+_build/
 *~
+setup.log
+setup.data
+gitMain.native
