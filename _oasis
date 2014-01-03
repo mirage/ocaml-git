@@ -1,0 +1,41 @@
+OASISFormat: 0.3
+Name:        cagit
+Version:     0.1.0
+Synopsis:    A low-level interface to Git in pure OCaml
+Authors:     Thomas Gazagnaire
+License:     ISC
+Plugins:     META (0.3), DevFiles (0.3)
+BuildTools:  ocamlbuild
+
+Flag unix
+  Description: build the Unix library
+  Default: true
+
+Library git
+  Path:         lib/
+  Findlibname:  git
+  Modules:      GitMisc, GitTypes, GitMarshal, GitLocal, GitRemote,
+                GitMemory, GitGraph
+  BuildDepends:	mstruct, dolog, core_kernel, ocamlgraph, lazy-trie,
+                re.pcre, zip, cryptokit, uri
+
+Executable ogit
+  Path:               lib/
+  MainIs:             gitMain.ml
+  Build$:             flag(unix)
+  CompiledObject:     best
+  Install:            true
+  BuildDepends:       cmdliner, git
+
+Executable test_git
+  Path:               lib_test
+  MainIs:             read.ml
+  Build$:             flag(tests) && flag(unix)
+  CompiledObject:     best
+  Install:            false
+  BuildDepends:       git, alcotest
+
+Test test_git
+  Run$:               flag(tests)
+  Command:            $test_git -q
+  WorkingDirectory:   lib_test
