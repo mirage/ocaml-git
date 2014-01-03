@@ -14,14 +14,16 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Lib
+open Core_kernel.Std
+
+open GitTypes
 
 let sp  = '\x20'
 let nul = '\x00'
 let lf  = '\x0a'
 
 let error fmt =
-  Printf.kprintf (fun msg ->
+  Printf.ksprintf (fun msg ->
     Printf.printf "Protocol error:%s\n%!" msg;
     raise Parsing.Parse_error
   ) fmt
@@ -29,16 +31,16 @@ let error fmt =
 let debug = ref true
 
 let debug fmt =
-  Printf.kprintf (fun str ->
+  Printf.ksprintf (fun str ->
     if !debug then
       Printf.printf "%s\n%!" str
   ) fmt
 
 let of_hex str =
-  Model.Node.of_string (Misc.hex_decode str)
+  Node.of_string (GitMisc.hex_decode str)
 
 let to_hex id =
-  Misc.hex_encode (Model.Node.to_string id)
+  GitMisc.hex_encode (Node.to_string id)
 
 module PacketLine = struct
 
@@ -123,10 +125,10 @@ module Capabilities = struct
   type t = Capability.t list
 
   let of_string str =
-    List.map Capability.of_string (Misc.split str sp)
+    List.map ~f:Capability.of_string (String.split str ~on:sp)
 
   let to_string l =
-    String.concat " " (List.map Capability.to_string l)
+    String.concat ~sep:" " (List.map ~f:Capability.to_string l)
 
   (* XXX really ? *)
   let default = []
@@ -213,49 +215,49 @@ module Listing = struct
 
   type t = {
     capabilities: Capabilities.t;
-    references  : (Model.node * string) list;
+    references  : string Node.Map.t;
   }
 
   let references t = t.references
 
   let empty = {
     capabilities = [];
-    references   = [];
+    references   = Node.Map.empty;
   }
 
   let head t =
-    match List.filter (fun (id,n) -> n="HEAD") t.references with
-    | []        -> None
-    | (id,_)::_ -> Some id
+    Map.fold
+      ~f:(fun ~key ~data acc -> if data="HEAD" then Some key else acc)
+      ~init:None t.references
 
   let dump t =
     Printf.printf "CAPABILITIES:\n%s\n" (Capabilities.to_string t.capabilities);
     Printf.printf "\nREFERENCES:\n";
-    List.iter
-      (fun (n,r) -> Printf.printf "%s %s\n%!" (to_hex n) r)
+    Map.iter
+      ~f:(fun ~key ~data -> Printf.printf "%s %s\n%!" (to_hex key) data)
       t.references
 
   let input ic =
     let rec aux acc =
       match PacketLine.input ic with
-      | None      -> { acc with references = List.rev acc.references }
+      | None      -> acc
       | Some line ->
-        match Misc.cut_at line sp with
+        match String.lsplit2 line ~on:sp with
         | Some ("ERR", err) -> error "ERROR: %s" err
         | Some (node, ref)  ->
           if acc = empty then (
             (* Read the capabilities on the first line *)
-            match Misc.cut_at ref nul with
+            match String.lsplit2 ref ~on:nul with
             | Some (ref, caps) ->
-              let pair = (of_hex node, ref) in
+              let references = Map.add ~key:(of_hex node) ~data:ref acc.references in
               let capabilities = Capabilities.of_string caps in
-              aux { references = [ pair ]; capabilities; }
+              aux { references; capabilities; }
             | None ->
-              let pair = (of_hex node, ref) in
-              aux { references = [ pair ]; capabilities = []; }
+              let references = Map.add ~key:(of_hex node) ~data:ref acc.references in
+              aux { references; capabilities = []; }
           ) else
-            let pair = (of_hex node, ref) in
-            aux { acc with references = pair :: acc.references }
+            let references = Map.add ~key:(of_hex node) ~data:ref acc.references in
+            aux { acc with references }
         | None -> error "%s is not a valid answer" line
     in
     aux empty
@@ -275,8 +277,8 @@ module Ack = struct
     | x          -> error "%s: invalid ack status" x
 
   type t =
-    | Ack_multi of Model.node * status
-    | Ack of Model.node
+    | Ack_multi of node * status
+    | Ack of node
     | Nak
 
   let input ic =
@@ -285,9 +287,9 @@ module Ack = struct
       | None
       | Some "NAK" -> List.rev (Nak :: acc)
       | Some s      ->
-        match Misc.cut_at s sp with
+        match String.lsplit2 s ~on:sp with
         | Some ("ACK", r) ->
-          begin match Misc.cut_at r sp with
+          begin match String.lsplit2 r ~on:sp with
             | None         -> aux (Ack (of_hex r) :: acc)
             | Some (id, s) -> aux (Ack_multi (of_hex id, string_of_status s) :: acc)
           end
@@ -300,21 +302,21 @@ end
 module Upload = struct
 
   type message =
-    | Want of Model.node * Capability.t list
-    | Shallow of Model.node
+    | Want of node * Capability.t list
+    | Shallow of node
     | Deepen of int
-    | Unshallow of Model.node
-    | Have of Model.node
+    | Unshallow of node
+    | Have of node
     | Done
 
   type t = message list
 
   let filter fn l =
-    List.fold_left (fun acc elt ->
+    List.fold_left ~f:(fun acc elt ->
       match fn elt with
       | None   -> acc
       | Some x -> x::acc
-    ) [] l
+    ) ~init:[] l
 
   let wants l =
     filter (function Want (x,y) -> Some (x,y) | _ -> None) l
@@ -340,7 +342,7 @@ module Upload = struct
       match PacketLine.input ic with
       | None   -> List.rev acc
       | Some l ->
-        match Misc.cut_at l sp with
+        match String.lsplit2 l ~on:sp with
         | None -> error "input upload"
         | Some (kind, s) ->
           match kind with
@@ -355,7 +357,7 @@ module Upload = struct
             aux (Deepen d :: acc)
           | "want" ->
             let aux id c = aux (Want (of_hex id, c) :: acc) in
-            begin match Misc.cut_at s sp with
+            begin match String.lsplit2 s ~on:sp with
               | Some (id,c) -> aux id (Capabilities.of_string c)
               | None        -> match acc with
                 | Want (_,c)::_ -> aux s c
@@ -369,7 +371,7 @@ module Upload = struct
     let last_c = ref [] in
 
     (* output wants *)
-    List.iter (fun (id, c) ->
+    List.iter ~f:(fun (id, c) ->
       if c = !last_c then
         let msg = Printf.sprintf "want %s\n" (to_hex id) in
         PacketLine.output_line oc msg
@@ -381,19 +383,19 @@ module Upload = struct
     ) (wants t);
 
     (* output shallows *)
-    List.iter (fun id ->
+    List.iter ~f:(fun id ->
       let msg = Printf.sprintf "shallow %s" (to_hex id) in
       PacketLine.output_line oc msg
     ) (shallows t);
 
     (* output unshallows *)
-    List.iter (fun id ->
+    List.iter ~f:(fun id ->
       let msg = Printf.sprintf "unshallow %s" (to_hex id) in
       PacketLine.output_line oc msg
     ) (unshallows t);
 
     (* output haves *)
-    List.iter (fun id ->
+    List.iter ~f:(fun id ->
       let msg = Printf.sprintf "have %s\n" (to_hex id) in
       PacketLine.output_line oc msg
     ) (haves t);
@@ -406,7 +408,7 @@ module Upload = struct
     );
 
     (* output done *)
-    if List.mem Done t then
+    if List.mem t Done then
       PacketLine.output_line oc "done"
     else
       PacketLine.flush oc
@@ -414,8 +416,8 @@ module Upload = struct
   (* PHASE1: the client send the the IDs he wants, the severs answer
      the new shallow state. *)
   let phase1 (ic, oc) ?deepen ?(shallows=[]) wants =
-    let wants = List.map (fun id -> Want (id, Capabilities.default)) wants in
-    let shallows = List.map (fun id -> Shallow id) shallows in
+    let wants = List.map ~f:(fun id -> Want (id, Capabilities.default)) wants in
+    let shallows = List.map ~f:(fun id -> Shallow id) shallows in
     let deepen = match deepen with
       | None   -> []
       | Some d -> [Deepen d] in
@@ -444,7 +446,7 @@ module Upload = struct
       else
         output oc (haves @ [Done])
     in
-    let haves = List.map (fun id -> Have id) haves in
+    let haves = List.map ~f:(fun id -> Have id) haves in
     aux haves;
     let _acks = Ack.input ic in
     ()
@@ -474,8 +476,8 @@ let clone ?(write=false) ?(bare=false) ?deepen t address =
     Init.output oc r;
     let listing = Listing.input ic in
     Listing.dump listing;
-    List.iter (fun (node, name) ->
-      Store.write_reference t name node
+    Map.iter ~f:(fun ~key:node ~data:name ->
+      GitLocal.write_reference t name node
     ) (Listing.references listing);
     match Listing.head listing with
     | None    -> Init.close oc
@@ -488,33 +490,33 @@ let clone ?(write=false) ?(bare=false) ?deepen t address =
 
       debug "PHASE3";
 
-      let raw = Misc.string_of_in_channel ic in
-      let buf = IO.of_string (File.Name.of_string "<network>") raw in
-      let buffers = Hashtbl.create 1024 in
+      let raw = In_channel.input_all ic in
+      let buf = Mstruct.of_string raw in
+      let buffers = Node.Table.create () in
       let read node =
-        if Hashtbl.mem buffers node then IO.clone (Hashtbl.find buffers node)
+        if Hashtbl.mem buffers node then Mstruct.clone (Hashtbl.find_exn buffers node)
         else error "%s: unknown node" (to_hex node) in
       let write value =
-        let inflated = Backend.Value.output_inflated value in
-        let node = Model.Node.sha1 inflated in
+        let inflated = GitMarshal.Value.output_inflated value in
+        let node = Node.sha1 inflated in
         if not (Hashtbl.mem buffers node) then (
-          let buf = IO.of_string (File.Name.of_string "<init>") inflated in
-          Hashtbl.add buffers node buf;
-          if write then Store.write_and_check_inflated t node inflated;
+          let buf = Mstruct.of_string inflated in
+          Hashtbl.replace buffers node buf;
+          if write then GitLocal.write_and_check_inflated t node inflated;
         );
         node in
 
-      let nodes = Backend.Pack.unpack_all ~read ~write buf in
+      let nodes = GitMarshal.Pack.unpack_all ~read ~write buf in
       begin match nodes with
         | [] -> debug "NO NEW OBJECTS"
         | _  ->
           debug "NEW OBJECTS";
-          List.iter (fun n -> debug "%s" (to_hex n)) nodes
+          List.iter ~f:(fun n -> debug "%s" (to_hex n)) nodes
       end;
       if not bare then (
         debug "EXPANDING THE FILESYSTEM";
-        match Filesystem.init t (Model.Node.to_commit head) with
+        match GitMemory.init t (Node.to_commit head) with
         | None      -> failwith "filesystem"
-        | Some tree -> Filesystem.write t tree
+        | Some tree -> GitMemory.write t tree
       ) else
         debug "BARE REPOSITORY"

@@ -15,7 +15,8 @@
  *)
 
 open Cmdliner
-open Lib
+
+open GitTypes
 
 let global_option_section = "COMMON OPTIONS"
 let help_sections = [
@@ -65,8 +66,8 @@ let clone =
     | [a] ->
       let name = Filename.basename a in
       let name = Filename.chop_extension name in
-      let t = Git.Store.create (File.Dirname.of_string name) in
-      Git.Protocol.clone t ~write:true ?deepen a; `Ok ()
+      let t = GitLocal.create name in
+      GitRemote.clone t ~write:true ?deepen a; `Ok ()
     | _   -> `Error (true, "Too many address") in
   Term.(ret (pure clone $ depth $ bare $ address)),
   term_info "clone" ~doc ~man
@@ -83,8 +84,7 @@ let graph =
     mk_required ["o";"output"] "FILE" "Output file."
       Arg.(some string) None in
   let graph file =
-    let file = File.Name.of_string file in
-    Git.View.current file in
+    GitGraph.current_to_dot file in
   Term.(pure graph $ file),
   term_info "graph" ~doc ~man
 
@@ -140,7 +140,7 @@ let default =
       clone_doc graph_doc in
   Term.(pure usage $ (pure ())),
   Term.info "cagit"
-    ~version:(Path_generated.project_version)
+    ~version:"0.9.0"
     ~sdocs:global_option_section
     ~doc
     ~man

@@ -16,22 +16,22 @@
 
 (** GIT data-model. *)
 
-open Lib
+open Core_kernel.Std
 
 (** Abstract identifiers. *)
 module Node: sig
 
   (** Generic nodes IDs. *)
-  include Abstract.SIG
+  include Identifiable.S
 
   (** Commit nodes. *)
-  module Commit: Abstract.SIG
+  module Commit: Identifiable.S
 
   (** Treee nodes. *)
-  module Tree  : Abstract.SIG
+  module Tree: Identifiable.S
 
   (** Blob nodes. *)
-  module Blob: Abstract.SIG
+  module Blob: Identifiable.S
 
   (** A commit node is also a node. *)
   val commit: Commit.t -> t
@@ -63,7 +63,7 @@ type user = {
 
 (** Blob files are leafs. For us, this is just a raw string but is
    could be arbitrary absract types. *)
-module Blob: Abstract.SIG
+module Blob: Identifiable.S
 
 (** Shorcut to blob types. *)
 type blob = Blob.t
@@ -136,8 +136,8 @@ type pack = node -> packed_value
 
 (** Pack indexes. *)
 type pack_index = {
-  offsets: (node * int) list;
-  lengths: (node * int option) list;
+  offsets: int Node.Map.t;
+  lengths: int option Node.Map.t;
 }
 
 (** {2 Casts} *)
@@ -167,8 +167,8 @@ val off_delta: int delta -> packed_value
 
 (** Git repository. *)
 type t = {
-  root   : File.Dirname.t;                                (** Git root *)
-  buffers: (node, IO.buffer) Hashtbl.t;  (** Cache of inflated buffers *)
-  packs  : (node, pack) Hashtbl.t;            (** Cache of pack files  *)
-  indexes: (node, pack_index) Hashtbl.t;      (** Cache of index files *)
+  root   : string;                                       (** Git root *)
+  buffers: (node, Mstruct.t) Hashtbl.t; (** Cache of inflated buffers *)
+  packs  : (node, pack) Hashtbl.t;           (** Cache of pack files  *)
+  indexes: (node, pack_index) Hashtbl.t;     (** Cache of index files *)
 }

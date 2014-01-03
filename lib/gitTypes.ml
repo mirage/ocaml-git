@@ -14,13 +14,15 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Lib
+open Core_kernel.Std
 
 module Node = struct
-  include Abstract.String
-  module Commit = Abstract.String
-  module Tree   = Abstract.String
-  module Blob   = Abstract.String
+
+  include (String: Identifiable.S)
+
+  module Commit: Identifiable.S = String
+  module Tree: Identifiable.S = String
+  module Blob: Identifiable.S = String
 
   let commit c = of_string (Commit.to_string c)
   let to_commit n = Commit.of_string (to_string n)
@@ -41,7 +43,7 @@ type user = {
   date : string;
 }
 
-module Blob = Abstract.String
+module Blob: Identifiable.S = String
 
 type blob = Blob.t
 
@@ -91,8 +93,8 @@ type packed_value =
   | Off_delta of int delta
 
 type pack_index = {
-  offsets: (node * int) list;
-  lengths: (node * int option) list;
+  offsets: int Node.Map.t;
+  lengths: int option Node.Map.t;
 }
 
 type pack = node -> packed_value
@@ -107,8 +109,8 @@ let ref_delta d = Ref_delta d
 let off_delta d = Off_delta d
 
 type t = {
-  root   : File.Dirname.t;
-  buffers: (node, IO.buffer) Hashtbl.t;
+  root   : string;
+  buffers: (node, Mstruct.t) Hashtbl.t;
   packs  : (node, pack) Hashtbl.t;
   indexes: (node, pack_index) Hashtbl.t;
 }

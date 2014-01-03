@@ -14,11 +14,12 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Lib
-open Model
+open Core_kernel.Std
+
+open GitTypes
 
 let to_string node =
-  let hex = Misc.hex_encode (Node.to_string node) in
+  let hex = GitMisc.hex_encode (Node.to_string node) in
   String.sub hex 0 8
 
 module G =
@@ -62,19 +63,19 @@ module Dot = Graph.Graphviz.Dot(struct
 let create_graph t =
 
   let g = G.create () in
-  let nodes = Store.list t in
+  let nodes = GitLocal.list t in
   let read n =
-    match Store.read t n with
+    match GitLocal.read t n with
     | None   -> failwith (Printf.sprintf "Cannot find %s" (to_string n))
     | Some v -> v in
-  let nodes = List.map (fun n -> (n, read n)) nodes in
+  let nodes = List.map ~f:(fun n -> (n, read n)) nodes in
 
   (* Add all the vertices *)
-  List.iter (G.add_vertex g) nodes;
+  List.iter ~f:(G.add_vertex g) nodes;
 
-  List.iter (fun (id, obj as src) ->
-    let succs = Store.succ t id in
-    List.iter (fun (l, succ) ->
+  List.iter ~f:(fun (id, obj as src) ->
+    let succs = GitLocal.succ t id in
+    List.iter ~f:(fun (l, succ) ->
       let l = match l with
         | `parent -> ""
         | `tag t  -> "TAG-" ^ t
@@ -87,12 +88,12 @@ let create_graph t =
   g
 
 let to_dot t file =
-  let oc = open_out_bin (File.Name.to_string file) in
-  let g = create_graph t in
-  Dot.output_graph oc g;
-  close_out oc
+  Out_channel.with_file file ~f:(fun oc ->
+      let g = create_graph t in
+      Dot.output_graph oc g;
+    )
 
-let current file =
-  let t = Store.create (File.Dirname.of_string ".git") in
-  Store.dump t;
+let current_to_dot file =
+  let t = GitLocal.create ".git" in
+  GitLocal.dump t;
   to_dot t file

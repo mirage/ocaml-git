@@ -14,23 +14,23 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Lib
-open Model
-open File.OP
+open Core_kernel.Std
 
-type t = (string, Model.blob) Trie.t
+open GitTypes
+
+type tree = (string, blob) Lazy_trie.t
 
 let init t commit =
   let rec aux node =
-    match Store.succ t node with
+    match GitLocal.succ t node with
     | []       ->
-      begin match Store.read t node with
-        | Some (Blob b) -> Some (Trie.create ~value:b ())
+      begin match GitLocal.read t node with
+        | Some (Blob b) -> Some (Lazy_trie.create ~value:b ())
         | _             -> None
       end
     | children ->
       let children = lazy (
-        List.fold_left (fun acc (l, n) ->
+        List.fold_left ~f:(fun acc (l, n) ->
           match l with
           | `parent
           | `tag _  -> acc
@@ -38,17 +38,15 @@ let init t commit =
             match aux n with
             | None   -> acc
             | Some t -> (l, t) :: acc
-        ) [] children
+        ) ~init:[] children
       ) in
-      Some (Trie.create ~children ())
+      Some (Lazy_trie.create ~children ())
   in
   aux (Node.commit commit)
 
 let write t trie =
-  Trie.iter (fun path blob ->
-    let file = String.concat "/" (File.Dirname.to_string t.root :: path) in
-    File.mkdir (File.dirname (File.Name.of_string file));
-    let oc = open_out file in
-    output_string oc (Blob.to_string blob);
-    close_out oc
+  Lazy_trie.iter (fun path blob ->
+    let file = String.concat ~sep:"/" (t.root :: path) in
+    GitMisc.mkdir (Filename.dirname file);
+    Out_channel.write_all file ~data: (Blob.to_string blob)
   ) trie

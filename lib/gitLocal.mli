@@ -14,16 +14,15 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** Mapping of git concepts into the filesystem. *)
+(** Management of Git objects in the local filesystem. *)
 
-open Lib
-open Model
+open GitTypes
 
 (** Read a complete repository state. Note: we only load the object
     references, not their contents. This is because we don't really want
     to store all the state in memory, especially when you can *huge* pack
     files. *)
-val create: File.Dirname.t -> t
+val create: string -> t
 
 (** Create a store from the current directory. *)
 val current: unit -> t

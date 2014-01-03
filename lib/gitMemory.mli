@@ -14,12 +14,15 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** Manage object graphs. *)
+(** Load a part of the Git store into an in-memory lazy tree. *)
 
-open Lib
+open GitTypes
 
-(** Display any repository. *)
-val to_dot: Model.t -> File.Name.t -> unit
+type tree = (string, blob) Lazy_trie.t
+(** A filesystem is a lazy tree to hold a part of the Git store. *)
 
-(** Display the current repository. *)
-val current: File.Name.t -> unit
+val init: t -> Node.Commit.t -> tree option
+(** Build a filesystem in memory, starting at a given revision. *)
+
+val write: t -> tree -> unit
+(** Write a file hierarchy to the disk. *)

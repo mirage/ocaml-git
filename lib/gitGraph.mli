@@ -14,9 +14,12 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** Clone/Fecth/Push protocol *)
+(** Manage object graphs. *)
 
-(** Clone a remote repository. *)
-val clone:
-  ?write:bool -> ?bare:bool -> ?deepen:int ->
-  Model.t -> string -> unit
+open GitTypes
+
+val to_dot: t -> string -> unit
+(** Export the Git store as a "graphviz" file. *)
+
+val current_to_dot: string -> unit
+(** Export the current repository. *)

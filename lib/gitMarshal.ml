@@ -14,11 +14,9 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Lib
-open IO
-open Model
+open Core_kernel.Std
 
-let (|>) x f = f x
+open GitTypes
 
 let (++) f g x = f (g x)
 
@@ -32,9 +30,8 @@ let lt  = '<'
 let gt  = '>'
 
 let input_hex buf =
-  let buf = IO.push buf "hex-tree" in
-  IO.input_string buf None
-  |> Misc.hex_decode
+  Mstruct.get_string buf (Mstruct.length buf)
+  |> GitMisc.hex_decode
 
 let input_hex_tree buf =
   Node.Tree.of_string (input_hex buf)
@@ -43,7 +40,7 @@ let input_hex_commit buf =
   Node.Commit.of_string (input_hex buf)
 
 let output_hex buf hex =
-  Buffer.add_string buf (Misc.hex_encode hex)
+  Buffer.add_string buf (GitMisc.hex_encode hex)
 
 let output_hex_commit buf hex =
   output_hex buf (Node.Commit.to_string hex)
@@ -52,8 +49,7 @@ let output_hex_tree buf hex =
   output_hex buf (Node.Tree.to_string hex)
 
 let input_node buf =
-  let buf = IO.push buf "node" in
-  IO.input_string buf (Some 20)
+  Mstruct.get_string buf 20
   |> Node.of_string
 
 let output_node buf t =
@@ -63,7 +59,7 @@ module type VALUE = sig
   type t
   val dump: t -> unit
   val output: Buffer.t -> t -> unit
-  val input: IO.buffer -> t
+  val input: Mstruct.t -> t
 end
 
 module User: sig
@@ -80,19 +76,18 @@ end = struct
     Buffer.add_string buf t.date
 
   let input buf =
-    let buf = IO.push buf "user" in
-    let i = match IO.index buf lt with
+    let i = match Mstruct.index buf lt with
       | Some i -> i-1
-      | None   -> parse_error buf "invalid user name" in
-    let name = IO.input_string buf (Some i) in
-    IO.shift buf 2;
-    let j = match IO.index buf gt with
+      | None   -> Mstruct.parse_error_buf buf "invalid user name" in
+    let name = Mstruct.get_string buf i in
+    Mstruct.shift buf 2;
+    let j = match Mstruct.index buf gt with
       | Some j -> j
-      | None   -> parse_error buf "invalid user email" in
-    let email = IO.input_string buf (Some j) in
+      | None   -> Mstruct.parse_error_buf buf "invalid user email" in
+    let email = Mstruct.get_string buf j in
     (* skip 2 bytes *)
-    IO.shift buf 2;
-    let date = IO.input_string buf None in
+    Mstruct.shift buf 2;
+    let date = Mstruct.get_string buf (Mstruct.length buf) in
     { name; email; date }
 
   let pretty t =
@@ -111,8 +106,7 @@ module Blob: VALUE with type t := Blob.t = struct
     Printf.eprintf "%s\n" (Blob.to_string t)
 
   let input buf =
-    let buf = IO.push buf "blob" in
-    IO.input_string buf None
+    Mstruct.get_string buf (Mstruct.length buf)
     |> Blob.of_string
 
   let output buf t =
@@ -129,8 +123,9 @@ module Commit: VALUE with type t := commit = struct
       \  author   : %s\n\
       \  committer: %s\n\
       \  message  :\n%s\n"
-      (Misc.hex_encode (Node.Tree.to_string t.tree))
-      (String.concat ", " (List.map (Misc.hex_encode ++ Node.Commit.to_string) t.parents))
+      (GitMisc.hex_encode (Node.Tree.to_string t.tree))
+      (String.concat ~sep:", "
+         (List.map ~f:(GitMisc.hex_encode ++ Node.Commit.to_string) t.parents))
       (User.pretty t.author)
       (User.pretty t.committer)
       t.message
@@ -144,57 +139,54 @@ module Commit: VALUE with type t := commit = struct
     Buffer.add_string buf "tree ";
     output_hex_tree   buf t.tree;
     Buffer.add_char   buf lf;
-    List.iter (output_parent buf) t.parents;
+    List.iter ~f:(output_parent buf) t.parents;
     Buffer.add_string buf "author ";
     User.output        buf t.author;
     Buffer.add_char   buf lf;
     Buffer.add_string buf "committer ";
-    User.output        buf t.committer;
+    User.output       buf t.committer;
     Buffer.add_char   buf lf;
     Buffer.add_char   buf lf;
     Buffer.add_string buf t.message
 
   let input_parents buf =
-    let buf = IO.push buf "parents" in
     let rec aux parents =
-      match IO.input_string_delim buf sp with
+      match Mstruct.get_string_delim buf sp with
       | None   -> List.rev parents
       | Some p ->
         if p = "parent" then
-          match IO.input_delim buf lf input_hex_commit with
-          | None   -> parse_error buf "input_parents"
+          match Mstruct.get_delim buf lf input_hex_commit with
+          | None   -> Mstruct.parse_error_buf buf "input_parents"
           | Some h -> aux (h :: parents)
         else (
           (* we cancel the shift we've done to input the key *)
           let n = String.length p in
-          IO.shift buf (-n-1);
+          Mstruct.shift buf (-n-1);
           List.rev parents
         ) in
     aux []
 
   let input_key_value buf expected input_value =
     let error actual =
-      parse_error buf "keys: [actual: %s] [expected: %s]" actual expected in
+      Mstruct.parse_error_buf buf "keys: [actual: %s] [expected: %s]" actual expected in
     let key =
-      let buf = IO.push buf "key" in
-      match IO.input_string_delim buf sp with
+      match Mstruct.get_string_delim buf sp with
       | None   -> error "<none>"
       | Some k -> k in
     if key <> expected then
       error key
     else
-      match IO.input_delim buf lf input_value with
-      | None   -> parse_error buf "no value to input"
+      match Mstruct.get_delim buf lf input_value with
+      | None   -> Mstruct.parse_error_buf buf "no value to input"
       | Some v -> v
 
   let input buf =
-    let buf       = IO.push         buf "commit" in
     let tree      = input_key_value buf "tree" input_hex_tree in
     let parents   = input_parents   buf in
     let author    = input_key_value buf "author" User.input in
     let committer = input_key_value buf "committer" User.input in
-    IO.shift buf 1;
-    let message   = IO.input_string buf None in
+    Mstruct.shift buf 1;
+    let message   = Mstruct.to_string buf in
     { parents; message; tree; author; committer }
 
 end
@@ -212,7 +204,7 @@ module Tree: VALUE with type t := tree = struct
     | "100755" -> `exec
     | "120000" -> `normal
     | "40000"  -> `dir
-    | x -> parse_error buf "%S is not a valid permission." x
+    | x -> Mstruct.parse_error_buf buf "%S is not a valid permission." x
 
   let string_of_perm = function
     | `normal -> "100644"
@@ -230,7 +222,7 @@ module Tree: VALUE with type t := tree = struct
       (Node.to_string e.node)
 
   let dump t =
-    List.iter dump_entry t
+    List.iter ~f:dump_entry t
 
   let output_entry buf e =
     Buffer.add_string buf (string_of_perm e.perm);
@@ -240,12 +232,11 @@ module Tree: VALUE with type t := tree = struct
     output_node       buf e.node
 
   let input_entry buf =
-    let buf  = IO.push buf "entry" in
-    let perm = match IO.input_string_delim buf sp with
-      | None      -> parse_error buf "invalid perm"
+    let perm = match Mstruct.get_string_delim buf sp with
+      | None      -> Mstruct.parse_error_buf buf "invalid perm"
       | Some perm -> perm in
-    let file = match IO.input_string_delim buf nul with
-      | None      -> parse_error buf "invalid filename"
+    let file = match Mstruct.get_string_delim buf nul with
+      | None      -> Mstruct.parse_error_buf buf "invalid filename"
       | Some file -> file in
     let node = input_node buf in
     let entry = {
@@ -255,12 +246,11 @@ module Tree: VALUE with type t := tree = struct
     Some entry
 
   let output buf t =
-    List.iter (output_entry buf) t
+    List.iter ~f:(output_entry buf) t
 
   let input buf =
-    let buf = IO.push buf "entries" in
     let rec aux entries =
-      if IO.length buf <= 0 then
+      if Mstruct.length buf <= 0 then
         List.rev entries
       else
         match input_entry buf with
@@ -280,11 +270,11 @@ module Tag: VALUE with type t := tag = struct
 end
 
 module Value: sig
-  include VALUE with type t := Model.value
-  val input: IO.buffer -> Model.value
-  val input_inflated: IO.buffer -> Model.value
-  val output_inflated: Model.value -> string
-  val output: Model.value -> string
+  include VALUE with type t := value
+  val input: Mstruct.t -> value
+  val input_inflated: Mstruct.t -> value
+  val output_inflated: value -> string
+  val output: value -> string
 end = struct
 
   let dump = function
@@ -329,38 +319,35 @@ end = struct
 
   let output t =
     let inflated = output_inflated t in
-    let deflated = Misc.deflate_string inflated in
+    let deflated = GitMisc.deflate_string inflated in
     deflated
 
   let input_inflated buf =
-    let buf = IO.push buf "value" in
     (* XXX call zlib directly on the stream interface *)
     let obj_type =
-      let buf = IO.push buf "type" in
-      match IO.input_string_delim buf sp with
-      | None   -> parse_error buf "value: type"
+      match Mstruct.get_string_delim buf sp with
+      | None   -> Mstruct.parse_error_buf buf "value: type"
       | Some t -> t in
     let size =
-      let buf = IO.push buf "size" in
-      match IO.input_string_delim buf nul with
-      | None   -> parse_error buf "value: size"
+      match Mstruct.get_string_delim buf nul with
+      | None   -> Mstruct.parse_error_buf buf "value: size"
       | Some s ->
         try int_of_string s
-        with _ -> parse_error buf "%S is not a valid integer." s in
-    if size <> IO.length buf then
-      parse_error buf
+        with _ -> Mstruct.parse_error_buf buf "%S is not a valid integer." s in
+    if size <> Mstruct.length buf then
+      Mstruct.parse_error_buf buf
         "[expected-size: %d; actual-size: %d]\n"
-        size (IO.length buf);
-    let buf = IO.sub buf 0 size in
+        size (Mstruct.length buf);
+    let buf = Mstruct.sub buf 0 size in
     match obj_type with
     | "blob"   -> Blob.input buf   |> blob
     | "commit" -> Commit.input buf |> commit
     | "tag"    -> Tag.input buf    |> tag
     | "tree"   -> Tree.input buf   |> tree
-    | x        -> parse_error buf "%S is not a valid object type." x
+    | x        -> Mstruct.parse_error_buf buf "%S is not a valid object type." x
 
   let input buf =
-    input_inflated (IO.inflate buf)
+    input_inflated (GitMisc.inflate_mstruct buf)
 
 end
 
@@ -372,20 +359,20 @@ end = struct
     (i lsr bit) land 1 <> 0
 
   let input_hunk source_length buf =
-    let opcode = IO.input_byte buf in
+    let opcode = Mstruct.get_uint8 buf in
     if opcode = 0 then
-      parse_error buf "0 as value of the first byte of a hunk is reserved.";
+      Mstruct.parse_error_buf buf "0 as value of the first byte of a hunk is reserved.";
 
     match opcode land 0x80 with
 
     | 0 ->
-      let contents = IO.input_string buf (Some opcode) in
+      let contents = Mstruct.get_string buf opcode in
       Insert contents
 
     | _ ->
       let read bit shift =
         if not (isset opcode bit) then 0
-        else IO.input_byte buf lsl shift in
+        else Mstruct.get_uint8 buf lsl shift in
       let offset =
         let o0 = read 0 0 in
         let o1 = read 1 8 in
@@ -397,20 +384,19 @@ end = struct
         let l1 = read 5 8 in
         let l2 = read 6 16 in
         if M.version = 2 && l2 <> 0 then
-          parse_error buf "result fied set in delta hunk";
+          Mstruct.parse_error_buf buf "result fied set in delta hunk";
         l0 lor l1 lor l2 in
       let length =
         if length = 0 then 0x10000 else length in
       if offset+length > source_length then
-        parse_error buf
+        Mstruct.parse_error_buf buf
           "wrong insert hunk (offset:%d length:%d source:%d)"
           offset length source_length;
       Copy (offset, length)
 
   let input_le_base_128 buf =
-    let buf = IO.push buf "le-128" in
     let rec aux int shift =
-      let byte = IO.input_byte buf in
+      let byte = Mstruct.get_uint8 buf in
       let more = (byte land 0x80) <> 0 in
       let base = byte land 0x7f in
       let int  = (base lsl shift) lor int in
@@ -419,19 +405,17 @@ end = struct
     aux 0 0
 
   let input_hunks size source buf =
-    let buf = IO.push buf (Printf.sprintf "hunks[%d]" size) in
     let source_length = input_le_base_128 buf in
     let result_length = input_le_base_128 buf in
     let rec aux acc =
-      if IO.length buf = 0 then List.rev acc
+      if Mstruct.length buf = 0 then List.rev acc
       else aux (input_hunk source_length buf :: acc) in
     let hunks = aux [] in
     { source; hunks; source_length; result_length }
 
   let input_be_modified_base_128 buf =
-    let buf = IO.push buf "be-128" in
     let rec aux i n =
-      let byte = IO.input_byte buf in
+      let byte = Mstruct.get_uint8 buf in
       let more = (byte land 0x80) <> 0 in
       let i    = if n >= 2 then i+1 else i in
       let i    = (i lsl 7) lor (byte land 0x7f) in
@@ -440,8 +424,7 @@ end = struct
     aux 0 1
 
   let input buf =
-    let buf  = IO.push buf "pack-value" in
-    let byte = IO.input_byte buf in
+    let byte = Mstruct.get_uint8 buf in
     let more = (byte land 0x80) <> 0 in
     let kind = (byte land 0x70) lsr 4 in
     let size =
@@ -453,24 +436,21 @@ end = struct
 
     let with_inflated buf fn =
       (* XXX: the 2 following lines are very expensive *)
-      let buf = IO.push buf "inflated"in
-      fn (IO.inflate buf) in
+      fn (GitMisc.inflate_mstruct buf) in
 
     match kind with
-    | 0b000 -> parse_error   buf "invalid: Reserved"
+    | 0b000 -> Mstruct.parse_error_buf buf "invalid: Reserved"
     | 0b001 -> with_inflated buf Commit.input |> commit |> value
     | 0b010 -> with_inflated buf Tree.input   |> tree   |> value
     | 0b011 -> with_inflated buf Blob.input   |> blob   |> value
     | 0b100 -> with_inflated buf Tag.input    |> tag    |> value
-    | 0b101 -> parse_error   buf "invalid: Reserved"
+    | 0b101 -> Mstruct.parse_error_buf buf "invalid: Reserved"
     | 0b110 ->
       let base  = input_be_modified_base_128 buf in
-      let buf   = IO.push buf (Printf.sprintf "delta-off[%d]" base) in
       let hunks = with_inflated buf (input_hunks size base)in
       off_delta hunks
     | 0b111 ->
       let base  = input_node buf in
-      let buf   = IO.push buf "delta-ref" in
       let hunks = with_inflated buf (input_hunks size base) in
       ref_delta hunks
     | _     -> assert false
@@ -492,58 +472,57 @@ let lengths offsets =
     | [h,_] -> aux ((h,None)::acc) []
     | (h1,l1)::((h2,l2)::_ as t) -> aux ((h1,Some (l2-l1))::acc) t in
   (* Compare the list in increasing offests. *)
-  let l = List.sort (fun (_,x) (_,y) -> compare x y) offsets in
+  let l = List.sort ~cmp:(fun (_,x) (_,y) -> compare x y) offsets in
   aux [] l
 
 module Pack: sig
   include VALUE with type t := pack
-  val input: pack_index -> IO.buffer -> pack
+  val input: pack_index -> Mstruct.t -> pack
   val unpack:
-    read:(node -> IO.buffer) -> write:(value -> node) ->
-    (node * int) list -> int -> packed_value -> node
+    read:(node -> Mstruct.t) -> write:(value -> node) ->
+    int Node.Map.t -> int -> packed_value -> node
   val unpack_all:
-    read:(node -> IO.buffer) -> write:(value -> node) ->
-    IO.buffer -> node list
+    read:(node -> Mstruct.t) -> write:(value -> node) ->
+    Mstruct.t -> node list
 end = struct
 
   let input_header buf =
-    let buf = IO.push buf "version" in
-    let header = IO.input_string buf (Some 4) in
+    let header = Mstruct.get_string buf 4 in
     if header <> "PACK" then
-      parse_error buf "wrong header (%s)" header;
-    let version = Int32.to_int (IO.input_be_int32 buf) in
+      Mstruct.parse_error_buf buf "wrong header (%s)" header;
+    let version = Int32.to_int_exn (Mstruct.get_be_uint32 buf) in
     if version <> 2 && version <> 3 then
-      parse_error buf "wrong pack version (%d)" version;
-    version, Int32.to_int (IO.input_be_int32 buf)
+      Mstruct.parse_error_buf buf "wrong pack version (%d)" version;
+    version, Int32.to_int_exn (Mstruct.get_be_uint32 buf)
 
   let input_packed_value version buf =
     if version = 2 then PackedValue2.input buf
     else PackedValue3.input buf
 
   let input idx buf =
-    let version, size = input_header (IO.clone buf) in
-    let packs = Hashtbl.create size in
+    let version, size = input_header (Mstruct.clone buf) in
+    let packs = Node.Table.create () in
     fun node ->
       if Hashtbl.mem packs node then
-        Hashtbl.find packs node
+        Hashtbl.find_exn packs node
       else (
-        let offset = List.assoc node idx.offsets in
-        let buf = IO.clone buf in
-        let buf = match List.assoc node idx.lengths with
+        let offset = Map.find_exn idx.offsets node in
+        let buf = Mstruct.clone buf in
+        let buf = match Map.find_exn idx.lengths node with
           | None   ->
-            IO.shift buf offset;
-            IO.sub buf 0 (IO.length buf - 20)
-          | Some l -> IO.sub buf offset l in
+            Mstruct.shift buf offset;
+            Mstruct.sub buf 0 (Mstruct.length buf - 20)
+          | Some l -> Mstruct.sub buf offset l in
         let value = input_packed_value version buf in
-        Hashtbl.add packs node value;
+        Hashtbl.replace packs node value;
         value
       )
 
   let apply_hunk source buf = function
     | Insert str     -> Buffer.add_string buf str
     | Copy (off,len) ->
-      let view = IO.sub (IO.clone source) off len in
-      let str = IO.input_string view None in
+      let view = Mstruct.sub (Mstruct.clone source) off len in
+      let str = Mstruct.to_string view in
       Buffer.add_string buf str
 
   let dump_delta d =
@@ -552,21 +531,21 @@ end = struct
        result-length: %d\n"
       d.source_length
       d.result_length;
-    List.iter (function
+    List.iter ~f:(function
       | Insert str     -> Printf.eprintf "INSERT %S\n" str
       | Copy (off,len) -> Printf.eprintf "COPY (%d,%d)\n" off len
     ) d.hunks
 
   let apply_delta delta =
     let source = delta.source in
-    let kind = match IO.input_string_delim source sp with
-      | None   -> parse_error source "missing kind"
+    let kind = match Mstruct.get_string_delim source sp with
+      | None   -> Mstruct.parse_error_buf source "missing kind"
       | Some k -> k in
-    let size = match IO.input_string_delim source nul with
-      | None   -> parse_error source "missing size"
+    let size = match Mstruct.get_string_delim source nul with
+      | None   -> Mstruct.parse_error_buf source "missing size"
       | Some s -> try int_of_string s with _ -> -1 in
     if size <> delta.source_length then
-      parse_error source
+      Mstruct.parse_error_buf source
         "size differs: delta:%d source:%d\n"
         delta.source_length size;
 
@@ -575,10 +554,10 @@ end = struct
     Buffer.add_char   buf sp;
     Buffer.add_string buf (string_of_int delta.result_length);
     Buffer.add_char   buf nul;
-    List.iter (apply_hunk delta.source buf) delta.hunks;
+    List.iter ~f:(apply_hunk delta.source buf) delta.hunks;
 
     let str = Buffer.contents buf in
-    let buf = IO.of_string (File.Name.of_string "<hunk>") str in
+    let buf = Mstruct.of_string str in
     Value.input_inflated buf
 
   let unpack ~read ~write idx offset packed_value =
@@ -589,13 +568,16 @@ end = struct
         apply_delta { d with source }
       | Off_delta d ->
         let offset = offset - d.source in
-        let base, _ =
-          try List.find (fun (_,o) -> o=offset) idx
-          with Not_found ->
+        let base =
+          match Map.fold
+                  ~f:(fun ~key ~data acc -> if data=offset then Some key else acc)
+                  ~init:None idx
+          with None ->
             let msg = Printf.sprintf
                 "inflate: cannot find any object starting at offset %d"
                 offset in
-            failwith msg in
+            failwith msg
+             | Some k -> k  in
         let source = read base in
         apply_delta { d with source } in
     write value
@@ -608,15 +590,15 @@ end = struct
     let next_packed_value () =
       input_packed_value version buf in
 
-    let idx = ref [] in
+    let idx = ref Node.Map.empty in
     for i = 0 to size - 1 do
       Printf.eprintf "UNPACK [%d/%d]\n%!" (i+1) size;
-      let offset = IO.offset buf in
+      let offset = Mstruct.offset buf in
       let packed_value = next_packed_value () in
       let node = unpack ~read ~write !idx offset packed_value in
-      idx := (node, offset) :: !idx
+      idx := Map.add !idx ~key:node ~data:offset
     done;
-    List.map fst !idx
+    Map.keys !idx
 
   let output _ =
     todo "pack"
@@ -629,24 +611,23 @@ end
 module Idx: VALUE with type t := pack_index = struct
 
   let input buf =
-    let buf = IO.push buf "pack-index" in
 
-    let magic = IO.input_string buf (Some 4) in
+    let magic = Mstruct.get_string buf 4 in
     if magic <> "\255tOc" then
-      parse_error buf "wrong magic index (%S)" magic;
-    let version = IO.input_be_int32 buf in
+      Mstruct.parse_error_buf buf "wrong magic index (%S)" magic;
+    let version = Mstruct.get_be_uint32 buf in
     if version <> 2l then
-      parse_error buf "wrong index version (%ld)" version;
+      Mstruct.parse_error_buf buf "wrong index version (%ld)" version;
 
     (* Read the fanout *)
     let fanout =
       let a = Array.create 256 0l in
       for i=0 to 255 do
-        a.(i) <- IO.input_be_int32 buf;
+        a.(i) <- Mstruct.get_be_uint32 buf;
       done;
       a in
 
-    let nb_objects = Int32.to_int fanout.(255) in
+    let nb_objects = Int32.to_int_exn fanout.(255) in
 
     (* Read the names *)
     let names =
@@ -660,7 +641,7 @@ module Idx: VALUE with type t := pack_index = struct
     let _crcs =
       let a = Array.create nb_objects 0l in
       for i=0 to nb_objects-1 do
-        a.(i) <- IO.input_be_int32 buf;
+        a.(i) <- Mstruct.get_be_uint32 buf;
       done;
       a in
 
@@ -669,9 +650,9 @@ module Idx: VALUE with type t := pack_index = struct
       let a = Array.create nb_objects 0l in
       let b = Array.create nb_objects false in
       for i=0 to nb_objects-1 do
-        b.(i) <- (IO.input_byte buf) land 128 <> 0;
-        IO.shift buf (-1);
-        a.(i) <- IO.input_be_int32 buf
+        b.(i) <- (Mstruct.get_uint8 buf) land 128 <> 0;
+        Mstruct.shift buf (-1);
+        a.(i) <- Mstruct.get_be_uint32 buf
       done;
       a, b in
 
@@ -679,17 +660,18 @@ module Idx: VALUE with type t := pack_index = struct
         let offset = offsets.(i) in
         let cont = conts.(i) in
         if cont then (
-          let offset = IO.input_be_int64 buf in
-          (name, Int64.to_int offset)
+          let offset = Mstruct.get_be_uint64 buf in
+          (name, Int64.to_int_exn offset)
         ) else
-          (name, Int32.to_int offset)
+          (name, Int32.to_int_exn offset)
       ) names in
 
     let _node = input_node buf in
     let _checksum = input_node buf in
 
-    let offsets = Array.to_list idx in
-    let lengths = lengths offsets in
+    let offsets_alist = Array.to_list idx in
+    let offsets = Node.Map.of_alist_exn offsets_alist in
+    let lengths = Node.Map.of_alist_exn (lengths offsets_alist) in
     { offsets; lengths }
 
   let output buf =
