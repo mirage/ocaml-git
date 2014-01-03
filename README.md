@@ -9,6 +9,7 @@ libgit in OCaml.
 ### Build Instructions
 
 ```
-opam install camlzip obuild cryptokit uri cmdliner ocplib-endian re ocamlgraph
+opam install camlzip dolog core_kernel cryptokit uri \
+  cmdliner lazy-trie mstruct re ocamlgraph
 make
 ```
