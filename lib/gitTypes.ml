@@ -16,7 +16,7 @@
 
 open Core_kernel.Std
 
-module Node = struct
+module SHA1 = struct
 
   include (String: Identifiable.S)
 
@@ -35,7 +35,7 @@ module Node = struct
     of_string hash#result
 end
 
-type node = Node.t
+type sha1 = SHA1.t
 
 type user = {
   name : string;
@@ -48,8 +48,8 @@ module Blob: Identifiable.S = String
 type blob = Blob.t
 
 type commit = {
-  tree     : Node.Tree.t;
-  parents  : Node.Commit.t list;
+  tree     : SHA1.Tree.t;
+  parents  : SHA1.Commit.t list;
   author   : user;
   committer: user;
   message  : string;
@@ -58,13 +58,13 @@ type commit = {
 type entry = {
   perm: [`normal|`exec|`link|`dir];
   file: string;
-  node: node;
+  node: sha1;
   }
 
 type tree = entry list
 
 type tag = {
-  commit     : Node.Commit.t;
+  commit     : SHA1.Commit.t;
   tag        : string;
   tagger     : user;
   tag_message: string;
@@ -89,15 +89,15 @@ type value =
 
 type packed_value =
   | Value     of value
-  | Ref_delta of node delta
+  | Ref_delta of sha1 delta
   | Off_delta of int delta
 
 type pack_index = {
-  offsets: int Node.Map.t;
-  lengths: int option Node.Map.t;
+  offsets: int SHA1.Map.t;
+  lengths: int option SHA1.Map.t;
 }
 
-type pack = node -> packed_value
+type pack = sha1 -> packed_value
 
 let commit c = Commit c
 let blob b = Blob b
@@ -110,7 +110,7 @@ let off_delta d = Off_delta d
 
 type t = {
   root   : string;
-  buffers: (node, Mstruct.t) Hashtbl.t;
-  packs  : (node, pack) Hashtbl.t;
-  indexes: (node, pack_index) Hashtbl.t;
+  buffers: (sha1, Mstruct.t) Hashtbl.t;
+  packs  : (sha1, pack) Hashtbl.t;
+  indexes: (sha1, pack_index) Hashtbl.t;
 }

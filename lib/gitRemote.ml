@@ -37,10 +37,10 @@ let debug fmt =
   ) fmt
 
 let of_hex str =
-  Node.of_string (GitMisc.hex_decode str)
+  SHA1.of_string (GitMisc.hex_decode str)
 
 let to_hex id =
-  GitMisc.hex_encode (Node.to_string id)
+  GitMisc.hex_encode (SHA1.to_string id)
 
 module PacketLine = struct
 
@@ -215,14 +215,14 @@ module Listing = struct
 
   type t = {
     capabilities: Capabilities.t;
-    references  : string Node.Map.t;
+    references  : string SHA1.Map.t;
   }
 
   let references t = t.references
 
   let empty = {
     capabilities = [];
-    references   = Node.Map.empty;
+    references   = SHA1.Map.empty;
   }
 
   let head t =
@@ -277,8 +277,8 @@ module Ack = struct
     | x          -> error "%s: invalid ack status" x
 
   type t =
-    | Ack_multi of node * status
-    | Ack of node
+    | Ack_multi of sha1 * status
+    | Ack of sha1
     | Nak
 
   let input ic =
@@ -302,11 +302,11 @@ end
 module Upload = struct
 
   type message =
-    | Want of node * Capability.t list
-    | Shallow of node
+    | Want of sha1 * Capability.t list
+    | Shallow of sha1
     | Deepen of int
-    | Unshallow of node
-    | Have of node
+    | Unshallow of sha1
+    | Have of sha1
     | Done
 
   type t = message list
@@ -492,13 +492,13 @@ let clone ?(write=false) ?(bare=false) ?deepen t address =
 
       let raw = In_channel.input_all ic in
       let buf = Mstruct.of_string raw in
-      let buffers = Node.Table.create () in
+      let buffers = SHA1.Table.create () in
       let read node =
         if Hashtbl.mem buffers node then Mstruct.clone (Hashtbl.find_exn buffers node)
         else error "%s: unknown node" (to_hex node) in
       let write value =
         let inflated = GitMarshal.Value.output_inflated value in
-        let node = Node.sha1 inflated in
+        let node = SHA1.sha1 inflated in
         if not (Hashtbl.mem buffers node) then (
           let buf = Mstruct.of_string inflated in
           Hashtbl.replace buffers node buf;
@@ -515,8 +515,8 @@ let clone ?(write=false) ?(bare=false) ?deepen t address =
       end;
       if not bare then (
         debug "EXPANDING THE FILESYSTEM";
-        match GitMemory.init t (Node.to_commit head) with
+        match GitMemory.filesystem_of_local t (SHA1.to_commit head) with
         | None      -> failwith "filesystem"
-        | Some tree -> GitMemory.write t tree
+        | Some tree -> GitMemory.write_filesystem t tree
       ) else
         debug "BARE REPOSITORY"

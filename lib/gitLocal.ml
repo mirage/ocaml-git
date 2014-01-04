@@ -23,19 +23,19 @@ open GitTypes
 let create root =
   {
     root;
-    buffers = Node.Table.create ();
-    packs   = Node.Table.create ();
-    indexes = Node.Table.create ();
+    buffers = SHA1.Table.create ();
+    packs   = SHA1.Table.create ();
+    indexes = SHA1.Table.create ();
   }
 
 let current () =
   create (Sys.getcwd ())
 
 let to_hex node =
-  GitMisc.hex_encode (Node.to_string node)
+  GitMisc.hex_encode (SHA1.to_string node)
 
 let of_hex hex =
-  Node.of_string (GitMisc.hex_decode hex)
+  SHA1.of_string (GitMisc.hex_decode hex)
 
 module Loose = struct
 
@@ -60,7 +60,7 @@ module Loose = struct
         None
 
   let write_inflated t inflated =
-    let node = Node.sha1 inflated in
+    let node = SHA1.sha1 inflated in
     Printf.eprintf "Expanding %s\n" (to_hex node);
     let file = file t.root node in
     GitMisc.mkdir (Filename.dirname file);
@@ -72,7 +72,7 @@ module Loose = struct
     let file = file t.root node in
     if not (Sys.file_exists file)
     then (
-      let new_node = Node.sha1 inflated in
+      let new_node = SHA1.sha1 inflated in
       if node = new_node then
         ignore (write_inflated t inflated)
       else (
@@ -220,22 +220,22 @@ let dump root =
     Printf.eprintf "%s\n" (to_hex n)
   ) nodes
 
-let refs t =
+let references t =
   let refs = t.root / ".git" / "refs" in
   let files = GitMisc.rec_files refs in
   let n = String.length t.root in
   List.map ~f:(fun file ->
-    let r = String.sub file n (String.length file - n) in
-    r, of_hex (In_channel.read_all file)
-  ) files
+      let r = String.sub file n (String.length file - n) in
+      r, of_hex (In_channel.read_all file)
+    ) files
 
 let succ root node =
-  let parent c = (`parent, Node.commit c) in
-  let tag t = (`tag t.tag, Node.commit t.commit) in
+  let parent c = (`parent, SHA1.commit c) in
+  let tag t = (`tag t.tag, SHA1.commit t.commit) in
   match read root node with
   | None            -> []
   | Some (Blob _)   -> []
-  | Some (Commit c) -> (`file "", Node.tree c.tree) :: List.map ~f:parent c.parents
+  | Some (Commit c) -> (`file "", SHA1.tree c.tree) :: List.map ~f:parent c.parents
   | Some (Tag t)    -> [tag t]
   | Some (Tree t)   -> List.map ~f:(fun e -> (`file e.file, e.node)) t
 

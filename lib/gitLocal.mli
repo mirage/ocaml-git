@@ -14,42 +14,43 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** Management of Git objects in the local filesystem. *)
+(** Store Git objects on the local filesystem. *)
 
 open GitTypes
 
+val create: string -> t
 (** Read a complete repository state. Note: we only load the object
     references, not their contents. This is because we don't really want
     to store all the state in memory, especially when you can *huge* pack
     files. *)
-val create: string -> t
 
-(** Create a store from the current directory. *)
 val current: unit -> t
+(** Create a store from the current directory. *)
 
+val dump: t -> unit
 (** Dump the state to stderr. This function is in this module because
     we need to be aware of the mapping model/filesystem to load file
     contents on demand. *)
-val dump: t -> unit
 
-(** Read the contents of a node. The result can be either a normal
+val read: t -> sha1 -> value option
+(** Read the contents of an object. The result can be either a normal
     value or a packed value. *)
-val read: t -> node -> value option
 
-(** Return the references. *)
-val refs: t -> (string * node) list
+val references: t -> (string * sha1) list
+(** Return the list of references (stored in {i ./git/refs/}). *)
 
-(** List of nodes. *)
-val list: t -> node list
+val list: t -> sha1 list
+(** List of SHA1. *)
 
+val succ: t -> sha1 -> ([`parent|`tag of string|`file of string] * sha1) list
 (** Successors (with labels). *)
-val succ: t -> node -> ([`parent|`tag of string|`file of string] * node) list
 
-(** Write a value. *)
-val write: t -> value -> node
+val write: t -> value -> sha1
+(** Write a value and return the SHA1 of the object. *)
 
-(** Write a value. *)
-val write_and_check_inflated: t -> node -> string -> unit
+val write_and_check_inflated: t -> sha1 -> string -> unit
+(** Compress a binary value and write it in the store. Check that the
+    SHA1 of the uncompressed value is the one expected. *)
 
+val write_reference: t -> string -> sha1 -> unit
 (** Write a reference. *)
-val write_reference: t -> string -> node -> unit

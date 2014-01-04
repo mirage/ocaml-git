@@ -14,14 +14,14 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** GIT data-model. *)
+(** Git types. *)
 
 open Core_kernel.Std
 
-(** Abstract identifiers. *)
-module Node: sig
+module SHA1: sig
 
-  (** Generic nodes IDs. *)
+  (** Unique object identifiers using SHA1. *)
+
   include Identifiable.S
 
   (** Commit nodes. *)
@@ -51,8 +51,8 @@ module Node: sig
 
 end
 
-(** Short-cut to generic object IDs. *)
-type node = Node.t
+(** Short-cut to generic object SHA1. *)
+type sha1 = SHA1.t
 
 (** Git user. *)
 type user = {
@@ -69,22 +69,23 @@ module Blob: Identifiable.S
 type blob = Blob.t
 
 (** A commit is a tree snapshot, with some credentials (eg. we can
-   find who created the initial snapshot, and who added it to to
-   store) and a message explaining what the snapshot contains. *)
+    find who created the initial snapshot, and who added it to to
+    store) and a message explaining what the snapshot contains. *)
 type commit = {
-  tree     : Node.Tree.t;
-  parents  : Node.Commit.t list;
+  tree     : SHA1.Tree.t;
+  parents  : SHA1.Commit.t list;
   author   : user;
   committer: user;
   message  : string;
 }
 
 (** A tree entry. This is either a directory or a file. As this is
-    supposed to model a filesystem, directory does not contain data. *)
+    supposed to model a filesystem, directory does not contain
+    data. *)
 type entry = {
   perm: [`normal|`exec|`link|`dir];
   file: string;
-  node: node;
+  node: sha1;
 }
 
 (** A tree is an hierarchical data-store. NB: data (eg. blobs) are
@@ -93,7 +94,7 @@ type tree = entry list
 
 (** A tag is bookmark to a previous commit. *)
 type tag = {
-  commit     : Node.Commit.t;
+  commit     : SHA1.Commit.t;
   tag        : string;
   tagger     : user;
   tag_message: string;
@@ -125,19 +126,19 @@ type 'a delta = {
 (** Packed values. *)
 type packed_value =
   | Value     of value
-  | Ref_delta of node delta
+  | Ref_delta of sha1 delta
   | Off_delta of int delta
 
 (** A pack file. Pack files can become quite big, so we fully parse
-    the index file (which says which nodes are stored in there) and we
-    lazily parse the contents (eg. we fetch the contents on
+    the index file (which says which objects are stored in there) and
+    we lazily parse the contents (eg. we fetch the contents on
     demand). *)
-type pack = node -> packed_value
+type pack = sha1 -> packed_value
 
 (** Pack indexes. *)
 type pack_index = {
-  offsets: int Node.Map.t;
-  lengths: int option Node.Map.t;
+  offsets: int SHA1.Map.t;
+  lengths: int option SHA1.Map.t;
 }
 
 (** {2 Casts} *)
@@ -158,7 +159,7 @@ val tag: tag -> value
 val value: value -> packed_value
 
 (** Cast reference-delta values. *)
-val ref_delta: node delta -> packed_value
+val ref_delta: sha1 delta -> packed_value
 
 (** Cast offset-delta values. *)
 val off_delta: int delta -> packed_value
@@ -168,7 +169,7 @@ val off_delta: int delta -> packed_value
 (** Git repository. *)
 type t = {
   root   : string;                                       (** Git root *)
-  buffers: (node, Mstruct.t) Hashtbl.t; (** Cache of inflated buffers *)
-  packs  : (node, pack) Hashtbl.t;           (** Cache of pack files  *)
-  indexes: (node, pack_index) Hashtbl.t;     (** Cache of index files *)
+  buffers: (sha1, Mstruct.t) Hashtbl.t; (** Cache of inflated buffers *)
+  packs  : (sha1, pack) Hashtbl.t;           (** Cache of pack files  *)
+  indexes: (sha1, pack_index) Hashtbl.t;     (** Cache of index files *)
 }

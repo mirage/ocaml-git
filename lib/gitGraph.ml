@@ -19,15 +19,15 @@ open Core_kernel.Std
 open GitTypes
 
 let to_string node =
-  let hex = GitMisc.hex_encode (Node.to_string node) in
+  let hex = GitMisc.hex_encode (SHA1.to_string node) in
   String.sub hex 0 8
 
 module G =
   Graph.Imperative.Digraph.ConcreteBidirectionalLabeled
     (struct
-      type t = (node * value)
-      let compare (x,_) (y,_) = String.compare (Node.to_string x) (Node.to_string y)
-      let hash (x,_) = Hashtbl.hash (Node.to_string x)
+      type t = (sha1 * value)
+      let compare (x,_) (y,_) = String.compare (SHA1.to_string x) (SHA1.to_string y)
+      let hash (x,_) = Hashtbl.hash (SHA1.to_string x)
       let equal (x,_) (y,_) = (x = y)
     end)
     (struct

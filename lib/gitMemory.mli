@@ -18,11 +18,11 @@
 
 open GitTypes
 
-type tree = (string, blob) Lazy_trie.t
+type filesystem = (string, blob) Lazy_trie.t
 (** A filesystem is a lazy tree to hold a part of the Git store. *)
 
-val init: t -> Node.Commit.t -> tree option
+val filesystem_of_local: t -> SHA1.Commit.t -> filesystem option
 (** Build a filesystem in memory, starting at a given revision. *)
 
-val write: t -> tree -> unit
-(** Write a file hierarchy to the disk. *)
+val write_filesystem: t -> filesystem -> unit
+(** Create the filesystem corresponding to the loaded store. *)

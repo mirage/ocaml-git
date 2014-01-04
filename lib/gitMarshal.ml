@@ -34,28 +34,28 @@ let input_hex buf =
   |> GitMisc.hex_decode
 
 let input_hex_tree buf =
-  Node.Tree.of_string (input_hex buf)
+  SHA1.Tree.of_string (input_hex buf)
 
 let input_hex_commit buf =
-  Node.Commit.of_string (input_hex buf)
+  SHA1.Commit.of_string (input_hex buf)
 
 let output_hex buf hex =
   Buffer.add_string buf (GitMisc.hex_encode hex)
 
 let output_hex_commit buf hex =
-  output_hex buf (Node.Commit.to_string hex)
+  output_hex buf (SHA1.Commit.to_string hex)
 
 let output_hex_tree buf hex =
-  output_hex buf (Node.Tree.to_string hex)
+  output_hex buf (SHA1.Tree.to_string hex)
 
 let input_node buf =
   Mstruct.get_string buf 20
-  |> Node.of_string
+  |> SHA1.of_string
 
 let output_node buf t =
-  Buffer.add_string buf (Node.to_string t)
+  Buffer.add_string buf (SHA1.to_string t)
 
-module type VALUE = sig
+module type CONTENTS = sig
   type t
   val dump: t -> unit
   val output: Buffer.t -> t -> unit
@@ -63,7 +63,7 @@ module type VALUE = sig
 end
 
 module User: sig
-  include VALUE with type t := user
+  include CONTENTS with type t := user
   val pretty: user -> string
 end = struct
 
@@ -100,7 +100,7 @@ end = struct
 
 end
 
-module Blob: VALUE with type t := Blob.t = struct
+module Blob: CONTENTS with type t := Blob.t = struct
 
   let dump t =
     Printf.eprintf "%s\n" (Blob.to_string t)
@@ -114,7 +114,7 @@ module Blob: VALUE with type t := Blob.t = struct
 
 end
 
-module Commit: VALUE with type t := commit = struct
+module Commit: CONTENTS with type t := commit = struct
 
   let dump t =
     Printf.eprintf
@@ -123,9 +123,9 @@ module Commit: VALUE with type t := commit = struct
       \  author   : %s\n\
       \  committer: %s\n\
       \  message  :\n%s\n"
-      (GitMisc.hex_encode (Node.Tree.to_string t.tree))
+      (GitMisc.hex_encode (SHA1.Tree.to_string t.tree))
       (String.concat ~sep:", "
-         (List.map ~f:(GitMisc.hex_encode ++ Node.Commit.to_string) t.parents))
+         (List.map ~f:(GitMisc.hex_encode ++ SHA1.Commit.to_string) t.parents))
       (User.pretty t.author)
       (User.pretty t.committer)
       t.message
@@ -191,7 +191,7 @@ module Commit: VALUE with type t := commit = struct
 
 end
 
-module Tree: VALUE with type t := tree = struct
+module Tree: CONTENTS with type t := tree = struct
 
   let pretty_perm = function
     | `normal -> "normal"
@@ -219,7 +219,7 @@ module Tree: VALUE with type t := tree = struct
        node: %S\n"
       (pretty_perm e.perm)
       e.file
-      (Node.to_string e.node)
+      (SHA1.to_string e.node)
 
   let dump t =
     List.iter ~f:dump_entry t
@@ -260,7 +260,7 @@ module Tree: VALUE with type t := tree = struct
 
 end
 
-module Tag: VALUE with type t := tag = struct
+module Tag: CONTENTS with type t := tag = struct
 
   type t = tag
   let dump x = todo "tree"
@@ -270,7 +270,7 @@ module Tag: VALUE with type t := tag = struct
 end
 
 module Value: sig
-  include VALUE with type t := value
+  include CONTENTS with type t := value
   val input: Mstruct.t -> value
   val input_inflated: Mstruct.t -> value
   val output_inflated: value -> string
@@ -352,7 +352,7 @@ end = struct
 end
 
 module PackedValue (M: sig val version: int end): sig
-  include VALUE with type t := packed_value
+  include CONTENTS with type t := packed_value
 end = struct
 
   let isset i bit =
@@ -476,14 +476,14 @@ let lengths offsets =
   aux [] l
 
 module Pack: sig
-  include VALUE with type t := pack
+  include CONTENTS with type t := pack
   val input: pack_index -> Mstruct.t -> pack
   val unpack:
-    read:(node -> Mstruct.t) -> write:(value -> node) ->
-    int Node.Map.t -> int -> packed_value -> node
+    read:(sha1 -> Mstruct.t) -> write:(value -> sha1) ->
+    int SHA1.Map.t -> int -> packed_value -> sha1
   val unpack_all:
-    read:(node -> Mstruct.t) -> write:(value -> node) ->
-    Mstruct.t -> node list
+    read:(sha1 -> Mstruct.t) -> write:(value -> sha1) ->
+    Mstruct.t -> sha1 list
 end = struct
 
   let input_header buf =
@@ -501,7 +501,7 @@ end = struct
 
   let input idx buf =
     let version, size = input_header (Mstruct.clone buf) in
-    let packs = Node.Table.create () in
+    let packs = SHA1.Table.create () in
     fun node ->
       if Hashtbl.mem packs node then
         Hashtbl.find_exn packs node
@@ -590,7 +590,7 @@ end = struct
     let next_packed_value () =
       input_packed_value version buf in
 
-    let idx = ref Node.Map.empty in
+    let idx = ref SHA1.Map.empty in
     for i = 0 to size - 1 do
       Printf.eprintf "UNPACK [%d/%d]\n%!" (i+1) size;
       let offset = Mstruct.offset buf in
@@ -608,7 +608,7 @@ end = struct
 
 end
 
-module Idx: VALUE with type t := pack_index = struct
+module Idx: CONTENTS with type t := pack_index = struct
 
   let input buf =
 
@@ -631,7 +631,7 @@ module Idx: VALUE with type t := pack_index = struct
 
     (* Read the names *)
     let names =
-      let a = Array.create nb_objects (Node.of_string "") in
+      let a = Array.create nb_objects (SHA1.of_string "") in
       for i=0 to nb_objects-1 do
         a.(i) <- input_node buf;
       done;
@@ -670,8 +670,8 @@ module Idx: VALUE with type t := pack_index = struct
     let _checksum = input_node buf in
 
     let offsets_alist = Array.to_list idx in
-    let offsets = Node.Map.of_alist_exn offsets_alist in
-    let lengths = Node.Map.of_alist_exn (lengths offsets_alist) in
+    let offsets = SHA1.Map.of_alist_exn offsets_alist in
+    let lengths = SHA1.Map.of_alist_exn (lengths offsets_alist) in
     { offsets; lengths }
 
   let output buf =

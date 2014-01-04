@@ -18,9 +18,9 @@ open Core_kernel.Std
 
 open GitTypes
 
-type tree = (string, blob) Lazy_trie.t
+type filesystem = (string, blob) Lazy_trie.t
 
-let init t commit =
+let filesystem_of_local t commit =
   let rec aux node =
     match GitLocal.succ t node with
     | []       ->
@@ -42,9 +42,9 @@ let init t commit =
       ) in
       Some (Lazy_trie.create ~children ())
   in
-  aux (Node.commit commit)
+  aux (SHA1.commit commit)
 
-let write t trie =
+let write_filesystem t trie =
   Lazy_trie.iter (fun path blob ->
     let file = String.concat ~sep:"/" (t.root :: path) in
     GitMisc.mkdir (Filename.dirname file);
