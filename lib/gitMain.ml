@@ -66,7 +66,7 @@ let clone =
     | [a] ->
       let name = Filename.basename a in
       let name = Filename.chop_extension name in
-      let t = GitLocal.create name in
+      let t = GitLocal.create ~root:name () in
       GitRemote.clone t ~write:true ?deepen a; `Ok ()
     | _   -> `Error (true, "Too many address") in
   Term.(ret (pure clone $ depth $ bare $ address)),
@@ -84,7 +84,8 @@ let graph =
     mk_required ["o";"output"] "FILE" "Output file."
       Arg.(some string) None in
   let graph file =
-    GitGraph.current_to_dot file in
+    let t = GitLocal.create () in
+    GitGraph.to_dot t file in
   Term.(pure graph $ file),
   term_info "graph" ~doc ~man
 

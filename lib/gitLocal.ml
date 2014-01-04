@@ -20,16 +20,16 @@ open GitMisc.OP
 open GitTypes
 
 
-let create root =
+let create ?root () =
+  let root = match root with
+    | None   -> Sys.getcwd ()
+    | Some r -> r in
   {
     root;
     buffers = SHA1.Table.create ();
     packs   = SHA1.Table.create ();
     indexes = SHA1.Table.create ();
   }
-
-let current () =
-  create (Sys.getcwd ())
 
 let to_hex node =
   GitMisc.hex_encode (SHA1.to_string node)

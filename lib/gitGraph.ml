@@ -92,8 +92,3 @@ let to_dot t file =
       let g = create_graph t in
       Dot.output_graph oc g;
     )
-
-let current_to_dot file =
-  let t = GitLocal.create ".git" in
-  GitLocal.dump t;
-  to_dot t file

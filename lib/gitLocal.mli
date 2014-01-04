@@ -18,14 +18,11 @@
 
 open GitTypes
 
-val create: string -> t
+val create: ?root:string -> unit -> t
 (** Read a complete repository state. Note: we only load the object
     references, not their contents. This is because we don't really want
     to store all the state in memory, especially when you can *huge* pack
-    files. *)
-
-val current: unit -> t
-(** Create a store from the current directory. *)
+    files. if [root] is not set, use the current directory. *)
 
 val dump: t -> unit
 (** Dump the state to stderr. This function is in this module because

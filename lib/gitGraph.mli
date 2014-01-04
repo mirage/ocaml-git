@@ -20,6 +20,3 @@ open GitTypes
 
 val to_dot: t -> string -> unit
 (** Export the Git store as a "graphviz" file. *)
-
-val current_to_dot: string -> unit
-(** Export the current repository. *)
