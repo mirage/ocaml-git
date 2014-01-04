@@ -84,11 +84,11 @@ module Loose = struct
     )
 
   let write t value =
-    let inflated = GitMarshal.Value.output_inflated value in
+    let inflated = Git.Value.output_inflated value in
     write_inflated t inflated
 
   let write_and_check t node value =
-    let inflated = GitMarshal.Value.output_inflated value in
+    let inflated = Git.Value.output_inflated value in
     write_and_check_inflated t node inflated
 
   let list root =
@@ -137,7 +137,7 @@ module Packed = struct
     else
       let file = index t.root node in
       if Sys.file_exists file then
-        let idx = GitMarshal.Idx.input (GitMisc.mstruct_of_file file) in
+        let idx = Git.Idx.input (GitMisc.mstruct_of_file file) in
         Hashtbl.replace t.indexes node idx;
         idx
       else (
@@ -153,7 +153,7 @@ module Packed = struct
       let index = read_index t node in
       if Sys.file_exists file then (
         let buf = GitMisc.mstruct_of_file file in
-        let fn = GitMarshal.Pack.input index buf in
+        let fn = Git.Pack.input index buf in
         Hashtbl.replace t.packs node fn;
         fn
       ) else (
@@ -178,7 +178,7 @@ module Packed = struct
       let write value =
         Loose.write_and_check t node value;
         node in
-      let n = GitMarshal.Pack.unpack ~read ~write idx.offsets offset packed_value in
+      let n = Git.Pack.unpack ~read ~write idx.offsets offset packed_value in
       assert (n = node);
       read node
     ) else
@@ -212,7 +212,7 @@ let read t node =
     else Packed.read_inflated t node in
   match buf with
   | None     -> None
-  | Some buf -> Some (GitMarshal.Value.input_inflated buf)
+  | Some buf -> Some (Git.Value.input_inflated buf)
 
 let dump root =
   let nodes = list root in

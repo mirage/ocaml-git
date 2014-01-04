@@ -14,7 +14,7 @@ Flag unix
 Library git
   Path:         lib/
   Findlibname:  git
-  Modules:      GitMisc, GitTypes, GitMarshal, GitLocal, GitRemote,
+  Modules:      GitMisc, GitTypes, Git, GitLocal, GitRemote,
                 GitMemory, GitGraph
   BuildDepends:	mstruct, dolog, core_kernel, ocamlgraph, lazy-trie,
                 re.pcre, zip, cryptokit, uri
