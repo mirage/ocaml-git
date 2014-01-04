@@ -67,7 +67,7 @@ let clone =
       let name = Filename.basename a in
       let name = Filename.chop_extension name in
       let t = GitLocal.create ~root:name () in
-      GitRemote.clone t ~write:true ?deepen a; `Ok ()
+      GitRemote.clone_on_disk t ?deepen a; `Ok ()
     | _   -> `Error (true, "Too many address") in
   Term.(ret (pure clone $ depth $ bare $ address)),
   term_info "clone" ~doc ~man

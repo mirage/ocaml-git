@@ -467,7 +467,13 @@ let connect address port =
 let todo msg =
   failwith ("TODO: " ^ msg)
 
-let clone ?(write=false) ?(bare=false) ?deepen t address =
+type backend = {
+  write_reference: t -> string -> sha1 -> unit;
+  write_and_check_inflated: t -> sha1 -> string -> unit;
+  create_filesystem: t -> SHA1.Commit.t -> unit;
+}
+
+let clone ?(bare=false) ?deepen backend t address =
   let r = Init.create address in
   match Init.host r with
   | None   -> todo "no-host"
@@ -477,7 +483,7 @@ let clone ?(write=false) ?(bare=false) ?deepen t address =
     let listing = Listing.input ic in
     Listing.dump listing;
     Map.iter ~f:(fun ~key:node ~data:name ->
-      GitLocal.write_reference t name node
+      backend.write_reference t name node
     ) (Listing.references listing);
     match Listing.head listing with
     | None    -> Init.close oc
@@ -497,16 +503,16 @@ let clone ?(write=false) ?(bare=false) ?deepen t address =
         if Hashtbl.mem buffers node then Mstruct.clone (Hashtbl.find_exn buffers node)
         else error "%s: unknown node" (to_hex node) in
       let write value =
-        let inflated = GitMarshal.Value.output_inflated value in
+        let inflated = Git.Value.output_inflated value in
         let node = SHA1.sha1 inflated in
         if not (Hashtbl.mem buffers node) then (
           let buf = Mstruct.of_string inflated in
           Hashtbl.replace buffers node buf;
-          if write then GitLocal.write_and_check_inflated t node inflated;
+          backend.write_and_check_inflated t node inflated;
         );
         node in
 
-      let nodes = GitMarshal.Pack.unpack_all ~read ~write buf in
+      let nodes = Git.Pack.unpack_all ~read ~write buf in
       begin match nodes with
         | [] -> debug "NO NEW OBJECTS"
         | _  ->
@@ -514,9 +520,19 @@ let clone ?(write=false) ?(bare=false) ?deepen t address =
           List.iter ~f:(fun n -> debug "%s" (to_hex n)) nodes
       end;
       if not bare then (
+        (* TODO: generate the index file *)
         debug "EXPANDING THE FILESYSTEM";
-        match GitMemory.filesystem_of_local t (SHA1.to_commit head) with
-        | None      -> failwith "filesystem"
-        | Some tree -> GitMemory.write_filesystem t tree
+        backend.create_filesystem t (SHA1.to_commit head)
       ) else
         debug "BARE REPOSITORY"
+
+let clone_on_disk ?bare ?deepen t address =
+  let backend = {
+    write_reference = GitLocal.write_reference;
+    write_and_check_inflated = GitLocal.write_and_check_inflated;
+    create_filesystem = fun t head ->
+      match GitMemory.filesystem_of_local t head with
+      | None      -> failwith "filesystem"
+      | Some tree -> GitMemory.write_filesystem t tree
+  } in
+  clone ?bare ?deepen backend t address

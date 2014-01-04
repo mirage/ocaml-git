@@ -18,5 +18,16 @@
 
 open GitTypes
 
+type backend = {
+  write_reference: t -> string -> sha1 -> unit;
+  write_and_check_inflated: t -> sha1 -> string -> unit;
+  create_filesystem: t -> SHA1.Commit.t -> unit;
+}
+(** Abstraction for the backend type (could be on-disk or
+    in-memory. *)
+
+val clone: ?bare:bool -> ?deepen:int -> backend -> t -> string -> unit
 (** Clone a remote repository. *)
-val clone: ?write:bool -> ?bare:bool -> ?deepen:int -> t -> string -> unit
+
+val clone_on_disk: ?bare:bool -> ?deepen:int -> t -> string -> unit
+(** Same as [clone] by populate the filesystem with the result of the clone. *)
