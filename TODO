@@ -1,3 +1,5 @@
 * GitRemote.pull/fetch
 * Handling of the staging area
 * Index file
+* Read pack file without decompressing it
+* More tests
