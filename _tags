@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: a8c153f0b8222b13e285e3ec0e2eb419)
+# DO NOT EDIT (digest: c78752bb3190d12d3d7eadda402e2897)
 # Ignore VCS directories, you can use the same kind of rule outside
 # OASIS_START/STOP if you want to exclude directories that contains
 # useless stuff for the build process
@@ -18,6 +18,7 @@
 # Executable ogit
 <lib/gitMain.{native,byte}>: use_git
 <lib/gitMain.{native,byte}>: pkg_cmdliner
+<lib/gitMain.{native,byte}>: pkg_lwt.unix
 <lib/gitMain.{native,byte}>: pkg_mstruct
 <lib/gitMain.{native,byte}>: pkg_dolog
 <lib/gitMain.{native,byte}>: pkg_core_kernel
@@ -29,6 +30,7 @@
 <lib/gitMain.{native,byte}>: pkg_uri
 <lib/*.ml{,i}>: use_git
 <lib/*.ml{,i}>: pkg_cmdliner
+<lib/*.ml{,i}>: pkg_lwt.unix
 <lib/*.ml{,i}>: pkg_mstruct
 <lib/*.ml{,i}>: pkg_dolog
 <lib/*.ml{,i}>: pkg_core_kernel
@@ -41,6 +43,7 @@
 # Executable test_git
 <lib_test/read.{native,byte}>: use_git
 <lib_test/read.{native,byte}>: pkg_alcotest
+<lib_test/read.{native,byte}>: pkg_lwt.unix
 <lib_test/read.{native,byte}>: pkg_mstruct
 <lib_test/read.{native,byte}>: pkg_dolog
 <lib_test/read.{native,byte}>: pkg_core_kernel
@@ -52,6 +55,7 @@
 <lib_test/read.{native,byte}>: pkg_uri
 <lib_test/*.ml{,i}>: use_git
 <lib_test/*.ml{,i}>: pkg_alcotest
+<lib_test/*.ml{,i}>: pkg_lwt.unix
 <lib_test/*.ml{,i}>: pkg_mstruct
 <lib_test/*.ml{,i}>: pkg_dolog
 <lib_test/*.ml{,i}>: pkg_core_kernel
