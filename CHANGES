@@ -1,0 +1,5 @@
+0.10.0: (trunk)
+* Switch non-blocking IO using Lwt
+
+0.9.0: (2014-01-04)
+* Initial release
