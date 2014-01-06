@@ -15,10 +15,12 @@
  *)
 
 open Core_kernel.Std
+open Lwt
 
 open GitMisc.OP
 open GitTypes
 
+module Log = Log.Make(struct let section = "local" end)
 
 let create ?root () =
   let root = match root with
@@ -31,227 +33,322 @@ let create ?root () =
     indexes = SHA1.Table.create ();
   }
 
-let to_hex node =
-  GitMisc.hex_encode (SHA1.to_string node)
+let to_hex sha1 =
+  GitMisc.hex_encode (SHA1.to_string sha1)
 
 let of_hex hex =
   SHA1.of_string (GitMisc.hex_decode hex)
 
+let auto_flush = ref true
+
+let set_auto_flush b =
+  auto_flush := b
+
+let get_auto_flush () =
+  !auto_flush
+
+(* Loose objects *)
 module Loose = struct
 
-  let file root node =
-    let hex = to_hex node in
+  let file root sha1 =
+    let hex = to_hex sha1 in
     let prefix = String.sub hex 0 2 in
     let suffix = String.sub hex 2 (String.length hex - 2) in
     root / ".git" / "objects" / prefix / suffix
 
-  let read_inflated t node =
-    if Hashtbl.mem t.buffers node then
-      let buf = Hashtbl.find_exn t.buffers node in
-      Some (Mstruct.clone buf)
+  let read_inflated t sha1 =
+    if Hashtbl.mem t.buffers sha1 then
+      let buf = Hashtbl.find_exn t.buffers sha1 in
+      return (Some (Mstruct.clone buf))
     else
-      let file = file t.root node in
+      let file = file t.root sha1 in
       if Sys.file_exists file then
-        let buf = GitMisc.mstruct_of_file file in
+        GitMisc.mstruct_of_file file >>= fun buf ->
         let buf = GitMisc.inflate_mstruct buf in
-        Hashtbl.replace t.buffers node buf;
-        Some (Mstruct.clone buf)
+        Hashtbl.add_exn t.buffers sha1 buf;
+        return (Some (Mstruct.clone buf))
       else
-        None
+        return_none
 
   let write_inflated t inflated =
-    let node = SHA1.sha1 inflated in
-    Printf.eprintf "Expanding %s\n" (to_hex node);
-    let file = file t.root node in
-    GitMisc.mkdir (Filename.dirname file);
+    let sha1 = SHA1.sha1 inflated in
+    Printf.eprintf "Expanding %s\n" (to_hex sha1);
+    let file = file t.root sha1 in
+    GitMisc.mkdir (Filename.dirname file) >>= fun () ->
     let deflated = GitMisc.deflate_string inflated in
-    Out_channel.write_all file ~data:deflated;
-    node
+    begin
+      if !auto_flush then (
+        Log.infof "Writing %s" file;
+        Lwt_io.(with_file ~mode:Output file
+                  (fun oc -> write oc deflated))
+      ) else
+        return_unit
+    end >>= fun () ->
+    return sha1
 
-  let write_and_check_inflated t node inflated =
-    let file = file t.root node in
-    if not (Sys.file_exists file)
-    then (
-      let new_node = SHA1.sha1 inflated in
-      if node = new_node then
-        ignore (write_inflated t inflated)
+  let write_and_check_inflated t sha1 inflated =
+    let file = file t.root sha1 in
+    if Sys.file_exists file then return_unit
+    else (
+      let new_sha1 = SHA1.sha1 inflated in
+      if sha1 = new_sha1 then
+        write_inflated t inflated >>= fun _ -> return_unit
       else (
         Printf.eprintf "%S\n" inflated;
         Printf.eprintf
-          "Marshaling error: expected:%s actual:%s\n" (to_hex node) (to_hex new_node);
-        failwith "build_packed_object"
+          "Marshaling error: expected:%s actual:%s\n" (to_hex sha1) (to_hex new_sha1);
+        fail (Failure "build_packed_object")
       )
     )
 
-  let write t value =
-    let inflated = Git.Value.output_inflated value in
-    write_inflated t inflated
+  let inflated value =
+    let buf = Buffer.create 1024 in
+    Git.output_inflated buf value;
+    Buffer.contents buf
 
-  let write_and_check t node value =
-    let inflated = Git.Value.output_inflated value in
-    write_and_check_inflated t node inflated
+  let write t value =
+    write_inflated t (inflated value)
+
+  let write_and_check t sha1 value =
+    write_and_check_inflated t sha1 (inflated value)
 
   let list root =
+    Log.debugf "Loose.list %s" root;
     let objects = root / ".git" / "objects" in
-    let objects = GitMisc.directories objects in
+    GitMisc.directories objects >>= fun objects ->
     let objects = List.map ~f:Filename.basename objects in
     let objects = List.filter ~f:(fun s -> (s <> "info") && (s <> "pack")) objects in
-    List.fold_left ~f:(fun acc prefix ->
+    Lwt_list.fold_left_s (fun acc prefix ->
       let dir = root / ".git" / "objects" / prefix in
-      let suffixes = GitMisc.files dir in
+      GitMisc.files dir >>= fun suffixes ->
       let suffixes = List.map ~f:Filename.basename suffixes in
       let objects = List.map ~f:(fun suffix ->
           of_hex (prefix ^ suffix)
         ) suffixes in
-      objects @ acc
-    ) ~init:[] objects
+      return (objects @ acc)
+    ) [] objects
 
 end
 
 module Packed = struct
 
-  let file root node =
+  let file root sha1 =
     let pack_dir = root / ".git" / "objects" / "pack" in
-    let pack_file = "pack-" ^ (to_hex node) ^ ".pack" in
+    let pack_file = "pack-" ^ (to_hex sha1) ^ ".pack" in
     pack_dir / pack_file
 
   let list root =
+    Log.debugf "Packed.list %s" root;
     let packs = root / ".git" / "objects" / "pack" in
-    let packs = GitMisc.files packs in
+    GitMisc.files packs >>= fun packs ->
     let packs = List.map ~f:Filename.basename packs in
     let packs = List.filter ~f:(fun f -> Filename.check_suffix f ".idx") packs in
-    List.map ~f:(fun f ->
-      let p = Filename.chop_suffix f ".idx" in
-      let p = String.sub p 5 (String.length p - 5) in
-      of_hex p
-    ) packs
+    let packs = List.map ~f:(fun f ->
+        let p = Filename.chop_suffix f ".idx" in
+        let p = String.sub p 5 (String.length p - 5) in
+        of_hex p
+      ) packs in
+    return packs
 
-  let index root node =
+  let index root sha1 =
     let pack_dir = root / ".git" / "objects" / "pack" in
-    let idx_file = "pack-" ^ (to_hex node) ^ ".idx" in
+    let idx_file = "pack-" ^ (to_hex sha1) ^ ".idx" in
     pack_dir / idx_file
 
-  let read_index t node: pack_index =
-    if Hashtbl.mem t.indexes node then
-      Hashtbl.find_exn t.indexes node
+  let read_index t sha1 =
+    if Hashtbl.mem t.indexes sha1 then
+      return (Hashtbl.find_exn t.indexes sha1)
     else
-      let file = index t.root node in
+      let file = index t.root sha1 in
       if Sys.file_exists file then
-        let idx = Git.Idx.input (GitMisc.mstruct_of_file file) in
-        Hashtbl.replace t.indexes node idx;
-        idx
+        GitMisc.mstruct_of_file file >>= fun buf ->
+        let idx = Git.Idx.input buf in
+        Hashtbl.add_exn t.indexes sha1 idx;
+        return idx
       else (
         Printf.eprintf "%s does not exist." file;
-        failwith "read_index"
+        fail (Failure "read_index")
       )
 
-  let read t node =
-    if Hashtbl.mem t.packs node then
-      Hashtbl.find_exn t.packs node
+  let read t sha1 =
+    if Hashtbl.mem t.packs sha1 then
+      return (Hashtbl.find_exn t.packs sha1)
     else (
-      let file = file t.root node in
-      let index = read_index t node in
+      let file = file t.root sha1 in
+      read_index t sha1 >>= fun index ->
       if Sys.file_exists file then (
-        let buf = GitMisc.mstruct_of_file file in
+        GitMisc.mstruct_of_file file >>= fun buf ->
         let fn = Git.Pack.input index buf in
-        Hashtbl.replace t.packs node fn;
-        fn
+        Hashtbl.add_exn t.packs sha1 fn;
+        return fn
       ) else (
-        Printf.eprintf "No file associated with the pack object %s.\n" (to_hex node);
-        failwith "read_file"
+        Printf.eprintf "No file associated with the pack object %s.\n" (to_hex sha1);
+        fail (Failure "read_file")
       )
     )
 
-  let rec read_inflated t (pack,idx) node =
+  let rec read_inflated t (pack, idx) sha1 =
     let error offset =
       let idx = Map.data idx.offsets in
       let idx = String.concat ~sep:"," (List.map ~f:string_of_int idx) in
       Printf.eprintf "%d: invalid offset.\nValid offsets are: {%s}\n" offset idx;
       failwith "invalid offset" in
-    if Map.mem idx.offsets node then (
-      let offset = Map.find_exn idx.offsets node in
-      let packed_value = read t pack node in
-      let read node =
-        match Loose.read_inflated t node with
-        | Some buf -> buf
-        | None     -> read_inflated t (pack,idx) node in
+    if Map.mem idx.offsets sha1 then (
+      let offset = Map.find_exn idx.offsets sha1 in
+      read t pack >>= fun fn ->
+      let packed_value = fn sha1 in
+      let read_inflated sha1 =
+        Loose.read_inflated t sha1 >>= function
+        | Some buf -> return buf
+        | None     -> read_inflated t (pack,idx) sha1 in
       let write value =
-        Loose.write_and_check t node value;
-        node in
-      let n = Git.Pack.unpack ~read ~write idx.offsets offset packed_value in
-      assert (n = node);
-      read node
+        Loose.write_and_check t sha1 value >>= fun () ->
+        return sha1 in
+      Git.Pack.unpack ~read_inflated ~write ~idx:idx.offsets ~offset packed_value >>= fun u ->
+      assert (u = sha1);
+      read_inflated sha1
     ) else
       error (-1)
 
-  let read_inflated t node =
+  let read_inflated t sha1 =
     let rec find = function
-      | []    -> None
+      | []    -> return_none
       | n::ns ->
-        let idx = read_index t n in
-        if Map.mem idx.offsets node then
-          Some (read_inflated t (n,idx) node)
+        read_index t n >>= fun idx ->
+        if Map.mem idx.offsets sha1 then
+          read_inflated t (n,idx) sha1 >>= fun v ->
+          return (Some v)
         else
           find ns in
-    find (list t.root)
+    list t.root >>=
+    find
 
 end
 
 let list t =
-  let objects = Loose.list t.root in
-  let packs = Packed.list t.root in
-  List.fold_left ~f:(fun acc p ->
-    let idx = Packed.read_index t p in
-    (Map.keys idx.offsets) @ acc
-  ) ~init:objects packs
+  Log.debugf "list";
+  Loose.list t.root  >>= fun objects ->
+  Packed.list t.root >>= fun packs   ->
+  (* Add cached objects *)
+  let objects = List.dedup (Hashtbl.keys t.buffers @ objects) in
+  Lwt_list.fold_left_s (fun acc p ->
+      Packed.read_index t p >>= fun idx ->
+      return ((Map.keys idx.offsets) @ acc)
+    ) objects packs
 
-let read t node =
-  let file = Loose.file t.root node in
-  let buf =
-    if Sys.file_exists file then Loose.read_inflated t node
-    else Packed.read_inflated t node in
-  match buf with
-  | None     -> None
-  | Some buf -> Some (Git.Value.input_inflated buf)
+let read_inflated t sha1 =
+  let file = Loose.file t.root sha1 in
+  if Hashtbl.mem t.buffers sha1 || Sys.file_exists file
+  then Loose.read_inflated t sha1
+  else Packed.read_inflated t sha1
 
-let dump root =
-  let nodes = list root in
-  List.iter ~f:(fun n ->
-    Printf.eprintf "%s\n" (to_hex n)
-  ) nodes
+let read t sha1 =
+  read_inflated t sha1 >>= function
+  | None     -> return_none
+  | Some buf -> return (Some (Git.input_inflated buf))
+
+let type_of t sha1 =
+  read_inflated t sha1 >>= function
+  | None     -> return_none
+  | Some buf -> return (Some (Git.type_of_inflated buf))
+
+let string_of_type_opt = function
+  | Some `Blob   -> "Blob"
+  | Some `Commit -> "Commit"
+  | Some `Tag    -> "Tag"
+  | Some `Tree   -> "Tree"
+  | None         -> "Unknown"
+
+let dump t =
+  Log.debugf "dump";
+  list t >>= fun sha1s ->
+  Lwt_list.iter_s (fun sha1 ->
+      type_of t sha1 >>= fun typ ->
+      Printf.eprintf "%s %s\n"
+        (to_hex sha1)
+        (string_of_type_opt typ);
+      return_unit
+    ) sha1s
 
 let references t =
   let refs = t.root / ".git" / "refs" in
-  let files = GitMisc.rec_files refs in
+  GitMisc.rec_files refs >>= fun files ->
   let n = String.length t.root in
-  List.map ~f:(fun file ->
+  Lwt_list.map_p (fun file ->
       let r = String.sub file n (String.length file - n) in
-      r, of_hex (In_channel.read_all file)
+      Log.infof "Reading %s" file;
+      Lwt_io.(with_file ~mode:Input file read) >>= fun hex ->
+      return (r, of_hex hex)
     ) files
 
-let succ root node =
-  let parent c = (`parent, SHA1.commit c) in
-  let tag t = (`tag t.tag, SHA1.commit t.commit) in
-  match read root node with
-  | None            -> []
-  | Some (Blob _)   -> []
-  | Some (Commit c) -> (`file "", SHA1.tree c.tree) :: List.map ~f:parent c.parents
-  | Some (Tag t)    -> [tag t]
-  | Some (Tree t)   -> List.map ~f:(fun e -> (`file e.file, e.node)) t
+let succ root sha1 =
+  let parent c = (`Parent, SHA1.commit c) in
+  let tag t = (`Tag t.tag, SHA1.commit t.commit) in
+  read root sha1 >>= function
+  | None            -> return_nil
+  | Some (Blob _)   -> return_nil
+  | Some (Commit c) -> return ((`File "", SHA1.tree c.tree) :: List.map ~f:parent c.parents)
+  | Some (Tag t)    -> return [tag t]
+  | Some (Tree t)   -> return (List.map ~f:(fun e -> (`File e.file, e.node)) t)
 
 let write t value =
   Loose.write t value
 
-let write_and_check t node value =
-  Loose.write_and_check t node value
+let write_and_check t sha1 value =
+  Loose.write_and_check t sha1 value
 
 let write_inflated t inflated =
   Loose.write_inflated t inflated
 
-let write_and_check_inflated t node inflated =
-  Loose.write_and_check_inflated t node inflated
+let write_and_check_inflated t sha1 inflated =
+  Loose.write_and_check_inflated t sha1 inflated
 
-let write_reference t name node =
+let write_reference t name sha1 =
   let file = t.root / ".git" / name in
-  GitMisc.mkdir (Filename.dirname file);
-  Out_channel.write_all file (to_hex node)
+  GitMisc.mkdir (Filename.dirname file) >>= fun () ->
+  Log.infof "Writing %s" file;
+  Lwt_io.(with_file ~mode:Output file (fun oc -> write oc (to_hex sha1)))
+
+(* XXX: do not load the blobs *)
+let load_filesystem t commit =
+  let rec aux sha1 =
+    succ t sha1 >>= function
+    | [] ->
+      begin read t sha1 >>= function
+        | Some (Blob b) -> return (Some (Lazy_trie.create ~value:b ()))
+        | _             -> return_none
+      end
+    | children ->
+      Lwt_list.fold_left_s (fun acc (l, n) ->
+          match l with
+          | `Parent
+          | `Tag _  -> return acc
+          | `File l ->
+            aux n >>= function
+            | None   -> return acc
+            | Some t -> return ((l, t) :: acc)
+        ) [] children
+      >>= fun children ->
+      let children = lazy children in
+      return (Some (Lazy_trie.create ~children ()))
+  in
+  aux (SHA1.commit commit) >>= function
+  | None    -> fail (Failure "create")
+  | Some fs -> return fs
+
+let write_filesystem t commit =
+  load_filesystem t commit >>= fun trie ->
+  Lazy_trie.fold (fun acc path blob ->
+      acc >>= fun () ->
+      let file = String.concat ~sep:"/" (t.root :: path) in
+      GitMisc.mkdir (Filename.dirname file) >>= fun () ->
+      Log.infof "Writing %s" file;
+      Lwt_io.(with_file ~mode:Output file (fun oc -> write oc (Blob.to_string blob)))
+  ) trie return_unit
+
+let flush t =
+  Hashtbl.fold ~f:(fun ~key ~data acc ->
+      acc >>= fun () ->
+      let data = Mstruct.to_string data in
+      write_and_check_inflated t key data
+    ) ~init:return_unit t.buffers

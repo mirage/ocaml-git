@@ -14,6 +14,10 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+open Core_kernel.Std
+
+module Log = Log.Make(struct let section = "misc" end)
+
 (* From OCaml's stdlib. See [Digest.to_hex] *)
 let hex_encode s =
   let n = String.length s in
@@ -33,35 +37,18 @@ let hex_decode h =
   );
   let digit c =
     match c with
-    | '0'..'9' -> Char.code c - Char.code '0'
-    | 'A'..'F' -> Char.code c - Char.code 'A' + 10
-    | 'a'..'f' -> Char.code c - Char.code 'a' + 10
+    | '0'..'9' -> Char.to_int c - Char.to_int '0'
+    | 'A'..'F' -> Char.to_int c - Char.to_int 'A' + 10
+    | 'a'..'f' -> Char.to_int c - Char.to_int 'a' + 10
     | c ->
       let msg = Printf.sprintf "hex_decode: %S is invalid" (String.make 1 c) in
       raise (Invalid_argument msg) in
   let byte i = digit h.[i] lsl 4 + digit h.[i+1] in
   let result = String.create (n / 2) in
   for i = 0 to n/2 - 1 do
-    result.[i] <- Char.chr (byte (2 * i));
+    result.[i] <- Char.of_int_exn (byte (2 * i));
   done;
   result
-
-(* From OPAM's [OpamMisc.cut_at] *)
-let cut_at_aux fn s sep =
-  try
-    let i = fn s sep in
-    let name = String.sub s 0 i in
-    let version = String.sub s (i+1) (String.length s - i - 1) in
-    Some (name, version)
-  with _ ->
-    None
-
-let cut_at = cut_at_aux String.index
-
-let rcut_at = cut_at_aux String.rindex
-
-let split s c =
-  Re_pcre.split ~rex:(Re_perl.compile (Re.char c)) s
 
 (* From Zlib *)
 module Zlib_ext = struct
@@ -146,46 +133,50 @@ let inflate_mstruct ?allocator orig_buf =
   Mstruct.shift orig_buf size;
   res
 
+(* XXX: blocking ? *)
 let mstruct_of_file file =
-  let fd = Unix.openfile file [Unix.O_RDONLY; Unix.O_NONBLOCK] 0o644 in
-  let len =
-    let stats = Unix.stat file in
-    stats.Unix.st_size in
-  let ba = Bigarray.Array1.map_file fd Bigarray.char Bigarray.c_layout false len in
-  Mstruct.of_bigarray ba
+  let open Lwt in
+  let fd = Unix.(openfile file [O_RDONLY; O_NONBLOCK] 0o644) in
+  let ba = Lwt_bytes.map_file ~fd ~shared:false () in
+  return (Mstruct.of_bigarray ba)
 
-open Core_kernel.Std
+open Lwt
 
 let mkdir dirname =
   let rec aux dir =
-    if Sys.file_exists dir then ()
+    if Sys.file_exists dir then return_unit
     else (
-      aux (Filename.dirname dir);
-      Unix.mkdir dir 0o755
+      aux (Filename.dirname dir) >>= fun () ->
+      Log.debugf "mkdir %s" dir;
+      Lwt_unix.mkdir dir 0o755
     ) in
   aux dirname
 
 let list_files kind dir =
-  if Sys.file_exists dir then
-    let d = Sys.readdir dir in
-    let d = Array.to_list d in
-    let d = List.rev_map ~f:(Filename.concat dir) d in
-    let d = List.filter ~f:kind d in
-    List.sort compare d
-  else
-    []
+  if Sys.file_exists dir then (
+    let s = Lwt_unix.files_of_directory dir in
+    let s = Lwt_stream.filter (fun s -> s <> "." && s <> "..") s in
+    let s = Lwt_stream.map (Filename.concat dir) s in
+    let s = Lwt_stream.filter kind s in
+    Lwt_stream.to_list s >>= fun l ->
+    return l
+  ) else
+    return_nil
 
 let directories dir =
+  Log.debugf "directories %s" dir;
   list_files (fun f -> try Sys.is_directory f with _ -> false) dir
 
 let files dir =
+  Log.debugf "files %s" dir;
   list_files (fun f -> try not (Sys.is_directory f) with _ -> false) dir
 
 let rec_files dir =
+  Log.debugf "rec_files %s" dir;
   let rec aux accu dir =
-    let d = directories dir in
-    let f = files dir in
-    List.fold_left ~f:aux ~init:(f @ accu) d in
+    directories dir >>= fun ds ->
+    files dir       >>= fun fs ->
+  Lwt_list.fold_left_s aux (fs @ accu) ds in
   aux [] dir
 
 module OP = struct

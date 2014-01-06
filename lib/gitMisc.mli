@@ -37,19 +37,19 @@ val deflate_mstruct: Mstruct.t -> Mstruct.t
 
 (** {2 Files} *)
 
-val mkdir: string -> unit
+val mkdir: string -> unit Lwt.t
 (** Create a directory (and the parent dirs if needed). *)
 
-val directories: string -> string list
+val directories: string -> string list Lwt.t
 (** List the subdirs. *)
 
-val files: string -> string list
+val files: string -> string list Lwt.t
 (** List the subfiles. *)
 
-val rec_files: string -> string list
+val rec_files: string -> string list Lwt.t
 (** List of the subfiles, recursively. *)
 
-val mstruct_of_file: string -> Mstruct.t
+val mstruct_of_file: string -> Mstruct.t Lwt.t
 (** mmap a file and return a mutable C-like structure with its
     contents. *)
 

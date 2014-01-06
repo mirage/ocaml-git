@@ -48,14 +48,14 @@ let output_hex_commit buf hex =
 let output_hex_tree buf hex =
   output_hex buf (SHA1.Tree.to_string hex)
 
-let input_node buf =
+let input_sha1 buf =
   Mstruct.get_string buf 20
   |> SHA1.of_string
 
-let output_node buf t =
+let output_sha1 buf t =
   Buffer.add_string buf (SHA1.to_string t)
 
-module type CONTENTS = sig
+module type SERIALIZABLE = sig
   type t
   val dump: t -> unit
   val output: Buffer.t -> t -> unit
@@ -63,7 +63,7 @@ module type CONTENTS = sig
 end
 
 module User: sig
-  include CONTENTS with type t := user
+  include SERIALIZABLE with type t := user
   val pretty: user -> string
 end = struct
 
@@ -100,7 +100,7 @@ end = struct
 
 end
 
-module Blob: CONTENTS with type t := Blob.t = struct
+module Blob: SERIALIZABLE with type t := Blob.t = struct
 
   let dump t =
     Printf.eprintf "%s\n" (Blob.to_string t)
@@ -114,7 +114,7 @@ module Blob: CONTENTS with type t := Blob.t = struct
 
 end
 
-module Commit: CONTENTS with type t := commit = struct
+module Commit: SERIALIZABLE with type t := commit = struct
 
   let dump t =
     Printf.eprintf
@@ -191,7 +191,7 @@ module Commit: CONTENTS with type t := commit = struct
 
 end
 
-module Tree: CONTENTS with type t := tree = struct
+module Tree: SERIALIZABLE with type t := tree = struct
 
   let pretty_perm = function
     | `normal -> "normal"
@@ -216,7 +216,7 @@ module Tree: CONTENTS with type t := tree = struct
     Printf.eprintf
       "perm: %s\n\
        file: %s\n\
-       node: %S\n"
+       sha1: %S\n"
       (pretty_perm e.perm)
       e.file
       (SHA1.to_string e.node)
@@ -229,7 +229,7 @@ module Tree: CONTENTS with type t := tree = struct
     Buffer.add_char   buf sp;
     Buffer.add_string buf e.file;
     Buffer.add_char   buf nul;
-    output_node       buf e.node
+    output_sha1       buf e.node
 
   let input_entry buf =
     let perm = match Mstruct.get_string_delim buf sp with
@@ -238,7 +238,7 @@ module Tree: CONTENTS with type t := tree = struct
     let file = match Mstruct.get_string_delim buf nul with
       | None      -> Mstruct.parse_error_buf buf "invalid filename"
       | Some file -> file in
-    let node = input_node buf in
+    let node = input_sha1 buf in
     let entry = {
       perm = perm_of_string buf perm;
       file; node
@@ -260,7 +260,7 @@ module Tree: CONTENTS with type t := tree = struct
 
 end
 
-module Tag: CONTENTS with type t := tag = struct
+module Tag: SERIALIZABLE with type t := tag = struct
 
   type t = tag
   let dump x = todo "tree"
@@ -269,13 +269,7 @@ module Tag: CONTENTS with type t := tag = struct
 
 end
 
-module Value: sig
-  include CONTENTS with type t := value
-  val input: Mstruct.t -> value
-  val input_inflated: Mstruct.t -> value
-  val output_inflated: value -> string
-  val output: value -> string
-end = struct
+module Value = struct
 
   let dump = function
     | Blob b ->
@@ -303,31 +297,41 @@ end = struct
     | Tag t    -> Tag.output buf t
     | Tree t   -> Tree.output buf t
 
-  let output_inflated t =
+  let output_inflated buf t =
     let size, contents =
       let buf = Buffer.create 1024 in
       output_contents buf t;
       let size = Buffer.length buf in
       size, buf in
-    let buf = Buffer.create size in
     Buffer.add_string buf (obj_type t);
     Buffer.add_char   buf sp;
     Buffer.add_string buf (string_of_int size);
     Buffer.add_char   buf nul;
-    Buffer.add_buffer buf contents;
-    Buffer.contents buf
+    Buffer.add_buffer buf contents
 
-  let output t =
-    let inflated = output_inflated t in
+  let output buf t =
+    let inflated =
+      let buf = Buffer.create 1024 in
+      output_inflated buf t;
+      Buffer.contents buf in
     let deflated = GitMisc.deflate_string inflated in
-    deflated
+    Buffer.add_string buf deflated
 
-  let input_inflated buf =
-    (* XXX call zlib directly on the stream interface *)
+  let type_of_inflated buf =
     let obj_type =
       match Mstruct.get_string_delim buf sp with
       | None   -> Mstruct.parse_error_buf buf "value: type"
       | Some t -> t in
+    match obj_type with
+    | "blob"   -> `Blob
+    | "commit" -> `Commit
+    | "tag"    -> `Tag
+    | "tree"   -> `Tree
+    | x        -> Mstruct.parse_error_buf buf "%S is not a valid object type." x
+
+  let input_inflated buf =
+    (* XXX call zlib directly on the stream interface *)
+    let obj_type = type_of_inflated buf in
     let size =
       match Mstruct.get_string_delim buf nul with
       | None   -> Mstruct.parse_error_buf buf "value: size"
@@ -340,19 +344,20 @@ end = struct
         size (Mstruct.length buf);
     let buf = Mstruct.sub buf 0 size in
     match obj_type with
-    | "blob"   -> Blob.input buf   |> blob
-    | "commit" -> Commit.input buf |> commit
-    | "tag"    -> Tag.input buf    |> tag
-    | "tree"   -> Tree.input buf   |> tree
-    | x        -> Mstruct.parse_error_buf buf "%S is not a valid object type." x
+    | `Blob   -> Blob.input buf   |> blob
+    | `Commit -> Commit.input buf |> commit
+    | `Tag    -> Tag.input buf    |> tag
+    | `Tree   -> Tree.input buf   |> tree
 
   let input buf =
     input_inflated (GitMisc.inflate_mstruct buf)
 
 end
 
+include Value
+
 module PackedValue (M: sig val version: int end): sig
-  include CONTENTS with type t := packed_value
+  include SERIALIZABLE with type t := packed_value
 end = struct
 
   let isset i bit =
@@ -450,7 +455,7 @@ end = struct
       let hunks = with_inflated buf (input_hunks size base)in
       off_delta hunks
     | 0b111 ->
-      let base  = input_node buf in
+      let base  = input_sha1 buf in
       let hunks = with_inflated buf (input_hunks size base) in
       ref_delta hunks
     | _     -> assert false
@@ -476,15 +481,21 @@ let lengths offsets =
   aux [] l
 
 module Pack: sig
-  include CONTENTS with type t := pack
+  include SERIALIZABLE with type t := pack
   val input: pack_index -> Mstruct.t -> pack
   val unpack:
-    read:(sha1 -> Mstruct.t) -> write:(value -> sha1) ->
-    int SHA1.Map.t -> int -> packed_value -> sha1
+    read_inflated:(sha1 -> Mstruct.t Lwt.t) ->
+    write:(value -> sha1 Lwt.t) ->
+    idx:int SHA1.Map.t ->
+    offset:int ->
+    packed_value -> sha1 Lwt.t
   val unpack_all:
-    read:(sha1 -> Mstruct.t) -> write:(value -> sha1) ->
-    Mstruct.t -> sha1 list
+    read_inflated:(sha1 -> Mstruct.t Lwt.t) ->
+    write:(value -> sha1 Lwt.t) ->
+    Mstruct.t -> sha1 list Lwt.t
 end = struct
+
+  open Lwt
 
   let input_header buf =
     let header = Mstruct.get_string buf 4 in
@@ -502,19 +513,19 @@ end = struct
   let input idx buf =
     let version, size = input_header (Mstruct.clone buf) in
     let packs = SHA1.Table.create () in
-    fun node ->
-      if Hashtbl.mem packs node then
-        Hashtbl.find_exn packs node
+    fun sha1 ->
+      if Hashtbl.mem packs sha1 then
+        Hashtbl.find_exn packs sha1
       else (
-        let offset = Map.find_exn idx.offsets node in
+        let offset = Map.find_exn idx.offsets sha1 in
         let buf = Mstruct.clone buf in
-        let buf = match Map.find_exn idx.lengths node with
+        let buf = match Map.find_exn idx.lengths sha1 with
           | None   ->
             Mstruct.shift buf offset;
             Mstruct.sub buf 0 (Mstruct.length buf - 20)
           | Some l -> Mstruct.sub buf offset l in
         let value = input_packed_value version buf in
-        Hashtbl.replace packs node value;
+        Hashtbl.replace packs sha1 value;
         value
       )
 
@@ -560,12 +571,13 @@ end = struct
     let buf = Mstruct.of_string str in
     Value.input_inflated buf
 
-  let unpack ~read ~write idx offset packed_value =
-    let value = match packed_value with
-      | Value v     -> v
+  let unpack ~read_inflated ~write ~idx ~offset packed_value =
+    begin match packed_value with
+      | Value v     -> return v
       | Ref_delta d ->
-        let source = read d.source in
-        apply_delta { d with source }
+        read_inflated d.source >>= fun source ->
+        let value = apply_delta { d with source } in
+        return value
       | Off_delta d ->
         let offset = offset - d.source in
         let base =
@@ -578,11 +590,13 @@ end = struct
                 offset in
             failwith msg
              | Some k -> k  in
-        let source = read base in
-        apply_delta { d with source } in
-    write value
+        read_inflated base >>= fun source ->
+        let value = apply_delta { d with source } in
+        return value
+    end >>=
+    write
 
-  let unpack_all ~read ~write buf =
+  let unpack_all ~read_inflated ~write buf =
     Printf.eprintf "UNPACK-ALL\n%!";
     let version, size = input_header buf in
     Printf.eprintf "version=%d size=%d\n%!" version size;
@@ -591,14 +605,16 @@ end = struct
       input_packed_value version buf in
 
     let idx = ref SHA1.Map.empty in
-    for i = 0 to size - 1 do
+    let rec loop i =
       Printf.eprintf "UNPACK [%d/%d]\n%!" (i+1) size;
       let offset = Mstruct.offset buf in
       let packed_value = next_packed_value () in
-      let node = unpack ~read ~write !idx offset packed_value in
-      idx := Map.add !idx ~key:node ~data:offset
-    done;
-    Map.keys !idx
+      unpack ~read_inflated ~write ~idx:!idx ~offset packed_value >>= fun sha1 ->
+      idx := Map.add !idx ~key:sha1 ~data:offset;
+      if i >= size - 1 then return_unit
+      else loop (i+1) in
+    loop 0 >>= fun () ->
+    return (Map.keys !idx)
 
   let output _ =
     todo "pack"
@@ -608,7 +624,7 @@ end = struct
 
 end
 
-module Idx: CONTENTS with type t := pack_index = struct
+module Idx: SERIALIZABLE with type t := pack_index = struct
 
   let input buf =
 
@@ -633,7 +649,7 @@ module Idx: CONTENTS with type t := pack_index = struct
     let names =
       let a = Array.create nb_objects (SHA1.of_string "") in
       for i=0 to nb_objects-1 do
-        a.(i) <- input_node buf;
+        a.(i) <- input_sha1 buf;
       done;
       a in
 
@@ -666,8 +682,8 @@ module Idx: CONTENTS with type t := pack_index = struct
           (name, Int32.to_int_exn offset)
       ) names in
 
-    let _node = input_node buf in
-    let _checksum = input_node buf in
+    let _sha1 = input_sha1 buf in
+    let _checksum = input_sha1 buf in
 
     let offsets_alist = Array.to_list idx in
     let offsets = SHA1.Map.of_alist_exn offsets_alist in

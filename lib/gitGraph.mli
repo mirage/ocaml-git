@@ -18,5 +18,5 @@
 
 open GitTypes
 
-val to_dot: t -> string -> unit
+val to_dot: t -> string -> unit Lwt.t
 (** Export the Git store as a "graphviz" file. *)

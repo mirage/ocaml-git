@@ -45,6 +45,13 @@ let arg_list name doc conv =
   let doc = Arg.info ~docv:name ~doc [] in
   Arg.(non_empty & pos_all conv [] & doc)
 
+let run t =
+  Lwt_unix.run (
+    Lwt.catch
+      (fun () -> t)
+      (function e -> Printf.eprintf "%s\n%!" (Printexc.to_string e); exit 1)
+  )
+
 (* CLONE *)
 let clone_doc = "Clone a remote Git repository."
 let clone =
@@ -67,7 +74,8 @@ let clone =
       let name = Filename.basename a in
       let name = Filename.chop_extension name in
       let t = GitLocal.create ~root:name () in
-      GitRemote.clone_on_disk t ?deepen a; `Ok ()
+      run (GitRemote.clone_on_disk t ?deepen a);
+      `Ok ()
     | _   -> `Error (true, "Too many address") in
   Term.(ret (pure clone $ depth $ bare $ address)),
   term_info "clone" ~doc ~man
@@ -85,7 +93,7 @@ let graph =
       Arg.(some string) None in
   let graph file =
     let t = GitLocal.create () in
-    GitGraph.to_dot t file in
+    run (GitGraph.to_dot t file) in
   Term.(pure graph $ file),
   term_info "graph" ~doc ~man
 

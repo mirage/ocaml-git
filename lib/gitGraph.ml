@@ -15,6 +15,7 @@
  *)
 
 open Core_kernel.Std
+open Lwt
 
 open GitTypes
 
@@ -62,33 +63,41 @@ module Dot = Graph.Graphviz.Dot(struct
 
 let create_graph t =
 
-  let g = G.create () in
-  let nodes = GitLocal.list t in
   let read n =
-    match GitLocal.read t n with
-    | None   -> failwith (Printf.sprintf "Cannot find %s" (to_string n))
-    | Some v -> v in
-  let nodes = List.map ~f:(fun n -> (n, read n)) nodes in
+    GitLocal.read t n >>= function
+    | None   -> fail (Failure (Printf.sprintf "Cannot find %s" (to_string n)))
+    | Some v -> return v in
+
+  let g = G.create () in
+
+  GitLocal.list t >>= fun nodes ->
+  Lwt_list.map_p (fun n ->
+      read n >>= fun v -> return (n, v)
+    ) nodes
+  >>= fun nodes ->
 
   (* Add all the vertices *)
   List.iter ~f:(G.add_vertex g) nodes;
 
-  List.iter ~f:(fun (id, obj as src) ->
-    let succs = GitLocal.succ t id in
-    List.iter ~f:(fun (l, succ) ->
-      let l = match l with
-        | `parent -> ""
-        | `tag t  -> "TAG-" ^ t
-        | `file f -> f in
-      G.add_edge_e g (src, l, (succ, read succ))
-    ) succs
-  ) nodes;
+  begin
+    Lwt_list.iter_s (fun (id, obj as src) ->
+      GitLocal.succ t id >>= fun succs ->
+      Lwt_list.iter_s (fun (l, succ) ->
+          let l = match l with
+            | `Parent -> ""
+            | `Tag t  -> "TAG-" ^ t
+            | `File f -> f in
+          read succ >>= fun v ->
+          G.add_edge_e g (src, l, (succ, v));
+          return_unit
+        ) succs
+    ) nodes
+  end >>= fun () ->
 
   (* Return the graph *)
-  g
+  return g
 
 let to_dot t file =
-  Out_channel.with_file file ~f:(fun oc ->
-      let g = create_graph t in
-      Dot.output_graph oc g;
-    )
+  create_graph t >>= fun g ->
+  Out_channel.with_file file ~f:(fun oc -> Dot.output_graph oc g);
+  return_unit

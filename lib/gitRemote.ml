@@ -15,6 +15,7 @@
  *)
 
 open Core_kernel.Std
+open Lwt
 
 open GitTypes
 
@@ -26,6 +27,12 @@ let error fmt =
   Printf.ksprintf (fun msg ->
     Printf.printf "Protocol error:%s\n%!" msg;
     raise Parsing.Parse_error
+  ) fmt
+
+let lwt_error fmt =
+  Printf.ksprintf (fun msg ->
+    Printf.printf "Protocol error:%s\n%!" msg;
+    fail Parsing.Parse_error
   ) fmt
 
 let debug = ref true
@@ -49,14 +56,14 @@ module PacketLine = struct
   let output oc = function
     | None  ->
       debug "SENDING: FLUSH";
-      output_string oc "0000";
-      flush oc
+      Lwt_io.write oc "0000" >>= fun () ->
+      Lwt_io.flush oc
     | Some l ->
       debug "SENDING: %S" l;
       let size = Printf.sprintf "%04x" (4 + String.length l) in
-      output_string oc size;
-      output_string oc l;
-      flush oc
+      Lwt_io.write oc size >>= fun () ->
+      Lwt_io.write oc l    >>= fun () ->
+      Lwt_io.flush oc
 
   let output_line oc s =
     output oc (Some s)
@@ -65,21 +72,18 @@ module PacketLine = struct
     output oc None
 
   let input ic =
-    let size = String.create 4 in
-    really_input ic size 0 4;
-    match size with
+    Lwt_io.read ~count:4 ic >>= function
     | "0000" ->
       debug "RECEIVED: FLUSH";
-      None
-    | _      ->
+      return_none
+    | size   ->
       let size = int_of_string ("0x" ^ size) - 4 in
-      let payload = String.create size in
-      really_input ic payload 0 size;
+      Lwt_io.read ~count:size ic >>= fun payload ->
       debug "RECEIVED: %S" payload;
       if payload.[size - 1] = lf then
-        Some (String.sub payload 0 (size-1))
+        return (Some (String.sub payload 0 (size-1)))
       else
-        Some payload
+        return (Some payload)
 
 end
 
@@ -239,24 +243,24 @@ module Listing = struct
 
   let input ic =
     let rec aux acc =
-      match PacketLine.input ic with
-      | None      -> acc
+      PacketLine.input ic >>= function
+      | None      -> return acc
       | Some line ->
         match String.lsplit2 line ~on:sp with
         | Some ("ERR", err) -> error "ERROR: %s" err
-        | Some (node, ref)  ->
+        | Some (sha1, ref)  ->
           if acc = empty then (
             (* Read the capabilities on the first line *)
             match String.lsplit2 ref ~on:nul with
             | Some (ref, caps) ->
-              let references = Map.add ~key:(of_hex node) ~data:ref acc.references in
+              let references = Map.add ~key:(of_hex sha1) ~data:ref acc.references in
               let capabilities = Capabilities.of_string caps in
               aux { references; capabilities; }
             | None ->
-              let references = Map.add ~key:(of_hex node) ~data:ref acc.references in
+              let references = Map.add ~key:(of_hex sha1) ~data:ref acc.references in
               aux { references; capabilities = []; }
           ) else
-            let references = Map.add ~key:(of_hex node) ~data:ref acc.references in
+            let references = Map.add ~key:(of_hex sha1) ~data:ref acc.references in
             aux { acc with references }
         | None -> error "%s is not a valid answer" line
     in
@@ -283,9 +287,9 @@ module Ack = struct
 
   let input ic =
     let rec aux acc =
-      match PacketLine.input ic with
+      PacketLine.input ic >>= function
       | None
-      | Some "NAK" -> List.rev (Nak :: acc)
+      | Some "NAK" -> return (List.rev (Nak :: acc))
       | Some s      ->
         match String.lsplit2 s ~on:sp with
         | Some ("ACK", r) ->
@@ -339,8 +343,8 @@ module Upload = struct
 
   let input ic =
     let rec aux acc =
-      match PacketLine.input ic with
-      | None   -> List.rev acc
+      PacketLine.input ic >>= function
+      | None   -> return (List.rev acc)
       | Some l ->
         match String.lsplit2 l ~on:sp with
         | None -> error "input upload"
@@ -371,41 +375,47 @@ module Upload = struct
     let last_c = ref [] in
 
     (* output wants *)
-    List.iter ~f:(fun (id, c) ->
+    Lwt_list.iter_s (fun (id, c) ->
       if c = !last_c then
         let msg = Printf.sprintf "want %s\n" (to_hex id) in
         PacketLine.output_line oc msg
       else
         let msg =
           Printf.sprintf "want %s %s\n" (to_hex id) (Capabilities.to_string c) in
-        PacketLine.output_line oc msg;
         last_c := c;
-    ) (wants t);
+        PacketLine.output_line oc msg
+    ) (wants t)
+    >>= fun () ->
 
     (* output shallows *)
-    List.iter ~f:(fun id ->
+    Lwt_list.iter_s (fun id ->
       let msg = Printf.sprintf "shallow %s" (to_hex id) in
       PacketLine.output_line oc msg
-    ) (shallows t);
+    ) (shallows t)
+    >>= fun () ->
 
     (* output unshallows *)
-    List.iter ~f:(fun id ->
+    Lwt_list.iter_s (fun id ->
       let msg = Printf.sprintf "unshallow %s" (to_hex id) in
       PacketLine.output_line oc msg
-    ) (unshallows t);
+    ) (unshallows t)
+    >>= fun () ->
 
     (* output haves *)
-    List.iter ~f:(fun id ->
+    Lwt_list.iter_s (fun id ->
       let msg = Printf.sprintf "have %s\n" (to_hex id) in
       PacketLine.output_line oc msg
-    ) (haves t);
+    ) (haves t)
+    >>= fun () ->
 
     (* output deepen *)
     let deepen = deepen t in
-    if deepen <> 0 then (
-      let msg = Printf.sprintf "deepen %d" deepen in
-      PacketLine.output_line oc msg;
-    );
+    begin if deepen <> 0 then (
+        let msg = Printf.sprintf "deepen %d" deepen in
+        PacketLine.output_line oc msg;
+      ) else
+        return_unit
+    end >>= fun () ->
 
     (* output done *)
     if List.mem t Done then
@@ -421,11 +431,12 @@ module Upload = struct
     let deepen = match deepen with
       | None   -> []
       | Some d -> [Deepen d] in
-    output oc (wants @ shallows @ deepen);
+    output oc (wants @ shallows @ deepen) >>= fun () ->
     if deepen <> [] then
-      Some (input ic)
+      input ic >>= fun i ->
+      return (Some i)
     else
-      None
+      return_none
 
   let pick n l =
     let rec aux i acc l =
@@ -441,36 +452,35 @@ module Upload = struct
     let rec aux haves =
       if List.length haves > 32 then
         let head, tail = pick 32 haves in
-        output oc head;
+        output oc head >>= fun () ->
         aux tail
       else
         output oc (haves @ [Done])
     in
     let haves = List.map ~f:(fun id -> Have id) haves in
-    aux haves;
-    let _acks = Ack.input ic in
-    ()
+    aux haves >>= fun () ->
+    Ack.input ic >>= fun _ack ->
+    return_unit
 
 end
 
-let connect address port =
+
+let with_connection address port fn =
   let port = match port with
     | None   -> 9418
     | Some p -> p in
-  let inet_addr =
-    let host = Unix.gethostbyname address in
-    host.Unix.h_addr_list.(0) in
-  let sockaddr =
-    Unix.ADDR_INET (inet_addr, port) in
-  Unix.open_connection sockaddr
+  Lwt_unix.gethostbyname address >>= fun host ->
+  let inet_addr = host.Unix.h_addr_list.(0) in
+  let sockaddr = Unix.ADDR_INET (inet_addr, port) in
+  Lwt_io.with_connection sockaddr fn
 
 let todo msg =
-  failwith ("TODO: " ^ msg)
+  fail (Failure ("TODO: " ^ msg))
 
 type backend = {
-  write_reference: t -> string -> sha1 -> unit;
-  write_and_check_inflated: t -> sha1 -> string -> unit;
-  create_filesystem: t -> SHA1.Commit.t -> unit;
+  write_reference: t -> string -> sha1 -> unit Lwt.t;
+  write_and_check_inflated: t -> sha1 -> string -> unit Lwt.t;
+  write_filesystem: t -> SHA1.Commit.t -> unit Lwt.t;
 }
 
 let clone ?(bare=false) ?deepen backend t address =
@@ -478,61 +488,71 @@ let clone ?(bare=false) ?deepen backend t address =
   match Init.host r with
   | None   -> todo "no-host"
   | Some h ->
-    let ic, oc = connect h (Init.port r) in
-    Init.output oc r;
-    let listing = Listing.input ic in
-    Listing.dump listing;
-    Map.iter ~f:(fun ~key:node ~data:name ->
-      backend.write_reference t name node
-    ) (Listing.references listing);
-    match Listing.head listing with
-    | None    -> Init.close oc
-    | Some head ->
-      debug "PHASE1";
-      let _shallows = Upload.phase1 ?deepen (ic,oc) [head] in
+    with_connection h (Init.port r)(fun (ic, oc) ->
+        Init.output oc r     >>= fun () ->
+        Listing.input ic     >>= fun listing ->
+        Listing.dump listing;
+        begin Map.fold
+            ~f:(fun ~key:sha1 ~data:name acc ->
+                acc >>= fun () ->
+                backend.write_reference t name sha1)
+            ~init:return_unit (Listing.references listing)
+        end >>= fun () ->
+        match Listing.head listing with
+        | None    -> Init.close oc
+        | Some head ->
+          debug "PHASE1";
+          Upload.phase1 ?deepen (ic,oc) [head] >>= fun _shallows ->
 
-      debug "PHASE2";
-      Upload.phase2 (ic,oc) [];
+          debug "PHASE2";
+          Upload.phase2 (ic,oc) [] >>= fun () ->
 
-      debug "PHASE3";
+          debug "PHASE3";
 
-      let raw = In_channel.input_all ic in
-      let buf = Mstruct.of_string raw in
-      let buffers = SHA1.Table.create () in
-      let read node =
-        if Hashtbl.mem buffers node then Mstruct.clone (Hashtbl.find_exn buffers node)
-        else error "%s: unknown node" (to_hex node) in
-      let write value =
-        let inflated = Git.Value.output_inflated value in
-        let node = SHA1.sha1 inflated in
-        if not (Hashtbl.mem buffers node) then (
-          let buf = Mstruct.of_string inflated in
-          Hashtbl.replace buffers node buf;
-          backend.write_and_check_inflated t node inflated;
-        );
-        node in
+          Lwt_io.read ic >>= fun raw ->
+          let buf = Mstruct.of_string raw in
+          let buffers = SHA1.Table.create () in
+          let read_inflated sha1 =
+            if Hashtbl.mem buffers sha1 then return (Mstruct.clone (Hashtbl.find_exn buffers sha1))
+            else lwt_error "%s: unknown sha1" (to_hex sha1) in
+          let write value =
+            let buf = Buffer.create 1024 in
+            Git.output_inflated buf value;
+            let inflated = Buffer.contents buf in
+            let sha1 = SHA1.sha1 inflated in
+            begin if not (Hashtbl.mem buffers sha1) then (
+                let buf = Mstruct.of_string inflated in
+                Hashtbl.replace buffers sha1 buf;
+                backend.write_and_check_inflated t sha1 inflated;
+              ) else
+                return_unit
+            end >>= fun () ->
+            return sha1 in
 
-      let nodes = Git.Pack.unpack_all ~read ~write buf in
-      begin match nodes with
-        | [] -> debug "NO NEW OBJECTS"
-        | _  ->
-          debug "NEW OBJECTS";
-          List.iter ~f:(fun n -> debug "%s" (to_hex n)) nodes
-      end;
-      if not bare then (
-        (* TODO: generate the index file *)
-        debug "EXPANDING THE FILESYSTEM";
-        backend.create_filesystem t (SHA1.to_commit head)
-      ) else
-        debug "BARE REPOSITORY"
+          Git.Pack.unpack_all ~read_inflated ~write buf >>= fun sha1s ->
+
+          match sha1s with
+          | []    ->
+            debug "NO NEW OBJECTS";
+            return_unit
+          | sha1s ->
+            debug "NEW OBJECTS";
+            List.iter ~f:(fun n -> debug "%s" (to_hex n)) sha1s;
+            if not bare then (
+              (* TODO: generate the index file *)
+              debug "EXPANDING THE FILESYSTEM";
+              GitLocal.write_filesystem t (SHA1.to_commit head)
+            ) else (
+              debug "BARE REPOSITORY";
+              return_unit
+            )
+      )
+
+let local = {
+  write_reference = GitLocal.write_reference;
+  write_and_check_inflated = GitLocal.write_and_check_inflated;
+  write_filesystem = GitLocal.write_filesystem;
+}
 
 let clone_on_disk ?bare ?deepen t address =
-  let backend = {
-    write_reference = GitLocal.write_reference;
-    write_and_check_inflated = GitLocal.write_and_check_inflated;
-    create_filesystem = fun t head ->
-      match GitMemory.filesystem_of_local t head with
-      | None      -> failwith "filesystem"
-      | Some tree -> GitMemory.write_filesystem t tree
-  } in
-  clone ?bare ?deepen backend t address
+  clone ?bare ?deepen local t address

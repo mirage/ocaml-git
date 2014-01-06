@@ -19,35 +19,54 @@
 open GitTypes
 
 val create: ?root:string -> unit -> t
-(** Read a complete repository state. Note: we only load the object
-    references, not their contents. This is because we don't really want
-    to store all the state in memory, especially when you can *huge* pack
-    files. if [root] is not set, use the current directory. *)
+(** Create a cache of objects for the given path. If [root] is not
+    set, use the current directory. *)
 
-val dump: t -> unit
-(** Dump the state to stderr. This function is in this module because
-    we need to be aware of the mapping model/filesystem to load file
-    contents on demand. *)
+val dump: t -> unit Lwt.t
+(** Dump the state of cache to stderr. *)
 
-val read: t -> sha1 -> value option
-(** Read the contents of an object. The result can be either a normal
-    value or a packed value. *)
+val read: t -> sha1 -> value option Lwt.t
+(** Return the contents of the object having the given SHA1 file. The
+    result can be either a normal value or a packed value. If the
+    object is already in the cache, use it directly. Otherwise,
+    populate the cache to speed up the next disk accesses. *)
 
-val references: t -> (string * sha1) list
+val type_of: t -> sha1 -> [ `Blob | `Commit | `Tag | `Tree ] option Lwt.t
+(** Return the object type corresponding to the given SHA1. *)
+
+val references: t -> (string * sha1) list Lwt.t
 (** Return the list of references (stored in {i ./git/refs/}). *)
 
-val list: t -> sha1 list
+val list: t -> sha1 list Lwt.t
 (** List of SHA1. *)
 
-val succ: t -> sha1 -> ([`parent|`tag of string|`file of string] * sha1) list
+val succ: t -> sha1 -> ([ `Parent | `Tag of string | `File of string ] * sha1) list Lwt.t
 (** Successors (with labels). *)
 
-val write: t -> value -> sha1
+val write: t -> value -> sha1 Lwt.t
 (** Write a value and return the SHA1 of the object. *)
 
-val write_and_check_inflated: t -> sha1 -> string -> unit
+val write_and_check_inflated: t -> sha1 -> string -> unit Lwt.t
 (** Compress a binary value and write it in the store. Check that the
     SHA1 of the uncompressed value is the one expected. *)
 
-val write_reference: t -> string -> sha1 -> unit
+val write_reference: t -> string -> sha1 -> unit Lwt.t
 (** Write a reference. *)
+
+val read_inflated: t -> sha1 -> Mstruct.t option Lwt.t
+(** Return the inflated contents of the given SHA1 file. *)
+
+val write_filesystem: t -> SHA1.Commit.t -> unit Lwt.t
+(** Expand the filesystem corresponding to the given revision. *)
+
+(** {2 Flushing} *)
+
+val flush: t -> unit Lwt.t
+(** Flush the in-memory cache to disk. *)
+
+val set_auto_flush: bool -> unit
+(** Set the flushing behavior. When set to [false], no contents is
+    modified on the disk. *)
+
+val get_auto_flush: unit -> bool
+(** Get the current flush behavior. *)

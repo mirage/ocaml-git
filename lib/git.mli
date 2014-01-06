@@ -22,82 +22,88 @@
 
 open GitTypes
 
-module type CONTENTS = sig
+module type SERIALIZABLE = sig
 
   (** Serialization of file contents. *)
 
   type t
   (** The file contents. *)
 
-  (** Dump the contents to stderr. *)
   val dump: t -> unit
+  (** Dump the contents to stderr. *)
 
-  (** Output the file in a buffer. *)
   val output: Buffer.t -> t -> unit
+  (** Output the file in a buffer. *)
 
-  (** Read the contents from an input buffer. *)
   val input: Mstruct.t -> t
+  (** Read the contents from an input buffer. *)
 
 end
 
-module Blob: CONTENTS with type t := blob
+module Blob: SERIALIZABLE with type t := blob
 (** Blob objects. *)
 
-module Commit: CONTENTS with type t := commit
+module Commit: SERIALIZABLE with type t := commit
 (** Commit objects. *)
 
-module Tree: CONTENTS with type t := tree
+module Tree: SERIALIZABLE with type t := tree
 (** Tree objects. *)
 
-module Tag: CONTENTS with type t := tag
+module Tag: SERIALIZABLE with type t := tag
 (** Tag objects. *)
 
-module Value: sig
+include SERIALIZABLE with type t := value
+(** All the objects kinds can be serializable. *)
 
-  (** An object is either a tag/tree/commit/blob. *)
+val type_of_inflated: Mstruct.t -> [`Blob|`Commit|`Tag|`Tree]
+(** Return the type of the inflated object stored in the given
+    buffer. *)
 
-  include CONTENTS with type t := value
-  val input: Mstruct.t -> value
-  val input_inflated: Mstruct.t -> value
-  val output_inflated: value -> string
-  val output: value -> string
-end
+val input_inflated: Mstruct.t -> value
+(** Unmarshal an inflated string to a value. *)
 
-module Idx: CONTENTS with type t := pack_index
+val output_inflated: Buffer.t -> value -> unit
+(** Marshal a value to a buffer, without deflating it. *)
+
+(** {2 Packed Objects} *)
+
+module Idx: SERIALIZABLE with type t := pack_index
 (** Pack indexes. *)
 
-module PackedValue2: CONTENTS with type t := packed_value
+module PackedValue2: SERIALIZABLE with type t := packed_value
 (** Pack objects. *)
 
-module PackedValue3: CONTENTS with type t := packed_value
+module PackedValue3: SERIALIZABLE with type t := packed_value
 (** Pack objects. *)
 
 (** Packs. *)
 module Pack: sig
 
-  include CONTENTS with type t := pack
+  include SERIALIZABLE with type t := pack
 
   (** Read a pack, given the associated pack index. *)
   val input: pack_index -> Mstruct.t -> pack
 
   val unpack:
-    read:(sha1 -> Mstruct.t) ->
-    write:(value -> sha1) -> int SHA1.Map.t ->
-    int -> packed_value -> sha1
-  (** Unpack a packed value. The [read] and [write] function are used
-      to read and write object contents (to the disk or in memory,
-      depending on their implementation).
+    read_inflated:(sha1 -> Mstruct.t Lwt.t) ->
+    write:(value -> sha1 Lwt.t) ->
+    idx:int SHA1.Map.t ->
+    offset:int ->
+    packed_value -> sha1 Lwt.t
+  (** Unpack a packed value. The [read_inflated] and [write] function
+      are used to read and write object contents (to the disk or in
+      memory, depending on their implementation).
 
-      Usage: [unpack ~read ~write idx offset packed_value]
+      Usage: [unpack ~read_inflated ~write ~idx ~offset packed_value]
 
       [offset] is the position of [packed_value] into the pack file:
-      this is useful of delta offsets.  *)
+      this is useful of delta offsets. *)
 
   val unpack_all:
-    read:(sha1 -> Mstruct.t) ->
-    write:(value -> sha1) ->
-    Mstruct.t -> sha1 list
-  (** Unpack a whole pack file. Useful when we have no index file,
-      eg. after a fetch. *)
+    read_inflated:(sha1 -> Mstruct.t Lwt.t) ->
+    write:(value -> sha1 Lwt.t) ->
+    Mstruct.t -> sha1 list Lwt.t
+    (** Unpack a whole pack file. Useful when we have no index file,
+        eg. after a fetch. *)
 
 end
