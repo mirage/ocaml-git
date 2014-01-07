@@ -44,14 +44,14 @@ module Dot = Graph.Graphviz.Dot(struct
     let vertex_name (x,o) =
       let hex = to_string x in
       let p = match o with
-        | Blob s   -> "B"
-        | Commit _ -> "C"
-        | Tree _   -> "Tr"
-        | Tag  _   -> "Ta" in
+        | Value.Blob s   -> "B"
+        | Value.Commit _ -> "C"
+        | Value.Tree _   -> "Tr"
+        | Value.Tag  _   -> "Ta" in
       Printf.sprintf "\"%s-%s\"" p hex
     let vertex_attributes (_,o) =
       match o with
-      | Commit _ -> [`Shape `Doublecircle]
+      | Value.Commit _ -> [`Shape `Doublecircle]
       | _ -> []
     let get_subgraph _ = None
     let default_edge_attributes _ = []
@@ -61,43 +61,48 @@ module Dot = Graph.Graphviz.Dot(struct
       | _  ->[`Label l]
   end)
 
-let create_graph t =
+module Make (Store: S) = struct
 
-  let read n =
-    GitLocal.read t n >>= function
-    | None   -> fail (Failure (Printf.sprintf "Cannot find %s" (to_string n)))
-    | Some v -> return v in
+  let create_graph t =
 
-  let g = G.create () in
+    let read n =
+      Store.read t n >>= function
+      | None   -> fail (Failure (Printf.sprintf "Cannot find %s" (to_string n)))
+      | Some v -> return v in
 
-  GitLocal.list t >>= fun nodes ->
-  Lwt_list.map_p (fun n ->
-      read n >>= fun v -> return (n, v)
-    ) nodes
-  >>= fun nodes ->
+    let g = G.create () in
 
-  (* Add all the vertices *)
-  List.iter ~f:(G.add_vertex g) nodes;
+    Store.list t >>= fun nodes ->
+    Lwt_list.map_p (fun n ->
+        read n >>= fun v -> return (n, v)
+      ) nodes
+    >>= fun nodes ->
 
-  begin
-    Lwt_list.iter_s (fun (id, obj as src) ->
-      GitLocal.succ t id >>= fun succs ->
-      Lwt_list.iter_s (fun (l, succ) ->
-          let l = match l with
-            | `Parent -> ""
-            | `Tag t  -> "TAG-" ^ t
-            | `File f -> f in
-          read succ >>= fun v ->
-          G.add_edge_e g (src, l, (succ, v));
-          return_unit
-        ) succs
-    ) nodes
-  end >>= fun () ->
+    (* Add all the vertices *)
+    List.iter ~f:(G.add_vertex g) nodes;
 
-  (* Return the graph *)
-  return g
+    begin
+      Lwt_list.iter_s (fun (id, obj as src) ->
+          Store.succ t id >>= fun succs ->
+          Lwt_list.iter_s (fun s ->
+              let l = match s with
+                | `Commit _   -> ""
+                | `Tag (t,_)  -> "TAG-" ^ t
+                | `Tree (f,_) -> f in
+              let succ = succ s in
+              read succ >>= fun v ->
+              G.add_edge_e g (src, l, (succ, v));
+              return_unit
+            ) succs
+        ) nodes
+    end >>= fun () ->
 
-let to_dot t file =
-  create_graph t >>= fun g ->
-  Out_channel.with_file file ~f:(fun oc -> Dot.output_graph oc g);
-  return_unit
+    (* Return the graph *)
+    return g
+
+  let to_dot t file =
+    create_graph t >>= fun g ->
+    Out_channel.with_file file ~f:(fun oc -> Dot.output_graph oc g);
+    return_unit
+
+end

@@ -22,16 +22,24 @@ open GitTypes
 
 module Log = Log.Make(struct let section = "local" end)
 
+type t = {
+  root   : string;
+  buffers: (sha1, Mstruct.t) Hashtbl.t;
+  packs  : (sha1, pack) Hashtbl.t;
+  indexes: (sha1, pack_index) Hashtbl.t;
+}
+
 let create ?root () =
   let root = match root with
     | None   -> Sys.getcwd ()
     | Some r -> r in
-  {
+  let t = {
     root;
     buffers = SHA1.Table.create ();
     packs   = SHA1.Table.create ();
     indexes = SHA1.Table.create ();
-  }
+  } in
+  return t
 
 let to_hex sha1 =
   GitMisc.hex_encode (SHA1.to_string sha1)
@@ -282,14 +290,15 @@ let references t =
     ) files
 
 let succ root sha1 =
-  let parent c = (`Parent, SHA1.commit c) in
-  let tag t = (`Tag t.tag, SHA1.commit t.commit) in
+  let commit c = `Commit (SHA1.commit c) in
+  let tree l s = `Tree (l, SHA1.tree s) in
+  let tag t = `Tag (t.Tag.tag, SHA1.commit t.Tag.commit) in
   read root sha1 >>= function
-  | None            -> return_nil
-  | Some (Blob _)   -> return_nil
-  | Some (Commit c) -> return ((`File "", SHA1.tree c.tree) :: List.map ~f:parent c.parents)
-  | Some (Tag t)    -> return [tag t]
-  | Some (Tree t)   -> return (List.map ~f:(fun e -> (`File e.file, e.node)) t)
+  | None                  -> return_nil
+  | Some (Value.Blob _)   -> return_nil
+  | Some (Value.Commit c) -> return (tree "" c.Commit.tree :: List.map ~f:commit c.Commit.parents)
+  | Some (Value.Tag t)    -> return [tag t]
+  | Some (Value.Tree t)   -> return (List.map ~f:(fun e -> `Tree (e.Tree.file, e.Tree.node)) t)
 
 let write t value =
   Loose.write t value
@@ -315,15 +324,14 @@ let load_filesystem t commit =
     succ t sha1 >>= function
     | [] ->
       begin read t sha1 >>= function
-        | Some (Blob b) -> return (Some (Lazy_trie.create ~value:b ()))
-        | _             -> return_none
+        | Some (Value.Blob b) -> return (Some (Lazy_trie.create ~value:b ()))
+        | _                   -> return_none
       end
     | children ->
-      Lwt_list.fold_left_s (fun acc (l, n) ->
-          match l with
-          | `Parent
-          | `Tag _  -> return acc
-          | `File l ->
+      Lwt_list.fold_left_s (fun acc -> function
+          | `Commit _
+          | `Tag _       -> return acc
+          | `Tree (l, n) ->
             aux n >>= function
             | None   -> return acc
             | Some t -> return ((l, t) :: acc)
@@ -336,7 +344,7 @@ let load_filesystem t commit =
   | None    -> fail (Failure "create")
   | Some fs -> return fs
 
-let write_filesystem t commit =
+let expand_filesystem t commit =
   load_filesystem t commit >>= fun trie ->
   Lazy_trie.fold (fun acc path blob ->
       acc >>= fun () ->

@@ -63,12 +63,13 @@ module type SERIALIZABLE = sig
 end
 
 module User: sig
-  include SERIALIZABLE with type t := user
-  val pretty: user -> string
+  include SERIALIZABLE with type t := User.t
+  val pretty: User.t -> string
 end = struct
 
   (* XXX needs to escape name/email/date *)
   let output buf t =
+    let open User in
     Buffer.add_string buf t.name ;
     Buffer.add_string buf " <"   ;
     Buffer.add_string buf t.email;
@@ -88,9 +89,10 @@ end = struct
     (* skip 2 bytes *)
     Mstruct.shift buf 2;
     let date = Mstruct.get_string buf (Mstruct.length buf) in
-    { name; email; date }
+    { User.name; email; date }
 
   let pretty t =
+    let open User in
     Printf.sprintf
       "[name: %S] [email: %S] [date: %S]"
       t.name t.email t.date
@@ -117,6 +119,7 @@ end
 module Commit: SERIALIZABLE with type t := commit = struct
 
   let dump t =
+    let open Commit in
     Printf.eprintf
       "  tree     : %s\n\
       \  parents  : %s\n\
@@ -136,6 +139,7 @@ module Commit: SERIALIZABLE with type t := commit = struct
     Buffer.add_char   buf lf
 
   let output buf t =
+    let open Commit in
     Buffer.add_string buf "tree ";
     output_hex_tree   buf t.tree;
     Buffer.add_char   buf lf;
@@ -187,7 +191,7 @@ module Commit: SERIALIZABLE with type t := commit = struct
     let committer = input_key_value buf "committer" User.input in
     Mstruct.shift buf 1;
     let message   = Mstruct.to_string buf in
-    { parents; message; tree; author; committer }
+    { Commit.parents; message; tree; author; committer }
 
 end
 
@@ -213,6 +217,7 @@ module Tree: SERIALIZABLE with type t := tree = struct
     | `dir    -> "40000"
 
   let dump_entry e =
+    let open Tree in
     Printf.eprintf
       "perm: %s\n\
        file: %s\n\
@@ -225,6 +230,7 @@ module Tree: SERIALIZABLE with type t := tree = struct
     List.iter ~f:dump_entry t
 
   let output_entry buf e =
+    let open Tree in
     Buffer.add_string buf (string_of_perm e.perm);
     Buffer.add_char   buf sp;
     Buffer.add_string buf e.file;
@@ -240,7 +246,7 @@ module Tree: SERIALIZABLE with type t := tree = struct
       | Some file -> file in
     let node = input_sha1 buf in
     let entry = {
-      perm = perm_of_string buf perm;
+      Tree.perm = perm_of_string buf perm;
       file; node
     } in
     Some entry
@@ -271,31 +277,33 @@ end
 
 module Value = struct
 
+  module V = Value
+
   let dump = function
-    | Blob b ->
+    | V.Blob b ->
       Printf.eprintf "BLOB:\n";
       Blob.dump b
-    | Commit c ->
+    | V.Commit c ->
       Printf.eprintf "COMMIT:\n";
       Commit.dump c
-    | Tag t ->
+    | V.Tag t ->
       Printf.eprintf "TAG:\n";
       Tag.dump t
-    | Tree t ->
+    | V.Tree t ->
       Printf.eprintf "TREE:\n";
       Tree.dump t
 
   let obj_type = function
-    | Blob _   -> "blob"
-    | Commit _ -> "commit"
-    | Tag _    -> "tag"
-    | Tree _   -> "tree"
+    | V.Blob _   -> "blob"
+    | V.Commit _ -> "commit"
+    | V.Tag _    -> "tag"
+    | V.Tree _   -> "tree"
 
   let output_contents buf = function
-    | Blob b   -> Blob.output buf b
-    | Commit c -> Commit.output buf c
-    | Tag t    -> Tag.output buf t
-    | Tree t   -> Tree.output buf t
+    | V.Blob b   -> Blob.output buf b
+    | V.Commit c -> Commit.output buf c
+    | V.Tag t    -> Tag.output buf t
+    | V.Tree t   -> Tree.output buf t
 
   let output_inflated buf t =
     let size, contents =
@@ -372,7 +380,7 @@ end = struct
 
     | 0 ->
       let contents = Mstruct.get_string buf opcode in
-      Insert contents
+      Packed_value.Insert contents
 
     | _ ->
       let read bit shift =
@@ -397,7 +405,7 @@ end = struct
         Mstruct.parse_error_buf buf
           "wrong insert hunk (offset:%d length:%d source:%d)"
           offset length source_length;
-      Copy (offset, length)
+      Packed_value.Copy (offset, length)
 
   let input_le_base_128 buf =
     let rec aux int shift =
@@ -416,7 +424,7 @@ end = struct
       if Mstruct.length buf = 0 then List.rev acc
       else aux (input_hunk source_length buf :: acc) in
     let hunks = aux [] in
-    { source; hunks; source_length; result_length }
+    { Packed_value.source; hunks; source_length; result_length }
 
   let input_be_modified_base_128 buf =
     let rec aux i n =
@@ -496,6 +504,7 @@ module Pack: sig
 end = struct
 
   open Lwt
+  module P = Packed_value
 
   let input_header buf =
     let header = Mstruct.get_string buf 4 in
@@ -530,13 +539,14 @@ end = struct
       )
 
   let apply_hunk source buf = function
-    | Insert str     -> Buffer.add_string buf str
-    | Copy (off,len) ->
+    | P.Insert str     -> Buffer.add_string buf str
+    | P.Copy (off,len) ->
       let view = Mstruct.sub (Mstruct.clone source) off len in
       let str = Mstruct.to_string view in
       Buffer.add_string buf str
 
   let dump_delta d =
+    let open Packed_value in
     Printf.eprintf
       "source-length: %d\n\
        result-length: %d\n"
@@ -548,24 +558,24 @@ end = struct
     ) d.hunks
 
   let apply_delta delta =
-    let source = delta.source in
+    let source = delta.P.source in
     let kind = match Mstruct.get_string_delim source sp with
       | None   -> Mstruct.parse_error_buf source "missing kind"
       | Some k -> k in
     let size = match Mstruct.get_string_delim source nul with
       | None   -> Mstruct.parse_error_buf source "missing size"
       | Some s -> try int_of_string s with _ -> -1 in
-    if size <> delta.source_length then
+    if size <> delta.P.source_length then
       Mstruct.parse_error_buf source
         "size differs: delta:%d source:%d\n"
-        delta.source_length size;
+        delta.P.source_length size;
 
-    let buf = Buffer.create (20 + delta.result_length) in
+    let buf = Buffer.create (20 + delta.P.result_length) in
     Buffer.add_string buf kind;
     Buffer.add_char   buf sp;
-    Buffer.add_string buf (string_of_int delta.result_length);
+    Buffer.add_string buf (string_of_int delta.P.result_length);
     Buffer.add_char   buf nul;
-    List.iter ~f:(apply_hunk delta.source buf) delta.hunks;
+    List.iter ~f:(apply_hunk delta.P.source buf) delta.P.hunks;
 
     let str = Buffer.contents buf in
     let buf = Mstruct.of_string str in
@@ -573,13 +583,13 @@ end = struct
 
   let unpack ~read_inflated ~write ~idx ~offset packed_value =
     begin match packed_value with
-      | Value v     -> return v
-      | Ref_delta d ->
-        read_inflated d.source >>= fun source ->
-        let value = apply_delta { d with source } in
+      | P.Value v     -> return v
+      | P.Ref_delta d ->
+        read_inflated d.P.source >>= fun source ->
+        let value = apply_delta { d with P.source } in
         return value
-      | Off_delta d ->
-        let offset = offset - d.source in
+      | P.Off_delta d ->
+        let offset = offset - d.P.source in
         let base =
           match Map.fold
                   ~f:(fun ~key ~data acc -> if data=offset then Some key else acc)
@@ -591,7 +601,7 @@ end = struct
             failwith msg
              | Some k -> k  in
         read_inflated base >>= fun source ->
-        let value = apply_delta { d with source } in
+        let value = apply_delta { d with P.source } in
         return value
     end >>=
     write

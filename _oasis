@@ -14,9 +14,17 @@ Flag unix
 Library git
   Path:         lib/
   Findlibname:  git
-  Modules:      GitMisc, GitTypes, Git, GitLocal, GitRemote, GitGraph
+  Modules:      GitMisc, GitTypes, Git, GitRemote, GitGraph
   BuildDepends:	mstruct, dolog, core_kernel, ocamlgraph, lazy-trie,
-                re.pcre, zip, cryptokit, uri, lwt.unix
+                re.pcre, zip, cryptokit, uri, lwt,
+                bin_prot.syntax, comparelib.syntax, sexplib.syntax
+
+Library "git-unix"
+  Path:          lib/
+  FindlibParent: git
+  Findlibname:   unix
+  Modules:       GitLocal
+  BuildDepends:	 git, lwt.unix
 
 Executable ogit
   Path:               lib/
@@ -24,17 +32,17 @@ Executable ogit
   Build$:             flag(unix)
   CompiledObject:     best
   Install:            true
-  BuildDepends:       cmdliner, git, lwt.unix
+  BuildDepends:       cmdliner, git.unix
 
 Executable test_git
   Path:               lib_test
-  MainIs:             read.ml
+  MainIs:             test.ml
   Build$:             flag(tests) && flag(unix)
   CompiledObject:     best
   Install:            false
-  BuildDepends:       git, alcotest
+  BuildDepends:       git.unix, alcotest
 
 Test test_git
   Run$:               flag(tests)
   Command:            $test_git -q
-  WorkingDirectory:   .
+  WorkingDirectory:   lib_test/

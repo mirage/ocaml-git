@@ -464,7 +464,6 @@ module Upload = struct
 
 end
 
-
 let with_connection address port fn =
   let port = match port with
     | None   -> 9418
@@ -477,82 +476,72 @@ let with_connection address port fn =
 let todo msg =
   fail (Failure ("TODO: " ^ msg))
 
-type backend = {
-  write_reference: t -> string -> sha1 -> unit Lwt.t;
-  write_and_check_inflated: t -> sha1 -> string -> unit Lwt.t;
-  write_filesystem: t -> SHA1.Commit.t -> unit Lwt.t;
-}
+module Make (Store: S) = struct
 
-let clone ?(bare=false) ?deepen backend t address =
-  let r = Init.create address in
-  match Init.host r with
-  | None   -> todo "no-host"
-  | Some h ->
-    with_connection h (Init.port r)(fun (ic, oc) ->
-        Init.output oc r     >>= fun () ->
-        Listing.input ic     >>= fun listing ->
-        Listing.dump listing;
-        begin Map.fold
-            ~f:(fun ~key:sha1 ~data:name acc ->
-                acc >>= fun () ->
-                backend.write_reference t name sha1)
-            ~init:return_unit (Listing.references listing)
-        end >>= fun () ->
-        match Listing.head listing with
-        | None    -> Init.close oc
-        | Some head ->
-          debug "PHASE1";
-          Upload.phase1 ?deepen (ic,oc) [head] >>= fun _shallows ->
+  let clone t ?(bare=false) ?deepen address =
+    let r = Init.create address in
+    match Init.host r with
+    | None   -> todo "local-clone"
+    | Some h ->
+      with_connection h (Init.port r)(fun (ic, oc) ->
+          Init.output oc r     >>= fun () ->
+          Listing.input ic     >>= fun listing ->
+          Listing.dump listing;
+          begin Map.fold
+              ~f:(fun ~key:sha1 ~data:name acc ->
+                  acc >>= fun () ->
+                  Store.write_reference t name sha1)
+              ~init:return_unit (Listing.references listing)
+          end >>= fun () ->
+          match Listing.head listing with
+          | None    -> Init.close oc
+          | Some head ->
+            debug "PHASE1";
+            Upload.phase1 ?deepen (ic,oc) [head] >>= fun _shallows ->
 
-          debug "PHASE2";
-          Upload.phase2 (ic,oc) [] >>= fun () ->
+            debug "PHASE2";
+            Upload.phase2 (ic,oc) [] >>= fun () ->
 
-          debug "PHASE3";
+            debug "PHASE3";
 
-          Lwt_io.read ic >>= fun raw ->
-          let buf = Mstruct.of_string raw in
-          let buffers = SHA1.Table.create () in
-          let read_inflated sha1 =
-            if Hashtbl.mem buffers sha1 then return (Mstruct.clone (Hashtbl.find_exn buffers sha1))
-            else lwt_error "%s: unknown sha1" (to_hex sha1) in
-          let write value =
-            let buf = Buffer.create 1024 in
-            Git.output_inflated buf value;
-            let inflated = Buffer.contents buf in
-            let sha1 = SHA1.sha1 inflated in
-            begin if not (Hashtbl.mem buffers sha1) then (
-                let buf = Mstruct.of_string inflated in
-                Hashtbl.replace buffers sha1 buf;
-                backend.write_and_check_inflated t sha1 inflated;
-              ) else
-                return_unit
-            end >>= fun () ->
-            return sha1 in
+            Lwt_io.read ic >>= fun raw ->
+            let buf = Mstruct.of_string raw in
+            let buffers = SHA1.Table.create () in
+            let read_inflated sha1 =
+              if Hashtbl.mem buffers sha1 then
+                return (Mstruct.clone (Hashtbl.find_exn buffers sha1))
+              else lwt_error "%s: unknown sha1" (to_hex sha1) in
+            let write value =
+              let buf = Buffer.create 1024 in
+              Git.output_inflated buf value;
+              let inflated = Buffer.contents buf in
+              let sha1 = SHA1.sha1 inflated in
+              begin if not (Hashtbl.mem buffers sha1) then (
+                  let buf = Mstruct.of_string inflated in
+                  Hashtbl.replace buffers sha1 buf;
+                  Store.write_and_check_inflated t sha1 inflated;
+                ) else
+                  return_unit
+              end >>= fun () ->
+              return sha1 in
 
-          Git.Pack.unpack_all ~read_inflated ~write buf >>= fun sha1s ->
+            Git.Pack.unpack_all ~read_inflated ~write buf >>= fun sha1s ->
 
-          match sha1s with
-          | []    ->
-            debug "NO NEW OBJECTS";
-            return_unit
-          | sha1s ->
-            debug "NEW OBJECTS";
-            List.iter ~f:(fun n -> debug "%s" (to_hex n)) sha1s;
-            if not bare then (
-              (* TODO: generate the index file *)
-              debug "EXPANDING THE FILESYSTEM";
-              GitLocal.write_filesystem t (SHA1.to_commit head)
-            ) else (
-              debug "BARE REPOSITORY";
+            match sha1s with
+            | []    ->
+              debug "NO NEW OBJECTS";
               return_unit
-            )
-      )
+            | sha1s ->
+              debug "NEW OBJECTS";
+              List.iter ~f:(fun n -> debug "%s" (to_hex n)) sha1s;
+              if not bare then (
+                (* TODO: generate the index file *)
+                debug "EXPANDING THE FILESYSTEM";
+                Store.expand_filesystem t (SHA1.to_commit head)
+              ) else (
+                debug "BARE REPOSITORY";
+                return_unit
+              )
+        )
 
-let local = {
-  write_reference = GitLocal.write_reference;
-  write_and_check_inflated = GitLocal.write_and_check_inflated;
-  write_filesystem = GitLocal.write_filesystem;
-}
-
-let clone_on_disk ?bare ?deepen t address =
-  clone ?bare ?deepen local t address
+end

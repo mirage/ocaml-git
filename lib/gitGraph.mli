@@ -18,5 +18,9 @@
 
 open GitTypes
 
-val to_dot: t -> string -> unit Lwt.t
-(** Export the Git store as a "graphviz" file. *)
+module Make (Store: S): sig
+
+  val to_dot: Store.t -> string -> unit Lwt.t
+  (** Export the Git store as a "graphviz" file. *)
+
+end

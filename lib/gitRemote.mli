@@ -18,19 +18,12 @@
 
 open GitTypes
 
-type backend = {
-  write_reference: t -> string -> sha1 -> unit Lwt.t;
-  write_and_check_inflated: t -> sha1 -> string -> unit Lwt.t;
-  write_filesystem: t -> SHA1.Commit.t -> unit Lwt.t;
-}
-(** Abstraction for the backend type (could be on-disk or
-    in-memory. *)
+module Make (Store: S): sig
 
-val local: backend
-(** Local Git store. *)
+  (** Remote operation, abstracted over the bakend type. *)
 
-val clone: ?bare:bool -> ?deepen:int -> backend -> t -> string -> unit Lwt.t
-(** Clone a remote repository. *)
+  val clone: Store.t -> ?bare:bool -> ?deepen:int -> string -> unit Lwt.t
+  (** [clone t address] clones the contents of [address] into the
+      store [t]. *)
 
-val clone_on_disk: ?bare:bool -> ?deepen:int -> t -> string -> unit Lwt.t
-(** Same as [clone] by populate the filesystem with the result of the clone. *)
+end

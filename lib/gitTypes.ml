@@ -33,64 +33,135 @@ module SHA1 = struct
     let hash = Cryptokit.Hash.sha1 () in
     hash#add_string str;
     of_string hash#result
+
+  let pretty t =
+    GitMisc.hex_encode (to_string t)
+
 end
 
 type sha1 = SHA1.t
 
-type user = {
-  name : string;
-  email: string;
-  date : string;
-}
+module User = struct
+  module T = struct
+    type t = {
+      name : string;
+      email: string;
+      date : string;
+    } with bin_io, compare, sexp
+    let hash (t : t) = Hashtbl.hash t
+    include Sexpable.To_stringable (struct type nonrec t = t with sexp end)
+    let module_name = "User"
+  end
+  include T
+  include Identifiable.Make (T)
+end
 
 module Blob: Identifiable.S = String
 
 type blob = Blob.t
 
-type commit = {
-  tree     : SHA1.Tree.t;
-  parents  : SHA1.Commit.t list;
-  author   : user;
-  committer: user;
-  message  : string;
-}
+module Commit = struct
+  module T = struct
+    type t = {
+      tree     : SHA1.Tree.t;
+      parents  : SHA1.Commit.t list;
+      author   : User.t;
+      committer: User.t;
+      message  : string;
+    } with bin_io, compare, sexp
+    let hash (t : t) = Hashtbl.hash t
+    include Sexpable.To_stringable (struct type nonrec t = t with sexp end)
+    let module_name = "Commit"
+  end
+  include T
+  include Identifiable.Make (T)
+end
 
-type entry = {
-  perm: [`normal|`exec|`link|`dir];
-  file: string;
-  node: sha1;
-  }
+type commit = Commit.t
 
-type tree = entry list
+module Tree = struct
+  module T = struct
+    type entry = {
+      perm: [`normal|`exec|`link|`dir];
+      file: string;
+      node: SHA1.t;
+    } with bin_io, compare, sexp
+    type t = entry list with bin_io, compare, sexp
+    let hash (t: t) = Hashtbl.hash t
+    include Sexpable.To_stringable (struct type nonrec t = t with sexp end)
+    let module_name = "Tree.Entry"
+  end
+  include T
+  include Identifiable.Make (T)
+end
 
-type tag = {
-  commit     : SHA1.Commit.t;
-  tag        : string;
-  tagger     : user;
-  tag_message: string;
-}
+type tree = Tree.t
 
-type hunk =
-  | Insert of string
-  | Copy of int * int
+module Tag = struct
+  module T = struct
+    type t = {
+      commit     : SHA1.Commit.t;
+      tag        : string;
+      tagger     : User.t;
+      tag_message: string;
+    } with bin_io, compare, sexp
+    let hash (t: t) = Hashtbl.hash t
+    include Sexpable.To_stringable (struct type nonrec t = t with sexp end)
+    let module_name = "Tag"
+  end
+  include T
+  include Identifiable.Make (T)
+end
 
-type 'a delta = {
-  source: 'a;
-  source_length: int;
-  result_length: int;
-  hunks: hunk list;
-}
+type tag = Tag.t
 
-type value =
-  | Blob   of blob
-  | Commit of commit
-  | Tag    of tag
-  | Tree   of tree
+module Value = struct
+  module T = struct
+    type t =
+      | Blob   of Blob.t
+      | Commit of Commit.t
+      | Tag    of Tag.t
+      | Tree   of Tree.t
+    with bin_io, compare, sexp
+    let hash (t: t) = Hashtbl.hash t
+    include Sexpable.To_stringable (struct type nonrec t = t with sexp end)
+    let module_name = "Value"
+  end
+  include T
+  include Identifiable.Make (T)
+end
 
-type packed_value =
-  | Value     of value
-  | Ref_delta of sha1 delta
-  | Off_delta of int delta
+type value = Value.t
+
+module Packed_value = struct
+
+  type hunk =
+    | Insert of string
+    | Copy of int * int
+  with bin_io, compare, sexp
+
+  type 'a delta = {
+    source: 'a;
+    source_length: int;
+    result_length: int;
+    hunks: hunk list;
+  } with bin_io, compare, sexp
+
+  module T = struct
+    type t =
+      | Value     of Value.t
+      | Ref_delta of SHA1.t delta
+      | Off_delta of int delta
+    with bin_io, compare, sexp
+    let hash (t: t) = Hashtbl.hash t
+    include Sexpable.To_stringable (struct type nonrec t = t with sexp end)
+    let module_name = "Value"
+  end
+  include T
+  include Identifiable.Make (T)
+end
+
+type packed_value = Packed_value.t
 
 type pack_index = {
   offsets: int SHA1.Map.t;
@@ -99,18 +170,43 @@ type pack_index = {
 
 type pack = sha1 -> packed_value
 
-let commit c = Commit c
-let blob b = Blob b
-let tree t = Tree t
-let tag t = Tag t
+let commit c = Value.Commit c
+let blob b = Value.Blob b
+let tree t = Value.Tree t
+let tag t = Value.Tag t
 
-let value v = Value v
-let ref_delta d = Ref_delta d
-let off_delta d = Off_delta d
+let value v = Packed_value.Value v
+let ref_delta d = Packed_value.Ref_delta d
+let off_delta d = Packed_value.Off_delta d
 
-type t = {
-  root   : string;
-  buffers: (sha1, Mstruct.t) Hashtbl.t;
-  packs  : (sha1, pack) Hashtbl.t;
-  indexes: (sha1, pack_index) Hashtbl.t;
-}
+type object_type =
+  [ `Blob
+  | `Commit
+  | `Tag
+  | `Tree ]
+
+type successor =
+  [ `Commit of sha1
+  | `Tag of string * sha1
+  | `Tree of string * sha1 ]
+
+let succ = function
+  | `Commit s
+  | `Tag (_, s)
+  | `Tree (_, s) -> s
+
+module type S = sig
+  type t
+  val create: ?root:string -> unit -> t Lwt.t
+  val dump: t -> unit Lwt.t
+  val read: t -> sha1 -> value option Lwt.t
+  val read_inflated: t -> sha1 -> Mstruct.t option Lwt.t
+  val list: t -> sha1 list Lwt.t
+  val write: t -> value -> sha1 Lwt.t
+  val write_and_check_inflated: t -> sha1 -> string -> unit Lwt.t
+  val references: t -> (string * sha1) list Lwt.t
+  val write_reference: t -> string -> sha1 -> unit Lwt.t
+  val type_of: t -> sha1 -> object_type option Lwt.t
+  val succ: t -> sha1 -> successor list Lwt.t
+  val expand_filesystem: t -> SHA1.Commit.t -> unit Lwt.t
+end

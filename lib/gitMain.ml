@@ -14,9 +14,14 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+open Lwt
+
 open Cmdliner
 
 open GitTypes
+
+module GitRemote = GitRemote.Make(GitLocal)
+module GitGraph = GitGraph.Make(GitLocal)
 
 let global_option_section = "COMMON OPTIONS"
 let help_sections = [
@@ -73,8 +78,10 @@ let clone =
     | [a] ->
       let name = Filename.basename a in
       let name = Filename.chop_extension name in
-      let t = GitLocal.create ~root:name () in
-      run (GitRemote.clone_on_disk t ?deepen a);
+      run begin
+        GitLocal.create ~root:name () >>= fun t ->
+        GitRemote.clone t ?deepen a
+      end;
       `Ok ()
     | _   -> `Error (true, "Too many address") in
   Term.(ret (pure clone $ depth $ bare $ address)),
@@ -92,8 +99,10 @@ let graph =
     mk_required ["o";"output"] "FILE" "Output file."
       Arg.(some string) None in
   let graph file =
-    let t = GitLocal.create () in
-    run (GitGraph.to_dot t file) in
+    run begin
+      GitLocal.create () >>= fun t ->
+      GitGraph.to_dot t file
+    end in
   Term.(pure graph $ file),
   term_info "graph" ~doc ~man
 
