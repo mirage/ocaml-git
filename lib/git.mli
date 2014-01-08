@@ -107,3 +107,21 @@ module Pack: sig
         eg. after a fetch. *)
 
 end
+
+(** {2 Navigation through the filesystem} *)
+
+val mem: succ:(sha1 -> successor list Lwt.t) -> sha1 -> string list -> bool Lwt.t
+(** [mem t sha1 path] check wether we can go from the object named
+    [sha1] to an other object following the [path] labels. This
+    could work for tree and tag objects only. *)
+
+val find: succ:(sha1 -> successor list Lwt.t) -> sha1 -> string list -> sha1 option Lwt.t
+(** [find t sha1 path] returns (if it exists) the object named [sha1]
+    to an other object following the [path] labels. This could work
+    for tree and tag objects only. *)
+
+val find_exn: succ:(sha1 -> successor list Lwt.t) -> sha1 -> string list -> sha1 Lwt.t
+(** [find t sha1 path] returns (if it exists) the object named [sha1]
+    to an other object following the [path] labels. This could work
+    for tree and tag objects only. Raise [Not_found] if no such
+    object exist.*)

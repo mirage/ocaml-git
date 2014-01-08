@@ -707,3 +707,32 @@ module Idx: SERIALIZABLE with type t := pack_index = struct
     todo "pack-index"
 
 end
+
+open Lwt
+
+let rec find ~succ sha1 = function
+  | []   -> return (Some sha1)
+  | h::t ->
+    succ sha1 >>= fun succs ->
+    Lwt_list.fold_left_s (fun acc s ->
+        match (acc, s) with
+        | Some _, _            -> return acc
+        | _     , `Commit _    -> return acc
+        | _     , `Tag (l, s)
+        | _     , `Tree (l, s) ->
+          if l=h then return acc
+          else
+            find ~succ s t >>= function
+            | None   -> return None
+            | Some f -> return (Some f)
+      ) None succs
+
+let find_exn ~succ sha1 path =
+  find succ sha1 path >>= function
+  | None   -> fail Not_found
+  | Some x -> return x
+
+let mem ~succ sha1 path =
+  find succ sha1 path >>= function
+  | None   -> return false
+  | Some _ -> return true

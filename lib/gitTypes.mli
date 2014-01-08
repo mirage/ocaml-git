@@ -269,6 +269,10 @@ module type S = sig
   val read: t -> sha1 -> value option Lwt.t
   (** Return the object having the given SHA1 name. *)
 
+  val read_exn: t -> sha1 -> value Lwt.t
+  (** Same as [read] but raises [Not_found] if no object with the given
+      SHA1 is found. *)
+
   val read_inflated: t -> sha1 -> Mstruct.t option Lwt.t
   (** Return the inflated contents of object having the given SHA1
       name. *)
