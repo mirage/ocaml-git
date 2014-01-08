@@ -31,22 +31,21 @@ let gt  = '>'
 
 let input_hex buf =
   Mstruct.get_string buf (Mstruct.length buf)
-  |> GitMisc.hex_decode
 
 let input_hex_tree buf =
-  SHA1.Tree.of_string (input_hex buf)
+  SHA1.Tree.of_hex (input_hex buf)
 
 let input_hex_commit buf =
-  SHA1.Commit.of_string (input_hex buf)
+  SHA1.Commit.of_hex (input_hex buf)
 
 let output_hex buf hex =
-  Buffer.add_string buf (GitMisc.hex_encode hex)
+  Buffer.add_string buf hex
 
 let output_hex_commit buf hex =
-  output_hex buf (SHA1.Commit.to_string hex)
+  output_hex buf (SHA1.Commit.to_hex hex)
 
 let output_hex_tree buf hex =
-  output_hex buf (SHA1.Tree.to_string hex)
+  output_hex buf (SHA1.Tree.to_hex hex)
 
 let input_sha1 buf =
   Mstruct.get_string buf 20
@@ -126,9 +125,8 @@ module Commit: SERIALIZABLE with type t := commit = struct
       \  author   : %s\n\
       \  committer: %s\n\
       \  message  :\n%s\n"
-      (GitMisc.hex_encode (SHA1.Tree.to_string t.tree))
-      (String.concat ~sep:", "
-         (List.map ~f:(GitMisc.hex_encode ++ SHA1.Commit.to_string) t.parents))
+      (SHA1.Tree.to_hex t.tree)
+      (String.concat ~sep:", " (List.map ~f:SHA1.Commit.to_hex t.parents))
       (User.pretty t.author)
       (User.pretty t.committer)
       t.message

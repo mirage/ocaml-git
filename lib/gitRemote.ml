@@ -43,12 +43,6 @@ let debug fmt =
       Printf.printf "%s\n%!" str
   ) fmt
 
-let of_hex str =
-  SHA1.of_string (GitMisc.hex_decode str)
-
-let to_hex id =
-  GitMisc.hex_encode (SHA1.to_string id)
-
 module PacketLine = struct
 
   type t = string option
@@ -238,7 +232,7 @@ module Listing = struct
     Printf.printf "CAPABILITIES:\n%s\n" (Capabilities.to_string t.capabilities);
     Printf.printf "\nREFERENCES:\n";
     Map.iter
-      ~f:(fun ~key ~data -> Printf.printf "%s %s\n%!" (to_hex key) data)
+      ~f:(fun ~key ~data -> Printf.printf "%s %s\n%!" (SHA1.to_hex key) data)
       t.references
 
   let input ic =
@@ -253,14 +247,14 @@ module Listing = struct
             (* Read the capabilities on the first line *)
             match String.lsplit2 ref ~on:nul with
             | Some (ref, caps) ->
-              let references = Map.add ~key:(of_hex sha1) ~data:ref acc.references in
+              let references = Map.add ~key:(SHA1.of_hex sha1) ~data:ref acc.references in
               let capabilities = Capabilities.of_string caps in
               aux { references; capabilities; }
             | None ->
-              let references = Map.add ~key:(of_hex sha1) ~data:ref acc.references in
+              let references = Map.add ~key:(SHA1.of_hex sha1) ~data:ref acc.references in
               aux { references; capabilities = []; }
           ) else
-            let references = Map.add ~key:(of_hex sha1) ~data:ref acc.references in
+            let references = Map.add ~key:(SHA1.of_hex sha1) ~data:ref acc.references in
             aux { acc with references }
         | None -> error "%s is not a valid answer" line
     in
@@ -294,8 +288,8 @@ module Ack = struct
         match String.lsplit2 s ~on:sp with
         | Some ("ACK", r) ->
           begin match String.lsplit2 r ~on:sp with
-            | None         -> aux (Ack (of_hex r) :: acc)
-            | Some (id, s) -> aux (Ack_multi (of_hex id, string_of_status s) :: acc)
+            | None         -> aux (Ack (SHA1.of_hex r) :: acc)
+            | Some (id, s) -> aux (Ack_multi (SHA1.of_hex id, string_of_status s) :: acc)
           end
         | _ -> error "%S invalid ack" s
     in
@@ -350,17 +344,17 @@ module Upload = struct
         | None -> error "input upload"
         | Some (kind, s) ->
           match kind with
-          | "shallow"   -> aux (Shallow   (of_hex s) :: acc)
-          | "unshallow" -> aux (Unshallow (of_hex s) :: acc)
-          | "have"      -> aux (Have      (of_hex s) :: acc)
-          | "done"      -> aux (Done                 :: acc)
+          | "shallow"   -> aux (Shallow   (SHA1.of_hex s) :: acc)
+          | "unshallow" -> aux (Unshallow (SHA1.of_hex s) :: acc)
+          | "have"      -> aux (Have      (SHA1.of_hex s) :: acc)
+          | "done"      -> aux (Done                      :: acc)
           | "deepen"    ->
             let d =
               try int_of_string s
               with _ -> error "%s is not a valid integer" s in
             aux (Deepen d :: acc)
           | "want" ->
-            let aux id c = aux (Want (of_hex id, c) :: acc) in
+            let aux id c = aux (Want (SHA1.of_hex id, c) :: acc) in
             begin match String.lsplit2 s ~on:sp with
               | Some (id,c) -> aux id (Capabilities.of_string c)
               | None        -> match acc with
@@ -377,11 +371,11 @@ module Upload = struct
     (* output wants *)
     Lwt_list.iter_s (fun (id, c) ->
       if c = !last_c then
-        let msg = Printf.sprintf "want %s\n" (to_hex id) in
+        let msg = Printf.sprintf "want %s\n" (SHA1.to_hex id) in
         PacketLine.output_line oc msg
       else
         let msg =
-          Printf.sprintf "want %s %s\n" (to_hex id) (Capabilities.to_string c) in
+          Printf.sprintf "want %s %s\n" (SHA1.to_hex id) (Capabilities.to_string c) in
         last_c := c;
         PacketLine.output_line oc msg
     ) (wants t)
@@ -389,21 +383,21 @@ module Upload = struct
 
     (* output shallows *)
     Lwt_list.iter_s (fun id ->
-      let msg = Printf.sprintf "shallow %s" (to_hex id) in
+      let msg = Printf.sprintf "shallow %s" (SHA1.to_hex id) in
       PacketLine.output_line oc msg
     ) (shallows t)
     >>= fun () ->
 
     (* output unshallows *)
     Lwt_list.iter_s (fun id ->
-      let msg = Printf.sprintf "unshallow %s" (to_hex id) in
+      let msg = Printf.sprintf "unshallow %s" (SHA1.to_hex id) in
       PacketLine.output_line oc msg
     ) (unshallows t)
     >>= fun () ->
 
     (* output haves *)
     Lwt_list.iter_s (fun id ->
-      let msg = Printf.sprintf "have %s\n" (to_hex id) in
+      let msg = Printf.sprintf "have %s\n" (SHA1.to_hex id) in
       PacketLine.output_line oc msg
     ) (haves t)
     >>= fun () ->
@@ -510,12 +504,12 @@ module Make (Store: S) = struct
             let read_inflated sha1 =
               if Hashtbl.mem buffers sha1 then
                 return (Mstruct.clone (Hashtbl.find_exn buffers sha1))
-              else lwt_error "%s: unknown sha1" (to_hex sha1) in
+              else lwt_error "%s: unknown sha1" (SHA1.to_hex sha1) in
             let write value =
               let buf = Buffer.create 1024 in
               Git.output_inflated buf value;
               let inflated = Buffer.contents buf in
-              let sha1 = SHA1.sha1 inflated in
+              let sha1 = SHA1.create inflated in
               begin if not (Hashtbl.mem buffers sha1) then (
                   let buf = Mstruct.of_string inflated in
                   Hashtbl.replace buffers sha1 buf;
@@ -533,7 +527,7 @@ module Make (Store: S) = struct
               return_unit
             | sha1s ->
               debug "NEW OBJECTS";
-              List.iter ~f:(fun n -> debug "%s" (to_hex n)) sha1s;
+              List.iter ~f:(fun n -> debug "%s" (SHA1.to_hex n)) sha1s;
               if not bare then (
                 (* TODO: generate the index file *)
                 debug "EXPANDING THE FILESYSTEM";

@@ -18,19 +18,31 @@
 
 open Core_kernel.Std
 
+module type SHA1 = sig
+
+  (** Signature for SHA1 values *)
+
+  include Identifiable.S
+
+  val create: string -> t
+  (** Build a node from a raw string. *)
+
+  val to_hex: t -> string
+  (** Display the hex encoding of the SHA1 hash. *)
+
+  val of_hex: string -> t
+  (** Convert an hex-encoded string into a sha1 value. *)
+
+end
+
+
 module SHA1: sig
 
   (** Unique object identifiers using SHA1. *)
 
-  include Identifiable.S
+  include SHA1
 
-  val sha1: string -> t
-  (** Build a node from a raw string. *)
-
-  val pretty: t -> string
-  (** Display the hex encoding of the SHA1 hash. *)
-
-  module Commit: Identifiable.S
+  module Commit: SHA1
   (** Commit nodes. *)
 
   val commit: Commit.t -> t
@@ -40,13 +52,13 @@ module SHA1: sig
   (** A node can be casted to a commit. WARNING: this is not
       type-safe, use it carrefuly! *)
 
-  module Tree: Identifiable.S
+  module Tree: SHA1
   (** Treee nodes. *)
 
   val tree: Tree.t -> t
   (** A tree node is also a node. *)
 
-  module Blob: Identifiable.S
+  module Blob: SHA1
   (** Blob nodes. *)
 
   val blob: Blob.t -> t

@@ -20,7 +20,7 @@ open Lwt
 open GitTypes
 
 let to_string node =
-  let hex = GitMisc.hex_encode (SHA1.to_string node) in
+  let hex = SHA1.to_hex node in
   String.sub hex 0 8
 
 module G =

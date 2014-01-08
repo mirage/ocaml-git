@@ -16,26 +16,42 @@
 
 open Core_kernel.Std
 
-module SHA1 = struct
+module type SHA1 = sig
+  include Identifiable.S
+  val create: string -> t
+  val to_hex: t -> string
+  val of_hex: string -> t
+end
+
+module String = struct
 
   include (String: Identifiable.S)
 
-  module Commit: Identifiable.S = String
-  module Tree: Identifiable.S = String
-  module Blob: Identifiable.S = String
+  let create str =
+    let hash = Cryptokit.Hash.sha1 () in
+    hash#add_string str;
+    of_string hash#result
+
+  let to_hex t =
+    GitMisc.hex_encode (to_string t)
+
+  let of_hex h =
+    of_string (GitMisc.hex_decode h)
+
+end
+
+module SHA1 = struct
+
+  include (String: SHA1)
+
+  module Commit: SHA1 = String
+  module Tree: SHA1 = String
+  module Blob: SHA1 = String
 
   let commit c = of_string (Commit.to_string c)
   let to_commit n = Commit.of_string (to_string n)
   let tree t = of_string (Tree.to_string t)
   let blob b = of_string (Blob.to_string b)
-
-  let sha1 str =
-    let hash = Cryptokit.Hash.sha1 () in
-    hash#add_string str;
-    of_string hash#result
-
-  let pretty t =
-    GitMisc.hex_encode (to_string t)
 
 end
 

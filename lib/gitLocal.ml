@@ -41,12 +41,6 @@ let create ?root () =
   } in
   return t
 
-let to_hex sha1 =
-  GitMisc.hex_encode (SHA1.to_string sha1)
-
-let of_hex hex =
-  SHA1.of_string (GitMisc.hex_decode hex)
-
 let auto_flush = ref true
 
 let set_auto_flush b =
@@ -59,7 +53,7 @@ let get_auto_flush () =
 module Loose = struct
 
   let file root sha1 =
-    let hex = to_hex sha1 in
+    let hex = SHA1.to_hex sha1 in
     let prefix = String.sub hex 0 2 in
     let suffix = String.sub hex 2 (String.length hex - 2) in
     root / ".git" / "objects" / prefix / suffix
@@ -79,8 +73,8 @@ module Loose = struct
         return_none
 
   let write_inflated t inflated =
-    let sha1 = SHA1.sha1 inflated in
-    Printf.eprintf "Expanding %s\n" (to_hex sha1);
+    let sha1 = SHA1.create inflated in
+    Log.debugf "write_inflated %s:%S" (SHA1.to_hex sha1) inflated;
     let file = file t.root sha1 in
     GitMisc.mkdir (Filename.dirname file) >>= fun () ->
     let deflated = GitMisc.deflate_string inflated in
@@ -98,13 +92,13 @@ module Loose = struct
     let file = file t.root sha1 in
     if Sys.file_exists file then return_unit
     else (
-      let new_sha1 = SHA1.sha1 inflated in
+      let new_sha1 = SHA1.create inflated in
       if sha1 = new_sha1 then
         write_inflated t inflated >>= fun _ -> return_unit
       else (
         Printf.eprintf "%S\n" inflated;
         Printf.eprintf
-          "Marshaling error: expected:%s actual:%s\n" (to_hex sha1) (to_hex new_sha1);
+          "Marshaling error: expected:%s actual:%s\n" (SHA1.to_hex sha1) (SHA1.to_hex new_sha1);
         fail (Failure "build_packed_object")
       )
     )
@@ -131,7 +125,7 @@ module Loose = struct
       GitMisc.files dir >>= fun suffixes ->
       let suffixes = List.map ~f:Filename.basename suffixes in
       let objects = List.map ~f:(fun suffix ->
-          of_hex (prefix ^ suffix)
+          SHA1.of_hex (prefix ^ suffix)
         ) suffixes in
       return (objects @ acc)
     ) [] objects
@@ -142,7 +136,7 @@ module Packed = struct
 
   let file root sha1 =
     let pack_dir = root / ".git" / "objects" / "pack" in
-    let pack_file = "pack-" ^ (to_hex sha1) ^ ".pack" in
+    let pack_file = "pack-" ^ (SHA1.to_hex sha1) ^ ".pack" in
     pack_dir / pack_file
 
   let list root =
@@ -154,13 +148,13 @@ module Packed = struct
     let packs = List.map ~f:(fun f ->
         let p = Filename.chop_suffix f ".idx" in
         let p = String.sub p 5 (String.length p - 5) in
-        of_hex p
+        SHA1.of_hex p
       ) packs in
     return packs
 
   let index root sha1 =
     let pack_dir = root / ".git" / "objects" / "pack" in
-    let idx_file = "pack-" ^ (to_hex sha1) ^ ".idx" in
+    let idx_file = "pack-" ^ (SHA1.to_hex sha1) ^ ".idx" in
     pack_dir / idx_file
 
   let read_index t sha1 =
@@ -190,7 +184,7 @@ module Packed = struct
         Hashtbl.add_exn t.packs sha1 fn;
         return fn
       ) else (
-        Printf.eprintf "No file associated with the pack object %s.\n" (to_hex sha1);
+        Printf.eprintf "No file associated with the pack object %s.\n" (SHA1.to_hex sha1);
         fail (Failure "read_file")
       )
     )
@@ -278,7 +272,7 @@ let dump t =
   Lwt_list.iter_s (fun sha1 ->
       type_of t sha1 >>= fun typ ->
       Printf.eprintf "%s %s\n"
-        (to_hex sha1)
+        (SHA1.to_hex sha1)
         (string_of_type_opt typ);
       return_unit
     ) sha1s
@@ -291,7 +285,7 @@ let references t =
       let r = String.sub file n (String.length file - n) in
       Log.infof "Reading %s" file;
       Lwt_io.(with_file ~mode:Input file read) >>= fun hex ->
-      return (r, of_hex hex)
+      return (r, SHA1.of_hex hex)
     ) files
 
 let succ root sha1 =
@@ -306,6 +300,7 @@ let succ root sha1 =
   | Some (Value.Tree t)   -> return (List.map ~f:(fun e -> `Tree (e.Tree.file, e.Tree.node)) t)
 
 let write t value =
+  Log.debugf "write %s" (Value.to_string value);
   Loose.write t value
 
 let write_and_check t sha1 value =
@@ -321,7 +316,7 @@ let write_reference t name sha1 =
   let file = t.root / ".git" / name in
   GitMisc.mkdir (Filename.dirname file) >>= fun () ->
   Log.infof "Writing %s" file;
-  Lwt_io.(with_file ~mode:Output file (fun oc -> write oc (to_hex sha1)))
+  Lwt_io.(with_file ~mode:Output file (fun oc -> write oc (SHA1.to_hex sha1)))
 
 (* XXX: do not load the blobs *)
 let load_filesystem t commit =
