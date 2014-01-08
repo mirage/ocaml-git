@@ -62,19 +62,13 @@ module Make (S: S) = struct
     aux (cmp_list equal compare) (printer_list pretty)
 
   let assert_key_equal, assert_key_opt_equal, assert_keys_equal =
-    mk SHA1.equal SHA1.compare SHA1.to_string
+    mk SHA1.equal SHA1.compare SHA1.to_hex
 
   let assert_value_equal, assert_value_opt_equal, assert_values_equal =
     mk Value.equal Value.compare Value.to_string
 
   let assert_tag_equal, assert_tag_opt_equal, assert_tags_equal =
     mk Tag.equal Tag.compare Tag.to_string
-
-  let assert_tree_equal, assert_tree_opt_equal, assert_trees_equal =
-    mk Tree.equal Tree.compare Tree.to_string
-
-  let assert_commit_equal, assert_commit_opt_equal, assert_commits_equal =
-    mk Commit.equal Commit.compare Commit.to_string
 
   let assert_path_equal, assert_path_opt_equal, assert_paths_equal =
     mk (=) compare (String.concat "/")
@@ -85,8 +79,8 @@ module Make (S: S) = struct
   (* XXX: move that into the library ? *)
   let key value =
     let buf = Buffer.create 1024 in
-    Git.output buf value;
+    Git.output_inflated buf value;
     let str = Buffer.contents buf in
-    SHA1.of_string str
+    SHA1.create str
 
 end

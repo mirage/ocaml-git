@@ -92,13 +92,13 @@ module Make (S: S) = struct
             file = "b";
             node = k1 }
         ] in
-      write t t2     >>= fun k2  ->
-      write t t2     >>= fun k2' ->
+      write t t2        >>= fun k2  ->
+      write t t2        >>= fun k2' ->
       assert_key_equal "k2.1" k2 k2';
-      read_exn t k2  >>= fun t2  ->
-      write t t2     >>= fun k2''->
+      read_exn t k2     >>= fun t2  ->
+      write t t2        >>= fun k2''->
       assert_key_equal "k2.2" k2 k2'';
-      Git.find_exn ~succ:(succ t) k2 ["b"] >>= fun k1_ ->
+      find_exn k2 ["b"] >>= fun k1_ ->
       assert_key_equal "k1.1" k1 k1_;
 
       (* Create the tree t3 -a-> t2 -b-> t1 -a-> v1 *)
