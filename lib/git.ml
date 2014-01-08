@@ -710,21 +710,25 @@ end
 
 open Lwt
 
-let rec find ~succ sha1 = function
+let rec find ~succ sha1 path =
+  Log.debugf "find %s %s" (SHA1.to_hex sha1) (String.concat ~sep:"/" path);
+  match path with
   | []   -> return (Some sha1)
   | h::t ->
     succ sha1 >>= fun succs ->
+    Log.debugf "succ %s: %d" (SHA1.to_hex sha1) (List.length succs);
     Lwt_list.fold_left_s (fun acc s ->
         match (acc, s) with
         | Some _, _            -> return acc
         | _     , `Commit _    -> return acc
         | _     , `Tag (l, s)
         | _     , `Tree (l, s) ->
-          if l=h then return acc
-          else
+          if l=h then
             find ~succ s t >>= function
             | None   -> return None
             | Some f -> return (Some f)
+          else
+            return acc
       ) None succs
 
 let find_exn ~succ sha1 path =
