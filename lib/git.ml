@@ -32,6 +32,9 @@ let gt  = '>'
 let input_hex buf =
   Mstruct.get_string buf (Mstruct.length buf)
 
+let input_hex_sha1 buf =
+  SHA1.of_hex (input_hex buf)
+
 let input_hex_tree buf =
   SHA1.Tree.of_hex (input_hex buf)
 
@@ -298,9 +301,59 @@ end
 module Tag: ISERIALIZABLE with type t := tag = struct
 
   type t = tag
-  let dump x = todo "tree"
-  let output buf t = todo "tree"
-  let input buf = todo "tree"
+
+  let string_of_object_type = function
+    | `Blob   -> "blob"
+    | `Commit -> "commit"
+    | `Tag    -> "tag"
+    | `Tree   -> "tree"
+
+  let input_object_type buf =
+    match Mstruct.to_string buf with
+    | "blob"   -> `Blob
+    | "commit" -> `Commit
+    | "tag"    -> `Tag
+    | "tree"   -> `Tree
+    | s        -> Mstruct.parse_error_buf buf "input_object_type: %s" s
+
+  let pretty t =
+    let open Tag in
+    Printf.sprintf
+      "{\n\
+      \  object      : %s;\n\
+      \  type        : %s;\n\
+      \  tag         : %S;\n\
+      \  tagger      : %s;\n\
+      \  tag_message : %S;\n\
+       }"
+      (SHA1.to_hex t.sha1)
+      (string_of_object_type t.typ)
+      t.tag
+      (User.pretty t.tagger)
+      t.message
+
+  let dump t =
+    Printf.eprintf "%s" (pretty t)
+
+  let output_inflated buf t =
+    let open Tag in
+    output_key_value     buf "object" (SHA1.to_hex t.sha1);
+    output_key_value     buf "type"   (string_of_object_type t.typ);
+    output_key_value     buf "tag"    t.tag;
+    Buffer.add_string    buf "tagger ";
+    User.output_inflated buf t.tagger;
+    Buffer.add_char      buf lf;
+    Buffer.add_char      buf lf;
+    Buffer.add_string    buf t.message
+
+  let input_inflated buf =
+    let sha1   = input_key_value buf "object" input_hex_sha1 in
+    let typ    = input_key_value buf "type"   input_object_type in
+    let tag    = input_key_value buf "tag"    Mstruct.to_string in
+    let tagger = input_key_value buf "tagger" User.input_inflated in
+    Mstruct.shift buf 1;
+    let message = Mstruct.to_string buf in
+    { Tag.sha1; typ; tag; tagger; message }
 
 end
 
