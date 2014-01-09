@@ -148,7 +148,8 @@ let mkdir dirname =
     else (
       aux (Filename.dirname dir) >>= fun () ->
       Log.debugf "mkdir %s" dir;
-      Lwt_unix.mkdir dir 0o755
+      if Sys.file_exists dir then return_unit
+      else Lwt_unix.mkdir dir 0o755
     ) in
   aux dirname
 
