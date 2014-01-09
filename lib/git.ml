@@ -218,20 +218,20 @@ module Tree: SERIALIZABLE with type t := tree = struct
     let open Tree in
     Printf.eprintf
       "perm: %s\n\
-       file: %s\n\
+       name: %s\n\
        sha1: %S\n"
       (pretty_perm e.perm)
-      e.file
+      e.name
       (SHA1.to_string e.node)
 
   let dump t =
-    List.iter ~f:dump_entry t
+    List.iter ~f:dump_entry (Tree.entries t)
 
   let output_entry buf e =
     let open Tree in
     Buffer.add_string buf (string_of_perm e.perm);
     Buffer.add_char   buf sp;
-    Buffer.add_string buf e.file;
+    Buffer.add_string buf e.name;
     Buffer.add_char   buf nul;
     output_sha1       buf e.node
 
@@ -239,26 +239,26 @@ module Tree: SERIALIZABLE with type t := tree = struct
     let perm = match Mstruct.get_string_delim buf sp with
       | None      -> Mstruct.parse_error_buf buf "invalid perm"
       | Some perm -> perm in
-    let file = match Mstruct.get_string_delim buf nul with
+    let name = match Mstruct.get_string_delim buf nul with
       | None      -> Mstruct.parse_error_buf buf "invalid filename"
-      | Some file -> file in
+      | Some name -> name in
     let node = input_sha1 buf in
     let entry = {
       Tree.perm = perm_of_string buf perm;
-      file; node
+      name; node
     } in
     Some entry
 
   let output buf t =
-    List.iter ~f:(output_entry buf) t
+    List.iter ~f:(output_entry buf) (Tree.entries t)
 
   let input buf =
     let rec aux entries =
       if Mstruct.length buf <= 0 then
-        List.rev entries
+        Tree.create entries
       else
         match input_entry buf with
-        | None   -> List.rev entries
+        | None   -> Tree.create entries
         | Some e -> aux (e :: entries) in
     aux []
 

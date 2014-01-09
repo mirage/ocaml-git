@@ -23,7 +23,7 @@ module type SHA1 = sig
   val of_hex: string -> t
 end
 
-module String = struct
+module SHA1_String = struct
 
   include (String: Identifiable.S)
 
@@ -42,16 +42,18 @@ end
 
 module SHA1 = struct
 
-  include (String: SHA1)
+  include (SHA1_String: SHA1)
 
-  module Commit: SHA1 = String
-  module Tree: SHA1 = String
-  module Blob: SHA1 = String
+  module Commit: SHA1 = SHA1_String
+  module Tree: SHA1 = SHA1_String
+  module Blob: SHA1 = SHA1_String
 
-  let commit c = of_string (Commit.to_string c)
+  let of_commit c = of_string (Commit.to_string c)
   let to_commit n = Commit.of_string (to_string n)
-  let tree t = of_string (Tree.to_string t)
-  let blob b = of_string (Blob.to_string b)
+  let of_tree t = of_string (Tree.to_string t)
+  let to_tree n = Tree.of_string (to_string n)
+  let of_blob b = of_string (Blob.to_string b)
+  let to_blob n = Blob.of_string (to_string n)
 
 end
 
@@ -99,10 +101,13 @@ module Tree = struct
   module T = struct
     type entry = {
       perm: [`normal|`exec|`link|`dir];
-      file: string;
+      name: string;
       node: SHA1.t;
     } with bin_io, compare, sexp
     type t = entry list with bin_io, compare, sexp
+    let create t =
+      List.sort ~cmp:(fun e1 e2 -> String.compare e1.name e2.name) t
+    let entries t = t
     let hash (t: t) = Hashtbl.hash t
     include Sexpable.To_stringable (struct type nonrec t = t with sexp end)
     let module_name = "Tree.Entry"

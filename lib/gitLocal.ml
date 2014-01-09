@@ -32,7 +32,7 @@ type t = {
 let create ?root () =
   let root = match root with
     | None   -> Sys.getcwd ()
-    | Some r -> r in
+    | Some r -> if Filename.is_relative r then Sys.getcwd () / r else r in
   let t = {
     root;
     buffers = SHA1.Table.create ();
@@ -289,15 +289,17 @@ let references t =
     ) files
 
 let succ root sha1 =
-  let commit c = `Commit (SHA1.commit c) in
-  let tree l s = `Tree (l, SHA1.tree s) in
-  let tag t = `Tag (t.Tag.tag, SHA1.commit t.Tag.commit) in
+  let commit c = `Commit (SHA1.of_commit c) in
+  let tree l s = `Tree (l, SHA1.of_tree s) in
+  let tag t = `Tag (t.Tag.tag, SHA1.of_commit t.Tag.commit) in
   read root sha1 >>= function
   | None                  -> return_nil
   | Some (Value.Blob _)   -> return_nil
   | Some (Value.Commit c) -> return (tree "" c.Commit.tree :: List.map ~f:commit c.Commit.parents)
   | Some (Value.Tag t)    -> return [tag t]
-  | Some (Value.Tree t)   -> return (List.map ~f:(fun e -> `Tree (e.Tree.file, e.Tree.node)) t)
+  | Some (Value.Tree t)   ->
+    let t = Tree.entries t in
+    return (List.map ~f:(fun e -> `Tree (e.Tree.name, e.Tree.node)) t)
 
 let write t value =
   Log.debugf "write %s" (Value.to_string value);
@@ -340,7 +342,7 @@ let load_filesystem t commit =
       let children = lazy children in
       return (Some (Lazy_trie.create ~children ()))
   in
-  aux (SHA1.commit commit) >>= function
+  aux (SHA1.of_commit commit) >>= function
   | None    -> fail (Failure "create")
   | Some fs -> return fs
 

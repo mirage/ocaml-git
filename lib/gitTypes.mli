@@ -45,24 +45,29 @@ module SHA1: sig
   module Commit: SHA1
   (** Commit nodes. *)
 
-  val commit: Commit.t -> t
+  val of_commit: Commit.t -> t
   (** A commit node is also a node. *)
 
   val to_commit: t -> Commit.t
-  (** A node can be casted to a commit. WARNING: this is not
-      type-safe, use it carrefuly! *)
+  (** A node might be a commit. *)
 
   module Tree: SHA1
   (** Treee nodes. *)
 
-  val tree: Tree.t -> t
+  val of_tree: Tree.t -> t
   (** A tree node is also a node. *)
+
+  val to_tree: t -> Tree.t
+  (** A node might be a node. *)
 
   module Blob: SHA1
   (** Blob nodes. *)
 
-  val blob: Blob.t -> t
+  val of_blob: Blob.t -> t
   (** A blob node is also a node. *)
+
+  val to_blob: t -> Blob.t
+  (** A node might be a blob node. *)
 
 end
 
@@ -95,11 +100,11 @@ module Commit: sig
   (** Git commits. *)
 
   type t = {
-  tree     : SHA1.Tree.t;
-  parents  : SHA1.Commit.t list;
-  author   : User.t;
-  committer: User.t;
-  message  : string;
+    tree     : SHA1.Tree.t;
+    parents  : SHA1.Commit.t list;
+    author   : User.t;
+    committer: User.t;
+    message  : string;
   }
   (** A commit is a tree snapshot, with some credentials (eg. we can
       find who created the initial snapshot, and who added it to to
@@ -117,16 +122,22 @@ module Tree: sig
 
   type entry = {
     perm: [`normal|`exec|`link|`dir];
-    file: string;
+    name: string;
     node: SHA1.t;
   }
   (** A tree entry. This is either a directory or a file. As this is
       supposed to model a filesystem, directory does not contain
       data. *)
 
-  type t = entry list
+  type t
   (** A tree is an hierarchical data-store. NB: data (eg. blobs) are
       only carried on the leafs. *)
+
+  val create: entry list -> t
+  (** Order the entries by name. *)
+
+  val entries: t -> entry list
+  (** Return the tree entries. *)
 
   include Identifiable.S with type t := t
 
