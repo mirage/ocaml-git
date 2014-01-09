@@ -41,152 +41,141 @@ module Make (S: S) = struct
       Lwt_unix.run (x.clean ());
       raise e
 
+  let v1 = blob (Blob.of_string "foo")
+  let kv1 = key v1
+
+  let v2 = blob (Blob.of_string "")
+  let kv2 = key v2
+
+  (* Create a node containing t1 -a-> v1 *)
+  let t1 = tree (Tree.create [
+      { Tree.perm = `normal;
+        name = "a";
+        node = kv1 }
+    ])
+  let kt1 = key t1
+
+  (* Create the tree t2 -b-> t1 -a-> v1 *)
+  let t2 = tree (Tree.create [
+      { Tree.perm = `dir;
+        name = "b";
+        node = kt1 }
+    ])
+  let kt2 = key t2
+
+  (* Create the tree t3 -a-> t2 -b-> t1 -a-> v1 *)
+  let t3 = tree (Tree.create [
+      { Tree.perm = `dir;
+        name = "a";
+        node = kt2; }
+    ])
+  let kt3 = key t3
+
+  (* Create the tree t4 -a-> t2 -b-> t1 -a-> v1
+                       \-c-> v2 *)
+  let t4 = tree (Tree.create [
+      { Tree.perm = `exec;
+        name = "c";
+        node = kv2; };
+      { Tree.perm = `dir;
+        name = "a";
+        node = kt2; }
+    ])
+  let kt4 = key t4
+
+  let john_doe = User.({
+      name  = "John Doe";
+      email = "jon@doe.com";
+      date  = "today";
+    })
+
+  (* c1 : t2 *)
+  let c1 = commit {
+      Commit.tree = SHA1.to_tree kt2;
+      parents     = [];
+      author      = john_doe;
+      committer   = john_doe;
+      message     = "hello r1!";
+    }
+  let kc1 = key c1
+
+  (* c1 -> c2 : t4 *)
+  let c2 = commit {
+      Commit.tree = SHA1.to_tree kt4;
+      parents     = [SHA1.to_commit kc1];
+      author      = john_doe;
+      committer   = john_doe;
+      message     = "hello r1!"
+    }
+  let kc2 = key c2
+
+  let check_write t name k v =
+    write t v    >>= fun k' ->
+    assert_key_equal (name ^ "-key-1") k k';
+    read_exn t k >>= fun v' ->
+    assert_value_equal name v v';
+    write t v'   >>= fun k''->
+    assert_key_equal (name ^ "-key-2") k k'';
+    return_unit
+
+  let check_find t name k path e =
+    Git.find ~succ:(succ t) k path >>= fun k' ->
+    assert_key_opt_equal (name ^ "-find") (Some e) k';
+    return_unit
+
+  let create () =
+    create ~root:"test-db" () >>= fun t ->
+    Lwt_list.iter_p
+      (fun v -> write t v >>= fun _ -> return_unit)
+      [
+        v1; v2;
+        t1; t2; t3; t4;
+        c1; c2
+      ] >>= fun () ->
+    return t
+
   let test_values x () =
-    let v1 = blob (Blob.of_string "foo") in
-    let k1 = key v1 in
-    let v2 = blob (Blob.of_string "") in
-    let k2 = key v2 in
     let test () =
-      create () >>= fun t    ->
-      write t v1 >>= fun k1'  ->
-      assert_key_equal "k1" k1 k1';
-      write t v1 >>= fun k1'' ->
-      assert_key_equal "k1" k1 k1'';
-      write t v2 >>= fun k2'  ->
-      assert_key_equal "k2" k2 k2';
-      write t v2 >>= fun k2'' ->
-      assert_key_equal "k2" k2 k2'';
-      read t k1  >>= fun v1'  ->
-      assert_value_opt_equal "v1" (Some v1) v1';
-      read t k2  >>= fun v2'  ->
-      assert_value_opt_equal "v2" (Some v2) v2';
+      create ()                 >>= fun t     ->
+      check_write t "v1" kv1 v1 >>= fun () ->
+      check_write t "v2" kv2 v2 >>= fun () ->
       return_unit
     in
     run x test
 
   let test_trees x () =
-    let v1 = blob (Blob.of_string "foo") in
-    let v2 = blob (Blob.of_string "") in
-    let kv1 = key v1 in
     let test () =
-      create () >>= fun t  ->
-      let find = Git.find ~succ:(succ t) in
-      let find_exn = Git.find_exn ~succ:(succ t) in
+      create ()                 >>= fun t  ->
+      check_write t "t1" kt1 t1 >>= fun () ->
+      check_write t "t2" kt2 t2 >>= fun () ->
+      check_write t "t3" kt3 t3 >>= fun () ->
+      check_write t "t4" kt4 t4 >>= fun () ->
 
-      let t1 = tree [
-        { Tree.perm = `normal;
-          file = "a";
-          node = kv1 }
-      ] in
-      (* Create a node containing t1 -a-> v1 *)
-      write t t1    >>= fun k1  ->
-      write t t1    >>= fun k1' ->
-      assert_key_equal "k1.1" k1 k1';
-      read_exn t k1 >>= fun t1  ->
-      write t t1    >>= fun k1''->
-      assert_key_equal "k1.2" k1 k1'';
-
-      (* Create the tree t2 -b-> t1 -a-> v1 *)
-      let t2 = tree [
-          { Tree.perm = `dir;
-            file = "b";
-            node = k1 }
-        ] in
-      write t t2        >>= fun k2  ->
-      write t t2        >>= fun k2' ->
-      assert_key_equal "k2.1" k2 k2';
-      read_exn t k2     >>= fun t2  ->
-      write t t2        >>= fun k2''->
-      assert_key_equal "k2.2" k2 k2'';
-      find_exn k2 ["b"] >>= fun k1_ ->
-      assert_key_equal "k1.1" k1 k1_;
-
-      (* Create the tree t3 -a-> t2 -b-> t1 -a-> v1 *)
-      let t3 = tree [
-          { Tree.perm = `dir;
-            file = "a";
-            node = k2; }
-        ] in
-      write t t3         >>= fun k3  ->
-      write t t3         >>= fun k3' ->
-      assert_key_equal "k3.1" k3 k3';
-      read_exn t k3      >>= fun t3  ->
-      write t t3         >>= fun k3''->
-      assert_key_equal "k3.2" k3 k3'';
-      find_exn k3 ["a"]  >>= fun k2_ ->
-      assert_key_equal "k2.1" k2 k2_;
-      find_exn k2_ ["b"] >>= fun k1_ ->
-      assert_key_equal "k1.2" k1 k1_;
-      find k3 ["a";"b"]  >>= fun k1_ ->
-      assert_key_opt_equal "k1.3" (Some k1) k1_;
-
-      find k1 ["a"]         >>= fun kv11 ->
-      assert_key_opt_equal "kv1.1" (Some kv1) kv11;
-      find k2 ["b";"a"]     >>= fun kv12 ->
-      assert_key_opt_equal "kv1.2" (Some kv1) kv12;
-      find k3 ["a";"b";"a"] >>= fun kv13 ->
-      assert_key_opt_equal "kv1.3" (Some kv1) kv13;
-
-      (* Create the tree t4 -a-> t2 -b-> t1 -a-> v1
-                           \-c-> t4 -> v2 *)
-      let t4 = tree [
-          { Tree.perm = `exec;
-            file = "c";
-            node = key v2; };
-          { Tree.perm = `dir;
-            file = "a";
-            node = k2; }
-        ] in
-      write t t4                  >>= fun k4 ->
-      assert_key_equal "k4" k4 (key t4);
-      read_exn t k4               >>= fun t4' ->
-      assert_value_equal "t4" t4 t4';
-      find_exn k4 ["a"; "b"; "a"] >>= fun kv1' ->
-      assert_key_equal "kv1.4" kv1 kv1';
-      find_exn k4 ["c"]           >>= fun kv2' ->
-      assert_key_equal "kv2" (key v2) kv2';
+      check_find t "kt1:a"     kt1 ["a"]         kv1 >>= fun () ->
+      check_find t "kt2:b"     kt2 ["b"]         kt1 >>= fun () ->
+      check_find t "kt2:b/a"   kt2 ["b";"a"]     kv1 >>= fun () ->
+      check_find t "kt3:a"     kt3 ["a"]         kt2 >>= fun () ->
+      check_find t "kt3:a/b"   kt3 ["a";"b"]     kt1 >>= fun () ->
+      check_find t "kt3:a/b/a" kt3 ["a";"b";"a"] kv1 >>= fun () ->
+      check_find t "kt4:c"     kt4 ["c"]         kv2 >>= fun () ->
       return_unit
     in
     run x test
 
-(*
   let test_revisions x () =
-    let v1 = Value.of_bytes "foo" in
     let test () =
-      create () >>= fun t   ->
-      let tree = tree_store t in
-      let revision = revision_store t in
+      create ()                 >>= fun t   ->
+      check_write t "c1" kc1 c1 >>= fun () ->
+      check_write t "c2" kc2 c2 >>= fun () ->
 
-      (* t3 -a-> t2 -b-> t1(v1) *)
-      Tree.tree tree ~value:v1 [] >>= fun k1  ->
-      Tree.read_exn tree k1       >>= fun t1  ->
-      Tree.tree tree ["a", t1]    >>= fun k2  ->
-      Tree.read_exn tree k2       >>= fun t2  ->
-      Tree.tree tree ["b", t2]    >>= fun k3  ->
-      Tree.read_exn tree k3       >>= fun t3  ->
-
-      (* r1 : t2 *)
-      Revision.revision revision ~tree:t2 [] >>= fun kr1 ->
-      Revision.revision revision ~tree:t2 [] >>= fun kr1'->
-      assert_key_equal "kr1" kr1 kr1';
-      Revision.read_exn revision kr1         >>= fun r1  ->
-
-      (* r1 -> r2 : t3 *)
-      Revision.revision revision ~tree:t3 [r1] >>= fun kr2  ->
-      Revision.revision revision ~tree:t3 [r1] >>= fun kr2' ->
-      assert_key_equal "kr2" kr2 kr2';
-      Revision.read_exn revision kr2           >>= fun r2   ->
-
-      Revision.list revision kr1 >>= fun kr1s ->
-      assert_keys_equal "g1" [kr1] kr1s;
-
-      Revision.list revision kr2 >>= fun kr2s ->
-      assert_keys_equal "g2" [kr1; kr2] kr2s;
-
-     return_unit
+      check_find t "c1:b"     kc1 ["";"b"]         kt1 >>= fun () ->
+      check_find t "c1:b/a"   kc1 ["";"b";"a"]     kv1 >>= fun () ->
+      check_find t "c2:a/b/a" kc2 ["";"a";"b";"a"] kv1 >>= fun () ->
+      check_find t "c2:c"     kc2 ["";"c"]         kv2 >>= fun () ->
+      return_unit
     in
     run x test
-
+(*
   let test_tags x () =
     let t1 = Tag.of_string "foo" in
     let t2 = Tag.of_string "bar" in
@@ -274,7 +263,7 @@ module Make (S: S) = struct
       (* Restart a fresh store and import everything in there. *)
       x.clean ()             >>= fun () ->
       x.init ()              >>= fun () ->
-      create ()              >>= fun t2 ->
+      create ~root:"test-db2" () >>= fun t2 ->
 
       import t2 partial      >>= fun () ->
       revert t2 r3           >>= fun () ->
@@ -314,8 +303,8 @@ let suite (speed, x) =
   [
     "Basic operations on values"      , speed, T.test_values    x;
     "Basic operations on trees"       , speed, T.test_trees     x;
-(*
     "Basic operations on revisions"   , speed, T.test_revisions x;
+(*
     "Basic operations on tags"        , speed, T.test_tags      x;
     "High-level store operations"     , speed, T.test_stores    x;
     "High-level store synchronisation", speed, T.test_sync      x;
