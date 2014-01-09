@@ -109,6 +109,26 @@ module Make (S: S) = struct
     }
   let kc2 = key c2
 
+  (* tag1: c1 *)
+  let tag1 = tag {
+      Tag.sha1 = kc1;
+      typ      = `Commit;
+      tag      = "foo";
+      tagger   = john_doe;
+      message  = "Ho yeah!";
+    }
+  let ktag1 = key tag1
+
+  (* tag2: c2 *)
+  let tag2 = tag {
+      Tag.sha1 = kc2;
+      typ      = `Commit;
+      tag      = "bar";
+      tagger   = john_doe;
+      message  = "Hahah!";
+    }
+  let ktag2 = key tag2
+
   let check_write t name k v =
     write t v    >>= fun k' ->
     assert_key_equal (name ^ "-key-1") k k';
@@ -175,37 +195,21 @@ module Make (S: S) = struct
       return_unit
     in
     run x test
-(*
+
   let test_tags x () =
-    let t1 = Tag.of_string "foo" in
-    let t2 = Tag.of_string "bar" in
-    let v1 = Value.of_bytes "foo" in
-    let k1 = key v1 in
-    let v2 = Value.of_bytes "" in
-    let k2 = key v2 in
     let test () =
-      create ()              >>= fun t   ->
-      let tag = tag_store t in
-      Tag.update tag t1 k1 >>= fun ()  ->
-      Tag.read   tag t1    >>= fun k1' ->
-      assert_key_opt_equal "t1" (Some k1) k1';
-      Tag.update tag t2 k2 >>= fun ()  ->
-      Tag.read   tag t2    >>= fun k2' ->
-      assert_key_opt_equal "t2" (Some k2) k2';
-      Tag.update tag t1 k2 >>= fun ()   ->
-      Tag.read   tag t1    >>= fun k2'' ->
-      assert_key_opt_equal "t1-after-update" (Some k2) k2'';
-      Tag.list   tag t1    >>= fun ts ->
-      assert_tags_equal "list" [t1; t2] ts;
-      Tag.remove tag t1    >>= fun () ->
-      Tag.read   tag t1    >>= fun empty ->
-      assert_key_opt_equal "empty" None empty;
-      Tag.list   tag t1    >>= fun t2' ->
-      assert_tags_equal "all-after-remove" [t2] t2';
+      create () >>= fun t   ->
+      check_write t "tag1" ktag1 tag1 >>= fun () ->
+      check_write t "tag2" ktag2 tag2 >>= fun () ->
+
+      check_find t "tag1:b" ktag1 ["foo";"";"b"] kt1 >>= fun () ->
+      check_find t "tag2:a" ktag2 ["bar";"";"a"] kt2 >>= fun () ->
+      check_find t "tag2:c" ktag2 ["bar";"";"c"] kv2 >>= fun () ->
       return_unit
     in
     run x test
 
+(*
   let test_stores x () =
     let v1 = Value.of_bytes "foo" in
     let v2 = Value.of_bytes "" in
@@ -304,8 +308,9 @@ let suite (speed, x) =
     "Basic operations on values"      , speed, T.test_values    x;
     "Basic operations on trees"       , speed, T.test_trees     x;
     "Basic operations on revisions"   , speed, T.test_revisions x;
-(*
     "Basic operations on tags"        , speed, T.test_tags      x;
+(*
+    "Basic operations on references"  , speed, T.test_tags      x;
     "High-level store operations"     , speed, T.test_stores    x;
     "High-level store synchronisation", speed, T.test_sync      x;
 *)
