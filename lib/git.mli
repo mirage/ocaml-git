@@ -22,59 +22,80 @@
 
 open GitTypes
 
-module type SERIALIZABLE = sig
+module type ISERIALIZABLE = sig
 
-  (** Serialization of file contents. *)
+  (** Serialization of inflated contents. *)
 
   type t
   (** The file contents. *)
 
+  val pretty: t -> string
+  (** Almost as [to_string] but prettier (if possible). *)
+
   val dump: t -> unit
   (** Dump the contents to stderr. *)
 
-  val output: Buffer.t -> t -> unit
-  (** Output the file in a buffer. *)
+  val output_inflated: Buffer.t -> t -> unit
+  (** Output the inflated contents in a buffer. *)
 
-  val input: Mstruct.t -> t
-  (** Read the contents from an input buffer. *)
+  val input_inflated: Mstruct.t -> t
+  (** Build a value from an inflated contents. *)
 
 end
 
-module Blob: SERIALIZABLE with type t := blob
+module type SERIALIZABLE = sig
+
+  (** Serialization of full contents. *)
+
+  type t
+  (** The file contents. *)
+
+  val pretty: t -> string
+  (** Almost as [to_string] but prettier (if possible). *)
+
+  val dump: t -> unit
+  (** Dump the contents to stderr. *)
+
+  val output: t -> Mstruct.t
+  (** Output the inflated contents in a buffer. *)
+
+  val input: Mstruct.t -> t
+  (** Build a value from an inflated contents. *)
+
+end
+
+module Blob: ISERIALIZABLE with type t := blob
 (** Blob objects. *)
 
-module Commit: SERIALIZABLE with type t := commit
+module Commit: ISERIALIZABLE with type t := commit
 (** Commit objects. *)
 
-module Tree: SERIALIZABLE with type t := tree
+module Tree: ISERIALIZABLE with type t := tree
 (** Tree objects. *)
 
-module Tag: SERIALIZABLE with type t := tag
+module Tag: ISERIALIZABLE with type t := tag
 (** Tag objects. *)
 
 include SERIALIZABLE with type t := value
+(** All the objects kinds can be serializable. *)
+
+include ISERIALIZABLE with type t := value
 (** All the objects kinds can be serializable. *)
 
 val type_of_inflated: Mstruct.t -> [`Blob|`Commit|`Tag|`Tree]
 (** Return the type of the inflated object stored in the given
     buffer. *)
 
-val input_inflated: Mstruct.t -> value
-(** Unmarshal an inflated string to a value. *)
-
-val output_inflated: Buffer.t -> value -> unit
-(** Marshal a value to a buffer, without deflating it. *)
-
 (** {2 Packed Objects} *)
 
 module Idx: SERIALIZABLE with type t := pack_index
 (** Pack indexes. *)
 
-module PackedValue2: SERIALIZABLE with type t := packed_value
-(** Pack objects. *)
+module PackedValue2: ISERIALIZABLE with type t := packed_value
+(** Pack objects version 2. *)
 
-module PackedValue3: SERIALIZABLE with type t := packed_value
-(** Pack objects. *)
+module PackedValue3: ISERIALIZABLE with type t := packed_value
+(** Pack objects version 3. *)
 
 (** Packs. *)
 module Pack: sig

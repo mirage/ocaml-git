@@ -291,7 +291,7 @@ let references t =
 let succ root sha1 =
   let commit c = `Commit (SHA1.of_commit c) in
   let tree l s = `Tree (l, SHA1.of_tree s) in
-  let tag t = `Tag (t.Tag.tag, SHA1.of_commit t.Tag.commit) in
+  let tag t = `Tag (t.Tag.tag, t.Tag.sha1) in
   read root sha1 >>= function
   | None                  -> return_nil
   | Some (Value.Blob _)   -> return_nil

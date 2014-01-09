@@ -54,20 +54,50 @@ let input_sha1 buf =
 let output_sha1 buf t =
   Buffer.add_string buf (SHA1.to_string t)
 
+let output_key_value buf k v =
+  Buffer.add_string buf k;
+  Buffer.add_char   buf sp;
+  Buffer.add_string buf v;
+  Buffer.add_char   buf lf
+
+let input_key_value buf expected input_value =
+  let error actual =
+    Mstruct.parse_error_buf buf "keys: [actual: %s] [expected: %s]" actual expected in
+  let key =
+    match Mstruct.get_string_delim buf sp with
+    | None   -> error "<none>"
+    | Some k -> k in
+  if key <> expected then
+    error key
+  else
+    match Mstruct.get_delim buf lf input_value with
+    | None   -> Mstruct.parse_error_buf buf "no value to input"
+    | Some v -> v
+
+
+module type ISERIALIZABLE = sig
+  type t
+  val pretty: t -> string
+  val dump: t -> unit
+  val output_inflated: Buffer.t -> t -> unit
+  val input_inflated: Mstruct.t -> t
+end
+
 module type SERIALIZABLE = sig
   type t
+  val pretty: t -> string
   val dump: t -> unit
-  val output: Buffer.t -> t -> unit
+  val output: t -> Mstruct.t
   val input: Mstruct.t -> t
 end
 
 module User: sig
-  include SERIALIZABLE with type t := User.t
+  include ISERIALIZABLE with type t := User.t
   val pretty: User.t -> string
 end = struct
 
   (* XXX needs to escape name/email/date *)
-  let output buf t =
+  let output_inflated buf t =
     let open User in
     Buffer.add_string buf t.name ;
     Buffer.add_string buf " <"   ;
@@ -75,7 +105,7 @@ end = struct
     Buffer.add_string buf "> "   ;
     Buffer.add_string buf t.date
 
-  let input buf =
+  let input_inflated buf =
     let i = match Mstruct.index buf lt with
       | Some i -> i-1
       | None   -> Mstruct.parse_error_buf buf "invalid user name" in
@@ -101,55 +131,63 @@ end = struct
 
 end
 
-module Blob: SERIALIZABLE with type t := Blob.t = struct
+module Blob: ISERIALIZABLE with type t := Blob.t = struct
+
+  let pretty t =
+    Printf.sprintf "%S" (Blob.to_string t)
 
   let dump t =
-    Printf.eprintf "%s\n" (Blob.to_string t)
+    Printf.eprintf "%s\n" (pretty t)
 
-  let input buf =
+  let input_inflated buf =
     Mstruct.get_string buf (Mstruct.length buf)
     |> Blob.of_string
 
-  let output buf t =
+  let output_inflated buf t =
     Buffer.add_string buf (Blob.to_string t)
 
 end
 
-module Commit: SERIALIZABLE with type t := commit = struct
+module Commit: ISERIALIZABLE with type t := commit = struct
 
-  let dump t =
+  let pretty t =
     let open Commit in
-    Printf.eprintf
-      "  tree     : %s\n\
+    Printf.sprintf
+      "{\n\
+      \  tree     : %s\n\
       \  parents  : %s\n\
       \  author   : %s\n\
       \  committer: %s\n\
-      \  message  :\n%s\n"
+      \  message  :\n%s\n\
+       }\n"
       (SHA1.Tree.to_hex t.tree)
       (String.concat ~sep:", " (List.map ~f:SHA1.Commit.to_hex t.parents))
       (User.pretty t.author)
       (User.pretty t.committer)
       t.message
 
+  let dump t =
+    Printf.eprintf "%s" (pretty t)
+
   let output_parent buf parent =
     Buffer.add_string buf "parent ";
     output_hex_commit buf parent;
     Buffer.add_char   buf lf
 
-  let output buf t =
+  let output_inflated buf t =
     let open Commit in
-    Buffer.add_string buf "tree ";
-    output_hex_tree   buf t.tree;
-    Buffer.add_char   buf lf;
+    Buffer.add_string    buf "tree ";
+    output_hex_tree      buf t.tree;
+    Buffer.add_char      buf lf;
     List.iter ~f:(output_parent buf) t.parents;
-    Buffer.add_string buf "author ";
-    User.output        buf t.author;
-    Buffer.add_char   buf lf;
-    Buffer.add_string buf "committer ";
-    User.output       buf t.committer;
-    Buffer.add_char   buf lf;
-    Buffer.add_char   buf lf;
-    Buffer.add_string buf t.message
+    Buffer.add_string    buf "author ";
+    User.output_inflated buf t.author;
+    Buffer.add_char      buf lf;
+    Buffer.add_string    buf "committer ";
+    User.output_inflated buf t.committer;
+    Buffer.add_char      buf lf;
+    Buffer.add_char      buf lf;
+    Buffer.add_string    buf t.message
 
   let input_parents buf =
     let rec aux parents =
@@ -168,32 +206,18 @@ module Commit: SERIALIZABLE with type t := commit = struct
         ) in
     aux []
 
-  let input_key_value buf expected input_value =
-    let error actual =
-      Mstruct.parse_error_buf buf "keys: [actual: %s] [expected: %s]" actual expected in
-    let key =
-      match Mstruct.get_string_delim buf sp with
-      | None   -> error "<none>"
-      | Some k -> k in
-    if key <> expected then
-      error key
-    else
-      match Mstruct.get_delim buf lf input_value with
-      | None   -> Mstruct.parse_error_buf buf "no value to input"
-      | Some v -> v
-
-  let input buf =
+  let input_inflated buf =
     let tree      = input_key_value buf "tree" input_hex_tree in
     let parents   = input_parents   buf in
-    let author    = input_key_value buf "author" User.input in
-    let committer = input_key_value buf "committer" User.input in
+    let author    = input_key_value buf "author" User.input_inflated in
+    let committer = input_key_value buf "committer" User.input_inflated in
     Mstruct.shift buf 1;
     let message   = Mstruct.to_string buf in
     { Commit.parents; message; tree; author; committer }
 
 end
 
-module Tree: SERIALIZABLE with type t := tree = struct
+module Tree: ISERIALIZABLE with type t := tree = struct
 
   let pretty_perm = function
     | `normal -> "normal"
@@ -214,18 +238,25 @@ module Tree: SERIALIZABLE with type t := tree = struct
     | `link   -> "120000"
     | `dir    -> "40000"
 
-  let dump_entry e =
+  let pretty_entry e =
     let open Tree in
-    Printf.eprintf
-      "perm: %s\n\
-       name: %s\n\
-       sha1: %S\n"
+    Printf.sprintf
+      "{\n\
+      \  perm: %s\n\
+      \  name: %s\n\
+      \  sha1: %S\n\
+       }\n"
       (pretty_perm e.perm)
       e.name
       (SHA1.to_string e.node)
 
+  let pretty t =
+    let b = Buffer.create 1024 in
+    List.iter ~f:(fun e -> Buffer.add_string b (pretty_entry e)) (Tree.entries t);
+    Buffer.contents b
+
   let dump t =
-    List.iter ~f:dump_entry (Tree.entries t)
+    Printf.eprintf "%s" (pretty t)
 
   let output_entry buf e =
     let open Tree in
@@ -249,10 +280,10 @@ module Tree: SERIALIZABLE with type t := tree = struct
     } in
     Some entry
 
-  let output buf t =
+  let output_inflated buf t =
     List.iter ~f:(output_entry buf) (Tree.entries t)
 
-  let input buf =
+  let input_inflated buf =
     let rec aux entries =
       if Mstruct.length buf <= 0 then
         Tree.create entries
@@ -264,7 +295,7 @@ module Tree: SERIALIZABLE with type t := tree = struct
 
 end
 
-module Tag: SERIALIZABLE with type t := tag = struct
+module Tag: ISERIALIZABLE with type t := tag = struct
 
   type t = tag
   let dump x = todo "tree"
@@ -277,19 +308,14 @@ module Value = struct
 
   module V = Value
 
-  let dump = function
-    | V.Blob b ->
-      Printf.eprintf "BLOB:\n";
-      Blob.dump b
-    | V.Commit c ->
-      Printf.eprintf "COMMIT:\n";
-      Commit.dump c
-    | V.Tag t ->
-      Printf.eprintf "TAG:\n";
-      Tag.dump t
-    | V.Tree t ->
-      Printf.eprintf "TREE:\n";
-      Tree.dump t
+  let pretty = function
+    | V.Blob b   -> Printf.sprintf "BLOB:\n%s" (Blob.pretty b)
+    | V.Commit c -> Printf.sprintf "COMMIT:\n%s" (Commit.pretty c)
+    | V.Tag t    -> Printf.sprintf "TAG:\n%s" (Tag.pretty t)
+    | V.Tree t   -> Printf.sprintf "TREE:\n%s" (Tree.pretty t)
+
+  let dump t =
+    Printf.eprintf "%s" (pretty t)
 
   let obj_type = function
     | V.Blob _   -> "blob"
@@ -298,10 +324,10 @@ module Value = struct
     | V.Tree _   -> "tree"
 
   let output_contents buf = function
-    | V.Blob b   -> Blob.output buf b
-    | V.Commit c -> Commit.output buf c
-    | V.Tag t    -> Tag.output buf t
-    | V.Tree t   -> Tree.output buf t
+    | V.Blob b   -> Blob.output_inflated buf b
+    | V.Commit c -> Commit.output_inflated buf c
+    | V.Tag t    -> Tag.output_inflated buf t
+    | V.Tree t   -> Tree.output_inflated buf t
 
   let output_inflated buf t =
     let size, contents =
@@ -315,13 +341,13 @@ module Value = struct
     Buffer.add_char   buf nul;
     Buffer.add_buffer buf contents
 
-  let output buf t =
+  let output t =
     let inflated =
       let buf = Buffer.create 1024 in
       output_inflated buf t;
       Buffer.contents buf in
     let deflated = GitMisc.deflate_string inflated in
-    Buffer.add_string buf deflated
+    Mstruct.of_string deflated
 
   let type_of_inflated buf =
     let obj_type =
@@ -350,10 +376,10 @@ module Value = struct
         size (Mstruct.length buf);
     let buf = Mstruct.sub buf 0 size in
     match obj_type with
-    | `Blob   -> Blob.input buf   |> blob
-    | `Commit -> Commit.input buf |> commit
-    | `Tag    -> Tag.input buf    |> tag
-    | `Tree   -> Tree.input buf   |> tree
+    | `Blob   -> Blob.input_inflated buf   |> blob
+    | `Commit -> Commit.input_inflated buf |> commit
+    | `Tag    -> Tag.input_inflated buf    |> tag
+    | `Tree   -> Tree.input_inflated buf   |> tree
 
   let input buf =
     input_inflated (GitMisc.inflate_mstruct buf)
@@ -363,7 +389,7 @@ end
 include Value
 
 module PackedValue (M: sig val version: int end): sig
-  include SERIALIZABLE with type t := packed_value
+  include ISERIALIZABLE with type t := packed_value
 end = struct
 
   let isset i bit =
@@ -434,7 +460,7 @@ end = struct
       else i in
     aux 0 1
 
-  let input buf =
+  let input_inflated buf =
     let byte = Mstruct.get_uint8 buf in
     let more = (byte land 0x80) <> 0 in
     let kind = (byte land 0x70) lsr 4 in
@@ -451,10 +477,10 @@ end = struct
 
     match kind with
     | 0b000 -> Mstruct.parse_error_buf buf "invalid: Reserved"
-    | 0b001 -> with_inflated buf Commit.input |> commit |> value
-    | 0b010 -> with_inflated buf Tree.input   |> tree   |> value
-    | 0b011 -> with_inflated buf Blob.input   |> blob   |> value
-    | 0b100 -> with_inflated buf Tag.input    |> tag    |> value
+    | 0b001 -> with_inflated buf Commit.input_inflated |> commit |> value
+    | 0b010 -> with_inflated buf Tree.input_inflated   |> tree   |> value
+    | 0b011 -> with_inflated buf Blob.input_inflated   |> blob   |> value
+    | 0b100 -> with_inflated buf Tag.input_inflated    |> tag    |> value
     | 0b101 -> Mstruct.parse_error_buf buf "invalid: Reserved"
     | 0b110 ->
       let base  = input_be_modified_base_128 buf in
@@ -466,11 +492,14 @@ end = struct
       ref_delta hunks
     | _     -> assert false
 
-  let output buf t =
-    todo "delta"
+  let output_inflated buf t =
+    todo "packed_value"
+
+  let pretty t =
+    todo "packed_value"
 
   let dump t =
-    todo "delta"
+    Printf.eprintf (pretty t)
 
 end
 
@@ -514,8 +543,8 @@ end = struct
     version, Int32.to_int_exn (Mstruct.get_be_uint32 buf)
 
   let input_packed_value version buf =
-    if version = 2 then PackedValue2.input buf
-    else PackedValue3.input buf
+    if version = 2 then PackedValue2.input_inflated buf
+    else PackedValue3.input_inflated buf
 
   let input idx buf =
     let version, size = input_header (Mstruct.clone buf) in
@@ -627,8 +656,11 @@ end = struct
   let output _ =
     todo "pack"
 
-  let dump _ =
+  let pretty _ =
     todo "pack"
+
+  let dump t =
+    Printf.eprintf "%s" (pretty t)
 
 end
 
@@ -701,8 +733,11 @@ module Idx: SERIALIZABLE with type t := pack_index = struct
   let output buf =
     todo "pack-index"
 
-  let dump buf =
+  let pretty _ =
     todo "pack-index"
+
+  let dump t =
+    Printf.eprintf "%s" (pretty t)
 
 end
 
