@@ -18,6 +18,13 @@
 
 open Core_kernel.Std
 
+type object_type =
+  [ `Blob
+  | `Commit
+  | `Tag
+  | `Tree ]
+(** Values representing object types. *)
+
 module type SHA1 = sig
 
   (** Signature for SHA1 values *)
@@ -150,10 +157,11 @@ module Tag: sig
   (** Git tags. *)
 
   type t = {
-    commit     : SHA1.Commit.t;
-    tag        : string;
-    tagger     : User.t;
-    tag_message: string;
+    sha1   : SHA1.t;
+    typ    : object_type;
+    tag    : string;
+    tagger : User.t;
+    message: string;
   }
   (** A tag is bookmark to a previous commit. *)
 
@@ -247,14 +255,7 @@ val ref_delta: sha1 Packed_value.delta -> packed_value
 val off_delta: int Packed_value.delta -> packed_value
 (** Cast offset-delta values. *)
 
-(** {2 Types} *)
-
-type object_type =
-  [ `Blob
-  | `Commit
-  | `Tag
-  | `Tree ]
-(** Values representing object types. *)
+(** {2 Successors} *)
 
 type successor =
   [ `Commit of sha1

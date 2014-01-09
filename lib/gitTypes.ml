@@ -16,6 +16,13 @@
 
 open Core_kernel.Std
 
+type object_type =
+  [ `Blob
+  | `Commit
+  | `Tag
+  | `Tree ]
+with bin_io, compare, sexp
+
 module type SHA1 = sig
   include Identifiable.S
   val create: string -> t
@@ -121,10 +128,11 @@ type tree = Tree.t
 module Tag = struct
   module T = struct
     type t = {
-      commit     : SHA1.Commit.t;
-      tag        : string;
-      tagger     : User.t;
-      tag_message: string;
+      sha1   : SHA1.t;
+      typ    : object_type;
+      tag    : string;
+      tagger : User.t;
+      message: string;
     } with bin_io, compare, sexp
     let hash (t: t) = Hashtbl.hash t
     include Sexpable.To_stringable (struct type nonrec t = t with sexp end)
@@ -199,12 +207,6 @@ let tag t = Value.Tag t
 let value v = Packed_value.Value v
 let ref_delta d = Packed_value.Ref_delta d
 let off_delta d = Packed_value.Off_delta d
-
-type object_type =
-  [ `Blob
-  | `Commit
-  | `Tag
-  | `Tree ]
 
 type successor =
   [ `Commit of sha1
