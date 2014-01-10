@@ -129,6 +129,12 @@ module Make (S: S) = struct
     }
   let ktag2 = key tag2
 
+  (* r1: t4 *)
+  let r1 = Reference.of_string "origin/head"
+
+  (* r2: c2 *)
+  let r2 = Reference.of_string "upstream/head"
+
   let check_write t name k v =
     write t v    >>= fun k' ->
     assert_key_equal (name ^ "-key-1") k k';
@@ -205,6 +211,21 @@ module Make (S: S) = struct
       check_find t "tag1:b" ktag1 ["foo";"";"b"] kt1 >>= fun () ->
       check_find t "tag2:a" ktag2 ["bar";"";"a"] kt2 >>= fun () ->
       check_find t "tag2:c" ktag2 ["bar";"";"c"] kv2 >>= fun () ->
+      return_unit
+    in
+    run x test
+
+  let test_refs x () =
+    let test () =
+      create () >>= fun t ->
+      write_reference t r1 kt4 >>= fun ()   ->
+      read_reference t r1      >>= fun kt4' ->
+      assert_key_opt_equal "r1" (Some kt4) kt4';
+      write_reference t r2 kc2 >>= fun ()   ->
+      read_reference t r2      >>= fun kc2' ->
+      assert_key_opt_equal "r2" (Some kc2) kc2';
+      references t             >>= fun rs   ->
+      assert_refs_equal "refs" rs [r1; r2];
       return_unit
     in
     run x test
@@ -309,8 +330,8 @@ let suite (speed, x) =
     "Basic operations on trees"       , speed, T.test_trees     x;
     "Basic operations on revisions"   , speed, T.test_revisions x;
     "Basic operations on tags"        , speed, T.test_tags      x;
+    "Basic operations on references"  , speed, T.test_refs      x;
 (*
-    "Basic operations on references"  , speed, T.test_tags      x;
     "High-level store operations"     , speed, T.test_stores    x;
     "High-level store synchronisation", speed, T.test_sync      x;
 *)

@@ -70,13 +70,9 @@ module Make (S: S) = struct
   let assert_tag_equal, assert_tag_opt_equal, assert_tags_equal =
     mk Tag.equal Tag.compare Tag.to_string
 
-  let assert_path_equal, assert_path_opt_equal, assert_paths_equal =
-    mk (=) compare (String.concat "/")
+  let assert_ref_equal, assert_ref_opt_equal, assert_refs_equal =
+    mk Reference.equal Reference.compare Reference.to_string
 
-  let assert_bool_equal, assert_bool_opt_equal, assert_bools_equal =
-    mk (=) compare string_of_bool
-
-  (* XXX: move that into the library ? *)
   let key value =
     let buf = Buffer.create 1024 in
     Git.output_inflated buf value;
