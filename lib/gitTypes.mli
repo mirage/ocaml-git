@@ -255,6 +255,13 @@ val ref_delta: sha1 Packed_value.delta -> packed_value
 val off_delta: int Packed_value.delta -> packed_value
 (** Cast offset-delta values. *)
 
+(** {2 References} *)
+
+module Reference: Identifiable.S
+(** Branch references. *)
+
+type reference = Reference.t
+
 (** {2 Successors} *)
 
 type successor =
@@ -314,10 +321,16 @@ module type S = sig
 
   (** {2 References} *)
 
-  val references: t -> (string * sha1) list Lwt.t
+  val references: t -> reference list Lwt.t
   (** Return the list of references (ie. tags and branches). *)
 
-  val write_reference: t -> string -> sha1 -> unit Lwt.t
+  val read_reference: t -> reference -> sha1 option Lwt.t
+  (** Read a given reference. *)
+
+  val read_reference_exn: t -> reference -> sha1 Lwt.t
+  (** Read a given reference. *)
+
+  val write_reference: t -> reference -> sha1 -> unit Lwt.t
   (** Write a reference. *)
 
   (** {2 Type Inspection} *)

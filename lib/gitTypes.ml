@@ -218,6 +218,10 @@ let succ = function
   | `Tag (_, s)
   | `Tree (_, s) -> s
 
+module Reference = String
+
+type reference = Reference.t
+
 module type S = sig
   type t
   val create: ?root:string -> unit -> t Lwt.t
@@ -228,8 +232,10 @@ module type S = sig
   val list: t -> sha1 list Lwt.t
   val write: t -> value -> sha1 Lwt.t
   val write_and_check_inflated: t -> sha1 -> string -> unit Lwt.t
-  val references: t -> (string * sha1) list Lwt.t
-  val write_reference: t -> string -> sha1 -> unit Lwt.t
+  val references: t -> reference list Lwt.t
+  val read_reference: t -> reference -> sha1 option Lwt.t
+  val read_reference_exn: t -> reference -> sha1 Lwt.t
+  val write_reference: t -> reference -> sha1 -> unit Lwt.t
   val type_of: t -> sha1 -> object_type option Lwt.t
   val succ: t -> sha1 -> successor list Lwt.t
   val expand_filesystem: t -> SHA1.Commit.t -> unit Lwt.t

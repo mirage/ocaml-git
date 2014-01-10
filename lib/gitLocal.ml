@@ -280,13 +280,26 @@ let dump t =
 let references t =
   let refs = t.root / ".git" / "refs" in
   GitMisc.rec_files refs >>= fun files ->
-  let n = String.length t.root in
-  Lwt_list.map_p (fun file ->
-      let r = String.sub file n (String.length file - n) in
-      Log.infof "Reading %s" file;
-      Lwt_io.(with_file ~mode:Input file read) >>= fun hex ->
-      return (r, SHA1.of_hex hex)
-    ) files
+  let n = String.length (t.root / ".git" / "refs" / "") in
+  let refs = List.map ~f:(fun file ->
+      let ref = String.sub file n (String.length file - n) in
+      Reference.of_string ref
+    ) files in
+  return refs
+
+let read_reference t ref =
+  let file = t.root / ".git" / "refs" / Reference.to_string ref in
+  Log.infof "Reading %s" file;
+  if Sys.file_exists file then
+    Lwt_io.(with_file ~mode:Input file read) >>= fun hex ->
+    return (Some (SHA1.of_hex hex))
+  else
+    return_none
+
+let read_reference_exn t ref =
+  read_reference t ref >>= function
+  | None   -> fail Not_found
+  | Some s -> return s
 
 let succ root sha1 =
   let commit c = `Commit (SHA1.of_commit c) in
@@ -314,8 +327,8 @@ let write_inflated t inflated =
 let write_and_check_inflated t sha1 inflated =
   Loose.write_and_check_inflated t sha1 inflated
 
-let write_reference t name sha1 =
-  let file = t.root / ".git" / name in
+let write_reference t ref sha1 =
+  let file = t.root / ".git" / "refs" / Reference.to_string ref in
   GitMisc.mkdir (Filename.dirname file) >>= fun () ->
   Log.infof "Writing %s" file;
   Lwt_io.(with_file ~mode:Output file (fun oc -> write oc (SHA1.to_hex sha1)))

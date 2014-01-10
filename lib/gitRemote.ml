@@ -213,7 +213,7 @@ module Listing = struct
 
   type t = {
     capabilities: Capabilities.t;
-    references  : string SHA1.Map.t;
+    references  : reference SHA1.Map.t;
   }
 
   let references t = t.references
@@ -223,16 +223,18 @@ module Listing = struct
     references   = SHA1.Map.empty;
   }
 
+  let head_ref = Reference.of_string "HEAD"
+
   let head t =
     Map.fold
-      ~f:(fun ~key ~data acc -> if data="HEAD" then Some key else acc)
+      ~f:(fun ~key ~data acc -> if data=head_ref then Some key else acc)
       ~init:None t.references
 
   let dump t =
     Printf.printf "CAPABILITIES:\n%s\n" (Capabilities.to_string t.capabilities);
     Printf.printf "\nREFERENCES:\n";
     Map.iter
-      ~f:(fun ~key ~data -> Printf.printf "%s %s\n%!" (SHA1.to_hex key) data)
+      ~f:(fun ~key ~data -> Printf.printf "%s %s\n%!" (SHA1.to_hex key) (Reference.to_string data))
       t.references
 
   let input ic =
@@ -247,13 +249,16 @@ module Listing = struct
             (* Read the capabilities on the first line *)
             match String.lsplit2 ref ~on:nul with
             | Some (ref, caps) ->
+              let ref = Reference.of_string ref in
               let references = Map.add ~key:(SHA1.of_hex sha1) ~data:ref acc.references in
               let capabilities = Capabilities.of_string caps in
               aux { references; capabilities; }
             | None ->
+              let ref = Reference.of_string ref in
               let references = Map.add ~key:(SHA1.of_hex sha1) ~data:ref acc.references in
               aux { references; capabilities = []; }
           ) else
+            let ref = Reference.of_string ref in
             let references = Map.add ~key:(SHA1.of_hex sha1) ~data:ref acc.references in
             aux { acc with references }
         | None -> error "%s is not a valid answer" line
