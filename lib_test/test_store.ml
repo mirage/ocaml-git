@@ -160,11 +160,23 @@ module Make (S: S) = struct
       ] >>= fun () ->
     return t
 
-  let test_values x () =
+  let is_ typ t k =
+    type_of t k >>= function
+    | Some x -> return (x = typ)
+    | None    -> return false
+
+  let check_keys t name typ expected =
+    list t                           >>= fun ks ->
+    Lwt_list.filter_p (is_ typ t) ks >>= fun ks ->
+    return (assert_keys_equal name expected ks)
+
+  let test_blobs x () =
     let test () =
       create ()                 >>= fun t     ->
       check_write t "v1" kv1 v1 >>= fun () ->
       check_write t "v2" kv2 v2 >>= fun () ->
+
+      check_keys  t "blobs" `Blob [kv1; kv2] >>= fun () ->
       return_unit
     in
     run x test
@@ -184,11 +196,14 @@ module Make (S: S) = struct
       check_find t "kt3:a/b"   kt3 ["a";"b"]     kt1 >>= fun () ->
       check_find t "kt3:a/b/a" kt3 ["a";"b";"a"] kv1 >>= fun () ->
       check_find t "kt4:c"     kt4 ["c"]         kv2 >>= fun () ->
+
+      check_keys t "trees" `Tree [kt1; kt2; kt3; kt4] >>= fun () ->
+
       return_unit
     in
     run x test
 
-  let test_revisions x () =
+  let test_commits x () =
     let test () =
       create ()                 >>= fun t   ->
       check_write t "c1" kc1 c1 >>= fun () ->
@@ -198,6 +213,9 @@ module Make (S: S) = struct
       check_find t "c1:b/a"   kc1 ["";"b";"a"]     kv1 >>= fun () ->
       check_find t "c2:a/b/a" kc2 ["";"a";"b";"a"] kv1 >>= fun () ->
       check_find t "c2:c"     kc2 ["";"c"]         kv2 >>= fun () ->
+
+      check_keys t "commits" `Commit [kc1; kc2] >>= fun () ->
+
       return_unit
     in
     run x test
@@ -211,6 +229,9 @@ module Make (S: S) = struct
       check_find t "tag1:b" ktag1 ["foo";"";"b"] kt1 >>= fun () ->
       check_find t "tag2:a" ktag2 ["bar";"";"a"] kt2 >>= fun () ->
       check_find t "tag2:c" ktag2 ["bar";"";"c"] kv2 >>= fun () ->
+
+      check_keys t "tags" `Tag [ktag1; ktag2] >>= fun () ->
+
       return_unit
     in
     run x test
@@ -221,11 +242,14 @@ module Make (S: S) = struct
       write_reference t r1 kt4 >>= fun ()   ->
       read_reference t r1      >>= fun kt4' ->
       assert_key_opt_equal "r1" (Some kt4) kt4';
+
       write_reference t r2 kc2 >>= fun ()   ->
       read_reference t r2      >>= fun kc2' ->
       assert_key_opt_equal "r2" (Some kc2) kc2';
+
       references t             >>= fun rs   ->
-      assert_refs_equal "refs" rs [r1; r2];
+      assert_refs_equal "refs" [r1; r2] rs;
+
       return_unit
     in
     run x test
@@ -326,11 +350,11 @@ let suite (speed, x) =
   let module T = Make(S) in
   x.name,
   [
-    "Basic operations on values"      , speed, T.test_values    x;
-    "Basic operations on trees"       , speed, T.test_trees     x;
-    "Basic operations on revisions"   , speed, T.test_revisions x;
-    "Basic operations on tags"        , speed, T.test_tags      x;
-    "Basic operations on references"  , speed, T.test_refs      x;
+    "Basic operations on blobs"       , speed, T.test_blobs    x;
+    "Basic operations on trees"       , speed, T.test_trees    x;
+    "Basic operations on commits"     , speed, T.test_commits  x;
+    "Basic operations on tags"        , speed, T.test_tags     x;
+    "Basic operations on references"  , speed, T.test_refs     x;
 (*
     "High-level store operations"     , speed, T.test_stores    x;
     "High-level store synchronisation", speed, T.test_sync      x;
