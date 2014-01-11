@@ -27,7 +27,51 @@ let global_option_section = "COMMON OPTIONS"
 let help_sections = [
   `S global_option_section;
   `P "These options are common to all commands.";
+
+  `S "AUTHORS";
+  `P "Thomas Gazagnaire   <thomas@gazagnaire.org>";
+
+  `S "BUGS";
+  `P "Check bug reports at https://github.com/samoht/ocaml-git/issues.";
 ]
+
+(* Global options *)
+type global = {
+  verbose: bool;
+}
+
+let app_global g =
+  Log.color_on ();
+  if g.verbose then
+    Log.set_log_level Log.DEBUG
+
+let global =
+  let verbose =
+    let doc =
+      Arg.info ~docs:global_option_section ~doc:"Be more verbose." ["v";"verbose"] in
+    Arg.(value & flag & doc) in
+  Term.(pure (fun verbose -> { verbose }) $ verbose)
+
+let term_info title ~doc ~man =
+  let man = man @ help_sections in
+  Term.info ~sdocs:global_option_section ~doc ~man title
+
+type command = {
+  name: string;
+  doc : string;
+  man : Manpage.block list;
+  term: unit Term.t;
+}
+
+let command c =
+  let man = [
+    `S "DESCRIPTION";
+    `P c.doc;
+  ] @ c.man in
+  c.term, term_info c.name ~doc:c.doc ~man
+
+let mk (fn:'a): 'a Term.t =
+  Term.(pure (fun global -> app_global global; fn) $ global)
 
 (* Helpers *)
 let mk_flag ?section flags doc =
@@ -58,78 +102,101 @@ let run t =
   )
 
 (* CLONE *)
-let clone_doc = "Clone a remote Git repository."
-let clone =
-  let doc = clone_doc in
-  let man = [
-    `S "DESCRIPTION";
-    `P "Clone a remote repository."
-  ] in
-  let depth =
-    mk_opt ["depth"] "DEPTH"
-      "Create a shallow clone with a history truncated to the specified number \
-       of revisions. Refer to $(b,git clone --help) for more information."
-      Arg.(some int) None in
-  let bare =
-    mk_flag ["bare"] "Do not expand the filesystem." in
-  let address =
-    arg_list "ADDRESS" "Address of the remote repository." Arg.string in
-  let clone deepen bare = function
-    | [a] ->
-      let name = Filename.basename a in
-      let name = Filename.chop_extension name in
-      run begin
-        GitLocal.create ~root:name () >>= fun t ->
-        GitRemote.clone t ?deepen a
-      end;
-      `Ok ()
-    | _   -> `Error (true, "Too many address") in
-  Term.(ret (pure clone $ depth $ bare $ address)),
-  term_info "clone" ~doc ~man
+let clone = {
+  name = "clone";
+  doc  = "Clone a remote repository.";
+  man  = [];
+  term =
+    let depth =
+      mk_opt ["depth"] "DEPTH"
+        "Create a shallow clone with a history truncated to the specified number \
+         of revisions. Refer to $(b,git clone --help) for more information."
+        Arg.(some int) None in
+    let bare =
+      mk_flag ["bare"] "Do not expand the filesystem." in
+    let address =
+      arg_list "ADDRESS" "Address of the remote repository." Arg.string in
+    let clone deepen bare args =
+      let run adress dir =
+        run begin
+          GitLocal.create ~root:dir () >>= fun t ->
+          GitRemote.clone t ?deepen adress
+        end;
+        `Ok ()
+      in
+      match args with
+      | [a] ->
+        let dir = Filename.basename a in
+        let dir =
+          if Filename.check_suffix dir ".git" then
+            Filename.chop_extension dir
+          else
+            dir in
+        run a dir
+        | [a;b] -> run a b
+        | _     -> `Error (true, "usage: ogit clone <address> [dirname]") in
+    Term.(ret (mk clone $ depth $ bare $ address))
+}
+
+(* FETCH *)
+let fetch = {
+  name = "fetch";
+  doc  = "Fetch a remote Git repository.";
+  man  = [];
+  term =
+    let address =
+      arg_list "ADDRESS" "Address of the remote repository." Arg.string in
+    let fetch = function
+      | [a] ->
+        run begin
+          GitLocal.create () >>= fun t ->
+          GitRemote.fetch t a
+        end;
+        `Ok ()
+      | _   -> `Error (true, "Too many address") in
+    Term.(ret (mk fetch $ address))
+}
 
 (* GRAPH *)
-let graph_doc = "Display a graph of the objects."
-let graph =
-  let doc = graph_doc in
-  let man = [
-    `S "DESCRIPTION";
-    `P "Output a graph on the objects in the current repository."
-  ] in
-  let file =
-    mk_required ["o";"output"] "FILE" "Output file."
-      Arg.(some string) None in
-  let graph file =
-    run begin
-      GitLocal.create () >>= fun t ->
-      GitGraph.to_dot t file
-    end in
-  Term.(pure graph $ file),
-  term_info "graph" ~doc ~man
+let graph = {
+  name = "graph";
+  doc  = "Display a graph of the objects.";
+  man  = [];
+  term =
+    let file =
+      mk_required ["o";"output"] "FILE" "Output file."
+        Arg.(some string) None in
+    let graph file =
+      run begin
+        GitLocal.create () >>= fun t ->
+        GitGraph.to_dot t file
+      end in
+    Term.(mk graph $ file)
+}
 
 (* HELP *)
-let help =
-  let doc = "Display help about Mirari and Mirari commands." in
-  let man = [
-    `S "DESCRIPTION";
-     `P "Prints help about Mirari commands.";
-     `P "Use `$(mname) help topics' to get the full list of help topics.";
-  ] in
-  let topic =
-    let doc = Arg.info [] ~docv:"TOPIC" ~doc:"The topic to get help on." in
-    Arg.(value & pos 0 (some string) None & doc )
-  in
-  let help man_format cmds topic = match topic with
-    | None       -> `Help (`Pager, None)
-    | Some topic ->
-      let topics = "topics" :: cmds in
-      let conv, _ = Arg.enum (List.rev_map (fun s -> (s, s)) topics) in
-      match conv topic with
-      | `Error e                -> `Error (false, e)
-      | `Ok t when t = "topics" -> List.iter print_endline cmds; `Ok ()
-      | `Ok t                   -> `Help (man_format, Some t) in
-
-  Term.(ret (pure help $Term.man_format $Term.choice_names $topic)),
-  Term.info "help" ~doc ~man
+let help = {
+  name = "help";
+  doc  = "Display help about ogit and ogit commands.";
+  man  = [
+    `P "Use `$(mname) help topics' to get the full list of help topics.";
+  ];
+  term =
+    let topic =
+      let doc = Arg.info [] ~docv:"TOPIC" ~doc:"The topic to get help on." in
+      Arg.(value & pos 0 (some string) None & doc )
+    in
+    let help man_format cmds topic = match topic with
+      | None       -> `Help (`Pager, None)
+      | Some topic ->
+        let topics = "topics" :: cmds in
+        let conv, _ = Arg.enum (List.rev_map (fun s -> (s, s)) topics) in
+        match conv topic with
+        | `Error e                -> `Error (false, e)
+        | `Ok t when t = "topics" -> List.iter print_endline cmds; `Ok ()
+        | `Ok t                   -> `Help (man_format, Some t) in
+  Term.(ret (pure help $Term.man_format $Term.choice_names $topic))
+}
 
 let default =
   let doc = "Mirage application builder" in
@@ -152,22 +219,24 @@ let default =
       \n\
       The most commonly used cagit commands are:\n\
       \    clone       %s\n\
+      \    fetch       %s\n\
       \    graph       %s\n\
       \n\
       See 'cagit help <command>' for more information on a specific command.\n%!"
-      clone_doc graph_doc in
+      clone.doc fetch.doc graph.doc in
   Term.(pure usage $ (pure ())),
   Term.info "cagit"
-    ~version:"0.9.0"
+    ~version:"0.10.0"
     ~sdocs:global_option_section
     ~doc
     ~man
 
-let commands = [
-  clone;
-  graph;
-  help;
-]
+let commands = List.map command [
+    clone;
+    fetch;
+    graph;
+    help;
+  ]
 
 let () =
   match Term.eval_choice default commands with

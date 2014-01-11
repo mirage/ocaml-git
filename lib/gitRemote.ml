@@ -35,13 +35,7 @@ let lwt_error fmt =
     fail Parsing.Parse_error
   ) fmt
 
-let debug = ref true
-
-let debug fmt =
-  Printf.ksprintf (fun str ->
-    if !debug then
-      Printf.printf "%s\n%!" str
-  ) fmt
+module Log = Log.Make(struct let section = "remote" end)
 
 module PacketLine = struct
 
@@ -49,11 +43,11 @@ module PacketLine = struct
 
   let output oc = function
     | None  ->
-      debug "SENDING: FLUSH";
+      Log.debugf "SENDING: FLUSH";
       Lwt_io.write oc "0000" >>= fun () ->
       Lwt_io.flush oc
     | Some l ->
-      debug "SENDING: %S" l;
+      Log.debugf "SENDING: %S" l;
       let size = Printf.sprintf "%04x" (4 + String.length l) in
       Lwt_io.write oc size >>= fun () ->
       Lwt_io.write oc l    >>= fun () ->
@@ -66,14 +60,16 @@ module PacketLine = struct
     output oc None
 
   let input ic =
+    Log.debugf "PacketLine.input";
     Lwt_io.read ~count:4 ic >>= function
     | "0000" ->
-      debug "RECEIVED: FLUSH";
+      Log.debugf "RECEIVED: FLUSH";
       return_none
     | size   ->
+      Log.debugf "size= %s" size;
       let size = int_of_string ("0x" ^ size) - 4 in
       Lwt_io.read ~count:size ic >>= fun payload ->
-      debug "RECEIVED: %S" payload;
+      Log.debugf "RECEIVED: %S" payload;
       if payload.[size - 1] = lf then
         return (Some (String.sub payload 0 (size-1)))
       else
@@ -213,7 +209,7 @@ module Listing = struct
 
   type t = {
     capabilities: Capabilities.t;
-    references  : reference SHA1.Map.t;
+    references  : reference list SHA1.Map.t;
   }
 
   let references t = t.references
@@ -223,21 +219,30 @@ module Listing = struct
     references   = SHA1.Map.empty;
   }
 
+  let is_empty t =
+    t.capabilities = [] && Map.is_empty t.references
+
   let head_ref = Reference.of_string "HEAD"
 
   let head t =
     Map.fold
-      ~f:(fun ~key ~data acc -> if data=head_ref then Some key else acc)
+      ~f:(fun ~key ~data acc -> if List.mem data head_ref then Some key else acc)
       ~init:None t.references
 
-  let dump t =
-    Printf.printf "CAPABILITIES:\n%s\n" (Capabilities.to_string t.capabilities);
-    Printf.printf "\nREFERENCES:\n";
+  let pretty t =
+    let buf = Buffer.create 1024 in
+    Printf.bprintf buf "CAPABILITIES:\n%s\n" (Capabilities.to_string t.capabilities);
+    Printf.bprintf buf "\nREFERENCES:\n";
     Map.iter
-      ~f:(fun ~key ~data -> Printf.printf "%s %s\n%!" (SHA1.to_hex key) (Reference.to_string data))
-      t.references
+      ~f:(fun ~key ~data ->
+          List.iter ~f:(fun ref ->
+              Printf.bprintf buf "%s %s\n%!" (SHA1.to_hex key) (Reference.to_string ref)
+            ) data
+        ) t.references;
+    Buffer.contents buf
 
   let input ic =
+    Log.debugf "Listing.input";
     let rec aux acc =
       PacketLine.input ic >>= function
       | None      -> return acc
@@ -245,21 +250,21 @@ module Listing = struct
         match String.lsplit2 line ~on:sp with
         | Some ("ERR", err) -> error "ERROR: %s" err
         | Some (sha1, ref)  ->
-          if acc = empty then (
+          if is_empty acc then (
             (* Read the capabilities on the first line *)
             match String.lsplit2 ref ~on:nul with
             | Some (ref, caps) ->
               let ref = Reference.of_string ref in
-              let references = Map.add ~key:(SHA1.of_hex sha1) ~data:ref acc.references in
+              let references = Map.add_multi ~key:(SHA1.of_hex sha1) ~data:ref acc.references in
               let capabilities = Capabilities.of_string caps in
               aux { references; capabilities; }
             | None ->
               let ref = Reference.of_string ref in
-              let references = Map.add ~key:(SHA1.of_hex sha1) ~data:ref acc.references in
+              let references = Map.add_multi ~key:(SHA1.of_hex sha1) ~data:ref acc.references in
               aux { references; capabilities = []; }
           ) else
             let ref = Reference.of_string ref in
-            let references = Map.add ~key:(SHA1.of_hex sha1) ~data:ref acc.references in
+            let references = Map.add_multi ~key:(SHA1.of_hex sha1) ~data:ref acc.references in
             aux { acc with references }
         | None -> error "%s is not a valid answer" line
     in
@@ -285,6 +290,7 @@ module Ack = struct
     | Nak
 
   let input ic =
+    Log.debugf "Ack.input";
     let rec aux acc =
       PacketLine.input ic >>= function
       | None
@@ -341,6 +347,7 @@ module Upload = struct
   let create l = l
 
   let input ic =
+    Log.debugf "Upload.input";
     let rec aux acc =
       PacketLine.input ic >>= function
       | None   -> return (List.rev acc)
@@ -371,6 +378,7 @@ module Upload = struct
     aux []
 
   let output oc t =
+    Log.debugf "Upload.output";
     let last_c = ref [] in
 
     (* output wants *)
@@ -425,6 +433,7 @@ module Upload = struct
   (* PHASE1: the client send the the IDs he wants, the severs answer
      the new shallow state. *)
   let phase1 (ic, oc) ?deepen ?(shallows=[]) wants =
+    Log.debugf "Upload.phase1";
     let wants = List.map ~f:(fun id -> Want (id, Capabilities.default)) wants in
     let shallows = List.map ~f:(fun id -> Shallow id) shallows in
     let deepen = match deepen with
@@ -448,6 +457,7 @@ module Upload = struct
 
 
   let phase2 (ic, oc) haves =
+    Log.debugf "Upload.phase2";
     let rec aux haves =
       if List.length haves > 32 then
         let head, tail = pick 32 haves in
@@ -477,7 +487,7 @@ let todo msg =
 
 module Make (Store: S) = struct
 
-  let clone t ?(bare=false) ?deepen address =
+  let fetch_pack t ?(bare=false) ?deepen address haves =
     let r = Init.create address in
     match Init.host r with
     | None   -> todo "local-clone"
@@ -485,23 +495,24 @@ module Make (Store: S) = struct
       with_connection h (Init.port r)(fun (ic, oc) ->
           Init.output oc r     >>= fun () ->
           Listing.input ic     >>= fun listing ->
-          Listing.dump listing;
+          Log.debugf "listing: %s" (Listing.pretty listing);
           begin Map.fold
-              ~f:(fun ~key:sha1 ~data:name acc ->
+              ~f:(fun ~key:sha1 ~data acc ->
                   acc >>= fun () ->
-                  Store.write_reference t name sha1)
-              ~init:return_unit (Listing.references listing)
+                  Lwt_list.iter_p (fun ref -> Store.write_reference t ref sha1) data)
+              ~init:return_unit
+              (Listing.references listing)
           end >>= fun () ->
           match Listing.head listing with
-          | None    -> Init.close oc
+          | None      -> Init.close oc
           | Some head ->
-            debug "PHASE1";
+            Log.debugf "PHASE1";
             Upload.phase1 ?deepen (ic,oc) [head] >>= fun _shallows ->
 
-            debug "PHASE2";
-            Upload.phase2 (ic,oc) [] >>= fun () ->
+            Log.debugf "PHASE2";
+            Upload.phase2 (ic,oc) haves >>= fun () ->
 
-            debug "PHASE3";
+            Log.debugf "PHASE3";
 
             Lwt_io.read ic >>= fun raw ->
             let buf = Mstruct.of_string raw in
@@ -528,19 +539,33 @@ module Make (Store: S) = struct
 
             match sha1s with
             | []    ->
-              debug "NO NEW OBJECTS";
+              Log.debugf "NO NEW OBJECTS";
+              Printf.printf "Already up-to-date.\n%!";
               return_unit
             | sha1s ->
-              debug "NEW OBJECTS";
-              List.iter ~f:(fun n -> debug "%s" (SHA1.to_hex n)) sha1s;
+              Log.debugf "NEW OBJECTS";
+              Printf.printf "remote: Counting objects: %d, done.\n%!" (List.length sha1s);
+
+              List.iter
+                ~f:(fun n -> Printf.printf "%s\n" (SHA1.to_hex n))
+                (List.sort ~cmp:SHA1.compare sha1s);
+
               if not bare then (
                 (* TODO: generate the index file *)
-                debug "EXPANDING THE FILESYSTEM";
+                Log.debugf "EXPANDING THE FILESYSTEM";
                 Store.expand_filesystem t (SHA1.to_commit head)
               ) else (
-                debug "BARE REPOSITORY";
+                Log.debugf "BARE REPOSITORY";
                 return_unit
               )
         )
+
+  let clone t ?bare ?deepen address =
+    Printf.printf "Cloning into '%s' ...\n%!" (Filename.basename (Store.root t));
+    fetch_pack t ?bare ?deepen address []
+
+  let fetch t address =
+    Store.list t >>= fun refs ->
+    fetch_pack t ~bare:true address refs
 
 end

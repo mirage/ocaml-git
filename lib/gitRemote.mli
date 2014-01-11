@@ -26,4 +26,8 @@ module Make (Store: S): sig
   (** [clone t address] clones the contents of [address] into the
       store [t]. *)
 
+  val fetch: Store.t -> string -> unit Lwt.t
+  (** [clone t address] clones the contents of [address] into the
+      store [t]. *)
+
 end

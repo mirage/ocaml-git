@@ -255,48 +255,7 @@ module Make (S: S) = struct
     run x test
 
 (*
-  let test_stores x () =
-    let v1 = Value.of_bytes "foo" in
-    let v2 = Value.of_bytes "" in
-    let test () =
-      create ()             >>= fun t   ->
-      update t ["a";"b"] v1 >>= fun ()  ->
-
-      mem t ["a";"b"]       >>= fun b1  ->
-      assert_bool_equal "mem1" true b1;
-      mem t ["a"]           >>= fun b2  ->
-      assert_bool_equal "mem2" false b2;
-      read_exn t ["a";"b"]  >>= fun v1' ->
-      assert_value_equal "v1.1" v1 v1';
-      snapshot t            >>= fun r1  ->
-
-      update t ["a";"c"] v2 >>= fun ()  ->
-      mem t ["a";"b"]       >>= fun b1  ->
-      assert_bool_equal "mem3" true b1;
-      mem t ["a"]           >>= fun b2  ->
-      assert_bool_equal "mem4" false b2;
-      read_exn t ["a";"b"]  >>= fun v1' ->
-      assert_value_equal "v1.1" v1 v1';
-      mem t ["a";"c"]       >>= fun b1  ->
-      assert_bool_equal "mem5" true b1;
-      read_exn t ["a";"c"]  >>= fun v2' ->
-      assert_value_equal "v1.1" v2 v2';
-
-      remove t ["a";"b"]    >>= fun ()  ->
-      read t ["a";"b"]      >>= fun v1''->
-      assert_value_opt_equal "v1.2" None v1'';
-      revert t r1           >>= fun ()  ->
-      read t ["a";"b"]      >>= fun v1''->
-      assert_value_opt_equal "v1.3" (Some v1) v1'';
-      list t ["a"]          >>= fun ks  ->
-      assert_paths_equal "path" [["a";"b"]] ks;
-      return_unit
-    in
-    run x test
-
   let test_sync x () =
-    let v1 = Value.of_bytes "foo" in
-    let v2 = Value.of_bytes "" in
     let test () =
       create ()              >>= fun t1 ->
       update t1 ["a";"b"] v1 >>= fun () ->
@@ -356,8 +315,7 @@ let suite (speed, x) =
     "Basic operations on tags"        , speed, T.test_tags     x;
     "Basic operations on references"  , speed, T.test_refs     x;
 (*
-    "High-level store operations"     , speed, T.test_stores    x;
-    "High-level store synchronisation", speed, T.test_sync      x;
+    "High-level store synchronisation", speed, T.test_sync     x;
 *)
   ]
 

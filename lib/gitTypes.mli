@@ -292,6 +292,10 @@ module type S = sig
   (** Create a store handler for the given path. If [root] is not set,
       use the current directory. *)
 
+  val root: t -> string
+  (** The state root (or any other meaningful name to be displayed to
+      the user). *)
+
   val dump: t -> unit Lwt.t
   (** Dump the store contents of cache to stderr. *)
 

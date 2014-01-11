@@ -29,6 +29,9 @@ type t = {
   indexes: (sha1, pack_index) Hashtbl.t;
 }
 
+let root t =
+  t.root
+
 let create ?root () =
   let root = match root with
     | None   -> Sys.getcwd ()
@@ -335,38 +338,37 @@ let write_reference t ref sha1 =
 
 (* XXX: do not load the blobs *)
 let load_filesystem t commit =
-  let rec aux sha1 =
-    succ t sha1 >>= function
-    | [] ->
-      begin read t sha1 >>= function
-        | Some (Value.Blob b) -> return (Some (Lazy_trie.create ~value:b ()))
-        | _                   -> return_none
-      end
-    | children ->
-      Lwt_list.fold_left_s (fun acc -> function
-          | `Commit _
-          | `Tag _       -> return acc
-          | `Tree (l, n) ->
-            aux n >>= function
-            | None   -> return acc
-            | Some t -> return ((l, t) :: acc)
-        ) [] children
+  let rec aux (mode, sha1): ('a, [`dir|`exec|`link|`normal] * blob) Lazy_trie.t option Lwt.t =
+    read t sha1 >>= function
+    | Some (Value.Blob b) ->
+      return (Some (Lazy_trie.create ~value:(mode, b) ()))
+    | Some (Value.Tree t) ->
+      Lwt_list.fold_left_s (fun acc e ->
+          aux (e.Tree.perm, e.Tree.node) >>= function
+          | None   -> return acc
+          | Some t -> return ((e.Tree.name, t) :: acc)
+        ) [] (Tree.entries t)
       >>= fun children ->
       let children = lazy children in
       return (Some (Lazy_trie.create ~children ()))
+    | Some (Value.Commit c) -> aux (`dir, SHA1.of_tree c.Commit.tree)
+    | _ -> return_none
   in
-  aux (SHA1.of_commit commit) >>= function
+  aux (`dir, SHA1.of_commit commit) >>= function
   | None    -> fail (Failure "create")
   | Some fs -> return fs
 
 let expand_filesystem t commit =
   load_filesystem t commit >>= fun trie ->
-  Lazy_trie.fold (fun acc path blob ->
+  Lazy_trie.fold (fun acc path (mode, blob) ->
       acc >>= fun () ->
       let file = String.concat ~sep:"/" (t.root :: path) in
       GitMisc.mkdir (Filename.dirname file) >>= fun () ->
       Log.infof "Writing %s" file;
-      Lwt_io.(with_file ~mode:Output file (fun oc -> write oc (Blob.to_string blob)))
+      Lwt_io.(with_file ~mode:Output file (fun oc -> write oc (Blob.to_string blob))) >>= fun () ->
+      match mode with
+      | `exec -> Lwt_unix.chmod file 0o755
+      | _     -> return_unit
   ) trie return_unit
 
 let flush t =

@@ -687,16 +687,15 @@ end = struct
     write
 
   let unpack_all ~read_inflated ~write buf =
-    Printf.eprintf "UNPACK-ALL\n%!";
     let version, size = input_header buf in
-    Printf.eprintf "version=%d size=%d\n%!" version size;
+    Log.debugf "unpack-all: version=%d size=%d\n%!" version size;
 
     let next_packed_value () =
       input_packed_value version buf in
 
     let idx = ref SHA1.Map.empty in
     let rec loop i =
-      Printf.eprintf "UNPACK [%d/%d]\n%!" (i+1) size;
+      Printf.printf "\rReceiving objects: %3d%% (%d/%d)%!" (i*100/size) (i+1) size;
       let offset = Mstruct.offset buf in
       let packed_value = next_packed_value () in
       unpack ~read_inflated ~write ~idx:!idx ~offset packed_value >>= fun sha1 ->
@@ -704,6 +703,7 @@ end = struct
       if i >= size - 1 then return_unit
       else loop (i+1) in
     loop 0 >>= fun () ->
+    Printf.printf "\rReceiving objects: 100%% (%d/%d), done.\n%!" size size;
     return (Map.keys !idx)
 
   let output _ =

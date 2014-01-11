@@ -225,6 +225,7 @@ type reference = Reference.t
 module type S = sig
   type t
   val create: ?root:string -> unit -> t Lwt.t
+  val root: t -> string
   val dump: t -> unit Lwt.t
   val read: t -> sha1 -> value option Lwt.t
   val read_exn: t -> sha1 -> value Lwt.t
