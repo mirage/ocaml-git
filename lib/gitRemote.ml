@@ -66,7 +66,6 @@ module PacketLine = struct
       Log.debugf "RECEIVED: FLUSH";
       return_none
     | size   ->
-      Log.debugf "size= %s" size;
       let size = int_of_string ("0x" ^ size) - 4 in
       Lwt_io.read ~count:size ic >>= fun payload ->
       Log.debugf "RECEIVED: %S" payload;
@@ -278,7 +277,7 @@ module Ack = struct
               | Common
               | Ready
 
-  let string_of_status = function
+  let status_of_string = function
     | "continue" -> Continue
     | "common"   -> Common
     | "ready"    -> Ready
@@ -291,18 +290,24 @@ module Ack = struct
 
   let input ic =
     Log.debugf "Ack.input";
+    PacketLine.input ic >>= function
+    | None
+    | Some "NAK" -> return Nak
+    | Some s      ->
+      match String.lsplit2 s ~on:sp with
+      | Some ("ACK", r) ->
+        begin match String.lsplit2 r ~on:sp with
+          | None         -> return (Ack (SHA1.of_hex r))
+          | Some (id, s) -> return (Ack_multi (SHA1.of_hex id, status_of_string s))
+        end
+      | _ -> error "%S invalid ack" s
+
+  let inputs ic =
+    Log.debugf "Ack.inputs";
     let rec aux acc =
-      PacketLine.input ic >>= function
-      | None
-      | Some "NAK" -> return (List.rev (Nak :: acc))
-      | Some s      ->
-        match String.lsplit2 s ~on:sp with
-        | Some ("ACK", r) ->
-          begin match String.lsplit2 r ~on:sp with
-            | None         -> aux (Ack (SHA1.of_hex r) :: acc)
-            | Some (id, s) -> aux (Ack_multi (SHA1.of_hex id, string_of_status s) :: acc)
-          end
-        | _ -> error "%S invalid ack" s
+      input ic >>= function
+      | Nak -> return (List.rev (Nak :: acc))
+      | tok -> aux (tok :: acc)
     in
     aux []
 
@@ -327,21 +332,21 @@ module Upload = struct
       | Some x -> x::acc
     ) ~init:[] l
 
-  let wants l =
+  let filter_wants l =
     filter (function Want (x,y) -> Some (x,y) | _ -> None) l
 
-  let shallows l =
+  let filter_shallows l =
     filter (function Shallow x -> Some x | _ -> None) l
 
-  let deepen l =
+  let filter_deepen l =
     match filter (function Deepen d -> Some d | _ -> None) l with
     | []    -> 0
     |  i::_ -> i
 
-  let unshallows l =
+  let filter_unshallows l =
     filter (function Unshallow x -> Some x | _ -> None) l
 
-  let haves l =
+  let filter_haves l =
     filter (function Have x -> Some x | _ -> None) l
 
   let create l = l
@@ -377,6 +382,7 @@ module Upload = struct
     in
     aux []
 
+  (* XXX: handler multi_hack *)
   let output oc t =
     Log.debugf "Upload.output";
     let last_c = ref [] in
@@ -391,32 +397,33 @@ module Upload = struct
           Printf.sprintf "want %s %s\n" (SHA1.to_hex id) (Capabilities.to_string c) in
         last_c := c;
         PacketLine.output_line oc msg
-    ) (wants t)
+    ) (filter_wants t)
     >>= fun () ->
 
     (* output shallows *)
     Lwt_list.iter_s (fun id ->
       let msg = Printf.sprintf "shallow %s" (SHA1.to_hex id) in
       PacketLine.output_line oc msg
-    ) (shallows t)
+    ) (filter_shallows t)
     >>= fun () ->
 
     (* output unshallows *)
     Lwt_list.iter_s (fun id ->
       let msg = Printf.sprintf "unshallow %s" (SHA1.to_hex id) in
       PacketLine.output_line oc msg
-    ) (unshallows t)
+    ) (filter_unshallows t)
     >>= fun () ->
 
     (* output haves *)
     Lwt_list.iter_s (fun id ->
       let msg = Printf.sprintf "have %s\n" (SHA1.to_hex id) in
-      PacketLine.output_line oc msg
-    ) (haves t)
+      PacketLine.output_line oc msg >>= fun () ->
+      return_unit
+    ) (filter_haves t)
     >>= fun () ->
 
     (* output deepen *)
-    let deepen = deepen t in
+    let deepen = filter_deepen t in
     begin if deepen <> 0 then (
         let msg = Printf.sprintf "deepen %d" deepen in
         PacketLine.output_line oc msg;
@@ -430,9 +437,14 @@ module Upload = struct
     else
       PacketLine.flush oc
 
+  type phase1_result = {
+    shallows: sha1 list;
+    unshallows: sha1 list;
+  }
+
   (* PHASE1: the client send the the IDs he wants, the severs answer
      the new shallow state. *)
-  let phase1 (ic, oc) ?deepen ?(shallows=[]) wants =
+  let phase1 (ic, oc) ?deepen ~shallows ~wants =
     Log.debugf "Upload.phase1";
     let wants = List.map ~f:(fun id -> Want (id, Capabilities.default)) wants in
     let shallows = List.map ~f:(fun id -> Shallow id) shallows in
@@ -441,8 +453,10 @@ module Upload = struct
       | Some d -> [Deepen d] in
     output oc (wants @ shallows @ deepen) >>= fun () ->
     if deepen <> [] then
-      input ic >>= fun i ->
-      return (Some i)
+      input ic >>= fun res ->
+      let shallows = filter_shallows res in
+      let unshallows = filter_unshallows res in
+      return (Some { shallows; unshallows })
     else
       return_none
 
@@ -455,13 +469,16 @@ module Upload = struct
     in
     aux n [] l
 
-
-  let phase2 (ic, oc) haves =
-    Log.debugf "Upload.phase2";
+  let phase2 (ic, oc) ~haves =
     let rec aux haves =
       if List.length haves > 32 then
         let head, tail = pick 32 haves in
         output oc head >>= fun () ->
+        (* XXX: the client can notify the servers that it has received
+           enough ACK (?) and is ready to receive the pack file by
+           sending an early 'done' *)
+        (* XXX: the client is supposed to give-up after sending 256 keys
+           without receiving any 'ACKS <key> continue'. *)
         aux tail
       else
         output oc (haves @ [Done])
@@ -485,9 +502,25 @@ let with_connection address port fn =
 let todo msg =
   fail (Failure ("TODO: " ^ msg))
 
+type clone = {
+  bare  : bool;
+  deepen: int option;
+}
+
+type fetch = {
+  haves   : sha1 list;
+  shallows: sha1 list;
+  deepen  : int option;
+}
+
+type op =
+  | List_refs
+  | Fetch of fetch
+  | Clone of clone
+
 module Make (Store: S) = struct
 
-  let fetch_pack t ?(bare=false) ?deepen address haves =
+  let fetch_pack t address op =
     let r = Init.create address in
     match Init.host r with
     | None   -> todo "local-clone"
@@ -495,77 +528,108 @@ module Make (Store: S) = struct
       with_connection h (Init.port r)(fun (ic, oc) ->
           Init.output oc r     >>= fun () ->
           Listing.input ic     >>= fun listing ->
-          Log.debugf "listing: %s" (Listing.pretty listing);
-          begin Map.fold
-              ~f:(fun ~key:sha1 ~data acc ->
-                  acc >>= fun () ->
-                  Lwt_list.iter_p (fun ref -> Store.write_reference t ref sha1) data)
-              ~init:return_unit
-              (Listing.references listing)
-          end >>= fun () ->
-          match Listing.head listing with
-          | None      -> Init.close oc
-          | Some head ->
-            Log.debugf "PHASE1";
-            Upload.phase1 ?deepen (ic,oc) [head] >>= fun _shallows ->
+          Log.debugf "listing:\n %s" (Listing.pretty listing);
+          match op with
+          | List_refs ->
+            Printf.printf "From %s" address;
+            Map.iter
+              ~f:(fun ~key:sha1 ~data ->
+                  List.iter
+                    ~f:(fun ref -> Printf.printf "%s         %s\n"
+                           (SHA1.to_hex sha1)
+                           (Reference.to_string ref);)
+                    data)
+              (Listing.references listing);
+            return_unit
+          | Fetch _ | Clone _ ->
+            begin Map.fold
+                ~f:(fun ~key:sha1 ~data acc ->
+                    acc >>= fun () ->
+                    Lwt_list.iter_p (fun ref -> Store.write_reference t ref sha1) data)
+                ~init:return_unit
+                (Listing.references listing)
+            end >>= fun () ->
+            match Listing.head listing with
+            | None      -> Init.close oc
+            | Some head ->
+              Log.debugf "PHASE1";
+              let deepen = match op with
+                | Clone { deepen }
+                | Fetch { deepen } -> deepen
+                |  _               -> None in
+              let shallows = match op with
+                | Fetch { shallows } -> shallows
+                | _                  -> [] in
+              Upload.phase1 ?deepen (ic,oc) ~shallows ~wants:[head] >>= fun _phase1 ->
+              (* XXX: process the shallow / unshallow.  *)
+              (* XXX: need a notion of shallow/unshallow in API. *)
 
-            Log.debugf "PHASE2";
-            Upload.phase2 (ic,oc) haves >>= fun () ->
+              Log.debugf "PHASE2";
+              let haves = match op with
+                | Fetch { haves } -> haves
+                | _               -> [] in
+              Upload.phase2 (ic,oc) ~haves >>= fun () ->
 
-            Log.debugf "PHASE3";
+              Log.debugf "PHASE3";
+              Lwt_io.read ic >>= fun raw ->
+              Log.debugf "Received a pack file of %d bytes:" (String.length raw);
+              let buf = Mstruct.of_string raw in
 
-            Lwt_io.read ic >>= fun raw ->
-            let buf = Mstruct.of_string raw in
-            let buffers = SHA1.Table.create () in
-            let read_inflated sha1 =
-              if Hashtbl.mem buffers sha1 then
-                return (Mstruct.clone (Hashtbl.find_exn buffers sha1))
-              else lwt_error "%s: unknown sha1" (SHA1.to_hex sha1) in
-            let write value =
-              let buf = Buffer.create 1024 in
-              Git.output_inflated buf value;
-              let inflated = Buffer.contents buf in
-              let sha1 = SHA1.create inflated in
-              begin if not (Hashtbl.mem buffers sha1) then (
-                  let buf = Mstruct.of_string inflated in
-                  Hashtbl.replace buffers sha1 buf;
-                  Store.write_and_check_inflated t sha1 inflated;
-                ) else
-                  return_unit
-              end >>= fun () ->
-              return sha1 in
+              let buffers = SHA1.Table.create () in
+              let read_inflated sha1 =
+                if Hashtbl.mem buffers sha1 then
+                  return (Mstruct.clone (Hashtbl.find_exn buffers sha1))
+                else lwt_error "%s: unknown sha1" (SHA1.to_hex sha1) in
+              let write value =
+                let buf = Buffer.create 1024 in
+                Git.output_inflated buf value;
+                let inflated = Buffer.contents buf in
+                let sha1 = SHA1.create inflated in
+                begin if not (Hashtbl.mem buffers sha1) then (
+                    let buf = Mstruct.of_string inflated in
+                    Hashtbl.replace buffers sha1 buf;
+                    Store.write_and_check_inflated t sha1 inflated;
+                  ) else
+                    return_unit
+                end >>= fun () ->
+                return sha1 in
 
-            Git.Pack.unpack_all ~read_inflated ~write buf >>= fun sha1s ->
+              Git.Pack.unpack_all ~read_inflated ~write buf >>= fun sha1s ->
 
-            match sha1s with
-            | []    ->
-              Log.debugf "NO NEW OBJECTS";
-              Printf.printf "Already up-to-date.\n%!";
-              return_unit
-            | sha1s ->
-              Log.debugf "NEW OBJECTS";
-              Printf.printf "remote: Counting objects: %d, done.\n%!" (List.length sha1s);
-
-              List.iter
-                ~f:(fun n -> Printf.printf "%s\n" (SHA1.to_hex n))
-                (List.sort ~cmp:SHA1.compare sha1s);
-
-              if not bare then (
-                (* TODO: generate the index file *)
-                Log.debugf "EXPANDING THE FILESYSTEM";
-                Store.expand_filesystem t (SHA1.to_commit head)
-              ) else (
-                Log.debugf "BARE REPOSITORY";
+              match sha1s with
+              | []    ->
+                Log.debugf "NO NEW OBJECTS";
+                Printf.printf "Already up-to-date.\n%!";
                 return_unit
-              )
+              | sha1s ->
+                Log.debugf "NEW OBJECTS";
+                Printf.printf "remote: Counting objects: %d, done.\n%!" (List.length sha1s);
+
+                List.iter
+                  ~f:(fun n -> Printf.printf "%s\n" (SHA1.to_hex n))
+                  (List.sort ~cmp:SHA1.compare sha1s);
+
+                let bare = match op with
+                  | Clone { bare } -> bare
+                  | _              -> true in
+                if not bare then (
+                  (* TODO: generate the index file *)
+                  Log.debugf "EXPANDING THE FILESYSTEM";
+                  Store.expand_filesystem t (SHA1.to_commit head)
+                ) else (
+                  Log.debugf "BARE REPOSITORY";
+                  return_unit
+                )
         )
 
-  let clone t ?bare ?deepen address =
+  let clone t ?(bare=false) ?deepen address =
     Printf.printf "Cloning into '%s' ...\n%!" (Filename.basename (Store.root t));
-    fetch_pack t ?bare ?deepen address []
+    fetch_pack t address (Clone { bare; deepen })
 
-  let fetch t address =
-    Store.list t >>= fun refs ->
-    fetch_pack t ~bare:true address refs
+  let fetch t ?deepen address =
+    Store.list t >>= fun haves ->
+    (* XXX: Store.shallows t >>= fun shallows *)
+    let shallows = [] in
+    fetch_pack t address (Fetch { shallows; haves; deepen })
 
 end
