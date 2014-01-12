@@ -689,23 +689,23 @@ end = struct
   let unpack_all ~read_inflated ~write buf =
     let version, size = input_header buf in
     Log.debugf "unpack-all: version=%d size=%d\n%!" version size;
-
-    let next_packed_value () =
-      input_packed_value version buf in
-
-    let idx = ref SHA1.Map.empty in
-    let rec loop i =
-      Printf.printf "\rReceiving objects: %3d%% (%d/%d)%!" (i*100/size) (i+1) size;
-      let offset = Mstruct.offset buf in
-      let packed_value = next_packed_value () in
-      unpack ~read_inflated ~write ~idx:!idx ~offset packed_value >>= fun sha1 ->
-      idx := Map.add !idx ~key:sha1 ~data:offset;
-      if i >= size - 1 then return_unit
-      else loop (i+1) in
-    loop 0 >>= fun () ->
-    Printf.printf "\rReceiving objects: 100%% (%d/%d), done.\n%!" size size;
-    return (Map.keys !idx)
-
+    if size <= 0 then return_nil
+    else (
+      let next_packed_value () =
+        input_packed_value version buf in
+      let idx = ref SHA1.Map.empty in
+      let rec loop i =
+        Printf.printf "\rReceiving objects: %3d%% (%d/%d)%!" (i*100/size) (i+1) size;
+        let offset = Mstruct.offset buf in
+        let packed_value = next_packed_value () in
+        unpack ~read_inflated ~write ~idx:!idx ~offset packed_value >>= fun sha1 ->
+        idx := Map.add !idx ~key:sha1 ~data:offset;
+        if i >= size - 1 then return_unit
+        else loop (i+1) in
+      loop 0 >>= fun () ->
+      Printf.printf "\rReceiving objects: 100%% (%d/%d), done.\n%!" size size;
+      return (Map.keys !idx)
+    )
   let output _ =
     todo "pack"
 
