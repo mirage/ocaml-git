@@ -22,12 +22,15 @@ module Make (Store: S): sig
 
   (** Remote operation, abstracted over the bakend type. *)
 
+  val ls_remote: Store.t -> string -> unit Lwt.t
+  (** List the references in the remote repository. *)
+
   val clone: Store.t -> ?bare:bool -> ?deepen:int -> string -> unit Lwt.t
   (** [clone t address] clones the contents of [address] into the
       store [t]. *)
 
   val fetch: Store.t -> ?deepen:int -> string -> unit Lwt.t
-  (** [clone t address] clones the contents of [address] into the
-      store [t]. *)
+  (** [fetch t address] fetches the missing contents of [address] into
+      the store [t]. *)
 
 end

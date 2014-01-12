@@ -101,6 +101,26 @@ let run t =
       (function e -> Printf.eprintf "%s\n%!" (Printexc.to_string e); exit 1)
   )
 
+let address =
+  arg_list "REPOSITORY" "Location of the remote repository." Arg.string
+
+(* FETCH *)
+let ls_remote = {
+  name = "ls-remote";
+  doc  = "List references in a remote repository.";
+  man  = [];
+  term =
+    let ls = function
+      | [a] ->
+        run begin
+          GitLocal.create () >>= fun t ->
+          GitRemote.ls_remote t a
+        end;
+        `Ok ()
+      | _   -> `Error (true, "Too many address") in
+    Term.(ret (mk ls $ address))
+}
+
 (* CLONE *)
 let clone = {
   name = "clone";
@@ -114,8 +134,6 @@ let clone = {
         Arg.(some int) None in
     let bare =
       mk_flag ["bare"] "Do not expand the filesystem." in
-    let address =
-      arg_list "ADDRESS" "Address of the remote repository." Arg.string in
     let clone deepen bare args =
       let run adress dir =
         run begin
@@ -232,6 +250,7 @@ let default =
     ~man
 
 let commands = List.map command [
+    ls_remote;
     clone;
     fetch;
     graph;

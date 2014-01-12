@@ -211,7 +211,8 @@ module Listing = struct
     references  : reference list SHA1.Map.t;
   }
 
-  let references t = t.references
+  let references t =
+    t.references
 
   let empty = {
     capabilities = [];
@@ -531,15 +532,22 @@ module Make (Store: S) = struct
           Log.debugf "listing:\n %s" (Listing.pretty listing);
           match op with
           | List_refs ->
-            Printf.printf "From %s" address;
-            Map.iter
-              ~f:(fun ~key:sha1 ~data ->
-                  List.iter
-                    ~f:(fun ref -> Printf.printf "%s         %s\n"
-                           (SHA1.to_hex sha1)
-                           (Reference.to_string ref);)
-                    data)
-              (Listing.references listing);
+            (* XXX: we should return a concrete value instead of
+               printing the result in the API. *)
+            Printf.printf "From %s\n" address;
+            let listing = Map.to_alist (Listing.references listing) in
+            let refs = List.fold_left ~f:(fun acc (sha1, refs) ->
+                List.fold_left
+                  ~f:(fun acc ref -> (sha1, ref) :: acc)
+                  ~init:acc
+                  refs
+              ) ~init:[] listing in
+            let refs = List.sort ~cmp:(fun (_,x) (_,y) -> Reference.compare x y) refs in
+            let print (sha1, ref) =
+              Printf.printf "%s        %s\n"
+                (SHA1.to_hex sha1)
+                (Reference.to_string ref) in
+            List.iter ~f:print refs;
             return_unit
           | Fetch _ | Clone _ ->
             begin Map.fold
@@ -622,7 +630,11 @@ module Make (Store: S) = struct
                 )
         )
 
+  let ls_remote t address =
+    fetch_pack t address List_refs
+
   let clone t ?(bare=false) ?deepen address =
+    (* XXX: no printf stmts in the library -> move it to GitMain if possible *)
     Printf.printf "Cloning into '%s' ...\n%!" (Filename.basename (Store.root t));
     fetch_pack t address (Clone { bare; deepen })
 
