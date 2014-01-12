@@ -218,7 +218,15 @@ let succ = function
   | `Tag (_, s)
   | `Tree (_, s) -> s
 
-module Reference = String
+module Reference = struct
+  include String
+  let of_string str =
+    let prefix = "refs/" in
+    if String.is_prefix str ~prefix then
+      String.chop_prefix_exn str ~prefix
+    else
+      str
+end
 
 type reference = Reference.t
 
