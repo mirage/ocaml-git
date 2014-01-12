@@ -166,15 +166,12 @@ let list_files kind dir =
     return_nil
 
 let directories dir =
-  Log.debugf "directories %s" dir;
   list_files (fun f -> try Sys.is_directory f with _ -> false) dir
 
 let files dir =
-  Log.debugf "files %s" dir;
   list_files (fun f -> try not (Sys.is_directory f) with _ -> false) dir
 
 let rec_files dir =
-  Log.debugf "rec_files %s" dir;
   let rec aux accu dir =
     directories dir >>= fun ds ->
     files dir       >>= fun fs ->
