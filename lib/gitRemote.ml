@@ -611,9 +611,11 @@ module Make (Store: S) = struct
                 Log.debugf "NEW OBJECTS";
                 Printf.printf "remote: Counting objects: %d, done.\n%!" (List.length sha1s);
 
-                List.iter
+                (*
+                  List.iter
                   ~f:(fun n -> Printf.printf "%s\n" (SHA1.to_hex n))
                   (List.sort ~cmp:SHA1.compare sha1s);
+                *)
 
                 let bare = match op with
                   | Clone { bare } -> bare
