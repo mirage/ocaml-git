@@ -94,6 +94,14 @@ let arg_list name doc conv =
   let doc = Arg.info ~docv:name ~doc [] in
   Arg.(non_empty & pos_all conv [] & doc)
 
+let repository =
+  let doc = Arg.info ~docv:"REPOSITORY" ~doc:"Location of the remote repository." [] in
+  Arg.(required & pos 0 (some string) None & doc)
+
+let directory =
+  let doc = Arg.info ~docv:"DIRECTORY" ~doc:"The name of the directory to clone into." [] in
+  Arg.(value & pos ~rev:true 0 (some string) None & doc)
+
 let run t =
   Lwt_unix.run (
     Lwt.catch
@@ -104,28 +112,25 @@ let run t =
 let address =
   arg_list "REPOSITORY" "Location of the remote repository." Arg.string
 
-(* FETCH *)
-let ls_remote = {
+(* LS *)
+let ls = {
   name = "ls-remote";
   doc  = "List references in a remote repository.";
   man  = [];
   term =
-    let ls = function
-      | [a] ->
-        run begin
-          GitLocal.create () >>= fun t ->
-          GitRemote.ls t a >>= fun references ->
-          Printf.printf "From %s\n" a;
-          let print (sha1, ref) =
-            Printf.printf "%s        %s\n"
-              (SHA1.to_hex sha1)
-              (Reference.to_string ref) in
-          List.iter ~f:print references;
-          return_unit
-        end;
-        `Ok ()
-      | _   -> `Error (true, "Too many address") in
-    Term.(ret (mk ls $ address))
+    let ls repo =
+      run begin
+        GitLocal.create ()  >>= fun t ->
+        GitRemote.ls t repo >>= fun references ->
+        Printf.printf "From %s\n" repo;
+        let print (sha1, ref) =
+          Printf.printf "%s        %s\n"
+            (SHA1.to_hex sha1)
+            (Reference.to_string ref) in
+        List.iter ~f:print references;
+        return_unit
+      end in
+    Term.(mk ls $ repository)
 }
 
 (* CLONE *)
@@ -141,28 +146,27 @@ let clone = {
         Arg.(some int) None in
     let bare =
       mk_flag ["bare"] "Do not expand the filesystem." in
-    let clone deepen bare args =
-      let run adress dir =
-        run begin
-          GitLocal.create ~root:dir () >>= fun t ->
-          printf "Cloning into '%s' ...\n%!" (Filename.basename (GitLocal.root t));
-          GitRemote.clone t ?deepen adress >>= fun _ ->
-          return_unit
-        end;
-        `Ok ()
-      in
-      match args with
-      | [a] ->
-        let dir = Filename.basename a in
-        let dir =
+    let clone deepen bare repo dir =
+      let dir = match dir with
+        | Some d -> d
+        | None   ->
+          let dir = Filename.basename repo in
           if Filename.check_suffix dir ".git" then
             Filename.chop_extension dir
           else
-            dir in
-        run a dir
-        | [a;b] -> run a b
-        | _     -> `Error (true, "usage: ogit clone <address> [dirname]") in
-    Term.(ret (mk clone $ depth $ bare $ address))
+            dir
+      in
+      if Sys.file_exists dir && Array.length (Sys.readdir dir) > 0 then (
+        eprintf "fatal: destination path '%s' already exists and is not an empty directory.\n" dir;
+        exit 128
+      );
+      run begin
+        GitLocal.create ~root:dir ()   >>= fun t ->
+        printf "Cloning into '%s' ...\n%!" (Filename.basename (GitLocal.root t));
+        GitRemote.clone t ?deepen repo >>= fun _ ->
+        return_unit
+      end in
+    Term.(mk clone $ depth $ bare $ repository $ directory)
 }
 
 (* FETCH *)
@@ -171,18 +175,13 @@ let fetch = {
   doc  = "Fetch a remote Git repository.";
   man  = [];
   term =
-    let address =
-      arg_list "ADDRESS" "Address of the remote repository." Arg.string in
-    let fetch = function
-      | [a] ->
-        run begin
-          GitLocal.create () >>= fun t ->
-          GitRemote.fetch t a >>= fun _ ->
-          return_unit
-        end;
-        `Ok ()
-      | _   -> `Error (true, "Too many address") in
-    Term.(ret (mk fetch $ address))
+    let fetch repo =
+      run begin
+        GitLocal.create ()     >>= fun t ->
+        GitRemote.fetch t repo >>= fun _ ->
+        return_unit
+      end in
+    Term.(mk fetch $ repository)
 }
 
 (* GRAPH *)
@@ -230,37 +229,37 @@ let default =
   let doc = "Mirage application builder" in
   let man = [
     `S "DESCRIPTION";
-    `P "Cagit is a small tool to experiement with the pure-OCaml implementation \
+    `P "ogit is a small tool to experiement with the pure-OCaml implementation \
         of the Git format and protocol. Very few options are available, and it  \
         is not expected that this number grows very much in a near future.";
-    `P "Cagit is a prototype, so use it at your own risk (eg. it might corrupt \
+    `P "ogit is a prototype, so use it at your own risk (eg. it might corrupt \
         your data if you are particulary unlucky).";
-    `P "Use either $(b,cagit <command> --help) or $(b,cagit help <command>) \
+    `P "Use either $(b,ogit <command> --help) or $(b,ogit help <command>) \
         for more information on a specific command.";
   ] @  help_sections
   in
   let usage _ =
     Printf.printf
-      "usage: cagit [--version]\n\
-      \              [--help]\n\
-      \              <command> [<args>]\n\
+      "usage: ogit [--version]\n\
+      \            [--help]\n\
+      \            <command> [<args>]\n\
       \n\
-      The most commonly used cagit commands are:\n\
+      The most commonly used ogit commands are:\n\
       \    clone       %s\n\
       \    fetch       %s\n\
       \    graph       %s\n\
       \n\
-      See 'cagit help <command>' for more information on a specific command.\n%!"
+      See 'ogit help <command>' for more information on a specific command.\n%!"
       clone.doc fetch.doc graph.doc in
   Term.(pure usage $ (pure ())),
-  Term.info "cagit"
+  Term.info "ogit"
     ~version:"0.10.0"
     ~sdocs:global_option_section
     ~doc
     ~man
 
 let commands = List.map ~f:command [
-    ls_remote;
+    ls;
     clone;
     fetch;
     graph;
