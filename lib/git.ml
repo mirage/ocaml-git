@@ -126,7 +126,7 @@ end = struct
   let pretty t =
     let open User in
     Printf.sprintf
-      "[name: %S] [email: %S] [date: %S]"
+      "[name:%S email:%S date:%S]"
       t.name t.email t.date
 
   let dump t =
@@ -156,18 +156,16 @@ module Commit: ISERIALIZABLE with type t := commit = struct
   let pretty t =
     let open Commit in
     Printf.sprintf
-      "{\n\
-      \  tree     : %s\n\
-      \  parents  : %s\n\
-      \  author   : %s\n\
-      \  committer: %s\n\
-      \  message  :\n%s\n\
-       }\n"
+      "tree     : %s\n\
+       parents  : %s\n\
+       author   : %s\n\
+       committer: %s\n\n\
+       %s"
       (SHA1.Tree.to_hex t.tree)
       (String.concat ~sep:", " (List.map ~f:SHA1.Commit.to_hex t.parents))
       (User.pretty t.author)
       (User.pretty t.committer)
-      t.message
+      (String.strip t.message)
 
   let dump t =
     Printf.eprintf "%s" (pretty t)
@@ -244,12 +242,7 @@ module Tree: ISERIALIZABLE with type t := tree = struct
 
   let pretty_entry e =
     let open Tree in
-    Printf.sprintf
-      "{\n\
-      \  perm: %s\n\
-      \  name: %s\n\
-      \  sha1: %S\n\
-       }\n"
+    Printf.sprintf "[name:%s perm:%s node:%s]"
       (pretty_perm e.perm)
       e.name
       (SHA1.to_string e.node)
@@ -320,13 +313,11 @@ module Tag: ISERIALIZABLE with type t := tag = struct
   let pretty t =
     let open Tag in
     Printf.sprintf
-      "{\n\
-      \  object      : %s;\n\
-      \  type        : %s;\n\
-      \  tag         : %S;\n\
-      \  tagger      : %s;\n\
-      \  tag_message : %S;\n\
-       }"
+      "object: %s\n\
+       type  : %s\n\
+       tag   : %S\n\
+       tagger: %s\n\n\
+       %s"
       (SHA1.to_hex t.sha1)
       (string_of_object_type t.typ)
       t.tag
@@ -363,10 +354,10 @@ module Value = struct
   module V = Value
 
   let pretty = function
-    | V.Blob b   -> Printf.sprintf "BLOB:\n%s" (Blob.pretty b)
-    | V.Commit c -> Printf.sprintf "COMMIT:\n%s" (Commit.pretty c)
-    | V.Tag t    -> Printf.sprintf "TAG:\n%s" (Tag.pretty t)
-    | V.Tree t   -> Printf.sprintf "TREE:\n%s" (Tree.pretty t)
+    | V.Blob b   -> Printf.sprintf "== Blob ==\n%s" (Blob.pretty b)
+    | V.Commit c -> Printf.sprintf "== Commit ==\n%s" (Commit.pretty c)
+    | V.Tag t    -> Printf.sprintf "== Tag ==\n%s" (Tag.pretty t)
+    | V.Tree t   -> Printf.sprintf "== Tree ==\n%s" (Tree.pretty t)
 
   let dump t =
     Printf.eprintf "%s" (pretty t)
