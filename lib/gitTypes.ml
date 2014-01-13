@@ -275,5 +275,8 @@ module type S = sig
   val write_reference: t -> reference -> sha1 -> unit Lwt.t
   val type_of: t -> sha1 -> object_type option Lwt.t
   val succ: t -> sha1 -> successor list Lwt.t
-  val expand_filesystem: t -> SHA1.Commit.t -> unit Lwt.t
+  val iter_blobs: t ->
+    f:(string list -> perm -> blob -> unit Lwt.t) ->
+    init:SHA1.Commit.t ->
+    unit Lwt.t
 end
