@@ -44,14 +44,6 @@ let create ?root () =
   } in
   return t
 
-let auto_flush = ref true
-
-let set_auto_flush b =
-  auto_flush := b
-
-let get_auto_flush () =
-  !auto_flush
-
 (* Loose objects *)
 module Loose = struct
 
@@ -75,29 +67,32 @@ module Loose = struct
       else
         return_none
 
-  let write_inflated t inflated =
-    let sha1 = SHA1.create inflated in
+  let unsafe_write_inflated t sha1 ~inflated ~file =
     Log.debugf "write_inflated %s:%S" (SHA1.to_hex sha1) inflated;
-    let file = file t.root sha1 in
     GitMisc.mkdir (Filename.dirname file) >>= fun () ->
     let deflated = GitMisc.deflate_string inflated in
-    begin
-      if !auto_flush then (
-        Log.infof "Writing %s" file;
-        Lwt_io.(with_file ~mode:Output file
-                  (fun oc -> write oc deflated))
-      ) else
-        return_unit
-    end >>= fun () ->
-    return sha1
+    Log.infof "Writing %s" file;
+    Lwt_io.(with_file ~mode:Output file (fun oc -> write oc deflated)) >>= fun () ->
+    Hashtbl.add_exn t.buffers sha1 (Mstruct.of_string inflated);
+    return_unit
+
+  let write_inflated t inflated =
+    let sha1 = SHA1.create inflated in
+    let file = file t.root sha1 in
+    if Hashtbl.mem t.buffers sha1 || Sys.file_exists file then
+      return sha1
+    else
+      unsafe_write_inflated t sha1 ~inflated ~file >>= fun () ->
+      return sha1
 
   let write_and_check_inflated t sha1 inflated =
     let file = file t.root sha1 in
-    if Sys.file_exists file then return_unit
+    if Hashtbl.mem t.buffers sha1 || Sys.file_exists file then
+      return_unit
     else (
       let new_sha1 = SHA1.create inflated in
       if sha1 = new_sha1 then
-        write_inflated t inflated >>= fun _ -> return_unit
+        unsafe_write_inflated t sha1 ~inflated ~file
       else (
         Printf.eprintf "%S\n" inflated;
         Printf.eprintf
@@ -358,22 +353,20 @@ let load_filesystem t commit =
   | None    -> fail (Failure "create")
   | Some fs -> return fs
 
-let expand_filesystem t commit =
-  load_filesystem t commit >>= fun trie ->
+let iter_blobs t ~f ~init =
+  load_filesystem t init >>= fun trie ->
   Lazy_trie.fold (fun acc path (mode, blob) ->
       acc >>= fun () ->
-      let file = String.concat ~sep:"/" (t.root :: path) in
-      GitMisc.mkdir (Filename.dirname file) >>= fun () ->
-      Log.infof "Writing %s" file;
-      Lwt_io.(with_file ~mode:Output file (fun oc -> write oc (Blob.to_string blob))) >>= fun () ->
-      match mode with
-      | `exec -> Lwt_unix.chmod file 0o755
-      | _     -> return_unit
+      f (t.root :: path) mode blob
   ) trie return_unit
 
-let flush t =
-  Hashtbl.fold ~f:(fun ~key ~data acc ->
-      acc >>= fun () ->
-      let data = Mstruct.to_string data in
-      write_and_check_inflated t key data
-    ) ~init:return_unit t.buffers
+let create_file path mode blob =
+  let file = String.concat ~sep:Filename.dir_sep path in
+  let blob = Blob.to_string blob in
+  Log.debugf "create_file %s %S" file blob;
+  Log.infof "Writing %s" file;
+  GitMisc.mkdir (Filename.dirname file) >>= fun () ->
+  Lwt_io.(with_file ~mode:Output file (fun oc -> write oc blob)) >>= fun () ->
+  match mode with
+  | `exec -> Lwt_unix.chmod file 0o755
+  | _     -> return_unit

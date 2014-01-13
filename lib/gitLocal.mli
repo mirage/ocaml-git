@@ -20,14 +20,6 @@ open GitTypes
 
 include S
 
-(** {2 Flushing} *)
-
-val flush: t -> unit Lwt.t
-(** Flush the in-memory cache to disk. *)
-
-val set_auto_flush: bool -> unit
-(** Set the flushing behavior. When set to [false], no contents is
-    modified on the disk. *)
-
-val get_auto_flush: unit -> bool
-(** Get the current flush behavior. *)
+val create_file: string list -> perm -> blob -> unit Lwt.t
+(** [create_file path perm blob] creates the file corresponding to the
+    given blob. *)
