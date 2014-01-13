@@ -25,13 +25,13 @@ let lf  = '\x0a'
 
 let error fmt =
   Printf.ksprintf (fun msg ->
-    Printf.printf "Protocol error:%s\n%!" msg;
+    Printf.printf "Protocol error: %s\n%!" msg;
     raise Parsing.Parse_error
   ) fmt
 
 let lwt_error fmt =
   Printf.ksprintf (fun msg ->
-    Printf.printf "Protocol error:%s\n%!" msg;
+    Printf.printf "Protocol error: %s\n%!" msg;
     fail Parsing.Parse_error
   ) fmt
 
@@ -577,6 +577,7 @@ module Make (Store: S) = struct
               Upload.phase2 (ic,oc) ~haves >>= fun () ->
 
               Log.debugf "PHASE3";
+              (* XXX: what happen if the pack is sent in chunks ? *)
               Lwt_io.read ic >>= fun raw ->
               Log.debugf "Received a pack file of %d bytes:" (String.length raw);
               let buf = Mstruct.of_string raw in
@@ -585,7 +586,8 @@ module Make (Store: S) = struct
               let read_inflated sha1 =
                 if Hashtbl.mem buffers sha1 then
                   return (Mstruct.clone (Hashtbl.find_exn buffers sha1))
-                else lwt_error "%s: unknown sha1" (SHA1.to_hex sha1) in
+                else
+                  lwt_error "Cannot read %s" (SHA1.to_hex sha1) in
               let write value =
                 let buf = Buffer.create 1024 in
                 Git.output_inflated buf value;
