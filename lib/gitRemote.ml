@@ -527,6 +527,11 @@ type result = {
   sha1s     : sha1 list;
 }
 
+let expand_hook = ref (fun _ _ _ -> return_unit)
+
+let set_expand_hook f =
+  expand_hook := f
+
 module Make (Store: S) = struct
 
   let fetch_pack t address op =
@@ -628,7 +633,7 @@ module Make (Store: S) = struct
                 if not bare then (
                   (* TODO: generate the index file *)
                   Log.debugf "EXPANDING THE FILESYSTEM";
-                  Store.expand_filesystem t (SHA1.to_commit head) >>= fun () ->
+                  Store.iter_blobs t ~f:!expand_hook ~init:(SHA1.to_commit head) >>= fun () ->
                   return { references; sha1s }
                 ) else (
                   Log.debugf "BARE REPOSITORY";

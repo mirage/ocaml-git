@@ -370,3 +370,6 @@ let create_file path mode blob =
   match mode with
   | `exec -> Lwt_unix.chmod file 0o755
   | _     -> return_unit
+
+let () =
+  GitRemote.set_expand_hook create_file

@@ -24,6 +24,9 @@ type result = {
 }
 (** The resulting sha1s and references. *)
 
+val set_expand_hook: (string list -> perm -> blob -> unit Lwt.t) -> unit
+(** Set up the expand hook (to avoid cyclic deps) *)
+
 module Make (Store: S): sig
 
   (** Remote operation, abstracted over the bakend type. *)
