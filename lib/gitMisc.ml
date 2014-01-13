@@ -133,52 +133,6 @@ let inflate_mstruct ?allocator orig_buf =
   Mstruct.shift orig_buf size;
   res
 
-(* XXX: blocking ? *)
-let mstruct_of_file file =
-  let open Lwt in
-  let fd = Unix.(openfile file [O_RDONLY; O_NONBLOCK] 0o644) in
-  let ba = Lwt_bytes.map_file ~fd ~shared:false () in
-  Unix.close fd;
-  return (Mstruct.of_bigarray ba)
-
-open Lwt
-
-let mkdir dirname =
-  let rec aux dir =
-    if Sys.file_exists dir then return_unit
-    else (
-      aux (Filename.dirname dir) >>= fun () ->
-      Log.debugf "mkdir %s" dir;
-      catch
-        (fun () -> Lwt_unix.mkdir dir 0o755)
-        (fun _ -> return_unit)
-    ) in
-  aux dirname
-
-let list_files kind dir =
-  if Sys.file_exists dir then (
-    let s = Lwt_unix.files_of_directory dir in
-    let s = Lwt_stream.filter (fun s -> s <> "." && s <> "..") s in
-    let s = Lwt_stream.map (Filename.concat dir) s in
-    let s = Lwt_stream.filter kind s in
-    Lwt_stream.to_list s >>= fun l ->
-    return l
-  ) else
-    return_nil
-
-let directories dir =
-  list_files (fun f -> try Sys.is_directory f with _ -> false) dir
-
-let files dir =
-  list_files (fun f -> try not (Sys.is_directory f) with _ -> false) dir
-
-let rec_files dir =
-  let rec aux accu dir =
-    directories dir >>= fun ds ->
-    files dir       >>= fun fs ->
-  Lwt_list.fold_left_s aux (fs @ accu) ds in
-  aux [] dir
-
 module OP = struct
 
   let (/) = Filename.concat

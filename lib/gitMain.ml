@@ -19,6 +19,7 @@ open Core_kernel.Std
 open Cmdliner
 
 open GitTypes
+module Remote = GitRemote.Make(GitUnix)
 
 let global_option_section = "COMMON OPTIONS"
 let help_sections = [
@@ -125,7 +126,7 @@ let cat = {
       Arg.(required & pos 0 (some string) None & doc) in
     let cat_file file =
       run begin
-        GitMisc.mstruct_of_file file >>= fun buf ->
+        GitUnix.mstruct_of_file file >>= fun buf ->
         let v = Git.input buf in
         Printf.printf "%s%!" (Git.pretty v);
         return_unit
@@ -140,10 +141,10 @@ let ls = {
   man  = [];
   term =
     let ls (module S: S) repo =
-      let module GitRemote = GitRemote.Make(S) in
+      let module Remote = Remote(S) in
       run begin
         S.create ()  >>= fun t ->
-        GitRemote.ls t repo >>= fun references ->
+        Remote.ls t repo >>= fun references ->
         Printf.printf "From %s\n" repo;
         let print (sha1, ref) =
           Printf.printf "%s        %s\n"
@@ -182,11 +183,11 @@ let clone = {
         eprintf "fatal: destination path '%s' already exists and is not an empty directory.\n" dir;
         exit 128
       );
-      let module GitRemote = GitRemote.Make(S) in
+      let module Remote = Remote(S) in
       run begin
         S.create ~root:dir ()   >>= fun t ->
         printf "Cloning into '%s' ...\n%!" (Filename.basename (S.root t));
-        GitRemote.clone t ?deepen repo >>= fun _ ->
+        Remote.clone t ?deepen repo >>= fun _ ->
         return_unit
       end in
     Term.(mk clone $ backend $ depth $ bare $ repository $ directory)
@@ -199,10 +200,10 @@ let fetch = {
   man  = [];
   term =
     let fetch (module S: S) repo =
-      let module GitRemote = GitRemote.Make(S) in
+      let module Remote = Remote(S) in
       run begin
         S.create ()     >>= fun t ->
-        GitRemote.fetch t repo >>= fun _ ->
+        Remote.fetch t repo >>= fun _ ->
         return_unit
       end in
     Term.(mk fetch $ backend $ repository)

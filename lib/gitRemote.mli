@@ -27,7 +27,38 @@ type result = {
 val set_expand_hook: (string list -> perm -> blob -> unit Lwt.t) -> unit
 (** Set up the expand hook (to avoid cyclic deps) *)
 
-module Make (Store: S): sig
+module type IO = sig
+
+  (** Channel abstraction. XXX: reuse something existing ... *)
+
+  type ic
+  (** Type for input channels. *)
+
+  type oc
+  (** Type for output channels. *)
+
+  val with_connection: string -> int option -> (ic * oc -> 'a Lwt.t) -> 'a Lwt.t
+  (** Connect to a remote server, get the corresponding input and
+      output channels and apply a function on them. Close the channel
+      once the function returns. *)
+
+  val read_all: ic -> string Lwt.t
+  (** Read all the channel contents (until the channel is closed by
+      the other side). *)
+
+  val read_exactly: ic -> int -> string Lwt.t
+  (** Read a given number of bits. *)
+
+  val write: oc -> string -> unit Lwt.t
+  (** Write a string on a channel. *)
+
+  val flush: oc -> unit Lwt.t
+  (** Flush the channel. *)
+
+end
+
+
+module Make (IO: IO) (Store: S): sig
 
   (** Remote operation, abstracted over the bakend type. *)
 

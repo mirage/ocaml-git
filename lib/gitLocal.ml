@@ -60,7 +60,7 @@ module Loose = struct
     else
       let file = file t.root sha1 in
       if Sys.file_exists file then
-        GitMisc.mstruct_of_file file >>= fun buf ->
+        GitUnix.mstruct_of_file file >>= fun buf ->
         let buf = GitMisc.inflate_mstruct buf in
         Hashtbl.add_exn t.buffers sha1 buf;
         return (Some (Mstruct.clone buf))
@@ -69,7 +69,7 @@ module Loose = struct
 
   let unsafe_write_inflated t sha1 ~inflated ~file =
     Log.debugf "write_inflated %s:%S" (SHA1.to_hex sha1) inflated;
-    GitMisc.mkdir (Filename.dirname file) >>= fun () ->
+    GitUnix.mkdir (Filename.dirname file) >>= fun () ->
     let deflated = GitMisc.deflate_string inflated in
     Log.infof "Writing %s" file;
     Lwt_io.(with_file ~mode:Output file (fun oc -> write oc deflated)) >>= fun () ->
@@ -115,12 +115,12 @@ module Loose = struct
   let list root =
     Log.debugf "Loose.list %s" root;
     let objects = root / ".git" / "objects" in
-    GitMisc.directories objects >>= fun objects ->
+    GitUnix.directories objects >>= fun objects ->
     let objects = List.map ~f:Filename.basename objects in
     let objects = List.filter ~f:(fun s -> (s <> "info") && (s <> "pack")) objects in
     Lwt_list.fold_left_s (fun acc prefix ->
       let dir = root / ".git" / "objects" / prefix in
-      GitMisc.files dir >>= fun suffixes ->
+      GitUnix.files dir >>= fun suffixes ->
       let suffixes = List.map ~f:Filename.basename suffixes in
       let objects = List.map ~f:(fun suffix ->
           SHA1.of_hex (prefix ^ suffix)
@@ -140,7 +140,7 @@ module Packed = struct
   let list root =
     Log.debugf "Packed.list %s" root;
     let packs = root / ".git" / "objects" / "pack" in
-    GitMisc.files packs >>= fun packs ->
+    GitUnix.files packs >>= fun packs ->
     let packs = List.map ~f:Filename.basename packs in
     let packs = List.filter ~f:(fun f -> Filename.check_suffix f ".idx") packs in
     let packs = List.map ~f:(fun f ->
@@ -161,7 +161,7 @@ module Packed = struct
     else
       let file = index t.root sha1 in
       if Sys.file_exists file then
-        GitMisc.mstruct_of_file file >>= fun buf ->
+        GitUnix.mstruct_of_file file >>= fun buf ->
         let idx = Git.Idx.input buf in
         Hashtbl.add_exn t.indexes sha1 idx;
         return idx
@@ -177,7 +177,7 @@ module Packed = struct
       let file = file t.root sha1 in
       read_index t sha1 >>= fun index ->
       if Sys.file_exists file then (
-        GitMisc.mstruct_of_file file >>= fun buf ->
+        GitUnix.mstruct_of_file file >>= fun buf ->
         let fn = Git.Pack.input index buf in
         Hashtbl.add_exn t.packs sha1 fn;
         return fn
@@ -277,7 +277,7 @@ let dump t =
 
 let references t =
   let refs = t.root / ".git" / "refs" in
-  GitMisc.rec_files refs >>= fun files ->
+  GitUnix.rec_files refs >>= fun files ->
   let n = String.length (t.root / ".git" / "") in
   let refs = List.map ~f:(fun file ->
       let ref = String.sub file n (String.length file - n) in
@@ -327,7 +327,7 @@ let write_and_check_inflated t sha1 inflated =
 
 let write_reference t ref sha1 =
   let file = t.root / ".git" / Reference.to_string ref in
-  GitMisc.mkdir (Filename.dirname file) >>= fun () ->
+  GitUnix.mkdir (Filename.dirname file) >>= fun () ->
   Log.infof "Writing %s" file;
   Lwt_io.(with_file ~mode:Output file (fun oc -> write oc (SHA1.to_hex sha1)))
 
@@ -365,7 +365,7 @@ let create_file path mode blob =
   let blob = Blob.to_string blob in
   Log.debugf "create_file %s %S" file blob;
   Log.infof "Writing %s" file;
-  GitMisc.mkdir (Filename.dirname file) >>= fun () ->
+  GitUnix.mkdir (Filename.dirname file) >>= fun () ->
   Lwt_io.(with_file ~mode:Output file (fun oc -> write oc blob)) >>= fun () ->
   match mode with
   | `exec -> Lwt_unix.chmod file 0o755

@@ -23,7 +23,7 @@ Library "git-unix"
   Path:          lib/
   FindlibParent: git
   Findlibname:   unix
-  Modules:       GitLocal
+  Modules:       GitLocal, GitUnix
   BuildDepends:	 git, lwt.unix
 
 Executable ogit

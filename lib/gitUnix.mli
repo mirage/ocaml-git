@@ -14,30 +14,22 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** Miscellaneous functions. *)
+(** Lwt_unix IO module. *)
 
-(** {2 Hexa encoding} *)
+include GitRemote.IO
 
-val hex_encode: string -> string
-(** Encode a string to base16. *)
+val mkdir: string -> unit Lwt.t
+(** Create a directory (and the parent dirs if needed). *)
 
-val hex_decode: string -> string
-(** Decode a string from base16. *)
+val directories: string -> string list Lwt.t
+(** List the subdirs. *)
 
-(** {2 Zlib Compression} *)
+val files: string -> string list Lwt.t
+(** List the subfiles. *)
 
-(** Deflate a string. *)
-val deflate_string: string -> string
+val rec_files: string -> string list Lwt.t
+(** List of the subfiles, recursively. *)
 
-(** Inflate a buffer. *)
-val inflate_mstruct: ?allocator:(int -> Cstruct.t) -> Mstruct.t -> Mstruct.t
-
-(** Deflate a buffer. *)
-val deflate_mstruct: Mstruct.t -> Mstruct.t
-
-module OP: sig
-
-  val (/): string -> string -> string
-  (** Same as [Filename.concat]. *)
-
-end
+val mstruct_of_file: string -> Mstruct.t Lwt.t
+(** mmap a file and return a mutable C-like structure with its
+    contents. *)
