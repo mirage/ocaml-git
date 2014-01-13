@@ -350,7 +350,10 @@ module type S = sig
 
   (** {2 Filesystem} *)
 
-  val expand_filesystem: t -> SHA1.Commit.t -> unit Lwt.t
-  (** Expand the filesystem corresponding to the given revision. *)
-
+  val iter_blobs: t ->
+    f:(string list -> perm -> blob -> unit Lwt.t) ->
+    init:SHA1.Commit.t ->
+    unit Lwt.t
+    (** Apply a function on all the blobs corresponding to the given
+        commit. This is useful to create a new filesystem. *)
 end

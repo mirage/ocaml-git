@@ -20,9 +20,6 @@ open Cmdliner
 
 open GitTypes
 
-module GitRemote = GitRemote.Make(GitLocal)
-module GitGraph = GitGraph.Make(GitLocal)
-
 let global_option_section = "COMMON OPTIONS"
 let help_sections = [
   `S global_option_section;
@@ -102,6 +99,14 @@ let directory =
   let doc = Arg.info ~docv:"DIRECTORY" ~doc:"The name of the directory to clone into." [] in
   Arg.(value & pos 1 (some string) None & doc)
 
+let backend =
+  let memory = mk_flag ["m";"in-memory"] "Use an in-memory store." in
+  let create = function
+    | true  -> (module GitMemory: S)
+    | false -> (module GitLocal: S)
+  in
+  Term.(pure create $ memory)
+
 let run t =
   Lwt_unix.run (
     Lwt.catch
@@ -134,9 +139,10 @@ let ls = {
   doc  = "List references in a remote repository.";
   man  = [];
   term =
-    let ls repo =
+    let ls (module S: S) repo =
+      let module GitRemote = GitRemote.Make(S) in
       run begin
-        GitLocal.create ()  >>= fun t ->
+        S.create ()  >>= fun t ->
         GitRemote.ls t repo >>= fun references ->
         Printf.printf "From %s\n" repo;
         let print (sha1, ref) =
@@ -146,7 +152,7 @@ let ls = {
         List.iter ~f:print references;
         return_unit
       end in
-    Term.(mk ls $ repository)
+    Term.(mk ls $ backend $ repository)
 }
 
 (* CLONE *)
@@ -162,7 +168,7 @@ let clone = {
         Arg.(some int) None in
     let bare =
       mk_flag ["bare"] "Do not expand the filesystem." in
-    let clone deepen bare repo dir =
+    let clone (module S: S) deepen bare repo dir =
       let dir = match dir with
         | Some d -> d
         | None   ->
@@ -176,13 +182,14 @@ let clone = {
         eprintf "fatal: destination path '%s' already exists and is not an empty directory.\n" dir;
         exit 128
       );
+      let module GitRemote = GitRemote.Make(S) in
       run begin
-        GitLocal.create ~root:dir ()   >>= fun t ->
-        printf "Cloning into '%s' ...\n%!" (Filename.basename (GitLocal.root t));
+        S.create ~root:dir ()   >>= fun t ->
+        printf "Cloning into '%s' ...\n%!" (Filename.basename (S.root t));
         GitRemote.clone t ?deepen repo >>= fun _ ->
         return_unit
       end in
-    Term.(mk clone $ depth $ bare $ repository $ directory)
+    Term.(mk clone $ backend $ depth $ bare $ repository $ directory)
 }
 
 (* FETCH *)
@@ -191,13 +198,14 @@ let fetch = {
   doc  = "Fetch a remote Git repository.";
   man  = [];
   term =
-    let fetch repo =
+    let fetch (module S: S) repo =
+      let module GitRemote = GitRemote.Make(S) in
       run begin
-        GitLocal.create ()     >>= fun t ->
+        S.create ()     >>= fun t ->
         GitRemote.fetch t repo >>= fun _ ->
         return_unit
       end in
-    Term.(mk fetch $ repository)
+    Term.(mk fetch $ backend $ repository)
 }
 
 (* GRAPH *)
@@ -209,12 +217,13 @@ let graph = {
     let file =
       mk_required ["o";"output"] "FILE" "Output file."
         Arg.(some string) None in
-    let graph file =
+    let graph (module S: S) file =
+      let module GitGraph = GitGraph.Make(S) in
       run begin
-        GitLocal.create () >>= fun t ->
+        S.create () >>= fun t ->
         GitGraph.to_dot t file
       end in
-    Term.(mk graph $ file)
+    Term.(mk graph $ backend $ file)
 }
 
 (* HELP *)
