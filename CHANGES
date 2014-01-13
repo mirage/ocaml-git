@@ -1,4 +1,6 @@
 0.10.0: (trunk)
+* Add ls-remotes
+* Add fetch
 * Switch non-blocking IO using Lwt
 
 0.9.0: (2014-01-04)
