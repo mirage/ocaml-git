@@ -130,10 +130,10 @@ module Make (S: S) = struct
   let ktag2 = key tag2
 
   (* r1: t4 *)
-  let r1 = Reference.of_string "origin/head"
+  let r1 = Reference.of_string "refs/origin/head"
 
   (* r2: c2 *)
-  let r2 = Reference.of_string "upstream/head"
+  let r2 = Reference.of_string "refs/upstream/head"
 
   let check_write t name k v =
     write t v    >>= fun k' ->

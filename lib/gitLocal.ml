@@ -286,7 +286,7 @@ let references t =
   let n = String.length (t.root / ".git" / "") in
   let refs = List.map ~f:(fun file ->
       let ref = String.sub file n (String.length file - n) in
-      Reference.of_string ("refs" / ref)
+      Reference.of_string ref
     ) files in
   return refs
 
