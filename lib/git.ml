@@ -231,9 +231,11 @@ module Tree: ISERIALIZABLE with type t := tree = struct
   let perm_of_string buf = function
     | "100644" -> `normal
     | "100755" -> `exec
-    | "120000" -> `normal
+    | "120000" -> `link
     | "40000"  -> `dir
-    | x -> Mstruct.parse_error_buf buf "%S is not a valid permission." x
+    | x ->
+      (* XXX: Mstruct.parse_error_buf buf "%S is not a valid permission." x *)
+      `normal
 
   let string_of_perm = function
     | `normal -> "100644"
