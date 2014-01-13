@@ -61,14 +61,17 @@ module PacketLine = struct
 
   let input ic =
     Log.debugf "PacketLine.input";
-    Lwt_io.read ~count:4 ic >>= function
+    let size = String.create 4 in
+    Lwt_io.read_into_exactly ic size 0 4 >>= fun () ->
+    match size with
     | "0000" ->
       Log.debugf "RECEIVED: FLUSH";
       return_none
     | size   ->
       let size = int_of_string ("0x" ^ size) - 4 in
-      Lwt_io.read ~count:size ic >>= fun payload ->
-      Log.debugf "RECEIVED: %S" payload;
+      let payload = String.create size in
+      Lwt_io.read_into_exactly ic payload 0 size >>= fun () ->
+      Log.debugf "RECEIVED: %S (%d)" payload size;
       if payload.[size - 1] = lf then
         return (Some (String.sub payload 0 (size-1)))
       else
