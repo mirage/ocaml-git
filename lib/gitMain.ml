@@ -109,8 +109,24 @@ let run t =
       (function e -> eprintf "%s\n%!" (Exn.to_string e); exit 1)
   )
 
-let address =
-  arg_list "REPOSITORY" "Location of the remote repository." Arg.string
+(* CAT *)
+let cat = {
+  name = "cat-file";
+  doc  = "Provide content or type and size information for repository objects";
+  man  = [];
+  term =
+    let file =
+      let doc = Arg.info ~docv:"FILE"  ~doc:"The name of the file to show the contents." [] in
+      Arg.(required & pos 0 (some string) None & doc) in
+    let cat_file file =
+      run begin
+        GitMisc.mstruct_of_file file >>= fun buf ->
+        let v = Git.input buf in
+        Printf.printf "%s\n" (Git.pretty v);
+        return_unit
+      end in
+    Term.(mk cat_file $ file)
+}
 
 (* LS *)
 let ls = {
@@ -259,6 +275,7 @@ let default =
     ~man
 
 let commands = List.map ~f:command [
+    cat;
     ls;
     clone;
     fetch;
