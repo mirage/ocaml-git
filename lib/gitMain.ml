@@ -19,7 +19,6 @@ open Core_kernel.Std
 open Cmdliner
 
 open GitTypes
-module Remote = GitRemote.Make(GitUnix)
 
 let global_option_section = "COMMON OPTIONS"
 let help_sections = [
@@ -141,7 +140,7 @@ let ls = {
   man  = [];
   term =
     let ls (module S: S) repo =
-      let module Remote = Remote(S) in
+      let module Remote = GitUnix.Remote(S) in
       run begin
         S.create ()  >>= fun t ->
         Remote.ls t repo >>= fun references ->
@@ -183,7 +182,7 @@ let clone = {
         eprintf "fatal: destination path '%s' already exists and is not an empty directory.\n" dir;
         exit 128
       );
-      let module Remote = Remote(S) in
+      let module Remote = GitUnix.Remote(S) in
       run begin
         S.create ~root:dir ()   >>= fun t ->
         printf "Cloning into '%s' ...\n%!" (Filename.basename (S.root t));
@@ -200,7 +199,7 @@ let fetch = {
   man  = [];
   term =
     let fetch (module S: S) repo =
-      let module Remote = Remote(S) in
+      let module Remote = GitUnix.Remote(S) in
       run begin
         S.create ()     >>= fun t ->
         Remote.fetch t repo >>= fun _ ->

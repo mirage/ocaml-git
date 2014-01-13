@@ -33,3 +33,7 @@ val rec_files: string -> string list Lwt.t
 val mstruct_of_file: string -> Mstruct.t Lwt.t
 (** mmap a file and return a mutable C-like structure with its
     contents. *)
+
+module Remote: functor (S: GitTypes.S) -> GitRemote.S with type t = S.t
+(** Implementation of the Git protocol using [Lwt_unix] and [Lwt_io]
+    IO functions. *)

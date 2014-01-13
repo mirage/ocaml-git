@@ -57,20 +57,24 @@ module type IO = sig
 
 end
 
-
-module Make (IO: IO) (Store: S): sig
+module type S = sig
 
   (** Remote operation, abstracted over the bakend type. *)
 
-  val ls: Store.t -> string -> (sha1 * reference) list Lwt.t
+  type t
+  (** Abstract value for stores. *)
+
+  val ls: t -> string -> (sha1 * reference) list Lwt.t
   (** List the references in the remote repository. *)
 
-  val clone: Store.t -> ?bare:bool -> ?deepen:int -> string -> result Lwt.t
+  val clone: t -> ?bare:bool -> ?deepen:int -> string -> result Lwt.t
   (** [clone t address] clones the contents of [address] into the
       store [t]. *)
 
-  val fetch: Store.t -> ?deepen:int -> string -> result Lwt.t
+  val fetch: t -> ?deepen:int -> string -> result Lwt.t
   (** [fetch t address] fetches the missing contents of [address] into
       the store [t]. *)
 
 end
+
+module Make (IO: IO) (S: GitTypes.S): S with type t = S.t

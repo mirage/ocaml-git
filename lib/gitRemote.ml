@@ -652,4 +652,13 @@ module Make (IO: IO) (Store: S) = struct
     let shallows = [] in
     fetch_pack t address (Fetch { shallows; haves; deepen })
 
+  type t = Store.t
+
+end
+
+module type S = sig
+  type t
+  val ls: t -> string -> (sha1 * reference) list Lwt.t
+  val clone: t -> ?bare:bool -> ?deepen:int -> string -> result Lwt.t
+  val fetch: t -> ?deepen:int -> string -> result Lwt.t
 end
