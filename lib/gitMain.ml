@@ -100,7 +100,7 @@ let repository =
 
 let directory =
   let doc = Arg.info ~docv:"DIRECTORY" ~doc:"The name of the directory to clone into." [] in
-  Arg.(value & pos ~rev:true 0 (some string) None & doc)
+  Arg.(value & pos 1 (some string) None & doc)
 
 let run t =
   Lwt_unix.run (
