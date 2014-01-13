@@ -15,7 +15,7 @@
  *)
 
 open Lwt
-
+open Core_kernel.Std
 open Cmdliner
 
 open GitTypes
@@ -98,7 +98,7 @@ let run t =
   Lwt_unix.run (
     Lwt.catch
       (fun () -> t)
-      (function e -> Printf.eprintf "%s\n%!" (Printexc.to_string e); exit 1)
+      (function e -> eprintf "%s\n%!" (Exn.to_string e); exit 1)
   )
 
 let address =
@@ -114,7 +114,14 @@ let ls_remote = {
       | [a] ->
         run begin
           GitLocal.create () >>= fun t ->
-          GitRemote.ls_remote t a
+          GitRemote.ls t a >>= fun references ->
+          Printf.printf "From %s\n" a;
+          let print (sha1, ref) =
+            Printf.printf "%s        %s\n"
+              (SHA1.to_hex sha1)
+              (Reference.to_string ref) in
+          List.iter ~f:print references;
+          return_unit
         end;
         `Ok ()
       | _   -> `Error (true, "Too many address") in
@@ -138,7 +145,9 @@ let clone = {
       let run adress dir =
         run begin
           GitLocal.create ~root:dir () >>= fun t ->
-          GitRemote.clone t ?deepen adress
+          printf "Cloning into '%s' ...\n%!" (Filename.basename (GitLocal.root t));
+          GitRemote.clone t ?deepen adress >>= fun _ ->
+          return_unit
         end;
         `Ok ()
       in
@@ -168,7 +177,8 @@ let fetch = {
       | [a] ->
         run begin
           GitLocal.create () >>= fun t ->
-          GitRemote.fetch t a
+          GitRemote.fetch t a >>= fun _ ->
+          return_unit
         end;
         `Ok ()
       | _   -> `Error (true, "Too many address") in
@@ -208,10 +218,10 @@ let help = {
       | None       -> `Help (`Pager, None)
       | Some topic ->
         let topics = "topics" :: cmds in
-        let conv, _ = Arg.enum (List.rev_map (fun s -> (s, s)) topics) in
+        let conv, _ = Arg.enum (List.rev_map ~f:(fun s -> (s, s)) topics) in
         match conv topic with
         | `Error e                -> `Error (false, e)
-        | `Ok t when t = "topics" -> List.iter print_endline cmds; `Ok ()
+        | `Ok t when t = "topics" -> List.iter ~f:print_endline cmds; `Ok ()
         | `Ok t                   -> `Help (man_format, Some t) in
   Term.(ret (pure help $Term.man_format $Term.choice_names $topic))
 }
@@ -249,7 +259,7 @@ let default =
     ~doc
     ~man
 
-let commands = List.map command [
+let commands = List.map ~f:command [
     ls_remote;
     clone;
     fetch;

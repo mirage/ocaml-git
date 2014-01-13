@@ -18,18 +18,24 @@
 
 open GitTypes
 
+type result = {
+  references: (sha1 * reference) list;
+  sha1s     : sha1 list;
+}
+(** The resulting sha1s and references. *)
+
 module Make (Store: S): sig
 
   (** Remote operation, abstracted over the bakend type. *)
 
-  val ls_remote: Store.t -> string -> unit Lwt.t
+  val ls: Store.t -> string -> (sha1 * reference) list Lwt.t
   (** List the references in the remote repository. *)
 
-  val clone: Store.t -> ?bare:bool -> ?deepen:int -> string -> unit Lwt.t
+  val clone: Store.t -> ?bare:bool -> ?deepen:int -> string -> result Lwt.t
   (** [clone t address] clones the contents of [address] into the
       store [t]. *)
 
-  val fetch: Store.t -> ?deepen:int -> string -> unit Lwt.t
+  val fetch: Store.t -> ?deepen:int -> string -> result Lwt.t
   (** [fetch t address] fetches the missing contents of [address] into
       the store [t]. *)
 

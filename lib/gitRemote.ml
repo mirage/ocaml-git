@@ -515,9 +515,14 @@ type fetch = {
 }
 
 type op =
-  | List_refs
+  | Ls
   | Fetch of fetch
   | Clone of clone
+
+type result = {
+  references: (sha1 * reference) list;
+  sha1s     : sha1 list;
+}
 
 module Make (Store: S) = struct
 
@@ -530,35 +535,28 @@ module Make (Store: S) = struct
           Init.output oc r     >>= fun () ->
           Listing.input ic     >>= fun listing ->
           Log.debugf "listing:\n %s" (Listing.pretty listing);
-          match op with
-          | List_refs ->
-            (* XXX: we should return a concrete value instead of
-               printing the result in the API. *)
-            Printf.printf "From %s\n" address;
-            let listing = Map.to_alist (Listing.references listing) in
-            let refs = List.fold_left ~f:(fun acc (sha1, refs) ->
+          let references =
+            List.fold_left ~f:(fun acc (sha1, refs) ->
                 List.fold_left
                   ~f:(fun acc ref -> (sha1, ref) :: acc)
                   ~init:acc
                   refs
-              ) ~init:[] listing in
-            let refs = List.sort ~cmp:(fun (_,x) (_,y) -> Reference.compare x y) refs in
-            let print (sha1, ref) =
-              Printf.printf "%s        %s\n"
-                (SHA1.to_hex sha1)
-                (Reference.to_string ref) in
-            List.iter ~f:print refs;
-            return_unit
-          | Fetch _ | Clone _ ->
-            begin Map.fold
-                ~f:(fun ~key:sha1 ~data acc ->
-                    acc >>= fun () ->
-                    Lwt_list.iter_p (fun ref -> Store.write_reference t ref sha1) data)
-                ~init:return_unit
-                (Listing.references listing)
-            end >>= fun () ->
+              ) ~init:[] (Map.to_alist (Listing.references listing)) in
+          let references =
+            List.sort ~cmp:(fun (_,x) (_,y) -> Reference.compare x y) references in
+
+          match op with
+          | Ls      -> return { references; sha1s = [] }
+          | Fetch _
+          | Clone _ ->
+            Lwt_list.iter_p (fun (sha1, ref) ->
+                Store.write_reference t ref sha1
+              ) references
+            >>= fun () ->
             match Listing.head listing with
-            | None      -> Init.close oc
+            | None      ->
+              Init.close oc >>= fun () ->
+              return { references; sha1s = [] }
             | Some head ->
               Log.debugf "PHASE1";
               let deepen = match op with
@@ -608,7 +606,7 @@ module Make (Store: S) = struct
               | []    ->
                 Log.debugf "NO NEW OBJECTS";
                 Printf.printf "Already up-to-date.\n%!";
-                return_unit
+                return { references; sha1s = [] }
               | sha1s ->
                 Log.debugf "NEW OBJECTS";
                 Printf.printf "remote: Counting objects: %d, done.\n%!" (List.length sha1s);
@@ -623,19 +621,19 @@ module Make (Store: S) = struct
                 if not bare then (
                   (* TODO: generate the index file *)
                   Log.debugf "EXPANDING THE FILESYSTEM";
-                  Store.expand_filesystem t (SHA1.to_commit head)
+                  Store.expand_filesystem t (SHA1.to_commit head) >>= fun () ->
+                  return { references; sha1s }
                 ) else (
                   Log.debugf "BARE REPOSITORY";
-                  return_unit
+                  return { references; sha1s }
                 )
         )
 
-  let ls_remote t address =
-    fetch_pack t address List_refs
+  let ls t address =
+    fetch_pack t address Ls >>= function
+      { references } -> return references
 
   let clone t ?(bare=false) ?deepen address =
-    (* XXX: no printf stmts in the library -> move it to GitMain if possible *)
-    Printf.printf "Cloning into '%s' ...\n%!" (Filename.basename (Store.root t));
     fetch_pack t address (Clone { bare; deepen })
 
   let fetch t ?deepen address =
