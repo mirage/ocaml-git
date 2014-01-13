@@ -598,7 +598,7 @@ module Make (Store: S) = struct
                 let sha1 = SHA1.create inflated in
                 begin if not (Hashtbl.mem buffers sha1) then (
                     let buf = Mstruct.of_string inflated in
-                    Hashtbl.replace buffers sha1 buf;
+                    Hashtbl.add_exn buffers sha1 buf;
                     Store.write_and_check_inflated t sha1 inflated;
                   ) else
                     return_unit
