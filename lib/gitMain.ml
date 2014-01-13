@@ -122,7 +122,7 @@ let cat = {
       run begin
         GitMisc.mstruct_of_file file >>= fun buf ->
         let v = Git.input buf in
-        Printf.printf "%s\n" (Git.pretty v);
+        Printf.printf "%s%!" (Git.pretty v);
         return_unit
       end in
     Term.(mk cat_file $ file)

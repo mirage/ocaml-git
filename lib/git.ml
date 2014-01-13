@@ -160,7 +160,7 @@ module Commit: ISERIALIZABLE with type t := commit = struct
        parents  : %s\n\
        author   : %s\n\
        committer: %s\n\n\
-       %s"
+       %s\n"
       (SHA1.Tree.to_hex t.tree)
       (String.concat ~sep:", " (List.map ~f:SHA1.Commit.to_hex t.parents))
       (User.pretty t.author)
@@ -242,10 +242,10 @@ module Tree: ISERIALIZABLE with type t := tree = struct
 
   let pretty_entry e =
     let open Tree in
-    Printf.sprintf "[name:%s perm:%s node:%s]"
+    Printf.sprintf "%s %s    %s\n"
       (pretty_perm e.perm)
+      (SHA1.to_hex e.node)
       e.name
-      (SHA1.to_string e.node)
 
   let pretty t =
     let b = Buffer.create 1024 in
@@ -283,10 +283,10 @@ module Tree: ISERIALIZABLE with type t := tree = struct
   let input_inflated buf =
     let rec aux entries =
       if Mstruct.length buf <= 0 then
-        Tree.create entries
+        Tree.create (List.rev entries)
       else
         match input_entry buf with
-        | None   -> Tree.create entries
+        | None   -> Tree.create (List.rev entries)
         | Some e -> aux (e :: entries) in
     aux []
 
@@ -317,12 +317,12 @@ module Tag: ISERIALIZABLE with type t := tag = struct
        type  : %s\n\
        tag   : %S\n\
        tagger: %s\n\n\
-       %s"
+       %s\n"
       (SHA1.to_hex t.sha1)
       (string_of_object_type t.typ)
       t.tag
       (User.pretty t.tagger)
-      t.message
+      (String.strip t.message)
 
   let dump t =
     Printf.eprintf "%s" (pretty t)
@@ -666,18 +666,20 @@ end = struct
           match Map.fold
                   ~f:(fun ~key ~data acc -> if data=offset then Some key else acc)
                   ~init:None idx
-          with None ->
+          with
+          | Some k -> k
+          | None   ->
             let msg = Printf.sprintf
                 "inflate: cannot find any object starting at offset %d"
                 offset in
-            failwith msg
-             | Some k -> k  in
+            failwith msg in
         read_inflated base >>= fun source ->
         let value = apply_delta { d with P.source } in
         return value
     end >>=
     write
 
+  (* XXX: move the printf outside of the API *)
   let unpack_all ~read_inflated ~write buf =
     let version, size = input_header buf in
     Log.debugf "unpack-all: version=%d size=%d\n%!" version size;
@@ -687,7 +689,7 @@ end = struct
         input_packed_value version buf in
       let idx = ref SHA1.Map.empty in
       let rec loop i =
-        Printf.printf "\rReceiving objects: %3d%% (%d/%d)%!" (i*100/size) (i+1) size;
+        Printf.printf "\rUnpacking objects: %3d%% (%d/%d)%!" (i*100/size) (i+1) size;
         let offset = Mstruct.offset buf in
         let packed_value = next_packed_value () in
         unpack ~read_inflated ~write ~idx:!idx ~offset packed_value >>= fun sha1 ->
@@ -695,7 +697,7 @@ end = struct
         if i >= size - 1 then return_unit
         else loop (i+1) in
       loop 0 >>= fun () ->
-      Printf.printf "\rReceiving objects: 100%% (%d/%d), done.\n%!" size size;
+      Printf.printf "\rUnpacking objects: 100%% (%d/%d), done.\n%!" size size;
       return (Map.keys !idx)
     )
   let output _ =
