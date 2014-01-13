@@ -104,6 +104,10 @@ end
 
 type commit = Commit.t
 
+type perm =
+  [`normal|`exec|`link|`dir]
+with bin_io, compare, sexp
+
 module Tree = struct
   module T = struct
 
@@ -122,7 +126,7 @@ module Tree = struct
     end
 
     type entry = {
-      perm: [`normal|`exec|`link|`dir];
+      perm: perm;
       name: string;
       node: SHA1.t;
     } with bin_io, compare, sexp

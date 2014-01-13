@@ -123,12 +123,15 @@ end
 
 type commit = Commit.t
 
+type perm = [`normal|`exec|`link|`dir]
+(** File permission. *)
+
 module Tree: sig
 
   (** Git trees. *)
 
   type entry = {
-    perm: [`normal|`exec|`link|`dir];
+    perm: perm;
     name: string;
     node: SHA1.t;
   }
