@@ -106,17 +106,41 @@ type commit = Commit.t
 
 module Tree = struct
   module T = struct
+
+    module String = struct
+      include String
+      (*let compare s1 s2 =
+        let n1 = String.length s1 in
+        let n2 = String.length s2 in
+        let rec loop i =
+          if Int.(i >= n1) then 1
+          else if Int.(i >= n2) then (-1)
+          else match Char.compare s1.[i] s2.[i] with
+            | 0 -> loop (i+1)
+            | i -> i in
+        loop 0*)
+    end
+
     type entry = {
       perm: [`normal|`exec|`link|`dir];
       name: string;
       node: SHA1.t;
     } with bin_io, compare, sexp
+
     type t = entry list with bin_io, compare, sexp
+
     let create t =
-      List.sort ~cmp:(fun e1 e2 -> String.compare e1.name e2.name) t
+      (* XXX: this seems completely broken: sometimes Git use the
+         usual String.compare, sometimes the one defined above. *)
+      (*List.sort ~cmp:(fun e1 e2 -> String.compare e1.name e2.name) t*)
+      t
+
     let entries t = t
+
     let hash (t: t) = Hashtbl.hash t
+
     include Sexpable.To_stringable (struct type nonrec t = t with sexp end)
+
     let module_name = "Tree.Entry"
   end
   include T
