@@ -1,6 +1,8 @@
 0.10.0: (trunk)
-* Add ls-remotes
-* Add fetch
+* Add `ogit cat-file`
+* Add `ogit ls-remote`
+* Add `ogit fetch`
+* Add `ogit clone`
 * Switch non-blocking IO using Lwt
 
 0.9.0: (2014-01-04)
