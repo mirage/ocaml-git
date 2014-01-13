@@ -218,7 +218,15 @@ let succ = function
   | `Tag (_, s)
   | `Tree (_, s) -> s
 
-module Reference = String
+module Reference = struct
+  include String
+  let compare x y =
+    match x, y with
+    | "HEAD", "HEAD" -> 0
+    | "HEAD", _      -> (-1)
+    | _     , "HEAD" -> 1
+    | _     , _      -> compare x y
+end
 
 type reference = Reference.t
 
