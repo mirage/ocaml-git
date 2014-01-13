@@ -138,6 +138,7 @@ let mstruct_of_file file =
   let open Lwt in
   let fd = Unix.(openfile file [O_RDONLY; O_NONBLOCK] 0o644) in
   let ba = Lwt_bytes.map_file ~fd ~shared:false () in
+  Unix.close fd;
   return (Mstruct.of_bigarray ba)
 
 open Lwt
