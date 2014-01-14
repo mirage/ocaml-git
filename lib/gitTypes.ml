@@ -271,9 +271,11 @@ module type S = sig
   val write: t -> value -> sha1 Lwt.t
   val write_and_check_inflated: t -> sha1 -> string -> unit Lwt.t
   val references: t -> reference list Lwt.t
+  val mem_reference: t -> reference -> bool Lwt.t
   val read_reference: t -> reference -> sha1 option Lwt.t
   val read_reference_exn: t -> reference -> sha1 Lwt.t
   val write_reference: t -> reference -> sha1 -> unit Lwt.t
+  val remove_reference: t -> reference -> unit Lwt.t
   val type_of: t -> sha1 -> object_type option Lwt.t
   val succ: t -> sha1 -> successor list Lwt.t
   val iter_blobs: t ->

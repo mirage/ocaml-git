@@ -290,8 +290,21 @@ let references t =
     ) files in
   return refs
 
+let file_of_ref t ref =
+  t.root / ".git" / Reference.to_string ref
+
+let mem_reference t ref =
+  let file = file_of_ref t ref in
+  return (Sys.file_exists file)
+
+let remove_reference t ref =
+  let file = file_of_ref t ref in
+  catch
+    (fun () -> Lwt_unix.unlink file)
+    (fun _ -> return_unit)
+
 let read_reference t ref =
-  let file = t.root / ".git" / Reference.to_string ref in
+  let file = file_of_ref t ref in
   Log.infof "Reading %s" file;
   if Sys.file_exists file then
     Lwt_io.(with_file ~mode:Input file read) >>= fun hex ->

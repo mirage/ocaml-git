@@ -334,6 +334,9 @@ module type S = sig
   val references: t -> reference list Lwt.t
   (** Return the list of references (ie. tags and branches). *)
 
+  val mem_reference: t -> reference -> bool Lwt.t
+  (** Check if a reference exists. *)
+
   val read_reference: t -> reference -> sha1 option Lwt.t
   (** Read a given reference. *)
 
@@ -342,6 +345,9 @@ module type S = sig
 
   val write_reference: t -> reference -> sha1 -> unit Lwt.t
   (** Write a reference. *)
+
+  val remove_reference: t -> reference -> unit Lwt.t
+  (** Remove a refernce. *)
 
   (** {2 Type Inspection} *)
 

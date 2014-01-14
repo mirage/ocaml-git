@@ -145,9 +145,16 @@ let dump t =
 let references t =
   return (Hashtbl.keys t.refs)
 
+let mem_reference t ref =
+  return (Hashtbl.mem t.refs ref)
+
 let read_reference t ref =
   Log.infof "Reading %s" (Reference.to_string ref);
   return (Hashtbl.find t.refs ref)
+
+let remove_reference t ref =
+  Hashtbl.remove t.refs ref;
+  return_unit
 
 let read_reference_exn t ref =
   read_reference t ref >>= function

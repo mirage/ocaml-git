@@ -1,4 +1,6 @@
 0.10.1:
+* Add `GitTypes.S.mem_reference`
+* Add `GitTypes.S.remove_reference`
 * Add `GitTypes.S.mem` to check if an object exists in the store
 
 0.10.0: (2014-01-14)
