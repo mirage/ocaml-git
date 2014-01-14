@@ -111,6 +111,9 @@ let read t sha1 =
       Hashtbl.add_exn t.values sha1 value;
       return (Some value)
 
+let mem t sha1 =
+  return (Hashtbl.mem t.values sha1)
+
 let read_exn t sha1 =
   read t sha1 >>= function
   | None   -> fail Not_found

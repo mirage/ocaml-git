@@ -252,6 +252,11 @@ let read_exn t sha1 =
   | None     -> fail Not_found
   | Some buf -> return (Git.input_inflated buf)
 
+let mem t sha1 =
+  read_inflated t sha1 >>= function
+  | None   -> return false
+  | Some _ -> return true
+
 let type_of t sha1 =
   read_inflated t sha1 >>= function
   | None     -> return_none

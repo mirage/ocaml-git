@@ -265,6 +265,7 @@ module type S = sig
   val dump: t -> unit Lwt.t
   val read: t -> sha1 -> value option Lwt.t
   val read_exn: t -> sha1 -> value Lwt.t
+  val mem: t -> sha1 -> bool Lwt.t
   val read_inflated: t -> sha1 -> Mstruct.t option Lwt.t
   val list: t -> sha1 list Lwt.t
   val write: t -> value -> sha1 Lwt.t
