@@ -1,4 +1,5 @@
 0.10.1:
+* Add missing files (fix build)
 * Add `GitTypes.S.mem_reference`
 * Add `GitTypes.S.remove_reference`
 * Add `GitTypes.S.mem` to check if an object exists in the store
