@@ -1,4 +1,5 @@
-0.10.0: (trunk)
+0.10.0: (2014-01-14)
+* Support for in-memory stores
 * Add `ogit cat-file`
 * Add `ogit ls-remote`
 * Add `ogit fetch`
