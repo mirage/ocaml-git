@@ -8,7 +8,8 @@ Pure OCaml low-level bindings to Git -- Guaranteed no C inside.
 
 ```
 opam install camlzip dolog core_kernel cryptokit uri \
-             cmdliner lazy-trie mstruct re ocamlgraph lwt
+             cmdliner lazy-trie mstruct re ocamlgraph lwt \
+             alcotest
 make
 ```
 
