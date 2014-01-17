@@ -2,11 +2,14 @@
 
 Pure OCaml low-level bindings to Git -- Guaranteed no C inside.
 
+[![Build Status](https://travis-ci.org/samoht/ocaml-git.png?branch=master)](https://travis-ci.org/samoht/ocaml-git)
+
 ### Build Instructions
 
 ```
 opam install camlzip dolog core_kernel cryptokit uri \
-  cmdliner lazy-trie mstruct re ocamlgraph lwt
+             cmdliner lazy-trie mstruct re ocamlgraph lwt \
+             alcotest
 make
 ```
 
