@@ -309,6 +309,7 @@ let read_reference t ref =
   Log.infof "Reading %s" file;
   if Sys.file_exists file then
     Lwt_io.(with_file ~mode:Input file read) >>= fun hex ->
+    let hex = String.strip hex in
     return (Some (SHA1.of_hex hex))
   else
     return_none
