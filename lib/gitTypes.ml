@@ -45,6 +45,12 @@ module SHA1_String = struct
   let of_hex h =
     of_string (GitMisc.hex_decode h)
 
+  let sexp_of_t t =
+    Sexplib.Sexp.Atom (to_hex t)
+
+  let t_of_sexp s =
+    of_hex (Sexplib.Conv.string_of_sexp s)
+
 end
 
 module SHA1 = struct
@@ -247,13 +253,16 @@ let succ = function
   | `Tree (_, s) -> s
 
 module Reference = struct
+
   include String
+
   let compare x y =
     match x, y with
     | "HEAD", "HEAD" -> 0
     | "HEAD", _      -> (-1)
     | _     , "HEAD" -> 1
     | _     , _      -> compare x y
+
 end
 
 type reference = Reference.t
