@@ -1,4 +1,8 @@
-0.10.1:
+0.10.2:
+* Improve the pretty-printing of SHA1 values
+* Add some info message when reading files in the local backend
+
+0.10.1: (2014-01-15)
 * Add missing files (fix build)
 * Add `GitTypes.S.mem_reference`
 * Add `GitTypes.S.remove_reference`
