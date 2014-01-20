@@ -59,12 +59,13 @@ module Loose = struct
       return (Some (Mstruct.clone buf))
     else
       let file = file t.root sha1 in
-      if Sys.file_exists file then
+      if Sys.file_exists file then (
+        Log.infof "Reading %s" file;
         GitUnix.mstruct_of_file file >>= fun buf ->
         let buf = GitMisc.inflate_mstruct buf in
         Hashtbl.add_exn t.buffers sha1 buf;
         return (Some (Mstruct.clone buf))
-      else
+      ) else
         return_none
 
   let unsafe_write_inflated t sha1 ~inflated ~file =
