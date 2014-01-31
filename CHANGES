@@ -1,4 +1,6 @@
 0.10.3:
+* Support for reading index files
+* Add `ogit ls-files [--all]`
 
 0.10.2: (2014-01-20)
 * Strip the contents of references file
