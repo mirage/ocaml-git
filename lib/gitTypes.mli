@@ -191,6 +191,70 @@ end
 
 type value = Value.t
 
+(** {2 Cache (index file)} *)
+
+module Cache: sig
+
+  (** Implementation of the V2 cache format (as V1 is deprecated). *)
+
+  module Entry: sig
+
+    type time = {
+
+      lsb32: Int32.t;
+      (** binary integer containg the lower 32 bits of the entry (file
+	  or symbolic link) timestamp. *)
+
+      nsec : Int32.t;
+      (** binary integer containg the lower 32 bits of the entry (file or
+	  symbolic link) more precise timestamp, if available. *)
+    } with bin_io, compare, sexp
+
+    type stat_info = {
+      ctime: time;
+      mtime: time;
+      dev  : Int32.t;
+      inode: Int32.t;
+      uid  : Int32.t;
+      gid  : Int32.t;
+
+      mode : Int32.t;
+      (** binary integer containg the lower 32 bits of the entry (file
+	  or symbolic link) file system entity type and permissions. *)
+
+      size : Int32.t;
+      (** binary integer containg the lower 32 bits of the entry
+	  (file or symbolic link) size. *)
+    } with bin_io, compare, sexp
+    (** These fields are used as a part of a heuristic to determine if the
+	file system entity associated with this entry has changed. The
+	names are very *nix centric but the exact contents of each
+	field have no meaning to Git, besides exact match, except for
+	the [mode] and [size] fields. *)
+
+    type t = {
+      stats : stat_info;
+      id    : SHA1.t;
+      stage : int;
+      name  : string;
+    } with bin_io, compare, sexp
+
+  end
+
+  type t = {
+    entries   : Entry.t list;
+    extensions: (Int32.t * string) list;
+  }
+  (** Index entries are sorted by the byte sequence that comprises the
+      entry [name]; with a secondary comparison of the [stage] bits if
+      the entry name byte sequences are identical *)
+
+  include Identifiable.S with type t := t
+
+end
+
+type cache = Cache.t
+
 (** {2 Packs} *)
 
 module Packed_value: sig
@@ -365,4 +429,8 @@ module type S = sig
     unit Lwt.t
     (** Apply a function on all the blobs corresponding to the given
         commit. This is useful to create a new filesystem. *)
+
+  val cache: t -> cache Lwt.t
+  (** Return the cache of files. *)
+
 end

@@ -788,6 +788,113 @@ module Idx: SERIALIZABLE with type t := pack_index = struct
 
 end
 
+module Cache = struct
+
+  module Log = Log.Make(struct let section = "cache" end)
+
+  module Entry = struct
+
+    let pretty t =
+      let open Cache.Entry in
+      Printf.sprintf
+        "%s\n\
+        \  ctime: %ld:%ld\n\
+        \  mtime: %ld:%ld\n\
+        \  dev: %ld\tino: %ld\n\
+        \  uid: %ld\tgid: %ld\n\
+        \  size: %ld\tflags: %d\n"
+        t.name
+        t.stats.ctime.lsb32 t.stats.ctime.nsec
+        t.stats.mtime.lsb32 t.stats.mtime.nsec
+        t.stats.dev t.stats.inode
+        t.stats.uid t.stats.gid
+        t.stats.size t.stage
+
+    let dump t =
+      Sexp.pp_hum Format.err_formatter (Cache.Entry.sexp_of_t t)
+
+    let input_time buf =
+      let lsb32 = Mstruct.get_be_uint32 buf in
+      let nsec = Mstruct.get_be_uint32 buf in
+      { Cache.Entry.lsb32; nsec }
+
+    let input_stat_info buf =
+      let mtime = input_time buf in
+      let ctime = input_time buf in
+      let dev = Mstruct.get_be_uint32 buf in
+      let inode = Mstruct.get_be_uint32 buf in
+      let mode = Mstruct.get_be_uint32 buf in
+      let uid = Mstruct.get_be_uint32 buf in
+      let gid = Mstruct.get_be_uint32 buf in
+      let size = Mstruct.get_be_uint32 buf in
+      { Cache.Entry.mtime; ctime; dev; inode; mode;
+        uid; gid; size }
+
+    let input buf =
+      Log.debugf "Cache.Entry.input";
+      let offset0 = Mstruct.offset buf in
+      let stats = input_stat_info buf in
+      Log.debugf "XXXX %s" (Sexp.to_string (Cache.Entry.sexp_of_stat_info stats));
+      let id = input_sha1 buf in
+      let stage, len =
+        let i = Mstruct.get_be_uint16 buf in
+        (i land 0x3000) lsr 12,
+        (i land 0x0FFF) in
+      Log.debugf "stage:%d len:%d" stage len;
+      let name = Mstruct.get_string buf len in
+      Mstruct.shift buf 1;
+      let bytes = Mstruct.offset buf - offset0 in
+      let padding = match bytes mod 8 with
+        | 0 -> 0
+        | n -> 8-n in
+      Mstruct.shift buf padding;
+      Log.debugf "name: %s id: %s bytes:%d padding:%d" name (SHA1.to_hex id) bytes padding;
+      { Cache.Entry.stats; id; stage; name }
+
+    let output t =
+      failwith "TODO"
+
+  end
+
+  let pretty t =
+    let buf = Buffer.create 1024 in
+    List.iter ~f:(fun e ->
+        Buffer.add_string buf (Entry.pretty e)
+      ) t.Cache.entries;
+    Buffer.contents buf
+
+  let dump t =
+    Sexp.pp_hum Format.err_formatter (Cache.sexp_of_t t)
+
+  let output t =
+    failwith "TODO"
+
+  let input_extensions buf =
+    (* TODO: actually read the extension contents *)
+    []
+
+  let input buf =
+    let header = Mstruct.get_string buf 4 in
+    if header <> "DIRC" then Mstruct.parse_error_buf buf "%s: wrong cache header." header;
+    let version = Mstruct.get_be_uint32 buf in
+    if version <> 2l then
+      failwith (Printf.sprintf "Only cache version 2 is supported (%ld)" version);
+    let n = Mstruct.get_be_uint32 buf in
+    Log.debugf "%ld entries" n;
+    let entries =
+      let rec loop acc n =
+        if Int32.(n = 0l) then List.rev acc
+        else
+          let entry = Entry.input buf in
+          loop (entry :: acc) Int32.(n - 1l) in
+      loop [] n in
+    let extensions = input_extensions buf in
+    let _checksum = input_sha1 buf in
+    (* TODO: verify the checksum *)
+    { Cache.entries; extensions }
+
+end
+
 open Lwt
 
 (* XXX: not tail-rec *)

@@ -233,6 +233,54 @@ type pack_index = {
 
 type pack = sha1 -> packed_value
 
+module Cache  = struct
+
+  (* XXX: we only implement index file cache format V2 *)
+
+  module Entry = struct
+
+    type time = {
+      lsb32: Int32.t;
+      nsec : Int32.t;
+    } with bin_io, compare, sexp
+
+    type stat_info = {
+      ctime: time;
+      mtime: time;
+      dev  : Int32.t;
+      inode: Int32.t;
+      uid  : Int32.t;
+      gid  : Int32.t;
+      mode : Int32.t;
+      size : Int32.t;
+    } with bin_io, compare, sexp
+
+    type t = {
+      stats : stat_info;
+      id    : SHA1.t;
+      stage : int;
+      name  : string;
+    } with bin_io, compare, sexp
+
+  end
+
+  module T = struct
+    type t = {
+      entries   : Entry.t list;
+      extensions: (Int32.t * string) list;
+    }
+    with bin_io, compare, sexp
+    let hash (t: t) = Hashtbl.hash t
+    include Sexpable.To_stringable (struct type nonrec t = t with sexp end)
+    let module_name = "Cache"
+  end
+  include T
+  include Identifiable.Make (T)
+
+end
+
+type cache = Cache.t
+
 let commit c = Value.Commit c
 let blob b = Value.Blob b
 let tree t = Value.Tree t
@@ -291,4 +339,5 @@ module type S = sig
     f:(string list -> perm -> blob -> unit Lwt.t) ->
     init:SHA1.Commit.t ->
     unit Lwt.t
+  val cache: t -> cache Lwt.t
 end

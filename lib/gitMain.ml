@@ -133,8 +133,8 @@ let cat = {
     Term.(mk cat_file $ file)
 }
 
-(* LS *)
-let ls = {
+(* LS-REMOTE *)
+let ls_remote = {
   name = "ls-remote";
   doc  = "List references in a remote repository.";
   man  = [];
@@ -153,6 +153,31 @@ let ls = {
         return_unit
       end in
     Term.(mk ls $ backend $ repository)
+}
+
+(* LS-FILES *)
+let ls_files = {
+  name = "ls-files";
+  doc  = "Show information about files in the index and the working tree.";
+  man  = [];
+  term =
+    let all = mk_flag ["a";"all"]
+        "After each line that describes a file, add more data about its cache entry. \
+         This is intended to show as much information as possible for manual inspection; \
+         the exact format may change at any time." in
+    let ls (module S: S) all =
+      run begin
+        S.create () >>= fun t ->
+        S.cache t   >>= fun cache ->
+        if all then
+          printf "%s" (Git.Cache.pretty cache)
+        else
+          List.iter
+            ~f:(fun e -> Printf.printf "%s\n" e.Cache.Entry.name)
+            cache.Cache.entries;
+        return_unit
+      end in
+    Term.(mk ls $ backend $ all)
 }
 
 (* CLONE *)
@@ -285,7 +310,8 @@ let default =
 
 let commands = List.map ~f:command [
     cat;
-    ls;
+    ls_remote;
+    ls_files;
     clone;
     fetch;
     graph;

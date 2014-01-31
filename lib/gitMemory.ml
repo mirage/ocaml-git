@@ -209,3 +209,6 @@ let iter_blobs t ~f ~init =
       acc >>= fun () ->
       f (t.root :: path) mode blob
   ) trie return_unit
+
+let cache t =
+  failwith "Memory.cache: TODO"

@@ -129,6 +129,10 @@ module Pack: sig
 
 end
 
+(** Cache *)
+
+module Cache: SERIALIZABLE with type t := Cache.t
+
 (** {2 Navigation through the filesystem} *)
 
 val mem: succ:(sha1 -> successor list Lwt.t) -> sha1 -> string list -> bool Lwt.t

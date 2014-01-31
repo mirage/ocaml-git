@@ -41,7 +41,8 @@ module Make (S: S) = struct
       Lwt_unix.run (x.clean ());
       raise e
 
-  let v1 = blob (Blob.of_string "foo")
+  let long_random_string = Cryptokit.(Random.string (Random.device_rng "/dev/urandom") 1024)
+  let v1 = blob (Blob.of_string long_random_string)
   let kv1 = key v1
 
   let v2 = blob (Blob.of_string "")

@@ -393,3 +393,7 @@ let create_file path mode blob =
 
 let () =
   GitRemote.set_expand_hook create_file
+
+let cache t =
+  GitUnix.mstruct_of_file (t.root / ".git" / "index") >>= fun buf ->
+  return (Git.Cache.input buf)
