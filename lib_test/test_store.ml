@@ -50,7 +50,7 @@ module Make (S: S) = struct
 
   (* Create a node containing t1 -a-> v1 *)
   let t1 = tree (Tree.create [
-      { Tree.perm = `normal;
+      { Tree.perm = `Normal;
         name = "a";
         node = kv1 }
     ])
@@ -58,7 +58,7 @@ module Make (S: S) = struct
 
   (* Create the tree t2 -b-> t1 -a-> v1 *)
   let t2 = tree (Tree.create [
-      { Tree.perm = `dir;
+      { Tree.perm = `Dir;
         name = "b";
         node = kt1 }
     ])
@@ -66,7 +66,7 @@ module Make (S: S) = struct
 
   (* Create the tree t3 -a-> t2 -b-> t1 -a-> v1 *)
   let t3 = tree (Tree.create [
-      { Tree.perm = `dir;
+      { Tree.perm = `Dir;
         name = "a";
         node = kt2; }
     ])
@@ -75,10 +75,10 @@ module Make (S: S) = struct
   (* Create the tree t4 -a-> t2 -b-> t1 -a-> v1
                        \-c-> v2 *)
   let t4 = tree (Tree.create [
-      { Tree.perm = `exec;
+      { Tree.perm = `Exec;
         name = "c";
         node = kv2; };
-      { Tree.perm = `dir;
+      { Tree.perm = `Dir;
         name = "a";
         node = kt2; }
     ])
@@ -240,13 +240,17 @@ module Make (S: S) = struct
   let test_refs x () =
     let test () =
       create () >>= fun t ->
-      write_reference t r1 kt4 >>= fun ()   ->
-      read_reference t r1      >>= fun kt4' ->
-      assert_key_opt_equal "r1" (Some kt4) kt4';
+      let c = SHA1.to_commit in
+      let ko = function
+        | None   -> None
+        | Some x -> Some (SHA1.of_commit x) in
+      write_reference t r1 (c kt4) >>= fun ()   ->
+      read_reference t r1          >>= fun kt4' ->
+      assert_key_opt_equal "r1" (Some kt4) (ko kt4');
 
-      write_reference t r2 kc2 >>= fun ()   ->
-      read_reference t r2      >>= fun kc2' ->
-      assert_key_opt_equal "r2" (Some kc2) kc2';
+      write_reference t r2 (c kc2) >>= fun ()   ->
+      read_reference t r2          >>= fun kc2' ->
+      assert_key_opt_equal "r2" (Some kc2) (ko kc2');
 
       references t             >>= fun rs   ->
       assert_refs_equal "refs" [r1; r2] rs;

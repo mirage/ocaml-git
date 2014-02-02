@@ -310,7 +310,7 @@ let read_reference t ref =
   if Sys.file_exists file then
     Lwt_io.(with_file ~mode:Input file read) >>= fun hex ->
     let hex = String.strip hex in
-    return (Some (SHA1.of_hex hex))
+    return (Some (SHA1.Commit.of_hex hex))
   else
     return_none
 
@@ -318,6 +318,13 @@ let read_reference_exn t ref =
   read_reference t ref >>= function
   | None   -> fail Not_found
   | Some s -> return s
+
+let contents t =
+  references t >>= fun refs ->
+  Lwt_list.map_p (fun r ->
+      read_reference_exn t r >>= fun c ->
+      return (r, c)
+    ) refs
 
 let succ root sha1 =
   let commit c = `Commit (SHA1.of_commit c) in
@@ -349,11 +356,23 @@ let write_reference t ref sha1 =
   let file = t.root / ".git" / Reference.to_string ref in
   GitUnix.mkdir (Filename.dirname file) >>= fun () ->
   Log.infof "Writing %s" file;
-  Lwt_io.(with_file ~mode:Output file (fun oc -> write oc (SHA1.to_hex sha1)))
+  begin match Reference.to_string ref with
+    | "HEAD" ->
+      contents t >>= fun refs ->
+      let ref =
+        match List.find ~f:(fun (r, k) -> not (Reference.is_head r) && k = sha1) refs with
+        | None       -> SHA1.Commit.to_hex sha1
+        | Some (r,_) -> Printf.sprintf "ref: %s" (Reference.to_string r)
+      in
+      return ref
+    | _      ->
+      return (SHA1.Commit.to_hex sha1)
+  end >>= fun contents ->
+  Lwt_io.(with_file ~mode:Output file (fun oc -> write oc contents))
 
 (* XXX: do not load the blobs *)
 let load_filesystem t commit =
-  let rec aux (mode, sha1): ('a, [`dir|`exec|`link|`normal] * blob) Lazy_trie.t option Lwt.t =
+  let rec aux (mode, sha1): ('a, perm * blob) Lazy_trie.t option Lwt.t =
     read t sha1 >>= function
     | Some (Value.Blob b) ->
       return (Some (Lazy_trie.create ~value:(mode, b) ()))
@@ -366,10 +385,10 @@ let load_filesystem t commit =
       >>= fun children ->
       let children = lazy children in
       return (Some (Lazy_trie.create ~children ()))
-    | Some (Value.Commit c) -> aux (`dir, SHA1.of_tree c.Commit.tree)
+    | Some (Value.Commit c) -> aux (`Dir, SHA1.of_tree c.Commit.tree)
     | _ -> return_none
   in
-  aux (`dir, SHA1.of_commit commit) >>= function
+  aux (`Dir, SHA1.of_commit commit) >>= function
   | None    -> fail (Failure "create")
   | Some fs -> return fs
 
@@ -380,20 +399,69 @@ let iter_blobs t ~f ~init =
       f (t.root :: path) mode blob
   ) trie return_unit
 
-let create_file path mode blob =
-  let file = String.concat ~sep:Filename.dir_sep path in
+let create_file file mode blob =
   let blob = Blob.to_string blob in
   Log.debugf "create_file %s %S" file blob;
   Log.infof "Writing %s" file;
   GitUnix.mkdir (Filename.dirname file) >>= fun () ->
-  Lwt_io.(with_file ~mode:Output file (fun oc -> write oc blob)) >>= fun () ->
   match mode with
-  | `exec -> Lwt_unix.chmod file 0o755
-  | _     -> return_unit
+  | `Link -> (* Lwt_unix.symlink file ??? *) failwith "TODO"
+  | _     ->
+    Lwt_io.(with_file ~mode:Output file (fun oc -> write oc blob)) >>= fun () ->
+    match mode with
+    | `Exec -> Lwt_unix.chmod file 0o755
+    | _     -> return_unit
 
-let () =
-  GitRemote.set_expand_hook create_file
+let cache_file t =
+  t.root / ".git" / "index"
 
-let cache t =
-  GitUnix.mstruct_of_file (t.root / ".git" / "index") >>= fun buf ->
+let read_cache t =
+  GitUnix.mstruct_of_file (cache_file t) >>= fun buf ->
   return (Git.Cache.input buf)
+
+let stat_info_of_file path =
+  let open Cache.Entry in
+  let open Unix in
+  let stats = Unix.stat path in
+  let ctime = { lsb32 = Int32.of_float stats.st_ctime; nsec = 0l } in
+  let mtime = { lsb32 = Int32.of_float stats.st_mtime; nsec = 0l } in
+  let dev = Int32.of_int_exn stats.st_dev in
+  let inode = Int32.of_int_exn stats.st_ino in
+  let mode = match stats.st_kind, stats.st_perm with
+    | Unix.S_REG, 0o755 -> `Exec
+    | Unix.S_REG, 0o644 -> `Normal
+    | Unix.S_LNK, _     -> `Link
+    | _ -> failwith "stats_info_of_file" in
+  let uid = Int32.of_int_exn stats.st_uid in
+  let gid = Int32.of_int_exn stats.st_gid in
+  let size = Int32.of_int_exn stats.st_size in
+  { ctime; mtime; dev; inode; uid; gid; mode; size }
+
+let write_cache t head =
+  let entries = ref [] in
+  iter_blobs t ~init:head ~f:(fun path mode blob ->
+      let file = String.concat ~sep:Filename.dir_sep path in
+      begin
+        if not (Sys.file_exists file) then create_file file mode blob
+        else return_unit
+      end >>= fun () ->
+      let id = Git.sha1 (Value.Blob blob) in
+      let stats = stat_info_of_file file in
+      let stage = 0 in
+      let name = String.chop_prefix_exn ~prefix:(t.root / "") file in
+      let entry = { Cache.Entry.stats; id; stage; name } in
+      entries := entry :: !entries;
+      return_unit
+    ) >>= fun () ->
+  let cache = { Cache.entries = !entries; extensions = [] } in
+  let buffers = Git.Cache.output cache in
+  Lwt_unix.openfile (cache_file t)
+    [Lwt_unix.O_WRONLY; Lwt_unix.O_CREAT; Lwt_unix.O_TRUNC] 0o644 >>= fun fd ->
+  Lwt_list.iter_s (fun buf ->
+      let len = Bigarray.Array1.dim buf in
+      Lwt_bytes.write fd buf 0 len >>= fun d ->
+      if d <> len then failwith "XXX"
+      else return_unit
+    ) buffers
+  >>= fun () ->
+  Lwt_unix.close fd

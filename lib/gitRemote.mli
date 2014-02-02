@@ -19,13 +19,11 @@
 open GitTypes
 
 type result = {
-  references: (sha1 * reference) list;
+  head      : SHA1.Commit.t option;
+  references: (SHA1.Commit.t * reference) list;
   sha1s     : sha1 list;
 }
 (** The resulting sha1s and references. *)
-
-val set_expand_hook: (string list -> perm -> blob -> unit Lwt.t) -> unit
-(** Set up the expand hook (to avoid cyclic deps) *)
 
 module type IO = sig
 
@@ -64,7 +62,7 @@ module type S = sig
   type t
   (** Abstract value for stores. *)
 
-  val ls: t -> string -> (sha1 * reference) list Lwt.t
+  val ls: t -> string -> (SHA1.Commit.t * reference) list Lwt.t
   (** List the references in the remote repository. *)
 
   val clone: t -> ?bare:bool -> ?deepen:int -> string -> result Lwt.t

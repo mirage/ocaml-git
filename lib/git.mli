@@ -56,8 +56,8 @@ module type SERIALIZABLE = sig
   val dump: t -> unit
   (** Dump the contents to stderr. *)
 
-  val output: t -> Mstruct.t
-  (** Output the inflated contents in a buffer. *)
+  val output: t -> Cstruct.buffer list
+  (** Output the inflated contents in a list of buffers. *)
 
   val input: Mstruct.t -> t
   (** Build a value from an inflated contents. *)
@@ -81,6 +81,9 @@ include SERIALIZABLE with type t := value
 
 include ISERIALIZABLE with type t := value
 (** All the objects kinds can be serializable. *)
+
+val sha1: value -> SHA1.t
+(** Return the SHA1 of the serialized contents. *)
 
 val type_of_inflated: Mstruct.t -> [`Blob|`Commit|`Tag|`Tree]
 (** Return the type of the inflated object stored in the given

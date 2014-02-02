@@ -110,9 +110,12 @@ end
 
 type commit = Commit.t
 
-type perm =
-  [`normal|`exec|`link|`dir]
-with bin_io, compare, sexp
+type perm = [
+    `Normal
+  | `Exec
+  | `Link
+  | `Dir
+] with bin_io, compare, sexp
 
 module Tree = struct
   module T = struct
@@ -244,14 +247,21 @@ module Cache  = struct
       nsec : Int32.t;
     } with bin_io, compare, sexp
 
+    type mode = [
+        `Normal
+      | `Exec
+      | `Link
+      | `Gitlink
+    ] with bin_io, compare, sexp
+
     type stat_info = {
       ctime: time;
       mtime: time;
       dev  : Int32.t;
       inode: Int32.t;
+      mode : mode;
       uid  : Int32.t;
       gid  : Int32.t;
-      mode : Int32.t;
       size : Int32.t;
     } with bin_io, compare, sexp
 
@@ -311,6 +321,11 @@ module Reference = struct
     | _     , "HEAD" -> 1
     | _     , _      -> compare x y
 
+  let head = "HEAD"
+
+  let is_head x =
+    String.equal head x
+
 end
 
 type reference = Reference.t
@@ -329,15 +344,12 @@ module type S = sig
   val write_and_check_inflated: t -> sha1 -> string -> unit Lwt.t
   val references: t -> reference list Lwt.t
   val mem_reference: t -> reference -> bool Lwt.t
-  val read_reference: t -> reference -> sha1 option Lwt.t
-  val read_reference_exn: t -> reference -> sha1 Lwt.t
-  val write_reference: t -> reference -> sha1 -> unit Lwt.t
+  val read_reference: t -> reference -> SHA1.Commit.t option Lwt.t
+  val read_reference_exn: t -> reference -> SHA1.Commit.t Lwt.t
+  val write_reference: t -> reference -> SHA1.Commit.t -> unit Lwt.t
   val remove_reference: t -> reference -> unit Lwt.t
   val type_of: t -> sha1 -> object_type option Lwt.t
   val succ: t -> sha1 -> successor list Lwt.t
-  val iter_blobs: t ->
-    f:(string list -> perm -> blob -> unit Lwt.t) ->
-    init:SHA1.Commit.t ->
-    unit Lwt.t
-  val cache: t -> cache Lwt.t
+  val read_cache: t -> cache Lwt.t
+  val write_cache: t -> SHA1.Commit.t -> unit Lwt.t
 end

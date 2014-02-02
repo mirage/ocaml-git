@@ -16,6 +16,4 @@
 
 (** Store Git objects in memory. *)
 
-open GitTypes
-
-include S
+include GitTypes.S

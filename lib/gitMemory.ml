@@ -26,7 +26,7 @@ type t = {
   root   : string;
   buffers: (sha1, Mstruct.t) Hashtbl.t;
   values : (sha1, value) Hashtbl.t;
-  refs   : (reference, sha1) Hashtbl.t;
+  refs   : (reference, SHA1.Commit.t) Hashtbl.t;
 }
 
 let root t =
@@ -196,10 +196,10 @@ let load_filesystem t commit =
       >>= fun children ->
       let children = lazy children in
       return (Some (Lazy_trie.create ~children ()))
-    | Some (Value.Commit c) -> aux (`dir, SHA1.of_tree c.Commit.tree)
+    | Some (Value.Commit c) -> aux (`Dir, SHA1.of_tree c.Commit.tree)
     | _ -> return_none
   in
-  aux (`dir, SHA1.of_commit commit) >>= function
+  aux (`Dir, SHA1.of_commit commit) >>= function
   | None    -> fail (Failure "create")
   | Some fs -> return fs
 
@@ -210,5 +210,8 @@ let iter_blobs t ~f ~init =
       f (t.root :: path) mode blob
   ) trie return_unit
 
-let cache t =
-  failwith "Memory.cache: TODO"
+let read_cache t =
+  failwith "Memory.read_cache: TODO"
+
+let write_cache t head =
+  failwith "Memory.update_cache: TODO"

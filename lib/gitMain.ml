@@ -45,7 +45,8 @@ let app_global g =
 let global =
   let verbose =
     let doc =
-      Arg.info ~docs:global_option_section ~doc:"Be more verbose." ["v";"verbose"] in
+      Arg.info ~docs:global_option_section
+        ~doc:"Be more verbose." ["v";"verbose"] in
     Arg.(value & flag & doc) in
   Term.(pure (fun verbose -> { verbose }) $ verbose)
 
@@ -92,11 +93,13 @@ let arg_list name doc conv =
   Arg.(non_empty & pos_all conv [] & doc)
 
 let repository =
-  let doc = Arg.info ~docv:"REPOSITORY" ~doc:"Location of the remote repository." [] in
+  let doc = Arg.info ~docv:"REPOSITORY"
+      ~doc:"Location of the remote repository." [] in
   Arg.(required & pos 0 (some string) None & doc)
 
 let directory =
-  let doc = Arg.info ~docv:"DIRECTORY" ~doc:"The name of the directory to clone into." [] in
+  let doc = Arg.info ~docv:"DIRECTORY"
+      ~doc:"The name of the directory to clone into." [] in
   Arg.(value & pos 1 (some string) None & doc)
 
 let backend =
@@ -121,7 +124,8 @@ let cat = {
   man  = [];
   term =
     let file =
-      let doc = Arg.info ~docv:"FILE"  ~doc:"The name of the file to show the contents." [] in
+      let doc = Arg.info ~docv:"FILE"
+          ~doc:"The name of the file to show the contents." [] in
       Arg.(required & pos 0 (some string) None & doc) in
     let cat_file file =
       run begin
@@ -147,7 +151,7 @@ let ls_remote = {
         Printf.printf "From %s\n" repo;
         let print (sha1, ref) =
           Printf.printf "%s        %s\n"
-            (SHA1.to_hex sha1)
+            (SHA1.Commit.to_hex sha1)
             (Reference.to_string ref) in
         List.iter ~f:print references;
         return_unit
@@ -161,15 +165,15 @@ let ls_files = {
   doc  = "Show information about files in the index and the working tree.";
   man  = [];
   term =
-    let all = mk_flag ["a";"all"]
+    let debug = mk_flag ["debug"]
         "After each line that describes a file, add more data about its cache entry. \
          This is intended to show as much information as possible for manual inspection; \
          the exact format may change at any time." in
-    let ls (module S: S) all =
+    let ls (module S: S) debug =
       run begin
-        S.create () >>= fun t ->
-        S.cache t   >>= fun cache ->
-        if all then
+        S.create ()    >>= fun t ->
+        S.read_cache t >>= fun cache ->
+        if debug then
           printf "%s" (Git.Cache.pretty cache)
         else
           List.iter
@@ -177,7 +181,37 @@ let ls_files = {
             cache.Cache.entries;
         return_unit
       end in
-    Term.(mk ls $ backend $ all)
+    Term.(mk ls $ backend $ debug)
+}
+
+(* READ-TREE *)
+let read_tree = {
+  name = "read-tree";
+  doc  = "Reads tree information into the index.";
+  man  = [];
+  term =
+    let commit =
+      let doc = Arg.info [] ~docv:"COMMIT"
+          ~doc:"The commit to set the index to. Use any valid tag \
+                name as well." in
+      Arg.(required & pos 0 (some string) None & doc ) in
+    let read (module S: S) commit_str =
+      run begin
+        S.create ()    >>= fun t ->
+        S.references t >>= fun refs ->
+        begin
+          let (/) = Filename.concat in
+          let ref = "refs" / "heads" / commit_str in
+          if List.exists refs ~f:(fun r -> Reference.to_string r = ref) then
+            S.read_reference_exn t (Reference.of_string ref)
+          else
+            return (SHA1.Commit.of_hex commit_str)
+        end >>= fun commit ->
+        S.write_cache t commit >>= fun () ->
+        printf "The index file has been update to %s\n%!" commit_str;
+        return_unit
+      end in
+    Term.(mk read $ backend $ commit)
 }
 
 (* CLONE *)
@@ -211,8 +245,10 @@ let clone = {
       run begin
         S.create ~root:dir ()   >>= fun t ->
         printf "Cloning into '%s' ...\n%!" (Filename.basename (S.root t));
-        Remote.clone t ?deepen repo >>= fun _ ->
-        return_unit
+        Remote.clone t ?deepen repo >>= fun r ->
+        match r.GitRemote.head with
+        | None      -> return_unit
+        | Some head -> S.write_cache t head
       end in
     Term.(mk clone $ backend $ depth $ bare $ repository $ directory)
 }
@@ -312,6 +348,7 @@ let commands = List.map ~f:command [
     cat;
     ls_remote;
     ls_files;
+    read_tree;
     clone;
     fetch;
     graph;

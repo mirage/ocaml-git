@@ -1,6 +1,10 @@
 0.10.3:
-* Support for reading index files
+* `ogit clone` now correctly set-up the index file (whic means
+  that `git status` and `git diff` will not work as expected
+  on a repository created by `ogit`)
+* Add `ogit read-tree COMMIT`
 * Add `ogit ls-files [--all]`
+* Support for reading and writing index files
 
 0.10.2: (2014-01-20)
 * Strip the contents of references file

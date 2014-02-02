@@ -90,7 +90,7 @@ module type SERIALIZABLE = sig
   type t
   val pretty: t -> string
   val dump: t -> unit
-  val output: t -> Mstruct.t
+  val output: t -> Cstruct.buffer list
   val input: Mstruct.t -> t
 end
 
@@ -221,24 +221,24 @@ end
 module Tree: ISERIALIZABLE with type t := tree = struct
 
   let pretty_perm = function
-    | `normal -> "normal"
-    | `exec   -> "exec"
-    | `link   -> "link"
-    | `dir    -> "dir"
+    | `Normal -> "normal"
+    | `Exec   -> "exec"
+    | `Link   -> "link"
+    | `Dir    -> "dir"
 
   let perm_of_string buf = function
     | "44"
-    | "100644" -> `normal
-    | "100755" -> `exec
-    | "120000" -> `link
-    | "40000"  -> `dir
+    | "100644" -> `Normal
+    | "100755" -> `Exec
+    | "120000" -> `Link
+    | "40000"  -> `Dir
     | x        -> Mstruct.parse_error_buf buf "%S is not a valid permission." x
 
   let string_of_perm = function
-    | `normal -> "100644"
-    | `exec   -> "100755"
-    | `link   -> "120000"
-    | `dir    -> "40000"
+    | `Normal -> "100644"
+    | `Exec   -> "100755"
+    | `Link   -> "120000"
+    | `Dir    -> "40000"
 
   let pretty_entry e =
     let open Tree in
@@ -386,13 +386,20 @@ module Value = struct
     Buffer.add_char   buf nul;
     Buffer.add_buffer buf contents
 
+  let sha1 t =
+    let buf = Buffer.create 1024 in
+    output_inflated buf t;
+    SHA1.create (Buffer.contents buf)
+
   let output t =
     let inflated =
       let buf = Buffer.create 1024 in
       output_inflated buf t;
       Buffer.contents buf in
     let deflated = GitMisc.deflate_string inflated in
-    Mstruct.of_string deflated
+    (* XXX: avoid copy *)
+    let cstruct = Cstruct.of_string deflated in
+    [ cstruct.Cstruct.buffer ]
 
   let type_of_inflated buf =
     let obj_type =
@@ -794,8 +801,9 @@ module Cache = struct
 
   module Entry = struct
 
+    open Cache.Entry
+
     let pretty t =
-      let open Cache.Entry in
       Printf.sprintf
         "%s\n\
         \  ctime: %ld:%ld\n\
@@ -818,17 +826,56 @@ module Cache = struct
       let nsec = Mstruct.get_be_uint32 buf in
       { Cache.Entry.lsb32; nsec }
 
+    let output_time buf t =
+      Mstruct.set_be_uint32 buf t.lsb32;
+      Mstruct.set_be_uint32 buf t.nsec
+
+    let input_mode buf =
+      let _zero = Mstruct.get_be_uint16 buf in
+      (* XX: check that _zero is full of 0s *)
+      let n = Mstruct.get_be_uint16 buf in
+      match Int32.(n lsr 12) with
+      | 0b1010 -> `Link
+      | 0b1110 -> `Gitlink
+      | 0b1000 ->
+        begin match Int32.(n land 0x1FF) with
+          | 0o755 -> `Exec
+          | 0o644 -> `Normal
+          | d     -> Mstruct.parse_error_buf buf "mode: invalid permission (%d)" d
+        end
+      | m -> Mstruct.parse_error_buf buf "mode: invalid (%d)" m
+
+    let output_mode buf t =
+      let n = match t with
+        | `Exec    -> 0o1000__000__111_101_101
+        | `Normal  -> 0b1000__000__110_100_100
+        | `Link    -> 0b1010__000__000_000_000
+        | `Gitlink -> 0b1110__000__000_000_000 in
+    Mstruct.set_be_uint16 buf 0;
+    Mstruct.set_be_uint16 buf n
+
+
     let input_stat_info buf =
-      let mtime = input_time buf in
       let ctime = input_time buf in
+      let mtime = input_time buf in
       let dev = Mstruct.get_be_uint32 buf in
       let inode = Mstruct.get_be_uint32 buf in
-      let mode = Mstruct.get_be_uint32 buf in
+      let mode = input_mode buf in
       let uid = Mstruct.get_be_uint32 buf in
       let gid = Mstruct.get_be_uint32 buf in
       let size = Mstruct.get_be_uint32 buf in
-      { Cache.Entry.mtime; ctime; dev; inode; mode;
-        uid; gid; size }
+      { mtime; ctime; dev; inode; mode; uid; gid; size }
+
+    let output_stat_info buf t =
+      output_time buf t.ctime;
+      output_time buf t.mtime;
+      let uint32 = Mstruct.set_be_uint32 buf in
+      uint32 t.dev;
+      uint32 t.inode;
+      output_mode buf t.mode;
+      uint32 t.uid;
+      uint32 t.gid;
+      uint32 t.size
 
     let input buf =
       Log.debugf "Cache.Entry.input";
@@ -848,11 +895,23 @@ module Cache = struct
         | 0 -> 0
         | n -> 8-n in
       Mstruct.shift buf padding;
-      Log.debugf "name: %s id: %s bytes:%d padding:%d" name (SHA1.to_hex id) bytes padding;
-      { Cache.Entry.stats; id; stage; name }
+      Log.debugf "name: %s id: %s bytes:%d padding:%d"
+        name (SHA1.to_hex id) bytes padding;
+      { stats; id; stage; name }
 
     let output t =
-      failwith "TODO"
+      let len = 63 + String.length t.name in
+      let pad = match len mod 8 with
+        | 0 -> 0
+        | n -> 8-n in
+      let mstr = Mstruct.create (len+pad) in
+      output_stat_info mstr t.stats;
+      Mstruct.set_string mstr (SHA1.to_string t.id);
+      let flags = (t.stage lsl 12 + String.length t.name) land 0x3FFF in
+      Mstruct.set_be_uint16 mstr flags;
+      Mstruct.set_string mstr t.name;
+      Mstruct.set_string mstr (String.make (1+pad) '\x00');
+      Mstruct.to_bigarray mstr
 
   end
 
@@ -866,16 +925,14 @@ module Cache = struct
   let dump t =
     Sexp.pp_hum Format.err_formatter (Cache.sexp_of_t t)
 
-  let output t =
-    failwith "TODO"
-
   let input_extensions buf =
     (* TODO: actually read the extension contents *)
     []
 
   let input buf =
     let header = Mstruct.get_string buf 4 in
-    if header <> "DIRC" then Mstruct.parse_error_buf buf "%s: wrong cache header." header;
+    if header <> "DIRC" then
+      Mstruct.parse_error_buf buf "%s: wrong cache header." header;
     let version = Mstruct.get_be_uint32 buf in
     if version <> 2l then
       failwith (Printf.sprintf "Only cache version 2 is supported (%ld)" version);
@@ -889,9 +946,31 @@ module Cache = struct
           loop (entry :: acc) Int32.(n - 1l) in
       loop [] n in
     let extensions = input_extensions buf in
+    (* XXX: verify checksum *)
     let _checksum = input_sha1 buf in
+
     (* TODO: verify the checksum *)
     { Cache.entries; extensions }
+
+  let output t =
+    let header = Mstruct.create 12 in
+    Mstruct.set_string header "DIRC";
+    Mstruct.set_be_uint32 header 2l;
+    let entries = t.Cache.entries in
+    Mstruct.set_be_uint32 header (Int32.of_int_exn (List.length entries));
+    let header = Mstruct.to_bigarray header in
+
+    let body = List.map ~f:Entry.output entries in
+    let hash = Cryptokit.Hash.sha1 () in
+    (* THOMAS: the Git doc are wrong here ... *)
+    hash#add_string (Bigstring.to_string header);
+    List.iter body (fun ba ->
+        (* XXX: avoid copy to tmp string *)
+        hash#add_string (Bigstring.to_string ba)
+      );
+    let footer = Bigstring.of_string hash#result in
+    Log.debugf "%d" (String.length hash#result);
+    header :: body @ [footer]
 
 end
 

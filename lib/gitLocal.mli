@@ -16,10 +16,4 @@
 
 (** Store Git objects on the local filesystem. *)
 
-open GitTypes
-
-include S
-
-val create_file: string list -> perm -> blob -> unit Lwt.t
-(** [create_file path perm blob] creates the file corresponding to the
-    given blob. *)
+include GitTypes.S

@@ -37,13 +37,9 @@ let lwt_error fmt =
 
 module Log = Log.Make(struct let section = "remote" end)
 
-let expand_hook = ref (fun _ _ _ -> return_unit)
-
-let set_expand_hook f =
-    expand_hook := f
-
 type result = {
-  references: (sha1 * reference) list;
+  head      : SHA1.Commit.t option;
+  references: (SHA1.Commit.t * reference) list;
   sha1s     : sha1 list;
 }
 
@@ -231,7 +227,7 @@ module Make (IO: IO) (Store: S) = struct
 
     type t = {
       capabilities: Capabilities.t;
-      references  : reference list SHA1.Map.t;
+      references  : reference list SHA1.Commit.Map.t;
     }
 
     let references t =
@@ -239,17 +235,15 @@ module Make (IO: IO) (Store: S) = struct
 
     let empty = {
       capabilities = [];
-      references   = SHA1.Map.empty;
+      references   = SHA1.Commit.Map.empty;
     }
 
     let is_empty t =
       t.capabilities = [] && Map.is_empty t.references
 
-    let head_ref = Reference.of_string "HEAD"
-
     let head t =
       Map.fold
-        ~f:(fun ~key ~data acc -> if List.mem data head_ref then Some key else acc)
+        ~f:(fun ~key ~data acc -> if List.mem data Reference.head then Some key else acc)
         ~init:None t.references
 
     let pretty t =
@@ -259,7 +253,7 @@ module Make (IO: IO) (Store: S) = struct
       Map.iter
         ~f:(fun ~key ~data ->
             List.iter ~f:(fun ref ->
-                Printf.bprintf buf "%s %s\n%!" (SHA1.to_hex key) (Reference.to_string ref)
+                Printf.bprintf buf "%s %s\n%!" (SHA1.Commit.to_hex key) (Reference.to_string ref)
               ) data
           ) t.references;
       Buffer.contents buf
@@ -278,16 +272,19 @@ module Make (IO: IO) (Store: S) = struct
               match String.lsplit2 ref ~on:nul with
               | Some (ref, caps) ->
                 let ref = Reference.of_string ref in
-                let references = Map.add_multi ~key:(SHA1.of_hex sha1) ~data:ref acc.references in
+                let references =
+                  Map.add_multi ~key:(SHA1.Commit.of_hex sha1) ~data:ref acc.references in
                 let capabilities = Capabilities.of_string caps in
                 aux { references; capabilities; }
               | None ->
                 let ref = Reference.of_string ref in
-                let references = Map.add_multi ~key:(SHA1.of_hex sha1) ~data:ref acc.references in
+                let references =
+                  Map.add_multi ~key:(SHA1.Commit.of_hex sha1) ~data:ref acc.references in
                 aux { references; capabilities = []; }
             ) else
               let ref = Reference.of_string ref in
-              let references = Map.add_multi ~key:(SHA1.of_hex sha1) ~data:ref acc.references in
+              let references =
+                Map.add_multi ~key:(SHA1.Commit.of_hex sha1) ~data:ref acc.references in
               aux { acc with references }
           | None -> error "%s is not a valid answer" line
       in
@@ -551,19 +548,21 @@ module Make (IO: IO) (Store: S) = struct
               ) ~init:[] (Map.to_alist (Listing.references listing)) in
           let references =
             List.sort ~cmp:(fun (_,x) (_,y) -> Reference.compare x y) references in
-
+          let head = Listing.head listing in
           match op with
-          | Ls      -> return { references; sha1s = [] }
+          | Ls      -> return { head; references; sha1s = [] }
           | Fetch _
           | Clone _ ->
-            Lwt_list.iter_p (fun (sha1, ref) ->
-                Store.write_reference t ref sha1
-              ) references
-            >>= fun () ->
-            match Listing.head listing with
+            let ref_head, references =
+              List.partition_tf ~f:(fun (_,r) -> Reference.is_head r) references in
+            let write_ref (sha1, ref) = Store.write_reference t ref sha1 in
+            Lwt_list.iter_p write_ref references >>= fun () ->
+            Lwt_list.iter_p write_ref ref_head   >>= fun () ->
+
+            match head with
             | None      ->
               Init.close oc >>= fun () ->
-              return { references; sha1s = [] }
+              return { head; references; sha1s = [] }
             | Some head ->
               Log.debugf "PHASE1";
               let deepen = match op with
@@ -573,7 +572,8 @@ module Make (IO: IO) (Store: S) = struct
               let shallows = match op with
                 | Fetch { shallows } -> shallows
                 | _                  -> [] in
-              Upload.phase1 ?deepen (ic,oc) ~shallows ~wants:[head] >>= fun _phase1 ->
+              Upload.phase1 ?deepen (ic,oc) ~shallows ~wants:[SHA1.of_commit head]
+              >>= fun _phase1 ->
               (* XXX: process the shallow / unshallow.  *)
               (* XXX: need a notion of shallow/unshallow in API. *)
 
@@ -614,10 +614,11 @@ module Make (IO: IO) (Store: S) = struct
               | []    ->
                 Log.debugf "NO NEW OBJECTS";
                 Printf.printf "Already up-to-date.\n%!";
-                return { references; sha1s = [] }
+                return { head = Some head; references; sha1s = [] }
               | sha1s ->
                 Log.debugf "NEW OBJECTS";
-                Printf.printf "remote: Counting objects: %d, done.\n%!" (List.length sha1s);
+                printf "remote: Counting objects: %d, done.\n%!"
+                  (List.length sha1s);
 
                 (*
                   List.iter
@@ -631,11 +632,15 @@ module Make (IO: IO) (Store: S) = struct
                 if not bare then (
                   (* TODO: generate the index file *)
                   Log.debugf "EXPANDING THE FILESYSTEM";
-                  Store.iter_blobs t ~f:!expand_hook ~init:(SHA1.to_commit head) >>= fun () ->
-                  return { references; sha1s }
+                  printf "HEAD is now %s\n" (SHA1.Commit.to_hex head);
+(*
+                  Lwt_unix.sleep 2.        >>= fun () ->
+                  Store.write_cache t head >>= fun () ->
+*)
+                  return { head = Some head; references; sha1s }
                 ) else (
                   Log.debugf "BARE REPOSITORY";
-                  return { references; sha1s }
+                  return { head = None; references; sha1s }
                 )
         )
 
@@ -658,7 +663,7 @@ end
 
 module type S = sig
   type t
-  val ls: t -> string -> (sha1 * reference) list Lwt.t
+  val ls: t -> string -> (SHA1.Commit.t * reference) list Lwt.t
   val clone: t -> ?bare:bool -> ?deepen:int -> string -> result Lwt.t
   val fetch: t -> ?deepen:int -> string -> result Lwt.t
 end

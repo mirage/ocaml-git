@@ -123,7 +123,11 @@ end
 
 type commit = Commit.t
 
-type perm = [`normal|`exec|`link|`dir]
+type perm =
+  [ `Normal
+  | `Exec
+  | `Link
+  | `Dir ]
 (** File permission. *)
 
 module Tree: sig
@@ -210,17 +214,25 @@ module Cache: sig
 	  symbolic link) more precise timestamp, if available. *)
     } with bin_io, compare, sexp
 
+    type mode =
+      [ `Normal
+      | `Exec
+      | `Link
+      | `Gitlink ]
+    (** Permission for files in the cache index. *)
+
     type stat_info = {
       ctime: time;
       mtime: time;
       dev  : Int32.t;
       inode: Int32.t;
-      uid  : Int32.t;
-      gid  : Int32.t;
 
-      mode : Int32.t;
+      mode : mode;
       (** binary integer containg the lower 32 bits of the entry (file
 	  or symbolic link) file system entity type and permissions. *)
+
+      uid  : Int32.t;
+      gid  : Int32.t;
 
       size : Int32.t;
       (** binary integer containg the lower 32 bits of the entry
@@ -324,8 +336,18 @@ val off_delta: int Packed_value.delta -> packed_value
 
 (** {2 References} *)
 
-module Reference: Identifiable.S
-(** Branch references. *)
+module Reference: sig
+
+  (** Branch references. *)
+
+  include Identifiable.S
+
+  val head: t
+  (** The repository HEAD. *)
+
+  val is_head: t -> bool
+
+end
 
 type reference = Reference.t
 
@@ -401,13 +423,13 @@ module type S = sig
   val mem_reference: t -> reference -> bool Lwt.t
   (** Check if a reference exists. *)
 
-  val read_reference: t -> reference -> sha1 option Lwt.t
+  val read_reference: t -> reference -> SHA1.Commit.t option Lwt.t
   (** Read a given reference. *)
 
-  val read_reference_exn: t -> reference -> sha1 Lwt.t
+  val read_reference_exn: t -> reference -> SHA1.Commit.t Lwt.t
   (** Read a given reference. *)
 
-  val write_reference: t -> reference -> sha1 -> unit Lwt.t
+  val write_reference: t -> reference -> SHA1.Commit.t -> unit Lwt.t
   (** Write a reference. *)
 
   val remove_reference: t -> reference -> unit Lwt.t
@@ -421,16 +443,13 @@ module type S = sig
   val succ: t -> sha1 -> successor list Lwt.t
   (** Return the list of [successors] of a given object. *)
 
-  (** {2 Filesystem} *)
+  (** {2 Cache file} *)
 
-  val iter_blobs: t ->
-    f:(string list -> perm -> blob -> unit Lwt.t) ->
-    init:SHA1.Commit.t ->
-    unit Lwt.t
-    (** Apply a function on all the blobs corresponding to the given
-        commit. This is useful to create a new filesystem. *)
-
-  val cache: t -> cache Lwt.t
+  val read_cache: t -> cache Lwt.t
   (** Return the cache of files. *)
+
+  val write_cache: t -> SHA1.Commit.t -> unit Lwt.t
+  (** Update the cache of files for the given revision. XXX: need a
+      merge stategy. *)
 
 end
