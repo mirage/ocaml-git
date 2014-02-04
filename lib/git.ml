@@ -306,7 +306,7 @@ let string_of_object_type = function
   | `Tag    -> "tag"
   | `Tree   -> "tree"
 
-let object_kind_of_string = function
+let object_type_of_string = function
   | "blob"   -> Some `Blob
   | "commit" -> Some `Commit
   | "tag"    -> Some `Tag
@@ -319,7 +319,7 @@ module Tag = struct
 
   let input_object_type buf =
     let s = Mstruct.to_string buf in
-    match object_kind_of_string s with
+    match object_type_of_string s with
     | Some k -> k
     | None   -> Mstruct.parse_error_buf buf "input_object_type: %s" s
 
@@ -399,12 +399,6 @@ module Value = struct
     Bigbuffer.add_string buf (Bigstring.to_string contents);
     GitMisc.buffer_contents buf
 
-  let remove_header contents =
-    let buf = Mstruct.of_bigarray contents in
-    match Mstruct.index buf nul with
-    | None   -> failwith "remove_header"
-    | Some i -> Bigstring.sub_shared contents ~pos:(i+1)
-
   let output_inflated t =
     let contents = Bigbuffer.create 1024 in
     output_contents contents t;
@@ -423,15 +417,11 @@ module Value = struct
       match Mstruct.get_string_delim buf sp with
       | None   -> Mstruct.parse_error_buf buf "value: type"
       | Some t -> t in
-    match obj_type with
-    | "blob"   -> `Blob
-    | "commit" -> `Commit
-    | "tag"    -> `Tag
-    | "tree"   -> `Tree
-    | x        -> Mstruct.parse_error_buf buf "%S is not a valid object type." x
+    match object_type_of_string obj_type with
+    | Some t -> t
+    | None   -> Mstruct.parse_error_buf buf "%S is not a valid object type." obj_type
 
   let input_inflated buf =
-    (* XXX call zlib directly on the stream interface *)
     let obj_type = type_of_inflated buf in
     let size =
       match Mstruct.get_string_delim buf nul with
@@ -452,13 +442,6 @@ module Value = struct
 
   let input buf =
     input_inflated (GitMisc.inflate_mstruct buf)
-
-  let input_inflated_with_header kind buf =
-    match kind with
-    | `Blob   -> blob   (Blob.input_inflated buf)
-    | `Commit -> commit (Commit.input_inflated buf)
-    | `Tree   -> tree   (Tree.input_inflated buf)
-    | `Tag    -> tag    (Tag.input_inflated buf)
 
 end
 
@@ -670,7 +653,7 @@ module Pack = struct
     let source = Mstruct.of_bigarray delta.P.source in
     let kind = match Mstruct.get_string_delim source sp with
       | None   -> Mstruct.parse_error_buf source "missing kind"
-      | Some k -> match object_kind_of_string k with
+      | Some k -> match object_type_of_string k with
         | None   -> Mstruct.parse_error_buf source "wrong_kind: %s" k
         | Some k -> k in
     let size = match Mstruct.get_string_delim source nul with

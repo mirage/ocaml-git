@@ -96,9 +96,6 @@ val type_of_inflated: Mstruct.t -> object_type
 val add_header: object_type -> Bigstring.t -> Bigstring.t
 (** Add the headers for the given object type. *)
 
-val remove_header: Bigstring.t -> Bigstring.t
-(** Remove the headers for the given object. *)
-
 (** {2 Packed Objects} *)
 
 module Pack_index: sig
