@@ -24,9 +24,10 @@ module Log = Log.Make(struct let section = "memory" end)
 
 type t = {
   root   : string;
-  buffers: (sha1, Mstruct.t) Hashtbl.t;
+  buffers: (sha1, Bigstring.t) Hashtbl.t;
   values : (sha1, value) Hashtbl.t;
   refs   : (reference, SHA1.Commit.t) Hashtbl.t;
+  mutable packs: (pack_index * pack) list;
 }
 
 let root t =
@@ -41,13 +42,15 @@ let create ?root () =
     buffers = SHA1.Table.create ();
     values  = SHA1.Table.create ();
     refs    = Reference.Table.create ();
+    packs   = [];
+
   } in
   return t
 
 let read_inflated t sha1 =
   if Hashtbl.mem t.buffers sha1 then
     let buf = Hashtbl.find_exn t.buffers sha1 in
-    return (Some (Mstruct.clone buf))
+    return (Some buf)
   else
     return_none
 
@@ -56,9 +59,9 @@ let write_inflated t inflated =
   if Hashtbl.mem t.buffers sha1 then
     return sha1
   else (
-    Log.debugf "write_inflated %s:%S" (SHA1.to_hex sha1) inflated;
+    Log.debugf "write_inflated %s:%S" (SHA1.to_hex sha1) (Bigstring.to_string inflated);
     Log.infof "Writing %s" (SHA1.to_hex sha1);
-    Hashtbl.add_exn t.buffers sha1 (Mstruct.of_string inflated);
+    Hashtbl.add_exn t.buffers sha1 inflated;
     return sha1
   )
 
@@ -70,7 +73,7 @@ let write_and_check_inflated t sha1 inflated =
     if sha1 = new_sha1 then
       write_inflated t inflated >>= fun _ -> return_unit
     else (
-      Printf.eprintf "%S\n" inflated;
+      Printf.eprintf "%S\n" (Bigstring.to_string inflated);
       Printf.eprintf
         "Marshaling error: expected:%s actual:%s\n" (SHA1.to_hex sha1) (SHA1.to_hex new_sha1);
       fail (Failure "build_packed_object")
@@ -78,9 +81,7 @@ let write_and_check_inflated t sha1 inflated =
   )
 
 let inflated value =
-  let buf = Buffer.create 1024 in
-  Git.output_inflated buf value;
-  Buffer.contents buf
+  Git.output_inflated value
 
 let write t value =
   write_inflated t (inflated value) >>= fun sha1 ->
@@ -89,6 +90,11 @@ let write t value =
   | None   ->
     Hashtbl.add_exn t.values sha1 value;
     return sha1
+
+let write_pack t pack =
+  let index = Git.Pack_index.of_pack pack in
+  t.packs <- (index, pack) :: t.packs;
+  return index
 
 let write_and_check t sha1 value =
   match Hashtbl.find t.values sha1 with
@@ -107,7 +113,7 @@ let read t sha1 =
     read_inflated t sha1 >>= function
     | None     -> return_none
     | Some buf ->
-      let value = Git.input_inflated buf in
+      let value = Git.input_inflated (Mstruct.of_bigarray buf) in
       Hashtbl.add_exn t.values sha1 value;
       return (Some value)
 
@@ -122,7 +128,9 @@ let read_exn t sha1 =
 let type_of t sha1 =
   read_inflated t sha1 >>= function
   | None     -> return_none
-  | Some buf -> return (Some (Git.type_of_inflated buf))
+  | Some buf ->
+    let buf = Mstruct.of_bigarray buf in
+    return (Some (Git.type_of_inflated buf))
 
 let string_of_type_opt = function
   | Some `Blob   -> "Blob"

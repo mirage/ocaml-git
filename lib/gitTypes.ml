@@ -25,7 +25,7 @@ with bin_io, compare, sexp
 
 module type SHA1 = sig
   include Identifiable.S
-  val create: string -> t
+  val create: Bigstring.t -> t
   val to_hex: t -> string
   val of_hex: string -> t
 end
@@ -36,7 +36,7 @@ module SHA1_String = struct
 
   let create str =
     let hash = Cryptokit.Hash.sha1 () in
-    hash#add_string str;
+    hash#add_string (Bigstring.to_string str);
     of_string hash#result
 
   let to_hex t =
@@ -199,6 +199,14 @@ end
 
 type value = Value.t
 
+module Bigstring = struct
+  include Bigstring
+  let compare t1 t2 =
+    match Int.compare (Bigstring.length t1) (Bigstring.length t2) with
+    | 0 -> String.compare (Bigstring.to_string t1) (Bigstring.to_string t2)
+    | i -> i
+end
+
 module Packed_value = struct
 
   type hunk =
@@ -215,7 +223,7 @@ module Packed_value = struct
 
   module T = struct
     type t =
-      | Value     of Value.t
+      | Raw_value of Bigstring.t
       | Ref_delta of SHA1.t delta
       | Off_delta of int delta
     with bin_io, compare, sexp
@@ -234,7 +242,24 @@ type pack_index = {
   lengths: int option SHA1.Map.t;
 }
 
-type pack = sha1 -> packed_value
+let empty_pack_index = {
+  offsets = SHA1.Map.empty;
+  lengths = SHA1.Map.empty;
+}
+
+module Pack = struct
+  module T = struct
+    type t = Bigstring.t
+    with bin_io, compare, sexp
+    let hash (t: t) = Hashtbl.hash t
+    include Sexpable.To_stringable (struct type nonrec t = t with sexp end)
+    let module_name = "Value"
+  end
+  include T
+  include Identifiable.Make (T)
+end
+
+type pack = Pack.t
 
 module Cache  = struct
 
@@ -296,10 +321,6 @@ let blob b = Value.Blob b
 let tree t = Value.Tree t
 let tag t = Value.Tag t
 
-let value v = Packed_value.Value v
-let ref_delta d = Packed_value.Ref_delta d
-let off_delta d = Packed_value.Off_delta d
-
 type successor =
   [ `Commit of sha1
   | `Tag of string * sha1
@@ -338,10 +359,11 @@ module type S = sig
   val read: t -> sha1 -> value option Lwt.t
   val read_exn: t -> sha1 -> value Lwt.t
   val mem: t -> sha1 -> bool Lwt.t
-  val read_inflated: t -> sha1 -> Mstruct.t option Lwt.t
+  val read_inflated: t -> sha1 -> Bigstring.t option Lwt.t
   val list: t -> sha1 list Lwt.t
   val write: t -> value -> sha1 Lwt.t
-  val write_and_check_inflated: t -> sha1 -> string -> unit Lwt.t
+  val write_and_check_inflated: t -> sha1 -> Bigstring.t -> unit Lwt.t
+  val write_pack: t -> pack -> pack_index Lwt.t
   val references: t -> reference list Lwt.t
   val mem_reference: t -> reference -> bool Lwt.t
   val read_reference: t -> reference -> SHA1.Commit.t option Lwt.t

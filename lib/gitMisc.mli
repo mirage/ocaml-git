@@ -16,6 +16,8 @@
 
 (** Miscellaneous functions. *)
 
+open Core_kernel.Std
+
 (** {2 Hexa encoding} *)
 
 val hex_encode: string -> string
@@ -24,13 +26,16 @@ val hex_encode: string -> string
 val hex_decode: string -> string
 (** Decode a string from base16. *)
 
+val buffer_contents: Bigbuffer.t -> Bigstring.t
+(** zero-copy buffer contents. *)
+
 (** {2 Zlib Compression} *)
 
-(** Deflate a string. *)
-val deflate_string: string -> string
+(** Deflate a big string. *)
+val deflate_bigstring: Bigstring.t -> Bigstring.t
 
 (** Inflate a buffer. *)
-val inflate_mstruct: ?allocator:(int -> Cstruct.t) -> Mstruct.t -> Mstruct.t
+val inflate_mstruct: Mstruct.t -> Mstruct.t
 
 (** Deflate a buffer. *)
 val deflate_mstruct: Mstruct.t -> Mstruct.t

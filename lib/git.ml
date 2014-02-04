@@ -42,7 +42,7 @@ let input_hex_commit buf =
   SHA1.Commit.of_hex (input_hex buf)
 
 let output_hex buf hex =
-  Buffer.add_string buf hex
+  Bigbuffer.add_string buf hex
 
 let output_hex_commit buf hex =
   output_hex buf (SHA1.Commit.to_hex hex)
@@ -55,13 +55,13 @@ let input_sha1 buf =
   |> SHA1.of_string
 
 let output_sha1 buf t =
-  Buffer.add_string buf (SHA1.to_string t)
+  Bigbuffer.add_string buf (SHA1.to_string t)
 
 let output_key_value buf k v =
-  Buffer.add_string buf k;
-  Buffer.add_char   buf sp;
-  Buffer.add_string buf v;
-  Buffer.add_char   buf lf
+  Bigbuffer.add_string buf k;
+  Bigbuffer.add_char   buf sp;
+  Bigbuffer.add_string buf v;
+  Bigbuffer.add_char   buf lf
 
 let input_key_value buf expected input_value =
   let error actual =
@@ -82,7 +82,7 @@ module type ISERIALIZABLE = sig
   type t
   val pretty: t -> string
   val dump: t -> unit
-  val output_inflated: Buffer.t -> t -> unit
+  val output_inflated: Bigbuffer.t -> t -> unit
   val input_inflated: Mstruct.t -> t
 end
 
@@ -95,18 +95,20 @@ module type SERIALIZABLE = sig
 end
 
 module User: sig
-  include ISERIALIZABLE with type t := User.t
+  include ISERIALIZABLE with type t = User.t
   val pretty: User.t -> string
 end = struct
+
+  type t = User.t
 
   (* XXX needs to escape name/email/date *)
   let output_inflated buf t =
     let open User in
-    Buffer.add_string buf t.name ;
-    Buffer.add_string buf " <"   ;
-    Buffer.add_string buf t.email;
-    Buffer.add_string buf "> "   ;
-    Buffer.add_string buf t.date
+    Bigbuffer.add_string buf t.name ;
+    Bigbuffer.add_string buf " <"   ;
+    Bigbuffer.add_string buf t.email;
+    Bigbuffer.add_string buf "> "   ;
+    Bigbuffer.add_string buf t.date
 
   let input_inflated buf =
     let i = match Mstruct.index buf lt with
@@ -134,7 +136,9 @@ end = struct
 
 end
 
-module Blob: ISERIALIZABLE with type t := Blob.t = struct
+module Blob = struct
+
+  type t = Blob.t
 
   let pretty t =
     Printf.sprintf "%S" (Blob.to_string t)
@@ -147,11 +151,13 @@ module Blob: ISERIALIZABLE with type t := Blob.t = struct
     |> Blob.of_string
 
   let output_inflated buf t =
-    Buffer.add_string buf (Blob.to_string t)
+    Bigbuffer.add_string buf (Blob.to_string t)
 
 end
 
-module Commit: ISERIALIZABLE with type t := commit = struct
+module Commit = struct
+
+  type t = commit
 
   let pretty t =
     let open Commit in
@@ -171,24 +177,24 @@ module Commit: ISERIALIZABLE with type t := commit = struct
     Printf.eprintf "%s" (pretty t)
 
   let output_parent buf parent =
-    Buffer.add_string buf "parent ";
+    Bigbuffer.add_string buf "parent ";
     output_hex_commit buf parent;
-    Buffer.add_char   buf lf
+    Bigbuffer.add_char   buf lf
 
   let output_inflated buf t =
     let open Commit in
-    Buffer.add_string    buf "tree ";
+    Bigbuffer.add_string    buf "tree ";
     output_hex_tree      buf t.tree;
-    Buffer.add_char      buf lf;
+    Bigbuffer.add_char      buf lf;
     List.iter ~f:(output_parent buf) t.parents;
-    Buffer.add_string    buf "author ";
+    Bigbuffer.add_string    buf "author ";
     User.output_inflated buf t.author;
-    Buffer.add_char      buf lf;
-    Buffer.add_string    buf "committer ";
+    Bigbuffer.add_char      buf lf;
+    Bigbuffer.add_string    buf "committer ";
     User.output_inflated buf t.committer;
-    Buffer.add_char      buf lf;
-    Buffer.add_char      buf lf;
-    Buffer.add_string    buf t.message
+    Bigbuffer.add_char      buf lf;
+    Bigbuffer.add_char      buf lf;
+    Bigbuffer.add_string    buf t.message
 
   let input_parents buf =
     let rec aux parents =
@@ -218,7 +224,9 @@ module Commit: ISERIALIZABLE with type t := commit = struct
 
 end
 
-module Tree: ISERIALIZABLE with type t := tree = struct
+module Tree = struct
+
+  type t = tree
 
   let pretty_perm = function
     | `Normal -> "normal"
@@ -257,10 +265,10 @@ module Tree: ISERIALIZABLE with type t := tree = struct
 
   let output_entry buf e =
     let open Tree in
-    Buffer.add_string buf (string_of_perm e.perm);
-    Buffer.add_char   buf sp;
-    Buffer.add_string buf e.name;
-    Buffer.add_char   buf nul;
+    Bigbuffer.add_string buf (string_of_perm e.perm);
+    Bigbuffer.add_char   buf sp;
+    Bigbuffer.add_string buf e.name;
+    Bigbuffer.add_char   buf nul;
     output_sha1       buf e.node
 
   let input_entry buf =
@@ -292,23 +300,28 @@ module Tree: ISERIALIZABLE with type t := tree = struct
 
 end
 
-module Tag: ISERIALIZABLE with type t := tag = struct
+let string_of_object_type = function
+  | `Blob   -> "blob"
+  | `Commit -> "commit"
+  | `Tag    -> "tag"
+  | `Tree   -> "tree"
+
+let object_kind_of_string = function
+  | "blob"   -> Some `Blob
+  | "commit" -> Some `Commit
+  | "tag"    -> Some `Tag
+  | "tree"   -> Some `Tree
+  | _        -> None
+
+module Tag = struct
 
   type t = tag
 
-  let string_of_object_type = function
-    | `Blob   -> "blob"
-    | `Commit -> "commit"
-    | `Tag    -> "tag"
-    | `Tree   -> "tree"
-
   let input_object_type buf =
-    match Mstruct.to_string buf with
-    | "blob"   -> `Blob
-    | "commit" -> `Commit
-    | "tag"    -> `Tag
-    | "tree"   -> `Tree
-    | s        -> Mstruct.parse_error_buf buf "input_object_type: %s" s
+    let s = Mstruct.to_string buf in
+    match object_kind_of_string s with
+    | Some k -> k
+    | None   -> Mstruct.parse_error_buf buf "input_object_type: %s" s
 
   let pretty t =
     let open Tag in
@@ -332,11 +345,11 @@ module Tag: ISERIALIZABLE with type t := tag = struct
     output_key_value     buf "object" (SHA1.to_hex t.sha1);
     output_key_value     buf "type"   (string_of_object_type t.typ);
     output_key_value     buf "tag"    t.tag;
-    Buffer.add_string    buf "tagger ";
+    Bigbuffer.add_string    buf "tagger ";
     User.output_inflated buf t.tagger;
-    Buffer.add_char      buf lf;
-    Buffer.add_char      buf lf;
-    Buffer.add_string    buf t.message
+    Bigbuffer.add_char      buf lf;
+    Bigbuffer.add_char      buf lf;
+    Bigbuffer.add_string    buf t.message
 
   let input_inflated buf =
     let sha1   = input_key_value buf "object" input_hex_sha1 in
@@ -351,6 +364,8 @@ end
 
 module Value = struct
 
+  type t = value
+
   module V = Value
 
   let pretty = function
@@ -362,11 +377,11 @@ module Value = struct
   let dump t =
     Printf.eprintf "%s" (pretty t)
 
-  let obj_type = function
-    | V.Blob _   -> "blob"
-    | V.Commit _ -> "commit"
-    | V.Tag _    -> "tag"
-    | V.Tree _   -> "tree"
+  let type_of = function
+    | V.Blob _   -> `Blob
+    | V.Commit _ -> `Commit
+    | V.Tag _    -> `Tag
+    | V.Tree _   -> `Tree
 
   let output_contents buf = function
     | V.Blob b   -> Blob.output_inflated buf b
@@ -374,32 +389,34 @@ module Value = struct
     | V.Tag t    -> Tag.output_inflated buf t
     | V.Tree t   -> Tree.output_inflated buf t
 
-  let output_inflated buf t =
-    let size, contents =
-      let buf = Buffer.create 1024 in
-      output_contents buf t;
-      let size = Buffer.length buf in
-      size, buf in
-    Buffer.add_string buf (obj_type t);
-    Buffer.add_char   buf sp;
-    Buffer.add_string buf (string_of_int size);
-    Buffer.add_char   buf nul;
-    Buffer.add_buffer buf contents
+  let add_header typ contents =
+    let size = Bigstring.length contents in
+    let buf = Bigbuffer.create size in
+    Bigbuffer.add_string buf (string_of_object_type typ);
+    Bigbuffer.add_char   buf sp;
+    Bigbuffer.add_string buf (string_of_int size);
+    Bigbuffer.add_char   buf nul;
+    Bigbuffer.add_string buf (Bigstring.to_string contents);
+    GitMisc.buffer_contents buf
+
+  let remove_header contents =
+    let buf = Mstruct.of_bigarray contents in
+    match Mstruct.index buf nul with
+    | None   -> failwith "remove_header"
+    | Some i -> Bigstring.sub_shared contents ~pos:(i+1)
+
+  let output_inflated t =
+    let contents = Bigbuffer.create 1024 in
+    output_contents contents t;
+    add_header (type_of t) (GitMisc.buffer_contents contents)
 
   let sha1 t =
-    let buf = Buffer.create 1024 in
-    output_inflated buf t;
-    SHA1.create (Buffer.contents buf)
+    SHA1.create (output_inflated t)
 
   let output t =
-    let inflated =
-      let buf = Buffer.create 1024 in
-      output_inflated buf t;
-      Buffer.contents buf in
-    let deflated = GitMisc.deflate_string inflated in
-    (* XXX: avoid copy *)
-    let cstruct = Cstruct.of_string deflated in
-    [ cstruct.Cstruct.buffer ]
+    let inflated = output_inflated t in
+    let deflated = GitMisc.deflate_bigstring inflated in
+    [ deflated ]
 
   let type_of_inflated buf =
     let obj_type =
@@ -436,13 +453,20 @@ module Value = struct
   let input buf =
     input_inflated (GitMisc.inflate_mstruct buf)
 
+  let input_inflated_with_header kind buf =
+    match kind with
+    | `Blob   -> blob   (Blob.input_inflated buf)
+    | `Commit -> commit (Commit.input_inflated buf)
+    | `Tree   -> tree   (Tree.input_inflated buf)
+    | `Tag    -> tag    (Tag.input_inflated buf)
+
 end
 
 include Value
 
-module PackedValue (M: sig val version: int end): sig
-  include ISERIALIZABLE with type t := packed_value
-end = struct
+module PackedValue (M: sig val version: int end) = struct
+
+  type t = packed_value
 
   let isset i bit =
     (i lsr bit) land 1 <> 0
@@ -512,6 +536,17 @@ end = struct
       else i in
     aux 0 1
 
+  let with_inflated buf fn =
+    (* XXX: lots of copy *)
+    fn (GitMisc.inflate_mstruct buf)
+
+  let with_inflated_buf buf fn =
+    with_inflated buf (fun buf ->
+        (* XXX: lots of copy *)
+        let contents = Mstruct.to_bigarray buf in
+        fn contents
+      )
+
   let input_inflated buf =
     let byte = Mstruct.get_uint8 buf in
     let more = (byte land 0x80) <> 0 in
@@ -523,25 +558,25 @@ end = struct
         low lor (ss lsl 4)
       else low in
 
-    let with_inflated buf fn =
-      (* XXX: the 2 following lines are very expensive *)
-      fn (GitMisc.inflate_mstruct buf) in
+    let mk typ buffer =
+      let buffer = add_header typ buffer in
+      Packed_value.Raw_value buffer in
 
     match kind with
     | 0b000 -> Mstruct.parse_error_buf buf "invalid: Reserved"
-    | 0b001 -> with_inflated buf Commit.input_inflated |> commit |> value
-    | 0b010 -> with_inflated buf Tree.input_inflated   |> tree   |> value
-    | 0b011 -> with_inflated buf Blob.input_inflated   |> blob   |> value
-    | 0b100 -> with_inflated buf Tag.input_inflated    |> tag    |> value
+    | 0b001 -> with_inflated_buf buf (mk `Commit)
+    | 0b010 -> with_inflated_buf buf (mk `Tree)
+    | 0b011 -> with_inflated_buf buf (mk `Blob)
+    | 0b100 -> with_inflated_buf buf (mk `Tag)
     | 0b101 -> Mstruct.parse_error_buf buf "invalid: Reserved"
     | 0b110 ->
       let base  = input_be_modified_base_128 buf in
-      let hunks = with_inflated buf (input_hunks size base)in
-      off_delta hunks
+      let hunks = with_inflated buf (input_hunks size base) in
+      Packed_value.Off_delta hunks
     | 0b111 ->
       let base  = input_sha1 buf in
       let hunks = with_inflated buf (input_hunks size base) in
-      ref_delta hunks
+      Packed_value.Ref_delta hunks
     | _     -> assert false
 
   let output_inflated buf t =
@@ -567,23 +602,17 @@ let lengths offsets =
   let l = List.sort ~cmp:(fun (_,x) (_,y) -> compare x y) offsets in
   aux [] l
 
-module Pack: sig
-  include SERIALIZABLE with type t := pack
-  val input: pack_index -> Mstruct.t -> pack
-  val unpack:
-    read_inflated:(sha1 -> Mstruct.t Lwt.t) ->
-    write:(value -> sha1 Lwt.t) ->
-    idx:int SHA1.Map.t ->
-    offset:int ->
-    packed_value -> sha1 Lwt.t
-  val unpack_all:
-    read_inflated:(sha1 -> Mstruct.t Lwt.t) ->
-    write:(value -> sha1 Lwt.t) ->
-    Mstruct.t -> sha1 list Lwt.t
-end = struct
+module Pack = struct
+
+  module Log = Log.Make(struct let section = "pack" end)
+
+  type t = pack
 
   open Lwt
   module P = Packed_value
+
+  let input buf =
+    Mstruct.to_bigarray buf
 
   let input_header buf =
     let header = Mstruct.get_string buf 4 in
@@ -598,7 +627,8 @@ end = struct
     if version = 2 then PackedValue2.input_inflated buf
     else PackedValue3.input_inflated buf
 
-  let input idx buf =
+  let get_packed_value buf idx =
+    let buf = Mstruct.of_bigarray buf in
     let version, size = input_header (Mstruct.clone buf) in
     let packs = SHA1.Table.create () in
     fun sha1 ->
@@ -618,11 +648,11 @@ end = struct
       )
 
   let apply_hunk source buf = function
-    | P.Insert str     -> Buffer.add_string buf str
+    | P.Insert str     -> Bigbuffer.add_string buf str
     | P.Copy (off,len) ->
-      let view = Mstruct.sub (Mstruct.clone source) off len in
+      let view = Mstruct.sub source off len in
       let str = Mstruct.to_string view in
-      Buffer.add_string buf str
+      Bigbuffer.add_string buf str
 
   let dump_delta d =
     let open Packed_value in
@@ -636,77 +666,125 @@ end = struct
       | Copy (off,len) -> Printf.eprintf "COPY (%d,%d)\n" off len
     ) d.hunks
 
-  let apply_delta delta =
-    let source = delta.P.source in
+  let apply_delta (delta: Bigstring.t Packed_value.delta) =
+    let source = Mstruct.of_bigarray delta.P.source in
     let kind = match Mstruct.get_string_delim source sp with
       | None   -> Mstruct.parse_error_buf source "missing kind"
-      | Some k -> k in
+      | Some k -> match object_kind_of_string k with
+        | None   -> Mstruct.parse_error_buf source "wrong_kind: %s" k
+        | Some k -> k in
     let size = match Mstruct.get_string_delim source nul with
       | None   -> Mstruct.parse_error_buf source "missing size"
-      | Some s -> try int_of_string s with _ -> -1 in
+      | Some s ->
+        try int_of_string s
+        with Failure "int_of_string" ->
+          eprintf "Pack.apply_delta: %s is not a valid size (source: %S)."
+            s (Bigstring.to_string (Mstruct.to_bigarray source));
+          failwith "Pack.apply_delta" in
     if size <> delta.P.source_length then
       Mstruct.parse_error_buf source
         "size differs: delta:%d source:%d\n"
         delta.P.source_length size;
+    let buf = Bigbuffer.create (20 + delta.P.result_length) in
+    Bigbuffer.add_string buf (string_of_object_type kind);
+    Bigbuffer.add_char   buf sp;
+    Bigbuffer.add_string buf (string_of_int delta.P.result_length);
+    Bigbuffer.add_char   buf nul;
+    List.iter ~f:(apply_hunk source buf) delta.P.hunks;
+    GitMisc.buffer_contents buf
 
-    let buf = Buffer.create (20 + delta.P.result_length) in
-    Buffer.add_string buf kind;
-    Buffer.add_char   buf sp;
-    Buffer.add_string buf (string_of_int delta.P.result_length);
-    Buffer.add_char   buf nul;
-    List.iter ~f:(apply_hunk delta.P.source buf) delta.P.hunks;
+  let rev_assoc map d =
+    let r = ref None in
+    try
+      Map.iter
+        ~f:(fun ~key ~data -> if data=d then (r := Some key; raise Exit))
+        map;
+      raise Not_found
+    with Exit ->
+      match !r with
+      | Some x -> x
+      | None   -> failwith "rev_assoc"
 
-    let str = Buffer.contents buf in
-    let buf = Mstruct.of_string str in
-    Value.input_inflated buf
+  let unpack_inflated_aux (return, bind) ~read_inflated ~index ~offset = function
+    | P.Raw_value x -> return x
+    | P.Ref_delta d ->
+      bind
+        (read_inflated d.P.source)
+        (fun source ->
+           return (apply_delta { d with P.source }))
+    | P.Off_delta d ->
+      let offset = offset - d.P.source in
+      let base =
+        match
+          Map.fold
+            ~f:(fun ~key ~data acc -> if data=offset then Some key else acc)
+            ~init:None index.offsets
+        with
+        | Some k -> k
+        | None   ->
+          let msg = Printf.sprintf
+              "inflate: cannot find any object starting at offset %d"
+              offset in
+          failwith msg in
+      bind
+        (read_inflated base)
+        (fun source ->
+           return (apply_delta { d with P.source }))
 
-  let unpack ~read_inflated ~write ~idx ~offset packed_value =
-    begin match packed_value with
-      | P.Value v     -> return v
-      | P.Ref_delta d ->
-        read_inflated d.P.source >>= fun source ->
-        let value = apply_delta { d with P.source } in
-        return value
-      | P.Off_delta d ->
-        let offset = offset - d.P.source in
-        let base =
-          match Map.fold
-                  ~f:(fun ~key ~data acc -> if data=offset then Some key else acc)
-                  ~init:None idx
-          with
-          | Some k -> k
-          | None   ->
-            let msg = Printf.sprintf
-                "inflate: cannot find any object starting at offset %d"
-                offset in
-            failwith msg in
-        read_inflated base >>= fun source ->
-        let value = apply_delta { d with P.source } in
-        return value
-    end >>=
-    write
+  let lwt_monad = (Lwt.return, Lwt.bind)
 
-  (* XXX: move the printf outside of the API *)
-  let unpack_all ~read_inflated ~write buf =
+  let unpack_inflated = unpack_inflated_aux lwt_monad
+
+  let unpack ~read_inflated ~index ~offset packed_value =
+    unpack_inflated ~read_inflated ~index ~offset packed_value >>= fun buf ->
+    let buf = Mstruct.of_bigarray buf in
+    let value = input_inflated buf in
+    return value
+
+  let index_aux (return, bind) ~compute_sha1 buf =
+    let buf = Mstruct.of_bigarray buf in
     let version, size = input_header buf in
-    Log.debugf "unpack-all: version=%d size=%d\n%!" version size;
-    if size <= 0 then return_nil
+    Log.debugf "index: version=%d size=%d" version size;
+    if size <= 0 then
+      return empty_pack_index
     else (
       let next_packed_value () =
         input_packed_value version buf in
-      let idx = ref SHA1.Map.empty in
-      let rec loop i =
-        Printf.printf "\rUnpacking objects: %3d%% (%d/%d)%!" (i*100/size) (i+1) size;
+      let rec loop index i =
         let offset = Mstruct.offset buf in
         let packed_value = next_packed_value () in
-        unpack ~read_inflated ~write ~idx:!idx ~offset packed_value >>= fun sha1 ->
-        idx := Map.add !idx ~key:sha1 ~data:offset;
-        if i >= size - 1 then return_unit
-        else loop (i+1) in
-      loop 0 >>= fun () ->
-      Printf.printf "\rUnpacking objects: 100%% (%d/%d), done.\n%!" size size;
-      return (Map.keys !idx)
+        let length = Mstruct.offset buf - offset in
+        bind
+          (compute_sha1 ~size ~index ~offset packed_value)
+          (fun sha1 ->
+             let index = {
+               offsets = Map.add index.offsets ~key:sha1 ~data:offset;
+               lengths = Map.add index.lengths ~key:sha1 ~data:(Some length);
+             } in
+             if i >= size - 1 then return index
+             else loop index (i+1))
+      in
+      loop empty_pack_index 0
     )
+
+  let index = index_aux lwt_monad
+
+  let unpack_and_write ~read_inflated ~write ~index ~offset packed_value =
+    unpack ~read_inflated ~index ~offset packed_value >>=
+    write
+
+  let unpack_all ~read_inflated ~write buf =
+    let i = ref 0 in
+    let compute_sha1 ~size ~index ~offset packed_value =
+      Printf.printf "\rUnpacking objects: %3d%% (%d/%d)%!" (!i*100/size) (!i+1) size;
+      incr i;
+      unpack_and_write ~read_inflated ~write ~index ~offset packed_value in
+    index ~compute_sha1 buf >>= fun index ->
+    Printf.printf "\rUnpacking objects: 100%% (%d/%d), done.\n%!" !i !i;
+    let keys = Map.keys index.offsets in
+    return keys
+
+
   let output _ =
     todo "pack"
 
@@ -718,10 +796,33 @@ end = struct
 
 end
 
-module Idx: SERIALIZABLE with type t := pack_index = struct
+module Pack_index = struct
+
+  open Lwt
+
+  type t = pack_index
+
+  let id_monad =
+    (fun x -> x), (fun x f -> f x)
+
+  let of_pack buf =
+    let buffers = SHA1.Table.create () in
+    let read_inflated sha1 =
+      try Hashtbl.find_exn buffers sha1
+      with Not_found ->
+        eprintf "Pack_index.of_pack: %s not found" (SHA1.to_hex sha1);
+        failwith "Pack_index.of_pack" in
+    let write buffer =
+      let sha1 = SHA1.create buffer in
+      Hashtbl.add_exn buffers sha1 buffer;
+      sha1 in
+    let compute_sha1 ~size:_ ~index ~offset packed_value =
+      let buf = Pack.unpack_inflated_aux id_monad ~read_inflated ~index ~offset packed_value in
+      write buf
+    in
+    Pack.index_aux id_monad ~compute_sha1 buf
 
   let input buf =
-
     let magic = Mstruct.get_string buf 4 in
     if magic <> "\255tOc" then
       Mstruct.parse_error_buf buf "wrong magic index (%S)" magic;
@@ -798,6 +899,8 @@ end
 module Cache = struct
 
   module Log = Log.Make(struct let section = "cache" end)
+
+  type t = cache
 
   module Entry = struct
 
@@ -881,7 +984,6 @@ module Cache = struct
       Log.debugf "Cache.Entry.input";
       let offset0 = Mstruct.offset buf in
       let stats = input_stat_info buf in
-      Log.debugf "XXXX %s" (Sexp.to_string (Cache.Entry.sexp_of_stat_info stats));
       let id = input_sha1 buf in
       let stage, len =
         let i = Mstruct.get_be_uint16 buf in
@@ -969,7 +1071,6 @@ module Cache = struct
         hash#add_string (Bigstring.to_string ba)
       );
     let footer = Bigstring.of_string hash#result in
-    Log.debugf "%d" (String.length hash#result);
     header :: body @ [footer]
 
 end

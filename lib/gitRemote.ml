@@ -585,31 +585,10 @@ module Make (IO: IO) (Store: S) = struct
 
               Log.debugf "PHASE3";
               IO.read_all ic >>= fun raw ->
-              Log.debugf "Received a pack file of %d bytes:" (String.length raw);
-              let buf = Mstruct.of_string raw in
-
-              let buffers = SHA1.Table.create () in
-              let read_inflated sha1 =
-                if Hashtbl.mem buffers sha1 then
-                  return (Mstruct.clone (Hashtbl.find_exn buffers sha1))
-                else
-                  lwt_error "Cannot read %s" (SHA1.to_hex sha1) in
-              let write value =
-                let buf = Buffer.create 1024 in
-                Git.output_inflated buf value;
-                let inflated = Buffer.contents buf in
-                let sha1 = SHA1.create inflated in
-                begin if not (Hashtbl.mem buffers sha1) then (
-                    let buf = Mstruct.of_string inflated in
-                    Hashtbl.add_exn buffers sha1 buf;
-                    Store.write_and_check_inflated t sha1 inflated;
-                  ) else
-                    return_unit
-                end >>= fun () ->
-                return sha1 in
-
-              Git.Pack.unpack_all ~read_inflated ~write buf >>= fun sha1s ->
-
+              Log.debugf "Received a pack file of %d bytes." (String.length raw);
+              let pack = Bigstring.of_string raw in
+              Store.write_pack t pack >>= fun index ->
+              let sha1s = Map.keys index.offsets in
               match sha1s with
               | []    ->
                 Log.debugf "NO NEW OBJECTS";
@@ -619,24 +598,12 @@ module Make (IO: IO) (Store: S) = struct
                 Log.debugf "NEW OBJECTS";
                 printf "remote: Counting objects: %d, done.\n%!"
                   (List.length sha1s);
-
-                (*
-                  List.iter
-                  ~f:(fun n -> Printf.printf "%s\n" (SHA1.to_hex n))
-                  (List.sort ~cmp:SHA1.compare sha1s);
-                *)
-
                 let bare = match op with
                   | Clone { bare } -> bare
                   | _              -> true in
                 if not bare then (
-                  (* TODO: generate the index file *)
                   Log.debugf "EXPANDING THE FILESYSTEM";
                   printf "HEAD is now %s\n" (SHA1.Commit.to_hex head);
-(*
-                  Lwt_unix.sleep 2.        >>= fun () ->
-                  Store.write_cache t head >>= fun () ->
-*)
                   return { head = Some head; references; sha1s }
                 ) else (
                   Log.debugf "BARE REPOSITORY";

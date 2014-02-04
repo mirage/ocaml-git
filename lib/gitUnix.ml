@@ -55,7 +55,7 @@ module M = struct
     let fd = Unix.(openfile file [O_RDONLY; O_NONBLOCK] 0o644) in
     let ba = Lwt_bytes.map_file ~fd ~shared:false () in
     Unix.close fd;
-    return (Mstruct.of_bigarray ba)
+    Mstruct.of_bigarray ba
 
   let mkdir dirname =
     let rec aux dir =
@@ -95,6 +95,31 @@ module M = struct
 
 end
 
-module Remote = GitRemote.Make(M)
-
 include M
+
+open Core_kernel.Std
+
+let write_bigstring fd b =
+  let rec rwrite fd buf ofs len =
+    Lwt_bytes.write fd buf ofs len >>= fun n ->
+    if n = 0 then fail End_of_file
+    else if n < len then rwrite fd buf (ofs + n) (len - n)
+    else return () in
+  rwrite fd b 0 (Bigstring.length b)
+
+let with_write_file file fn =
+  mkdir (Filename.dirname file) >>= fun () ->
+  Lwt_unix.(openfile file [O_WRONLY; O_CREAT; O_TRUNC] 0o644) >>= fun fd ->
+  catch
+    (fun () -> fn fd >>= fun () -> Lwt_unix.close fd)
+    (fun _  -> Lwt_unix.close fd)
+
+let write_file file b =
+  with_write_file file (fun fd -> write_bigstring fd b)
+
+let writev_file file bs =
+  with_write_file file (fun fd ->
+      Lwt_list.iter_s (write_bigstring fd) bs
+    )
+
+module Remote = GitRemote.Make(M)

@@ -31,8 +31,8 @@ module type SHA1 = sig
 
   include Identifiable.S
 
-  val create: string -> t
-  (** Build a node from a raw string. *)
+  val create: Bigstring.t -> t
+  (** Build a node from a raw bigstring. *)
 
   val to_hex: t -> string
   (** Display the hex encoding of the SHA1 hash. *)
@@ -276,6 +276,7 @@ module Packed_value: sig
   type hunk =
     | Insert of string
     | Copy of int * int
+  with bin_io, compare, sexp
     (** A delta hunk can either insert a string of copy the contents of a
         base object. *)
 
@@ -284,13 +285,14 @@ module Packed_value: sig
     source_length: int;
     result_length: int;
     hunks        : hunk list;
-  }
+  } with bin_io, compare, sexp
   (** Delta objects. *)
 
   type t =
-    | Value     of Value.t
+    | Raw_value of Bigstring.t
     | Ref_delta of SHA1.t delta
     | Off_delta of int delta
+  with bin_io, compare, sexp
   (** Packed values. *)
 
   include Identifiable.S with type t := t
@@ -299,17 +301,19 @@ end
 
 type packed_value = Packed_value.t
 
-type pack = SHA1.t -> packed_value
-(** A pack file. Pack files can become quite big, so we fully parse
-    the index file (which says which objects are stored in there) and
-    we lazily parse the contents (eg. we fetch the contents on
-    demand). *)
-
 type pack_index = {
   offsets: int SHA1.Map.t;
   lengths: int option SHA1.Map.t;
 }
 (** Pack indexes. *)
+
+module Pack: Identifiable.S with type t = Bigstring.t
+(** Raw pack files. *)
+
+type pack = Pack.t
+
+val empty_pack_index: pack_index
+(** The empty pack index. *)
 
 (** {2 Casts} *)
 
@@ -324,15 +328,6 @@ val tree: tree -> value
 
 val tag: tag -> value
 (** Cast a tag to an object. *)
-
-val value: value -> packed_value
-(** Packed value. *)
-
-val ref_delta: sha1 Packed_value.delta -> packed_value
-(** Cast reference-delta values. *)
-
-val off_delta: int Packed_value.delta -> packed_value
-(** Cast offset-delta values. *)
 
 (** {2 References} *)
 
@@ -400,7 +395,7 @@ module type S = sig
   val mem: t -> sha1 -> bool Lwt.t
   (** Check whether a key belongs to the store. *)
 
-  val read_inflated: t -> sha1 -> Mstruct.t option Lwt.t
+  val read_inflated: t -> sha1 -> Bigstring.t option Lwt.t
   (** Return the inflated contents of object having the given SHA1
       name. *)
 
@@ -410,10 +405,13 @@ module type S = sig
   val write: t -> value -> sha1 Lwt.t
   (** Write a value and return the SHA1 of its serialized contents. *)
 
-  val write_and_check_inflated: t -> sha1 -> string -> unit Lwt.t
+  val write_and_check_inflated: t -> sha1 -> Bigstring.t -> unit Lwt.t
   (** Compress a binary value and write it in the store. Check that
       the SHA1 of the uncompressed contents is the one that is
       expected. *)
+
+  val write_pack: t -> pack -> pack_index Lwt.t
+  (** Write a raw pack file and its corresponding index. *)
 
   (** {2 References} *)
 

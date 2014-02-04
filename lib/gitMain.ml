@@ -129,7 +129,7 @@ let cat = {
       Arg.(required & pos 0 (some string) None & doc) in
     let cat_file file =
       run begin
-        GitUnix.mstruct_of_file file >>= fun buf ->
+        let buf = GitUnix.mstruct_of_file file in
         let v = Git.input buf in
         Printf.printf "%s%!" (Git.pretty v);
         return_unit

@@ -74,9 +74,6 @@ module Make (S: S) = struct
     mk Reference.equal Reference.compare Reference.to_string
 
   let key value =
-    let buf = Buffer.create 1024 in
-    Git.output_inflated buf value;
-    let str = Buffer.contents buf in
-    SHA1.create str
+    SHA1.create (Git.output_inflated value)
 
 end

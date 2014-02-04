@@ -24,7 +24,7 @@ module Log = Log.Make(struct let section = "local" end)
 
 type t = {
   root   : string;
-  buffers: (sha1, Mstruct.t) Hashtbl.t;
+  buffers: (sha1, Bigstring.t) Hashtbl.t;
   packs  : (sha1, pack) Hashtbl.t;
   indexes: (sha1, pack_index) Hashtbl.t;
 }
@@ -56,25 +56,25 @@ module Loose = struct
   let read_inflated t sha1 =
     if Hashtbl.mem t.buffers sha1 then
       let buf = Hashtbl.find_exn t.buffers sha1 in
-      return (Some (Mstruct.clone buf))
+      return (Some buf)
     else
       let file = file t.root sha1 in
       if Sys.file_exists file then (
         Log.infof "Reading %s" file;
-        GitUnix.mstruct_of_file file >>= fun buf ->
+        let buf = GitUnix.mstruct_of_file file in
         let buf = GitMisc.inflate_mstruct buf in
+        let buf = Mstruct.to_bigarray buf in
         Hashtbl.add_exn t.buffers sha1 buf;
-        return (Some (Mstruct.clone buf))
+        return (Some buf)
       ) else
         return_none
 
   let unsafe_write_inflated t sha1 ~inflated ~file =
-    Log.debugf "write_inflated %s:%S" (SHA1.to_hex sha1) inflated;
     GitUnix.mkdir (Filename.dirname file) >>= fun () ->
-    let deflated = GitMisc.deflate_string inflated in
+    let deflated = GitMisc.deflate_bigstring inflated in
     Log.infof "Writing %s" file;
-    Lwt_io.(with_file ~mode:Output file (fun oc -> write oc deflated)) >>= fun () ->
-    Hashtbl.add_exn t.buffers sha1 (Mstruct.of_string inflated);
+    GitUnix.write_file file deflated >>= fun () ->
+    Hashtbl.add_exn t.buffers sha1 inflated;
     return_unit
 
   let write_inflated t inflated =
@@ -95,23 +95,18 @@ module Loose = struct
       if sha1 = new_sha1 then
         unsafe_write_inflated t sha1 ~inflated ~file
       else (
-        Printf.eprintf "%S\n" inflated;
-        Printf.eprintf
-          "Marshaling error: expected:%s actual:%s\n" (SHA1.to_hex sha1) (SHA1.to_hex new_sha1);
+        eprintf "%S\n" (Bigstring.to_string inflated);
+        eprintf "Marshaling error: expected:%s actual:%s\n"
+          (SHA1.to_hex sha1) (SHA1.to_hex new_sha1);
         fail (Failure "build_packed_object")
       )
     )
 
-  let inflated value =
-    let buf = Buffer.create 1024 in
-    Git.output_inflated buf value;
-    Buffer.contents buf
-
   let write t value =
-    write_inflated t (inflated value)
+    write_inflated t (Git.output_inflated value)
 
   let write_and_check t sha1 value =
-    write_and_check_inflated t sha1 (inflated value)
+    write_and_check_inflated t sha1 (Git.output_inflated value)
 
   let list root =
     Log.debugf "Loose.list %s" root;
@@ -162,10 +157,10 @@ module Packed = struct
     else
       let file = index t.root sha1 in
       if Sys.file_exists file then
-        GitUnix.mstruct_of_file file >>= fun buf ->
-        let idx = Git.Idx.input buf in
-        Hashtbl.add_exn t.indexes sha1 idx;
-        return idx
+        let buf = GitUnix.mstruct_of_file file in
+        let index = Git.Pack_index.input buf in
+        Hashtbl.add_exn t.indexes sha1 index;
+        return index
       else (
         Printf.eprintf "%s does not exist." file;
         fail (Failure "read_index")
@@ -178,36 +173,39 @@ module Packed = struct
       let file = file t.root sha1 in
       read_index t sha1 >>= fun index ->
       if Sys.file_exists file then (
-        GitUnix.mstruct_of_file file >>= fun buf ->
-        let fn = Git.Pack.input index buf in
-        Hashtbl.add_exn t.packs sha1 fn;
-        return fn
+        let buf = GitUnix.mstruct_of_file file in
+        let pack = Git.Pack.input buf in
+        Hashtbl.add_exn t.packs sha1 pack;
+        return pack
       ) else (
         Printf.eprintf "No file associated with the pack object %s.\n" (SHA1.to_hex sha1);
         fail (Failure "read_file")
       )
     )
 
-  let rec read_inflated t (pack, idx) sha1 =
+  let write t sha1 pack =
+    let file = file t.root sha1 in
+    GitUnix.write_file file pack
+
+  let write_index t sha1 idx =
+    let file = index t.root sha1 in
+    let buffers = Git.Pack_index.output idx in
+    GitUnix.writev_file file buffers
+
+  let rec read_inflated t (pack, index) sha1 =
     let error offset =
-      let idx = Map.data idx.offsets in
-      let idx = String.concat ~sep:"," (List.map ~f:string_of_int idx) in
-      Printf.eprintf "%d: invalid offset.\nValid offsets are: {%s}\n" offset idx;
+      let offsets = Map.data index.offsets in
+      let offsets = String.concat ~sep:"," (List.map ~f:string_of_int offsets) in
+      Printf.eprintf "%d: invalid offset.\nValid offsets are: {%s}\n" offset offsets;
       failwith "invalid offset" in
-    if Map.mem idx.offsets sha1 then (
-      let offset = Map.find_exn idx.offsets sha1 in
-      read t pack >>= fun fn ->
-      let packed_value = fn sha1 in
+    if Map.mem index.offsets sha1 then (
+      let offset = Map.find_exn index.offsets sha1 in
+      let packed_value = Git.Pack.get_packed_value pack index sha1 in
       let read_inflated sha1 =
         Loose.read_inflated t sha1 >>= function
         | Some buf -> return buf
-        | None     -> read_inflated t (pack,idx) sha1 in
-      let write value =
-        Loose.write_and_check t sha1 value >>= fun () ->
-        return sha1 in
-      Git.Pack.unpack ~read_inflated ~write ~idx:idx.offsets ~offset packed_value >>= fun u ->
-      assert (u = sha1);
-      read_inflated sha1
+        | None     -> read_inflated t (pack, index) sha1 in
+      Git.Pack.unpack_inflated ~read_inflated ~index ~offset packed_value
     ) else
       error (-1)
 
@@ -215,9 +213,10 @@ module Packed = struct
     let rec find = function
       | []    -> return_none
       | n::ns ->
-        read_index t n >>= fun idx ->
-        if Map.mem idx.offsets sha1 then
-          read_inflated t (n,idx) sha1 >>= fun v ->
+        read_index t n >>= fun index ->
+        if Map.mem index.offsets sha1 then
+          read t n                           >>= fun pack ->
+          read_inflated t (pack, index) sha1 >>= fun v ->
           return (Some v)
         else
           find ns in
@@ -233,8 +232,8 @@ let list t =
   (* Add cached objects *)
   let objects = List.dedup (Hashtbl.keys t.buffers @ objects) in
   Lwt_list.fold_left_s (fun acc p ->
-      Packed.read_index t p >>= fun idx ->
-      return ((Map.keys idx.offsets) @ acc)
+      Packed.read_index t p >>= fun index ->
+      return ((Map.keys index.offsets) @ acc)
     ) objects packs
 
 let read_inflated t sha1 =
@@ -246,12 +245,16 @@ let read_inflated t sha1 =
 let read t sha1 =
   read_inflated t sha1 >>= function
   | None     -> return_none
-  | Some buf -> return (Some (Git.input_inflated buf))
+  | Some buf ->
+    let buf = Mstruct.of_bigarray buf in
+    return (Some (Git.input_inflated buf))
 
 let read_exn t sha1 =
   read_inflated t sha1 >>= function
   | None     -> fail Not_found
-  | Some buf -> return (Git.input_inflated buf)
+  | Some buf ->
+    let buf = Mstruct.of_bigarray buf in
+    return (Git.input_inflated buf)
 
 let mem t sha1 =
   read_inflated t sha1 >>= function
@@ -261,7 +264,9 @@ let mem t sha1 =
 let type_of t sha1 =
   read_inflated t sha1 >>= function
   | None     -> return_none
-  | Some buf -> return (Some (Git.type_of_inflated buf))
+  | Some buf ->
+    let buf = Mstruct.of_bigarray buf in
+    return (Some (Git.type_of_inflated buf))
 
 let string_of_type_opt = function
   | Some `Blob   -> "Blob"
@@ -352,6 +357,19 @@ let write_inflated t inflated =
 let write_and_check_inflated t sha1 inflated =
   Loose.write_and_check_inflated t sha1 inflated
 
+let write_pack t pack =
+  let index = Git.Pack_index.of_pack pack in
+  let name =
+    Map.keys index.offsets
+    |> List.map ~f:SHA1.to_hex
+    |> List.sort ~cmp:String.compare
+    |> String.concat ~sep:""
+    |> Bigstring.of_string
+    |> SHA1.create in
+  Packed.write t name pack >>= fun () ->
+  Packed.write_index t name index >>= fun () ->
+  return index
+
 let write_reference t ref sha1 =
   let file = t.root / ".git" / Reference.to_string ref in
   GitUnix.mkdir (Filename.dirname file) >>= fun () ->
@@ -401,7 +419,6 @@ let iter_blobs t ~f ~init =
 
 let create_file file mode blob =
   let blob = Blob.to_string blob in
-  Log.debugf "create_file %s %S" file blob;
   Log.infof "Writing %s" file;
   GitUnix.mkdir (Filename.dirname file) >>= fun () ->
   match mode with
@@ -416,7 +433,7 @@ let cache_file t =
   t.root / ".git" / "index"
 
 let read_cache t =
-  GitUnix.mstruct_of_file (cache_file t) >>= fun buf ->
+  let buf = GitUnix.mstruct_of_file (cache_file t) in
   return (Git.Cache.input buf)
 
 let stat_info_of_file path =

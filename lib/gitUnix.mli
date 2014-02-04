@@ -16,6 +16,8 @@
 
 (** Lwt_unix IO module. *)
 
+open Core_kernel.Std
+
 include GitRemote.IO
 
 val mkdir: string -> unit Lwt.t
@@ -30,9 +32,12 @@ val files: string -> string list Lwt.t
 val rec_files: string -> string list Lwt.t
 (** List of the subfiles, recursively. *)
 
-val mstruct_of_file: string -> Mstruct.t Lwt.t
+val mstruct_of_file: string -> Mstruct.t
 (** mmap a file and return a mutable C-like structure with its
     contents. *)
+
+val write_file: string -> Bigstring.t -> unit Lwt.t
+val writev_file: string -> Bigstring.t list -> unit Lwt.t
 
 module Remote: functor (S: GitTypes.S) -> GitRemote.S with type t = S.t
 (** Implementation of the Git protocol using [Lwt_unix] and [Lwt_io]
