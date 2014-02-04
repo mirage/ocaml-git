@@ -110,6 +110,9 @@ let backend =
   in
   Term.(pure create $ memory)
 
+let unpack =
+  mk_flag ["unpack"] "Unpack the received pack archive."
+
 let run t =
   Lwt_unix.run (
     Lwt.catch
@@ -227,7 +230,7 @@ let clone = {
         Arg.(some int) None in
     let bare =
       mk_flag ["bare"] "Do not expand the filesystem." in
-    let clone (module S: S) deepen bare repo dir =
+    let clone (module S: S) deepen bare unpack repo dir =
       let dir = match dir with
         | Some d -> d
         | None   ->
@@ -245,12 +248,12 @@ let clone = {
       run begin
         S.create ~root:dir ()   >>= fun t ->
         printf "Cloning into '%s' ...\n%!" (Filename.basename (S.root t));
-        Remote.clone t ?deepen repo >>= fun r ->
+        Remote.clone t ?deepen ~unpack repo >>= fun r ->
         match r.GitRemote.head with
         | None      -> return_unit
         | Some head -> S.write_cache t head
       end in
-    Term.(mk clone $ backend $ depth $ bare $ repository $ directory)
+    Term.(mk clone $ backend $ depth $ bare $ unpack $ repository $ directory)
 }
 
 (* FETCH *)
@@ -259,14 +262,14 @@ let fetch = {
   doc  = "Fetch a remote Git repository.";
   man  = [];
   term =
-    let fetch (module S: S) repo =
+    let fetch (module S: S) unpack repo =
       let module Remote = GitUnix.Remote(S) in
       run begin
         S.create ()     >>= fun t ->
-        Remote.fetch t repo >>= fun _ ->
+        Remote.fetch t ~unpack repo >>= fun _ ->
         return_unit
       end in
-    Term.(mk fetch $ backend $ repository)
+    Term.(mk fetch $ backend $ unpack $ repository)
 }
 
 (* GRAPH *)

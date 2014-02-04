@@ -360,6 +360,7 @@ module type S = sig
   val read_exn: t -> sha1 -> value Lwt.t
   val mem: t -> sha1 -> bool Lwt.t
   val read_inflated: t -> sha1 -> Bigstring.t option Lwt.t
+  val read_inflated_exn: t -> sha1 -> Bigstring.t Lwt.t
   val list: t -> sha1 list Lwt.t
   val write: t -> value -> sha1 Lwt.t
   val write_and_check_inflated: t -> sha1 -> Bigstring.t -> unit Lwt.t

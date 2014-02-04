@@ -152,7 +152,7 @@ module Pack: sig
     read_inflated:(sha1 -> Bigstring.t Lwt.t) ->
     write:(value -> sha1 Lwt.t) ->
     pack ->
-    sha1 list Lwt.t
+    pack_index Lwt.t
     (** Unpack a whole pack file. *)
 
 end

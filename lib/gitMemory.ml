@@ -54,6 +54,11 @@ let read_inflated t sha1 =
   else
     return_none
 
+let read_inflated_exn t sha1 =
+  read_inflated t sha1 >>= function
+  | None   -> fail Not_found
+  | Some b -> return b
+
 let write_inflated t inflated =
   let sha1 = SHA1.create inflated in
   if Hashtbl.mem t.buffers sha1 then

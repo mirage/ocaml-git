@@ -781,8 +781,7 @@ module Pack = struct
       unpack_and_write ~read_inflated ~write ~index ~offset packed_value in
     index ~compute_sha1 buf >>= fun index ->
     Printf.printf "\rUnpacking objects: 100%% (%d/%d), done.\n%!" !i !i;
-    let keys = Map.keys index.offsets in
-    return keys
+    return index
 
 
   let output _ =

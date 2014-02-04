@@ -517,12 +517,14 @@ module Make (IO: IO) (Store: S) = struct
   type clone = {
     bare  : bool;
     deepen: int option;
+    unpack: bool;
   }
 
   type fetch = {
     haves   : sha1 list;
     shallows: sha1 list;
     deepen  : int option;
+    unpack  : bool;
   }
 
   type op =
@@ -587,7 +589,19 @@ module Make (IO: IO) (Store: S) = struct
               IO.read_all ic >>= fun raw ->
               Log.debugf "Received a pack file of %d bytes." (String.length raw);
               let pack = Bigstring.of_string raw in
-              Store.write_pack t pack >>= fun index ->
+
+              let unpack = match op with
+                | Clone { unpack }
+                | Fetch { unpack } -> unpack
+                | _                -> false in
+
+              begin if unpack then
+                  let read_inflated = Store.read_inflated_exn t in
+                  let write = Store.write t in
+                  Git.Pack.unpack_all ~read_inflated ~write pack
+                else
+                  Store.write_pack t pack
+              end >>= fun index ->
               let sha1s = Map.keys index.offsets in
               match sha1s with
               | []    ->
@@ -615,14 +629,14 @@ module Make (IO: IO) (Store: S) = struct
     fetch_pack t address Ls >>= function
       { references } -> return references
 
-  let clone t ?(bare=false) ?deepen address =
-    fetch_pack t address (Clone { bare; deepen })
+  let clone t ?(bare=false) ?deepen ?(unpack=false) address =
+    fetch_pack t address (Clone { bare; deepen; unpack })
 
-  let fetch t ?deepen address =
+  let fetch t ?deepen ?(unpack=false) address =
     Store.list t >>= fun haves ->
     (* XXX: Store.shallows t >>= fun shallows *)
     let shallows = [] in
-    fetch_pack t address (Fetch { shallows; haves; deepen })
+    fetch_pack t address (Fetch { shallows; haves; deepen; unpack })
 
   type t = Store.t
 
@@ -631,6 +645,6 @@ end
 module type S = sig
   type t
   val ls: t -> string -> (SHA1.Commit.t * reference) list Lwt.t
-  val clone: t -> ?bare:bool -> ?deepen:int -> string -> result Lwt.t
-  val fetch: t -> ?deepen:int -> string -> result Lwt.t
+  val clone: t -> ?bare:bool -> ?deepen:int -> ?unpack:bool -> string -> result Lwt.t
+  val fetch: t -> ?deepen:int -> ?unpack:bool -> string -> result Lwt.t
 end

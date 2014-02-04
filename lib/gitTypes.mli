@@ -399,6 +399,10 @@ module type S = sig
   (** Return the inflated contents of object having the given SHA1
       name. *)
 
+  val read_inflated_exn: t -> sha1 -> Bigstring.t Lwt.t
+  (** Same as [read_inflated] but raise [Not_found] if the key does
+      not exist. *)
+
   val list: t -> sha1 list Lwt.t
   (** Return the list of SHA1 names. *)
 

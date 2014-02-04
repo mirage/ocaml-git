@@ -242,6 +242,11 @@ let read_inflated t sha1 =
   then Loose.read_inflated t sha1
   else Packed.read_inflated t sha1
 
+let read_inflated_exn t sha1 =
+  read_inflated t sha1 >>= function
+  | None   -> fail Not_found
+  | Some b -> return b
+
 let read t sha1 =
   read_inflated t sha1 >>= function
   | None     -> return_none
@@ -250,11 +255,9 @@ let read t sha1 =
     return (Some (Git.input_inflated buf))
 
 let read_exn t sha1 =
-  read_inflated t sha1 >>= function
-  | None     -> fail Not_found
-  | Some buf ->
-    let buf = Mstruct.of_bigarray buf in
-    return (Git.input_inflated buf)
+  read_inflated_exn t sha1 >>= fun buf ->
+  let buf = Mstruct.of_bigarray buf in
+  return (Git.input_inflated buf)
 
 let mem t sha1 =
   read_inflated t sha1 >>= function

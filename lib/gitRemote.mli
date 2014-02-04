@@ -65,11 +65,11 @@ module type S = sig
   val ls: t -> string -> (SHA1.Commit.t * reference) list Lwt.t
   (** List the references in the remote repository. *)
 
-  val clone: t -> ?bare:bool -> ?deepen:int -> string -> result Lwt.t
+  val clone: t -> ?bare:bool -> ?deepen:int -> ?unpack:bool -> string -> result Lwt.t
   (** [clone t address] clones the contents of [address] into the
       store [t]. *)
 
-  val fetch: t -> ?deepen:int -> string -> result Lwt.t
+  val fetch: t -> ?deepen:int -> ?unpack:bool -> string -> result Lwt.t
   (** [fetch t address] fetches the missing contents of [address] into
       the store [t]. *)
 
