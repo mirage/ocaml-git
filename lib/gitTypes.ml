@@ -34,6 +34,8 @@ module SHA1_String = struct
 
   include (String: Identifiable.S)
 
+  (* XXX: add the bigstring in chunks using a tmp buffer (to alloc only
+     once). *)
   let create str =
     let hash = Cryptokit.Hash.sha1 () in
     hash#add_string (Bigstring.to_string str);
@@ -237,19 +239,33 @@ end
 
 type packed_value = Packed_value.t
 
-type pack_index = {
-  offsets: int SHA1.Map.t;
-  lengths: int option SHA1.Map.t;
-}
+module Pack_index = struct
 
-let empty_pack_index = {
-  offsets = SHA1.Map.empty;
-  lengths = SHA1.Map.empty;
-}
+  module T = struct
+    type t = {
+      offsets : int SHA1.Map.t;
+      lengths : int option SHA1.Map.t;
+      pack_checksum: SHA1.t;
+    } with bin_io, compare, sexp
+    let hash (t: t) = Hashtbl.hash t
+    include Sexpable.To_stringable (struct type nonrec t = t with sexp end)
+    let module_name = "Value"
+  end
+  include T
+  include Identifiable.Make (T)
+
+  let empty ~pack_checksum = {
+    offsets = SHA1.Map.empty;
+    lengths = SHA1.Map.empty;
+    pack_checksum;
+  }
+end
+
+type pack_index = Pack_index.t
 
 module Pack = struct
   module T = struct
-    type t = Bigstring.t
+    type t = Packed_value.t list
     with bin_io, compare, sexp
     let hash (t: t) = Hashtbl.hash t
     include Sexpable.To_stringable (struct type nonrec t = t with sexp end)
@@ -365,6 +381,7 @@ module type S = sig
   val write: t -> value -> sha1 Lwt.t
   val write_and_check_inflated: t -> sha1 -> Bigstring.t -> unit Lwt.t
   val write_pack: t -> pack -> pack_index Lwt.t
+  val write_raw_pack: t -> Bigstring.t -> pack_index Lwt.t
   val references: t -> reference list Lwt.t
   val mem_reference: t -> reference -> bool Lwt.t
   val read_reference: t -> reference -> SHA1.Commit.t option Lwt.t

@@ -32,6 +32,10 @@ val files: string -> string list Lwt.t
 val rec_files: string -> string list Lwt.t
 (** List of the subfiles, recursively. *)
 
+val bigstring_of_file: string -> Bigstring.t
+(** mmap a file and return a mutable C-like structure with its
+    contents. *)
+
 val mstruct_of_file: string -> Mstruct.t
 (** mmap a file and return a mutable C-like structure with its
     contents. *)

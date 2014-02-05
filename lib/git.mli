@@ -105,7 +105,11 @@ module Pack_index: sig
   include SERIALIZABLE with type t = pack_index
 
   val of_pack: pack -> t
-  (** Create an index from a full pack (useful on fetch/clone) *)
+  (** Create an index from a pack. *)
+
+  val of_raw_pack: Bigstring.t -> t
+  (** Same as [of_pack] but create an index from a raw pack instead
+      (such raw packs are received on fetch/clone) *)
 
 end
 
@@ -120,8 +124,8 @@ module Pack: sig
 
   include SERIALIZABLE with type t = pack
 
-  val get_packed_value: pack -> pack_index -> sha1 -> packed_value
-  (** Read a packed value inside a pack file. *)
+  val read_packed_value: Bigstring.t -> pack_index -> sha1 -> packed_value
+  (** Read a packed value inside a raw pack file. *)
 
   val unpack_inflated:
     read_inflated:(sha1 -> Bigstring.t Lwt.t) ->
@@ -148,7 +152,7 @@ module Pack: sig
   val unpack_all:
     read_inflated:(sha1 -> Bigstring.t Lwt.t) ->
     write:(value -> sha1 Lwt.t) ->
-    pack ->
+    Bigstring.t ->
     pack_index Lwt.t
     (** Unpack a whole pack file. *)
 

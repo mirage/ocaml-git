@@ -458,13 +458,10 @@ module PackedValue (M: sig val version: int end) = struct
     let opcode = Mstruct.get_uint8 buf in
     if opcode = 0 then
       Mstruct.parse_error_buf buf "0 as value of the first byte of a hunk is reserved.";
-
     match opcode land 0x80 with
-
     | 0 ->
       let contents = Mstruct.get_string buf opcode in
       Packed_value.Insert contents
-
     | _ ->
       let read bit shift =
         if not (isset opcode bit) then 0
@@ -594,9 +591,6 @@ module Pack = struct
   open Lwt
   module P = Packed_value
 
-  let input buf =
-    Mstruct.to_bigarray buf
-
   let input_header buf =
     let header = Mstruct.get_string buf 4 in
     if header <> "PACK" then
@@ -610,7 +604,16 @@ module Pack = struct
     if version = 2 then PackedValue2.input_inflated buf
     else PackedValue3.input_inflated buf
 
-  let get_packed_value buf idx =
+  let input buf =
+    let version, count = input_header buf in
+    let values = ref [] in
+    for i = 0 to count - 1 do
+      let v = input_packed_value version buf in
+      values := v :: !values
+    done;
+    !values
+
+  let read_packed_value buf { Pack_index.offsets; lengths } =
     let buf = Mstruct.of_bigarray buf in
     let version, size = input_header (Mstruct.clone buf) in
     let packs = SHA1.Table.create () in
@@ -618,9 +621,9 @@ module Pack = struct
       if Hashtbl.mem packs sha1 then
         Hashtbl.find_exn packs sha1
       else (
-        let offset = Map.find_exn idx.offsets sha1 in
+        let offset = Map.find_exn offsets sha1 in
         let buf = Mstruct.clone buf in
-        let buf = match Map.find_exn idx.lengths sha1 with
+        let buf = match Map.find_exn lengths sha1 with
           | None   ->
             Mstruct.shift buf offset;
             Mstruct.sub buf 0 (Mstruct.length buf - 20)
@@ -682,11 +685,9 @@ module Pack = struct
       Map.iter
         ~f:(fun ~key ~data -> if data=d then (r := Some key; raise Exit))
         map;
-      raise Not_found
+      None
     with Exit ->
-      match !r with
-      | Some x -> x
-      | None   -> failwith "rev_assoc"
+      !r
 
   let unpack_inflated_aux (return, bind) ~read_inflated ~index ~offset = function
     | P.Raw_value x -> return x
@@ -698,11 +699,7 @@ module Pack = struct
     | P.Off_delta d ->
       let offset = offset - d.P.source in
       let base =
-        match
-          Map.fold
-            ~f:(fun ~key ~data acc -> if data=offset then Some key else acc)
-            ~init:None index.offsets
-        with
+        match rev_assoc index.Pack_index.offsets offset with
         | Some k -> k
         | None   ->
           let msg = Printf.sprintf
@@ -725,11 +722,13 @@ module Pack = struct
     return value
 
   let index_aux (return, bind) ~compute_sha1 buf =
+    let pack_checksum = SHA1.create buf in
     let buf = Mstruct.of_bigarray buf in
     let version, size = input_header buf in
     Log.debugf "index: version=%d size=%d" version size;
+    let empty = Pack_index.empty pack_checksum in
     if size <= 0 then
-      return empty_pack_index
+      return empty
     else (
       let next_packed_value () =
         input_packed_value version buf in
@@ -740,14 +739,15 @@ module Pack = struct
         bind
           (compute_sha1 ~size ~index ~offset packed_value)
           (fun sha1 ->
-             let index = {
-               offsets = Map.add index.offsets ~key:sha1 ~data:offset;
-               lengths = Map.add index.lengths ~key:sha1 ~data:(Some length);
-             } in
+             let index = Pack_index.({
+                 offsets = SHA1.Map.add index.offsets ~key:sha1 ~data:offset;
+                 lengths = SHA1.Map.add index.lengths ~key:sha1 ~data:(Some length);
+                 pack_checksum;
+               }) in
              if i >= size - 1 then return index
              else loop index (i+1))
       in
-      loop empty_pack_index 0
+      loop empty 0
     )
 
   let index = index_aux lwt_monad
@@ -787,7 +787,7 @@ module Pack_index = struct
   let id_monad =
     (fun x -> x), (fun x f -> f x)
 
-  let of_pack buf =
+  let of_raw_pack buf =
     let buffers = SHA1.Table.create () in
     let read_inflated sha1 =
       try Hashtbl.find_exn buffers sha1
@@ -803,6 +803,11 @@ module Pack_index = struct
       write buf
     in
     Pack.index_aux id_monad ~compute_sha1 buf
+
+  let of_pack pack =
+    (* XXX: could do beter *)
+    let buf = Pack.output pack in
+    of_raw_pack buf
 
   let input buf =
     let magic = Mstruct.get_string buf 4 in
@@ -859,19 +864,53 @@ module Pack_index = struct
           (name, Int32.to_int_exn offset)
       ) names in
 
-    let _sha1 = input_sha1 buf in
+    let pack_checksum = input_sha1 buf in
     let _checksum = input_sha1 buf in
 
     let offsets_alist = Array.to_list idx in
     let offsets = SHA1.Map.of_alist_exn offsets_alist in
     let lengths = SHA1.Map.of_alist_exn (lengths offsets_alist) in
-    { offsets; lengths }
+    { Pack_index.offsets; lengths; pack_checksum }
 
-  let output buf =
-    todo "pack-index"
+  let str_buffer = String.create 4
+  let add_be_uint32 buf i =
+    EndianString.BigEndian.set_int32 str_buffer 0 i;
+    Bigbuffer.add_string buf str_buffer
 
-  let pretty _ =
-    todo "pack-index"
+  let output t =
+    let buf = Bigbuffer.create 1024 in
+    Bigbuffer.add_string buf "\255tOc";
+    add_be_uint32 buf 2l;
+
+    let offsets = Map.to_alist t.Pack_index.offsets in
+    let offsets = List.sort ~cmp:(fun (k1,_) (k2,_) -> SHA1.compare k1 k2) offsets in
+
+    let fanout = Array.create 256 0l in
+    List.iter ~f:(fun (key, _) ->
+        let str = SHA1.to_string key in
+        let n = Char.to_int str.[0] in
+        for i = n to 255 do
+          fanout.(i) <- Int32.succ fanout.(i)
+        done;
+      ) offsets;
+    Array.iter ~f:(add_be_uint32 buf) fanout;
+
+    List.iter ~f:(fun (key, offset) ->
+        add_be_uint32 buf (Int32.of_int_exn offset);
+        Bigbuffer.add_string buf (SHA1.to_string key)
+      ) offsets;
+
+    output_sha1 buf t.Pack_index.pack_checksum;
+
+    (* XXX: slow *)
+    let str = GitMisc.buffer_contents buf in
+    let checksum = SHA1.create str in
+
+    Bigbuffer.add_string buf (SHA1.to_string checksum);
+    [ GitMisc.buffer_contents buf ]
+
+  let pretty t =
+    Sexp.to_string_hum (Pack_index.sexp_of_t t)
 
   let dump t =
     Printf.eprintf "%s" (pretty t)

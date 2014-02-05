@@ -301,19 +301,38 @@ end
 
 type packed_value = Packed_value.t
 
-type pack_index = {
-  offsets: int SHA1.Map.t;
-  lengths: int option SHA1.Map.t;
-}
-(** Pack indexes. *)
+module Pack_index: sig
 
-module Pack: Identifiable.S with type t = Bigstring.t
+  (** Pack indexes. *)
+
+  type t = {
+    offsets      : int SHA1.Map.t;
+    lengths      : int option SHA1.Map.t;
+    pack_checksum: SHA1.t;
+  }
+  (** [offsests] is the position of the SHA1 objects in the
+      corresponding raw pack file.
+
+      [lengths] is the difference between two consecutive offsets
+      (appart for the last elements, where the lenght can be [None] is
+      the index file is build from a raw pack file).
+
+      [pack_checksum] is the corresponding pack file checksums, value
+      which is needed when writing the pack index file to disk. *)
+
+  include Identifiable.S with type t := t
+
+  val empty: pack_checksum:SHA1.t -> t
+  (** The empty pack index. *)
+
+end
+
+type pack_index = Pack_index.t
+
+module Pack: Identifiable.S with type t = packed_value list
 (** Raw pack files. *)
 
 type pack = Pack.t
-
-val empty_pack_index: pack_index
-(** The empty pack index. *)
 
 (** {2 Casts} *)
 
@@ -416,6 +435,9 @@ module type S = sig
 
   val write_pack: t -> pack -> pack_index Lwt.t
   (** Write a raw pack file and its corresponding index. *)
+
+  val write_raw_pack: t -> Bigstring.t -> pack_index Lwt.t
+  (** Same as [write_pack] but with a raw pack file. *)
 
   (** {2 References} *)
 

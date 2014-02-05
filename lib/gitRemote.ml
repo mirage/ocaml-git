@@ -600,9 +600,9 @@ module Make (IO: IO) (Store: S) = struct
                   let write = Store.write t in
                   Git.Pack.unpack_all ~read_inflated ~write pack
                 else
-                  Store.write_pack t pack
+                  Store.write_raw_pack t pack
               end >>= fun index ->
-              let sha1s = Map.keys index.offsets in
+              let sha1s = Map.keys index.Pack_index.offsets in
               match sha1s with
               | []    ->
                 Log.debugf "NO NEW OBJECTS";

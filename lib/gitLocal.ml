@@ -166,13 +166,14 @@ module Packed = struct
     GitUnix.writev_file file buffers
 
   let rec read_inflated t (pack, index) sha1 =
+    let offsets = index.Pack_index.offsets in
     let error offset =
-      let offsets = Map.data index.offsets in
+      let offsets = Map.data offsets in
       let offsets = String.concat ~sep:"," (List.map ~f:string_of_int offsets) in
       Printf.eprintf "%d: invalid offset.\nValid offsets are: {%s}\n" offset offsets;
       failwith "invalid offset" in
-    if Map.mem index.offsets sha1 then (
-      let offset = Map.find_exn index.offsets sha1 in
+    if Map.mem offsets sha1 then (
+      let offset = Map.find_exn offsets sha1 in
       let packed_value = Git.Pack.read_packed_value pack index sha1 in
       let read_inflated sha1 =
         Loose.read_inflated t sha1 >>= function
@@ -187,7 +188,7 @@ module Packed = struct
       | []    -> return_none
       | n::ns ->
         read_index t n >>= fun index ->
-        if Map.mem index.offsets sha1 then
+        if Map.mem index.Pack_index.offsets sha1 then
           read t n                           >>= fun pack ->
           read_inflated t (pack, index) sha1 >>= fun v ->
           return (Some v)
@@ -204,8 +205,8 @@ let list t =
   Packed.list t >>= fun packs   ->
   (* Add cached objects *)
   Lwt_list.fold_left_s (fun acc p ->
-      Packed.read_index t p >>= fun index ->
-      return ((Map.keys index.offsets) @ acc)
+      Packed.read_index t p >>= fun { Pack_index.offsets } ->
+      return ((Map.keys offsets) @ acc)
     ) objects packs
 
 let read_inflated t sha1 =
@@ -335,7 +336,7 @@ let write_and_check_inflated t sha1 inflated =
 let write_raw_pack t pack =
   let index = Git.Pack_index.of_raw_pack pack in
   let name =
-    Map.keys index.offsets
+    Map.keys index.Pack_index.offsets
     |> List.map ~f:SHA1.to_hex
     |> List.sort ~cmp:String.compare
     |> String.concat ~sep:""

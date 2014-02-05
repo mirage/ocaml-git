@@ -101,6 +101,12 @@ let write_pack t pack =
   t.packs <- (index, pack) :: t.packs;
   return index
 
+let write_raw_pack t pack =
+  let index = Git.Pack_index.of_raw_pack pack in
+  let pack = Git.Pack.input (Mstruct.of_bigarray pack) in
+  t.packs <- (index, pack) :: t.packs;
+  return index
+
 let write_and_check t sha1 value =
   match Hashtbl.find t.values sha1 with
   | Some _ -> return_unit

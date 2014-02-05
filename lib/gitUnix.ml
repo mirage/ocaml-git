@@ -50,12 +50,15 @@ module M = struct
   let write oc s =
     Lwt_io.write oc s
 
-  let mstruct_of_file file =
+  let bigstring_of_file file =
     let open Lwt in
     let fd = Unix.(openfile file [O_RDONLY; O_NONBLOCK] 0o644) in
     let ba = Lwt_bytes.map_file ~fd ~shared:false () in
     Unix.close fd;
-    Mstruct.of_bigarray ba
+    ba
+
+  let mstruct_of_file file =
+    Mstruct.of_bigarray (bigstring_of_file file)
 
   let mkdir dirname =
     let rec aux dir =
