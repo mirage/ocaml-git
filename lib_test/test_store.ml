@@ -18,6 +18,7 @@ open OUnit
 open Test_common
 open Lwt
 open GitTypes
+open Core_kernel.Std
 
 type t = {
   name : string;
@@ -259,54 +260,42 @@ module Make (S: S) = struct
     in
     run x test
 
-(*
-  let test_sync x () =
-    let test () =
-      create ()              >>= fun t1 ->
-      update t1 ["a";"b"] v1 >>= fun () ->
-      snapshot t1            >>= fun r1 ->
-      update t1 ["a";"c"] v2 >>= fun () ->
-      snapshot t1            >>= fun r2 ->
-      update t1 ["a";"d"] v1 >>= fun () ->
-      snapshot t1            >>= fun r3 ->
-      output t1 "full"       >>= fun () ->
-      export t1 [r3]         >>= fun partial ->
-      export t1 []           >>= fun full    ->
+  let test_packs x () =
+    if x.name = "FS" then
+      let test () =
+        GitUnix.files "data/" >>= fun files ->
+        let files = List.filter ~f:(fun file ->
+            String.is_suffix file ~suffix:".pack"
+          ) files in
+        let files = List.map ~f:(fun file ->
+            let name = String.chop_prefix_exn file ~prefix:"data/pack-" in
+            let name = String.chop_suffix_exn name ~suffix:".pack" in
+            SHA1.of_string name, file, "data/pack-" ^ name ^ ".idx"
+          ) files in
+        List.iter ~f:(fun (name, pack, index) ->
+            let raw_pack  = GitUnix.read_file pack in
+            let raw_index = GitUnix.read_file index in
 
-      (* Restart a fresh store and import everything in there. *)
-      x.clean ()             >>= fun () ->
-      x.init ()              >>= fun () ->
-      create ~root:"test-db2" () >>= fun t2 ->
+            let pack = Git.Pack.input (Mstruct.of_bigarray raw_pack) in
+            let raw_pack2 = GitMisc.bigstring_concat (Git.Pack.output pack) in
+            assert_bigstring_equal "pack" raw_pack raw_pack2;
 
-      import t2 partial      >>= fun () ->
-      revert t2 r3           >>= fun () ->
-      output t2 "partial"    >>= fun () ->
+            let index = Git.Pack_index.input (Mstruct.of_bigarray raw_index) in
+            let raw_index2 = GitMisc.bigstring_concat (Git.Pack_index.output index) in
+            assert_bigstring_equal "pack-index" raw_index raw_index2;
 
-      mem t2 ["a";"b"]       >>= fun b1 ->
-      assert_bool_equal "mem-ab" true b1;
+            let i2 = Git.Pack_index.of_pack pack in
+            assert_pack_index_equal "pack -> pack-index" index i2;
 
-      mem t2 ["a";"c"]       >>= fun b2 ->
-      assert_bool_equal "mem-ac" true b2;
+            let i3 = Git.Pack_index.of_raw_pack raw_pack in
+            assert_pack_index_equal "raw-pack -> pack-index" index i3;
 
-      mem t2 ["a";"d"]       >>= fun b3  ->
-      assert_bool_equal "mem-ad" true b3;
-      read_exn t2 ["a";"d"]  >>= fun v1' ->
-      assert_value_equal "v1" v1' v1;
+          ) files;
 
-      catch
-        (fun () ->
-           revert t2 r2      >>= fun () ->
-           OUnit.assert_bool "revert" false;
-           return_unit)
-        (fun e ->
-           import t2 full    >>= fun () ->
-           revert t2 r2      >>= fun () ->
-           mem t2 ["a";"d"]  >>= fun b4 ->
-           assert_bool_equal "mem-ab" false b4;
-           return_unit
-        ) in
-    run x test
-*)
+        return_unit
+      in
+      run x test
+
 end
 
 let suite (speed, x) =
@@ -319,11 +308,9 @@ let suite (speed, x) =
     "Basic operations on commits"     , speed, T.test_commits  x;
     "Basic operations on tags"        , speed, T.test_tags     x;
     "Basic operations on references"  , speed, T.test_refs     x;
-(*
-    "High-level store synchronisation", speed, T.test_sync     x;
-*)
+    "Basic operations on pack files"  , speed, T.test_packs    x;
   ]
 
 let run name tl =
-  let tl = List.map suite tl in
+  let tl = List.map ~f:suite tl in
   Alcotest.run name tl

@@ -15,6 +15,21 @@
  *)
 
 open GitTypes
+open Core_kernel.Std
+
+module Bigstring = struct
+  include Bigstring
+  let compare t1 t2 =
+    match Int.compare (Bigstring.length t1) (Bigstring.length t2) with
+    | 0 -> String.compare (Bigstring.to_string t1) (Bigstring.to_string t2)
+    | i -> i
+  let equal t1 t2 =
+    Int.equal (Bigstring.length t1) (Bigstring.length t2)
+    && String.equal (Bigstring.to_string t1) (Bigstring.to_string t2)
+
+  let pretty b =
+    sprintf "%S" (to_string b)
+end
 
 let () =
   Log.set_log_level Log.DEBUG;
@@ -38,9 +53,9 @@ let rec cmp_list fn x y =
   | []    , []     -> true
   | _              -> false
 
-let printer_list fn = function
+let printer_list f = function
   | [] -> "[]"
-  | l  -> Printf.sprintf "[ %s ]" (String.concat ", " (List.map fn l))
+  | l  -> Printf.sprintf "[ %s ]" (String.concat ~sep:", " (List.map ~f l))
 
 let line msg =
   let line () = Alcotest.line stderr ~color:`Yellow '-' in
@@ -72,6 +87,12 @@ module Make (S: S) = struct
 
   let assert_ref_equal, assert_ref_opt_equal, assert_refs_equal =
     mk Reference.equal Reference.compare Reference.to_string
+
+  let assert_bigstring_equal, assert_bigstring_opt_equal, assert_bigstrings_equal =
+    mk Bigstring.equal Bigstring.compare Bigstring.pretty
+
+  let assert_pack_index_equal, assert_pack_index_opt_equal, assert_pack_indexes_equal =
+    mk Pack_index.equal Pack_index.compare Pack_index.to_string
 
   let key value =
     SHA1.create (Git.output_inflated value)
