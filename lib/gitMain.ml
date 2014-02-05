@@ -132,7 +132,8 @@ let cat = {
       Arg.(required & pos 0 (some string) None & doc) in
     let cat_file file =
       run begin
-        let buf = GitUnix.mstruct_of_file file in
+        let buf = GitUnix.read_file file in
+        let buf = Mstruct.of_bigarray buf in
         let v = Git.input buf in
         Printf.printf "%s%!" (Git.pretty v);
         return_unit

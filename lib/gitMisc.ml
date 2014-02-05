@@ -108,6 +108,13 @@ let buffer_contents buf =
   let len = Bigbuffer.length buf in
   Bigstring.sub_shared ~len (Bigbuffer.volatile_contents buf)
 
+let bigstring_concat buffers =
+  let buf = Bigbuffer.create 1024 in
+  List.iter ~f:(fun b ->
+      Bigbuffer.add_string buf (Bigstring.to_string b)
+    ) buffers;
+  buffer_contents buf
+
 let deflate_bigstring input =
   let output = Bigbuffer.create (Bigstring.length input) in
   Zlib.compress (refill input) (flush output);

@@ -46,7 +46,8 @@ module Loose = struct
     let file = file t sha1 in
     if Sys.file_exists file then (
       Log.infof "Reading %s" file;
-      let buf = GitUnix.mstruct_of_file file in
+      let buf = GitUnix.read_file file in
+      let buf = Mstruct.of_bigarray buf in
       let buf = GitMisc.inflate_mstruct buf in
       let buf = Mstruct.to_bigarray buf in
       return (Some buf)
@@ -137,7 +138,8 @@ module Packed = struct
   let read_index t sha1 =
     let file = index t sha1 in
     if Sys.file_exists file then
-      let buf = GitUnix.mstruct_of_file file in
+      let buf = GitUnix.read_file file in
+      let buf = Mstruct.of_bigarray buf in
       let index = Git.Pack_index.input buf in
       return index
     else (
@@ -149,7 +151,7 @@ module Packed = struct
     let file = file t sha1 in
     read_index t sha1 >>= fun index ->
     if Sys.file_exists file then (
-      let buf = GitUnix.bigstring_of_file file in
+      let buf = GitUnix.read_file file in
       return buf
     ) else (
       Printf.eprintf "No file associated with the pack object %s.\n" (SHA1.to_hex sha1);
@@ -348,11 +350,8 @@ let write_raw_pack t pack =
 
 let write_pack t pack =
   let buffers = Git.Pack.output pack in
-  let buf = Bigbuffer.create 1024 in
-  List.iter ~f:(fun b ->
-      Bigbuffer.add_string buf (Bigstring.to_string b)
-    ) buffers;
-  write_raw_pack t (GitMisc.buffer_contents buf)
+  let buf = GitMisc.bigstring_concat buffers in
+  write_raw_pack t buf
 
 let write_reference t ref sha1 =
   let file = t / ".git" / Reference.to_string ref in
@@ -370,7 +369,7 @@ let write_reference t ref sha1 =
     | _      ->
       return (SHA1.Commit.to_hex sha1)
   end >>= fun contents ->
-  Lwt_io.(with_file ~mode:Output file (fun oc -> write oc contents))
+  GitUnix.write_file_string file ~contents
 
 (* XXX: do not load the blobs *)
 let load_filesystem t commit =
@@ -408,7 +407,7 @@ let create_file file mode blob =
   match mode with
   | `Link -> (* Lwt_unix.symlink file ??? *) failwith "TODO"
   | _     ->
-    Lwt_io.(with_file ~mode:Output file (fun oc -> write oc blob)) >>= fun () ->
+    GitUnix.write_file_string file ~contents:blob >>= fun () ->
     match mode with
     | `Exec -> Lwt_unix.chmod file 0o755
     | _     -> return_unit
@@ -417,7 +416,8 @@ let cache_file t =
   t / ".git" / "index"
 
 let read_cache t =
-  let buf = GitUnix.mstruct_of_file (cache_file t) in
+  let buf = GitUnix.read_file (cache_file t) in
+  let buf = Mstruct.of_bigarray buf in
   return (Git.Cache.input buf)
 
 let stat_info_of_file path =
@@ -456,13 +456,4 @@ let write_cache t head =
     ) >>= fun () ->
   let cache = { Cache.entries = !entries; extensions = [] } in
   let buffers = Git.Cache.output cache in
-  Lwt_unix.openfile (cache_file t)
-    [Lwt_unix.O_WRONLY; Lwt_unix.O_CREAT; Lwt_unix.O_TRUNC] 0o644 >>= fun fd ->
-  Lwt_list.iter_s (fun buf ->
-      let len = Bigarray.Array1.dim buf in
-      Lwt_bytes.write fd buf 0 len >>= fun d ->
-      if d <> len then failwith "XXX"
-      else return_unit
-    ) buffers
-  >>= fun () ->
-  Lwt_unix.close fd
+  GitUnix.writev_file (cache_file t) buffers

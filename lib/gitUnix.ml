@@ -50,15 +50,12 @@ module M = struct
   let write oc s =
     Lwt_io.write oc s
 
-  let bigstring_of_file file =
+  let read_file file =
     let open Lwt in
     let fd = Unix.(openfile file [O_RDONLY; O_NONBLOCK] 0o644) in
     let ba = Lwt_bytes.map_file ~fd ~shared:false () in
     Unix.close fd;
     ba
-
-  let mstruct_of_file file =
-    Mstruct.of_bigarray (bigstring_of_file file)
 
   let mkdir dirname =
     let rec aux dir =
@@ -110,6 +107,14 @@ let write_bigstring fd b =
     else return () in
   rwrite fd b 0 (Bigstring.length b)
 
+let write_string fd b =
+  let rec rwrite fd buf ofs len =
+    Lwt_unix.write fd buf ofs len >>= fun n ->
+    if n = 0 then fail End_of_file
+    else if n < len then rwrite fd buf (ofs + n) (len - n)
+    else return () in
+  rwrite fd b 0 (String.length b)
+
 let with_write_file file fn =
   mkdir (Filename.dirname file) >>= fun () ->
   Lwt_unix.(openfile file [O_WRONLY; O_CREAT; O_TRUNC] 0o644) >>= fun fd ->
@@ -119,6 +124,9 @@ let with_write_file file fn =
 
 let write_file file b =
   with_write_file file (fun fd -> write_bigstring fd b)
+
+let write_file_string file ~contents =
+  with_write_file file (fun fd -> write_string fd contents)
 
 let writev_file file bs =
   with_write_file file (fun fd ->

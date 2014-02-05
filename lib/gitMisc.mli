@@ -29,16 +29,19 @@ val hex_decode: string -> string
 val buffer_contents: Bigbuffer.t -> Bigstring.t
 (** zero-copy buffer contents. *)
 
+val bigstring_concat: Bigstring.t list -> Bigstring.t
+(** Return the concatenation of buffers. *)
+
 (** {2 Zlib Compression} *)
 
-(** Deflate a big string. *)
 val deflate_bigstring: Bigstring.t -> Bigstring.t
+(** Deflate a big string. *)
 
-(** Inflate a buffer. *)
 val inflate_mstruct: Mstruct.t -> Mstruct.t
+(** Inflate a buffer. *)
 
-(** Deflate a buffer. *)
 val deflate_mstruct: Mstruct.t -> Mstruct.t
+(** Deflate a buffer. *)
 
 module OP: sig
 

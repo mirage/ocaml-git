@@ -32,16 +32,18 @@ val files: string -> string list Lwt.t
 val rec_files: string -> string list Lwt.t
 (** List of the subfiles, recursively. *)
 
-val bigstring_of_file: string -> Bigstring.t
+val read_file: string -> Bigstring.t
 (** mmap a file and return a mutable C-like structure with its
     contents. *)
 
-val mstruct_of_file: string -> Mstruct.t
-(** mmap a file and return a mutable C-like structure with its
-    contents. *)
+val write_file_string: string -> contents:string -> unit Lwt.t
+(** Write a bigarray to a file. *)
 
 val write_file: string -> Bigstring.t -> unit Lwt.t
+(** Write a bigarray to a file. *)
+
 val writev_file: string -> Bigstring.t list -> unit Lwt.t
+(** Write a list of bigarrays to a file. *)
 
 module Remote: functor (S: GitTypes.S) -> GitRemote.S with type t = S.t
 (** Implementation of the Git protocol using [Lwt_unix] and [Lwt_io]
