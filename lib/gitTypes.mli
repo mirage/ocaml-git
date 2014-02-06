@@ -280,6 +280,9 @@ module Packed_value: sig
     (** A delta hunk can either insert a string of copy the contents of a
         base object. *)
 
+  val pretty_hunk: hunk -> string
+  (** Pretty-print a delta hunk. *)
+
   type 'a delta = {
     source       : 'a;
     source_length: int;
@@ -287,6 +290,10 @@ module Packed_value: sig
     hunks        : hunk list;
   } with bin_io, compare, sexp
   (** Delta objects. *)
+
+  val pretty_delta: 'a delta -> string
+  (** Pretty-print a delta object, by discarding the polymorphic
+      source. *)
 
   type t =
     | Raw_value of Bigstring.t
@@ -296,6 +303,12 @@ module Packed_value: sig
   (** Packed values. *)
 
   include Identifiable.S with type t := t
+
+  val result_length: t -> int
+  (** Return the lenght of the result object. *)
+
+  val source_length: t -> int
+  (** Return the lenght of the base (source) object. *)
 
 end
 

@@ -264,6 +264,8 @@ module Make (S: S) = struct
     if x.name = "FS" then
       let test () =
         GitUnix.files "data/" >>= fun files ->
+        if files = [] then
+          failwith "Please run that test in lib_test/";
         let files = List.filter ~f:(fun file ->
             String.is_suffix file ~suffix:".pack"
           ) files in
@@ -278,17 +280,20 @@ module Make (S: S) = struct
 
             let pack = Git.Pack.input (Mstruct.of_bigarray raw_pack) in
             let raw_pack2 = GitMisc.bigstring_concat (Git.Pack.output pack) in
-            assert_bigstring_equal "pack" raw_pack raw_pack2;
+            let pack2 = Git.Pack.input (Mstruct.of_bigarray raw_pack2) in
+
+            assert_pack_equal "pack" pack pack2;
 
             let index = Git.Pack_index.input (Mstruct.of_bigarray raw_index) in
             let raw_index2 = GitMisc.bigstring_concat (Git.Pack_index.output index) in
-            assert_bigstring_equal "pack-index" raw_index raw_index2;
+            let i1 = Git.Pack_index.input (Mstruct.of_bigarray raw_index2) in
+            assert_pack_index_equal "pack-index" index i1;
 
             let i2 = Git.Pack_index.of_pack pack in
-            assert_pack_index_equal "pack -> pack-index" index i2;
+            assert_pack_index_equal "pack_to_pack-index" index i2;
 
             let i3 = Git.Pack_index.of_raw_pack raw_pack in
-            assert_pack_index_equal "raw-pack -> pack-index" index i3;
+            assert_pack_index_equal "raw-pack_to_pack-index" index i3;
 
           ) files;
 

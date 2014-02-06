@@ -113,10 +113,10 @@ module Pack_index: sig
 
 end
 
-module PackedValue2: ISERIALIZABLE with type t = packed_value
+module Packed_value_2: ISERIALIZABLE with type t = packed_value
 (** Pack objects version 2. *)
 
-module PackedValue3: ISERIALIZABLE with type t = packed_value
+module Packed_value_3: ISERIALIZABLE with type t = packed_value
 (** Pack objects version 3. *)
 
 (** Packs. *)

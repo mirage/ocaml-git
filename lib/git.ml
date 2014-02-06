@@ -447,7 +447,7 @@ end
 
 include Value
 
-module PackedValue (M: sig val version: int end) = struct
+module Packed_value (M: sig val version: int end) = struct
 
   type t = packed_value
 
@@ -460,9 +460,11 @@ module PackedValue (M: sig val version: int end) = struct
       Mstruct.parse_error_buf buf "0 as value of the first byte of a hunk is reserved.";
     match opcode land 0x80 with
     | 0 ->
+      Log.debugf "input_hunk insert";
       let contents = Mstruct.get_string buf opcode in
       Packed_value.Insert contents
     | _ ->
+      Log.debugf "input_hunk copy %d:%d" opcode (opcode land 0x80);
       let read bit shift =
         if not (isset opcode bit) then 0
         else Mstruct.get_uint8 buf lsl shift in
@@ -480,7 +482,8 @@ module PackedValue (M: sig val version: int end) = struct
           Mstruct.parse_error_buf buf "result fied set in delta hunk";
         l0 lor l1 lor l2 in
       let length =
-        if length = 0 then 0x10000 else length in
+        if length = 0 then 0x10_000 else length in
+      Log.debugf "input_hunk offset:%d length:%d" offset length;
       if offset+length > source_length then
         Mstruct.parse_error_buf buf
           "wrong insert hunk (offset:%d length:%d source:%d)"
@@ -490,18 +493,18 @@ module PackedValue (M: sig val version: int end) = struct
   let output_hunk buf = function
     | Packed_value.Insert contents ->
       let len = String.length contents in
-      if len > 64 then
-        failwith "invalid hunk: insert too large";
+      if len >= 0x80 then
+        failwith ("invalid hunk: insert too large: " ^ string_of_int len);
       Bigbuffer.add_char buf (Char.of_int_exn (String.length contents));
       Bigbuffer.add_string buf contents
     | Packed_value.Copy (offset, length) ->
-      let length = if length = 0x10000 then 0 else length in
+      let length = if length = 0x10_000 then 0 else length in
+      let bits = ref [] in
       let bit n shift =
-        if (n lsr shift) land 0xFF = 0 then 0
-        else (
-          Bigbuffer.add_char buf (Char.of_int_exn n);
-          1
-        ) in
+        match (n lsr shift) land 0xFF with
+        | 0 -> 0
+        | n -> bits := Char.of_int_exn n :: !bits; 1
+      in
       let o0 = bit offset 0 in
       let o1 = bit offset 8 in
       let o2 = bit offset 16 in
@@ -509,10 +512,14 @@ module PackedValue (M: sig val version: int end) = struct
       let l0 = bit length 0 in
       let l1 = bit length 8 in
       let l2 = bit length 16 in
+      if l2 <> 0 && M.version = 2 then
+        failwith "pack version 2 does not support copy hunks of size greater than 64K.";
       let n =
-        o0 + (o1 lsl 1) + (o2 lsl 2) + (o3 lsl 3)
+        0x80
+        + o0 + (o1 lsl 1) + (o2 lsl 2) + (o3 lsl 3)
         + (l0 lsl 4) + (l1 lsl 5) + (l2 lsl 6) in
-      Bigbuffer.add_char buf (Char.of_int_exn n)
+      Bigbuffer.add_char buf (Char.of_int_exn n);
+      List.iter ~f:(Bigbuffer.add_char buf) (List.rev !bits)
 
   let input_le_base_128 buf =
     let rec aux int shift =
@@ -522,20 +529,31 @@ module PackedValue (M: sig val version: int end) = struct
       let int  = (base lsl shift) lor int in
       if more then aux int (shift+7)
       else int in
-    aux 0 0
+    let i = aux 0 0 in
+    Log.debugf "input_le_base_128: %d" i;
+    i
+
+  let check_ints msg i1 i2 =
+    if i1 <> i2 then (
+      eprintf "%s: expect %d, got %d\n" msg i1 i2;
+      failwith "check_ints"
+    )
 
   let output_le_base_128 buf int =
-    let rec loop i =
-      if i <> 0 then
-        let more =
-          if i < 0x80 then 0
-          else 0x80 in
-        let byte = more lor (i land 0x7f) in
-        Bigbuffer.add_char buf (Char.of_int_exn byte);
-        loop (i lsr 7) in
-    loop int
+    Log.debugf "output_le_base_128: %d" int;
+    let bytes = ref [] in
+    let rec aux i =
+      let more = if i < 0x80 then 0 else 0x80 in
+      let byte = more lor (i land 0x7f) in
+      bytes := Char.of_int_exn byte :: !bytes;
+      if i >= 0x80 then aux (i lsr 7) in
+    aux int;
+    let str = String.of_char_list (List.rev !bytes) in
+    let int2 = input_le_base_128 (Mstruct.of_string str) in
+    check_ints "output_le_base_128" int int2;
+    Bigbuffer.add_string buf str
 
-  let input_hunks size source buf =
+  let input_hunks source buf =
     let source_length = input_le_base_128 buf in
     let result_length = input_le_base_128 buf in
     let rec aux acc =
@@ -545,10 +563,19 @@ module PackedValue (M: sig val version: int end) = struct
     { Packed_value.source; hunks; source_length; result_length }
 
   let output_hunks buf t =
-    let open Packed_value in
-    output_le_base_128 buf t.source_length;
-    output_le_base_128 buf t.result_length;
-    List.iter ~f:(output_hunk buf) t.hunks
+    Log.debugf "output_hunks: %s" (Packed_value.pretty_delta t);
+    let { Packed_value.source_length; result_length; hunks } = t in
+    output_le_base_128 buf source_length;
+    output_le_base_128 buf result_length;
+    List.iter ~f:(fun h ->
+        let b = Bigbuffer.create 1024 in
+        output_hunk b h;
+        let str = Mstruct.of_bigarray (GitMisc.buffer_contents b) in
+        let h2 = input_hunk source_length str in
+        Log.debugf "h  = %s" (Packed_value.pretty_hunk h);
+        Log.debugf "h2 = %s" (Packed_value.pretty_hunk h2);
+        output_hunk buf h
+      ) hunks
 
   let input_be_modified_base_128 buf =
     let rec aux i first =
@@ -556,32 +583,46 @@ module PackedValue (M: sig val version: int end) = struct
       let more = (byte land 0x80) <> 0 in
       let i    = if first then i else i+1 in
       let i    = (i lsl 7) lor (byte land 0x7f) in
+      Log.debugf "in-byte: byte:%d more:%b i:%d" byte more i;
       if more then aux i false
       else i in
     aux 0 true
 
   let output_be_modified_base_128 buf int =
-    let rec loop i first =
-      if i <> 0 then
-        let more =
-          if i < 0x80 then 0
-          else 0x80 in
-        let i = if first then i else i-1 in
+    let bytes = ref [] in
+    let rec aux i first =
+      if i = 0 then ()
+      else
+        let more = if first then 0 else 0x80 in
+        let i    = if first then i else i-1 in
         let byte = more lor (i land 0x7f) in
-        Bigbuffer.add_char buf (Char.of_int_exn byte);
-        loop (i lsr 7) false in
-    loop int true
+        Log.debugf "out-byte: %d (more:%d i:%d byte:%d)" byte more i byte;
+        bytes := (Char.of_int_exn byte) :: !bytes;
+        if i > 0x80 then aux (i lsr 7) false in
+    aux int true;
+    let bytes = String.of_char_list !bytes in
+    let int2 = input_be_modified_base_128 (Mstruct.of_string bytes) in
+    check_ints "output_be_modified_base_128" int int2;
+    Bigbuffer.add_string buf bytes
 
-  let with_inflated buf fn =
-    fn (GitMisc.inflate_mstruct buf)
+  let with_inflated buf size fn =
+    let buf = GitMisc.inflate_mstruct buf in
+    let len = Mstruct.length buf in
+    if len <> size then (
+      eprintf "Packed_value.with_inflated: inflated size differs. Expecting %d, got %d.\n"
+        size len;
+      failwith "Packed_value.with_inflated"
+    );
+    fn buf
 
-  let with_inflated_buf buf fn =
-    with_inflated buf (fun buf ->
+  let with_inflated_buf buf size fn =
+    with_inflated buf size (fun buf ->
         let contents = Mstruct.to_bigarray buf in
         fn contents
       )
 
   let input_inflated buf =
+    Log.debugf "input_inflated";
     let byte = Mstruct.get_uint8 buf in
     let more = (byte land 0x80) <> 0 in
     let kind = (byte land 0x70) lsr 4 in
@@ -596,25 +637,79 @@ module PackedValue (M: sig val version: int end) = struct
       let buffer = add_header typ buffer in
       Packed_value.Raw_value buffer in
 
+    Log.debugf "input_inflated kind:%d size:%d (%b)" kind size more;
+
     match kind with
-    | 0b000 -> Mstruct.parse_error_buf buf "invalid: Reserved"
-    | 0b001 -> with_inflated_buf buf (mk `Commit)
-    | 0b010 -> with_inflated_buf buf (mk `Tree)
-    | 0b011 -> with_inflated_buf buf (mk `Blob)
-    | 0b100 -> with_inflated_buf buf (mk `Tag)
-    | 0b101 -> Mstruct.parse_error_buf buf "invalid: Reserved"
+    | 0b000 -> Mstruct.parse_error "invalid: 0 is reserved"
+    | 0b001 -> with_inflated_buf buf size (mk `Commit)
+    | 0b010 -> with_inflated_buf buf size (mk `Tree)
+    | 0b011 -> with_inflated_buf buf size (mk `Blob)
+    | 0b100 -> with_inflated_buf buf size (mk `Tag)
+    | 0b101 -> Mstruct.parse_error "invalid: 5 is reserved"
     | 0b110 ->
       let base  = input_be_modified_base_128 buf in
-      let hunks = with_inflated buf (input_hunks size base) in
+      let hunks = with_inflated buf size (input_hunks base) in
       Packed_value.Off_delta hunks
     | 0b111 ->
       let base  = input_sha1 buf in
-      let hunks = with_inflated buf (input_hunks size base) in
+      let hunks = with_inflated buf size (input_hunks base) in
       Packed_value.Ref_delta hunks
     | _     -> assert false
 
+  let inflated_buffer = Bigbuffer.create 1024
+  let with_deflated buf fn =
+    Bigbuffer.reset inflated_buffer;
+    fn inflated_buffer;
+    let inflated = GitMisc.buffer_contents inflated_buffer in
+    let deflated = GitMisc.deflate_bigstring inflated in
+    Bigbuffer.add_string buf (Bigstring.to_string deflated);
+    Bigstring.length inflated
+
+  let tmp_buffer = Bigbuffer.create 1024
   let output_inflated buf t =
-    failwith "TODO"
+    let aux buf =
+      Bigbuffer.reset tmp_buffer;
+      let output_hunks buf hunks =
+        with_deflated buf (fun b -> output_hunks b hunks) in
+      let size = match t with
+        | Packed_value.Raw_value str ->
+          begin match Bigstring.find nul str with
+            | None   -> failwith "Packed_value.output_inflated"
+            | Some i ->
+              let s = Bigstring.To_string.subo ~pos:(i+1) str in
+              with_deflated tmp_buffer (fun b -> Bigbuffer.add_string b s)
+          end
+        | Packed_value.Off_delta hunks ->
+          output_be_modified_base_128 tmp_buffer hunks.Packed_value.source;
+          output_hunks tmp_buffer hunks
+        | Packed_value.Ref_delta hunks ->
+          output_sha1 tmp_buffer hunks.Packed_value.source;
+          output_hunks tmp_buffer hunks
+      in
+      let kind = match t with
+        | Packed_value.Off_delta _ -> 0b110
+        | Packed_value.Ref_delta _ -> 0b111
+        | Packed_value.Raw_value v ->
+          match type_of_inflated (Mstruct.of_bigarray v) with
+          | `Commit -> 0b001
+          | `Tree   -> 0b010
+          | `Blob   -> 0b011
+          | `Tag    -> 0b100 in
+      let more = if size > 0x0f then 0x80 else 0 in
+      Log.debugf "output_inflated kind:%d size:%d (%b %d)" kind size (more=0x80) (size land 0x0f);
+      let byte = more lor (kind lsl 4) lor (size land 0x0f) in
+      Bigbuffer.add_char buf (Char.of_int_exn byte);
+      if size > 0x0f then
+        output_le_base_128 buf (size lsr 4);
+      let str = GitMisc.buffer_contents tmp_buffer in
+      Bigbuffer.add_string buf (Bigstring.to_string str)
+    in
+    let buf0 = Bigbuffer.create 1024 in
+    aux buf0;
+    Log.debugf "%S" (Bigbuffer.contents buf0);
+    let t0 = input_inflated (Mstruct.of_bigarray (GitMisc.buffer_contents buf0)) in
+    assert (t = t0);
+    aux buf
 
   let pretty t =
     Packed_value.to_string t
@@ -624,8 +719,8 @@ module PackedValue (M: sig val version: int end) = struct
 
 end
 
-module PackedValue2 = PackedValue(struct let version = 2 end)
-module PackedValue3 = PackedValue(struct let version = 3 end)
+module Packed_value_2 = Packed_value(struct let version = 2 end)
+module Packed_value_3 = Packed_value(struct let version = 3 end)
 
 let lengths offsets =
   let rec aux acc = function
@@ -636,6 +731,11 @@ let lengths offsets =
   let l = List.sort ~cmp:(fun (_,x) (_,y) -> compare x y) offsets in
   aux [] l
 
+let str_buffer = String.create 4
+let add_be_uint32 buf i =
+  EndianString.BigEndian.set_int32 str_buffer 0 i;
+  Bigbuffer.add_string buf str_buffer
+
 module Pack = struct
 
   module Log = Log.Make(struct let section = "pack" end)
@@ -643,7 +743,7 @@ module Pack = struct
   type t = pack
 
   open Lwt
-  module P = Packed_value
+  module P = GitTypes.Packed_value
 
   let input_header buf =
     let header = Mstruct.get_string buf 4 in
@@ -654,18 +754,46 @@ module Pack = struct
       Mstruct.parse_error_buf buf "wrong pack version (%d)" version;
     version, Int32.to_int_exn (Mstruct.get_be_uint32 buf)
 
-  let input_packed_value version buf =
-    if version = 2 then PackedValue2.input_inflated buf
-    else PackedValue3.input_inflated buf
+  let output_header ~version buf count =
+    Bigbuffer.add_string buf "PACK";
+    add_be_uint32 buf (Int32.of_int_exn version);
+    add_be_uint32 buf (Int32.of_int_exn count)
+
+  let input_packed_value ~version buf = match version with
+    | 2 -> Packed_value_2.input_inflated buf
+    | 3 -> Packed_value_3.input_inflated buf
+    | _ -> failwith "pack version should be 2 or 3"
+
+  let output_packed_value ~version buf = match version with
+    | 2 -> Packed_value_2.output_inflated buf
+    | 3 -> Packed_value_3.output_inflated buf
+    | _ -> failwith "pack version should be 2 or 3"
 
   let input buf =
     let version, count = input_header buf in
+    Log.debugf "Pack.input version:%d count:%d" version count;
     let values = ref [] in
     for i = 0 to count - 1 do
       let v = input_packed_value version buf in
       values := v :: !values
     done;
-    !values
+    let str = Bigstring.sub_shared ~len:(Mstruct.offset buf) (Mstruct.to_bigarray buf) in
+    let checksum = input_sha1 buf in
+    if SHA1.create str <> checksum then (
+      eprintf "Pack.input: wrong checksum";
+      failwith "Pack.input"
+    );
+    List.rev !values
+
+  let output t =
+    Log.debugf "Pack.output";
+    let buf = Bigbuffer.create 1024 in
+    let version = 2 in
+    output_header ~version buf (List.length t);
+    List.iter ~f:(output_packed_value ~version buf) t;
+    let str = GitMisc.buffer_contents buf in
+    let sha1 = SHA1.create str in
+    [ str; Bigstring.of_string (SHA1.to_string sha1) ]
 
   let read_packed_value buf { Pack_index.offsets; lengths } =
     let buf = Mstruct.of_bigarray buf in
@@ -695,18 +823,17 @@ module Pack = struct
       Bigbuffer.add_string buf str
 
   let dump_delta d =
-    let open Packed_value in
     Printf.eprintf
       "source-length: %d\n\
        result-length: %d\n"
-      d.source_length
-      d.result_length;
+      d.P.source_length
+      d.P.result_length;
     List.iter ~f:(function
-      | Insert str     -> Printf.eprintf "INSERT %S\n" str
-      | Copy (off,len) -> Printf.eprintf "COPY (%d,%d)\n" off len
-    ) d.hunks
+      | P.Insert str     -> Printf.eprintf "INSERT %S\n" str
+      | P.Copy (off,len) -> Printf.eprintf "COPY (%d,%d)\n" off len
+    ) d.P.hunks
 
-  let apply_delta (delta: Bigstring.t Packed_value.delta) =
+  let apply_delta delta =
     let source = Mstruct.of_bigarray delta.P.source in
     let kind = match Mstruct.get_string_delim source sp with
       | None   -> Mstruct.parse_error_buf source "missing kind"
@@ -820,12 +947,8 @@ module Pack = struct
     Printf.printf "\rUnpacking objects: 100%% (%d/%d), done.\n%!" !i !i;
     return index
 
-
-  let output _ =
-    todo "pack"
-
-  let pretty _ =
-    todo "pack"
+  let pretty t =
+    Pack.to_string t
 
   let dump t =
     Printf.eprintf "%s" (pretty t)
@@ -859,9 +982,7 @@ module Pack_index = struct
     Pack.index_aux id_monad ~compute_sha1 buf
 
   let of_pack pack =
-    (* XXX: could do beter *)
-    let buf = Pack.output pack in
-    of_raw_pack buf
+    of_raw_pack (GitMisc.bigstring_concat (Pack.output pack))
 
   let input buf =
     let magic = Mstruct.get_string buf 4 in
@@ -925,11 +1046,6 @@ module Pack_index = struct
     let offsets = SHA1.Map.of_alist_exn offsets_alist in
     let lengths = SHA1.Map.of_alist_exn (lengths offsets_alist) in
     { Pack_index.offsets; lengths; pack_checksum }
-
-  let str_buffer = String.create 4
-  let add_be_uint32 buf i =
-    EndianString.BigEndian.set_int32 str_buffer 0 i;
-    Bigbuffer.add_string buf str_buffer
 
   let output t =
     let buf = Bigbuffer.create 1024 in

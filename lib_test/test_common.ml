@@ -89,10 +89,16 @@ module Make (S: S) = struct
     mk Reference.equal Reference.compare Reference.to_string
 
   let assert_bigstring_equal, assert_bigstring_opt_equal, assert_bigstrings_equal =
-    mk Bigstring.equal Bigstring.compare Bigstring.pretty
+    mk Bigstring.equal Bigstring.compare (fun b ->
+        if Bigstring.length b < 40 then Bigstring.pretty b
+        else sprintf "%S (%d)" (Bigstring.To_string.subo ~len:40 b) (Bigstring.length b)
+      )
 
   let assert_pack_index_equal, assert_pack_index_opt_equal, assert_pack_indexes_equal =
     mk Pack_index.equal Pack_index.compare Pack_index.to_string
+
+  let assert_pack_equal, assert_pack_opt_equal, assert_packs_equal =
+    mk Pack.equal Pack.compare Pack.to_string
 
   let key value =
     SHA1.create (Git.output_inflated value)

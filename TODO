@@ -1,8 +1,4 @@
 * output of index files
-* output of pack files
 * push
-* building of pack files
-
-Core_kernel:
-- missing Bigbuffer.add_bigstring{s}
-- Bigbuffer.volatile_contents should export the subview (cf. GitMisc.buffer_contents)
+* generation of a pack files from a collection of object files
+* git server

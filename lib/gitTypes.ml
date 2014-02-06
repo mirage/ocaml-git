@@ -216,12 +216,19 @@ module Packed_value = struct
     | Copy of int * int
   with bin_io, compare, sexp
 
+  let pretty_hunk = function
+    | Insert s -> sprintf "(Insert %S)" s
+    | t        -> Sexp.to_string_hum (sexp_of_hunk t)
+
   type 'a delta = {
     source: 'a;
     source_length: int;
     result_length: int;
     hunks: hunk list;
   } with bin_io, compare, sexp
+
+  let pretty_delta d =
+    Sexp.to_string_hum (sexp_of_delta (fun _ -> Sexp.List []) d)
 
   module T = struct
     type t =
@@ -235,6 +242,17 @@ module Packed_value = struct
   end
   include T
   include Identifiable.Make (T)
+
+  let result_length = function
+    | Ref_delta { result_length }
+    | Off_delta { result_length } -> result_length
+    | Raw_value str               -> Bigstring.length str
+
+  let source_length = function
+    | Ref_delta { source_length }
+    | Off_delta { source_length } -> source_length
+    | Raw_value str               -> Bigstring.length str
+
 end
 
 type packed_value = Packed_value.t
