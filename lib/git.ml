@@ -487,6 +487,33 @@ module PackedValue (M: sig val version: int end) = struct
           offset length source_length;
       Packed_value.Copy (offset, length)
 
+  let output_hunk buf = function
+    | Packed_value.Insert contents ->
+      let len = String.length contents in
+      if len > 64 then
+        failwith "invalid hunk: insert too large";
+      Bigbuffer.add_char buf (Char.of_int_exn (String.length contents));
+      Bigbuffer.add_string buf contents
+    | Packed_value.Copy (offset, length) ->
+      let length = if length = 0x10000 then 0 else length in
+      let bit n shift =
+        if (n lsr shift) land 0xFF = 0 then 0
+        else (
+          Bigbuffer.add_char buf (Char.of_int_exn n);
+          1
+        ) in
+      let o0 = bit offset 0 in
+      let o1 = bit offset 8 in
+      let o2 = bit offset 16 in
+      let o3 = bit offset 24 in
+      let l0 = bit length 0 in
+      let l1 = bit length 8 in
+      let l2 = bit length 16 in
+      let n =
+        o0 + (o1 lsl 1) + (o2 lsl 2) + (o3 lsl 3)
+        + (l0 lsl 4) + (l1 lsl 5) + (l2 lsl 6) in
+      Bigbuffer.add_char buf (Char.of_int_exn n)
+
   let input_le_base_128 buf =
     let rec aux int shift =
       let byte = Mstruct.get_uint8 buf in
@@ -497,6 +524,17 @@ module PackedValue (M: sig val version: int end) = struct
       else int in
     aux 0 0
 
+  let output_le_base_128 buf int =
+    let rec loop i =
+      if i <> 0 then
+        let more =
+          if i < 0x80 then 0
+          else 0x80 in
+        let byte = more lor (i land 0x7f) in
+        Bigbuffer.add_char buf (Char.of_int_exn byte);
+        loop (i lsr 7) in
+    loop int
+
   let input_hunks size source buf =
     let source_length = input_le_base_128 buf in
     let result_length = input_le_base_128 buf in
@@ -506,23 +544,39 @@ module PackedValue (M: sig val version: int end) = struct
     let hunks = aux [] in
     { Packed_value.source; hunks; source_length; result_length }
 
+  let output_hunks buf t =
+    let open Packed_value in
+    output_le_base_128 buf t.source_length;
+    output_le_base_128 buf t.result_length;
+    List.iter ~f:(output_hunk buf) t.hunks
+
   let input_be_modified_base_128 buf =
-    let rec aux i n =
+    let rec aux i first =
       let byte = Mstruct.get_uint8 buf in
       let more = (byte land 0x80) <> 0 in
-      let i    = if n >= 2 then i+1 else i in
+      let i    = if first then i else i+1 in
       let i    = (i lsl 7) lor (byte land 0x7f) in
-      if more then aux i (n+1)
+      if more then aux i false
       else i in
-    aux 0 1
+    aux 0 true
+
+  let output_be_modified_base_128 buf int =
+    let rec loop i first =
+      if i <> 0 then
+        let more =
+          if i < 0x80 then 0
+          else 0x80 in
+        let i = if first then i else i-1 in
+        let byte = more lor (i land 0x7f) in
+        Bigbuffer.add_char buf (Char.of_int_exn byte);
+        loop (i lsr 7) false in
+    loop int true
 
   let with_inflated buf fn =
-    (* XXX: lots of copy *)
     fn (GitMisc.inflate_mstruct buf)
 
   let with_inflated_buf buf fn =
     with_inflated buf (fun buf ->
-        (* XXX: lots of copy *)
         let contents = Mstruct.to_bigarray buf in
         fn contents
       )
@@ -560,13 +614,13 @@ module PackedValue (M: sig val version: int end) = struct
     | _     -> assert false
 
   let output_inflated buf t =
-    todo "packed_value"
+    failwith "TODO"
 
   let pretty t =
-    todo "packed_value"
+    Packed_value.to_string t
 
   let dump t =
-    Printf.eprintf (pretty t)
+    Printf.eprintf "%s" (pretty t)
 
 end
 
