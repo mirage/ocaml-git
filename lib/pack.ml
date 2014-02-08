@@ -16,8 +16,6 @@
 
 open Lwt
 open Core_kernel.Std
-module Log_raw = Log.Make(struct let section = "pack-raw" end)
-module Log = Log.Make(struct let section = "pack" end)
 
 module Bigstring = struct
   include Bigstring
@@ -35,7 +33,7 @@ end
 
 module Raw = struct
 
-  module Log = Log_raw
+  module Log = Log.Make(struct let section = "pack-raw" end)
 
   module T = struct
     type t = {
@@ -77,11 +75,6 @@ module Raw = struct
     | 3 -> Packed_value.V3.input buf
     | _ -> failwith "pack version should be 2 or 3"
 
-  let add_packed_value ~version buf = match version with
-    | 2 -> Packed_value.V2.add buf
-    | 3 -> Packed_value.V3.add buf
-    | _ -> failwith "pack version should be 2 or 3"
-
   let crc32_of_packed_value ~version t = match version with
     | 2 -> Packed_value.V2.crc32 t
     | 3 -> Packed_value.V3.crc32 t
@@ -113,7 +106,7 @@ module Raw = struct
       eprintf "Pack.input: unprocessed data.";
       failwith "Pack.input";
     );
-    Log.debugf "checksum: %s" (SHA1.to_hex checksum);
+    Log.debugf "input checksum: %s" (SHA1.to_hex checksum);
     {
       version; checksum;
       values = List.rev !values;
@@ -123,19 +116,20 @@ module Raw = struct
     Log.debugf "add";
     let version = 2 in
     add_header ~version buf (List.length t.values);
-    List.iter ~f:(fun (offset, _, p) ->
+    List.iter ~f:(fun (offset, raw, p) ->
         let pos = Bigbuffer.length buf in
         if Int.(offset <> pos) then (
           eprintf "Pack.Raw.add: offset differs. Got: %d, expected %d\n" pos offset;
           failwith "Pack.Raw.add";
         );
-        add_packed_value ~version buf p
+        Bigbuffer.add_string buf (Bigstring.to_string raw)
       ) t.values;
     let sha1 = SHA1.create (Misc.buffer_contents buf) in
     Log.debugf "add sha1: %s" (SHA1.to_hex sha1);
     SHA1.add buf sha1
 
   let index_aux (return, bind) ~sha1 raw =
+    Log.debugf "index_aux";
     let pack_checksum = raw.checksum in
     let empty = Pack_index.empty pack_checksum in
     let size = List.length raw.values in
@@ -164,7 +158,7 @@ module Raw = struct
   let index_sync = index_aux id_monad
 
   let to_index t =
-    Log.debugf "index_of_raw";
+    Log.debugf "to_index";
     let buffers = SHA1.Table.create () in
     let read sha1 =
       try Hashtbl.find_exn buffers sha1
@@ -184,6 +178,8 @@ module Raw = struct
     index_sync ~sha1 t
 
 end
+
+module Log = Log.Make(struct let section = "pack" end)
 
 module T = struct
   type t = {
@@ -213,6 +209,7 @@ let pretty t =
   Buffer.contents buf
 
 let pic index raw =
+  Log.debugf "pic";
   if SHA1.(index.Pack_index.pack_checksum <> raw.Raw.checksum) then (
     eprintf "Pack.pic: the index file does not correspond to the given pack file.\n";
     failwith "Pack.pic"
@@ -224,6 +221,11 @@ let input buf index =
   let raw = Raw.input buf in
   pic index raw
 
+let add_packed_value ~version buf = match version with
+  | 2 -> Packed_value.V2.add buf
+  | 3 -> Packed_value.V3.add buf
+  | _ -> failwith "pack version should be 2 or 3"
+
 let add buf t =
   Log.debugf "add";
   let version = 2 in
@@ -231,13 +233,14 @@ let add buf t =
   List.iter ~f:(fun p ->
       let pos = Bigbuffer.length buf in
       let p = Packed_value.unpic t.index ~pos p in
-      Raw.add_packed_value ~version buf p
+      add_packed_value ~version buf p
     ) t.pics;
   let sha1 = SHA1.create (Misc.buffer_contents buf) in
   Log.debugf "add sha1: %s" (SHA1.to_hex sha1);
   SHA1.add buf sha1
 
 let packed_value ~index ~key:sha1 buf =
+  Log.debugf "packed_value %s" (SHA1.to_hex sha1);
   let buf = Mstruct.of_bigarray buf in
   let version, size = Raw.input_header (Mstruct.clone buf) in
   let packs = SHA1.Table.create () in
@@ -258,6 +261,7 @@ let packed_value ~index ~key:sha1 buf =
   )
 
 let unpack ~read ~write buf =
+  Log.debugf "unpack";
   let i = ref 0 in
   let sha1 ~size ~version ~index ~pos packed_value =
     Printf.printf "\rUnpacking objects: %3d%% (%d/%d)%!" (!i*100/size) (!i+1) size;
@@ -269,8 +273,5 @@ let unpack ~read ~write buf =
   Printf.printf "\rUnpacking objects: 100%% (%d/%d), done.\n%!" !i !i;
   return index
 
-(* XXX: could we do better ? *)
 let to_index pack =
-  let buf = Misc.with_buffer (fun buf -> add buf pack) in
-  let pack = Raw.input (Mstruct.of_bigarray buf) in
-  Raw.to_index pack
+  pack.index

@@ -1,4 +1,3 @@
-* output of index files
 * push
-* generation of a pack files from a collection of object files
+* generation of a compact pack files from a collection of object files
 * git server

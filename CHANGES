@@ -1,4 +1,5 @@
 1.0.0:
+* Support for reading and writing pack indexes
 * Support for reading and writing pack files
 * Refactor the API: each Git object has now its own file,
   with a consistent signature

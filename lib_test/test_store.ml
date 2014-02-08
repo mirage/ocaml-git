@@ -291,7 +291,8 @@ module Make (S: Store.S) = struct
             let i3 = Pack_index.input (Mstruct.of_bigarray raw_index2) in
             assert_pack_index_equal "pack-index" i1 i3;
 
-            let i4 = Pack.to_index (Pack.pic i1 rp1) in
+            let pic = Pack.pic i1 rp1 in
+            let i4 = Pack.to_index pic in
             assert_pack_index_equal "pack-->>--pack-index" i1 i4;
 
             let p1 = Pack.input (Mstruct.of_bigarray raw_pack1) i1 in
