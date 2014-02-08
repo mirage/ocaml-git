@@ -1,5 +1,5 @@
 (*
- * Copyright (c) 2013 Thomas Gazagnaire <thomas@gazagnaire.org>
+ * Copyright (c) 2013-2014 Thomas Gazagnaire <thomas@gazagnaire.org>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,6 +14,19 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** Store Git objects in memory. *)
+open Core_kernel.Std
+module Log = Log.Make(struct let section = "reference" end)
 
-include GitTypes.S
+include String
+
+let compare x y =
+  match x, y with
+  | "HEAD", "HEAD" -> 0
+  | "HEAD", _      -> (-1)
+  | _     , "HEAD" -> 1
+  | _     , _      -> compare x y
+
+let head = "HEAD"
+
+let is_head x =
+  String.(head = x)

@@ -1,5 +1,5 @@
 (*
- * Copyright (c) 2013 Thomas Gazagnaire <thomas@gazagnaire.org>
+ * Copyright (c) 2013-2014 Thomas Gazagnaire <thomas@gazagnaire.org>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -29,8 +29,9 @@ val hex_decode: string -> string
 val buffer_contents: Bigbuffer.t -> Bigstring.t
 (** zero-copy buffer contents. *)
 
-val bigstring_concat: Bigstring.t list -> Bigstring.t
-(** Return the concatenation of buffers. *)
+val with_buffer: (Bigbuffer.t -> unit) -> Bigstring.t
+(** Create a temporary buffer, apply a function to append stuff to it,
+    and return the buffer contents. *)
 
 (** {2 Zlib Compression} *)
 
@@ -42,6 +43,24 @@ val inflate_mstruct: Mstruct.t -> Mstruct.t
 
 val deflate_mstruct: Mstruct.t -> Mstruct.t
 (** Deflate a buffer. *)
+
+(** {2 CRC-32} *)
+
+val crc32: Bigstring.t -> int32
+(** Return the CRC-32 value of a bigstring. *)
+
+(** {2 Marshaling helpers} *)
+
+val add_be_uint32: Bigbuffer.t -> int32 -> unit
+
+val input_key_value: Mstruct.t -> key:string -> (Mstruct.t -> 'a) -> 'a
+
+val sp: char
+val nul: char
+val lf: char
+val lt: char
+val gt: char
+
 
 module OP: sig
 

@@ -1,6 +1,6 @@
 # OASIS_START
-# DO NOT EDIT (digest: 4061f180ad05612d9f1ae6adb158f9ba)
-version = "0.10.3"
+# DO NOT EDIT (digest: ae86edc66651a00cad32ad7ff052889c)
+version = "1.0.0"
 description = "A low-level interface to Git in pure OCaml"
 requires =
 "mstruct dolog core_kernel ocamlgraph lazy-trie re.pcre zip cryptokit uri lwt bin_prot.syntax comparelib.syntax sexplib.syntax"
@@ -10,7 +10,7 @@ archive(native) = "git.cmxa"
 archive(native, plugin) = "git.cmxs"
 exists_if = "git.cma"
 package "unix" (
- version = "0.10.3"
+ version = "1.0.0"
  description = "A low-level interface to Git in pure OCaml"
  requires = "git lwt.unix"
  archive(byte) = "git-unix.cma"
@@ -18,6 +18,28 @@ package "unix" (
  archive(native) = "git-unix.cmxa"
  archive(native, plugin) = "git-unix.cmxs"
  exists_if = "git-unix.cma"
+)
+
+package "memory" (
+ version = "1.0.0"
+ description = "A low-level interface to Git in pure OCaml"
+ requires = "git"
+ archive(byte) = "git-memory.cma"
+ archive(byte, plugin) = "git-memory.cma"
+ archive(native) = "git-memory.cmxa"
+ archive(native, plugin) = "git-memory.cmxs"
+ exists_if = "git-memory.cma"
+)
+
+package "fs" (
+ version = "1.0.0"
+ description = "A low-level interface to Git in pure OCaml"
+ requires = "git git.unix"
+ archive(byte) = "git-fs.cma"
+ archive(byte, plugin) = "git-fs.cma"
+ archive(native) = "git-fs.cmxa"
+ archive(native, plugin) = "git-fs.cmxs"
+ exists_if = "git-fs.cma"
 )
 # OASIS_STOP
 

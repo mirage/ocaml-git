@@ -1,5 +1,5 @@
 (*
- * Copyright (c) 2013 Thomas Gazagnaire <thomas@gazagnaire.org>
+ * Copyright (c) 2013-2014 Thomas Gazagnaire <thomas@gazagnaire.org>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -17,8 +17,7 @@
 open Lwt
 open Core_kernel.Std
 open Cmdliner
-
-open GitTypes
+open Git
 
 let global_option_section = "COMMON OPTIONS"
 let help_sections = [
@@ -105,8 +104,8 @@ let directory =
 let backend =
   let memory = mk_flag ["m";"in-memory"] "Use an in-memory store." in
   let create = function
-    | true  -> (module GitMemory: S)
-    | false -> (module GitLocal: S)
+    | true  -> (module Git_memory: Store.S)
+    | false -> (module Git_fs    : Store.S)
   in
   Term.(pure create $ memory)
 
@@ -132,10 +131,10 @@ let cat = {
       Arg.(required & pos 0 (some string) None & doc) in
     let cat_file file =
       run begin
-        let buf = GitUnix.read_file file in
+        let buf = Git_unix.read_file file in
         let buf = Mstruct.of_bigarray buf in
-        let v = Git.input buf in
-        Printf.printf "%s%!" (Git.pretty v);
+        let v = Value.input buf in
+        Printf.printf "%s%!" (Value.pretty v);
         return_unit
       end in
     Term.(mk cat_file $ file)
@@ -147,8 +146,8 @@ let ls_remote = {
   doc  = "List references in a remote repository.";
   man  = [];
   term =
-    let ls (module S: S) repo =
-      let module Remote = GitUnix.Remote(S) in
+    let ls (module S: Store.S) repo =
+      let module Remote = Git_unix.Remote(S) in
       run begin
         S.create ()  >>= fun t ->
         Remote.ls t repo >>= fun references ->
@@ -173,15 +172,15 @@ let ls_files = {
         "After each line that describes a file, add more data about its cache entry. \
          This is intended to show as much information as possible for manual inspection; \
          the exact format may change at any time." in
-    let ls (module S: S) debug =
+    let ls (module S: Store.S) debug =
       run begin
         S.create ()    >>= fun t ->
         S.read_cache t >>= fun cache ->
         if debug then
-          printf "%s" (Git.Cache.pretty cache)
+          printf "%s" (Cache.pretty cache)
         else
           List.iter
-            ~f:(fun e -> Printf.printf "%s\n" e.Cache.Entry.name)
+            ~f:(fun e -> Printf.printf "%s\n" e.Cache.name)
             cache.Cache.entries;
         return_unit
       end in
@@ -199,7 +198,7 @@ let read_tree = {
           ~doc:"The commit to set the index to. Use any valid tag \
                 name as well." in
       Arg.(required & pos 0 (some string) None & doc ) in
-    let read (module S: S) commit_str =
+    let read (module S: Store.S) commit_str =
       run begin
         S.create ()    >>= fun t ->
         S.references t >>= fun refs ->
@@ -231,7 +230,7 @@ let clone = {
         Arg.(some int) None in
     let bare =
       mk_flag ["bare"] "Do not expand the filesystem." in
-    let clone (module S: S) deepen bare unpack repo dir =
+    let clone (module S: Store.S) deepen bare unpack repo dir =
       let dir = match dir with
         | Some d -> d
         | None   ->
@@ -245,12 +244,12 @@ let clone = {
         eprintf "fatal: destination path '%s' already exists and is not an empty directory.\n" dir;
         exit 128
       );
-      let module Remote = GitUnix.Remote(S) in
+      let module R = Git_unix.Remote(S) in
       run begin
         S.create ~root:dir ()   >>= fun t ->
         printf "Cloning into '%s' ...\n%!" (Filename.basename (S.root t));
-        Remote.clone t ?deepen ~unpack repo >>= fun r ->
-        match r.GitRemote.head with
+        R.clone t ?deepen ~unpack repo >>= fun r ->
+        match r.Remote.head with
         | None      -> return_unit
         | Some head -> S.write_cache t head
       end in
@@ -263,8 +262,8 @@ let fetch = {
   doc  = "Fetch a remote Git repository.";
   man  = [];
   term =
-    let fetch (module S: S) unpack repo =
-      let module Remote = GitUnix.Remote(S) in
+    let fetch (module S: Store.S) unpack repo =
+      let module Remote = Git_unix.Remote(S) in
       run begin
         S.create ()     >>= fun t ->
         Remote.fetch t ~unpack repo >>= fun _ ->
@@ -282,11 +281,11 @@ let graph = {
     let file =
       mk_required ["o";"output"] "FILE" "Output file."
         Arg.(some string) None in
-    let graph (module S: S) file =
-      let module GitGraph = GitGraph.Make(S) in
+    let graph (module S: Store.S) file =
+      let module Graph = Output.Graph(S) in
       run begin
         S.create () >>= fun t ->
-        GitGraph.to_dot t file
+        Graph.to_dot t file
       end in
     Term.(mk graph $ backend $ file)
 }

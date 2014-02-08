@@ -1,6 +1,6 @@
-OASISFormat: 0.3
+OASISFormat: 0.4
 Name:        git
-Version:     0.10.3
+Version:     1.0.0
 Synopsis:    A low-level interface to Git in pure OCaml
 Authors:     Thomas Gazagnaire
 License:     ISC
@@ -8,41 +8,61 @@ Plugins:     META (0.3), DevFiles (0.3)
 BuildTools:  ocamlbuild
 
 Flag unix
-  Description: build the Unix library
-  Default: true
+  Description:       build the Unix libraries
+  Default:           true
 
 Library git
-  Path:         lib/
-  Findlibname:  git
-  Modules:      GitMisc, GitTypes, Git, GitRemote, GitGraph, GitMemory
-  BuildDepends:	mstruct, dolog, core_kernel, ocamlgraph, lazy-trie,
-                re.pcre, zip, cryptokit, uri, lwt,
-                bin_prot.syntax, comparelib.syntax, sexplib.syntax
+  Pack:              true
+  Path:              lib/
+  Findlibname:       git
+  Modules:           SHA1, Blob, Cache, Commit, Misc,
+                     Output, Pack, Pack_index, Packed_value,
+                     Reference, Remote, Tag, Tree, User, Value,
+                     Object, Object_type, Store
+  BuildDepends:      mstruct, dolog, core_kernel, ocamlgraph, lazy-trie,
+                     re.pcre, zip, cryptokit, uri, lwt,
+                     bin_prot.syntax, comparelib.syntax, sexplib.syntax
+
+Library "git-memory"
+  Path:              lib/backend/
+  FindlibParent:     git
+  Findlibname:       memory
+  Modules:           Git_memory
+  BuildDepends:      git
 
 Library "git-unix"
-  Path:          lib/
-  FindlibParent: git
-  Findlibname:   unix
-  Modules:       GitLocal, GitUnix
-  BuildDepends:	 git, lwt.unix
+  Build$:           flag(unix)
+  Path:              lib/
+  FindlibParent:     git
+  Findlibname:       unix
+  Modules:           Git_unix
+  BuildDepends:      git, lwt.unix
+
+Library "git-fs"
+  Build$:           flag(unix)
+  Path:             lib/backend/
+  FindlibParent:    git
+  Findlibname:      fs
+  Modules:          Git_fs
+  BuildDepends:     git, git.unix
 
 Executable ogit
-  Path:               lib/
-  MainIs:             gitMain.ml
-  Build$:             flag(unix)
-  CompiledObject:     best
-  Install:            true
-  BuildDepends:       cmdliner, git.unix
+  Build$:           flag(unix)
+  Path:             bin/
+  MainIs:           ogit.ml
+  CompiledObject:   best
+  Install:          true
+  BuildDepends:     cmdliner, git, git.store, git.fs
 
 Executable test_git
-  Path:               lib_test
-  MainIs:             test.ml
-  Build$:             flag(tests) && flag(unix)
-  CompiledObject:     best
-  Install:            false
-  BuildDepends:       git.unix, alcotest
+  Build$:           flag(tests) && flag(unix)
+  Path:             lib_test
+  MainIs:           test.ml
+  CompiledObject:   best
+  Install:          false
+  BuildDepends:     alcotest, git, git.memory, git.fs
 
 Test test_git
-  Run$:               flag(tests)
-  Command:            $test_git -q
-  WorkingDirectory:   lib_test/
+  Run$:             flag(tests)
+  Command:          $test_git -q
+  WorkingDirectory: lib_test/

@@ -1,5 +1,5 @@
 (*
- * Copyright (c) 2013 Thomas Gazagnaire <thomas@gazagnaire.org>
+ * Copyright (c) 2013-2014 Thomas Gazagnaire <thomas@gazagnaire.org>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -16,9 +16,7 @@
 
 (** Manage object graphs. *)
 
-open GitTypes
-
-module Make (Store: S): sig
+module Graph (Store: Store.S): sig
 
   val to_dot: Store.t -> string -> unit Lwt.t
   (** Export the Git store as a "graphviz" file. *)

@@ -15,7 +15,6 @@
  *)
 
 open Core_kernel.Std
-
 module Log = Log.Make(struct let section = "misc" end)
 
 (* From OCaml's stdlib. See [Digest.to_hex] *)
@@ -140,6 +139,42 @@ let inflate_mstruct orig_buf =
   let res = Mstruct.of_bigarray inflated in
   Mstruct.shift orig_buf size;
   res
+
+let crc32 str =
+  let str = Bigstring.to_string str in
+  (* XXX: use ocaml-crc ? *)
+  Zlib.update_crc 0l str 0 (String.length str)
+
+
+let sp  = '\x20'
+let nul = '\x00'
+let lf  = '\x0a'
+let lt  = '<'
+let gt  = '>'
+
+let input_key_value buf ~key:expected input_value =
+  let error actual =
+    Mstruct.parse_error_buf buf "keys: [actual: %s] [expected: %s]" actual expected in
+  let key =
+    match Mstruct.get_string_delim buf sp with
+    | None   -> error "<none>"
+    | Some k -> k in
+  if key <> expected then
+    error key
+  else
+    match Mstruct.get_delim buf lf input_value with
+    | None   -> Mstruct.parse_error_buf buf "no value to input"
+    | Some v -> v
+
+let str_buffer = String.create 4
+let add_be_uint32 buf i =
+  EndianString.BigEndian.set_int32 str_buffer 0 i;
+  Bigbuffer.add_string buf str_buffer
+
+let with_buffer fn =
+  let buf = Bigbuffer.create 1024 in
+  fn buf;
+  buffer_contents buf
 
 module OP = struct
 

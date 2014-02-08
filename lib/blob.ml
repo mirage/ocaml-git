@@ -1,5 +1,5 @@
 (*
- * Copyright (c) 2013 Thomas Gazagnaire <thomas@gazagnaire.org>
+ * Copyright (c) 2013-2014 Thomas Gazagnaire <thomas@gazagnaire.org>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,22 +14,17 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Lwt
-open Test_store
+open Core_kernel.Std
+module Log = Log.Make(struct let section = "blob" end)
 
-let test_db = "test-db"
+include String
 
-let init () =
-  if Sys.file_exists test_db then begin
-    let cmd = Printf.sprintf "rm -rf %s" test_db in
-    let _ = Sys.command cmd in ()
-  end;
-  return_unit
+let pretty t =
+  if Int.(String.length t < 70) then sprintf "%S" t
+  else sprintf "%S[%d]" (String.sub t 0 70) (String.length t)
 
-let suite =
-  {
-    name = "FS";
-    init;
-    clean = unit;
-    store = (module Git_fs);
-  }
+let input buf =
+  Mstruct.get_string buf (Mstruct.length buf)
+
+let add buf t =
+  Bigbuffer.add_string buf t

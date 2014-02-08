@@ -1,5 +1,5 @@
 (*
- * Copyright (c) 2013 Thomas Gazagnaire <thomas@gazagnaire.org>
+ * Copyright (c) 2013-2014 Thomas Gazagnaire <thomas@gazagnaire.org>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -13,7 +13,10 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
+
 open Lwt
+open Git
+module Log = Log.Make(struct let section = "unix" end)
 
 module M = struct
   type ic = Lwt_io.input_channel
@@ -62,10 +65,13 @@ module M = struct
       if Sys.file_exists dir then return_unit
       else (
         aux (Filename.dirname dir) >>= fun () ->
-        Log.debugf "mkdir %s" dir;
-        catch
-          (fun () -> Lwt_unix.mkdir dir 0o755)
-          (fun _ -> return_unit)
+        if Sys.file_exists dir then return_unit
+        else
+          catch
+            (fun () ->
+               Log.debugf "mkdir %s" dir;
+               Lwt_unix.mkdir dir 0o755)
+            (fun _ -> return_unit)
       ) in
     aux dirname
 
@@ -133,4 +139,4 @@ let writev_file file bs =
       Lwt_list.iter_s (write_bigstring fd) bs
     )
 
-module Remote = GitRemote.Make(M)
+module Remote = Remote.Make(M)

@@ -1,5 +1,5 @@
 (*
- * Copyright (c) 2013 Thomas Gazagnaire <thomas@gazagnaire.org>
+ * Copyright (c) 2013-2014 Thomas Gazagnaire <thomas@gazagnaire.org>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -17,8 +17,7 @@
 (** Lwt_unix IO module. *)
 
 open Core_kernel.Std
-
-include GitRemote.IO
+open Git
 
 val mkdir: string -> unit Lwt.t
 (** Create a directory (and the parent dirs if needed). *)
@@ -45,6 +44,10 @@ val write_file: string -> Bigstring.t -> unit Lwt.t
 val writev_file: string -> Bigstring.t list -> unit Lwt.t
 (** Write a list of bigarrays to a file. *)
 
-module Remote: functor (S: GitTypes.S) -> GitRemote.S with type t = S.t
+include Remote.IO
+  with type ic = Lwt_io.input_channel
+   and type oc = Lwt_io.output_channel
+
+module Remote: functor (S: Store.S) -> Remote.S with type t = S.t
 (** Implementation of the Git protocol using [Lwt_unix] and [Lwt_io]
     IO functions. *)

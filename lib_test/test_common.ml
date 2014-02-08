@@ -14,8 +14,8 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open GitTypes
 open Core_kernel.Std
+open Git
 
 module Bigstring = struct
   include Bigstring
@@ -63,7 +63,7 @@ let line msg =
   Log.infof "ASSERT %s" msg;
   line ()
 
-module Make (S: S) = struct
+module Make (S: Store.S) = struct
 
   let cmp_list eq comp l1 l2 =
     cmp_list eq (List.sort comp l1) (List.sort comp l2)
@@ -95,12 +95,9 @@ module Make (S: S) = struct
       )
 
   let assert_pack_index_equal, assert_pack_index_opt_equal, assert_pack_indexes_equal =
-    mk Pack_index.equal Pack_index.compare Pack_index.to_string
+    mk Pack_index.equal Pack_index.compare Pack_index.pretty
 
   let assert_pack_equal, assert_pack_opt_equal, assert_packs_equal =
     mk Pack.equal Pack.compare Pack.to_string
-
-  let key value =
-    SHA1.create (Git.output_inflated value)
 
 end

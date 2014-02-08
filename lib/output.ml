@@ -1,5 +1,5 @@
 (*
- * Copyright (c) 2013 Thomas Gazagnaire <thomas@gazagnaire.org>
+ * Copyright (c) 2013-2014 Thomas Gazagnaire <thomas@gazagnaire.org>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -17,8 +17,6 @@
 open Core_kernel.Std
 open Lwt
 
-open GitTypes
-
 let to_string node =
   let hex = SHA1.to_hex node in
   String.sub hex 0 8
@@ -26,7 +24,7 @@ let to_string node =
 module G =
   Graph.Imperative.Digraph.ConcreteBidirectionalLabeled
     (struct
-      type t = (sha1 * value)
+      type t = (SHA1.t * Value.t)
       let compare (x,_) (y,_) = String.compare (SHA1.to_string x) (SHA1.to_string y)
       let hash (x,_) = Hashtbl.hash (SHA1.to_string x)
       let equal (x,_) (y,_) = (x = y)
@@ -61,7 +59,9 @@ module Dot = Graph.Graphviz.Dot(struct
       | _  ->[`Label l]
   end)
 
-module Make (Store: S) = struct
+module Graph (Store: Store.S) = struct
+
+  module Log = Log.Make(struct let section = "graph" end)
 
   let create_graph t =
 
@@ -89,7 +89,7 @@ module Make (Store: S) = struct
                 | `Commit _   -> ""
                 | `Tag (t,_)  -> "TAG-" ^ t
                 | `Tree (f,_) -> f in
-              let succ = succ s in
+              let succ = Value.succ s in
               read succ >>= fun v ->
               G.add_edge_e g (src, l, (succ, v));
               return_unit

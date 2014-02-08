@@ -1,6 +1,10 @@
 _build/
 *~
+\#*
+.#*
 setup.log
 setup.data
 *.native
 *.dot
+lib_test/_tests/
+_tests/

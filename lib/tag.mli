@@ -1,5 +1,5 @@
 (*
- * Copyright (c) 2013 Thomas Gazagnaire <thomas@gazagnaire.org>
+ * Copyright (c) 2013-2014 Thomas Gazagnaire <thomas@gazagnaire.org>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,22 +14,15 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Lwt
-open Test_store
+(** Git tags. *)
 
-let test_db = "test-db"
+type t = {
+  sha1   : SHA1.t;
+  typ    : Object_type.t;
+  tag    : string;
+  tagger : User.t;
+  message: string;
+}
+(** A tag is bookmark to a previous commit. *)
 
-let init () =
-  if Sys.file_exists test_db then begin
-    let cmd = Printf.sprintf "rm -rf %s" test_db in
-    let _ = Sys.command cmd in ()
-  end;
-  return_unit
-
-let suite =
-  {
-    name = "FS";
-    init;
-    clean = unit;
-    store = (module Git_fs);
-  }
+include Object.S with type t := t

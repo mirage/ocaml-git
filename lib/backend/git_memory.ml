@@ -1,5 +1,5 @@
 (*
- * Copyright (c) 2013 Thomas Gazagnaire <thomas@gazagnaire.org>
+ * Copyright (c) 2013-2014 Thomas Gazagnaire <thomas@gazagnaire.org>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -16,18 +16,15 @@
 
 open Core_kernel.Std
 open Lwt
-
-open GitMisc.OP
-open GitTypes
-
+open Git
 module Log = Log.Make(struct let section = "memory" end)
 
 type t = {
   root   : string;
-  buffers: (sha1, Bigstring.t) Hashtbl.t;
-  values : (sha1, value) Hashtbl.t;
-  refs   : (reference, SHA1.Commit.t) Hashtbl.t;
-  mutable packs: (pack_index * pack) list;
+  buffers: (SHA1.t, Bigstring.t) Hashtbl.t;
+  values : (SHA1.t, Value.t) Hashtbl.t;
+  refs   : (Reference.t, SHA1.Commit.t) Hashtbl.t;
+  mutable packs: (Pack_index.t * Pack.t) list;
 }
 
 let root t =
@@ -86,10 +83,11 @@ let write_and_check_inflated t sha1 inflated =
   )
 
 let inflated value =
-  Git.output_inflated value
+  Misc.with_buffer (fun buf -> Value.add_inflated buf value)
 
 let write t value =
-  write_inflated t (inflated value) >>= fun sha1 ->
+  let inflated = inflated value in
+  write_inflated t inflated >>= fun sha1 ->
   match Hashtbl.find t.values sha1 with
   | Some _ -> return sha1
   | None   ->
@@ -97,13 +95,13 @@ let write t value =
     return sha1
 
 let write_pack t pack =
-  let index = Git.Pack_index.of_pack pack in
+  let index = Pack.to_index pack in
   t.packs <- (index, pack) :: t.packs;
   return index
 
 let write_raw_pack t pack =
-  let index = Git.Pack_index.of_raw_pack pack in
-  let pack = Git.Pack.input (Mstruct.of_bigarray pack) in
+  let index = Pack.index_of_raw pack in
+  let pack = Pack.input (Mstruct.of_bigarray pack) in
   t.packs <- (index, pack) :: t.packs;
   return index
 
@@ -124,7 +122,7 @@ let read t sha1 =
     read_inflated t sha1 >>= function
     | None     -> return_none
     | Some buf ->
-      let value = Git.input_inflated (Mstruct.of_bigarray buf) in
+      let value = Value.input_inflated (Mstruct.of_bigarray buf) in
       Hashtbl.add_exn t.values sha1 value;
       return (Some value)
 
@@ -141,14 +139,11 @@ let type_of t sha1 =
   | None     -> return_none
   | Some buf ->
     let buf = Mstruct.of_bigarray buf in
-    return (Some (Git.type_of_inflated buf))
+    return (Some (Value.type_of_inflated buf))
 
 let string_of_type_opt = function
-  | Some `Blob   -> "Blob"
-  | Some `Commit -> "Commit"
-  | Some `Tag    -> "Tag"
-  | Some `Tree   -> "Tree"
-  | None         -> "Unknown"
+  | Some t -> Object_type.to_string t
+  | None   -> "Unknown"
 
 let dump t =
   Log.debugf "dump";
@@ -189,9 +184,7 @@ let succ root sha1 =
   | Some (Value.Blob _)   -> return_nil
   | Some (Value.Commit c) -> return (tree "" c.Commit.tree :: List.map ~f:commit c.Commit.parents)
   | Some (Value.Tag t)    -> return [tag t]
-  | Some (Value.Tree t)   ->
-    let t = Tree.entries t in
-    return (List.map ~f:(fun e -> `Tree (e.Tree.name, e.Tree.node)) t)
+  | Some (Value.Tree t)   -> return (List.map ~f:(fun e -> `Tree (e.Tree.name, e.Tree.node)) t)
 
 let write_reference t ref sha1 =
   Log.infof "Writing %s" (Reference.to_string ref);
@@ -201,7 +194,7 @@ let write_reference t ref sha1 =
 (* XXX: do not load the blobs *)
 let load_filesystem t commit =
   Log.debugf "load_filesystem %s" (SHA1.Commit.to_hex commit);
-  let rec aux (mode, sha1): ('a, perm * blob) Lazy_trie.t option Lwt.t =
+  let rec aux (mode, sha1) =
     Log.debugf "aux %s" (SHA1.to_hex sha1);
     read t sha1 >>= function
     | Some (Value.Blob b) ->
@@ -211,7 +204,7 @@ let load_filesystem t commit =
           aux (e.Tree.perm, e.Tree.node) >>= function
           | None   -> return acc
           | Some t -> return ((e.Tree.name, t) :: acc)
-        ) [] (Tree.entries t)
+        ) [] t
       >>= fun children ->
       let children = lazy children in
       return (Some (Lazy_trie.create ~children ()))

@@ -1,5 +1,5 @@
 (*
- * Copyright (c) 2013 Thomas Gazagnaire <thomas@gazagnaire.org>
+ * Copyright (c) 2013-2014 Thomas Gazagnaire <thomas@gazagnaire.org>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,22 +14,22 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Lwt
-open Test_store
+(** Signatures *)
 
-let test_db = "test-db"
+open Core_kernel.Std
 
-let init () =
-  if Sys.file_exists test_db then begin
-    let cmd = Printf.sprintf "rm -rf %s" test_db in
-    let _ = Sys.command cmd in ()
-  end;
-  return_unit
+module type S = sig
 
-let suite =
-  {
-    name = "FS";
-    init;
-    clean = unit;
-    store = (module Git_fs);
-  }
+  include Identifiable.S
+
+  val pretty: t -> string
+  (** Human readable represenation of the object. *)
+
+  val input: Mstruct.t -> t
+  (** Build a value from an inflated contents. *)
+
+  val add: Bigbuffer.t -> t -> unit
+  (** Add the serialization of the value to an already existing
+      buffer. *)
+
+end
