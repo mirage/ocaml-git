@@ -19,8 +19,10 @@ open Core_kernel.Std
 module Log = Log.Make(struct let section = "pack" end)
 
 module T = struct
-  type t = Packed_value.t list
-  with bin_io, compare, sexp
+  type t = {
+    index : Pack_index.t;
+    values: Packed_value.pic list;
+  } with bin_io, compare, sexp
   let hash (t: t) = Hashtbl.hash t
   include Sexpable.To_stringable (struct type nonrec t = t with sexp end)
   let module_name = "Value"
@@ -28,11 +30,18 @@ end
 include T
 include Identifiable.Make (T)
 
+
+type raw  = {
+  checksum  : SHA1.t;
+  raw_values:  (int * Packed_value.t) list;
+}
+
 let pretty t =
   let buf = Buffer.create 1024 in
   List.iter ~f:(fun p ->
+      let p = (p :> Packed_value.t) in
       bprintf buf "%s---\n" (Packed_value.pretty p)
-    ) t;
+    ) t.values;
   Buffer.contents buf
 
 let input_header buf =
@@ -78,16 +87,16 @@ let index_aux (return, bind) ~sha1 buf =
   let rec loop index = function
     | 0 -> return index
     | i ->
-      let offset = Mstruct.offset buf in
+      let pos = Mstruct.offset buf in
       let packed_value = next_packed_value () in
-      let length = Mstruct.offset buf - offset in
-      let raw = Bigstring.sub_shared ~pos:offset ~len:length (Mstruct.to_bigarray buf) in
+      let length = Mstruct.offset buf - pos in
+      let raw = Bigstring.sub_shared ~pos ~len:length (Mstruct.to_bigarray buf) in
       let crc = Misc.crc32 raw in
       bind
-        (sha1 ~size ~version ~index ~offset packed_value)
+        (sha1 ~size ~version ~index ~pos packed_value)
         (fun sha1 ->
            let index = Pack_index.({
-               offsets = SHA1.Map.add index.offsets ~key:sha1 ~data:offset;
+               offsets = SHA1.Map.add index.offsets ~key:sha1 ~data:pos;
                crcs    = SHA1.Map.add index.crcs    ~key:sha1 ~data:crc;
                pack_checksum;
              }) in
@@ -101,8 +110,9 @@ let input buf =
   Log.debugf "input version:%d count:%d" version count;
   let values = ref [] in
   for i = 0 to count - 1 do
+    let pos = Mstruct.offset buf in
     let v = input_packed_value version buf in
-    values := v :: !values
+    values := (pos, v) :: !values
   done;
   let str = Bigstring.sub_shared
       ~len:(Mstruct.offset buf - offset)
@@ -119,13 +129,20 @@ let input buf =
     failwith "Pack.input";
   );
   Log.debugf "checksum: %s" (SHA1.to_hex actual_checksum);
-  List.rev !values
+  {
+    checksum   = actual_checksum;
+    raw_values = List.rev !values;
+  }
 
 let add buf t =
   Log.debugf "add";
   let version = 2 in
-  add_header ~version buf (List.length t);
-  List.iter ~f:(add_packed_value ~version buf) t;
+  add_header ~version buf (List.length t.values);
+  List.iter ~f:(fun p ->
+      let pos = Bigbuffer.length buf in
+      let p = Packed_value.unpic t.index ~pos p in
+      add_packed_value ~version buf p
+    ) t.values;
   let sha1 = SHA1.create (Misc.buffer_contents buf) in
   Log.debugf "add sha1: %s" (SHA1.to_hex sha1);
   SHA1.add buf sha1
@@ -156,12 +173,20 @@ let id_monad = (fun x ->x), (fun x f -> f x)
 let index = index_aux lwt_monad
 let index_sync = index_aux id_monad
 
+let pic index raw =
+  if SHA1.(index.Pack_index.pack_checksum <> raw.checksum) then (
+    eprintf "Pack.pic: the index file does not correspond to the given pack file.\n";
+    failwith "Pack.pic"
+  );
+  let values = List.map ~f:(fun (pos, p) -> Packed_value.pic index ~pos p) raw.raw_values in
+  { index; values }
+
 let unpack ~read ~write buf =
   let i = ref 0 in
-  let sha1 ~size ~version ~index ~offset packed_value =
+  let sha1 ~size ~version ~index ~pos packed_value =
     Printf.printf "\rUnpacking objects: %3d%% (%d/%d)%!" (!i*100/size) (!i+1) size;
     incr i;
-    Packed_value.to_value ~read ~index ~offset packed_value >>= fun value ->
+    Packed_value.to_value ~read ~index ~pos packed_value >>= fun value ->
     write value in
   index ~sha1 buf >>= fun index ->
   Printf.printf "\rUnpacking objects: 100%% (%d/%d), done.\n%!" !i !i;
@@ -179,9 +204,9 @@ let index_of_raw buf =
     let sha1 = SHA1.create buffer in
     Hashtbl.add_exn buffers sha1 buffer;
     sha1 in
-  let sha1 ~size:_ ~version ~index ~offset packed_value =
+  let sha1 ~size:_ ~version ~index ~pos packed_value =
     let buf = Misc.with_buffer (fun buf ->
-        Packed_value.add_inflated_value_sync ~read ~index ~offset buf packed_value
+        Packed_value.add_inflated_value_sync ~read ~index ~pos buf packed_value
       ) in
     write buf
   in

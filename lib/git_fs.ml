@@ -175,14 +175,14 @@ module Packed = struct
       Printf.eprintf "%d: invalid offset.\nValid offsets are: {%s}\n" offset offsets;
       failwith "invalid offset" in
     if Map.mem offsets sha1 then (
-      let offset = Map.find_exn offsets sha1 in
+      let pos = Map.find_exn offsets sha1 in
       let packed_value = Pack.packed_value ~index ~key:sha1 pack in
       let read sha1 =
         Loose.read_inflated t sha1 >>= function
         | Some buf -> return buf
         | None     -> read_inflated t (pack, index) sha1 in
       let buf = Bigbuffer.create 1024 in
-      Packed_value.add_inflated_value ~read ~index ~offset buf packed_value >>= fun () ->
+      Packed_value.add_inflated_value ~read ~index ~pos buf packed_value >>= fun () ->
       return (Misc.buffer_contents buf)
     ) else
       error (-1)

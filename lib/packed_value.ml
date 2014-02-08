@@ -71,10 +71,12 @@ let pretty_delta d =
 
 module T = struct
   module X = struct
+    type pic =
+      [ `Raw_value of Bigstring.t
+      | `Ref_delta of SHA1.t delta ]
+    with bin_io, compare, sexp
     type t =
-      | Raw_value of Bigstring.t
-      | Ref_delta of SHA1.t delta
-      | Off_delta of int delta
+      [ pic | `Off_delta of int delta ]
     with bin_io, compare, sexp
     let hash (t: t) = Hashtbl.hash t
     include Sexpable.To_stringable (struct type nonrec t = t with sexp end)
@@ -86,19 +88,19 @@ end
 include T
 
 let pretty = function
-  | Raw_value s -> Bigstring.pretty s
-  | Ref_delta d -> sprintf "source:%s\n%s" (SHA1.to_hex d.source) (pretty_delta d)
-  | Off_delta d -> sprintf "source:%d\n%s" d.source (pretty_delta d)
+  | `Raw_value s -> Bigstring.pretty s
+  | `Ref_delta d -> sprintf "source:%s\n%s" (SHA1.to_hex d.source) (pretty_delta d)
+  | `Off_delta d -> sprintf "source:%d\n%s" d.source (pretty_delta d)
 
 let result_length = function
-  | Ref_delta { result_length }
-  | Off_delta { result_length } -> result_length
-  | Raw_value str               -> Bigstring.length str
+  | `Ref_delta { result_length }
+  | `Off_delta { result_length } -> result_length
+  | `Raw_value str               -> Bigstring.length str
 
 let source_length = function
-  | Ref_delta { source_length }
-  | Off_delta { source_length } -> source_length
-  | Raw_value str               -> Bigstring.length str
+  | `Ref_delta { source_length }
+  | `Off_delta { source_length } -> source_length
+  | `Raw_value str               -> Bigstring.length str
 
 let add_hunk ~source buf = function
   | Insert str -> Bigbuffer.add_string buf str
@@ -290,7 +292,7 @@ module Make (M: sig val version: int end) = struct
           Value.add_header buf typ size;
           Bigbuffer.add_string buf (Bigstring.to_string str)
         ) in
-      Raw_value buf in
+      `Raw_value buf in
 
     Log.debugf "input kind:%d size:%d (%b)" kind size more;
 
@@ -304,11 +306,11 @@ module Make (M: sig val version: int end) = struct
     | 0b110 ->
       let base  = input_be_modified_base_128 buf in
       let hunks = with_inflated buf size (input_hunks base) in
-      Off_delta hunks
+      `Off_delta hunks
     | 0b111 ->
       let base  = SHA1.input buf in
       let hunks = with_inflated buf size (input_hunks base) in
-      Ref_delta hunks
+      `Ref_delta hunks
     | _     -> assert false
 
   let inflated_buffer = Bigbuffer.create 1024
@@ -326,24 +328,24 @@ module Make (M: sig val version: int end) = struct
     let add_deflated_hunks buf hunks =
       with_deflated buf (fun b -> add_hunks b hunks) in
     let size = match t with
-      | Raw_value str ->
+      | `Raw_value str ->
         begin match Bigstring.find Misc.nul str with
           | None   -> failwith "Packed_value.add"
           | Some i ->
             let s = Bigstring.To_string.subo ~pos:(i+1) str in
             with_deflated tmp_buffer (fun b -> Bigbuffer.add_string b s)
         end
-      | Off_delta hunks ->
+      | `Off_delta hunks ->
         add_be_modified_base_128 tmp_buffer hunks.source;
         add_deflated_hunks tmp_buffer hunks
-      | Ref_delta hunks ->
+      | `Ref_delta hunks ->
         SHA1.add tmp_buffer hunks.source;
         add_deflated_hunks tmp_buffer hunks
     in
     let kind = match t with
-      | Off_delta _ -> 0b110
-      | Ref_delta _ -> 0b111
-      | Raw_value v ->
+      | `Off_delta _ -> 0b110
+      | `Ref_delta _ -> 0b111
+      | `Raw_value v ->
         match Value.type_of_inflated (Mstruct.of_bigarray v) with
         | Object_type.Commit -> 0b001
         | Object_type.Tree   -> 0b010
@@ -382,26 +384,25 @@ let rev_assoc map d =
   with Exit ->
     !r
 
-let add_inflated_value_aux (return, bind) ~read ~index ~offset buf = function
-  | Raw_value x ->
+let add_inflated_value_aux (return, bind) ~read ~index ~pos buf = function
+  | `Raw_value x ->
     Bigbuffer.add_string buf (Bigstring.to_string x);
     return ()
-  | Ref_delta d ->
+  | `Ref_delta d ->
     bind
       (read d.source)
       (fun source ->
          add_delta buf { d with source };
          return ())
-  | Off_delta d ->
-    let offset = offset - d.source in
+  | `Off_delta d ->
+    let offset = pos - d.source in
     let base =
       match rev_assoc index.Pack_index.offsets offset with
       | Some k -> k
       | None   ->
-        let msg = sprintf
-            "inflate: cannot find any object starting at offset %d"
-            offset in
-        failwith msg in
+        eprintf "Packed_value.add_inflated_value: cannot find any object at offset %d\n%s"
+          offset (Pack_index.pretty index);
+        failwith "Packed_inflated_value_aux" in
     bind
       (read base)
       (fun source ->
@@ -416,9 +417,31 @@ let add_inflated_value_sync = add_inflated_value_aux id_monad
 
 open Lwt
 
-let to_value ~read ~index ~offset packed_value =
+let to_value ~read ~index ~pos packed_value =
   let buf = Bigbuffer.create 1024 in
-  add_inflated_value ~read ~index ~offset buf packed_value >>= fun () ->
+  add_inflated_value ~read ~index ~pos buf packed_value >>= fun () ->
   let buf = Mstruct.of_bigarray (Misc.buffer_contents buf) in
   let value = Value.input_inflated buf in
   return value
+
+let unpic index ~pos t =
+  match t with
+  | `Ref_delta hunks ->
+    begin match SHA1.Map.find index.Pack_index.offsets hunks.source with
+      | None   -> `Ref_delta hunks
+      | Some o -> `Off_delta { hunks with source = pos - o }
+    end
+  | _ -> (t :> T.t)
+
+let pic index ~pos t =
+  match t with
+  | `Off_delta hunks ->
+    let offset = pos - hunks.source in
+    begin match rev_assoc index.Pack_index.offsets offset with
+      | Some r -> `Ref_delta { hunks with source = r }
+      | None   ->
+        eprintf "Cannot find offest %d in the pack index\n%s" hunks.source
+          (Pack_index.pretty index);
+        failwith "pic"
+    end
+  | #pic as t -> t

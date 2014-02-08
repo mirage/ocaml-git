@@ -38,10 +38,13 @@ type 'a delta = {
 }
 (** Delta objects. *)
 
+type pic =
+  [ `Raw_value of Bigstring.t
+  | `Ref_delta of SHA1.t delta ]
+with bin_io, compare, sexp
+
 type t =
-  | Raw_value of Bigstring.t
-  | Ref_delta of SHA1.t delta
-  | Off_delta of int delta
+  [ pic | `Off_delta of int delta ]
 (** Packed values. *)
 
 val pretty: t -> string
@@ -87,19 +90,19 @@ val add_delta: Bigbuffer.t -> Bigstring.t delta -> unit
 val to_value:
   read:(SHA1.t -> Bigstring.t Lwt.t) ->
   index:Pack_index.t ->
-  offset:int ->
+  pos:int ->
   t -> Value.t Lwt.t
-(** [to_value ~read index ~offset p] unpacks the packed value [p].
+(** [to_value ~read index ~pos p] unpacks the packed value [p].
 
     The [read] function is used to read object contents from the disk
     or from memory, depending on the backend. [index] is the pack
-    index and [offset] is the current position of [p] into the pack
+    index and [pos] is the current position of [p] into the pack
     file (this is useful to process delta offsets). *)
 
 val add_inflated_value:
   read:(SHA1.t -> Bigstring.t Lwt.t) ->
   index:Pack_index.t ->
-  offset:int ->
+  pos:int ->
   Bigbuffer.t -> t -> unit Lwt.t
 (** Append the inflated representation of a value to a given
     buffer. Use the same paramaters as [to_value]. *)
@@ -107,7 +110,17 @@ val add_inflated_value:
 val add_inflated_value_sync:
   read:(SHA1.t -> Bigstring.t) ->
   index:Pack_index.t ->
-  offset:int ->
+  pos:int ->
   Bigbuffer.t -> t -> unit
 (** Same as [add_inflated_value] but with a synchronous read
     function. *)
+
+(** {2 Position independant packed values} *)
+
+val pic: Pack_index.t -> pos:int -> t -> pic
+(** Position-independant packed value. Convert an [Off_delta] packed
+    value into [Ref_delta] using the provided pack index. *)
+
+val unpic: Pack_index.t -> pos:int -> pic -> t
+(** Position dependent packed value. Convert a [Ref_delta] to the
+    corresponding [Off_delta], using the provided pack index. *)

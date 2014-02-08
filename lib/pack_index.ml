@@ -40,12 +40,16 @@ let empty ~pack_checksum = {
 let pretty t =
   let buf = Buffer.create 1024 in
   bprintf buf "pack-checksum: %s\n" (SHA1.to_hex t.pack_checksum);
+  let l = ref [] in
   SHA1.Map.iter2 ~f:(fun ~key ~data ->
       match data with
-      | `Both (offset, crc) ->
-        bprintf buf "%s: off:%d crc:%ld\n" (SHA1.to_hex key) offset crc
+      | `Both (offset, crc) -> l := (key, offset, crc) :: !l
       | _ -> assert false
     ) t.offsets t.crcs;
+  let l = List.sort ~cmp:(fun (_,o1,_) (_,o2,_) -> Int.compare o1 o2) !l in
+  List.iter ~f:(fun (sha1, offset, crc) ->
+      bprintf buf "%s: off:%d crc:%ld\n" (SHA1.to_hex sha1) offset crc
+    ) l;
   Buffer.contents buf
 
 let id_monad =

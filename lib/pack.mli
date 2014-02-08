@@ -18,7 +18,24 @@
 
 open Core_kernel.Std
 
-include Object.S with type t = Packed_value.t list
+type t = {
+  index : Pack_index.t;
+  values: Packed_value.pic list;
+}
+
+include Object.S with type t := t
+
+type raw  = {
+  checksum  : SHA1.t;
+  raw_values:  (int * Packed_value.t) list;
+}
+
+val pic: Pack_index.t -> raw -> t
+(** Return position-independant packed values. Convert all [Off_delta]
+    into [Ref_delta] using the provided pack index. *)
+
+val input: Mstruct.t -> raw
+(** Return the list of offsets of the packed values. *)
 
 val packed_value: index:Pack_index.t -> key:SHA1.t ->
   Bigstring.t -> Packed_value.t
