@@ -57,7 +57,7 @@ let of_string = function
   | _        -> None
 
 let input buf =
-  match Mstruct.get_string_delim buf Misc.nul with
+  match Mstruct.get_string_delim buf Misc.sp with
   | None     -> Mstruct.parse_error_buf buf "no object type"
   | Some str ->
     match of_string str with

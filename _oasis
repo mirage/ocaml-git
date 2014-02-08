@@ -24,7 +24,7 @@ Library git
                      bin_prot.syntax, comparelib.syntax, sexplib.syntax
 
 Library "git-memory"
-  Path:              lib/backend/
+  Path:              lib/
   FindlibParent:     git
   Findlibname:       memory
   Modules:           Git_memory
@@ -40,7 +40,7 @@ Library "git-unix"
 
 Library "git-fs"
   Build$:           flag(unix)
-  Path:             lib/backend/
+  Path:             lib/
   FindlibParent:    git
   Findlibname:      fs
   Modules:          Git_fs
@@ -52,7 +52,7 @@ Executable ogit
   MainIs:           ogit.ml
   CompiledObject:   best
   Install:          true
-  BuildDepends:     cmdliner, git, git.store, git.fs
+  BuildDepends:     cmdliner, git, git.unix, git.memory, git.fs
 
 Executable test_git
   Build$:           flag(tests) && flag(unix)

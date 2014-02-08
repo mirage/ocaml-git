@@ -280,21 +280,21 @@ module Make (S: Store.S) = struct
 
             let pack = Pack.input (Mstruct.of_bigarray raw_pack) in
             let raw_pack2 = Misc.with_buffer (fun buf -> Pack.add buf pack) in
-            let pack2 = Pack.input (Mstruct.of_bigarray raw_pack2) in
 
+            let pack2 = Pack.input (Mstruct.of_bigarray raw_pack2) in
             assert_pack_equal "pack" pack pack2;
 
             let index = Pack_index.input (Mstruct.of_bigarray raw_index) in
             let raw_index2 = Misc.with_buffer (fun buf -> Pack_index.add buf index) in
+
             let i1 = Pack_index.input (Mstruct.of_bigarray raw_index2) in
             assert_pack_index_equal "pack-index" index i1;
 
             let i3 = Pack.index_of_raw raw_pack in
-            assert_pack_index_equal "raw-pack_to_pack-index" index i3;
+            assert_pack_index_equal "raw-pack-->>--pack-index" index i3;
 
             let i2 = Pack.to_index pack in
-            assert_pack_index_equal "pack_to_pack-index" index i2;
-
+            assert_pack_index_equal "pack-->>--pack-index" index i2;
           ) files;
 
         return_unit

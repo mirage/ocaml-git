@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: a171bb0285ed7a19c84433b404c03dc5)
+# DO NOT EDIT (digest: 3643dbc0cc91a6027b66245391e47f1a)
 # Ignore VCS directories, you can use the same kind of rule outside
 # OASIS_START/STOP if you want to exclude directories that contains
 # useless stuff for the build process
@@ -34,9 +34,12 @@
 "lib/object_type.cmx": for-pack(Git)
 "lib/store.cmx": for-pack(Git)
 # Library git-memory
-"lib/backend/git-memory.cmxs": use_git-memory
+"lib/git-memory.cmxs": use_git-memory
 # Library git-unix
 "lib/git-unix.cmxs": use_git-unix
+# Library git-fs
+"lib/git-fs.cmxs": use_git-fs
+<lib/*.ml{,i}>: use_git-unix
 <lib/*.ml{,i}>: use_git
 <lib/*.ml{,i}>: pkg_lwt.unix
 <lib/*.ml{,i}>: pkg_mstruct
@@ -52,30 +55,12 @@
 <lib/*.ml{,i}>: pkg_bin_prot.syntax
 <lib/*.ml{,i}>: pkg_comparelib.syntax
 <lib/*.ml{,i}>: pkg_sexplib.syntax
-# Library git-fs
-"lib/backend/git-fs.cmxs": use_git-fs
-<lib/backend/*.ml{,i}>: use_git-unix
-<lib/backend/*.ml{,i}>: use_git
-<lib/backend/*.ml{,i}>: pkg_lwt.unix
-<lib/backend/*.ml{,i}>: pkg_mstruct
-<lib/backend/*.ml{,i}>: pkg_dolog
-<lib/backend/*.ml{,i}>: pkg_core_kernel
-<lib/backend/*.ml{,i}>: pkg_ocamlgraph
-<lib/backend/*.ml{,i}>: pkg_lazy-trie
-<lib/backend/*.ml{,i}>: pkg_re.pcre
-<lib/backend/*.ml{,i}>: pkg_zip
-<lib/backend/*.ml{,i}>: pkg_cryptokit
-<lib/backend/*.ml{,i}>: pkg_uri
-<lib/backend/*.ml{,i}>: pkg_lwt
-<lib/backend/*.ml{,i}>: pkg_bin_prot.syntax
-<lib/backend/*.ml{,i}>: pkg_comparelib.syntax
-<lib/backend/*.ml{,i}>: pkg_sexplib.syntax
 # Executable ogit
 <bin/ogit.{native,byte}>: use_git-fs
 <bin/ogit.{native,byte}>: use_git-unix
+<bin/ogit.{native,byte}>: use_git-memory
 <bin/ogit.{native,byte}>: use_git
 <bin/ogit.{native,byte}>: pkg_cmdliner
-<bin/ogit.{native,byte}>: pkg_git.store
 <bin/ogit.{native,byte}>: pkg_lwt.unix
 <bin/ogit.{native,byte}>: pkg_mstruct
 <bin/ogit.{native,byte}>: pkg_dolog
@@ -92,9 +77,9 @@
 <bin/ogit.{native,byte}>: pkg_sexplib.syntax
 <bin/*.ml{,i}>: use_git-fs
 <bin/*.ml{,i}>: use_git-unix
+<bin/*.ml{,i}>: use_git-memory
 <bin/*.ml{,i}>: use_git
 <bin/*.ml{,i}>: pkg_cmdliner
-<bin/*.ml{,i}>: pkg_git.store
 <bin/*.ml{,i}>: pkg_lwt.unix
 <bin/*.ml{,i}>: pkg_mstruct
 <bin/*.ml{,i}>: pkg_dolog

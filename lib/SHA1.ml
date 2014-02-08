@@ -62,7 +62,7 @@ module SHA1_String = struct
     of_hex (Mstruct.get_string buf (Mstruct.length buf))
 
   let add_hex buf t =
-  Bigbuffer.add_string buf (to_hex t)
+    Bigbuffer.add_string buf (to_hex t)
 
 end
 

@@ -20,16 +20,11 @@ open Core_kernel.Std
 
 type t = {
   offsets      : int SHA1.Map.t;
-  lengths      : int option SHA1.Map.t;
   crcs         : int32 SHA1.Map.t;
   pack_checksum: SHA1.t;
 }
 (** [offsests] is the positions of the SHA1 objects in the
     corresponding raw pack file.
-
-    [lengths] is the difference between two consecutive offsets
-    (appart for the last elements, where the lenght can be [None] is
-    the index file is build from a raw pack file).
 
     [crcs] contains the CRC-32 value of the packed object data.
 
@@ -37,6 +32,11 @@ type t = {
     which is needed when writing the pack index file to disk. *)
 
 include Object.S with type t := t
+
+val lengths: t -> int option SHA1.Map.t
+(** [lengths] returns the difference between two consecutive offsets
+    (appart for the last elements, where the lenght can be [None] is
+    the index file is build from a raw pack file). *)
 
 val empty: pack_checksum:SHA1.t -> t
 (** The empty pack index. *)

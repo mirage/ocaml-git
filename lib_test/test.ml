@@ -14,6 +14,19 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+let color_tri_state =
+  try match Sys.getenv "GITCOLOR" with
+    | "always" -> true
+    | "never"  -> false
+    | _        -> Unix.isatty Unix.stdout
+  with
+  | Not_found  -> Unix.isatty Unix.stdout
+
+let () =
+  match color_tri_state with
+  | true  -> Log.color_on ()
+  | false -> Log.color_off ()
+
 let () =
   Test_store.run "git" [
     `Quick, Test_memory.suite;

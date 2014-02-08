@@ -64,8 +64,8 @@ let pretty_delta d =
     d.source_length
     d.result_length;
   List.iter ~f:(function
-      | Insert str -> bprintf buf "INSERT %S\n" str
-      | Copy copy  -> bprintf buf "COPY[%s]\n" (pretty_copy copy)
+      | Insert str -> bprintf buf " - INSERT %S\n" str
+      | Copy copy  -> bprintf buf " - COPY   [%s]\n" (pretty_copy copy)
     ) d.hunks;
   Buffer.contents buf
 
@@ -123,7 +123,8 @@ let add_delta buf delta =
   Bigbuffer.add_char   buf Misc.sp;
   Bigbuffer.add_string buf (string_of_int delta.result_length);
   Bigbuffer.add_char   buf Misc.nul;
-  List.iter ~f:(add_hunk ~source:delta.source buf) delta.hunks
+  let source = Bigstring.sub_shared ~pos:(Mstruct.offset source) delta.source in
+  List.iter ~f:(add_hunk ~source buf) delta.hunks
 
 module Make (M: sig val version: int end) = struct
 

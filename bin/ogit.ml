@@ -34,12 +34,22 @@ let help_sections = [
 (* Global options *)
 type global = {
   verbose: bool;
+  color  : bool;
 }
 
 let app_global g =
-  Log.color_on ();
+  if g.color then
+    Log.color_on ();
   if g.verbose then
     Log.set_log_level Log.DEBUG
+
+let color_tri_state =
+  try match Sys.getenv "GITCOLOR" with
+    | "always" -> `Always
+    | "never"  -> `Never
+    | _        -> `Auto
+  with
+  | Not_found  -> `Auto
 
 let global =
   let verbose =
@@ -47,7 +57,19 @@ let global =
       Arg.info ~docs:global_option_section
         ~doc:"Be more verbose." ["v";"verbose"] in
     Arg.(value & flag & doc) in
-  Term.(pure (fun verbose -> { verbose }) $ verbose)
+  let color =
+    let doc = Arg.info ~docv:"WHEN"
+        ~doc:"Colorize the output. $(docv) must be `always', `never' or `auto'."
+        ["color"] in
+    let choices = Arg.enum [ "always", `Always; "never", `Never; "auto", `Auto ] in
+    let arg = Arg.(value & opt choices color_tri_state & doc) in
+    let to_bool = function
+      | `Always -> true
+      | `Never  -> false
+      | `Auto   -> Unix.isatty Unix.stdout in
+    Term.(pure to_bool $ arg)
+  in
+  Term.(pure (fun verbose color -> { verbose; color }) $ verbose $ color)
 
 let term_info title ~doc ~man =
   let man = man @ help_sections in
