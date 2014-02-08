@@ -275,29 +275,30 @@ module Make (S: Store.S) = struct
             SHA1.of_string name, file, "data/pack-" ^ name ^ ".idx"
           ) files in
         List.iter ~f:(fun (name, pack, index) ->
-            let raw_pack  = Git_unix.read_file pack in
-            let raw_index = Git_unix.read_file index in
+            let raw_pack1  = Git_unix.read_file pack in
+            let raw_index1 = Git_unix.read_file index in
 
-            let pack = Pack.input (Mstruct.of_bigarray raw_pack) in
-            let index = Pack_index.input (Mstruct.of_bigarray raw_index) in
-            let pack = Pack.pic index pack in
+            let rp1 = Pack.Raw.input (Mstruct.of_bigarray raw_pack1) in
+            let raw_pack2 = Misc.with_buffer (fun buf -> Pack.Raw.add buf rp1) in
+            let rp2 = Pack.Raw.input (Mstruct.of_bigarray raw_pack2) in
+            assert_raw_pack_equal "raw-pack" rp1 rp2;
 
-            let raw_pack2 = Misc.with_buffer (fun buf -> Pack.add buf pack) in
-            let pack2 = Pack.input (Mstruct.of_bigarray raw_pack2) in
-            let index2 = Pack.index_of_raw raw_pack2 in
-            let pack2 = Pack.pic index2 pack2 in
-            assert_pack_equal "pack" pack pack2;
+            let i1 = Pack_index.input (Mstruct.of_bigarray raw_index1) in
+            let i2 = Pack.Raw.to_index rp1 in
+            assert_pack_index_equal "raw-pack-->>--pack-index" i1 i2;
 
-            let i1 = Pack.index_of_raw raw_pack in
-            assert_pack_index_equal "raw-pack-->>--pack-index" index i1;
+            let raw_index2 = Misc.with_buffer (fun buf -> Pack_index.add buf i2) in
+            let i3 = Pack_index.input (Mstruct.of_bigarray raw_index2) in
+            assert_pack_index_equal "pack-index" i1 i3;
 
-            let raw_index2 = Misc.with_buffer (fun buf -> Pack_index.add buf index) in
+            let i4 = Pack.to_index (Pack.pic i1 rp1) in
+            assert_pack_index_equal "pack-->>--pack-index" i1 i4;
 
-            let i2 = Pack_index.input (Mstruct.of_bigarray raw_index2) in
-            assert_pack_index_equal "pack-index" index i2;
+            let p1 = Pack.input (Mstruct.of_bigarray raw_pack1) i1 in
+            assert_pack_equal "pack-1" (Pack.pic i1 rp1) p1;
 
-            let i3 = Pack.to_index pack in
-            assert_pack_index_equal "pack-->>--pack-index" index i2;
+            let p2 = Pack.input (Mstruct.of_bigarray raw_pack2) i2 in
+            assert_pack_equal "pack-2" (Pack.pic i2 rp2) p2;
 
           ) files;
 

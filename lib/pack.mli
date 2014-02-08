@@ -18,24 +18,19 @@
 
 open Core_kernel.Std
 
-type t = {
-  index : Pack_index.t;
-  values: Packed_value.pic list;
-}
+type t
+(** Pack value. *)
 
 include Object.S with type t := t
 
-type raw  = {
-  checksum  : SHA1.t;
-  raw_values:  (int * Packed_value.t) list;
-}
-
-val pic: Pack_index.t -> raw -> t
-(** Return position-independant packed values. Convert all [Off_delta]
-    into [Ref_delta] using the provided pack index. *)
-
-val input: Mstruct.t -> raw
+val input: Mstruct.t -> Pack_index.t -> t
 (** Return the list of offsets of the packed values. *)
+
+val values: t -> Packed_value.pic list
+(** Get the pack values. *)
+
+val create: Packed_value.pic list -> t
+(** Create a pack file from a list of PIC packed values. *)
 
 val packed_value: index:Pack_index.t -> key:SHA1.t ->
   Bigstring.t -> Packed_value.t
@@ -54,6 +49,17 @@ val to_index: t -> Pack_index.t
     [Pack_index.of_raw_pack] but works on structured pack values
     instead of a raw buffer. *)
 
-val index_of_raw: Bigstring.t -> Pack_index.t
-(** Same a [index] but using a raw pack file. Useful in
-    fetch/clone. *)
+module Raw: sig
+
+  include Object.S
+  (** Raw pack file, with position-dependant deltas. *)
+
+  val to_index: t -> Pack_index.t
+  (** Same a [index] but using a raw pack file. Useful in
+      fetch/clone. *)
+
+end
+
+val pic: Pack_index.t -> Raw.t -> t
+(** Transform a raw pack file into a position independant pack
+    file. *)

@@ -100,8 +100,8 @@ let write_pack t pack =
   return index
 
 let write_raw_pack t pack =
-  let index = Pack.index_of_raw pack in
-  let pack = Pack.input (Mstruct.of_bigarray pack) in
+  let pack = Pack.Raw.input (Mstruct.of_bigarray pack) in
+  let index = Pack.Raw.to_index pack in
   let pack = Pack.pic index pack in
   t.packs <- (index, pack) :: t.packs;
   return index

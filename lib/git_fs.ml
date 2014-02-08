@@ -331,7 +331,11 @@ let write_and_check_inflated t sha1 inflated =
   Loose.write_and_check_inflated t sha1 inflated
 
 let write_raw_pack t pack =
-  let index = Pack.index_of_raw pack in
+  let index =
+    pack
+    |> Mstruct.of_bigarray
+    |> Pack.Raw.input
+    |> Pack.Raw.to_index in
   let name =
     Map.keys index.Pack_index.offsets
     |> List.map ~f:SHA1.to_hex
