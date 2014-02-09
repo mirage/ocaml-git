@@ -52,7 +52,7 @@ usual `git` command.
 
 ```
 $ time ogit clone git://github.com/ocaml/opam-repository
-Cloning into 'kk' ...
+Cloning into 'opam-repository' ...
 Receiving data ... done.
 Resolving deltas: 100% (37294/37294), done.
 remote: Counting objects: 37294, done.
@@ -66,7 +66,7 @@ sys  0m5.078s
 
 ```
 $ time git clone git://github.com/ocaml/opam-repository
-Cloning into 'rr'...
+Cloning into 'opam-repository'...
 remote: Reusing existing pack: 37868, done.
 remote: Total 37868 (delta 0), reused 0 (delta 0)
 Receiving objects: 100% (37868/37868), 5.41 MiB | 408.00 KiB/s, done.
