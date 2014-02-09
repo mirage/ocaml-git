@@ -273,7 +273,10 @@ let clone = {
         R.clone t ?deepen ~unpack ~bare repo >>= fun r ->
         match r.Remote.head with
         | None      -> return_unit
-        | Some head -> S.write_cache t head
+        | Some head ->
+          S.write_cache t head >>= fun () ->
+          printf "HEAD is now at %s\n" (SHA1.Commit.to_hex head);
+          return_unit
       end in
     Term.(mk clone $ backend $ depth $ bare $ unpack $ repository $ directory)
 }

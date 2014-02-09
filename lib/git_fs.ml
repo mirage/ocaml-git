@@ -372,9 +372,10 @@ let write_head t = function
 (* XXX: do not load the blobs *)
 let load_filesystem t commit =
   Log.debugf "load_filesystem %s" (SHA1.Commit.to_hex commit);
+  let n = ref 0 in
   let rec aux (mode, sha1) =
     read_exn t sha1 >>= function
-    | Value.Blob b   -> return (Lazy_trie.create ~value:(mode, b) ())
+    | Value.Blob b   -> incr n; return (Lazy_trie.create ~value:(mode, b) ())
     | Value.Commit c -> aux (`Dir, SHA1.of_tree c.Commit.tree)
     | Value.Tag t    -> aux (mode, t.Tag.sha1)
     | Value.Tree t   ->
@@ -386,14 +387,17 @@ let load_filesystem t commit =
       let children = lazy children in
       return (Lazy_trie.create ~children ())
   in
-  aux (`Dir, SHA1.of_commit commit)
+  aux (`Dir, SHA1.of_commit commit) >>= fun t ->
+  return (!n, t)
 
 let iter_blobs t ~f ~init =
-  load_filesystem t init >>= fun trie ->
+  load_filesystem t init >>= fun (n, trie) ->
+  let i = ref 0 in
   Log.debugf "iter_blobs %s" (SHA1.Commit.to_hex init);
   Lazy_trie.fold (fun acc path (mode, blob) ->
       acc >>= fun () ->
-      f (t :: path) mode blob
+      incr i;
+      f (!i, n) (t :: path) mode blob
   ) trie return_unit
 
 let create_file file mode blob =
@@ -455,7 +459,10 @@ let entry_of_file ?root file mode blob =
 let write_cache t head =
   Log.debugf "write_cache %s" (SHA1.Commit.to_hex head);
   let entries = ref [] in
-  iter_blobs t ~init:head ~f:(fun path mode blob ->
+  let all = ref 0 in
+  iter_blobs t ~init:head ~f:(fun (i,n) path mode blob ->
+      all := n;
+      printf "\rChecking out files: %d%% (%d/%d), done.%!" Int.(100*i/n) i n;
       let file = String.concat ~sep:Filename.dir_sep path in
       Log.debugf "write_cache: blob:%s" file;
       entry_of_file ~root:t file mode blob >>= function
@@ -465,4 +472,6 @@ let write_cache t head =
   let cache = { Cache.entries = !entries; extensions = [] } in
   let buf = Bigbuffer.create 1024 in
   Cache.add buf cache;
-  Git_unix.write_file (cache_file t) (Misc.buffer_contents buf)
+  Git_unix.write_file (cache_file t) (Misc.buffer_contents buf) >>= fun () ->
+  printf "\rChecking out files: 100%% (%d/%d), done.%!\n" !all !all;
+  return_unit

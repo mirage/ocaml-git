@@ -613,7 +613,6 @@ module Make (IO: IO) (Store: Store.S) = struct
                   | _              -> true in
                 if not bare then (
                   Log.debugf "EXPANDING THE FILESYSTEM";
-                  printf "HEAD is now %s\n" (SHA1.Commit.to_hex head);
                   return { head = Some head; references; sha1s }
                 ) else (
                   Log.debugf "BARE REPOSITORY";

@@ -119,7 +119,7 @@ module Raw = struct
     let size = List.length values in
     let i = ref 0 in
     let sha1 ~offsets ~pos p =
-      Printf.printf "\rUnpacking index: %3d%% (%d/%d)%!" (!i*100/size) (!i+1) size;
+      Printf.printf "\rResolving deltas: %3d%% (%d/%d)%!" (!i*100/size) (!i+1) size;
       incr i;
       let buf = Misc.with_buffer (fun buf ->
           Packed_value.add_inflated_value_sync ~read ~offsets ~pos buf p
@@ -127,9 +127,11 @@ module Raw = struct
       write buf
     in
     let keys = index_of_values_sync ~sha1 ~pack_checksum values in
-    Printf.printf "\rUnpacking index: 100%% (%d/%d), done.\n%!" !i !i;
+    Printf.printf "\rResolving deltas: 100%% (%d/%d), done.\n%!" !i !i;
     keys
 
+  (* Since Git 1.8.5 the naming is hardly reproductible, so pick a
+     random but stable one. *)
   let sha1_of_keys keys =
     keys
     |> List.map ~f:SHA1.to_hex
