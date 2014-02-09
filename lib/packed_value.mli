@@ -38,13 +38,10 @@ type 'a delta = {
 }
 (** Delta objects. *)
 
-type pic =
-  [ `Raw_value of Bigstring.t
-  | `Ref_delta of SHA1.t delta ]
-with bin_io, compare, sexp
-
 type t =
-  [ pic | `Off_delta of int delta ]
+  | Raw_value of string
+  | Ref_delta of SHA1.t delta
+  | Off_delta of int delta
 (** Packed values. *)
 
 val pretty: t -> string
@@ -80,36 +77,24 @@ val source_length: t -> int
 
 (** {2 Conversion to values} *)
 
-val add_hunk: source:Bigstring.t -> Bigbuffer.t -> hunk -> unit
+val add_hunk: Bigbuffer.t -> source:string -> pos:int -> hunk -> unit
 (** Append a hunk to a buffer. [source] is the original object the
-    hunk refers to. *)
+    hunk refers to (with the given offset). *)
 
-val add_delta: Bigbuffer.t -> Bigstring.t delta -> unit
+val add_delta: Bigbuffer.t -> string delta -> unit
 (** Append a delta to a buffer. *)
 
-val to_value:
-  read:(SHA1.t -> Bigstring.t Lwt.t) ->
-  index:Pack_index.t ->
-  pos:int ->
-  t -> Value.t Lwt.t
-(** [to_value ~read index ~pos p] unpacks the packed value [p].
-
-    The [read] function is used to read object contents from the disk
-    or from memory, depending on the backend. [index] is the pack
-    index and [pos] is the current position of [p] into the pack
-    file (this is useful to process delta offsets). *)
-
 val add_inflated_value:
-  read:(SHA1.t -> Bigstring.t Lwt.t) ->
-  index:Pack_index.t ->
+  read:(SHA1.t -> string Lwt.t) ->
+  offsets:SHA1.t Int.Map.t ->
   pos:int ->
   Bigbuffer.t -> t -> unit Lwt.t
-(** Append the inflated representation of a value to a given
+(** Append the inflated representation of a packed value to a given
     buffer. Use the same paramaters as [to_value]. *)
 
 val add_inflated_value_sync:
-  read:(SHA1.t -> Bigstring.t) ->
-  index:Pack_index.t ->
+  read:(SHA1.t -> string) ->
+  offsets:SHA1.t Int.Map.t ->
   pos:int ->
   Bigbuffer.t -> t -> unit
 (** Same as [add_inflated_value] but with a synchronous read
@@ -117,10 +102,35 @@ val add_inflated_value_sync:
 
 (** {2 Position independant packed values} *)
 
-val pic: Pack_index.t -> pos:int -> t -> pic
-(** Position-independant packed value. Convert an [Off_delta] packed
-    value into [Ref_delta] using the provided pack index. *)
+module PIC: sig
 
-val unpic: Pack_index.t -> pos:int -> pic -> t
-(** Position dependent packed value. Convert a [Ref_delta] to the
-    corresponding [Off_delta], using the provided pack index. *)
+  (** Position-independant packed values. *)
+
+  type kind =
+    | Raw of string
+    | Link of t delta
+
+  and t = {
+    kind: kind;
+    sha1: SHA1.t;
+  }
+
+  include Identifiable.S with type t := t
+
+  val pretty: t -> string
+  (** Human readable representation. *)
+
+  val to_value: t -> Value.t
+  (** [to_value ~read p] unpacks the packed position-independant value
+      [p]. The [read] function is used to read object contents from the
+      disk or from memory, depending on the backend. *)
+
+end
+
+val to_pic: PIC.t Int.Map.t -> PIC.t SHA1.Map.t -> (int * SHA1.t * t) -> PIC.t
+(** Position-independant packed value. Convert [Off_delta] and
+    [Ref_delta] to [PIC.Link] using the provided indexes. *)
+
+val of_pic: int PIC.Map.t -> pos:int -> PIC.t -> t
+(** Position dependent packed value. Convert a [PIC.Link] into to the
+    corresponding [Off_delta], using the provided indexes. *)

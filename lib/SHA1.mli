@@ -22,7 +22,7 @@ module type S = sig
 
   include Object.S
 
-  val create: Bigstring.t -> t
+  val create: string -> t
   (** Build a node from a raw bigstring. *)
 
   val to_hex: t -> string

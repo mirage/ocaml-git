@@ -19,7 +19,7 @@ module Log = Log.Make(struct let section = "sha1" end)
 
 module type S = sig
   include Object.S
-  val create: Bigstring.t -> t
+  val create: string -> t
   val to_hex: t -> string
   val of_hex: string -> t
   val input_hex: Mstruct.t -> t
@@ -34,7 +34,7 @@ module SHA1_String = struct
      once). *)
   let create str =
     let hash = Cryptokit.Hash.sha1 () in
-    hash#add_string (Bigstring.to_string str);
+    hash#add_string str;
     of_string hash#result
 
   let to_hex t =

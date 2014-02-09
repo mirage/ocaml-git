@@ -140,8 +140,11 @@ let inflate_mstruct orig_buf =
   Mstruct.shift orig_buf size;
   res
 
+let inflate_bigstring str =
+  let buf = inflate_mstruct (Mstruct.of_bigarray str) in
+  Mstruct.to_bigarray buf
+
 let crc32 str =
-  let str = Bigstring.to_string str in
   (* XXX: use ocaml-crc ? *)
   Zlib.update_crc 0l str 0 (String.length str)
 
@@ -171,13 +174,49 @@ let add_be_uint32 buf i =
   EndianString.BigEndian.set_int32 str_buffer 0 i;
   Bigbuffer.add_string buf str_buffer
 
-let with_buffer fn =
-  let buf = Bigbuffer.create 1024 in
+let buf = Bigbuffer.create 1024
+
+let with_bigbuffer fn =
+  Bigbuffer.reset buf;
   fn buf;
-  buffer_contents buf
+  Bigbuffer.big_contents buf
+
+let with_buffer fn =
+  Bigbuffer.reset buf;
+  fn buf;
+  Bigbuffer.contents buf
+
+open Lwt
+
+let rec list_iter_p ?(width=50) f l =
+  match List.split_n l width with
+  | [], [] -> return_unit
+  | h , t  ->
+    Lwt_list.iter_p f h >>= fun () ->
+    list_iter_p ~width f t
+
+let list_map_p ?(width=50) f l =
+  let res = ref [] in
+  list_iter_p ~width (fun x ->
+      f x >>= fun y ->
+      res := y :: !res;
+      return_unit
+    ) l
+  >>= fun () ->
+  return !res
 
 module OP = struct
 
   let (/) = Filename.concat
 
 end
+
+let map_rev_find map d =
+  let r = ref None in
+  try
+    Map.iter
+      ~f:(fun ~key ~data -> if data = d then (r := Some key; raise Exit))
+      map;
+    None
+  with Exit ->
+    !r

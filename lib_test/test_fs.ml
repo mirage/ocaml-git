@@ -17,19 +17,10 @@
 open Lwt
 open Test_store
 
-let test_db = "test-db"
-
-let init () =
-  if Sys.file_exists test_db then begin
-    let cmd = Printf.sprintf "rm -rf %s" test_db in
-    let _ = Sys.command cmd in ()
-  end;
-  return_unit
-
 let suite =
   {
-    name = "FS";
-    init;
+    name  = "FS";
+    init  = unit;
     clean = unit;
     store = (module Git_fs);
   }

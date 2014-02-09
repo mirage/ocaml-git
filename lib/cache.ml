@@ -176,7 +176,7 @@ let add_entry buf t =
   Mstruct.set_string mstr (String.make (1+pad) '\x00');
   Bigbuffer.add_string buf (Mstruct.to_string mstr)
 
-let input_extensions buf =
+let input_extensions _buf =
   (* TODO: actually read the extension contents *)
   []
 

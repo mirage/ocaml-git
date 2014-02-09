@@ -30,13 +30,18 @@ type t = {
 let unit () =
   return_unit
 
-module Make (S: Store.S) = struct
+let log_level = Log.get_log_level ()
 
-  module Common = Make(S)
+module Make (Store: Store.S) = struct
+
+  module Common = Make(Store)
   open Common
-  open S
+  module Search = Search.Make(Store)
+
+  let () = Log.(set_log_level INFO)
 
   let run x test =
+    Log.set_log_level log_level;
     try Lwt_unix.run (x.init () >>= test >>= x.clean)
     with e ->
       Lwt_unix.run (x.clean ());
@@ -138,23 +143,24 @@ module Make (S: Store.S) = struct
   let r2 = Reference.of_string "refs/upstream/head"
 
   let check_write t name k v =
-    write t v    >>= fun k' ->
+    Store.write t v    >>= fun k' ->
     assert_key_equal (name ^ "-key-1") k k';
-    read_exn t k >>= fun v' ->
+    Store.read_exn t k >>= fun v' ->
     assert_value_equal name v v';
-    write t v'   >>= fun k'' ->
+    Store.write t v'   >>= fun k'' ->
     assert_key_equal (name ^ "-key-2") k k'';
     return_unit
 
   let check_find t name k path e =
-    Value.find ~succ:(succ t) k path >>= fun k' ->
+    Search.find t k path >>= fun k' ->
     assert_key_opt_equal (name ^ "-find") (Some e) k';
     return_unit
 
   let create () =
-    create ~root:"test-db" () >>= fun t ->
+    Store.create ~root:"test-db" () >>= fun t  ->
+    Store.clear t                   >>= fun () ->
     Lwt_list.iter_p
-      (fun v -> write t v >>= fun _ -> return_unit)
+      (fun v -> Store.write t v >>= fun _ -> return_unit)
       [
         v1; v2;
         t1; t2; t3; t4;
@@ -163,12 +169,13 @@ module Make (S: Store.S) = struct
     return t
 
   let is_ typ t k =
-    type_of t k >>= function
-    | Some x -> return (x = typ)
-    | None    -> return false
+    Store.read t k >>= function
+    | None   -> return false
+    | Some v ->
+      return (typ = Value.type_of v)
 
   let check_keys t name typ expected =
-    list t                           >>= fun ks ->
+    Store.list t                     >>= fun ks ->
     Lwt_list.filter_p (is_ typ t) ks >>= fun ks ->
     return (assert_keys_equal name expected ks)
 
@@ -245,15 +252,15 @@ module Make (S: Store.S) = struct
       let ko = function
         | None   -> None
         | Some x -> Some (SHA1.of_commit x) in
-      write_reference t r1 (c kt4) >>= fun ()   ->
-      read_reference t r1          >>= fun kt4' ->
+      Store.write_reference t r1 (c kt4) >>= fun ()   ->
+      Store.read_reference t r1          >>= fun kt4' ->
       assert_key_opt_equal "r1" (Some kt4) (ko kt4');
 
-      write_reference t r2 (c kc2) >>= fun ()   ->
-      read_reference t r2          >>= fun kc2' ->
+      Store.write_reference t r2 (c kc2) >>= fun ()   ->
+      Store.read_reference t r2          >>= fun kc2' ->
       assert_key_opt_equal "r2" (Some kc2) (ko kc2');
 
-      references t             >>= fun rs   ->
+      Store.references t                 >>= fun rs   ->
       assert_refs_equal "refs" [r1; r2] rs;
 
       return_unit
@@ -272,34 +279,29 @@ module Make (S: Store.S) = struct
         let files = List.map ~f:(fun file ->
             let name = String.chop_prefix_exn file ~prefix:"data/pack-" in
             let name = String.chop_suffix_exn name ~suffix:".pack" in
-            SHA1.of_string name, file, "data/pack-" ^ name ^ ".idx"
+            file, "data/pack-" ^ name ^ ".idx"
           ) files in
-        List.iter ~f:(fun (name, pack, index) ->
-            let raw_pack1  = Git_unix.read_file pack in
-            let raw_index1 = Git_unix.read_file index in
+        List.iter ~f:(fun (pack, index) ->
 
-            let rp1 = Pack.Raw.input (Mstruct.of_bigarray raw_pack1) in
-            let raw_pack2 = Misc.with_buffer (fun buf -> Pack.Raw.add buf rp1) in
-            let rp2 = Pack.Raw.input (Mstruct.of_bigarray raw_pack2) in
-            assert_raw_pack_equal "raw-pack" rp1 rp2;
+            (* basic serialization of index files *)
+            let istr1 = Git_unix.read_file index in
+            let i1    = Pack_index.input (Mstruct.of_bigarray istr1) in
+            let istr2 = Misc.with_bigbuffer (fun buf -> Pack_index.add buf i1) in
+            let i2    = Pack_index.input (Mstruct.of_bigarray istr2) in
+            assert_pack_index_equal "pack-index" i1 i2;
 
-            let i1 = Pack_index.input (Mstruct.of_bigarray raw_index1) in
-            let i2 = Pack.Raw.to_index rp1 in
-            assert_pack_index_equal "raw-pack-->>--pack-index" i1 i2;
+            (* basic serialization of pack files *)
+            let pstr1 = Git_unix.read_file pack in
+            let rp1   = Pack.Raw.input (Mstruct.of_bigarray pstr1) ~index:None in
+            let rp1'  = Pack.Raw.input (Mstruct.of_bigarray pstr1) ~index:(Some i1) in
+            assert_raw_pack_equal "raw-pack" rp1 rp1';
 
-            let raw_index2 = Misc.with_buffer (fun buf -> Pack_index.add buf i2) in
-            let i3 = Pack_index.input (Mstruct.of_bigarray raw_index2) in
-            assert_pack_index_equal "pack-index" i1 i3;
+            let pstr2 = Misc.with_bigbuffer (fun buf -> Pack.Raw.add buf rp1) in
+            let rp2   = Pack.Raw.input (Mstruct.of_bigarray pstr2) ~index:None in
+            assert_pack_equal "pack" (Pack.to_pic rp1) (Pack.to_pic rp2);
 
-            let pic = Pack.pic i1 rp1 in
-            let i4 = Pack.to_index pic in
-            assert_pack_index_equal "pack-->>--pack-index" i1 i4;
-
-            let p1 = Pack.input (Mstruct.of_bigarray raw_pack1) i1 in
-            assert_pack_equal "pack-1" (Pack.pic i1 rp1) p1;
-
-            let p2 = Pack.input (Mstruct.of_bigarray raw_pack2) i2 in
-            assert_pack_equal "pack-2" (Pack.pic i2 rp2) p2;
+            let i3 = Pack.Raw.index rp1 in
+            assert_pack_index_equal "raw-pack-->>--pack-index" i1 i3;
 
           ) files;
 

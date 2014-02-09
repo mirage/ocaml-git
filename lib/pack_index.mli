@@ -33,10 +33,13 @@ type t = {
 
 include Object.S with type t := t
 
+val keys: Mstruct.t -> SHA1.Set.t
+(** Read only the keys contained in the index. *)
+
 val lengths: t -> int option SHA1.Map.t
 (** [lengths] returns the difference between two consecutive offsets
     (appart for the last elements, where the lenght can be [None] is
     the index file is build from a raw pack file). *)
 
-val empty: pack_checksum:SHA1.t -> t
+val empty: ?pack_checksum:SHA1.t -> unit -> t
 (** The empty pack index. *)

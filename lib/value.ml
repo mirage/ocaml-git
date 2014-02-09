@@ -33,7 +33,7 @@ include T
 include Identifiable.Make (T)
 
 let pretty = function
-  | Blob b   -> sprintf "== Blob ==\n%s" (Blob.pretty b)
+  | Blob b   -> sprintf "== Blob ==\n%s\n" (Blob.pretty b)
   | Commit c -> sprintf "== Commit ==\n%s" (Commit.pretty c)
   | Tag t    -> sprintf "== Tag ==\n%s" (Tag.pretty t)
   | Tree t   -> sprintf "== Tree ==\n%s" (Tree.pretty t)
@@ -42,48 +42,6 @@ let commit c = Commit c
 let blob b = Blob b
 let tree t = Tree t
 let tag t = Tag t
-
-
-type successor =
-  [ `Commit of SHA1.t
-  | `Tag of string * SHA1.t
-  | `Tree of string * SHA1.t ]
-
-let succ = function
-  | `Commit s
-  | `Tag (_, s)
-  | `Tree (_, s) -> s
-
-(* XXX: not tail-rec *)
-let rec find ~succ sha1 path =
-  match path with
-  | []   -> return (Some sha1)
-  | h::t ->
-    succ sha1 >>= fun succs ->
-    Lwt_list.fold_left_s (fun acc s ->
-        match (acc, s) with
-        | Some _, _            -> return acc
-        | _     , `Commit _    -> return acc
-        | _     , `Tag (l, s)
-        | _     , `Tree (l, s) ->
-          if String.(l=h) then
-            find ~succ s t >>= function
-            | None   -> return_none
-            | Some f -> return (Some f)
-          else
-            return acc
-      ) None succs
-
-let find_exn ~succ sha1 path =
-  find succ sha1 path >>= function
-  | None   -> fail Not_found
-  | Some x -> return x
-
-let mem ~succ sha1 path =
-  find succ sha1 path >>= function
-  | None   -> return false
-  | Some _ -> return true
-
 
 let type_of = function
   | Blob _   -> Object_type.Blob
@@ -104,7 +62,7 @@ let add_header buf typ size =
   Bigbuffer.add_char   buf Misc.nul
 
 let add_inflated buf t =
-  Log.debugf "add_inflated %s" (to_string t);
+  Log.debugf "add_inflated";
   let tmp = Bigbuffer.create 1024 in
   add_contents tmp t;
   let size = Bigbuffer.length tmp in
@@ -117,7 +75,7 @@ let sha1 t =
 
 let add buf t =
   Log.debugf "add %s" (to_string t);
-  let inflated = Misc.with_buffer (fun buf -> add_inflated buf t) in
+  let inflated = Misc.with_bigbuffer (fun buf -> add_inflated buf t) in
   let deflated = Misc.deflate_bigstring inflated in
   Bigbuffer.add_string buf (Bigstring.to_string deflated)
 
@@ -151,3 +109,20 @@ let input_inflated buf =
 
 let input buf =
   input_inflated (Misc.inflate_mstruct buf)
+
+module Cache = struct
+
+  let cache = SHA1.Table.create ()
+
+  let clear () = SHA1.Table.clear cache
+
+  let find sha1: string option =
+    Hashtbl.find cache sha1
+
+  let find_exn sha1: string =
+    Hashtbl.find_exn cache sha1
+
+  let add sha1 str =
+    ignore (Hashtbl.add cache ~key:sha1 ~data:str)
+
+end

@@ -26,16 +26,20 @@ module T = struct
   } with bin_io, compare, sexp
   let hash (t: t) = Hashtbl.hash t
   include Sexpable.To_stringable (struct type nonrec t = t with sexp end)
-  let module_name = "Value"
+  let module_name = "Pack_index"
 end
 include T
 include Identifiable.Make (T)
 
-let empty ~pack_checksum = {
-  offsets = SHA1.Map.empty;
-  crcs    = SHA1.Map.empty;
-  pack_checksum;
-}
+let empty ?pack_checksum () =
+  let pack_checksum = match pack_checksum with
+    | None   -> SHA1.of_string "" (* XXX: ugly *)
+    | Some c -> c in
+  {
+    offsets = SHA1.Map.empty;
+    crcs    = SHA1.Map.empty;
+    pack_checksum;
+  }
 
 let pretty t =
   let buf = Buffer.create 1024 in
@@ -59,22 +63,38 @@ let lengths { offsets } =
   Log.debugf "lengths";
   let rec aux acc = function
     | []    -> List.rev acc
-    | [h,l] -> aux ((h, None)::acc) []
-    | (h1,l1)::((h2,l2)::_ as t) -> aux ((h1, Some (l2-l1))::acc) t in
+    | [h,_] -> aux ((h, None)::acc) []
+    | (h1,l1)::((_,l2)::_ as t) -> aux ((h1, Some (l2-l1))::acc) t in
   let l = SHA1.Map.to_alist offsets in
   let l = List.sort ~cmp:(fun (_,x) (_,y) -> Int.compare x y) l in
   SHA1.Map.of_alist_exn (aux [] l)
 
-let input buf =
-  Log.debugf "input";
-
+let input_header buf =
   let magic = Mstruct.get_string buf 4 in
   if String.(magic <> "\255tOc") then
     Mstruct.parse_error_buf buf "wrong magic index (%S)" magic;
   let version = Mstruct.get_be_uint32 buf in
   if Int32.(version <> 2l) then
-    Mstruct.parse_error_buf buf "wrong index version (%ld)" version;
+    Mstruct.parse_error_buf buf "wrong index version (%ld)" version
 
+let input_keys buf n =
+  Log.debugf "input: reading the %d objects IDs" n;
+  let a = Array.create n (SHA1.of_string "") in
+  for i=0 to n - 1 do
+    a.(i) <- SHA1.input buf;
+  done;
+  a
+
+let keys buf =
+  Log.debugf "keys";
+  input_header buf;
+  Mstruct.shift buf 255;
+  let n = Mstruct.get_be_uint32 buf in
+  SHA1.Set.of_array (input_keys buf (Int32.to_int_exn n))
+
+let input buf =
+  Log.debugf "input";
+  input_header buf;
   (* Read the first-level fanout *)
   Log.debugf "input: reading the first-level fanout";
   let fanout =
@@ -87,13 +107,7 @@ let input buf =
   let nb_objects = Int32.to_int_exn fanout.(255) in
 
   (* Read the names *)
-  Log.debugf "input: reading the %d objects IDs" nb_objects;
-  let names =
-    let a = Array.create nb_objects (SHA1.of_string "") in
-    for i=0 to nb_objects-1 do
-      a.(i) <- SHA1.input buf;
-    done;
-    a in
+  let names = input_keys buf nb_objects in
 
   (* Read the CRCs *)
   Log.debugf "input: reading the %d CRCs" nb_objects;
@@ -195,8 +209,8 @@ let add buf t =
 
   SHA1.add buf t.pack_checksum;
 
-  (* XXX: slow *)
-  let str = Misc.buffer_contents buf in
+  (* XXX: SHA1.of_bigstring *)
+  let str = Bigbuffer.contents buf in
   let checksum = SHA1.create str in
 
   Bigbuffer.add_string buf (SHA1.to_string checksum)

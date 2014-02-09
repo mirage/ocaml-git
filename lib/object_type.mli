@@ -25,4 +25,3 @@ type t =
 include Object.S with type t := t
 
 val of_string: string -> t option
-val string_of_opt: t option -> string

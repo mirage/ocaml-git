@@ -27,12 +27,18 @@ module type S = sig
   (** Create a store handler for the given path. If [root] is not set,
       use the current directory. *)
 
+  val clear: t -> unit Lwt.t
+  (** Remove all the contents of the Git store. *)
+
   val root: t -> string
   (** The state root (or any other meaningful name to be displayed to
       the user). *)
 
   val dump: t -> unit Lwt.t
-  (** Dump the store contents of cache to stderr. *)
+  (** Dump the store contents to stderr. *)
+
+  val contents: t -> (SHA1.t * Value.t) list Lwt.t
+  (** Get the full store contents. *)
 
   (** {2 Objects} *)
 
@@ -46,30 +52,15 @@ module type S = sig
   val mem: t -> SHA1.t -> bool Lwt.t
   (** Check whether a key belongs to the store. *)
 
-  val read_inflated: t -> SHA1.t -> Bigstring.t option Lwt.t
-  (** Return the inflated contents of object having the given SHA1
-      name. *)
-
-  val read_inflated_exn: t -> SHA1.t -> Bigstring.t Lwt.t
-  (** Same as [read_inflated] but raise [Not_found] if the key does
-      not exist. *)
-
   val list: t -> SHA1.t list Lwt.t
   (** Return the list of SHA1 names. *)
 
   val write: t -> Value.t -> SHA1.t Lwt.t
   (** Write a value and return the SHA1 of its serialized contents. *)
 
-  val write_and_check_inflated: t -> SHA1.t -> Bigstring.t -> unit Lwt.t
-  (** Compress a binary value and write it in the store. Check that
-      the SHA1 of the uncompressed contents is the one that is
-      expected. *)
-
-  val write_pack: t -> Pack.t -> Pack_index.t Lwt.t
-  (** Write a raw pack file and its corresponding index. *)
-
-  val write_raw_pack: t -> Bigstring.t -> Pack_index.t Lwt.t
-  (** Same as [write_pack] but with a raw pack file. *)
+  val write_pack: t -> Pack.Raw.t -> SHA1.Set.t Lwt.t
+  (** Write a raw pack file and the corresponding index. Return the
+      objects IDs which have been written. *)
 
   (** {2 References} *)
 
@@ -85,19 +76,17 @@ module type S = sig
   val read_reference_exn: t -> Reference.t -> SHA1.Commit.t Lwt.t
   (** Read a given reference. *)
 
+  val write_head: t -> Reference.head_contents -> unit Lwt.t
+  (** Write the HEAD. *)
+
+  val read_head: t -> Reference.head_contents option Lwt.t
+  (** Read the head contents. *)
+
   val write_reference: t -> Reference.t -> SHA1.Commit.t -> unit Lwt.t
   (** Write a reference. *)
 
   val remove_reference: t -> Reference.t -> unit Lwt.t
   (** Remove a refernce. *)
-
-  (** {2 Type Inspection} *)
-
-  val type_of: t -> SHA1.t -> Object_type.t option Lwt.t
-  (** Return the object type corresponding to the given SHA1. *)
-
-  val succ: t -> SHA1.t -> Value.successor list Lwt.t
-  (** Return the list of [successors] of a given object. *)
 
   (** {2 Cache file} *)
 

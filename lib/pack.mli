@@ -18,48 +18,55 @@
 
 open Core_kernel.Std
 
-type t
-(** Pack value. *)
+type t = (SHA1.t * Packed_value.PIC.t) list
+(** A pack value is an ordered list of position-independant packed
+    values and the SHA1 of the corresponding inflated objects. *)
 
 include Object.S with type t := t
 
-val input: Mstruct.t -> Pack_index.t -> t
-(** Return the list of offsets of the packed values. *)
+val input: Mstruct.t -> index:Pack_index.t option -> t
+(** The usual [Object.S.input] function, but with an additional
+    [index] argument. When [index] is [None], recompute the whole
+    index: that's very costly so provide the index when possible. *)
 
-val values: t -> Packed_value.pic list
-(** Get the pack values. *)
+val keys: t -> SHA1.Set.t
+(** Return the keys present in the pack. *)
 
-val create: Packed_value.pic list -> t
-(** Create a pack file from a list of PIC packed values. *)
+val read: t -> SHA1.t -> Value.t option
+(** Return the value stored in the pack file. *)
 
-val packed_value: index:Pack_index.t -> key:SHA1.t ->
-  Bigstring.t -> Packed_value.t
-(** Read a packed value inside a raw pack file. *)
+val read_exn: t -> SHA1.t -> Value.t
+(** Return the value stored in the pack file. *)
 
-val unpack:
-  read:(SHA1.t -> Bigstring.t Lwt.t) ->
-  write:(Value.t -> SHA1.t Lwt.t) ->
-  Bigstring.t -> Pack_index.t Lwt.t
-(** Unpack a whole pack file. [read] should return the inflated
-    contents of the value having the given SHA1. [write] should
-    returns the SHA1 of the marshaled value. *)
-
-val to_index: t -> Pack_index.t
-(** Build a pack index from a pack file. Similar to
-    [Pack_index.of_raw_pack] but works on structured pack values
-    instead of a raw buffer. *)
+val unpack: write:(Value.t -> SHA1.t Lwt.t) ->
+  Bigstring.t -> SHA1.Set.t Lwt.t
+(** Unpack a whole pack file. [write] should returns the SHA1 of the
+    marshaled value. Return the IDs of the written objects. *)
 
 module Raw: sig
 
-  include Object.S
-  (** Raw pack file, with position-dependant deltas. *)
+  (** Raw pack file: they contains a pack index and a list of
+      position-dependant deltas. *)
 
-  val to_index: t -> Pack_index.t
-  (** Same a [index] but using a raw pack file. Useful in
-      fetch/clone. *)
+  include Object.S
+
+  val input: Mstruct.t -> index:Pack_index.t option -> t
+  (** Same as the top-level [input] function but for raw packs. *)
+
+  val sha1: t -> SHA1.t
+  (** Return the name of the pack. *)
+
+  val index: t -> Pack_index.t
+  (** Return the pack index. *)
+
+  val keys: t -> SHA1.Set.t
+  (** Return the keys present in the raw pack. *)
 
 end
 
-val pic: Pack_index.t -> Raw.t -> t
-(** Transform a raw pack file into a position independant pack
+val to_pic: Raw.t -> t
+(** Transform a raw pack file into a position-independant pack
     file. *)
+
+val of_pic: t -> Raw.t
+(** Transform a position-independant pack file into a raw one. *)

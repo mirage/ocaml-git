@@ -2,10 +2,19 @@
 
 Pure OCaml low-level bindings to Git -- Guaranteed no C inside.
 
-Support for on-disk and in-memory Git stores.
+Support for on-disk and in-memory Git stores. Can read and write all
+the Git objects: the usual blobs, trees, commits and tags but also the
+pack files, pack indexes and the index file (where the staging area
+lives).
+
+All the objects share a consistent API, and convenience functions are
+provided to manipulate the different objects. For instance, it is
+possible to make a pack file position independant (as the Zlib
+compression might change the relative offsets between the packed
+objects), to generate pack indexes from pack files, or to expand
+the filesystem of a given commit.
 
 [![Build Status](https://travis-ci.org/samoht/ocaml-git.png?branch=master)](https://travis-ci.org/samoht/ocaml-git)
-
 
 ### Build and Install Instructions
 

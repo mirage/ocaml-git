@@ -18,6 +18,16 @@
 
 open Core_kernel.Std
 
+(** {2 Bounded parallelism} *)
+
+val list_iter_p: ?width:int -> ('a -> unit Lwt.t) -> 'a list -> unit Lwt.t
+(** Same as [List_lwt.iter_p] but using a maximum width of
+    [width]. The default width is 50. *)
+
+val list_map_p: ?width:int -> ('a -> 'b Lwt.t) -> 'a list -> 'b list Lwt.t
+(** Same as [List_lwt.map_p] but using a maximum width of [width]. The
+    default width is 50. *)
+
 (** {2 Hexa encoding} *)
 
 val hex_encode: string -> string
@@ -29,11 +39,18 @@ val hex_decode: string -> string
 val buffer_contents: Bigbuffer.t -> Bigstring.t
 (** zero-copy buffer contents. *)
 
-val with_buffer: (Bigbuffer.t -> unit) -> Bigstring.t
+val with_bigbuffer: (Bigbuffer.t -> unit) -> Bigstring.t
+(** Create a temporarybuffer, apply a function to append stuff to
+    it, and return the buffer contents as a bigstring. *)
+
+val with_buffer: (Bigbuffer.t -> unit) -> string
 (** Create a temporary buffer, apply a function to append stuff to it,
     and return the buffer contents. *)
 
 (** {2 Zlib Compression} *)
+
+val inflate_bigstring: Bigstring.t -> Bigstring.t
+(** Inflate a buffer. *)
 
 val deflate_bigstring: Bigstring.t -> Bigstring.t
 (** Deflate a big string. *)
@@ -46,8 +63,13 @@ val deflate_mstruct: Mstruct.t -> Mstruct.t
 
 (** {2 CRC-32} *)
 
-val crc32: Bigstring.t -> int32
+val crc32: string -> int32
 (** Return the CRC-32 value of a bigstring. *)
+
+(** {2 Maps} *)
+
+val map_rev_find: ('key, 'value, 'cmp) Map.t -> 'value -> 'key option
+(** Reverse of [Map.find]. *)
 
 (** {2 Marshaling helpers} *)
 
@@ -60,7 +82,6 @@ val nul: char
 val lf: char
 val lt: char
 val gt: char
-
 
 module OP: sig
 

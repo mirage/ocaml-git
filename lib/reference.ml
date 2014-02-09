@@ -28,5 +28,15 @@ let compare x y =
 
 let head = "HEAD"
 
+type head_contents =
+  | SHA1 of SHA1.Commit.t
+  | Ref of t
+
 let is_head x =
   String.(head = x)
+
+let head_contents refs sha1 =
+  let refs = Map.remove refs "HEAD" in
+  match Misc.map_rev_find refs sha1 with
+  | None   -> SHA1 sha1
+  | Some r -> Ref r

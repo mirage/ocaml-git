@@ -32,7 +32,7 @@ let lwt_error fmt =
 
 type result = {
   head      : SHA1.Commit.t option;
-  references: (SHA1.Commit.t * Reference.t) list;
+  references: SHA1.Commit.t Reference.Map.t;
   sha1s     : SHA1.t list;
 }
 
@@ -537,22 +537,25 @@ module Make (IO: IO) (Store: Store.S) = struct
           let references =
             List.fold_left ~f:(fun acc (sha1, refs) ->
                 List.fold_left
-                  ~f:(fun acc ref -> (sha1, ref) :: acc)
+                  ~f:(fun acc ref -> Reference.Map.add acc ~key:ref ~data:sha1)
                   ~init:acc
                   refs
-              ) ~init:[] (Map.to_alist (Listing.references listing)) in
-          let references =
-            List.sort ~cmp:(fun (_,x) (_,y) -> Reference.compare x y) references in
+              ) ~init:Reference.Map.empty
+              (Map.to_alist (Listing.references listing)) in
           let head = Listing.head listing in
           match op with
           | Ls      -> return { head; references; sha1s = [] }
           | Fetch _
           | Clone _ ->
-            let ref_head, references =
-              List.partition_tf ~f:(fun (_,r) -> Reference.is_head r) references in
-            let write_ref (sha1, ref) = Store.write_reference t ref sha1 in
-            Lwt_list.iter_p write_ref references >>= fun () ->
-            Lwt_list.iter_p write_ref ref_head   >>= fun () ->
+            begin match Map.find references Reference.head with
+              | None      -> return_unit
+              | Some sha1 ->
+                let contents = Reference.head_contents references sha1 in
+                Store.write_head t contents
+            end >>= fun () ->
+            let write_ref (ref, sha1) = Store.write_reference t ref sha1 in
+            let references = Map.remove references Reference.head in
+            Misc.list_iter_p write_ref (Map.to_alist references) >>= fun () ->
 
             match head with
             | None      ->
@@ -579,7 +582,9 @@ module Make (IO: IO) (Store: Store.S) = struct
               Upload.phase2 (ic,oc) ~haves >>= fun () ->
 
               Log.debugf "PHASE3";
+              printf "Receiving data ...%!";
               IO.read_all ic >>= fun raw ->
+              printf " done.\n%!";
               Log.debugf "Received a pack file of %d bytes." (String.length raw);
               let pack = Bigstring.of_string raw in
 
@@ -589,14 +594,12 @@ module Make (IO: IO) (Store: Store.S) = struct
                 | _                -> false in
 
               begin if unpack then
-                  let read = Store.read_inflated_exn t in
-                  let write = Store.write t in
-                  Pack.unpack ~read ~write pack
+                  Pack.unpack ~write:(Store.write t) pack
                 else
-                  Store.write_raw_pack t pack
-              end >>= fun index ->
-              let sha1s = Map.keys index.Pack_index.offsets in
-              match sha1s with
+                  let pack = Pack.Raw.input (Mstruct.of_bigarray pack) ~index:None in
+                  Store.write_pack t pack
+              end >>= fun sha1s ->
+              match SHA1.Set.to_list sha1s with
               | []    ->
                 Log.debugf "NO NEW OBJECTS";
                 Printf.printf "Already up-to-date.\n%!";
@@ -637,7 +640,7 @@ end
 
 module type S = sig
   type t
-  val ls: t -> string -> (SHA1.Commit.t * Reference.t) list Lwt.t
+  val ls: t -> string -> SHA1.Commit.t Reference.Map.t Lwt.t
   val clone: t -> ?bare:bool -> ?deepen:int -> ?unpack:bool -> string -> result Lwt.t
   val fetch: t -> ?deepen:int -> ?unpack:bool -> string -> result Lwt.t
 end

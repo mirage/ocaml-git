@@ -42,7 +42,7 @@ module Dot = Graph.Graphviz.Dot(struct
     let vertex_name (x,o) =
       let hex = to_string x in
       let p = match o with
-        | Value.Blob s   -> "B"
+        | Value.Blob _   -> "B"
         | Value.Commit _ -> "C"
         | Value.Tree _   -> "Tr"
         | Value.Tag  _   -> "Ta" in
@@ -63,35 +63,29 @@ module Graph (Store: Store.S) = struct
 
   module Log = Log.Make(struct let section = "graph" end)
 
+  module Search = struct
+    include Search.Make(Store)
+    include Search
+  end
+
   let create_graph t =
-
-    let read n =
-      Store.read t n >>= function
-      | None   -> fail (Failure (Printf.sprintf "Cannot find %s" (to_string n)))
-      | Some v -> return v in
-
     let g = G.create () in
-
-    Store.list t >>= fun nodes ->
-    Lwt_list.map_p (fun n ->
-        read n >>= fun v -> return (n, v)
-      ) nodes
-    >>= fun nodes ->
+    Store.contents t >>= fun nodes ->
 
     (* Add all the vertices *)
     List.iter ~f:(G.add_vertex g) nodes;
 
     begin
-      Lwt_list.iter_s (fun (id, obj as src) ->
-          Store.succ t id >>= fun succs ->
-          Lwt_list.iter_s (fun s ->
+      Misc.list_iter_p (fun (id, _ as src) ->
+          Search.succ t id >>= fun succs ->
+          Misc.list_iter_p (fun s ->
               let l = match s with
                 | `Commit _   -> ""
                 | `Tag (t,_)  -> "TAG-" ^ t
                 | `Tree (f,_) -> f in
-              let succ = Value.succ s in
-              read succ >>= fun v ->
-              G.add_edge_e g (src, l, (succ, v));
+              let sha1 = Search.sha1_of_succ s in
+              Store.read_exn t sha1 >>= fun v ->
+              G.add_edge_e g (src, l, (sha1, v));
               return_unit
             ) succs
         ) nodes

@@ -25,6 +25,9 @@ type t =
   | Tree   of Tree.t
 (** Loose git objects. *)
 
+val type_of: t -> Object_type.t
+(** Return the object type. *)
+
 val sha1: t -> SHA1.t
 (** Return the SHA1 of the serialized contents. *)
 
@@ -44,36 +47,6 @@ val tree: Tree.t -> t
 val tag: Tag.t -> t
 (** Cast a tag to an object. *)
 
-(** {2 Successors} *)
-
-type successor =
-  [ `Commit of SHA1.t
-  | `Tag of string * SHA1.t
-  | `Tree of string * SHA1.t ]
-(** Value representing object successors:
-
-    - blobs have no successors;
-    - commits might have commit successors (in this case, 'ancestors');
-    - tags have commit successors;
-    - trees have trees and blobs successors.
-*)
-
-val succ: successor -> SHA1.t
-(** Return the sha1 of a successor object. *)
-
-val mem: succ:(SHA1.t -> successor list Lwt.t) -> SHA1.t -> string list -> bool Lwt.t
-(** [mem t sha1 path] check wether we can go from the object named
-    [sha1] to an other object following the [path] labels. *)
-
-val find: succ:(SHA1.t -> successor list Lwt.t) -> SHA1.t -> string list -> SHA1.t option Lwt.t
-(** [find t sha1 path] returns (if it exists) the object named [sha1]
-    to an other object following the [path] labels. *)
-
-val find_exn: succ:(SHA1.t -> successor list Lwt.t) -> SHA1.t -> string list -> SHA1.t Lwt.t
-(** [find t sha1 path] returns (if it exists) the object named [sha1]
-    to an other object following the [path] labels. Raise [Not_found]
-    if no such object exist.*)
-
 (** {2 Inflated values} *)
 
 val add_header: Bigbuffer.t -> Object_type.t -> int -> unit
@@ -89,3 +62,22 @@ val input_inflated: Mstruct.t -> t
 val type_of_inflated: Mstruct.t -> Object_type.t
 (** Return the type of the inflated object stored in the given
     buffer. *)
+
+module Cache: sig
+
+  val clear: unit -> unit
+  (** Empty the cache. *)
+
+  val find: SHA1.t -> string option
+  (** Cache an inflated values. This is used by various operations, so
+      it could be useful to look into it to speed-up operations which
+      needs to search a pack file. *)
+
+  val find_exn: SHA1.t -> string
+  (** Same as [find] but raises [Not_found] if the key is not in the
+      cache. *)
+
+  val add: SHA1.t -> string -> unit
+  (** Cache an inflated value. *)
+
+end

@@ -37,13 +37,6 @@ let to_string = function
   | Tag    -> "tag"
   | Tree   -> "tree"
 
-let string_of_opt = function
-  | Some Blob   -> "Blob"
-  | Some Commit -> "Commit"
-  | Some Tag    -> "Tag"
-  | Some Tree   -> "Tree"
-  | None        -> "Unknown"
-
 let pretty = to_string
 
 let add buf t =

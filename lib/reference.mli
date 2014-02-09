@@ -25,3 +25,13 @@ val head: t
 
 val is_head: t -> bool
 (** Is the given reference the HEAD ? *)
+
+type head_contents =
+  | SHA1 of SHA1.Commit.t
+  | Ref of t
+(** The possible HEAD contents. *)
+
+val head_contents: SHA1.Commit.t Map.t -> SHA1.Commit.t -> head_contents
+(** Compute the head contents. The result is either the hex
+    representation of the SHA1 or something like {i ref: <ref>} if the
+    SHA1 has already a reference pointing to it. *)

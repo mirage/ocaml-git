@@ -21,97 +21,57 @@ module Log = Log.Make(struct let section = "memory" end)
 
 type t = {
   root   : string;
-  buffers: (SHA1.t, Bigstring.t) Hashtbl.t;
   values : (SHA1.t, Value.t) Hashtbl.t;
   refs   : (Reference.t, SHA1.Commit.t) Hashtbl.t;
-  mutable packs: (Pack_index.t * Pack.t) list;
+  mutable head : Reference.head_contents option;
 }
 
 let root t =
   t.root
 
+let stores = String.Table.create ()
+
 let create ?root () =
   let root = match root with
     | None   -> "root"
     | Some r -> r in
-  let t = {
-    root;
-    buffers = SHA1.Table.create ();
-    values  = SHA1.Table.create ();
-    refs    = Reference.Table.create ();
-    packs   = [];
-
-  } in
+  let t = match Hashtbl.find stores root with
+    | Some t -> t
+    | None   ->
+      let t = {
+        root;
+        values  = SHA1.Table.create ();
+        refs    = Reference.Table.create ();
+        head    = None;
+      } in
+      Hashtbl.add_exn stores ~key:root ~data:t;
+      t in
   return t
 
-let read_inflated t sha1 =
-  if Hashtbl.mem t.buffers sha1 then
-    let buf = Hashtbl.find_exn t.buffers sha1 in
-    return (Some buf)
-  else
-    return_none
-
-let read_inflated_exn t sha1 =
-  read_inflated t sha1 >>= function
-  | None   -> fail Not_found
-  | Some b -> return b
-
-let write_inflated t inflated =
-  let sha1 = SHA1.create inflated in
-  if Hashtbl.mem t.buffers sha1 then
-    return sha1
-  else (
-    Log.debugf "write_inflated %s:%S" (SHA1.to_hex sha1) (Bigstring.to_string inflated);
-    Log.infof "Writing %s" (SHA1.to_hex sha1);
-    Hashtbl.add_exn t.buffers sha1 inflated;
-    return sha1
-  )
-
-let write_and_check_inflated t sha1 inflated =
-  if Hashtbl.mem t.buffers sha1 then
-    return_unit
-  else (
-    let new_sha1 = SHA1.create inflated in
-    if sha1 = new_sha1 then
-      write_inflated t inflated >>= fun _ -> return_unit
-    else (
-      Printf.eprintf "%S\n" (Bigstring.to_string inflated);
-      Printf.eprintf
-        "Marshaling error: expected:%s actual:%s\n" (SHA1.to_hex sha1) (SHA1.to_hex new_sha1);
-      fail (Failure "build_packed_object")
-    )
-  )
-
-let inflated value =
-  Misc.with_buffer (fun buf -> Value.add_inflated buf value)
+let clear t =
+  Hashtbl.remove stores t.root;
+  return_unit
 
 let write t value =
-  let inflated = inflated value in
-  write_inflated t inflated >>= fun sha1 ->
+  let inflated = Misc.with_buffer (fun buf -> Value.add_inflated buf value) in
+  let sha1 = SHA1.create inflated in
   match Hashtbl.find t.values sha1 with
   | Some _ -> return sha1
   | None   ->
+    Log.infof "Writing %s" (SHA1.to_hex sha1);
     Hashtbl.add_exn t.values sha1 value;
     return sha1
 
 let write_pack t pack =
-  let index = Pack.to_index pack in
-  t.packs <- (index, pack) :: t.packs;
-  return index
-
-let write_raw_pack t pack =
-  let pack = Pack.Raw.input (Mstruct.of_bigarray pack) in
-  let index = Pack.Raw.to_index pack in
-  let pack = Pack.pic index pack in
-  t.packs <- (index, pack) :: t.packs;
-  return index
-
-let write_and_check t sha1 value =
-  match Hashtbl.find t.values sha1 with
-  | Some _ -> return_unit
-  | None   ->
-    Hashtbl.add_exn t.values sha1 value;
-    write_and_check_inflated t sha1 (inflated value)
+  let pack = Pack.to_pic pack in
+  Misc.list_iter_p (fun (sha1, p) ->
+      let v = Packed_value.PIC.to_value p in
+      write t v >>= fun sha2 ->
+      if SHA1.(sha1 <> sha2) then failwith "Git_memory.write_pack";
+      return_unit
+    ) pack
+  >>= fun () ->
+  return (Pack.keys pack)
 
 let list t =
   return (Hashtbl.keys t.values)
@@ -119,13 +79,7 @@ let list t =
 let read t sha1 =
   match Hashtbl.find t.values sha1 with
   | Some _ as v -> return v
-  | None        ->
-    read_inflated t sha1 >>= function
-    | None     -> return_none
-    | Some buf ->
-      let value = Value.input_inflated (Mstruct.of_bigarray buf) in
-      Hashtbl.add_exn t.values sha1 value;
-      return (Some value)
+  | None        -> return_none
 
 let mem t sha1 =
   return (Hashtbl.mem t.values sha1)
@@ -136,26 +90,25 @@ let read_exn t sha1 =
   | Some v -> return v
 
 let type_of t sha1 =
-  read_inflated t sha1 >>= function
-  | None     -> return_none
-  | Some buf ->
-    let buf = Mstruct.of_bigarray buf in
-    return (Some (Value.type_of_inflated buf))
+  read t sha1 >>= function
+  | None   -> return_none
+  | Some v -> return (Some (Value.type_of v))
 
-let string_of_type_opt = function
-  | Some t -> Object_type.to_string t
-  | None   -> "Unknown"
+let contents t =
+  Log.debugf "contents";
+  list t >>= fun sha1s ->
+  Lwt_list.map_s (fun sha1 ->
+      read_exn t sha1 >>= fun value ->
+      return (sha1, value)
+    ) sha1s
 
 let dump t =
-  Log.debugf "dump";
-  list t >>= fun sha1s ->
-  Lwt_list.iter_s (fun sha1 ->
-      type_of t sha1 >>= fun typ ->
-      Printf.eprintf "%s %s\n"
-        (SHA1.to_hex sha1)
-        (string_of_type_opt typ);
-      return_unit
-    ) sha1s
+  contents t >>= fun contents ->
+  List.iter ~f:(fun (sha1, value) ->
+      let typ = Value.type_of value in
+      Printf.eprintf "%s %s\n" (SHA1.to_hex sha1) (Object_type.to_string typ)
+    ) contents;
+  return_unit
 
 let references t =
   return (Hashtbl.keys t.refs)
@@ -167,6 +120,10 @@ let read_reference t ref =
   Log.infof "Reading %s" (Reference.to_string ref);
   return (Hashtbl.find t.refs ref)
 
+let read_head t =
+  Log.infof "Reading HEAD";
+  return t.head
+
 let remove_reference t ref =
   Hashtbl.remove t.refs ref;
   return_unit
@@ -176,55 +133,18 @@ let read_reference_exn t ref =
   | None   -> fail Not_found
   | Some s -> return s
 
-let succ root sha1 =
-  let commit c = `Commit (SHA1.of_commit c) in
-  let tree l s = `Tree (l, SHA1.of_tree s) in
-  let tag t = `Tag (t.Tag.tag, t.Tag.sha1) in
-  read root sha1 >>= function
-  | None                  -> return_nil
-  | Some (Value.Blob _)   -> return_nil
-  | Some (Value.Commit c) -> return (tree "" c.Commit.tree :: List.map ~f:commit c.Commit.parents)
-  | Some (Value.Tag t)    -> return [tag t]
-  | Some (Value.Tree t)   -> return (List.map ~f:(fun e -> `Tree (e.Tree.name, e.Tree.node)) t)
+let write_head t c =
+  Log.infof "Writing HEAD";
+  t.head <- Some c;
+  return_unit
 
 let write_reference t ref sha1 =
   Log.infof "Writing %s" (Reference.to_string ref);
   Hashtbl.replace t.refs ref sha1;
   return_unit
 
-(* XXX: do not load the blobs *)
-let load_filesystem t commit =
-  Log.debugf "load_filesystem %s" (SHA1.Commit.to_hex commit);
-  let rec aux (mode, sha1) =
-    Log.debugf "aux %s" (SHA1.to_hex sha1);
-    read t sha1 >>= function
-    | Some (Value.Blob b) ->
-      return (Some (Lazy_trie.create ~value:(mode, b) ()))
-    | Some (Value.Tree t) ->
-      Lwt_list.fold_left_s (fun acc e ->
-          aux (e.Tree.perm, e.Tree.node) >>= function
-          | None   -> return acc
-          | Some t -> return ((e.Tree.name, t) :: acc)
-        ) [] t
-      >>= fun children ->
-      let children = lazy children in
-      return (Some (Lazy_trie.create ~children ()))
-    | Some (Value.Commit c) -> aux (`Dir, SHA1.of_tree c.Commit.tree)
-    | _ -> return_none
-  in
-  aux (`Dir, SHA1.of_commit commit) >>= function
-  | None    -> fail (Failure "create")
-  | Some fs -> return fs
-
-let iter_blobs t ~f ~init =
-  load_filesystem t init >>= fun trie ->
-  Lazy_trie.fold (fun acc path (mode, blob) ->
-      acc >>= fun () ->
-      f (t.root :: path) mode blob
-  ) trie return_unit
-
-let read_cache t =
+let read_cache _t =
   failwith "Memory.read_cache: TODO"
 
-let write_cache t head =
+let write_cache _t _head =
   failwith "Memory.update_cache: TODO"

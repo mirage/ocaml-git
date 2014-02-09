@@ -18,7 +18,7 @@
 
 type result = {
   head      : SHA1.Commit.t option;
-  references: (SHA1.Commit.t * Reference.t) list;
+  references: SHA1.Commit.t Reference.Map.t;
   sha1s     : SHA1.t list;
 }
 (** The resulting sha1s and references. *)
@@ -60,8 +60,8 @@ module type S = sig
   type t
   (** Abstract value for stores. *)
 
-  val ls: t -> string -> (SHA1.Commit.t * Reference.t) list Lwt.t
-  (** List the references in the remote repository. *)
+  val ls: t -> string -> SHA1.Commit.t Reference.Map.t Lwt.t
+  (** List the references of the remote repository. *)
 
   val clone: t -> ?bare:bool -> ?deepen:int -> ?unpack:bool -> string -> result Lwt.t
   (** [clone t address] clones the contents of [address] into the

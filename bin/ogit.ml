@@ -154,8 +154,7 @@ let cat = {
     let cat_file file =
       run begin
         let buf = Git_unix.read_file file in
-        let buf = Mstruct.of_bigarray buf in
-        let v = Value.input buf in
+        let v = Value.input (Mstruct.of_bigarray buf) in
         Printf.printf "%s%!" (Value.pretty v);
         return_unit
       end in
@@ -174,11 +173,11 @@ let ls_remote = {
         S.create ()  >>= fun t ->
         Remote.ls t repo >>= fun references ->
         Printf.printf "From %s\n" repo;
-        let print (sha1, ref) =
+        let print ~key:ref ~data:sha1 =
           Printf.printf "%s        %s\n"
             (SHA1.Commit.to_hex sha1)
             (Reference.to_string ref) in
-        List.iter ~f:print references;
+        Map.iter ~f:print references;
         return_unit
       end in
     Term.(mk ls $ backend $ repository)
@@ -263,14 +262,15 @@ let clone = {
             dir
       in
       if Sys.file_exists dir && Array.length (Sys.readdir dir) > 0 then (
-        eprintf "fatal: destination path '%s' already exists and is not an empty directory.\n" dir;
+        eprintf "fatal: destination path '%s' already exists and is not an empty directory.\n"
+          dir;
         exit 128
       );
       let module R = Git_unix.Remote(S) in
       run begin
         S.create ~root:dir ()   >>= fun t ->
         printf "Cloning into '%s' ...\n%!" (Filename.basename (S.root t));
-        R.clone t ?deepen ~unpack repo >>= fun r ->
+        R.clone t ?deepen ~unpack ~bare repo >>= fun r ->
         match r.Remote.head with
         | None      -> return_unit
         | Some head -> S.write_cache t head
