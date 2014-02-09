@@ -212,5 +212,4 @@ let add buf t =
   (* XXX: SHA1.of_bigstring *)
   let str = Bigbuffer.contents buf in
   let checksum = SHA1.create str in
-
   Bigbuffer.add_string buf (SHA1.to_string checksum)

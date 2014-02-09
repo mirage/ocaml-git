@@ -134,6 +134,7 @@ module Raw = struct
     keys
     |> List.map ~f:SHA1.to_hex
     |> List.sort ~cmp:String.compare
+    |> List.rev
     |> String.concat ~sep:""
     |> SHA1.create
 

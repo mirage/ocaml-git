@@ -119,6 +119,7 @@ let output_mode buf t =
   Mstruct.set_be_uint16 buf n
 
 let input_stat_info buf =
+  Log.debugf "input_stat_info";
   let ctime = input_time buf in
   let mtime = input_time buf in
   let dev = Mstruct.get_be_uint32 buf in
@@ -174,13 +175,16 @@ let add_entry buf t =
   Mstruct.set_be_uint16 mstr flags;
   Mstruct.set_string mstr t.name;
   Mstruct.set_string mstr (String.make (1+pad) '\x00');
-  Bigbuffer.add_string buf (Mstruct.to_string mstr)
+  let str = mstr |> Mstruct.to_bigarray |> Bigstring.to_string in
+  Bigbuffer.add_string buf str
 
 let input_extensions _buf =
   (* TODO: actually read the extension contents *)
   []
 
 let input buf =
+  let offset = Mstruct.offset buf in
+  let total_length = Mstruct.length buf in
   let header = Mstruct.get_string buf 4 in
   if String.(header <> "DIRC") then
     Mstruct.parse_error_buf buf "%s: wrong cache header." header;
@@ -188,7 +192,7 @@ let input buf =
   if Int32.(version <> 2l) then
     failwith (Printf.sprintf "Only cache version 2 is supported (%ld)" version);
   let n = Mstruct.get_be_uint32 buf in
-  Log.debugf "%ld entries" n;
+  Log.debugf "input: %ld entries (%db)" n (Mstruct.length buf);
   let entries =
     let rec loop acc n =
       if Int32.(n = 0l) then List.rev acc
@@ -197,24 +201,36 @@ let input buf =
         loop (entry :: acc) Int32.(n - 1l) in
     loop [] n in
   let extensions = input_extensions buf in
-  (* XXX: verify checksum *)
-  let _checksum = SHA1.input buf in
-
-  (* TODO: verify the checksum *)
+  let length = Mstruct.offset buf - offset in
+  if Int.(length <> total_length - 20) then (
+    eprintf "Cache.input: more data to read! (total:%d current:%d)"
+      (total_length - 20) length;
+    failwith "Cache.input"
+  );
+  let actual_checksum =
+    buf
+    |> Mstruct.to_bigarray
+    |> Bigstring.To_string.sub ~pos:offset ~len:length
+    |> SHA1.create in
+  let checksum = SHA1.input buf in
+  if SHA1.(actual_checksum <> checksum) then (
+    eprintf "Cach.input: wrong checksum";
+    failwith "Cache.input"
+  );
   { entries; extensions }
 
 let add buf t =
-  let header = Mstruct.create 12 in
-  Mstruct.set_string header "DIRC";
-  Mstruct.set_be_uint32 header 2l;
-  let entries = t.entries in
-  Mstruct.set_be_uint32 header (Int32.of_int_exn (List.length entries));
-
-  Bigbuffer.add_string buf (Mstruct.to_string header);
-  List.iter ~f:(add_entry buf) entries;
-
-  let hash = Cryptokit.Hash.sha1 () in
-  (* THOMAS: the Git doc are wrong here ... *)
-  hash#add_string (Bigbuffer.contents buf);
-
-  Bigbuffer.add_string buf hash#result
+  let str = Misc.with_buffer (fun buf ->
+      let n = List.length t.entries in
+      Log.debugf "add %d entries" n;
+      let header = Mstruct.create 12 in
+      Mstruct.set_string header "DIRC";
+      Mstruct.set_be_uint32 header 2l;
+      Mstruct.set_be_uint32 header (Int32.of_int_exn n);
+      let str = header |> Mstruct.to_bigarray |> Bigstring.to_string in
+      Bigbuffer.add_string buf str;
+      List.iter ~f:(add_entry buf) t.entries;
+    ) in
+  let sha1 = SHA1.create str in
+  Bigbuffer.add_string buf str;
+  Bigbuffer.add_string buf (SHA1.to_string sha1)

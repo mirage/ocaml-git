@@ -174,15 +174,13 @@ let add_be_uint32 buf i =
   EndianString.BigEndian.set_int32 str_buffer 0 i;
   Bigbuffer.add_string buf str_buffer
 
-let buf = Bigbuffer.create 1024
-
 let with_bigbuffer fn =
-  Bigbuffer.reset buf;
+  let buf = Bigbuffer.create 1024 in
   fn buf;
-  Bigbuffer.big_contents buf
+  buffer_contents buf
 
 let with_buffer fn =
-  Bigbuffer.reset buf;
+  let buf = Bigbuffer.create 1024 in
   fn buf;
   Bigbuffer.contents buf
 

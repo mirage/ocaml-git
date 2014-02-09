@@ -267,6 +267,27 @@ module Make (Store: Store.S) = struct
     in
     run x test
 
+  let test_index x () =
+    if x.name = "FS" then
+      let test () =
+        Git_unix.rec_files "." >>= fun files ->
+        Lwt_list.map_p (fun file ->
+            let blob =
+              file
+              |> Git_unix.read_file
+              |> Bigstring.to_string
+              |> Blob.of_string in
+            Git_fs.entry_of_file file `Normal blob
+          ) files >>= fun entries ->
+        let entries = List.filter_map ~f:(fun x -> x) entries in
+        let cache = { Cache.entries; extensions = [] } in
+        let buf = Misc.with_bigbuffer (fun buf -> Cache.add buf cache) in
+        let cache2 = Cache.input (Mstruct.of_bigarray buf) in
+        assert_cache_equal "cache" cache cache2;
+        return_unit
+      in
+      run x test
+
   let test_packs x () =
     if x.name = "FS" then
       let test () =
@@ -321,6 +342,7 @@ let suite (speed, x) =
     "Basic operations on commits"     , speed, T.test_commits  x;
     "Basic operations on tags"        , speed, T.test_tags     x;
     "Basic operations on references"  , speed, T.test_refs     x;
+    "Basic operations on index"       , speed, T.test_index    x;
     "Basic operations on pack files"  , speed, T.test_packs    x;
   ]
 

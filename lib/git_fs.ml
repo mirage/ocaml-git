@@ -24,11 +24,11 @@ type t = string
 let root t = t
 
 let create ?root () =
-  let t = match root with
-  | None   -> Sys.getcwd ()
-  | Some r -> if Filename.is_relative r then Sys.getcwd () / r else r
-  in
-  return t
+  match root with
+  | None   -> return (Sys.getcwd ())
+  | Some r ->
+    Git_unix.mkdir r >>= fun () ->
+    return (Git_unix.realpath r)
 
 let clear t =
   Log.infof "clear %s" t;
@@ -426,11 +426,31 @@ let stat_info_of_file path =
     | Unix.S_REG, 0o755 -> `Exec
     | Unix.S_REG, 0o644 -> `Normal
     | Unix.S_LNK, _     -> `Link
-    | _ -> failwith "stats_info_of_file" in
+    | _ -> failwith (path ^ ": not supported kind of file.") in
   let uid = Int32.of_int_exn stats.st_uid in
   let gid = Int32.of_int_exn stats.st_gid in
   let size = Int32.of_int_exn stats.st_size in
   { ctime; mtime; dev; inode; uid; gid; mode; size }
+
+let entry_of_file ?root file mode blob =
+  Log.debugf "entry_of_file %s" file;
+  begin
+    if Sys.file_exists file then return_unit
+    else create_file file mode blob
+  end >>= fun () ->
+  let root = match root with
+    | None   -> Sys.getcwd ()
+    | Some r -> Git_unix.realpath r in
+  let file = Git_unix.realpath file in
+  try
+    let id = Value.sha1 (Value.Blob blob) in
+    let stats = stat_info_of_file file in
+    let stage = 0 in
+    let name = String.chop_prefix_exn ~prefix:(root / "") file in
+    let entry = { Cache.stats; id; stage; name } in
+    return (Some entry)
+  with Failure _ ->
+    return_none
 
 let write_cache t head =
   Log.debugf "write_cache %s" (SHA1.Commit.to_hex head);
@@ -438,17 +458,9 @@ let write_cache t head =
   iter_blobs t ~init:head ~f:(fun path mode blob ->
       let file = String.concat ~sep:Filename.dir_sep path in
       Log.debugf "write_cache: blob:%s" file;
-      begin
-        if not (Sys.file_exists file) then create_file file mode blob
-        else return_unit
-      end >>= fun () ->
-      let id = Value.sha1 (Value.Blob blob) in
-      let stats = stat_info_of_file file in
-      let stage = 0 in
-      let name = String.chop_prefix_exn ~prefix:(t / "") file in
-      let entry = { Cache.stats; id; stage; name } in
-      entries := entry :: !entries;
-      return_unit
+      entry_of_file ~root:t file mode blob >>= function
+      | None   -> return_unit
+      | Some e -> entries := e :: !entries; return_unit
     ) >>= fun () ->
   let cache = { Cache.entries = !entries; extensions = [] } in
   let buf = Bigbuffer.create 1024 in

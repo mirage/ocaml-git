@@ -144,3 +144,19 @@ let writev_file file bs =
     )
 
 module Remote = Remote.Make(M)
+
+let realdir dir =
+  if Sys.file_exists dir then (
+    let d = Sys.getcwd () in
+    Unix.chdir dir;
+    let e = Sys.getcwd () in
+    Sys.chdir d;
+    e
+  ) else dir
+
+let realpath file =
+  if Sys.is_directory file then realdir file
+  else
+    Filename.concat
+      (realdir (Filename.dirname file))
+      (Filename.basename file)

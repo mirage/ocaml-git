@@ -19,6 +19,9 @@
 open Core_kernel.Std
 open Git
 
+val realpath: string -> string
+(** Very dumb real-path. Only works for existing directories. *)
+
 val mkdir: string -> unit Lwt.t
 (** Create a directory (and the parent dirs if needed). *)
 
