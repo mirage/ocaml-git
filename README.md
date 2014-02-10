@@ -14,6 +14,10 @@ compression might change the relative offsets between the packed
 objects), to generate pack indexes from pack files, or to expand
 the filesystem of a given commit.
 
+The library comes with a command-line tool called `ogit` which shares
+a similar interface with `git`, but where all operations are mapped to
+the API exposed `ocaml-git` (and hence using only OCaml code).
+
 [![Build Status](https://travis-ci.org/samoht/ocaml-git.png?branch=master)](https://travis-ci.org/samoht/ocaml-git)
 
 ### Build and Install Instructions
@@ -30,25 +34,46 @@ Then to install it:
 ```
 $ make install
 ```
-
 ### What is supported
 
 * The loose object files can be read and written;
-* The pack files can be read but not written;
-* Cloning and fetching works for remote repository --
-  no support for local clone, shallow objects and
-  capacities yet (this means that we are not using
-  the special optimization available in the protocol
-  but the operations should be safe);
-* Index file: no support yet -- this means that `git status`
-   will think that you have no staged all the files in the
-   directory.
-* No pull/merge/rebase (and merging strategy)
 
-### It should be painfully slow
+- binary blobs (files)
+- trees (directories)
+- commits (revision history)
 
-Well, actually, not really. Performance is comparable to the
-usual `git` command.
+* The pack files and pack indexes (which are collections of compressed
+  loose objects using a diff-based representation) can be read and
+  written). Moreover, diff hunks are exposed using a higher-level
+  position-independent representation so that they can be manipulated
+  more easily.
+
+* The index file (cache) -- used as for managing the stagging area --
+  is fully supported. Which means that `git diff` and `git status`
+  will work as expected on a repository created by the library.
+
+* Basic support for client-side cloning and fetching (using bare and
+ deepen options) but with no support for fancy download capabilities
+ which is exposed by usual Git servers.
+
+### Waht is *not* supported
+
+* Puhsing is not supported -- although it should not be very hard to
+  support a dummy implementation, with no compression.
+
+* Only client-side operations are currently supported. Implementing
+  the corresponding server-side implementation is high on the TODO
+  list: using a dummy compression scheme, this should not be too hard
+  to add, though.
+
+* Merging and rebasing strategies are not supported.
+
+
+### Performance
+
+Performance is comparable to the `git` command. For instance, when
+downloading and processing a 5.4MiB pack file (the download time
+itself takes ~10s):
 
 ```
 $ time ogit clone git://github.com/ocaml/opam-repository
@@ -77,3 +102,6 @@ real	 0m17.409s
 user	 0m1.198s
 sys	 0m0.925s
 ```
+
+Not much energy have been dedicated to profiling the protocol
+implementation yet, so there is still plenty room for improvement.
