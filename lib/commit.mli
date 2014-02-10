@@ -1,5 +1,5 @@
 (*
- * Copyright (c) 2013 Thomas Gazagnaire <thomas@gazagnaire.org>
+ * Copyright (c) 2013-2014 Thomas Gazagnaire <thomas@gazagnaire.org>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,13 +14,17 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Lwt
-open Test_store
+(** Git commits. *)
 
-let suite =
-  {
-    name  = "FS";
-    init  = unit;
-    clean = unit;
-    store = (module Git_fs);
-  }
+type t = {
+  tree     : SHA1.Tree.t;
+  parents  : SHA1.Commit.t list;
+  author   : User.t;
+  committer: User.t;
+  message  : string;
+}
+(** A commit is a tree snapshot, with some credentials (eg. we can
+    find who created the initial snapshot, and who added it to to
+    store) and a message explaining what the snapshot contains. *)
+
+include Object.S with type t := t

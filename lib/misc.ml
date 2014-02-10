@@ -15,7 +15,6 @@
  *)
 
 open Core_kernel.Std
-
 module Log = Log.Make(struct let section = "misc" end)
 
 (* From OCaml's stdlib. See [Digest.to_hex] *)
@@ -92,49 +91,130 @@ let uncompress_with_size ?header refill flush =
   Zlib_ext.uncompress ?header incr_used_in refill flush;
   !used_in
 
-let refill_string input =
-  let n = String.length input in
+let refill input =
+  let n = Bigstring.length input in
   let toread = ref n in
   fun buf ->
-    let m =
-      if !toread <= String.length buf then !toread
-      else String.length buf in
-    String.blit input (n - !toread) buf 0 m;
+    let m = min !toread (String.length buf) in
+    Bigstring.To_string.blit input (n - !toread) buf 0 m;
     toread := !toread - m;
     m
 
-let flush_string output buf len =
-  Buffer.add_substring output buf 0 len
+let flush output buf len =
+  Bigbuffer.add_substring output buf 0 len
 
-let deflate_string input =
-  let output = Buffer.create 1024 in
-  Zlib.compress (refill_string input) (flush_string output);
-  Buffer.contents output
+let buffer_contents buf =
+  let len = Bigbuffer.length buf in
+  Bigstring.sub_shared ~len (Bigbuffer.volatile_contents buf)
+
+let bigstring_concat buffers =
+  let buf = Bigbuffer.create 1024 in
+  List.iter ~f:(fun b ->
+      Bigbuffer.add_string buf (Bigstring.to_string b)
+    ) buffers;
+  buffer_contents buf
+
+let deflate_bigstring input =
+  let output = Bigbuffer.create (Bigstring.length input) in
+  Zlib.compress (refill input) (flush output);
+  buffer_contents output
 
 let deflate_mstruct buf =
-  let inflated = Mstruct.get_string buf (Mstruct.length buf) in
-  let deflated = deflate_string inflated in
-  Mstruct.of_string deflated
+  let inflated = Mstruct.to_bigarray buf in
+  let deflated = deflate_bigstring inflated in
+  Mstruct.of_bigarray deflated
 
-let inflate_mstruct ?allocator orig_buf =
+let inflate_mstruct orig_buf =
   let buf = Mstruct.clone orig_buf in
-  let output = Buffer.create 1024 in
+  let output = Bigbuffer.create (Mstruct.length orig_buf) in
   let refill input =
     let n = min (Mstruct.length buf) (String.length input) in
     let s = Mstruct.get_string buf n in
-    (* XXX: we could directly blit the bigarray into the string *)
     String.blit s 0 input 0 n;
     n in
   let flush buf len =
-    Buffer.add_substring output buf 0 len in
+    Bigbuffer.add_substring output buf 0 len in
   let size = uncompress_with_size refill flush in
-  let inflated = Buffer.contents output in
-  let res = Mstruct.of_string ?allocator inflated in
+  let inflated = buffer_contents output in
+  let res = Mstruct.of_bigarray inflated in
   Mstruct.shift orig_buf size;
   res
+
+let inflate_bigstring str =
+  let buf = inflate_mstruct (Mstruct.of_bigarray str) in
+  Mstruct.to_bigarray buf
+
+let crc32 str =
+  (* XXX: use ocaml-crc ? *)
+  Zlib.update_crc 0l str 0 (String.length str)
+
+
+let sp  = '\x20'
+let nul = '\x00'
+let lf  = '\x0a'
+let lt  = '<'
+let gt  = '>'
+
+let input_key_value buf ~key:expected input_value =
+  let error actual =
+    Mstruct.parse_error_buf buf "keys: [actual: %s] [expected: %s]" actual expected in
+  let key =
+    match Mstruct.get_string_delim buf sp with
+    | None   -> error "<none>"
+    | Some k -> k in
+  if key <> expected then
+    error key
+  else
+    match Mstruct.get_delim buf lf input_value with
+    | None   -> Mstruct.parse_error_buf buf "no value to input"
+    | Some v -> v
+
+let str_buffer = String.create 4
+let add_be_uint32 buf i =
+  EndianString.BigEndian.set_int32 str_buffer 0 i;
+  Bigbuffer.add_string buf str_buffer
+
+let with_bigbuffer fn =
+  let buf = Bigbuffer.create 1024 in
+  fn buf;
+  buffer_contents buf
+
+let with_buffer fn =
+  let buf = Bigbuffer.create 1024 in
+  fn buf;
+  Bigbuffer.contents buf
+
+open Lwt
+
+let rec list_iter_p ?(width=50) f l =
+  match List.split_n l width with
+  | [], [] -> return_unit
+  | h , t  ->
+    Lwt_list.iter_p f h >>= fun () ->
+    list_iter_p ~width f t
+
+let list_map_p ?(width=50) f l =
+  let res = ref [] in
+  list_iter_p ~width (fun x ->
+      f x >>= fun y ->
+      res := y :: !res;
+      return_unit
+    ) l
+  >>= fun () ->
+  return !res
 
 module OP = struct
 
   let (/) = Filename.concat
 
 end
+
+let map_rev_find map d =
+  let r = ref None in
+  try
+    Map.iter
+      ~f:(fun ~key ~data -> if data = d then (r := Some key; raise Exit))
+      map;
+    None
+  with Exit ->
+    !r

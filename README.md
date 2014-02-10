@@ -2,10 +2,19 @@
 
 Pure OCaml low-level bindings to Git -- Guaranteed no C inside.
 
-Support for on-disk and in-memory Git stores.
+Support for on-disk and in-memory Git stores. Can read and write all
+the Git objects: the usual blobs, trees, commits and tags but also the
+pack files, pack indexes and the index file (where the staging area
+lives).
+
+All the objects share a consistent API, and convenience functions are
+provided to manipulate the different objects. For instance, it is
+possible to make a pack file position independant (as the Zlib
+compression might change the relative offsets between the packed
+objects), to generate pack indexes from pack files, or to expand
+the filesystem of a given commit.
 
 [![Build Status](https://travis-ci.org/samoht/ocaml-git.png?branch=master)](https://travis-ci.org/samoht/ocaml-git)
-
 
 ### Build and Install Instructions
 
@@ -42,31 +51,29 @@ Well, actually, not really. Performance is comparable to the
 usual `git` command.
 
 ```
-$ time git clone https://github.com/mirage/cowabloga xxx1
-Cloning into 'xxx1'...
-remote: Reusing existing pack: 616, done.
-remote: Total 616 (delta 0), reused 0 (delta 0)
-Receiving objects: 100% (616/616), 629.00 KiB | 347.00 KiB/s, done.
-Resolving deltas: 100% (383/383), done.
+$ time ogit clone git://github.com/ocaml/opam-repository
+Cloning into 'opam-repository' ...
+Receiving data ... done.
+Resolving deltas: 100% (37294/37294), done.
+remote: Counting objects: 37294, done.
+Checking out files: 100% (6527/6527), done.
+HEAD is now at 267e08725291fc61b8411c0f20553ddd2e246d4f
+
+real 0m22.522s
+user 0m4.954s
+sys  0m5.078s
+```
+
+```
+$ time git clone git://github.com/ocaml/opam-repository
+Cloning into 'opam-repository'...
+remote: Reusing existing pack: 37868, done.
+remote: Total 37868 (delta 0), reused 0 (delta 0)
+Receiving objects: 100% (37868/37868), 5.41 MiB | 408.00 KiB/s, done.
+Resolving deltas: 100% (13973/13973), done.
 Checking connectivity... done
 
-real	 0m3.348s
-user	 0m0.123s
-sys	 0m0.074s
+real	 0m17.409s
+user	 0m1.198s
+sys	 0m0.925s
 ```
-
-```
-$ time ogit clone https://github.com/mirage/cowabloga xxx2
-https://github.com/mirage/cowabloga xxx2
-Cloning into 'xxx2' ...
-Receiving objects: 100% (616/616), done.
-remote: Counting objects: 616, done.
-
-real	0m2.850s
-user	0m0.554s
-sys	0m0.232s
-```
-
-Remark: currently, `ogit clone` will unpack all the loose objects.
-This is pretty inefficient. The usual `git clone` simply download
-the pack file and unpack it on-demand.

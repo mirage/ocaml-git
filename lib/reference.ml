@@ -1,5 +1,5 @@
 (*
- * Copyright (c) 2013 Thomas Gazagnaire <thomas@gazagnaire.org>
+ * Copyright (c) 2013-2014 Thomas Gazagnaire <thomas@gazagnaire.org>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,13 +14,29 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Lwt
-open Test_store
+open Core_kernel.Std
+module Log = Log.Make(struct let section = "reference" end)
 
-let suite =
-  {
-    name  = "FS";
-    init  = unit;
-    clean = unit;
-    store = (module Git_fs);
-  }
+include String
+
+let compare x y =
+  match x, y with
+  | "HEAD", "HEAD" -> 0
+  | "HEAD", _      -> (-1)
+  | _     , "HEAD" -> 1
+  | _     , _      -> compare x y
+
+let head = "HEAD"
+
+type head_contents =
+  | SHA1 of SHA1.Commit.t
+  | Ref of t
+
+let is_head x =
+  String.(head = x)
+
+let head_contents refs sha1 =
+  let refs = Map.remove refs "HEAD" in
+  match Misc.map_rev_find refs sha1 with
+  | None   -> SHA1 sha1
+  | Some r -> Ref r

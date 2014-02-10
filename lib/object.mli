@@ -1,5 +1,5 @@
 (*
- * Copyright (c) 2013 Thomas Gazagnaire <thomas@gazagnaire.org>
+ * Copyright (c) 2013-2014 Thomas Gazagnaire <thomas@gazagnaire.org>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,6 +14,22 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** Store Git objects in memory. *)
+(** Signatures *)
 
-include GitTypes.S
+open Core_kernel.Std
+
+module type S = sig
+
+  include Identifiable.S
+
+  val pretty: t -> string
+  (** Human readable represenation of the object. *)
+
+  val input: Mstruct.t -> t
+  (** Build a value from an inflated contents. *)
+
+  val add: Bigbuffer.t -> t -> unit
+  (** Add the serialization of the value to an already existing
+      buffer. *)
+
+end

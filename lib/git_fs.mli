@@ -1,5 +1,5 @@
 (*
- * Copyright (c) 2013 Thomas Gazagnaire <thomas@gazagnaire.org>
+ * Copyright (c) 2013-2014 Thomas Gazagnaire <thomas@gazagnaire.org>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,26 +14,16 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** Lwt_unix IO module. *)
+(** Store Git objects on the local filesystem. *)
 
-include GitRemote.IO
+open Git
+include Store.S
 
-val mkdir: string -> unit Lwt.t
-(** Create a directory (and the parent dirs if needed). *)
+val create_file: string -> Tree.perm -> Blob.t -> unit Lwt.t
+(** Create a file on the filesystem, with the given mode. *)
 
-val directories: string -> string list Lwt.t
-(** List the subdirs. *)
-
-val files: string -> string list Lwt.t
-(** List the subfiles. *)
-
-val rec_files: string -> string list Lwt.t
-(** List of the subfiles, recursively. *)
-
-val mstruct_of_file: string -> Mstruct.t Lwt.t
-(** mmap a file and return a mutable C-like structure with its
-    contents. *)
-
-module Remote: functor (S: GitTypes.S) -> GitRemote.S with type t = S.t
-(** Implementation of the Git protocol using [Lwt_unix] and [Lwt_io]
-    IO functions. *)
+val entry_of_file: ?root:string ->
+  string -> Tree.perm -> Blob.t -> Cache.entry option Lwt.t
+(** Generate a cache entry for the file. Create a fresh file if it
+    does not already exist. If [root] is not set, use the current
+    working directory as repository root. *)

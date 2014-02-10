@@ -1,5 +1,5 @@
 (*
- * Copyright (c) 2013 Thomas Gazagnaire <thomas@gazagnaire.org>
+ * Copyright (c) 2013-2014 Thomas Gazagnaire <thomas@gazagnaire.org>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -17,8 +17,6 @@
 open Core_kernel.Std
 open Lwt
 
-open GitTypes
-
 let to_string node =
   let hex = SHA1.to_hex node in
   String.sub hex 0 8
@@ -26,7 +24,7 @@ let to_string node =
 module G =
   Graph.Imperative.Digraph.ConcreteBidirectionalLabeled
     (struct
-      type t = (sha1 * value)
+      type t = (SHA1.t * Value.t)
       let compare (x,_) (y,_) = String.compare (SHA1.to_string x) (SHA1.to_string y)
       let hash (x,_) = Hashtbl.hash (SHA1.to_string x)
       let equal (x,_) (y,_) = (x = y)
@@ -44,7 +42,7 @@ module Dot = Graph.Graphviz.Dot(struct
     let vertex_name (x,o) =
       let hex = to_string x in
       let p = match o with
-        | Value.Blob s   -> "B"
+        | Value.Blob _   -> "B"
         | Value.Commit _ -> "C"
         | Value.Tree _   -> "Tr"
         | Value.Tag  _   -> "Ta" in
@@ -61,37 +59,33 @@ module Dot = Graph.Graphviz.Dot(struct
       | _  ->[`Label l]
   end)
 
-module Make (Store: S) = struct
+module Graph (Store: Store.S) = struct
+
+  module Log = Log.Make(struct let section = "graph" end)
+
+  module Search = struct
+    include Search.Make(Store)
+    include Search
+  end
 
   let create_graph t =
-
-    let read n =
-      Store.read t n >>= function
-      | None   -> fail (Failure (Printf.sprintf "Cannot find %s" (to_string n)))
-      | Some v -> return v in
-
     let g = G.create () in
-
-    Store.list t >>= fun nodes ->
-    Lwt_list.map_p (fun n ->
-        read n >>= fun v -> return (n, v)
-      ) nodes
-    >>= fun nodes ->
+    Store.contents t >>= fun nodes ->
 
     (* Add all the vertices *)
     List.iter ~f:(G.add_vertex g) nodes;
 
     begin
-      Lwt_list.iter_s (fun (id, obj as src) ->
-          Store.succ t id >>= fun succs ->
-          Lwt_list.iter_s (fun s ->
+      Misc.list_iter_p (fun (id, _ as src) ->
+          Search.succ t id >>= fun succs ->
+          Misc.list_iter_p (fun s ->
               let l = match s with
                 | `Commit _   -> ""
                 | `Tag (t,_)  -> "TAG-" ^ t
                 | `Tree (f,_) -> f in
-              let succ = succ s in
-              read succ >>= fun v ->
-              G.add_edge_e g (src, l, (succ, v));
+              let sha1 = Search.sha1_of_succ s in
+              Store.read_exn t sha1 >>= fun v ->
+              G.add_edge_e g (src, l, (sha1, v));
               return_unit
             ) succs
         ) nodes

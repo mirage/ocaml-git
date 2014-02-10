@@ -1,10 +1,14 @@
-0.10.3:
-* `ogit clone` now correctly set-up the index file (whic means
-  that `git status` and `git diff` will not work as expected
+1.0.0:
+* Support for reading and writing pack indexes
+* Support for reading and writing pack files
+* Refactor the API: each Git object has now its own file,
+  with a consistent signature
+* `ogit clone` now correctly set-up the cache file (which means
+  that `git status` and `git diff` will now work as expected
   on a repository created by `ogit`)
 * Add `ogit read-tree COMMIT`
 * Add `ogit ls-files [--all]`
-* Support for reading and writing index files
+* Support for reading and writing cache files
 
 0.10.2: (2014-01-20)
 * Strip the contents of references file

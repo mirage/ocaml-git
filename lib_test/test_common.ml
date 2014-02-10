@@ -14,7 +14,22 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open GitTypes
+open Core_kernel.Std
+open Git
+
+module Bigstring = struct
+  include Bigstring
+  let compare t1 t2 =
+    match Int.compare (Bigstring.length t1) (Bigstring.length t2) with
+    | 0 -> String.compare (Bigstring.to_string t1) (Bigstring.to_string t2)
+    | i -> i
+  let equal t1 t2 =
+    Int.equal (Bigstring.length t1) (Bigstring.length t2)
+    && String.equal (Bigstring.to_string t1) (Bigstring.to_string t2)
+
+  let pretty b =
+    sprintf "%S" (to_string b)
+end
 
 let () =
   Log.set_log_level Log.DEBUG;
@@ -38,9 +53,9 @@ let rec cmp_list fn x y =
   | []    , []     -> true
   | _              -> false
 
-let printer_list fn = function
+let printer_list f = function
   | [] -> "[]"
-  | l  -> Printf.sprintf "[ %s ]" (String.concat ", " (List.map fn l))
+  | l  -> Printf.sprintf "[ %s ]" (String.concat ~sep:", " (List.map ~f l))
 
 let line msg =
   let line () = Alcotest.line stderr ~color:`Yellow '-' in
@@ -48,7 +63,7 @@ let line msg =
   Log.infof "ASSERT %s" msg;
   line ()
 
-module Make (S: S) = struct
+module Make (S: Store.S) = struct
 
   let cmp_list eq comp l1 l2 =
     cmp_list eq (List.sort comp l1) (List.sort comp l2)
@@ -73,10 +88,22 @@ module Make (S: S) = struct
   let assert_ref_equal, assert_ref_opt_equal, assert_refs_equal =
     mk Reference.equal Reference.compare Reference.to_string
 
-  let key value =
-    let buf = Buffer.create 1024 in
-    Git.output_inflated buf value;
-    let str = Buffer.contents buf in
-    SHA1.create str
+  let assert_bigstring_equal, assert_bigstring_opt_equal, assert_bigstrings_equal =
+    mk Bigstring.equal Bigstring.compare (fun b ->
+        if Bigstring.length b < 40 then Bigstring.pretty b
+        else sprintf "%S (%d)" (Bigstring.To_string.subo ~len:40 b) (Bigstring.length b)
+      )
+
+  let assert_pack_index_equal, assert_pack_index_opt_equal, assert_pack_indexes_equal =
+    mk Pack_index.equal Pack_index.compare Pack_index.pretty
+
+  let assert_pack_equal, assert_pack_opt_equal, assert_packs_equal =
+    mk Pack.equal Pack.compare Pack.to_string
+
+  let assert_cache_equal, assert_cache_opt_equal, assert_caches_equal =
+    mk Cache.equal Cache.compare Cache.to_string
+
+  let assert_raw_pack_equal, assert_raw_pack_opt_equal, assert_raw_packs_equal =
+    mk Pack.Raw.equal Pack.Raw.compare Pack.Raw.to_string
 
 end

@@ -1,5 +1,5 @@
 (*
- * Copyright (c) 2013 Thomas Gazagnaire <thomas@gazagnaire.org>
+ * Copyright (c) 2013-2014 Thomas Gazagnaire <thomas@gazagnaire.org>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -16,12 +16,7 @@
 
 open Core_kernel.Std
 open Lwt
-
-open GitTypes
-
-let sp  = '\x20'
-let nul = '\x00'
-let lf  = '\x0a'
+module Log = Log.Make(struct let section = "remote" end)
 
 let error fmt =
   Printf.ksprintf (fun msg ->
@@ -35,12 +30,10 @@ let lwt_error fmt =
       fail Parsing.Parse_error
     ) fmt
 
-module Log = Log.Make(struct let section = "remote" end)
-
 type result = {
   head      : SHA1.Commit.t option;
-  references: (SHA1.Commit.t * reference) list;
-  sha1s     : sha1 list;
+  references: SHA1.Commit.t Reference.Map.t;
+  sha1s     : SHA1.t list;
 }
 
 module type IO = sig
@@ -53,7 +46,7 @@ module type IO = sig
   val flush: oc -> unit Lwt.t
 end
 
-module Make (IO: IO) (Store: S) = struct
+module Make (IO: IO) (Store: Store.S) = struct
 
   module PacketLine = struct
 
@@ -88,7 +81,7 @@ module Make (IO: IO) (Store: S) = struct
         let size = int_of_string ("0x" ^ size) - 4 in
         IO.read_exactly ic size >>= fun payload ->
         Log.debugf "RECEIVED: %S (%d)" payload size;
-        if payload.[size - 1] = lf then
+        if payload.[size - 1] = Misc.lf then
           return (Some (String.sub payload 0 (size-1)))
         else
           return (Some payload)
@@ -137,7 +130,7 @@ module Make (IO: IO) (Store: S) = struct
     type t = Capability.t list
 
     let of_string str =
-      List.map ~f:Capability.of_string (String.split str ~on:sp)
+      List.map ~f:Capability.of_string (String.split str ~on:Misc.sp)
 
     let to_string l =
       String.concat ~sep:" " (List.map ~f:Capability.to_string l)
@@ -195,9 +188,9 @@ module Make (IO: IO) (Store: S) = struct
       let message =
         let buf = Buffer.create 1024 in
         Buffer.add_string buf (string_of_request t.request);
-        Buffer.add_char   buf sp;
+        Buffer.add_char   buf Misc.sp;
         Buffer.add_string buf (Address.path t.address);
-        Buffer.add_char   buf nul;
+        Buffer.add_char   buf Misc.nul;
         begin match Address.host t.address with
           | None   -> ()
           | Some h ->
@@ -209,7 +202,7 @@ module Make (IO: IO) (Store: S) = struct
                 Buffer.add_char   buf ':';
                 Buffer.add_string buf (Printf.sprintf "%d" p);
             end;
-            Buffer.add_char buf nul;
+            Buffer.add_char buf Misc.nul;
         end;
         Buffer.contents buf in
       PacketLine.output_line oc message
@@ -227,7 +220,7 @@ module Make (IO: IO) (Store: S) = struct
 
     type t = {
       capabilities: Capabilities.t;
-      references  : reference list SHA1.Commit.Map.t;
+      references  : Reference.t list SHA1.Commit.Map.t;
     }
 
     let references t =
@@ -264,12 +257,12 @@ module Make (IO: IO) (Store: S) = struct
         PacketLine.input ic >>= function
         | None      -> return acc
         | Some line ->
-          match String.lsplit2 line ~on:sp with
+          match String.lsplit2 line ~on:Misc.sp with
           | Some ("ERR", err) -> error "ERROR: %s" err
           | Some (sha1, ref)  ->
             if is_empty acc then (
               (* Read the capabilities on the first line *)
-              match String.lsplit2 ref ~on:nul with
+              match String.lsplit2 ref ~on:Misc.nul with
               | Some (ref, caps) ->
                 let ref = Reference.of_string ref in
                 let references =
@@ -305,8 +298,8 @@ module Make (IO: IO) (Store: S) = struct
       | x          -> error "%s: invalid ack status" x
 
     type t =
-      | Ack_multi of sha1 * status
-      | Ack of sha1
+      | Ack_multi of SHA1.t * status
+      | Ack of SHA1.t
       | Nak
 
     let input ic =
@@ -315,9 +308,9 @@ module Make (IO: IO) (Store: S) = struct
       | None
       | Some "NAK" -> return Nak
       | Some s      ->
-        match String.lsplit2 s ~on:sp with
+        match String.lsplit2 s ~on:Misc.sp with
         | Some ("ACK", r) ->
-          begin match String.lsplit2 r ~on:sp with
+          begin match String.lsplit2 r ~on:Misc.sp with
             | None         -> return (Ack (SHA1.of_hex r))
             | Some (id, s) -> return (Ack_multi (SHA1.of_hex id, status_of_string s))
           end
@@ -337,11 +330,11 @@ module Make (IO: IO) (Store: S) = struct
   module Upload = struct
 
     type message =
-      | Want of sha1 * Capability.t list
-      | Shallow of sha1
+      | Want of SHA1.t * Capability.t list
+      | Shallow of SHA1.t
       | Deepen of int
-      | Unshallow of sha1
-      | Have of sha1
+      | Unshallow of SHA1.t
+      | Have of SHA1.t
       | Done
 
     type t = message list
@@ -378,7 +371,7 @@ module Make (IO: IO) (Store: S) = struct
         PacketLine.input ic >>= function
         | None   -> return (List.rev acc)
         | Some l ->
-          match String.lsplit2 l ~on:sp with
+          match String.lsplit2 l ~on:Misc.sp with
           | None -> error "input upload"
           | Some (kind, s) ->
             match kind with
@@ -393,7 +386,7 @@ module Make (IO: IO) (Store: S) = struct
               aux (Deepen d :: acc)
             | "want" ->
               let aux id c = aux (Want (SHA1.of_hex id, c) :: acc) in
-              begin match String.lsplit2 s ~on:sp with
+              begin match String.lsplit2 s ~on:Misc.sp with
                 | Some (id,c) -> aux id (Capabilities.of_string c)
                 | None        -> match acc with
                   | Want (_,c)::_ -> aux s c
@@ -459,8 +452,8 @@ module Make (IO: IO) (Store: S) = struct
         PacketLine.flush oc
 
     type phase1_result = {
-      shallows: sha1 list;
-      unshallows: sha1 list;
+      shallows: SHA1.t list;
+      unshallows: SHA1.t list;
     }
 
     (* PHASE1: the client send the the IDs he wants, the severs answer
@@ -517,12 +510,14 @@ module Make (IO: IO) (Store: S) = struct
   type clone = {
     bare  : bool;
     deepen: int option;
+    unpack: bool;
   }
 
   type fetch = {
-    haves   : sha1 list;
-    shallows: sha1 list;
+    haves   : SHA1.t list;
+    shallows: SHA1.t list;
     deepen  : int option;
+    unpack  : bool;
   }
 
   type op =
@@ -542,22 +537,25 @@ module Make (IO: IO) (Store: S) = struct
           let references =
             List.fold_left ~f:(fun acc (sha1, refs) ->
                 List.fold_left
-                  ~f:(fun acc ref -> (sha1, ref) :: acc)
+                  ~f:(fun acc ref -> Reference.Map.add acc ~key:ref ~data:sha1)
                   ~init:acc
                   refs
-              ) ~init:[] (Map.to_alist (Listing.references listing)) in
-          let references =
-            List.sort ~cmp:(fun (_,x) (_,y) -> Reference.compare x y) references in
+              ) ~init:Reference.Map.empty
+              (Map.to_alist (Listing.references listing)) in
           let head = Listing.head listing in
           match op with
           | Ls      -> return { head; references; sha1s = [] }
           | Fetch _
           | Clone _ ->
-            let ref_head, references =
-              List.partition_tf ~f:(fun (_,r) -> Reference.is_head r) references in
-            let write_ref (sha1, ref) = Store.write_reference t ref sha1 in
-            Lwt_list.iter_p write_ref references >>= fun () ->
-            Lwt_list.iter_p write_ref ref_head   >>= fun () ->
+            begin match Map.find references Reference.head with
+              | None      -> return_unit
+              | Some sha1 ->
+                let contents = Reference.head_contents references sha1 in
+                Store.write_head t contents
+            end >>= fun () ->
+            let write_ref (ref, sha1) = Store.write_reference t ref sha1 in
+            let references = Map.remove references Reference.head in
+            Misc.list_iter_p write_ref (Map.to_alist references) >>= fun () ->
 
             match head with
             | None      ->
@@ -584,33 +582,24 @@ module Make (IO: IO) (Store: S) = struct
               Upload.phase2 (ic,oc) ~haves >>= fun () ->
 
               Log.debugf "PHASE3";
+              printf "Receiving data ...%!";
               IO.read_all ic >>= fun raw ->
-              Log.debugf "Received a pack file of %d bytes:" (String.length raw);
-              let buf = Mstruct.of_string raw in
+              printf " done.\n%!";
+              Log.debugf "Received a pack file of %d bytes." (String.length raw);
+              let pack = Bigstring.of_string raw in
 
-              let buffers = SHA1.Table.create () in
-              let read_inflated sha1 =
-                if Hashtbl.mem buffers sha1 then
-                  return (Mstruct.clone (Hashtbl.find_exn buffers sha1))
+              let unpack = match op with
+                | Clone { unpack }
+                | Fetch { unpack } -> unpack
+                | _                -> false in
+
+              begin if unpack then
+                  Pack.unpack ~write:(Store.write t) pack
                 else
-                  lwt_error "Cannot read %s" (SHA1.to_hex sha1) in
-              let write value =
-                let buf = Buffer.create 1024 in
-                Git.output_inflated buf value;
-                let inflated = Buffer.contents buf in
-                let sha1 = SHA1.create inflated in
-                begin if not (Hashtbl.mem buffers sha1) then (
-                    let buf = Mstruct.of_string inflated in
-                    Hashtbl.add_exn buffers sha1 buf;
-                    Store.write_and_check_inflated t sha1 inflated;
-                  ) else
-                    return_unit
-                end >>= fun () ->
-                return sha1 in
-
-              Git.Pack.unpack_all ~read_inflated ~write buf >>= fun sha1s ->
-
-              match sha1s with
+                  let pack = Pack.Raw.input (Mstruct.of_bigarray pack) ~index:None in
+                  Store.write_pack t pack
+              end >>= fun sha1s ->
+              match SHA1.Set.to_list sha1s with
               | []    ->
                 Log.debugf "NO NEW OBJECTS";
                 Printf.printf "Already up-to-date.\n%!";
@@ -619,24 +608,11 @@ module Make (IO: IO) (Store: S) = struct
                 Log.debugf "NEW OBJECTS";
                 printf "remote: Counting objects: %d, done.\n%!"
                   (List.length sha1s);
-
-                (*
-                  List.iter
-                  ~f:(fun n -> Printf.printf "%s\n" (SHA1.to_hex n))
-                  (List.sort ~cmp:SHA1.compare sha1s);
-                *)
-
                 let bare = match op with
                   | Clone { bare } -> bare
                   | _              -> true in
                 if not bare then (
-                  (* TODO: generate the index file *)
                   Log.debugf "EXPANDING THE FILESYSTEM";
-                  printf "HEAD is now %s\n" (SHA1.Commit.to_hex head);
-(*
-                  Lwt_unix.sleep 2.        >>= fun () ->
-                  Store.write_cache t head >>= fun () ->
-*)
                   return { head = Some head; references; sha1s }
                 ) else (
                   Log.debugf "BARE REPOSITORY";
@@ -648,14 +624,14 @@ module Make (IO: IO) (Store: S) = struct
     fetch_pack t address Ls >>= function
       { references } -> return references
 
-  let clone t ?(bare=false) ?deepen address =
-    fetch_pack t address (Clone { bare; deepen })
+  let clone t ?(bare=false) ?deepen ?(unpack=false) address =
+    fetch_pack t address (Clone { bare; deepen; unpack })
 
-  let fetch t ?deepen address =
+  let fetch t ?deepen ?(unpack=false) address =
     Store.list t >>= fun haves ->
     (* XXX: Store.shallows t >>= fun shallows *)
     let shallows = [] in
-    fetch_pack t address (Fetch { shallows; haves; deepen })
+    fetch_pack t address (Fetch { shallows; haves; deepen; unpack })
 
   type t = Store.t
 
@@ -663,7 +639,7 @@ end
 
 module type S = sig
   type t
-  val ls: t -> string -> (SHA1.Commit.t * reference) list Lwt.t
-  val clone: t -> ?bare:bool -> ?deepen:int -> string -> result Lwt.t
-  val fetch: t -> ?deepen:int -> string -> result Lwt.t
+  val ls: t -> string -> SHA1.Commit.t Reference.Map.t Lwt.t
+  val clone: t -> ?bare:bool -> ?deepen:int -> ?unpack:bool -> string -> result Lwt.t
+  val fetch: t -> ?deepen:int -> ?unpack:bool -> string -> result Lwt.t
 end

@@ -17,64 +17,70 @@
 open OUnit
 open Test_common
 open Lwt
-open GitTypes
+open Core_kernel.Std
+open Git
 
 type t = {
   name : string;
   init : unit -> unit Lwt.t;
   clean: unit -> unit Lwt.t;
-  store: (module S);
+  store: (module Store.S);
 }
 
 let unit () =
   return_unit
 
-module Make (S: S) = struct
+let log_level = Log.get_log_level ()
 
-  module Common = Make(S)
+module Make (Store: Store.S) = struct
+
+  module Common = Make(Store)
   open Common
-  open S
+  module Search = Search.Make(Store)
+
+  let () = Log.(set_log_level INFO)
 
   let run x test =
+    Log.set_log_level log_level;
     try Lwt_unix.run (x.init () >>= test >>= x.clean)
     with e ->
       Lwt_unix.run (x.clean ());
       raise e
 
   let long_random_string = Cryptokit.(Random.string (Random.device_rng "/dev/urandom") 1024)
-  let v1 = blob (Blob.of_string long_random_string)
-  let kv1 = key v1
+  let v1 = Value.blob (Blob.of_string long_random_string)
+  let kv1 = Value.sha1 v1
 
-  let v2 = blob (Blob.of_string "")
-  let kv2 = key v2
+  let v2 = Value.blob (Blob.of_string "")
+  let kv2 = Value.sha1 v2
 
   (* Create a node containing t1 -a-> v1 *)
-  let t1 = tree (Tree.create [
+  let t1 = Value.tree ([
       { Tree.perm = `Normal;
         name = "a";
         node = kv1 }
     ])
-  let kt1 = key t1
+  let kt1 = Value.sha1 t1
 
   (* Create the tree t2 -b-> t1 -a-> v1 *)
-  let t2 = tree (Tree.create [
+  let t2 = Value.tree ([
       { Tree.perm = `Dir;
         name = "b";
         node = kt1 }
     ])
-  let kt2 = key t2
+  let kt2 = Value.sha1 t2
 
   (* Create the tree t3 -a-> t2 -b-> t1 -a-> v1 *)
-  let t3 = tree (Tree.create [
+  let t3 = Value.tree ([
       { Tree.perm = `Dir;
         name = "a";
         node = kt2; }
     ])
-  let kt3 = key t3
+  let kt3 = Value.sha1 t3
 
   (* Create the tree t4 -a-> t2 -b-> t1 -a-> v1
                        \-c-> v2 *)
-  let t4 = tree (Tree.create [
+  let t4 = Value.tree ([
       { Tree.perm = `Exec;
         name = "c";
         node = kv2; };
@@ -82,7 +88,7 @@ module Make (S: S) = struct
         name = "a";
         node = kt2; }
     ])
-  let kt4 = key t4
+  let kt4 = Value.sha1 t4
 
   let john_doe = User.({
       name  = "John Doe";
@@ -91,44 +97,44 @@ module Make (S: S) = struct
     })
 
   (* c1 : t2 *)
-  let c1 = commit {
+  let c1 = Value.commit {
       Commit.tree = SHA1.to_tree kt2;
       parents     = [];
       author      = john_doe;
       committer   = john_doe;
       message     = "hello r1!";
     }
-  let kc1 = key c1
+  let kc1 = Value.sha1 c1
 
   (* c1 -> c2 : t4 *)
-  let c2 = commit {
+  let c2 = Value.commit {
       Commit.tree = SHA1.to_tree kt4;
       parents     = [SHA1.to_commit kc1];
       author      = john_doe;
       committer   = john_doe;
       message     = "hello r1!"
     }
-  let kc2 = key c2
+  let kc2 = Value.sha1 c2
 
   (* tag1: c1 *)
-  let tag1 = tag {
+  let tag1 = Value.tag {
       Tag.sha1 = kc1;
-      typ      = `Commit;
+      typ      = Object_type.Commit;
       tag      = "foo";
       tagger   = john_doe;
       message  = "Ho yeah!";
     }
-  let ktag1 = key tag1
+  let ktag1 = Value.sha1 tag1
 
   (* tag2: c2 *)
-  let tag2 = tag {
+  let tag2 = Value.tag {
       Tag.sha1 = kc2;
-      typ      = `Commit;
+      typ      = Object_type.Commit;
       tag      = "bar";
       tagger   = john_doe;
       message  = "Hahah!";
     }
-  let ktag2 = key tag2
+  let ktag2 = Value.sha1 tag2
 
   (* r1: t4 *)
   let r1 = Reference.of_string "refs/origin/head"
@@ -137,23 +143,24 @@ module Make (S: S) = struct
   let r2 = Reference.of_string "refs/upstream/head"
 
   let check_write t name k v =
-    write t v    >>= fun k' ->
+    Store.write t v    >>= fun k' ->
     assert_key_equal (name ^ "-key-1") k k';
-    read_exn t k >>= fun v' ->
+    Store.read_exn t k >>= fun v' ->
     assert_value_equal name v v';
-    write t v'   >>= fun k''->
+    Store.write t v'   >>= fun k'' ->
     assert_key_equal (name ^ "-key-2") k k'';
     return_unit
 
   let check_find t name k path e =
-    Git.find ~succ:(succ t) k path >>= fun k' ->
+    Search.find t k path >>= fun k' ->
     assert_key_opt_equal (name ^ "-find") (Some e) k';
     return_unit
 
   let create () =
-    create ~root:"test-db" () >>= fun t ->
+    Store.create ~root:"test-db" () >>= fun t  ->
+    Store.clear t                   >>= fun () ->
     Lwt_list.iter_p
-      (fun v -> write t v >>= fun _ -> return_unit)
+      (fun v -> Store.write t v >>= fun _ -> return_unit)
       [
         v1; v2;
         t1; t2; t3; t4;
@@ -162,12 +169,13 @@ module Make (S: S) = struct
     return t
 
   let is_ typ t k =
-    type_of t k >>= function
-    | Some x -> return (x = typ)
-    | None    -> return false
+    Store.read t k >>= function
+    | None   -> return false
+    | Some v ->
+      return (typ = Value.type_of v)
 
   let check_keys t name typ expected =
-    list t                           >>= fun ks ->
+    Store.list t                     >>= fun ks ->
     Lwt_list.filter_p (is_ typ t) ks >>= fun ks ->
     return (assert_keys_equal name expected ks)
 
@@ -177,7 +185,7 @@ module Make (S: S) = struct
       check_write t "v1" kv1 v1 >>= fun () ->
       check_write t "v2" kv2 v2 >>= fun () ->
 
-      check_keys  t "blobs" `Blob [kv1; kv2] >>= fun () ->
+      check_keys t "blobs" Object_type.Blob [kv1; kv2] >>= fun () ->
       return_unit
     in
     run x test
@@ -198,7 +206,7 @@ module Make (S: S) = struct
       check_find t "kt3:a/b/a" kt3 ["a";"b";"a"] kv1 >>= fun () ->
       check_find t "kt4:c"     kt4 ["c"]         kv2 >>= fun () ->
 
-      check_keys t "trees" `Tree [kt1; kt2; kt3; kt4] >>= fun () ->
+      check_keys t "trees" Object_type.Tree [kt1; kt2; kt3; kt4] >>= fun () ->
 
       return_unit
     in
@@ -215,7 +223,7 @@ module Make (S: S) = struct
       check_find t "c2:a/b/a" kc2 ["";"a";"b";"a"] kv1 >>= fun () ->
       check_find t "c2:c"     kc2 ["";"c"]         kv2 >>= fun () ->
 
-      check_keys t "commits" `Commit [kc1; kc2] >>= fun () ->
+      check_keys t "commits" Object_type.Commit [kc1; kc2] >>= fun () ->
 
       return_unit
     in
@@ -231,7 +239,7 @@ module Make (S: S) = struct
       check_find t "tag2:a" ktag2 ["bar";"";"a"] kt2 >>= fun () ->
       check_find t "tag2:c" ktag2 ["bar";"";"c"] kv2 >>= fun () ->
 
-      check_keys t "tags" `Tag [ktag1; ktag2] >>= fun () ->
+      check_keys t "tags" Object_type.Tag [ktag1; ktag2] >>= fun () ->
 
       return_unit
     in
@@ -244,69 +252,84 @@ module Make (S: S) = struct
       let ko = function
         | None   -> None
         | Some x -> Some (SHA1.of_commit x) in
-      write_reference t r1 (c kt4) >>= fun ()   ->
-      read_reference t r1          >>= fun kt4' ->
+      Store.write_reference t r1 (c kt4) >>= fun ()   ->
+      Store.read_reference t r1          >>= fun kt4' ->
       assert_key_opt_equal "r1" (Some kt4) (ko kt4');
 
-      write_reference t r2 (c kc2) >>= fun ()   ->
-      read_reference t r2          >>= fun kc2' ->
+      Store.write_reference t r2 (c kc2) >>= fun ()   ->
+      Store.read_reference t r2          >>= fun kc2' ->
       assert_key_opt_equal "r2" (Some kc2) (ko kc2');
 
-      references t             >>= fun rs   ->
+      Store.references t                 >>= fun rs   ->
       assert_refs_equal "refs" [r1; r2] rs;
 
       return_unit
     in
     run x test
 
-(*
-  let test_sync x () =
-    let test () =
-      create ()              >>= fun t1 ->
-      update t1 ["a";"b"] v1 >>= fun () ->
-      snapshot t1            >>= fun r1 ->
-      update t1 ["a";"c"] v2 >>= fun () ->
-      snapshot t1            >>= fun r2 ->
-      update t1 ["a";"d"] v1 >>= fun () ->
-      snapshot t1            >>= fun r3 ->
-      output t1 "full"       >>= fun () ->
-      export t1 [r3]         >>= fun partial ->
-      export t1 []           >>= fun full    ->
+  let test_index x () =
+    if x.name = "FS" then
+      let test () =
+        Git_unix.rec_files "." >>= fun files ->
+        Lwt_list.map_p (fun file ->
+            let blob =
+              file
+              |> Git_unix.read_file
+              |> Bigstring.to_string
+              |> Blob.of_string in
+            Git_fs.entry_of_file file `Normal blob
+          ) files >>= fun entries ->
+        let entries = List.filter_map ~f:(fun x -> x) entries in
+        let cache = { Cache.entries; extensions = [] } in
+        let buf = Misc.with_bigbuffer (fun buf -> Cache.add buf cache) in
+        let cache2 = Cache.input (Mstruct.of_bigarray buf) in
+        assert_cache_equal "cache" cache cache2;
+        return_unit
+      in
+      run x test
 
-      (* Restart a fresh store and import everything in there. *)
-      x.clean ()             >>= fun () ->
-      x.init ()              >>= fun () ->
-      create ~root:"test-db2" () >>= fun t2 ->
+  let test_packs x () =
+    if x.name = "FS" then
+      let test () =
+        Git_unix.files "data/" >>= fun files ->
+        if files = [] then
+          failwith "Please run that test in lib_test/";
+        let files = List.filter ~f:(fun file ->
+            String.is_suffix file ~suffix:".pack"
+          ) files in
+        let files = List.map ~f:(fun file ->
+            let name = String.chop_prefix_exn file ~prefix:"data/pack-" in
+            let name = String.chop_suffix_exn name ~suffix:".pack" in
+            file, "data/pack-" ^ name ^ ".idx"
+          ) files in
+        List.iter ~f:(fun (pack, index) ->
 
-      import t2 partial      >>= fun () ->
-      revert t2 r3           >>= fun () ->
-      output t2 "partial"    >>= fun () ->
+            (* basic serialization of index files *)
+            let istr1 = Git_unix.read_file index in
+            let i1    = Pack_index.input (Mstruct.of_bigarray istr1) in
+            let istr2 = Misc.with_bigbuffer (fun buf -> Pack_index.add buf i1) in
+            let i2    = Pack_index.input (Mstruct.of_bigarray istr2) in
+            assert_pack_index_equal "pack-index" i1 i2;
 
-      mem t2 ["a";"b"]       >>= fun b1 ->
-      assert_bool_equal "mem-ab" true b1;
+            (* basic serialization of pack files *)
+            let pstr1 = Git_unix.read_file pack in
+            let rp1   = Pack.Raw.input (Mstruct.of_bigarray pstr1) ~index:None in
+            let rp1'  = Pack.Raw.input (Mstruct.of_bigarray pstr1) ~index:(Some i1) in
+            assert_raw_pack_equal "raw-pack" rp1 rp1';
 
-      mem t2 ["a";"c"]       >>= fun b2 ->
-      assert_bool_equal "mem-ac" true b2;
+            let pstr2 = Misc.with_bigbuffer (fun buf -> Pack.Raw.add buf rp1) in
+            let rp2   = Pack.Raw.input (Mstruct.of_bigarray pstr2) ~index:None in
+            assert_pack_equal "pack" (Pack.to_pic rp1) (Pack.to_pic rp2);
 
-      mem t2 ["a";"d"]       >>= fun b3  ->
-      assert_bool_equal "mem-ad" true b3;
-      read_exn t2 ["a";"d"]  >>= fun v1' ->
-      assert_value_equal "v1" v1' v1;
+            let i3 = Pack.Raw.index rp1 in
+            assert_pack_index_equal "raw-pack-->>--pack-index" i1 i3;
 
-      catch
-        (fun () ->
-           revert t2 r2      >>= fun () ->
-           OUnit.assert_bool "revert" false;
-           return_unit)
-        (fun e ->
-           import t2 full    >>= fun () ->
-           revert t2 r2      >>= fun () ->
-           mem t2 ["a";"d"]  >>= fun b4 ->
-           assert_bool_equal "mem-ab" false b4;
-           return_unit
-        ) in
-    run x test
-*)
+          ) files;
+
+        return_unit
+      in
+      run x test
+
 end
 
 let suite (speed, x) =
@@ -319,11 +342,10 @@ let suite (speed, x) =
     "Basic operations on commits"     , speed, T.test_commits  x;
     "Basic operations on tags"        , speed, T.test_tags     x;
     "Basic operations on references"  , speed, T.test_refs     x;
-(*
-    "High-level store synchronisation", speed, T.test_sync     x;
-*)
+    "Basic operations on index"       , speed, T.test_index    x;
+    "Basic operations on pack files"  , speed, T.test_packs    x;
   ]
 
 let run name tl =
-  let tl = List.map suite tl in
+  let tl = List.map ~f:suite tl in
   Alcotest.run name tl

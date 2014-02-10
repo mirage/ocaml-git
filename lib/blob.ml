@@ -1,5 +1,5 @@
 (*
- * Copyright (c) 2013 Thomas Gazagnaire <thomas@gazagnaire.org>
+ * Copyright (c) 2013-2014 Thomas Gazagnaire <thomas@gazagnaire.org>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,30 +14,17 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** Miscellaneous functions. *)
+open Core_kernel.Std
+module Log = Log.Make(struct let section = "blob" end)
 
-(** {2 Hexa encoding} *)
+include String
 
-val hex_encode: string -> string
-(** Encode a string to base16. *)
+let pretty t =
+  if Int.(String.length t < 70) then sprintf "%S" t
+  else sprintf "%S[%d]" (String.sub t 0 70) (String.length t)
 
-val hex_decode: string -> string
-(** Decode a string from base16. *)
+let input buf =
+  Mstruct.get_string buf (Mstruct.length buf)
 
-(** {2 Zlib Compression} *)
-
-(** Deflate a string. *)
-val deflate_string: string -> string
-
-(** Inflate a buffer. *)
-val inflate_mstruct: ?allocator:(int -> Cstruct.t) -> Mstruct.t -> Mstruct.t
-
-(** Deflate a buffer. *)
-val deflate_mstruct: Mstruct.t -> Mstruct.t
-
-module OP: sig
-
-  val (/): string -> string -> string
-  (** Same as [Filename.concat]. *)
-
-end
+let add buf t =
+  Bigbuffer.add_string buf t

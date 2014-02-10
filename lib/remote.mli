@@ -1,5 +1,5 @@
 (*
- * Copyright (c) 2013 Thomas Gazagnaire <thomas@gazagnaire.org>
+ * Copyright (c) 2013-2014 Thomas Gazagnaire <thomas@gazagnaire.org>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -16,12 +16,10 @@
 
 (** Clone/Fecth/Push protocol *)
 
-open GitTypes
-
 type result = {
   head      : SHA1.Commit.t option;
-  references: (SHA1.Commit.t * reference) list;
-  sha1s     : sha1 list;
+  references: SHA1.Commit.t Reference.Map.t;
+  sha1s     : SHA1.t list;
 }
 (** The resulting sha1s and references. *)
 
@@ -62,17 +60,17 @@ module type S = sig
   type t
   (** Abstract value for stores. *)
 
-  val ls: t -> string -> (SHA1.Commit.t * reference) list Lwt.t
-  (** List the references in the remote repository. *)
+  val ls: t -> string -> SHA1.Commit.t Reference.Map.t Lwt.t
+  (** List the references of the remote repository. *)
 
-  val clone: t -> ?bare:bool -> ?deepen:int -> string -> result Lwt.t
+  val clone: t -> ?bare:bool -> ?deepen:int -> ?unpack:bool -> string -> result Lwt.t
   (** [clone t address] clones the contents of [address] into the
       store [t]. *)
 
-  val fetch: t -> ?deepen:int -> string -> result Lwt.t
+  val fetch: t -> ?deepen:int -> ?unpack:bool -> string -> result Lwt.t
   (** [fetch t address] fetches the missing contents of [address] into
       the store [t]. *)
 
 end
 
-module Make (IO: IO) (S: GitTypes.S): S with type t = S.t
+module Make (IO: IO) (S: Store.S): S with type t = S.t

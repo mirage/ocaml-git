@@ -1,5 +1,5 @@
 (*
- * Copyright (c) 2013 Thomas Gazagnaire <thomas@gazagnaire.org>
+ * Copyright (c) 2013-2014 Thomas Gazagnaire <thomas@gazagnaire.org>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,6 +14,26 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** Store Git objects on the local filesystem. *)
+(** Git trees. *)
 
-include GitTypes.S
+type perm =
+  [ `Normal
+  | `Exec
+  | `Link
+  | `Dir ]
+(** File permission. *)
+
+type entry = {
+  perm: perm;
+  name: string;
+  node: SHA1.t;
+}
+(** A tree entry. This is either a directory or a file. As this is
+    supposed to model a filesystem, directory does not contain
+    data. *)
+
+type t = entry list
+(** A tree is an hierarchical data-store. NB: data (eg. blobs) are
+    only carried on the leafs. *)
+
+include Object.S with type t := t
