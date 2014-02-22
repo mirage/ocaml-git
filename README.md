@@ -9,7 +9,7 @@ lives).
 
 All the objects share a consistent API, and convenience functions are
 provided to manipulate the different objects. For instance, it is
-possible to make a pack file position independant (as the Zlib
+possible to make a pack file position independent (as the Zlib
 compression might change the relative offsets between the packed
 objects), to generate pack indexes from pack files, or to expand
 the filesystem of a given commit.
@@ -56,9 +56,9 @@ $ make install
  deepen options) but with no support for fancy download capabilities
  which is exposed by usual Git servers.
 
-### Waht is *not* supported
+### What is *not* supported
 
-* Puhsing is not supported -- although it should not be very hard to
+* Pushing is not supported -- although it should not be very hard to
   support a dummy implementation, with no compression.
 
 * Only client-side operations are currently supported. Implementing
