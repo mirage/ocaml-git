@@ -22,6 +22,8 @@ Library git
   BuildDepends:      mstruct, dolog, core_kernel, ocamlgraph, lazy-trie,
                      re.pcre, zip, cryptokit, uri, lwt,
                      bin_prot.syntax, comparelib.syntax, sexplib.syntax
+  XMETARequires:     mstruct, dolog, core_kernel, ocamlgraph, lazy-trie,
+                     re.pcre, zip, cryptokit, uri, lwt
 
 Library "git-memory"
   Path:              lib/
