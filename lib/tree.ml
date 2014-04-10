@@ -70,12 +70,59 @@ let string_of_perm = function
   | `Link   -> "120000"
   | `Dir    -> "40000"
 
+let escape = Char.of_int_exn 42
+
+let escaped_chars =
+  escape :: List.map ~f:Char.of_int_exn [ 0x00; 0x2f ]
+
+let needs_escape = List.mem escaped_chars
+
+let encode path =
+  if not (String.exists ~f:needs_escape path) then
+    path
+  else
+    let n = String.length path in
+    let b = Buffer.create n in
+    let last = ref 0 in
+    for i = 0 to n - 1 do
+      if needs_escape path.[i] then (
+        let c = Char.of_int_exn (Char.to_int path.[i] + 1) in
+        if Int.(i - !last > 0) then Buffer.add_substring b path !last (i - !last);
+        Buffer.add_char b escape;
+        Buffer.add_char b c;
+        last := i + 1;
+      )
+    done;
+    if Int.(n - !last > 0) then
+      Buffer.add_substring b path !last (n - !last);
+    Buffer.contents b
+
 let add_entry buf e =
   Bigbuffer.add_string buf (string_of_perm e.perm);
   Bigbuffer.add_char buf Misc.sp;
-  Bigbuffer.add_string buf e.name;
+  Bigbuffer.add_string buf (encode e.name);
   Bigbuffer.add_char buf Misc.nul;
   SHA1.add buf e.node
+
+let decode path =
+  if not (String.mem path escape) then path
+  else
+    let n = String.length path in
+    let b = Buffer.create n in
+    let last = ref 0 in
+    for i = 0 to n - 1 do
+      if Char.(path.[i] = escape) then (
+        if Int.(i - !last > 0) then Buffer.add_substring b path !last (i - !last);
+        if Int.(i + 1 < n) then (
+          let c = Char.of_int_exn (Char.to_int path.[i+1] - 1) in
+          Buffer.add_char b c;
+        );
+        last := i + 2;
+      );
+    done;
+    if Int.(n - !last > 0) then
+      Buffer.add_substring b path !last (n - !last);
+    Buffer.contents b
 
 let input_entry buf =
   let perm = match Mstruct.get_string_delim buf Misc.sp with
@@ -84,6 +131,7 @@ let input_entry buf =
   let name = match Mstruct.get_string_delim buf Misc.nul with
     | None      -> Mstruct.parse_error_buf buf "invalid filename"
     | Some name -> name in
+  let name = decode name in
   let node = SHA1.input buf in
   let entry = {
     perm = perm_of_string buf perm;
