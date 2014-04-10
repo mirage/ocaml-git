@@ -54,10 +54,11 @@ module Make (Store: Store.S) = struct
   let v2 = Value.blob (Blob.of_string "")
   let kv2 = Value.sha1 v2
 
-  (* Create a node containing t1 -a-> v1 *)
+  (* Create a node containing t1 -w-> v1 *)
+  let w = "a\000bbb\047"
   let t1 = Value.tree ([
       { Tree.perm = `Normal;
-        name = "a";
+        name = w;
         node = kv1 }
     ])
   let kt1 = Value.sha1 t1
@@ -198,12 +199,12 @@ module Make (Store: Store.S) = struct
       check_write t "t3" kt3 t3 >>= fun () ->
       check_write t "t4" kt4 t4 >>= fun () ->
 
-      check_find t "kt1:a"     kt1 ["a"]         kv1 >>= fun () ->
+      check_find t "kt1:w"     kt1 [w]           kv1 >>= fun () ->
       check_find t "kt2:b"     kt2 ["b"]         kt1 >>= fun () ->
-      check_find t "kt2:b/a"   kt2 ["b";"a"]     kv1 >>= fun () ->
+      check_find t "kt2:b/w"   kt2 ["b";w]       kv1 >>= fun () ->
       check_find t "kt3:a"     kt3 ["a"]         kt2 >>= fun () ->
       check_find t "kt3:a/b"   kt3 ["a";"b"]     kt1 >>= fun () ->
-      check_find t "kt3:a/b/a" kt3 ["a";"b";"a"] kv1 >>= fun () ->
+      check_find t "kt3:a/b/w" kt3 ["a";"b";w]   kv1 >>= fun () ->
       check_find t "kt4:c"     kt4 ["c"]         kv2 >>= fun () ->
 
       check_keys t "trees" Object_type.Tree [kt1; kt2; kt3; kt4] >>= fun () ->
@@ -219,8 +220,8 @@ module Make (Store: Store.S) = struct
       check_write t "c2" kc2 c2 >>= fun () ->
 
       check_find t "c1:b"     kc1 ["";"b"]         kt1 >>= fun () ->
-      check_find t "c1:b/a"   kc1 ["";"b";"a"]     kv1 >>= fun () ->
-      check_find t "c2:a/b/a" kc2 ["";"a";"b";"a"] kv1 >>= fun () ->
+      check_find t "c1:b/w"   kc1 ["";"b"; w]      kv1 >>= fun () ->
+      check_find t "c2:a/b/w" kc2 ["";"a";"b"; w]  kv1 >>= fun () ->
       check_find t "c2:c"     kc2 ["";"c"]         kv2 >>= fun () ->
 
       check_keys t "commits" Object_type.Commit [kc1; kc2] >>= fun () ->
