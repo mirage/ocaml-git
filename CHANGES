@@ -1,4 +1,8 @@
-1.0.0:
+1.0.1:
+* Escape invalid chars in path names
+* Do not link with camlp4 when using as a libray
+
+1.0.0: (2014-02-10)
 * Support for reading and writing pack indexes
 * Support for reading and writing pack files
 * Refactor the API: each Git object has now its own file,
