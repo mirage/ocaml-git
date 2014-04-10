@@ -41,12 +41,12 @@ include Identifiable.Make (T)
 
 let pretty_perm = function
   | `Normal -> "normal"
-  | `Exec   -> "exec"
-  | `Link   -> "link"
-  | `Dir    -> "dir"
+  | `Exec   -> "exec  "
+  | `Link   -> "link  "
+  | `Dir    -> "dir   "
 
 let pretty_entry e =
-  sprintf "%s %s    %s\n"
+  sprintf "%s %s    %S\n"
     (pretty_perm e.perm)
     (SHA1.to_hex e.node)
     e.name
