@@ -31,7 +31,7 @@ include T
 include Identifiable.Make (T)
 
 let pretty t =
-  sprintf "[name: %s | email: %s | data: %s]"
+  sprintf "[name: %s | email: %s | date: %s]"
     t.name t.email t.date
 
 (* XXX needs to escape name/email/date *)
