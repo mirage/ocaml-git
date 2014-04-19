@@ -55,8 +55,11 @@ module Loose = struct
     let file = file t sha1 in
     if Sys.file_exists file then (
       let buf = Git_unix.read_file file in
-      let value = Value.input (Mstruct.of_bigarray buf) in
-      return (Some value)
+      try
+        let value = Value.input (Mstruct.of_bigarray buf) in
+        return (Some value)
+      with Zlib.Error _ ->
+        fail (Zlib.Error (file, (Bigstring.to_string buf)))
     ) else
       return_none
 
