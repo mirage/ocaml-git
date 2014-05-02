@@ -20,10 +20,10 @@ Library git
                      Reference, Remote, Tag, Tree, User, Value,
                      Object, Object_type, Store, Search
   BuildDepends:      mstruct, dolog, core_kernel, ocamlgraph, lazy-trie,
-                     re.pcre, zip, cryptokit, uri, lwt,
+                     re.pcre, zip, cryptokit, uri, lwt, patience,
                      bin_prot.syntax, comparelib.syntax, sexplib.syntax
   XMETARequires:     mstruct, dolog, core_kernel, ocamlgraph, lazy-trie,
-                     re.pcre, zip, cryptokit, uri, lwt
+                     re.pcre, zip, cryptokit, uri, lwt, patience
 
 Library "git-memory"
   Path:              lib/
