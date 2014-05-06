@@ -43,6 +43,9 @@ val unpack: write:(Value.t -> SHA1.t Lwt.t) ->
 (** Unpack a whole pack file. [write] should returns the SHA1 of the
     marshaled value. Return the IDs of the written objects. *)
 
+val pack: (SHA1.t * Bigstring.t) list -> t
+(** Create a (compressed) pack file. *)
+
 module Raw: sig
 
   (** Raw pack file: they contains a pack index and a list of

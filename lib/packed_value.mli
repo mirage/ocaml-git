@@ -121,9 +121,11 @@ module PIC: sig
   (** Human readable representation. *)
 
   val to_value: t -> Value.t
-  (** [to_value ~read p] unpacks the packed position-independant value
-      [p]. The [read] function is used to read object contents from the
-      disk or from memory, depending on the backend. *)
+  (** [to_value p] unpacks the packed position-independant value
+      [p]. *)
+
+  val raw: SHA1.t -> Bigstring.t -> t
+  (** Build a raw value. *)
 
 end
 

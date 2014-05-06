@@ -247,7 +247,7 @@ let add buf t =
   Log.debugf "add";
   let version = 2 in
   Raw.add_header ~version buf (List.length t);
-  let _index= List.fold_left ~f:(fun index (_, pic) ->
+  let _index = List.fold_left ~f:(fun index (_, pic) ->
       let pos = Bigbuffer.length buf in
       let p = Packed_value.of_pic index ~pos pic in
       add_packed_value ~version buf p;
@@ -278,6 +278,10 @@ let unpack ~write buf =
   >>= fun () ->
   Printf.printf "\rUnpacking objects: 100%% (%d/%d), done.\n%!" !i !i;
   return (keys pack)
+
+let pack contents =
+  (* XXX: Patience_diff.be_clever *)
+  List.map ~f:(fun (l,s) -> l, Packed_value.PIC.raw l s) contents
 
 let of_pic t =
   Log.debugf "of_pic";

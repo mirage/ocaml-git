@@ -400,6 +400,8 @@ module PIC = struct
     let buf = unpack p in
     Value.input_inflated (Mstruct.of_string buf)
 
+  let raw sha1 raw =
+    { sha1; kind = Raw (Bigstring.to_string raw) }
 end
 
 let of_pic index ~pos t =

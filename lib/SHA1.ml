@@ -24,11 +24,14 @@ module type S = sig
   val of_hex: string -> t
   val input_hex: Mstruct.t -> t
   val add_hex: Bigbuffer.t -> t -> unit
+  val zero: t
 end
 
 module SHA1_String = struct
 
   include (String: Identifiable.S)
+
+  let zero = of_string (String.make 20 '0')
 
   (* XXX: add the bigstring in chunks using a tmp buffer (to alloc only
      once). *)

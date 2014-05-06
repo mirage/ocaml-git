@@ -99,6 +99,8 @@ module Make (IO: IO) (Store: Store.S) = struct
       | Shallow
       | No_progress
       | Include_tag
+      | Report_status
+      | Delete_refs
       | Other of string
 
     let of_string = function
@@ -110,6 +112,8 @@ module Make (IO: IO) (Store: Store.S) = struct
       | "shallow"       -> Shallow
       | "no-progress"   -> No_progress
       | "include-tag"   -> Include_tag
+      | "report-status" -> Report_status
+      | "delete-refs"   -> Delete_refs
       | x               -> Other x
 
     let to_string = function
@@ -121,7 +125,26 @@ module Make (IO: IO) (Store: Store.S) = struct
       | Shallow       -> "shallow"
       | No_progress   -> "no-progress"
       | Include_tag   -> "include-tag"
+      | Report_status -> "report-status"
+      | Delete_refs   -> "delete-refs"
       | Other x       -> x
+
+    let is_valid_fetch = function
+      | Multi_ack
+      | Thin_pack
+      | Side_band
+      | Side_band_64k
+      | Ofs_delta
+      | Shallow
+      | No_progress
+      | Include_tag -> true
+      | _ -> false
+
+    let is_valid_push = function
+      | Ofs_delta
+      | Report_status
+      | Delete_refs -> true
+      | _ -> false
 
   end
 
@@ -137,6 +160,10 @@ module Make (IO: IO) (Store: Store.S) = struct
 
     (* XXX really ? *)
     let default = []
+
+    let is_valid_push = List.for_all ~f:Capability.is_valid_push
+
+    let is_valid_fetch = List.for_all ~f:Capability.is_valid_fetch
 
   end
 
@@ -210,9 +237,13 @@ module Make (IO: IO) (Store: Store.S) = struct
     let close oc =
       PacketLine.flush oc
 
-    let create str =
+    let upload_pack str =
       let address = Address.of_string str in
       { request = Upload_pack; address }
+
+    let receive_pack str =
+      let address = Address.of_string str in
+      { request = Receive_pack; address }
 
   end
 
@@ -327,7 +358,7 @@ module Make (IO: IO) (Store: Store.S) = struct
 
   end
 
-  module Upload = struct
+  module Upload_request = struct
 
     type message =
       | Want of SHA1.t * Capability.t list
@@ -456,7 +487,7 @@ module Make (IO: IO) (Store: Store.S) = struct
       unshallows: SHA1.t list;
     }
 
-    (* PHASE1: the client send the the IDs he wants, the severs answer
+    (* PHASE1: the client send the the IDs he wants, the sever answers with
        the new shallow state. *)
     let phase1 (ic, oc) ?deepen ~shallows ~wants =
       Log.debugf "Upload.phase1";
@@ -504,6 +535,83 @@ module Make (IO: IO) (Store: Store.S) = struct
 
   end
 
+  module Update_request = struct
+
+    type command =
+      | Create of Reference.t * SHA1.t
+      | Delete of Reference.t * SHA1.t
+      | Update of Reference.t * SHA1.t * SHA1.t
+
+    let output_command buf t =
+      let old_id, new_id, name = match t with
+        | Create (name, new_id) -> SHA1.zero, new_id, name
+        | Delete (name, old_id) -> old_id, SHA1.zero, name
+        | Update (name, old_id, new_id) -> old_id, new_id, name in
+      Printf.bprintf buf "%s %s %s"
+        (SHA1.to_string old_id)
+        (SHA1.to_string new_id)
+        (Reference.to_string name)
+
+    type t = {
+      capabilities: Capabilities.t;
+      commands: command list;
+      pack: Pack.t;
+    }
+
+    let output oc t =
+      let rec aux first = function
+        | []   -> PacketLine.flush oc
+        | x::y ->
+          let buf = Buffer.create 1024 in
+          output_command buf x;
+          if first then (
+            Buffer.add_char buf Misc.nul;
+            Buffer.add_string buf (Capabilities.to_string t.capabilities);
+          );
+          PacketLine.output_line oc (Buffer.contents buf) >>= fun () ->
+          aux false y in
+      aux true t.commands >>= fun () ->
+      let s = Misc.with_buffer (fun b -> Pack.add b t.pack) in
+      IO.write oc s
+
+  end
+
+  module Report_status = struct
+
+    type result = Ok | Error of string
+
+    type t = {
+      result: result;
+      commands: (Reference.t * result) list;
+    }
+
+    let input ic =
+      PacketLine.input ic >>= function
+      | None -> fail (Failure "Report_status.input: empty")
+      | Some line ->
+        begin match String.lsplit2 line ~on:Misc.sp with
+          | Some ("unpack", "ok") -> return Ok
+          | Some ("unpack", err ) -> return (Error err)
+          | _ -> fail (Failure "Report_status.input: unpack-status")
+        end >>= fun result ->
+        let aux acc =
+          PacketLine.input ic >>= function
+          | None      -> return acc
+          | Some line ->
+            match String.lsplit2 line ~on:Misc.sp with
+            | Some ("ok", name)  -> return ((Reference.of_string name, Ok) :: acc)
+            | Some ("ng", cont)  ->
+              begin match String.lsplit2 line ~on:Misc.sp with
+                | None  -> fail (Failure "Report_status.input: command-fail")
+                | Some (name, err) -> return ((Reference.of_string name, Error err) :: acc)
+              end
+            | _ -> fail (Failure "Report_status.input: command-status")
+        in
+        aux [] >>= fun commands ->
+        return { result; commands }
+
+  end
+
   let todo msg =
     fail (Failure ("TODO: " ^ msg))
 
@@ -525,14 +633,27 @@ module Make (IO: IO) (Store: Store.S) = struct
     | Fetch of fetch
     | Clone of clone
 
-  let fetch_pack t address op =
-    let r = Init.create address in
+  let push_pack t address request =
+    let r = Init.receive_pack address in
     match Init.host r with
     | None   -> todo "local-clone"
     | Some h ->
-      IO.with_connection h (Init.port r)(fun (ic, oc) ->
-          Init.output oc r     >>= fun () ->
-          Listing.input ic     >>= fun listing ->
+      IO.with_connection h (Init.port r) (fun (ic, oc) ->
+          Init.output oc r                 >>= fun () ->
+          Listing.input ic                 >>= fun listing ->
+          Update_request.output oc request >>= fun () ->
+          Report_status.input ic           >>= fun _report ->
+          return_unit
+        )
+
+  let fetch_pack t address op =
+    let r = Init.upload_pack address in
+    match Init.host r with
+    | None   -> todo "local-clone"
+    | Some h ->
+      IO.with_connection h (Init.port r) (fun (ic, oc) ->
+          Init.output oc r >>= fun () ->
+          Listing.input ic      >>= fun listing ->
           Log.debugf "listing:\n %s" (Listing.pretty listing);
           let references =
             List.fold_left ~f:(fun acc (sha1, refs) ->
@@ -570,7 +691,7 @@ module Make (IO: IO) (Store: Store.S) = struct
               let shallows = match op with
                 | Fetch { shallows } -> shallows
                 | _                  -> [] in
-              Upload.phase1 ?deepen (ic,oc) ~shallows ~wants:[SHA1.of_commit head]
+              Upload_request.phase1 ?deepen (ic,oc) ~shallows ~wants:[SHA1.of_commit head]
               >>= fun _phase1 ->
               (* XXX: process the shallow / unshallow.  *)
               (* XXX: need a notion of shallow/unshallow in API. *)
@@ -579,7 +700,7 @@ module Make (IO: IO) (Store: Store.S) = struct
               let haves = match op with
                 | Fetch { haves } -> haves
                 | _               -> [] in
-              Upload.phase2 (ic,oc) ~haves >>= fun () ->
+              Upload_request.phase2 (ic,oc) ~haves >>= fun () ->
 
               Log.debugf "PHASE3";
               printf "Receiving data ...%!";
