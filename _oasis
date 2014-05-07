@@ -18,7 +18,7 @@ Library git
   Modules:           SHA1, Blob, Cache, Commit, Misc,
                      Global_graph, Pack, Pack_index, Packed_value,
                      Reference, Remote, Tag, Tree, User, Value,
-                     Object, Object_type, Store, Search
+                     Object, Object_type, Store, Search, Gri
   BuildDepends:      mstruct, dolog, core_kernel, ocamlgraph, lazy-trie,
                      re.pcre, zip, cryptokit, uri, lwt, patience,
                      bin_prot.syntax, comparelib.syntax, sexplib.syntax,

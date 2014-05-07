@@ -18,16 +18,18 @@ open Core_kernel.Std
 open Lwt
 module Log = Log.Make(struct let section = "remote" end)
 
+exception Error
+
 let error fmt =
   Printf.ksprintf (fun msg ->
-      Printf.printf "Protocol error: %s\n%!" msg;
-      raise Parsing.Parse_error
+      Printf.eprintf "%s\n%!" msg;
+      raise Error
     ) fmt
 
 let lwt_error fmt =
   Printf.ksprintf (fun msg ->
-      Printf.printf "Protocol error: %s\n%!" msg;
-      fail Parsing.Parse_error
+      Printf.eprintf "%s\n%!" msg;
+      fail Error
     ) fmt
 
 type fetch_result = {
@@ -42,6 +44,15 @@ type push_result = {
   result: ok_or_error;
   commands: (Reference.t * ok_or_error) list;
 }
+
+let pretty_push_result t =
+  let buf = Buffer.create 1024 in
+  let aux (ref, result) = match result with
+    | Ok      -> Printf.bprintf buf "* %s\n" (Reference.to_string ref)
+    | Error e -> Printf.bprintf buf "! %s: %s\n" (Reference.to_string ref) e
+  in
+  List.iter ~f:aux t.commands;
+  Buffer.contents buf
 
 module type IO = sig
   type ic
@@ -95,7 +106,6 @@ module Make (IO: IO) (Store: Store.S) = struct
           return (Some (String.sub payload 0 (size-1)))
         else
           return (Some payload)
-
   end
 
   module Capability = struct
@@ -177,34 +187,6 @@ module Make (IO: IO) (Store: Store.S) = struct
 
   end
 
-  module Address = struct
-
-    type t = {
-      uri : Uri.t;
-      host: string option;
-      port: int option;
-      path: string;
-    }
-
-    let host t = t.host
-    let port t = t.port
-    let path t = t.path
-    let uri t = t.uri
-
-    let of_uri uri =
-      let host, port = match Uri.host uri with
-        | None      -> None, None
-        | Some host ->
-          let port = Uri.port uri in
-          Some host, port in
-      let path = Uri.path uri in
-      { uri; host; port; path }
-
-    let of_string str =
-      of_uri (Uri.of_string str)
-
-  end
-
   module Init = struct
 
     type request =
@@ -219,25 +201,25 @@ module Make (IO: IO) (Store: Store.S) = struct
 
     type t = {
       request: request;
-      address: Address.t;
+      gri: Gri.t;
     }
 
-    let host t = Address.host t.address
-    let port t = Address.port t.address
+    let host t = Uri.host (Gri.to_uri t.gri)
 
     let output oc t =
+      let uri = Gri.to_uri t.gri in
       let message =
         let buf = Buffer.create 1024 in
         Buffer.add_string buf (string_of_request t.request);
         Buffer.add_char   buf Misc.sp;
-        Buffer.add_string buf (Address.path t.address);
+        Buffer.add_string buf (Uri.path uri);
         Buffer.add_char   buf Misc.nul;
-        begin match Address.host t.address with
+        begin match Uri.host uri with
           | None   -> ()
           | Some h ->
             Buffer.add_string buf "host=";
             Buffer.add_string buf h;
-            begin match Address.port t.address with
+            begin match Uri.port uri with
               | None   -> ()
               | Some p ->
                 Buffer.add_char   buf ':';
@@ -251,9 +233,11 @@ module Make (IO: IO) (Store: Store.S) = struct
     let close oc =
       PacketLine.flush oc
 
-    let upload_pack uri =
-      let address = Address.of_uri uri in
-      { request = Upload_pack; address }
+    let upload_pack gri =
+      { request = Upload_pack; gri }
+
+    let receive_pack gri =
+      { request = Receive_pack; gri }
 
     let receive_pack uri =
       let address = Address.of_uri uri in
@@ -565,8 +549,8 @@ module Make (IO: IO) (Store: Store.S) = struct
         | Delete (name, old_id) -> old_id, SHA1.Commit.zero, name
         | Update (name, old_id, new_id) -> old_id, new_id, name in
       Printf.bprintf buf "%s %s %s"
-        (SHA1.Commit.to_string old_id)
-        (SHA1.Commit.to_string new_id)
+        (SHA1.Commit.to_hex old_id)
+        (SHA1.Commit.to_hex new_id)
         (Reference.to_string name)
 
     type t = {
@@ -645,19 +629,21 @@ module Make (IO: IO) (Store: Store.S) = struct
 
   module Graph = Global_graph.Make(Store)
 
-  let push t ~branch uri =
-    let r = Init.receive_pack uri in
+  let push t ~branch gri =
+    let r = Init.receive_pack gri in
     match Init.host r with
     | None   -> todo "local-clone"
     | Some h ->
+      let uri = Gri.to_uri gri in
       IO.with_connection uri (fun (ic, oc) ->
           Init.output oc r                 >>= fun () ->
           Listing.input ic                 >>= fun listing ->
           (* XXX: check listing.capabilities *)
+          Log.debugf "listing:\n %s" (Listing.pretty listing);
           Store.read_reference t branch    >>= fun new_obj ->
           let old_obj = Listing.find_reference listing branch in
           let command = match old_obj, new_obj with
-            | None  , None   -> failwith "Unknown request"
+            | None  , None   -> failwith (Reference.to_string branch ^ ": unknown tag")
             | Some x, None   -> Update_request.Delete (branch, x)
             | None  , Some x -> Update_request.Create (branch, x)
             | Some x, Some y -> Update_request.Update (branch, x, y) in
@@ -679,14 +665,15 @@ module Make (IO: IO) (Store: Store.S) = struct
           Report_status.input ic
         )
 
-  let fetch_pack t uri op =
-    let r = Init.upload_pack uri in
+  let fetch_pack t gri op =
+    let r = Init.upload_pack gri in
     match Init.host r with
     | None   -> todo "local-clone"
     | Some h ->
+      let uri = Gri.to_uri gri in
       IO.with_connection uri (fun (ic, oc) ->
           Init.output oc r >>= fun () ->
-          Listing.input ic      >>= fun listing ->
+          Listing.input ic >>= fun listing ->
           Log.debugf "listing:\n %s" (Listing.pretty listing);
           let references =
             List.fold_left ~f:(fun acc (sha1, refs) ->
@@ -774,18 +761,18 @@ module Make (IO: IO) (Store: Store.S) = struct
                 )
         )
 
-  let ls t uri =
-    fetch_pack t uri Ls >>= function
+  let ls t gri =
+    fetch_pack t gri Ls >>= function
       { references } -> return references
 
-  let clone t ?(bare=false) ?deepen ?(unpack=false) address =
-    fetch_pack t address (Clone { bare; deepen; unpack })
+  let clone t ?(bare=false) ?deepen ?(unpack=false) gri =
+    fetch_pack t gri (Clone { bare; deepen; unpack })
 
-  let fetch t ?deepen ?(unpack=false) address =
+  let fetch t ?deepen ?(unpack=false) gri =
     Store.list t >>= fun haves ->
     (* XXX: Store.shallows t >>= fun shallows *)
     let shallows = [] in
-    fetch_pack t address (Fetch { shallows; haves; deepen; unpack })
+    fetch_pack t gri (Fetch { shallows; haves; deepen; unpack })
 
   type t = Store.t
 
@@ -793,8 +780,8 @@ end
 
 module type S = sig
   type t
-  val ls: t -> Uri.t -> SHA1.Commit.t Reference.Map.t Lwt.t
-  val push: t -> branch:Reference.t -> Uri.t -> push_result Lwt.t
-  val clone: t -> ?bare:bool -> ?deepen:int -> ?unpack:bool -> Uri.t -> fetch_result Lwt.t
-  val fetch: t -> ?deepen:int -> ?unpack:bool -> Uri.t -> fetch_result Lwt.t
+  val ls: t -> Gri.t -> SHA1.Commit.t Reference.Map.t Lwt.t
+  val push: t -> branch:Reference.t -> Gri.t -> push_result Lwt.t
+  val clone: t -> ?bare:bool -> ?deepen:int -> ?unpack:bool -> Gri.t -> fetch_result Lwt.t
+  val fetch: t -> ?deepen:int -> ?unpack:bool -> Gri.t -> fetch_result Lwt.t
 end

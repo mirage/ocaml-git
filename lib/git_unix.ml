@@ -24,18 +24,16 @@ module M = struct
   type oc = Lwt_io.output_channel
 
   let with_connection uri fn =
-    let port = match Uri_services.tcp_port_of_uri uri with
-      | None   -> 9418
-      | Some p -> p in
-    let mode = match Uri.scheme uri with
-      | Some "https" -> `SSL
-      | _            -> `TCP in
-    let service = match mode with
-      | `SSL -> string_of_int port
-      | `TCP -> string_of_int 9418 in
     let host = match Uri.host uri with
       | None   -> "localhost"
       | Some x -> x in
+    let mode = match Uri.scheme uri with
+      | Some "https"   -> `TCP (* XXX: otherwise fetch returns
+                                       Ssl.Connection_error *)
+      | Some "git+ssh" -> failwith "TODO" (* XXX: need SSH *)
+      |  _             -> `TCP in
+    let service = string_of_int 9418 in
+    Log.debugf "Connecting to %s" host;
     Lwt_unix_conduit.connect ~mode ~host ~service () >>= fun (ic, oc) ->
     Lwt.catch
       (fun () -> fn (ic, oc))

@@ -14,29 +14,26 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** Manage object graphs. *)
+(** Git ressource identifiers (GRI). *)
 
-module C: Graph.Sig.I with type V.t = (SHA1.t * Value.t)
-                       and type E.label = string
-(** Contents graph. *)
+(** GRIs are similar to URIs, but Git also allows some blend of URL
+    and SSH remote files such as:
 
-module K: Graph.Sig.I with type V.t = SHA1.t
-(** Key graph. *)
+      git@github.com:samoht/ocaml-git.git
 
-module Make (S: Store.S): sig
+*)
 
-  val create_contents: S.t -> C.t Lwt.t
-  (** Create a graph of contents. *)
+type t
+(** Git ressource identifier values. *)
 
-  val create_key: S.t -> K.t Lwt.t
-  (** Create a graph of keys. *)
+val of_string: string -> t
+(** Create a GRI from a string. *)
 
-  val pack: S.t -> ?min:SHA1.Set.t -> SHA1.Set.t -> Pack.t Lwt.t
-  (** Find a consistent cut in the graph of keys with [min] as minimal
-      elements and [max] as maximal elements. If [min] is empty,
-      return all the predecessors of [max]. *)
+val to_string: t -> string
+(** Convert a string to a GRI. *)
 
-  val to_dot: S.t -> string -> unit Lwt.t
-  (** Export the Git store as a "graphviz" file. *)
+val to_uri: t -> Uri.t
+(** Cast to [Uri.t]. *)
 
-end
+val of_uri: Uri.t -> t
+(** Cast from [Uri.t]. *)

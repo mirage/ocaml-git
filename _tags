@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 540237c749833eb09690b0fe0a34ec19)
+# DO NOT EDIT (digest: 2df9629b1b9e1b2d9be3d592cb15a7b8)
 # Ignore VCS directories, you can use the same kind of rule outside
 # OASIS_START/STOP if you want to exclude directories that contains
 # useless stuff for the build process
@@ -34,6 +34,7 @@
 "lib/object_type.cmx": for-pack(Git)
 "lib/store.cmx": for-pack(Git)
 "lib/search.cmx": for-pack(Git)
+"lib/gri.cmx": for-pack(Git)
 # Library git-memory
 "lib/git-memory.cmxs": use_git-memory
 # Library git-unix

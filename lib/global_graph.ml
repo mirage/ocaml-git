@@ -72,6 +72,7 @@ module Make (Store: Store.S) = struct
   end
 
   let create_contents t =
+    Log.debugf "create_contents";
     let g = C.create () in
     Store.contents t >>= fun nodes ->
     List.iter ~f:(C.add_vertex g) nodes;
@@ -93,6 +94,7 @@ module Make (Store: Store.S) = struct
     return g
 
   let create_key t =
+    Log.debugf "create_key";
     let g = K.create () in
     Store.contents t >>= fun nodes ->
     List.iter ~f:(fun (k, _) -> K.add_vertex g k) nodes;
@@ -101,8 +103,7 @@ module Make (Store: Store.S) = struct
           Search.succ t src >>= fun succs ->
           Misc.list_iter_p (fun s ->
               let sha1 = Search.sha1_of_succ s in
-              Store.read_exn t sha1 >>= fun v ->
-              K.add_edge g src sha1;
+              if K.mem_vertex g sha1 then K.add_edge g src sha1;
               return_unit
             ) succs
         ) nodes
@@ -110,12 +111,14 @@ module Make (Store: Store.S) = struct
     return g
 
   let to_dot t file =
+    Log.debugf "to_dot";
     create_contents t >>= fun g ->
     Out_channel.with_file file ~f:(fun oc -> Dot.output_graph oc g);
     return_unit
 
   (* XXX: can be optimized ... *)
   let pack t ?(min=SHA1.Set.empty) max =
+    Log.debugf "pack";
     create_key t >>= fun g ->
     let g = KO.transitive_closure g in
     let pack = ref [] in

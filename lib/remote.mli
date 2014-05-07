@@ -32,6 +32,9 @@ type push_result = {
 }
 (** The result of a push operation. *)
 
+val pretty_push_result: push_result -> string
+(** Pretty print the push status. *)
+
 module type IO = sig
 
   (** Channel abstraction. XXX: reuse something existing ... *)
@@ -69,17 +72,17 @@ module type S = sig
   type t
   (** Abstract value for stores. *)
 
-  val ls: t -> Uri.t -> SHA1.Commit.t Reference.Map.t Lwt.t
+  val ls: t -> Gri.t -> SHA1.Commit.t Reference.Map.t Lwt.t
   (** List the references of the remote repository. *)
 
-  val push: t -> branch:Reference.t -> Uri.t -> push_result Lwt.t
+  val push: t -> branch:Reference.t -> Gri.t -> push_result Lwt.t
   (** Push a local branch to a remote store. *)
 
-  val clone: t -> ?bare:bool -> ?deepen:int -> ?unpack:bool -> Uri.t -> fetch_result Lwt.t
+  val clone: t -> ?bare:bool -> ?deepen:int -> ?unpack:bool -> Gri.t -> fetch_result Lwt.t
   (** [clone t address] clones the contents of [address] into the
       store [t]. *)
 
-  val fetch: t -> ?deepen:int -> ?unpack:bool -> Uri.t -> fetch_result Lwt.t
+  val fetch: t -> ?deepen:int -> ?unpack:bool -> Gri.t -> fetch_result Lwt.t
   (** [fetch t address] fetches the missing contents of [address] into
       the store [t]. *)
 
