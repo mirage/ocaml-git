@@ -388,10 +388,11 @@ let default =
       The most commonly used ogit commands are:\n\
       \    clone       %s\n\
       \    fetch       %s\n\
+      \    push        %s\n\
       \    graph       %s\n\
       \n\
       See 'ogit help <command>' for more information on a specific command.\n%!"
-      clone.doc fetch.doc graph.doc in
+      clone.doc fetch.doc push.doc graph.doc in
   Term.(pure usage $ (pure ())),
   Term.info "ogit"
     ~version:"0.10.0"
@@ -407,6 +408,7 @@ let commands = List.map ~f:command [
     clone;
     fetch;
     graph;
+    push;
     help;
   ]
 
