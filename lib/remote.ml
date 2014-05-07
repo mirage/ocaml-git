@@ -79,10 +79,6 @@ module Make (IO: IO) (Store: Store.S) = struct
 
     let input ic =
       Log.debugf "PacketLine.input";
-      IO.read_all ic >>= fun str ->
-      Log.debugf "RECEIVED: %s" str;
-      return_none
-(*
       IO.read_exactly ic 4 >>= fun size ->
       match size with
       | "0000" ->
@@ -99,7 +95,7 @@ module Make (IO: IO) (Store: Store.S) = struct
           return (Some (String.sub payload 0 (size-1)))
         else
           return (Some payload)
-*)
+
   end
 
   module Capability = struct

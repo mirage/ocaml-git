@@ -27,10 +27,12 @@ module M = struct
     let port = match Uri_services.tcp_port_of_uri uri with
       | None   -> 9418
       | Some p -> p in
-    let service = string_of_int port in
     let mode = match Uri.scheme uri with
       | Some "https" -> `SSL
       | _            -> `TCP in
+    let service = match mode with
+      | `SSL -> string_of_int port
+      | `TCP -> string_of_int 9418 in
     let host = match Uri.host uri with
       | None   -> "localhost"
       | Some x -> x in
