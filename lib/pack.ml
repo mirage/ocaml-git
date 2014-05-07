@@ -280,8 +280,13 @@ let unpack ~write buf =
   return (keys pack)
 
 let pack contents =
+  let uncompressed =
+    List.map ~f:(fun (k, v) ->
+        let raw = Misc.with_bigbuffer (fun buf -> Value.add buf v) in
+        k, Packed_value.PIC.raw k raw
+      ) contents in
   (* XXX: Patience_diff.be_clever *)
-  List.map ~f:(fun (l,s) -> l, Packed_value.PIC.raw l s) contents
+  uncompressed
 
 let of_pic t =
   Log.debugf "of_pic";

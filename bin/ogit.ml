@@ -113,7 +113,7 @@ let arg_list name doc conv =
   let doc = Arg.info ~docv:name ~doc [] in
   Arg.(non_empty & pos_all conv [] & doc)
 
-let repository =
+let remote =
   let doc = Arg.info ~docv:"REPOSITORY"
       ~doc:"Location of the remote repository." [] in
   Arg.(required & pos 0 (some string) None & doc)
@@ -122,6 +122,16 @@ let directory =
   let doc = Arg.info ~docv:"DIRECTORY"
       ~doc:"The name of the directory to clone into." [] in
   Arg.(value & pos 1 (some string) None & doc)
+
+let reference =
+  let parse str = `Ok (Reference.of_string str) in
+  let print ppf name = Format.pp_print_string ppf (Reference.to_string name) in
+  parse, print
+
+let branch =
+  let doc = Arg.info ~docv:"BRANCH"
+      ~doc:"The name of the branch to update remotely." [] in
+  Arg.(value & pos 1 reference Reference.master & doc)
 
 let backend =
   let memory = mk_flag ["m";"in-memory"] "Use an in-memory store." in
@@ -167,12 +177,12 @@ let ls_remote = {
   doc  = "List references in a remote repository.";
   man  = [];
   term =
-    let ls (module S: Store.S) repo =
-      let module Remote = Git_unix.Remote(S) in
+    let ls (module S: Store.S) remote =
+      let module Local = Git_unix.Remote(S) in
       run begin
         S.create ()  >>= fun t ->
-        Remote.ls t repo >>= fun references ->
-        Printf.printf "From %s\n" repo;
+        Local.ls t remote >>= fun references ->
+        Printf.printf "From %s\n" remote;
         let print ~key:ref ~data:sha1 =
           Printf.printf "%s        %s\n"
             (SHA1.Commit.to_hex sha1)
@@ -180,7 +190,7 @@ let ls_remote = {
         Map.iter ~f:print references;
         return_unit
       end in
-    Term.(mk ls $ backend $ repository)
+    Term.(mk ls $ backend $ remote)
 }
 
 (* LS-FILES *)
@@ -251,11 +261,11 @@ let clone = {
         Arg.(some int) None in
     let bare =
       mk_flag ["bare"] "Do not expand the filesystem." in
-    let clone (module S: Store.S) deepen bare unpack repo dir =
+    let clone (module S: Store.S) deepen bare unpack remote dir =
       let dir = match dir with
         | Some d -> d
         | None   ->
-          let dir = Filename.basename repo in
+          let dir = Filename.basename remote in
           if Filename.check_suffix dir ".git" then
             Filename.chop_extension dir
           else
@@ -266,11 +276,11 @@ let clone = {
           dir;
         exit 128
       );
-      let module R = Git_unix.Remote(S) in
+      let module Local = Git_unix.Remote(S) in
       run begin
         S.create ~root:dir ()   >>= fun t ->
         printf "Cloning into '%s' ...\n%!" (Filename.basename (S.root t));
-        R.clone t ?deepen ~unpack ~bare repo >>= fun r ->
+        Local.clone t ?deepen ~unpack ~bare remote >>= fun r ->
         match r.Remote.head with
         | None      -> return_unit
         | Some head ->
@@ -278,7 +288,7 @@ let clone = {
           printf "HEAD is now at %s\n" (SHA1.Commit.to_hex head);
           return_unit
       end in
-    Term.(mk clone $ backend $ depth $ bare $ unpack $ repository $ directory)
+    Term.(mk clone $ backend $ depth $ bare $ unpack $ remote $ directory)
 }
 
 (* FETCH *)
@@ -287,14 +297,31 @@ let fetch = {
   doc  = "Fetch a remote Git repository.";
   man  = [];
   term =
-    let fetch (module S: Store.S) unpack repo =
-      let module Remote = Git_unix.Remote(S) in
+    let fetch (module S: Store.S) unpack remote =
+      let module Local = Git_unix.Remote(S) in
       run begin
-        S.create ()     >>= fun t ->
-        Remote.fetch t ~unpack repo >>= fun _ ->
+        S.create ()                  >>= fun t ->
+        Local.fetch t ~unpack remote >>= fun _ ->
         return_unit
       end in
-    Term.(mk fetch $ backend $ unpack $ repository)
+    Term.(mk fetch $ backend $ unpack $ remote)
+}
+
+
+(* PUSH *)
+let push = {
+  name = "push";
+  doc  = "Update remote refs along with associated objects.";
+  man  = [];
+  term =
+    let push (module S: Store.S) remote branch =
+      let module Local = Git_unix.Remote(S) in
+      run begin
+        S.create ()                 >>= fun t ->
+        Local.push t ~branch remote >>= fun _ ->
+        return_unit
+      end in
+    Term.(mk push $ backend $ remote $ branch)
 }
 
 (* GRAPH *)
@@ -307,7 +334,7 @@ let graph = {
       mk_required ["o";"output"] "FILE" "Output file."
         Arg.(some string) None in
     let graph (module S: Store.S) file =
-      let module Graph = Output.Graph(S) in
+      let module Graph = Global_graph.Make(S) in
       run begin
         S.create () >>= fun t ->
         Graph.to_dot t file

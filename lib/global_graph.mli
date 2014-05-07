@@ -16,9 +16,27 @@
 
 (** Manage object graphs. *)
 
-module Graph (Store: Store.S): sig
+module C: Graph.Sig.I with type V.t = (SHA1.t * Value.t)
+                       and type E.label = string
+(** Contents graph. *)
 
-  val to_dot: Store.t -> string -> unit Lwt.t
+module K: Graph.Sig.I with type V.t = SHA1.t
+(** Key graph. *)
+
+module Make (S: Store.S): sig
+
+  val create_contents: S.t -> C.t Lwt.t
+  (** Create a graph of contents. *)
+
+  val create_key: S.t -> K.t Lwt.t
+  (** Create a graph of keys. *)
+
+  val pack: S.t -> ?min:SHA1.Set.t -> SHA1.Set.t -> Pack.t Lwt.t
+  (** Find a consistent cut in the graph of keys with [min] as minimal
+      elements and [max] as maximal elements. If [min] is empty,
+      return all the predecessors of [max]. *)
+
+  val to_dot: S.t -> string -> unit Lwt.t
   (** Export the Git store as a "graphviz" file. *)
 
 end

@@ -30,10 +30,17 @@ let lwt_error fmt =
       fail Parsing.Parse_error
     ) fmt
 
-type result = {
+type fetch_result = {
   head      : SHA1.Commit.t option;
   references: SHA1.Commit.t Reference.Map.t;
   sha1s     : SHA1.t list;
+}
+
+type ok_or_error = Ok | Error of string
+
+type push_result = {
+  result: ok_or_error;
+  commands: (Reference.t * ok_or_error) list;
 }
 
 module type IO = sig
@@ -265,10 +272,13 @@ module Make (IO: IO) (Store: Store.S) = struct
     let is_empty t =
       t.capabilities = [] && Map.is_empty t.references
 
-    let head t =
+    let find_reference t ref =
       Map.fold
-        ~f:(fun ~key ~data acc -> if List.mem data Reference.head then Some key else acc)
+        ~f:(fun ~key ~data acc -> if List.mem data ref then Some key else acc)
         ~init:None t.references
+
+    let head t =
+      find_reference t Reference.head
 
     let pretty t =
       let buf = Buffer.create 1024 in
@@ -538,18 +548,18 @@ module Make (IO: IO) (Store: Store.S) = struct
   module Update_request = struct
 
     type command =
-      | Create of Reference.t * SHA1.t
-      | Delete of Reference.t * SHA1.t
-      | Update of Reference.t * SHA1.t * SHA1.t
+      | Create of Reference.t * SHA1.Commit.t
+      | Delete of Reference.t * SHA1.Commit.t
+      | Update of Reference.t * SHA1.Commit.t * SHA1.Commit.t
 
     let output_command buf t =
       let old_id, new_id, name = match t with
-        | Create (name, new_id) -> SHA1.zero, new_id, name
-        | Delete (name, old_id) -> old_id, SHA1.zero, name
+        | Create (name, new_id) -> SHA1.Commit.zero, new_id, name
+        | Delete (name, old_id) -> old_id, SHA1.Commit.zero, name
         | Update (name, old_id, new_id) -> old_id, new_id, name in
       Printf.bprintf buf "%s %s %s"
-        (SHA1.to_string old_id)
-        (SHA1.to_string new_id)
+        (SHA1.Commit.to_string old_id)
+        (SHA1.Commit.to_string new_id)
         (Reference.to_string name)
 
     type t = {
@@ -577,13 +587,6 @@ module Make (IO: IO) (Store: Store.S) = struct
   end
 
   module Report_status = struct
-
-    type result = Ok | Error of string
-
-    type t = {
-      result: result;
-      commands: (Reference.t * result) list;
-    }
 
     let input ic =
       PacketLine.input ic >>= function
@@ -633,7 +636,9 @@ module Make (IO: IO) (Store: Store.S) = struct
     | Fetch of fetch
     | Clone of clone
 
-  let push_pack t address request =
+  module Graph = Global_graph.Make(Store)
+
+  let push t ~branch address =
     let r = Init.receive_pack address in
     match Init.host r with
     | None   -> todo "local-clone"
@@ -641,9 +646,30 @@ module Make (IO: IO) (Store: Store.S) = struct
       IO.with_connection h (Init.port r) (fun (ic, oc) ->
           Init.output oc r                 >>= fun () ->
           Listing.input ic                 >>= fun listing ->
+          (* XXX: check listing.capabilities *)
+          Store.read_reference t branch    >>= fun new_obj ->
+          let old_obj = Listing.find_reference listing branch in
+          let command = match old_obj, new_obj with
+            | None  , None   -> failwith "Unknown request"
+            | Some x, None   -> Update_request.Delete (branch, x)
+            | None  , Some x -> Update_request.Create (branch, x)
+            | Some x, Some y -> Update_request.Update (branch, x, y) in
+          let capabilities =
+            Capability.Report_status ::
+            match command with
+            | Update_request.Delete _ -> [Capability.Delete_refs]
+            | _                       -> [Capability.Ofs_delta ] in
+          let commands = [ command ] in
+          let min = Map.keys (Listing.references listing)
+                  |> List.map ~f:SHA1.of_commit
+                  |> SHA1.Set.of_list in
+          let max = match new_obj with
+            | None   -> SHA1.Set.empty
+            | Some x -> SHA1.Set.singleton (SHA1.of_commit x) in
+          Graph.pack t ~min max >>= fun pack ->
+          let request = { Update_request.capabilities; commands; pack } in
           Update_request.output oc request >>= fun () ->
-          Report_status.input ic           >>= fun _report ->
-          return_unit
+          Report_status.input ic
         )
 
   let fetch_pack t address op =
@@ -758,9 +784,12 @@ module Make (IO: IO) (Store: Store.S) = struct
 
 end
 
+type remote = string
+
 module type S = sig
   type t
-  val ls: t -> string -> SHA1.Commit.t Reference.Map.t Lwt.t
-  val clone: t -> ?bare:bool -> ?deepen:int -> ?unpack:bool -> string -> result Lwt.t
-  val fetch: t -> ?deepen:int -> ?unpack:bool -> string -> result Lwt.t
+  val ls: t -> remote -> SHA1.Commit.t Reference.Map.t Lwt.t
+  val push: t -> branch:Reference.t -> remote -> push_result Lwt.t
+  val clone: t -> ?bare:bool -> ?deepen:int -> ?unpack:bool -> remote -> fetch_result Lwt.t
+  val fetch: t -> ?deepen:int -> ?unpack:bool -> remote -> fetch_result Lwt.t
 end

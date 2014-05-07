@@ -23,6 +23,9 @@ include Identifiable.S
 val head: t
 (** The repository HEAD. *)
 
+val master: t
+(** The master branch. *)
+
 val is_head: t -> bool
 (** Is the given reference the HEAD ? *)
 
