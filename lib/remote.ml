@@ -239,10 +239,6 @@ module Make (IO: IO) (Store: Store.S) = struct
     let receive_pack gri =
       { request = Receive_pack; gri }
 
-    let receive_pack uri =
-      let address = Address.of_uri uri in
-      { request = Receive_pack; address }
-
   end
 
   module Listing = struct
