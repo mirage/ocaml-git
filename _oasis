@@ -21,9 +21,11 @@ Library git
                      Object, Object_type, Store, Search
   BuildDepends:      mstruct, dolog, core_kernel, ocamlgraph, lazy-trie,
                      re.pcre, zip, cryptokit, uri, lwt, patience,
-                     bin_prot.syntax, comparelib.syntax, sexplib.syntax
+                     bin_prot.syntax, comparelib.syntax, sexplib.syntax,
+                     conduit.lwt, uri.services
   XMETARequires:     mstruct, dolog, core_kernel, ocamlgraph, lazy-trie,
-                     re.pcre, zip, cryptokit, uri, lwt, patience
+                     re.pcre, zip, cryptokit, uri, lwt, patience,
+                     conduit.lwt, uri.services
 
 Library "git-memory"
   Path:              lib/

@@ -42,7 +42,7 @@ module type IO = sig
   type oc
   (** Type for output channels. *)
 
-  val with_connection: string -> int option -> (ic * oc -> 'a Lwt.t) -> 'a Lwt.t
+  val with_connection: Uri.t -> (ic * oc -> 'a Lwt.t) -> 'a Lwt.t
   (** Connect to a remote server, get the corresponding input and
       output channels and apply a function on them. Close the channel
       once the function returns. *)
@@ -62,8 +62,6 @@ module type IO = sig
 
 end
 
-type remote = string
-
 module type S = sig
 
   (** Remote operation, abstracted over the bakend type. *)
@@ -71,17 +69,17 @@ module type S = sig
   type t
   (** Abstract value for stores. *)
 
-  val ls: t -> remote -> SHA1.Commit.t Reference.Map.t Lwt.t
+  val ls: t -> Uri.t -> SHA1.Commit.t Reference.Map.t Lwt.t
   (** List the references of the remote repository. *)
 
-  val push: t -> branch:Reference.t -> remote -> push_result Lwt.t
+  val push: t -> branch:Reference.t -> Uri.t -> push_result Lwt.t
   (** Push a local branch to a remote store. *)
 
-  val clone: t -> ?bare:bool -> ?deepen:int -> ?unpack:bool -> remote -> fetch_result Lwt.t
+  val clone: t -> ?bare:bool -> ?deepen:int -> ?unpack:bool -> Uri.t -> fetch_result Lwt.t
   (** [clone t address] clones the contents of [address] into the
       store [t]. *)
 
-  val fetch: t -> ?deepen:int -> ?unpack:bool -> remote -> fetch_result Lwt.t
+  val fetch: t -> ?deepen:int -> ?unpack:bool -> Uri.t -> fetch_result Lwt.t
   (** [fetch t address] fetches the missing contents of [address] into
       the store [t]. *)
 

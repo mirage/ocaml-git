@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: b2ea931a3bba917ac6f05b3b2e0dea49)
+# DO NOT EDIT (digest: 540237c749833eb09690b0fe0a34ec19)
 # Ignore VCS directories, you can use the same kind of rule outside
 # OASIS_START/STOP if you want to exclude directories that contains
 # useless stuff for the build process
@@ -42,6 +42,7 @@
 "lib/git-fs.cmxs": use_git-fs
 <lib/*.ml{,i}>: pkg_bin_prot.syntax
 <lib/*.ml{,i}>: pkg_comparelib.syntax
+<lib/*.ml{,i}>: pkg_conduit.lwt
 <lib/*.ml{,i}>: pkg_core_kernel
 <lib/*.ml{,i}>: pkg_cryptokit
 <lib/*.ml{,i}>: pkg_dolog
@@ -54,6 +55,7 @@
 <lib/*.ml{,i}>: pkg_re.pcre
 <lib/*.ml{,i}>: pkg_sexplib.syntax
 <lib/*.ml{,i}>: pkg_uri
+<lib/*.ml{,i}>: pkg_uri.services
 <lib/*.ml{,i}>: pkg_zip
 <lib/*.ml{,i}>: use_git
 <lib/*.ml{,i}>: use_git-unix
@@ -61,6 +63,7 @@
 <bin/ogit.{native,byte}>: pkg_bin_prot.syntax
 <bin/ogit.{native,byte}>: pkg_cmdliner
 <bin/ogit.{native,byte}>: pkg_comparelib.syntax
+<bin/ogit.{native,byte}>: pkg_conduit.lwt
 <bin/ogit.{native,byte}>: pkg_core_kernel
 <bin/ogit.{native,byte}>: pkg_cryptokit
 <bin/ogit.{native,byte}>: pkg_dolog
@@ -73,6 +76,7 @@
 <bin/ogit.{native,byte}>: pkg_re.pcre
 <bin/ogit.{native,byte}>: pkg_sexplib.syntax
 <bin/ogit.{native,byte}>: pkg_uri
+<bin/ogit.{native,byte}>: pkg_uri.services
 <bin/ogit.{native,byte}>: pkg_zip
 <bin/ogit.{native,byte}>: use_git
 <bin/ogit.{native,byte}>: use_git-fs
@@ -81,6 +85,7 @@
 <bin/*.ml{,i}>: pkg_bin_prot.syntax
 <bin/*.ml{,i}>: pkg_cmdliner
 <bin/*.ml{,i}>: pkg_comparelib.syntax
+<bin/*.ml{,i}>: pkg_conduit.lwt
 <bin/*.ml{,i}>: pkg_core_kernel
 <bin/*.ml{,i}>: pkg_cryptokit
 <bin/*.ml{,i}>: pkg_dolog
@@ -93,6 +98,7 @@
 <bin/*.ml{,i}>: pkg_re.pcre
 <bin/*.ml{,i}>: pkg_sexplib.syntax
 <bin/*.ml{,i}>: pkg_uri
+<bin/*.ml{,i}>: pkg_uri.services
 <bin/*.ml{,i}>: pkg_zip
 <bin/*.ml{,i}>: use_git
 <bin/*.ml{,i}>: use_git-fs
@@ -102,6 +108,7 @@
 <lib_test/test.{native,byte}>: pkg_alcotest
 <lib_test/test.{native,byte}>: pkg_bin_prot.syntax
 <lib_test/test.{native,byte}>: pkg_comparelib.syntax
+<lib_test/test.{native,byte}>: pkg_conduit.lwt
 <lib_test/test.{native,byte}>: pkg_core_kernel
 <lib_test/test.{native,byte}>: pkg_cryptokit
 <lib_test/test.{native,byte}>: pkg_dolog
@@ -114,6 +121,7 @@
 <lib_test/test.{native,byte}>: pkg_re.pcre
 <lib_test/test.{native,byte}>: pkg_sexplib.syntax
 <lib_test/test.{native,byte}>: pkg_uri
+<lib_test/test.{native,byte}>: pkg_uri.services
 <lib_test/test.{native,byte}>: pkg_zip
 <lib_test/test.{native,byte}>: use_git
 <lib_test/test.{native,byte}>: use_git-fs
@@ -122,6 +130,7 @@
 <lib_test/*.ml{,i}>: pkg_alcotest
 <lib_test/*.ml{,i}>: pkg_bin_prot.syntax
 <lib_test/*.ml{,i}>: pkg_comparelib.syntax
+<lib_test/*.ml{,i}>: pkg_conduit.lwt
 <lib_test/*.ml{,i}>: pkg_core_kernel
 <lib_test/*.ml{,i}>: pkg_cryptokit
 <lib_test/*.ml{,i}>: pkg_dolog
@@ -134,9 +143,11 @@
 <lib_test/*.ml{,i}>: pkg_re.pcre
 <lib_test/*.ml{,i}>: pkg_sexplib.syntax
 <lib_test/*.ml{,i}>: pkg_uri
+<lib_test/*.ml{,i}>: pkg_uri.services
 <lib_test/*.ml{,i}>: pkg_zip
 <lib_test/*.ml{,i}>: use_git
 <lib_test/*.ml{,i}>: use_git-fs
 <lib_test/*.ml{,i}>: use_git-memory
 <lib_test/*.ml{,i}>: use_git-unix
 # OASIS_STOP
+true: debug, bin_annot

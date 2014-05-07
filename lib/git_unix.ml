@@ -23,14 +23,21 @@ module M = struct
 
   type oc = Lwt_io.output_channel
 
-  let with_connection address port fn =
-    let port = match port with
+  let with_connection uri fn =
+    let port = match Uri_services.tcp_port_of_uri uri with
       | None   -> 9418
       | Some p -> p in
-    Lwt_unix.gethostbyname address >>= fun host ->
-    let inet_addr = host.Unix.h_addr_list.(0) in
-    let sockaddr = Unix.ADDR_INET (inet_addr, port) in
-    Lwt_io.with_connection sockaddr fn
+    let service = string_of_int port in
+    let mode = match Uri.scheme uri with
+      | Some "https" -> `SSL
+      | _            -> `TCP in
+    let host = match Uri.host uri with
+      | None   -> "localhost"
+      | Some x -> x in
+    Lwt_unix_conduit.connect ~mode ~host ~service () >>= fun (ic, oc) ->
+    Lwt.catch
+      (fun () -> fn (ic, oc))
+      (fun e  -> Lwt_unix_conduit.close ic oc; fail e)
 
   let read_all ic =
     let len = 1024 in

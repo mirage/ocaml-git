@@ -113,10 +113,15 @@ let arg_list name doc conv =
   let doc = Arg.info ~docv:name ~doc [] in
   Arg.(non_empty & pos_all conv [] & doc)
 
+let uri =
+  let parse str = `Ok (Uri.of_string str) in
+  let print ppf name = Format.pp_print_string ppf (Uri.to_string name) in
+  parse, print
+
 let remote =
   let doc = Arg.info ~docv:"REPOSITORY"
       ~doc:"Location of the remote repository." [] in
-  Arg.(required & pos 0 (some string) None & doc)
+  Arg.(required & pos 0 (some uri) None & doc)
 
 let directory =
   let doc = Arg.info ~docv:"DIRECTORY"
@@ -182,7 +187,7 @@ let ls_remote = {
       run begin
         S.create ()  >>= fun t ->
         Local.ls t remote >>= fun references ->
-        Printf.printf "From %s\n" remote;
+        Printf.printf "From %s\n" (Uri.to_string remote);
         let print ~key:ref ~data:sha1 =
           Printf.printf "%s        %s\n"
             (SHA1.Commit.to_hex sha1)
@@ -265,7 +270,8 @@ let clone = {
       let dir = match dir with
         | Some d -> d
         | None   ->
-          let dir = Filename.basename remote in
+          let str = Uri.to_string remote in
+          let dir = Filename.basename str in
           if Filename.check_suffix dir ".git" then
             Filename.chop_extension dir
           else

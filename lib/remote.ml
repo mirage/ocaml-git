@@ -46,7 +46,7 @@ type push_result = {
 module type IO = sig
   type ic
   type oc
-  val with_connection: string -> int option -> (ic * oc -> 'a Lwt.t) -> 'a Lwt.t
+  val with_connection: Uri.t -> (ic * oc -> 'a Lwt.t) -> 'a Lwt.t
   val read_all: ic -> string Lwt.t
   val read_exactly: ic -> int -> string Lwt.t
   val write: oc -> string -> unit Lwt.t
@@ -79,20 +79,27 @@ module Make (IO: IO) (Store: Store.S) = struct
 
     let input ic =
       Log.debugf "PacketLine.input";
+      IO.read_all ic >>= fun str ->
+      Log.debugf "RECEIVED: %s" str;
+      return_none
+(*
       IO.read_exactly ic 4 >>= fun size ->
       match size with
       | "0000" ->
         Log.debugf "RECEIVED: FLUSH";
         return_none
       | size   ->
-        let size = int_of_string ("0x" ^ size) - 4 in
+        let size =
+          let str = "0x" ^ size in
+          try int_of_string str - 4
+          with _ -> error "%s is not a valid integer" str in
         IO.read_exactly ic size >>= fun payload ->
         Log.debugf "RECEIVED: %S (%d)" payload size;
         if payload.[size - 1] = Misc.lf then
           return (Some (String.sub payload 0 (size-1)))
         else
           return (Some payload)
-
+*)
   end
 
   module Capability = struct
@@ -177,6 +184,7 @@ module Make (IO: IO) (Store: Store.S) = struct
   module Address = struct
 
     type t = {
+      uri : Uri.t;
       host: string option;
       port: int option;
       path: string;
@@ -185,16 +193,19 @@ module Make (IO: IO) (Store: Store.S) = struct
     let host t = t.host
     let port t = t.port
     let path t = t.path
+    let uri t = t.uri
 
-    let of_string str =
-      let uri = Uri.of_string str in
+    let of_uri uri =
       let host, port = match Uri.host uri with
         | None      -> None, None
         | Some host ->
           let port = Uri.port uri in
           Some host, port in
       let path = Uri.path uri in
-      { host; port; path }
+      { uri; host; port; path }
+
+    let of_string str =
+      of_uri (Uri.of_string str)
 
   end
 
@@ -244,12 +255,12 @@ module Make (IO: IO) (Store: Store.S) = struct
     let close oc =
       PacketLine.flush oc
 
-    let upload_pack str =
-      let address = Address.of_string str in
+    let upload_pack uri =
+      let address = Address.of_uri uri in
       { request = Upload_pack; address }
 
-    let receive_pack str =
-      let address = Address.of_string str in
+    let receive_pack uri =
+      let address = Address.of_uri uri in
       { request = Receive_pack; address }
 
   end
@@ -638,12 +649,12 @@ module Make (IO: IO) (Store: Store.S) = struct
 
   module Graph = Global_graph.Make(Store)
 
-  let push t ~branch address =
-    let r = Init.receive_pack address in
+  let push t ~branch uri =
+    let r = Init.receive_pack uri in
     match Init.host r with
     | None   -> todo "local-clone"
     | Some h ->
-      IO.with_connection h (Init.port r) (fun (ic, oc) ->
+      IO.with_connection uri (fun (ic, oc) ->
           Init.output oc r                 >>= fun () ->
           Listing.input ic                 >>= fun listing ->
           (* XXX: check listing.capabilities *)
@@ -672,12 +683,12 @@ module Make (IO: IO) (Store: Store.S) = struct
           Report_status.input ic
         )
 
-  let fetch_pack t address op =
-    let r = Init.upload_pack address in
+  let fetch_pack t uri op =
+    let r = Init.upload_pack uri in
     match Init.host r with
     | None   -> todo "local-clone"
     | Some h ->
-      IO.with_connection h (Init.port r) (fun (ic, oc) ->
+      IO.with_connection uri (fun (ic, oc) ->
           Init.output oc r >>= fun () ->
           Listing.input ic      >>= fun listing ->
           Log.debugf "listing:\n %s" (Listing.pretty listing);
@@ -767,8 +778,8 @@ module Make (IO: IO) (Store: Store.S) = struct
                 )
         )
 
-  let ls t address =
-    fetch_pack t address Ls >>= function
+  let ls t uri =
+    fetch_pack t uri Ls >>= function
       { references } -> return references
 
   let clone t ?(bare=false) ?deepen ?(unpack=false) address =
@@ -784,12 +795,10 @@ module Make (IO: IO) (Store: Store.S) = struct
 
 end
 
-type remote = string
-
 module type S = sig
   type t
-  val ls: t -> remote -> SHA1.Commit.t Reference.Map.t Lwt.t
-  val push: t -> branch:Reference.t -> remote -> push_result Lwt.t
-  val clone: t -> ?bare:bool -> ?deepen:int -> ?unpack:bool -> remote -> fetch_result Lwt.t
-  val fetch: t -> ?deepen:int -> ?unpack:bool -> remote -> fetch_result Lwt.t
+  val ls: t -> Uri.t -> SHA1.Commit.t Reference.Map.t Lwt.t
+  val push: t -> branch:Reference.t -> Uri.t -> push_result Lwt.t
+  val clone: t -> ?bare:bool -> ?deepen:int -> ?unpack:bool -> Uri.t -> fetch_result Lwt.t
+  val fetch: t -> ?deepen:int -> ?unpack:bool -> Uri.t -> fetch_result Lwt.t
 end
