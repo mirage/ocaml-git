@@ -41,4 +41,4 @@ let head_contents refs sha1 =
   | None   -> SHA1 sha1
   | Some r -> Ref r
 
-let master = "master"
+let master = "refs/heads/master"
