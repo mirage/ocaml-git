@@ -26,7 +26,7 @@ To build the project, simply run:
 ```
 $ opam install camlzip dolog core_kernel cryptokit uri \
                cmdliner lazy-trie mstruct re ocamlgraph lwt \
-               alcotest patience
+               alcotest patience conduit uri
 $ make
 ```
 
