@@ -611,7 +611,7 @@ module Make (IO: IO) (Store: Store.S) = struct
             match String.lsplit2 line ~on:Misc.sp with
             | Some ("ok", name)  -> return ((Reference.of_string name, Ok) :: acc)
             | Some ("ng", cont)  ->
-              begin match String.lsplit2 line ~on:Misc.sp with
+              begin match String.lsplit2 cont ~on:Misc.sp with
                 | None  -> fail (Failure "Report_status.input: command-fail")
                 | Some (name, err) -> return ((Reference.of_string name, Error err) :: acc)
               end
