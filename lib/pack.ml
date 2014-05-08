@@ -282,7 +282,7 @@ let unpack ~write buf =
 let pack contents =
   let uncompressed =
     List.map ~f:(fun (k, v) ->
-        let raw = Misc.with_bigbuffer (fun buf -> Value.add buf v) in
+        let raw = Misc.with_bigbuffer (fun buf -> Value.add_inflated buf v) in
         k, Packed_value.PIC.raw k raw
       ) contents in
   (* XXX: Patience_diff.be_clever *)
