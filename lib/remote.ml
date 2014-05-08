@@ -178,6 +178,9 @@ module Make (IO: IO) (Store: Store.S) = struct
     let to_string l =
       String.concat ~sep:" " (List.map ~f:Capability.to_string l)
 
+    let pretty l =
+      String.concat ~sep:", " (List.map ~f:Capability.to_string l)
+
     (* XXX really ? *)
     let default = []
 
@@ -539,6 +542,17 @@ module Make (IO: IO) (Store: Store.S) = struct
       | Delete of Reference.t * SHA1.Commit.t
       | Update of Reference.t * SHA1.Commit.t * SHA1.Commit.t
 
+    let pretty_command t =
+      let r = Reference.to_string in
+      let c = SHA1.Commit.to_hex in
+      match t with
+      | Create (name, new_id)         -> sprintf "create %s %s" (r name) (c new_id)
+      | Delete (name, old_id)         -> sprintf "delete %s %s" (r name) (c old_id)
+      | Update (name, old_id, new_id) -> sprintf "update %s %s %s" (r name) (c old_id) (c new_id)
+
+    let pretty_commands l =
+      String.concat ~sep:" & " (List.map ~f:pretty_command l)
+
     let output_command buf t =
       let old_id, new_id, name = match t with
         | Create (name, new_id) -> SHA1.Commit.zero, new_id, name
@@ -554,6 +568,12 @@ module Make (IO: IO) (Store: Store.S) = struct
       commands: command list;
       pack: Pack.t;
     }
+
+    let pretty t =
+      sprintf "UPDATE_REQUEST:\n%s\n%s\npack: %d"
+        (Capabilities.pretty t.capabilities)
+        (pretty_commands t.commands)
+        (List.length t.pack)
 
     let output oc t =
       let rec aux first = function
@@ -657,6 +677,7 @@ module Make (IO: IO) (Store: Store.S) = struct
             | Some x -> SHA1.Set.singleton (SHA1.of_commit x) in
           Graph.pack t ~min max >>= fun pack ->
           let request = { Update_request.capabilities; commands; pack } in
+          Log.debugf "request:\n%s" (Update_request.pretty request);
           Update_request.output oc request >>= fun () ->
           Report_status.input ic
         )
