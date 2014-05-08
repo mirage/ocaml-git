@@ -14,6 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+open Core_kernel.Std
 open Lwt
 open Git
 module Log = Log.Make(struct let section = "unix" end)
@@ -23,21 +24,45 @@ module M = struct
 
   type oc = Lwt_io.output_channel
 
-  let with_connection uri fn =
+  let write oc s =
+    Lwt_io.write oc s
+
+  let flush oc =
+    Lwt_io.flush oc
+
+  let with_connection uri ?init fn =
     let host = match Uri.host uri with
       | None   -> "localhost"
       | Some x -> x in
-    let mode = match Uri.scheme uri with
-      | Some "https"   -> `TCP (* XXX: otherwise fetch returns
-                                       Ssl.Connection_error *)
-      | Some "git+ssh" -> failwith "TODO" (* XXX: need SSH *)
-      |  _             -> `TCP in
-    let service = string_of_int 9418 in
-    Log.debugf "Connecting to %s" host;
-    Lwt_unix_conduit.connect ~mode ~host ~service () >>= fun (ic, oc) ->
-    Lwt.catch
-      (fun () -> fn (ic, oc))
-      (fun e  -> Lwt_unix_conduit.close ic oc; fail e)
+    match Uri.scheme uri with
+    | Some "git+ssh" ->
+      let user = match Uri.userinfo uri with
+        | None   -> ""
+        | Some u -> u ^ "@" in
+      let cmd = match init with
+        | None   -> [| "ssh"; user ^ host; |]
+        | Some x -> [| "ssh"; user ^ host; x |] in
+      Log.debugf "Executing %s" (String.concat ~sep:" " (Array.to_list cmd));
+      let env = Unix.environment () in
+      let p = Lwt_process.open_process_full ~env ("ssh", cmd) in
+      Lwt.finalize
+        (fun () -> fn (p#stdout, p#stdin))
+        (fun () -> let _ = p#close in return_unit)
+    | _ ->
+      (* XXX: make it work for smart-HTTP *)
+      (* XXX: make it work over SSL *)
+      let mode = `TCP in
+      let service = string_of_int 9418 in
+      Log.debugf "Connecting to %s [%s]" host service;
+      Lwt_unix_conduit.connect ~mode ~host ~service () >>= fun (ic, oc) ->
+      Lwt.finalize
+        (fun () ->
+           begin match init with
+             | None   -> return_unit
+             | Some s -> write oc s
+           end >>= fun () ->
+           fn (ic, oc))
+        (fun ()  -> Lwt_unix_conduit.close ic oc; return_unit)
 
   let read_all ic =
     let len = 1024 in
@@ -49,16 +74,10 @@ module M = struct
       | i -> Buffer.add_substring res buf 0 i; aux () in
     aux ()
 
-  let flush oc =
-    Lwt_io.flush oc
-
   let read_exactly ic n =
     let res = String.create n in
     Lwt_io.read_into_exactly ic res 0 n >>= fun () ->
     return res
-
-  let write oc s =
-    Lwt_io.write oc s
 
   let read_file file =
     let open Lwt in

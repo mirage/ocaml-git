@@ -45,10 +45,11 @@ module type IO = sig
   type oc
   (** Type for output channels. *)
 
-  val with_connection: Uri.t -> (ic * oc -> 'a Lwt.t) -> 'a Lwt.t
+  val with_connection: Uri.t -> ?init:string -> (ic * oc -> 'a Lwt.t) -> 'a Lwt.t
   (** Connect to a remote server, get the corresponding input and
       output channels and apply a function on them. Close the channel
-      once the function returns. *)
+      once the function returns. The [init] corresponds to an optional
+      first message sent on the connection to set-it up. *)
 
   val read_all: ic -> string Lwt.t
   (** Read all the channel contents (until the channel is closed by

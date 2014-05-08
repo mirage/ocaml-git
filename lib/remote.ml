@@ -57,7 +57,7 @@ let pretty_push_result t =
 module type IO = sig
   type ic
   type oc
-  val with_connection: Uri.t -> (ic * oc -> 'a Lwt.t) -> 'a Lwt.t
+  val with_connection: Uri.t -> ?init:string -> (ic * oc -> 'a Lwt.t) -> 'a Lwt.t
   val read_all: ic -> string Lwt.t
   val read_exactly: ic -> int -> string Lwt.t
   val write: oc -> string -> unit Lwt.t
@@ -82,8 +82,17 @@ module Make (IO: IO) (Store: Store.S) = struct
         IO.write oc l    >>= fun () ->
         IO.flush oc
 
+    let to_string = function
+      | None   -> "0000"
+      | Some l ->
+        let size = Printf.sprintf "%04x" (4 + String.length l) in
+        sprintf "%s%s" size l
+
     let output_line oc s =
       output oc (Some s)
+
+    let string_of_line s =
+      to_string (Some s)
 
     let flush oc =
       output oc None
@@ -209,7 +218,8 @@ module Make (IO: IO) (Store: Store.S) = struct
 
     let host t = Uri.host (Gri.to_uri t.gri)
 
-    let output oc t =
+    (* Initialisation sentence for the Git protocol *)
+    let git t =
       let uri = Gri.to_uri t.gri in
       let message =
         let buf = Buffer.create 1024 in
@@ -231,7 +241,17 @@ module Make (IO: IO) (Store: Store.S) = struct
             Buffer.add_char buf Misc.nul;
         end;
         Buffer.contents buf in
-      PacketLine.output_line oc message
+      PacketLine.string_of_line message
+
+    let ssh t =
+      sprintf "%s %s" (string_of_request t.request) (Uri.path (Gri.to_uri t.gri))
+
+    (* XXX: as we don't support the smart HTTP protocol (yet) we fall
+       back the default Git protocol. *)
+    let to_string t =
+      match Gri.mode t.gri with
+      | `HTTP | `Git -> git t
+      | `SSH         -> ssh t
 
     let close oc =
       PacketLine.flush oc
@@ -558,6 +578,7 @@ module Make (IO: IO) (Store: Store.S) = struct
         | Create (name, new_id) -> SHA1.Commit.zero, new_id, name
         | Delete (name, old_id) -> old_id, SHA1.Commit.zero, name
         | Update (name, old_id, new_id) -> old_id, new_id, name in
+      Log.debugf "XXX: zero=%s" (SHA1.Commit.(to_hex zero));
       Printf.bprintf buf "%s %s %s"
         (SHA1.Commit.to_hex old_id)
         (SHA1.Commit.to_hex new_id)
@@ -651,8 +672,8 @@ module Make (IO: IO) (Store: Store.S) = struct
     | None   -> todo "local-clone"
     | Some h ->
       let uri = Gri.to_uri gri in
-      IO.with_connection uri (fun (ic, oc) ->
-          Init.output oc r                 >>= fun () ->
+      let init = Init.to_string r in
+      IO.with_connection uri ~init (fun (ic, oc) ->
           Listing.input ic                 >>= fun listing ->
           (* XXX: check listing.capabilities *)
           Log.debugf "listing:\n %s" (Listing.pretty listing);
@@ -688,8 +709,8 @@ module Make (IO: IO) (Store: Store.S) = struct
     | None   -> todo "local-clone"
     | Some h ->
       let uri = Gri.to_uri gri in
-      IO.with_connection uri (fun (ic, oc) ->
-          Init.output oc r >>= fun () ->
+      let init = Init.to_string r in
+      IO.with_connection uri ~init (fun (ic, oc) ->
           Listing.input ic >>= fun listing ->
           Log.debugf "listing:\n %s" (Listing.pretty listing);
           let references =

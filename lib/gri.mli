@@ -37,3 +37,9 @@ val to_uri: t -> Uri.t
 
 val of_uri: Uri.t -> t
 (** Cast from [Uri.t]. *)
+
+type mode = [ `Git | `SSH | `HTTP ]
+(** The three transmission protocols. *)
+
+val mode: t -> mode
+(** Return the protocol mode. *)
