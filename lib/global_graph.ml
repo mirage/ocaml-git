@@ -56,7 +56,7 @@ module Dot = Graph.Graphviz.Dot(struct
     let edge_attributes (_,l,_) =
       match l with
       | "" -> []
-      | _  ->[`Label l]
+      | _  ->[`Label (String.escaped l)]
   end)
 
 module K = Graph.Imperative.Digraph.ConcreteBidirectional(SHA1)
