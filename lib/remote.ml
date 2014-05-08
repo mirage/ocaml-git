@@ -578,7 +578,6 @@ module Make (IO: IO) (Store: Store.S) = struct
         | Create (name, new_id) -> SHA1.Commit.zero, new_id, name
         | Delete (name, old_id) -> old_id, SHA1.Commit.zero, name
         | Update (name, old_id, new_id) -> old_id, new_id, name in
-      Log.debugf "XXX: zero=%s" (SHA1.Commit.(to_hex zero));
       Printf.bprintf buf "%s %s %s"
         (SHA1.Commit.to_hex old_id)
         (SHA1.Commit.to_hex new_id)
