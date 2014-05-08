@@ -71,8 +71,8 @@ module Make (Store: Store.S) = struct
     include Search
   end
 
-  let create_contents t =
-    Log.debugf "create_contents";
+  let of_contents t =
+    Log.debugf "of_contents";
     let g = C.create () in
     Store.contents t >>= fun nodes ->
     List.iter ~f:(C.add_vertex g) nodes;
@@ -93,8 +93,8 @@ module Make (Store: Store.S) = struct
     end >>= fun () ->
     return g
 
-  let create_key t =
-    Log.debugf "create_key";
+  let of_keys t =
+    Log.debugf "of_keys";
     let g = K.create () in
     Store.contents t >>= fun nodes ->
     List.iter ~f:(fun (k, _) -> K.add_vertex g k) nodes;
@@ -112,31 +112,54 @@ module Make (Store: Store.S) = struct
 
   let to_dot t file =
     Log.debugf "to_dot";
-    create_contents t >>= fun g ->
+    of_contents t >>= fun g ->
     Out_channel.with_file file ~f:(fun oc -> Dot.output_graph oc g);
     return_unit
 
-  (* XXX: can be optimized ... *)
-  let pack t ?(min=SHA1.Set.empty) max =
-    Log.debugf "pack";
-    create_key t >>= fun g ->
-    let g = KO.transitive_closure g in
-    let pack = ref [] in
-    K.iter_vertex (fun k ->
-        let succs = SHA1.Set.of_list (K.succ g k) in
-        if SHA1.Set.(equal (inter succs min) min) then
-          (* we are lesser than any min elements *)
-          ()
-        else if SHA1.Set.(is_empty (inter succs max)) then
-          (* we are bigger than any max elements *)
-          ()
-        else
-          pack := k :: !pack
-      ) g;
+  (* XXX: From IrminGraph.closure *)
+  let closure t ~min max =
+    Log.debugf "closure";
+    let g = K.create ~size:1024 () in
+    let marks = SHA1.Table.create () in
+    let mark key = Hashtbl.add_exn marks key true in
+    let has_mark key = Hashtbl.mem marks key in
+    let min = SHA1.Set.to_list min in
+    Lwt_list.iter_p (fun k ->
+        Store.mem t k >>= function
+        | false -> return_unit
+        | true  ->
+          mark k;
+          K.add_vertex g k;
+          return_unit
+      ) min >>= fun () ->
+    let rec add key =
+      if has_mark key then Lwt.return ()
+      else (
+        mark key;
+        Log.debugf "ADD %s" (SHA1.to_hex key);
+        Store.mem t key >>= function
+        | false -> return_unit
+        | true  ->
+          if not (K.mem_vertex g key) then K.add_vertex g key;
+          Search.succ t key >>= fun succs ->
+          let keys = List.map ~f:Search.sha1_of_succ succs in
+          List.iter ~f:(fun k -> K.add_edge g k key) keys;
+          Lwt_list.iter_p add keys
+      ) in
+    let max = SHA1.Set.to_list max in
+    Lwt_list.iter_p add max >>= fun () ->
+    Lwt.return g
+
+  let keys g =
+    K.fold_vertex (fun k set -> k :: set) g []
+
+  let pack t ~min max =
+    closure t ~min max >>= fun g ->
+    let keys = keys g in
     Lwt_list.map_p (fun k ->
         Store.read_exn t k >>= fun v -> return (k, v)
-      ) !pack
-    >>= fun pack ->
-    return (Pack.pack pack)
+      ) keys
+    >>= fun values ->
+    return (Pack.pack values)
 
 end
