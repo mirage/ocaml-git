@@ -31,8 +31,6 @@ module SHA1_String = struct
 
   include (String: Identifiable.S)
 
-  let zero = of_string (String.make 20 '0')
-
   (* XXX: add the bigstring in chunks using a tmp buffer (to alloc only
      once). *)
   let create str =
@@ -45,6 +43,9 @@ module SHA1_String = struct
 
   let of_hex h =
     of_string (Misc.hex_decode h)
+
+  let zero =
+    of_hex (String.make 40 '0')
 
   let sexp_of_t t =
     Sexplib.Sexp.Atom (to_hex t)
