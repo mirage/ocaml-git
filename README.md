@@ -58,16 +58,12 @@ $ make install
 
 ### What is *not* supported
 
-* Pushing is not supported -- although it should not be very hard to
-  support a dummy implementation, with no compression.
-
 * Only client-side operations are currently supported. Implementing
   the corresponding server-side implementation is high on the TODO
   list: using a dummy compression scheme, this should not be too hard
   to add, though.
 
 * Merging and rebasing strategies are not supported.
-
 
 ### Performance
 
