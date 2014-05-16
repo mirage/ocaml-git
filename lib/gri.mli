@@ -14,27 +14,32 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** Branch references. *)
+(** Git ressource identifiers (GRI). *)
 
-open Core_kernel.Std
+(** GRIs are similar to URIs, but Git also allows some blend of URL
+    and SSH remote files such as:
 
-include Identifiable.S
+      git@github.com:samoht/ocaml-git.git
 
-val head: t
-(** The repository HEAD. *)
+*)
 
-val master: t
-(** The master branch. *)
+type t
+(** Git ressource identifier values. *)
 
-val is_head: t -> bool
-(** Is the given reference the HEAD ? *)
+val of_string: string -> t
+(** Create a GRI from a string. *)
 
-type head_contents =
-  | SHA1 of SHA1.Commit.t
-  | Ref of t
-(** The possible HEAD contents. *)
+val to_string: t -> string
+(** Convert a string to a GRI. *)
 
-val head_contents: SHA1.Commit.t Map.t -> SHA1.Commit.t -> head_contents
-(** Compute the head contents. The result is either the hex
-    representation of the SHA1 or something like {i ref: <ref>} if the
-    SHA1 has already a reference pointing to it. *)
+val to_uri: t -> Uri.t
+(** Cast to [Uri.t]. *)
+
+val of_uri: Uri.t -> t
+(** Cast from [Uri.t]. *)
+
+type mode = [ `Git | `SSH | `HTTP ]
+(** The three transmission protocols. *)
+
+val mode: t -> mode
+(** Return the protocol mode. *)

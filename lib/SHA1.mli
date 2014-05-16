@@ -18,6 +18,7 @@ open Core_kernel.Std
 
 module type S = sig
 
+
   (** Signature for SHA1 values *)
 
   include Object.S
@@ -36,6 +37,9 @@ module type S = sig
 
   val add_hex: Bigbuffer.t -> t -> unit
   (** Add the hex-encoding of the SHA1 value to the buffer. *)
+
+  val zero: t
+  (** A SHA1 full of zero. Useful for padding. *)
 
 end
 

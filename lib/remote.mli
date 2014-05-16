@@ -16,12 +16,24 @@
 
 (** Clone/Fecth/Push protocol *)
 
-type result = {
+
+type fetch_result = {
   head      : SHA1.Commit.t option;
   references: SHA1.Commit.t Reference.Map.t;
   sha1s     : SHA1.t list;
 }
 (** The resulting sha1s and references. *)
+
+type ok_or_error = Ok | Error of string
+
+type push_result = {
+  result: ok_or_error;
+  commands: (Reference.t * ok_or_error) list;
+}
+(** The result of a push operation. *)
+
+val pretty_push_result: push_result -> string
+(** Pretty print the push status. *)
 
 module type IO = sig
 
@@ -33,10 +45,11 @@ module type IO = sig
   type oc
   (** Type for output channels. *)
 
-  val with_connection: string -> int option -> (ic * oc -> 'a Lwt.t) -> 'a Lwt.t
+  val with_connection: Uri.t -> ?init:string -> (ic * oc -> 'a Lwt.t) -> 'a Lwt.t
   (** Connect to a remote server, get the corresponding input and
       output channels and apply a function on them. Close the channel
-      once the function returns. *)
+      once the function returns. The [init] corresponds to an optional
+      first message sent on the connection to set-it up. *)
 
   val read_all: ic -> string Lwt.t
   (** Read all the channel contents (until the channel is closed by
@@ -60,14 +73,17 @@ module type S = sig
   type t
   (** Abstract value for stores. *)
 
-  val ls: t -> string -> SHA1.Commit.t Reference.Map.t Lwt.t
+  val ls: t -> Gri.t -> SHA1.Commit.t Reference.Map.t Lwt.t
   (** List the references of the remote repository. *)
 
-  val clone: t -> ?bare:bool -> ?deepen:int -> ?unpack:bool -> string -> result Lwt.t
+  val push: t -> branch:Reference.t -> Gri.t -> push_result Lwt.t
+  (** Push a local branch to a remote store. *)
+
+  val clone: t -> ?bare:bool -> ?deepen:int -> ?unpack:bool -> Gri.t -> fetch_result Lwt.t
   (** [clone t address] clones the contents of [address] into the
       store [t]. *)
 
-  val fetch: t -> ?deepen:int -> ?unpack:bool -> string -> result Lwt.t
+  val fetch: t -> ?deepen:int -> ?unpack:bool -> Gri.t -> fetch_result Lwt.t
   (** [fetch t address] fetches the missing contents of [address] into
       the store [t]. *)
 

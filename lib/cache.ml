@@ -111,7 +111,7 @@ let input_mode buf =
 
 let output_mode buf t =
   let n = match t with
-    | `Exec    -> 0o1000__000__111_101_101
+    | `Exec    -> 0b1000__000__111_101_101
     | `Normal  -> 0b1000__000__110_100_100
     | `Link    -> 0b1010__000__000_000_000
     | `Gitlink -> 0b1110__000__000_000_000 in

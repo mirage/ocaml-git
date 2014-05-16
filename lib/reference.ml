@@ -40,3 +40,5 @@ let head_contents refs sha1 =
   match Misc.map_rev_find refs sha1 with
   | None   -> SHA1 sha1
   | Some r -> Ref r
+
+let master = "refs/heads/master"

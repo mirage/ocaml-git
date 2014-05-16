@@ -69,8 +69,10 @@ module Make (Store: Store.S) = struct
 
   let find_exn t sha1 path =
     find t sha1 path >>= function
-    | None   -> fail Not_found
     | Some x -> return x
+    | None   ->
+      Log.debugf "find_exn: Not_found";
+      fail Not_found
 
   (* XXX: can do one less look-up *)
   let mem t sha1 path =

@@ -21,7 +21,7 @@ let to_string node =
   let hex = SHA1.to_hex node in
   String.sub hex 0 8
 
-module G =
+module C =
   Graph.Imperative.Digraph.ConcreteBidirectionalLabeled
     (struct
       type t = (SHA1.t * Value.t)
@@ -36,7 +36,7 @@ module G =
     end)
 
 module Dot = Graph.Graphviz.Dot(struct
-    include G
+    include C
     let graph_attributes _ = []
     let default_vertex_attributes _ = []
     let vertex_name (x,o) =
@@ -56,10 +56,13 @@ module Dot = Graph.Graphviz.Dot(struct
     let edge_attributes (_,l,_) =
       match l with
       | "" -> []
-      | _  ->[`Label l]
+      | _  ->[`Label (String.escaped l)]
   end)
 
-module Graph (Store: Store.S) = struct
+module K = Graph.Imperative.Digraph.ConcreteBidirectional(SHA1)
+module KO = Graph.Oper.I(K)
+
+module Make (Store: Store.S) = struct
 
   module Log = Log.Make(struct let section = "graph" end)
 
@@ -68,13 +71,11 @@ module Graph (Store: Store.S) = struct
     include Search
   end
 
-  let create_graph t =
-    let g = G.create () in
+  let of_contents t =
+    Log.debugf "of_contents";
+    let g = C.create () in
     Store.contents t >>= fun nodes ->
-
-    (* Add all the vertices *)
-    List.iter ~f:(G.add_vertex g) nodes;
-
+    List.iter ~f:(C.add_vertex g) nodes;
     begin
       Misc.list_iter_p (fun (id, _ as src) ->
           Search.succ t id >>= fun succs ->
@@ -85,18 +86,80 @@ module Graph (Store: Store.S) = struct
                 | `Tree (f,_) -> f in
               let sha1 = Search.sha1_of_succ s in
               Store.read_exn t sha1 >>= fun v ->
-              G.add_edge_e g (src, l, (sha1, v));
+              C.add_edge_e g (src, l, (sha1, v));
               return_unit
             ) succs
         ) nodes
     end >>= fun () ->
+    return g
 
-    (* Return the graph *)
+  let of_keys t =
+    Log.debugf "of_keys";
+    let g = K.create () in
+    Store.contents t >>= fun nodes ->
+    List.iter ~f:(fun (k, _) -> K.add_vertex g k) nodes;
+    begin
+      Misc.list_iter_p (fun (src, _) ->
+          Search.succ t src >>= fun succs ->
+          Misc.list_iter_p (fun s ->
+              let sha1 = Search.sha1_of_succ s in
+              if K.mem_vertex g sha1 then K.add_edge g src sha1;
+              return_unit
+            ) succs
+        ) nodes
+    end >>= fun () ->
     return g
 
   let to_dot t file =
-    create_graph t >>= fun g ->
+    Log.debugf "to_dot";
+    of_contents t >>= fun g ->
     Out_channel.with_file file ~f:(fun oc -> Dot.output_graph oc g);
     return_unit
+
+  (* XXX: From IrminGraph.closure *)
+  let closure t ~min max =
+    Log.debugf "closure";
+    let g = K.create ~size:1024 () in
+    let marks = SHA1.Table.create () in
+    let mark key = Hashtbl.add_exn marks key true in
+    let has_mark key = Hashtbl.mem marks key in
+    let min = SHA1.Set.to_list min in
+    Lwt_list.iter_p (fun k ->
+        Store.mem t k >>= function
+        | false -> return_unit
+        | true  ->
+          mark k;
+          K.add_vertex g k;
+          return_unit
+      ) min >>= fun () ->
+    let rec add key =
+      if has_mark key then Lwt.return ()
+      else (
+        mark key;
+        Log.debugf "ADD %s" (SHA1.to_hex key);
+        Store.mem t key >>= function
+        | false -> return_unit
+        | true  ->
+          if not (K.mem_vertex g key) then K.add_vertex g key;
+          Search.succ t key >>= fun succs ->
+          let keys = List.map ~f:Search.sha1_of_succ succs in
+          List.iter ~f:(fun k -> K.add_edge g k key) keys;
+          Lwt_list.iter_p add keys
+      ) in
+    let max = SHA1.Set.to_list max in
+    Lwt_list.iter_p add max >>= fun () ->
+    Lwt.return g
+
+  let keys g =
+    K.fold_vertex (fun k set -> k :: set) g []
+
+  let pack t ~min max =
+    closure t ~min max >>= fun g ->
+    let keys = keys g in
+    Lwt_list.map_p (fun k ->
+        Store.read_exn t k >>= fun v -> return (k, v)
+      ) keys
+    >>= fun values ->
+    return (Pack.pack values)
 
 end

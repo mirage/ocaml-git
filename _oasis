@@ -1,6 +1,6 @@
 OASISFormat: 0.4
 Name:        git
-Version:     1.0.2
+Version:     1.1.0
 Synopsis:    A low-level interface to Git in pure OCaml
 Authors:     Thomas Gazagnaire
 License:     ISC
@@ -16,14 +16,16 @@ Library git
   Path:              lib/
   Findlibname:       git
   Modules:           SHA1, Blob, Cache, Commit, Misc,
-                     Output, Pack, Pack_index, Packed_value,
+                     Global_graph, Pack, Pack_index, Packed_value,
                      Reference, Remote, Tag, Tree, User, Value,
-                     Object, Object_type, Store, Search
+                     Object, Object_type, Store, Search, Gri
   BuildDepends:      mstruct, dolog, core_kernel, ocamlgraph, lazy-trie,
-                     re.pcre, zip, cryptokit, uri, lwt,
-                     bin_prot.syntax, comparelib.syntax, sexplib.syntax
+                     re.pcre, zip, cryptokit, uri, lwt, patience,
+                     bin_prot.syntax, comparelib.syntax, sexplib.syntax,
+                     conduit.lwt, uri.services
   XMETARequires:     mstruct, dolog, core_kernel, ocamlgraph, lazy-trie,
-                     re.pcre, zip, cryptokit, uri, lwt
+                     re.pcre, zip, cryptokit, uri, lwt, patience,
+                     conduit.lwt, uri.services
 
 Library "git-memory"
   Path:              lib/

@@ -331,6 +331,18 @@ module Make (Store: Store.S) = struct
       in
       run x test
 
+  module Local = Git_unix.Remote(Store)
+
+  let test_remote x () =
+    let test () =
+      let gri = Gri.of_string "git://localhost/" in
+      create ()         >>= fun t ->
+      Local.fetch t gri >>= fun _ ->
+      Local.push t gri ~branch:Reference.master >>= fun _ ->
+      return_unit
+    in
+    run x test
+
 end
 
 let suite (speed, x) =
@@ -338,13 +350,14 @@ let suite (speed, x) =
   let module T = Make(S) in
   x.name,
   [
-    "Basic operations on blobs"       , speed, T.test_blobs    x;
-    "Basic operations on trees"       , speed, T.test_trees    x;
-    "Basic operations on commits"     , speed, T.test_commits  x;
-    "Basic operations on tags"        , speed, T.test_tags     x;
-    "Basic operations on references"  , speed, T.test_refs     x;
-    "Basic operations on index"       , speed, T.test_index    x;
-    "Basic operations on pack files"  , speed, T.test_packs    x;
+    "Operations on blobs"       , speed, T.test_blobs    x;
+    "Operations on trees"       , speed, T.test_trees    x;
+    "Operations on commits"     , speed, T.test_commits  x;
+    "Operations on tags"        , speed, T.test_tags     x;
+    "Operations on references"  , speed, T.test_refs     x;
+    "Operations on index"       , speed, T.test_index    x;
+    "Operations on pack files"  , speed, T.test_packs    x;
+    "Remote operations"         , `Slow, T.test_remote   x;
   ]
 
 let run name tl =

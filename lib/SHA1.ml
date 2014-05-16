@@ -24,6 +24,7 @@ module type S = sig
   val of_hex: string -> t
   val input_hex: Mstruct.t -> t
   val add_hex: Bigbuffer.t -> t -> unit
+  val zero: t
 end
 
 module SHA1_String = struct
@@ -42,6 +43,9 @@ module SHA1_String = struct
 
   let of_hex h =
     of_string (Misc.hex_decode h)
+
+  let zero =
+    of_hex (String.make 40 '0')
 
   let sexp_of_t t =
     Sexplib.Sexp.Atom (to_hex t)

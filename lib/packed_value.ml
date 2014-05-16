@@ -313,7 +313,7 @@ module Make (M: sig val version: int end) = struct
     let size = match t with
       | Raw_value str ->
         begin match String.index str Misc.nul with
-          | None   -> failwith "Packed_value.add"
+          | None   -> failwith (sprintf "Packed_value.add: %S" str)
           | Some i ->
             let s = String.subo ~pos:(i+1) str in
             with_deflated tmp_buffer (fun b -> Bigbuffer.add_string b s)
@@ -400,6 +400,8 @@ module PIC = struct
     let buf = unpack p in
     Value.input_inflated (Mstruct.of_string buf)
 
+  let raw sha1 raw =
+    { sha1; kind = Raw (Bigstring.to_string raw) }
 end
 
 let of_pic index ~pos t =

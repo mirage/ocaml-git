@@ -137,6 +137,7 @@ module Packed = struct
     )
 
   let read_index t sha1 =
+    Log.debugf "read_index %s" (SHA1.to_hex sha1);
     match Hashtbl.find indexes sha1 with
     | Some i -> return i
     | None   ->
@@ -259,7 +260,8 @@ let list t =
   Packed.list t >>= fun packs   ->
   Misc.list_map_p (fun p -> return (Packed.read_keys t p)) packs >>= fun keys ->
   let keys = SHA1.Set.(union (of_list objects) (union_list keys)) in
-  return (SHA1.Set.to_list keys)
+  let keys = SHA1.Set.to_list keys in
+  return keys
 
 let read t sha1 =
   Log.debugf "read %s" (SHA1.to_hex sha1);
@@ -271,8 +273,10 @@ let read = Memo.general read
 
 let read_exn t sha1 =
   read t sha1 >>= function
-  | None   -> fail Not_found
   | Some v -> return v
+  | None   ->
+    Log.debugf "read_exn: Cannot read %s" (SHA1.to_hex sha1);
+    fail Not_found
 
 let mem t sha1 =
   Loose.mem t sha1 >>= function
@@ -344,8 +348,10 @@ let read_head t =
 
 let read_reference_exn t ref =
   read_reference t ref >>= function
-  | None   -> fail Not_found
   | Some s -> return s
+  | None   ->
+    Log.debugf "read_reference_exn: Cannot read %s" (Reference.to_string ref);
+    fail Not_found
 
 let write t value =
   Loose.write t value >>= fun sha1 ->

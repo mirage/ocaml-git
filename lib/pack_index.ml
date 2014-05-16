@@ -88,7 +88,7 @@ let input_keys buf n =
 let keys buf =
   Log.debugf "keys";
   input_header buf;
-  Mstruct.shift buf 255;
+  Mstruct.shift buf (255 * 4);
   let n = Mstruct.get_be_uint32 buf in
   SHA1.Set.of_array (input_keys buf (Int32.to_int_exn n))
 
