@@ -1,9 +1,9 @@
 # OASIS_START
-# DO NOT EDIT (digest: 9d918e4d0c48f195cd2e385b6f71048c)
+# DO NOT EDIT (digest: 49f2973975c674e380ad7df5d9fe6c68)
 version = "1.1.0"
 description = "A low-level interface to Git in pure OCaml"
 requires =
-"mstruct dolog core_kernel ocamlgraph lazy-trie re.pcre zip cryptokit uri lwt patience conduit.lwt uri.services"
+"mstruct dolog core_kernel ocamlgraph lazy-trie re.pcre zip cryptokit uri lwt conduit.lwt uri.services"
 archive(byte) = "git.cma"
 archive(byte, plugin) = "git.cma"
 archive(native) = "git.cmxa"
