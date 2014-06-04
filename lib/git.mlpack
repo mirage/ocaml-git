@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 2567d9780f665aae6e59b590916414c6)
+# DO NOT EDIT (digest: ece38bc705359029ab7d90b3e4c5dab4)
 SHA1
 Blob
 Cache
@@ -20,4 +20,6 @@ Object_type
 Store
 Search
 Gri
+Memory
+FS
 # OASIS_STOP

@@ -16,8 +16,28 @@
 
 open Core_kernel.Std
 open Lwt
-open Git
 open Misc.OP
+
+module type DISK = sig
+  val realpath: string -> string
+  val mkdir: string -> unit Lwt.t
+  val directories: string -> string list Lwt.t
+  val files: string -> string list Lwt.t
+  val rec_files: string -> string list Lwt.t
+  val read_file: string -> Bigstring.t
+  val write_file_string: string -> contents:string -> unit Lwt.t
+  val write_file: string -> Bigstring.t -> unit Lwt.t
+  val writev_file: string -> Bigstring.t list -> unit Lwt.t
+end
+
+module type S = sig
+  include Store.S
+  val create_file: string -> Tree.perm -> Blob.t -> unit Lwt.t
+  val entry_of_file: ?root:string ->
+    string -> Tree.perm -> Blob.t -> Cache.entry option Lwt.t
+end
+
+module Make (D: DISK) = struct
 
 type t = string
 
@@ -27,8 +47,8 @@ let create ?root () =
   match root with
   | None   -> return (Sys.getcwd ())
   | Some r ->
-    Git_unix.mkdir r >>= fun () ->
-    return (Git_unix.realpath r)
+    D.mkdir r >>= fun () ->
+    return (D.realpath r)
 
 let clear t =
   Log.infof "clear %s" t;
@@ -54,7 +74,7 @@ module Loose = struct
     Log.debugf "read %s" (SHA1.to_hex sha1);
     let file = file t sha1 in
     if Sys.file_exists file then (
-      let buf = Git_unix.read_file file in
+      let buf = D.read_file file in
       try
         let value = Value.input (Mstruct.of_bigarray buf) in
         return (Some value)
@@ -72,19 +92,19 @@ module Loose = struct
       return sha1
     else (
       let deflated = Misc.deflate_bigstring (Bigstring.of_string inflated) in
-      Git_unix.write_file file deflated >>= fun () ->
+      D.write_file file deflated >>= fun () ->
       return sha1
     )
 
   let list root =
     Log.debugf "Loose.list %s" root;
     let objects = root / ".git" / "objects" in
-    Git_unix.directories objects >>= fun objects ->
+    D.directories objects >>= fun objects ->
     let objects = List.map ~f:Filename.basename objects in
     let objects = List.filter ~f:(fun s -> (s <> "info") && (s <> "pack")) objects in
     Lwt_list.map_s (fun prefix ->
         let dir = root / ".git" / "objects" / prefix in
-        Git_unix.files dir >>= fun suffixes ->
+        D.files dir >>= fun suffixes ->
         let suffixes = List.map ~f:Filename.basename suffixes in
         let objects = List.map ~f:(fun suffix ->
             SHA1.of_hex (prefix ^ suffix)
@@ -108,7 +128,7 @@ module Packed = struct
   let list root =
     Log.debugf "list %s" root;
     let packs = root / ".git" / "objects" / "pack" in
-    Git_unix.files packs >>= fun packs ->
+    D.files packs >>= fun packs ->
     let packs = List.map ~f:Filename.basename packs in
     let packs = List.filter ~f:(fun f -> Filename.check_suffix f ".idx") packs in
     let packs = List.map ~f:(fun f ->
@@ -133,7 +153,7 @@ module Packed = struct
     else (
       let buf = Bigbuffer.create 1024 in
       Pack_index.add buf idx;
-      Git_unix.write_file file (Misc.buffer_contents buf)
+      D.write_file file (Misc.buffer_contents buf)
     )
 
   let read_index t sha1 =
@@ -143,7 +163,7 @@ module Packed = struct
     | None   ->
       let file = index t sha1 in
       if Sys.file_exists file then
-        let buf = Git_unix.read_file file in
+        let buf = D.read_file file in
         let buf = Mstruct.of_bigarray buf in
         let index = Pack_index.input buf in
         Hashtbl.add_exn indexes ~key:sha1 ~data:index;
@@ -165,7 +185,7 @@ module Packed = struct
         | None   ->
           let file = index t sha1 in
           if Sys.file_exists file then
-            let buf = Git_unix.read_file file in
+            let buf = D.read_file file in
             Pack_index.keys (Mstruct.of_bigarray buf)
           else
             failwith "Git_fs.Packed.read_keys"
@@ -181,7 +201,7 @@ module Packed = struct
     | None      ->
       let file = file t sha1 in
       if Sys.file_exists file then (
-        let buf = Git_unix.read_file file in
+        let buf = D.read_file file in
         read_index t sha1 >>= fun index ->
         let pack = Pack.Raw.input (Mstruct.of_bigarray buf) ~index:(Some index) in
         let pack = Pack.to_pic pack in
@@ -202,7 +222,7 @@ module Packed = struct
       return_unit
     else (
       let pack = Misc.with_bigbuffer (fun buf -> Pack.Raw.add buf pack) in
-      Git_unix.write_file file pack
+      D.write_file file pack
     )
 
   let mem_in_pack t pack_sha1 sha1 =
@@ -301,7 +321,7 @@ let dump t =
 
 let references t =
   let refs = t / ".git" / "refs" in
-  Git_unix.rec_files refs >>= fun files ->
+  D.rec_files refs >>= fun files ->
   let n = String.length (t / ".git" / "") in
   let refs = List.map ~f:(fun file ->
       let ref = String.sub file n (String.length file - n) in
@@ -369,14 +389,14 @@ let write_pack t pack =
 let write_reference t ref sha1 =
   let file = t / ".git" / Reference.to_string ref in
   let contents = SHA1.Commit.to_hex sha1 in
-  Git_unix.write_file_string file ~contents
+  D.write_file_string file ~contents
 
 let write_head t = function
   | Reference.SHA1 sha1 -> write_reference t Reference.head sha1
   | Reference.Ref ref   ->
     let file = t / ".git" / "HEAD" in
     let contents = sprintf "ref: %s" (Reference.to_string ref) in
-    Git_unix.write_file_string file ~contents
+    D.write_file_string file ~contents
 
 (* XXX: do not load the blobs *)
 let load_filesystem t commit =
@@ -414,7 +434,7 @@ let create_file file mode blob =
   match mode with
   | `Link -> (* Lwt_unix.symlink file ??? *) failwith "TODO"
   | _     ->
-    Git_unix.write_file_string file ~contents:blob >>= fun () ->
+    D.write_file_string file ~contents:blob >>= fun () ->
     match mode with
     | `Exec -> Lwt_unix.chmod file 0o755
     | _     -> return_unit
@@ -423,7 +443,7 @@ let cache_file t =
   t / ".git" / "index"
 
 let read_cache t =
-  let buf = Git_unix.read_file (cache_file t) in
+  let buf = D.read_file (cache_file t) in
   let buf = Mstruct.of_bigarray buf in
   return (Cache.input buf)
 
@@ -453,8 +473,8 @@ let entry_of_file ?root file mode blob =
   end >>= fun () ->
   let root = match root with
     | None   -> Sys.getcwd ()
-    | Some r -> Git_unix.realpath r in
-  let file = Git_unix.realpath file in
+    | Some r -> D.realpath r in
+  let file = D.realpath file in
   try
     let id = Value.sha1 (Value.Blob blob) in
     let stats = stat_info_of_file file in
@@ -481,6 +501,8 @@ let write_cache t head =
   let cache = { Cache.entries = !entries; extensions = [] } in
   let buf = Bigbuffer.create 1024 in
   Cache.add buf cache;
-  Git_unix.write_file (cache_file t) (Misc.buffer_contents buf) >>= fun () ->
+  D.write_file (cache_file t) (Misc.buffer_contents buf) >>= fun () ->
   printf "\rChecking out files: 100%% (%d/%d), done.%!\n" !all !all;
   return_unit
+
+end

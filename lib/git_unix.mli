@@ -17,40 +17,12 @@
 (** Lwt_unix IO module. *)
 
 open Core_kernel.Std
-open Git
 
-val realpath: string -> string
-(** Very dumb real-path. Only works for existing directories. *)
-
-val mkdir: string -> unit Lwt.t
-(** Create a directory (and the parent dirs if needed). *)
-
-val directories: string -> string list Lwt.t
-(** List the subdirs. *)
-
-val files: string -> string list Lwt.t
-(** List the subfiles. *)
-
-val rec_files: string -> string list Lwt.t
-(** List of the subfiles, recursively. *)
-
-val read_file: string -> Bigstring.t
-(** mmap a file and return a mutable C-like structure with its
-    contents. *)
-
-val write_file_string: string -> contents:string -> unit Lwt.t
-(** Write a bigarray to a file. *)
-
-val write_file: string -> Bigstring.t -> unit Lwt.t
-(** Write a bigarray to a file. *)
-
-val writev_file: string -> Bigstring.t list -> unit Lwt.t
-(** Write a list of bigarrays to a file. *)
-
-include Remote.IO
-  with type ic = Lwt_io.input_channel
-   and type oc = Lwt_io.output_channel
-
-module Remote: functor (S: Store.S) -> Remote.S with type t = S.t
+module Remote: functor (S: Git.Store.S) -> Git.Remote.S with type t = S.t
 (** Implementation of the Git protocol using [Lwt_unix] and [Lwt_io]
     IO functions. *)
+
+(** Filesystem. *)
+
+module FS: Git.FS.S
+(** Implementation of the on-disk Git protocol. *)

@@ -14,16 +14,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** Store Git objects on the local filesystem. *)
+(** Store Git objects in memory. *)
 
-open Git
 include Store.S
-
-val create_file: string -> Tree.perm -> Blob.t -> unit Lwt.t
-(** Create a file on the filesystem, with the given mode. *)
-
-val entry_of_file: ?root:string ->
-  string -> Tree.perm -> Blob.t -> Cache.entry option Lwt.t
-(** Generate a cache entry for the file. Create a fresh file if it
-    does not already exist. If [root] is not set, use the current
-    working directory as repository root. *)

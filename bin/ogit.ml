@@ -141,8 +141,8 @@ let branch =
 let backend =
   let memory = mk_flag ["m";"in-memory"] "Use an in-memory store." in
   let create = function
-    | true  -> (module Git_memory: Store.S)
-    | false -> (module Git_fs    : Store.S)
+    | true  -> (module Git.Memory : Store.S)
+    | false -> (module Git_unix.FS: Store.S)
   in
   Term.(pure create $ memory)
 
@@ -168,8 +168,8 @@ let cat = {
       Arg.(required & pos 0 (some string) None & doc) in
     let cat_file file =
       run begin
-        let buf = Git_unix.read_file file in
-        let v = Value.input (Mstruct.of_bigarray buf) in
+        let buf = In_channel.read_all file in
+        let v = Value.input (Mstruct.of_string buf) in
         Printf.printf "%s%!" (Value.pretty v);
         return_unit
       end in

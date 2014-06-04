@@ -1,6 +1,6 @@
 OASISFormat: 0.4
 Name:        git
-Version:     1.1.0
+Version:     1.2.0
 Synopsis:    A low-level interface to Git in pure OCaml
 Authors:     Thomas Gazagnaire
 License:     ISC
@@ -18,7 +18,8 @@ Library git
   Modules:           SHA1, Blob, Cache, Commit, Misc,
                      Global_graph, Pack, Pack_index, Packed_value,
                      Reference, Remote, Tag, Tree, User, Value,
-                     Object, Object_type, Store, Search, Gri
+                     Object, Object_type, Store, Search, Gri,
+                     Memory, FS
   BuildDepends:      mstruct, dolog, core_kernel, ocamlgraph, lazy-trie,
                      re.pcre, zip, cryptokit, uri, lwt,
                      bin_prot.syntax, comparelib.syntax, sexplib.syntax,
@@ -26,13 +27,6 @@ Library git
   XMETARequires:     mstruct, dolog, core_kernel, ocamlgraph, lazy-trie,
                      re.pcre, zip, cryptokit, uri, lwt,
                      conduit.lwt, uri.services
-
-Library "git-memory"
-  Path:              lib/
-  FindlibParent:     git
-  Findlibname:       memory
-  Modules:           Git_memory
-  BuildDepends:      git
 
 Library "git-unix"
   Build$:           flag(unix)
@@ -42,21 +36,13 @@ Library "git-unix"
   Modules:           Git_unix
   BuildDepends:      git, lwt.unix
 
-Library "git-fs"
-  Build$:           flag(unix)
-  Path:             lib/
-  FindlibParent:    git
-  Findlibname:      fs
-  Modules:          Git_fs
-  BuildDepends:     git, git.unix
-
 Executable ogit
   Build$:           flag(unix)
   Path:             bin/
   MainIs:           ogit.ml
   CompiledObject:   best
   Install:          true
-  BuildDepends:     cmdliner, git, git.unix, git.memory, git.fs
+  BuildDepends:     cmdliner, git, git.unix
 
 Executable test_git
   Build$:           flag(tests) && flag(unix)
@@ -64,7 +50,7 @@ Executable test_git
   MainIs:           test.ml
   CompiledObject:   best
   Install:          false
-  BuildDepends:     alcotest, git, git.memory, git.fs
+  BuildDepends:     alcotest, git, git.unix
 
 Test test_git
   Run$:             flag(tests)
