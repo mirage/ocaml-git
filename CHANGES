@@ -1,3 +1,9 @@
+1.2.0:
+* Minor API refactoring to abstract the unix layer more easily
+* Expose a filesystem functor to create filesystem backends
+  independent of unix
+* Simplify the ocamlfind packages: there's only git and git.unix
+
 1.1.0:
 * Support for push (not optimized at all)
 * Fix the generation of `.dot` file representing the Git repo
