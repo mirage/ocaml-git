@@ -18,6 +18,23 @@
 
 open Core_kernel.Std
 
+module type S = sig
+
+  include Store.S
+
+  val create_file: string -> Tree.perm -> Blob.t -> unit Lwt.t
+  (** Create a file on the filesystem, with the given mode. *)
+
+  val entry_of_file: ?root:string ->
+    string -> Tree.perm -> Blob.t -> Cache.entry option Lwt.t
+  (** Generate a cache entry for the file. Create a fresh file if it
+      does not already exist. If [root] is not set, use the current
+      working directory as repository root. *)
+
+end
+
+(** {2 Constructor} *)
+
 module type DISK = sig
 
   val realpath: string -> string
@@ -47,21 +64,6 @@ module type DISK = sig
 
   val writev_file: string -> Bigstring.t list -> unit Lwt.t
   (** Write a list of bigarrays to a file. *)
-
-end
-
-module type S = sig
-
-  include Store.S
-
-  val create_file: string -> Tree.perm -> Blob.t -> unit Lwt.t
-  (** Create a file on the filesystem, with the given mode. *)
-
-  val entry_of_file: ?root:string ->
-    string -> Tree.perm -> Blob.t -> Cache.entry option Lwt.t
-  (** Generate a cache entry for the file. Create a fresh file if it
-      does not already exist. If [root] is not set, use the current
-      working directory as repository root. *)
 
 end
 
