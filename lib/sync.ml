@@ -18,18 +18,31 @@ open Core_kernel.Std
 open Lwt
 module Log = Log.Make(struct let section = "remote" end)
 
-type fetch_result = {
-  head      : SHA1.Commit.t option;
-  references: SHA1.Commit.t Reference.Map.t;
-  sha1s     : SHA1.t list;
-}
+module Result = struct
 
-type ok_or_error = Ok | Error of string
+  type fetch = {
+    head      : SHA1.Commit.t option;
+    references: SHA1.Commit.t Reference.Map.t;
+    sha1s     : SHA1.t list;
+  }
 
-type push_result = {
-  result: ok_or_error;
-  commands: (Reference.t * ok_or_error) list;
-}
+  type ok_or_error = [ `Ok | `Error of string ]
+
+  type push = {
+    result: ok_or_error;
+    commands: (Reference.t * ok_or_error) list;
+  }
+
+  let pretty_push t =
+    let buf = Buffer.create 1024 in
+    let aux (ref, result) = match result with
+      | `Ok      -> Printf.bprintf buf "* %s\n" (Reference.to_string ref)
+      | `Error e -> Printf.bprintf buf "! %s: %s\n" (Reference.to_string ref) e
+    in
+    List.iter ~f:aux t.commands;
+    Buffer.contents buf
+
+end
 
 module type IO = sig
   type ic
@@ -56,28 +69,6 @@ module Make (IO: IO) (Store: Store.S) = struct
         Printf.eprintf "%s\n%!" msg;
         fail Error
       ) fmt
-
-  type nonrec fetch_result = fetch_result = {
-    head      : SHA1.Commit.t option;
-    references: SHA1.Commit.t Reference.Map.t;
-    sha1s     : SHA1.t list;
-  }
-
-  type nonrec ok_or_error = ok_or_error = Ok | Error of string
-
-  type nonrec push_result = push_result = {
-    result: ok_or_error;
-    commands: (Reference.t * ok_or_error) list;
-  }
-
-  let pretty_push_result t =
-    let buf = Buffer.create 1024 in
-    let aux (ref, result) = match result with
-      | Ok      -> Printf.bprintf buf "* %s\n" (Reference.to_string ref)
-      | Error e -> Printf.bprintf buf "! %s: %s\n" (Reference.to_string ref) e
-    in
-    List.iter ~f:aux t.commands;
-    Buffer.contents buf
 
   module PacketLine = struct
 
@@ -633,8 +624,8 @@ module Make (IO: IO) (Store: Store.S) = struct
       | None -> fail (Failure "Report_status.input: empty")
       | Some line ->
         begin match String.lsplit2 line ~on:Misc.sp with
-          | Some ("unpack", "ok") -> return Ok
-          | Some ("unpack", err ) -> return (Error err)
+          | Some ("unpack", "ok") -> return `Ok
+          | Some ("unpack", err ) -> return (`Error err)
           | _ -> fail (Failure "Report_status.input: unpack-status")
         end >>= fun result ->
         let aux acc =
@@ -642,16 +633,16 @@ module Make (IO: IO) (Store: Store.S) = struct
           | None      -> return acc
           | Some line ->
             match String.lsplit2 line ~on:Misc.sp with
-            | Some ("ok", name)  -> return ((Reference.of_string name, Ok) :: acc)
+            | Some ("ok", name)  -> return ((Reference.of_string name, `Ok) :: acc)
             | Some ("ng", cont)  ->
               begin match String.lsplit2 cont ~on:Misc.sp with
                 | None  -> fail (Failure "Report_status.input: command-fail")
-                | Some (name, err) -> return ((Reference.of_string name, Error err) :: acc)
+                | Some (name, err) -> return ((Reference.of_string name, `Error err) :: acc)
               end
             | _ -> fail (Failure "Report_status.input: command-status")
         in
         aux [] >>= fun commands ->
-        return { result; commands }
+        return { Result.result; commands }
 
   end
 
@@ -735,7 +726,7 @@ module Make (IO: IO) (Store: Store.S) = struct
               (Map.to_alist (Listing.references listing)) in
           let head = Listing.head listing in
           match op with
-          | Ls      -> return { head; references; sha1s = [] }
+          | Ls      -> return { Result.head; references; sha1s = [] }
           | Fetch _
           | Clone _ ->
             begin match Map.find references Reference.head with
@@ -751,7 +742,7 @@ module Make (IO: IO) (Store: Store.S) = struct
             match head with
             | None      ->
               Init.close oc >>= fun () ->
-              return { head; references; sha1s = [] }
+              return { Result.head; references; sha1s = [] }
             | Some head ->
               Log.debugf "PHASE1";
               let deepen = match op with
@@ -794,7 +785,7 @@ module Make (IO: IO) (Store: Store.S) = struct
               | []    ->
                 Log.debugf "NO NEW OBJECTS";
                 Printf.printf "Already up-to-date.\n%!";
-                return { head = Some head; references; sha1s = [] }
+                return { Result.head = Some head; references; sha1s = [] }
               | sha1s ->
                 Log.debugf "NEW OBJECTS";
                 printf "remote: Counting objects: %d, done.\n%!"
@@ -804,16 +795,16 @@ module Make (IO: IO) (Store: Store.S) = struct
                   | _              -> true in
                 if not bare then (
                   Log.debugf "EXPANDING THE FILESYSTEM";
-                  return { head = Some head; references; sha1s }
+                  return { Result.head = Some head; references; sha1s }
                 ) else (
                   Log.debugf "BARE REPOSITORY";
-                  return { head = None; references; sha1s }
+                  return { Result.head = None; references; sha1s }
                 )
         )
 
   let ls t gri =
     fetch_pack t gri Ls >>= function
-      { references } -> return references
+      { Result.references } -> return references
 
   let clone t ?(bare=false) ?deepen ?(unpack=false) gri =
     fetch_pack t gri (Clone { bare; deepen; unpack })
@@ -829,20 +820,9 @@ module Make (IO: IO) (Store: Store.S) = struct
 end
 
 module type S = sig
-  type nonrec fetch_result = fetch_result = {
-    head      : SHA1.Commit.t option;
-    references: SHA1.Commit.t Reference.Map.t;
-    sha1s     : SHA1.t list;
-  }
-  type nonrec ok_or_error = ok_or_error = Ok | Error of string
-  type nonrec push_result = push_result = {
-    result: ok_or_error;
-    commands: (Reference.t * ok_or_error) list;
-  }
-  val pretty_push_result: push_result -> string
   type t
   val ls: t -> Gri.t -> SHA1.Commit.t Reference.Map.t Lwt.t
-  val push: t -> branch:Reference.t -> Gri.t -> push_result Lwt.t
-  val clone: t -> ?bare:bool -> ?deepen:int -> ?unpack:bool -> Gri.t -> fetch_result Lwt.t
-  val fetch: t -> ?deepen:int -> ?unpack:bool -> Gri.t -> fetch_result Lwt.t
+  val push: t -> branch:Reference.t -> Gri.t -> Result.push Lwt.t
+  val clone: t -> ?bare:bool -> ?deepen:int -> ?unpack:bool -> Gri.t -> Result.fetch Lwt.t
+  val fetch: t -> ?deepen:int -> ?unpack:bool -> Gri.t -> Result.fetch Lwt.t
 end

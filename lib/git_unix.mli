@@ -17,13 +17,19 @@
 (** Lwt_unix IO module. *)
 
 open Core_kernel.Std
+open Git
 
-module Remote (S: Git.Store.S): Git.Remote.S with type t = S.t
+(** {2 Synchronisation primitives} *)
 
+module Sync: sig
+  module Result: (module type of Sync.Result with type fetch = Sync.Result.fetch
+                                              and type push  = Sync.Result.push)
+  module Make (S: Store.S): Sync.S with type t = S.t
 (** Implementation of the Git protocol using [Lwt_unix] and [Lwt_io]
     IO functions. *)
+end
 
 (** Filesystem. *)
 
-module FS: Git.FS.S
+module FS: FS.S
 (** Implementation of the on-disk Git protocol. *)

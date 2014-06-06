@@ -184,10 +184,10 @@ let ls_remote = {
   man  = [];
   term =
     let ls (module S: Store.S) remote =
-      let module Local = Git_unix.Remote(S) in
+      let module Sync = Sync.Make(S) in
       run begin
         S.create ()  >>= fun t ->
-        Local.ls t remote >>= fun references ->
+        Sync.ls t remote >>= fun references ->
         Printf.printf "From %s\n" (Gri.to_string remote);
         let print ~key:ref ~data:sha1 =
           Printf.printf "%s        %s\n"
@@ -283,12 +283,13 @@ let clone = {
           dir;
         exit 128
       );
-      let module Local = Git_unix.Remote(S) in
+      let module Result = Sync.Result in
+      let module Sync = Sync.Make(S) in
       run begin
         S.create ~root:dir ()   >>= fun t ->
         printf "Cloning into '%s' ...\n%!" (Filename.basename (S.root t));
-        Local.clone t ?deepen ~unpack ~bare remote >>= fun r ->
-        match r.Local.head with
+        Sync.clone t ?deepen ~unpack ~bare remote >>= fun r ->
+        match r.Result.head with
         | None      -> return_unit
         | Some head ->
           S.write_cache t head >>= fun () ->
@@ -305,10 +306,10 @@ let fetch = {
   man  = [];
   term =
     let fetch (module S: Store.S) unpack remote =
-      let module Local = Git_unix.Remote(S) in
+      let module Sync = Sync.Make(S) in
       run begin
         S.create ()                  >>= fun t ->
-        Local.fetch t ~unpack remote >>= fun _ ->
+        Sync.fetch t ~unpack remote >>= fun _ ->
         return_unit
       end in
     Term.(mk fetch $ backend $ unpack $ remote)
@@ -322,7 +323,8 @@ let push = {
   man  = [];
   term =
     let push (module S: Store.S) remote branch =
-      let module Local = Git_unix.Remote(S) in
+      let module Result = Sync.Result in
+      let module Sync = Sync.Make(S) in
       run begin
         S.create ()                 >>= fun t ->
         S.read_reference t branch   >>= fun b ->
@@ -330,8 +332,8 @@ let push = {
           | None   -> Reference.of_string
                         ("refs/heads/" ^ Reference.to_string branch)
           | Some _ -> branch in
-        Local.push t ~branch remote >>= fun s ->
-        printf "%s\n" (Local.pretty_push_result s);
+        Sync.push t ~branch remote >>= fun s ->
+        printf "%s\n" (Result.pretty_push s);
         return_unit
       end in
     Term.(mk push $ backend $ remote $ branch)

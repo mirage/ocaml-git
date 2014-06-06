@@ -185,6 +185,9 @@ module D = struct
 
 end
 
-module Remote = Remote.Make(M)
+module Sync = struct
+  module Result = Sync.Result
+  module Make = Sync.Make(M)
+end
 
 module FS = Git.FS.Make(D)
