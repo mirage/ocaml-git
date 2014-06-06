@@ -81,8 +81,6 @@ module M = struct
 
 end
 
-module Remote = Remote.Make(M)
-
 module D = struct
 
   let mkdir dirname =
@@ -186,5 +184,7 @@ module D = struct
         (Filename.basename file)
 
 end
+
+module Remote = Remote.Make(M)
 
 module FS = Git.FS.Make(D)

@@ -18,7 +18,8 @@
 
 open Core_kernel.Std
 
-module Remote: functor (S: Git.Store.S) -> Git.Remote.S with type t = S.t
+module Remote (S: Git.Store.S): Git.Remote.S with type t = S.t
+
 (** Implementation of the Git protocol using [Lwt_unix] and [Lwt_io]
     IO functions. *)
 

@@ -31,12 +31,26 @@ type push_result = {
 }
 (** The result of a push operation. *)
 
-val pretty_push_result: push_result -> string
-(** Pretty print the push status. *)
-
 module type S = sig
 
   (** Remote operation, abstracted over the bakend type. *)
+  type nonrec fetch_result = fetch_result = {
+    head      : SHA1.Commit.t option;
+    references: SHA1.Commit.t Reference.Map.t;
+    sha1s     : SHA1.t list;
+  }
+  (** The resulting sha1s and references. *)
+
+  type nonrec ok_or_error = ok_or_error = Ok | Error of string
+
+  type nonrec push_result = push_result = {
+    result: ok_or_error;
+    commands: (Reference.t * ok_or_error) list;
+  }
+  (** The result of a push operation. *)
+
+  val pretty_push_result: push_result -> string
+  (** Pretty print the push status. *)
 
   type t
   (** Abstract value for stores. *)
@@ -56,7 +70,6 @@ module type S = sig
       the store [t]. *)
 
 end
-
 
 (** {2 Constructor} *)
 

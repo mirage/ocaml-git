@@ -18,20 +18,6 @@ open Core_kernel.Std
 open Lwt
 module Log = Log.Make(struct let section = "remote" end)
 
-exception Error
-
-let error fmt =
-  Printf.ksprintf (fun msg ->
-      Printf.eprintf "%s\n%!" msg;
-      raise Error
-    ) fmt
-
-let lwt_error fmt =
-  Printf.ksprintf (fun msg ->
-      Printf.eprintf "%s\n%!" msg;
-      fail Error
-    ) fmt
-
 type fetch_result = {
   head      : SHA1.Commit.t option;
   references: SHA1.Commit.t Reference.Map.t;
@@ -45,15 +31,6 @@ type push_result = {
   commands: (Reference.t * ok_or_error) list;
 }
 
-let pretty_push_result t =
-  let buf = Buffer.create 1024 in
-  let aux (ref, result) = match result with
-    | Ok      -> Printf.bprintf buf "* %s\n" (Reference.to_string ref)
-    | Error e -> Printf.bprintf buf "! %s: %s\n" (Reference.to_string ref) e
-  in
-  List.iter ~f:aux t.commands;
-  Buffer.contents buf
-
 module type IO = sig
   type ic
   type oc
@@ -65,6 +42,42 @@ module type IO = sig
 end
 
 module Make (IO: IO) (Store: Store.S) = struct
+
+  exception Error
+
+  let error fmt =
+    Printf.ksprintf (fun msg ->
+        Printf.eprintf "%s\n%!" msg;
+        raise Error
+      ) fmt
+
+  let lwt_error fmt =
+    Printf.ksprintf (fun msg ->
+        Printf.eprintf "%s\n%!" msg;
+        fail Error
+      ) fmt
+
+  type nonrec fetch_result = fetch_result = {
+    head      : SHA1.Commit.t option;
+    references: SHA1.Commit.t Reference.Map.t;
+    sha1s     : SHA1.t list;
+  }
+
+  type nonrec ok_or_error = ok_or_error = Ok | Error of string
+
+  type nonrec push_result = push_result = {
+    result: ok_or_error;
+    commands: (Reference.t * ok_or_error) list;
+  }
+
+  let pretty_push_result t =
+    let buf = Buffer.create 1024 in
+    let aux (ref, result) = match result with
+      | Ok      -> Printf.bprintf buf "* %s\n" (Reference.to_string ref)
+      | Error e -> Printf.bprintf buf "! %s: %s\n" (Reference.to_string ref) e
+    in
+    List.iter ~f:aux t.commands;
+    Buffer.contents buf
 
   module PacketLine = struct
 
@@ -816,6 +829,17 @@ module Make (IO: IO) (Store: Store.S) = struct
 end
 
 module type S = sig
+  type nonrec fetch_result = fetch_result = {
+    head      : SHA1.Commit.t option;
+    references: SHA1.Commit.t Reference.Map.t;
+    sha1s     : SHA1.t list;
+  }
+  type nonrec ok_or_error = ok_or_error = Ok | Error of string
+  type nonrec push_result = push_result = {
+    result: ok_or_error;
+    commands: (Reference.t * ok_or_error) list;
+  }
+  val pretty_push_result: push_result -> string
   type t
   val ls: t -> Gri.t -> SHA1.Commit.t Reference.Map.t Lwt.t
   val push: t -> branch:Reference.t -> Gri.t -> push_result Lwt.t

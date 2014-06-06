@@ -18,6 +18,7 @@ open Lwt
 open Core_kernel.Std
 open Cmdliner
 open Git
+open Git_unix
 
 let global_option_section = "COMMON OPTIONS"
 let help_sections = [
@@ -141,8 +142,8 @@ let branch =
 let backend =
   let memory = mk_flag ["m";"in-memory"] "Use an in-memory store." in
   let create = function
-    | true  -> (module Git.Memory : Store.S)
-    | false -> (module Git_unix.FS: Store.S)
+    | true  -> (module Memory: Store.S)
+    | false -> (module FS    : Store.S)
   in
   Term.(pure create $ memory)
 
@@ -287,7 +288,7 @@ let clone = {
         S.create ~root:dir ()   >>= fun t ->
         printf "Cloning into '%s' ...\n%!" (Filename.basename (S.root t));
         Local.clone t ?deepen ~unpack ~bare remote >>= fun r ->
-        match r.Remote.head with
+        match r.Local.head with
         | None      -> return_unit
         | Some head ->
           S.write_cache t head >>= fun () ->
@@ -330,7 +331,7 @@ let push = {
                         ("refs/heads/" ^ Reference.to_string branch)
           | Some _ -> branch in
         Local.push t ~branch remote >>= fun s ->
-        printf "%s\n" (Remote.pretty_push_result s);
+        printf "%s\n" (Local.pretty_push_result s);
         return_unit
       end in
     Term.(mk push $ backend $ remote $ branch)
