@@ -18,7 +18,7 @@ open Core_kernel.Std
 open Lwt
 open Misc.OP
 
-module type DISK = sig
+module type IO = sig
   val realpath: string -> string
   val mkdir: string -> unit Lwt.t
   val directories: string -> string list Lwt.t
@@ -37,7 +37,7 @@ module type S = sig
     string -> Tree.perm -> Blob.t -> Cache.entry option Lwt.t
 end
 
-module Make (D: DISK) = struct
+module Make (D: IO) = struct
 
 type t = string
 

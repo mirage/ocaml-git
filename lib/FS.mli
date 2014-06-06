@@ -35,7 +35,7 @@ end
 
 (** {2 Constructor} *)
 
-module type DISK = sig
+module type IO = sig
 
   val realpath: string -> string
   (** Very dumb real-path. Only works for existing directories. *)
@@ -67,5 +67,5 @@ module type DISK = sig
 
 end
 
-module Make (D: DISK): S
+module Make (IO: IO): S
 (** Create an on-disk store implementation. *)
