@@ -25,6 +25,9 @@ module Result: sig
   }
   (** The resulting sha1s and references. *)
 
+  val pretty_fetch: fetch -> string
+  (** Pretty print a fetch result. *)
+
   type ok_or_error = [`Ok | `Error of string]
 
   type push = {
@@ -34,7 +37,7 @@ module Result: sig
   (** The result of a push operation. *)
 
   val pretty_push: push -> string
-  (** Pretty print the push status. *)
+  (** Pretty print a push status. *)
 
 end
 

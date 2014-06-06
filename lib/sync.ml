@@ -26,6 +26,19 @@ module Result = struct
     sha1s     : SHA1.t list;
   }
 
+  let pretty_fetch t =
+    let buf = Buffer.create 1024 in
+    bprintf buf "HEAD: %s\n" (match t.head with None -> "<none>" | Some x -> SHA1.Commit.to_hex x);
+    Reference.Map.iter ~f:(fun ~key ~data ->
+        bprintf buf "%s %s\n" (Reference.to_string key) (SHA1.Commit.to_hex data)
+      ) t.references;
+    List.iteri ~f:(fun i key ->
+        bprintf buf "%s " (SHA1.to_hex key);
+        if i mod 4 = 3 then bprintf buf "\n"
+      ) t.sha1s;
+    bprintf buf "\n";
+    Buffer.contents buf
+
   type ok_or_error = [ `Ok | `Error of string ]
 
   type push = {
