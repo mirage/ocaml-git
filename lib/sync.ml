@@ -32,11 +32,7 @@ module Result = struct
     Reference.Map.iter ~f:(fun ~key ~data ->
         bprintf buf "%s %s\n" (Reference.to_string key) (SHA1.Commit.to_hex data)
       ) t.references;
-    List.iteri ~f:(fun i key ->
-        bprintf buf "%s " (SHA1.to_hex key);
-        if i mod 4 = 3 then bprintf buf "\n"
-      ) t.sha1s;
-    bprintf buf "\n";
+    bprintf buf "Keys: %d\n" (List.length t.sha1s);
     Buffer.contents buf
 
   type ok_or_error = [ `Ok | `Error of string ]
@@ -748,7 +744,9 @@ module Make (IO: IO) (Store: Store.S) = struct
                 let contents = Reference.head_contents references sha1 in
                 Store.write_head t contents
             end >>= fun () ->
-            let write_ref (ref, sha1) = Store.write_reference t ref sha1 in
+            let write_ref (ref, sha1) =
+              if Reference.is_valid ref then Store.write_reference t ref sha1
+              else return_unit in
             let references = Map.remove references Reference.head in
             Misc.list_iter_p write_ref (Map.to_alist references) >>= fun () ->
 

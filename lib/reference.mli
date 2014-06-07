@@ -38,3 +38,6 @@ val head_contents: SHA1.Commit.t Map.t -> SHA1.Commit.t -> head_contents
 (** Compute the head contents. The result is either the hex
     representation of the SHA1 or something like {i ref: <ref>} if the
     SHA1 has already a reference pointing to it. *)
+
+val is_valid: t -> bool
+(** Check if a reference can be stored on disk properly. *)
