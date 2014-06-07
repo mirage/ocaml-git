@@ -4,7 +4,7 @@
   independent of unix
 * Simplify the ocamlfind packages: there's only git and git.unix
 
-1.1.0:
+1.1.0: (2014-06-02)
 * Support for push (not optimized at all)
 * Fix the generation of `.dot` file representing the Git repo
 * Fix serialization of executable files in the cache
@@ -14,11 +14,11 @@
 * Depend the implementation of patience diff in pure OCaml
    (unused for now)
 
-1.0.2:
+1.0.2: (2014-04-19)
 * Catch, improve and propagate Zlib inflation errors
    (which usually on incomplete files)
 
-1.0.1: (2013-04-10)
+1.0.1: (2014-04-10)
 * Escape invalid chars in path names
 * Do not link with camlp4 when using as a libray
 
