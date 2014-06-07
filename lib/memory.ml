@@ -16,7 +16,6 @@
 
 open Core_kernel.Std
 open Lwt
-open Git
 module Log = Log.Make(struct let section = "memory" end)
 
 type t = {

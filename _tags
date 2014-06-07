@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: dd728d4986555f8c15692f3ed7bd0cd8)
+# DO NOT EDIT (digest: 0d39513a68176676ea0381dfeb62c76d)
 # Ignore VCS directories, you can use the same kind of rule outside
 # OASIS_START/STOP if you want to exclude directories that contains
 # useless stuff for the build process
@@ -25,7 +25,7 @@
 "lib/pack_index.cmx": for-pack(Git)
 "lib/packed_value.cmx": for-pack(Git)
 "lib/reference.cmx": for-pack(Git)
-"lib/remote.cmx": for-pack(Git)
+"lib/sync.cmx": for-pack(Git)
 "lib/tag.cmx": for-pack(Git)
 "lib/tree.cmx": for-pack(Git)
 "lib/user.cmx": for-pack(Git)
@@ -35,12 +35,10 @@
 "lib/store.cmx": for-pack(Git)
 "lib/search.cmx": for-pack(Git)
 "lib/gri.cmx": for-pack(Git)
-# Library git-memory
-"lib/git-memory.cmxs": use_git-memory
+"lib/memory.cmx": for-pack(Git)
+"lib/FS.cmx": for-pack(Git)
 # Library git-unix
 "lib/git-unix.cmxs": use_git-unix
-# Library git-fs
-"lib/git-fs.cmxs": use_git-fs
 <lib/*.ml{,i}>: pkg_bin_prot.syntax
 <lib/*.ml{,i}>: pkg_comparelib.syntax
 <lib/*.ml{,i}>: pkg_conduit.lwt
@@ -58,7 +56,6 @@
 <lib/*.ml{,i}>: pkg_uri.services
 <lib/*.ml{,i}>: pkg_zip
 <lib/*.ml{,i}>: use_git
-<lib/*.ml{,i}>: use_git-unix
 # Executable ogit
 <bin/ogit.{native,byte}>: pkg_bin_prot.syntax
 <bin/ogit.{native,byte}>: pkg_cmdliner
@@ -78,8 +75,6 @@
 <bin/ogit.{native,byte}>: pkg_uri.services
 <bin/ogit.{native,byte}>: pkg_zip
 <bin/ogit.{native,byte}>: use_git
-<bin/ogit.{native,byte}>: use_git-fs
-<bin/ogit.{native,byte}>: use_git-memory
 <bin/ogit.{native,byte}>: use_git-unix
 <bin/*.ml{,i}>: pkg_bin_prot.syntax
 <bin/*.ml{,i}>: pkg_cmdliner
@@ -99,8 +94,6 @@
 <bin/*.ml{,i}>: pkg_uri.services
 <bin/*.ml{,i}>: pkg_zip
 <bin/*.ml{,i}>: use_git
-<bin/*.ml{,i}>: use_git-fs
-<bin/*.ml{,i}>: use_git-memory
 <bin/*.ml{,i}>: use_git-unix
 # Executable test_git
 <lib_test/test.{native,byte}>: pkg_alcotest
@@ -121,8 +114,6 @@
 <lib_test/test.{native,byte}>: pkg_uri.services
 <lib_test/test.{native,byte}>: pkg_zip
 <lib_test/test.{native,byte}>: use_git
-<lib_test/test.{native,byte}>: use_git-fs
-<lib_test/test.{native,byte}>: use_git-memory
 <lib_test/test.{native,byte}>: use_git-unix
 <lib_test/*.ml{,i}>: pkg_alcotest
 <lib_test/*.ml{,i}>: pkg_bin_prot.syntax
@@ -142,8 +133,6 @@
 <lib_test/*.ml{,i}>: pkg_uri.services
 <lib_test/*.ml{,i}>: pkg_zip
 <lib_test/*.ml{,i}>: use_git
-<lib_test/*.ml{,i}>: use_git-fs
-<lib_test/*.ml{,i}>: use_git-memory
 <lib_test/*.ml{,i}>: use_git-unix
 # OASIS_STOP
 true: debug, bin_annot

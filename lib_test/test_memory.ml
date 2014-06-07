@@ -21,5 +21,5 @@ let suite = {
   name  = "MEM";
   init  = unit;
   clean = unit;
-  store = (module Git_memory);
+  store = (module Git.Memory);
 }

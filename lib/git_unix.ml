@@ -79,15 +79,9 @@ module M = struct
     Lwt_io.read_into_exactly ic res 0 n >>= fun () ->
     return res
 
-  let read_file file =
-    let open Lwt in
-    Log.infof "Reading %s" file;
-    Unix.handle_unix_error (fun () ->
-        let fd = Unix.(openfile file [O_RDONLY; O_NONBLOCK] 0o644) in
-        let ba = Lwt_bytes.map_file ~fd ~shared:false () in
-        Unix.close fd;
-        ba
-      ) ()
+end
+
+module D = struct
 
   let mkdir dirname =
     let rec aux dir =
@@ -128,61 +122,72 @@ module M = struct
       Lwt_list.fold_left_s aux (fs @ accu) ds in
     aux [] dir
 
+  let write_bigstring fd b =
+    let rec rwrite fd buf ofs len =
+      Lwt_bytes.write fd buf ofs len >>= fun n ->
+      if n = 0 then fail End_of_file
+      else if n < len then rwrite fd buf (ofs + n) (len - n)
+      else return () in
+    rwrite fd b 0 (Bigstring.length b)
+
+  let write_string fd b =
+    let rec rwrite fd buf ofs len =
+      Lwt_unix.write fd buf ofs len >>= fun n ->
+      if n = 0 then fail End_of_file
+      else if n < len then rwrite fd buf (ofs + n) (len - n)
+      else return () in
+    rwrite fd b 0 (String.length b)
+
+  let with_write_file file fn =
+    Log.infof "Writing %s" file;
+    mkdir (Filename.dirname file) >>= fun () ->
+    Lwt_unix.(openfile file [O_WRONLY; O_NONBLOCK; O_CREAT; O_TRUNC] 0o644) >>= fun fd ->
+    catch
+      (fun () -> fn fd >>= fun () -> Lwt_unix.close fd)
+      (fun _  -> Lwt_unix.close fd)
+
+  let write_file file b =
+    with_write_file file (fun fd -> write_bigstring fd b)
+
+  let write_file_string file ~contents =
+    with_write_file file (fun fd -> write_string fd contents)
+
+  let writev_file file bs =
+    with_write_file file (fun fd ->
+        Lwt_list.iter_s (write_bigstring fd) bs
+      )
+
+  let read_file file =
+    let open Lwt in
+    Log.infof "Reading %s" file;
+    Unix.handle_unix_error (fun () ->
+        let fd = Unix.(openfile file [O_RDONLY; O_NONBLOCK] 0o644) in
+        let ba = Lwt_bytes.map_file ~fd ~shared:false () in
+        Unix.close fd;
+        ba
+      ) ()
+
+  let realdir dir =
+    if Sys.file_exists dir then (
+      let d = Sys.getcwd () in
+      Unix.chdir dir;
+      let e = Sys.getcwd () in
+      Sys.chdir d;
+      e
+    ) else dir
+
+  let realpath file =
+    if Sys.is_directory file then realdir file
+    else
+      Filename.concat
+        (realdir (Filename.dirname file))
+        (Filename.basename file)
+
 end
 
-include M
+module Sync = struct
+  module Result = Sync.Result
+  module Make = Sync.Make(M)
+end
 
-open Core_kernel.Std
-
-let write_bigstring fd b =
-  let rec rwrite fd buf ofs len =
-    Lwt_bytes.write fd buf ofs len >>= fun n ->
-    if n = 0 then fail End_of_file
-    else if n < len then rwrite fd buf (ofs + n) (len - n)
-    else return () in
-  rwrite fd b 0 (Bigstring.length b)
-
-let write_string fd b =
-  let rec rwrite fd buf ofs len =
-    Lwt_unix.write fd buf ofs len >>= fun n ->
-    if n = 0 then fail End_of_file
-    else if n < len then rwrite fd buf (ofs + n) (len - n)
-    else return () in
-  rwrite fd b 0 (String.length b)
-
-let with_write_file file fn =
-  Log.infof "Writing %s" file;
-  mkdir (Filename.dirname file) >>= fun () ->
-  Lwt_unix.(openfile file [O_WRONLY; O_NONBLOCK; O_CREAT; O_TRUNC] 0o644) >>= fun fd ->
-  catch
-    (fun () -> fn fd >>= fun () -> Lwt_unix.close fd)
-    (fun _  -> Lwt_unix.close fd)
-
-let write_file file b =
-  with_write_file file (fun fd -> write_bigstring fd b)
-
-let write_file_string file ~contents =
-  with_write_file file (fun fd -> write_string fd contents)
-
-let writev_file file bs =
-  with_write_file file (fun fd ->
-      Lwt_list.iter_s (write_bigstring fd) bs
-    )
-
-module Remote = Remote.Make(M)
-
-let realdir dir =
-  if Sys.file_exists dir then (
-    let d = Sys.getcwd () in
-    Unix.chdir dir;
-    let e = Sys.getcwd () in
-    Sys.chdir d;
-    e
-  ) else dir
-
-let realpath file =
-  if Sys.is_directory file then realdir file
-  else
-    Filename.concat
-      (realdir (Filename.dirname file))
-      (Filename.basename file)
+module FS = Git.FS.Make(D)

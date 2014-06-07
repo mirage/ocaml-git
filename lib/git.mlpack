@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 2567d9780f665aae6e59b590916414c6)
+# DO NOT EDIT (digest: 4c3cef859298e7f32c7c10b6a43b9bae)
 SHA1
 Blob
 Cache
@@ -10,7 +10,7 @@ Pack
 Pack_index
 Packed_value
 Reference
-Remote
+Sync
 Tag
 Tree
 User
@@ -20,4 +20,6 @@ Object_type
 Store
 Search
 Gri
+Memory
+FS
 # OASIS_STOP

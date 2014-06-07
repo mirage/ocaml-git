@@ -16,28 +16,57 @@
 
 (** Clone/Fecth/Push protocol *)
 
+module Result: sig
 
-type fetch_result = {
-  head      : SHA1.Commit.t option;
-  references: SHA1.Commit.t Reference.Map.t;
-  sha1s     : SHA1.t list;
-}
-(** The resulting sha1s and references. *)
+  type fetch = {
+    head      : SHA1.Commit.t option;
+    references: SHA1.Commit.t Reference.Map.t;
+    sha1s     : SHA1.t list;
+  }
+  (** The resulting sha1s and references. *)
 
-type ok_or_error = Ok | Error of string
+  val pretty_fetch: fetch -> string
+  (** Pretty print a fetch result. *)
 
-type push_result = {
-  result: ok_or_error;
-  commands: (Reference.t * ok_or_error) list;
-}
-(** The result of a push operation. *)
+  type ok_or_error = [`Ok | `Error of string]
 
-val pretty_push_result: push_result -> string
-(** Pretty print the push status. *)
+  type push = {
+    result  : ok_or_error;
+    commands: (Reference.t * ok_or_error) list;
+  }
+  (** The result of a push operation. *)
+
+  val pretty_push: push -> string
+  (** Pretty print a push status. *)
+
+end
+
+module type S = sig
+
+  type t
+  (** Abstract value for stores. *)
+
+  val ls: t -> Gri.t -> SHA1.Commit.t Reference.Map.t Lwt.t
+  (** List the references of the remote repository. *)
+
+  val push: t -> branch:Reference.t -> Gri.t -> Result.push Lwt.t
+  (** Push a local branch to a remote store. *)
+
+  val clone: t -> ?bare:bool -> ?deepen:int -> ?unpack:bool -> Gri.t -> Result.fetch Lwt.t
+  (** [clone t address] clones the contents of [address] into the
+      store [t]. *)
+
+  val fetch: t -> ?deepen:int -> ?unpack:bool -> Gri.t -> Result.fetch Lwt.t
+  (** [fetch t address] fetches the missing contents of [address] into
+      the store [t]. *)
+
+end
+
+(** {2 Constructor} *)
 
 module type IO = sig
 
-  (** Channel abstraction. XXX: reuse something existing ... *)
+  (** Channel abstraction. *)
 
   type ic
   (** Type for input channels. *)
@@ -63,29 +92,6 @@ module type IO = sig
 
   val flush: oc -> unit Lwt.t
   (** Flush the channel. *)
-
-end
-
-module type S = sig
-
-  (** Remote operation, abstracted over the bakend type. *)
-
-  type t
-  (** Abstract value for stores. *)
-
-  val ls: t -> Gri.t -> SHA1.Commit.t Reference.Map.t Lwt.t
-  (** List the references of the remote repository. *)
-
-  val push: t -> branch:Reference.t -> Gri.t -> push_result Lwt.t
-  (** Push a local branch to a remote store. *)
-
-  val clone: t -> ?bare:bool -> ?deepen:int -> ?unpack:bool -> Gri.t -> fetch_result Lwt.t
-  (** [clone t address] clones the contents of [address] into the
-      store [t]. *)
-
-  val fetch: t -> ?deepen:int -> ?unpack:bool -> Gri.t -> fetch_result Lwt.t
-  (** [fetch t address] fetches the missing contents of [address] into
-      the store [t]. *)
 
 end
 

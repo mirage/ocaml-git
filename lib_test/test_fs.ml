@@ -22,5 +22,5 @@ let suite =
     name  = "FS";
     init  = unit;
     clean = unit;
-    store = (module Git_fs);
+    store = (module Git_unix.FS);
   }

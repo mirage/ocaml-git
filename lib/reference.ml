@@ -42,3 +42,11 @@ let head_contents refs sha1 =
   | Some r -> Ref r
 
 let master = "refs/heads/master"
+
+let is_valid r =
+  String.for_all ~f:(function
+      | '{'
+      | '}'
+      | '^' -> false
+      | _   -> true
+    ) r
