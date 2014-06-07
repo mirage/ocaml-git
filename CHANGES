@@ -1,5 +1,5 @@
 1.2.0:
-* Minor API refactoring to abstract the unix layer more easily
+* Minor API refactoring to abstract the unix layer cleanly
 * Expose a filesystem functor to create filesystem backends
   independent of unix
 * Simplify the ocamlfind packages: there's only git and git.unix

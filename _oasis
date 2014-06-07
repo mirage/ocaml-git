@@ -8,8 +8,12 @@ Plugins:     META (0.3), DevFiles (0.3)
 BuildTools:  ocamlbuild
 
 Flag unix
-  Description:       build the Unix libraries
+  Description:       build the Unix library
   Default:           true
+
+Flag mirage
+  Description:       build the Mirage library
+  Default:           false
 
 Library git
   Pack:              true
@@ -35,6 +39,14 @@ Library "git-unix"
   Findlibname:       unix
   Modules:           Git_unix
   BuildDepends:      git, lwt.unix
+
+Library "git-mirage"
+  Build$:           flag(mirage)
+  Path:              lib/
+  FindlibParent:     git
+  Findlibname:       mirage
+  Modules:           Git_mirage
+  BuildDepends:      git, mirage.types
 
 Executable ogit
   Build$:           flag(unix)
