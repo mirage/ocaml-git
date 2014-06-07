@@ -19,6 +19,7 @@ open Test_common
 open Lwt
 open Core_kernel.Std
 open Git
+open Git_unix
 
 type t = {
   name : string;
@@ -271,14 +272,13 @@ module Make (Store: Store.S) = struct
   let test_index x () =
     if x.name = "FS" then
       let test () =
-        Git_unix.rec_files "." >>= fun files ->
+        rec_files "." >>= fun files ->
         Lwt_list.map_p (fun file ->
             let blob =
               file
-              |> Git_unix.read_file
-              |> Bigstring.to_string
+              |> In_channel.read_all
               |> Blob.of_string in
-            Git_fs.entry_of_file file `Normal blob
+            FS.entry_of_file file `Normal blob
           ) files >>= fun entries ->
         let entries = List.filter_map ~f:(fun x -> x) entries in
         let cache = { Cache.entries; extensions = [] } in
@@ -292,7 +292,7 @@ module Make (Store: Store.S) = struct
   let test_packs x () =
     if x.name = "FS" then
       let test () =
-        Git_unix.files "data/" >>= fun files ->
+        files "data/" >>= fun files ->
         if files = [] then
           failwith "Please run that test in lib_test/";
         let files = List.filter ~f:(fun file ->
@@ -306,16 +306,16 @@ module Make (Store: Store.S) = struct
         List.iter ~f:(fun (pack, index) ->
 
             (* basic serialization of index files *)
-            let istr1 = Git_unix.read_file index in
-            let i1    = Pack_index.input (Mstruct.of_bigarray istr1) in
+            let istr1 = In_channel.read_all index in
+            let i1    = Pack_index.input (Mstruct.of_string istr1) in
             let istr2 = Misc.with_bigbuffer (fun buf -> Pack_index.add buf i1) in
             let i2    = Pack_index.input (Mstruct.of_bigarray istr2) in
             assert_pack_index_equal "pack-index" i1 i2;
 
             (* basic serialization of pack files *)
-            let pstr1 = Git_unix.read_file pack in
-            let rp1   = Pack.Raw.input (Mstruct.of_bigarray pstr1) ~index:None in
-            let rp1'  = Pack.Raw.input (Mstruct.of_bigarray pstr1) ~index:(Some i1) in
+            let pstr1 = In_channel.read_all pack in
+            let rp1   = Pack.Raw.input (Mstruct.of_string pstr1) ~index:None in
+            let rp1'  = Pack.Raw.input (Mstruct.of_string pstr1) ~index:(Some i1) in
             assert_raw_pack_equal "raw-pack" rp1 rp1';
 
             let pstr2 = Misc.with_bigbuffer (fun buf -> Pack.Raw.add buf rp1) in
@@ -331,14 +331,14 @@ module Make (Store: Store.S) = struct
       in
       run x test
 
-  module Local = Git_unix.Remote(Store)
+  module Sync = Sync.Make(Store)
 
   let test_remote x () =
     let test () =
       let gri = Gri.of_string "git://localhost/" in
-      create ()         >>= fun t ->
-      Local.fetch t gri >>= fun _ ->
-      Local.push t gri ~branch:Reference.master >>= fun _ ->
+      create ()        >>= fun t ->
+      Sync.fetch t gri >>= fun _ ->
+      Sync.push t gri ~branch:Reference.master >>= fun _ ->
       return_unit
     in
     run x test
