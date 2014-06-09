@@ -1,7 +1,8 @@
 # OPAM packages needed to build tests.
 OPAM_PACKAGES="camlzip dolog core_kernel cryptokit uri \
                cmdliner sha mstruct re ocamlgraph \
-               alcotest lwt conduit uri mirage-fs-unix io-page"
+               alcotest lwt \
+               conduit uri mirage-fs-unix io-page ipaddr"
 
 ppa=avsm/ocaml41+opam11
 echo "yes" | sudo add-apt-repository ppa:$ppa
