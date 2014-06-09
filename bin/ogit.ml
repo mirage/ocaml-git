@@ -191,7 +191,7 @@ let ls_remote = {
         Printf.printf "From %s\n" (Gri.to_string remote);
         let print ~key:ref ~data:sha1 =
           Printf.printf "%s        %s\n"
-            (SHA1.Commit.to_hex sha1)
+            (SHA.Commit.to_hex sha1)
             (Reference.to_string ref) in
         Map.iter ~f:print references;
         return_unit
@@ -245,7 +245,7 @@ let read_tree = {
           if List.exists refs ~f:(fun r -> Reference.to_string r = ref) then
             S.read_reference_exn t (Reference.of_string ref)
           else
-            return (SHA1.Commit.of_hex commit_str)
+            return (SHA.Commit.of_hex commit_str)
         end >>= fun commit ->
         S.write_cache t commit >>= fun () ->
         printf "The index file has been update to %s\n%!" commit_str;
@@ -293,7 +293,7 @@ let clone = {
         | None      -> return_unit
         | Some head ->
           S.write_cache t head >>= fun () ->
-          printf "HEAD is now at %s\n" (SHA1.Commit.to_hex head);
+          printf "HEAD is now at %s\n" (SHA.Commit.to_hex head);
           return_unit
       end in
     Term.(mk clone $ backend $ depth $ bare $ unpack $ remote $ directory)
