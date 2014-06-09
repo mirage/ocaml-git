@@ -46,7 +46,7 @@ Library "git-mirage"
   FindlibParent:     git
   Findlibname:       mirage
   Modules:           Git_mirage
-  BuildDepends:      git, mirage-types, io-page
+  BuildDepends:      git, mirage-types.lwt, io-page
 
 Executable ogit
   Build$:           flag(unix)

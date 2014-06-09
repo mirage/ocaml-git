@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 2b91ac15701ecb9764f496b6d3a0a9ba)
+# DO NOT EDIT (digest: 0216bcc876c5cc9c342039b0c69188fb)
 # Ignore VCS directories, you can use the same kind of rule outside
 # OASIS_START/STOP if you want to exclude directories that contains
 # useless stuff for the build process
@@ -49,7 +49,7 @@
 <lib/*.ml{,i}>: pkg_dolog
 <lib/*.ml{,i}>: pkg_io-page
 <lib/*.ml{,i}>: pkg_lwt
-<lib/*.ml{,i}>: pkg_mirage-types
+<lib/*.ml{,i}>: pkg_mirage-types.lwt
 <lib/*.ml{,i}>: pkg_mstruct
 <lib/*.ml{,i}>: pkg_ocamlgraph
 <lib/*.ml{,i}>: pkg_re.pcre
@@ -109,7 +109,7 @@
 <lib_test/test.{native,byte}>: pkg_lwt
 <lib_test/test.{native,byte}>: pkg_lwt.unix
 <lib_test/test.{native,byte}>: pkg_mirage-fs-unix
-<lib_test/test.{native,byte}>: pkg_mirage-types
+<lib_test/test.{native,byte}>: pkg_mirage-types.lwt
 <lib_test/test.{native,byte}>: pkg_mstruct
 <lib_test/test.{native,byte}>: pkg_ocamlgraph
 <lib_test/test.{native,byte}>: pkg_re.pcre
@@ -133,7 +133,7 @@
 <lib_test/*.ml{,i}>: pkg_lwt
 <lib_test/*.ml{,i}>: pkg_lwt.unix
 <lib_test/*.ml{,i}>: pkg_mirage-fs-unix
-<lib_test/*.ml{,i}>: pkg_mirage-types
+<lib_test/*.ml{,i}>: pkg_mirage-types.lwt
 <lib_test/*.ml{,i}>: pkg_mstruct
 <lib_test/*.ml{,i}>: pkg_ocamlgraph
 <lib_test/*.ml{,i}>: pkg_re.pcre

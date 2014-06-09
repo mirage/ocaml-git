@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: d9d43fe778273589e9b1822c39359e42)
+# DO NOT EDIT (digest: da6a915f8c1a760c9ea0e7b0c2d8b639)
 version = "1.2.0"
 description = "A low-level interface to Git in pure OCaml"
 requires =
@@ -23,7 +23,7 @@ package "unix" (
 package "mirage" (
  version = "1.2.0"
  description = "A low-level interface to Git in pure OCaml"
- requires = "git mirage-types io-page"
+ requires = "git mirage-types.lwt io-page"
  archive(byte) = "git-mirage.cma"
  archive(byte, plugin) = "git-mirage.cma"
  archive(native) = "git-mirage.cmxa"
