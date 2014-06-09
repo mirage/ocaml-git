@@ -100,7 +100,7 @@ module Make (Store: Store.S) = struct
 
   (* c1 : t2 *)
   let c1 = Value.commit {
-      Commit.tree = SHA1.to_tree kt2;
+      Commit.tree = SHA.to_tree kt2;
       parents     = [];
       author      = john_doe;
       committer   = john_doe;
@@ -110,8 +110,8 @@ module Make (Store: Store.S) = struct
 
   (* c1 -> c2 : t4 *)
   let c2 = Value.commit {
-      Commit.tree = SHA1.to_tree kt4;
-      parents     = [SHA1.to_commit kc1];
+      Commit.tree = SHA.to_tree kt4;
+      parents     = [SHA.to_commit kc1];
       author      = john_doe;
       committer   = john_doe;
       message     = "hello r1!"
@@ -160,7 +160,6 @@ module Make (Store: Store.S) = struct
 
   let create () =
     Store.create ~root:"test-db" () >>= fun t  ->
-    Store.clear t                   >>= fun () ->
     Lwt_list.iter_p
       (fun v -> Store.write t v >>= fun _ -> return_unit)
       [
@@ -250,10 +249,10 @@ module Make (Store: Store.S) = struct
   let test_refs x () =
     let test () =
       create () >>= fun t ->
-      let c = SHA1.to_commit in
+      let c = SHA.to_commit in
       let ko = function
         | None   -> None
-        | Some x -> Some (SHA1.of_commit x) in
+        | Some x -> Some (SHA.of_commit x) in
       Store.write_reference t r1 (c kt4) >>= fun ()   ->
       Store.read_reference t r1          >>= fun kt4' ->
       assert_key_opt_equal "r1" (Some kt4) (ko kt4');

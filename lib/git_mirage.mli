@@ -1,5 +1,5 @@
 (*
- * Copyright (c) 2013 Thomas Gazagnaire <thomas@gazagnaire.org>
+ * Copyright (c) 2013-2014 Thomas Gazagnaire <thomas@gazagnaire.org>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,19 +14,22 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Lwt
-open Test_store
+(** Mirage implementation of the Git file-system backend and
+    protocol. *)
 
-module M = Git_unix.FS
+open Core_kernel.Std
 
-let init () =
-  M.create ~root:"test-db" () >>= fun t ->
-  M.clear t
+module type FS = sig
 
-let suite =
-  {
-    name  = "FS";
-    init  = init;
-    clean = unit;
-    store = (module M);
-  }
+  include V1_LWT.FS with type page_aligned_buffer = Cstruct.t
+
+  val connect: unit -> [`Error of error | `Ok of t ] Lwt.t
+  (** Every [S] define how to connect to a peticular [t]. *)
+
+  val string_of_error: error -> string
+  (** Pretty-print errors. *)
+
+end
+
+module FS (FS: FS): Git.FS.S
+  (** Create a irminsule store from raw block devices hanlder. *)

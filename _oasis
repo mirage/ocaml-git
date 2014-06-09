@@ -19,17 +19,17 @@ Library git
   Pack:              true
   Path:              lib/
   Findlibname:       git
-  Modules:           SHA1, Blob, Cache, Commit, Misc,
+  Modules:           SHA, Blob, Cache, Commit, Misc,
                      Global_graph, Pack, Pack_index, Packed_value,
                      Reference, Sync, Tag, Tree, User, Value,
                      Object, Object_type, Store, Search, Gri,
                      Memory, FS
-  BuildDepends:      mstruct, dolog, core_kernel, ocamlgraph, lazy-trie,
-                     re.pcre, zip, cryptokit, uri, lwt,
+  BuildDepends:      mstruct, dolog, core_kernel, ocamlgraph,
+                     re.pcre, zip, sha, uri, lwt,
                      bin_prot.syntax, comparelib.syntax, sexplib.syntax,
                      conduit.lwt, uri.services
-  XMETARequires:     mstruct, dolog, core_kernel, ocamlgraph, lazy-trie,
-                     re.pcre, zip, cryptokit, uri, lwt,
+  XMETARequires:     mstruct, dolog, core_kernel, ocamlgraph,
+                     re.pcre, zip, sha, uri, lwt,
                      conduit.lwt, uri.services
 
 Library "git-unix"
@@ -46,7 +46,7 @@ Library "git-mirage"
   FindlibParent:     git
   Findlibname:       mirage
   Modules:           Git_mirage
-  BuildDepends:      git, mirage.types
+  BuildDepends:      git, mirage-types.lwt, io-page
 
 Executable ogit
   Build$:           flag(unix)
@@ -57,14 +57,15 @@ Executable ogit
   BuildDepends:     cmdliner, git, git.unix
 
 Executable test_git
-  Build$:           flag(tests) && flag(unix)
+  Build$:           flag(tests) && flag(unix) && flag(mirage)
   Path:             lib_test
   MainIs:           test.ml
   CompiledObject:   best
   Install:          false
-  BuildDepends:     alcotest, git, git.unix
+  BuildDepends:     alcotest, git, git.unix, cryptokit,
+                    git.mirage, io-page.unix, mirage-fs-unix
 
 Test test_git
-  Run$:             flag(tests)
+  Run$:             flag(tests) && flag(unix) && flag(mirage)
   Command:          $test_git -q
   WorkingDirectory: lib_test/

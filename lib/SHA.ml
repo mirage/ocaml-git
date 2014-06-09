@@ -31,12 +31,8 @@ module SHA1_String = struct
 
   include (String: Identifiable.S)
 
-  (* XXX: add the bigstring in chunks using a tmp buffer (to alloc only
-     once). *)
   let create str =
-    let hash = Cryptokit.Hash.sha1 () in
-    hash#add_string str;
-    of_string hash#result
+    of_string (Sha1.(to_bin (string str)))
 
   let to_hex t =
     Misc.hex_encode (to_string t)

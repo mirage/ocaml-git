@@ -20,8 +20,8 @@ module Log = Log.Make(struct let section = "memory" end)
 
 type t = {
   root   : string;
-  values : (SHA1.t, Value.t) Hashtbl.t;
-  refs   : (Reference.t, SHA1.Commit.t) Hashtbl.t;
+  values : (SHA.t, Value.t) Hashtbl.t;
+  refs   : (Reference.t, SHA.Commit.t) Hashtbl.t;
   mutable head : Reference.head_contents option;
 }
 
@@ -39,7 +39,7 @@ let create ?root () =
     | None   ->
       let t = {
         root;
-        values  = SHA1.Table.create ();
+        values  = SHA.Table.create ();
         refs    = Reference.Table.create ();
         head    = None;
       } in
@@ -53,11 +53,11 @@ let clear t =
 
 let write t value =
   let inflated = Misc.with_buffer (fun buf -> Value.add_inflated buf value) in
-  let sha1 = SHA1.create inflated in
+  let sha1 = SHA.create inflated in
   match Hashtbl.find t.values sha1 with
   | Some _ -> return sha1
   | None   ->
-    Log.infof "Writing %s" (SHA1.to_hex sha1);
+    Log.infof "Writing %s" (SHA.to_hex sha1);
     Hashtbl.add_exn t.values sha1 value;
     return sha1
 
@@ -66,7 +66,7 @@ let write_pack t pack =
   Misc.list_iter_p (fun (sha1, p) ->
       let v = Packed_value.PIC.to_value p in
       write t v >>= fun sha2 ->
-      if SHA1.(sha1 <> sha2) then failwith "Git_memory.write_pack";
+      if SHA.(sha1 <> sha2) then failwith "Git_memory.write_pack";
       return_unit
     ) pack
   >>= fun () ->
@@ -105,7 +105,7 @@ let dump t =
   contents t >>= fun contents ->
   List.iter ~f:(fun (sha1, value) ->
       let typ = Value.type_of value in
-      Printf.eprintf "%s %s\n" (SHA1.to_hex sha1) (Object_type.to_string typ)
+      Printf.eprintf "%s %s\n" (SHA.to_hex sha1) (Object_type.to_string typ)
     ) contents;
   return_unit
 

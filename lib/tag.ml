@@ -19,7 +19,7 @@ module Log = Log.Make(struct let section = "tag" end)
 
 module T = struct
   type t = {
-    sha1   : SHA1.t;
+    sha1   : SHA.t;
     typ    : Object_type.t;
     tag    : string;
     tagger : User.t;
@@ -39,7 +39,7 @@ let pretty t =
      tag   : %S\n\
      tagger: %s\n\n\
      %s\n"
-    (SHA1.to_hex t.sha1)
+    (SHA.to_hex t.sha1)
     (Object_type.to_string t.typ)
     t.tag
     (User.pretty t.tagger)
@@ -58,7 +58,7 @@ let input_object_type buf =
   | None   -> Mstruct.parse_error_buf buf "input_object_type: %s" s
 
 let add buf t =
-  add_key_value buf "object" (SHA1.to_hex t.sha1);
+  add_key_value buf "object" (SHA.to_hex t.sha1);
   add_key_value buf "type"   (Object_type.to_string t.typ);
   add_key_value buf "tag"    t.tag;
   Bigbuffer.add_string buf "tagger ";
@@ -68,7 +68,7 @@ let add buf t =
   Bigbuffer.add_string buf t.message
 
 let input buf =
-  let sha1   = Misc.input_key_value buf ~key:"object" SHA1.input_hex in
+  let sha1   = Misc.input_key_value buf ~key:"object" SHA.input_hex in
   let typ    = Misc.input_key_value buf ~key:"type" input_object_type in
   let tag    = Misc.input_key_value buf ~key:"tag" Mstruct.to_string in
   let tagger = Misc.input_key_value buf ~key:"tagger" User.input in

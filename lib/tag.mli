@@ -17,7 +17,7 @@
 (** Git tags. *)
 
 type t = {
-  sha1   : SHA1.t;
+  sha1   : SHA.t;
   typ    : Object_type.t;
   tag    : string;
   tagger : User.t;

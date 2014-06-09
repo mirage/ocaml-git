@@ -18,7 +18,6 @@ open Core_kernel.Std
 
 module type S = sig
 
-
   (** Signature for SHA1 values *)
 
   include Object.S

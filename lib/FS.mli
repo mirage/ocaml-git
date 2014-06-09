@@ -37,11 +37,20 @@ end
 
 module type IO = sig
 
-  val realpath: string -> string
+  val getcwd: unit -> string Lwt.t
+  (** Get the current working directory. *)
+
+  val realpath: string -> string Lwt.t
   (** Very dumb real-path. Only works for existing directories. *)
 
   val mkdir: string -> unit Lwt.t
   (** Create a directory (and the parent dirs if needed). *)
+
+  val remove: string -> unit Lwt.t
+  (** Remote a file or a directory (even if non-empty). *)
+
+  val file_exists: string -> bool Lwt.t
+  (** Does the given file exists ? *)
 
   val directories: string -> string list Lwt.t
   (** List the subdirs. *)
@@ -52,18 +61,18 @@ module type IO = sig
   val rec_files: string -> string list Lwt.t
   (** List of the subfiles, recursively. *)
 
-  val read_file: string -> Bigstring.t
+  val read_file: string -> Bigstring.t Lwt.t
   (** mmap a file and return a mutable C-like structure with its
       contents. *)
-
-  val write_file_string: string -> contents:string -> unit Lwt.t
-  (** Write a bigarray to a file. *)
 
   val write_file: string -> Bigstring.t -> unit Lwt.t
   (** Write a bigarray to a file. *)
 
-  val writev_file: string -> Bigstring.t list -> unit Lwt.t
-  (** Write a list of bigarrays to a file. *)
+  val chmod: string -> int -> unit Lwt.t
+  (** Change the file mode. *)
+
+  val stat_info: string -> Cache.stat_info
+  (** Return the stats of the given file. *)
 
 end
 

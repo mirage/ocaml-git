@@ -40,7 +40,7 @@ type 'a delta = {
 
 type t =
   | Raw_value of string
-  | Ref_delta of SHA1.t delta
+  | Ref_delta of SHA.t delta
   | Off_delta of int delta
 (** Packed values. *)
 
@@ -85,16 +85,16 @@ val add_delta: Bigbuffer.t -> string delta -> unit
 (** Append a delta to a buffer. *)
 
 val add_inflated_value:
-  read:(SHA1.t -> string Lwt.t) ->
-  offsets:SHA1.t Int.Map.t ->
+  read:(SHA.t -> string Lwt.t) ->
+  offsets:SHA.t Int.Map.t ->
   pos:int ->
   Bigbuffer.t -> t -> unit Lwt.t
 (** Append the inflated representation of a packed value to a given
     buffer. Use the same paramaters as [to_value]. *)
 
 val add_inflated_value_sync:
-  read:(SHA1.t -> string) ->
-  offsets:SHA1.t Int.Map.t ->
+  read:(SHA.t -> string) ->
+  offsets:SHA.t Int.Map.t ->
   pos:int ->
   Bigbuffer.t -> t -> unit
 (** Same as [add_inflated_value] but with a synchronous read
@@ -112,7 +112,7 @@ module PIC: sig
 
   and t = {
     kind: kind;
-    sha1: SHA1.t;
+    sha1: SHA.t;
   }
 
   include Identifiable.S with type t := t
@@ -124,12 +124,12 @@ module PIC: sig
   (** [to_value p] unpacks the packed position-independant value
       [p]. *)
 
-  val raw: SHA1.t -> Bigstring.t -> t
+  val raw: SHA.t -> Bigstring.t -> t
   (** Build a raw value. *)
 
 end
 
-val to_pic: PIC.t Int.Map.t -> PIC.t SHA1.Map.t -> (int * SHA1.t * t) -> PIC.t
+val to_pic: PIC.t Int.Map.t -> PIC.t SHA.Map.t -> (int * SHA.t * t) -> PIC.t
 (** Position-independant packed value. Convert [Off_delta] and
     [Ref_delta] to [PIC.Link] using the provided indexes. *)
 

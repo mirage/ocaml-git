@@ -19,8 +19,8 @@ module Log = Log.Make(struct let section = "commit" end)
 
 module T = struct
   type t = {
-    tree     : SHA1.Tree.t;
-    parents  : SHA1.Commit.t list;
+    tree     : SHA.Tree.t;
+    parents  : SHA.Commit.t list;
     author   : User.t;
     committer: User.t;
     message  : string;
@@ -39,20 +39,20 @@ let pretty t =
      author   : %s\n\
      committer: %s\n\n\
      %s\n"
-    (SHA1.Tree.to_hex t.tree)
-    (String.concat ~sep:", " (List.map ~f:SHA1.Commit.to_hex t.parents))
+    (SHA.Tree.to_hex t.tree)
+    (String.concat ~sep:", " (List.map ~f:SHA.Commit.to_hex t.parents))
     (User.pretty t.author)
     (User.pretty t.committer)
     (String.strip t.message)
 
 let add_parent buf parent =
   Bigbuffer.add_string buf "parent ";
-  SHA1.Commit.add_hex buf parent;
+  SHA.Commit.add_hex buf parent;
   Bigbuffer.add_char buf Misc.lf
 
 let add buf t =
   Bigbuffer.add_string buf "tree ";
-  SHA1.Tree.add_hex buf t.tree;
+  SHA.Tree.add_hex buf t.tree;
   Bigbuffer.add_char buf Misc.lf;
   List.iter ~f:(add_parent buf) t.parents;
   Bigbuffer.add_string buf "author ";
@@ -69,7 +69,7 @@ let input_parents buf =
     match Mstruct.get_string_delim buf Misc.sp with
     | None          -> List.rev parents
     | Some "parent" ->
-      begin match Mstruct.get_delim buf Misc.lf SHA1.Commit.input_hex with
+      begin match Mstruct.get_delim buf Misc.lf SHA.Commit.input_hex with
         | None   -> Mstruct.parse_error_buf buf "input_parents"
         | Some h -> aux (h :: parents)
       end
@@ -82,7 +82,7 @@ let input_parents buf =
   aux []
 
 let input buf =
-  let tree      = Misc.input_key_value buf ~key:"tree" SHA1.Tree.input_hex in
+  let tree      = Misc.input_key_value buf ~key:"tree" SHA.Tree.input_hex in
   let parents   = input_parents buf in
   let author    = Misc.input_key_value buf ~key:"author" User.input in
   let committer = Misc.input_key_value buf ~key:"committer" User.input in

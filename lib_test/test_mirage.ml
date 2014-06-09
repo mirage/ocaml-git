@@ -16,17 +16,43 @@
 
 open Lwt
 open Test_store
+open Git_mirage
 
-module M = Git_unix.FS
+let test_img = "test.img"
 
-let init () =
-  M.create ~root:"test-db" () >>= fun t ->
-  M.clear t
+let command fmt =
+  Printf.ksprintf (fun str ->
+      Printf.printf "[x] %s\n" str;
+      let _ = Sys.command str in
+      ()
+    ) fmt
+
+module M = struct
+
+  include FS_unix
+
+  let (>>|) x f =
+    x >>= function
+    | `Ok x    -> f x
+    | `Error e -> fail (Failure (string_of_error e))
+
+  let connect () =
+    connect "mirage-fs"
+
+  let init () =
+    command "rm -rf mirage-fs";
+    connect ()  >>| fun t ->
+    mkdir t "/" >>| fun () ->
+    return_unit
+
+end
+
+module S = FS(M)
 
 let suite =
   {
-    name  = "FS";
-    init  = init;
+    name  = "MIR-FAT";
+    init  = M.init;
     clean = unit;
-    store = (module M);
+    store = (module S);
   }

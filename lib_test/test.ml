@@ -31,4 +31,5 @@ let () =
   Test_store.run "git" [
     `Quick, Test_memory.suite;
     `Quick, Test_fs.suite;
+    `Quick, Test_mirage.suite;
   ]

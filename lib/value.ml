@@ -71,7 +71,7 @@ let add_inflated buf t =
 
 let sha1 t =
   let buf = Misc.with_buffer (fun buf -> add_inflated buf t) in
-  SHA1.create buf
+  SHA.create buf
 
 let add buf t =
   Log.debugf "add %s" (to_string t);
@@ -113,11 +113,11 @@ let input buf =
 module Cache = struct
 
   (* XXX: this can go in Store.t if we want to avoid relying on a
-     global state. But as the keys are always the SHA1 of the inflated
+     global state. But as the keys are always the SHA of the inflated
      contents, having a global cache is fine. *)
-  let cache = SHA1.Table.create ()
+  let cache = SHA.Table.create ()
 
-  let clear () = SHA1.Table.clear cache
+  let clear () = SHA.Table.clear cache
 
   let find sha1: string option =
     Hashtbl.find cache sha1

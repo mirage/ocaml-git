@@ -59,7 +59,7 @@ module T = struct
   module X = struct
     type t =
       | Raw_value of string
-      | Ref_delta of SHA1.t delta
+      | Ref_delta of SHA.t delta
       | Off_delta of int delta
     with bin_io, compare, sexp
     let hash (t: t) = Hashtbl.hash t
@@ -73,7 +73,7 @@ include T
 
 let pretty = function
   | Raw_value s -> sprintf "%S" s
-  | Ref_delta d -> sprintf "source:%s\n%s" (SHA1.to_hex d.source) (pretty_delta d)
+  | Ref_delta d -> sprintf "source:%s\n%s" (SHA.to_hex d.source) (pretty_delta d)
   | Off_delta d -> sprintf "source:%d\n%s" d.source (pretty_delta d)
 
 let result_length = function
@@ -290,7 +290,7 @@ module Make (M: sig val version: int end) = struct
       let hunks = with_inflated buf size (input_hunks base) in
       Off_delta hunks
     | 0b111 ->
-      let base  = SHA1.input buf in
+      let base  = SHA.input buf in
       let hunks = with_inflated buf size (input_hunks base) in
       Ref_delta hunks
     | _     -> assert false
@@ -322,7 +322,7 @@ module Make (M: sig val version: int end) = struct
         add_be_modified_base_128 tmp_buffer hunks.source;
         add_deflated_hunks tmp_buffer hunks
       | Ref_delta hunks ->
-        SHA1.add tmp_buffer hunks.source;
+        SHA.add tmp_buffer hunks.source;
         add_deflated_hunks tmp_buffer hunks
     in
     let kind = match t with
@@ -363,7 +363,7 @@ module PIC = struct
       | Link of t delta
     and t = {
       kind: kind;
-      sha1: SHA1.t;
+      sha1: SHA.t;
     }
     with bin_io, compare, sexp
     let hash (t: t) = Hashtbl.hash t
@@ -375,10 +375,10 @@ module PIC = struct
 
   let pretty_kind = function
     | Raw _  -> "RAW"
-    | Link d -> sprintf "link(%s)" (SHA1.to_hex d.source.sha1)
+    | Link d -> sprintf "link(%s)" (SHA.to_hex d.source.sha1)
 
   let pretty { kind; sha1 } =
-    sprintf "%s: %s" (SHA1.to_hex sha1) (pretty_kind kind)
+    sprintf "%s: %s" (SHA.to_hex sha1) (pretty_kind kind)
 
   let rec unpack pic =
     match Value.Cache.find pic.sha1 with
@@ -389,7 +389,7 @@ module PIC = struct
         match pic.kind with
         | Raw x  -> x
         | Link d ->
-          Log.debugf "unpack: hop to %s" (SHA1.to_hex d.source.sha1);
+          Log.debugf "unpack: hop to %s" (SHA.to_hex d.source.sha1);
           let source = unpack d.source in
           Misc.with_buffer (fun buf -> add_delta buf { d with source }) in
       Value.Cache.add pic.sha1 str;
@@ -418,13 +418,13 @@ let to_pic offsets sha1s (pos, sha1, t) =
   let kind = match t with
     | Raw_value x -> PIC.Raw x
     | Ref_delta d ->
-      begin match SHA1.Map.find sha1s d.source with
+      begin match SHA.Map.find sha1s d.source with
         | Some pic -> PIC.Link { d with source = pic }
         | None      ->
           eprintf
             "Packed_value.to_pic: shallow pack are not supported.\n\
              %s is not in the pack file!\n"
-            (SHA1.to_hex d.source);
+            (SHA.to_hex d.source);
           failwith "Packed_value.to_pic";
       end
     | Off_delta d ->
