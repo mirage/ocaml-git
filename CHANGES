@@ -1,4 +1,6 @@
 1.2.0:
+* Support for Mirage's V1_LWT.FS backends. This allows to
+  store Git repo in a raw block store directly
 * Minor API refactoring to abstract the unix layer cleanly
 * Expose a filesystem functor to create filesystem backends
   independent of unix
