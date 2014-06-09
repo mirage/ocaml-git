@@ -78,7 +78,7 @@ module Make (S: Store.S) = struct
     aux (cmp_list equal compare) (printer_list pretty)
 
   let assert_key_equal, assert_key_opt_equal, assert_keys_equal =
-    mk SHA1.equal SHA1.compare SHA1.to_hex
+    mk SHA.equal SHA.compare SHA.to_hex
 
   let assert_value_equal, assert_value_opt_equal, assert_values_equal =
     mk Value.equal Value.compare Value.to_string
