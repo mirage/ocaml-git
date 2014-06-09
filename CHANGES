@@ -1,6 +1,7 @@
-1.2.0:
-* Support for Mirage's V1_LWT.FS backends. This allows to
-  store Git repo in a raw block store directly
+1.2.0: (2014-06-10)
+* Can consume Mirage's V1_LWT.FS signature to generate a
+  persistent store. This allows to store Git repos directly
+  inside raw block devices (no need of filesystem anymore).
 * Minor API refactoring to abstract the unix layer cleanly
 * Expose a filesystem functor to create filesystem backends
   independent of unix
