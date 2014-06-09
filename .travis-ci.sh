@@ -11,8 +11,10 @@ export OPAMYES=1
 
 opam init git://github.com/ocaml/opam-repository >/dev/null 2>&1
 opam install ${OPAM_PACKAGES}
+opam list
 
 eval `opam config env`
-ocaml setup.ml -configure --enable-tests --enable-mirage
+ls $(ocamlfind query mirage-types)
+./configure --enable-tests --enable-mirage
 make
 make test
