@@ -17,13 +17,13 @@
 (** {2 Search over the Git objects} *)
 
 type succ =
-  [ `Commit of SHA1.t
-  | `Tag of string * SHA1.t
-  | `Tree of string * SHA1.t ]
+  [ `Commit of SHA.t
+  | `Tag of string * SHA.t
+  | `Tree of string * SHA.t ]
 (** [Value.t] successors. *)
 
-val sha1_of_succ: succ -> SHA1.t
-(** Return the SHA1 of the successor value. *)
+val sha1_of_succ: succ -> SHA.t
+(** Return the SHA of the successor value. *)
 
 module Make (S: Store.S): sig
 
@@ -33,18 +33,18 @@ module Make (S: Store.S): sig
       transition, so that [mem head ["";"a";"b"]] will look into the
       Tree/Blob object located under {i a/b} for the head revision. *)
 
-  val succ: S.t -> SHA1.t -> succ list Lwt.t
+  val succ: S.t -> SHA.t -> succ list Lwt.t
   (** Compute the successor values. *)
 
-  val mem: S.t -> SHA1.t -> string list -> bool Lwt.t
+  val mem: S.t -> SHA.t -> string list -> bool Lwt.t
   (** [mem t sha1 path] check wether we can go from the object named
       [sha1] to an other object following the [path] labels.*)
 
-  val find: S.t -> SHA1.t -> string list -> SHA1.t option Lwt.t
+  val find: S.t -> SHA.t -> string list -> SHA.t option Lwt.t
   (** [find t sha1 path] returns (if it exists) the object named
       [sha1] to an other object following the [path] labels. *)
 
-  val find_exn: S.t -> SHA1.t -> string list -> SHA1.t Lwt.t
+  val find_exn: S.t -> SHA.t -> string list -> SHA.t Lwt.t
   (** [find t sha1 path] returns (if it exists) the object named
       [sha1] to an other object following the [path] labels. Raise
       [Not_found] if no such object exist.*)

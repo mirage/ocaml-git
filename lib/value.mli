@@ -28,8 +28,8 @@ type t =
 val type_of: t -> Object_type.t
 (** Return the object type. *)
 
-val sha1: t -> SHA1.t
-(** Return the SHA1 of the serialized contents. *)
+val sha1: t -> SHA.t
+(** Return the SHA of the serialized contents. *)
 
 include Object.S with type t := t
 
@@ -68,16 +68,16 @@ module Cache: sig
   val clear: unit -> unit
   (** Empty the cache. *)
 
-  val find: SHA1.t -> string option
+  val find: SHA.t -> string option
   (** Cache an inflated values. This is used by various operations, so
       it could be useful to look into it to speed-up operations which
       needs to search a pack file. *)
 
-  val find_exn: SHA1.t -> string
+  val find_exn: SHA.t -> string
   (** Same as [find] but raises [Not_found] if the key is not in the
       cache. *)
 
-  val add: SHA1.t -> string -> unit
+  val add: SHA.t -> string -> unit
   (** Cache an inflated value. *)
 
 end

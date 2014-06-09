@@ -37,11 +37,11 @@ module Raw = struct
 
   module T = struct
     type t = {
-      sha1    : SHA1.t;
+      sha1    : SHA.t;
       index   : Pack_index.t;
       buffer  : Bigstring.t;
       version : int;
-      checksum: SHA1.t;
+      checksum: SHA.t;
       values  :  (int * Bigstring.t * Packed_value.t) list;
     } with bin_io, compare, sexp
     let hash (t: t) = Hashtbl.hash t
@@ -53,7 +53,7 @@ module Raw = struct
 
   let pretty t =
     let buf = Buffer.create 128 in
-    bprintf buf "%s\n" (SHA1.to_hex t.checksum);
+    bprintf buf "%s\n" (SHA.to_hex t.checksum);
     List.iter ~f:(fun (offset, _, p) ->
         bprintf buf "offset: %d\n%s" offset (Packed_value.pretty p)
       ) t.values;
@@ -95,8 +95,8 @@ module Raw = struct
           (sha1 ~offsets ~pos p)
           (fun sha1 ->
              let index = Pack_index.({
-                 offsets = SHA1.Map.add index.offsets ~key:sha1 ~data:pos;
-                 crcs    = SHA1.Map.add index.crcs    ~key:sha1 ~data:crc;
+                 offsets = SHA.Map.add index.offsets ~key:sha1 ~data:pos;
+                 crcs    = SHA.Map.add index.crcs    ~key:sha1 ~data:crc;
                  pack_checksum;
                }) in
              let offsets = Int.Map.add offsets ~key:pos ~data:sha1 in
@@ -113,7 +113,7 @@ module Raw = struct
   let index_of_values ~pack_checksum values =
     let read sha1 = Value.Cache.find_exn sha1 in
     let write buffer =
-      let sha1 = SHA1.create buffer in
+      let sha1 = SHA.create buffer in
       Value.Cache.add sha1 buffer;
       sha1 in
     let size = List.length values in
@@ -134,11 +134,11 @@ module Raw = struct
      random but stable one. *)
   let sha1_of_keys keys =
     keys
-    |> List.map ~f:SHA1.to_hex
+    |> List.map ~f:SHA.to_hex
     |> List.sort ~cmp:String.compare
     |> List.rev
     |> String.concat ~sep:""
-    |> SHA1.create
+    |> SHA.create
 
   let input buf ~index =
     let offset = Mstruct.offset buf in
@@ -155,15 +155,15 @@ module Raw = struct
     let str = Bigstring.sub_shared
         ~len:(Mstruct.offset buf - offset)
         (Mstruct.to_bigarray buf) in
-    let pack_checksum = SHA1.input buf in
-    (* XXX: SHA1.of_bigstring *)
-    let checksum = SHA1.create (Bigstring.to_string str) in
-    if SHA1.(checksum <> pack_checksum) then (
+    let pack_checksum = SHA.input buf in
+    (* XXX: SHA.of_bigstring *)
+    let checksum = SHA.create (Bigstring.to_string str) in
+    if SHA.(checksum <> pack_checksum) then (
       eprintf "Pack.Raw.input: wrong file checksum. Got: %s, expecting %s."
-        (SHA1.to_hex checksum) (SHA1.to_hex pack_checksum);
+        (SHA.to_hex checksum) (SHA.to_hex pack_checksum);
       failwith "Pack.input"
     );
-    Log.debugf "input checksum: %s" (SHA1.to_hex pack_checksum);
+    Log.debugf "input checksum: %s" (SHA.to_hex pack_checksum);
     if Int.(Mstruct.length buf <> 0) then (
       eprintf "Pack.input: unprocessed data.";
       failwith "Pack.input";
@@ -172,13 +172,13 @@ module Raw = struct
     let index = match index with
       | None   -> index_of_values ~pack_checksum values
       | Some i ->
-        if SHA1.(i.Pack_index.pack_checksum <> pack_checksum) then (
+        if SHA.(i.Pack_index.pack_checksum <> pack_checksum) then (
           eprintf "Pack.Raw.input: wrong index checksum. Got: %s, expecting %s."
-            (SHA1.to_hex i.Pack_index.pack_checksum) (SHA1.to_hex pack_checksum);
+            (SHA.to_hex i.Pack_index.pack_checksum) (SHA.to_hex pack_checksum);
           failwith "Pack.input"
         );
         i in
-    let sha1 = sha1_of_keys (SHA1.Map.keys index.Pack_index.offsets) in
+    let sha1 = sha1_of_keys (SHA.Map.keys index.Pack_index.offsets) in
     {
       sha1; index; values;
       buffer = Bigstring.sub_shared ~pos:offset (Mstruct.to_bigarray buf);
@@ -193,15 +193,15 @@ module Raw = struct
   let index t = t.index
 
   let keys t =
-    SHA1.Set.of_list
-      (SHA1.Map.keys t.index.Pack_index.offsets)
+    SHA.Set.of_list
+      (SHA.Map.keys t.index.Pack_index.offsets)
 
 end
 
 module Log = Log.Make(struct let section = "pack" end)
 
 module T = struct
-  type t = (SHA1.t * Packed_value.PIC.t) list with bin_io, compare, sexp
+  type t = (SHA.t * Packed_value.PIC.t) list with bin_io, compare, sexp
   let hash (t: t) = Hashtbl.hash t
   include Sexpable.To_stringable (struct type nonrec t = t with sexp end)
   let module_name = "Pack"
@@ -212,14 +212,14 @@ include Identifiable.Make (T)
 let pretty t =
   let buf = Buffer.create 1024 in
   List.iter ~f:(fun (sha1, p) ->
-      bprintf buf "%s: %s---\n" (SHA1.to_hex sha1) (Packed_value.PIC.pretty p)
+      bprintf buf "%s: %s---\n" (SHA.to_hex sha1) (Packed_value.PIC.pretty p)
     ) t;
   Buffer.contents buf
 
 let to_pic { Raw.values; index }  =
   Log.debugf "to_pic";
   let inv_offsets = Int.Map.of_alist_exn
-      (List.Assoc.inverse (SHA1.Map.to_alist index.Pack_index.offsets)) in
+      (List.Assoc.inverse (SHA.Map.to_alist index.Pack_index.offsets)) in
   let _offsets, _sha1, pics =
     List.fold_left ~f:(fun (offsets, sha1s, pics) (pos, _, p) ->
         match Int.Map.find inv_offsets pos with
@@ -227,10 +227,10 @@ let to_pic { Raw.values; index }  =
         | Some sha1 ->
           let pic = Packed_value.to_pic offsets sha1s (pos, sha1, p) in
           Int.Map.add  offsets ~key:pos  ~data:pic,
-          SHA1.Map.add sha1s   ~key:sha1 ~data:pic,
+          SHA.Map.add sha1s   ~key:sha1 ~data:pic,
           (sha1, pic) :: pics
       )
-      ~init:(Int.Map.empty, SHA1.Map.empty, [])
+      ~init:(Int.Map.empty, SHA.Map.empty, [])
       values in
   List.rev pics
 
@@ -253,14 +253,14 @@ let add buf t =
       add_packed_value ~version buf p;
       Packed_value.PIC.Map.add index pic pos
     ) ~init:Packed_value.PIC.Map.empty t in
-  let sha1 = SHA1.create (Bigbuffer.contents buf) in
-  Log.debugf "add sha1: %s" (SHA1.to_hex sha1);
-  SHA1.add buf sha1
+  let sha1 = SHA.create (Bigbuffer.contents buf) in
+  Log.debugf "add sha1: %s" (SHA.to_hex sha1);
+  SHA.add buf sha1
 
 let keys t =
   List.fold_left ~f:(fun set (key, _) ->
-      SHA1.Set.add set key
-    ) ~init:SHA1.Set.empty t
+      SHA.Set.add set key
+    ) ~init:SHA.Set.empty t
 
 let unpack ~write buf =
   Log.debugf "XXX unpack";

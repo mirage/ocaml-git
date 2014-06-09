@@ -18,15 +18,15 @@ open Core_kernel.Std
 open Lwt
 
 let to_string node =
-  let hex = SHA1.to_hex node in
+  let hex = SHA.to_hex node in
   String.sub hex 0 8
 
 module C =
   Graph.Imperative.Digraph.ConcreteBidirectionalLabeled
     (struct
-      type t = (SHA1.t * Value.t)
-      let compare (x,_) (y,_) = String.compare (SHA1.to_string x) (SHA1.to_string y)
-      let hash (x,_) = Hashtbl.hash (SHA1.to_string x)
+      type t = (SHA.t * Value.t)
+      let compare (x,_) (y,_) = String.compare (SHA.to_string x) (SHA.to_string y)
+      let hash (x,_) = Hashtbl.hash (SHA.to_string x)
       let equal (x,_) (y,_) = (x = y)
     end)
     (struct
@@ -59,7 +59,7 @@ module Dot = Graph.Graphviz.Dot(struct
       | _  ->[`Label (String.escaped l)]
   end)
 
-module K = Graph.Imperative.Digraph.ConcreteBidirectional(SHA1)
+module K = Graph.Imperative.Digraph.ConcreteBidirectional(SHA)
 module KO = Graph.Oper.I(K)
 
 module Make (Store: Store.S) = struct
@@ -120,10 +120,10 @@ module Make (Store: Store.S) = struct
   let closure t ~min max =
     Log.debugf "closure";
     let g = K.create ~size:1024 () in
-    let marks = SHA1.Table.create () in
+    let marks = SHA.Table.create () in
     let mark key = Hashtbl.add_exn marks key true in
     let has_mark key = Hashtbl.mem marks key in
-    let min = SHA1.Set.to_list min in
+    let min = SHA.Set.to_list min in
     Lwt_list.iter_p (fun k ->
         Store.mem t k >>= function
         | false -> return_unit
@@ -136,7 +136,7 @@ module Make (Store: Store.S) = struct
       if has_mark key then Lwt.return ()
       else (
         mark key;
-        Log.debugf "ADD %s" (SHA1.to_hex key);
+        Log.debugf "ADD %s" (SHA.to_hex key);
         Store.mem t key >>= function
         | false -> return_unit
         | true  ->
@@ -146,7 +146,7 @@ module Make (Store: Store.S) = struct
           List.iter ~f:(fun k -> K.add_edge g k key) keys;
           Lwt_list.iter_p add keys
       ) in
-    let max = SHA1.Set.to_list max in
+    let max = SHA.Set.to_list max in
     Lwt_list.iter_p add max >>= fun () ->
     Lwt.return g
 

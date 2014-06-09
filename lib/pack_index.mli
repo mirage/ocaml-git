@@ -19,11 +19,11 @@
 open Core_kernel.Std
 
 type t = {
-  offsets      : int SHA1.Map.t;
-  crcs         : int32 SHA1.Map.t;
-  pack_checksum: SHA1.t;
+  offsets      : int SHA.Map.t;
+  crcs         : int32 SHA.Map.t;
+  pack_checksum: SHA.t;
 }
-(** [offsests] is the positions of the SHA1 objects in the
+(** [offsests] is the positions of the SHA objects in the
     corresponding raw pack file.
 
     [crcs] contains the CRC-32 value of the packed object data.
@@ -33,13 +33,13 @@ type t = {
 
 include Object.S with type t := t
 
-val keys: Mstruct.t -> SHA1.Set.t
+val keys: Mstruct.t -> SHA.Set.t
 (** Read only the keys contained in the index. *)
 
-val lengths: t -> int option SHA1.Map.t
+val lengths: t -> int option SHA.Map.t
 (** [lengths] returns the difference between two consecutive offsets
     (appart for the last elements, where the lenght can be [None] is
     the index file is build from a raw pack file). *)
 
-val empty: ?pack_checksum:SHA1.t -> unit -> t
+val empty: ?pack_checksum:SHA.t -> unit -> t
 (** The empty pack index. *)

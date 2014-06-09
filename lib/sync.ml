@@ -21,16 +21,16 @@ module Log = Log.Make(struct let section = "remote" end)
 module Result = struct
 
   type fetch = {
-    head      : SHA1.Commit.t option;
-    references: SHA1.Commit.t Reference.Map.t;
-    sha1s     : SHA1.t list;
+    head      : SHA.Commit.t option;
+    references: SHA.Commit.t Reference.Map.t;
+    sha1s     : SHA.t list;
   }
 
   let pretty_fetch t =
     let buf = Buffer.create 1024 in
-    bprintf buf "HEAD: %s\n" (match t.head with None -> "<none>" | Some x -> SHA1.Commit.to_hex x);
+    bprintf buf "HEAD: %s\n" (match t.head with None -> "<none>" | Some x -> SHA.Commit.to_hex x);
     Reference.Map.iter ~f:(fun ~key ~data ->
-        bprintf buf "%s %s\n" (Reference.to_string key) (SHA1.Commit.to_hex data)
+        bprintf buf "%s %s\n" (Reference.to_string key) (SHA.Commit.to_hex data)
       ) t.references;
     bprintf buf "Keys: %d\n" (List.length t.sha1s);
     Buffer.contents buf
@@ -281,7 +281,7 @@ module Make (IO: IO) (Store: Store.S) = struct
 
     type t = {
       capabilities: Capabilities.t;
-      references  : Reference.t list SHA1.Commit.Map.t;
+      references  : Reference.t list SHA.Commit.Map.t;
     }
 
     let references t =
@@ -289,7 +289,7 @@ module Make (IO: IO) (Store: Store.S) = struct
 
     let empty = {
       capabilities = [];
-      references   = SHA1.Commit.Map.empty;
+      references   = SHA.Commit.Map.empty;
     }
 
     let is_empty t =
@@ -310,7 +310,7 @@ module Make (IO: IO) (Store: Store.S) = struct
       Map.iter
         ~f:(fun ~key ~data ->
             List.iter ~f:(fun ref ->
-                Printf.bprintf buf "%s %s\n%!" (SHA1.Commit.to_hex key) (Reference.to_string ref)
+                Printf.bprintf buf "%s %s\n%!" (SHA.Commit.to_hex key) (Reference.to_string ref)
               ) data
           ) t.references;
       Buffer.contents buf
@@ -330,18 +330,18 @@ module Make (IO: IO) (Store: Store.S) = struct
               | Some (ref, caps) ->
                 let ref = Reference.of_string ref in
                 let references =
-                  Map.add_multi ~key:(SHA1.Commit.of_hex sha1) ~data:ref acc.references in
+                  Map.add_multi ~key:(SHA.Commit.of_hex sha1) ~data:ref acc.references in
                 let capabilities = Capabilities.of_string caps in
                 aux { references; capabilities; }
               | None ->
                 let ref = Reference.of_string ref in
                 let references =
-                  Map.add_multi ~key:(SHA1.Commit.of_hex sha1) ~data:ref acc.references in
+                  Map.add_multi ~key:(SHA.Commit.of_hex sha1) ~data:ref acc.references in
                 aux { references; capabilities = []; }
             ) else
               let ref = Reference.of_string ref in
               let references =
-                Map.add_multi ~key:(SHA1.Commit.of_hex sha1) ~data:ref acc.references in
+                Map.add_multi ~key:(SHA.Commit.of_hex sha1) ~data:ref acc.references in
               aux { acc with references }
           | None -> error "%s is not a valid answer" line
       in
@@ -362,8 +362,8 @@ module Make (IO: IO) (Store: Store.S) = struct
       | x          -> error "%s: invalid ack status" x
 
     type t =
-      | Ack_multi of SHA1.t * status
-      | Ack of SHA1.t
+      | Ack_multi of SHA.t * status
+      | Ack of SHA.t
       | Nak
 
     let input ic =
@@ -375,8 +375,8 @@ module Make (IO: IO) (Store: Store.S) = struct
         match String.lsplit2 s ~on:Misc.sp with
         | Some ("ACK", r) ->
           begin match String.lsplit2 r ~on:Misc.sp with
-            | None         -> return (Ack (SHA1.of_hex r))
-            | Some (id, s) -> return (Ack_multi (SHA1.of_hex id, status_of_string s))
+            | None         -> return (Ack (SHA.of_hex r))
+            | Some (id, s) -> return (Ack_multi (SHA.of_hex id, status_of_string s))
           end
         | _ -> error "%S invalid ack" s
 
@@ -394,11 +394,11 @@ module Make (IO: IO) (Store: Store.S) = struct
   module Upload_request = struct
 
     type message =
-      | Want of SHA1.t * Capability.t list
-      | Shallow of SHA1.t
+      | Want of SHA.t * Capability.t list
+      | Shallow of SHA.t
       | Deepen of int
-      | Unshallow of SHA1.t
-      | Have of SHA1.t
+      | Unshallow of SHA.t
+      | Have of SHA.t
       | Done
 
     type t = message list
@@ -439,9 +439,9 @@ module Make (IO: IO) (Store: Store.S) = struct
           | None -> error "input upload"
           | Some (kind, s) ->
             match kind with
-            | "shallow"   -> aux (Shallow   (SHA1.of_hex s) :: acc)
-            | "unshallow" -> aux (Unshallow (SHA1.of_hex s) :: acc)
-            | "have"      -> aux (Have      (SHA1.of_hex s) :: acc)
+            | "shallow"   -> aux (Shallow   (SHA.of_hex s) :: acc)
+            | "unshallow" -> aux (Unshallow (SHA.of_hex s) :: acc)
+            | "have"      -> aux (Have      (SHA.of_hex s) :: acc)
             | "done"      -> aux (Done                      :: acc)
             | "deepen"    ->
               let d =
@@ -449,7 +449,7 @@ module Make (IO: IO) (Store: Store.S) = struct
                 with _ -> error "%s is not a valid integer" s in
               aux (Deepen d :: acc)
             | "want" ->
-              let aux id c = aux (Want (SHA1.of_hex id, c) :: acc) in
+              let aux id c = aux (Want (SHA.of_hex id, c) :: acc) in
               begin match String.lsplit2 s ~on:Misc.sp with
                 | Some (id,c) -> aux id (Capabilities.of_string c)
                 | None        -> match acc with
@@ -468,11 +468,11 @@ module Make (IO: IO) (Store: Store.S) = struct
       (* output wants *)
       Lwt_list.iter_s (fun (id, c) ->
           if c = !last_c then
-            let msg = Printf.sprintf "want %s\n" (SHA1.to_hex id) in
+            let msg = Printf.sprintf "want %s\n" (SHA.to_hex id) in
             PacketLine.output_line oc msg
           else
             let msg =
-              Printf.sprintf "want %s %s\n" (SHA1.to_hex id) (Capabilities.to_string c) in
+              Printf.sprintf "want %s %s\n" (SHA.to_hex id) (Capabilities.to_string c) in
             last_c := c;
             PacketLine.output_line oc msg
         ) (filter_wants t)
@@ -480,21 +480,21 @@ module Make (IO: IO) (Store: Store.S) = struct
 
       (* output shallows *)
       Lwt_list.iter_s (fun id ->
-          let msg = Printf.sprintf "shallow %s" (SHA1.to_hex id) in
+          let msg = Printf.sprintf "shallow %s" (SHA.to_hex id) in
           PacketLine.output_line oc msg
         ) (filter_shallows t)
       >>= fun () ->
 
       (* output unshallows *)
       Lwt_list.iter_s (fun id ->
-          let msg = Printf.sprintf "unshallow %s" (SHA1.to_hex id) in
+          let msg = Printf.sprintf "unshallow %s" (SHA.to_hex id) in
           PacketLine.output_line oc msg
         ) (filter_unshallows t)
       >>= fun () ->
 
       (* output haves *)
       Lwt_list.iter_s (fun id ->
-          let msg = Printf.sprintf "have %s\n" (SHA1.to_hex id) in
+          let msg = Printf.sprintf "have %s\n" (SHA.to_hex id) in
           PacketLine.output_line oc msg >>= fun () ->
           return_unit
         ) (filter_haves t)
@@ -516,8 +516,8 @@ module Make (IO: IO) (Store: Store.S) = struct
         PacketLine.flush oc
 
     type phase1_result = {
-      shallows: SHA1.t list;
-      unshallows: SHA1.t list;
+      shallows: SHA.t list;
+      unshallows: SHA.t list;
     }
 
     (* PHASE1: the client send the the IDs he wants, the sever answers with
@@ -571,13 +571,13 @@ module Make (IO: IO) (Store: Store.S) = struct
   module Update_request = struct
 
     type command =
-      | Create of Reference.t * SHA1.Commit.t
-      | Delete of Reference.t * SHA1.Commit.t
-      | Update of Reference.t * SHA1.Commit.t * SHA1.Commit.t
+      | Create of Reference.t * SHA.Commit.t
+      | Delete of Reference.t * SHA.Commit.t
+      | Update of Reference.t * SHA.Commit.t * SHA.Commit.t
 
     let pretty_command t =
       let r = Reference.to_string in
-      let c = SHA1.Commit.to_hex in
+      let c = SHA.Commit.to_hex in
       match t with
       | Create (name, new_id)         -> sprintf "create %s %s" (r name) (c new_id)
       | Delete (name, old_id)         -> sprintf "delete %s %s" (r name) (c old_id)
@@ -588,12 +588,12 @@ module Make (IO: IO) (Store: Store.S) = struct
 
     let output_command buf t =
       let old_id, new_id, name = match t with
-        | Create (name, new_id) -> SHA1.Commit.zero, new_id, name
-        | Delete (name, old_id) -> old_id, SHA1.Commit.zero, name
+        | Create (name, new_id) -> SHA.Commit.zero, new_id, name
+        | Delete (name, old_id) -> old_id, SHA.Commit.zero, name
         | Update (name, old_id, new_id) -> old_id, new_id, name in
       Printf.bprintf buf "%s %s %s"
-        (SHA1.Commit.to_hex old_id)
-        (SHA1.Commit.to_hex new_id)
+        (SHA.Commit.to_hex old_id)
+        (SHA.Commit.to_hex new_id)
         (Reference.to_string name)
 
     type t = {
@@ -665,8 +665,8 @@ module Make (IO: IO) (Store: Store.S) = struct
   }
 
   type fetch = {
-    haves   : SHA1.t list;
-    shallows: SHA1.t list;
+    haves   : SHA.t list;
+    shallows: SHA.t list;
     deepen  : int option;
     unpack  : bool;
   }
@@ -703,11 +703,11 @@ module Make (IO: IO) (Store: Store.S) = struct
             | _                       -> [Capability.Ofs_delta ] in
           let commands = [ command ] in
           let min = Map.keys (Listing.references listing)
-                  |> List.map ~f:SHA1.of_commit
-                  |> SHA1.Set.of_list in
+                  |> List.map ~f:SHA.of_commit
+                  |> SHA.Set.of_list in
           let max = match new_obj with
-            | None   -> SHA1.Set.empty
-            | Some x -> SHA1.Set.singleton (SHA1.of_commit x) in
+            | None   -> SHA.Set.empty
+            | Some x -> SHA.Set.singleton (SHA.of_commit x) in
           Graph.pack t ~min max >>= fun pack ->
           let request = { Update_request.capabilities; commands; pack } in
           Log.debugf "request:\n%s" (Update_request.pretty request);
@@ -763,7 +763,7 @@ module Make (IO: IO) (Store: Store.S) = struct
               let shallows = match op with
                 | Fetch { shallows } -> shallows
                 | _                  -> [] in
-              Upload_request.phase1 ?deepen (ic,oc) ~shallows ~wants:[SHA1.of_commit head]
+              Upload_request.phase1 ?deepen (ic,oc) ~shallows ~wants:[SHA.of_commit head]
               >>= fun _phase1 ->
               (* XXX: process the shallow / unshallow.  *)
               (* XXX: need a notion of shallow/unshallow in API. *)
@@ -792,7 +792,7 @@ module Make (IO: IO) (Store: Store.S) = struct
                   let pack = Pack.Raw.input (Mstruct.of_bigarray pack) ~index:None in
                   Store.write_pack t pack
               end >>= fun sha1s ->
-              match SHA1.Set.to_list sha1s with
+              match SHA.Set.to_list sha1s with
               | []    ->
                 Log.debugf "NO NEW OBJECTS";
                 Printf.printf "Already up-to-date.\n%!";
@@ -832,7 +832,7 @@ end
 
 module type S = sig
   type t
-  val ls: t -> Gri.t -> SHA1.Commit.t Reference.Map.t Lwt.t
+  val ls: t -> Gri.t -> SHA.Commit.t Reference.Map.t Lwt.t
   val push: t -> branch:Reference.t -> Gri.t -> Result.push Lwt.t
   val clone: t -> ?bare:bool -> ?deepen:int -> ?unpack:bool -> Gri.t -> Result.fetch Lwt.t
   val fetch: t -> ?deepen:int -> ?unpack:bool -> Gri.t -> Result.fetch Lwt.t

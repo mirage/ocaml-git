@@ -45,7 +45,7 @@ type stat_info = {
 
 type entry = {
   stats : stat_info;
-  id    : SHA1.t;
+  id    : SHA.t;
   stage : int;
   name  : string;
 } with bin_io, compare, sexp
@@ -145,7 +145,7 @@ let input_entry buf =
   Log.debugf "input_entry";
   let offset0 = Mstruct.offset buf in
   let stats = input_stat_info buf in
-  let id = SHA1.input buf in
+  let id = SHA.input buf in
   let stage, len =
     let i = Mstruct.get_be_uint16 buf in
     (i land 0x3000) lsr 12,
@@ -159,7 +159,7 @@ let input_entry buf =
     | n -> 8-n in
   Mstruct.shift buf padding;
   Log.debugf "name: %s id: %s bytes:%d padding:%d"
-    name (SHA1.to_hex id) bytes padding;
+    name (SHA.to_hex id) bytes padding;
   { stats; id; stage; name }
 
 let add_entry buf t =
@@ -170,7 +170,7 @@ let add_entry buf t =
     | n -> 8-n in
   let mstr = Mstruct.create (len+pad) in
   add_stat_info mstr t.stats;
-  Mstruct.set_string mstr (SHA1.to_string t.id);
+  Mstruct.set_string mstr (SHA.to_string t.id);
   let flags = (t.stage lsl 12 + String.length t.name) land 0x3FFF in
   Mstruct.set_be_uint16 mstr flags;
   Mstruct.set_string mstr t.name;
@@ -211,9 +211,9 @@ let input buf =
     buf
     |> Mstruct.to_bigarray
     |> Bigstring.To_string.sub ~pos:offset ~len:length
-    |> SHA1.create in
-  let checksum = SHA1.input buf in
-  if SHA1.(actual_checksum <> checksum) then (
+    |> SHA.create in
+  let checksum = SHA.input buf in
+  if SHA.(actual_checksum <> checksum) then (
     eprintf "Cach.input: wrong checksum";
     failwith "Cache.input"
   );
@@ -231,6 +231,6 @@ let add buf t =
       Bigbuffer.add_string buf str;
       List.iter ~f:(add_entry buf) t.entries;
     ) in
-  let sha1 = SHA1.create str in
+  let sha1 = SHA.create str in
   Bigbuffer.add_string buf str;
-  Bigbuffer.add_string buf (SHA1.to_string sha1)
+  Bigbuffer.add_string buf (SHA.to_string sha1)

@@ -17,8 +17,8 @@
 (** Git commits. *)
 
 type t = {
-  tree     : SHA1.Tree.t;
-  parents  : SHA1.Commit.t list;
+  tree     : SHA.Tree.t;
+  parents  : SHA.Commit.t list;
   author   : User.t;
   committer: User.t;
   message  : string;

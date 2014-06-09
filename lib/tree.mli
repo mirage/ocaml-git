@@ -26,7 +26,7 @@ type perm =
 type entry = {
   perm: perm;
   name: string;
-  node: SHA1.t;
+  node: SHA.t;
 }
 (** A tree entry. This is either a directory or a file. As this is
     supposed to model a filesystem, directory does not contain

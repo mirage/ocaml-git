@@ -18,9 +18,9 @@ open Lwt
 open Core_kernel.Std
 
 type succ =
-  [ `Commit of SHA1.t
-  | `Tag of string * SHA1.t
-  | `Tree of string * SHA1.t ]
+  [ `Commit of SHA.t
+  | `Tag of string * SHA.t
+  | `Tree of string * SHA.t ]
 
 let sha1_of_succ = function
   | `Commit s
@@ -33,9 +33,9 @@ module Make (Store: Store.S) = struct
 
   let succ t sha1 =
     let commit c =
-      `Commit (SHA1.of_commit c) in
+      `Commit (SHA.of_commit c) in
     let tree l s =
-      `Tree (l, SHA1.of_tree s) in
+      `Tree (l, SHA.of_tree s) in
     let tag t =
       `Tag (t.Tag.tag, t.Tag.sha1) in
     Store.read t sha1 >>= function

@@ -19,9 +19,9 @@
 module Result: sig
 
   type fetch = {
-    head      : SHA1.Commit.t option;
-    references: SHA1.Commit.t Reference.Map.t;
-    sha1s     : SHA1.t list;
+    head      : SHA.Commit.t option;
+    references: SHA.Commit.t Reference.Map.t;
+    sha1s     : SHA.t list;
   }
   (** The resulting sha1s and references. *)
 
@@ -46,7 +46,7 @@ module type S = sig
   type t
   (** Abstract value for stores. *)
 
-  val ls: t -> Gri.t -> SHA1.Commit.t Reference.Map.t Lwt.t
+  val ls: t -> Gri.t -> SHA.Commit.t Reference.Map.t Lwt.t
   (** List the references of the remote repository. *)
 
   val push: t -> branch:Reference.t -> Gri.t -> Result.push Lwt.t

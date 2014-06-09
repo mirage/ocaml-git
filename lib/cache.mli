@@ -59,7 +59,7 @@ type stat_info = {
 
 type entry = {
   stats : stat_info;
-  id    : SHA1.t;
+  id    : SHA.t;
   stage : int;
   name  : string;
 }

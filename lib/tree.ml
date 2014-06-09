@@ -27,7 +27,7 @@ type perm = [
 type entry = {
   perm: perm;
   name: string;
-  node: SHA1.t;
+  node: SHA.t;
 } with bin_io, compare, sexp
 
 module T = struct
@@ -48,7 +48,7 @@ let pretty_perm = function
 let pretty_entry e =
   sprintf "%s %s    %S\n"
     (pretty_perm e.perm)
-    (SHA1.to_hex e.node)
+    (SHA.to_hex e.node)
     e.name
 
 let pretty t =
@@ -102,7 +102,7 @@ let add_entry buf e =
   Bigbuffer.add_char buf Misc.sp;
   Bigbuffer.add_string buf (encode e.name);
   Bigbuffer.add_char buf Misc.nul;
-  SHA1.add buf e.node
+  SHA.add buf e.node
 
 let decode path =
   if not (String.mem path escape) then path
@@ -132,7 +132,7 @@ let input_entry buf =
     | None      -> Mstruct.parse_error_buf buf "invalid filename"
     | Some name -> name in
   let name = decode name in
-  let node = SHA1.input buf in
+  let node = SHA.input buf in
   let entry = {
     perm = perm_of_string buf perm;
     name; node

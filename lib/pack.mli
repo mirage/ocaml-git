@@ -18,9 +18,9 @@
 
 open Core_kernel.Std
 
-type t = (SHA1.t * Packed_value.PIC.t) list
+type t = (SHA.t * Packed_value.PIC.t) list
 (** A pack value is an ordered list of position-independant packed
-    values and the SHA1 of the corresponding inflated objects. *)
+    values and the SHA of the corresponding inflated objects. *)
 
 include Object.S with type t := t
 
@@ -29,21 +29,21 @@ val input: Mstruct.t -> index:Pack_index.t option -> t
     [index] argument. When [index] is [None], recompute the whole
     index: that's very costly so provide the index when possible. *)
 
-val keys: t -> SHA1.Set.t
+val keys: t -> SHA.Set.t
 (** Return the keys present in the pack. *)
 
-val read: t -> SHA1.t -> Value.t option
+val read: t -> SHA.t -> Value.t option
 (** Return the value stored in the pack file. *)
 
-val read_exn: t -> SHA1.t -> Value.t
+val read_exn: t -> SHA.t -> Value.t
 (** Return the value stored in the pack file. *)
 
-val unpack: write:(Value.t -> SHA1.t Lwt.t) ->
-  Bigstring.t -> SHA1.Set.t Lwt.t
-(** Unpack a whole pack file. [write] should returns the SHA1 of the
+val unpack: write:(Value.t -> SHA.t Lwt.t) ->
+  Bigstring.t -> SHA.Set.t Lwt.t
+(** Unpack a whole pack file. [write] should returns the SHA of the
     marshaled value. Return the IDs of the written objects. *)
 
-val pack: (SHA1.t * Value.t) list -> t
+val pack: (SHA.t * Value.t) list -> t
 (** Create a (compressed) pack file. *)
 
 module Raw: sig
@@ -56,13 +56,13 @@ module Raw: sig
   val input: Mstruct.t -> index:Pack_index.t option -> t
   (** Same as the top-level [input] function but for raw packs. *)
 
-  val sha1: t -> SHA1.t
+  val sha1: t -> SHA.t
   (** Return the name of the pack. *)
 
   val index: t -> Pack_index.t
   (** Return the pack index. *)
 
-  val keys: t -> SHA1.Set.t
+  val keys: t -> SHA.Set.t
   (** Return the keys present in the raw pack. *)
 
 end

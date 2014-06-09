@@ -149,14 +149,6 @@ module D = struct
   let write_file file b =
     with_write_file file (fun fd -> write_bigstring fd b)
 
-  let write_file_string file ~contents =
-    with_write_file file (fun fd -> write_string fd contents)
-
-  let writev_file file bs =
-    with_write_file file (fun fd ->
-        Lwt_list.iter_s (write_bigstring fd) bs
-      )
-
   let read_file file =
     let open Lwt in
     Log.infof "Reading %s" file;
@@ -164,7 +156,7 @@ module D = struct
         let fd = Unix.(openfile file [O_RDONLY; O_NONBLOCK] 0o644) in
         let ba = Lwt_bytes.map_file ~fd ~shared:false () in
         Unix.close fd;
-        ba
+        return ba
       ) ()
 
   let realdir dir =
@@ -177,11 +169,43 @@ module D = struct
     ) else dir
 
   let realpath file =
-    if Sys.is_directory file then realdir file
-    else
-      Filename.concat
-        (realdir (Filename.dirname file))
-        (Filename.basename file)
+    let r =
+      if Sys.is_directory file then realdir file
+      else
+        Filename.concat
+          (realdir (Filename.dirname file))
+          (Filename.basename file) in
+    return r
+
+  let stat_info path =
+    let open Cache in
+    let stats = Unix.stat path in
+    let ctime = { lsb32 = Int32.of_float stats.Unix.st_ctime; nsec = 0l } in
+    let mtime = { lsb32 = Int32.of_float stats.Unix.st_mtime; nsec = 0l } in
+    let dev = Int32.of_int_exn stats.Unix.st_dev in
+    let inode = Int32.of_int_exn stats.Unix.st_ino in
+    let mode = match stats.Unix.st_kind, stats.Unix.st_perm with
+      | Unix.S_REG, 0o755 -> `Exec
+      | Unix.S_REG, 0o644 -> `Normal
+      | Unix.S_LNK, _     -> `Link
+      | _ -> failwith (path ^ ": not supported kind of file.") in
+    let uid = Int32.of_int_exn stats.Unix.st_uid in
+    let gid = Int32.of_int_exn stats.Unix.st_gid in
+    let size = Int32.of_int_exn stats.Unix.st_size in
+    { ctime; mtime; dev; inode; uid; gid; mode; size }
+
+  let file_exists f =
+    return (Sys.file_exists f)
+
+  let remove f =
+    let _ = Sys.command (sprintf "rm -rf %s" f) in
+    return_unit
+
+  let chmod f i =
+    return (Unix.chmod f i)
+
+  let getcwd () =
+    return (Sys.getcwd ())
 
 end
 

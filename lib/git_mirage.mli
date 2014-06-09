@@ -14,39 +14,22 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+(** Mirage implementation of the Git file-system backend and
+    protocol. *)
+
 open Core_kernel.Std
-module Log = Log.Make(struct let section = "reference" end)
 
-include String
+module type FS = sig
 
-let compare x y =
-  match x, y with
-  | "HEAD", "HEAD" -> 0
-  | "HEAD", _      -> (-1)
-  | _     , "HEAD" -> 1
-  | _     , _      -> compare x y
+  include V1_LWT.FS with type page_aligned_buffer = Cstruct.t
 
-let head = "HEAD"
+  val connect: unit -> [`Error of error | `Ok of t ] Lwt.t
+  (** Every [S] define how to connect to a peticular [t]. *)
 
-type head_contents =
-  | SHA of SHA.Commit.t
-  | Ref of t
+  val string_of_error: error -> string
+  (** Pretty-print errors. *)
 
-let is_head x =
-  String.(head = x)
+end
 
-let head_contents refs sha1 =
-  let refs = Map.remove refs "HEAD" in
-  match Misc.map_rev_find refs sha1 with
-  | None   -> SHA sha1
-  | Some r -> Ref r
-
-let master = "refs/heads/master"
-
-let is_valid r =
-  String.for_all ~f:(function
-      | '{'
-      | '}'
-      | '^' -> false
-      | _   -> true
-    ) r
+module FS (FS: FS): Git.FS.S
+  (** Create a irminsule store from raw block devices hanlder. *)

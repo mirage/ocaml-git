@@ -37,28 +37,28 @@ module type S = sig
   val dump: t -> unit Lwt.t
   (** Dump the store contents to stderr. *)
 
-  val contents: t -> (SHA1.t * Value.t) list Lwt.t
+  val contents: t -> (SHA.t * Value.t) list Lwt.t
   (** Get the full store contents. *)
 
   (** {2 Objects} *)
 
-  val read: t -> SHA1.t -> Value.t option Lwt.t
-  (** Return the object having the given SHA1 name. *)
+  val read: t -> SHA.t -> Value.t option Lwt.t
+  (** Return the object having the given SHA name. *)
 
-  val read_exn: t -> SHA1.t -> Value.t Lwt.t
+  val read_exn: t -> SHA.t -> Value.t Lwt.t
   (** Same as [read] but raises [Not_found] if no object with the given
-      SHA1 is found. *)
+      SHA is found. *)
 
-  val mem: t -> SHA1.t -> bool Lwt.t
+  val mem: t -> SHA.t -> bool Lwt.t
   (** Check whether a key belongs to the store. *)
 
-  val list: t -> SHA1.t list Lwt.t
-  (** Return the list of SHA1 names. *)
+  val list: t -> SHA.t list Lwt.t
+  (** Return the list of SHA names. *)
 
-  val write: t -> Value.t -> SHA1.t Lwt.t
-  (** Write a value and return the SHA1 of its serialized contents. *)
+  val write: t -> Value.t -> SHA.t Lwt.t
+  (** Write a value and return the SHA of its serialized contents. *)
 
-  val write_pack: t -> Pack.Raw.t -> SHA1.Set.t Lwt.t
+  val write_pack: t -> Pack.Raw.t -> SHA.Set.t Lwt.t
   (** Write a raw pack file and the corresponding index. Return the
       objects IDs which have been written. *)
 
@@ -70,10 +70,10 @@ module type S = sig
   val mem_reference: t -> Reference.t -> bool Lwt.t
   (** Check if a reference exists. *)
 
-  val read_reference: t -> Reference.t -> SHA1.Commit.t option Lwt.t
+  val read_reference: t -> Reference.t -> SHA.Commit.t option Lwt.t
   (** Read a given reference. *)
 
-  val read_reference_exn: t -> Reference.t -> SHA1.Commit.t Lwt.t
+  val read_reference_exn: t -> Reference.t -> SHA.Commit.t Lwt.t
   (** Read a given reference. *)
 
   val write_head: t -> Reference.head_contents -> unit Lwt.t
@@ -82,7 +82,7 @@ module type S = sig
   val read_head: t -> Reference.head_contents option Lwt.t
   (** Read the head contents. *)
 
-  val write_reference: t -> Reference.t -> SHA1.Commit.t -> unit Lwt.t
+  val write_reference: t -> Reference.t -> SHA.Commit.t -> unit Lwt.t
   (** Write a reference. *)
 
   val remove_reference: t -> Reference.t -> unit Lwt.t
@@ -93,7 +93,7 @@ module type S = sig
   val read_cache: t -> Cache.t Lwt.t
   (** Return the cache of files. *)
 
-  val write_cache: t -> SHA1.Commit.t -> unit Lwt.t
+  val write_cache: t -> SHA.Commit.t -> unit Lwt.t
   (** Update the cache of files for the given revision. XXX: need a
       merge stategy. *)
 
