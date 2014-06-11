@@ -57,16 +57,9 @@ module FS (FS: FS) = struct
       | "." -> None
       | s   -> Some (Filename.dirname s)
 
-    let xxx t name =
-      FS.listdir t "/test-db/.git/objects" >>= function
-      | `Ok l -> Log.debugf "%s %S" name (String.concat ~sep:"," l); return_unit
-      | _     -> return_unit
-
     let mkdir t dirname =
       Log.debugf "mkdir %s" dirname;
-      xxx t "ZZZ" >>= fun () ->
       let rec aux dir =
-        Log.debugf "RRR %S" dir;
         file_exists t dir >>= function
         | true  -> return_unit
         | false ->
@@ -74,13 +67,10 @@ module FS (FS: FS) = struct
           | None   -> return_unit
           | Some d ->
             aux d >>= fun () ->
-            Log.debugf "RRR %S" dir;
             file_exists t dir >>= function
             | true  -> return_unit
             | false ->
-              Log.debugf "zzz %S" dir;
               FS.mkdir t dir >>| fun () ->
-              xxx t "UUU"    >>= fun () ->
               return_unit
       in
       aux dirname
@@ -138,13 +128,9 @@ module FS (FS: FS) = struct
     let write_file t file b =
       Log.debugf "write_file %s %S" file (Bigstring.to_string b);
       mkdir t (Filename.dirname file) >>= fun () ->
-      FS.listdir t "/test-db/.git/objects" >>| fun l ->
-      Log.debugf "XXX %S" (String.concat ~sep:"," l);
       let c = Cstruct.of_bigarray b in
       FS.create t file    >>| fun () ->
       FS.write t file 0 c >>| fun () ->
-      FS.listdir t "/test-db/.git/objects" >>| fun l ->
-      Log.debugf "YYY %S" (String.concat ~sep:"," l);
       return_unit
 
     let getcwd () =
