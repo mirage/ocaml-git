@@ -69,3 +69,27 @@ Test test_git
   Run$:             flag(tests) && flag(unix) && flag(mirage)
   Command:          $test_git -q
   WorkingDirectory: lib_test/
+
+Document git
+  Title:                Git docs
+  Type:                 OCamlbuild (0.4)
+  BuildTools+:          ocamldoc
+  Install:              true
+  XOCamlbuildPath:      lib
+  XOCamlbuildLibraries: git
+
+Document "git-unix"
+  Title:                Git docs, UNIX backend
+  Type:                 OCamlbuild (0.4)
+  BuildTools+:          ocamldoc
+  Install:              true
+  XOCamlbuildPath:      lib
+  XOCamlbuildLibraries: git.unix
+
+Document "git-mirage"
+  Title:                Git docs, Mirage backend
+  Type:                 OCamlbuild (0.4)
+  BuildTools+:          ocamldoc
+  Install:              true
+  XOCamlbuildPath:      lib
+  XOCamlbuildLibraries: git.mirage
