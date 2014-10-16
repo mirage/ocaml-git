@@ -1,6 +1,6 @@
 # OPAM packages needed to build tests.
-OPAM_PACKAGES="camlzip dolog core_kernel cryptokit uri \
-               cmdliner sha mstruct re ocamlgraph \
+OPAM_PACKAGES="camlzip dolog nocrypto uri \
+               cmdliner mstruct re ocamlgraph \
                alcotest lwt \
                conduit uri mirage-fs-unix io-page ipaddr"
 
