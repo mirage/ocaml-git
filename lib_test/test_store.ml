@@ -47,7 +47,13 @@ module Make (Store: Store.S) = struct
       Lwt_unix.run (x.clean ());
       raise e
 
-  let long_random_string = Cryptokit.(Random.string (Random.device_rng "/dev/urandom") 1024)
+  let long_random_string =
+    let t  = Unix.gettimeofday () in
+    let cs = Cstruct.create 8 in
+    Cstruct.BE.set_uint64 cs 0 Int64.(of_float (t *. 1000.)) ;
+    Nocrypto.Rng.reseed cs;
+    Cstruct.to_string (Nocrypto.Rng.generate 1024)
+
   let v1 = Value.blob (Blob.of_raw long_random_string)
   let kv1 = Value.sha1 v1
 

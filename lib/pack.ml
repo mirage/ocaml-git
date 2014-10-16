@@ -105,7 +105,7 @@ module Raw = struct
   let index_of_values ~pack_checksum values =
     let read sha1 = Value.Cache.find_exn sha1 in
     let write buffer =
-      let sha1 = SHA.create buffer in
+      let sha1 = SHA.of_string buffer in
       Value.Cache.add sha1 buffer;
       sha1 in
     let size = List.length values in
@@ -130,7 +130,7 @@ module Raw = struct
     |> List.sort String.compare
     |> List.rev
     |> String.concat ""
-    |> SHA.create
+    |> SHA.of_string
 
   let input buf ~index =
     let all = Mstruct.to_cstruct buf in
@@ -147,7 +147,7 @@ module Raw = struct
     done;
     let str = Cstruct.sub all 0 (Mstruct.offset buf - offset) in
     let pack_checksum = SHA.input buf in
-    let checksum = SHA.create (Cstruct.to_string str) in
+    let checksum = SHA.of_cstruct str in
     if checksum <> pack_checksum then (
       eprintf "Pack.Raw.input: wrong file checksum. Got: %s, expecting %s."
         (SHA.to_hex checksum) (SHA.to_hex pack_checksum);
@@ -239,7 +239,7 @@ let add buf t =
       add_packed_value ~version buf p;
       Packed_value.PIC.Map.add pic pos index
     ) Packed_value.PIC.Map.empty t in
-  let sha1 = SHA.create (Buffer.contents buf) in
+  let sha1 = SHA.of_string (Buffer.contents buf) in
   Log.debugf "add sha1: %s" (SHA.to_hex sha1);
   SHA.add buf sha1
 

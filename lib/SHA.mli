@@ -20,8 +20,11 @@ module type S = sig
 
   include Object.S
 
-  val create: string -> t
-  (** Build a node from a raw bigstring. *)
+  val of_string: string -> t
+  (** Build a hash from a string. *)
+
+  val of_cstruct: Cstruct.t -> t
+  (** Build a hash from a cstruct. *)
 
   val to_raw: t -> string
   (** Raw SHA1 value. *)

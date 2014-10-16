@@ -3,7 +3,7 @@
 version = "1.2.0"
 description = "A low-level interface to Git in pure OCaml"
 requires =
-"mstruct dolog ocamlgraph re.pcre zip sha uri lwt conduit.lwt uri.services"
+"mstruct dolog ocamlgraph re.pcre zip nocrypto uri lwt conduit.lwt uri.services"
 archive(byte) = "git.cma"
 archive(byte, plugin) = "git.cma"
 archive(native) = "git.cmxa"

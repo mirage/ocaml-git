@@ -70,7 +70,7 @@ let add_inflated buf t =
 
 let sha1 t =
   let buf = Misc.with_buffer (fun buf -> add_inflated buf t) in
-  SHA.create buf
+  SHA.of_string buf
 
 let add buf t =
   Log.debugf "add %s" (pretty t);

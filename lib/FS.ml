@@ -91,7 +91,7 @@ module Loose = struct
   let write t value =
     Log.debugf "write";
     let inflated = Misc.with_buffer (fun buf -> Value.add_inflated buf value) in
-    let sha1 = SHA.create inflated in
+    let sha1 = SHA.of_string inflated in
     let file = file t sha1 in
     IO.file_exists file >>= function
     | true  -> return sha1

@@ -25,11 +25,11 @@ Library git
                      Object, Object_type, Store, Search, Gri,
                      Memory, FS
   BuildDepends:      mstruct, dolog, ocamlgraph,
-                     re.pcre, zip, sha1, uri, lwt,
+                     re.pcre, zip, nocrypto, uri, lwt,
                      sexplib.syntax,
                      conduit.lwt, uri.services
   XMETARequires:     mstruct, dolog, ocamlgraph,
-                     re.pcre, zip, sha, uri, lwt,
+                     re.pcre, zip, nocrypto, uri, lwt,
                      conduit.lwt, uri.services
 
 Library "git-unix"
@@ -62,7 +62,7 @@ Executable test_git
   MainIs:           test.ml
   CompiledObject:   best
   Install:          false
-  BuildDepends:     alcotest, git, git.unix, cryptokit,
+  BuildDepends:     alcotest, git, git.unix,
                     git.mirage, io-page.unix, mirage-fs-unix
 
 Test test_git

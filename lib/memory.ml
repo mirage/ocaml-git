@@ -52,7 +52,7 @@ let clear t =
 
 let write t value =
   let inflated = Misc.with_buffer (fun buf -> Value.add_inflated buf value) in
-  let sha1 = SHA.create inflated in
+  let sha1 = SHA.of_string inflated in
   try
     let _ = Hashtbl.find t.values sha1 in
     return sha1

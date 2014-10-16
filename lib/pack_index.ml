@@ -228,5 +228,5 @@ let add buf t =
 
   (* XXX: SHA.of_bigstring *)
   let str = Buffer.contents buf in
-  let checksum = SHA.create str in
+  let checksum = SHA.of_string str in
   Buffer.add_string buf (SHA.to_raw checksum)

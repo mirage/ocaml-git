@@ -20,7 +20,8 @@ module Log = Log.Make(struct let section = "sha1" end)
 
 module type S = sig
   include Object.S
-  val create: string -> t
+  val of_string: string -> t
+  val of_cstruct: Cstruct.t -> t
   val to_raw: t -> string
   val of_raw: string -> t
   val to_hex: t -> string
@@ -46,7 +47,14 @@ module SHA1_String = struct
 
   let of_raw x = x
 
-  let create str = Sha1.(to_bin (string str))
+  let of_string str =
+    Cstruct.of_string str
+    |> Nocrypto.Hash.SHA1.digest
+    |> Cstruct.to_string
+
+  let of_cstruct c =
+    Nocrypto.Hash.SHA1.digest c
+    |> Cstruct.to_string
 
   let to_hex t =
     Misc.hex_encode t

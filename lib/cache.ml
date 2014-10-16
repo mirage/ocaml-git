@@ -212,8 +212,8 @@ let input buf =
   );
   let actual_checksum =
     Cstruct.sub all offset length
-    |> Cstruct.to_string
-    |> SHA.create in
+    |> SHA.of_cstruct
+  in
   let checksum = SHA.input buf in
   if SHA.(actual_checksum <> checksum) then (
     eprintf "Cach.input: wrong checksum";
@@ -234,6 +234,6 @@ let add buf t =
       Buffer.add_string buf (Cstruct.to_string header);
       List.iter (add_entry buf) t.entries;
     ) in
-  let sha1 = SHA.create str in
+  let sha1 = SHA.of_string str in
   Buffer.add_string buf str;
   Buffer.add_string buf (SHA.to_raw sha1)

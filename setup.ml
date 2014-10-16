@@ -6907,7 +6907,7 @@ let setup_t =
                            FindlibPackage ("ocamlgraph", None);
                            FindlibPackage ("re.pcre", None);
                            FindlibPackage ("zip", None);
-                           FindlibPackage ("sha", None);
+                           FindlibPackage ("nocrypto", None);
                            FindlibPackage ("uri", None);
                            FindlibPackage ("lwt", None);
                            FindlibPackage ("sexplib.syntax", None);
@@ -7090,7 +7090,6 @@ let setup_t =
                            FindlibPackage ("alcotest", None);
                            InternalLibrary "git";
                            InternalLibrary "git-unix";
-                           FindlibPackage ("cryptokit", None);
                            InternalLibrary "git-mirage";
                            FindlibPackage ("io-page.unix", None);
                            FindlibPackage ("mirage-fs-unix", None)
