@@ -16,8 +16,6 @@
 
 (** Store Git objects on the local filesystem. *)
 
-open Core_kernel.Std
-
 module type S = sig
 
   include Store.S
@@ -61,11 +59,11 @@ module type IO = sig
   val rec_files: string -> string list Lwt.t
   (** List of the subfiles, recursively. *)
 
-  val read_file: string -> Bigstring.t Lwt.t
+  val read_file: string -> Cstruct.t Lwt.t
   (** mmap a file and return a mutable C-like structure with its
       contents. *)
 
-  val write_file: string -> Bigstring.t -> unit Lwt.t
+  val write_file: string -> Cstruct.t -> unit Lwt.t
   (** Write a bigarray to a file. *)
 
   val chmod: string -> int -> unit Lwt.t

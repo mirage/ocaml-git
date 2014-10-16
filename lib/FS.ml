@@ -14,9 +14,9 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Core_kernel.Std
 open Lwt
 open Misc.OP
+open Printf
 
 module LogMake = Log.Make
 
@@ -31,8 +31,8 @@ module type IO = sig
   val directories: string -> string list Lwt.t
   val files: string -> string list Lwt.t
   val rec_files: string -> string list Lwt.t
-  val read_file: string -> Bigstring.t Lwt.t
-  val write_file: string -> Bigstring.t -> unit Lwt.t
+  val read_file: string -> Cstruct.t Lwt.t
+  val write_file: string -> Cstruct.t -> unit Lwt.t
   val chmod: string -> int -> unit Lwt.t
   val stat_info: string -> Cache.stat_info
 end
@@ -83,10 +83,10 @@ module Loose = struct
     | true  ->
       IO.read_file file >>= fun buf ->
       try
-        let value = Value.input (Mstruct.of_bigarray buf) in
+        let value = Value.input (Mstruct.of_cstruct buf) in
         return (Some value)
       with Zlib.Error _ ->
-        fail (Zlib.Error (file, (Bigstring.to_string buf)))
+        fail (Zlib.Error (file, (Cstruct.to_string buf)))
 
   let write t value =
     Log.debugf "write";
@@ -96,7 +96,7 @@ module Loose = struct
     IO.file_exists file >>= function
     | true  -> return sha1
     | false ->
-      let deflated = Misc.deflate_bigstring (Bigstring.of_string inflated) in
+      let deflated = Misc.deflate_cstruct (Cstruct.of_string inflated) in
       IO.write_file file deflated >>= fun () ->
       return sha1
 
@@ -104,13 +104,13 @@ module Loose = struct
     Log.debugf "Loose.list %s" root;
     let objects = root / ".git" / "objects" in
     IO.directories objects >>= fun objects ->
-    let objects = List.map ~f:Filename.basename objects in
-    let objects = List.filter ~f:(fun s -> (s <> "info") && (s <> "pack")) objects in
+    let objects = List.map Filename.basename objects in
+    let objects = List.filter (fun s -> (s <> "info") && (s <> "pack")) objects in
     Lwt_list.map_s (fun prefix ->
         let dir = root / ".git" / "objects" / prefix in
         IO.files dir >>= fun suffixes ->
-        let suffixes = List.map ~f:Filename.basename suffixes in
-        let objects = List.map ~f:(fun suffix ->
+        let suffixes = List.map Filename.basename suffixes in
+        let objects = List.map (fun suffix ->
             SHA.of_hex (prefix ^ suffix)
           ) suffixes in
         return objects
@@ -133,9 +133,9 @@ module Packed = struct
     Log.debugf "list %s" root;
     let packs = root / ".git" / "objects" / "pack" in
     IO.files packs >>= fun packs ->
-    let packs = List.map ~f:Filename.basename packs in
-    let packs = List.filter ~f:(fun f -> Filename.check_suffix f ".idx") packs in
-    let packs = List.map ~f:(fun f ->
+    let packs = List.map Filename.basename packs in
+    let packs = List.filter (fun f -> Filename.check_suffix f ".idx") packs in
+    let packs = List.map (fun f ->
         let p = Filename.chop_suffix f ".idx" in
         let p = String.sub p 5 (String.length p - 5) in
         SHA.of_hex p
@@ -147,73 +147,71 @@ module Packed = struct
     let idx_file = "pack-" ^ (SHA.to_hex sha1) ^ ".idx" in
     pack_dir / idx_file
 
-  let indexes = SHA.Table.create ()
+  let indexes = Hashtbl.create 1024
 
   let write_index t sha1 idx =
     let file = index t sha1 in
-    if not (Hashtbl.mem indexes sha1) then Hashtbl.add_exn indexes ~key:sha1 ~data:idx;
+    if not (Hashtbl.mem indexes sha1) then Hashtbl.add indexes sha1 idx;
     IO.file_exists file >>= function
     | true  -> return_unit
     | false ->
-      let buf = Bigbuffer.create 1024 in
+      let buf = Buffer.create 1024 in
       Pack_index.add buf idx;
-      IO.write_file file (Misc.buffer_contents buf)
+      IO.write_file file (Cstruct.of_string (Buffer.contents buf))
 
   let read_index t sha1 =
     Log.debugf "read_index %s" (SHA.to_hex sha1);
-    match Hashtbl.find indexes sha1 with
-    | Some i -> return i
-    | None   ->
+    try return (Hashtbl.find indexes sha1)
+    with Not_found ->
       let file = index t sha1 in
       IO.file_exists file >>= function
       | true ->
         IO.read_file file >>= fun buf ->
-        let buf = Mstruct.of_bigarray buf in
+        let buf = Mstruct.of_cstruct buf in
         let index = Pack_index.input buf in
-        Hashtbl.add_exn indexes ~key:sha1 ~data:index;
+        Hashtbl.add indexes sha1 index;
         return index
       | false ->
         Printf.eprintf "%s does not exist." file;
         fail (Failure "read_index")
 
-  let keys = SHA.Table.create ()
+  let keys = Hashtbl.create 1024
 
   let read_keys t sha1 =
     Log.debugf "read_keys %s" (SHA.to_hex sha1);
-    match Hashtbl.find keys sha1 with
-    | Some k   -> return k
-    | None     ->
-      begin match Hashtbl.find indexes sha1 with
-        | Some i ->
+    try return (Hashtbl.find keys sha1)
+    with Not_found ->
+      begin
+        try
+          let i = Hashtbl.find indexes sha1 in
           let keys = SHA.Set.of_list (SHA.Map.keys i.Pack_index.offsets) in
           return keys
-        | None   ->
+        with Not_found ->
           let file = index t sha1 in
           IO.file_exists file >>= function
           | true ->
             IO.read_file file >>= fun buf ->
-            let keys = Pack_index.keys (Mstruct.of_bigarray buf) in
+            let keys = Pack_index.keys (Mstruct.of_cstruct buf) in
             return keys
           | false ->
             fail (Failure "Git_fs.Packed.read_keys")
       end >>= fun data ->
-      Hashtbl.add_exn keys ~key:sha1 ~data;
+      Hashtbl.add keys sha1 data;
       return data
 
-  let packs = SHA.Table.create ()
+  let packs = Hashtbl.create 8
 
   let read_pack t sha1 =
-    match Hashtbl.find packs sha1 with
-    | Some pack -> return pack
-    | None      ->
+    try return (Hashtbl.find packs sha1)
+    with Not_found ->
       let file = file t sha1 in
       IO.file_exists file >>= function
       | true ->
         IO.read_file file  >>= fun buf ->
         read_index t sha1 >>= fun index ->
-        let pack = Pack.Raw.input (Mstruct.of_bigarray buf) ~index:(Some index) in
+        let pack = Pack.Raw.input (Mstruct.of_cstruct buf) ~index:(Some index) in
         let pack = Pack.to_pic pack in
-        Hashtbl.add_exn packs ~key:sha1 ~data:pack;
+        Hashtbl.add packs sha1 pack;
         return pack
       | false ->
         Printf.eprintf "No file associated with the pack object %s.\n" (SHA.to_hex sha1);
@@ -223,19 +221,18 @@ module Packed = struct
     let file = file t sha1 in
     if not (Hashtbl.mem packs sha1) then  (
       let pack = Pack.to_pic pack in
-      Hashtbl.add_exn packs ~key:sha1 ~data:pack;
+      Hashtbl.add packs sha1 pack;
     );
     IO.file_exists file >>= function
     | true  -> return_unit
     | false ->
-      let pack = Misc.with_bigbuffer (fun buf -> Pack.Raw.add buf pack) in
+      let pack = Misc.with_buffer' (fun buf -> Pack.Raw.add buf pack) in
       IO.write_file file pack
 
   let mem_in_pack t pack_sha1 sha1 =
-    Log.debugf "mem_in_pack %s:%s"
-      (SHA.to_hex pack_sha1) (SHA.to_hex sha1);
+    Log.debugf "mem_in_pack %s:%s" (SHA.to_hex pack_sha1) (SHA.to_hex sha1);
     read_keys t pack_sha1 >>= fun keys ->
-    return (Set.mem keys sha1)
+    return (SHA.Set.mem sha1 keys)
 
   let read_in_pack t pack_sha1 sha1 =
     Log.debugf "read_in_pack %s:%s"
@@ -246,12 +243,11 @@ module Packed = struct
       read_pack t pack_sha1 >>= fun pack ->
       return (Pack.read pack sha1)
 
-  let values = SHA.Table.create ()
+  let values = Hashtbl.create 1024
 
   let read t sha1 =
-    match SHA.Table.find values sha1 with
-    | Some v -> return (Some v)
-    | None   ->
+    try return (Some (Hashtbl.find values sha1))
+    with Not_found ->
       begin match Value.Cache.find sha1 with
         | Some str -> return (Some (Value.input_inflated (Mstruct.of_string str)))
         | None     ->
@@ -264,7 +260,7 @@ module Packed = struct
       end >>= function
       | None   -> return_none
       | Some v ->
-        ignore (SHA.Table.add values ~key:sha1 ~data:v);
+        ignore (Hashtbl.add values sha1 v);
         return (Some v)
 
   let mem t sha1 =
@@ -281,7 +277,7 @@ let list t =
   Loose.list t  >>= fun objects ->
   Packed.list t >>= fun packs   ->
   Misc.list_map_p (fun p -> Packed.read_keys t p) packs >>= fun keys ->
-  let keys = SHA.Set.(union (of_list objects) (union_list keys)) in
+  let keys = List.fold_left SHA.Set.union (SHA.Set.of_list objects) keys in
   let keys = SHA.Set.to_list keys in
   return keys
 
@@ -291,7 +287,14 @@ let read t sha1 =
   | Some v -> return (Some v)
   | None   -> Packed.read t sha1
 
-let read = Memo.general read
+let read =
+  let memo = Hashtbl.create 1024 in
+  fun t k ->
+    try Hashtbl.find memo k
+    with Not_found ->
+      let v = read t k in
+      Hashtbl.add memo k v;
+      v
 
 let read_exn t sha1 =
   read t sha1 >>= function
@@ -315,7 +318,7 @@ let contents t =
 
 let dump t =
   contents t >>= fun contents ->
-  List.iter ~f:(fun (sha1, value) ->
+  List.iter (fun (sha1, value) ->
       let typ = Value.type_of value in
       Printf.eprintf "%s %s\n" (SHA.to_hex sha1) (Object_type.to_string typ);
     ) contents;
@@ -325,14 +328,14 @@ let references t =
   let refs = t / ".git" / "refs" in
   IO.rec_files refs >>= fun files ->
   let n = String.length (t / ".git" / "") in
-  let refs = List.map ~f:(fun file ->
+  let refs = List.map (fun file ->
       let ref = String.sub file n (String.length file - n) in
-      Reference.of_string ref
+      Reference.of_raw ref
     ) files in
   return refs
 
 let file_of_ref t ref =
-  t / ".git" / Reference.to_string ref
+  t / ".git" / Reference.to_raw ref
 
 let mem_reference t ref =
   let file = file_of_ref t ref in
@@ -350,7 +353,7 @@ let read_reference t ref =
   IO.file_exists file >>= function
   | true ->
     IO.read_file file >>= fun hex ->
-    let hex = String.strip (Bigstring.to_string hex) in
+    let hex = String.trim (Cstruct.to_string hex) in
     return (Some (SHA.Commit.of_hex hex))
   | false ->
     return_none
@@ -361,10 +364,10 @@ let read_head t =
   IO.file_exists file >>= function
   | true ->
     IO.read_file file >>= fun str ->
-    let str = Bigstring.to_string str in
-    let contents = match String.split ~on:' ' str with
+    let str = Cstruct.to_string str in
+    let contents = match Misc.string_split ~on:' ' str with
       | [sha1]  -> Reference.SHA (SHA.Commit.of_hex sha1)
-      | [_;ref] -> Reference.Ref (Reference.of_string ref)
+      | [_;ref] -> Reference.Ref (Reference.of_raw ref)
       | _       -> failwith (sprintf "read_head: %s is not a valid HEAD contents" str)
     in
     return (Some contents)
@@ -375,7 +378,7 @@ let read_reference_exn t ref =
   read_reference t ref >>= function
   | Some s -> return s
   | None   ->
-    Log.debugf "read_reference_exn: Cannot read %s" (Reference.to_string ref);
+    Log.debugf "read_reference_exn: Cannot read %s" (Reference.pretty ref);
     fail Not_found
 
 let write t value =
@@ -392,16 +395,16 @@ let write_pack t pack =
   return (Pack.Raw.keys pack)
 
 let write_reference t ref sha1 =
-  let file = t / ".git" / Reference.to_string ref in
+  let file = t / ".git" / Reference.to_raw ref in
   let contents = SHA.Commit.to_hex sha1 in
-  IO.write_file file (Bigstring.of_string contents)
+  IO.write_file file (Cstruct.of_string contents)
 
 let write_head t = function
   | Reference.SHA sha1 -> write_reference t Reference.head sha1
   | Reference.Ref ref   ->
     let file = t / ".git" / "HEAD" in
-    let contents = sprintf "ref: %s" (Reference.to_string ref) in
-    IO.write_file file (Bigstring.of_string contents)
+    let contents = sprintf "ref: %s" (Reference.to_raw ref) in
+    IO.write_file file (Cstruct.of_string contents)
 
 type 'a tree =
   | Leaf of 'a
@@ -426,7 +429,7 @@ let load_filesystem t commit =
     | Value.Commit c -> aux (`Dir, SHA.of_tree c.Commit.tree)
     | Value.Tag t    -> aux (mode, t.Tag.sha1)
     | Value.Tree t   ->
-      Misc.list_map_p ~width:10 (fun e ->
+      Misc.list_map_p (fun e ->
           aux (e.Tree.perm, e.Tree.node) >>= fun t ->
           return (e.Tree.name, t)
         ) t
@@ -446,11 +449,12 @@ let iter_blobs t ~f ~init =
     ) trie
 
 let create_file file mode blob =
-  let blob = Blob.to_string blob in
+  Log.debugf "create_file %s" file;
+  let blob = Blob.to_raw blob in
   match mode with
   | `Link -> (* Lwt_unix.symlink file ??? *) failwith "TODO"
   | _     ->
-    IO.write_file file (Bigstring.of_string blob) >>= fun () ->
+    IO.write_file file (Cstruct.of_string blob) >>= fun () ->
     match mode with
     | `Exec -> IO.chmod file 0o755
     | _     -> return_unit
@@ -460,7 +464,7 @@ let cache_file t =
 
 let read_cache t =
   IO.read_file (cache_file t) >>= fun buf ->
-  let buf = Mstruct.of_bigarray buf in
+  let buf = Mstruct.of_cstruct buf in
   return (Cache.input buf)
 
 let entry_of_file ?root file mode blob =
@@ -479,9 +483,11 @@ let entry_of_file ?root file mode blob =
     let id = Value.sha1 (Value.Blob blob) in
     let stats = IO.stat_info file in
     let stage = 0 in
-    let name = String.chop_prefix_exn ~prefix:(root / "") file in
-    let entry = { Cache.stats; id; stage; name } in
-    return (Some entry)
+    match Misc.string_chop_prefix ~prefix:(root / "") file with
+    | None      -> failwith ("entry_of_file: " ^ file)
+    | Some name ->
+      let entry = { Cache.stats; id; stage; name } in
+      return (Some entry)
   with Failure _ ->
     return_none
 
@@ -491,17 +497,17 @@ let write_cache t head =
   let all = ref 0 in
   iter_blobs t ~init:head ~f:(fun (i,n) path mode blob ->
       all := n;
-      printf "\rChecking out files: %d%% (%d/%d), done.%!" Int.(100*i/n) i n;
-      let file = String.concat ~sep:Filename.dir_sep path in
+      printf "\rChecking out files: %d%% (%d/%d), done.%!" Pervasives.(100*i/n) i n;
+      let file = String.concat Filename.dir_sep path in
       Log.debugf "write_cache: blob:%s" file;
       entry_of_file ~root:t file mode blob >>= function
       | None   -> return_unit
       | Some e -> entries := e :: !entries; return_unit
     ) >>= fun () ->
   let cache = { Cache.entries = !entries; extensions = [] } in
-  let buf = Bigbuffer.create 1024 in
+  let buf = Buffer.create 1024 in
   Cache.add buf cache;
-  IO.write_file (cache_file t) (Misc.buffer_contents buf) >>= fun () ->
+  IO.write_file (cache_file t) (Cstruct.of_string (Buffer.contents buf)) >>= fun () ->
   printf "\rChecking out files: 100%% (%d/%d), done.%!\n" !all !all;
   return_unit
 

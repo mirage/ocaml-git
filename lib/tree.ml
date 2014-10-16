@@ -14,7 +14,9 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Core_kernel.Std
+open Sexplib.Std
+open Printf
+
 module Log = Log.Make(struct let section = "tree" end)
 
 type perm = [
@@ -22,22 +24,19 @@ type perm = [
   | `Exec
   | `Link
   | `Dir
-] with bin_io, compare, sexp
+] with sexp
 
 type entry = {
   perm: perm;
   name: string;
   node: SHA.t;
-} with bin_io, compare, sexp
+} with sexp
 
-module T = struct
-  type t = entry list with bin_io, compare, sexp
-  let hash (t: t) = Hashtbl.hash t
-  include Sexpable.To_stringable (struct type nonrec t = t with sexp end)
-  let module_name = "Tree.Entry"
-end
-include T
-include Identifiable.Make (T)
+type t = entry list with sexp
+
+let hash = Hashtbl.hash
+let compare = compare
+let equal = (=)
 
 let pretty_perm = function
   | `Normal -> "normal"
@@ -53,7 +52,7 @@ let pretty_entry e =
 
 let pretty t =
   let b = Buffer.create 1024 in
-  List.iter ~f:(fun e -> Buffer.add_string b (pretty_entry e)) t;
+  List.iter (fun e -> Buffer.add_string b (pretty_entry e)) t;
   Buffer.contents b
 
 let perm_of_string buf = function
@@ -70,15 +69,15 @@ let string_of_perm = function
   | `Link   -> "120000"
   | `Dir    -> "40000"
 
-let escape = Char.of_int_exn 42
+let escape = Char.chr 42
 
 let escaped_chars =
-  escape :: List.map ~f:Char.of_int_exn [ 0x00; 0x2f ]
+  escape :: List.map Char.chr [ 0x00; 0x2f ]
 
-let needs_escape = List.mem escaped_chars
+let needs_escape x = List.mem x escaped_chars
 
 let encode path =
-  if not (String.exists ~f:needs_escape path) then
+  if not (Misc.string_exists needs_escape path) then
     path
   else
     let n = String.length path in
@@ -86,41 +85,41 @@ let encode path =
     let last = ref 0 in
     for i = 0 to n - 1 do
       if needs_escape path.[i] then (
-        let c = Char.of_int_exn (Char.to_int path.[i] + 1) in
-        if Int.(i - !last > 0) then Buffer.add_substring b path !last (i - !last);
+        let c = Char.chr (Char.code path.[i] + 1) in
+        if i - !last > 0 then Buffer.add_substring b path !last (i - !last);
         Buffer.add_char b escape;
         Buffer.add_char b c;
         last := i + 1;
       )
     done;
-    if Int.(n - !last > 0) then
+    if n - !last > 0 then
       Buffer.add_substring b path !last (n - !last);
     Buffer.contents b
 
 let add_entry buf e =
-  Bigbuffer.add_string buf (string_of_perm e.perm);
-  Bigbuffer.add_char buf Misc.sp;
-  Bigbuffer.add_string buf (encode e.name);
-  Bigbuffer.add_char buf Misc.nul;
+  Buffer.add_string buf (string_of_perm e.perm);
+  Buffer.add_char buf Misc.sp;
+  Buffer.add_string buf (encode e.name);
+  Buffer.add_char buf Misc.nul;
   SHA.add buf e.node
 
 let decode path =
-  if not (String.mem path escape) then path
+  if not (Misc.string_mem escape path) then path
   else
     let n = String.length path in
     let b = Buffer.create n in
     let last = ref 0 in
     for i = 0 to n - 1 do
       if Char.(path.[i] = escape) then (
-        if Int.(i - !last > 0) then Buffer.add_substring b path !last (i - !last);
-        if Int.(i + 1 < n) then (
-          let c = Char.of_int_exn (Char.to_int path.[i+1] - 1) in
+        if i - !last > 0 then Buffer.add_substring b path !last (i - !last);
+        if i + 1 < n then (
+          let c = Char.chr (Char.code path.[i+1] - 1) in
           Buffer.add_char b c;
         );
         last := i + 2;
       );
     done;
-    if Int.(n - !last > 0) then
+    if n - !last > 0 then
       Buffer.add_substring b path !last (n - !last);
     Buffer.contents b
 
@@ -140,11 +139,11 @@ let input_entry buf =
   Some entry
 
 let add buf t =
-  List.iter ~f:(add_entry buf) t
+  List.iter (add_entry buf) t
 
 let input buf =
   let rec aux entries =
-    if Int.(Mstruct.length buf <= 0) then
+    if Mstruct.length buf <= 0 then
       List.rev entries
     else
       match input_entry buf with

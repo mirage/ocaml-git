@@ -14,21 +14,20 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Core_kernel.Std
+open Sexplib.Std
+open Printf
+
 module Log = Log.Make(struct let section = "user" end)
 
-module T = struct
-  type t = {
-    name : string;
-    email: string;
-    date : string;
-  } with bin_io, compare, sexp
-  let hash (t : t) = Hashtbl.hash t
-  include Sexpable.To_stringable (struct type nonrec t = t with sexp end)
-  let module_name = "User"
-end
-include T
-include Identifiable.Make (T)
+type t = {
+  name : string;
+  email: string;
+  date : string;
+} with sexp
+
+let hash = Hashtbl.hash
+let equal = (=)
+let compare = compare
 
 let pretty t =
   sprintf "[name: %s | email: %s | date: %s]"
@@ -36,11 +35,11 @@ let pretty t =
 
 (* XXX needs to escape name/email/date *)
 let add buf t =
-  Bigbuffer.add_string buf t.name ;
-  Bigbuffer.add_string buf " <"   ;
-  Bigbuffer.add_string buf t.email;
-  Bigbuffer.add_string buf "> "   ;
-  Bigbuffer.add_string buf t.date
+  Buffer.add_string buf t.name ;
+  Buffer.add_string buf " <"   ;
+  Buffer.add_string buf t.email;
+  Buffer.add_string buf "> "   ;
+  Buffer.add_string buf t.date
 
 let input buf =
   let i = match Mstruct.index buf Misc.lt with

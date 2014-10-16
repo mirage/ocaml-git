@@ -17,3 +17,6 @@
 (** Binaray blobs. *)
 
 include Object.S
+
+val to_raw: t -> string
+val of_raw: string -> t

@@ -14,23 +14,24 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Core_kernel.Std
+open Printf
+open Sexplib.Std
+
 module Log = Log.Make(struct let section = "commit" end)
 
-module T = struct
-  type t = {
-    tree     : SHA.Tree.t;
-    parents  : SHA.Commit.t list;
-    author   : User.t;
-    committer: User.t;
-    message  : string;
-  } with bin_io, compare, sexp
-  let hash (t : t) = Hashtbl.hash t
-  include Sexpable.To_stringable (struct type nonrec t = t with sexp end)
-  let module_name = "Commit"
-end
-include T
-include Identifiable.Make (T)
+type t = {
+  tree     : SHA.Tree.t;
+  parents  : SHA.Commit.t list;
+  author   : User.t;
+  committer: User.t;
+  message  : string;
+} with sexp
+
+let hash = Hashtbl.hash
+
+let compare = compare
+
+let equal = (=)
 
 let pretty t =
   sprintf
@@ -40,29 +41,29 @@ let pretty t =
      committer: %s\n\n\
      %s\n"
     (SHA.Tree.to_hex t.tree)
-    (String.concat ~sep:", " (List.map ~f:SHA.Commit.to_hex t.parents))
+    (String.concat ", " (List.map SHA.Commit.to_hex t.parents))
     (User.pretty t.author)
     (User.pretty t.committer)
-    (String.strip t.message)
+    (String.trim t.message)
 
 let add_parent buf parent =
-  Bigbuffer.add_string buf "parent ";
+  Buffer.add_string buf "parent ";
   SHA.Commit.add_hex buf parent;
-  Bigbuffer.add_char buf Misc.lf
+  Buffer.add_char buf Misc.lf
 
 let add buf t =
-  Bigbuffer.add_string buf "tree ";
+  Buffer.add_string buf "tree ";
   SHA.Tree.add_hex buf t.tree;
-  Bigbuffer.add_char buf Misc.lf;
-  List.iter ~f:(add_parent buf) t.parents;
-  Bigbuffer.add_string buf "author ";
+  Buffer.add_char buf Misc.lf;
+  List.iter (add_parent buf) t.parents;
+  Buffer.add_string buf "author ";
   User.add buf t.author;
-  Bigbuffer.add_char buf Misc.lf;
-  Bigbuffer.add_string buf "committer ";
+  Buffer.add_char buf Misc.lf;
+  Buffer.add_string buf "committer ";
   User.add buf t.committer;
-  Bigbuffer.add_char buf Misc.lf;
-  Bigbuffer.add_char buf Misc.lf;
-  Bigbuffer.add_string buf t.message
+  Buffer.add_char buf Misc.lf;
+  Buffer.add_char buf Misc.lf;
+  Buffer.add_string buf t.message
 
 let input_parents buf =
   let rec aux parents =

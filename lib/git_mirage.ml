@@ -14,19 +14,16 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Core_kernel.Std
 open Lwt
 open Git
 
 module Log = Log.Make(struct let section = "mirage" end)
-
 
 module type FS = sig
   include V1_LWT.FS with type page_aligned_buffer = Cstruct.t
   val connect: unit -> [`Error of error | `Ok of t ] Lwt.t
   val string_of_error: error -> string
 end
-
 
 module FS (FS: FS) = struct
 
@@ -41,14 +38,13 @@ module FS (FS: FS) = struct
   module M = struct
 
     let file_exists t f =
-      Log.debugf "file_exists %S" f;
+      Log.debugf "file_exists %s" f;
       FS.stat t f >>= function
       | `Ok _    -> return true
-      | `Error e ->
-        Log.errorf "%s" (FS.string_of_error e);
-        return false
+      | `Error _ -> return false
 
     let is_directory t dir =
+      Log.debugf "is_directory %s" dir;
       FS.stat t dir >>| fun s ->
       return s.FS.directory
 
@@ -56,6 +52,8 @@ module FS (FS: FS) = struct
       | "/"
       | "." -> None
       | s   -> Some (Filename.dirname s)
+
+    let mkdir_pool = Lwt_pool.create 1 (fun () -> return_unit)
 
     let mkdir t dirname =
       Log.debugf "mkdir %s" dirname;
@@ -67,20 +65,18 @@ module FS (FS: FS) = struct
           | None   -> return_unit
           | Some d ->
             aux d >>= fun () ->
-            file_exists t dir >>= function
-            | true  -> return_unit
-            | false ->
-              FS.mkdir t dir >>| fun () ->
-              return_unit
+            FS.mkdir t dir >>| fun () ->
+            return_unit
       in
-      aux dirname
+      Lwt_pool.use mkdir_pool (fun () -> aux dirname)
 
     let list_files t kind dir =
+      Log.debugf "list_files %s" dir;
       file_exists t dir >>= function
       | true ->
         FS.listdir t dir >>| fun l ->
-        let l = List.filter ~f:(fun s -> s <> "." && s <> "..") l in
-        let l = List.map ~f:(Filename.concat dir) l in
+        let l = List.filter (fun s -> s <> "." && s <> "..") l in
+        let l = List.map (Filename.concat dir) l in
         Lwt_list.filter_s kind l
       | false ->
         return_nil
@@ -121,16 +117,15 @@ module FS (FS: FS) = struct
     let read_file t file =
       Log.debugf "read_file %s" file;
       FS.stat t file >>| fun s ->
-      FS.read t file 0 (Int64.to_int_exn s.FS.size) >>| fun bs ->
+      FS.read t file 0 (Int64.to_int s.FS.size) >>| fun bs ->
       let s = Cstruct.copyv bs in
-      return (Bigstring.of_string s)
+      return (Cstruct.of_string s)
 
     let write_file t file b =
-      Log.debugf "write_file %s %S" file (Bigstring.to_string b);
+      Log.debugf "write_file %s" file;
       mkdir t (Filename.dirname file) >>= fun () ->
-      let c = Cstruct.of_bigarray b in
       FS.create t file    >>| fun () ->
-      FS.write t file 0 c >>| fun () ->
+      FS.write t file 0 b >>| fun () ->
       return_unit
 
     let getcwd () =
@@ -140,7 +135,7 @@ module FS (FS: FS) = struct
       return dir
 
     let realpath file =
-      realdir file
+      return file
 
     let stat_info file =
       failwith "TODO"
@@ -148,12 +143,8 @@ module FS (FS: FS) = struct
     let chmod t file perm =
       return_unit
 
-    let mutex = Lwt_mutex.create ()
-
     let connect fn =
-      Lwt_mutex.with_lock mutex (fun () ->
-          FS.connect () >>| fn
-        )
+      FS.connect () >>| fn
 
     let mkdir dir =
       connect (fun t -> mkdir t dir)

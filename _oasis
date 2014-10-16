@@ -24,11 +24,11 @@ Library git
                      Reference, Sync, Tag, Tree, User, Value,
                      Object, Object_type, Store, Search, Gri,
                      Memory, FS
-  BuildDepends:      mstruct, dolog, core_kernel, ocamlgraph,
-                     re.pcre, zip, sha, uri, lwt,
-                     bin_prot.syntax, comparelib.syntax, sexplib.syntax,
+  BuildDepends:      mstruct, dolog, ocamlgraph,
+                     re.pcre, zip, sha1, uri, lwt,
+                     sexplib.syntax,
                      conduit.lwt, uri.services
-  XMETARequires:     mstruct, dolog, core_kernel, ocamlgraph,
+  XMETARequires:     mstruct, dolog, ocamlgraph,
                      re.pcre, zip, sha, uri, lwt,
                      conduit.lwt, uri.services
 

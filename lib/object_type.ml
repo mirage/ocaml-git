@@ -14,22 +14,18 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Core_kernel.Std
 module Log = Log.Make(struct let section = "object-type" end)
 
-module T = struct
-  type t =
-    | Blob
-    | Commit
-    | Tag
-    | Tree
-  with bin_io, compare, sexp
-  let hash (t: t) = Hashtbl.hash t
-  include Sexpable.To_stringable (struct type nonrec t = t with sexp end)
-  let module_name = "Tag"
-end
-include T
-include Identifiable.Make (T)
+type t =
+  | Blob
+  | Commit
+  | Tag
+  | Tree
+with sexp
+
+let hash = Hashtbl.hash
+let equal = (=)
+let compare = compare
 
 let to_string = function
   | Blob   -> "blob"
@@ -40,7 +36,7 @@ let to_string = function
 let pretty = to_string
 
 let add buf t =
-  Bigbuffer.add_string buf (to_string t)
+  Buffer.add_string buf (to_string t)
 
 let of_string = function
   | "blob"   -> Some Blob

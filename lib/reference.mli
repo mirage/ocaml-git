@@ -16,9 +16,13 @@
 
 (** Branch references. *)
 
-open Core_kernel.Std
+include Object.S
 
-include Identifiable.S
+val to_raw: t -> string
+val of_raw: string -> t
+
+module Map: Misc.Map with type key = t
+(** A map of references. *)
 
 val head: t
 (** The repository HEAD. *)

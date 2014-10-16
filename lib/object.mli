@@ -16,11 +16,18 @@
 
 (** Signatures *)
 
-open Core_kernel.Std
-
 module type S = sig
 
-  include Identifiable.S
+  type t with sexp
+
+  val equal: t -> t -> bool
+  (** Are two objects equal? *)
+
+  val hash: t -> int
+  (** Hash an object. *)
+
+  val compare: t -> t -> int
+  (** Compare two objects. *)
 
   val pretty: t -> string
   (** Human readable represenation of the object. *)
@@ -28,7 +35,7 @@ module type S = sig
   val input: Mstruct.t -> t
   (** Build a value from an inflated contents. *)
 
-  val add: Bigbuffer.t -> t -> unit
+  val add: Buffer.t -> t -> unit
   (** Add the serialization of the value to an already existing
       buffer. *)
 

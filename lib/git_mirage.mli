@@ -17,8 +17,6 @@
 (** Mirage implementation of the Git file-system backend and
     protocol. *)
 
-open Core_kernel.Std
-
 module type FS = sig
 
   include V1_LWT.FS with type page_aligned_buffer = Cstruct.t

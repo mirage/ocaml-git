@@ -14,7 +14,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Core_kernel.Std
 open Lwt
 
 let to_string node =
@@ -25,9 +24,9 @@ module C =
   Graph.Imperative.Digraph.ConcreteBidirectionalLabeled
     (struct
       type t = (SHA.t * Value.t)
-      let compare (x,_) (y,_) = String.compare (SHA.to_string x) (SHA.to_string y)
-      let hash (x,_) = Hashtbl.hash (SHA.to_string x)
-      let equal (x,_) (y,_) = (x = y)
+      let compare (x,_) (y,_) = SHA.compare x y
+      let hash (x,_) = SHA.hash x
+      let equal (x,_) (y,_) = SHA.equal x y
     end)
     (struct
       type t = string
@@ -75,7 +74,7 @@ module Make (Store: Store.S) = struct
     Log.debugf "of_contents";
     let g = C.create () in
     Store.contents t >>= fun nodes ->
-    List.iter ~f:(C.add_vertex g) nodes;
+    List.iter (C.add_vertex g) nodes;
     begin
       Misc.list_iter_p (fun (id, _ as src) ->
           Search.succ t id >>= fun succs ->
@@ -97,7 +96,7 @@ module Make (Store: Store.S) = struct
     Log.debugf "of_keys";
     let g = K.create () in
     Store.contents t >>= fun nodes ->
-    List.iter ~f:(fun (k, _) -> K.add_vertex g k) nodes;
+    List.iter (fun (k, _) -> K.add_vertex g k) nodes;
     begin
       Misc.list_iter_p (fun (src, _) ->
           Search.succ t src >>= fun succs ->
@@ -110,18 +109,19 @@ module Make (Store: Store.S) = struct
     end >>= fun () ->
     return g
 
-  let to_dot t file =
+  let to_dot t buf =
     Log.debugf "to_dot";
+    let fmt = Format.formatter_of_buffer buf in
     of_contents t >>= fun g ->
-    Out_channel.with_file file ~f:(fun oc -> Dot.output_graph oc g);
+    Dot.fprint_graph fmt g;
     return_unit
 
   (* XXX: From IrminGraph.closure *)
   let closure t ~min max =
     Log.debugf "closure";
     let g = K.create ~size:1024 () in
-    let marks = SHA.Table.create () in
-    let mark key = Hashtbl.add_exn marks key true in
+    let marks = Hashtbl.create 1024 in
+    let mark key = Hashtbl.add marks key true in
     let has_mark key = Hashtbl.mem marks key in
     let min = SHA.Set.to_list min in
     Lwt_list.iter_p (fun k ->
@@ -142,8 +142,8 @@ module Make (Store: Store.S) = struct
         | true  ->
           if not (K.mem_vertex g key) then K.add_vertex g key;
           Search.succ t key >>= fun succs ->
-          let keys = List.map ~f:Search.sha1_of_succ succs in
-          List.iter ~f:(fun k -> K.add_edge g k key) keys;
+          let keys = List.map Search.sha1_of_succ succs in
+          List.iter (fun k -> K.add_edge g k key) keys;
           Lwt_list.iter_p add keys
       ) in
     let max = SHA.Set.to_list max in

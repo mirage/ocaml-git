@@ -17,38 +17,40 @@
 (* XXX: we only implement index file cache format V2 *)
 
 open Lwt
-open Core_kernel.Std
+open Printf
+open Sexplib.Std
+
 module Log = Log.Make(struct let section = "cache" end)
 
 type time = {
-  lsb32: Int32.t;
-  nsec : Int32.t;
-} with bin_io, compare, sexp
+  lsb32: int32;
+  nsec : int32;
+} with sexp
 
 type mode = [
     `Normal
   | `Exec
   | `Link
   | `Gitlink
-] with bin_io, compare, sexp
+] with sexp
 
 type stat_info = {
   ctime: time;
   mtime: time;
-  dev  : Int32.t;
-  inode: Int32.t;
+  dev  : int32;
+  inode: int32;
   mode : mode;
-  uid  : Int32.t;
-  gid  : Int32.t;
-  size : Int32.t;
-} with bin_io, compare, sexp
+  uid  : int32;
+  gid  : int32;
+  size : int32;
+} with sexp
 
 type entry = {
   stats : stat_info;
   id    : SHA.t;
   stage : int;
   name  : string;
-} with bin_io, compare, sexp
+} with sexp
 
 let pretty_entry t =
   sprintf
@@ -65,23 +67,22 @@ let pretty_entry t =
     t.stats.uid t.stats.gid
     t.stats.size t.stage
 
-module T = struct
-  type t = {
-    entries   : entry list;
-    extensions: (Int32.t * string) list;
-  }
-  with bin_io, compare, sexp
-  let hash (t: t) = Hashtbl.hash t
-  include Sexpable.To_stringable (struct type nonrec t = t with sexp end)
-  let module_name = "Cache"
-end
-include T
-include Identifiable.Make (T)
+type t = {
+  entries   : entry list;
+  extensions: (int32 * string) list;
+}
+with sexp
+
+let hash = Hashtbl.hash
+
+let compare = compare
+
+let equal = (=)
 
 let pretty t =
   let buf = Buffer.create 1024 in
-  List.iter ~f:(fun e ->
-      Buffer.add_string buf (pretty_entry e)
+  List.iter (fun e ->
+      Buffer.add_string buf (Sexplib.Sexp.to_string_hum (sexp_of_entry e))
     ) t.entries;
   Buffer.contents buf
 
@@ -168,21 +169,23 @@ let add_entry buf t =
   let pad = match len mod 8 with
     | 0 -> 0
     | n -> 8-n in
-  let mstr = Mstruct.create (len+pad) in
-  add_stat_info mstr t.stats;
-  Mstruct.set_string mstr (SHA.to_string t.id);
-  let flags = (t.stage lsl 12 + String.length t.name) land 0x3FFF in
-  Mstruct.set_be_uint16 mstr flags;
-  Mstruct.set_string mstr t.name;
-  Mstruct.set_string mstr (String.make (1+pad) '\x00');
-  let str = mstr |> Mstruct.to_bigarray |> Bigstring.to_string in
-  Bigbuffer.add_string buf str
+  let cstr = Cstruct.create (len+pad) in
+  Mstruct.with_mstruct cstr (fun mstr ->
+      add_stat_info mstr t.stats;
+      Mstruct.set_string mstr (SHA.to_raw t.id);
+      let flags = (t.stage lsl 12 + String.length t.name) land 0x3FFF in
+      Mstruct.set_be_uint16 mstr flags;
+      Mstruct.set_string mstr t.name;
+      Mstruct.set_string mstr (String.make (1+pad) '\x00');
+    );
+  Buffer.add_string buf (Cstruct.to_string cstr)
 
 let input_extensions _buf =
   (* TODO: actually read the extension contents *)
   []
 
 let input buf =
+  let all = Mstruct.to_cstruct buf in
   let offset = Mstruct.offset buf in
   let total_length = Mstruct.length buf in
   let header = Mstruct.get_string buf 4 in
@@ -198,19 +201,18 @@ let input buf =
       if Int32.(n = 0l) then List.rev acc
       else
         let entry = input_entry buf in
-        loop (entry :: acc) Int32.(n - 1l) in
+        loop (entry :: acc) Int32.(sub n 1l) in
     loop [] n in
   let extensions = input_extensions buf in
   let length = Mstruct.offset buf - offset in
-  if Int.(length <> total_length - 20) then (
+  if length <> total_length - 20 then (
     eprintf "Cache.input: more data to read! (total:%d current:%d)"
       (total_length - 20) length;
     failwith "Cache.input"
   );
   let actual_checksum =
-    buf
-    |> Mstruct.to_bigarray
-    |> Bigstring.To_string.sub ~pos:offset ~len:length
+    Cstruct.sub all offset length
+    |> Cstruct.to_string
     |> SHA.create in
   let checksum = SHA.input buf in
   if SHA.(actual_checksum <> checksum) then (
@@ -223,14 +225,15 @@ let add buf t =
   let str = Misc.with_buffer (fun buf ->
       let n = List.length t.entries in
       Log.debugf "add %d entries" n;
-      let header = Mstruct.create 12 in
-      Mstruct.set_string header "DIRC";
-      Mstruct.set_be_uint32 header 2l;
-      Mstruct.set_be_uint32 header (Int32.of_int_exn n);
-      let str = header |> Mstruct.to_bigarray |> Bigstring.to_string in
-      Bigbuffer.add_string buf str;
-      List.iter ~f:(add_entry buf) t.entries;
+      let header = Cstruct.create 12 in
+      Mstruct.with_mstruct header (fun header ->
+          Mstruct.set_string header "DIRC";
+          Mstruct.set_be_uint32 header 2l;
+          Mstruct.set_be_uint32 header (Int32.of_int n);
+        );
+      Buffer.add_string buf (Cstruct.to_string header);
+      List.iter (add_entry buf) t.entries;
     ) in
   let sha1 = SHA.create str in
-  Bigbuffer.add_string buf str;
-  Bigbuffer.add_string buf (SHA.to_string sha1)
+  Buffer.add_string buf str;
+  Buffer.add_string buf (SHA.to_raw sha1)

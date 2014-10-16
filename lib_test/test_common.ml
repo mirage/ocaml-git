@@ -14,28 +14,17 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Core_kernel.Std
 open Git
 open Lwt
-
-module Bigstring = struct
-  include Bigstring
-  let compare t1 t2 =
-    match Int.compare (Bigstring.length t1) (Bigstring.length t2) with
-    | 0 -> String.compare (Bigstring.to_string t1) (Bigstring.to_string t2)
-    | i -> i
-  let equal t1 t2 =
-    Int.equal (Bigstring.length t1) (Bigstring.length t2)
-    && String.equal (Bigstring.to_string t1) (Bigstring.to_string t2)
-
-  let pretty b =
-    sprintf "%S" (to_string b)
-end
+open Printf
 
 let () =
   Log.set_log_level Log.DEBUG;
   Log.color_on ();
   Log.set_output stderr
+
+let pretty fn s =
+  Sexplib.Sexp.to_string_hum (fn s)
 
 let cmp_opt fn x y =
   match x, y with
@@ -56,7 +45,7 @@ let rec cmp_list fn x y =
 
 let printer_list f = function
   | [] -> "[]"
-  | l  -> Printf.sprintf "[ %s ]" (String.concat ~sep:", " (List.map ~f l))
+  | l  -> Printf.sprintf "[ %s ]" (String.concat ", " (List.map f l))
 
 let line msg =
   let line () = Alcotest.line stderr ~color:`Yellow '-' in
@@ -81,31 +70,28 @@ module Make (S: Store.S) = struct
     mk SHA.equal SHA.compare SHA.to_hex
 
   let assert_value_equal, assert_value_opt_equal, assert_values_equal =
-    mk Value.equal Value.compare Value.to_string
+    mk Value.equal Value.compare (pretty Value.sexp_of_t)
 
   let assert_tag_equal, assert_tag_opt_equal, assert_tags_equal =
-    mk Tag.equal Tag.compare Tag.to_string
+    mk Tag.equal Tag.compare (pretty Tag.sexp_of_t)
 
   let assert_ref_equal, assert_ref_opt_equal, assert_refs_equal =
-    mk Reference.equal Reference.compare Reference.to_string
+    mk Reference.equal Reference.compare (pretty Reference.sexp_of_t)
 
-  let assert_bigstring_equal, assert_bigstring_opt_equal, assert_bigstrings_equal =
-    mk Bigstring.equal Bigstring.compare (fun b ->
-        if Bigstring.length b < 40 then Bigstring.pretty b
-        else sprintf "%S (%d)" (Bigstring.To_string.subo ~len:40 b) (Bigstring.length b)
-      )
+  let assert_cstruct_equal, assert_cstruct_opt_equal, assert_cstructs_equal =
+    mk (=) compare Cstruct.debug
 
   let assert_pack_index_equal, assert_pack_index_opt_equal, assert_pack_indexes_equal =
     mk Pack_index.equal Pack_index.compare Pack_index.pretty
 
   let assert_pack_equal, assert_pack_opt_equal, assert_packs_equal =
-    mk Pack.equal Pack.compare Pack.to_string
+    mk Pack.equal Pack.compare Pack.pretty
 
   let assert_cache_equal, assert_cache_opt_equal, assert_caches_equal =
-    mk Cache.equal Cache.compare Cache.to_string
+    mk Cache.equal Cache.compare Cache.pretty
 
   let assert_raw_pack_equal, assert_raw_pack_opt_equal, assert_raw_packs_equal =
-    mk Pack.Raw.equal Pack.Raw.compare Pack.Raw.to_string
+    mk Pack.Raw.equal Pack.Raw.compare Pack.Raw.pretty
 
 end
 

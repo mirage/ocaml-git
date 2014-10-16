@@ -16,13 +16,12 @@
 
 (** Git objects. *)
 
-open Core_kernel.Std
-
 type t =
   | Blob   of Blob.t
   | Commit of Commit.t
   | Tag    of Tag.t
   | Tree   of Tree.t
+with sexp
 (** Loose git objects. *)
 
 val type_of: t -> Object_type.t
@@ -49,10 +48,10 @@ val tag: Tag.t -> t
 
 (** {2 Inflated values} *)
 
-val add_header: Bigbuffer.t -> Object_type.t -> int -> unit
+val add_header: Buffer.t -> Object_type.t -> int -> unit
 (** Append the given object header to a buffer.  *)
 
-val add_inflated: Bigbuffer.t -> t -> unit
+val add_inflated: Buffer.t -> t -> unit
 (** Append the inflated serialization of an object to a buffer.
     Similar to [add], but without deflating the contents. *)
 

@@ -14,8 +14,9 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Core_kernel.Std
 open Lwt
+open Printf
+
 module Log = Log.Make(struct let section = "remote" end)
 
 module Result = struct
@@ -28,9 +29,11 @@ module Result = struct
 
   let pretty_fetch t =
     let buf = Buffer.create 1024 in
-    bprintf buf "HEAD: %s\n" (match t.head with None -> "<none>" | Some x -> SHA.Commit.to_hex x);
-    Reference.Map.iter ~f:(fun ~key ~data ->
-        bprintf buf "%s %s\n" (Reference.to_string key) (SHA.Commit.to_hex data)
+    bprintf buf "HEAD: %s\n" (match t.head with
+        | None -> "<none>"
+        | Some x -> SHA.Commit.to_hex x);
+    Reference.Map.iter (fun key data ->
+        bprintf buf "%s %s\n" (Reference.pretty key) (SHA.Commit.to_hex data)
       ) t.references;
     bprintf buf "Keys: %d\n" (List.length t.sha1s);
     Buffer.contents buf
@@ -45,10 +48,10 @@ module Result = struct
   let pretty_push t =
     let buf = Buffer.create 1024 in
     let aux (ref, result) = match result with
-      | `Ok      -> Printf.bprintf buf "* %s\n" (Reference.to_string ref)
-      | `Error e -> Printf.bprintf buf "! %s: %s\n" (Reference.to_string ref) e
+      | `Ok      -> Printf.bprintf buf "* %s\n" (Reference.pretty ref)
+      | `Error e -> Printf.bprintf buf "! %s: %s\n" (Reference.pretty ref) e
     in
-    List.iter ~f:aux t.commands;
+    List.iter aux t.commands;
     Buffer.contents buf
 
 end
@@ -195,20 +198,20 @@ module Make (IO: IO) (Store: Store.S) = struct
     type t = Capability.t list
 
     let of_string str =
-      List.map ~f:Capability.of_string (String.split str ~on:Misc.sp)
+      List.map Capability.of_string (Misc.string_split str ~on:Misc.sp)
 
     let to_string l =
-      String.concat ~sep:" " (List.map ~f:Capability.to_string l)
+      String.concat " " (List.map Capability.to_string l)
 
     let pretty l =
-      String.concat ~sep:", " (List.map ~f:Capability.to_string l)
+      String.concat ", " (List.map Capability.to_string l)
 
     (* XXX really ? *)
     let default = []
 
-    let is_valid_push = List.for_all ~f:Capability.is_valid_push
+    let is_valid_push = List.for_all Capability.is_valid_push
 
-    let is_valid_fetch = List.for_all ~f:Capability.is_valid_fetch
+    let is_valid_fetch = List.for_all Capability.is_valid_fetch
 
   end
 
@@ -293,26 +296,28 @@ module Make (IO: IO) (Store: Store.S) = struct
     }
 
     let is_empty t =
-      t.capabilities = [] && Map.is_empty t.references
+      t.capabilities = [] && SHA.Commit.Map.is_empty t.references
 
     let find_reference t ref =
-      Map.fold
-        ~f:(fun ~key ~data acc -> if List.mem data ref then Some key else acc)
-        ~init:None t.references
+      SHA.Commit.Map.fold
+        (fun key data acc -> if List.mem ref data then Some key else acc)
+        t.references None
 
     let head t =
       find_reference t Reference.head
 
     let pretty t =
       let buf = Buffer.create 1024 in
-      Printf.bprintf buf "CAPABILITIES:\n%s\n" (Capabilities.to_string t.capabilities);
+      Printf.bprintf buf "CAPABILITIES:\n%s\n"
+        (Capabilities.to_string t.capabilities);
       Printf.bprintf buf "\nREFERENCES:\n";
-      Map.iter
-        ~f:(fun ~key ~data ->
-            List.iter ~f:(fun ref ->
-                Printf.bprintf buf "%s %s\n%!" (SHA.Commit.to_hex key) (Reference.to_string ref)
-              ) data
-          ) t.references;
+      SHA.Commit.Map.iter
+        (fun key data ->
+           List.iter (fun ref ->
+               Printf.bprintf buf "%s %s\n%!"
+                 (SHA.Commit.to_hex key) (Reference.pretty ref)
+             ) data
+        ) t.references;
       Buffer.contents buf
 
     let input ic =
@@ -321,27 +326,30 @@ module Make (IO: IO) (Store: Store.S) = struct
         PacketLine.input ic >>= function
         | None      -> return acc
         | Some line ->
-          match String.lsplit2 line ~on:Misc.sp with
+          match Misc.string_lsplit2 line ~on:Misc.sp with
           | Some ("ERR", err) -> error "ERROR: %s" err
           | Some (sha1, ref)  ->
             if is_empty acc then (
               (* Read the capabilities on the first line *)
-              match String.lsplit2 ref ~on:Misc.nul with
+              match Misc.string_lsplit2 ref ~on:Misc.nul with
               | Some (ref, caps) ->
-                let ref = Reference.of_string ref in
+                let ref = Reference.of_raw ref in
                 let references =
-                  Map.add_multi ~key:(SHA.Commit.of_hex sha1) ~data:ref acc.references in
+                  SHA.Commit.Map.add_multi (SHA.Commit.of_hex sha1) ref acc.references
+                in
                 let capabilities = Capabilities.of_string caps in
                 aux { references; capabilities; }
               | None ->
-                let ref = Reference.of_string ref in
+                let ref = Reference.of_raw ref in
                 let references =
-                  Map.add_multi ~key:(SHA.Commit.of_hex sha1) ~data:ref acc.references in
+                  SHA.Commit.Map.add_multi (SHA.Commit.of_hex sha1) ref acc.references
+                in
                 aux { references; capabilities = []; }
             ) else
-              let ref = Reference.of_string ref in
+              let ref = Reference.of_raw ref in
               let references =
-                Map.add_multi ~key:(SHA.Commit.of_hex sha1) ~data:ref acc.references in
+                SHA.Commit.Map.add_multi (SHA.Commit.of_hex sha1) ref acc.references
+              in
               aux { acc with references }
           | None -> error "%s is not a valid answer" line
       in
@@ -372,9 +380,9 @@ module Make (IO: IO) (Store: Store.S) = struct
       | None
       | Some "NAK" -> return Nak
       | Some s      ->
-        match String.lsplit2 s ~on:Misc.sp with
+        match Misc.string_lsplit2 s ~on:Misc.sp with
         | Some ("ACK", r) ->
-          begin match String.lsplit2 r ~on:Misc.sp with
+          begin match Misc.string_lsplit2 r ~on:Misc.sp with
             | None         -> return (Ack (SHA.of_hex r))
             | Some (id, s) -> return (Ack_multi (SHA.of_hex id, status_of_string s))
           end
@@ -404,11 +412,11 @@ module Make (IO: IO) (Store: Store.S) = struct
     type t = message list
 
     let filter fn l =
-      List.fold_left ~f:(fun acc elt ->
+      List.fold_left (fun acc elt ->
           match fn elt with
           | None   -> acc
           | Some x -> x::acc
-        ) ~init:[] l
+        ) [] l
 
     let filter_wants l =
       filter (function Want (x,y) -> Some (x,y) | _ -> None) l
@@ -435,7 +443,7 @@ module Make (IO: IO) (Store: Store.S) = struct
         PacketLine.input ic >>= function
         | None   -> return (List.rev acc)
         | Some l ->
-          match String.lsplit2 l ~on:Misc.sp with
+          match Misc.string_lsplit2 l ~on:Misc.sp with
           | None -> error "input upload"
           | Some (kind, s) ->
             match kind with
@@ -450,7 +458,7 @@ module Make (IO: IO) (Store: Store.S) = struct
               aux (Deepen d :: acc)
             | "want" ->
               let aux id c = aux (Want (SHA.of_hex id, c) :: acc) in
-              begin match String.lsplit2 s ~on:Misc.sp with
+              begin match Misc.string_lsplit2 s ~on:Misc.sp with
                 | Some (id,c) -> aux id (Capabilities.of_string c)
                 | None        -> match acc with
                   | Want (_,c)::_ -> aux s c
@@ -510,7 +518,7 @@ module Make (IO: IO) (Store: Store.S) = struct
       end >>= fun () ->
 
       (* output done *)
-      if List.mem t Done then
+      if List.mem Done t then
         PacketLine.output_line oc "done"
       else
         PacketLine.flush oc
@@ -524,8 +532,8 @@ module Make (IO: IO) (Store: Store.S) = struct
        the new shallow state. *)
     let phase1 (ic, oc) ?deepen ~shallows ~wants =
       Log.debugf "Upload.phase1";
-      let wants = List.map ~f:(fun id -> Want (id, Capabilities.default)) wants in
-      let shallows = List.map ~f:(fun id -> Shallow id) shallows in
+      let wants = List.map (fun id -> Want (id, Capabilities.default)) wants in
+      let shallows = List.map (fun id -> Shallow id) shallows in
       let deepen = match deepen with
         | None   -> []
         | Some d -> [Deepen d] in
@@ -561,7 +569,7 @@ module Make (IO: IO) (Store: Store.S) = struct
         else
           output oc (haves @ [Done])
       in
-      let haves = List.map ~f:(fun id -> Have id) haves in
+      let haves = List.map (fun id -> Have id) haves in
       aux haves >>= fun () ->
       Ack.input ic >>= fun _ack ->
       return_unit
@@ -576,7 +584,7 @@ module Make (IO: IO) (Store: Store.S) = struct
       | Update of Reference.t * SHA.Commit.t * SHA.Commit.t
 
     let pretty_command t =
-      let r = Reference.to_string in
+      let r = Reference.pretty in
       let c = SHA.Commit.to_hex in
       match t with
       | Create (name, new_id)         -> sprintf "create %s %s" (r name) (c new_id)
@@ -584,7 +592,7 @@ module Make (IO: IO) (Store: Store.S) = struct
       | Update (name, old_id, new_id) -> sprintf "update %s %s %s" (r name) (c old_id) (c new_id)
 
     let pretty_commands l =
-      String.concat ~sep:" & " (List.map ~f:pretty_command l)
+      String.concat " & " (List.map pretty_command l)
 
     let output_command buf t =
       let old_id, new_id, name = match t with
@@ -594,7 +602,7 @@ module Make (IO: IO) (Store: Store.S) = struct
       Printf.bprintf buf "%s %s %s"
         (SHA.Commit.to_hex old_id)
         (SHA.Commit.to_hex new_id)
-        (Reference.to_string name)
+        (Reference.to_raw name)
 
     type t = {
       capabilities: Capabilities.t;
@@ -632,7 +640,7 @@ module Make (IO: IO) (Store: Store.S) = struct
       PacketLine.input ic >>= function
       | None -> fail (Failure "Report_status.input: empty")
       | Some line ->
-        begin match String.lsplit2 line ~on:Misc.sp with
+        begin match Misc.string_lsplit2 line ~on:Misc.sp with
           | Some ("unpack", "ok") -> return `Ok
           | Some ("unpack", err ) -> return (`Error err)
           | _ -> fail (Failure "Report_status.input: unpack-status")
@@ -641,12 +649,12 @@ module Make (IO: IO) (Store: Store.S) = struct
           PacketLine.input ic >>= function
           | None      -> return acc
           | Some line ->
-            match String.lsplit2 line ~on:Misc.sp with
-            | Some ("ok", name)  -> return ((Reference.of_string name, `Ok) :: acc)
+            match Misc.string_lsplit2 line ~on:Misc.sp with
+            | Some ("ok", name)  -> return ((Reference.of_raw name, `Ok) :: acc)
             | Some ("ng", cont)  ->
-              begin match String.lsplit2 cont ~on:Misc.sp with
+              begin match Misc.string_lsplit2 cont ~on:Misc.sp with
                 | None  -> fail (Failure "Report_status.input: command-fail")
-                | Some (name, err) -> return ((Reference.of_string name, `Error err) :: acc)
+                | Some (name, err) -> return ((Reference.of_raw name, `Error err) :: acc)
               end
             | _ -> fail (Failure "Report_status.input: command-status")
         in
@@ -692,7 +700,7 @@ module Make (IO: IO) (Store: Store.S) = struct
           Store.read_reference t branch    >>= fun new_obj ->
           let old_obj = Listing.find_reference listing branch in
           let command = match old_obj, new_obj with
-            | None  , None   -> failwith (Reference.to_string branch ^ ": unknown tag")
+            | None  , None   -> failwith (Reference.pretty branch ^ ": unknown tag")
             | Some x, None   -> Update_request.Delete (branch, x)
             | None  , Some x -> Update_request.Create (branch, x)
             | Some x, Some y -> Update_request.Update (branch, x, y) in
@@ -702,8 +710,8 @@ module Make (IO: IO) (Store: Store.S) = struct
             | Update_request.Delete _ -> [Capability.Delete_refs]
             | _                       -> [Capability.Ofs_delta ] in
           let commands = [ command ] in
-          let min = Map.keys (Listing.references listing)
-                  |> List.map ~f:SHA.of_commit
+          let min = SHA.Commit.Map.keys (Listing.references listing)
+                  |> List.map SHA.of_commit
                   |> SHA.Set.of_list in
           let max = match new_obj with
             | None   -> SHA.Set.empty
@@ -726,29 +734,31 @@ module Make (IO: IO) (Store: Store.S) = struct
           Listing.input ic >>= fun listing ->
           Log.debugf "listing:\n %s" (Listing.pretty listing);
           let references =
-            List.fold_left ~f:(fun acc (sha1, refs) ->
+            List.fold_left (fun acc (sha1, refs) ->
                 List.fold_left
-                  ~f:(fun acc ref -> Reference.Map.add acc ~key:ref ~data:sha1)
-                  ~init:acc
+                  (fun acc ref -> Reference.Map.add ref sha1 acc)
+                  acc
                   refs
-              ) ~init:Reference.Map.empty
-              (Map.to_alist (Listing.references listing)) in
+              ) Reference.Map.empty
+              (SHA.Commit.Map.to_alist (Listing.references listing)) in
           let head = Listing.head listing in
           match op with
           | Ls      -> return { Result.head; references; sha1s = [] }
           | Fetch _
           | Clone _ ->
-            begin match Map.find references Reference.head with
-              | None      -> return_unit
-              | Some sha1 ->
+            begin
+              try
+                let sha1 = Reference.Map.find Reference.head references in
                 let contents = Reference.head_contents references sha1 in
                 Store.write_head t contents
+              with Not_found ->
+                return_unit
             end >>= fun () ->
             let write_ref (ref, sha1) =
               if Reference.is_valid ref then Store.write_reference t ref sha1
               else return_unit in
-            let references = Map.remove references Reference.head in
-            Misc.list_iter_p write_ref (Map.to_alist references) >>= fun () ->
+            let references = Reference.Map.remove Reference.head references in
+            Misc.list_iter_p write_ref (Reference.Map.to_alist references) >>= fun () ->
 
             match head with
             | None      ->
@@ -779,7 +789,7 @@ module Make (IO: IO) (Store: Store.S) = struct
               IO.read_all ic >>= fun raw ->
               printf " done.\n%!";
               Log.debugf "Received a pack file of %d bytes." (String.length raw);
-              let pack = Bigstring.of_string raw in
+              let pack = Cstruct.of_string raw in
 
               let unpack = match op with
                 | Clone { unpack }
@@ -789,7 +799,7 @@ module Make (IO: IO) (Store: Store.S) = struct
               begin if unpack then
                   Pack.unpack ~write:(Store.write t) pack
                 else
-                  let pack = Pack.Raw.input (Mstruct.of_bigarray pack) ~index:None in
+                  let pack = Pack.Raw.input (Mstruct.of_cstruct pack) ~index:None in
                   Store.write_pack t pack
               end >>= fun sha1s ->
               match SHA.Set.to_list sha1s with
