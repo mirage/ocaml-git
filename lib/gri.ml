@@ -14,8 +14,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Core_kernel.Std
-
 type t = Uri.t
 
 let to_uri x = x
@@ -26,11 +24,11 @@ let of_string str =
   match Uri.host uri with
   | Some _ -> uri
   | None   ->
-    match String.lsplit2 str ~on:':' with
+    match Misc.string_lsplit2 str ~on:':' with
     | None       -> uri
     | Some (host, path) ->
       let userinfo, host =
-        match String.lsplit2 host ~on:'@' with
+        match Misc.string_lsplit2 host ~on:'@' with
         | None       -> None  , host
         | Some (a,b) -> Some a, b in
       let scheme = "git+ssh" in

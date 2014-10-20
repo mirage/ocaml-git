@@ -51,7 +51,7 @@ module S = FS(M)
 
 let suite =
   {
-    name  = "MIR-FAT";
+    name  = "MIR-FS-unix";
     init  = M.init;
     clean = unit;
     store = (module S);

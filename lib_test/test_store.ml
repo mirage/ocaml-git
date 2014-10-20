@@ -17,7 +17,6 @@
 open OUnit
 open Test_common
 open Lwt
-open Core_kernel.Std
 open Git
 open Git_unix
 
@@ -48,11 +47,17 @@ module Make (Store: Store.S) = struct
       Lwt_unix.run (x.clean ());
       raise e
 
-  let long_random_string = Cryptokit.(Random.string (Random.device_rng "/dev/urandom") 1024)
-  let v1 = Value.blob (Blob.of_string long_random_string)
+  let long_random_string =
+    let t  = Unix.gettimeofday () in
+    let cs = Cstruct.create 8 in
+    Cstruct.BE.set_uint64 cs 0 Int64.(of_float (t *. 1000.)) ;
+    Nocrypto.Rng.reseed cs;
+    Cstruct.to_string (Nocrypto.Rng.generate 1024)
+
+  let v1 = Value.blob (Blob.of_raw long_random_string)
   let kv1 = Value.sha1 v1
 
-  let v2 = Value.blob (Blob.of_string "")
+  let v2 = Value.blob (Blob.of_raw "")
   let kv2 = Value.sha1 v2
 
   (* Create a node containing t1 -w-> v1 *)
@@ -139,10 +144,10 @@ module Make (Store: Store.S) = struct
   let ktag2 = Value.sha1 tag2
 
   (* r1: t4 *)
-  let r1 = Reference.of_string "refs/origin/head"
+  let r1 = Reference.of_raw "refs/origin/head"
 
   (* r2: c2 *)
-  let r2 = Reference.of_string "refs/upstream/head"
+  let r2 = Reference.of_raw "refs/upstream/head"
 
   let check_write t name k v =
     Store.write t v    >>= fun k' ->
@@ -272,17 +277,18 @@ module Make (Store: Store.S) = struct
     if x.name = "FS" then
       let test () =
         rec_files "." >>= fun files ->
-        Lwt_list.map_p (fun file ->
-            let blob =
-              file
-              |> In_channel.read_all
-              |> Blob.of_string in
+        let pool = Lwt_pool.create 200 (fun () -> return_unit) in
+        Git.Misc.list_map_p ~pool (fun file ->
+            Lwt_io.with_file ~mode:Lwt_io.input file (fun ic ->
+                Lwt_io.read ic >>= fun str ->
+                return (Blob.of_raw str)
+              ) >>= fun blob ->
             FS.entry_of_file file `Normal blob
           ) files >>= fun entries ->
-        let entries = List.filter_map ~f:(fun x -> x) entries in
+        let entries = Misc.list_filter_map (fun x -> x) entries in
         let cache = { Cache.entries; extensions = [] } in
-        let buf = Misc.with_bigbuffer (fun buf -> Cache.add buf cache) in
-        let cache2 = Cache.input (Mstruct.of_bigarray buf) in
+        let buf = Misc.with_buffer' (fun buf -> Cache.add buf cache) in
+        let cache2 = Cache.input (Mstruct.of_cstruct buf) in
         assert_cache_equal "cache" cache cache2;
         return_unit
       in
@@ -294,39 +300,44 @@ module Make (Store: Store.S) = struct
         files "data/" >>= fun files ->
         if files = [] then
           failwith "Please run that test in lib_test/";
-        let files = List.filter ~f:(fun file ->
-            String.is_suffix file ~suffix:".pack"
+        let files = List.filter (fun file ->
+            match Misc.string_chop_suffix file ~suffix:".pack" with
+            | None   -> false
+            | Some _ -> true
           ) files in
-        let files = List.map ~f:(fun file ->
-            let name = String.chop_prefix_exn file ~prefix:"data/pack-" in
-            let name = String.chop_suffix_exn name ~suffix:".pack" in
-            file, "data/pack-" ^ name ^ ".idx"
+        let files = List.map (fun file ->
+            match Misc.string_chop_prefix file ~prefix:"data/pack-" with
+            | None      -> failwith ("chop prefix " ^ file)
+            | Some name ->
+              match Misc.string_chop_suffix name ~suffix:".pack" with
+              | None      -> failwith ("chop suffix " ^ name)
+              | Some name -> file, "data/pack-" ^ name ^ ".idx"
           ) files in
-        List.iter ~f:(fun (pack, index) ->
+        Lwt_list.iter_s (fun (pack, index) ->
 
             (* basic serialization of index files *)
-            let istr1 = In_channel.read_all index in
+            Lwt_io.with_file ~mode:Lwt_io.input index Lwt_io.read >>= fun istr1 ->
             let i1    = Pack_index.input (Mstruct.of_string istr1) in
-            let istr2 = Misc.with_bigbuffer (fun buf -> Pack_index.add buf i1) in
-            let i2    = Pack_index.input (Mstruct.of_bigarray istr2) in
+            let istr2 = Misc.with_buffer' (fun buf -> Pack_index.add buf i1) in
+            let i2    = Pack_index.input (Mstruct.of_cstruct istr2) in
             assert_pack_index_equal "pack-index" i1 i2;
 
             (* basic serialization of pack files *)
-            let pstr1 = In_channel.read_all pack in
+            Lwt_io.with_file ~mode:Lwt_io.input pack Lwt_io.read >>= fun pstr1 ->
             let rp1   = Pack.Raw.input (Mstruct.of_string pstr1) ~index:None in
             let rp1'  = Pack.Raw.input (Mstruct.of_string pstr1) ~index:(Some i1) in
             assert_raw_pack_equal "raw-pack" rp1 rp1';
 
-            let pstr2 = Misc.with_bigbuffer (fun buf -> Pack.Raw.add buf rp1) in
-            let rp2   = Pack.Raw.input (Mstruct.of_bigarray pstr2) ~index:None in
+            let pstr2 = Misc.with_buffer' (fun buf -> Pack.Raw.add buf rp1) in
+            let rp2   = Pack.Raw.input (Mstruct.of_cstruct pstr2) ~index:None in
             assert_pack_equal "pack" (Pack.to_pic rp1) (Pack.to_pic rp2);
 
             let i3 = Pack.Raw.index rp1 in
             assert_pack_index_equal "raw-pack-->>--pack-index" i1 i3;
 
-          ) files;
+            return_unit
 
-        return_unit
+          ) files
       in
       run x test
 
@@ -360,5 +371,5 @@ let suite (speed, x) =
   ]
 
 let run name tl =
-  let tl = List.map ~f:suite tl in
+  let tl = List.map suite tl in
   Alcotest.run name tl

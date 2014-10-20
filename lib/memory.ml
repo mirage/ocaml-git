@@ -14,7 +14,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Core_kernel.Std
 open Lwt
 module Log = Log.Make(struct let section = "memory" end)
 
@@ -28,22 +27,22 @@ type t = {
 let root t =
   t.root
 
-let stores = String.Table.create ()
+let stores = Hashtbl.create 1024
 
 let create ?root () =
   let root = match root with
     | None   -> "root"
     | Some r -> r in
-  let t = match Hashtbl.find stores root with
-    | Some t -> t
-    | None   ->
+  let t =
+    try Hashtbl.find stores root
+    with Not_found ->
       let t = {
         root;
-        values  = SHA.Table.create ();
-        refs    = Reference.Table.create ();
+        values  = Hashtbl.create 1024;
+        refs    = Hashtbl.create 8;
         head    = None;
       } in
-      Hashtbl.add_exn stores ~key:root ~data:t;
+      Hashtbl.add stores root t;
       t in
   return t
 
@@ -53,12 +52,13 @@ let clear t =
 
 let write t value =
   let inflated = Misc.with_buffer (fun buf -> Value.add_inflated buf value) in
-  let sha1 = SHA.create inflated in
-  match Hashtbl.find t.values sha1 with
-  | Some _ -> return sha1
-  | None   ->
+  let sha1 = SHA.of_string inflated in
+  try
+    let _ = Hashtbl.find t.values sha1 in
+    return sha1
+  with Not_found ->
     Log.infof "Writing %s" (SHA.to_hex sha1);
-    Hashtbl.add_exn t.values sha1 value;
+    Hashtbl.add t.values sha1 value;
     return sha1
 
 let write_pack t pack =
@@ -72,13 +72,15 @@ let write_pack t pack =
   >>= fun () ->
   return (Pack.keys pack)
 
+let keys t =
+  Hashtbl.fold (fun k _ l -> k :: l) t []
+
 let list t =
-  return (Hashtbl.keys t.values)
+  return (keys t.values)
 
 let read t sha1 =
-  match Hashtbl.find t.values sha1 with
-  | Some _ as v -> return v
-  | None        -> return_none
+  try return (Some (Hashtbl.find t.values sha1))
+  with Not_found -> return_none
 
 let mem t sha1 =
   return (Hashtbl.mem t.values sha1)
@@ -103,21 +105,22 @@ let contents t =
 
 let dump t =
   contents t >>= fun contents ->
-  List.iter ~f:(fun (sha1, value) ->
+  List.iter (fun (sha1, value) ->
       let typ = Value.type_of value in
       Printf.eprintf "%s %s\n" (SHA.to_hex sha1) (Object_type.to_string typ)
     ) contents;
   return_unit
 
 let references t =
-  return (Hashtbl.keys t.refs)
+  return (keys t.refs)
 
 let mem_reference t ref =
   return (Hashtbl.mem t.refs ref)
 
 let read_reference t ref =
-  Log.infof "Reading %s" (Reference.to_string ref);
-  return (Hashtbl.find t.refs ref)
+  Log.infof "Reading %s" (Reference.pretty ref);
+  try return (Some (Hashtbl.find t.refs ref))
+  with Not_found -> return_none
 
 let read_head t =
   Log.infof "Reading HEAD";
@@ -138,7 +141,7 @@ let write_head t c =
   return_unit
 
 let write_reference t ref sha1 =
-  Log.infof "Writing %s" (Reference.to_string ref);
+  Log.infof "Writing %s" (Reference.pretty ref);
   Hashtbl.replace t.refs ref sha1;
   return_unit
 

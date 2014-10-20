@@ -15,7 +15,6 @@
  *)
 
 open Lwt
-open Core_kernel.Std
 
 type succ =
   [ `Commit of SHA.t
@@ -42,10 +41,10 @@ module Make (Store: Store.S) = struct
     | None                  -> return_nil
     | Some (Value.Blob _)   -> return_nil
     | Some (Value.Commit c) ->
-      return (tree "" c.Commit.tree :: List.map ~f:commit c.Commit.parents)
+      return (tree "" c.Commit.tree :: List.map commit c.Commit.parents)
     | Some (Value.Tag t)    -> return [tag t]
     | Some (Value.Tree t)   ->
-      return (List.map ~f:(fun e -> `Tree (e.Tree.name, e.Tree.node)) t)
+      return (List.map (fun e -> `Tree (e.Tree.name, e.Tree.node)) t)
 
   (* XXX: not tail-rec *)
   let rec find t sha1 path =

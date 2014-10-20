@@ -15,25 +15,36 @@
  *)
 
 open Lwt
-open Core_kernel.Std
+open Sexplib.Std
+open Printf
+
 module Log = Log.Make(struct let section = "pack-index" end)
 
-module T = struct
-  type t = {
-    offsets : int SHA.Map.t;
-    crcs    : int32 SHA.Map.t;
-    pack_checksum: SHA.t;
-  } with bin_io, compare, sexp
-  let hash (t: t) = Hashtbl.hash t
-  include Sexpable.To_stringable (struct type nonrec t = t with sexp end)
-  let module_name = "Pack_index"
-end
-include T
-include Identifiable.Make (T)
+type t = {
+  offsets : int SHA.Map.t;
+  crcs    : int32 SHA.Map.t;
+  pack_checksum: SHA.t;
+} with sexp
+
+let hash = Hashtbl.hash
+
+let compare t1 t2 =
+  match SHA.compare t1.pack_checksum t2.pack_checksum with
+  | 0 -> begin
+      match SHA.Map.compare compare t1.offsets t2.offsets with
+      | 0 -> SHA.Map.compare Int32.compare t1.crcs t2.crcs
+      | i -> i
+    end
+  | i -> i
+
+let equal t1 t2 =
+  SHA.equal t1.pack_checksum t2.pack_checksum
+  && SHA.Map.equal (=) t1.offsets t2.offsets
+  && SHA.Map.equal (=) t1.crcs t2.crcs
 
 let empty ?pack_checksum () =
   let pack_checksum = match pack_checksum with
-    | None   -> SHA.of_string "" (* XXX: ugly *)
+    | None   -> SHA.of_raw "" (* XXX: ugly *)
     | Some c -> c in
   {
     offsets = SHA.Map.empty;
@@ -45,13 +56,14 @@ let pretty t =
   let buf = Buffer.create 1024 in
   bprintf buf "pack-checksum: %s\n" (SHA.to_hex t.pack_checksum);
   let l = ref [] in
-  SHA.Map.iter2 ~f:(fun ~key ~data ->
-      match data with
-      | `Both (offset, crc) -> l := (key, offset, crc) :: !l
-      | _ -> assert false
-    ) t.offsets t.crcs;
-  let l = List.sort ~cmp:(fun (_,o1,_) (_,o2,_) -> Int.compare o1 o2) !l in
-  List.iter ~f:(fun (sha1, offset, crc) ->
+  let offsets = SHA.Map.to_alist t.offsets in
+  let crcs = SHA.Map.to_alist t.crcs in
+  List.iter2 (fun (key1, offset) (key2, crc) ->
+      assert (key1 = key2);
+      l := (key1, offset, crc) :: !l
+    ) offsets crcs;
+  let l = List.sort (fun (_,o1,_) (_,o2,_) -> Pervasives.compare o1 o2) !l in
+  List.iter (fun (sha1, offset, crc) ->
       bprintf buf "%s: off:%d crc:%ld\n" (SHA.to_hex sha1) offset crc
     ) l;
   Buffer.contents buf
@@ -65,9 +77,9 @@ let lengths { offsets } =
     | []    -> List.rev acc
     | [h,_] -> aux ((h, None)::acc) []
     | (h1,l1)::((_,l2)::_ as t) -> aux ((h1, Some (l2-l1))::acc) t in
-  let l = SHA.Map.to_alist offsets in
-  let l = List.sort ~cmp:(fun (_,x) (_,y) -> Int.compare x y) l in
-  SHA.Map.of_alist_exn (aux [] l)
+  let l = SHA.Map.bindings offsets in
+  let l = List.sort (fun (_,x) (_,y) -> Pervasives.compare x y) l in
+  SHA.Map.of_alist (aux [] l)
 
 let input_header buf =
   let magic = Mstruct.get_string buf 4 in
@@ -79,7 +91,7 @@ let input_header buf =
 
 let input_keys buf n =
   Log.debugf "input: reading the %d objects IDs" n;
-  let a = Array.create n (SHA.of_string "") in
+  let a = Array.create n (SHA.of_raw "") in
   for i=0 to n - 1 do
     a.(i) <- SHA.input buf;
   done;
@@ -89,8 +101,11 @@ let keys buf =
   Log.debugf "keys";
   input_header buf;
   Mstruct.shift buf (255 * 4);
-  let n = Mstruct.get_be_uint32 buf in
-  SHA.Set.of_array (input_keys buf (Int32.to_int_exn n))
+  Mstruct.get_be_uint32 buf
+  |> Int32.to_int
+  |> input_keys buf
+  |> Array.to_list
+  |> SHA.Set.of_list
 
 let input buf =
   Log.debugf "input";
@@ -104,7 +119,7 @@ let input buf =
     done;
     a in
 
-  let nb_objects = Int32.to_int_exn fanout.(255) in
+  let nb_objects = Int32.to_int fanout.(255) in
 
   (* Read the names *)
   let names = input_keys buf nb_objects in
@@ -112,7 +127,7 @@ let input buf =
   (* Read the CRCs *)
   Log.debugf "input: reading the %d CRCs" nb_objects;
   let crcs =
-    let a = Array.create nb_objects (SHA.of_string "", 0l) in
+    let a = Array.create nb_objects (SHA.of_raw "", 0l) in
     for i=0 to nb_objects-1 do
       let crc = Mstruct.get_be_uint32 buf in
       a.(i) <- (names.(i), crc);
@@ -126,7 +141,7 @@ let input buf =
     let a = Array.create nb_objects 0l in
     let b = Array.create nb_objects false in
     for i=0 to nb_objects-1 do
-      let more = match Int.(Mstruct.get_uint8 buf land 128) with
+      let more = match Mstruct.get_uint8 buf land 128 with
         | 0 -> false
         | _ -> true in
       let n =
@@ -146,70 +161,72 @@ let input buf =
       let cont = conts.(i) in
       if cont then (
         let offset = Mstruct.get_be_uint64 buf in
-        (name, Int64.to_int_exn offset)
+        (name, Int64.to_int offset)
       ) else
-        (name, Int32.to_int_exn offset)
+        (name, Int32.to_int offset)
     ) names in
   let pack_checksum = SHA.input buf in
   let _checksum = SHA.input buf in
 
   let offsets_alist = Array.to_list offsets in
-  let offsets = SHA.Map.of_alist_exn offsets_alist in
-  let crcs = SHA.Map.of_alist_exn (Array.to_list crcs) in
+  let offsets = SHA.Map.of_alist offsets_alist in
+  let crcs = SHA.Map.of_alist (Array.to_list crcs) in
   { offsets; crcs; pack_checksum }
 
 let add buf t =
-  let n = SHA.Map.length t.offsets in
+  let n = SHA.Map.cardinal t.offsets in
   Log.debugf "output: %d packed values" n;
-  Bigbuffer.add_string buf "\255tOc";
+  Buffer.add_string buf "\255tOc";
   Misc.add_be_uint32 buf 2l;
 
   let cmp (k1,_) (k2,_) = SHA.compare k1 k2 in
 
-  let offsets = List.sort ~cmp (SHA.Map.to_alist t.offsets) in
-  let crcs    = List.sort ~cmp (SHA.Map.to_alist t.crcs) in
+  let offsets = List.sort cmp (SHA.Map.to_alist t.offsets) in
+  let crcs    = List.sort cmp (SHA.Map.to_alist t.crcs) in
 
   Log.debugf "output: writing the first-level fanout";
   let fanout = Array.create 256 0l in
-  List.iter ~f:(fun (key, _) ->
-      let str = SHA.to_string key in
-      let n = Char.to_int str.[0] in
+  List.iter (fun (key, _) ->
+      let str = SHA.to_raw key in
+      let n = Char.code str.[0] in
       for i = n to 255 do
         fanout.(i) <- Int32.succ fanout.(i)
       done;
     ) offsets;
-  Array.iter ~f:(Misc.add_be_uint32 buf) fanout;
+  Array.iter (Misc.add_be_uint32 buf) fanout;
 
   Log.debugf "output: writing the %d object IDs" n;
-  List.iter ~f:(fun (key, _) ->
+  List.iter (fun (key, _) ->
       SHA.add buf key
     ) offsets;
 
   Log.debugf "output: writing the %d CRCs" n;
-  List.iter ~f:(fun (_, crc) ->
+  List.iter (fun (_, crc) ->
       Misc.add_be_uint32 buf crc
     ) crcs;
 
   Log.debugf "output: writing the %d offsets" n;
   let conts = ref [] in
-  List.iter ~f:(fun (_, offset) ->
-      match Int32.of_int offset with
-      | Some i -> Misc.add_be_uint32 buf i
-      | None   ->
-        conts := Int64.of_int_exn offset :: !conts;
+  List.iter (fun (_, offset) ->
+      if offset <= Int32.(to_int max_int) then (
+        let i = Int32.of_int offset in
+        Misc.add_be_uint32 buf i
+      ) else (
+        conts := Int64.of_int offset :: !conts;
         Misc.add_be_uint32 buf 0x80_00_00_00l
+      )
     ) offsets;
 
   Log.debugf "output: writing the %d offset continuations" (List.length !conts);
   let str = String.create 8 in
-  List.iter ~f:(fun cont ->
+  List.iter (fun cont ->
       EndianString.BigEndian.set_int64 str 0 cont;
-      Bigbuffer.add_string buf str
+      Buffer.add_string buf str
     ) (List.rev !conts);
 
   SHA.add buf t.pack_checksum;
 
   (* XXX: SHA.of_bigstring *)
-  let str = Bigbuffer.contents buf in
-  let checksum = SHA.create str in
-  Bigbuffer.add_string buf (SHA.to_string checksum)
+  let str = Buffer.contents buf in
+  let checksum = SHA.of_string str in
+  Buffer.add_string buf (SHA.to_raw checksum)

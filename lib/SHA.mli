@@ -14,16 +14,23 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Core_kernel.Std
-
 module type S = sig
 
   (** Signature for SHA1 values *)
 
   include Object.S
 
-  val create: string -> t
-  (** Build a node from a raw bigstring. *)
+  val of_string: string -> t
+  (** Build a hash from a string. *)
+
+  val of_cstruct: Cstruct.t -> t
+  (** Build a hash from a cstruct. *)
+
+  val to_raw: t -> string
+  (** Raw SHA1 value. *)
+
+  val of_raw: string -> t
+  (** Abstract a raw SHA1 value. *)
 
   val to_hex: t -> string
   (** Display the hex encoding of the SHA1 hash. *)
@@ -34,14 +41,16 @@ module type S = sig
   val input_hex: Mstruct.t -> t
   (** Read an hex-encode SHA1 value. *)
 
-  val add_hex: Bigbuffer.t -> t -> unit
+  val add_hex: Buffer.t -> t -> unit
   (** Add the hex-encoding of the SHA1 value to the buffer. *)
 
   val zero: t
   (** A SHA1 full of zero. Useful for padding. *)
 
-end
+  module Set: Misc.Set with type elt = t
+  module Map: Misc.Map with type key = t
 
+end
 
 (** Unique object identifiers using SHA1. *)
 

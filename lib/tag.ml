@@ -14,23 +14,22 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Core_kernel.Std
+open Sexplib.Std
+open Printf
+
 module Log = Log.Make(struct let section = "tag" end)
 
-module T = struct
-  type t = {
-    sha1   : SHA.t;
-    typ    : Object_type.t;
-    tag    : string;
-    tagger : User.t;
-    message: string;
-  } with bin_io, compare, sexp
-  let hash (t: t) = Hashtbl.hash t
-  include Sexpable.To_stringable (struct type nonrec t = t with sexp end)
-  let module_name = "Tag"
-end
-include T
-include Identifiable.Make (T)
+type t = {
+  sha1   : SHA.t;
+  typ    : Object_type.t;
+  tag    : string;
+  tagger : User.t;
+  message: string;
+} with sexp
+
+let hash = Hashtbl.hash
+let equal = (=)
+let compare = compare
 
 let pretty t =
   sprintf
@@ -43,13 +42,13 @@ let pretty t =
     (Object_type.to_string t.typ)
     t.tag
     (User.pretty t.tagger)
-    (String.strip t.message)
+    (String.trim t.message)
 
 let add_key_value buf k v =
-  Bigbuffer.add_string buf k;
-  Bigbuffer.add_char   buf Misc.sp;
-  Bigbuffer.add_string buf v;
-  Bigbuffer.add_char   buf Misc.lf
+  Buffer.add_string buf k;
+  Buffer.add_char   buf Misc.sp;
+  Buffer.add_string buf v;
+  Buffer.add_char   buf Misc.lf
 
 let input_object_type buf =
   let s = Mstruct.to_string buf in
@@ -61,11 +60,11 @@ let add buf t =
   add_key_value buf "object" (SHA.to_hex t.sha1);
   add_key_value buf "type"   (Object_type.to_string t.typ);
   add_key_value buf "tag"    t.tag;
-  Bigbuffer.add_string buf "tagger ";
+  Buffer.add_string buf "tagger ";
   User.add buf t.tagger;
-  Bigbuffer.add_char buf Misc.lf;
-  Bigbuffer.add_char buf Misc.lf;
-  Bigbuffer.add_string buf t.message
+  Buffer.add_char buf Misc.lf;
+  Buffer.add_char buf Misc.lf;
+  Buffer.add_string buf t.message
 
 let input buf =
   let sha1   = Misc.input_key_value buf ~key:"object" SHA.input_hex in

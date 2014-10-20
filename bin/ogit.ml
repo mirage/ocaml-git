@@ -15,8 +15,8 @@
  *)
 
 open Lwt
-open Core_kernel.Std
 open Cmdliner
+open Printf
 open Git
 open Git_unix
 
@@ -130,8 +130,8 @@ let directory =
   Arg.(value & pos 1 (some string) None & doc)
 
 let reference =
-  let parse str = `Ok (Reference.of_string str) in
-  let print ppf name = Format.pp_print_string ppf (Reference.to_string name) in
+  let parse str = `Ok (Reference.of_raw str) in
+  let print ppf name = Format.pp_print_string ppf (Reference.to_raw name) in
   parse, print
 
 let branch =
@@ -154,7 +154,7 @@ let run t =
   Lwt_unix.run (
     Lwt.catch
       (fun () -> t)
-      (function e -> eprintf "%s\n%!" (Exn.to_string e); exit 1)
+      (function e -> eprintf "%s\n%!" (Printexc.to_string e); exit 1)
   )
 
 (* CAT *)
@@ -169,7 +169,7 @@ let cat = {
       Arg.(required & pos 0 (some string) None & doc) in
     let cat_file file =
       run begin
-        let buf = In_channel.read_all file in
+        Lwt_io.with_file ~mode:Lwt_io.input file Lwt_io.read >>= fun buf ->
         let v = Value.input (Mstruct.of_string buf) in
         Printf.printf "%s%!" (Value.pretty v);
         return_unit
@@ -189,11 +189,11 @@ let ls_remote = {
         S.create ()  >>= fun t ->
         Sync.ls t remote >>= fun references ->
         Printf.printf "From %s\n" (Gri.to_string remote);
-        let print ~key:ref ~data:sha1 =
+        let print ref sha1 =
           Printf.printf "%s        %s\n"
             (SHA.Commit.to_hex sha1)
-            (Reference.to_string ref) in
-        Map.iter ~f:print references;
+            (Reference.to_raw ref) in
+        Reference.Map.iter print references;
         return_unit
       end in
     Term.(mk ls $ backend $ remote)
@@ -217,7 +217,7 @@ let ls_files = {
           printf "%s" (Cache.pretty cache)
         else
           List.iter
-            ~f:(fun e -> Printf.printf "%s\n" e.Cache.name)
+            (fun e -> Printf.printf "%s\n" e.Cache.name)
             cache.Cache.entries;
         return_unit
       end in
@@ -242,8 +242,8 @@ let read_tree = {
         begin
           let (/) = Filename.concat in
           let ref = "refs" / "heads" / commit_str in
-          if List.exists refs ~f:(fun r -> Reference.to_string r = ref) then
-            S.read_reference_exn t (Reference.of_string ref)
+          if List.exists (fun r -> Reference.to_raw r = ref) refs then
+            S.read_reference_exn t (Reference.of_raw ref)
           else
             return (SHA.Commit.of_hex commit_str)
         end >>= fun commit ->
@@ -329,8 +329,8 @@ let push = {
         S.create ()                 >>= fun t ->
         S.read_reference t branch   >>= fun b ->
         let branch = match b with
-          | None   -> Reference.of_string
-                        ("refs/heads/" ^ Reference.to_string branch)
+          | None   -> Reference.of_raw
+                        ("refs/heads/" ^ Reference.to_raw branch)
           | Some _ -> branch in
         Sync.push t ~branch remote >>= fun s ->
         printf "%s\n" (Result.pretty_push s);
@@ -352,7 +352,11 @@ let graph = {
       let module Graph = Global_graph.Make(S) in
       run begin
         S.create () >>= fun t ->
-        Graph.to_dot t file
+        let buf = Buffer.create 1024 in
+        Graph.to_dot t buf >>= fun () ->
+        Lwt_io.with_file ~mode:Lwt_io.output file (fun oc ->
+            Lwt_io.write oc (Buffer.contents buf)
+          )
       end in
     Term.(mk graph $ backend $ file)
 }
@@ -373,10 +377,10 @@ let help = {
       | None       -> `Help (`Pager, None)
       | Some topic ->
         let topics = "topics" :: cmds in
-        let conv, _ = Arg.enum (List.rev_map ~f:(fun s -> (s, s)) topics) in
+        let conv, _ = Arg.enum (List.rev_map (fun s -> (s, s)) topics) in
         match conv topic with
         | `Error e                -> `Error (false, e)
-        | `Ok t when t = "topics" -> List.iter ~f:print_endline cmds; `Ok ()
+        | `Ok t when t = "topics" -> List.iter print_endline cmds; `Ok ()
         | `Ok t                   -> `Help (man_format, Some t) in
   Term.(ret (pure help $Term.man_format $Term.choice_names $topic))
 }
@@ -415,7 +419,7 @@ let default =
     ~doc
     ~man
 
-let commands = List.map ~f:command [
+let commands = List.map command [
     cat;
     ls_remote;
     ls_files;

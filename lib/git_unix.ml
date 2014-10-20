@@ -14,10 +14,15 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Core_kernel.Std
 open Lwt
 open Git
+open Printf
+
 module Log = Log.Make(struct let section = "unix" end)
+
+(* Pool of opened files *)
+let openfile_pool = Lwt_pool.create 200 (fun () -> return_unit)
+let mkdir_pool = Lwt_pool.create 1 (fun () -> return_unit)
 
 module M = struct
   type ic = Lwt_io.input_channel
@@ -42,7 +47,7 @@ module M = struct
       let cmd = match init with
         | None   -> [| "ssh"; user ^ host; |]
         | Some x -> [| "ssh"; user ^ host; x |] in
-      Log.debugf "Executing %s" (String.concat ~sep:" " (Array.to_list cmd));
+      Log.debugf "Executing %s" (String.concat " " (Array.to_list cmd));
       let env = Unix.environment () in
       let p = Lwt_process.open_process_full ~env ("ssh", cmd) in
       Lwt.finalize
@@ -88,15 +93,10 @@ module D = struct
       if Sys.file_exists dir then return_unit
       else (
         aux (Filename.dirname dir) >>= fun () ->
-        if Sys.file_exists dir then return_unit
-        else
-          catch
-            (fun () ->
-               Log.debugf "mkdir %s" dir;
-               Lwt_unix.mkdir dir 0o755)
-            (fun _ -> return_unit)
+        Log.debugf "mkdir %s" dir;
+        Lwt_unix.mkdir dir 0o755
       ) in
-    aux dirname
+    Lwt_pool.use mkdir_pool (fun () -> aux dirname)
 
   let list_files kind dir =
     if Sys.file_exists dir then (
@@ -122,13 +122,13 @@ module D = struct
       Lwt_list.fold_left_s aux (fs @ accu) ds in
     aux [] dir
 
-  let write_bigstring fd b =
+  let write_cstruct fd b =
     let rec rwrite fd buf ofs len =
       Lwt_bytes.write fd buf ofs len >>= fun n ->
       if n = 0 then fail End_of_file
       else if n < len then rwrite fd buf (ofs + n) (len - n)
       else return () in
-    rwrite fd b 0 (Bigstring.length b)
+    rwrite fd (Cstruct.to_bigarray b) 0 (Cstruct.len b)
 
   let write_string fd b =
     let rec rwrite fd buf ofs len =
@@ -141,23 +141,25 @@ module D = struct
   let with_write_file file fn =
     Log.infof "Writing %s" file;
     mkdir (Filename.dirname file) >>= fun () ->
-    Lwt_unix.(openfile file [O_WRONLY; O_NONBLOCK; O_CREAT; O_TRUNC] 0o644) >>= fun fd ->
-    catch
-      (fun () -> fn fd >>= fun () -> Lwt_unix.close fd)
-      (fun _  -> Lwt_unix.close fd)
+    Lwt_pool.use openfile_pool (fun () ->
+        Lwt_unix.(openfile file [O_WRONLY; O_NONBLOCK; O_CREAT; O_TRUNC] 0o644) >>= fun fd ->
+        catch
+          (fun () -> fn fd >>= fun () -> Lwt_unix.close fd)
+          (fun _  -> Lwt_unix.close fd))
 
   let write_file file b =
-    with_write_file file (fun fd -> write_bigstring fd b)
+    with_write_file file (fun fd -> write_cstruct fd b)
 
   let read_file file =
-    let open Lwt in
     Log.infof "Reading %s" file;
     Unix.handle_unix_error (fun () ->
-        let fd = Unix.(openfile file [O_RDONLY; O_NONBLOCK] 0o644) in
-        let ba = Lwt_bytes.map_file ~fd ~shared:false () in
-        Unix.close fd;
-        return ba
-      ) ()
+        Lwt_pool.use openfile_pool (fun () ->
+            let fd = Unix.(openfile file [O_RDONLY; O_NONBLOCK] 0o644) in
+            let ba = Lwt_bytes.map_file ~fd ~shared:false () in
+            Unix.close fd;
+            return (Cstruct.of_bigarray ba)
+          ))
+      ()
 
   let realdir dir =
     if Sys.file_exists dir then (
@@ -182,16 +184,16 @@ module D = struct
     let stats = Unix.stat path in
     let ctime = { lsb32 = Int32.of_float stats.Unix.st_ctime; nsec = 0l } in
     let mtime = { lsb32 = Int32.of_float stats.Unix.st_mtime; nsec = 0l } in
-    let dev = Int32.of_int_exn stats.Unix.st_dev in
-    let inode = Int32.of_int_exn stats.Unix.st_ino in
+    let dev = Int32.of_int stats.Unix.st_dev in
+    let inode = Int32.of_int stats.Unix.st_ino in
     let mode = match stats.Unix.st_kind, stats.Unix.st_perm with
       | Unix.S_REG, 0o755 -> `Exec
       | Unix.S_REG, 0o644 -> `Normal
       | Unix.S_LNK, _     -> `Link
       | _ -> failwith (path ^ ": not supported kind of file.") in
-    let uid = Int32.of_int_exn stats.Unix.st_uid in
-    let gid = Int32.of_int_exn stats.Unix.st_gid in
-    let size = Int32.of_int_exn stats.Unix.st_size in
+    let uid = Int32.of_int stats.Unix.st_uid in
+    let gid = Int32.of_int stats.Unix.st_gid in
+    let size = Int32.of_int stats.Unix.st_size in
     { ctime; mtime; dev; inode; uid; gid; mode; size }
 
   let file_exists f =

@@ -16,7 +16,6 @@
 
 (** Lwt_unix IO module. *)
 
-open Core_kernel.Std
 open Git
 
 (** {2 Synchronisation primitives} *)

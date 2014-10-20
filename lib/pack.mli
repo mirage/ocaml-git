@@ -16,8 +16,6 @@
 
 (** Pack files. *)
 
-open Core_kernel.Std
-
 type t = (SHA.t * Packed_value.PIC.t) list
 (** A pack value is an ordered list of position-independant packed
     values and the SHA of the corresponding inflated objects. *)
@@ -38,8 +36,7 @@ val read: t -> SHA.t -> Value.t option
 val read_exn: t -> SHA.t -> Value.t
 (** Return the value stored in the pack file. *)
 
-val unpack: write:(Value.t -> SHA.t Lwt.t) ->
-  Bigstring.t -> SHA.Set.t Lwt.t
+val unpack: write:(Value.t -> SHA.t Lwt.t) -> Cstruct.t -> SHA.Set.t Lwt.t
 (** Unpack a whole pack file. [write] should returns the SHA of the
     marshaled value. Return the IDs of the written objects. *)
 

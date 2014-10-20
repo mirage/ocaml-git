@@ -16,17 +16,15 @@
 
 (** Miscellaneous functions. *)
 
-open Core_kernel.Std
-
 (** {2 Bounded parallelism} *)
 
-val list_iter_p: ?width:int -> ('a -> unit Lwt.t) -> 'a list -> unit Lwt.t
-(** Same as [List_lwt.iter_p] but using a maximum width of
-    [width]. The default width is 50. *)
+val list_iter_p: ?pool:unit Lwt_pool.t -> ('a -> unit Lwt.t) -> 'a list -> unit Lwt.t
+(** Same as [List_lwt.iter_p] but using a maximum width equals to the
+    size of the [pool]. The default width is 50. *)
 
-val list_map_p: ?width:int -> ('a -> 'b Lwt.t) -> 'a list -> 'b list Lwt.t
-(** Same as [List_lwt.map_p] but using a maximum width of [width]. The
-    default width is 50. *)
+val list_map_p: ?pool:unit Lwt_pool.t -> ('a -> 'b Lwt.t) -> 'a list -> 'b list Lwt.t
+(** Same as [List_lwt.map_p] but using a maximum width equals to the
+    size of [pool]. The default width is 50. *)
 
 (** {2 Hexa encoding} *)
 
@@ -36,44 +34,44 @@ val hex_encode: string -> string
 val hex_decode: string -> string
 (** Decode a string from base16. *)
 
-val buffer_contents: Bigbuffer.t -> Bigstring.t
-(** zero-copy buffer contents. *)
-
-val with_bigbuffer: (Bigbuffer.t -> unit) -> Bigstring.t
-(** Create a temporarybuffer, apply a function to append stuff to
-    it, and return the buffer contents as a bigstring. *)
-
-val with_buffer: (Bigbuffer.t -> unit) -> string
+val with_buffer: (Buffer.t -> unit) -> string
 (** Create a temporary buffer, apply a function to append stuff to it,
     and return the buffer contents. *)
 
+val with_buffer': (Buffer.t -> unit) -> Cstruct.t
+(** Create a temporary buffer, apply a function to append stuff to
+    it, and return the buffer contents as a cstruct. *)
+
 (** {2 Zlib Compression} *)
 
-val inflate_bigstring: Bigstring.t -> Bigstring.t
-(** Inflate a buffer. *)
+val inflate_cstruct: Cstruct.t -> Cstruct.t
+(** Inflate a cstruct. *)
 
-val deflate_bigstring: Bigstring.t -> Bigstring.t
-(** Deflate a big string. *)
+val deflate_cstruct: Cstruct.t -> Cstruct.t
+(** Deflate a cstruct. *)
 
 val inflate_mstruct: Mstruct.t -> Mstruct.t
-(** Inflate a buffer. *)
+(** Inflate an mstruct. *)
 
 val deflate_mstruct: Mstruct.t -> Mstruct.t
-(** Deflate a buffer. *)
+(** Deflate an mstruct. *)
 
 (** {2 CRC-32} *)
 
 val crc32: string -> int32
 (** Return the CRC-32 value of a bigstring. *)
 
-(** {2 Maps} *)
+(** {2 Association lists} *)
 
-val map_rev_find: ('key, 'value, 'cmp) Map.t -> 'value -> 'key option
-(** Reverse of [Map.find]. *)
+val inverse_assoc: ('a * 'b) list -> ('b * 'a) list
+(** Inverse the association map. *)
+
+val try_assoc: 'a -> ('a * 'b) list -> 'b option
+(** Same as [List.assoc] but returns [None] if no element is found. *)
 
 (** {2 Marshaling helpers} *)
 
-val add_be_uint32: Bigbuffer.t -> int32 -> unit
+val add_be_uint32: Buffer.t -> int32 -> unit
 
 val input_key_value: Mstruct.t -> key:string -> (Mstruct.t -> 'a) -> 'a
 
@@ -82,6 +80,48 @@ val nul: char
 val lf: char
 val lt: char
 val gt: char
+
+module type OrderedType = sig
+  include Set.OrderedType
+  val sexp_of_t: t -> Sexplib.Type.t
+  val t_of_sexp: Sexplib.Type.t -> t
+end
+
+module I: OrderedType with type t = int
+module S: OrderedType with type t = string
+
+module type Set = sig
+  include Set.S
+  val sexp_of_t: t -> Sexplib.Type.t
+  val t_of_sexp: Sexplib.Type.t -> t
+  val to_list: t -> elt list
+  val of_list: elt list -> t
+end
+
+module type Map = sig
+  include Map.S
+  val sexp_of_t: ('a -> Sexplib.Type.t) -> 'a t -> Sexplib.Type.t
+  val t_of_sexp: (Sexplib.Type.t -> 'a) -> Sexplib.Type.t -> 'a t
+  val keys: 'a t -> key list
+  val to_alist: 'a t -> (key * 'a) list
+  val of_alist: (key * 'a) list -> 'a t
+  val add_multi: key -> 'a -> 'a list t -> 'a list t
+end
+
+module Set (X: OrderedType): Set with type elt = X.t
+module Map (X: OrderedType): Map with type key = X.t
+
+module IntMap: Map with type key = int
+
+val string_split: string -> on:char -> string list
+val string_lsplit2: string -> on:char -> (string * string) option
+val string_forall: (char -> bool) -> string -> bool
+val string_exists: (char -> bool) -> string -> bool
+val string_mem: char -> string -> bool
+val string_chop_prefix: string -> prefix:string -> string option
+val string_chop_suffix: string -> suffix:string -> string option
+
+val list_filter_map: ('a -> 'b option) -> 'a list -> 'b list
 
 module OP: sig
 

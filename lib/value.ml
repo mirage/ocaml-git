@@ -14,23 +14,22 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Core_kernel.Std
+open Printf
 open Lwt
+open Sexplib.Std
+
 module Log = Log.Make(struct let section = "value" end)
 
-module T = struct
-  type t =
-    | Blob   of Blob.t
-    | Commit of Commit.t
-    | Tag    of Tag.t
-    | Tree   of Tree.t
-  with bin_io, compare, sexp
-  let hash (t: t) = Hashtbl.hash t
-  include Sexpable.To_stringable (struct type nonrec t = t with sexp end)
-  let module_name = "Value"
-end
-include T
-include Identifiable.Make (T)
+type t =
+  | Blob   of Blob.t
+  | Commit of Commit.t
+  | Tag    of Tag.t
+  | Tree   of Tree.t
+with sexp
+
+let equal = (=)
+let hash = Hashtbl.hash
+let compare = compare
 
 let pretty = function
   | Blob b   -> sprintf "== Blob ==\n%s\n" (Blob.pretty b)
@@ -56,28 +55,28 @@ let add_contents buf = function
   | Tree t   -> Tree.add buf t
 
 let add_header buf typ size =
-  Bigbuffer.add_string buf (Object_type.to_string typ);
-  Bigbuffer.add_char   buf Misc.sp;
-  Bigbuffer.add_string buf (string_of_int size);
-  Bigbuffer.add_char   buf Misc.nul
+  Buffer.add_string buf (Object_type.to_string typ);
+  Buffer.add_char   buf Misc.sp;
+  Buffer.add_string buf (string_of_int size);
+  Buffer.add_char   buf Misc.nul
 
 let add_inflated buf t =
   Log.debugf "add_inflated";
-  let tmp = Bigbuffer.create 1024 in
+  let tmp = Buffer.create 1024 in
   add_contents tmp t;
-  let size = Bigbuffer.length tmp in
+  let size = Buffer.length tmp in
   add_header buf (type_of t) size;
-  Bigbuffer.add_buffer buf tmp
+  Buffer.add_buffer buf tmp
 
 let sha1 t =
   let buf = Misc.with_buffer (fun buf -> add_inflated buf t) in
-  SHA.create buf
+  SHA.of_string buf
 
 let add buf t =
-  Log.debugf "add %s" (to_string t);
-  let inflated = Misc.with_bigbuffer (fun buf -> add_inflated buf t) in
-  let deflated = Misc.deflate_bigstring inflated in
-  Bigbuffer.add_string buf (Bigstring.to_string deflated)
+  Log.debugf "add %s" (pretty t);
+  let inflated = Misc.with_buffer' (fun buf -> add_inflated buf t) in
+  let deflated = Misc.deflate_cstruct inflated in
+  Buffer.add_string buf (Cstruct.to_string deflated)
 
 let type_of_inflated buf =
   let obj_type =
@@ -96,7 +95,7 @@ let input_inflated buf =
     | Some s ->
       try int_of_string s
       with _ -> Mstruct.parse_error_buf buf "%S is not a valid integer." s in
-  if Int.(size <> Mstruct.length buf) then
+  if size <> Mstruct.length buf then
     Mstruct.parse_error_buf buf
       "[expected-size: %d; actual-size: %d]\n"
       size (Mstruct.length buf);
@@ -115,17 +114,18 @@ module Cache = struct
   (* XXX: this can go in Store.t if we want to avoid relying on a
      global state. But as the keys are always the SHA of the inflated
      contents, having a global cache is fine. *)
-  let cache = SHA.Table.create ()
+  let cache = Hashtbl.create 1024
 
-  let clear () = SHA.Table.clear cache
+  let clear () = Hashtbl.clear cache
 
   let find sha1: string option =
-    Hashtbl.find cache sha1
+    try Some (Hashtbl.find cache sha1)
+    with Not_found -> None
 
   let find_exn sha1: string =
-    Hashtbl.find_exn cache sha1
+    Hashtbl.find cache sha1
 
   let add sha1 str =
-    ignore (Hashtbl.add cache ~key:sha1 ~data:str)
+    ignore (Hashtbl.add cache sha1 str)
 
 end

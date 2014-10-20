@@ -14,17 +14,26 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Core_kernel.Std
+open Printf
+open Sexplib.Std
+
 module Log = Log.Make(struct let section = "blob" end)
 
-include String
+include Misc.S
+
+let hash = Hashtbl.hash
+
+let equal x y = String.compare x y = 0
 
 let pretty t =
-  if Int.(String.length t < 70) then sprintf "%S" t
+  if String.length t < 70 then sprintf "%S" t
   else sprintf "%S[%d]" (String.sub t 0 70) (String.length t)
 
 let input buf =
   Mstruct.get_string buf (Mstruct.length buf)
 
 let add buf t =
-  Bigbuffer.add_string buf t
+  Buffer.add_string buf t
+
+let to_raw x = x
+let of_raw x = x

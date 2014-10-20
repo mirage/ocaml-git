@@ -1,6 +1,6 @@
 OASISFormat: 0.4
 Name:        git
-Version:     1.2.0
+Version:     1.3.0
 Synopsis:    A low-level interface to Git in pure OCaml
 Authors:     Thomas Gazagnaire
 License:     ISC
@@ -24,12 +24,12 @@ Library git
                      Reference, Sync, Tag, Tree, User, Value,
                      Object, Object_type, Store, Search, Gri,
                      Memory, FS
-  BuildDepends:      mstruct, dolog, core_kernel, ocamlgraph,
-                     re.pcre, zip, sha, uri, lwt,
-                     bin_prot.syntax, comparelib.syntax, sexplib.syntax,
+  BuildDepends:      mstruct, dolog, ocamlgraph,
+                     re.pcre, zip, nocrypto, uri, lwt,
+                     sexplib.syntax,
                      conduit.lwt, uri.services
-  XMETARequires:     mstruct, dolog, core_kernel, ocamlgraph,
-                     re.pcre, zip, sha, uri, lwt,
+  XMETARequires:     mstruct, dolog, ocamlgraph,
+                     re.pcre, zip, nocrypto, uri, lwt,
                      conduit.lwt, uri.services
 
 Library "git-unix"
@@ -62,7 +62,7 @@ Executable test_git
   MainIs:           test.ml
   CompiledObject:   best
   Install:          false
-  BuildDepends:     alcotest, git, git.unix, cryptokit,
+  BuildDepends:     alcotest, git, git.unix,
                     git.mirage, io-page.unix, mirage-fs-unix
 
 Test test_git

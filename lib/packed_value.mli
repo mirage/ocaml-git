@@ -16,17 +16,16 @@
 
 (** Packed values. *)
 
-open Core_kernel.Std
-
 type copy = {
   offset: int;
   length: int;
-}
+} with sexp
 (** Copy arguments. *)
 
 type hunk =
   | Insert of string
   | Copy of copy
+with sexp
 (** A delta hunk can either insert a string of copy the contents of a
     base object. *)
 
@@ -35,19 +34,18 @@ type 'a delta = {
   source_length: int;
   result_length: int;
   hunks        : hunk list;
-}
+} with sexp
 (** Delta objects. *)
 
 type t =
   | Raw_value of string
   | Ref_delta of SHA.t delta
   | Off_delta of int delta
+with sexp
 (** Packed values. *)
 
 val pretty: t -> string
 (** Human readable representation of a packed value. *)
-
-include Identifiable.S with type t := t
 
 module V2: sig
 
@@ -77,26 +75,26 @@ val source_length: t -> int
 
 (** {2 Conversion to values} *)
 
-val add_hunk: Bigbuffer.t -> source:string -> pos:int -> hunk -> unit
+val add_hunk: Buffer.t -> source:string -> pos:int -> hunk -> unit
 (** Append a hunk to a buffer. [source] is the original object the
     hunk refers to (with the given offset). *)
 
-val add_delta: Bigbuffer.t -> string delta -> unit
+val add_delta: Buffer.t -> string delta -> unit
 (** Append a delta to a buffer. *)
 
 val add_inflated_value:
   read:(SHA.t -> string Lwt.t) ->
-  offsets:SHA.t Int.Map.t ->
+  offsets:SHA.t Misc.IntMap.t ->
   pos:int ->
-  Bigbuffer.t -> t -> unit Lwt.t
+  Buffer.t -> t -> unit Lwt.t
 (** Append the inflated representation of a packed value to a given
     buffer. Use the same paramaters as [to_value]. *)
 
 val add_inflated_value_sync:
   read:(SHA.t -> string) ->
-  offsets:SHA.t Int.Map.t ->
+  offsets:SHA.t Misc.IntMap.t ->
   pos:int ->
-  Bigbuffer.t -> t -> unit
+  Buffer.t -> t -> unit
 (** Same as [add_inflated_value] but with a synchronous read
     function. *)
 
@@ -113,9 +111,7 @@ module PIC: sig
   and t = {
     kind: kind;
     sha1: SHA.t;
-  }
-
-  include Identifiable.S with type t := t
+  } with sexp
 
   val pretty: t -> string
   (** Human readable representation. *)
@@ -124,12 +120,14 @@ module PIC: sig
   (** [to_value p] unpacks the packed position-independant value
       [p]. *)
 
-  val raw: SHA.t -> Bigstring.t -> t
+  val raw: SHA.t -> Cstruct.t -> t
   (** Build a raw value. *)
+
+  module Map: Map.S with type key = t
 
 end
 
-val to_pic: PIC.t Int.Map.t -> PIC.t SHA.Map.t -> (int * SHA.t * t) -> PIC.t
+val to_pic: PIC.t Misc.IntMap.t -> PIC.t SHA.Map.t -> (int * SHA.t * t) -> PIC.t
 (** Position-independant packed value. Convert [Off_delta] and
     [Ref_delta] to [PIC.Link] using the provided indexes. *)
 

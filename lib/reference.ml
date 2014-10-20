@@ -14,10 +14,27 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Core_kernel.Std
+open Sexplib.Std
+
 module Log = Log.Make(struct let section = "reference" end)
 
-include String
+type t = string with sexp
+
+let compare = String.compare
+let equal = (=)
+let hash = Hashtbl.hash
+
+let add buf t =
+  failwith "TODO: Reference.add"
+
+let input buf =
+  failwith "TODO: Reference.input"
+
+let to_raw x = x
+let of_raw x = x
+let pretty x = String.escaped x
+
+module Map = Misc.Map(Misc.S)
 
 let compare x y =
   match x, y with
@@ -30,21 +47,22 @@ let head = "HEAD"
 
 type head_contents =
   | SHA of SHA.Commit.t
-  | Ref of t
+  | Ref of string
 
 let is_head x =
-  String.(head = x)
+  String.compare head x = 0
 
 let head_contents refs sha1 =
-  let refs = Map.remove refs "HEAD" in
-  match Misc.map_rev_find refs sha1 with
+  let refs = Map.remove "HEAD" refs in
+  let alist = Misc.inverse_assoc (Map.to_alist refs) in
+  match Misc.try_assoc sha1 alist with
   | None   -> SHA sha1
   | Some r -> Ref r
 
 let master = "refs/heads/master"
 
 let is_valid r =
-  String.for_all ~f:(function
+  Misc.string_forall (function
       | '{'
       | '}'
       | '^' -> false

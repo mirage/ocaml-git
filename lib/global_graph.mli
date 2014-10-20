@@ -32,7 +32,8 @@ module Make (S: Store.S): sig
   val pack: S.t -> min:SHA.Set.t -> SHA.Set.t -> Pack.t Lwt.t
   (** Return a packed (closed) collection of objects. *)
 
-  val to_dot: S.t -> string -> unit Lwt.t
-  (** Create a `.dot` file describing the Git graph. *)
+  val to_dot: S.t -> Buffer.t -> unit Lwt.t
+  (** [to_dot g buffer] fille [buffer] with the `.dot` representation
+      of the Git graph. *)
 
 end
