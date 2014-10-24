@@ -28,12 +28,6 @@ val list_map_p: ?pool:unit Lwt_pool.t -> ('a -> 'b Lwt.t) -> 'a list -> 'b list 
 
 (** {2 Hexa encoding} *)
 
-val hex_encode: string -> string
-(** Encode a string to base16. *)
-
-val hex_decode: string -> string
-(** Decode a string from base16. *)
-
 val with_buffer: (Buffer.t -> unit) -> string
 (** Create a temporary buffer, apply a function to append stuff to it,
     and return the buffer contents. *)
