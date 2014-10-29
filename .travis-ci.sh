@@ -11,7 +11,7 @@ make install
 make uninstall
 
 make clean
-opam install mirage-types io-page ipaddr
+opam install mirage-types io-page ipaddr -y
 ./configure --prefix=$prefix --enable-tests --enable-mirage
 make
 make test
