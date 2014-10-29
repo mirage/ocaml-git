@@ -9,7 +9,7 @@ dev-repo:     "https://github.com/mirage/ocaml-git.git"
 build: [
   ["./configure"
      "--prefix" prefix
-     "--%{mirage-types+io-page+ipadrr:enable}%-mirage"
+     "--%{mirage-types+io-page+ipadrr+mirage-fs-unix:enable}%-mirage"
      "--%{alcotest:enable}%-tests"
   ]
   [make]
@@ -32,6 +32,7 @@ depends: [
   "hex"
   "conduit" {= "0.5.1"}
   "alcotest" {test}
+  "mirage-fs-unix" {test}
 ]
 depopts: [
   "mirage-types"
