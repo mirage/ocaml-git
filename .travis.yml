@@ -1,3 +1,4 @@
+cache: apt
 language: c
 script: bash -ex .travis-ci.sh
 env:
