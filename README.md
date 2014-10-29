@@ -22,18 +22,11 @@ the API exposed `ocaml-git` (and hence using only OCaml code).
 
 ### Build and Install Instructions
 
-To build the project, simply run:
+To build and install the project, simply run:
 ```
-$ opam install camlzip dolog core_kernel cryptokit uri \
-               cmdliner lazy-trie mstruct re ocamlgraph lwt \
-               alcotest patience conduit uri
-$ make
+$ opam install git
 ```
 
-Then to install it:
-```
-$ make install
-```
 ### What is supported
 
 * The loose object files can be read and written;
