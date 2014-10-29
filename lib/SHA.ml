@@ -57,10 +57,11 @@ module SHA1_String = struct
     |> Cstruct.to_string
 
   let to_hex t =
-    Misc.hex_encode t
+    let `Hex h = Hex.of_string t in
+    h
 
   let of_hex h =
-    Misc.hex_decode h
+    Hex.to_string (`Hex h)
 
   let zero =
     of_hex (String.make 40 '0')
