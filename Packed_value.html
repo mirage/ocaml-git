@@ -1,0 +1,263 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<link rel="stylesheet" href="style.css" type="text/css">
+<meta content="text/html; charset=iso-8859-1" http-equiv="Content-Type">
+<link rel="Start" href="index.html">
+<link rel="previous" href="Pack_index.html">
+<link rel="next" href="Reference.html">
+<link rel="Up" href="index.html">
+<link title="Index of types" rel=Appendix href="index_types.html">
+<link title="Index of values" rel=Appendix href="index_values.html">
+<link title="Index of modules" rel=Appendix href="index_modules.html">
+<link title="Index of module types" rel=Appendix href="index_module_types.html">
+<link title="SHA" rel="Chapter" href="SHA.html">
+<link title="Blob" rel="Chapter" href="Blob.html">
+<link title="Cache" rel="Chapter" href="Cache.html">
+<link title="Commit" rel="Chapter" href="Commit.html">
+<link title="Misc" rel="Chapter" href="Misc.html">
+<link title="Global_graph" rel="Chapter" href="Global_graph.html">
+<link title="Pack" rel="Chapter" href="Pack.html">
+<link title="Pack_index" rel="Chapter" href="Pack_index.html">
+<link title="Packed_value" rel="Chapter" href="Packed_value.html">
+<link title="Reference" rel="Chapter" href="Reference.html">
+<link title="Sync" rel="Chapter" href="Sync.html">
+<link title="Tag" rel="Chapter" href="Tag.html">
+<link title="Tree" rel="Chapter" href="Tree.html">
+<link title="User" rel="Chapter" href="User.html">
+<link title="Value" rel="Chapter" href="Value.html">
+<link title="Object" rel="Chapter" href="Object.html">
+<link title="Object_type" rel="Chapter" href="Object_type.html">
+<link title="Store" rel="Chapter" href="Store.html">
+<link title="Search" rel="Chapter" href="Search.html">
+<link title="Gri" rel="Chapter" href="Gri.html">
+<link title="Memory" rel="Chapter" href="Memory.html">
+<link title="FS" rel="Chapter" href="FS.html">
+<link title="Git_unix" rel="Chapter" href="Git_unix.html">
+<link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><link title="Conversion to values" rel="Section" href="#2_Conversiontovalues">
+<link title="Position independant packed values" rel="Section" href="#2_Positionindependantpackedvalues">
+<link title="Conversion to values" rel="Section" href="#2_Conversiontovalues">
+<link title="Position independant packed values" rel="Section" href="#2_Positionindependantpackedvalues">
+<title>Packed_value</title>
+</head>
+<body>
+<div class="navbar"><a class="pre" href="Pack_index.html" title="Pack_index">Previous</a>
+&nbsp;<a class="up" href="index.html" title="Index">Up</a>
+&nbsp;<a class="post" href="Reference.html" title="Reference">Next</a>
+</div>
+<h1>Module <a href="type_Packed_value.html">Packed_value</a></h1>
+
+<pre><span class="keyword">module</span> Packed_value: <code class="code">sig</code> <a href="Packed_value.html">..</a> <code class="code">end</code></pre><div class="info module top">
+Packed values.<br>
+</div>
+<hr width="100%">
+
+<pre><code><span id="TYPEcopy"><span class="keyword">type</span> <code class="type"></code>copy</span> = {</code></pre><table class="typetable">
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTcopy.offset">offset</span>&nbsp;: <code class="type">int</code>;</code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTcopy.length">length</span>&nbsp;: <code class="type">int</code>;</code></td>
+
+</tr></table>
+}
+
+<div class="info ">
+Copy arguments.<br>
+</div>
+
+
+<pre><code><span id="TYPEhunk"><span class="keyword">type</span> <code class="type"></code>hunk</span> = </code></pre><table class="typetable">
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELThunk.Insert"><span class="constructor">Insert</span></span> <span class="keyword">of</span> <code class="type">string</code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELThunk.Copy"><span class="constructor">Copy</span></span> <span class="keyword">of</span> <code class="type"><a href="Packed_value.html#TYPEcopy">copy</a></code></code></td>
+<td class="typefieldcomment" align="left" valign="top" ><code>(*</code></td><td class="typefieldcomment" align="left" valign="top" >A delta hunk can either insert a string of copy the contents of a
+    base object.</td><td class="typefieldcomment" align="left" valign="bottom" ><code>*)</code></td>
+</tr></table>
+
+
+
+<pre><code><span id="TYPEdelta"><span class="keyword">type</span> <code class="type">'a</code> delta</span> = {</code></pre><table class="typetable">
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTdelta.source">source</span>&nbsp;: <code class="type">'a</code>;</code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTdelta.source_length">source_length</span>&nbsp;: <code class="type">int</code>;</code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTdelta.result_length">result_length</span>&nbsp;: <code class="type">int</code>;</code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTdelta.hunks">hunks</span>&nbsp;: <code class="type"><a href="Packed_value.html#TYPEhunk">hunk</a> list</code>;</code></td>
+
+</tr></table>
+}
+
+<div class="info ">
+Delta objects.<br>
+</div>
+
+
+<pre><code><span id="TYPEt"><span class="keyword">type</span> <code class="type"></code>t</span> = </code></pre><table class="typetable">
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTt.Raw_value"><span class="constructor">Raw_value</span></span> <span class="keyword">of</span> <code class="type">string</code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTt.Ref_delta"><span class="constructor">Ref_delta</span></span> <span class="keyword">of</span> <code class="type">SHA.t <a href="Packed_value.html#TYPEdelta">delta</a></code></code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code><span class="keyword">|</span></code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTt.Off_delta"><span class="constructor">Off_delta</span></span> <span class="keyword">of</span> <code class="type">int <a href="Packed_value.html#TYPEdelta">delta</a></code></code></td>
+<td class="typefieldcomment" align="left" valign="top" ><code>(*</code></td><td class="typefieldcomment" align="left" valign="top" >Packed values.</td><td class="typefieldcomment" align="left" valign="bottom" ><code>*)</code></td>
+</tr></table>
+
+
+
+<pre><span id="VALpretty"><span class="keyword">val</span> pretty</span> : <code class="type"><a href="Packed_value.html#TYPEt">t</a> -> string</code></pre><div class="info ">
+Human readable representation of a packed value.<br>
+</div>
+
+<pre><span class="keyword">module</span> <a href="Packed_value.V2.html">V2</a>: <code class="code">sig</code> <a href="Packed_value.V2.html">..</a> <code class="code">end</code></pre>
+<pre><span class="keyword">module</span> <a href="Packed_value.V3.html">V3</a>: <code class="code">sig</code> <a href="Packed_value.V3.html">..</a> <code class="code">end</code></pre>
+<pre><span id="VALresult_length"><span class="keyword">val</span> result_length</span> : <code class="type"><a href="Packed_value.html#TYPEt">t</a> -> int</code></pre><div class="info ">
+Return the lenght of the result object.<br>
+</div>
+
+<pre><span id="VALsource_length"><span class="keyword">val</span> source_length</span> : <code class="type"><a href="Packed_value.html#TYPEt">t</a> -> int</code></pre><div class="info ">
+Return the lenght of the base (source) object.<br>
+</div>
+<br>
+<h2 id="2_Conversiontovalues">Conversion to values</h2><br>
+
+<pre><span id="VALadd_hunk"><span class="keyword">val</span> add_hunk</span> : <code class="type">Buffer.t -> source:string -> pos:int -> <a href="Packed_value.html#TYPEhunk">hunk</a> -> unit</code></pre><div class="info ">
+Append a hunk to a buffer. <code class="code">source</code> is the original object the
+    hunk refers to (with the given offset).<br>
+</div>
+
+<pre><span id="VALadd_delta"><span class="keyword">val</span> add_delta</span> : <code class="type">Buffer.t -> string <a href="Packed_value.html#TYPEdelta">delta</a> -> unit</code></pre><div class="info ">
+Append a delta to a buffer.<br>
+</div>
+
+<pre><span id="VALadd_inflated_value"><span class="keyword">val</span> add_inflated_value</span> : <code class="type">read:(SHA.t -> string Lwt.t) -><br>       offsets:SHA.t Misc.IntMap.t -><br>       pos:int -> Buffer.t -> <a href="Packed_value.html#TYPEt">t</a> -> unit Lwt.t</code></pre><div class="info ">
+Append the inflated representation of a packed value to a given
+    buffer. Use the same paramaters as <code class="code">to_value</code>.<br>
+</div>
+
+<pre><span id="VALadd_inflated_value_sync"><span class="keyword">val</span> add_inflated_value_sync</span> : <code class="type">read:(SHA.t -> string) -><br>       offsets:SHA.t Misc.IntMap.t -> pos:int -> Buffer.t -> <a href="Packed_value.html#TYPEt">t</a> -> unit</code></pre><div class="info ">
+Same as <code class="code">add_inflated_value</code> but with a synchronous read
+    function.<br>
+</div>
+<br>
+<h2 id="2_Positionindependantpackedvalues">Position independant packed values</h2><br>
+
+<pre><span class="keyword">module</span> <a href="Packed_value.PIC.html">PIC</a>: <code class="code">sig</code> <a href="Packed_value.PIC.html">..</a> <code class="code">end</code></pre>
+<pre><span id="VALto_pic"><span class="keyword">val</span> to_pic</span> : <code class="type"><a href="Packed_value.PIC.html#TYPEt">PIC.t</a> Misc.IntMap.t -><br>       <a href="Packed_value.PIC.html#TYPEt">PIC.t</a> SHA.Map.t -><br>       int * SHA.t * <a href="Packed_value.html#TYPEt">t</a> -> <a href="Packed_value.PIC.html#TYPEt">PIC.t</a></code></pre><div class="info ">
+Position-independant packed value. Convert <code class="code">Off_delta</code> and
+    <code class="code">Ref_delta</code> to <code class="code">PIC.Link</code> using the provided indexes.<br>
+</div>
+
+<pre><span id="VALof_pic"><span class="keyword">val</span> of_pic</span> : <code class="type">int PIC.Map.t -> pos:int -> <a href="Packed_value.PIC.html#TYPEt">PIC.t</a> -> <a href="Packed_value.html#TYPEt">t</a></code></pre>
+<pre><span id="VALcopy_of_sexp"><span class="keyword">val</span> copy_of_sexp</span> : <code class="type">Sexplib.Sexp.t -> <a href="Packed_value.html#TYPEcopy">copy</a></code></pre>
+<pre><span id="VALsexp_of_copy"><span class="keyword">val</span> sexp_of_copy</span> : <code class="type"><a href="Packed_value.html#TYPEcopy">copy</a> -> Sexplib.Sexp.t</code></pre><div class="info ">
+Copy arguments.<br>
+</div>
+
+<pre><span id="VALhunk_of_sexp"><span class="keyword">val</span> hunk_of_sexp</span> : <code class="type">Sexplib.Sexp.t -> <a href="Packed_value.html#TYPEhunk">hunk</a></code></pre>
+<pre><span id="VALsexp_of_hunk"><span class="keyword">val</span> sexp_of_hunk</span> : <code class="type"><a href="Packed_value.html#TYPEhunk">hunk</a> -> Sexplib.Sexp.t</code></pre><div class="info ">
+A delta hunk can either insert a string of copy the contents of a
+    base object.<br>
+</div>
+
+<pre><span id="VALdelta_of_sexp"><span class="keyword">val</span> delta_of_sexp</span> : <code class="type">(Sexplib.Sexp.t -> 'a) -> Sexplib.Sexp.t -> 'a <a href="Packed_value.html#TYPEdelta">delta</a></code></pre>
+<pre><span id="VALsexp_of_delta"><span class="keyword">val</span> sexp_of_delta</span> : <code class="type">('a -> Sexplib.Sexp.t) -> 'a <a href="Packed_value.html#TYPEdelta">delta</a> -> Sexplib.Sexp.t</code></pre><div class="info ">
+Delta objects.<br>
+</div>
+
+<pre><span id="VALt_of_sexp"><span class="keyword">val</span> t_of_sexp</span> : <code class="type">Sexplib.Sexp.t -> <a href="Packed_value.html#TYPEt">t</a></code></pre>
+<pre><span id="VALsexp_of_t"><span class="keyword">val</span> sexp_of_t</span> : <code class="type"><a href="Packed_value.html#TYPEt">t</a> -> Sexplib.Sexp.t</code></pre><div class="info ">
+Packed values.<br>
+</div>
+<br>
+Human readable representation of a packed value.<br>
+<br>
+Return the CRC-32 of the packed value. Useful when creating pack
+      index files.<br>
+<br>
+Return the CRC-32 of the packed value. Useful when creating pack
+      index files.<br>
+<br>
+Return the lenght of the result object.<br>
+<br>
+Return the lenght of the base (source) object.<br>
+<br>
+<h2 id="2_Conversiontovalues">Conversion to values</h2><br>
+<br>
+Append a hunk to a buffer. <code class="code">source</code> is the original object the
+    hunk refers to (with the given offset).<br>
+<br>
+Append a delta to a buffer.<br>
+<br>
+Append the inflated representation of a packed value to a given
+    buffer. Use the same paramaters as <code class="code">to_value</code>.<br>
+<br>
+Same as <code class="code">add_inflated_value</code> but with a synchronous read
+    function.<br>
+<br>
+<h2 id="2_Positionindependantpackedvalues">Position independant packed values</h2><br>
+<br>
+Position-independant packed values.<br>
+<br>
+Human readable representation.<br>
+<br>
+<code class="code">to_value p</code> unpacks the packed position-independant value
+      <code class="code">p</code>.<br>
+<br>
+Build a raw value.<br>
+<br>
+Position-independant packed value. Convert <code class="code">Off_delta</code> and
+    <code class="code">Ref_delta</code> to <code class="code">PIC.Link</code> using the provided indexes.<br>
+<br>
+Position dependent packed value. Convert a <code class="code">PIC.Link</code> into to the
+    corresponding <code class="code">Off_delta</code>, using the provided indexes.<br>
+</body></html>

@@ -1,0 +1,82 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<link rel="stylesheet" href="style.css" type="text/css">
+<meta content="text/html; charset=iso-8859-1" http-equiv="Content-Type">
+<link rel="Start" href="index.html">
+<link rel="Up" href="Object.html">
+<link title="Index of types" rel=Appendix href="index_types.html">
+<link title="Index of values" rel=Appendix href="index_values.html">
+<link title="Index of modules" rel=Appendix href="index_modules.html">
+<link title="Index of module types" rel=Appendix href="index_module_types.html">
+<link title="SHA" rel="Chapter" href="SHA.html">
+<link title="Blob" rel="Chapter" href="Blob.html">
+<link title="Cache" rel="Chapter" href="Cache.html">
+<link title="Commit" rel="Chapter" href="Commit.html">
+<link title="Misc" rel="Chapter" href="Misc.html">
+<link title="Global_graph" rel="Chapter" href="Global_graph.html">
+<link title="Pack" rel="Chapter" href="Pack.html">
+<link title="Pack_index" rel="Chapter" href="Pack_index.html">
+<link title="Packed_value" rel="Chapter" href="Packed_value.html">
+<link title="Reference" rel="Chapter" href="Reference.html">
+<link title="Sync" rel="Chapter" href="Sync.html">
+<link title="Tag" rel="Chapter" href="Tag.html">
+<link title="Tree" rel="Chapter" href="Tree.html">
+<link title="User" rel="Chapter" href="User.html">
+<link title="Value" rel="Chapter" href="Value.html">
+<link title="Object" rel="Chapter" href="Object.html">
+<link title="Object_type" rel="Chapter" href="Object_type.html">
+<link title="Store" rel="Chapter" href="Store.html">
+<link title="Search" rel="Chapter" href="Search.html">
+<link title="Gri" rel="Chapter" href="Gri.html">
+<link title="Memory" rel="Chapter" href="Memory.html">
+<link title="FS" rel="Chapter" href="FS.html">
+<link title="Git_unix" rel="Chapter" href="Git_unix.html">
+<link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>Object.S</title>
+</head>
+<body>
+<div class="navbar">&nbsp;<a class="up" href="Object.html" title="Object">Up</a>
+&nbsp;</div>
+<h1>Module type <a href="type_Object.S.html">Object.S</a></h1>
+
+<pre><span class="keyword">module type</span> S = <code class="code">sig</code> <a href="Object.S.html">..</a> <code class="code">end</code></pre><hr width="100%">
+
+<pre><span id="TYPEt"><span class="keyword">type</span> <code class="type"></code>t</span> </pre>
+
+
+<pre><span id="VALequal"><span class="keyword">val</span> equal</span> : <code class="type"><a href="Object.S.html#TYPEt">t</a> -> <a href="Object.S.html#TYPEt">t</a> -> bool</code></pre><div class="info ">
+Are two objects equal?<br>
+</div>
+
+<pre><span id="VALhash"><span class="keyword">val</span> hash</span> : <code class="type"><a href="Object.S.html#TYPEt">t</a> -> int</code></pre><div class="info ">
+Hash an object.<br>
+</div>
+
+<pre><span id="VALcompare"><span class="keyword">val</span> compare</span> : <code class="type"><a href="Object.S.html#TYPEt">t</a> -> <a href="Object.S.html#TYPEt">t</a> -> int</code></pre><div class="info ">
+Compare two objects.<br>
+</div>
+
+<pre><span id="VALpretty"><span class="keyword">val</span> pretty</span> : <code class="type"><a href="Object.S.html#TYPEt">t</a> -> string</code></pre><div class="info ">
+Human readable represenation of the object.<br>
+</div>
+
+<pre><span id="VALinput"><span class="keyword">val</span> input</span> : <code class="type">Mstruct.t -> <a href="Object.S.html#TYPEt">t</a></code></pre><div class="info ">
+Build a value from an inflated contents.<br>
+</div>
+
+<pre><span id="VALadd"><span class="keyword">val</span> add</span> : <code class="type">Buffer.t -> <a href="Object.S.html#TYPEt">t</a> -> unit</code></pre>
+<pre><span id="VALt_of_sexp"><span class="keyword">val</span> t_of_sexp</span> : <code class="type">Sexplib.Sexp.t -> <a href="Object.S.html#TYPEt">t</a></code></pre>
+<pre><span id="VALsexp_of_t"><span class="keyword">val</span> sexp_of_t</span> : <code class="type"><a href="Object.S.html#TYPEt">t</a> -> Sexplib.Sexp.t</code></pre><br>
+Are two objects equal?<br>
+<br>
+Hash an object.<br>
+<br>
+Compare two objects.<br>
+<br>
+Human readable represenation of the object.<br>
+<br>
+Build a value from an inflated contents.<br>
+<br>
+Add the serialization of the value to an already existing
+      buffer.<br>
+</body></html>
