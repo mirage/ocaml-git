@@ -53,7 +53,7 @@ init-doc:
 	git pull
 
 update-doc: doc
-	cd gh-pages
-	$(shell cp ../git.docdir/*.html .)
-	git commit -a -m "Update docs"
-	git push
+	rm -f gh-pages/*.html
+	cd gh-pages && cp ../git.docdir/*.html .
+	cd gh-pages && git add * && git commit -a -m "Update docs"
+	cd gh-pages && git push
