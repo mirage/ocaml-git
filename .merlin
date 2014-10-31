@@ -1,0 +1,4 @@
+PKG cstruct dolog ocamlgraph re zip uri lwt mstruct cmdliner mirage-types
+PKG nocrypto hex
+B _build/**
+S lib/
