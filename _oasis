@@ -19,7 +19,7 @@ Library git
   Pack:              true
   Path:              lib/
   Findlibname:       git
-  Modules:           SHA, Blob, Cache, Commit, Misc,
+  Modules:           SHA, Blob, Cache, Commit, Misc, Version,
                      Global_graph, Pack, Pack_index, Packed_value,
                      Reference, Sync, Tag, Tree, User, Value,
                      Object, Object_type, Store, Search, Gri,
@@ -71,20 +71,4 @@ Document git
   BuildTools+:          ocamldoc
   Install:              true
   XOCamlbuildPath:      lib
-  XOCamlbuildLibraries: git
-
-Document "git-unix"
-  Title:                Git docs, UNIX backend
-  Type:                 OCamlbuild (0.4)
-  BuildTools+:          ocamldoc
-  Install:              true
-  XOCamlbuildPath:      lib
-  XOCamlbuildLibraries: git.unix
-
-Document "git-mirage"
-  Title:                Git docs, Mirage backend
-  Type:                 OCamlbuild (0.4)
-  BuildTools+:          ocamldoc
-  Install:              true
-  XOCamlbuildPath:      lib
-  XOCamlbuildLibraries: git.mirage
+  XOCamlbuildLibraries: git, git.unix, git.mirage
