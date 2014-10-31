@@ -414,7 +414,7 @@ let default =
       clone.doc fetch.doc push.doc graph.doc in
   Term.(pure usage $ (pure ())),
   Term.info "ogit"
-    ~version:"1.3.0"
+    ~version:Git.Version.current
     ~sdocs:global_option_section
     ~doc
     ~man

@@ -1,9 +1,9 @@
-# OASIS_START
-# DO NOT EDIT (digest: a3c674b4239234cbbe53afe090018954)
+VERSION = $(shell grep 'Version:' _oasis | sed 's/Version: *//')
+VFILE   = lib/version.ml
 
 SETUP = ocaml setup.ml
 
-build: setup.data
+build: setup.data $(VFILE)
 	$(SETUP) -build $(BUILDFLAGS)
 
 doc: setup.data build
@@ -12,7 +12,7 @@ doc: setup.data build
 test: setup.data build
 	$(SETUP) -test $(TESTFLAGS)
 
-all:
+all: $(VFILE)
 	$(SETUP) -all $(ALLFLAGS)
 
 install: setup.data
@@ -26,6 +26,7 @@ reinstall: setup.data
 
 clean:
 	$(SETUP) -clean $(CLEANFLAGS)
+	rm -f $(VFILE)
 
 distclean:
 	$(SETUP) -distclean $(DISTCLEANFLAGS)
@@ -39,6 +40,9 @@ configure:
 .PHONY: build doc test all install uninstall reinstall clean distclean configure
 
 # OASIS_STOP
+
+$(VFILE): _oasis
+	echo "let current = \"$(VERSION)\"" > $@
 
 init-doc:
 	mkdir -p gh-pages
