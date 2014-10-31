@@ -39,3 +39,17 @@ configure:
 .PHONY: build doc test all install uninstall reinstall clean distclean configure
 
 # OASIS_STOP
+
+init-doc:
+	mkdir -p gh-pages
+	cd gh-pages
+	git init
+	git remote add origin git@github.com:mirage/ocaml-git.git
+	git checkout gh-pages
+	git pull
+
+update-doc: doc
+	cd gh-pages
+	$(shell cp ../git.docdir/*.html .)
+	git commit -a -m "Update docs"
+	git push

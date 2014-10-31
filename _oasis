@@ -71,20 +71,4 @@ Document git
   BuildTools+:          ocamldoc
   Install:              true
   XOCamlbuildPath:      lib
-  XOCamlbuildLibraries: git
-
-Document "git-unix"
-  Title:                Git docs, UNIX backend
-  Type:                 OCamlbuild (0.4)
-  BuildTools+:          ocamldoc
-  Install:              true
-  XOCamlbuildPath:      lib
-  XOCamlbuildLibraries: git.unix
-
-Document "git-mirage"
-  Title:                Git docs, Mirage backend
-  Type:                 OCamlbuild (0.4)
-  BuildTools+:          ocamldoc
-  Install:              true
-  XOCamlbuildPath:      lib
-  XOCamlbuildLibraries: git.mirage
+  XOCamlbuildLibraries: git, git.unix, git.mirage
