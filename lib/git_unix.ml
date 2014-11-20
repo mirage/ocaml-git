@@ -67,7 +67,7 @@ module M = struct
              | Some s -> write oc s
            end >>= fun () ->
            fn (ic, oc))
-        (fun ()  -> Lwt_io.close ic >>= fun () -> Lwt_io.close oc)
+        (fun ()  -> Lwt_io.close ic)
    | Some x ->
       (* XXX: make it work for smart-HTTP *)
       (* XXX: make it work over SSL *)
