@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: a4d4195be44b131449bbb09884fadca0)
+# DO NOT EDIT (digest: b342839f4a03056605b18b5846a1e55a)
 # Ignore VCS directories, you can use the same kind of rule outside
 # OASIS_START/STOP if you want to exclude directories that contains
 # useless stuff for the build process
@@ -41,6 +41,7 @@ true: annot, bin_annot
 "lib/FS.cmx": for-pack(Git)
 # Library git-unix
 "lib/git-unix.cmxs": use_git-unix
+<lib/*.ml{,i,y}>: pkg_conduit.lwt-unix
 <lib/*.ml{,i,y}>: pkg_lwt.unix
 # Library git-mirage
 "lib/git-mirage.cmxs": use_git-mirage
@@ -60,6 +61,7 @@ true: annot, bin_annot
 # Executable ogit
 <bin/ogit.{native,byte}>: pkg_cmdliner
 <bin/ogit.{native,byte}>: pkg_conduit.lwt
+<bin/ogit.{native,byte}>: pkg_conduit.lwt-unix
 <bin/ogit.{native,byte}>: pkg_dolog
 <bin/ogit.{native,byte}>: pkg_hex
 <bin/ogit.{native,byte}>: pkg_lwt
@@ -74,6 +76,7 @@ true: annot, bin_annot
 <bin/ogit.{native,byte}>: use_git-unix
 <bin/*.ml{,i,y}>: pkg_cmdliner
 <bin/*.ml{,i,y}>: pkg_conduit.lwt
+<bin/*.ml{,i,y}>: pkg_conduit.lwt-unix
 <bin/*.ml{,i,y}>: pkg_dolog
 <bin/*.ml{,i,y}>: pkg_hex
 <bin/*.ml{,i,y}>: pkg_lwt
@@ -89,6 +92,7 @@ true: annot, bin_annot
 # Executable test_git
 <lib_test/test.{native,byte}>: pkg_alcotest
 <lib_test/test.{native,byte}>: pkg_conduit.lwt
+<lib_test/test.{native,byte}>: pkg_conduit.lwt-unix
 <lib_test/test.{native,byte}>: pkg_dolog
 <lib_test/test.{native,byte}>: pkg_hex
 <lib_test/test.{native,byte}>: pkg_io-page
@@ -108,6 +112,7 @@ true: annot, bin_annot
 <lib_test/test.{native,byte}>: use_git-unix
 <lib_test/*.ml{,i,y}>: pkg_alcotest
 <lib_test/*.ml{,i,y}>: pkg_conduit.lwt
+<lib_test/*.ml{,i,y}>: pkg_conduit.lwt-unix
 <lib_test/*.ml{,i,y}>: pkg_dolog
 <lib_test/*.ml{,i,y}>: pkg_hex
 <lib_test/*.ml{,i,y}>: pkg_io-page
