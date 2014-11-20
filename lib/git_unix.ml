@@ -148,8 +148,8 @@ module D = struct
     mkdir (Filename.dirname file) >>= fun () ->
     Lwt_pool.use openfile_pool (fun () ->
         Lwt_unix.(openfile file [O_WRONLY; O_NONBLOCK; O_CREAT; O_TRUNC] 0o644) >>= fun fd ->
-        catch
-          (fun () -> fn fd >>= fun () -> Lwt_unix.close fd)
+        Lwt.finalize
+          (fun () -> fn fd)
           (fun _  -> Lwt_unix.close fd))
 
   let write_file file b =
