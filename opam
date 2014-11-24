@@ -21,11 +21,13 @@ remove: [
   ["rm" "-f" "%{bin}%/ogit"]
 ]
 depends: [
+  "dolog" {>= "0.4"}
   "mstruct" {>= "1.3.1"}
   "camlzip" {>= "1.05"}
   "nocrypto" {>= "0.2.0"}
   "uri" {>= "1.3.12"}
   "ocamlgraph"
+  "lwt" {>= "2.4.5"}
   "hex"
   "base-bytes"
   "alcotest" {test}
@@ -36,7 +38,5 @@ depopts: [
   "io-page"
   "ipaddr"
   "conduits"
-  "lwt"
-  "dolog"
 ]
 available: [ocaml-version >= "4.01.0"]

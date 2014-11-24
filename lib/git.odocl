@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 02d7850d75adca94d02d074b58fe2daf)
+# DO NOT EDIT (digest: 1b5abc49ded8a61facb80a46e37a563a)
 SHA
 Blob
 Cache
@@ -23,6 +23,6 @@ Search
 Gri
 Memory
 FS
-Git_unix
+../lib_unix/Git_unix
 Git_mirage
 # OASIS_STOP
