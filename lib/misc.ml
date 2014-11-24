@@ -23,8 +23,8 @@ module Zlib_ext = struct
 
   let buffer_size = 1024
   let uncompress ?(header = true) incr_used_in refill flush =
-    let inbuf = String.create buffer_size
-    and outbuf = String.create buffer_size in
+    let inbuf = Bytes.create buffer_size
+    and outbuf = Bytes.create buffer_size in
     let zs = Zlib.inflate_init header in
     let rec uncompr inpos inavail =
       if inavail = 0 then begin
@@ -125,7 +125,7 @@ let input_key_value buf ~key:expected input_value =
     | None   -> Mstruct.parse_error_buf buf "no value to input"
     | Some v -> v
 
-let str_buffer = String.create 4
+let str_buffer = Bytes.create 4
 let add_be_uint32 buf i =
   EndianString.BigEndian.set_int32 str_buffer 0 i;
   Buffer.add_string buf str_buffer

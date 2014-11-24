@@ -25,7 +25,7 @@ Library git
                      Object, Object_type, Store, Search, Gri,
                      Memory, FS
   BuildDepends:      mstruct, ocamlgraph, zip, nocrypto, uri,
-                     uri.services, hex
+                     uri.services, hex, bytes
 
 Library "git-unix"
   Build$:           flag(unix)
