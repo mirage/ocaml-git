@@ -9,6 +9,7 @@ dev-repo:     "https://github.com/mirage/ocaml-git.git"
 build: [
   ["./configure"
      "--prefix" prefix
+     "--%{lwt+conduit.lwt-unix+dolog+cmdliner:enable}%-unix"
      "--%{mirage-types+io-page+ipaddr+mirage-fs-unix:enable}%-mirage"
      "--%{alcotest:enable}%-tests"
   ]
@@ -20,16 +21,13 @@ remove: [
   ["rm" "-f" "%{bin}%/ogit"]
 ]
 depends: [
-  "dolog" {>= "0.4"}
   "mstruct" {>= "1.3.1"}
   "camlzip" {>= "1.05"}
   "nocrypto" {>= "0.2.0"}
   "uri" {>= "1.3.12"}
-  "cmdliner"
   "ocamlgraph"
-  "lwt" {>= "2.4.5"}
   "hex"
-  "conduit" {>= "0.6.0"}
+  "base-bytes"
   "alcotest" {test}
   "mirage-fs-unix" {test}
 ]
@@ -37,5 +35,8 @@ depopts: [
   "mirage-types"
   "io-page"
   "ipaddr"
+  "conduits"
+  "lwt"
+  "dolog"
 ]
 available: [ocaml-version >= "4.01.0"]
