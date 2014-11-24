@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 0194ab183eaa956025a57a71cb750a1c)
+# DO NOT EDIT (digest: 4492af8e19ef01ce4588b044700337cf)
 # Ignore VCS directories, you can use the same kind of rule outside
 # OASIS_START/STOP if you want to exclude directories that contains
 # useless stuff for the build process
@@ -43,26 +43,22 @@ true: annot, bin_annot
 "lib/git-unix.cmxs": use_git-unix
 <lib/*.ml{,i,y}>: pkg_conduit.lwt-unix
 <lib/*.ml{,i,y}>: pkg_lwt.unix
-<lib/*.ml{,i,y}>: pkg_uri.services
 # Library git-mirage
 "lib/git-mirage.cmxs": use_git-mirage
-<lib/*.ml{,i,y}>: pkg_dolog
 <lib/*.ml{,i,y}>: pkg_hex
 <lib/*.ml{,i,y}>: pkg_io-page
-<lib/*.ml{,i,y}>: pkg_lwt
 <lib/*.ml{,i,y}>: pkg_mirage-types.lwt
 <lib/*.ml{,i,y}>: pkg_mstruct
 <lib/*.ml{,i,y}>: pkg_nocrypto
 <lib/*.ml{,i,y}>: pkg_ocamlgraph
 <lib/*.ml{,i,y}>: pkg_uri
+<lib/*.ml{,i,y}>: pkg_uri.services
 <lib/*.ml{,i,y}>: pkg_zip
 <lib/*.ml{,i,y}>: use_git
 # Executable ogit
 <bin/ogit.{native,byte}>: pkg_cmdliner
 <bin/ogit.{native,byte}>: pkg_conduit.lwt-unix
-<bin/ogit.{native,byte}>: pkg_dolog
 <bin/ogit.{native,byte}>: pkg_hex
-<bin/ogit.{native,byte}>: pkg_lwt
 <bin/ogit.{native,byte}>: pkg_lwt.unix
 <bin/ogit.{native,byte}>: pkg_mstruct
 <bin/ogit.{native,byte}>: pkg_nocrypto
@@ -74,9 +70,7 @@ true: annot, bin_annot
 <bin/ogit.{native,byte}>: use_git-unix
 <bin/*.ml{,i,y}>: pkg_cmdliner
 <bin/*.ml{,i,y}>: pkg_conduit.lwt-unix
-<bin/*.ml{,i,y}>: pkg_dolog
 <bin/*.ml{,i,y}>: pkg_hex
-<bin/*.ml{,i,y}>: pkg_lwt
 <bin/*.ml{,i,y}>: pkg_lwt.unix
 <bin/*.ml{,i,y}>: pkg_mstruct
 <bin/*.ml{,i,y}>: pkg_nocrypto
@@ -89,11 +83,9 @@ true: annot, bin_annot
 # Executable test_git
 <lib_test/test.{native,byte}>: pkg_alcotest
 <lib_test/test.{native,byte}>: pkg_conduit.lwt-unix
-<lib_test/test.{native,byte}>: pkg_dolog
 <lib_test/test.{native,byte}>: pkg_hex
 <lib_test/test.{native,byte}>: pkg_io-page
 <lib_test/test.{native,byte}>: pkg_io-page.unix
-<lib_test/test.{native,byte}>: pkg_lwt
 <lib_test/test.{native,byte}>: pkg_lwt.unix
 <lib_test/test.{native,byte}>: pkg_mirage-fs-unix
 <lib_test/test.{native,byte}>: pkg_mirage-types.lwt
@@ -108,11 +100,9 @@ true: annot, bin_annot
 <lib_test/test.{native,byte}>: use_git-unix
 <lib_test/*.ml{,i,y}>: pkg_alcotest
 <lib_test/*.ml{,i,y}>: pkg_conduit.lwt-unix
-<lib_test/*.ml{,i,y}>: pkg_dolog
 <lib_test/*.ml{,i,y}>: pkg_hex
 <lib_test/*.ml{,i,y}>: pkg_io-page
 <lib_test/*.ml{,i,y}>: pkg_io-page.unix
-<lib_test/*.ml{,i,y}>: pkg_lwt
 <lib_test/*.ml{,i,y}>: pkg_lwt.unix
 <lib_test/*.ml{,i,y}>: pkg_mirage-fs-unix
 <lib_test/*.ml{,i,y}>: pkg_mirage-types.lwt
