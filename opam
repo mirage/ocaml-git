@@ -9,7 +9,7 @@ dev-repo:     "https://github.com/mirage/ocaml-git.git"
 build: [
   ["./configure"
      "--prefix" prefix
-     "--%{lwt+conduit.lwt-unix+dolog+cmdliner:enable}%-unix"
+     "--%{lwt+conduit+base-unix+dolog+cmdliner:enable}%-unix"
      "--%{mirage-types+io-page+ipaddr+mirage-fs-unix:enable}%-mirage"
      "--%{alcotest:enable}%-tests"
   ]
@@ -37,6 +37,6 @@ depopts: [
   "mirage-types"
   "io-page"
   "ipaddr"
-  "conduits"
+  "conduit"
 ]
 available: [ocaml-version >= "4.01.0"]
