@@ -288,12 +288,14 @@ let clone = {
       run begin
         S.create ~root:dir ()   >>= fun t ->
         printf "Cloning into '%s' ...\n%!" (Filename.basename (S.root t));
-        Sync.clone t ?deepen ~unpack ~bare remote >>= fun r ->
-        match r.Result.head with
-        | None      -> return_unit
-        | Some head ->
-          S.write_cache t head >>= fun () ->
-          printf "HEAD is now at %s\n" (SHA.Commit.to_hex head);
+        Sync.clone t ?deepen ~unpack remote >>= fun r ->
+        if not bare then match r.Result.head with
+          | None      -> return_unit
+          | Some head ->
+            S.write_cache t head >>= fun () ->
+            printf "HEAD is now at %s\n" (SHA.Commit.to_hex head);
+            return_unit
+        else
           return_unit
       end in
     Term.(mk clone $ backend $ depth $ bare $ unpack $ remote $ directory)

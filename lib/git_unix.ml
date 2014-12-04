@@ -217,8 +217,12 @@ module D = struct
 end
 
 module Sync = struct
+  module IO = M
   module Result = Sync.Result
   module Make = Sync.Make(M)
 end
 
-module FS = Git.FS.Make(D)
+module FS = struct
+  module IO = D
+  include Git.FS.Make(D)
+end

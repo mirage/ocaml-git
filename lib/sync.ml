@@ -667,7 +667,6 @@ module Make (IO: IO) (Store: Store.S) = struct
     fail (Failure ("TODO: " ^ msg))
 
   type clone = {
-    bare  : bool;
     deepen: int option;
     unpack: bool;
   }
@@ -811,24 +810,15 @@ module Make (IO: IO) (Store: Store.S) = struct
                 Log.debugf "NEW OBJECTS";
                 printf "remote: Counting objects: %d, done.\n%!"
                   (List.length sha1s);
-                let bare = match op with
-                  | Clone { bare } -> bare
-                  | _              -> true in
-                if not bare then (
-                  Log.debugf "EXPANDING THE FILESYSTEM";
-                  return { Result.head = Some head; references; sha1s }
-                ) else (
-                  Log.debugf "BARE REPOSITORY";
-                  return { Result.head = None; references; sha1s }
-                )
+                return { Result.head = Some head; references; sha1s }
         )
 
   let ls t gri =
     fetch_pack t gri Ls >>= function
       { Result.references } -> return references
 
-  let clone t ?(bare=false) ?deepen ?(unpack=false) gri =
-    fetch_pack t gri (Clone { bare; deepen; unpack })
+  let clone t ?deepen ?(unpack=false) gri =
+    fetch_pack t gri (Clone { deepen; unpack })
 
   let fetch t ?deepen ?(unpack=false) gri =
     Store.list t >>= fun haves ->
@@ -844,6 +834,6 @@ module type S = sig
   type t
   val ls: t -> Gri.t -> SHA.Commit.t Reference.Map.t Lwt.t
   val push: t -> branch:Reference.t -> Gri.t -> Result.push Lwt.t
-  val clone: t -> ?bare:bool -> ?deepen:int -> ?unpack:bool -> Gri.t -> Result.fetch Lwt.t
+  val clone: t -> ?deepen:int -> ?unpack:bool -> Gri.t -> Result.fetch Lwt.t
   val fetch: t -> ?deepen:int -> ?unpack:bool -> Gri.t -> Result.fetch Lwt.t
 end
