@@ -134,7 +134,7 @@ module D = struct
       let w = Weak.create 1 in
       Weak.set w 0 (Some file);
       let v = { path; file = w } in
-      Gc.finalise (fun _ -> Weak.set v.file 1 None) file;
+      Gc.finalise (fun _ -> Weak.set v.file 0 None) file;
       (* Maintain v alive while file is alive by forcing v to be
          present in the function closure. The effect is useless, but
          it ensures that the compiler won't optimise the refence to
