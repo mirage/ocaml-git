@@ -25,7 +25,7 @@ Library git
                      Object, Object_type, Store, Search, Gri,
                      Memory, FS
   BuildDepends:      mstruct, dolog, ocamlgraph, zip, nocrypto, uri,
-                     lwt, conduit.lwt, uri.services, hex
+                     lwt, hex
 
 Library "git-unix"
   Build$:           flag(unix)
@@ -33,7 +33,7 @@ Library "git-unix"
   FindlibParent:     git
   Findlibname:       unix
   Modules:           Git_unix
-  BuildDepends:      git, lwt.unix, conduit.lwt-unix
+  BuildDepends:      git, lwt.unix, conduit.lwt-unix, uri.services
 
 Library "git-mirage"
   Build$:           flag(mirage)
