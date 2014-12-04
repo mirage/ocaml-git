@@ -57,7 +57,9 @@ module type IO = sig
   (** List the subfiles. *)
 
   val rec_files: string -> string list Lwt.t
-  (** List of the subfiles, recursively. *)
+  (** [rec_files dir] is the list of the files recursively present in
+      [dir] and all of its sub-directories. Return filenames prefixed
+      by [dir]. *)
 
   val read_file: string -> Cstruct.t Lwt.t
   (** mmap a file and return a mutable C-like structure with its
