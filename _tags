@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: b342839f4a03056605b18b5846a1e55a)
+# DO NOT EDIT (digest: 0194ab183eaa956025a57a71cb750a1c)
 # Ignore VCS directories, you can use the same kind of rule outside
 # OASIS_START/STOP if you want to exclude directories that contains
 # useless stuff for the build process
@@ -43,9 +43,9 @@ true: annot, bin_annot
 "lib/git-unix.cmxs": use_git-unix
 <lib/*.ml{,i,y}>: pkg_conduit.lwt-unix
 <lib/*.ml{,i,y}>: pkg_lwt.unix
+<lib/*.ml{,i,y}>: pkg_uri.services
 # Library git-mirage
 "lib/git-mirage.cmxs": use_git-mirage
-<lib/*.ml{,i,y}>: pkg_conduit.lwt
 <lib/*.ml{,i,y}>: pkg_dolog
 <lib/*.ml{,i,y}>: pkg_hex
 <lib/*.ml{,i,y}>: pkg_io-page
@@ -55,12 +55,10 @@ true: annot, bin_annot
 <lib/*.ml{,i,y}>: pkg_nocrypto
 <lib/*.ml{,i,y}>: pkg_ocamlgraph
 <lib/*.ml{,i,y}>: pkg_uri
-<lib/*.ml{,i,y}>: pkg_uri.services
 <lib/*.ml{,i,y}>: pkg_zip
 <lib/*.ml{,i,y}>: use_git
 # Executable ogit
 <bin/ogit.{native,byte}>: pkg_cmdliner
-<bin/ogit.{native,byte}>: pkg_conduit.lwt
 <bin/ogit.{native,byte}>: pkg_conduit.lwt-unix
 <bin/ogit.{native,byte}>: pkg_dolog
 <bin/ogit.{native,byte}>: pkg_hex
@@ -75,7 +73,6 @@ true: annot, bin_annot
 <bin/ogit.{native,byte}>: use_git
 <bin/ogit.{native,byte}>: use_git-unix
 <bin/*.ml{,i,y}>: pkg_cmdliner
-<bin/*.ml{,i,y}>: pkg_conduit.lwt
 <bin/*.ml{,i,y}>: pkg_conduit.lwt-unix
 <bin/*.ml{,i,y}>: pkg_dolog
 <bin/*.ml{,i,y}>: pkg_hex
@@ -91,7 +88,6 @@ true: annot, bin_annot
 <bin/*.ml{,i,y}>: use_git-unix
 # Executable test_git
 <lib_test/test.{native,byte}>: pkg_alcotest
-<lib_test/test.{native,byte}>: pkg_conduit.lwt
 <lib_test/test.{native,byte}>: pkg_conduit.lwt-unix
 <lib_test/test.{native,byte}>: pkg_dolog
 <lib_test/test.{native,byte}>: pkg_hex
@@ -111,7 +107,6 @@ true: annot, bin_annot
 <lib_test/test.{native,byte}>: use_git-mirage
 <lib_test/test.{native,byte}>: use_git-unix
 <lib_test/*.ml{,i,y}>: pkg_alcotest
-<lib_test/*.ml{,i,y}>: pkg_conduit.lwt
 <lib_test/*.ml{,i,y}>: pkg_conduit.lwt-unix
 <lib_test/*.ml{,i,y}>: pkg_dolog
 <lib_test/*.ml{,i,y}>: pkg_hex
