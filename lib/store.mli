@@ -95,4 +95,7 @@ module type S = sig
   (** Update the cache of files for the given revision. XXX: need a
       merge stategy. *)
 
+  val kind: [`Memory | `Disk]
+  (** The kind of backend. *)
+
 end

@@ -511,4 +511,6 @@ let write_cache t head =
   printf "\rChecking out files: 100%% (%d/%d), done.%!\n" !all !all;
   return_unit
 
+let kind = `Disk
+
 end

@@ -150,3 +150,5 @@ let read_cache _t =
 
 let write_cache _t _head =
   failwith "Memory.update_cache: TODO"
+
+let kind = `Memory
