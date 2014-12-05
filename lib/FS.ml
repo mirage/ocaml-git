@@ -203,8 +203,11 @@ module Make (IO: IO) = struct
       let pack_file = "pack-" ^ (SHA.to_hex sha1) ^ ".pack" in
       pack_dir / pack_file
 
+    let packs_opt = ref None
+
     let list { root; _ } =
       Log.debug "list %s" root;
+(*
       let packs = root / ".git" / "objects" / "pack" in
       IO.files packs >>= fun packs ->
       let packs = List.map Filename.basename packs in
@@ -215,6 +218,23 @@ module Make (IO: IO) = struct
           SHA.of_hex p
         ) packs in
       Lwt.return packs
+*)
+    match !packs_opt with
+    | Some ps -> 
+        Log.debug "list cache hit!";
+        Lwt.return ps
+    | None ->
+        let packs = root / ".git" / "objects" / "pack" in
+        IO.files packs >>= fun packs ->
+          let packs = List.map Filename.basename packs in
+          let packs = List.filter (fun f -> Filename.check_suffix f ".idx") packs in
+          let packs = List.map (fun f ->
+              let p = Filename.chop_suffix f ".idx" in
+              let p = String.sub p 5 (String.length p - 5) in
+              SHA.of_hex p
+            ) packs in
+          packs_opt := Some packs;
+          Lwt.return packs
 
     let index { root; _ } sha1 =
       let pack_dir = root / ".git" / "objects" / "pack" in
@@ -222,6 +242,26 @@ module Make (IO: IO) = struct
       pack_dir / idx_file
 
     let index_lru: Pack_index.t LRU.t = LRU.make 8
+
+    let indexes_c = Hashtbl.create 1024
+
+    let read_index_c t sha1 =
+      try
+        let i = Hashtbl.find indexes_c sha1 in
+        Log.debug "read_index_c cache hit!";
+        Lwt.return i
+      with
+        Not_found ->
+          let file = index t sha1 in
+          IO.file_exists file >>= function
+            | true ->
+                IO.read_file file >>= fun buf ->
+                  let index = new Pack_index.c (Cstruct.to_bigarray buf) in
+                  Hashtbl.add indexes_c sha1 index;
+                  Lwt.return index
+            | false ->
+                Log.error "%s does not exist." file;
+	        Lwt.fail (Failure "read_index_c")
 
     let write_pack_index t sha1 idx =
       LRU.add index_lru sha1 idx;
@@ -303,17 +343,58 @@ module Make (IO: IO) = struct
 
     let mem_in_pack t pack_sha1 sha1 =
       Log.debug "mem_in_pack %s:%s" (SHA.to_hex pack_sha1) (SHA.to_hex sha1);
+(*
       read_keys t pack_sha1 >>= fun keys ->
       Lwt.return (SHA.Set.mem sha1 keys)
+*)
+      read_index_c t pack_sha1 >>= fun idx -> 
+        Lwt.return (idx#mem sha1)
+
+    let pack_ba_cache = Hashtbl.create 1024
 
     let read_in_pack t pack_sha1 sha1 =
       Log.debug "read_in_pack %s:%s"
         (SHA.to_hex pack_sha1) (SHA.to_hex sha1);
+(*
       mem_in_pack t pack_sha1 sha1 >>= function
       | false -> Lwt.return_none
       | true  ->
         read_pack t pack_sha1 >>= fun pack ->
         Lwt.return (Pack.read pack sha1)
+*)
+    read_index_c t pack_sha1 >>= fun index ->
+      if index#mem sha1 then begin
+        try
+          let pack = Hashtbl.find packs sha1 in
+	  Log.debug "read_in_pack pack cache hit!";
+	  return (Pack.read pack sha1)
+        with
+          Not_found -> begin
+            try
+              let ba = Hashtbl.find pack_ba_cache pack_sha1 in
+	      Log.debug "read_in_pack ba cache hit!";
+	      let v_opt = Pack.Raw.read (Mstruct.of_bigarray ba) index sha1 in
+	      return v_opt
+            with
+              Not_found -> begin
+	        let file = file t pack_sha1 in
+                IO.file_exists file >>= function
+                  | true ->
+	              IO.read_file file >>= fun buf ->
+                        Hashtbl.add pack_ba_cache pack_sha1 (Cstruct.to_bigarray buf);
+	                let v_opt = Pack.Raw.read (Mstruct.of_cstruct buf) index sha1 in
+	                return v_opt
+                  | false ->
+	              Log.error
+	                "No file associated with the pack object %s.\n" (SHA.to_hex pack_sha1);
+	              Lwt.fail (Failure "read_in_pack")
+              end
+          end
+      end
+      else begin
+        Log.debug "read_in_pack: not found";
+        return_none
+      end
 
     let read t sha1 =
       list t >>= fun packs ->

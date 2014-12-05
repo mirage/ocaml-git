@@ -41,3 +41,10 @@ val lengths: t -> int option SHA.Map.t
 
 val empty: ?pack_checksum:SHA.t -> unit -> t
 (** The empty pack index. *)
+
+class type c_t = object
+  method find_offset : SHA.t -> int option
+  method mem         : SHA.t -> bool
+end
+
+class c : ?scan_thresh:int -> ?cache_size:int -> Cstruct.buffer -> c_t

@@ -224,3 +224,261 @@ let add buf ?level:_ t =
   let str = Buffer.contents buf in
   let checksum = SHA.of_string str in
   Buffer.add_string buf (SHA.to_raw checksum)
+
+
+
+let int_of_hex hex = int_of_string ("0x" ^ hex)
+
+class type c_t = object
+  method find_offset : SHA.t -> int option
+  method mem         : SHA.t -> bool
+end
+
+class offset_cache size = object (self)
+  val keyq = (Queue.create() : SHA.t Queue.t)
+  val tbl = Hashtbl.create 0
+
+  method add (sha1 : SHA.t) (offset : int) =
+    Log.debug "offset_cache#add: %s -> %d" (SHA.to_hex sha1) offset;
+    Queue.add sha1 keyq;
+    let _ = Hashtbl.add tbl sha1 offset in
+    let qsz = Queue.length keyq in
+    if qsz > size then begin
+      try
+        let k = Queue.take keyq in
+          Log.debug "offset_cache#add: qsz=%d shrinking..." qsz;
+          Hashtbl.remove tbl k
+      with
+        Queue.Empty -> ()
+    end
+
+  method find (sha1 : SHA.t) =
+    Log.debug "offset_cache#find: %s" (SHA.to_hex sha1);
+    Hashtbl.find tbl sha1
+
+end (* of class Pack_index.offset_cache *)
+
+exception Idx_found of int
+
+class c ?(scan_thresh=8) ?(cache_size=1) (ba : Cstruct.buffer) = object (self)
+
+  val cache = new offset_cache cache_size
+
+  val mutable fanout_ofs  = 0
+  val mutable sha1s_ofs   = 0
+  val mutable crcs_ofs    = 0
+  val mutable offsets_ofs = 0
+  val mutable ofs64_ofs   = 0
+
+  val mutable n_sha1s    = 0
+  val mutable n_sha1s_4  = 0
+  val mutable n_sha1s_20 = 0
+
+  val ofs64_tbl = Hashtbl.create 0
+  val mutable ofs64_size = None
+
+
+  method find_offset sha1 =
+    Log.debug "c#find_offset: %s" (SHA.to_hex sha1);
+    try
+      let o = cache#find sha1 in
+      Log.debug "c#find_offset: cache hit!";
+      Some o
+    with
+      Not_found -> begin
+        match self#get_sha1_idx sha1 with
+        | Some idx -> begin
+            let buf = Mstruct.of_bigarray ~off:offsets_ofs ~len:n_sha1s_4 ba in
+
+            Mstruct.shift buf (idx * 4);
+
+            let is64 =
+	      match Mstruct.get_uint8 buf land 128 with
+              | 0 -> false
+              | _ -> true 
+            in
+            if is64 then begin
+              Log.debug "c#find_offset: 64bit offset";
+
+              let size64 =
+                match ofs64_size with
+                | Some sz -> sz
+                | None -> self#create_ofs64_tbl
+              in
+              let buf64 = Mstruct.of_bigarray ~off:ofs64_ofs ~len:(size64 * 8) ba in
+              
+              try
+                let idx64 = Hashtbl.find ofs64_tbl idx in
+                Mstruct.shift buf64 (idx64 * 8);
+                let o64 = Int64.to_int (Mstruct.get_be_uint64 buf64) in
+                Log.debug "c#find_offset: found:%d" o64;
+                cache#add sha1 o64;
+                Some o64
+              with
+                Not_found -> assert false
+            end
+            else begin
+              Mstruct.shift buf (-1);
+              let o = Int32.to_int (Mstruct.get_be_uint32 buf) in
+              Log.debug "c#find_offset: found:%d" o;
+              cache#add sha1 o;
+              Some o
+            end
+        end
+        | None -> None
+      end
+
+  method mem sha1 =
+    Log.debug "c#mem: %s" (SHA.to_hex sha1);
+    match self#find_offset sha1 with
+    | Some o -> 
+        Log.debug "c#mem: true"; 
+        true
+    | None -> 
+        Log.debug "c#mem: false"; 
+        false
+
+
+  initializer
+    let buf = Mstruct.of_bigarray ba in
+
+    input_header buf;
+
+    (* fanout table *)
+    fanout_ofs <- Mstruct.offset buf;
+    Log.debug "c#<init>: entering fanout table (ofs=%d)" fanout_ofs;
+    Mstruct.shift buf (255 * 4);
+    n_sha1s <- Int32.to_int (Mstruct.get_be_uint32 buf);
+    n_sha1s_4 <- n_sha1s * 4;
+    n_sha1s_20 <- n_sha1s * 20;
+    Log.debug "c#<init>: n_sha1s:%d" n_sha1s;
+
+    (* sha1 listing *)
+    sha1s_ofs <- Mstruct.offset buf;
+    Log.debug "c#<init>: entering sha1 listing (ofs=%d)" sha1s_ofs;
+    Mstruct.shift buf n_sha1s_20;
+
+    (* crc checksums *)
+    crcs_ofs <- Mstruct.offset buf;
+    Log.debug "c#<init>: entering crc checksums (ofs=%d)" crcs_ofs;
+    Mstruct.shift buf n_sha1s_4;
+
+    (* packfile offsets *)
+    offsets_ofs <- Mstruct.offset buf;
+    Log.debug "c#<init>: entering packfile offsets (ofs=%d)" offsets_ofs;
+    Mstruct.shift buf n_sha1s_4;
+
+    (* large packfile offsets *)
+    ofs64_ofs <- Mstruct.offset buf;
+    Log.debug "c#<init>: entering large packfile offsets (ofs=%d)" ofs64_ofs;
+
+
+  method private get_sha1_idx sha1 =
+    Log.debug "c#get_sha1_idx: %s" (SHA.to_hex sha1);
+    let fo_idx = self#get_fanout_idx sha1 in
+    let buf = Mstruct.of_bigarray ~off:fanout_ofs ~len:(256 * 4) ba in
+    let sz0, n =
+      if fo_idx = 0 then begin
+	0, Int32.to_int (Mstruct.get_be_uint32 buf)
+      end
+      else if fo_idx > 0 then begin
+	Mstruct.shift buf ((fo_idx - 1) * 4);
+	let sz0 = Int32.to_int (Mstruct.get_be_uint32 buf) in
+	let sz1 = Int32.to_int (Mstruct.get_be_uint32 buf) in
+	 sz0, sz1 - sz0
+      end 
+      else
+        failwith "Pack_index.c#get_sha1_idx"
+    in
+    try
+      self#scan_sha1s fo_idx sz0 (sha1s_ofs + (sz0 * 20)) n sha1
+    with
+      Idx_found i -> 
+        Log.debug "c#get_sha1_idx: found:%d" i;
+        Some i
+
+  method private create_ofs64_tbl =
+    Log.debug "c#create_ofs64_tbl";
+    let buf = Mstruct.of_bigarray ~off:offsets_ofs ~len:n_sha1s_4 ba in
+    let count = ref 0 in
+    for i = 0 to n_sha1s - 1 do
+      begin
+        match Mstruct.get_uint8 buf land 128 with
+        | 0 -> ()
+        | _ -> 
+            let _ = Hashtbl.add ofs64_tbl i !count in
+            Log.debug "c#create_ofs64_tbl: %d -> %d" i !count;
+            incr count
+      end;
+      Mstruct.shift buf 3
+    done;
+    ofs64_size <- Some !count;
+    !count
+
+  method private get_fanout_idx ?(verbose=true) sha1 =
+    let s = SHA.to_raw sha1 in
+    let fanout_idx = int_of_char s.[0] in
+    fanout_idx
+
+  (* implements binary search *)
+  method private scan_sha1s fo_idx idx_ofs ofs n sha1 =
+    Log.debug "c#scan_sha1s: fo_idx:%d idx_ofs:%d ofs:%d n:%d" fo_idx idx_ofs ofs n;
+    let len = n * 20 in
+    let buf = Mstruct.of_bigarray ~off:ofs ~len ba in
+
+    if n > scan_thresh then begin
+      Log.debug "c#scan_sha1s: %d > scan_thresh(=%d)" n scan_thresh;
+      let p = n / 2 in
+      Log.debug "c#scan_sha1s: p:%d" p;
+      let len' = p * 20 in
+      Mstruct.shift buf len';
+      let s = SHA.input buf in
+      if s = sha1 then begin
+        let idx = idx_ofs + p in
+        Log.debug "c#scan_sha1s: idx -> %d" idx;
+        raise (Idx_found idx)
+      end
+      else if self#le_sha1 sha1 s then
+        self#scan_sha1s fo_idx idx_ofs ofs p sha1
+      else
+        let d = p + 1 in
+        self#scan_sha1s fo_idx (idx_ofs + d) (ofs + d * 20) (n - p - 1) sha1
+    end
+    else begin
+      Log.debug "c#scan_sha1s: scanning...";
+      self#scan_sub idx_ofs sha1 buf 0 (n - 1)
+    end
+
+
+  method private scan_sub idx_ofs sha1 buf i m =
+    if i > m then 
+      None
+    else
+      let s = SHA.input buf in
+      if s = sha1 then begin
+        let idx = idx_ofs + i in
+        Log.debug "c#scan_sub: idx -> %d" idx;
+        raise (Idx_found idx)
+      end
+      else
+        self#scan_sub idx_ofs sha1 buf (i + 1) m
+
+
+  method private le_sha1 sha1_0 sha1_1 =
+    let s0 = SHA.to_raw sha1_0 in
+    let s1 = SHA.to_raw sha1_1 in
+    let rec scan i =
+      let x0 = int_of_char s0.[i] in
+      let x1 = int_of_char s1.[i] in
+      if x0 < x1 then
+        true
+      else if x0 > x1 then
+        false
+      else
+        scan (i + 1)
+    in
+    let b = scan 1 in
+    Log.debug "c#le_sha1: -> %B" b;
+    b
+
+end (* Pack_index.c *)

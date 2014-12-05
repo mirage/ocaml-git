@@ -264,6 +264,8 @@ module Make (M: sig val version: int end) = struct
         low lor (ss lsl 4)
       else low in
 
+    Log.debug "input: kind:%d size:%d (more=%b)" kind size more;
+
     let mk typ str =
       let size = Cstruct.len str in
       let buf = Misc.with_buffer (fun buf ->
@@ -401,7 +403,7 @@ module PIC = struct
   end
   module Map = Misc.Map(X)
 
-end
+end (* of module Packed_value.PIC *)
 
 let of_pic index ~pos t =
   match t.PIC.kind with
@@ -442,6 +444,58 @@ let to_pic offsets sha1s (pos, sha1, t) =
 
   in
   { PIC.sha1; kind }
+
+let rec unpack ?(lv=0) ~version ~index ~ba (pos, t) =
+  let ba_len = Bigarray.Array1.dim ba in
+  Log.debug "unpack[%d]: ba_len=%d" lv ba_len;
+  let input_packed_value =
+    match version with
+    | 2 -> V2.input
+    | 3 -> V3.input
+    | _ -> 
+	eprintf "pack version should be 2 or 3";
+	failwith "Packed_value.unpack"
+  in
+  let unpacked = 
+    match t with
+    | Raw_value x -> begin
+        Log.debug "unpack[%d]: Raw_value" lv; 
+        x
+    end
+    | Ref_delta d -> begin 
+        Log.debug "unpack[%d]: Ref_delta: d.source=%s" lv (SHA.to_hex d.source);
+        match index#find_offset d.source with
+        | Some offset -> begin
+            Log.debug "unpack[%d]: offset=%d" lv offset;
+            let offset = offset - 12 in (* header skipped *) 
+            let buf = Mstruct.of_bigarray ~off:offset ~len:(ba_len-offset) ba in
+            let packed_v = input_packed_value buf in
+	    let u = unpack ~lv:(lv+1) ~version ~index ~ba (offset, packed_v) in
+	    Misc.with_buffer (fun b -> add_delta b {d with source = u})
+        end
+        | None -> begin
+            eprintf
+              "Packed_value.unpack: shallow pack are not supported.\n%s is not in the pack file!\n"
+              (SHA.to_hex d.source);
+            failwith "Packed_value.unpack";
+        end
+    end
+    | Off_delta d -> begin
+        Log.debug "unpack[%d]: Off_delta: d.source=%d" lv d.source;
+        let offset = pos - d.source in
+        Log.debug "unpack[%d]: offset=%d-%d=%d" lv pos d.source offset;
+        let buf = Mstruct.of_bigarray ~off:offset ~len:(ba_len-offset) ba in
+        let packed_v = input_packed_value buf in
+	let u = unpack ~lv:(lv+1) ~version ~index ~ba (offset, packed_v) in
+	Misc.with_buffer (fun b -> add_delta b {d with source = u})
+    end
+  in
+  unpacked
+
+let to_value ~version ~index ~ba (offset, packed_v) =
+  let u = unpack ~version ~index ~ba (offset, packed_v) in
+  Value.input_inflated (Mstruct.of_string u)
+
 
 (* XXX: merge with PIC.unpack *)
 let add_inflated_value_aux (return, bind) ~read ~offsets ~pos buf = function
