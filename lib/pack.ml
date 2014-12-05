@@ -132,6 +132,26 @@ module Raw = struct
     |> String.concat ""
     |> SHA.of_string
 
+  let read buf index sha1 =
+    let version, count = input_header buf in
+    Log.debugf "read: version=%d count=%d" version count;
+    begin
+      match index#find_offset sha1 with
+      | Some offset -> begin
+          Log.debugf "read: offset=%d" offset;
+          let orig_off = Mstruct.offset buf in
+          let orig_len = Mstruct.length buf in
+          Log.debugf "read: buf: orig_off=%d orig_len=%d" orig_off orig_len;
+	  let ba = Mstruct.to_bigarray buf in
+          Mstruct.shift buf (offset - orig_off);
+          Log.debugf "read: buf: off=%d len=%d (after shift:%d)" (Mstruct.offset buf) (Mstruct.length buf) (offset-orig_off);
+          let packed_v = input_packed_value version buf in
+          Log.debugf "read: buf: off=%d len=%d (after input_packed_value)" (Mstruct.offset buf) (Mstruct.length buf);
+	  Some (Packed_value.to_value ~version ~index ~ba (offset-orig_off, packed_v))
+      end
+      | None -> None
+    end
+
   let input buf ~index =
     let all = Mstruct.to_cstruct buf in
     let offset = Mstruct.offset buf in

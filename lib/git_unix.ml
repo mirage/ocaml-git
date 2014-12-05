@@ -103,6 +103,7 @@ module D = struct
       ) in
     Lwt_pool.use mkdir_pool (fun () -> aux dirname)
 
+(*
   let list_files kind dir =
     if Sys.file_exists dir then (
       let s = Lwt_unix.files_of_directory dir in
@@ -112,6 +113,17 @@ module D = struct
       Lwt_stream.to_list s >>= fun l ->
       return l
     ) else
+      return_nil
+*)
+  let list_files kind dir = (* Lwt_unix.files_of_directory does not close dir in some cases *)
+    if Sys.file_exists dir then begin
+      let l = Array.to_list (Sys.readdir dir) in
+      let l = List.filter (fun s -> s <> "." && s <> "..") l in
+      let l = List.map (Filename.concat dir) l in
+      let l = List.filter kind l in
+      return l
+    end
+    else
       return_nil
 
   let directories dir =
