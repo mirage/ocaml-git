@@ -24,12 +24,12 @@ Library git
                      Reference, Sync, Tag, Tree, User, Value,
                      Object, Object_type, Store, Search, Gri,
                      Memory, FS
-  BuildDepends:      mstruct, dolog, ocamlgraph, zip, nocrypto, uri,
-                     lwt, hex
+  BuildDepends:      mstruct, ocamlgraph, zip, nocrypto, uri,
+                     lwt, dolog, uri.services, hex, bytes
 
 Library "git-unix"
   Build$:           flag(unix)
-  Path:              lib/
+  Path:              lib_unix
   FindlibParent:     git
   Findlibname:       unix
   Modules:           Git_unix

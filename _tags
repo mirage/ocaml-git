@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 0194ab183eaa956025a57a71cb750a1c)
+# DO NOT EDIT (digest: d87491cd5b9dfd3d7dcdcd8ee2953438)
 # Ignore VCS directories, you can use the same kind of rule outside
 # OASIS_START/STOP if you want to exclude directories that contains
 # useless stuff for the build process
@@ -40,12 +40,23 @@ true: annot, bin_annot
 "lib/memory.cmx": for-pack(Git)
 "lib/FS.cmx": for-pack(Git)
 # Library git-unix
-"lib/git-unix.cmxs": use_git-unix
-<lib/*.ml{,i,y}>: pkg_conduit.lwt-unix
-<lib/*.ml{,i,y}>: pkg_lwt.unix
-<lib/*.ml{,i,y}>: pkg_uri.services
+"lib_unix/git-unix.cmxs": use_git-unix
+<lib_unix/*.ml{,i,y}>: pkg_bytes
+<lib_unix/*.ml{,i,y}>: pkg_conduit.lwt-unix
+<lib_unix/*.ml{,i,y}>: pkg_dolog
+<lib_unix/*.ml{,i,y}>: pkg_hex
+<lib_unix/*.ml{,i,y}>: pkg_lwt
+<lib_unix/*.ml{,i,y}>: pkg_lwt.unix
+<lib_unix/*.ml{,i,y}>: pkg_mstruct
+<lib_unix/*.ml{,i,y}>: pkg_nocrypto
+<lib_unix/*.ml{,i,y}>: pkg_ocamlgraph
+<lib_unix/*.ml{,i,y}>: pkg_uri
+<lib_unix/*.ml{,i,y}>: pkg_uri.services
+<lib_unix/*.ml{,i,y}>: pkg_zip
+<lib_unix/*.ml{,i,y}>: use_git
 # Library git-mirage
 "lib/git-mirage.cmxs": use_git-mirage
+<lib/*.ml{,i,y}>: pkg_bytes
 <lib/*.ml{,i,y}>: pkg_dolog
 <lib/*.ml{,i,y}>: pkg_hex
 <lib/*.ml{,i,y}>: pkg_io-page
@@ -55,9 +66,11 @@ true: annot, bin_annot
 <lib/*.ml{,i,y}>: pkg_nocrypto
 <lib/*.ml{,i,y}>: pkg_ocamlgraph
 <lib/*.ml{,i,y}>: pkg_uri
+<lib/*.ml{,i,y}>: pkg_uri.services
 <lib/*.ml{,i,y}>: pkg_zip
 <lib/*.ml{,i,y}>: use_git
 # Executable ogit
+<bin/ogit.{native,byte}>: pkg_bytes
 <bin/ogit.{native,byte}>: pkg_cmdliner
 <bin/ogit.{native,byte}>: pkg_conduit.lwt-unix
 <bin/ogit.{native,byte}>: pkg_dolog
@@ -72,6 +85,7 @@ true: annot, bin_annot
 <bin/ogit.{native,byte}>: pkg_zip
 <bin/ogit.{native,byte}>: use_git
 <bin/ogit.{native,byte}>: use_git-unix
+<bin/*.ml{,i,y}>: pkg_bytes
 <bin/*.ml{,i,y}>: pkg_cmdliner
 <bin/*.ml{,i,y}>: pkg_conduit.lwt-unix
 <bin/*.ml{,i,y}>: pkg_dolog
@@ -88,6 +102,7 @@ true: annot, bin_annot
 <bin/*.ml{,i,y}>: use_git-unix
 # Executable test_git
 <lib_test/test.{native,byte}>: pkg_alcotest
+<lib_test/test.{native,byte}>: pkg_bytes
 <lib_test/test.{native,byte}>: pkg_conduit.lwt-unix
 <lib_test/test.{native,byte}>: pkg_dolog
 <lib_test/test.{native,byte}>: pkg_hex
@@ -107,6 +122,7 @@ true: annot, bin_annot
 <lib_test/test.{native,byte}>: use_git-mirage
 <lib_test/test.{native,byte}>: use_git-unix
 <lib_test/*.ml{,i,y}>: pkg_alcotest
+<lib_test/*.ml{,i,y}>: pkg_bytes
 <lib_test/*.ml{,i,y}>: pkg_conduit.lwt-unix
 <lib_test/*.ml{,i,y}>: pkg_dolog
 <lib_test/*.ml{,i,y}>: pkg_hex
