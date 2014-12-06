@@ -188,7 +188,7 @@ let cat_file = {
   let ty_flag = mk_flag ["t"] "Instead of the content, show the object type." in
   let sz_flag = mk_flag ["s"] "Instead of the content, show the object size." in
   let id =
-    let doc = Arg.info ~docv:"ID" ~doc:"The id of the repository object." [] in
+    let doc = Arg.info ~docv:"SHA1" ~doc:"The SHA1 of the repository object." [] in
     Arg.(required & pos 0 (some string) None & doc) 
   in
   let cat_file (module S: Store.S) ty_flag sz_flag id =
@@ -281,8 +281,8 @@ let ls_tree = {
   term =
   let recurse_flag = mk_flag ["r"] "Recurse into sub-trees." in
   let oid =
-    let doc = Arg.info [] ~docv:"ID"
-        ~doc:"The id of the commit." 
+    let doc = Arg.info [] ~docv:"SHA1"
+        ~doc:"The SHA1 of the tree." 
     in
     Arg.(required & pos 0 (some string) None & doc ) 
   in
