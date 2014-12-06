@@ -65,7 +65,7 @@ let perm_of_string buf = function
   | "100644" -> `Normal
   | "100755" -> `Exec
   | "120000" -> `Link
-  | "040000" -> `Dir
+  | "40000"  -> `Dir
   | "160000" -> `Commit
   | x        -> Mstruct.parse_error_buf buf "%S is not a valid permission." x
 
@@ -73,7 +73,7 @@ let string_of_perm = function
   | `Normal -> "100644"
   | `Exec   -> "100755"
   | `Link   -> "120000"
-  | `Dir    -> "040000"
+  | `Dir    -> "40000"
   | `Commit -> "160000"
 
 let escape = Char.chr 42
