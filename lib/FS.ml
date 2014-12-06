@@ -278,7 +278,17 @@ module Packed = struct
     read_index_c t pack_sha1 >>= fun idx -> 
       return (idx#mem sha1)
 
-  let pack_ba_cache = Hashtbl.create 1024
+
+  let pack_size_thresh = 10000000
+
+  let pack_ba_cache = Hashtbl.create 8
+
+  let cache_pack sha buf =
+    let ba = Cstruct.to_bigarray buf in
+    let sz = Bigarray.Array1.dim ba in
+    if sz < pack_size_thresh then
+      Hashtbl.add pack_ba_cache sha ba
+
 
   let read_in_pack t pack_sha1 sha1 =
     Log.debugf "read_in_pack %s:%s"
@@ -309,7 +319,7 @@ module Packed = struct
                 IO.file_exists file >>= function
                   | true ->
 	              IO.read_file file >>= fun buf ->
-                        Hashtbl.add pack_ba_cache pack_sha1 (Cstruct.to_bigarray buf);
+                        cache_pack pack_sha1 buf;
 	                let v_opt = Pack.Raw.read (Mstruct.of_cstruct buf) index sha1 in
 	                return v_opt
                   | false ->
