@@ -264,6 +264,90 @@ class offset_cache size = object (self)
 
 end (* of class Pack_index.offset_cache *)
 
+
+module Oid = struct
+  type t =
+    | SHA1 of SHA.t
+    | Abbrev of string (* hex *)
+
+  let length = function
+    | SHA1 _ -> 40
+    | Abbrev h -> String.length h
+
+  let of_hex h =
+    let len = String.length h in
+    if len = 40 then
+      SHA1 (SHA.of_hex h)
+    else if len > 40 then
+      SHA1 (SHA.of_hex (String.sub h 0 40))
+    else
+      Abbrev h
+
+  let to_hex = function
+    | SHA1 sha -> SHA.to_hex sha
+    | Abbrev h -> h
+
+  let of_sha1 sha1 = SHA1 sha1
+
+  let sstartswith s s0 =
+    let len = String.length s in
+    let len0 = String.length s0 in
+    if len < len0 then
+      false
+    else
+      try
+        for i = 0 to len0 - 1 do
+	  if s.[i] != s0.[i] then
+	    raise Exit
+        done;
+        true
+      with 
+      | Exit -> false
+
+  let pair_to_str_pair = function
+    | SHA1 sha, SHA1 sha0 -> SHA.to_raw sha, SHA.to_raw sha0
+    | SHA1 sha, Abbrev h0 -> SHA.to_hex sha, h0
+    | Abbrev h, SHA1 sha0 -> h, SHA.to_hex sha0
+    | Abbrev h, Abbrev h0 -> h, h0
+
+  let startswith oid oid0 =
+    let s, s0 = pair_to_str_pair (oid, oid0) in
+    sstartswith s s0
+
+  exception Ambiguous
+
+  let slt s0 s1 =
+    let len0 = String.length s0 in
+    let len1 = String.length s1 in
+    let len = min len0 len1 in
+    let same = len0 = len1 in
+
+    let rec scan i =
+      if i = len then
+        if same then
+          false
+        else
+          raise Ambiguous
+      else
+        let x0 = s0.[i] in
+        let x1 = s1.[i] in
+        if x0 < x1 then
+          true
+        else if x0 > x1 then
+          false
+        else
+          scan (i + 1)
+    in
+    let b = scan 1 in
+    Log.debugf "Oid.slt: -> %B" b;
+    b
+
+  let lt oid oid0 =
+    let s, s0 = pair_to_str_pair (oid, oid0) in
+    slt s s0
+
+end
+
 exception Idx_found of int
 
 class c ?(scan_thresh=8) ?(cache_size=1) (ba : Cstruct.buffer) = object (self)
@@ -397,7 +481,8 @@ class c ?(scan_thresh=8) ?(cache_size=1) (ba : Cstruct.buffer) = object (self)
         failwith "Pack_index.c#get_sha1_idx"
     in
     try
-      self#scan_sha1s fo_idx sz0 (sha1s_ofs + (sz0 * 20)) n sha1
+      let ofs = sha1s_ofs + (sz0 * 20) in
+      self#scan_sha1s fo_idx sz0 ofs n sha1
     with
       Idx_found i -> 
         Log.debugf "c#get_sha1_idx: found:%d" i;
@@ -444,7 +529,7 @@ class c ?(scan_thresh=8) ?(cache_size=1) (ba : Cstruct.buffer) = object (self)
         Log.debugf "c#scan_sha1s: idx -> %d" idx;
         raise (Idx_found idx)
       end
-      else if self#le_sha1 sha1 s then
+      else if self#lt_sha1 sha1 s then
         self#scan_sha1s fo_idx idx_ofs ofs p sha1
       else
         let d = p + 1 in
@@ -455,6 +540,25 @@ class c ?(scan_thresh=8) ?(cache_size=1) (ba : Cstruct.buffer) = object (self)
       self#scan_sub idx_ofs sha1 buf 0 (n - 1)
     end
 
+  method private lt_sha1 sha1_0 sha1_1 =
+    let s0 = SHA.to_raw sha1_0 in
+    let s1 = SHA.to_raw sha1_1 in
+    let rec scan i =
+      let x0 = s0.[i] in
+      let x1 = s1.[i] in
+      if x0 < x1 then
+        true
+      else if x0 > x1 then
+        false
+      else
+        scan (i + 1)
+    in
+    try
+      let b = scan 1 in
+      Log.debugf "c#lt_sha1: -> %B" b;
+      b
+    with
+      Invalid_argument _ -> assert false
 
   method private scan_sub idx_ofs sha1 buf i m =
     if i > m then 
@@ -470,21 +574,5 @@ class c ?(scan_thresh=8) ?(cache_size=1) (ba : Cstruct.buffer) = object (self)
         self#scan_sub idx_ofs sha1 buf (i + 1) m
 
 
-  method private le_sha1 sha1_0 sha1_1 =
-    let s0 = SHA.to_raw sha1_0 in
-    let s1 = SHA.to_raw sha1_1 in
-    let rec scan i =
-      let x0 = int_of_char s0.[i] in
-      let x1 = int_of_char s1.[i] in
-      if x0 < x1 then
-        true
-      else if x0 > x1 then
-        false
-      else
-        scan (i + 1)
-    in
-    let b = scan 1 in
-    Log.debugf "c#le_sha1: -> %B" b;
-    b
 
 end (* Pack_index.c *)
