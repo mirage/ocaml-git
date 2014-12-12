@@ -1,6 +1,8 @@
+## 1.4.2
+* Fix `Git_unix.IO.write_file` to work on empty files
+
 ## 1.4.1 (2014-12-4)
 * Fix `ogit --version` (#22)
-* Depend on ocaml-hex
 
 ## 1.4.0 (2014-11-20):
 * Port to Conduit 0.6.0 API.

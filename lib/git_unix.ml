@@ -130,18 +130,22 @@ module D = struct
   let write_cstruct fd b =
     let rec rwrite fd buf ofs len =
       Lwt_bytes.write fd buf ofs len >>= fun n ->
-      if n = 0 then fail End_of_file
+      if len = 0 then fail End_of_file
       else if n < len then rwrite fd buf (ofs + n) (len - n)
-      else return () in
-    rwrite fd (Cstruct.to_bigarray b) 0 (Cstruct.len b)
+      else return_unit in
+    match Cstruct.len b with
+    | 0   -> return_unit
+    | len -> rwrite fd (Cstruct.to_bigarray b) 0 len
 
   let write_string fd b =
     let rec rwrite fd buf ofs len =
       Lwt_unix.write fd buf ofs len >>= fun n ->
-      if n = 0 then fail End_of_file
+      if len = 0 then fail End_of_file
       else if n < len then rwrite fd buf (ofs + n) (len - n)
-      else return () in
-    rwrite fd b 0 (String.length b)
+      else return_unit in
+    match String.length b with
+    | 0   -> return_unit
+    | len -> rwrite fd b 0 len
 
   let with_write_file file fn =
     Log.infof "Writing %s" file;
