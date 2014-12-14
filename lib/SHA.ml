@@ -27,39 +27,123 @@ module type S = sig
   val input_hex: Mstruct.t -> t
   val add_hex: Buffer.t -> t -> unit
   val zero: t
+  val is_short: t -> bool
+  val lt: t -> t -> bool
+  val is_prefix: t -> t -> bool
   module Set: Misc.Set with type elt = t
   module Map: Misc.Map with type key = t
 end
 
+type sha_t = { raw    : string;
+               padded : bool;   (* for hex of odd length *)
+             }
+
+exception Ambiguous
+
+let sha_compare x y = 
+  let nx = String.length x.raw in
+  let ny = String.length y.raw in
+  let pad_same = x.padded && y.padded in
+  if nx = ny && not x.padded && not y.padded then
+    String.compare x.raw y.raw
+  else begin
+    let len = min nx ny in
+    let rec scan i =
+      if i = len then
+        raise Ambiguous
+      else
+        let x0 = x.raw.[i] in
+        let x1 = y.raw.[i] in
+        if x0 < x1 && pad_same then
+          -1
+        else if x0 > x1 && pad_same then
+          1
+        else
+          scan (i + 1)
+    in
+    scan 0
+  end
+
 module SHA1_String = struct
 
-  type t = string
+  type t = sha_t
+
+  let length x = (* 0 <= length <= 40 *)
+    let n = (String.length x.raw) * 2 in
+    if x.padded then
+      n - 1
+    else
+      n
+
+  let is_short x = (length x) < 40
 
   let equal x y = (x=y)
 
-  let hash x = Hashtbl.hash x
+  let hash x = Hashtbl.hash x.raw
 
-  let compare x y = String.compare x y
+  let compare = sha_compare
 
-  let to_raw x = x
+  let is_prefix p x =
+    let np = length p in
+    let nx = length x in
+    if np > nx then
+      false
+    else if np = nx then
+      equal p x
+    else 
+      let n =
+        if p.padded then
+          (String.length p.raw) - 1
+        else
+          String.length p.raw
+      in
+      try
+        for i = 0 to n - 1 do
+          if p.raw.[i] <> x.raw.[i] then
+            raise Exit
+        done;
+        if p.padded then
+          ((Char.code p.raw.[n]) land 0xf0) = ((Char.code x.raw.[n]) land 0xf0)
+        else
+          true
+      with
+        Exit -> false
 
-  let of_raw x = x
+  let lt x y = compare x y < 0
+
+  let to_raw x = x.raw
+
+  let of_raw x = { raw=x; padded=false; }
 
   let of_string str =
     Cstruct.of_string str
     |> Nocrypto.Hash.SHA1.digest
     |> Cstruct.to_string
+    |> fun x -> { raw=x; padded=false; }
 
   let of_cstruct c =
     Nocrypto.Hash.SHA1.digest c
     |> Cstruct.to_string
+    |> fun x -> { raw=x; padded=false; }
 
   let to_hex t =
-    let `Hex h = Hex.of_string t in
-    h
+    let `Hex h = Hex.of_string t.raw in
+    if t.padded then
+      String.sub h 0 ((String.length h) - 1)
+    else
+      h
 
   let of_hex h =
-    Hex.to_string (`Hex h)
+    let len = String.length h in
+    let h' =
+      if (len mod 2) = 1 then
+        h ^ "0"
+      else
+        h
+    in
+    { raw    = Hex.to_string (`Hex h');
+      padded = true;
+    }
 
   let zero =
     of_hex (String.make 40 '0')
@@ -69,10 +153,10 @@ module SHA1_String = struct
   let pp_hum ppf t = Format.fprintf ppf "%s" (pretty t)
 
   let input buf =
-    Mstruct.get_string buf 20
+    { raw=Mstruct.get_string buf 20; padded=false; }
 
   let add buf ?level:_ t =
-    Buffer.add_string buf t
+    Buffer.add_string buf t.raw
 
   let input_hex buf =
     of_hex (Mstruct.get_string buf (Mstruct.length buf))
@@ -81,8 +165,8 @@ module SHA1_String = struct
     Buffer.add_string buf (to_hex t)
 
   module X = struct
-    type t = string
-    let compare = String.compare
+    type t = sha_t
+    let compare = sha_compare
     let pretty = pretty
   end
   module Map = Misc.Map(X)
