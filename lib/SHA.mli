@@ -47,6 +47,15 @@ module type S = sig
   val zero: t
   (** A SHA1 full of zero. Useful for padding. *)
 
+  val is_short: t -> bool
+  (** Check if the SHA1 is abbreviated. *)
+
+  val lt: t -> t -> bool
+  (** (<) relation between SHA1s. *)
+
+  val is_prefix: t -> t -> bool
+  (** Check if a SHA1 is a prefix of another SHA1. *)
+
   module Set: Misc.Set with type elt = t
   module Map: Misc.Map with type key = t
 
@@ -82,3 +91,5 @@ val of_blob: Blob.t -> t
 
 val to_blob: t -> Blob.t
 (** A node might be a blob node. *)
+
+exception Ambiguous
