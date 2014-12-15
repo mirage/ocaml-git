@@ -137,14 +137,15 @@ module SHA1_String = struct
 
   let of_hex h =
     let len = String.length h in
+    let to_be_padded = (len mod 2) = 1 in
     let h' =
-      if (len mod 2) = 1 then
+      if to_be_padded then
         h ^ "0"
       else
         h
     in
     { raw    = Hex.to_string (`Hex h');
-      padded = true;
+      padded = to_be_padded;
     }
 
   let zero = of_hex (String.make 40 '0')
