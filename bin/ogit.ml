@@ -193,33 +193,43 @@ let cat_file = {
   let cat_file (module S: Store.S) ty_flag sz_flag id =
     run begin
       S.create () >>= fun t ->
-	S.read_exn t (SHA.of_hex id) >>= fun v -> begin
-	  let t, c, s =
-	    match v with
-	    | Value.Blob blob -> 
-		let c = Blob.pretty blob in
-		"blob", c, String.length c
-	    | Value.Commit commit ->
-		let c = Commit.pretty commit in
-		"commit", c, String.length c
-	    | Value.Tree tree ->
-		let c = Tree.pretty tree in
-		"tree", c, String.length c
-	    | Value.Tag tag ->
-		let c = Tag.pretty tag in
-		"tag", c, String.length c
-	  in
-	  if ty_flag then
-	    Printf.printf "%s%!" t;
+        Lwt.catch 
+          (fun () ->
+	    S.read_exn t (SHA.of_hex id) >>= fun v -> begin
+	      let t, c, s =
+	        match v with
+	        | Value.Blob blob -> 
+		    let c = Blob.pretty blob in
+		    "blob", c, String.length c
+	        | Value.Commit commit ->
+		    let c = Commit.pretty commit in
+		    "commit", c, String.length c
+	        | Value.Tree tree ->
+		    let c = Tree.pretty tree in
+		    "tree", c, String.length c
+	        | Value.Tag tag ->
+		    let c = Tag.pretty tag in
+		    "tag", c, String.length c
+	      in
+	      if ty_flag then
+	        Printf.printf "%s%!" t;
 
-	  if sz_flag then
-	    Printf.printf "%d%!" s;
+	      if sz_flag then
+	        Printf.printf "%d%!" s;
 
-	  if not ty_flag && not sz_flag then
-	    Printf.printf "%s%!" c;
+	      if not ty_flag && not sz_flag then
+	        Printf.printf "%s%!" c;
 
-	  return_unit
-	end 
+	      return_unit
+	    end 
+          )
+          (function
+            | SHA.Ambiguous -> eprintf "ambiguous argument\n%!"; exit 1
+            | Not_found ->
+                eprintf "unknown revision or path not in the working tree\n%!";
+                exit 1
+            | e -> eprintf "%s\n%!" (Printexc.to_string e); exit 1
+          )
     end
   in
   Term.(mk cat_file $ backend $ ty_flag $ sz_flag $ id)
@@ -326,7 +336,15 @@ let ls_tree = {
           end
         in
         let sha1 = SHA.of_hex oid in
-        walk recurse_flag "" sha1
+        Lwt.catch
+          (fun () -> walk recurse_flag "" sha1)
+          (function
+            | SHA.Ambiguous -> eprintf "ambiguous argument\n%!"; exit 1
+            | Not_found ->
+                eprintf "unknown revision or path not in the working tree\n%!";
+                exit 1
+            | e -> eprintf "%s\n%!" (Printexc.to_string e); exit 1
+          )          
     end 
   in
   Term.(mk ls $ backend $ recurse_flag $ oid)
