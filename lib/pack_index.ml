@@ -445,6 +445,8 @@ class c ?(scan_thresh=8) ?(cache_size=1) (ba : Cstruct.buffer) = object (self)
       Mstruct.shift buf len';
       let s = SHA.input buf in
 
+      Log.debugf "c#scan_sha1s: s=%s" (SHA.to_hex s);
+
       if s = sha1 then begin
         let idx = idx_ofs + p in
         Log.debugf "c#scan_sha1s: idx -> %d (full)" idx;
@@ -468,6 +470,7 @@ class c ?(scan_thresh=8) ?(cache_size=1) (ba : Cstruct.buffer) = object (self)
           else
             true
         in
+        Log.debugf "prev_ok:%B next_ok:%B" prev_ok next_ok;
         if prev_ok && next_ok then begin
           let idx = idx_ofs + p in
           Log.debugf "c#scan_sha1s: idx -> %d (short)" idx;
@@ -484,22 +487,39 @@ class c ?(scan_thresh=8) ?(cache_size=1) (ba : Cstruct.buffer) = object (self)
     end
     else begin
       Log.debugf "c#scan_sha1s: scanning...";
-      self#scan_sub idx_ofs sha1 buf 0 (n - 1)
+      self#scan_sub idx_ofs sha1 short_sha buf 0 (n - 1)
     end
 
-  method private scan_sub idx_ofs sha1 buf i m =
-    if i > m then 
-      None
-    else
+  method private scan_sub idx_ofs sha1 short_sha ?(cands=[]) buf i m =
+    Log.debugf "c#scan_sub: idx_ofs=%d short_sha=%B cands=[%s] i=%d m=%d" 
+      idx_ofs short_sha 
+      (List.fold_left (fun s i -> s^(if s = "" then "" else ",")^(string_of_int i)) "" cands)
+      i m;
+    if i > m then begin
+      match cands with
+      | [idx] -> raise (Idx_found idx)
+      | _ -> None
+    end
+    else begin
       let s = SHA.input buf in
       if s = sha1 then begin
         let idx = idx_ofs + i in
         Log.debugf "c#scan_sub: idx -> %d" idx;
         raise (Idx_found idx)
       end
-      else
-        self#scan_sub idx_ofs sha1 buf (i + 1) m
-
+      else begin
+        let cands =
+          if short_sha then
+            if SHA.is_prefix sha1 s then
+              (idx_ofs + i) :: cands
+            else
+              cands
+          else
+            []
+        in
+        self#scan_sub idx_ofs sha1 short_sha ~cands buf (i + 1) m
+      end
+    end
 
 
 end (* Pack_index.c *)

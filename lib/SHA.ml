@@ -41,30 +41,52 @@ type sha_t = { raw    : string;
              }
 
 exception Ambiguous
+exception Too_short
+
+let sha_to_string t =
+  let `Hex h = Hex.of_string t.raw in
+  h^(if t.padded then "(PADDED)" else "")
+
+let get_upper c = (Char.code c) land 0xf0
 
 let sha_compare x y = 
+  Log.debugf "sha_compare: %s vs %s" (sha_to_string x) (sha_to_string y);
   let nx = String.length x.raw in
   let ny = String.length y.raw in
   let pad_same = x.padded && y.padded in
-  if nx = ny && not x.padded && not y.padded then
-    String.compare x.raw y.raw
-  else begin
-    let len = min nx ny in
-    let rec scan i =
-      if i = len then
-        raise Ambiguous
-      else
-        let x0 = x.raw.[i] in
-        let x1 = y.raw.[i] in
-        if x0 < x1 && pad_same then
-          -1
-        else if x0 > x1 && pad_same then
-          1
+  let res =
+    if nx = ny && not x.padded && not y.padded then
+      String.compare x.raw y.raw
+    else begin
+      let len = min nx ny in
+      let rec scan i =
+        if i = len then
+          raise Ambiguous
         else
-          scan (i + 1)
-    in
-    scan 0
-  end
+          if pad_same || i < len then
+            let x0 = x.raw.[i] in
+            let y0 = y.raw.[i] in
+            if x0 < y0 then
+              -1
+            else if x0 > y0 then
+              1
+            else
+              scan (i + 1)
+          else
+            let x0 = get_upper x.raw.[i] in
+            let y0 = get_upper y.raw.[i] in
+            if x0 < y0 then
+              -1
+            else if x0 > y0 then
+              1
+            else
+              raise Ambiguous
+      in
+      scan 0
+    end
+  in
+  Log.debugf "sha_compare: result=%d" res;
+  res
 
 module SHA1_String = struct
 
@@ -105,7 +127,7 @@ module SHA1_String = struct
             raise Exit
         done;
         if p.padded then
-          ((Char.code p.raw.[n]) land 0xf0) = ((Char.code x.raw.[n]) land 0xf0)
+          (get_upper p.raw.[n]) = (get_upper x.raw.[n])
         else
           true
       with
@@ -137,16 +159,19 @@ module SHA1_String = struct
 
   let of_hex h =
     let len = String.length h in
-    let to_be_padded = (len mod 2) = 1 in
-    let h' =
-      if to_be_padded then
-        h ^ "0"
-      else
-        h
-    in
-    { raw    = Hex.to_string (`Hex h');
-      padded = to_be_padded;
-    }
+    if len < 7 then
+      raise Too_short
+    else
+      let to_be_padded = (len mod 2) = 1 in
+      let h' =
+        if to_be_padded then
+          h ^ "0"
+        else
+          h
+      in
+      { raw    = Hex.to_string (`Hex h');
+        padded = to_be_padded;
+      }
 
   let zero = of_hex (String.make 40 '0')
 
