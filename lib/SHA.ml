@@ -29,6 +29,7 @@ module type S = sig
   val input_hex: Mstruct.t -> t
   val add_hex: Buffer.t -> t -> unit
   val zero: t
+  val length: t -> int
   val is_short: t -> bool
   val lt: t -> t -> bool
   val is_prefix: t -> t -> bool
@@ -41,7 +42,6 @@ type sha_t = { raw    : string;
              }
 
 exception Ambiguous
-exception Too_short
 
 let sha_to_string t =
   let `Hex h = Hex.of_string t.raw in
@@ -159,19 +159,16 @@ module SHA1_String = struct
 
   let of_hex h =
     let len = String.length h in
-    if len < 7 then
-      raise Too_short
-    else
-      let to_be_padded = (len mod 2) = 1 in
-      let h' =
-        if to_be_padded then
-          h ^ "0"
-        else
-          h
-      in
-      { raw    = Hex.to_string (`Hex h');
-        padded = to_be_padded;
-      }
+    let to_be_padded = (len mod 2) = 1 in
+    let h' =
+      if to_be_padded then
+        h ^ "0"
+      else
+        h
+    in
+    { raw    = Hex.to_string (`Hex h');
+      padded = to_be_padded;
+    }
 
   let zero = of_hex (String.make 40 '0')
 

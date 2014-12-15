@@ -75,18 +75,64 @@ module Loose = struct
   let mem root sha1 =
     IO.file_exists (file root sha1)
 
+  let get_file root sha1 =
+    IO.directories (root / ".git" / "objects") >>= fun dirs ->
+      let hex = SHA.to_hex sha1 in
+      let len = String.length hex in
+      let len_le_2 = len <= 2 in
+      let dcands = 
+        if len_le_2 then
+          List.filter 
+            (fun d -> 
+              (String.sub (Filename.basename d) 0 len) = hex
+            ) dirs
+        else
+          List.filter (fun d -> (Filename.basename d) = (String.sub hex 0 2)) dirs 
+      in
+      match dcands with
+      | [] -> return_none
+      | [dir] -> begin
+          Log.debugf "get_file: %s" dir;
+          IO.files dir >>= fun files ->
+            let fcands =
+              if len_le_2 then
+                files
+              else
+                let len' = len - 2 in
+                let suffix = String.sub hex 2 len' in
+                List.filter 
+                  (fun f -> (String.sub (Filename.basename f) 0 len') = suffix) 
+                  files 
+            in
+            match fcands with
+            | [] -> return_none
+            | [file] -> return (Some file)
+            | _ -> raise SHA.Ambiguous
+      end
+      | _ -> raise SHA.Ambiguous
+
+  let read_file file =
+    IO.read_file file >>= fun buf ->
+    try
+      let value = Value.input (Mstruct.of_cstruct buf) in
+      return (Some value)
+    with Zlib.Error _ ->
+      fail (Zlib.Error (file, (Cstruct.to_string buf)))
+
   let read t sha1 =
     Log.debugf "read %s" (SHA.to_hex sha1);
-    let file = file t sha1 in
-    IO.file_exists file >>= function
-    | false -> return_none
-    | true  ->
-      IO.read_file file >>= fun buf ->
-      try
-        let value = Value.input (Mstruct.of_cstruct buf) in
-        return (Some value)
-      with Zlib.Error _ ->
-        fail (Zlib.Error (file, (Cstruct.to_string buf)))
+    if SHA.is_short sha1 then begin
+      Log.debugf "read: short sha1";
+      get_file t sha1 >>= function
+        | Some file -> read_file file
+        | None -> return_none
+    end
+    else begin
+      let file = file t sha1 in
+      IO.file_exists file >>= function
+        | false -> return_none
+        | true  -> read_file file
+    end
 
   let write t value =
     Log.debugf "write";
