@@ -93,6 +93,59 @@ end
 
 module D = struct
 
+  module Read_file_cache : sig
+    val find : string -> Cstruct.t option
+    val add : string -> Cstruct.t -> unit
+  end = struct
+
+    (* Search key and value stored in the weak table.
+       The path is used to find the file.
+       When searching, file is a dummy empty value.
+       This value should be alive as long as the file
+       is alive, to ensure that, a finaliser is attached
+       to the file referencing its key to maintain it alive.
+       Notice that the key don't maintain the file alive to
+       avoid making both values always reachable.
+    *)
+    type key =
+      { path : string;
+        file : Cstruct.t Weak.t }
+
+    module WeakTbl = Weak.Make(struct
+        type t = key
+        let hash t = Hashtbl.hash t.path
+        let equal t1 t2 = t1.path = t2.path
+      end)
+
+    let cache = WeakTbl.create 10
+
+    let dummy = Weak.create 0 (* only used to create a search key *)
+
+    let find path =
+      try
+        let search_key = { path; file = dummy } in
+        let cached_value = WeakTbl.find cache search_key in
+        match Weak.get cached_value.file 0 with
+        | None -> WeakTbl.remove cache cached_value; None
+        | Some f -> Some f
+      with Not_found -> None
+
+    let add path file =
+      let w = Weak.create 1 in
+      Weak.set w 0 (Some file);
+      let v = { path; file = w } in
+      Gc.finalise (fun _ -> Weak.set v.file 0 None) file;
+      (* Maintain v alive while file is alive by forcing v to be
+         present in the function closure. The effect is useless, but
+         it ensures that the compiler won't optimise the refence to
+         v away. This is guaranteed to work as long as the compiler
+         don't have a deep knowledge of Weak.set behaviour.
+         Maybe some kind of "ignore" external function would be better.
+      *)
+      WeakTbl.add cache v
+
+  end
+
   let mkdir dirname =
     let rec aux dir =
       if Sys.file_exists dir then return_unit
@@ -161,14 +214,19 @@ module D = struct
 
   let read_file file =
     Log.infof "Reading %s" file;
-    Unix.handle_unix_error (fun () ->
-        Lwt_pool.use openfile_pool (fun () ->
-            let fd = Unix.(openfile file [O_RDONLY; O_NONBLOCK] 0o644) in
-            let ba = Lwt_bytes.map_file ~fd ~shared:false () in
-            Unix.close fd;
-            return (Cstruct.of_bigarray ba)
-          ))
-      ()
+    match Read_file_cache.find file with
+    | Some v -> Lwt.return v
+    | None ->
+      Unix.handle_unix_error (fun () ->
+          Lwt_pool.use openfile_pool (fun () ->
+              let fd = Unix.(openfile file [O_RDONLY; O_NONBLOCK] 0o644) in
+              let ba = Lwt_bytes.map_file ~fd ~shared:false () in
+              Unix.close fd;
+              let cs = Cstruct.of_bigarray ba in
+              Read_file_cache.add file cs;
+              return cs
+            ))
+        ()
 
   let realdir dir =
     if Sys.file_exists dir then (
