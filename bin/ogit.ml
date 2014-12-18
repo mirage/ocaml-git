@@ -199,7 +199,7 @@ let cat_file = {
 	      let t, c, s =
 	        match v with
 	        | Value.Blob blob -> 
-		    let c = Blob.pretty blob in
+		    let c = Blob.to_raw blob in
 		    "blob", c, String.length c
 	        | Value.Commit commit ->
 		    let c = Commit.pretty commit in
@@ -309,7 +309,7 @@ let ls_tree = {
           S.read_exn t sha1 >>= fun v -> begin
             match v with
             | Value.Blob blob -> begin
-                printf "blob %s %s\n" (SHA.to_hex sha1) path;
+                printf "blob %s %s\n%!" (SHA.to_hex sha1) path;
                 return_unit
             end
             | Value.Tree tree -> begin
@@ -318,7 +318,7 @@ let ls_tree = {
                     let path' = Filename.concat path e.Tree.name in
                     let kind, is_dir = get_kind e.Tree.perm in
                     let mode = Tree.string_of_perm e.Tree.perm in
-                    printf "%s %s %s\t%s\n" mode kind (SHA.to_hex e.Tree.node) path';
+                    printf "%s %s %s\t%s\n%!" mode kind (SHA.to_hex e.Tree.node) path';
                     if is_dir && recurse then
                       walk recurse path' e.Tree.node
                     else
@@ -326,11 +326,11 @@ let ls_tree = {
                   ) tree
             end
             | Value.Tag tag -> begin
-                printf "tag %s %s\n" (SHA.to_hex sha1) path;
+                printf "tag %s %s\n%!" (SHA.to_hex sha1) path;
                 return_unit
             end
             | Value.Commit commit -> begin
-                printf "commit %s %s\n" (SHA.to_hex sha1) path;
+                printf "commit %s %s\n%!" (SHA.to_hex sha1) path;
                 walk recurse path (SHA.of_tree commit.Commit.tree)
             end
           end
