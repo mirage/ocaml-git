@@ -258,9 +258,12 @@ let read_exn t sha1 =
     fail Not_found
 
 let mem t sha1 =
-  Loose.mem t sha1 >>= function
-  | true  -> return true
-  | false -> Packed.mem t sha1
+  match Value.Cache.find sha1 with
+  | Some _ -> return true
+  | None   ->
+    Loose.mem t sha1 >>= function
+    | true  -> return true
+    | false -> Packed.mem t sha1
 
 let contents t =
   Log.debug "contents";
