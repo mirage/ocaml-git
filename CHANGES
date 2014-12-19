@@ -1,4 +1,5 @@
 ## 1.4.3
+* Update to dolog.1.0
 * Remove dependency to camlp4
 * Remove lots of warnings
 * Move `Git_unix` and `Git_mirage` in their own subdirs as it
