@@ -76,14 +76,18 @@ module M = struct
    | None -> fail (Failure ("Must supply a scheme like git://"))
 
   let read_all ic =
-    let len = 1024 in
+    let len = 64_1024 in
     let buf = Bytes.create len in
-    let res = Buffer.create 1024 in
+    let res = Buffer.create len in
     let rec aux () =
       Lwt_io.read_into ic buf 0 len >>= function
-      | 0 -> return (Buffer.contents res)
-      | i -> Buffer.add_substring res buf 0 i; aux () in
-    aux ()
+      | 0 -> return_unit
+      | i -> Buffer.add_substring res buf 0 i;
+        if len = i then return_unit
+        else aux ()
+    in
+    aux () >>= fun () ->
+    return (Buffer.contents res)
 
   let read_exactly ic n =
     let res = Bytes.create n in
