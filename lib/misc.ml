@@ -14,8 +14,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Sexplib.Std
-
 module Log = Log.Make(struct let section = "misc" end)
 
 (* From Zlib *)
@@ -23,8 +21,8 @@ module Zlib_ext = struct
 
   let buffer_size = 1024
   let uncompress ?(header = true) incr_used_in refill flush =
-    let inbuf = String.create buffer_size
-    and outbuf = String.create buffer_size in
+    let inbuf = Bytes.create buffer_size
+    and outbuf = Bytes.create buffer_size in
     let zs = Zlib.inflate_init header in
     let rec uncompr inpos inavail =
       if inavail = 0 then begin
@@ -125,7 +123,7 @@ let input_key_value buf ~key:expected input_value =
     | None   -> Mstruct.parse_error_buf buf "no value to input"
     | Some v -> v
 
-let str_buffer = String.create 4
+let str_buffer = Bytes.create 4
 let add_be_uint32 buf i =
   EndianString.BigEndian.set_int32 str_buffer 0 i;
   Buffer.add_string buf str_buffer
@@ -137,27 +135,6 @@ let with_buffer fn =
 
 let with_buffer' fn =
   Cstruct.of_string (with_buffer fn)
-
-open Lwt
-
-let list_iter_p ?pool f l =
-  let pool = match pool with
-    | None   -> Lwt_pool.create 50 (fun () -> return_unit)
-    | Some p -> p
-  in
-  Lwt_list.iter_p (fun x ->
-      Lwt_pool.use pool (fun () -> f x)
-    ) l
-
-let list_map_p ?pool f l =
-  let res = ref [] in
-  list_iter_p ?pool (fun x ->
-      f x >>= fun y ->
-      res := y :: !res;
-      return_unit
-    ) l
-  >>= fun () ->
-  return !res
 
 module OP = struct
 

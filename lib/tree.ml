@@ -14,7 +14,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Sexplib.Std
 open Printf
 
 module Log = Log.Make(struct let section = "tree" end)
@@ -110,7 +109,7 @@ let decode path =
     let b = Buffer.create n in
     let last = ref 0 in
     for i = 0 to n - 1 do
-      if Char.(path.[i] = escape) then (
+      if path.[i] = escape then (
         if i - !last > 0 then Buffer.add_substring b path !last (i - !last);
         if i + 1 < n then (
           let c = Char.chr (Char.code path.[i+1] - 1) in

@@ -63,10 +63,10 @@ let write t value =
 
 let write_pack t pack =
   let pack = Pack.to_pic pack in
-  Misc.list_iter_p (fun (sha1, p) ->
+  Lwt_list.iter_p (fun (sha1, p) ->
       let v = Packed_value.PIC.to_value p in
       write t v >>= fun sha2 ->
-      if SHA.(sha1 <> sha2) then failwith "Git_memory.write_pack";
+      if sha1 <> sha2 then failwith "Git_memory.write_pack";
       return_unit
     ) pack
   >>= fun () ->
@@ -89,11 +89,6 @@ let read_exn t sha1 =
   read t sha1 >>= function
   | None   -> fail Not_found
   | Some v -> return v
-
-let type_of t sha1 =
-  read t sha1 >>= function
-  | None   -> return_none
-  | Some v -> return (Some (Value.type_of v))
 
 let contents t =
   Log.debugf "contents";

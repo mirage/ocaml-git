@@ -1,3 +1,10 @@
+## 1.4.3
+* Remove dependency to camlp4
+* Remove lots of warnings
+* Move `Git_unix` and `Git_mirage` in their own subdirs as it
+  was causing issues to oasis (#5, Simon Cruanes)
+* Use `Bytes` instead of `String` (#5, Simon Cruanes)
+
 ## 1.4.2
 * Fix `Git_unix.IO.write_file` to work on empty files
 

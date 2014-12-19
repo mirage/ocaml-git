@@ -15,7 +15,6 @@
  *)
 
 open Printf
-open Sexplib.Std
 
 module Log = Log.Make(struct let section = "packed-value" end)
 
@@ -31,9 +30,9 @@ type hunk =
   | Insert of string
   | Copy of copy
 
-let pretty_hunk = function
-  | Insert s -> sprintf "Insert %S" s
-  | Copy c   -> sprintf "Copy %s" (pretty_copy c)
+let pretty_hunk buf = function
+  | Insert str -> bprintf buf " - INSERT %S\n" str
+  | Copy copy  -> bprintf buf " - COPY   [%s]\n" (pretty_copy copy)
 
 type 'a delta = {
   source: 'a;
@@ -49,10 +48,7 @@ let pretty_delta d =
      result-length: %d\n"
     d.source_length
     d.result_length;
-  List.iter (function
-      | Insert str -> bprintf buf " - INSERT %S\n" str
-      | Copy copy  -> bprintf buf " - COPY   [%s]\n" (pretty_copy copy)
-    ) d.hunks;
+  List.iter (pretty_hunk buf) d.hunks;
   Buffer.contents buf
 
 type t =
@@ -70,14 +66,14 @@ let pretty = function
   | Off_delta d -> sprintf "source:%d\n%s" d.source (pretty_delta d)
 
 let result_length = function
-  | Ref_delta { result_length }
-  | Off_delta { result_length } -> result_length
-  | Raw_value str               -> String.length str
+  | Ref_delta { result_length; _ }
+  | Off_delta { result_length; _ } -> result_length
+  | Raw_value str -> String.length str
 
 let source_length = function
-  | Ref_delta { source_length }
-  | Off_delta { source_length } -> source_length
-  | Raw_value str               -> String.length str
+  | Ref_delta { source_length; _ }
+  | Off_delta { source_length; _ } -> source_length
+  | Raw_value str -> String.length str
 
 let add_hunk buf ~source ~pos = function
   | Insert str -> Buffer.add_string buf str
@@ -206,7 +202,7 @@ module Make (M: sig val version: int end) = struct
     { source; hunks; source_length; result_length }
 
   let add_hunks buf t =
-    let { source_length; result_length; hunks } = t in
+    let { source_length; result_length; hunks; _ } = t in
     add_le_base_128 buf source_length;
     add_le_base_128 buf result_length;
     List.iter (add_hunk buf) hunks

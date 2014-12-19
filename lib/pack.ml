@@ -15,7 +15,6 @@
  *)
 
 open Lwt
-open Sexplib.Std
 open Printf
 
 module Raw = struct
@@ -53,7 +52,7 @@ module Raw = struct
 
   let input_header buf =
     let header = Mstruct.get_string buf 4 in
-    if String.(header <> "PACK") then
+    if header <> "PACK" then
       Mstruct.parse_error_buf buf "wrong header (%s)" header;
     let version = Int32.to_int (Mstruct.get_be_uint32 buf) in
     if version <> 2 && version <> 3 then
@@ -70,7 +69,7 @@ module Raw = struct
     | 3 -> Packed_value.V3.input buf
     | _ -> failwith "pack version should be 2 or 3"
 
-  let crc32_of_packed_value ~version t = match version with
+  let _crc32_of_packed_value ~version t = match version with
     | 2 -> Packed_value.V2.crc32 t
     | 3 -> Packed_value.V3.crc32 t
     | _ -> failwith "pack version should be 2 or 3"
@@ -99,7 +98,7 @@ module Raw = struct
   let lwt_monad = Lwt.return, Lwt.bind
   let id_monad = (fun x ->x), (fun x f -> f x)
 
-  let index_of_values_async = index_of_values_aux lwt_monad
+  let _index_of_values_async = index_of_values_aux lwt_monad
   let index_of_values_sync  = index_of_values_aux id_monad
 
   let index_of_values ~pack_checksum values =
@@ -138,9 +137,9 @@ module Raw = struct
     let version, count = input_header buf in
     Log.debugf "input version:%d count:%d" version count;
     let values = ref [] in
-    for i = 0 to count - 1 do
+    for _i = 0 to count - 1 do
       let pos = Mstruct.offset buf in
-      let v = input_packed_value version buf in
+      let v = input_packed_value ~version buf in
       let length = Mstruct.offset buf - pos in
       let raw = Cstruct.sub all pos length in
       values := (pos, raw, v) :: !values
@@ -162,7 +161,7 @@ module Raw = struct
     let index = match index with
       | None   -> index_of_values ~pack_checksum values
       | Some i ->
-        if SHA.(i.Pack_index.pack_checksum <> pack_checksum) then (
+        if i.Pack_index.pack_checksum <> pack_checksum then (
           eprintf "Pack.Raw.input: wrong index checksum. Got: %s, expecting %s."
             (SHA.to_hex i.Pack_index.pack_checksum) (SHA.to_hex pack_checksum);
           failwith "Pack.input"
@@ -204,7 +203,7 @@ let pretty t =
     ) t;
   Buffer.contents buf
 
-let to_pic { Raw.values; index }  =
+let to_pic { Raw.values; index; _ }  =
   Log.debugf "to_pic";
   let inv_offsets = Misc.IntMap.of_alist
       (Misc.inverse_assoc (SHA.Map.to_alist index.Pack_index.offsets)) in
@@ -254,7 +253,7 @@ let unpack ~write buf =
   let pack = Raw.input (Mstruct.of_cstruct buf) ~index:None in
   let pack = to_pic pack in
   let size = List.length pack in
-  Misc.list_iter_p (fun (_, pic) ->
+  Lwt_list.iter_p (fun (_, pic) ->
       let value = Packed_value.PIC.to_value pic in
       Printf.printf "\rUnpacking objects: %3d%% (%d/%d)%!" (!i*100/size) (!i+1) size;
       incr i;

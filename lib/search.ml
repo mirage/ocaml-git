@@ -58,7 +58,7 @@ module Make (Store: Store.S) = struct
           | _     , `Commit _    -> return acc
           | _     , `Tag (l, s)
           | _     , `Tree (l, s) ->
-            if String.(l=h) then
+            if l = h then
               find t s p >>= function
               | None   -> return_none
               | Some f -> return (Some f)

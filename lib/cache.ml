@@ -16,9 +16,7 @@
 
 (* XXX: we only implement index file cache format V2 *)
 
-open Lwt
 open Printf
-open Sexplib.Std
 
 module Log = Log.Make(struct let section = "cache" end)
 
@@ -106,11 +104,11 @@ let input_mode buf =
   let _zero = Mstruct.get_be_uint16 buf in
   (* XX: check that _zero is full of 0s *)
   let n = Mstruct.get_be_uint16 buf in
-  match Int32.(n lsr 12) with
+  match n lsr 12 with
   | 0b1010 -> `Link
   | 0b1110 -> `Gitlink
   | 0b1000 ->
-    begin match Int32.(n land 0x1FF) with
+    begin match n land 0x1FF with
       | 0o755 -> `Exec
       | 0o644 -> `Normal
       | d     -> Mstruct.parse_error_buf buf "mode: invalid permission (%d)" d
@@ -196,16 +194,16 @@ let input buf =
   let offset = Mstruct.offset buf in
   let total_length = Mstruct.length buf in
   let header = Mstruct.get_string buf 4 in
-  if String.(header <> "DIRC") then
+  if header <> "DIRC" then
     Mstruct.parse_error_buf buf "%s: wrong cache header." header;
   let version = Mstruct.get_be_uint32 buf in
-  if Int32.(version <> 2l) then
+  if version <> 2l then
     failwith (Printf.sprintf "Only cache version 2 is supported (%ld)" version);
   let n = Mstruct.get_be_uint32 buf in
   Log.debugf "input: %ld entries (%db)" n (Mstruct.length buf);
   let entries =
     let rec loop acc n =
-      if Int32.(n = 0l) then List.rev acc
+      if n = 0l then List.rev acc
       else
         let entry = input_entry buf in
         loop (entry :: acc) Int32.(sub n 1l) in
@@ -222,7 +220,7 @@ let input buf =
     |> SHA.of_cstruct
   in
   let checksum = SHA.input buf in
-  if SHA.(actual_checksum <> checksum) then (
+  if actual_checksum <> checksum then (
     eprintf "Cach.input: wrong checksum";
     failwith "Cache.input"
   );

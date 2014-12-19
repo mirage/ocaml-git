@@ -76,9 +76,9 @@ module Make (Store: Store.S) = struct
     Store.contents t >>= fun nodes ->
     List.iter (C.add_vertex g) nodes;
     begin
-      Misc.list_iter_p (fun (id, _ as src) ->
+      Lwt_list.iter_p (fun (id, _ as src) ->
           Search.succ t id >>= fun succs ->
-          Misc.list_iter_p (fun s ->
+          Lwt_list.iter_p (fun s ->
               let l = match s with
                 | `Commit _   -> ""
                 | `Tag (t,_)  -> "TAG-" ^ t
@@ -98,9 +98,9 @@ module Make (Store: Store.S) = struct
     Store.contents t >>= fun nodes ->
     List.iter (fun (k, _) -> K.add_vertex g k) nodes;
     begin
-      Misc.list_iter_p (fun (src, _) ->
+      Lwt_list.iter_p (fun (src, _) ->
           Search.succ t src >>= fun succs ->
-          Misc.list_iter_p (fun s ->
+          Lwt_list.iter_p (fun s ->
               let sha1 = Search.sha1_of_succ s in
               if K.mem_vertex g sha1 then K.add_edge g src sha1;
               return_unit

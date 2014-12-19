@@ -276,7 +276,7 @@ let list t =
   Log.debugf "list";
   Loose.list t  >>= fun objects ->
   Packed.list t >>= fun packs   ->
-  Misc.list_map_p (fun p -> Packed.read_keys t p) packs >>= fun keys ->
+  Lwt_list.map_p (fun p -> Packed.read_keys t p) packs >>= fun keys ->
   let keys = List.fold_left SHA.Set.union (SHA.Set.of_list objects) keys in
   let keys = SHA.Set.to_list keys in
   return keys
@@ -311,7 +311,7 @@ let mem t sha1 =
 let contents t =
   Log.debugf "contents";
   list t >>= fun sha1s ->
-  Misc.list_map_p (fun sha1 ->
+  Lwt_list.map_p (fun sha1 ->
       read_exn t sha1 >>= fun value ->
       return (sha1, value)
     ) sha1s
@@ -429,7 +429,7 @@ let load_filesystem t commit =
     | Value.Commit c -> aux (`Dir, SHA.of_tree c.Commit.tree)
     | Value.Tag t    -> aux (mode, t.Tag.sha1)
     | Value.Tree t   ->
-      Misc.list_map_p (fun e ->
+      Lwt_list.map_p (fun e ->
           aux (e.Tree.perm, e.Tree.node) >>= fun t ->
           return (e.Tree.name, t)
         ) t

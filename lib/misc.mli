@@ -16,16 +16,6 @@
 
 (** Miscellaneous functions. *)
 
-(** {2 Bounded parallelism} *)
-
-val list_iter_p: ?pool:unit Lwt_pool.t -> ('a -> unit Lwt.t) -> 'a list -> unit Lwt.t
-(** Same as [List_lwt.iter_p] but using a maximum width equals to the
-    size of the [pool]. The default width is 50. *)
-
-val list_map_p: ?pool:unit Lwt_pool.t -> ('a -> 'b Lwt.t) -> 'a list -> 'b list Lwt.t
-(** Same as [List_lwt.map_p] but using a maximum width equals to the
-    size of [pool]. The default width is 50. *)
-
 (** {2 Hexa encoding} *)
 
 val with_buffer: (Buffer.t -> unit) -> string

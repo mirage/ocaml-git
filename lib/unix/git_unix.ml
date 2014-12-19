@@ -22,6 +22,7 @@ module Log = Log.Make(struct let section = "unix" end)
 
 (* Pool of opened files *)
 let openfile_pool = Lwt_pool.create 200 (fun () -> return_unit)
+
 let mkdir_pool = Lwt_pool.create 1 (fun () -> return_unit)
 
 module M = struct
@@ -59,7 +60,7 @@ module M = struct
       Resolver_lwt.resolve_uri ~uri resolver >>= fun endp ->
       let ctx = Conduit_lwt_unix.default_ctx in
       Conduit_lwt_unix.endp_to_client ~ctx endp >>= fun client ->
-      Conduit_lwt_unix.connect ~ctx client >>= fun (flow, ic, oc) ->
+      Conduit_lwt_unix.connect ~ctx client >>= fun (_flow, ic, oc) ->
       Lwt.finalize
         (fun () ->
            begin match init with
@@ -76,7 +77,7 @@ module M = struct
 
   let read_all ic =
     let len = 1024 in
-    let buf = String.create len in
+    let buf = Bytes.create len in
     let res = Buffer.create 1024 in
     let rec aux () =
       Lwt_io.read_into ic buf 0 len >>= function
@@ -85,7 +86,7 @@ module M = struct
     aux ()
 
   let read_exactly ic n =
-    let res = String.create n in
+    let res = Bytes.create n in
     Lwt_io.read_into_exactly ic res 0 n >>= fun () ->
     return res
 
@@ -136,16 +137,6 @@ module D = struct
     match Cstruct.len b with
     | 0   -> return_unit
     | len -> rwrite fd (Cstruct.to_bigarray b) 0 len
-
-  let write_string fd b =
-    let rec rwrite fd buf ofs len =
-      Lwt_unix.write fd buf ofs len >>= fun n ->
-      if len = 0 then fail End_of_file
-      else if n < len then rwrite fd buf (ofs + n) (len - n)
-      else return_unit in
-    match String.length b with
-    | 0   -> return_unit
-    | len -> rwrite fd b 0 len
 
   let with_write_file file fn =
     Log.infof "Writing %s" file;

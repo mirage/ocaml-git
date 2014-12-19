@@ -15,8 +15,6 @@
  *)
 
 open Printf
-open Lwt
-open Sexplib.Std
 
 module Log = Log.Make(struct let section = "value" end)
 

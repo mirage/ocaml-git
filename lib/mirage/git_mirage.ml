@@ -15,7 +15,6 @@
  *)
 
 open Lwt
-open Git
 
 module Log = Log.Make(struct let section = "mirage" end)
 
@@ -131,16 +130,13 @@ module FS (FS: FS) = struct
     let getcwd () =
       return "/"
 
-    let realdir dir =
-      return dir
-
     let realpath file =
       return file
 
-    let stat_info file =
+    let stat_info _file =
       failwith "TODO"
 
-    let chmod t file perm =
+    let chmod _t _file _perm =
       return_unit
 
     let connect fn =

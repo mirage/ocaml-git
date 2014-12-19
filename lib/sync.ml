@@ -76,12 +76,6 @@ module Make (IO: IO) (Store: Store.S) = struct
         raise Error
       ) fmt
 
-  let lwt_error fmt =
-    Printf.ksprintf (fun msg ->
-        Printf.eprintf "%s\n%!" msg;
-        fail Error
-      ) fmt
-
   module PacketLine = struct
 
     type t = string option
@@ -113,7 +107,7 @@ module Make (IO: IO) (Store: Store.S) = struct
     let flush oc =
       output oc None
 
-    let input ic =
+    let input ic: t Lwt.t =
       Log.debugf "PacketLine.input";
       IO.read_exactly ic 4 >>= fun size ->
       match size with
@@ -209,9 +203,8 @@ module Make (IO: IO) (Store: Store.S) = struct
     (* XXX really ? *)
     let default = []
 
-    let is_valid_push = List.for_all Capability.is_valid_push
-
-    let is_valid_fetch = List.for_all Capability.is_valid_fetch
+    let _is_valid_push = List.for_all Capability.is_valid_push
+    let _is_valid_fetch = List.for_all Capability.is_valid_fetch
 
   end
 
@@ -272,12 +265,9 @@ module Make (IO: IO) (Store: Store.S) = struct
     let close oc =
       PacketLine.flush oc
 
-    let upload_pack gri =
-      { request = Upload_pack; gri }
-
-    let receive_pack gri =
-      { request = Receive_pack; gri }
-
+    let upload_pack gri = { request = Upload_pack; gri }
+    let receive_pack gri = { request = Receive_pack; gri }
+    let _upload_archive gri = { request = Upload_archive; gri }
   end
 
   module Listing = struct
@@ -388,7 +378,7 @@ module Make (IO: IO) (Store: Store.S) = struct
           end
         | _ -> error "%S invalid ack" s
 
-    let inputs ic =
+    let _inputs ic =
       Log.debugf "Ack.inputs";
       let rec aux acc =
         input ic >>= function
@@ -435,9 +425,7 @@ module Make (IO: IO) (Store: Store.S) = struct
     let filter_haves l =
       filter (function Have x -> Some x | _ -> None) l
 
-    let create l = l
-
-    let input ic =
+    let input ic: t Lwt.t =
       Log.debugf "Upload.input";
       let rec aux acc =
         PacketLine.input ic >>= function
@@ -667,15 +655,15 @@ module Make (IO: IO) (Store: Store.S) = struct
     fail (Failure ("TODO: " ^ msg))
 
   type clone = {
-    deepen: int option;
-    unpack: bool;
+    c_deepen: int option;
+    c_unpack: bool;
   }
 
   type fetch = {
-    haves   : SHA.t list;
-    shallows: SHA.t list;
-    deepen  : int option;
-    unpack  : bool;
+    f_haves   : SHA.t list;
+    f_shallows: SHA.t list;
+    f_deepen  : int option;
+    f_unpack  : bool;
   }
 
   type op =
@@ -689,7 +677,7 @@ module Make (IO: IO) (Store: Store.S) = struct
     let r = Init.receive_pack gri in
     match Init.host r with
     | None   -> todo "local-clone"
-    | Some h ->
+    | Some _ ->
       let uri = Gri.to_uri gri in
       let init = Init.to_string r in
       IO.with_connection uri ~init (fun (ic, oc) ->
@@ -726,7 +714,7 @@ module Make (IO: IO) (Store: Store.S) = struct
     let r = Init.upload_pack gri in
     match Init.host r with
     | None   -> todo "local-clone"
-    | Some h ->
+    | Some _ ->
       let uri = Gri.to_uri gri in
       let init = Init.to_string r in
       IO.with_connection uri ~init (fun (ic, oc) ->
@@ -757,7 +745,8 @@ module Make (IO: IO) (Store: Store.S) = struct
               if Reference.is_valid ref then Store.write_reference t ref sha1
               else return_unit in
             let references = Reference.Map.remove Reference.head references in
-            Misc.list_iter_p write_ref (Reference.Map.to_alist references) >>= fun () ->
+            Lwt_list.iter_p write_ref (Reference.Map.to_alist references)
+            >>= fun () ->
 
             match head with
             | None      ->
@@ -766,12 +755,12 @@ module Make (IO: IO) (Store: Store.S) = struct
             | Some head ->
               Log.debugf "PHASE1";
               let deepen = match op with
-                | Clone { deepen }
-                | Fetch { deepen } -> deepen
+                | Clone { c_deepen = d; _ }
+                | Fetch { f_deepen = d; _ } -> d
                 |  _               -> None in
               let shallows = match op with
-                | Fetch { shallows } -> shallows
-                | _                  -> [] in
+                | Fetch { f_shallows = s; _ } -> s
+                | _ -> [] in
               Upload_request.phase1 ?deepen (ic,oc) ~shallows ~wants:[SHA.of_commit head]
               >>= fun _phase1 ->
               (* XXX: process the shallow / unshallow.  *)
@@ -779,8 +768,8 @@ module Make (IO: IO) (Store: Store.S) = struct
 
               Log.debugf "PHASE2";
               let haves = match op with
-                | Fetch { haves } -> haves
-                | _               -> [] in
+                | Fetch { f_haves = h; _ } -> h
+                | _ -> [] in
               Upload_request.phase2 (ic,oc) ~haves >>= fun () ->
 
               Log.debugf "PHASE3";
@@ -791,9 +780,9 @@ module Make (IO: IO) (Store: Store.S) = struct
               let pack = Cstruct.of_string raw in
 
               let unpack = match op with
-                | Clone { unpack }
-                | Fetch { unpack } -> unpack
-                | _                -> false in
+                | Clone { c_unpack = u; _ }
+                | Fetch { f_unpack = u; _ } -> u
+                | _ -> false in
 
               begin if unpack then
                   Pack.unpack ~write:(Store.write t) pack
@@ -815,16 +804,19 @@ module Make (IO: IO) (Store: Store.S) = struct
 
   let ls t gri =
     fetch_pack t gri Ls >>= function
-      { Result.references } -> return references
+      { Result.references; _ } -> return references
 
   let clone t ?deepen ?(unpack=false) gri =
-    fetch_pack t gri (Clone { deepen; unpack })
+    fetch_pack t gri (Clone { c_deepen = deepen; c_unpack = unpack })
 
   let fetch t ?deepen ?(unpack=false) gri =
     Store.list t >>= fun haves ->
     (* XXX: Store.shallows t >>= fun shallows *)
     let shallows = [] in
-    fetch_pack t gri (Fetch { shallows; haves; deepen; unpack })
+    fetch_pack t gri (Fetch { f_shallows = shallows;
+                              f_haves = haves;
+                              f_deepen = deepen;
+                              f_unpack = unpack })
 
   type t = Store.t
 

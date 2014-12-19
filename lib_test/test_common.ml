@@ -16,7 +16,6 @@
 
 open Git
 open Lwt
-open Printf
 
 let () =
   Log.set_log_level Log.DEBUG;

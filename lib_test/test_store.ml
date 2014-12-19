@@ -14,7 +14,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open OUnit
 open Test_common
 open Lwt
 open Git
@@ -97,11 +96,11 @@ module Make (Store: Store.S) = struct
     ])
   let kt4 = Value.sha1 t4
 
-  let john_doe = User.({
-      name  = "John Doe";
-      email = "jon@doe.com";
-      date  = "today";
-    })
+  let john_doe = {
+    User.name  = "John Doe";
+    email = "jon@doe.com";
+    date  = "today";
+  }
 
   (* c1 : t2 *)
   let c1 = Value.commit {
@@ -277,8 +276,7 @@ module Make (Store: Store.S) = struct
     if x.name = "FS" then
       let test () =
         rec_files "." >>= fun files ->
-        let pool = Lwt_pool.create 200 (fun () -> return_unit) in
-        Git.Misc.list_map_p ~pool (fun file ->
+        Lwt_list.map_s (fun file ->
             Lwt_io.with_file ~mode:Lwt_io.input file (fun ic ->
                 Lwt_io.read ic >>= fun str ->
                 return (Blob.of_raw str)
@@ -316,14 +314,16 @@ module Make (Store: Store.S) = struct
         Lwt_list.iter_s (fun (pack, index) ->
 
             (* basic serialization of index files *)
-            Lwt_io.with_file ~mode:Lwt_io.input index Lwt_io.read >>= fun istr1 ->
+            Lwt_io.with_file ~mode:Lwt_io.input index (fun x -> Lwt_io.read x)
+            >>= fun istr1 ->
             let i1    = Pack_index.input (Mstruct.of_string istr1) in
             let istr2 = Misc.with_buffer' (fun buf -> Pack_index.add buf i1) in
             let i2    = Pack_index.input (Mstruct.of_cstruct istr2) in
             assert_pack_index_equal "pack-index" i1 i2;
 
             (* basic serialization of pack files *)
-            Lwt_io.with_file ~mode:Lwt_io.input pack Lwt_io.read >>= fun pstr1 ->
+            Lwt_io.with_file ~mode:Lwt_io.input pack (fun x -> Lwt_io.read x)
+            >>= fun pstr1 ->
             let rp1   = Pack.Raw.input (Mstruct.of_string pstr1) ~index:None in
             let rp1'  = Pack.Raw.input (Mstruct.of_string pstr1) ~index:(Some i1) in
             assert_raw_pack_equal "raw-pack" rp1 rp1';
