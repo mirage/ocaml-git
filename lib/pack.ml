@@ -102,10 +102,13 @@ module Raw = struct
   let index_of_values_sync  = index_of_values_aux id_monad
 
   let index_of_values ~pack_checksum values =
-    let read sha1 = Value.Cache.find_exn sha1 in
+    let read sha1 = match Value.Cache.find_inflated sha1 with
+      | Some v -> v
+      | None   -> raise Not_found
+    in
     let write buffer =
       let sha1 = SHA.of_string buffer in
-      Value.Cache.add sha1 buffer;
+      Value.Cache.add_inflated sha1 buffer;
       sha1 in
     let size = List.length values in
     let i = ref 0 in

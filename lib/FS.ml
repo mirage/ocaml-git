@@ -147,11 +147,8 @@ module Packed = struct
     let idx_file = "pack-" ^ (SHA.to_hex sha1) ^ ".idx" in
     pack_dir / idx_file
 
-  let indexes = Hashtbl.create 1024
-
   let write_index t sha1 idx =
     let file = index t sha1 in
-    if not (Hashtbl.mem indexes sha1) then Hashtbl.add indexes sha1 idx;
     IO.file_exists file >>= function
     | true  -> return_unit
     | false ->
@@ -161,68 +158,43 @@ module Packed = struct
 
   let read_index t sha1 =
     Log.debug "read_index %s" (SHA.to_hex sha1);
-    try return (Hashtbl.find indexes sha1)
-    with Not_found ->
-      let file = index t sha1 in
-      IO.file_exists file >>= function
-      | true ->
-        IO.read_file file >>= fun buf ->
-        let buf = Mstruct.of_cstruct buf in
-        let index = Pack_index.input buf in
-        Hashtbl.add indexes sha1 index;
-        return index
-      | false ->
-        Printf.eprintf "%s does not exist." file;
-        fail (Failure "read_index")
-
-  let keys = Hashtbl.create 1024
+    let file = index t sha1 in
+    IO.file_exists file >>= function
+    | true ->
+      IO.read_file file >>= fun buf ->
+      let buf = Mstruct.of_cstruct buf in
+      let index = Pack_index.input buf in
+      return index
+    | false ->
+      Printf.eprintf "%s does not exist." file;
+      fail (Failure "read_index")
 
   let read_keys t sha1 =
     Log.debug "read_keys %s" (SHA.to_hex sha1);
-    try return (Hashtbl.find keys sha1)
-    with Not_found ->
-      begin
-        try
-          let i = Hashtbl.find indexes sha1 in
-          let keys = SHA.Set.of_list (SHA.Map.keys i.Pack_index.offsets) in
-          return keys
-        with Not_found ->
-          let file = index t sha1 in
-          IO.file_exists file >>= function
-          | true ->
-            IO.read_file file >>= fun buf ->
-            let keys = Pack_index.keys (Mstruct.of_cstruct buf) in
-            return keys
-          | false ->
-            fail (Failure "Git_fs.Packed.read_keys")
-      end >>= fun data ->
-      Hashtbl.add keys sha1 data;
-      return data
-
-  let packs = Hashtbl.create 8
+    let file = index t sha1 in
+    IO.file_exists file >>= function
+    | true ->
+      IO.read_file file >>= fun buf ->
+      let keys = Pack_index.keys (Mstruct.of_cstruct buf) in
+      return keys
+    | false ->
+      fail (Failure "Git_fs.Packed.read_keys")
 
   let read_pack t sha1 =
-    try return (Hashtbl.find packs sha1)
-    with Not_found ->
-      let file = file t sha1 in
-      IO.file_exists file >>= function
-      | true ->
-        IO.read_file file  >>= fun buf ->
-        read_index t sha1 >>= fun index ->
-        let pack = Pack.Raw.input (Mstruct.of_cstruct buf) ~index:(Some index) in
-        let pack = Pack.to_pic pack in
-        Hashtbl.add packs sha1 pack;
-        return pack
-      | false ->
-        Printf.eprintf "No file associated with the pack object %s.\n" (SHA.to_hex sha1);
-        fail (Failure "read_file")
+    let file = file t sha1 in
+    IO.file_exists file >>= function
+    | true ->
+      IO.read_file file  >>= fun buf ->
+      read_index t sha1 >>= fun index ->
+      let pack = Pack.Raw.input (Mstruct.of_cstruct buf) ~index:(Some index) in
+      let pack = Pack.to_pic pack in
+      return pack
+    | false ->
+      Printf.eprintf "No file associated with the pack object %s.\n" (SHA.to_hex sha1);
+      fail (Failure "read_file")
 
   let write_pack t sha1 pack =
     let file = file t sha1 in
-    if not (Hashtbl.mem packs sha1) then  (
-      let pack = Pack.to_pic pack in
-      Hashtbl.add packs sha1 pack;
-    );
     IO.file_exists file >>= function
     | true  -> return_unit
     | false ->
@@ -243,25 +215,13 @@ module Packed = struct
       read_pack t pack_sha1 >>= fun pack ->
       return (Pack.read pack sha1)
 
-  let values = Hashtbl.create 1024
-
   let read t sha1 =
-    try return (Some (Hashtbl.find values sha1))
-    with Not_found ->
-      begin match Value.Cache.find sha1 with
-        | Some str -> return (Some (Value.input_inflated (Mstruct.of_string str)))
-        | None     ->
-          list t >>= fun packs ->
-          Lwt_list.fold_left_s (fun acc pack ->
-              match acc with
-              | Some v -> return (Some v)
-              | None   -> read_in_pack t pack sha1
-            ) None packs
-      end >>= function
-      | None   -> return_none
-      | Some v ->
-        ignore (Hashtbl.add values sha1 v);
-        return (Some v)
+    list t >>= fun packs ->
+    Lwt_list.fold_left_s (fun acc pack ->
+        match acc with
+        | Some v -> return (Some v)
+        | None   -> read_in_pack t pack sha1
+      ) None packs
 
   let mem t sha1 =
     list t >>= fun packs ->
@@ -283,18 +243,12 @@ let list t =
 
 let read t sha1 =
   Log.debug "read %s" (SHA.to_hex sha1);
-  Loose.read t sha1 >>= function
+  match Value.Cache.find sha1 with
   | Some v -> return (Some v)
-  | None   -> Packed.read t sha1
-
-let read =
-  let memo = Hashtbl.create 1024 in
-  fun t k ->
-    try Hashtbl.find memo k
-    with Not_found ->
-      let v = read t k in
-      Hashtbl.add memo k v;
-      v
+  | None   ->
+    Loose.read t sha1 >>= function
+    | Some v -> return (Some v)
+    | None   -> Packed.read t sha1
 
 let read_exn t sha1 =
   read t sha1 >>= function
@@ -384,6 +338,7 @@ let read_reference_exn t ref =
 let write t value =
   Loose.write t value >>= fun sha1 ->
   Log.debug "write -> %s" (SHA.to_hex sha1);
+  Value.Cache.add sha1 value;
   return sha1
 
 let write_pack t pack =

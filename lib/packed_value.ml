@@ -363,7 +363,7 @@ module PIC = struct
     sprintf "%s: %s" (SHA.to_hex sha1) (pretty_kind kind)
 
   let rec unpack pic =
-    match Value.Cache.find pic.sha1 with
+    match Value.Cache.find_inflated pic.sha1 with
     | Some x -> x
     | None   ->
       Log.debug "unpack %s" (pretty pic);
@@ -374,7 +374,7 @@ module PIC = struct
           Log.debug "unpack: hop to %s" (SHA.to_hex d.source.sha1);
           let source = unpack d.source in
           Misc.with_buffer (fun buf -> add_delta buf { d with source }) in
-      Value.Cache.add pic.sha1 str;
+      Value.Cache.add_inflated pic.sha1 str;
       str
 
   let to_value p =

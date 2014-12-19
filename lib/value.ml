@@ -247,9 +247,34 @@ module LRU = struct
 end
 
 module Cache = struct
-  let cache = LRU.make 1024
-  let clear () = LRU.clear cache
-  let find sha1 = try Some (LRU.get cache sha1) with Not_found -> None
-  let find_exn sha1 = LRU.get cache sha1
-  let add sha1 str = LRU.set cache sha1 str
+
+  let cache: t LRU.t = LRU.make 1024
+  let cache_inflated: string LRU.t = LRU.make 1024
+
+  let clear () =
+    LRU.clear cache;
+    LRU.clear cache_inflated
+
+  let find sha1 =
+    try Some (LRU.get cache sha1)
+    with Not_found -> None
+
+  let find_inflated sha1 =
+    try Some (LRU.get cache_inflated sha1)
+    with Not_found -> None
+
+  let add_both sha1 t str =
+    LRU.set cache sha1 t;
+    LRU.set cache_inflated sha1 str
+
+  let add sha1 t =
+    let buf = Buffer.create 1024 in
+    add_inflated buf t;
+    let str = Buffer.contents buf in
+    add_both sha1 t str
+
+  let add_inflated sha1 str =
+    let t = input_inflated (Mstruct.of_string str) in
+    add_both sha1 t str
+
 end

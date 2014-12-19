@@ -66,16 +66,22 @@ module Cache: sig
   val clear: unit -> unit
   (** Empty the cache. *)
 
-  val find: SHA.t -> string option
+  val find: SHA.t -> t option
   (** Cache an inflated values. This is used by various operations, so
       it could be useful to look into it to speed-up operations which
       needs to search a pack file. *)
 
-  val find_exn: SHA.t -> string
-  (** Same as [find] but raises [Not_found] if the key is not in the
-      cache. *)
+  val find_inflated: SHA.t -> string option
+  (** Same as {!find} but store the inflated representation of the
+      value. *)
 
-  val add: SHA.t -> string -> unit
+  val add: SHA.t -> t -> unit
+  (** Cache a value. *)
+
+  val add_inflated: SHA.t -> string -> unit
   (** Cache an inflated value. *)
+
+  val add_both: SHA.t -> t -> string -> unit
+  (** Cache both a value and its inflated representation. *)
 
 end
