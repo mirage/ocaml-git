@@ -24,15 +24,15 @@ type perm = [
   | `Exec
   | `Link
   | `Dir
-] with sexp
+]
 
 type entry = {
   perm: perm;
   name: string;
   node: SHA.t;
-} with sexp
+}
 
-type t = entry list with sexp
+type t = entry list
 
 let hash = Hashtbl.hash
 let compare = compare

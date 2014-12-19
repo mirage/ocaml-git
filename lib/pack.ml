@@ -29,7 +29,7 @@ module Raw = struct
     version : int;
     checksum: SHA.t;
     values  :  (int * Cstruct.t * Packed_value.t) list;
-  } with sexp
+  }
 
   let hash = Hashtbl.hash
 
@@ -189,7 +189,7 @@ end
 
 module Log = Log.Make(struct let section = "pack" end)
 
-type t = (SHA.t * Packed_value.PIC.t) list with sexp
+type t = (SHA.t * Packed_value.PIC.t) list
 
 let hash = Hashtbl.hash
 

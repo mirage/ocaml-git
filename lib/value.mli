@@ -21,7 +21,6 @@ type t =
   | Commit of Commit.t
   | Tag    of Tag.t
   | Tree   of Tree.t
-with sexp
 (** Loose git objects. *)
 
 val type_of: t -> Object_type.t

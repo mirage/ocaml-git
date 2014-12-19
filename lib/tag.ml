@@ -25,7 +25,7 @@ type t = {
   tag    : string;
   tagger : User.t;
   message: string;
-} with sexp
+}
 
 let hash = Hashtbl.hash
 let equal = (=)

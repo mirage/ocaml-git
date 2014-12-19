@@ -18,7 +18,7 @@ open Sexplib.Std
 
 module Log = Log.Make(struct let section = "reference" end)
 
-type t = string with sexp
+type t = string
 
 let compare = String.compare
 let equal = (=)

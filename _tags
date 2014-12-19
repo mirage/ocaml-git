@@ -127,18 +127,3 @@ true: annot, bin_annot
 <lib_test/*.ml{,i,y}>: use_git-unix
 # OASIS_STOP
 true: debug, bin_annot
-<lib/object.mli>: pkg_sexplib.syntax
-<lib/SHA.ml>: pkg_sexplib.syntax
-<lib/cache.ml>: pkg_sexplib.syntax
-<lib/tag.ml>: pkg_sexplib.syntax
-<lib/commit.ml>: pkg_sexplib.syntax
-<lib/misc.ml>: pkg_sexplib.syntax
-<lib/pack_index.ml{,i}>: pkg_sexplib.syntax
-<lib/packed_value.ml{,i}>: pkg_sexplib.syntax
-<lib/value.mli>: pkg_sexplib.syntax
-<lib/pack.ml>: pkg_sexplib.syntax
-<lib/tree.ml>: pkg_sexplib.syntax
-<lib/user.ml>: pkg_sexplib.syntax
-<lib/value.ml>: pkg_sexplib.syntax
-<lib/object_type.ml>: pkg_sexplib.syntax
-<lib/reference.ml>: pkg_sexplib.syntax

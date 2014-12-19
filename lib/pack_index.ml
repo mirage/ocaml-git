@@ -24,7 +24,7 @@ type t = {
   offsets : int SHA.Map.t;
   crcs    : int32 SHA.Map.t;
   pack_checksum: SHA.t;
-} with sexp
+}
 
 let hash = Hashtbl.hash
 

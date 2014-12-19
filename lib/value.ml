@@ -25,7 +25,6 @@ type t =
   | Commit of Commit.t
   | Tag    of Tag.t
   | Tree   of Tree.t
-with sexp
 
 let equal = (=)
 let hash = Hashtbl.hash

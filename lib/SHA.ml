@@ -87,8 +87,9 @@ module SHA1_String = struct
     Buffer.add_string buf (to_hex t)
 
   module X = struct
-    type t = string with sexp
+    type t = string
     let compare = String.compare
+    let pretty = pretty
   end
   module Map = Misc.Map(X)
   module Set = Misc.Set(X)

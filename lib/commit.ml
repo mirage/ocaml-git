@@ -25,7 +25,7 @@ type t = {
   author   : User.t;
   committer: User.t;
   message  : string;
-} with sexp
+}
 
 let hash = Hashtbl.hash
 

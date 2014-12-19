@@ -23,7 +23,7 @@ type t = {
   name : string;
   email: string;
   date : string;
-} with sexp
+}
 
 let hash = Hashtbl.hash
 let equal = (=)

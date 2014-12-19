@@ -25,14 +25,20 @@ module Log = Log.Make(struct let section = "cache" end)
 type time = {
   lsb32: int32;
   nsec : int32;
-} with sexp
+}
 
 type mode = [
     `Normal
   | `Exec
   | `Link
   | `Gitlink
-] with sexp
+]
+
+let pretty_mode = function
+  | `Normal  -> "normal"
+  | `Exec    -> "exec"
+  | `Link    -> "link"
+  | `Gitlink -> "gitlink"
 
 type stat_info = {
   ctime: time;
@@ -43,14 +49,14 @@ type stat_info = {
   uid  : int32;
   gid  : int32;
   size : int32;
-} with sexp
+}
 
 type entry = {
   stats : stat_info;
   id    : SHA.t;
   stage : int;
   name  : string;
-} with sexp
+}
 
 let pretty_entry t =
   sprintf
@@ -59,19 +65,19 @@ let pretty_entry t =
     \  mtime: %ld:%ld\n\
     \  dev: %ld\tino: %ld\n\
     \  uid: %ld\tgid: %ld\n\
-    \  size: %ld\tflags: %d\n"
+    \  size: %ld\tflags: %d\n\
+    \  mode: %s\n"
     t.name
     t.stats.ctime.lsb32 t.stats.ctime.nsec
     t.stats.mtime.lsb32 t.stats.mtime.nsec
     t.stats.dev t.stats.inode
     t.stats.uid t.stats.gid
-    t.stats.size t.stage
+    t.stats.size t.stage (pretty_mode t.stats.mode)
 
 type t = {
   entries   : entry list;
   extensions: (int32 * string) list;
 }
-with sexp
 
 let hash = Hashtbl.hash
 
@@ -82,7 +88,8 @@ let equal = (=)
 let pretty t =
   let buf = Buffer.create 1024 in
   List.iter (fun e ->
-      Buffer.add_string buf (Sexplib.Sexp.to_string_hum (sexp_of_entry e))
+      Buffer.add_string buf (pretty_entry e);
+      Buffer.add_char buf '\n';
     ) t.entries;
   Buffer.contents buf
 

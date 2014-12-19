@@ -174,22 +174,19 @@ let try_assoc elt l =
 
 module type OrderedType = sig
   include Set.OrderedType
-  val sexp_of_t: t -> Sexplib.Type.t
-  val t_of_sexp: Sexplib.Type.t -> t
+  val pretty: t -> string
 end
 
 module type Set = sig
   include Set.S
-  val sexp_of_t: t -> Sexplib.Type.t
-  val t_of_sexp: Sexplib.Type.t -> t
+  val pretty: t -> string
   val to_list: t -> elt list
   val of_list: elt list -> t
 end
 
 module type Map = sig
   include Map.S
-  val sexp_of_t: ('a -> Sexplib.Type.t) -> 'a t -> Sexplib.Type.t
-  val t_of_sexp: (Sexplib.Type.t -> 'a) -> Sexplib.Type.t -> 'a t
+  val pretty: ('a -> string) -> 'a t -> string
   val keys: 'a t -> key list
   val to_alist: 'a t -> (key * 'a) list
   val of_alist: (key * 'a) list -> 'a t
@@ -206,14 +203,12 @@ module Set (X: OrderedType) = struct
 
   let to_list = elements
 
-  let sexp_of_t t =
-    elements t
-    |> Sexplib.Conv.sexp_of_list X.sexp_of_t
-
-  let t_of_sexp s =
-    Sexplib.Conv.list_of_sexp X.t_of_sexp s
-    |> of_list
-
+  let pretty s = match List.rev (elements s) with
+    | []   -> "{}"
+    | [x]  -> Printf.sprintf "{ %s }" (X.pretty x)
+    | h::t -> Printf.sprintf "{ %s and %s }"
+                (String.concat ", " (List.rev_map X.pretty t))
+                (X.pretty h)
 end
 
 module Map (X: OrderedType) = struct
@@ -228,31 +223,31 @@ module Map (X: OrderedType) = struct
 
   let to_alist = bindings
 
-  let sexp_of_t sexp_of_a t =
-    bindings t
-    |> Sexplib.Conv.(sexp_of_list (sexp_of_pair X.sexp_of_t sexp_of_a))
+  let pretty p m =
+    let binding (k, v) = Printf.sprintf "(%s: %s)" (X.pretty k) (p v) in
+    match List.rev (to_alist m) with
+    | [] -> "{}"
+    | x  -> Printf.sprintf "{ %s }" (String.concat " " (List.rev_map binding x))
 
-  let t_of_sexp a_of_sexp s =
-    Sexplib.Conv.(list_of_sexp (pair_of_sexp X.t_of_sexp a_of_sexp) s)
-    |> of_alist
-
-    let add_multi key data t =
-      try
-        let l = find key t in
-        add key (data :: l) t
-      with Not_found ->
-        add key [data] t
+  let add_multi key data t =
+    try
+      let l = find key t in
+      add key (data :: l) t
+    with Not_found ->
+      add key [data] t
 
 end
 
 module I = struct
-  type t = int with sexp
+  type t = int
   let compare = compare
+  let pretty = string_of_int
 end
 
 module S = struct
-  type t = string with sexp
+  type t = string
   let compare = String.compare
+  let pretty x = x
 end
 
 module IntMap = Map(I)

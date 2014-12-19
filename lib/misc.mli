@@ -77,8 +77,7 @@ val gt: char
 
 module type OrderedType = sig
   include Set.OrderedType
-  val sexp_of_t: t -> Sexplib.Type.t
-  val t_of_sexp: Sexplib.Type.t -> t
+  val pretty: t -> string
 end
 
 module I: OrderedType with type t = int
@@ -86,16 +85,14 @@ module S: OrderedType with type t = string
 
 module type Set = sig
   include Set.S
-  val sexp_of_t: t -> Sexplib.Type.t
-  val t_of_sexp: Sexplib.Type.t -> t
+  val pretty: t -> string
   val to_list: t -> elt list
   val of_list: elt list -> t
 end
 
 module type Map = sig
   include Map.S
-  val sexp_of_t: ('a -> Sexplib.Type.t) -> 'a t -> Sexplib.Type.t
-  val t_of_sexp: (Sexplib.Type.t -> 'a) -> Sexplib.Type.t -> 'a t
+  val pretty: ('a -> string) -> 'a t -> string
   val keys: 'a t -> key list
   val to_alist: 'a t -> (key * 'a) list
   val of_alist: (key * 'a) list -> 'a t
