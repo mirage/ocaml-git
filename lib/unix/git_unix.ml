@@ -139,12 +139,13 @@ module D = struct
     | len -> rwrite fd (Cstruct.to_bigarray b) 0 len
 
   let with_write_file file fn =
-    Log.info "Writing %s" file;
+    let tmp = Filename.temp_file (Filename.basename file) "write" in
+    Log.info "Writing %s (/tmp/%s)" file (Filename.basename tmp);
     mkdir (Filename.dirname file) >>= fun () ->
     Lwt_pool.use openfile_pool (fun () ->
-        Lwt_unix.(openfile file [O_WRONLY; O_NONBLOCK; O_CREAT; O_TRUNC] 0o644) >>= fun fd ->
+        Lwt_unix.(openfile tmp [O_WRONLY; O_NONBLOCK; O_CREAT; O_TRUNC] 0o644) >>= fun fd ->
         Lwt.finalize
-          (fun () -> fn fd)
+          (fun () -> fn fd >>= fun () -> Lwt_unix.rename tmp file)
           (fun _  -> Lwt_unix.close fd))
 
   let write_file file b =
