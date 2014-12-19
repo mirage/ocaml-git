@@ -353,6 +353,24 @@ module Make (Store: Store.S) = struct
     in
     run x test
 
+  let test_leaks x () =
+    let runs =
+      try int_of_string (Sys.getenv "TESTRUNS")
+      with Not_found -> 10_000
+    in
+    let test () =
+      create () >>= fun t ->
+      let rec aux = function
+        | 0 -> return_unit
+        | i ->
+          check_write t "v1" kv1 v1 >>= fun () ->
+          check_write t "v2" kv2 v2 >>= fun () ->
+          aux (i-1)
+      in
+      aux runs
+    in
+    run x test
+
 end
 
 let suite (speed, x) =
@@ -368,6 +386,7 @@ let suite (speed, x) =
     "Operations on index"       , speed, T.test_index    x;
     "Operations on pack files"  , speed, T.test_packs    x;
     "Remote operations"         , `Slow, T.test_remote   x;
+    "Resource leaks"            , `Slow, T.test_leaks    x;
   ]
 
 let run name tl =
