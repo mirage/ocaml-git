@@ -1,4 +1,5 @@
 ## 1.4.3
+* Fix concurrent read/write by using an atomic rename (#35)
 * Tree objects can also point to commits (@codinuum)
 * Reduce allocation (@codinuum)
 * Use LRU cache instead of an unbounde Hashtl
