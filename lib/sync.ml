@@ -82,11 +82,11 @@ module Make (IO: IO) (Store: Store.S) = struct
 
     let output oc = function
       | None  ->
-        Log.debugf "SENDING: FLUSH";
+        Log.debug "SENDING: FLUSH";
         IO.write oc "0000" >>= fun () ->
         IO.flush oc
       | Some l ->
-        Log.debugf "SENDING: %S" l;
+        Log.debug "SENDING: %S" l;
         let size = Printf.sprintf "%04x" (4 + String.length l) in
         IO.write oc size >>= fun () ->
         IO.write oc l    >>= fun () ->
@@ -108,11 +108,11 @@ module Make (IO: IO) (Store: Store.S) = struct
       output oc None
 
     let input ic: t Lwt.t =
-      Log.debugf "PacketLine.input";
+      Log.debug "PacketLine.input";
       IO.read_exactly ic 4 >>= fun size ->
       match size with
       | "0000" ->
-        Log.debugf "RECEIVED: FLUSH";
+        Log.debug "RECEIVED: FLUSH";
         return_none
       | size   ->
         let size =
@@ -120,7 +120,7 @@ module Make (IO: IO) (Store: Store.S) = struct
           try int_of_string str - 4
           with _ -> error "%s is not a valid integer" str in
         IO.read_exactly ic size >>= fun payload ->
-        Log.debugf "RECEIVED: %S (%d)" payload size;
+        Log.debug "RECEIVED: %S (%d)" payload size;
         if payload.[size - 1] = Misc.lf then
           return (Some (String.sub payload 0 (size-1)))
         else
@@ -311,7 +311,7 @@ module Make (IO: IO) (Store: Store.S) = struct
       Buffer.contents buf
 
     let input ic =
-      Log.debugf "Listing.input";
+      Log.debug "Listing.input";
       let rec aux acc =
         PacketLine.input ic >>= function
         | None      -> return acc
@@ -365,7 +365,7 @@ module Make (IO: IO) (Store: Store.S) = struct
       | Nak
 
     let input ic =
-      Log.debugf "Ack.input";
+      Log.debug "Ack.input";
       PacketLine.input ic >>= function
       | None
       | Some "NAK" -> return Nak
@@ -379,7 +379,7 @@ module Make (IO: IO) (Store: Store.S) = struct
         | _ -> error "%S invalid ack" s
 
     let _inputs ic =
-      Log.debugf "Ack.inputs";
+      Log.debug "Ack.inputs";
       let rec aux acc =
         input ic >>= function
         | Nak -> return (List.rev (Nak :: acc))
@@ -426,7 +426,7 @@ module Make (IO: IO) (Store: Store.S) = struct
       filter (function Have x -> Some x | _ -> None) l
 
     let input ic: t Lwt.t =
-      Log.debugf "Upload.input";
+      Log.debug "Upload.input";
       let rec aux acc =
         PacketLine.input ic >>= function
         | None   -> return (List.rev acc)
@@ -458,7 +458,7 @@ module Make (IO: IO) (Store: Store.S) = struct
 
     (* XXX: handler multi_hack *)
     let output oc t =
-      Log.debugf "Upload.output";
+      Log.debug "Upload.output";
       let last_c = ref [] in
 
       (* output wants *)
@@ -519,7 +519,7 @@ module Make (IO: IO) (Store: Store.S) = struct
     (* PHASE1: the client send the the IDs he wants, the sever answers with
        the new shallow state. *)
     let phase1 (ic, oc) ?deepen ~shallows ~wants =
-      Log.debugf "Upload.phase1";
+      Log.debug "Upload.phase1";
       let wants = List.map (fun id -> Want (id, Capabilities.default)) wants in
       let shallows = List.map (fun id -> Shallow id) shallows in
       let deepen = match deepen with
@@ -683,7 +683,7 @@ module Make (IO: IO) (Store: Store.S) = struct
       IO.with_connection uri ~init (fun (ic, oc) ->
           Listing.input ic                 >>= fun listing ->
           (* XXX: check listing.capabilities *)
-          Log.debugf "listing:\n %s" (Listing.pretty listing);
+          Log.debug "listing:\n %s" (Listing.pretty listing);
           Store.read_reference t branch    >>= fun new_obj ->
           let old_obj = Listing.find_reference listing branch in
           let command = match old_obj, new_obj with
@@ -705,7 +705,7 @@ module Make (IO: IO) (Store: Store.S) = struct
             | Some x -> SHA.Set.singleton (SHA.of_commit x) in
           Graph.pack t ~min max >>= fun pack ->
           let request = { Update_request.capabilities; commands; pack } in
-          Log.debugf "request:\n%s" (Update_request.pretty request);
+          Log.debug "request:\n%s" (Update_request.pretty request);
           Update_request.output oc request >>= fun () ->
           Report_status.input ic
         )
@@ -719,7 +719,7 @@ module Make (IO: IO) (Store: Store.S) = struct
       let init = Init.to_string r in
       IO.with_connection uri ~init (fun (ic, oc) ->
           Listing.input ic >>= fun listing ->
-          Log.debugf "listing:\n %s" (Listing.pretty listing);
+          Log.debug "listing:\n %s" (Listing.pretty listing);
           let references =
             List.fold_left (fun acc (sha1, refs) ->
                 List.fold_left
@@ -753,7 +753,7 @@ module Make (IO: IO) (Store: Store.S) = struct
               Init.close oc >>= fun () ->
               return { Result.head; references; sha1s = [] }
             | Some head ->
-              Log.debugf "PHASE1";
+              Log.debug "PHASE1";
               let deepen = match op with
                 | Clone { c_deepen = d; _ }
                 | Fetch { f_deepen = d; _ } -> d
@@ -766,17 +766,17 @@ module Make (IO: IO) (Store: Store.S) = struct
               (* XXX: process the shallow / unshallow.  *)
               (* XXX: need a notion of shallow/unshallow in API. *)
 
-              Log.debugf "PHASE2";
+              Log.debug "PHASE2";
               let haves = match op with
                 | Fetch { f_haves = h; _ } -> h
                 | _ -> [] in
               Upload_request.phase2 (ic,oc) ~haves >>= fun () ->
 
-              Log.debugf "PHASE3";
+              Log.debug "PHASE3";
               printf "Receiving data ...%!";
               IO.read_all ic >>= fun raw ->
               printf " done.\n%!";
-              Log.debugf "Received a pack file of %d bytes." (String.length raw);
+              Log.debug "Received a pack file of %d bytes." (String.length raw);
               let pack = Cstruct.of_string raw in
 
               let unpack = match op with
@@ -792,11 +792,11 @@ module Make (IO: IO) (Store: Store.S) = struct
               end >>= fun sha1s ->
               match SHA.Set.to_list sha1s with
               | []    ->
-                Log.debugf "NO NEW OBJECTS";
+                Log.debug "NO NEW OBJECTS";
                 Printf.printf "Already up-to-date.\n%!";
                 return { Result.head = Some head; references; sha1s = [] }
               | sha1s ->
-                Log.debugf "NEW OBJECTS";
+                Log.debug "NEW OBJECTS";
                 printf "remote: Counting objects: %d, done.\n%!"
                   (List.length sha1s);
                 return { Result.head = Some head; references; sha1s }

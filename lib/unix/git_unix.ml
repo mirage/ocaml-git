@@ -48,14 +48,14 @@ module M = struct
       let cmd = match init with
         | None   -> [| "ssh"; user ^ host; |]
         | Some x -> [| "ssh"; user ^ host; x |] in
-      Log.debugf "Executing %s" (String.concat " " (Array.to_list cmd));
+      Log.debug "Executing %s" (String.concat " " (Array.to_list cmd));
       let env = Unix.environment () in
       let p = Lwt_process.open_process_full ~env ("ssh", cmd) in
       Lwt.finalize
         (fun () -> fn (p#stdout, p#stdin))
         (fun () -> let _ = p#close in return_unit)
     | Some "git" ->
-      Log.debugf "Connecting to %s" (Uri.to_string uri);
+      Log.debug "Connecting to %s" (Uri.to_string uri);
       let resolver = Resolver_lwt_unix.system in
       Resolver_lwt.resolve_uri ~uri resolver >>= fun endp ->
       let ctx = Conduit_lwt_unix.default_ctx in
@@ -99,7 +99,7 @@ module D = struct
       if Sys.file_exists dir then return_unit
       else (
         aux (Filename.dirname dir) >>= fun () ->
-        Log.debugf "mkdir %s" dir;
+        Log.debug "mkdir %s" dir;
         Lwt_unix.mkdir dir 0o755
       ) in
     Lwt_pool.use mkdir_pool (fun () -> aux dirname)
@@ -139,7 +139,7 @@ module D = struct
     | len -> rwrite fd (Cstruct.to_bigarray b) 0 len
 
   let with_write_file file fn =
-    Log.infof "Writing %s" file;
+    Log.info "Writing %s" file;
     mkdir (Filename.dirname file) >>= fun () ->
     Lwt_pool.use openfile_pool (fun () ->
         Lwt_unix.(openfile file [O_WRONLY; O_NONBLOCK; O_CREAT; O_TRUNC] 0o644) >>= fun fd ->
@@ -151,7 +151,7 @@ module D = struct
     with_write_file file (fun fd -> write_cstruct fd b)
 
   let read_file file =
-    Log.infof "Reading %s" file;
+    Log.info "Reading %s" file;
     Unix.handle_unix_error (fun () ->
         Lwt_pool.use openfile_pool (fun () ->
             let fd = Unix.(openfile file [O_RDONLY; O_NONBLOCK] 0o644) in

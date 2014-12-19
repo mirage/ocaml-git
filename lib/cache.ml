@@ -125,7 +125,7 @@ let output_mode buf t =
   Mstruct.set_be_uint16 buf n
 
 let input_stat_info buf =
-  Log.debugf "input_stat_info";
+  Log.debug "input_stat_info";
   let ctime = input_time buf in
   let mtime = input_time buf in
   let dev = Mstruct.get_be_uint32 buf in
@@ -148,7 +148,7 @@ let add_stat_info buf t =
   uint32 t.size
 
 let input_entry buf =
-  Log.debugf "input_entry";
+  Log.debug "input_entry";
   let offset0 = Mstruct.offset buf in
   let stats = input_stat_info buf in
   let id = SHA.input buf in
@@ -156,7 +156,7 @@ let input_entry buf =
     let i = Mstruct.get_be_uint16 buf in
     (i land 0x3000) lsr 12,
     (i land 0x0FFF) in
-  Log.debugf "stage:%d len:%d" stage len;
+  Log.debug "stage:%d len:%d" stage len;
   let name = Mstruct.get_string buf len in
   Mstruct.shift buf 1;
   let bytes = Mstruct.offset buf - offset0 in
@@ -164,12 +164,12 @@ let input_entry buf =
     | 0 -> 0
     | n -> 8-n in
   Mstruct.shift buf padding;
-  Log.debugf "name: %s id: %s bytes:%d padding:%d"
+  Log.debug "name: %s id: %s bytes:%d padding:%d"
     name (SHA.to_hex id) bytes padding;
   { stats; id; stage; name }
 
 let add_entry buf t =
-  Log.debugf "add_entry";
+  Log.debug "add_entry";
   let len = 63 + String.length t.name in
   let pad = match len mod 8 with
     | 0 -> 0
@@ -200,7 +200,7 @@ let input buf =
   if version <> 2l then
     failwith (Printf.sprintf "Only cache version 2 is supported (%ld)" version);
   let n = Mstruct.get_be_uint32 buf in
-  Log.debugf "input: %ld entries (%db)" n (Mstruct.length buf);
+  Log.debug "input: %ld entries (%db)" n (Mstruct.length buf);
   let entries =
     let rec loop acc n =
       if n = 0l then List.rev acc
@@ -229,7 +229,7 @@ let input buf =
 let add buf t =
   let str = Misc.with_buffer (fun buf ->
       let n = List.length t.entries in
-      Log.debugf "add %d entries" n;
+      Log.debug "add %d entries" n;
       let header = Cstruct.create 12 in
       Mstruct.with_mstruct header (fun header ->
           Mstruct.set_string header "DIRC";

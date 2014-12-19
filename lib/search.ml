@@ -70,7 +70,7 @@ module Make (Store: Store.S) = struct
     find t sha1 path >>= function
     | Some x -> return x
     | None   ->
-      Log.debugf "find_exn: Not_found";
+      Log.debug "find_exn: Not_found";
       fail Not_found
 
   (* XXX: can do one less look-up *)

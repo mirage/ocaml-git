@@ -58,7 +58,7 @@ let add_header buf typ size =
   Buffer.add_char   buf Misc.nul
 
 let add_inflated buf t =
-  Log.debugf "add_inflated";
+  Log.debug "add_inflated";
   let tmp = Buffer.create 1024 in
   add_contents tmp t;
   let size = Buffer.length tmp in
@@ -70,7 +70,7 @@ let sha1 t =
   SHA.of_string buf
 
 let add buf t =
-  Log.debugf "add %s" (pretty t);
+  Log.debug "add %s" (pretty t);
   let inflated = Misc.with_buffer' (fun buf -> add_inflated buf t) in
   let deflated = Misc.deflate_cstruct inflated in
   Buffer.add_string buf (Cstruct.to_string deflated)

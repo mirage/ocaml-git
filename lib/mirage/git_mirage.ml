@@ -31,19 +31,19 @@ module FS (FS: FS) = struct
     | `Ok x    -> f x
     | `Error e ->
       let str = FS.string_of_error e in
-      Log.errorf "%s" str;
+      Log.error "%s" str;
       fail (Failure str)
 
   module M = struct
 
     let file_exists t f =
-      Log.debugf "file_exists %s" f;
+      Log.debug "file_exists %s" f;
       FS.stat t f >>= function
       | `Ok _    -> return true
       | `Error _ -> return false
 
     let is_directory t dir =
-      Log.debugf "is_directory %s" dir;
+      Log.debug "is_directory %s" dir;
       FS.stat t dir >>| fun s ->
       return s.FS.directory
 
@@ -55,7 +55,7 @@ module FS (FS: FS) = struct
     let mkdir_pool = Lwt_pool.create 1 (fun () -> return_unit)
 
     let mkdir t dirname =
-      Log.debugf "mkdir %s" dirname;
+      Log.debug "mkdir %s" dirname;
       let rec aux dir =
         file_exists t dir >>= function
         | true  -> return_unit
@@ -70,7 +70,7 @@ module FS (FS: FS) = struct
       Lwt_pool.use mkdir_pool (fun () -> aux dirname)
 
     let list_files t kind dir =
-      Log.debugf "list_files %s" dir;
+      Log.debug "list_files %s" dir;
       file_exists t dir >>= function
       | true ->
         FS.listdir t dir >>| fun l ->
@@ -81,21 +81,21 @@ module FS (FS: FS) = struct
         return_nil
 
     let directories t dir =
-      Log.debugf "directories %s" dir;
+      Log.debug "directories %s" dir;
       list_files t (fun f -> catch
                        (fun () -> is_directory t f)
                        (fun _ -> return false)
                    ) dir
 
     let files t dir =
-      Log.debugf "files %s" dir;
+      Log.debug "files %s" dir;
       list_files t (fun f -> catch
                        (fun () -> is_directory t f >>= fun b -> return (not b))
                        (fun _ -> return false)
                    ) dir
 
     let rec remove t dir =
-      Log.debugf "remove %s" dir;
+      Log.debug "remove %s" dir;
       let destroy dir =
         FS.destroy t dir >>| fun () ->
         return_unit in
@@ -106,7 +106,7 @@ module FS (FS: FS) = struct
       destroy dir
 
     let rec_files t dir =
-      Log.debugf "rec_files %s" dir;
+      Log.debug "rec_files %s" dir;
       let rec aux accu dir =
         directories t dir >>= fun ds ->
         files t dir       >>= fun fs ->
@@ -114,14 +114,14 @@ module FS (FS: FS) = struct
       aux [] dir
 
     let read_file t file =
-      Log.debugf "read_file %s" file;
+      Log.debug "read_file %s" file;
       FS.stat t file >>| fun s ->
       FS.read t file 0 (Int64.to_int s.FS.size) >>| fun bs ->
       let s = Cstruct.copyv bs in
       return (Cstruct.of_string s)
 
     let write_file t file b =
-      Log.debugf "write_file %s" file;
+      Log.debug "write_file %s" file;
       mkdir t (Filename.dirname file) >>= fun () ->
       FS.create t file    >>| fun () ->
       FS.write t file 0 b >>| fun () ->

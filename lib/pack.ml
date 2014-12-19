@@ -75,7 +75,7 @@ module Raw = struct
     | _ -> failwith "pack version should be 2 or 3"
 
   let index_of_values_aux (return, bind) ~sha1 ~pack_checksum values =
-    Log.debugf "index_of_value";
+    Log.debug "index_of_value";
     let empty = Pack_index.empty ~pack_checksum () in
     let rec loop (offsets, index) = function
       | []                 -> return index
@@ -135,7 +135,7 @@ module Raw = struct
     let all = Mstruct.to_cstruct buf in
     let offset = Mstruct.offset buf in
     let version, count = input_header buf in
-    Log.debugf "input version:%d count:%d" version count;
+    Log.debug "input version:%d count:%d" version count;
     let values = ref [] in
     for _i = 0 to count - 1 do
       let pos = Mstruct.offset buf in
@@ -152,7 +152,7 @@ module Raw = struct
         (SHA.to_hex checksum) (SHA.to_hex pack_checksum);
       failwith "Pack.input"
     );
-    Log.debugf "input checksum: %s" (SHA.to_hex pack_checksum);
+    Log.debug "input checksum: %s" (SHA.to_hex pack_checksum);
     if Mstruct.length buf <> 0 then (
       eprintf "Pack.input: unprocessed data.";
       failwith "Pack.input";
@@ -204,7 +204,7 @@ let pretty t =
   Buffer.contents buf
 
 let to_pic { Raw.values; index; _ }  =
-  Log.debugf "to_pic";
+  Log.debug "to_pic";
   let inv_offsets = Misc.IntMap.of_alist
       (Misc.inverse_assoc (SHA.Map.to_alist index.Pack_index.offsets)) in
   let _offsets, _sha1, pics =
@@ -220,7 +220,7 @@ let to_pic { Raw.values; index; _ }  =
   List.rev pics
 
 let input buf ~index =
-  Log.debugf "input";
+  Log.debug "input";
   to_pic (Raw.input buf ~index)
 
 let add_packed_value ~version buf = match version with
@@ -229,7 +229,7 @@ let add_packed_value ~version buf = match version with
   | _ -> failwith "pack version should be 2 or 3"
 
 let add buf t =
-  Log.debugf "add";
+  Log.debug "add";
   let version = 2 in
   Raw.add_header ~version buf (List.length t);
   let _index = List.fold_left (fun index (_, pic) ->
@@ -239,7 +239,7 @@ let add buf t =
       Packed_value.PIC.Map.add pic pos index
     ) Packed_value.PIC.Map.empty t in
   let sha1 = SHA.of_string (Buffer.contents buf) in
-  Log.debugf "add sha1: %s" (SHA.to_hex sha1);
+  Log.debug "add sha1: %s" (SHA.to_hex sha1);
   SHA.add buf sha1
 
 let keys t =
@@ -248,7 +248,7 @@ let keys t =
     ) SHA.Set.empty t
 
 let unpack ~write buf =
-  Log.debugf "XXX unpack";
+  Log.debug "XXX unpack";
   let i = ref 0 in
   let pack = Raw.input (Mstruct.of_cstruct buf) ~index:None in
   let pack = to_pic pack in
@@ -274,7 +274,7 @@ let pack contents =
   uncompressed
 
 let of_pic t =
-  Log.debugf "of_pic";
+  Log.debug "of_pic";
   let buf = Misc.with_buffer (fun buf -> add buf t) in
   Raw.input (Mstruct.of_string buf) ~index:None
 

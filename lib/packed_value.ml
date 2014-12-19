@@ -265,7 +265,7 @@ module Make (M: sig val version: int end) = struct
         ) in
       Raw_value buf in
 
-    Log.debugf "input kind:%d size:%d (%b)" kind size more;
+    Log.debug "input kind:%d size:%d (%b)" kind size more;
 
     match kind with
     | 0b000 -> Mstruct.parse_error "invalid: 0 is reserved"
@@ -325,7 +325,7 @@ module Make (M: sig val version: int end) = struct
         | Object_type.Blob   -> 0b011
         | Object_type.Tag    -> 0b100 in
     let more = if size > 0x0f then 0x80 else 0 in
-    Log.debugf "add kind:%d size:%d (%b %d)"
+    Log.debug "add kind:%d size:%d (%b %d)"
       kind size (more=0x80) (size land 0x0f);
     let byte = more lor (kind lsl 4) lor (size land 0x0f) in
     Buffer.add_char buf (Char.chr byte);
@@ -366,19 +366,19 @@ module PIC = struct
     match Value.Cache.find pic.sha1 with
     | Some x -> x
     | None   ->
-      Log.debugf "unpack %s" (pretty pic);
+      Log.debug "unpack %s" (pretty pic);
       let str =
         match pic.kind with
         | Raw x  -> x
         | Link d ->
-          Log.debugf "unpack: hop to %s" (SHA.to_hex d.source.sha1);
+          Log.debug "unpack: hop to %s" (SHA.to_hex d.source.sha1);
           let source = unpack d.source in
           Misc.with_buffer (fun buf -> add_delta buf { d with source }) in
       Value.Cache.add pic.sha1 str;
       str
 
   let to_value p =
-    Log.debugf "to_value";
+    Log.debug "to_value";
     let buf = unpack p in
     Value.input_inflated (Mstruct.of_string buf)
 

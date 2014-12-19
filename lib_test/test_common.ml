@@ -46,7 +46,7 @@ let printer_list f = function
 let line msg =
   let line () = Alcotest.line stderr ~color:`Yellow '-' in
   line ();
-  Log.infof "ASSERT %s" msg;
+  Log.info "ASSERT %s" msg;
   line ()
 
 module Make (S: Store.S) = struct

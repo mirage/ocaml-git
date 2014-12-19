@@ -71,7 +71,7 @@ module Make (Store: Store.S) = struct
   end
 
   let of_contents t =
-    Log.debugf "of_contents";
+    Log.debug "of_contents";
     let g = C.create () in
     Store.contents t >>= fun nodes ->
     List.iter (C.add_vertex g) nodes;
@@ -93,7 +93,7 @@ module Make (Store: Store.S) = struct
     return g
 
   let of_keys t =
-    Log.debugf "of_keys";
+    Log.debug "of_keys";
     let g = K.create () in
     Store.contents t >>= fun nodes ->
     List.iter (fun (k, _) -> K.add_vertex g k) nodes;
@@ -110,7 +110,7 @@ module Make (Store: Store.S) = struct
     return g
 
   let to_dot t buf =
-    Log.debugf "to_dot";
+    Log.debug "to_dot";
     let fmt = Format.formatter_of_buffer buf in
     of_contents t >>= fun g ->
     Dot.fprint_graph fmt g;
@@ -118,7 +118,7 @@ module Make (Store: Store.S) = struct
 
   (* XXX: From IrminGraph.closure *)
   let closure t ~min max =
-    Log.debugf "closure";
+    Log.debug "closure";
     let g = K.create ~size:1024 () in
     let marks = Hashtbl.create 1024 in
     let mark key = Hashtbl.add marks key true in
@@ -136,7 +136,7 @@ module Make (Store: Store.S) = struct
       if has_mark key then Lwt.return ()
       else (
         mark key;
-        Log.debugf "ADD %s" (SHA.to_hex key);
+        Log.debug "ADD %s" (SHA.to_hex key);
         Store.mem t key >>= function
         | false -> return_unit
         | true  ->
