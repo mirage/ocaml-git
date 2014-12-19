@@ -245,17 +245,19 @@ class offset_cache size = object (self)
   val tbl = Hashtbl.create 0
 
   method add (sha1 : SHA.t) (offset : int) =
-    Log.debugf "offset_cache#add: %s -> %d" (SHA.to_hex sha1) offset;
-    Queue.add sha1 keyq;
-    let _ = Hashtbl.add tbl sha1 offset in
-    let qsz = Queue.length keyq in
-    if qsz > size then begin
-      try
-        let k = Queue.take keyq in
+    if size >= 1 then begin
+      Log.debugf "offset_cache#add: %s -> %d" (SHA.to_hex sha1) offset;
+      Queue.add sha1 keyq;
+      let _ = Hashtbl.add tbl sha1 offset in
+      let qsz = Queue.length keyq in
+      if qsz > size then begin
+        try
+          let k = Queue.take keyq in
           Log.debugf "offset_cache#add: qsz=%d shrinking..." qsz;
           Hashtbl.remove tbl k
-      with
-        Queue.Empty -> ()
+        with
+          Queue.Empty -> ()
+      end
     end
 
   method find (sha1 : SHA.t) =
@@ -267,7 +269,7 @@ end (* of class Pack_index.offset_cache *)
 
 exception Idx_found of int
 
-class c ?(scan_thresh=8) ?(cache_size=1) (ba : Cstruct.buffer) = object (self)
+class c ?(scan_thresh=8) ?(cache_size=0) (ba : Cstruct.buffer) = object (self)
 
   val cache = new offset_cache cache_size
 
