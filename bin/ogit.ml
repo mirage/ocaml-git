@@ -290,13 +290,17 @@ let ls_tree = {
   man  = [];
   term =
   let recurse_flag = mk_flag ["r"] "Recurse into sub-trees." in
+  let show_tree_flag = 
+    mk_flag ["t"] "Show tree entries even when going to recurse them." 
+  in
+  let only_tree_flag = mk_flag ["d"] "Show only the named tree entry itself." in
   let oid =
     let doc = Arg.info [] ~docv:"SHA1"
         ~doc:"The SHA1 of the tree." 
     in
     Arg.(required & pos 0 (some string) None & doc ) 
   in
-  let ls (module S: Store.S) recurse_flag oid =
+  let ls (module S: Store.S) recurse_flag show_tree_flag only_tree_flag oid =
     run begin
       S.create () >>= fun t ->
 
@@ -306,11 +310,11 @@ let ls_tree = {
           | _       -> "blob",   false
         in
 
-        let rec walk recurse path sha1 =
+        let rec walk recurse show_tree only_tree path sha1 =
           S.read_exn t sha1 >>= fun v -> begin
             match v with
             | Value.Blob blob -> begin
-                printf "blob %s %s\n%!" (SHA.to_hex sha1) path;
+                printf "blob %s %s\n" (SHA.to_hex sha1) path;
                 return_unit
             end
             | Value.Tree tree -> begin
@@ -319,26 +323,34 @@ let ls_tree = {
                     let path' = Filename.concat path e.Tree.name in
                     let kind, is_dir = get_kind e.Tree.perm in
                     let mode = Tree.string_of_perm e.Tree.perm in
-                    printf "%s %s %s\t%s\n%!" mode kind (SHA.to_hex e.Tree.node) path';
+                    let show =
+                      if is_dir then
+                        show_tree || only_tree
+                      else
+                        not only_tree
+                    in
+                    if show then
+                      print_string (String.concat "" [mode; " "; kind; " "; SHA.to_hex e.Tree.node; "\t"; path'; "\n"]);
+                      (*printf "%s %s %s\t%s\n" mode kind (SHA.to_hex e.Tree.node) path';*)
                     if is_dir && recurse then
-                      walk recurse path' e.Tree.node
+                      walk recurse show_tree only_tree path' e.Tree.node
                     else
                       return_unit
                   ) tree
             end
             | Value.Tag tag -> begin
-                printf "tag %s %s\n%!" (SHA.to_hex sha1) path;
+                printf "tag %s %s\n" (SHA.to_hex sha1) path;
                 return_unit
             end
             | Value.Commit commit -> begin
-                printf "commit %s %s\n%!" (SHA.to_hex sha1) path;
-                walk recurse path (SHA.of_tree commit.Commit.tree)
+                (* printf "commit %s %s\n" (SHA.to_hex sha1) path; *)
+                walk recurse show_tree only_tree path (SHA.of_tree commit.Commit.tree)
             end
           end
         in
         let sha1 = SHA.of_hex oid in
         Lwt.catch
-          (fun () -> walk recurse_flag "" sha1)
+          (fun () -> walk recurse_flag show_tree_flag only_tree_flag "" sha1)
           (function
             | SHA.Ambiguous -> eprintf "ambiguous argument\n%!"; exit 1
             | Not_found ->
@@ -348,7 +360,7 @@ let ls_tree = {
           )          
     end 
   in
-  Term.(mk ls $ backend $ recurse_flag $ oid)
+  Term.(mk ls $ backend $ recurse_flag $ show_tree_flag $ only_tree_flag $ oid)
 }
 
 (* READ-TREE *)
