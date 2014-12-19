@@ -23,6 +23,7 @@ type perm = [
   | `Exec
   | `Link
   | `Dir
+  | `Commit
 ]
 
 type entry = {
@@ -42,6 +43,7 @@ let pretty_perm = function
   | `Exec   -> "exec  "
   | `Link   -> "link  "
   | `Dir    -> "dir   "
+  | `Commit -> "commit"
 
 let pretty_entry e =
   sprintf "%s %s    %S\n"
@@ -60,6 +62,7 @@ let perm_of_string buf = function
   | "100755" -> `Exec
   | "120000" -> `Link
   | "40000"  -> `Dir
+  | "160000" -> `Commit
   | x        -> Mstruct.parse_error_buf buf "%S is not a valid permission." x
 
 let string_of_perm = function
@@ -67,6 +70,7 @@ let string_of_perm = function
   | `Exec   -> "100755"
   | `Link   -> "120000"
   | `Dir    -> "40000"
+  | `Commit -> "160000"
 
 let escape = Char.chr 42
 
