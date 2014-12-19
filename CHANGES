@@ -1,4 +1,9 @@
 ## 1.4.3
+* Use LRU cache instead of an unbounde Hashtl
+  (code imported for Simon Cruanes's CCache implementation)
+* Remove the crazy unbounded caching in Git.FS. Use the LRU
+  everywhere (#22)
+* Fix fd leaking (#29)
 * Update to dolog.1.0
 * Remove dependency to camlp4
 * Remove lots of warnings
