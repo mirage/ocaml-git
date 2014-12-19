@@ -41,9 +41,9 @@ module Make (Store: Store.S) = struct
 
   let run x test =
     Log.set_log_level log_level;
-    try Lwt_unix.run (x.init () >>= test >>= x.clean)
+    try Lwt_main.run (x.init () >>= test >>= x.clean)
     with e ->
-      Lwt_unix.run (x.clean ());
+      Lwt_main.run (x.clean ());
       raise e
 
   let long_random_string =
@@ -373,6 +373,26 @@ module Make (Store: Store.S) = struct
 
 end
 
+let test_read_writes () =
+  Lwt_main.run begin
+    let file = "/tmp/test-git" in
+    let payload = Cstruct.of_string "boo!" in
+    let rec write = function
+      | 0 -> return_unit
+      | i -> Git_unix.FS.IO.write_file file payload <?> write (i-1)
+    in
+    let rec read = function
+      | 0 -> return_unit
+      | i ->
+        Git_unix.FS.IO.read_file file >>= fun r ->
+        OUnit.assert_equal ~msg:"concurrent read/write" ~printer:(fun x -> x)
+          (Cstruct.to_string payload) (Cstruct.to_string r);
+        read (i-1)
+    in
+    write 1
+    >>= fun () -> Lwt.join [ write 100; read 100; write 100; read 100; ]
+  end
+
 let suite (speed, x) =
   let (module S) = x.store in
   let module T = Make(S) in
@@ -389,6 +409,9 @@ let suite (speed, x) =
     "Resource leaks"            , `Slow, T.test_leaks    x;
   ]
 
+let ops = [
+  "OPS", ["Concurrent read/writes", `Quick, test_read_writes]
+]
+
 let run name tl =
-  let tl = List.map suite tl in
-  Alcotest.run name tl
+  Alcotest.run name (ops @ List.map suite tl)
