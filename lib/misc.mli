@@ -44,7 +44,7 @@ val inflate_cstruct: Cstruct.t -> Cstruct.t
 val deflate_cstruct: Cstruct.t -> Cstruct.t
 (** Deflate a cstruct. *)
 
-val inflate_mstruct: Mstruct.t -> Mstruct.t
+val inflate_mstruct: ?output_size:int -> Mstruct.t -> Mstruct.t
 (** Inflate an mstruct. *)
 
 val deflate_mstruct: Mstruct.t -> Mstruct.t

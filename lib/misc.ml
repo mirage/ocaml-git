@@ -82,9 +82,14 @@ let deflate_mstruct buf =
   let deflated = deflate_cstruct inflated in
   Mstruct.of_cstruct deflated
 
-let inflate_mstruct orig_buf =
+let inflate_mstruct ?output_size orig_buf =
   let buf = Mstruct.clone orig_buf in
-  let output = Buffer.create (Mstruct.length orig_buf) in
+  let osz = 
+    match output_size with
+    | None -> Mstruct.length orig_buf
+    | Some sz -> sz
+  in
+  let output = Buffer.create osz in
   let refill input =
     let n = min (Mstruct.length buf) (String.length input) in
     let s = Mstruct.get_string buf n in

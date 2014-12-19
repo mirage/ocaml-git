@@ -239,7 +239,7 @@ module Make (M: sig val version: int end) = struct
     List.iter (Buffer.add_char buf) !bytes
 
   let with_inflated buf size fn =
-    let buf = Misc.inflate_mstruct buf in
+    let buf = Misc.inflate_mstruct ~output_size:size buf in
     let len = Mstruct.length buf in
     if len <> size then (
       eprintf "Packed_value.with_inflated: inflated size differs. Expecting %d, got %d.\n"
