@@ -169,7 +169,8 @@ let cat = {
       Arg.(required & pos 0 (some string) None & doc) in
     let cat_file file =
       run begin
-        Lwt_io.with_file ~mode:Lwt_io.input file Lwt_io.read >>= fun buf ->
+        Lwt_io.with_file ~mode:Lwt_io.input file (fun x -> Lwt_io.read x)
+        >>= fun buf ->
         let v = Value.input (Mstruct.of_string buf) in
         Printf.printf "%s%!" (Value.pretty v);
         return_unit

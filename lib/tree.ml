@@ -14,7 +14,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Sexplib.Std
 open Printf
 
 module Log = Log.Make(struct let section = "tree" end)
@@ -24,15 +23,16 @@ type perm = [
   | `Exec
   | `Link
   | `Dir
-] with sexp
+  | `Commit
+]
 
 type entry = {
   perm: perm;
   name: string;
   node: SHA.t;
-} with sexp
+}
 
-type t = entry list with sexp
+type t = entry list
 
 let hash = Hashtbl.hash
 let compare = compare
@@ -43,6 +43,7 @@ let pretty_perm = function
   | `Exec   -> "exec  "
   | `Link   -> "link  "
   | `Dir    -> "dir   "
+  | `Commit -> "commit"
 
 let pretty_entry e =
   sprintf "%s %s    %S\n"
@@ -61,6 +62,7 @@ let perm_of_string buf = function
   | "100755" -> `Exec
   | "120000" -> `Link
   | "40000"  -> `Dir
+  | "160000" -> `Commit
   | x        -> Mstruct.parse_error_buf buf "%S is not a valid permission." x
 
 let string_of_perm = function
@@ -68,6 +70,7 @@ let string_of_perm = function
   | `Exec   -> "100755"
   | `Link   -> "120000"
   | `Dir    -> "40000"
+  | `Commit -> "160000"
 
 let escape = Char.chr 42
 
@@ -110,7 +113,7 @@ let decode path =
     let b = Buffer.create n in
     let last = ref 0 in
     for i = 0 to n - 1 do
-      if Char.(path.[i] = escape) then (
+      if path.[i] = escape then (
         if i - !last > 0 then Buffer.add_substring b path !last (i - !last);
         if i + 1 < n then (
           let c = Char.chr (Char.code path.[i+1] - 1) in

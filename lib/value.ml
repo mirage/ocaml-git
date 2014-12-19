@@ -15,8 +15,6 @@
  *)
 
 open Printf
-open Lwt
-open Sexplib.Std
 
 module Log = Log.Make(struct let section = "value" end)
 
@@ -25,7 +23,6 @@ type t =
   | Commit of Commit.t
   | Tag    of Tag.t
   | Tree   of Tree.t
-with sexp
 
 let equal = (=)
 let hash = Hashtbl.hash
@@ -61,7 +58,7 @@ let add_header buf typ size =
   Buffer.add_char   buf Misc.nul
 
 let add_inflated buf t =
-  Log.debugf "add_inflated";
+  Log.debug "add_inflated";
   let tmp = Buffer.create 1024 in
   add_contents tmp t;
   let size = Buffer.length tmp in
@@ -73,7 +70,7 @@ let sha1 t =
   SHA.of_string buf
 
 let add buf t =
-  Log.debugf "add %s" (pretty t);
+  Log.debug "add %s" (pretty t);
   let inflated = Misc.with_buffer' (fun buf -> add_inflated buf t) in
   let deflated = Misc.deflate_cstruct inflated in
   Buffer.add_string buf (Cstruct.to_string deflated)
@@ -109,23 +106,175 @@ let input_inflated buf =
 let input buf =
   input_inflated (Misc.inflate_mstruct buf)
 
+
+module LRU = struct
+
+  (* Copyright (c) 2013, Simon Cruanes
+     All rights reserved.
+
+     Redistribution and use in source and binary forms, with or
+     without modification, are permitted provided that the following
+     conditions are met:
+
+     Redistributions of source code must retain the above copyright
+     notice, this list of conditions and the following disclaimer.
+     Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in
+     the documentation and/or other materials provided with the
+     distribution.
+
+     THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+     CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES,
+     INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+     MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+     DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+     CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+     SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+     LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF
+     USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
+     AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+     LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+     ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+     POSSIBILITY OF SUCH DAMAGE.  *)
+
+  (* From
+     https://github.com/c-cube/ocaml-containers/blob/8c0670155d62511c540d125f106b9ec6bfab5931/src/data/CCCache.ml *)
+
+  type key = SHA.t
+
+  module H = Hashtbl.Make(SHA)
+
+  type 'a t = {
+    table : 'a node H.t;  (* hashtable key -> node *)
+    mutable first : 'a node option;
+    size : int;           (* max size *)
+  }
+  and 'a node = {
+    mutable key : key;
+    mutable value : 'a;
+    mutable next : 'a node;
+    mutable prev : 'a node;
+  } (** Meta data for the value, making a chained list *)
+
+  let make size =
+    assert (size > 0);
+    { table = H.create size;
+      size;
+      first=None;
+    }
+
+  let clear c =
+    H.clear c.table;
+    c.first <- None;
+    ()
+
+  (* take first from queue *)
+  let take_ c =
+    match c.first with
+    | Some n when n.next == n ->
+      (* last element *)
+      c.first <- None;
+      n
+    | Some n ->
+      c.first <- Some n.next;
+      n.prev.next <- n.next;
+      n.next.prev <- n.prev;
+      n
+    | None ->
+      failwith "LRU: empty queue"
+
+  (* push at back of queue *)
+  let push_ c n =
+    match c.first with
+    | None ->
+      n.next <- n;
+      n.prev <- n;
+      c.first <- Some n
+    | Some n1 when n1==n -> ()
+    | Some n1 ->
+      n.prev <- n1.prev;
+      n.next <- n1;
+      n1.prev.next <- n;
+      n1.prev <- n
+
+  (* remove from queue *)
+  let remove_ n =
+    n.prev.next <- n.next;
+    n.next.prev <- n.prev
+
+  (* Replace least recently used element of [c] by x->y *)
+  let replace_ c x y =
+    (* remove old *)
+    let n = take_ c in
+    H.remove c.table n.key;
+    (* add x->y, at the back of the queue *)
+    n.key <- x;
+    n.value <- y;
+    H.add c.table x n;
+    push_ c n;
+    ()
+
+  (* Insert x->y in the cache, increasing its entry count *)
+  let insert_ c x y =
+    let rec n = {
+      key = x;
+      value = y;
+      next = n;
+      prev = n;
+    } in
+    H.add c.table x n;
+    push_ c n;
+    ()
+
+  let get c x =
+    let n = H.find c.table x in
+    (* put n at the back of the queue *)
+    remove_ n;
+    push_ c n;
+    n.value
+
+  let set c x y =
+    let len = H.length c.table in
+    assert (len <= c.size);
+    if len = c.size
+    then replace_ c x y
+    else insert_ c x y
+
+  let _size c () = H.length c.table
+
+  let _iter c f =
+    H.iter (fun x node -> f x node.value) c.table
+end
+
 module Cache = struct
 
-  (* XXX: this can go in Store.t if we want to avoid relying on a
-     global state. But as the keys are always the SHA of the inflated
-     contents, having a global cache is fine. *)
-  let cache = Hashtbl.create 1024
+  let cache: t LRU.t = LRU.make 1024
+  let cache_inflated: string LRU.t = LRU.make 1024
 
-  let clear () = Hashtbl.clear cache
+  let clear () =
+    LRU.clear cache;
+    LRU.clear cache_inflated
 
-  let find sha1: string option =
-    try Some (Hashtbl.find cache sha1)
+  let find sha1 =
+    try Some (LRU.get cache sha1)
     with Not_found -> None
 
-  let find_exn sha1: string =
-    Hashtbl.find cache sha1
+  let find_inflated sha1 =
+    try Some (LRU.get cache_inflated sha1)
+    with Not_found -> None
 
-  let add sha1 str =
-    ignore (Hashtbl.add cache sha1 str)
+  let add_both sha1 t str =
+    LRU.set cache sha1 t;
+    LRU.set cache_inflated sha1 str
+
+  let add sha1 t =
+    let buf = Buffer.create 1024 in
+    add_inflated buf t;
+    let str = Buffer.contents buf in
+    add_both sha1 t str
+
+  let add_inflated sha1 str =
+    let t = input_inflated (Mstruct.of_string str) in
+    add_both sha1 t str
 
 end

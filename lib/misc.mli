@@ -16,16 +16,6 @@
 
 (** Miscellaneous functions. *)
 
-(** {2 Bounded parallelism} *)
-
-val list_iter_p: ?pool:unit Lwt_pool.t -> ('a -> unit Lwt.t) -> 'a list -> unit Lwt.t
-(** Same as [List_lwt.iter_p] but using a maximum width equals to the
-    size of the [pool]. The default width is 50. *)
-
-val list_map_p: ?pool:unit Lwt_pool.t -> ('a -> 'b Lwt.t) -> 'a list -> 'b list Lwt.t
-(** Same as [List_lwt.map_p] but using a maximum width equals to the
-    size of [pool]. The default width is 50. *)
-
 (** {2 Hexa encoding} *)
 
 val with_buffer: (Buffer.t -> unit) -> string
@@ -44,7 +34,7 @@ val inflate_cstruct: Cstruct.t -> Cstruct.t
 val deflate_cstruct: Cstruct.t -> Cstruct.t
 (** Deflate a cstruct. *)
 
-val inflate_mstruct: Mstruct.t -> Mstruct.t
+val inflate_mstruct: ?output_size:int -> Mstruct.t -> Mstruct.t
 (** Inflate an mstruct. *)
 
 val deflate_mstruct: Mstruct.t -> Mstruct.t
@@ -77,8 +67,7 @@ val gt: char
 
 module type OrderedType = sig
   include Set.OrderedType
-  val sexp_of_t: t -> Sexplib.Type.t
-  val t_of_sexp: Sexplib.Type.t -> t
+  val pretty: t -> string
 end
 
 module I: OrderedType with type t = int
@@ -86,16 +75,14 @@ module S: OrderedType with type t = string
 
 module type Set = sig
   include Set.S
-  val sexp_of_t: t -> Sexplib.Type.t
-  val t_of_sexp: Sexplib.Type.t -> t
+  val pretty: t -> string
   val to_list: t -> elt list
   val of_list: elt list -> t
 end
 
 module type Map = sig
   include Map.S
-  val sexp_of_t: ('a -> Sexplib.Type.t) -> 'a t -> Sexplib.Type.t
-  val t_of_sexp: (Sexplib.Type.t -> 'a) -> Sexplib.Type.t -> 'a t
+  val pretty: ('a -> string) -> 'a t -> string
   val keys: 'a t -> key list
   val to_alist: 'a t -> (key * 'a) list
   val of_alist: (key * 'a) list -> 'a t

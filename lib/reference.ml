@@ -14,20 +14,18 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Sexplib.Std
-
 module Log = Log.Make(struct let section = "reference" end)
 
-type t = string with sexp
+type t = string
 
 let compare = String.compare
 let equal = (=)
 let hash = Hashtbl.hash
 
-let add buf t =
+let add _buf _t =
   failwith "TODO: Reference.add"
 
-let input buf =
+let input _buf =
   failwith "TODO: Reference.input"
 
 let to_raw x = x

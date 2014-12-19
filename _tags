@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 0194ab183eaa956025a57a71cb750a1c)
+# DO NOT EDIT (digest: ce384d8ddc526c9433608717fdb8b86c)
 # Ignore VCS directories, you can use the same kind of rule outside
 # OASIS_START/STOP if you want to exclude directories that contains
 # useless stuff for the build process
@@ -39,24 +39,41 @@ true: annot, bin_annot
 "lib/gri.cmx": for-pack(Git)
 "lib/memory.cmx": for-pack(Git)
 "lib/FS.cmx": for-pack(Git)
-# Library git-unix
-"lib/git-unix.cmxs": use_git-unix
-<lib/*.ml{,i,y}>: pkg_conduit.lwt-unix
-<lib/*.ml{,i,y}>: pkg_lwt.unix
-<lib/*.ml{,i,y}>: pkg_uri.services
-# Library git-mirage
-"lib/git-mirage.cmxs": use_git-mirage
 <lib/*.ml{,i,y}>: pkg_dolog
 <lib/*.ml{,i,y}>: pkg_hex
-<lib/*.ml{,i,y}>: pkg_io-page
 <lib/*.ml{,i,y}>: pkg_lwt
-<lib/*.ml{,i,y}>: pkg_mirage-types.lwt
 <lib/*.ml{,i,y}>: pkg_mstruct
 <lib/*.ml{,i,y}>: pkg_nocrypto
 <lib/*.ml{,i,y}>: pkg_ocamlgraph
 <lib/*.ml{,i,y}>: pkg_uri
 <lib/*.ml{,i,y}>: pkg_zip
-<lib/*.ml{,i,y}>: use_git
+# Library git-unix
+"lib/unix/git-unix.cmxs": use_git-unix
+<lib/unix/*.ml{,i,y}>: pkg_conduit.lwt-unix
+<lib/unix/*.ml{,i,y}>: pkg_dolog
+<lib/unix/*.ml{,i,y}>: pkg_hex
+<lib/unix/*.ml{,i,y}>: pkg_lwt
+<lib/unix/*.ml{,i,y}>: pkg_lwt.unix
+<lib/unix/*.ml{,i,y}>: pkg_mstruct
+<lib/unix/*.ml{,i,y}>: pkg_nocrypto
+<lib/unix/*.ml{,i,y}>: pkg_ocamlgraph
+<lib/unix/*.ml{,i,y}>: pkg_uri
+<lib/unix/*.ml{,i,y}>: pkg_uri.services
+<lib/unix/*.ml{,i,y}>: pkg_zip
+<lib/unix/*.ml{,i,y}>: use_git
+# Library git-mirage
+"lib/mirage/git-mirage.cmxs": use_git-mirage
+<lib/mirage/*.ml{,i,y}>: pkg_dolog
+<lib/mirage/*.ml{,i,y}>: pkg_hex
+<lib/mirage/*.ml{,i,y}>: pkg_io-page
+<lib/mirage/*.ml{,i,y}>: pkg_lwt
+<lib/mirage/*.ml{,i,y}>: pkg_mirage-types.lwt
+<lib/mirage/*.ml{,i,y}>: pkg_mstruct
+<lib/mirage/*.ml{,i,y}>: pkg_nocrypto
+<lib/mirage/*.ml{,i,y}>: pkg_ocamlgraph
+<lib/mirage/*.ml{,i,y}>: pkg_uri
+<lib/mirage/*.ml{,i,y}>: pkg_zip
+<lib/mirage/*.ml{,i,y}>: use_git
 # Executable ogit
 <bin/ogit.{native,byte}>: pkg_cmdliner
 <bin/ogit.{native,byte}>: pkg_conduit.lwt-unix
@@ -127,18 +144,4 @@ true: annot, bin_annot
 <lib_test/*.ml{,i,y}>: use_git-unix
 # OASIS_STOP
 true: debug, bin_annot
-<lib/object.mli>: pkg_sexplib.syntax
-<lib/SHA.ml>: pkg_sexplib.syntax
-<lib/cache.ml>: pkg_sexplib.syntax
-<lib/tag.ml>: pkg_sexplib.syntax
-<lib/commit.ml>: pkg_sexplib.syntax
-<lib/misc.ml>: pkg_sexplib.syntax
-<lib/pack_index.ml{,i}>: pkg_sexplib.syntax
-<lib/packed_value.ml{,i}>: pkg_sexplib.syntax
-<lib/value.mli>: pkg_sexplib.syntax
-<lib/pack.ml>: pkg_sexplib.syntax
-<lib/tree.ml>: pkg_sexplib.syntax
-<lib/user.ml>: pkg_sexplib.syntax
-<lib/value.ml>: pkg_sexplib.syntax
-<lib/object_type.ml>: pkg_sexplib.syntax
-<lib/reference.ml>: pkg_sexplib.syntax
+true: warn_error_A, warn(A-4-41-44)

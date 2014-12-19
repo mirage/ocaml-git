@@ -57,16 +57,16 @@ let write t value =
     let _ = Hashtbl.find t.values sha1 in
     return sha1
   with Not_found ->
-    Log.infof "Writing %s" (SHA.to_hex sha1);
+    Log.info "Writing %s" (SHA.to_hex sha1);
     Hashtbl.add t.values sha1 value;
     return sha1
 
 let write_pack t pack =
   let pack = Pack.to_pic pack in
-  Misc.list_iter_p (fun (sha1, p) ->
+  Lwt_list.iter_p (fun (sha1, p) ->
       let v = Packed_value.PIC.to_value p in
       write t v >>= fun sha2 ->
-      if SHA.(sha1 <> sha2) then failwith "Git_memory.write_pack";
+      if sha1 <> sha2 then failwith "Git_memory.write_pack";
       return_unit
     ) pack
   >>= fun () ->
@@ -90,13 +90,8 @@ let read_exn t sha1 =
   | None   -> fail Not_found
   | Some v -> return v
 
-let type_of t sha1 =
-  read t sha1 >>= function
-  | None   -> return_none
-  | Some v -> return (Some (Value.type_of v))
-
 let contents t =
-  Log.debugf "contents";
+  Log.debug "contents";
   list t >>= fun sha1s ->
   Lwt_list.map_s (fun sha1 ->
       read_exn t sha1 >>= fun value ->
@@ -118,12 +113,12 @@ let mem_reference t ref =
   return (Hashtbl.mem t.refs ref)
 
 let read_reference t ref =
-  Log.infof "Reading %s" (Reference.pretty ref);
+  Log.info "Reading %s" (Reference.pretty ref);
   try return (Some (Hashtbl.find t.refs ref))
   with Not_found -> return_none
 
 let read_head t =
-  Log.infof "Reading HEAD";
+  Log.info "Reading HEAD";
   return t.head
 
 let remove_reference t ref =
@@ -136,12 +131,12 @@ let read_reference_exn t ref =
   | Some s -> return s
 
 let write_head t c =
-  Log.infof "Writing HEAD";
+  Log.info "Writing HEAD";
   t.head <- Some c;
   return_unit
 
 let write_reference t ref sha1 =
-  Log.infof "Writing %s" (Reference.pretty ref);
+  Log.info "Writing %s" (Reference.pretty ref);
   Hashtbl.replace t.refs ref sha1;
   return_unit
 

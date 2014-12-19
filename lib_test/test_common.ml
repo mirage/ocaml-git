@@ -16,15 +16,11 @@
 
 open Git
 open Lwt
-open Printf
 
 let () =
   Log.set_log_level Log.DEBUG;
   Log.color_on ();
   Log.set_output stderr
-
-let pretty fn s =
-  Sexplib.Sexp.to_string_hum (fn s)
 
 let cmp_opt fn x y =
   match x, y with
@@ -50,7 +46,7 @@ let printer_list f = function
 let line msg =
   let line () = Alcotest.line stderr ~color:`Yellow '-' in
   line ();
-  Log.infof "ASSERT %s" msg;
+  Log.info "ASSERT %s" msg;
   line ()
 
 module Make (S: Store.S) = struct
@@ -70,13 +66,13 @@ module Make (S: Store.S) = struct
     mk SHA.equal SHA.compare SHA.to_hex
 
   let assert_value_equal, assert_value_opt_equal, assert_values_equal =
-    mk Value.equal Value.compare (pretty Value.sexp_of_t)
+    mk Value.equal Value.compare Value.pretty
 
   let assert_tag_equal, assert_tag_opt_equal, assert_tags_equal =
-    mk Tag.equal Tag.compare (pretty Tag.sexp_of_t)
+    mk Tag.equal Tag.compare Tag.pretty
 
   let assert_ref_equal, assert_ref_opt_equal, assert_refs_equal =
-    mk Reference.equal Reference.compare (pretty Reference.sexp_of_t)
+    mk Reference.equal Reference.compare Reference.pretty
 
   let assert_cstruct_equal, assert_cstruct_opt_equal, assert_cstructs_equal =
     mk (=) compare Cstruct.debug

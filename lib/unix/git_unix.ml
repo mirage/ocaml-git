@@ -22,6 +22,7 @@ module Log = Log.Make(struct let section = "unix" end)
 
 (* Pool of opened files *)
 let openfile_pool = Lwt_pool.create 200 (fun () -> return_unit)
+
 let mkdir_pool = Lwt_pool.create 1 (fun () -> return_unit)
 
 module M = struct
@@ -47,19 +48,19 @@ module M = struct
       let cmd = match init with
         | None   -> [| "ssh"; user ^ host; |]
         | Some x -> [| "ssh"; user ^ host; x |] in
-      Log.debugf "Executing %s" (String.concat " " (Array.to_list cmd));
+      Log.debug "Executing %s" (String.concat " " (Array.to_list cmd));
       let env = Unix.environment () in
       let p = Lwt_process.open_process_full ~env ("ssh", cmd) in
       Lwt.finalize
         (fun () -> fn (p#stdout, p#stdin))
         (fun () -> let _ = p#close in return_unit)
     | Some "git" ->
-      Log.debugf "Connecting to %s" (Uri.to_string uri);
+      Log.debug "Connecting to %s" (Uri.to_string uri);
       let resolver = Resolver_lwt_unix.system in
       Resolver_lwt.resolve_uri ~uri resolver >>= fun endp ->
       let ctx = Conduit_lwt_unix.default_ctx in
       Conduit_lwt_unix.endp_to_client ~ctx endp >>= fun client ->
-      Conduit_lwt_unix.connect ~ctx client >>= fun (flow, ic, oc) ->
+      Conduit_lwt_unix.connect ~ctx client >>= fun (_flow, ic, oc) ->
       Lwt.finalize
         (fun () ->
            begin match init with
@@ -76,7 +77,7 @@ module M = struct
 
   let read_all ic =
     let len = 1024 in
-    let buf = String.create len in
+    let buf = Bytes.create len in
     let res = Buffer.create 1024 in
     let rec aux () =
       Lwt_io.read_into ic buf 0 len >>= function
@@ -85,7 +86,7 @@ module M = struct
     aux ()
 
   let read_exactly ic n =
-    let res = String.create n in
+    let res = Bytes.create n in
     Lwt_io.read_into_exactly ic res 0 n >>= fun () ->
     return res
 
@@ -98,7 +99,7 @@ module D = struct
       if Sys.file_exists dir then return_unit
       else (
         aux (Filename.dirname dir) >>= fun () ->
-        Log.debugf "mkdir %s" dir;
+        Log.debug "mkdir %s" dir;
         Lwt_unix.mkdir dir 0o755
       ) in
     Lwt_pool.use mkdir_pool (fun () -> aux dirname)
@@ -137,30 +138,21 @@ module D = struct
     | 0   -> return_unit
     | len -> rwrite fd (Cstruct.to_bigarray b) 0 len
 
-  let write_string fd b =
-    let rec rwrite fd buf ofs len =
-      Lwt_unix.write fd buf ofs len >>= fun n ->
-      if len = 0 then fail End_of_file
-      else if n < len then rwrite fd buf (ofs + n) (len - n)
-      else return_unit in
-    match String.length b with
-    | 0   -> return_unit
-    | len -> rwrite fd b 0 len
-
   let with_write_file file fn =
-    Log.infof "Writing %s" file;
+    let tmp = Filename.temp_file (Filename.basename file) "write" in
+    Log.info "Writing %s (/tmp/%s)" file (Filename.basename tmp);
     mkdir (Filename.dirname file) >>= fun () ->
     Lwt_pool.use openfile_pool (fun () ->
-        Lwt_unix.(openfile file [O_WRONLY; O_NONBLOCK; O_CREAT; O_TRUNC] 0o644) >>= fun fd ->
+        Lwt_unix.(openfile tmp [O_WRONLY; O_NONBLOCK; O_CREAT; O_TRUNC] 0o644) >>= fun fd ->
         Lwt.finalize
-          (fun () -> fn fd)
+          (fun () -> fn fd >>= fun () -> Lwt_unix.rename tmp file)
           (fun _  -> Lwt_unix.close fd))
 
   let write_file file b =
     with_write_file file (fun fd -> write_cstruct fd b)
 
   let read_file file =
-    Log.infof "Reading %s" file;
+    Log.info "Reading %s" file;
     Unix.handle_unix_error (fun () ->
         Lwt_pool.use openfile_pool (fun () ->
             let fd = Unix.(openfile file [O_RDONLY; O_NONBLOCK] 0o644) in

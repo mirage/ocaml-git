@@ -1,3 +1,19 @@
+## 1.4.3
+* Fix concurrent read/write by using an atomic rename (#35)
+* Tree objects can also point to commits (@codinuum)
+* Reduce allocation (@codinuum)
+* Use LRU cache instead of an unbounde Hashtl
+  (code imported for Simon Cruanes's CCache implementation)
+* Remove the crazy unbounded caching in Git.FS. Use the LRU
+  everywhere (#22)
+* Fix fd leaking (#29)
+* Update to dolog.1.0
+* Remove dependency to camlp4
+* Remove lots of warnings
+* Move `Git_unix` and `Git_mirage` in their own subdirs as it
+  was causing issues to oasis (#5, Simon Cruanes)
+* Use `Bytes` instead of `String` (#5, Simon Cruanes)
+
 ## 1.4.2
 * Fix `Git_unix.IO.write_file` to work on empty files
 

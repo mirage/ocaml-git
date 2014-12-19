@@ -1,6 +1,6 @@
 OASISFormat: 0.4
 Name:        git
-Version:     1.4.2
+Version:     1.4.3
 Synopsis:    A low-level interface to Git in pure OCaml
 Authors:     Thomas Gazagnaire
 License:     ISC
@@ -29,7 +29,7 @@ Library git
 
 Library "git-unix"
   Build$:           flag(unix)
-  Path:              lib/
+  Path:              lib/unix/
   FindlibParent:     git
   Findlibname:       unix
   Modules:           Git_unix
@@ -37,7 +37,7 @@ Library "git-unix"
 
 Library "git-mirage"
   Build$:           flag(mirage)
-  Path:              lib/
+  Path:              lib/mirage/
   FindlibParent:     git
   Findlibname:       mirage
   Modules:           Git_mirage

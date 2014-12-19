@@ -14,7 +14,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Sexplib.Std
 open Printf
 
 module Log = Log.Make(struct let section = "user" end)
@@ -23,7 +22,7 @@ type t = {
   name : string;
   email: string;
   date : string;
-} with sexp
+}
 
 let hash = Hashtbl.hash
 let equal = (=)

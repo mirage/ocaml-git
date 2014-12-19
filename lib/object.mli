@@ -18,7 +18,8 @@
 
 module type S = sig
 
-  type t with sexp
+  type t
+  (** The type for the given Git object. *)
 
   val equal: t -> t -> bool
   (** Are two objects equal? *)

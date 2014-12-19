@@ -15,14 +15,13 @@
  *)
 
 open Printf
-open Sexplib.Std
 
 module Log = Log.Make(struct let section = "packed-value" end)
 
 type copy = {
   offset: int;
   length: int;
-} with sexp
+}
 
 let pretty_copy t =
   sprintf "off:%d len:%d" t.offset t.length
@@ -30,18 +29,17 @@ let pretty_copy t =
 type hunk =
   | Insert of string
   | Copy of copy
-with sexp
 
-let pretty_hunk = function
-  | Insert s -> sprintf "Insert %S" s
-  | Copy c   -> sprintf "Copy %s" (pretty_copy c)
+let pretty_hunk buf = function
+  | Insert str -> bprintf buf " - INSERT %S\n" str
+  | Copy copy  -> bprintf buf " - COPY   [%s]\n" (pretty_copy copy)
 
 type 'a delta = {
   source: 'a;
   source_length: int;
   result_length: int;
   hunks: hunk list;
-} with sexp
+}
 
 let pretty_delta d =
   let buf = Buffer.create 128 in
@@ -50,17 +48,13 @@ let pretty_delta d =
      result-length: %d\n"
     d.source_length
     d.result_length;
-  List.iter (function
-      | Insert str -> bprintf buf " - INSERT %S\n" str
-      | Copy copy  -> bprintf buf " - COPY   [%s]\n" (pretty_copy copy)
-    ) d.hunks;
+  List.iter (pretty_hunk buf) d.hunks;
   Buffer.contents buf
 
 type t =
   | Raw_value of string
   | Ref_delta of SHA.t delta
   | Off_delta of int delta
-with sexp
 
 let hash = Hashtbl.hash
 let equal = (=)
@@ -72,14 +66,14 @@ let pretty = function
   | Off_delta d -> sprintf "source:%d\n%s" d.source (pretty_delta d)
 
 let result_length = function
-  | Ref_delta { result_length }
-  | Off_delta { result_length } -> result_length
-  | Raw_value str               -> String.length str
+  | Ref_delta { result_length; _ }
+  | Off_delta { result_length; _ } -> result_length
+  | Raw_value str -> String.length str
 
 let source_length = function
-  | Ref_delta { source_length }
-  | Off_delta { source_length } -> source_length
-  | Raw_value str               -> String.length str
+  | Ref_delta { source_length; _ }
+  | Off_delta { source_length; _ } -> source_length
+  | Raw_value str -> String.length str
 
 let add_hunk buf ~source ~pos = function
   | Insert str -> Buffer.add_string buf str
@@ -107,8 +101,6 @@ let add_delta buf delta =
 
 module Make (M: sig val version: int end) = struct
 
-  let sexp_of_t = sexp_of_t
-  let t_of_sexp = t_of_sexp
   let compare = compare
   let hash = hash
   let equal = equal
@@ -210,7 +202,7 @@ module Make (M: sig val version: int end) = struct
     { source; hunks; source_length; result_length }
 
   let add_hunks buf t =
-    let { source_length; result_length; hunks } = t in
+    let { source_length; result_length; hunks; _ } = t in
     add_le_base_128 buf source_length;
     add_le_base_128 buf result_length;
     List.iter (add_hunk buf) hunks
@@ -239,7 +231,7 @@ module Make (M: sig val version: int end) = struct
     List.iter (Buffer.add_char buf) !bytes
 
   let with_inflated buf size fn =
-    let buf = Misc.inflate_mstruct buf in
+    let buf = Misc.inflate_mstruct ~output_size:size buf in
     let len = Mstruct.length buf in
     if len <> size then (
       eprintf "Packed_value.with_inflated: inflated size differs. Expecting %d, got %d.\n"
@@ -273,7 +265,7 @@ module Make (M: sig val version: int end) = struct
         ) in
       Raw_value buf in
 
-    Log.debugf "input kind:%d size:%d (%b)" kind size more;
+    Log.debug "input kind:%d size:%d (%b)" kind size more;
 
     match kind with
     | 0b000 -> Mstruct.parse_error "invalid: 0 is reserved"
@@ -333,7 +325,7 @@ module Make (M: sig val version: int end) = struct
         | Object_type.Blob   -> 0b011
         | Object_type.Tag    -> 0b100 in
     let more = if size > 0x0f then 0x80 else 0 in
-    Log.debugf "add kind:%d size:%d (%b %d)"
+    Log.debug "add kind:%d size:%d (%b %d)"
       kind size (more=0x80) (size land 0x0f);
     let byte = more lor (kind lsl 4) lor (size land 0x0f) in
     Buffer.add_char buf (Char.chr byte);
@@ -362,7 +354,6 @@ module PIC = struct
     kind: kind;
     sha1: SHA.t;
   }
-  with sexp
 
   let pretty_kind = function
     | Raw _  -> "RAW"
@@ -372,22 +363,22 @@ module PIC = struct
     sprintf "%s: %s" (SHA.to_hex sha1) (pretty_kind kind)
 
   let rec unpack pic =
-    match Value.Cache.find pic.sha1 with
+    match Value.Cache.find_inflated pic.sha1 with
     | Some x -> x
     | None   ->
-      Log.debugf "unpack %s" (pretty pic);
+      Log.debug "unpack %s" (pretty pic);
       let str =
         match pic.kind with
         | Raw x  -> x
         | Link d ->
-          Log.debugf "unpack: hop to %s" (SHA.to_hex d.source.sha1);
+          Log.debug "unpack: hop to %s" (SHA.to_hex d.source.sha1);
           let source = unpack d.source in
           Misc.with_buffer (fun buf -> add_delta buf { d with source }) in
-      Value.Cache.add pic.sha1 str;
+      Value.Cache.add_inflated pic.sha1 str;
       str
 
   let to_value p =
-    Log.debugf "to_value";
+    Log.debug "to_value";
     let buf = unpack p in
     Value.input_inflated (Mstruct.of_string buf)
 
@@ -395,9 +386,10 @@ module PIC = struct
     { sha1; kind = Raw (Cstruct.to_string raw) }
 
   module X = struct
-    type x = t with sexp
-    type t = x with sexp
+    type x = t
+    type t = x
     let compare = compare
+    let pretty = pretty
   end
   module Map = Misc.Map(X)
 
@@ -436,8 +428,7 @@ let to_pic offsets sha1s (pos, sha1, t) =
         PIC.Link { d with source = pic }
       with Not_found ->
         eprintf "Cannot find offest %d in the index\n%s"
-          d.source
-          (Sexplib.Sexp.to_string_hum (Misc.IntMap.sexp_of_t PIC.sexp_of_t offsets));
+          d.source (Misc.IntMap.pretty PIC.pretty offsets);
         failwith "Packed_value.to_pic"
 
   in

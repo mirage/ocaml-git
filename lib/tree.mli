@@ -20,8 +20,12 @@ type perm =
   [ `Normal
   | `Exec
   | `Link
-  | `Dir ]
+  | `Dir
+  | `Commit ]
 (** File permission. *)
+
+val string_of_perm : perm -> string
+(** Raw represention of a permission, using the [Git] format. *)
 
 type entry = {
   perm: perm;

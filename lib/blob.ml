@@ -15,7 +15,6 @@
  *)
 
 open Printf
-open Sexplib.Std
 
 module Log = Log.Make(struct let section = "blob" end)
 

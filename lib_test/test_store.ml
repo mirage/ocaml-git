@@ -14,7 +14,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open OUnit
 open Test_common
 open Lwt
 open Git
@@ -42,9 +41,9 @@ module Make (Store: Store.S) = struct
 
   let run x test =
     Log.set_log_level log_level;
-    try Lwt_unix.run (x.init () >>= test >>= x.clean)
+    try Lwt_main.run (x.init () >>= test >>= x.clean)
     with e ->
-      Lwt_unix.run (x.clean ());
+      Lwt_main.run (x.clean ());
       raise e
 
   let long_random_string =
@@ -97,11 +96,11 @@ module Make (Store: Store.S) = struct
     ])
   let kt4 = Value.sha1 t4
 
-  let john_doe = User.({
-      name  = "John Doe";
-      email = "jon@doe.com";
-      date  = "today";
-    })
+  let john_doe = {
+    User.name  = "John Doe";
+    email = "jon@doe.com";
+    date  = "today";
+  }
 
   (* c1 : t2 *)
   let c1 = Value.commit {
@@ -277,8 +276,7 @@ module Make (Store: Store.S) = struct
     if x.name = "FS" then
       let test () =
         rec_files "." >>= fun files ->
-        let pool = Lwt_pool.create 200 (fun () -> return_unit) in
-        Git.Misc.list_map_p ~pool (fun file ->
+        Lwt_list.map_s (fun file ->
             Lwt_io.with_file ~mode:Lwt_io.input file (fun ic ->
                 Lwt_io.read ic >>= fun str ->
                 return (Blob.of_raw str)
@@ -316,14 +314,16 @@ module Make (Store: Store.S) = struct
         Lwt_list.iter_s (fun (pack, index) ->
 
             (* basic serialization of index files *)
-            Lwt_io.with_file ~mode:Lwt_io.input index Lwt_io.read >>= fun istr1 ->
+            Lwt_io.with_file ~mode:Lwt_io.input index (fun x -> Lwt_io.read x)
+            >>= fun istr1 ->
             let i1    = Pack_index.input (Mstruct.of_string istr1) in
             let istr2 = Misc.with_buffer' (fun buf -> Pack_index.add buf i1) in
             let i2    = Pack_index.input (Mstruct.of_cstruct istr2) in
             assert_pack_index_equal "pack-index" i1 i2;
 
             (* basic serialization of pack files *)
-            Lwt_io.with_file ~mode:Lwt_io.input pack Lwt_io.read >>= fun pstr1 ->
+            Lwt_io.with_file ~mode:Lwt_io.input pack (fun x -> Lwt_io.read x)
+            >>= fun pstr1 ->
             let rp1   = Pack.Raw.input (Mstruct.of_string pstr1) ~index:None in
             let rp1'  = Pack.Raw.input (Mstruct.of_string pstr1) ~index:(Some i1) in
             assert_raw_pack_equal "raw-pack" rp1 rp1';
@@ -353,7 +353,45 @@ module Make (Store: Store.S) = struct
     in
     run x test
 
+  let test_leaks x () =
+    let runs =
+      try int_of_string (Sys.getenv "TESTRUNS")
+      with Not_found -> 10_000
+    in
+    let test () =
+      create () >>= fun t ->
+      let rec aux = function
+        | 0 -> return_unit
+        | i ->
+          check_write t "v1" kv1 v1 >>= fun () ->
+          check_write t "v2" kv2 v2 >>= fun () ->
+          aux (i-1)
+      in
+      aux runs
+    in
+    run x test
+
 end
+
+let test_read_writes () =
+  Lwt_main.run begin
+    let file = "/tmp/test-git" in
+    let payload = Cstruct.of_string "boo!" in
+    let rec write = function
+      | 0 -> return_unit
+      | i -> Git_unix.FS.IO.write_file file payload <?> write (i-1)
+    in
+    let rec read = function
+      | 0 -> return_unit
+      | i ->
+        Git_unix.FS.IO.read_file file >>= fun r ->
+        OUnit.assert_equal ~msg:"concurrent read/write" ~printer:(fun x -> x)
+          (Cstruct.to_string payload) (Cstruct.to_string r);
+        read (i-1)
+    in
+    write 1
+    >>= fun () -> Lwt.join [ write 500; read 1000; write 1000; read 500; ]
+  end
 
 let suite (speed, x) =
   let (module S) = x.store in
@@ -368,8 +406,12 @@ let suite (speed, x) =
     "Operations on index"       , speed, T.test_index    x;
     "Operations on pack files"  , speed, T.test_packs    x;
     "Remote operations"         , `Slow, T.test_remote   x;
+    "Resource leaks"            , `Slow, T.test_leaks    x;
   ]
 
+let ops = [
+  "OPS", ["Concurrent read/writes", `Quick, test_read_writes]
+]
+
 let run name tl =
-  let tl = List.map suite tl in
-  Alcotest.run name tl
+  Alcotest.run name (ops @ List.map suite tl)

@@ -14,8 +14,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Sexplib.Std
-
 module Log = Log.Make(struct let section = "misc" end)
 
 (* From Zlib *)
@@ -23,8 +21,8 @@ module Zlib_ext = struct
 
   let buffer_size = 1024
   let uncompress ?(header = true) incr_used_in refill flush =
-    let inbuf = String.create buffer_size
-    and outbuf = String.create buffer_size in
+    let inbuf = Bytes.create buffer_size
+    and outbuf = Bytes.create buffer_size in
     let zs = Zlib.inflate_init header in
     let rec uncompr inpos inavail =
       if inavail = 0 then begin
@@ -82,9 +80,14 @@ let deflate_mstruct buf =
   let deflated = deflate_cstruct inflated in
   Mstruct.of_cstruct deflated
 
-let inflate_mstruct orig_buf =
+let inflate_mstruct ?output_size orig_buf =
   let buf = Mstruct.clone orig_buf in
-  let output = Buffer.create (Mstruct.length orig_buf) in
+  let osz = 
+    match output_size with
+    | None -> Mstruct.length orig_buf
+    | Some sz -> sz
+  in
+  let output = Buffer.create osz in
   let refill input =
     let n = min (Mstruct.length buf) (String.length input) in
     let s = Mstruct.get_string buf n in
@@ -125,7 +128,7 @@ let input_key_value buf ~key:expected input_value =
     | None   -> Mstruct.parse_error_buf buf "no value to input"
     | Some v -> v
 
-let str_buffer = String.create 4
+let str_buffer = Bytes.create 4
 let add_be_uint32 buf i =
   EndianString.BigEndian.set_int32 str_buffer 0 i;
   Buffer.add_string buf str_buffer
@@ -137,27 +140,6 @@ let with_buffer fn =
 
 let with_buffer' fn =
   Cstruct.of_string (with_buffer fn)
-
-open Lwt
-
-let list_iter_p ?pool f l =
-  let pool = match pool with
-    | None   -> Lwt_pool.create 50 (fun () -> return_unit)
-    | Some p -> p
-  in
-  Lwt_list.iter_p (fun x ->
-      Lwt_pool.use pool (fun () -> f x)
-    ) l
-
-let list_map_p ?pool f l =
-  let res = ref [] in
-  list_iter_p ?pool (fun x ->
-      f x >>= fun y ->
-      res := y :: !res;
-      return_unit
-    ) l
-  >>= fun () ->
-  return !res
 
 module OP = struct
 
@@ -174,22 +156,19 @@ let try_assoc elt l =
 
 module type OrderedType = sig
   include Set.OrderedType
-  val sexp_of_t: t -> Sexplib.Type.t
-  val t_of_sexp: Sexplib.Type.t -> t
+  val pretty: t -> string
 end
 
 module type Set = sig
   include Set.S
-  val sexp_of_t: t -> Sexplib.Type.t
-  val t_of_sexp: Sexplib.Type.t -> t
+  val pretty: t -> string
   val to_list: t -> elt list
   val of_list: elt list -> t
 end
 
 module type Map = sig
   include Map.S
-  val sexp_of_t: ('a -> Sexplib.Type.t) -> 'a t -> Sexplib.Type.t
-  val t_of_sexp: (Sexplib.Type.t -> 'a) -> Sexplib.Type.t -> 'a t
+  val pretty: ('a -> string) -> 'a t -> string
   val keys: 'a t -> key list
   val to_alist: 'a t -> (key * 'a) list
   val of_alist: (key * 'a) list -> 'a t
@@ -206,14 +185,12 @@ module Set (X: OrderedType) = struct
 
   let to_list = elements
 
-  let sexp_of_t t =
-    elements t
-    |> Sexplib.Conv.sexp_of_list X.sexp_of_t
-
-  let t_of_sexp s =
-    Sexplib.Conv.list_of_sexp X.t_of_sexp s
-    |> of_list
-
+  let pretty s = match List.rev (elements s) with
+    | []   -> "{}"
+    | [x]  -> Printf.sprintf "{ %s }" (X.pretty x)
+    | h::t -> Printf.sprintf "{ %s and %s }"
+                (String.concat ", " (List.rev_map X.pretty t))
+                (X.pretty h)
 end
 
 module Map (X: OrderedType) = struct
@@ -228,31 +205,31 @@ module Map (X: OrderedType) = struct
 
   let to_alist = bindings
 
-  let sexp_of_t sexp_of_a t =
-    bindings t
-    |> Sexplib.Conv.(sexp_of_list (sexp_of_pair X.sexp_of_t sexp_of_a))
+  let pretty p m =
+    let binding (k, v) = Printf.sprintf "(%s: %s)" (X.pretty k) (p v) in
+    match List.rev (to_alist m) with
+    | [] -> "{}"
+    | x  -> Printf.sprintf "{ %s }" (String.concat " " (List.rev_map binding x))
 
-  let t_of_sexp a_of_sexp s =
-    Sexplib.Conv.(list_of_sexp (pair_of_sexp X.t_of_sexp a_of_sexp) s)
-    |> of_alist
-
-    let add_multi key data t =
-      try
-        let l = find key t in
-        add key (data :: l) t
-      with Not_found ->
-        add key [data] t
+  let add_multi key data t =
+    try
+      let l = find key t in
+      add key (data :: l) t
+    with Not_found ->
+      add key [data] t
 
 end
 
 module I = struct
-  type t = int with sexp
+  type t = int
   let compare = compare
+  let pretty = string_of_int
 end
 
 module S = struct
-  type t = string with sexp
+  type t = string
   let compare = String.compare
+  let pretty x = x
 end
 
 module IntMap = Map(I)

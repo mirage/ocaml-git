@@ -14,8 +14,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Sexplib.Std
-
 module Log = Log.Make(struct let section = "sha1" end)
 
 module type S = sig
@@ -66,12 +64,6 @@ module SHA1_String = struct
   let zero =
     of_hex (String.make 40 '0')
 
-  let sexp_of_t t =
-    Sexplib.Sexp.Atom (to_hex t)
-
-  let t_of_sexp s =
-    of_hex (Sexplib.Conv.string_of_sexp s)
-
   let pretty = to_hex
 
   let input buf =
@@ -87,8 +79,9 @@ module SHA1_String = struct
     Buffer.add_string buf (to_hex t)
 
   module X = struct
-    type t = string with sexp
+    type t = string
     let compare = String.compare
+    let pretty = pretty
   end
   module Map = Misc.Map(X)
   module Set = Misc.Set(X)
