@@ -390,7 +390,7 @@ let test_read_writes () =
         read (i-1)
     in
     write 1
-    >>= fun () -> Lwt.join [ write 100; read 100; write 100; read 100; ]
+    >>= fun () -> Lwt.join [ write 500; read 1000; write 1000; read 500; ]
   end
 
 let suite (speed, x) =
