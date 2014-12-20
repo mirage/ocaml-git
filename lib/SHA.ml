@@ -48,10 +48,9 @@ let sha_to_string t =
 let get_upper c = (Char.code c) land 0xf0
 
 let sha_compare x y = 
-  Log.debugf "sha_compare: %s vs %s" (sha_to_string x) (sha_to_string y);
+  (*Log.debugf "sha_compare: %s vs %s" (sha_to_string x) (sha_to_string y);*)
   let nx = String.length x.raw in
   let ny = String.length y.raw in
-  let pad_same = x.padded && y.padded in
   let res =
     if nx = ny && not x.padded && not y.padded then
       String.compare x.raw y.raw
@@ -61,7 +60,7 @@ let sha_compare x y =
         if i = len then
           raise Ambiguous
         else
-          if pad_same || i < len then
+          if (x.padded && y.padded) || i < len then
             let x0 = x.raw.[i] in
             let y0 = y.raw.[i] in
             if x0 < y0 then
@@ -83,7 +82,7 @@ let sha_compare x y =
       scan 0
     end
   in
-  Log.debugf "sha_compare: result=%d" res;
+  (*Log.debugf "sha_compare: result=%d" res;*)
   res
 
 module SHA1_String = struct
