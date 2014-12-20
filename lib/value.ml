@@ -248,8 +248,9 @@ end
 
 module Cache = struct
 
-  let cache: t LRU.t = LRU.make 1024
-  let cache_inflated: string LRU.t = LRU.make 1024
+  let len = 64 * 1024
+  let cache: t LRU.t = LRU.make len
+  let cache_inflated: string LRU.t = LRU.make len
 
   let clear () =
     LRU.clear cache;

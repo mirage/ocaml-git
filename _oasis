@@ -19,6 +19,7 @@ Library git
   Pack:              true
   Path:              lib/
   Findlibname:       git
+  InternalModules:   LRU
   Modules:           SHA, Blob, Cache, Commit, Misc, Version,
                      Global_graph, Pack, Pack_index, Packed_value,
                      Reference, Sync, Tag, Tree, User, Value,

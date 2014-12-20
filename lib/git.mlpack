@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 06497c66cf1741a41b5ca1a25e1422e1)
+# DO NOT EDIT (digest: e717b446c257d011ed5125cd4f3ca28d)
 SHA
 Blob
 Cache
@@ -23,4 +23,5 @@ Search
 Gri
 Memory
 FS
+LRU
 # OASIS_STOP

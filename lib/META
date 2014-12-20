@@ -1,6 +1,6 @@
 # OASIS_START
-# DO NOT EDIT (digest: 16839c5d8790b58a9160160f63972b41)
-version = "1.4.2"
+# DO NOT EDIT (digest: 3c1beaeb2c5ef2d099fded34938c9432)
+version = "1.4.3"
 description = "A low-level interface to Git in pure OCaml"
 requires = "mstruct dolog ocamlgraph zip nocrypto uri lwt hex"
 archive(byte) = "git.cma"
@@ -9,7 +9,7 @@ archive(native) = "git.cmxa"
 archive(native, plugin) = "git.cmxs"
 exists_if = "git.cma"
 package "unix" (
- version = "1.4.2"
+ version = "1.4.3"
  description = "A low-level interface to Git in pure OCaml"
  requires = "git lwt.unix conduit.lwt-unix uri.services"
  archive(byte) = "git-unix.cma"
@@ -20,7 +20,7 @@ package "unix" (
 )
 
 package "mirage" (
- version = "1.4.2"
+ version = "1.4.3"
  description = "A low-level interface to Git in pure OCaml"
  requires = "git mirage-types.lwt io-page"
  archive(byte) = "git-mirage.cma"

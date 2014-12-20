@@ -147,7 +147,10 @@ module Packed = struct
     let idx_file = "pack-" ^ (SHA.to_hex sha1) ^ ".idx" in
     pack_dir / idx_file
 
+  let index_lru: Pack_index.t LRU.t = LRU.make 8
+
   let write_index t sha1 idx =
+    LRU.set index_lru sha1 idx;
     let file = index t sha1 in
     IO.file_exists file >>= function
     | true  -> return_unit
@@ -158,42 +161,60 @@ module Packed = struct
 
   let read_index t sha1 =
     Log.debug "read_index %s" (SHA.to_hex sha1);
-    let file = index t sha1 in
-    IO.file_exists file >>= function
-    | true ->
-      IO.read_file file >>= fun buf ->
-      let buf = Mstruct.of_cstruct buf in
-      let index = Pack_index.input buf in
-      return index
-    | false ->
-      Printf.eprintf "%s does not exist." file;
-      fail (Failure "read_index")
+    try return (LRU.get index_lru sha1)
+    with Not_found ->
+      Log.debug "read_index: cache miss!";
+      let file = index t sha1 in
+      IO.file_exists file >>= function
+      | true ->
+        IO.read_file file >>= fun buf ->
+        let buf = Mstruct.of_cstruct buf in
+        let index = Pack_index.input buf in
+        LRU.set index_lru sha1 index;
+        return index
+      | false ->
+        Printf.eprintf "%s does not exist." file;
+        fail (Failure "read_index")
+
+  let keys_lru = LRU.make (128 * 1024)
 
   let read_keys t sha1 =
     Log.debug "read_keys %s" (SHA.to_hex sha1);
-    let file = index t sha1 in
-    IO.file_exists file >>= function
-    | true ->
-      IO.read_file file >>= fun buf ->
-      let keys = Pack_index.keys (Mstruct.of_cstruct buf) in
-      return keys
-    | false ->
-      fail (Failure "Git_fs.Packed.read_keys")
+    try return (LRU.get keys_lru sha1)
+    with Not_found ->
+      Log.debug "read_keys: cache miss!";
+      let file = index t sha1 in
+      IO.file_exists file >>= function
+      | true ->
+        IO.read_file file >>= fun buf ->
+        let keys = Pack_index.keys (Mstruct.of_cstruct buf) in
+        LRU.set keys_lru sha1 keys;
+        return keys
+      | false ->
+        fail (Failure "Git_fs.Packed.read_keys")
+
+  let pack_lru = LRU.make 2
 
   let read_pack t sha1 =
-    let file = file t sha1 in
-    IO.file_exists file >>= function
-    | true ->
-      IO.read_file file  >>= fun buf ->
-      read_index t sha1 >>= fun index ->
-      let pack = Pack.Raw.input (Mstruct.of_cstruct buf) ~index:(Some index) in
-      let pack = Pack.to_pic pack in
-      return pack
-    | false ->
-      Printf.eprintf "No file associated with the pack object %s.\n" (SHA.to_hex sha1);
-      fail (Failure "read_file")
+    Log.debug "read_pack";
+    try return (LRU.get pack_lru sha1)
+    with Not_found ->
+      Log.debug "read_pack: cache miss";
+      let file = file t sha1 in
+      IO.file_exists file >>= function
+      | true ->
+        IO.read_file file >>= fun buf ->
+        read_index t sha1 >>= fun index ->
+        let pack = Pack.Raw.input (Mstruct.of_cstruct buf) ~index:(Some index) in
+        let pack = Pack.to_pic pack in
+        LRU.set pack_lru sha1 pack;
+        return pack
+      | false ->
+        Printf.eprintf "No file associated with the pack object %s.\n" (SHA.to_hex sha1);
+        fail (Failure "read_file")
 
   let write_pack t sha1 pack =
+    Log.debug "write pack";
     let file = file t sha1 in
     IO.file_exists file >>= function
     | true  -> return_unit
@@ -246,6 +267,7 @@ let read t sha1 =
   match Value.Cache.find sha1 with
   | Some v -> return (Some v)
   | None   ->
+    Log.debug "read: cache miss!";
     Loose.read t sha1 >>= function
     | Some v -> return (Some v)
     | None   -> Packed.read t sha1
@@ -261,6 +283,7 @@ let mem t sha1 =
   match Value.Cache.find sha1 with
   | Some _ -> return true
   | None   ->
+    Log.debug "mem: cache miss!";
     Loose.mem t sha1 >>= function
     | true  -> return true
     | false -> Packed.mem t sha1
