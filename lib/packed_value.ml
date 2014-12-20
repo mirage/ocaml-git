@@ -265,8 +265,6 @@ module Make (M: sig val version: int end) = struct
         ) in
       Raw_value buf in
 
-    Log.debug "input kind:%d size:%d (%b)" kind size more;
-
     match kind with
     | 0b000 -> Mstruct.parse_error "invalid: 0 is reserved"
     | 0b001 -> with_inflated_buf buf size (mk Object_type.Commit)
@@ -407,6 +405,7 @@ let of_pic index ~pos t =
       failwith "Packed_value.of_pic"
 
 let to_pic offsets sha1s (pos, sha1, t) =
+  Log.debug "to_pic(%s): cache miss!" (SHA.to_hex sha1);
   let kind = match t with
     | Raw_value x -> PIC.Raw x
     | Ref_delta d ->

@@ -313,27 +313,32 @@ module Make (Store: Store.S) = struct
           ) files in
         Lwt_list.iter_s (fun (pack, index) ->
 
-            (* basic serialization of index files *)
-            Lwt_io.with_file ~mode:Lwt_io.input index (fun x -> Lwt_io.read x)
-            >>= fun istr1 ->
-            let i1    = Pack_index.input (Mstruct.of_string istr1) in
-            let istr2 = Misc.with_buffer' (fun buf -> Pack_index.add buf i1) in
-            let i2    = Pack_index.input (Mstruct.of_cstruct istr2) in
-            assert_pack_index_equal "pack-index" i1 i2;
-
             (* basic serialization of pack files *)
             Lwt_io.with_file ~mode:Lwt_io.input pack (fun x -> Lwt_io.read x)
             >>= fun pstr1 ->
             let rp1   = Pack.Raw.input (Mstruct.of_string pstr1) ~index:None in
-            let rp1'  = Pack.Raw.input (Mstruct.of_string pstr1) ~index:(Some i1) in
-            assert_raw_pack_equal "raw-pack" rp1 rp1';
+            let i3 = Pack.Raw.index rp1 in
+
+            (* basic serialization of index files *)
+            begin if Sys.file_exists index then
+                Lwt_io.with_file ~mode:Lwt_io.input index (fun x -> Lwt_io.read x)
+                >>= fun istr1 ->
+                let i1    = Pack_index.input (Mstruct.of_string istr1) in
+                let istr2 = Misc.with_buffer' (fun buf -> Pack_index.add buf i1) in
+                let i2    = Pack_index.input (Mstruct.of_cstruct istr2) in
+                assert_pack_index_equal "pack-index" i1 i2;
+                let rp1'  = Pack.Raw.input (Mstruct.of_string pstr1) ~index:(Some i1) in
+                assert_raw_pack_equal "raw-pack" rp1 rp1';
+                assert_pack_index_equal "raw-pack-->>--pack-index" i1 i3;
+                return_unit
+              else
+                return_unit
+            end >>= fun () ->
 
             let pstr2 = Misc.with_buffer' (fun buf -> Pack.Raw.add buf rp1) in
             let rp2   = Pack.Raw.input (Mstruct.of_cstruct pstr2) ~index:None in
             assert_pack_equal "pack" (Pack.to_pic rp1) (Pack.to_pic rp2);
 
-            let i3 = Pack.Raw.index rp1 in
-            assert_pack_index_equal "raw-pack-->>--pack-index" i1 i3;
 
             return_unit
 

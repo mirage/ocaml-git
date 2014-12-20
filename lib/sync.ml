@@ -783,6 +783,7 @@ module Make (IO: IO) (Store: Store.S) = struct
                 | Clone { c_unpack = u; _ }
                 | Fetch { f_unpack = u; _ } -> u
                 | _ -> false in
+              Log.debug "unpack=%b" unpack;
 
               begin if unpack then
                   Pack.unpack ~write:(Store.write t) pack

@@ -76,14 +76,18 @@ module M = struct
    | None -> fail (Failure ("Must supply a scheme like git://"))
 
   let read_all ic =
-    let len = 1024 in
+    let len = 64_1024 in
     let buf = Bytes.create len in
-    let res = Buffer.create 1024 in
+    let res = Buffer.create len in
     let rec aux () =
       Lwt_io.read_into ic buf 0 len >>= function
-      | 0 -> return (Buffer.contents res)
-      | i -> Buffer.add_substring res buf 0 i; aux () in
-    aux ()
+      | 0 -> return_unit
+      | i -> Buffer.add_substring res buf 0 i;
+        if len = i then return_unit
+        else aux ()
+    in
+    aux () >>= fun () ->
+    return (Buffer.contents res)
 
   let read_exactly ic n =
     let res = Bytes.create n in
@@ -105,15 +109,17 @@ module D = struct
     Lwt_pool.use mkdir_pool (fun () -> aux dirname)
 
   let list_files kind dir =
-    if Sys.file_exists dir then (
-      let s = Lwt_unix.files_of_directory dir in
-      let s = Lwt_stream.filter (fun s -> s <> "." && s <> "..") s in
-      let s = Lwt_stream.map (Filename.concat dir) s in
-      let s = Lwt_stream.filter kind s in
-      Lwt_stream.to_list s >>= fun l ->
-      return l
-    ) else
-      return_nil
+    Lwt_pool.use openfile_pool (fun () ->
+        if Sys.file_exists dir then (
+          let s = Lwt_unix.files_of_directory dir in
+          let s = Lwt_stream.filter (fun s -> s <> "." && s <> "..") s in
+          let s = Lwt_stream.map (Filename.concat dir) s in
+          let s = Lwt_stream.filter kind s in
+          Lwt_stream.to_list s >>= fun l ->
+          return l
+        ) else
+          return_nil
+      )
 
   let directories dir =
     list_files (fun f -> try Sys.is_directory f with _ -> false) dir
