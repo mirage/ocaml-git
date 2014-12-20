@@ -269,7 +269,7 @@ end (* of class Pack_index.offset_cache *)
 
 exception Idx_found of int
 
-class c ?(scan_thresh=8) ?(cache_size=0) (ba : Cstruct.buffer) = object (self)
+class c ?(scan_thresh=8) ?(cache_size=1) (ba : Cstruct.buffer) = object (self)
 
   val cache = new offset_cache cache_size
 
@@ -433,25 +433,26 @@ class c ?(scan_thresh=8) ?(cache_size=0) (ba : Cstruct.buffer) = object (self)
   (* implements binary search *)
   method private scan_sha1s fo_idx idx_ofs ofs n sha1 =
     let short_sha = SHA.is_short sha1 in
+(*
     Log.debugf "c#scan_sha1s: fo_idx:%d idx_ofs:%d ofs:%d n:%d sha1:%s" 
       fo_idx idx_ofs ofs n (if short_sha then "short" else "full");
-
+*)
     let len = n * 20 in
     let buf = Mstruct.of_bigarray ~off:ofs ~len ba in
 
     if n > scan_thresh then begin
-      Log.debugf "c#scan_sha1s: %d > scan_thresh(=%d)" n scan_thresh;
+      (*Log.debugf "c#scan_sha1s: %d > scan_thresh(=%d)" n scan_thresh;*)
       let p = n / 2 in
-      Log.debugf "c#scan_sha1s: p:%d" p;
+      (*Log.debugf "c#scan_sha1s: p:%d" p;*)
       let len' = p * 20 in
       Mstruct.shift buf len';
       let s = SHA.input buf in
 
-      Log.debugf "c#scan_sha1s: s=%s" (SHA.to_hex s);
+      (*Log.debugf "c#scan_sha1s: s=%s" (SHA.to_hex s);*)
 
       if s = sha1 then begin
         let idx = idx_ofs + p in
-        Log.debugf "c#scan_sha1s: idx -> %d (full)" idx;
+        (*Log.debugf "c#scan_sha1s: idx -> %d (full)" idx;*)
         raise (Idx_found idx)
       end
       else if short_sha && SHA.is_prefix sha1 s then begin
@@ -472,10 +473,10 @@ class c ?(scan_thresh=8) ?(cache_size=0) (ba : Cstruct.buffer) = object (self)
           else
             true
         in
-        Log.debugf "prev_ok:%B next_ok:%B" prev_ok next_ok;
+        (*Log.debugf "prev_ok:%B next_ok:%B" prev_ok next_ok;*)
         if prev_ok && next_ok then begin
           let idx = idx_ofs + p in
-          Log.debugf "c#scan_sha1s: idx -> %d (short)" idx;
+          (*Log.debugf "c#scan_sha1s: idx -> %d (short)" idx;*)
           raise (Idx_found idx)
         end
         else
@@ -488,15 +489,17 @@ class c ?(scan_thresh=8) ?(cache_size=0) (ba : Cstruct.buffer) = object (self)
         self#scan_sha1s fo_idx (idx_ofs + d) (ofs + d * 20) (n - p - 1) sha1
     end
     else begin
-      Log.debugf "c#scan_sha1s: scanning...";
+      (*Log.debugf "c#scan_sha1s: scanning...";*)
       self#scan_sub idx_ofs sha1 short_sha buf 0 (n - 1)
     end
 
   method private scan_sub idx_ofs sha1 short_sha ?(cands=[]) buf i m =
-    Log.debugf "c#scan_sub: idx_ofs=%d short_sha=%B cands=[%s] i=%d m=%d" 
+(*
+    Log.debugf "c#scan_sub: idx_ofs=%d short_sha=%B cands=[%s] i=%d m=%d"
       idx_ofs short_sha 
       (List.fold_left (fun s i -> s^(if s = "" then "" else ",")^(string_of_int i)) "" cands)
       i m;
+*)
     if i > m then begin
       match cands with
       | [idx] -> raise (Idx_found idx)
@@ -506,7 +509,7 @@ class c ?(scan_thresh=8) ?(cache_size=0) (ba : Cstruct.buffer) = object (self)
       let s = SHA.input buf in
       if s = sha1 then begin
         let idx = idx_ofs + i in
-        Log.debugf "c#scan_sub: idx -> %d" idx;
+        (*Log.debugf "c#scan_sub: idx -> %d" idx;*)
         raise (Idx_found idx)
       end
       else begin
