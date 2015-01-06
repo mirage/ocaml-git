@@ -1,4 +1,5 @@
 ## 1.4.4
+* Expose zlib compression level (#41)
 * Maintain a cache of opened files (#29, Pierre Chambart)
 
 ## 1.4.3 (2014-12-19)
