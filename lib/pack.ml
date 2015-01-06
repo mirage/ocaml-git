@@ -190,15 +190,10 @@ module Raw = struct
       version; checksum; inv_offs;
     }
 
-  let add buf t =
-    Buffer.add_string buf (Cstruct.to_string t.buffer)
-
+  let add buf ?level:_ t = Buffer.add_string buf (Cstruct.to_string t.buffer)
   let sha1 t = t.sha1
-
   let index t = t.index
-
-  let keys t =
-    SHA.Set.of_list (SHA.Map.keys t.index.Pack_index.offsets)
+  let keys t = SHA.Set.of_list (SHA.Map.keys t.index.Pack_index.offsets)
 
 end
 
@@ -242,19 +237,19 @@ let input buf ~index =
   Log.debug "input";
   to_pic (Raw.input buf ~index)
 
-let add_packed_value ~version buf = match version with
-  | 2 -> Packed_value.V2.add buf
-  | 3 -> Packed_value.V3.add buf
+let add_packed_value ~version ?level buf = match version with
+  | 2 -> Packed_value.V2.add buf ?level
+  | 3 -> Packed_value.V3.add buf ?level
   | _ -> failwith "pack version should be 2 or 3"
 
-let add buf t =
+let add buf ?level t =
   Log.debug "add";
   let version = 2 in
   Raw.add_header ~version buf (List.length t);
   let _index = List.fold_left (fun index (_, pic) ->
       let pos = Buffer.length buf in
       let p = Packed_value.of_pic index ~pos pic in
-      add_packed_value ~version buf p;
+      add_packed_value ~version ?level buf p;
       Packed_value.PIC.Map.add pic pos index
     ) Packed_value.PIC.Map.empty t in
   let sha1 = SHA.of_string (Buffer.contents buf) in

@@ -148,7 +148,7 @@ module Make (IO: IO) = struct
         with Zlib.Error _ ->
           fail (Zlib.Error (file, (Cstruct.to_string buf)))
 
-    let write t value =
+    let write t ?level value =
       Log.debug "write";
       let inflated = Misc.with_buffer (fun buf -> Value.add_inflated buf value) in
       let sha1 = SHA.of_string inflated in
@@ -156,7 +156,7 @@ module Make (IO: IO) = struct
       IO.file_exists file >>= function
       | true  -> return sha1
       | false ->
-        let deflated = Misc.deflate_cstruct (Cstruct.of_string inflated) in
+        let deflated = Misc.deflate_cstruct ?level (Cstruct.of_string inflated) in
         IO.write_file file deflated >>= fun () ->
         return sha1
 
@@ -421,8 +421,8 @@ module Make (IO: IO) = struct
       Log.debug "read_reference_exn: Cannot read %s" (Reference.pretty ref);
       fail Not_found
 
-  let write t value =
-    Loose.write t value >>= fun sha1 ->
+  let write t ?level value =
+    Loose.write t ?level value >>= fun sha1 ->
     Log.debug "write -> %s" (SHA.to_hex sha1);
     Value.Cache.add sha1 value;
     return sha1

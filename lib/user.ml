@@ -33,7 +33,7 @@ let pretty t =
     t.name t.email t.date
 
 (* XXX needs to escape name/email/date *)
-let add buf t =
+let add buf ?level:_ t =
   Buffer.add_string buf t.name ;
   Buffer.add_string buf " <"   ;
   Buffer.add_string buf t.email;

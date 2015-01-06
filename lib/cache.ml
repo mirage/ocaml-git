@@ -226,7 +226,7 @@ let input buf =
   );
   { entries; extensions }
 
-let add buf t =
+let add buf ?level:_ t =
   let str = Misc.with_buffer (fun buf ->
       let n = List.length t.entries in
       Log.debug "add %d entries" n;

@@ -31,7 +31,7 @@ let pretty t =
 let input buf =
   Mstruct.get_string buf (Mstruct.length buf)
 
-let add buf t =
+let add buf ?level:_ t =
   Buffer.add_string buf t
 
 let to_raw x = x

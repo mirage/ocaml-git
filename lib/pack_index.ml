@@ -168,7 +168,7 @@ let input buf =
   let crcs = SHA.Map.of_alist (Array.to_list crcs) in
   { offsets; crcs; pack_checksum }
 
-let add buf t =
+let add buf ?level:_ t =
   let n = SHA.Map.cardinal t.offsets in
   Log.debug "output: %d packed values" n;
   Buffer.add_string buf "\255tOc";
