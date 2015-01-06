@@ -146,9 +146,9 @@ module D = struct
 
   let with_write_file file fn =
     let tmp = Filename.temp_file (Filename.basename file) "write" in
-    Log.info "Writing %s (/tmp/%s)" file (Filename.basename tmp);
     mkdir (Filename.dirname file) >>= fun () ->
     Lwt_pool.use openfile_pool (fun () ->
+        Log.info "Writing %s (/tmp/%s)" file (Filename.basename tmp);
         Lwt_unix.(openfile tmp [O_WRONLY; O_NONBLOCK; O_CREAT; O_TRUNC] 0o644) >>= fun fd ->
         Lwt.finalize
           (fun () -> fn fd >>= fun () -> Lwt_unix.rename tmp file)
@@ -158,9 +158,9 @@ module D = struct
     with_write_file file (fun fd -> write_cstruct fd b)
 
   let read_file file =
-    Log.info "Reading %s" file;
     Unix.handle_unix_error (fun () ->
         Lwt_pool.use openfile_pool (fun () ->
+            Log.info "Reading %s" file;
             let fd = Unix.(openfile file [O_RDONLY; O_NONBLOCK] 0o644) in
             let ba = Lwt_bytes.map_file ~fd ~shared:false () in
             Unix.close fd;
