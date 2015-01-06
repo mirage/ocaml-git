@@ -46,6 +46,66 @@ end
 
 module Make (IO: IO) = struct
 
+  module File_cache : sig
+    val read : string -> Cstruct.t Lwt.t
+  end = struct
+
+    (* Search key and value stored in the weak table.
+       The path is used to find the file.
+       When searching, file is a dummy empty value.
+       This value should be alive as long as the file
+       is alive, to ensure that, a finaliser is attached
+       to the file referencing its key to maintain it alive.
+       Notice that the key don't maintain the file alive to
+       avoid making both values always reachable.
+    *)
+    type key =
+      { path : string;
+        file : Cstruct.t Weak.t }
+
+    module WeakTbl = Weak.Make(struct
+        type t = key
+        let hash t = Hashtbl.hash t.path
+        let equal t1 t2 = t1.path = t2.path
+      end)
+
+    let cache = WeakTbl.create 10
+
+    let dummy = Weak.create 0 (* only used to create a search key *)
+
+    let find path =
+      try
+        let search_key = { path; file = dummy } in
+        let cached_value = WeakTbl.find cache search_key in
+        match Weak.get cached_value.file 0 with
+        | None -> WeakTbl.remove cache cached_value; None
+        | Some f -> Some f
+      with Not_found -> None
+
+    let add path file =
+      let w = Weak.create 1 in
+      Weak.set w 0 (Some file);
+      let v = { path; file = w } in
+      Gc.finalise (fun _ -> Weak.set v.file 0 None) file;
+      (* Maintain v alive while file is alive by forcing v to be
+         present in the function closure. The effect is useless, but
+         it ensures that the compiler won't optimise the refence to
+         v away. This is guaranteed to work as long as the compiler
+         don't have a deep knowledge of Weak.set behaviour.
+         Maybe some kind of "ignore" external function would be better.
+      *)
+      WeakTbl.add cache v
+
+    let read file =
+      match find file with
+      | Some v -> Lwt.return v
+      | None ->
+        IO.read_file file >>= fun cs ->
+        add file cs;
+        return cs
+
+  end
+
   type t = string
 
   let root t = t
@@ -81,7 +141,7 @@ module Make (IO: IO) = struct
       IO.file_exists file >>= function
       | false -> return_none
       | true  ->
-        IO.read_file file >>= fun buf ->
+        File_cache.read file >>= fun buf ->
         try
           let value = Value.input (Mstruct.of_cstruct buf) in
           return (Some value)
@@ -167,7 +227,7 @@ module Make (IO: IO) = struct
         let file = index t sha1 in
         IO.file_exists file >>= function
         | true ->
-          IO.read_file file >>= fun buf ->
+          File_cache.read file >>= fun buf ->
           let buf = Mstruct.of_cstruct buf in
           let index = Pack_index.input buf in
           LRU.set index_lru sha1 index;
@@ -186,7 +246,7 @@ module Make (IO: IO) = struct
         let file = index t sha1 in
         IO.file_exists file >>= function
         | true ->
-          IO.read_file file >>= fun buf ->
+          File_cache.read file >>= fun buf ->
           let keys = Pack_index.keys (Mstruct.of_cstruct buf) in
           LRU.set keys_lru sha1 keys;
           return keys
@@ -203,7 +263,7 @@ module Make (IO: IO) = struct
         let file = file t sha1 in
         IO.file_exists file >>= function
         | true ->
-          IO.read_file file >>= fun buf ->
+          File_cache.read file >>= fun buf ->
           read_index t sha1 >>= fun index ->
           let pack = Pack.Raw.input (Mstruct.of_cstruct buf) ~index:(Some index) in
           let pack = Pack.to_pic pack in
@@ -211,7 +271,7 @@ module Make (IO: IO) = struct
           return pack
         | false ->
           Printf.eprintf "No file associated with the pack object %s.\n" (SHA.to_hex sha1);
-          fail (Failure "read_file")
+          fail (Failure "read_pack")
 
     let write_pack t sha1 pack =
       Log.debug "write pack";

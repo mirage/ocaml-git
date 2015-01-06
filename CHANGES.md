@@ -1,3 +1,6 @@
+## 1.4.4
+* Maintain a cache of opened files (#29, Pierre Chambart)
+
 ## 1.4.3 (2014-12-19)
 * Fix regression introduced in 1.4.3 appearing when
   synchronising big repositories (#38)
