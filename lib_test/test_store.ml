@@ -384,7 +384,7 @@ let test_read_writes () =
     let payload = Cstruct.of_string "boo!" in
     let rec write = function
       | 0 -> return_unit
-      | i -> Git_unix.FS.IO.write_file file payload <?> write (i-1)
+      | i -> Git_unix.FS.IO.write_file file payload <&> write (i-1)
     in
     let rec read = function
       | 0 -> return_unit
