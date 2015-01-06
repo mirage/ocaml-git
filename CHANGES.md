@@ -1,4 +1,6 @@
-## 1.4.3
+## 1.4.3 (2014-12-19)
+* Fix regression introduced in 1.4.3 appearing when
+  synchronising big repositories (#38)
 * Fix concurrent read/write by using an atomic rename (#35)
 * Tree objects can also point to commits (@codinuum)
 * Reduce allocation (@codinuum)
@@ -14,7 +16,7 @@
   was causing issues to oasis (#5, Simon Cruanes)
 * Use `Bytes` instead of `String` (#5, Simon Cruanes)
 
-## 1.4.2
+## 1.4.2 (2014-12-14)
 * Fix `Git_unix.IO.write_file` to work on empty files
 
 ## 1.4.1 (2014-12-4)
