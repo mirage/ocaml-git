@@ -36,8 +36,13 @@ module type S = sig
   val input: Mstruct.t -> t
   (** Build a value from an inflated contents. *)
 
-  val add: Buffer.t -> t -> unit
+  val add: Buffer.t -> ?level:int -> t -> unit
   (** Add the serialization of the value to an already existing
-      buffer. *)
+      buffer.
 
+      The compression [level] must be between 0 and 9: 1 gives best
+      speed, 9 gives best compression, 0 gives no compression at all
+      (the input data is simply copied a block at a time). The default
+      value (currently equivalent to level 6) requests a default
+      compromise between speed and compression. *)
 end

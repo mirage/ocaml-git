@@ -786,7 +786,7 @@ module Make (IO: IO) (Store: Store.S) = struct
               Log.debug "unpack=%b" unpack;
 
               begin if unpack then
-                  Pack.unpack ~write:(Store.write t) pack
+                  Pack.unpack ~write:(Store.write ?level:None t) pack
                 else
                   let pack = Pack.Raw.input (Mstruct.of_cstruct pack) ~index:None in
                   Store.write_pack t pack

@@ -69,10 +69,10 @@ let sha1 t =
   let buf = Misc.with_buffer (fun buf -> add_inflated buf t) in
   SHA.of_string buf
 
-let add buf t =
+let add buf ?level t =
   Log.debug "add %s" (pretty t);
   let inflated = Misc.with_buffer' (fun buf -> add_inflated buf t) in
-  let deflated = Misc.deflate_cstruct inflated in
+  let deflated = Misc.deflate_cstruct ?level inflated in
   Buffer.add_string buf (Cstruct.to_string deflated)
 
 let type_of_inflated buf =

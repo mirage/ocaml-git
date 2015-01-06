@@ -55,7 +55,7 @@ let input_object_type buf =
   | Some k -> k
   | None   -> Mstruct.parse_error_buf buf "input_object_type: %s" s
 
-let add buf t =
+let add buf ?level:_ t =
   add_key_value buf "object" (SHA.to_hex t.sha1);
   add_key_value buf "type"   (Object_type.to_string t.typ);
   add_key_value buf "tag"    t.tag;

@@ -141,7 +141,7 @@ let input_entry buf =
   } in
   Some entry
 
-let add buf t =
+let add buf ?level:_ t =
   List.iter (add_entry buf) t
 
 let input buf =

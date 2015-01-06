@@ -31,13 +31,13 @@ val with_buffer': (Buffer.t -> unit) -> Cstruct.t
 val inflate_cstruct: Cstruct.t -> Cstruct.t
 (** Inflate a cstruct. *)
 
-val deflate_cstruct: Cstruct.t -> Cstruct.t
+val deflate_cstruct: ?level:int -> Cstruct.t -> Cstruct.t
 (** Deflate a cstruct. *)
 
 val inflate_mstruct: ?output_size:int -> Mstruct.t -> Mstruct.t
 (** Inflate an mstruct. *)
 
-val deflate_mstruct: Mstruct.t -> Mstruct.t
+val deflate_mstruct: ?level:int -> Mstruct.t -> Mstruct.t
 (** Deflate an mstruct. *)
 
 (** {2 CRC-32} *)

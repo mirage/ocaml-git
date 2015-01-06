@@ -283,20 +283,20 @@ module Make (M: sig val version: int end) = struct
     | _     -> assert false
 
   let inflated_buffer = Buffer.create 1024
-  let with_deflated buf fn =
+  let with_deflated buf ?level fn =
     Buffer.reset inflated_buffer;
     fn inflated_buffer;
     let inflated = Buffer.contents inflated_buffer in
-    let deflated = Misc.deflate_cstruct (Cstruct.of_string inflated) in
+    let deflated = Misc.deflate_cstruct ?level (Cstruct.of_string inflated) in
     Buffer.add_string buf (Cstruct.to_string deflated);
     String.length inflated
 
   let tmp_buffer = Buffer.create 1024
 
-  let add buf t =
+  let add buf ?level t =
     Buffer.reset tmp_buffer;
     let add_deflated_hunks buf hunks =
-      with_deflated buf (fun b -> add_hunks b hunks) in
+      with_deflated buf ?level (fun b -> add_hunks b hunks) in
     let size = match t with
       | Raw_value str ->
         begin

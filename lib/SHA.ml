@@ -69,7 +69,7 @@ module SHA1_String = struct
   let input buf =
     Mstruct.get_string buf 20
 
-  let add buf t =
+  let add buf ?level:_ t =
     Buffer.add_string buf t
 
   let input_hex buf =

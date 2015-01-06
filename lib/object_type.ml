@@ -34,7 +34,7 @@ let to_string = function
 
 let pretty = to_string
 
-let add buf t =
+let add buf ?level:_ t =
   Buffer.add_string buf (to_string t)
 
 let of_string = function

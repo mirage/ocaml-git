@@ -70,19 +70,19 @@ let refill input =
 let flush output buf len =
   Buffer.add_substring output buf 0 len
 
-let deflate_cstruct input =
+let deflate_cstruct ?level input =
   let output = Buffer.create (Cstruct.len input) in
-  Zlib.compress (refill input) (flush output);
+  Zlib.compress ?level (refill input) (flush output);
   Cstruct.of_string (Buffer.contents output)
 
-let deflate_mstruct buf =
+let deflate_mstruct ?level buf =
   let inflated = Mstruct.to_cstruct buf in
-  let deflated = deflate_cstruct inflated in
+  let deflated = deflate_cstruct ?level inflated in
   Mstruct.of_cstruct deflated
 
 let inflate_mstruct ?output_size orig_buf =
   let buf = Mstruct.clone orig_buf in
-  let osz = 
+  let osz =
     match output_size with
     | None -> Mstruct.length orig_buf
     | Some sz -> sz

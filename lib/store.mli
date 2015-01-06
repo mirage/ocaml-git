@@ -53,8 +53,14 @@ module type S = sig
   val list: t -> SHA.t list Lwt.t
   (** Return the list of SHA names. *)
 
-  val write: t -> Value.t -> SHA.t Lwt.t
-  (** Write a value and return the SHA of its serialized contents. *)
+  val write: t -> ?level:int -> Value.t -> SHA.t Lwt.t
+  (** Write a value and return the SHA of its serialized contents.
+
+    The compression [level] must be between 0 and 9: 1 gives best
+    speed, 9 gives best compression, 0 gives no compression at all
+    (the input data is simply copied a block at a time). The default
+    value (currently equivalent to level 6) requests a default
+    compromise between speed and compression . *)
 
   val write_pack: t -> Pack.Raw.t -> SHA.Set.t Lwt.t
   (** Write a raw pack file and the corresponding index. Return the

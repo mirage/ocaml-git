@@ -22,7 +22,7 @@ let compare = String.compare
 let equal = (=)
 let hash = Hashtbl.hash
 
-let add _buf _t =
+let add _buf ?level:_ _t =
   failwith "TODO: Reference.add"
 
 let input _buf =

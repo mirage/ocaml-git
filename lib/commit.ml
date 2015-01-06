@@ -50,7 +50,7 @@ let add_parent buf parent =
   SHA.Commit.add_hex buf parent;
   Buffer.add_char buf Misc.lf
 
-let add buf t =
+let add buf ?level:_ t =
   Buffer.add_string buf "tree ";
   SHA.Tree.add_hex buf t.tree;
   Buffer.add_char buf Misc.lf;
