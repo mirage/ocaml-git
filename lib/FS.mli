@@ -26,8 +26,8 @@ module type S = sig
   val entry_of_file: ?root:string -> Index.t ->
     string -> Tree.perm -> SHA.Blob.t -> Blob.t -> Index.entry option Lwt.t
   (** Generate a cache entry for the file. Create a fresh file if it
-      does not already exist and [update_fs] is set. If [root] is not
-      set, use the current working directory as repository root. *)
+      does not already exist. If [root] is not set, use the current
+      working directory as repository root. *)
 
 end
 
