@@ -1,4 +1,7 @@
 ## 1.4.4
+* Expose the protocol capabilities to the client
+* Support side-band-64k protocol capability (#44)
+* Fix support for git+ssh (#39)
 * Expose zlib compression level (#41)
 * Maintain a cache of opened files (#29, Pierre Chambart)
 
