@@ -1,4 +1,10 @@
 ## 1.4.4
+* Overwrite changed file when expanding the index into the filesystem (#4)
+* Do not recompute the hash of blob files when expanding the index into the
+  filesystem. This help fixing a speed issue with non-bare repo with lots of
+  file.
+* Rename `{write,read}_cache` to `{write,read}_index`
+* Rename Cache to Index
 * Expose the protocol capabilities to the client
 * Support side-band-64k protocol capability (#44)
 * Fix support for git+ssh (#39)
