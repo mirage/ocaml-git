@@ -16,6 +16,20 @@
 
 (** Clone/Fecth/Push protocol *)
 
+type capability =
+  [ `Multi_ack
+  | `Thin_pack
+  | `Side_band
+  | `Side_band_64k
+  | `Ofs_delta
+  | `Shallow
+  | `No_progress
+  | `Include_tag
+  | `Report_status
+  | `Delete_refs
+  | `Agent of string
+  | `Other of string ]
+
 module Result: sig
 
   type fetch = {
@@ -52,11 +66,13 @@ module type S = sig
   val push: t -> branch:Reference.t -> Gri.t -> Result.push Lwt.t
   (** Push a local branch to a remote store. *)
 
-  val clone: t -> ?deepen:int -> ?unpack:bool -> Gri.t -> Result.fetch Lwt.t
+  val clone: t -> ?deepen:int -> ?unpack:bool -> ?capabilities:capability list
+    -> Gri.t -> Result.fetch Lwt.t
   (** [clone t address] clones the contents of [address] into the
       store [t]. *)
 
-  val fetch: t -> ?deepen:int -> ?unpack:bool -> Gri.t -> Result.fetch Lwt.t
+  val fetch: t -> ?deepen:int -> ?unpack:bool -> ?capabilities:capability list
+    -> Gri.t -> Result.fetch Lwt.t
   (** [fetch t address] fetches the missing contents of [address] into
       the store [t]. *)
 

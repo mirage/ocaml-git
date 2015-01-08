@@ -48,7 +48,7 @@ module M = struct
       let cmd = match init with
         | None   -> [| "ssh"; user ^ host; |]
         | Some x -> [| "ssh"; user ^ host; x |] in
-      Log.debug "Executing %s" (String.concat " " (Array.to_list cmd));
+      Log.info "Executing '%s'" (String.concat " " (Array.to_list cmd));
       let env = Unix.environment () in
       let p = Lwt_process.open_process_full ~env ("ssh", cmd) in
       Lwt.finalize

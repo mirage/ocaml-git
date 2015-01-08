@@ -66,6 +66,20 @@ module type IO = sig
   val flush: oc -> unit Lwt.t
 end
 
+type capability =
+  [ `Multi_ack
+  | `Thin_pack
+  | `Side_band
+  | `Side_band_64k
+  | `Ofs_delta
+  | `Shallow
+  | `No_progress
+  | `Include_tag
+  | `Report_status
+  | `Delete_refs
+  | `Agent of string
+  | `Other of string ]
+
 module Make (IO: IO) (Store: Store.S) = struct
 
   exception Error
@@ -82,12 +96,13 @@ module Make (IO: IO) (Store: Store.S) = struct
 
     let output oc = function
       | None  ->
-        Log.debug "SENDING: FLUSH";
-        IO.write oc "0000" >>= fun () ->
+        let flush = "0000" in
+        Log.info "SENDING: %S" flush;
+        IO.write oc flush >>= fun () ->
         IO.flush oc
       | Some l ->
-        Log.debug "SENDING: %S" l;
         let size = Printf.sprintf "%04x" (4 + String.length l) in
+        Log.info "SENDING: %S" (size ^ l);
         IO.write oc size >>= fun () ->
         IO.write oc l    >>= fun () ->
         IO.flush oc
@@ -107,7 +122,7 @@ module Make (IO: IO) (Store: Store.S) = struct
     let flush oc =
       output oc None
 
-    let input ic: t Lwt.t =
+    let input_raw ic: t Lwt.t =
       Log.debug "PacketLine.input";
       IO.read_exactly ic 4 >>= fun size ->
       match size with
@@ -121,69 +136,73 @@ module Make (IO: IO) (Store: Store.S) = struct
           with _ -> error "%s is not a valid integer" str in
         IO.read_exactly ic size >>= fun payload ->
         Log.debug "RECEIVED: %S (%d)" payload size;
-        if payload.[size - 1] = Misc.lf then
-          return (Some (String.sub payload 0 (size-1)))
-        else
-          return (Some payload)
+        return (Some payload)
+
+    let input ic =
+      input_raw ic >>= function
+      | None    -> return_none
+      | Some "" -> return (Some "")
+      | Some s  ->
+        let size = String.length s in
+        if s.[size - 1] <> Misc.lf then
+          error "input: the payload doesn't have a trailing LF";
+        let s = String.sub s 0 (size-1) in
+        return (Some s)
+
   end
 
   module Capability = struct
 
-    type t =
-      | Multi_ack
-      | Thin_pack
-      | Side_band
-      | Side_band_64k
-      | Ofs_delta
-      | Shallow
-      | No_progress
-      | Include_tag
-      | Report_status
-      | Delete_refs
-      | Other of string
+    type t = capability
 
-    let of_string = function
-      | "multi_ack"     -> Multi_ack
-      | "thin-pack"     -> Thin_pack
-      | "side-band"     -> Side_band
-      | "side-band-64k" -> Side_band_64k
-      | "ofs-delta"     -> Ofs_delta
-      | "shallow"       -> Shallow
-      | "no-progress"   -> No_progress
-      | "include-tag"   -> Include_tag
-      | "report-status" -> Report_status
-      | "delete-refs"   -> Delete_refs
-      | x               -> Other x
+    let of_string: string -> t = function
+      | "multi_ack"     -> `Multi_ack
+      | "thin-pack"     -> `Thin_pack
+      | "side-band"     -> `Side_band
+      | "side-band-64k" -> `Side_band_64k
+      | "ofs-delta"     -> `Ofs_delta
+      | "shallow"       -> `Shallow
+      | "no-progress"   -> `No_progress
+      | "include-tag"   -> `Include_tag
+      | "report-status" -> `Report_status
+      | "delete-refs"   -> `Delete_refs
+      | x               ->
+        match Misc.string_lsplit2 x ~on:'=' with
+        | Some ("agent", a) -> `Agent a
+        | _ -> `Other x
 
-    let to_string = function
-      | Multi_ack     -> "multi_ack"
-      | Thin_pack     -> "thin-pack"
-      | Side_band     -> "side-band"
-      | Side_band_64k -> "side-band-64k"
-      | Ofs_delta     -> "ofs-delta"
-      | Shallow       -> "shallow"
-      | No_progress   -> "no-progress"
-      | Include_tag   -> "include-tag"
-      | Report_status -> "report-status"
-      | Delete_refs   -> "delete-refs"
-      | Other x       -> x
+    let to_string: t -> string = function
+      | `Multi_ack     -> "multi_ack"
+      | `Thin_pack     -> "thin-pack"
+      | `Side_band     -> "side-band"
+      | `Side_band_64k -> "side-band-64k"
+      | `Ofs_delta     -> "ofs-delta"
+      | `Shallow       -> "shallow"
+      | `No_progress   -> "no-progress"
+      | `Include_tag   -> "include-tag"
+      | `Report_status -> "report-status"
+      | `Delete_refs   -> "delete-refs"
+      | `Agent a       -> "agent=" ^ a
+      | `Other x       -> x
 
-    let is_valid_fetch = function
-      | Multi_ack
-      | Thin_pack
-      | Side_band
-      | Side_band_64k
-      | Ofs_delta
-      | Shallow
-      | No_progress
-      | Include_tag -> true
+    let is_valid_fetch: t -> bool = function
+      | `Multi_ack
+      | `Thin_pack
+      | `Side_band
+      | `Side_band_64k
+      | `Ofs_delta
+      | `Shallow
+      | `No_progress
+      | `Include_tag -> true
       | _ -> false
 
-    let is_valid_push = function
-      | Ofs_delta
-      | Report_status
-      | Delete_refs -> true
+    let is_valid_push: t -> bool = function
+      | `Ofs_delta
+      | `Report_status
+      | `Delete_refs -> true
       | _ -> false
+
+    let ogit_agent = `Agent ("ogit/" ^ Version.current)
 
   end
 
@@ -200,8 +219,11 @@ module Make (IO: IO) (Store: Store.S) = struct
     let pretty l =
       String.concat ", " (List.map Capability.to_string l)
 
-    (* XXX really ? *)
-    let default = []
+    let default = [
+      Capability.ogit_agent;
+      `Side_band_64k;
+      `No_progress;
+    ]
 
     let _is_valid_push = List.for_all Capability.is_valid_push
     let _is_valid_fetch = List.for_all Capability.is_valid_fetch
@@ -438,7 +460,7 @@ module Make (IO: IO) (Store: Store.S) = struct
             | "shallow"   -> aux (Shallow   (SHA.of_hex s) :: acc)
             | "unshallow" -> aux (Unshallow (SHA.of_hex s) :: acc)
             | "have"      -> aux (Have      (SHA.of_hex s) :: acc)
-            | "done"      -> aux (Done                      :: acc)
+            | "done"      -> aux (Done                     :: acc)
             | "deepen"    ->
               let d =
                 try int_of_string s
@@ -456,20 +478,23 @@ module Make (IO: IO) (Store: Store.S) = struct
       in
       aux []
 
-    (* XXX: handler multi_hack *)
+    (* XXX: handle multi_hack *)
     let output oc t =
       Log.debug "Upload.output";
-      let last_c = ref [] in
 
       (* output wants *)
-      Lwt_list.iter_s (fun (id, c) ->
-          if c = !last_c then
-            let msg = Printf.sprintf "want %s\n" (SHA.to_hex id) in
+      Lwt_list.iteri_s (fun i (id, c) ->
+          if i = 0 && c <> [] then
+            (* first-want *)
+            let msg = Printf.sprintf
+                "want %s %s\n" (SHA.to_hex id) (Capabilities.to_string c)
+            in
             PacketLine.output_line oc msg
           else
-            let msg =
-              Printf.sprintf "want %s %s\n" (SHA.to_hex id) (Capabilities.to_string c) in
-            last_c := c;
+            (* additional-want *)
+            let msg = Printf.sprintf "want %s\n" (SHA.to_hex id) in
+            if i <> 0 && c <> [] then
+              Log.warn "'additional-want' should have empty capabilities";
             PacketLine.output_line oc msg
         ) (filter_wants t)
       >>= fun () ->
@@ -507,7 +532,7 @@ module Make (IO: IO) (Store: Store.S) = struct
 
       (* output done *)
       if List.mem Done t then
-        PacketLine.output_line oc "done"
+        PacketLine.output_line oc "done\n"
       else
         PacketLine.flush oc
 
@@ -518,9 +543,9 @@ module Make (IO: IO) (Store: Store.S) = struct
 
     (* PHASE1: the client send the the IDs he wants, the sever answers with
        the new shallow state. *)
-    let phase1 (ic, oc) ?deepen ~shallows ~wants =
+    let phase1 (ic, oc) ?deepen ~capabilities ~shallows ~wants =
       Log.debug "Upload.phase1";
-      let wants = List.map (fun id -> Want (id, Capabilities.default)) wants in
+      let wants = List.map (fun id -> Want (id, capabilities)) wants in
       let shallows = List.map (fun id -> Shallow id) shallows in
       let deepen = match deepen with
         | None   -> []
@@ -561,6 +586,80 @@ module Make (IO: IO) (Store: Store.S) = struct
       aux haves >>= fun () ->
       Ack.input ic >>= fun _ack ->
       return_unit
+
+  end
+
+  module Side_band = struct
+
+    (* This capability means that server can send, and client
+       understand multiplexed progress reports and error info
+       interleaved with the packfile itself.
+
+       These two options are mutually exclusive. A modern client
+       always favors 'side-band-64k'.
+
+       Either mode indicates that the packfile data will be streamed
+       broken up into packets of up to either 1000 bytes in the case
+       of 'side_band', or 65520 bytes in the case of
+       'side_band_64k'. Each packet is made up of a leading 4-byte
+       pkt-line length of how much data is in the packet, followed by
+       a 1-byte stream code, followed by the actual data.
+
+       The stream code can be one of:
+
+       1 - pack data
+       2 - progress messages
+       3 - fatal error message just before stream aborts
+
+       The "side-band-64k" capability came about as a way for newer
+       clients that can handle much larger packets to request packets
+       that are actually crammed nearly full, while maintaining
+       backward compatibility for the older clients.
+
+       Further, with side-band and its up to 1000-byte messages, it's
+       actually 999 bytes of payload and 1 byte for the stream
+       code. With side-band-64k, same deal, you have up to 65519 bytes
+       of data and 1 byte for the stream code.
+
+       The client MUST send only maximum of one of "side-band" and "side-
+       band-64k".  Server MUST diagnose it as an error if client requests
+       both.  *)
+
+    type kind = Pack | Progress | Fatal
+
+    let kind c = match Char.code c with
+      | 1 -> Pack
+      | 2 -> Progress
+      | 3 -> Fatal
+      | i -> error "Side_band: %d is not a valid message type" i
+
+    exception Error of string
+
+    let input ic =
+      Log.debug "Side_band.input";
+      let rec aux acc =
+        PacketLine.input_raw ic >>= function
+        | None    -> return (List.rev acc)
+        | Some "" -> aux acc
+        | Some s  ->
+          let payload = String.sub s 1 (String.length s - 1) in
+          match kind s.[0] with
+          | Pack     -> aux (payload :: acc)
+          | Progress -> Log.info "remote: %s" payload; aux acc
+          | Fatal    -> fail (Error payload)
+      in
+      aux [] >>= fun bufs ->
+      return (String.concat "" bufs)
+
+  end
+
+  module Pack_file = struct
+
+    let input ~capabilities ic =
+      if List.mem `Side_band_64k capabilities
+      || List.mem `Side_band capabilities
+      then Side_band.input ic
+      else IO.read_all ic
 
   end
 
@@ -618,6 +717,7 @@ module Make (IO: IO) (Store: Store.S) = struct
           aux false y in
       aux true t.commands >>= fun () ->
       let s = Misc.with_buffer (fun b -> Pack.add b t.pack) in
+      Log.info "SENDING: %s" s;
       IO.write oc s
 
   end
@@ -657,6 +757,7 @@ module Make (IO: IO) (Store: Store.S) = struct
   type clone = {
     c_deepen: int option;
     c_unpack: bool;
+    c_capabilites: Capabilities.t;
   }
 
   type fetch = {
@@ -664,6 +765,7 @@ module Make (IO: IO) (Store: Store.S) = struct
     f_shallows: SHA.t list;
     f_deepen  : int option;
     f_unpack  : bool;
+    f_capabilites: Capabilities.t;
   }
 
   type op =
@@ -692,17 +794,20 @@ module Make (IO: IO) (Store: Store.S) = struct
             | None  , Some x -> Update_request.Create (branch, x)
             | Some x, Some y -> Update_request.Update (branch, x, y) in
           let capabilities =
-            Capability.Report_status ::
-            match command with
-            | Update_request.Delete _ -> [Capability.Delete_refs]
-            | _                       -> [Capability.Ofs_delta ] in
+            `Report_status :: match command with
+            | Update_request.Delete _ -> [`Delete_refs]
+            | _                       -> [`Ofs_delta ]
+          in
           let commands = [ command ] in
-          let min = SHA.Commit.Map.keys (Listing.references listing)
-                  |> List.map SHA.of_commit
-                  |> SHA.Set.of_list in
+          let min =
+            SHA.Commit.Map.keys (Listing.references listing)
+            |> List.map SHA.of_commit
+            |> SHA.Set.of_list
+          in
           let max = match new_obj with
             | None   -> SHA.Set.empty
-            | Some x -> SHA.Set.singleton (SHA.of_commit x) in
+            | Some x -> SHA.Set.singleton (SHA.of_commit x)
+          in
           Graph.pack t ~min max >>= fun pack ->
           let request = { Update_request.capabilities; commands; pack } in
           Log.debug "request:\n%s" (Update_request.pretty request);
@@ -757,12 +862,21 @@ module Make (IO: IO) (Store: Store.S) = struct
               let deepen = match op with
                 | Clone { c_deepen = d; _ }
                 | Fetch { f_deepen = d; _ } -> d
-                |  _               -> None in
+                |  _               -> None
+              in
               let shallows = match op with
                 | Fetch { f_shallows = s; _ } -> s
-                | _ -> [] in
-              Upload_request.phase1 ?deepen (ic,oc) ~shallows ~wants:[SHA.of_commit head]
+                | _ -> []
+              in
+              let capabilities = match op with
+               | Fetch { f_capabilites = c; _ }
+                | Clone { c_capabilites = c; _ } -> c
+                | _ -> []
+              in
+              Upload_request.phase1 (ic,oc) ?deepen ~capabilities
+                ~shallows ~wants:[SHA.of_commit head]
               >>= fun _phase1 ->
+
               (* XXX: process the shallow / unshallow.  *)
               (* XXX: need a notion of shallow/unshallow in API. *)
 
@@ -774,7 +888,8 @@ module Make (IO: IO) (Store: Store.S) = struct
 
               Log.debug "PHASE3";
               printf "Receiving data ...%!";
-              IO.read_all ic >>= fun raw ->
+              Pack_file.input ~capabilities ic >>= fun raw ->
+
               printf " done.\n%!";
               Log.debug "Received a pack file of %d bytes." (String.length raw);
               let pack = Cstruct.of_string raw in
@@ -807,17 +922,26 @@ module Make (IO: IO) (Store: Store.S) = struct
     fetch_pack t gri Ls >>= function
       { Result.references; _ } -> return references
 
-  let clone t ?deepen ?(unpack=false) gri =
-    fetch_pack t gri (Clone { c_deepen = deepen; c_unpack = unpack })
+  let clone t ?deepen ?(unpack=false) ?(capabilities=Capabilities.default) gri =
+    let op = {
+      c_deepen = deepen;
+      c_unpack = unpack;
+      c_capabilites = capabilities;
+    } in
+    fetch_pack t gri (Clone op)
 
-  let fetch t ?deepen ?(unpack=false) gri =
+  let fetch t ?deepen ?(unpack=false) ?(capabilities=Capabilities.default) gri =
     Store.list t >>= fun haves ->
     (* XXX: Store.shallows t >>= fun shallows *)
     let shallows = [] in
-    fetch_pack t gri (Fetch { f_shallows = shallows;
-                              f_haves = haves;
-                              f_deepen = deepen;
-                              f_unpack = unpack })
+    let op = {
+      f_shallows = shallows;
+      f_haves = haves;
+      f_deepen = deepen;
+      f_unpack = unpack;
+      f_capabilites = capabilities;
+    } in
+    fetch_pack t gri (Fetch op)
 
   type t = Store.t
 
@@ -827,6 +951,8 @@ module type S = sig
   type t
   val ls: t -> Gri.t -> SHA.Commit.t Reference.Map.t Lwt.t
   val push: t -> branch:Reference.t -> Gri.t -> Result.push Lwt.t
-  val clone: t -> ?deepen:int -> ?unpack:bool -> Gri.t -> Result.fetch Lwt.t
-  val fetch: t -> ?deepen:int -> ?unpack:bool -> Gri.t -> Result.fetch Lwt.t
+  val clone: t -> ?deepen:int -> ?unpack:bool -> ?capabilities:capability list
+    -> Gri.t -> Result.fetch Lwt.t
+  val fetch: t -> ?deepen:int -> ?unpack:bool -> ?capabilities:capability list
+    -> Gri.t -> Result.fetch Lwt.t
 end
