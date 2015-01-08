@@ -213,13 +213,13 @@ let ls_files = {
     let ls (module S: Store.S) debug =
       run begin
         S.create ()    >>= fun t ->
-        S.read_cache t >>= fun cache ->
+        S.read_index t >>= fun cache ->
         if debug then
-          printf "%s" (Cache.pretty cache)
+          printf "%s" (Index.pretty cache)
         else
           List.iter
-            (fun e -> Printf.printf "%s\n" e.Cache.name)
-            cache.Cache.entries;
+            (fun e -> Printf.printf "%s\n" e.Index.name)
+            cache.Index.entries;
         return_unit
       end in
     Term.(mk ls $ backend $ debug)
@@ -248,7 +248,7 @@ let read_tree = {
           else
             return (SHA.Commit.of_hex commit_str)
         end >>= fun commit ->
-        S.write_cache t commit >>= fun () ->
+        S.write_index t commit >>= fun () ->
         printf "The index file has been update to %s\n%!" commit_str;
         return_unit
       end in
@@ -293,7 +293,7 @@ let clone = {
         if not bare then match r.Result.head with
           | None      -> return_unit
           | Some head ->
-            S.write_cache t head >>= fun () ->
+            S.write_index t head >>= fun () ->
             printf "HEAD is now at %s\n" (SHA.Commit.to_hex head);
             return_unit
         else
@@ -311,11 +311,34 @@ let fetch = {
     let fetch (module S: Store.S) unpack remote =
       let module Sync = Sync.Make(S) in
       run begin
-        S.create ()                  >>= fun t ->
+        S.create ()                 >>= fun t ->
         Sync.fetch t ~unpack remote >>= fun _ ->
         return_unit
       end in
     Term.(mk fetch $ backend $ unpack $ remote)
+}
+
+(* PULL *)
+let pull = {
+  name = "pull";
+  doc  = "Pull a remote Git repository (and reset --hard to the new head).";
+  man  = [];
+  term =
+    let pull (module S: Store.S) unpack remote =
+      let module Sy = Sync.Make(S) in
+      run begin
+        S.create ()               >>= fun t ->
+        Sy.fetch t ~unpack remote >>= function
+        | { Sync.Result.head = None; _ }   -> return_unit
+        | { Sync.Result.head = Some h; _ } ->
+          S.write_index t h >>= fun () ->
+          S.read_head t >>= function
+          | None
+          | Some (Reference.SHA _) -> S.write_head t (Reference.SHA h)
+          | Some (Reference.Ref r) -> S.write_reference t r h
+      end
+    in
+    Term.(mk pull $ backend $ unpack $ remote)
 }
 
 
@@ -407,14 +430,15 @@ let default =
       \            [--help]\n\
       \            <command> [<args>]\n\
       \n\
-      The most commonly used ogit commands are:\n\
+      The most commonly used commands are:\n\
       \    clone       %s\n\
       \    fetch       %s\n\
+      \    pull        %s\n\
       \    push        %s\n\
       \    graph       %s\n\
       \n\
       See 'ogit help <command>' for more information on a specific command.\n%!"
-      clone.doc fetch.doc push.doc graph.doc in
+      clone.doc fetch.doc pull.doc push.doc graph.doc in
   Term.(pure usage $ (pure ())),
   Term.info "ogit"
     ~version:Git.Version.current
@@ -429,6 +453,7 @@ let commands = List.map command [
     read_tree;
     clone;
     fetch;
+    pull;
     graph;
     push;
     help;

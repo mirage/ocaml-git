@@ -20,7 +20,7 @@ Library git
   Path:              lib/
   Findlibname:       git
   InternalModules:   LRU
-  Modules:           SHA, Blob, Cache, Commit, Misc, Version,
+  Modules:           SHA, Blob, Index, Commit, Misc, Version,
                      Global_graph, Pack, Pack_index, Packed_value,
                      Reference, Sync, Tag, Tree, User, Value,
                      Object, Object_type, Store, Search, Gri,

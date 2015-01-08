@@ -179,7 +179,8 @@ module D = struct
 
   let realpath file =
     let r =
-      if Sys.is_directory file then realdir file
+      if Sys.file_exists file && Sys.is_directory file then
+        realdir file
       else
         Filename.concat
           (realdir (Filename.dirname file))
@@ -187,17 +188,32 @@ module D = struct
     return r
 
   let stat_info path =
-    let open Cache in
+    let open Index in
     let stats = Unix.stat path in
     let ctime = { lsb32 = Int32.of_float stats.Unix.st_ctime; nsec = 0l } in
     let mtime = { lsb32 = Int32.of_float stats.Unix.st_mtime; nsec = 0l } in
     let dev = Int32.of_int stats.Unix.st_dev in
     let inode = Int32.of_int stats.Unix.st_ino in
     let mode = match stats.Unix.st_kind, stats.Unix.st_perm with
-      | Unix.S_REG, 0o755 -> `Exec
-      | Unix.S_REG, 0o644 -> `Normal
-      | Unix.S_LNK, _     -> `Link
-      | _ -> failwith (path ^ ": not supported kind of file.") in
+      | Unix.S_REG, p -> if p land 0o100 = 0o100 then `Exec else `Normal
+      | Unix.S_LNK, _ -> `Link
+      | k, p ->
+        let kind = match k with
+          | Unix.S_REG -> "REG"
+          | Unix.S_DIR -> "DIR"
+          | Unix.S_CHR -> "CHR"
+          | Unix.S_BLK -> "BLK"
+          | Unix.S_LNK -> "LNK"
+          | Unix.S_FIFO -> "FIFO"
+          | Unix.S_SOCK -> "SOCK"
+        in
+        let perm = Printf.sprintf "%o" p in
+        let error =
+          Printf.sprintf "%s: not supported kind of file [%s, %s]."
+            path kind perm
+        in
+        failwith error
+    in
     let uid = Int32.of_int stats.Unix.st_uid in
     let gid = Int32.of_int stats.Unix.st_gid in
     let size = Int32.of_int stats.Unix.st_size in

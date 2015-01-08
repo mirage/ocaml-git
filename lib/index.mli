@@ -1,5 +1,5 @@
 (*
- * Copyright (c) 2013-2014 Thomas Gazagnaire <thomas@gazagnaire.org>
+ * Copyright (c) 2013-2015 Thomas Gazagnaire <thomas@gazagnaire.org>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** Implementation of the V2 cache format (as V1 is deprecated). *)
+(** Implementation of the V2 Git Index format (as V1 is deprecated). *)
 
 type time = {
 
@@ -32,7 +32,7 @@ type mode =
   | `Exec
   | `Link
   | `Gitlink ]
-(** Permission for files in the cache index. *)
+(** Permission for files in the index file. *)
 
 type stat_info = {
   ctime: time;
@@ -57,22 +57,42 @@ type stat_info = {
     have no meaning to Git, besides exact match, except for the [mode]
     and [size] fields. *)
 
+val pretty_stats: stat_info -> string
+(** Pretty-print file stats. *)
+
 type entry = {
   stats : stat_info;
-  id    : SHA.t;
+  id    : SHA.Blob.t;
   stage : int;
   name  : string;
 }
 
 val pretty_entry: entry -> string
-(** Human-readable representation of a cache entry. *)
+(** Human-readable representation of an index entry. *)
+
+type extension_kind =
+  [ `Tree (** Cached tree *)
+  | `Reuc (** Reuse undo *)
+  | `Link (** split index *)
+  | `Other of string ]
+
+type extension = {
+  kind: extension_kind;
+  payload: string;
+}
+
+val pretty_extension: extension -> string
+(** Human-readable representation of the extension. *)
 
 type t = {
   entries   : entry list;
-  extensions: (Int32.t * string) list;
+  extensions: extension list;
 }
 (** Index entries are sorted by the byte sequence that comprises the
     entry [name]; with a secondary comparison of the [stage] bits if
     the entry name byte sequences are identical *)
 
 include Object.S with type t := t
+
+val empty: t
+(** The empty index file. *)

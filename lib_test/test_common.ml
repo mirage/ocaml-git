@@ -83,8 +83,8 @@ module Make (S: Store.S) = struct
   let assert_pack_equal, assert_pack_opt_equal, assert_packs_equal =
     mk Pack.equal Pack.compare Pack.pretty
 
-  let assert_cache_equal, assert_cache_opt_equal, assert_caches_equal =
-    mk Cache.equal Cache.compare Cache.pretty
+  let assert_index_equal, assert_index_opt_equal, assert_indexs_equal =
+    mk Index.equal Index.compare Index.pretty
 
   let assert_raw_pack_equal, assert_raw_pack_opt_equal, assert_raw_packs_equal =
     mk Pack.Raw.equal Pack.Raw.compare Pack.Raw.pretty

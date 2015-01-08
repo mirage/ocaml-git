@@ -34,14 +34,14 @@ module type IO = sig
   val read_file: string -> Cstruct.t Lwt.t
   val write_file: string -> Cstruct.t -> unit Lwt.t
   val chmod: string -> int -> unit Lwt.t
-  val stat_info: string -> Cache.stat_info
+  val stat_info: string -> Index.stat_info
 end
 
 module type S = sig
   include Store.S
   val create_file: string -> Tree.perm -> Blob.t -> unit Lwt.t
-  val entry_of_file: ?root:string ->
-    string -> Tree.perm -> Blob.t -> Cache.entry option Lwt.t
+  val entry_of_file: ?root:string -> Index.t ->
+    string -> Tree.perm -> SHA.Blob.t -> Blob.t -> Index.entry option Lwt.t
 end
 
 module Make (IO: IO) = struct
@@ -209,7 +209,7 @@ module Make (IO: IO) = struct
 
     let index_lru: Pack_index.t LRU.t = LRU.make 8
 
-    let write_index t sha1 idx =
+    let write_pack_index t sha1 idx =
       LRU.set index_lru sha1 idx;
       let file = index t sha1 in
       IO.file_exists file >>= function
@@ -219,11 +219,11 @@ module Make (IO: IO) = struct
         Pack_index.add buf idx;
         IO.write_file file (Cstruct.of_string (Buffer.contents buf))
 
-    let read_index t sha1 =
-      Log.debug "read_index %s" (SHA.to_hex sha1);
+    let read_pack_index t sha1 =
+      Log.debug "read_pack_index %s" (SHA.to_hex sha1);
       try return (LRU.get index_lru sha1)
       with Not_found ->
-        Log.debug "read_index: cache miss!";
+        Log.debug "read_pack_index: cache miss!";
         let file = index t sha1 in
         IO.file_exists file >>= function
         | true ->
@@ -264,7 +264,7 @@ module Make (IO: IO) = struct
         IO.file_exists file >>= function
         | true ->
           File_cache.read file >>= fun buf ->
-          read_index t sha1 >>= fun index ->
+          read_pack_index t sha1 >>= fun index ->
           let pack = Pack.Raw.input (Mstruct.of_cstruct buf) ~index:(Some index) in
           let pack = Pack.to_pic pack in
           LRU.set pack_lru sha1 pack;
@@ -432,7 +432,7 @@ module Make (IO: IO) = struct
     let sha1 = Pack.Raw.sha1 pack in
     let index = Pack.Raw.index pack in
     Packed.write_pack t sha1 pack   >>= fun () ->
-    Packed.write_index t sha1 index >>= fun () ->
+    Packed.write_pack_index t sha1 index >>= fun () ->
     return (Pack.Raw.keys pack)
 
   let write_reference t ref sha1 =
@@ -466,7 +466,7 @@ module Make (IO: IO) = struct
     let n = ref 0 in
     let rec aux (mode, sha1) =
       read_exn t sha1 >>= function
-      | Value.Blob b   -> incr n; return (Leaf (mode, b))
+      | Value.Blob b   -> incr n; return (Leaf (mode, (SHA.to_blob sha1, b)))
       | Value.Commit c -> aux (`Dir, SHA.of_tree c.Commit.tree)
       | Value.Tag t    -> aux (mode, t.Tag.sha1)
       | Value.Tree t   ->
@@ -484,71 +484,88 @@ module Make (IO: IO) = struct
     load_filesystem t init >>= fun (n, trie) ->
     let i = ref 0 in
     Log.debug "iter_blobs %s" (SHA.Commit.to_hex init);
-    iter (fun path (mode, blob) ->
+    iter (fun path (mode, (sha1, blob)) ->
         incr i;
-        f (!i, n) (t :: path) mode blob
+        f (!i, n) (t :: path) mode sha1 blob
       ) trie
 
   let create_file file mode blob =
     Log.debug "create_file %s" file;
     let blob = Blob.to_raw blob in
     match mode with
-    | `Link -> (* Lwt_unix.symlink file ??? *) failwith "TODO"
+    | `Link -> (*q Lwt_unix.symlink file ??? *) failwith "TODO"
     | _     ->
       IO.write_file file (Cstruct.of_string blob) >>= fun () ->
       match mode with
       | `Exec -> IO.chmod file 0o755
       | _     -> return_unit
 
-  let cache_file t =
+  let index_file t =
     t / ".git" / "index"
 
-  let read_cache t =
-    IO.read_file (cache_file t) >>= fun buf ->
-    let buf = Mstruct.of_cstruct buf in
-    return (Cache.input buf)
+  let read_index t =
+    Log.debug "read_index";
+    let file = index_file t in
+    IO.file_exists file >>= function
+    | false -> return Index.empty
+    | true  ->
+      IO.read_file file >>= fun buf ->
+      let buf = Mstruct.of_cstruct buf in
+      return (Index.input buf)
 
-  let entry_of_file ?root file mode blob =
-    Log.debug "entry_of_file %s" file;
-    begin
-      IO.file_exists file >>= function
-      | true  -> return_unit
-      | false -> create_file file mode blob
-    end >>= fun () ->
+  let entry_of_file ?root index file mode sha1 blob =
     begin match root with
       | None   -> IO.getcwd ()
       | Some r -> IO.realpath r
     end >>= fun root ->
     IO.realpath file >>= fun file ->
+    Log.debug "entry_of_file %s" file;
+    begin
+      IO.file_exists file >>= function
+      | false -> create_file file mode blob
+      | true  ->
+        let stats = IO.stat_info file in
+        if List.exists
+            (fun e -> root / e.Index.name = file && e.Index.stats = stats)
+            index.Index.entries
+        then (
+          Log.debug "%s unchanged!" file;
+          return_unit
+        ) else (
+          Log.debug "%s has changed, updating!" file;
+          create_file file mode blob
+        )
+    end >>= fun () ->
     try
-      let id = Value.sha1 (Value.Blob blob) in
+      let id = sha1 in
       let stats = IO.stat_info file in
       let stage = 0 in
       match Misc.string_chop_prefix ~prefix:(root / "") file with
       | None      -> failwith ("entry_of_file: " ^ file)
       | Some name ->
-        let entry = { Cache.stats; id; stage; name } in
+        let entry = { Index.stats; id; stage; name } in
         return (Some entry)
     with Failure _ ->
       return_none
 
-  let write_cache t head =
-    Log.debug "write_cache %s" (SHA.Commit.to_hex head);
+  let write_index t head =
+    Log.debug "write_index %s" (SHA.Commit.to_hex head);
     let entries = ref [] in
     let all = ref 0 in
-    iter_blobs t ~init:head ~f:(fun (i,n) path mode blob ->
+    read_index t >>= fun index ->
+    iter_blobs t ~init:head ~f:(fun (i,n) path mode sha1 blob ->
         all := n;
         printf "\rChecking out files: %d%% (%d/%d), done.%!" Pervasives.(100*i/n) i n;
         let file = String.concat Filename.dir_sep path in
-        Log.debug "write_cache: blob:%s" file;
-        entry_of_file ~root:t file mode blob >>= function
+        Log.debug "write_index: blob:%s" file;
+        entry_of_file ~root:t index file mode sha1 blob >>= function
         | None   -> return_unit
         | Some e -> entries := e :: !entries; return_unit
       ) >>= fun () ->
-    let cache = { Cache.entries = !entries; extensions = [] } in
+    let index = { Index.entries = !entries; extensions = [] } in
     let buf = Buffer.create 1024 in
-    Cache.add buf cache;
-    IO.write_file (cache_file t) (Cstruct.of_string (Buffer.contents buf)) >>= fun () ->
+    Index.add buf index;
+    IO.write_file (index_file t) (Cstruct.of_string (Buffer.contents buf)) >>= fun () ->
     printf "\rChecking out files: 100%% (%d/%d), done.%!\n" !all !all;
     return_unit
 
