@@ -1,5 +1,5 @@
 (*
- * Copyright (c) 2013-2014 Thomas Gazagnaire <thomas@gazagnaire.org>
+ * Copyright (c) 2013-2015 Thomas Gazagnaire <thomas@gazagnaire.org>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -92,14 +92,15 @@ module type S = sig
   val remove_reference: t -> Reference.t -> unit Lwt.t
   (** Remove a refernce. *)
 
-  (** {2 Cache file} *)
+  (** {2 Git index files} *)
 
-  val read_cache: t -> Cache.t Lwt.t
-  (** Return the cache of files. *)
+  val read_index: t -> Index.t Lwt.t
+  (** Return the index file. *)
 
-  val write_cache: t -> SHA.Commit.t -> unit Lwt.t
-  (** Update the cache of files for the given revision. XXX: need a
-      merge stategy. *)
+  val write_index: t -> SHA.Commit.t -> unit Lwt.t
+  (** Update the index file for the given revision. *)
+
+  (** {2 Backend kind} *)
 
   val kind: [`Memory | `Disk]
   (** The kind of backend. *)

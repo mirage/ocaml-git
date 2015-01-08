@@ -1,5 +1,5 @@
 (*
- * Copyright (c) 2013-2014 Thomas Gazagnaire <thomas@gazagnaire.org>
+ * Copyright (c) 2013-2015 Thomas Gazagnaire <thomas@gazagnaire.org>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,11 +14,9 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(* XXX: we only implement index file cache format V2 *)
-
 open Printf
 
-module Log = Log.Make(struct let section = "cache" end)
+module Log = Log.Make(struct let section = "index" end)
 
 type time = {
   lsb32: int32;
@@ -49,9 +47,22 @@ type stat_info = {
   size : int32;
 }
 
+let pretty_stats t =
+  sprintf "\
+    \  ctime: %ld:%ld\n\
+    \  mtime: %ld:%ld\n\
+    \  dev: %ld\tino: %ld\n\
+    \  uid: %ld\tgid: %ld\n\
+    \  size: %ld\tmode: %s\n"
+    t.ctime.lsb32 t.ctime.nsec
+    t.mtime.lsb32 t.mtime.nsec
+    t.dev t.inode
+    t.uid t.gid
+    t.size (pretty_mode t.mode)
+
 type entry = {
   stats : stat_info;
-  id    : SHA.t;
+  id    : SHA.Blob.t;
   stage : int;
   name  : string;
 }
@@ -72,10 +83,36 @@ let pretty_entry t =
     t.stats.uid t.stats.gid
     t.stats.size t.stage (pretty_mode t.stats.mode)
 
+
+type extension_kind =
+  [ `Tree
+  | `Reuc (* Reuse undo *)
+  | `Link (* split index *)
+  | `Other of string ]
+
+let extension_kind_of_string: string -> extension_kind = function
+  | "TREE" -> `Tree
+  | "REUC" -> `Reuc
+  | "link" -> `Link
+  | x      -> `Other x
+
+let string_of_extension_kind: extension_kind -> string = function
+  | `Tree -> "TREE"
+  | `Reuc -> "REUC"
+  | `Link -> "link"
+  | `Other x -> x
+
+type extension = {
+  kind: extension_kind;
+  payload: string;
+}
+
 type t = {
   entries   : entry list;
-  extensions: (int32 * string) list;
+  extensions: extension list;
 }
+
+let empty = { entries = []; extensions = [] }
 
 let hash = Hashtbl.hash
 
@@ -151,7 +188,7 @@ let input_entry buf =
   Log.debug "input_entry";
   let offset0 = Mstruct.offset buf in
   let stats = input_stat_info buf in
-  let id = SHA.input buf in
+  let id = SHA.Blob.input buf in
   let stage, len =
     let i = Mstruct.get_be_uint16 buf in
     (i land 0x3000) lsr 12,
@@ -165,7 +202,7 @@ let input_entry buf =
     | n -> 8-n in
   Mstruct.shift buf padding;
   Log.debug "name: %s id: %s bytes:%d padding:%d"
-    name (SHA.to_hex id) bytes padding;
+    name (SHA.Blob.to_hex id) bytes padding;
   { stats; id; stage; name }
 
 let add_entry buf t =
@@ -177,7 +214,7 @@ let add_entry buf t =
   let cstr = Cstruct.create (len+pad) in
   Mstruct.with_mstruct cstr (fun mstr ->
       add_stat_info mstr t.stats;
-      Mstruct.set_string mstr (SHA.to_raw t.id);
+      Mstruct.set_string mstr (SHA.Blob.to_raw t.id);
       let flags = (t.stage lsl 12 + String.length t.name) land 0x3FFF in
       Mstruct.set_be_uint16 mstr flags;
       Mstruct.set_string mstr t.name;
@@ -185,9 +222,32 @@ let add_entry buf t =
     );
   Buffer.add_string buf (Cstruct.to_string cstr)
 
-let input_extensions _buf =
-  (* TODO: actually read the extension contents *)
-  []
+let pretty_extension e =
+  Printf.sprintf "kind:%s size:%d"
+    (string_of_extension_kind e.kind) (String.length e.payload)
+
+let input_entries buf =
+  let n = Mstruct.get_be_uint32 buf in
+  Log.debug "input_entries: %ld entries (%db)" n (Mstruct.length buf);
+  let rec loop acc n =
+    if n = 0l then List.rev acc
+    else
+      let entry = input_entry buf in
+      loop (entry :: acc) Int32.(sub n 1l) in
+  loop [] n
+
+let input_extensions buf =
+  let rec aux acc =
+    if Mstruct.length buf = 20 then List.rev acc
+    else
+      let kind = extension_kind_of_string (Mstruct.get_string buf 4) in
+      let size = Mstruct.get_be_uint32 buf in
+      let payload = Mstruct.get_string buf (Int32.to_int size) in
+      let e = { kind; payload } in
+      Log.debug "input_extensions: %s" (pretty_extension e);
+      aux (e :: acc)
+  in
+  aux []
 
 let input buf =
   let all = Mstruct.to_cstruct buf in
@@ -195,25 +255,17 @@ let input buf =
   let total_length = Mstruct.length buf in
   let header = Mstruct.get_string buf 4 in
   if header <> "DIRC" then
-    Mstruct.parse_error_buf buf "%s: wrong cache header." header;
+    Mstruct.parse_error_buf buf "%s: wrong index header." header;
   let version = Mstruct.get_be_uint32 buf in
   if version <> 2l then
-    failwith (Printf.sprintf "Only cache version 2 is supported (%ld)" version);
-  let n = Mstruct.get_be_uint32 buf in
-  Log.debug "input: %ld entries (%db)" n (Mstruct.length buf);
-  let entries =
-    let rec loop acc n =
-      if n = 0l then List.rev acc
-      else
-        let entry = input_entry buf in
-        loop (entry :: acc) Int32.(sub n 1l) in
-    loop [] n in
+    failwith (Printf.sprintf "Only index version 2 is supported (%ld)" version);
+  let entries = input_entries buf in
   let extensions = input_extensions buf in
   let length = Mstruct.offset buf - offset in
   if length <> total_length - 20 then (
-    eprintf "Cache.input: more data to read! (total:%d current:%d)"
+    eprintf "Index.input: more data to read! (total:%d current:%d)"
       (total_length - 20) length;
-    failwith "Cache.input"
+    failwith "Index.input"
   );
   let actual_checksum =
     Cstruct.sub all offset length
@@ -221,8 +273,8 @@ let input buf =
   in
   let checksum = SHA.input buf in
   if actual_checksum <> checksum then (
-    eprintf "Cach.input: wrong checksum";
-    failwith "Cache.input"
+    eprintf "Index.input: wrong checksum";
+    failwith "Index.input"
   );
   { entries; extensions }
 

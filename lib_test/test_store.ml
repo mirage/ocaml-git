@@ -1,5 +1,5 @@
 (*
- * Copyright (c) 2013 Thomas Gazagnaire <thomas@gazagnaire.org>
+ * Copyright (c) 2013-2015 Thomas Gazagnaire <thomas@gazagnaire.org>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -281,13 +281,14 @@ module Make (Store: Store.S) = struct
                 Lwt_io.read ic >>= fun str ->
                 return (Blob.of_raw str)
               ) >>= fun blob ->
-            FS.entry_of_file file `Normal blob
+            let sha1 = SHA.to_blob (Value.sha1 (Value.Blob blob)) in
+            FS.entry_of_file Index.empty file `Normal sha1 blob
           ) files >>= fun entries ->
         let entries = Misc.list_filter_map (fun x -> x) entries in
-        let cache = { Cache.entries; extensions = [] } in
-        let buf = Misc.with_buffer' (fun buf -> Cache.add buf cache) in
-        let cache2 = Cache.input (Mstruct.of_cstruct buf) in
-        assert_cache_equal "cache" cache cache2;
+        let cache = { Index.entries; extensions = [] } in
+        let buf = Misc.with_buffer' (fun buf -> Index.add buf cache) in
+        let cache2 = Index.input (Mstruct.of_cstruct buf) in
+        assert_index_equal "index" cache cache2;
         return_unit
       in
       run x test

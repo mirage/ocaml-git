@@ -1,5 +1,5 @@
 (*
- * Copyright (c) 2013-2014 Thomas Gazagnaire <thomas@gazagnaire.org>
+ * Copyright (c) 2013-2015 Thomas Gazagnaire <thomas@gazagnaire.org>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -140,10 +140,10 @@ let write_reference t ref sha1 =
   Hashtbl.replace t.refs ref sha1;
   return_unit
 
-let read_cache _t =
-  failwith "Memory.read_cache: TODO"
+let read_index _t =
+  failwith "Memory.read_index: TODO"
 
-let write_cache _t _head =
-  failwith "Memory.update_cache: TODO"
+let write_index _t _head =
+  failwith "Memory.update_index: TODO"
 
 let kind = `Memory

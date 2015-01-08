@@ -1,5 +1,5 @@
 (*
- * Copyright (c) 2013-2014 Thomas Gazagnaire <thomas@gazagnaire.org>
+ * Copyright (c) 2013-2015 Thomas Gazagnaire <thomas@gazagnaire.org>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -23,8 +23,8 @@ module type S = sig
   val create_file: string -> Tree.perm -> Blob.t -> unit Lwt.t
   (** Create a file on the filesystem, with the given mode. *)
 
-  val entry_of_file: ?root:string ->
-    string -> Tree.perm -> Blob.t -> Cache.entry option Lwt.t
+  val entry_of_file: ?root:string -> Index.t ->
+    string -> Tree.perm -> SHA.Blob.t -> Blob.t -> Index.entry option Lwt.t
   (** Generate a cache entry for the file. Create a fresh file if it
       does not already exist. If [root] is not set, use the current
       working directory as repository root. *)
@@ -71,7 +71,7 @@ module type IO = sig
   val chmod: string -> int -> unit Lwt.t
   (** Change the file mode. *)
 
-  val stat_info: string -> Cache.stat_info
+  val stat_info: string -> Index.stat_info
   (** Return the stats of the given file. *)
 
 end

@@ -1,4 +1,10 @@
 ## 1.4.4
+* Overwrite changed file when expanding the index into the filesystem (#4)
+* Do not recompute the hash of blob files when expanding the index into the
+  filesystem. This help fixing a speed issue with non-bare repo with lots of
+  file.
+* Rename `{write,read}_cache` to `{write,read}_index`
+* Rename Cache to Index
 * Expose the protocol capabilities to the client
 * Support side-band-64k protocol capability (#44)
 * Fix support for git+ssh (#39)
@@ -6,21 +12,20 @@
 * Maintain a cache of opened files (#29, Pierre Chambart)
 
 ## 1.4.3 (2014-12-19)
-* Fix regression introduced in 1.4.3 appearing when
-  synchronising big repositories (#38)
+* Fix regression introduced in 1.4.3 appearing when synchronising big
+  repositories (#38)
 * Fix concurrent read/write by using an atomic rename (#35)
 * Tree objects can also point to commits (@codinuum)
 * Reduce allocation (@codinuum)
-* Use LRU cache instead of an unbounde Hashtl
-  (code imported for Simon Cruanes's CCache implementation)
-* Remove the crazy unbounded caching in Git.FS. Use the LRU
-  everywhere (#22)
+* Use LRU cache instead of an unbounde Hashtbl (code imported for
+  Simon Cruanes's CCache implementation)
+* Remove the crazy unbounded caching in Git.FS. Use the LRU everywhere (#22)
 * Fix fd leaking (#29)
 * Update to dolog.1.0
 * Remove dependency to camlp4
 * Remove lots of warnings
-* Move `Git_unix` and `Git_mirage` in their own subdirs as it
-  was causing issues to oasis (#5, Simon Cruanes)
+* Move `Git_unix` and `Git_mirage` in their own subdirs as it was causing issues
+  to oasis (#5, Simon Cruanes)
 * Use `Bytes` instead of `String` (#5, Simon Cruanes)
 
 ## 1.4.2 (2014-12-14)
@@ -55,12 +60,11 @@
 * Fix reading the total number of keys in a pack index file
 * Use `ocaml-conduit` to set-up connections with remote repositories
 * USe `ocaml-uri` to specify Git Remote Identifiers
-* Depend the implementation of patience diff in pure OCaml
-   (unused for now)
+* Depend the implementation of patience diff in pure OCaml (unused for now)
 
 ## 1.0.2: (2014-04-19)
-* Catch, improve and propagate Zlib inflation errors
-   (which usually on incomplete files)
+* Catch, improve and propagate Zlib inflation errors (which usually pop-ups
+  on incomplete files)
 
 ## 1.0.1: (2014-04-10)
 * Escape invalid chars in path names
@@ -69,11 +73,11 @@
 ## 1.0.0: (2014-02-10)
 * Support for reading and writing pack indexes
 * Support for reading and writing pack files
-* Refactor the API: each Git object has now its own file,
-  with a consistent signature
-* `ogit clone` now correctly set-up the cache file (which means
-  that `git status` and `git diff` will now work as expected
-  on a repository created by `ogit`)
+* Refactor the API: each Git object has now its own file, with a consistent
+  signature
+* `ogit clone` now correctly set-up the cache file (which means that
+  `git status` and `git diff` will now work as expected on a repository created
+   by `ogit`)
 * Add `ogit read-tree COMMIT`
 * Add `ogit ls-files [--all]`
 * Support for reading and writing cache files
