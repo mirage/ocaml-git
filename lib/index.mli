@@ -34,6 +34,9 @@ type mode =
   | `Gitlink ]
 (** Permission for files in the index file. *)
 
+val pretty_mode: mode -> string
+(** Pretty print file modes. *)
+
 type stat_info = {
   ctime: time;
   mtime: time;

@@ -201,7 +201,7 @@ let input_entry buf =
     | 0 -> 0
     | n -> 8-n in
   Mstruct.shift buf padding;
-  Log.debug "name: %s id: %s bytes:%d padding:%d"
+  Log.debug "name:%s id:%s bytes:%d padding:%d"
     name (SHA.Blob.to_hex id) bytes padding;
   { stats; id; stage; name }
 

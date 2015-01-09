@@ -96,6 +96,16 @@ module Make (Store: Store.S) = struct
     ])
   let kt4 = Value.sha1 t4
 
+  let t5 = Value.tree ([
+      { Tree.perm = `Normal;
+        name = long_random_string;
+        node = kv2; };
+      { Tree.perm = `Dir;
+        name = "a";
+        node = kt2; }
+    ])
+  let kt5 = Value.sha1 t5
+
   let john_doe = {
     User.name  = "John Doe";
     email = "jon@doe.com";
@@ -121,6 +131,11 @@ module Make (Store: Store.S) = struct
       message     = "hello r1!"
     }
   let kc2 = Value.sha1 c2
+
+  let c3 =
+    let c2 = match c2 with Value.Commit x -> x | _ -> assert false in
+    Value.commit { c2 with Commit.tree = SHA.to_tree kt5 }
+  let kc3 = Value.sha1 c3
 
   (* tag1: c1 *)
   let tag1 = Value.tag {
@@ -162,15 +177,20 @@ module Make (Store: Store.S) = struct
     assert_key_opt_equal (name ^ "-find") (Some e) k';
     return_unit
 
-  let create () =
+  let create ?(index=false) () =
     Store.create ~root:"test-db" () >>= fun t  ->
     Lwt_list.iter_p
       (fun v -> Store.write t v >>= fun _ -> return_unit)
-      [
-        v1; v2;
-        t1; t2; t3; t4;
-        c1; c2
-      ] >>= fun () ->
+      (if not index then [
+          v1; v2;
+          t1; t2; t3; t4;
+          c1; c2;
+        ] else [
+         v1; v2;
+         t1; t2; t5;
+         c1; c3;
+       ])
+    >>= fun () ->
     return t
 
   let is_ typ t k =
@@ -273,25 +293,42 @@ module Make (Store: Store.S) = struct
     run x test
 
   let test_index x () =
-    if x.name = "FS" then
-      let test () =
-        rec_files "." >>= fun files ->
-        Lwt_list.map_s (fun file ->
-            Lwt_io.with_file ~mode:Lwt_io.input file (fun ic ->
-                Lwt_io.read ic >>= fun str ->
-                return (Blob.of_raw str)
-              ) >>= fun blob ->
-            let sha1 = SHA.to_blob (Value.sha1 (Value.Blob blob)) in
-            FS.entry_of_file Index.empty file `Normal sha1 blob
-          ) files >>= fun entries ->
-        let entries = Misc.list_filter_map (fun x -> x) entries in
-        let cache = { Index.entries; extensions = [] } in
-        let buf = Misc.with_buffer' (fun buf -> Index.add buf cache) in
-        let cache2 = Index.input (Mstruct.of_cstruct buf) in
-        assert_index_equal "index" cache cache2;
-        return_unit
+    let test () =
+      let test_fs () =
+        (* scan the local filesystem *)
+        if x.name = "FS" then (
+          if Filename.basename (Sys.getcwd ()) <> "lib_test" then
+            failwith "Tests should run in lib_test/";
+          files "." >>= fun files ->
+          Lwt_list.map_s (fun file ->
+              Git_unix.FS.IO.read_file file >>= fun str ->
+              let blob = Blob.of_raw (Cstruct.to_string str) in
+              let sha1 = SHA.to_blob (Value.sha1 (Value.Blob blob)) in
+              let mode =
+                let p = (Unix.stat file).Unix.st_perm in
+                if p land 0o100 = 0o100 then `Exec else `Normal
+              in
+              FS.entry_of_file Index.empty file mode sha1 blob >>= fun f ->
+              return f
+            ) files >>= fun entries ->
+          let entries = Misc.list_filter_map (fun x -> x) entries in
+          let cache = { Index.entries; extensions = [] } in
+          let buf = Misc.with_buffer' (fun buf -> Index.add buf cache) in
+          let cache2 = Index.input (Mstruct.of_cstruct buf) in
+          assert_index_equal "index" cache cache2;
+          return_unit
+        ) else
+          return_unit
       in
-      run x test
+      test_fs () >>= fun () ->
+
+      (* test random entries *)
+      create ~index:true () >>= fun t ->
+      Store.write_index t (SHA.to_commit kc3) >>= fun () ->
+      Store.read_index t >>= fun _ ->
+      return_unit
+    in
+    run x test
 
   let test_packs x () =
     if x.name = "FS" then
