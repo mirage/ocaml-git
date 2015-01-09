@@ -1,4 +1,7 @@
 ## 1.4.4
+* Best-effort creation of files when expanding the index into the filesystem:
+  Skip the invalid filenames and continue. Users are expected to sanitize
+  their filenames if they want to use a non-bare repository (#11)
 * Overwrite changed file when expanding the index into the filesystem (#4)
 * Do not recompute the hash of blob files when expanding the index into the
   filesystem. This help fixing a speed issue with non-bare repo with lots of
