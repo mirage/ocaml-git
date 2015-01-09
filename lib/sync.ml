@@ -766,6 +766,7 @@ module Make (IO: IO) (Store: Store.S) = struct
     f_deepen  : int option;
     f_unpack  : bool;
     f_capabilites: Capabilities.t;
+    f_update_tags: bool;
   }
 
   type op =
@@ -838,20 +839,27 @@ module Make (IO: IO) (Store: Store.S) = struct
           | Ls      -> return { Result.head; references; sha1s = [] }
           | Fetch _
           | Clone _ ->
-            begin
-              try
-                let sha1 = Reference.Map.find Reference.head references in
-                let contents = Reference.head_contents references sha1 in
-                Store.write_head t contents
-              with Not_found ->
-                return_unit
+            begin match op with
+              | Ls | Fetch { f_update_tags = false; _ } -> return_unit
+              | Clone _ | Fetch _ ->
+                try
+                  let write_ref (ref, sha1) =
+                    if Reference.is_valid ref then
+                      Store.write_reference t ref sha1
+                    else return_unit in
+                  let references =
+                    Reference.Map.remove Reference.head references
+                  in
+                  Lwt_list.iter_p write_ref (Reference.Map.to_alist references)
+                  >>= fun () ->
+                  let sha1 = Reference.Map.find Reference.head references in
+                  let contents = Reference.head_contents references sha1 in
+                  match op with
+                  | Clone _ -> Store.write_head t contents
+                  | _ -> return_unit
+                with Not_found ->
+                  return_unit
             end >>= fun () ->
-            let write_ref (ref, sha1) =
-              if Reference.is_valid ref then Store.write_reference t ref sha1
-              else return_unit in
-            let references = Reference.Map.remove Reference.head references in
-            Lwt_list.iter_p write_ref (Reference.Map.to_alist references)
-            >>= fun () ->
 
             match head with
             | None      ->
@@ -940,6 +948,7 @@ module Make (IO: IO) (Store: Store.S) = struct
       f_deepen = deepen;
       f_unpack = unpack;
       f_capabilites = capabilities;
+      f_update_tags = false;
     } in
     fetch_pack t gri (Fetch op)
 
