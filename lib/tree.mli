@@ -24,6 +24,9 @@ type perm =
   | `Commit ]
 (** File permission. *)
 
+val pretty_perm: perm -> string
+(** Pretty printing of tree permissions. *)
+
 val string_of_perm : perm -> string
 (** Raw represention of a permission, using the [Git] format. *)
 
