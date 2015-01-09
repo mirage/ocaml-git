@@ -116,9 +116,12 @@ module FS (FS: FS) = struct
     let read_file t file =
       Log.debug "read_file %s" file;
       FS.stat t file >>| fun s ->
-      FS.read t file 0 (Int64.to_int s.FS.size) >>| fun bs ->
-      let s = Cstruct.copyv bs in
-      return (Cstruct.of_string s)
+      is_directory t file >>= function
+      | false ->
+        FS.read t file 0 (Int64.to_int s.FS.size) >>| fun bs ->
+        let s = Cstruct.copyv bs in
+        return (Cstruct.of_string s)
+      | true -> fail (Failure (Printf.sprintf "%s is a directory" file))
 
     let write_file t file b =
       Log.debug "write_file %s" file;
