@@ -515,7 +515,7 @@ module Make (IO: IO) = struct
       let buf = Mstruct.of_cstruct buf in
       Lwt.return (Index.input buf)
 
-  let entry_of_file ?root index file mode sha1 blob =
+  let entry_of_file_aux ?root index file mode sha1 blob =
     begin match root with
       | None   -> IO.getcwd ()
       | Some r -> IO.realpath r
@@ -538,17 +538,19 @@ module Make (IO: IO) = struct
           create_file file mode blob
         )
     end >>= fun () ->
-    try
-      let id = sha1 in
-      let stats = IO.stat_info file in
-      let stage = 0 in
-      match Misc.string_chop_prefix ~prefix:(root / "") file with
-      | None      -> Lwt.fail (Failure ("entry_of_file: " ^ file))
-      | Some name ->
-        let entry = { Index.stats; id; stage; name } in
-        Lwt.return (Some entry)
-    with Failure _ ->
-      Lwt.return_none
+    let id = sha1 in
+    let stats = IO.stat_info file in
+    let stage = 0 in
+    match Misc.string_chop_prefix ~prefix:(root / "") file with
+    | None      -> Lwt.fail (Failure ("entry_of_file: " ^ file))
+    | Some name ->
+      let entry = { Index.stats; id; stage; name } in
+      Lwt.return (Some entry)
+
+  let entry_of_file ?root index file mode sha1 blob =
+    Lwt.catch
+      (fun () -> entry_of_file_aux ?root index file mode sha1 blob)
+      (function Failure _ | Sys_error _ -> Lwt.return_none | e -> Lwt.fail e)
 
   let write_index t head =
     Log.debug "write_index %s" (SHA.Commit.to_hex head);
