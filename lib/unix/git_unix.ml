@@ -40,21 +40,23 @@ module M = struct
     let host = match Uri.host uri with
       | None   -> "localhost"
       | Some x -> x in
-    match Uri.scheme uri with
-    | Some "git+ssh" ->
+    match Sync.protocol uri with
+    | `Ok `SSH ->
       let user = match Uri.userinfo uri with
         | None   -> ""
-        | Some u -> u ^ "@" in
+        | Some u -> u ^ "@"
+      in
       let cmd = match init with
         | None   -> [| "ssh"; user ^ host; |]
-        | Some x -> [| "ssh"; user ^ host; x |] in
+        | Some x -> [| "ssh"; user ^ host; x |]
+      in
       Log.info "Executing '%s'" (String.concat " " (Array.to_list cmd));
       let env = Unix.environment () in
       let p = Lwt_process.open_process_full ~env ("ssh", cmd) in
       Lwt.finalize
         (fun () -> fn (p#stdout, p#stdin))
         (fun () -> let _ = p#close in return_unit)
-    | Some "git" ->
+    | `Ok (`Git | `Smart_HTTP) ->
       Log.debug "Connecting to %s" (Uri.to_string uri);
       let resolver = Resolver_lwt_unix.system in
       Resolver_lwt.resolve_uri ~uri resolver >>= fun endp ->
@@ -69,11 +71,10 @@ module M = struct
            end >>= fun () ->
            fn (ic, oc))
         (fun ()  -> Lwt_io.close ic)
-   | Some x ->
-      (* XXX: make it work for smart-HTTP *)
-      (* XXX: make it work over SSL *)
+    | `Not_supported x ->
       fail (Failure ("Scheme " ^ x ^ " not supported yet"))
-   | None -> fail (Failure ("Must supply a scheme like git://"))
+    | `Unknown ->
+      fail (Failure ("Unknown protocol. Must supply a scheme like git://"))
 
   let read_all ic =
     let len = 64_1024 in

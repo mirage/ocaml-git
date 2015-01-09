@@ -19,6 +19,26 @@ open Printf
 
 module Log = Log.Make(struct let section = "remote" end)
 
+type protocol = [ `SSH | `Git | `Smart_HTTP ]
+
+let protocol uri = match Uri.scheme uri with
+  | Some "git"     -> `Ok `Git
+  | Some "git+ssh" -> `Ok `SSH
+  | Some "http"
+  | Some "https"   -> `Ok `Smart_HTTP
+  | Some x -> `Not_supported x
+  | None   -> `Unknown
+
+let protocol_exn uri = match protocol uri with
+  | `Ok x -> x
+  | `Unknown -> failwith (sprintf "Unknown Git protocol")
+  | `Not_supported x -> failwith (sprintf "%s is not a supported Git protocol" x)
+
+let pretty_protocol = function
+  | `Git -> "git"
+  | `SSH -> "ssh"
+  | `Smart_HTTP -> "smart-http"
+
 module Result = struct
 
   type fetch = {
@@ -332,36 +352,36 @@ module Make (IO: IO) (Store: Store.S) = struct
         ) t.references;
       Buffer.contents buf
 
-    let input ic =
-      Log.debug "Listing.input";
+    let input ic protocol =
+      Log.debug "Listing.input (protocol=%s)" (pretty_protocol protocol);
       let rec aux acc =
         PacketLine.input ic >>= function
         | None      -> return acc
         | Some line ->
           match Misc.string_lsplit2 line ~on:Misc.sp with
+          | Some ("#", _) ->
+            if protocol <> `Smart_HTTP then error "ERROR: %s" line else aux acc
           | Some ("ERR", err) -> error "ERROR: %s" err
           | Some (sha1, ref)  ->
+            let add sha1 ref =
+              SHA.Commit.Map.add_multi (SHA.Commit.of_hex sha1) ref
+                acc.references
+            in
             if is_empty acc then (
               (* Read the capabilities on the first line *)
               match Misc.string_lsplit2 ref ~on:Misc.nul with
               | Some (ref, caps) ->
                 let ref = Reference.of_raw ref in
-                let references =
-                  SHA.Commit.Map.add_multi (SHA.Commit.of_hex sha1) ref acc.references
-                in
+                let references = add sha1 ref in
                 let capabilities = Capabilities.of_string caps in
                 aux { references; capabilities; }
               | None ->
                 let ref = Reference.of_raw ref in
-                let references =
-                  SHA.Commit.Map.add_multi (SHA.Commit.of_hex sha1) ref acc.references
-                in
+                let references = add sha1 ref in
                 aux { references; capabilities = []; }
             ) else
               let ref = Reference.of_raw ref in
-              let references =
-                SHA.Commit.Map.add_multi (SHA.Commit.of_hex sha1) ref acc.references
-              in
+              let references = add sha1 ref in
               aux { acc with references }
           | None -> error "%s is not a valid answer" line
       in
@@ -782,9 +802,10 @@ module Make (IO: IO) (Store: Store.S) = struct
     | None   -> todo "local-clone"
     | Some _ ->
       let uri = Gri.to_uri gri in
+      let protocol = protocol_exn uri in
       let init = Init.to_string r in
       IO.with_connection uri ~init (fun (ic, oc) ->
-          Listing.input ic                 >>= fun listing ->
+          Listing.input ic protocol >>= fun listing ->
           (* XXX: check listing.capabilities *)
           Log.debug "listing:\n %s" (Listing.pretty listing);
           Store.read_reference t branch    >>= fun new_obj ->
@@ -816,15 +837,76 @@ module Make (IO: IO) (Store: Store.S) = struct
           Report_status.input ic
         )
 
+  let fetch_pack_with_head t (ic, oc) op references head =
+    Log.debug "PHASE1";
+    let deepen = match op with
+      | Clone { c_deepen = d; _ }
+      | Fetch { f_deepen = d; _ } -> d
+      |  _               -> None
+    in
+    let shallows = match op with
+      | Fetch { f_shallows = s; _ } -> s
+      | _ -> []
+    in
+    let capabilities = match op with
+      | Fetch { f_capabilites = c; _ }
+      | Clone { c_capabilites = c; _ } -> c
+      | _ -> []
+    in
+    Upload_request.phase1 (ic, oc) ?deepen ~capabilities
+      ~shallows ~wants:[SHA.of_commit head]
+    >>= fun _phase1 ->
+
+    (* XXX: process the shallow / unshallow.  *)
+    (* XXX: need a notion of shallow/unshallow in API. *)
+
+    Log.debug "PHASE2";
+    let haves = match op with
+      | Fetch { f_haves = h; _ } -> h
+      | _ -> [] in
+    Upload_request.phase2 (ic,oc) ~haves >>= fun () ->
+
+    Log.debug "PHASE3";
+    printf "Receiving data ...%!";
+    Pack_file.input ~capabilities ic >>= fun raw ->
+
+    printf " done.\n%!";
+    Log.debug "Received a pack file of %d bytes." (String.length raw);
+    let pack = Cstruct.of_string raw in
+
+    let unpack = match op with
+      | Clone { c_unpack = u; _ }
+      | Fetch { f_unpack = u; _ } -> u
+      | _ -> false in
+    Log.debug "unpack=%b" unpack;
+
+    begin if unpack then
+        Pack.unpack ~write:(Store.write ?level:None t) pack
+      else
+        let pack = Pack.Raw.input (Mstruct.of_cstruct pack) ~index:None in
+        Store.write_pack t pack
+    end >>= fun sha1s ->
+    match SHA.Set.to_list sha1s with
+    | []    ->
+      Log.debug "NO NEW OBJECTS";
+      Printf.printf "Already up-to-date.\n%!";
+      return { Result.head = Some head; references; sha1s = [] }
+    | sha1s ->
+      Log.debug "NEW OBJECTS";
+      printf "remote: Counting objects: %d, done.\n%!"
+        (List.length sha1s);
+      return { Result.head = Some head; references; sha1s }
+
   let fetch_pack t gri op =
     let r = Init.upload_pack gri in
     match Init.host r with
     | None   -> todo "local-clone"
     | Some _ ->
       let uri = Gri.to_uri gri in
+      let protocol = protocol_exn uri in
       let init = Init.to_string r in
       IO.with_connection uri ~init (fun (ic, oc) ->
-          Listing.input ic >>= fun listing ->
+          Listing.input ic protocol >>= fun listing ->
           Log.debug "listing:\n %s" (Listing.pretty listing);
           let references =
             List.fold_left (fun acc (sha1, refs) ->
@@ -860,70 +942,11 @@ module Make (IO: IO) (Store: Store.S) = struct
                 with Not_found ->
                   return_unit
             end >>= fun () ->
-
             match head with
+            | Some head -> fetch_pack_with_head t (ic, oc) op references head
             | None      ->
               Init.close oc >>= fun () ->
               return { Result.head; references; sha1s = [] }
-            | Some head ->
-              Log.debug "PHASE1";
-              let deepen = match op with
-                | Clone { c_deepen = d; _ }
-                | Fetch { f_deepen = d; _ } -> d
-                |  _               -> None
-              in
-              let shallows = match op with
-                | Fetch { f_shallows = s; _ } -> s
-                | _ -> []
-              in
-              let capabilities = match op with
-               | Fetch { f_capabilites = c; _ }
-                | Clone { c_capabilites = c; _ } -> c
-                | _ -> []
-              in
-              Upload_request.phase1 (ic,oc) ?deepen ~capabilities
-                ~shallows ~wants:[SHA.of_commit head]
-              >>= fun _phase1 ->
-
-              (* XXX: process the shallow / unshallow.  *)
-              (* XXX: need a notion of shallow/unshallow in API. *)
-
-              Log.debug "PHASE2";
-              let haves = match op with
-                | Fetch { f_haves = h; _ } -> h
-                | _ -> [] in
-              Upload_request.phase2 (ic,oc) ~haves >>= fun () ->
-
-              Log.debug "PHASE3";
-              printf "Receiving data ...%!";
-              Pack_file.input ~capabilities ic >>= fun raw ->
-
-              printf " done.\n%!";
-              Log.debug "Received a pack file of %d bytes." (String.length raw);
-              let pack = Cstruct.of_string raw in
-
-              let unpack = match op with
-                | Clone { c_unpack = u; _ }
-                | Fetch { f_unpack = u; _ } -> u
-                | _ -> false in
-              Log.debug "unpack=%b" unpack;
-
-              begin if unpack then
-                  Pack.unpack ~write:(Store.write ?level:None t) pack
-                else
-                  let pack = Pack.Raw.input (Mstruct.of_cstruct pack) ~index:None in
-                  Store.write_pack t pack
-              end >>= fun sha1s ->
-              match SHA.Set.to_list sha1s with
-              | []    ->
-                Log.debug "NO NEW OBJECTS";
-                Printf.printf "Already up-to-date.\n%!";
-                return { Result.head = Some head; references; sha1s = [] }
-              | sha1s ->
-                Log.debug "NEW OBJECTS";
-                printf "remote: Counting objects: %d, done.\n%!"
-                  (List.length sha1s);
-                return { Result.head = Some head; references; sha1s }
         )
 
   let ls t gri =

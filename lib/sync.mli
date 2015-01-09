@@ -16,6 +16,12 @@
 
 (** Clone/Fecth/Push protocol *)
 
+type protocol = [ `SSH | `Git | `Smart_HTTP ]
+(** The type for the different Git protocols. *)
+
+val protocol: Uri.t -> [`Ok of protocol | `Not_supported of string | `Unknown]
+(** [protocol uri] is the Git protocol associated to [uri]. *)
+
 type capability =
   [ `Multi_ack
   | `Thin_pack
@@ -59,6 +65,8 @@ module type S = sig
 
   type t
   (** Abstract value for stores. *)
+
+  (** {1 The base Git protocol and Git+SSH} *)
 
   val ls: t -> Gri.t -> SHA.Commit.t Reference.Map.t Lwt.t
   (** List the references of the remote repository. *)
