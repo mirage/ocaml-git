@@ -98,7 +98,12 @@ module type S = sig
   (** Return the index file. *)
 
   val write_index: t -> SHA.Commit.t -> unit Lwt.t
-  (** Update the index file for the given revision. *)
+  (** Update the index file for the given revision. A side-effect of
+      this operation is that the blobs are expanded into the
+      filesystem. {b Note:} It is the user responsability to ensure
+      that filenames are valid. No sanitazition is done by the library
+      -- the Git format does not impose a filename format as this is a
+      constraint of the underlying filesystem. *)
 
   (** {2 Backend kind} *)
 
