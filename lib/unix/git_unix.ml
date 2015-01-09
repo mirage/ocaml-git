@@ -98,13 +98,20 @@ end
 
 module D = struct
 
+  let protect_exn = function
+    | Unix.Unix_error _ as e -> Lwt.fail (Failure (Printexc.to_string e))
+    | e -> Lwt.fail e
+
+  let protect f x =
+    Lwt.catch (fun () -> f x) protect_exn
+
   let mkdir dirname =
     let rec aux dir =
       if Sys.file_exists dir then return_unit
       else (
         aux (Filename.dirname dir) >>= fun () ->
         Log.debug "mkdir %s" dir;
-        Lwt_unix.mkdir dir 0o755
+        protect (Lwt_unix.mkdir dir) 0o755;
       ) in
     Lwt_pool.use mkdir_pool (fun () -> aux dirname)
 
@@ -151,8 +158,9 @@ module D = struct
         Log.info "Writing %s (/tmp/%s)" file (Filename.basename tmp);
         Lwt_unix.(openfile tmp [O_WRONLY; O_NONBLOCK; O_CREAT; O_TRUNC] 0o644) >>= fun fd ->
         Lwt.finalize
-          (fun () -> fn fd >>= fun () -> Lwt_unix.rename tmp file)
-          (fun _  -> Lwt_unix.close fd))
+          (fun () -> protect fn fd >>= fun () -> Lwt_unix.rename tmp file)
+          (fun _  -> Lwt_unix.close fd)
+      )
 
   let write_file file b =
     with_write_file file (fun fd -> write_cstruct fd b)
