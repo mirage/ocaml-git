@@ -17,7 +17,7 @@
 open Lwt
 open Printf
 
-module Log = Log.Make(struct let section = "remote" end)
+module Log = Log.Make(struct let section = "sync" end)
 
 type protocol = [ `SSH | `Git | `Smart_HTTP ]
 
@@ -264,10 +264,12 @@ module Make (IO: IO) (Store: Store.S) = struct
 
     type t = {
       request: request;
+      discover: bool; (* The smart HTTP protocol has 2 modes. *)
       gri: Gri.t;
     }
 
     let host t = Uri.host (Gri.to_uri t.gri)
+    let uri t = Gri.to_uri t.gri
 
     (* Initialisation sentence for the Git protocol *)
     let git t =
@@ -295,22 +297,44 @@ module Make (IO: IO) (Store: Store.S) = struct
       PacketLine.string_of_line message
 
     let ssh t =
-      sprintf "%s %s" (string_of_request t.request) (Uri.path (Gri.to_uri t.gri))
+      sprintf "%s %s" (string_of_request t.request)
+        (Uri.path (Gri.to_uri t.gri))
 
-    (* XXX: as we don't support the smart HTTP protocol (yet) we fall
-       back the default Git protocol. *)
+    let smart_http t =
+      if t.discover then None else
+        let headers : (string * string) list = [
+          "Content-Type",
+          sprintf "application/x-%s-request" (string_of_request t.request);
+        ]
+        in
+        Some (Marshal.to_string headers [])
+
     let to_string t =
-      match Gri.mode t.gri with
-      | `HTTP | `Git -> git t
-      | `SSH         -> ssh t
+      match protocol_exn (Gri.to_uri t.gri) with
+      | `Git -> Some (git t)
+      | `SSH -> Some (ssh t)
+      | `Smart_HTTP -> smart_http t
 
-    let close oc =
-      PacketLine.flush oc
+    let create request ~discover gri =
+      Log.debug "Init.create request=%s discover=%b gri=%s"
+        (string_of_request request) discover (Gri.to_string gri);
+      let protocol = protocol_exn (Gri.to_uri gri) in
+      let gri = match protocol with
+        | `SSH | `Git -> gri
+        | `Smart_HTTP ->
+          let service = if discover then "info/refs?service=" else "" in
+          let url = Gri.to_string gri in
+          let request = string_of_request request in
+          Gri.of_string (sprintf "%s/%s%s" url service request)
+      in
+      Log.debug "computed-gri: %s" (Gri.to_string gri);
+      { request; discover; gri }
 
-    let upload_pack gri = { request = Upload_pack; gri }
-    let receive_pack gri = { request = Receive_pack; gri }
-    let _upload_archive gri = { request = Upload_archive; gri }
+    let upload_pack = create Upload_pack
+    let receive_pack = create Receive_pack
+    let _upload_archive = create Upload_archive
   end
+
 
   module Listing = struct
 
@@ -354,13 +378,28 @@ module Make (IO: IO) (Store: Store.S) = struct
 
     let input ic protocol =
       Log.debug "Listing.input (protocol=%s)" (pretty_protocol protocol);
+      let skip_smart_http () =
+        match protocol with
+        | `Git | `SSH -> return_unit
+        | `Smart_HTTP ->
+          PacketLine.input ic >>= function
+          | None      -> error "SMART-HTTP: missing # header."
+          | Some line ->
+            match Misc.string_lsplit2 line ~on:Misc.sp with
+            | Some ("#", service) ->
+              Log.debug "skipping %s" service;
+              begin PacketLine.input ic >>= function
+              | None   -> return_unit
+              | Some x -> error "SMART-HTTP: waiting for pkt-flush, got %S" x
+              end
+            | Some _ -> error "SMART-HTTP: waiting for # header, got %S" line
+            | None   -> error "SMART-HTTP: waiting for # header, got pkt-flush"
+      in
       let rec aux acc =
         PacketLine.input ic >>= function
         | None      -> return acc
         | Some line ->
           match Misc.string_lsplit2 line ~on:Misc.sp with
-          | Some ("#", _) ->
-            if protocol <> `Smart_HTTP then error "ERROR: %s" line else aux acc
           | Some ("ERR", err) -> error "ERROR: %s" err
           | Some (sha1, ref)  ->
             let add sha1 ref =
@@ -385,6 +424,7 @@ module Make (IO: IO) (Store: Store.S) = struct
               aux { acc with references }
           | None -> error "%s is not a valid answer" line
       in
+      skip_smart_http () >>= fun () ->
       aux empty
 
   end
@@ -797,14 +837,15 @@ module Make (IO: IO) (Store: Store.S) = struct
   module Graph = Global_graph.Make(Store)
 
   let push t ~branch gri =
-    let r = Init.receive_pack gri in
-    match Init.host r with
+    Log.debug "Sync.push";
+    let init = Init.receive_pack ~discover:true gri in
+    match Init.host init with
     | None   -> todo "local-clone"
     | Some _ ->
-      let uri = Gri.to_uri gri in
+      let uri = Init.uri init in
       let protocol = protocol_exn uri in
-      let init = Init.to_string r in
-      IO.with_connection uri ~init (fun (ic, oc) ->
+      let init = Init.to_string init in
+      IO.with_connection uri ?init (fun (ic, oc) ->
           Listing.input ic protocol >>= fun listing ->
           (* XXX: check listing.capabilities *)
           Log.debug "listing:\n %s" (Listing.pretty listing);
@@ -838,7 +879,7 @@ module Make (IO: IO) (Store: Store.S) = struct
         )
 
   let fetch_pack_with_head t (ic, oc) op references head =
-    Log.debug "PHASE1";
+    Log.debug "Sync.fetch_pack_with_head";
     let deepen = match op with
       | Clone { c_deepen = d; _ }
       | Fetch { f_deepen = d; _ } -> d
@@ -853,6 +894,7 @@ module Make (IO: IO) (Store: Store.S) = struct
       | Clone { c_capabilites = c; _ } -> c
       | _ -> []
     in
+    Log.debug "PHASE1";
     Upload_request.phase1 (ic, oc) ?deepen ~capabilities
       ~shallows ~wants:[SHA.of_commit head]
     >>= fun _phase1 ->
@@ -898,14 +940,15 @@ module Make (IO: IO) (Store: Store.S) = struct
       return { Result.head = Some head; references; sha1s }
 
   let fetch_pack t gri op =
-    let r = Init.upload_pack gri in
-    match Init.host r with
+    Log.debug "Sync.fetch_pack";
+    let init = Init.upload_pack ~discover:true gri in
+    match Init.host init with
     | None   -> todo "local-clone"
     | Some _ ->
-      let uri = Gri.to_uri gri in
+      let uri = Init.uri init in
       let protocol = protocol_exn uri in
-      let init = Init.to_string r in
-      IO.with_connection uri ~init (fun (ic, oc) ->
+      let init = Init.to_string init in
+      IO.with_connection uri ?init (fun (ic, oc) ->
           Listing.input ic protocol >>= fun listing ->
           Log.debug "listing:\n %s" (Listing.pretty listing);
           let references =
@@ -929,10 +972,11 @@ module Make (IO: IO) (Store: Store.S) = struct
                     if Reference.is_valid ref then
                       Store.write_reference t ref sha1
                     else return_unit in
-                  let references =
+                  let references_no_head =
                     Reference.Map.remove Reference.head references
                   in
-                  Lwt_list.iter_p write_ref (Reference.Map.to_alist references)
+                  Lwt_list.iter_p write_ref
+                    (Reference.Map.to_alist references_no_head)
                   >>= fun () ->
                   let sha1 = Reference.Map.find Reference.head references in
                   let contents = Reference.head_contents references sha1 in
@@ -943,10 +987,17 @@ module Make (IO: IO) (Store: Store.S) = struct
                   return_unit
             end >>= fun () ->
             match head with
-            | Some head -> fetch_pack_with_head t (ic, oc) op references head
-            | None      ->
-              Init.close oc >>= fun () ->
-              return { Result.head; references; sha1s = [] }
+            | None -> return { Result.head; references; sha1s = [] }
+            | Some head ->
+              if protocol = `Smart_HTTP then
+                let init = Init.upload_pack ~discover:false gri in
+                let uri = Init.uri init in
+                let init = Init.to_string init in
+                IO.with_connection uri ?init (fun (ic, oc) ->
+                    fetch_pack_with_head t (ic, oc) op references head
+                  )
+              else
+                fetch_pack_with_head t (ic, oc) op references head
         )
 
   let ls t gri =

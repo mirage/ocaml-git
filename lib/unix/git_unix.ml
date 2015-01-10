@@ -36,41 +36,146 @@ module M = struct
   let flush oc =
     Lwt_io.flush oc
 
-  let with_connection uri ?init fn =
+  let with_ssh_process ?init uri fn =
     let host = match Uri.host uri with
       | None   -> "localhost"
-      | Some x -> x in
+      | Some x -> x
+    in
+    let user = match Uri.userinfo uri with
+      | None   -> ""
+      | Some u -> u ^ "@"
+    in
+    let cmd = match init with
+      | None   -> [| "ssh"; user ^ host; |]
+      | Some x -> [| "ssh"; user ^ host; x |]
+    in
+    Log.info "Executing '%s'" (String.concat " " (Array.to_list cmd));
+    let env = Unix.environment () in
+    let p = Lwt_process.open_process_full ~env ("ssh", cmd) in
+    Lwt.finalize
+      (fun () -> fn (p#stdout, p#stdin))
+      (fun () -> let _ = p#close in return_unit)
+
+  let with_conduit ?init uri fn =
+    Log.debug "Connecting to %s" (Uri.to_string uri);
+    let resolver = Resolver_lwt_unix.system in
+    Resolver_lwt.resolve_uri ~uri resolver >>= fun endp ->
+    let ctx = Conduit_lwt_unix.default_ctx in
+    Conduit_lwt_unix.endp_to_client ~ctx endp >>= fun client ->
+    Conduit_lwt_unix.connect ~ctx client >>= fun (_flow, ic, oc) ->
+    Lwt.finalize
+      (fun () ->
+         begin match init with
+           | None   -> return_unit
+           | Some s -> write oc s
+         end >>= fun () ->
+         fn (ic, oc))
+      (fun ()  -> Lwt_io.close ic)
+
+  let http_call ?headers meth uri fn =
+    let headers = match headers with None -> Cohttp.Header.init () | Some h -> h in
+    let callback (ic, oc) =
+      let req = match meth with
+        | `GET ->
+          Cohttp.Request.make_for_client ~headers ~chunked:false
+            (meth :> Cohttp.Code.meth) uri
+        | `POST ->
+          Cohttp_lwt_unix.Request.make_for_client ~headers ~chunked:true
+            (meth :> Cohttp.Code.meth) uri
+      in
+      let http_oc =
+        match meth with
+        | `GET  -> oc
+        | `POST ->
+          let writer =
+            Cohttp_lwt_unix.Request.make_body_writer ~flush:true req oc
+          in
+          Lwt_io.make ~mode:Lwt_io.output ~close:(fun () -> Lwt_io.close oc)
+            (fun bytes off len ->
+               let chunk = Bytes.create len in
+               Lwt_bytes.blit_to_bytes bytes off chunk 0 len;
+               Cohttp_lwt_unix.Request.write_body writer chunk >>= fun () ->
+               return len)
+      in
+      let flush_http_oc () =
+        Log.debug "Closing output connection";
+        Cohttp_lwt_unix.Request.write_footer req oc
+      in
+      let http_ic =
+        let reader = ref None in
+        let old_chunk = ref None in
+        let read reader bytes off len =
+          let write chunk =
+            let blit len =
+              Lwt_bytes.blit_from_bytes chunk 0 bytes off len;
+              Log.debug "refill: actual-len=%d" len;
+              Lwt.return len
+            in
+            let n = String.length chunk in
+            if n <= len then blit n
+            else
+              let tl = String.sub chunk len (n - len - 1) in
+              old_chunk := Some tl;
+              blit len
+          in
+          match !old_chunk with
+          | Some c -> write c
+          | None ->
+            Cohttp_lwt_unix.Response.read_body_chunk reader >>= function
+            | Cohttp.Transfer.Done -> Lwt.return 0
+            | Cohttp.Transfer.Chunk chunk -> write chunk
+            | Cohttp.Transfer.Final_chunk chunk -> write chunk
+        in
+        Lwt_io.make ~mode:Lwt_io.input ~close:(fun () -> Lwt_io.close ic)
+          (fun bytes off len ->
+             match !reader with
+             | None ->
+               begin
+                 flush_http_oc () >>= fun () ->
+                 Cohttp_lwt_unix.Response.read ic >>= function
+                 | `Ok r ->
+                   let r = Cohttp_lwt_unix.Response.make_body_reader r ic in
+                   reader := Some r;
+                   Lwt.return_unit
+                 | `Eof       -> Lwt.return_unit
+                 | `Invalid i -> Lwt.fail (Failure i)
+               end >>= fun () ->
+               begin match !reader with
+                 | Some reader -> read reader bytes off len
+                 | None        -> return 0
+               end
+             | Some reader -> read reader bytes off len)
+      in
+      Cohttp_lwt_unix.Request.write_header req oc >>= fun () ->
+      fn (http_ic, http_oc)
+    in
+    with_conduit uri callback
+
+  let with_http ?init uri fn =
+    Log.debug "HTTP connecting to %s" (Uri.to_string uri);
+    let headers = match init with
+      | None -> Cohttp.Header.of_list []
+      | Some s ->
+        let l = Marshal.from_string s 0 in
+        Cohttp.Header.of_list l
+    in
+    Log.debug "HTTP headers: %s"
+      (Sexplib.Sexp.to_string (Cohttp.Header.sexp_of_t headers));
+    let meth =
+      let path = Uri.path uri in
+      let info = Filename.basename (Filename.dirname path) in
+      let refs = Filename.basename path in
+      match info, refs with
+      | "info", "refs" -> `GET
+      | _ -> `POST
+    in
+    http_call ~headers meth uri fn
+
+  let with_connection uri ?init fn =
     match Sync.protocol uri with
-    | `Ok `SSH ->
-      let user = match Uri.userinfo uri with
-        | None   -> ""
-        | Some u -> u ^ "@"
-      in
-      let cmd = match init with
-        | None   -> [| "ssh"; user ^ host; |]
-        | Some x -> [| "ssh"; user ^ host; x |]
-      in
-      Log.info "Executing '%s'" (String.concat " " (Array.to_list cmd));
-      let env = Unix.environment () in
-      let p = Lwt_process.open_process_full ~env ("ssh", cmd) in
-      Lwt.finalize
-        (fun () -> fn (p#stdout, p#stdin))
-        (fun () -> let _ = p#close in return_unit)
-    | `Ok (`Git | `Smart_HTTP) ->
-      Log.debug "Connecting to %s" (Uri.to_string uri);
-      let resolver = Resolver_lwt_unix.system in
-      Resolver_lwt.resolve_uri ~uri resolver >>= fun endp ->
-      let ctx = Conduit_lwt_unix.default_ctx in
-      Conduit_lwt_unix.endp_to_client ~ctx endp >>= fun client ->
-      Conduit_lwt_unix.connect ~ctx client >>= fun (_flow, ic, oc) ->
-      Lwt.finalize
-        (fun () ->
-           begin match init with
-             | None   -> return_unit
-             | Some s -> write oc s
-           end >>= fun () ->
-           fn (ic, oc))
-        (fun ()  -> Lwt_io.close ic)
+    | `Ok `SSH -> with_ssh_process ?init uri fn
+    | `Ok `Git -> with_conduit ?init uri fn
+    | `Ok `Smart_HTTP -> with_http ?init uri fn
     | `Not_supported x ->
       fail (Failure ("Scheme " ^ x ^ " not supported yet"))
     | `Unknown ->

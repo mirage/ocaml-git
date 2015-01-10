@@ -45,11 +45,3 @@ let to_string uri =
       | Some h -> h in
     Printf.sprintf "%s%s:%s" userinfo host (Uri.path uri)
   | _ -> Uri.to_string uri
-
-type mode = [ `Git | `SSH | `HTTP ]
-
-let mode t =
-  match Uri.scheme t with
-  | Some "git"     -> `Git
-  | Some "git+ssh" -> `SSH
-  | _              -> `HTTP
