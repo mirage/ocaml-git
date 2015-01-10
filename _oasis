@@ -29,15 +29,15 @@ Library git
                      lwt, hex
 
 Library "git-unix"
-  Build$:           flag(unix)
+  Build$:            flag(unix)
   Path:              lib/unix/
   FindlibParent:     git
   Findlibname:       unix
   Modules:           Git_unix
-  BuildDepends:      git, lwt.unix, conduit.lwt-unix, uri.services
+  BuildDepends:      git, cohttp.lwt, lwt.unix, conduit.lwt-unix, uri.services
 
 Library "git-mirage"
-  Build$:           flag(mirage)
+  Build$:            flag(mirage)
   Path:              lib/mirage/
   FindlibParent:     git
   Findlibname:       mirage
