@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: e523e8688c7da528848c072b66cdd8f7)
+# DO NOT EDIT (digest: e20b5ffb1f25bd996a030452be571ff3)
 # Ignore VCS directories, you can use the same kind of rule outside
 # OASIS_START/STOP if you want to exclude directories that contains
 # useless stuff for the build process
@@ -50,6 +50,7 @@ true: annot, bin_annot
 <lib/*.ml{,i,y}>: pkg_zip
 # Library git-unix
 "lib/unix/git-unix.cmxs": use_git-unix
+<lib/unix/*.ml{,i,y}>: pkg_cohttp.lwt
 <lib/unix/*.ml{,i,y}>: pkg_conduit.lwt-unix
 <lib/unix/*.ml{,i,y}>: pkg_dolog
 <lib/unix/*.ml{,i,y}>: pkg_hex
@@ -77,6 +78,7 @@ true: annot, bin_annot
 <lib/mirage/*.ml{,i,y}>: use_git
 # Executable ogit
 <bin/ogit.{native,byte}>: pkg_cmdliner
+<bin/ogit.{native,byte}>: pkg_cohttp.lwt
 <bin/ogit.{native,byte}>: pkg_conduit.lwt-unix
 <bin/ogit.{native,byte}>: pkg_dolog
 <bin/ogit.{native,byte}>: pkg_hex
@@ -91,6 +93,7 @@ true: annot, bin_annot
 <bin/ogit.{native,byte}>: use_git
 <bin/ogit.{native,byte}>: use_git-unix
 <bin/*.ml{,i,y}>: pkg_cmdliner
+<bin/*.ml{,i,y}>: pkg_cohttp.lwt
 <bin/*.ml{,i,y}>: pkg_conduit.lwt-unix
 <bin/*.ml{,i,y}>: pkg_dolog
 <bin/*.ml{,i,y}>: pkg_hex
@@ -106,6 +109,7 @@ true: annot, bin_annot
 <bin/*.ml{,i,y}>: use_git-unix
 # Executable test_git
 <lib_test/test.{native,byte}>: pkg_alcotest
+<lib_test/test.{native,byte}>: pkg_cohttp.lwt
 <lib_test/test.{native,byte}>: pkg_conduit.lwt-unix
 <lib_test/test.{native,byte}>: pkg_dolog
 <lib_test/test.{native,byte}>: pkg_hex
@@ -125,6 +129,7 @@ true: annot, bin_annot
 <lib_test/test.{native,byte}>: use_git-mirage
 <lib_test/test.{native,byte}>: use_git-unix
 <lib_test/*.ml{,i,y}>: pkg_alcotest
+<lib_test/*.ml{,i,y}>: pkg_cohttp.lwt
 <lib_test/*.ml{,i,y}>: pkg_conduit.lwt-unix
 <lib_test/*.ml{,i,y}>: pkg_dolog
 <lib_test/*.ml{,i,y}>: pkg_hex
