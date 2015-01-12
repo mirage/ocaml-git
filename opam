@@ -11,7 +11,7 @@ build: [
      "--prefix" prefix
      "--%{mirage-types-lwt:enable}%-mirage"
      "--%{mirage-fs-unix+alcotest:enable}%-tests"
-     "--%{cmdliner+conduit+cohttp+base-unix:enable}%-unix"
+     "--%{conduit+cohttp+base-unix:enable}%-unix"
   ]
   [make]
 ]
@@ -34,9 +34,12 @@ depends: [
   "mirage-types-lwt" {test}
   "cohttp" {test}
   "conduit" {test}
+  "cmdliner"
 ]
 depopts: [
-  "cmdliner"
+  "cohttp"
+  "conduit"
+  "mirage-types-lwt"
 ]
 conflicts: [
  "cohttp"  {<= "0.15.0"}
