@@ -24,7 +24,7 @@ Library git
                      Global_graph, Pack, Pack_index, Packed_value,
                      Reference, Sync, Tag, Tree, User, Value,
                      Object, Object_type, Store, Search, Gri,
-                     Memory, FS
+                     Memory, FS, Packed_refs
   BuildDepends:      mstruct, dolog, ocamlgraph, zip, nocrypto, uri,
                      lwt, hex
 

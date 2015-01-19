@@ -155,7 +155,7 @@ module Make (IO: IO) = struct
       let sha1 = SHA.of_string inflated in
       let file = file t sha1 in
       IO.file_exists file >>= function
-      | true  -> Lwt.return sha1
+      | true  -> Log.debug "write: file %s already exists!" file; Lwt.return sha1
       | false ->
         let deflated = Misc.deflate_cstruct ?level (Cstruct.of_string inflated) in
         IO.write_file file deflated >>= fun () ->
@@ -397,7 +397,14 @@ module Make (IO: IO) = struct
       let hex = String.trim (Cstruct.to_string hex) in
       Lwt.return (Some (SHA.Commit.of_hex hex))
     | false ->
-      Lwt.return_none
+      let packed_refs = t / ".git" / "packed-refs" in
+      IO.file_exists packed_refs >>= function
+      | false -> Lwt.return_none
+      | true  ->
+        IO.read_file packed_refs >>= fun buf ->
+        let refs = Packed_refs.input (Mstruct.of_cstruct buf) in
+        let sha1 = Packed_refs.find refs ref in
+        Lwt.return sha1
 
   let read_head t =
     let file = file_of_ref t Reference.head in
