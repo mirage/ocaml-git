@@ -1,6 +1,8 @@
 ## 1.4.5
 * Support `packed-refs` files, to read references packed by `git gc` (reported
   by Gregory Tsipenyuk)
+* Fix the filesystem backend when TMPDIR is not on the same partition as the
+  Git repository (#51, patch from @vklquevs)
 
 ## 1.4.4
 * Support the smart HTTP Git protocol (#26)
