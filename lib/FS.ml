@@ -398,10 +398,13 @@ module Make (IO: IO) = struct
       Lwt.return (Some (SHA.Commit.of_hex hex))
     | false ->
       let packed_refs = t / ".git" / "packed-refs" in
-      IO.read_file packed_refs >>= fun buf ->
-      let refs = Packed_refs.input (Mstruct.of_cstruct buf) in
-      let sha1 = Packed_refs.find refs ref in
-      Lwt.return sha1
+      IO.file_exists packed_refs >>= function
+      | false -> Lwt.return_none
+      | true  ->
+        IO.read_file packed_refs >>= fun buf ->
+        let refs = Packed_refs.input (Mstruct.of_cstruct buf) in
+        let sha1 = Packed_refs.find refs ref in
+        Lwt.return sha1
 
   let read_head t =
     let file = file_of_ref t Reference.head in
