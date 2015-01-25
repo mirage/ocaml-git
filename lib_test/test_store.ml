@@ -109,7 +109,7 @@ module Make (Store: Store.S) = struct
   let john_doe = {
     User.name  = "John Doe";
     email = "jon@doe.com";
-    date  = 0, None;
+    date  = 0L, None;
   }
 
   (* c1 : t2 *)

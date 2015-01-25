@@ -26,7 +26,7 @@ type tz_offset = {
 type t = {
   name : string;
   email: string;
-  date : int * tz_offset option;
+  date : int64 * tz_offset option;
 }
 (** A user action has a (user) name, an (user) email and an (action)
     date. The date is the number of seconds since 12:00 midnight

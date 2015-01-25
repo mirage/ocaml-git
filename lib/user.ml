@@ -36,7 +36,7 @@ let pp_tz_offset ppf t =
 type t = {
   name : string;
   email: string;
-  date : int * tz_offset option;
+  date : int64 * tz_offset option;
 }
 
 let pp_date ppf (date, tz) =
@@ -44,10 +44,10 @@ let pp_date ppf (date, tz) =
     | None   -> Format.fprintf ppf "None"
     | Some o -> Format.fprintf ppf "Some %a" pp_tz_offset o
   in
-  Format.fprintf ppf "@[<hov 2>(%d,@ %a)@]" date pp_tz tz
+  Format.fprintf ppf "@[<hov 2>(%LdL,@ %a)@]" date pp_tz tz
 
 let add_date buf (date, tz) =
-  Buffer.add_string buf (string_of_int date);
+  Buffer.add_string buf (Int64.to_string date);
   Buffer.add_char buf ' ';
   match tz with
   | None    -> Buffer.add_string buf " +0000"
@@ -87,7 +87,7 @@ let input buf =
   Mstruct.shift buf 2;
   let seconds = match Mstruct.get_string_delim buf ' ' with
     | None   -> Mstruct.parse_error_buf buf "Invalid Git date"
-    | Some s -> int_of_string s
+    | Some s -> Int64.of_string s
   in
   let sign = match Mstruct.get_char buf with
     | '+' -> `Plus
