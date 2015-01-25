@@ -1,3 +1,7 @@
+## 1.4.6
+* More precise type for commit dates
+* Add `git.top` to load toplevel printers for Git values
+
 ## 1.4.5
 * Support `packed-refs` files, to read references packed by `git gc` (reported
   by Gregory Tsipenyuk)
