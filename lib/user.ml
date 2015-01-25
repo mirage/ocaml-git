@@ -16,19 +16,52 @@
 
 module Log = Log.Make(struct let section = "user" end)
 
+type tz_offset = {
+  sign: [`Plus | `Minus];
+  hours: int;
+  min: int;
+}
+
+let default_tz_offset =
+  { sign = `Plus; hours=0; min= 0}
+
+let pp_tz_offset ppf t =
+  let pp_sign ppf = function
+    | `Plus -> Format.fprintf ppf "+"
+    | `Minus -> Format.fprintf ppf "-"
+  in
+  Format.fprintf ppf "{@[<hov 2>sign = '%a';@ hours = %d;@ min = %d@ @]}"
+    pp_sign t.sign t.hours t.min
+
 type t = {
   name : string;
   email: string;
-  date : string;
+  date : int * tz_offset option;
 }
+
+let pp_date ppf (date, tz) =
+  let pp_tz ppf = function
+    | None   -> Format.fprintf ppf "None"
+    | Some o -> Format.fprintf ppf "Some %a" pp_tz_offset o
+  in
+  Format.fprintf ppf "@[<hov 2>(%d,@ %a)@]" date pp_tz tz
+
+let add_date buf (date, tz) =
+  Buffer.add_string buf (string_of_int date);
+  Buffer.add_char buf ' ';
+  match tz with
+  | None    -> Buffer.add_string buf " +0000"
+  | Some tz ->
+    let sign = match tz.sign with `Plus -> "+" | `Minus -> "-" in
+    Printf.bprintf buf " %s%2d%2d" sign tz.hours tz.min
 
 let hash = Hashtbl.hash
 let equal = (=)
 let compare = compare
 
 let pp_hum ppf t =
-  Format.fprintf ppf "{@[<hov>name=\"%s\";@ email=\"%s\";@ date:%s@]}"
-    t.name t.email t.date
+  Format.fprintf ppf "{@[<hov>name=\"%s\";@ email=\"%s\";@ date:%a@]}"
+    t.name t.email pp_date t.date
 
 let pretty = Misc.pretty pp_hum
 
@@ -38,7 +71,7 @@ let add buf ?level:_ t =
   Buffer.add_string buf " <"   ;
   Buffer.add_string buf t.email;
   Buffer.add_string buf "> "   ;
-  Buffer.add_string buf t.date
+  add_date buf t.date
 
 let input buf =
   let i = match Mstruct.index buf Misc.lt with
@@ -52,5 +85,27 @@ let input buf =
   let email = Mstruct.get_string buf j in
   (* skip 2 bytes *)
   Mstruct.shift buf 2;
-  let date = Mstruct.get_string buf (Mstruct.length buf) in
-  { name; email; date }
+  let seconds = match Mstruct.get_string_delim buf ' ' with
+    | None   -> Mstruct.parse_error_buf buf "Invalid Git date"
+    | Some s -> int_of_string s
+  in
+  let sign = match Mstruct.get_char buf with
+    | '+' -> `Plus
+    | '-' -> `Minus
+    | c   -> Mstruct.parse_error_buf buf "wrong sign: %c" c
+  in
+  let hours =
+    let str = Mstruct.get_string buf 2 in
+    try int_of_string str
+    with Failure "int_of_string" ->
+      Mstruct.parse_error_buf buf "%s is not a valid int" str
+  in
+  let min =
+    let str = Mstruct.get_string buf 2 in
+    try int_of_string str
+    with Failure "int_of_string" ->
+      Mstruct.parse_error_buf buf "%s is not a valid int" str
+  in
+  let tz = { sign; hours; min } in
+  let tz = if tz = default_tz_offset then None else Some tz in
+  { name; email; date = (seconds, tz) }
