@@ -33,6 +33,7 @@ let to_string = function
   | Tree   -> "tree"
 
 let pretty = to_string
+let pp_hum ppf t = Format.fprintf ppf "%s" (pretty t)
 
 let add buf ?level:_ t =
   Buffer.add_string buf (to_string t)

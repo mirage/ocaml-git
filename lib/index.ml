@@ -31,10 +31,13 @@ type mode = [
 ]
 
 let pretty_mode = function
-  | `Normal  -> "normal"
-  | `Exec    -> "exec"
-  | `Link    -> "link"
-  | `Gitlink -> "gitlink"
+    | `Normal  -> "normal"
+    | `Exec    -> "exec"
+    | `Link    -> "link"
+    | `Gitlink -> "gitlink"
+
+let pp_hum_mode ppf t =
+  Format.fprintf ppf "%s" (pretty_mode t)
 
 type stat_info = {
   ctime: time;
@@ -47,18 +50,22 @@ type stat_info = {
   size : int32;
 }
 
-let pretty_stats t =
-  sprintf "\
-    \  ctime: %ld:%ld\n\
-    \  mtime: %ld:%ld\n\
-    \  dev: %ld\tino: %ld\n\
-    \  uid: %ld\tgid: %ld\n\
-    \  size: %ld\tmode: %s\n"
+let pp_hum_stats ppf t =
+  Format.fprintf ppf
+    "{@[<hov 2>\
+     ctime = (%ld, %ld);@ \
+     mtime = (%ld, %ld);@ \
+     dev = %ld;@ \
+     inode = %ld;@ \
+     uid = %ld;@ \
+     gid = %ld;@ \
+     size = %ld;@ \
+     mode = \"%a\"@]}"
     t.ctime.lsb32 t.ctime.nsec
     t.mtime.lsb32 t.mtime.nsec
     t.dev t.inode
     t.uid t.gid
-    t.size (pretty_mode t.mode)
+    t.size pp_hum_mode t.mode
 
 type entry = {
   stats : stat_info;
@@ -67,22 +74,17 @@ type entry = {
   name  : string;
 }
 
-let pretty_entry t =
-  sprintf
-    "%s\n\
-    \  ctime: %ld:%ld\n\
-    \  mtime: %ld:%ld\n\
-    \  dev: %ld\tino: %ld\n\
-    \  uid: %ld\tgid: %ld\n\
-    \  size: %ld\tflags: %d\n\
-    \  mode: %s\n"
+let pp_hum_entry ppf t =
+  Format.fprintf ppf
+    "{@[<hov 2>\
+     name = %S@ \
+     id = \"%a\"@ \
+     stats =@ %a;@ \
+     stage = %d;@]}"
     t.name
-    t.stats.ctime.lsb32 t.stats.ctime.nsec
-    t.stats.mtime.lsb32 t.stats.mtime.nsec
-    t.stats.dev t.stats.inode
-    t.stats.uid t.stats.gid
-    t.stats.size t.stage (pretty_mode t.stats.mode)
-
+    SHA.Blob.pp_hum t.id
+    pp_hum_stats t.stats
+    t.stage
 
 type extension_kind =
   [ `Tree
@@ -120,13 +122,21 @@ let compare = compare
 
 let equal = (=)
 
+let pp_hum ppf t =
+  Format.fprintf ppf "@[";
+  List.iter (fun e ->
+      pp_hum_entry ppf e;
+      Format.fprintf ppf "@.";
+    ) t.entries;
+  Format.fprintf ppf "@]"
+
 let pretty t =
   let buf = Buffer.create 1024 in
-  List.iter (fun e ->
-      Buffer.add_string buf (pretty_entry e);
-      Buffer.add_char buf '\n';
-    ) t.entries;
+  let ppf = Format.formatter_of_buffer buf in
+  pp_hum ppf t;
   Buffer.contents buf
+
+let pp_hum ppf t = Format.fprintf ppf "%s" (pretty t)
 
 let input_time buf =
   let lsb32 = Mstruct.get_be_uint32 buf in
@@ -222,8 +232,8 @@ let add_entry buf t =
     );
   Buffer.add_string buf (Cstruct.to_string cstr)
 
-let pretty_extension e =
-  Printf.sprintf "kind:%s size:%d"
+let pp_hum_extension ppf e =
+  Format.fprintf ppf "@[kind:%s@ size:%d]"
     (string_of_extension_kind e.kind) (String.length e.payload)
 
 let input_entries buf =
@@ -244,7 +254,6 @@ let input_extensions buf =
       let size = Mstruct.get_be_uint32 buf in
       let payload = Mstruct.get_string buf (Int32.to_int size) in
       let e = { kind; payload } in
-      Log.debug "input_extensions: %s" (pretty_extension e);
       aux (e :: acc)
   in
   aux []
@@ -258,7 +267,8 @@ let input buf =
     Mstruct.parse_error_buf buf "%s: wrong index header." header;
   let version = Mstruct.get_be_uint32 buf in
   if version <> 2l then
-    failwith (Printf.sprintf "Only index version 2 is supported (%ld)" version);
+    failwith (Printf.sprintf "Only index version 2 is supported (%ld)"
+                version);
   let entries = input_entries buf in
   let extensions = input_extensions buf in
   let length = Mstruct.offset buf - offset in

@@ -16,12 +16,21 @@
 
 (** Git user actions. *)
 
+type tz_offset = {
+  sign: [`Plus | `Minus];
+  hours: int;
+  min: int;
+}
+(** Signed offset of time zone from UTC. *)
+
 type t = {
   name : string;
   email: string;
-  date : string;
+  date : int * tz_offset option;
 }
 (** A user action has a (user) name, an (user) email and an (action)
-    date. *)
+    date. The date is the number of seconds since 12:00 midnight
+    January 1, 1970, UTC without accounting for leap seconds with an
+    optional timezone info. *)
 
 include Object.S with type t := t

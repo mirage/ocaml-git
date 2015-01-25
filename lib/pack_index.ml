@@ -14,8 +14,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Printf
-
 module Log = Log.Make(struct let section = "pack-index" end)
 
 type t = {
@@ -50,9 +48,8 @@ let empty ?pack_checksum () =
     pack_checksum;
   }
 
-let pretty t =
-  let buf = Buffer.create 1024 in
-  bprintf buf "pack-checksum: %s\n" (SHA.to_hex t.pack_checksum);
+let pp_hum ppf t =
+  Format.fprintf ppf "@[pack-checksum: %a@ " SHA.pp_hum t.pack_checksum;
   let l = ref [] in
   let offsets = SHA.Map.to_alist t.offsets in
   let crcs = SHA.Map.to_alist t.crcs in
@@ -62,9 +59,11 @@ let pretty t =
     ) offsets crcs;
   let l = List.sort (fun (_,o1,_) (_,o2,_) -> Pervasives.compare o1 o2) !l in
   List.iter (fun (sha1, offset, crc) ->
-      bprintf buf "%s: off:%d crc:%ld\n" (SHA.to_hex sha1) offset crc
+      Format.fprintf ppf "@[%a@ off:%d@ crc:%ld@]" SHA.pp_hum sha1 offset crc
     ) l;
-  Buffer.contents buf
+  Format.fprintf ppf "@]"
+
+let pretty = Misc.pretty pp_hum
 
 let lengths { offsets; _ } =
   Log.debug "lengths";

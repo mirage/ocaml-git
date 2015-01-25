@@ -23,16 +23,21 @@ type copy = {
   length: int;
 }
 
-let pretty_copy t =
-  sprintf "off:%d len:%d" t.offset t.length
+let pp_hum_copy ppf t =
+  Format.fprintf ppf "@[off:%d@ len:%d@]" t.offset t.length
 
 type hunk =
   | Insert of string
   | Copy of copy
 
-let pretty_hunk buf = function
-  | Insert str -> bprintf buf " - INSERT %S\n" str
-  | Copy copy  -> bprintf buf " - COPY   [%s]\n" (pretty_copy copy)
+let pp_hum_hunk ppf = function
+  | Insert str -> Format.fprintf ppf "@[INSERT %S@]" str
+  | Copy copy  -> Format.fprintf ppf "@[COPY %a@]" pp_hum_copy copy
+
+let pp_hum_hunks ppf l =
+  Format.fprintf ppf "@[";
+  List.iter (Format.fprintf ppf "%a@ " pp_hum_hunk) l;
+  Format.fprintf ppf "@]"
 
 type 'a delta = {
   source: 'a;
@@ -41,15 +46,15 @@ type 'a delta = {
   hunks: hunk list;
 }
 
-let pretty_delta d =
-  let buf = Buffer.create 128 in
-  bprintf buf
-    "source-length: %d\n\
-     result-length: %d\n"
+let pp_hum_delta ppf d =
+  Format.fprintf ppf
+    "@[\
+     source-length: %d@ \
+     result-length: %d@ \
+     %a@]"
     d.source_length
-    d.result_length;
-  List.iter (pretty_hunk buf) d.hunks;
-  Buffer.contents buf
+    d.result_length
+    pp_hum_hunks d.hunks
 
 type t =
   | Raw_value of string
@@ -60,10 +65,12 @@ let hash = Hashtbl.hash
 let equal = (=)
 let compare = compare
 
-let pretty = function
-  | Raw_value s -> sprintf "%S\n" s
-  | Ref_delta d -> sprintf "source:%s\n%s" (SHA.to_hex d.source) (pretty_delta d)
-  | Off_delta d -> sprintf "source:%d\n%s" d.source (pretty_delta d)
+let pp_hum ppf = function
+  | Raw_value s -> Format.fprintf ppf "%S@." s
+  | Ref_delta d -> Format.fprintf ppf "@[source: %s@ %a@]"
+                     (SHA.to_hex d.source) pp_hum_delta d
+  | Off_delta d -> Format.fprintf ppf "@[source:%d@ %a@]"
+                     d.source pp_hum_delta d
 
 let result_length = function
   | Ref_delta { result_length; _ }
@@ -336,7 +343,8 @@ module Make (M: sig val version: int end) = struct
     let buf = Misc.with_buffer (fun buf -> add buf t) in
     Misc.crc32 buf
 
-  let pretty = pretty
+  let pp_hum = pp_hum
+  let pretty = Misc.pretty pp_hum
 
 end
 
@@ -357,8 +365,10 @@ module PIC = struct
     | Raw _  -> "RAW"
     | Link d -> sprintf "link(%s)" (SHA.to_hex d.source.sha1)
 
-  let pretty { kind; sha1 } =
-    sprintf "%s: %s" (SHA.to_hex sha1) (pretty_kind kind)
+  let pp_hum ppf { kind; sha1 } =
+    Format.fprintf ppf "@[%a: %s@]" SHA.pp_hum sha1 (pretty_kind kind)
+
+  let pretty = Misc.pretty pp_hum
 
   let rec unpack pic =
     match Value.Cache.find_inflated pic.sha1 with

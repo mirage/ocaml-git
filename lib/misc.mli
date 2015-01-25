@@ -110,3 +110,5 @@ module OP: sig
   (** Same as [Filename.concat]. *)
 
 end
+
+val pretty: (Format.formatter -> 'a -> unit) -> 'a -> string

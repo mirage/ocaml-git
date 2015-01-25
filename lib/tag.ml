@@ -14,8 +14,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Printf
-
 module Log = Log.Make(struct let section = "tag" end)
 
 type t = {
@@ -30,18 +28,20 @@ let hash = Hashtbl.hash
 let equal = (=)
 let compare = compare
 
-let pretty t =
-  sprintf
-    "object: %s\n\
-     type  : %s\n\
-     tag   : %S\n\
-     tagger: %s\n\n\
-     %s\n"
-    (SHA.to_hex t.sha1)
+let pp_hum ppf t =
+  Format.fprintf ppf
+    "@[object: %a@ \
+     type  : %s@ \
+     tag   : %S@ \
+     tagger: %a@.\
+     %s@]"
+    SHA.pp_hum t.sha1
     (Object_type.to_string t.typ)
     t.tag
-    (User.pretty t.tagger)
+    User.pp_hum t.tagger
     (String.trim t.message)
+
+let pretty = Misc.pretty pp_hum
 
 let add_key_value buf k v =
   Buffer.add_string buf k;

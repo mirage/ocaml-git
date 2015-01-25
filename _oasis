@@ -28,6 +28,15 @@ Library git
   BuildDepends:      mstruct, dolog, ocamlgraph, zip, nocrypto, uri,
                      lwt, hex
 
+Library git_top
+  Path:             lib/top
+  FindlibName:      top
+  FindlibParent:    git
+  Modules:          Git_top
+  BuildDepends:     compiler-libs.toplevel
+  XMETARequires:    git
+  XMETADescription: Toplevel printers for Git values
+
 Library "git-unix"
   Build$:            flag(unix)
   Path:              lib/unix/

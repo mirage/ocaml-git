@@ -42,7 +42,7 @@ type t =
   | Off_delta of int delta
 (** Packed values. *)
 
-val pretty: t -> string
+val pp_hum: Format.formatter -> t -> unit
 (** Human readable representation of a packed value. *)
 
 module V2: sig
@@ -111,7 +111,7 @@ module PIC: sig
     sha1: SHA.t;
   }
 
-  val pretty: t -> string
+  val pp_hum: Format.formatter -> t -> unit
   (** Human readable representation. *)
 
   val to_value: t -> Value.t
