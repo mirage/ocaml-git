@@ -26,7 +26,9 @@ let equal x y = String.compare x y = 0
 
 let pretty t =
   if String.length t < 70 then sprintf "%S" t
-  else sprintf "%S[%d]" (String.sub t 0 70) (String.length t)
+  else sprintf "%S..(%db)" (String.sub t 0 70) (String.length t)
+
+let pp_hum ppf t = Format.fprintf ppf "%s" (pretty t)
 
 let input buf =
   Mstruct.get_string buf (Mstruct.length buf)

@@ -14,8 +14,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Printf
-
 module Log = Log.Make(struct let section = "user" end)
 
 type t = {
@@ -28,9 +26,11 @@ let hash = Hashtbl.hash
 let equal = (=)
 let compare = compare
 
-let pretty t =
-  sprintf "[name: %s | email: %s | date: %s]"
+let pp_hum ppf t =
+  Format.fprintf ppf "{@[<hov>name=\"%s\";@ email=\"%s\";@ date:%s@]}"
     t.name t.email t.date
+
+let pretty = Misc.pretty pp_hum
 
 (* XXX needs to escape name/email/date *)
 let add buf ?level:_ t =

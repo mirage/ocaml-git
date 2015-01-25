@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 2ef26bddc3babf70174bb6a066e30e9d)
+# DO NOT EDIT (digest: 602ea91e608a1f3c3196b09d632fe193)
 # Ignore VCS directories, you can use the same kind of rule outside
 # OASIS_START/STOP if you want to exclude directories that contains
 # useless stuff for the build process
@@ -49,6 +49,9 @@ true: annot, bin_annot
 <lib/*.ml{,i,y}>: pkg_ocamlgraph
 <lib/*.ml{,i,y}>: pkg_uri
 <lib/*.ml{,i,y}>: pkg_zip
+# Library git_top
+"lib/top/git_top.cmxs": use_git_top
+<lib/top/*.ml{,i,y}>: pkg_compiler-libs.toplevel
 # Library git-unix
 "lib/unix/git-unix.cmxs": use_git-unix
 <lib/unix/*.ml{,i,y}>: pkg_cohttp.lwt

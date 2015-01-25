@@ -66,6 +66,8 @@ module SHA1_String = struct
 
   let pretty = to_hex
 
+  let pp_hum ppf t = Format.fprintf ppf "%s" (pretty t)
+
   let input buf =
     Mstruct.get_string buf 20
 

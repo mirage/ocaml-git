@@ -14,8 +14,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Printf
-
 module Log = Log.Make(struct let section = "commit" end)
 
 type t = {
@@ -32,18 +30,26 @@ let compare = compare
 
 let equal = (=)
 
-let pretty t =
-  sprintf
-    "tree     : %s\n\
-     parents  : %s\n\
-     author   : %s\n\
-     committer: %s\n\n\
-     %s\n"
-    (SHA.Tree.to_hex t.tree)
-    (String.concat ", " (List.map SHA.Commit.to_hex t.parents))
-    (User.pretty t.author)
-    (User.pretty t.committer)
+let pp_hum_parents ppf parents =
+  List.iter (fun t ->
+      Format.fprintf ppf "\"%a\";@ " SHA.Commit.pp_hum t
+    ) parents
+
+let pp_hum ppf t =
+  Format.fprintf ppf
+    "{@[<hov 2>\
+     tree = \"%a\";@ \
+     parents = [@,@[<hov 2>%a@]];@ \
+     author = %a;@ \
+     committer = %a;@.\
+     message = %S@]}"
+    SHA.Tree.pp_hum t.tree
+    pp_hum_parents t.parents
+    User.pp_hum t.author
+    User.pp_hum t.committer
     (String.trim t.message)
+
+let pretty = Misc.pretty pp_hum
 
 let add_parent buf parent =
   Buffer.add_string buf "parent ";

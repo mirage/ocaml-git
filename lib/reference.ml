@@ -31,6 +31,7 @@ let input _buf =
 let to_raw x = x
 let of_raw x = x
 let pretty x = String.escaped x
+let pp_hum ppf x = Format.fprintf ppf "%s" (pretty x)
 
 module Map = Misc.Map(Misc.S)
 

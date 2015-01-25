@@ -14,8 +14,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Printf
-
 module Log = Log.Make(struct let section = "tree" end)
 
 type perm = [
@@ -40,21 +38,23 @@ let equal = (=)
 
 let pretty_perm = function
   | `Normal -> "normal"
-  | `Exec   -> "exec  "
-  | `Link   -> "link  "
-  | `Dir    -> "dir   "
+  | `Exec   -> "exec"
+  | `Link   -> "link"
+  | `Dir    -> "dir"
   | `Commit -> "commit"
 
-let pretty_entry e =
-  sprintf "%s %s    %S\n"
+let pp_hum_entry ppf e =
+  Format.fprintf ppf "{@[<hov 2>perm = %s;@ node = \"%a\";@ name = %S;@]}"
     (pretty_perm e.perm)
-    (SHA.to_hex e.node)
+    SHA.pp_hum e.node
     e.name
 
-let pretty t =
-  let b = Buffer.create 1024 in
-  List.iter (fun e -> Buffer.add_string b (pretty_entry e)) t;
-  Buffer.contents b
+let pp_hum ppf t =
+  Format.fprintf ppf "[@,";
+  List.iter (Format.fprintf ppf "%a;@ " pp_hum_entry) t;
+  Format.fprintf ppf "@,@]]"
+
+let pretty = Misc.pretty pp_hum
 
 let perm_of_string buf = function
   | "44"
