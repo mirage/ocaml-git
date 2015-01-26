@@ -63,6 +63,10 @@ val type_of_inflated: Mstruct.t -> Object_type.t
 
 module Cache: sig
 
+  val set_size: int -> unit
+  (** Empty the current LRU cache, and create a new one with the given
+      size. *)
+
   val clear: unit -> unit
   (** Empty the cache. *)
 

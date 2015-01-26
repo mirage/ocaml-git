@@ -108,25 +108,29 @@ let input buf =
 
 module Cache = struct
 
-  let len = 64 * 1024
-  let cache: t LRU.t = LRU.make len
-  let cache_inflated: string LRU.t = LRU.make len
+  let len = 512
+  let cache: t LRU.t ref = ref (LRU.make len)
+  let cache_inflated: string LRU.t ref = ref (LRU.make len)
 
   let clear () =
-    LRU.clear cache;
-    LRU.clear cache_inflated
+    LRU.clear !cache;
+    LRU.clear !cache_inflated
+
+  let set_size len =
+    cache := LRU.make len;
+    cache_inflated := LRU.make len
 
   let find sha1 =
-    try Some (LRU.get cache sha1)
+    try Some (LRU.get !cache sha1)
     with Not_found -> None
 
   let find_inflated sha1 =
-    try Some (LRU.get cache_inflated sha1)
+    try Some (LRU.get !cache_inflated sha1)
     with Not_found -> None
 
   let add_both sha1 t str =
-    LRU.set cache sha1 t;
-    LRU.set cache_inflated sha1 str
+    LRU.set !cache sha1 t;
+    LRU.set !cache_inflated sha1 str
 
   let add sha1 t =
     let buf = Buffer.create 1024 in
