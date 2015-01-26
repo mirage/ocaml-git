@@ -50,10 +50,10 @@ let add_date buf (date, tz) =
   Buffer.add_string buf (Int64.to_string date);
   Buffer.add_char buf ' ';
   match tz with
-  | None    -> Buffer.add_string buf " +0000"
+  | None    -> Buffer.add_string buf "+0000"
   | Some tz ->
     let sign = match tz.sign with `Plus -> "+" | `Minus -> "-" in
-    Printf.bprintf buf " %s%2d%2d" sign tz.hours tz.min
+    Printf.bprintf buf "%s%2d%2d" sign tz.hours tz.min
 
 let hash = Hashtbl.hash
 let equal = (=)
@@ -92,7 +92,7 @@ let input buf =
   let sign = match Mstruct.get_char buf with
     | '+' -> `Plus
     | '-' -> `Minus
-    | c   -> Mstruct.parse_error_buf buf "wrong sign: %c" c
+    | c   -> Mstruct.parse_error_buf buf "wrong sign: %d" (Char.code c)
   in
   let hours =
     let str = Mstruct.get_string buf 2 in
