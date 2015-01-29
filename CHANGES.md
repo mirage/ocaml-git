@@ -1,4 +1,6 @@
 ## 1.4.6
+* Expose `Git.Value.Cache.set_size` to change the LRU cache size
+* Reduce the default LRU cache size (in 1.4.4 it was set to 64k, now it's 512)
 * More precise type for commit dates
 * Add `git.top` to load toplevel printers for Git values
 
