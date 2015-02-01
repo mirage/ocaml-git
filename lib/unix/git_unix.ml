@@ -257,10 +257,21 @@ module D = struct
     | 0   -> return_unit
     | len -> rwrite fd (Cstruct.to_bigarray b) 0 len
 
-  let with_write_file file fn =
+  let default_tmp_dir =
+    try match Sys.getenv "OGITTMPDIR" with
+      | "" -> None
+      | x  -> Some x
+    with Not_found ->
+      None
+
+  let with_write_file ?temp_dir file fn =
+    let temp_dir = match temp_dir with
+      | None -> default_tmp_dir
+      | Some x -> Some x
+    in
     let dir = Filename.dirname file in
     mkdir dir >>= fun () ->
-    let tmp = Filename.temp_file ~temp_dir:dir (Filename.basename file) "write" in
+    let tmp = Filename.temp_file ?temp_dir (Filename.basename file) "write" in
     Lwt_pool.use openfile_pool (fun () ->
         Log.info "Writing %s (%s/%s)" file dir (Filename.basename tmp);
         Lwt_unix.(openfile tmp [O_WRONLY; O_NONBLOCK; O_CREAT; O_TRUNC] 0o644) >>= fun fd ->
@@ -269,8 +280,8 @@ module D = struct
           (fun _  -> Lwt_unix.close fd)
       )
 
-  let write_file file b =
-    with_write_file file (fun fd -> write_cstruct fd b)
+  let write_file file ?temp_dir b =
+    with_write_file file ?temp_dir (fun fd -> write_cstruct fd b)
 
   let read_file file =
     Unix.handle_unix_error (fun () ->

@@ -50,7 +50,7 @@ let clear t =
   Hashtbl.remove stores t.root;
   return_unit
 
-let write t ?level:_ value =
+let write t ?level:_ ?temp_dir:_ value =
   let inflated = Misc.with_buffer (fun buf -> Value.add_inflated buf value) in
   let sha1 = SHA.of_string inflated in
   try

@@ -33,7 +33,7 @@ module type IO = sig
   val files: string -> string list Lwt.t
   val rec_files: string -> string list Lwt.t
   val read_file: string -> Cstruct.t Lwt.t
-  val write_file: string -> Cstruct.t -> unit Lwt.t
+  val write_file: string -> ?temp_dir:string -> Cstruct.t -> unit Lwt.t
   val chmod: string -> int -> unit Lwt.t
   val stat_info: string -> Index.stat_info
 end
@@ -149,7 +149,7 @@ module Make (IO: IO) = struct
         with Zlib.Error _ ->
           Lwt.fail (Zlib.Error (file, (Cstruct.to_string buf)))
 
-    let write t ?level value =
+    let write t ?level ?temp_dir value =
       Log.debug "write";
       let inflated = Misc.with_buffer (fun buf -> Value.add_inflated buf value) in
       let sha1 = SHA.of_string inflated in
@@ -158,7 +158,7 @@ module Make (IO: IO) = struct
       | true  -> Log.debug "write: file %s already exists!" file; Lwt.return sha1
       | false ->
         let deflated = Misc.deflate_cstruct ?level (Cstruct.of_string inflated) in
-        IO.write_file file deflated >>= fun () ->
+        IO.write_file file ?temp_dir deflated >>= fun () ->
         Lwt.return sha1
 
     let list root =
@@ -390,7 +390,6 @@ module Make (IO: IO) = struct
 
   let read_reference t ref =
     let file = file_of_ref t ref in
-    Log.info "Reading %s" file;
     IO.file_exists file >>= function
     | true ->
       IO.read_file file >>= fun hex ->
@@ -408,7 +407,6 @@ module Make (IO: IO) = struct
 
   let read_head t =
     let file = file_of_ref t Reference.head in
-    Log.info "Reading %s" file;
     IO.file_exists file >>= function
     | true ->
       IO.read_file file >>= fun str ->
@@ -430,8 +428,8 @@ module Make (IO: IO) = struct
       Log.debug "read_reference_exn: Cannot read %s" (Reference.pretty ref);
       Lwt.fail Not_found
 
-  let write t ?level value =
-    Loose.write t ?level value >>= fun sha1 ->
+  let write t ?level ?temp_dir value =
+    Loose.write t ?level ?temp_dir value >>= fun sha1 ->
     Log.debug "write -> %s" (SHA.to_hex sha1);
     Value.Cache.add sha1 value;
     Lwt.return sha1
