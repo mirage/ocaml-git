@@ -234,7 +234,7 @@ module Make (IO: IO) = struct
           LRU.set index_lru sha1 index;
           Lwt.return index
         | false ->
-          Printf.eprintf "%s does not exist." file;
+          Log.error "%s does not exist." file;
           Lwt.fail (Failure "read_index")
 
     let keys_lru = LRU.make (128 * 1024)
@@ -271,7 +271,7 @@ module Make (IO: IO) = struct
           LRU.set pack_lru sha1 pack;
           Lwt.return pack
         | false ->
-          Printf.eprintf "No file associated with the pack object %s.\n" (SHA.to_hex sha1);
+          Log.error "No file associated with the pack object %s." (SHA.to_hex sha1);
           Lwt.fail (Failure "read_pack")
 
     let write_pack t sha1 pack =
@@ -361,7 +361,7 @@ module Make (IO: IO) = struct
     contents t >>= fun contents ->
     List.iter (fun (sha1, value) ->
         let typ = Value.type_of value in
-        Printf.eprintf "%s %s\n" (SHA.to_hex sha1) (Object_type.to_string typ);
+        Log.error "%s %s" (SHA.to_hex sha1) (Object_type.to_string typ);
       ) contents;
     Lwt.return_unit
 
@@ -562,11 +562,11 @@ module Make (IO: IO) = struct
     let entries = ref [] in
     let all = ref 0 in
     read_index t >>= fun index ->
+    Log.info "Checking out files...";
     iter_blobs t ~init:head ~f:(fun (i,n) path mode sha1 blob ->
         all := n;
-        printf "\rChecking out files: %d%% (%d/%d), done.%!" Pervasives.(100*i/n) i n;
         let file = String.concat Filename.dir_sep path in
-        Log.debug "write_index: blob:%s" file;
+        Log.debug "write_index: %d/%d blob:%s" i n file;
         entry_of_file ~root:t index file mode sha1 blob >>= function
         | None   -> Lwt.return_unit
         | Some e -> entries := e :: !entries; Lwt.return_unit
@@ -575,7 +575,7 @@ module Make (IO: IO) = struct
     let buf = Buffer.create 1024 in
     Index.add buf index;
     IO.write_file (index_file t) (Cstruct.of_string (Buffer.contents buf)) >>= fun () ->
-    printf "\rChecking out files: 100%% (%d/%d), done.%!\n" !all !all;
+    Log.info "Checking out files: 100%% (%d/%d), done." !all !all;
     Lwt.return_unit
 
   let kind = `Disk

@@ -14,8 +14,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Printf
-
 module Log = Log.Make(struct let section = "index" end)
 
 type time = {
@@ -273,7 +271,7 @@ let input buf =
   let extensions = input_extensions buf in
   let length = Mstruct.offset buf - offset in
   if length <> total_length - 20 then (
-    eprintf "Index.input: more data to read! (total:%d current:%d)"
+    Log.error "Index.input: more data to read! (total:%d current:%d)"
       (total_length - 20) length;
     failwith "Index.input"
   );
@@ -283,7 +281,7 @@ let input buf =
   in
   let checksum = SHA.input buf in
   if actual_checksum <> checksum then (
-    eprintf "Index.input: wrong checksum";
+    Log.error "Index.input: wrong checksum";
     failwith "Index.input"
   );
   { entries; extensions }

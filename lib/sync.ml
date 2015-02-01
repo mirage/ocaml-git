@@ -106,7 +106,7 @@ module Make (IO: IO) (Store: Store.S) = struct
 
   let error fmt =
     Printf.ksprintf (fun msg ->
-        Printf.eprintf "%s\n%!" msg;
+        Log.error "%s" msg;
         raise Error
       ) fmt
 
@@ -370,7 +370,7 @@ module Make (IO: IO) (Store: Store.S) = struct
       SHA.Commit.Map.iter
         (fun key data ->
            List.iter (fun ref ->
-               Printf.bprintf buf "%s %s\n%!"
+               Printf.bprintf buf "%s %s\n"
                  (SHA.Commit.to_hex key) (Reference.pretty ref)
              ) data
         ) t.references;
@@ -909,11 +909,10 @@ module Make (IO: IO) (Store: Store.S) = struct
     Upload_request.phase2 (ic,oc) ~haves >>= fun () ->
 
     Log.debug "PHASE3";
-    printf "Receiving data ...%!";
+    Log.info "Receiving data ...";
     Pack_file.input ~capabilities ic >>= fun raw ->
 
-    printf " done.\n%!";
-    Log.debug "Received a pack file of %d bytes." (String.length raw);
+    Log.info "Received a pack file of %d bytes." (String.length raw);
     let pack = Cstruct.of_string raw in
 
     let unpack = match op with
@@ -931,11 +930,11 @@ module Make (IO: IO) (Store: Store.S) = struct
     match SHA.Set.to_list sha1s with
     | []    ->
       Log.debug "NO NEW OBJECTS";
-      Printf.printf "Already up-to-date.\n%!";
+      Log.info "Already up-to-date.";
       return { Result.head = Some head; references; sha1s = [] }
     | sha1s ->
       Log.debug "NEW OBJECTS";
-      printf "remote: Counting objects: %d, done.\n%!"
+      Log.info "remote: Counting objects: %d, done."
         (List.length sha1s);
       return { Result.head = Some head; references; sha1s }
 
