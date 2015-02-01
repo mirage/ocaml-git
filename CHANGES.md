@@ -1,3 +1,9 @@
+## 1.4.7
+* Remove raw printf (#60)
+* More flexibility on where to write temp files. The directory name can be
+  configured by write calls, and the default is `OGITTMPDIR` if set,
+  then `Filename.get_temp_dir_name` -- as it was in 1.4.5, see #51
+
 ## 1.4.6
 * Expose `Git.Value.Cache.set_size` to change the LRU cache size
 * Reduce the default LRU cache size (in 1.4.4 it was set to 64k, now it's 512)
