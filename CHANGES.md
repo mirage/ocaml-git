@@ -1,4 +1,5 @@
 ## 1.4.7
+* Index entries should be fixed alphabetically
 * Remove raw printf (#60)
 * More flexibility on where to write temp files. The directory name can be
   configured by write calls, and the default is `OGITTMPDIR` if set,
