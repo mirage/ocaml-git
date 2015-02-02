@@ -141,6 +141,6 @@ let write_reference t ref sha1 =
   return_unit
 
 let read_index _t = return Index.empty
-let write_index _t _head = return_unit
+let write_index _t ?index:_ _head = return_unit
 
 let kind = `Memory

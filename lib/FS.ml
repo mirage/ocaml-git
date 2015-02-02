@@ -557,26 +557,34 @@ module Make (IO: IO) = struct
       (fun () -> entry_of_file_aux ?root index file mode sha1 blob)
       (function Failure _ | Sys_error _ -> Lwt.return_none | e -> Lwt.fail e)
 
-  let write_index t head =
+  let write_index t ?index head =
     Log.debug "write_index %s" (SHA.Commit.to_hex head);
-    let entries = ref [] in
-    let all = ref 0 in
-    read_index t >>= fun index ->
-    Log.info "Checking out files...";
-    iter_blobs t ~init:head ~f:(fun (i,n) path mode sha1 blob ->
-        all := n;
-        let file = String.concat Filename.dir_sep path in
-        Log.debug "write_index: %d/%d blob:%s" i n file;
-        entry_of_file ~root:t index file mode sha1 blob >>= function
-        | None   -> Lwt.return_unit
-        | Some e -> entries := e :: !entries; Lwt.return_unit
-      ) >>= fun () ->
-    let index = Index.create !entries in
     let buf = Buffer.create 1024 in
-    Index.add buf index;
-    IO.write_file (index_file t) (Cstruct.of_string (Buffer.contents buf)) >>= fun () ->
-    Log.info "Checking out files: 100%% (%d/%d), done." !all !all;
-    Lwt.return_unit
+    match index with
+    | Some index ->
+      Index.add buf index;
+      IO.write_file (index_file t) (Cstruct.of_string (Buffer.contents buf)) >>= fun () ->
+      let all = List.length index.Index.entries in
+      Log.info "Checking out files: 100%% (%d/%d), done." all all;
+      Lwt.return_unit
+    | None ->
+      let entries = ref [] in
+      let all = ref 0 in
+      read_index t >>= fun index ->
+      Log.info "Checking out files...";
+      iter_blobs t ~init:head ~f:(fun (i,n) path mode sha1 blob ->
+          all := n;
+          let file = String.concat Filename.dir_sep path in
+          Log.debug "write_index: %d/%d blob:%s" i n file;
+          entry_of_file ~root:t index file mode sha1 blob >>= function
+          | None   -> Lwt.return_unit
+          | Some e -> entries := e :: !entries; Lwt.return_unit
+        ) >>= fun () ->
+      let index = Index.create !entries in
+      Index.add buf index;
+      IO.write_file (index_file t) (Cstruct.of_string (Buffer.contents buf)) >>= fun () ->
+      Log.info "Checking out files: 100%% (%d/%d), done." !all !all;
+      Lwt.return_unit
 
   let kind = `Disk
 

@@ -1,4 +1,5 @@
 ## 1.4.7
+* `Git.write_index` now takes an optional `index` argument
 * Index entries should be fixed alphabetically
 * Remove raw printf (#60)
 * More flexibility on where to write temp files. The directory name can be

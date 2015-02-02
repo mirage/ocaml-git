@@ -100,13 +100,16 @@ module type S = sig
   val read_index: t -> Index.t Lwt.t
   (** Return the index file. *)
 
-  val write_index: t -> SHA.Commit.t -> unit Lwt.t
+  val write_index: t -> ?index:Index.t -> SHA.Commit.t -> unit Lwt.t
   (** Update the index file for the given revision. A side-effect of
       this operation is that the blobs are expanded into the
       filesystem. {b Note:} It is the user responsability to ensure
       that filenames are valid. No sanitazition is done by the library
       -- the Git format does not impose a filename format as this is a
-      constraint of the underlying filesystem. *)
+      constraint of the underlying filesystem.
+
+      If [index] is not set, read the current index and update it with
+      the current state of the filesystem. *)
 
   (** {2 Backend kind} *)
 
