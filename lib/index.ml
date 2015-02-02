@@ -72,6 +72,14 @@ type entry = {
   name  : string;
 }
 
+(* Index entries are sorted by the byte sequence that comprises the
+   entry name; with a secondary comparison of the stage bits from the
+   <ENTRY_FLAGS> if the entry name byte sequences are identical. *)
+let compare_entries e1 e2 =
+  match String.compare e1.name e2.name with
+  | 0 -> compare e1.id e2.id
+  | i -> i
+
 let pp_hum_entry ppf t =
   Format.fprintf ppf
     "{@[<hov 2>\
@@ -111,6 +119,9 @@ type t = {
   entries   : entry list;
   extensions: extension list;
 }
+
+let create ?(extensions=[]) entries =
+  { entries = List.sort compare_entries entries; extensions }
 
 let empty = { entries = []; extensions = [] }
 

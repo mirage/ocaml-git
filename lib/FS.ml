@@ -571,7 +571,7 @@ module Make (IO: IO) = struct
         | None   -> Lwt.return_unit
         | Some e -> entries := e :: !entries; Lwt.return_unit
       ) >>= fun () ->
-    let index = { Index.entries = !entries; extensions = [] } in
+    let index = Index.create !entries in
     let buf = Buffer.create 1024 in
     Index.add buf index;
     IO.write_file (index_file t) (Cstruct.of_string (Buffer.contents buf)) >>= fun () ->
