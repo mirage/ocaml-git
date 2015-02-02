@@ -50,7 +50,7 @@ let clear t =
   Hashtbl.remove stores t.root;
   return_unit
 
-let write t ?level:_ value =
+let write t ?level:_ ?temp_dir:_ value =
   let inflated = Misc.with_buffer (fun buf -> Value.add_inflated buf value) in
   let sha1 = SHA.of_string inflated in
   try
@@ -141,6 +141,6 @@ let write_reference t ref sha1 =
   return_unit
 
 let read_index _t = return Index.empty
-let write_index _t _head = return_unit
+let write_index _t ?index:_ _head = return_unit
 
 let kind = `Memory

@@ -30,7 +30,7 @@ Library git
 
 Library git_top
   Path:             lib/top
-  FindlibName:      top
+  Findlibname:      top
   FindlibParent:    git
   Modules:          Git_top
   BuildDepends:     compiler-libs.toplevel

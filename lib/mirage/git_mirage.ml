@@ -123,7 +123,7 @@ module FS (FS: FS) = struct
         return (Cstruct.of_string s)
       | true -> fail (Failure (Printf.sprintf "%s is a directory" file))
 
-    let write_file t file b =
+    let write_file t ?temp_dir:_ file b =
       Log.debug "write_file %s" file;
       mkdir t (Filename.dirname file) >>= fun () ->
       FS.create t file    >>| fun () ->
@@ -166,8 +166,8 @@ module FS (FS: FS) = struct
     let read_file file =
       connect (fun t -> read_file t file)
 
-    let write_file file buf =
-      connect (fun t -> write_file t file buf)
+    let write_file file ?temp_dir buf =
+      connect (fun t -> write_file t ?temp_dir file buf)
 
     let chmod file perm =
       connect (fun t -> chmod t file perm)

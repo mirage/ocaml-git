@@ -74,12 +74,14 @@ module type S = sig
   val push: t -> branch:Reference.t -> Gri.t -> Result.push Lwt.t
   (** Push a local branch to a remote store. *)
 
-  val clone: t -> ?deepen:int -> ?unpack:bool -> ?capabilities:capability list
+  val clone: t -> ?deepen:int -> ?unpack:bool -> ?level:int
+    -> ?temp_dir:string -> ?capabilities:capability list
     -> Gri.t -> Result.fetch Lwt.t
   (** [clone t address] clones the contents of [address] into the
       store [t]. *)
 
-  val fetch: t -> ?deepen:int -> ?unpack:bool -> ?capabilities:capability list
+  val fetch: t -> ?deepen:int -> ?unpack:bool -> ?level:int
+    -> ?temp_dir:string -> ?capabilities:capability list
     -> Gri.t -> Result.fetch Lwt.t
   (** [fetch t address] fetches the missing contents of [address] into
       the store [t]. *)

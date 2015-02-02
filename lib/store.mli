@@ -53,14 +53,17 @@ module type S = sig
   val list: t -> SHA.t list Lwt.t
   (** Return the list of SHA names. *)
 
-  val write: t -> ?level:int -> Value.t -> SHA.t Lwt.t
+  val write: t -> ?level:int -> ?temp_dir:string -> Value.t -> SHA.t Lwt.t
   (** Write a value and return the SHA of its serialized contents.
 
-    The compression [level] must be between 0 and 9: 1 gives best
-    speed, 9 gives best compression, 0 gives no compression at all
-    (the input data is simply copied a block at a time). The default
-    value (currently equivalent to level 6) requests a default
-    compromise between speed and compression . *)
+      {ul
+      {- [temp_dir] is directory name used to store temporary files}
+      {- The compression [level] must be between 0 and 9: 1 gives best
+      speed, 9 gives best compression, 0 gives no compression at all
+      (the input data is simply copied a block at a time). The default
+      value (currently equivalent to level 6) requests a default
+      compromise between speed and compression .}}
+*)
 
   val write_pack: t -> Pack.Raw.t -> SHA.Set.t Lwt.t
   (** Write a raw pack file and the corresponding index. Return the
@@ -97,13 +100,16 @@ module type S = sig
   val read_index: t -> Index.t Lwt.t
   (** Return the index file. *)
 
-  val write_index: t -> SHA.Commit.t -> unit Lwt.t
+  val write_index: t -> ?index:Index.t -> SHA.Commit.t -> unit Lwt.t
   (** Update the index file for the given revision. A side-effect of
       this operation is that the blobs are expanded into the
       filesystem. {b Note:} It is the user responsability to ensure
       that filenames are valid. No sanitazition is done by the library
       -- the Git format does not impose a filename format as this is a
-      constraint of the underlying filesystem. *)
+      constraint of the underlying filesystem.
+
+      If [index] is not set, read the current index and update it with
+      the current state of the filesystem. *)
 
   (** {2 Backend kind} *)
 

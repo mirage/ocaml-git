@@ -312,7 +312,7 @@ module Make (Store: Store.S) = struct
               return f
             ) files >>= fun entries ->
           let entries = Misc.list_filter_map (fun x -> x) entries in
-          let cache = { Index.entries; extensions = [] } in
+          let cache = Index.create entries in
           let buf = Misc.with_buffer' (fun buf -> Index.add buf cache) in
           let cache2 = Index.input (Mstruct.of_cstruct buf) in
           assert_index_equal "index" cache cache2;

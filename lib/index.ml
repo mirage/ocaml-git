@@ -14,8 +14,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Printf
-
 module Log = Log.Make(struct let section = "index" end)
 
 type time = {
@@ -74,6 +72,14 @@ type entry = {
   name  : string;
 }
 
+(* Index entries are sorted by the byte sequence that comprises the
+   entry name; with a secondary comparison of the stage bits from the
+   <ENTRY_FLAGS> if the entry name byte sequences are identical. *)
+let compare_entries e1 e2 =
+  match String.compare e1.name e2.name with
+  | 0 -> compare e1.id e2.id
+  | i -> i
+
 let pp_hum_entry ppf t =
   Format.fprintf ppf
     "{@[<hov 2>\
@@ -113,6 +119,9 @@ type t = {
   entries   : entry list;
   extensions: extension list;
 }
+
+let create ?(extensions=[]) entries =
+  { entries = List.sort compare_entries entries; extensions }
 
 let empty = { entries = []; extensions = [] }
 
@@ -273,7 +282,7 @@ let input buf =
   let extensions = input_extensions buf in
   let length = Mstruct.offset buf - offset in
   if length <> total_length - 20 then (
-    eprintf "Index.input: more data to read! (total:%d current:%d)"
+    Log.error "Index.input: more data to read! (total:%d current:%d)"
       (total_length - 20) length;
     failwith "Index.input"
   );
@@ -283,7 +292,7 @@ let input buf =
   in
   let checksum = SHA.input buf in
   if actual_checksum <> checksum then (
-    eprintf "Index.input: wrong checksum";
+    Log.error "Index.input: wrong checksum";
     failwith "Index.input"
   );
   { entries; extensions }

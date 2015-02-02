@@ -87,13 +87,16 @@ type extension = {
 val pp_hum_extension: Format.formatter -> extension -> unit
 (** Human-readable representation of the extension. *)
 
-type t = {
+type t = private {
   entries   : entry list;
   extensions: extension list;
 }
 (** Index entries are sorted by the byte sequence that comprises the
     entry [name]; with a secondary comparison of the [stage] bits if
     the entry name byte sequences are identical *)
+
+val create: ?extensions:extension list -> entry list -> t
+(** Create an index. *)
 
 include Object.S with type t := t
 

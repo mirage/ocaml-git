@@ -33,7 +33,7 @@ module type IO = sig
   val files: string -> string list Lwt.t
   val rec_files: string -> string list Lwt.t
   val read_file: string -> Cstruct.t Lwt.t
-  val write_file: string -> Cstruct.t -> unit Lwt.t
+  val write_file: string -> ?temp_dir:string -> Cstruct.t -> unit Lwt.t
   val chmod: string -> int -> unit Lwt.t
   val stat_info: string -> Index.stat_info
 end
@@ -149,7 +149,7 @@ module Make (IO: IO) = struct
         with Zlib.Error _ ->
           Lwt.fail (Zlib.Error (file, (Cstruct.to_string buf)))
 
-    let write t ?level value =
+    let write t ?level ?temp_dir value =
       Log.debug "write";
       let inflated = Misc.with_buffer (fun buf -> Value.add_inflated buf value) in
       let sha1 = SHA.of_string inflated in
@@ -158,7 +158,7 @@ module Make (IO: IO) = struct
       | true  -> Log.debug "write: file %s already exists!" file; Lwt.return sha1
       | false ->
         let deflated = Misc.deflate_cstruct ?level (Cstruct.of_string inflated) in
-        IO.write_file file deflated >>= fun () ->
+        IO.write_file file ?temp_dir deflated >>= fun () ->
         Lwt.return sha1
 
     let list root =
@@ -234,7 +234,7 @@ module Make (IO: IO) = struct
           LRU.set index_lru sha1 index;
           Lwt.return index
         | false ->
-          Printf.eprintf "%s does not exist." file;
+          Log.error "%s does not exist." file;
           Lwt.fail (Failure "read_index")
 
     let keys_lru = LRU.make (128 * 1024)
@@ -271,7 +271,7 @@ module Make (IO: IO) = struct
           LRU.set pack_lru sha1 pack;
           Lwt.return pack
         | false ->
-          Printf.eprintf "No file associated with the pack object %s.\n" (SHA.to_hex sha1);
+          Log.error "No file associated with the pack object %s." (SHA.to_hex sha1);
           Lwt.fail (Failure "read_pack")
 
     let write_pack t sha1 pack =
@@ -361,7 +361,7 @@ module Make (IO: IO) = struct
     contents t >>= fun contents ->
     List.iter (fun (sha1, value) ->
         let typ = Value.type_of value in
-        Printf.eprintf "%s %s\n" (SHA.to_hex sha1) (Object_type.to_string typ);
+        Log.error "%s %s" (SHA.to_hex sha1) (Object_type.to_string typ);
       ) contents;
     Lwt.return_unit
 
@@ -390,7 +390,6 @@ module Make (IO: IO) = struct
 
   let read_reference t ref =
     let file = file_of_ref t ref in
-    Log.info "Reading %s" file;
     IO.file_exists file >>= function
     | true ->
       IO.read_file file >>= fun hex ->
@@ -408,7 +407,6 @@ module Make (IO: IO) = struct
 
   let read_head t =
     let file = file_of_ref t Reference.head in
-    Log.info "Reading %s" file;
     IO.file_exists file >>= function
     | true ->
       IO.read_file file >>= fun str ->
@@ -430,8 +428,8 @@ module Make (IO: IO) = struct
       Log.debug "read_reference_exn: Cannot read %s" (Reference.pretty ref);
       Lwt.fail Not_found
 
-  let write t ?level value =
-    Loose.write t ?level value >>= fun sha1 ->
+  let write t ?level ?temp_dir value =
+    Loose.write t ?level ?temp_dir value >>= fun sha1 ->
     Log.debug "write -> %s" (SHA.to_hex sha1);
     Value.Cache.add sha1 value;
     Lwt.return sha1
@@ -559,26 +557,34 @@ module Make (IO: IO) = struct
       (fun () -> entry_of_file_aux ?root index file mode sha1 blob)
       (function Failure _ | Sys_error _ -> Lwt.return_none | e -> Lwt.fail e)
 
-  let write_index t head =
+  let write_index t ?index head =
     Log.debug "write_index %s" (SHA.Commit.to_hex head);
-    let entries = ref [] in
-    let all = ref 0 in
-    read_index t >>= fun index ->
-    iter_blobs t ~init:head ~f:(fun (i,n) path mode sha1 blob ->
-        all := n;
-        printf "\rChecking out files: %d%% (%d/%d), done.%!" Pervasives.(100*i/n) i n;
-        let file = String.concat Filename.dir_sep path in
-        Log.debug "write_index: blob:%s" file;
-        entry_of_file ~root:t index file mode sha1 blob >>= function
-        | None   -> Lwt.return_unit
-        | Some e -> entries := e :: !entries; Lwt.return_unit
-      ) >>= fun () ->
-    let index = { Index.entries = !entries; extensions = [] } in
     let buf = Buffer.create 1024 in
-    Index.add buf index;
-    IO.write_file (index_file t) (Cstruct.of_string (Buffer.contents buf)) >>= fun () ->
-    printf "\rChecking out files: 100%% (%d/%d), done.%!\n" !all !all;
-    Lwt.return_unit
+    match index with
+    | Some index ->
+      Index.add buf index;
+      IO.write_file (index_file t) (Cstruct.of_string (Buffer.contents buf)) >>= fun () ->
+      let all = List.length index.Index.entries in
+      Log.info "Checking out files: 100%% (%d/%d), done." all all;
+      Lwt.return_unit
+    | None ->
+      let entries = ref [] in
+      let all = ref 0 in
+      read_index t >>= fun index ->
+      Log.info "Checking out files...";
+      iter_blobs t ~init:head ~f:(fun (i,n) path mode sha1 blob ->
+          all := n;
+          let file = String.concat Filename.dir_sep path in
+          Log.debug "write_index: %d/%d blob:%s" i n file;
+          entry_of_file ~root:t index file mode sha1 blob >>= function
+          | None   -> Lwt.return_unit
+          | Some e -> entries := e :: !entries; Lwt.return_unit
+        ) >>= fun () ->
+      let index = Index.create !entries in
+      Index.add buf index;
+      IO.write_file (index_file t) (Cstruct.of_string (Buffer.contents buf)) >>= fun () ->
+      Log.info "Checking out files: 100%% (%d/%d), done." !all !all;
+      Lwt.return_unit
 
   let kind = `Disk
 
