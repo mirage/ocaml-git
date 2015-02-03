@@ -502,6 +502,7 @@ module Make (IO: IO) = struct
     match mode with
     | `Link -> (*q Lwt_unix.symlink file ??? *) failwith "TODO"
     | _     ->
+      IO.remove file >>= fun () ->
       IO.write_file file (Cstruct.of_string blob) >>= fun () ->
       match mode with
       | `Exec -> IO.chmod file 0o755
@@ -526,22 +527,40 @@ module Make (IO: IO) = struct
       | Some r -> IO.realpath r
     end >>= fun root ->
     IO.realpath file >>= fun file ->
-    Log.debug "entry_of_file %s" file;
+    Log.debug "entry_of_file %s %s" (SHA.Blob.to_hex sha1) file;
     begin
       IO.file_exists file >>= function
-      | false -> create_file file mode blob
+      | false ->
+        Log.debug "%s does not exist on the filesystem, creating!" file;
+        create_file file mode blob
       | true  ->
-        let stats = IO.stat_info file in
-        if List.exists
-            (fun e -> root / e.Index.name = file && e.Index.stats = stats)
-            index.Index.entries
-        then (
-          Log.debug "%s unchanged!" file;
-          Lwt.return_unit
-        ) else (
-          Log.debug "%s has changed, updating!" file;
+        let entry =
+          try
+            List.find (fun e -> root / e.Index.name = file) index.Index.entries
+            |> fun x -> Some x
+          with Not_found ->
+            None
+        in
+        match entry with
+        | None  ->
+          Log.debug "%s does not exist in the index, adding!" file;
+          (* in doubt, overide the current version -- git will just refuse
+             to do anything in that case. *)
           create_file file mode blob
-        )
+        | Some e ->
+          if e.Index.id <> sha1 then (
+            Log.debug "%s has an old version in the index, updating!" file;
+            create_file file mode blob
+          ) else
+            let stats = IO.stat_info file in
+            if e.Index.stats <> stats then (
+              (* same thing here, usually Git just stops in that case. *)
+              Log.debug "%s has been modified on the filesystem, reversing!" file;
+              create_file file mode blob
+            ) else (
+              Log.debug "%s: %s unchanged!" (SHA.Blob.to_hex sha1) file;
+              Lwt.return_unit
+            )
     end >>= fun () ->
     let id = sha1 in
     let stats = IO.stat_info file in

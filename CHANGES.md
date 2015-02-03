@@ -1,4 +1,5 @@
 ## 1.4.7
+* Fix the filesystem updates for non-bare repositories (reported by @avsm)
 * `Git.write_index` now takes an optional `index` argument
 * Index entries should be fixed alphabetically
 * Remove raw printf (#60)
