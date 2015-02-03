@@ -1,3 +1,8 @@
+## 1.4.8
+* Also add read objects in the LRU
+* Fix a regression in `ogit cat-file` which were displaying nothing
+  for small objects.
+
 ## 1.4.7
 * Fix the filesystem updates for non-bare repositories (reported by @avsm)
 * `Git.write_index` now takes an optional `index` argument
