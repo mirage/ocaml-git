@@ -330,7 +330,7 @@ module Make (IO: IO) = struct
     | None   ->
       Log.debug "read: cache miss!";
       Loose.read t sha1 >>= function
-      | Some v -> Lwt.return (Some v)
+      | Some v -> Value.Cache.add sha1 v; Lwt.return (Some v)
       | None   -> Packed.read t sha1
 
   let read_exn t sha1 =
