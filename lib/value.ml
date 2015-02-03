@@ -32,10 +32,11 @@ let pp_hum ppf = function
   | Tag t    -> Format.fprintf ppf "@[<hov 2>Tag@ %a@]" Tag.pp_hum t
   | Tree t   -> Format.fprintf ppf "@[<hov 2>Tree@ %a@]" Tree.pp_hum t
 
-let pretty = Misc.pretty pp_hum
+let pretty t = Misc.pretty pp_hum t
 
 let commit c = Commit c
 let blob b = Blob b
+
 let tree t = Tree t
 let tag t = Tag t
 
