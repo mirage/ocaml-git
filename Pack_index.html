@@ -13,7 +13,7 @@
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="SHA" rel="Chapter" href="SHA.html">
 <link title="Blob" rel="Chapter" href="Blob.html">
-<link title="Cache" rel="Chapter" href="Cache.html">
+<link title="Index" rel="Chapter" href="Index.html">
 <link title="Commit" rel="Chapter" href="Commit.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
 <link title="Version" rel="Chapter" href="Version.html">
@@ -34,6 +34,7 @@
 <link title="Gri" rel="Chapter" href="Gri.html">
 <link title="Memory" rel="Chapter" href="Memory.html">
 <link title="FS" rel="Chapter" href="FS.html">
+<link title="Packed_refs" rel="Chapter" href="Packed_refs.html">
 <link title="Git_unix" rel="Chapter" href="Git_unix.html">
 <link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>Pack_index</title>
 </head>
@@ -98,25 +99,7 @@ Read only the keys contained in the index.<br>
     the index file is build from a raw pack file).<br>
 </div>
 
-<pre><span id="VALempty"><span class="keyword">val</span> empty</span> : <code class="type">?pack_checksum:SHA.t -> unit -> <a href="Pack_index.html#TYPEt">t</a></code></pre>
-<pre><span id="VALt_of_sexp"><span class="keyword">val</span> t_of_sexp</span> : <code class="type">Sexplib.Sexp.t -> <a href="Pack_index.html#TYPEt">t</a></code></pre>
-<pre><span id="VALsexp_of_t"><span class="keyword">val</span> sexp_of_t</span> : <code class="type"><a href="Pack_index.html#TYPEt">t</a> -> Sexplib.Sexp.t</code></pre><div class="info ">
-<code class="code">offsests</code> is the positions of the SHA objects in the
-    corresponding raw pack file.
-<p>
-
-    <code class="code">crcs</code> contains the CRC-32 value of the packed object data.
-<p>
-
-    <code class="code">pack_checksum</code> is the corresponding pack file checksums, value
-    which is needed when writing the pack index file to disk.<br>
-</div>
-<br>
-Read only the keys contained in the index.<br>
-<br>
-<code class="code">lengths</code> returns the difference between two consecutive offsets
-    (appart for the last elements, where the lenght can be <code class="code">None</code> is
-    the index file is build from a raw pack file).<br>
-<br>
+<pre><span id="VALempty"><span class="keyword">val</span> empty</span> : <code class="type">?pack_checksum:SHA.t -> unit -> <a href="Pack_index.html#TYPEt">t</a></code></pre><div class="info ">
 The empty pack index.<br>
+</div>
 </body></html>

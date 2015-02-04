@@ -13,7 +13,7 @@
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="SHA" rel="Chapter" href="SHA.html">
 <link title="Blob" rel="Chapter" href="Blob.html">
-<link title="Cache" rel="Chapter" href="Cache.html">
+<link title="Index" rel="Chapter" href="Index.html">
 <link title="Commit" rel="Chapter" href="Commit.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
 <link title="Version" rel="Chapter" href="Version.html">
@@ -34,6 +34,7 @@
 <link title="Gri" rel="Chapter" href="Gri.html">
 <link title="Memory" rel="Chapter" href="Memory.html">
 <link title="FS" rel="Chapter" href="FS.html">
+<link title="Packed_refs" rel="Chapter" href="Packed_refs.html">
 <link title="Git_unix" rel="Chapter" href="Git_unix.html">
 <link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><link title="Constructor" rel="Section" href="#2_Constructor">
 <title>Sync</title>
@@ -49,6 +50,19 @@
 Clone/Fecth/Push protocol<br>
 </div>
 <hr width="100%">
+
+<pre><span id="TYPEprotocol"><span class="keyword">type</span> <code class="type"></code>protocol</span> = <code class="type">[ `Git | `SSH | `Smart_HTTP ]</code> </pre>
+<div class="info ">
+The type for the different Git protocols.<br>
+</div>
+
+
+<pre><span id="VALprotocol"><span class="keyword">val</span> protocol</span> : <code class="type">Uri.t -> [ `Not_supported of string | `Ok of <a href="Sync.html#TYPEprotocol">protocol</a> | `Unknown ]</code></pre><div class="info ">
+<code class="code">protocol uri</code> is the Git protocol associated to <code class="code">uri</code>.<br>
+</div>
+
+<pre><span id="TYPEcapability"><span class="keyword">type</span> <code class="type"></code>capability</span> = <code class="type">[ `Agent of string<br>       | `Delete_refs<br>       | `Include_tag<br>       | `Multi_ack<br>       | `No_progress<br>       | `Ofs_delta<br>       | `Other of string<br>       | `Report_status<br>       | `Shallow<br>       | `Side_band<br>       | `Side_band_64k<br>       | `Thin_pack ]</code> </pre>
+
 
 <pre><span class="keyword">module</span> <a href="Sync.Result.html">Result</a>: <code class="code">sig</code> <a href="Sync.Result.html">..</a> <code class="code">end</code></pre>
 <pre><span class="keyword">module type</span> <a href="Sync.S.html">S</a> = <code class="code">sig</code> <a href="Sync.S.html">..</a> <code class="code">end</code></pre><br>

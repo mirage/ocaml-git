@@ -11,7 +11,7 @@
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="SHA" rel="Chapter" href="SHA.html">
 <link title="Blob" rel="Chapter" href="Blob.html">
-<link title="Cache" rel="Chapter" href="Cache.html">
+<link title="Index" rel="Chapter" href="Index.html">
 <link title="Commit" rel="Chapter" href="Commit.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
 <link title="Version" rel="Chapter" href="Version.html">
@@ -32,10 +32,12 @@
 <link title="Gri" rel="Chapter" href="Gri.html">
 <link title="Memory" rel="Chapter" href="Memory.html">
 <link title="FS" rel="Chapter" href="FS.html">
+<link title="Packed_refs" rel="Chapter" href="Packed_refs.html">
 <link title="Git_unix" rel="Chapter" href="Git_unix.html">
 <link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><link title="Objects" rel="Section" href="#2_Objects">
 <link title="References" rel="Section" href="#2_References">
-<link title="Cache file" rel="Section" href="#2_Cachefile">
+<link title="Git index files" rel="Section" href="#2_Gitindexfiles">
+<link title="Backend kind" rel="Section" href="#2_Backendkind">
 <title>Store.S</title>
 </head>
 <body>
@@ -53,18 +55,26 @@ Git store handlers.<br>
 </div>
 
 
-<pre><span id="VALcreate"><span class="keyword">val</span> create</span> : <code class="type">?root:string -> unit -> <a href="Store.S.html#TYPEt">t</a> Lwt.t</code></pre><div class="info ">
-Create a store handler for the given path. If <code class="code">root</code> is not set,
-      use the current directory.<br>
-</div>
-
-<pre><span id="VALclear"><span class="keyword">val</span> clear</span> : <code class="type"><a href="Store.S.html#TYPEt">t</a> -> unit Lwt.t</code></pre><div class="info ">
-Remove all the contents of the Git store.<br>
+<pre><span id="VALcreate"><span class="keyword">val</span> create</span> : <code class="type">?root:string -> ?level:int -> unit -> <a href="Store.S.html#TYPEt">t</a> Lwt.t</code></pre><div class="info ">
+Create a store handler for the given path. See <a href="Store.S.html#VALroot"><code class="code">Store.S.root</code></a> and <a href="Store.S.html#VALlevel"><code class="code">Store.S.level</code></a>.<br>
 </div>
 
 <pre><span id="VALroot"><span class="keyword">val</span> root</span> : <code class="type"><a href="Store.S.html#TYPEt">t</a> -> string</code></pre><div class="info ">
 The state root (or any other meaningful name to be displayed to
-      the user).<br>
+      the user). By default, it is the current directory.<br>
+</div>
+
+<pre><span id="VALlevel"><span class="keyword">val</span> level</span> : <code class="type"><a href="Store.S.html#TYPEt">t</a> -> int</code></pre><div class="info ">
+The compression <code class="code">level</code> used when creating new Git objects. must
+      be between 0 and 9: 1 gives best speed, 9 gives best
+      compression, 0 gives no compression at all (the input data is
+      simply copied a block at a time). The default value (currently
+      equivalent to level 6) requests a default compromise between
+      speed and compression.<br>
+</div>
+
+<pre><span id="VALclear"><span class="keyword">val</span> clear</span> : <code class="type"><a href="Store.S.html#TYPEt">t</a> -> unit Lwt.t</code></pre><div class="info ">
+Remove all the contents of the Git store.<br>
 </div>
 
 <pre><span id="VALdump"><span class="keyword">val</span> dump</span> : <code class="type"><a href="Store.S.html#TYPEt">t</a> -> unit Lwt.t</code></pre><div class="info ">
@@ -137,14 +147,28 @@ Write a reference.<br>
 Remove a refernce.<br>
 </div>
 <br>
-<h2 id="2_Cachefile">Cache file</h2><br>
+<h2 id="2_Gitindexfiles">Git index files</h2><br>
 
-<pre><span id="VALread_cache"><span class="keyword">val</span> read_cache</span> : <code class="type"><a href="Store.S.html#TYPEt">t</a> -> <a href="Cache.html#TYPEt">Cache.t</a> Lwt.t</code></pre><div class="info ">
-Return the cache of files.<br>
+<pre><span id="VALread_index"><span class="keyword">val</span> read_index</span> : <code class="type"><a href="Store.S.html#TYPEt">t</a> -> <a href="Index.html#TYPEt">Index.t</a> Lwt.t</code></pre><div class="info ">
+Return the index file.<br>
 </div>
 
-<pre><span id="VALwrite_cache"><span class="keyword">val</span> write_cache</span> : <code class="type"><a href="Store.S.html#TYPEt">t</a> -> SHA.Commit.t -> unit Lwt.t</code></pre><div class="info ">
-Update the cache of files for the given revision. XXX: need a
-      merge stategy.<br>
+<pre><span id="VALwrite_index"><span class="keyword">val</span> write_index</span> : <code class="type"><a href="Store.S.html#TYPEt">t</a> -> ?index:<a href="Index.html#TYPEt">Index.t</a> -> SHA.Commit.t -> unit Lwt.t</code></pre><div class="info ">
+Update the index file for the given revision. A side-effect of
+      this operation is that the blobs are expanded into the
+      filesystem. <b>Note:</b> It is the user responsability to ensure
+      that filenames are valid. No sanitazition is done by the library
+      -- the Git format does not impose a filename format as this is a
+      constraint of the underlying filesystem.
+<p>
+
+      If <code class="code">index</code> is not set, read the current index and update it with
+      the current state of the filesystem.<br>
+</div>
+<br>
+<h2 id="2_Backendkind">Backend kind</h2><br>
+
+<pre><span id="VALkind"><span class="keyword">val</span> kind</span> : <code class="type">[ `Disk | `Memory ]</code></pre><div class="info ">
+The kind of backend.<br>
 </div>
 </body></html>

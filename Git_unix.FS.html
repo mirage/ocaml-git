@@ -12,7 +12,7 @@
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="SHA" rel="Chapter" href="SHA.html">
 <link title="Blob" rel="Chapter" href="Blob.html">
-<link title="Cache" rel="Chapter" href="Cache.html">
+<link title="Index" rel="Chapter" href="Index.html">
 <link title="Commit" rel="Chapter" href="Commit.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
 <link title="Version" rel="Chapter" href="Version.html">
@@ -33,6 +33,7 @@
 <link title="Gri" rel="Chapter" href="Gri.html">
 <link title="Memory" rel="Chapter" href="Memory.html">
 <link title="FS" rel="Chapter" href="FS.html">
+<link title="Packed_refs" rel="Chapter" href="Packed_refs.html">
 <link title="Git_unix" rel="Chapter" href="Git_unix.html">
 <link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>Git_unix.FS</title>
 </head>
@@ -42,8 +43,11 @@
 &nbsp;</div>
 <h1>Module <a href="type_Git_unix.FS.html">Git_unix.FS</a></h1>
 
-<pre><span class="keyword">module</span> FS: <code class="type">Git.FS.S</code><code class="type"> </code></pre><div class="info module top">
-Implementation of the on-disk Git protocol.<br>
+<pre><span class="keyword">module</span> FS: <code class="code">sig</code> <a href="Git_unix.FS.html">..</a> <code class="code">end</code></pre><div class="info module top">
+Implementation of the on-disk Git protocol using <code class="code">Lwt_unix</code>.<br>
 </div>
 <hr width="100%">
+
+<pre><span class="keyword">module</span> <a href="Git_unix.FS.IO.html">IO</a>: <code class="type">Git.FS.IO</code><code class="type"> </code></pre>
+<pre><span class="keyword">include</span> <a href="FS.S.html">FS.S</a></pre>
 </body></html>

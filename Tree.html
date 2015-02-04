@@ -13,7 +13,7 @@
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="SHA" rel="Chapter" href="SHA.html">
 <link title="Blob" rel="Chapter" href="Blob.html">
-<link title="Cache" rel="Chapter" href="Cache.html">
+<link title="Index" rel="Chapter" href="Index.html">
 <link title="Commit" rel="Chapter" href="Commit.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
 <link title="Version" rel="Chapter" href="Version.html">
@@ -34,6 +34,7 @@
 <link title="Gri" rel="Chapter" href="Gri.html">
 <link title="Memory" rel="Chapter" href="Memory.html">
 <link title="FS" rel="Chapter" href="FS.html">
+<link title="Packed_refs" rel="Chapter" href="Packed_refs.html">
 <link title="Git_unix" rel="Chapter" href="Git_unix.html">
 <link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>Tree</title>
 </head>
@@ -49,11 +50,19 @@ Git trees.<br>
 </div>
 <hr width="100%">
 
-<pre><span id="TYPEperm"><span class="keyword">type</span> <code class="type"></code>perm</span> = <code class="type">[ `Dir | `Exec | `Link | `Normal ]</code> </pre>
+<pre><span id="TYPEperm"><span class="keyword">type</span> <code class="type"></code>perm</span> = <code class="type">[ `Commit | `Dir | `Exec | `Link | `Normal ]</code> </pre>
 <div class="info ">
 File permission.<br>
 </div>
 
+
+<pre><span id="VALpretty_perm"><span class="keyword">val</span> pretty_perm</span> : <code class="type"><a href="Tree.html#TYPEperm">perm</a> -> string</code></pre><div class="info ">
+Pretty printing of tree permissions.<br>
+</div>
+
+<pre><span id="VALstring_of_perm"><span class="keyword">val</span> string_of_perm</span> : <code class="type"><a href="Tree.html#TYPEperm">perm</a> -> string</code></pre><div class="info ">
+Raw represention of a permission, using the <code class="code">Git</code> format.<br>
+</div>
 
 <pre><code><span id="TYPEentry"><span class="keyword">type</span> <code class="type"></code>entry</span> = {</code></pre><table class="typetable">
 <tr>

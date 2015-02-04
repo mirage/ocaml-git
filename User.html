@@ -13,7 +13,7 @@
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="SHA" rel="Chapter" href="SHA.html">
 <link title="Blob" rel="Chapter" href="Blob.html">
-<link title="Cache" rel="Chapter" href="Cache.html">
+<link title="Index" rel="Chapter" href="Index.html">
 <link title="Commit" rel="Chapter" href="Commit.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
 <link title="Version" rel="Chapter" href="Version.html">
@@ -34,6 +34,7 @@
 <link title="Gri" rel="Chapter" href="Gri.html">
 <link title="Memory" rel="Chapter" href="Memory.html">
 <link title="FS" rel="Chapter" href="FS.html">
+<link title="Packed_refs" rel="Chapter" href="Packed_refs.html">
 <link title="Git_unix" rel="Chapter" href="Git_unix.html">
 <link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>User</title>
 </head>
@@ -48,6 +49,35 @@
 Git user actions.<br>
 </div>
 <hr width="100%">
+
+<pre><code><span id="TYPEtz_offset"><span class="keyword">type</span> <code class="type"></code>tz_offset</span> = {</code></pre><table class="typetable">
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTtz_offset.sign">sign</span>&nbsp;: <code class="type">[ `Minus | `Plus ]</code>;</code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTtz_offset.hours">hours</span>&nbsp;: <code class="type">int</code>;</code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTtz_offset.min">min</span>&nbsp;: <code class="type">int</code>;</code></td>
+
+</tr></table>
+}
+
+<div class="info ">
+Signed offset of time zone from UTC.<br>
+</div>
+
 
 <pre><code><span id="TYPEt"><span class="keyword">type</span> <code class="type"></code>t</span> = {</code></pre><table class="typetable">
 <tr>
@@ -68,14 +98,16 @@ Git user actions.<br>
 <td align="left" valign="top" >
 <code>&nbsp;&nbsp;</code></td>
 <td align="left" valign="top" >
-<code><span id="TYPEELTt.date">date</span>&nbsp;: <code class="type">string</code>;</code></td>
+<code><span id="TYPEELTt.date">date</span>&nbsp;: <code class="type">int64 * <a href="User.html#TYPEtz_offset">tz_offset</a> option</code>;</code></td>
 
 </tr></table>
 }
 
 <div class="info ">
 A user action has a (user) name, an (user) email and an (action)
-    date.<br>
+    date. The date is the number of seconds since 12:00 midnight
+    January 1, 1970, UTC without accounting for leap seconds with an
+    optional timezone info.<br>
 </div>
 
 

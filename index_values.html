@@ -9,7 +9,7 @@
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="SHA" rel="Chapter" href="SHA.html">
 <link title="Blob" rel="Chapter" href="Blob.html">
-<link title="Cache" rel="Chapter" href="Cache.html">
+<link title="Index" rel="Chapter" href="Index.html">
 <link title="Commit" rel="Chapter" href="Commit.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
 <link title="Version" rel="Chapter" href="Version.html">
@@ -30,6 +30,7 @@
 <link title="Gri" rel="Chapter" href="Gri.html">
 <link title="Memory" rel="Chapter" href="Memory.html">
 <link title="FS" rel="Chapter" href="FS.html">
+<link title="Packed_refs" rel="Chapter" href="Packed_refs.html">
 <link title="Git_unix" rel="Chapter" href="Git_unix.html">
 <link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>Index of values</title>
 </head>
@@ -46,14 +47,23 @@ Same as <code class="code">Filename.concat</code>.
 </td></tr>
 <tr><td align="left"><br>A</td></tr>
 <tr><td><a href="Object.S.html#VALadd">add</a> [<a href="Object.S.html">Object.S</a>]</td>
-<td></td></tr>
+<td><div class="info">
+Add the serialization of the value to an already existing
+      buffer.
+</div>
+</td></tr>
 <tr><td><a href="Value.Cache.html#VALadd">add</a> [<a href="Value.Cache.html">Value.Cache</a>]</td>
 <td><div class="info">
-Cache an inflated value.
+Cache a value.
 </div>
 </td></tr>
 <tr><td><a href="Misc.html#VALadd_be_uint32">add_be_uint32</a> [<a href="Misc.html">Misc</a>]</td>
 <td></td></tr>
+<tr><td><a href="Value.Cache.html#VALadd_both">add_both</a> [<a href="Value.Cache.html">Value.Cache</a>]</td>
+<td><div class="info">
+Cache both a value and its inflated representation.
+</div>
+</td></tr>
 <tr><td><a href="Packed_value.html#VALadd_delta">add_delta</a> [<a href="Packed_value.html">Packed_value</a>]</td>
 <td><div class="info">
 Append a delta to a buffer.
@@ -72,6 +82,11 @@ Add the hex-encoding of the SHA1 value to the buffer.
 <tr><td><a href="Packed_value.html#VALadd_hunk">add_hunk</a> [<a href="Packed_value.html">Packed_value</a>]</td>
 <td><div class="info">
 Append a hunk to a buffer.
+</div>
+</td></tr>
+<tr><td><a href="Value.Cache.html#VALadd_inflated">add_inflated</a> [<a href="Value.Cache.html">Value.Cache</a>]</td>
+<td><div class="info">
+Cache an inflated value.
 </div>
 </td></tr>
 <tr><td><a href="Value.html#VALadd_inflated">add_inflated</a> [<a href="Value.html">Value</a>]</td>
@@ -148,8 +163,6 @@ Every <code class="code">S</code> define how to connect to a peticular <code cla
 Get the full store contents.
 </div>
 </td></tr>
-<tr><td><a href="Packed_value.html#VALcopy_of_sexp">copy_of_sexp</a> [<a href="Packed_value.html">Packed_value</a>]</td>
-<td></td></tr>
 <tr><td><a href="Packed_value.V3.html#VALcrc32">crc32</a> [<a href="Packed_value.V3.html">Packed_value.V3</a>]</td>
 <td><div class="info">
 Return the CRC-32 of the packed value.
@@ -170,6 +183,11 @@ Return the CRC-32 value of a bigstring.
 Create a store handler for the given path.
 </div>
 </td></tr>
+<tr><td><a href="Index.html#VALcreate">create</a> [<a href="Index.html">Index</a>]</td>
+<td><div class="info">
+Create an index.
+</div>
+</td></tr>
 <tr><td><a href="FS.S.html#VALcreate_file">create_file</a> [<a href="FS.S.html">FS.S</a>]</td>
 <td><div class="info">
 Create a file on the filesystem, with the given mode.
@@ -188,8 +206,6 @@ Deflate a cstruct.
 Deflate an mstruct.
 </div>
 </td></tr>
-<tr><td><a href="Packed_value.html#VALdelta_of_sexp">delta_of_sexp</a> [<a href="Packed_value.html">Packed_value</a>]</td>
-<td></td></tr>
 <tr><td><a href="FS.IO.html#VALdirectories">directories</a> [<a href="FS.IO.html">FS.IO</a>]</td>
 <td><div class="info">
 List the subdirs.
@@ -202,7 +218,15 @@ Dump the store contents to stderr.
 </td></tr>
 <tr><td align="left"><br>E</td></tr>
 <tr><td><a href="Pack_index.html#VALempty">empty</a> [<a href="Pack_index.html">Pack_index</a>]</td>
-<td></td></tr>
+<td><div class="info">
+The empty pack index.
+</div>
+</td></tr>
+<tr><td><a href="Index.html#VALempty">empty</a> [<a href="Index.html">Index</a>]</td>
+<td><div class="info">
+The empty index file.
+</div>
+</td></tr>
 <tr><td><a href="FS.S.html#VALentry_of_file">entry_of_file</a> [<a href="FS.S.html">FS.S</a>]</td>
 <td><div class="info">
 Generate a cache entry for the file.
@@ -230,6 +254,11 @@ Does the given file exists ?
 List the subfiles.
 </div>
 </td></tr>
+<tr><td><a href="Packed_refs.html#VALfind">find</a> [<a href="Packed_refs.html">Packed_refs</a>]</td>
+<td><div class="info">
+Get the reference SHA1.
+</div>
+</td></tr>
 <tr><td><a href="Search.Make.html#VALfind">find</a> [<a href="Search.Make.html">Search.Make</a>]</td>
 <td><div class="info">
 <code class="code">find t sha1 path</code> returns (if it exists) the object named
@@ -247,10 +276,10 @@ Cache an inflated values.
       <code class="code">sha1</code> to an other object following the <code class="code">path</code> labels.
 </div>
 </td></tr>
-<tr><td><a href="Value.Cache.html#VALfind_exn">find_exn</a> [<a href="Value.Cache.html">Value.Cache</a>]</td>
+<tr><td><a href="Value.Cache.html#VALfind_inflated">find_inflated</a> [<a href="Value.Cache.html">Value.Cache</a>]</td>
 <td><div class="info">
-Same as <code class="code">find</code> but raises <code class="code">Not_found</code> if the key is not in the
-      cache.
+Same as <a href="Value.Cache.html#VALfind"><code class="code">Value.Cache.find</code></a> but store the inflated representation of the
+      value.
 </div>
 </td></tr>
 <tr><td><a href="Sync.IO.html#VALflush">flush</a> [<a href="Sync.IO.html">Sync.IO</a>]</td>
@@ -282,8 +311,6 @@ The repository HEAD.
 Compute the head contents.
 </div>
 </td></tr>
-<tr><td><a href="Packed_value.html#VALhunk_of_sexp">hunk_of_sexp</a> [<a href="Packed_value.html">Packed_value</a>]</td>
-<td></td></tr>
 <tr><td align="left"><br>I</td></tr>
 <tr><td><a href="Pack.Raw.html#VALindex">index</a> [<a href="Pack.Raw.html">Pack.Raw</a>]</td>
 <td><div class="info">
@@ -361,14 +388,22 @@ Return the keys present in the pack.
 </td></tr>
 <tr><td><a href="Misc.Map.html#VALkeys">keys</a> [<a href="Misc.Map.html">Misc.Map</a>]</td>
 <td></td></tr>
-<tr><td><a href="Packed_value.PIC.html#VALkind_of_sexp">kind_of_sexp</a> [<a href="Packed_value.PIC.html">Packed_value.PIC</a>]</td>
-<td></td></tr>
+<tr><td><a href="Store.S.html#VALkind">kind</a> [<a href="Store.S.html">Store.S</a>]</td>
+<td><div class="info">
+The kind of backend.
+</div>
+</td></tr>
 <tr><td align="left"><br>L</td></tr>
 <tr><td><a href="Pack_index.html#VALlengths">lengths</a> [<a href="Pack_index.html">Pack_index</a>]</td>
 <td><div class="info">
 <code class="code">lengths</code> returns the difference between two consecutive offsets
     (appart for the last elements, where the lenght can be <code class="code">None</code> is
     the index file is build from a raw pack file).
+</div>
+</td></tr>
+<tr><td><a href="Store.S.html#VALlevel">level</a> [<a href="Store.S.html">Store.S</a>]</td>
+<td><div class="info">
+The compression <code class="code">level</code> used when creating new Git objects.
 </div>
 </td></tr>
 <tr><td><a href="Misc.html#VALlf">lf</a> [<a href="Misc.html">Misc</a>]</td>
@@ -380,18 +415,6 @@ Return the list of SHA names.
 </td></tr>
 <tr><td><a href="Misc.html#VALlist_filter_map">list_filter_map</a> [<a href="Misc.html">Misc</a>]</td>
 <td></td></tr>
-<tr><td><a href="Misc.html#VALlist_iter_p">list_iter_p</a> [<a href="Misc.html">Misc</a>]</td>
-<td><div class="info">
-Same as <code class="code">List_lwt.iter_p</code> but using a maximum width equals to the
-    size of the <code class="code">pool</code>.
-</div>
-</td></tr>
-<tr><td><a href="Misc.html#VALlist_map_p">list_map_p</a> [<a href="Misc.html">Misc</a>]</td>
-<td><div class="info">
-Same as <code class="code">List_lwt.map_p</code> but using a maximum width equals to the
-    size of <code class="code">pool</code>.
-</div>
-</td></tr>
 <tr><td><a href="Sync.S.html#VALls">ls</a> [<a href="Sync.S.html">Sync.S</a>]</td>
 <td><div class="info">
 List the references of the remote repository.
@@ -424,11 +447,6 @@ Check if a reference exists.
 <tr><td><a href="FS.IO.html#VALmkdir">mkdir</a> [<a href="FS.IO.html">FS.IO</a>]</td>
 <td><div class="info">
 Create a directory (and the parent dirs if needed).
-</div>
-</td></tr>
-<tr><td><a href="Gri.html#VALmode">mode</a> [<a href="Gri.html">Gri</a>]</td>
-<td><div class="info">
-Return the protocol mode.
 </div>
 </td></tr>
 <tr><td align="left"><br>N</td></tr>
@@ -465,7 +483,10 @@ Return the graph of keys of the given Git store.
 <tr><td><a href="Misc.Set.html#VALof_list">of_list</a> [<a href="Misc.Set.html">Misc.Set</a>]</td>
 <td></td></tr>
 <tr><td><a href="Packed_value.html#VALof_pic">of_pic</a> [<a href="Packed_value.html">Packed_value</a>]</td>
-<td></td></tr>
+<td><div class="info">
+Position dependent packed value.
+</div>
+</td></tr>
 <tr><td><a href="Pack.html#VALof_pic">of_pic</a> [<a href="Pack.html">Pack</a>]</td>
 <td><div class="info">
 Transform a position-independant pack file into a raw one.
@@ -513,34 +534,72 @@ Create a (compressed) pack file.
 Return a packed (closed) collection of objects.
 </div>
 </td></tr>
+<tr><td><a href="Object.S.html#VALpp_hum">pp_hum</a> [<a href="Object.S.html">Object.S</a>]</td>
+<td><div class="info">
+Same as <a href="Object.S.html#VALpretty"><code class="code">Object.S.pretty</code></a> but using a generic formatter.
+</div>
+</td></tr>
+<tr><td><a href="Packed_value.PIC.html#VALpp_hum">pp_hum</a> [<a href="Packed_value.PIC.html">Packed_value.PIC</a>]</td>
+<td><div class="info">
+Human readable representation.
+</div>
+</td></tr>
+<tr><td><a href="Packed_value.html#VALpp_hum">pp_hum</a> [<a href="Packed_value.html">Packed_value</a>]</td>
+<td><div class="info">
+Human readable representation of a packed value.
+</div>
+</td></tr>
+<tr><td><a href="Index.html#VALpp_hum_entry">pp_hum_entry</a> [<a href="Index.html">Index</a>]</td>
+<td><div class="info">
+Human-readable representation of an index entry.
+</div>
+</td></tr>
+<tr><td><a href="Index.html#VALpp_hum_extension">pp_hum_extension</a> [<a href="Index.html">Index</a>]</td>
+<td><div class="info">
+Human-readable representation of the extension.
+</div>
+</td></tr>
+<tr><td><a href="Index.html#VALpp_hum_mode">pp_hum_mode</a> [<a href="Index.html">Index</a>]</td>
+<td><div class="info">
+Pretty print file modes.
+</div>
+</td></tr>
+<tr><td><a href="Index.html#VALpp_hum_stats">pp_hum_stats</a> [<a href="Index.html">Index</a>]</td>
+<td><div class="info">
+Pretty-print file stats.
+</div>
+</td></tr>
 <tr><td><a href="Object.S.html#VALpretty">pretty</a> [<a href="Object.S.html">Object.S</a>]</td>
 <td><div class="info">
 Human readable represenation of the object.
 </div>
 </td></tr>
-<tr><td><a href="Packed_value.PIC.html#VALpretty">pretty</a> [<a href="Packed_value.PIC.html">Packed_value.PIC</a>]</td>
-<td><div class="info">
-Human readable representation.
-</div>
-</td></tr>
-<tr><td><a href="Packed_value.html#VALpretty">pretty</a> [<a href="Packed_value.html">Packed_value</a>]</td>
-<td><div class="info">
-Human readable representation of a packed value.
-</div>
-</td></tr>
-<tr><td><a href="Cache.html#VALpretty_entry">pretty_entry</a> [<a href="Cache.html">Cache</a>]</td>
-<td><div class="info">
-Human-readable representation of a cache entry.
-</div>
-</td></tr>
+<tr><td><a href="Misc.OrderedType.html#VALpretty">pretty</a> [<a href="Misc.OrderedType.html">Misc.OrderedType</a>]</td>
+<td></td></tr>
+<tr><td><a href="Misc.html#VALpretty">pretty</a> [<a href="Misc.html">Misc</a>]</td>
+<td></td></tr>
+<tr><td><a href="Misc.Map.html#VALpretty">pretty</a> [<a href="Misc.Map.html">Misc.Map</a>]</td>
+<td></td></tr>
+<tr><td><a href="Misc.Set.html#VALpretty">pretty</a> [<a href="Misc.Set.html">Misc.Set</a>]</td>
+<td></td></tr>
 <tr><td><a href="Sync.Result.html#VALpretty_fetch">pretty_fetch</a> [<a href="Sync.Result.html">Sync.Result</a>]</td>
 <td><div class="info">
 Pretty print a fetch result.
 </div>
 </td></tr>
+<tr><td><a href="Tree.html#VALpretty_perm">pretty_perm</a> [<a href="Tree.html">Tree</a>]</td>
+<td><div class="info">
+Pretty printing of tree permissions.
+</div>
+</td></tr>
 <tr><td><a href="Sync.Result.html#VALpretty_push">pretty_push</a> [<a href="Sync.Result.html">Sync.Result</a>]</td>
 <td><div class="info">
 Pretty print a push status.
+</div>
+</td></tr>
+<tr><td><a href="Sync.html#VALprotocol">protocol</a> [<a href="Sync.html">Sync</a>]</td>
+<td><div class="info">
+<code class="code">protocol uri</code> is the Git protocol associated to <code class="code">uri</code>.
 </div>
 </td></tr>
 <tr><td><a href="Sync.S.html#VALpush">push</a> [<a href="Sync.S.html">Sync.S</a>]</td>
@@ -570,11 +629,6 @@ Read all the channel contents (until the channel is closed by
       the other side).
 </div>
 </td></tr>
-<tr><td><a href="Store.S.html#VALread_cache">read_cache</a> [<a href="Store.S.html">Store.S</a>]</td>
-<td><div class="info">
-Return the cache of files.
-</div>
-</td></tr>
 <tr><td><a href="Sync.IO.html#VALread_exactly">read_exactly</a> [<a href="Sync.IO.html">Sync.IO</a>]</td>
 <td><div class="info">
 Read a given number of bits.
@@ -602,6 +656,11 @@ mmap a file and return a mutable C-like structure with its
 Read the head contents.
 </div>
 </td></tr>
+<tr><td><a href="Store.S.html#VALread_index">read_index</a> [<a href="Store.S.html">Store.S</a>]</td>
+<td><div class="info">
+Return the index file.
+</div>
+</td></tr>
 <tr><td><a href="Store.S.html#VALread_reference">read_reference</a> [<a href="Store.S.html">Store.S</a>]</td>
 <td><div class="info">
 Read a given reference.
@@ -619,7 +678,8 @@ Very dumb real-path.
 </td></tr>
 <tr><td><a href="FS.IO.html#VALrec_files">rec_files</a> [<a href="FS.IO.html">FS.IO</a>]</td>
 <td><div class="info">
-List of the subfiles, recursively.
+<code class="code">rec_files dir</code> is the list of the files recursively present in
+      <code class="code">dir</code> and all of its sub-directories.
 </div>
 </td></tr>
 <tr><td><a href="Store.S.html#VALreferences">references</a> [<a href="Store.S.html">Store.S</a>]</td>
@@ -649,50 +709,12 @@ The state root (or any other meaningful name to be displayed to
 </div>
 </td></tr>
 <tr><td align="left"><br>S</td></tr>
-<tr><td><a href="Packed_value.html#VALsexp_of_copy">sexp_of_copy</a> [<a href="Packed_value.html">Packed_value</a>]</td>
+<tr><td><a href="Value.Cache.html#VALset_size">set_size</a> [<a href="Value.Cache.html">Value.Cache</a>]</td>
 <td><div class="info">
-Copy arguments.
+Empty the current LRU cache, and create a new one with the given
+      size.
 </div>
 </td></tr>
-<tr><td><a href="Packed_value.html#VALsexp_of_delta">sexp_of_delta</a> [<a href="Packed_value.html">Packed_value</a>]</td>
-<td><div class="info">
-Delta objects.
-</div>
-</td></tr>
-<tr><td><a href="Packed_value.html#VALsexp_of_hunk">sexp_of_hunk</a> [<a href="Packed_value.html">Packed_value</a>]</td>
-<td><div class="info">
-A delta hunk can either insert a string of copy the contents of a
-    base object.
-</div>
-</td></tr>
-<tr><td><a href="Packed_value.PIC.html#VALsexp_of_kind">sexp_of_kind</a> [<a href="Packed_value.PIC.html">Packed_value.PIC</a>]</td>
-<td></td></tr>
-<tr><td><a href="Object.S.html#VALsexp_of_t">sexp_of_t</a> [<a href="Object.S.html">Object.S</a>]</td>
-<td></td></tr>
-<tr><td><a href="Value.html#VALsexp_of_t">sexp_of_t</a> [<a href="Value.html">Value</a>]</td>
-<td><div class="info">
-Loose git objects.
-</div>
-</td></tr>
-<tr><td><a href="Packed_value.PIC.html#VALsexp_of_t">sexp_of_t</a> [<a href="Packed_value.PIC.html">Packed_value.PIC</a>]</td>
-<td></td></tr>
-<tr><td><a href="Packed_value.html#VALsexp_of_t">sexp_of_t</a> [<a href="Packed_value.html">Packed_value</a>]</td>
-<td><div class="info">
-Packed values.
-</div>
-</td></tr>
-<tr><td><a href="Pack_index.html#VALsexp_of_t">sexp_of_t</a> [<a href="Pack_index.html">Pack_index</a>]</td>
-<td><div class="info">
-<code class="code">offsests</code> is the positions of the SHA objects in the
-    corresponding raw pack file.
-</div>
-</td></tr>
-<tr><td><a href="Misc.OrderedType.html#VALsexp_of_t">sexp_of_t</a> [<a href="Misc.OrderedType.html">Misc.OrderedType</a>]</td>
-<td></td></tr>
-<tr><td><a href="Misc.Map.html#VALsexp_of_t">sexp_of_t</a> [<a href="Misc.Map.html">Misc.Map</a>]</td>
-<td></td></tr>
-<tr><td><a href="Misc.Set.html#VALsexp_of_t">sexp_of_t</a> [<a href="Misc.Set.html">Misc.Set</a>]</td>
-<td></td></tr>
 <tr><td><a href="Value.html#VALsha1">sha1</a> [<a href="Value.html">Value</a>]</td>
 <td><div class="info">
 Return the SHA of the serialized contents.
@@ -737,6 +759,11 @@ Return the stats of the given file.
 Pretty-print errors.
 </div>
 </td></tr>
+<tr><td><a href="Tree.html#VALstring_of_perm">string_of_perm</a> [<a href="Tree.html">Tree</a>]</td>
+<td><div class="info">
+Raw represention of a permission, using the <code class="code">Git</code> format.
+</div>
+</td></tr>
 <tr><td><a href="Misc.html#VALstring_split">string_split</a> [<a href="Misc.html">Misc</a>]</td>
 <td></td></tr>
 <tr><td><a href="Search.Make.html#VALsucc">succ</a> [<a href="Search.Make.html">Search.Make</a>]</td>
@@ -745,22 +772,6 @@ Compute the successor values.
 </div>
 </td></tr>
 <tr><td align="left"><br>T</td></tr>
-<tr><td><a href="Object.S.html#VALt_of_sexp">t_of_sexp</a> [<a href="Object.S.html">Object.S</a>]</td>
-<td></td></tr>
-<tr><td><a href="Value.html#VALt_of_sexp">t_of_sexp</a> [<a href="Value.html">Value</a>]</td>
-<td></td></tr>
-<tr><td><a href="Packed_value.PIC.html#VALt_of_sexp">t_of_sexp</a> [<a href="Packed_value.PIC.html">Packed_value.PIC</a>]</td>
-<td></td></tr>
-<tr><td><a href="Packed_value.html#VALt_of_sexp">t_of_sexp</a> [<a href="Packed_value.html">Packed_value</a>]</td>
-<td></td></tr>
-<tr><td><a href="Pack_index.html#VALt_of_sexp">t_of_sexp</a> [<a href="Pack_index.html">Pack_index</a>]</td>
-<td></td></tr>
-<tr><td><a href="Misc.OrderedType.html#VALt_of_sexp">t_of_sexp</a> [<a href="Misc.OrderedType.html">Misc.OrderedType</a>]</td>
-<td></td></tr>
-<tr><td><a href="Misc.Map.html#VALt_of_sexp">t_of_sexp</a> [<a href="Misc.Map.html">Misc.Map</a>]</td>
-<td></td></tr>
-<tr><td><a href="Misc.Set.html#VALt_of_sexp">t_of_sexp</a> [<a href="Misc.Set.html">Misc.Set</a>]</td>
-<td></td></tr>
 <tr><td><a href="Value.html#VALtag">tag</a> [<a href="Value.html">Value</a>]</td>
 <td><div class="info">
 Cast a tag to an object.
@@ -890,11 +901,6 @@ Write a value and return the SHA of its serialized contents.
 Write a string on a channel.
 </div>
 </td></tr>
-<tr><td><a href="Store.S.html#VALwrite_cache">write_cache</a> [<a href="Store.S.html">Store.S</a>]</td>
-<td><div class="info">
-Update the cache of files for the given revision.
-</div>
-</td></tr>
 <tr><td><a href="FS.IO.html#VALwrite_file">write_file</a> [<a href="FS.IO.html">FS.IO</a>]</td>
 <td><div class="info">
 Write a bigarray to a file.
@@ -903,6 +909,11 @@ Write a bigarray to a file.
 <tr><td><a href="Store.S.html#VALwrite_head">write_head</a> [<a href="Store.S.html">Store.S</a>]</td>
 <td><div class="info">
 Write the HEAD.
+</div>
+</td></tr>
+<tr><td><a href="Store.S.html#VALwrite_index">write_index</a> [<a href="Store.S.html">Store.S</a>]</td>
+<td><div class="info">
+Update the index file for the given revision.
 </div>
 </td></tr>
 <tr><td><a href="Store.S.html#VALwrite_pack">write_pack</a> [<a href="Store.S.html">Store.S</a>]</td>

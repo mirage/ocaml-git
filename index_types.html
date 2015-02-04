@@ -9,7 +9,7 @@
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="SHA" rel="Chapter" href="SHA.html">
 <link title="Blob" rel="Chapter" href="Blob.html">
-<link title="Cache" rel="Chapter" href="Cache.html">
+<link title="Index" rel="Chapter" href="Index.html">
 <link title="Commit" rel="Chapter" href="Commit.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
 <link title="Version" rel="Chapter" href="Version.html">
@@ -30,6 +30,7 @@
 <link title="Gri" rel="Chapter" href="Gri.html">
 <link title="Memory" rel="Chapter" href="Memory.html">
 <link title="FS" rel="Chapter" href="FS.html">
+<link title="Packed_refs" rel="Chapter" href="Packed_refs.html">
 <link title="Git_unix" rel="Chapter" href="Git_unix.html">
 <link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>Index of types</title>
 </head>
@@ -39,6 +40,8 @@
 <h1>Index of types</h1>
 <table>
 <tr><td align="left"><br>C</td></tr>
+<tr><td><a href="Sync.html#TYPEcapability">capability</a> [<a href="Sync.html">Sync</a>]</td>
+<td></td></tr>
 <tr><td><a href="Packed_value.html#TYPEcopy">copy</a> [<a href="Packed_value.html">Packed_value</a>]</td>
 <td><div class="info">
 Copy arguments.
@@ -51,12 +54,18 @@ Delta objects.
 </div>
 </td></tr>
 <tr><td align="left"><br>E</td></tr>
+<tr><td><a href="Packed_refs.html#TYPEentry">entry</a> [<a href="Packed_refs.html">Packed_refs</a>]</td>
+<td></td></tr>
 <tr><td><a href="Tree.html#TYPEentry">entry</a> [<a href="Tree.html">Tree</a>]</td>
 <td><div class="info">
 A tree entry.
 </div>
 </td></tr>
-<tr><td><a href="Cache.html#TYPEentry">entry</a> [<a href="Cache.html">Cache</a>]</td>
+<tr><td><a href="Index.html#TYPEentry">entry</a> [<a href="Index.html">Index</a>]</td>
+<td></td></tr>
+<tr><td><a href="Index.html#TYPEextension">extension</a> [<a href="Index.html">Index</a>]</td>
+<td></td></tr>
+<tr><td><a href="Index.html#TYPEextension_kind">extension_kind</a> [<a href="Index.html">Index</a>]</td>
 <td></td></tr>
 <tr><td align="left"><br>F</td></tr>
 <tr><td><a href="Sync.Result.html#TYPEfetch">fetch</a> [<a href="Sync.Result.html">Sync.Result</a>]</td>
@@ -79,14 +88,9 @@ Type for input channels.
 <tr><td><a href="Packed_value.PIC.html#TYPEkind">kind</a> [<a href="Packed_value.PIC.html">Packed_value.PIC</a>]</td>
 <td></td></tr>
 <tr><td align="left"><br>M</td></tr>
-<tr><td><a href="Gri.html#TYPEmode">mode</a> [<a href="Gri.html">Gri</a>]</td>
+<tr><td><a href="Index.html#TYPEmode">mode</a> [<a href="Index.html">Index</a>]</td>
 <td><div class="info">
-The three transmission protocols.
-</div>
-</td></tr>
-<tr><td><a href="Cache.html#TYPEmode">mode</a> [<a href="Cache.html">Cache</a>]</td>
-<td><div class="info">
-Permission for files in the cache index.
+Permission for files in the index file.
 </div>
 </td></tr>
 <tr><td align="left"><br>O</td></tr>
@@ -108,13 +112,18 @@ A path can cross different type of Git object boundaries.
 File permission.
 </div>
 </td></tr>
+<tr><td><a href="Sync.html#TYPEprotocol">protocol</a> [<a href="Sync.html">Sync</a>]</td>
+<td><div class="info">
+The type for the different Git protocols.
+</div>
+</td></tr>
 <tr><td><a href="Sync.Result.html#TYPEpush">push</a> [<a href="Sync.Result.html">Sync.Result</a>]</td>
 <td><div class="info">
 The result of a push operation.
 </div>
 </td></tr>
 <tr><td align="left"><br>S</td></tr>
-<tr><td><a href="Cache.html#TYPEstat_info">stat_info</a> [<a href="Cache.html">Cache</a>]</td>
+<tr><td><a href="Index.html#TYPEstat_info">stat_info</a> [<a href="Index.html">Index</a>]</td>
 <td><div class="info">
 These fields are used as a part of a heuristic to determine if the
     file system entity associated with this entry has changed.
@@ -139,7 +148,10 @@ Git store handlers.
 <tr><td><a href="Object_type.html#TYPEt">t</a> [<a href="Object_type.html">Object_type</a>]</td>
 <td></td></tr>
 <tr><td><a href="Object.S.html#TYPEt">t</a> [<a href="Object.S.html">Object.S</a>]</td>
-<td></td></tr>
+<td><div class="info">
+The type for the given Git object.
+</div>
+</td></tr>
 <tr><td><a href="Value.html#TYPEt">t</a> [<a href="Value.html">Value</a>]</td>
 <td></td></tr>
 <tr><td><a href="User.html#TYPEt">t</a> [<a href="User.html">User</a>]</td>
@@ -184,15 +196,20 @@ A pack value is an ordered list of position-independant packed
 A commit is a tree snapshot, with some credentials (eg.
 </div>
 </td></tr>
-<tr><td><a href="Cache.html#TYPEt">t</a> [<a href="Cache.html">Cache</a>]</td>
+<tr><td><a href="Index.html#TYPEt">t</a> [<a href="Index.html">Index</a>]</td>
 <td><div class="info">
 Index entries are sorted by the byte sequence that comprises the
     entry <code class="code">name</code>; with a secondary comparison of the <code class="code">stage</code> bits if
     the entry name byte sequences are identical
 </div>
 </td></tr>
-<tr><td><a href="Cache.html#TYPEtime">time</a> [<a href="Cache.html">Cache</a>]</td>
+<tr><td><a href="Index.html#TYPEtime">time</a> [<a href="Index.html">Index</a>]</td>
 <td></td></tr>
+<tr><td><a href="User.html#TYPEtz_offset">tz_offset</a> [<a href="User.html">User</a>]</td>
+<td><div class="info">
+Signed offset of time zone from UTC.
+</div>
+</td></tr>
 </table>
 </body>
 </html>

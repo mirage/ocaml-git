@@ -13,7 +13,7 @@
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="SHA" rel="Chapter" href="SHA.html">
 <link title="Blob" rel="Chapter" href="Blob.html">
-<link title="Cache" rel="Chapter" href="Cache.html">
+<link title="Index" rel="Chapter" href="Index.html">
 <link title="Commit" rel="Chapter" href="Commit.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
 <link title="Version" rel="Chapter" href="Version.html">
@@ -34,9 +34,9 @@
 <link title="Gri" rel="Chapter" href="Gri.html">
 <link title="Memory" rel="Chapter" href="Memory.html">
 <link title="FS" rel="Chapter" href="FS.html">
+<link title="Packed_refs" rel="Chapter" href="Packed_refs.html">
 <link title="Git_unix" rel="Chapter" href="Git_unix.html">
-<link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><link title="Bounded parallelism" rel="Section" href="#2_Boundedparallelism">
-<link title="Hexa encoding" rel="Section" href="#2_Hexaencoding">
+<link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><link title="Hexa encoding" rel="Section" href="#2_Hexaencoding">
 <link title="Zlib Compression" rel="Section" href="#2_ZlibCompression">
 <link title="CRC-32" rel="Section" href="#2_CRC32">
 <link title="Association lists" rel="Section" href="#2_Associationlists">
@@ -54,18 +54,6 @@
 Miscellaneous functions.<br>
 </div>
 <hr width="100%">
-<br>
-<h2 id="2_Boundedparallelism">Bounded parallelism</h2><br>
-
-<pre><span id="VALlist_iter_p"><span class="keyword">val</span> list_iter_p</span> : <code class="type">?pool:unit Lwt_pool.t -> ('a -> unit Lwt.t) -> 'a list -> unit Lwt.t</code></pre><div class="info ">
-Same as <code class="code">List_lwt.iter_p</code> but using a maximum width equals to the
-    size of the <code class="code">pool</code>. The default width is 50.<br>
-</div>
-
-<pre><span id="VALlist_map_p"><span class="keyword">val</span> list_map_p</span> : <code class="type">?pool:unit Lwt_pool.t -> ('a -> 'b Lwt.t) -> 'a list -> 'b list Lwt.t</code></pre><div class="info ">
-Same as <code class="code">List_lwt.map_p</code> but using a maximum width equals to the
-    size of <code class="code">pool</code>. The default width is 50.<br>
-</div>
 <br>
 <h2 id="2_Hexaencoding">Hexa encoding</h2><br>
 
@@ -85,15 +73,15 @@ Create a temporary buffer, apply a function to append stuff to
 Inflate a cstruct.<br>
 </div>
 
-<pre><span id="VALdeflate_cstruct"><span class="keyword">val</span> deflate_cstruct</span> : <code class="type">Cstruct.t -> Cstruct.t</code></pre><div class="info ">
+<pre><span id="VALdeflate_cstruct"><span class="keyword">val</span> deflate_cstruct</span> : <code class="type">?level:int -> Cstruct.t -> Cstruct.t</code></pre><div class="info ">
 Deflate a cstruct.<br>
 </div>
 
-<pre><span id="VALinflate_mstruct"><span class="keyword">val</span> inflate_mstruct</span> : <code class="type">Mstruct.t -> Mstruct.t</code></pre><div class="info ">
+<pre><span id="VALinflate_mstruct"><span class="keyword">val</span> inflate_mstruct</span> : <code class="type">?output_size:int -> Mstruct.t -> Mstruct.t</code></pre><div class="info ">
 Inflate an mstruct.<br>
 </div>
 
-<pre><span id="VALdeflate_mstruct"><span class="keyword">val</span> deflate_mstruct</span> : <code class="type">Mstruct.t -> Mstruct.t</code></pre><div class="info ">
+<pre><span id="VALdeflate_mstruct"><span class="keyword">val</span> deflate_mstruct</span> : <code class="type">?level:int -> Mstruct.t -> Mstruct.t</code></pre><div class="info ">
 Deflate an mstruct.<br>
 </div>
 <br>
@@ -138,4 +126,5 @@ Same as <code class="code">List.assoc</code> but returns <code class="code">None
 <pre><span id="VALstring_chop_prefix"><span class="keyword">val</span> string_chop_prefix</span> : <code class="type">string -> prefix:string -> string option</code></pre>
 <pre><span id="VALstring_chop_suffix"><span class="keyword">val</span> string_chop_suffix</span> : <code class="type">string -> suffix:string -> string option</code></pre>
 <pre><span id="VALlist_filter_map"><span class="keyword">val</span> list_filter_map</span> : <code class="type">('a -> 'b option) -> 'a list -> 'b list</code></pre>
-<pre><span class="keyword">module</span> <a href="Misc.OP.html">OP</a>: <code class="code">sig</code> <a href="Misc.OP.html">..</a> <code class="code">end</code></pre></body></html>
+<pre><span class="keyword">module</span> <a href="Misc.OP.html">OP</a>: <code class="code">sig</code> <a href="Misc.OP.html">..</a> <code class="code">end</code></pre>
+<pre><span id="VALpretty"><span class="keyword">val</span> pretty</span> : <code class="type">(Format.formatter -> 'a -> unit) -> 'a -> string</code></pre></body></html>

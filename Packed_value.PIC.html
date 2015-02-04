@@ -12,7 +12,7 @@
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="SHA" rel="Chapter" href="SHA.html">
 <link title="Blob" rel="Chapter" href="Blob.html">
-<link title="Cache" rel="Chapter" href="Cache.html">
+<link title="Index" rel="Chapter" href="Index.html">
 <link title="Commit" rel="Chapter" href="Commit.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
 <link title="Version" rel="Chapter" href="Version.html">
@@ -33,6 +33,7 @@
 <link title="Gri" rel="Chapter" href="Gri.html">
 <link title="Memory" rel="Chapter" href="Memory.html">
 <link title="FS" rel="Chapter" href="FS.html">
+<link title="Packed_refs" rel="Chapter" href="Packed_refs.html">
 <link title="Git_unix" rel="Chapter" href="Git_unix.html">
 <link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>Packed_value.PIC</title>
 </head>
@@ -83,7 +84,7 @@ Position-independant packed values.<br>
 
 
 
-<pre><span id="VALpretty"><span class="keyword">val</span> pretty</span> : <code class="type"><a href="Packed_value.PIC.html#TYPEt">t</a> -> string</code></pre><div class="info ">
+<pre><span id="VALpp_hum"><span class="keyword">val</span> pp_hum</span> : <code class="type">Format.formatter -> <a href="Packed_value.PIC.html#TYPEt">t</a> -> unit</code></pre><div class="info ">
 Human readable representation.<br>
 </div>
 
@@ -96,15 +97,4 @@ Human readable representation.<br>
 Build a raw value.<br>
 </div>
 
-<pre><span class="keyword">module</span> <a href="Packed_value.PIC.Map.html">Map</a>: <code class="type">Map.S</code><code class="type">  with type key = t</code></pre>
-<pre><span id="VALkind_of_sexp"><span class="keyword">val</span> kind_of_sexp</span> : <code class="type">Sexplib.Sexp.t -> <a href="Packed_value.PIC.html#TYPEkind">kind</a></code></pre>
-<pre><span id="VALt_of_sexp"><span class="keyword">val</span> t_of_sexp</span> : <code class="type">Sexplib.Sexp.t -> <a href="Packed_value.PIC.html#TYPEt">t</a></code></pre>
-<pre><span id="VALsexp_of_kind"><span class="keyword">val</span> sexp_of_kind</span> : <code class="type"><a href="Packed_value.PIC.html#TYPEkind">kind</a> -> Sexplib.Sexp.t</code></pre>
-<pre><span id="VALsexp_of_t"><span class="keyword">val</span> sexp_of_t</span> : <code class="type"><a href="Packed_value.PIC.html#TYPEt">t</a> -> Sexplib.Sexp.t</code></pre><br>
-Human readable representation.<br>
-<br>
-<code class="code">to_value p</code> unpacks the packed position-independant value
-      <code class="code">p</code>.<br>
-<br>
-Build a raw value.<br>
-</body></html>
+<pre><span class="keyword">module</span> <a href="Packed_value.PIC.Map.html">Map</a>: <code class="type">Map.S</code><code class="type">  with type key = t</code></pre></body></html>

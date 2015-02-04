@@ -13,7 +13,7 @@
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="SHA" rel="Chapter" href="SHA.html">
 <link title="Blob" rel="Chapter" href="Blob.html">
-<link title="Cache" rel="Chapter" href="Cache.html">
+<link title="Index" rel="Chapter" href="Index.html">
 <link title="Commit" rel="Chapter" href="Commit.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
 <link title="Version" rel="Chapter" href="Version.html">
@@ -34,10 +34,9 @@
 <link title="Gri" rel="Chapter" href="Gri.html">
 <link title="Memory" rel="Chapter" href="Memory.html">
 <link title="FS" rel="Chapter" href="FS.html">
+<link title="Packed_refs" rel="Chapter" href="Packed_refs.html">
 <link title="Git_unix" rel="Chapter" href="Git_unix.html">
 <link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><link title="Conversion to values" rel="Section" href="#2_Conversiontovalues">
-<link title="Position independant packed values" rel="Section" href="#2_Positionindependantpackedvalues">
-<link title="Conversion to values" rel="Section" href="#2_Conversiontovalues">
 <link title="Position independant packed values" rel="Section" href="#2_Positionindependantpackedvalues">
 <title>Packed_value</title>
 </head>
@@ -88,8 +87,11 @@ Copy arguments.<br>
 <code><span class="keyword">|</span></code></td>
 <td align="left" valign="top" >
 <code><span id="TYPEELThunk.Copy"><span class="constructor">Copy</span></span> <span class="keyword">of</span> <code class="type"><a href="Packed_value.html#TYPEcopy">copy</a></code></code></td>
-<td class="typefieldcomment" align="left" valign="top" ><code>(*</code></td><td class="typefieldcomment" align="left" valign="top" >A delta hunk can either insert a string of copy the contents of a
-    base object.</td><td class="typefieldcomment" align="left" valign="bottom" ><code>*)</code></td>
+<td class="typefieldcomment" align="left" valign="top" ><code>(*</code></td><td class="typefieldcomment" align="left" valign="top" ><div class="info ">
+A delta hunk can either insert a string of copy the contents of a
+    base object.<br>
+</div>
+</td><td class="typefieldcomment" align="left" valign="bottom" ><code>*)</code></td>
 </tr></table>
 
 
@@ -150,12 +152,15 @@ Delta objects.<br>
 <code><span class="keyword">|</span></code></td>
 <td align="left" valign="top" >
 <code><span id="TYPEELTt.Off_delta"><span class="constructor">Off_delta</span></span> <span class="keyword">of</span> <code class="type">int <a href="Packed_value.html#TYPEdelta">delta</a></code></code></td>
-<td class="typefieldcomment" align="left" valign="top" ><code>(*</code></td><td class="typefieldcomment" align="left" valign="top" >Packed values.</td><td class="typefieldcomment" align="left" valign="bottom" ><code>*)</code></td>
+<td class="typefieldcomment" align="left" valign="top" ><code>(*</code></td><td class="typefieldcomment" align="left" valign="top" ><div class="info ">
+Packed values.<br>
+</div>
+</td><td class="typefieldcomment" align="left" valign="bottom" ><code>*)</code></td>
 </tr></table>
 
 
 
-<pre><span id="VALpretty"><span class="keyword">val</span> pretty</span> : <code class="type"><a href="Packed_value.html#TYPEt">t</a> -> string</code></pre><div class="info ">
+<pre><span id="VALpp_hum"><span class="keyword">val</span> pp_hum</span> : <code class="type">Format.formatter -> <a href="Packed_value.html#TYPEt">t</a> -> unit</code></pre><div class="info ">
 Human readable representation of a packed value.<br>
 </div>
 
@@ -198,67 +203,8 @@ Position-independant packed value. Convert <code class="code">Off_delta</code> a
     <code class="code">Ref_delta</code> to <code class="code">PIC.Link</code> using the provided indexes.<br>
 </div>
 
-<pre><span id="VALof_pic"><span class="keyword">val</span> of_pic</span> : <code class="type">int PIC.Map.t -> pos:int -> <a href="Packed_value.PIC.html#TYPEt">PIC.t</a> -> <a href="Packed_value.html#TYPEt">t</a></code></pre>
-<pre><span id="VALcopy_of_sexp"><span class="keyword">val</span> copy_of_sexp</span> : <code class="type">Sexplib.Sexp.t -> <a href="Packed_value.html#TYPEcopy">copy</a></code></pre>
-<pre><span id="VALsexp_of_copy"><span class="keyword">val</span> sexp_of_copy</span> : <code class="type"><a href="Packed_value.html#TYPEcopy">copy</a> -> Sexplib.Sexp.t</code></pre><div class="info ">
-Copy arguments.<br>
-</div>
-
-<pre><span id="VALhunk_of_sexp"><span class="keyword">val</span> hunk_of_sexp</span> : <code class="type">Sexplib.Sexp.t -> <a href="Packed_value.html#TYPEhunk">hunk</a></code></pre>
-<pre><span id="VALsexp_of_hunk"><span class="keyword">val</span> sexp_of_hunk</span> : <code class="type"><a href="Packed_value.html#TYPEhunk">hunk</a> -> Sexplib.Sexp.t</code></pre><div class="info ">
-A delta hunk can either insert a string of copy the contents of a
-    base object.<br>
-</div>
-
-<pre><span id="VALdelta_of_sexp"><span class="keyword">val</span> delta_of_sexp</span> : <code class="type">(Sexplib.Sexp.t -> 'a) -> Sexplib.Sexp.t -> 'a <a href="Packed_value.html#TYPEdelta">delta</a></code></pre>
-<pre><span id="VALsexp_of_delta"><span class="keyword">val</span> sexp_of_delta</span> : <code class="type">('a -> Sexplib.Sexp.t) -> 'a <a href="Packed_value.html#TYPEdelta">delta</a> -> Sexplib.Sexp.t</code></pre><div class="info ">
-Delta objects.<br>
-</div>
-
-<pre><span id="VALt_of_sexp"><span class="keyword">val</span> t_of_sexp</span> : <code class="type">Sexplib.Sexp.t -> <a href="Packed_value.html#TYPEt">t</a></code></pre>
-<pre><span id="VALsexp_of_t"><span class="keyword">val</span> sexp_of_t</span> : <code class="type"><a href="Packed_value.html#TYPEt">t</a> -> Sexplib.Sexp.t</code></pre><div class="info ">
-Packed values.<br>
-</div>
-<br>
-Human readable representation of a packed value.<br>
-<br>
-Return the CRC-32 of the packed value. Useful when creating pack
-      index files.<br>
-<br>
-Return the CRC-32 of the packed value. Useful when creating pack
-      index files.<br>
-<br>
-Return the lenght of the result object.<br>
-<br>
-Return the lenght of the base (source) object.<br>
-<br>
-<h2 id="2_Conversiontovalues">Conversion to values</h2><br>
-<br>
-Append a hunk to a buffer. <code class="code">source</code> is the original object the
-    hunk refers to (with the given offset).<br>
-<br>
-Append a delta to a buffer.<br>
-<br>
-Append the inflated representation of a packed value to a given
-    buffer. Use the same paramaters as <code class="code">to_value</code>.<br>
-<br>
-Same as <code class="code">add_inflated_value</code> but with a synchronous read
-    function.<br>
-<br>
-<h2 id="2_Positionindependantpackedvalues">Position independant packed values</h2><br>
-<br>
-Position-independant packed values.<br>
-<br>
-Human readable representation.<br>
-<br>
-<code class="code">to_value p</code> unpacks the packed position-independant value
-      <code class="code">p</code>.<br>
-<br>
-Build a raw value.<br>
-<br>
-Position-independant packed value. Convert <code class="code">Off_delta</code> and
-    <code class="code">Ref_delta</code> to <code class="code">PIC.Link</code> using the provided indexes.<br>
-<br>
+<pre><span id="VALof_pic"><span class="keyword">val</span> of_pic</span> : <code class="type">int PIC.Map.t -> pos:int -> <a href="Packed_value.PIC.html#TYPEt">PIC.t</a> -> <a href="Packed_value.html#TYPEt">t</a></code></pre><div class="info ">
 Position dependent packed value. Convert a <code class="code">PIC.Link</code> into to the
     corresponding <code class="code">Off_delta</code>, using the provided indexes.<br>
+</div>
 </body></html>

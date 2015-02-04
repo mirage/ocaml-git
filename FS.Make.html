@@ -11,7 +11,7 @@
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="SHA" rel="Chapter" href="SHA.html">
 <link title="Blob" rel="Chapter" href="Blob.html">
-<link title="Cache" rel="Chapter" href="Cache.html">
+<link title="Index" rel="Chapter" href="Index.html">
 <link title="Commit" rel="Chapter" href="Commit.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
 <link title="Version" rel="Chapter" href="Version.html">
@@ -32,6 +32,7 @@
 <link title="Gri" rel="Chapter" href="Gri.html">
 <link title="Memory" rel="Chapter" href="Memory.html">
 <link title="FS" rel="Chapter" href="FS.html">
+<link title="Packed_refs" rel="Chapter" href="Packed_refs.html">
 <link title="Git_unix" rel="Chapter" href="Git_unix.html">
 <link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>FS.Make</title>
 </head>
@@ -61,11 +62,11 @@ Create an on-disk store implementation.<br>
 
 <pre><span class="keyword">include</span> <a href="Store.S.html">Store.S</a></pre>
 
-<pre><span id="VALcreate_file"><span class="keyword">val</span> create_file</span> : <code class="type">string -> <a href="Tree.html#TYPEperm">Tree.perm</a> -> Blob.t -> unit Lwt.t</code></pre><div class="info ">
+<pre><span id="VALcreate_file"><span class="keyword">val</span> create_file</span> : <code class="type">t -> string -> <a href="Tree.html#TYPEperm">Tree.perm</a> -> Blob.t -> unit Lwt.t</code></pre><div class="info ">
 Create a file on the filesystem, with the given mode.<br>
 </div>
 
-<pre><span id="VALentry_of_file"><span class="keyword">val</span> entry_of_file</span> : <code class="type">?root:string -> string -> <a href="Tree.html#TYPEperm">Tree.perm</a> -> Blob.t -> <a href="Cache.html#TYPEentry">Cache.entry</a> option Lwt.t</code></pre><div class="info ">
+<pre><span id="VALentry_of_file"><span class="keyword">val</span> entry_of_file</span> : <code class="type">t -><br>       <a href="Index.html#TYPEt">Index.t</a> -><br>       string -> <a href="Tree.html#TYPEperm">Tree.perm</a> -> SHA.Blob.t -> Blob.t -> <a href="Index.html#TYPEentry">Index.entry</a> option Lwt.t</code></pre><div class="info ">
 Generate a cache entry for the file. Create a fresh file if it
       does not already exist. If <code class="code">root</code> is not set, use the current
       working directory as repository root.<br>

@@ -8,7 +8,7 @@
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="SHA" rel="Chapter" href="SHA.html">
 <link title="Blob" rel="Chapter" href="Blob.html">
-<link title="Cache" rel="Chapter" href="Cache.html">
+<link title="Index" rel="Chapter" href="Index.html">
 <link title="Commit" rel="Chapter" href="Commit.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
 <link title="Version" rel="Chapter" href="Version.html">
@@ -29,40 +29,48 @@
 <link title="Gri" rel="Chapter" href="Gri.html">
 <link title="Memory" rel="Chapter" href="Memory.html">
 <link title="FS" rel="Chapter" href="FS.html">
+<link title="Packed_refs" rel="Chapter" href="Packed_refs.html">
 <link title="Git_unix" rel="Chapter" href="Git_unix.html">
-<link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>Cache</title>
+<link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>Index</title>
 </head>
 <body>
 <code class="code"><span class="keyword">sig</span><br>
 &nbsp;&nbsp;<span class="keyword">type</span>&nbsp;time&nbsp;=&nbsp;{&nbsp;lsb32&nbsp;:&nbsp;<span class="constructor">Int32</span>.t;&nbsp;nsec&nbsp;:&nbsp;<span class="constructor">Int32</span>.t;&nbsp;}<br>
 &nbsp;&nbsp;<span class="keyword">type</span>&nbsp;mode&nbsp;=&nbsp;[&nbsp;<span class="keywordsign">`</span><span class="constructor">Exec</span>&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="keywordsign">`</span><span class="constructor">Gitlink</span>&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="keywordsign">`</span><span class="constructor">Link</span>&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="keywordsign">`</span><span class="constructor">Normal</span>&nbsp;]<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;pp_hum_mode&nbsp;:&nbsp;<span class="constructor">Format</span>.formatter&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Index</span>.mode&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit<br>
 &nbsp;&nbsp;<span class="keyword">type</span>&nbsp;stat_info&nbsp;=&nbsp;{<br>
-&nbsp;&nbsp;&nbsp;&nbsp;ctime&nbsp;:&nbsp;<span class="constructor">Cache</span>.time;<br>
-&nbsp;&nbsp;&nbsp;&nbsp;mtime&nbsp;:&nbsp;<span class="constructor">Cache</span>.time;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;ctime&nbsp;:&nbsp;<span class="constructor">Index</span>.time;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;mtime&nbsp;:&nbsp;<span class="constructor">Index</span>.time;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;dev&nbsp;:&nbsp;<span class="constructor">Int32</span>.t;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;inode&nbsp;:&nbsp;<span class="constructor">Int32</span>.t;<br>
-&nbsp;&nbsp;&nbsp;&nbsp;mode&nbsp;:&nbsp;<span class="constructor">Cache</span>.mode;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;mode&nbsp;:&nbsp;<span class="constructor">Index</span>.mode;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;uid&nbsp;:&nbsp;<span class="constructor">Int32</span>.t;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;gid&nbsp;:&nbsp;<span class="constructor">Int32</span>.t;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;size&nbsp;:&nbsp;<span class="constructor">Int32</span>.t;<br>
 &nbsp;&nbsp;}<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;pp_hum_stats&nbsp;:&nbsp;<span class="constructor">Format</span>.formatter&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Index</span>.stat_info&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit<br>
 &nbsp;&nbsp;<span class="keyword">type</span>&nbsp;entry&nbsp;=&nbsp;{<br>
-&nbsp;&nbsp;&nbsp;&nbsp;stats&nbsp;:&nbsp;<span class="constructor">Cache</span>.stat_info;<br>
-&nbsp;&nbsp;&nbsp;&nbsp;id&nbsp;:&nbsp;<span class="constructor">SHA</span>.t;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;stats&nbsp;:&nbsp;<span class="constructor">Index</span>.stat_info;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;id&nbsp;:&nbsp;<span class="constructor">SHA</span>.<span class="constructor">Blob</span>.t;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;stage&nbsp;:&nbsp;int;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;name&nbsp;:&nbsp;string;<br>
 &nbsp;&nbsp;}<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;pretty_entry&nbsp;:&nbsp;<span class="constructor">Cache</span>.entry&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string<br>
-&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;t&nbsp;=&nbsp;{<br>
-&nbsp;&nbsp;&nbsp;&nbsp;entries&nbsp;:&nbsp;<span class="constructor">Cache</span>.entry&nbsp;list;<br>
-&nbsp;&nbsp;&nbsp;&nbsp;extensions&nbsp;:&nbsp;(<span class="constructor">Int32</span>.t&nbsp;*&nbsp;string)&nbsp;list;<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;pp_hum_entry&nbsp;:&nbsp;<span class="constructor">Format</span>.formatter&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Index</span>.entry&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit<br>
+&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;extension_kind&nbsp;=&nbsp;[&nbsp;<span class="keywordsign">`</span><span class="constructor">Link</span>&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="keywordsign">`</span><span class="constructor">Other</span>&nbsp;<span class="keyword">of</span>&nbsp;string&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="keywordsign">`</span><span class="constructor">Reuc</span>&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="keywordsign">`</span><span class="constructor">Tree</span>&nbsp;]<br>
+&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;extension&nbsp;=&nbsp;{&nbsp;kind&nbsp;:&nbsp;<span class="constructor">Index</span>.extension_kind;&nbsp;payload&nbsp;:&nbsp;string;&nbsp;}<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;pp_hum_extension&nbsp;:&nbsp;<span class="constructor">Format</span>.formatter&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Index</span>.extension&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit<br>
+&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;t&nbsp;=&nbsp;<span class="keyword">private</span>&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;entries&nbsp;:&nbsp;<span class="constructor">Index</span>.entry&nbsp;list;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;extensions&nbsp;:&nbsp;<span class="constructor">Index</span>.extension&nbsp;list;<br>
 &nbsp;&nbsp;}<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;create&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;?extensions:<span class="constructor">Index</span>.extension&nbsp;list&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Index</span>.entry&nbsp;list&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Index</span>.t<br>
 &nbsp;&nbsp;<span class="keyword">val</span>&nbsp;equal&nbsp;:&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;bool<br>
 &nbsp;&nbsp;<span class="keyword">val</span>&nbsp;hash&nbsp;:&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;int<br>
 &nbsp;&nbsp;<span class="keyword">val</span>&nbsp;compare&nbsp;:&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;int<br>
 &nbsp;&nbsp;<span class="keyword">val</span>&nbsp;pretty&nbsp;:&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;pp_hum&nbsp;:&nbsp;<span class="constructor">Format</span>.formatter&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit<br>
 &nbsp;&nbsp;<span class="keyword">val</span>&nbsp;input&nbsp;:&nbsp;<span class="constructor">Mstruct</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;t<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;add&nbsp;:&nbsp;<span class="constructor">Buffer</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;t_of_sexp&nbsp;:&nbsp;<span class="constructor">Sexplib</span>.<span class="constructor">Sexp</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;t<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;sexp_of_t&nbsp;:&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Sexplib</span>.<span class="constructor">Sexp</span>.t<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;add&nbsp;:&nbsp;<span class="constructor">Buffer</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;?level:int&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;empty&nbsp;:&nbsp;<span class="constructor">Index</span>.t<br>
 <span class="keyword">end</span></code></body></html>

@@ -12,7 +12,7 @@
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="SHA" rel="Chapter" href="SHA.html">
 <link title="Blob" rel="Chapter" href="Blob.html">
-<link title="Cache" rel="Chapter" href="Cache.html">
+<link title="Index" rel="Chapter" href="Index.html">
 <link title="Commit" rel="Chapter" href="Commit.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
 <link title="Version" rel="Chapter" href="Version.html">
@@ -33,6 +33,7 @@
 <link title="Gri" rel="Chapter" href="Gri.html">
 <link title="Memory" rel="Chapter" href="Memory.html">
 <link title="FS" rel="Chapter" href="FS.html">
+<link title="Packed_refs" rel="Chapter" href="Packed_refs.html">
 <link title="Git_unix" rel="Chapter" href="Git_unix.html">
 <link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>SHA.S.Map</title>
 </head>
@@ -46,8 +47,7 @@
 
 <pre><span class="keyword">include</span> Map.S</pre>
 
-<pre><span id="VALsexp_of_t"><span class="keyword">val</span> sexp_of_t</span> : <code class="type">('a -> Sexplib.Type.t) -> 'a t -> Sexplib.Type.t</code></pre>
-<pre><span id="VALt_of_sexp"><span class="keyword">val</span> t_of_sexp</span> : <code class="type">(Sexplib.Type.t -> 'a) -> Sexplib.Type.t -> 'a t</code></pre>
+<pre><span id="VALpretty"><span class="keyword">val</span> pretty</span> : <code class="type">('a -> string) -> 'a t -> string</code></pre>
 <pre><span id="VALkeys"><span class="keyword">val</span> keys</span> : <code class="type">'a t -> key list</code></pre>
 <pre><span id="VALto_alist"><span class="keyword">val</span> to_alist</span> : <code class="type">'a t -> (key * 'a) list</code></pre>
 <pre><span id="VALof_alist"><span class="keyword">val</span> of_alist</span> : <code class="type">(key * 'a) list -> 'a t</code></pre>

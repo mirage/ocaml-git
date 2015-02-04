@@ -11,7 +11,7 @@
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="SHA" rel="Chapter" href="SHA.html">
 <link title="Blob" rel="Chapter" href="Blob.html">
-<link title="Cache" rel="Chapter" href="Cache.html">
+<link title="Index" rel="Chapter" href="Index.html">
 <link title="Commit" rel="Chapter" href="Commit.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
 <link title="Version" rel="Chapter" href="Version.html">
@@ -32,6 +32,7 @@
 <link title="Gri" rel="Chapter" href="Gri.html">
 <link title="Memory" rel="Chapter" href="Memory.html">
 <link title="FS" rel="Chapter" href="FS.html">
+<link title="Packed_refs" rel="Chapter" href="Packed_refs.html">
 <link title="Git_unix" rel="Chapter" href="Git_unix.html">
 <link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>Value.Cache</title>
 </head>
@@ -42,22 +43,35 @@
 
 <pre><span class="keyword">module</span> Cache: <code class="code">sig</code> <a href="Value.Cache.html">..</a> <code class="code">end</code></pre><hr width="100%">
 
+<pre><span id="VALset_size"><span class="keyword">val</span> set_size</span> : <code class="type">int -> unit</code></pre><div class="info ">
+Empty the current LRU cache, and create a new one with the given
+      size.<br>
+</div>
+
 <pre><span id="VALclear"><span class="keyword">val</span> clear</span> : <code class="type">unit -> unit</code></pre><div class="info ">
 Empty the cache.<br>
 </div>
 
-<pre><span id="VALfind"><span class="keyword">val</span> find</span> : <code class="type">SHA.t -> string option</code></pre><div class="info ">
+<pre><span id="VALfind"><span class="keyword">val</span> find</span> : <code class="type">SHA.t -> <a href="Value.html#TYPEt">Value.t</a> option</code></pre><div class="info ">
 Cache an inflated values. This is used by various operations, so
       it could be useful to look into it to speed-up operations which
       needs to search a pack file.<br>
 </div>
 
-<pre><span id="VALfind_exn"><span class="keyword">val</span> find_exn</span> : <code class="type">SHA.t -> string</code></pre><div class="info ">
-Same as <code class="code">find</code> but raises <code class="code">Not_found</code> if the key is not in the
-      cache.<br>
+<pre><span id="VALfind_inflated"><span class="keyword">val</span> find_inflated</span> : <code class="type">SHA.t -> string option</code></pre><div class="info ">
+Same as <a href="Value.Cache.html#VALfind"><code class="code">Value.Cache.find</code></a> but store the inflated representation of the
+      value.<br>
 </div>
 
-<pre><span id="VALadd"><span class="keyword">val</span> add</span> : <code class="type">SHA.t -> string -> unit</code></pre><div class="info ">
+<pre><span id="VALadd"><span class="keyword">val</span> add</span> : <code class="type">SHA.t -> <a href="Value.html#TYPEt">Value.t</a> -> unit</code></pre><div class="info ">
+Cache a value.<br>
+</div>
+
+<pre><span id="VALadd_inflated"><span class="keyword">val</span> add_inflated</span> : <code class="type">SHA.t -> string -> unit</code></pre><div class="info ">
 Cache an inflated value.<br>
+</div>
+
+<pre><span id="VALadd_both"><span class="keyword">val</span> add_both</span> : <code class="type">SHA.t -> <a href="Value.html#TYPEt">Value.t</a> -> string -> unit</code></pre><div class="info ">
+Cache both a value and its inflated representation.<br>
 </div>
 </body></html>

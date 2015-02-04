@@ -13,7 +13,7 @@
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="SHA" rel="Chapter" href="SHA.html">
 <link title="Blob" rel="Chapter" href="Blob.html">
-<link title="Cache" rel="Chapter" href="Cache.html">
+<link title="Index" rel="Chapter" href="Index.html">
 <link title="Commit" rel="Chapter" href="Commit.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
 <link title="Version" rel="Chapter" href="Version.html">
@@ -34,10 +34,9 @@
 <link title="Gri" rel="Chapter" href="Gri.html">
 <link title="Memory" rel="Chapter" href="Memory.html">
 <link title="FS" rel="Chapter" href="FS.html">
+<link title="Packed_refs" rel="Chapter" href="Packed_refs.html">
 <link title="Git_unix" rel="Chapter" href="Git_unix.html">
 <link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><link title="Constructors" rel="Section" href="#2_Constructors">
-<link title="Inflated values" rel="Section" href="#2_Inflatedvalues">
-<link title="Constructors" rel="Section" href="#2_Constructors">
 <link title="Inflated values" rel="Section" href="#2_Inflatedvalues">
 <title>Value</title>
 </head>
@@ -80,7 +79,10 @@ Git objects.<br>
 <code><span class="keyword">|</span></code></td>
 <td align="left" valign="top" >
 <code><span id="TYPEELTt.Tree"><span class="constructor">Tree</span></span> <span class="keyword">of</span> <code class="type"><a href="Tree.html#TYPEt">Tree.t</a></code></code></td>
-<td class="typefieldcomment" align="left" valign="top" ><code>(*</code></td><td class="typefieldcomment" align="left" valign="top" >Loose git objects.</td><td class="typefieldcomment" align="left" valign="bottom" ><code>*)</code></td>
+<td class="typefieldcomment" align="left" valign="top" ><code>(*</code></td><td class="typefieldcomment" align="left" valign="top" ><div class="info ">
+Loose git objects.<br>
+</div>
+</td><td class="typefieldcomment" align="left" valign="bottom" ><code>*)</code></td>
 </tr></table>
 
 
@@ -133,46 +135,4 @@ Return the type of the inflated object stored in the given
     buffer.<br>
 </div>
 
-<pre><span class="keyword">module</span> <a href="Value.Cache.html">Cache</a>: <code class="code">sig</code> <a href="Value.Cache.html">..</a> <code class="code">end</code></pre>
-<pre><span id="VALt_of_sexp"><span class="keyword">val</span> t_of_sexp</span> : <code class="type">Sexplib.Sexp.t -> <a href="Value.html#TYPEt">t</a></code></pre>
-<pre><span id="VALsexp_of_t"><span class="keyword">val</span> sexp_of_t</span> : <code class="type"><a href="Value.html#TYPEt">t</a> -> Sexplib.Sexp.t</code></pre><div class="info ">
-Loose git objects.<br>
-</div>
-<br>
-Return the object type.<br>
-<br>
-Return the SHA of the serialized contents.<br>
-<br>
-<h2 id="2_Constructors">Constructors</h2><br>
-<br>
-Cast a commit to an object.<br>
-<br>
-Cast a blob to an object.<br>
-<br>
-Cast a tree to an object.<br>
-<br>
-Cast a tag to an object.<br>
-<br>
-<h2 id="2_Inflatedvalues">Inflated values</h2><br>
-<br>
-Append the given object header to a buffer.<br>
-<br>
-Append the inflated serialization of an object to a buffer.
-    Similar to <code class="code">add</code>, but without deflating the contents.<br>
-<br>
-Build a value from an inflated contents.<br>
-<br>
-Return the type of the inflated object stored in the given
-    buffer.<br>
-<br>
-Empty the cache.<br>
-<br>
-Cache an inflated values. This is used by various operations, so
-      it could be useful to look into it to speed-up operations which
-      needs to search a pack file.<br>
-<br>
-Same as <code class="code">find</code> but raises <code class="code">Not_found</code> if the key is not in the
-      cache.<br>
-<br>
-Cache an inflated value.<br>
-</body></html>
+<pre><span class="keyword">module</span> <a href="Value.Cache.html">Cache</a>: <code class="code">sig</code> <a href="Value.Cache.html">..</a> <code class="code">end</code></pre></body></html>

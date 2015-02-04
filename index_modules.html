@@ -9,7 +9,7 @@
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="SHA" rel="Chapter" href="SHA.html">
 <link title="Blob" rel="Chapter" href="Blob.html">
-<link title="Cache" rel="Chapter" href="Cache.html">
+<link title="Index" rel="Chapter" href="Index.html">
 <link title="Commit" rel="Chapter" href="Commit.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
 <link title="Version" rel="Chapter" href="Version.html">
@@ -30,6 +30,7 @@
 <link title="Gri" rel="Chapter" href="Gri.html">
 <link title="Memory" rel="Chapter" href="Memory.html">
 <link title="FS" rel="Chapter" href="FS.html">
+<link title="Packed_refs" rel="Chapter" href="Packed_refs.html">
 <link title="Git_unix" rel="Chapter" href="Git_unix.html">
 <link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>Index of modules</title>
 </head>
@@ -52,11 +53,6 @@ Blob nodes.
 <tr><td align="left"><br>C</td></tr>
 <tr><td><a href="Value.Cache.html">Cache</a> [<a href="Value.html">Value</a>]</td>
 <td></td></tr>
-<tr><td><a href="Cache.html">Cache</a> </td>
-<td><div class="info">
-Implementation of the V2 cache format (as V1 is deprecated).
-</div>
-</td></tr>
 <tr><td><a href="Commit.html">Commit</a> </td>
 <td><div class="info">
 Git commits.
@@ -75,7 +71,7 @@ Create a irminsule store from raw block devices hanlder.
 </td></tr>
 <tr><td><a href="Git_unix.FS.html">FS</a> [<a href="Git_unix.html">Git_unix</a>]</td>
 <td><div class="info">
-Implementation of the on-disk Git protocol.
+Implementation of the on-disk Git protocol using <code class="code">Lwt_unix</code>.
 </div>
 </td></tr>
 <tr><td><a href="FS.html">FS</a> </td>
@@ -108,6 +104,15 @@ Git ressource identifiers (GRI).
 <tr><td align="left"><br>I</td></tr>
 <tr><td><a href="Misc.I.html">I</a> [<a href="Misc.html">Misc</a>]</td>
 <td></td></tr>
+<tr><td><a href="Git_unix.FS.IO.html">IO</a> [<a href="Git_unix.FS.html">Git_unix.FS</a>]</td>
+<td></td></tr>
+<tr><td><a href="Git_unix.Sync.IO.html">IO</a> [<a href="Git_unix.Sync.html">Git_unix.Sync</a>]</td>
+<td></td></tr>
+<tr><td><a href="Index.html">Index</a> </td>
+<td><div class="info">
+Implementation of the V2 Git Index format (as V1 is deprecated).
+</div>
+</td></tr>
 <tr><td><a href="Misc.IntMap.html">IntMap</a> [<a href="Misc.html">Misc</a>]</td>
 <td></td></tr>
 <tr><td align="left"><br>K</td></tr>
@@ -118,11 +123,7 @@ The graph of Git keys.
 </td></tr>
 <tr><td align="left"><br>M</td></tr>
 <tr><td><a href="Git_unix.Sync.Make.html">Make</a> [<a href="Git_unix.Sync.html">Git_unix.Sync</a>]</td>
-<td><div class="info">
-Implementation of the Git protocol using <code class="code">Lwt_unix</code> and <code class="code">Lwt_io</code>
-    IO functions.
-</div>
-</td></tr>
+<td></td></tr>
 <tr><td><a href="FS.Make.html">Make</a> [<a href="FS.html">FS</a>]</td>
 <td><div class="info">
 Create an on-disk store implementation.
@@ -181,6 +182,11 @@ Pack files.
 Pack indexes.
 </div>
 </td></tr>
+<tr><td><a href="Packed_refs.html">Packed_refs</a> </td>
+<td><div class="info">
+Packed references
+</div>
+</td></tr>
 <tr><td><a href="Packed_value.html">Packed_value</a> </td>
 <td><div class="info">
 Packed values.
@@ -221,7 +227,11 @@ Signature for Git stores.
 </div>
 </td></tr>
 <tr><td><a href="Git_unix.Sync.html">Sync</a> [<a href="Git_unix.html">Git_unix</a>]</td>
-<td></td></tr>
+<td><div class="info">
+Implementation of the Git protocol using <code class="code">Lwt_unix</code> and <code class="code">Lwt_io</code>
+    IO functions.
+</div>
+</td></tr>
 <tr><td><a href="Sync.html">Sync</a> </td>
 <td><div class="info">
 Clone/Fecth/Push protocol

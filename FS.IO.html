@@ -12,7 +12,7 @@
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="SHA" rel="Chapter" href="SHA.html">
 <link title="Blob" rel="Chapter" href="Blob.html">
-<link title="Cache" rel="Chapter" href="Cache.html">
+<link title="Index" rel="Chapter" href="Index.html">
 <link title="Commit" rel="Chapter" href="Commit.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
 <link title="Version" rel="Chapter" href="Version.html">
@@ -33,6 +33,7 @@
 <link title="Gri" rel="Chapter" href="Gri.html">
 <link title="Memory" rel="Chapter" href="Memory.html">
 <link title="FS" rel="Chapter" href="FS.html">
+<link title="Packed_refs" rel="Chapter" href="Packed_refs.html">
 <link title="Git_unix" rel="Chapter" href="Git_unix.html">
 <link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>FS.IO</title>
 </head>
@@ -73,7 +74,9 @@ List the subfiles.<br>
 </div>
 
 <pre><span id="VALrec_files"><span class="keyword">val</span> rec_files</span> : <code class="type">string -> string list Lwt.t</code></pre><div class="info ">
-List of the subfiles, recursively.<br>
+<code class="code">rec_files dir</code> is the list of the files recursively present in
+      <code class="code">dir</code> and all of its sub-directories. Return filenames prefixed
+      by <code class="code">dir</code>.<br>
 </div>
 
 <pre><span id="VALread_file"><span class="keyword">val</span> read_file</span> : <code class="type">string -> Cstruct.t Lwt.t</code></pre><div class="info ">
@@ -81,15 +84,18 @@ mmap a file and return a mutable C-like structure with its
       contents.<br>
 </div>
 
-<pre><span id="VALwrite_file"><span class="keyword">val</span> write_file</span> : <code class="type">string -> Cstruct.t -> unit Lwt.t</code></pre><div class="info ">
-Write a bigarray to a file.<br>
+<pre><span id="VALwrite_file"><span class="keyword">val</span> write_file</span> : <code class="type">string -> ?temp_dir:string -> Cstruct.t -> unit Lwt.t</code></pre><div class="info ">
+Write a bigarray to a file. Atomicity is guaranteed by writing
+      the file first in <code class="code">temp_dir</code> and then moving the file to the
+      right location. By defaut, <code class="code">temp_dir</code> is
+      <code class="code">Filename.get_temp_dir_name</code>.<br>
 </div>
 
 <pre><span id="VALchmod"><span class="keyword">val</span> chmod</span> : <code class="type">string -> int -> unit Lwt.t</code></pre><div class="info ">
 Change the file mode.<br>
 </div>
 
-<pre><span id="VALstat_info"><span class="keyword">val</span> stat_info</span> : <code class="type">string -> <a href="Cache.html#TYPEstat_info">Cache.stat_info</a></code></pre><div class="info ">
+<pre><span id="VALstat_info"><span class="keyword">val</span> stat_info</span> : <code class="type">string -> <a href="Index.html#TYPEstat_info">Index.stat_info</a></code></pre><div class="info ">
 Return the stats of the given file.<br>
 </div>
 </body></html>

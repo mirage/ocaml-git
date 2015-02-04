@@ -11,7 +11,7 @@
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="SHA" rel="Chapter" href="SHA.html">
 <link title="Blob" rel="Chapter" href="Blob.html">
-<link title="Cache" rel="Chapter" href="Cache.html">
+<link title="Index" rel="Chapter" href="Index.html">
 <link title="Commit" rel="Chapter" href="Commit.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
 <link title="Version" rel="Chapter" href="Version.html">
@@ -32,6 +32,7 @@
 <link title="Gri" rel="Chapter" href="Gri.html">
 <link title="Memory" rel="Chapter" href="Memory.html">
 <link title="FS" rel="Chapter" href="FS.html">
+<link title="Packed_refs" rel="Chapter" href="Packed_refs.html">
 <link title="Git_unix" rel="Chapter" href="Git_unix.html">
 <link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>Object.S</title>
 </head>
@@ -43,6 +44,9 @@
 <pre><span class="keyword">module type</span> S = <code class="code">sig</code> <a href="Object.S.html">..</a> <code class="code">end</code></pre><hr width="100%">
 
 <pre><span id="TYPEt"><span class="keyword">type</span> <code class="type"></code>t</span> </pre>
+<div class="info ">
+The type for the given Git object.<br>
+</div>
 
 
 <pre><span id="VALequal"><span class="keyword">val</span> equal</span> : <code class="type"><a href="Object.S.html#TYPEt">t</a> -> <a href="Object.S.html#TYPEt">t</a> -> bool</code></pre><div class="info ">
@@ -61,23 +65,23 @@ Compare two objects.<br>
 Human readable represenation of the object.<br>
 </div>
 
+<pre><span id="VALpp_hum"><span class="keyword">val</span> pp_hum</span> : <code class="type">Format.formatter -> <a href="Object.S.html#TYPEt">t</a> -> unit</code></pre><div class="info ">
+Same as <a href="Object.S.html#VALpretty"><code class="code">Object.S.pretty</code></a> but using a generic formatter.<br>
+</div>
+
 <pre><span id="VALinput"><span class="keyword">val</span> input</span> : <code class="type">Mstruct.t -> <a href="Object.S.html#TYPEt">t</a></code></pre><div class="info ">
 Build a value from an inflated contents.<br>
 </div>
 
-<pre><span id="VALadd"><span class="keyword">val</span> add</span> : <code class="type">Buffer.t -> <a href="Object.S.html#TYPEt">t</a> -> unit</code></pre>
-<pre><span id="VALt_of_sexp"><span class="keyword">val</span> t_of_sexp</span> : <code class="type">Sexplib.Sexp.t -> <a href="Object.S.html#TYPEt">t</a></code></pre>
-<pre><span id="VALsexp_of_t"><span class="keyword">val</span> sexp_of_t</span> : <code class="type"><a href="Object.S.html#TYPEt">t</a> -> Sexplib.Sexp.t</code></pre><br>
-Are two objects equal?<br>
-<br>
-Hash an object.<br>
-<br>
-Compare two objects.<br>
-<br>
-Human readable represenation of the object.<br>
-<br>
-Build a value from an inflated contents.<br>
-<br>
+<pre><span id="VALadd"><span class="keyword">val</span> add</span> : <code class="type">Buffer.t -> ?level:int -> <a href="Object.S.html#TYPEt">t</a> -> unit</code></pre><div class="info ">
 Add the serialization of the value to an already existing
-      buffer.<br>
+      buffer.
+<p>
+
+      The compression <code class="code">level</code> must be between 0 and 9: 1 gives best
+      speed, 9 gives best compression, 0 gives no compression at all
+      (the input data is simply copied a block at a time). The default
+      value (currently equivalent to level 6) requests a default
+      compromise between speed and compression.<br>
+</div>
 </body></html>
