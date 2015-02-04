@@ -211,7 +211,7 @@ module Make (IO: IO) = struct
     let index_lru: Pack_index.t LRU.t = LRU.make 8
 
     let write_pack_index t sha1 idx =
-      LRU.set index_lru sha1 idx;
+      LRU.add index_lru sha1 idx;
       let file = index t sha1 in
       IO.file_exists file >>= function
       | true  -> Lwt.return_unit
@@ -222,8 +222,9 @@ module Make (IO: IO) = struct
 
     let read_pack_index t sha1 =
       Log.debug "read_pack_index %s" (SHA.to_hex sha1);
-      try Lwt.return (LRU.get index_lru sha1)
-      with Not_found ->
+      match LRU.find index_lru sha1 with
+      | Some i -> Lwt.return i
+      | None   ->
         Log.debug "read_pack_index: cache miss!";
         let file = index t sha1 in
         IO.file_exists file >>= function
@@ -231,7 +232,7 @@ module Make (IO: IO) = struct
           File_cache.read file >>= fun buf ->
           let buf = Mstruct.of_cstruct buf in
           let index = Pack_index.input buf in
-          LRU.set index_lru sha1 index;
+          LRU.add index_lru sha1 index;
           Lwt.return index
         | false ->
           Log.error "%s does not exist." file;
@@ -241,15 +242,16 @@ module Make (IO: IO) = struct
 
     let read_keys t sha1 =
       Log.debug "read_keys %s" (SHA.to_hex sha1);
-      try Lwt.return (LRU.get keys_lru sha1)
-      with Not_found ->
+      match LRU.find keys_lru sha1 with
+      | Some ks -> Lwt.return ks
+      | None    ->
         Log.debug "read_keys: cache miss!";
         let file = index t sha1 in
         IO.file_exists file >>= function
         | true ->
           File_cache.read file >>= fun buf ->
           let keys = Pack_index.keys (Mstruct.of_cstruct buf) in
-          LRU.set keys_lru sha1 keys;
+          LRU.add keys_lru sha1 keys;
           Lwt.return keys
         | false ->
           Lwt.fail (Failure "Git_fs.Packed.read_keys")
@@ -258,8 +260,9 @@ module Make (IO: IO) = struct
 
     let read_pack t sha1 =
       Log.debug "read_pack";
-      try Lwt.return (LRU.get pack_lru sha1)
-      with Not_found ->
+      match LRU.find pack_lru sha1 with
+      | Some p -> Lwt.return p
+      | None   ->
         Log.debug "read_pack: cache miss";
         let file = file t sha1 in
         IO.file_exists file >>= function
@@ -268,7 +271,7 @@ module Make (IO: IO) = struct
           read_pack_index t sha1 >>= fun index ->
           let pack = Pack.Raw.input (Mstruct.of_cstruct buf) ~index:(Some index) in
           let pack = Pack.to_pic pack in
-          LRU.set pack_lru sha1 pack;
+          LRU.add pack_lru sha1 pack;
           Lwt.return pack
         | false ->
           Log.error "No file associated with the pack object %s." (SHA.to_hex sha1);

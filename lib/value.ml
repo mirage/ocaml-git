@@ -121,17 +121,12 @@ module Cache = struct
     cache := LRU.make len;
     cache_inflated := LRU.make len
 
-  let find sha1 =
-    try Some (LRU.get !cache sha1)
-    with Not_found -> None
-
-  let find_inflated sha1 =
-    try Some (LRU.get !cache_inflated sha1)
-    with Not_found -> None
+  let find sha1 = LRU.find !cache sha1
+  let find_inflated sha1 = LRU.find !cache_inflated sha1
 
   let add_both sha1 t str =
-    LRU.set !cache sha1 t;
-    LRU.set !cache_inflated sha1 str
+    LRU.add !cache sha1 t;
+    LRU.add !cache_inflated sha1 str
 
   let add sha1 t =
     let buf = Buffer.create 1024 in
