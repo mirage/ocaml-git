@@ -299,4 +299,5 @@ let pretty pp_hum t =
   let buf = Buffer.create 1024 in
   let ppf = Format.formatter_of_buffer buf in
   pp_hum ppf t;
+  Format.pp_print_flush ppf ();
   Buffer.contents buf

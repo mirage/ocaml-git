@@ -131,3 +131,14 @@ let _size c () = H.length c.table
 
 let _iter c f =
   H.iter (fun x node -> f x node.value) c.table
+
+(* new functions *)
+
+let find c x =
+  try Some (get c x)
+  with Not_found -> None
+
+let add c x y =
+  match find c x with
+  | None   -> set c x y
+  | Some _ -> ()

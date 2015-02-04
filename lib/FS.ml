@@ -211,7 +211,7 @@ module Make (IO: IO) = struct
     let index_lru: Pack_index.t LRU.t = LRU.make 8
 
     let write_pack_index t sha1 idx =
-      LRU.set index_lru sha1 idx;
+      LRU.add index_lru sha1 idx;
       let file = index t sha1 in
       IO.file_exists file >>= function
       | true  -> Lwt.return_unit
@@ -222,8 +222,9 @@ module Make (IO: IO) = struct
 
     let read_pack_index t sha1 =
       Log.debug "read_pack_index %s" (SHA.to_hex sha1);
-      try Lwt.return (LRU.get index_lru sha1)
-      with Not_found ->
+      match LRU.find index_lru sha1 with
+      | Some i -> Lwt.return i
+      | None   ->
         Log.debug "read_pack_index: cache miss!";
         let file = index t sha1 in
         IO.file_exists file >>= function
@@ -231,7 +232,7 @@ module Make (IO: IO) = struct
           File_cache.read file >>= fun buf ->
           let buf = Mstruct.of_cstruct buf in
           let index = Pack_index.input buf in
-          LRU.set index_lru sha1 index;
+          LRU.add index_lru sha1 index;
           Lwt.return index
         | false ->
           Log.error "%s does not exist." file;
@@ -241,15 +242,16 @@ module Make (IO: IO) = struct
 
     let read_keys t sha1 =
       Log.debug "read_keys %s" (SHA.to_hex sha1);
-      try Lwt.return (LRU.get keys_lru sha1)
-      with Not_found ->
+      match LRU.find keys_lru sha1 with
+      | Some ks -> Lwt.return ks
+      | None    ->
         Log.debug "read_keys: cache miss!";
         let file = index t sha1 in
         IO.file_exists file >>= function
         | true ->
           File_cache.read file >>= fun buf ->
           let keys = Pack_index.keys (Mstruct.of_cstruct buf) in
-          LRU.set keys_lru sha1 keys;
+          LRU.add keys_lru sha1 keys;
           Lwt.return keys
         | false ->
           Lwt.fail (Failure "Git_fs.Packed.read_keys")
@@ -258,8 +260,9 @@ module Make (IO: IO) = struct
 
     let read_pack t sha1 =
       Log.debug "read_pack";
-      try Lwt.return (LRU.get pack_lru sha1)
-      with Not_found ->
+      match LRU.find pack_lru sha1 with
+      | Some p -> Lwt.return p
+      | None   ->
         Log.debug "read_pack: cache miss";
         let file = file t sha1 in
         IO.file_exists file >>= function
@@ -268,7 +271,7 @@ module Make (IO: IO) = struct
           read_pack_index t sha1 >>= fun index ->
           let pack = Pack.Raw.input (Mstruct.of_cstruct buf) ~index:(Some index) in
           let pack = Pack.to_pic pack in
-          LRU.set pack_lru sha1 pack;
+          LRU.add pack_lru sha1 pack;
           Lwt.return pack
         | false ->
           Log.error "No file associated with the pack object %s." (SHA.to_hex sha1);
@@ -330,7 +333,7 @@ module Make (IO: IO) = struct
     | None   ->
       Log.debug "read: cache miss!";
       Loose.read t sha1 >>= function
-      | Some v -> Lwt.return (Some v)
+      | Some v -> Value.Cache.add sha1 v; Lwt.return (Some v)
       | None   -> Packed.read t sha1
 
   let read_exn t sha1 =
@@ -468,24 +471,51 @@ module Make (IO: IO) = struct
     aux [] t
 
   (* XXX: do not load the blobs *)
-  let load_filesystem t commit =
-    Log.debug "load_filesystem %s" (SHA.Commit.to_hex commit);
-    let n = ref 0 in
-    let rec aux (mode, sha1) =
-      read_exn t sha1 >>= function
-      | Value.Blob b   -> incr n; Lwt.return (Leaf (mode, (SHA.to_blob sha1, b)))
-      | Value.Commit c -> aux (`Dir, SHA.of_tree c.Commit.tree)
-      | Value.Tag t    -> aux (mode, t.Tag.sha1)
-      | Value.Tree t   ->
-        Lwt_list.map_p (fun e ->
-            aux (e.Tree.perm, e.Tree.node) >>= fun t ->
-            Lwt.return (e.Tree.name, t)
-          ) t
-        >>= fun children ->
-        Lwt.return (Node children)
+  let id = let n = ref 0 in fun () -> incr n; !n
+
+  let load_filesystem t head =
+    Log.debug "load_filesystem head=%s" (SHA.Commit.to_hex head);
+    let blobs_c = ref 0 in
+    let id = id () in
+    let error expected got =
+      let str = Printf.sprintf
+          "Expecting a %s, got a %s" expected
+          (Object_type.pretty (Value.type_of got))
+      in
+      Log.error "load-filesystem: %s" str;
+      Lwt.fail (Failure str)
     in
-    aux (`Dir, SHA.of_commit commit) >>= fun t ->
-    Lwt.return (!n, t)
+    let blob mode sha1 k =
+      Log.debug "blob %d %s" id (SHA.to_hex sha1);
+      assert (mode <> `Dir);
+      incr blobs_c;
+      read_exn t sha1 >>= function
+      | Value.Blob b -> k (Leaf (mode, (SHA.to_blob sha1, b)))
+      | obj -> error "blob" obj
+    in
+    let rec tree mode sha1 k =
+      Log.debug "tree %d %s" id (SHA.to_hex sha1);
+      assert (mode = `Dir);
+      read_exn t sha1 >>= function
+      | Value.Tree t -> tree_entries t [] k
+      | obj -> error "tree" obj
+    and tree_entries trees children k =
+      match trees with
+      | []   -> k (Node children)
+      | e::t ->
+        let k n = tree_entries t ((e.Tree.name, n)::children) k in
+        match e.Tree.perm with
+        | `Dir -> tree `Dir e.Tree.node k
+        | mode -> blob mode e.Tree.node k
+    in
+    let commit sha1 =
+      Log.debug "commit %d %s" id (SHA.to_hex sha1);
+      read_exn t sha1 >>= function
+      | Value.Commit c -> tree `Dir (SHA.of_tree c.Commit.tree) Lwt.return
+      | obj -> error "commit" obj
+    in
+    commit (SHA.of_commit head) >>= fun t ->
+    Lwt.return (!blobs_c, t)
 
   let iter_blobs t ~f ~init =
     load_filesystem t init >>= fun (n, trie) ->
@@ -502,7 +532,6 @@ module Make (IO: IO) = struct
     match mode with
     | `Link -> (*q Lwt_unix.symlink file ??? *) failwith "TODO"
     | _     ->
-      IO.remove file >>= fun () ->
       IO.write_file file (Cstruct.of_string blob) >>= fun () ->
       match mode with
       | `Exec -> IO.chmod file 0o755
