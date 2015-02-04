@@ -878,7 +878,7 @@ module Make (IO: IO) (Store: Store.S) = struct
           Report_status.input ic
         )
 
-  let fetch_pack_with_head t (ic, oc) ?level ?temp_dir op references head =
+  let fetch_pack_with_head t (ic, oc) op references head =
     Log.debug "Sync.fetch_pack_with_head";
     let deepen = match op with
       | Clone { c_deepen = d; _ }
@@ -922,7 +922,7 @@ module Make (IO: IO) (Store: Store.S) = struct
     Log.debug "unpack=%b" unpack;
 
     begin if unpack then
-        Pack.unpack ~write:(Store.write ?level ?temp_dir t) pack
+        Pack.unpack ~write:(Store.write t) pack
       else
         let pack = Pack.Raw.input (Mstruct.of_cstruct pack) ~index:None in
         Store.write_pack t pack
@@ -938,7 +938,7 @@ module Make (IO: IO) (Store: Store.S) = struct
         (List.length sha1s);
       return { Result.head = Some head; references; sha1s }
 
-  let fetch_pack t ?level ?temp_dir gri op =
+  let fetch_pack t gri op =
     Log.debug "Sync.fetch_pack";
     let init = Init.upload_pack ~discover:true gri in
     match Init.host init with
@@ -993,29 +993,25 @@ module Make (IO: IO) (Store: Store.S) = struct
                 let uri = Init.uri init in
                 let init = Init.to_string init in
                 IO.with_connection uri ?init (fun (ic, oc) ->
-                    fetch_pack_with_head t (ic, oc) ?level ?temp_dir
-                      op references head
+                    fetch_pack_with_head t (ic, oc) op references head
                   )
               else
-                fetch_pack_with_head t (ic, oc) ?level ?temp_dir op
-                  references head
+                fetch_pack_with_head t (ic, oc) op references head
         )
 
   let ls t gri =
     fetch_pack t gri Ls >>= function
       { Result.references; _ } -> return references
 
-  let clone t ?deepen ?(unpack=false) ?level ?temp_dir
-      ?(capabilities=Capabilities.default) gri =
+  let clone t ?deepen ?(unpack=false) ?(capabilities=Capabilities.default) gri =
     let op = {
       c_deepen = deepen;
       c_unpack = unpack;
       c_capabilites = capabilities;
     } in
-    fetch_pack t ?level ?temp_dir gri (Clone op)
+    fetch_pack t gri (Clone op)
 
-  let fetch t ?deepen ?(unpack=false) ?level ?temp_dir
-      ?(capabilities=Capabilities.default) gri =
+  let fetch t ?deepen ?(unpack=false) ?(capabilities=Capabilities.default) gri =
     Store.list t >>= fun haves ->
     (* XXX: Store.shallows t >>= fun shallows *)
     let shallows = [] in
@@ -1027,7 +1023,7 @@ module Make (IO: IO) (Store: Store.S) = struct
       f_capabilites = capabilities;
       f_update_tags = false;
     } in
-    fetch_pack t ?level ?temp_dir gri (Fetch op)
+    fetch_pack t gri (Fetch op)
 
   type t = Store.t
 
@@ -1037,10 +1033,8 @@ module type S = sig
   type t
   val ls: t -> Gri.t -> SHA.Commit.t Reference.Map.t Lwt.t
   val push: t -> branch:Reference.t -> Gri.t -> Result.push Lwt.t
-  val clone: t -> ?deepen:int -> ?unpack:bool -> ?level:int ->
-    ?temp_dir:string -> ?capabilities:capability list
+  val clone: t -> ?deepen:int -> ?unpack:bool -> ?capabilities:capability list
     -> Gri.t -> Result.fetch Lwt.t
-  val fetch: t -> ?deepen:int -> ?unpack:bool -> ?level:int ->
-    ?temp_dir:string -> ?capabilities:capability list
+  val fetch: t -> ?deepen:int -> ?unpack:bool -> ?capabilities:capability list
     -> Gri.t -> Result.fetch Lwt.t
 end

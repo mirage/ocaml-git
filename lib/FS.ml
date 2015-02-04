@@ -40,8 +40,8 @@ end
 
 module type S = sig
   include Store.S
-  val create_file: string -> Tree.perm -> Blob.t -> unit Lwt.t
-  val entry_of_file: ?root:string -> Index.t ->
+  val create_file: t -> string -> Tree.perm -> Blob.t -> unit Lwt.t
+  val entry_of_file: t -> Index.t ->
     string -> Tree.perm -> SHA.Blob.t -> Blob.t -> Index.entry option Lwt.t
 end
 
@@ -107,34 +107,43 @@ module Make (IO: IO) = struct
 
   end
 
-  type t = string
+  type t = {
+    root: string;
+    level: int;
+  }
 
-  let root t = t
+  let root t = t.root
+  let level t = t.level
 
-  let create ?root () =
-    match root with
+  let temp_dir { root; _ } = root / ".git" / "tmp"
+
+  let create ?root ?(level=6) () =
+    if level < 0 || level > 9 then failwith "level should be between 0 and 9";
+    begin match root with
     | None   -> IO.getcwd ()
     | Some r ->
       IO.mkdir r >>= fun () ->
       IO.realpath r
+    end >>= fun root ->
+    Lwt.return { root; level }
 
   let clear t =
-    Log.info "clear %s" t;
-    IO.remove (sprintf "%s/.git" t)
+    Log.info "clear %s" t.root;
+    IO.remove (sprintf "%s/.git" t.root)
 
   (* Loose objects *)
   module Loose = struct
 
     module Log = LogMake(struct let section = "fs-loose" end)
 
-    let file root sha1 =
+    let file { root; _ } sha1 =
       let hex = SHA.to_hex sha1 in
       let prefix = String.sub hex 0 2 in
       let suffix = String.sub hex 2 (String.length hex - 2) in
       root / ".git" / "objects" / prefix / suffix
 
-    let mem root sha1 =
-      IO.file_exists (file root sha1)
+    let mem t sha1 =
+      IO.file_exists (file t sha1)
 
     let read t sha1 =
       Log.debug "read %s" (SHA.to_hex sha1);
@@ -149,7 +158,7 @@ module Make (IO: IO) = struct
         with Zlib.Error _ ->
           Lwt.fail (Zlib.Error (file, (Cstruct.to_string buf)))
 
-    let write t ?level ?temp_dir value =
+    let write t value =
       Log.debug "write";
       let inflated = Misc.with_buffer (fun buf -> Value.add_inflated buf value) in
       let sha1 = SHA.of_string inflated in
@@ -157,11 +166,15 @@ module Make (IO: IO) = struct
       IO.file_exists file >>= function
       | true  -> Log.debug "write: file %s already exists!" file; Lwt.return sha1
       | false ->
-        let deflated = Misc.deflate_cstruct ?level (Cstruct.of_string inflated) in
-        IO.write_file file ?temp_dir deflated >>= fun () ->
+        let level = t.level in
+        let deflated =
+          Misc.deflate_cstruct ~level (Cstruct.of_string inflated)
+        in
+        let temp_dir = temp_dir t in
+        IO.write_file file ~temp_dir deflated >>= fun () ->
         Lwt.return sha1
 
-    let list root =
+    let list { root; _ } =
       Log.debug "Loose.list %s" root;
       let objects = root / ".git" / "objects" in
       IO.directories objects >>= fun objects ->
@@ -185,12 +198,12 @@ module Make (IO: IO) = struct
 
     module Log = LogMake(struct let section = "fs-packed" end)
 
-    let file root sha1 =
+    let file { root; _ } sha1 =
       let pack_dir = root / ".git" / "objects" / "pack" in
       let pack_file = "pack-" ^ (SHA.to_hex sha1) ^ ".pack" in
       pack_dir / pack_file
 
-    let list root =
+    let list { root; _ } =
       Log.debug "list %s" root;
       let packs = root / ".git" / "objects" / "pack" in
       IO.files packs >>= fun packs ->
@@ -203,7 +216,7 @@ module Make (IO: IO) = struct
         ) packs in
       Lwt.return packs
 
-    let index root sha1 =
+    let index { root; _ } sha1 =
       let pack_dir = root / ".git" / "objects" / "pack" in
       let idx_file = "pack-" ^ (SHA.to_hex sha1) ^ ".idx" in
       pack_dir / idx_file
@@ -218,7 +231,8 @@ module Make (IO: IO) = struct
       | false ->
         let buf = Buffer.create 1024 in
         Pack_index.add buf idx;
-        IO.write_file file (Cstruct.of_string (Buffer.contents buf))
+        let temp_dir = temp_dir t in
+        IO.write_file file ~temp_dir (Cstruct.of_string (Buffer.contents buf))
 
     let read_pack_index t sha1 =
       Log.debug "read_pack_index %s" (SHA.to_hex sha1);
@@ -284,7 +298,8 @@ module Make (IO: IO) = struct
       | true  -> Lwt.return_unit
       | false ->
         let pack = Misc.with_buffer' (fun buf -> Pack.Raw.add buf pack) in
-        IO.write_file file pack
+        let temp_dir = temp_dir t in
+        IO.write_file file ~temp_dir pack
 
     let mem_in_pack t pack_sha1 sha1 =
       Log.debug "mem_in_pack %s:%s" (SHA.to_hex pack_sha1) (SHA.to_hex sha1);
@@ -369,17 +384,16 @@ module Make (IO: IO) = struct
     Lwt.return_unit
 
   let references t =
-    let refs = t / ".git" / "refs" in
+    let refs = t.root / ".git" / "refs" in
     IO.rec_files refs >>= fun files ->
-    let n = String.length (t / ".git" / "") in
+    let n = String.length (t.root / ".git" / "") in
     let refs = List.map (fun file ->
         let ref = String.sub file n (String.length file - n) in
         Reference.of_raw ref
       ) files in
     Lwt.return refs
 
-  let file_of_ref t ref =
-    t / ".git" / Reference.to_raw ref
+  let file_of_ref t ref = t.root / ".git" / Reference.to_raw ref
 
   let mem_reference t ref =
     let file = file_of_ref t ref in
@@ -399,7 +413,7 @@ module Make (IO: IO) = struct
       let hex = String.trim (Cstruct.to_string hex) in
       Lwt.return (Some (SHA.Commit.of_hex hex))
     | false ->
-      let packed_refs = t / ".git" / "packed-refs" in
+      let packed_refs = t.root / ".git" / "packed-refs" in
       IO.file_exists packed_refs >>= function
       | false -> Lwt.return_none
       | true  ->
@@ -431,8 +445,8 @@ module Make (IO: IO) = struct
       Log.debug "read_reference_exn: Cannot read %s" (Reference.pretty ref);
       Lwt.fail Not_found
 
-  let write t ?level ?temp_dir value =
-    Loose.write t ?level ?temp_dir value >>= fun sha1 ->
+  let write t value =
+    Loose.write t value >>= fun sha1 ->
     Log.debug "write -> %s" (SHA.to_hex sha1);
     Value.Cache.add sha1 value;
     Lwt.return sha1
@@ -446,16 +460,18 @@ module Make (IO: IO) = struct
     Lwt.return (Pack.Raw.keys pack)
 
   let write_reference t ref sha1 =
-    let file = t / ".git" / Reference.to_raw ref in
+    let file = t.root / ".git" / Reference.to_raw ref in
     let contents = SHA.Commit.to_hex sha1 in
-    IO.write_file file (Cstruct.of_string contents)
+    let temp_dir = temp_dir t in
+    IO.write_file file ~temp_dir (Cstruct.of_string contents)
 
   let write_head t = function
     | Reference.SHA sha1 -> write_reference t Reference.head sha1
     | Reference.Ref ref   ->
-      let file = t / ".git" / "HEAD" in
+      let file = t.root / ".git" / "HEAD" in
       let contents = sprintf "ref: %s" (Reference.to_raw ref) in
-      IO.write_file file (Cstruct.of_string contents)
+      let temp_dir = temp_dir t in
+      IO.write_file file ~temp_dir (Cstruct.of_string contents)
 
   type 'a tree =
     | Leaf of 'a
@@ -523,22 +539,22 @@ module Make (IO: IO) = struct
     Log.debug "iter_blobs %s" (SHA.Commit.to_hex init);
     iter (fun path (mode, (sha1, blob)) ->
         incr i;
-        f (!i, n) (t :: path) mode sha1 blob
+        f (!i, n) (t.root :: path) mode sha1 blob
       ) trie
 
-  let create_file file mode blob =
+  let create_file t file mode blob =
     Log.debug "create_file %s" file;
     let blob = Blob.to_raw blob in
     match mode with
     | `Link -> (*q Lwt_unix.symlink file ??? *) failwith "TODO"
     | _     ->
-      IO.write_file file (Cstruct.of_string blob) >>= fun () ->
+      let temp_dir = temp_dir t in
+      IO.write_file file ~temp_dir (Cstruct.of_string blob) >>= fun () ->
       match mode with
       | `Exec -> IO.chmod file 0o755
       | _     -> Lwt.return_unit
 
-  let index_file t =
-    t / ".git" / "index"
+  let index_file t = t.root / ".git" / "index"
 
   let read_index t =
     Log.debug "read_index";
@@ -550,22 +566,18 @@ module Make (IO: IO) = struct
       let buf = Mstruct.of_cstruct buf in
       Lwt.return (Index.input buf)
 
-  let entry_of_file_aux ?root index file mode sha1 blob =
-    begin match root with
-      | None   -> IO.getcwd ()
-      | Some r -> IO.realpath r
-    end >>= fun root ->
+  let entry_of_file_aux t index file mode sha1 blob =
     IO.realpath file >>= fun file ->
     Log.debug "entry_of_file %s %s" (SHA.Blob.to_hex sha1) file;
     begin
       IO.file_exists file >>= function
       | false ->
         Log.debug "%s does not exist on the filesystem, creating!" file;
-        create_file file mode blob
+        create_file t file mode blob
       | true  ->
         let entry =
           try
-            List.find (fun e -> root / e.Index.name = file) index.Index.entries
+            List.find (fun e -> t.root / e.Index.name = file) index.Index.entries
             |> fun x -> Some x
           with Not_found ->
             None
@@ -575,17 +587,17 @@ module Make (IO: IO) = struct
           Log.debug "%s does not exist in the index, adding!" file;
           (* in doubt, overide the current version -- git will just refuse
              to do anything in that case. *)
-          create_file file mode blob
+          create_file t file mode blob
         | Some e ->
           if e.Index.id <> sha1 then (
             Log.debug "%s has an old version in the index, updating!" file;
-            create_file file mode blob
+            create_file t file mode blob
           ) else
             let stats = IO.stat_info file in
             if e.Index.stats <> stats then (
               (* same thing here, usually Git just stops in that case. *)
               Log.debug "%s has been modified on the filesystem, reversing!" file;
-              create_file file mode blob
+              create_file t file mode blob
             ) else (
               Log.debug "%s: %s unchanged!" (SHA.Blob.to_hex sha1) file;
               Lwt.return_unit
@@ -594,15 +606,15 @@ module Make (IO: IO) = struct
     let id = sha1 in
     let stats = IO.stat_info file in
     let stage = 0 in
-    match Misc.string_chop_prefix ~prefix:(root / "") file with
+    match Misc.string_chop_prefix ~prefix:(t.root / "") file with
     | None      -> Lwt.fail (Failure ("entry_of_file: " ^ file))
     | Some name ->
       let entry = { Index.stats; id; stage; name } in
       Lwt.return (Some entry)
 
-  let entry_of_file ?root index file mode sha1 blob =
+  let entry_of_file t index file mode sha1 blob =
     Lwt.catch
-      (fun () -> entry_of_file_aux ?root index file mode sha1 blob)
+      (fun () -> entry_of_file_aux t index file mode sha1 blob)
       (function Failure _ | Sys_error _ -> Lwt.return_none | e -> Lwt.fail e)
 
   let write_index t ?index head =
@@ -611,7 +623,9 @@ module Make (IO: IO) = struct
     match index with
     | Some index ->
       Index.add buf index;
-      IO.write_file (index_file t) (Cstruct.of_string (Buffer.contents buf)) >>= fun () ->
+      let temp_dir = temp_dir t in
+      IO.write_file (index_file t) ~temp_dir
+        (Cstruct.of_string (Buffer.contents buf)) >>= fun () ->
       let all = List.length index.Index.entries in
       Log.info "Checking out files: 100%% (%d/%d), done." all all;
       Lwt.return_unit
@@ -624,13 +638,15 @@ module Make (IO: IO) = struct
           all := n;
           let file = String.concat Filename.dir_sep path in
           Log.debug "write_index: %d/%d blob:%s" i n file;
-          entry_of_file ~root:t index file mode sha1 blob >>= function
+          entry_of_file t index file mode sha1 blob >>= function
           | None   -> Lwt.return_unit
           | Some e -> entries := e :: !entries; Lwt.return_unit
         ) >>= fun () ->
       let index = Index.create !entries in
+      let temp_dir = temp_dir t in
       Index.add buf index;
-      IO.write_file (index_file t) (Cstruct.of_string (Buffer.contents buf)) >>= fun () ->
+      IO.write_file (index_file t) ~temp_dir
+        (Cstruct.of_string (Buffer.contents buf)) >>= fun () ->
       Log.info "Checking out files: 100%% (%d/%d), done." !all !all;
       Lwt.return_unit
 

@@ -177,8 +177,10 @@ module Make (Store: Store.S) = struct
     assert_key_opt_equal (name ^ "-find") (Some e) k';
     return_unit
 
+  let root = "test-db"
+
   let create ?(index=false) () =
-    Store.create ~root:"test-db" () >>= fun t  ->
+    Store.create ~root () >>= fun t  ->
     Lwt_list.iter_p
       (fun v -> Store.write t v >>= fun _ -> return_unit)
       (if not index then [
@@ -300,6 +302,7 @@ module Make (Store: Store.S) = struct
           if Filename.basename (Sys.getcwd ()) <> "lib_test" then
             failwith "Tests should run in lib_test/";
           files "." >>= fun files ->
+          FS.create ~root () >>= fun t ->
           Lwt_list.map_s (fun file ->
               Git_unix.FS.IO.read_file file >>= fun str ->
               let blob = Blob.of_raw (Cstruct.to_string str) in
@@ -308,7 +311,7 @@ module Make (Store: Store.S) = struct
                 let p = (Unix.stat file).Unix.st_perm in
                 if p land 0o100 = 0o100 then `Exec else `Normal
               in
-              FS.entry_of_file Index.empty file mode sha1 blob >>= fun f ->
+              FS.entry_of_file t Index.empty file mode sha1 blob >>= fun f ->
               return f
             ) files >>= fun entries ->
           let entries = Misc.list_filter_map (fun x -> x) entries in
