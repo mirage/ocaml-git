@@ -257,18 +257,11 @@ module D = struct
     | 0   -> return_unit
     | len -> rwrite fd (Cstruct.to_bigarray b) 0 len
 
-  let default_tmp_dir =
-    try match Sys.getenv "OGITTMPDIR" with
-      | "" -> None
-      | x  -> Some x
-    with Not_found ->
-      None
-
   let with_write_file ?temp_dir file fn =
-    let temp_dir = match temp_dir with
-      | None -> default_tmp_dir
-      | Some x -> Some x
-    in
+    begin match temp_dir with
+      | None   -> Lwt.return_unit
+      | Some d -> mkdir d
+    end >>= fun () ->
     let dir = Filename.dirname file in
     mkdir dir >>= fun () ->
     let tmp = Filename.temp_file ?temp_dir (Filename.basename file) "write" in

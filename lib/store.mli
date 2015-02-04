@@ -21,16 +21,23 @@ module type S = sig
   type t
   (** Git store handlers. *)
 
-  val create: ?root:string -> unit -> t Lwt.t
-  (** Create a store handler for the given path. If [root] is not set,
-      use the current directory. *)
-
-  val clear: t -> unit Lwt.t
-  (** Remove all the contents of the Git store. *)
+  val create: ?root:string -> ?level:int -> unit -> t Lwt.t
+      (** Create a store handler for the given path. See {!root} and {!level}.*)
 
   val root: t -> string
   (** The state root (or any other meaningful name to be displayed to
-      the user). *)
+      the user). By default, it is the current directory. *)
+
+  val level: t -> int
+  (** The compression [level] used when creating new Git objects. must
+      be between 0 and 9: 1 gives best speed, 9 gives best
+      compression, 0 gives no compression at all (the input data is
+      simply copied a block at a time). The default value (currently
+      equivalent to level 6) requests a default compromise between
+      speed and compression. *)
+
+  val clear: t -> unit Lwt.t
+  (** Remove all the contents of the Git store. *)
 
   val dump: t -> unit Lwt.t
   (** Dump the store contents to stderr. *)
@@ -53,17 +60,8 @@ module type S = sig
   val list: t -> SHA.t list Lwt.t
   (** Return the list of SHA names. *)
 
-  val write: t -> ?level:int -> ?temp_dir:string -> Value.t -> SHA.t Lwt.t
-  (** Write a value and return the SHA of its serialized contents.
-
-      {ul
-      {- [temp_dir] is directory name used to store temporary files}
-      {- The compression [level] must be between 0 and 9: 1 gives best
-      speed, 9 gives best compression, 0 gives no compression at all
-      (the input data is simply copied a block at a time). The default
-      value (currently equivalent to level 6) requests a default
-      compromise between speed and compression .}}
-*)
+  val write: t -> Value.t -> SHA.t Lwt.t
+  (** Write a value and return the SHA of its serialized contents. *)
 
   val write_pack: t -> Pack.Raw.t -> SHA.Set.t Lwt.t
   (** Write a raw pack file and the corresponding index. Return the

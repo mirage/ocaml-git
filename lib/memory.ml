@@ -19,17 +19,19 @@ module Log = Log.Make(struct let section = "memory" end)
 
 type t = {
   root   : string;
+  level  : int;
   values : (SHA.t, Value.t) Hashtbl.t;
   refs   : (Reference.t, SHA.Commit.t) Hashtbl.t;
   mutable head : Reference.head_contents option;
 }
 
-let root t =
-  t.root
+let root t = t.root
+let level t = t.level
 
 let stores = Hashtbl.create 1024
 
-let create ?root () =
+let create ?root ?(level=6) () =
+  if level < 0 || level > 9 then failwith "level should be between 0 and 9";
   let root = match root with
     | None   -> "root"
     | Some r -> r in
@@ -37,7 +39,7 @@ let create ?root () =
     try Hashtbl.find stores root
     with Not_found ->
       let t = {
-        root;
+        root; level;
         values  = Hashtbl.create 1024;
         refs    = Hashtbl.create 8;
         head    = None;
@@ -50,7 +52,7 @@ let clear t =
   Hashtbl.remove stores t.root;
   return_unit
 
-let write t ?level:_ ?temp_dir:_ value =
+let write t value =
   let inflated = Misc.with_buffer (fun buf -> Value.add_inflated buf value) in
   let sha1 = SHA.of_string inflated in
   try

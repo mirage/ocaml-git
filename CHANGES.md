@@ -1,3 +1,7 @@
+## 1.4.9
+* Remove the `OGITTMPDIR` and alway store temp files under
+  `git/tmp` (mirage/irmin#132)
+
 ## 1.4.8
 * Fix LRU cache: SHA1 should be unique in the cache (regression
   introduced in 1.4.3). This was causing confusing read results
