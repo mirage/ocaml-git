@@ -1,5 +1,8 @@
 ## 1.4.8
-* Also add read objects in the LRU
+* Fix LRU cache: SHA1 should be unique in the cache (regression
+  introduced in 1.4.3). This was causing confusing read results
+  under load.
+* Reading objects now updates the LRU cache
 * Fix a regression in `ogit cat-file` which were displaying nothing
   for small objects.
 
