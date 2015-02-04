@@ -18,6 +18,9 @@ The library comes with a command-line tool called `ogit` which shares
 a similar interface with `git`, but where all operations are mapped to
 the API exposed `ocaml-git` (and hence using only OCaml code).
 
+The API documentation is available
+[online](http://mirage.github.io/ocaml-git/).
+
 [![Build Status](https://travis-ci.org/mirage/ocaml-git.png?branch=master)](https://travis-ci.org/mirage/ocaml-git)
 
 ### Build and Install Instructions
