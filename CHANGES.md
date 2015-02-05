@@ -1,3 +1,7 @@
+## 1.4.10
+* Fix support for the smart HTTP protocol (report by @talex5,
+  mirage/irmin#138)
+
 ## 1.4.9
 * Remove the `OGITTMPDIR` and alway store temp files under
   `git/tmp` (mirage/irmin#132)
