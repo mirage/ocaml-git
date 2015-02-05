@@ -80,7 +80,7 @@ module M = struct
           Cohttp.Request.make_for_client ~headers ~chunked:false
             (meth :> Cohttp.Code.meth) uri
         | `POST ->
-          Cohttp_lwt_unix.Request.make_for_client ~headers ~chunked:true
+          Cohttp.Request.make_for_client ~headers ~chunked:true
             (meth :> Cohttp.Code.meth) uri
       in
       let http_oc =
