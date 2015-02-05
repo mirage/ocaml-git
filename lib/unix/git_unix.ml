@@ -70,9 +70,16 @@ module M = struct
            | Some s -> write oc s
          end >>= fun () ->
          fn (ic, oc))
-      (fun ()  -> Lwt_io.close ic)
+      (fun ()  ->
+         Lwt.catch
+           (fun () -> Lwt_io.close ic)
+           (function
+             | Unix.Unix_error _ -> Lwt.return_unit
+             | e -> fail e))
 
-  let http_call ?headers meth uri fn =
+  exception Redirect of Uri.t
+
+  let rec http_call ?headers ?(redirects=0) meth uri fn =
     let headers = match headers with None -> Cohttp.Header.init () | Some h -> h in
     let callback (ic, oc) =
       let req = match meth with
@@ -80,7 +87,7 @@ module M = struct
           Cohttp.Request.make_for_client ~headers ~chunked:false
             (meth :> Cohttp.Code.meth) uri
         | `POST ->
-          Cohttp_lwt_unix.Request.make_for_client ~headers ~chunked:true
+          Cohttp.Request.make_for_client ~headers ~chunked:true
             (meth :> Cohttp.Code.meth) uri
       in
       let http_oc =
@@ -105,26 +112,28 @@ module M = struct
         let reader = ref None in
         let old_chunk = ref None in
         let read reader bytes off len =
-          let write chunk =
+          let read_in_chunk chunk =            (* Use [chunk] as read buffer. *)
             let blit len =
               Lwt_bytes.blit_from_bytes chunk 0 bytes off len;
-              Log.debug "refill: actual-len=%d" len;
               Lwt.return len
             in
             let n = String.length chunk in
-            if n <= len then blit n
-            else
-              let tl = String.sub chunk len (n - len - 1) in
+            if n <= len then (
+              old_chunk := None;
+              blit n;
+            ) else (
+              let tl = String.sub chunk len (n - len) in
               old_chunk := Some tl;
               blit len
+            )
           in
           match !old_chunk with
-          | Some c -> write c
+          | Some c -> read_in_chunk c
           | None ->
             Cohttp_lwt_unix.Response.read_body_chunk reader >>= function
             | Cohttp.Transfer.Done -> Lwt.return 0
-            | Cohttp.Transfer.Chunk chunk -> write chunk
-            | Cohttp.Transfer.Final_chunk chunk -> write chunk
+            | Cohttp.Transfer.Chunk chunk -> read_in_chunk chunk
+            | Cohttp.Transfer.Final_chunk chunk -> read_in_chunk chunk
         in
         Lwt_io.make ~mode:Lwt_io.input ~close:(fun () -> Lwt_io.close ic)
           (fun bytes off len ->
@@ -134,20 +143,47 @@ module M = struct
                  flush_http_oc () >>= fun () ->
                  Cohttp_lwt_unix.Response.read ic >>= function
                  | `Ok r ->
-                   let r = Cohttp_lwt_unix.Response.make_body_reader r ic in
-                   reader := Some r;
-                   Lwt.return_unit
+                   let status = Cohttp_lwt_unix.Response.status r in
+                   let status_code = Cohttp.Code.code_of_status status in
+                   let status = Cohttp.Code.string_of_status status in
+                   if Cohttp.Code.is_redirection status_code then (
+                     let uri =
+                       try
+                         Cohttp_lwt_unix.Response.headers r
+                         |> Cohttp.Header.to_list
+                         |> List.assoc "location"
+                         |> Uri.of_string
+                       with Not_found ->
+                         failwith status
+                     in
+                     fail (Redirect uri)
+                   ) else if Cohttp.Code.is_success status_code then (
+                     let r = Cohttp_lwt_unix.Response.make_body_reader r ic in
+                     reader := Some r;
+                     Lwt.return_unit
+                   ) else (
+                     Log.error "with_http: %s" status;
+                     failwith status
+                   )
                  | `Eof       -> Lwt.return_unit
                  | `Invalid i -> Lwt.fail (Failure i)
                end >>= fun () ->
                begin match !reader with
                  | Some reader -> read reader bytes off len
-                 | None        -> return 0
+                 | None        -> Lwt.return 0
                end
              | Some reader -> read reader bytes off len)
       in
       Cohttp_lwt_unix.Request.write_header req oc >>= fun () ->
-      fn (http_ic, http_oc)
+      Lwt.catch
+        (fun () -> fn (http_ic, http_oc))
+        (function
+          | Redirect uri ->
+            Lwt_io.close http_ic >>= fun () ->
+            let redirects = redirects + 1 in
+            if redirects > 10 then fail (Failure "Too many redirects")
+            else http_call ~headers ~redirects meth uri fn
+          | e -> fail e)
     in
     with_conduit uri callback
 
@@ -235,10 +271,14 @@ module D = struct
       )
 
   let directories dir =
-    list_files (fun f -> try Sys.is_directory f with _ -> false) dir
+    list_files (fun f ->
+        try Sys.is_directory f with Sys_error _ -> false
+      ) dir
 
   let files dir =
-    list_files (fun f -> try not (Sys.is_directory f) with _ -> false) dir
+    list_files (fun f ->
+        try not (Sys.is_directory f) with Sys_error _ -> false
+      ) dir
 
   let rec_files dir =
     let rec aux accu dir =
