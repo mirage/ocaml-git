@@ -235,10 +235,14 @@ module D = struct
       )
 
   let directories dir =
-    list_files (fun f -> try Sys.is_directory f with _ -> false) dir
+    list_files (fun f ->
+        try Sys.is_directory f with Sys_error _ -> false
+      ) dir
 
   let files dir =
-    list_files (fun f -> try not (Sys.is_directory f) with _ -> false) dir
+    list_files (fun f ->
+        try not (Sys.is_directory f) with Sys_error _ -> false
+      ) dir
 
   let rec_files dir =
     let rec aux accu dir =

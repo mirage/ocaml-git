@@ -153,7 +153,9 @@ module Make (IO: IO) (Store: Store.S) = struct
         let size =
           let str = "0x" ^ size in
           try int_of_string str - 4
-          with _ -> error "%s is not a valid integer" str in
+          with Failure _ ->
+            error "PacketLine.input: %S is not a valid integer" str
+        in
         IO.read_exactly ic size >>= fun payload ->
         Log.debug "RECEIVED: %S (%d)" payload size;
         return (Some payload)
@@ -422,7 +424,7 @@ module Make (IO: IO) (Store: Store.S) = struct
               let ref = Reference.of_raw ref in
               let references = add sha1 ref in
               aux { acc with references }
-          | None -> error "%s is not a valid answer" line
+          | None -> error "Listing.input: %S is not a valid answer" line
       in
       skip_smart_http () >>= fun () ->
       aux empty
@@ -524,7 +526,9 @@ module Make (IO: IO) (Store: Store.S) = struct
             | "deepen"    ->
               let d =
                 try int_of_string s
-                with _ -> error "%s is not a valid integer" s in
+                with Failure _ ->
+                  error "Upload.input: %S is not a valid integer" s
+              in
               aux (Deepen d :: acc)
             | "want" ->
               let aux id c = aux (Want (SHA.of_hex id, c) :: acc) in
@@ -534,7 +538,7 @@ module Make (IO: IO) (Store: Store.S) = struct
                   | Want (_,c)::_ -> aux s c
                   | _             -> error "want without capacity"
               end
-            | s -> error "%s is not a valid upload request." s
+            | s -> error "Upload.input: %S is not a valid upload request." s
       in
       aux []
 

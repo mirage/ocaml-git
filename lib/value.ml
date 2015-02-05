@@ -92,7 +92,10 @@ let input_inflated buf =
     | None   -> Mstruct.parse_error_buf buf "value: size"
     | Some s ->
       try int_of_string s
-      with _ -> Mstruct.parse_error_buf buf "%S is not a valid integer." s in
+      with Failure _ ->
+        Mstruct.parse_error_buf buf
+          "Value.input_inflated: %S is not a valid integer." s
+  in
   if size <> Mstruct.length buf then
     Mstruct.parse_error_buf buf
       "[expected-size: %d; actual-size: %d]\n"
