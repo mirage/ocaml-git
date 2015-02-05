@@ -70,7 +70,12 @@ module M = struct
            | Some s -> write oc s
          end >>= fun () ->
          fn (ic, oc))
-      (fun ()  -> Lwt_io.close ic)
+      (fun ()  ->
+         Lwt.catch
+           (fun () -> Lwt_io.close ic)
+           (function
+             | Unix.Unix_error _ -> Lwt.return_unit
+             | e -> fail e))
 
   exception Redirect of Uri.t
 
@@ -107,26 +112,28 @@ module M = struct
         let reader = ref None in
         let old_chunk = ref None in
         let read reader bytes off len =
-          let write chunk =
+          let read_in_chunk chunk =            (* Use [chunk] as read buffer. *)
             let blit len =
               Lwt_bytes.blit_from_bytes chunk 0 bytes off len;
-              Log.debug "refill: actual-len=%d" len;
               Lwt.return len
             in
             let n = String.length chunk in
-            if n <= len then blit n
-            else
-              let tl = String.sub chunk len (n - len - 1) in
+            if n <= len then (
+              old_chunk := None;
+              blit n;
+            ) else (
+              let tl = String.sub chunk len (n - len) in
               old_chunk := Some tl;
               blit len
+            )
           in
           match !old_chunk with
-          | Some c -> write c
+          | Some c -> read_in_chunk c
           | None ->
             Cohttp_lwt_unix.Response.read_body_chunk reader >>= function
             | Cohttp.Transfer.Done -> Lwt.return 0
-            | Cohttp.Transfer.Chunk chunk -> write chunk
-            | Cohttp.Transfer.Final_chunk chunk -> write chunk
+            | Cohttp.Transfer.Chunk chunk -> read_in_chunk chunk
+            | Cohttp.Transfer.Final_chunk chunk -> read_in_chunk chunk
         in
         Lwt_io.make ~mode:Lwt_io.input ~close:(fun () -> Lwt_io.close ic)
           (fun bytes off len ->
