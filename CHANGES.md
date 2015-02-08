@@ -1,3 +1,7 @@
+# 1.4.11
+* Add `User-Agent` in the headers of the smart HTTP protocol. This
+  makes `bitbucket.org` happy. (#66, patch from @vklquevs)
+
 ## 1.4.10
 * Fix support for the smart HTTP protocol (report by @talex5,
   mirage/irmin#138)
