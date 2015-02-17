@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 602ea91e608a1f3c3196b09d632fe193)
+# DO NOT EDIT (digest: e133fb3b60d71dc9fc763023ec98d12f)
 # Ignore VCS directories, you can use the same kind of rule outside
 # OASIS_START/STOP if you want to exclude directories that contains
 # useless stuff for the build process
@@ -52,6 +52,19 @@ true: annot, bin_annot
 # Library git_top
 "lib/top/git_top.cmxs": use_git_top
 <lib/top/*.ml{,i,y}>: pkg_compiler-libs.toplevel
+# Library git-http
+"lib/http/git-http.cmxs": use_git-http
+<lib/http/*.ml{,i,y}>: pkg_cohttp.lwt
+<lib/http/*.ml{,i,y}>: pkg_dolog
+<lib/http/*.ml{,i,y}>: pkg_hex
+<lib/http/*.ml{,i,y}>: pkg_lwt
+<lib/http/*.ml{,i,y}>: pkg_mstruct
+<lib/http/*.ml{,i,y}>: pkg_nocrypto
+<lib/http/*.ml{,i,y}>: pkg_ocamlgraph
+<lib/http/*.ml{,i,y}>: pkg_uri
+<lib/http/*.ml{,i,y}>: pkg_uri.services
+<lib/http/*.ml{,i,y}>: pkg_zip
+<lib/http/*.ml{,i,y}>: use_git
 # Library git-unix
 "lib/unix/git-unix.cmxs": use_git-unix
 <lib/unix/*.ml{,i,y}>: pkg_cohttp.lwt
@@ -67,6 +80,7 @@ true: annot, bin_annot
 <lib/unix/*.ml{,i,y}>: pkg_uri.services
 <lib/unix/*.ml{,i,y}>: pkg_zip
 <lib/unix/*.ml{,i,y}>: use_git
+<lib/unix/*.ml{,i,y}>: use_git-http
 # Library git-mirage
 "lib/mirage/git-mirage.cmxs": use_git-mirage
 <lib/mirage/*.ml{,i,y}>: pkg_dolog
@@ -95,6 +109,7 @@ true: annot, bin_annot
 <bin/ogit.{native,byte}>: pkg_uri.services
 <bin/ogit.{native,byte}>: pkg_zip
 <bin/ogit.{native,byte}>: use_git
+<bin/ogit.{native,byte}>: use_git-http
 <bin/ogit.{native,byte}>: use_git-unix
 <bin/*.ml{,i,y}>: pkg_cmdliner
 <bin/*.ml{,i,y}>: pkg_cohttp.lwt
@@ -110,6 +125,7 @@ true: annot, bin_annot
 <bin/*.ml{,i,y}>: pkg_uri.services
 <bin/*.ml{,i,y}>: pkg_zip
 <bin/*.ml{,i,y}>: use_git
+<bin/*.ml{,i,y}>: use_git-http
 <bin/*.ml{,i,y}>: use_git-unix
 # Executable test_git
 <lib_test/test.{native,byte}>: pkg_alcotest
@@ -130,6 +146,7 @@ true: annot, bin_annot
 <lib_test/test.{native,byte}>: pkg_uri.services
 <lib_test/test.{native,byte}>: pkg_zip
 <lib_test/test.{native,byte}>: use_git
+<lib_test/test.{native,byte}>: use_git-http
 <lib_test/test.{native,byte}>: use_git-mirage
 <lib_test/test.{native,byte}>: use_git-unix
 <lib_test/*.ml{,i,y}>: pkg_alcotest
@@ -150,6 +167,7 @@ true: annot, bin_annot
 <lib_test/*.ml{,i,y}>: pkg_uri.services
 <lib_test/*.ml{,i,y}>: pkg_zip
 <lib_test/*.ml{,i,y}>: use_git
+<lib_test/*.ml{,i,y}>: use_git-http
 <lib_test/*.ml{,i,y}>: use_git-mirage
 <lib_test/*.ml{,i,y}>: use_git-unix
 # OASIS_STOP

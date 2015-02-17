@@ -79,7 +79,9 @@ end
 module type IO = sig
   type ic
   type oc
-  val with_connection: Uri.t -> ?init:string -> (ic * oc -> 'a Lwt.t) -> 'a Lwt.t
+  type ctx
+  val with_connection: ?ctx:ctx -> Uri.t -> ?init:string ->
+    (ic * oc -> 'a Lwt.t) -> 'a Lwt.t
   val read_all: ic -> string Lwt.t
   val read_exactly: ic -> int -> string Lwt.t
   val write: oc -> string -> unit Lwt.t
@@ -103,6 +105,8 @@ type capability =
 module Make (IO: IO) (Store: Store.S) = struct
 
   exception Error
+
+  type ctx = IO.ctx
 
   let error fmt =
     Printf.ksprintf (fun msg ->
@@ -844,7 +848,7 @@ module Make (IO: IO) (Store: Store.S) = struct
 
   module Graph = Global_graph.Make(Store)
 
-  let push t ~branch gri =
+  let push ?ctx t ~branch gri =
     Log.debug "Sync.push";
     let init = Init.receive_pack ~discover:true gri in
     match Init.host init with
@@ -853,7 +857,7 @@ module Make (IO: IO) (Store: Store.S) = struct
       let uri = Init.uri init in
       let protocol = protocol_exn uri in
       let init = Init.to_string init in
-      IO.with_connection uri ?init (fun (ic, oc) ->
+      IO.with_connection ?ctx uri ?init (fun (ic, oc) ->
           Listing.input ic protocol >>= fun listing ->
           (* XXX: check listing.capabilities *)
           Log.debug "listing:\n %s" (Listing.pretty listing);
@@ -946,7 +950,7 @@ module Make (IO: IO) (Store: Store.S) = struct
         (List.length sha1s);
       return { Result.head = Some head; references; sha1s }
 
-  let fetch_pack t gri op =
+  let fetch_pack ?ctx t gri op =
     Log.debug "Sync.fetch_pack";
     let init = Init.upload_pack ~discover:true gri in
     match Init.host init with
@@ -955,7 +959,7 @@ module Make (IO: IO) (Store: Store.S) = struct
       let uri = Init.uri init in
       let protocol = protocol_exn uri in
       let init = Init.to_string init in
-      IO.with_connection uri ?init (fun (ic, oc) ->
+      IO.with_connection ?ctx uri ?init (fun (ic, oc) ->
           Listing.input ic protocol >>= fun listing ->
           Log.debug "listing:\n %s" (Listing.pretty listing);
           let references =
@@ -1000,26 +1004,28 @@ module Make (IO: IO) (Store: Store.S) = struct
                 let init = Init.upload_pack ~discover:false gri in
                 let uri = Init.uri init in
                 let init = Init.to_string init in
-                IO.with_connection uri ?init (fun (ic, oc) ->
+                IO.with_connection ?ctx uri ?init (fun (ic, oc) ->
                     fetch_pack_with_head t (ic, oc) op references head
                   )
               else
                 fetch_pack_with_head t (ic, oc) op references head
         )
 
-  let ls t gri =
-    fetch_pack t gri Ls >>= function
+  let ls ?ctx t gri =
+    fetch_pack ?ctx t gri Ls >>= function
       { Result.references; _ } -> return references
 
-  let clone t ?deepen ?(unpack=false) ?(capabilities=Capabilities.default) gri =
+  let clone ?ctx t ?deepen ?(unpack=false) ?(capabilities=Capabilities.default)
+      gri =
     let op = {
       c_deepen = deepen;
       c_unpack = unpack;
       c_capabilites = capabilities;
     } in
-    fetch_pack t gri (Clone op)
+    fetch_pack ?ctx t gri (Clone op)
 
-  let fetch t ?deepen ?(unpack=false) ?(capabilities=Capabilities.default) gri =
+  let fetch ?ctx t ?deepen ?(unpack=false) ?(capabilities=Capabilities.default)
+      gri =
     Store.list t >>= fun haves ->
     (* XXX: Store.shallows t >>= fun shallows *)
     let shallows = [] in
@@ -1031,7 +1037,7 @@ module Make (IO: IO) (Store: Store.S) = struct
       f_capabilites = capabilities;
       f_update_tags = false;
     } in
-    fetch_pack t gri (Fetch op)
+    fetch_pack ?ctx t gri (Fetch op)
 
   type t = Store.t
 
@@ -1039,10 +1045,11 @@ end
 
 module type S = sig
   type t
-  val ls: t -> Gri.t -> SHA.Commit.t Reference.Map.t Lwt.t
-  val push: t -> branch:Reference.t -> Gri.t -> Result.push Lwt.t
-  val clone: t -> ?deepen:int -> ?unpack:bool -> ?capabilities:capability list
-    -> Gri.t -> Result.fetch Lwt.t
-  val fetch: t -> ?deepen:int -> ?unpack:bool -> ?capabilities:capability list
-    -> Gri.t -> Result.fetch Lwt.t
+  type ctx
+  val ls: ?ctx:ctx -> t -> Gri.t -> SHA.Commit.t Reference.Map.t Lwt.t
+  val push: ?ctx:ctx -> t -> branch:Reference.t -> Gri.t -> Result.push Lwt.t
+  val clone: ?ctx:ctx -> t -> ?deepen:int -> ?unpack:bool ->
+    ?capabilities:capability list -> Gri.t -> Result.fetch Lwt.t
+  val fetch: ?ctx:ctx -> t -> ?deepen:int -> ?unpack:bool ->
+    ?capabilities:capability list -> Gri.t -> Result.fetch Lwt.t
 end

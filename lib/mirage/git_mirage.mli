@@ -30,4 +30,4 @@ module type FS = sig
 end
 
 module FS (FS: FS): Git.FS.S
-  (** Create a irminsule store from raw block devices hanlder. *)
+(** Create a Irmin store from raw block devices hanlder. *)

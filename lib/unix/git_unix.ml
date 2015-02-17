@@ -26,6 +26,9 @@ let openfile_pool = Lwt_pool.create 200 (fun () -> return_unit)
 let mkdir_pool = Lwt_pool.create 1 (fun () -> return_unit)
 
 module M = struct
+
+  type ctx = unit
+
   type ic = Lwt_io.input_channel
 
   type oc = Lwt_io.output_channel
@@ -77,148 +80,43 @@ module M = struct
              | Unix.Unix_error _ -> Lwt.return_unit
              | e -> fail e))
 
-  exception Redirect of Uri.t
+  module IC = struct
+    type t = Lwt_io.input_channel
+    let make ?close perform_io =
+      let perform_io buf = perform_io (Cstruct.of_bigarray buf) in
+      Lwt_io.make ~mode:Lwt_io.Input ?close perform_io
+  end
 
-  let rec http_call ?headers ?(redirects=0) meth uri fn =
-    let headers = match headers with None -> Cohttp.Header.init () | Some h -> h in
-    let callback (ic, oc) =
-      let req = match meth with
-        | `GET ->
-          Cohttp.Request.make_for_client ~headers ~chunked:false
-            (meth :> Cohttp.Code.meth) uri
-        | `POST ->
-          Cohttp.Request.make_for_client ~headers ~chunked:true
-            (meth :> Cohttp.Code.meth) uri
-      in
-      let http_oc =
-        match meth with
-        | `GET  -> oc
-        | `POST ->
-          let writer =
-            Cohttp_lwt_unix.Request.make_body_writer ~flush:true req oc
-          in
-          Lwt_io.make ~mode:Lwt_io.output ~close:(fun () -> Lwt_io.close oc)
-            (fun bytes off len ->
-               let chunk = Bytes.create len in
-               Lwt_bytes.blit_to_bytes bytes off chunk 0 len;
-               Cohttp_lwt_unix.Request.write_body writer chunk >>= fun () ->
-               return len)
-      in
-      let flush_http_oc () =
-        Log.debug "Closing output connection";
-        Cohttp_lwt_unix.Request.write_footer req oc
-      in
-      let http_ic =
-        let reader = ref None in
-        let old_chunk = ref None in
-        let read reader bytes off len =
-          let read_in_chunk chunk =            (* Use [chunk] as read buffer. *)
-            let blit len =
-              Lwt_bytes.blit_from_bytes chunk 0 bytes off len;
-              Lwt.return len
-            in
-            let n = String.length chunk in
-            if n <= len then (
-              old_chunk := None;
-              blit n;
-            ) else (
-              let tl = String.sub chunk len (n - len) in
-              old_chunk := Some tl;
-              blit len
-            )
-          in
-          match !old_chunk with
-          | Some c -> read_in_chunk c
-          | None ->
-            Cohttp_lwt_unix.Response.read_body_chunk reader >>= function
-            | Cohttp.Transfer.Done -> Lwt.return 0
-            | Cohttp.Transfer.Chunk chunk -> read_in_chunk chunk
-            | Cohttp.Transfer.Final_chunk chunk -> read_in_chunk chunk
-        in
-        Lwt_io.make ~mode:Lwt_io.input ~close:(fun () -> Lwt_io.close ic)
-          (fun bytes off len ->
-             match !reader with
-             | None ->
-               begin
-                 flush_http_oc () >>= fun () ->
-                 Cohttp_lwt_unix.Response.read ic >>= function
-                 | `Ok r ->
-                   let status = Cohttp_lwt_unix.Response.status r in
-                   let status_code = Cohttp.Code.code_of_status status in
-                   let status = Cohttp.Code.string_of_status status in
-                   if Cohttp.Code.is_redirection status_code then (
-                     let uri =
-                       try
-                         Cohttp_lwt_unix.Response.headers r
-                         |> Cohttp.Header.to_list
-                         |> List.assoc "location"
-                         |> Uri.of_string
-                       with Not_found ->
-                         failwith status
-                     in
-                     fail (Redirect uri)
-                   ) else if Cohttp.Code.is_success status_code then (
-                     let r = Cohttp_lwt_unix.Response.make_body_reader r ic in
-                     reader := Some r;
-                     Lwt.return_unit
-                   ) else (
-                     Log.error "with_http: %s" status;
-                     failwith status
-                   )
-                 | `Eof       -> Lwt.return_unit
-                 | `Invalid i -> Lwt.fail (Failure i)
-               end >>= fun () ->
-               begin match !reader with
-                 | Some reader -> read reader bytes off len
-                 | None        -> Lwt.return 0
-               end
-             | Some reader -> read reader bytes off len)
-      in
-      Cohttp_lwt_unix.Request.write_header req oc >>= fun () ->
-      Lwt.catch
-        (fun () -> fn (http_ic, http_oc))
-        (function
-          | Redirect uri ->
-            Lwt_io.close http_ic >>= fun () ->
-            let redirects = redirects + 1 in
-            if redirects > 10 then fail (Failure "Too many redirects")
-            else http_call ~headers ~redirects meth uri fn
-          | e -> fail e)
-    in
-    with_conduit uri callback
+  module OC = struct
+    type t = Lwt_io.output_channel
+    let make ?close perform_io =
+      let perform_io buf = perform_io (Cstruct.of_bigarray buf) in
+      Lwt_io.make ~mode:Lwt_io.Output ?close perform_io
+  end
 
-  let with_http ?init uri fn =
-    Log.debug "HTTP connecting to %s" (Uri.to_string uri);
-    let headers = match init with
-      | None -> Cohttp.Header.of_list []
-      | Some s ->
-        let l = Marshal.from_string s 0 in
-        Cohttp.Header.of_list l
-    in
-    Log.debug "HTTP headers: %s"
-      (Sexplib.Sexp.to_string (Cohttp.Header.sexp_of_t headers));
-    let meth =
-      let path = Uri.path uri in
-      let info = Filename.basename (Filename.dirname path) in
-      let refs = Filename.basename path in
-      match info, refs with
-      | "info", "refs" -> `GET
-      | _ -> `POST
-    in
-    http_call ~headers meth uri fn
+  module Client = struct
+    (* FIXME in cohttp *)
+    include Cohttp_lwt_unix.Client
+    let ic x = x
+    let oc x = x
+    let close_in x = Lwt.ignore_result (Lwt_io.close x)
+    let close_out x = Lwt.ignore_result (Lwt_io.close x)
+  end
 
-  let with_connection uri ?init fn =
+  module HTTP = Git_http.Flow(Client)(IC)(OC)
+
+  let with_connection ?ctx:_ uri ?init fn =
     match Sync.protocol uri with
     | `Ok `SSH -> with_ssh_process ?init uri fn
     | `Ok `Git -> with_conduit ?init uri fn
-    | `Ok `Smart_HTTP -> with_http ?init uri fn
+    | `Ok `Smart_HTTP -> HTTP.with_http ?init (with_conduit ?init:None) uri fn
     | `Not_supported x ->
       fail (Failure ("Scheme " ^ x ^ " not supported yet"))
     | `Unknown ->
       fail (Failure ("Unknown protocol. Must supply a scheme like git://"))
 
   let read_all ic =
-    let len = 64_1024 in
+    let len = 4096 in
     let buf = Bytes.create len in
     let res = Buffer.create len in
     let rec aux () =
