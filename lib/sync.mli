@@ -66,21 +66,24 @@ module type S = sig
   type t
   (** Abstract value for stores. *)
 
+  type ctx
+  (** Connection context *)
+
   (** {1 The base Git protocol and Git+SSH} *)
 
-  val ls: t -> Gri.t -> SHA.Commit.t Reference.Map.t Lwt.t
+  val ls: ?ctx:ctx -> t -> Gri.t -> SHA.Commit.t Reference.Map.t Lwt.t
   (** List the references of the remote repository. *)
 
-  val push: t -> branch:Reference.t -> Gri.t -> Result.push Lwt.t
+  val push: ?ctx:ctx -> t -> branch:Reference.t -> Gri.t -> Result.push Lwt.t
   (** Push a local branch to a remote store. *)
 
-  val clone: t -> ?deepen:int -> ?unpack:bool -> ?capabilities:capability list
-    -> Gri.t -> Result.fetch Lwt.t
+  val clone: ?ctx:ctx -> t -> ?deepen:int -> ?unpack:bool ->
+    ?capabilities:capability list -> Gri.t -> Result.fetch Lwt.t
   (** [clone t address] clones the contents of [address] into the
       store [t]. *)
 
-  val fetch: t -> ?deepen:int -> ?unpack:bool -> ?capabilities:capability list
-    -> Gri.t -> Result.fetch Lwt.t
+  val fetch: ?ctx:ctx -> t -> ?deepen:int -> ?unpack:bool ->
+    ?capabilities:capability list -> Gri.t -> Result.fetch Lwt.t
   (** [fetch t address] fetches the missing contents of [address] into
       the store [t]. *)
 
@@ -98,7 +101,11 @@ module type IO = sig
   type oc
   (** Type for output channels. *)
 
-  val with_connection: Uri.t -> ?init:string -> (ic * oc -> 'a Lwt.t) -> 'a Lwt.t
+  type ctx
+  (** Connection context. *)
+
+  val with_connection: ?ctx:ctx -> Uri.t -> ?init:string ->
+    (ic * oc -> 'a Lwt.t) -> 'a Lwt.t
   (** Connect to a remote server, get the corresponding input and
       output channels and apply a function on them. Close the channel
       once the function returns. The [init] corresponds to an optional
@@ -119,4 +126,4 @@ module type IO = sig
 
 end
 
-module Make (IO: IO) (S: Store.S): S with type t = S.t
+module Make (IO: IO) (S: Store.S): S with type t = S.t and type ctx = IO.ctx

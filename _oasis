@@ -37,13 +37,21 @@ Library git_top
   XMETARequires:    git
   XMETADescription: Toplevel printers for Git values
 
+Library "git-http"
+  Build$:            flag(unix) || flag(mirage)
+  Path:              lib/http/
+  FindlibParent:     git
+  Findlibname:       http
+  Modules:           Git_http
+  BuildDepends:      git, lwt, cohttp.lwt, uri.services
+
 Library "git-unix"
   Build$:            flag(unix)
   Path:              lib/unix/
   FindlibParent:     git
   Findlibname:       unix
   Modules:           Git_unix
-  BuildDepends:      git, cohttp.lwt, lwt.unix, conduit.lwt-unix, uri.services
+  BuildDepends:      git, git.http, lwt, cohttp.lwt, lwt.unix, conduit.lwt-unix
 
 Library "git-mirage"
   Build$:            flag(mirage)
