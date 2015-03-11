@@ -281,8 +281,8 @@ module Flow(HTTP: CLIENT) (IC: CHAN) (OC: CHAN) = struct
     let reconnect ctx =
       let t, u = Lwt.task () in
       Lwt.ignore_result @@ with_conduit uri (fun (nic, noc) ->
-          (try HTTP.close_in  ctx.ic with _ -> ());
-          (try HTTP.close_out ctx.oc with _ -> ());
+          HTTP.close_in ctx.ic;
+          HTTP.close_out ctx.oc;
           ctx.ic <- nic;
           ctx.oc <- noc;
           ctx.reader <- None;
