@@ -59,7 +59,13 @@ Type for output channels.<br>
 </div>
 
 
-<pre><span id="VALwith_connection"><span class="keyword">val</span> with_connection</span> : <code class="type">Uri.t -> ?init:string -> (<a href="Sync.IO.html#TYPEic">ic</a> * <a href="Sync.IO.html#TYPEoc">oc</a> -> 'a Lwt.t) -> 'a Lwt.t</code></pre><div class="info ">
+<pre><span id="TYPEctx"><span class="keyword">type</span> <code class="type"></code>ctx</span> </pre>
+<div class="info ">
+Connection context.<br>
+</div>
+
+
+<pre><span id="VALwith_connection"><span class="keyword">val</span> with_connection</span> : <code class="type">?ctx:<a href="Sync.IO.html#TYPEctx">ctx</a> -><br>       Uri.t -> ?init:string -> (<a href="Sync.IO.html#TYPEic">ic</a> * <a href="Sync.IO.html#TYPEoc">oc</a> -> 'a Lwt.t) -> 'a Lwt.t</code></pre><div class="info ">
 Connect to a remote server, get the corresponding input and
       output channels and apply a function on them. Close the channel
       once the function returns. The <code class="code">init</code> corresponds to an optional

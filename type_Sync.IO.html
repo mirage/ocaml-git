@@ -37,7 +37,9 @@
 <code class="code"><span class="keyword">sig</span><br>
 &nbsp;&nbsp;<span class="keyword">type</span>&nbsp;ic<br>
 &nbsp;&nbsp;<span class="keyword">type</span>&nbsp;oc<br>
+&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;ctx<br>
 &nbsp;&nbsp;<span class="keyword">val</span>&nbsp;with_connection&nbsp;:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;?ctx:<span class="constructor">Sync</span>.<span class="constructor">IO</span>.ctx&nbsp;<span class="keywordsign">-&gt;</span><br>
 &nbsp;&nbsp;&nbsp;&nbsp;<span class="constructor">Uri</span>.t&nbsp;<span class="keywordsign">-&gt;</span><br>
 &nbsp;&nbsp;&nbsp;&nbsp;?init:string&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;(<span class="constructor">Sync</span>.<span class="constructor">IO</span>.ic&nbsp;*&nbsp;<span class="constructor">Sync</span>.<span class="constructor">IO</span>.oc&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>a&nbsp;<span class="constructor">Lwt</span>.t)&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="keywordsign">'</span>a&nbsp;<span class="constructor">Lwt</span>.t<br>
 &nbsp;&nbsp;<span class="keyword">val</span>&nbsp;read_all&nbsp;:&nbsp;<span class="constructor">Sync</span>.<span class="constructor">IO</span>.ic&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string&nbsp;<span class="constructor">Lwt</span>.t<br>

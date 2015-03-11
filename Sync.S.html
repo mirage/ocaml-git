@@ -51,23 +51,29 @@
 Abstract value for stores.<br>
 </div>
 
+
+<pre><span id="TYPEctx"><span class="keyword">type</span> <code class="type"></code>ctx</span> </pre>
+<div class="info ">
+Connection context<br>
+</div>
+
 <br>
 <h1 id="1_ThebaseGitprotocolandGitSSH">The base Git protocol and Git+SSH</h1><br>
 
-<pre><span id="VALls"><span class="keyword">val</span> ls</span> : <code class="type"><a href="Sync.S.html#TYPEt">t</a> -> <a href="Gri.html#TYPEt">Gri.t</a> -> SHA.Commit.t Reference.Map.t Lwt.t</code></pre><div class="info ">
+<pre><span id="VALls"><span class="keyword">val</span> ls</span> : <code class="type">?ctx:<a href="Sync.S.html#TYPEctx">ctx</a> -> <a href="Sync.S.html#TYPEt">t</a> -> <a href="Gri.html#TYPEt">Gri.t</a> -> SHA.Commit.t Reference.Map.t Lwt.t</code></pre><div class="info ">
 List the references of the remote repository.<br>
 </div>
 
-<pre><span id="VALpush"><span class="keyword">val</span> push</span> : <code class="type"><a href="Sync.S.html#TYPEt">t</a> -> branch:Reference.t -> <a href="Gri.html#TYPEt">Gri.t</a> -> <a href="Sync.Result.html#TYPEpush">Sync.Result.push</a> Lwt.t</code></pre><div class="info ">
+<pre><span id="VALpush"><span class="keyword">val</span> push</span> : <code class="type">?ctx:<a href="Sync.S.html#TYPEctx">ctx</a> -><br>       <a href="Sync.S.html#TYPEt">t</a> -> branch:Reference.t -> <a href="Gri.html#TYPEt">Gri.t</a> -> <a href="Sync.Result.html#TYPEpush">Sync.Result.push</a> Lwt.t</code></pre><div class="info ">
 Push a local branch to a remote store.<br>
 </div>
 
-<pre><span id="VALclone"><span class="keyword">val</span> clone</span> : <code class="type"><a href="Sync.S.html#TYPEt">t</a> -><br>       ?deepen:int -><br>       ?unpack:bool -><br>       ?capabilities:<a href="Sync.html#TYPEcapability">Sync.capability</a> list -> <a href="Gri.html#TYPEt">Gri.t</a> -> <a href="Sync.Result.html#TYPEfetch">Sync.Result.fetch</a> Lwt.t</code></pre><div class="info ">
+<pre><span id="VALclone"><span class="keyword">val</span> clone</span> : <code class="type">?ctx:<a href="Sync.S.html#TYPEctx">ctx</a> -><br>       <a href="Sync.S.html#TYPEt">t</a> -><br>       ?deepen:int -><br>       ?unpack:bool -><br>       ?capabilities:<a href="Sync.html#TYPEcapability">Sync.capability</a> list -> <a href="Gri.html#TYPEt">Gri.t</a> -> <a href="Sync.Result.html#TYPEfetch">Sync.Result.fetch</a> Lwt.t</code></pre><div class="info ">
 <code class="code">clone t address</code> clones the contents of <code class="code">address</code> into the
       store <code class="code">t</code>.<br>
 </div>
 
-<pre><span id="VALfetch"><span class="keyword">val</span> fetch</span> : <code class="type"><a href="Sync.S.html#TYPEt">t</a> -><br>       ?deepen:int -><br>       ?unpack:bool -><br>       ?capabilities:<a href="Sync.html#TYPEcapability">Sync.capability</a> list -> <a href="Gri.html#TYPEt">Gri.t</a> -> <a href="Sync.Result.html#TYPEfetch">Sync.Result.fetch</a> Lwt.t</code></pre><div class="info ">
+<pre><span id="VALfetch"><span class="keyword">val</span> fetch</span> : <code class="type">?ctx:<a href="Sync.S.html#TYPEctx">ctx</a> -><br>       <a href="Sync.S.html#TYPEt">t</a> -><br>       ?deepen:int -><br>       ?unpack:bool -><br>       ?capabilities:<a href="Sync.html#TYPEcapability">Sync.capability</a> list -> <a href="Gri.html#TYPEt">Gri.t</a> -> <a href="Sync.Result.html#TYPEfetch">Sync.Result.fetch</a> Lwt.t</code></pre><div class="info ">
 <code class="code">fetch t address</code> fetches the missing contents of <code class="code">address</code> into
       the store <code class="code">t</code>.<br>
 </div>
