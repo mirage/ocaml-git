@@ -1,4 +1,6 @@
 # 1.4.11
+* Fix multi round-trips in the smart HTTP protocol. This fixes
+  depth-limited clones (#71) and fetches.
 * Create the `git.http` library for abstracting away bits of the
   smart HTTP protocol.
 * Add `User-Agent` in the headers of the smart HTTP protocol. This
