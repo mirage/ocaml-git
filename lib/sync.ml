@@ -520,7 +520,7 @@ module Make (IO: IO) (Store: Store.S) = struct
     let input ic: t Lwt.t =
       Log.debug "Upload.input";
       let rec aux acc =
-        PacketLine.input ic >>= function
+        PacketLine.input_raw ic >>= function
         | None   -> return (List.rev acc)
         | Some l ->
           match Misc.string_lsplit2 l ~on:Misc.sp with
