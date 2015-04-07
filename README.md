@@ -3,8 +3,8 @@
 Pure OCaml low-level bindings to Git -- Guaranteed no C inside.
 
 Support for on-disk and in-memory Git stores. Can read and write all
-the Git objects: the usual blobs, trees, commits and tags but also the
-pack files, pack indexes and the index file (where the staging area
+the Git objects: the usual blobs, trees, commits and tags but also
+the pack files, pack indexes and the index file (where the staging area
 lives).
 
 All the objects share a consistent API, and convenience functions are
