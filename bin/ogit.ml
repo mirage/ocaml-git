@@ -325,7 +325,7 @@ let ls_tree = {
                     let mode = Tree.string_of_perm e.Tree.perm in
                     let show =
                       if is_dir then
-                        show_tree || only_tree
+                        not recurse || show_tree || only_tree
                       else
                         not only_tree
                     in
