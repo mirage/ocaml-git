@@ -22,11 +22,7 @@ type perm = [
   | `Link
   | `Dir
   | `Commit
-<<<<<<< HEAD
 ]
-=======
-] with sexp
->>>>>>> modified to mimic git-cat-file and git-ls-tree of the original Git
 
 type entry = {
   perm: perm;
