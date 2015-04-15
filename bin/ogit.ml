@@ -313,7 +313,7 @@ let ls_tree = {
         let rec walk recurse show_tree only_tree path sha1 =
           S.read_exn t sha1 >>= fun v -> begin
             match v with
-            | Value.Blob blob -> begin
+            | Value.Blob _ -> begin
                 printf "blob %s %s\n" (SHA.to_hex sha1) path;
                 return_unit
             end
@@ -338,7 +338,7 @@ let ls_tree = {
                       return_unit
                   ) tree
             end
-            | Value.Tag tag -> begin
+            | Value.Tag _ -> begin
                 printf "tag %s %s\n" (SHA.to_hex sha1) path;
                 return_unit
             end

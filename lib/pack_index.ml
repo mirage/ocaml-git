@@ -334,7 +334,7 @@ class c ?(scan_thresh=8) ?(cache_size=1) (ba : Cstruct.buffer) = object (self)
   method mem sha1 =
     Log.debug "c#mem: %s" (SHA.to_hex sha1);
     match self#find_offset sha1 with
-    | Some o -> 
+    | Some _ -> 
         Log.debug "c#mem: true"; 
         true
     | None -> 
@@ -419,7 +419,7 @@ class c ?(scan_thresh=8) ?(cache_size=1) (ba : Cstruct.buffer) = object (self)
     ofs64_size <- Some !count;
     !count
 
-  method private get_fanout_idx ?(verbose=true) sha1 =
+  method private get_fanout_idx sha1 =
     let s = SHA.to_raw sha1 in
     let fanout_idx = int_of_char s.[0] in
     fanout_idx

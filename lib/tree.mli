@@ -43,7 +43,5 @@ type t = entry list
 (** A tree is an hierarchical data-store. NB: data (eg. blobs) are
     only carried on the leafs. *)
 
-val string_of_perm : perm -> string
-
 
 include Object.S with type t := t
