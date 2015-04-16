@@ -161,13 +161,13 @@ module Raw = struct
           let orig_off = Mstruct.offset buf in
           let orig_len = Mstruct.length buf in
           Log.debug "read: buf: orig_off=%d orig_len=%d" orig_off orig_len;
-	  let ba = Mstruct.to_bigarray buf in
+          let ba = Mstruct.to_bigarray buf in
           Mstruct.shift buf (offset - orig_off);
           Log.debug "read: buf: off=%d len=%d (after shift:%d)" (Mstruct.offset buf) (Mstruct.length buf) (offset-orig_off);
           let packed_v = input_packed_value ~version buf in
           Log.debug "read: buf: off=%d len=%d (after input_packed_value)" (Mstruct.offset buf) (Mstruct.length buf);
-	  Some (Packed_value.to_value ~version ~index ~ba (offset-orig_off, packed_v))
-      end
+          Some (Packed_value.to_value ~version ~index ~ba (offset-orig_off, packed_v))
+        end
       | None -> None
     end
 

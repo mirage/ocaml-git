@@ -453,15 +453,15 @@ let rec unpack ?(lv=0) ~version ~index ~ba (pos, t) =
     | 2 -> V2.input
     | 3 -> V3.input
     | _ -> 
-	eprintf "pack version should be 2 or 3";
-	failwith "Packed_value.unpack"
+      eprintf "pack version should be 2 or 3";
+      failwith "Packed_value.unpack"
   in
   let unpacked = 
     match t with
     | Raw_value x -> begin
         Log.debug "unpack[%d]: Raw_value" lv; 
         x
-    end
+      end
     | Ref_delta d -> begin 
         Log.debug "unpack[%d]: Ref_delta: d.source=%s" lv (SHA.to_hex d.source);
         match Pack_index.find_offset index d.source with
@@ -470,25 +470,25 @@ let rec unpack ?(lv=0) ~version ~index ~ba (pos, t) =
             let offset = offset - 12 in (* header skipped *) 
             let buf = Mstruct.of_bigarray ~off:offset ~len:(ba_len-offset) ba in
             let packed_v = input_packed_value buf in
-	    let u = unpack ~lv:(lv+1) ~version ~index ~ba (offset, packed_v) in
-	    Misc.with_buffer (fun b -> add_delta b {d with source = u})
-        end
+            let u = unpack ~lv:(lv+1) ~version ~index ~ba (offset, packed_v) in
+            Misc.with_buffer (fun b -> add_delta b {d with source = u})
+          end
         | None -> begin
             eprintf
               "Packed_value.unpack: shallow pack are not supported.\n%s is not in the pack file!\n"
               (SHA.to_hex d.source);
             failwith "Packed_value.unpack";
-        end
-    end
+          end
+      end
     | Off_delta d -> begin
         Log.debug "unpack[%d]: Off_delta: d.source=%d" lv d.source;
         let offset = pos - d.source in
         Log.debug "unpack[%d]: offset=%d-%d=%d" lv pos d.source offset;
         let buf = Mstruct.of_bigarray ~off:offset ~len:(ba_len-offset) ba in
         let packed_v = input_packed_value buf in
-	let u = unpack ~lv:(lv+1) ~version ~index ~ba (offset, packed_v) in
-	Misc.with_buffer (fun b -> add_delta b {d with source = u})
-    end
+        let u = unpack ~lv:(lv+1) ~version ~index ~ba (offset, packed_v) in
+        Misc.with_buffer (fun b -> add_delta b {d with source = u})
+      end
   in
   unpacked
 

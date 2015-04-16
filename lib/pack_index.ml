@@ -299,7 +299,7 @@ class c ?(cache_size=default_cache_size) (ba : Cstruct.buffer) = object (self)
             Mstruct.shift buf (idx * 4);
 
             let is64 =
-	      match Mstruct.get_uint8 buf land 128 with
+              match Mstruct.get_uint8 buf land 128 with
               | 0 -> false
               | _ -> true 
             in
@@ -312,7 +312,7 @@ class c ?(cache_size=default_cache_size) (ba : Cstruct.buffer) = object (self)
                 | None -> self#create_ofs64_tbl
               in
               let buf64 = Mstruct.of_bigarray ~off:ofs64_ofs ~len:(size64 * 8) ba in
-              
+
               try
                 let idx64 = Hashtbl.find ofs64_tbl idx in
                 Mstruct.shift buf64 (idx64 * 8);
@@ -330,7 +330,7 @@ class c ?(cache_size=default_cache_size) (ba : Cstruct.buffer) = object (self)
               cache#add sha1 o;
               Some o
             end
-        end
+          end
         | None -> None
       end
 
@@ -338,11 +338,11 @@ class c ?(cache_size=default_cache_size) (ba : Cstruct.buffer) = object (self)
     Log.debug "c#mem: %s" (SHA.to_hex sha1);
     match self#find_offset sha1 with
     | Some _ -> 
-        Log.debug "c#mem: true"; 
-        true
+      Log.debug "c#mem: true"; 
+      true
     | None -> 
-        Log.debug "c#mem: false"; 
-        false
+      Log.debug "c#mem: false"; 
+      false
 
 
   initializer
@@ -385,13 +385,13 @@ class c ?(cache_size=default_cache_size) (ba : Cstruct.buffer) = object (self)
     let buf = Mstruct.of_bigarray ~off:fanout_ofs ~len:(256 * 4) ba in
     let sz0, n =
       if fo_idx = 0 then begin
-	0, Int32.to_int (Mstruct.get_be_uint32 buf)
+        0, Int32.to_int (Mstruct.get_be_uint32 buf)
       end
       else if fo_idx > 0 then begin
-	Mstruct.shift buf ((fo_idx - 1) * 4);
-	let sz0 = Int32.to_int (Mstruct.get_be_uint32 buf) in
-	let sz1 = Int32.to_int (Mstruct.get_be_uint32 buf) in
-	 sz0, sz1 - sz0
+        Mstruct.shift buf ((fo_idx - 1) * 4);
+        let sz0 = Int32.to_int (Mstruct.get_be_uint32 buf) in
+        let sz1 = Int32.to_int (Mstruct.get_be_uint32 buf) in
+        sz0, sz1 - sz0
       end 
       else
         failwith "Pack_index.c#get_sha1_idx"
@@ -401,8 +401,8 @@ class c ?(cache_size=default_cache_size) (ba : Cstruct.buffer) = object (self)
       self#scan_sha1s ~scan_thresh fo_idx sz0 ofs n sha1
     with
       Idx_found i -> 
-        Log.debug "c#get_sha1_idx: found:%d" i;
-        Some i
+      Log.debug "c#get_sha1_idx: found:%d" i;
+      Some i
 
   method private create_ofs64_tbl =
     Log.debug "c#create_ofs64_tbl";
@@ -413,9 +413,9 @@ class c ?(cache_size=default_cache_size) (ba : Cstruct.buffer) = object (self)
         match Mstruct.get_uint8 buf land 128 with
         | 0 -> ()
         | _ -> 
-            let _ = Hashtbl.add ofs64_tbl i !count in
-            Log.debug "c#create_ofs64_tbl: %d -> %d" i !count;
-            incr count
+          let _ = Hashtbl.add ofs64_tbl i !count in
+          Log.debug "c#create_ofs64_tbl: %d -> %d" i !count;
+          incr count
       end;
       Mstruct.shift buf 3
     done;

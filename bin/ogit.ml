@@ -184,55 +184,55 @@ let cat_file = {
   doc  = "Provide content or type and size information for repository objects";
   man  = [];
   term =
-  let ty_flag = mk_flag ["t"] "Instead of the content, show the object type." in
-  let sz_flag = mk_flag ["s"] "Instead of the content, show the object size." in
-  let id =
-    let doc = Arg.info ~docv:"SHA1" ~doc:"The SHA1 of the repository object." [] in
-    Arg.(required & pos 0 (some string) None & doc) 
-  in
-  let cat_file (module S: Store.S) ty_flag sz_flag id =
-    run begin
-      S.create () >>= fun t ->
+    let ty_flag = mk_flag ["t"] "Instead of the content, show the object type." in
+    let sz_flag = mk_flag ["s"] "Instead of the content, show the object size." in
+    let id =
+      let doc = Arg.info ~docv:"SHA1" ~doc:"The SHA1 of the repository object." [] in
+      Arg.(required & pos 0 (some string) None & doc) 
+    in
+    let cat_file (module S: Store.S) ty_flag sz_flag id =
+      run begin
+        S.create () >>= fun t ->
         Lwt.catch 
           (fun () ->
-	    S.read_exn t (SHA.of_hex id) >>= fun v -> begin
-	      let t, c, s =
-	        match v with
-	        | Value.Blob blob -> 
-		    let c = Blob.to_raw blob in
-		    "blob", c, String.length c
-	        | Value.Commit commit ->
-		    let c = Commit.pretty commit in
-		    "commit", c, String.length c
-	        | Value.Tree tree ->
-		    let c = Tree.pretty tree in
-		    "tree", c, String.length c
-	        | Value.Tag tag ->
-		    let c = Tag.pretty tag in
-		    "tag", c, String.length c
-	      in
-	      if ty_flag then
-	        Printf.printf "%s%!" t;
+             S.read_exn t (SHA.of_hex id) >>= fun v -> begin
+               let t, c, s =
+                 match v with
+                 | Value.Blob blob -> 
+                   let c = Blob.to_raw blob in
+                   "blob", c, String.length c
+                 | Value.Commit commit ->
+                   let c = Commit.pretty commit in
+                   "commit", c, String.length c
+                 | Value.Tree tree ->
+                   let c = Tree.pretty tree in
+                   "tree", c, String.length c
+                 | Value.Tag tag ->
+                   let c = Tag.pretty tag in
+                   "tag", c, String.length c
+               in
+               if ty_flag then
+                 Printf.printf "%s%!" t;
 
-	      if sz_flag then
-	        Printf.printf "%d%!" s;
+               if sz_flag then
+                 Printf.printf "%d%!" s;
 
-	      if not ty_flag && not sz_flag then
-	        Printf.printf "%s%!" c;
+               if not ty_flag && not sz_flag then
+                 Printf.printf "%s%!" c;
 
-	      return_unit
-	    end 
+               return_unit
+             end 
           )
           (function
             | SHA.Ambiguous -> eprintf "ambiguous argument\n%!"; exit 1
             | Not_found ->
-                eprintf "unknown revision or path not in the working tree\n%!";
-                exit 1
+              eprintf "unknown revision or path not in the working tree\n%!";
+              exit 1
             | e -> eprintf "%s\n%!" (Printexc.to_string e); exit 1
           )
-    end
-  in
-  Term.(mk cat_file $ backend $ ty_flag $ sz_flag $ id)
+      end
+    in
+    Term.(mk cat_file $ backend $ ty_flag $ sz_flag $ id)
 }
 
 (* LS-REMOTE *)
@@ -288,20 +288,20 @@ let ls_tree = {
   doc  = "List the contents of a tree object.";
   man  = [];
   term =
-  let recurse_flag = mk_flag ["r"] "Recurse into sub-trees." in
-  let show_tree_flag = 
-    mk_flag ["t"] "Show tree entries even when going to recurse them." 
-  in
-  let only_tree_flag = mk_flag ["d"] "Show only the named tree entry itself." in
-  let oid =
-    let doc = Arg.info [] ~docv:"SHA1"
-        ~doc:"The SHA1 of the tree." 
+    let recurse_flag = mk_flag ["r"] "Recurse into sub-trees." in
+    let show_tree_flag = 
+      mk_flag ["t"] "Show tree entries even when going to recurse them." 
     in
-    Arg.(required & pos 0 (some string) None & doc ) 
-  in
-  let ls (module S: Store.S) recurse_flag show_tree_flag only_tree_flag oid =
-    run begin
-      S.create () >>= fun t ->
+    let only_tree_flag = mk_flag ["d"] "Show only the named tree entry itself." in
+    let oid =
+      let doc = Arg.info [] ~docv:"SHA1"
+          ~doc:"The SHA1 of the tree." 
+      in
+      Arg.(required & pos 0 (some string) None & doc ) 
+    in
+    let ls (module S: Store.S) recurse_flag show_tree_flag only_tree_flag oid =
+      run begin
+        S.create () >>= fun t ->
 
         let get_kind = function
           | `Dir    -> "tree",   true
@@ -315,36 +315,36 @@ let ls_tree = {
             | Value.Blob _ -> begin
                 printf "blob %s %s\n" (SHA.to_hex sha1) path;
                 return_unit
-            end
+              end
             | Value.Tree tree -> begin
                 Lwt_list.iter_s
                   (fun e -> 
-                    let path' = Filename.concat path e.Tree.name in
-                    let kind, is_dir = get_kind e.Tree.perm in
-                    let mode = Tree.fixed_length_string_of_perm e.Tree.perm in
-                    let show =
-                      if is_dir then
-                        not recurse || show_tree || only_tree
-                      else
-                        not only_tree
-                    in
-                    if show then
-                      print_string (String.concat "" [mode; " "; kind; " "; SHA.to_hex e.Tree.node; "\t"; path'; "\n"]);
-                      (*printf "%s %s %s\t%s\n" mode kind (SHA.to_hex e.Tree.node) path';*)
-                    if is_dir && recurse then
-                      walk recurse show_tree only_tree path' e.Tree.node
-                    else
-                      return_unit
+                     let path' = Filename.concat path e.Tree.name in
+                     let kind, is_dir = get_kind e.Tree.perm in
+                     let mode = Tree.fixed_length_string_of_perm e.Tree.perm in
+                     let show =
+                       if is_dir then
+                         not recurse || show_tree || only_tree
+                       else
+                         not only_tree
+                     in
+                     if show then
+                       print_string (String.concat "" [mode; " "; kind; " "; SHA.to_hex e.Tree.node; "\t"; path'; "\n"]);
+                     (*printf "%s %s %s\t%s\n" mode kind (SHA.to_hex e.Tree.node) path';*)
+                     if is_dir && recurse then
+                       walk recurse show_tree only_tree path' e.Tree.node
+                     else
+                       return_unit
                   ) tree
-            end
+              end
             | Value.Tag _ -> begin
                 printf "tag %s %s\n" (SHA.to_hex sha1) path;
                 return_unit
-            end
+              end
             | Value.Commit commit -> begin
                 (* printf "commit %s %s\n" (SHA.to_hex sha1) path; *)
                 walk recurse show_tree only_tree path (SHA.of_tree commit.Commit.tree)
-            end
+              end
           end
         in
         let sha1 = SHA.of_hex oid in
@@ -353,13 +353,13 @@ let ls_tree = {
           (function
             | SHA.Ambiguous -> eprintf "ambiguous argument\n%!"; exit 1
             | Not_found ->
-                eprintf "unknown revision or path not in the working tree\n%!";
-                exit 1
+              eprintf "unknown revision or path not in the working tree\n%!";
+              exit 1
             | e -> eprintf "%s\n%!" (Printexc.to_string e); exit 1
           )          
-    end 
-  in
-  Term.(mk ls $ backend $ recurse_flag $ show_tree_flag $ only_tree_flag $ oid)
+      end 
+    in
+    Term.(mk ls $ backend $ recurse_flag $ show_tree_flag $ only_tree_flag $ oid)
 }
 
 (* READ-TREE *)
@@ -545,7 +545,7 @@ let help = {
         | `Error e                -> `Error (false, e)
         | `Ok t when t = "topics" -> List.iter print_endline cmds; `Ok ()
         | `Ok t                   -> `Help (man_format, Some t) in
-  Term.(ret (pure help $Term.man_format $Term.choice_names $topic))
+    Term.(ret (pure help $Term.man_format $Term.choice_names $topic))
 }
 
 let default =
@@ -566,15 +566,15 @@ let default =
       "usage: ogit [--version]\n\
       \            [--help]\n\
       \            <command> [<args>]\n\
-      \n\
-      The most commonly used commands are:\n\
+       \n\
+       The most commonly used commands are:\n\
       \    clone       %s\n\
       \    fetch       %s\n\
       \    pull        %s\n\
       \    push        %s\n\
       \    graph       %s\n\
-      \n\
-      See 'ogit help <command>' for more information on a specific command.\n%!"
+       \n\
+       See 'ogit help <command>' for more information on a specific command.\n%!"
       clone.doc fetch.doc pull.doc push.doc graph.doc in
   Term.(pure usage $ (pure ())),
   Term.info "ogit"

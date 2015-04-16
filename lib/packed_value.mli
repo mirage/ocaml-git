@@ -25,8 +25,8 @@ type copy = {
 type hunk =
   | Insert of string
   | Copy of copy
-(** A delta hunk can either insert a string of copy the contents of a
-    base object. *)
+  (** A delta hunk can either insert a string of copy the contents of a
+      base object. *)
 
 type 'a delta = {
   source       : 'a;
@@ -40,7 +40,7 @@ type t =
   | Raw_value of string
   | Ref_delta of SHA.t delta
   | Off_delta of int delta
-(** Packed values. *)
+  (** Packed values. *)
 
 val pp_hum: Format.formatter -> t -> unit
 (** Human readable representation of a packed value. *)

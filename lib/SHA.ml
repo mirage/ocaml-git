@@ -60,24 +60,24 @@ let sha_compare x y =
         if i = len then
           raise Ambiguous
         else
-          if (x.padded && y.padded) || i < len then
-            let x0 = x.raw.[i] in
-            let y0 = y.raw.[i] in
-            if x0 < y0 then
-              -1
-            else if x0 > y0 then
-              1
-            else
-              scan (i + 1)
+        if (x.padded && y.padded) || i < len then
+          let x0 = x.raw.[i] in
+          let y0 = y.raw.[i] in
+          if x0 < y0 then
+            -1
+          else if x0 > y0 then
+            1
           else
-            let x0 = get_upper x.raw.[i] in
-            let y0 = get_upper y.raw.[i] in
-            if x0 < y0 then
-              -1
-            else if x0 > y0 then
-              1
-            else
-              raise Ambiguous
+            scan (i + 1)
+        else
+          let x0 = get_upper x.raw.[i] in
+          let y0 = get_upper y.raw.[i] in
+          if x0 < y0 then
+            -1
+          else if x0 > y0 then
+            1
+          else
+            raise Ambiguous
       in
       scan 0
     end
