@@ -269,21 +269,19 @@ module Make (IO: IO) = struct
 
     let index_lru: Pack_index.t LRU.t = LRU.make 8
 
-    let indexes_c = Hashtbl.create 1024
+    let index_c_lru: Pack_index.c LRU.t = LRU.make 8
 
     let read_index_c t sha1 =
-      try
-        let i = Hashtbl.find indexes_c sha1 in
-        Log.debug "read_index_c cache hit!";
-        Lwt.return i
-      with
-        Not_found ->
+      Log.debug "read_index_c %s" (SHA.to_hex sha1);
+      match LRU.find index_c_lru sha1 with
+      | Some i -> Log.debug "read_index_c cache hit!"; Lwt.return i
+      | None ->
           let file = index t sha1 in
           IO.file_exists file >>= function
             | true ->
                 IO.read_file file >>= fun buf ->
                   let index = new Pack_index.c (Cstruct.to_bigarray buf) in
-                  Hashtbl.add indexes_c sha1 index;
+                  LRU.add index_c_lru sha1 index;
                   Lwt.return index
             | false ->
                 Log.error "%s does not exist." file;
