@@ -191,18 +191,6 @@ module Make (IO: IO) = struct
 
     let read t sha1 =
       Log.debug "read %s" (SHA.to_hex sha1);
-(*
-      let file = file t sha1 in
-      IO.file_exists file >>= function
-      | false -> Lwt.return_none
-      | true  ->
-        File_cache.read file >>= fun buf ->
-        try
-          let value = Value.input (Mstruct.of_cstruct buf) in
-          Lwt.return (Some value)
-        with Zlib.Error _ ->
-          Lwt.fail (Zlib.Error (file, (Cstruct.to_string buf)))
-*)
       if SHA.is_short sha1 then begin
         Log.debug "read: short sha1";
         get_file t sha1 >>= function
@@ -261,38 +249,18 @@ module Make (IO: IO) = struct
       let pack_file = "pack-" ^ (SHA.to_hex sha1) ^ ".pack" in
       pack_dir / pack_file
 
-    let packs_opt = ref None
-
     let list { root; _ } =
       Log.debug "list %s" root;
-(*
       let packs = root / ".git" / "objects" / "pack" in
       IO.files packs >>= fun packs ->
-      let packs = List.map Filename.basename packs in
-      let packs = List.filter (fun f -> Filename.check_suffix f ".idx") packs in
-      let packs = List.map (fun f ->
+        let packs = List.map Filename.basename packs in
+        let packs = List.filter (fun f -> Filename.check_suffix f ".idx") packs in
+        let packs = List.map (fun f ->
           let p = Filename.chop_suffix f ".idx" in
           let p = String.sub p 5 (String.length p - 5) in
           SHA.of_hex p
-        ) packs in
-      Lwt.return packs
-*)
-    match !packs_opt with
-    | Some ps -> 
-        Log.debug "list cache hit!";
-        Lwt.return ps
-    | None ->
-        let packs = root / ".git" / "objects" / "pack" in
-        IO.files packs >>= fun packs ->
-          let packs = List.map Filename.basename packs in
-          let packs = List.filter (fun f -> Filename.check_suffix f ".idx") packs in
-          let packs = List.map (fun f ->
-              let p = Filename.chop_suffix f ".idx" in
-              let p = String.sub p 5 (String.length p - 5) in
-              SHA.of_hex p
-            ) packs in
-          packs_opt := Some packs;
-          Lwt.return packs
+                             ) packs in
+        Lwt.return packs
 
     let index { root; _ } sha1 =
       let pack_dir = root / ".git" / "objects" / "pack" in
@@ -401,10 +369,6 @@ module Make (IO: IO) = struct
 
     let mem_in_pack t pack_sha1 sha1 =
       Log.debug "mem_in_pack %s:%s" (SHA.to_hex pack_sha1) (SHA.to_hex sha1);
-(*
-      read_keys t pack_sha1 >>= fun keys ->
-      Lwt.return (SHA.Set.mem sha1 keys)
-*)
       read_index_c t pack_sha1 >>= fun idx -> 
         Lwt.return (idx#mem sha1)
 
@@ -421,13 +385,6 @@ module Make (IO: IO) = struct
     let read_in_pack t pack_sha1 sha1 =
       Log.debug "read_in_pack %s:%s"
         (SHA.to_hex pack_sha1) (SHA.to_hex sha1);
-(*
-      mem_in_pack t pack_sha1 sha1 >>= function
-      | false -> Lwt.return_none
-      | true  ->
-        read_pack t pack_sha1 >>= fun pack ->
-        Lwt.return (Pack.read pack sha1)
-*)
       read_index_c t pack_sha1 >>= fun index ->
         if index#mem sha1 then begin
           try
