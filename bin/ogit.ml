@@ -321,7 +321,7 @@ let ls_tree = {
                   (fun e -> 
                     let path' = Filename.concat path e.Tree.name in
                     let kind, is_dir = get_kind e.Tree.perm in
-                    let mode = Tree.string_of_perm e.Tree.perm in
+                    let mode = Tree.fixed_length_string_of_perm e.Tree.perm in
                     let show =
                       if is_dir then
                         not recurse || show_tree || only_tree

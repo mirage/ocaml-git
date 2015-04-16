@@ -69,6 +69,13 @@ let string_of_perm = function
   | `Normal -> "100644"
   | `Exec   -> "100755"
   | `Link   -> "120000"
+  | `Dir    -> "40000"
+  | `Commit -> "160000"
+
+let fixed_length_string_of_perm = function
+  | `Normal -> "100644"
+  | `Exec   -> "100755"
+  | `Link   -> "120000"
   | `Dir    -> "040000"
   | `Commit -> "160000"
 
