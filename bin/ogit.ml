@@ -158,9 +158,8 @@ let run t =
   )
 
 (* CAT *)
-(*
 let cat = {
-  name = "cat-file";
+  name = "cat";
   doc  = "Provide content or type and size information for repository objects";
   man  = [];
   term =
@@ -178,7 +177,7 @@ let cat = {
       end in
     Term.(mk cat_file $ file)
 }
-*)
+
 (* CAT-FILE *)
 let cat_file = {
   name = "cat-file";
@@ -585,6 +584,7 @@ let default =
     ~man
 
 let commands = List.map command [
+    cat;
     cat_file;
     ls_remote;
     ls_files;
