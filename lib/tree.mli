@@ -46,5 +46,4 @@ type t = entry list
 (** A tree is an hierarchical data-store. NB: data (eg. blobs) are
     only carried on the leafs. *)
 
-
 include Object.S with type t := t

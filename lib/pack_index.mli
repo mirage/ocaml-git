@@ -42,9 +42,17 @@ val lengths: t -> int option SHA.Map.t
 val empty: ?pack_checksum:SHA.t -> unit -> t
 (** The empty pack index. *)
 
-class type c_t = object
-  method find_offset : SHA.t -> int option
-  method mem         : SHA.t -> bool
-end
+type c_t
+(** Abstract type of pack index. *)
 
-class c : ?scan_thresh:int -> ?cache_size:int -> Cstruct.buffer -> c_t
+val create: ?cache_size:int -> Cstruct.buffer -> c_t
+(** Create a pack index object. The results of [find_offset] are cached
+    for upto [cache_size] SHA objects *)
+
+val find_offset: ?scan_thresh:int -> c_t -> SHA.t -> int option
+(** [find_offset] searches the index for the offset of the SHA object.
+    Binary search is performed until the candidates are narrowed down to
+    [scan_thresh] or less. *)
+
+val mem: c_t -> SHA.t -> bool
+(** [mem] checks if the SHA object is contained in the index object *)

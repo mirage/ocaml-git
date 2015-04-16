@@ -229,11 +229,6 @@ let add buf ?level:_ t =
 
 let int_of_hex hex = int_of_string ("0x" ^ hex)
 
-class type c_t = object
-  method find_offset : SHA.t -> int option
-  method mem         : SHA.t -> bool
-end
-
 class offset_cache size = object (self)
   val keyq = (Queue.create() : SHA.t Queue.t)
   val tbl = Hashtbl.create 0
@@ -263,7 +258,15 @@ end (* of class Pack_index.offset_cache *)
 
 exception Idx_found of int
 
-class c ?(scan_thresh=8) ?(cache_size=1) (ba : Cstruct.buffer) = object (self)
+class type c_t = object
+  method find_offset : ?scan_thresh:int -> SHA.t -> int option
+  method mem         : SHA.t -> bool
+end
+
+let default_cache_size = 1
+let default_scan_thresh = 8
+
+class c ?(cache_size=default_cache_size) (ba : Cstruct.buffer) = object (self)
 
   val cache = new offset_cache cache_size
 
@@ -281,7 +284,7 @@ class c ?(scan_thresh=8) ?(cache_size=1) (ba : Cstruct.buffer) = object (self)
   val mutable ofs64_size = None
 
 
-  method find_offset sha1 =
+  method find_offset ?(scan_thresh=default_scan_thresh) sha1 =
     Log.debug "c#find_offset: %s" (SHA.to_hex sha1);
     try
       let o = cache#find sha1 in
@@ -289,7 +292,7 @@ class c ?(scan_thresh=8) ?(cache_size=1) (ba : Cstruct.buffer) = object (self)
       Some o
     with
       Not_found -> begin
-        match self#get_sha1_idx sha1 with
+        match self#get_sha1_idx ~scan_thresh sha1 with
         | Some idx -> begin
             let buf = Mstruct.of_bigarray ~off:offsets_ofs ~len:n_sha1s_4 ba in
 
@@ -376,7 +379,7 @@ class c ?(scan_thresh=8) ?(cache_size=1) (ba : Cstruct.buffer) = object (self)
     Log.debug "c#<init>: entering large packfile offsets (ofs=%d)" ofs64_ofs;
 
 
-  method private get_sha1_idx sha1 =
+  method private get_sha1_idx ?(scan_thresh=default_scan_thresh) sha1 =
     Log.debug "c#get_sha1_idx: %s" (SHA.to_hex sha1);
     let fo_idx = self#get_fanout_idx sha1 in
     let buf = Mstruct.of_bigarray ~off:fanout_ofs ~len:(256 * 4) ba in
@@ -395,7 +398,7 @@ class c ?(scan_thresh=8) ?(cache_size=1) (ba : Cstruct.buffer) = object (self)
     in
     try
       let ofs = sha1s_ofs + (sz0 * 20) in
-      self#scan_sha1s fo_idx sz0 ofs n sha1
+      self#scan_sha1s ~scan_thresh fo_idx sz0 ofs n sha1
     with
       Idx_found i -> 
         Log.debug "c#get_sha1_idx: found:%d" i;
@@ -425,7 +428,7 @@ class c ?(scan_thresh=8) ?(cache_size=1) (ba : Cstruct.buffer) = object (self)
     fanout_idx
 
   (* implements binary search *)
-  method private scan_sha1s fo_idx idx_ofs ofs n sha1 =
+  method private scan_sha1s ?(scan_thresh=default_scan_thresh) fo_idx idx_ofs ofs n sha1 =
     let short_sha = SHA.is_short sha1 in
 (*
     Log.debug "c#scan_sha1s: fo_idx:%d idx_ofs:%d ofs:%d n:%d sha1:%s" 
@@ -521,3 +524,12 @@ class c ?(scan_thresh=8) ?(cache_size=1) (ba : Cstruct.buffer) = object (self)
     end
 
 end (* Pack_index.c *)
+
+let find_offset ?(scan_thresh=default_scan_thresh) (idx : c_t) sha1 =
+  idx#find_offset ~scan_thresh sha1
+
+let mem idx sha1 =
+  idx#mem sha1
+
+let create ?(cache_size=default_cache_size) (ba : Cstruct.buffer) =
+  new c ~cache_size ba

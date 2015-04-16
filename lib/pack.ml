@@ -155,7 +155,7 @@ module Raw = struct
     let version, count = input_header buf in
     Log.debug "read: version=%d count=%d" version count;
     begin
-      match index#find_offset sha1 with
+      match Pack_index.find_offset index sha1 with
       | Some offset -> begin
           Log.debug "read: offset=%d" offset;
           let orig_off = Mstruct.offset buf in

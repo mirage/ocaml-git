@@ -269,7 +269,7 @@ module Make (IO: IO) = struct
 
     let index_lru: Pack_index.t LRU.t = LRU.make 8
 
-    let index_c_lru: Pack_index.c LRU.t = LRU.make 8
+    let index_c_lru: Pack_index.c_t LRU.t = LRU.make 8
 
     let read_index_c t sha1 =
       Log.debug "read_index_c %s" (SHA.to_hex sha1);
@@ -280,7 +280,7 @@ module Make (IO: IO) = struct
           IO.file_exists file >>= function
             | true ->
                 IO.read_file file >>= fun buf ->
-                  let index = new Pack_index.c (Cstruct.to_bigarray buf) in
+                  let index = Pack_index.create (Cstruct.to_bigarray buf) in
                   LRU.add index_c_lru sha1 index;
                   Lwt.return index
             | false ->
@@ -368,7 +368,7 @@ module Make (IO: IO) = struct
     let mem_in_pack t pack_sha1 sha1 =
       Log.debug "mem_in_pack %s:%s" (SHA.to_hex pack_sha1) (SHA.to_hex sha1);
       read_index_c t pack_sha1 >>= fun idx -> 
-        Lwt.return (idx#mem sha1)
+        Lwt.return (Pack_index.mem idx sha1)
 
     let pack_size_thresh = 10000000
 
@@ -384,7 +384,7 @@ module Make (IO: IO) = struct
       Log.debug "read_in_pack %s:%s"
         (SHA.to_hex pack_sha1) (SHA.to_hex sha1);
       read_index_c t pack_sha1 >>= fun index ->
-        if index#mem sha1 then begin
+        if Pack_index.mem index sha1 then begin
           try
             let ba = Hashtbl.find pack_ba_cache pack_sha1 in
             Log.debug "read_in_pack ba cache hit!";

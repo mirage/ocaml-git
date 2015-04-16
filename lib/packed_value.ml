@@ -464,7 +464,7 @@ let rec unpack ?(lv=0) ~version ~index ~ba (pos, t) =
     end
     | Ref_delta d -> begin 
         Log.debug "unpack[%d]: Ref_delta: d.source=%s" lv (SHA.to_hex d.source);
-        match index#find_offset d.source with
+        match Pack_index.find_offset index d.source with
         | Some offset -> begin
             Log.debug "unpack[%d]: offset=%d" lv offset;
             let offset = offset - 12 in (* header skipped *) 
