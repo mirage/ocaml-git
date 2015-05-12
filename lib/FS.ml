@@ -120,10 +120,10 @@ module Make (IO: IO) = struct
   let create ?root ?(level=6) () =
     if level < 0 || level > 9 then failwith "level should be between 0 and 9";
     begin match root with
-    | None   -> IO.getcwd ()
-    | Some r ->
-      IO.mkdir r >>= fun () ->
-      IO.realpath r
+      | None   -> IO.getcwd ()
+      | Some r ->
+        IO.mkdir r >>= fun () ->
+        IO.realpath r
     end >>= fun root ->
     Lwt.return { root; level }
 
@@ -145,18 +145,64 @@ module Make (IO: IO) = struct
     let mem t sha1 =
       IO.file_exists (file t sha1)
 
+    let get_file { root; _ } sha1 =
+      IO.directories (root / ".git" / "objects") >>= fun dirs ->
+      let hex = SHA.to_hex sha1 in
+      let len = String.length hex in
+      let len_le_2 = len <= 2 in
+      let dcands = 
+        if len_le_2 then
+          List.filter 
+            (fun d -> 
+               (String.sub (Filename.basename d) 0 len) = hex
+            ) dirs
+        else
+          List.filter (fun d -> (Filename.basename d) = (String.sub hex 0 2)) dirs 
+      in
+      match dcands with
+      | [] -> Lwt.return_none
+      | [dir] -> begin
+          Log.debug "get_file: %s" dir;
+          IO.files dir >>= fun files ->
+          let fcands =
+            if len_le_2 then
+              files
+            else
+              let len' = len - 2 in
+              let suffix = String.sub hex 2 len' in
+              List.filter 
+                (fun f -> (String.sub (Filename.basename f) 0 len') = suffix) 
+                files 
+          in
+          match fcands with
+          | [] -> Lwt.return_none
+          | [file] -> Lwt.return (Some file)
+          | _ -> raise SHA.Ambiguous
+        end
+      | _ -> raise SHA.Ambiguous
+
+    let read_file file =
+      File_cache.read file >>= fun buf ->
+      try
+        let value = Value.input (Mstruct.of_cstruct buf) in
+        Lwt.return (Some value)
+      with Zlib.Error _ ->
+        Lwt.fail (Zlib.Error (file, (Cstruct.to_string buf)))
+
     let read t sha1 =
       Log.debug "read %s" (SHA.to_hex sha1);
-      let file = file t sha1 in
-      IO.file_exists file >>= function
-      | false -> Lwt.return_none
-      | true  ->
-        File_cache.read file >>= fun buf ->
-        try
-          let value = Value.input (Mstruct.of_cstruct buf) in
-          Lwt.return (Some value)
-        with Zlib.Error _ ->
-          Lwt.fail (Zlib.Error (file, (Cstruct.to_string buf)))
+      if SHA.is_short sha1 then begin
+        Log.debug "read: short sha1";
+        get_file t sha1 >>= function
+        | Some file -> read_file file
+        | None -> Lwt.return_none
+      end
+      else begin
+        let file = file t sha1 in
+        IO.file_exists file >>= function
+        | false -> Lwt.return_none
+        | true  -> read_file file
+      end
 
     let write t value =
       Log.debug "write";
@@ -222,6 +268,24 @@ module Make (IO: IO) = struct
       pack_dir / idx_file
 
     let index_lru: Pack_index.t LRU.t = LRU.make 8
+
+    let index_c_lru: Pack_index.c_t LRU.t = LRU.make 8
+
+    let read_index_c t sha1 =
+      Log.debug "read_index_c %s" (SHA.to_hex sha1);
+      match LRU.find index_c_lru sha1 with
+      | Some i -> Log.debug "read_index_c cache hit!"; Lwt.return i
+      | None ->
+        let file = index t sha1 in
+        IO.file_exists file >>= function
+        | true ->
+          IO.read_file file >>= fun buf ->
+          let index = Pack_index.create (Cstruct.to_bigarray buf) in
+          LRU.add index_c_lru sha1 index;
+          Lwt.return index
+        | false ->
+          Log.error "%s does not exist." file;
+          Lwt.fail (Failure "read_index_c")
 
     let write_pack_index t sha1 idx =
       LRU.add index_lru sha1 idx;
@@ -303,17 +367,48 @@ module Make (IO: IO) = struct
 
     let mem_in_pack t pack_sha1 sha1 =
       Log.debug "mem_in_pack %s:%s" (SHA.to_hex pack_sha1) (SHA.to_hex sha1);
-      read_keys t pack_sha1 >>= fun keys ->
-      Lwt.return (SHA.Set.mem sha1 keys)
+      read_index_c t pack_sha1 >>= fun idx -> 
+      Lwt.return (Pack_index.mem idx sha1)
+
+    let pack_size_thresh = 10000000
+
+    let pack_ba_cache = Hashtbl.create 8
+
+    let cache_pack sha buf =
+      let ba = Cstruct.to_bigarray buf in
+      let sz = Bigarray.Array1.dim ba in
+      if sz < pack_size_thresh then
+        Hashtbl.add pack_ba_cache sha ba
 
     let read_in_pack t pack_sha1 sha1 =
       Log.debug "read_in_pack %s:%s"
         (SHA.to_hex pack_sha1) (SHA.to_hex sha1);
-      mem_in_pack t pack_sha1 sha1 >>= function
-      | false -> Lwt.return_none
-      | true  ->
-        read_pack t pack_sha1 >>= fun pack ->
-        Lwt.return (Pack.read pack sha1)
+      read_index_c t pack_sha1 >>= fun index ->
+      if Pack_index.mem index sha1 then begin
+        try
+          let ba = Hashtbl.find pack_ba_cache pack_sha1 in
+          Log.debug "read_in_pack ba cache hit!";
+          let v_opt = Pack.Raw.read (Mstruct.of_bigarray ba) index sha1 in
+          Lwt.return v_opt
+        with
+          Not_found -> begin
+            let file = file t pack_sha1 in
+            IO.file_exists file >>= function
+            | true ->
+              IO.read_file file >>= fun buf ->
+              cache_pack pack_sha1 buf;
+              let v_opt = Pack.Raw.read (Mstruct.of_cstruct buf) index sha1 in
+              Lwt.return v_opt
+            | false ->
+              Log.error
+                "No file associated with the pack object %s.\n" (SHA.to_hex pack_sha1);
+              Lwt.fail (Failure "read_in_pack")
+          end
+      end
+      else begin
+        Log.debug "read_in_pack: not found";
+        Lwt.return_none
+      end
 
     let read t sha1 =
       list t >>= fun packs ->

@@ -25,8 +25,8 @@ type copy = {
 type hunk =
   | Insert of string
   | Copy of copy
-(** A delta hunk can either insert a string of copy the contents of a
-    base object. *)
+  (** A delta hunk can either insert a string of copy the contents of a
+      base object. *)
 
 type 'a delta = {
   source       : 'a;
@@ -40,7 +40,7 @@ type t =
   | Raw_value of string
   | Ref_delta of SHA.t delta
   | Off_delta of int delta
-(** Packed values. *)
+  (** Packed values. *)
 
 val pp_hum: Format.formatter -> t -> unit
 (** Human readable representation of a packed value. *)
@@ -132,3 +132,6 @@ val to_pic: PIC.t Misc.IntMap.t -> PIC.t SHA.Map.t -> (int * SHA.t * t) -> PIC.t
 val of_pic: int PIC.Map.t -> pos:int -> PIC.t -> t
 (** Position dependent packed value. Convert a [PIC.Link] into to the
     corresponding [Off_delta], using the provided indexes. *)
+
+val to_value: version:int -> index:Pack_index.c_t -> ba:Cstruct.buffer -> (int * t) -> Value.t
+(** Unpack the packed value using the provided indexes. *)

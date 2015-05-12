@@ -30,6 +30,9 @@ val pretty_perm: perm -> string
 val string_of_perm : perm -> string
 (** Raw represention of a permission, using the [Git] format. *)
 
+val fixed_length_string_of_perm : perm -> string
+(** Fixed-length raw represention of a permission, using the [Git] format (6 characters long). *)
+
 type entry = {
   perm: perm;
   name: string;
