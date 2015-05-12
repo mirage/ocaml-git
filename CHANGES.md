@@ -1,3 +1,18 @@
+# 1.5.0
+* Change `ogit cat-file` to behave exactly as `git cat-file`.
+  The previous command is renamed to `ogit cat` (#75 by @codinuum)
+* `ogit` now supports short hashes instead of full SHA1 (#75 by @codinuum)
+* Add `Git.Pack.Raw.read` to read raw pack files (#75 by @codinuum)
+* `Git.Pack_index.t` now uses a cache of entries. This is more efficient
+  than the previous representation (#75 by @codinuum)
+* Add `Git.Pack_index.mem` to find an entry in the pack index cache
+  (#75 by @codinuum)
+* Add `Git.Pack_index.find_offset` to find an offset in the pack index
+  cache (#75 by @codinuum)
+* Add `Git.Packed_value.to_value` to unpack a value stored in a pack file
+  (#75 by @codinuum)
+* Support synchronisation for MirageOS unikernels (#70)
+
 # 1.4.11
 * Fix multi round-trips in the smart HTTP protocol. This fixes
   depth-limited clones (#71) and fetches.
