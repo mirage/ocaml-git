@@ -177,3 +177,231 @@ module FS (FS: FS) = struct
   include Git.FS.Make(M)
 
 end
+
+module IO_helper (Channel: V1_LWT.CHANNEL) = struct
+
+  let write oc s =
+    let buf = Cstruct.of_string s in
+    Channel.write_buffer oc buf;
+    Channel.flush oc
+
+  let read_all ic =
+    let len = 4096 in
+    let res = Buffer.create len in
+    let rec aux () =
+      Channel.read_some ~len ic >>= fun buf ->
+      match Cstruct.len buf with
+      | 0 -> return_unit
+      | i ->
+        Buffer.add_string res (Cstruct.to_string buf);
+        if len = i then return_unit
+        else aux ()
+    in
+    aux () >>= fun () ->
+    return (Buffer.contents res)
+
+  let read_exactly ic n =
+    let res = Bytes.create n in
+    let rec aux off =
+      if off >= n then return_unit
+      else (
+        Channel.read_some ~len:(n-off) ic >>= fun buf ->
+        match Cstruct.len buf with
+        | 0 -> return_unit
+        | i ->
+          Cstruct.blit_to_string buf 0 res off i;
+          aux (off + i)
+      ) in
+    aux 0 >>= fun () ->
+    return res
+
+  let flush _ = Lwt.return_unit
+
+end
+
+(* channel with functional constructors. *)
+module Fchannel = Channel.Make(Fflow)
+
+module In_channel = struct
+  include Fchannel
+  let make ?close input =
+    create (Fflow.make ?close ~input ())
+end
+
+module Out_channel = struct
+  include Fchannel
+  let make ?close output =
+    create (Fflow.make ?close ~output ())
+end
+
+(* Cohttp IO with functional input/channel constructors *)
+module FIO = Cohttp_mirage_io.Make(Fchannel)
+
+(* hanlde the git:// connections *)
+module Git_protocol (Conduit: Conduit_mirage.S) = struct
+
+  module Flow = Conduit.Flow
+  module Channel = Channel.Make(Flow)
+  include IO_helper (Channel)
+
+  let with_connection (resolver, ctx) uri ?init fn =
+    assert (Git.Sync.protocol uri = `Ok `Git);
+    Log.debug "Connecting to %s" (Uri.to_string uri);
+    Resolver_lwt.resolve_uri ~uri resolver >>= fun endp ->
+    Conduit.endp_to_client ~ctx endp >>= fun client ->
+    Conduit.connect ~ctx client >>= fun (flow, _, _) ->
+    let ic = Channel.create flow in
+    let oc = Channel.create flow in
+    Lwt.finalize
+      (fun () ->
+         begin match init with
+           | None   -> return_unit
+           | Some s -> write oc s
+         end >>= fun () ->
+         fn (ic, oc))
+      (fun () -> Channel.close ic)
+
+end
+
+(* hanlde the http(s):// connections *)
+module Smart_HTTP (Conduit: Conduit_mirage.S) = struct
+
+  module Conduit_channel = Channel.Make(Conduit.Flow)
+  module HTTP_IO = Cohttp_mirage_io.Make(Conduit_channel)
+  module Net = struct
+    module IO = HTTP_IO
+    type ctx = { resolver: Resolver_lwt.t; ctx: Conduit.ctx; }
+    let sexp_of_ctx { resolver; ctx} =
+      Sexplib.Type.List [
+        Resolver_lwt.sexp_of_t resolver;
+        Conduit.sexp_of_ctx ctx
+      ]
+    let default_ctx = { resolver = Resolver_mirage.localhost; ctx = Conduit.default_ctx }
+    let connect_uri ~ctx uri =
+      Resolver_lwt.resolve_uri ~uri ctx.resolver >>= fun endp ->
+      Conduit.endp_to_client ~ctx:ctx.ctx endp >>= fun client ->
+      Conduit.connect ~ctx:ctx.ctx client >>= fun (flow, _, _) ->
+      let ch = Conduit_channel.create flow in
+      return (flow, ch, ch)
+    let close_in _ = ()
+    let close_out oc = ignore_result (Conduit_channel.close oc)
+    let close _ oc = ignore_result (Conduit_channel.close oc)
+  end
+  module Request = Cohttp_lwt.Make_request(HTTP_IO)
+  module Response = Cohttp_lwt.Make_response(HTTP_IO)
+  module HTTP = struct
+    include Cohttp_lwt.Make_client(HTTP_IO)(Request)(Response)(Net)
+    let oc x = x
+    let ic x = x
+    let close_in = Net.close_in
+    let close_out oc = Net.close () oc
+  end
+
+  type ctx = HTTP.ctx
+
+  include IO_helper(Fchannel)
+
+  module HTTP_fn = Git_http.Flow(HTTP)(In_channel)(Out_channel)
+  let with_conduit ctx ?init uri fn =
+    Net.connect_uri ~ctx uri >>= fun (_, ic, oc) ->
+    Lwt.finalize
+      (fun () ->
+         begin match init with
+           | None   -> return_unit
+           | Some s -> HTTP_IO.write oc s
+         end >>= fun () ->
+         fn (ic, oc))
+      (fun () -> Conduit_channel.close ic)
+
+  let with_connection (ctx:ctx) (uri:Uri.t) ?init fn =
+    assert (Git.Sync.protocol uri =`Ok `Smart_HTTP);
+    HTTP_fn.with_http ?init (with_conduit ctx ?init:None) uri fn
+
+  module Flow = Fflow
+  module Channel = Fchannel
+
+end
+
+module Make (Conduit: Conduit_mirage.S) = struct
+
+  module G = Git_protocol(Conduit)
+  module H = Smart_HTTP(Conduit)
+
+  type ctx = Resolver_lwt.t * Conduit.ctx
+
+  module Flow = struct
+    type 'a io = 'a Lwt.t
+    type buffer = Cstruct.t
+    module G = G.Flow
+    module H = H.Flow
+    type flow = [`Git of G.flow | `HTTP of H.flow ]
+    type error = [ `Git of G.error | `HTTP of H.error ]
+    let error_message = function
+      | `Git e  -> "git: " ^ G.error_message e
+      | `HTTP e -> "http: " ^ H.error_message e
+    let git_err f t =
+      f t >>= function
+      | `Error (x:G.error) -> Lwt.return (`Error (`Git x))
+      | `Ok x -> Lwt.return (`Ok x)
+      | `Eof -> Lwt.return `Eof
+    let http_err f t =
+      f t >>= function
+      | `Error (x:H.error) -> Lwt.return (`Error (`HTTP x))
+      | `Ok x -> Lwt.return (`Ok x)
+      | `Eof -> Lwt.return `Eof
+    let read = function
+      | `Git g -> git_err G.read g
+      | `HTTP h -> http_err H.read h
+    let write t v = match t with
+      | `Git g -> git_err (G.write g) v
+      | `HTTP h -> http_err (H.write h) v
+    let writev t v = match t with
+      | `Git g -> git_err (G.writev g) v
+      | `HTTP h -> http_err (H.writev h) v
+    let close = function
+      | `Git g -> G.close g
+      | `HTTP h -> H.close h
+  end
+
+  module Channel = Channel.Make(Flow)
+  include IO_helper(Channel)
+  type ic = Channel.t
+  type oc = Channel.t
+
+  let with_connection ?ctx uri ?init fn =
+    let resolver, ctx = match ctx with
+      | Some x -> x
+      | None   ->
+        let { H.Net.resolver; ctx } = H.Net.default_ctx in
+        resolver, ctx
+    in
+    match Git.Sync.protocol uri with
+    | `Ok `SSH -> failwith "GIT+SSH is not supported with Mirage"
+    | `Ok `Git ->
+      let fn (ic, oc) =
+        let ic = `Git (G.Channel.to_flow ic) in
+        let oc = `Git (G.Channel.to_flow oc) in
+        fn (Channel.create ic, Channel.create oc)
+      in
+      G.with_connection (resolver, ctx) ?init uri fn
+    | `Ok `Smart_HTTP ->
+      let ctx = { H.Net.resolver; ctx } in
+      let fn (ic, oc) =
+        let ic = `HTTP (H.Channel.to_flow ic) in
+        let oc = `HTTP (H.Channel.to_flow oc) in
+        fn (Channel.create ic, Channel.create oc)
+      in
+      H.with_connection ctx ?init:None uri fn
+    | `Not_supported x ->
+      fail (Failure ("Scheme " ^ x ^ " not supported yet"))
+    | `Unknown ->
+      fail (Failure ("Unknown protocol. Must supply a scheme like git://"))
+
+end
+
+module Sync (Conduit: Conduit_mirage.S) = struct
+  module M = Make (Conduit)
+  module IO = M
+  module Result = Git.Sync.Result
+  module Make = Git.Sync.Make(M)
+end
