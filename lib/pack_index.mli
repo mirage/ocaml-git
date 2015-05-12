@@ -16,43 +16,47 @@
 
 (** Pack indexes. *)
 
-type t = {
-  offsets      : int SHA.Map.t;
-  crcs         : int32 SHA.Map.t;
-  pack_checksum: SHA.t;
-}
-(** [offsests] is the positions of the SHA objects in the
-    corresponding raw pack file.
+module Raw: sig
 
-    [crcs] contains the CRC-32 value of the packed object data.
+  type t = {
+    offsets      : int SHA.Map.t;
+    crcs         : int32 SHA.Map.t;
+    pack_checksum: SHA.t;
+  }
+  (** [offsests] is the positions of the SHA objects in the
+      corresponding raw pack file.
 
-    [pack_checksum] is the corresponding pack file checksums, value
-    which is needed when writing the pack index file to disk. *)
+      [crcs] contains the CRC-32 value of the packed object data.
 
-include Object.S with type t := t
+      [pack_checksum] is the corresponding pack file checksums, value
+      which is needed when writing the pack index file to disk. *)
 
-val keys: Mstruct.t -> SHA.Set.t
-(** Read only the keys contained in the index. *)
+  include Object.S with type t := t
 
-val lengths: t -> int option SHA.Map.t
-(** [lengths] returns the difference between two consecutive offsets
-    (appart for the last elements, where the lenght can be [None] is
-    the index file is build from a raw pack file). *)
+  val keys: Mstruct.t -> SHA.Set.t
+  (** Read only the keys contained in the index. *)
 
-val empty: ?pack_checksum:SHA.t -> unit -> t
-(** The empty pack index. *)
+  val lengths: t -> int option SHA.Map.t
+  (** [lengths] returns the difference between two consecutive offsets
+      (appart for the last elements, where the lenght can be [None] is
+      the index file is build from a raw pack file). *)
 
-type c_t
+  val empty: ?pack_checksum:SHA.t -> unit -> t
+  (** The empty pack index. *)
+
+end
+
+type t
 (** Abstract type of pack index. *)
 
-val create: ?cache_size:int -> Cstruct.buffer -> c_t
+val create: ?cache_size:int -> Cstruct.buffer -> t
 (** Create a pack index object. The results of [find_offset] are cached
     for upto [cache_size] SHA objects *)
 
-val find_offset: ?scan_thresh:int -> c_t -> SHA.t -> int option
+val find_offset: ?scan_thresh:int -> t -> SHA.t -> int option
 (** [find_offset] searches the index for the offset of the SHA object.
     Binary search is performed until the candidates are narrowed down to
     [scan_thresh] or less. *)
 
-val mem: c_t -> SHA.t -> bool
+val mem: t -> SHA.t -> bool
 (** [mem] checks if the SHA object is contained in the index object *)

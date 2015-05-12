@@ -27,7 +27,7 @@ module Raw = struct
 
   type t = {
     sha1    : SHA.t;
-    index   : Pack_index.t;
+    index   : Pack_index.Raw.t;
     inv_offs: SHA.t Misc.IntMap.t Lazy.t;
     buffer  : Cstruct.t;
     version : int;
@@ -41,7 +41,7 @@ module Raw = struct
 
   let equal t1 t2 =
     SHA.equal t1.sha1 t2.sha1
-    && Pack_index.equal t1.index t2.index
+    && Pack_index.Raw.equal t1.index t2.index
     && t1.buffer = t2.buffer
     && t1.version = t2.version
     && SHA.equal t1.checksum t2.checksum
@@ -81,7 +81,7 @@ module Raw = struct
 
   let index_of_values_aux (return, bind) ~sha1 ~pack_checksum values =
     Log.debug "index_of_values";
-    let empty = Pack_index.empty ~pack_checksum () in
+    let empty = Pack_index.Raw.empty ~pack_checksum () in
     let rec loop (offsets, index) = function
       | []                 -> return index
       | (pos, raw, p) :: t ->
@@ -90,7 +90,7 @@ module Raw = struct
         bind
           (sha1 ~offsets ~pos p)
           (fun sha1 ->
-             let index = Pack_index.({
+             let index = Pack_index.Raw.({
                  offsets = SHA.Map.add sha1 pos index.offsets;
                  crcs    = SHA.Map.add sha1 crc index.crcs;
                  pack_checksum;
@@ -150,27 +150,24 @@ module Raw = struct
     in
     aux [] 0
 
-
   let read buf index sha1 =
     let version, count = input_header buf in
     Log.debug "read: version=%d count=%d" version count;
-    begin
-      match Pack_index.find_offset index sha1 with
-      | Some offset -> begin
-          Log.debug "read: offset=%d" offset;
-          let orig_off = Mstruct.offset buf in
-          let orig_len = Mstruct.length buf in
-          Log.debug "read: buf: orig_off=%d orig_len=%d" orig_off orig_len;
-          let ba = Mstruct.to_bigarray buf in
-          Mstruct.shift buf (offset - orig_off);
-          Log.debug "read: buf: off=%d len=%d (after shift:%d)" (Mstruct.offset buf) (Mstruct.length buf) (offset-orig_off);
-          let packed_v = input_packed_value ~version buf in
-          Log.debug "read: buf: off=%d len=%d (after input_packed_value)" (Mstruct.offset buf) (Mstruct.length buf);
-          Some (Packed_value.to_value ~version ~index ~ba (offset-orig_off, packed_v))
-        end
-      | None -> None
-    end
-
+    match Pack_index.find_offset index sha1 with
+    | None -> None
+    | Some offset ->
+      Log.debug "read: offset=%d" offset;
+      let orig_off = Mstruct.offset buf in
+      let orig_len = Mstruct.length buf in
+      Log.debug "read: buf: orig_off=%d orig_len=%d" orig_off orig_len;
+      let ba = Mstruct.to_bigarray buf in
+      Mstruct.shift buf (offset - orig_off);
+      Log.debug "read: buf: off=%d len=%d (after shift:%d)"
+        (Mstruct.offset buf) (Mstruct.length buf) (offset-orig_off);
+      let packed_v = input_packed_value ~version buf in
+      Log.debug "read: buf: off=%d len=%d (after input_packed_value)"
+        (Mstruct.offset buf) (Mstruct.length buf);
+      Some (Packed_value.to_value ~version ~index ~ba (offset-orig_off, packed_v))
 
   let input buf ~index =
     let all = Mstruct.to_cstruct buf in
@@ -195,16 +192,16 @@ module Raw = struct
     let index = match index with
       | None   -> index_of_values ~pack_checksum cache values
       | Some i ->
-        if i.Pack_index.pack_checksum <> pack_checksum then (
+        if i.Pack_index.Raw.pack_checksum <> pack_checksum then (
           eprintf "Pack.Raw.input: wrong index checksum. Got: %s, expecting %s."
-            (SHA.to_hex i.Pack_index.pack_checksum) (SHA.to_hex pack_checksum);
+            (SHA.to_hex i.Pack_index.Raw.pack_checksum) (SHA.to_hex pack_checksum);
           failwith "Pack.input"
         );
         i in
-    let sha1 = sha1_of_keys (SHA.Map.keys index.Pack_index.offsets) in
+    let sha1 = sha1_of_keys (SHA.Map.keys index.Pack_index.Raw.offsets) in
     let inv_offs = lazy (
       Misc.IntMap.of_alist
-        (Misc.inverse_assoc (SHA.Map.to_alist index.Pack_index.offsets))
+        (Misc.inverse_assoc (SHA.Map.to_alist index.Pack_index.Raw.offsets))
     ) in
     {
       sha1; index; values;
@@ -215,10 +212,9 @@ module Raw = struct
   let add buf ?level:_ t = Buffer.add_string buf (Cstruct.to_string t.buffer)
   let sha1 t = t.sha1
   let index t = t.index
-  let keys t = SHA.Set.of_list (SHA.Map.keys t.index.Pack_index.offsets)
+  let keys t = SHA.Set.of_list (SHA.Map.keys t.index.Pack_index.Raw.offsets)
 
 end
-
 
 type t = (SHA.t * Packed_value.PIC.t) list
 

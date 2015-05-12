@@ -150,14 +150,14 @@ module Make (IO: IO) = struct
       let hex = SHA.to_hex sha1 in
       let len = String.length hex in
       let len_le_2 = len <= 2 in
-      let dcands = 
+      let dcands =
         if len_le_2 then
-          List.filter 
-            (fun d -> 
+          List.filter
+            (fun d ->
                (String.sub (Filename.basename d) 0 len) = hex
             ) dirs
         else
-          List.filter (fun d -> (Filename.basename d) = (String.sub hex 0 2)) dirs 
+          List.filter (fun d -> (Filename.basename d) = (String.sub hex 0 2)) dirs
       in
       match dcands with
       | [] -> Lwt.return_none
@@ -170,9 +170,9 @@ module Make (IO: IO) = struct
             else
               let len' = len - 2 in
               let suffix = String.sub hex 2 len' in
-              List.filter 
-                (fun f -> (String.sub (Filename.basename f) 0 len') = suffix) 
-                files 
+              List.filter
+                (fun f -> (String.sub (Filename.basename f) 0 len') = suffix)
+                files
           in
           match fcands with
           | [] -> Lwt.return_none
@@ -267,9 +267,9 @@ module Make (IO: IO) = struct
       let idx_file = "pack-" ^ (SHA.to_hex sha1) ^ ".idx" in
       pack_dir / idx_file
 
-    let index_lru: Pack_index.t LRU.t = LRU.make 8
+    let index_lru: Pack_index.Raw.t LRU.t = LRU.make 8
 
-    let index_c_lru: Pack_index.c_t LRU.t = LRU.make 8
+    let index_c_lru: Pack_index.t LRU.t = LRU.make 8
 
     let read_index_c t sha1 =
       Log.debug "read_index_c %s" (SHA.to_hex sha1);
@@ -294,27 +294,9 @@ module Make (IO: IO) = struct
       | true  -> Lwt.return_unit
       | false ->
         let buf = Buffer.create 1024 in
-        Pack_index.add buf idx;
+        Pack_index.Raw.add buf idx;
         let temp_dir = temp_dir t in
         IO.write_file file ~temp_dir (Cstruct.of_string (Buffer.contents buf))
-
-    let read_pack_index t sha1 =
-      Log.debug "read_pack_index %s" (SHA.to_hex sha1);
-      match LRU.find index_lru sha1 with
-      | Some i -> Lwt.return i
-      | None   ->
-        Log.debug "read_pack_index: cache miss!";
-        let file = index t sha1 in
-        IO.file_exists file >>= function
-        | true ->
-          File_cache.read file >>= fun buf ->
-          let buf = Mstruct.of_cstruct buf in
-          let index = Pack_index.input buf in
-          LRU.add index_lru sha1 index;
-          Lwt.return index
-        | false ->
-          Log.error "%s does not exist." file;
-          Lwt.fail (Failure "read_index")
 
     let keys_lru = LRU.make (128 * 1024)
 
@@ -328,32 +310,11 @@ module Make (IO: IO) = struct
         IO.file_exists file >>= function
         | true ->
           File_cache.read file >>= fun buf ->
-          let keys = Pack_index.keys (Mstruct.of_cstruct buf) in
+          let keys = Pack_index.Raw.keys (Mstruct.of_cstruct buf) in
           LRU.add keys_lru sha1 keys;
           Lwt.return keys
         | false ->
           Lwt.fail (Failure "Git_fs.Packed.read_keys")
-
-    let pack_lru = LRU.make 2
-
-    let read_pack t sha1 =
-      Log.debug "read_pack";
-      match LRU.find pack_lru sha1 with
-      | Some p -> Lwt.return p
-      | None   ->
-        Log.debug "read_pack: cache miss";
-        let file = file t sha1 in
-        IO.file_exists file >>= function
-        | true ->
-          File_cache.read file >>= fun buf ->
-          read_pack_index t sha1 >>= fun index ->
-          let pack = Pack.Raw.input (Mstruct.of_cstruct buf) ~index:(Some index) in
-          let pack = Pack.to_pic pack in
-          LRU.add pack_lru sha1 pack;
-          Lwt.return pack
-        | false ->
-          Log.error "No file associated with the pack object %s." (SHA.to_hex sha1);
-          Lwt.fail (Failure "read_pack")
 
     let write_pack t sha1 pack =
       Log.debug "write pack";
@@ -367,7 +328,7 @@ module Make (IO: IO) = struct
 
     let mem_in_pack t pack_sha1 sha1 =
       Log.debug "mem_in_pack %s:%s" (SHA.to_hex pack_sha1) (SHA.to_hex sha1);
-      read_index_c t pack_sha1 >>= fun idx -> 
+      read_index_c t pack_sha1 >>= fun idx ->
       Lwt.return (Pack_index.mem idx sha1)
 
     let pack_size_thresh = 10000000

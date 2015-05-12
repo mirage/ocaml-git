@@ -41,13 +41,9 @@ type sha_t = { raw    : string;
 
 exception Ambiguous
 
-let sha_to_string t =
-  let `Hex h = Hex.of_string t.raw in
-  h^(if t.padded then "(PADDED)" else "")
-
 let get_upper c = (Char.code c) land 0xf0
 
-let sha_compare x y = 
+let sha_compare x y =
   (*Log.debugf "sha_compare: %s vs %s" (sha_to_string x) (sha_to_string y);*)
   let nx = String.length x.raw in
   let ny = String.length y.raw in
@@ -111,7 +107,7 @@ module SHA1_String = struct
       false
     else if np = nx then
       equal p x
-    else 
+    else
       let n =
         if p.padded then
           (String.length p.raw) - 1
