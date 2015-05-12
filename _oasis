@@ -59,7 +59,8 @@ Library "git-mirage"
   FindlibParent:     git
   Findlibname:       mirage
   Modules:           Git_mirage
-  BuildDepends:      git, mirage-types.lwt, io-page
+  BuildDepends:      git, git.http, mirage-types.lwt, io-page, conduit.mirage,
+                     dns.mirage, mirage-http, mirage-flow
 
 Executable ogit
   Build$:           flag(unix)
