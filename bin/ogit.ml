@@ -188,17 +188,17 @@ let cat_file = {
     let sz_flag = mk_flag ["s"] "Instead of the content, show the object size." in
     let id =
       let doc = Arg.info ~docv:"SHA1" ~doc:"The SHA1 of the repository object." [] in
-      Arg.(required & pos 0 (some string) None & doc) 
+      Arg.(required & pos 0 (some string) None & doc)
     in
     let cat_file (module S: Store.S) ty_flag sz_flag id =
       run begin
         S.create () >>= fun t ->
-        Lwt.catch 
+        Lwt.catch
           (fun () ->
              S.read_exn t (SHA.of_hex id) >>= fun v -> begin
                let t, c, s =
                  match v with
-                 | Value.Blob blob -> 
+                 | Value.Blob blob ->
                    let c = Blob.to_raw blob in
                    "blob", c, String.length c
                  | Value.Commit commit ->
@@ -221,7 +221,7 @@ let cat_file = {
                  Printf.printf "%s%!" c;
 
                return_unit
-             end 
+             end
           )
           (function
             | SHA.Ambiguous -> eprintf "ambiguous argument\n%!"; exit 1
@@ -289,15 +289,15 @@ let ls_tree = {
   man  = [];
   term =
     let recurse_flag = mk_flag ["r"] "Recurse into sub-trees." in
-    let show_tree_flag = 
-      mk_flag ["t"] "Show tree entries even when going to recurse them." 
+    let show_tree_flag =
+      mk_flag ["t"] "Show tree entries even when going to recurse them."
     in
     let only_tree_flag = mk_flag ["d"] "Show only the named tree entry itself." in
     let oid =
       let doc = Arg.info [] ~docv:"SHA1"
-          ~doc:"The SHA1 of the tree." 
+          ~doc:"The SHA1 of the tree."
       in
-      Arg.(required & pos 0 (some string) None & doc ) 
+      Arg.(required & pos 0 (some string) None & doc )
     in
     let ls (module S: Store.S) recurse_flag show_tree_flag only_tree_flag oid =
       run begin
@@ -318,7 +318,7 @@ let ls_tree = {
               end
             | Value.Tree tree -> begin
                 Lwt_list.iter_s
-                  (fun e -> 
+                  (fun e ->
                      let path' = Filename.concat path e.Tree.name in
                      let kind, is_dir = get_kind e.Tree.perm in
                      let mode = Tree.fixed_length_string_of_perm e.Tree.perm in
@@ -356,8 +356,8 @@ let ls_tree = {
               eprintf "unknown revision or path not in the working tree\n%!";
               exit 1
             | e -> eprintf "%s\n%!" (Printexc.to_string e); exit 1
-          )          
-      end 
+          )
+      end
     in
     Term.(mk ls $ backend $ recurse_flag $ show_tree_flag $ only_tree_flag $ oid)
 }
