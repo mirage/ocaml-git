@@ -22,7 +22,7 @@ type t = (SHA.t * Packed_value.PIC.t) list
 
 include Object.S with type t := t
 
-val input: Mstruct.t -> index:Pack_index.t option -> t
+val input: Mstruct.t -> index:Pack_index.Raw.t option -> t
 (** The usual [Object.S.input] function, but with an additional
     [index] argument. When [index] is [None], recompute the whole
     index: that's very costly so provide the index when possible. *)
@@ -50,19 +50,19 @@ module Raw: sig
 
   include Object.S
 
-  val input: Mstruct.t -> index:Pack_index.t option -> t
+  val input: Mstruct.t -> index:Pack_index.Raw.t option -> t
   (** Same as the top-level [input] function but for raw packs. *)
 
   val sha1: t -> SHA.t
   (** Return the name of the pack. *)
 
-  val index: t -> Pack_index.t
+  val index: t -> Pack_index.Raw.t
   (** Return the pack index. *)
 
   val keys: t -> SHA.Set.t
   (** Return the keys present in the raw pack. *)
 
-  val read: Mstruct.t -> Pack_index.c_t -> SHA.t -> Value.t option
+  val read: Mstruct.t -> Pack_index.t -> SHA.t -> Value.t option
   (** Same as the top-level [read] function but for raw packs. *)
 
 end

@@ -133,5 +133,5 @@ val of_pic: int PIC.Map.t -> pos:int -> PIC.t -> t
 (** Position dependent packed value. Convert a [PIC.Link] into to the
     corresponding [Off_delta], using the provided indexes. *)
 
-val to_value: version:int -> index:Pack_index.c_t -> ba:Cstruct.buffer -> (int * t) -> Value.t
+val to_value: version:int -> index:Pack_index.t -> ba:Cstruct.buffer -> (int * t) -> Value.t
 (** Unpack the packed value using the provided indexes. *)
