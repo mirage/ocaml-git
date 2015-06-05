@@ -46,8 +46,10 @@
 module type CLIENT = sig
   include Cohttp_lwt.Client
     with type 'a IO.t = 'a Lwt.t               (* FIMXE in cohttp *)
-     and type 'a Request.IO.t = 'a Lwt.t       (* FIXME in cohttp *)
-     and type 'a Response.IO.t = 'a Lwt.t      (* FIXME in cohttp *)
+
+  module Request : Cohttp.S.Http_io with module IO = IO and type t = Cohttp.Request.t
+  module Response : Cohttp.S.Http_io with module IO = IO and type t = Cohttp.Response.t
+
   val close_out: IO.oc -> unit                 (* FIXME in cohttp *)
   val close_in: IO.ic -> unit                  (* FIXME in cohttp *)
   val oc: IO.oc -> Request.IO.oc               (* FIXME in cohttp *)
