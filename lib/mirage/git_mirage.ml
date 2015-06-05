@@ -290,7 +290,9 @@ module Smart_HTTP (Conduit: Conduit_mirage.S) = struct
   module Request = Cohttp_lwt.Make_request(HTTP_IO)
   module Response = Cohttp_lwt.Make_response(HTTP_IO)
   module HTTP = struct
-    include Cohttp_lwt.Make_client(HTTP_IO)(Request)(Response)(Net)
+    include Cohttp_lwt.Make_client(HTTP_IO)(Net)
+    module Request = Request
+    module Response = Response
     let oc x = x
     let ic x = x
     let close_in = Net.close_in

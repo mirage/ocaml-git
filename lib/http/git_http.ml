@@ -21,8 +21,10 @@ module Log = Log.Make(struct let section = "http" end)
 module type CLIENT = sig
   include Cohttp_lwt.Client
     with type 'a IO.t = 'a Lwt.t               (* FIMXE in cohttp *)
-     and type 'a Request.IO.t = 'a Lwt.t       (* FIXME in cohttp *)
-     and type 'a Response.IO.t = 'a Lwt.t      (* FIXME in cohttp *)
+
+  module Request : Cohttp.S.Http_io with module IO = IO and type t = Cohttp.Request.t
+  module Response : Cohttp.S.Http_io with module IO = IO and type t = Cohttp.Response.t
+
   val close_out: IO.oc -> unit                 (* FIXME in cohttp *)
   val close_in: IO.ic -> unit                  (* FIXME in cohttp *)
   val oc: IO.oc -> Request.IO.oc               (* FIXME in cohttp *)
@@ -106,13 +108,13 @@ module Flow(HTTP: CLIENT) (IC: CHAN) (OC: CHAN) = struct
 
   (* FIXME Should be moved into cohttp *)
   let check_redirect r =
-    let status = HTTP.Response.status r in
+    let status = Cohttp.Response.status r in
     let status_code = Cohttp.Code.code_of_status status in
     let status = Cohttp.Code.string_of_status status in
     if Cohttp.Code.is_redirection status_code then (
       let uri =
         try
-          HTTP.Response.headers r
+          Cohttp.Response.headers r
           |> Cohttp.Header.to_list
           |> List.assoc "location"
           |> Uri.of_string
@@ -124,7 +126,7 @@ module Flow(HTTP: CLIENT) (IC: CHAN) (OC: CHAN) = struct
       Lwt.return_unit
 
   let on_success r fn =
-    let status = HTTP.Response.status r in
+    let status = Cohttp.Response.status r in
     let status_code = Cohttp.Code.code_of_status status in
     if Cohttp.Code.is_success status_code then fn () else (
       let status = Cohttp.Code.string_of_status status in
