@@ -1,6 +1,8 @@
 ### 1.5.0
 
-* Change `ogit cat-file` to behave exactly as `git cat-file`.
+* Compatibility with `cohttp.0.18.` (#80 by @rgrinberg)
+* Simplify the mirage sync API to use `conduit 0.8.4` (breaking API changes)
+* Change `ogit cat-file` to behave exactly as `git cat-file`
   The previous command is renamed to `ogit cat` (#75 by @codinuum)
 * `ogit` now supports short hashes instead of full SHA1 (#75 by @codinuum)
 * Add `Git.Pack.Raw.read` to read raw pack files (#75 by @codinuum)
