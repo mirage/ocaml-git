@@ -1,4 +1,4 @@
-### 1.5.0
+### 1.5.0 (2015-06-12)
 
 * Compatibility with `cohttp.0.18.` (#80 by @rgrinberg)
 * Simplify the mirage sync API to use `conduit 0.8.4` (breaking API changes)
@@ -16,7 +16,7 @@
   (#75 by @codinuum)
 * Support synchronisation for MirageOS unikernels (#70)
 
-### 1.4.11
+### 1.4.11 (2015-03-11)
 
 * Fix multi round-trips in the smart HTTP protocol. This fixes
   depth-limited clones (#71) and fetches.
@@ -25,17 +25,17 @@
 * Add `User-Agent` in the headers of the smart HTTP protocol. This
   makes `bitbucket.org` happy. (#66, patch from @vklquevs)
 
-### 1.4.10
+### 1.4.10 (2015-02-05)
 
 * Fix support for the smart HTTP protocol (report by @talex5,
   mirage/irmin#138)
 
-### 1.4.9
+### 1.4.9 (2015-02-04)
 
 * Remove the `OGITTMPDIR` and alway store temp files under
   `git/tmp` (mirage/irmin#132)
 
-### 1.4.8
+### 1.4.8 (2015-02-04)
 
 * Fix LRU cache: SHA1 should be unique in the cache (regression
   introduced in 1.4.3). This was causing confusing read results
@@ -44,7 +44,7 @@
 * Fix a regression in `ogit cat-file` which were displaying nothing
   for small objects.
 
-### 1.4.7
+### 1.4.7 (2015-02-03)
 
 * Fix the filesystem updates for non-bare repositories (reported by @avsm)
 * `Git.write_index` now takes an optional `index` argument
@@ -54,21 +54,21 @@
   configured by write calls, and the default is `OGITTMPDIR` if set,
   then `Filename.get_temp_dir_name` -- as it was in 1.4.5, see #51
 
-### 1.4.6
+### 1.4.6 (2015-01-29)
 
 * Expose `Git.Value.Cache.set_size` to change the LRU cache size
 * Reduce the default LRU cache size (in 1.4.4 it was set to 64k, now it's 512)
 * More precise type for commit dates
 * Add `git.top` to load toplevel printers for Git values
 
-### 1.4.5
+### 1.4.5 (2015-01-19)
 
 * Support `packed-refs` files, to read references packed by `git gc` (reported
   by Gregory Tsipenyuk)
 * Fix the filesystem backend when TMPDIR is not on the same partition as the
   Git repository (#51, patch from @vklquevs)
 
-### 1.4.4
+### 1.4.4 (2015-01-12)
 
 * Support the smart HTTP Git protocol (#26)
 * Best-effort creation of files when expanding the index into the filesystem:
