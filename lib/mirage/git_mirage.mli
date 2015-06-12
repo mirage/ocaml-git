@@ -32,8 +32,8 @@ end
 module FS (FS: FS): Git.FS.S
 (** Create a Irmin store from raw block devices hanlder. *)
 
-module Sync (Conduit: Conduit_mirage.S): sig
-  module IO: Git.Sync.IO with type ctx = Resolver_lwt.t * Conduit.ctx
+module Sync: sig
+  module IO: Git.Sync.IO with type ctx = Resolver_lwt.t * Conduit_mirage.t
   module Result: (module type of
                    Git.Sync.Result with type fetch = Git.Sync.Result.fetch
                                     and type push  = Git.Sync.Result.push)

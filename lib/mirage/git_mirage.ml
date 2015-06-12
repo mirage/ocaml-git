@@ -238,18 +238,18 @@ end
 module FIO = Cohttp_mirage_io.Make(Fchannel)
 
 (* hanlde the git:// connections *)
-module Git_protocol (Conduit: Conduit_mirage.S) = struct
+module Git_protocol = struct
 
-  module Flow = Conduit.Flow
+  module Flow = Conduit_mirage.Flow
   module Channel = Channel.Make(Flow)
   include IO_helper (Channel)
 
-  let with_connection (resolver, ctx) uri ?init fn =
+  let with_connection (resolver, conduit) uri ?init fn =
     assert (Git.Sync.protocol uri = `Ok `Git);
     Log.debug "Connecting to %s" (Uri.to_string uri);
     Resolver_lwt.resolve_uri ~uri resolver >>= fun endp ->
-    Conduit.endp_to_client ~ctx endp >>= fun client ->
-    Conduit.connect ~ctx client >>= fun (flow, _, _) ->
+    Conduit_mirage.client endp >>= fun client ->
+    Conduit_mirage.connect conduit client >>= fun flow ->
     let ic = Channel.create flow in
     let oc = Channel.create flow in
     Lwt.finalize
@@ -264,23 +264,22 @@ module Git_protocol (Conduit: Conduit_mirage.S) = struct
 end
 
 (* hanlde the http(s):// connections *)
-module Smart_HTTP (Conduit: Conduit_mirage.S) = struct
+module Smart_HTTP = struct
 
-  module Conduit_channel = Channel.Make(Conduit.Flow)
+  module Conduit_channel = Channel.Make(Conduit_mirage.Flow)
   module HTTP_IO = Cohttp_mirage_io.Make(Conduit_channel)
   module Net = struct
     module IO = HTTP_IO
-    type ctx = { resolver: Resolver_lwt.t; ctx: Conduit.ctx; }
-    let sexp_of_ctx { resolver; ctx} =
-      Sexplib.Type.List [
-        Resolver_lwt.sexp_of_t resolver;
-        Conduit.sexp_of_ctx ctx
-      ]
-    let default_ctx = { resolver = Resolver_mirage.localhost; ctx = Conduit.default_ctx }
+    type ctx = { resolver: Resolver_lwt.t; conduit: Conduit_mirage.t; }
+    let sexp_of_ctx { resolver; _ } = Resolver_lwt.sexp_of_t resolver
+    let default_ctx = {
+      resolver = Resolver_mirage.localhost;
+      conduit = Conduit_mirage.empty;
+    }
     let connect_uri ~ctx uri =
       Resolver_lwt.resolve_uri ~uri ctx.resolver >>= fun endp ->
-      Conduit.endp_to_client ~ctx:ctx.ctx endp >>= fun client ->
-      Conduit.connect ~ctx:ctx.ctx client >>= fun (flow, _, _) ->
+      Conduit_mirage.client endp >>= fun client ->
+      Conduit_mirage.connect ctx.conduit client >>= fun flow ->
       let ch = Conduit_channel.create flow in
       return (flow, ch, ch)
     let close_in _ = ()
@@ -324,12 +323,12 @@ module Smart_HTTP (Conduit: Conduit_mirage.S) = struct
 
 end
 
-module Make (Conduit: Conduit_mirage.S) = struct
+module IO = struct
 
-  module G = Git_protocol(Conduit)
-  module H = Smart_HTTP(Conduit)
+  module G = Git_protocol
+  module H = Smart_HTTP
 
-  type ctx = Resolver_lwt.t * Conduit.ctx
+  type ctx = Resolver_lwt.t * Conduit_mirage.t
 
   module Flow = struct
     type 'a io = 'a Lwt.t
@@ -371,11 +370,11 @@ module Make (Conduit: Conduit_mirage.S) = struct
   type oc = Channel.t
 
   let with_connection ?ctx uri ?init fn =
-    let resolver, ctx = match ctx with
+    let resolver, conduit = match ctx with
       | Some x -> x
       | None   ->
-        let { H.Net.resolver; ctx } = H.Net.default_ctx in
-        resolver, ctx
+        let { H.Net.resolver; conduit } = H.Net.default_ctx in
+        resolver, conduit
     in
     match Git.Sync.protocol uri with
     | `Ok `SSH -> failwith "GIT+SSH is not supported with Mirage"
@@ -385,9 +384,9 @@ module Make (Conduit: Conduit_mirage.S) = struct
         let oc = `Git (G.Channel.to_flow oc) in
         fn (Channel.create ic, Channel.create oc)
       in
-      G.with_connection (resolver, ctx) ?init uri fn
+      G.with_connection (resolver, conduit) ?init uri fn
     | `Ok `Smart_HTTP ->
-      let ctx = { H.Net.resolver; ctx } in
+      let ctx = { H.Net.resolver; conduit } in
       let fn (ic, oc) =
         let ic = `HTTP (H.Channel.to_flow ic) in
         let oc = `HTTP (H.Channel.to_flow oc) in
@@ -401,9 +400,8 @@ module Make (Conduit: Conduit_mirage.S) = struct
 
 end
 
-module Sync (Conduit: Conduit_mirage.S) = struct
-  module M = Make (Conduit)
-  module IO = M
+module Sync = struct
+  module IO = IO
   module Result = Git.Sync.Result
-  module Make = Git.Sync.Make(M)
+  module Make = Git.Sync.Make(IO)
 end

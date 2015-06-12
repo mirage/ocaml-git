@@ -1,0 +1,4 @@
+bin: [
+  "?_build/bin/ogit.byte"   {"ogit"}
+  "?_build/bin/ogit.native" {"ogit"}
+]
