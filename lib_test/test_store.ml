@@ -364,9 +364,9 @@ module Make (Store: Store.S) = struct
             begin if Sys.file_exists index then
                 Lwt_io.with_file ~mode:Lwt_io.input index (fun x -> Lwt_io.read x)
                 >>= fun istr1 ->
-                let i1    = Pack_index.input (Mstruct.of_string istr1) in
-                let istr2 = Misc.with_buffer' (fun buf -> Pack_index.add buf i1) in
-                let i2    = Pack_index.input (Mstruct.of_cstruct istr2) in
+                let i1    = Pack_index.Raw.input (Mstruct.of_string istr1) in
+                let istr2 = Misc.with_buffer' (fun buf -> Pack_index.Raw.add buf i1) in
+                let i2    = Pack_index.Raw.input (Mstruct.of_cstruct istr2) in
                 assert_pack_index_equal "pack-index" i1 i2;
                 let rp1'  = Pack.Raw.input (Mstruct.of_string pstr1) ~index:(Some i1) in
                 assert_raw_pack_equal "raw-pack" rp1 rp1';
