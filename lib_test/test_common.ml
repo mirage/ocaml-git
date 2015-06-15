@@ -78,7 +78,7 @@ module Make (S: Store.S) = struct
     mk (=) compare Cstruct.debug
 
   let assert_pack_index_equal, assert_pack_index_opt_equal, assert_pack_indexes_equal =
-    mk Pack_index.equal Pack_index.compare Pack_index.pretty
+    mk Pack_index.Raw.equal Pack_index.Raw.compare Pack_index.Raw.pretty
 
   let assert_pack_equal, assert_pack_opt_equal, assert_packs_equal =
     mk Pack.equal Pack.compare Pack.pretty
