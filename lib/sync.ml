@@ -906,9 +906,13 @@ module Make (IO: IO) (Store: Store.S) = struct
       | Clone { c_capabilites = c; _ } -> c
       | _ -> []
     in
+    let wants =
+      SHA.of_commit head ::
+      Reference.Map.fold (fun _ s acc -> SHA.of_commit s::acc) references []
+    in
     Log.debug "PHASE1";
     Upload_request.phase1 (ic, oc) ?deepen ~capabilities
-      ~shallows ~wants:[SHA.of_commit head]
+      ~shallows ~wants
     >>= fun _phase1 ->
 
     (* XXX: process the shallow / unshallow.  *)
