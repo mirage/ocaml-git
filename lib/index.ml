@@ -77,7 +77,7 @@ type entry = {
    <ENTRY_FLAGS> if the entry name byte sequences are identical. *)
 let compare_entries e1 e2 =
   match String.compare e1.name e2.name with
-  | 0 -> compare e1.id e2.id
+  | 0 -> compare e2.id e1.id
   | i -> i
 
 let pp_hum_entry ppf t =
