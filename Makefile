@@ -44,11 +44,12 @@ $(VFILE): _oasis
 
 init-doc:
 	mkdir -p gh-pages
-	cd gh-pages
-	git init
-	git remote add origin git@github.com:mirage/ocaml-git.git
-	git checkout gh-pages
-	git pull
+	cd gh-pages && ( \
+	  git init && \
+	  git remote add origin git@github.com:mirage/ocaml-git.git && \
+	  git fetch && \
+	  git checkout gh-pages && \
+	  git pull)
 
 update-doc: doc
 	rm -f gh-pages/*.html

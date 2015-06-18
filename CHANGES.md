@@ -1,3 +1,11 @@
+### 1.5.1 (2015-06-18)
+
+* Fix filesystem expansion when a filen ame becomes a directory name or when
+  a directory name becomes a file name (#87)
+* Fix the order of entries in the tree objects (#86)
+* Fix the compilation of tests (#85)
+* Fetch all remote refs on synchronize (#83, by @AltGr)
+
 ### 1.5.0 (2015-06-12)
 
 * Compatibility with `cohttp.0.18.` (#80 by @rgrinberg)
