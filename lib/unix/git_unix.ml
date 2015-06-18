@@ -147,10 +147,19 @@ module D = struct
   let protect f x =
     Lwt.catch (fun () -> f x) protect_exn
 
+  (* FIXME: do not shell out *)
+  let remove_file f =
+    let _ = Sys.command (sprintf "rm -f %s" f) in
+    ()
+
   let mkdir dirname =
     let rec aux dir =
-      if Sys.file_exists dir then return_unit
+      if Sys.file_exists dir && Sys.is_directory dir then return_unit
       else (
+        if Sys.file_exists dir then (
+          Log.debug "%s already exists but os a file, removing." dir;
+          remove_file dir;
+        );
         aux (Filename.dirname dir) >>= fun () ->
         Log.debug "mkdir %s" dir;
         protect (Lwt_unix.mkdir dir) 0o755;
@@ -228,7 +237,7 @@ module D = struct
       ()
 
   let realdir dir =
-    if Sys.file_exists dir then (
+    if Sys.file_exists dir && Sys.is_directory dir then (
       let d = Sys.getcwd () in
       Unix.chdir dir;
       let e = Sys.getcwd () in
@@ -236,15 +245,17 @@ module D = struct
       e
     ) else dir
 
+  (* FIXME: this is crazy *)
   let realpath file =
-    let r =
+    let rec aux file =
       if Sys.file_exists file && Sys.is_directory file then
         realdir file
       else
-        Filename.concat
-          (realdir (Filename.dirname file))
-          (Filename.basename file) in
-    return r
+        let dirname = Filename.dirname file in
+        let basename = Filename.basename file in
+        Filename.concat (aux dirname) basename
+    in
+    Lwt.return (aux file)
 
   let stat_info path =
     let open Index in
@@ -281,6 +292,7 @@ module D = struct
   let file_exists f =
     return (Sys.file_exists f)
 
+  (* FIXME: do not shell out *)
   let remove f =
     let _ = Sys.command (sprintf "rm -rf %s" f) in
     return_unit
