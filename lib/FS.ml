@@ -605,7 +605,20 @@ module Make (IO: IO) = struct
     | `Link -> (*q Lwt_unix.symlink file ??? *) failwith "TODO"
     | _     ->
       let temp_dir = temp_dir t in
-      IO.write_file file ~temp_dir (Cstruct.of_string blob) >>= fun () ->
+      let contents = Cstruct.of_string blob in
+      let rec write n =
+        let one () =
+          Log.debug "one %s" file;
+          IO.write_file file ~temp_dir contents
+        in
+        if n <= 1 then one () else
+          Lwt.catch one (fun e ->
+              Log.debug "write (%d/10): Got %s, retrying."
+                (11-n) (Printexc.to_string e);
+              IO.remove file >>= fun () ->
+              write (n-1))
+      in
+      write 10 >>= fun () ->
       match mode with
       | `Exec -> IO.chmod file 0o755
       | _     -> Lwt.return_unit

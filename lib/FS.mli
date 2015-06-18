@@ -48,7 +48,7 @@ module type IO = sig
   (** Remote a file or a directory (even if non-empty). *)
 
   val file_exists: string -> bool Lwt.t
-  (** Does the given file exists ? *)
+  (** Does the given file exists? See {!Sys.file_exists}*)
 
   val directories: string -> string list Lwt.t
   (** List the subdirs. *)
