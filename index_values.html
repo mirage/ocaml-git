@@ -4,6 +4,7 @@
 <meta content="text/html; charset=iso-8859-1" http-equiv="Content-Type">
 <link rel="Start" href="index.html">
 <link title="Index of types" rel=Appendix href="index_types.html">
+<link title="Index of exceptions" rel=Appendix href="index_exceptions.html">
 <link title="Index of values" rel=Appendix href="index_values.html">
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
@@ -42,7 +43,7 @@
 <tr><td align="left"><br></td></tr>
 <tr><td><a href="Misc.OP.html#VAL(/)">(/)</a> [<a href="Misc.OP.html">Misc.OP</a>]</td>
 <td><div class="info">
-Same as <code class="code">Filename.concat</code>.
+Same as <code class="code"><span class="constructor">Filename</span>.concat</code>.
 </div>
 </td></tr>
 <tr><td align="left"><br>A</td></tr>
@@ -155,7 +156,7 @@ Compare two objects.
 </td></tr>
 <tr><td><a href="Git_mirage.FS.html#VALconnect">connect</a> [<a href="Git_mirage.FS.html">Git_mirage.FS</a>]</td>
 <td><div class="info">
-Every <code class="code">S</code> define how to connect to a peticular <code class="code">t</code>.
+Every <code class="code"><span class="constructor">S</span></code> define how to connect to a peticular <code class="code">t</code>.
 </div>
 </td></tr>
 <tr><td><a href="Store.S.html#VALcontents">contents</a> [<a href="Store.S.html">Store.S</a>]</td>
@@ -181,6 +182,11 @@ Return the CRC-32 value of a bigstring.
 <tr><td><a href="Store.S.html#VALcreate">create</a> [<a href="Store.S.html">Store.S</a>]</td>
 <td><div class="info">
 Create a store handler for the given path.
+</div>
+</td></tr>
+<tr><td><a href="Pack_index.html#VALcreate">create</a> [<a href="Pack_index.html">Pack_index</a>]</td>
+<td><div class="info">
+Create a pack index object.
 </div>
 </td></tr>
 <tr><td><a href="Index.html#VALcreate">create</a> [<a href="Index.html">Index</a>]</td>
@@ -217,7 +223,7 @@ Dump the store contents to stderr.
 </div>
 </td></tr>
 <tr><td align="left"><br>E</td></tr>
-<tr><td><a href="Pack_index.html#VALempty">empty</a> [<a href="Pack_index.html">Pack_index</a>]</td>
+<tr><td><a href="Pack_index.Raw.html#VALempty">empty</a> [<a href="Pack_index.Raw.html">Pack_index.Raw</a>]</td>
 <td><div class="info">
 The empty pack index.
 </div>
@@ -246,7 +252,7 @@ Are two objects equal?
 </td></tr>
 <tr><td><a href="FS.IO.html#VALfile_exists">file_exists</a> [<a href="FS.IO.html">FS.IO</a>]</td>
 <td><div class="info">
-Does the given file exists ?
+Does the given file exists? See <code class="code"><span class="constructor">Sys</span>.file_exists</code>
 </div>
 </td></tr>
 <tr><td><a href="FS.IO.html#VALfiles">files</a> [<a href="FS.IO.html">FS.IO</a>]</td>
@@ -278,8 +284,18 @@ Cache an inflated values.
 </td></tr>
 <tr><td><a href="Value.Cache.html#VALfind_inflated">find_inflated</a> [<a href="Value.Cache.html">Value.Cache</a>]</td>
 <td><div class="info">
-Same as <a href="Value.Cache.html#VALfind"><code class="code">Value.Cache.find</code></a> but store the inflated representation of the
+Same as <a href="Value.Cache.html#VALfind"><code class="code"><span class="constructor">Value</span>.<span class="constructor">Cache</span>.find</code></a> but store the inflated representation of the
       value.
+</div>
+</td></tr>
+<tr><td><a href="Pack_index.html#VALfind_offset">find_offset</a> [<a href="Pack_index.html">Pack_index</a>]</td>
+<td><div class="info">
+<code class="code">find_offset</code> searches the index for the offset of the SHA object.
+</div>
+</td></tr>
+<tr><td><a href="Tree.html#VALfixed_length_string_of_perm">fixed_length_string_of_perm</a> [<a href="Tree.html">Tree</a>]</td>
+<td><div class="info">
+Fixed-length raw represention of a permission, using the <code class="code"><span class="constructor">Git</span></code> format (6 characters long).
 </div>
 </td></tr>
 <tr><td><a href="Sync.IO.html#VALflush">flush</a> [<a href="Sync.IO.html">Sync.IO</a>]</td>
@@ -339,7 +355,7 @@ Same as the top-level <code class="code">input</code> function but for raw packs
 </td></tr>
 <tr><td><a href="Pack.html#VALinput">input</a> [<a href="Pack.html">Pack</a>]</td>
 <td><div class="info">
-The usual <code class="code">Object.S.input</code> function, but with an additional
+The usual <code class="code"><span class="constructor">Object</span>.<span class="constructor">S</span>.input</code> function, but with an additional
     <code class="code">index</code> argument.
 </div>
 </td></tr>
@@ -365,13 +381,23 @@ Inverse the association map.
 Is the given reference the HEAD ?
 </div>
 </td></tr>
+<tr><td><a href="SHA.S.html#VALis_prefix">is_prefix</a> [<a href="SHA.S.html">SHA.S</a>]</td>
+<td><div class="info">
+Check if a SHA1 is a prefix of another SHA1.
+</div>
+</td></tr>
+<tr><td><a href="SHA.S.html#VALis_short">is_short</a> [<a href="SHA.S.html">SHA.S</a>]</td>
+<td><div class="info">
+Check if the SHA1 is abbreviated.
+</div>
+</td></tr>
 <tr><td><a href="Reference.html#VALis_valid">is_valid</a> [<a href="Reference.html">Reference</a>]</td>
 <td><div class="info">
 Check if a reference can be stored on disk properly.
 </div>
 </td></tr>
 <tr><td align="left"><br>K</td></tr>
-<tr><td><a href="Pack_index.html#VALkeys">keys</a> [<a href="Pack_index.html">Pack_index</a>]</td>
+<tr><td><a href="Pack_index.Raw.html#VALkeys">keys</a> [<a href="Pack_index.Raw.html">Pack_index.Raw</a>]</td>
 <td><div class="info">
 Read only the keys contained in the index.
 </div>
@@ -394,11 +420,16 @@ The kind of backend.
 </div>
 </td></tr>
 <tr><td align="left"><br>L</td></tr>
-<tr><td><a href="Pack_index.html#VALlengths">lengths</a> [<a href="Pack_index.html">Pack_index</a>]</td>
+<tr><td><a href="SHA.S.html#VALlength">length</a> [<a href="SHA.S.html">SHA.S</a>]</td>
+<td><div class="info">
+The number of hex digits in the SHA1.
+</div>
+</td></tr>
+<tr><td><a href="Pack_index.Raw.html#VALlengths">lengths</a> [<a href="Pack_index.Raw.html">Pack_index.Raw</a>]</td>
 <td><div class="info">
 <code class="code">lengths</code> returns the difference between two consecutive offsets
-    (appart for the last elements, where the lenght can be <code class="code">None</code> is
-    the index file is build from a raw pack file).
+      (appart for the last elements, where the lenght can be <code class="code"><span class="constructor">None</span></code> is
+      the index file is build from a raw pack file).
 </div>
 </td></tr>
 <tr><td><a href="Store.S.html#VALlevel">level</a> [<a href="Store.S.html">Store.S</a>]</td>
@@ -422,6 +453,11 @@ List the references of the remote repository.
 </td></tr>
 <tr><td><a href="Misc.html#VALlt">lt</a> [<a href="Misc.html">Misc</a>]</td>
 <td></td></tr>
+<tr><td><a href="SHA.S.html#VALlt">lt</a> [<a href="SHA.S.html">SHA.S</a>]</td>
+<td><div class="info">
+(&lt;) relation between SHA1s.
+</div>
+</td></tr>
 <tr><td align="left"><br>M</td></tr>
 <tr><td><a href="Reference.html#VALmaster">master</a> [<a href="Reference.html">Reference</a>]</td>
 <td><div class="info">
@@ -437,6 +473,11 @@ The master branch.
 <tr><td><a href="Store.S.html#VALmem">mem</a> [<a href="Store.S.html">Store.S</a>]</td>
 <td><div class="info">
 Check whether a key belongs to the store.
+</div>
+</td></tr>
+<tr><td><a href="Pack_index.html#VALmem">mem</a> [<a href="Pack_index.html">Pack_index</a>]</td>
+<td><div class="info">
+<code class="code">mem</code> checks if the SHA object is contained in the index object
 </div>
 </td></tr>
 <tr><td><a href="Store.S.html#VALmem_reference">mem_reference</a> [<a href="Store.S.html">Store.S</a>]</td>
@@ -520,7 +561,7 @@ A tree node is also a node.
 </td></tr>
 <tr><td><a href="Gri.html#VALof_uri">of_uri</a> [<a href="Gri.html">Gri</a>]</td>
 <td><div class="info">
-Cast from <code class="code">Uri.t</code>.
+Cast from <code class="code"><span class="constructor">Uri</span>.t</code>.
 </div>
 </td></tr>
 <tr><td align="left"><br>P</td></tr>
@@ -536,7 +577,7 @@ Return a packed (closed) collection of objects.
 </td></tr>
 <tr><td><a href="Object.S.html#VALpp_hum">pp_hum</a> [<a href="Object.S.html">Object.S</a>]</td>
 <td><div class="info">
-Same as <a href="Object.S.html#VALpretty"><code class="code">Object.S.pretty</code></a> but using a generic formatter.
+Same as <a href="Object.S.html#VALpretty"><code class="code"><span class="constructor">Object</span>.<span class="constructor">S</span>.pretty</code></a> but using a generic formatter.
 </div>
 </td></tr>
 <tr><td><a href="Packed_value.PIC.html#VALpp_hum">pp_hum</a> [<a href="Packed_value.PIC.html">Packed_value.PIC</a>]</td>
@@ -618,6 +659,11 @@ Build a raw value.
 Return the object having the given SHA name.
 </div>
 </td></tr>
+<tr><td><a href="Pack.Raw.html#VALread">read</a> [<a href="Pack.Raw.html">Pack.Raw</a>]</td>
+<td><div class="info">
+Same as the top-level <code class="code">read</code> function but for raw packs.
+</div>
+</td></tr>
 <tr><td><a href="Pack.html#VALread">read</a> [<a href="Pack.html">Pack</a>]</td>
 <td><div class="info">
 Return the value stored in the pack file.
@@ -636,7 +682,7 @@ Read a given number of bits.
 </td></tr>
 <tr><td><a href="Store.S.html#VALread_exn">read_exn</a> [<a href="Store.S.html">Store.S</a>]</td>
 <td><div class="info">
-Same as <code class="code">read</code> but raises <code class="code">Not_found</code> if no object with the given
+Same as <code class="code">read</code> but raises <code class="code"><span class="constructor">Not_found</span></code> if no object with the given
       SHA is found.
 </div>
 </td></tr>
@@ -761,7 +807,7 @@ Pretty-print errors.
 </td></tr>
 <tr><td><a href="Tree.html#VALstring_of_perm">string_of_perm</a> [<a href="Tree.html">Tree</a>]</td>
 <td><div class="info">
-Raw represention of a permission, using the <code class="code">Git</code> format.
+Raw represention of a permission, using the <code class="code"><span class="constructor">Git</span></code> format.
 </div>
 </td></tr>
 <tr><td><a href="Misc.html#VALstring_split">string_split</a> [<a href="Misc.html">Misc</a>]</td>
@@ -836,13 +882,18 @@ A node might be a node.
 </td></tr>
 <tr><td><a href="Gri.html#VALto_uri">to_uri</a> [<a href="Gri.html">Gri</a>]</td>
 <td><div class="info">
-Cast to <code class="code">Uri.t</code>.
+Cast to <code class="code"><span class="constructor">Uri</span>.t</code>.
 </div>
 </td></tr>
 <tr><td><a href="Packed_value.PIC.html#VALto_value">to_value</a> [<a href="Packed_value.PIC.html">Packed_value.PIC</a>]</td>
 <td><div class="info">
 <code class="code">to_value p</code> unpacks the packed position-independant value
       <code class="code">p</code>.
+</div>
+</td></tr>
+<tr><td><a href="Packed_value.html#VALto_value">to_value</a> [<a href="Packed_value.html">Packed_value</a>]</td>
+<td><div class="info">
+Unpack the packed value using the provided indexes.
 </div>
 </td></tr>
 <tr><td><a href="Value.html#VALtree">tree</a> [<a href="Value.html">Value</a>]</td>
@@ -852,7 +903,7 @@ Cast a tree to an object.
 </td></tr>
 <tr><td><a href="Misc.html#VALtry_assoc">try_assoc</a> [<a href="Misc.html">Misc</a>]</td>
 <td><div class="info">
-Same as <code class="code">List.assoc</code> but returns <code class="code">None</code> if no element is found.
+Same as <code class="code"><span class="constructor">List</span>.assoc</code> but returns <code class="code"><span class="constructor">None</span></code> if no element is found.
 </div>
 </td></tr>
 <tr><td><a href="Value.html#VALtype_of">type_of</a> [<a href="Value.html">Value</a>]</td>

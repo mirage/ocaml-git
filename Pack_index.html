@@ -8,6 +8,7 @@
 <link rel="next" href="Packed_value.html">
 <link rel="Up" href="index.html">
 <link title="Index of types" rel=Appendix href="index_types.html">
+<link title="Index of exceptions" rel=Appendix href="index_exceptions.html">
 <link title="Index of values" rel=Appendix href="index_values.html">
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
@@ -45,61 +46,30 @@
 </div>
 <h1>Module <a href="type_Pack_index.html">Pack_index</a></h1>
 
-<pre><span class="keyword">module</span> Pack_index: <code class="code">sig</code> <a href="Pack_index.html">..</a> <code class="code">end</code></pre><div class="info module top">
+<pre><span class="keyword">module</span> Pack_index: <code class="code"><span class="keyword">sig</span></code> <a href="Pack_index.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><div class="info module top">
 Pack indexes.<br>
 </div>
 <hr width="100%">
 
-<pre><code><span id="TYPEt"><span class="keyword">type</span> <code class="type"></code>t</span> = {</code></pre><table class="typetable">
-<tr>
-<td align="left" valign="top" >
-<code>&nbsp;&nbsp;</code></td>
-<td align="left" valign="top" >
-<code><span id="TYPEELTt.offsets">offsets</span>&nbsp;: <code class="type">int SHA.Map.t</code>;</code></td>
-
-</tr>
-<tr>
-<td align="left" valign="top" >
-<code>&nbsp;&nbsp;</code></td>
-<td align="left" valign="top" >
-<code><span id="TYPEELTt.crcs">crcs</span>&nbsp;: <code class="type">int32 SHA.Map.t</code>;</code></td>
-
-</tr>
-<tr>
-<td align="left" valign="top" >
-<code>&nbsp;&nbsp;</code></td>
-<td align="left" valign="top" >
-<code><span id="TYPEELTt.pack_checksum">pack_checksum</span>&nbsp;: <code class="type">SHA.t</code>;</code></td>
-
-</tr></table>
-}
-
+<pre><span class="keyword">module</span> <a href="Pack_index.Raw.html">Raw</a>: <code class="code"><span class="keyword">sig</span></code> <a href="Pack_index.Raw.html">..</a> <code class="code"><span class="keyword">end</span></code></pre>
+<pre><span id="TYPEt"><span class="keyword">type</span> <code class="type"></code>t</span> </pre>
 <div class="info ">
-<code class="code">offsests</code> is the positions of the SHA objects in the
-    corresponding raw pack file.
-<p>
-
-    <code class="code">crcs</code> contains the CRC-32 value of the packed object data.
-<p>
-
-    <code class="code">pack_checksum</code> is the corresponding pack file checksums, value
-    which is needed when writing the pack index file to disk.<br>
+Abstract type of pack index.<br>
 </div>
 
 
-<pre><span class="keyword">include</span> <a href="Object.S.html">Object.S</a></pre>
-
-<pre><span id="VALkeys"><span class="keyword">val</span> keys</span> : <code class="type">Mstruct.t -> SHA.Set.t</code></pre><div class="info ">
-Read only the keys contained in the index.<br>
+<pre><span id="VALcreate"><span class="keyword">val</span> create</span> : <code class="type">?cache_size:int -> Cstruct.buffer -> <a href="Pack_index.html#TYPEt">t</a></code></pre><div class="info ">
+Create a pack index object. The results of <code class="code">find_offset</code> are cached
+    for upto <code class="code">cache_size</code> SHA objects<br>
 </div>
 
-<pre><span id="VALlengths"><span class="keyword">val</span> lengths</span> : <code class="type"><a href="Pack_index.html#TYPEt">t</a> -> int option SHA.Map.t</code></pre><div class="info ">
-<code class="code">lengths</code> returns the difference between two consecutive offsets
-    (appart for the last elements, where the lenght can be <code class="code">None</code> is
-    the index file is build from a raw pack file).<br>
+<pre><span id="VALfind_offset"><span class="keyword">val</span> find_offset</span> : <code class="type">?scan_thresh:int -> <a href="Pack_index.html#TYPEt">t</a> -> SHA.t -> int option</code></pre><div class="info ">
+<code class="code">find_offset</code> searches the index for the offset of the SHA object.
+    Binary search is performed until the candidates are narrowed down to
+    <code class="code">scan_thresh</code> or less.<br>
 </div>
 
-<pre><span id="VALempty"><span class="keyword">val</span> empty</span> : <code class="type">?pack_checksum:SHA.t -> unit -> <a href="Pack_index.html#TYPEt">t</a></code></pre><div class="info ">
-The empty pack index.<br>
+<pre><span id="VALmem"><span class="keyword">val</span> mem</span> : <code class="type"><a href="Pack_index.html#TYPEt">t</a> -> SHA.t -> bool</code></pre><div class="info ">
+<code class="code">mem</code> checks if the SHA object is contained in the index object<br>
 </div>
 </body></html>

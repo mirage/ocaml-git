@@ -4,6 +4,7 @@
 <meta content="text/html; charset=iso-8859-1" http-equiv="Content-Type">
 <link rel="Start" href="index.html">
 <link title="Index of types" rel=Appendix href="index_types.html">
+<link title="Index of exceptions" rel=Appendix href="index_exceptions.html">
 <link title="Index of values" rel=Appendix href="index_values.html">
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
@@ -141,7 +142,7 @@ These fields are used as a part of a heuristic to determine if the
 </td></tr>
 <tr><td><a href="Search.html#TYPEsucc">succ</a> [<a href="Search.html">Search</a>]</td>
 <td><div class="info">
-<code class="code">Value.t</code> successors.
+<code class="code"><span class="constructor">Value</span>.t</code> successors.
 </div>
 </td></tr>
 <tr><td align="left"><br>T</td></tr>
@@ -189,10 +190,15 @@ Abstract value for stores.
 <td></td></tr>
 <tr><td><a href="Packed_value.html#TYPEt">t</a> [<a href="Packed_value.html">Packed_value</a>]</td>
 <td></td></tr>
-<tr><td><a href="Pack_index.html#TYPEt">t</a> [<a href="Pack_index.html">Pack_index</a>]</td>
+<tr><td><a href="Pack_index.Raw.html#TYPEt">t</a> [<a href="Pack_index.Raw.html">Pack_index.Raw</a>]</td>
 <td><div class="info">
 <code class="code">offsests</code> is the positions of the SHA objects in the
-    corresponding raw pack file.
+      corresponding raw pack file.
+</div>
+</td></tr>
+<tr><td><a href="Pack_index.html#TYPEt">t</a> [<a href="Pack_index.html">Pack_index</a>]</td>
+<td><div class="info">
+Abstract type of pack index.
 </div>
 </td></tr>
 <tr><td><a href="Pack.html#TYPEt">t</a> [<a href="Pack.html">Pack</a>]</td>

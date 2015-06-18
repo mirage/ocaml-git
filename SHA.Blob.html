@@ -7,6 +7,7 @@
 <link rel="previous" href="SHA.Tree.html">
 <link rel="Up" href="SHA.html">
 <link title="Index of types" rel=Appendix href="index_types.html">
+<link title="Index of exceptions" rel=Appendix href="index_exceptions.html">
 <link title="Index of values" rel=Appendix href="index_values.html">
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
@@ -86,6 +87,22 @@ Add the hex-encoding of the SHA1 value to the buffer.<br>
 
 <pre><span id="VALzero"><span class="keyword">val</span> zero</span> : <code class="type">t</code></pre><div class="info ">
 A SHA1 full of zero. Useful for padding.<br>
+</div>
+
+<pre><span id="VALlength"><span class="keyword">val</span> length</span> : <code class="type">t -> int</code></pre><div class="info ">
+The number of hex digits in the SHA1.<br>
+</div>
+
+<pre><span id="VALis_short"><span class="keyword">val</span> is_short</span> : <code class="type">t -> bool</code></pre><div class="info ">
+Check if the SHA1 is abbreviated.<br>
+</div>
+
+<pre><span id="VALlt"><span class="keyword">val</span> lt</span> : <code class="type">t -> t -> bool</code></pre><div class="info ">
+(&lt;) relation between SHA1s.<br>
+</div>
+
+<pre><span id="VALis_prefix"><span class="keyword">val</span> is_prefix</span> : <code class="type">t -> t -> bool</code></pre><div class="info ">
+Check if a SHA1 is a prefix of another SHA1.<br>
 </div>
 
 <pre><span class="keyword">module</span> <a href="SHA.S.Set.html">Set</a>: <code class="type"><a href="Misc.Set.html">Misc.Set</a></code><code class="type">  with type elt = t</code></pre>

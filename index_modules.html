@@ -4,6 +4,7 @@
 <meta content="text/html; charset=iso-8859-1" http-equiv="Content-Type">
 <link rel="Start" href="index.html">
 <link title="Index of types" rel=Appendix href="index_types.html">
+<link title="Index of exceptions" rel=Appendix href="index_exceptions.html">
 <link title="Index of values" rel=Appendix href="index_values.html">
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
@@ -71,7 +72,7 @@ Create a Irmin store from raw block devices hanlder.
 </td></tr>
 <tr><td><a href="Git_unix.FS.html">FS</a> [<a href="Git_unix.html">Git_unix</a>]</td>
 <td><div class="info">
-Implementation of the on-disk Git protocol using <code class="code">Lwt_unix</code>.
+Implementation of the on-disk Git protocol using <code class="code"><span class="constructor">Lwt_unix</span></code>.
 </div>
 </td></tr>
 <tr><td><a href="FS.html">FS</a> </td>
@@ -104,6 +105,8 @@ Git ressource identifiers (GRI).
 <tr><td align="left"><br>I</td></tr>
 <tr><td><a href="Misc.I.html">I</a> [<a href="Misc.html">Misc</a>]</td>
 <td></td></tr>
+<tr><td><a href="Git_mirage.Sync.IO.html">IO</a> [<a href="Git_mirage.Sync.html">Git_mirage.Sync</a>]</td>
+<td></td></tr>
 <tr><td><a href="Git_unix.FS.IO.html">IO</a> [<a href="Git_unix.FS.html">Git_unix.FS</a>]</td>
 <td></td></tr>
 <tr><td><a href="Git_unix.Sync.IO.html">IO</a> [<a href="Git_unix.Sync.html">Git_unix.Sync</a>]</td>
@@ -122,6 +125,8 @@ The graph of Git keys.
 </div>
 </td></tr>
 <tr><td align="left"><br>M</td></tr>
+<tr><td><a href="Git_mirage.Sync.Make.html">Make</a> [<a href="Git_mirage.Sync.html">Git_mirage.Sync</a>]</td>
+<td></td></tr>
 <tr><td><a href="Git_unix.Sync.Make.html">Make</a> [<a href="Git_unix.Sync.html">Git_unix.Sync</a>]</td>
 <td></td></tr>
 <tr><td><a href="FS.Make.html">Make</a> [<a href="FS.html">FS</a>]</td>
@@ -193,6 +198,8 @@ Packed values.
 </div>
 </td></tr>
 <tr><td align="left"><br>R</td></tr>
+<tr><td><a href="Pack_index.Raw.html">Raw</a> [<a href="Pack_index.html">Pack_index</a>]</td>
+<td></td></tr>
 <tr><td><a href="Pack.Raw.html">Raw</a> [<a href="Pack.html">Pack</a>]</td>
 <td></td></tr>
 <tr><td><a href="Reference.html">Reference</a> </td>
@@ -200,6 +207,8 @@ Packed values.
 Branch references.
 </div>
 </td></tr>
+<tr><td><a href="Git_mirage.Sync.Result.html">Result</a> [<a href="Git_mirage.Sync.html">Git_mirage.Sync</a>]</td>
+<td></td></tr>
 <tr><td><a href="Git_unix.Sync.Result.html">Result</a> [<a href="Git_unix.Sync.html">Git_unix.Sync</a>]</td>
 <td></td></tr>
 <tr><td><a href="Sync.Result.html">Result</a> [<a href="Sync.html">Sync</a>]</td>
@@ -226,9 +235,11 @@ Search over the Git objects
 Signature for Git stores.
 </div>
 </td></tr>
+<tr><td><a href="Git_mirage.Sync.html">Sync</a> [<a href="Git_mirage.html">Git_mirage</a>]</td>
+<td></td></tr>
 <tr><td><a href="Git_unix.Sync.html">Sync</a> [<a href="Git_unix.html">Git_unix</a>]</td>
 <td><div class="info">
-Implementation of the Git protocol using <code class="code">Lwt_unix</code> and <code class="code">Lwt_io</code>
+Implementation of the Git protocol using <code class="code"><span class="constructor">Lwt_unix</span></code> and <code class="code"><span class="constructor">Lwt_io</span></code>
     IO functions.
 </div>
 </td></tr>
