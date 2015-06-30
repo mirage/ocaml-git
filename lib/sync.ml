@@ -282,9 +282,10 @@ module Make (IO: IO) (Store: Store.S) = struct
       let uri = Gri.to_uri t.gri in
       let message =
         let buf = Buffer.create 1024 in
+        let path = match Uri.path uri with "" -> "/" | p  -> p in
         Buffer.add_string buf (string_of_request t.request);
         Buffer.add_char   buf Misc.sp;
-        Buffer.add_string buf (Uri.path uri);
+        Buffer.add_string buf path;
         Buffer.add_char   buf Misc.nul;
         begin match Uri.host uri with
           | None   -> ()

@@ -1,3 +1,7 @@
+### 1.5.2
+
+* Fix handling of empty paths (#89)
+
 ### 1.5.1 (2015-06-18)
 
 * Fix filesystem expansion when a filen ame becomes a directory name or when
