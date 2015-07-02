@@ -139,13 +139,18 @@ end
 
 module D = struct
 
-  let protect_exn = function
+  let protect_unix_exn = function
     | Unix.Unix_error _ as e -> Lwt.fail (Failure (Printexc.to_string e))
     | e -> Lwt.fail e
 
-  let protect f x = Lwt.catch (fun () -> f x) protect_exn
+  let ignore_unix_exn = function
+    | Unix.Unix_error _ -> Lwt.return_unit
+    | e -> Lwt.fail e
 
-  let remove_file f = protect Lwt_unix.unlink f
+  let protect f x = Lwt.catch (fun () -> f x) protect_unix_exn
+  let safe f x = Lwt.catch (fun () -> f x) ignore_unix_exn
+
+  let remove_file f = safe Lwt_unix.unlink f
 
   let mkdir dirname =
     let rec aux dir =
