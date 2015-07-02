@@ -31,10 +31,13 @@ depends: [
   "lwt"        {>= "2.4.7"}
   "hex"
   "alcotest"         {test}
-  "mirage-fs-unix"   {test & >="1.1.4"}
   "mirage-types-lwt" {test}
+  "mirage-flow"      {test}
+  "mirage-http"      {test}
+  "mirage-fs-unix"   {test & >="1.1.4"}
   "cohttp"           {test}
   "conduit"          {test}
+  "base-unix"        {test}
 ]
 depopts: [
   # --enable-mirage
