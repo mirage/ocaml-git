@@ -452,22 +452,22 @@ let rec unpack ?(lv=0) ~version ~index ~ba (pos, t) =
     match version with
     | 2 -> V2.input
     | 3 -> V3.input
-    | _ -> 
+    | _ ->
       eprintf "pack version should be 2 or 3";
       failwith "Packed_value.unpack"
   in
-  let unpacked = 
+  let unpacked =
     match t with
     | Raw_value x -> begin
-        Log.debug "unpack[%d]: Raw_value" lv; 
+        Log.debug "unpack[%d]: Raw_value" lv;
         x
       end
-    | Ref_delta d -> begin 
+    | Ref_delta d -> begin
         Log.debug "unpack[%d]: Ref_delta: d.source=%s" lv (SHA.to_hex d.source);
         match Pack_index.find_offset index d.source with
         | Some offset -> begin
             Log.debug "unpack[%d]: offset=%d" lv offset;
-            let offset = offset - 12 in (* header skipped *) 
+            let offset = offset - 12 in (* header skipped *)
             let buf = Mstruct.of_bigarray ~off:offset ~len:(ba_len-offset) ba in
             let packed_v = input_packed_value buf in
             let u = unpack ~lv:(lv+1) ~version ~index ~ba (offset, packed_v) in
