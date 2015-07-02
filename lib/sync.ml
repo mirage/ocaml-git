@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Lwt
+open Lwt.Infix
 open Printf
 
 module Log = Log.Make(struct let section = "sync" end)
@@ -152,7 +152,7 @@ module Make (IO: IO) (Store: Store.S) = struct
       match size with
       | "0000" ->
         Log.debug "RECEIVED: FLUSH";
-        return_none
+        Lwt.return_none
       | size   ->
         let size =
           let str = "0x" ^ size in
@@ -162,18 +162,20 @@ module Make (IO: IO) (Store: Store.S) = struct
         in
         IO.read_exactly ic size >>= fun payload ->
         Log.debug "RECEIVED: %S (%d)" payload size;
-        return (Some payload)
+        Lwt.return (Some payload)
+
+    let niet = Lwt.return (Some "")
 
     let input ic =
       input_raw ic >>= function
-      | None    -> return_none
-      | Some "" -> return (Some "")
+      | None    -> Lwt.return_none
+      | Some "" -> niet
       | Some s  ->
         let size = String.length s in
         if s.[size - 1] <> Misc.lf then
           error "input: the payload doesn't have a trailing LF";
         let s = String.sub s 0 (size-1) in
-        return (Some s)
+        Lwt.return (Some s)
 
   end
 
@@ -391,7 +393,7 @@ module Make (IO: IO) (Store: Store.S) = struct
       Log.debug "Listing.input (protocol=%s)" (pretty_protocol protocol);
       let skip_smart_http () =
         match protocol with
-        | `Git | `SSH -> return_unit
+        | `Git | `SSH -> Lwt.return_unit
         | `Smart_HTTP ->
           PacketLine.input ic >>= function
           | None      -> error "SMART-HTTP: missing # header."
@@ -400,7 +402,7 @@ module Make (IO: IO) (Store: Store.S) = struct
             | Some ("#", service) ->
               Log.debug "skipping %s" service;
               begin PacketLine.input ic >>= function
-              | None   -> return_unit
+              | None   -> Lwt.return_unit
               | Some x -> error "SMART-HTTP: waiting for pkt-flush, got %S" x
               end
             | Some _ -> error "SMART-HTTP: waiting for # header, got %S" line
@@ -408,7 +410,7 @@ module Make (IO: IO) (Store: Store.S) = struct
       in
       let rec aux acc =
         PacketLine.input ic >>= function
-        | None      -> return acc
+        | None      -> Lwt.return acc
         | Some line ->
           match Misc.string_lsplit2 line ~on:Misc.sp with
           | Some ("ERR", err) -> error "ERROR: %s" err
@@ -461,13 +463,14 @@ module Make (IO: IO) (Store: Store.S) = struct
       Log.debug "Ack.input";
       PacketLine.input ic >>= function
       | None
-      | Some "NAK" -> return Nak
+      | Some "NAK" -> Lwt.return Nak
       | Some s      ->
         match Misc.string_lsplit2 s ~on:Misc.sp with
         | Some ("ACK", r) ->
           begin match Misc.string_lsplit2 r ~on:Misc.sp with
-            | None         -> return (Ack (SHA.of_hex r))
-            | Some (id, s) -> return (Ack_multi (SHA.of_hex id, status_of_string s))
+            | None         -> Lwt.return (Ack (SHA.of_hex r))
+            | Some (id, s) ->
+              Lwt.return (Ack_multi (SHA.of_hex id, status_of_string s))
           end
         | _ -> error "%S invalid ack" s
 
@@ -475,7 +478,7 @@ module Make (IO: IO) (Store: Store.S) = struct
       Log.debug "Ack.inputs";
       let rec aux acc =
         input ic >>= function
-        | Nak -> return (List.rev (Nak :: acc))
+        | Nak -> Lwt.return (List.rev (Nak :: acc))
         | tok -> aux (tok :: acc)
       in
       aux []
@@ -522,7 +525,7 @@ module Make (IO: IO) (Store: Store.S) = struct
       Log.debug "Upload.input";
       let rec aux acc =
         PacketLine.input_raw ic >>= function
-        | None   -> return (List.rev acc)
+        | None   -> Lwt.return (List.rev acc)
         | Some l ->
           match Misc.string_lsplit2 l ~on:Misc.sp with
           | None -> error "input upload"
@@ -590,7 +593,7 @@ module Make (IO: IO) (Store: Store.S) = struct
       Lwt_list.iter_s (fun id ->
           let msg = Printf.sprintf "have %s\n" (SHA.to_hex id) in
           PacketLine.output_line oc msg >>= fun () ->
-          return_unit
+          Lwt.return_unit
         ) (filter_haves t)
       >>= fun () ->
 
@@ -600,7 +603,7 @@ module Make (IO: IO) (Store: Store.S) = struct
           let msg = Printf.sprintf "deepen %d" deepen in
           PacketLine.output_line oc msg;
         ) else
-          return_unit
+          Lwt.return_unit
       end >>= fun () ->
 
       (* output done *)
@@ -628,9 +631,9 @@ module Make (IO: IO) (Store: Store.S) = struct
         input ic >>= fun res ->
         let shallows = filter_shallows res in
         let unshallows = filter_unshallows res in
-        return (Some { shallows; unshallows })
+        Lwt.return (Some { shallows; unshallows })
       else
-        return_none
+        Lwt.return_none
 
     let pick n l =
       let rec aux i acc l =
@@ -658,7 +661,7 @@ module Make (IO: IO) (Store: Store.S) = struct
       let haves = List.map (fun id -> Have id) haves in
       aux haves >>= fun () ->
       Ack.input ic >>= fun _ack ->
-      return_unit
+      Lwt.return_unit
 
   end
 
@@ -712,17 +715,17 @@ module Make (IO: IO) (Store: Store.S) = struct
       Log.debug "Side_band.input";
       let rec aux acc =
         PacketLine.input_raw ic >>= function
-        | None    -> return (List.rev acc)
+        | None    -> Lwt.return (List.rev acc)
         | Some "" -> aux acc
         | Some s  ->
           let payload = String.sub s 1 (String.length s - 1) in
           match kind s.[0] with
           | Pack     -> aux (payload :: acc)
           | Progress -> Log.info "remote: %s" payload; aux acc
-          | Fatal    -> fail (Error payload)
+          | Fatal    -> Lwt.fail (Error payload)
       in
       aux [] >>= fun bufs ->
-      return (String.concat "" bufs)
+      Lwt.return (String.concat "" bufs)
 
   end
 
@@ -799,33 +802,35 @@ module Make (IO: IO) (Store: Store.S) = struct
 
     let input ic =
       PacketLine.input ic >>= function
-      | None -> fail (Failure "Report_status.input: empty")
+      | None -> Lwt.fail (Failure "Report_status.input: empty")
       | Some line ->
         begin match Misc.string_lsplit2 line ~on:Misc.sp with
-          | Some ("unpack", "ok") -> return `Ok
-          | Some ("unpack", err ) -> return (`Error err)
-          | _ -> fail (Failure "Report_status.input: unpack-status")
+          | Some ("unpack", "ok") -> Lwt.return `Ok
+          | Some ("unpack", err ) -> Lwt.return (`Error err)
+          | _ -> Lwt.fail (Failure "Report_status.input: unpack-status")
         end >>= fun result ->
         let aux acc =
           PacketLine.input ic >>= function
-          | None      -> return acc
+          | None      -> Lwt.return acc
           | Some line ->
             match Misc.string_lsplit2 line ~on:Misc.sp with
-            | Some ("ok", name)  -> return ((Reference.of_raw name, `Ok) :: acc)
+            | Some ("ok", name)  ->
+              Lwt.return ((Reference.of_raw name, `Ok) :: acc)
             | Some ("ng", cont)  ->
               begin match Misc.string_lsplit2 cont ~on:Misc.sp with
-                | None  -> fail (Failure "Report_status.input: command-fail")
-                | Some (name, err) -> return ((Reference.of_raw name, `Error err) :: acc)
+                | None  -> Lwt.fail (Failure "Report_status.input: command-fail")
+                | Some (name, err) ->
+                  Lwt.return ((Reference.of_raw name, `Error err) :: acc)
               end
-            | _ -> fail (Failure "Report_status.input: command-status")
+            | _ -> Lwt.fail (Failure "Report_status.input: command-status")
         in
         aux [] >>= fun commands ->
-        return { Result.result; commands }
+        Lwt.return { Result.result; commands }
 
   end
 
   let todo msg =
-    fail (Failure ("TODO: " ^ msg))
+    Lwt.fail (Failure ("TODO: " ^ msg))
 
   type clone = {
     c_deepen: int option;
@@ -948,12 +953,12 @@ module Make (IO: IO) (Store: Store.S) = struct
     | []    ->
       Log.debug "NO NEW OBJECTS";
       Log.info "Already up-to-date.";
-      return { Result.head = Some head; references; sha1s = [] }
+      Lwt.return { Result.head = Some head; references; sha1s = [] }
     | sha1s ->
       Log.debug "NEW OBJECTS";
       Log.info "remote: Counting objects: %d, done."
         (List.length sha1s);
-      return { Result.head = Some head; references; sha1s }
+      Lwt.return { Result.head = Some head; references; sha1s }
 
   let fetch_pack ?ctx t gri op =
     Log.debug "Sync.fetch_pack";
@@ -977,17 +982,17 @@ module Make (IO: IO) (Store: Store.S) = struct
               (SHA.Commit.Map.to_alist (Listing.references listing)) in
           let head = Listing.head listing in
           match op with
-          | Ls      -> return { Result.head; references; sha1s = [] }
+          | Ls      -> Lwt.return { Result.head; references; sha1s = [] }
           | Fetch _
           | Clone _ ->
             begin match op with
-              | Ls | Fetch { f_update_tags = false; _ } -> return_unit
+              | Ls | Fetch { f_update_tags = false; _ } -> Lwt.return_unit
               | Clone _ | Fetch _ ->
                 try
                   let write_ref (ref, sha1) =
                     if Reference.is_valid ref then
                       Store.write_reference t ref sha1
-                    else return_unit in
+                    else Lwt.return_unit in
                   let references_no_head =
                     Reference.Map.remove Reference.head references
                   in
@@ -998,12 +1003,12 @@ module Make (IO: IO) (Store: Store.S) = struct
                   let contents = Reference.head_contents references sha1 in
                   match op with
                   | Clone _ -> Store.write_head t contents
-                  | _ -> return_unit
+                  | _ -> Lwt.return_unit
                 with Not_found ->
-                  return_unit
+                  Lwt.return_unit
             end >>= fun () ->
             match head with
-            | None -> return { Result.head; references; sha1s = [] }
+            | None -> Lwt.return { Result.head; references; sha1s = [] }
             | Some head ->
               if protocol = `Smart_HTTP then
                 let init = Init.upload_pack ~discover:false gri in
@@ -1018,7 +1023,7 @@ module Make (IO: IO) (Store: Store.S) = struct
 
   let ls ?ctx t gri =
     fetch_pack ?ctx t gri Ls >>= function
-      { Result.references; _ } -> return references
+      { Result.references; _ } -> Lwt.return references
 
   let clone ?ctx t ?deepen ?(unpack=false) ?(capabilities=Capabilities.default)
       gri =
