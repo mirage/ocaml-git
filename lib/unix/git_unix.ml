@@ -16,7 +16,6 @@
 
 open Lwt
 open Git
-open Printf
 
 module Log = Log.Make(struct let section = "unix" end)
 
@@ -144,22 +143,22 @@ module D = struct
     | Unix.Unix_error _ as e -> Lwt.fail (Failure (Printexc.to_string e))
     | e -> Lwt.fail e
 
-  let protect f x =
-    Lwt.catch (fun () -> f x) protect_exn
+  let protect f x = Lwt.catch (fun () -> f x) protect_exn
 
-  (* FIXME: do not shell out *)
-  let remove_file f =
-    let _ = Sys.command (sprintf "rm -f %s" f) in
-    ()
+  let remove_file f = protect Lwt_unix.unlink f
 
   let mkdir dirname =
     let rec aux dir =
       if Sys.file_exists dir && Sys.is_directory dir then return_unit
       else (
-        if Sys.file_exists dir then (
-          Log.debug "%s already exists but os a file, removing." dir;
-          remove_file dir;
-        );
+        let clear =
+          if Sys.file_exists dir then (
+            Log.debug "%s already exists but os a file, removing." dir;
+            remove_file dir;
+          ) else
+            Lwt.return_unit
+        in
+        clear >>= fun () ->
         aux (Filename.dirname dir) >>= fun () ->
         Log.debug "mkdir %s" dir;
         protect (Lwt_unix.mkdir dir) 0o755;
@@ -292,10 +291,13 @@ module D = struct
   let file_exists f =
     return (Sys.file_exists f)
 
-  (* FIXME: do not shell out *)
   let remove f =
-    let _ = Sys.command (sprintf "rm -rf %s" f) in
-    return_unit
+    if Sys.file_exists f && not (Sys.is_directory f) then remove_file f
+    else if not (Sys.file_exists f) then Lwt.return_unit
+    else
+      (* FIXME: eeek *)
+      let i = Sys.command ("rm -rf " ^ f) in
+      if i = 0 then Lwt.return_unit else Lwt.fail (Failure ("Cannot remove " ^ f))
 
   let chmod f i =
     return (Unix.chmod f i)
