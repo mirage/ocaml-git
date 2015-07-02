@@ -29,10 +29,15 @@ let protocol uri = match Uri.scheme uri with
   | Some x -> `Not_supported x
   | None   -> `Unknown
 
+let err fmt = Printf.ksprintf failwith fmt
+let err_unknkown () = err "Unknown Git protocol"
+let err_not_supported x = err "%s is not a supported Git protocol" x
+let err_unknown_tag t = err "%s: unknown tag" (Reference.pretty t)
+
 let protocol_exn uri = match protocol uri with
-  | `Ok x -> x
-  | `Unknown -> failwith (sprintf "Unknown Git protocol")
-  | `Not_supported x -> failwith (sprintf "%s is not a supported Git protocol" x)
+  | `Ok x            -> x
+  | `Unknown         -> err_unknkown ()
+  | `Not_supported x -> err_not_supported x
 
 let pretty_protocol = function
   | `Git -> "git"
@@ -114,6 +119,9 @@ module Make (IO: IO) (Store: Store.S) = struct
         raise Error
       ) fmt
 
+  let err_invalid_integer fn str =
+    error "%s: %S is not a valid integer" fn str
+
   module PacketLine = struct
 
     type t = string option
@@ -146,6 +154,9 @@ module Make (IO: IO) (Store: Store.S) = struct
     let flush oc =
       output oc None
 
+    let err_no_trailing_lf () =
+      error "PacketLine.input: the payload doesn't have a trailing LF"
+
     let input_raw ic: t Lwt.t =
       Log.debug "PacketLine.input";
       IO.read_exactly ic 4 >>= fun size ->
@@ -157,8 +168,7 @@ module Make (IO: IO) (Store: Store.S) = struct
         let size =
           let str = "0x" ^ size in
           try int_of_string str - 4
-          with Failure _ ->
-            error "PacketLine.input: %S is not a valid integer" str
+          with Failure _ -> err_invalid_integer "PacketLine.input" str
         in
         IO.read_exactly ic size >>= fun payload ->
         Log.debug "RECEIVED: %S (%d)" payload size;
@@ -172,8 +182,7 @@ module Make (IO: IO) (Store: Store.S) = struct
       | Some "" -> niet
       | Some s  ->
         let size = String.length s in
-        if s.[size - 1] <> Misc.lf then
-          error "input: the payload doesn't have a trailing LF";
+        if s.[size - 1] <> Misc.lf then err_no_trailing_lf ();
         let s = String.sub s 0 (size-1) in
         Lwt.return (Some s)
 
@@ -391,22 +400,23 @@ module Make (IO: IO) (Store: Store.S) = struct
 
     let input ic protocol =
       Log.debug "Listing.input (protocol=%s)" (pretty_protocol protocol);
+      let error fmt = error ("[SMART-HTTP] Listing.input:" ^^ fmt) in
       let skip_smart_http () =
         match protocol with
         | `Git | `SSH -> Lwt.return_unit
         | `Smart_HTTP ->
           PacketLine.input ic >>= function
-          | None      -> error "SMART-HTTP: missing # header."
+          | None      -> error "missing # header."
           | Some line ->
             match Misc.string_lsplit2 line ~on:Misc.sp with
             | Some ("#", service) ->
               Log.debug "skipping %s" service;
               begin PacketLine.input ic >>= function
               | None   -> Lwt.return_unit
-              | Some x -> error "SMART-HTTP: waiting for pkt-flush, got %S" x
+              | Some x -> error "waiting for pkt-flush, got %S" x
               end
-            | Some _ -> error "SMART-HTTP: waiting for # header, got %S" line
-            | None   -> error "SMART-HTTP: waiting for # header, got pkt-flush"
+            | Some _ -> error "waiting for # header, got %S" line
+            | None   -> error "waiting for # header, got pkt-flush"
       in
       let rec aux acc =
         PacketLine.input ic >>= function
@@ -538,8 +548,7 @@ module Make (IO: IO) (Store: Store.S) = struct
             | "deepen"    ->
               let d =
                 try int_of_string s
-                with Failure _ ->
-                  error "Upload.input: %S is not a valid integer" s
+                with Failure _ -> err_invalid_integer "Upload.input" s
               in
               aux (Deepen d :: acc)
             | "want" ->
@@ -870,7 +879,7 @@ module Make (IO: IO) (Store: Store.S) = struct
           Store.read_reference t branch    >>= fun new_obj ->
           let old_obj = Listing.find_reference listing branch in
           let command = match old_obj, new_obj with
-            | None  , None   -> failwith (Reference.pretty branch ^ ": unknown tag")
+            | None  , None   -> err_unknown_tag branch
             | Some x, None   -> Update_request.Delete (branch, x)
             | None  , Some x -> Update_request.Create (branch, x)
             | Some x, Some y -> Update_request.Update (branch, x, y) in
