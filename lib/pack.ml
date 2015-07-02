@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Lwt
+open Lwt.Infix
 open Printf
 
 module Dolog = Log
@@ -293,11 +293,11 @@ let unpack ~read ~write buf =
       Printf.printf "\rUnpacking objects: %3d%% (%d/%d)%!" (!i*100/size) (!i+1) size;
       incr i;
       write value >>= fun _ ->
-      return_unit
+      Lwt.return_unit
     ) pack
   >>= fun () ->
   Printf.printf "\rUnpacking objects: 100%% (%d/%d), done.\n%!" !i !i;
-  return (keys pack)
+  Lwt.return (keys pack)
 
 let pack contents =
   let uncompressed =
