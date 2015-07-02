@@ -143,12 +143,12 @@ module D = struct
     | Unix.Unix_error _ as e -> Lwt.fail (Failure (Printexc.to_string e))
     | e -> Lwt.fail e
 
-  let ignore_unix_exn = function
-    | Unix.Unix_error _ -> Lwt.return_unit
+  let ignore_enoent = function
+    | Unix.Unix_error (Unix.ENOENT, _, _) -> Lwt.return_unit
     | e -> Lwt.fail e
 
   let protect f x = Lwt.catch (fun () -> f x) protect_unix_exn
-  let safe f x = Lwt.catch (fun () -> f x) ignore_unix_exn
+  let safe f x = Lwt.catch (fun () -> f x) ignore_enoent
 
   let remove_file f = safe Lwt_unix.unlink f
 
@@ -158,7 +158,7 @@ module D = struct
       else (
         let clear =
           if Sys.file_exists dir then (
-            Log.debug "%s already exists but os a file, removing." dir;
+            Log.debug "%s already exists but is a file, removing." dir;
             remove_file dir;
           ) else
             Lwt.return_unit
