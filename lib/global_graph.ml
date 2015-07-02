@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Lwt
+open Lwt.Infix
 
 let to_string node =
   let hex = SHA.to_hex node in
@@ -86,11 +86,11 @@ module Make (Store: Store.S) = struct
               let sha1 = Search.sha1_of_succ s in
               Store.read_exn t sha1 >>= fun v ->
               C.add_edge_e g (src, l, (sha1, v));
-              return_unit
+              Lwt.return_unit
             ) succs
         ) nodes
     end >>= fun () ->
-    return g
+    Lwt.return g
 
   let of_keys t =
     Log.debug "of_keys";
@@ -103,18 +103,18 @@ module Make (Store: Store.S) = struct
           Lwt_list.iter_p (fun s ->
               let sha1 = Search.sha1_of_succ s in
               if K.mem_vertex g sha1 then K.add_edge g src sha1;
-              return_unit
+              Lwt.return_unit
             ) succs
         ) nodes
     end >>= fun () ->
-    return g
+    Lwt.return g
 
   let to_dot t buf =
     Log.debug "to_dot";
     let fmt = Format.formatter_of_buffer buf in
     of_contents t >>= fun g ->
     Dot.fprint_graph fmt g;
-    return_unit
+    Lwt.return_unit
 
   (* XXX: From IrminGraph.closure *)
   let closure t ~min max =
@@ -126,11 +126,11 @@ module Make (Store: Store.S) = struct
     let min = SHA.Set.to_list min in
     Lwt_list.iter_p (fun k ->
         Store.mem t k >>= function
-        | false -> return_unit
+        | false -> Lwt.return_unit
         | true  ->
           mark k;
           K.add_vertex g k;
-          return_unit
+          Lwt.return_unit
       ) min >>= fun () ->
     let rec add key =
       if has_mark key then Lwt.return ()
@@ -138,7 +138,7 @@ module Make (Store: Store.S) = struct
         mark key;
         Log.debug "ADD %s" (SHA.to_hex key);
         Store.mem t key >>= function
-        | false -> return_unit
+        | false -> Lwt.return_unit
         | true  ->
           if not (K.mem_vertex g key) then K.add_vertex g key;
           Search.succ t key >>= fun succs ->
@@ -157,9 +157,9 @@ module Make (Store: Store.S) = struct
     closure t ~min max >>= fun g ->
     let keys = keys g in
     Lwt_list.map_p (fun k ->
-        Store.read_exn t k >>= fun v -> return (k, v)
+        Store.read_exn t k >>= fun v -> Lwt.return (k, v)
       ) keys
     >>= fun values ->
-    return (Pack.pack values)
+    Lwt.return (Pack.pack values)
 
 end
