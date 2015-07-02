@@ -53,7 +53,10 @@ module Make (Store: Store.S) = struct
     Nocrypto.Rng.reseed cs;
     Cstruct.to_string (Nocrypto.Rng.generate 1024)
 
-  let v1 = Value.blob (Blob.of_raw long_random_string)
+  let v0 = Value.blob (Blob.of_raw long_random_string)
+  let kv0 = Value.sha1 v0
+
+  let v1  = Value.blob (Blob.of_raw "hoho")
   let kv1 = Value.sha1 v1
 
   let v2 = Value.blob (Blob.of_raw "")
@@ -61,9 +64,16 @@ module Make (Store: Store.S) = struct
 
   (* Create a node containing t1 -w-> v1 *)
   let w = "a\000bbb\047"
-  let t1 = Value.tree ([
+  let t0 = Value.tree ([
       { Tree.perm = `Normal;
         name = w;
+        node = kv1 }
+    ])
+  let kt0 = Value.sha1 t0
+
+  let t1 = Value.tree ([
+      { Tree.perm = `Normal;
+        name = "x";
         node = kv1 }
     ])
   let kt1 = Value.sha1 t1
@@ -184,8 +194,8 @@ module Make (Store: Store.S) = struct
     Lwt_list.iter_p
       (fun v -> Store.write t v >>= fun _ -> return_unit)
       (if not index then [
-          v1; v2;
-          t1; t2; t3; t4;
+          v0; v1; v2;
+          t0; t1; t2; t3; t4;
           c1; c2;
         ] else [
          v1; v2;
@@ -212,7 +222,7 @@ module Make (Store: Store.S) = struct
       check_write t "v1" kv1 v1 >>= fun () ->
       check_write t "v2" kv2 v2 >>= fun () ->
 
-      check_keys t "blobs" Object_type.Blob [kv1; kv2] >>= fun () ->
+      check_keys t "blobs" Object_type.Blob [kv0; kv1; kv2] >>= fun () ->
       return_unit
     in
     run x test
@@ -225,15 +235,17 @@ module Make (Store: Store.S) = struct
       check_write t "t3" kt3 t3 >>= fun () ->
       check_write t "t4" kt4 t4 >>= fun () ->
 
-      check_find t "kt1:w"     kt1 [w]           kv1 >>= fun () ->
+      check_find t "kt0:w"     kt0 [w]           kv1 >>= fun () ->
+      check_find t "kt1:w"     kt1 ["x"]         kv1 >>= fun () ->
       check_find t "kt2:b"     kt2 ["b"]         kt1 >>= fun () ->
-      check_find t "kt2:b/w"   kt2 ["b";w]       kv1 >>= fun () ->
+      check_find t "kt2:b/x"   kt2 ["b";"x"]     kv1 >>= fun () ->
       check_find t "kt3:a"     kt3 ["a"]         kt2 >>= fun () ->
       check_find t "kt3:a/b"   kt3 ["a";"b"]     kt1 >>= fun () ->
-      check_find t "kt3:a/b/w" kt3 ["a";"b";w]   kv1 >>= fun () ->
+      check_find t "kt3:a/b/x" kt3 ["a";"b";"x"] kv1 >>= fun () ->
       check_find t "kt4:c"     kt4 ["c"]         kv2 >>= fun () ->
 
-      check_keys t "trees" Object_type.Tree [kt1; kt2; kt3; kt4] >>= fun () ->
+      check_keys t "trees" Object_type.Tree [kt0; kt1; kt2; kt3; kt4] >>=
+      fun () ->
 
       return_unit
     in
@@ -245,10 +257,10 @@ module Make (Store: Store.S) = struct
       check_write t "c1" kc1 c1 >>= fun () ->
       check_write t "c2" kc2 c2 >>= fun () ->
 
-      check_find t "c1:b"     kc1 ["";"b"]         kt1 >>= fun () ->
-      check_find t "c1:b/w"   kc1 ["";"b"; w]      kv1 >>= fun () ->
-      check_find t "c2:a/b/w" kc2 ["";"a";"b"; w]  kv1 >>= fun () ->
-      check_find t "c2:c"     kc2 ["";"c"]         kv2 >>= fun () ->
+      check_find t "c1:b"     kc1 ["";"b"]          kt1 >>= fun () ->
+      check_find t "c1:b/x"   kc1 ["";"b"; "x"]     kv1 >>= fun () ->
+      check_find t "c2:a/b/x" kc2 ["";"a";"b"; "x"] kv1 >>= fun () ->
+      check_find t "c2:c"     kc2 ["";"c"]          kv2 >>= fun () ->
 
       check_keys t "commits" Object_type.Commit [kc1; kc2] >>= fun () ->
 
