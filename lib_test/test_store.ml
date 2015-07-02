@@ -199,7 +199,7 @@ module Make (Store: Store.S) = struct
           c1; c2;
         ] else [
          v1; v2;
-         t1; t2; t5;
+         t1; t2; t4;
          c1; c3;
        ])
     >>= fun () ->
