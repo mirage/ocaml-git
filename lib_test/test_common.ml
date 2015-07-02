@@ -43,12 +43,6 @@ let printer_list f = function
   | [] -> "[]"
   | l  -> Printf.sprintf "[ %s ]" (String.concat ", " (List.map f l))
 
-let line msg =
-  let line () = Alcotest.line stderr ~color:`Yellow '-' in
-  line ();
-  Log.info "ASSERT %s" msg;
-  line ()
-
 module Make (S: Store.S) = struct
 
   let cmp_list eq comp l1 l2 =
@@ -64,7 +58,6 @@ module Make (S: Store.S) = struct
         end in
         (module M)
       in
-      line msg;
       Alcotest.check testable msg
     in
     aux equal pretty,
