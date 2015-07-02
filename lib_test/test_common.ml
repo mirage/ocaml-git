@@ -55,9 +55,18 @@ module Make (S: Store.S) = struct
     cmp_list eq (List.sort comp l1) (List.sort comp l2)
 
   let mk equal compare pretty =
-    let aux cmp printer msg =
+    let aux (type a) cmp printer msg =
+      let testable: a Alcotest.testable =
+        let module M = struct
+          type t = a
+          let equal = cmp
+          let pp fmt t = Format.pp_print_string fmt (printer t)
+        end in
+        (module M)
+      in
       line msg;
-      OUnit.assert_equal ~msg ~cmp ~printer in
+      Alcotest.check testable msg
+    in
     aux equal pretty,
     aux (cmp_opt equal) (printer_opt pretty),
     aux (cmp_list equal compare) (printer_list pretty)

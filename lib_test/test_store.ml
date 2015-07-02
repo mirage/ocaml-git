@@ -431,7 +431,7 @@ let test_read_writes () =
       | 0 -> return_unit
       | i ->
         Git_unix.FS.IO.read_file file >>= fun r ->
-        OUnit.assert_equal ~msg:"concurrent read/write" ~printer:(fun x -> x)
+        Alcotest.(check string) "concurrent read/write"
           (Cstruct.to_string payload) (Cstruct.to_string r);
         read (i-1)
     in
