@@ -172,7 +172,7 @@ let cat = {
         Lwt_io.with_file ~mode:Lwt_io.input file (fun x -> Lwt_io.read x)
         >>= fun buf ->
         let v = Value.input (Mstruct.of_string buf) in
-        Printf.printf "%s%!" (Value.pretty v);
+        Printf.printf "%s%!\n" (Value.pretty v);
         return_unit
       end in
     Term.(mk cat_file $ file)
@@ -211,15 +211,9 @@ let cat_file = {
                    let c = Tag.pretty tag in
                    "tag", c, String.length c
                in
-               if ty_flag then
-                 Printf.printf "%s%!" t;
-
-               if sz_flag then
-                 Printf.printf "%d%!" s;
-
-               if not ty_flag && not sz_flag then
-                 Printf.printf "%s%!" c;
-
+               if ty_flag then Printf.printf "%s%!\n" t;
+               if sz_flag then Printf.printf "%d%!\n" s;
+               if not ty_flag && not sz_flag then Printf.printf "%s%!\n" c;
                return_unit
              end
           )
