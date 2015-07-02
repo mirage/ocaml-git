@@ -71,12 +71,21 @@ let read t sha1 =
   try return (Some (Hashtbl.find t.values sha1))
   with Not_found -> return_none
 
+let err_write_pack expected got =
+  let str =
+    Printf.sprintf
+      "Git_memory.write_pack: wrong checksum.\n\
+       Expecting %s, but got %s."
+      (SHA.pretty expected) (SHA.pretty got)
+  in
+  failwith str
+
 let write_pack t pack =
   Pack.to_pic ~read:(read t) pack >>= fun pack ->
   Lwt_list.iter_p (fun (sha1, p) ->
       let v = Packed_value.PIC.to_value p in
       write t v >>= fun sha2 ->
-      if sha1 <> sha2 then failwith "Git_memory.write_pack";
+      if sha1 <> sha2 then err_write_pack sha1 sha2;
       return_unit
     ) pack
   >>= fun () ->
