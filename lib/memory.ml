@@ -63,8 +63,12 @@ let write t value =
     Hashtbl.add t.values sha1 value;
     return sha1
 
+let read t sha1 =
+  try return (Some (Hashtbl.find t.values sha1))
+  with Not_found -> return_none
+
 let write_pack t pack =
-  let pack = Pack.to_pic pack in
+  Pack.to_pic ~read:(read t) pack >>= fun pack ->
   Lwt_list.iter_p (fun (sha1, p) ->
       let v = Packed_value.PIC.to_value p in
       write t v >>= fun sha2 ->
@@ -79,10 +83,6 @@ let keys t =
 
 let list t =
   return (keys t.values)
-
-let read t sha1 =
-  try return (Some (Hashtbl.find t.values sha1))
-  with Not_found -> return_none
 
 let mem t sha1 =
   return (Hashtbl.mem t.values sha1)

@@ -223,18 +223,17 @@ let read (t:t) sha1 =
   | None     -> None
   | Some pic -> Some (Packed_value.PIC.to_value pic)
 
-let to_pic { Raw.values; inv_offs; _ } =
+let to_pic ~read { Raw.values; inv_offs; _ } =
   Log.debug "to_pic";
-  let _offsets, _sha1s, pics =
-    List.fold_left (fun (offsets, sha1s, pics) (pos, _, p) ->
-        let sha1 = Misc.IntMap.find pos (Lazy.force inv_offs) in
-        let pic = Packed_value.to_pic offsets sha1s (pos, sha1, p) in
-        Misc.IntMap.add pos pic offsets ,
-        SHA.Map.add sha1 pic sha1s,
-        (sha1, pic) :: pics
-      )
-      (Misc.IntMap.empty, SHA.Map.empty, [])
-      values in
+  Lwt_list.fold_left_s (fun (offsets, sha1s, pics) (pos, _, p) ->
+      let sha1 = Misc.IntMap.find pos (Lazy.force inv_offs) in
+      Packed_value.to_pic ~read offsets sha1s (pos, sha1, p) >|= fun pic ->
+      Misc.IntMap.add pos pic offsets ,
+      SHA.Map.add sha1 pic sha1s,
+      (sha1, pic) :: pics
+    )
+    (Misc.IntMap.empty, SHA.Map.empty, [])
+    values >|= fun (_offsets, _sha1s, pics) ->
   Log.debug "to_pic: ok";
   List.rev pics
 
@@ -255,9 +254,9 @@ let pp_hum ppf t =
 
 let pretty = Misc.pretty pp_hum
 
-let input buf ~index =
+let input ~read buf ~index =
   Log.debug "input";
-  to_pic (Raw.input buf ~index)
+  to_pic ~read (Raw.input buf ~index)
 
 let add_packed_value ~version ?level buf = match version with
   | 2 -> Packed_value.V2.add buf ?level
@@ -283,10 +282,10 @@ let keys t =
       SHA.Set.add key set
     ) SHA.Set.empty t
 
-let unpack ~write buf =
+let unpack ~read ~write buf =
   let i = ref 0 in
   let pack = Raw.input (Mstruct.of_cstruct buf) ~index:None in
-  let pack = to_pic pack in
+  to_pic ~read pack >>= fun pack ->
   let size = List.length pack in
   Lwt_list.iter_p (fun (_, pic) ->
       let value = Packed_value.PIC.to_value pic in

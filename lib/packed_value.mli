@@ -125,7 +125,8 @@ module PIC: sig
 
 end
 
-val to_pic: PIC.t Misc.IntMap.t -> PIC.t SHA.Map.t -> (int * SHA.t * t) -> PIC.t
+val to_pic: read:(SHA.t -> Value.t option Lwt.t) -> PIC.t Misc.IntMap.t ->
+  PIC.t SHA.Map.t -> (int * SHA.t * t) -> PIC.t Lwt.t
 (** Position-independant packed value. Convert [Off_delta] and
     [Ref_delta] to [PIC.Link] using the provided indexes. *)
 

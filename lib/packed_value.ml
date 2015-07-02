@@ -14,6 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+open Lwt.Infix
 open Printf
 
 module Log = Log.Make(struct let section = "packed-value" end)
@@ -416,34 +417,43 @@ let of_pic index ~pos t =
       eprintf "Packed_value.of_pic: cannot fallow the PIC chain.\n";
       failwith "Packed_value.of_pic"
 
-let to_pic offsets sha1s (pos, sha1, t) =
+let to_pic ~read offsets sha1s (pos, sha1, t) =
   Log.debug "to_pic(%s): cache miss!" (SHA.to_hex sha1);
   let kind = match t with
-    | Raw_value x -> PIC.Raw x
-    | Ref_delta d ->
-      begin
+    | Raw_value x -> Lwt.return (PIC.Raw x)
+    | Ref_delta d -> begin
         try
           let pic = SHA.Map.find d.source sha1s in
-          PIC.Link { d with source = pic }
+          let pic = PIC.Link { d with source = pic } in
+          Lwt.return pic
         with Not_found ->
-          eprintf
-            "Packed_value.to_pic: shallow pack are not supported.\n\
-             %s is not in the pack file!\n"
-            (SHA.to_hex d.source);
-          failwith "Packed_value.to_pic";
+          read d.source >>= function
+          | Some v ->
+            let buf = Buffer.create 1024 in
+            Value.add_inflated buf v;
+            let buf = Buffer.contents buf in
+            let pic = PIC.Raw buf in
+            Lwt.return pic
+          | None ->
+            eprintf
+              "Packed_value.to_pic: shallow pack are not supported.\n\
+               %s is not in the pack file!\n"
+              (SHA.to_hex d.source);
+            Lwt.fail (Failure "Packed_value.to_pic")
       end
     | Off_delta d ->
       let offset = pos - d.source in
       try
         let pic = Misc.IntMap.find offset offsets in
-        PIC.Link { d with source = pic }
+        let pic = PIC.Link { d with source = pic } in
+        Lwt.return pic
       with Not_found ->
         eprintf "Cannot find offest %d in the index\n%s"
           d.source (Misc.IntMap.pretty PIC.pretty offsets);
-        failwith "Packed_value.to_pic"
+        Lwt.fail (Failure "Packed_value.to_pic")
 
   in
-  { PIC.sha1; kind }
+  kind >|= fun kind -> { PIC.sha1; kind }
 
 let rec unpack ?(lv=0) ~version ~index ~ba (pos, t) =
   let ba_len = Bigarray.Array1.dim ba in

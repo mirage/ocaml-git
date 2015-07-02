@@ -22,9 +22,11 @@ type t = (SHA.t * Packed_value.PIC.t) list
 
 include Object.S with type t := t
 
-val input: Mstruct.t -> index:Pack_index.Raw.t option -> t
-(** The usual [Object.S.input] function, but with an additional
-    [index] argument. When [index] is [None], recompute the whole
+val input:
+  read:(SHA.t -> Value.t option Lwt.t) -> Mstruct.t ->
+  index:Pack_index.Raw.t option -> t Lwt.t
+(** The usual [Object.S.input] function, but with additionals [read]
+    and [index] arguments. When [index] is [None], recompute the whole
     index: that's very costly so provide the index when possible. *)
 
 val keys: t -> SHA.Set.t
@@ -36,7 +38,9 @@ val read: t -> SHA.t -> Value.t option
 val read_exn: t -> SHA.t -> Value.t
 (** Return the value stored in the pack file. *)
 
-val unpack: write:(Value.t -> SHA.t Lwt.t) -> Cstruct.t -> SHA.Set.t Lwt.t
+val unpack:
+  read:(SHA.t -> Value.t option Lwt.t) -> write:(Value.t -> SHA.t Lwt.t) ->
+  Cstruct.t -> SHA.Set.t Lwt.t
 (** Unpack a whole pack file. [write] should returns the SHA of the
     marshaled value. Return the IDs of the written objects. *)
 
@@ -67,7 +71,7 @@ module Raw: sig
 
 end
 
-val to_pic: Raw.t -> t
+val to_pic: read:(SHA.t -> Value.t option Lwt.t) -> Raw.t -> t Lwt.t
 (** Transform a raw pack file into a position-independant pack
     file. *)
 
