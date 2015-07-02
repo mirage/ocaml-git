@@ -14,15 +14,15 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Lwt
+open Lwt.Infix
 open Git
 
 module Log = Log.Make(struct let section = "unix" end)
 
 (* Pool of opened files *)
-let openfile_pool = Lwt_pool.create 200 (fun () -> return_unit)
+let openfile_pool = Lwt_pool.create 200 (fun () -> Lwt.return_unit)
 
-let mkdir_pool = Lwt_pool.create 1 (fun () -> return_unit)
+let mkdir_pool = Lwt_pool.create 1 (fun () -> Lwt.return_unit)
 
 module M = struct
 
@@ -56,7 +56,7 @@ module M = struct
     let p = Lwt_process.open_process_full ~env ("ssh", cmd) in
     Lwt.finalize
       (fun () -> fn (p#stdout, p#stdin))
-      (fun () -> let _ = p#close in return_unit)
+      (fun () -> let _ = p#close in Lwt.return_unit)
 
   let with_conduit ?init uri fn =
     Log.debug "Connecting to %s" (Uri.to_string uri);
@@ -68,7 +68,7 @@ module M = struct
     Lwt.finalize
       (fun () ->
          begin match init with
-           | None   -> return_unit
+           | None   -> Lwt.return_unit
            | Some s -> write oc s
          end >>= fun () ->
          fn (ic, oc))
@@ -77,7 +77,7 @@ module M = struct
            (fun () -> Lwt_io.close ic)
            (function
              | Unix.Unix_error _ -> Lwt.return_unit
-             | e -> fail e))
+             | e -> Lwt.fail e))
 
   module IC = struct
     type t = Lwt_io.input_channel
@@ -112,9 +112,9 @@ module M = struct
     | `Ok `Git -> with_conduit ?init uri fn
     | `Ok `Smart_HTTP -> HTTP.with_http ?init (with_conduit ?init:None) uri fn
     | `Not_supported x ->
-      fail (Failure ("Scheme " ^ x ^ " not supported yet"))
+      Lwt.fail (Failure ("Scheme " ^ x ^ " not supported yet"))
     | `Unknown ->
-      fail (Failure ("Unknown protocol. Must supply a scheme like git://"))
+      Lwt.fail (Failure ("Unknown protocol. Must supply a scheme like git://"))
 
   let read_all ic =
     let len = 4096 in
@@ -122,18 +122,18 @@ module M = struct
     let res = Buffer.create len in
     let rec aux () =
       Lwt_io.read_into ic buf 0 len >>= function
-      | 0 -> return_unit
+      | 0 -> Lwt.return_unit
       | i -> Buffer.add_substring res buf 0 i;
-        if len = i then return_unit
+        if len = i then Lwt.return_unit
         else aux ()
     in
     aux () >>= fun () ->
-    return (Buffer.contents res)
+    Lwt.return (Buffer.contents res)
 
   let read_exactly ic n =
     let res = Bytes.create n in
     Lwt_io.read_into_exactly ic res 0 n >>= fun () ->
-    return res
+    Lwt.return res
 
 end
 
@@ -149,7 +149,7 @@ module D = struct
 
   let mkdir dirname =
     let rec aux dir =
-      if Sys.file_exists dir && Sys.is_directory dir then return_unit
+      if Sys.file_exists dir && Sys.is_directory dir then Lwt.return_unit
       else (
         let clear =
           if Sys.file_exists dir then (
@@ -173,9 +173,9 @@ module D = struct
           let s = Lwt_stream.map (Filename.concat dir) s in
           let s = Lwt_stream.filter kind s in
           Lwt_stream.to_list s >>= fun l ->
-          return l
+          Lwt.return l
         ) else
-          return_nil
+          Lwt.return_nil
       )
 
   let directories dir =
@@ -198,11 +198,11 @@ module D = struct
   let write_cstruct fd b =
     let rec rwrite fd buf ofs len =
       Lwt_bytes.write fd buf ofs len >>= fun n ->
-      if len = 0 then fail End_of_file
+      if len = 0 then Lwt.fail End_of_file
       else if n < len then rwrite fd buf (ofs + n) (len - n)
-      else return_unit in
+      else Lwt.return_unit in
     match Cstruct.len b with
-    | 0   -> return_unit
+    | 0   -> Lwt.return_unit
     | len -> rwrite fd (Cstruct.to_bigarray b) 0 len
 
   let with_write_file ?temp_dir file fn =
@@ -231,7 +231,7 @@ module D = struct
             let fd = Unix.(openfile file [O_RDONLY; O_NONBLOCK] 0o644) in
             let ba = Lwt_bytes.map_file ~fd ~shared:false () in
             Unix.close fd;
-            return (Cstruct.of_bigarray ba)
+            Lwt.return (Cstruct.of_bigarray ba)
           ))
       ()
 
@@ -289,7 +289,7 @@ module D = struct
     { ctime; mtime; dev; inode; uid; gid; mode; size }
 
   let file_exists f =
-    return (Sys.file_exists f)
+    Lwt.return (Sys.file_exists f)
 
   let remove f =
     if Sys.file_exists f && not (Sys.is_directory f) then remove_file f
@@ -300,10 +300,10 @@ module D = struct
       if i = 0 then Lwt.return_unit else Lwt.fail (Failure ("Cannot remove " ^ f))
 
   let chmod f i =
-    return (Unix.chmod f i)
+    Lwt.return (Unix.chmod f i)
 
   let getcwd () =
-    return (Sys.getcwd ())
+    Lwt.return (Sys.getcwd ())
 
 end
 
