@@ -53,7 +53,7 @@ let add_date buf (date, tz) =
   | None    -> Buffer.add_string buf "+0000"
   | Some tz ->
     let sign = match tz.sign with `Plus -> "+" | `Minus -> "-" in
-    Printf.bprintf buf "%s%2d%2d" sign tz.hours tz.min
+    Printf.bprintf buf "%s%02d%02d" sign tz.hours tz.min
 
 let hash = Hashtbl.hash
 let equal = (=)
