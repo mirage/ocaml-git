@@ -114,6 +114,9 @@ module PIC: sig
   val pp_hum: Format.formatter -> t -> unit
   (** Human readable representation. *)
 
+  val pretty: t -> string
+  (** Pretty-print the value. *)
+
   val to_value: t -> Value.t
   (** [to_value p] unpacks the packed position-independant value
       [p]. *)
