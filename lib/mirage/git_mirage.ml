@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Lwt
+open Lwt.Infix
 
 module Log = Log.Make(struct let section = "mirage" end)
 
@@ -32,40 +32,40 @@ module FS (FS: FS) = struct
     | `Error e ->
       let str = FS.string_of_error e in
       Log.error "%s" str;
-      fail (Failure str)
+      Lwt.fail (Failure str)
 
   module M = struct
 
     let file_exists t f =
       Log.debug "file_exists %s" f;
       FS.stat t f >>= function
-      | `Ok _    -> return true
-      | `Error _ -> return false
+      | `Ok _    -> Lwt.return true
+      | `Error _ -> Lwt.return false
 
     let is_directory t dir =
       Log.debug "is_directory %s" dir;
       FS.stat t dir >>| fun s ->
-      return s.FS.directory
+      Lwt.return s.FS.directory
 
     let parent_dir = function
       | "/"
       | "." -> None
       | s   -> Some (Filename.dirname s)
 
-    let mkdir_pool = Lwt_pool.create 1 (fun () -> return_unit)
+    let mkdir_pool = Lwt_pool.create 1 (fun () -> Lwt.return_unit)
 
     let mkdir t dirname =
       Log.debug "mkdir %s" dirname;
       let rec aux dir =
         file_exists t dir >>= function
-        | true  -> return_unit
+        | true  -> Lwt.return_unit
         | false ->
           match parent_dir dir with
-          | None   -> return_unit
+          | None   -> Lwt.return_unit
           | Some d ->
             aux d >>= fun () ->
             FS.mkdir t dir >>| fun () ->
-            return_unit
+            Lwt.return_unit
       in
       Lwt_pool.use mkdir_pool (fun () -> aux dirname)
 
@@ -78,27 +78,27 @@ module FS (FS: FS) = struct
         let l = List.map (Filename.concat dir) l in
         Lwt_list.filter_s kind l
       | false ->
-        return_nil
+        Lwt.return_nil
 
     let directories t dir =
       Log.debug "directories %s" dir;
-      list_files t (fun f -> catch
+      list_files t (fun f -> Lwt.catch
                        (fun () -> is_directory t f)
-                       (fun _ -> return false)
+                       (fun _ -> Lwt.return false)
                    ) dir
 
     let files t dir =
       Log.debug "files %s" dir;
-      list_files t (fun f -> catch
-                       (fun () -> is_directory t f >>= fun b -> return (not b))
-                       (fun _ -> return false)
+      list_files t (fun f -> Lwt.catch
+                       (fun () -> is_directory t f >>= fun b -> Lwt.return (not b))
+                       (fun _ -> Lwt.return false)
                    ) dir
 
     let rec remove t dir =
       Log.debug "remove %s" dir;
       let destroy dir =
         FS.destroy t dir >>| fun () ->
-        return_unit in
+        Lwt.return_unit in
       files t dir                   >>= fun ls ->
       Lwt_list.iter_s destroy ls    >>= fun () ->
       directories t dir             >>= fun ds ->
@@ -120,27 +120,27 @@ module FS (FS: FS) = struct
       | false ->
         FS.read t file 0 (Int64.to_int s.FS.size) >>| fun bs ->
         let s = Cstruct.copyv bs in
-        return (Cstruct.of_string s)
-      | true -> fail (Failure (Printf.sprintf "%s is a directory" file))
+        Lwt.return (Cstruct.of_string s)
+      | true -> Lwt.fail (Failure (Printf.sprintf "%s is a directory" file))
 
     let write_file t ?temp_dir:_ file b =
       Log.debug "write_file %s" file;
       mkdir t (Filename.dirname file) >>= fun () ->
       FS.create t file    >>| fun () ->
       FS.write t file 0 b >>| fun () ->
-      return_unit
+      Lwt.return_unit
 
     let getcwd () =
-      return "/"
+      Lwt.return "/"
 
     let realpath file =
-      return file
+      Lwt.return file
 
     let stat_info _file =
       failwith "TODO"
 
     let chmod _t _file _perm =
-      return_unit
+      Lwt.return_unit
 
     let connect fn =
       FS.connect () >>| fn
@@ -191,29 +191,29 @@ module IO_helper (Channel: V1_LWT.CHANNEL) = struct
     let rec aux () =
       Channel.read_some ~len ic >>= fun buf ->
       match Cstruct.len buf with
-      | 0 -> return_unit
+      | 0 -> Lwt.return_unit
       | i ->
         Buffer.add_string res (Cstruct.to_string buf);
-        if len = i then return_unit
+        if len = i then Lwt.return_unit
         else aux ()
     in
     aux () >>= fun () ->
-    return (Buffer.contents res)
+    Lwt.return (Buffer.contents res)
 
   let read_exactly ic n =
     let res = Bytes.create n in
     let rec aux off =
-      if off >= n then return_unit
+      if off >= n then Lwt.return_unit
       else (
         Channel.read_some ~len:(n-off) ic >>= fun buf ->
         match Cstruct.len buf with
-        | 0 -> return_unit
+        | 0 -> Lwt.return_unit
         | i ->
           Cstruct.blit_to_string buf 0 res off i;
           aux (off + i)
       ) in
     aux 0 >>= fun () ->
-    return res
+    Lwt.return res
 
   let flush _ = Lwt.return_unit
 
@@ -255,7 +255,7 @@ module Git_protocol = struct
     Lwt.finalize
       (fun () ->
          begin match init with
-           | None   -> return_unit
+           | None   -> Lwt.return_unit
            | Some s -> write oc s
          end >>= fun () ->
          fn (ic, oc))
@@ -281,10 +281,10 @@ module Smart_HTTP = struct
       Conduit_mirage.client endp >>= fun client ->
       Conduit_mirage.connect ctx.conduit client >>= fun flow ->
       let ch = Conduit_channel.create flow in
-      return (flow, ch, ch)
+      Lwt.return (flow, ch, ch)
     let close_in _ = ()
-    let close_out oc = ignore_result (Conduit_channel.close oc)
-    let close _ oc = ignore_result (Conduit_channel.close oc)
+    let close_out oc = Lwt.async (fun () -> Conduit_channel.close oc)
+    let close _ oc = Lwt.async (fun () -> Conduit_channel.close oc)
   end
   module Request = Cohttp_lwt.Make_request(HTTP_IO)
   module Response = Cohttp_lwt.Make_response(HTTP_IO)
@@ -308,7 +308,7 @@ module Smart_HTTP = struct
     Lwt.finalize
       (fun () ->
          begin match init with
-           | None   -> return_unit
+           | None   -> Lwt.return_unit
            | Some s -> HTTP_IO.write oc s
          end >>= fun () ->
          fn (ic, oc))
@@ -394,9 +394,9 @@ module IO = struct
       in
       H.with_connection ctx ?init:None uri fn
     | `Not_supported x ->
-      fail (Failure ("Scheme " ^ x ^ " not supported yet"))
+      Lwt.fail (Failure ("Scheme " ^ x ^ " not supported yet"))
     | `Unknown ->
-      fail (Failure ("Unknown protocol. Must supply a scheme like git://"))
+      Lwt.fail (Failure ("Unknown protocol. Must supply a scheme like git://"))
 
 end
 
