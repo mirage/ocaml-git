@@ -17,6 +17,10 @@
 open Lwt
 module Log = Log.Make(struct let section = "memory" end)
 
+let err_not_found n k =
+  let str = Printf.sprintf "Git.Memory.%s: %s not found" n k in
+  Lwt.fail (Invalid_argument str)
+
 type t = {
   root   : string;
   level  : int;
@@ -89,7 +93,7 @@ let mem t sha1 =
 
 let read_exn t sha1 =
   read t sha1 >>= function
-  | None   -> fail Not_found
+  | None   -> err_not_found "read_exn" (SHA.pretty sha1)
   | Some v -> return v
 
 let contents t =
@@ -129,7 +133,7 @@ let remove_reference t ref =
 
 let read_reference_exn t ref =
   read_reference t ref >>= function
-  | None   -> fail Not_found
+  | None   -> err_not_found "read_reference_exn" (Reference.pretty ref)
   | Some s -> return s
 
 let write_head t c =

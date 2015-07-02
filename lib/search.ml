@@ -16,6 +16,10 @@
 
 open Lwt
 
+let err_not_found n k =
+  let str = Printf.sprintf "Git.Search.%s: %s not found" n k in
+  Lwt.fail (Invalid_argument str)
+
 type succ =
   [ `Commit of SHA.t
   | `Tag of string * SHA.t
@@ -66,12 +70,11 @@ module Make (Store: Store.S) = struct
               return acc
         ) None succs
 
+
   let find_exn t sha1 path =
     find t sha1 path >>= function
     | Some x -> return x
-    | None   ->
-      Log.debug "find_exn: Not_found";
-      fail Not_found
+    | None   -> err_not_found "find_exn" (SHA.pretty sha1)
 
   (* XXX: can do one less look-up *)
   let mem t sha1 path =

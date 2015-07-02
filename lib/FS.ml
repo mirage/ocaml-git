@@ -14,10 +14,13 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+open Lwt.Infix
 open Misc.OP
 open Printf
 
-let (>>=) = Lwt.bind
+let err_not_found n k =
+  let str = Printf.sprintf "Git.FS.%s: %s not found" n k in
+  Lwt.fail (Invalid_argument str)
 
 module LogMake = Log.Make
 
@@ -409,9 +412,7 @@ module Make (IO: IO) = struct
   let read_exn t sha1 =
     read t sha1 >>= function
     | Some v -> Lwt.return v
-    | None   ->
-      Log.debug "read_exn: Cannot read %s" (SHA.to_hex sha1);
-      Lwt.fail Not_found
+    | None   -> err_not_found "read_exn" (SHA.pretty sha1)
 
   let mem t sha1 =
     match Value.Cache.find sha1 with
@@ -502,9 +503,7 @@ module Make (IO: IO) = struct
   let read_reference_exn t ref =
     read_reference t ref >>= function
     | Some s -> Lwt.return s
-    | None   ->
-      Log.debug "read_reference_exn: Cannot read %s" (Reference.pretty ref);
-      Lwt.fail Not_found
+    | None   -> err_not_found "read_reference_exn" (Reference.pretty ref)
 
   let write t value =
     Loose.write t value >>= fun sha1 ->
@@ -613,12 +612,12 @@ module Make (IO: IO) = struct
       let contents = Cstruct.of_string blob in
       let rec write n =
         let one () =
-          Log.debug "one %s" file;
+          Log.debug "one %S" file;
           IO.write_file file ~temp_dir contents
         in
         if n <= 1 then one () else
           Lwt.catch one (fun e ->
-              Log.debug "write (%d/10): Got %s, retrying."
+              Log.debug "write (%d/10): Got %S, retrying."
                 (11-n) (Printexc.to_string e);
               IO.remove file >>= fun () ->
               write (n-1))
