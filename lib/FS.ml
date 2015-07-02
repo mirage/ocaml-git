@@ -279,7 +279,7 @@ module Make (IO: IO) = struct
         let file = index t sha1 in
         IO.file_exists file >>= function
         | true ->
-          IO.read_file file >>= fun buf ->
+          File_cache.read file >>= fun buf ->
           let index = Pack_index.create (Cstruct.to_bigarray buf) in
           LRU.add index_c_lru sha1 index;
           Lwt.return index
@@ -356,7 +356,7 @@ module Make (IO: IO) = struct
             let file = file t pack_sha1 in
             IO.file_exists file >>= function
             | true ->
-              IO.read_file file >>= fun buf ->
+              File_cache.read file >>= fun buf ->
               cache_pack pack_sha1 buf;
               let v_opt = Pack.Raw.read (Mstruct.of_cstruct buf) index sha1 in
               Lwt.return v_opt
@@ -465,6 +465,8 @@ module Make (IO: IO) = struct
     let file = file_of_ref t ref in
     IO.file_exists file >>= function
     | true ->
+      (* We use `IO.read_file` here as the contents of the file might
+         change. *)
       IO.read_file file >>= fun hex ->
       let hex = String.trim (Cstruct.to_string hex) in
       Lwt.return (Some (SHA.Commit.of_hex hex))
@@ -473,6 +475,8 @@ module Make (IO: IO) = struct
       IO.file_exists packed_refs >>= function
       | false -> Lwt.return_none
       | true  ->
+        (* We use `IO.read_file` here as the contents of the file
+           might change. *)
         IO.read_file packed_refs >>= fun buf ->
         let refs = Packed_refs.input (Mstruct.of_cstruct buf) in
         let sha1 = Packed_refs.find refs ref in
@@ -482,6 +486,8 @@ module Make (IO: IO) = struct
     let file = file_of_ref t Reference.head in
     IO.file_exists file >>= function
     | true ->
+      (* We use `IO.read_file` here as the contents of the file might
+         change. *)
       IO.read_file file >>= fun str ->
       let str = Cstruct.to_string str in
       let contents = match Misc.string_split ~on:' ' str with
@@ -631,6 +637,8 @@ module Make (IO: IO) = struct
     IO.file_exists file >>= function
     | false -> Lwt.return Index.empty
     | true  ->
+      (* We use `IO.read_file` here as the contents of the file might
+         change. *)
       IO.read_file file >>= fun buf ->
       let buf = Mstruct.of_cstruct buf in
       Lwt.return (Index.input buf)
