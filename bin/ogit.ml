@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Lwt
+open Lwt.Infix
 open Cmdliner
 open Printf
 open Git
@@ -173,7 +173,7 @@ let cat = {
         >>= fun buf ->
         let v = Value.input (Mstruct.of_string buf) in
         Printf.printf "%s%!\n" (Value.pretty v);
-        return_unit
+        Lwt.return_unit
       end in
     Term.(mk cat_file $ file)
 }
@@ -214,7 +214,7 @@ let cat_file = {
                if ty_flag then Printf.printf "%s%!\n" t;
                if sz_flag then Printf.printf "%d%!\n" s;
                if not ty_flag && not sz_flag then Printf.printf "%s%!\n" c;
-               return_unit
+               Lwt.return_unit
              end
           )
           (function
@@ -246,7 +246,7 @@ let ls_remote = {
             (SHA.Commit.to_hex sha1)
             (Reference.to_raw ref) in
         Reference.Map.iter print references;
-        return_unit
+        Lwt.return_unit
       end in
     Term.(mk ls $ backend $ remote)
 }
@@ -271,7 +271,7 @@ let ls_files = {
           List.iter
             (fun e -> Printf.printf "%s\n" e.Index.name)
             cache.Index.entries;
-        return_unit
+        Lwt.return_unit
       end in
     Term.(mk ls $ backend $ debug)
 }
@@ -308,7 +308,7 @@ let ls_tree = {
             match v with
             | Value.Blob _ -> begin
                 printf "blob %s %s\n" (SHA.to_hex sha1) path;
-                return_unit
+                Lwt.return_unit
               end
             | Value.Tree tree -> begin
                 Lwt_list.iter_s
@@ -328,12 +328,12 @@ let ls_tree = {
                      if is_dir && recurse then
                        walk recurse show_tree only_tree path' e.Tree.node
                      else
-                       return_unit
+                       Lwt.return_unit
                   ) tree
               end
             | Value.Tag _ -> begin
                 printf "tag %s %s\n" (SHA.to_hex sha1) path;
-                return_unit
+                Lwt.return_unit
               end
             | Value.Commit commit -> begin
                 (* printf "commit %s %s\n" (SHA.to_hex sha1) path; *)
@@ -377,11 +377,11 @@ let read_tree = {
           if List.exists (fun r -> Reference.to_raw r = ref) refs then
             S.read_reference_exn t (Reference.of_raw ref)
           else
-            return (SHA.Commit.of_hex commit_str)
+            Lwt.return (SHA.Commit.of_hex commit_str)
         end >>= fun commit ->
         S.write_index t commit >>= fun () ->
         printf "The index file has been update to %s\n%!" commit_str;
-        return_unit
+        Lwt.return_unit
       end in
     Term.(mk read $ backend $ commit)
 }
@@ -422,13 +422,13 @@ let clone = {
         printf "Cloning into '%s' ...\n%!" (Filename.basename (S.root t));
         Sync.clone t ?deepen ~unpack remote >>= fun r ->
         if not bare then match r.Result.head with
-          | None      -> return_unit
+          | None      -> Lwt.return_unit
           | Some head ->
             S.write_index t head >>= fun () ->
             printf "HEAD is now at %s\n" (SHA.Commit.to_hex head);
-            return_unit
+            Lwt.return_unit
         else
-          return_unit
+          Lwt.return_unit
       end in
     Term.(mk clone $ backend $ depth $ bare $ unpack $ remote $ directory)
 }
@@ -444,7 +444,7 @@ let fetch = {
       run begin
         S.create ()                 >>= fun t ->
         Sync.fetch t ~unpack remote >>= fun _ ->
-        return_unit
+        Lwt.return_unit
       end in
     Term.(mk fetch $ backend $ unpack $ remote)
 }
@@ -460,7 +460,7 @@ let pull = {
       run begin
         S.create ()               >>= fun t ->
         Sy.fetch t ~unpack remote >>= function
-        | { Sync.Result.head = None; _ }   -> return_unit
+        | { Sync.Result.head = None; _ }   -> Lwt.return_unit
         | { Sync.Result.head = Some h; _ } ->
           S.write_index t h >>= fun () ->
           S.read_head t >>= function
@@ -491,7 +491,7 @@ let push = {
           | Some _ -> branch in
         Sync.push t ~branch remote >>= fun s ->
         printf "%s\n" (Result.pretty_push s);
-        return_unit
+        Lwt.return_unit
       end in
     Term.(mk push $ backend $ remote $ branch)
 }
