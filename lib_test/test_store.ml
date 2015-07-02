@@ -252,7 +252,25 @@ module Make (Store: Store.S) = struct
     run x test
 
   let test_commits x () =
+    let c =
+      let tree =
+        Git.SHA.Tree.of_hex "3aadeb4d06f2a149e06350e4dab2c7eff117addc"
+      in
+      let parents = [] in
+      let author = {
+        Git.User.name="Thomas Gazagnaire"; email="thomas@gazagnaire.org";
+        date= (1435873834L, Some { Git.User.sign = `Plus; hours = 1; min = 0 })}
+      in
+      let message = "Initial commit" in
+      Git.Value.Commit
+        { Git.Commit.tree; parents; author; committer = author; message }
+    in
     let test () =
+      let buf = Git.Misc.with_buffer (fun buf -> Git.Value.add_inflated buf c) in
+      let buf = Mstruct.of_string buf in
+      let c' = Git.Value.input_inflated buf in
+      assert_value_equal "commits: convert" c c';
+
       create ()                 >>= fun t   ->
       check_write t "c1" kc1 c1 >>= fun () ->
       check_write t "c2" kc2 c2 >>= fun () ->
