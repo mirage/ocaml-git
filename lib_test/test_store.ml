@@ -378,7 +378,11 @@ module Make (Store: Store.S) = struct
 
             let pstr2 = Misc.with_buffer' (fun buf -> Pack.Raw.add buf rp1) in
             let rp2   = Pack.Raw.input (Mstruct.of_cstruct pstr2) ~index:None in
-            assert_pack_equal "pack" (Pack.to_pic rp1) (Pack.to_pic rp2);
+            create () >>= fun t ->
+            let read  = Store.read t in
+            Pack.to_pic ~read rp1 >>= fun pic1 ->
+            Pack.to_pic ~read rp2 >>= fun pic2 ->
+            assert_pack_equal "pack" pic1 pic2;
 
 
             return_unit
