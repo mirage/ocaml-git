@@ -196,11 +196,11 @@ module Make (Store: Store.S) = struct
       (if not index then [
           v0; v1; v2;
           t0; t1; t2; t3; t4;
-          c1; c2;
+          c1; c2; c3;
         ] else [
          v1; v2;
          t1; t2; t4;
-         c1; c3;
+         c1; c2;
        ])
     >>= fun () ->
     return t
@@ -262,7 +262,7 @@ module Make (Store: Store.S) = struct
       check_find t "c2:a/b/x" kc2 ["";"a";"b"; "x"] kv1 >>= fun () ->
       check_find t "c2:c"     kc2 ["";"c"]          kv2 >>= fun () ->
 
-      check_keys t "commits" Object_type.Commit [kc1; kc2] >>= fun () ->
+      check_keys t "commits" Object_type.Commit [kc1; kc2; kc3] >>= fun () ->
 
       return_unit
     in
@@ -339,7 +339,7 @@ module Make (Store: Store.S) = struct
 
       (* test random entries *)
       create ~index:true () >>= fun t ->
-      Store.write_index t (SHA.to_commit kc3) >>= fun () ->
+      Store.write_index t (SHA.to_commit kc2) >>= fun () ->
       Store.read_index t >>= fun _ ->
       return_unit
     in
