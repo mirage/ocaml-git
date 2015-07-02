@@ -150,11 +150,11 @@ module Raw = struct
     in
     aux [] 0
 
-  let read buf index sha1 =
+  let read ~read buf index sha1 =
     let version, count = input_header buf in
     Log.debug "read: version=%d count=%d" version count;
     match Pack_index.find_offset index sha1 with
-    | None -> None
+    | None -> Lwt.return_none
     | Some offset ->
       Log.debug "read: offset=%d" offset;
       let orig_off = Mstruct.offset buf in
@@ -167,7 +167,8 @@ module Raw = struct
       let packed_v = input_packed_value ~version buf in
       Log.debug "read: buf: off=%d len=%d (after input_packed_value)"
         (Mstruct.offset buf) (Mstruct.length buf);
-      Some (Packed_value.to_value ~version ~index ~ba (offset-orig_off, packed_v))
+      Packed_value.to_value ~version ~read ~index ~ba (offset-orig_off, packed_v)
+      >|= fun x -> Some x
 
   let input buf ~index =
     let all = Mstruct.to_cstruct buf in

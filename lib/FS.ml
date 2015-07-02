@@ -341,42 +341,41 @@ module Make (IO: IO) = struct
       if sz < pack_size_thresh then
         Hashtbl.add pack_ba_cache sha ba
 
-    let read_in_pack t pack_sha1 sha1 =
+    let read_in_pack ~read t pack_sha1 sha1 =
       Log.debug "read_in_pack %s:%s"
         (SHA.to_hex pack_sha1) (SHA.to_hex sha1);
       read_index_c t pack_sha1 >>= fun index ->
-      if Pack_index.mem index sha1 then begin
-        try
-          let ba = Hashtbl.find pack_ba_cache pack_sha1 in
-          Log.debug "read_in_pack ba cache hit!";
-          let v_opt = Pack.Raw.read (Mstruct.of_bigarray ba) index sha1 in
-          Lwt.return v_opt
-        with
-          Not_found -> begin
-            let file = file t pack_sha1 in
-            IO.file_exists file >>= function
-            | true ->
-              File_cache.read file >>= fun buf ->
-              cache_pack pack_sha1 buf;
-              let v_opt = Pack.Raw.read (Mstruct.of_cstruct buf) index sha1 in
-              Lwt.return v_opt
-            | false ->
-              Log.error
-                "No file associated with the pack object %s.\n" (SHA.to_hex pack_sha1);
-              Lwt.fail (Failure "read_in_pack")
-          end
-      end
+      if Pack_index.mem index sha1 then
+        Lwt.catch
+          (fun () ->
+             let ba = Hashtbl.find pack_ba_cache pack_sha1 in
+             Log.debug "read_in_pack ba cache hit!";
+             Pack.Raw.read ~read (Mstruct.of_bigarray ba) index sha1)
+          (function
+            | Not_found -> begin
+                let file = file t pack_sha1 in
+                IO.file_exists file >>= function
+                | true ->
+                  File_cache.read file >>= fun buf ->
+                  cache_pack pack_sha1 buf;
+                  Pack.Raw.read ~read (Mstruct.of_cstruct buf) index sha1
+                | false ->
+                  Log.error
+                    "No file associated with the pack object %s.\n" (SHA.to_hex pack_sha1);
+                  Lwt.fail (Failure "read_in_pack")
+              end
+            | e -> Lwt.fail e)
       else begin
         Log.debug "read_in_pack: not found";
         Lwt.return_none
       end
 
-    let read t sha1 =
+    let read ~read t sha1 =
       list t >>= fun packs ->
       Lwt_list.fold_left_s (fun acc pack ->
           match acc with
           | Some v -> Lwt.return (Some v)
-          | None   -> read_in_pack t pack sha1
+          | None   -> read_in_pack ~read t pack sha1
         ) None packs
 
     let mem t sha1 =
@@ -397,7 +396,7 @@ module Make (IO: IO) = struct
     let keys = SHA.Set.to_list keys in
     Lwt.return keys
 
-  let read t sha1 =
+  let rec read t sha1 =
     Log.debug "read %s" (SHA.to_hex sha1);
     match Value.Cache.find sha1 with
     | Some v -> Lwt.return (Some v)
@@ -405,7 +404,7 @@ module Make (IO: IO) = struct
       Log.debug "read: cache miss!";
       Loose.read t sha1 >>= function
       | Some v -> Value.Cache.add sha1 v; Lwt.return (Some v)
-      | None   -> Packed.read t sha1
+      | None   -> Packed.read ~read:(read t) t sha1
 
   let read_exn t sha1 =
     read t sha1 >>= function
