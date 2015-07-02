@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Lwt
+open Lwt.Infix
 open Test_store
 open Git_mirage
 
@@ -34,7 +34,7 @@ module M = struct
   let (>>|) x f =
     x >>= function
     | `Ok x    -> f x
-    | `Error e -> fail (Failure (string_of_error e))
+    | `Error e -> Lwt.fail (Failure (string_of_error e))
 
   let connect () =
     connect "mirage-fs"
@@ -43,7 +43,7 @@ module M = struct
     command "rm -rf mirage-fs";
     connect ()  >>| fun t ->
     mkdir t "/" >>| fun () ->
-    return_unit
+    Lwt.return_unit
 
 end
 

@@ -15,7 +15,7 @@
  *)
 
 open Test_common
-open Lwt
+open Lwt.Infix
 open Git
 open Git_unix
 
@@ -26,8 +26,7 @@ type t = {
   store: (module Store.S);
 }
 
-let unit () =
-  return_unit
+let unit () = Lwt.return_unit
 
 let log_level = Log.get_log_level ()
 
@@ -180,19 +179,19 @@ module Make (Store: Store.S) = struct
     assert_value_equal name v v';
     Store.write t v'   >>= fun k'' ->
     assert_key_equal (name ^ "-key-2") k k'';
-    return_unit
+    Lwt.return_unit
 
   let check_find t name k path e =
     Search.find t k path >>= fun k' ->
     assert_key_opt_equal (name ^ "-find") (Some e) k';
-    return_unit
+    Lwt.return_unit
 
   let root = "test-db"
 
   let create ?(index=false) () =
     Store.create ~root () >>= fun t  ->
     Lwt_list.iter_p
-      (fun v -> Store.write t v >>= fun _ -> return_unit)
+      (fun v -> Store.write t v >>= fun _ -> Lwt.return_unit)
       (if not index then [
           v0; v1; v2;
           t0; t1; t2; t3; t4;
@@ -203,18 +202,18 @@ module Make (Store: Store.S) = struct
          c1; c2;
        ])
     >>= fun () ->
-    return t
+    Lwt.return t
 
   let is_ typ t k =
     Store.read t k >>= function
-    | None   -> return false
+    | None   -> Lwt.return false
     | Some v ->
-      return (typ = Value.type_of v)
+      Lwt.return (typ = Value.type_of v)
 
   let check_keys t name typ expected =
     Store.list t                     >>= fun ks ->
     Lwt_list.filter_p (is_ typ t) ks >>= fun ks ->
-    return (assert_keys_equal name expected ks)
+    Lwt.return (assert_keys_equal name expected ks)
 
   let test_blobs x () =
     let test () =
@@ -223,7 +222,7 @@ module Make (Store: Store.S) = struct
       check_write t "v2" kv2 v2 >>= fun () ->
 
       check_keys t "blobs" Object_type.Blob [kv0; kv1; kv2] >>= fun () ->
-      return_unit
+      Lwt.return_unit
     in
     run x test
 
@@ -247,7 +246,7 @@ module Make (Store: Store.S) = struct
       check_keys t "trees" Object_type.Tree [kt0; kt1; kt2; kt3; kt4] >>=
       fun () ->
 
-      return_unit
+      Lwt.return_unit
     in
     run x test
 
@@ -282,7 +281,7 @@ module Make (Store: Store.S) = struct
 
       check_keys t "commits" Object_type.Commit [kc1; kc2; kc3] >>= fun () ->
 
-      return_unit
+      Lwt.return_unit
     in
     run x test
 
@@ -298,7 +297,7 @@ module Make (Store: Store.S) = struct
 
       check_keys t "tags" Object_type.Tag [ktag1; ktag2] >>= fun () ->
 
-      return_unit
+      Lwt.return_unit
     in
     run x test
 
@@ -320,7 +319,7 @@ module Make (Store: Store.S) = struct
       Store.references t                 >>= fun rs   ->
       assert_refs_equal "refs" [r1; r2] rs;
 
-      return_unit
+      Lwt.return_unit
     in
     run x test
 
@@ -342,16 +341,16 @@ module Make (Store: Store.S) = struct
                 if p land 0o100 = 0o100 then `Exec else `Normal
               in
               FS.entry_of_file t Index.empty file mode sha1 blob >>= fun f ->
-              return f
+              Lwt.return f
             ) files >>= fun entries ->
           let entries = Misc.list_filter_map (fun x -> x) entries in
           let cache = Index.create entries in
           let buf = Misc.with_buffer' (fun buf -> Index.add buf cache) in
           let cache2 = Index.input (Mstruct.of_cstruct buf) in
           assert_index_equal "index" cache cache2;
-          return_unit
+          Lwt.return_unit
         ) else
-          return_unit
+          Lwt.return_unit
       in
       test_fs () >>= fun () ->
 
@@ -359,7 +358,7 @@ module Make (Store: Store.S) = struct
       create ~index:true () >>= fun t ->
       Store.write_index t (SHA.to_commit kc2) >>= fun () ->
       Store.read_index t >>= fun _ ->
-      return_unit
+      Lwt.return_unit
     in
     run x test
 
@@ -401,9 +400,9 @@ module Make (Store: Store.S) = struct
                 let rp1'  = Pack.Raw.input (Mstruct.of_string pstr1) ~index:(Some i1) in
                 assert_raw_pack_equal "raw-pack" rp1 rp1';
                 assert_pack_index_equal "raw-pack-->>--pack-index" i1 i3;
-                return_unit
+                Lwt.return_unit
               else
-                return_unit
+                Lwt.return_unit
             end >>= fun () ->
 
             let pstr2 = Misc.with_buffer' (fun buf -> Pack.Raw.add buf rp1) in
@@ -415,7 +414,7 @@ module Make (Store: Store.S) = struct
             assert_pack_equal "pack" pic1 pic2;
 
 
-            return_unit
+            Lwt.return_unit
 
           ) files
       in
@@ -429,7 +428,7 @@ module Make (Store: Store.S) = struct
       create ()        >>= fun t ->
       Sync.fetch t gri >>= fun _ ->
       Sync.push t gri ~branch:Reference.master >>= fun _ ->
-      return_unit
+      Lwt.return_unit
     in
     run x test
 
@@ -441,7 +440,7 @@ module Make (Store: Store.S) = struct
     let test () =
       create () >>= fun t ->
       let rec aux = function
-        | 0 -> return_unit
+        | 0 -> Lwt.return_unit
         | i ->
           check_write t "v1" kv1 v1 >>= fun () ->
           check_write t "v2" kv2 v2 >>= fun () ->
@@ -458,11 +457,11 @@ let test_read_writes () =
     let file = "/tmp/test-git" in
     let payload = Cstruct.of_string "boo!" in
     let rec write = function
-      | 0 -> return_unit
+      | 0 -> Lwt.return_unit
       | i -> Git_unix.FS.IO.write_file file payload <&> write (i-1)
     in
     let rec read = function
-      | 0 -> return_unit
+      | 0 -> Lwt.return_unit
       | i ->
         Git_unix.FS.IO.read_file file >>= fun r ->
         Alcotest.(check string) "concurrent read/write"

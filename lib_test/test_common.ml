@@ -15,7 +15,7 @@
  *)
 
 open Git
-open Lwt
+open Lwt.Infix
 
 let () =
   Log.set_log_level Log.DEBUG;
@@ -100,9 +100,9 @@ let list_files kind dir =
     let s = Lwt_stream.map (Filename.concat dir) s in
     let s = Lwt_stream.filter kind s in
     Lwt_stream.to_list s >>= fun l ->
-    return l
+    Lwt.return l
   ) else
-    return_nil
+    Lwt.return_nil
 
 let directories dir =
   list_files (fun f -> try Sys.is_directory f with _ -> false) dir
