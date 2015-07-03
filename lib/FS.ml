@@ -14,10 +14,13 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+open Lwt.Infix
 open Misc.OP
 open Printf
 
-let (>>=) = Lwt.bind
+let err_not_found n k =
+  let str = Printf.sprintf "Git.FS.%s: %s not found" n k in
+  Lwt.fail (Invalid_argument str)
 
 module LogMake = Log.Make
 
@@ -279,7 +282,7 @@ module Make (IO: IO) = struct
         let file = index t sha1 in
         IO.file_exists file >>= function
         | true ->
-          IO.read_file file >>= fun buf ->
+          File_cache.read file >>= fun buf ->
           let index = Pack_index.create (Cstruct.to_bigarray buf) in
           LRU.add index_c_lru sha1 index;
           Lwt.return index
@@ -341,42 +344,41 @@ module Make (IO: IO) = struct
       if sz < pack_size_thresh then
         Hashtbl.add pack_ba_cache sha ba
 
-    let read_in_pack t pack_sha1 sha1 =
+    let read_in_pack ~read t pack_sha1 sha1 =
       Log.debug "read_in_pack %s:%s"
         (SHA.to_hex pack_sha1) (SHA.to_hex sha1);
       read_index_c t pack_sha1 >>= fun index ->
-      if Pack_index.mem index sha1 then begin
-        try
-          let ba = Hashtbl.find pack_ba_cache pack_sha1 in
-          Log.debug "read_in_pack ba cache hit!";
-          let v_opt = Pack.Raw.read (Mstruct.of_bigarray ba) index sha1 in
-          Lwt.return v_opt
-        with
-          Not_found -> begin
-            let file = file t pack_sha1 in
-            IO.file_exists file >>= function
-            | true ->
-              IO.read_file file >>= fun buf ->
-              cache_pack pack_sha1 buf;
-              let v_opt = Pack.Raw.read (Mstruct.of_cstruct buf) index sha1 in
-              Lwt.return v_opt
-            | false ->
-              Log.error
-                "No file associated with the pack object %s.\n" (SHA.to_hex pack_sha1);
-              Lwt.fail (Failure "read_in_pack")
-          end
-      end
+      if Pack_index.mem index sha1 then
+        Lwt.catch
+          (fun () ->
+             let ba = Hashtbl.find pack_ba_cache pack_sha1 in
+             Log.debug "read_in_pack ba cache hit!";
+             Pack.Raw.read ~read (Mstruct.of_bigarray ba) index sha1)
+          (function
+            | Not_found -> begin
+                let file = file t pack_sha1 in
+                IO.file_exists file >>= function
+                | true ->
+                  File_cache.read file >>= fun buf ->
+                  cache_pack pack_sha1 buf;
+                  Pack.Raw.read ~read (Mstruct.of_cstruct buf) index sha1
+                | false ->
+                  Log.error
+                    "No file associated with the pack object %s.\n" (SHA.to_hex pack_sha1);
+                  Lwt.fail (Failure "read_in_pack")
+              end
+            | e -> Lwt.fail e)
       else begin
         Log.debug "read_in_pack: not found";
         Lwt.return_none
       end
 
-    let read t sha1 =
+    let read ~read t sha1 =
       list t >>= fun packs ->
       Lwt_list.fold_left_s (fun acc pack ->
           match acc with
           | Some v -> Lwt.return (Some v)
-          | None   -> read_in_pack t pack sha1
+          | None   -> read_in_pack ~read t pack sha1
         ) None packs
 
     let mem t sha1 =
@@ -397,7 +399,7 @@ module Make (IO: IO) = struct
     let keys = SHA.Set.to_list keys in
     Lwt.return keys
 
-  let read t sha1 =
+  let rec read t sha1 =
     Log.debug "read %s" (SHA.to_hex sha1);
     match Value.Cache.find sha1 with
     | Some v -> Lwt.return (Some v)
@@ -405,14 +407,12 @@ module Make (IO: IO) = struct
       Log.debug "read: cache miss!";
       Loose.read t sha1 >>= function
       | Some v -> Value.Cache.add sha1 v; Lwt.return (Some v)
-      | None   -> Packed.read t sha1
+      | None   -> Packed.read ~read:(read t) t sha1
 
   let read_exn t sha1 =
     read t sha1 >>= function
     | Some v -> Lwt.return v
-    | None   ->
-      Log.debug "read_exn: Cannot read %s" (SHA.to_hex sha1);
-      Lwt.fail Not_found
+    | None   -> err_not_found "read_exn" (SHA.pretty sha1)
 
   let mem t sha1 =
     match Value.Cache.find sha1 with
@@ -465,6 +465,8 @@ module Make (IO: IO) = struct
     let file = file_of_ref t ref in
     IO.file_exists file >>= function
     | true ->
+      (* We use `IO.read_file` here as the contents of the file might
+         change. *)
       IO.read_file file >>= fun hex ->
       let hex = String.trim (Cstruct.to_string hex) in
       Lwt.return (Some (SHA.Commit.of_hex hex))
@@ -473,6 +475,8 @@ module Make (IO: IO) = struct
       IO.file_exists packed_refs >>= function
       | false -> Lwt.return_none
       | true  ->
+        (* We use `IO.read_file` here as the contents of the file
+           might change. *)
         IO.read_file packed_refs >>= fun buf ->
         let refs = Packed_refs.input (Mstruct.of_cstruct buf) in
         let sha1 = Packed_refs.find refs ref in
@@ -482,6 +486,8 @@ module Make (IO: IO) = struct
     let file = file_of_ref t Reference.head in
     IO.file_exists file >>= function
     | true ->
+      (* We use `IO.read_file` here as the contents of the file might
+         change. *)
       IO.read_file file >>= fun str ->
       let str = Cstruct.to_string str in
       let contents = match Misc.string_split ~on:' ' str with
@@ -497,9 +503,7 @@ module Make (IO: IO) = struct
   let read_reference_exn t ref =
     read_reference t ref >>= function
     | Some s -> Lwt.return s
-    | None   ->
-      Log.debug "read_reference_exn: Cannot read %s" (Reference.pretty ref);
-      Lwt.fail Not_found
+    | None   -> err_not_found "read_reference_exn" (Reference.pretty ref)
 
   let write t value =
     Loose.write t value >>= fun sha1 ->
@@ -608,12 +612,12 @@ module Make (IO: IO) = struct
       let contents = Cstruct.of_string blob in
       let rec write n =
         let one () =
-          Log.debug "one %s" file;
+          Log.debug "one %S" file;
           IO.write_file file ~temp_dir contents
         in
         if n <= 1 then one () else
           Lwt.catch one (fun e ->
-              Log.debug "write (%d/10): Got %s, retrying."
+              Log.debug "write (%d/10): Got %S, retrying."
                 (11-n) (Printexc.to_string e);
               IO.remove file >>= fun () ->
               write (n-1))
@@ -631,6 +635,8 @@ module Make (IO: IO) = struct
     IO.file_exists file >>= function
     | false -> Lwt.return Index.empty
     | true  ->
+      (* We use `IO.read_file` here as the contents of the file might
+         change. *)
       IO.read_file file >>= fun buf ->
       let buf = Mstruct.of_cstruct buf in
       Lwt.return (Index.input buf)

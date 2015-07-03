@@ -27,8 +27,8 @@ let default_tz_offset =
 
 let pp_tz_offset ppf t =
   let pp_sign ppf = function
-    | `Plus -> Format.fprintf ppf "+"
-    | `Minus -> Format.fprintf ppf "-"
+    | `Plus -> Format.fprintf ppf "`Plus"
+    | `Minus -> Format.fprintf ppf "`Minus"
   in
   Format.fprintf ppf "{@[<hov 2>sign = '%a';@ hours = %d;@ min = %d@ @]}"
     pp_sign t.sign t.hours t.min
@@ -53,14 +53,14 @@ let add_date buf (date, tz) =
   | None    -> Buffer.add_string buf "+0000"
   | Some tz ->
     let sign = match tz.sign with `Plus -> "+" | `Minus -> "-" in
-    Printf.bprintf buf "%s%2d%2d" sign tz.hours tz.min
+    Printf.bprintf buf "%s%02d%02d" sign tz.hours tz.min
 
 let hash = Hashtbl.hash
 let equal = (=)
 let compare = compare
 
 let pp_hum ppf t =
-  Format.fprintf ppf "{@[<hov>name=\"%s\";@ email=\"%s\";@ date:%a@]}"
+  Format.fprintf ppf "{@[<hov>name=\"%s\";@ email=\"%s\";@ date=%a@]}"
     t.name t.email pp_date t.date
 
 let pretty = Misc.pretty pp_hum
@@ -98,13 +98,13 @@ let input buf =
     let str = Mstruct.get_string buf 2 in
     try int_of_string str
     with Failure "int_of_string" ->
-      Mstruct.parse_error_buf buf "%s is not a valid int" str
+      Mstruct.parse_error_buf buf "%S is not a valid hour" str
   in
   let min =
     let str = Mstruct.get_string buf 2 in
     try int_of_string str
     with Failure "int_of_string" ->
-      Mstruct.parse_error_buf buf "%s is not a valid int" str
+      Mstruct.parse_error_buf buf "%S is not a valid hour" str
   in
   let tz = { sign; hours; min } in
   let tz = if tz = default_tz_offset then None else Some tz in

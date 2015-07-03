@@ -15,7 +15,7 @@
  *)
 
 open Git
-open Lwt
+open Lwt.Infix
 
 let () =
   Log.set_log_level Log.DEBUG;
@@ -43,21 +43,23 @@ let printer_list f = function
   | [] -> "[]"
   | l  -> Printf.sprintf "[ %s ]" (String.concat ", " (List.map f l))
 
-let line msg =
-  let line () = Alcotest.line stderr ~color:`Yellow '-' in
-  line ();
-  Log.info "ASSERT %s" msg;
-  line ()
-
 module Make (S: Store.S) = struct
 
   let cmp_list eq comp l1 l2 =
     cmp_list eq (List.sort comp l1) (List.sort comp l2)
 
   let mk equal compare pretty =
-    let aux cmp printer msg =
-      line msg;
-      OUnit.assert_equal ~msg ~cmp ~printer in
+    let aux (type a) cmp printer msg =
+      let testable: a Alcotest.testable =
+        let module M = struct
+          type t = a
+          let equal = cmp
+          let pp fmt t = Format.pp_print_string fmt (printer t)
+        end in
+        (module M)
+      in
+      Alcotest.check testable msg
+    in
     aux equal pretty,
     aux (cmp_opt equal) (printer_opt pretty),
     aux (cmp_list equal compare) (printer_list pretty)
@@ -98,9 +100,9 @@ let list_files kind dir =
     let s = Lwt_stream.map (Filename.concat dir) s in
     let s = Lwt_stream.filter kind s in
     Lwt_stream.to_list s >>= fun l ->
-    return l
+    Lwt.return l
   ) else
-    return_nil
+    Lwt.return_nil
 
 let directories dir =
   list_files (fun f -> try Sys.is_directory f with _ -> false) dir

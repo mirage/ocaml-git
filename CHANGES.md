@@ -1,6 +1,13 @@
-### 1.5.2
+### 1.5.2 (2015-07-04)
 
 * Fix handling of empty paths (#89)
+* Fix the serialization of dates in commit objects
+* Expose `Git.Packed_value.PIC.pretty`
+* Improve the efficiency of `Git_unix.FS.remove`
+* Support shallow packs (#81)
+* Fix an mmap leak introduced in `1.5.*` (#90)
+* Remove the dependency to OUnit for the tests
+* Improve the pretty printers and the output of `ogit`
 
 ### 1.5.1 (2015-06-18)
 

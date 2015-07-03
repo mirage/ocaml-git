@@ -14,7 +14,11 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Lwt
+open Lwt.Infix
+
+let err_not_found n k =
+  let str = Printf.sprintf "Git.Search.%s: %s not found" n k in
+  Lwt.fail (Invalid_argument str)
 
 type succ =
   [ `Commit of SHA.t
@@ -38,45 +42,44 @@ module Make (Store: Store.S) = struct
     let tag t =
       `Tag (t.Tag.tag, t.Tag.sha1) in
     Store.read t sha1 >>= function
-    | None                  -> return_nil
-    | Some (Value.Blob _)   -> return_nil
+    | None                  -> Lwt.return_nil
+    | Some (Value.Blob _)   -> Lwt.return_nil
     | Some (Value.Commit c) ->
-      return (tree "" c.Commit.tree :: List.map commit c.Commit.parents)
-    | Some (Value.Tag t)    -> return [tag t]
+      Lwt.return (tree "" c.Commit.tree :: List.map commit c.Commit.parents)
+    | Some (Value.Tag t)    -> Lwt.return [tag t]
     | Some (Value.Tree t)   ->
-      return (List.map (fun e -> `Tree (e.Tree.name, e.Tree.node)) t)
+      Lwt.return (List.map (fun e -> `Tree (e.Tree.name, e.Tree.node)) t)
 
   (* XXX: not tail-rec *)
   let rec find t sha1 path =
     match path with
-    | []   -> return (Some sha1)
+    | []   -> Lwt.return (Some sha1)
     | h::p ->
       succ t sha1 >>= fun succs ->
       Lwt_list.fold_left_s (fun acc s ->
           match (acc, s) with
-          | Some _, _            -> return acc
-          | _     , `Commit _    -> return acc
+          | Some _, _            -> Lwt.return acc
+          | _     , `Commit _    -> Lwt.return acc
           | _     , `Tag (l, s)
           | _     , `Tree (l, s) ->
             if l = h then
               find t s p >>= function
-              | None   -> return_none
-              | Some f -> return (Some f)
+              | None   -> Lwt.return_none
+              | Some f -> Lwt.return (Some f)
             else
-              return acc
+              Lwt.return acc
         ) None succs
+
 
   let find_exn t sha1 path =
     find t sha1 path >>= function
-    | Some x -> return x
-    | None   ->
-      Log.debug "find_exn: Not_found";
-      fail Not_found
+    | Some x -> Lwt.return x
+    | None   -> err_not_found "find_exn" (SHA.pretty sha1)
 
   (* XXX: can do one less look-up *)
   let mem t sha1 path =
     find t sha1 path >>= function
-    | None   -> return false
-    | Some _ -> return true
+    | None   -> Lwt.return false
+    | Some _ -> Lwt.return true
 
 end

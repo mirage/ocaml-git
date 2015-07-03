@@ -14,6 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+open Lwt.Infix
 open Printf
 
 module Log = Log.Make(struct let section = "packed-value" end)
@@ -416,68 +417,82 @@ let of_pic index ~pos t =
       eprintf "Packed_value.of_pic: cannot fallow the PIC chain.\n";
       failwith "Packed_value.of_pic"
 
-let to_pic offsets sha1s (pos, sha1, t) =
+let to_pic ~read offsets sha1s (pos, sha1, t) =
   Log.debug "to_pic(%s): cache miss!" (SHA.to_hex sha1);
   let kind = match t with
-    | Raw_value x -> PIC.Raw x
-    | Ref_delta d ->
-      begin
+    | Raw_value x -> Lwt.return (PIC.Raw x)
+    | Ref_delta d -> begin
         try
           let pic = SHA.Map.find d.source sha1s in
-          PIC.Link { d with source = pic }
+          let pic = PIC.Link { d with source = pic } in
+          Lwt.return pic
         with Not_found ->
-          eprintf
-            "Packed_value.to_pic: shallow pack are not supported.\n\
-             %s is not in the pack file!\n"
-            (SHA.to_hex d.source);
-          failwith "Packed_value.to_pic";
+          read d.source >>= function
+          | Some v ->
+            let buf = Misc.with_buffer (fun buf -> Value.add_inflated buf v) in
+            let pic = PIC.Raw buf in
+            Lwt.return pic
+          | None ->
+            eprintf
+              "Packed_value.to_pic: shallow pack are not supported.\n\
+               %s is not in the pack file!\n"
+              (SHA.to_hex d.source);
+            Lwt.fail (Failure "Packed_value.to_pic")
       end
     | Off_delta d ->
       let offset = pos - d.source in
       try
         let pic = Misc.IntMap.find offset offsets in
-        PIC.Link { d with source = pic }
+        let pic = PIC.Link { d with source = pic } in
+        Lwt.return pic
       with Not_found ->
         eprintf "Cannot find offest %d in the index\n%s"
           d.source (Misc.IntMap.pretty PIC.pretty offsets);
-        failwith "Packed_value.to_pic"
+        Lwt.fail (Failure "Packed_value.to_pic")
 
   in
-  { PIC.sha1; kind }
+  kind >|= fun kind -> { PIC.sha1; kind }
 
-let rec unpack ?(lv=0) ~version ~index ~ba (pos, t) =
+let rec unpack ?(lv=0) ~read ~version ~index ~ba (pos, t) =
   let ba_len = Bigarray.Array1.dim ba in
   Log.debug "unpack[%d]: ba_len=%d" lv ba_len;
   let input_packed_value =
     match version with
     | 2 -> V2.input
     | 3 -> V3.input
-    | _ -> 
+    | _ ->
       eprintf "pack version should be 2 or 3";
       failwith "Packed_value.unpack"
   in
-  let unpacked = 
+  let unpacked =
     match t with
     | Raw_value x -> begin
-        Log.debug "unpack[%d]: Raw_value" lv; 
-        x
+        Log.debug "unpack[%d]: Raw_value" lv;
+        Lwt.return x
       end
-    | Ref_delta d -> begin 
+    | Ref_delta d -> begin
         Log.debug "unpack[%d]: Ref_delta: d.source=%s" lv (SHA.to_hex d.source);
         match Pack_index.find_offset index d.source with
         | Some offset -> begin
             Log.debug "unpack[%d]: offset=%d" lv offset;
-            let offset = offset - 12 in (* header skipped *) 
+            let offset = offset - 12 in (* header skipped *)
             let buf = Mstruct.of_bigarray ~off:offset ~len:(ba_len-offset) ba in
             let packed_v = input_packed_value buf in
-            let u = unpack ~lv:(lv+1) ~version ~index ~ba (offset, packed_v) in
-            Misc.with_buffer (fun b -> add_delta b {d with source = u})
+            unpack ~lv:(lv+1) ~read ~version ~index ~ba (offset, packed_v)
+            >|= fun source ->
+            Misc.with_buffer (fun b -> add_delta b {d with source})
           end
         | None -> begin
-            eprintf
-              "Packed_value.unpack: shallow pack are not supported.\n%s is not in the pack file!\n"
-              (SHA.to_hex d.source);
-            failwith "Packed_value.unpack";
+            read d.source >>= function
+            | None ->
+              eprintf
+                "Packed_value.unpack: shallow pack are not supported.\n%s is not \
+                 in the pack file!\n"
+                (SHA.to_hex d.source);
+              Lwt.fail (Failure "Packed_value.unpack")
+            | Some v ->
+              let buf = Misc.with_buffer (fun buf -> Value.add_inflated buf v) in
+              Lwt.return buf
           end
       end
     | Off_delta d -> begin
@@ -486,16 +501,16 @@ let rec unpack ?(lv=0) ~version ~index ~ba (pos, t) =
         Log.debug "unpack[%d]: offset=%d-%d=%d" lv pos d.source offset;
         let buf = Mstruct.of_bigarray ~off:offset ~len:(ba_len-offset) ba in
         let packed_v = input_packed_value buf in
-        let u = unpack ~lv:(lv+1) ~version ~index ~ba (offset, packed_v) in
-        Misc.with_buffer (fun b -> add_delta b {d with source = u})
+        unpack ~lv:(lv+1) ~read ~version ~index ~ba (offset, packed_v)
+        >|= fun source ->
+        Misc.with_buffer (fun b -> add_delta b {d with source})
       end
   in
   unpacked
 
-let to_value ~version ~index ~ba (offset, packed_v) =
-  let u = unpack ~version ~index ~ba (offset, packed_v) in
+let to_value ~read ~version ~index ~ba (offset, packed_v) =
+  unpack ~version ~read ~index ~ba (offset, packed_v) >|= fun u ->
   Value.input_inflated (Mstruct.of_string u)
-
 
 (* XXX: merge with PIC.unpack *)
 let add_inflated_value_aux (return, bind) ~read ~offsets ~pos buf = function

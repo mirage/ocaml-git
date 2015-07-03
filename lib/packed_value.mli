@@ -114,6 +114,9 @@ module PIC: sig
   val pp_hum: Format.formatter -> t -> unit
   (** Human readable representation. *)
 
+  val pretty: t -> string
+  (** Pretty-print the value. *)
+
   val to_value: t -> Value.t
   (** [to_value p] unpacks the packed position-independant value
       [p]. *)
@@ -125,7 +128,8 @@ module PIC: sig
 
 end
 
-val to_pic: PIC.t Misc.IntMap.t -> PIC.t SHA.Map.t -> (int * SHA.t * t) -> PIC.t
+val to_pic: read:(SHA.t -> Value.t option Lwt.t) -> PIC.t Misc.IntMap.t ->
+  PIC.t SHA.Map.t -> (int * SHA.t * t) -> PIC.t Lwt.t
 (** Position-independant packed value. Convert [Off_delta] and
     [Ref_delta] to [PIC.Link] using the provided indexes. *)
 
@@ -133,5 +137,6 @@ val of_pic: int PIC.Map.t -> pos:int -> PIC.t -> t
 (** Position dependent packed value. Convert a [PIC.Link] into to the
     corresponding [Off_delta], using the provided indexes. *)
 
-val to_value: version:int -> index:Pack_index.t -> ba:Cstruct.buffer -> (int * t) -> Value.t
+val to_value: read:(SHA.t -> Value.t option Lwt.t) -> version:int ->
+  index:Pack_index.t -> ba:Cstruct.buffer -> (int * t) -> Value.t Lwt.t
 (** Unpack the packed value using the provided indexes. *)
