@@ -38,6 +38,7 @@ depends: [
   "cohttp"           {test}
   "conduit"          {test}
   "base-unix"        {test}
+  "channel"          {test}
 ]
 depopts: [
   # --enable-mirage
