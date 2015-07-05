@@ -9,7 +9,7 @@ dev-repo:     "https://github.com/mirage/ocaml-git.git"
 build: [
   ["./configure"
      "--prefix" prefix
-     "--%{mirage-http+mirage-flow+mirage-types-lwt:enable}%-mirage"
+     "--%{mirage-http+mirage-flow+mirage-types-lwt+channel:enable}%-mirage"
      "--%{conduit+cohttp+base-unix:enable}%-unix"
   ]
   [make]
@@ -38,12 +38,14 @@ depends: [
   "cohttp"           {test}
   "conduit"          {test}
   "base-unix"        {test}
+  "channel"          {test}
 ]
 depopts: [
   # --enable-mirage
   "mirage-types-lwt"
   "mirage-http"
   "mirage-flow"
+  "channel"
   # --enable-unix
   "cohttp"
   "conduit"

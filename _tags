@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 06aaa0d80bf14b05f783a596c236e9d4)
+# DO NOT EDIT (digest: a4a985c6ac5e966966f38c5311876856)
 # Ignore VCS directories, you can use the same kind of rule outside
 # OASIS_START/STOP if you want to exclude directories that contains
 # useless stuff for the build process
@@ -83,6 +83,7 @@ true: annot, bin_annot
 <lib/unix/*.ml{,i,y}>: use_git-http
 # Library git-mirage
 "lib/mirage/git-mirage.cmxs": use_git-mirage
+<lib/mirage/*.ml{,i,y}>: pkg_channel
 <lib/mirage/*.ml{,i,y}>: pkg_cohttp.lwt
 <lib/mirage/*.ml{,i,y}>: pkg_conduit.mirage
 <lib/mirage/*.ml{,i,y}>: pkg_dns.mirage
@@ -136,6 +137,7 @@ true: annot, bin_annot
 <bin/*.ml{,i,y}>: use_git-unix
 # Executable test_git
 <lib_test/test.{native,byte}>: pkg_alcotest
+<lib_test/test.{native,byte}>: pkg_channel
 <lib_test/test.{native,byte}>: pkg_cohttp.lwt
 <lib_test/test.{native,byte}>: pkg_conduit.lwt-unix
 <lib_test/test.{native,byte}>: pkg_conduit.mirage
@@ -161,6 +163,7 @@ true: annot, bin_annot
 <lib_test/test.{native,byte}>: use_git-mirage
 <lib_test/test.{native,byte}>: use_git-unix
 <lib_test/*.ml{,i,y}>: pkg_alcotest
+<lib_test/*.ml{,i,y}>: pkg_channel
 <lib_test/*.ml{,i,y}>: pkg_cohttp.lwt
 <lib_test/*.ml{,i,y}>: pkg_conduit.lwt-unix
 <lib_test/*.ml{,i,y}>: pkg_conduit.mirage
