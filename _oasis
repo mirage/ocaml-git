@@ -60,7 +60,7 @@ Library "git-mirage"
   Findlibname:       mirage
   Modules:           Git_mirage
   BuildDepends:      git, git.http, mirage-types.lwt, io-page, conduit.mirage,
-                     dns.mirage, mirage-http, mirage-flow
+                     dns.mirage, mirage-http, mirage-flow, channel
 
 Executable ogit
   Build$:           flag(unix)
