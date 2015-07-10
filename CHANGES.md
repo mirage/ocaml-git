@@ -1,3 +1,7 @@
+### 1.5.3 (2015-07-10)
+
+* Fix listing of packed references (#98)
+
 ### 1.5.2 (2015-07-04)
 
 * Fix handling of empty paths (#89)
