@@ -29,7 +29,7 @@ let printers = [
   "Git.Index.pp_hum_entry";
   "Git.Object_type.pp_hum";
   "Git.Pack.pp_hum";
-  "Git.Pack_index.pp_hum";
+  (*  "Git.Pack_index.pp_hum"; *)
   "Git.Packed_value.pp_hum";
   "Git.Packed_refs.pp_hum";
   "Git.Reference.pp_hum";

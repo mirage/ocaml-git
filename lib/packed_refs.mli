@@ -25,3 +25,6 @@ include Object.S with type t = entry list
 
 val find: t -> Reference.t -> SHA.Commit.t option
 (** Get the reference SHA1. *)
+
+val references: t -> Reference.t list
+(** [references t] is the list of references appearing in [t]. *)

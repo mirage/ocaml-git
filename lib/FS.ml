@@ -439,6 +439,8 @@ module Make (IO: IO) = struct
       ) contents;
     Lwt.return_unit
 
+  let packed_refs t = t.root / ".git" / "packed-refs"
+
   let references t =
     let refs = t.root / ".git" / "refs" in
     IO.rec_files refs >>= fun files ->
@@ -447,7 +449,16 @@ module Make (IO: IO) = struct
         let ref = String.sub file n (String.length file - n) in
         Reference.of_raw ref
       ) files in
-    Lwt.return refs
+    let packed_refs = packed_refs t in
+    let packed_refs =
+      IO.file_exists packed_refs >>= function
+      | false -> Lwt.return_nil
+      | true  ->
+        IO.read_file packed_refs >>= fun buf ->
+        let pr = Packed_refs.input (Mstruct.of_cstruct buf) in
+        Lwt.return (Packed_refs.references pr)
+    in
+    packed_refs >|= fun packed_refs -> refs @ packed_refs
 
   let file_of_ref t ref = t.root / ".git" / Reference.to_raw ref
 
@@ -471,7 +482,7 @@ module Make (IO: IO) = struct
       let hex = String.trim (Cstruct.to_string hex) in
       Lwt.return (Some (SHA.Commit.of_hex hex))
     | false ->
-      let packed_refs = t.root / ".git" / "packed-refs" in
+      let packed_refs = packed_refs t in
       IO.file_exists packed_refs >>= function
       | false -> Lwt.return_none
       | true  ->
