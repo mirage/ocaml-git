@@ -513,6 +513,7 @@ module Make (IO: IO) (Store: Store.S) = struct
           | None   -> acc
           | Some x -> x::acc
         ) [] l
+      |> List.rev
 
     let filter_wants l =
       filter (function Want (x,y) -> Some (x,y) | _ -> None) l
@@ -579,7 +580,7 @@ module Make (IO: IO) (Store: Store.S) = struct
             (* additional-want *)
             let msg = Printf.sprintf "want %s\n" (SHA.to_hex id) in
             if i <> 0 && c <> [] then
-              Log.warn "'additional-want' should have empty capabilities";
+              Log.warn "additional-want: ignoring %s." (Capabilities.to_string c);
             PacketLine.output_line oc msg
         ) (filter_wants t)
       >>= fun () ->
@@ -630,7 +631,12 @@ module Make (IO: IO) (Store: Store.S) = struct
        the new shallow state. *)
     let phase1 (ic, oc) ?deepen ~capabilities ~shallows ~wants =
       Log.debug "Upload.phase1";
-      let wants = List.map (fun id -> Want (id, capabilities)) wants in
+      let wants =
+        let want id = Want (id, []) in
+        match wants with
+        | []   -> []
+        | h::t -> Want (h, capabilities) :: List.map want t
+      in
       let shallows = List.map (fun id -> Shallow id) shallows in
       let deepen = match deepen with
         | None   -> []
@@ -922,8 +928,13 @@ module Make (IO: IO) (Store: Store.S) = struct
       | _ -> []
     in
     let wants =
-      SHA.of_commit head ::
-      Reference.Map.fold (fun _ s acc -> SHA.of_commit s::acc) references []
+      let refs =
+        Reference.Map.fold (fun _ s acc ->
+            if SHA.Commit.equal s head then acc
+            else SHA.Set.add (SHA.of_commit s) acc
+          ) references SHA.Set.empty
+      in
+      SHA.of_commit head :: SHA.Set.elements refs
     in
     Log.debug "PHASE1";
     Upload_request.phase1 (ic, oc) ?deepen ~capabilities
