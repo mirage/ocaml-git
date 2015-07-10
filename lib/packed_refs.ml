@@ -72,3 +72,13 @@ let find t r =
     | `Entry (x, y) :: t -> if Reference.equal y r then Some x else aux t
   in
   aux t
+
+module Set = Set.Make(Reference)
+
+let references (t:t) =
+  let rec aux acc = function
+    | [] -> Set.elements acc
+    | (`Newline | `Comment _) :: t -> aux acc t
+    | `Entry (_, r) :: t -> aux (Set.add r acc) t
+  in
+  aux Set.empty t
