@@ -21,7 +21,7 @@ module M = Git_unix.FS
 
 let init () =
   M.create ~root:"test-db" () >>= fun t ->
-  M.clear t
+  M.remove t
 
 let suite =
   {

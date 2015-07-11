@@ -386,6 +386,9 @@ let read_tree = {
     Term.(mk read $ backend $ commit)
 }
 
+let reference_of_raw branch =
+  Reference.of_raw ("refs/heads/" ^ Reference.to_raw branch)
+
 (* CLONE *)
 let clone = {
   name = "clone";
@@ -399,7 +402,14 @@ let clone = {
         Arg.(some int) None in
     let bare =
       mk_flag ["bare"] "Do not expand the filesystem." in
-    let clone (module S: Store.S) deepen bare unpack remote dir =
+    let branch =
+      mk_opt ["b"; "branch"] "BRANCH"
+        "Instead of pointing the newly created HEAD to the branch pointed to by \
+         the cloned repository's HEAD, point to $(b, name) branch instead. In a \
+         non-bare repository, this is the branch that will be checked out."
+        Arg.(some reference) None
+    in
+    let clone (module S: Store.S) deepen bare branch unpack remote dir =
       let dir = match dir with
         | Some d -> d
         | None   ->
@@ -419,8 +429,12 @@ let clone = {
       let module Sync = Sync.Make(S) in
       run begin
         S.create ~root:dir ()   >>= fun t ->
+        let head = match branch with
+          | None   -> None
+          | Some b -> Some (Reference.Ref (reference_of_raw b))
+        in
         printf "Cloning into '%s' ...\n%!" (Filename.basename (S.root t));
-        Sync.clone t ?deepen ~unpack remote >>= fun r ->
+        Sync.clone t ?deepen ~unpack ?head remote >>= fun r ->
         if not bare then match r.Result.head with
           | None      -> Lwt.return_unit
           | Some head ->
@@ -430,7 +444,8 @@ let clone = {
         else
           Lwt.return_unit
       end in
-    Term.(mk clone $ backend $ depth $ bare $ unpack $ remote $ directory)
+    Term.(mk clone $ backend $ depth $ bare $ branch $
+          unpack $ remote $ directory)
 }
 
 (* FETCH *)
@@ -486,8 +501,7 @@ let push = {
         S.create ()                 >>= fun t ->
         S.read_reference t branch   >>= fun b ->
         let branch = match b with
-          | None   -> Reference.of_raw
-                        ("refs/heads/" ^ Reference.to_raw branch)
+          | None   -> reference_of_raw branch
           | Some _ -> branch in
         Sync.push t ~branch remote >>= fun s ->
         printf "%s\n" (Result.pretty_push s);

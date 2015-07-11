@@ -28,20 +28,20 @@ let hash = Hashtbl.hash
 let equal = (=)
 let compare = compare
 
-let pp_hum ppf t =
+let pp ppf t =
   Format.fprintf ppf
     "@[object: %a@ \
      type  : %s@ \
      tag   : %S@ \
      tagger: %a@.\
      %s@]"
-    SHA.pp_hum t.sha1
+    SHA.pp t.sha1
     (Object_type.to_string t.typ)
     t.tag
-    User.pp_hum t.tagger
+    User.pp t.tagger
     (String.trim t.message)
 
-let pretty = Misc.pretty pp_hum
+let pretty = Misc.pretty pp
 
 let add_key_value buf k v =
   Buffer.add_string buf k;

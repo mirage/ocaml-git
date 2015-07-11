@@ -34,7 +34,7 @@ type mode =
   | `Gitlink ]
 (** Permission for files in the index file. *)
 
-val pp_hum_mode: Format.formatter -> mode -> unit
+val pp_mode: Format.formatter -> mode -> unit
 (** Pretty print file modes. *)
 
 type stat_info = {
@@ -60,7 +60,7 @@ type stat_info = {
     have no meaning to Git, besides exact match, except for the [mode]
     and [size] fields. *)
 
-val pp_hum_stats: Format.formatter -> stat_info -> unit
+val pp_stats: Format.formatter -> stat_info -> unit
 (** Pretty-print file stats. *)
 
 type entry = {
@@ -70,7 +70,7 @@ type entry = {
   name  : string;
 }
 
-val pp_hum_entry: Format.formatter -> entry -> unit
+val pp_entry: Format.formatter -> entry -> unit
 (** Human-readable representation of an index entry. *)
 
 type extension_kind =
@@ -84,7 +84,7 @@ type extension = {
   payload: string;
 }
 
-val pp_hum_extension: Format.formatter -> extension -> unit
+val pp_extension: Format.formatter -> extension -> unit
 (** Human-readable representation of the extension. *)
 
 type t = private {

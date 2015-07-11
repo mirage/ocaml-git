@@ -78,9 +78,13 @@ module type S = sig
   (** Push a local branch to a remote store. *)
 
   val clone: ?ctx:ctx -> t -> ?deepen:int -> ?unpack:bool ->
-    ?capabilities:capability list -> Gri.t -> Result.fetch Lwt.t
+    ?capabilities:capability list -> ?head:Reference.head_contents ->
+    Gri.t -> Result.fetch Lwt.t
   (** [clone t address] clones the contents of [address] into the
-      store [t]. *)
+      store [t]. If [head] is set, only the history of the given SHA1
+      or references will be downloaded. If [head] is not set
+      (default), all the whole history (corresponding to {i all} the
+      remote heads) will be downloaded. *)
 
   val fetch: ?ctx:ctx -> t -> ?deepen:int -> ?unpack:bool ->
     ?capabilities:capability list -> Gri.t -> Result.fetch Lwt.t
@@ -111,7 +115,7 @@ module type IO = sig
       once the function returns. The [init] corresponds to an optional
       first message sent on the connection to set-it up. *)
 
-  val read_all: ic -> string Lwt.t
+  val read_all: ic -> string list Lwt.t
   (** Read all the channel contents (until the channel is closed by
       the other side). *)
 

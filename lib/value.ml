@@ -26,13 +26,13 @@ let equal = (=)
 let hash = Hashtbl.hash
 let compare = compare
 
-let pp_hum ppf = function
-  | Blob b   -> Format.fprintf ppf "@[<hov 2>Blob@ %a@]" Blob.pp_hum b
-  | Commit c -> Format.fprintf ppf "@[<hov 2>Commit@ %a@]" Commit.pp_hum c
-  | Tag t    -> Format.fprintf ppf "@[<hov 2>Tag@ %a@]" Tag.pp_hum t
-  | Tree t   -> Format.fprintf ppf "@[<hov 2>Tree@ %a@]" Tree.pp_hum t
+let pp ppf = function
+  | Blob b   -> Format.fprintf ppf "@[<hov 2>Blob@ %a@]" Blob.pp b
+  | Commit c -> Format.fprintf ppf "@[<hov 2>Commit@ %a@]" Commit.pp c
+  | Tag t    -> Format.fprintf ppf "@[<hov 2>Tag@ %a@]" Tag.pp t
+  | Tree t   -> Format.fprintf ppf "@[<hov 2>Tree@ %a@]" Tree.pp t
 
-let pretty t = Misc.pretty pp_hum t
+let pretty t = Misc.pretty pp t
 
 let commit c = Commit c
 let blob b = Blob b

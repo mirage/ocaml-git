@@ -59,11 +59,11 @@ let hash = Hashtbl.hash
 let equal = (=)
 let compare = compare
 
-let pp_hum ppf t =
+let pp ppf t =
   Format.fprintf ppf "{@[<hov>name=\"%s\";@ email=\"%s\";@ date=%a@]}"
     t.name t.email pp_date t.date
 
-let pretty = Misc.pretty pp_hum
+let pretty = Misc.pretty pp
 
 (* XXX needs to escape name/email/date *)
 let add buf ?level:_ t =

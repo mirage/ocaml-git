@@ -1,3 +1,16 @@
+### 1.6.0 (2015-07-11)
+
+* Allow some references to contain pointer to other references (#96)
+* Improve the support for 32bit architectures (#97)
+* Add `Reference.pp_head_contents` and `Reference.equal_head_contents`.
+* Remove `Store.clear` and replace it by `Memory.clear`, `Memory.clear_all`
+  and `FS.remove`. This let users have a finer control over the memory
+  consumption of the program over time (related to #90)
+* Rename all `pp_hum` functions into `pp`.
+* Fix regression in `Sync.fetch` and add unit-tests (running only in slow mode).
+* Fix reading of `.git/HEAD` when the contents is a commit hash.
+* Depends on `Stringext` for all the extra string function needed.
+
 ### 1.5.3 (2015-07-10)
 
 * Fix listing of packed references (#98)

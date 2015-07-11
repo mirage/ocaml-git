@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: a4a985c6ac5e966966f38c5311876856)
+# DO NOT EDIT (digest: e091b6058d4207e403bc545d417f795e)
 # Ignore VCS directories, you can use the same kind of rule outside
 # OASIS_START/STOP if you want to exclude directories that contains
 # useless stuff for the build process
@@ -47,6 +47,7 @@ true: annot, bin_annot
 <lib/*.ml{,i,y}>: pkg_mstruct
 <lib/*.ml{,i,y}>: pkg_nocrypto
 <lib/*.ml{,i,y}>: pkg_ocamlgraph
+<lib/*.ml{,i,y}>: pkg_stringext
 <lib/*.ml{,i,y}>: pkg_uri
 <lib/*.ml{,i,y}>: pkg_zip
 # Library git_top
@@ -61,6 +62,7 @@ true: annot, bin_annot
 <lib/http/*.ml{,i,y}>: pkg_mstruct
 <lib/http/*.ml{,i,y}>: pkg_nocrypto
 <lib/http/*.ml{,i,y}>: pkg_ocamlgraph
+<lib/http/*.ml{,i,y}>: pkg_stringext
 <lib/http/*.ml{,i,y}>: pkg_uri
 <lib/http/*.ml{,i,y}>: pkg_uri.services
 <lib/http/*.ml{,i,y}>: pkg_zip
@@ -76,6 +78,7 @@ true: annot, bin_annot
 <lib/unix/*.ml{,i,y}>: pkg_mstruct
 <lib/unix/*.ml{,i,y}>: pkg_nocrypto
 <lib/unix/*.ml{,i,y}>: pkg_ocamlgraph
+<lib/unix/*.ml{,i,y}>: pkg_stringext
 <lib/unix/*.ml{,i,y}>: pkg_uri
 <lib/unix/*.ml{,i,y}>: pkg_uri.services
 <lib/unix/*.ml{,i,y}>: pkg_zip
@@ -97,6 +100,7 @@ true: annot, bin_annot
 <lib/mirage/*.ml{,i,y}>: pkg_mstruct
 <lib/mirage/*.ml{,i,y}>: pkg_nocrypto
 <lib/mirage/*.ml{,i,y}>: pkg_ocamlgraph
+<lib/mirage/*.ml{,i,y}>: pkg_stringext
 <lib/mirage/*.ml{,i,y}>: pkg_uri
 <lib/mirage/*.ml{,i,y}>: pkg_uri.services
 <lib/mirage/*.ml{,i,y}>: pkg_zip
@@ -113,6 +117,7 @@ true: annot, bin_annot
 <bin/ogit.{native,byte}>: pkg_mstruct
 <bin/ogit.{native,byte}>: pkg_nocrypto
 <bin/ogit.{native,byte}>: pkg_ocamlgraph
+<bin/ogit.{native,byte}>: pkg_stringext
 <bin/ogit.{native,byte}>: pkg_uri
 <bin/ogit.{native,byte}>: pkg_uri.services
 <bin/ogit.{native,byte}>: pkg_zip
@@ -129,6 +134,7 @@ true: annot, bin_annot
 <bin/*.ml{,i,y}>: pkg_mstruct
 <bin/*.ml{,i,y}>: pkg_nocrypto
 <bin/*.ml{,i,y}>: pkg_ocamlgraph
+<bin/*.ml{,i,y}>: pkg_stringext
 <bin/*.ml{,i,y}>: pkg_uri
 <bin/*.ml{,i,y}>: pkg_uri.services
 <bin/*.ml{,i,y}>: pkg_zip
@@ -155,6 +161,7 @@ true: annot, bin_annot
 <lib_test/test.{native,byte}>: pkg_mstruct
 <lib_test/test.{native,byte}>: pkg_nocrypto
 <lib_test/test.{native,byte}>: pkg_ocamlgraph
+<lib_test/test.{native,byte}>: pkg_stringext
 <lib_test/test.{native,byte}>: pkg_uri
 <lib_test/test.{native,byte}>: pkg_uri.services
 <lib_test/test.{native,byte}>: pkg_zip
@@ -181,6 +188,7 @@ true: annot, bin_annot
 <lib_test/*.ml{,i,y}>: pkg_mstruct
 <lib_test/*.ml{,i,y}>: pkg_nocrypto
 <lib_test/*.ml{,i,y}>: pkg_ocamlgraph
+<lib_test/*.ml{,i,y}>: pkg_stringext
 <lib_test/*.ml{,i,y}>: pkg_uri
 <lib_test/*.ml{,i,y}>: pkg_uri.services
 <lib_test/*.ml{,i,y}>: pkg_zip

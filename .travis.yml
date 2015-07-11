@@ -2,8 +2,12 @@ language: c
 install: wget https://raw.githubusercontent.com/ocaml/ocaml-travisci-skeleton/master/.travis-opam.sh
 script: bash -ex .travis-opam.sh
 env:
-  - OCAML_VERSION=4.01 DEPOTS=cohttp
-  - OCAML_VERSION=latest
-  - OCAML_VERSION=latest
-    DEPOPTS="mirage-http mirage-flow mirage-types-lwt channel cmdliner"
-    TESTS=false
+  global:
+    - PACKAGE=git
+  matrix:
+    - OCAML_VERSION=4.01 DEPOTS=cohttp
+    - OCAML_VERSION=4.01
+    - OCAML_VERSION=4.02
+      DEPOPTS="mirage-http mirage-flow mirage-types-lwt channel cmdliner"
+      TESTS=false
+    - OCAML_VERSION=4.02 TESTS=false REVDEPS=*

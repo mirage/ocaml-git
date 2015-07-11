@@ -36,9 +36,6 @@ module type S = sig
       equivalent to level 6) requests a default compromise between
       speed and compression. *)
 
-  val clear: t -> unit Lwt.t
-  (** Remove all the contents of the Git store. *)
-
   val dump: t -> unit Lwt.t
   (** Dump the store contents to stderr. *)
 

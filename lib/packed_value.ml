@@ -24,20 +24,20 @@ type copy = {
   length: int;
 }
 
-let pp_hum_copy ppf t =
+let pp_copy ppf t =
   Format.fprintf ppf "@[off:%d@ len:%d@]" t.offset t.length
 
 type hunk =
   | Insert of string
   | Copy of copy
 
-let pp_hum_hunk ppf = function
+let pp_hunk ppf = function
   | Insert str -> Format.fprintf ppf "@[INSERT %S@]" str
-  | Copy copy  -> Format.fprintf ppf "@[COPY %a@]" pp_hum_copy copy
+  | Copy copy  -> Format.fprintf ppf "@[COPY %a@]" pp_copy copy
 
-let pp_hum_hunks ppf l =
+let pp_hunks ppf l =
   Format.fprintf ppf "@[";
-  List.iter (Format.fprintf ppf "%a@ " pp_hum_hunk) l;
+  List.iter (Format.fprintf ppf "%a@ " pp_hunk) l;
   Format.fprintf ppf "@]"
 
 type 'a delta = {
@@ -47,7 +47,7 @@ type 'a delta = {
   hunks: hunk list;
 }
 
-let pp_hum_delta ppf d =
+let pp_delta ppf d =
   Format.fprintf ppf
     "@[\
      source-length: %d@ \
@@ -55,7 +55,7 @@ let pp_hum_delta ppf d =
      %a@]"
     d.source_length
     d.result_length
-    pp_hum_hunks d.hunks
+    pp_hunks d.hunks
 
 type t =
   | Raw_value of string
@@ -66,12 +66,12 @@ let hash = Hashtbl.hash
 let equal = (=)
 let compare = compare
 
-let pp_hum ppf = function
+let pp ppf = function
   | Raw_value s -> Format.fprintf ppf "%S@." s
   | Ref_delta d -> Format.fprintf ppf "@[source: %s@ %a@]"
-                     (SHA.to_hex d.source) pp_hum_delta d
+                     (SHA.to_hex d.source) pp_delta d
   | Off_delta d -> Format.fprintf ppf "@[source:%d@ %a@]"
-                     d.source pp_hum_delta d
+                     d.source pp_delta d
 
 let result_length = function
   | Ref_delta { result_length; _ }
@@ -346,8 +346,9 @@ module Make (M: sig val version: int end) = struct
     let buf = Misc.with_buffer (fun buf -> add buf t) in
     Misc.crc32 buf
 
-  let pp_hum = pp_hum
-  let pretty = Misc.pretty pp_hum
+  let pp = pp
+
+  let pretty = Misc.pretty pp
 
 end
 
@@ -368,10 +369,10 @@ module PIC = struct
     | Raw _  -> "RAW"
     | Link d -> sprintf "link(%s)" (SHA.to_hex d.source.sha1)
 
-  let pp_hum ppf { kind; sha1 } =
-    Format.fprintf ppf "@[%a: %s@]" SHA.pp_hum sha1 (pretty_kind kind)
+  let pp ppf { kind; sha1 } =
+    Format.fprintf ppf "@[%a: %s@]" SHA.pp sha1 (pretty_kind kind)
 
-  let pretty = Misc.pretty pp_hum
+  let pretty = Misc.pretty pp
 
   let rec unpack pic =
     match Value.Cache.find_inflated pic.sha1 with

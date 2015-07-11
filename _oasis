@@ -1,6 +1,6 @@
 OASISFormat: 0.4
 Name:        git
-Version:     1.5.3
+Version:     1.6.0
 Synopsis:    A low-level interface to Git in pure OCaml
 Authors:     Thomas Gazagnaire
 License:     ISC
@@ -26,7 +26,7 @@ Library git
                      Object, Object_type, Store, Search, Gri,
                      Memory, FS, Packed_refs
   BuildDepends:      mstruct, dolog, ocamlgraph, zip, nocrypto, uri,
-                     lwt, hex
+                     lwt, hex, stringext
 
 Library git_top
   Path:             lib/top

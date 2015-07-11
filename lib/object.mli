@@ -33,7 +33,7 @@ module type S = sig
   val pretty: t -> string
   (** Human readable represenation of the object. *)
 
-  val pp_hum: Format.formatter -> t -> unit
+  val pp: Format.formatter -> t -> unit
   (** Same as {!pretty} but using a generic formatter. *)
 
   val input: Mstruct.t -> t

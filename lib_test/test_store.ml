@@ -319,6 +319,16 @@ module Make (Store: Store.S) = struct
       Store.references t                 >>= fun rs   ->
       assert_refs_equal "refs" [r1; r2] rs;
 
+      let commit =
+        Git.Reference.SHA (
+          SHA.Commit.of_hex "21930ccb5f7b97e80a068371cb554b1f5ce8e55a"
+        ) in
+      Store.write_head t ( commit) >>= fun () ->
+      Store.read_head t >>= fun head ->
+      let () = match head with
+        | None   -> Alcotest.fail "no head"
+        | Some h -> Alcotest.(check head_contents) "head" commit h
+      in
       Lwt.return_unit
     in
     run x test
@@ -422,12 +432,63 @@ module Make (Store: Store.S) = struct
 
   module Sync = Sync.Make(Store)
 
-  let test_remote x () =
+  let test_basic_remote x () =
     let test () =
       let gri = Gri.of_string "git://localhost/" in
-      create ()        >>= fun t ->
+      create () >>= fun t ->
+      Store.read_head t >>= fun head ->
+      Alcotest.(check (option head_contents)) "no head" None head;
       Sync.fetch t gri >>= fun _ ->
       Sync.push t gri ~branch:Reference.master >>= fun _ ->
+      Lwt.return_unit
+    in
+    run x test
+
+  let head_contents =
+    let module M = struct
+      type t = Git.Reference.head_contents
+      let equal = Git.Reference.equal_head_contents
+      let pp = Git.Reference.pp_head_contents
+    end
+    in (module M: Alcotest.TESTABLE with type t = M.t)
+
+  let test_clones x () =
+    let test () =
+      Store.create ~root () >>= fun t  ->
+      let clone gri head =
+        x.init () >>= fun () ->
+        Sync.clone t ?head gri >>= fun _ ->
+        if Store.kind = `Disk then
+          let cmd = Printf.sprintf "cd %s && git fsck" @@ Store.root t in
+          Alcotest.(check int) "fsck" 0 (Sys.command cmd);
+          let e = match head with
+            | None   -> Git.Reference.(Ref (of_raw "refs/heads/master"))
+            | Some h -> h
+          in
+          Store.read_head t >>= function
+          | None   -> Alcotest.fail "empty clone!"
+          | Some h ->
+            Alcotest.(check head_contents) "correct head contents" e h;
+            Lwt.return_unit
+        else
+        Lwt.return_unit
+      in
+      let git = Gri.of_string "git://github.com/mirage/ocaml-git.git" in
+      let https = Gri.of_string "https://github.com/mirage/ocaml-git.git" in
+      let gh_pages =
+        Some (Git.Reference.(Ref (of_raw "refs/heads/gh-pages")))
+      in
+      let commit =
+        let h = SHA.Commit.of_hex "21930ccb5f7b97e80a068371cb554b1f5ce8e55a" in
+        Some (Git.Reference.SHA h)
+      in
+      clone git   None     >>= fun () ->
+      clone https None     >>= fun () ->
+      clone git   gh_pages >>= fun () ->
+      clone https gh_pages >>= fun () ->
+      clone https commit   >>= fun () ->
+      clone git   commit   >>= fun () ->
+
       Lwt.return_unit
     in
     run x test
@@ -484,8 +545,9 @@ let suite (speed, x) =
     "Operations on references"  , speed, T.test_refs     x;
     "Operations on index"       , speed, T.test_index    x;
     "Operations on pack files"  , speed, T.test_packs    x;
-    "Remote operations"         , `Slow, T.test_remote   x;
     "Resource leaks"            , `Slow, T.test_leaks    x;
+    "Basic Remote operations"   , `Slow, T.test_basic_remote x;
+    "Cloning ocaml-git.git"     , `Slow, T.test_clones   x;
   ]
 
 let ops = [

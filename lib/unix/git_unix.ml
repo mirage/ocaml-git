@@ -117,18 +117,18 @@ module M = struct
       Lwt.fail (Failure ("Unknown protocol. Must supply a scheme like git://"))
 
   let read_all ic =
-    let len = 4096 in
-    let buf = Bytes.create len in
-    let res = Buffer.create len in
-    let rec aux () =
+    let len = 4 * 4096 in
+    let return l = Lwt.return (List.rev l) in
+    let rec aux acc =
+      let buf = Bytes.create len in
       Lwt_io.read_into ic buf 0 len >>= function
-      | 0 -> Lwt.return_unit
-      | i -> Buffer.add_substring res buf 0 i;
-        if len = i then Lwt.return_unit
-        else aux ()
+      | 0 -> return acc
+      | i ->
+        let buf = Bytes.sub buf 0 i in
+        if len = i then return (buf :: acc)
+        else aux (buf :: acc)
     in
-    aux () >>= fun () ->
-    Lwt.return (Buffer.contents res)
+    aux []
 
   let read_exactly ic n =
     let res = Bytes.create n in

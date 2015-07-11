@@ -20,6 +20,9 @@ module type S = sig
 
   include Store.S
 
+  val remove: t -> unit Lwt.t
+  (** Remove all the contents of the store. *)
+
   val create_file: t -> string -> Tree.perm -> Blob.t -> unit Lwt.t
   (** Create a file on the filesystem, with the given mode. *)
 

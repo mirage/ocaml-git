@@ -43,18 +43,18 @@ let pretty_perm = function
   | `Dir    -> "dir"
   | `Commit -> "commit"
 
-let pp_hum_entry ppf e =
+let pp_entry ppf e =
   Format.fprintf ppf "{@[<hov 2>perm = %s;@ node = \"%a\";@ name = %S;@]}"
     (pretty_perm e.perm)
-    SHA.pp_hum e.node
+    SHA.pp e.node
     e.name
 
-let pp_hum ppf t =
+let pp ppf t =
   Format.fprintf ppf "[@,";
-  List.iter (Format.fprintf ppf "%a;@ " pp_hum_entry) t;
+  List.iter (Format.fprintf ppf "%a;@ " pp_entry) t;
   Format.fprintf ppf "@,@]]"
 
-let pretty = Misc.pretty pp_hum
+let pretty = Misc.pretty pp
 
 let perm_of_string buf = function
   | "44"
