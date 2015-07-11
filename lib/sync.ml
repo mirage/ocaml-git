@@ -87,7 +87,7 @@ module type IO = sig
   type ctx
   val with_connection: ?ctx:ctx -> Uri.t -> ?init:string ->
     (ic * oc -> 'a Lwt.t) -> 'a Lwt.t
-  val read_all: ic -> string Lwt.t
+  val read_all: ic -> string list Lwt.t
   val read_exactly: ic -> int -> string Lwt.t
   val write: oc -> string -> unit Lwt.t
   val flush: oc -> unit Lwt.t
@@ -751,7 +751,7 @@ module Make (IO: IO) (Store: Store.S) = struct
     let input ~capabilities ic =
       if List.mem `Side_band_64k capabilities
       || List.mem `Side_band capabilities
-      then Side_band.input ic
+      then Side_band.input ic >|= fun x -> [x]
       else IO.read_all ic
 
   end
@@ -945,10 +945,16 @@ module Make (IO: IO) (Store: Store.S) = struct
 
     Log.debug "PHASE3";
     Log.info "Receiving data ...";
-    Pack_file.input ~capabilities ic >>= fun raw ->
+    Pack_file.input ~capabilities ic >>= fun bufs ->
 
-    Log.info "Received a pack file of %d bytes." (String.length raw);
-    let pack = Cstruct.of_string raw in
+    let size = List.fold_left (fun acc s -> acc + String.length s) 0 bufs in
+    Log.info "Received a pack file of %d bytes." size;
+    let pack = Cstruct.create size in
+    let _size = List.fold_left (fun acc buf ->
+        let len = String.length buf in
+        Cstruct.blit_from_string buf 0 pack acc len;
+        acc + len
+      ) 0 bufs in
 
     let unpack = match op with
       | Clone { c_unpack = u; _ }

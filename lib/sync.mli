@@ -115,7 +115,7 @@ module type IO = sig
       once the function returns. The [init] corresponds to an optional
       first message sent on the connection to set-it up. *)
 
-  val read_all: ic -> string Lwt.t
+  val read_all: ic -> string list Lwt.t
   (** Read all the channel contents (until the channel is closed by
       the other side). *)
 

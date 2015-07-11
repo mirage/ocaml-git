@@ -186,19 +186,18 @@ module IO_helper (Channel: V1_LWT.CHANNEL) = struct
     Channel.flush oc
 
   let read_all ic =
-    let len = 4096 in
-    let res = Buffer.create len in
-    let rec aux () =
+    let len = 4 * 4096 in
+    let return l = Lwt.return (List.rev l) in
+    let rec aux acc =
       Channel.read_some ~len ic >>= fun buf ->
       match Cstruct.len buf with
-      | 0 -> Lwt.return_unit
+      | 0 -> return acc
       | i ->
-        Buffer.add_string res (Cstruct.to_string buf);
-        if len = i then Lwt.return_unit
-        else aux ()
+        let buf = Cstruct.to_string buf in
+        if len = i then return (buf :: acc)
+        else aux (buf :: acc)
     in
-    aux () >>= fun () ->
-    Lwt.return (Buffer.contents res)
+    aux []
 
   let read_exactly ic n =
     let res = Bytes.create n in
