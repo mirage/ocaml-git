@@ -116,3 +116,11 @@ let rec_files dir =
     files dir       >>= fun fs ->
     Lwt_list.fold_left_s aux (fs @ accu) ds in
   aux [] dir
+
+let head_contents =
+  let module M = struct
+    type t = Git.Reference.head_contents
+    let equal = Git.Reference.equal_head_contents
+    let pp = Git.Reference.pp_head_contents
+    end
+  in (module M: Alcotest.TESTABLE with type t = M.t)

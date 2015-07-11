@@ -319,6 +319,16 @@ module Make (Store: Store.S) = struct
       Store.references t                 >>= fun rs   ->
       assert_refs_equal "refs" [r1; r2] rs;
 
+      let commit =
+        Git.Reference.SHA (
+          SHA.Commit.of_hex "21930ccb5f7b97e80a068371cb554b1f5ce8e55a"
+        ) in
+      Store.write_head t ( commit) >>= fun () ->
+      Store.read_head t >>= fun head ->
+      let () = match head with
+        | None   -> Alcotest.fail "no head"
+        | Some h -> Alcotest.(check head_contents) "head" commit h
+      in
       Lwt.return_unit
     in
     run x test
