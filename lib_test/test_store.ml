@@ -454,9 +454,8 @@ module Make (Store: Store.S) = struct
 
   let test_clones x () =
     let test () =
-      let gri = Gri.of_string "git://github.com/mirage/ocaml-git.git" in
       Store.create ~root () >>= fun t  ->
-      let clone head =
+      let clone gri head =
         x.init () >>= fun () ->
         Sync.clone t ?head gri >>= fun _ ->
         if Store.kind = `Disk then
@@ -474,13 +473,23 @@ module Make (Store: Store.S) = struct
         else
         Lwt.return_unit
       in
-      let gh_pages = Git.Reference.of_raw "refs/heads/gh-pages" in
-      let commit =
-        Git.SHA.Commit.of_hex "21930ccb5f7b97e80a068371cb554b1f5ce8e55a"
+      let git = Gri.of_string "git://github.com/mirage/ocaml-git.git" in
+      let https = Gri.of_string "https://github.com/mirage/ocaml-git.git" in
+      let gh_pages =
+        Some (Git.Reference.(Ref (of_raw "refs/heads/gh-pages")))
       in
-      clone None >>= fun () ->
-      clone (Some (Git.Reference.Ref gh_pages)) >>= fun () ->
-      clone (Some (Git.Reference.SHA commit))
+      let commit =
+        let h = SHA.Commit.of_hex "21930ccb5f7b97e80a068371cb554b1f5ce8e55a" in
+        Some (Git.Reference.SHA h)
+      in
+      clone git   None     >>= fun () ->
+      clone https None     >>= fun () ->
+      clone git   gh_pages >>= fun () ->
+      clone https gh_pages >>= fun () ->
+      clone https commit   >>= fun () ->
+      clone git   commit   >>= fun () ->
+
+      Lwt.return_unit
     in
     run x test
 
