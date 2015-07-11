@@ -15,26 +15,27 @@
  *)
 
 let printers = [
-  "Git.SHA.pp_hum";
-  "Git.SHA.Blob.pp_hum";
-  "Git.SHA.Tree.pp_hum";
-  "Git.SHA.Commit.pp_hum";
-  "Git.Blob.pp_hum";
-  "Git.Tree.pp_hum";
-  "Git.Commit.pp_hum";
-  "Git.Value.pp_hum";
-  "Git.Index.pp_hum";
-  "Git.Index.pp_hum_mode";
-  "Git.Index.pp_hum_stats";
-  "Git.Index.pp_hum_entry";
-  "Git.Object_type.pp_hum";
-  "Git.Pack.pp_hum";
+  "Git.SHA.pp";
+  "Git.SHA.Blob.pp";
+  "Git.SHA.Tree.pp";
+  "Git.SHA.Commit.pp";
+  "Git.Blob.pp";
+  "Git.Tree.pp";
+  "Git.Commit.pp";
+  "Git.Value.pp";
+  "Git.Index.pp";
+  "Git.Index.pp_mode";
+  "Git.Index.pp_stats";
+  "Git.Index.pp_entry";
+  "Git.Object_type.pp";
+  "Git.Pack.pp";
   (*  "Git.Pack_index.pp_hum"; *)
-  "Git.Packed_value.pp_hum";
-  "Git.Packed_refs.pp_hum";
-  "Git.Reference.pp_hum";
-  "Git.Tag.pp_hum";
-  "Git.User.pp_hum";
+  "Git.Packed_value.pp";
+  "Git.Packed_refs.pp";
+  "Git.Reference.pp";
+  "Git.Reference.pp_head_contents";
+  "Git.Tag.pp";
+  "Git.User.pp";
 ]
 
 let eval_string

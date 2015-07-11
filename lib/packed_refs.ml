@@ -48,8 +48,8 @@ let add buf ?level:_ t =
   let ppf = Format.formatter_of_buffer buf in
   List.iter (to_line ppf) t
 
-let pp_hum ppf t = List.iter (to_line ppf) t
-let pretty = Misc.pretty pp_hum
+let pp ppf t = List.iter (to_line ppf) t
+let pretty = Misc.pretty pp
 
 let input buf =
   let rec aux acc =

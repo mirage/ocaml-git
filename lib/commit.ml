@@ -30,12 +30,12 @@ let compare = compare
 
 let equal = (=)
 
-let pp_hum_parents ppf parents =
+let pp_parents ppf parents =
   List.iter (fun t ->
-      Format.fprintf ppf "\"%a\";@ " SHA.Commit.pp_hum t
+      Format.fprintf ppf "\"%a\";@ " SHA.Commit.pp t
     ) parents
 
-let pp_hum ppf t =
+let pp ppf t =
   Format.fprintf ppf
     "{@[<hov 2>\
      tree = \"%a\";@ \
@@ -43,13 +43,13 @@ let pp_hum ppf t =
      author = %a;@ \
      committer = %a;@.\
      message = %S@]}"
-    SHA.Tree.pp_hum t.tree
-    pp_hum_parents t.parents
-    User.pp_hum t.author
-    User.pp_hum t.committer
+    SHA.Tree.pp t.tree
+    pp_parents t.parents
+    User.pp t.author
+    User.pp t.committer
     (String.trim t.message)
 
-let pretty = Misc.pretty pp_hum
+let pretty = Misc.pretty pp
 
 let add_parent buf parent =
   Buffer.add_string buf "parent ";

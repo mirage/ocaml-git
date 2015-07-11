@@ -50,8 +50,8 @@ module Raw = struct
       pack_checksum;
     }
 
-  let pp_hum ppf t =
-    Format.fprintf ppf "@[pack-checksum: %a@ " SHA.pp_hum t.pack_checksum;
+  let pp ppf t =
+    Format.fprintf ppf "@[pack-checksum: %a@ " SHA.pp t.pack_checksum;
     let l = ref [] in
     let offsets = SHA.Map.to_alist t.offsets in
     let crcs = SHA.Map.to_alist t.crcs in
@@ -61,11 +61,11 @@ module Raw = struct
       ) offsets crcs;
     let l = List.sort (fun (_,o1,_) (_,o2,_) -> Pervasives.compare o1 o2) !l in
     List.iter (fun (sha1, offset, crc) ->
-        Format.fprintf ppf "@[%a@ off:%d@ crc:%ld@]" SHA.pp_hum sha1 offset crc
+        Format.fprintf ppf "@[%a@ off:%d@ crc:%ld@]" SHA.pp sha1 offset crc
       ) l;
     Format.fprintf ppf "@]"
 
-  let pretty = Misc.pretty pp_hum
+  let pretty = Misc.pretty pp
 
   let lengths { offsets; _ } =
     Log.debug "lengths";

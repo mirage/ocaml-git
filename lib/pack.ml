@@ -47,13 +47,13 @@ module Raw = struct
     && SHA.equal t1.checksum t2.checksum
     && t1.values = t2.values
 
-  let pp_hum ppf t =
-    Format.fprintf ppf "%a@." SHA.pp_hum t.checksum;
+  let pp ppf t =
+    Format.fprintf ppf "%a@." SHA.pp t.checksum;
     List.iter (fun (offset, _, p) ->
-        Format.fprintf ppf "offset: %d@,%a" offset Packed_value.pp_hum p
+        Format.fprintf ppf "offset: %d@,%a" offset Packed_value.pp p
       ) t.values
 
-  let pretty = Misc.pretty pp_hum
+  let pretty = Misc.pretty pp
 
   let input_header buf =
     let header = Mstruct.get_string buf 4 in
@@ -244,16 +244,16 @@ let compare = compare
 
 let equal = (=)
 
-let pp_hum ppf t =
+let pp ppf t =
   Format.fprintf ppf "@[";
   List.iter (fun (sha1, p) ->
       Format.fprintf ppf "@[%a@,%a@;@]"
-        SHA.pp_hum sha1
-        Packed_value.PIC.pp_hum p
+        SHA.pp sha1
+        Packed_value.PIC.pp p
     ) t;
   Format.fprintf ppf "@]"
 
-let pretty = Misc.pretty pp_hum
+let pretty = Misc.pretty pp
 
 let input ~read buf ~index =
   Log.debug "input";

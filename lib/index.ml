@@ -34,7 +34,7 @@ let pretty_mode = function
     | `Link    -> "link"
     | `Gitlink -> "gitlink"
 
-let pp_hum_mode ppf t =
+let pp_mode ppf t =
   Format.fprintf ppf "%s" (pretty_mode t)
 
 type stat_info = {
@@ -48,7 +48,7 @@ type stat_info = {
   size : int32;
 }
 
-let pp_hum_stats ppf t =
+let pp_stats ppf t =
   Format.fprintf ppf
     "{@[<hov 2>\
      ctime = (%ld, %ld);@ \
@@ -63,7 +63,7 @@ let pp_hum_stats ppf t =
     t.mtime.lsb32 t.mtime.nsec
     t.dev t.inode
     t.uid t.gid
-    t.size pp_hum_mode t.mode
+    t.size pp_mode t.mode
 
 type entry = {
   stats : stat_info;
@@ -80,7 +80,7 @@ let compare_entries e1 e2 =
   | 0 -> compare e2.id e1.id
   | i -> i
 
-let pp_hum_entry ppf t =
+let pp_entry ppf t =
   Format.fprintf ppf
     "{@[<hov 2>\
      name = %S@ \
@@ -88,8 +88,8 @@ let pp_hum_entry ppf t =
      stats =@ %a;@ \
      stage = %d;@]}"
     t.name
-    SHA.Blob.pp_hum t.id
-    pp_hum_stats t.stats
+    SHA.Blob.pp t.id
+    pp_stats t.stats
     t.stage
 
 type extension_kind =
@@ -131,10 +131,10 @@ let compare = compare
 
 let equal = (=)
 
-let pp_hum ppf t =
+let pp ppf t =
   Format.fprintf ppf "@[";
   List.iter (fun e ->
-      pp_hum_entry ppf e;
+      pp_entry ppf e;
       Format.fprintf ppf "@.";
     ) t.entries;
   Format.fprintf ppf "@]"
@@ -142,10 +142,10 @@ let pp_hum ppf t =
 let pretty t =
   let buf = Buffer.create 1024 in
   let ppf = Format.formatter_of_buffer buf in
-  pp_hum ppf t;
+  pp ppf t;
   Buffer.contents buf
 
-let pp_hum ppf t = Format.fprintf ppf "%s" (pretty t)
+let pp ppf t = Format.fprintf ppf "%s" (pretty t)
 
 let input_time buf =
   let lsb32 = Mstruct.get_be_uint32 buf in
@@ -241,7 +241,7 @@ let add_entry buf t =
     );
   Buffer.add_string buf (Cstruct.to_string cstr)
 
-let pp_hum_extension ppf e =
+let pp_extension ppf e =
   Format.fprintf ppf "@[kind:%s@ size:%d]"
     (string_of_extension_kind e.kind) (String.length e.payload)
 
