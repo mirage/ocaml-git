@@ -75,12 +75,9 @@ module SHA1_String = struct
     let n = (String.length x.raw) * 2 in
     if x.padded then n - 1 else n
 
-  let is_short x = (length x) < 40
-
-  let equal x y = (x=y)
-
+  let is_short x = length x < 40
+  let equal x y = x.padded = y.padded && String.compare x.raw y.raw = 0
   let hash x = Hashtbl.hash x.raw
-
   let compare = sha_compare
 
   let is_prefix p x =
@@ -100,9 +97,7 @@ module SHA1_String = struct
         Exit -> false
 
   let lt x y = compare x y < 0
-
   let to_raw x = x.raw
-
   let of_raw x = { raw=x; padded=false; }
 
   let of_string str =
@@ -118,10 +113,8 @@ module SHA1_String = struct
 
   let to_hex t =
     let `Hex h = Hex.of_string t.raw in
-    if t.padded then
-      String.sub h 0 ((String.length h) - 1)
-    else
-      h
+    if t.padded then String.sub h 0 ((String.length h) - 1)
+    else h
 
   let of_hex h =
     let len = String.length h in
@@ -129,24 +122,13 @@ module SHA1_String = struct
     let h' = if to_be_padded then h ^ "0" else h in
     { raw = Hex.to_string (`Hex h'); padded = to_be_padded; }
 
-  let zero =
-    of_hex (String.make 40 '0')
-
+  let zero = of_hex (String.make 40 '0')
   let pretty = to_hex
-
   let pp ppf t = Format.fprintf ppf "%s" (pretty t)
-
-  let input buf =
-    { raw=Mstruct.get_string buf 20; padded=false; }
-
-  let add buf ?level:_ t =
-    Buffer.add_string buf t.raw
-
-  let input_hex buf =
-    of_hex (Mstruct.get_string buf (Mstruct.length buf))
-
-  let add_hex buf t =
-    Buffer.add_string buf (to_hex t)
+  let input buf = { raw=Mstruct.get_string buf 20; padded=false; }
+  let add buf ?level:_ t = Buffer.add_string buf t.raw
+  let input_hex buf = of_hex (Mstruct.get_string buf (Mstruct.length buf))
+  let add_hex buf t = Buffer.add_string buf (to_hex t)
 
   module X = struct
     type t = sha_t

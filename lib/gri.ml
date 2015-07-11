@@ -24,11 +24,11 @@ let of_string str =
   match Uri.host uri with
   | Some _ -> uri
   | None   ->
-    match Misc.string_lsplit2 str ~on:':' with
+    match Stringext.cut str ~on:":" with
     | None       -> uri
     | Some (host, path) ->
       let userinfo, host =
-        match Misc.string_lsplit2 host ~on:'@' with
+        match Stringext.cut host ~on:"@" with
         | None       -> None  , host
         | Some (a,b) -> Some a, b in
       let scheme = "git+ssh" in

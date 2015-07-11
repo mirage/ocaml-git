@@ -114,6 +114,9 @@ let lf  = '\x0a'
 let lt  = '<'
 let gt  = '>'
 
+let sp_str = String.make 1 sp
+let nul_str = String.make 1 nul
+
 let input_key_value buf ~key:expected input_value =
   let error actual =
     Mstruct.parse_error_buf buf "keys: [actual: %s] [expected: %s]" actual expected in
@@ -233,32 +236,6 @@ module S = struct
 end
 
 module IntMap = Map(I)
-
-let string_split str ~on =
-  let len = String.length str in
-  let rec loop acc i =
-    if i < 0 then acc else (
-      let j =
-        try String.rindex_from str i on
-        with Not_found -> -42
-      in
-      match j with
-      | -42 -> String.sub str 0 i :: acc
-      | _  ->
-        let sub = String.sub str (j + 1) (i - j) in
-        loop (sub :: acc) (j - 1)
-    )
-  in
-  loop [] (len - 1)
-
-let string_lsplit2 str ~on =
-  try
-    let j = String.index str on in
-    let x = String.sub str 0 j in
-    let y = String.sub str (j + 1) (String.length str - j - 1) in
-    Some (x, y)
-  with Not_found ->
-    None
 
 let string_forall f s =
   let rec aux i = i = String.length s || (f s.[i] && aux (i+1)) in

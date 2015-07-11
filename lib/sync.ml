@@ -204,7 +204,7 @@ module Make (IO: IO) (Store: Store.S) = struct
       | "report-status" -> `Report_status
       | "delete-refs"   -> `Delete_refs
       | x               ->
-        match Misc.string_lsplit2 x ~on:'=' with
+        match Stringext.cut x ~on:"=" with
         | Some ("agent", a) -> `Agent a
         | _ -> `Other x
 
@@ -248,7 +248,7 @@ module Make (IO: IO) (Store: Store.S) = struct
     type t = Capability.t list
 
     let of_string str =
-      List.map Capability.of_string (Misc.string_split str ~on:Misc.sp)
+      List.map Capability.of_string (Stringext.split str ~on:Misc.sp)
 
     let to_string l =
       String.concat " " (List.map Capability.to_string l)
@@ -408,7 +408,7 @@ module Make (IO: IO) (Store: Store.S) = struct
           PacketLine.input ic >>= function
           | None      -> error "missing # header."
           | Some line ->
-            match Misc.string_lsplit2 line ~on:Misc.sp with
+            match Stringext.cut line ~on:Misc.sp_str with
             | Some ("#", service) ->
               Log.debug "skipping %s" service;
               begin PacketLine.input ic >>= function
@@ -422,7 +422,7 @@ module Make (IO: IO) (Store: Store.S) = struct
         PacketLine.input ic >>= function
         | None      -> Lwt.return acc
         | Some line ->
-          match Misc.string_lsplit2 line ~on:Misc.sp with
+          match Stringext.cut line ~on:Misc.sp_str with
           | Some ("ERR", err) -> error "ERROR: %s" err
           | Some (sha1, ref)  ->
             let add sha1 ref =
@@ -431,7 +431,7 @@ module Make (IO: IO) (Store: Store.S) = struct
             in
             if is_empty acc then (
               (* Read the capabilities on the first line *)
-              match Misc.string_lsplit2 ref ~on:Misc.nul with
+              match Stringext.cut ref ~on:Misc.nul_str with
               | Some (ref, caps) ->
                 let ref = Reference.of_raw ref in
                 let references = add sha1 ref in
@@ -475,9 +475,9 @@ module Make (IO: IO) (Store: Store.S) = struct
       | None
       | Some "NAK" -> Lwt.return Nak
       | Some s      ->
-        match Misc.string_lsplit2 s ~on:Misc.sp with
+        match Stringext.cut s ~on:Misc.sp_str with
         | Some ("ACK", r) ->
-          begin match Misc.string_lsplit2 r ~on:Misc.sp with
+          begin match Stringext.cut r ~on:Misc.sp_str with
             | None         -> Lwt.return (Ack (SHA.of_hex r))
             | Some (id, s) ->
               Lwt.return (Ack_multi (SHA.of_hex id, status_of_string s))
@@ -538,7 +538,7 @@ module Make (IO: IO) (Store: Store.S) = struct
         PacketLine.input_raw ic >>= function
         | None   -> Lwt.return (List.rev acc)
         | Some l ->
-          match Misc.string_lsplit2 l ~on:Misc.sp with
+          match Stringext.cut l ~on:Misc.sp_str with
           | None -> error "input upload"
           | Some (kind, s) ->
             match kind with
@@ -554,7 +554,7 @@ module Make (IO: IO) (Store: Store.S) = struct
               aux (Deepen d :: acc)
             | "want" ->
               let aux id c = aux (Want (SHA.of_hex id, c) :: acc) in
-              begin match Misc.string_lsplit2 s ~on:Misc.sp with
+              begin match Stringext.cut s ~on:Misc.sp_str with
                 | Some (id,c) -> aux id (Capabilities.of_string c)
                 | None        -> match acc with
                   | Want (_,c)::_ -> aux s c
@@ -819,7 +819,7 @@ module Make (IO: IO) (Store: Store.S) = struct
       PacketLine.input ic >>= function
       | None -> Lwt.fail (Failure "Report_status.input: empty")
       | Some line ->
-        begin match Misc.string_lsplit2 line ~on:Misc.sp with
+        begin match Stringext.cut line ~on:Misc.sp_str with
           | Some ("unpack", "ok") -> Lwt.return `Ok
           | Some ("unpack", err ) -> Lwt.return (`Error err)
           | _ -> Lwt.fail (Failure "Report_status.input: unpack-status")
@@ -828,11 +828,11 @@ module Make (IO: IO) (Store: Store.S) = struct
           PacketLine.input ic >>= function
           | None      -> Lwt.return acc
           | Some line ->
-            match Misc.string_lsplit2 line ~on:Misc.sp with
+            match Stringext.cut line ~on:Misc.sp_str with
             | Some ("ok", name)  ->
               Lwt.return ((Reference.of_raw name, `Ok) :: acc)
             | Some ("ng", cont)  ->
-              begin match Misc.string_lsplit2 cont ~on:Misc.sp with
+              begin match Stringext.cut cont ~on:Misc.sp_str with
                 | None  -> Lwt.fail (Failure "Report_status.input: command-fail")
                 | Some (name, err) ->
                   Lwt.return ((Reference.of_raw name, `Error err) :: acc)

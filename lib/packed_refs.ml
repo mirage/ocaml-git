@@ -27,7 +27,7 @@ let of_line line =
   else if line.[0] = '#' then
     let str = String.sub line 1 (String.length line - 1) in
     Some (`Comment str)
-  else match Misc.string_lsplit2 line ~on:' ' with
+  else match Stringext.cut line ~on:" " with
     | None  -> None
     | Some (sha1, ref) ->
       let sha1 = SHA.Commit.of_hex sha1 in

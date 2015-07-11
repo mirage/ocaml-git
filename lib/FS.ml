@@ -501,7 +501,7 @@ module Make (IO: IO) = struct
          change. *)
       IO.read_file file >>= fun str ->
       let str = Cstruct.to_string str in
-      let contents = match Misc.string_split ~on:' ' str with
+      let contents = match Stringext.split ~on:' ' str with
         | [sha1]  -> Reference.SHA (SHA.Commit.of_hex sha1)
         | [_;ref] -> Reference.Ref (Reference.of_raw ref)
         | _       ->

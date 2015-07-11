@@ -64,6 +64,8 @@ val nul: char
 val lf: char
 val lt: char
 val gt: char
+val sp_str: string
+val nul_str: string
 
 module type OrderedType = sig
   include Set.OrderedType
@@ -94,8 +96,6 @@ module Map (X: OrderedType): Map with type key = X.t
 
 module IntMap: Map with type key = int
 
-val string_split: string -> on:char -> string list
-val string_lsplit2: string -> on:char -> (string * string) option
 val string_forall: (char -> bool) -> string -> bool
 val string_exists: (char -> bool) -> string -> bool
 val string_mem: char -> string -> bool
