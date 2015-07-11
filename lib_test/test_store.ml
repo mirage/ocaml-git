@@ -432,13 +432,53 @@ module Make (Store: Store.S) = struct
 
   module Sync = Sync.Make(Store)
 
-  let test_remote x () =
+  let test_basic_remote x () =
     let test () =
       let gri = Gri.of_string "git://localhost/" in
       create ()        >>= fun t ->
       Sync.fetch t gri >>= fun _ ->
       Sync.push t gri ~branch:Reference.master >>= fun _ ->
       Lwt.return_unit
+    in
+    run x test
+
+  let head_contents =
+    let module M = struct
+      type t = Git.Reference.head_contents
+      let equal = Git.Reference.equal_head_contents
+      let pp = Git.Reference.pp_head_contents
+    end
+    in (module M: Alcotest.TESTABLE with type t = M.t)
+
+  let test_clones x () =
+    let test () =
+      let gri = Gri.of_string "git://github.com/mirage/ocaml-git.git" in
+      Store.create ~root () >>= fun t  ->
+      let clone head =
+        x.clean () >>= fun () ->
+        Sync.clone t ?head gri >>= fun _ ->
+        if Store.kind = `Disk then
+          let cmd = Printf.sprintf "cd %s && git fsck" @@ Store.root t in
+          Alcotest.(check int) "fsck" 0 (Sys.command cmd);
+          let e = match head with
+            | None   -> Git.Reference.(Ref (of_raw "refs/heads/master"))
+            | Some h -> h
+          in
+          Store.read_head t >>= function
+          | None   -> Alcotest.fail "empty clone!"
+          | Some h ->
+            Alcotest.(check head_contents) "correct head contents" e h;
+            Lwt.return_unit
+        else
+        Lwt.return_unit
+      in
+      let gh_pages = Git.Reference.of_raw "refs/heads/gh-pages" in
+      let commit =
+        Git.SHA.Commit.of_hex "21930ccb5f7b97e80a068371cb554b1f5ce8e55a"
+      in
+      clone None >>= fun () ->
+      clone (Some (Git.Reference.Ref gh_pages)) >>= fun () ->
+      clone (Some (Git.Reference.SHA commit))
     in
     run x test
 
@@ -494,8 +534,9 @@ let suite (speed, x) =
     "Operations on references"  , speed, T.test_refs     x;
     "Operations on index"       , speed, T.test_index    x;
     "Operations on pack files"  , speed, T.test_packs    x;
-    "Remote operations"         , `Slow, T.test_remote   x;
     "Resource leaks"            , `Slow, T.test_leaks    x;
+    "Basic Remote operations"   , `Slow, T.test_basic_remote x;
+    "Clones"                    , `Slow, T.test_clones   x;
   ]
 
 let ops = [
