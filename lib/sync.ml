@@ -158,7 +158,7 @@ module Make (IO: IO) (Store: Store.S) = struct
       error "PacketLine.input: the payload doesn't have a trailing LF"
 
     let input_raw ic: t Lwt.t =
-      Log.debug "PacketLine.input";
+      Log.debug "PacketLine.input_raw";
       IO.read_exactly ic 4 >>= fun size ->
       match size with
       | "0000" ->
@@ -177,6 +177,7 @@ module Make (IO: IO) (Store: Store.S) = struct
     let niet = Lwt.return (Some "")
 
     let input ic =
+      Log.debug "PacketLine.input";
       input_raw ic >>= function
       | None    -> Lwt.return_none
       | Some "" -> niet
@@ -912,7 +913,7 @@ module Make (IO: IO) (Store: Store.S) = struct
         )
 
   let fetch_pack_with_head t (ic, oc) op references head =
-    Log.debug "Sync.fetch_pack_with_head";
+    Log.debug "Sync.fetch_pack_with_head head=%s" (SHA.Commit.pretty head);
     let deepen = match op with
       | Clone { c_deepen = d; _ }
       | Fetch { f_deepen = d; _ } -> d
@@ -927,15 +928,7 @@ module Make (IO: IO) (Store: Store.S) = struct
       | Clone { c_capabilites = c; _ } -> c
       | _ -> []
     in
-    let wants =
-      let refs =
-        Reference.Map.fold (fun _ s acc ->
-            if SHA.Commit.equal s head then acc
-            else SHA.Set.add (SHA.of_commit s) acc
-          ) references SHA.Set.empty
-      in
-      SHA.of_commit head :: SHA.Set.elements refs
-    in
+    let wants = [SHA.of_commit head] in
     Log.debug "PHASE1";
     Upload_request.phase1 (ic, oc) ?deepen ~capabilities
       ~shallows ~wants
@@ -980,8 +973,22 @@ module Make (IO: IO) (Store: Store.S) = struct
         (List.length sha1s);
       Lwt.return { Result.head = Some head; references; sha1s }
 
-  let fetch_pack ?ctx t gri op =
-    Log.debug "Sync.fetch_pack";
+  let write_heads t (ref, sha1) =
+    if Reference.is_valid ref then
+      let raw_ref = Reference.to_raw ref in
+      let prefix = "refs/heads/" in
+      match Misc.string_chop_prefix ~prefix raw_ref with
+      | None   -> Lwt.return_unit
+      | Some _ ->
+        Store.mem t (SHA.of_commit sha1) >>= function
+        | false -> Lwt.return_unit
+        | true  -> Store.write_reference t ref sha1
+    else
+      Lwt.return_unit
+
+  (* Query the remote store for its references and its HEAD. *)
+  let with_listing ?ctx gri k =
+    Log.debug "Sync.with_listing";
     let init = Init.upload_pack ~discover:true gri in
     match Init.host init with
     | None   -> todo "local-clone"
@@ -999,64 +1006,82 @@ module Make (IO: IO) (Store: Store.S) = struct
                   acc
                   refs
               ) Reference.Map.empty
-              (SHA.Commit.Map.to_alist (Listing.references listing)) in
-          let head = Listing.head listing in
-          match op with
-          | Ls      -> Lwt.return { Result.head; references; sha1s = [] }
-          | Fetch _
-          | Clone _ ->
-            begin match op with
-              | Ls | Fetch { f_update_tags = false; _ } -> Lwt.return_unit
-              | Clone _ | Fetch _ ->
-                try
-                  let write_ref (ref, sha1) =
-                    if Reference.is_valid ref then
-                      Store.write_reference t ref sha1
-                    else Lwt.return_unit in
-                  let references_no_head =
-                    Reference.Map.remove Reference.head references
-                  in
-                  Lwt_list.iter_p write_ref
-                    (Reference.Map.to_alist references_no_head)
-                  >>= fun () ->
-                  let sha1 = Reference.Map.find Reference.head references in
-                  let contents = Reference.head_contents references sha1 in
-                  match op with
-                  | Clone _ -> Store.write_head t contents
-                  | _ -> Lwt.return_unit
-                with Not_found ->
-                  Lwt.return_unit
-            end >>= fun () ->
-            match head with
-            | None -> Lwt.return { Result.head; references; sha1s = [] }
-            | Some head ->
-              if protocol = `Smart_HTTP then
-                let init = Init.upload_pack ~discover:false gri in
-                let uri = Init.uri init in
-                let init = Init.to_string init in
-                IO.with_connection ?ctx uri ?init (fun (ic, oc) ->
-                    fetch_pack_with_head t (ic, oc) op references head
-                  )
-              else
-                fetch_pack_with_head t (ic, oc) op references head
+              (SHA.Commit.Map.to_alist (Listing.references listing))
+          in
+          let head_commit = Listing.head listing in
+          k (protocol, ic, oc) head_commit references
         )
+
+  let err_invalid_branch gri br =
+    error "%s has no branch called %s" (Gri.to_string gri) (Reference.pretty br)
+
+  let pretty_head_opt = function
+    | None   -> "<none>"
+    | Some x -> Misc.pretty Reference.pp_head_contents x
+
+  let fetch_pack ?ctx ?head t gri op =
+    Log.debug "Sync.fetch_pack head=%s" (pretty_head_opt head);
+    with_listing ?ctx gri (fun (protocol, ic, oc) remote_head references ->
+        match op with
+        | Ls -> Lwt.return { Result.head = remote_head; references; sha1s = [] }
+        | Fetch _
+        | Clone _ ->
+          let head = match head with
+            | None                   -> Reference.Ref Reference.master
+            | Some (Reference.SHA x) -> Reference.SHA x
+            | Some (Reference.Ref r) ->
+              if Reference.Map.mem r references then Reference.Ref r
+              else err_invalid_branch gri r
+          in
+          let want = match head with
+            | Reference.SHA x -> x
+            | Reference.Ref r -> Reference.Map.find r references
+          in
+          let sync () =
+            if protocol = `Smart_HTTP then
+              let init = Init.upload_pack ~discover:false gri in
+              let uri = Init.uri init in
+              let init = Init.to_string init in
+              IO.with_connection ?ctx uri ?init (fun (ic, oc) ->
+                  fetch_pack_with_head t (ic, oc) op references want
+                )
+            else
+              fetch_pack_with_head t (ic, oc) op references want
+          in
+          let update_refs () = match op with
+            | Ls -> assert false
+            | Fetch { f_update_tags = false; _ } -> Lwt.return_unit
+            | Clone _ | Fetch _ ->
+              (* populate .git/refs/heads/ with the discovered tags. *)
+              Reference.Map.to_alist references
+              |> Lwt_list.iter_p (write_heads t)
+              >>= fun () ->
+              match op with
+              | Clone _ -> Store.write_head t head (* update .git/HEAD *)
+              | _       -> Lwt.return_unit
+          in
+          sync ()        >>= fun r ->
+          update_refs () >|= fun () ->
+          r
+      )
 
   let ls ?ctx t gri =
     fetch_pack ?ctx t gri Ls >>= function
       { Result.references; _ } -> Lwt.return references
 
   let clone ?ctx t ?deepen ?(unpack=false) ?(capabilities=Capabilities.default)
-      gri =
+      ?head gri =
     let op = {
       c_deepen = deepen;
       c_unpack = unpack;
       c_capabilites = capabilities;
     } in
-    fetch_pack ?ctx t gri (Clone op)
+    fetch_pack ?ctx ?head t gri (Clone op)
 
   let fetch ?ctx t ?deepen ?(unpack=false) ?(capabilities=Capabilities.default)
       gri =
-    Store.list t >>= fun haves ->
+    Store.list t      >>= fun haves ->
+    Store.read_head t >>= fun head ->
     (* XXX: Store.shallows t >>= fun shallows *)
     let shallows = [] in
     let op = {
@@ -1067,7 +1092,7 @@ module Make (IO: IO) (Store: Store.S) = struct
       f_capabilites = capabilities;
       f_update_tags = false;
     } in
-    fetch_pack ?ctx t gri (Fetch op)
+    fetch_pack ?ctx ?head t gri (Fetch op)
 
   type t = Store.t
 
@@ -1079,7 +1104,8 @@ module type S = sig
   val ls: ?ctx:ctx -> t -> Gri.t -> SHA.Commit.t Reference.Map.t Lwt.t
   val push: ?ctx:ctx -> t -> branch:Reference.t -> Gri.t -> Result.push Lwt.t
   val clone: ?ctx:ctx -> t -> ?deepen:int -> ?unpack:bool ->
-    ?capabilities:capability list -> Gri.t -> Result.fetch Lwt.t
+    ?capabilities:capability list -> ?head:Reference.head_contents ->
+    Gri.t -> Result.fetch Lwt.t
   val fetch: ?ctx:ctx -> t -> ?deepen:int -> ?unpack:bool ->
     ?capabilities:capability list -> Gri.t -> Result.fetch Lwt.t
 end

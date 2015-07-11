@@ -78,7 +78,8 @@ module type S = sig
   (** Push a local branch to a remote store. *)
 
   val clone: ?ctx:ctx -> t -> ?deepen:int -> ?unpack:bool ->
-    ?capabilities:capability list -> Gri.t -> Result.fetch Lwt.t
+    ?capabilities:capability list -> ?head:Reference.head_contents ->
+    Gri.t -> Result.fetch Lwt.t
   (** [clone t address] clones the contents of [address] into the
       store [t]. *)
 
