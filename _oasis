@@ -1,6 +1,6 @@
 OASISFormat: 0.4
 Name:        git
-Version:     1.5.3
+Version:     1.6.0
 Synopsis:    A low-level interface to Git in pure OCaml
 Authors:     Thomas Gazagnaire
 License:     ISC
