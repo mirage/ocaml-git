@@ -435,7 +435,9 @@ module Make (Store: Store.S) = struct
   let test_basic_remote x () =
     let test () =
       let gri = Gri.of_string "git://localhost/" in
-      create ()        >>= fun t ->
+      create () >>= fun t ->
+      Store.read_head t >>= fun head ->
+      Alcotest.(check (option head_contents)) "no head" None head;
       Sync.fetch t gri >>= fun _ ->
       Sync.push t gri ~branch:Reference.master >>= fun _ ->
       Lwt.return_unit
@@ -455,7 +457,7 @@ module Make (Store: Store.S) = struct
       let gri = Gri.of_string "git://github.com/mirage/ocaml-git.git" in
       Store.create ~root () >>= fun t  ->
       let clone head =
-        x.clean () >>= fun () ->
+        x.init () >>= fun () ->
         Sync.clone t ?head gri >>= fun _ ->
         if Store.kind = `Disk then
           let cmd = Printf.sprintf "cd %s && git fsck" @@ Store.root t in
@@ -536,7 +538,7 @@ let suite (speed, x) =
     "Operations on pack files"  , speed, T.test_packs    x;
     "Resource leaks"            , `Slow, T.test_leaks    x;
     "Basic Remote operations"   , `Slow, T.test_basic_remote x;
-    "Clones"                    , `Slow, T.test_clones   x;
+    "Cloning ocaml-git.git"     , `Slow, T.test_clones   x;
   ]
 
 let ops = [

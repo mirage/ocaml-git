@@ -34,12 +34,12 @@ let root t = t.root
 let level t = t.level
 
 let stores = Hashtbl.create 1024
+let default_root = "root"
+let clear ?(root=default_root) () = Hashtbl.remove stores root
+let clear_all () = Hashtbl.reset stores
 
-let create ?root ?(level=6) () =
+let create ?(root=default_root) ?(level=6) () =
   if level < 0 || level > 9 then failwith "level should be between 0 and 9";
-  let root = match root with
-    | None   -> "root"
-    | Some r -> r in
   let t =
     try Hashtbl.find stores root
     with Not_found ->
@@ -52,10 +52,6 @@ let create ?root ?(level=6) () =
       Hashtbl.add stores root t;
       t in
   Lwt.return t
-
-let clear t =
-  Hashtbl.remove stores t.root;
-  Lwt.return_unit
 
 let write t value =
   let inflated = Misc.with_buffer (fun buf -> Value.add_inflated buf value) in

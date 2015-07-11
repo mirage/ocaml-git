@@ -43,6 +43,7 @@ end
 
 module type S = sig
   include Store.S
+  val remove: t -> unit Lwt.t
   val create_file: t -> string -> Tree.perm -> Blob.t -> unit Lwt.t
   val entry_of_file: t -> Index.t ->
     string -> Tree.perm -> SHA.Blob.t -> Blob.t -> Index.entry option Lwt.t
@@ -130,8 +131,8 @@ module Make (IO: IO) = struct
     end >>= fun root ->
     Lwt.return { root; level }
 
-  let clear t =
-    Log.info "clear %s" t.root;
+  let remove t =
+    Log.info "remove %s" t.root;
     IO.remove (sprintf "%s/.git" t.root)
 
   (* Loose objects *)

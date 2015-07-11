@@ -15,10 +15,13 @@
  *)
 
 open Test_store
+open Lwt.Infix
+
+let init () = Git.Memory.clear_all (); Lwt.return_unit
 
 let suite = {
   name  = "MEM";
-  init  = unit;
+  init  = init;
   clean = unit;
   store = (module Git.Memory);
 }
