@@ -499,7 +499,7 @@ module Make (IO: IO) (Store: Store.S) = struct
   module Upload_request = struct
 
     type message =
-      | Want of SHA.t * Capability.t list
+      | Want of SHA.Commit.t * Capability.t list
       | Shallow of SHA.t
       | Deepen of int
       | Unshallow of SHA.t
@@ -554,7 +554,7 @@ module Make (IO: IO) (Store: Store.S) = struct
               in
               aux (Deepen d :: acc)
             | "want" ->
-              let aux id c = aux (Want (SHA.of_hex id, c) :: acc) in
+              let aux id c = aux (Want (SHA.Commit.of_hex id, c) :: acc) in
               begin match Stringext.cut s ~on:Misc.sp_str with
                 | Some (id,c) -> aux id (Capabilities.of_string c)
                 | None        -> match acc with
@@ -574,14 +574,15 @@ module Make (IO: IO) (Store: Store.S) = struct
           if i = 0 && c <> [] then
             (* first-want *)
             let msg = Printf.sprintf
-                "want %s %s\n" (SHA.to_hex id) (Capabilities.to_string c)
+                "want %s %s\n" (SHA.Commit.to_hex id) (Capabilities.to_string c)
             in
             PacketLine.output_line oc msg
           else
             (* additional-want *)
-            let msg = Printf.sprintf "want %s\n" (SHA.to_hex id) in
+            let msg = Printf.sprintf "want %s\n" (SHA.Commit.to_hex id) in
             if i <> 0 && c <> [] then
-              Log.warn "additional-want: ignoring %s." (Capabilities.to_string c);
+              Log.warn "additional-want: ignoring %s."
+                (Capabilities.to_string c);
             PacketLine.output_line oc msg
         ) (filter_wants t)
       >>= fun () ->
@@ -912,8 +913,8 @@ module Make (IO: IO) (Store: Store.S) = struct
           Report_status.input ic
         )
 
-  let fetch_pack_with_head t (ic, oc) op references head =
-    Log.debug "Sync.fetch_pack_with_head head=%s" (SHA.Commit.pretty head);
+  let fetch_pack_with_wants t (ic, oc) op references wants =
+    Log.debug "Sync.fetch_pack_with_head";
     let deepen = match op with
       | Clone { c_deepen = d; _ }
       | Fetch { f_deepen = d; _ } -> d
@@ -928,7 +929,6 @@ module Make (IO: IO) (Store: Store.S) = struct
       | Clone { c_capabilites = c; _ } -> c
       | _ -> []
     in
-    let wants = [SHA.of_commit head] in
     Log.debug "PHASE1";
     Upload_request.phase1 (ic, oc) ?deepen ~capabilities
       ~shallows ~wants
@@ -962,27 +962,33 @@ module Make (IO: IO) (Store: Store.S) = struct
         let pack = Pack.Raw.input (Mstruct.of_cstruct pack) ~index:None in
         Store.write_pack t pack
     end >>= fun sha1s ->
+    let head =
+      try Some (Reference.Map.find Reference.head references) with Not_found -> None
+    in
     match SHA.Set.to_list sha1s with
     | []    ->
       Log.debug "NO NEW OBJECTS";
       Log.info "Already up-to-date.";
-      Lwt.return { Result.head = Some head; references; sha1s = [] }
+      Lwt.return { Result.head; references; sha1s = [] }
     | sha1s ->
       Log.debug "NEW OBJECTS";
       Log.info "remote: Counting objects: %d, done."
         (List.length sha1s);
-      Lwt.return { Result.head = Some head; references; sha1s }
+      Lwt.return { Result.head; references; sha1s }
+
+  let is_head ref =
+    Reference.is_valid ref &&
+    let raw_ref = Reference.to_raw ref in
+    let prefix = "refs/heads/" in
+    match Misc.string_chop_prefix ~prefix raw_ref with
+    | None   -> false
+    | Some _ -> true
 
   let write_heads t (ref, sha1) =
-    if Reference.is_valid ref then
-      let raw_ref = Reference.to_raw ref in
-      let prefix = "refs/heads/" in
-      match Misc.string_chop_prefix ~prefix raw_ref with
-      | None   -> Lwt.return_unit
-      | Some _ ->
-        Store.mem t (SHA.of_commit sha1) >>= function
-        | false -> Lwt.return_unit
-        | true  -> Store.write_reference t ref sha1
+    if is_head ref then
+      Store.mem t (SHA.of_commit sha1) >>= function
+      | false -> Lwt.return_unit
+      | true  -> Store.write_reference t ref sha1
     else
       Lwt.return_unit
 
@@ -1026,16 +1032,23 @@ module Make (IO: IO) (Store: Store.S) = struct
         | Ls -> Lwt.return { Result.head = remote_head; references; sha1s = [] }
         | Fetch _
         | Clone _ ->
-          let head = match head with
+          let local_head = match head with
             | None                   -> Reference.Ref Reference.master
             | Some (Reference.SHA x) -> Reference.SHA x
             | Some (Reference.Ref r) ->
               if Reference.Map.mem r references then Reference.Ref r
               else err_invalid_branch gri r
           in
-          let want = match head with
-            | Reference.SHA x -> x
-            | Reference.Ref r -> Reference.Map.find r references
+          let wants = match head with
+            | None ->
+              (* the user didn't specify a branch, download all
+                 the tags. *)
+              Reference.Map.fold (fun r c acc ->
+                  if is_head r then SHA.Commit.Set.add c acc else acc
+                ) references SHA.Commit.Set.empty
+              |> SHA.Commit.Set.elements
+            | Some (Reference.SHA x) -> [x]
+            | Some (Reference.Ref r) -> [Reference.Map.find r references]
           in
           let sync () =
             if protocol = `Smart_HTTP then
@@ -1043,10 +1056,10 @@ module Make (IO: IO) (Store: Store.S) = struct
               let uri = Init.uri init in
               let init = Init.to_string init in
               IO.with_connection ?ctx uri ?init (fun (ic, oc) ->
-                  fetch_pack_with_head t (ic, oc) op references want
+                  fetch_pack_with_wants t (ic, oc) op references wants
                 )
             else
-              fetch_pack_with_head t (ic, oc) op references want
+              fetch_pack_with_wants t (ic, oc) op references wants
           in
           let update_refs () = match op with
             | Ls -> assert false
@@ -1057,7 +1070,7 @@ module Make (IO: IO) (Store: Store.S) = struct
               |> Lwt_list.iter_p (write_heads t)
               >>= fun () ->
               match op with
-              | Clone _ -> Store.write_head t head (* update .git/HEAD *)
+              | Clone _ -> Store.write_head t local_head (* update .git/HEAD *)
               | _       -> Lwt.return_unit
           in
           sync ()        >>= fun r ->
