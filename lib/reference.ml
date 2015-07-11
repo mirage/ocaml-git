@@ -22,11 +22,8 @@ let compare = String.compare
 let equal = (=)
 let hash = Hashtbl.hash
 
-let add _buf ?level:_ _t =
-  failwith "TODO: Reference.add"
-
-let input _buf =
-  failwith "TODO: Reference.input"
+let add _buf ?level:_ _t = failwith "TODO: Reference.add"
+let input _buf = failwith "TODO: Reference.input"
 
 let to_raw x = x
 let of_raw x = x
@@ -57,10 +54,20 @@ let equal_head_contents x y = match x, y with
   | Ref x, Ref y -> String.compare x y = 0
   | _ -> false
 
+let err_head_contents str =
+  let err = Printf.sprintf "%S is not a valid HEAD contents" str in
+  failwith err
+
+let head_contents_of_string str =
+  match Stringext.split ~on:' ' (String.trim str) with
+  | [sha1]  -> SHA (SHA.Commit.of_hex sha1)
+  | [_;ref] -> Ref (of_raw ref)
+  | _       -> err_head_contents str
+
 let is_head x =
   String.compare head x = 0
 
-let head_contents refs sha1 =
+let head_contents_of_commit refs sha1 =
   let refs = Map.remove "HEAD" refs in
   let alist = Misc.inverse_assoc (Map.to_alist refs) in
   match Misc.try_assoc sha1 alist with

@@ -473,16 +473,18 @@ module Make (IO: IO) = struct
       (fun () -> IO.remove file)
       (fun _ -> Lwt.return_unit)
 
-  let read_reference t ref =
+  let rec read_reference t ref =
     let file = file_of_ref t ref in
-    IO.file_exists file >>= function
-    | true ->
+    IO.file_exists file >>= fun exists ->
+    if exists then
       (* We use `IO.read_file` here as the contents of the file might
          change. *)
-      IO.read_file file >>= fun hex ->
-      let hex = String.trim (Cstruct.to_string hex) in
-      Lwt.return (Some (SHA.Commit.of_hex hex))
-    | false ->
+      IO.read_file file >>= fun buf ->
+      let str = Cstruct.to_string buf in
+      match Reference.head_contents_of_string str with
+      | Reference.SHA x -> Lwt.return (Some x)
+      | Reference.Ref r -> read_reference t r
+    else
       let packed_refs = packed_refs t in
       IO.file_exists packed_refs >>= function
       | false -> Lwt.return_none
@@ -500,15 +502,9 @@ module Make (IO: IO) = struct
     | true ->
       (* We use `IO.read_file` here as the contents of the file might
          change. *)
-      IO.read_file file >>= fun str ->
-      let str = Cstruct.to_string str in
-      let contents = match Stringext.split ~on:' ' str with
-        | [sha1]  -> Reference.SHA (SHA.Commit.of_hex sha1)
-        | [_;ref] -> Reference.Ref (Reference.of_raw ref)
-        | _       ->
-          failwith (sprintf "read_head: %s is not a valid HEAD contents" str)
-      in
-      Lwt.return (Some contents)
+      IO.read_file file >|= fun buf ->
+      let str = Cstruct.to_string buf in
+      Some (Reference.head_contents_of_string str)
     | false ->
       Lwt.return None
 

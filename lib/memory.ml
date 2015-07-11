@@ -26,7 +26,7 @@ type t = {
   root   : string;
   level  : int;
   values : (SHA.t, Value.t) Hashtbl.t;
-  refs   : (Reference.t, SHA.Commit.t) Hashtbl.t;
+  refs   : (Reference.t, [`S of SHA.Commit.t | `R of Reference.t]) Hashtbl.t;
   mutable head : Reference.head_contents option;
 }
 
@@ -124,9 +124,12 @@ let references t =
 let mem_reference t ref =
   Lwt.return (Hashtbl.mem t.refs ref)
 
-let read_reference t ref =
+let rec read_reference t ref =
   Log.info "Reading %s" (Reference.pretty ref);
-  try Lwt.return (Some (Hashtbl.find t.refs ref))
+  try
+    match Hashtbl.find t.refs ref with
+    | `S s -> Lwt.return (Some s)
+    | `R r -> read_reference t r
   with Not_found -> Lwt.return_none
 
 let read_head t =
@@ -149,7 +152,7 @@ let write_head t c =
 
 let write_reference t ref sha1 =
   Log.info "Writing %s" (Reference.pretty ref);
-  Hashtbl.replace t.refs ref sha1;
+  Hashtbl.replace t.refs ref (`S sha1);
   Lwt.return_unit
 
 let read_index _t = Lwt.return Index.empty
