@@ -43,5 +43,11 @@ val head_contents: SHA.Commit.t Map.t -> SHA.Commit.t -> head_contents
     representation of the SHA or something like {i ref: <ref>} if the
     SHA has already a reference pointing to it. *)
 
+val pp_head_contents: Format.formatter -> head_contents -> unit
+(** Pretty-print head contents. *)
+
+val equal_head_contents: head_contents -> head_contents -> bool
+(** Compare head contents. *)
+
 val is_valid: t -> bool
 (** Check if a reference can be stored on disk properly. *)

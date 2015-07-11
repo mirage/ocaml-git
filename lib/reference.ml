@@ -48,6 +48,15 @@ type head_contents =
   | SHA of SHA.Commit.t
   | Ref of string
 
+let pp_head_contents ppf = function
+  | SHA x -> Format.fprintf ppf "SHA %a" SHA.Commit.pp x
+  | Ref x -> Format.pp_print_string ppf x
+
+let equal_head_contents x y = match x, y with
+  | SHA x, SHA y -> SHA.Commit.equal x y
+  | Ref x, Ref y -> String.compare x y = 0
+  | _ -> false
+
 let is_head x =
   String.compare head x = 0
 
