@@ -185,34 +185,50 @@ module IO_helper (Channel: V1_LWT.CHANNEL) = struct
     Channel.write_buffer oc buf;
     Channel.flush oc
 
+  let safe_read ~len ic =
+    Lwt.catch
+      (fun () -> Channel.read_some ~len ic >|= fun buf -> Some buf)
+      (fun e ->
+         Log.debug "Got exn: %s" (Printexc.to_string e);
+         Printexc.print_backtrace stderr;
+         Lwt.return_none)
+
   let read_all ic =
     let len = 4 * 4096 in
     let return l = Lwt.return (List.rev l) in
     let rec aux acc =
-      Channel.read_some ~len ic >>= fun buf ->
-      match Cstruct.len buf with
-      | 0 -> return acc
-      | i ->
-        let buf = Cstruct.to_string buf in
-        if len = i then return (buf :: acc)
-        else aux (buf :: acc)
+      safe_read ~len ic >>= function
+      | None                          -> return acc
+      | Some b when Cstruct.len b = 0 -> return acc
+      | Some b -> aux (Cstruct.to_string b :: acc)
     in
     aux []
+
+  let fail fmt = Printf.ksprintf failwith fmt
 
   let read_exactly ic n =
     let res = Bytes.create n in
     let rec aux off =
-      if off >= n then Lwt.return_unit
+      if off >= n then Lwt.return off
       else (
-        Channel.read_some ~len:(n-off) ic >>= fun buf ->
-        match Cstruct.len buf with
-        | 0 -> Lwt.return_unit
-        | i ->
-          Cstruct.blit_to_string buf 0 res off i;
+        safe_read ~len:(n-off) ic >>= fun buf ->
+        match buf with
+        | None                          -> Lwt.return off
+        | Some b when Cstruct.len b = 0 -> Lwt.return off
+        | Some b ->
+          let i = Cstruct.len b in
+          Cstruct.blit_to_string b 0 res off i;
           aux (off + i)
       ) in
-    aux 0 >>= fun () ->
-    Lwt.return res
+    aux 0 >>= fun m ->
+    if n <> m then (
+      let err =
+        Printf.sprintf "Git_mirage.IO.read_exactly: expecting %d, got %d" n m
+      in
+      Log.error "%s" err;
+      Lwt.fail (Failure err)
+    ) else
+      Lwt.return res
 
   let flush _ = Lwt.return_unit
 
@@ -243,6 +259,13 @@ module Git_protocol = struct
   module Channel = Channel.Make(Flow)
   include IO_helper (Channel)
 
+  let safe_close c =
+    Lwt.catch
+      (fun () -> Channel.close c)
+      (function
+        | End_of_file | Unix.Unix_error _ -> Lwt.return_unit
+        | e -> Lwt.fail e)
+
   let with_connection (resolver, conduit) uri ?init fn =
     assert (Git.Sync.protocol uri = `Ok `Git);
     Log.debug "Connecting to %s" (Uri.to_string uri);
@@ -258,7 +281,10 @@ module Git_protocol = struct
            | Some s -> write oc s
          end >>= fun () ->
          fn (ic, oc))
-      (fun () -> Channel.close ic)
+      (fun () ->
+         safe_close ic >>= fun () ->
+         safe_close oc >>= fun () ->
+         Lwt.return_unit)
 
 end
 
@@ -301,6 +327,13 @@ module Smart_HTTP = struct
 
   include IO_helper(Fchannel)
 
+  let safe_close ic =
+    Lwt.catch
+      (fun () -> Conduit_channel.close ic)
+      (function
+        | End_of_file | Unix.Unix_error _ -> Lwt.return_unit
+        | e -> Lwt.fail e)
+
   module HTTP_fn = Git_http.Flow(HTTP)(In_channel)(Out_channel)
   let with_conduit ctx ?init uri fn =
     Net.connect_uri ~ctx uri >>= fun (_, ic, oc) ->
@@ -311,7 +344,7 @@ module Smart_HTTP = struct
            | Some s -> HTTP_IO.write oc s
          end >>= fun () ->
          fn (ic, oc))
-      (fun () -> Conduit_channel.close ic)
+      (fun () -> safe_close ic)
 
   let with_connection (ctx:ctx) (uri:Uri.t) ?init fn =
     assert (Git.Sync.protocol uri =`Ok `Smart_HTTP);
