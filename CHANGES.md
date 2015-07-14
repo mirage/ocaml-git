@@ -1,3 +1,11 @@
+### 1.6.1 (2015-07-14)
+* Fix a bug in `ogit pull` using the smart HTTP protocol when the HTTP temporary
+  buffer could sometimes be overfill.
+* Avoid closing twice the same fd in the smart HTTP protocol.
+* Avoid the GC to close a fd while we are still using a channel built on top of
+  it -- this affects the smart HTTP protocol only.
+* Add an opam file for the `mirage-git` package.
+
 ### 1.6.0 (2015-07-11)
 
 * Allow some references to contain pointer to other references (#96)
