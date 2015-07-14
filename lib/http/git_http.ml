@@ -184,6 +184,7 @@ module Flow(HTTP: CLIENT) (IC: CHAN) (OC: CHAN) = struct
      incoming channel over HTTP. *)
   let http_ic ctx req =
     let read reader buf off len =
+      let len = min len (Cstruct.len buf - off) in
       let read_in_chunk chunk =            (* Use [chunk] as read buffer. *)
         let blit len =
           Cstruct.blit_from_string chunk 0 buf off len;
