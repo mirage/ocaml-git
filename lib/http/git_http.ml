@@ -257,10 +257,14 @@ module Flow(HTTP: CLIENT) (IC: CHAN) (OC: CHAN) = struct
         | exn -> fn exn
       )
 
-  let ignore_unix_exn f x =
+  let ignore_exn f x =
     Lwt.catch
       (fun () -> try f x; Lwt.return_unit with e -> Lwt.fail e)
-      (function Unix.Unix_error _ -> Lwt.return_unit | e -> Lwt.fail e)
+      (function e ->
+        (* WARNING: do not catch `Unix` exception here, as it will
+           bring a unwanted dependency to unix.cma *)
+        Log.debug "Ignoring exn: %s" (Printexc.to_string e);
+        Lwt.return_unit)
 
   (* The smart HTTP protocols simulates a flow using the following "trick":
 
@@ -288,8 +292,8 @@ module Flow(HTTP: CLIENT) (IC: CHAN) (OC: CHAN) = struct
     in
     let reconnect ctx =
       let t, u = Lwt.task () in
-      ignore_unix_exn HTTP.close_in ctx.ic  >>= fun () ->
-      ignore_unix_exn HTTP.close_out ctx.oc >>= fun () ->
+      ignore_exn HTTP.close_in ctx.ic  >>= fun () ->
+      ignore_exn HTTP.close_out ctx.oc >>= fun () ->
       ctx.reader <- None;
       ctx.last_chunk <- None;
       Lwt.ignore_result @@ with_conduit uri (fun (nic, noc) ->
