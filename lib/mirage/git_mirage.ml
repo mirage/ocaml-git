@@ -263,8 +263,12 @@ module Git_protocol = struct
     Lwt.catch
       (fun () -> Channel.close c)
       (function
-        | End_of_file | Unix.Unix_error _ -> Lwt.return_unit
-        | e -> Lwt.fail e)
+        | End_of_file -> Lwt.return_unit
+        | e ->
+          (* WARNING: do not catch `Unix` exception here, as it will
+             bring a unwanted dependency to unix.cma *)
+          Log.debug "Ignoring exn: %s" (Printexc.to_string e);
+          Lwt.return_unit)
 
   let with_connection (resolver, conduit) uri ?init fn =
     assert (Git.Sync.protocol uri = `Ok `Git);
@@ -331,8 +335,12 @@ module Smart_HTTP = struct
     Lwt.catch
       (fun () -> Conduit_channel.close ic)
       (function
-        | End_of_file | Unix.Unix_error _ -> Lwt.return_unit
-        | e -> Lwt.fail e)
+        | End_of_file -> Lwt.return_unit
+        | e ->
+          (* WARNING: do not catch `Unix` exception here, as it will
+             bring a unwanted dependency to unix.cma *)
+          Log.debug "Ignoring exn: %s" (Printexc.to_string e);
+          Lwt.return_unit)
 
   module HTTP_fn = Git_http.Flow(HTTP)(In_channel)(Out_channel)
   let with_conduit ctx ?init uri fn =
