@@ -259,6 +259,13 @@ module Git_protocol = struct
   module Channel = Channel.Make(Flow)
   include IO_helper (Channel)
 
+  let safe_close c =
+    Lwt.catch
+      (fun () -> Channel.close c)
+      (function
+        | End_of_file | Unix.Unix_error _ -> Lwt.return_unit
+        | e -> Lwt.fail e)
+
   let with_connection (resolver, conduit) uri ?init fn =
     assert (Git.Sync.protocol uri = `Ok `Git);
     Log.debug "Connecting to %s" (Uri.to_string uri);
@@ -274,7 +281,10 @@ module Git_protocol = struct
            | Some s -> write oc s
          end >>= fun () ->
          fn (ic, oc))
-      (fun () -> Channel.close ic)
+      (fun () ->
+         safe_close ic >>= fun () ->
+         safe_close oc >>= fun () ->
+         Lwt.return_unit)
 
 end
 
