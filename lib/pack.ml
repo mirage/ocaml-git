@@ -214,6 +214,7 @@ module Raw = struct
   let sha1 t = t.sha1
   let index t = t.index
   let keys t = SHA.Set.of_list (SHA.Map.keys t.index.Pack_index.Raw.offsets)
+  let buffer t = t.buffer
 
 end
 

@@ -741,8 +741,7 @@ module Make (IO: IO) (Store: Store.S) = struct
           | Progress -> Log.info "remote: %s" payload; aux acc
           | Fatal    -> Lwt.fail (Error payload)
       in
-      aux [] >>= fun bufs ->
-      Lwt.return (String.concat "" bufs)
+      aux []
 
   end
 
@@ -751,7 +750,7 @@ module Make (IO: IO) (Store: Store.S) = struct
     let input ~capabilities ic =
       if List.mem `Side_band_64k capabilities
       || List.mem `Side_band capabilities
-      then Side_band.input ic >|= fun x -> [x]
+      then Side_band.input ic
       else IO.read_all ic
 
   end

@@ -326,7 +326,7 @@ module Make (IO: IO) = struct
       IO.file_exists file >>= function
       | true  -> Lwt.return_unit
       | false ->
-        let pack = Misc.with_buffer' (fun buf -> Pack.Raw.add buf pack) in
+        let pack = Pack.Raw.buffer pack in
         let temp_dir = temp_dir t in
         IO.write_file file ~temp_dir pack
 
