@@ -1,4 +1,11 @@
+### 1.6.2 (2015-07-16)
+
+* Support 32 bit platform by avoiding creating large strings. This also improve
+  the performance of reading and synchronizin large pack files
+  (#103, @gregtatcam)
+
 ### 1.6.1 (2015-07-14)
+
 * Fix a bug in `ogit pull` using the smart HTTP protocol when the HTTP temporary
   buffer could sometimes be overfill.
 * Avoid closing twice the same fd in the smart HTTP protocol.
