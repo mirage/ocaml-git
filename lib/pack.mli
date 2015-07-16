@@ -66,6 +66,9 @@ module Raw: sig
   val keys: t -> SHA.Set.t
   (** Return the keys present in the raw pack. *)
 
+  val buffer: t -> Cstruct.t
+  (** Return the pack buffer. *)
+
   val read: read:(SHA.t -> Value.t option Lwt.t) -> Mstruct.t -> Pack_index.t ->
     SHA.t -> Value.t option Lwt.t
   (** Same as the top-level [read] function but for raw packs. *)
