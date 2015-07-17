@@ -455,7 +455,7 @@ module Make (Store: Store.S) = struct
   let test_clones x () =
     let test () =
       Store.create ~root () >>= fun t  ->
-      let clone gri head =
+      let clone ?depth gri head =
         x.init () >>= fun () ->
         Sync.clone t ?head gri >>= fun _ ->
         if Store.kind = `Disk then
@@ -486,8 +486,8 @@ module Make (Store: Store.S) = struct
       clone https None     >>= fun () ->
       clone git   gh_pages >>= fun () ->
       clone https gh_pages >>= fun () ->
-      clone https commit   >>= fun () ->
-      clone git   commit   >>= fun () ->
+      clone https ~depth:1 commit >>= fun () ->
+      clone git   ~depth:3 commit >>= fun () ->
 
       Lwt.return_unit
     in
