@@ -252,7 +252,7 @@ end
 (* Cohttp IO with functional input/channel constructors *)
 module FIO = Cohttp_mirage_io.Make(Fchannel)
 
-(* hanlde the git:// connections *)
+(* handle the git:// connections *)
 module Git_protocol = struct
 
   module Flow = Conduit_mirage.Flow
@@ -292,7 +292,7 @@ module Git_protocol = struct
 
 end
 
-(* hanlde the http(s):// connections *)
+(* handle the http(s):// connections *)
 module Smart_HTTP = struct
 
   module Conduit_channel = Channel.Make(Conduit_mirage.Flow)
