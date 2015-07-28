@@ -120,7 +120,7 @@ module type IO = sig
       the other side). *)
 
   val read_exactly: ic -> int -> string Lwt.t
-  (** Read a given number of bits. *)
+  (** Read a given number of bytes. *)
 
   val write: oc -> string -> unit Lwt.t
   (** Write a string on a channel. *)
