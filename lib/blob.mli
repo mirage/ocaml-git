@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** Binaray blobs. *)
+(** Binary blobs. *)
 
 include Object.S
 
