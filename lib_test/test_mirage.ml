@@ -22,7 +22,7 @@ let test_img = "test.img"
 
 let command fmt =
   Printf.ksprintf (fun str ->
-      Printf.printf "[x] %s\n" str;
+      Printf.printf "[exec] %s\n" str;
       let _ = Sys.command str in
       ()
     ) fmt
@@ -41,6 +41,7 @@ module M = struct
 
   let init () =
     command "rm -rf mirage-fs";
+    command "mkdir mirage-fs";
     connect ()  >>| fun t ->
     mkdir t "/" >>| fun () ->
     Lwt.return_unit
@@ -51,8 +52,9 @@ module S = FS(M)
 
 let suite =
   {
-    name  = "MIR-FS-mirage";
+    name  = "MIRAGE-FS";
     init  = M.init;
     clean = unit;
     store = (module S);
+    mirage= true;
   }
