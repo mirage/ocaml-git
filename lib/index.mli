@@ -14,7 +14,11 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** Implementation of the V2 Git Index format (as V1 is deprecated). *)
+(** Implementation of the V2 Git Index format (as V1 is deprecated).
+
+    The index file contains information used by Git to manage the
+    state of working directory contents.
+*)
 
 type time = {
 
@@ -73,16 +77,22 @@ type entry = {
 val pp_entry: Format.formatter -> entry -> unit
 (** Human-readable representation of an index entry. *)
 
-type extension_kind =
-  [ `Tree (** Cached tree *)
-  | `Reuc (** Reuse undo *)
-  | `Link (** split index *)
-  | `Other of string ]
+type extension_kind = [ `Tree | `Reuc | `Link | `Other of string ]
+(** The type for extension kinds.
+
+    {ul
+    {- [Tree] is for cached tree}
+    {- [Reuc] is for reuse undo}
+    {- [Link] is for split index}
+    {- [Other] is for other extension kinds}
+    }
+*)
 
 type extension = {
   kind: extension_kind;
   payload: string;
 }
+(** The type for extension payload. *)
 
 val pp_extension: Format.formatter -> extension -> unit
 (** Human-readable representation of the extension. *)

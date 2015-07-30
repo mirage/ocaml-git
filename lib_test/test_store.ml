@@ -20,10 +20,11 @@ open Git
 open Git_unix
 
 type t = {
-  name : string;
-  init : unit -> unit Lwt.t;
-  clean: unit -> unit Lwt.t;
-  store: (module Store.S);
+  name  : string;
+  init  : unit -> unit Lwt.t;
+  clean : unit -> unit Lwt.t;
+  store : (module Store.S);
+  mirage: bool;
 }
 
 let unit () = Lwt.return_unit
@@ -457,21 +458,20 @@ module Make (Store: Store.S) = struct
       Store.create ~root () >>= fun t  ->
       let clone ?depth gri head =
         x.init () >>= fun () ->
-        Sync.clone t ?head gri >>= fun _ ->
-        if Store.kind = `Disk then
+        Sync.clone t ?head ?deepen:depth gri >>= fun _ ->
+        if Store.kind = `Disk && not x.mirage then (
           let cmd = Printf.sprintf "cd %s && git fsck" @@ Store.root t in
-          Alcotest.(check int) "fsck" 0 (Sys.command cmd);
-          let e = match head with
-            | None   -> Git.Reference.(Ref (of_raw "refs/heads/master"))
-            | Some h -> h
-          in
-          Store.read_head t >>= function
-          | None   -> Alcotest.fail "empty clone!"
-          | Some h ->
-            Alcotest.(check head_contents) "correct head contents" e h;
-            Lwt.return_unit
-        else
-        Lwt.return_unit
+          Alcotest.(check int) "fsck" 0 (Sys.command cmd)
+        );
+        let e = match head with
+          | None   -> Git.Reference.(Ref (of_raw "refs/heads/master"))
+          | Some h -> h
+        in
+        Store.read_head t >>= function
+        | None   -> Alcotest.fail "empty clone!"
+        | Some h ->
+          Alcotest.(check head_contents) "correct head contents" e h;
+          Lwt.return_unit
       in
       let git = Gri.of_string "git://github.com/mirage/ocaml-git.git" in
       let https = Gri.of_string "https://github.com/mirage/ocaml-git.git" in

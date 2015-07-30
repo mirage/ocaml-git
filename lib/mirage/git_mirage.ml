@@ -204,8 +204,6 @@ module IO_helper (Channel: V1_LWT.CHANNEL) = struct
     in
     aux []
 
-  let fail fmt = Printf.ksprintf failwith fmt
-
   let read_exactly ic n =
     let res = Bytes.create n in
     let rec aux off =

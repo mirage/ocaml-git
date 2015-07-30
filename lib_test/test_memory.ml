@@ -15,7 +15,6 @@
  *)
 
 open Test_store
-open Lwt.Infix
 
 let init () = Git.Memory.clear_all (); Lwt.return_unit
 
@@ -24,4 +23,5 @@ let suite = {
   init  = init;
   clean = unit;
   store = (module Git.Memory);
+  mirage=false;
 }
