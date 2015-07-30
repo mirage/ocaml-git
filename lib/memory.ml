@@ -78,9 +78,10 @@ let err_write_pack expected got =
   failwith str
 
 let write_pack t pack =
-  Pack.to_pic ~read:(read t) pack >>= fun pack ->
-  Lwt_list.iter_p (fun (sha1, p) ->
+  Pack.of_raw pack >>= fun pack ->
+  Lwt_list.iter_p (fun p ->
       let v = Packed_value.PIC.to_value p in
+      let sha1 = p.Packed_value.PIC.sha1 in
       write t v >>= fun sha2 ->
       if sha1 <> sha2 then err_write_pack sha1 sha2;
       Lwt.return_unit

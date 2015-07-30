@@ -89,3 +89,12 @@ module Cache: sig
   (** Cache both a value and its inflated representation. *)
 
 end
+
+type read = SHA.t -> t option Lwt.t
+(** The type for functions reading values. *)
+
+type read_inflated = SHA.t -> string option Lwt.t
+(** The type for functions reading inflated values. *)
+
+type write = t -> SHA.t Lwt.t
+(** The type for functions writing values. *)

@@ -18,9 +18,9 @@ open Lwt.Infix
 open Misc.OP
 open Printf
 
-let err_not_found n k =
-  let str = Printf.sprintf "Git.FS.%s: %s not found" n k in
-  Lwt.fail (Invalid_argument str)
+let fail fmt = Printf.ksprintf failwith fmt
+
+let err_not_found n k = fail "Git.FS.%s: %s not found" n k
 
 module LogMake = Log.Make
 
@@ -122,7 +122,7 @@ module Make (IO: IO) = struct
   let temp_dir { root; _ } = root / ".git" / "tmp"
 
   let create ?root ?(level=6) () =
-    if level < 0 || level > 9 then failwith "level should be between 0 and 9";
+    if level < 0 || level > 9 then fail "level should be between 0 and 9";
     begin match root with
       | None   -> IO.getcwd ()
       | Some r ->
@@ -149,41 +149,40 @@ module Make (IO: IO) = struct
     let mem t sha1 =
       IO.file_exists (file t sha1)
 
+    let ambiguous sha1 = raise (SHA.Ambiguous (SHA.pretty sha1))
+
     let get_file { root; _ } sha1 =
       IO.directories (root / ".git" / "objects") >>= fun dirs ->
       let hex = SHA.to_hex sha1 in
       let len = String.length hex in
-      let len_le_2 = len <= 2 in
       let dcands =
-        if len_le_2 then
+        if len <= 2 then
           List.filter
             (fun d ->
                (String.sub (Filename.basename d) 0 len) = hex
             ) dirs
         else
-          List.filter (fun d -> (Filename.basename d) = (String.sub hex 0 2)) dirs
+          List.filter (fun d -> Filename.basename d = String.sub hex 0 2) dirs
       in
       match dcands with
-      | [] -> Lwt.return_none
-      | [dir] -> begin
-          Log.debug "get_file: %s" dir;
-          IO.files dir >>= fun files ->
-          let fcands =
-            if len_le_2 then
+      | []      -> Lwt.return_none
+      | _::_::_ -> ambiguous sha1
+      | [dir] ->
+        Log.debug "get_file: %s" dir;
+        IO.files dir >>= fun files ->
+        let fcands =
+          if len <= 2 then files
+          else
+            let len' = len - 2 in
+            let suffix = String.sub hex 2 len' in
+            List.filter
+              (fun f -> String.sub (Filename.basename f) 0 len' = suffix)
               files
-            else
-              let len' = len - 2 in
-              let suffix = String.sub hex 2 len' in
-              List.filter
-                (fun f -> (String.sub (Filename.basename f) 0 len') = suffix)
-                files
-          in
-          match fcands with
-          | [] -> Lwt.return_none
-          | [file] -> Lwt.return (Some file)
-          | _ -> raise SHA.Ambiguous
-        end
-      | _ -> raise SHA.Ambiguous
+        in
+        match fcands with
+        | []     -> Lwt.return_none
+        | [file] -> Lwt.return (Some file)
+        | _      -> ambiguous sha1
 
     let read_file file =
       File_cache.read file >>= fun buf ->
@@ -284,12 +283,10 @@ module Make (IO: IO) = struct
         IO.file_exists file >>= function
         | true ->
           File_cache.read file >>= fun buf ->
-          let index = Pack_index.create (Cstruct.to_bigarray buf) in
+          let index = Pack_index.input (Cstruct.to_bigarray buf) in
           LRU.add index_c_lru sha1 index;
           Lwt.return index
-        | false ->
-          Log.error "%s does not exist." file;
-          Lwt.fail (Failure "read_index_c")
+        | false -> fail "read_index: %s does not exist" file
 
     let write_pack_index t sha1 idx =
       LRU.add index_lru sha1 idx;
@@ -300,7 +297,8 @@ module Make (IO: IO) = struct
         let buf = Buffer.create 1024 in
         Pack_index.Raw.add buf idx;
         let temp_dir = temp_dir t in
-        IO.write_file file ~temp_dir (Cstruct.of_string (Buffer.contents buf))
+        let buf = Cstruct.of_string (Buffer.contents buf) in
+        IO.write_file file ~temp_dir buf
 
     let keys_lru = LRU.make (128 * 1024)
 
@@ -310,15 +308,10 @@ module Make (IO: IO) = struct
       | Some ks -> Lwt.return ks
       | None    ->
         Log.debug "read_keys: cache miss!";
-        let file = index t sha1 in
-        IO.file_exists file >>= function
-        | true ->
-          File_cache.read file >>= fun buf ->
-          let keys = Pack_index.Raw.keys (Mstruct.of_cstruct buf) in
-          LRU.add keys_lru sha1 keys;
-          Lwt.return keys
-        | false ->
-          Lwt.fail (Failure "Git_fs.Packed.read_keys")
+        read_index_c t sha1 >>= fun index ->
+        let keys = Pack_index.keys index |> SHA.Set.of_list in
+        LRU.add keys_lru sha1 keys;
+        Lwt.return keys
 
     let write_pack t sha1 pack =
       Log.debug "write pack";
@@ -335,44 +328,20 @@ module Make (IO: IO) = struct
       read_index_c t pack_sha1 >>= fun idx ->
       Lwt.return (Pack_index.mem idx sha1)
 
-    let pack_size_thresh = 10000000
-
-    let pack_ba_cache = Hashtbl.create 8
-
-    let cache_pack sha buf =
-      let ba = Cstruct.to_bigarray buf in
-      let sz = Bigarray.Array1.dim ba in
-      if sz < pack_size_thresh then
-        Hashtbl.add pack_ba_cache sha ba
-
     let read_in_pack ~read t pack_sha1 sha1 =
       Log.debug "read_in_pack %s:%s"
         (SHA.to_hex pack_sha1) (SHA.to_hex sha1);
       read_index_c t pack_sha1 >>= fun index ->
-      if Pack_index.mem index sha1 then
-        Lwt.catch
-          (fun () ->
-             let ba = Hashtbl.find pack_ba_cache pack_sha1 in
-             Log.debug "read_in_pack ba cache hit!";
-             Pack.Raw.read ~read (Mstruct.of_bigarray ba) index sha1)
-          (function
-            | Not_found -> begin
-                let file = file t pack_sha1 in
-                IO.file_exists file >>= function
-                | true ->
-                  File_cache.read file >>= fun buf ->
-                  cache_pack pack_sha1 buf;
-                  Pack.Raw.read ~read (Mstruct.of_cstruct buf) index sha1
-                | false ->
-                  Log.error
-                    "No file associated with the pack object %s.\n" (SHA.to_hex pack_sha1);
-                  Lwt.fail (Failure "read_in_pack")
-              end
-            | e -> Lwt.fail e)
-      else begin
-        Log.debug "read_in_pack: not found";
-        Lwt.return_none
-      end
+      let index = Pack_index.find_offset index in
+      match index sha1 with
+      | None   -> Log.debug "read_in_pack: not found"; Lwt.return_none
+      | Some _ ->
+        let file = file t pack_sha1 in
+        IO.file_exists file >>= function
+        | true ->
+          File_cache.read file >>= fun buf ->
+          Pack.Raw.read ~read (Mstruct.of_cstruct buf) ~index sha1
+        | false -> fail "Cannot read the pack object %s" (SHA.to_hex pack_sha1)
 
     let read ~read t sha1 =
       list t >>= fun packs ->
@@ -408,7 +377,15 @@ module Make (IO: IO) = struct
       Log.debug "read: cache miss!";
       Loose.read t sha1 >>= function
       | Some v -> Value.Cache.add sha1 v; Lwt.return (Some v)
-      | None   -> Packed.read ~read:(read t) t sha1
+      | None   ->
+        let read sha1 =
+          read t sha1 >>= function
+          | None   -> Lwt.return_none
+          | Some v ->
+            let buf = Misc.with_buffer (fun buf -> Value.add_inflated buf v) in
+            Lwt.return (Some buf)
+        in
+        Packed.read ~read t sha1
 
   let read_exn t sha1 =
     read t sha1 >>= function
@@ -562,12 +539,8 @@ module Make (IO: IO) = struct
     let blobs_c = ref 0 in
     let id = id () in
     let error expected got =
-      let str = Printf.sprintf
-          "Expecting a %s, got a %s" expected
-          (Object_type.pretty (Value.type_of got))
-      in
-      Log.error "load-filesystem: %s" str;
-      Lwt.fail (Failure str)
+      fail "Expecting a %s, got a %s"
+        expected (Object_type.pretty (Value.type_of got))
     in
     let blob mode sha1 k =
       Log.debug "blob %d %s" id (SHA.to_hex sha1);
@@ -690,7 +663,7 @@ module Make (IO: IO) = struct
     let stats = IO.stat_info file in
     let stage = 0 in
     match Misc.string_chop_prefix ~prefix:(t.root / "") file with
-    | None      -> Lwt.fail (Failure ("entry_of_file: " ^ file))
+    | None      -> fail "entry_of_file: %s" file
     | Some name ->
       let entry = { Index.stats; id; stage; name } in
       Lwt.return (Some entry)

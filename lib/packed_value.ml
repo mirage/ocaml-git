@@ -19,13 +19,10 @@ open Printf
 
 module Log = Log.Make(struct let section = "packed-value" end)
 
-type copy = {
-  offset: int;
-  length: int;
-}
+type copy = { copy_offset: int; copy_length: int; }
 
 let pp_copy ppf t =
-  Format.fprintf ppf "@[off:%d@ len:%d@]" t.offset t.length
+  Format.fprintf ppf "@[off:%d@ len:%d@]" t.copy_offset t.copy_length
 
 type hunk =
   | Insert of string
@@ -57,35 +54,44 @@ let pp_delta ppf d =
     d.result_length
     pp_hunks d.hunks
 
-type t =
+type kind =
   | Raw_value of string
   | Ref_delta of SHA.t delta
   | Off_delta of int delta
+
+
+type t = { kind: kind; offset: int; }
 
 let hash = Hashtbl.hash
 let equal = (=)
 let compare = compare
 
-let pp ppf = function
+let pp_kind ppf = function
   | Raw_value s -> Format.fprintf ppf "%S@." s
   | Ref_delta d -> Format.fprintf ppf "@[source: %s@ %a@]"
                      (SHA.to_hex d.source) pp_delta d
   | Off_delta d -> Format.fprintf ppf "@[source:%d@ %a@]"
                      d.source pp_delta d
 
-let result_length = function
+let pp ppf { kind; offset } =
+  Format.fprintf ppf "offset: %d@,%a" offset pp_kind kind
+
+let result_length { kind; _ } = match kind with
   | Ref_delta { result_length; _ }
   | Off_delta { result_length; _ } -> result_length
   | Raw_value str -> String.length str
 
-let source_length = function
+let source_length { kind; _ } = match kind with
   | Ref_delta { source_length; _ }
   | Off_delta { source_length; _ } -> source_length
   | Raw_value str -> String.length str
 
 let add_hunk buf ~source ~pos = function
   | Insert str -> Buffer.add_string buf str
-  | Copy copy  -> Buffer.add_substring buf source (pos+copy.offset) copy.length
+  | Copy c     ->
+    Buffer.add_substring buf source (pos + c.copy_offset) c.copy_length
+
+let fail fmt = Printf.ksprintf failwith ("Packed_value." ^^ fmt)
 
 let add_delta buf delta =
   let source = Mstruct.of_string delta.source in
@@ -94,11 +100,10 @@ let add_delta buf delta =
     | None   -> Mstruct.parse_error_buf source "missing size"
     | Some s ->
       try int_of_string s
-      with Failure "int_of_string" ->
-        eprintf "Packed_value.add_delta: %s is not a valid size.\n" s;
-        failwith "Packed_value.add_delta" in
+      with Failure "int_of_string" -> fail "add_delta: %s is not a valid size" s
+  in
   if size <> delta.source_length then
-    Mstruct.parse_error_buf source "size differs: delta:%d source:%d\n"
+    Mstruct.parse_error_buf source "size differs: delta:%d source:%d."
       delta.source_length size;
   Buffer.add_string buf (Object_type.to_string object_type);
   Buffer.add_char   buf Misc.sp;
@@ -109,6 +114,7 @@ let add_delta buf delta =
 
 module Make (M: sig val version: int end) = struct
 
+  type t = kind
   let compare = compare
   let hash = hash
   let equal = equal
@@ -119,7 +125,8 @@ module Make (M: sig val version: int end) = struct
   let input_hunk source_length buf =
     let opcode = Mstruct.get_uint8 buf in
     if opcode = 0 then
-      Mstruct.parse_error_buf buf "0 as value of the first byte of a hunk is reserved.";
+      Mstruct.parse_error_buf buf
+        "0 as value of the first byte of a hunk is reserved.";
     match opcode land 0x80 with
     | 0 ->
       let contents = Mstruct.get_string buf opcode in
@@ -128,36 +135,36 @@ module Make (M: sig val version: int end) = struct
       let read bit shift =
         if not (isset opcode bit) then 0
         else Mstruct.get_uint8 buf lsl shift in
-      let offset =
+      let copy_offset =
         let o0 = read 0 0 in
         let o1 = read 1 8 in
         let o2 = read 2 16 in
         let o3 = read 3 24 in
         o0 lor o1 lor o2 lor o3 in
-      let length =
+      let copy_length =
         let l0 = read 4 0 in
         let l1 = read 5 8 in
         let l2 = read 6 16 in
         if M.version = 2 && l2 <> 0 then
           Mstruct.parse_error_buf buf "result fied set in delta hunk";
         l0 lor l1 lor l2 in
-      let length =
-        if length = 0 then 0x10_000 else length in
-      if offset+length > source_length then
+      let copy_length =
+        if copy_length = 0 then 0x10_000 else copy_length in
+      if copy_offset + copy_length > source_length then
         Mstruct.parse_error_buf buf
           "wrong insert hunk (offset:%d length:%d source:%d)"
-          offset length source_length;
-      Copy { offset; length }
+          copy_offset copy_length source_length;
+      Copy { copy_offset; copy_length }
 
   let add_hunk buf = function
     | Insert contents ->
       let len = String.length contents in
-      if len >= 0x80 then
-        failwith ("invalid hunk: insert too large: " ^ string_of_int len);
+      if len >= 0x80 then fail "invalid hunk: insert too large (%d)" len;
       Buffer.add_char buf (Char.chr (String.length contents));
       Buffer.add_string buf contents
-    | Copy { offset; length } ->
-      let length = if length = 0x10_000 then 0 else length in
+    | Copy { copy_offset; copy_length } ->
+      let length = if copy_length = 0x10_000 then 0 else copy_length in
+      let offset = copy_offset in
       let bits = ref [] in
       let bit n shift =
         match (n lsr shift) land 0xFF with
@@ -172,7 +179,8 @@ module Make (M: sig val version: int end) = struct
       let l1 = bit length 8 in
       let l2 = bit length 16 in
       if l2 <> 0 && M.version = 2 then
-        failwith "pack version 2 does not support copy hunks of size greater than 64K.";
+        fail "pack version 2 does not support copy hunks of size greater than \
+              64K.";
       let n =
         0x80
         + o0 + (o1 lsl 1) + (o2 lsl 2) + (o3 lsl 3)
@@ -241,11 +249,9 @@ module Make (M: sig val version: int end) = struct
   let with_inflated buf size fn =
     let buf = Misc.inflate_mstruct ~output_size:size buf in
     let len = Mstruct.length buf in
-    if len <> size then (
-      eprintf "Packed_value.with_inflated: inflated size differs. Expecting %d, got %d.\n"
+    if len <> size then
+      fail "with_inflated: inflated size differs. Expecting %d, got %d."
         size len;
-      failwith "Packed_value.with_inflated"
-    );
     fn buf
 
   let with_inflated_buf buf size fn =
@@ -314,7 +320,7 @@ module Make (M: sig val version: int end) = struct
             let i = String.index str Misc.nul in
             let s = String.sub str (i+1) (String.length str-i-1) in
             with_deflated tmp_buffer (fun b -> Buffer.add_string b s)
-          with Not_found -> failwith (sprintf "Packed_value.add: %S" str)
+          with Not_found -> fail "add: %S" str
         end
       | Off_delta hunks ->
         add_be_modified_base_128 tmp_buffer hunks.source;
@@ -346,9 +352,9 @@ module Make (M: sig val version: int end) = struct
     let buf = Misc.with_buffer (fun buf -> add buf t) in
     Misc.crc32 buf
 
-  let pp = pp
+  let pp = pp_kind
 
-  let pretty = Misc.pretty pp
+  let pretty = Misc.pretty pp_kind
 
 end
 
@@ -356,38 +362,42 @@ module V2 = Make(struct let version = 2 end)
 module V3 = Make(struct let version = 3 end)
 module PIC = struct
 
-  type kind =
-    | Raw of string
-    | Link of t delta
+  type kind = Raw of string  | Link of t delta
 
-  and t = {
-    kind: kind;
-    sha1: SHA.t;
-  }
+  and t = { kind: kind; sha1: SHA.t; mutable raw: string option }
 
   let pretty_kind = function
     | Raw _  -> "RAW"
     | Link d -> sprintf "link(%s)" (SHA.to_hex d.source.sha1)
 
-  let pp ppf { kind; sha1 } =
+  let pp ppf { kind; sha1; _ } =
     Format.fprintf ppf "@[%a: %s@]" SHA.pp sha1 (pretty_kind kind)
 
   let pretty = Misc.pretty pp
 
-  let rec unpack pic =
-    match Value.Cache.find_inflated pic.sha1 with
+  let with_cache f sha1 =
+    match Value.Cache.find_inflated sha1 with
     | Some x -> x
     | None   ->
-      Log.debug "unpack %s" (pretty pic);
-      let str =
-        match pic.kind with
-        | Raw x  -> x
-        | Link d ->
-          Log.debug "unpack: hop to %s" (SHA.to_hex d.source.sha1);
-          let source = unpack d.source in
-          Misc.with_buffer (fun buf -> add_delta buf { d with source }) in
-      Value.Cache.add_inflated pic.sha1 str;
-      str
+      let x = f () in
+      Value.Cache.add_inflated sha1 x;
+      x
+
+  let rec unpack t =
+    match t.raw with
+    | Some str -> str
+    | None     ->
+      Log.debug "unpack %s" (pretty t);
+      let raw = with_cache (fun () -> unpack_kind t.kind) t.sha1 in
+      t.raw <- Some raw;
+      raw
+
+  and unpack_kind = function
+    | Raw x  -> x
+    | Link d ->
+      Log.debug "unpack: hop to %s" (SHA.to_hex d.source.sha1);
+      let source = unpack d.source in
+      Misc.with_buffer (fun buf -> add_delta buf { d with source })
 
   let to_value p =
     Log.debug "to_value";
@@ -395,7 +405,8 @@ module PIC = struct
     Value.input_inflated (Mstruct.of_string buf)
 
   let raw sha1 raw =
-    { sha1; kind = Raw (Cstruct.to_string raw) }
+    let raw = Cstruct.to_string raw in
+    { sha1; kind = Raw raw; raw = Some raw; }
 
   module X = struct
     type x = t
@@ -405,141 +416,110 @@ module PIC = struct
   end
   module Map = Misc.Map(X)
 
-end (* of module Packed_value.PIC *)
+end
 
-let of_pic index ~pos t =
+let of_pic ~index ~offset t =
+  let return kind = { offset; kind } in
   match t.PIC.kind with
-  | PIC.Raw x  -> Raw_value x
+  | PIC.Raw x  -> return (Raw_value x)
   | PIC.Link d ->
-    try
-      let o = PIC.Map.find d.source index in
-      Off_delta { d with source = pos - o }
-    with Not_found ->
-      eprintf "Packed_value.of_pic: cannot fallow the PIC chain.\n";
-      failwith "Packed_value.of_pic"
+    let sha1 = d.source.PIC.sha1 in
+    match index sha1 with
+    | None   -> fail "of_pic: cannot find %s" (SHA.pretty sha1)
+    | Some o -> return (Off_delta { d with source = offset - o })
 
-let to_pic ~read offsets sha1s (pos, sha1, t) =
-  Log.debug "to_pic(%s): cache miss!" (SHA.to_hex sha1);
-  let kind = match t with
+let to_pic ~read ~offsets ~sha1s ?sha1 { offset; kind } =
+  let kind = match kind with
     | Raw_value x -> Lwt.return (PIC.Raw x)
-    | Ref_delta d -> begin
-        try
-          let pic = SHA.Map.find d.source sha1s in
-          let pic = PIC.Link { d with source = pic } in
-          Lwt.return pic
-        with Not_found ->
+    | Ref_delta d ->
+      begin match sha1s d.source with
+        | Some pic -> Lwt.return (PIC.Link { d with source = pic })
+        | None ->
           read d.source >>= function
-          | Some v ->
-            let buf = Misc.with_buffer (fun buf -> Value.add_inflated buf v) in
-            let pic = PIC.Raw buf in
-            Lwt.return pic
+          | Some buf -> Lwt.return (PIC.Raw buf)
           | None ->
-            eprintf
-              "Packed_value.to_pic: shallow pack are not supported.\n\
-               %s is not in the pack file!\n"
-              (SHA.to_hex d.source);
-            Lwt.fail (Failure "Packed_value.to_pic")
+            fail "to_pic: shallow pack are not supported and %s is not in the \
+                  pack file!" (SHA.to_hex d.source)
       end
     | Off_delta d ->
-      let offset = pos - d.source in
-      try
-        let pic = Misc.IntMap.find offset offsets in
+      let offset = offset - d.source in
+      match offsets offset with
+      | None     -> fail "to_pic: cannot find offest %d in the index." d.source
+      | Some pic ->
         let pic = PIC.Link { d with source = pic } in
         Lwt.return pic
-      with Not_found ->
-        eprintf "Cannot find offest %d in the index\n%s"
-          d.source (Misc.IntMap.pretty PIC.pretty offsets);
-        Lwt.fail (Failure "Packed_value.to_pic")
-
   in
-  kind >|= fun kind -> { PIC.sha1; kind }
+  kind >|= fun kind ->
+  match sha1 with
+  | Some sha1 -> { PIC.sha1; kind; raw = None }
+  | None      ->
+    let raw  = PIC.unpack_kind kind in
+    let sha1 = SHA.of_string raw in
+    { PIC.sha1; kind; raw = None }
 
-let rec unpack ?(lv=0) ~read ~version ~index ~ba (pos, t) =
+let err_sha1_not_found sha1 = fail "cannot read %s" (SHA.pretty sha1)
+let err_offset_not_found off = fail "cannot find any object at offset %d" off
+
+let read_and_add_delta ~read buf delta sha1 =
+  read sha1 >>= function
+  | None        -> err_sha1_not_found sha1
+  | Some source -> add_delta buf { delta with source }; Lwt.return_unit
+
+let add_inflated_value ~read ~offsets buf { offset; kind } = match kind with
+  | Raw_value x -> Buffer.add_string buf x; Lwt.return_unit
+  | Ref_delta d -> read_and_add_delta ~read buf d d.source
+  | Off_delta d ->
+    let offset = offset - d.source in
+    match offsets offset with
+    | None      -> err_offset_not_found offset
+    | Some base -> read_and_add_delta ~read buf d base
+
+let input_packed_value = function
+  | 2 -> V2.input
+  | 3 -> V3.input
+  | _ -> fail "pack version should be 2 or 3"
+
+let rec unpack_ref_delta ~lv ~version ~index ~read ba d =
+  Log.debug "unpack[%d]: Ref_delta: d.source=%s" lv (SHA.to_hex d.source);
+  match index d.source with
+  | Some offset ->
+    Log.debug "unpack[%d]: offset=%d" lv offset;
+    let offset = offset - 12 in (* header skipped *)
+    let ba_len = Bigarray.Array1.dim ba in
+    let len = ba_len - offset in
+    let buf = Mstruct.of_bigarray ~off:offset ~len ba in
+    let kind = input_packed_value version buf in
+    let t = { offset; kind } in
+    unpack ~lv:(lv+1) ~read ~version ~index ba t >|= fun source ->
+    Misc.with_buffer (fun b -> add_delta b {d with source})
+  | None ->
+    read d.source >>= function
+    | None     -> fail "unpack: cannot read %s" (SHA.pretty d.source)
+    | Some buf -> Lwt.return buf
+
+and unpack_off_delta ~lv ~version ~index ~read ba d offset =
+  let offset = offset - d.source in
+  Log.debug "unpack[%d]: offset=%d-%d=%d" lv offset d.source offset;
   let ba_len = Bigarray.Array1.dim ba in
-  Log.debug "unpack[%d]: ba_len=%d" lv ba_len;
-  let input_packed_value =
-    match version with
-    | 2 -> V2.input
-    | 3 -> V3.input
-    | _ ->
-      eprintf "pack version should be 2 or 3";
-      failwith "Packed_value.unpack"
-  in
-  let unpacked =
-    match t with
-    | Raw_value x -> begin
-        Log.debug "unpack[%d]: Raw_value" lv;
-        Lwt.return x
-      end
-    | Ref_delta d -> begin
-        Log.debug "unpack[%d]: Ref_delta: d.source=%s" lv (SHA.to_hex d.source);
-        match Pack_index.find_offset index d.source with
-        | Some offset -> begin
-            Log.debug "unpack[%d]: offset=%d" lv offset;
-            let offset = offset - 12 in (* header skipped *)
-            let buf = Mstruct.of_bigarray ~off:offset ~len:(ba_len-offset) ba in
-            let packed_v = input_packed_value buf in
-            unpack ~lv:(lv+1) ~read ~version ~index ~ba (offset, packed_v)
-            >|= fun source ->
-            Misc.with_buffer (fun b -> add_delta b {d with source})
-          end
-        | None -> begin
-            read d.source >>= function
-            | None ->
-              eprintf
-                "Packed_value.unpack: shallow pack are not supported.\n%s is not \
-                 in the pack file!\n"
-                (SHA.to_hex d.source);
-              Lwt.fail (Failure "Packed_value.unpack")
-            | Some v ->
-              let buf = Misc.with_buffer (fun buf -> Value.add_inflated buf v) in
-              Lwt.return buf
-          end
-      end
-    | Off_delta d -> begin
-        Log.debug "unpack[%d]: Off_delta: d.source=%d" lv d.source;
-        let offset = pos - d.source in
-        Log.debug "unpack[%d]: offset=%d-%d=%d" lv pos d.source offset;
-        let buf = Mstruct.of_bigarray ~off:offset ~len:(ba_len-offset) ba in
-        let packed_v = input_packed_value buf in
-        unpack ~lv:(lv+1) ~read ~version ~index ~ba (offset, packed_v)
-        >|= fun source ->
-        Misc.with_buffer (fun b -> add_delta b {d with source})
-      end
-  in
-  unpacked
+  let len = ba_len - offset in
+  let buf = Mstruct.of_bigarray ~off:offset ~len ba in
+  let kind = input_packed_value version buf in
+  let t = { offset; kind } in
+  unpack ~lv:(lv+1) ~read ~version ~index ba t >|= fun source ->
+  Misc.with_buffer (fun b -> add_delta b {d with source})
 
-let to_value ~read ~version ~index ~ba (offset, packed_v) =
-  unpack ~version ~read ~index ~ba (offset, packed_v) >|= fun u ->
+and unpack ?(lv=0) ~read ~version ~index ba { offset; kind } =
+  Log.debug "unpack[%d] offset=%d" lv offset;
+  match kind with
+  | Raw_value x -> Log.debug "unpack[%d]: Raw_value" lv; Lwt.return x
+  | Ref_delta d -> unpack_ref_delta ~lv ~version ~index ~read ba d
+  | Off_delta d -> unpack_off_delta ~lv ~version ~index ~read ba d offset
+
+let to_value ~index ~read ~version ~ba t =
+  unpack ~version ~read ~index ba t >|= fun u ->
   Value.input_inflated (Mstruct.of_string u)
 
-(* XXX: merge with PIC.unpack *)
-let add_inflated_value_aux (return, bind) ~read ~offsets ~pos buf = function
-  | Raw_value x ->
-    Buffer.add_string buf x;
-    return ()
-  | Ref_delta d ->
-    bind
-      (read d.source)
-      (fun source ->
-         add_delta buf { d with source };
-         return ())
-  | Off_delta d ->
-    let offset = pos - d.source in
-    let base =
-      try Misc.IntMap.find offset offsets
-      with Not_found ->
-        eprintf "Packed_value.add_inflated_value: cannot find any object at offset %d\n"
-          offset;
-        failwith "Packed_inflated_value" in
-    bind
-      (read base)
-      (fun source ->
-         add_delta buf { d with source };
-         return ())
-
-let lwt_monad = Lwt.return, Lwt.bind
-let id_monad = (fun x ->x), (fun x f -> f x)
-
-let add_inflated_value = add_inflated_value_aux lwt_monad
-let add_inflated_value_sync = add_inflated_value_aux id_monad
+module type S = sig
+  include Object.S with type t = kind
+  val crc32: t -> int32
+end

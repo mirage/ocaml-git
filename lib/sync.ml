@@ -808,9 +808,16 @@ module Make (IO: IO) (Store: Store.S) = struct
           PacketLine.output_line oc (Buffer.contents buf) >>= fun () ->
           aux false y in
       aux true t.commands >>= fun () ->
-      let s = Misc.with_buffer (fun b -> Pack.add b t.pack) in
-      Log.info "SENDING: %s" s;
-      IO.write oc s
+      let _, buf = Pack.add t.pack in
+      let buf = Mstruct.of_cstruct buf in
+      Log.info "SENDING: %d bytes" (Mstruct.length buf);
+      let rec send () =
+        let len = min 4096 (Mstruct.length buf) in
+        let buf = Mstruct.get_string buf len in
+        IO.write oc buf >>=
+        send
+      in
+      send ()
 
   end
 
@@ -960,13 +967,20 @@ module Make (IO: IO) (Store: Store.S) = struct
       | Fetch { f_unpack = u; _ } -> u
       | _ -> false in
     Log.debug "unpack=%b" unpack;
-
-    begin if unpack then
-        Pack.unpack ~read:(Store.read t) ~write:(Store.write t) pack
-      else
-        let pack = Pack.Raw.input (Mstruct.of_cstruct pack) ~index:None in
-        Store.write_pack t pack
-    end >>= fun sha1s ->
+    let read sha1 =
+      Store.read t sha1 >>= function
+      | None   -> Lwt.return_none
+      | Some v ->
+        let buf = Misc.with_buffer (fun buf -> Value.add buf v) in
+        Lwt.return (Some buf)
+    in
+    Pack.Raw.input ~read (Mstruct.of_cstruct pack) >>= fun pack ->
+    let unpack () =
+      if unpack
+      then Pack.Raw.unpack ~write:(Store.write t) pack
+      else Store.write_pack t pack
+    in
+    unpack () >>= fun sha1s ->
     let head =
       try Some (Reference.Map.find Reference.head references) with Not_found -> None
     in

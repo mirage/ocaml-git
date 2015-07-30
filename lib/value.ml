@@ -142,3 +142,7 @@ module Cache = struct
     add_both sha1 t str
 
 end
+
+type read = SHA.t -> t option Lwt.t
+type read_inflated = SHA.t -> string option Lwt.t
+type write = t -> SHA.t Lwt.t

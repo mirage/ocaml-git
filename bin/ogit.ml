@@ -218,7 +218,7 @@ let cat_file = {
              end
           )
           (function
-            | SHA.Ambiguous -> eprintf "ambiguous argument\n%!"; exit 1
+            | SHA.Ambiguous s -> eprintf "%s: ambiguous argument\n%!" s; exit 1
             | Not_found ->
               eprintf "unknown revision or path not in the working tree\n%!";
               exit 1
@@ -345,7 +345,7 @@ let ls_tree = {
         Lwt.catch
           (fun () -> walk recurse_flag show_tree_flag only_tree_flag "" sha1)
           (function
-            | SHA.Ambiguous -> eprintf "ambiguous argument\n%!"; exit 1
+            | SHA.Ambiguous s -> eprintf "%s: ambiguous argument\n%!" s; exit 1
             | Not_found ->
               eprintf "unknown revision or path not in the working tree\n%!";
               exit 1

@@ -16,18 +16,21 @@
 
 (** Pack files. *)
 
-type t = (SHA.t * Packed_value.PIC.t) list
+type t = Packed_value.PIC.t list
 (** A pack value is an ordered list of position-independant packed
     values and the SHA of the corresponding inflated objects. *)
 
 include Object.S with type t := t
 
-val input:
-  read:(SHA.t -> Value.t option Lwt.t) -> Mstruct.t ->
-  index:Pack_index.Raw.t option -> t Lwt.t
-(** The usual [Object.S.input] function, but with additionals [read]
-    and [index] arguments. When [index] is [None], recompute the whole
-    index: that's very costly so provide the index when possible. *)
+val add: ?level:int -> t -> Pack_index.Raw.t * Cstruct.t
+(** Serialize a pack file into a list of buffers. Return the
+    corresponding raw index. *)
+
+val input: index:Pack_index.f -> keys:SHA.Set.t -> read:Value.read_inflated ->
+  Mstruct.t -> t Lwt.t
+(** The usual [Object.S.input] function, but with additionals [index]
+    and [keys] arguments to speed-up ramdom accesses and [read] to
+    read shallow objects external to the pack file. *)
 
 val keys: t -> SHA.Set.t
 (** Return the keys present in the pack. *)
@@ -38,14 +41,8 @@ val read: t -> SHA.t -> Value.t option
 val read_exn: t -> SHA.t -> Value.t
 (** Return the value stored in the pack file. *)
 
-val unpack:
-  read:(SHA.t -> Value.t option Lwt.t) -> write:(Value.t -> SHA.t Lwt.t) ->
-  Cstruct.t -> SHA.Set.t Lwt.t
-(** Unpack a whole pack file. [write] should returns the SHA of the
-    marshaled value. Return the IDs of the written objects. *)
-
 val pack: (SHA.t * Value.t) list -> t
-(** Create a (compressed) pack file. *)
+(** Create a (not very well compressed) pack file. *)
 
 module Raw: sig
 
@@ -54,30 +51,39 @@ module Raw: sig
 
   include Object.S
 
-  val input: Mstruct.t -> index:Pack_index.Raw.t option -> t
-  (** Same as the top-level [input] function but for raw packs. *)
+  val input: read:Value.read_inflated -> Mstruct.t -> t Lwt.t
+  (** [input ~read buf] is the raw pack and raw index obtained by
+      reading the buffer [buf]. External (shallow) SHA1 references are
+      resolved using the [read] function; these references are needed
+      to unpack the list of values stored in the pack file, to then
+      compute the full raw index. *)
 
-  val sha1: t -> SHA.t
-  (** Return the name of the pack. *)
+  val unpack: write:Value.write -> t -> SHA.Set.t Lwt.t
+  (** Unpack a whole pack file on disk (by calling [write] on every
+      values) and return the SHA1s of the written objects. *)
+
+  val read: index:Pack_index.f -> read:Value.read_inflated ->
+    Mstruct.t -> SHA.t -> Value.t option Lwt.t
+  (** Same as the top-level [read] function but for raw packs. *)
 
   val index: t -> Pack_index.Raw.t
-  (** Return the pack index. *)
+  (** Get the raw index asoociated to the raw pack. *)
+
+  val sha1: t -> SHA.t
+  (** Get the name of the pack. *)
 
   val keys: t -> SHA.Set.t
-  (** Return the keys present in the raw pack. *)
+  (** Get the keys present in the raw pack. *)
 
   val buffer: t -> Cstruct.t
-  (** Return the pack buffer. *)
-
-  val read: read:(SHA.t -> Value.t option Lwt.t) -> Mstruct.t -> Pack_index.t ->
-    SHA.t -> Value.t option Lwt.t
-  (** Same as the top-level [read] function but for raw packs. *)
+  (** Get the pack buffer. *)
 
 end
 
-val to_pic: read:(SHA.t -> Value.t option Lwt.t) -> Raw.t -> t Lwt.t
+val of_raw: Raw.t -> t Lwt.t
 (** Transform a raw pack file into a position-independant pack
     file. *)
 
-val of_pic: t -> Raw.t
-(** Transform a position-independant pack file into a raw one. *)
+val to_raw: t -> Raw.t
+(** Transform a position-independant pack file into a raw pack and
+    index files. *)
