@@ -21,12 +21,19 @@ module type S = sig
   type t
   (** Git store handlers. *)
 
-  val create: ?root:string -> ?level:int -> unit -> t Lwt.t
-      (** Create a store handler for the given path. See {!root} and {!level}.*)
+  val create: ?root:string -> ?dot_git:string -> ?level:int ->
+    unit -> t Lwt.t
+  (** Create a store handler for the given path. See {!root} and
+      {!level}.*)
+
+  val dot_git: t -> string
+  (** The location of the [.git] directory. By defaut it is
+      {!root}[/.git]. *)
 
   val root: t -> string
-  (** The state root (or any other meaningful name to be displayed to
-      the user). By default, it is the current directory. *)
+  (** The location of the repository root (or any other meaningful
+      name to be displayed to the user). By default, it is the current
+      directory. *)
 
   val level: t -> int
   (** The compression [level] used when creating new Git objects. must
@@ -98,10 +105,12 @@ module type S = sig
   val write_index: t -> ?index:Index.t -> SHA.Commit.t -> unit Lwt.t
   (** Update the index file for the given revision. A side-effect of
       this operation is that the blobs are expanded into the
-      filesystem. {b Note:} It is the user responsability to ensure
-      that filenames are valid. No sanitazition is done by the library
-      -- the Git format does not impose a filename format as this is a
-      constraint of the underlying filesystem.
+      filesystem.
+
+      {b Note:} It is the user responsability to ensure that filenames
+      are valid. No sanitazition is done by the library -- the Git
+      format does not impose a filename format as this is a constraint
+      of the underlying filesystem.
 
       If [index] is not set, read the current index and update it with
       the current state of the filesystem. *)

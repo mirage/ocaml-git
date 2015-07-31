@@ -24,6 +24,7 @@ let err_not_found n k =
 
 type t = {
   root   : string;
+  dot_git: string;
   level  : int;
   values : (SHA.t, Value.t) Hashtbl.t;
   refs   : (Reference.t, [`S of SHA.Commit.t | `R of Reference.t]) Hashtbl.t;
@@ -31,20 +32,22 @@ type t = {
 }
 
 let root t = t.root
+let dot_git t = t.dot_git
 let level t = t.level
 
 let stores = Hashtbl.create 1024
 let default_root = "root"
 let clear ?(root=default_root) () = Hashtbl.remove stores root
 let clear_all () = Hashtbl.reset stores
+let (/) = Filename.concat
 
-let create ?(root=default_root) ?(level=6) () =
+let create ?(root=default_root) ?(dot_git=default_root / ".git") ?(level=6) () =
   if level < 0 || level > 9 then failwith "level should be between 0 and 9";
   let t =
     try Hashtbl.find stores root
     with Not_found ->
       let t = {
-        root; level;
+        root; level; dot_git;
         values  = Hashtbl.create 1024;
         refs    = Hashtbl.create 8;
         head    = None;

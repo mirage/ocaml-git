@@ -111,48 +111,50 @@ module Make (IO: IO) = struct
 
   end
 
-  type t = {
-    root: string;
-    level: int;
-  }
+  type t = { root: string; dot_git: string; level: int; }
 
   let root t = t.root
+  let dot_git t = t.dot_git
   let level t = t.level
 
-  let temp_dir { root; _ } = root / ".git" / "tmp"
+  let temp_dir t = t.dot_git / "tmp"
 
-  let create ?root ?(level=6) () =
+  let create ?root ?dot_git ?(level=6) () =
     if level < 0 || level > 9 then fail "level should be between 0 and 9";
     begin match root with
       | None   -> IO.getcwd ()
       | Some r ->
         IO.mkdir r >>= fun () ->
         IO.realpath r
-    end >>= fun root ->
-    Lwt.return { root; level }
+    end >>= fun root' ->
+    let dot_git = match dot_git with
+      | None    -> root' / ".git"
+      | Some s -> s
+    in
+    Lwt.return { root = root'; level; dot_git }
 
   let remove t =
-    Log.info "remove %s" t.root;
-    IO.remove (sprintf "%s/.git" t.root)
+    Log.info "remove %s" t.dot_git;
+    IO.remove t.dot_git
 
   (* Loose objects *)
   module Loose = struct
 
     module Log = LogMake(struct let section = "fs-loose" end)
 
-    let file { root; _ } sha1 =
+    let file t sha1 =
       let hex = SHA.to_hex sha1 in
       let prefix = String.sub hex 0 2 in
       let suffix = String.sub hex 2 (String.length hex - 2) in
-      root / ".git" / "objects" / prefix / suffix
+      t.dot_git / "objects" / prefix / suffix
 
     let mem t sha1 =
       IO.file_exists (file t sha1)
 
     let ambiguous sha1 = raise (SHA.Ambiguous (SHA.pretty sha1))
 
-    let get_file { root; _ } sha1 =
-      IO.directories (root / ".git" / "objects") >>= fun dirs ->
+    let get_file t sha1 =
+      IO.directories (t.dot_git / "objects") >>= fun dirs ->
       let hex = SHA.to_hex sha1 in
       let len = String.length hex in
       let dcands =
@@ -223,14 +225,14 @@ module Make (IO: IO) = struct
         IO.write_file file ~temp_dir deflated >>= fun () ->
         Lwt.return sha1
 
-    let list { root; _ } =
-      Log.debug "Loose.list %s" root;
-      let objects = root / ".git" / "objects" in
+    let list t =
+      Log.debug "Loose.list %s" t.dot_git;
+      let objects = t.dot_git / "objects" in
       IO.directories objects >>= fun objects ->
       let objects = List.map Filename.basename objects in
       let objects = List.filter (fun s -> (s <> "info") && (s <> "pack")) objects in
       Lwt_list.map_s (fun prefix ->
-          let dir = root / ".git" / "objects" / prefix in
+          let dir = t.dot_git / "objects" / prefix in
           IO.files dir >>= fun suffixes ->
           let suffixes = List.map Filename.basename suffixes in
           let objects = List.map (fun suffix ->
@@ -247,14 +249,14 @@ module Make (IO: IO) = struct
 
     module Log = LogMake(struct let section = "fs-packed" end)
 
-    let file { root; _ } sha1 =
-      let pack_dir = root / ".git" / "objects" / "pack" in
+    let file t sha1 =
+      let pack_dir = t.dot_git / "objects" / "pack" in
       let pack_file = "pack-" ^ (SHA.to_hex sha1) ^ ".pack" in
       pack_dir / pack_file
 
-    let list { root; _ } =
-      Log.debug "list %s" root;
-      let packs = root / ".git" / "objects" / "pack" in
+    let list t =
+      Log.debug "list %s" t.dot_git;
+      let packs = t.dot_git / "objects" / "pack" in
       IO.files packs >>= fun packs ->
       let packs = List.map Filename.basename packs in
       let packs = List.filter (fun f -> Filename.check_suffix f ".idx") packs in
@@ -265,8 +267,8 @@ module Make (IO: IO) = struct
         ) packs in
       Lwt.return packs
 
-    let index { root; _ } sha1 =
-      let pack_dir = root / ".git" / "objects" / "pack" in
+    let index t sha1 =
+      let pack_dir = t.dot_git / "objects" / "pack" in
       let idx_file = "pack-" ^ (SHA.to_hex sha1) ^ ".idx" in
       pack_dir / idx_file
 
@@ -417,12 +419,12 @@ module Make (IO: IO) = struct
       ) contents;
     Lwt.return_unit
 
-  let packed_refs t = t.root / ".git" / "packed-refs"
+  let packed_refs t = t.dot_git / "packed-refs"
 
   let references t =
-    let refs = t.root / ".git" / "refs" in
+    let refs = t.dot_git / "refs" in
     IO.rec_files refs >>= fun files ->
-    let n = String.length (t.root / ".git" / "") in
+    let n = String.length (t.dot_git / "") in
     let refs = List.map (fun file ->
         let ref = String.sub file n (String.length file - n) in
         Reference.of_raw ref
@@ -438,7 +440,7 @@ module Make (IO: IO) = struct
     in
     packed_refs >|= fun packed_refs -> refs @ packed_refs
 
-  let file_of_ref t ref = t.root / ".git" / Reference.to_raw ref
+  let file_of_ref t ref = t.dot_git / Reference.to_raw ref
 
   let mem_reference t ref =
     let file = file_of_ref t ref in
@@ -505,7 +507,7 @@ module Make (IO: IO) = struct
     Lwt.return (Pack.Raw.keys pack)
 
   let write_reference t ref sha1 =
-    let file = t.root / ".git" / Reference.to_raw ref in
+    let file = t.dot_git / Reference.to_raw ref in
     let contents = SHA.Commit.to_hex sha1 in
     let temp_dir = temp_dir t in
     IO.write_file file ~temp_dir (Cstruct.of_string contents)
@@ -513,7 +515,7 @@ module Make (IO: IO) = struct
   let write_head t = function
     | Reference.SHA sha1 -> write_reference t Reference.head sha1
     | Reference.Ref ref   ->
-      let file = t.root / ".git" / "HEAD" in
+      let file = t.dot_git / "HEAD" in
       let contents = sprintf "ref: %s" (Reference.to_raw ref) in
       let temp_dir = temp_dir t in
       IO.write_file file ~temp_dir (Cstruct.of_string contents)
@@ -608,7 +610,7 @@ module Make (IO: IO) = struct
       | `Exec -> IO.chmod file 0o755
       | _     -> Lwt.return_unit
 
-  let index_file t = t.root / ".git" / "index"
+  let index_file t = t.dot_git / "index"
 
   let read_index t =
     Log.debug "read_index";
