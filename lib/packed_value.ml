@@ -519,6 +519,7 @@ let unpack = unpack ~lv:0
 
 let to_value ~index ~read ~version ~ba t =
   unpack ~version ~read ~index ~ba t >|= fun u ->
+  (* FIXME: costly, allocates a bigarray *)
   Value.input_inflated (Mstruct.of_string u)
 
 module type S = sig
