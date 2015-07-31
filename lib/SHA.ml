@@ -184,10 +184,10 @@ module Array = struct
         let off = len - i in
         let s = get buf off in
         if equal s sha1 then (assert (acc = []); Some off)
-        else if (not short_sha) then aux acc (len - 1)
+        else if (not short_sha) then aux acc (i - 1)
         else
           let acc = if is_prefix sha1 s then off :: acc else acc in
-          aux acc (len - 1)
+          aux acc (i - 1)
     in
     aux [] len
 
