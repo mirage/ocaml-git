@@ -383,6 +383,7 @@ module PIC = struct
     match Value.Cache.find_inflated sha1 with
     | Some x -> x
     | None   ->
+      Log.debug "%s: cache miss!" (SHA.pretty sha1);
       let x = f () in
       Value.Cache.add_inflated sha1 x;
       x
@@ -480,10 +481,9 @@ let input_packed_value = function
   | _ -> fail "pack version should be 2 or 3"
 
 let rec unpack_ref_delta ~lv ~version ~index ~read ba d =
-  Log.debug "unpack[%d]: Ref_delta: d.source=%s" lv (SHA.to_hex d.source);
+  Log.debug "unpack-ref-delta[%d]: d.source=%s" lv (SHA.to_hex d.source);
   match index d.source with
   | Some offset ->
-    Log.debug "unpack[%d]: offset=%d" lv offset;
     let offset = offset - 12 in (* header skipped *)
     let ba_len = Bigarray.Array1.dim ba in
     let len = ba_len - offset in
@@ -499,7 +499,7 @@ let rec unpack_ref_delta ~lv ~version ~index ~read ba d =
 
 and unpack_off_delta ~lv ~version ~index ~read ba d offset =
   let offset = offset - d.source in
-  Log.debug "unpack[%d]: offset=%d-%d=%d" lv offset d.source offset;
+  Log.debug "unpack-off-delta[%d]: offset=%d-%d=%d" lv offset d.source offset;
   let ba_len = Bigarray.Array1.dim ba in
   let len = ba_len - offset in
   let buf = Mstruct.of_bigarray ~off:offset ~len ba in
@@ -509,15 +509,15 @@ and unpack_off_delta ~lv ~version ~index ~read ba d offset =
   Misc.with_buffer (fun b -> add_delta b {d with source})
 
 and unpack ~lv ~index ~read ~version ~ba { offset; kind } =
-  Log.debug "unpack[%d] offset=%d" lv offset;
   match kind with
-  | Raw_value x -> Log.debug "unpack[%d]: Raw_value" lv; Lwt.return x
+  | Raw_value x -> Log.debug "unpack-raw[%d]" lv; Lwt.return x
   | Ref_delta d -> unpack_ref_delta ~lv ~version ~index ~read ba d
   | Off_delta d -> unpack_off_delta ~lv ~version ~index ~read ba d offset
 
 let unpack = unpack ~lv:0
 
 let to_value ~index ~read ~version ~ba t =
+  Log.debug "to_value";
   unpack ~version ~read ~index ~ba t >|= fun u ->
   (* FIXME: costly, allocates a bigarray *)
   Value.input_inflated (Mstruct.of_string u)

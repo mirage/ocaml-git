@@ -84,39 +84,32 @@ module Raw = struct
     | 3 -> Packed_value.V3.crc32 t
     | _ -> fail "pack version should be 2 or 3"
 
-  let read_packed_value ~index buf sha1 =
+  let read_packed_value name ~index buf sha1 =
     let `Version version, `Count count = input_header buf in
-    Log.debug "read: version=%d count=%d" version count;
+    Log.debug "%s: %s version=%d count=%d" name (SHA.pretty sha1) version count;
     match index sha1 with
     | None -> None
     | Some offset ->
       Log.debug "read: offset=%d" offset;
       let orig_off = Mstruct.offset buf in
-      let orig_len = Mstruct.length buf in
-      Log.debug "read: buf: orig_off=%d orig_len=%d" orig_off orig_len;
+      let ba = Mstruct.to_bigarray buf in
       let shift = offset - orig_off in
       Mstruct.shift buf shift;
-      Log.debug "read: buf: off=%d len=%d (after shift:%d)"
-        (Mstruct.offset buf) (Mstruct.length buf) shift;
-      let packed_v = input_packed_value ~version buf in
-      Log.debug "read: buf: off=%d len=%d (after input_packed_value)"
-        (Mstruct.offset buf) (Mstruct.length buf);
-      let v = { Packed_value.offset = shift; kind = packed_v } in
-      Some (version, v)
+      let kind = input_packed_value ~version buf in
+      let v = { Packed_value.offset = shift; kind } in
+      Some (version, ba, v)
 
   let read ~index ~read buf sha1 =
-    match read_packed_value ~index buf sha1 with
-    | None              -> Lwt.return_none
-    | Some (version, v) ->
-      let ba = Mstruct.to_bigarray buf in
+    match read_packed_value "read" ~index buf sha1 with
+    | None                  -> Lwt.return_none
+    | Some (version, ba, v) ->
       Packed_value.to_value ~version ~read ~index ~ba v >|=
       fun x -> Some x
 
   let read_inflated ~index ~read buf sha1 =
-    match read_packed_value ~index buf sha1 with
-    | None              -> Lwt.return_none
-    | Some (version, v) ->
-      let ba = Mstruct.to_bigarray buf in
+    match read_packed_value "read_inflated" ~index buf sha1 with
+    | None                  -> Lwt.return_none
+    | Some (version, ba, v) ->
       Packed_value.unpack ~version ~read ~index ~ba v >|=
       fun x -> Some x
 

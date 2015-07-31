@@ -186,22 +186,29 @@ module Make (IO: IO) = struct
         | [file] -> Lwt.return (Some file)
         | _      -> ambiguous sha1
 
+
+    let some x = Lwt.return (Some x)
+
     let value_of_file file =
       File_cache.read file >>= fun buf ->
       try
-        let value = Value.input (Mstruct.of_cstruct buf) in
-        Lwt.return (Some value)
+        Mstruct.of_cstruct buf
+        |> Value.input
+        |> some
       with Zlib.Error _ ->
         Lwt.fail (Zlib.Error (file, (Cstruct.to_string buf)))
 
-    let inflated_value_of_file file =
+    let inflated_of_file file =
       File_cache.read file >>= fun buf ->
-      try Lwt.return (Some (Misc.inflate_cstruct buf |> Cstruct.to_string))
+      try
+        Misc.inflate_cstruct buf
+        |> Cstruct.to_string
+        |> some
       with Zlib.Error _ ->
         Lwt.fail (Zlib.Error (file, (Cstruct.to_string buf)))
 
-    let read_aux read_file t sha1 =
-      Log.debug "read %s" (SHA.to_hex sha1);
+    let read_aux name read_file t sha1 =
+      Log.debug "%s %s" name (SHA.to_hex sha1);
       if SHA.is_short sha1 then (
         Log.debug "read: short sha1";
         get_file t sha1 >>= function
@@ -213,8 +220,8 @@ module Make (IO: IO) = struct
         | false -> Lwt.return_none
         | true  -> read_file file
       )
-    let read = read_aux value_of_file
-    let read_inflated = read_aux inflated_value_of_file
+    let read  = read_aux "read" value_of_file
+    let read_inflated = read_aux "read_inflated" inflated_of_file
 
     let write_inflated t inflated =
       let sha1 = SHA.of_string inflated in
@@ -340,8 +347,8 @@ module Make (IO: IO) = struct
       read_index_c t pack_sha1 >>= fun idx ->
       Lwt.return (Pack_index.mem idx sha1)
 
-    let read_in_pack pack_read ~read t pack_sha1 sha1 =
-      Log.debug "read_in_pack %s:%s"
+    let read_in_pack name pack_read ~read t pack_sha1 sha1 =
+      Log.debug "read_in_pack(%s) %s:%s" name
         (SHA.to_hex pack_sha1) (SHA.to_hex sha1);
       read_index_c t pack_sha1 >>= fun index ->
       let index = Pack_index.find_offset index in
@@ -363,8 +370,9 @@ module Make (IO: IO) = struct
           | None   -> read_in_pack ~read t pack sha1
         ) None packs
 
-    let read = read_aux (read_in_pack Pack.Raw.read)
-    let read_inflated = read_aux (read_in_pack Pack.Raw.read_inflated)
+    let read = read_aux (read_in_pack "read" Pack.Raw.read)
+    let read_inflated =
+      read_aux (read_in_pack "read_inflated" Pack.Raw.read_inflated)
 
     let mem t sha1 =
       list t >>= fun packs ->
@@ -384,17 +392,27 @@ module Make (IO: IO) = struct
     let keys = SHA.Set.to_list keys in
     Lwt.return keys
 
+  let cache_add sha1 = function
+    | None   -> None
+    | Some v -> Value.Cache.add sha1 v; Some v
+
+  let cache_add_inflated sha1 = function
+    | None   -> None
+    | Some v -> Value.Cache.add_inflated sha1 v; Some v
+
   let rec read t sha1 =
     Log.debug "read %s" (SHA.to_hex sha1);
     match Value.Cache.find sha1 with
     | Some v -> Lwt.return (Some v)
     | None   ->
       Log.debug "read: cache miss!";
-      Loose.read t sha1 >>= function
-      | Some v -> Value.Cache.add sha1 v; Lwt.return (Some v)
+      begin Loose.read t sha1 >>= function
+      | Some v -> Lwt.return (Some v)
       | None   ->
         let read = read_inflated t in
         Packed.read ~read t sha1
+      end >|=
+      cache_add sha1
 
   and read_inflated t sha1 =
     Log.debug "read_inflated %s" (SHA.to_hex sha1);
@@ -402,11 +420,13 @@ module Make (IO: IO) = struct
     | Some v -> Lwt.return (Some v)
     | None   ->
       Log.debug "read_inflated: cache miss!";
-      Loose.read_inflated t sha1 >>= function
-      | Some v -> Value.Cache.add_inflated sha1 v; Lwt.return (Some v)
+      begin Loose.read_inflated t sha1 >>= function
+      | Some v -> Lwt.return (Some v)
       | None   ->
         let read = read_inflated t in
         Packed.read_inflated ~read t sha1
+      end >|=
+      cache_add_inflated sha1
 
   let read_exn t sha1 =
     read t sha1 >>= function

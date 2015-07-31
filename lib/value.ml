@@ -129,10 +129,6 @@ module Cache = struct
   let add sha1 t = LRU.add !cache sha1 t
   let add_inflated sha1 str = LRU.add !cache_inflated sha1 str
 
-  let add_both sha1 t str =
-    add sha1 t;
-    add_inflated sha1 str
-
 end
 
 type read = SHA.t -> t option Lwt.t

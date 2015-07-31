@@ -85,9 +85,6 @@ module Cache: sig
   val add_inflated: SHA.t -> string -> unit
   (** Cache an inflated value. *)
 
-  val add_both: SHA.t -> t -> string -> unit
-  (** Cache both a value and its inflated representation. *)
-
 end
 
 type read = SHA.t -> t option Lwt.t
