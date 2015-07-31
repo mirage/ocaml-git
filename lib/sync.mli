@@ -79,6 +79,7 @@ module type S = sig
 
   val clone: ?ctx:ctx -> t -> ?deepen:int -> ?unpack:bool ->
     ?capabilities:capability list -> ?head:Reference.head_contents ->
+    ?progress:(string -> unit) ->
     Gri.t -> Result.fetch Lwt.t
   (** [clone t address] clones the contents of [address] into the
       store [t]. If [head] is set, only the history of the given SHA1
@@ -87,7 +88,8 @@ module type S = sig
       remote heads) will be downloaded. *)
 
   val fetch: ?ctx:ctx -> t -> ?deepen:int -> ?unpack:bool ->
-    ?capabilities:capability list -> Gri.t -> Result.fetch Lwt.t
+    ?capabilities:capability list -> ?progress:(string -> unit) ->
+    Gri.t -> Result.fetch Lwt.t
   (** [fetch t address] fetches the missing contents of [address] into
       the store [t]. *)
 

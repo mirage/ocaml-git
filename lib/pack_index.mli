@@ -33,30 +33,37 @@ module Raw: sig
 
   include Object.S with type t := t
 
-  val keys: Mstruct.t -> SHA.Set.t
+  val keys: t -> SHA.Set.t
   (** Read only the keys contained in the index. *)
+
+  val find_offset: t -> SHA.t -> int option
+  (** Same as {!find_offset} but for raw packs. *)
 
   val lengths: t -> int option SHA.Map.t
   (** [lengths] returns the difference between two consecutive offsets
       (appart for the last elements, where the lenght can be [None] is
       the index file is build from a raw pack file). *)
 
-  val empty: ?pack_checksum:SHA.t -> unit -> t
-  (** The empty pack index. *)
-
 end
 
 type t
 (** Abstract type of pack index. *)
 
-val create: ?cache_size:int -> Cstruct.buffer -> t
+val input: ?cache_size:int -> Cstruct.buffer -> t
 (** Create a pack index object. The results of [find_offset] are cached
     for upto [cache_size] SHA objects *)
 
-val find_offset: ?scan_thresh:int -> t -> SHA.t -> int option
+val find_offset: t -> SHA.t -> int option
 (** [find_offset] searches the index for the offset of the SHA object.
     Binary search is performed until the candidates are narrowed down to
     [scan_thresh] or less. *)
 
 val mem: t -> SHA.t -> bool
 (** [mem] checks if the SHA object is contained in the index object *)
+
+val keys: t -> SHA.t list
+(** [keys t] is the list of SHA1 keys present in [t]. *)
+
+type f = SHA.t -> int option
+(** The type of functions associating SHA1 keys to offset in the pack
+    file. *)

@@ -260,7 +260,6 @@ module Make (IO: IO) (Store: Store.S) = struct
     let default = [
       Capability.ogit_agent;
       `Side_band_64k;
-      `No_progress;
     ]
 
     let _is_valid_push = List.for_all Capability.is_valid_push
@@ -320,7 +319,8 @@ module Make (IO: IO) (Store: Store.S) = struct
         (Uri.path (Gri.to_uri t.gri))
 
     let smart_http t =
-      let useragent = "User-Agent", "ogit/" ^ Version.current in
+      (* Note: GitHub wants User-Agent to start by `git/`  *)
+      let useragent = "User-Agent", "git/ogit." ^ Version.current in
       let headers : (string * string) list =
         if t.discover
         then [useragent]
@@ -728,18 +728,36 @@ module Make (IO: IO) (Store: Store.S) = struct
 
     exception Error of string
 
-    let input ic =
+    let input ?(progress=fun _ -> ()) ic =
       Log.debug "Side_band.input";
+      let size = ref 0 in
+      let t0 = Sys.time () in
+      let pp s =
+        size := !size + String.length s;
+        let mib = 1024. *. 1024. in
+        let total = float_of_int !size /. mib in
+        let per_s = total /. (Sys.time () -. t0) in
+        let done_ = if s = "" then ", done.\n" else "" in
+        let str =
+          sprintf "Receiving objects: %.2f MiB | %.2f MiB/s%s" total per_s done_
+        in
+        progress str
+      in
       let rec aux acc =
         PacketLine.input_raw ic >>= function
-        | None    -> Lwt.return (List.rev acc)
+        | None    -> pp ""; Lwt.return (List.rev acc)
         | Some "" -> aux acc
         | Some s  ->
           let payload = String.sub s 1 (String.length s - 1) in
+          pp payload;
           match kind s.[0] with
           | Pack     -> aux (payload :: acc)
-          | Progress -> Log.info "remote: %s" payload; aux acc
           | Fatal    -> Lwt.fail (Error payload)
+          | Progress ->
+            let payload = "remote: " ^ payload in
+            Log.info "%s" payload;
+            progress payload;
+            aux acc
       in
       aux []
 
@@ -747,10 +765,10 @@ module Make (IO: IO) (Store: Store.S) = struct
 
   module Pack_file = struct
 
-    let input ~capabilities ic =
+    let input ~capabilities ?progress ic =
       if List.mem `Side_band_64k capabilities
       || List.mem `Side_band capabilities
-      then Side_band.input ic
+      then Side_band.input ?progress ic
       else IO.read_all ic
 
   end
@@ -808,9 +826,19 @@ module Make (IO: IO) (Store: Store.S) = struct
           PacketLine.output_line oc (Buffer.contents buf) >>= fun () ->
           aux false y in
       aux true t.commands >>= fun () ->
-      let s = Misc.with_buffer (fun b -> Pack.add b t.pack) in
-      Log.info "SENDING: %s" s;
-      IO.write oc s
+      let _, buf = Pack.add t.pack in
+      let buf = Mstruct.of_cstruct buf in
+      let rec send () =
+        match Mstruct.length buf with
+        | 0 -> Lwt.return_unit
+        | n ->
+          let len = min 4096 n in
+          Log.info "SENDING: %d bytes" len;
+          let buf = Mstruct.get_string buf len in
+          IO.write oc buf >>=
+          send
+      in
+      send ()
 
   end
 
@@ -912,7 +940,7 @@ module Make (IO: IO) (Store: Store.S) = struct
           Report_status.input ic
         )
 
-  let fetch_pack_with_wants t (ic, oc) op references wants =
+  let fetch_pack_with_wants t (ic, oc) ?progress op references wants =
     Log.debug "Sync.fetch_pack_with_head";
     let deepen = match op with
       | Clone { c_deepen = d; _ }
@@ -944,7 +972,7 @@ module Make (IO: IO) (Store: Store.S) = struct
 
     Log.debug "PHASE3";
     Log.info "Receiving data ...";
-    Pack_file.input ~capabilities ic >>= fun bufs ->
+    Pack_file.input ~capabilities ?progress ic >>= fun bufs ->
 
     let size = List.fold_left (fun acc s -> acc + String.length s) 0 bufs in
     Log.info "Received a pack file of %d bytes." size;
@@ -960,13 +988,14 @@ module Make (IO: IO) (Store: Store.S) = struct
       | Fetch { f_unpack = u; _ } -> u
       | _ -> false in
     Log.debug "unpack=%b" unpack;
-
-    begin if unpack then
-        Pack.unpack ~read:(Store.read t) ~write:(Store.write t) pack
-      else
-        let pack = Pack.Raw.input (Mstruct.of_cstruct pack) ~index:None in
-        Store.write_pack t pack
-    end >>= fun sha1s ->
+    let read = Store.read_inflated t in
+    Pack.Raw.input ?progress ~read (Mstruct.of_cstruct pack) >>= fun pack ->
+    let unpack () =
+      if unpack
+      then Pack.Raw.unpack ?progress ~write:(Store.write_inflated t) pack
+      else Store.write_pack t pack
+    in
+    unpack () >>= fun sha1s ->
     let head =
       try Some (Reference.Map.find Reference.head references) with Not_found -> None
     in
@@ -1030,7 +1059,7 @@ module Make (IO: IO) (Store: Store.S) = struct
     | None   -> "<none>"
     | Some x -> Misc.pretty Reference.pp_head_contents x
 
-  let fetch_pack ?ctx ?head t gri op =
+  let fetch_pack ?ctx ?head ?progress t gri op =
     Log.debug "Sync.fetch_pack head=%s" (pretty_head_opt head);
     with_listing ?ctx gri (fun (protocol, ic, oc) remote_head references ->
         match op with
@@ -1061,10 +1090,10 @@ module Make (IO: IO) (Store: Store.S) = struct
               let uri = Init.uri init in
               let init = Init.to_string init in
               IO.with_connection ?ctx uri ?init (fun (ic, oc) ->
-                  fetch_pack_with_wants t (ic, oc) op references wants
+                  fetch_pack_with_wants t (ic, oc) ?progress op references wants
                 )
             else
-              fetch_pack_with_wants t (ic, oc) op references wants
+              fetch_pack_with_wants t (ic, oc) ?progress op references wants
           in
           let update_refs () = match op with
             | Ls -> assert false
@@ -1088,16 +1117,16 @@ module Make (IO: IO) (Store: Store.S) = struct
       { Result.references; _ } -> Lwt.return references
 
   let clone ?ctx t ?deepen ?(unpack=false) ?(capabilities=Capabilities.default)
-      ?head gri =
+      ?head ?progress gri =
     let op = {
       c_deepen = deepen;
       c_unpack = unpack;
       c_capabilites = capabilities;
     } in
-    fetch_pack ?ctx ?head t gri (Clone op)
+    fetch_pack ?ctx ?head ?progress t gri (Clone op)
 
   let fetch ?ctx t ?deepen ?(unpack=false) ?(capabilities=Capabilities.default)
-      gri =
+      ?progress gri =
     Store.list t      >>= fun haves ->
     Store.read_head t >>= fun head ->
     (* XXX: Store.shallows t >>= fun shallows *)
@@ -1110,7 +1139,7 @@ module Make (IO: IO) (Store: Store.S) = struct
       f_capabilites = capabilities;
       f_update_tags = false;
     } in
-    fetch_pack ?ctx ?head t gri (Fetch op)
+    fetch_pack ?ctx ?head ?progress t gri (Fetch op)
 
   type t = Store.t
 
@@ -1123,7 +1152,9 @@ module type S = sig
   val push: ?ctx:ctx -> t -> branch:Reference.t -> Gri.t -> Result.push Lwt.t
   val clone: ?ctx:ctx -> t -> ?deepen:int -> ?unpack:bool ->
     ?capabilities:capability list -> ?head:Reference.head_contents ->
+    ?progress:(string -> unit) ->
     Gri.t -> Result.fetch Lwt.t
   val fetch: ?ctx:ctx -> t -> ?deepen:int -> ?unpack:bool ->
-    ?capabilities:capability list -> Gri.t -> Result.fetch Lwt.t
+    ?capabilities:capability list -> ?progress:(string -> unit) ->
+    Gri.t -> Result.fetch Lwt.t
 end

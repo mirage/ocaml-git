@@ -23,31 +23,36 @@ let err_not_found n k =
   Lwt.fail (Invalid_argument str)
 
 type t = {
-  root   : string;
-  level  : int;
-  values : (SHA.t, Value.t) Hashtbl.t;
-  refs   : (Reference.t, [`S of SHA.Commit.t | `R of Reference.t]) Hashtbl.t;
+  root    : string;
+  dot_git : string;
+  level   : int;
+  values  : (SHA.t, Value.t Lazy.t) Hashtbl.t;
+  inflated: (SHA.t, string) Hashtbl.t;
+  refs    : (Reference.t, [`S of SHA.Commit.t | `R of Reference.t]) Hashtbl.t;
   mutable head : Reference.head_contents option;
 }
 
 let root t = t.root
+let dot_git t = t.dot_git
 let level t = t.level
 
 let stores = Hashtbl.create 1024
 let default_root = "root"
 let clear ?(root=default_root) () = Hashtbl.remove stores root
 let clear_all () = Hashtbl.reset stores
+let (/) = Filename.concat
 
-let create ?(root=default_root) ?(level=6) () =
+let create ?(root=default_root) ?(dot_git=default_root / ".git") ?(level=6) () =
   if level < 0 || level > 9 then failwith "level should be between 0 and 9";
   let t =
     try Hashtbl.find stores root
     with Not_found ->
       let t = {
-        root; level;
-        values  = Hashtbl.create 1024;
-        refs    = Hashtbl.create 8;
-        head    = None;
+        root; level; dot_git;
+        values   = Hashtbl.create 1024;
+        inflated = Hashtbl.create 1024;
+        refs     = Hashtbl.create 8;
+        head     = None;
       } in
       Hashtbl.add stores root t;
       t in
@@ -56,16 +61,34 @@ let create ?(root=default_root) ?(level=6) () =
 let write t value =
   let inflated = Misc.with_buffer (fun buf -> Value.add_inflated buf value) in
   let sha1 = SHA.of_string inflated in
-  try
-    let _ = Hashtbl.find t.values sha1 in
-    Lwt.return sha1
-  with Not_found ->
+  if Hashtbl.mem t.values sha1 then Lwt.return sha1
+  else (
     Log.info "Writing %s" (SHA.to_hex sha1);
+    Hashtbl.add t.values sha1 (lazy value);
+    Hashtbl.add t.inflated sha1 inflated;
+    Lwt.return sha1
+  )
+
+let write_inflated t inflated =
+  let sha1 = SHA.of_string inflated in
+  if Hashtbl.mem t.values sha1 then Lwt.return sha1
+  else (
+    Log.info "Writing %s" (SHA.to_hex sha1);
+    Hashtbl.add t.inflated sha1 inflated;
+    let value =
+      (* FIXME: this allocates too much *)
+      lazy (Value.input_inflated (Mstruct.of_string inflated))
+    in
     Hashtbl.add t.values sha1 value;
     Lwt.return sha1
+  )
+
+let read_inflated t sha1 =
+  try Lwt.return (Some (Hashtbl.find t.inflated sha1))
+  with Not_found -> Lwt.return_none
 
 let read t sha1 =
-  try Lwt.return (Some (Hashtbl.find t.values sha1))
+  try Lwt.return (Some (Lazy.force (Hashtbl.find t.values sha1)))
   with Not_found -> Lwt.return_none
 
 let err_write_pack expected got =
@@ -78,9 +101,10 @@ let err_write_pack expected got =
   failwith str
 
 let write_pack t pack =
-  Pack.to_pic ~read:(read t) pack >>= fun pack ->
-  Lwt_list.iter_p (fun (sha1, p) ->
+  Pack.of_raw pack >>= fun pack ->
+  Lwt_list.iter_p (fun p ->
       let v = Packed_value.PIC.to_value p in
+      let sha1 = p.Packed_value.PIC.sha1 in
       write t v >>= fun sha2 ->
       if sha1 <> sha2 then err_write_pack sha1 sha2;
       Lwt.return_unit

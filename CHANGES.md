@@ -1,3 +1,17 @@
+### 1.7.0 (2015-07-31)
+
+* Add a `dot_git` optional parameter to `Store.create` to specify where
+  the Git metadata should be stored (default is still `<root>/.git`). This
+  is useful to properly implement `bare` repositories (#110)
+* Full support for 32 bit platform (ie. continue the patch started in 1.6.2).
+* Rework the `Git.Pack` and `Git.Pack_index` API to speed-up random access.
+* Add a `Git.SHA.Array` module to work with contiguous arrays of SHA1.
+* Rename `Git.SHA.lenght` to `Git.SHA.hex_length` to avoid confusion.
+* Expose `Git.SHA.of_short_hex` to create short hashes. `Git.SHA.of_hex` now
+  only accept 40 characters hexa-decimal strings.
+* Improve the output of `ogit clone` by showing progress when the pack file
+  is downloaded and when the delta are resolved.
+
 ### 1.6.2 (2015-07-16)
 
 * Support 32 bit platform by avoiding creating large strings. This also improve

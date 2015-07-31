@@ -14,11 +14,29 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+(** SHA1 hashes.
+
+    This module handles both usual SHA1 hashes (20 bits) and {i short}
+    hashes, which are shorter sequences of bits with a valid
+    hexadecimal representation. The only way to create short hashes is
+    to use {!of_hex} with the [strict] argument set to false.
+
+    When short hashes are used in normal Git operations, they can
+    raise {!Ambiguous}.
+
+    This module define various abstraction to distinguish between
+    general, commit, node and blob hashes. It's just an abstraction
+    layer, at runtine they will all be similar.
+*)
+
+
 module type S = sig
 
-  (** Signature for SHA1 values *)
+  (** {1 Signature for SHA1 values} *)
 
   include Object.S
+  (** The usual compare functions on hashes, but can raise
+      {!Ambiguous} if one is short hash and is prefix to the other. *)
 
   val of_string: string -> t
   (** Build a hash from a string. *)
@@ -36,7 +54,14 @@ module type S = sig
   (** Display the hex encoding of the SHA1 hash. *)
 
   val of_hex: string -> t
-  (** Convert an hex-encoded string into a sha1 value. *)
+  (** Convert an hex-encoded string into a sha1 value. Raise
+      {!Ambiguous} if the hash is short; in that case use
+      {!of_short_hex}. *)
+
+  val of_short_hex: string -> t
+  (** Same as {!of_hex} but allow values shorter than 20
+      characters. Such hash values are called {i short} hashes and can
+      cause some functions to raise {!Ambiguous}. *)
 
   val input_hex: Mstruct.t -> t
   (** Read an hex-encode SHA1 value. *)
@@ -47,7 +72,7 @@ module type S = sig
   val zero: t
   (** A SHA1 full of zero. Useful for padding. *)
 
-  val length: t -> int
+  val hex_length: t -> int
   (** The number of hex digits in the SHA1. *)
 
   val is_short: t -> bool
@@ -95,4 +120,38 @@ val of_blob: Blob.t -> t
 val to_blob: t -> Blob.t
 (** A node might be a blob node. *)
 
-exception Ambiguous
+exception Ambiguous of string
+(** Exception raised when using short and ambiguous hashes. *)
+
+module Array: sig
+  (** {1 Arrays of SHA1s}
+
+      Similar to [Cstruct.t] but where the unit of offsets and length
+      is the number of hash values instead of the number of bytes.*)
+
+  val get: Cstruct.t -> int -> t
+  (** [get buf n] is the [n]-th hash in the buffer [buf]. *)
+
+  val sub: Cstruct.t -> int -> int -> Cstruct.t
+  (** Same as [Cstruct.sub] but where [offset] and [length] as hash
+      offsets. *)
+
+  val to_list: Cstruct.t -> t list
+  (** [to_list t] is the list of elements of [t]. *)
+
+  val length: Cstruct.t -> int
+  (** [length v] is the number of hashes store in [t]. *)
+
+  val linear_search: Cstruct.t -> t -> int option
+  (** [linear_search buf sha1] iterates through the hashes stored in
+      the buffer [buf]. Return the indice of the first hash equals to
+      [sha1]. Can raise {!Ambiguous} if [sha1] is short and more than
+      one hash are similar.*)
+
+  val binary_search: Cstruct.t -> t ->  int option
+  (** [binary_search buf shat1] binary searches through the sorted
+      array of hashes stored in [buf]. Return the indice of the first
+      hash equal to [sha1]. Can raise {!Ambiguous} if [sha1] is short
+      and more than one hash are similar. *)
+
+end
