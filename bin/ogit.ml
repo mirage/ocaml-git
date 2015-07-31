@@ -369,6 +369,8 @@ let read_tree = {
 let reference_of_raw branch =
   Reference.of_raw ("refs/heads/" ^ Reference.to_raw branch)
 
+let progress s = printf "\r%s%!" s
+
 (* CLONE *)
 let clone = {
   name = "clone";
@@ -414,7 +416,7 @@ let clone = {
           | Some b -> Some (Reference.Ref (reference_of_raw b))
         in
         printf "Cloning into '%s' ...\n%!" (Filename.basename (S.root t));
-        Sync.clone t ?deepen ~unpack ?head remote >>= fun r ->
+        Sync.clone t ?deepen ~unpack ?head ~progress remote >>= fun r ->
         if not bare then match r.Result.head with
           | None      -> Lwt.return_unit
           | Some head ->
@@ -438,7 +440,7 @@ let fetch = {
       let module Sync = Sync.Make(S) in
       run begin
         S.create ()                 >>= fun t ->
-        Sync.fetch t ~unpack remote >>= fun _ ->
+        Sync.fetch t ~unpack ~progress remote >>= fun _ ->
         Lwt.return_unit
       end in
     Term.(mk fetch $ backend $ unpack $ remote)
