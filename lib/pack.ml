@@ -198,7 +198,7 @@ module Raw = struct
     let k _ _ create = create index keys in
     input_values ~read buf k
 
-  let add buf ?level:_ t = Buffer.add_string buf (Cstruct.to_string t.buffer)
+  let add = `Not_defined
   let sha1 t = t.sha1
   let keys t = t.keys
   let buffer t = t.buffer

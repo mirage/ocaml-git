@@ -51,6 +51,9 @@ module Raw: sig
 
   include Object.S
 
+  val add: [`Not_defined]
+  (** [Pack.Raw.add] is not defined. Use {!buffer} instead. *)
+
   val input: read:Value.read_inflated -> Mstruct.t -> t Lwt.t
   (** [input ~read buf] is the raw pack and raw index obtained by
       reading the buffer [buf]. External (shallow) SHA1 references are
