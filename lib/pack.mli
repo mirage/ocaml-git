@@ -67,7 +67,7 @@ module Raw: sig
       to unpack the list of values stored in the pack file, to then
       compute the full raw index. *)
 
-  val unpack: ?progress:(string -> unit) -> write:Value.write ->
+  val unpack: ?progress:(string -> unit) -> write:Value.write_inflated ->
     t -> SHA.Set.t Lwt.t
   (** Unpack a whole pack file on disk (by calling [write] on every
       values) and return the SHA1s of the written objects. *)
@@ -75,6 +75,10 @@ module Raw: sig
   val read: index:Pack_index.f -> read:Value.read_inflated ->
     Mstruct.t -> SHA.t -> Value.t option Lwt.t
   (** Same as the top-level [read] function but for raw packs. *)
+
+  val read_inflated: index:Pack_index.f -> read:Value.read_inflated ->
+    Mstruct.t -> SHA.t -> string option Lwt.t
+  (** Same as {!read} but for inflated values. *)
 
   val index: t -> Pack_index.Raw.t
   (** Get the raw index asoociated to the raw pack. *)

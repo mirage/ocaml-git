@@ -32,8 +32,7 @@ let pretty t =
 
 let pp ppf t = Format.fprintf ppf "%s" (pretty t)
 
-let input buf =
-  Mstruct.get_string buf (Mstruct.length buf)
+let input buf = Mstruct.to_string buf
 
 let add buf ?level:_ t =
   Buffer.add_string buf t

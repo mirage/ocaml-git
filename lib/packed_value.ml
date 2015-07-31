@@ -406,6 +406,7 @@ module PIC = struct
   let to_value p =
     Log.debug "to_value";
     let buf = unpack p in
+    (* FIXME: costly, allocate a bigarray *)
     Value.input_inflated (Mstruct.of_string buf)
 
   let raw sha1 raw =
@@ -491,7 +492,7 @@ let rec unpack_ref_delta ~lv ~version ~index ~read ba d =
     let buf = Mstruct.of_bigarray ~off:offset ~len ba in
     let kind = input_packed_value version buf in
     let t = { offset; kind } in
-    unpack ~lv:(lv+1) ~read ~version ~index ba t >|= fun source ->
+    unpack ~lv:(lv+1) ~read ~version ~index ~ba t >|= fun source ->
     Misc.with_buffer (fun b -> add_delta b {d with source})
   | None ->
     read d.source >>= function
@@ -506,18 +507,20 @@ and unpack_off_delta ~lv ~version ~index ~read ba d offset =
   let buf = Mstruct.of_bigarray ~off:offset ~len ba in
   let kind = input_packed_value version buf in
   let t = { offset; kind } in
-  unpack ~lv:(lv+1) ~read ~version ~index ba t >|= fun source ->
+  unpack ~lv:(lv+1) ~read ~version ~index ~ba t >|= fun source ->
   Misc.with_buffer (fun b -> add_delta b {d with source})
 
-and unpack ?(lv=0) ~read ~version ~index ba { offset; kind } =
+and unpack ~lv ~index ~read ~version ~ba { offset; kind } =
   Log.debug "unpack[%d] offset=%d" lv offset;
   match kind with
   | Raw_value x -> Log.debug "unpack[%d]: Raw_value" lv; Lwt.return x
   | Ref_delta d -> unpack_ref_delta ~lv ~version ~index ~read ba d
   | Off_delta d -> unpack_off_delta ~lv ~version ~index ~read ba d offset
 
+let unpack = unpack ~lv:0
+
 let to_value ~index ~read ~version ~ba t =
-  unpack ~version ~read ~index ba t >|= fun u ->
+  unpack ~version ~read ~index ~ba t >|= fun u ->
   Value.input_inflated (Mstruct.of_string u)
 
 module type S = sig

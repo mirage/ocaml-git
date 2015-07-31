@@ -94,6 +94,10 @@ val to_value: index:Pack_index.f -> read:Value.read_inflated -> version:int ->
 
 (** {2 Position independant packed values} *)
 
+val unpack: index:Pack_index.f -> read:Value.read_inflated -> version:int ->
+  ba:Cstruct.buffer -> t -> string Lwt.t
+(** Same as {!to_value} but for inflated raw buffers. *)
+
 module PIC: sig
 
   (** Position-independant packed values. *)

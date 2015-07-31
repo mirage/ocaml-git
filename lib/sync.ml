@@ -987,17 +987,11 @@ module Make (IO: IO) (Store: Store.S) = struct
       | Fetch { f_unpack = u; _ } -> u
       | _ -> false in
     Log.debug "unpack=%b" unpack;
-    let read sha1 =
-      Store.read t sha1 >>= function
-      | None   -> Lwt.return_none
-      | Some v ->
-        let buf = Misc.with_buffer (fun buf -> Value.add buf v) in
-        Lwt.return (Some buf)
-    in
+    let read = Store.read_inflated t in
     Pack.Raw.input ?progress ~read (Mstruct.of_cstruct pack) >>= fun pack ->
     let unpack () =
       if unpack
-      then Pack.Raw.unpack ?progress ~write:(Store.write t) pack
+      then Pack.Raw.unpack ?progress ~write:(Store.write_inflated t) pack
       else Store.write_pack t pack
     in
     unpack () >>= fun sha1s ->

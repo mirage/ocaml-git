@@ -98,3 +98,6 @@ type read_inflated = SHA.t -> string option Lwt.t
 
 type write = t -> SHA.t Lwt.t
 (** The type for functions writing values. *)
+
+type write_inflated = string -> SHA.t Lwt.t
+(** The type for functions writing raw values. *)

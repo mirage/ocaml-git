@@ -126,23 +126,16 @@ module Cache = struct
 
   let find sha1 = LRU.find !cache sha1
   let find_inflated sha1 = LRU.find !cache_inflated sha1
+  let add sha1 t = LRU.add !cache sha1 t
+  let add_inflated sha1 str = LRU.add !cache_inflated sha1 str
 
   let add_both sha1 t str =
-    LRU.add !cache sha1 t;
-    LRU.add !cache_inflated sha1 str
-
-  let add sha1 t =
-    let buf = Buffer.create 1024 in
-    add_inflated buf t;
-    let str = Buffer.contents buf in
-    add_both sha1 t str
-
-  let add_inflated sha1 str =
-    let t = input_inflated (Mstruct.of_string str) in
-    add_both sha1 t str
+    add sha1 t;
+    add_inflated sha1 str
 
 end
 
 type read = SHA.t -> t option Lwt.t
 type read_inflated = SHA.t -> string option Lwt.t
 type write = t -> SHA.t Lwt.t
+type write_inflated = string -> SHA.t Lwt.t

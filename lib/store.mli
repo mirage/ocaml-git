@@ -120,4 +120,12 @@ module type S = sig
   val kind: [`Memory | `Disk]
   (** The kind of backend. *)
 
+  (** {2 Raw values} *)
+
+  val read_inflated: t -> SHA.t -> string option Lwt.t
+  (** Read a raw buffer from the store. *)
+
+  val write_inflated: t -> string -> SHA.t Lwt.t
+  (** Write a raw buffer in the store. *)
+
 end
