@@ -62,6 +62,10 @@ type kind =
 
 type t = { kind: kind; offset: int; }
 
+let is_delta t = match t.kind with
+  | Raw_value _ -> false
+  | _ -> true
+
 let hash = Hashtbl.hash
 let equal = (=)
 let compare = compare
@@ -428,7 +432,7 @@ let of_pic ~index ~offset t =
     | None   -> fail "of_pic: cannot find %s" (SHA.pretty sha1)
     | Some o -> return (Off_delta { d with source = offset - o })
 
-let to_pic ~read ~offsets ~sha1s ?sha1 { offset; kind } =
+let to_pic ~read ~offsets ~sha1s { offset; kind } =
   let kind = match kind with
     | Raw_value x -> Lwt.return (PIC.Raw x)
     | Ref_delta d ->
@@ -450,12 +454,9 @@ let to_pic ~read ~offsets ~sha1s ?sha1 { offset; kind } =
         Lwt.return pic
   in
   kind >|= fun kind ->
-  match sha1 with
-  | Some sha1 -> { PIC.sha1; kind; raw = None }
-  | None      ->
-    let raw  = PIC.unpack_kind kind in
-    let sha1 = SHA.of_string raw in
-    { PIC.sha1; kind; raw = None }
+  let raw  = PIC.unpack_kind kind in
+  let sha1 = SHA.of_string raw in
+  { PIC.sha1; kind; raw = Some raw }
 
 let err_sha1_not_found sha1 = fail "cannot read %s" (SHA.pretty sha1)
 let err_offset_not_found off = fail "cannot find any object at offset %d" off

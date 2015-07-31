@@ -43,6 +43,10 @@ val pp_kind: Format.formatter -> kind -> unit
 type t = { kind: kind; offset: int }
 (** The type for packed values. *)
 
+val is_delta: t -> bool
+(** Check if a packed value is a delta (either a [Ref_delta] or an
+    [Off_delta]). *)
+
 val pp: Format.formatter -> t -> unit
 (** Human readable representation of a packed value. *)
 
@@ -125,7 +129,7 @@ end
 
 val to_pic: read:Value.read_inflated ->
   offsets:(int -> PIC.t option) -> sha1s:(SHA.t -> PIC.t option) ->
-  ?sha1:SHA.t -> t -> PIC.t Lwt.t
+  t -> PIC.t Lwt.t
 (** [to_pic t] is the position-independant representation of the
     packed value [t]. *)
 

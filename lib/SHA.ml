@@ -203,7 +203,7 @@ module Array = struct
 
   let binary_search buf sha1 =
     let short_sha = is_short sha1 in
-    let scan_thresh = 8 in
+    let scan_thresh = 4 in
     let rec aux buf =
       let len = length buf in
       if len < scan_thresh then

@@ -67,7 +67,7 @@ module Raw = struct
     let version = Int32.to_int (Mstruct.get_be_uint32 buf) in
     if version <> 2 && version <> 3 then
       Mstruct.parse_error_buf buf "wrong pack version (%d)" version;
-    version, Int32.to_int (Mstruct.get_be_uint32 buf)
+    `Version version, `Count (Int32.to_int (Mstruct.get_be_uint32 buf))
 
   let add_header ~version buf count =
     Buffer.add_string buf "PACK";
@@ -85,7 +85,7 @@ module Raw = struct
     | _ -> fail "pack version should be 2 or 3"
 
   let read ~index ~read buf sha1 =
-    let version, count = input_header buf in
+    let `Version version, `Count count = input_header buf in
     Log.debug "read: version=%d count=%d" version count;
     match index sha1 with
     | None -> Lwt.return_none
@@ -106,12 +106,28 @@ module Raw = struct
         { Packed_value.offset = shift; kind = packed_v }
       >|= fun x -> Some x
 
-  let to_pic ~read values =
+  let to_pic ?(progress=fun _ -> ())  ~read values =
     Log.debug "to_pic";
     let get f t x = try Some (f x t) with Not_found -> None in
+    let deltas =
+      List.filter (fun (_, v) -> Packed_value.is_delta v) values
+      |> List.length
+    in
+    let d = ref 0 in
+    let pp () =
+      if !d = deltas || !d mod 100 = 1 then (
+        let pc = 100 * !d / deltas in
+        let done_ = if !d = deltas then ", done.\n" else "" in
+        let str =
+          Printf.sprintf "Resolving deltas: %3d%% (%d/%d)%s" pc !d deltas done_
+        in
+        progress str
+      )
+    in
     Lwt_list.fold_left_s (fun (offsets, crcs, sha1s, pics) (crc, v) ->
         let get_offsets = get Misc.IntMap.find offsets in
         let get_sha1s   = get SHA.Map.find sha1s in
+        if Packed_value.is_delta v then (incr d; pp ());
         Packed_value.to_pic ~read ~offsets:get_offsets ~sha1s:get_sha1s v
         >|= fun pic ->
         let sha1 = pic.Packed_value.PIC.sha1 in
@@ -127,9 +143,9 @@ module Raw = struct
     Log.debug "to_pic: ok";
     offsets, crcs, List.rev pics
 
-  let index_of_packed_values ~pack_checksum ~read values =
+  let index_of_packed_values ?progress ~pack_checksum ~read values =
     Log.debug "index_of_packed_values";
-    to_pic ~read values >|= fun (_, crcs, pics) ->
+    to_pic ?progress ~read values >|= fun (_, crcs, pics) ->
     let offsets = List.fold_left (fun offsets (offset, pic) ->
         SHA.Map.add pic.Packed_value.PIC.sha1 offset offsets
       ) SHA.Map.empty pics
@@ -165,7 +181,7 @@ module Raw = struct
   let input_values ~read buf k =
     let all = Mstruct.to_cstruct buf in
     let offset = Mstruct.offset buf in
-    let version, count = input_header buf in
+    let `Version version, `Count count = input_header buf in
     Log.debug "input version:%d count:%d" version count;
     let values = values buf ~version count in
     let str = Cstruct.sub all 0 (Mstruct.offset buf - offset) in
@@ -184,9 +200,10 @@ module Raw = struct
     in
     k pack_checksum values create
 
-  let input ~read buf =
+  let input ?progress ~read buf =
     let k pack_checksum values create =
-      index_of_packed_values ~pack_checksum ~read values >|= fun index ->
+      index_of_packed_values ?progress ~pack_checksum ~read values
+      >|= fun index ->
       let keys = Pack_index.Raw.keys index in
       let index_fn = Pack_index.Raw.find_offset index in
       let raw = create index_fn keys in
@@ -203,20 +220,24 @@ module Raw = struct
   let keys t = t.keys
   let buffer t = t.buffer
 
-  let unpack ~write { values; read; _ } =
+  let unpack ?(progress=fun _ -> ()) ~write { values; read; _ } =
     let i = ref 0 in
-    to_pic ~read values >>= fun (_, crcs, pack) ->
+    to_pic ~progress ~read values >>= fun (_, crcs, pack) ->
     let size = List.length pack in
     Lwt_list.iter_p (fun (_, pic) ->
         let value = Packed_value.PIC.to_value pic in
-        Printf.printf "\rUnpacking objects: %3d%% (%d/%d)%!"
-          (!i*100/size) (!i+1) size;
+        let str = Printf.sprintf "\rUnpacking objects: %3d%% (%d/%d)%!"
+            (!i*100/size) (!i+1) size in
+        progress str;
         incr i;
         write value >>= fun _ ->
         Lwt.return_unit
       ) pack
     >|= fun () ->
-    Printf.printf "\rUnpacking objects: 100%% (%d/%d), done.\n%!" !i !i;
+    let str =
+      Printf.sprintf "\rUnpacking objects: 100%% (%d/%d), done.\n%!" !i !i
+    in
+    progress str;
     SHA.Map.keys crcs |> SHA.Set.of_list
 
 end
@@ -238,14 +259,14 @@ let pp ppf t =
 
 let pretty = Misc.pretty pp
 
-let of_raw { Raw.values; read; _ } =
-  Raw.to_pic ~read values >|= fun (_, _, pics) ->
+let of_raw ?progress { Raw.values; read; _ } =
+  Raw.to_pic ?progress ~read values >|= fun (_, _, pics) ->
   List.map snd pics
 
-let input ~index ~keys ~read buf =
+let input ?progress ~index ~keys ~read buf =
   Log.debug "input";
   let raw = Raw.input_with_index ~read ~index ~keys buf in
-  of_raw raw
+  of_raw ?progress raw
 
 let add_packed_value ~version ?level buf = match version with
   | 2 -> Packed_value.V2.add buf ?level
