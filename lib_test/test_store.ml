@@ -554,7 +554,7 @@ module Array = struct
     done
 
   let test_lenght () =
-    for _ = 0 to 10 do
+    for _i = 0 to 10 do
       let len = 10 + Random.int 1024 in
       let _, b = create len in
       let msg = Printf.sprintf "len%d" len in
