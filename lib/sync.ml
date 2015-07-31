@@ -810,12 +810,15 @@ module Make (IO: IO) (Store: Store.S) = struct
       aux true t.commands >>= fun () ->
       let _, buf = Pack.add t.pack in
       let buf = Mstruct.of_cstruct buf in
-      Log.info "SENDING: %d bytes" (Mstruct.length buf);
       let rec send () =
-        let len = min 4096 (Mstruct.length buf) in
-        let buf = Mstruct.get_string buf len in
-        IO.write oc buf >>=
-        send
+        match Mstruct.length buf with
+        | 0 -> Lwt.return_unit
+        | n ->
+          let len = min 4096 n in
+          Log.info "SENDING: %d bytes" len;
+          let buf = Mstruct.get_string buf len in
+          IO.write oc buf >>=
+          send
       in
       send ()
 
