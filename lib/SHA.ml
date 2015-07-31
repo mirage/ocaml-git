@@ -27,7 +27,7 @@ module type S = sig
   val input_hex: Mstruct.t -> t
   val add_hex: Buffer.t -> t -> unit
   val zero: t
-  val length: t -> int
+  val hex_length: t -> int
   val is_short: t -> bool
   val lt: t -> t -> bool
   val is_prefix: t -> t -> bool
@@ -46,7 +46,7 @@ module SHA1_String = struct
 
   type t = sha_t
 
-  let length x = (* 0 <= length <= 40 *)
+  let hex_length x = (* 0 <= length <= 40 *)
     let n = (String.length x.raw) * 2 in
     if x.padded then n - 1 else n
 
@@ -55,7 +55,7 @@ module SHA1_String = struct
     if t.padded then String.sub h 0 ((String.length h) - 1)
     else h
 
-  let is_short x = length x < 40
+  let is_short x = hex_length x < 40
   let equal x y = x.padded = y.padded && String.compare x.raw y.raw = 0
   let hash x = Hashtbl.hash x.raw
   let ambiguous t = raise (Ambiguous (to_hex t))
@@ -86,8 +86,8 @@ module SHA1_String = struct
       scan 0
 
   let is_prefix p x =
-    let np = length p in
-    let nx = length x in
+    let np = hex_length p in
+    let nx = hex_length x in
     if np > nx then false
     else if np = nx then equal p x
     else
