@@ -22,7 +22,7 @@
     to use {!of_hex} with the [strict] argument set to false.
 
     When short hashes are used in normal Git operations, they can
-    raise {Ambiguous}.
+    raise {!Ambiguous}.
 
     This module define various abstraction to distinguish between
     general, commit, node and blob hashes. It's just an abstraction
