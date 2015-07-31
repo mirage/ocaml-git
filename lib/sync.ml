@@ -319,7 +319,8 @@ module Make (IO: IO) (Store: Store.S) = struct
         (Uri.path (Gri.to_uri t.gri))
 
     let smart_http t =
-      let useragent = "User-Agent", "ogit/" ^ Version.current in
+      (* Note: GitHub wants User-Agent to start by `git/`  *)
+      let useragent = "User-Agent", "git/ogit." ^ Version.current in
       let headers : (string * string) list =
         if t.discover
         then [useragent]
