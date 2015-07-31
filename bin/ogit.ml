@@ -195,7 +195,7 @@ let cat_file = {
         S.create () >>= fun t ->
         Lwt.catch
           (fun () ->
-             S.read_exn t (SHA.of_hex id) >>= fun v -> begin
+             S.read_exn t (SHA.of_short_hex id) >>= fun v -> begin
                let t, c, s =
                  match v with
                  | Value.Blob blob ->
@@ -304,44 +304,35 @@ let ls_tree = {
         in
 
         let rec walk recurse show_tree only_tree path sha1 =
-          S.read_exn t sha1 >>= fun v -> begin
-            match v with
-            | Value.Blob _ -> begin
-                printf "blob %s %s\n" (SHA.to_hex sha1) path;
-                Lwt.return_unit
-              end
-            | Value.Tree tree -> begin
-                Lwt_list.iter_s
-                  (fun e ->
-                     let path' = Filename.concat path e.Tree.name in
-                     let kind, is_dir = get_kind e.Tree.perm in
-                     let mode = Tree.fixed_length_string_of_perm e.Tree.perm in
-                     let show =
-                       if is_dir then
-                         not recurse || show_tree || only_tree
-                       else
-                         not only_tree
-                     in
-                     if show then
-                       print_string (String.concat "" [mode; " "; kind; " "; SHA.to_hex e.Tree.node; "\t"; path'; "\n"]);
-                     (*printf "%s %s %s\t%s\n" mode kind (SHA.to_hex e.Tree.node) path';*)
-                     if is_dir && recurse then
-                       walk recurse show_tree only_tree path' e.Tree.node
-                     else
-                       Lwt.return_unit
-                  ) tree
-              end
-            | Value.Tag _ -> begin
-                printf "tag %s %s\n" (SHA.to_hex sha1) path;
-                Lwt.return_unit
-              end
-            | Value.Commit commit -> begin
-                (* printf "commit %s %s\n" (SHA.to_hex sha1) path; *)
-                walk recurse show_tree only_tree path (SHA.of_tree commit.Commit.tree)
-              end
-          end
+          S.read_exn t sha1 >>= function
+          | Value.Blob _ ->
+            printf "blob %s %s\n" (SHA.to_hex sha1) path;
+            Lwt.return_unit
+          | Value.Tree tree ->
+              Lwt_list.iter_s (fun e ->
+                  let path' = Filename.concat path e.Tree.name in
+                  let kind, is_dir = get_kind e.Tree.perm in
+                  let mode = Tree.fixed_length_string_of_perm e.Tree.perm in
+                  let show =
+                    if is_dir then not recurse || show_tree || only_tree
+                    else not only_tree
+                  in
+                  if show then
+                    Printf.printf "%s %s %s\t%s\n"
+                      mode kind (SHA.to_hex e.Tree.node) path';
+                  if is_dir && recurse then
+                    walk recurse show_tree only_tree path' e.Tree.node
+                  else
+                    Lwt.return_unit
+                ) tree
+          | Value.Tag _ ->
+            printf "tag %s %s\n" (SHA.to_hex sha1) path;
+            Lwt.return_unit
+          | Value.Commit commit ->
+            walk recurse show_tree only_tree path
+              (SHA.of_tree commit.Commit.tree)
         in
-        let sha1 = SHA.of_hex oid in
+        let sha1 = SHA.of_short_hex oid in
         Lwt.catch
           (fun () -> walk recurse_flag show_tree_flag only_tree_flag "" sha1)
           (function
@@ -349,11 +340,10 @@ let ls_tree = {
             | Not_found ->
               eprintf "unknown revision or path not in the working tree\n%!";
               exit 1
-            | e -> eprintf "%s\n%!" (Printexc.to_string e); exit 1
-          )
-      end
-    in
-    Term.(mk ls $ backend $ recurse_flag $ show_tree_flag $ only_tree_flag $ oid)
+            | e -> eprintf "%s\n%!" (Printexc.to_string e); exit 1)
+      end in
+    Term.(mk ls $ backend $ recurse_flag $ show_tree_flag
+          $ only_tree_flag $ oid)
 }
 
 (* READ-TREE *)
@@ -377,7 +367,7 @@ let read_tree = {
           if List.exists (fun r -> Reference.to_raw r = ref) refs then
             S.read_reference_exn t (Reference.of_raw ref)
           else
-            Lwt.return (SHA.Commit.of_hex commit_str)
+            Lwt.return (SHA.Commit.of_short_hex commit_str)
         end >>= fun commit ->
         S.write_index t commit >>= fun () ->
         printf "The index file has been update to %s\n%!" commit_str;
