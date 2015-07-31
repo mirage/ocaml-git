@@ -455,25 +455,31 @@ module Make (Store: Store.S) = struct
   let test_clones x () =
     let test () =
       Store.create ~root () >>= fun t  ->
-      let clone ?depth gri head =
+      let clone ?depth ?(bare=true) gri head =
         x.init () >>= fun () ->
         Sync.clone t ?head ?deepen:depth gri >>= fun _ ->
         if Store.kind = `Disk && not x.mirage then (
           let cmd = Printf.sprintf "cd %s && git fsck" @@ Store.root t in
           Alcotest.(check int) "fsck" 0 (Sys.command cmd)
         );
+        let master = Git.Reference.of_raw "refs/heads/master" in
         let e = match head with
-          | None   -> Git.Reference.(Ref (of_raw "refs/heads/master"))
+          | None   -> Git.Reference.Ref master
           | Some h -> h
         in
         Store.read_head t >>= function
         | None   -> Alcotest.fail "empty clone!"
         | Some h ->
           Alcotest.(check head_contents) "correct head contents" e h;
-          Lwt.return_unit
+          if not bare then
+            Store.read_reference_exn t master >>= fun h ->
+            Store.write_index t h
+          else
+            Lwt.return_unit
       in
       let git = Gri.of_string "git://github.com/mirage/ocaml-git.git" in
       let https = Gri.of_string "https://github.com/mirage/ocaml-git.git" in
+      let large = Gri.of_string "https://github.com/ocaml/opam-repository.git" in
       let gh_pages =
         Some (Git.Reference.(Ref (of_raw "refs/heads/gh-pages")))
       in
@@ -487,6 +493,7 @@ module Make (Store: Store.S) = struct
       clone https gh_pages >>= fun () ->
       clone https ~depth:1 commit >>= fun () ->
       clone git   ~depth:3 commit >>= fun () ->
+      clone large ~bare:false None >>= fun () ->
 
       Lwt.return_unit
     in
@@ -593,7 +600,7 @@ let suite (speed, x) =
     "Operations on pack files"  , speed, T.test_packs    x;
     "Resource leaks"            , `Slow, T.test_leaks    x;
     "Basic Remote operations"   , `Slow, T.test_basic_remote x;
-    "Cloning ocaml-git.git"     , `Slow, T.test_clones   x;
+    "Cloning remote repos"      , `Slow, T.test_clones   x;
   ]
 
 let generic = [
