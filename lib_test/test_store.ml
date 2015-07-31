@@ -29,7 +29,12 @@ type t = {
 
 let unit () = Lwt.return_unit
 
-let log_level = Log.get_log_level ()
+let long_random_string () =
+  let t  = Unix.gettimeofday () in
+  let cs = Cstruct.create 8 in
+  Cstruct.BE.set_uint64 cs 0 Int64.(of_float (t *. 1000.)) ;
+  Nocrypto.Rng.reseed cs;
+  Cstruct.to_string (Nocrypto.Rng.generate 1024)
 
 module Make (Store: Store.S) = struct
 
@@ -37,23 +42,15 @@ module Make (Store: Store.S) = struct
   open Common
   module Search = Search.Make(Store)
 
-  let () = Log.(set_log_level INFO)
-
   let run x test =
-    Log.set_log_level log_level;
     try Lwt_main.run (x.init () >>= test >>= x.clean)
     with e ->
       Lwt_main.run (x.clean ());
       raise e
 
-  let long_random_string =
-    let t  = Unix.gettimeofday () in
-    let cs = Cstruct.create 8 in
-    Cstruct.BE.set_uint64 cs 0 Int64.(of_float (t *. 1000.)) ;
-    Nocrypto.Rng.reseed cs;
-    Cstruct.to_string (Nocrypto.Rng.generate 1024)
+  let () = quiet ()
 
-  let v0 = Value.blob (Blob.of_raw long_random_string)
+  let v0 = Value.blob (Blob.of_raw @@ long_random_string ())
   let kv0 = Value.sha1 v0
 
   let v1  = Value.blob (Blob.of_raw "hoho")
@@ -108,7 +105,7 @@ module Make (Store: Store.S) = struct
 
   let t5 = Value.tree ([
       { Tree.perm = `Normal;
-        name = long_random_string;
+        name = long_random_string ();
         node = kv2; };
       { Tree.perm = `Dir;
         name = "a";
@@ -172,6 +169,8 @@ module Make (Store: Store.S) = struct
 
   (* r2: c2 *)
   let r2 = Reference.of_raw "refs/upstream/head"
+
+  let () = verbose ()
 
   let check_write t name k v =
     Store.write t v    >>= fun k' ->
@@ -392,38 +391,38 @@ module Make (Store: Store.S) = struct
               | None      -> failwith ("chop suffix " ^ name)
               | Some name -> file, "data/pack-" ^ name ^ ".idx"
           ) files in
+        let read_file file =
+            let fd = Unix.(openfile file [O_RDONLY; O_NONBLOCK] 0o644) in
+            let ba = Lwt_bytes.map_file ~fd ~shared:false () in
+            Unix.close fd;
+            Cstruct.of_bigarray ba
+        in
         Lwt_list.iter_s (fun (pack, index) ->
 
             (* basic serialization of pack files *)
-            Lwt_io.with_file ~mode:Lwt_io.input pack (fun x -> Lwt_io.read x)
-            >>= fun pstr1 ->
-            let rp1   = Pack.Raw.input (Mstruct.of_string pstr1) ~index:None in
+            let pstr1 = read_file pack in
+            let read _ = failwith "shallow pack" in
+            Pack.Raw.input (Mstruct.of_cstruct pstr1) ~read >>= fun rp1 ->
             let i3 = Pack.Raw.index rp1 in
 
             (* basic serialization of index files *)
             begin if Sys.file_exists index then
-                Lwt_io.with_file ~mode:Lwt_io.input index (fun x -> Lwt_io.read x)
-                >>= fun istr1 ->
-                let i1    = Pack_index.Raw.input (Mstruct.of_string istr1) in
+                let istr1 = read_file index in
+                let i1    = Pack_index.Raw.input (Mstruct.of_cstruct istr1) in
                 let istr2 = Misc.with_buffer' (fun buf -> Pack_index.Raw.add buf i1) in
                 let i2    = Pack_index.Raw.input (Mstruct.of_cstruct istr2) in
                 assert_pack_index_equal "pack-index" i1 i2;
-                let rp1'  = Pack.Raw.input (Mstruct.of_string pstr1) ~index:(Some i1) in
-                assert_raw_pack_equal "raw-pack" rp1 rp1';
                 assert_pack_index_equal "raw-pack-->>--pack-index" i1 i3;
                 Lwt.return_unit
               else
                 Lwt.return_unit
             end >>= fun () ->
 
-            let pstr2 = Misc.with_buffer' (fun buf -> Pack.Raw.add buf rp1) in
-            let rp2   = Pack.Raw.input (Mstruct.of_cstruct pstr2) ~index:None in
-            create () >>= fun t ->
-            let read  = Store.read t in
-            Pack.to_pic ~read rp1 >>= fun pic1 ->
-            Pack.to_pic ~read rp2 >>= fun pic2 ->
+            let pstr2 = Pack.Raw.buffer rp1 in
+            Pack.Raw.input (Mstruct.of_cstruct pstr2) ~read >>= fun rp2 ->
+            Pack.of_raw rp1 >>= fun pic1 ->
+            Pack.of_raw rp2 >>= fun pic2 ->
             assert_pack_equal "pack" pic1 pic2;
-
 
             Lwt.return_unit
 
@@ -533,6 +532,53 @@ let test_read_writes () =
     >>= fun () -> Lwt.join [ write 500; read 1000; write 1000; read 500; ]
   end
 
+module Array = struct
+
+  let create len =
+    let mk _i = long_random_string () |> Git.SHA.of_string in
+    let a = Array.init len mk in
+    Array.sort Git.SHA.compare a;
+    let hsize = Git.SHA.(hex_length zero) / 2 in
+    let b = Cstruct.create (len * hsize) in
+    for i = 0 to len-1 do
+      let raw = Git.SHA.to_raw a.(i) in
+      Cstruct.blit_from_string raw 0 b (i * hsize) hsize
+    done;
+    a, b
+
+  let test_get () =
+    let a, b = create 127 in
+    for i = 0 to Array.length a - 1 do
+      let msg = Printf.sprintf "get%d" i in
+      Alcotest.(check sha1) msg a.(i) (Git.SHA.Array.get b i);
+    done
+
+  let test_lenght () =
+    for _ = 0 to 10 do
+      let len = 10 + Random.int 1024 in
+      let _, b = create len in
+      let msg = Printf.sprintf "len%d" len in
+      Alcotest.(check int) msg len (Git.SHA.Array.length b)
+    done
+
+  let test_linear_search () =
+    let a, b = create 127 in
+    for i = 0 to 126 do
+      let j = Git.SHA.Array.linear_search b a.(i) in
+      let msg = Printf.sprintf "linear-seach %d" i in
+      Alcotest.(check (option int)) msg (Some i) j
+    done
+
+  let test_binary_search () =
+    let a, b = create 127 in
+    for i = 0 to 126 do
+      let j = Git.SHA.Array.binary_search b a.(i) in
+      let msg = Printf.sprintf "binary-seach %d" i in
+      Alcotest.(check (option int)) msg (Some i) j
+    done
+
+end
+
 let suite (speed, x) =
   let (module S) = x.store in
   let module T = Make(S) in
@@ -550,9 +596,16 @@ let suite (speed, x) =
     "Cloning ocaml-git.git"     , `Slow, T.test_clones   x;
   ]
 
-let ops = [
-  "OPS", ["Concurrent read/writes", `Quick, test_read_writes]
+let generic = [
+  "OPS"       , ["Concurrent read/writes", `Quick, test_read_writes];
+  "SHA1-ARRAY", [
+    ("get"          , `Quick, Array.test_get);
+    ("length"       , `Quick, Array.test_lenght);
+    ("linear search", `Quick, Array.test_linear_search);
+    ("binary search", `Quick, Array.test_binary_search);
+  ]
 ]
 
 let run name tl =
-  Alcotest.run name (ops @ List.map suite tl)
+  verbose ();
+  Alcotest.run name (generic @ List.map suite tl)

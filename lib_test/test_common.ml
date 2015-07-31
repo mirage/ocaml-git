@@ -17,8 +17,13 @@
 open Git
 open Lwt.Infix
 
-let () =
+let verbose () =
   Log.set_log_level Log.DEBUG;
+  Log.color_on ();
+  Log.set_output stderr
+
+let quiet () =
+  Log.set_log_level Log.ERROR;
   Log.color_on ();
   Log.set_output stderr
 
@@ -124,3 +129,5 @@ let head_contents =
     let pp = Git.Reference.pp_head_contents
     end
   in (module M: Alcotest.TESTABLE with type t = M.t)
+
+let sha1 = (module Git.SHA: Alcotest.TESTABLE with type t = Git.SHA.t)
