@@ -69,7 +69,7 @@ module type S = sig
   val zero: t
   (** A SHA1 full of zero. Useful for padding. *)
 
-  val length: t -> int
+  val hex_length: t -> int
   (** The number of hex digits in the SHA1. *)
 
   val is_short: t -> bool
