@@ -178,6 +178,15 @@ let cat = {
     Term.(mk cat_file $ file)
 }
 
+let catch_ambiguous f =
+  Lwt.catch f (function
+      | SHA.Ambiguous s -> eprintf "%s: ambiguous argument\n%!" s; exit 1
+      | Not_found ->
+        eprintf "unknown revision or path not in the working tree\n%!";
+        exit 1
+      | e -> eprintf "%s\n%!" (Printexc.to_string e); exit 1
+    )
+
 (* CAT-FILE *)
 let cat_file = {
   name = "cat-file";
@@ -193,37 +202,26 @@ let cat_file = {
     let cat_file (module S: Store.S) ty_flag sz_flag id =
       run begin
         S.create () >>= fun t ->
-        Lwt.catch
-          (fun () ->
-             S.read_exn t (SHA.of_short_hex id) >>= fun v -> begin
-               let t, c, s =
-                 match v with
-                 | Value.Blob blob ->
-                   let c = Blob.to_raw blob in
-                   "blob", c, String.length c
-                 | Value.Commit commit ->
-                   let c = Commit.pretty commit in
-                   "commit", c, String.length c
-                 | Value.Tree tree ->
-                   let c = Tree.pretty tree in
-                   "tree", c, String.length c
-                 | Value.Tag tag ->
-                   let c = Tag.pretty tag in
-                   "tag", c, String.length c
-               in
-               if ty_flag then Printf.printf "%s%!\n" t;
-               if sz_flag then Printf.printf "%d%!\n" s;
-               if not ty_flag && not sz_flag then Printf.printf "%s%!\n" c;
-               Lwt.return_unit
-             end
-          )
-          (function
-            | SHA.Ambiguous s -> eprintf "%s: ambiguous argument\n%!" s; exit 1
-            | Not_found ->
-              eprintf "unknown revision or path not in the working tree\n%!";
-              exit 1
-            | e -> eprintf "%s\n%!" (Printexc.to_string e); exit 1
-          )
+        catch_ambiguous (fun () ->
+            S.read_exn t (SHA.of_short_hex id) >>= fun v ->
+             let t, c, s = match v with
+               | Value.Blob blob ->
+                 let c = Blob.to_raw blob in
+                 "blob", c, String.length c
+               | Value.Commit commit ->
+                 let c = Commit.pretty commit in
+                 "commit", c, String.length c
+               | Value.Tree tree ->
+                 let c = Tree.pretty tree in
+                 "tree", c, String.length c
+               | Value.Tag tag ->
+                 let c = Tag.pretty tag in
+                 "tag", c, String.length c
+             in
+             if ty_flag then Printf.printf "%s%!\n" t;
+             if sz_flag then Printf.printf "%d%!\n" s;
+             if not ty_flag && not sz_flag then Printf.printf "%s%!\n" c;
+             Lwt.return_unit)
       end
     in
     Term.(mk cat_file $ backend $ ty_flag $ sz_flag $ id)
@@ -293,54 +291,46 @@ let ls_tree = {
       in
       Arg.(required & pos 0 (some string) None & doc )
     in
-    let ls (module S: Store.S) recurse_flag show_tree_flag only_tree_flag oid =
+    let get_kind = function
+      | `Dir    -> "tree",   true
+      | `Commit -> "commit", false
+      | _       -> "blob",   false
+    in
+    let ls (module S: Store.S) recurse show_tree only_tree oid =
+      let pp_blob path sha1 =
+        printf "blob %s %s\n" (SHA.to_hex sha1) path;
+        Lwt.return_unit
+      in
+      let pp_tree mode kind path e =
+        printf "%s %s %s\t%s\n" mode kind (SHA.to_hex e.Tree.node) path
+      in
+      let pp_tag path sha1 =
+        printf "tag %s %s\n" (SHA.to_hex sha1) path;
+        Lwt.return_unit
+      in
+      let rec walk t path sha1 =
+        S.read_exn t sha1 >>= function
+        | Value.Commit c -> walk t path (SHA.of_tree c.Commit.tree)
+        | Value.Blob _   -> pp_blob path sha1
+        | Value.Tag _    -> pp_tag path sha1
+        | Value.Tree tree ->
+          Lwt_list.iter_s (fun e ->
+              let path = Filename.concat path e.Tree.name in
+              let kind, is_dir = get_kind e.Tree.perm in
+              let mode = Tree.fixed_length_string_of_perm e.Tree.perm in
+              let show =
+                if is_dir then not recurse || show_tree || only_tree
+                else not only_tree
+              in
+              if show then pp_tree mode kind path e;
+              if is_dir && recurse then walk t path e.Tree.node
+              else Lwt.return_unit
+            ) tree
+      in
       run begin
         S.create () >>= fun t ->
-
-        let get_kind = function
-          | `Dir    -> "tree",   true
-          | `Commit -> "commit", false
-          | _       -> "blob",   false
-        in
-
-        let rec walk recurse show_tree only_tree path sha1 =
-          S.read_exn t sha1 >>= function
-          | Value.Blob _ ->
-            printf "blob %s %s\n" (SHA.to_hex sha1) path;
-            Lwt.return_unit
-          | Value.Tree tree ->
-              Lwt_list.iter_s (fun e ->
-                  let path' = Filename.concat path e.Tree.name in
-                  let kind, is_dir = get_kind e.Tree.perm in
-                  let mode = Tree.fixed_length_string_of_perm e.Tree.perm in
-                  let show =
-                    if is_dir then not recurse || show_tree || only_tree
-                    else not only_tree
-                  in
-                  if show then
-                    Printf.printf "%s %s %s\t%s\n"
-                      mode kind (SHA.to_hex e.Tree.node) path';
-                  if is_dir && recurse then
-                    walk recurse show_tree only_tree path' e.Tree.node
-                  else
-                    Lwt.return_unit
-                ) tree
-          | Value.Tag _ ->
-            printf "tag %s %s\n" (SHA.to_hex sha1) path;
-            Lwt.return_unit
-          | Value.Commit commit ->
-            walk recurse show_tree only_tree path
-              (SHA.of_tree commit.Commit.tree)
-        in
         let sha1 = SHA.of_short_hex oid in
-        Lwt.catch
-          (fun () -> walk recurse_flag show_tree_flag only_tree_flag "" sha1)
-          (function
-            | SHA.Ambiguous s -> eprintf "%s: ambiguous argument\n%!" s; exit 1
-            | Not_found ->
-              eprintf "unknown revision or path not in the working tree\n%!";
-              exit 1
-            | e -> eprintf "%s\n%!" (Printexc.to_string e); exit 1)
+        catch_ambiguous (fun () -> walk t "" sha1)
       end in
     Term.(mk ls $ backend $ recurse_flag $ show_tree_flag
           $ only_tree_flag $ oid)
