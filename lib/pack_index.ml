@@ -315,6 +315,10 @@ let fanout_of_sha1 sha1 =
 
 let fail fmt = Printf.ksprintf failwith ("Pack_index." ^^ fmt)
 
+let (++) x y = match y with
+  | None   -> None
+  | Some y -> Some (x + y)
+
 let get_sha1_idx t sha1 =
   Log.debug "get_sha1_idx: %s" (SHA.pretty sha1);
   let fanout_idx = fanout_of_sha1 sha1 in
@@ -323,7 +327,7 @@ let get_sha1_idx t sha1 =
   let offset, len =
     if fanout_idx = 0 then 0, get_int offsets
     else if fanout_idx > 0 then
-      let offset = fanout_idx * 4 in
+      let offset = (fanout_idx - 1) * 4 in
       Mstruct.shift offsets offset;
       let off0 = get_int offsets in
       let off1 = get_int offsets in
@@ -334,7 +338,7 @@ let get_sha1_idx t sha1 =
   in
   let buf = sha1s t in
   let buf = SHA.Array.sub buf offset len in
-  SHA.Array.binary_search buf sha1
+  offset ++ SHA.Array.binary_search buf sha1
 
 let find_offset t sha1 =
   Log.debug "find_offset: %s" (SHA.pretty sha1);
