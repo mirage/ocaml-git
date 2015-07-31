@@ -202,22 +202,20 @@ module Array = struct
     let scan_thresh = 8 in
     let rec aux buf =
       let len = length buf in
-      if len <= scan_thresh then
+      if len < scan_thresh then
         linear_search buf sha1
       else
-        let p = len / 2 in
-        let s = get buf p in
-        if equal s sha1 then Some p
+        let off = len / 2 in
+        let s = get buf off in
+        if equal s sha1 then Some off
         else if short_sha && is_prefix sha1 s then
           let is_prefix_of n = is_prefix sha1 (get buf n) in
-          let prev_ok = p = 0      || not (is_prefix_of (p-1)) in
-          let next_ok = p >= len-1 || not (is_prefix_of (p+1)) in
-          if prev_ok && next_ok then Some p
+          let prev_ok = off = 0      || not (is_prefix_of (off-1)) in
+          let next_ok = off >= len-1 || not (is_prefix_of (off+1)) in
+          if prev_ok && next_ok then Some off
           else ambiguous sha1
-        else if lt sha1 s then
-          aux (sub buf 0 p)
-        else
-          p ++ aux (sub buf p (len-p-1))
+        else if lt sha1 s then aux (sub buf 0 off)
+        else off ++ aux (sub buf off (len-off))
     in
     aux buf
 
