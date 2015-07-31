@@ -1,8 +1,9 @@
 ### 1.7.0 (2015-07-31)
 
+* Support Github http(s) URLs without .git (#111)
 * Add a `dot_git` optional parameter to `Store.create` to specify where
   the Git metadata should be stored (default is still `<root>/.git`). This
-  is useful to properly implement `bare` repositories (#110)
+  is useful to properly support `bare` repositories (#110)
 * Full support for 32 bit platform (ie. continue the patch started in 1.6.2).
 * Rework the `Git.Pack` and `Git.Pack_index` API to speed-up random access.
 * Add a `Git.SHA.Array` module to work with contiguous arrays of SHA1.
@@ -16,7 +17,7 @@
 
 * Support 32 bit platform by avoiding creating large strings. This also improve
   the performance of reading and synchronizin large pack files
-  (#103, @gregtatcam)
+  (#103, #105 @gregtatcam)
 
 ### 1.6.1 (2015-07-14)
 
