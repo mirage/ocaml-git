@@ -49,9 +49,9 @@ module Raw = struct
         assert (key1 = key2);
         l := (key1, offset, crc) :: !l
       ) offsets crcs;
-    let l = List.sort (fun (_,o1,_) (_,o2,_) -> Pervasives.compare o1 o2) !l in
+    let l = List.sort (fun (s1,_,_) (s2,_,_) -> SHA.compare s1 s2) !l in
     List.iter (fun (sha1, offset, crc) ->
-        Format.fprintf ppf "@[%a@ off:%d@ crc:%ld@]" SHA.pp sha1 offset crc
+        Format.fprintf ppf "@[%a@ off:%d@ crc:%ld@;@]" SHA.pp sha1 offset crc
       ) l;
     Format.fprintf ppf "@]"
 
