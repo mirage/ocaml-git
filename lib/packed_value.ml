@@ -409,9 +409,7 @@ module PIC = struct
     (* FIXME: costly, allocate a bigarray *)
     Value.input_inflated (Mstruct.of_string buf)
 
-  let raw sha1 raw =
-    let raw = Cstruct.to_string raw in
-    { sha1; kind = Raw raw; raw = Some raw; }
+  let raw sha1 raw = { sha1; kind = Raw raw; raw = Some raw; }
 
   module X = struct
     type x = t

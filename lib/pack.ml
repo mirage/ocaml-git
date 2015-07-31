@@ -348,7 +348,7 @@ let keys t =
 let pack contents =
   let uncompressed =
     List.map (fun (k, v) ->
-        let raw = Misc.with_buffer' (fun buf -> Value.add_inflated buf v) in
+        let raw = Misc.with_buffer (fun buf -> Value.add_inflated buf v) in
         Packed_value.PIC.raw k raw
       ) contents in
   (* XXX: Patience_diff.be_clever *)

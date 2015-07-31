@@ -118,7 +118,7 @@ module PIC: sig
   (** [to_value p] unpacks the packed position-independant value
       [p]. *)
 
-  val raw: SHA.t -> Cstruct.t -> t
+  val raw: SHA.t -> string -> t
   (** Build a raw value. *)
 
   val unpack_kind: kind -> string
