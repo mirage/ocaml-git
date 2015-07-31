@@ -23,7 +23,8 @@ module type S = sig
   val to_raw: t -> string
   val of_raw: string -> t
   val to_hex: t -> string
-  val of_hex: ?strict:bool -> string -> t
+  val of_hex: string -> t
+  val of_short_hex: string -> t
   val input_hex: Mstruct.t -> t
   val add_hex: Buffer.t -> t -> unit
   val zero: t
@@ -116,12 +117,15 @@ module SHA1_String = struct
     |> Cstruct.to_string
     |> fun x -> { raw=x; padded=false; }
 
-  let of_hex ?(strict=true) h =
+  let of_hex_aux ~strict h =
     let len = String.length h in
     if strict && len <> 40 then raise (Ambiguous h);
     let to_be_padded = (len mod 2) = 1 in
     let h' = if to_be_padded then h ^ "0" else h in
     { raw = Hex.to_string (`Hex h'); padded = to_be_padded; }
+
+  let of_hex = of_hex_aux ~strict:true
+  let of_short_hex = of_hex_aux ~strict:false
 
   let zero = of_hex (String.make 40 '0')
   let pretty = to_hex

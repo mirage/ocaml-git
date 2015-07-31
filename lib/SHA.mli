@@ -53,12 +53,15 @@ module type S = sig
   val to_hex: t -> string
   (** Display the hex encoding of the SHA1 hash. *)
 
-  val of_hex: ?strict:bool -> string -> t
-  (** Convert an hex-encoded string into a sha1 value.  If [strict] is
-      not set (by default it is), we allow values shorter than 20
+  val of_hex: string -> t
+  (** Convert an hex-encoded string into a sha1 value. Raise
+      {!Ambiguous} if the hash is short; in that case use
+      {!of_short_hex}. *)
+
+  val of_short_hex: string -> t
+  (** Same as {!of_hex} but allow values shorter than 20
       characters. Such hash values are called {i short} hashes and can
-      cause some functions to raise {!Ambiguous}. Can raise
-      {!Ambiguous} if the hash is short but [strict] is set. *)
+      cause some functions to raise {!Ambiguous}. *)
 
   val input_hex: Mstruct.t -> t
   (** Read an hex-encode SHA1 value. *)
