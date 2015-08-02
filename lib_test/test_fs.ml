@@ -20,6 +20,7 @@ open Test_store
 module M = Git_unix.FS
 
 let init () =
+  M.clear ();
   M.create ~root:"test-db" () >>= fun t ->
   M.remove t
 

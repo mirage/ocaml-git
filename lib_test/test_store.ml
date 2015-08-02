@@ -454,9 +454,11 @@ module Make (Store: Store.S) = struct
 
   let test_clones x () =
     let test () =
-      Store.create ~root () >>= fun t  ->
+      Store.create ~root () >>= fun t ->
       let fetch ?depth ?(bare=true) ?wants gri =
         x.init () >>= fun () ->
+        Store.list t >>= fun l ->
+        Alcotest.(check (list sha1)) "empty" [] l;
         Sync.fetch t ?wants ?deepen:depth gri  >>= fun r ->
         Sync.populate ~checkout:(not bare) t r >>= fun () ->
         if Store.kind = `Disk && not x.mirage then (
