@@ -44,23 +44,216 @@ let pretty_protocol = function
   | `SSH -> "ssh"
   | `Smart_HTTP -> "smart-http"
 
+type want = [ `Ref of Reference.t | `Commit of SHA.Commit.t ]
+
+let pretty_list f l = "[" ^ String.concat ", " (List.map f l) ^ "]"
+
+let pretty_want = function
+  | `Commit s -> sprintf "commit:%s" (SHA.Commit.pretty s)
+  | `Ref r    -> sprintf "ref:%s" (Reference.pretty r)
+
+let pretty_wants = function
+  | None   -> "<all>"
+  | Some l -> pretty_list pretty_want l
+
+let is_head ref =
+  Reference.is_valid ref &&
+  let raw_ref = Reference.to_raw ref in
+  let prefix = "refs/heads/" in
+  match Misc.string_chop_prefix ~prefix raw_ref with
+  | None   -> false
+  | Some _ -> true
+
+module type IO = sig
+  type ic
+  type oc
+  type ctx
+  val with_connection: ?ctx:ctx -> Uri.t -> ?init:string ->
+    (ic * oc -> 'a Lwt.t) -> 'a Lwt.t
+  val read_all: ic -> string list Lwt.t
+  val read_exactly: ic -> int -> string Lwt.t
+  val write: oc -> string -> unit Lwt.t
+  val flush: oc -> unit Lwt.t
+end
+
+let ogit_agent = "git/ogit." ^ Version.current
+
+module Capability = struct
+
+  type t = [
+    | `Multi_ack
+    | `Thin_pack
+    | `Side_band
+    | `Side_band_64k
+    | `Ofs_delta
+    | `Shallow
+    | `No_progress
+    | `Include_tag
+    | `Report_status
+    | `Delete_refs
+    | `Agent of string
+    | `Other of string ]
+
+  let of_string: string -> t = function
+    | "multi_ack"     -> `Multi_ack
+    | "thin-pack"     -> `Thin_pack
+    | "side-band"     -> `Side_band
+    | "side-band-64k" -> `Side_band_64k
+    | "ofs-delta"     -> `Ofs_delta
+    | "shallow"       -> `Shallow
+    | "no-progress"   -> `No_progress
+    | "include-tag"   -> `Include_tag
+    | "report-status" -> `Report_status
+    | "delete-refs"   -> `Delete_refs
+    | x               ->
+      match Stringext.cut x ~on:"=" with
+      | Some ("agent", a) -> `Agent a
+      | _ -> `Other x
+
+  let to_string: t -> string = function
+    | `Multi_ack     -> "multi_ack"
+    | `Thin_pack     -> "thin-pack"
+    | `Side_band     -> "side-band"
+    | `Side_band_64k -> "side-band-64k"
+    | `Ofs_delta     -> "ofs-delta"
+    | `Shallow       -> "shallow"
+    | `No_progress   -> "no-progress"
+    | `Include_tag   -> "include-tag"
+    | `Report_status -> "report-status"
+    | `Delete_refs   -> "delete-refs"
+    | `Agent a       -> "agent=" ^ a
+    | `Other x       -> x
+
+  let _is_valid_fetch: t -> bool = function
+    | `Multi_ack
+    | `Thin_pack
+    | `Side_band
+    | `Side_band_64k
+    | `Ofs_delta
+    | `Shallow
+    | `No_progress
+    | `Include_tag -> true
+    | _ -> false
+
+  let _is_valid_push: t -> bool = function
+    | `Ofs_delta
+    | `Report_status
+    | `Delete_refs -> true
+    | _ -> false
+
+  let ogit_agent = `Agent ogit_agent
+
+end
+
+type capability = Capability.t
+
+module Capabilities = struct
+
+    type t = Capability.t list
+
+    let of_string str =
+      List.map Capability.of_string (Stringext.split str ~on:Misc.sp)
+
+    let to_string l =
+      String.concat " " (List.map Capability.to_string l)
+
+    let pretty l =
+      String.concat ", " (List.map Capability.to_string l)
+
+    let default = [
+      Capability.ogit_agent;
+      `Side_band_64k;
+    ]
+
+end
+
+module Listing = struct
+
+  type t = {
+    capabilities: Capability.t list;
+    sha1s       : Reference.t list SHA.Commit.Map.t;
+    references  : SHA.Commit.t Reference.Map.t;
+  }
+
+  let references t = t.references
+  let sha1s t = t.sha1s
+
+  let empty = {
+    capabilities = [];
+    sha1s        = SHA.Commit.Map.empty;
+    references   = Reference.Map.empty;
+  }
+
+  let is_empty t = t.capabilities = [] && SHA.Commit.Map.is_empty t.sha1s
+
+  let find_reference t r =
+    try Some (Reference.Map.find r t.references)
+    with Not_found -> None
+
+  let pretty t =
+    let buf = Buffer.create 1024 in
+    Printf.bprintf buf "CAPABILITIES:\n%s\n"
+      (Capabilities.to_string t.capabilities);
+    Printf.bprintf buf "\nREFERENCES:\n";
+    SHA.Commit.Map.iter
+      (fun key data ->
+         List.iter (fun ref ->
+             Printf.bprintf buf "%s %s\n"
+               (SHA.Commit.to_hex key) (Reference.pretty ref)
+           ) data
+      ) t.sha1s;
+    Buffer.contents buf
+
+end
+
 module Result = struct
 
-  type fetch = {
-    head      : SHA.Commit.t option;
-    references: SHA.Commit.t Reference.Map.t;
-    sha1s     : SHA.t list;
-  }
+  type fetch = { listing: Listing.t; sha1s: SHA.Set.t }
+
+  let head t = Listing.find_reference t.listing Reference.head
+
+  let head_contents t =
+    match head t with
+    | None   -> None
+    | Some c ->
+      let heads =
+        SHA.Commit.Map.find c t.listing.Listing.sha1s
+        |> List.filter is_head
+      in
+      match heads with
+      | []   -> Some (Reference.SHA c)
+      | h::_ ->
+        let r =
+          if List.mem Reference.master heads then Reference.master else (
+            if List.length heads > 1 then
+              Log.info "Ambiguous remote HEAD, picking %s."
+                (Reference.pretty h);
+            h
+          )
+        in
+        Some (Reference.Ref r)
+
+  let references t = Listing.references t.listing
+  let sha1s t = t.sha1s
+
+  let pretty_head_contents = function
+    | None -> "<none>"
+    | Some (Reference.Ref r) -> Reference.pretty r
+    | Some (Reference.SHA s) -> SHA.Commit.pretty s
+
+  let pretty_head = function
+    | None   -> ""
+    | Some c -> SHA.Commit.pretty c
 
   let pretty_fetch t =
     let buf = Buffer.create 1024 in
-    bprintf buf "HEAD: %s\n" (match t.head with
-        | None -> "<none>"
-        | Some x -> SHA.Commit.to_hex x);
+    let hc = head_contents t in
+    let h = head t in
+    bprintf buf "HEAD: %s %s\n" (pretty_head_contents hc) (pretty_head h);
     Reference.Map.iter (fun key data ->
         bprintf buf "%s %s\n" (Reference.pretty key) (SHA.Commit.to_hex data)
-      ) t.references;
-    bprintf buf "Keys: %d\n" (List.length t.sha1s);
+      ) (references t);
+    bprintf buf "Keys: %d\n" (SHA.Set.cardinal t.sha1s);
     Buffer.contents buf
 
   type ok_or_error = [ `Ok | `Error of string ]
@@ -80,32 +273,6 @@ module Result = struct
     Buffer.contents buf
 
 end
-
-module type IO = sig
-  type ic
-  type oc
-  type ctx
-  val with_connection: ?ctx:ctx -> Uri.t -> ?init:string ->
-    (ic * oc -> 'a Lwt.t) -> 'a Lwt.t
-  val read_all: ic -> string list Lwt.t
-  val read_exactly: ic -> int -> string Lwt.t
-  val write: oc -> string -> unit Lwt.t
-  val flush: oc -> unit Lwt.t
-end
-
-type capability =
-  [ `Multi_ack
-  | `Thin_pack
-  | `Side_band
-  | `Side_band_64k
-  | `Ofs_delta
-  | `Shallow
-  | `No_progress
-  | `Include_tag
-  | `Report_status
-  | `Delete_refs
-  | `Agent of string
-  | `Other of string ]
 
 module Make (IO: IO) (Store: Store.S) = struct
 
@@ -189,84 +356,6 @@ module Make (IO: IO) (Store: Store.S) = struct
 
   end
 
-  module Capability = struct
-
-    type t = capability
-
-    let of_string: string -> t = function
-      | "multi_ack"     -> `Multi_ack
-      | "thin-pack"     -> `Thin_pack
-      | "side-band"     -> `Side_band
-      | "side-band-64k" -> `Side_band_64k
-      | "ofs-delta"     -> `Ofs_delta
-      | "shallow"       -> `Shallow
-      | "no-progress"   -> `No_progress
-      | "include-tag"   -> `Include_tag
-      | "report-status" -> `Report_status
-      | "delete-refs"   -> `Delete_refs
-      | x               ->
-        match Stringext.cut x ~on:"=" with
-        | Some ("agent", a) -> `Agent a
-        | _ -> `Other x
-
-    let to_string: t -> string = function
-      | `Multi_ack     -> "multi_ack"
-      | `Thin_pack     -> "thin-pack"
-      | `Side_band     -> "side-band"
-      | `Side_band_64k -> "side-band-64k"
-      | `Ofs_delta     -> "ofs-delta"
-      | `Shallow       -> "shallow"
-      | `No_progress   -> "no-progress"
-      | `Include_tag   -> "include-tag"
-      | `Report_status -> "report-status"
-      | `Delete_refs   -> "delete-refs"
-      | `Agent a       -> "agent=" ^ a
-      | `Other x       -> x
-
-    let is_valid_fetch: t -> bool = function
-      | `Multi_ack
-      | `Thin_pack
-      | `Side_band
-      | `Side_band_64k
-      | `Ofs_delta
-      | `Shallow
-      | `No_progress
-      | `Include_tag -> true
-      | _ -> false
-
-    let is_valid_push: t -> bool = function
-      | `Ofs_delta
-      | `Report_status
-      | `Delete_refs -> true
-      | _ -> false
-
-    let ogit_agent = `Agent ("ogit/" ^ Version.current)
-
-  end
-
-  module Capabilities = struct
-
-    type t = Capability.t list
-
-    let of_string str =
-      List.map Capability.of_string (Stringext.split str ~on:Misc.sp)
-
-    let to_string l =
-      String.concat " " (List.map Capability.to_string l)
-
-    let pretty l =
-      String.concat ", " (List.map Capability.to_string l)
-
-    let default = [
-      Capability.ogit_agent;
-      `Side_band_64k;
-    ]
-
-    let _is_valid_push = List.for_all Capability.is_valid_push
-    let _is_valid_fetch = List.for_all Capability.is_valid_fetch
-
-  end
-
   module Init = struct
 
     type request =
@@ -320,7 +409,7 @@ module Make (IO: IO) (Store: Store.S) = struct
 
     let smart_http t =
       (* Note: GitHub wants User-Agent to start by `git/`  *)
-      let useragent = "User-Agent", "git/ogit." ^ Version.current in
+      let useragent = "User-Agent", ogit_agent in
       let headers : (string * string) list =
         if t.discover
         then [useragent]
@@ -361,43 +450,7 @@ module Make (IO: IO) (Store: Store.S) = struct
 
   module Listing = struct
 
-    type t = {
-      capabilities: Capabilities.t;
-      references  : Reference.t list SHA.Commit.Map.t;
-    }
-
-    let references t =
-      t.references
-
-    let empty = {
-      capabilities = [];
-      references   = SHA.Commit.Map.empty;
-    }
-
-    let is_empty t =
-      t.capabilities = [] && SHA.Commit.Map.is_empty t.references
-
-    let find_reference t ref =
-      SHA.Commit.Map.fold
-        (fun key data acc -> if List.mem ref data then Some key else acc)
-        t.references None
-
-    let head t =
-      find_reference t Reference.head
-
-    let pretty t =
-      let buf = Buffer.create 1024 in
-      Printf.bprintf buf "CAPABILITIES:\n%s\n"
-        (Capabilities.to_string t.capabilities);
-      Printf.bprintf buf "\nREFERENCES:\n";
-      SHA.Commit.Map.iter
-        (fun key data ->
-           List.iter (fun ref ->
-               Printf.bprintf buf "%s %s\n"
-                 (SHA.Commit.to_hex key) (Reference.pretty ref)
-             ) data
-        ) t.references;
-      Buffer.contents buf
+    include Listing
 
     let input ic protocol =
       Log.debug "Listing.input (protocol=%s)" (pretty_protocol protocol);
@@ -425,27 +478,27 @@ module Make (IO: IO) (Store: Store.S) = struct
         | Some line ->
           match Stringext.cut line ~on:Misc.sp_str with
           | Some ("ERR", err) -> error "ERROR: %s" err
-          | Some (sha1, ref)  ->
-            let add sha1 ref =
-              SHA.Commit.Map.add_multi (SHA.Commit.of_hex sha1) ref
-                acc.references
-            in
+          | Some (sha1, r)  ->
+            let sha1 = SHA.Commit.of_hex sha1 in
             if is_empty acc then (
               (* Read the capabilities on the first line *)
-              match Stringext.cut ref ~on:Misc.nul_str with
-              | Some (ref, caps) ->
-                let ref = Reference.of_raw ref in
-                let references = add sha1 ref in
+              match Stringext.cut r ~on:Misc.nul_str with
+              | Some (r, caps) ->
+                let r = Reference.of_raw r in
+                let sha1s = SHA.Commit.Map.add_multi sha1 r acc.sha1s in
+                let references = Reference.Map.add r sha1 acc.references in
                 let capabilities = Capabilities.of_string caps in
-                aux { references; capabilities; }
+                aux { sha1s; capabilities; references }
               | None ->
-                let ref = Reference.of_raw ref in
-                let references = add sha1 ref in
-                aux { references; capabilities = []; }
+                let r = Reference.of_raw r in
+                let sha1s = SHA.Commit.Map.add_multi sha1 r acc.sha1s in
+                let references = Reference.Map.add r sha1 acc.references in
+                aux { sha1s; references; capabilities = [] }
             ) else
-              let ref = Reference.of_raw ref in
-              let references = add sha1 ref in
-              aux { acc with references }
+              let r = Reference.of_raw r in
+              let sha1s = SHA.Commit.Map.add_multi sha1 r acc.sha1s in
+              let references = Reference.Map.add r sha1 acc.references in
+              aux { acc with sha1s; references }
           | None -> error "Listing.input: %S is not a valid answer" line
       in
       skip_smart_http () >>= fun () ->
@@ -876,25 +929,19 @@ module Make (IO: IO) (Store: Store.S) = struct
   let todo msg =
     Lwt.fail (Failure ("TODO: " ^ msg))
 
-  type clone = {
-    c_deepen: int option;
-    c_unpack: bool;
-    c_capabilites: Capabilities.t;
-  }
-
   type fetch = {
-    f_haves   : SHA.t list;
-    f_shallows: SHA.t list;
-    f_deepen  : int option;
-    f_unpack  : bool;
-    f_capabilites: Capabilities.t;
-    f_update_tags: bool;
+    haves       : SHA.t list;
+    shallows    : SHA.t list;
+    deepen      : int option;
+    unpack      : bool;
+    capabilities: Capabilities.t;
+    wants       : want list option;
+    update      : bool;
   }
 
   type op =
     | Ls
     | Fetch of fetch
-    | Clone of clone
 
   module Graph = Global_graph.Make(Store)
 
@@ -925,7 +972,7 @@ module Make (IO: IO) (Store: Store.S) = struct
           in
           let commands = [ command ] in
           let min =
-            SHA.Commit.Map.keys (Listing.references listing)
+            SHA.Commit.Map.keys (Listing.sha1s listing)
             |> List.map SHA.of_commit
             |> SHA.Set.of_list
           in
@@ -940,23 +987,12 @@ module Make (IO: IO) (Store: Store.S) = struct
           Report_status.input ic
         )
 
-  let fetch_pack_with_wants t (ic, oc) ?progress op references wants =
+  let fetch_commits t (ic, oc) ?(progress=fun _ -> ()) f listing wants =
     Log.debug "Sync.fetch_pack_with_head";
-    let deepen = match op with
-      | Clone { c_deepen = d; _ }
-      | Fetch { f_deepen = d; _ } -> d
-      |  _               -> None
-    in
-    let shallows = match op with
-      | Fetch { f_shallows = s; _ } -> s
-      | _ -> []
-    in
-    let capabilities = match op with
-      | Fetch { f_capabilites = c; _ }
-      | Clone { c_capabilites = c; _ } -> c
-      | _ -> []
-    in
     Log.debug "PHASE1";
+    let deepen = f.deepen in
+    let capabilities = f.capabilities in
+    let shallows = f.shallows in
     Upload_request.phase1 (ic, oc) ?deepen ~capabilities
       ~shallows ~wants
     >>= fun _phase1 ->
@@ -965,14 +1001,12 @@ module Make (IO: IO) (Store: Store.S) = struct
     (* XXX: need a notion of shallow/unshallow in API. *)
 
     Log.debug "PHASE2";
-    let haves = match op with
-      | Fetch { f_haves = h; _ } -> h
-      | _ -> [] in
+    let haves = f.haves in
     Upload_request.phase2 (ic,oc) ~haves >>= fun () ->
 
     Log.debug "PHASE3";
-    Log.info "Receiving data ...";
-    Pack_file.input ~capabilities ?progress ic >>= fun bufs ->
+    progress "Receiving data ...\n";
+    Pack_file.input ~capabilities ~progress ic >>= fun bufs ->
 
     let size = List.fold_left (fun acc s -> acc + String.length s) 0 bufs in
     Log.info "Received a pack file of %d bytes." size;
@@ -983,46 +1017,29 @@ module Make (IO: IO) (Store: Store.S) = struct
         acc + len
       ) 0 bufs in
 
-    let unpack = match op with
-      | Clone { c_unpack = u; _ }
-      | Fetch { f_unpack = u; _ } -> u
-      | _ -> false in
-    Log.debug "unpack=%b" unpack;
+    Log.debug "unpack=%b" f.unpack;
     let read = Store.read_inflated t in
-    Pack.Raw.input ?progress ~read (Mstruct.of_cstruct pack) >>= fun pack ->
+    Pack.Raw.input ~progress ~read (Mstruct.of_cstruct pack) >>= fun pack ->
     let unpack () =
-      if unpack
-      then Pack.Raw.unpack ?progress ~write:(Store.write_inflated t) pack
+      if f.unpack
+      then Pack.Raw.unpack ~progress ~write:(Store.write_inflated t) pack
       else Store.write_pack t pack
     in
     unpack () >>= fun sha1s ->
-    let head =
-      try Some (Reference.Map.find Reference.head references) with Not_found -> None
-    in
-    match SHA.Set.to_list sha1s with
-    | []    ->
+    match SHA.Set.cardinal sha1s with
+    | 0 ->
       Log.debug "NO NEW OBJECTS";
-      Log.info "Already up-to-date.";
-      Lwt.return { Result.head; references; sha1s = [] }
-    | sha1s ->
-      Log.debug "NEW OBJECTS";
-      Log.info "remote: Counting objects: %d, done."
-        (List.length sha1s);
-      Lwt.return { Result.head; references; sha1s }
+      progress "Already up-to-date.\n";
+      Lwt.return { Result.listing; sha1s }
+    | n ->
+      Log.debug "%d NEW OBJECTS" n;
+      Lwt.return { Result.listing; sha1s }
 
-  let is_head ref =
-    Reference.is_valid ref &&
-    let raw_ref = Reference.to_raw ref in
-    let prefix = "refs/heads/" in
-    match Misc.string_chop_prefix ~prefix raw_ref with
-    | None   -> false
-    | Some _ -> true
-
-  let write_heads t (ref, sha1) =
-    if is_head ref then
+  let write_heads t reference sha1 =
+    if is_head reference then
       Store.mem t (SHA.of_commit sha1) >>= function
       | false -> Lwt.return_unit
-      | true  -> Store.write_reference t ref sha1
+      | true  -> Store.write_reference t reference sha1
     else
       Lwt.return_unit
 
@@ -1039,50 +1056,33 @@ module Make (IO: IO) (Store: Store.S) = struct
       IO.with_connection ?ctx uri ?init (fun (ic, oc) ->
           Listing.input ic protocol >>= fun listing ->
           Log.debug "listing:\n %s" (Listing.pretty listing);
-          let references =
-            List.fold_left (fun acc (sha1, refs) ->
-                List.fold_left
-                  (fun acc ref -> Reference.Map.add ref sha1 acc)
-                  acc
-                  refs
-              ) Reference.Map.empty
-              (SHA.Commit.Map.to_alist (Listing.references listing))
-          in
-          let head_commit = Listing.head listing in
-          k (protocol, ic, oc) head_commit references
+          k (protocol, ic, oc) listing
         )
 
-  let err_invalid_branch gri br =
-    error "%s has no branch called %s" (Gri.to_string gri) (Reference.pretty br)
-
-  let pretty_head_opt = function
-    | None   -> "<none>"
-    | Some x -> Misc.pretty Reference.pp_head_contents x
-
-  let fetch_pack ?ctx ?head ?progress t gri op =
-    Log.debug "Sync.fetch_pack head=%s" (pretty_head_opt head);
-    with_listing ?ctx gri (fun (protocol, ic, oc) remote_head references ->
+  let fetch_pack ?ctx ?progress t gri op =
+    with_listing ?ctx gri (fun (protocol, ic, oc) listing ->
         match op with
-        | Ls -> Lwt.return { Result.head = remote_head; references; sha1s = [] }
-        | Fetch _
-        | Clone _ ->
-          let local_head = match head with
-            | None                   -> Reference.Ref Reference.master
-            | Some (Reference.SHA x) -> Reference.SHA x
-            | Some (Reference.Ref r) ->
-              if Reference.Map.mem r references then Reference.Ref r
-              else err_invalid_branch gri r
-          in
-          let wants = match head with
-            | None ->
-              (* the user didn't specify a branch, download all
-                 the tags. *)
+        | Ls      -> Lwt.return { Result.listing; sha1s = SHA.Set.empty }
+        | Fetch f ->
+          let references = Listing.references listing in
+          let commits = match f.wants with
+            | None   ->
+              (* We ask for all the remote references *)
               Reference.Map.fold (fun r c acc ->
                   if is_head r then SHA.Commit.Set.add c acc else acc
                 ) references SHA.Commit.Set.empty
               |> SHA.Commit.Set.elements
-            | Some (Reference.SHA x) -> [x]
-            | Some (Reference.Ref r) -> [Reference.Map.find r references]
+            | Some wants ->
+              List.fold_left (fun acc -> function
+                  | `Commit c -> SHA.Commit.Set.add c acc
+                  | `Ref r    ->
+                    try
+                      let c = Reference.Map.find r references in
+                      SHA.Commit.Set.add c acc
+                    with Not_found ->
+                      acc
+                ) SHA.Commit.Set.empty wants
+              |> SHA.Commit.Set.elements
           in
           let sync () =
             if protocol = `Smart_HTTP then
@@ -1090,22 +1090,25 @@ module Make (IO: IO) (Store: Store.S) = struct
               let uri = Init.uri init in
               let init = Init.to_string init in
               IO.with_connection ?ctx uri ?init (fun (ic, oc) ->
-                  fetch_pack_with_wants t (ic, oc) ?progress op references wants
+                  fetch_commits t (ic, oc) ?progress f listing commits
                 )
             else
-              fetch_pack_with_wants t (ic, oc) ?progress op references wants
+              fetch_commits t (ic, oc) ?progress f listing commits
           in
-          let update_refs () = match op with
-            | Ls -> assert false
-            | Fetch { f_update_tags = false; _ } -> Lwt.return_unit
-            | Clone _ | Fetch _ ->
-              (* populate .git/refs/heads/ with the discovered tags. *)
-              Reference.Map.to_alist references
-              |> Lwt_list.iter_p (write_heads t)
-              >>= fun () ->
-              match op with
-              | Clone _ -> Store.write_head t local_head (* update .git/HEAD *)
-              | _       -> Lwt.return_unit
+          let update_refs () =
+            if not f.update then Lwt.return_unit
+            else match f.wants with
+              | None       -> Lwt.return_unit
+              | Some wants ->
+                Lwt_list.iter_p (function
+                    | `Commit _ -> Lwt.return_unit
+                    | `Ref r    ->
+                      try
+                        let c = Reference.Map.find r references in
+                        write_heads t r c
+                      with Not_found ->
+                        Lwt.return_unit
+                  ) wants
           in
           sync ()        >>= fun r ->
           update_refs () >|= fun () ->
@@ -1113,33 +1116,40 @@ module Make (IO: IO) (Store: Store.S) = struct
       )
 
   let ls ?ctx t gri =
-    fetch_pack ?ctx t gri Ls >>= function
-      { Result.references; _ } -> Lwt.return references
+    Log.debug "ls %s" (Gri.to_string gri);
+    fetch_pack ?ctx t gri Ls >|= fun r ->
+    Result.references r
 
-  let clone ?ctx t ?deepen ?(unpack=false) ?(capabilities=Capabilities.default)
-      ?head ?progress gri =
-    let op = {
-      c_deepen = deepen;
-      c_unpack = unpack;
-      c_capabilites = capabilities;
-    } in
-    fetch_pack ?ctx ?head ?progress t gri (Clone op)
-
-  let fetch ?ctx t ?deepen ?(unpack=false) ?(capabilities=Capabilities.default)
-      ?progress gri =
-    Store.list t      >>= fun haves ->
-    Store.read_head t >>= fun head ->
+  let fetch
+      ?ctx ?deepen ?(unpack=false) ?(capabilities=Capabilities.default)
+      ?wants ?(update=false) ?progress
+      t gri =
+    Log.debug "fetch %s wants=%s" (Gri.to_string gri) (pretty_wants wants);
+    Store.list t >>= fun haves ->
     (* XXX: Store.shallows t >>= fun shallows *)
     let shallows = [] in
-    let op = {
-      f_shallows = shallows;
-      f_haves = haves;
-      f_deepen = deepen;
-      f_unpack = unpack;
-      f_capabilites = capabilities;
-      f_update_tags = false;
-    } in
-    fetch_pack ?ctx ?head ?progress t gri (Fetch op)
+    let op = { shallows; haves; deepen; unpack; capabilities; update; wants } in
+    fetch_pack ?ctx ?progress t gri (Fetch op)
+
+  let populate ?head ?(progress=fun _ -> ()) t ~checkout result =
+    let update_head () =
+      match head with
+      | Some b -> Store.write_head t b
+      | None   ->
+        match Result.head_contents result with
+        | None   -> Lwt.return_unit
+        | Some h -> Store.write_head t h
+    in
+    let update_checkout () =
+      if not checkout then Lwt.return_unit
+      else match Result.head result with
+        | None      -> Lwt.return_unit
+        | Some head ->
+          Store.write_index t head >>= fun () ->
+          progress (sprintf "HEAD is now at %s\n" (SHA.Commit.to_hex head));
+          Lwt.return_unit
+    in
+    update_head () >>= update_checkout
 
   type t = Store.t
 
@@ -1150,11 +1160,17 @@ module type S = sig
   type ctx
   val ls: ?ctx:ctx -> t -> Gri.t -> SHA.Commit.t Reference.Map.t Lwt.t
   val push: ?ctx:ctx -> t -> branch:Reference.t -> Gri.t -> Result.push Lwt.t
-  val clone: ?ctx:ctx -> t -> ?deepen:int -> ?unpack:bool ->
-    ?capabilities:capability list -> ?head:Reference.head_contents ->
+  val fetch:
+    ?ctx:ctx ->
+    ?deepen:int ->
+    ?unpack:bool ->
+    ?capabilities:capability list ->
+    ?wants:want list ->
+    ?update:bool ->
     ?progress:(string -> unit) ->
-    Gri.t -> Result.fetch Lwt.t
-  val fetch: ?ctx:ctx -> t -> ?deepen:int -> ?unpack:bool ->
-    ?capabilities:capability list -> ?progress:(string -> unit) ->
-    Gri.t -> Result.fetch Lwt.t
+    t -> Gri.t -> Result.fetch Lwt.t
+  val populate:
+    ?head:Reference.head_contents ->
+    ?progress:(string -> unit) ->
+    t -> checkout:bool -> Result.fetch -> unit Lwt.t
 end
