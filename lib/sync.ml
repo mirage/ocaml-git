@@ -988,52 +988,64 @@ module Make (IO: IO) (Store: Store.S) = struct
         )
 
   let fetch_commits t (ic, oc) ?(progress=fun _ -> ()) f listing wants =
-    Log.debug "Sync.fetch_pack_with_head";
-    Log.debug "PHASE1";
-    let deepen = f.deepen in
-    let capabilities = f.capabilities in
-    let shallows = f.shallows in
-    Upload_request.phase1 (ic, oc) ?deepen ~capabilities
-      ~shallows ~wants
-    >>= fun _phase1 ->
-
-    (* XXX: process the shallow / unshallow.  *)
-    (* XXX: need a notion of shallow/unshallow in API. *)
-
-    Log.debug "PHASE2";
-    let haves = f.haves in
-    Upload_request.phase2 (ic,oc) ~haves >>= fun () ->
-
-    Log.debug "PHASE3";
-    progress "Receiving data ...\n";
-    Pack_file.input ~capabilities ~progress ic >>= fun bufs ->
-
-    let size = List.fold_left (fun acc s -> acc + String.length s) 0 bufs in
-    Log.info "Received a pack file of %d bytes." size;
-    let pack = Cstruct.create size in
-    let _size = List.fold_left (fun acc buf ->
-        let len = String.length buf in
-        Cstruct.blit_from_string buf 0 pack acc len;
-        acc + len
-      ) 0 bufs in
-
-    Log.debug "unpack=%b" f.unpack;
-    let read = Store.read_inflated t in
-    Pack.Raw.input ~progress ~read (Mstruct.of_cstruct pack) >>= fun pack ->
-    let unpack () =
-      if f.unpack
-      then Pack.Raw.unpack ~progress ~write:(Store.write_inflated t) pack
-      else Store.write_pack t pack
+    Log.debug "Sync.fetch_commits %s" (pretty_list SHA.Commit.pretty wants);
+    let wants =
+      let w = SHA.Commit.Set.of_list wants in
+      let h = SHA.Commit.Set.of_list (List.map SHA.to_commit f.haves) in
+      SHA.Commit.Set.diff w h
+      |> SHA.Commit.Set.to_list
     in
-    unpack () >>= fun sha1s ->
-    match SHA.Set.cardinal sha1s with
-    | 0 ->
-      Log.debug "NO NEW OBJECTS";
+    if wants = [] then (
+      Log.debug "Nothing to want: nothing to do! skip the pack file read.";
       progress "Already up-to-date.\n";
-      Lwt.return { Result.listing; sha1s }
-    | n ->
-      Log.debug "%d NEW OBJECTS" n;
-      Lwt.return { Result.listing; sha1s }
+      Lwt.return { Result.listing; sha1s = SHA.Set.empty }
+    ) else (
+      Log.debug "PHASE1";
+      let deepen = f.deepen in
+      let capabilities = f.capabilities in
+      let shallows = f.shallows in
+      Upload_request.phase1 (ic, oc) ?deepen ~capabilities
+        ~shallows ~wants
+      >>= fun _phase1 ->
+
+      (* XXX: process the shallow / unshallow.  *)
+      (* XXX: need a notion of shallow/unshallow in API. *)
+
+      Log.debug "PHASE2";
+      let haves = f.haves in
+      Upload_request.phase2 (ic,oc) ~haves >>= fun () ->
+
+      Log.debug "PHASE3";
+      progress "Receiving data ...\n";
+      Pack_file.input ~capabilities ~progress ic >>= fun bufs ->
+
+      let size = List.fold_left (fun acc s -> acc + String.length s) 0 bufs in
+      Log.info "Received a pack file of %d bytes." size;
+      let pack = Cstruct.create size in
+      let _size = List.fold_left (fun acc buf ->
+          let len = String.length buf in
+          Cstruct.blit_from_string buf 0 pack acc len;
+          acc + len
+        ) 0 bufs in
+
+      Log.debug "unpack=%b" f.unpack;
+      let read = Store.read_inflated t in
+      Pack.Raw.input ~progress ~read (Mstruct.of_cstruct pack) >>= fun pack ->
+      let unpack () =
+        if f.unpack
+        then Pack.Raw.unpack ~progress ~write:(Store.write_inflated t) pack
+        else Store.write_pack t pack
+      in
+      unpack () >>= fun sha1s ->
+      match SHA.Set.cardinal sha1s with
+      | 0 ->
+        Log.debug "No new objects";
+        progress "Already up-to-date.\n";
+        Lwt.return { Result.listing; sha1s }
+      | n ->
+        Log.debug "%d new objects" n;
+        Lwt.return { Result.listing; sha1s }
+    )
 
   let write_heads t reference sha1 =
     if is_head reference then
