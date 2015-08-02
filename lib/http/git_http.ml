@@ -86,13 +86,8 @@ module Flow(HTTP: CLIENT) (IC: CHAN) (OC: CHAN) = struct
             Lwt.return_unit)
         (fun buf off len ->
            begin
-             if ctx.state = `Read then (
-               Log.debug "Write need reconnects.";
-               reconnect ctx
-             ) else (
-               Log.debug "Write uses the existing connection.";
-               Lwt.return_unit;
-             )
+             if not (ctx.state = `Read) then Lwt.return_unit
+             else (Log.debug "Write need reconnects."; reconnect ctx)
            end >>= fun () ->
            let chunk = Bytes.create len in
            ctx.out_stream <- ctx.out_stream @ [chunk];
