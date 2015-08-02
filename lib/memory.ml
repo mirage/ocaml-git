@@ -38,8 +38,21 @@ let level t = t.level
 
 let stores = Hashtbl.create 1024
 let default_root = "root"
-let clear ?(root=default_root) () = Hashtbl.remove stores root
-let clear_all () = Hashtbl.reset stores
+
+let reset t =
+  Log.debug "reset %s" t.root;
+  Hashtbl.clear t.values;
+  Hashtbl.clear t.inflated;
+  Hashtbl.clear t.refs;
+  t.head <- None
+
+let clear ?(root=default_root) () =
+  let () = try reset (Hashtbl.find stores root) with Not_found -> () in
+  Hashtbl.remove stores root
+
+let clear_all () =
+  Hashtbl.iter (fun _ t -> reset t) stores
+
 let (/) = Filename.concat
 
 let create ?(root=default_root) ?(dot_git=default_root / ".git") ?(level=6) () =
@@ -116,6 +129,7 @@ let keys t =
   Hashtbl.fold (fun k _ l -> k :: l) t []
 
 let list t =
+  Log.debug "list %s" t.root;
   Lwt.return (keys t.values)
 
 let mem t sha1 =
