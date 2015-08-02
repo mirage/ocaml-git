@@ -38,12 +38,21 @@ type capability =
 
 module Result: sig
 
-  type fetch = {
-    head      : SHA.Commit.t option;
-    references: SHA.Commit.t Reference.Map.t;
-    sha1s     : SHA.t list;
-  }
+  type fetch
   (** The resulting sha1s and references. *)
+
+  val head_contents: fetch -> Reference.head_contents option
+  (** [head_contents f] is [f]'s head contents (the value of the
+      remote {i .git/HEAD}). *)
+
+  val head: fetch -> SHA.Commit.t option
+  (** [head f] is [f]'s head commit. *)
+
+  val references: fetch -> SHA.Commit.t Reference.Map.t
+  (** [references f] are [f]'s references. *)
+
+  val sha1s: fetch -> SHA.Set.t
+  (** [sha1s f] are [f]'s object hashes. *)
 
   val pretty_fetch: fetch -> string
   (** Pretty print a fetch result. *)
@@ -61,6 +70,9 @@ module Result: sig
 
 end
 
+type want = [ `Ref of Reference.t | `Commit of SHA.Commit.t ]
+(** The type for values wanted. See {!fetch} for details. *)
+
 module type S = sig
 
   type t
@@ -77,21 +89,50 @@ module type S = sig
   val push: ?ctx:ctx -> t -> branch:Reference.t -> Gri.t -> Result.push Lwt.t
   (** Push a local branch to a remote store. *)
 
-  val clone: ?ctx:ctx -> t -> ?deepen:int -> ?unpack:bool ->
-    ?capabilities:capability list -> ?head:Reference.head_contents ->
+  val fetch:
+    ?ctx:ctx ->
+    ?deepen:int ->
+    ?unpack:bool ->
+    ?capabilities:capability list ->
+    ?wants:want list ->
+    ?update:bool ->
     ?progress:(string -> unit) ->
-    Gri.t -> Result.fetch Lwt.t
-  (** [clone t address] clones the contents of [address] into the
-      store [t]. If [head] is set, only the history of the given SHA1
-      or references will be downloaded. If [head] is not set
-      (default), all the whole history (corresponding to {i all} the
-      remote heads) will be downloaded. *)
+    t -> Gri.t -> Result.fetch Lwt.t
+  (** [fetch t uri] fetches the contents of [uri] into the store [t].
 
-  val fetch: ?ctx:ctx -> t -> ?deepen:int -> ?unpack:bool ->
-    ?capabilities:capability list -> ?progress:(string -> unit) ->
-    Gri.t -> Result.fetch Lwt.t
-  (** [fetch t address] fetches the missing contents of [address] into
-      the store [t]. *)
+      By default, all the remote references are updated. This behavior
+      can be changed by using the [wants] parameter:
+
+      {ul
+      {- if [wants] is not specified, the objects corresponding to {b
+         all} the remote references are downloaded. This is useful
+         when cloning a new repository as the remote references are
+         not yet known.}
+      {- If a reference (e.g. a [`Ref] {!want} value) appears in the
+         list, the object corresponding to that remote reference are
+         fetched.}
+      {- If a commit hash (e.g. a [`Commit] {!want} value) in the
+         list, the objects corresponding to the that remote commits
+         are fetched..}  }
+      If [update] is set (default is [false]) the references given in
+      [wants] are updated locally.
+
+      {b Note:} the local HEAD is not modified when doing a fetch. To do so
+      (for instance when doing a clone) do the following:
+
+      {[
+        fetch t gri >>= fun r ->
+        match Result.head_contents r with
+        | Some h -> Store.write_head t h
+        | None   -> Lwt.return_unit
+      ]}
+  *)
+
+  val populate:
+    ?head:Reference.head_contents ->
+    ?progress:(string -> unit) ->
+    t -> checkout:bool -> Result.fetch -> unit Lwt.t
+  (** Populate a fresh repository after a fetch. *)
 
 end
 

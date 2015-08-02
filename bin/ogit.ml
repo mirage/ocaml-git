@@ -371,6 +371,17 @@ let reference_of_raw branch =
 
 let progress s = printf "\r%s%!" s
 
+let err_not_a_directory dir =
+  eprintf "fatal: %s is not a directory.\n" dir;
+  exit 128
+
+let err_not_empty dir =
+  eprintf "fatal: destination path '%s' already exists and is not an \
+           empty directory.\n" dir;
+  exit 128
+
+let (>+=) x f = match x with None -> None | Some x -> Some (f x)
+
 (* CLONE *)
 let clone = {
   name = "clone";
@@ -383,7 +394,16 @@ let clone = {
          of revisions. Refer to $(b,git clone --help) for more information."
         Arg.(some int) None in
     let bare =
-      mk_flag ["bare"] "Do not expand the filesystem." in
+      mk_flag ["bare"]
+        "Make a bare Git repository. That is, instead of creating <directory> \
+         and placing the administrative files in <directory>/.git, make the \
+         $(i, <directory>) itself the $(i,$GIT_DIR). This obviously implies \
+         the -n because there is nowhere to check out the working tree."
+    in
+    let no_checkout =
+      mk_flag ["n"; "no-checkout"]
+        "No checkout of HEAD is performed after the clone is complete."
+    in
     let branch =
       mk_opt ["b"; "branch"] "BRANCH"
         "Instead of pointing the newly created HEAD to the branch pointed to by \
@@ -391,7 +411,8 @@ let clone = {
          non-bare repository, this is the branch that will be checked out."
         Arg.(some reference) None
     in
-    let clone (module S: Store.S) deepen bare branch unpack remote dir =
+    let clone (module S: Store.S)
+        deepen bare no_checkout branch unpack remote dir =
       let dir = match dir with
         | Some d -> d
         | None   ->
@@ -402,31 +423,25 @@ let clone = {
           else
             dir
       in
-      if Sys.file_exists dir && Array.length (Sys.readdir dir) > 0 then (
-        eprintf "fatal: destination path '%s' already exists and is not an empty directory.\n"
-          dir;
-        exit 128
-      );
+      if Sys.file_exists dir && not (Sys.is_directory dir) then
+        err_not_a_directory dir;
+      if Sys.file_exists dir && Array.length (Sys.readdir dir) > 0 then
+        err_not_empty dir;
       let module Result = Sync.Result in
       let module Sync = Sync.Make(S) in
       run begin
-        S.create ~root:dir ()   >>= fun t ->
-        let head = match branch with
-          | None   -> None
-          | Some b -> Some (Reference.Ref (reference_of_raw b))
-        in
+        let dot_git = if bare then Some dir else None in
+        S.create ~root:dir ?dot_git () >>= fun t ->
+        let branch = branch >+= reference_of_raw in
+        let wants  = branch >+= fun b -> [`Ref b] in
         printf "Cloning into '%s' ...\n%!" (Filename.basename (S.root t));
-        Sync.clone t ?deepen ~unpack ?head ~progress remote >>= fun r ->
-        if not bare then match r.Result.head with
-          | None      -> Lwt.return_unit
-          | Some head ->
-            S.write_index t head >>= fun () ->
-            printf "HEAD is now at %s\n" (SHA.Commit.to_hex head);
-            Lwt.return_unit
-        else
-          Lwt.return_unit
+        Sync.fetch t ?deepen ~unpack ?wants ~update:true
+          ~progress remote >>= fun r ->
+        let head = branch >+= fun b -> Reference.Ref b in
+        let checkout = not (bare || no_checkout) in
+        Sync.populate ?head ~checkout ~progress t r
       end in
-    Term.(mk clone $ backend $ depth $ bare $ branch $
+    Term.(mk clone $ backend $ depth $ bare $ no_checkout $ branch $
           unpack $ remote $ directory)
 }
 
@@ -455,15 +470,20 @@ let pull = {
     let pull (module S: Store.S) unpack remote =
       let module Sy = Sync.Make(S) in
       run begin
-        S.create ()               >>= fun t ->
-        Sy.fetch t ~unpack remote >>= function
-        | { Sync.Result.head = None; _ }   -> Lwt.return_unit
-        | { Sync.Result.head = Some h; _ } ->
-          S.write_index t h >>= fun () ->
-          S.read_head t >>= function
-          | None
-          | Some (Reference.SHA _) -> S.write_head t (Reference.SHA h)
-          | Some (Reference.Ref r) -> S.write_reference t r h
+        S.create ()   >>= fun t ->
+        S.read_head t >>= fun h ->
+        Sy.fetch t ~unpack remote >>= fun r ->
+        match h with
+        | None
+        | Some (Reference.SHA _) -> Lwt.return_unit
+        | Some (Reference.Ref b) ->
+          let refs = Sync.Result.references r in
+          if Reference.Map.mem b refs then (
+            let commit = Reference.Map.find b refs in
+            S.write_reference t b commit >>= fun () ->
+            S.write_index t commit
+          ) else
+            Lwt.return_unit
       end
     in
     Term.(mk pull $ backend $ unpack $ remote)

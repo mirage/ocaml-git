@@ -16,7 +16,10 @@
 
 open Test_store
 
-let init () = Git.Memory.clear_all (); Lwt.return_unit
+let init () =
+  Git.Value.Cache.clear ();
+  Git.Memory.clear_all ();
+  Lwt.return_unit
 
 let suite = {
   name  = "MEM";

@@ -1,5 +1,12 @@
-### 1.7.0 (2015-07-31)
+### 1.7.0 (2015-08-02)
 
+* Better sync API (#113)
+  - Change the arguments of `Sync.fetch`
+  - Remove `Sync.clone`
+  - Add `Sync.populate` to be called after a fetch to properly populate
+    the local Git repository (similar to what `git clone` does).
+  - Add `ogit clone --no-checkout` and make `ogit clone --bare` more similar
+    to the same `git` command.
 * Support Github http(s) URLs without .git (#111)
 * Add a `dot_git` optional parameter to `Store.create` to specify where
   the Git metadata should be stored (default is still `<root>/.git`). This

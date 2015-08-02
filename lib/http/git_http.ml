@@ -86,13 +86,8 @@ module Flow(HTTP: CLIENT) (IC: CHAN) (OC: CHAN) = struct
             Lwt.return_unit)
         (fun buf off len ->
            begin
-             if ctx.state = `Read then (
-               Log.debug "Write need reconnects.";
-               reconnect ctx
-             ) else (
-               Log.debug "Write uses the existing connection.";
-               Lwt.return_unit;
-             )
+             if not (ctx.state = `Read) then Lwt.return_unit
+             else (Log.debug "Write need reconnects."; reconnect ctx)
            end >>= fun () ->
            let chunk = Bytes.create len in
            ctx.out_stream <- ctx.out_stream @ [chunk];
@@ -219,25 +214,21 @@ module Flow(HTTP: CLIENT) (IC: CHAN) (OC: CHAN) = struct
           Log.debug "Closing input connection";
           HTTP.close_in ctx.ic;
           Lwt.return_unit)
-      (fun bytes off len ->
-         match ctx.reader with
+      (fun bytes off len -> match ctx.reader with
+         | Some reader -> read_and_save reader bytes off len
          | None ->
-           begin
-             flush_oc ctx req >>= fun () ->
-             HTTP.Response.read (HTTP.ic ctx.ic) >>= function
-             | `Ok r ->
-               check_redirect r >>= fun () ->
-               on_success r (fun () ->
-                   let r = HTTP.Response.make_body_reader r (HTTP.ic ctx.ic) in
-                   ctx.reader     <- Some r;
-                   ctx.last_chunk <- None;
-                   replay_in_stream (read r) ctx.in_stream >>= fun () ->
-                   read_and_save r bytes off len
-                 )
-             | `Eof       -> Lwt.return 0
-             | `Invalid i -> Lwt.fail (Failure i)
-           end
-         | Some reader -> read_and_save reader bytes off len)
+           flush_oc ctx req >>= fun () ->
+           HTTP.Response.read (HTTP.ic ctx.ic) >>= function
+           | `Ok r ->
+             check_redirect r >>= fun () ->
+             on_success r (fun () ->
+                 let r = HTTP.Response.make_body_reader r (HTTP.ic ctx.ic) in
+                 ctx.reader     <- Some r;
+                 ctx.last_chunk <- None;
+                 replay_in_stream (read r) ctx.in_stream >>= fun () ->
+                 read_and_save r bytes off len)
+           | `Eof       -> Lwt.return 0
+           | `Invalid i -> Lwt.fail (Failure i))
 
   let mk_headers = function
     | None   -> Cohttp.Header.init ()

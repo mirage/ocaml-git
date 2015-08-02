@@ -454,46 +454,39 @@ module Make (Store: Store.S) = struct
 
   let test_clones x () =
     let test () =
-      Store.create ~root () >>= fun t  ->
-      let clone ?depth ?(bare=true) gri head =
+      Store.create ~root () >>= fun t ->
+      let fetch ?depth ?(bare=true) ?wants gri =
         x.init () >>= fun () ->
-        Sync.clone t ?head ?deepen:depth gri >>= fun _ ->
+        Store.list t >>= fun l ->
+        Alcotest.(check (list sha1)) "empty" [] l;
+        Sync.fetch t ?wants ?deepen:depth gri  >>= fun r ->
+        Sync.populate ~checkout:(not bare) t r >>= fun () ->
         if Store.kind = `Disk && not x.mirage then (
           let cmd = Printf.sprintf "cd %s && git fsck" @@ Store.root t in
           Alcotest.(check int) "fsck" 0 (Sys.command cmd)
         );
-        let master = Git.Reference.of_raw "refs/heads/master" in
-        let e = match head with
-          | None   -> Git.Reference.Ref master
-          | Some h -> h
-        in
+        let master = Git.Reference.master in
+        let e = Git.Reference.Ref master in
         Store.read_head t >>= function
         | None   -> Alcotest.fail "empty clone!"
         | Some h ->
           Alcotest.(check head_contents) "correct head contents" e h;
-          if not bare then
-            Store.read_reference_exn t master >>= fun h ->
-            Store.write_index t h
-          else
-            Lwt.return_unit
+          Lwt.return_unit
       in
       let git = Gri.of_string "git://github.com/mirage/ocaml-git.git" in
       let https = Gri.of_string "https://github.com/mirage/ocaml-git.git" in
       let large = Gri.of_string "https://github.com/ocaml/opam-repository.git" in
-      let gh_pages =
-        Some (Git.Reference.(Ref (of_raw "refs/heads/gh-pages")))
-      in
+      let gh_pages = `Ref (Git.Reference.of_raw "refs/heads/gh-pages") in
       let commit =
-        let h = SHA.Commit.of_hex "21930ccb5f7b97e80a068371cb554b1f5ce8e55a" in
-        Some (Git.Reference.SHA h)
+        `Commit (SHA.Commit.of_hex "21930ccb5f7b97e80a068371cb554b1f5ce8e55a")
       in
-      clone git   None     >>= fun () ->
-      clone https None     >>= fun () ->
-      clone git   gh_pages >>= fun () ->
-      clone https gh_pages >>= fun () ->
-      clone https ~depth:1 commit >>= fun () ->
-      clone git   ~depth:3 commit >>= fun () ->
-      clone large ~bare:false None >>= fun () ->
+      fetch git   >>= fun () ->
+      fetch https >>= fun () ->
+      fetch git   ~wants:[gh_pages] >>= fun () ->
+      fetch https ~wants:[gh_pages] >>= fun () ->
+      fetch https ~depth:1 ~wants:[commit] >>= fun () ->
+      fetch git   ~depth:3 ~wants:[commit; gh_pages] >>= fun () ->
+      fetch large ~bare:false  >>= fun () ->
 
       Lwt.return_unit
     in

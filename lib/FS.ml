@@ -47,12 +47,14 @@ module type S = sig
   val create_file: t -> string -> Tree.perm -> Blob.t -> unit Lwt.t
   val entry_of_file: t -> Index.t ->
     string -> Tree.perm -> SHA.Blob.t -> Blob.t -> Index.entry option Lwt.t
+  val clear: unit -> unit
 end
 
 module Make (IO: IO) = struct
 
   module File_cache : sig
     val read : string -> Cstruct.t Lwt.t
+    val clear: unit -> unit
   end = struct
 
     (* Search key and value stored in the weak table.
@@ -75,7 +77,7 @@ module Make (IO: IO) = struct
       end)
 
     let cache = WeakTbl.create 10
-
+    let clear () = WeakTbl.clear cache
     let dummy = Weak.create 0 (* only used to create a search key *)
 
     let find path =
@@ -289,9 +291,14 @@ module Make (IO: IO) = struct
       let idx_file = "pack-" ^ (SHA.to_hex sha1) ^ ".idx" in
       pack_dir / idx_file
 
-    let index_lru: Pack_index.Raw.t LRU.t = LRU.make 8
+    let index_lru = LRU.make 8
+    let index_c_lru = LRU.make 8
+    let keys_lru = LRU.make (128 * 1024)
 
-    let index_c_lru: Pack_index.t LRU.t = LRU.make 8
+    let clear () =
+      LRU.clear index_lru;
+      LRU.clear index_lru;
+      LRU.clear keys_lru
 
     let read_index_c t sha1 =
       Log.debug "read_index_c %s" (SHA.to_hex sha1);
@@ -318,8 +325,6 @@ module Make (IO: IO) = struct
         let temp_dir = temp_dir t in
         let buf = Cstruct.of_string (Buffer.contents buf) in
         IO.write_file file ~temp_dir buf
-
-    let keys_lru = LRU.make (128 * 1024)
 
     let read_keys t sha1 =
       Log.debug "read_keys %s" (SHA.to_hex sha1);
@@ -754,5 +759,9 @@ module Make (IO: IO) = struct
       Lwt.return_unit
 
   let kind = `Disk
+
+  let clear () =
+    File_cache.clear ();
+    Packed.clear ()
 
 end
