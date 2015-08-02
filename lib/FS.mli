@@ -32,6 +32,9 @@ module type S = sig
       does not already exist. If [root] is not set, use the current
       working directory as repository root. *)
 
+  val clear: unit -> unit
+  (** Clear the LRU caches. *)
+
 end
 
 (** {2 Constructor} *)
