@@ -16,11 +16,15 @@
 
 (** Store Git objects in memory. *)
 
-include Store.S
+module Make (D: SHA.DIGEST): sig
 
-val clear: ?root:string -> unit -> unit
-(** Remove all the contents store in memory for the given root. Use
-    the default root if the optional argument is not provided. *)
+  include Store.S
 
-val clear_all: unit -> unit
-(** Remove all the contents store in memory for all roots. *)
+  val clear: ?root:string -> unit -> unit
+  (** Remove all the contents store in memory for the given root. Use
+      the default root if the optional argument is not provided. *)
+
+  val clear_all: unit -> unit
+  (** Remove all the contents store in memory for all roots. *)
+
+end
