@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 9d5ad2741882e6a01ca78d2199b13b9f)
+# DO NOT EDIT (digest: 42b4a7ea741b2cd57147917461410665)
 SHA
 Blob
 Index
@@ -24,5 +24,6 @@ Gri
 Memory
 FS
 Packed_refs
+Inflate
 LRU
 # OASIS_STOP
