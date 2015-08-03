@@ -203,6 +203,17 @@ let add_stat_info buf t =
   uint32 t.gid;
   uint32 t.size
 
+let fail fmt = Format.ksprintf failwith ("Index: " ^^ fmt)
+let err_invalid_version v = fail "Only index version 2 is supported (not %ld)" v
+let err_need_more_data = fail "input: need more data! (total:%d current:%d)"
+
+let err_wrong_index_header buf =
+  Mstruct.parse_error_buf buf "%s: wrong index header."
+
+let err_wrong_checksum ~got ~expected =
+  fail "Wrong checksum! got %s but was expecting %s."
+    (SHA.pretty got) (SHA.pretty expected)
+
 let input_entry buf =
   Log.debug "input_entry";
   let offset0 = Mstruct.offset buf in
@@ -211,7 +222,8 @@ let input_entry buf =
   let stage, len =
     let i = Mstruct.get_be_uint16 buf in
     (i land 0x3000) lsr 12,
-    (i land 0x0FFF) in
+    (i land 0x0FFF)
+  in
   Log.debug "stage:%d len:%d" stage len;
   let name = Mstruct.get_string buf len in
   Mstruct.shift buf 1;
@@ -272,29 +284,17 @@ let input buf =
   let offset = Mstruct.offset buf in
   let total_length = Mstruct.length buf in
   let header = Mstruct.get_string buf 4 in
-  if header <> "DIRC" then
-    Mstruct.parse_error_buf buf "%s: wrong index header." header;
+  if header <> "DIRC" then err_wrong_index_header buf header;
   let version = Mstruct.get_be_uint32 buf in
-  if version <> 2l then
-    failwith (Printf.sprintf "Only index version 2 is supported (%ld)"
-                version);
+  if version <> 2l then err_invalid_version version;
   let entries = input_entries buf in
   let extensions = input_extensions buf in
   let length = Mstruct.offset buf - offset in
-  if length <> total_length - 20 then (
-    Log.error "Index.input: more data to read! (total:%d current:%d)"
-      (total_length - 20) length;
-    failwith "Index.input"
-  );
-  let actual_checksum =
-    Cstruct.sub all offset length
-    |> SHA.of_cstruct
-  in
-  let checksum = SHA.input buf in
-  if actual_checksum <> checksum then (
-    Log.error "Index.input: wrong checksum";
-    failwith "Index.input"
-  );
+  if length <> total_length - 20 then
+    err_need_more_data (total_length - 20) length;
+  let got = Cstruct.sub all offset length |> SHA.of_cstruct in
+  let expected = SHA.input buf in
+  if not (SHA.equal got expected) then err_wrong_checksum ~got ~expected;
   { entries; extensions }
 
 let add buf ?level:_ t =
