@@ -85,5 +85,5 @@ module type IO = sig
 
 end
 
-module Make (IO: IO): S
+module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S): S
 (** Create an on-disk store implementation. *)

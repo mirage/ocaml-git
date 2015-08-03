@@ -18,9 +18,9 @@ open Lwt.Infix
 open Misc.OP
 open Printf
 
-let fail fmt = Printf.ksprintf failwith fmt
+let fail fmt = Printf.ksprintf failwith ("Git.FS." ^^ fmt)
 
-let err_not_found n k = fail "Git.FS.%s: %s not found" n k
+let err_not_found n k = fail "%s: %s not found" n k
 
 module LogMake = Log.Make
 
@@ -50,7 +50,14 @@ module type S = sig
   val clear: unit -> unit
 end
 
-module Make (IO: IO) = struct
+module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) = struct
+
+  module Value_IO = Value.IO(D)(I)
+  module Pack_IO = Pack.IO(D)(I)
+  module SHA_IO = SHA.IO(D)
+  module Packed_value_IO = Packed_value.IO(D)(I)
+  module Pack_index = Pack_index.Make(D)
+  module Packed_refs_IO = Packed_refs.IO(D)
 
   module File_cache : sig
     val read : string -> Cstruct.t Lwt.t
@@ -122,7 +129,8 @@ module Make (IO: IO) = struct
   let temp_dir t = t.dot_git / "tmp"
 
   let create ?root ?dot_git ?(level=6) () =
-    if level < 0 || level > 9 then fail "level should be between 0 and 9";
+    if level < 0 || level > 9 then
+      fail "create: level should be between 0 and 9";
     begin match root with
       | None   -> IO.getcwd ()
       | Some r ->
@@ -193,25 +201,19 @@ module Make (IO: IO) = struct
 
     let value_of_file file =
       File_cache.read file >>= fun buf ->
-      try
-        Mstruct.of_cstruct buf
-        |> Value.input
-        |> some
-      with Zlib.Error _ ->
-        Lwt.fail (Zlib.Error (file, (Cstruct.to_string buf)))
+      Mstruct.of_cstruct buf
+      |> Value_IO.input
+      |> some
 
     let inflated_of_file file =
       File_cache.read file >>= fun buf ->
-      try
-        Misc.inflate_cstruct buf
-        |> Cstruct.to_string
-        |> some
-      with Zlib.Error _ ->
-        Lwt.fail (Zlib.Error (file, (Cstruct.to_string buf)))
+      match I.inflate (Mstruct.of_cstruct buf) with
+      | None   -> fail "%s is not a valid compressed file." file;
+      | Some s -> some (Mstruct.to_string s)
 
     let read_aux name read_file t sha1 =
       Log.debug "%s %s" name (SHA.to_hex sha1);
-      if SHA.is_short sha1 then (
+      if SHA_IO.is_short sha1 then (
         Log.debug "read: short sha1";
         get_file t sha1 >>= function
         | Some file -> read_file file
@@ -226,22 +228,22 @@ module Make (IO: IO) = struct
     let read_inflated = read_aux "read_inflated" inflated_of_file
 
     let write_inflated t inflated =
-      let sha1 = SHA.of_string inflated in
+      let sha1 = D.string inflated in
       let file = file t sha1 in
       IO.file_exists file >>= function
       | true  -> Log.debug "write: file %s already exists!" file; Lwt.return sha1
       | false ->
         let level = t.level in
-        let deflated =
-          Misc.deflate_cstruct ~level (Cstruct.of_string inflated)
-        in
+        let deflated = I.deflate ~level (Cstruct.of_string inflated) in
         let temp_dir = temp_dir t in
         IO.write_file file ~temp_dir deflated >>= fun () ->
         Lwt.return sha1
 
     let write t value =
       Log.debug "write";
-      let inflated = Misc.with_buffer (fun buf -> Value.add_inflated buf value) in
+      let inflated =
+        Misc.with_buffer (fun buf -> Value_IO.add_inflated buf value)
+      in
       write_inflated t inflated
 
     let list t =
@@ -255,7 +257,7 @@ module Make (IO: IO) = struct
           IO.files dir >>= fun suffixes ->
           let suffixes = List.map Filename.basename suffixes in
           let objects = List.map (fun suffix ->
-              SHA.of_hex (prefix ^ suffix)
+              SHA_IO.of_hex (prefix ^ suffix)
             ) suffixes in
           Lwt.return objects
         ) objects
@@ -282,7 +284,7 @@ module Make (IO: IO) = struct
       let packs = List.map (fun f ->
           let p = Filename.chop_suffix f ".idx" in
           let p = String.sub p 5 (String.length p - 5) in
-          SHA.of_hex p
+          SHA_IO.of_hex p
         ) packs in
       Lwt.return packs
 
@@ -292,30 +294,27 @@ module Make (IO: IO) = struct
       pack_dir / idx_file
 
     let index_lru = LRU.make 8
-    let index_c_lru = LRU.make 8
     let keys_lru = LRU.make (128 * 1024)
 
     let clear () =
       LRU.clear index_lru;
-      LRU.clear index_lru;
       LRU.clear keys_lru
 
-    let read_index_c t sha1 =
-      Log.debug "read_index_c %s" (SHA.to_hex sha1);
-      match LRU.find index_c_lru sha1 with
-      | Some i -> Log.debug "read_index_c cache hit!"; Lwt.return i
+    let read_pack_index t sha1 =
+      Log.debug "read_pack_index %s" (SHA.to_hex sha1);
+      match LRU.find index_lru sha1 with
+      | Some i -> Log.debug "read_pack_index cache hit!"; Lwt.return i
       | None ->
         let file = index t sha1 in
         IO.file_exists file >>= function
         | true ->
           File_cache.read file >>= fun buf ->
           let index = Pack_index.input (Cstruct.to_bigarray buf) in
-          LRU.add index_c_lru sha1 index;
+          LRU.add index_lru sha1 index;
           Lwt.return index
-        | false -> fail "read_index: %s does not exist" file
+        | false -> fail "read_pack_index: %s does not exist" file
 
     let write_pack_index t sha1 idx =
-      LRU.add index_lru sha1 idx;
       let file = index t sha1 in
       IO.file_exists file >>= function
       | true  -> Lwt.return_unit
@@ -332,7 +331,7 @@ module Make (IO: IO) = struct
       | Some ks -> Lwt.return ks
       | None    ->
         Log.debug "read_keys: cache miss!";
-        read_index_c t sha1 >>= fun index ->
+        read_pack_index t sha1 >>= fun index ->
         let keys = Pack_index.keys index |> SHA.Set.of_list in
         LRU.add keys_lru sha1 keys;
         Lwt.return keys
@@ -343,29 +342,31 @@ module Make (IO: IO) = struct
       IO.file_exists file >>= function
       | true  -> Lwt.return_unit
       | false ->
-        let pack = Pack.Raw.buffer pack in
+        let pack = Pack_IO.Raw.buffer pack in
         let temp_dir = temp_dir t in
         IO.write_file file ~temp_dir pack
 
     let mem_in_pack t pack_sha1 sha1 =
       Log.debug "mem_in_pack %s:%s" (SHA.to_hex pack_sha1) (SHA.to_hex sha1);
-      read_index_c t pack_sha1 >>= fun idx ->
+      read_pack_index t pack_sha1 >>= fun idx ->
       Lwt.return (Pack_index.mem idx sha1)
 
     let read_in_pack name pack_read ~read t pack_sha1 sha1 =
       Log.debug "read_in_pack(%s) %s:%s" name
         (SHA.to_hex pack_sha1) (SHA.to_hex sha1);
-      read_index_c t pack_sha1 >>= fun index ->
-      let index = Pack_index.find_offset index in
+      read_pack_index t pack_sha1 >>= fun i ->
+      let index = Pack_index.find_offset i in
       match index sha1 with
-      | None   -> Log.debug "read_in_pack: not found"; Lwt.return_none
+      | None   ->
+        Log.debug "read_in_pack: not found"; Lwt.return_none
       | Some _ ->
         let file = file t pack_sha1 in
         IO.file_exists file >>= function
         | true ->
           File_cache.read file >>= fun buf ->
           pack_read ~index ~read (Mstruct.of_cstruct buf) sha1
-        | false -> fail "Cannot read the pack object %s" (SHA.to_hex pack_sha1)
+        | false ->
+          fail "read_in_pack: cannot read the pack object %s" (SHA.to_hex pack_sha1)
 
     let read_aux read_in_pack ~read t sha1 =
       list t >>= fun packs ->
@@ -375,9 +376,9 @@ module Make (IO: IO) = struct
           | None   -> read_in_pack ~read t pack sha1
         ) None packs
 
-    let read = read_aux (read_in_pack "read" Pack.Raw.read)
+    let read = read_aux (read_in_pack "read" Pack_IO.Raw.read)
     let read_inflated =
-      read_aux (read_in_pack "read_inflated" Pack.Raw.read_inflated)
+      read_aux (read_in_pack "read_inflated" Pack_IO.Raw.read_inflated)
 
     let mem t sha1 =
       list t >>= fun packs ->
@@ -479,7 +480,7 @@ module Make (IO: IO) = struct
       | false -> Lwt.return_nil
       | true  ->
         IO.read_file packed_refs >>= fun buf ->
-        let pr = Packed_refs.input (Mstruct.of_cstruct buf) in
+        let pr = Packed_refs_IO.input (Mstruct.of_cstruct buf) in
         Lwt.return (Packed_refs.references pr)
     in
     packed_refs >|= fun packed_refs -> refs @ packed_refs
@@ -504,7 +505,7 @@ module Make (IO: IO) = struct
          change. *)
       IO.read_file file >>= fun buf ->
       let str = Cstruct.to_string buf in
-      match Reference.head_contents_of_string str with
+      match Reference.head_contents_of_string ~of_hex:SHA_IO.of_hex str with
       | Reference.SHA x -> Lwt.return (Some x)
       | Reference.Ref r -> read_reference t r
     else
@@ -515,7 +516,7 @@ module Make (IO: IO) = struct
         (* We use `IO.read_file` here as the contents of the file
            might change. *)
         IO.read_file packed_refs >>= fun buf ->
-        let refs = Packed_refs.input (Mstruct.of_cstruct buf) in
+        let refs = Packed_refs_IO.input (Mstruct.of_cstruct buf) in
         let sha1 = Packed_refs.find refs ref in
         Lwt.return sha1
 
@@ -527,7 +528,7 @@ module Make (IO: IO) = struct
          change. *)
       IO.read_file file >|= fun buf ->
       let str = Cstruct.to_string buf in
-      Some (Reference.head_contents_of_string str)
+      Some (Reference.head_contents_of_string ~of_hex:SHA_IO.of_hex str)
     | false ->
       Lwt.return None
 
@@ -550,11 +551,11 @@ module Make (IO: IO) = struct
 
   let write_pack t pack =
     Log.debug "write_pack";
-    let sha1 = Pack.Raw.sha1 pack in
-    let index = Pack.Raw.index pack in
+    let sha1 = Pack_IO.Raw.sha1 pack in
+    let index = Pack_IO.Raw.index pack in
     Packed.write_pack t sha1 pack   >>= fun () ->
     Packed.write_pack_index t sha1 index >>= fun () ->
-    Lwt.return (Pack.Raw.keys pack)
+    Lwt.return (Pack_IO.Raw.keys pack)
 
   let write_reference t ref sha1 =
     let file = t.dot_git / Reference.to_raw ref in
@@ -591,7 +592,7 @@ module Make (IO: IO) = struct
     let blobs_c = ref 0 in
     let id = id () in
     let error expected got =
-      fail "Expecting a %s, got a %s"
+      fail "load_filesystem: expecting a %s, got a %s"
         expected (Object_type.pretty (Value.type_of got))
     in
     let blob mode sha1 k =
@@ -600,14 +601,14 @@ module Make (IO: IO) = struct
       incr blobs_c;
       read_exn t sha1 >>= function
       | Value.Blob b -> k (Leaf (mode, (SHA.to_blob sha1, b)))
-      | obj -> error "blob" obj
+      | obj          -> error "blob" obj
     in
     let rec tree mode sha1 k =
       Log.debug "tree %d %s" id (SHA.to_hex sha1);
       assert (mode = `Dir);
       read_exn t sha1 >>= function
       | Value.Tree t -> tree_entries t [] k
-      | obj -> error "tree" obj
+      | obj          -> error "tree" obj
     and tree_entries trees children k =
       match trees with
       | []   -> k (Node children)
@@ -621,7 +622,7 @@ module Make (IO: IO) = struct
       Log.debug "commit %d %s" id (SHA.to_hex sha1);
       read_exn t sha1 >>= function
       | Value.Commit c -> tree `Dir (SHA.of_tree c.Commit.tree) Lwt.return
-      | obj -> error "commit" obj
+      | obj            -> error "commit" obj
     in
     commit (SHA.of_commit head) >>= fun t ->
     Lwt.return (!blobs_c, t)
@@ -662,6 +663,8 @@ module Make (IO: IO) = struct
 
   let index_file t = t.dot_git / "index"
 
+  module Index_IO = Index.IO(D)
+
   let read_index t =
     Log.debug "read_index";
     let file = index_file t in
@@ -672,7 +675,7 @@ module Make (IO: IO) = struct
          change. *)
       IO.read_file file >>= fun buf ->
       let buf = Mstruct.of_cstruct buf in
-      Lwt.return (Index.input buf)
+      Lwt.return (Index_IO.input buf)
 
   let entry_of_file_aux t index file mode sha1 blob =
     IO.realpath file >>= fun file ->
@@ -730,7 +733,7 @@ module Make (IO: IO) = struct
     let buf = Buffer.create 1024 in
     match index with
     | Some index ->
-      Index.add buf index;
+      Index_IO.add buf index;
       let temp_dir = temp_dir t in
       IO.write_file (index_file t) ~temp_dir
         (Cstruct.of_string (Buffer.contents buf)) >>= fun () ->
@@ -752,7 +755,7 @@ module Make (IO: IO) = struct
         ) >>= fun () ->
       let index = Index.create !entries in
       let temp_dir = temp_dir t in
-      Index.add buf index;
+      Index_IO.add buf index;
       IO.write_file (index_file t) ~temp_dir
         (Cstruct.of_string (Buffer.contents buf)) >>= fun () ->
       Log.info "Checking out files: 100%% (%d/%d), done." !all !all;
@@ -763,5 +766,8 @@ module Make (IO: IO) = struct
   let clear () =
     File_cache.clear ();
     Packed.clear ()
+
+  module Digest = D
+  module Inflate = I
 
 end
