@@ -26,25 +26,6 @@ val with_buffer': (Buffer.t -> unit) -> Cstruct.t
 (** Create a temporary buffer, apply a function to append stuff to
     it, and return the buffer contents as a cstruct. *)
 
-(** {2 Zlib Compression} *)
-
-val inflate_cstruct: Cstruct.t -> Cstruct.t
-(** Inflate a cstruct. *)
-
-val deflate_cstruct: ?level:int -> Cstruct.t -> Cstruct.t
-(** Deflate a cstruct. *)
-
-val inflate_mstruct: ?output_size:int -> Mstruct.t -> Mstruct.t
-(** Inflate an mstruct. *)
-
-val deflate_mstruct: ?level:int -> Mstruct.t -> Mstruct.t
-(** Deflate an mstruct. *)
-
-(** {2 CRC-32} *)
-
-val crc32: string -> int32
-(** Return the CRC-32 value of a bigstring. *)
-
 (** {2 Association lists} *)
 
 val inverse_assoc: ('a * 'b) list -> ('b * 'a) list
