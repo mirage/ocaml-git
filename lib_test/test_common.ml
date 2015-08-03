@@ -124,10 +124,10 @@ let rec_files dir =
 
 let head_contents =
   let module M = struct
-    type t = Git.Reference.head_contents
-    let equal = Git.Reference.equal_head_contents
-    let pp = Git.Reference.pp_head_contents
+    type t = Reference.head_contents
+    let equal = Reference.equal_head_contents
+    let pp = Reference.pp_head_contents
     end
   in (module M: Alcotest.TESTABLE with type t = M.t)
 
-let sha1 = (module Git.SHA: Alcotest.TESTABLE with type t = Git.SHA.t)
+let sha1 = (module SHA: Alcotest.TESTABLE with type t = SHA.t)

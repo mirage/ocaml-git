@@ -17,7 +17,6 @@
 open Test_common
 open Lwt.Infix
 open Git
-open Git_unix
 
 type t = {
   name  : string;
@@ -42,6 +41,12 @@ module Make (Store: Store.S) = struct
   open Common
   module Search = Search.Make(Store)
 
+  module Value_IO = Value.IO(Store.Digest)(Store.Inflate)
+  module SHA_IO = SHA.IO(Store.Digest)
+  module Index_IO = Index.IO(Store.Digest)
+  module Pack_IO = Pack.IO(Store.Digest)(Store.Inflate)
+  module Pack_index = Pack_index.Make(Store.Digest)
+
   let run x test =
     try Lwt_main.run (x.init () >>= test >>= x.clean)
     with e ->
@@ -51,13 +56,13 @@ module Make (Store: Store.S) = struct
   let () = quiet ()
 
   let v0 = Value.blob (Blob.of_raw @@ long_random_string ())
-  let kv0 = Value.sha1 v0
+  let kv0 = Value_IO.sha1 v0
 
   let v1  = Value.blob (Blob.of_raw "hoho")
-  let kv1 = Value.sha1 v1
+  let kv1 = Value_IO.sha1 v1
 
   let v2 = Value.blob (Blob.of_raw "")
-  let kv2 = Value.sha1 v2
+  let kv2 = Value_IO.sha1 v2
 
   (* Create a node containing t1 -w-> v1 *)
   let w = "a\000bbb\047"
@@ -66,14 +71,14 @@ module Make (Store: Store.S) = struct
         name = w;
         node = kv1 }
     ])
-  let kt0 = Value.sha1 t0
+  let kt0 = Value_IO.sha1 t0
 
   let t1 = Value.tree ([
       { Tree.perm = `Normal;
         name = "x";
         node = kv1 }
     ])
-  let kt1 = Value.sha1 t1
+  let kt1 = Value_IO.sha1 t1
 
   (* Create the tree t2 -b-> t1 -a-> v1 *)
   let t2 = Value.tree ([
@@ -81,7 +86,7 @@ module Make (Store: Store.S) = struct
         name = "b";
         node = kt1 }
     ])
-  let kt2 = Value.sha1 t2
+  let kt2 = Value_IO.sha1 t2
 
   (* Create the tree t3 -a-> t2 -b-> t1 -a-> v1 *)
   let t3 = Value.tree ([
@@ -89,7 +94,7 @@ module Make (Store: Store.S) = struct
         name = "a";
         node = kt2; }
     ])
-  let kt3 = Value.sha1 t3
+  let kt3 = Value_IO.sha1 t3
 
   (* Create the tree t4 -a-> t2 -b-> t1 -a-> v1
                        \-c-> v2 *)
@@ -101,7 +106,7 @@ module Make (Store: Store.S) = struct
         name = "a";
         node = kt2; }
     ])
-  let kt4 = Value.sha1 t4
+  let kt4 = Value_IO.sha1 t4
 
   let t5 = Value.tree ([
       { Tree.perm = `Normal;
@@ -111,7 +116,7 @@ module Make (Store: Store.S) = struct
         name = "a";
         node = kt2; }
     ])
-  let kt5 = Value.sha1 t5
+  let kt5 = Value_IO.sha1 t5
 
   let john_doe = {
     User.name  = "John Doe";
@@ -127,7 +132,7 @@ module Make (Store: Store.S) = struct
       committer   = john_doe;
       message     = "hello r1!";
     }
-  let kc1 = Value.sha1 c1
+  let kc1 = Value_IO.sha1 c1
 
   (* c1 -> c2 : t4 *)
   let c2 = Value.commit {
@@ -137,12 +142,12 @@ module Make (Store: Store.S) = struct
       committer   = john_doe;
       message     = "hello r1!"
     }
-  let kc2 = Value.sha1 c2
+  let kc2 = Value_IO.sha1 c2
 
   let c3 =
     let c2 = match c2 with Value.Commit x -> x | _ -> assert false in
     Value.commit { c2 with Commit.tree = SHA.to_tree kt5 }
-  let kc3 = Value.sha1 c3
+  let kc3 = Value_IO.sha1 c3
 
   (* tag1: c1 *)
   let tag1 = Value.tag {
@@ -152,7 +157,7 @@ module Make (Store: Store.S) = struct
       tagger   = john_doe;
       message  = "Ho yeah!";
     }
-  let ktag1 = Value.sha1 tag1
+  let ktag1 = Value_IO.sha1 tag1
 
   (* tag2: c2 *)
   let tag2 = Value.tag {
@@ -162,7 +167,7 @@ module Make (Store: Store.S) = struct
       tagger   = john_doe;
       message  = "Hahah!";
     }
-  let ktag2 = Value.sha1 tag2
+  let ktag2 = Value_IO.sha1 tag2
 
   (* r1: t4 *)
   let r1 = Reference.of_raw "refs/origin/head"
@@ -253,21 +258,20 @@ module Make (Store: Store.S) = struct
   let test_commits x () =
     let c =
       let tree =
-        Git.SHA.Tree.of_hex "3aadeb4d06f2a149e06350e4dab2c7eff117addc"
+        SHA_IO.Tree.of_hex "3aadeb4d06f2a149e06350e4dab2c7eff117addc"
       in
       let parents = [] in
       let author = {
-        Git.User.name="Thomas Gazagnaire"; email="thomas@gazagnaire.org";
-        date= (1435873834L, Some { Git.User.sign = `Plus; hours = 1; min = 0 })}
+        User.name="Thomas Gazagnaire"; email="thomas@gazagnaire.org";
+        date= (1435873834L, Some { User.sign = `Plus; hours = 1; min = 0 })}
       in
       let message = "Initial commit" in
-      Git.Value.Commit
-        { Git.Commit.tree; parents; author; committer = author; message }
+      Value.Commit { Commit.tree; parents; author; committer = author; message }
     in
     let test () =
-      let buf = Git.Misc.with_buffer (fun buf -> Git.Value.add_inflated buf c) in
+      let buf = Misc.with_buffer (fun buf -> Value_IO.add_inflated buf c) in
       let buf = Mstruct.of_string buf in
-      let c' = Git.Value.input_inflated buf in
+      let c' = Value_IO.input_inflated buf in
       assert_value_equal "commits: convert" c c';
 
       create ()                 >>= fun t   ->
@@ -320,8 +324,8 @@ module Make (Store: Store.S) = struct
       assert_refs_equal "refs" [r1; r2] rs;
 
       let commit =
-        Git.Reference.SHA (
-          SHA.Commit.of_hex "21930ccb5f7b97e80a068371cb554b1f5ce8e55a"
+        Reference.SHA (
+          SHA_IO.Commit.of_hex "21930ccb5f7b97e80a068371cb554b1f5ce8e55a"
         ) in
       Store.write_head t ( commit) >>= fun () ->
       Store.read_head t >>= fun head ->
@@ -341,22 +345,21 @@ module Make (Store: Store.S) = struct
           if Filename.basename (Sys.getcwd ()) <> "lib_test" then
             failwith "Tests should run in lib_test/";
           files "." >>= fun files ->
-          FS.create ~root () >>= fun t ->
+          Git_unix.FS.create ~root () >>= fun t ->
           Lwt_list.map_s (fun file ->
               Git_unix.FS.IO.read_file file >>= fun str ->
               let blob = Blob.of_raw (Cstruct.to_string str) in
-              let sha1 = SHA.to_blob (Value.sha1 (Value.Blob blob)) in
+              let sha1 = SHA.to_blob (Value_IO.sha1 (Value.Blob blob)) in
               let mode =
                 let p = (Unix.stat file).Unix.st_perm in
                 if p land 0o100 = 0o100 then `Exec else `Normal
               in
-              FS.entry_of_file t Index.empty file mode sha1 blob >>= fun f ->
-              Lwt.return f
+              Git_unix.FS.entry_of_file t Index.empty file mode sha1 blob
             ) files >>= fun entries ->
           let entries = Misc.list_filter_map (fun x -> x) entries in
           let cache = Index.create entries in
-          let buf = Misc.with_buffer' (fun buf -> Index.add buf cache) in
-          let cache2 = Index.input (Mstruct.of_cstruct buf) in
+          let buf = Misc.with_buffer' (fun buf -> Index_IO.add buf cache) in
+          let cache2 = Index_IO.input (Mstruct.of_cstruct buf) in
           assert_index_equal "index" cache cache2;
           Lwt.return_unit
         ) else
@@ -402,8 +405,8 @@ module Make (Store: Store.S) = struct
             (* basic serialization of pack files *)
             let pstr1 = read_file pack in
             let read _ = failwith "shallow pack" in
-            Pack.Raw.input (Mstruct.of_cstruct pstr1) ~read >>= fun rp1 ->
-            let i3 = Pack.Raw.index rp1 in
+            Pack_IO.Raw.input (Mstruct.of_cstruct pstr1) ~read >>= fun rp1 ->
+            let i3 = Pack_IO.Raw.index rp1 in
 
             (* basic serialization of index files *)
             begin if Sys.file_exists index then
@@ -418,10 +421,10 @@ module Make (Store: Store.S) = struct
                 Lwt.return_unit
             end >>= fun () ->
 
-            let pstr2 = Pack.Raw.buffer rp1 in
-            Pack.Raw.input (Mstruct.of_cstruct pstr2) ~read >>= fun rp2 ->
-            Pack.of_raw rp1 >>= fun pic1 ->
-            Pack.of_raw rp2 >>= fun pic2 ->
+            let pstr2 = Pack_IO.Raw.buffer rp1 in
+            Pack_IO.Raw.input (Mstruct.of_cstruct pstr2) ~read >>= fun rp2 ->
+            Pack_IO.of_raw rp1 >>= fun pic1 ->
+            Pack_IO.of_raw rp2 >>= fun pic2 ->
             assert_pack_equal "pack" pic1 pic2;
 
             Lwt.return_unit
@@ -430,7 +433,7 @@ module Make (Store: Store.S) = struct
       in
       run x test
 
-  module Sync = Sync.Make(Store)
+  module Sync = Git_unix.Sync.Make(Store)
 
   let test_basic_remote x () =
     let test () =
@@ -443,14 +446,6 @@ module Make (Store: Store.S) = struct
       Lwt.return_unit
     in
     run x test
-
-  let head_contents =
-    let module M = struct
-      type t = Git.Reference.head_contents
-      let equal = Git.Reference.equal_head_contents
-      let pp = Git.Reference.pp_head_contents
-    end
-    in (module M: Alcotest.TESTABLE with type t = M.t)
 
   let test_clones x () =
     let test () =
@@ -465,8 +460,14 @@ module Make (Store: Store.S) = struct
           let cmd = Printf.sprintf "cd %s && git fsck" @@ Store.root t in
           Alcotest.(check int) "fsck" 0 (Sys.command cmd)
         );
-        let master = Git.Reference.master in
-        let e = Git.Reference.Ref master in
+        let master = Reference.master in
+        let e = Reference.Ref master in
+        Store.list t >>= fun sha1s ->
+        Lwt_list.iter_s (fun sha1 ->
+            Store.read_exn t sha1 >>= fun _v ->
+            Lwt.return_unit
+          ) sha1s
+        >>= fun () ->
         Store.read_head t >>= function
         | None   -> Alcotest.fail "empty clone!"
         | Some h ->
@@ -476,9 +477,9 @@ module Make (Store: Store.S) = struct
       let git = Gri.of_string "git://github.com/mirage/ocaml-git.git" in
       let https = Gri.of_string "https://github.com/mirage/ocaml-git.git" in
       let large = Gri.of_string "https://github.com/ocaml/opam-repository.git" in
-      let gh_pages = `Ref (Git.Reference.of_raw "refs/heads/gh-pages") in
+      let gh_pages = `Ref (Reference.of_raw "refs/heads/gh-pages") in
       let commit =
-        `Commit (SHA.Commit.of_hex "21930ccb5f7b97e80a068371cb554b1f5ce8e55a")
+        `Commit (SHA_IO.Commit.of_hex "21930ccb5f7b97e80a068371cb554b1f5ce8e55a")
       in
       fetch git   >>= fun () ->
       fetch https >>= fun () ->
@@ -532,16 +533,19 @@ let test_read_writes () =
     >>= fun () -> Lwt.join [ write 500; read 1000; write 1000; read 500; ]
   end
 
-module Array = struct
+module Test_array (D: SHA.DIGEST) = struct
+
+  module SHA_IO = SHA.IO(D)
+  module SHA_Array = SHA.Array(D)
 
   let create len =
-    let mk _i = long_random_string () |> Git.SHA.of_string in
+    let mk _i = long_random_string () |> D.string in
     let a = Array.init len mk in
-    Array.sort Git.SHA.compare a;
-    let hsize = Git.SHA.(hex_length zero) / 2 in
+    Array.sort SHA.compare a;
+    let hsize = SHA.(hex_length SHA_IO.zero) / 2 in
     let b = Cstruct.create (len * hsize) in
     for i = 0 to len-1 do
-      let raw = Git.SHA.to_raw a.(i) in
+      let raw = SHA.to_raw a.(i) in
       Cstruct.blit_from_string raw 0 b (i * hsize) hsize
     done;
     a, b
@@ -550,7 +554,7 @@ module Array = struct
     let a, b = create 127 in
     for i = 0 to Array.length a - 1 do
       let msg = Printf.sprintf "get%d" i in
-      Alcotest.(check sha1) msg a.(i) (Git.SHA.Array.get b i);
+      Alcotest.(check sha1) msg a.(i) (SHA_Array.get b i);
     done
 
   let test_lenght () =
@@ -558,13 +562,13 @@ module Array = struct
       let len = 10 + Random.int 1024 in
       let _, b = create len in
       let msg = Printf.sprintf "len%d" len in
-      Alcotest.(check int) msg len (Git.SHA.Array.length b)
+      Alcotest.(check int) msg len (SHA_Array.length b)
     done
 
   let test_linear_search () =
     let a, b = create 127 in
     for i = 0 to 126 do
-      let j = Git.SHA.Array.linear_search b a.(i) in
+      let j = SHA_Array.linear_search b a.(i) in
       let msg = Printf.sprintf "linear-seach %d" i in
       Alcotest.(check (option int)) msg (Some i) j
     done
@@ -572,12 +576,14 @@ module Array = struct
   let test_binary_search () =
     let a, b = create 127 in
     for i = 0 to 126 do
-      let j = Git.SHA.Array.binary_search b a.(i) in
+      let j = SHA_Array.binary_search b a.(i) in
       let msg = Printf.sprintf "binary-seach %d" i in
       Alcotest.(check (option int)) msg (Some i) j
     done
 
 end
+
+module Array = Test_array(Git_unix.Digest)
 
 let suite (speed, x) =
   let (module S) = x.store in
