@@ -171,7 +171,7 @@ let cat = {
       run begin
         Lwt_io.with_file ~mode:Lwt_io.input file (fun x -> Lwt_io.read x)
         >>= fun buf ->
-        let v = Value.input (Mstruct.of_string buf) in
+        let v = Value_IO.input (Mstruct.of_string buf) in
         Printf.printf "%s%!\n" (Value.pretty v);
         Lwt.return_unit
       end in
@@ -203,7 +203,7 @@ let cat_file = {
       run begin
         S.create () >>= fun t ->
         catch_ambiguous (fun () ->
-            S.read_exn t (SHA.of_short_hex id) >>= fun v ->
+            S.read_exn t (SHA_IO.of_short_hex id) >>= fun v ->
              let t, c, s = match v with
                | Value.Blob blob ->
                  let c = Blob.to_raw blob in
@@ -310,9 +310,9 @@ let ls_tree = {
       in
       let rec walk t path sha1 =
         S.read_exn t sha1 >>= function
-        | Value.Commit c -> walk t path (SHA.of_tree c.Commit.tree)
-        | Value.Blob _   -> pp_blob path sha1
-        | Value.Tag _    -> pp_tag path sha1
+        | Value.Commit c  -> walk t path (SHA.of_tree c.Commit.tree)
+        | Value.Blob _    -> pp_blob path sha1
+        | Value.Tag _     -> pp_tag path sha1
         | Value.Tree tree ->
           Lwt_list.iter_s (fun e ->
               let path = Filename.concat path e.Tree.name in
@@ -329,7 +329,7 @@ let ls_tree = {
       in
       run begin
         S.create () >>= fun t ->
-        let sha1 = SHA.of_short_hex oid in
+        let sha1 = SHA_IO.of_short_hex oid in
         catch_ambiguous (fun () -> walk t "" sha1)
       end in
     Term.(mk ls $ backend $ recurse_flag $ show_tree_flag
@@ -357,7 +357,7 @@ let read_tree = {
           if List.exists (fun r -> Reference.to_raw r = ref) refs then
             S.read_reference_exn t (Reference.of_raw ref)
           else
-            Lwt.return (SHA.Commit.of_short_hex commit_str)
+            Lwt.return (SHA_IO.Commit.of_short_hex commit_str)
         end >>= fun commit ->
         S.write_index t commit >>= fun () ->
         printf "The index file has been update to %s\n%!" commit_str;
@@ -588,7 +588,7 @@ let default =
       clone.doc fetch.doc pull.doc push.doc graph.doc in
   Term.(pure usage $ (pure ())),
   Term.info "ogit"
-    ~version:Git.Version.current
+    ~version:Version.current
     ~sdocs:global_option_section
     ~doc
     ~man
