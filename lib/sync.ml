@@ -274,7 +274,9 @@ module Result = struct
 
 end
 
-module Make (IO: IO) (Store: Store.S) = struct
+module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) (Store: Store.S) = struct
+
+  module SHA_IO = SHA.IO(D)
 
   exception Error
 
@@ -479,7 +481,7 @@ module Make (IO: IO) (Store: Store.S) = struct
           match Stringext.cut line ~on:Misc.sp_str with
           | Some ("ERR", err) -> error "ERROR: %s" err
           | Some (sha1, r)  ->
-            let sha1 = SHA.Commit.of_hex sha1 in
+            let sha1 = SHA_IO.Commit.of_hex sha1 in
             if is_empty acc then (
               (* Read the capabilities on the first line *)
               match Stringext.cut r ~on:Misc.nul_str with
@@ -532,9 +534,9 @@ module Make (IO: IO) (Store: Store.S) = struct
         match Stringext.cut s ~on:Misc.sp_str with
         | Some ("ACK", r) ->
           begin match Stringext.cut r ~on:Misc.sp_str with
-            | None         -> Lwt.return (Ack (SHA.of_hex r))
+            | None         -> Lwt.return (Ack (SHA_IO.of_hex r))
             | Some (id, s) ->
-              Lwt.return (Ack_multi (SHA.of_hex id, status_of_string s))
+              Lwt.return (Ack_multi (SHA_IO.of_hex id, status_of_string s))
           end
         | _ -> error "%S invalid ack" s
 
@@ -596,10 +598,10 @@ module Make (IO: IO) (Store: Store.S) = struct
           | None -> error "input upload"
           | Some (kind, s) ->
             match kind with
-            | "shallow"   -> aux (Shallow   (SHA.of_hex s) :: acc)
-            | "unshallow" -> aux (Unshallow (SHA.of_hex s) :: acc)
-            | "have"      -> aux (Have      (SHA.of_hex s) :: acc)
-            | "done"      -> aux (Done                     :: acc)
+            | "shallow"   -> aux (Shallow   (SHA_IO.of_hex s) :: acc)
+            | "unshallow" -> aux (Unshallow (SHA_IO.of_hex s) :: acc)
+            | "have"      -> aux (Have      (SHA_IO.of_hex s) :: acc)
+            | "done"      -> aux (Done                      :: acc)
             | "deepen"    ->
               let d =
                 try int_of_string s
@@ -607,7 +609,7 @@ module Make (IO: IO) (Store: Store.S) = struct
               in
               aux (Deepen d :: acc)
             | "want" ->
-              let aux id c = aux (Want (SHA.Commit.of_hex id, c) :: acc) in
+              let aux id c = aux (Want (SHA_IO.Commit.of_hex id, c) :: acc) in
               begin match Stringext.cut s ~on:Misc.sp_str with
                 | Some (id,c) -> aux id (Capabilities.of_string c)
                 | None        -> match acc with
@@ -828,6 +830,8 @@ module Make (IO: IO) (Store: Store.S) = struct
 
   module Update_request = struct
 
+    module Pack_IO = Pack.IO(D)(I)
+
     type command =
       | Create of Reference.t * SHA.Commit.t
       | Delete of Reference.t * SHA.Commit.t
@@ -837,17 +841,21 @@ module Make (IO: IO) (Store: Store.S) = struct
       let r = Reference.pretty in
       let c = SHA.Commit.to_hex in
       match t with
-      | Create (name, new_id)         -> sprintf "create %s %s" (r name) (c new_id)
-      | Delete (name, old_id)         -> sprintf "delete %s %s" (r name) (c old_id)
-      | Update (name, old_id, new_id) -> sprintf "update %s %s %s" (r name) (c old_id) (c new_id)
+      | Create (name, new_id)         ->
+        sprintf "create %s %s" (r name) (c new_id)
+      | Delete (name, old_id)         ->
+        sprintf "delete %s %s" (r name) (c old_id)
+      | Update (name, old_id, new_id) ->
+        sprintf "update %s %s %s" (r name) (c old_id) (c new_id)
 
     let pretty_commands l =
       String.concat " & " (List.map pretty_command l)
 
     let output_command buf t =
+      let zero = SHA_IO.Commit.zero in
       let old_id, new_id, name = match t with
-        | Create (name, new_id) -> SHA.Commit.zero, new_id, name
-        | Delete (name, old_id) -> old_id, SHA.Commit.zero, name
+        | Create (name, new_id) -> zero, new_id, name
+        | Delete (name, old_id) -> old_id, zero, name
         | Update (name, old_id, new_id) -> old_id, new_id, name in
       Printf.bprintf buf "%s %s %s"
         (SHA.Commit.to_hex old_id)
@@ -879,7 +887,7 @@ module Make (IO: IO) (Store: Store.S) = struct
           PacketLine.output_line oc (Buffer.contents buf) >>= fun () ->
           aux false y in
       aux true t.commands >>= fun () ->
-      let _, buf = Pack.add t.pack in
+      let _, buf = Pack_IO.add t.pack in
       let buf = Mstruct.of_cstruct buf in
       let rec send () =
         match Mstruct.length buf with
@@ -944,6 +952,7 @@ module Make (IO: IO) (Store: Store.S) = struct
     | Fetch of fetch
 
   module Graph = Global_graph.Make(Store)
+  module Pack_IO = Pack.IO(D)(I)
 
   let push ?ctx t ~branch gri =
     Log.debug "Sync.push";
@@ -980,7 +989,8 @@ module Make (IO: IO) (Store: Store.S) = struct
             | None   -> SHA.Set.empty
             | Some x -> SHA.Set.singleton (SHA.of_commit x)
           in
-          Graph.pack t ~min max >>= fun pack ->
+          Graph.pack t ~min max >>= fun values ->
+          let pack = Pack_IO.create values in
           let request = { Update_request.capabilities; commands; pack } in
           Log.debug "request:\n%s" (Update_request.pretty request);
           Update_request.output oc request >>= fun () ->
@@ -1030,10 +1040,10 @@ module Make (IO: IO) (Store: Store.S) = struct
 
       Log.debug "unpack=%b" f.unpack;
       let read = Store.read_inflated t in
-      Pack.Raw.input ~progress ~read (Mstruct.of_cstruct pack) >>= fun pack ->
+      Pack_IO.Raw.input ~progress ~read (Mstruct.of_cstruct pack) >>= fun pack ->
       let unpack () =
         if f.unpack
-        then Pack.Raw.unpack ~progress ~write:(Store.write_inflated t) pack
+        then Pack_IO.Raw.unpack ~progress ~write:(Store.write_inflated t) pack
         else Store.write_pack t pack
       in
       unpack () >>= fun sha1s ->

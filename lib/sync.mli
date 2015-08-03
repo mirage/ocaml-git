@@ -173,4 +173,5 @@ module type IO = sig
 
 end
 
-module Make (IO: IO) (S: Store.S): S with type t = S.t and type ctx = IO.ctx
+module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) (S: Store.S):
+  S with type t = S.t and type ctx = IO.ctx
