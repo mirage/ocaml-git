@@ -159,7 +159,5 @@ module Make (Store: Store.S) = struct
     Lwt_list.map_p (fun k ->
         Store.read_exn t k >>= fun v -> Lwt.return (k, v)
       ) keys
-    >>= fun values ->
-    Lwt.return (Pack.pack values)
 
 end

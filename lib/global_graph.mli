@@ -29,7 +29,7 @@ module Make (S: Store.S): sig
       are lesser than the ones in [min] and none are bigger than the
       ones in [max]. *)
 
-  val pack: S.t -> min:SHA.Set.t -> SHA.Set.t -> Pack.t Lwt.t
+  val pack: S.t -> min:SHA.Set.t -> SHA.Set.t -> (SHA.t * Value.t) list Lwt.t
   (** Return a packed (closed) collection of objects. *)
 
   val to_dot: S.t -> Buffer.t -> unit Lwt.t
