@@ -583,9 +583,15 @@ module Test_array (D: SHA.DIGEST) = struct
 
 end
 
-module Array = Test_array(Git_unix.Digest)
+let array (module D: SHA.DIGEST) =
+  let module Array = Test_array(D) in [
+    ("get"          , `Quick, Array.test_get);
+    ("length"       , `Quick, Array.test_lenght);
+    ("linear search", `Quick, Array.test_linear_search);
+    ("binary search", `Quick, Array.test_binary_search);
+  ]
 
-let suite (speed, x) =
+  let suite (speed, x) =
   let (module S) = x.store in
   let module T = Make(S) in
   x.name,
@@ -603,13 +609,10 @@ let suite (speed, x) =
   ]
 
 let generic = [
-  "OPS"       , ["Concurrent read/writes", `Quick, test_read_writes];
-  "SHA1-ARRAY", [
-    ("get"          , `Quick, Array.test_get);
-    ("length"       , `Quick, Array.test_lenght);
-    ("linear search", `Quick, Array.test_linear_search);
-    ("binary search", `Quick, Array.test_binary_search);
-  ]
+  "OPS"        , ["Concurrent read/writes", `Quick, test_read_writes];
+  "SHA1-unix"  , array (module Git_unix.SHA1);
+  "SHA1-mirage", array (module Git_mirage.SHA1_slow);
+  "SHA256-unix", array (module Git_unix.SHA256);
 ]
 
 let run name tl =

@@ -16,7 +16,7 @@
 
 open Test_store
 
-module Memory = Git.Memory.Make(Git_unix.Digest)
+module Memory = Git.Memory.Make(Git_unix.SHA1)
 
 let init () =
   Git.Value.Cache.clear ();

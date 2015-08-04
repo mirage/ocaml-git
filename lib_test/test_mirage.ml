@@ -48,7 +48,7 @@ module M = struct
 
 end
 
-module S = FS(M)(SHA1_slow)(Git_unix.Inflate)
+module S = FS(M)(SHA1_slow)(Git_unix.Zlib)
 
 let suite =
   {

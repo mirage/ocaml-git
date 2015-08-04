@@ -313,9 +313,9 @@ module IO_FS = struct
 end
 
 
-module Inflate = Git.Inflate.Make(Zlib)
+module Zlib = Git.Inflate.Make(Zlib)
 
-module Digest = struct
+module SHA1 = struct
 
   let cstruct buf =
     buf
@@ -327,7 +327,23 @@ module Digest = struct
     Cstruct.of_string str
     |> cstruct
 
-  let length = 20
+  let length = Nocrypto.Hash.SHA1.digest_size
+
+end
+
+module SHA256 = struct
+
+  let cstruct buf =
+    buf
+    |> Nocrypto.Hash.SHA256.digest
+    |> Cstruct.to_string
+    |> fun x -> SHA.of_raw x
+
+  let string str =
+    Cstruct.of_string str
+    |> cstruct
+
+  let length = Nocrypto.Hash.SHA256.digest_size
 
 end
 
@@ -353,7 +369,7 @@ module Make (D: Git.SHA.DIGEST) (I: Git.Inflate.S) = struct
 
 end
 
-module M = Make(Digest)(Inflate)
+module M = Make(SHA1)(Zlib)
 include M
 
 module type S = sig

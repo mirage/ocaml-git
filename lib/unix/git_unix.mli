@@ -22,9 +22,9 @@ module type S = sig
 
   (** {1 Unix implementation}
 
-      The Unix implementation fix the choice of [Git.Inflate.S] and
-      [Git.SHA.DIGEST]. By default, it uses [camlzip] and
-      [nocrypto].
+      The default implementation for Unix fixes the choice of
+      [Git.Inflate.S] and [Git.SHA.DIGEST] by using [camlzip]'s zlib
+      bindings and [nocrypto]'s SHA1 implementation.
 
       It also uses [Lwt_unix] and [Lwt_io] for the IO functions. *)
 
@@ -65,8 +65,14 @@ module Make (D: Git.SHA.DIGEST) (I: Git.Inflate.S): S
     algorithms. {b Note:} this might cause your implementation to not
     be compatible with Git anynore! *)
 
-module Inflate: Inflate.S
-(** Implementation of the inflate signature using [camlzip]. *)
+module Zlib: Inflate.S
+(** Implementation of the inflate signature using [camlzip]'s zlib
+    bindings. *)
 
-module Digest: Git.SHA.DIGEST
-(** Implementation of the digest signature using [ocaml-nocrypto]. *)
+module SHA1: Git.SHA.DIGEST
+(** Implementation of the digest signature using [ocaml-nocrypto]'s
+    SHA1 algorithm. *)
+
+module SHA256: Git.SHA.DIGEST
+(** Implementation of the digest signature using [ocaml-nocrypto]'s
+    SHA256 algorithm. *)
