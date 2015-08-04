@@ -49,7 +49,6 @@ module Raw = struct
   let pretty = Misc.pretty pp
 
   let lengths { offsets; _ } =
-    Log.debug "lengths";
     let rec aux acc = function
       | []    -> List.rev acc
       | [h,_] -> aux ((h, None)::acc) []
