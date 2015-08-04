@@ -214,102 +214,118 @@ let err_wrong_checksum ~got ~expected =
   fail "Wrong checksum! got %s but was expecting %s."
     (SHA.pretty got) (SHA.pretty expected)
 
-let input_entry buf =
-  Log.debug "input_entry";
-  let offset0 = Mstruct.offset buf in
-  let stats = input_stat_info buf in
-  let id = SHA.Blob.input buf in
-  let stage, len =
-    let i = Mstruct.get_be_uint16 buf in
-    (i land 0x3000) lsr 12,
-    (i land 0x0FFF)
-  in
-  Log.debug "stage:%d len:%d" stage len;
-  let name = Mstruct.get_string buf len in
-  Mstruct.shift buf 1;
-  let bytes = Mstruct.offset buf - offset0 in
-  let padding = match bytes mod 8 with
-    | 0 -> 0
-    | n -> 8-n in
-  Mstruct.shift buf padding;
-  Log.debug "name:%s id:%s bytes:%d padding:%d"
-    name (SHA.Blob.to_hex id) bytes padding;
-  { stats; id; stage; name }
-
-let add_entry buf t =
-  Log.debug "add_entry";
-  let len = 63 + String.length t.name in
-  let pad = match len mod 8 with
-    | 0 -> 0
-    | n -> 8-n in
-  let cstr = Cstruct.create (len+pad) in
-  Mstruct.with_mstruct cstr (fun mstr ->
-      add_stat_info mstr t.stats;
-      Mstruct.set_string mstr (SHA.Blob.to_raw t.id);
-      let flags = (t.stage lsl 12 + String.length t.name) land 0x3FFF in
-      Mstruct.set_be_uint16 mstr flags;
-      Mstruct.set_string mstr t.name;
-      Mstruct.set_string mstr (String.make (1+pad) '\x00');
-    );
-  Buffer.add_string buf (Cstruct.to_string cstr)
-
 let pp_extension ppf e =
   Format.fprintf ppf "@[kind:%s@ size:%d]"
     (string_of_extension_kind e.kind) (String.length e.payload)
 
-let input_entries buf =
-  let n = Mstruct.get_be_uint32 buf in
-  Log.debug "input_entries: %ld entries (%db)" n (Mstruct.length buf);
-  let rec loop acc n =
-    if n = 0l then List.rev acc
-    else
-      let entry = input_entry buf in
-      loop (entry :: acc) Int32.(sub n 1l) in
-  loop [] n
+module IO (D: SHA.DIGEST) = struct
 
-let input_extensions buf =
-  let rec aux acc =
-    if Mstruct.length buf = 20 then List.rev acc
-    else
-      let kind = extension_kind_of_string (Mstruct.get_string buf 4) in
-      let size = Mstruct.get_be_uint32 buf in
-      let payload = Mstruct.get_string buf (Int32.to_int size) in
-      let e = { kind; payload } in
-      aux (e :: acc)
-  in
-  aux []
+  module SHA_IO = SHA.IO(D)
+  type x = t
+  type t = x
+  let equal = equal
+  let compare = compare
+  let pp = pp
+  let pretty = pretty
+  let hash = hash
 
-let input buf =
-  let all = Mstruct.to_cstruct buf in
-  let offset = Mstruct.offset buf in
-  let total_length = Mstruct.length buf in
-  let header = Mstruct.get_string buf 4 in
-  if header <> "DIRC" then err_wrong_index_header buf header;
-  let version = Mstruct.get_be_uint32 buf in
-  if version <> 2l then err_invalid_version version;
-  let entries = input_entries buf in
-  let extensions = input_extensions buf in
-  let length = Mstruct.offset buf - offset in
-  if length <> total_length - 20 then
-    err_need_more_data (total_length - 20) length;
-  let got = Cstruct.sub all offset length |> SHA.of_cstruct in
-  let expected = SHA.input buf in
-  if not (SHA.equal got expected) then err_wrong_checksum ~got ~expected;
-  { entries; extensions }
+  let input_entry buf =
+    Log.debug "input_entry";
+    let offset0 = Mstruct.offset buf in
+    let stats = input_stat_info buf in
+    let id = SHA_IO.input buf |> SHA.to_blob in
+    let stage, len =
+      let i = Mstruct.get_be_uint16 buf in
+      (i land 0x3000) lsr 12,
+      (i land 0x0FFF)
+    in
+    Log.debug "stage:%d len:%d" stage len;
+    let name = Mstruct.get_string buf len in
+    Mstruct.shift buf 1;
+    let bytes = Mstruct.offset buf - offset0 in
+    let padding = match bytes mod 8 with
+      | 0 -> 0
+      | n -> 8-n in
+    Mstruct.shift buf padding;
+    Log.debug "name:%s id:%s bytes:%d padding:%d"
+      name (SHA.Blob.to_hex id) bytes padding;
+    { stats; id; stage; name }
 
-let add buf ?level:_ t =
-  let str = Misc.with_buffer (fun buf ->
-      let n = List.length t.entries in
-      Log.debug "add %d entries" n;
-      let header = Cstruct.create 12 in
-      Mstruct.with_mstruct header (fun header ->
-          Mstruct.set_string header "DIRC";
-          Mstruct.set_be_uint32 header 2l;
-          Mstruct.set_be_uint32 header (Int32.of_int n);
-        );
-      Buffer.add_string buf (Cstruct.to_string header);
-      List.iter (add_entry buf) t.entries;
-    ) in
-  let sha1 = SHA.of_string str in
-  Buffer.add_string buf str;
-  Buffer.add_string buf (SHA.to_raw sha1)
+  let add_entry buf t =
+    Log.debug "add_entry";
+    let len = 63 + String.length t.name in
+    let pad = match len mod 8 with
+      | 0 -> 0
+      | n -> 8-n in
+    let cstr = Cstruct.create (len+pad) in
+    Mstruct.with_mstruct cstr (fun mstr ->
+        add_stat_info mstr t.stats;
+        Mstruct.set_string mstr (SHA.Blob.to_raw t.id);
+        let flags = (t.stage lsl 12 + String.length t.name) land 0x3FFF in
+        Mstruct.set_be_uint16 mstr flags;
+        Mstruct.set_string mstr t.name;
+        Mstruct.set_string mstr (String.make (1+pad) '\x00');
+      );
+    Buffer.add_string buf (Cstruct.to_string cstr)
+
+
+  let input_entries buf =
+    let n = Mstruct.get_be_uint32 buf in
+    Log.debug "input_entries: %ld entries (%db)" n (Mstruct.length buf);
+    let rec loop acc n =
+      if n = 0l then List.rev acc
+      else
+        let entry = input_entry buf in
+        loop (entry :: acc) Int32.(sub n 1l) in
+    loop [] n
+
+  let input_extensions buf =
+    let rec aux acc =
+      if Mstruct.length buf = 20 then List.rev acc
+      else
+        let kind = extension_kind_of_string (Mstruct.get_string buf 4) in
+        let size = Mstruct.get_be_uint32 buf in
+        let payload = Mstruct.get_string buf (Int32.to_int size) in
+        let e = { kind; payload } in
+        aux (e :: acc)
+    in
+    aux []
+
+  let input buf =
+    let all = Mstruct.to_cstruct buf in
+    let offset = Mstruct.offset buf in
+    let total_length = Mstruct.length buf in
+    let header = Mstruct.get_string buf 4 in
+    if header <> "DIRC" then err_wrong_index_header buf header;
+    let version = Mstruct.get_be_uint32 buf in
+    if version <> 2l then err_invalid_version version;
+    let entries = input_entries buf in
+    let extensions = input_extensions buf in
+    let length = Mstruct.offset buf - offset in
+    if length <> total_length - 20 then
+      err_need_more_data (total_length - 20) length;
+    let got = Cstruct.sub all offset length |> D.cstruct in
+    let expected = SHA_IO.input buf in
+    if not (SHA.equal got expected) then err_wrong_checksum ~got ~expected;
+    { entries; extensions }
+
+  let add buf ?level:_ t =
+    let str = Misc.with_buffer (fun buf ->
+        let n = List.length t.entries in
+        Log.debug "add %d entries" n;
+        let header = Cstruct.create 12 in
+        Mstruct.with_mstruct header (fun header ->
+            Mstruct.set_string header "DIRC";
+            Mstruct.set_be_uint32 header 2l;
+            Mstruct.set_be_uint32 header (Int32.of_int n);
+          );
+        Buffer.add_string buf (Cstruct.to_string header);
+        List.iter (add_entry buf) t.entries;
+      ) in
+    let sha1 = D.string str in
+    Buffer.add_string buf str;
+    Buffer.add_string buf (SHA.to_raw sha1)
+
+end
+
+module type IO = Object.IO with type t = t

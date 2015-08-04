@@ -30,13 +30,14 @@ type time = {
   (** binary integer containg the lower 32 bits of the entry (file or
       symbolic link) more precise timestamp, if available. *)
 }
+(** The type for time values. *)
 
 type mode =
   [ `Normal
   | `Exec
   | `Link
   | `Gitlink ]
-(** Permission for files in the index file. *)
+(** The type for files' permission in the index file. *)
 
 val pp_mode: Format.formatter -> mode -> unit
 (** Pretty print file modes. *)
@@ -108,7 +109,11 @@ type t = private {
 val create: ?extensions:extension list -> entry list -> t
 (** Create an index. *)
 
-include Object.S with type t := t
-
 val empty: t
 (** The empty index file. *)
+
+include Object.S with type t := t
+
+module type IO = Object.IO with type t = t
+
+module IO (D: SHA.DIGEST): IO
