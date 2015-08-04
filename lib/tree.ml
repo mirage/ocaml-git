@@ -30,31 +30,37 @@ type entry = {
   node: SHA.t;
 }
 
-type t = entry list
+module T = struct
 
-let hash = Hashtbl.hash
-let compare = compare
-let equal = (=)
+  type t = entry list
 
-let pretty_perm = function
-  | `Normal -> "normal"
-  | `Exec   -> "exec"
-  | `Link   -> "link"
-  | `Dir    -> "dir"
-  | `Commit -> "commit"
+  let hash = Hashtbl.hash
+  let compare = compare
+  let equal = (=)
 
-let pp_entry ppf e =
-  Format.fprintf ppf "{@[<hov 2>perm = %s;@ node = \"%a\";@ name = %S;@]}"
-    (pretty_perm e.perm)
-    SHA.pp e.node
-    e.name
+  let pretty_perm = function
+    | `Normal -> "normal"
+    | `Exec   -> "exec"
+    | `Link   -> "link"
+    | `Dir    -> "dir"
+    | `Commit -> "commit"
 
-let pp ppf t =
-  Format.fprintf ppf "[@,";
-  List.iter (Format.fprintf ppf "%a;@ " pp_entry) t;
-  Format.fprintf ppf "@,@]]"
+  let pp_entry ppf e =
+    Format.fprintf ppf "{@[<hov 2>perm = %s;@ node = \"%a\";@ name = %S;@]}"
+      (pretty_perm e.perm)
+      SHA.pp e.node
+      e.name
 
-let pretty = Misc.pretty pp
+  let pp ppf t =
+    Format.fprintf ppf "[@,";
+    List.iter (Format.fprintf ppf "%a;@ " pp_entry) t;
+    Format.fprintf ppf "@,@]]"
+
+  let pretty = Misc.pretty pp
+
+end
+
+include T
 
 let perm_of_string buf = function
   | "44"
@@ -106,57 +112,64 @@ let encode path =
       Buffer.add_substring b path !last (n - !last);
     Buffer.contents b
 
-let add_entry buf e =
-  Buffer.add_string buf (string_of_perm e.perm);
-  Buffer.add_char buf Misc.sp;
-  Buffer.add_string buf (encode e.name);
-  Buffer.add_char buf Misc.nul;
-  SHA.add buf e.node
+module IO (D: SHA.DIGEST) = struct
 
-let decode path =
-  if not (Misc.string_mem escape path) then path
-  else
-    let n = String.length path in
-    let b = Buffer.create n in
-    let last = ref 0 in
-    for i = 0 to n - 1 do
-      if path.[i] = escape then (
-        if i - !last > 0 then Buffer.add_substring b path !last (i - !last);
-        if i + 1 < n then (
-          let c = Char.chr (Char.code path.[i+1] - 1) in
-          Buffer.add_char b c;
-        );
-        last := i + 2;
-      );
-    done;
-    if n - !last > 0 then
-      Buffer.add_substring b path !last (n - !last);
-    Buffer.contents b
+  module SHA_IO = SHA.IO(D)
+  include T
 
-let input_entry buf =
-  let perm = match Mstruct.get_string_delim buf Misc.sp with
-    | None      -> Mstruct.parse_error_buf buf "invalid perm"
-    | Some perm -> perm in
-  let name = match Mstruct.get_string_delim buf Misc.nul with
-    | None      -> Mstruct.parse_error_buf buf "invalid filename"
-    | Some name -> name in
-  let name = decode name in
-  let node = SHA.input buf in
-  let entry = {
-    perm = perm_of_string buf perm;
-    name; node
-  } in
-  Some entry
+  let add_entry buf e =
+    Buffer.add_string buf (string_of_perm e.perm);
+    Buffer.add_char buf Misc.sp;
+    Buffer.add_string buf (encode e.name);
+    Buffer.add_char buf Misc.nul;
+    SHA_IO.add buf e.node
 
-let add buf ?level:_ t =
-  List.iter (add_entry buf) t
-
-let input buf =
-  let rec aux entries =
-    if Mstruct.length buf <= 0 then
-      List.rev entries
+  let decode path =
+    if not (Misc.string_mem escape path) then path
     else
-      match input_entry buf with
-      | None   -> List.rev entries
-      | Some e -> aux (e :: entries) in
-  aux []
+      let n = String.length path in
+      let b = Buffer.create n in
+      let last = ref 0 in
+      for i = 0 to n - 1 do
+        if path.[i] = escape then (
+          if i - !last > 0 then Buffer.add_substring b path !last (i - !last);
+          if i + 1 < n then (
+            let c = Char.chr (Char.code path.[i+1] - 1) in
+            Buffer.add_char b c;
+          );
+          last := i + 2;
+        );
+      done;
+      if n - !last > 0 then
+        Buffer.add_substring b path !last (n - !last);
+      Buffer.contents b
+
+  let input_entry buf =
+    let perm = match Mstruct.get_string_delim buf Misc.sp with
+      | None      -> Mstruct.parse_error_buf buf "invalid perm"
+      | Some perm -> perm in
+    let name = match Mstruct.get_string_delim buf Misc.nul with
+      | None      -> Mstruct.parse_error_buf buf "invalid filename"
+      | Some name -> name in
+    let name = decode name in
+    let node = SHA_IO.input buf in
+    let entry = {
+      perm = perm_of_string buf perm;
+      name; node
+    } in
+    Some entry
+
+  let add buf ?level:_ t =
+    List.iter (add_entry buf) t
+
+  let input buf =
+    let rec aux entries =
+      if Mstruct.length buf <= 0 then
+        List.rev entries
+      else
+        match input_entry buf with
+        | None   -> List.rev entries
+        | Some e -> aux (e :: entries) in
+    aux []
+
+end
