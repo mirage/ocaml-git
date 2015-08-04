@@ -28,3 +28,5 @@ type t = {
     store) and a message explaining what the snapshot contains. *)
 
 include Object.S with type t := t
+
+module IO (D: SHA.DIGEST): Object.IO with type t = t

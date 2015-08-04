@@ -16,82 +16,100 @@
 
 module Log = Log.Make(struct let section = "commit" end)
 
-type t = {
-  tree     : SHA.Tree.t;
-  parents  : SHA.Commit.t list;
-  author   : User.t;
-  committer: User.t;
-  message  : string;
-}
+module T = struct
 
-let hash = Hashtbl.hash
+  type t = {
+    tree     : SHA.Tree.t;
+    parents  : SHA.Commit.t list;
+    author   : User.t;
+    committer: User.t;
+    message  : string;
+  }
 
-let compare = compare
+  let hash = Hashtbl.hash
 
-let equal = (=)
+  let compare = compare
 
-let pp_parents ppf parents =
-  List.iter (fun t ->
-      Format.fprintf ppf "\"%a\";@ " SHA.Commit.pp t
-    ) parents
+  let equal = (=)
 
-let pp ppf t =
-  Format.fprintf ppf
-    "{@[<hov 2>\
-     tree = \"%a\";@ \
-     parents = [@,@[<hov 2>%a@]];@ \
-     author = %a;@ \
-     committer = %a;@.\
-     message = %S@]}"
-    SHA.Tree.pp t.tree
-    pp_parents t.parents
-    User.pp t.author
-    User.pp t.committer
-    (String.trim t.message)
+  let pp_parents ppf parents =
+    List.iter (fun t ->
+        Format.fprintf ppf "\"%a\";@ " SHA.Commit.pp t
+      ) parents
 
-let pretty = Misc.pretty pp
+  let pp ppf t =
+    Format.fprintf ppf
+      "{@[<hov 2>\
+       tree = \"%a\";@ \
+       parents = [@,@[<hov 2>%a@]];@ \
+       author = %a;@ \
+       committer = %a;@.\
+       message = %S@]}"
+      SHA.Tree.pp t.tree
+      pp_parents t.parents
+      User.pp t.author
+      User.pp t.committer
+      (String.trim t.message)
 
-let add_parent buf parent =
-  Buffer.add_string buf "parent ";
-  SHA.Commit.add_hex buf parent;
-  Buffer.add_char buf Misc.lf
+  let pretty = Misc.pretty pp
 
-let add buf ?level:_ t =
-  Buffer.add_string buf "tree ";
-  SHA.Tree.add_hex buf t.tree;
-  Buffer.add_char buf Misc.lf;
-  List.iter (add_parent buf) t.parents;
-  Buffer.add_string buf "author ";
-  User.add buf t.author;
-  Buffer.add_char buf Misc.lf;
-  Buffer.add_string buf "committer ";
-  User.add buf t.committer;
-  Buffer.add_char buf Misc.lf;
-  Buffer.add_char buf Misc.lf;
-  Buffer.add_string buf t.message
+end
 
-let input_parents buf =
-  let rec aux parents =
-    match Mstruct.get_string_delim buf Misc.sp with
-    | None          -> List.rev parents
-    | Some "parent" ->
-      begin match Mstruct.get_delim buf Misc.lf SHA.Commit.input_hex with
-        | None   -> Mstruct.parse_error_buf buf "input_parents"
-        | Some h -> aux (h :: parents)
-      end
-    | Some p ->
-      (* we cancel the shift we've done to input the key *)
-      let n = String.length p in
-      Mstruct.shift buf (-n-1);
-      List.rev parents
-  in
-  aux []
+include T
 
-let input buf =
-  let tree      = Misc.input_key_value buf ~key:"tree" SHA.Tree.input_hex in
-  let parents   = input_parents buf in
-  let author    = Misc.input_key_value buf ~key:"author" User.input in
-  let committer = Misc.input_key_value buf ~key:"committer" User.input in
-  Mstruct.shift buf 1;
-  let message   = Mstruct.to_string buf in
-  { parents; message; tree; author; committer }
+module IO (D: SHA.DIGEST) = struct
+
+  include T
+  module SHA_IO = SHA.IO(D)
+
+  let add_parent buf parent =
+    Buffer.add_string buf "parent ";
+    SHA_IO.Commit.add_hex buf parent;
+    Buffer.add_char buf Misc.lf
+
+  let add buf ?level:_ t =
+    Buffer.add_string buf "tree ";
+    SHA_IO.Tree.add_hex buf t.tree;
+    Buffer.add_char buf Misc.lf;
+    List.iter (add_parent buf) t.parents;
+    Buffer.add_string buf "author ";
+    User.add buf t.author;
+    Buffer.add_char buf Misc.lf;
+    Buffer.add_string buf "committer ";
+    User.add buf t.committer;
+    Buffer.add_char buf Misc.lf;
+    Buffer.add_char buf Misc.lf;
+    Buffer.add_string buf t.message
+
+  let commit_sha buf = SHA_IO.Commit.input_hex buf
+
+  let input_parents buf =
+    let rec aux parents =
+      match Mstruct.get_string_delim buf Misc.sp with
+      | None          -> List.rev parents
+      | Some "parent" ->
+        begin
+          match Mstruct.get_delim buf Misc.lf commit_sha with
+          | None   -> Mstruct.parse_error_buf buf "input_parents"
+          | Some h -> aux (h :: parents)
+        end
+      | Some p ->
+        (* we cancel the shift we've done to input the key *)
+        let n = String.length p in
+        Mstruct.shift buf (-n-1);
+        List.rev parents
+    in
+    aux []
+
+  let tree_sha buf = SHA_IO.Tree.input_hex buf
+
+  let input buf =
+    let tree      = Misc.input_key_value buf ~key:"tree" tree_sha in
+    let parents   = input_parents buf in
+    let author    = Misc.input_key_value buf ~key:"author" User.input in
+    let committer = Misc.input_key_value buf ~key:"committer" User.input in
+    Mstruct.shift buf 1;
+    let message   = Mstruct.to_string buf in
+    { parents; message; tree; author; committer }
+
+end
