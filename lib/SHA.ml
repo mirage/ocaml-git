@@ -197,7 +197,7 @@ module Array (D: DIGEST) = struct
   let to_list t =
     let rec loop acc = function
       | 0 -> acc
-      | n -> loop (get t n :: acc) (n-1)
+      | n -> loop (get t (n-1) :: acc) (n-1)
     in
     loop [] (length t)
 
@@ -241,7 +241,7 @@ module Array (D: DIGEST) = struct
           if prev_ok && next_ok then Some off
           else ambiguous sha1
         else if lt sha1 s then aux (sub buf 0 off)
-        else off ++ aux (sub buf off (len-off))
+        else 1 + off ++ aux (sub buf (off+1) (len-off-1))
     in
     aux buf
 
