@@ -16,7 +16,7 @@
 
 (** Branch references. *)
 
-include Object.S
+include Object.IO
 
 val to_raw: t -> string
 val of_raw: string -> t
@@ -38,7 +38,7 @@ type head_contents =
   | Ref of t
 (** The possible HEAD contents. *)
 
-val head_contents_of_string: string -> head_contents
+val head_contents_of_string: of_hex:(string -> SHA.t) -> string -> head_contents
 (** Parse the contents of HEAD *)
 
 val head_contents_of_commit: SHA.Commit.t Map.t -> SHA.Commit.t -> head_contents
