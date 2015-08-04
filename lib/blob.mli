@@ -16,7 +16,6 @@
 
 (** Binary blobs. *)
 
-include Object.S
-
+include Object.IO
 val to_raw: t -> string
 val of_raw: string -> t
