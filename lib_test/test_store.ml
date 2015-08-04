@@ -581,6 +581,11 @@ module Test_array (D: SHA.DIGEST) = struct
       Alcotest.(check (option int)) msg (Some i) j
     done
 
+  let test_to_list () =
+    let a, b = create 127 in
+    let c = SHA_Array.to_list b in
+    Alcotest.(check (list sha1)) "to_list" (Array.to_list a) c
+
 end
 
 let array (module D: SHA.DIGEST) =
@@ -589,6 +594,7 @@ let array (module D: SHA.DIGEST) =
     ("length"       , `Quick, Array.test_lenght);
     ("linear search", `Quick, Array.test_linear_search);
     ("binary search", `Quick, Array.test_binary_search);
+    ("to_list"      , `Quick, Array.test_to_list);
   ]
 
   let suite (speed, x) =
