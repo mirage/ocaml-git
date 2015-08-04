@@ -26,3 +26,5 @@ type t = {
 (** A tag is bookmark to a previous commit. *)
 
 include Object.S with type t := t
+
+module IO (D: SHA.DIGEST): Object.IO with type t = t
