@@ -18,25 +18,17 @@ module Log = Log.Make(struct let section = "sha1" end)
 
 module type S = sig
   include Object.S
-  val of_string: string -> t
-  val of_cstruct: Cstruct.t -> t
   val to_raw: t -> string
   val of_raw: string -> t
   val to_hex: t -> string
-  val of_hex: string -> t
-  val of_short_hex: string -> t
-  val input_hex: Mstruct.t -> t
-  val add_hex: Buffer.t -> t -> unit
-  val zero: t
   val hex_length: t -> int
-  val is_short: t -> bool
   val lt: t -> t -> bool
   val is_prefix: t -> t -> bool
   module Set: Misc.Set with type elt = t
   module Map: Misc.Map with type key = t
 end
 
-type sha_t = {
+type sha = {
   raw   : string;
   padded: bool;   (* for hex of odd length *)
 }
@@ -45,9 +37,9 @@ exception Ambiguous of string
 
 module SHA1_String = struct
 
-  type t = sha_t
+  type t = sha
 
-  let hex_length x = (* 0 <= length <= 40 *)
+  let hex_length x =
     let n = (String.length x.raw) * 2 in
     if x.padded then n - 1 else n
 
@@ -56,7 +48,6 @@ module SHA1_String = struct
     if t.padded then String.sub h 0 ((String.length h) - 1)
     else h
 
-  let is_short x = hex_length x < 40
   let equal x y = x.padded = y.padded && String.compare x.raw y.raw = 0
   let hash x = Hashtbl.hash x.raw
   let ambiguous t = raise (Ambiguous (to_hex t))
@@ -105,63 +96,94 @@ module SHA1_String = struct
   let lt x y = compare x y < 0
   let to_raw x = x.raw
   let of_raw x = { raw=x; padded=false; }
+  let pretty = to_hex
+  let pp ppf t = Format.fprintf ppf "%s" (pretty t)
 
-  let of_string str =
-    Cstruct.of_string str
-    |> Nocrypto.Hash.SHA1.digest
-    |> Cstruct.to_string
-    |> fun x -> { raw=x; padded=false; }
+  module X = struct
+    type t = sha
+    let compare = compare
+    let pretty = pretty
+  end
+  module Map = Misc.Map(X)
+  module Set = Misc.Set(X)
 
-  let of_cstruct c =
-    Nocrypto.Hash.SHA1.digest c
-    |> Cstruct.to_string
-    |> fun x -> { raw=x; padded=false; }
+end
+
+include (SHA1_String: S with type t = sha)
+module Commit = SHA1_String
+module Tree = SHA1_String
+module Blob = SHA1_String
+
+module type H = sig
+  include S
+  include Object.IO with type t := t
+  val of_hex: string -> t
+  val of_short_hex: string -> t
+  val input_hex: Mstruct.t -> t
+  val add_hex: Buffer.t -> t -> unit
+  val is_short: t -> bool
+  val zero: t
+end
+
+module type IO = sig
+  include H with type t = sha
+  module Blob: H with type t = Blob.t
+  module Tree: H with type t = Tree.t
+  module Commit: H with type t = Commit.t
+end
+
+type 'a digest = 'a -> sha
+
+module type DIGEST = sig
+  val cstruct: Cstruct.t digest
+  val string: string digest
+  val length: int
+end
+
+module H (D: DIGEST) = struct
+
+  include SHA1_String
+
+  let is_short x = hex_length x < D.length * 2
 
   let of_hex_aux ~strict h =
     let len = String.length h in
-    if strict && len <> 40 then raise (Ambiguous h);
+    if strict && len <> D.length * 2 then raise (Ambiguous h);
     let to_be_padded = (len mod 2) = 1 in
     let h' = if to_be_padded then h ^ "0" else h in
     { raw = Hex.to_string (`Hex h'); padded = to_be_padded; }
 
   let of_hex = of_hex_aux ~strict:true
   let of_short_hex = of_hex_aux ~strict:false
-
-  let zero = of_hex (String.make 40 '0')
-  let pretty = to_hex
-  let pp ppf t = Format.fprintf ppf "%s" (pretty t)
-  let input buf = { raw=Mstruct.get_string buf 20; padded=false; }
+  let zero = of_hex (String.make (D.length * 2) '0')
+  let input buf = { raw=Mstruct.get_string buf D.length; padded=false; }
   let add buf ?level:_ t = Buffer.add_string buf t.raw
   let input_hex buf = of_hex (Mstruct.get_string buf (Mstruct.length buf))
   let add_hex buf t = Buffer.add_string buf (to_hex t)
 
-  module X = struct
-    type t = sha_t
-    let compare = compare
-    let pretty = pretty
-  end
-  module Map = Misc.Map(X)
-  module Set = Misc.Set(X)
 end
 
-include (SHA1_String: S)
-
-module Commit: S = SHA1_String
-module Tree: S = SHA1_String
-module Blob: S = SHA1_String
-
+let of_blob b = of_raw (Blob.to_raw b)
+let to_blob n = Blob.of_raw (to_raw n)
 let of_commit c = of_raw (Commit.to_raw c)
 let to_commit n = Commit.of_raw (to_raw n)
 let of_tree t = of_raw (Tree.to_raw t)
 let to_tree n = Tree.of_raw (to_raw n)
-let of_blob b = of_raw (Blob.to_raw b)
-let to_blob n = Blob.of_raw (to_raw n)
 
-module Array = struct
+module IO (D: DIGEST) = struct
+  include H(D)
+  module Blob = H(D)
+  module Tree = H(D)
+  module Commit = H(D)
+end
+
+module Array (D: DIGEST) = struct
+
+  module SHA = IO(D)
 
   let get buf n =
-    let buf = Cstruct.sub buf (n * 20) 20 in
-    input (Mstruct.of_cstruct buf)
+    let buf = Cstruct.sub buf (n * D.length) D.length in
+    SHA.input (Mstruct.of_cstruct buf)
 
   let ambiguous t = raise (Ambiguous (to_hex t))
 
@@ -170,7 +192,7 @@ module Array = struct
     | [x] -> Some x
     | _   -> ambiguous sha1
 
-  let length buf = Cstruct.len buf / 20
+  let length buf = Cstruct.len buf / D.length
 
   let to_list t =
     let rec loop acc = function
@@ -181,7 +203,7 @@ module Array = struct
 
   let linear_search buf sha1 =
     let len = length buf in
-    let short_sha = is_short sha1 in
+    let short_sha = SHA.is_short sha1 in
     let rec aux acc = function
       | 0 -> only_one sha1 acc
       | i ->
@@ -195,14 +217,14 @@ module Array = struct
     in
     aux [] len
 
-  let sub buf off len = Cstruct.sub buf (off * 20) (len * 20)
+  let sub buf off len = Cstruct.sub buf (off * D.length) (len * D.length)
 
   let (++) x y = match y with
     | None   -> None
     | Some y -> Some (x + y)
 
   let binary_search buf sha1 =
-    let short_sha = is_short sha1 in
+    let short_sha = SHA.is_short sha1 in
     let scan_thresh = 4 in
     let rec aux buf =
       let len = length buf in
