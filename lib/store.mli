@@ -128,4 +128,10 @@ module type S = sig
   val write_inflated: t -> string -> SHA.t Lwt.t
   (** Write a raw buffer in the store. *)
 
+  module Digest: SHA.DIGEST
+  (** Digest functions that the store is using. *)
+
+  module Inflate: Inflate.S
+  (** Inflate functions that the store is using. *)
+
 end
