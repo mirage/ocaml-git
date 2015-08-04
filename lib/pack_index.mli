@@ -16,22 +16,29 @@
 
 (** Pack indexes. *)
 
+type t
+(** Abstract type of pack index. *)
+
+type f = SHA.t -> int option
+(** The type of functions associating SHA1 keys to offset in the pack
+    file. *)
+
+type raw = {
+  offsets      : int SHA.Map.t;
+  crcs         : int32 SHA.Map.t;
+  pack_checksum: SHA.t;
+}
+(** [offsests] is the positions of the SHA objects in the
+    corresponding raw pack file.
+
+    [crcs] contains the CRC-32 value of the packed object data.
+
+    [pack_checksum] is the corresponding pack file checksums, value
+    which is needed when writing the pack index file to disk. *)
+
 module Raw: sig
 
-  type t = {
-    offsets      : int SHA.Map.t;
-    crcs         : int32 SHA.Map.t;
-    pack_checksum: SHA.t;
-  }
-  (** [offsests] is the positions of the SHA objects in the
-      corresponding raw pack file.
-
-      [crcs] contains the CRC-32 value of the packed object data.
-
-      [pack_checksum] is the corresponding pack file checksums, value
-      which is needed when writing the pack index file to disk. *)
-
-  include Object.S with type t := t
+  include Object.S with type t = raw
 
   val keys: t -> SHA.Set.t
   (** Read only the keys contained in the index. *)
@@ -46,24 +53,23 @@ module Raw: sig
 
 end
 
-type t
-(** Abstract type of pack index. *)
+module Make (D: SHA.DIGEST): sig
 
-val input: ?cache_size:int -> Cstruct.buffer -> t
-(** Create a pack index object. The results of [find_offset] are cached
-    for upto [cache_size] SHA objects *)
+  val input: ?cache_size:int -> Cstruct.buffer -> t
+  (** Create a pack index object. The results of [find_offset] are
+      cached for upto [cache_size] SHA objects *)
 
-val find_offset: t -> SHA.t -> int option
-(** [find_offset] searches the index for the offset of the SHA object.
-    Binary search is performed until the candidates are narrowed down to
-    [scan_thresh] or less. *)
+  val find_offset: t -> SHA.t -> int option
+  (** [find_offset] searches the index for the offset of the SHA object.
+      Binary search is performed until the candidates are narrowed down to
+      [scan_thresh] or less. *)
 
-val mem: t -> SHA.t -> bool
-(** [mem] checks if the SHA object is contained in the index object *)
+  val mem: t -> SHA.t -> bool
+  (** [mem] checks if the SHA object is contained in the index object *)
 
-val keys: t -> SHA.t list
-(** [keys t] is the list of SHA1 keys present in [t]. *)
+  val keys: t -> SHA.t list
+  (** [keys t] is the list of SHA1 keys present in [t]. *)
 
-type f = SHA.t -> int option
-(** The type of functions associating SHA1 keys to offset in the pack
-    file. *)
+  module Raw: Object.IO with type t = raw
+
+end
