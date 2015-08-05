@@ -203,3 +203,7 @@ true: annot, bin_annot
 true: debug, bin_annot
 true: warn(A-4-41-44)
 # true: warn_error_A
+"test-db": -traverse
+"_tests": -traverse
+"lib_test/_tests": -traverse
+"lib_test/test-db": -traverse
