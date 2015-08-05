@@ -334,6 +334,10 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) (Store: Store.S) = struct
     let err_no_trailing_lf () =
       error "PacketLine.input: the payload doesn't have a trailing LF"
 
+    let truncate s =
+      if String.length s > 20 then String.escaped (String.sub s 0 20) ^ "[..]"
+      else String.escaped s
+
     let input_raw_exn ic: t Lwt.t =
       Log.debug "PacketLine.input_raw";
       IO.read_exactly ic 4 >>= fun size ->
@@ -348,7 +352,7 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) (Store: Store.S) = struct
           with Failure _ -> err_invalid_integer "PacketLine.input" str
         in
         IO.read_exactly ic size >>= fun payload ->
-        Log.debug "RECEIVED: %S (%d)" payload size;
+        Log.debug "RECEIVED: %s (%d)" (truncate payload) size;
         Lwt.return (Some payload)
 
     let input_raw ic =
