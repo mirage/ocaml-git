@@ -1208,7 +1208,14 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) (Store: Store.S) = struct
       ?wants ?(update=false) ?progress
       t gri =
     Log.debug "fetch %s wants=%s" (Gri.to_string gri) (pretty_wants wants);
-    Store.list t >>= fun haves ->
+    Store.references t >>= fun refs ->
+    Lwt_list.fold_left_s (fun haves r ->
+        Store.read_reference t r >|= function
+        | None   -> haves
+        | Some h -> SHA.Set.add (SHA.of_commit h) haves
+      ) SHA.Set.empty refs
+    >>= fun commits ->
+    let haves = SHA.Set.to_list commits in
     (* XXX: Store.shallows t >>= fun shallows *)
     let shallows = [] in
     let op = { shallows; haves; deepen; unpack; capabilities; update; wants } in
