@@ -1085,9 +1085,10 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) (Store: Store.S) = struct
       let read = Store.read_inflated t in
       Pack_IO.Raw.input ~progress ~read (Mstruct.of_cstruct pack) >>= fun pack ->
       let unpack () =
-        if f.unpack
-        then Pack_IO.Raw.unpack ~progress ~write:(Store.write_inflated t) pack
-        else Store.write_pack t pack
+        if f.unpack || Pack.Raw.shallow pack then
+          Pack_IO.Raw.unpack ~progress ~write:(Store.write_inflated t) pack
+        else
+          Store.write_pack t pack
       in
       unpack () >>= fun sha1s ->
       match SHA.Set.cardinal sha1s with

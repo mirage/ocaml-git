@@ -42,6 +42,10 @@ type kind =
 type t = { kind: kind; offset: int }
 (** The type for packed values. *)
 
+val shallow: SHA.Set.t -> t -> bool
+(** [shallow p t] checks whether the SHAs appearing in [t] also appear
+    in the pack file [p]. *)
+
 val create: offset:int -> kind:kind -> t
 (** Create a packed value. *)
 

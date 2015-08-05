@@ -50,6 +50,7 @@ type raw = {
   version : int;
   checksum: SHA.t;
   values  :  (int32 * Packed_value.t) list;
+  shallow : bool;
   raw_index: Pack_index.Raw.t option;
 }
 
@@ -74,6 +75,8 @@ module Raw = struct
       ) t.values
 
   let pretty = Misc.pretty pp
+
+  let shallow t = t.shallow
 
 end
 
@@ -230,9 +233,11 @@ module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
       if Mstruct.length buf <> 0 then fail "input: unprocessed data.";
       let buffer = Cstruct.sub all offset (Cstruct.len all - offset) in
       let raw_index = None in
+      let shallow = false in
       let create index keys =
         let sha1 = sha1_of_keys keys in
-        { sha1; keys; read; index; values; buffer; version; checksum; raw_index; }
+        { sha1; keys; read; index; values; buffer; version; checksum;
+          raw_index; shallow; }
       in
       k pack_checksum values create
 
@@ -242,8 +247,13 @@ module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
         >|= fun index ->
         let keys = Pack_index.Raw.keys index in
         let index_fn = Pack_index.Raw.find_offset index in
+        let shallow =
+          List.fold_left
+            (fun shallow (_, v) -> shallow || Packed_value.shallow keys v)
+            false values
+        in
         let raw = create index_fn keys in
-        { raw with raw_index = Some index }
+        { raw with raw_index = Some index; shallow }
       in
       input_values ~read buf k
 

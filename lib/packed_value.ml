@@ -64,6 +64,11 @@ let hash = Hashtbl.hash
 let equal = (=)
 let compare = compare
 
+let shallow sha1s t = match t.kind with
+  | Off_delta _
+  | Raw_value _ -> false
+  | Ref_delta d -> not (SHA.Set.mem d.source sha1s)
+
 let pp_kind ppf = function
   | Raw_value _ -> Format.pp_print_string ppf "RAW"
   | Ref_delta d -> Format.fprintf ppf "@[ref-delta: %s@@]" (SHA.to_hex d.source)

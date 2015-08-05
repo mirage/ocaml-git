@@ -25,7 +25,15 @@ include Object.S with type t := t
 type raw
 (** The type for raw packs. *)
 
-module Raw: Object.S with type t = raw
+module Raw: sig
+
+  include Object.S with type t = raw
+
+  val shallow: t -> bool
+  (** [shallow t] is true if all the SHA references appearing in [t]
+      corresponds to objects also in [t]. *)
+
+end
 
 module type IO = sig
 
