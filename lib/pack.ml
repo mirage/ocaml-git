@@ -349,8 +349,10 @@ module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
 
   let keys t =
     List.fold_left (fun set pic ->
-        let key = Packed_value.PIC.sha1 pic in
-        SHA.Set.add key set
+        if Packed_value.PIC.shallow pic then set
+        else
+          let key = Packed_value.PIC.sha1 pic in
+          SHA.Set.add key set
       ) SHA.Set.empty t
 
   let create contents =
