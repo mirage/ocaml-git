@@ -1004,7 +1004,7 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) (Store: Store.S) = struct
             | None   -> SHA.Set.empty
             | Some x -> SHA.Set.singleton (SHA.of_commit x)
           in
-          Graph.pack t ~min max >>= fun values ->
+          Graph.pack t ~min ~max >>= fun values ->
           let pack = Pack_IO.create values in
           let request = { Update_request.capabilities; commands; pack } in
           Log.debug "request:\n%s" (Update_request.pretty request);

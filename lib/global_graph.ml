@@ -116,8 +116,7 @@ module Make (Store: Store.S) = struct
     Dot.fprint_graph fmt g;
     Lwt.return_unit
 
-  (* XXX: From IrminGraph.closure *)
-  let closure t ~min max =
+  let closure t ~min ~max =
     Log.debug "closure";
     let g = K.create ~size:1024 () in
     let marks = Hashtbl.create 1024 in
@@ -150,14 +149,11 @@ module Make (Store: Store.S) = struct
     Lwt_list.iter_p add max >>= fun () ->
     Lwt.return g
 
-  let keys g =
-    K.fold_vertex (fun k set -> k :: set) g []
+  let keys g = K.fold_vertex (fun k set -> k :: set) g []
 
-  let pack t ~min max =
-    closure t ~min max >>= fun g ->
+  let pack t ~min ~max =
+    closure t ~min ~max >>= fun g ->
     let keys = keys g in
-    Lwt_list.map_p (fun k ->
-        Store.read_exn t k >>= fun v -> Lwt.return (k, v)
-      ) keys
+    Lwt_list.map_p (fun k -> Store.read_exn t k >|= fun v -> (k, v)) keys
 
 end
