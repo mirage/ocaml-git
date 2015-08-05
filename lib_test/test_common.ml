@@ -131,3 +131,11 @@ let head_contents =
   in (module M: Alcotest.TESTABLE with type t = M.t)
 
 let sha1 = (module SHA: Alcotest.TESTABLE with type t = SHA.t)
+
+let sha1s =
+  let module M = struct
+    type t = SHA.Set.t
+    let equal = SHA.Set.equal
+    let pp fmt t = Format.pp_print_string fmt (SHA.Set.pretty t)
+  end
+  in (module M: Alcotest.TESTABLE with type t = M.t)

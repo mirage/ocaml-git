@@ -447,7 +447,7 @@ module Make (Store: Store.S) = struct
     in
     run x test
 
-  let test_clones x () =
+  let test_clone x () =
     let test () =
       Store.create ~root () >>= fun t ->
       let fetch ?depth ?(bare=true) ?wants gri =
@@ -489,6 +489,49 @@ module Make (Store: Store.S) = struct
       fetch git   ~depth:3 ~wants:[commit; gh_pages] >>= fun () ->
       fetch large ~bare:false  >>= fun () ->
 
+      Lwt.return_unit
+    in
+    run x test
+
+  let test_fetch x () =
+    let test_one gri c0 c1 diff =
+      x.init () >>= fun () ->
+      Store.create ~root () >>= fun t ->
+      Store.list t >>= fun l ->
+      Alcotest.(check (list sha1)) "empty" [] l;
+      let fetch gri (branch, commit) =
+        let b = Reference.of_raw ("refs/heads/" ^ branch) in
+        let c = SHA_IO.Commit.of_hex commit in
+        let wants = [`Commit c] in
+        Sync.fetch t ~wants gri  >>= fun r ->
+        Sync.populate ~checkout:false t r >>= fun () ->
+        Store.write_reference t b c >>= fun () ->
+        if Store.kind = `Disk && not x.mirage then (
+          let cmd = Printf.sprintf "cd %s && git fsck" @@ Store.root t in
+          Alcotest.(check int) "fsck" 0 (Sys.command cmd)
+          );
+        Lwt.return (Git.Sync.Result.sha1s r)
+      in
+      fetch gri c0 >>= fun _ ->
+      fetch gri c1 >>= fun r ->
+      Alcotest.(check sha1s) "diff" diff r;
+      Lwt.return_unit
+    in
+    let test () =
+      let git   = Gri.of_string "git://github.com/mirage/irmin-rt.git" in
+      let https = Gri.of_string "https://github.com/mirage/irmin-rt.git" in
+      let c1 = "test-fetch-2", "64beec7402efc772363f4e0a7dfeb0ad2a667367" in
+      let c0 = "test-fetch-1", "348199320dc33614bc5d101b1e0e22eaea25b36b" in
+      let diff  =
+        let x = SHA_IO.of_hex in
+        SHA.Set.of_list [
+          x (snd c1); (* commit *)
+          x "1700d5cbd2ac8f5faf491a3c07c4562f9e43f016"; (* / *)
+          x "2c6368156f499eaee397c5c2d698fabcb1b3114c"; (* overhead/ *)
+          x "54e0af2928da25353fb2a9ecc87530202e940580"; (* overhead/overhead.ml *)
+        ] in
+      test_one git c0 c1 diff   >>= fun () ->
+      test_one https c0 c1 diff >>= fun () ->
       Lwt.return_unit
     in
     run x test
@@ -602,16 +645,17 @@ let array (module D: SHA.DIGEST) =
   let module T = Make(S) in
   x.name,
   [
-    "Operations on blobs"       , speed, T.test_blobs    x;
-    "Operations on trees"       , speed, T.test_trees    x;
-    "Operations on commits"     , speed, T.test_commits  x;
-    "Operations on tags"        , speed, T.test_tags     x;
-    "Operations on references"  , speed, T.test_refs     x;
-    "Operations on index"       , speed, T.test_index    x;
-    "Operations on pack files"  , speed, T.test_packs    x;
-    "Resource leaks"            , `Slow, T.test_leaks    x;
+    "Operations on blobs"       , speed, T.test_blobs x;
+    "Operations on trees"       , speed, T.test_trees x;
+    "Operations on commits"     , speed, T.test_commits x;
+    "Operations on tags"        , speed, T.test_tags x;
+    "Operations on references"  , speed, T.test_refs x;
+    "Operations on index"       , speed, T.test_index x;
+    "Operations on pack files"  , speed, T.test_packs x;
+    "Resource leaks"            , `Slow, T.test_leaks x;
     "Basic Remote operations"   , `Slow, T.test_basic_remote x;
-    "Cloning remote repos"      , `Slow, T.test_clones   x;
+    "Fetching remote repos"     , `Slow, T.test_fetch x;
+    "Cloning remote repos"      , `Slow, T.test_clone x;
   ]
 
 let generic = [
