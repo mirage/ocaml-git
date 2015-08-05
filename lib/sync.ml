@@ -83,6 +83,7 @@ module Capability = struct
   type t = [
     | `Multi_ack
     | `Thin_pack
+    | `No_thin
     | `Side_band
     | `Side_band_64k
     | `Ofs_delta
@@ -98,6 +99,7 @@ module Capability = struct
   let of_string: string -> t = function
     | "multi_ack"     -> `Multi_ack
     | "thin-pack"     -> `Thin_pack
+    | "no-thin"       -> `No_thin
     | "side-band"     -> `Side_band
     | "side-band-64k" -> `Side_band_64k
     | "ofs-delta"     -> `Ofs_delta
@@ -115,6 +117,7 @@ module Capability = struct
   let to_string: t -> string = function
     | `Multi_ack     -> "multi_ack"
     | `Thin_pack     -> "thin-pack"
+    | `No_thin       -> "no-thin"
     | `Side_band     -> "side-band"
     | `Side_band_64k -> "side-band-64k"
     | `Ofs_delta     -> "ofs-delta"
@@ -166,7 +169,21 @@ module Capabilities = struct
     let default = [
       Capability.ogit_agent;
       `Side_band_64k;
+      `Ofs_delta;
+      `Thin_pack;
     ]
+
+    let restrict x y =
+      List.filter (function
+          | `Agent _   -> true
+          | `Thin_pack ->
+            (* Receive-pack [..] can ask the client not to use the
+               feature by advertising the 'no-thin' capability. A
+               client MUST NOT send a thin pack if the server
+               advertises the 'no-thin' capability.  *)
+            not (List.mem `No_thin y)
+          | x -> List.mem x y
+        ) x
 
 end
 
@@ -1018,6 +1035,13 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) (Store: Store.S) = struct
 
   let fetch_commits t (ic, oc) ?(progress=fun _ -> ()) f listing wants =
     Log.debug "Sync.fetch_commits %s" (pretty_list SHA.Commit.pretty wants);
+    let f =
+      let server_caps = Listing.capabilities listing in
+      (* The client MUST NOT ask for capabilities the server did not
+         say it supports. *)
+      let capabilities = Capabilities.restrict f.capabilities server_caps in
+      { f with capabilities }
+    in
     let wants =
       let w = SHA.Commit.Set.of_list wants in
       let h = SHA.Commit.Set.of_list (List.map SHA.to_commit f.haves) in

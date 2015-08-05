@@ -25,6 +25,7 @@ val protocol: Uri.t -> [`Ok of protocol | `Not_supported of string | `Unknown]
 type capability =
   [ `Multi_ack
   | `Thin_pack
+  | `No_thin
   | `Side_band
   | `Side_band_64k
   | `Ofs_delta
@@ -109,9 +110,12 @@ module type S = sig
          all} the remote references are downloaded. This is useful
          when cloning a new repository as the remote references are
          not yet known.}
+
       {- If a reference (e.g. a [`Ref] {!want} value) appears in the
          list, the object corresponding to that remote reference are
-         fetched.}
+         fetched. This works only if the server exports the
+         "allow-reachable-sha1-in-want" (available in Git 2.5.0)}
+
       {- If a commit hash (e.g. a [`Commit] {!want} value) in the
          list, the objects corresponding to the that remote commits
          are fetched..}  }
