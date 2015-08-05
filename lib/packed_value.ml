@@ -126,7 +126,13 @@ let add_delta buf delta =
 module PIC = struct
 
   type kind = Raw of string | Link of t delta
-  and t = { kind: kind; sha1: SHA.t; mutable raw: string option; }
+
+  and t = {
+    kind: kind;
+    sha1: SHA.t;
+    shallow: bool;
+    mutable raw: string option;
+  }
 
   let equal x y = SHA.equal x.sha1 y.sha1
   let hash x = SHA.hash x.sha1
@@ -141,11 +147,14 @@ module PIC = struct
 
   let pretty = Misc.pretty pp
 
-  let create ?raw sha1 kind = { sha1; kind; raw }
+  let create ?raw ?(shallow=false) sha1 kind = { sha1; kind; shallow; raw }
   let sha1 t = t.sha1
   let kind t = t.kind
   let raw t = t.raw
-  let of_raw sha1 raw = { sha1; kind = Raw raw; raw = Some raw; }
+  let shallow t = t.shallow
+
+  let of_raw ?(shallow=false) sha1 raw =
+    { sha1; kind = Raw raw; shallow; raw = Some raw; }
 
   let with_cache f sha1 =
     match Value.Cache.find_inflated sha1 with
@@ -452,8 +461,8 @@ module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
       | None   -> fail "of_pic: cannot find %s" (SHA.pretty sha1)
       | Some o -> return (Off_delta { d with source = offset - o })
 
-  let to_pic ~digest ~read ~offsets ~sha1s { offset; kind } =
-    let kind = match kind with
+  let to_pic ~digest ~read ~offsets ~sha1s t =
+    let kind = match t.kind with
       | Raw_value x -> Lwt.return (PIC.Raw x)
       | Ref_delta d ->
         begin match sha1s d.source with
@@ -466,7 +475,7 @@ module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
                     pack file!" (SHA.to_hex d.source)
         end
       | Off_delta d ->
-        let offset = offset - d.source in
+        let offset = t.offset - d.source in
         match offsets offset with
         | None     -> fail "to_pic: cannot find offest %d in the index." d.source
         | Some pic ->
@@ -476,6 +485,8 @@ module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
     kind >|= fun kind ->
     let raw  = PIC.unpack_kind kind in
     let sha1 = digest raw in
+    Log.debug "to_pic(%s) -> %s:%s"
+      (Misc.pretty pp_kind t.kind) (SHA.pretty sha1) (PIC.pretty_kind kind);
     PIC.create ~raw sha1 kind
 
   let err_sha1_not_found sha1 = fail "cannot read %s" (SHA.pretty sha1)

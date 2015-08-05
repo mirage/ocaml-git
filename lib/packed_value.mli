@@ -73,17 +73,23 @@ module PIC: sig
   type kind = Raw of string | Link of t delta
   (** The type for position-independent packed values' kind. *)
 
-  and t = { kind: kind; sha1: SHA.t; mutable raw: string option; }
+  and t = {
+    kind: kind;
+    sha1: SHA.t;
+    shallow: bool;
+    mutable raw: string option;
+  }
   (** The type for postition-independant packed values. See {!S.PIC}. *)
 
   include Object.S with type t := t
 
-  val create: ?raw:string -> SHA.t -> kind -> t
-  (** Create a position-independent packed value. *)
+  val create: ?raw:string -> ?shallow:bool -> SHA.t -> kind -> t
+  (** Create a position-independent packed value. By default,
+      [shallow] is [false]. *)
 
-  val of_raw: SHA.t -> string -> t
-  (** [of_raw sha1 raw] is the position-independant packed value
-      built by parsing [raw]. *)
+  val of_raw: ?shallow:bool ->  SHA.t -> string -> t
+  (** [of_raw sha1 raw] is the position-independant packed value built
+      by parsing [raw]. By default [shallow] is [false]. *)
 
   val kind: t -> kind
   (** [kind t] is [t]'s kind. *)
@@ -93,6 +99,9 @@ module PIC: sig
 
   val raw: t -> string option
   (** [raw t] is [t]'s raw represation. *)
+
+  val shallow: t -> bool
+  (** [shallow t] is true iff [t] is not included in the pack file. *)
 
   val unpack_kind: kind -> string
   (** Unpack a PIC kind into a string. *)
