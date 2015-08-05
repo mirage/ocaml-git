@@ -295,6 +295,10 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) (Store: Store.S) = struct
   let err_invalid_integer fn str =
     error "%s: %S is not a valid integer" fn str
 
+  let err_end_of_file () =
+    err "The connection has been closed by the server. This is usually due \
+         to an invalid client request."
+
   module PacketLine = struct
 
     type t = string option
@@ -330,7 +334,7 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) (Store: Store.S) = struct
     let err_no_trailing_lf () =
       error "PacketLine.input: the payload doesn't have a trailing LF"
 
-    let input_raw ic: t Lwt.t =
+    let input_raw_exn ic: t Lwt.t =
       Log.debug "PacketLine.input_raw";
       IO.read_exactly ic 4 >>= fun size ->
       match size with
@@ -346,6 +350,13 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) (Store: Store.S) = struct
         IO.read_exactly ic size >>= fun payload ->
         Log.debug "RECEIVED: %S (%d)" payload size;
         Lwt.return (Some payload)
+
+    let input_raw ic =
+      Lwt.catch
+        (fun () -> input_raw_exn ic)
+        (function
+          | End_of_file -> err_end_of_file ()
+          | e -> Lwt.fail e)
 
     let niet = Lwt.return (Some "")
 
