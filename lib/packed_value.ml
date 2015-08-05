@@ -469,7 +469,9 @@ module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
           | Some pic -> Lwt.return (PIC.Link { d with source = pic })
           | None ->
             read d.source >>= function
-            | Some buf -> Lwt.return (PIC.Raw buf)
+            | Some buf ->
+              let shallow = PIC.of_raw ~shallow:true d.source buf in
+              Lwt.return (PIC.Link { d with source = shallow })
             | None ->
               fail "to_pic: shallow pack are not supported and %s is not in the \
                     pack file!" (SHA.to_hex d.source)
