@@ -49,7 +49,7 @@ let pp_hunks ppf l =
   List.iter (Format.fprintf ppf "%a@ " pp_hunk) l;
   Format.fprintf ppf "@]"
 
-let pp_delta ppf d =
+let _pp_delta ppf d =
   Format.fprintf ppf
     "@[\
      source-length: %d@ \
@@ -65,11 +65,9 @@ let equal = (=)
 let compare = compare
 
 let pp_kind ppf = function
-  | Raw_value s -> Format.fprintf ppf "%S@." s
-  | Ref_delta d -> Format.fprintf ppf "@[source: %s@ %a@]"
-                     (SHA.to_hex d.source) pp_delta d
-  | Off_delta d -> Format.fprintf ppf "@[source:%d@ %a@]"
-                     d.source pp_delta d
+  | Raw_value _ -> Format.pp_print_string ppf "RAW"
+  | Ref_delta d -> Format.fprintf ppf "@[ref-delta: %s@@]" (SHA.to_hex d.source)
+  | Off_delta d -> Format.fprintf ppf "@[off-delta:%d@@]" d.source
 
 let pp ppf { kind; offset } =
   Format.fprintf ppf "offset: %d@,%a" offset pp_kind kind
