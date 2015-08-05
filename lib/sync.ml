@@ -91,6 +91,7 @@ module Capability = struct
     | `Include_tag
     | `Report_status
     | `Delete_refs
+    | `Allow_reachable_sha1_in_want (* in Git 2.5 only *)
     | `Agent of string
     | `Other of string ]
 
@@ -105,6 +106,7 @@ module Capability = struct
     | "include-tag"   -> `Include_tag
     | "report-status" -> `Report_status
     | "delete-refs"   -> `Delete_refs
+    | "allow-reachable-sha1-in-want" -> `Allow_reachable_sha1_in_want
     | x               ->
       match Stringext.cut x ~on:"=" with
       | Some ("agent", a) -> `Agent a
@@ -122,6 +124,7 @@ module Capability = struct
     | `Report_status -> "report-status"
     | `Delete_refs   -> "delete-refs"
     | `Agent a       -> "agent=" ^ a
+    | `Allow_reachable_sha1_in_want -> "allow-reachable-sha1-in-want"
     | `Other x       -> x
 
   let _is_valid_fetch: t -> bool = function
@@ -175,6 +178,7 @@ module Listing = struct
     references  : SHA.Commit.t Reference.Map.t;
   }
 
+  let capabilities t = t.capabilities
   let references t = t.references
   let sha1s t = t.sha1s
 
@@ -1081,6 +1085,13 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) (Store: Store.S) = struct
           k (protocol, ic, oc) listing
         )
 
+  let err_sha1_not_advertised sha1 =
+    err
+      "Cannot fetch %s as the server does not advertise \
+       'allow-reachable-sha1-in-want' and it is not in the \
+       list of head commits advertised by `upload-pack`."
+      (SHA.Commit.pretty sha1)
+
   let fetch_pack ?ctx ?progress t gri op =
     with_listing ?ctx gri (fun (protocol, ic, oc) listing ->
         match op with
@@ -1095,8 +1106,19 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) (Store: Store.S) = struct
                 ) references SHA.Commit.Set.empty
               |> SHA.Commit.Set.elements
             | Some wants ->
+              let allow_sha1 =
+                let caps = Listing.capabilities listing in
+                let all = List.mem `Allow_reachable_sha1_in_want caps in
+                fun sha1 ->
+                  all ||
+                  let sha1s = Listing.sha1s listing in
+                  try List.exists is_head (SHA.Commit.Map.find sha1 sha1s)
+                  with Not_found -> false
+              in
               List.fold_left (fun acc -> function
-                  | `Commit c -> SHA.Commit.Set.add c acc
+                  | `Commit c ->
+                    if allow_sha1 c then SHA.Commit.Set.add c acc
+                    else err_sha1_not_advertised c
                   | `Ref r    ->
                     try
                       let c = Reference.Map.find r references in

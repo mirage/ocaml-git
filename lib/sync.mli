@@ -33,6 +33,7 @@ type capability =
   | `Include_tag
   | `Report_status
   | `Delete_refs
+  | `Allow_reachable_sha1_in_want (* in Git 2.5 only *)
   | `Agent of string
   | `Other of string ]
 
