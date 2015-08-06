@@ -23,7 +23,7 @@ type t = {
   init  : unit -> unit Lwt.t;
   clean : unit -> unit Lwt.t;
   store : (module Store.S);
-  mirage: bool;
+  shell : bool;
 }
 
 let unit () = Lwt.return_unit
@@ -456,7 +456,7 @@ module Make (Store: Store.S) = struct
         Alcotest.(check (list sha1)) "empty" [] l;
         Sync.fetch t ?wants ?deepen:depth gri  >>= fun r ->
         Sync.populate ~checkout:(not bare) t r >>= fun () ->
-        if Store.kind = `Disk && not x.mirage then (
+        if x.shell then (
           let cmd = Printf.sprintf "cd %s && git fsck" @@ Store.root t in
           Alcotest.(check int) "fsck" 0 (Sys.command cmd)
         );
@@ -506,7 +506,7 @@ module Make (Store: Store.S) = struct
         Sync.fetch t ~wants gri  >>= fun r ->
         Sync.populate ~checkout:false t r >>= fun () ->
         Store.write_reference t b c >>= fun () ->
-        if Store.kind = `Disk && not x.mirage then (
+        if x.shell then (
           let cmd = Printf.sprintf "cd %s && git fsck" @@ Store.root t in
           Alcotest.(check int) "fsck" 0 (Sys.command cmd)
           );

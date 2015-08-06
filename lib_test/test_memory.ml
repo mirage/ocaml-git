@@ -28,5 +28,5 @@ let suite = {
   init  = init;
   clean = unit;
   store = (module Memory);
-  mirage=false;
+  shell = false;
 }

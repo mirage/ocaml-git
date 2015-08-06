@@ -56,5 +56,5 @@ let suite =
     init  = M.init;
     clean = unit;
     store = (module S);
-    mirage= true;
+    shell = true;
   }

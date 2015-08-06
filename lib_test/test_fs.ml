@@ -30,5 +30,5 @@ let suite =
     init  = init;
     clean = unit;
     store = (module M);
-    mirage= false;
+    shell = true;
   }
