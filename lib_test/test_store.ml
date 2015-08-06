@@ -494,7 +494,7 @@ module Make (Store: Store.S) = struct
     run x test
 
   let test_fetch x () =
-    let test_one gri c0 c1 diff =
+    let test_one gri c0 c1 ?(update=false) diff =
       x.init () >>= fun () ->
       Store.create ~root () >>= fun t ->
       Store.list t >>= fun l ->
@@ -509,7 +509,17 @@ module Make (Store: Store.S) = struct
         if x.shell then (
           let cmd = Printf.sprintf "cd %s && git fsck" @@ Store.root t in
           Alcotest.(check int) "fsck" 0 (Sys.command cmd)
-          );
+        );
+        begin if update then (
+            Store.read_exn t (SHA.of_commit c) >>= function
+            | Value.Commit parent ->
+              let c' = { parent with Commit.message = "foo"; parents = [c] } in
+              Store.write t (Value.Commit c') >>= fun k ->
+              Store.write_reference t b (SHA.to_commit k)
+            | _ -> assert false
+          ) else
+            Lwt.return_unit
+        end >>= fun () ->
         Lwt.return (Git.Sync.Result.sha1s r)
       in
       fetch gri c0 >>= fun _ ->
@@ -532,6 +542,7 @@ module Make (Store: Store.S) = struct
         ] in
       test_one git c0 c1 diff   >>= fun () ->
       test_one https c0 c1 diff >>= fun () ->
+      test_one https ~update:true c0 c1 diff >>= fun () ->
       Lwt.return_unit
     in
     run x test
