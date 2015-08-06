@@ -80,7 +80,7 @@ module Make (Store: Store.S) = struct
     ])
   let kt1 = Value_IO.sha1 t1
 
-  (* Create the tree t2 -b-> t1 -a-> v1 *)
+  (* Create the tree t2 -b-> t1 -x-> v1 *)
   let t2 = Value.tree ([
       { Tree.perm = `Dir;
         name = "b";
@@ -88,7 +88,7 @@ module Make (Store: Store.S) = struct
     ])
   let kt2 = Value_IO.sha1 t2
 
-  (* Create the tree t3 -a-> t2 -b-> t1 -a-> v1 *)
+  (* Create the tree t3 -a-> t2 -b-> t1 -x-> v1 *)
   let t3 = Value.tree ([
       { Tree.perm = `Dir;
         name = "a";
@@ -96,7 +96,7 @@ module Make (Store: Store.S) = struct
     ])
   let kt3 = Value_IO.sha1 t3
 
-  (* Create the tree t4 -a-> t2 -b-> t1 -a-> v1
+  (* Create the tree t4 -a-> t2 -b-> t1 -x-> v1
                        \-c-> v2 *)
   let t4 = Value.tree ([
       { Tree.perm = `Exec;
@@ -239,14 +239,15 @@ module Make (Store: Store.S) = struct
       check_write t "t3" kt3 t3 >>= fun () ->
       check_write t "t4" kt4 t4 >>= fun () ->
 
-      check_find t "kt0:w"     kt0 [w]           kv1 >>= fun () ->
-      check_find t "kt1:w"     kt1 ["x"]         kv1 >>= fun () ->
-      check_find t "kt2:b"     kt2 ["b"]         kt1 >>= fun () ->
-      check_find t "kt2:b/x"   kt2 ["b";"x"]     kv1 >>= fun () ->
-      check_find t "kt3:a"     kt3 ["a"]         kt2 >>= fun () ->
-      check_find t "kt3:a/b"   kt3 ["a";"b"]     kt1 >>= fun () ->
-      check_find t "kt3:a/b/x" kt3 ["a";"b";"x"] kv1 >>= fun () ->
-      check_find t "kt4:c"     kt4 ["c"]         kv2 >>= fun () ->
+      let p x = `Path x in
+      check_find t "kt0:w"     kt0 (p [w])           kv1 >>= fun () ->
+      check_find t "kt1:w"     kt1 (p ["x"])         kv1 >>= fun () ->
+      check_find t "kt2:b"     kt2 (p ["b"])         kt1 >>= fun () ->
+      check_find t "kt2:b/x"   kt2 (p ["b";"x"])     kv1 >>= fun () ->
+      check_find t "kt3:a"     kt3 (p ["a"])         kt2 >>= fun () ->
+      check_find t "kt3:a/b"   kt3 (p ["a";"b"])     kt1 >>= fun () ->
+      check_find t "kt3:a/b/x" kt3 (p ["a";"b";"x"]) kv1 >>= fun () ->
+      check_find t "kt4:c"     kt4 (p ["c"])         kv2 >>= fun () ->
 
       check_keys t "trees" Object_type.Tree [kt0; kt1; kt2; kt3; kt4] >>=
       fun () ->
@@ -278,10 +279,11 @@ module Make (Store: Store.S) = struct
       check_write t "c1" kc1 c1 >>= fun () ->
       check_write t "c2" kc2 c2 >>= fun () ->
 
-      check_find t "c1:b"     kc1 ["";"b"]          kt1 >>= fun () ->
-      check_find t "c1:b/x"   kc1 ["";"b"; "x"]     kv1 >>= fun () ->
-      check_find t "c2:a/b/x" kc2 ["";"a";"b"; "x"] kv1 >>= fun () ->
-      check_find t "c2:c"     kc2 ["";"c"]          kv2 >>= fun () ->
+      let p x = `Commit (`Path x) in
+      check_find t "c1:b"     kc1 (p ["b"])          kt1 >>= fun () ->
+      check_find t "c1:b/x"   kc1 (p ["b"; "x"])     kv1 >>= fun () ->
+      check_find t "c2:a/b/x" kc2 (p ["a";"b"; "x"]) kv1 >>= fun () ->
+      check_find t "c2:c"     kc2 (p ["c"])          kv2 >>= fun () ->
 
       check_keys t "commits" Object_type.Commit [kc1; kc2; kc3] >>= fun () ->
 
@@ -295,9 +297,10 @@ module Make (Store: Store.S) = struct
       check_write t "tag1" ktag1 tag1 >>= fun () ->
       check_write t "tag2" ktag2 tag2 >>= fun () ->
 
-      check_find t "tag1:b" ktag1 ["foo";"";"b"] kt1 >>= fun () ->
-      check_find t "tag2:a" ktag2 ["bar";"";"a"] kt2 >>= fun () ->
-      check_find t "tag2:c" ktag2 ["bar";"";"c"] kv2 >>= fun () ->
+      let p l x = `Tag (l, `Commit (`Path x)) in
+      check_find t "tag1:b" ktag1 (p "foo" ["b"]) kt1 >>= fun () ->
+      check_find t "tag2:a" ktag2 (p "bar" ["a"]) kt2 >>= fun () ->
+      check_find t "tag2:c" ktag2 (p "bar" ["c"]) kv2 >>= fun () ->
 
       check_keys t "tags" Object_type.Tag [ktag1; ktag2] >>= fun () ->
 
@@ -334,6 +337,22 @@ module Make (Store: Store.S) = struct
         | Some h -> Alcotest.(check head_contents) "head" commit h
       in
       Lwt.return_unit
+    in
+    run x test
+
+  let test_search x () =
+    let test () =
+      create () >>= fun t ->
+      let check k path v =
+        Search.find t k path >>= fun v' ->
+        Alcotest.(check (option sha1)) "search" (Some v) v';
+        Lwt.return_unit
+      in
+      check kt4 (`Path ["a";"b";"x"]) kv1 >>= fun () ->
+      check kc2 (`Commit (`Path ["a";"b";"x"])) kv1 >>= fun () ->
+      check kc2 (`Commit (`Path ["a"])) kt2 >>= fun () ->
+      Lwt.return_unit
+
     in
     run x test
 
@@ -651,7 +670,7 @@ let array (module D: SHA.DIGEST) =
     ("to_list"      , `Quick, Array.test_to_list);
   ]
 
-  let suite (speed, x) =
+let suite (speed, x) =
   let (module S) = x.store in
   let module T = Make(S) in
   x.name,
@@ -663,6 +682,7 @@ let array (module D: SHA.DIGEST) =
     "Operations on references"  , speed, T.test_refs x;
     "Operations on index"       , speed, T.test_index x;
     "Operations on pack files"  , speed, T.test_packs x;
+    "Search"                    , speed, T.test_search x;
     "Resource leaks"            , `Slow, T.test_leaks x;
     "Basic Remote operations"   , `Slow, T.test_basic_remote x;
     "Fetching remote repos"     , `Slow, T.test_fetch x;

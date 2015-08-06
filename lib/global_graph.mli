@@ -21,17 +21,18 @@ module K: Graph.Sig.I with type V.t = SHA.t
 
 module Make (S: Store.S): sig
 
-  val keys: K.t -> SHA.t list
-  (** [keys g] is [g]'s list of keys. *)
+  val keys: K.t -> SHA.Set.t
+  (** [keys g] is [g]'s collection of keys. *)
 
   val of_keys: S.t -> K.t Lwt.t
   (** Return the graph of keys of the given Git store. *)
 
-  val closure: S.t -> min:SHA.Set.t -> max:SHA.Set.t -> K.t Lwt.t
+  val closure: ?full:bool -> S.t -> min:SHA.Set.t -> max:SHA.Set.t -> K.t Lwt.t
   (** Return a consistent cut of the graph of keys, where no elements
       are stricly lesser than the ones in [min] and none are bigger
       than the ones in [max]. Elements of [min] and [max] are in the
-      closure.  *)
+      closure. If [full] is not set (it is by default), return only
+      the graph of commits. *)
 
   val pack: S.t -> min:SHA.Set.t -> max:SHA.Set.t -> (SHA.t * Value.t) list Lwt.t
   (** Return a packed (closed) collection of objects. *)

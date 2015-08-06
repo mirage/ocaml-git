@@ -70,24 +70,26 @@ module Make (Store: Store.S) = struct
     include Search
   end
 
-  let of_contents t =
-    Log.debug "of_contents";
+  let label = function
+    | `Commit s    -> "commit"  , s
+    | `Tag (t,s)   -> "TAG-" ^ t, s
+    | `Tree (f,s)  -> f         , s
+    | `Tree_root s -> "/"       , s
+
+  let of_store t =
+    Log.debug "of_store";
     let g = C.create () in
     Store.contents t >>= fun nodes ->
     List.iter (C.add_vertex g) nodes;
     begin
       Lwt_list.iter_p (fun (id, _ as src) ->
-          Search.succ t id >>= fun succs ->
+          Search.pred t id >>= fun preds ->
           Lwt_list.iter_p (fun s ->
-              let l = match s with
-                | `Commit _   -> ""
-                | `Tag (t,_)  -> "TAG-" ^ t
-                | `Tree (f,_) -> f in
-              let sha1 = Search.sha1_of_succ s in
+              let l, sha1 = label s in
               Store.read_exn t sha1 >>= fun v ->
               C.add_edge_e g (src, l, (sha1, v));
               Lwt.return_unit
-            ) succs
+            ) preds
         ) nodes
     end >>= fun () ->
     Lwt.return g
@@ -99,9 +101,9 @@ module Make (Store: Store.S) = struct
     List.iter (fun (k, _) -> K.add_vertex g k) nodes;
     begin
       Lwt_list.iter_p (fun (src, _) ->
-          Search.succ t src >>= fun succs ->
+          Search.pred t src >>= fun succs ->
           Lwt_list.iter_p (fun s ->
-              let sha1 = Search.sha1_of_succ s in
+              let _, sha1 = label s in
               if K.mem_vertex g sha1 then K.add_edge g src sha1;
               Lwt.return_unit
             ) succs
@@ -112,11 +114,11 @@ module Make (Store: Store.S) = struct
   let to_dot t buf =
     Log.debug "to_dot";
     let fmt = Format.formatter_of_buffer buf in
-    of_contents t >>= fun g ->
+    of_store t >>= fun g ->
     Dot.fprint_graph fmt g;
     Lwt.return_unit
 
-  let closure t ~min ~max =
+  let closure ?(full=true) t ~min ~max =
     Log.debug "closure";
     let g = K.create ~size:1024 () in
     let marks = Hashtbl.create 1024 in
@@ -140,8 +142,8 @@ module Make (Store: Store.S) = struct
         | false -> Lwt.return_unit
         | true  ->
           if not (K.mem_vertex g key) then K.add_vertex g key;
-          Search.succ t key >>= fun succs ->
-          let keys = List.map Search.sha1_of_succ succs in
+          Search.pred ~full t key >>= fun preds ->
+          let keys = List.map (fun x -> snd (label x)) preds in
           List.iter (fun k -> K.add_edge g k key) keys;
           Lwt_list.iter_p add keys
       ) in
@@ -149,11 +151,11 @@ module Make (Store: Store.S) = struct
     Lwt_list.iter_p add max >>= fun () ->
     Lwt.return g
 
-  let keys g = K.fold_vertex (fun k set -> k :: set) g []
+  let keys g = K.fold_vertex (fun k set -> SHA.Set.add k set) g SHA.Set.empty
 
   let pack t ~min ~max =
     closure t ~min ~max >>= fun g ->
-    let keys = keys g in
+    let keys = keys g |> SHA.Set.to_list in
     Lwt_list.map_p (fun k -> Store.read_exn t k >|= fun v -> (k, v)) keys
 
 end
