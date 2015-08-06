@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** {2 Search over the graph of Git objects} *)
+(** Search over the graph of Git objects. *)
 
 type pred = [
   | `Commit of SHA.t

@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** Git commits. *)
+(** Commits. *)
 
 type t = {
   tree     : SHA.Tree.t;

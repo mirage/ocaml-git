@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** Lwt_unix IO module. *)
+(** Unix backend. *)
 
 open Git
 

@@ -20,6 +20,9 @@ type t = Packed_value.pic list
 (** A pack value is an ordered list of position-independant packed
     values and the SHA of the corresponding inflated objects. *)
 
+val keys: t -> SHA.Set.t
+(** Return the keys present in the pack. *)
+
 include Object.S with type t := t
 
 type raw
@@ -29,9 +32,25 @@ module Raw: sig
 
   include Object.S with type t = raw
 
+  val index: t -> Pack_index.Raw.t
+  (** Get the raw index asoociated to the raw pack. *)
+
+  val sha1: t -> SHA.t
+  (** Get the name of the pack. *)
+
+  val keys: t -> SHA.Set.t
+  (** Get the keys present in the raw pack. *)
+
+  val buffer: t -> Cstruct.t
+  (** Get the pack buffer. *)
+
   val shallow: t -> bool
   (** [shallow t] is true if all the SHA references appearing in [t]
       corresponds to objects also in [t]. *)
+
+  val input_header: Mstruct.t -> [`Version of int] * [`Count of int]
+  (** [input_head buf] reads the pack [version] number (could be 2 or
+      3) and the [count] of packed values in the pack file. *)
 
 end
 
@@ -49,9 +68,6 @@ module type IO = sig
   (** The usual [Object.S.input] function, but with additionals [index]
       and [keys] arguments to speed-up ramdom accesses and [read] to
       read shallow objects external to the pack file. *)
-
-  val keys: t -> SHA.Set.t
-  (** Return the keys present in the pack. *)
 
   val read: t -> SHA.t -> Value.t option
   (** Return the value stored in the pack file. *)
@@ -71,10 +87,6 @@ module type IO = sig
 
     val add: [`Not_defined]
     (** [Pack.Raw.add] is not defined. Use {!buffer} instead. *)
-
-    val input_header: Mstruct.t -> [`Version of int] * [`Count of int]
-    (** [input_head buf] reads the pack [version] number (could be 2 or
-        3) and the [count] of packed values in the pack file. *)
 
     val input: ?progress:(string -> unit) -> read:Value.read_inflated ->
       Mstruct.t -> t Lwt.t
@@ -96,18 +108,6 @@ module type IO = sig
     val read_inflated: index:Pack_index.f -> read:Value.read_inflated ->
       Mstruct.t -> SHA.t -> string option Lwt.t
     (** Same as {!read} but for inflated values. *)
-
-    val index: t -> Pack_index.Raw.t
-    (** Get the raw index asoociated to the raw pack. *)
-
-    val sha1: t -> SHA.t
-    (** Get the name of the pack. *)
-
-    val keys: t -> SHA.Set.t
-    (** Get the keys present in the raw pack. *)
-
-    val buffer: t -> Cstruct.t
-    (** Get the pack buffer. *)
 
   end
 

@@ -14,14 +14,14 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** Loose Git objects. *)
+(** Loose objects. *)
 
+(** The type for loose Git objects. *)
 type t =
   | Blob   of Blob.t
   | Commit of Commit.t
   | Tag    of Tag.t
   | Tree   of Tree.t
-(** The type for loose Git objects. *)
 
 include Object.S with type t := t
 

@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** Git user actions. *)
+(** User actions. *)
 
 type tz_offset = {
   sign: [`Plus | `Minus];

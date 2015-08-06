@@ -425,7 +425,7 @@ module Make (Store: Store.S) = struct
             let pstr1 = read_file pack in
             let read _ = failwith "shallow pack" in
             Pack_IO.Raw.input (Mstruct.of_cstruct pstr1) ~read >>= fun rp1 ->
-            let i3 = Pack_IO.Raw.index rp1 in
+            let i3 = Pack.Raw.index rp1 in
 
             (* basic serialization of index files *)
             begin if Sys.file_exists index then
@@ -440,7 +440,7 @@ module Make (Store: Store.S) = struct
                 Lwt.return_unit
             end >>= fun () ->
 
-            let pstr2 = Pack_IO.Raw.buffer rp1 in
+            let pstr2 = Pack.Raw.buffer rp1 in
             Pack_IO.Raw.input (Mstruct.of_cstruct pstr2) ~read >>= fun rp2 ->
             Pack_IO.of_raw rp1 >>= fun pic1 ->
             Pack_IO.of_raw rp2 >>= fun pic2 ->

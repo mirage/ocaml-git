@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** Git tags. *)
+(** Annotated tags. *)
 
 type t = {
   sha1   : SHA.t;

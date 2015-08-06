@@ -33,67 +33,52 @@ $ opam install git
 ### What is supported
 
 * The loose object files can be read and written;
+  - [blobs](http://mirage.github.io/ocaml-git/Blob.html) (files)
+  - [trees](http://mirage.github.io/ocaml-git/Tree.html) (directories)
+  - [commits](http://mirage.github.io/ocaml-git/Commit.html) (revision history)
+  - [tags](http://mirage.github.io/ocaml-git/Tag.html) (annotated tags)
+  - [references](http://mirage.github.io/ocaml-git/Reference.html) (branch names)
 
-- binary blobs (files)
-- trees (directories)
-- commits (revision history)
-
-* The pack files and pack indexes (which are collections of compressed
-  loose objects using a diff-based representation) can be read and
-  written). Moreover, diff hunks are exposed using a higher-level
+* The [pack files](http://mirage.github.io/ocaml-git/Pack.html)
+  (collections of compressed loose objects using a binary-diff representation)
+  and [pack indexes](http://mirage.github.io/ocaml-git/Pack_index.html)
+  (indexes of pack files) can be read and
+  written). The binary diff hunks are exposed using a high-level
   position-independent representation so that they can be manipulated
-  more easily.
+  more easily. Pack file can be created but will not be compressed yet.
 
-* The index file (cache) -- used as for managing the stagging area --
-  is fully supported. Which means that `git diff` and `git status`
+* The [index file] (http://mirage.github.io/ocaml-git/Index.html)
+  (used as for managing the stagging area)
+  are fully supported. Which means that `git diff` and `git status`
   will work as expected on a repository created by the library.
 
-* Basic support for client-side cloning and fetching (using bare and
- deepen options) but with no support for fancy download capabilities
- which is exposed by usual Git servers.
+* [Cloning and fetching](http://mirage.github.io/ocaml-git/Sync.html)
+  (using various options) are fully supported for
+  the Git protocol, the smart-HTTP protocol and `git+ssh`. A subset
+  of the protocol capabilities are implemented (mainly `thin-pack`,
+  `ofs-delta`, `side-band-64k` and `allow-reachable-sha1-in-want`).
+
+* Pushing is still experimental and need more testing.
+
+* An abstraction for Git [Store](http://mirage.github.io/ocaml-git/Store.S.html)
+  is available. Various store implementations are available:
+  - An [in-memory](http://mirage.github.io/ocaml-git/Memory.html) implementation;
+  - A [unix filesystem](http://mirage.github.io/ocaml-git/Git_unix.FS.html)
+    implementation;
+  - A [mirageOS](http://mirage.github.io/ocaml-git/Git_mirage.html) implementation,
+    requiring an `V1_LWT.FS` implementation.
 
 ### What is *not* supported
 
-* Only client-side operations are currently supported. Implementing
-  the corresponding server-side implementation is high on the TODO
-  list: using a dummy compression scheme, this should not be too hard
-  to add, though.
-
-* Merging and rebasing strategies are not supported.
+* No server-side operations are currently supported.
+* No GC.
+* Updates, merge and rebase are not supported. Use
+  [irmin](https://github.com/mirage/irmin) instead.
 
 ### Performance
 
-Performance is comparable to the `git` command. For instance, when
-downloading and processing a 5.4MiB pack file (the download time
-itself takes ~10s):
+Performance is comparable to the Git tool.
 
-```
-$ time ogit clone git://github.com/ocaml/opam-repository
-Cloning into 'opam-repository' ...
-Receiving data ... done.
-Resolving deltas: 100% (37294/37294), done.
-remote: Counting objects: 37294, done.
-Checking out files: 100% (6527/6527), done.
-HEAD is now at 267e08725291fc61b8411c0f20553ddd2e246d4f
+### License
 
-real 0m22.522s
-user 0m4.954s
-sys  0m5.078s
-```
-
-```
-$ time git clone git://github.com/ocaml/opam-repository
-Cloning into 'opam-repository'...
-remote: Reusing existing pack: 37868, done.
-remote: Total 37868 (delta 0), reused 0 (delta 0)
-Receiving objects: 100% (37868/37868), 5.41 MiB | 408.00 KiB/s, done.
-Resolving deltas: 100% (13973/13973), done.
-Checking connectivity... done
-
-real	 0m17.409s
-user	 0m1.198s
-sys	 0m0.925s
-```
-
-Not much energy have been dedicated to profiling the protocol
-implementation yet, so there is still plenty room for improvement.
+MIT, see LICENSE file for its text.
