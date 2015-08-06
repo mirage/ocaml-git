@@ -17,11 +17,13 @@
 open Lwt.Infix
 open Test_store
 
+let root = "test-db"
+
 module M = Git_unix.FS
 
 let init () =
   M.clear ();
-  M.create ~root:"test-db" () >>= fun t ->
+  M.create ~root () >>= fun t ->
   M.remove t
 
 let suite =
