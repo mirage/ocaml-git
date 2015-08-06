@@ -1,30 +1,30 @@
 # OASIS_START
-# DO NOT EDIT (digest: 4211e35ad430cb1587fceee4f2e5538a)
-SHA
-Blob
-Index
-Commit
+# DO NOT EDIT (digest: b9aef35b4eb5bae846b1977d4b14ceaa)
 Misc
-Version
-Global_graph
+SHA
+Inflate
+Object
+Object_type
+Blob
+Tree
+Commit
+Tag
+Reference
+Value
 Pack
 Pack_index
 Packed_value
-Reference
+Packed_refs
+Index
 Sync
-Tag
-Tree
-User
-Value
-Object
-Object_type
-Store
-Search
 Gri
+Search
+Global_graph
+User
+Store
 Memory
 FS
-Packed_refs
-Inflate
+Version
 unix/Git_unix
 mirage/Git_mirage
 # OASIS_STOP

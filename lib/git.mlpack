@@ -1,29 +1,29 @@
 # OASIS_START
-# DO NOT EDIT (digest: 42b4a7ea741b2cd57147917461410665)
-SHA
-Blob
-Index
-Commit
+# DO NOT EDIT (digest: cef061f9d94df1d68949576e76304f23)
 Misc
-Version
-Global_graph
+SHA
+Inflate
+Object
+Object_type
+Blob
+Tree
+Commit
+Tag
+Reference
+Value
 Pack
 Pack_index
 Packed_value
-Reference
+Packed_refs
+Index
 Sync
-Tag
-Tree
-User
-Value
-Object
-Object_type
-Store
-Search
 Gri
+Search
+Global_graph
+User
+Store
 Memory
 FS
-Packed_refs
-Inflate
+Version
 LRU
 # OASIS_STOP

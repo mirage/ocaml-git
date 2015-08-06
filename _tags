@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 09920af19b83c7eb429e6939e5bf764e)
+# DO NOT EDIT (digest: 501285491099ba47432025adabcf8ece)
 # Ignore VCS directories, you can use the same kind of rule outside
 # OASIS_START/STOP if you want to exclude directories that contains
 # useless stuff for the build process
@@ -16,31 +16,31 @@ true: annot, bin_annot
 "_darcs": not_hygienic
 # Library git
 "lib/git.cmxs": use_git
-"lib/SHA.cmx": for-pack(Git)
-"lib/blob.cmx": for-pack(Git)
-"lib/index.cmx": for-pack(Git)
-"lib/commit.cmx": for-pack(Git)
 "lib/misc.cmx": for-pack(Git)
-"lib/version.cmx": for-pack(Git)
-"lib/global_graph.cmx": for-pack(Git)
+"lib/SHA.cmx": for-pack(Git)
+"lib/inflate.cmx": for-pack(Git)
+"lib/object.cmx": for-pack(Git)
+"lib/object_type.cmx": for-pack(Git)
+"lib/blob.cmx": for-pack(Git)
+"lib/tree.cmx": for-pack(Git)
+"lib/commit.cmx": for-pack(Git)
+"lib/tag.cmx": for-pack(Git)
+"lib/reference.cmx": for-pack(Git)
+"lib/value.cmx": for-pack(Git)
 "lib/pack.cmx": for-pack(Git)
 "lib/pack_index.cmx": for-pack(Git)
 "lib/packed_value.cmx": for-pack(Git)
-"lib/reference.cmx": for-pack(Git)
+"lib/packed_refs.cmx": for-pack(Git)
+"lib/index.cmx": for-pack(Git)
 "lib/sync.cmx": for-pack(Git)
-"lib/tag.cmx": for-pack(Git)
-"lib/tree.cmx": for-pack(Git)
-"lib/user.cmx": for-pack(Git)
-"lib/value.cmx": for-pack(Git)
-"lib/object.cmx": for-pack(Git)
-"lib/object_type.cmx": for-pack(Git)
-"lib/store.cmx": for-pack(Git)
-"lib/search.cmx": for-pack(Git)
 "lib/gri.cmx": for-pack(Git)
+"lib/search.cmx": for-pack(Git)
+"lib/global_graph.cmx": for-pack(Git)
+"lib/user.cmx": for-pack(Git)
+"lib/store.cmx": for-pack(Git)
 "lib/memory.cmx": for-pack(Git)
 "lib/FS.cmx": for-pack(Git)
-"lib/packed_refs.cmx": for-pack(Git)
-"lib/inflate.cmx": for-pack(Git)
+"lib/version.cmx": for-pack(Git)
 "lib/LRU.cmx": for-pack(Git)
 <lib/*.ml{,i,y}>: pkg_crc
 <lib/*.ml{,i,y}>: pkg_dolog
