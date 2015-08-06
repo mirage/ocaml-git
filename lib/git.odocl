@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 54e5c75acbb103471454e9b40a7fe8c5)
+# DO NOT EDIT (digest: 4211e35ad430cb1587fceee4f2e5538a)
 SHA
 Blob
 Index
@@ -24,6 +24,7 @@ Gri
 Memory
 FS
 Packed_refs
+Inflate
 unix/Git_unix
 mirage/Git_mirage
 # OASIS_STOP

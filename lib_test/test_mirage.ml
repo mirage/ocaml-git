@@ -18,8 +18,6 @@ open Lwt.Infix
 open Test_store
 open Git_mirage
 
-let test_img = "test.img"
-
 let command fmt =
   Printf.ksprintf (fun str ->
       Printf.printf "[exec] %s\n" str;
@@ -36,19 +34,18 @@ module M = struct
     | `Ok x    -> f x
     | `Error e -> Lwt.fail (Failure (string_of_error e))
 
-  let connect () =
-    connect "mirage-fs"
+  let connect () = connect Test_fs.root
 
   let init () =
-    command "rm -rf mirage-fs";
-    command "mkdir mirage-fs";
+    command "rm -rf %s" Test_fs.root;
+    command "mkdir %s" Test_fs.root;
     connect ()  >>| fun t ->
     mkdir t "/" >>| fun () ->
     Lwt.return_unit
 
 end
 
-module S = FS(M)
+module S = FS(M)(SHA1_slow)(Git_unix.Zlib)
 
 let suite =
   {
@@ -56,5 +53,5 @@ let suite =
     init  = M.init;
     clean = unit;
     store = (module S);
-    mirage= true;
+    shell = true;
   }

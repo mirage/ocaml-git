@@ -24,7 +24,7 @@ module type FS = sig
   val string_of_error: error -> string
 end
 
-module FS (FS: FS) = struct
+module FS (FS: FS) (D: Git.SHA.DIGEST) (I: Git.Inflate.S) = struct
 
   let (>>|) x f =
     x >>= function
@@ -34,7 +34,7 @@ module FS (FS: FS) = struct
       Log.error "%s" str;
       Lwt.fail (Failure str)
 
-  module M = struct
+  module IO = struct
 
     let file_exists t f =
       Log.debug "file_exists %s" f;
@@ -130,51 +130,27 @@ module FS (FS: FS) = struct
       FS.write t file 0 b >>| fun () ->
       Lwt.return_unit
 
-    let getcwd () =
-      Lwt.return "/"
-
-    let realpath file =
-      Lwt.return file
-
-    let stat_info _file =
-      failwith "TODO"
-
-    let chmod _t _file _perm =
-      Lwt.return_unit
-
-    let connect fn =
-      FS.connect () >>| fn
-
-    let mkdir dir =
-      connect (fun t -> mkdir t dir)
-
-    let remove file =
-      connect (fun t -> remove t file)
-
-    let file_exists file =
-      connect (fun t -> file_exists t file)
-
-    let directories dir =
-      connect (fun t -> directories t dir)
-
-    let files dir =
-      connect (fun t -> files t dir)
-
-    let rec_files dir =
-      connect (fun t -> rec_files t dir)
-
-    let read_file file =
-      connect (fun t -> read_file t file)
+    let getcwd () = Lwt.return "/"
+    let realpath file = Lwt.return file
+    let chmod _t _file _perm = Lwt.return_unit
+    let connect fn = FS.connect () >>| fn
+    let mkdir dir = connect (fun t -> mkdir t dir)
+    let remove file = connect (fun t -> remove t file)
+    let file_exists file = connect (fun t -> file_exists t file)
+    let directories dir = connect (fun t -> directories t dir)
+    let files dir = connect (fun t -> files t dir)
+    let rec_files dir = connect (fun t -> rec_files t dir)
+    let read_file file = connect (fun t -> read_file t file)
+    let chmod file perm = connect (fun t -> chmod t file perm)
 
     let write_file file ?temp_dir buf =
       connect (fun t -> write_file t ?temp_dir file buf)
 
-    let chmod file perm =
-      connect (fun t -> chmod t file perm)
+    let stat_info _file = failwith "TODO"
 
   end
 
-  include Git.FS.Make(M)
+  include Git.FS.Make(IO)(D)(I)
 
 end
 
@@ -442,4 +418,120 @@ module Sync = struct
   module IO = IO
   module Result = Git.Sync.Result
   module Make = Git.Sync.Make(IO)
+end
+
+module SHA1_slow = struct
+
+  (* (from uuidm) *)
+  (* sha-1 digest. Based on pseudo-code of RFC 3174. Slow and ugly but
+     does the job. *)
+  let digest ~length ~blit s =
+    let set m n c = Bytes.set m n (Char.unsafe_chr c) in
+    let sha_1_pad s =
+      let len = length s in
+      let blen = 8 * len in
+      let rem = len mod 64 in
+      let mlen = if rem > 55 then len + 128 - rem else len + 64 - rem in
+      let m = Bytes.create mlen in
+      blit s 0 m 0 len;
+      Bytes.fill m len (mlen - len) '\x00';
+      Bytes.set m len '\x80';
+      if Sys.word_size > 32 then begin
+        set m (mlen - 8) (blen lsr 56 land 0xFF);
+        set m (mlen - 7) (blen lsr 48 land 0xFF);
+        set m (mlen - 6) (blen lsr 40 land 0xFF);
+        set m (mlen - 5) (blen lsr 32 land 0xFF);
+      end;
+      set m (mlen - 4) (blen lsr 24 land 0xFF);
+      set m (mlen - 3) (blen lsr 16 land 0xFF);
+      set m (mlen - 2) (blen lsr 8 land 0xFF);
+      set m (mlen - 1) (blen land 0xFF);
+      m
+    in
+    (* Operations on int32 *)
+    let ( &&& ) = ( land ) in
+    let ( lor ) = Int32.logor in
+    let ( lxor ) = Int32.logxor in
+    let ( land ) = Int32.logand in
+    let ( ++ ) = Int32.add in
+    let lnot = Int32.lognot in
+    let sr = Int32.shift_right in
+    let sl = Int32.shift_left in
+    let cls n x = (sl x n) lor (Int32.shift_right_logical x (32 - n)) in
+    (* Start *)
+    let m = sha_1_pad s in
+    let w = Array.make 16 0l in
+    let h0 = ref 0x67452301l in
+    let h1 = ref 0xEFCDAB89l in
+    let h2 = ref 0x98BADCFEl in
+    let h3 = ref 0x10325476l in
+    let h4 = ref 0xC3D2E1F0l in
+    let a = ref 0l in
+    let b = ref 0l in
+    let c = ref 0l in
+    let d = ref 0l in
+    let e = ref 0l in
+    for i = 0 to ((String.length m) / 64) - 1 do             (* For each block *)
+      (* Fill w *)
+      let base = i * 64 in
+      for j = 0 to 15 do
+        let k = base + (j * 4) in
+        w.(j) <- sl (Int32.of_int (Char.code m.[k])) 24 lor
+                 sl (Int32.of_int (Char.code m.[k + 1])) 16 lor
+                 sl (Int32.of_int (Char.code m.[k + 2])) 8 lor
+                 (Int32.of_int (Char.code m.[k + 3]))
+      done;
+      (* Loop *)
+      a := !h0; b := !h1; c := !h2; d := !h3; e := !h4;
+      for t = 0 to 79 do
+        let f, k =
+          if t <= 19 then (!b land !c) lor ((lnot !b) land !d), 0x5A827999l else
+          if t <= 39 then !b lxor !c lxor !d, 0x6ED9EBA1l else
+          if t <= 59 then
+            (!b land !c) lor (!b land !d) lor (!c land !d), 0x8F1BBCDCl
+          else
+            !b lxor !c lxor !d, 0xCA62C1D6l
+        in
+        let s = t &&& 0xF in
+        if (t >= 16) then begin
+          w.(s) <- cls 1 begin
+              w.((s + 13) &&& 0xF) lxor
+              w.((s + 8) &&& 0xF) lxor
+              w.((s + 2) &&& 0xF) lxor
+              w.(s)
+            end
+        end;
+        let temp = (cls 5 !a) ++ f ++ !e ++ w.(s) ++ k in
+        e := !d;
+        d := !c;
+        c := cls 30 !b;
+        b := !a;
+        a := temp;
+      done;
+      (* Update *)
+      h0 := !h0 ++ !a;
+      h1 := !h1 ++ !b;
+      h2 := !h2 ++ !c;
+      h3 := !h3 ++ !d;
+      h4 := !h4 ++ !e
+    done;
+    let h = Bytes.create 20 in
+    let i2s h k i =
+      set h k       ((Int32.to_int (sr i 24)) &&& 0xFF);
+      set h (k + 1) ((Int32.to_int (sr i 16)) &&& 0xFF);
+      set h (k + 2) ((Int32.to_int (sr i 8)) &&& 0xFF);
+      set h (k + 3) ((Int32.to_int i) &&& 0xFF);
+    in
+    i2s h 0 !h0;
+    i2s h 4 !h1;
+    i2s h 8 !h2;
+    i2s h 12 !h3;
+    i2s h 16 !h4;
+    Git.SHA.of_raw h
+
+  let string = digest ~length:String.length ~blit:Bytes.blit
+  let cstruct = digest ~length:Cstruct.len ~blit:Cstruct.blit_to_string
+
+  let length = 20
+
 end

@@ -28,3 +28,5 @@ val find: t -> Reference.t -> SHA.Commit.t option
 
 val references: t -> Reference.t list
 (** [references t] is the list of references appearing in [t]. *)
+
+module IO (D: SHA.DIGEST): Object.IO with type t = t

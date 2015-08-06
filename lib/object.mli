@@ -14,9 +14,11 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** Signatures *)
+(** Common signatures to all objects. *)
 
 module type S = sig
+
+  (** {1 General functions} *)
 
   type t
   (** The type for the given Git object. *)
@@ -36,6 +38,14 @@ module type S = sig
   val pp: Format.formatter -> t -> unit
   (** Same as {!pretty} but using a generic formatter. *)
 
+end
+
+module type IO = sig
+
+  (** {1 Input/output functions} *)
+
+  include S
+
   val input: Mstruct.t -> t
   (** Build a value from an inflated contents. *)
 
@@ -48,4 +58,5 @@ module type S = sig
       (the input data is simply copied a block at a time). The default
       value (currently equivalent to level 6) requests a default
       compromise between speed and compression. *)
+
 end

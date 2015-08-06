@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: e091b6058d4207e403bc545d417f795e)
+# DO NOT EDIT (digest: 09920af19b83c7eb429e6939e5bf764e)
 # Ignore VCS directories, you can use the same kind of rule outside
 # OASIS_START/STOP if you want to exclude directories that contains
 # useless stuff for the build process
@@ -40,37 +40,37 @@ true: annot, bin_annot
 "lib/memory.cmx": for-pack(Git)
 "lib/FS.cmx": for-pack(Git)
 "lib/packed_refs.cmx": for-pack(Git)
+"lib/inflate.cmx": for-pack(Git)
 "lib/LRU.cmx": for-pack(Git)
+<lib/*.ml{,i,y}>: pkg_crc
 <lib/*.ml{,i,y}>: pkg_dolog
 <lib/*.ml{,i,y}>: pkg_hex
 <lib/*.ml{,i,y}>: pkg_lwt
 <lib/*.ml{,i,y}>: pkg_mstruct
-<lib/*.ml{,i,y}>: pkg_nocrypto
 <lib/*.ml{,i,y}>: pkg_ocamlgraph
 <lib/*.ml{,i,y}>: pkg_stringext
 <lib/*.ml{,i,y}>: pkg_uri
-<lib/*.ml{,i,y}>: pkg_zip
 # Library git_top
 "lib/top/git_top.cmxs": use_git_top
 <lib/top/*.ml{,i,y}>: pkg_compiler-libs.toplevel
 # Library git-http
 "lib/http/git-http.cmxs": use_git-http
 <lib/http/*.ml{,i,y}>: pkg_cohttp.lwt
+<lib/http/*.ml{,i,y}>: pkg_crc
 <lib/http/*.ml{,i,y}>: pkg_dolog
 <lib/http/*.ml{,i,y}>: pkg_hex
 <lib/http/*.ml{,i,y}>: pkg_lwt
 <lib/http/*.ml{,i,y}>: pkg_mstruct
-<lib/http/*.ml{,i,y}>: pkg_nocrypto
 <lib/http/*.ml{,i,y}>: pkg_ocamlgraph
 <lib/http/*.ml{,i,y}>: pkg_stringext
 <lib/http/*.ml{,i,y}>: pkg_uri
 <lib/http/*.ml{,i,y}>: pkg_uri.services
-<lib/http/*.ml{,i,y}>: pkg_zip
 <lib/http/*.ml{,i,y}>: use_git
 # Library git-unix
 "lib/unix/git-unix.cmxs": use_git-unix
 <lib/unix/*.ml{,i,y}>: pkg_cohttp.lwt
 <lib/unix/*.ml{,i,y}>: pkg_conduit.lwt-unix
+<lib/unix/*.ml{,i,y}>: pkg_crc
 <lib/unix/*.ml{,i,y}>: pkg_dolog
 <lib/unix/*.ml{,i,y}>: pkg_hex
 <lib/unix/*.ml{,i,y}>: pkg_lwt
@@ -89,6 +89,7 @@ true: annot, bin_annot
 <lib/mirage/*.ml{,i,y}>: pkg_channel
 <lib/mirage/*.ml{,i,y}>: pkg_cohttp.lwt
 <lib/mirage/*.ml{,i,y}>: pkg_conduit.mirage
+<lib/mirage/*.ml{,i,y}>: pkg_crc
 <lib/mirage/*.ml{,i,y}>: pkg_dns.mirage
 <lib/mirage/*.ml{,i,y}>: pkg_dolog
 <lib/mirage/*.ml{,i,y}>: pkg_hex
@@ -98,18 +99,17 @@ true: annot, bin_annot
 <lib/mirage/*.ml{,i,y}>: pkg_mirage-http
 <lib/mirage/*.ml{,i,y}>: pkg_mirage-types.lwt
 <lib/mirage/*.ml{,i,y}>: pkg_mstruct
-<lib/mirage/*.ml{,i,y}>: pkg_nocrypto
 <lib/mirage/*.ml{,i,y}>: pkg_ocamlgraph
 <lib/mirage/*.ml{,i,y}>: pkg_stringext
 <lib/mirage/*.ml{,i,y}>: pkg_uri
 <lib/mirage/*.ml{,i,y}>: pkg_uri.services
-<lib/mirage/*.ml{,i,y}>: pkg_zip
 <lib/mirage/*.ml{,i,y}>: use_git
 <lib/mirage/*.ml{,i,y}>: use_git-http
 # Executable ogit
 <bin/ogit.{native,byte}>: pkg_cmdliner
 <bin/ogit.{native,byte}>: pkg_cohttp.lwt
 <bin/ogit.{native,byte}>: pkg_conduit.lwt-unix
+<bin/ogit.{native,byte}>: pkg_crc
 <bin/ogit.{native,byte}>: pkg_dolog
 <bin/ogit.{native,byte}>: pkg_hex
 <bin/ogit.{native,byte}>: pkg_lwt
@@ -127,6 +127,7 @@ true: annot, bin_annot
 <bin/*.ml{,i,y}>: pkg_cmdliner
 <bin/*.ml{,i,y}>: pkg_cohttp.lwt
 <bin/*.ml{,i,y}>: pkg_conduit.lwt-unix
+<bin/*.ml{,i,y}>: pkg_crc
 <bin/*.ml{,i,y}>: pkg_dolog
 <bin/*.ml{,i,y}>: pkg_hex
 <bin/*.ml{,i,y}>: pkg_lwt
@@ -147,6 +148,7 @@ true: annot, bin_annot
 <lib_test/test.{native,byte}>: pkg_cohttp.lwt
 <lib_test/test.{native,byte}>: pkg_conduit.lwt-unix
 <lib_test/test.{native,byte}>: pkg_conduit.mirage
+<lib_test/test.{native,byte}>: pkg_crc
 <lib_test/test.{native,byte}>: pkg_dns.mirage
 <lib_test/test.{native,byte}>: pkg_dolog
 <lib_test/test.{native,byte}>: pkg_hex
@@ -174,6 +176,7 @@ true: annot, bin_annot
 <lib_test/*.ml{,i,y}>: pkg_cohttp.lwt
 <lib_test/*.ml{,i,y}>: pkg_conduit.lwt-unix
 <lib_test/*.ml{,i,y}>: pkg_conduit.mirage
+<lib_test/*.ml{,i,y}>: pkg_crc
 <lib_test/*.ml{,i,y}>: pkg_dns.mirage
 <lib_test/*.ml{,i,y}>: pkg_dolog
 <lib_test/*.ml{,i,y}>: pkg_hex
@@ -200,3 +203,7 @@ true: annot, bin_annot
 true: debug, bin_annot
 true: warn(A-4-41-44)
 # true: warn_error_A
+"test-db": -traverse
+"_tests": -traverse
+"lib_test/_tests": -traverse
+"lib_test/test-db": -traverse

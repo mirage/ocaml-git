@@ -24,9 +24,8 @@ Library git
                      Global_graph, Pack, Pack_index, Packed_value,
                      Reference, Sync, Tag, Tree, User, Value,
                      Object, Object_type, Store, Search, Gri,
-                     Memory, FS, Packed_refs
-  BuildDepends:      mstruct, dolog, ocamlgraph, zip, nocrypto, uri,
-                     lwt, hex, stringext
+                     Memory, FS, Packed_refs, Inflate
+  BuildDepends:      mstruct, dolog, ocamlgraph, uri, lwt, hex, stringext, crc
 
 Library git_top
   Path:             lib/top
@@ -51,7 +50,8 @@ Library "git-unix"
   FindlibParent:     git
   Findlibname:       unix
   Modules:           Git_unix
-  BuildDepends:      git, git.http, lwt, cohttp.lwt, lwt.unix, conduit.lwt-unix
+  BuildDepends:      git, git.http, lwt, cohttp.lwt, lwt.unix, conduit.lwt-unix,
+                     zip, nocrypto
 
 Library "git-mirage"
   Build$:            flag(mirage)

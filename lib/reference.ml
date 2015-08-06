@@ -58,12 +58,6 @@ let err_head_contents str =
   let err = Printf.sprintf "%S is not a valid HEAD contents" str in
   failwith err
 
-let head_contents_of_string str =
-  match Stringext.split ~on:' ' (String.trim str) with
-  | [sha1]  -> SHA (SHA.Commit.of_hex sha1)
-  | [_;ref] -> Ref (of_raw ref)
-  | _       -> err_head_contents str
-
 let is_head x =
   String.compare head x = 0
 
@@ -83,3 +77,9 @@ let is_valid r =
       | '^' -> false
       | _   -> true
     ) r
+
+let head_contents_of_string ~of_hex str =
+  match Stringext.split ~on:' ' (String.trim str) with
+  | [sha1]  -> SHA (of_hex sha1 |> SHA.to_raw |> SHA.Commit.of_raw)
+  | [_;ref] -> Ref (of_raw ref)
+  | _       -> err_head_contents str

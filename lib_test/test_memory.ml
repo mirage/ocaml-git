@@ -16,15 +16,17 @@
 
 open Test_store
 
+module Memory = Git.Memory.Make(Git_unix.SHA1)
+
 let init () =
   Git.Value.Cache.clear ();
-  Git.Memory.clear_all ();
+  Memory.clear_all ();
   Lwt.return_unit
 
 let suite = {
   name  = "MEM";
   init  = init;
   clean = unit;
-  store = (module Git.Memory);
-  mirage=false;
+  store = (module Memory);
+  shell = false;
 }

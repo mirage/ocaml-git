@@ -1,4 +1,41 @@
-### 1.7.0 (2015-08-02)
+### 1.7.0 (2015-08-06)
+
+* Changes to the `Search` API:
+  - Remove `find_exn`
+  - the type `t` has a new case `Tree_root` to represent tree roots
+  - the type `path` is now structured (not a list of strings anymore).
+    this removes the confusing semantics of empty strings in paths.
+
+* Changes to the `Global_graph` API:
+  - `closure` takes an optional `full` argument to work over
+    commit objects only
+  - All the arguments of `pack` are labelled and its result type
+    has changed.
+  - Add `keys` to return the topological sort of keys in the graph.
+
+
+* Improve the size of pack files received when fetching (#115)
+  - advertise the fact that `ocaml-git` clients support `ofs-delta`
+    and `thin-pack`
+  - Compute a minimal set of `haves` to send to the server after
+    the discovery phase, where we already know all the server
+    references (#114)
+
+* Unpack shallow pack files after a fetch
+* Full support for shallow packs (#81)
+* During fetch, we now respect the "allow-reachable-sha1-in-want"
+  server (non-)capability. A proper error is reported to the client
+  if that's not the case.
+* Parametrize the codebase over the Inflate implementation. Useful
+  to change the inflate algorithm (or to not use any at all, which
+  would be what we want for big files and/or for efficient writes)
+  and to simplify the port to other backends. `Store.S` implementations
+  now expose their `Inflate` implementation.
+* Parametrize the codebase over the SHA implementation. Useful to change
+  the SHA algorihm (the unix backend provides SHA256) or simplify the
+  port to other backends (the mirage backend uses a pure OCaml implementation
+  extracted from uuidm). `Store.S` implementations now expose their `Digest`
+  implementation (#68)
 
 * Better sync API (#113)
   - Change the arguments of `Sync.fetch`
@@ -7,6 +44,7 @@
     the local Git repository (similar to what `git clone` does).
   - Add `ogit clone --no-checkout` and make `ogit clone --bare` more similar
     to the same `git` command.
+
 * Support Github http(s) URLs without .git (#111)
 * Add a `dot_git` optional parameter to `Store.create` to specify where
   the Git metadata should be stored (default is still `<root>/.git`). This
@@ -58,7 +96,7 @@
 * Fix the serialization of dates in commit objects
 * Expose `Git.Packed_value.PIC.pretty`
 * Improve the efficiency of `Git_unix.FS.remove`
-* Support shallow packs (#81)
+* Partial support for shallow packs (#81)
 * Fix an mmap leak introduced in `1.5.*` (#90)
 * Remove the dependency to OUnit for the tests
 * Improve the pretty printers and the output of `ogit`

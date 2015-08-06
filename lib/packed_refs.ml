@@ -19,51 +19,22 @@ type entry =
   | `Comment of string
   | `Entry of (SHA.Commit.t * Reference.t) ]
 
-type t = entry list
-
-let of_line line =
-  let line = String.trim line in
-  if String.length line = 0 then Some `Newline
-  else if line.[0] = '#' then
-    let str = String.sub line 1 (String.length line - 1) in
-    Some (`Comment str)
-  else match Stringext.cut line ~on:" " with
-    | None  -> None
-    | Some (sha1, ref) ->
-      let sha1 = SHA.Commit.of_hex sha1 in
-      let ref = Reference.of_raw ref in
-      Some (`Entry (sha1, ref))
-
 let to_line ppf = function
   | `Newline -> Format.fprintf ppf "\n"
   | `Comment c -> Format.fprintf ppf "# %s\n" c
   | `Entry (s,r) ->
     Format.fprintf ppf "%s %s" (SHA.Commit.to_hex s) (Reference.to_raw r)
 
-let equal t1 t2 = List.length t1 = List.length t2 && t1 = t2
-let hash = Hashtbl.hash
-let compare = Pervasives.compare
+module T = struct
+  type t = entry list
+  let equal t1 t2 = List.length t1 = List.length t2 && t1 = t2
+  let hash = Hashtbl.hash
+  let compare = Pervasives.compare
+  let pp ppf t = List.iter (to_line ppf) t
+  let pretty = Misc.pretty pp
+end
 
-let add buf ?level:_ t =
-  let ppf = Format.formatter_of_buffer buf in
-  List.iter (to_line ppf) t
-
-let pp ppf t = List.iter (to_line ppf) t
-let pretty = Misc.pretty pp
-
-let input buf =
-  let rec aux acc =
-    let line, cont = match Mstruct.get_string_delim buf '\n' with
-      | None  -> Mstruct.to_string buf, false
-      | Some s ->  s, true
-    in
-    let acc = match of_line line with
-      | None   -> acc
-      | Some e -> e :: acc
-    in
-    if cont then aux acc else List.rev acc
-  in
-  aux []
+include T
 
 let find t r =
   let rec aux = function
@@ -82,3 +53,41 @@ let references (t:t) =
     | `Entry (_, r) :: t -> aux (Set.add r acc) t
   in
   aux Set.empty t
+
+module IO (D: SHA.DIGEST) = struct
+
+  module SHA_IO = SHA.IO(D)
+  include T
+
+  let of_line line =
+    let line = String.trim line in
+    if String.length line = 0 then Some `Newline
+    else if line.[0] = '#' then
+      let str = String.sub line 1 (String.length line - 1) in
+      Some (`Comment str)
+    else match Stringext.cut line ~on:" " with
+      | None  -> None
+      | Some (sha1, ref) ->
+        let sha1 = SHA_IO.Commit.of_hex sha1 in
+        let ref = Reference.of_raw ref in
+        Some (`Entry (sha1, ref))
+
+  let add buf ?level:_ t =
+    let ppf = Format.formatter_of_buffer buf in
+    List.iter (to_line ppf) t
+
+  let input buf =
+    let rec aux acc =
+      let line, cont = match Mstruct.get_string_delim buf '\n' with
+        | None   -> Mstruct.to_string buf, false
+        | Some s -> s, true
+      in
+      let acc = match of_line line with
+        | None   -> acc
+        | Some e -> e :: acc
+      in
+      if cont then aux acc else List.rev acc
+    in
+    aux []
+
+end

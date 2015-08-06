@@ -15,13 +15,11 @@
  *)
 
 open Printf
-
 module Log = Log.Make(struct let section = "blob" end)
 
+(* FIXME: might want to have an option type with string|cstruct *)
 include Misc.S
-
 let hash = Hashtbl.hash
-
 let equal x y = String.compare x y = 0
 
 let pretty t =
@@ -31,11 +29,7 @@ let pretty t =
       (String.length t)
 
 let pp ppf t = Format.fprintf ppf "%s" (pretty t)
-
-let input buf = Mstruct.to_string buf
-
-let add buf ?level:_ t =
-  Buffer.add_string buf t
-
 let to_raw x = x
 let of_raw x = x
+let input buf = Mstruct.to_string buf
+let add buf ?level:_ t = Buffer.add_string buf t

@@ -14,23 +14,38 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Lwt.Infix
-open Test_store
+(** Zlib Compression. *)
 
-let root = "test-db"
+module type S = sig
 
-module M = Git_unix.FS
+  val inflate: ?output_size:int -> Mstruct.t -> Mstruct.t option
+  (** Inflate an mstruct. *)
 
-let init () =
-  M.clear ();
-  M.create ~root () >>= fun t ->
-  M.remove t
+  val deflate: ?level:int -> Cstruct.t -> Cstruct.t
+  (** Deflate an cstruct. *)
 
-let suite =
-  {
-    name  = "FS";
-    init  = init;
-    clean = unit;
-    store = (module M);
-    shell = true;
-  }
+end
+
+module None: S
+(** No compression. *)
+
+(** Minimaal signature provided by Zlib. *)
+module type ZLIB = sig
+  exception Error of string * string
+  val compress:
+    ?level: int -> ?header: bool ->
+    (string -> int) -> (string -> int -> unit) -> unit
+  type stream
+  type flush_command =
+    | Z_NO_FLUSH
+    | Z_SYNC_FLUSH
+    | Z_FULL_FLUSH
+    | Z_FINISH
+  val inflate_init: bool -> stream
+  val inflate:
+    stream -> string -> int -> int -> string -> int -> int -> flush_command
+    -> bool * int * int
+  val inflate_end: stream -> unit
+end
+
+module Make (Z: ZLIB): S

@@ -1,8 +1,8 @@
 # OASIS_START
-# DO NOT EDIT (digest: bfb4a354ddb2852b2de8246ccace9860)
+# DO NOT EDIT (digest: 7367801f05869337fe79bbbf8efd97f3)
 version = "1.7.0"
 description = "A low-level interface to Git in pure OCaml"
-requires = "mstruct dolog ocamlgraph zip nocrypto uri lwt hex stringext"
+requires = "mstruct dolog ocamlgraph uri lwt hex stringext crc"
 archive(byte) = "git.cma"
 archive(byte, plugin) = "git.cma"
 archive(native) = "git.cmxa"
@@ -11,7 +11,8 @@ exists_if = "git.cma"
 package "unix" (
  version = "1.7.0"
  description = "A low-level interface to Git in pure OCaml"
- requires = "git git.http lwt cohttp.lwt lwt.unix conduit.lwt-unix"
+ requires =
+ "git git.http lwt cohttp.lwt lwt.unix conduit.lwt-unix zip nocrypto"
  archive(byte) = "git-unix.cma"
  archive(byte, plugin) = "git-unix.cma"
  archive(native) = "git-unix.cmxa"

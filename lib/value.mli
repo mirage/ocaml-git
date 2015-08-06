@@ -14,22 +14,23 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** Git objects. *)
+(** Loose Git objects. *)
 
 type t =
   | Blob   of Blob.t
   | Commit of Commit.t
   | Tag    of Tag.t
   | Tree   of Tree.t
-(** Loose git objects. *)
+(** The type for loose Git objects. *)
+
+include Object.S with type t := t
 
 val type_of: t -> Object_type.t
 (** Return the object type. *)
 
-val sha1: t -> SHA.t
-(** Return the SHA of the serialized contents. *)
-
-include Object.S with type t := t
+val type_of_inflated: Mstruct.t -> Object_type.t
+(** Return the type of the inflated object stored in the given
+    buffer. *)
 
 (** {2 Constructors} *)
 
@@ -45,23 +46,23 @@ val tree: Tree.t -> t
 val tag: Tag.t -> t
 (** Cast a tag to an object. *)
 
-(** {2 Inflated values} *)
+(** {1 IO types} *)
 
-val add_header: Buffer.t -> Object_type.t -> int -> unit
-(** Append the given object header to a buffer.  *)
+type read = SHA.t -> t option Lwt.t
+(** The type for functions reading values. *)
 
-val add_inflated: Buffer.t -> t -> unit
-(** Append the inflated serialization of an object to a buffer.
-    Similar to [add], but without deflating the contents. *)
+type read_inflated = SHA.t -> string option Lwt.t
+(** The type for functions reading inflated values. *)
 
-val input_inflated: Mstruct.t -> t
-(** Build a value from an inflated contents. *)
+type write = t -> SHA.t Lwt.t
+(** The type for functions writing values. *)
 
-val type_of_inflated: Mstruct.t -> Object_type.t
-(** Return the type of the inflated object stored in the given
-    buffer. *)
+type write_inflated = string -> SHA.t Lwt.t
+(** The type for functions writing raw values. *)
 
 module Cache: sig
+
+  (** {1 Global cache of values} *)
 
   val set_size: int -> unit
   (** Empty the current LRU cache, and create a new one with the given
@@ -87,14 +88,25 @@ module Cache: sig
 
 end
 
-type read = SHA.t -> t option Lwt.t
-(** The type for functions reading values. *)
+module type IO = sig
 
-type read_inflated = SHA.t -> string option Lwt.t
-(** The type for functions reading inflated values. *)
+  include Object.IO with type t = t
 
-type write = t -> SHA.t Lwt.t
-(** The type for functions writing values. *)
+  (** {2 Inflated values} *)
 
-type write_inflated = string -> SHA.t Lwt.t
-(** The type for functions writing raw values. *)
+  val sha1: t -> SHA.t
+  (** Return the SHA of the serialized contents. *)
+
+  val add_header: Buffer.t -> Object_type.t -> int -> unit
+  (** Append the given object header to a buffer.  *)
+
+  val add_inflated: Buffer.t -> t -> unit
+  (** Append the inflated serialization of an object to a buffer.
+      Similar to [add], but without deflating the contents. *)
+
+  val input_inflated: Mstruct.t -> t
+  (** Build a value from an inflated contents. *)
+
+end
+
+module IO (D: SHA.DIGEST) (I: Inflate.S): IO

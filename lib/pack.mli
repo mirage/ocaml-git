@@ -16,88 +16,112 @@
 
 (** Pack files. *)
 
-type t = Packed_value.PIC.t list
+type t = Packed_value.pic list
 (** A pack value is an ordered list of position-independant packed
     values and the SHA of the corresponding inflated objects. *)
 
 include Object.S with type t := t
 
-val add: ?level:int -> t -> Pack_index.Raw.t * Cstruct.t
-(** Serialize a pack file into a list of buffers. Return the
-    corresponding raw index. *)
-
-val input: ?progress:(string -> unit) ->
-  index:Pack_index.f -> keys:SHA.Set.t -> read:Value.read_inflated ->
-  Mstruct.t -> t Lwt.t
-(** The usual [Object.S.input] function, but with additionals [index]
-    and [keys] arguments to speed-up ramdom accesses and [read] to
-    read shallow objects external to the pack file. *)
-
-val keys: t -> SHA.Set.t
-(** Return the keys present in the pack. *)
-
-val read: t -> SHA.t -> Value.t option
-(** Return the value stored in the pack file. *)
-
-val read_exn: t -> SHA.t -> Value.t
-(** Return the value stored in the pack file. *)
-
-val pack: (SHA.t * Value.t) list -> t
-(** Create a (not very well compressed) pack file. *)
+type raw
+(** The type for raw packs. *)
 
 module Raw: sig
 
-  (** Raw pack file: they contains a pack index and a list of
-      position-dependant deltas. *)
+  include Object.S with type t = raw
 
-  include Object.S
-
-  val add: [`Not_defined]
-  (** [Pack.Raw.add] is not defined. Use {!buffer} instead. *)
-
-  val input_header: Mstruct.t -> [`Version of int] * [`Count of int]
-  (** [input_head buf] reads the pack [version] number (could be 2 or
-      3) and the [count] of packed values in the pack file. *)
-
-  val input: ?progress:(string -> unit) -> read:Value.read_inflated ->
-    Mstruct.t -> t Lwt.t
-  (** [input ~read buf] is the raw pack and raw index obtained by
-      reading the buffer [buf]. External (shallow) SHA1 references are
-      resolved using the [read] function; these references are needed
-      to unpack the list of values stored in the pack file, to then
-      compute the full raw index. *)
-
-  val unpack: ?progress:(string -> unit) -> write:Value.write_inflated ->
-    t -> SHA.Set.t Lwt.t
-  (** Unpack a whole pack file on disk (by calling [write] on every
-      values) and return the SHA1s of the written objects. *)
-
-  val read: index:Pack_index.f -> read:Value.read_inflated ->
-    Mstruct.t -> SHA.t -> Value.t option Lwt.t
-  (** Same as the top-level [read] function but for raw packs. *)
-
-  val read_inflated: index:Pack_index.f -> read:Value.read_inflated ->
-    Mstruct.t -> SHA.t -> string option Lwt.t
-  (** Same as {!read} but for inflated values. *)
-
-  val index: t -> Pack_index.Raw.t
-  (** Get the raw index asoociated to the raw pack. *)
-
-  val sha1: t -> SHA.t
-  (** Get the name of the pack. *)
-
-  val keys: t -> SHA.Set.t
-  (** Get the keys present in the raw pack. *)
-
-  val buffer: t -> Cstruct.t
-  (** Get the pack buffer. *)
+  val shallow: t -> bool
+  (** [shallow t] is true if all the SHA references appearing in [t]
+      corresponds to objects also in [t]. *)
 
 end
 
-val of_raw: ?progress:(string -> unit) -> Raw.t -> t Lwt.t
-(** Transform a raw pack file into a position-independant pack
-    file. *)
+module type IO = sig
 
-val to_raw: t -> Raw.t
-(** Transform a position-independant pack file into a raw pack and
-    index files. *)
+  include Object.S with type t = t
+
+  val add: ?level:int -> t -> Pack_index.raw * Cstruct.t
+  (** Serialize a pack file into a list of buffers. Return the
+      corresponding raw index. *)
+
+  val input: ?progress:(string -> unit) ->
+    index:Pack_index.f -> keys:SHA.Set.t -> read:Value.read_inflated ->
+    Mstruct.t -> t Lwt.t
+  (** The usual [Object.S.input] function, but with additionals [index]
+      and [keys] arguments to speed-up ramdom accesses and [read] to
+      read shallow objects external to the pack file. *)
+
+  val keys: t -> SHA.Set.t
+  (** Return the keys present in the pack. *)
+
+  val read: t -> SHA.t -> Value.t option
+  (** Return the value stored in the pack file. *)
+
+  val read_exn: t -> SHA.t -> Value.t
+  (** Return the value stored in the pack file. *)
+
+  val create: (SHA.t * Value.t) list -> t
+  (** Create a (not very well compressed) pack file. *)
+
+  module Raw: sig
+
+    (** Raw pack file: they contains a pack index and a list of
+        position-dependant deltas. *)
+
+    include Object.S with type t = raw
+
+    val add: [`Not_defined]
+    (** [Pack.Raw.add] is not defined. Use {!buffer} instead. *)
+
+    val input_header: Mstruct.t -> [`Version of int] * [`Count of int]
+    (** [input_head buf] reads the pack [version] number (could be 2 or
+        3) and the [count] of packed values in the pack file. *)
+
+    val input: ?progress:(string -> unit) -> read:Value.read_inflated ->
+      Mstruct.t -> t Lwt.t
+    (** [input ~read buf] is the raw pack and raw index obtained by
+        reading the buffer [buf]. External (shallow) SHA1 references are
+        resolved using the [read] function; these references are needed
+        to unpack the list of values stored in the pack file, to then
+        compute the full raw index. *)
+
+    val unpack: ?progress:(string -> unit) -> write:Value.write_inflated ->
+      t -> SHA.Set.t Lwt.t
+    (** Unpack a whole pack file on disk (by calling [write] on every
+        values) and return the SHA1s of the written objects. *)
+
+    val read: index:Pack_index.f -> read:Value.read_inflated ->
+      Mstruct.t -> SHA.t -> Value.t option Lwt.t
+    (** Same as the top-level [read] function but for raw packs. *)
+
+    val read_inflated: index:Pack_index.f -> read:Value.read_inflated ->
+      Mstruct.t -> SHA.t -> string option Lwt.t
+    (** Same as {!read} but for inflated values. *)
+
+    val index: t -> Pack_index.Raw.t
+    (** Get the raw index asoociated to the raw pack. *)
+
+    val sha1: t -> SHA.t
+    (** Get the name of the pack. *)
+
+    val keys: t -> SHA.Set.t
+    (** Get the keys present in the raw pack. *)
+
+    val buffer: t -> Cstruct.t
+    (** Get the pack buffer. *)
+
+  end
+
+  type raw = Raw.t
+  (** The type for raw packs. *)
+
+  val of_raw: ?progress:(string -> unit) -> Raw.t -> t Lwt.t
+  (** Transform a raw pack file into a position-independant pack
+      file. *)
+
+  val to_raw: t -> Raw.t
+    (** Transform a position-independant pack file into a raw pack and
+        index files. *)
+
+end
+
+module IO (D: SHA.DIGEST) (I: Inflate.S): IO

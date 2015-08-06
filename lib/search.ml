@@ -16,65 +16,73 @@
 
 open Lwt.Infix
 
-let err_not_found n k =
-  let str = Printf.sprintf "Git.Search.%s: %s not found" n k in
-  Lwt.fail (Invalid_argument str)
-
-type succ =
-  [ `Commit of SHA.t
+type pred = [
+  |`Commit of SHA.t
   | `Tag of string * SHA.t
-  | `Tree of string * SHA.t ]
-
-let sha1_of_succ = function
-  | `Commit s
-  | `Tag (_, s)
-  | `Tree (_, s) -> s
+  | `Tree of string * SHA.t
+  | `Tree_root of SHA.t
+]
 
 module Make (Store: Store.S) = struct
 
-  type path = string list
-
-  let succ t sha1 =
-    let commit c =
-      `Commit (SHA.of_commit c) in
-    let tree l s =
-      `Tree (l, SHA.of_tree s) in
-    let tag t =
-      `Tag (t.Tag.tag, t.Tag.sha1) in
-    Store.read t sha1 >>= function
-    | None                  -> Lwt.return_nil
-    | Some (Value.Blob _)   -> Lwt.return_nil
+  let pred t ?(full=true) sha1 =
+    let commit c = `Commit (SHA.of_commit c) in
+    let tree l s = `Tree (l, s) in
+    let tree_root s = `Tree_root (SHA.of_tree s) in
+    let tag t = `Tag (t.Tag.tag, t.Tag.sha1) in
+    Store.read t sha1 >|= function
+    | None                  -> []
+    | Some (Value.Blob _)   -> []
     | Some (Value.Commit c) ->
-      Lwt.return (tree "" c.Commit.tree :: List.map commit c.Commit.parents)
-    | Some (Value.Tag t)    -> Lwt.return [tag t]
+      (if full then [tree_root c.Commit.tree] else [])
+      @ List.map commit c.Commit.parents
+    | Some (Value.Tag t)    -> if full then [tag t] else []
     | Some (Value.Tree t)   ->
-      Lwt.return (List.map (fun e -> `Tree (e.Tree.name, e.Tree.node)) t)
+      if full then List.map (fun e -> tree e.Tree.name e.Tree.node) t else []
+
+  type path = [
+    | `Tag of string * path
+    | `Commit of path
+    | `Path of string list
+  ]
+
+  let find_list f l =
+    List.fold_left (fun acc x ->
+        match acc with
+        | Some _ -> acc
+        | None   -> f x
+      ) None l
+
+  let _find_commit = find_list (function `Commit x -> Some x | _ -> None)
+  let find_tree_root = find_list (function `Tree_root x -> Some x | _ -> None)
+
+  let find_tag l =
+    find_list (function `Tag (s, x) -> if l=s then Some x else None | _  -> None)
+
+  let find_tree l =
+    find_list (function `Tree (s, x) -> if s=l then Some x else None | _ -> None)
 
   (* XXX: not tail-rec *)
   let rec find t sha1 path =
     match path with
-    | []   -> Lwt.return (Some sha1)
-    | h::p ->
-      succ t sha1 >>= fun succs ->
-      Lwt_list.fold_left_s (fun acc s ->
-          match (acc, s) with
-          | Some _, _            -> Lwt.return acc
-          | _     , `Commit _    -> Lwt.return acc
-          | _     , `Tag (l, s)
-          | _     , `Tree (l, s) ->
-            if l = h then
-              find t s p >>= function
-              | None   -> Lwt.return_none
-              | Some f -> Lwt.return (Some f)
-            else
-              Lwt.return acc
-        ) None succs
-
-
-  let find_exn t sha1 path =
-    find t sha1 path >>= function
-    | Some x -> Lwt.return x
-    | None   -> err_not_found "find_exn" (SHA.pretty sha1)
+    | `Path []   -> Lwt.return (Some sha1)
+    | `Tag (l, p) -> begin
+        pred t sha1 >>= fun preds ->
+        match find_tag l preds with
+        | None   -> Lwt.return_none
+        | Some s -> find t s p
+      end
+    | `Commit p -> begin
+        pred t sha1 >>= fun preds ->
+        match find_tree_root preds with
+        | None   -> Lwt.return_none
+        | Some s -> find t s p
+      end
+    | `Path (h::p) ->
+      pred t sha1 >>= fun preds ->
+      match find_tree h preds with
+      | None   -> Lwt.return_none
+      | Some s -> find t s (`Path p)
 
   (* XXX: can do one less look-up *)
   let mem t sha1 path =

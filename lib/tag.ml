@@ -16,60 +16,73 @@
 
 module Log = Log.Make(struct let section = "tag" end)
 
-type t = {
-  sha1   : SHA.t;
-  typ    : Object_type.t;
-  tag    : string;
-  tagger : User.t;
-  message: string;
-}
+module T = struct
 
-let hash = Hashtbl.hash
-let equal = (=)
-let compare = compare
+  type t = {
+    sha1   : SHA.t;
+    typ    : Object_type.t;
+    tag    : string;
+    tagger : User.t;
+    message: string;
+  }
 
-let pp ppf t =
-  Format.fprintf ppf
-    "@[object: %a@ \
-     type  : %s@ \
-     tag   : %S@ \
-     tagger: %a@.\
-     %s@]"
-    SHA.pp t.sha1
-    (Object_type.to_string t.typ)
-    t.tag
-    User.pp t.tagger
-    (String.trim t.message)
+  let hash = Hashtbl.hash
+  let equal = (=)
+  let compare = compare
 
-let pretty = Misc.pretty pp
+  let pp ppf t =
+    Format.fprintf ppf
+      "@[object: %a@ \
+       type  : %s@ \
+       tag   : %S@ \
+       tagger: %a@.\
+       %s@]"
+      SHA.pp t.sha1
+      (Object_type.to_string t.typ)
+      t.tag
+      User.pp t.tagger
+      (String.trim t.message)
 
-let add_key_value buf k v =
-  Buffer.add_string buf k;
-  Buffer.add_char   buf Misc.sp;
-  Buffer.add_string buf v;
-  Buffer.add_char   buf Misc.lf
+  let pretty = Misc.pretty pp
 
-let input_object_type buf =
-  let s = Mstruct.to_string buf in
-  match Object_type.of_string s with
-  | Some k -> k
-  | None   -> Mstruct.parse_error_buf buf "input_object_type: %s" s
+end
 
-let add buf ?level:_ t =
-  add_key_value buf "object" (SHA.to_hex t.sha1);
-  add_key_value buf "type"   (Object_type.to_string t.typ);
-  add_key_value buf "tag"    t.tag;
-  Buffer.add_string buf "tagger ";
-  User.add buf t.tagger;
-  Buffer.add_char buf Misc.lf;
-  Buffer.add_char buf Misc.lf;
-  Buffer.add_string buf t.message
+include T
 
-let input buf =
-  let sha1   = Misc.input_key_value buf ~key:"object" SHA.input_hex in
-  let typ    = Misc.input_key_value buf ~key:"type" input_object_type in
-  let tag    = Misc.input_key_value buf ~key:"tag" Mstruct.to_string in
-  let tagger = Misc.input_key_value buf ~key:"tagger" User.input in
-  Mstruct.shift buf 1;
-  let message = Mstruct.to_string buf in
-  { sha1; typ; tag; tagger; message }
+module IO (D: SHA.DIGEST) = struct
+
+  include T
+  module SHA_IO = SHA.IO(D)
+
+  let add_key_value buf k v =
+    Buffer.add_string buf k;
+    Buffer.add_char   buf Misc.sp;
+    Buffer.add_string buf v;
+    Buffer.add_char   buf Misc.lf
+
+  let input_object_type buf =
+    let s = Mstruct.to_string buf in
+    match Object_type.of_string s with
+    | Some k -> k
+    | None   -> Mstruct.parse_error_buf buf "input_object_type: %s" s
+
+  let add buf ?level:_ t =
+    add_key_value buf "object" (SHA.to_hex t.sha1);
+    add_key_value buf "type"   (Object_type.to_string t.typ);
+    add_key_value buf "tag"    t.tag;
+    Buffer.add_string buf "tagger ";
+    User.add buf t.tagger;
+    Buffer.add_char buf Misc.lf;
+    Buffer.add_char buf Misc.lf;
+    Buffer.add_string buf t.message
+
+  let input buf =
+    let sha1   = Misc.input_key_value buf ~key:"object" SHA_IO.input_hex in
+    let typ    = Misc.input_key_value buf ~key:"type" input_object_type in
+    let tag    = Misc.input_key_value buf ~key:"tag" Mstruct.to_string in
+    let tagger = Misc.input_key_value buf ~key:"tagger" User.input in
+    Mstruct.shift buf 1;
+    let message = Mstruct.to_string buf in
+    { sha1; typ; tag; tagger; message }
+
+end

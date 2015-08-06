@@ -5,9 +5,10 @@ env:
   global:
     - PACKAGE=git.1.7.0
   matrix:
-    - OCAML_VERSION=4.01 DEPOTS=cohttp
     - OCAML_VERSION=4.01
     - OCAML_VERSION=4.02
-      DEPOPTS="mirage-http mirage-flow mirage-types-lwt channel cmdliner"
-      TESTS=false
+    - OCAML_VERSION=4.01 TESTS=false
+      DEPOPTS="conduit cohttp camlzip nocrypto"
+    - OCAML_VERSION=4.02 TESTS=false
+      DEPOPTS="mirage-http mirage-flow mirage-types-lwt channel"
     - OCAML_VERSION=4.02 TESTS=false REVDEPS=*

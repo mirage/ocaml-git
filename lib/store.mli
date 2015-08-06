@@ -67,7 +67,7 @@ module type S = sig
   val write: t -> Value.t -> SHA.t Lwt.t
   (** Write a value and return the SHA of its serialized contents. *)
 
-  val write_pack: t -> Pack.Raw.t -> SHA.Set.t Lwt.t
+  val write_pack: t -> Pack.raw -> SHA.Set.t Lwt.t
   (** Write a raw pack file and the corresponding index. Return the
       objects IDs which have been written. *)
 
@@ -127,5 +127,11 @@ module type S = sig
 
   val write_inflated: t -> string -> SHA.t Lwt.t
   (** Write a raw buffer in the store. *)
+
+  module Digest: SHA.DIGEST
+  (** Digest functions that the store is using. *)
+
+  module Inflate: Inflate.S
+  (** Inflate functions that the store is using. *)
 
 end

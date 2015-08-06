@@ -33,4 +33,4 @@ type t = {
     January 1, 1970, UTC without accounting for leap seconds with an
     optional timezone info. *)
 
-include Object.S with type t := t
+include Object.IO with type t := t

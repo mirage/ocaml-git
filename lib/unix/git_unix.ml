@@ -24,7 +24,7 @@ let openfile_pool = Lwt_pool.create 200 (fun () -> Lwt.return_unit)
 
 let mkdir_pool = Lwt_pool.create 1 (fun () -> Lwt.return_unit)
 
-module M = struct
+module IO_Sync = struct
 
   type ctx = unit
 
@@ -137,7 +137,7 @@ module M = struct
 
 end
 
-module D = struct
+module IO_FS = struct
 
   let protect_unix_exn = function
     | Unix.Unix_error _ as e -> Lwt.fail (Failure (Printexc.to_string e))
@@ -312,13 +312,83 @@ module D = struct
 
 end
 
-module Sync = struct
-  module IO = M
-  module Result = Sync.Result
-  module Make = Sync.Make(M)
+
+module Zlib = Git.Inflate.Make(Zlib)
+
+module SHA1 = struct
+
+  let cstruct buf =
+    buf
+    |> Nocrypto.Hash.SHA1.digest
+    |> Cstruct.to_string
+    |> fun x -> SHA.of_raw x
+
+  let string str =
+    Cstruct.of_string str
+    |> cstruct
+
+  let length = Nocrypto.Hash.SHA1.digest_size
+
 end
 
-module FS = struct
-  module IO = D
-  include Git.FS.Make(D)
+module SHA256 = struct
+
+  let cstruct buf =
+    buf
+    |> Nocrypto.Hash.SHA256.digest
+    |> Cstruct.to_string
+    |> fun x -> SHA.of_raw x
+
+  let string str =
+    Cstruct.of_string str
+    |> cstruct
+
+  let length = Nocrypto.Hash.SHA256.digest_size
+
+end
+
+module Make (D: Git.SHA.DIGEST) (I: Git.Inflate.S) = struct
+
+  module Sync = struct
+    module IO = IO_Sync
+    module Result = Sync.Result
+    module Make = Sync.Make(IO)(D)(I)
+  end
+
+  module FS = struct
+    module IO = IO_FS
+    include Git.FS.Make(IO_FS)(D)(I)
+  end
+
+  module Memory = Git.Memory.Make(D)
+
+  module SHA_IO = Git.SHA.IO(D)
+  module Value_IO = Value.IO(D)(I)
+  module Pack_IO = Git.Pack.IO(D)(I)
+  module Index_IO = Git.Index.IO(D)
+
+end
+
+module M = Make(SHA1)(Zlib)
+include M
+
+module type S = sig
+  module Sync: sig
+    module IO: Git.Sync.IO
+    module Result: (module type of Sync.Result
+                     with type fetch = Sync.Result.fetch
+                      and type push  = Sync.Result.push)
+    module Make (S: Git.Store.S): Git.Sync.S with type t = S.t
+  end
+  module FS: sig
+    module IO: Git.FS.IO
+    include Git.FS.S
+  end
+  module Memory: Store.S
+
+  module SHA_IO: Git.SHA.IO
+  module Value_IO: Git.Value.IO
+  module Pack_IO: Git.Pack.IO
+  module Index_IO: Git.Index.IO
+
 end

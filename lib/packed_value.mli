@@ -16,6 +16,8 @@
 
 (** Packed values. *)
 
+(** {1 Packed values} *)
+
 type copy = { copy_offset: int; copy_length: int; }
 (** The type for [Copy]'s {!hunk} arguments. *)
 
@@ -37,18 +39,28 @@ type kind =
   | Off_delta of int delta
 (** The type for packed values kind. *)
 
-val pp_kind: Format.formatter -> kind -> unit
-(** Pretty-print packed values' kind. *)
-
 type t = { kind: kind; offset: int }
 (** The type for packed values. *)
+
+val shallow: SHA.Set.t -> t -> bool
+(** [shallow p t] checks whether the SHAs appearing in [t] also appear
+    in the pack file [p]. *)
+
+val create: offset:int -> kind:kind -> t
+(** Create a packed value. *)
+
+val kind: t -> kind
+(** [kind t] is [t]'s kind. *)
+
+val offset: t -> int
+(** [offset t] is [t]'s offset. *)
+
+val pp_kind: Format.formatter -> kind -> unit
+(** Pretty-print packed values' kind. *)
 
 val is_delta: t -> bool
 (** Check if a packed value is a delta (either a [Ref_delta] or an
     [Off_delta]). *)
-
-val pp: Format.formatter -> t -> unit
-(** Human readable representation of a packed value. *)
 
 val result_length: t -> int
 (** Return the lenght of the result object. *)
@@ -56,70 +68,44 @@ val result_length: t -> int
 val source_length: t -> int
 (** Return the lenght of the base (source) object. *)
 
-module type S = sig
-  (** The signature for packed values implementations. *)
+include Object.S with type t := t
 
-  include Object.S with type t = kind
-
-  val crc32: t -> int32
-  (** Return the CRC-32 of the packed value. Useful when creating pack
-      index files. *)
-
-end
-
-module V2: S
-(** Packed values version 2. *)
-
-module V3: S
-(** Packed values version 3. *)
-
-(** {2 Conversion to values} *)
-
-
-val add_hunk: Buffer.t -> source:string -> pos:int -> hunk -> unit
-(** Append a hunk to a buffer. [source] is the original object the
-    hunk refers to (with the given offset). *)
-
-val add_delta: Buffer.t -> string delta -> unit
-(** Append a delta to a buffer. *)
-
-val add_inflated_value: read:Value.read_inflated -> offsets:(int -> SHA.t option) ->
-  Buffer.t -> t -> unit Lwt.t
-(** Append the inflated representation of a packed value to a given
-    buffer. *)
-
-val to_value: index:Pack_index.f -> read:Value.read_inflated -> version:int ->
-  ba:Cstruct.buffer -> t -> Value.t Lwt.t
-(** Unpack the packed value using the provided indexes. *)
-
-(** {2 Position independant packed values} *)
-
-val unpack: index:Pack_index.f -> read:Value.read_inflated -> version:int ->
-  ba:Cstruct.buffer -> t -> string Lwt.t
-(** Same as {!to_value} but for inflated raw buffers. *)
+(** {1 Positition-independant packed values} *)
 
 module PIC: sig
-
-  (** Position-independant packed values. *)
 
   type kind = Raw of string | Link of t delta
   (** The type for position-independent packed values' kind. *)
 
-  and t = { kind: kind; sha1: SHA.t; mutable raw: string option; }
-  (** The type for postition-independant packed values. *)
+  and t = {
+    kind: kind;
+    sha1: SHA.t;
+    shallow: bool;
+    mutable raw: string option;
+  }
+  (** The type for postition-independant packed values. See {!S.PIC}. *)
 
-  val pp: Format.formatter -> t -> unit
-  (** Human readable representation. *)
+  include Object.S with type t := t
 
-  val pretty: t -> string
-  (** Pretty-print the value. *)
+  val create: ?raw:string -> ?shallow:bool -> SHA.t -> kind -> t
+  (** Create a position-independent packed value. By default,
+      [shallow] is [false]. *)
 
-  val to_value: t -> Value.t
-  (** [to_value p] unpacks the packed position-independant value
-      [p]. *)
+  val of_raw: ?shallow:bool ->  SHA.t -> string -> t
+  (** [of_raw sha1 raw] is the position-independant packed value built
+      by parsing [raw]. By default [shallow] is [false]. *)
 
-  val raw: SHA.t -> string -> t
-  (** Build a raw value. *)
+  val kind: t -> kind
+  (** [kind t] is [t]'s kind. *)
+
+  val sha1: t -> SHA.t
+  (** [sha1 t] is [t]'s SHA1. *)
+
+  val raw: t -> string option
+  (** [raw t] is [t]'s raw represation. *)
+
+  val shallow: t -> bool
+  (** [shallow t] is true iff [t] is not included in the pack file. *)
 
   val unpack_kind: kind -> string
   (** Unpack a PIC kind into a string. *)
@@ -127,17 +113,54 @@ module PIC: sig
   val unpack: t -> string
   (** Unpack a PICK value into a string. *)
 
-  module Map: Map.S with type key = t
-
 end
 
-val to_pic: read:Value.read_inflated ->
-  offsets:(int -> PIC.t option) -> sha1s:(SHA.t -> PIC.t option) ->
-  t -> PIC.t Lwt.t
-(** [to_pic t] is the position-independant representation of the
-    packed value [t]. *)
+type pic = PIC.t
+(** The type for position-independant packked values. *)
 
-val of_pic: index:Pack_index.f -> offset:int -> PIC.t -> t
-(** Position dependent packed value. Convert a [PIC.Link] into to the
-    corresponding [Off_delta] and [Ref_delta], using the provided
-    indexes. *)
+module IO (D: SHA.DIGEST) (I: Inflate.S): sig
+
+  module type IO = Object.IO with type t = kind
+
+  module V2: IO
+  (** Packed values version 2. *)
+
+  module V3: IO
+  (** Packed values version 3. *)
+
+  (** {2 Conversion to values} *)
+
+  val add_inflated_value:
+    read:Value.read_inflated -> offsets:(int -> SHA.t option) ->
+    Buffer.t -> t -> unit Lwt.t
+  (** Append the inflated representation of a packed value to a given
+      buffer. *)
+
+  val to_value:
+    index:Pack_index.f -> read:Value.read_inflated -> version:int ->
+    ba:Cstruct.buffer -> t -> Value.t Lwt.t
+  (** Unpack the packed value using the provided indexes. *)
+
+  (** {2 Position independant packed values} *)
+
+  val unpack:
+    index:Pack_index.f -> read:Value.read_inflated -> version:int ->
+    ba:Cstruct.buffer -> t -> string Lwt.t
+  (** Same as {!to_value} but for inflated raw buffers. *)
+
+  val value_of_pic: pic -> Value.t
+  (** [to_value p] unpacks the packed position-independant value
+      [p]. *)
+
+  val to_pic: digest:string SHA.digest -> read:Value.read_inflated ->
+    offsets:(int -> pic option) -> sha1s:(SHA.t -> pic option) ->
+    t -> pic Lwt.t
+  (** [to_pic t] is the position-independant representation of the
+      packed value [t]. *)
+
+  val of_pic: index:Pack_index.f -> offset:int -> pic -> t
+  (** Position dependent packed value. Convert a [PIC.Link] into to the
+      corresponding [Off_delta] and [Ref_delta], using the provided
+      indexes. *)
+
+end

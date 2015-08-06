@@ -29,14 +29,16 @@ module type FS = sig
 
 end
 
-module FS (FS: FS): Git.FS.S
+module FS (FS: FS) (D: Git.SHA.DIGEST) (I: Git.Inflate.S): Git.FS.S
 (** Create a Irmin store from raw block devices handler. *)
 
 module Sync: sig
   module IO: Git.Sync.IO with type ctx = Resolver_lwt.t * Conduit_mirage.t
-  module Result: (module type of
-                   Git.Sync.Result with type fetch = Git.Sync.Result.fetch
-                                    and type push  = Git.Sync.Result.push)
-  module Make (S: Git.Store.S): Git.Sync.S
-    with type t = S.t and type ctx = IO.ctx
+  module Result:
+    (module type of Git.Sync.Result with type fetch = Git.Sync.Result.fetch
+                                     and type push  = Git.Sync.Result.push)
+  module Make  (D: Git.SHA.DIGEST) (I: Git.Inflate.S) (S: Git.Store.S):
+    Git.Sync.S with type t = S.t and type ctx = IO.ctx
 end
+
+module SHA1_slow: Git.SHA.DIGEST

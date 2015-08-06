@@ -47,3 +47,5 @@ type t = entry list
     only carried on the leafs. *)
 
 include Object.S with type t := t
+
+module IO (D: SHA.DIGEST): Object.IO with type t = t

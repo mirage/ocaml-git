@@ -14,39 +14,35 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** {2 Search over the Git objects} *)
+(** {2 Search over the graph of Git objects} *)
 
-type succ =
-  [ `Commit of SHA.t
+type pred = [
+  | `Commit of SHA.t
   | `Tag of string * SHA.t
-  | `Tree of string * SHA.t ]
-(** [Value.t] successors. *)
-
-val sha1_of_succ: succ -> SHA.t
-(** Return the SHA of the successor value. *)
+  | `Tree of string * SHA.t
+  | `Tree_root of SHA.t
+]
+(** The type for {!Value.t} predecessors. *)
 
 module Make (S: Store.S): sig
 
-  type path = string list
-  (** A path can cross different type of Git object boundaries. By
-      convention, the empty string [""] denotes a [Commit.t] to [Tree.t]
-      transition, so that [mem head ["";"a";"b"]] will look into the
-      Tree/Blob object located under {i a/b} for the head revision. *)
+  val pred: S.t -> ?full:bool -> SHA.t -> pred list Lwt.t
+  (** [pred t s] is the list of [s]'s predecessors in the graph
+      [t]. If [full] is not set (by default it is) only consider
+      commits and their history relation. *)
 
-  val succ: S.t -> SHA.t -> succ list Lwt.t
-  (** Compute the successor values. *)
+  type path = [
+    | `Tag of string * path
+    | `Commit of path
+    | `Path of string list
+  ]
+  (** The type for path values. See {!find} for details. *)
 
-  val mem: S.t -> SHA.t -> string list -> bool Lwt.t
-  (** [mem t sha1 path] check wether we can go from the object named
-      [sha1] to an other object following the [path] labels.*)
+  val mem: S.t -> SHA.t -> path -> bool Lwt.t
+  (** [mem t s p] check wether there exists a path [p] from [s] in
+      [t]. *)
 
-  val find: S.t -> SHA.t -> string list -> SHA.t option Lwt.t
-  (** [find t sha1 path] returns (if it exists) the object named
-      [sha1] to an other object following the [path] labels. *)
-
-  val find_exn: S.t -> SHA.t -> string list -> SHA.t Lwt.t
-  (** [find t sha1 path] returns (if it exists) the object named
-      [sha1] to an other object following the [path] labels. Raise
-      [Not_found] if no such object exist.*)
+  val find: S.t -> SHA.t -> path -> SHA.t option Lwt.t
+  (** [find t s p] follows the path [p] from [s] in [t]. *)
 
 end
