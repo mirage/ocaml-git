@@ -14,8 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** Mirage implementation of the Git file-system backend and
-    protocol. *)
+(** Mirage backend. *)
 
 module type FS = sig
 

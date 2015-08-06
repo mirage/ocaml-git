@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** Git trees. *)
+(** Filesystem trees. *)
 
 type perm =
   [ `Normal
