@@ -48,21 +48,24 @@
 <h1>Module <a href="type_Packed_refs.html">Packed_refs</a></h1>
 
 <pre><span class="keyword">module</span> Packed_refs: <code class="code"><span class="keyword">sig</span></code> <a href="Packed_refs.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><div class="info module top">
-Packed references<br>
+Packed references.<br>
 </div>
 <hr width="100%">
 
 <pre><span id="TYPEentry"><span class="keyword">type</span> <code class="type"></code>entry</span> = <code class="type">[ `Comment of string | `Entry of SHA.Commit.t * Reference.t | `Newline ]</code> </pre>
+<div class="info ">
+The type for packed reference entries.<br>
+</div>
 
 
 <pre><span class="keyword">include</span> <a href="Object.S.html">Object.S</a></pre>
 
 <pre><span id="VALfind"><span class="keyword">val</span> find</span> : <code class="type">t -> Reference.t -> SHA.Commit.t option</code></pre><div class="info ">
-Get the reference SHA1.<br>
+<code class="code">find t r</code> is <code class="code">r</code>'s SHA1 in <code class="code">t</code>.<br>
 </div>
 
 <pre><span id="VALreferences"><span class="keyword">val</span> references</span> : <code class="type">t -> Reference.t list</code></pre><div class="info ">
-<code class="code">references t</code> is the list of references appearing in <code class="code">t</code>.<br>
+<code class="code">references t</code> is the list of <code class="code">t</code>'s references.<br>
 </div>
 
 <pre><span class="keyword">module</span> <a href="Packed_refs.IO.html">IO</a> <code class="code">(</code><code class="code"><span class="constructor">D</span></code><code class="code"> : </code><code class="type"><a href="SHA.DIGEST.html">SHA.DIGEST</a></code><code class="code">) </code>: <code class="type"><a href="Object.IO.html">Object.IO</a></code><code class="type">  with type t = t</code></pre></body></html>
