@@ -21,8 +21,8 @@ module K: Graph.Sig.I with type V.t = SHA.t
 
 module Make (S: Store.S): sig
 
-  val keys: K.t -> SHA.Set.t
-  (** [keys g] is [g]'s collection of keys. *)
+  val keys: K.t -> SHA.t list
+  (** [keys g] is a topological sort of [g]'s keys. *)
 
   val of_keys: S.t -> K.t Lwt.t
   (** Return the graph of keys of the given Git store. *)

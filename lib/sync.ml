@@ -597,7 +597,7 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) (Store: Store.S) = struct
       | Shallow of SHA.t
       | Deepen of int
       | Unshallow of SHA.t
-      | Have of SHA.t
+      | Have of SHA.Commit.t
       | Done
 
     type t = message list
@@ -637,10 +637,10 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) (Store: Store.S) = struct
           | None -> error "input upload"
           | Some (kind, s) ->
             match kind with
-            | "shallow"   -> aux (Shallow   (SHA_IO.of_hex s) :: acc)
+            | "shallow"   -> aux (Shallow (SHA_IO.of_hex s) :: acc)
             | "unshallow" -> aux (Unshallow (SHA_IO.of_hex s) :: acc)
-            | "have"      -> aux (Have      (SHA_IO.of_hex s) :: acc)
-            | "done"      -> aux (Done                      :: acc)
+            | "have"      -> aux (Have (SHA_IO.Commit.of_hex s) :: acc)
+            | "done"      -> aux (Done :: acc)
             | "deepen"    ->
               let d =
                 try int_of_string s
@@ -697,7 +697,7 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) (Store: Store.S) = struct
 
       (* output haves *)
       Lwt_list.iter_s (fun id ->
-          let msg = Printf.sprintf "have %s\n" (SHA.to_hex id) in
+          let msg = Printf.sprintf "have %s\n" (SHA.Commit.to_hex id) in
           PacketLine.output_line oc msg >>= fun () ->
           Lwt.return_unit
         ) (filter_haves t)
@@ -1045,6 +1045,18 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) (Store: Store.S) = struct
       let capabilities = Capabilities.restrict f.capabilities server_caps in
       { f with capabilities }
     in
+    let haves =
+      let server_tips =
+        SHA.Commit.Map.keys (Listing.sha1s listing)
+        |> List.map SHA.of_commit
+        |> Lwt_list.filter_p (Store.mem t)
+        >|= SHA.Set.of_list
+      in
+      server_tips >>= fun server_tips ->
+      let client_tips = SHA.Set.of_list f.haves in
+      Graph.closure t ~full:false ~min:server_tips ~max:client_tips >|= fun g ->
+      Graph.keys g |> List.map SHA.to_commit
+    in
     let wants =
       let w = SHA.Commit.Set.of_list wants in
       let h = SHA.Commit.Set.of_list (List.map SHA.to_commit f.haves) in
@@ -1068,7 +1080,7 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) (Store: Store.S) = struct
       (* XXX: need a notion of shallow/unshallow in API. *)
 
       Log.debug "PHASE2";
-      let haves = f.haves in
+      haves >>= fun haves ->
       Upload_request.phase2 (ic,oc) ~haves >>= fun () ->
 
       Log.debug "PHASE3";

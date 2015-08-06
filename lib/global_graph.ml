@@ -59,6 +59,7 @@ module Dot = Graph.Graphviz.Dot(struct
   end)
 
 module K = Graph.Imperative.Digraph.ConcreteBidirectional(SHA)
+module T = Graph.Topological.Make(K)
 module KO = Graph.Oper.I(K)
 
 module Make (Store: Store.S) = struct
@@ -151,11 +152,11 @@ module Make (Store: Store.S) = struct
     Lwt_list.iter_p add max >>= fun () ->
     Lwt.return g
 
-  let keys g = K.fold_vertex (fun k set -> SHA.Set.add k set) g SHA.Set.empty
+  let keys g = T.fold (fun k l -> k :: l) g [] |> List.rev
 
   let pack t ~min ~max =
     closure t ~min ~max >>= fun g ->
-    let keys = keys g |> SHA.Set.to_list in
+    let keys = keys g in
     Lwt_list.map_p (fun k -> Store.read_exn t k >|= fun v -> (k, v)) keys
 
 end
