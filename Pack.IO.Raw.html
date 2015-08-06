@@ -48,12 +48,7 @@
 <pre><span class="keyword">include</span> <a href="Object.S.html">Object.S</a></pre>
 
 <pre><span id="VALadd"><span class="keyword">val</span> add</span> : <code class="type">[ `Not_defined ]</code></pre><div class="info ">
-<code class="code"><span class="constructor">Pack</span>.<span class="constructor">Raw</span>.add</code> is not defined. Use <a href="Pack.IO.Raw.html#VALbuffer"><code class="code"><span class="constructor">Pack</span>.<span class="constructor">IO</span>.<span class="constructor">Raw</span>.buffer</code></a> instead.<br>
-</div>
-
-<pre><span id="VALinput_header"><span class="keyword">val</span> input_header</span> : <code class="type">Mstruct.t -> [ `Version of int ] * [ `Count of int ]</code></pre><div class="info ">
-<code class="code">input_head buf</code> reads the pack <code class="code">version</code> number (could be 2 or
-        3) and the <code class="code">count</code> of packed values in the pack file.<br>
+<code class="code"><span class="constructor">Pack</span>.<span class="constructor">Raw</span>.add</code> is not defined. Use <code class="code">buffer</code> instead.<br>
 </div>
 
 <pre><span id="VALinput"><span class="keyword">val</span> input</span> : <code class="type">?progress:(string -> unit) -><br>       read:<a href="Value.html#TYPEread_inflated">Value.read_inflated</a> -> Mstruct.t -> <a href="Pack.html#TYPEt">Pack.t</a> Lwt.t</code></pre><div class="info ">
@@ -75,21 +70,5 @@ Same as the top-level <code class="code">read</code> function but for raw packs.
 
 <pre><span id="VALread_inflated"><span class="keyword">val</span> read_inflated</span> : <code class="type">index:<a href="Pack_index.html#TYPEf">Pack_index.f</a> -><br>       read:<a href="Value.html#TYPEread_inflated">Value.read_inflated</a> -> Mstruct.t -> SHA.t -> string option Lwt.t</code></pre><div class="info ">
 Same as <a href="Pack.IO.Raw.html#VALread"><code class="code"><span class="constructor">Pack</span>.<span class="constructor">IO</span>.<span class="constructor">Raw</span>.read</code></a> but for inflated values.<br>
-</div>
-
-<pre><span id="VALindex"><span class="keyword">val</span> index</span> : <code class="type"><a href="Pack.html#TYPEt">Pack.t</a> -> Pack_index.Raw.t</code></pre><div class="info ">
-Get the raw index asoociated to the raw pack.<br>
-</div>
-
-<pre><span id="VALsha1"><span class="keyword">val</span> sha1</span> : <code class="type"><a href="Pack.html#TYPEt">Pack.t</a> -> SHA.t</code></pre><div class="info ">
-Get the name of the pack.<br>
-</div>
-
-<pre><span id="VALkeys"><span class="keyword">val</span> keys</span> : <code class="type"><a href="Pack.html#TYPEt">Pack.t</a> -> SHA.Set.t</code></pre><div class="info ">
-Get the keys present in the raw pack.<br>
-</div>
-
-<pre><span id="VALbuffer"><span class="keyword">val</span> buffer</span> : <code class="type"><a href="Pack.html#TYPEt">Pack.t</a> -> Cstruct.t</code></pre><div class="info ">
-Get the pack buffer.<br>
 </div>
 </body></html>

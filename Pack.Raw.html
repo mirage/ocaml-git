@@ -49,8 +49,29 @@
 
 <pre><span class="keyword">include</span> <a href="Object.S.html">Object.S</a></pre>
 
+<pre><span id="VALindex"><span class="keyword">val</span> index</span> : <code class="type"><a href="Pack.html#TYPEt">Pack.t</a> -> Pack_index.Raw.t</code></pre><div class="info ">
+Get the raw index asoociated to the raw pack.<br>
+</div>
+
+<pre><span id="VALsha1"><span class="keyword">val</span> sha1</span> : <code class="type"><a href="Pack.html#TYPEt">Pack.t</a> -> SHA.t</code></pre><div class="info ">
+Get the name of the pack.<br>
+</div>
+
+<pre><span id="VALkeys"><span class="keyword">val</span> keys</span> : <code class="type"><a href="Pack.html#TYPEt">Pack.t</a> -> SHA.Set.t</code></pre><div class="info ">
+Get the keys present in the raw pack.<br>
+</div>
+
+<pre><span id="VALbuffer"><span class="keyword">val</span> buffer</span> : <code class="type"><a href="Pack.html#TYPEt">Pack.t</a> -> Cstruct.t</code></pre><div class="info ">
+Get the pack buffer.<br>
+</div>
+
 <pre><span id="VALshallow"><span class="keyword">val</span> shallow</span> : <code class="type"><a href="Pack.html#TYPEt">Pack.t</a> -> bool</code></pre><div class="info ">
 <code class="code">shallow t</code> is true if all the SHA references appearing in <code class="code">t</code>
       corresponds to objects also in <code class="code">t</code>.<br>
+</div>
+
+<pre><span id="VALinput_header"><span class="keyword">val</span> input_header</span> : <code class="type">Mstruct.t -> [ `Version of int ] * [ `Count of int ]</code></pre><div class="info ">
+<code class="code">input_head buf</code> reads the pack <code class="code">version</code> number (could be 2 or
+      3) and the <code class="code">count</code> of packed values in the pack file.<br>
 </div>
 </body></html>

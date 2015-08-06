@@ -43,5 +43,10 @@
 &nbsp;&nbsp;<span class="keyword">val</span>&nbsp;compare&nbsp;:&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;int<br>
 &nbsp;&nbsp;<span class="keyword">val</span>&nbsp;pretty&nbsp;:&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string<br>
 &nbsp;&nbsp;<span class="keyword">val</span>&nbsp;pp&nbsp;:&nbsp;<span class="constructor">Format</span>.formatter&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;index&nbsp;:&nbsp;<span class="constructor">Pack</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Pack_index</span>.<span class="constructor">Raw</span>.t<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;sha1&nbsp;:&nbsp;<span class="constructor">Pack</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">SHA</span>.t<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;keys&nbsp;:&nbsp;<span class="constructor">Pack</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">SHA</span>.<span class="constructor">Set</span>.t<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;buffer&nbsp;:&nbsp;<span class="constructor">Pack</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Cstruct</span>.t<br>
 &nbsp;&nbsp;<span class="keyword">val</span>&nbsp;shallow&nbsp;:&nbsp;<span class="constructor">Pack</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;bool<br>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;input_header&nbsp;:&nbsp;<span class="constructor">Mstruct</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;[&nbsp;<span class="keywordsign">`</span><span class="constructor">Version</span>&nbsp;<span class="keyword">of</span>&nbsp;int&nbsp;]&nbsp;*&nbsp;[&nbsp;<span class="keywordsign">`</span><span class="constructor">Count</span>&nbsp;<span class="keyword">of</span>&nbsp;int&nbsp;]<br>
 <span class="keyword">end</span></code></body></html>
