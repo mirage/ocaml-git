@@ -466,6 +466,9 @@ module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
       | None   -> fail "of_pic: cannot find %s" (SHA.pretty sha1)
       | Some o -> return (Off_delta { d with source = offset - o })
 
+  let err_sha1_not_found n sha1 = fail "%s: cannot read %s" n (SHA.pretty sha1)
+  let err_offset_not_found = fail "%s: cannot find any object at offset %d"
+
   let to_pic ~digest ~read ~offsets ~sha1s t =
     let kind = match t.kind with
       | Raw_value x -> Lwt.return (PIC.Raw x)
@@ -477,14 +480,12 @@ module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
             | Some buf ->
               let shallow = PIC.of_raw ~shallow:true d.source buf in
               Lwt.return (PIC.Link { d with source = shallow })
-            | None ->
-              fail "to_pic: shallow pack are not supported and %s is not in the \
-                    pack file!" (SHA.to_hex d.source)
+            | None -> err_sha1_not_found "to_pic" d.source
         end
       | Off_delta d ->
         let offset = t.offset - d.source in
         match offsets offset with
-        | None     -> fail "to_pic: cannot find offest %d in the index." d.source
+        | None     -> err_offset_not_found "to_pic" d.source
         | Some pic ->
           let pic = PIC.Link { d with source = pic } in
           Lwt.return pic
@@ -496,12 +497,9 @@ module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
       (Misc.pretty pp_kind t.kind) (SHA.pretty sha1) (PIC.pretty_kind kind);
     PIC.create ~raw sha1 kind
 
-  let err_sha1_not_found sha1 = fail "cannot read %s" (SHA.pretty sha1)
-  let err_offset_not_found off = fail "cannot find any object at offset %d" off
-
   let read_and_add_delta ~read buf delta sha1 =
     read sha1 >>= function
-    | None        -> err_sha1_not_found sha1
+    | None        -> err_sha1_not_found "read_and_add_delta" sha1
     | Some source -> add_delta buf { delta with source }; Lwt.return_unit
 
   let add_inflated_value ~read ~offsets buf { offset; kind } = match kind with
@@ -510,7 +508,7 @@ module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
     | Off_delta d ->
       let offset = offset - d.source in
       match offsets offset with
-      | None      -> err_offset_not_found offset
+      | None      -> err_offset_not_found "add_inflated_value" offset
       | Some base -> read_and_add_delta ~read buf d base
 
   let input_packed_value = function
