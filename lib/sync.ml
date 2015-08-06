@@ -56,13 +56,16 @@ let pretty_wants = function
   | None   -> "<all>"
   | Some l -> pretty_list pretty_want l
 
-let is_head ref =
-  Reference.is_valid ref &&
-  let raw_ref = Reference.to_raw ref in
-  let prefix = "refs/heads/" in
+let has_prefix prefix r =
+  Reference.is_valid r &&
+  let raw_ref = Reference.to_raw r in
   match Misc.string_chop_prefix ~prefix raw_ref with
   | None   -> false
   | Some _ -> true
+
+let is_head = has_prefix "refs/heads/"
+let is_tag  = has_prefix "refs/tags/"
+let is_head_or_tag r = is_head r || is_tag r
 
 module type IO = sig
   type ic
@@ -1101,11 +1104,11 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) (Store: Store.S) = struct
         Lwt.return { Result.listing; sha1s }
     )
 
-  let write_heads t reference sha1 =
-    if is_head reference then
+  let write_heads_and_tags t r sha1 =
+    if is_head_or_tag r then
       Store.mem t (SHA.of_commit sha1) >>= function
       | false -> Lwt.return_unit
-      | true  -> Store.write_reference t reference sha1
+      | true  -> Store.write_reference t r sha1
     else
       Lwt.return_unit
 
@@ -1142,7 +1145,7 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) (Store: Store.S) = struct
             | None   ->
               (* We ask for all the remote references *)
               Reference.Map.fold (fun r c acc ->
-                  if is_head r then SHA.Commit.Set.add c acc else acc
+                  if is_head_or_tag r then SHA.Commit.Set.add c acc else acc
                 ) references SHA.Commit.Set.empty
               |> SHA.Commit.Set.elements
             | Some wants ->
@@ -1152,7 +1155,7 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) (Store: Store.S) = struct
                 fun sha1 ->
                   all ||
                   let sha1s = Listing.sha1s listing in
-                  try List.exists is_head (SHA.Commit.Map.find sha1 sha1s)
+                  try List.exists is_head_or_tag (SHA.Commit.Map.find sha1 sha1s)
                   with Not_found -> false
               in
               List.fold_left (fun acc -> function
@@ -1189,7 +1192,7 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) (Store: Store.S) = struct
                     | `Ref r    ->
                       try
                         let c = Reference.Map.find r references in
-                        write_heads t r c
+                        write_heads_and_tags t r c
                       with Not_found ->
                         Lwt.return_unit
                   ) wants
