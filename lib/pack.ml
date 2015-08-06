@@ -41,6 +41,14 @@ end
 
 include T
 
+let keys t =
+  List.fold_left (fun set pic ->
+      if Packed_value.PIC.shallow pic then set
+      else
+        let key = Packed_value.PIC.sha1 pic in
+        SHA.Set.add key set
+    ) SHA.Set.empty t
+
 type raw = {
   sha1    : SHA.t;
   keys    : SHA.Set.t;
@@ -75,8 +83,23 @@ module Raw = struct
       ) t.values
 
   let pretty = Misc.pretty pp
-
   let shallow t = t.shallow
+  let sha1 t = t.sha1
+  let keys t = t.keys
+  let buffer t = t.buffer
+
+  let index t = match t.raw_index with
+    | None   -> fail "Invalid raw index"
+    | Some i -> i
+
+  let input_header buf =
+    let header = Mstruct.get_string buf 4 in
+    if header <> "PACK" then
+      Mstruct.parse_error_buf buf "wrong header (%s)" header;
+    let version = Int32.to_int (Mstruct.get_be_uint32 buf) in
+    if version <> 2 && version <> 3 then
+      Mstruct.parse_error_buf buf "wrong pack version (%d)" version;
+    `Version version, `Count (Int32.to_int (Mstruct.get_be_uint32 buf))
 
 end
 
@@ -91,19 +114,6 @@ module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
     module Log = Dolog.Make(struct let section = "pack-raw" end)
 
     include Raw
-
-    let index t = match t.raw_index with
-      | None   -> fail "Invalid raw index"
-      | Some i -> i
-
-    let input_header buf =
-      let header = Mstruct.get_string buf 4 in
-      if header <> "PACK" then
-        Mstruct.parse_error_buf buf "wrong header (%s)" header;
-      let version = Int32.to_int (Mstruct.get_be_uint32 buf) in
-      if version <> 2 && version <> 3 then
-        Mstruct.parse_error_buf buf "wrong pack version (%d)" version;
-      `Version version, `Count (Int32.to_int (Mstruct.get_be_uint32 buf))
 
     let add_header ~version buf count =
       Buffer.add_string buf "PACK";
@@ -262,9 +272,6 @@ module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
       input_values ~read buf k
 
     let add = `Not_defined
-    let sha1 t = t.sha1
-    let keys t = t.keys
-    let buffer t = t.buffer
 
     let unpack ?(progress=fun _ -> ()) ~write { values; read; _ } =
       let i = ref 0 in
@@ -357,14 +364,6 @@ module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
     let pack_checksum = D.cstruct buf in
     { Pack_index.offsets; crcs; pack_checksum }, buf
 
-  let keys t =
-    List.fold_left (fun set pic ->
-        if Packed_value.PIC.shallow pic then set
-        else
-          let key = Packed_value.PIC.sha1 pic in
-          SHA.Set.add key set
-      ) SHA.Set.empty t
-
   let create contents =
     let uncompressed =
       List.map (fun (k, v) ->
@@ -408,14 +407,12 @@ module type IO = sig
   val input: ?progress:(string -> unit) ->
     index:Pack_index.f -> keys:SHA.Set.t -> read:Value.read_inflated ->
     Mstruct.t -> t Lwt.t
-  val keys: t -> SHA.Set.t
   val read: t -> SHA.t -> Value.t option
   val read_exn: t -> SHA.t -> Value.t
   val create: (SHA.t * Value.t) list -> t
   module Raw: sig
     include Object.S with type t = raw
     val add: [`Not_defined]
-    val input_header: Mstruct.t -> [`Version of int] * [`Count of int]
     val input: ?progress:(string -> unit) -> read:Value.read_inflated ->
       Mstruct.t -> t Lwt.t
     val unpack: ?progress:(string -> unit) -> write:Value.write_inflated ->
@@ -424,10 +421,6 @@ module type IO = sig
             Mstruct.t -> SHA.t -> Value.t option Lwt.t
     val read_inflated: index:Pack_index.f -> read:Value.read_inflated ->
       Mstruct.t -> SHA.t -> string option Lwt.t
-    val index: t -> Pack_index.Raw.t
-    val sha1: t -> SHA.t
-    val keys: t -> SHA.Set.t
-    val buffer: t -> Cstruct.t
   end
   type raw = Raw.t
   val of_raw: ?progress:(string -> unit) -> Raw.t -> t Lwt.t

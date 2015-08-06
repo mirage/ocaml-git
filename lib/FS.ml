@@ -342,7 +342,7 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) = struct
       IO.file_exists file >>= function
       | true  -> Lwt.return_unit
       | false ->
-        let pack = Pack_IO.Raw.buffer pack in
+        let pack = Pack.Raw.buffer pack in
         let temp_dir = temp_dir t in
         IO.write_file file ~temp_dir pack
 
@@ -551,11 +551,11 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) = struct
 
   let write_pack t pack =
     Log.debug "write_pack";
-    let sha1 = Pack_IO.Raw.sha1 pack in
-    let index = Pack_IO.Raw.index pack in
+    let sha1 = Pack.Raw.sha1 pack in
+    let index = Pack.Raw.index pack in
     Packed.write_pack t sha1 pack   >>= fun () ->
     Packed.write_pack_index t sha1 index >>= fun () ->
-    Lwt.return (Pack_IO.Raw.keys pack)
+    Lwt.return (Pack.Raw.keys pack)
 
   let write_reference t ref sha1 =
     let file = t.dot_git / Reference.to_raw ref in

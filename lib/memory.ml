@@ -132,7 +132,7 @@ module Make (D: SHA.DIGEST) = struct
         Lwt.return_unit
       ) pack
     >>= fun () ->
-    let keys = Pack_IO.keys pack in
+    let keys = Pack.keys pack in
     Lwt.return keys
 
   let keys t =
