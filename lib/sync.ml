@@ -228,6 +228,24 @@ module Listing = struct
       ) t.sha1s;
     Buffer.contents buf
 
+  let guess_reference t c =
+    let heads =
+      SHA.Commit.Map.find c t.sha1s
+      |> List.filter is_head
+    in
+    match heads with
+    | []   -> None
+    | h::_ ->
+      let r =
+        if List.mem Reference.master heads then Reference.master else (
+          if List.length heads > 1 then
+            Log.info "Ambiguous remote HEAD, picking %s."
+              (Reference.pretty h);
+          h
+        )
+      in
+      Some r
+
 end
 
 module Result = struct
@@ -240,22 +258,9 @@ module Result = struct
     match head t with
     | None   -> None
     | Some c ->
-      let heads =
-        SHA.Commit.Map.find c t.listing.Listing.sha1s
-        |> List.filter is_head
-      in
-      match heads with
-      | []   -> Some (Reference.SHA c)
-      | h::_ ->
-        let r =
-          if List.mem Reference.master heads then Reference.master else (
-            if List.length heads > 1 then
-              Log.info "Ambiguous remote HEAD, picking %s."
-                (Reference.pretty h);
-            h
-          )
-        in
-        Some (Reference.Ref r)
+      match Listing.guess_reference t.listing c with
+      | None   -> Some (Reference.SHA c)
+      | Some r -> Some (Reference.Ref r)
 
   let references t = Listing.references t.listing
   let sha1s t = t.sha1s
