@@ -479,7 +479,7 @@ module Make (Store: Store.S) = struct
       let large = Gri.of_string "https://github.com/ocaml/opam-repository.git" in
       let gh_pages = `Ref (Reference.of_raw "refs/heads/gh-pages") in
       let commit =
-        `Commit (SHA_IO.Commit.of_hex "21930ccb5f7b97e80a068371cb554b1f5ce8e55a")
+        `Commit (SHA_IO.Commit.of_hex "f7a8f077e4d880db173f3f48a74d5a3fc9210b4e")
       in
       fetch git   >>= fun () ->
       fetch https >>= fun () ->
