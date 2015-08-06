@@ -11,30 +11,31 @@
 <link title="Index of values" rel=Appendix href="index_values.html">
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
-<link title="SHA" rel="Chapter" href="SHA.html">
-<link title="Blob" rel="Chapter" href="Blob.html">
-<link title="Index" rel="Chapter" href="Index.html">
-<link title="Commit" rel="Chapter" href="Commit.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
-<link title="Version" rel="Chapter" href="Version.html">
-<link title="Global_graph" rel="Chapter" href="Global_graph.html">
+<link title="SHA" rel="Chapter" href="SHA.html">
+<link title="Inflate" rel="Chapter" href="Inflate.html">
+<link title="Object" rel="Chapter" href="Object.html">
+<link title="Object_type" rel="Chapter" href="Object_type.html">
+<link title="Blob" rel="Chapter" href="Blob.html">
+<link title="Tree" rel="Chapter" href="Tree.html">
+<link title="Commit" rel="Chapter" href="Commit.html">
+<link title="Tag" rel="Chapter" href="Tag.html">
+<link title="Reference" rel="Chapter" href="Reference.html">
+<link title="Value" rel="Chapter" href="Value.html">
 <link title="Pack" rel="Chapter" href="Pack.html">
 <link title="Pack_index" rel="Chapter" href="Pack_index.html">
 <link title="Packed_value" rel="Chapter" href="Packed_value.html">
-<link title="Reference" rel="Chapter" href="Reference.html">
+<link title="Packed_refs" rel="Chapter" href="Packed_refs.html">
+<link title="Index" rel="Chapter" href="Index.html">
 <link title="Sync" rel="Chapter" href="Sync.html">
-<link title="Tag" rel="Chapter" href="Tag.html">
-<link title="Tree" rel="Chapter" href="Tree.html">
-<link title="User" rel="Chapter" href="User.html">
-<link title="Value" rel="Chapter" href="Value.html">
-<link title="Object" rel="Chapter" href="Object.html">
-<link title="Object_type" rel="Chapter" href="Object_type.html">
-<link title="Store" rel="Chapter" href="Store.html">
-<link title="Search" rel="Chapter" href="Search.html">
 <link title="Gri" rel="Chapter" href="Gri.html">
+<link title="Search" rel="Chapter" href="Search.html">
+<link title="Global_graph" rel="Chapter" href="Global_graph.html">
+<link title="User" rel="Chapter" href="User.html">
+<link title="Store" rel="Chapter" href="Store.html">
 <link title="Memory" rel="Chapter" href="Memory.html">
 <link title="FS" rel="Chapter" href="FS.html">
-<link title="Packed_refs" rel="Chapter" href="Packed_refs.html">
+<link title="Version" rel="Chapter" href="Version.html">
 <link title="Git_unix" rel="Chapter" href="Git_unix.html">
 <link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>Sync.IO</title>
 </head>
@@ -45,8 +46,6 @@
 <h1>Module type <a href="type_Sync.IO.html">Sync.IO</a></h1>
 
 <pre><span class="keyword">module type</span> IO = <code class="code"><span class="keyword">sig</span></code> <a href="Sync.IO.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><hr width="100%">
-<br>
-Channel abstraction.<br>
 
 <pre><span id="TYPEic"><span class="keyword">type</span> <code class="type"></code>ic</span> </pre>
 <div class="info ">
@@ -73,13 +72,13 @@ Connect to a remote server, get the corresponding input and
       first message sent on the connection to set-it up.<br>
 </div>
 
-<pre><span id="VALread_all"><span class="keyword">val</span> read_all</span> : <code class="type"><a href="Sync.IO.html#TYPEic">ic</a> -> string Lwt.t</code></pre><div class="info ">
+<pre><span id="VALread_all"><span class="keyword">val</span> read_all</span> : <code class="type"><a href="Sync.IO.html#TYPEic">ic</a> -> string list Lwt.t</code></pre><div class="info ">
 Read all the channel contents (until the channel is closed by
       the other side).<br>
 </div>
 
 <pre><span id="VALread_exactly"><span class="keyword">val</span> read_exactly</span> : <code class="type"><a href="Sync.IO.html#TYPEic">ic</a> -> int -> string Lwt.t</code></pre><div class="info ">
-Read a given number of bits.<br>
+Read a given number of bytes.<br>
 </div>
 
 <pre><span id="VALwrite"><span class="keyword">val</span> write</span> : <code class="type"><a href="Sync.IO.html#TYPEoc">oc</a> -> string -> unit Lwt.t</code></pre><div class="info ">

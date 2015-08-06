@@ -11,33 +11,33 @@
 <link title="Index of values" rel=Appendix href="index_values.html">
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
-<link title="SHA" rel="Chapter" href="SHA.html">
-<link title="Blob" rel="Chapter" href="Blob.html">
-<link title="Index" rel="Chapter" href="Index.html">
-<link title="Commit" rel="Chapter" href="Commit.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
-<link title="Version" rel="Chapter" href="Version.html">
-<link title="Global_graph" rel="Chapter" href="Global_graph.html">
+<link title="SHA" rel="Chapter" href="SHA.html">
+<link title="Inflate" rel="Chapter" href="Inflate.html">
+<link title="Object" rel="Chapter" href="Object.html">
+<link title="Object_type" rel="Chapter" href="Object_type.html">
+<link title="Blob" rel="Chapter" href="Blob.html">
+<link title="Tree" rel="Chapter" href="Tree.html">
+<link title="Commit" rel="Chapter" href="Commit.html">
+<link title="Tag" rel="Chapter" href="Tag.html">
+<link title="Reference" rel="Chapter" href="Reference.html">
+<link title="Value" rel="Chapter" href="Value.html">
 <link title="Pack" rel="Chapter" href="Pack.html">
 <link title="Pack_index" rel="Chapter" href="Pack_index.html">
 <link title="Packed_value" rel="Chapter" href="Packed_value.html">
-<link title="Reference" rel="Chapter" href="Reference.html">
+<link title="Packed_refs" rel="Chapter" href="Packed_refs.html">
+<link title="Index" rel="Chapter" href="Index.html">
 <link title="Sync" rel="Chapter" href="Sync.html">
-<link title="Tag" rel="Chapter" href="Tag.html">
-<link title="Tree" rel="Chapter" href="Tree.html">
-<link title="User" rel="Chapter" href="User.html">
-<link title="Value" rel="Chapter" href="Value.html">
-<link title="Object" rel="Chapter" href="Object.html">
-<link title="Object_type" rel="Chapter" href="Object_type.html">
-<link title="Store" rel="Chapter" href="Store.html">
-<link title="Search" rel="Chapter" href="Search.html">
 <link title="Gri" rel="Chapter" href="Gri.html">
+<link title="Search" rel="Chapter" href="Search.html">
+<link title="Global_graph" rel="Chapter" href="Global_graph.html">
+<link title="User" rel="Chapter" href="User.html">
+<link title="Store" rel="Chapter" href="Store.html">
 <link title="Memory" rel="Chapter" href="Memory.html">
 <link title="FS" rel="Chapter" href="FS.html">
-<link title="Packed_refs" rel="Chapter" href="Packed_refs.html">
+<link title="Version" rel="Chapter" href="Version.html">
 <link title="Git_unix" rel="Chapter" href="Git_unix.html">
-<link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><link title="The base Git protocol and Git+SSH" rel="Section" href="#1_ThebaseGitprotocolandGitSSH">
-<title>Sync.S</title>
+<link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>Sync.S</title>
 </head>
 <body>
 <div class="navbar">&nbsp;<a class="up" href="Sync.html" title="Sync">Up</a>
@@ -58,8 +58,6 @@ Abstract value for stores.<br>
 Connection context<br>
 </div>
 
-<br>
-<h1 id="1_ThebaseGitprotocolandGitSSH">The base Git protocol and Git+SSH</h1><br>
 
 <pre><span id="VALls"><span class="keyword">val</span> ls</span> : <code class="type">?ctx:<a href="Sync.S.html#TYPEctx">ctx</a> -> <a href="Sync.S.html#TYPEt">t</a> -> <a href="Gri.html#TYPEt">Gri.t</a> -> SHA.Commit.t Reference.Map.t Lwt.t</code></pre><div class="info ">
 List the references of the remote repository.<br>
@@ -69,13 +67,45 @@ List the references of the remote repository.<br>
 Push a local branch to a remote store.<br>
 </div>
 
-<pre><span id="VALclone"><span class="keyword">val</span> clone</span> : <code class="type">?ctx:<a href="Sync.S.html#TYPEctx">ctx</a> -><br>       <a href="Sync.S.html#TYPEt">t</a> -><br>       ?deepen:int -><br>       ?unpack:bool -><br>       ?capabilities:<a href="Sync.html#TYPEcapability">Sync.capability</a> list -> <a href="Gri.html#TYPEt">Gri.t</a> -> <a href="Sync.Result.html#TYPEfetch">Sync.Result.fetch</a> Lwt.t</code></pre><div class="info ">
-<code class="code">clone t address</code> clones the contents of <code class="code">address</code> into the
-      store <code class="code">t</code>.<br>
+<pre><span id="VALfetch"><span class="keyword">val</span> fetch</span> : <code class="type">?ctx:<a href="Sync.S.html#TYPEctx">ctx</a> -><br>       ?deepen:int -><br>       ?unpack:bool -><br>       ?capabilities:<a href="Sync.html#TYPEcapability">Sync.capability</a> list -><br>       ?wants:<a href="Sync.html#TYPEwant">Sync.want</a> list -><br>       ?update:bool -><br>       ?progress:(string -> unit) -> <a href="Sync.S.html#TYPEt">t</a> -> <a href="Gri.html#TYPEt">Gri.t</a> -> <a href="Sync.Result.html#TYPEfetch">Sync.Result.fetch</a> Lwt.t</code></pre><div class="info ">
+<code class="code">fetch t uri</code> fetches the contents of <code class="code">uri</code> into the store <code class="code">t</code>.
+<p>
+
+      By default, all the remote references are updated. This behavior
+      can be changed by using the <code class="code">wants</code> parameter:
+<p>
+
+      <ul>
+<li>if <code class="code">wants</code> is not specified, the objects corresponding to <b>         all</b> the remote references are downloaded. This is useful
+         when cloning a new repository as the remote references are
+         not yet known.</li>
+<li>If a reference (e.g. a <code class="code"><span class="keywordsign">`</span><span class="constructor">Ref</span></code> <a href="Sync.html#TYPEwant"><code class="code"><span class="constructor">Sync</span>.want</code></a> value) appears in the
+         list, the object corresponding to that remote reference are
+         fetched. This works only if the server exports the
+         "allow-reachable-sha1-in-want" (available in Git 2.5.0)</li>
+<li>If a commit hash (e.g. a <code class="code"><span class="keywordsign">`</span><span class="constructor">Commit</span></code> <a href="Sync.html#TYPEwant"><code class="code"><span class="constructor">Sync</span>.want</code></a> value) in the
+         list, the objects corresponding to the that remote commits
+         are fetched..</li>
+</ul>
+
+<p>
+
+      If <code class="code">update</code> is set (default is <code class="code"><span class="keyword">false</span></code>) the references given in
+      <code class="code">wants</code> are updated locally.
+<p>
+
+      <b>Note:</b> the local HEAD is not modified when doing a fetch. To do so
+      (for instance when doing a clone) do the following:
+<p>
+
+      <pre class="codepre"><code class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fetch&nbsp;t&nbsp;gri&nbsp;&gt;&gt;=&nbsp;<span class="keyword">fun</span>&nbsp;r&nbsp;<span class="keywordsign">-&gt;</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">match</span>&nbsp;<span class="constructor">Result</span>.head_contents&nbsp;r&nbsp;<span class="keyword">with</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">Some</span>&nbsp;h&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Store</span>.write_head&nbsp;t&nbsp;h<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">None</span>&nbsp;&nbsp;&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Lwt</span>.return_unit<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code></pre><br>
 </div>
 
-<pre><span id="VALfetch"><span class="keyword">val</span> fetch</span> : <code class="type">?ctx:<a href="Sync.S.html#TYPEctx">ctx</a> -><br>       <a href="Sync.S.html#TYPEt">t</a> -><br>       ?deepen:int -><br>       ?unpack:bool -><br>       ?capabilities:<a href="Sync.html#TYPEcapability">Sync.capability</a> list -> <a href="Gri.html#TYPEt">Gri.t</a> -> <a href="Sync.Result.html#TYPEfetch">Sync.Result.fetch</a> Lwt.t</code></pre><div class="info ">
-<code class="code">fetch t address</code> fetches the missing contents of <code class="code">address</code> into
-      the store <code class="code">t</code>.<br>
+<pre><span id="VALpopulate"><span class="keyword">val</span> populate</span> : <code class="type">?head:<a href="Reference.html#TYPEhead_contents">Reference.head_contents</a> -><br>       ?progress:(string -> unit) -><br>       <a href="Sync.S.html#TYPEt">t</a> -> checkout:bool -> <a href="Sync.Result.html#TYPEfetch">Sync.Result.fetch</a> -> unit Lwt.t</code></pre><div class="info ">
+Populate a fresh repository after a fetch.<br>
 </div>
 </body></html>

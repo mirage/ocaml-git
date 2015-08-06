@@ -11,30 +11,31 @@
 <link title="Index of values" rel=Appendix href="index_values.html">
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
-<link title="SHA" rel="Chapter" href="SHA.html">
-<link title="Blob" rel="Chapter" href="Blob.html">
-<link title="Index" rel="Chapter" href="Index.html">
-<link title="Commit" rel="Chapter" href="Commit.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
-<link title="Version" rel="Chapter" href="Version.html">
-<link title="Global_graph" rel="Chapter" href="Global_graph.html">
+<link title="SHA" rel="Chapter" href="SHA.html">
+<link title="Inflate" rel="Chapter" href="Inflate.html">
+<link title="Object" rel="Chapter" href="Object.html">
+<link title="Object_type" rel="Chapter" href="Object_type.html">
+<link title="Blob" rel="Chapter" href="Blob.html">
+<link title="Tree" rel="Chapter" href="Tree.html">
+<link title="Commit" rel="Chapter" href="Commit.html">
+<link title="Tag" rel="Chapter" href="Tag.html">
+<link title="Reference" rel="Chapter" href="Reference.html">
+<link title="Value" rel="Chapter" href="Value.html">
 <link title="Pack" rel="Chapter" href="Pack.html">
 <link title="Pack_index" rel="Chapter" href="Pack_index.html">
 <link title="Packed_value" rel="Chapter" href="Packed_value.html">
-<link title="Reference" rel="Chapter" href="Reference.html">
+<link title="Packed_refs" rel="Chapter" href="Packed_refs.html">
+<link title="Index" rel="Chapter" href="Index.html">
 <link title="Sync" rel="Chapter" href="Sync.html">
-<link title="Tag" rel="Chapter" href="Tag.html">
-<link title="Tree" rel="Chapter" href="Tree.html">
-<link title="User" rel="Chapter" href="User.html">
-<link title="Value" rel="Chapter" href="Value.html">
-<link title="Object" rel="Chapter" href="Object.html">
-<link title="Object_type" rel="Chapter" href="Object_type.html">
-<link title="Store" rel="Chapter" href="Store.html">
-<link title="Search" rel="Chapter" href="Search.html">
 <link title="Gri" rel="Chapter" href="Gri.html">
+<link title="Search" rel="Chapter" href="Search.html">
+<link title="Global_graph" rel="Chapter" href="Global_graph.html">
+<link title="User" rel="Chapter" href="User.html">
+<link title="Store" rel="Chapter" href="Store.html">
 <link title="Memory" rel="Chapter" href="Memory.html">
 <link title="FS" rel="Chapter" href="FS.html">
-<link title="Packed_refs" rel="Chapter" href="Packed_refs.html">
+<link title="Version" rel="Chapter" href="Version.html">
 <link title="Git_unix" rel="Chapter" href="Git_unix.html">
 <link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>FS.S</title>
 </head>
@@ -48,6 +49,10 @@
 
 <pre><span class="keyword">include</span> <a href="Store.S.html">Store.S</a></pre>
 
+<pre><span id="VALremove"><span class="keyword">val</span> remove</span> : <code class="type">t -> unit Lwt.t</code></pre><div class="info ">
+Remove all the contents of the store.<br>
+</div>
+
 <pre><span id="VALcreate_file"><span class="keyword">val</span> create_file</span> : <code class="type">t -> string -> <a href="Tree.html#TYPEperm">Tree.perm</a> -> Blob.t -> unit Lwt.t</code></pre><div class="info ">
 Create a file on the filesystem, with the given mode.<br>
 </div>
@@ -56,5 +61,9 @@ Create a file on the filesystem, with the given mode.<br>
 Generate a cache entry for the file. Create a fresh file if it
       does not already exist. If <code class="code">root</code> is not set, use the current
       working directory as repository root.<br>
+</div>
+
+<pre><span id="VALclear"><span class="keyword">val</span> clear</span> : <code class="type">unit -> unit</code></pre><div class="info ">
+Clear the LRU caches.<br>
 </div>
 </body></html>

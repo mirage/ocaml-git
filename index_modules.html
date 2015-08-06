@@ -8,30 +8,31 @@
 <link title="Index of values" rel=Appendix href="index_values.html">
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
-<link title="SHA" rel="Chapter" href="SHA.html">
-<link title="Blob" rel="Chapter" href="Blob.html">
-<link title="Index" rel="Chapter" href="Index.html">
-<link title="Commit" rel="Chapter" href="Commit.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
-<link title="Version" rel="Chapter" href="Version.html">
-<link title="Global_graph" rel="Chapter" href="Global_graph.html">
+<link title="SHA" rel="Chapter" href="SHA.html">
+<link title="Inflate" rel="Chapter" href="Inflate.html">
+<link title="Object" rel="Chapter" href="Object.html">
+<link title="Object_type" rel="Chapter" href="Object_type.html">
+<link title="Blob" rel="Chapter" href="Blob.html">
+<link title="Tree" rel="Chapter" href="Tree.html">
+<link title="Commit" rel="Chapter" href="Commit.html">
+<link title="Tag" rel="Chapter" href="Tag.html">
+<link title="Reference" rel="Chapter" href="Reference.html">
+<link title="Value" rel="Chapter" href="Value.html">
 <link title="Pack" rel="Chapter" href="Pack.html">
 <link title="Pack_index" rel="Chapter" href="Pack_index.html">
 <link title="Packed_value" rel="Chapter" href="Packed_value.html">
-<link title="Reference" rel="Chapter" href="Reference.html">
+<link title="Packed_refs" rel="Chapter" href="Packed_refs.html">
+<link title="Index" rel="Chapter" href="Index.html">
 <link title="Sync" rel="Chapter" href="Sync.html">
-<link title="Tag" rel="Chapter" href="Tag.html">
-<link title="Tree" rel="Chapter" href="Tree.html">
-<link title="User" rel="Chapter" href="User.html">
-<link title="Value" rel="Chapter" href="Value.html">
-<link title="Object" rel="Chapter" href="Object.html">
-<link title="Object_type" rel="Chapter" href="Object_type.html">
-<link title="Store" rel="Chapter" href="Store.html">
-<link title="Search" rel="Chapter" href="Search.html">
 <link title="Gri" rel="Chapter" href="Gri.html">
+<link title="Search" rel="Chapter" href="Search.html">
+<link title="Global_graph" rel="Chapter" href="Global_graph.html">
+<link title="User" rel="Chapter" href="User.html">
+<link title="Store" rel="Chapter" href="Store.html">
 <link title="Memory" rel="Chapter" href="Memory.html">
 <link title="FS" rel="Chapter" href="FS.html">
-<link title="Packed_refs" rel="Chapter" href="Packed_refs.html">
+<link title="Version" rel="Chapter" href="Version.html">
 <link title="Git_unix" rel="Chapter" href="Git_unix.html">
 <link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>Index of modules</title>
 </head>
@@ -40,12 +41,17 @@
 &nbsp;</div>
 <h1>Index of modules</h1>
 <table>
+<tr><td align="left"><br>A</td></tr>
+<tr><td><a href="SHA.Array.html">Array</a> [<a href="SHA.html">SHA</a>]</td>
+<td></td></tr>
 <tr><td align="left"><br>B</td></tr>
 <tr><td><a href="Blob.html">Blob</a> </td>
 <td><div class="info">
-Binaray blobs.
+Binary blobs.
 </div>
 </td></tr>
+<tr><td><a href="SHA.IO.Blob.html">Blob</a> [<a href="SHA.IO.html">SHA.IO</a>]</td>
+<td></td></tr>
 <tr><td><a href="SHA.Blob.html">Blob</a> [<a href="SHA.html">SHA</a>]</td>
 <td><div class="info">
 Blob nodes.
@@ -56,21 +62,29 @@ Blob nodes.
 <td></td></tr>
 <tr><td><a href="Commit.html">Commit</a> </td>
 <td><div class="info">
-Git commits.
+Commits.
 </div>
 </td></tr>
+<tr><td><a href="SHA.IO.Commit.html">Commit</a> [<a href="SHA.IO.html">SHA.IO</a>]</td>
+<td></td></tr>
 <tr><td><a href="SHA.Commit.html">Commit</a> [<a href="SHA.html">SHA</a>]</td>
 <td><div class="info">
 Commit nodes.
 </div>
 </td></tr>
+<tr><td align="left"><br>D</td></tr>
+<tr><td><a href="Store.S.Digest.html">Digest</a> [<a href="Store.S.html">Store.S</a>]</td>
+<td><div class="info">
+Digest functions that the store is using.
+</div>
+</td></tr>
 <tr><td align="left"><br>F</td></tr>
 <tr><td><a href="Git_mirage.FS.html">FS</a> [<a href="Git_mirage.html">Git_mirage</a>]</td>
 <td><div class="info">
-Create a Irmin store from raw block devices hanlder.
+Create a Irmin store from raw block devices handler.
 </div>
 </td></tr>
-<tr><td><a href="Git_unix.FS.html">FS</a> [<a href="Git_unix.html">Git_unix</a>]</td>
+<tr><td><a href="Git_unix.S.FS.html">FS</a> [<a href="Git_unix.S.html">Git_unix.S</a>]</td>
 <td><div class="info">
 Implementation of the on-disk Git protocol using <code class="code"><span class="constructor">Lwt_unix</span></code>.
 </div>
@@ -83,13 +97,12 @@ Store Git objects on the local filesystem.
 <tr><td align="left"><br>G</td></tr>
 <tr><td><a href="Git_mirage.html">Git_mirage</a> </td>
 <td><div class="info">
-Mirage implementation of the Git file-system backend and
-    protocol.
+Mirage backend.
 </div>
 </td></tr>
 <tr><td><a href="Git_unix.html">Git_unix</a> </td>
 <td><div class="info">
-Lwt_unix IO module.
+Unix backend.
 </div>
 </td></tr>
 <tr><td><a href="Global_graph.html">Global_graph</a> </td>
@@ -107,13 +120,43 @@ Git ressource identifiers (GRI).
 <td></td></tr>
 <tr><td><a href="Git_mirage.Sync.IO.html">IO</a> [<a href="Git_mirage.Sync.html">Git_mirage.Sync</a>]</td>
 <td></td></tr>
-<tr><td><a href="Git_unix.FS.IO.html">IO</a> [<a href="Git_unix.FS.html">Git_unix.FS</a>]</td>
+<tr><td><a href="Git_unix.S.FS.IO.html">IO</a> [<a href="Git_unix.S.FS.html">Git_unix.S.FS</a>]</td>
 <td></td></tr>
-<tr><td><a href="Git_unix.Sync.IO.html">IO</a> [<a href="Git_unix.Sync.html">Git_unix.Sync</a>]</td>
+<tr><td><a href="Git_unix.S.Sync.IO.html">IO</a> [<a href="Git_unix.S.Sync.html">Git_unix.S.Sync</a>]</td>
+<td></td></tr>
+<tr><td><a href="Index.IO.html">IO</a> [<a href="Index.html">Index</a>]</td>
+<td></td></tr>
+<tr><td><a href="Packed_refs.IO.html">IO</a> [<a href="Packed_refs.html">Packed_refs</a>]</td>
+<td></td></tr>
+<tr><td><a href="Packed_value.IO.html">IO</a> [<a href="Packed_value.html">Packed_value</a>]</td>
+<td></td></tr>
+<tr><td><a href="Pack.IO.html">IO</a> [<a href="Pack.html">Pack</a>]</td>
+<td></td></tr>
+<tr><td><a href="Value.IO.html">IO</a> [<a href="Value.html">Value</a>]</td>
+<td></td></tr>
+<tr><td><a href="Tag.IO.html">IO</a> [<a href="Tag.html">Tag</a>]</td>
+<td></td></tr>
+<tr><td><a href="Commit.IO.html">IO</a> [<a href="Commit.html">Commit</a>]</td>
+<td></td></tr>
+<tr><td><a href="Tree.IO.html">IO</a> [<a href="Tree.html">Tree</a>]</td>
+<td></td></tr>
+<tr><td><a href="SHA.IO.html">IO</a> [<a href="SHA.html">SHA</a>]</td>
 <td></td></tr>
 <tr><td><a href="Index.html">Index</a> </td>
 <td><div class="info">
 Implementation of the V2 Git Index format (as V1 is deprecated).
+</div>
+</td></tr>
+<tr><td><a href="Git_unix.S.Index_IO.html">Index_IO</a> [<a href="Git_unix.S.html">Git_unix.S</a>]</td>
+<td></td></tr>
+<tr><td><a href="Store.S.Inflate.html">Inflate</a> [<a href="Store.S.html">Store.S</a>]</td>
+<td><div class="info">
+Inflate functions that the store is using.
+</div>
+</td></tr>
+<tr><td><a href="Inflate.html">Inflate</a> </td>
+<td><div class="info">
+Zlib Compression.
 </div>
 </td></tr>
 <tr><td><a href="Misc.IntMap.html">IntMap</a> [<a href="Misc.html">Misc</a>]</td>
@@ -127,30 +170,45 @@ The graph of Git keys.
 <tr><td align="left"><br>M</td></tr>
 <tr><td><a href="Git_mirage.Sync.Make.html">Make</a> [<a href="Git_mirage.Sync.html">Git_mirage.Sync</a>]</td>
 <td></td></tr>
-<tr><td><a href="Git_unix.Sync.Make.html">Make</a> [<a href="Git_unix.Sync.html">Git_unix.Sync</a>]</td>
+<tr><td><a href="Git_unix.S.Sync.Make.html">Make</a> [<a href="Git_unix.S.Sync.html">Git_unix.S.Sync</a>]</td>
 <td></td></tr>
+<tr><td><a href="Git_unix.Make.html">Make</a> [<a href="Git_unix.html">Git_unix</a>]</td>
+<td><div class="info">
+Parametrize the Git implementation with different inflate and hash
+    algorithms.
+</div>
+</td></tr>
 <tr><td><a href="FS.Make.html">Make</a> [<a href="FS.html">FS</a>]</td>
 <td><div class="info">
 Create an on-disk store implementation.
 </div>
 </td></tr>
+<tr><td><a href="Memory.Make.html">Make</a> [<a href="Memory.html">Memory</a>]</td>
+<td></td></tr>
+<tr><td><a href="Global_graph.Make.html">Make</a> [<a href="Global_graph.html">Global_graph</a>]</td>
+<td></td></tr>
 <tr><td><a href="Search.Make.html">Make</a> [<a href="Search.html">Search</a>]</td>
 <td></td></tr>
 <tr><td><a href="Sync.Make.html">Make</a> [<a href="Sync.html">Sync</a>]</td>
 <td></td></tr>
-<tr><td><a href="Global_graph.Make.html">Make</a> [<a href="Global_graph.html">Global_graph</a>]</td>
+<tr><td><a href="Pack_index.Make.html">Make</a> [<a href="Pack_index.html">Pack_index</a>]</td>
+<td></td></tr>
+<tr><td><a href="Inflate.Make.html">Make</a> [<a href="Inflate.html">Inflate</a>]</td>
 <td></td></tr>
 <tr><td><a href="Reference.Map.html">Map</a> [<a href="Reference.html">Reference</a>]</td>
 <td><div class="info">
 A map of references.
 </div>
 </td></tr>
-<tr><td><a href="Packed_value.PIC.Map.html">Map</a> [<a href="Packed_value.PIC.html">Packed_value.PIC</a>]</td>
+<tr><td><a href="SHA.S.Map.html">Map</a> [<a href="SHA.S.html">SHA.S</a>]</td>
 <td></td></tr>
 <tr><td><a href="Misc.Map.html">Map</a> [<a href="Misc.html">Misc</a>]</td>
 <td></td></tr>
-<tr><td><a href="SHA.S.Map.html">Map</a> [<a href="SHA.S.html">SHA.S</a>]</td>
-<td></td></tr>
+<tr><td><a href="Git_unix.S.Memory.html">Memory</a> [<a href="Git_unix.S.html">Git_unix.S</a>]</td>
+<td><div class="info">
+In-memory store.
+</div>
+</td></tr>
 <tr><td><a href="Memory.html">Memory</a> </td>
 <td><div class="info">
 Store Git objects in memory.
@@ -161,17 +219,23 @@ Store Git objects in memory.
 Miscellaneous functions.
 </div>
 </td></tr>
+<tr><td align="left"><br>N</td></tr>
+<tr><td><a href="Inflate.None.html">None</a> [<a href="Inflate.html">Inflate</a>]</td>
+<td><div class="info">
+No compression.
+</div>
+</td></tr>
 <tr><td align="left"><br>O</td></tr>
 <tr><td><a href="Misc.OP.html">OP</a> [<a href="Misc.html">Misc</a>]</td>
 <td></td></tr>
 <tr><td><a href="Object.html">Object</a> </td>
 <td><div class="info">
-Signatures
+Common signatures to all objects.
 </div>
 </td></tr>
 <tr><td><a href="Object_type.html">Object_type</a> </td>
 <td><div class="info">
-Git object types.
+Object types.
 </div>
 </td></tr>
 <tr><td align="left"><br>P</td></tr>
@@ -182,6 +246,8 @@ Git object types.
 Pack files.
 </div>
 </td></tr>
+<tr><td><a href="Git_unix.S.Pack_IO.html">Pack_IO</a> [<a href="Git_unix.S.html">Git_unix.S</a>]</td>
+<td></td></tr>
 <tr><td><a href="Pack_index.html">Pack_index</a> </td>
 <td><div class="info">
 Pack indexes.
@@ -198,18 +264,22 @@ Packed values.
 </div>
 </td></tr>
 <tr><td align="left"><br>R</td></tr>
+<tr><td><a href="Pack_index.Make.Raw.html">Raw</a> [<a href="Pack_index.Make.html">Pack_index.Make</a>]</td>
+<td></td></tr>
 <tr><td><a href="Pack_index.Raw.html">Raw</a> [<a href="Pack_index.html">Pack_index</a>]</td>
+<td></td></tr>
+<tr><td><a href="Pack.IO.Raw.html">Raw</a> [<a href="Pack.IO.html">Pack.IO</a>]</td>
 <td></td></tr>
 <tr><td><a href="Pack.Raw.html">Raw</a> [<a href="Pack.html">Pack</a>]</td>
 <td></td></tr>
 <tr><td><a href="Reference.html">Reference</a> </td>
 <td><div class="info">
-Branch references.
+References.
 </div>
 </td></tr>
 <tr><td><a href="Git_mirage.Sync.Result.html">Result</a> [<a href="Git_mirage.Sync.html">Git_mirage.Sync</a>]</td>
 <td></td></tr>
-<tr><td><a href="Git_unix.Sync.Result.html">Result</a> [<a href="Git_unix.Sync.html">Git_unix.Sync</a>]</td>
+<tr><td><a href="Git_unix.S.Sync.Result.html">Result</a> [<a href="Git_unix.S.Sync.html">Git_unix.S.Sync</a>]</td>
 <td></td></tr>
 <tr><td><a href="Sync.Result.html">Result</a> [<a href="Sync.html">Sync</a>]</td>
 <td></td></tr>
@@ -218,17 +288,33 @@ Branch references.
 <td></td></tr>
 <tr><td><a href="SHA.html">SHA</a> </td>
 <td><div class="info">
-Signature for SHA1 values
+SHA hashes.
 </div>
 </td></tr>
+<tr><td><a href="Git_unix.SHA1.html">SHA1</a> [<a href="Git_unix.html">Git_unix</a>]</td>
+<td><div class="info">
+Implementation of the digest signature using <code class="code">ocaml-nocrypto</code>'s
+    SHA1 algorithm.
+</div>
+</td></tr>
+<tr><td><a href="Git_mirage.SHA1_slow.html">SHA1_slow</a> [<a href="Git_mirage.html">Git_mirage</a>]</td>
+<td></td></tr>
+<tr><td><a href="Git_unix.SHA256.html">SHA256</a> [<a href="Git_unix.html">Git_unix</a>]</td>
+<td><div class="info">
+Implementation of the digest signature using <code class="code">ocaml-nocrypto</code>'s
+    SHA256 algorithm.
+</div>
+</td></tr>
+<tr><td><a href="Git_unix.S.SHA_IO.html">SHA_IO</a> [<a href="Git_unix.S.html">Git_unix.S</a>]</td>
+<td></td></tr>
 <tr><td><a href="Search.html">Search</a> </td>
 <td><div class="info">
-Search over the Git objects
+Search over the graph of Git objects.
 </div>
 </td></tr>
-<tr><td><a href="Misc.Set.html">Set</a> [<a href="Misc.html">Misc</a>]</td>
-<td></td></tr>
 <tr><td><a href="SHA.S.Set.html">Set</a> [<a href="SHA.S.html">SHA.S</a>]</td>
+<td></td></tr>
+<tr><td><a href="Misc.Set.html">Set</a> [<a href="Misc.html">Misc</a>]</td>
 <td></td></tr>
 <tr><td><a href="Store.html">Store</a> </td>
 <td><div class="info">
@@ -237,12 +323,8 @@ Signature for Git stores.
 </td></tr>
 <tr><td><a href="Git_mirage.Sync.html">Sync</a> [<a href="Git_mirage.html">Git_mirage</a>]</td>
 <td></td></tr>
-<tr><td><a href="Git_unix.Sync.html">Sync</a> [<a href="Git_unix.html">Git_unix</a>]</td>
-<td><div class="info">
-Implementation of the Git protocol using <code class="code"><span class="constructor">Lwt_unix</span></code> and <code class="code"><span class="constructor">Lwt_io</span></code>
-    IO functions.
-</div>
-</td></tr>
+<tr><td><a href="Git_unix.S.Sync.html">Sync</a> [<a href="Git_unix.S.html">Git_unix.S</a>]</td>
+<td></td></tr>
 <tr><td><a href="Sync.html">Sync</a> </td>
 <td><div class="info">
 Clone/Fecth/Push protocol
@@ -251,14 +333,16 @@ Clone/Fecth/Push protocol
 <tr><td align="left"><br>T</td></tr>
 <tr><td><a href="Tag.html">Tag</a> </td>
 <td><div class="info">
-Git tags.
+Annotated tags.
 </div>
 </td></tr>
 <tr><td><a href="Tree.html">Tree</a> </td>
 <td><div class="info">
-Git trees.
+Filesystem trees.
 </div>
 </td></tr>
+<tr><td><a href="SHA.IO.Tree.html">Tree</a> [<a href="SHA.IO.html">SHA.IO</a>]</td>
+<td></td></tr>
 <tr><td><a href="SHA.Tree.html">Tree</a> [<a href="SHA.html">SHA</a>]</td>
 <td><div class="info">
 Treee nodes.
@@ -267,21 +351,36 @@ Treee nodes.
 <tr><td align="left"><br>U</td></tr>
 <tr><td><a href="User.html">User</a> </td>
 <td><div class="info">
-Git user actions.
+User actions.
 </div>
 </td></tr>
 <tr><td align="left"><br>V</td></tr>
-<tr><td><a href="Packed_value.V2.html">V2</a> [<a href="Packed_value.html">Packed_value</a>]</td>
-<td></td></tr>
-<tr><td><a href="Packed_value.V3.html">V3</a> [<a href="Packed_value.html">Packed_value</a>]</td>
-<td></td></tr>
-<tr><td><a href="Value.html">Value</a> </td>
+<tr><td><a href="Packed_value.IO.V2.html">V2</a> [<a href="Packed_value.IO.html">Packed_value.IO</a>]</td>
 <td><div class="info">
-Git objects.
+Packed values version 2.
 </div>
 </td></tr>
+<tr><td><a href="Packed_value.IO.V3.html">V3</a> [<a href="Packed_value.IO.html">Packed_value.IO</a>]</td>
+<td><div class="info">
+Packed values version 3.
+</div>
+</td></tr>
+<tr><td><a href="Value.html">Value</a> </td>
+<td><div class="info">
+Loose objects.
+</div>
+</td></tr>
+<tr><td><a href="Git_unix.S.Value_IO.html">Value_IO</a> [<a href="Git_unix.S.html">Git_unix.S</a>]</td>
+<td></td></tr>
 <tr><td><a href="Version.html">Version</a> </td>
 <td></td></tr>
+<tr><td align="left"><br>Z</td></tr>
+<tr><td><a href="Git_unix.Zlib.html">Zlib</a> [<a href="Git_unix.html">Git_unix</a>]</td>
+<td><div class="info">
+Implementation of the inflate signature using <code class="code">camlzip</code>'s zlib
+    bindings.
+</div>
+</td></tr>
 </table>
 </body>
 </html>
