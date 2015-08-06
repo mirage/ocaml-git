@@ -214,6 +214,10 @@ module Listing = struct
     try Some (Reference.Map.find r t.references)
     with Not_found -> None
 
+  let find_sha1 t c =
+    try SHA.Commit.Map.find c t.sha1s
+    with Not_found -> []
+
   let pretty t =
     let buf = Buffer.create 1024 in
     Printf.bprintf buf "CAPABILITIES:\n%s\n"
@@ -1158,13 +1162,13 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) (Store: Store.S) = struct
         | Ls      -> Lwt.return { Result.listing; sha1s = SHA.Set.empty }
         | Fetch f ->
           let references = Listing.references listing in
-          let commits = match f.wants with
+          let references, commits = match f.wants with
             | None   ->
               (* We ask for all the remote references *)
-              Reference.Map.fold (fun r c acc ->
-                  if is_head_or_tag r then SHA.Commit.Set.add c acc else acc
-                ) references SHA.Commit.Set.empty
-              |> SHA.Commit.Set.elements
+              Reference.Map.fold (fun r c (rs, cs as acc) ->
+                  if not (is_head_or_tag r) then acc
+                  else (r, c) :: rs, SHA.Commit.Set.add c cs
+                ) references ([], SHA.Commit.Set.empty)
             | Some wants ->
               let allow_sha1 =
                 let caps = Listing.capabilities listing in
@@ -1175,19 +1179,22 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) (Store: Store.S) = struct
                   try List.exists is_head_or_tag (SHA.Commit.Map.find sha1 sha1s)
                   with Not_found -> false
               in
-              List.fold_left (fun acc -> function
+              List.fold_left (fun (rs, cs as acc) -> function
                   | `Commit c ->
-                    if allow_sha1 c then SHA.Commit.Set.add c acc
+                    if allow_sha1 c then
+                      let refs =  Listing.find_sha1 listing c in
+                      let rs = List.map (fun r -> (r, c)) refs @ rs in
+                      rs, SHA.Commit.Set.add c cs
                     else err_sha1_not_advertised c
                   | `Ref r    ->
                     try
                       let c = Reference.Map.find r references in
-                      SHA.Commit.Set.add c acc
+                      (r, c) :: rs, SHA.Commit.Set.add c cs
                     with Not_found ->
                       acc
-                ) SHA.Commit.Set.empty wants
-              |> SHA.Commit.Set.elements
+                ) ([], SHA.Commit.Set.empty) wants
           in
+          let commits = SHA.Commit.Set.to_list commits in
           let sync () =
             if protocol = `Smart_HTTP then
               let init = Init.upload_pack ~discover:false gri in
@@ -1201,18 +1208,10 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) (Store: Store.S) = struct
           in
           let update_refs () =
             if not f.update then Lwt.return_unit
-            else match f.wants with
-              | None       -> Lwt.return_unit
-              | Some wants ->
-                Lwt_list.iter_p (function
-                    | `Commit _ -> Lwt.return_unit
-                    | `Ref r    ->
-                      try
-                        let c = Reference.Map.find r references in
-                        write_heads_and_tags t r c
-                      with Not_found ->
-                        Lwt.return_unit
-                  ) wants
+            else
+              Lwt_list.iter_p
+                (fun (r, c) -> write_heads_and_tags t r c)
+                references
           in
           sync ()        >>= fun r ->
           update_refs () >|= fun () ->
