@@ -19,16 +19,10 @@ let (>>=) = Lwt.bind
 module Log = Log.Make(struct let section = "http" end)
 
 module type CLIENT = sig
-  include Cohttp_lwt.Client
-    with type 'a IO.t = 'a Lwt.t               (* FIMXE in cohttp *)
-
-  module Request : Cohttp.S.Http_io with module IO = IO and type t = Cohttp.Request.t
-  module Response : Cohttp.S.Http_io with module IO = IO and type t = Cohttp.Response.t
+  module IO : Cohttp_lwt_s.IO with type 'a t = 'a Lwt.t
 
   val close_out: IO.oc -> unit                 (* FIXME in cohttp *)
   val close_in: IO.ic -> unit                  (* FIXME in cohttp *)
-  val oc: IO.oc -> Request.IO.oc               (* FIXME in cohttp *)
-  val ic: IO.ic -> Response.IO.ic              (* FIXME in cohttp *)
 end
 
 module type CHAN = sig
@@ -38,6 +32,23 @@ module type CHAN = sig
 end
 
 module Flow(HTTP: CLIENT) (IC: CHAN) (OC: CHAN) = struct
+  open Cohttp
+
+  module Request = struct
+    include Request
+    include (Request.Make(HTTP.IO)
+             : Cohttp.S.Http_io with type t := t and module IO = HTTP.IO)
+  end
+  module Response = struct
+    include Response
+    include (Response.Make(HTTP.IO)
+             : Cohttp.S.Http_io with type t := t and module IO = HTTP.IO)
+  end
+
+  let write_footer oc = function
+    | Transfer.Chunked -> HTTP.IO.write oc "0\r\n\r\n"
+    | Transfer.Fixed _
+    | Transfer.Unknown -> Lwt.return_unit
 
   let make_oc oc =
     OC.make
@@ -64,7 +75,7 @@ module Flow(HTTP: CLIENT) (IC: CHAN) (OC: CHAN) = struct
     mutable in_stream : string list;
     mutable ic        : HTTP.IO.ic;
     mutable oc        : HTTP.IO.oc;
-    mutable reader    : HTTP.Response.reader option;
+    mutable reader    : Response.reader option;
     mutable last_chunk: string option;
   }
 
@@ -93,9 +104,9 @@ module Flow(HTTP: CLIENT) (IC: CHAN) (OC: CHAN) = struct
            ctx.out_stream <- ctx.out_stream @ [chunk];
            Cstruct.blit_to_string buf off chunk 0 len;
            let writer =
-             HTTP.Request.make_body_writer ~flush:true req (HTTP.oc ctx.oc)
+             Request.make_body_writer ~flush:true req ctx.oc
            in
-           HTTP.Request.write_body writer chunk >>= fun () ->
+           Request.write_body writer chunk >>= fun () ->
            Lwt.return len
         )
     | _  -> make_oc ctx.oc
@@ -132,7 +143,7 @@ module Flow(HTTP: CLIENT) (IC: CHAN) (OC: CHAN) = struct
   let flush_oc ctx req =
     if ctx.state = `Write then (
       Log.debug "Read flushes the outgoing connection";
-      HTTP.Request.write_footer req (HTTP.oc ctx.oc) >>= fun () ->
+      write_footer ctx.oc (Request.encoding req) >>= fun () ->
       ctx.state <- `Read;
       Lwt.return_unit
     ) else (
@@ -169,9 +180,9 @@ module Flow(HTTP: CLIENT) (IC: CHAN) (OC: CHAN) = struct
 
   let replay_out_stream req oc out_stream =
     Log.debug "Replay the outgoing connection history";
-    HTTP.Request.write_header req (HTTP.oc oc) >>= fun () ->
-    let writer = HTTP.Request.make_body_writer ~flush:false req (HTTP.oc oc) in
-    Lwt_list.iter_s (HTTP.Request.write_body writer) out_stream >>= fun () ->
+    Request.write_header req oc >>= fun () ->
+    let writer = Request.make_body_writer ~flush:false req oc in
+    Lwt_list.iter_s (Request.write_body writer) out_stream >>= fun () ->
     Log.debug "Replay complete!";
     Lwt.return_unit
 
@@ -198,7 +209,7 @@ module Flow(HTTP: CLIENT) (IC: CHAN) (OC: CHAN) = struct
       match ctx.last_chunk with
       | Some c -> read_in_chunk c
       | None ->
-        HTTP.Response.read_body_chunk reader >>= function
+        Response.read_body_chunk reader >>= function
         | Cohttp.Transfer.Done -> Lwt.return 0
         | Cohttp.Transfer.Chunk chunk -> read_in_chunk chunk
         | Cohttp.Transfer.Final_chunk chunk -> read_in_chunk chunk
@@ -218,11 +229,11 @@ module Flow(HTTP: CLIENT) (IC: CHAN) (OC: CHAN) = struct
          | Some reader -> read_and_save reader bytes off len
          | None ->
            flush_oc ctx req >>= fun () ->
-           HTTP.Response.read (HTTP.ic ctx.ic) >>= function
+           Response.read ctx.ic >>= function
            | `Ok r ->
              check_redirect r >>= fun () ->
              on_success r (fun () ->
-                 let r = HTTP.Response.make_body_reader r (HTTP.ic ctx.ic) in
+                 let r = Response.make_body_reader r ctx.ic in
                  ctx.reader     <- Some r;
                  ctx.last_chunk <- None;
                  replay_in_stream (read r) ctx.in_stream >>= fun () ->
@@ -310,7 +321,7 @@ module Flow(HTTP: CLIENT) (IC: CHAN) (OC: CHAN) = struct
     connect () >>= fun ctx ->
     let http_oc = http_oc ctx reconnect request in
     let http_ic = http_ic ctx request in
-    HTTP.Request.write_header request (HTTP.oc ctx.oc) >>= fun () ->
+    Request.write_header request ctx.oc >>= fun () ->
     Lwt.finalize
       (process http_ic http_oc)
       (fun () -> Lwt.wakeup wakeup (); Lwt.return_unit)
