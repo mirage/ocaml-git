@@ -274,7 +274,6 @@ module Smart_HTTP = struct
   module Net = struct
     module IO = HTTP_IO
     type ctx = { resolver: Resolver_lwt.t; conduit: Conduit_mirage.t; }
-    let sexp_of_ctx { resolver; _ } = Resolver_lwt.sexp_of_t resolver
     let default_ctx = {
       resolver = Resolver_mirage.localhost;
       conduit = Conduit_mirage.empty;
