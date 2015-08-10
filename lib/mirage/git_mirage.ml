@@ -286,22 +286,15 @@ module Smart_HTTP = struct
       let ch = Conduit_channel.create flow in
       Lwt.return (flow, ch, ch)
     let close_in _ = ()
-    let close_out oc = Lwt.async (fun () -> Conduit_channel.close oc)
     let close _ oc = Lwt.async (fun () -> Conduit_channel.close oc)
   end
-  module Request = Cohttp_lwt.Make_request(HTTP_IO)
-  module Response = Cohttp_lwt.Make_response(HTTP_IO)
   module HTTP = struct
-    include Cohttp_lwt.Make_client(HTTP_IO)(Net)
-    module Request = Request
-    module Response = Response
-    let oc x = x
-    let ic x = x
+    module IO = HTTP_IO
     let close_in = Net.close_in
     let close_out oc = Net.close () oc
   end
 
-  type ctx = HTTP.ctx
+  type ctx = Net.ctx
 
   include IO_helper(Fchannel)
 
