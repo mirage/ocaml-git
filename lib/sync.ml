@@ -307,9 +307,9 @@ module Result = struct
 
 end
 
-module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) (Store: Store.S) = struct
+module Make (IO: IO) (Store: Store.S) = struct
 
-  module SHA_IO = SHA.IO(D)
+  module SHA_IO = SHA.IO(Store.Digest)
 
   exception Error
 
@@ -878,7 +878,7 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) (Store: Store.S) = struct
 
   module Update_request = struct
 
-    module Pack_IO = Pack.IO(D)(I)
+    module Pack_IO = Pack.IO(Store.Digest)(Store.Inflate)
 
     type command =
       | Create of Reference.t * SHA.Commit.t
@@ -1000,7 +1000,7 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) (Store: Store.S) = struct
     | Fetch of fetch
 
   module Graph = Global_graph.Make(Store)
-  module Pack_IO = Pack.IO(D)(I)
+  module Pack_IO = Pack.IO(Store.Digest)(Store.Inflate)
 
   let push ?ctx t ~branch gri =
     Log.debug "Sync.push";
