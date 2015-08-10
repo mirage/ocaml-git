@@ -22,9 +22,9 @@ let err_not_found n k =
   let str = Printf.sprintf "Git.Memory.%s: %s not found" n k in
   Lwt.fail (Invalid_argument str)
 
-module Make (D: SHA.DIGEST) = struct
+module Make (D: SHA.DIGEST) (I: Inflate.S) = struct
 
-  module Value_IO = Value.IO(D)(Inflate.None)
+  module Value_IO = Value.IO(D)(I)
 
   type t = {
     root    : string;
@@ -119,8 +119,8 @@ module Make (D: SHA.DIGEST) = struct
     in
     failwith str
 
-  module Pack_IO = Pack.IO(D)(Inflate.None)
-  module Packed_value_IO = Packed_value.IO(D)(Inflate.None)
+  module Pack_IO = Pack.IO(D)(I)
+  module Packed_value_IO = Packed_value.IO(D)(I)
 
   let write_pack t pack =
     Pack_IO.of_raw pack >>= fun pack ->
@@ -209,5 +209,5 @@ module Make (D: SHA.DIGEST) = struct
   let kind = `Memory
 
   module Digest = D
-  module Inflate = Inflate.None
+  module Inflate = I
 end

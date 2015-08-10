@@ -348,7 +348,7 @@ module Make (D: Git.SHA.DIGEST) (I: Git.Inflate.S) = struct
   module Sync = struct
     module IO = IO_Sync
     module Result = Sync.Result
-    module Make = Sync.Make(IO)(D)(I)
+    module Make = Sync.Make(IO)
   end
 
   module FS = struct
@@ -356,7 +356,7 @@ module Make (D: Git.SHA.DIGEST) (I: Git.Inflate.S) = struct
     include Git.FS.Make(IO_FS)(D)(I)
   end
 
-  module Memory = Git.Memory.Make(D)
+  module Memory = Git.Memory.Make(D)(I)
 
   module SHA_IO = Git.SHA.IO(D)
   module Value_IO = Value.IO(D)(I)
