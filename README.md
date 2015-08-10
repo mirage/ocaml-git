@@ -47,7 +47,7 @@ $ opam install git
   position-independent representation so that they can be manipulated
   more easily. Pack file can be created but will not be compressed yet.
 
-* The [index file] (http://mirage.github.io/ocaml-git/Index.html)
+* The [index file] (https://github.com/samoht/ocaml-git/blob/master/lib/index.mli)
   (used as for managing the stagging area)
   are fully supported. Which means that `git diff` and `git status`
   will work as expected on a repository created by the library.
@@ -63,7 +63,7 @@ $ opam install git
 * An abstraction for Git [Store](http://mirage.github.io/ocaml-git/Store.S.html)
   is available. Various store implementations are available:
   - An [in-memory](http://mirage.github.io/ocaml-git/Memory.html) implementation;
-  - A [unix filesystem](http://mirage.github.io/ocaml-git/Git_unix.FS.html)
+  - A [unix filesystem](http://mirage.github.io/ocaml-git/Git_unix.S.FS.html)
     implementation;
   - A [mirageOS](http://mirage.github.io/ocaml-git/Git_mirage.html) implementation,
     requiring an `V1_LWT.FS` implementation.
@@ -78,6 +78,37 @@ $ opam install git
 ### Performance
 
 Performance is comparable to the Git tool.
+
+### Example
+
+```ocaml
+# require "git.unix";;
+# open Lwt.Infix;;
+# open Git_unix;;
+# module Search = Git.Search(FS);;
+
+# let read file =
+    FS.create () >>= fun t ->
+    FS.read_reference_exn t Git.Reference.master >>= fun head ->
+    Search.find t (Git.SHA.of_commit head) (`Commit (`Path file)) >>= function
+    | None     -> failwith "file not found"
+    | Some sha -> FS.read_exn t sha >>= function
+      | Git.Value.Blob b -> Lwt.return (Git.Blob.to_raw b)
+      | _ -> failwith "not a valid path"
+ ;;
+ val read : string list -> string Lwt.t = <fun>
+
+# Lwt_main.run (read ["README.md"] >|= print_string)
+
+Pure OCaml low-level bindings to Git -- Guaranteed no C inside.
+
+Support for on-disk and in-memory Git stores. Can read and write all
+the Git objects: the usual blobs, trees, commits and tags but also
+the pack files, pack indexes and the index file (where the staging area
+lives).
+
+[...]
+```
 
 ### License
 

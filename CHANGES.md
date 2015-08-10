@@ -1,3 +1,9 @@
+### 1.7.1 (2015-08-10)
+
+* Support cohtpp 0.19.1. (#119, @rgrinberg)
+* Revert API break for the Sync functor. Now still takes only a `Store.S`
+  as parameter. (#120)
+
 ### 1.7.0 (2015-08-06)
 
 * Changes to the `Search` API:
