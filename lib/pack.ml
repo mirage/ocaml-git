@@ -176,7 +176,7 @@ module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
           let get_offsets = get Misc.IntMap.find offsets in
           let get_sha1s   = get SHA.Map.find sha1s in
           if Packed_value.is_delta v then (incr d; pp ());
-          Packed_value_IO.to_pic ~digest:D.string
+          Packed_value_IO.to_pic
             ~read ~offsets:get_offsets ~sha1s:get_sha1s v
           >|= fun pic ->
           let sha1 = Packed_value.PIC.sha1 pic in
