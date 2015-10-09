@@ -152,7 +152,7 @@ module IO (D: SHA.DIGEST) (I: Inflate.S): sig
   (** [to_value p] unpacks the packed position-independant value
       [p]. *)
 
-  val to_pic: digest:string SHA.digest -> read:Value.read_inflated ->
+  val to_pic: read:Value.read_inflated ->
     offsets:(int -> pic option) -> sha1s:(SHA.t -> pic option) ->
     t -> pic Lwt.t
   (** [to_pic t] is the position-independant representation of the

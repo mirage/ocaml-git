@@ -469,7 +469,7 @@ module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
   let err_sha1_not_found n sha1 = fail "%s: cannot read %s" n (SHA.pretty sha1)
   let err_offset_not_found = fail "%s: cannot find any object at offset %d"
 
-  let to_pic ~digest ~read ~offsets ~sha1s t =
+  let to_pic ~read ~offsets ~sha1s t =
     let kind = match t.kind with
       | Raw_value x -> Lwt.return (PIC.Raw x)
       | Ref_delta d ->
@@ -492,7 +492,7 @@ module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
     in
     kind >|= fun kind ->
     let raw  = PIC.unpack_kind kind in
-    let sha1 = digest raw in
+    let sha1 = D.string raw in
     Log.debug "to_pic(%s) -> %s:%s"
       (Misc.pretty pp_kind t.kind) (SHA.pretty sha1) (PIC.pretty_kind kind);
     PIC.create ~raw sha1 kind
