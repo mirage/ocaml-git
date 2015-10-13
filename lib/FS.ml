@@ -212,7 +212,8 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) = struct
       | Some s -> some (Mstruct.to_string s)
 
     let read_aux name read_file t sha1 =
-      Log.debug "%s %s" name (SHA.to_hex sha1);
+      Log.debugk "%s %s" (fun log ->
+          log name (SHA.to_hex sha1));
       if SHA_IO.is_short sha1 then (
         Log.debug "read: short sha1";
         get_file t sha1 >>= function
@@ -301,7 +302,8 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) = struct
       LRU.clear keys_lru
 
     let read_pack_index t sha1 =
-      Log.debug "read_pack_index %s" (SHA.to_hex sha1);
+      Log.debugk "read_pack_index %s" (fun log ->
+          log (SHA.to_hex sha1));
       match LRU.find index_lru sha1 with
       | Some i -> Log.debug "read_pack_index cache hit!"; Lwt.return i
       | None ->
@@ -326,7 +328,8 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) = struct
         IO.write_file file ~temp_dir buf
 
     let read_keys t sha1 =
-      Log.debug "read_keys %s" (SHA.to_hex sha1);
+      Log.debugk "read_keys %s" (fun log ->
+          log (SHA.to_hex sha1));
       match LRU.find keys_lru sha1 with
       | Some ks -> Lwt.return ks
       | None    ->
@@ -347,13 +350,14 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) = struct
         IO.write_file file ~temp_dir pack
 
     let mem_in_pack t pack_sha1 sha1 =
-      Log.debug "mem_in_pack %s:%s" (SHA.to_hex pack_sha1) (SHA.to_hex sha1);
+      Log.debugk "mem_in_pack %s:%s" (fun log ->
+          log (SHA.to_hex pack_sha1) (SHA.to_hex sha1));
       read_pack_index t pack_sha1 >>= fun idx ->
       Lwt.return (Pack_index.mem idx sha1)
 
     let read_in_pack name pack_read ~read t pack_sha1 sha1 =
-      Log.debug "read_in_pack(%s) %s:%s" name
-        (SHA.to_hex pack_sha1) (SHA.to_hex sha1);
+      Log.debugk "read_in_pack(%s) %s:%s" (fun log ->
+          log name (SHA.to_hex pack_sha1) (SHA.to_hex sha1));
       read_pack_index t pack_sha1 >>= fun i ->
       let index = Pack_index.find_offset i in
       match index sha1 with
@@ -407,7 +411,8 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) = struct
     | Some v -> Value.Cache.add_inflated sha1 v; Some v
 
   let rec read t sha1 =
-    Log.debug "read %s" (SHA.to_hex sha1);
+    Log.debugk "read %s" (fun log ->
+        log (SHA.to_hex sha1));
     match Value.Cache.find sha1 with
     | Some v -> Lwt.return (Some v)
     | None   ->
@@ -421,7 +426,8 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) = struct
       cache_add sha1
 
   and read_inflated t sha1 =
-    Log.debug "read_inflated %s" (SHA.to_hex sha1);
+    Log.debugk "read_inflated %s" (fun log ->
+        log (SHA.to_hex sha1));
     match Value.Cache.find_inflated sha1 with
     | Some v -> Lwt.return (Some v)
     | None   ->
@@ -539,13 +545,15 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) = struct
 
   let write t value =
     Loose.write t value >>= fun sha1 ->
-    Log.debug "write -> %s" (SHA.to_hex sha1);
+    Log.debugk "write -> %s" (fun log ->
+        log (SHA.to_hex sha1));
     Value.Cache.add sha1 value;
     Lwt.return sha1
 
   let write_inflated t value =
     Loose.write_inflated t value >>= fun sha1 ->
-    Log.debug "write -> %s" (SHA.to_hex sha1);
+    Log.debugk "write -> %s" (fun log ->
+        log (SHA.to_hex sha1));
     Value.Cache.add_inflated sha1 value;
     Lwt.return sha1
 
@@ -588,7 +596,8 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) = struct
   let id = let n = ref 0 in fun () -> incr n; !n
 
   let load_filesystem t head =
-    Log.debug "load_filesystem head=%s" (SHA.Commit.to_hex head);
+    Log.debugk "load_filesystem head=%s" (fun log ->
+        log (SHA.Commit.to_hex head));
     let blobs_c = ref 0 in
     let id = id () in
     let error expected got =
@@ -596,7 +605,8 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) = struct
         expected (Object_type.pretty (Value.type_of got))
     in
     let blob mode sha1 k =
-      Log.debug "blob %d %s" id (SHA.to_hex sha1);
+      Log.debugk "blob %d %s" (fun log ->
+          log id (SHA.to_hex sha1));
       assert (mode <> `Dir);
       incr blobs_c;
       read_exn t sha1 >>= function
@@ -604,7 +614,8 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) = struct
       | obj          -> error "blob" obj
     in
     let rec tree mode sha1 k =
-      Log.debug "tree %d %s" id (SHA.to_hex sha1);
+      Log.debugk "tree %d %s" (fun log ->
+          log id (SHA.to_hex sha1));
       assert (mode = `Dir);
       read_exn t sha1 >>= function
       | Value.Tree t -> tree_entries t [] k
@@ -619,7 +630,8 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) = struct
         | mode -> blob mode e.Tree.node k
     in
     let commit sha1 =
-      Log.debug "commit %d %s" id (SHA.to_hex sha1);
+      Log.debugk "commit %d %s" (fun log ->
+          log id (SHA.to_hex sha1));
       read_exn t sha1 >>= function
       | Value.Commit c -> tree `Dir (SHA.of_tree c.Commit.tree) Lwt.return
       | obj            -> error "commit" obj
@@ -630,7 +642,8 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) = struct
   let iter_blobs t ~f ~init =
     load_filesystem t init >>= fun (n, trie) ->
     let i = ref 0 in
-    Log.debug "iter_blobs %s" (SHA.Commit.to_hex init);
+    Log.debugk "iter_blobs %s" (fun log ->
+        log (SHA.Commit.to_hex init));
     iter (fun path (mode, (sha1, blob)) ->
         incr i;
         f (!i, n) (t.root :: path) mode sha1 blob
@@ -651,8 +664,8 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) = struct
         in
         if n <= 1 then one () else
           Lwt.catch one (fun e ->
-              Log.debug "write (%d/10): Got %S, retrying."
-                (11-n) (Printexc.to_string e);
+              Log.debugk "write (%d/10): Got %S, retrying." (fun log ->
+                  log (11-n) (Printexc.to_string e));
               IO.remove file >>= fun () ->
               write (n-1))
       in
@@ -679,7 +692,8 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) = struct
 
   let entry_of_file_aux t index file mode sha1 blob =
     IO.realpath file >>= fun file ->
-    Log.debug "entry_of_file %s %s" (SHA.Blob.to_hex sha1) file;
+    Log.debugk "entry_of_file %s %s" (fun log ->
+        log (SHA.Blob.to_hex sha1) file);
     begin
       IO.file_exists file >>= function
       | false ->
@@ -729,7 +743,8 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) = struct
       (function Failure _ | Sys_error _ -> Lwt.return_none | e -> Lwt.fail e)
 
   let write_index t ?index head =
-    Log.debug "write_index %s" (SHA.Commit.to_hex head);
+    Log.debugk "write_index %s" (fun log ->
+        log (SHA.Commit.to_hex head));
     let buf = Buffer.create 1024 in
     match index with
     | Some index ->

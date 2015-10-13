@@ -165,7 +165,8 @@ module PIC = struct
     match Value.Cache.find_inflated sha1 with
     | Some x -> x
     | None   ->
-      Log.debug "%s: cache miss!" (SHA.pretty sha1);
+      Log.debugk "%s: cache miss!" (fun log ->
+          log (SHA.pretty sha1));
       let x = f () in
       Value.Cache.add_inflated sha1 x;
       x
@@ -173,7 +174,8 @@ module PIC = struct
   let rec unpack t = match raw t with
     | Some str -> str
     | None     ->
-      Log.debug "unpack %s" (pretty t);
+      Log.debugk "unpack %s" (fun log ->
+          log (pretty t));
       let raw = with_cache (fun () -> unpack_kind @@ kind t) (sha1 t) in
       t.raw <- Some raw;
       raw
@@ -181,7 +183,8 @@ module PIC = struct
   and unpack_kind = function
     | Raw x  -> x
     | Link d ->
-      Log.debug "unpack: hop to %s" (SHA.to_hex @@ sha1 d.source);
+      Log.debugk "unpack: hop to %s" (fun log ->
+          log (SHA.to_hex @@ sha1 d.source));
       let source = unpack d.source in
       Misc.with_buffer (fun buf -> add_delta buf { d with source })
 
@@ -493,8 +496,8 @@ module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
     kind >|= fun kind ->
     let raw  = PIC.unpack_kind kind in
     let sha1 = D.string raw in
-    Log.debug "to_pic(%s) -> %s:%s"
-      (Misc.pretty pp_kind t.kind) (SHA.pretty sha1) (PIC.pretty_kind kind);
+    Log.debugk "to_pic(%s) -> %s:%s" (fun log ->
+        log (Misc.pretty pp_kind t.kind) (SHA.pretty sha1) (PIC.pretty_kind kind));
     PIC.create ~raw sha1 kind
 
   let read_and_add_delta ~read buf delta sha1 =
@@ -517,7 +520,8 @@ module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
     | _ -> fail "pack version should be 2 or 3"
 
   let rec unpack_ref_delta ~lv ~version ~index ~read ba d =
-    Log.debug "unpack-ref-delta[%d]: d.source=%s" lv (SHA.to_hex d.source);
+    Log.debugk "unpack-ref-delta[%d]: d.source=%s" (fun log ->
+        log lv (SHA.to_hex d.source));
     match index d.source with
     | Some offset ->
       let offset = offset - 12 in (* header skipped *)

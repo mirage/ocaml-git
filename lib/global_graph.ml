@@ -138,7 +138,8 @@ module Make (Store: Store.S) = struct
       if has_mark key then Lwt.return ()
       else (
         mark key;
-        Log.debug "ADD %s" (SHA.to_hex key);
+        Log.debugk "ADD %s" (fun log ->
+            log (SHA.to_hex key));
         Store.mem t key >>= function
         | false -> Lwt.return_unit
         | true  ->

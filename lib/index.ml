@@ -247,8 +247,8 @@ module IO (D: SHA.DIGEST) = struct
       | 0 -> 0
       | n -> 8-n in
     Mstruct.shift buf padding;
-    Log.debug "name:%s id:%s bytes:%d padding:%d"
-      name (SHA.Blob.to_hex id) bytes padding;
+    Log.debugk "name:%s id:%s bytes:%d padding:%d" (fun log ->
+        log name (SHA.Blob.to_hex id) bytes padding);
     { stats; id; stage; name }
 
   let add_entry buf t =
