@@ -64,7 +64,7 @@ module KO = Graph.Oper.I(K)
 
 module Make (Store: Store.S) = struct
 
-  module Log = Log.Make(struct let section = "graph" end)
+  module Log = Misc.Log_make(struct let section = "graph" end)
 
   module Search = struct
     include Search.Make(Store)

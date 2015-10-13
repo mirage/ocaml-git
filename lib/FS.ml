@@ -22,7 +22,7 @@ let fail fmt = Printf.ksprintf failwith ("Git.FS." ^^ fmt)
 
 let err_not_found n k = fail "%s: %s not found" n k
 
-module LogMake = Log.Make
+module LogMake = Misc.Log_make
 
 module Log = LogMake(struct let section = "fs" end)
 

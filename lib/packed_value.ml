@@ -17,7 +17,7 @@
 open Lwt.Infix
 open Printf
 
-module Log = Log.Make(struct let section = "packed-value" end)
+module Log = Misc.Log_make(struct let section = "packed-value" end)
 
 type copy = { copy_offset: int; copy_length: int; }
 

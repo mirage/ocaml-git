@@ -17,7 +17,7 @@
 open Lwt.Infix
 open Printf
 
-module Log = Log.Make(struct let section = "sync" end)
+module Log = Misc.Log_make(struct let section = "sync" end)
 
 type protocol = [ `SSH | `Git | `Smart_HTTP ]
 

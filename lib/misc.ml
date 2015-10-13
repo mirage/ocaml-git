@@ -35,7 +35,7 @@ struct
   let debugk fmt k = logk Log.DEBUG fmt k
 end
 
-module Log = Log.Make(struct let section = "misc" end)
+module Log = Log_make(struct let section = "misc" end)
 
 let sp  = '\x20'
 let nul = '\x00'

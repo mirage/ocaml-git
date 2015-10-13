@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Log = Log.Make(struct let section = "pack-index" end)
+module Log = Misc.Log_make(struct let section = "pack-index" end)
 
 type f = SHA.t -> int option
 
