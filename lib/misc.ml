@@ -14,6 +14,27 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+module Log_make(S: sig val section: string end) =
+struct
+  include Log.Make(S)
+      
+  let int_of_level = function
+    | Log.FATAL -> 4
+    | Log.ERROR -> 3
+    | Log.WARN  -> 2
+    | Log.INFO  -> 1
+    | Log.DEBUG -> 0
+
+  let logk level fmt k =
+    if int_of_level level >= int_of_level (Log.get_log_level ())
+    then k (log level fmt)
+  let fatalk fmt k = logk Log.FATAL fmt k
+  let errork fmt k = logk Log.ERROR fmt k
+  let warnk  fmt k = logk Log.WARN  fmt k
+  let infok  fmt k = logk Log.INFO  fmt k
+  let debugk fmt k = logk Log.DEBUG fmt k
+end
+
 module Log = Log.Make(struct let section = "misc" end)
 
 let sp  = '\x20'
