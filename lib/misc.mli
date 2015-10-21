@@ -93,3 +93,16 @@ module OP: sig
 end
 
 val pretty: (Format.formatter -> 'a -> unit) -> 'a -> string
+
+module Log_make(S: sig val section: string end) :
+sig
+  include Log.S
+
+  val logk : Log.log_level -> ('a, out_channel, unit, unit) format4 ->
+             ('a -> unit) -> unit
+  val fatalk : ('a, out_channel, unit) format -> ('a -> unit) -> unit
+  val errork : ('a, out_channel, unit) format -> ('a -> unit) -> unit
+  val warnk  : ('a, out_channel, unit) format -> ('a -> unit) -> unit
+  val infok  : ('a, out_channel, unit) format -> ('a -> unit) -> unit
+  val debugk : ('a, out_channel, unit) format -> ('a -> unit) -> unit
+end

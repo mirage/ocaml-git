@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Log = Log.Make(struct let section = "sha1" end)
+module Log = Misc.Log_make(struct let section = "sha1" end)
 
 module type S = sig
   include Object.S

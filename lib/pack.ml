@@ -17,7 +17,7 @@
 open Lwt.Infix
 module Dolog = Log
 
-module Log = Dolog.Make(struct let section = "pack" end)
+module Log = Misc.Log_make(struct let section = "pack" end)
 
 let fail fmt = Printf.ksprintf failwith ("Pack." ^^ fmt)
 
@@ -111,7 +111,7 @@ module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
 
   module Raw = struct
 
-    module Log = Dolog.Make(struct let section = "pack-raw" end)
+    module Log = Misc.Log_make(struct let section = "pack-raw" end)
 
     include Raw
 
@@ -127,7 +127,8 @@ module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
 
     let read_packed_value name ~index buf sha1 =
       let `Version version, `Count count = input_header buf in
-      Log.debug "%s: %s version=%d count=%d" name (SHA.pretty sha1) version count;
+      Log.debugk "%s: %s version=%d count=%d" (fun log ->
+      log name (SHA.pretty sha1) version count);
       match index sha1 with
       | None -> None
       | Some offset ->
@@ -239,7 +240,8 @@ module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
       if checksum <> pack_checksum then
         fail "Raw.input: wrong file checksum. Got: %s, expecting %s."
           (SHA.to_hex checksum) (SHA.to_hex pack_checksum);
-      Log.debug "input checksum: %s" (SHA.to_hex pack_checksum);
+      Log.debugk "input checksum: %s" (fun log ->
+      log (SHA.to_hex pack_checksum));
       if Mstruct.length buf <> 0 then fail "input: unprocessed data.";
       let buffer = Cstruct.sub all offset (Cstruct.len all - offset) in
       let raw_index = None in
@@ -353,7 +355,8 @@ module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
         ) ([], SHA.Map.empty, SHA.Map.empty) t
     in
     let sha1 = Buffer.contents buf |> D.string in
-    Log.debug "add sha1: %s" (SHA.to_hex sha1);
+    Log.debugk "add sha1: %s" (fun log ->
+        log (SHA.to_hex sha1));
     let footer =
       let buf = Buffer.create 40 in
       SHA_IO.add buf sha1;
@@ -386,7 +389,8 @@ module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
     Printf.ksprintf failwith "Pack.Not_found: %s" (SHA.pretty k)
 
   let read t sha1 =
-    Log.debug "read %s" (SHA.pretty sha1);
+    Log.debugk "read %s" (fun log ->
+        log (SHA.pretty sha1));
     try
       let is_equal x = SHA.equal (Packed_value.PIC.sha1 x) sha1 in
       let pic = List.find is_equal t in

@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Log = Log.Make(struct let section = "index" end)
+module Log = Misc.Log_make(struct let section = "index" end)
 
 type time = {
   lsb32: int32;
@@ -247,8 +247,8 @@ module IO (D: SHA.DIGEST) = struct
       | 0 -> 0
       | n -> 8-n in
     Mstruct.shift buf padding;
-    Log.debug "name:%s id:%s bytes:%d padding:%d"
-      name (SHA.Blob.to_hex id) bytes padding;
+    Log.debugk "name:%s id:%s bytes:%d padding:%d" (fun log ->
+        log name (SHA.Blob.to_hex id) bytes padding);
     { stats; id; stage; name }
 
   let add_entry buf t =

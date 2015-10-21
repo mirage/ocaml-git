@@ -17,7 +17,7 @@
 open Lwt.Infix
 open Printf
 
-module Log = Log.Make(struct let section = "sync" end)
+module Log = Misc.Log_make(struct let section = "sync" end)
 
 type protocol = [ `SSH | `Git | `Smart_HTTP ]
 
@@ -381,7 +381,8 @@ module Make (IO: IO) (Store: Store.S) = struct
           with Failure _ -> err_invalid_integer "PacketLine.input" str
         in
         IO.read_exactly ic size >>= fun payload ->
-        Log.debug "RECEIVED: %s (%d)" (truncate payload) size;
+        Log.debugk "RECEIVED: %s (%d)" (fun log ->
+            log (truncate payload) size);
         Lwt.return (Some payload)
 
     let input_raw ic =
@@ -478,8 +479,8 @@ module Make (IO: IO) (Store: Store.S) = struct
       | `Smart_HTTP -> Some (smart_http t)
 
     let create request ~discover gri =
-      Log.debug "Init.create request=%s discover=%b gri=%s"
-        (string_of_request request) discover (Gri.to_string gri);
+      Log.debugk "Init.create request=%s discover=%b gri=%s" (fun log ->
+      log (string_of_request request) discover (Gri.to_string gri));
       let protocol = protocol_exn (Gri.to_uri gri) in
       let gri = match protocol with
         | `SSH | `Git -> gri
@@ -489,7 +490,8 @@ module Make (IO: IO) (Store: Store.S) = struct
           let request = string_of_request request in
           Gri.of_string (sprintf "%s/%s%s" url service request)
       in
-      Log.debug "computed-gri: %s" (Gri.to_string gri);
+      Log.debugk "computed-gri: %s" (fun log ->
+          log (Gri.to_string gri));
       { request; discover; gri }
 
     let upload_pack = create Upload_pack
@@ -503,7 +505,8 @@ module Make (IO: IO) (Store: Store.S) = struct
     include Listing
 
     let input ic protocol =
-      Log.debug "Listing.input (protocol=%s)" (pretty_protocol protocol);
+      Log.debugk "Listing.input (protocol=%s)" (fun log ->
+          log (pretty_protocol protocol));
       let error fmt = error ("[SMART-HTTP] Listing.input:" ^^ fmt) in
       let skip_smart_http () =
         match protocol with
@@ -1014,7 +1017,8 @@ module Make (IO: IO) (Store: Store.S) = struct
       IO.with_connection ?ctx uri ?init (fun (ic, oc) ->
           Listing.input ic protocol >>= fun listing ->
           (* XXX: check listing.capabilities *)
-          Log.debug "listing:\n %s" (Listing.pretty listing);
+          Log.debugk "listing:\n %s" (fun log ->
+          log (Listing.pretty listing));
           Store.read_reference t branch    >>= fun new_obj ->
           let old_obj = Listing.find_reference listing branch in
           let command = match old_obj, new_obj with
@@ -1040,13 +1044,15 @@ module Make (IO: IO) (Store: Store.S) = struct
           Graph.pack t ~min ~max >>= fun values ->
           let pack = Pack_IO.create values in
           let request = { Update_request.capabilities; commands; pack } in
-          Log.debug "request:\n%s" (Update_request.pretty request);
+          Log.debugk "request:\n%s" (fun log ->
+              log (Update_request.pretty request));
           Update_request.output oc request >>= fun () ->
           Report_status.input ic
         )
 
   let fetch_commits t (ic, oc) ?(progress=fun _ -> ()) f listing wants =
-    Log.debug "Sync.fetch_commits %s" (pretty_list SHA.Commit.pretty wants);
+    Log.debugk "Sync.fetch_commits %s" (fun log ->
+        log (pretty_list SHA.Commit.pretty wants));
     let f =
       let server_caps = Listing.capabilities listing in
       (* The client MUST NOT ask for capabilities the server did not
@@ -1145,7 +1151,8 @@ module Make (IO: IO) (Store: Store.S) = struct
       let init = Init.to_string init in
       IO.with_connection ?ctx uri ?init (fun (ic, oc) ->
           Listing.input ic protocol >>= fun listing ->
-          Log.debug "listing:\n %s" (Listing.pretty listing);
+          Log.debugk "listing:\n %s" (fun log ->
+              log (Listing.pretty listing));
           k (protocol, ic, oc) listing
         )
 
@@ -1219,7 +1226,8 @@ module Make (IO: IO) (Store: Store.S) = struct
       )
 
   let ls ?ctx t gri =
-    Log.debug "ls %s" (Gri.to_string gri);
+    Log.debugk "ls %s" (fun log ->
+        log (Gri.to_string gri));
     fetch_pack ?ctx t gri Ls >|= fun r ->
     Result.references r
 
@@ -1227,7 +1235,8 @@ module Make (IO: IO) (Store: Store.S) = struct
       ?ctx ?deepen ?(unpack=false) ?(capabilities=Capabilities.default)
       ?wants ?(update=false) ?progress
       t gri =
-    Log.debug "fetch %s wants=%s" (Gri.to_string gri) (pretty_wants wants);
+    Log.debugk "fetch %s wants=%s" (fun log ->
+        log (Gri.to_string gri) (pretty_wants wants));
     Store.references t >>= fun refs ->
     Lwt_list.fold_left_s (fun haves r ->
         Store.read_reference t r >|= function

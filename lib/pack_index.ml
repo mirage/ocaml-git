@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Log = Log.Make(struct let section = "pack-index" end)
+module Log = Misc.Log_make(struct let section = "pack-index" end)
 
 type f = SHA.t -> int option
 
@@ -152,7 +152,8 @@ module Make (D: SHA.DIGEST) = struct
     | Some y -> Some (x + y)
 
   let get_sha1_idx t sha1 =
-    Log.debug "get_sha1_idx: %s" (SHA.pretty sha1);
+    Log.debugk "get_sha1_idx: %s" (fun log ->
+        log (SHA.pretty sha1));
     let fanout_idx = fanout_of_sha1 sha1 in
     let offsets = fanout t in
     let get_int buf = Int32.to_int (Mstruct.get_be_uint32 buf) in
@@ -173,7 +174,8 @@ module Make (D: SHA.DIGEST) = struct
     offset ++ A.binary_search buf sha1
 
   let find_offset t sha1 =
-    Log.debug "find_offset: %s" (SHA.pretty sha1);
+    Log.debugk "find_offset: %s" (fun log ->
+        log (SHA.pretty sha1));
     match Offset_cache.find t.cache sha1 with
     | Some _ as x -> Log.debug "find_offset: cache hit!"; x
     | None ->
@@ -200,7 +202,8 @@ module Make (D: SHA.DIGEST) = struct
         )
 
   let mem t sha1 =
-    Log.debug "mem: %s" (SHA.to_hex sha1);
+    Log.debugk "mem: %s" (fun log ->
+        log (SHA.to_hex sha1));
     match find_offset t sha1 with
     | Some _ -> Log.debug "mem: true" ; true
     | None   -> Log.debug "mem: false"; false

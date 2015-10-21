@@ -15,7 +15,7 @@
  *)
 
 open Printf
-module Log = Log.Make(struct let section = "blob" end)
+module Log = Misc.Log_make(struct let section = "blob" end)
 
 (* FIXME: might want to have an option type with string|cstruct *)
 include Misc.S

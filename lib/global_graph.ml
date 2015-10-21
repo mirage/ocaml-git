@@ -64,7 +64,7 @@ module KO = Graph.Oper.I(K)
 
 module Make (Store: Store.S) = struct
 
-  module Log = Log.Make(struct let section = "graph" end)
+  module Log = Misc.Log_make(struct let section = "graph" end)
 
   module Search = struct
     include Search.Make(Store)
@@ -138,7 +138,8 @@ module Make (Store: Store.S) = struct
       if has_mark key then Lwt.return ()
       else (
         mark key;
-        Log.debug "ADD %s" (SHA.to_hex key);
+        Log.debugk "ADD %s" (fun log ->
+            log (SHA.to_hex key));
         Store.mem t key >>= function
         | false -> Lwt.return_unit
         | true  ->
