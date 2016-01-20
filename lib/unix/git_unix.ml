@@ -225,16 +225,28 @@ module IO_FS = struct
   let write_file file ?temp_dir b =
     with_write_file file ?temp_dir (fun fd -> write_cstruct fd b)
 
+  (* [read_into ~off buf ch] reads from [ch] into [buf] until
+     either [buf] is full or [ch] is exhausted. It returns the
+     subset of [buf] that was filled. *)
+  let rec read_into ~off buf ch =
+    match Cstruct.len buf - off with
+    | 0 -> Lwt.return buf   (* Buffer full *)
+    | avail ->
+        Lwt_io.read ~count:avail ch >>= function
+        | "" -> Lwt.return (Cstruct.sub buf 0 off)    (* End-of-file *)
+        | data ->
+            let len = Bytes.length data in
+            Cstruct.blit_from_string data 0 buf off len;
+            read_into ~off:(off + len) buf ch
+
   let read_file file =
-    Unix.handle_unix_error (fun () ->
-        Lwt_pool.use openfile_pool (fun () ->
-            Log.info "Reading %s" file;
-            let fd = Unix.(openfile file [O_RDONLY; O_NONBLOCK] 0o644) in
-            let ba = Lwt_bytes.map_file ~fd ~shared:false () in
-            Unix.close fd;
-            Lwt.return (Cstruct.of_bigarray ba)
-          ))
-      ()
+    Lwt_pool.use openfile_pool (fun () ->
+      Log.info "Reading %s" file;
+      Lwt_io.(with_file ~mode:input) ~flags:[Unix.O_RDONLY] file (fun ch ->
+        Lwt_io.length ch >|= Int64.to_int >|= Cstruct.create >>= fun buf ->
+        read_into buf ~off:0 ch
+      )
+    )
 
   let realdir dir =
     if Sys.file_exists dir && Sys.is_directory dir then (

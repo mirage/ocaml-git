@@ -68,7 +68,7 @@ module type IO = sig
       by [dir]. *)
 
   val read_file: string -> Cstruct.t Lwt.t
-  (** mmap a file and return a mutable C-like structure with its
+  (** Read a file and return a mutable C-like structure with its
       contents. *)
 
   val write_file: string -> ?temp_dir:string -> Cstruct.t -> unit Lwt.t
