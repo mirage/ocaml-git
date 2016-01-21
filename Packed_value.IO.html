@@ -37,7 +37,9 @@
 <link title="FS" rel="Chapter" href="FS.html">
 <link title="Version" rel="Chapter" href="Version.html">
 <link title="Git_unix" rel="Chapter" href="Git_unix.html">
-<link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>Packed_value.IO</title>
+<link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><link title="Conversion to values" rel="Section" href="#2_Conversiontovalues">
+<link title="Position independant packed values" rel="Section" href="#2_Positionindependantpackedvalues">
+<title>Packed_value.IO</title>
 </head>
 <body>
 <div class="navbar"><a class="pre" href="Packed_value.PIC.html" title="Packed_value.PIC">Previous</a>
@@ -74,6 +76,8 @@ Packed values version 2.
 <pre><span class="keyword">module</span> <a href="Packed_value.IO.V3.html">V3</a>: <code class="type"><a href="Packed_value.IO.IO.html">IO</a></code><code class="type"> </code></pre><div class="info">
 Packed values version 3.
 </div>
+<br>
+<h2 id="2_Conversiontovalues">Conversion to values</h2><br>
 
 <pre><span id="VALadd_inflated_value"><span class="keyword">val</span> add_inflated_value</span> : <code class="type">read:<a href="Value.html#TYPEread_inflated">Value.read_inflated</a> -><br>       offsets:(int -> SHA.t option) -> Buffer.t -> <a href="Packed_value.html#TYPEt">Packed_value.t</a> -> unit Lwt.t</code></pre><div class="info ">
 Append the inflated representation of a packed value to a given
@@ -83,6 +87,8 @@ Append the inflated representation of a packed value to a given
 <pre><span id="VALto_value"><span class="keyword">val</span> to_value</span> : <code class="type">index:<a href="Pack_index.html#TYPEf">Pack_index.f</a> -><br>       read:<a href="Value.html#TYPEread_inflated">Value.read_inflated</a> -><br>       version:int -> ba:Cstruct.buffer -> <a href="Packed_value.html#TYPEt">Packed_value.t</a> -> <a href="Value.html#TYPEt">Value.t</a> Lwt.t</code></pre><div class="info ">
 Unpack the packed value using the provided indexes.<br>
 </div>
+<br>
+<h2 id="2_Positionindependantpackedvalues">Position independant packed values</h2><br>
 
 <pre><span id="VALunpack"><span class="keyword">val</span> unpack</span> : <code class="type">index:<a href="Pack_index.html#TYPEf">Pack_index.f</a> -><br>       read:<a href="Value.html#TYPEread_inflated">Value.read_inflated</a> -><br>       version:int -> ba:Cstruct.buffer -> <a href="Packed_value.html#TYPEt">Packed_value.t</a> -> string Lwt.t</code></pre><div class="info ">
 Same as <code class="code">to_value</code> but for inflated raw buffers.<br>
@@ -93,7 +99,7 @@ Same as <code class="code">to_value</code> but for inflated raw buffers.<br>
       <code class="code">p</code>.<br>
 </div>
 
-<pre><span id="VALto_pic"><span class="keyword">val</span> to_pic</span> : <code class="type">digest:string <a href="SHA.html#TYPEdigest">SHA.digest</a> -><br>       read:<a href="Value.html#TYPEread_inflated">Value.read_inflated</a> -><br>       offsets:(int -> <a href="Packed_value.html#TYPEpic">Packed_value.pic</a> option) -><br>       sha1s:(SHA.t -> <a href="Packed_value.html#TYPEpic">Packed_value.pic</a> option) -><br>       <a href="Packed_value.html#TYPEt">Packed_value.t</a> -> <a href="Packed_value.html#TYPEpic">Packed_value.pic</a> Lwt.t</code></pre><div class="info ">
+<pre><span id="VALto_pic"><span class="keyword">val</span> to_pic</span> : <code class="type">read:<a href="Value.html#TYPEread_inflated">Value.read_inflated</a> -><br>       offsets:(int -> <a href="Packed_value.html#TYPEpic">Packed_value.pic</a> option) -><br>       sha1s:(SHA.t -> <a href="Packed_value.html#TYPEpic">Packed_value.pic</a> option) -><br>       <a href="Packed_value.html#TYPEt">Packed_value.t</a> -> <a href="Packed_value.html#TYPEpic">Packed_value.pic</a> Lwt.t</code></pre><div class="info ">
 <code class="code">to_pic t</code> is the position-independant representation of the
       packed value <code class="code">t</code>.<br>
 </div>

@@ -38,7 +38,9 @@
 <link title="FS" rel="Chapter" href="FS.html">
 <link title="Version" rel="Chapter" href="Version.html">
 <link title="Git_unix" rel="Chapter" href="Git_unix.html">
-<link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>Value</title>
+<link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><link title="IO types" rel="Section" href="#1_IOtypes">
+<link title="Constructors" rel="Subsection" href="#2_Constructors">
+<title>Value</title>
 </head>
 <body>
 <div class="navbar"><a class="pre" href="Reference.html" title="Reference">Previous</a>
@@ -97,6 +99,8 @@ Return the object type.<br>
 Return the type of the inflated object stored in the given
     buffer.<br>
 </div>
+<br>
+<h2 id="2_Constructors">Constructors</h2><br>
 
 <pre><span id="VALcommit"><span class="keyword">val</span> commit</span> : <code class="type"><a href="Commit.html#TYPEt">Commit.t</a> -> <a href="Value.html#TYPEt">t</a></code></pre><div class="info ">
 Cast a commit to an object.<br>
@@ -113,6 +117,8 @@ Cast a tree to an object.<br>
 <pre><span id="VALtag"><span class="keyword">val</span> tag</span> : <code class="type"><a href="Tag.html#TYPEt">Tag.t</a> -> <a href="Value.html#TYPEt">t</a></code></pre><div class="info ">
 Cast a tag to an object.<br>
 </div>
+<br>
+<h1 id="1_IOtypes">IO types</h1><br>
 
 <pre><span id="TYPEread"><span class="keyword">type</span> <code class="type"></code>read</span> = <code class="type">SHA.t -> <a href="Value.html#TYPEt">t</a> option Lwt.t</code> </pre>
 <div class="info ">

@@ -37,7 +37,10 @@
 <link title="FS" rel="Chapter" href="FS.html">
 <link title="Version" rel="Chapter" href="Version.html">
 <link title="Git_unix" rel="Chapter" href="Git_unix.html">
-<link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>Misc</title>
+<link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><link title="Hexa encoding" rel="Section" href="#2_Hexaencoding">
+<link title="Association lists" rel="Section" href="#2_Associationlists">
+<link title="Marshaling helpers" rel="Section" href="#2_Marshalinghelpers">
+<title>Misc</title>
 </head>
 <body>
 <div class="navbar">&nbsp;<a class="up" href="index.html" title="Index">Up</a>
@@ -49,6 +52,8 @@
 Miscellaneous functions.<br>
 </div>
 <hr width="100%">
+<br>
+<h2 id="2_Hexaencoding">Hexa encoding</h2><br>
 
 <pre><span id="VALwith_buffer"><span class="keyword">val</span> with_buffer</span> : <code class="type">(Buffer.t -> unit) -> string</code></pre><div class="info ">
 Create a temporary buffer, apply a function to append stuff to it,
@@ -59,6 +64,8 @@ Create a temporary buffer, apply a function to append stuff to it,
 Create a temporary buffer, apply a function to append stuff to
     it, and return the buffer contents as a cstruct.<br>
 </div>
+<br>
+<h2 id="2_Associationlists">Association lists</h2><br>
 
 <pre><span id="VALinverse_assoc"><span class="keyword">val</span> inverse_assoc</span> : <code class="type">('a * 'b) list -> ('b * 'a) list</code></pre><div class="info ">
 Inverse the association map.<br>
@@ -67,6 +74,8 @@ Inverse the association map.<br>
 <pre><span id="VALtry_assoc"><span class="keyword">val</span> try_assoc</span> : <code class="type">'a -> ('a * 'b) list -> 'b option</code></pre><div class="info ">
 Same as <code class="code"><span class="constructor">List</span>.assoc</code> but returns <code class="code"><span class="constructor">None</span></code> if no element is found.<br>
 </div>
+<br>
+<h2 id="2_Marshalinghelpers">Marshaling helpers</h2><br>
 
 <pre><span id="VALadd_be_uint32"><span class="keyword">val</span> add_be_uint32</span> : <code class="type">Buffer.t -> int32 -> unit</code></pre>
 <pre><span id="VALinput_key_value"><span class="keyword">val</span> input_key_value</span> : <code class="type">Mstruct.t -> key:string -> (Mstruct.t -> 'a) -> 'a</code></pre>
@@ -92,4 +101,6 @@ Same as <code class="code"><span class="constructor">List</span>.assoc</code> bu
 <pre><span id="VALstring_chop_suffix"><span class="keyword">val</span> string_chop_suffix</span> : <code class="type">string -> suffix:string -> string option</code></pre>
 <pre><span id="VALlist_filter_map"><span class="keyword">val</span> list_filter_map</span> : <code class="type">('a -> 'b option) -> 'a list -> 'b list</code></pre>
 <pre><span class="keyword">module</span> <a href="Misc.OP.html">OP</a>: <code class="code"><span class="keyword">sig</span></code> <a href="Misc.OP.html">..</a> <code class="code"><span class="keyword">end</span></code></pre>
-<pre><span id="VALpretty"><span class="keyword">val</span> pretty</span> : <code class="type">(Format.formatter -> 'a -> unit) -> 'a -> string</code></pre></body></html>
+<pre><span id="VALpretty"><span class="keyword">val</span> pretty</span> : <code class="type">(Format.formatter -> 'a -> unit) -> 'a -> string</code></pre>
+<pre><span class="keyword">module</span> <a href="Misc.Log_make.html">Log_make</a> <code class="code">(</code><code class="code"><span class="constructor">S</span></code><code class="code"> : </code><code class="code"><span class="keyword">sig</span></code><div class="sig_block">
+<pre><span id="VALsection"><span class="keyword">val</span> section</span> : <code class="type">string</code></pre></div><code class="code"><span class="keyword">end</span></code><code class="code">) </code>: <code class="code"><span class="keyword">sig</span></code> <a href="Misc.Log_make.html">..</a> <code class="code"><span class="keyword">end</span></code></pre></body></html>

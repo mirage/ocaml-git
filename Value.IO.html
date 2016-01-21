@@ -36,7 +36,8 @@
 <link title="FS" rel="Chapter" href="FS.html">
 <link title="Version" rel="Chapter" href="Version.html">
 <link title="Git_unix" rel="Chapter" href="Git_unix.html">
-<link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>Value.IO</title>
+<link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><link title="Inflated values" rel="Section" href="#2_Inflatedvalues">
+<title>Value.IO</title>
 </head>
 <body>
 <div class="navbar">&nbsp;<a class="up" href="Value.html" title="Value">Up</a>
@@ -46,6 +47,8 @@
 <pre><span class="keyword">module type</span> IO = <code class="code"><span class="keyword">sig</span></code> <a href="Value.IO.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><hr width="100%">
 
 <pre><span class="keyword">include</span> <a href="Object.IO.html">Object.IO</a></pre>
+<br>
+<h2 id="2_Inflatedvalues">Inflated values</h2><br>
 
 <pre><span id="VALsha1"><span class="keyword">val</span> sha1</span> : <code class="type"><a href="Value.html#TYPEt">Value.t</a> -> SHA.t</code></pre><div class="info ">
 Return the SHA of the serialized contents.<br>

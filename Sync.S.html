@@ -37,7 +37,8 @@
 <link title="FS" rel="Chapter" href="FS.html">
 <link title="Version" rel="Chapter" href="Version.html">
 <link title="Git_unix" rel="Chapter" href="Git_unix.html">
-<link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>Sync.S</title>
+<link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><link title="The base Git protocol and Git+SSH" rel="Section" href="#1_ThebaseGitprotocolandGitSSH">
+<title>Sync.S</title>
 </head>
 <body>
 <div class="navbar">&nbsp;<a class="up" href="Sync.html" title="Sync">Up</a>
@@ -58,6 +59,8 @@ Abstract value for stores.<br>
 Connection context<br>
 </div>
 
+<br>
+<h1 id="1_ThebaseGitprotocolandGitSSH">The base Git protocol and Git+SSH</h1><br>
 
 <pre><span id="VALls"><span class="keyword">val</span> ls</span> : <code class="type">?ctx:<a href="Sync.S.html#TYPEctx">ctx</a> -> <a href="Sync.S.html#TYPEt">t</a> -> <a href="Gri.html#TYPEt">Gri.t</a> -> SHA.Commit.t Reference.Map.t Lwt.t</code></pre><div class="info ">
 List the references of the remote repository.<br>

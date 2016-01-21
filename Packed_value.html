@@ -38,7 +38,9 @@
 <link title="FS" rel="Chapter" href="FS.html">
 <link title="Version" rel="Chapter" href="Version.html">
 <link title="Git_unix" rel="Chapter" href="Git_unix.html">
-<link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>Packed_value</title>
+<link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><link title="Packed values" rel="Section" href="#1_Packedvalues">
+<link title="Positition-independant packed values" rel="Section" href="#1_Posititionindependantpackedvalues">
+<title>Packed_value</title>
 </head>
 <body>
 <div class="navbar"><a class="pre" href="Pack_index.html" title="Pack_index">Previous</a>
@@ -51,6 +53,8 @@
 Packed values.<br>
 </div>
 <hr width="100%">
+<br>
+<h1 id="1_Packedvalues">Packed values</h1><br>
 
 <pre><code><span id="TYPEcopy"><span class="keyword">type</span> <code class="type"></code>copy</span> = {</code></pre><table class="typetable">
 <tr>
@@ -217,6 +221,8 @@ Return the lenght of the base (source) object.<br>
 </div>
 
 <pre><span class="keyword">include</span> <a href="Object.S.html">Object.S</a></pre>
+<br>
+<h1 id="1_Posititionindependantpackedvalues">Positition-independant packed values</h1><br>
 
 <pre><span class="keyword">module</span> <a href="Packed_value.PIC.html">PIC</a>: <code class="code"><span class="keyword">sig</span></code> <a href="Packed_value.PIC.html">..</a> <code class="code"><span class="keyword">end</span></code></pre>
 <pre><span id="TYPEpic"><span class="keyword">type</span> <code class="type"></code>pic</span> = <code class="type"><a href="Packed_value.PIC.html#TYPEt">PIC.t</a></code> </pre>

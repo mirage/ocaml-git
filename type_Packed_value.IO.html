@@ -65,7 +65,6 @@
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;version:int&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;ba:<span class="constructor">Cstruct</span>.buffer&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Packed_value</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string&nbsp;<span class="constructor">Lwt</span>.t<br>
 &nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;value_of_pic&nbsp;:&nbsp;<span class="constructor">Packed_value</span>.pic&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Value</span>.t<br>
 &nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;to_pic&nbsp;:<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;digest:string&nbsp;<span class="constructor">SHA</span>.digest&nbsp;<span class="keywordsign">-&gt;</span><br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;read:<span class="constructor">Value</span>.read_inflated&nbsp;<span class="keywordsign">-&gt;</span><br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;offsets:(int&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Packed_value</span>.pic&nbsp;option)&nbsp;<span class="keywordsign">-&gt;</span><br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sha1s:(<span class="constructor">SHA</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Packed_value</span>.pic&nbsp;option)&nbsp;<span class="keywordsign">-&gt;</span><br>

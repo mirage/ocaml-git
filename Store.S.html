@@ -36,7 +36,12 @@
 <link title="FS" rel="Chapter" href="FS.html">
 <link title="Version" rel="Chapter" href="Version.html">
 <link title="Git_unix" rel="Chapter" href="Git_unix.html">
-<link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>Store.S</title>
+<link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><link title="Objects" rel="Section" href="#2_Objects">
+<link title="References" rel="Section" href="#2_References">
+<link title="Git index files" rel="Section" href="#2_Gitindexfiles">
+<link title="Backend kind" rel="Section" href="#2_Backendkind">
+<link title="Raw values" rel="Section" href="#2_Rawvalues">
+<title>Store.S</title>
 </head>
 <body>
 <div class="navbar">&nbsp;<a class="up" href="Store.html" title="Store">Up</a>
@@ -44,6 +49,8 @@
 <h1>Module type <a href="type_Store.S.html">Store.S</a></h1>
 
 <pre><span class="keyword">module type</span> S = <code class="code"><span class="keyword">sig</span></code> <a href="Store.S.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><hr width="100%">
+<br>
+Signature for Git stores.<br>
 
 <pre><span id="TYPEt"><span class="keyword">type</span> <code class="type"></code>t</span> </pre>
 <div class="info ">
@@ -83,6 +90,8 @@ Dump the store contents to stderr.<br>
 <pre><span id="VALcontents"><span class="keyword">val</span> contents</span> : <code class="type"><a href="Store.S.html#TYPEt">t</a> -> (SHA.t * <a href="Value.html#TYPEt">Value.t</a>) list Lwt.t</code></pre><div class="info ">
 Get the full store contents.<br>
 </div>
+<br>
+<h2 id="2_Objects">Objects</h2><br>
 
 <pre><span id="VALread"><span class="keyword">val</span> read</span> : <code class="type"><a href="Store.S.html#TYPEt">t</a> -> SHA.t -> <a href="Value.html#TYPEt">Value.t</a> option Lwt.t</code></pre><div class="info ">
 Return the object having the given SHA name.<br>
@@ -109,6 +118,8 @@ Write a value and return the SHA of its serialized contents.<br>
 Write a raw pack file and the corresponding index. Return the
       objects IDs which have been written.<br>
 </div>
+<br>
+<h2 id="2_References">References</h2><br>
 
 <pre><span id="VALreferences"><span class="keyword">val</span> references</span> : <code class="type"><a href="Store.S.html#TYPEt">t</a> -> Reference.t list Lwt.t</code></pre><div class="info ">
 Return the list of references (ie. tags and branches).<br>
@@ -141,6 +152,8 @@ Write a reference.<br>
 <pre><span id="VALremove_reference"><span class="keyword">val</span> remove_reference</span> : <code class="type"><a href="Store.S.html#TYPEt">t</a> -> Reference.t -> unit Lwt.t</code></pre><div class="info ">
 Remove a refernce.<br>
 </div>
+<br>
+<h2 id="2_Gitindexfiles">Git index files</h2><br>
 
 <pre><span id="VALread_index"><span class="keyword">val</span> read_index</span> : <code class="type"><a href="Store.S.html#TYPEt">t</a> -> <a href="Index.html#TYPEt">Index.t</a> Lwt.t</code></pre><div class="info ">
 Return the index file.<br>
@@ -161,10 +174,14 @@ Update the index file for the given revision. A side-effect of
       If <code class="code">index</code> is not set, read the current index and update it with
       the current state of the filesystem.<br>
 </div>
+<br>
+<h2 id="2_Backendkind">Backend kind</h2><br>
 
 <pre><span id="VALkind"><span class="keyword">val</span> kind</span> : <code class="type">[ `Disk | `Memory ]</code></pre><div class="info ">
 The kind of backend.<br>
 </div>
+<br>
+<h2 id="2_Rawvalues">Raw values</h2><br>
 
 <pre><span id="VALread_inflated"><span class="keyword">val</span> read_inflated</span> : <code class="type"><a href="Store.S.html#TYPEt">t</a> -> SHA.t -> string option Lwt.t</code></pre><div class="info ">
 Read a raw buffer from the store.<br>

@@ -37,7 +37,8 @@
 <link title="FS" rel="Chapter" href="FS.html">
 <link title="Version" rel="Chapter" href="Version.html">
 <link title="Git_unix" rel="Chapter" href="Git_unix.html">
-<link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>SHA.Array</title>
+<link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><link title="Arrays of SHAs" rel="Section" href="#1_ArraysofSHAs">
+<title>SHA.Array</title>
 </head>
 <body>
 <div class="navbar"><a class="pre" href="SHA.IO.html" title="SHA.IO">Previous</a>
@@ -60,6 +61,12 @@
 </tr>
 </table>
 <hr width="100%">
+<br>
+<h1 id="1_ArraysofSHAs">Arrays of SHAs</h1>
+<p>
+
+      Similar to <code class="code"><span class="constructor">Cstruct</span>.t</code> but where the unit of offsets and length
+      is the number of hash values instead of the number of bytes.<br>
 
 <pre><span id="VALget"><span class="keyword">val</span> get</span> : <code class="type">Cstruct.t -> int -> t</code></pre><div class="info ">
 <code class="code">get buf n</code> is the <code class="code">n</code>-th hash in the buffer <code class="code">buf</code>.<br>

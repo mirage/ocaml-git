@@ -38,7 +38,8 @@
 <link title="FS" rel="Chapter" href="FS.html">
 <link title="Version" rel="Chapter" href="Version.html">
 <link title="Git_unix" rel="Chapter" href="Git_unix.html">
-<link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>FS</title>
+<link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><link title="Constructor" rel="Section" href="#2_Constructor">
+<title>FS</title>
 </head>
 <body>
 <div class="navbar"><a class="pre" href="Memory.html" title="Memory">Previous</a>
@@ -52,7 +53,9 @@ Store Git objects on the local filesystem.<br>
 </div>
 <hr width="100%">
 
-<pre><span class="keyword">module type</span> <a href="FS.S.html">S</a> = <code class="code"><span class="keyword">sig</span></code> <a href="FS.S.html">..</a> <code class="code"><span class="keyword">end</span></code></pre>
+<pre><span class="keyword">module type</span> <a href="FS.S.html">S</a> = <code class="code"><span class="keyword">sig</span></code> <a href="FS.S.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><br>
+<h2 id="2_Constructor">Constructor</h2><br>
+
 <pre><span class="keyword">module type</span> <a href="FS.IO.html">IO</a> = <code class="code"><span class="keyword">sig</span></code> <a href="FS.IO.html">..</a> <code class="code"><span class="keyword">end</span></code></pre>
 <pre><span class="keyword">module</span> <a href="FS.Make.html">Make</a> <code class="code">(</code><code class="code"><span class="constructor">IO</span></code><code class="code"> : </code><code class="type"><a href="FS.IO.html">IO</a></code><code class="code">) </code> <code class="code">(</code><code class="code"><span class="constructor">D</span></code><code class="code"> : </code><code class="type"><a href="SHA.DIGEST.html">SHA.DIGEST</a></code><code class="code">) </code> <code class="code">(</code><code class="code"><span class="constructor">I</span></code><code class="code"> : </code><code class="type"><a href="Inflate.S.html">Inflate.S</a></code><code class="code">) </code>: <code class="type"><a href="FS.S.html">S</a></code><code class="type"> </code></pre><div class="info">
 Create an on-disk store implementation.

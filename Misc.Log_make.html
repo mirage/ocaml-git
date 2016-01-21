@@ -4,8 +4,8 @@
 <link rel="stylesheet" href="style.css" type="text/css">
 <meta content="text/html; charset=iso-8859-1" http-equiv="Content-Type">
 <link rel="Start" href="index.html">
-<link rel="previous" href="Git_mirage.Sync.Result.html">
-<link rel="Up" href="Git_mirage.Sync.html">
+<link rel="previous" href="Misc.OP.html">
+<link rel="Up" href="Misc.html">
 <link title="Index of types" rel=Appendix href="index_types.html">
 <link title="Index of exceptions" rel=Appendix href="index_exceptions.html">
 <link title="Index of values" rel=Appendix href="index_values.html">
@@ -37,15 +37,16 @@
 <link title="FS" rel="Chapter" href="FS.html">
 <link title="Version" rel="Chapter" href="Version.html">
 <link title="Git_unix" rel="Chapter" href="Git_unix.html">
-<link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>Git_mirage.Sync.Make</title>
+<link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>Misc.Log_make</title>
 </head>
 <body>
-<div class="navbar"><a class="pre" href="Git_mirage.Sync.Result.html" title="Git_mirage.Sync.Result">Previous</a>
-&nbsp;<a class="up" href="Git_mirage.Sync.html" title="Git_mirage.Sync">Up</a>
+<div class="navbar"><a class="pre" href="Misc.OP.html" title="Misc.OP">Previous</a>
+&nbsp;<a class="up" href="Misc.html" title="Misc">Up</a>
 &nbsp;</div>
-<h1>Functor <a href="type_Git_mirage.Sync.Make.html">Git_mirage.Sync.Make</a></h1>
+<h1>Functor <a href="type_Misc.Log_make.html">Misc.Log_make</a></h1>
 
-<pre><span class="keyword">module</span> Make <code class="code">(</code><code class="code"><span class="constructor">S</span></code><code class="code"> : </code><code class="type">Git.Store.S</code><code class="code">) </code>: <code class="type">Git.Sync.S</code><code class="type">  with type t = S.t and type ctx = IO.ctx</code></pre><table border="0" cellpadding="3" width="100%">
+<pre><span class="keyword">module</span> Log_make <code class="code">(</code><code class="code"><span class="constructor">S</span></code><code class="code"> : </code><code class="code"><span class="keyword">sig</span></code><div class="sig_block">
+<pre><span id="VALsection"><span class="keyword">val</span> section</span> : <code class="type">string</code></pre></div><code class="code"><span class="keyword">end</span></code><code class="code">) </code>: <code class="code"><span class="keyword">sig</span></code> <a href="Misc.Log_make.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><table border="0" cellpadding="3" width="100%">
 <tr>
 <td align="left" valign="top" width="1%%"><b>Parameters: </b></td>
 <td>
@@ -54,10 +55,18 @@
 <td align="center" valign="top" width="15%">
 <code>S</code></td>
 <td align="center" valign="top">:</td>
-<td><code class="type">Git.Store.S</code>
+<td><code class="type">sig val section: string end</code>
 </table>
 </td>
 </tr>
 </table>
 <hr width="100%">
-</body></html>
+
+<pre><span class="keyword">include</span> Log.S</pre>
+
+<pre><span id="VALlogk"><span class="keyword">val</span> logk</span> : <code class="type">Log.log_level -><br>       ('a, Pervasives.out_channel, unit, unit) Pervasives.format4 -><br>       ('a -> unit) -> unit</code></pre>
+<pre><span id="VALfatalk"><span class="keyword">val</span> fatalk</span> : <code class="type">('a, Pervasives.out_channel, unit) Pervasives.format -> ('a -> unit) -> unit</code></pre>
+<pre><span id="VALerrork"><span class="keyword">val</span> errork</span> : <code class="type">('a, Pervasives.out_channel, unit) Pervasives.format -> ('a -> unit) -> unit</code></pre>
+<pre><span id="VALwarnk"><span class="keyword">val</span> warnk</span> : <code class="type">('a, Pervasives.out_channel, unit) Pervasives.format -> ('a -> unit) -> unit</code></pre>
+<pre><span id="VALinfok"><span class="keyword">val</span> infok</span> : <code class="type">('a, Pervasives.out_channel, unit) Pervasives.format -> ('a -> unit) -> unit</code></pre>
+<pre><span id="VALdebugk"><span class="keyword">val</span> debugk</span> : <code class="type">('a, Pervasives.out_channel, unit) Pervasives.format -> ('a -> unit) -> unit</code></pre></body></html>

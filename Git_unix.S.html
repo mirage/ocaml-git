@@ -36,7 +36,12 @@
 <link title="FS" rel="Chapter" href="FS.html">
 <link title="Version" rel="Chapter" href="Version.html">
 <link title="Git_unix" rel="Chapter" href="Git_unix.html">
-<link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>Git_unix.S</title>
+<link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><link title="Unix implementation" rel="Section" href="#1_Uniximplementation">
+<link title="Unix implementation" rel="Section" href="#1_Uniximplementation">
+<link title="Synchronisation" rel="Section" href="#1_Synchronisation">
+<link title="Filesystem" rel="Section" href="#1_Filesystem">
+<link title="Git objects" rel="Section" href="#1_Gitobjects">
+<title>Git_unix.S</title>
 </head>
 <body>
 <div class="navbar">&nbsp;<a class="up" href="Git_unix.html" title="Git_unix">Up</a>
@@ -44,8 +49,32 @@
 <h1>Module type <a href="type_Git_unix.S.html">Git_unix.S</a></h1>
 
 <pre><span class="keyword">module type</span> S = <code class="code"><span class="keyword">sig</span></code> <a href="Git_unix.S.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><hr width="100%">
+<br>
+<h1 id="1_Uniximplementation">Unix implementation</h1>
+<p>
 
-<pre><span class="keyword">module</span> <a href="Git_unix.S.Sync.html">Sync</a>: <code class="code"><span class="keyword">sig</span></code> <a href="Git_unix.S.Sync.html">..</a> <code class="code"><span class="keyword">end</span></code></pre>
+      The default implementation for Unix fixes the choice of
+      <code class="code"><span class="constructor">Git</span>.<span class="constructor">Inflate</span>.<span class="constructor">S</span></code> and <code class="code"><span class="constructor">Git</span>.<span class="constructor">SHA</span>.<span class="constructor">DIGEST</span></code> by using <code class="code">camlzip</code>'s zlib
+      bindings and <code class="code">nocrypto</code>'s SHA1 implementation.
+<p>
+
+      It also uses <code class="code"><span class="constructor">Lwt_unix</span></code> and <code class="code"><span class="constructor">Lwt_io</span></code> for the IO functions.<br>
+<br>
+<h1 id="1_Uniximplementation">Unix implementation</h1>
+<p>
+
+      The default implementation for Unix fixes the choice of
+      <code class="code"><span class="constructor">Git</span>.<span class="constructor">Inflate</span>.<span class="constructor">S</span></code> and <code class="code"><span class="constructor">Git</span>.<span class="constructor">SHA</span>.<span class="constructor">DIGEST</span></code> by using <code class="code">camlzip</code>'s zlib
+      bindings and <code class="code">nocrypto</code>'s SHA1 implementation.
+<p>
+
+      It also uses <code class="code"><span class="constructor">Lwt_unix</span></code> and <code class="code"><span class="constructor">Lwt_io</span></code> for the IO functions.<br>
+<br>
+<h1 id="1_Synchronisation">Synchronisation</h1><br>
+
+<pre><span class="keyword">module</span> <a href="Git_unix.S.Sync.html">Sync</a>: <code class="code"><span class="keyword">sig</span></code> <a href="Git_unix.S.Sync.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><br>
+<h1 id="1_Filesystem">Filesystem</h1><br>
+
 <pre><span class="keyword">module</span> <a href="Git_unix.S.FS.html">FS</a>: <code class="code"><span class="keyword">sig</span></code> <a href="Git_unix.S.FS.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><div class="info">
 Implementation of the on-disk Git protocol using <code class="code"><span class="constructor">Lwt_unix</span></code>.
 </div>
@@ -53,6 +82,8 @@ Implementation of the on-disk Git protocol using <code class="code"><span class=
 <pre><span class="keyword">module</span> <a href="Git_unix.S.Memory.html">Memory</a>: <code class="type">Git.Store.S</code><code class="type"> </code></pre><div class="info">
 In-memory store.
 </div>
+<br>
+<h1 id="1_Gitobjects">Git objects</h1><br>
 
 <pre><span class="keyword">module</span> <a href="Git_unix.S.SHA_IO.html">SHA_IO</a>: <code class="type">Git.SHA.IO</code><code class="type"> </code></pre>
 <pre><span class="keyword">module</span> <a href="Git_unix.S.Value_IO.html">Value_IO</a>: <code class="type">Git.Value.IO</code><code class="type"> </code></pre>
