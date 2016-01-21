@@ -232,21 +232,21 @@ module IO_FS = struct
     match Cstruct.len buf - off with
     | 0 -> Lwt.return buf   (* Buffer full *)
     | avail ->
-        Lwt_io.read ~count:avail ch >>= function
-        | "" -> Lwt.return (Cstruct.sub buf 0 off)    (* End-of-file *)
-        | data ->
-            let len = Bytes.length data in
-            Cstruct.blit_from_string data 0 buf off len;
-            read_into ~off:(off + len) buf ch
+      Lwt_io.read ~count:avail ch >>= function
+      | "" -> Lwt.return (Cstruct.sub buf 0 off)    (* End-of-file *)
+      | data ->
+        let len = Bytes.length data in
+        Cstruct.blit_from_string data 0 buf off len;
+        read_into ~off:(off + len) buf ch
 
   let read_file file =
     Lwt_pool.use openfile_pool (fun () ->
-      Log.info "Reading %s" file;
-      Lwt_io.(with_file ~mode:input) ~flags:[Unix.O_RDONLY] file (fun ch ->
-        Lwt_io.length ch >|= Int64.to_int >|= Cstruct.create >>= fun buf ->
-        read_into buf ~off:0 ch
+        Log.info "Reading %s" file;
+        Lwt_io.(with_file ~mode:input) ~flags:[Unix.O_RDONLY] file (fun ch ->
+            Lwt_io.length ch >|= Int64.to_int >|= Cstruct.create >>= fun buf ->
+            read_into buf ~off:0 ch
+          )
       )
-    )
 
   let realdir dir =
     if Sys.file_exists dir && Sys.is_directory dir then (

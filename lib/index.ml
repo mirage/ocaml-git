@@ -29,10 +29,10 @@ type mode = [
 ]
 
 let pretty_mode = function
-    | `Normal  -> "normal"
-    | `Exec    -> "exec"
-    | `Link    -> "link"
-    | `Gitlink -> "gitlink"
+  | `Normal  -> "normal"
+  | `Exec    -> "exec"
+  | `Link    -> "link"
+  | `Gitlink -> "gitlink"
 
 let pp_mode ppf t =
   Format.fprintf ppf "%s" (pretty_mode t)

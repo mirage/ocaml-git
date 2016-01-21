@@ -417,11 +417,12 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) = struct
     | Some v -> Lwt.return (Some v)
     | None   ->
       Log.debug "read: cache miss!";
-      begin Loose.read t sha1 >>= function
-      | Some v -> Lwt.return (Some v)
-      | None   ->
-        let read = read_inflated t in
-        Packed.read ~read t sha1
+      begin
+        Loose.read t sha1 >>= function
+        | Some v -> Lwt.return (Some v)
+        | None   ->
+          let read = read_inflated t in
+          Packed.read ~read t sha1
       end >|=
       cache_add sha1
 
@@ -432,11 +433,12 @@ module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S) = struct
     | Some v -> Lwt.return (Some v)
     | None   ->
       Log.debug "read_inflated: cache miss!";
-      begin Loose.read_inflated t sha1 >>= function
-      | Some v -> Lwt.return (Some v)
-      | None   ->
-        let read = read_inflated t in
-        Packed.read_inflated ~read t sha1
+      begin
+        Loose.read_inflated t sha1 >>= function
+        | Some v -> Lwt.return (Some v)
+        | None   ->
+          let read = read_inflated t in
+          Packed.read_inflated ~read t sha1
       end >|=
       cache_add_inflated sha1
 
