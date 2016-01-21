@@ -1,6 +1,6 @@
 ## ocaml-git
 
-Pure OCaml low-level bindings to Git -- Guaranteed no C inside.
+Pure OCaml low-level implementation of Git -- Guaranteed no C inside.
 
 Support for on-disk and in-memory Git stores. Can read and write all
 the Git objects: the usual blobs, trees, commits and tags but also
@@ -100,7 +100,7 @@ Performance is comparable to the Git tool.
 
 # Lwt_main.run (read ["README.md"] >|= print_string)
 
-Pure OCaml low-level bindings to Git -- Guaranteed no C inside.
+Pure OCaml low-level implementation of Git -- Guaranteed no C inside.
 
 Support for on-disk and in-memory Git stores. Can read and write all
 the Git objects: the usual blobs, trees, commits and tags but also
