@@ -232,7 +232,6 @@ module IO_FS = struct
     let len = 4 * 4096 in
     let data = Bytes.create len in
     let rec aux off =
-      Log.debug "XXX read_into off=%d" off;
       match Cstruct.len buf - off with
       | 0     -> Lwt.return buf   (* Buffer full *)
       | avail ->
