@@ -77,7 +77,7 @@ type entry = {
    <ENTRY_FLAGS> if the entry name byte sequences are identical. *)
 let compare_entries e1 e2 =
   match String.compare e1.name e2.name with
-  | 0 -> compare e2.id e1.id
+  | 0 -> SHA.Blob.compare e2.id e1.id
   | i -> i
 
 let pp_entry ppf t =
@@ -127,9 +127,22 @@ let empty = { entries = []; extensions = [] }
 
 let hash = Hashtbl.hash
 
-let compare = compare
+let compare x y =
+  let rec aux l1 l2 =
+    Printf.printf "XXX\n"; match l1, l2 with
+    | [], [] -> 0
+    | [], _ -> -1
+    | _ , [] -> 1
+    | h1::t1, h2::t2 ->
+      match compare_entries h1 h2 with
+      | 0 -> aux t1 t2
+      | i -> i
+  in
+  match aux x.entries y.entries with
+  | 0 -> compare x.extensions y.extensions
+  | i -> i
 
-let equal = (=)
+let equal x y = compare x y = 0
 
 let pp ppf t =
   Format.fprintf ppf "@[";
