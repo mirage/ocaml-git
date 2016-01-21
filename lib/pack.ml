@@ -128,7 +128,7 @@ module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
     let read_packed_value name ~index buf sha1 =
       let `Version version, `Count count = input_header buf in
       Log.debugk "%s: %s version=%d count=%d" (fun log ->
-      log name (SHA.pretty sha1) version count);
+          log name (SHA.pretty sha1) version count);
       match index sha1 with
       | None -> None
       | Some offset ->
@@ -241,7 +241,7 @@ module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
         fail "Raw.input: wrong file checksum. Got: %s, expecting %s."
           (SHA.to_hex checksum) (SHA.to_hex pack_checksum);
       Log.debugk "input checksum: %s" (fun log ->
-      log (SHA.to_hex pack_checksum));
+          log (SHA.to_hex pack_checksum));
       if Mstruct.length buf <> 0 then fail "input: unprocessed data.";
       let buffer = Cstruct.sub all offset (Cstruct.len all - offset) in
       let raw_index = None in
@@ -420,9 +420,9 @@ module type IO = sig
     val input: ?progress:(string -> unit) -> read:Value.read_inflated ->
       Mstruct.t -> t Lwt.t
     val unpack: ?progress:(string -> unit) -> write:Value.write_inflated ->
-            t -> SHA.Set.t Lwt.t
+      t -> SHA.Set.t Lwt.t
     val read: index:Pack_index.f -> read:Value.read_inflated ->
-            Mstruct.t -> SHA.t -> Value.t option Lwt.t
+      Mstruct.t -> SHA.t -> Value.t option Lwt.t
     val read_inflated: index:Pack_index.f -> read:Value.read_inflated ->
       Mstruct.t -> SHA.t -> string option Lwt.t
   end

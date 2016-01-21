@@ -158,35 +158,35 @@ type capability = Capability.t
 
 module Capabilities = struct
 
-    type t = Capability.t list
+  type t = Capability.t list
 
-    let of_string str =
-      List.map Capability.of_string (Stringext.split str ~on:Misc.sp)
+  let of_string str =
+    List.map Capability.of_string (Stringext.split str ~on:Misc.sp)
 
-    let to_string l =
-      String.concat " " (List.map Capability.to_string l)
+  let to_string l =
+    String.concat " " (List.map Capability.to_string l)
 
-    let pretty l =
-      String.concat ", " (List.map Capability.to_string l)
+  let pretty l =
+    String.concat ", " (List.map Capability.to_string l)
 
-    let default = [
-      Capability.ogit_agent;
-      `Side_band_64k;
-      `Ofs_delta;
-      `Thin_pack;
-    ]
+  let default = [
+    Capability.ogit_agent;
+    `Side_band_64k;
+    `Ofs_delta;
+    `Thin_pack;
+  ]
 
-    let restrict x y =
-      List.filter (function
-          | `Agent _   -> true
-          | `Thin_pack ->
-            (* Receive-pack [..] can ask the client not to use the
-               feature by advertising the 'no-thin' capability. A
-               client MUST NOT send a thin pack if the server
-               advertises the 'no-thin' capability.  *)
-            not (List.mem `No_thin y)
-          | x -> List.mem x y
-        ) x
+  let restrict x y =
+    List.filter (function
+        | `Agent _   -> true
+        | `Thin_pack ->
+          (* Receive-pack [..] can ask the client not to use the
+             feature by advertising the 'no-thin' capability. A
+             client MUST NOT send a thin pack if the server
+             advertises the 'no-thin' capability.  *)
+          not (List.mem `No_thin y)
+        | x -> List.mem x y
+      ) x
 
 end
 
@@ -470,7 +470,7 @@ module Make (IO: IO) (Store: Store.S) = struct
           sprintf "application/x-%s-request" (string_of_request t.request);
         ]
       in
-        Marshal.to_string headers []
+      Marshal.to_string headers []
 
     let to_string t =
       match protocol_exn (Gri.to_uri t.gri) with
@@ -480,7 +480,7 @@ module Make (IO: IO) (Store: Store.S) = struct
 
     let create request ~discover gri =
       Log.debugk "Init.create request=%s discover=%b gri=%s" (fun log ->
-      log (string_of_request request) discover (Gri.to_string gri));
+          log (string_of_request request) discover (Gri.to_string gri));
       let protocol = protocol_exn (Gri.to_uri gri) in
       let gri = match protocol with
         | `SSH | `Git -> gri
@@ -519,8 +519,8 @@ module Make (IO: IO) (Store: Store.S) = struct
             | Some ("#", service) ->
               Log.debug "skipping %s" service;
               begin PacketLine.input ic >>= function
-              | None   -> Lwt.return_unit
-              | Some x -> error "waiting for pkt-flush, got %S" x
+                | None   -> Lwt.return_unit
+                | Some x -> error "waiting for pkt-flush, got %S" x
               end
             | Some _ -> error "waiting for # header, got %S" line
             | None   -> error "waiting for # header, got pkt-flush"
@@ -873,7 +873,7 @@ module Make (IO: IO) (Store: Store.S) = struct
 
     let input ~capabilities ?progress ic =
       if List.mem `Side_band_64k capabilities
-      || List.mem `Side_band capabilities
+         || List.mem `Side_band capabilities
       then Side_band.input ?progress ic
       else IO.read_all ic
 
@@ -1018,7 +1018,7 @@ module Make (IO: IO) (Store: Store.S) = struct
           Listing.input ic protocol >>= fun listing ->
           (* XXX: check listing.capabilities *)
           Log.debugk "listing:\n %s" (fun log ->
-          log (Listing.pretty listing));
+              log (Listing.pretty listing));
           Store.read_reference t branch    >>= fun new_obj ->
           let old_obj = Listing.find_reference listing branch in
           let command = match old_obj, new_obj with

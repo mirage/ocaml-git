@@ -17,7 +17,7 @@
 module Log_make(S: sig val section: string end) =
 struct
   include Log.Make(S)
-      
+
   let int_of_level = function
     | Log.FATAL -> 4
     | Log.ERROR -> 3

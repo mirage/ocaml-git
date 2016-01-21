@@ -1,3 +1,11 @@
+### 1.7.2 (2016-01-21)
+
+* Do not mmap files, as there is no way to easily control the unmap
+  of bigarrays. This remove EMFILE errors under load (#133, @talex5)
+* Fix comparison of entries in the index file. This fix a random issue
+  which might happen when entries in a pack file are checkout and
+  updated (@samoht)
+
 ### 1.7.1 (2015-08-10)
 
 * Support cohtpp 0.19.1. (#119, @rgrinberg)

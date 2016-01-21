@@ -228,25 +228,27 @@ module IO_FS = struct
   (* [read_into ~off buf ch] reads from [ch] into [buf] until
      either [buf] is full or [ch] is exhausted. It returns the
      subset of [buf] that was filled. *)
-  let rec read_into ~off buf ch =
-    match Cstruct.len buf - off with
-    | 0 -> Lwt.return buf   (* Buffer full *)
-    | avail ->
-        Lwt_io.read ~count:avail ch >>= function
-        | "" -> Lwt.return (Cstruct.sub buf 0 off)    (* End-of-file *)
-        | data ->
-            let len = Bytes.length data in
-            Cstruct.blit_from_string data 0 buf off len;
-            read_into ~off:(off + len) buf ch
+  let read_into buf ch =
+    let len = 4 * 4096 in
+    let data = Bytes.create len in
+    let rec aux off =
+      match Cstruct.len buf - off with
+      | 0     -> Lwt.return buf   (* Buffer full *)
+      | avail ->
+        Lwt_io.read_into ch data 0 (min len avail) >>= fun read ->
+        Cstruct.blit_from_string data 0 buf off read;
+        aux (off + read)
+    in
+    aux 0
 
   let read_file file =
     Lwt_pool.use openfile_pool (fun () ->
-      Log.info "Reading %s" file;
-      Lwt_io.(with_file ~mode:input) ~flags:[Unix.O_RDONLY] file (fun ch ->
-        Lwt_io.length ch >|= Int64.to_int >|= Cstruct.create >>= fun buf ->
-        read_into buf ~off:0 ch
+        Log.info "Reading %s" file;
+        Lwt_io.(with_file ~mode:input) ~flags:[Unix.O_RDONLY] file (fun ch ->
+            Lwt_io.length ch >|= Int64.to_int >|= Cstruct.create >>= fun buf ->
+            read_into buf ch
+          )
       )
-    )
 
   let realdir dir =
     if Sys.file_exists dir && Sys.is_directory dir then (
