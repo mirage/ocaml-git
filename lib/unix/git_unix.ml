@@ -216,10 +216,11 @@ module IO_FS = struct
     let tmp = Filename.temp_file ?temp_dir (Filename.basename file) "write" in
     Lwt_pool.use openfile_pool (fun () ->
         Log.info "Writing %s (%s)" file tmp;
-        Lwt_unix.(openfile tmp [O_WRONLY; O_NONBLOCK; O_CREAT; O_TRUNC] 0o644) >>= fun fd ->
-        Lwt.finalize
-          (fun () -> protect fn fd >>= fun () -> Lwt_unix.rename tmp file)
-          (fun _  -> Lwt_unix.close fd)
+        Lwt_unix.(openfile tmp [O_WRONLY; O_NONBLOCK; O_CREAT; O_TRUNC] 0o644)
+        >>= fun fd ->
+        Lwt.finalize (fun () -> protect fn fd) (fun _  -> Lwt_unix.close fd)
+        >>= fun () ->
+        Lwt_unix.rename tmp file
       )
 
   let write_file file ?temp_dir b =
