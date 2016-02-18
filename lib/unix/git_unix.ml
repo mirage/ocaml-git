@@ -306,12 +306,18 @@ module IO_FS = struct
   let file_exists f =
     Lwt.return (Sys.file_exists f)
 
+  let rm_command =
+    if Sys.os_type = "Win32" then
+      "cmd /d /v:off /c rd /s /q"
+    else
+      "rm -rf"
+
   let remove f =
     if Sys.file_exists f && not (Sys.is_directory f) then remove_file f
     else if not (Sys.file_exists f) then Lwt.return_unit
     else
       (* FIXME: eeek *)
-      let i = Sys.command ("rm -rf " ^ f) in
+      let i = Sys.command (Printf.sprintf "%s %s" rm_command f) in
       if i = 0 then Lwt.return_unit else Lwt.fail (Failure ("Cannot remove " ^ f))
 
   let chmod f i =
@@ -321,7 +327,6 @@ module IO_FS = struct
     Lwt.return (Sys.getcwd ())
 
 end
-
 
 module Zlib = Git.Inflate.Make(Zlib)
 
