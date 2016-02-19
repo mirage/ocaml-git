@@ -1,4 +1,4 @@
-### 1.7.3
+### 1.7.3 (2016-02-19)
 
 * Git_unix now works on MinGW
 
