@@ -206,6 +206,22 @@ module IO_FS = struct
     | 0   -> Lwt.return_unit
     | len -> rwrite fd (Cstruct.to_bigarray b) 0 len
 
+  let rename =
+    if Sys.os_type <> "Win32" then Lwt_unix.rename
+    else
+      fun tmp file ->
+        let delays = [| 0.; 1.; 10.; 20.; 40. |] in
+        let rec aux i =
+          Lwt.catch
+            (fun () -> Lwt_unix.rename tmp file)
+            (function
+              | Unix.Unix_error (Unix.EACCES, _, _) as e ->
+                if i >= Array.length delays then Lwt.fail e
+                else Lwt_unix.sleep delays.(i) >>= fun () -> aux (i+1)
+              | e -> Lwt.fail e)
+        in
+        aux 0
+
   let with_write_file ?temp_dir file fn =
     begin match temp_dir with
       | None   -> Lwt.return_unit
@@ -218,9 +234,9 @@ module IO_FS = struct
         Log.info "Writing %s (%s)" file tmp;
         Lwt_unix.(openfile tmp [O_WRONLY; O_NONBLOCK; O_CREAT; O_TRUNC] 0o644)
         >>= fun fd ->
-        Lwt.finalize (fun () -> protect fn fd) (fun _  -> Lwt_unix.close fd)
+        Lwt.finalize (fun () -> protect fn fd) (fun () -> Lwt_unix.close fd)
         >>= fun () ->
-        Lwt_unix.rename tmp file
+        rename tmp file
       )
 
   let write_file file ?temp_dir b =
