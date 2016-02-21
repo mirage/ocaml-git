@@ -16,6 +16,5 @@ install:
 
 build_script:
   - "%CYG_BASH% 'opam pin add my-pkg \"$APPVEYOR_BUILD_FOLDER\" -n -k path'"
-  - "%CYG_BASH% 'OPAMBUILDTEST=1 opam depext my-pkg'"
-  - "%CYG_BASH% 'opam install `OPAMBUILDTEST=1 opam list --required-by my-pkg --short`'"
-  - "%CYG_BASH% 'opam install my-pkg -t'"
+  - "%CYG_BASH% 'opam depext  my-pkg'"
+  - "%CYG_BASH% 'opam install my-pkg'"
