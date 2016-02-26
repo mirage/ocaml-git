@@ -1,3 +1,7 @@
+### 1.7.3 (2016-02-19)
+
+* Git_unix now works on MinGW
+
 ### 1.7.2 (2016-01-21)
 
 * Do not mmap files, as there is no way to easily control the unmap
