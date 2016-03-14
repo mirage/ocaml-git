@@ -97,7 +97,6 @@ module type S = sig
     ?unpack:bool ->
     ?capabilities:capability list ->
     ?wants:want list ->
-    ?update:bool ->
     ?progress:(string -> unit) ->
     t -> Gri.t -> Result.fetch Lwt.t
   (** [fetch t uri] fetches the contents of [uri] into the store [t].
@@ -118,9 +117,6 @@ module type S = sig
          list, the objects corresponding to the that remote commits
          are fetched..}  }
 
-      If [update] is set (default is [false]) the references given in
-      [wants] are updated locally.
-
       {b Note:} the local HEAD is not modified when doing a fetch. To do so
       (for instance when doing a clone) do the following:
 
@@ -132,11 +128,17 @@ module type S = sig
       ]}
   *)
 
-  val populate:
-    ?head:Reference.head_contents ->
+  (** Similar to {!fetch} but also initialise [HEAD] and a the
+      specified [branch]. If [branch] is not specified, initialise all
+      the references that the remote repository exposes. *)
+  val clone:
+    ?ctx:ctx ->
+    ?deepen:int ->
+    ?unpack:bool ->
+    ?capabilities:capability list ->
+    ?branch:want ->
     ?progress:(string -> unit) ->
-    t -> checkout:bool -> Result.fetch -> unit Lwt.t
-  (** Populate a fresh repository after a fetch. *)
+    t -> checkout:bool -> Gri.t -> Result.fetch Lwt.t
 
 end
 

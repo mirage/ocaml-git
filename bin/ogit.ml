@@ -135,8 +135,9 @@ let reference =
   parse, print
 
 let branch =
-  let doc = Arg.info ~docv:"BRANCH"
-      ~doc:"The name of the branch to update remotely." [] in
+  let doc =
+    Arg.info ~docv:"BRANCH" ~doc:"The name of the branch to update remotely." []
+  in
   Arg.(value & pos 1 reference Reference.master & doc)
 
 let backend =
@@ -432,14 +433,11 @@ let clone = {
       run begin
         let dot_git = if bare then Some dir else None in
         S.create ~root:dir ?dot_git () >>= fun t ->
-        let branch = branch >+= reference_of_raw in
-        let wants  = branch >+= fun b -> [`Ref b] in
+        let branch = branch >+= fun b -> `Ref (reference_of_raw b) in
         printf "Cloning into '%s' ...\n%!" (Filename.basename (S.root t));
-        Sync.fetch t ?deepen ~unpack ?wants ~update:true
-          ~progress remote >>= fun r ->
-        let head = branch >+= fun b -> Reference.Ref b in
         let checkout = not (bare || no_checkout) in
-        Sync.populate ?head ~checkout ~progress t r
+        Sync.clone t ?deepen ~unpack ?branch ~progress ~checkout remote
+        >|= fun _ -> ()
       end in
     Term.(mk clone $ backend $ depth $ bare $ no_checkout $ branch $
           unpack $ remote $ directory)

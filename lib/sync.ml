@@ -1231,10 +1231,9 @@ module Make (IO: IO) (Store: Store.S) = struct
     fetch_pack ?ctx t gri Ls >|= fun r ->
     Result.references r
 
-  let fetch
+  let fetch_aux ~update
       ?ctx ?deepen ?(unpack=false) ?(capabilities=Capabilities.default)
-      ?wants ?(update=false) ?progress
-      t gri =
+      ?wants ?progress t gri =
     Log.debugk "fetch %s wants=%s" (fun log ->
         log (Gri.to_string gri) (pretty_wants wants));
     Store.references t >>= fun refs ->
@@ -1247,8 +1246,10 @@ module Make (IO: IO) (Store: Store.S) = struct
     let haves = Hash.Set.to_list commits in
     (* XXX: Store.shallows t >>= fun shallows *)
     let shallows = [] in
-    let op = { shallows; haves; deepen; unpack; capabilities; update; wants } in
+    let op = { shallows; haves; deepen; unpack; capabilities; wants; update } in
     fetch_pack ?ctx ?progress t gri (Fetch op)
+
+  let fetch = fetch_aux ~update:false
 
   let populate ?head ?(progress=fun _ -> ()) t ~checkout result =
     let update_head () =
@@ -1270,6 +1271,21 @@ module Make (IO: IO) (Store: Store.S) = struct
     in
     update_head () >>= update_checkout
 
+  let clone ?ctx ?deepen ?unpack ?capabilities ?branch ?progress t
+      ~checkout gri =
+    let wants = match branch with
+      | None   -> None
+      | Some b -> Some [b]
+    in
+    fetch_aux ~update:true ?ctx ?deepen ?unpack ?capabilities ?wants ?progress
+      t gri >>= fun result ->
+    let head = match branch with
+      | None              -> None
+      | Some (`Ref b)    -> Some (Reference.Ref b)
+      | Some (`Commit c) -> Some (Reference.Hash c)
+    in
+    populate ?head ?progress t ~checkout result >|= fun () -> result
+
   type t = Store.t
 
 end
@@ -1285,11 +1301,14 @@ module type S = sig
     ?unpack:bool ->
     ?capabilities:capability list ->
     ?wants:want list ->
-    ?update:bool ->
     ?progress:(string -> unit) ->
     t -> Gri.t -> Result.fetch Lwt.t
-  val populate:
-    ?head:Reference.head_contents ->
+  val clone:
+    ?ctx:ctx ->
+    ?deepen:int ->
+    ?unpack:bool ->
+    ?capabilities:capability list ->
+    ?branch:want ->
     ?progress:(string -> unit) ->
-    t -> checkout:bool -> Result.fetch -> unit Lwt.t
+    t -> checkout:bool -> Gri.t -> Result.fetch Lwt.t
 end
