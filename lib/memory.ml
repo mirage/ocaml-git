@@ -32,7 +32,7 @@ module Make (D: Hash.DIGEST) (I: Inflate.S) = struct
     level   : int;
     values  : (Hash.t, Value.t Lazy.t) Hashtbl.t;
     inflated: (Hash.t, string) Hashtbl.t;
-    refs    : (Reference.t, [`S of Hash.Commit.t | `R of Reference.t]) Hashtbl.t;
+    refs    : (Reference.t, [`H of Hash.t | `R of Reference.t]) Hashtbl.t;
     mutable head : Reference.head_contents option;
   }
 
@@ -169,13 +169,13 @@ module Make (D: Hash.DIGEST) (I: Inflate.S) = struct
   let mem_reference t ref =
     Lwt.return (Hashtbl.mem t.refs ref)
 
-  let rec read_reference t ref =
-    Log.info "Reading %s" (Reference.pretty ref);
-    try
-      match Hashtbl.find t.refs ref with
-      | `S s -> Lwt.return (Some s)
+  let rec read_reference t r =
+    Log.info "Reading %s" (Reference.pretty r);
+    try match Hashtbl.find t.refs r with
+      | `H s -> Lwt.return (Some s)
       | `R r -> read_reference t r
-    with Not_found -> Lwt.return_none
+    with Not_found ->
+      Lwt.return_none
 
   let read_head t =
     Log.info "Reading HEAD";
@@ -197,7 +197,7 @@ module Make (D: Hash.DIGEST) (I: Inflate.S) = struct
 
   let write_reference t r h =
     Log.info "Writing %s" (Reference.pretty r);
-    Hashtbl.replace t.refs r (`S h);
+    Hashtbl.replace t.refs r (`H h);
     Lwt.return_unit
 
   let read_index _t = Lwt.return Index.empty

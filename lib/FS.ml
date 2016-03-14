@@ -506,7 +506,7 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
       IO.read_file file >>= fun buf ->
       let str = Cstruct.to_string buf in
       match Reference.head_contents_of_string ~of_hex:Hash_IO.of_hex str with
-      | Reference.Hash x -> Lwt.return (Some x)
+      | Reference.Hash x -> Lwt.return (Some (Hash.of_commit x))
       | Reference.Ref r -> read_reference t r
     else
       let packed_refs = packed_refs t in
@@ -559,12 +559,12 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
 
   let write_reference t r hash =
     let file = t.dot_git / Reference.to_raw r in
-    let contents = Hash.Commit.to_hex hash in
+    let contents = Hash.to_hex hash in
     let temp_dir = temp_dir t in
     IO.write_file file ~temp_dir (Cstruct.of_string contents)
 
   let write_head t = function
-    | Reference.Hash h -> write_reference t Reference.head h
+    | Reference.Hash h -> write_reference t Reference.head (Hash.of_commit h)
     | Reference.Ref  r ->
       let file = t.dot_git / "HEAD" in
       let contents = sprintf "ref: %s" (Reference.to_raw r) in

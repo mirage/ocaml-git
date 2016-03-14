@@ -20,13 +20,13 @@
 type entry = [
   | `Newline
   | `Comment of string
-  | `Entry of (Hash.Commit.t * Reference.t)
+  | `Entry of (Hash.t * Reference.t)
 ]
 
 include Object.S with type t = entry list
 
-val find: t -> Reference.t -> Hash.Commit.t option
-(** [find t r] is [r]'s Hash1 in [t]. *)
+val find: t -> Reference.t -> Hash.t option
+(** [find t r] is [r]'s hash in [t]. *)
 
 val references: t -> Reference.t list
 (** [references t] is the list of [t]'s references. *)

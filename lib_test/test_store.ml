@@ -311,17 +311,13 @@ module Make (Store: Store.S) = struct
   let test_refs x () =
     let test () =
       create () >>= fun t ->
-      let c = Hash.to_commit in
-      let ko = function
-        | None   -> None
-        | Some x -> Some (Hash.of_commit x) in
-      Store.write_reference t r1 (c kt4) >>= fun ()   ->
-      Store.read_reference t r1          >>= fun kt4' ->
-      assert_key_opt_equal "r1" (Some kt4) (ko kt4');
+      Store.write_reference t r1 kt4 >>= fun ()   ->
+      Store.read_reference t r1      >>= fun kt4' ->
+      assert_key_opt_equal "r1" (Some kt4) kt4';
 
-      Store.write_reference t r2 (c kc2) >>= fun ()   ->
-      Store.read_reference t r2          >>= fun kc2' ->
-      assert_key_opt_equal "r2" (Some kc2) (ko kc2');
+      Store.write_reference t r2 kc2 >>= fun ()   ->
+      Store.read_reference t r2      >>= fun kc2' ->
+      assert_key_opt_equal "r2" (Some kc2) kc2';
 
       Store.references t                 >>= fun rs   ->
       assert_refs_equal "refs" [r1; r2] rs;
@@ -479,7 +475,11 @@ module Make (Store: Store.S) = struct
           Alcotest.(check int) "fsck" 0 (Sys.command cmd)
         );
         let master = Reference.master in
-        let e = Reference.Ref master in
+        let e = match branch with
+          | None             -> Reference.Ref master
+          | Some (`Ref b)    -> Reference.Ref b
+          | Some (`Commit h) -> Reference.Hash h
+        in
         Store.list t >>= fun sha1s ->
         Lwt_list.iter_s (fun sha1 ->
             Store.read_exn t sha1 >>= fun _v ->
@@ -519,19 +519,21 @@ module Make (Store: Store.S) = struct
       Alcotest.(check (list sha1)) "empty" [] l;
       let fetch gri (branch, commit) =
         let b = Reference.of_raw ("refs/heads/" ^ branch) in
-        let c = Hash_IO.Commit.of_hex commit in
-        Sync.clone t ~branch:(`Commit c) ~checkout:false gri >>= fun r ->
+        let c = Hash_IO.of_hex commit in
+        Sync.clone t ~branch:(`Commit (Hash.to_commit c)) ~checkout:false gri
+        >>= fun r ->
         Store.write_reference t b c >>= fun () ->
         if x.shell then (
           let cmd = Printf.sprintf "cd %s && git fsck" @@ Store.root t in
           Alcotest.(check int) "fsck" 0 (Sys.command cmd)
         );
         begin if update then (
-            Store.read_exn t (Hash.of_commit c) >>= function
+            Store.read_exn t c >>= function
             | Value.Commit parent ->
-              let c' = { parent with Commit.message = "foo"; parents = [c] } in
+              let parents = [Hash.to_commit c] in
+              let c' = { parent with Commit.message = "foo"; parents } in
               Store.write t (Value.Commit c') >>= fun k ->
-              Store.write_reference t b (Hash.to_commit k)
+              Store.write_reference t b k
             | _ -> assert false
           ) else
             Lwt.return_unit

@@ -79,10 +79,10 @@ module type S = sig
   val mem_reference: t -> Reference.t -> bool Lwt.t
   (** Check if a reference exists. *)
 
-  val read_reference: t -> Reference.t -> Hash.Commit.t option Lwt.t
+  val read_reference: t -> Reference.t -> Hash.t option Lwt.t
   (** Read a given reference. *)
 
-  val read_reference_exn: t -> Reference.t -> Hash.Commit.t Lwt.t
+  val read_reference_exn: t -> Reference.t -> Hash.t Lwt.t
   (** Read a given reference. *)
 
   val write_head: t -> Reference.head_contents -> unit Lwt.t
@@ -91,7 +91,7 @@ module type S = sig
   val read_head: t -> Reference.head_contents option Lwt.t
   (** Read the head contents. *)
 
-  val write_reference: t -> Reference.t -> Hash.Commit.t -> unit Lwt.t
+  val write_reference: t -> Reference.t -> Hash.t -> unit Lwt.t
   (** Write a reference. *)
 
   val remove_reference: t -> Reference.t -> unit Lwt.t

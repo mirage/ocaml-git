@@ -50,7 +50,7 @@ module Result: sig
   val head: fetch -> Hash.Commit.t option
   (** [head f] is [f]'s head commit. *)
 
-  val references: fetch -> Hash.Commit.t Reference.Map.t
+  val references: fetch -> Hash.t Reference.Map.t
   (** [references f] are [f]'s references. *)
 
   val hashes: fetch -> Hash.Set.t
@@ -85,7 +85,7 @@ module type S = sig
 
   (** {1 The base Git protocol and Git+SSH} *)
 
-  val ls: ?ctx:ctx -> t -> Gri.t -> Hash.Commit.t Reference.Map.t Lwt.t
+  val ls: ?ctx:ctx -> t -> Gri.t -> Hash.t Reference.Map.t Lwt.t
   (** List the references of the remote repository. *)
 
   val push: ?ctx:ctx -> t -> branch:Reference.t -> Gri.t -> Result.push Lwt.t

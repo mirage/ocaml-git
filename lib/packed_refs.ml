@@ -17,13 +17,13 @@
 type entry =
   [ `Newline
   | `Comment of string
-  | `Entry of (Hash.Commit.t * Reference.t) ]
+  | `Entry of (Hash.t * Reference.t) ]
 
 let to_line ppf = function
   | `Newline -> Format.fprintf ppf "\n"
   | `Comment c -> Format.fprintf ppf "# %s\n" c
   | `Entry (s,r) ->
-    Format.fprintf ppf "%s %s" (Hash.Commit.to_hex s) (Reference.to_raw r)
+    Format.fprintf ppf "%s %s" (Hash.to_hex s) (Reference.to_raw r)
 
 module T = struct
   type t = entry list
@@ -68,7 +68,7 @@ module IO (D: Hash.DIGEST) = struct
     else match Stringext.cut line ~on:" " with
       | None  -> None
       | Some (h, r) ->
-        let h = Hash_IO.Commit.of_hex h in
+        let h = Hash_IO.of_hex h in
         let r = Reference.of_raw r in
         Some (`Entry (h, r))
 

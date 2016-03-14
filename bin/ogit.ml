@@ -205,24 +205,24 @@ let cat_file = {
         S.create () >>= fun t ->
         catch_ambiguous (fun () ->
             S.read_exn t (Hash_IO.of_short_hex id) >>= fun v ->
-             let t, c, s = match v with
-               | Value.Blob blob ->
-                 let c = Blob.to_raw blob in
-                 "blob", c, String.length c
-               | Value.Commit commit ->
-                 let c = Commit.pretty commit in
-                 "commit", c, String.length c
-               | Value.Tree tree ->
-                 let c = Tree.pretty tree in
-                 "tree", c, String.length c
-               | Value.Tag tag ->
-                 let c = Tag.pretty tag in
-                 "tag", c, String.length c
-             in
-             if ty_flag then Printf.printf "%s%!\n" t;
-             if sz_flag then Printf.printf "%d%!\n" s;
-             if not ty_flag && not sz_flag then Printf.printf "%s%!\n" c;
-             Lwt.return_unit)
+            let t, c, s = match v with
+              | Value.Blob blob ->
+                let c = Blob.to_raw blob in
+                "blob", c, String.length c
+              | Value.Commit commit ->
+                let c = Commit.pretty commit in
+                "commit", c, String.length c
+              | Value.Tree tree ->
+                let c = Tree.pretty tree in
+                "tree", c, String.length c
+              | Value.Tag tag ->
+                let c = Tag.pretty tag in
+                "tag", c, String.length c
+            in
+            if ty_flag then Printf.printf "%s%!\n" t;
+            if sz_flag then Printf.printf "%d%!\n" s;
+            if not ty_flag && not sz_flag then Printf.printf "%s%!\n" c;
+            Lwt.return_unit)
       end
     in
     Term.(mk cat_file $ backend $ ty_flag $ sz_flag $ id)
@@ -240,10 +240,9 @@ let ls_remote = {
         S.create ()  >>= fun t ->
         Sync.ls t remote >>= fun references ->
         Printf.printf "From %s\n" (Gri.to_string remote);
-        let print ref sha1 =
-          Printf.printf "%s        %s\n"
-            (Hash.Commit.to_hex sha1)
-            (Reference.to_raw ref) in
+        let print r h =
+          Printf.printf "%s        %s\n" (Hash.to_hex h) (Reference.to_raw r)
+        in
         Reference.Map.iter print references;
         Lwt.return_unit
       end in
@@ -257,9 +256,10 @@ let ls_files = {
   man  = [];
   term =
     let debug = mk_flag ["debug"]
-        "After each line that describes a file, add more data about its cache entry. \
-         This is intended to show as much information as possible for manual inspection; \
-         the exact format may change at any time." in
+        "After each line that describes a file, add more data about its cache \
+         entry. This is intended to show as much information as possible for \
+         manual inspection; the exact format may change at any time."
+    in
     let ls (module S: Store.S) debug =
       run begin
         S.create ()    >>= fun t ->
@@ -298,22 +298,22 @@ let ls_tree = {
       | _       -> "blob",   false
     in
     let ls (module S: Store.S) recurse show_tree only_tree oid =
-      let pp_blob path sha1 =
-        printf "blob %s %s\n" (Hash.to_hex sha1) path;
+      let pp_blob path h =
+        printf "blob %s %s\n" (Hash.to_hex h) path;
         Lwt.return_unit
       in
       let pp_tree mode kind path e =
         printf "%s %s %s\t%s\n" mode kind (Hash.to_hex e.Tree.node) path
       in
-      let pp_tag path sha1 =
-        printf "tag %s %s\n" (Hash.to_hex sha1) path;
+      let pp_tag path h =
+        printf "tag %s %s\n" (Hash.to_hex h) path;
         Lwt.return_unit
       in
-      let rec walk t path sha1 =
-        S.read_exn t sha1 >>= function
+      let rec walk t path h =
+        S.read_exn t h >>= function
         | Value.Commit c  -> walk t path (Hash.of_tree c.Commit.tree)
-        | Value.Blob _    -> pp_blob path sha1
-        | Value.Tag _     -> pp_tag path sha1
+        | Value.Blob _    -> pp_blob path h
+        | Value.Tag _     -> pp_tag path h
         | Value.Tree tree ->
           Lwt_list.iter_s (fun e ->
               let path = Filename.concat path e.Tree.name in
@@ -330,8 +330,8 @@ let ls_tree = {
       in
       run begin
         S.create () >>= fun t ->
-        let sha1 = Hash_IO.of_short_hex oid in
-        catch_ambiguous (fun () -> walk t "" sha1)
+        let h = Hash_IO.of_short_hex oid in
+        catch_ambiguous (fun () -> walk t "" h)
       end in
     Term.(mk ls $ backend $ recurse_flag $ show_tree_flag
           $ only_tree_flag $ oid)
@@ -358,9 +358,9 @@ let read_tree = {
           if List.exists (fun r -> Reference.to_raw r = ref) refs then
             S.read_reference_exn t (Reference.of_raw ref)
           else
-            Lwt.return (Hash_IO.Commit.of_short_hex commit_str)
+            Lwt.return (Hash_IO.of_short_hex commit_str)
         end >>= fun commit ->
-        S.write_index t commit >>= fun () ->
+        S.write_index t (Hash.to_commit commit) >>= fun () ->
         printf "The index file has been update to %s\n%!" commit_str;
         Lwt.return_unit
       end in
@@ -479,7 +479,7 @@ let pull = {
           if Reference.Map.mem b refs then (
             let commit = Reference.Map.find b refs in
             S.write_reference t b commit >>= fun () ->
-            S.write_index t commit
+            S.write_index t (Hash.to_commit commit)
           ) else
             Lwt.return_unit
       end

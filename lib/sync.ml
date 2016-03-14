@@ -194,8 +194,8 @@ module Listing = struct
 
   type t = {
     capabilities: Capability.t list;
-    hashes      : Reference.t list Hash.Commit.Map.t;
-    references  : Hash.Commit.t Reference.Map.t;
+    hashes      : Reference.t list Hash.Map.t;
+    references  : Hash.t Reference.Map.t;
   }
 
   let capabilities t = t.capabilities
@@ -204,18 +204,18 @@ module Listing = struct
 
   let empty = {
     capabilities = [];
-    hashes       = Hash.Commit.Map.empty;
+    hashes       = Hash.Map.empty;
     references   = Reference.Map.empty;
   }
 
-  let is_empty t = t.capabilities = [] && Hash.Commit.Map.is_empty t.hashes
+  let is_empty t = t.capabilities = [] && Hash.Map.is_empty t.hashes
 
   let find_reference t r =
     try Some (Reference.Map.find r t.references)
     with Not_found -> None
 
   let find_hash t c =
-    try Hash.Commit.Map.find c t.hashes
+    try Hash.Map.find c t.hashes
     with Not_found -> []
 
   let pretty t =
@@ -223,20 +223,16 @@ module Listing = struct
     Printf.bprintf buf "CAPABILITIES:\n%s\n"
       (Capabilities.to_string t.capabilities);
     Printf.bprintf buf "\nREFERENCES:\n";
-    Hash.Commit.Map.iter
+    Hash.Map.iter
       (fun key data ->
-         List.iter (fun ref ->
-             Printf.bprintf buf "%s %s\n"
-               (Hash.Commit.to_hex key) (Reference.pretty ref)
+         List.iter (fun r ->
+             Printf.bprintf buf "%s %s\n" (Hash.to_hex key) (Reference.pretty r)
            ) data
       ) t.hashes;
     Buffer.contents buf
 
   let guess_reference t c =
-    let heads =
-      Hash.Commit.Map.find c t.hashes
-      |> List.filter is_head
-    in
+    let heads = Hash.Map.find c t.hashes |> List.filter is_head in
     match heads with
     | []   -> None
     | h::_ ->
@@ -256,13 +252,16 @@ module Result = struct
 
   type fetch = { listing: Listing.t; hashes: Hash.Set.t }
 
-  let head t = Listing.find_reference t.listing Reference.head
+  let head t =
+    match Listing.find_reference t.listing Reference.head with
+    | None   -> None
+    | Some h -> Some (Hash.to_commit h)
 
   let head_contents t =
     match head t with
     | None   -> None
     | Some c ->
-      match Listing.guess_reference t.listing c with
+      match Listing.guess_reference t.listing (Hash.of_commit c) with
       | None   -> Some (Reference.Hash c)
       | Some r -> Some (Reference.Ref r)
 
@@ -284,7 +283,7 @@ module Result = struct
     let h = head t in
     bprintf buf "HEAD: %s %s\n" (pretty_head_contents hc) (pretty_head h);
     Reference.Map.iter (fun key data ->
-        bprintf buf "%s %s\n" (Reference.pretty key) (Hash.Commit.to_hex data)
+        bprintf buf "%s %s\n" (Reference.pretty key) (Hash.to_hex data)
       ) (references t);
     bprintf buf "Keys: %d\n" (Hash.Set.cardinal t.hashes);
     Buffer.contents buf
@@ -538,18 +537,21 @@ module Make (IO: IO) (Store: Store.S) = struct
               match Stringext.cut r ~on:Misc.nul_str with
               | Some (r, caps) ->
                 let r = Reference.of_raw r in
-                let hashes = Hash.Commit.Map.add_multi h r acc.hashes in
+                let h = Hash.of_commit h in
+                let hashes = Hash.Map.add_multi h r acc.hashes in
                 let references = Reference.Map.add r h acc.references in
                 let capabilities = Capabilities.of_string caps in
                 aux { hashes; capabilities; references }
               | None ->
                 let r = Reference.of_raw r in
-                let hashes = Hash.Commit.Map.add_multi h r acc.hashes in
+                let h = Hash.of_commit h in
+                let hashes = Hash.Map.add_multi h r acc.hashes in
                 let references = Reference.Map.add r h acc.references in
                 aux { hashes; references; capabilities = [] }
             ) else
               let r = Reference.of_raw r in
-              let hashes = Hash.Commit.Map.add_multi h r acc.hashes in
+              let h = Hash.of_commit h in
+              let hashes = Hash.Map.add_multi h r acc.hashes in
               let references = Reference.Map.add r h acc.references in
               aux { acc with hashes; references }
           | None -> error "Listing.input: %S is not a valid answer" line
@@ -1021,11 +1023,13 @@ module Make (IO: IO) (Store: Store.S) = struct
               log (Listing.pretty listing));
           Store.read_reference t branch    >>= fun new_obj ->
           let old_obj = Listing.find_reference listing branch in
+          let commit = Hash.to_commit in
           let command = match old_obj, new_obj with
             | None  , None   -> err_unknown_tag branch
-            | Some x, None   -> Update_request.Delete (branch, x)
-            | None  , Some x -> Update_request.Create (branch, x)
-            | Some x, Some y -> Update_request.Update (branch, x, y) in
+            | Some x, None   -> Update_request.Delete (branch, commit x)
+            | None  , Some x -> Update_request.Create (branch, commit x)
+            | Some x, Some y -> Update_request.Update (branch, commit x, commit y)
+          in
           let capabilities =
             `Report_status :: match command with
             | Update_request.Delete _ -> [`Delete_refs]
@@ -1033,13 +1037,11 @@ module Make (IO: IO) (Store: Store.S) = struct
           in
           let commands = [ command ] in
           let min =
-            Hash.Commit.Map.keys (Listing.hashes listing)
-            |> List.map Hash.of_commit
-            |> Hash.Set.of_list
+            Hash.Map.keys (Listing.hashes listing) |> Hash.Set.of_list
           in
           let max = match new_obj with
             | None   -> Hash.Set.empty
-            | Some x -> Hash.Set.singleton (Hash.of_commit x)
+            | Some x -> Hash.Set.singleton x
           in
           Graph.pack t ~min ~max >>= fun values ->
           let pack = Pack_IO.create values in
@@ -1062,8 +1064,7 @@ module Make (IO: IO) (Store: Store.S) = struct
     in
     let haves =
       let server_tips =
-        Hash.Commit.Map.keys (Listing.hashes listing)
-        |> List.map Hash.of_commit
+        Hash.Map.keys (Listing.hashes listing)
         |> Lwt_list.filter_p (Store.mem t)
         >|= Hash.Set.of_list
       in
@@ -1133,7 +1134,7 @@ module Make (IO: IO) (Store: Store.S) = struct
 
   let write_heads_and_tags t r h =
     if is_head_or_tag r then
-      Store.mem t (Hash.of_commit h) >>= function
+      Store.mem t h >>= function
       | false -> Lwt.return_unit
       | true  -> Store.write_reference t r h
     else
@@ -1161,7 +1162,7 @@ module Make (IO: IO) (Store: Store.S) = struct
       "Cannot fetch %s as the server does not advertise \
        'allow-reachable-sha1-in-want' and it is not in the \
        list of head commits advertised by `upload-pack`."
-      (Hash.Commit.pretty h)
+      (Hash.pretty h)
 
   let fetch_pack ?ctx ?progress t gri op =
     with_listing ?ctx gri (fun (protocol, ic, oc) listing ->
@@ -1174,8 +1175,8 @@ module Make (IO: IO) (Store: Store.S) = struct
               (* We ask for all the remote references *)
               Reference.Map.fold (fun r c (rs, cs as acc) ->
                   if not (is_head_or_tag r) then acc
-                  else (r, c) :: rs, Hash.Commit.Set.add c cs
-                ) references ([], Hash.Commit.Set.empty)
+                  else (r, c) :: rs, Hash.Set.add c cs
+                ) references ([], Hash.Set.empty)
             | Some wants ->
               let allow_sha1 =
                 let caps = Listing.capabilities listing in
@@ -1183,25 +1184,26 @@ module Make (IO: IO) (Store: Store.S) = struct
                 fun h ->
                   all ||
                   let hashes = Listing.hashes listing in
-                  try List.exists is_head_or_tag (Hash.Commit.Map.find h hashes)
+                  try List.exists is_head_or_tag (Hash.Map.find h hashes)
                   with Not_found -> false
               in
               List.fold_left (fun (rs, cs as acc) -> function
                   | `Commit c ->
+                    let c = Hash.of_commit c in
                     if allow_sha1 c then
                       let refs =  Listing.find_hash listing c in
                       let rs = List.map (fun r -> (r, c)) refs @ rs in
-                      rs, Hash.Commit.Set.add c cs
+                      rs, Hash.Set.add c cs
                     else err_sha1_not_advertised c
                   | `Ref r    ->
                     try
                       let c = Reference.Map.find r references in
-                      (r, c) :: rs, Hash.Commit.Set.add c cs
+                      (r, c) :: rs, Hash.Set.add c cs
                     with Not_found ->
                       acc
-                ) ([], Hash.Commit.Set.empty) wants
+                ) ([], Hash.Set.empty) wants
           in
-          let commits = Hash.Commit.Set.to_list commits in
+          let commits = Hash.Set.to_list commits |> List.map Hash.to_commit in
           let sync () =
             if protocol = `Smart_HTTP then
               let init = Init.upload_pack ~discover:false gri in
@@ -1240,7 +1242,7 @@ module Make (IO: IO) (Store: Store.S) = struct
     Lwt_list.fold_left_s (fun haves r ->
         Store.read_reference t r >|= function
         | None   -> haves
-        | Some h -> Hash.Set.add (Hash.of_commit h) haves
+        | Some h -> Hash.Set.add h haves
       ) Hash.Set.empty refs
     >>= fun commits ->
     let haves = Hash.Set.to_list commits in
@@ -1293,7 +1295,7 @@ end
 module type S = sig
   type t
   type ctx
-  val ls: ?ctx:ctx -> t -> Gri.t -> Hash.Commit.t Reference.Map.t Lwt.t
+  val ls: ?ctx:ctx -> t -> Gri.t -> Hash.t Reference.Map.t Lwt.t
   val push: ?ctx:ctx -> t -> branch:Reference.t -> Gri.t -> Result.push Lwt.t
   val fetch:
     ?ctx:ctx ->
