@@ -42,15 +42,15 @@ let compare x y =
 let head = "HEAD"
 
 type head_contents =
-  | SHA of SHA.Commit.t
+  | Hash of Hash.Commit.t
   | Ref of string
 
 let pp_head_contents ppf = function
-  | SHA x -> Format.fprintf ppf "SHA %a" SHA.Commit.pp x
+  | Hash x -> Format.fprintf ppf "Hash %a" Hash.Commit.pp x
   | Ref x -> Format.pp_print_string ppf x
 
 let equal_head_contents x y = match x, y with
-  | SHA x, SHA y -> SHA.Commit.equal x y
+  | Hash x, Hash y -> Hash.Commit.equal x y
   | Ref x, Ref y -> String.compare x y = 0
   | _ -> false
 
@@ -61,11 +61,11 @@ let err_head_contents str =
 let is_head x =
   String.compare head x = 0
 
-let head_contents_of_commit refs sha1 =
+let head_contents_of_commit refs h =
   let refs = Map.remove "HEAD" refs in
   let alist = Misc.inverse_assoc (Map.to_alist refs) in
-  match Misc.try_assoc sha1 alist with
-  | None   -> SHA sha1
+  match Misc.try_assoc h alist with
+  | None   -> Hash h
   | Some r -> Ref r
 
 let master = "refs/heads/master"
@@ -80,6 +80,6 @@ let is_valid r =
 
 let head_contents_of_string ~of_hex str =
   match Stringext.split ~on:' ' (String.trim str) with
-  | [sha1]  -> SHA (of_hex sha1 |> SHA.to_raw |> SHA.Commit.of_raw)
-  | [_;ref] -> Ref (of_raw ref)
-  | _       -> err_head_contents str
+  | [h]   -> Hash (of_hex h |> Hash.to_raw |> Hash.Commit.of_raw)
+  | [_;r] -> Ref (of_raw r)
+  | _     -> err_head_contents str

@@ -14,12 +14,12 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** SHA hashes.
+(** Hashing.
 
-    This module handles both usual SHA hashes and {i short}
-    hashes, which are shorter sequences of bits with a valid
-    hexadecimal representation. The only way to create short hashes is
-    to use {!of_hex} with the [strict] argument set to false.
+    This module handles both usual hashes and {i short} hashes, which
+    are shorter sequences of bits with a valid hexadecimal
+    representation. The only way to create short hashes is to use
+    {!of_hex} with the [strict] argument set to false.
 
     When short hashes are used in normal Git operations, they can
     raise {!Ambiguous}.
@@ -31,29 +31,29 @@
 
 module type S = sig
 
-  (** {1 Signature for SHA values} *)
+  (** {1 Signature for hash values} *)
 
   include Object.S
   (** The usual compare functions on hashes, but can raise
       {!Ambiguous} if one is short hash and is prefix to the other. *)
 
   val to_raw: t -> string
-  (** Raw SHA value. *)
+  (** Raw hash value. *)
 
   val of_raw: string -> t
-  (** Abstract a raw SHA value. *)
+  (** Abstract a raw hash value. *)
 
   val to_hex: t -> string
-  (** Display the hex encoding of the SHA hash. *)
+  (** [to_hex h] is [h]s' hex encoding. *)
 
   val hex_length: t -> int
-  (** The number of hex digits in the SHA. *)
+  (** The number of hex digits in the hash. *)
 
   val lt: t -> t -> bool
-  (** (<) relation between SHAs. *)
+  (** (<) relation between hash. *)
 
   val is_prefix: t -> t -> bool
-  (** Check if a SHA is a prefix of another SHA. *)
+  (** Check if a hash is a prefix of another hash. *)
 
   module Set: Misc.Set with type elt = t
   module Map: Misc.Map with type key = t
@@ -98,7 +98,7 @@ module type H = sig
   include Object.IO with type t := t
 
   val of_hex: string -> t
-  (** Convert an hex-encoded string into a sha1 value. Raise
+  (** Convert an hex-encoded string into a hash value. Raise
       {!Ambiguous} if the hash is short; in that case use
       {!of_short_hex}. *)
 
@@ -108,16 +108,16 @@ module type H = sig
       cause some functions to raise {!Ambiguous}. *)
 
   val input_hex: Mstruct.t -> t
-  (** Read an hex-encode SHA value. *)
+  (** Read an hex-encoded hash value. *)
 
   val add_hex: Buffer.t -> t -> unit
-  (** Add the hex-encoding of the SHA value to the buffer. *)
+  (** Add the hex-encoding of the hash value to the buffer. *)
 
   val is_short: t -> bool
-  (** Check if the SHA is short. *)
+  (** Check if the hash is short. *)
 
   val zero: t
-  (** A SHA full of zero. Useful for padding. *)
+  (** A hash full of zero. Useful for padding. *)
 
 end
 
@@ -131,17 +131,17 @@ end
 type 'a digest = 'a -> t
 (** The type for digest functions. *)
 
+(** The signature to compute hash digests. *)
 module type DIGEST = sig
   val cstruct: Cstruct.t digest
   val string: string digest
   val length: int
 end
-(** The signature to compute SHA digests. *)
 
 module IO (D: DIGEST): IO
 
 module Array (D: DIGEST): sig
-  (** {1 Arrays of SHAs}
+  (** {1 Arrays of hashes}
 
       Similar to [Cstruct.t] but where the unit of offsets and length
       is the number of hash values instead of the number of bytes.*)
@@ -160,15 +160,15 @@ module Array (D: DIGEST): sig
   (** [length v] is the number of hashes store in [t]. *)
 
   val linear_search: Cstruct.t -> t -> int option
-  (** [linear_search buf sha1] iterates through the hashes stored in
-      the buffer [buf]. Return the indice of the first hash equals to
-      [sha1]. Can raise {!Ambiguous} if [sha1] is short and more than
-      one hash are similar.*)
+  (** [linear_search buf h] iterates through the hashes stored in the
+      buffer [buf]. Return the indice of the first hash equals to
+      [h]. Can raise {!Ambiguous} if [h] is short and more than one
+      hash are similar.*)
 
   val binary_search: Cstruct.t -> t ->  int option
-  (** [binary_search buf shat1] binary searches through the sorted
-      array of hashes stored in [buf]. Return the indice of the first
-      hash equal to [sha1]. Can raise {!Ambiguous} if [sha1] is short
-      and more than one hash are similar. *)
+  (** [binary_search buf h] binary searches through the sorted array
+      of hashes stored in [buf]. Return the indice of the first hash
+      equal to [h]. Can raise {!Ambiguous} if [h] is short and more
+      than one hash are similar. *)
 
 end

@@ -17,16 +17,16 @@
 open Lwt.Infix
 
 let to_string node =
-  let hex = SHA.to_hex node in
+  let hex = Hash.to_hex node in
   String.sub hex 0 8
 
 module C =
   Graph.Imperative.Digraph.ConcreteBidirectionalLabeled
     (struct
-      type t = (SHA.t * Value.t)
-      let compare (x,_) (y,_) = SHA.compare x y
-      let hash (x,_) = SHA.hash x
-      let equal (x,_) (y,_) = SHA.equal x y
+      type t = (Hash.t * Value.t)
+      let compare (x,_) (y,_) = Hash.compare x y
+      let hash (x,_) = Hash.hash x
+      let equal (x,_) (y,_) = Hash.equal x y
     end)
     (struct
       type t = string
@@ -58,7 +58,7 @@ module Dot = Graph.Graphviz.Dot(struct
       | _  ->[`Label (String.escaped l)]
   end)
 
-module K = Graph.Imperative.Digraph.ConcreteBidirectional(SHA)
+module K = Graph.Imperative.Digraph.ConcreteBidirectional(Hash)
 module T = Graph.Topological.Make(K)
 module KO = Graph.Oper.I(K)
 
@@ -86,9 +86,9 @@ module Make (Store: Store.S) = struct
       Lwt_list.iter_p (fun (id, _ as src) ->
           Search.pred t id >>= fun preds ->
           Lwt_list.iter_p (fun s ->
-              let l, sha1 = label s in
-              Store.read_exn t sha1 >>= fun v ->
-              C.add_edge_e g (src, l, (sha1, v));
+              let l, h = label s in
+              Store.read_exn t h >>= fun v ->
+              C.add_edge_e g (src, l, (h, v));
               Lwt.return_unit
             ) preds
         ) nodes
@@ -104,8 +104,8 @@ module Make (Store: Store.S) = struct
       Lwt_list.iter_p (fun (src, _) ->
           Search.pred t src >>= fun succs ->
           Lwt_list.iter_p (fun s ->
-              let _, sha1 = label s in
-              if K.mem_vertex g sha1 then K.add_edge g src sha1;
+              let _, h = label s in
+              if K.mem_vertex g h then K.add_edge g src h;
               Lwt.return_unit
             ) succs
         ) nodes
@@ -125,7 +125,7 @@ module Make (Store: Store.S) = struct
     let marks = Hashtbl.create 1024 in
     let mark key = Hashtbl.add marks key true in
     let has_mark key = Hashtbl.mem marks key in
-    let min = SHA.Set.to_list min in
+    let min = Hash.Set.to_list min in
     Lwt_list.iter_p (fun k ->
         Store.mem t k >>= function
         | false -> Lwt.return_unit
@@ -139,7 +139,7 @@ module Make (Store: Store.S) = struct
       else (
         mark key;
         Log.debugk "ADD %s" (fun log ->
-            log (SHA.to_hex key));
+            log (Hash.to_hex key));
         Store.mem t key >>= function
         | false -> Lwt.return_unit
         | true  ->
@@ -149,7 +149,7 @@ module Make (Store: Store.S) = struct
           List.iter (fun k -> K.add_edge g k key) keys;
           Lwt_list.iter_p add keys
       ) in
-    let max = SHA.Set.to_list max in
+    let max = Hash.Set.to_list max in
     Lwt_list.iter_p add max >>= fun () ->
     Lwt.return g
 

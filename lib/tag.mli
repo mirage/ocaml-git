@@ -17,7 +17,7 @@
 (** Annotated tags. *)
 
 type t = {
-  sha1   : SHA.t;
+  obj    : Hash.t;
   typ    : Object_type.t;
   tag    : string;
   tagger : User.t;
@@ -27,4 +27,4 @@ type t = {
 
 include Object.S with type t := t
 
-module IO (D: SHA.DIGEST): Object.IO with type t = t
+module IO (D: Hash.DIGEST): Object.IO with type t = t

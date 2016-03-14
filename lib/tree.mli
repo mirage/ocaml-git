@@ -36,7 +36,7 @@ val fixed_length_string_of_perm : perm -> string
 type entry = {
   perm: perm;
   name: string;
-  node: SHA.t;
+  node: Hash.t;
 }
 (** A tree entry. This is either a directory or a file. As this is
     supposed to model a filesystem, directory does not contain
@@ -48,4 +48,4 @@ type t = entry list
 
 include Object.S with type t := t
 
-module IO (D: SHA.DIGEST): Object.IO with type t = t
+module IO (D: Hash.DIGEST): Object.IO with type t = t

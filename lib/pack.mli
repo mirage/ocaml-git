@@ -18,9 +18,9 @@
 
 type t = Packed_value.pic list
 (** A pack value is an ordered list of position-independant packed
-    values and the SHA of the corresponding inflated objects. *)
+    values and the keys of the corresponding inflated objects. *)
 
-val keys: t -> SHA.Set.t
+val keys: t -> Hash.Set.t
 (** Return the keys present in the pack. *)
 
 include Object.S with type t := t
@@ -35,17 +35,17 @@ module Raw: sig
   val index: t -> Pack_index.Raw.t
   (** Get the raw index asoociated to the raw pack. *)
 
-  val sha1: t -> SHA.t
+  val name: t -> Hash.t
   (** Get the name of the pack. *)
 
-  val keys: t -> SHA.Set.t
+  val keys: t -> Hash.Set.t
   (** Get the keys present in the raw pack. *)
 
   val buffer: t -> Cstruct.t
   (** Get the pack buffer. *)
 
   val shallow: t -> bool
-  (** [shallow t] is true if all the SHA references appearing in [t]
+  (** [shallow t] is true if all the Hash references appearing in [t]
       corresponds to objects also in [t]. *)
 
   val input_header: Mstruct.t -> [`Version of int] * [`Count of int]
@@ -63,19 +63,19 @@ module type IO = sig
       corresponding raw index. *)
 
   val input: ?progress:(string -> unit) ->
-    index:Pack_index.f -> keys:SHA.Set.t -> read:Value.read_inflated ->
+    index:Pack_index.f -> keys:Hash.Set.t -> read:Value.read_inflated ->
     Mstruct.t -> t Lwt.t
   (** The usual [Object.S.input] function, but with additionals [index]
       and [keys] arguments to speed-up ramdom accesses and [read] to
       read shallow objects external to the pack file. *)
 
-  val read: t -> SHA.t -> Value.t option
+  val read: t -> Hash.t -> Value.t option
   (** Return the value stored in the pack file. *)
 
-  val read_exn: t -> SHA.t -> Value.t
+  val read_exn: t -> Hash.t -> Value.t
   (** Return the value stored in the pack file. *)
 
-  val create: (SHA.t * Value.t) list -> t
+  val create: (Hash.t * Value.t) list -> t
   (** Create a (not very well compressed) pack file. *)
 
   module Raw: sig
@@ -91,22 +91,22 @@ module type IO = sig
     val input: ?progress:(string -> unit) -> read:Value.read_inflated ->
       Mstruct.t -> t Lwt.t
     (** [input ~read buf] is the raw pack and raw index obtained by
-        reading the buffer [buf]. External (shallow) SHA1 references are
+        reading the buffer [buf]. External (shallow) Hash1 references are
         resolved using the [read] function; these references are needed
         to unpack the list of values stored in the pack file, to then
         compute the full raw index. *)
 
     val unpack: ?progress:(string -> unit) -> write:Value.write_inflated ->
-      t -> SHA.Set.t Lwt.t
+      t -> Hash.Set.t Lwt.t
     (** Unpack a whole pack file on disk (by calling [write] on every
-        values) and return the SHA1s of the written objects. *)
+        values) and return the Hash1s of the written objects. *)
 
     val read: index:Pack_index.f -> read:Value.read_inflated ->
-      Mstruct.t -> SHA.t -> Value.t option Lwt.t
+      Mstruct.t -> Hash.t -> Value.t option Lwt.t
     (** Same as the top-level [read] function but for raw packs. *)
 
     val read_inflated: index:Pack_index.f -> read:Value.read_inflated ->
-      Mstruct.t -> SHA.t -> string option Lwt.t
+      Mstruct.t -> Hash.t -> string option Lwt.t
     (** Same as {!read} but for inflated values. *)
 
   end
@@ -124,4 +124,4 @@ module type IO = sig
 
 end
 
-module IO (D: SHA.DIGEST) (I: Inflate.S): IO
+module IO (D: Hash.DIGEST) (I: Inflate.S): IO

@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Log = Misc.Log_make(struct let section = "sha1" end)
+module Log = Misc.Log_make(struct let section = "hash" end)
 
 module type S = sig
   include Object.S
@@ -35,7 +35,7 @@ type sha = {
 
 exception Ambiguous of string
 
-module SHA1_String = struct
+module Hash_string = struct
 
   type t = sha
 
@@ -109,10 +109,10 @@ module SHA1_String = struct
 
 end
 
-include (SHA1_String: S with type t = sha)
-module Commit = SHA1_String
-module Tree = SHA1_String
-module Blob = SHA1_String
+include (Hash_string: S with type t = sha)
+module Commit = Hash_string
+module Tree = Hash_string
+module Blob = Hash_string
 
 module type H = sig
   include S
@@ -142,7 +142,7 @@ end
 
 module H (D: DIGEST) = struct
 
-  include SHA1_String
+  include Hash_string
 
   let is_short x = hex_length x < D.length * 2
 
@@ -179,18 +179,18 @@ end
 
 module Array (D: DIGEST) = struct
 
-  module SHA = IO(D)
+  module Hash = IO(D)
 
   let get buf n =
     let buf = Cstruct.sub buf (n * D.length) D.length in
-    SHA.input (Mstruct.of_cstruct buf)
+    Hash.input (Mstruct.of_cstruct buf)
 
   let ambiguous t = raise (Ambiguous (to_hex t))
 
-  let only_one sha1 = function
+  let only_one h = function
     | []  -> None
     | [x] -> Some x
-    | _   -> ambiguous sha1
+    | _   -> ambiguous h
 
   let length buf = Cstruct.len buf / D.length
 
@@ -201,18 +201,18 @@ module Array (D: DIGEST) = struct
     in
     loop [] (length t)
 
-  let linear_search buf sha1 =
+  let linear_search buf h =
     let len = length buf in
-    let short_sha = SHA.is_short sha1 in
+    let short_sha = Hash.is_short h in
     let rec aux acc = function
-      | 0 -> only_one sha1 acc
+      | 0 -> only_one h acc
       | i ->
         let off = len - i in
         let s = get buf off in
-        if equal s sha1 then (assert (acc = []); Some off)
+        if equal s h then (assert (acc = []); Some off)
         else if (not short_sha) then aux acc (i - 1)
         else
-          let acc = if is_prefix sha1 s then off :: acc else acc in
+          let acc = if is_prefix h s then off :: acc else acc in
           aux acc (i - 1)
     in
     aux [] len
@@ -223,24 +223,24 @@ module Array (D: DIGEST) = struct
     | None   -> None
     | Some y -> Some (x + y)
 
-  let binary_search buf sha1 =
-    let short_sha = SHA.is_short sha1 in
+  let binary_search buf h =
+    let short_sha = Hash.is_short h in
     let scan_thresh = 4 in
     let rec aux buf =
       let len = length buf in
       if len < scan_thresh then
-        linear_search buf sha1
+        linear_search buf h
       else
         let off = len / 2 in
         let s = get buf off in
-        if equal s sha1 then Some off
-        else if short_sha && is_prefix sha1 s then
-          let is_prefix_of n = is_prefix sha1 (get buf n) in
+        if equal s h then Some off
+        else if short_sha && is_prefix h s then
+          let is_prefix_of n = is_prefix h (get buf n) in
           let prev_ok = off = 0      || not (is_prefix_of (off-1)) in
           let next_ok = off >= len-1 || not (is_prefix_of (off+1)) in
           if prev_ok && next_ok then Some off
-          else ambiguous sha1
-        else if lt sha1 s then aux (sub buf 0 off)
+          else ambiguous h
+        else if lt h s then aux (sub buf 0 off)
         else 1 + off ++ aux (sub buf (off+1) (len-off-1))
     in
     aux buf

@@ -27,7 +27,7 @@ module type S = sig
   (** Create a file on the filesystem, with the given mode. *)
 
   val entry_of_file: t -> Index.t ->
-    string -> Tree.perm -> SHA.Blob.t -> Blob.t -> Index.entry option Lwt.t
+    string -> Tree.perm -> Hash.Blob.t -> Blob.t -> Index.entry option Lwt.t
   (** Generate a cache entry for the file. Create a fresh file if it
       does not already exist. If [root] is not set, use the current
       working directory as repository root. *)
@@ -85,5 +85,5 @@ module type IO = sig
 
 end
 
-module Make (IO: IO) (D: SHA.DIGEST) (I: Inflate.S): S
+module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S): S
 (** Create an on-disk store implementation. *)

@@ -27,7 +27,7 @@ type perm = [
 type entry = {
   perm: perm;
   name: string;
-  node: SHA.t;
+  node: Hash.t;
 }
 
 module T = struct
@@ -48,7 +48,7 @@ module T = struct
   let pp_entry ppf e =
     Format.fprintf ppf "{@[<hov 2>perm = %s;@ node = \"%a\";@ name = %S;@]}"
       (pretty_perm e.perm)
-      SHA.pp e.node
+      Hash.pp e.node
       e.name
 
   let pp ppf t =
@@ -112,9 +112,9 @@ let encode path =
       Buffer.add_substring b path !last (n - !last);
     Buffer.contents b
 
-module IO (D: SHA.DIGEST) = struct
+module IO (D: Hash.DIGEST) = struct
 
-  module SHA_IO = SHA.IO(D)
+  module Hash_IO = Hash.IO(D)
   include T
 
   let add_entry buf e =
@@ -122,7 +122,7 @@ module IO (D: SHA.DIGEST) = struct
     Buffer.add_char buf Misc.sp;
     Buffer.add_string buf (encode e.name);
     Buffer.add_char buf Misc.nul;
-    SHA_IO.add buf e.node
+    Hash_IO.add buf e.node
 
   let decode path =
     if not (Misc.string_mem escape path) then path
@@ -152,7 +152,7 @@ module IO (D: SHA.DIGEST) = struct
       | None      -> Mstruct.parse_error_buf buf "invalid filename"
       | Some name -> name in
     let name = decode name in
-    let node = SHA_IO.input buf in
+    let node = Hash_IO.input buf in
     let entry = {
       perm = perm_of_string buf perm;
       name; node

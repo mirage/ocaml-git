@@ -17,8 +17,8 @@
 (** Commits. *)
 
 type t = {
-  tree     : SHA.Tree.t;
-  parents  : SHA.Commit.t list;
+  tree     : Hash.Tree.t;
+  parents  : Hash.Commit.t list;
   author   : User.t;
   committer: User.t;
   message  : string;
@@ -29,4 +29,4 @@ type t = {
 
 include Object.S with type t := t
 
-module IO (D: SHA.DIGEST): Object.IO with type t = t
+module IO (D: Hash.DIGEST): Object.IO with type t = t

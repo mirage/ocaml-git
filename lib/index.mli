@@ -70,7 +70,7 @@ val pp_stats: Format.formatter -> stat_info -> unit
 
 type entry = {
   stats : stat_info;
-  id    : SHA.Blob.t;
+  id    : Hash.Blob.t;
   stage : int;
   name  : string;
 }
@@ -116,4 +116,4 @@ include Object.S with type t := t
 
 module type IO = Object.IO with type t = t
 
-module IO (D: SHA.DIGEST): IO
+module IO (D: Hash.DIGEST): IO

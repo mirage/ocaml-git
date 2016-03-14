@@ -17,16 +17,16 @@
 (** Search over the graph of Git objects. *)
 
 type pred = [
-  | `Commit of SHA.t
-  | `Tag of string * SHA.t
-  | `Tree of string * SHA.t
-  | `Tree_root of SHA.t
+  | `Commit of Hash.t
+  | `Tag of string * Hash.t
+  | `Tree of string * Hash.t
+  | `Tree_root of Hash.t
 ]
 (** The type for {!Value.t} predecessors. *)
 
 module Make (S: Store.S): sig
 
-  val pred: S.t -> ?full:bool -> SHA.t -> pred list Lwt.t
+  val pred: S.t -> ?full:bool -> Hash.t -> pred list Lwt.t
   (** [pred t s] is the list of [s]'s predecessors in the graph
       [t]. If [full] is not set (by default it is) only consider
       commits and their history relation. *)
@@ -38,11 +38,11 @@ module Make (S: Store.S): sig
   ]
   (** The type for path values. See {!find} for details. *)
 
-  val mem: S.t -> SHA.t -> path -> bool Lwt.t
+  val mem: S.t -> Hash.t -> path -> bool Lwt.t
   (** [mem t s p] check wether there exists a path [p] from [s] in
       [t]. *)
 
-  val find: S.t -> SHA.t -> path -> SHA.t option Lwt.t
+  val find: S.t -> Hash.t -> path -> Hash.t option Lwt.t
   (** [find t s p] follows the path [p] from [s] in [t]. *)
 
 end

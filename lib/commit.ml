@@ -19,8 +19,8 @@ module Log = Misc.Log_make(struct let section = "commit" end)
 module T = struct
 
   type t = {
-    tree     : SHA.Tree.t;
-    parents  : SHA.Commit.t list;
+    tree     : Hash.Tree.t;
+    parents  : Hash.Commit.t list;
     author   : User.t;
     committer: User.t;
     message  : string;
@@ -34,7 +34,7 @@ module T = struct
 
   let pp_parents ppf parents =
     List.iter (fun t ->
-        Format.fprintf ppf "\"%a\";@ " SHA.Commit.pp t
+        Format.fprintf ppf "\"%a\";@ " Hash.Commit.pp t
       ) parents
 
   let pp ppf t =
@@ -45,7 +45,7 @@ module T = struct
        author = %a;@ \
        committer = %a;@.\
        message = %S@]}"
-      SHA.Tree.pp t.tree
+      Hash.Tree.pp t.tree
       pp_parents t.parents
       User.pp t.author
       User.pp t.committer
@@ -57,19 +57,19 @@ end
 
 include T
 
-module IO (D: SHA.DIGEST) = struct
+module IO (D: Hash.DIGEST) = struct
 
   include T
-  module SHA_IO = SHA.IO(D)
+  module Hash_IO = Hash.IO(D)
 
   let add_parent buf parent =
     Buffer.add_string buf "parent ";
-    SHA_IO.Commit.add_hex buf parent;
+    Hash_IO.Commit.add_hex buf parent;
     Buffer.add_char buf Misc.lf
 
   let add buf ?level:_ t =
     Buffer.add_string buf "tree ";
-    SHA_IO.Tree.add_hex buf t.tree;
+    Hash_IO.Tree.add_hex buf t.tree;
     Buffer.add_char buf Misc.lf;
     List.iter (add_parent buf) t.parents;
     Buffer.add_string buf "author ";
@@ -81,7 +81,7 @@ module IO (D: SHA.DIGEST) = struct
     Buffer.add_char buf Misc.lf;
     Buffer.add_string buf t.message
 
-  let commit_sha buf = SHA_IO.Commit.input_hex buf
+  let commit_sha buf = Hash_IO.Commit.input_hex buf
 
   let input_parents buf =
     let rec aux parents =
@@ -101,7 +101,7 @@ module IO (D: SHA.DIGEST) = struct
     in
     aux []
 
-  let tree_sha buf = SHA_IO.Tree.input_hex buf
+  let tree_sha buf = Hash_IO.Tree.input_hex buf
 
   let input buf =
     let tree      = Misc.input_key_value buf ~key:"tree" tree_sha in

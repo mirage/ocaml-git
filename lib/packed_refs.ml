@@ -17,13 +17,13 @@
 type entry =
   [ `Newline
   | `Comment of string
-  | `Entry of (SHA.Commit.t * Reference.t) ]
+  | `Entry of (Hash.Commit.t * Reference.t) ]
 
 let to_line ppf = function
   | `Newline -> Format.fprintf ppf "\n"
   | `Comment c -> Format.fprintf ppf "# %s\n" c
   | `Entry (s,r) ->
-    Format.fprintf ppf "%s %s" (SHA.Commit.to_hex s) (Reference.to_raw r)
+    Format.fprintf ppf "%s %s" (Hash.Commit.to_hex s) (Reference.to_raw r)
 
 module T = struct
   type t = entry list
@@ -54,9 +54,9 @@ let references (t:t) =
   in
   aux Set.empty t
 
-module IO (D: SHA.DIGEST) = struct
+module IO (D: Hash.DIGEST) = struct
 
-  module SHA_IO = SHA.IO(D)
+  module Hash_IO = Hash.IO(D)
   include T
 
   let of_line line =
@@ -67,10 +67,10 @@ module IO (D: SHA.DIGEST) = struct
       Some (`Comment str)
     else match Stringext.cut line ~on:" " with
       | None  -> None
-      | Some (sha1, ref) ->
-        let sha1 = SHA_IO.Commit.of_hex sha1 in
-        let ref = Reference.of_raw ref in
-        Some (`Entry (sha1, ref))
+      | Some (h, r) ->
+        let h = Hash_IO.Commit.of_hex h in
+        let r = Reference.of_raw r in
+        Some (`Entry (h, r))
 
   let add buf ?level:_ t =
     let ppf = Format.formatter_of_buffer buf in

@@ -67,7 +67,7 @@ let pp_stats ppf t =
 
 type entry = {
   stats : stat_info;
-  id    : SHA.Blob.t;
+  id    : Hash.Blob.t;
   stage : int;
   name  : string;
 }
@@ -77,7 +77,7 @@ type entry = {
    <ENTRY_FLAGS> if the entry name byte sequences are identical. *)
 let compare_entries e1 e2 =
   match String.compare e1.name e2.name with
-  | 0 -> SHA.Blob.compare e2.id e1.id
+  | 0 -> Hash.Blob.compare e2.id e1.id
   | i -> i
 
 let pp_entry ppf t =
@@ -88,7 +88,7 @@ let pp_entry ppf t =
      stats =@ %a;@ \
      stage = %d;@]}"
     t.name
-    SHA.Blob.pp t.id
+    Hash.Blob.pp t.id
     pp_stats t.stats
     t.stage
 
@@ -225,15 +225,15 @@ let err_wrong_index_header buf =
 
 let err_wrong_checksum ~got ~expected =
   fail "Wrong checksum! got %s but was expecting %s."
-    (SHA.pretty got) (SHA.pretty expected)
+    (Hash.pretty got) (Hash.pretty expected)
 
 let pp_extension ppf e =
   Format.fprintf ppf "@[kind:%s@ size:%d]"
     (string_of_extension_kind e.kind) (String.length e.payload)
 
-module IO (D: SHA.DIGEST) = struct
+module IO (D: Hash.DIGEST) = struct
 
-  module SHA_IO = SHA.IO(D)
+  module Hash_IO = Hash.IO(D)
   type x = t
   type t = x
   let equal = equal
@@ -246,7 +246,7 @@ module IO (D: SHA.DIGEST) = struct
     Log.debug "input_entry";
     let offset0 = Mstruct.offset buf in
     let stats = input_stat_info buf in
-    let id = SHA_IO.input buf |> SHA.to_blob in
+    let id = Hash_IO.input buf |> Hash.to_blob in
     let stage, len =
       let i = Mstruct.get_be_uint16 buf in
       (i land 0x3000) lsr 12,
@@ -261,7 +261,7 @@ module IO (D: SHA.DIGEST) = struct
       | n -> 8-n in
     Mstruct.shift buf padding;
     Log.debugk "name:%s id:%s bytes:%d padding:%d" (fun log ->
-        log name (SHA.Blob.to_hex id) bytes padding);
+        log name (Hash.Blob.to_hex id) bytes padding);
     { stats; id; stage; name }
 
   let add_entry buf t =
@@ -273,7 +273,7 @@ module IO (D: SHA.DIGEST) = struct
     let cstr = Cstruct.create (len+pad) in
     Mstruct.with_mstruct cstr (fun mstr ->
         add_stat_info mstr t.stats;
-        Mstruct.set_string mstr (SHA.Blob.to_raw t.id);
+        Mstruct.set_string mstr (Hash.Blob.to_raw t.id);
         let flags = (t.stage lsl 12 + String.length t.name) land 0x3FFF in
         Mstruct.set_be_uint16 mstr flags;
         Mstruct.set_string mstr t.name;
@@ -318,8 +318,8 @@ module IO (D: SHA.DIGEST) = struct
     if length <> total_length - 20 then
       err_need_more_data (total_length - 20) length;
     let got = Cstruct.sub all offset length |> D.cstruct in
-    let expected = SHA_IO.input buf in
-    if not (SHA.equal got expected) then err_wrong_checksum ~got ~expected;
+    let expected = Hash_IO.input buf in
+    if not (Hash.equal got expected) then err_wrong_checksum ~got ~expected;
     { entries; extensions }
 
   let add buf ?level:_ t =
@@ -335,9 +335,9 @@ module IO (D: SHA.DIGEST) = struct
         Buffer.add_string buf (Cstruct.to_string header);
         List.iter (add_entry buf) t.entries;
       ) in
-    let sha1 = D.string str in
+    let h = D.string str in
     Buffer.add_string buf str;
-    Buffer.add_string buf (SHA.to_raw sha1)
+    Buffer.add_string buf (Hash.to_raw h)
 
 end
 

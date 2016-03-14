@@ -45,18 +45,18 @@ let keys t =
   List.fold_left (fun set pic ->
       if Packed_value.PIC.shallow pic then set
       else
-        let key = Packed_value.PIC.sha1 pic in
-        SHA.Set.add key set
-    ) SHA.Set.empty t
+        let key = Packed_value.PIC.name pic in
+        Hash.Set.add key set
+    ) Hash.Set.empty t
 
 type raw = {
-  sha1    : SHA.t;
-  keys    : SHA.Set.t;
-  index   : SHA.t -> int option;
+  hash    : Hash.t;
+  keys    : Hash.Set.t;
+  index   : Hash.t -> int option;
   read    : Value.read_inflated;
   buffer  : Cstruct.t;
   version : int;
-  checksum: SHA.t;
+  checksum: Hash.t;
   values  :  (int32 * Packed_value.t) list;
   shallow : bool;
   raw_index: Pack_index.Raw.t option;
@@ -69,22 +69,22 @@ module Raw = struct
   let compare = compare
 
   let equal t1 t2 =
-    SHA.equal t1.sha1 t2.sha1
-    && SHA.Set.equal t1.keys t2.keys
+    Hash.equal t1.hash t2.hash
+    && Hash.Set.equal t1.keys t2.keys
     && t1.buffer = t2.buffer
     && t1.version = t2.version
-    && SHA.equal t1.checksum t2.checksum
+    && Hash.equal t1.checksum t2.checksum
     && t1.values = t2.values
 
   let pp ppf t =
-    Format.fprintf ppf "%a@." SHA.pp t.checksum;
+    Format.fprintf ppf "%a@." Hash.pp t.checksum;
     List.iter (fun (crc, p) ->
         Format.fprintf ppf "%ld: %a" crc Packed_value.pp p
       ) t.values
 
   let pretty = Misc.pretty pp
   let shallow t = t.shallow
-  let sha1 t = t.sha1
+  let name t = t.hash
   let keys t = t.keys
   let buffer t = t.buffer
 
@@ -103,11 +103,11 @@ module Raw = struct
 
 end
 
-module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
+module IO (D: Hash.DIGEST) (I: Inflate.S) = struct
 
   module Packed_value_IO = Packed_value.IO(D)(I)
   module Value_IO = Value.IO(D)(I)
-  module SHA_IO = SHA.IO(D)
+  module Hash_IO = Hash.IO(D)
 
   module Raw = struct
 
@@ -125,11 +125,11 @@ module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
       | 3 -> Packed_value_IO.V3.input buf
       | _ -> fail "pack version should be 2 or 3"
 
-    let read_packed_value name ~index buf sha1 =
+    let read_packed_value name ~index buf hash =
       let `Version version, `Count count = input_header buf in
       Log.debugk "%s: %s version=%d count=%d" (fun log ->
-          log name (SHA.pretty sha1) version count);
-      match index sha1 with
+          log name (Hash.pretty hash) version count);
+      match index hash with
       | None -> None
       | Some offset ->
         Log.debug "read: offset=%d" offset;
@@ -141,15 +141,15 @@ module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
         let v = Packed_value.create ~kind ~offset:shift in
         Some (version, ba, v)
 
-    let read ~index ~read buf sha1 =
-      match read_packed_value "read" ~index buf sha1 with
+    let read ~index ~read buf hash =
+      match read_packed_value "read" ~index buf hash with
       | None                  -> Lwt.return_none
       | Some (version, ba, v) ->
         Packed_value_IO.to_value ~version ~read ~index ~ba v >|=
         fun x -> Some x
 
-    let read_inflated ~index ~read buf sha1 =
-      match read_packed_value "read_inflated" ~index buf sha1 with
+    let read_inflated ~index ~read buf hash =
+      match read_packed_value "read_inflated" ~index buf hash with
       | None                  -> Lwt.return_none
       | Some (version, ba, v) ->
         Packed_value_IO.unpack ~version ~read ~index ~ba v >|=
@@ -173,22 +173,22 @@ module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
           progress str
         )
       in
-      Lwt_list.fold_left_s (fun (offsets, crcs, sha1s, pics) (crc, v) ->
+      Lwt_list.fold_left_s (fun (offsets, crcs, hashes, pics) (crc, v) ->
           let get_offsets = get Misc.IntMap.find offsets in
-          let get_sha1s   = get SHA.Map.find sha1s in
+          let get_hashes  = get Hash.Map.find hashes in
           if Packed_value.is_delta v then (incr d; pp ());
           Packed_value_IO.to_pic
-            ~read ~offsets:get_offsets ~sha1s:get_sha1s v
+            ~read ~offsets:get_offsets ~hashes:get_hashes v
           >|= fun pic ->
-          let sha1 = Packed_value.PIC.sha1 pic in
+          let name = Packed_value.PIC.name pic in
           let offset = Packed_value.offset v in
           let offsets = Misc.IntMap.add offset pic offsets in
-          let crcs = SHA.Map.add sha1 crc crcs in
-          let sha1s = SHA.Map.add sha1 pic sha1s in
+          let crcs = Hash.Map.add name crc crcs in
+          let hashes = Hash.Map.add name pic hashes in
           let pics = (offset, pic) :: pics in
-          offsets, crcs, sha1s, pics
+          offsets, crcs, hashes, pics
         )
-        (Misc.IntMap.empty, SHA.Map.empty, SHA.Map.empty, [])
+        (Misc.IntMap.empty, Hash.Map.empty, Hash.Map.empty, [])
         values >|= fun (offsets, crcs, _, pics) ->
       Log.debug "to_pic: ok";
       offsets, crcs, List.rev pics
@@ -197,17 +197,17 @@ module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
       Log.debug "index_of_packed_values";
       to_pic ?progress ~read values >|= fun (_, crcs, pics) ->
       let offsets = List.fold_left (fun offsets (offset, pic) ->
-          SHA.Map.add (Packed_value.PIC.sha1 pic) offset offsets
-        ) SHA.Map.empty pics
+          Hash.Map.add (Packed_value.PIC.name pic) offset offsets
+        ) Hash.Map.empty pics
       in
       { Pack_index.offsets; crcs; pack_checksum }
 
     (* Since Git 1.8.5 the naming is hardly reproductible, so pick a
        random but stable one. *)
-    let sha1_of_keys keys =
+    let hash_of_keys keys =
       keys
-      |> SHA.Set.to_list
-      |> List.map SHA.to_hex
+      |> Hash.Set.to_list
+      |> List.map Hash.to_hex
       |> List.sort String.compare
       |> List.rev
       |> String.concat ""
@@ -235,20 +235,20 @@ module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
       Log.debug "input version:%d count:%d" version count;
       let values = values buf ~version count in
       let str = Cstruct.sub all 0 (Mstruct.offset buf - offset) in
-      let pack_checksum = SHA_IO.input buf in
+      let pack_checksum = Hash_IO.input buf in
       let checksum = D.cstruct str in
       if checksum <> pack_checksum then
         fail "Raw.input: wrong file checksum. Got: %s, expecting %s."
-          (SHA.to_hex checksum) (SHA.to_hex pack_checksum);
+          (Hash.to_hex checksum) (Hash.to_hex pack_checksum);
       Log.debugk "input checksum: %s" (fun log ->
-          log (SHA.to_hex pack_checksum));
+          log (Hash.to_hex pack_checksum));
       if Mstruct.length buf <> 0 then fail "input: unprocessed data.";
       let buffer = Cstruct.sub all offset (Cstruct.len all - offset) in
       let raw_index = None in
       let shallow = false in
       let create index keys =
-        let sha1 = sha1_of_keys keys in
-        { sha1; keys; read; index; values; buffer; version; checksum;
+        let hash = hash_of_keys keys in
+        { hash; keys; read; index; values; buffer; version; checksum;
           raw_index; shallow; }
       in
       k pack_checksum values create
@@ -293,7 +293,7 @@ module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
         Printf.sprintf "\rUnpacking objects: 100%% (%d/%d), done.\n%!" !i !i
       in
       progress str;
-      SHA.Map.keys crcs |> SHA.Set.of_list
+      Hash.Map.keys crcs |> Hash.Set.of_list
 
   end
 
@@ -314,7 +314,7 @@ module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
     | 3 -> Packed_value_IO.V3.add buf ?level
     | _ -> fail "pack version should be 2 or 3"
 
-  let get h k = try Some (SHA.Map.find k h) with Not_found -> None
+  let get h k = try Some (Hash.Map.find k h) with Not_found -> None
 
   let string_lengths s = List.fold_left (fun acc s -> acc + String.length s) 0 s
 
@@ -341,25 +341,24 @@ module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
     let bufs, offsets, crcs =
       List.fold_left (fun (bufs, offsets, crcs) pic ->
           let offset = Buffer.length buf in
-          let sha1 = Packed_value.PIC.sha1 pic in
-          let offsets = SHA.Map.add sha1 offset offsets in
+          let name = Packed_value.PIC.name pic in
+          let offsets = Hash.Map.add name offset offsets in
           let index = get offsets in
           let p = Packed_value_IO.of_pic ~index ~offset pic in
           Buffer.reset buf;
           add_packed_value ~version ?level buf (Packed_value.kind p);
           let buf = Buffer.contents buf in
           let crc32 = Crc.Crc32.string buf 0 (String.length buf) in
-          let crcs = SHA.Map.add sha1 crc32 crcs in
+          let crcs = Hash.Map.add name crc32 crcs in
           let bufs = buf :: bufs in
           bufs, offsets, crcs
-        ) ([], SHA.Map.empty, SHA.Map.empty) t
+        ) ([], Hash.Map.empty, Hash.Map.empty) t
     in
-    let sha1 = Buffer.contents buf |> D.string in
-    Log.debugk "add sha1: %s" (fun log ->
-        log (SHA.to_hex sha1));
+    let h = Buffer.contents buf |> D.string in
+    Log.debugk "add hash: %s" (fun log -> log (Hash.to_hex h));
     let footer =
       let buf = Buffer.create 40 in
-      SHA_IO.add buf sha1;
+      Hash_IO.add buf h;
       Buffer.contents buf
     in
     let bufs = header :: List.rev_append bufs [footer] in
@@ -386,21 +385,20 @@ module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
     Raw.input_with_index ~read ~index ~keys buf
 
   let err_not_found k =
-    Printf.ksprintf failwith "Pack.Not_found: %s" (SHA.pretty k)
+    Printf.ksprintf failwith "Pack.Not_found: %s" (Hash.pretty k)
 
-  let read t sha1 =
-    Log.debugk "read %s" (fun log ->
-        log (SHA.pretty sha1));
+  let read t h =
+    Log.debugk "read %s" (fun log -> log (Hash.pretty h));
     try
-      let is_equal x = SHA.equal (Packed_value.PIC.sha1 x) sha1 in
+      let is_equal x = Hash.equal (Packed_value.PIC.name x) h in
       let pic = List.find is_equal t in
       Some (Packed_value_IO.value_of_pic pic)
     with Not_found ->
       None
 
-  let read_exn t sha1 =
-    match read t sha1 with
-    | None   -> err_not_found sha1
+  let read_exn t h =
+    match read t h with
+    | None   -> err_not_found h
     | Some x -> x
 
 end
@@ -409,22 +407,22 @@ module type IO = sig
   include Object.S with type t = t
   val add: ?level:int -> t -> Pack_index.Raw.t * Cstruct.t
   val input: ?progress:(string -> unit) ->
-    index:Pack_index.f -> keys:SHA.Set.t -> read:Value.read_inflated ->
+    index:Pack_index.f -> keys:Hash.Set.t -> read:Value.read_inflated ->
     Mstruct.t -> t Lwt.t
-  val read: t -> SHA.t -> Value.t option
-  val read_exn: t -> SHA.t -> Value.t
-  val create: (SHA.t * Value.t) list -> t
+  val read: t -> Hash.t -> Value.t option
+  val read_exn: t -> Hash.t -> Value.t
+  val create: (Hash.t * Value.t) list -> t
   module Raw: sig
     include Object.S with type t = raw
     val add: [`Not_defined]
     val input: ?progress:(string -> unit) -> read:Value.read_inflated ->
       Mstruct.t -> t Lwt.t
     val unpack: ?progress:(string -> unit) -> write:Value.write_inflated ->
-      t -> SHA.Set.t Lwt.t
+      t -> Hash.Set.t Lwt.t
     val read: index:Pack_index.f -> read:Value.read_inflated ->
-      Mstruct.t -> SHA.t -> Value.t option Lwt.t
+      Mstruct.t -> Hash.t -> Value.t option Lwt.t
     val read_inflated: index:Pack_index.f -> read:Value.read_inflated ->
-      Mstruct.t -> SHA.t -> string option Lwt.t
+      Mstruct.t -> Hash.t -> string option Lwt.t
   end
   type raw = Raw.t
   val of_raw: ?progress:(string -> unit) -> Raw.t -> t Lwt.t

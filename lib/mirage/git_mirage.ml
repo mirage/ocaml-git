@@ -7,7 +7,7 @@
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT HashLL THE AUTHOR BE LIABLE FOR
  * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
@@ -24,7 +24,7 @@ module type FS = sig
   val string_of_error: error -> string
 end
 
-module FS (FS: FS) (D: Git.SHA.DIGEST) (I: Git.Inflate.S) = struct
+module FS (FS: FS) (D: Git.Hash.DIGEST) (I: Git.Inflate.S) = struct
 
   let (>>|) x f =
     x >>= function
@@ -519,7 +519,7 @@ module SHA1_slow = struct
     i2s h 8 !h2;
     i2s h 12 !h3;
     i2s h 16 !h4;
-    Git.SHA.of_raw h
+    Git.Hash.of_raw h
 
   let string = digest ~length:String.length ~blit:Bytes.blit
   let cstruct = digest ~length:Cstruct.len ~blit:Cstruct.blit_to_string

@@ -19,7 +19,7 @@ module Log = Misc.Log_make(struct let section = "tag" end)
 module T = struct
 
   type t = {
-    sha1   : SHA.t;
+    obj    : Hash.t;
     typ    : Object_type.t;
     tag    : string;
     tagger : User.t;
@@ -37,7 +37,7 @@ module T = struct
        tag   : %S@ \
        tagger: %a@.\
        %s@]"
-      SHA.pp t.sha1
+      Hash.pp t.obj
       (Object_type.to_string t.typ)
       t.tag
       User.pp t.tagger
@@ -49,10 +49,10 @@ end
 
 include T
 
-module IO (D: SHA.DIGEST) = struct
+module IO (D: Hash.DIGEST) = struct
 
   include T
-  module SHA_IO = SHA.IO(D)
+  module Hash_IO = Hash.IO(D)
 
   let add_key_value buf k v =
     Buffer.add_string buf k;
@@ -67,7 +67,7 @@ module IO (D: SHA.DIGEST) = struct
     | None   -> Mstruct.parse_error_buf buf "input_object_type: %s" s
 
   let add buf ?level:_ t =
-    add_key_value buf "object" (SHA.to_hex t.sha1);
+    add_key_value buf "object" (Hash.to_hex t.obj);
     add_key_value buf "type"   (Object_type.to_string t.typ);
     add_key_value buf "tag"    t.tag;
     Buffer.add_string buf "tagger ";
@@ -77,12 +77,12 @@ module IO (D: SHA.DIGEST) = struct
     Buffer.add_string buf t.message
 
   let input buf =
-    let sha1   = Misc.input_key_value buf ~key:"object" SHA_IO.input_hex in
+    let obj    = Misc.input_key_value buf ~key:"object" Hash_IO.input_hex in
     let typ    = Misc.input_key_value buf ~key:"type" input_object_type in
     let tag    = Misc.input_key_value buf ~key:"tag" Mstruct.to_string in
     let tagger = Misc.input_key_value buf ~key:"tagger" User.input in
     Mstruct.shift buf 1;
     let message = Mstruct.to_string buf in
-    { sha1; typ; tag; tagger; message }
+    { obj; typ; tag; tagger; message }
 
 end

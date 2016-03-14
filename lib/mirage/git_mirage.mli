@@ -28,7 +28,7 @@ module type FS = sig
 
 end
 
-module FS (FS: FS) (D: Git.SHA.DIGEST) (I: Git.Inflate.S): Git.FS.S
+module FS (FS: FS) (D: Git.Hash.DIGEST) (I: Git.Inflate.S): Git.FS.S
 (** Create a Irmin store from raw block devices handler. *)
 
 module Sync: sig
@@ -42,4 +42,4 @@ module Sync: sig
     Git.Sync.S with type t = S.t and type ctx = IO.ctx
 end
 
-module SHA1_slow: Git.SHA.DIGEST
+module SHA1_slow: Git.Hash.DIGEST

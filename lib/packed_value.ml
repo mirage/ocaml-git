@@ -34,7 +34,7 @@ type 'a delta = {
 
 type kind =
   | Raw_value of string
-  | Ref_delta of SHA.t delta
+  | Ref_delta of Hash.t delta
   | Off_delta of int delta
 
 let pp_copy ppf t =
@@ -64,14 +64,14 @@ let hash = Hashtbl.hash
 let equal = (=)
 let compare = compare
 
-let shallow sha1s t = match t.kind with
+let shallow hashes t = match t.kind with
   | Off_delta _
   | Raw_value _ -> false
-  | Ref_delta d -> not (SHA.Set.mem d.source sha1s)
+  | Ref_delta d -> not (Hash.Set.mem d.source hashes)
 
 let pp_kind ppf = function
   | Raw_value _ -> Format.pp_print_string ppf "RAW"
-  | Ref_delta d -> Format.fprintf ppf "@[ref-delta: %s@@]" (SHA.to_hex d.source)
+  | Ref_delta d -> Format.fprintf ppf "@[ref-delta: %s@@]" (Hash.to_hex d.source)
   | Off_delta d -> Format.fprintf ppf "@[off-delta:%d@@]" d.source
 
 let pp ppf { kind; offset } =
@@ -133,42 +133,41 @@ module PIC = struct
   type kind = Raw of string | Link of t delta
 
   and t = {
-    kind: kind;
-    sha1: SHA.t;
+    kind   : kind;
+    hash   : Hash.t;
     shallow: bool;
     mutable raw: string option;
   }
 
-  let equal x y = SHA.equal x.sha1 y.sha1
-  let hash x = SHA.hash x.sha1
-  let compare x y = SHA.compare x.sha1 y.sha1
+  let equal x y = Hash.equal x.hash y.hash
+  let hash x = Hash.hash x.hash
+  let compare x y = Hash.compare x.hash y.hash
 
   let pretty_kind = function
     | Raw _  -> "RAW"
-    | Link d -> sprintf "link(%s)" (SHA.to_hex @@ d.source.sha1)
+    | Link d -> sprintf "link(%s)" (Hash.to_hex @@ d.source.hash)
 
   let pp ppf t =
-    Format.fprintf ppf "@[%a: %s@]" SHA.pp t.sha1 (pretty_kind t.kind)
+    Format.fprintf ppf "@[%a: %s@]" Hash.pp t.hash (pretty_kind t.kind)
 
   let pretty = Misc.pretty pp
 
-  let create ?raw ?(shallow=false) sha1 kind = { sha1; kind; shallow; raw }
-  let sha1 t = t.sha1
+  let create ?raw ?(shallow=false) hash kind = { hash; kind; shallow; raw }
+  let name t = t.hash
   let kind t = t.kind
   let raw t = t.raw
   let shallow t = t.shallow
 
-  let of_raw ?(shallow=false) sha1 raw =
-    { sha1; kind = Raw raw; shallow; raw = Some raw; }
+  let of_raw ?(shallow=false) hash raw =
+    { hash; kind = Raw raw; shallow; raw = Some raw; }
 
-  let with_cache f sha1 =
-    match Value.Cache.find_inflated sha1 with
+  let with_cache f h =
+    match Value.Cache.find_inflated h with
     | Some x -> x
     | None   ->
-      Log.debugk "%s: cache miss!" (fun log ->
-          log (SHA.pretty sha1));
+      Log.debugk "%s: cache miss!" (fun log -> log (Hash.pretty h));
       let x = f () in
-      Value.Cache.add_inflated sha1 x;
+      Value.Cache.add_inflated h x;
       x
 
   let rec unpack t = match raw t with
@@ -176,7 +175,7 @@ module PIC = struct
     | None     ->
       Log.debugk "unpack %s" (fun log ->
           log (pretty t));
-      let raw = with_cache (fun () -> unpack_kind @@ kind t) (sha1 t) in
+      let raw = with_cache (fun () -> unpack_kind @@ kind t) (name t) in
       t.raw <- Some raw;
       raw
 
@@ -184,7 +183,7 @@ module PIC = struct
     | Raw x  -> x
     | Link d ->
       Log.debugk "unpack: hop to %s" (fun log ->
-          log (SHA.to_hex @@ sha1 d.source));
+          log (Hash.to_hex @@ name d.source));
       let source = unpack d.source in
       Misc.with_buffer (fun buf -> add_delta buf { d with source })
 
@@ -200,9 +199,9 @@ end
 
 type pic = PIC.t
 
-module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
+module IO (D: Hash.DIGEST) (I: Inflate.S) = struct
 
-  module SHA_IO = SHA.IO(D)
+  module Hash_IO = Hash.IO(D)
   module Value_IO = Value.IO(D)(I)
 
   let err_inflate () = fail "not a valid compressed object"
@@ -389,7 +388,7 @@ module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
         let hunks = with_inflated buf size (input_hunks base) in
         Off_delta hunks
       | 0b111 ->
-        let base  = SHA_IO.input buf in
+        let base  = Hash_IO.input buf in
         let hunks = with_inflated buf size (input_hunks base) in
         Ref_delta hunks
       | _     -> assert false
@@ -422,7 +421,7 @@ module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
           add_be_modified_base_128 tmp_buffer hunks.source;
           add_deflated_hunks tmp_buffer hunks
         | Ref_delta hunks ->
-          SHA_IO.add tmp_buffer hunks.source;
+          Hash_IO.add tmp_buffer hunks.source;
           add_deflated_hunks tmp_buffer hunks
       in
       let kind = match t with
@@ -464,26 +463,26 @@ module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
     match PIC.kind t with
     | PIC.Raw x  -> return (Raw_value x)
     | PIC.Link d ->
-      let sha1 = PIC.sha1 d.source in
-      match index sha1 with
-      | None   -> fail "of_pic: cannot find %s" (SHA.pretty sha1)
+      let name = PIC.name d.source in
+      match index name with
+      | None   -> fail "of_pic: cannot find %s" (Hash.pretty name)
       | Some o -> return (Off_delta { d with source = offset - o })
 
-  let err_sha1_not_found n sha1 = fail "%s: cannot read %s" n (SHA.pretty sha1)
+  let err_hash_not_found n h = fail "%s: cannot read %s" n (Hash.pretty h)
   let err_offset_not_found = fail "%s: cannot find any object at offset %d"
 
-  let to_pic ~read ~offsets ~sha1s t =
+  let to_pic ~read ~offsets ~hashes t =
     let kind = match t.kind with
       | Raw_value x -> Lwt.return (PIC.Raw x)
       | Ref_delta d ->
-        begin match sha1s d.source with
+        begin match hashes d.source with
           | Some pic -> Lwt.return (PIC.Link { d with source = pic })
           | None ->
             read d.source >>= function
             | Some buf ->
               let shallow = PIC.of_raw ~shallow:true d.source buf in
               Lwt.return (PIC.Link { d with source = shallow })
-            | None -> err_sha1_not_found "to_pic" d.source
+            | None -> err_hash_not_found "to_pic" d.source
         end
       | Off_delta d ->
         let offset = t.offset - d.source in
@@ -495,14 +494,14 @@ module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
     in
     kind >|= fun kind ->
     let raw  = PIC.unpack_kind kind in
-    let sha1 = D.string raw in
+    let h = D.string raw in
     Log.debugk "to_pic(%s) -> %s:%s" (fun log ->
-        log (Misc.pretty pp_kind t.kind) (SHA.pretty sha1) (PIC.pretty_kind kind));
-    PIC.create ~raw sha1 kind
+        log (Misc.pretty pp_kind t.kind) (Hash.pretty h) (PIC.pretty_kind kind));
+    PIC.create ~raw h kind
 
-  let read_and_add_delta ~read buf delta sha1 =
-    read sha1 >>= function
-    | None        -> err_sha1_not_found "read_and_add_delta" sha1
+  let read_and_add_delta ~read buf delta h =
+    read h >>= function
+    | None        -> err_hash_not_found "read_and_add_delta" h
     | Some source -> add_delta buf { delta with source }; Lwt.return_unit
 
   let add_inflated_value ~read ~offsets buf { offset; kind } = match kind with
@@ -521,7 +520,7 @@ module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
 
   let rec unpack_ref_delta ~lv ~version ~index ~read ba d =
     Log.debugk "unpack-ref-delta[%d]: d.source=%s" (fun log ->
-        log lv (SHA.to_hex d.source));
+        log lv (Hash.to_hex d.source));
     match index d.source with
     | Some offset ->
       let offset = offset - 12 in (* header skipped *)
@@ -534,7 +533,7 @@ module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
       Misc.with_buffer (fun b -> add_delta b {d with source})
     | None ->
       read d.source >>= function
-      | None     -> fail "unpack: cannot read %s" (SHA.pretty d.source)
+      | None     -> fail "unpack: cannot read %s" (Hash.pretty d.source)
       | Some buf -> Lwt.return buf
 
   and unpack_off_delta ~lv ~version ~index ~read ba d offset =

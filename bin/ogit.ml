@@ -180,7 +180,7 @@ let cat = {
 
 let catch_ambiguous f =
   Lwt.catch f (function
-      | SHA.Ambiguous s -> eprintf "%s: ambiguous argument\n%!" s; exit 1
+      | Hash.Ambiguous s -> eprintf "%s: ambiguous argument\n%!" s; exit 1
       | Not_found ->
         eprintf "unknown revision or path not in the working tree\n%!";
         exit 1
@@ -196,14 +196,14 @@ let cat_file = {
     let ty_flag = mk_flag ["t"] "Instead of the content, show the object type." in
     let sz_flag = mk_flag ["s"] "Instead of the content, show the object size." in
     let id =
-      let doc = Arg.info ~docv:"SHA1" ~doc:"The SHA1 of the repository object." [] in
+      let doc = Arg.info ~docv:"Hash1" ~doc:"The Hash1 of the repository object." [] in
       Arg.(required & pos 0 (some string) None & doc)
     in
     let cat_file (module S: Store.S) ty_flag sz_flag id =
       run begin
         S.create () >>= fun t ->
         catch_ambiguous (fun () ->
-            S.read_exn t (SHA_IO.of_short_hex id) >>= fun v ->
+            S.read_exn t (Hash_IO.of_short_hex id) >>= fun v ->
              let t, c, s = match v with
                | Value.Blob blob ->
                  let c = Blob.to_raw blob in
@@ -241,7 +241,7 @@ let ls_remote = {
         Printf.printf "From %s\n" (Gri.to_string remote);
         let print ref sha1 =
           Printf.printf "%s        %s\n"
-            (SHA.Commit.to_hex sha1)
+            (Hash.Commit.to_hex sha1)
             (Reference.to_raw ref) in
         Reference.Map.iter print references;
         Lwt.return_unit
@@ -286,8 +286,8 @@ let ls_tree = {
     in
     let only_tree_flag = mk_flag ["d"] "Show only the named tree entry itself." in
     let oid =
-      let doc = Arg.info [] ~docv:"SHA1"
-          ~doc:"The SHA1 of the tree."
+      let doc = Arg.info [] ~docv:"Hash1"
+          ~doc:"The Hash1 of the tree."
       in
       Arg.(required & pos 0 (some string) None & doc )
     in
@@ -298,19 +298,19 @@ let ls_tree = {
     in
     let ls (module S: Store.S) recurse show_tree only_tree oid =
       let pp_blob path sha1 =
-        printf "blob %s %s\n" (SHA.to_hex sha1) path;
+        printf "blob %s %s\n" (Hash.to_hex sha1) path;
         Lwt.return_unit
       in
       let pp_tree mode kind path e =
-        printf "%s %s %s\t%s\n" mode kind (SHA.to_hex e.Tree.node) path
+        printf "%s %s %s\t%s\n" mode kind (Hash.to_hex e.Tree.node) path
       in
       let pp_tag path sha1 =
-        printf "tag %s %s\n" (SHA.to_hex sha1) path;
+        printf "tag %s %s\n" (Hash.to_hex sha1) path;
         Lwt.return_unit
       in
       let rec walk t path sha1 =
         S.read_exn t sha1 >>= function
-        | Value.Commit c  -> walk t path (SHA.of_tree c.Commit.tree)
+        | Value.Commit c  -> walk t path (Hash.of_tree c.Commit.tree)
         | Value.Blob _    -> pp_blob path sha1
         | Value.Tag _     -> pp_tag path sha1
         | Value.Tree tree ->
@@ -329,7 +329,7 @@ let ls_tree = {
       in
       run begin
         S.create () >>= fun t ->
-        let sha1 = SHA_IO.of_short_hex oid in
+        let sha1 = Hash_IO.of_short_hex oid in
         catch_ambiguous (fun () -> walk t "" sha1)
       end in
     Term.(mk ls $ backend $ recurse_flag $ show_tree_flag
@@ -357,7 +357,7 @@ let read_tree = {
           if List.exists (fun r -> Reference.to_raw r = ref) refs then
             S.read_reference_exn t (Reference.of_raw ref)
           else
-            Lwt.return (SHA_IO.Commit.of_short_hex commit_str)
+            Lwt.return (Hash_IO.Commit.of_short_hex commit_str)
         end >>= fun commit ->
         S.write_index t commit >>= fun () ->
         printf "The index file has been update to %s\n%!" commit_str;
@@ -475,8 +475,8 @@ let pull = {
         Sy.fetch t ~unpack remote >>= fun r ->
         match h with
         | None
-        | Some (Reference.SHA _) -> Lwt.return_unit
-        | Some (Reference.Ref b) ->
+        | Some (Reference.Hash _) -> Lwt.return_unit
+        | Some (Reference.Ref b)  ->
           let refs = Sync.Result.references r in
           if Reference.Map.mem b refs then (
             let commit = Reference.Map.find b refs in

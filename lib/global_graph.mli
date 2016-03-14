@@ -16,25 +16,25 @@
 
 (** Functions to manipulate the graph of Git objects. *)
 
-module K: Graph.Sig.I with type V.t = SHA.t
+module K: Graph.Sig.I with type V.t = Hash.t
 (** The graph of Git keys. *)
 
 module Make (S: Store.S): sig
 
-  val keys: K.t -> SHA.t list
+  val keys: K.t -> Hash.t list
   (** [keys g] is a topological sort of [g]'s keys. *)
 
   val of_keys: S.t -> K.t Lwt.t
   (** Return the graph of keys of the given Git store. *)
 
-  val closure: ?full:bool -> S.t -> min:SHA.Set.t -> max:SHA.Set.t -> K.t Lwt.t
+  val closure: ?full:bool -> S.t -> min:Hash.Set.t -> max:Hash.Set.t -> K.t Lwt.t
   (** Return a consistent cut of the graph of keys, where no elements
       are stricly lesser than the ones in [min] and none are bigger
       than the ones in [max]. Elements of [min] and [max] are in the
       closure. If [full] is not set (it is by default), return only
       the graph of commits. *)
 
-  val pack: S.t -> min:SHA.Set.t -> max:SHA.Set.t -> (SHA.t * Value.t) list Lwt.t
+  val pack: S.t -> min:Hash.Set.t -> max:Hash.Set.t -> (Hash.t * Value.t) list Lwt.t
   (** Return a packed (closed) collection of objects. *)
 
   val to_dot: S.t -> Buffer.t -> unit Lwt.t

@@ -34,14 +34,14 @@ val is_head: t -> bool
 (** Is the given reference the HEAD ? *)
 
 type head_contents =
-  | SHA of SHA.Commit.t
+  | Hash of Hash.Commit.t
   | Ref of t
 (** The possible HEAD contents. *)
 
-val head_contents_of_string: of_hex:(string -> SHA.t) -> string -> head_contents
+val head_contents_of_string: of_hex:(string -> Hash.t) -> string -> head_contents
 (** Parse the contents of HEAD *)
 
-val head_contents_of_commit: SHA.Commit.t Map.t -> SHA.Commit.t -> head_contents
+val head_contents_of_commit: Hash.Commit.t Map.t -> Hash.Commit.t -> head_contents
 (** Build a head contents from a commit hash. The result is either the
     hex representation of the SHA or something like {i ref: <ref>} if
     the SHA has already a reference pointing to it. *)

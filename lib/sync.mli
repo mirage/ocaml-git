@@ -41,20 +41,20 @@ type capability =
 module Result: sig
 
   type fetch
-  (** The resulting sha1s and references. *)
+  (** The resulting hashes and references. *)
 
   val head_contents: fetch -> Reference.head_contents option
   (** [head_contents f] is [f]'s head contents (the value of the
       remote {i .git/HEAD}). *)
 
-  val head: fetch -> SHA.Commit.t option
+  val head: fetch -> Hash.Commit.t option
   (** [head f] is [f]'s head commit. *)
 
-  val references: fetch -> SHA.Commit.t Reference.Map.t
+  val references: fetch -> Hash.Commit.t Reference.Map.t
   (** [references f] are [f]'s references. *)
 
-  val sha1s: fetch -> SHA.Set.t
-  (** [sha1s f] are [f]'s object hashes. *)
+  val hashes: fetch -> Hash.Set.t
+  (** [hashes f] are [f]'s object hashes. *)
 
   val pretty_fetch: fetch -> string
   (** Pretty print a fetch result. *)
@@ -72,7 +72,7 @@ module Result: sig
 
 end
 
-type want = [ `Ref of Reference.t | `Commit of SHA.Commit.t ]
+type want = [ `Ref of Reference.t | `Commit of Hash.Commit.t ]
 (** The type for values wanted. See {!fetch} for details. *)
 
 module type S = sig
@@ -85,7 +85,7 @@ module type S = sig
 
   (** {1 The base Git protocol and Git+SSH} *)
 
-  val ls: ?ctx:ctx -> t -> Gri.t -> SHA.Commit.t Reference.Map.t Lwt.t
+  val ls: ?ctx:ctx -> t -> Gri.t -> Hash.Commit.t Reference.Map.t Lwt.t
   (** List the references of the remote repository. *)
 
   val push: ?ctx:ctx -> t -> branch:Reference.t -> Gri.t -> Result.push Lwt.t

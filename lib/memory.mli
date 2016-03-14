@@ -16,7 +16,7 @@
 
 (** Store Git objects in memory. *)
 
-module Make (D: SHA.DIGEST) (I: Inflate.S): sig
+module Make (D: Hash.DIGEST) (I: Inflate.S): sig
 
   include Store.S
 

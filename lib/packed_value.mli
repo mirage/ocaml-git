@@ -35,15 +35,15 @@ type 'a delta = {
 
 type kind =
   | Raw_value of string
-  | Ref_delta of SHA.t delta
+  | Ref_delta of Hash.t delta
   | Off_delta of int delta
 (** The type for packed values kind. *)
 
 type t = { kind: kind; offset: int }
 (** The type for packed values. *)
 
-val shallow: SHA.Set.t -> t -> bool
-(** [shallow p t] checks whether the SHAs appearing in [t] also appear
+val shallow: Hash.Set.t -> t -> bool
+(** [shallow p t] checks whether the Hashs appearing in [t] also appear
     in the pack file [p]. *)
 
 val create: offset:int -> kind:kind -> t
@@ -78,8 +78,8 @@ module PIC: sig
   (** The type for position-independent packed values' kind. *)
 
   and t = {
-    kind: kind;
-    sha1: SHA.t;
+    kind   : kind;
+    hash   : Hash.t;
     shallow: bool;
     mutable raw: string option;
   }
@@ -87,19 +87,19 @@ module PIC: sig
 
   include Object.S with type t := t
 
-  val create: ?raw:string -> ?shallow:bool -> SHA.t -> kind -> t
+  val create: ?raw:string -> ?shallow:bool -> Hash.t -> kind -> t
   (** Create a position-independent packed value. By default,
       [shallow] is [false]. *)
 
-  val of_raw: ?shallow:bool ->  SHA.t -> string -> t
+  val of_raw: ?shallow:bool ->  Hash.t -> string -> t
   (** [of_raw sha1 raw] is the position-independant packed value built
       by parsing [raw]. By default [shallow] is [false]. *)
 
   val kind: t -> kind
   (** [kind t] is [t]'s kind. *)
 
-  val sha1: t -> SHA.t
-  (** [sha1 t] is [t]'s SHA1. *)
+  val name: t -> Hash.t
+  (** [name t] is [t]'s name. *)
 
   val raw: t -> string option
   (** [raw t] is [t]'s raw represation. *)
@@ -118,7 +118,7 @@ end
 type pic = PIC.t
 (** The type for position-independant packked values. *)
 
-module IO (D: SHA.DIGEST) (I: Inflate.S): sig
+module IO (D: Hash.DIGEST) (I: Inflate.S): sig
 
   module type IO = Object.IO with type t = kind
 
@@ -131,7 +131,7 @@ module IO (D: SHA.DIGEST) (I: Inflate.S): sig
   (** {2 Conversion to values} *)
 
   val add_inflated_value:
-    read:Value.read_inflated -> offsets:(int -> SHA.t option) ->
+    read:Value.read_inflated -> offsets:(int -> Hash.t option) ->
     Buffer.t -> t -> unit Lwt.t
   (** Append the inflated representation of a packed value to a given
       buffer. *)
@@ -153,7 +153,7 @@ module IO (D: SHA.DIGEST) (I: Inflate.S): sig
       [p]. *)
 
   val to_pic: read:Value.read_inflated ->
-    offsets:(int -> pic option) -> sha1s:(SHA.t -> pic option) ->
+    offsets:(int -> pic option) -> hashes:(Hash.t -> pic option) ->
     t -> pic Lwt.t
   (** [to_pic t] is the position-independant representation of the
       packed value [t]. *)
