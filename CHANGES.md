@@ -1,5 +1,6 @@
 ### 1.8.0
 
+* References can point to non-commit hashed (#123, @samoht)
 * Rename `Git.SHA` into `Git.Hash` (@samoht)
 * Remove `Git.Sync.populate` but add `Git.Sync.clone` to replace the
   previous `fetch+populate` (#122, @samoht)
