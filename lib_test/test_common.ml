@@ -70,7 +70,7 @@ module Make (S: Store.S) = struct
     aux (cmp_list equal compare) (printer_list pretty)
 
   let assert_key_equal, assert_key_opt_equal, assert_keys_equal =
-    mk SHA.equal SHA.compare SHA.to_hex
+    mk Hash.equal Hash.compare Hash.to_hex
 
   let assert_value_equal, assert_value_opt_equal, assert_values_equal =
     mk Value.equal Value.compare Value.pretty
@@ -130,12 +130,12 @@ let head_contents =
     end
   in (module M: Alcotest.TESTABLE with type t = M.t)
 
-let sha1 = (module SHA: Alcotest.TESTABLE with type t = SHA.t)
+let sha1 = (module Hash: Alcotest.TESTABLE with type t = Hash.t)
 
 let sha1s =
   let module M = struct
-    type t = SHA.Set.t
-    let equal = SHA.Set.equal
-    let pp fmt t = Format.pp_print_string fmt (SHA.Set.pretty t)
+    type t = Hash.Set.t
+    let equal = Hash.Set.equal
+    let pp fmt t = Format.pp_print_string fmt (Hash.Set.pretty t)
   end
   in (module M: Alcotest.TESTABLE with type t = M.t)
