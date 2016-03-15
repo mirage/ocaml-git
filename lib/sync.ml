@@ -857,9 +857,7 @@ module Make (IO: IO) (Store: Store.S) = struct
         | None    -> pp ""; Lwt.return (List.rev acc)
         | Some "" -> aux acc
         | Some s  ->
-          let payload =
-            String.with_range s ~first:1 ~len:(String.length s - 1)
-          in
+          let payload = String.with_range s ~first:1 in
           pp payload;
           match kind s.[0] with
           | Pack     -> aux (payload :: acc)
