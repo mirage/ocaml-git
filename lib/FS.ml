@@ -157,10 +157,8 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
 
     let file t h =
       let hex = Hash.to_hex h in
-      let prefix = String.with_range hex ~first:0 ~len:2 in
-      let suffix =
-        String.with_range hex ~first:2 ~len:(String.length hex - 2)
-      in
+      let prefix = String.with_range hex ~len:2 in
+      let suffix = String.with_range hex ~first:2 in
       t.dot_git / "objects" / prefix / suffix
 
     let mem t h = IO.file_exists (file t h)
@@ -191,7 +189,7 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
           if len <= 2 then files
           else
             let len' = len - 2 in
-            let suffix = String.with_range hex ~first:2 ~len:len' in
+            let suffix = String.with_range hex ~first:2 in
             List.filter (fun f ->
                 String.with_range (Filename.basename f) ~len:len' = suffix
               ) files
@@ -283,15 +281,15 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
     let list t =
       Log.debug "list %s" t.dot_git;
       let packs = t.dot_git / "objects" / "pack" in
-      IO.files packs >>= fun packs ->
-      let packs = List.map Filename.basename packs in
-      let packs = List.filter (fun f -> Filename.check_suffix f ".idx") packs in
-      let packs = List.map (fun f ->
-          let p = Filename.chop_suffix f ".idx" in
-          let p = String.with_range p ~first:5 ~len:(String.length p - 5) in
-          Hash_IO.of_hex p
-        ) packs in
-      Lwt.return packs
+      IO.files packs >|= fun packs ->
+      let parse_pack acc f =
+        let hex = Hash_IO.of_hex in
+        match String.cut ~rev:true ~sep:"." (Filename.basename f) with
+        | None            -> acc
+        | Some (f, "idx") -> hex (String.with_range ~first:5 f) :: acc
+        | Some (_, _)     -> acc
+      in
+      List.(rev (fold_left parse_pack [] packs))
 
     let index t h =
       let pack_dir = t.dot_git / "objects" / "pack" in
@@ -477,7 +475,7 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
     IO.rec_files refs >>= fun files ->
     let n = String.length (t.dot_git / "") in
     let refs = List.map (fun file ->
-        let r = String.with_range file ~first:n ~len:(String.length file - n) in
+        let r = String.with_range file ~first:n in
         Reference.of_raw r
       ) files in
     let packed_refs = packed_refs t in
@@ -730,9 +728,10 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
     let id = h in
     let stats = IO.stat_info file in
     let stage = 0 in
-    if not (String.is_prefix file ~affix:(t.root / "")) then None
+    let prefix = t.root / "" in
+    if not (String.is_prefix file ~affix:prefix) then None
     else
-      let name = String.with_range file ~len:(String.length @@ t.root / "") in
+      let name = String.with_range file ~first:(String.length prefix) in
       let entry = { Index.stats; id; stage; name } in
       Some entry
 
