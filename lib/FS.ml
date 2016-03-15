@@ -18,6 +18,8 @@ open Lwt.Infix
 open Misc.OP
 open Printf
 
+module ReferenceSet = Misc.Set(Reference)
+
 let fail fmt = Printf.ksprintf failwith ("Git.FS." ^^ fmt)
 
 let err_not_found n k = fail "%s: %s not found" n k
@@ -483,7 +485,11 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
         let pr = Packed_refs_IO.input (Mstruct.of_cstruct buf) in
         Lwt.return (Packed_refs.references pr)
     in
-    packed_refs >|= fun packed_refs -> refs @ packed_refs
+    packed_refs >|= fun packed_refs ->
+    ReferenceSet.(
+      union (of_list refs) (of_list packed_refs)
+      |> elements
+    )
 
   let file_of_ref t r = t.dot_git / Reference.to_raw r
 
