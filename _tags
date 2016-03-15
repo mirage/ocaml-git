@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: b24daecc88002a8492f35a48e95454b2)
+# DO NOT EDIT (digest: 1f887a5c66fe18fa975c85eb35845de1)
 # Ignore VCS directories, you can use the same kind of rule outside
 # OASIS_START/STOP if you want to exclude directories that contains
 # useless stuff for the build process
@@ -125,6 +125,7 @@ true: annot, bin_annot
 <bin/ogit.{native,byte}>: pkg_lwt
 <bin/ogit.{native,byte}>: pkg_lwt.unix
 <bin/ogit.{native,byte}>: pkg_mstruct
+<bin/ogit.{native,byte}>: pkg_mtime.os
 <bin/ogit.{native,byte}>: pkg_nocrypto
 <bin/ogit.{native,byte}>: pkg_ocamlgraph
 <bin/ogit.{native,byte}>: pkg_uri
@@ -148,6 +149,7 @@ true: annot, bin_annot
 <bin/*.ml{,i,y}>: pkg_lwt
 <bin/*.ml{,i,y}>: pkg_lwt.unix
 <bin/*.ml{,i,y}>: pkg_mstruct
+<bin/*.ml{,i,y}>: pkg_mtime.os
 <bin/*.ml{,i,y}>: pkg_nocrypto
 <bin/*.ml{,i,y}>: pkg_ocamlgraph
 <bin/*.ml{,i,y}>: pkg_uri
@@ -179,6 +181,7 @@ true: annot, bin_annot
 <lib_test/test.{native,byte}>: pkg_mirage-http
 <lib_test/test.{native,byte}>: pkg_mirage-types.lwt
 <lib_test/test.{native,byte}>: pkg_mstruct
+<lib_test/test.{native,byte}>: pkg_mtime.os
 <lib_test/test.{native,byte}>: pkg_nocrypto
 <lib_test/test.{native,byte}>: pkg_ocamlgraph
 <lib_test/test.{native,byte}>: pkg_uri
@@ -210,6 +213,7 @@ true: annot, bin_annot
 <lib_test/*.ml{,i,y}>: pkg_mirage-http
 <lib_test/*.ml{,i,y}>: pkg_mirage-types.lwt
 <lib_test/*.ml{,i,y}>: pkg_mstruct
+<lib_test/*.ml{,i,y}>: pkg_mtime.os
 <lib_test/*.ml{,i,y}>: pkg_nocrypto
 <lib_test/*.ml{,i,y}>: pkg_ocamlgraph
 <lib_test/*.ml{,i,y}>: pkg_uri

@@ -32,10 +32,24 @@ let help_sections = [
   `P "Check bug reports at https://github.com/samoht/ocaml-git/issues.";
 ]
 
+let reporter () =
+  let report src level ~over k msgf =
+    let k _ = over (); k () in
+    let with_stamp h _tags k ppf fmt =
+      let dt = Mtime.to_us (Mtime.elapsed ()) in
+      Fmt.kpf k ppf ("\r%a[%0+04.0fus] %a: @[" ^^ fmt ^^ "@]@.")
+        Logs_fmt.pp_header (level, h) dt
+        Fmt.(styled `Magenta string) (Logs.Src.name src)
+    in
+    msgf @@ fun ?header ?tags fmt ->
+    with_stamp header tags k Format.err_formatter fmt
+  in
+  { Logs.report = report }
+
 let setup_log style_renderer level =
   Fmt_tty.setup_std_outputs ?style_renderer ();
   Logs.set_level level;
-  Logs.set_reporter (Logs_fmt.reporter ());
+  Logs.set_reporter (reporter ());
   ()
 
 let setup_log =

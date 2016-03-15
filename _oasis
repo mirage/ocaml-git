@@ -70,7 +70,7 @@ Executable ogit
   CompiledObject:   best
   Install:          true
   BuildDepends:     git, git.unix,
-                    cmdliner, fmt.cli, fmt.tty, logs.cli, logs.fmt
+                    cmdliner, fmt.cli, fmt.tty, logs.cli, logs.fmt, mtime.os
 
 Executable test_git
   Build$:           flag(tests) && flag(unix) && flag(mirage)
@@ -79,7 +79,7 @@ Executable test_git
   CompiledObject:   best
   Install:          false
   BuildDepends:     alcotest, git, git.unix, git.mirage,
-                    io-page.unix, mirage-fs-unix, logs.fmt, fmt.tty
+                    io-page.unix, mirage-fs-unix, logs.fmt, fmt.tty, mtime.os
 
 Test test_git
   Run$:             flag(tests) && flag(unix) && flag(mirage)
