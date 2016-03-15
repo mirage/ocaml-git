@@ -14,6 +14,8 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+open Astring
+
 module Log = Misc.Log_make(struct let section = "reference" end)
 
 type t = string
@@ -27,7 +29,7 @@ let input _buf = failwith "TODO: Reference.input"
 
 let to_raw x = x
 let of_raw x = x
-let pretty x = String.escaped x
+let pretty x = String.Ascii.escape x
 let pp ppf x = Format.fprintf ppf "%s" (pretty x)
 
 module Map = Misc.Map(Misc.S)
@@ -79,7 +81,7 @@ let is_valid r =
     ) r
 
 let head_contents_of_string ~of_hex str =
-  match Stringext.split ~on:' ' (String.trim str) with
+  match String.cuts ~sep:" " (String.trim str) with
   | [h]   -> Hash (of_hex h |> Hash.to_raw |> Hash.Commit.of_raw)
   | [_;r] -> Ref (of_raw r)
   | _     -> err_head_contents str

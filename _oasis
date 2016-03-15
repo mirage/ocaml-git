@@ -27,7 +27,7 @@ Library git
                      Store,
                      Memory, FS,
                      Version
-  BuildDepends:      mstruct, dolog, ocamlgraph, uri, lwt, hex, stringext, crc
+  BuildDepends:      mstruct, dolog, ocamlgraph, uri, lwt, hex, astring, crc
 
 Library git_top
   Path:             lib/top

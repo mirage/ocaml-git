@@ -14,6 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+open Astring
 open Lwt.Infix
 open Printf
 
@@ -46,7 +47,7 @@ let pretty_protocol = function
 
 type want = [ `Ref of Reference.t | `Commit of Hash.Commit.t ]
 
-let pretty_list f l = "[" ^ String.concat ", " (List.map f l) ^ "]"
+let pretty_list f l = "[" ^ String.concat ~sep:", " (List.map f l) ^ "]"
 
 let pretty_want = function
   | `Commit s -> sprintf "commit:%s" (Hash.Commit.pretty s)
@@ -113,7 +114,7 @@ module Capability = struct
     | "delete-refs"   -> `Delete_refs
     | "allow-reachable-sha1-in-want" -> `Allow_reachable_sha1_in_want
     | x               ->
-      match Stringext.cut x ~on:"=" with
+      match String.cut x ~sep:"=" with
       | Some ("agent", a) -> `Agent a
       | _ -> `Other x
 
@@ -156,18 +157,20 @@ end
 
 type capability = Capability.t
 
+let mkstr c = String.v ~len:1 (fun _ -> c)
+
 module Capabilities = struct
 
   type t = Capability.t list
 
   let of_string str =
-    List.map Capability.of_string (Stringext.split str ~on:Misc.sp)
+    List.map Capability.of_string (String.cuts str ~sep:(mkstr Misc.sp))
 
   let to_string l =
-    String.concat " " (List.map Capability.to_string l)
+    String.concat ~sep:" " (List.map Capability.to_string l)
 
   let pretty l =
-    String.concat ", " (List.map Capability.to_string l)
+    String.concat ~sep:", " (List.map Capability.to_string l)
 
   let default = [
     Capability.ogit_agent;
@@ -363,8 +366,9 @@ module Make (IO: IO) (Store: Store.S) = struct
       error "PacketLine.input: the payload doesn't have a trailing LF"
 
     let truncate s =
-      if String.length s > 20 then String.escaped (String.sub s 0 20) ^ "[..]"
-      else String.escaped s
+      if String.length s > 20 then
+        String.Ascii.escape (String.sub ~stop:20 s |> String.Sub.to_string) ^ "[..]"
+      else String.Ascii.escape s
 
     let input_raw_exn ic: t Lwt.t =
       Log.debug "PacketLine.input_raw";
@@ -401,7 +405,7 @@ module Make (IO: IO) (Store: Store.S) = struct
       | Some s  ->
         let size = String.length s in
         if s.[size - 1] <> Misc.lf then err_no_trailing_lf ();
-        let s = String.sub s 0 (size-1) in
+        let s = String.sub s ~stop:(size-1) |> String.Sub.to_string in
         Lwt.return (Some s)
 
   end
@@ -514,7 +518,7 @@ module Make (IO: IO) (Store: Store.S) = struct
           PacketLine.input ic >>= function
           | None      -> error "missing # header."
           | Some line ->
-            match Stringext.cut line ~on:Misc.sp_str with
+            match String.cut line ~sep:Misc.sp_str with
             | Some ("#", service) ->
               Log.debug "skipping %s" service;
               begin PacketLine.input ic >>= function
@@ -528,13 +532,13 @@ module Make (IO: IO) (Store: Store.S) = struct
         PacketLine.input ic >>= function
         | None      -> Lwt.return acc
         | Some line ->
-          match Stringext.cut line ~on:Misc.sp_str with
+          match String.cut line ~sep:Misc.sp_str with
           | Some ("ERR", err) -> error "ERROR: %s" err
           | Some (h, r)  ->
             let h = Hash_IO.Commit.of_hex h in
             if is_empty acc then (
               (* Read the capabilities on the first line *)
-              match Stringext.cut r ~on:Misc.nul_str with
+              match String.cut r ~sep:Misc.nul_str with
               | Some (r, caps) ->
                 let r = Reference.of_raw r in
                 let h = Hash.of_commit h in
@@ -584,9 +588,9 @@ module Make (IO: IO) (Store: Store.S) = struct
       | None
       | Some "NAK" -> Lwt.return Nak
       | Some s      ->
-        match Stringext.cut s ~on:Misc.sp_str with
+        match String.cut s ~sep:Misc.sp_str with
         | Some ("ACK", r) ->
-          begin match Stringext.cut r ~on:Misc.sp_str with
+          begin match String.cut r ~sep:Misc.sp_str with
             | None         -> Lwt.return (Ack (Hash_IO.of_hex r))
             | Some (id, s) ->
               Lwt.return (Ack_multi (Hash_IO.of_hex id, status_of_string s))
@@ -647,7 +651,7 @@ module Make (IO: IO) (Store: Store.S) = struct
         PacketLine.input_raw ic >>= function
         | None   -> Lwt.return (List.rev acc)
         | Some l ->
-          match Stringext.cut l ~on:Misc.sp_str with
+          match String.cut l ~sep:Misc.sp_str with
           | None -> error "input upload"
           | Some (kind, s) ->
             match kind with
@@ -663,7 +667,7 @@ module Make (IO: IO) (Store: Store.S) = struct
               aux (Deepen d :: acc)
             | "want" ->
               let aux id c = aux (Want (Hash_IO.Commit.of_hex id, c) :: acc) in
-              begin match Stringext.cut s ~on:Misc.sp_str with
+              begin match String.cut s ~sep:Misc.sp_str with
                 | Some (id,c) -> aux id (Capabilities.of_string c)
                 | None        -> match acc with
                   | Want (_,c)::_ -> aux s c
@@ -828,7 +832,7 @@ module Make (IO: IO) (Store: Store.S) = struct
 
     type kind = Pack | Progress | Fatal
 
-    let kind c = match Char.code c with
+    let kind c = match Char.to_int c with
       | 1 -> Pack
       | 2 -> Progress
       | 3 -> Fatal
@@ -856,7 +860,10 @@ module Make (IO: IO) (Store: Store.S) = struct
         | None    -> pp ""; Lwt.return (List.rev acc)
         | Some "" -> aux acc
         | Some s  ->
-          let payload = String.sub s 1 (String.length s - 1) in
+          let payload =
+            String.sub s ~start:1 ~stop:(String.length s - 1)
+            |> String.Sub.to_string
+          in
           pp payload;
           match kind s.[0] with
           | Pack     -> aux (payload :: acc)
@@ -902,7 +909,7 @@ module Make (IO: IO) (Store: Store.S) = struct
         sprintf "update %s %s %s" (r name) (c old_id) (c new_id)
 
     let pretty_commands l =
-      String.concat " & " (List.map pretty_command l)
+      String.concat ~sep:" & " (List.map pretty_command l)
 
     let output_command buf t =
       let zero = Hash_IO.Commit.zero in
@@ -962,7 +969,7 @@ module Make (IO: IO) (Store: Store.S) = struct
       PacketLine.input ic >>= function
       | None -> Lwt.fail (Failure "Report_status.input: empty")
       | Some line ->
-        begin match Stringext.cut line ~on:Misc.sp_str with
+        begin match String.cut line ~sep:Misc.sp_str with
           | Some ("unpack", "ok") -> Lwt.return `Ok
           | Some ("unpack", err ) -> Lwt.return (`Error err)
           | _ -> Lwt.fail (Failure "Report_status.input: unpack-status")
@@ -971,11 +978,11 @@ module Make (IO: IO) (Store: Store.S) = struct
           PacketLine.input ic >>= function
           | None      -> Lwt.return acc
           | Some line ->
-            match Stringext.cut line ~on:Misc.sp_str with
+            match String.cut line ~sep:Misc.sp_str with
             | Some ("ok", name)  ->
               Lwt.return ((Reference.of_raw name, `Ok) :: acc)
             | Some ("ng", cont)  ->
-              begin match Stringext.cut cont ~on:Misc.sp_str with
+              begin match String.cut cont ~sep:Misc.sp_str with
                 | None  -> Lwt.fail (Failure "Report_status.input: command-fail")
                 | Some (name, err) ->
                   Lwt.return ((Reference.of_raw name, `Error err) :: acc)

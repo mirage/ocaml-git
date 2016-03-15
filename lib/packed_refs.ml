@@ -14,6 +14,8 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+open Astring
+
 type entry =
   [ `Newline
   | `Comment of string
@@ -63,9 +65,12 @@ module IO (D: Hash.DIGEST) = struct
     let line = String.trim line in
     if String.length line = 0 then Some `Newline
     else if line.[0] = '#' then
-      let str = String.sub line 1 (String.length line - 1) in
+      let str =
+        String.sub line ~start:1 ~stop:(String.length line - 1)
+        |> String.Sub.to_string
+      in
       Some (`Comment str)
-    else match Stringext.cut line ~on:" " with
+    else match String.cut line ~sep:" " with
       | None  -> None
       | Some (h, r) ->
         let h = Hash_IO.of_hex h in
