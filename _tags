@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 2224d005e2d59a4e0c01b2799ca3eb41)
+# DO NOT EDIT (digest: b24daecc88002a8492f35a48e95454b2)
 # Ignore VCS directories, you can use the same kind of rule outside
 # OASIS_START/STOP if you want to exclude directories that contains
 # useless stuff for the build process
@@ -44,8 +44,9 @@ true: annot, bin_annot
 "lib/LRU.cmx": for-pack(Git)
 <lib/*.ml{,i,y}>: pkg_astring
 <lib/*.ml{,i,y}>: pkg_crc
-<lib/*.ml{,i,y}>: pkg_dolog
+<lib/*.ml{,i,y}>: pkg_fmt
 <lib/*.ml{,i,y}>: pkg_hex
+<lib/*.ml{,i,y}>: pkg_logs
 <lib/*.ml{,i,y}>: pkg_lwt
 <lib/*.ml{,i,y}>: pkg_mstruct
 <lib/*.ml{,i,y}>: pkg_ocamlgraph
@@ -58,8 +59,9 @@ true: annot, bin_annot
 <lib/http/*.ml{,i,y}>: pkg_astring
 <lib/http/*.ml{,i,y}>: pkg_cohttp.lwt
 <lib/http/*.ml{,i,y}>: pkg_crc
-<lib/http/*.ml{,i,y}>: pkg_dolog
+<lib/http/*.ml{,i,y}>: pkg_fmt
 <lib/http/*.ml{,i,y}>: pkg_hex
+<lib/http/*.ml{,i,y}>: pkg_logs
 <lib/http/*.ml{,i,y}>: pkg_lwt
 <lib/http/*.ml{,i,y}>: pkg_mstruct
 <lib/http/*.ml{,i,y}>: pkg_ocamlgraph
@@ -72,8 +74,9 @@ true: annot, bin_annot
 <lib/unix/*.ml{,i,y}>: pkg_cohttp.lwt
 <lib/unix/*.ml{,i,y}>: pkg_conduit.lwt-unix
 <lib/unix/*.ml{,i,y}>: pkg_crc
-<lib/unix/*.ml{,i,y}>: pkg_dolog
+<lib/unix/*.ml{,i,y}>: pkg_fmt
 <lib/unix/*.ml{,i,y}>: pkg_hex
+<lib/unix/*.ml{,i,y}>: pkg_logs
 <lib/unix/*.ml{,i,y}>: pkg_lwt
 <lib/unix/*.ml{,i,y}>: pkg_lwt.unix
 <lib/unix/*.ml{,i,y}>: pkg_mstruct
@@ -92,9 +95,10 @@ true: annot, bin_annot
 <lib/mirage/*.ml{,i,y}>: pkg_conduit.mirage
 <lib/mirage/*.ml{,i,y}>: pkg_crc
 <lib/mirage/*.ml{,i,y}>: pkg_dns.mirage
-<lib/mirage/*.ml{,i,y}>: pkg_dolog
+<lib/mirage/*.ml{,i,y}>: pkg_fmt
 <lib/mirage/*.ml{,i,y}>: pkg_hex
 <lib/mirage/*.ml{,i,y}>: pkg_io-page
+<lib/mirage/*.ml{,i,y}>: pkg_logs
 <lib/mirage/*.ml{,i,y}>: pkg_lwt
 <lib/mirage/*.ml{,i,y}>: pkg_mirage-flow
 <lib/mirage/*.ml{,i,y}>: pkg_mirage-http
@@ -111,8 +115,13 @@ true: annot, bin_annot
 <bin/ogit.{native,byte}>: pkg_cohttp.lwt
 <bin/ogit.{native,byte}>: pkg_conduit.lwt-unix
 <bin/ogit.{native,byte}>: pkg_crc
-<bin/ogit.{native,byte}>: pkg_dolog
+<bin/ogit.{native,byte}>: pkg_fmt
+<bin/ogit.{native,byte}>: pkg_fmt.cli
+<bin/ogit.{native,byte}>: pkg_fmt.tty
 <bin/ogit.{native,byte}>: pkg_hex
+<bin/ogit.{native,byte}>: pkg_logs
+<bin/ogit.{native,byte}>: pkg_logs.cli
+<bin/ogit.{native,byte}>: pkg_logs.fmt
 <bin/ogit.{native,byte}>: pkg_lwt
 <bin/ogit.{native,byte}>: pkg_lwt.unix
 <bin/ogit.{native,byte}>: pkg_mstruct
@@ -129,8 +138,13 @@ true: annot, bin_annot
 <bin/*.ml{,i,y}>: pkg_cohttp.lwt
 <bin/*.ml{,i,y}>: pkg_conduit.lwt-unix
 <bin/*.ml{,i,y}>: pkg_crc
-<bin/*.ml{,i,y}>: pkg_dolog
+<bin/*.ml{,i,y}>: pkg_fmt
+<bin/*.ml{,i,y}>: pkg_fmt.cli
+<bin/*.ml{,i,y}>: pkg_fmt.tty
 <bin/*.ml{,i,y}>: pkg_hex
+<bin/*.ml{,i,y}>: pkg_logs
+<bin/*.ml{,i,y}>: pkg_logs.cli
+<bin/*.ml{,i,y}>: pkg_logs.fmt
 <bin/*.ml{,i,y}>: pkg_lwt
 <bin/*.ml{,i,y}>: pkg_lwt.unix
 <bin/*.ml{,i,y}>: pkg_mstruct
@@ -151,10 +165,13 @@ true: annot, bin_annot
 <lib_test/test.{native,byte}>: pkg_conduit.mirage
 <lib_test/test.{native,byte}>: pkg_crc
 <lib_test/test.{native,byte}>: pkg_dns.mirage
-<lib_test/test.{native,byte}>: pkg_dolog
+<lib_test/test.{native,byte}>: pkg_fmt
+<lib_test/test.{native,byte}>: pkg_fmt.tty
 <lib_test/test.{native,byte}>: pkg_hex
 <lib_test/test.{native,byte}>: pkg_io-page
 <lib_test/test.{native,byte}>: pkg_io-page.unix
+<lib_test/test.{native,byte}>: pkg_logs
+<lib_test/test.{native,byte}>: pkg_logs.fmt
 <lib_test/test.{native,byte}>: pkg_lwt
 <lib_test/test.{native,byte}>: pkg_lwt.unix
 <lib_test/test.{native,byte}>: pkg_mirage-flow
@@ -179,10 +196,13 @@ true: annot, bin_annot
 <lib_test/*.ml{,i,y}>: pkg_conduit.mirage
 <lib_test/*.ml{,i,y}>: pkg_crc
 <lib_test/*.ml{,i,y}>: pkg_dns.mirage
-<lib_test/*.ml{,i,y}>: pkg_dolog
+<lib_test/*.ml{,i,y}>: pkg_fmt
+<lib_test/*.ml{,i,y}>: pkg_fmt.tty
 <lib_test/*.ml{,i,y}>: pkg_hex
 <lib_test/*.ml{,i,y}>: pkg_io-page
 <lib_test/*.ml{,i,y}>: pkg_io-page.unix
+<lib_test/*.ml{,i,y}>: pkg_logs
+<lib_test/*.ml{,i,y}>: pkg_logs.fmt
 <lib_test/*.ml{,i,y}>: pkg_lwt
 <lib_test/*.ml{,i,y}>: pkg_lwt.unix
 <lib_test/*.ml{,i,y}>: pkg_mirage-flow

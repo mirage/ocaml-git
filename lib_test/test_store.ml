@@ -469,7 +469,14 @@ module Make (Store: Store.S) = struct
       let clone ?depth ?(bare=true) ?branch gri =
         x.init () >>= fun () ->
         Store.list t >>= fun l ->
-        Alcotest.(check (list sha1)) "empty" [] l;
+        Alcotest.(check (list sha1))
+          (Printf.sprintf "empty depth=%s branch=%s uri=%s"
+             (match depth with None -> "<none>" | Some d -> string_of_int d)
+             (match branch with
+              | None   -> "<none>"
+              | Some h -> Fmt.to_to_string Git.Sync.pp_want h)
+             (Gri.to_string gri))
+          l [];
         Sync.clone t ?deepen:depth ?branch ~checkout:(not bare) gri >>= fun _ ->
         if x.shell then (
           let cmd = Printf.sprintf "cd %s && git fsck" @@ Store.root t in
@@ -495,7 +502,7 @@ module Make (Store: Store.S) = struct
       in
       let git = Gri.of_string "git://github.com/mirage/ocaml-git.git" in
       let https = Gri.of_string "https://github.com/mirage/ocaml-git.git" in
-      let large = Gri.of_string "https://github.com/ocaml/opam-repository.git" in
+      (* let large = Gri.of_string "https://github.com/ocaml/opam-repository.git" in *)
       let gh_pages = `Ref (Reference.of_raw "refs/heads/gh-pages") in
       let commit =
         `Commit (Hash_IO.Commit.of_hex "f7a8f077e4d880db173f3f48a74d5a3fc9210b4e")
@@ -506,7 +513,7 @@ module Make (Store: Store.S) = struct
       clone https ~branch:gh_pages >>= fun () ->
       clone https ~depth:1 ~branch:commit   >>= fun () ->
       clone git   ~depth:3 ~branch:gh_pages >>= fun () ->
-      clone large ~bare:false  >>= fun () ->
+      (* clone large ~bare:false  >>= fun () -> *)
 
       Lwt.return_unit
     in

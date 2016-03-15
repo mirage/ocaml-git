@@ -32,45 +32,14 @@ let help_sections = [
   `P "Check bug reports at https://github.com/samoht/ocaml-git/issues.";
 ]
 
-(* Global options *)
-type global = {
-  verbose: bool;
-  color  : bool;
-}
+let setup_log style_renderer level =
+  Fmt_tty.setup_std_outputs ?style_renderer ();
+  Logs.set_level level;
+  Logs.set_reporter (Logs_fmt.reporter ());
+  ()
 
-let app_global g =
-  if g.color then
-    Log.color_on ();
-  if g.verbose then
-    Log.set_log_level Log.DEBUG
-
-let color_tri_state =
-  try match Sys.getenv "GITCOLOR" with
-    | "always" -> `Always
-    | "never"  -> `Never
-    | _        -> `Auto
-  with
-  | Not_found  -> `Auto
-
-let global =
-  let verbose =
-    let doc =
-      Arg.info ~docs:global_option_section
-        ~doc:"Be more verbose." ["v";"verbose"] in
-    Arg.(value & flag & doc) in
-  let color =
-    let doc = Arg.info ~docv:"WHEN"
-        ~doc:"Colorize the output. $(docv) must be `always', `never' or `auto'."
-        ["color"] in
-    let choices = Arg.enum [ "always", `Always; "never", `Never; "auto", `Auto ] in
-    let arg = Arg.(value & opt choices color_tri_state & doc) in
-    let to_bool = function
-      | `Always -> true
-      | `Never  -> false
-      | `Auto   -> Unix.isatty Unix.stdout in
-    Term.(pure to_bool $ arg)
-  in
-  Term.(pure (fun verbose color -> { verbose; color }) $ verbose $ color)
+let setup_log =
+  Term.(const setup_log $ Fmt_cli.style_renderer () $ Logs_cli.level ())
 
 let term_info title ~doc ~man =
   let man = man @ help_sections in
@@ -90,8 +59,7 @@ let command c =
   ] @ c.man in
   c.term, term_info c.name ~doc:c.doc ~man
 
-let mk (fn:'a): 'a Term.t =
-  Term.(pure (fun global -> app_global global; fn) $ global)
+let mk (fn:'a): 'a Term.t = Term.(pure (fun () -> fn) $ setup_log)
 
 (* Helpers *)
 let mk_flag ?section flags doc =
@@ -173,7 +141,7 @@ let cat = {
         Lwt_io.with_file ~mode:Lwt_io.input file (fun x -> Lwt_io.read x)
         >>= fun buf ->
         let v = Value_IO.input (Mstruct.of_string buf) in
-        Printf.printf "%s%!\n" (Value.pretty v);
+        Fmt.(pf stdout) "%a%!\n" Value.pp v;
         Lwt.return_unit
       end in
     Term.(mk cat_file $ file)
@@ -210,13 +178,13 @@ let cat_file = {
                 let c = Blob.to_raw blob in
                 "blob", c, String.length c
               | Value.Commit commit ->
-                let c = Commit.pretty commit in
+                let c = Fmt.to_to_string Commit.pp commit in
                 "commit", c, String.length c
               | Value.Tree tree ->
-                let c = Tree.pretty tree in
+                let c = Fmt.to_to_string Tree.pp tree in
                 "tree", c, String.length c
               | Value.Tag tag ->
-                let c = Tag.pretty tag in
+                let c = Fmt.to_to_string Tag.pp tag in
                 "tag", c, String.length c
             in
             if ty_flag then Printf.printf "%s%!\n" t;
@@ -265,7 +233,7 @@ let ls_files = {
         S.create ()    >>= fun t ->
         S.read_index t >>= fun cache ->
         if debug then
-          printf "%s" (Index.pretty cache)
+          Fmt.(pf stdout) "%a" Index.pp cache
         else
           List.iter
             (fun e -> Printf.printf "%s\n" e.Index.name)
@@ -504,7 +472,7 @@ let push = {
           | None   -> reference_of_raw branch
           | Some _ -> branch in
         Sync.push t ~branch remote >>= fun s ->
-        printf "%s\n" (Result.pretty_push s);
+        Fmt.(pf stdout) "%a\n" Result.pp_push s;
         Lwt.return_unit
       end in
     Term.(mk push $ backend $ remote $ branch)
@@ -544,7 +512,7 @@ let help = {
       let doc = Arg.info [] ~docv:"TOPIC" ~doc:"The topic to get help on." in
       Arg.(value & pos 0 (some string) None & doc )
     in
-    let help man_format cmds topic = match topic with
+    let help man_format cmds topic () = match topic with
       | None       -> `Help (`Pager, None)
       | Some topic ->
         let topics = "topics" :: cmds in
@@ -553,7 +521,7 @@ let help = {
         | `Error e                -> `Error (false, e)
         | `Ok t when t = "topics" -> List.iter print_endline cmds; `Ok ()
         | `Ok t                   -> `Help (man_format, Some t) in
-    Term.(ret (pure help $Term.man_format $Term.choice_names $topic))
+    Term.(ret (pure help $Term.man_format $Term.choice_names $topic $setup_log))
 }
 
 let default =
@@ -584,7 +552,7 @@ let default =
        \n\
        See 'ogit help <command>' for more information on a specific command.\n%!"
       clone.doc fetch.doc pull.doc push.doc graph.doc in
-  Term.(pure usage $ (pure ())),
+  Term.(pure usage $ setup_log),
   Term.info "ogit"
     ~version:Version.current
     ~sdocs:global_option_section

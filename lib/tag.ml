@@ -43,8 +43,6 @@ module T = struct
       User.pp t.tagger
       (String.trim t.message)
 
-  let pretty = Misc.pretty pp
-
 end
 
 include T

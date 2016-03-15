@@ -57,8 +57,6 @@ module T = struct
     List.iter (Format.fprintf ppf "%a;@ " pp_entry) t;
     Format.fprintf ppf "@,@]]"
 
-  let pretty = Misc.pretty pp
-
 end
 
 include T

@@ -23,11 +23,10 @@ Library git
   Modules:           Misc, Hash, Inflate, Object, Object_type,
                      Blob, Tree, Commit, Tag, Reference, Value,
                      Pack, Pack_index, Packed_value, Packed_refs, Index,
-                     Sync, Gri, Search, Global_graph, User,
-                     Store,
-                     Memory, FS,
-                     Version
-  BuildDepends:      mstruct, dolog, ocamlgraph, uri, lwt, hex, astring, crc
+                     Sync, Gri, Search, Global_graph, User, Store,
+                     Memory, FS, Version
+  BuildDepends:      mstruct, logs, ocamlgraph, uri, lwt, hex, astring,
+                     crc, fmt
 
 Library git_top
   Path:             lib/top
@@ -70,7 +69,8 @@ Executable ogit
   MainIs:           ogit.ml
   CompiledObject:   best
   Install:          true
-  BuildDepends:     cmdliner, git, git.unix
+  BuildDepends:     git, git.unix,
+                    cmdliner, fmt.cli, fmt.tty, logs.cli, logs.fmt
 
 Executable test_git
   Build$:           flag(tests) && flag(unix) && flag(mirage)
@@ -79,7 +79,7 @@ Executable test_git
   CompiledObject:   best
   Install:          false
   BuildDepends:     alcotest, git, git.unix, git.mirage,
-                    io-page.unix, mirage-fs-unix
+                    io-page.unix, mirage-fs-unix, logs.fmt, fmt.tty
 
 Test test_git
   Run$:             flag(tests) && flag(unix) && flag(mirage)

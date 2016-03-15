@@ -32,11 +32,8 @@ module type S = sig
   val compare: t -> t -> int
   (** Compare two objects. *)
 
-  val pretty: t -> string
-  (** Human readable represenation of the object. *)
-
-  val pp: Format.formatter -> t -> unit
-  (** Same as {!pretty} but using a generic formatter. *)
+  val pp: t Fmt.t
+  (** [pp] is the pretty-printer for values of type [t]. *)
 
 end
 

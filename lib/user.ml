@@ -63,8 +63,6 @@ let pp ppf t =
   Format.fprintf ppf "{@[<hov>name=\"%s\";@ email=\"%s\";@ date=%a@]}"
     t.name t.email pp_date t.date
 
-let pretty = Misc.pretty pp
-
 (* XXX needs to escape name/email/date *)
 let add buf ?level:_ t =
   Buffer.add_string buf t.name ;

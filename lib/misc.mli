@@ -50,7 +50,7 @@ val nul_str: string
 
 module type OrderedType = sig
   include Set.OrderedType
-  val pretty: t -> string
+  val pp: t Fmt.t
 end
 
 module I: OrderedType with type t = int
@@ -58,14 +58,14 @@ module S: OrderedType with type t = string
 
 module type Set = sig
   include Set.S
-  val pretty: t -> string
+  val pp: t Fmt.t
   val to_list: t -> elt list
   val of_list: elt list -> t
 end
 
 module type Map = sig
   include Map.S
-  val pretty: ('a -> string) -> 'a t -> string
+  val pp: 'a Fmt.t -> 'a t Fmt.t
   val keys: 'a t -> key list
   val to_alist: 'a t -> (key * 'a) list
   val of_alist: (key * 'a) list -> 'a t
@@ -86,17 +86,4 @@ module OP: sig
 
 end
 
-val pretty: (Format.formatter -> 'a -> unit) -> 'a -> string
-
-module Log_make(S: sig val section: string end) :
-sig
-  include Log.S
-
-  val logk : Log.log_level -> ('a, out_channel, unit, unit) format4 ->
-             ('a -> unit) -> unit
-  val fatalk : ('a, out_channel, unit) format -> ('a -> unit) -> unit
-  val errork : ('a, out_channel, unit) format -> ('a -> unit) -> unit
-  val warnk  : ('a, out_channel, unit) format -> ('a -> unit) -> unit
-  val infok  : ('a, out_channel, unit) format -> ('a -> unit) -> unit
-  val debugk : ('a, out_channel, unit) format -> ('a -> unit) -> unit
-end
+module Log_make(S: sig val section: string end): Logs.LOG

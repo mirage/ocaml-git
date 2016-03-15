@@ -15,7 +15,6 @@
  *)
 
 open Lwt.Infix
-module Dolog = Log
 
 module Log = Misc.Log_make(struct let section = "pack" end)
 
@@ -34,8 +33,6 @@ module T = struct
         Format.fprintf ppf "@[%a@;@]" Packed_value.PIC.pp p
       ) t;
     Format.fprintf ppf "@]"
-
-  let pretty = Misc.pretty pp
 
 end
 
@@ -82,7 +79,6 @@ module Raw = struct
         Format.fprintf ppf "%ld: %a" crc Packed_value.pp p
       ) t.values
 
-  let pretty = Misc.pretty pp
   let shallow t = t.shallow
   let name t = t.hash
   let keys t = t.keys
@@ -127,12 +123,12 @@ module IO (D: Hash.DIGEST) (I: Inflate.S) = struct
 
     let read_packed_value name ~index buf hash =
       let `Version version, `Count count = input_header buf in
-      Log.debugk "%s: %s version=%d count=%d" (fun log ->
-          log name (Hash.pretty hash) version count);
+      Log.debug (fun log ->
+          log "%s: %a version=%d count=%d"  name Hash.pp hash version count);
       match index hash with
       | None -> None
       | Some offset ->
-        Log.debug "read: offset=%d" offset;
+        Log.debug (fun l -> l "read: offset=%d" offset);
         let orig_off = Mstruct.offset buf in
         let ba = Mstruct.to_bigarray buf in
         let shift = offset - orig_off in
@@ -156,7 +152,7 @@ module IO (D: Hash.DIGEST) (I: Inflate.S) = struct
         fun x -> Some x
 
     let to_pic ?(progress=fun _ -> ())  ~read values =
-      Log.debug "to_pic";
+      Log.debug (fun l -> l "to_pic");
       let get f t x = try Some (f x t) with Not_found -> None in
       let deltas =
         List.filter (fun (_, v) -> Packed_value.is_delta v) values
@@ -190,11 +186,11 @@ module IO (D: Hash.DIGEST) (I: Inflate.S) = struct
         )
         (Misc.IntMap.empty, Hash.Map.empty, Hash.Map.empty, [])
         values >|= fun (offsets, crcs, _, pics) ->
-      Log.debug "to_pic: ok";
+      Log.debug (fun l -> l "to_pic: ok");
       offsets, crcs, List.rev pics
 
     let index_of_packed_values ?progress ~pack_checksum ~read values =
-      Log.debug "index_of_packed_values";
+      Log.debug (fun l -> l "index_of_packed_values");
       to_pic ?progress ~read values >|= fun (_, crcs, pics) ->
       let offsets = List.fold_left (fun offsets (offset, pic) ->
           Hash.Map.add (Packed_value.PIC.name pic) offset offsets
@@ -232,7 +228,7 @@ module IO (D: Hash.DIGEST) (I: Inflate.S) = struct
       let all = Mstruct.to_cstruct buf in
       let offset = Mstruct.offset buf in
       let `Version version, `Count count = input_header buf in
-      Log.debug "input version:%d count:%d" version count;
+      Log.debug (fun l -> l "input version:%d count:%d" version count);
       let values = values buf ~version count in
       let str = Cstruct.sub all 0 (Mstruct.offset buf - offset) in
       let pack_checksum = Hash_IO.input buf in
@@ -240,8 +236,7 @@ module IO (D: Hash.DIGEST) (I: Inflate.S) = struct
       if checksum <> pack_checksum then
         fail "Raw.input: wrong file checksum. Got: %s, expecting %s."
           (Hash.to_hex checksum) (Hash.to_hex pack_checksum);
-      Log.debugk "input checksum: %s" (fun log ->
-          log (Hash.to_hex pack_checksum));
+      Log.debug (fun l -> l "input checksum: %a" Hash.pp pack_checksum);
       if Mstruct.length buf <> 0 then fail "input: unprocessed data.";
       let buffer = Cstruct.sub all offset (Cstruct.len all - offset) in
       let raw_index = None in
@@ -305,7 +300,7 @@ module IO (D: Hash.DIGEST) (I: Inflate.S) = struct
     List.map snd pics
 
   let input ?progress ~index ~keys ~read buf =
-    Log.debug "input";
+    Log.debug (fun l -> l "input");
     let raw = Raw.input_with_index ~read ~index ~keys buf in
     of_raw ?progress raw
 
@@ -330,7 +325,7 @@ module IO (D: Hash.DIGEST) (I: Inflate.S) = struct
     buf
 
   let add ?level t =
-    Log.debug "add";
+    Log.debug (fun l -> l "add");
     let version = 2 in
     let header =
       let buf = Buffer.create 12 in
@@ -355,7 +350,7 @@ module IO (D: Hash.DIGEST) (I: Inflate.S) = struct
         ) ([], Hash.Map.empty, Hash.Map.empty) t
     in
     let h = Buffer.contents buf |> D.string in
-    Log.debugk "add hash: %s" (fun log -> log (Hash.to_hex h));
+    Log.debug (fun l -> l "add hash: %a" Hash.pp h);
     let footer =
       let buf = Buffer.create 40 in
       Hash_IO.add buf h;
@@ -376,7 +371,7 @@ module IO (D: Hash.DIGEST) (I: Inflate.S) = struct
     uncompressed
 
   let to_raw t =
-    Log.debug "to_raw";
+    Log.debug (fun l -> l "to_raw");
     let index_raw, buf = add t in
     let index = Pack_index.Raw.find_offset index_raw in
     let read _ = Lwt.return_none in
@@ -385,10 +380,10 @@ module IO (D: Hash.DIGEST) (I: Inflate.S) = struct
     Raw.input_with_index ~read ~index ~keys buf
 
   let err_not_found k =
-    Printf.ksprintf failwith "Pack.Not_found: %s" (Hash.pretty k)
+    Fmt.kstrf failwith "Pack.Not_found: %a" Hash.pp k
 
   let read t h =
-    Log.debugk "read %s" (fun log -> log (Hash.pretty h));
+    Log.debug (fun l -> l "read %a" Hash.pp h);
     try
       let is_equal x = Hash.equal (Packed_value.PIC.name x) h in
       let pic = List.find is_equal t in

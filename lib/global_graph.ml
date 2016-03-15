@@ -78,7 +78,7 @@ module Make (Store: Store.S) = struct
     | `Tree_root s -> "/"       , s
 
   let of_store t =
-    Log.debug "of_store";
+    Log.debug (fun l -> l "of_store");
     let g = C.create () in
     Store.contents t >>= fun nodes ->
     List.iter (C.add_vertex g) nodes;
@@ -96,7 +96,7 @@ module Make (Store: Store.S) = struct
     Lwt.return g
 
   let of_keys t =
-    Log.debug "of_keys";
+    Log.debug (fun l -> l "of_keys");
     let g = K.create () in
     Store.contents t >>= fun nodes ->
     List.iter (fun (k, _) -> K.add_vertex g k) nodes;
@@ -113,14 +113,14 @@ module Make (Store: Store.S) = struct
     Lwt.return g
 
   let to_dot t buf =
-    Log.debug "to_dot";
+    Log.debug (fun l -> l "to_dot");
     let fmt = Format.formatter_of_buffer buf in
     of_store t >>= fun g ->
     Dot.fprint_graph fmt g;
     Lwt.return_unit
 
   let closure ?(full=true) t ~min ~max =
-    Log.debug "closure";
+    Log.debug (fun l -> l "closure");
     let g = K.create ~size:1024 () in
     let marks = Hashtbl.create 1024 in
     let mark key = Hashtbl.add marks key true in
@@ -138,8 +138,7 @@ module Make (Store: Store.S) = struct
       if has_mark key then Lwt.return ()
       else (
         mark key;
-        Log.debugk "ADD %s" (fun log ->
-            log (Hash.to_hex key));
+        Log.debug (fun l -> l "ADD %a" Hash.pp key);
         Store.mem t key >>= function
         | false -> Lwt.return_unit
         | true  ->

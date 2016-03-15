@@ -51,8 +51,6 @@ module T = struct
       User.pp t.committer
       (String.trim t.message)
 
-  let pretty = Misc.pretty pp
-
 end
 
 include T

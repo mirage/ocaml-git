@@ -33,7 +33,6 @@ module T = struct
   let hash = Hashtbl.hash
   let compare = Pervasives.compare
   let pp ppf t = List.iter (to_line ppf) t
-  let pretty = Misc.pretty pp
 end
 
 include T

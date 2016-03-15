@@ -38,6 +38,10 @@ type capability =
   | `Agent of string
   | `Other of string ]
 
+val pp_capability: capability Fmt.t
+(** [pp_capability] it the pretty-printer for values of type
+    {!pp_capability}. *)
+
 module Result: sig
 
   type fetch
@@ -56,8 +60,8 @@ module Result: sig
   val hashes: fetch -> Hash.Set.t
   (** [hashes f] are [f]'s object hashes. *)
 
-  val pretty_fetch: fetch -> string
-  (** Pretty print a fetch result. *)
+  val pp_fetch: fetch Fmt.t
+  (** [pp_fetch] is the pretty-printer for {!fetch} values. *)
 
   type ok_or_error = [`Ok | `Error of string]
 
@@ -67,13 +71,16 @@ module Result: sig
   }
   (** The result of a push operation. *)
 
-  val pretty_push: push -> string
-  (** Pretty print a push status. *)
+  val pp_push: push Fmt.t
+  (** [pp_push] is the pretty-printer for {!push} values. *)
 
 end
 
 type want = [ `Ref of Reference.t | `Commit of Hash.Commit.t ]
 (** The type for values wanted. See {!fetch} for details. *)
+
+val pp_want: want Fmt.t
+(** [pp_want] is the pretty-printer for values of type {!want}. *)
 
 module type S = sig
 

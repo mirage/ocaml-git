@@ -17,7 +17,10 @@
 open Lwt.Infix
 open Git
 
-module Log = Log.Make(struct let section = "unix" end)
+module Log = struct
+  let src = Logs.Src.create "git.unix" ~doc:"logs git's unix events"
+  include (val Logs.src_log src : Logs.LOG)
+end
 
 (* Pool of opened files *)
 let openfile_pool = Lwt_pool.create 200 (fun () -> Lwt.return_unit)
@@ -51,7 +54,8 @@ module IO_Sync = struct
       | None   -> [| "ssh"; user ^ host; |]
       | Some x -> [| "ssh"; user ^ host; x |]
     in
-    Log.info "Executing '%s'" (String.concat " " (Array.to_list cmd));
+    Log.info (fun l ->
+        l "Executing '%s'" (String.concat " " (Array.to_list cmd)));
     let env = Unix.environment () in
     let p = Lwt_process.open_process_full ~env ("ssh", cmd) in
     Lwt.finalize
@@ -59,7 +63,7 @@ module IO_Sync = struct
       (fun () -> let _ = p#close in Lwt.return_unit)
 
   let with_conduit ?init uri fn =
-    Log.debug "Connecting to %s" (Uri.to_string uri);
+    Log.debug (fun l -> l "Connecting to %s" (Uri.to_string uri));
     let resolver = Resolver_lwt_unix.system in
     Resolver_lwt.resolve_uri ~uri resolver >>= fun endp ->
     let ctx = Conduit_lwt_unix.default_ctx in
@@ -154,14 +158,15 @@ module IO_FS = struct
       else (
         let clear =
           if Sys.file_exists dir then (
-            Log.debug "%s already exists but is a file, removing." dir;
+            Log.debug (fun l ->
+                l "%s already exists but is a file, removing." dir);
             remove_file dir;
           ) else
             Lwt.return_unit
         in
         clear >>= fun () ->
         aux (Filename.dirname dir) >>= fun () ->
-        Log.debug "mkdir %s" dir;
+        Log.debug (fun l -> l "mkdir %s" dir);
         protect (Lwt_unix.mkdir dir) 0o755;
       ) in
     Lwt_pool.use mkdir_pool (fun () -> aux dirname)
@@ -231,7 +236,7 @@ module IO_FS = struct
     mkdir dir >>= fun () ->
     let tmp = Filename.temp_file ?temp_dir (Filename.basename file) "write" in
     Lwt_pool.use openfile_pool (fun () ->
-        Log.info "Writing %s (%s)" file tmp;
+        Log.info (fun l -> l "Writing %s (%s)" file tmp);
         Lwt_unix.(openfile tmp [O_WRONLY; O_NONBLOCK; O_CREAT; O_TRUNC] 0o644)
         >>= fun fd ->
         Lwt.finalize (fun () -> protect fn fd) (fun () -> Lwt_unix.close fd)
@@ -259,16 +264,19 @@ module IO_FS = struct
 
   let read_file file =
     Lwt_pool.use openfile_pool (fun () ->
-        Log.info "Reading %s" file;
+        Log.info (fun l -> l "Reading %s" file);
         Lwt_unix.stat file >>= fun stats ->
-        (* There are really too many buffers here. First we copy from the FS to the Lwt_io buffer,
-           then from there into our own string buffer, then blit from there into a Cstruct. *)
+        (* There are really too many buffers here. First we copy from
+           the FS to the Lwt_io buffer, then from there into our own
+           string buffer, then blit from there into a Cstruct. *)
         let chunk_size = max 4096 (min stats.Lwt_unix.st_size 0x100000) in
         let lwt_buffer = Lwt_bytes.create chunk_size in
-        Lwt_io.(with_file ~buffer:lwt_buffer ~mode:input) ~flags:[Unix.O_RDONLY] file (fun ch ->
-          let buf = Cstruct.create stats.Lwt_unix.st_size in
-          read_into ~chunk_size buf ch
-        )
+        Lwt_io.(with_file
+                  ~buffer:lwt_buffer ~mode:input) ~flags:[Unix.O_RDONLY] file
+          (fun ch ->
+             let buf = Cstruct.create stats.Lwt_unix.st_size in
+             read_into ~chunk_size buf ch
+          )
       )
 
   let realdir dir =

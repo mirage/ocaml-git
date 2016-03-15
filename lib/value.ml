@@ -34,8 +34,6 @@ module T = struct
     | Tag t    -> Format.fprintf ppf "@[<hov 2>Tag@ %a@]" Tag.pp t
     | Tree t   -> Format.fprintf ppf "@[<hov 2>Tree@ %a@]" Tree.pp t
 
-  let pretty t = Misc.pretty pp t
-
 end
 
 include T
@@ -82,7 +80,7 @@ module IO (D: Hash.DIGEST) (I: Inflate.S) = struct
     | Tree t   -> Tree_IO.add buf t
 
   let add_inflated buf t =
-    Log.debug "add_inflated";
+    Log.debug (fun l -> l "add_inflated");
     let tmp = Buffer.create 1024 in
     add_contents tmp t;
     let size = Buffer.length tmp in
@@ -116,8 +114,7 @@ module IO (D: Hash.DIGEST) (I: Inflate.S) = struct
     | Object_type.Tree   -> Tree_IO.input buf   |> tree
 
   let add buf ?level t =
-    Log.debugk "add %s" (fun log ->
-        log (pretty t));
+    Log.debug (fun log -> log "add %a" pp t);
     let inflated = Misc.with_buffer' (fun buf -> add_inflated buf t) in
     let deflated = I.deflate ?level inflated in
     Buffer.add_string buf (Cstruct.to_string deflated)
