@@ -30,6 +30,7 @@ depends: [
   "hex"
   "stringext"
   "crc"
+  "astring"
   "alcotest"         {test}
   "mirage-types-lwt" {test}
   "mirage-http"      {test}
