@@ -17,37 +17,24 @@
 open Git
 open Lwt.Infix
 
-let app_style = `Cyan
-let err_style = `Red
-let warn_style = `Yellow
-let info_style = `Blue
-let debug_style = `Green
-
 let pp ppf style h = Fmt.pf ppf "%a " Fmt.(styled style string) h
 
-let pp_header ppf (l, h) = match l with
-| Logs.App ->
-    begin match h with
-    | None -> ()
-    | Some h -> Fmt.pf ppf "[%a] " Fmt.(styled app_style string) h
-    end
-| Logs.Error -> pp ppf err_style (match h with None -> "ERROR" | Some h -> h)
-| Logs.Warning -> pp ppf warn_style (match h with None -> "WARN " | Some h -> h)
-| Logs.Info -> pp ppf info_style (match h with None -> "INFO " | Some h -> h)
-| Logs.Debug -> pp ppf debug_style (match h with None -> "DEBUG" | Some h -> h)
+let pad n x =
+  if String.length x > n then x else x ^ String.make (n - String.length x) ' '
 
 let reporter () =
   let report src level ~over k msgf =
     let k _ = over (); k () in
-    let with_stamp h _tags k ppf fmt =
+    let ppf = match level with Logs.App -> Fmt.stdout | _ -> Fmt.stderr in
+    let with_stamp h _tags k fmt =
       let dt = Mtime.to_us (Mtime.elapsed ()) in
-      Fmt.kpf k ppf ("\r%0+04.0fus %a %a%s @[" ^^ fmt ^^ "@]@.")
-        dt pp_header (level, h)
-        Fmt.(styled `Magenta string) (Logs.Src.name src)
-        (String.make (max 0 @@ 10 - String.length (Logs.Src.name src)) ' ')
+      Fmt.kpf k ppf ("\r%0+04.0fus %a %a @[" ^^ fmt ^^ "@]@.")
+        dt
+        Fmt.(styled `Magenta string) (pad 10 @@ Logs.Src.name src)
+        Logs_fmt.pp_header (level, h)
     in
     msgf @@ fun ?header ?tags fmt ->
-    with_stamp header tags k Format.err_formatter fmt
+    with_stamp header tags k fmt
   in
   { Logs.report = report }
 

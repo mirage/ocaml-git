@@ -32,17 +32,22 @@ let help_sections = [
   `P "Check bug reports at https://github.com/samoht/ocaml-git/issues.";
 ]
 
+let pad n x =
+  if String.length x > n then x else x ^ String.make (n - String.length x) ' '
+
 let reporter () =
   let report src level ~over k msgf =
     let k _ = over (); k () in
-    let with_stamp h _tags k ppf fmt =
+    let ppf = match level with Logs.App -> Fmt.stdout | _ -> Fmt.stderr in
+    let with_stamp h _tags k fmt =
       let dt = Mtime.to_us (Mtime.elapsed ()) in
-      Fmt.kpf k ppf ("\r%a[%0+04.0fus] %a: @[" ^^ fmt ^^ "@]@.")
-        Logs_fmt.pp_header (level, h) dt
-        Fmt.(styled `Magenta string) (Logs.Src.name src)
+      Fmt.kpf k ppf ("\r%0+04.0fus %a %a @[" ^^ fmt ^^ "@]@.")
+        dt
+        Fmt.(styled `Magenta string) (pad 10 @@ Logs.Src.name src)
+        Logs_fmt.pp_header (level, h)
     in
     msgf @@ fun ?header ?tags fmt ->
-    with_stamp header tags k Format.err_formatter fmt
+    with_stamp header tags k fmt
   in
   { Logs.report = report }
 
