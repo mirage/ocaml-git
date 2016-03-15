@@ -60,9 +60,7 @@ let pretty_wants = function
 let has_prefix prefix r =
   Reference.is_valid r &&
   let raw_ref = Reference.to_raw r in
-  match Misc.string_chop_prefix ~prefix raw_ref with
-  | None   -> false
-  | Some _ -> true
+  String.is_prefix ~affix:prefix raw_ref
 
 let is_head = has_prefix "refs/heads/"
 let is_tag  = has_prefix "refs/tags/"
@@ -157,14 +155,12 @@ end
 
 type capability = Capability.t
 
-let mkstr c = String.v ~len:1 (fun _ -> c)
-
 module Capabilities = struct
 
   type t = Capability.t list
 
   let of_string str =
-    List.map Capability.of_string (String.cuts str ~sep:(mkstr Misc.sp))
+    List.map Capability.of_string (String.cuts str ~sep:Misc.sp_str)
 
   let to_string l =
     String.concat ~sep:" " (List.map Capability.to_string l)
@@ -366,9 +362,10 @@ module Make (IO: IO) (Store: Store.S) = struct
       error "PacketLine.input: the payload doesn't have a trailing LF"
 
     let truncate s =
-      if String.length s > 20 then
-        String.Ascii.escape (String.sub ~stop:20 s |> String.Sub.to_string) ^ "[..]"
-      else String.Ascii.escape s
+      if String.length s > 100 then
+        String.Ascii.escape (String.with_range ~len:96 s) ^ "[..]"
+      else
+        String.Ascii.escape s
 
     let input_raw_exn ic: t Lwt.t =
       Log.debug "PacketLine.input_raw";
@@ -405,7 +402,7 @@ module Make (IO: IO) (Store: Store.S) = struct
       | Some s  ->
         let size = String.length s in
         if s.[size - 1] <> Misc.lf then err_no_trailing_lf ();
-        let s = String.sub s ~stop:(size-1) |> String.Sub.to_string in
+        let s = String.with_range s ~len:(size-1) in
         Lwt.return (Some s)
 
   end
@@ -861,8 +858,7 @@ module Make (IO: IO) (Store: Store.S) = struct
         | Some "" -> aux acc
         | Some s  ->
           let payload =
-            String.sub s ~start:1 ~stop:(String.length s - 1)
-            |> String.Sub.to_string
+            String.with_range s ~first:1 ~len:(String.length s - 1)
           in
           pp payload;
           match kind s.[0] with

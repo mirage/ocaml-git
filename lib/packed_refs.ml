@@ -65,10 +65,7 @@ module IO (D: Hash.DIGEST) = struct
     let line = String.trim line in
     if String.length line = 0 then Some `Newline
     else if line.[0] = '#' then
-      let str =
-        String.sub line ~start:1 ~stop:(String.length line - 1)
-        |> String.Sub.to_string
-      in
+      let str = String.with_range line ~first:1 ~len:(String.length line - 1) in
       Some (`Comment str)
     else match String.cut line ~sep:" " with
       | None  -> None

@@ -73,7 +73,7 @@ let head_contents_of_commit refs h =
 let master = "refs/heads/master"
 
 let is_valid r =
-  Misc.string_forall (function
+  String.for_all (function
       | '{'
       | '}'
       | '^' -> false

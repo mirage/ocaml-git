@@ -17,6 +17,7 @@
 open Lwt.Infix
 open Misc.OP
 open Printf
+open Astring
 
 module ReferenceSet = Misc.Set(Reference)
 
@@ -156,8 +157,10 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
 
     let file t h =
       let hex = Hash.to_hex h in
-      let prefix = String.sub hex 0 2 in
-      let suffix = String.sub hex 2 (String.length hex - 2) in
+      let prefix = String.with_range hex ~first:0 ~len:2 in
+      let suffix =
+        String.with_range hex ~first:2 ~len:(String.length hex - 2)
+      in
       t.dot_git / "objects" / prefix / suffix
 
     let mem t h = IO.file_exists (file t h)
@@ -170,12 +173,13 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
       let len = String.length hex in
       let dcands =
         if len <= 2 then
-          List.filter
-            (fun d ->
-               (String.sub (Filename.basename d) 0 len) = hex
+          List.filter (fun d ->
+              String.is_prefix ~affix:hex @@ Filename.basename d
             ) dirs
         else
-          List.filter (fun d -> Filename.basename d = String.sub hex 0 2) dirs
+          List.filter (fun d ->
+              String.is_prefix ~affix:(Filename.basename d) hex
+            ) dirs
       in
       match dcands with
       | []      -> Lwt.return_none
@@ -187,10 +191,10 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
           if len <= 2 then files
           else
             let len' = len - 2 in
-            let suffix = String.sub hex 2 len' in
-            List.filter
-              (fun f -> String.sub (Filename.basename f) 0 len' = suffix)
-              files
+            let suffix = String.with_range hex ~first:2 ~len:len' in
+            List.filter (fun f ->
+                String.with_range (Filename.basename f) ~len:len' = suffix
+              ) files
         in
         match fcands with
         | []     -> Lwt.return_none
@@ -284,7 +288,7 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
       let packs = List.filter (fun f -> Filename.check_suffix f ".idx") packs in
       let packs = List.map (fun f ->
           let p = Filename.chop_suffix f ".idx" in
-          let p = String.sub p 5 (String.length p - 5) in
+          let p = String.with_range p ~first:5 ~len:(String.length p - 5) in
           Hash_IO.of_hex p
         ) packs in
       Lwt.return packs
@@ -473,8 +477,8 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
     IO.rec_files refs >>= fun files ->
     let n = String.length (t.dot_git / "") in
     let refs = List.map (fun file ->
-        let ref = String.sub file n (String.length file - n) in
-        Reference.of_raw ref
+        let r = String.with_range file ~first:n ~len:(String.length file - n) in
+        Reference.of_raw r
       ) files in
     let packed_refs = packed_refs t in
     let packed_refs =
@@ -722,15 +726,15 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
               Log.debug "%s: %s unchanged!" (Hash.Blob.to_hex h) file;
               Lwt.return_unit
             )
-    end >>= fun () ->
+    end >|= fun () ->
     let id = h in
     let stats = IO.stat_info file in
     let stage = 0 in
-    match Misc.string_chop_prefix ~prefix:(t.root / "") file with
-    | None      -> fail "entry_of_file: %s" file
-    | Some name ->
+    if not (String.is_prefix file ~affix:(t.root / "")) then None
+    else
+      let name = String.with_range file ~len:(String.length @@ t.root / "") in
       let entry = { Index.stats; id; stage; name } in
-      Lwt.return (Some entry)
+      Some entry
 
   let entry_of_file t index file mode h blob =
     Lwt.catch
@@ -757,7 +761,7 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
       Log.info "Checking out files...";
       iter_blobs t ~init:head ~f:(fun (i,n) path mode h blob ->
           all := n;
-          let file = String.concat Filename.dir_sep path in
+          let file = String.concat ~sep:Filename.dir_sep path in
           Log.debug "write_index: %d/%d blob:%s" i n file;
           entry_of_file t index file mode h blob >>= function
           | None   -> Lwt.return_unit

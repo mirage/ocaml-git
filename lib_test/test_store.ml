@@ -17,6 +17,7 @@
 open Test_common
 open Lwt.Infix
 open Git
+open Astring
 
 type t = {
   name  : string;
@@ -397,17 +398,17 @@ module Make (Store: Store.S) = struct
         if files = [] then
           failwith "Please run that test in lib_test/";
         let files = List.filter (fun file ->
-            match Misc.string_chop_suffix file ~suffix:".pack" with
-            | None   -> false
-            | Some _ -> true
+            String.is_suffix file ~affix:".pack"
           ) files in
         let files = List.map (fun file ->
-            match Misc.string_chop_prefix file ~prefix:"data/pack-" with
-            | None      -> failwith ("chop prefix " ^ file)
-            | Some name ->
-              match Misc.string_chop_suffix name ~suffix:".pack" with
-              | None      -> failwith ("chop suffix " ^ name)
-              | Some name -> file, "data/pack-" ^ name ^ ".idx"
+            let name =
+              String.with_range file ~first:(String.length "data/pack-")
+            in
+            let name =
+              String.with_range name
+                ~len:(String.length name - String.length ".pack")
+            in
+            file, "data/pack-" ^ name ^ ".idx"
           ) files in
         let read_file file =
             let fd = Unix.(openfile file [O_RDONLY; O_NONBLOCK] 0o644) in
