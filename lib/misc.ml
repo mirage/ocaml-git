@@ -14,13 +14,12 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Log_make (S: sig val section: string end) = struct
+let src_log section =
   let src =
-    let doc = Printf.sprintf "logs git's %s events" S.section in
-    Logs.Src.create ("git." ^ S.section) ~doc
-  module Log = (val Logs.src_log src : Logs.LOG)
-  include Log
-end
+    let doc = Printf.sprintf "logs git's %s events" section in
+    Logs.Src.create ("git." ^ section) ~doc
+  in
+  Logs.src_log src
 
 let sp  = '\x20'
 let nul = '\x00'

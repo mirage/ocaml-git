@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Log = Misc.Log_make(struct let section = "object-type" end)
+module Log = (val Misc.src_log "object-type" : Logs.LOG)
 
 type t =
   | Blob

@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Log = Misc.Log_make(struct let section = "inflate" end)
+module Log = (val Misc.src_log "inflate" : Logs.LOG)
 
 module type S = sig
   val inflate: ?output_size:int -> Mstruct.t -> Mstruct.t option

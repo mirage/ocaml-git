@@ -16,7 +16,7 @@
 
 open Lwt.Infix
 
-module Log = Misc.Log_make(struct let section = "pack" end)
+module Log = (val Misc.src_log "pack" : Logs.LOG)
 
 let fail fmt = Printf.ksprintf failwith ("Pack." ^^ fmt)
 
@@ -107,7 +107,7 @@ module IO (D: Hash.DIGEST) (I: Inflate.S) = struct
 
   module Raw = struct
 
-    module Log = Misc.Log_make(struct let section = "pack-raw" end)
+    module Log = (val Misc.src_log "pack-raw" : Logs.LOG)
 
     include Raw
 

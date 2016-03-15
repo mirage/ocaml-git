@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Log = Misc.Log_make(struct let section = "pack-index" end)
+module Log = (val Misc.src_log "pack-index" : Logs.LOG)
 
 type f = Hash.t -> int option
 

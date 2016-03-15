@@ -25,9 +25,7 @@ let fail fmt = Fmt.kstrf failwith ("Git.FS." ^^ fmt)
 
 let err_not_found n k = fail "%s: %s not found" n k
 
-module LogMake = Misc.Log_make
-
-module Log = LogMake(struct let section = "fs" end)
+module Log = (val Misc.src_log "fs" : Logs.LOG)
 
 module type IO = sig
   val getcwd: unit -> string Lwt.t
@@ -153,7 +151,7 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
   (* Loose objects *)
   module Loose = struct
 
-    module Log = LogMake(struct let section = "fs-loose" end)
+    module Log = (val Misc.src_log "fs-loose" : Logs.LOG)
 
     let file t h =
       let hex = Hash.to_hex h in
@@ -275,7 +273,7 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
 
   module Packed = struct
 
-    module Log = LogMake(struct let section = "fs-packed" end)
+    module Log = (val Misc.src_log "fs-packed" : Logs.LOG)
 
     let file t h =
       let pack_dir = t.dot_git / "objects" / "pack" in

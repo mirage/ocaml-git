@@ -16,7 +16,7 @@
 
 open Lwt.Infix
 
-module Log = Misc.Log_make(struct let section = "packed-value" end)
+module Log = (val Misc.src_log "packed-value" : Logs.LOG)
 
 type copy = { copy_offset: int; copy_length: int; }
 

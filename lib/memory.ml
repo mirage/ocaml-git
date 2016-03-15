@@ -16,7 +16,7 @@
 
 open Lwt.Infix
 
-module Log = Misc.Log_make(struct let section = "memory" end)
+module Log = (val Misc.src_log "memory" : Logs.LOG)
 
 let err_not_found n k =
   let str = Printf.sprintf "Git.Memory.%s: %s not found" n k in

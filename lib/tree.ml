@@ -15,7 +15,7 @@
  *)
 
 open Astring
-module Log = Misc.Log_make(struct let section = "tree" end)
+module Log = (val Misc.src_log "tree" : Logs.LOG)
 
 type perm = [
     `Normal

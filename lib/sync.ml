@@ -17,7 +17,7 @@
 open Astring
 open Lwt.Infix
 
-module Log = Misc.Log_make(struct let section = "sync" end)
+module Log = (val Misc.src_log "sync" : Logs.LOG)
 
 type protocol = [ `SSH | `Git | `Smart_HTTP ]
 

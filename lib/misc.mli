@@ -86,4 +86,4 @@ module OP: sig
 
 end
 
-module Log_make(S: sig val section: string end): Logs.LOG
+val src_log: string -> (module Logs.LOG)

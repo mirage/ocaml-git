@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Log = Misc.Log_make(struct let section = "hash" end)
+module Log = (val Misc.src_log "hash": Logs.LOG)
 
 module type S = sig
   include Object.S
