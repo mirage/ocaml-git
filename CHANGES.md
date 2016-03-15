@@ -4,6 +4,9 @@
 * Rename `Git.SHA` into `Git.Hash` (@samoht)
 * Remove `Git.Sync.populate` but add `Git.Sync.clone` to replace the
   previous `fetch+populate` (#122, @samoht)
+* Fix the API so that references can point to any kind of hashes (#123, @samoht)
+* Fix duplicated references when mixing packed and loose references
+  (#124, @samoht)
 
 ### 1.7.3 (2016-02-19)
 
