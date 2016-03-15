@@ -3,7 +3,7 @@ install: wget https://raw.githubusercontent.com/ocaml/ocaml-travisci-skeleton/ma
 script: bash -ex .travis-opam.sh
 env:
   global:
-    - PACKAGE=git
+    - PACKAGE="git.1.8.0"
   matrix:
     - OCAML_VERSION=4.01
     - OCAML_VERSION=4.02
