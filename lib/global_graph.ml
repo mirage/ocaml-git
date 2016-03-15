@@ -62,9 +62,9 @@ module K = Graph.Imperative.Digraph.ConcreteBidirectional(Hash)
 module T = Graph.Topological.Make(K)
 module KO = Graph.Oper.I(K)
 
-module Make (Store: Store.S) = struct
+module Log = (val Misc.src_log "graph" : Logs.LOG)
 
-  module Log = (val Misc.src_log "graph" : Logs.LOG)
+module Make (Store: Store.S) = struct
 
   module Search = struct
     include Search.Make(Store)

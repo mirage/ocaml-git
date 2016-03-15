@@ -19,6 +19,9 @@ open Misc.OP
 open Printf
 open Astring
 
+module PackedLog = (val Misc.src_log "fs-packed" : Logs.LOG)
+module LooseLog = (val Misc.src_log "fs-loose" : Logs.LOG)
+
 module ReferenceSet = Misc.Set(Reference)
 
 let fail fmt = Fmt.kstrf failwith ("Git.FS." ^^ fmt)
@@ -151,7 +154,7 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
   (* Loose objects *)
   module Loose = struct
 
-    module Log = (val Misc.src_log "fs-loose" : Logs.LOG)
+    module Log = LooseLog
 
     let file t h =
       let hex = Hash.to_hex h in
@@ -273,7 +276,7 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
 
   module Packed = struct
 
-    module Log = (val Misc.src_log "fs-packed" : Logs.LOG)
+    module Log = PackedLog
 
     let file t h =
       let pack_dir = t.dot_git / "objects" / "pack" in

@@ -99,6 +99,8 @@ module Raw = struct
 
 end
 
+module RawLog = (val Misc.src_log "pack-raw" : Logs.LOG)
+
 module IO (D: Hash.DIGEST) (I: Inflate.S) = struct
 
   module Packed_value_IO = Packed_value.IO(D)(I)
@@ -107,8 +109,7 @@ module IO (D: Hash.DIGEST) (I: Inflate.S) = struct
 
   module Raw = struct
 
-    module Log = (val Misc.src_log "pack-raw" : Logs.LOG)
-
+    module Log = RawLog
     include Raw
 
     let add_header ~version buf count =
