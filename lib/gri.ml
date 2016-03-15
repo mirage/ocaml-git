@@ -14,6 +14,8 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+open Astring
+
 type t = Uri.t
 
 let to_uri x = x
@@ -24,11 +26,11 @@ let of_string str =
   match Uri.host uri with
   | Some _ -> uri
   | None   ->
-    match Stringext.cut str ~on:":" with
+    match String.cut str ~sep:":" with
     | None       -> uri
     | Some (host, path) ->
       let userinfo, host =
-        match Stringext.cut host ~on:"@" with
+        match String.cut host ~sep:"@" with
         | None       -> None  , host
         | Some (a,b) -> Some a, b in
       let scheme = "git+ssh" in

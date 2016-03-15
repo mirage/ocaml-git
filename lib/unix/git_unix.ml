@@ -357,7 +357,7 @@ module SHA1 = struct
     buf
     |> Nocrypto.Hash.SHA1.digest
     |> Cstruct.to_string
-    |> fun x -> SHA.of_raw x
+    |> fun x -> Hash.of_raw x
 
   let string str =
     Cstruct.of_string str
@@ -373,7 +373,7 @@ module SHA256 = struct
     buf
     |> Nocrypto.Hash.SHA256.digest
     |> Cstruct.to_string
-    |> fun x -> SHA.of_raw x
+    |> fun x -> Hash.of_raw x
 
   let string str =
     Cstruct.of_string str
@@ -383,7 +383,7 @@ module SHA256 = struct
 
 end
 
-module Make (D: Git.SHA.DIGEST) (I: Git.Inflate.S) = struct
+module Make (D: Git.Hash.DIGEST) (I: Git.Inflate.S) = struct
 
   module Sync = struct
     module IO = IO_Sync
@@ -398,7 +398,7 @@ module Make (D: Git.SHA.DIGEST) (I: Git.Inflate.S) = struct
 
   module Memory = Git.Memory.Make(D)(I)
 
-  module SHA_IO = Git.SHA.IO(D)
+  module Hash_IO = Git.Hash.IO(D)
   module Value_IO = Value.IO(D)(I)
   module Pack_IO = Git.Pack.IO(D)(I)
   module Index_IO = Git.Index.IO(D)
@@ -422,7 +422,7 @@ module type S = sig
   end
   module Memory: Store.S
 
-  module SHA_IO: Git.SHA.IO
+  module Hash_IO: Git.Hash.IO
   module Value_IO: Git.Value.IO
   module Pack_IO: Git.Pack.IO
   module Index_IO: Git.Index.IO

@@ -27,9 +27,9 @@
 (* From
    https://github.com/c-cube/ocaml-containers/blob/8c0670155d62511c540d125f106b9ec6bfab5931/src/data/CCCache.ml *)
 
-type key = SHA.t
+type key = Hash.t
 
-module H = Hashtbl.Make(SHA)
+module H = Hashtbl.Make(Hash)
 
 type 'a t = {
   table : 'a node H.t;  (* hashtable key -> node *)

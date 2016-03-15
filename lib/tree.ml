@@ -14,6 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+open Astring
 module Log = Misc.Log_make(struct let section = "tree" end)
 
 type perm = [
@@ -27,7 +28,7 @@ type perm = [
 type entry = {
   perm: perm;
   name: string;
-  node: SHA.t;
+  node: Hash.t;
 }
 
 module T = struct
@@ -48,7 +49,7 @@ module T = struct
   let pp_entry ppf e =
     Format.fprintf ppf "{@[<hov 2>perm = %s;@ node = \"%a\";@ name = %S;@]}"
       (pretty_perm e.perm)
-      SHA.pp e.node
+      Hash.pp e.node
       e.name
 
   let pp ppf t =
@@ -85,15 +86,12 @@ let fixed_length_string_of_perm = function
   | `Dir    -> "040000"
   | `Commit -> "160000"
 
-let escape = Char.chr 42
-
-let escaped_chars =
-  escape :: List.map Char.chr [ 0x00; 0x2f ]
-
+let escape = Char.of_byte 42
+let escaped_chars = escape :: List.map Char.of_byte [ 0x00; 0x2f ]
 let needs_escape x = List.mem x escaped_chars
 
 let encode path =
-  if not (Misc.string_exists needs_escape path) then
+  if not (String.exists needs_escape path) then
     path
   else
     let n = String.length path in
@@ -101,7 +99,7 @@ let encode path =
     let last = ref 0 in
     for i = 0 to n - 1 do
       if needs_escape path.[i] then (
-        let c = Char.chr (Char.code path.[i] + 1) in
+        let c = Char.of_byte (Char.to_int path.[i] + 1) in
         if i - !last > 0 then Buffer.add_substring b path !last (i - !last);
         Buffer.add_char b escape;
         Buffer.add_char b c;
@@ -112,9 +110,9 @@ let encode path =
       Buffer.add_substring b path !last (n - !last);
     Buffer.contents b
 
-module IO (D: SHA.DIGEST) = struct
+module IO (D: Hash.DIGEST) = struct
 
-  module SHA_IO = SHA.IO(D)
+  module Hash_IO = Hash.IO(D)
   include T
 
   let add_entry buf e =
@@ -122,10 +120,10 @@ module IO (D: SHA.DIGEST) = struct
     Buffer.add_char buf Misc.sp;
     Buffer.add_string buf (encode e.name);
     Buffer.add_char buf Misc.nul;
-    SHA_IO.add buf e.node
+    Hash_IO.add buf e.node
 
   let decode path =
-    if not (Misc.string_mem escape path) then path
+    if not (String.exists ((=) escape) path) then path
     else
       let n = String.length path in
       let b = Buffer.create n in
@@ -134,7 +132,7 @@ module IO (D: SHA.DIGEST) = struct
         if path.[i] = escape then (
           if i - !last > 0 then Buffer.add_substring b path !last (i - !last);
           if i + 1 < n then (
-            let c = Char.chr (Char.code path.[i+1] - 1) in
+            let c = Char.of_byte (Char.to_int path.[i+1] - 1) in
             Buffer.add_char b c;
           );
           last := i + 2;
@@ -152,7 +150,7 @@ module IO (D: SHA.DIGEST) = struct
       | None      -> Mstruct.parse_error_buf buf "invalid filename"
       | Some name -> name in
     let name = decode name in
-    let node = SHA_IO.input buf in
+    let node = Hash_IO.input buf in
     let entry = {
       perm = perm_of_string buf perm;
       name; node

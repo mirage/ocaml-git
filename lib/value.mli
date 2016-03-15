@@ -48,16 +48,16 @@ val tag: Tag.t -> t
 
 (** {1 IO types} *)
 
-type read = SHA.t -> t option Lwt.t
+type read = Hash.t -> t option Lwt.t
 (** The type for functions reading values. *)
 
-type read_inflated = SHA.t -> string option Lwt.t
+type read_inflated = Hash.t -> string option Lwt.t
 (** The type for functions reading inflated values. *)
 
-type write = t -> SHA.t Lwt.t
+type write = t -> Hash.t Lwt.t
 (** The type for functions writing values. *)
 
-type write_inflated = string -> SHA.t Lwt.t
+type write_inflated = string -> Hash.t Lwt.t
 (** The type for functions writing raw values. *)
 
 module Cache: sig
@@ -71,19 +71,19 @@ module Cache: sig
   val clear: unit -> unit
   (** Empty the cache. *)
 
-  val find: SHA.t -> t option
+  val find: Hash.t -> t option
   (** Cache an inflated values. This is used by various operations, so
       it could be useful to look into it to speed-up operations which
       needs to search a pack file. *)
 
-  val find_inflated: SHA.t -> string option
+  val find_inflated: Hash.t -> string option
   (** Same as {!find} but store the inflated representation of the
       value. *)
 
-  val add: SHA.t -> t -> unit
+  val add: Hash.t -> t -> unit
   (** Cache a value. *)
 
-  val add_inflated: SHA.t -> string -> unit
+  val add_inflated: Hash.t -> string -> unit
   (** Cache an inflated value. *)
 
 end
@@ -94,8 +94,8 @@ module type IO = sig
 
   (** {2 Inflated values} *)
 
-  val sha1: t -> SHA.t
-  (** Return the SHA of the serialized contents. *)
+  val name: t -> Hash.t
+  (** Return the hash of the serialized contents. *)
 
   val add_header: Buffer.t -> Object_type.t -> int -> unit
   (** Append the given object header to a buffer.  *)
@@ -109,4 +109,4 @@ module type IO = sig
 
 end
 
-module IO (D: SHA.DIGEST) (I: Inflate.S): IO
+module IO (D: Hash.DIGEST) (I: Inflate.S): IO

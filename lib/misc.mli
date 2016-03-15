@@ -77,12 +77,6 @@ module Map (X: OrderedType): Map with type key = X.t
 
 module IntMap: Map with type key = int
 
-val string_forall: (char -> bool) -> string -> bool
-val string_exists: (char -> bool) -> string -> bool
-val string_mem: char -> string -> bool
-val string_chop_prefix: string -> prefix:string -> string option
-val string_chop_suffix: string -> suffix:string -> string option
-
 val list_filter_map: ('a -> 'b option) -> 'a list -> 'b list
 
 module OP: sig

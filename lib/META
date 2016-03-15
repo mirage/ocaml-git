@@ -1,15 +1,15 @@
 # OASIS_START
-# DO NOT EDIT (digest: 7676da5f7606d02565a3fb68aa504881)
-version = "1.7.3"
+# DO NOT EDIT (digest: 715dd3d9345ef2cd0770a0ed554cc5fd)
+version = "1.8.0"
 description = "A low-level interface to Git in pure OCaml"
-requires = "mstruct dolog ocamlgraph uri lwt hex stringext crc"
+requires = "mstruct dolog ocamlgraph uri lwt hex astring crc"
 archive(byte) = "git.cma"
 archive(byte, plugin) = "git.cma"
 archive(native) = "git.cmxa"
 archive(native, plugin) = "git.cmxs"
 exists_if = "git.cma"
 package "unix" (
- version = "1.7.3"
+ version = "1.8.0"
  description = "A low-level interface to Git in pure OCaml"
  requires =
  "git git.http lwt cohttp.lwt lwt.unix conduit.lwt-unix zip nocrypto"
@@ -21,7 +21,7 @@ package "unix" (
 )
 
 package "top" (
- version = "1.7.3"
+ version = "1.8.0"
  description = "Toplevel printers for Git values"
  requires = "git"
  archive(byte) = "git_top.cma"
@@ -32,7 +32,7 @@ package "top" (
 )
 
 package "mirage" (
- version = "1.7.3"
+ version = "1.8.0"
  description = "A low-level interface to Git in pure OCaml"
  requires =
  "git git.http mirage-types.lwt io-page conduit.mirage dns.mirage mirage-http mirage-flow channel"
@@ -44,7 +44,7 @@ package "mirage" (
 )
 
 package "http" (
- version = "1.7.3"
+ version = "1.8.0"
  description = "A low-level interface to Git in pure OCaml"
  requires = "git lwt cohttp.lwt uri.services"
  archive(byte) = "git-http.cma"

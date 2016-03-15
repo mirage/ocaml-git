@@ -166,33 +166,6 @@ end
 
 module IntMap = Map(I)
 
-let string_forall f s =
-  let rec aux i = i = String.length s || (f s.[i] && aux (i+1)) in
-  aux 0
-
-let string_exists f s =
-  let rec aux i = i < String.length s && (f s.[i] || aux (i+1)) in
-  aux 0
-
-let string_mem c s =
-  string_exists ((=) c) s
-
-let string_chop_prefix t ~prefix =
-  let lt = String.length t in
-  let lp = String.length prefix in
-  if lt < lp then None else
-    let p = String.sub t 0 lp in
-    if String.compare p prefix <> 0 then None
-    else Some (String.sub t lp (lt - lp))
-
-let string_chop_suffix t ~suffix =
-  let lt = String.length t in
-  let ls = String.length suffix in
-  if lt < ls then None else
-    let p = String.sub t (lt-ls) ls in
-    if String.compare p suffix <> 0 then None
-    else Some (String.sub t 0 (lt - ls))
-
 let list_filter_map f l =
   List.fold_left (fun l elt ->
       match f elt with

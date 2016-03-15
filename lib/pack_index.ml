@@ -16,33 +16,33 @@
 
 module Log = Misc.Log_make(struct let section = "pack-index" end)
 
-type f = SHA.t -> int option
+type f = Hash.t -> int option
 
 type raw = {
-  offsets : int SHA.Map.t;
-  crcs    : int32 SHA.Map.t;
-  pack_checksum: SHA.t;
+  offsets : int Hash.Map.t;
+  crcs    : int32 Hash.Map.t;
+  pack_checksum: Hash.t;
 }
 
 module Raw = struct
 
   type t = raw
   let hash t = Hashtbl.hash t.pack_checksum
-  let compare t1 t2 =  SHA.compare t1.pack_checksum t2.pack_checksum
-  let equal t1 t2 = SHA.equal t1.pack_checksum t2.pack_checksum
+  let compare t1 t2 =  Hash.compare t1.pack_checksum t2.pack_checksum
+  let equal t1 t2 = Hash.equal t1.pack_checksum t2.pack_checksum
 
   let pp ppf t =
-    Format.fprintf ppf "@[pack-checksum: %a@ " SHA.pp t.pack_checksum;
+    Format.fprintf ppf "@[pack-checksum: %a@ " Hash.pp t.pack_checksum;
     let l = ref [] in
-    let offsets = SHA.Map.to_alist t.offsets in
-    let crcs = SHA.Map.to_alist t.crcs in
+    let offsets = Hash.Map.to_alist t.offsets in
+    let crcs = Hash.Map.to_alist t.crcs in
     List.iter2 (fun (key1, offset) (key2, crc) ->
         assert (key1 = key2);
         l := (key1, offset, crc) :: !l
       ) offsets crcs;
-    let l = List.sort (fun (s1,_,_) (s2,_,_) -> SHA.compare s1 s2) !l in
-    List.iter (fun (sha1, offset, crc) ->
-        Format.fprintf ppf "@[%a@ off:%d@ crc:%ld@;@]" SHA.pp sha1 offset crc
+    let l = List.sort (fun (s1,_,_) (s2,_,_) -> Hash.compare s1 s2) !l in
+    List.iter (fun (h, offset, crc) ->
+        Format.fprintf ppf "@[%a@ off:%d@ crc:%ld@;@]" Hash.pp h offset crc
       ) l;
     Format.fprintf ppf "@]"
 
@@ -53,14 +53,14 @@ module Raw = struct
       | []    -> List.rev acc
       | [h,_] -> aux ((h, None)::acc) []
       | (h1,l1)::((_,l2)::_ as t) -> aux ((h1, Some (l2-l1))::acc) t in
-    let l = SHA.Map.bindings offsets in
+    let l = Hash.Map.bindings offsets in
     let l = List.sort (fun (_,x) (_,y) -> Pervasives.compare x y) l in
-    SHA.Map.of_alist (aux [] l)
+    Hash.Map.of_alist (aux [] l)
 
-  let keys t = SHA.Set.of_list (SHA.Map.keys t.offsets)
+  let keys t = Hash.Set.of_list (Hash.Map.keys t.offsets)
 
-  let find_offset t sha1 =
-    try Some (SHA.Map.find sha1 t.offsets)
+  let find_offset t h =
+    try Some (Hash.Map.find h t.offsets)
     with Not_found -> None
 
   let input_header buf =
@@ -83,19 +83,19 @@ end
 type t = {
   cache: Offset_cache.t;
   fanout_ofs: int;
-  sha1s_ofs: int;
+  hashes_ofs: int;
   crcs_ofs: int;
   offsets_ofs: int;
   ofs64_ofs: int;
-  n_sha1s: int;
+  n_hashes: int;
   ofs64_tbl: (int, int) Hashtbl.t;
   mutable ofs64_size: int option;
   ba: Cstruct.buffer;
 }
 
-module Make (D: SHA.DIGEST) = struct
+module Make (D: Hash.DIGEST) = struct
 
-  module A = SHA.Array(D)
+  module A = Hash.Array(D)
 
   (* The header consists of 256 4-byte network byte order integers.
       N-th entry of this table records the number of objects in the
@@ -107,9 +107,11 @@ module Make (D: SHA.DIGEST) = struct
   (* A table of 4-byte offset values (in network byte order). These are
       usually 31-bit pack file offsets, but large offsets are encoded as
       an index into the next table with the msbit set. *)
-  let offsets t = Mstruct.of_bigarray ~off:t.offsets_ofs ~len:(t.n_sha1s * 4) t.ba
+  let offsets t =
+    Mstruct.of_bigarray ~off:t.offsets_ofs ~len:(t.n_hashes * 4) t.ba
 
-  let sha1s t = Cstruct.of_bigarray ~off:t.sha1s_ofs ~len:(t.n_sha1s * D.length) t.ba
+  let hashes t =
+    Cstruct.of_bigarray ~off:t.hashes_ofs ~len:(t.n_hashes * D.length) t.ba
 
   let is64_offset buf =
     let buf = Mstruct.to_cstruct buf in
@@ -119,7 +121,7 @@ module Make (D: SHA.DIGEST) = struct
     Log.debug "create_ofs64_tbl";
     let offsets = offsets t in
     let count = ref 0 in
-    for i = 0 to t.n_sha1s - 1 do
+    for i = 0 to t.n_hashes - 1 do
       if is64_offset offsets then (
         Hashtbl.add t.ofs64_tbl i !count;
         Log.debug "create_ofs64_tbl: %d -> %d" i !count;
@@ -141,8 +143,8 @@ module Make (D: SHA.DIGEST) = struct
     in
     Mstruct.of_bigarray ~off:t.ofs64_ofs ~len:(size64 * 8) t.ba
 
-  let fanout_of_sha1 sha1 =
-    let s = SHA.to_raw sha1 in
+  let fanout_of_hash h =
+    let s = Hash.to_raw h in
     int_of_char s.[0]
 
   let fail fmt = Printf.ksprintf failwith ("Pack_index." ^^ fmt)
@@ -151,10 +153,9 @@ module Make (D: SHA.DIGEST) = struct
     | None   -> None
     | Some y -> Some (x + y)
 
-  let get_sha1_idx t sha1 =
-    Log.debugk "get_sha1_idx: %s" (fun log ->
-        log (SHA.pretty sha1));
-    let fanout_idx = fanout_of_sha1 sha1 in
+  let get_hash_idx t h =
+    Log.debugk "get_hash_idx: %s" (fun log -> log (Hash.pretty h));
+    let fanout_idx = fanout_of_hash h in
     let offsets = fanout t in
     let get_int buf = Int32.to_int (Mstruct.get_be_uint32 buf) in
     let offset, len =
@@ -167,19 +168,18 @@ module Make (D: SHA.DIGEST) = struct
         let len  = off1 - off0 in
         off0, len
       else
-        fail "get_sha1_idx %s" (SHA.pretty sha1);
+        fail "get_hash_idx %s" (Hash.pretty h);
     in
-    let buf = sha1s t in
+    let buf = hashes t in
     let buf = A.sub buf offset len in
-    offset ++ A.binary_search buf sha1
+    offset ++ A.binary_search buf h
 
-  let find_offset t sha1 =
-    Log.debugk "find_offset: %s" (fun log ->
-        log (SHA.pretty sha1));
-    match Offset_cache.find t.cache sha1 with
+  let find_offset t h =
+    Log.debugk "find_offset: %s" (fun log -> log (Hash.pretty h));
+    match Offset_cache.find t.cache h with
     | Some _ as x -> Log.debug "find_offset: cache hit!"; x
     | None ->
-      match get_sha1_idx t sha1 with
+      match get_hash_idx t h with
       | None     -> None
       | Some idx ->
         let buf = offsets t in
@@ -192,23 +192,22 @@ module Make (D: SHA.DIGEST) = struct
           Mstruct.shift buf64 (idx64 * 8);
           let o64 = Int64.to_int (Mstruct.get_be_uint64 buf64) in
           Log.debug "find_offset: found:%d" o64;
-          Offset_cache.add t.cache sha1 o64;
+          Offset_cache.add t.cache h o64;
           Some o64
         ) else (
           let o = Int32.to_int (Mstruct.get_be_uint32 buf) in
           Log.debug "find_offset: found:%d" o;
-          Offset_cache.add t.cache sha1 o;
+          Offset_cache.add t.cache h o;
           Some o
         )
 
-  let mem t sha1 =
-    Log.debugk "mem: %s" (fun log ->
-        log (SHA.to_hex sha1));
-    match find_offset t sha1 with
+  let mem t h =
+    Log.debugk "mem: %s" (fun log -> log (Hash.to_hex h));
+    match find_offset t h with
     | Some _ -> Log.debug "mem: true" ; true
     | None   -> Log.debug "mem: false"; false
 
-  let keys t = A.to_list (sha1s t)
+  let keys t = A.to_list (hashes t)
 
   let input ?(cache_size=10) ba =
     let buf = Mstruct.of_bigarray ba in
@@ -217,39 +216,39 @@ module Make (D: SHA.DIGEST) = struct
     let fanout_ofs = Mstruct.offset buf in
     Log.debug "create: entering fanout table (ofs=%d)" fanout_ofs;
     Mstruct.shift buf (255 * 4);
-    let n_sha1s = Int32.to_int (Mstruct.get_be_uint32 buf) in
-    Log.debug "create: n_sha1s:%d" n_sha1s;
-    (* sha1 listing *)
-    let sha1s_ofs = Mstruct.offset buf in
-    Log.debug "create: entering sha1 listing (ofs=%d)" sha1s_ofs;
-    Mstruct.shift buf (n_sha1s * D.length);
+    let n_hashes = Int32.to_int (Mstruct.get_be_uint32 buf) in
+    Log.debug "create: n_hashs:%d" n_hashes;
+    (* hash listing *)
+    let hashes_ofs = Mstruct.offset buf in
+    Log.debug "create: entering hash listing (ofs=%d)" hashes_ofs;
+    Mstruct.shift buf (n_hashes * D.length);
     (* crc checksums *)
     let crcs_ofs = Mstruct.offset buf in
     Log.debug "create: entering crc checksums (ofs=%d)" crcs_ofs;
-    Mstruct.shift buf (n_sha1s * 4);
+    Mstruct.shift buf (n_hashes * 4);
     (* packfile offsets *)
     let offsets_ofs = Mstruct.offset buf in
     Log.debug "create: entering packfile offsets (ofs=%d)" offsets_ofs;
-    Mstruct.shift buf (n_sha1s * 4);
+    Mstruct.shift buf (n_hashes * 4);
     (* large packfile offsets *)
     let ofs64_ofs = Mstruct.offset buf in
     Log.debug "create: entering large packfile offsets (ofs=%d)" ofs64_ofs;
     let cache = Offset_cache.create cache_size in
     let ofs64_tbl = Hashtbl.create 1024 in
     let ofs64_size = None in
-    { cache; fanout_ofs; sha1s_ofs; crcs_ofs; offsets_ofs; ofs64_ofs;
-      n_sha1s; ofs64_size; ofs64_tbl; ba; }
+    { cache; fanout_ofs; hashes_ofs; crcs_ofs; offsets_ofs; ofs64_ofs;
+      n_hashes; ofs64_size; ofs64_tbl; ba; }
 
   module Raw = struct
 
     include Raw
-    module SHA_IO = SHA.IO(D)
+    module Hash_IO = Hash.IO(D)
 
     let input_keys buf n =
       Log.debug "input: reading the %d objects IDs" n;
-      let a = Array.make n (SHA.of_raw "") in
+      let a = Array.make n (Hash.of_raw "") in
       for i=0 to n - 1 do
-        a.(i) <- SHA_IO.input buf;
+        a.(i) <- Hash_IO.input buf;
       done;
       a
 
@@ -273,7 +272,7 @@ module Make (D: SHA.DIGEST) = struct
       (* Read the CRCs *)
       Log.debug "input: reading the %d CRCs" nb_objects;
       let crcs =
-        let a = Array.make nb_objects (SHA.of_raw "", 0l) in
+        let a = Array.make nb_objects (Hash.of_raw "", 0l) in
         for i=0 to nb_objects-1 do
           let crc = Mstruct.get_be_uint32 buf in
           a.(i) <- (names.(i), crc);
@@ -311,29 +310,29 @@ module Make (D: SHA.DIGEST) = struct
           ) else
             (name, Int32.to_int offset)
         ) names in
-      let pack_checksum = SHA_IO.input buf in
-      let _checksum = SHA_IO.input buf in
+      let pack_checksum = Hash_IO.input buf in
+      let _checksum = Hash_IO.input buf in
 
       let offsets_alist = Array.to_list offsets in
-      let offsets = SHA.Map.of_alist offsets_alist in
-      let crcs = SHA.Map.of_alist (Array.to_list crcs) in
+      let offsets = Hash.Map.of_alist offsets_alist in
+      let crcs = Hash.Map.of_alist (Array.to_list crcs) in
       { offsets; crcs; pack_checksum }
 
     let add buf ?level:_ t =
-      let n = SHA.Map.cardinal t.offsets in
+      let n = Hash.Map.cardinal t.offsets in
       Log.debug "output: %d packed values" n;
       Buffer.add_string buf "\255tOc";
       Misc.add_be_uint32 buf 2l;
 
-      let cmp (k1,_) (k2,_) = SHA.compare k1 k2 in
+      let cmp (k1,_) (k2,_) = Hash.compare k1 k2 in
 
-      let offsets = List.sort cmp (SHA.Map.to_alist t.offsets) in
-      let crcs    = List.sort cmp (SHA.Map.to_alist t.crcs) in
+      let offsets = List.sort cmp (Hash.Map.to_alist t.offsets) in
+      let crcs    = List.sort cmp (Hash.Map.to_alist t.crcs) in
 
       Log.debug "output: writing the first-level fanout";
       let fanout = Array.make 256 0l in
       List.iter (fun (key, _) ->
-          let str = SHA.to_raw key in
+          let str = Hash.to_raw key in
           let n = Char.code str.[0] in
           for i = n to 255 do
             fanout.(i) <- Int32.succ fanout.(i)
@@ -343,7 +342,7 @@ module Make (D: SHA.DIGEST) = struct
 
       Log.debug "output: writing the %d object IDs" n;
       List.iter (fun (key, _) ->
-          SHA_IO.add buf key
+          Hash_IO.add buf key
         ) offsets;
 
       Log.debug "output: writing the %d CRCs" n;
@@ -370,12 +369,12 @@ module Make (D: SHA.DIGEST) = struct
           Buffer.add_string buf str
         ) (List.rev !conts);
 
-      SHA_IO.add buf t.pack_checksum;
+      Hash_IO.add buf t.pack_checksum;
 
-      (* XXX: SHA.of_bigstring *)
+      (* XXX: Hash.of_bigstring *)
       let str = Buffer.contents buf in
       let checksum = D.string str in
-      Buffer.add_string buf (SHA.to_raw checksum)
+      Buffer.add_string buf (Hash.to_raw checksum)
 
   end
 

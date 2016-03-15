@@ -17,20 +17,20 @@
 open Lwt.Infix
 
 type pred = [
-  |`Commit of SHA.t
-  | `Tag of string * SHA.t
-  | `Tree of string * SHA.t
-  | `Tree_root of SHA.t
+  |`Commit of Hash.t
+  | `Tag of string * Hash.t
+  | `Tree of string * Hash.t
+  | `Tree_root of Hash.t
 ]
 
 module Make (Store: Store.S) = struct
 
-  let pred t ?(full=true) sha1 =
-    let commit c = `Commit (SHA.of_commit c) in
+  let pred t ?(full=true) h =
+    let commit c = `Commit (Hash.of_commit c) in
     let tree l s = `Tree (l, s) in
-    let tree_root s = `Tree_root (SHA.of_tree s) in
-    let tag t = `Tag (t.Tag.tag, t.Tag.sha1) in
-    Store.read t sha1 >|= function
+    let tree_root s = `Tree_root (Hash.of_tree s) in
+    let tag t = `Tag (t.Tag.tag, t.Tag.obj) in
+    Store.read t h >|= function
     | None                  -> []
     | Some (Value.Blob _)   -> []
     | Some (Value.Commit c) ->
@@ -63,30 +63,30 @@ module Make (Store: Store.S) = struct
     find_list (function `Tree (s, x) -> if s=l then Some x else None | _ -> None)
 
   (* XXX: not tail-rec *)
-  let rec find t sha1 path =
+  let rec find t hash path =
     match path with
-    | `Path []   -> Lwt.return (Some sha1)
+    | `Path []   -> Lwt.return (Some hash)
     | `Tag (l, p) -> begin
-        pred t sha1 >>= fun preds ->
+        pred t hash >>= fun preds ->
         match find_tag l preds with
         | None   -> Lwt.return_none
         | Some s -> find t s p
       end
     | `Commit p -> begin
-        pred t sha1 >>= fun preds ->
+        pred t hash >>= fun preds ->
         match find_tree_root preds with
         | None   -> Lwt.return_none
         | Some s -> find t s p
       end
     | `Path (h::p) ->
-      pred t sha1 >>= fun preds ->
+      pred t hash >>= fun preds ->
       match find_tree h preds with
       | None   -> Lwt.return_none
       | Some s -> find t s (`Path p)
 
   (* XXX: can do one less look-up *)
-  let mem t sha1 path =
-    find t sha1 path >>= function
+  let mem t h path =
+    find t h path >>= function
     | None   -> Lwt.return false
     | Some _ -> Lwt.return true
 

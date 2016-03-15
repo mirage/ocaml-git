@@ -17,6 +17,7 @@
 open Test_common
 open Lwt.Infix
 open Git
+open Astring
 
 type t = {
   name  : string;
@@ -42,7 +43,7 @@ module Make (Store: Store.S) = struct
   module Search = Search.Make(Store)
 
   module Value_IO = Value.IO(Store.Digest)(Store.Inflate)
-  module SHA_IO = SHA.IO(Store.Digest)
+  module Hash_IO = Hash.IO(Store.Digest)
   module Index_IO = Index.IO(Store.Digest)
   module Pack_IO = Pack.IO(Store.Digest)(Store.Inflate)
   module Pack_index = Pack_index.Make(Store.Digest)
@@ -56,13 +57,13 @@ module Make (Store: Store.S) = struct
   let () = quiet ()
 
   let v0 = Value.blob (Blob.of_raw @@ long_random_string ())
-  let kv0 = Value_IO.sha1 v0
+  let kv0 = Value_IO.name v0
 
   let v1  = Value.blob (Blob.of_raw "hoho")
-  let kv1 = Value_IO.sha1 v1
+  let kv1 = Value_IO.name v1
 
   let v2 = Value.blob (Blob.of_raw "")
-  let kv2 = Value_IO.sha1 v2
+  let kv2 = Value_IO.name v2
 
   (* Create a node containing t1 -w-> v1 *)
   let w = "a\000bbb\047"
@@ -71,14 +72,14 @@ module Make (Store: Store.S) = struct
         name = w;
         node = kv1 }
     ])
-  let kt0 = Value_IO.sha1 t0
+  let kt0 = Value_IO.name t0
 
   let t1 = Value.tree ([
       { Tree.perm = `Normal;
         name = "x";
         node = kv1 }
     ])
-  let kt1 = Value_IO.sha1 t1
+  let kt1 = Value_IO.name t1
 
   (* Create the tree t2 -b-> t1 -x-> v1 *)
   let t2 = Value.tree ([
@@ -86,7 +87,7 @@ module Make (Store: Store.S) = struct
         name = "b";
         node = kt1 }
     ])
-  let kt2 = Value_IO.sha1 t2
+  let kt2 = Value_IO.name t2
 
   (* Create the tree t3 -a-> t2 -b-> t1 -x-> v1 *)
   let t3 = Value.tree ([
@@ -94,7 +95,7 @@ module Make (Store: Store.S) = struct
         name = "a";
         node = kt2; }
     ])
-  let kt3 = Value_IO.sha1 t3
+  let kt3 = Value_IO.name t3
 
   (* Create the tree t4 -a-> t2 -b-> t1 -x-> v1
                        \-c-> v2 *)
@@ -106,7 +107,7 @@ module Make (Store: Store.S) = struct
         name = "a";
         node = kt2; }
     ])
-  let kt4 = Value_IO.sha1 t4
+  let kt4 = Value_IO.name t4
 
   let t5 = Value.tree ([
       { Tree.perm = `Normal;
@@ -116,7 +117,7 @@ module Make (Store: Store.S) = struct
         name = "a";
         node = kt2; }
     ])
-  let kt5 = Value_IO.sha1 t5
+  let kt5 = Value_IO.name t5
 
   let john_doe = {
     User.name  = "John Doe";
@@ -126,48 +127,48 @@ module Make (Store: Store.S) = struct
 
   (* c1 : t2 *)
   let c1 = Value.commit {
-      Commit.tree = SHA.to_tree kt2;
+      Commit.tree = Hash.to_tree kt2;
       parents     = [];
       author      = john_doe;
       committer   = john_doe;
       message     = "hello r1!";
     }
-  let kc1 = Value_IO.sha1 c1
+  let kc1 = Value_IO.name c1
 
   (* c1 -> c2 : t4 *)
   let c2 = Value.commit {
-      Commit.tree = SHA.to_tree kt4;
-      parents     = [SHA.to_commit kc1];
+      Commit.tree = Hash.to_tree kt4;
+      parents     = [Hash.to_commit kc1];
       author      = john_doe;
       committer   = john_doe;
       message     = "hello r1!"
     }
-  let kc2 = Value_IO.sha1 c2
+  let kc2 = Value_IO.name c2
 
   let c3 =
     let c2 = match c2 with Value.Commit x -> x | _ -> assert false in
-    Value.commit { c2 with Commit.tree = SHA.to_tree kt5 }
-  let kc3 = Value_IO.sha1 c3
+    Value.commit { c2 with Commit.tree = Hash.to_tree kt5 }
+  let kc3 = Value_IO.name c3
 
   (* tag1: c1 *)
   let tag1 = Value.tag {
-      Tag.sha1 = kc1;
+      Tag.obj  = kc1;
       typ      = Object_type.Commit;
       tag      = "foo";
       tagger   = john_doe;
       message  = "Ho yeah!";
     }
-  let ktag1 = Value_IO.sha1 tag1
+  let ktag1 = Value_IO.name tag1
 
   (* tag2: c2 *)
   let tag2 = Value.tag {
-      Tag.sha1 = kc2;
+      Tag.obj  = kc2;
       typ      = Object_type.Commit;
       tag      = "bar";
       tagger   = john_doe;
       message  = "Hahah!";
     }
-  let ktag2 = Value_IO.sha1 tag2
+  let ktag2 = Value_IO.name tag2
 
   (* r1: t4 *)
   let r1 = Reference.of_raw "refs/origin/head"
@@ -259,7 +260,7 @@ module Make (Store: Store.S) = struct
   let test_commits x () =
     let c =
       let tree =
-        SHA_IO.Tree.of_hex "3aadeb4d06f2a149e06350e4dab2c7eff117addc"
+        Hash_IO.Tree.of_hex "3aadeb4d06f2a149e06350e4dab2c7eff117addc"
       in
       let parents = [] in
       let author = {
@@ -311,24 +312,20 @@ module Make (Store: Store.S) = struct
   let test_refs x () =
     let test () =
       create () >>= fun t ->
-      let c = SHA.to_commit in
-      let ko = function
-        | None   -> None
-        | Some x -> Some (SHA.of_commit x) in
-      Store.write_reference t r1 (c kt4) >>= fun ()   ->
-      Store.read_reference t r1          >>= fun kt4' ->
-      assert_key_opt_equal "r1" (Some kt4) (ko kt4');
+      Store.write_reference t r1 kt4 >>= fun ()   ->
+      Store.read_reference t r1      >>= fun kt4' ->
+      assert_key_opt_equal "r1" (Some kt4) kt4';
 
-      Store.write_reference t r2 (c kc2) >>= fun ()   ->
-      Store.read_reference t r2          >>= fun kc2' ->
-      assert_key_opt_equal "r2" (Some kc2) (ko kc2');
+      Store.write_reference t r2 kc2 >>= fun ()   ->
+      Store.read_reference t r2      >>= fun kc2' ->
+      assert_key_opt_equal "r2" (Some kc2) kc2';
 
       Store.references t                 >>= fun rs   ->
       assert_refs_equal "refs" [r1; r2] rs;
 
       let commit =
-        Reference.SHA (
-          SHA_IO.Commit.of_hex "21930ccb5f7b97e80a068371cb554b1f5ce8e55a"
+        Reference.Hash (
+          Hash_IO.Commit.of_hex "21930ccb5f7b97e80a068371cb554b1f5ce8e55a"
         ) in
       Store.write_head t ( commit) >>= fun () ->
       Store.read_head t >>= fun head ->
@@ -368,7 +365,7 @@ module Make (Store: Store.S) = struct
           Lwt_list.map_s (fun file ->
               Git_unix.FS.IO.read_file file >>= fun str ->
               let blob = Blob.of_raw (Cstruct.to_string str) in
-              let sha1 = SHA.to_blob (Value_IO.sha1 (Value.Blob blob)) in
+              let sha1 = Hash.to_blob (Value_IO.name (Value.Blob blob)) in
               let mode =
                 let p = (Unix.stat file).Unix.st_perm in
                 if p land 0o100 = 0o100 then `Exec else `Normal
@@ -388,7 +385,7 @@ module Make (Store: Store.S) = struct
 
       (* test random entries *)
       create ~index:true () >>= fun t ->
-      Store.write_index t (SHA.to_commit kc2) >>= fun () ->
+      Store.write_index t (Hash.to_commit kc2) >>= fun () ->
       Store.read_index t >>= fun _ ->
       Lwt.return_unit
     in
@@ -401,17 +398,17 @@ module Make (Store: Store.S) = struct
         if files = [] then
           failwith "Please run that test in lib_test/";
         let files = List.filter (fun file ->
-            match Misc.string_chop_suffix file ~suffix:".pack" with
-            | None   -> false
-            | Some _ -> true
+            String.is_suffix file ~affix:".pack"
           ) files in
         let files = List.map (fun file ->
-            match Misc.string_chop_prefix file ~prefix:"data/pack-" with
-            | None      -> failwith ("chop prefix " ^ file)
-            | Some name ->
-              match Misc.string_chop_suffix name ~suffix:".pack" with
-              | None      -> failwith ("chop suffix " ^ name)
-              | Some name -> file, "data/pack-" ^ name ^ ".idx"
+            let name =
+              String.with_range file ~first:(String.length "data/pack-")
+            in
+            let name =
+              String.with_range name
+                ~len:(String.length name - String.length ".pack")
+            in
+            file, "data/pack-" ^ name ^ ".idx"
           ) files in
         let read_file file =
             let fd = Unix.(openfile file [O_RDONLY; O_NONBLOCK] 0o644) in
@@ -469,18 +466,21 @@ module Make (Store: Store.S) = struct
   let test_clone x () =
     let test () =
       Store.create ~root () >>= fun t ->
-      let fetch ?depth ?(bare=true) ?wants gri =
+      let clone ?depth ?(bare=true) ?branch gri =
         x.init () >>= fun () ->
         Store.list t >>= fun l ->
         Alcotest.(check (list sha1)) "empty" [] l;
-        Sync.fetch t ?wants ?deepen:depth gri  >>= fun r ->
-        Sync.populate ~checkout:(not bare) t r >>= fun () ->
+        Sync.clone t ?deepen:depth ?branch ~checkout:(not bare) gri >>= fun _ ->
         if x.shell then (
           let cmd = Printf.sprintf "cd %s && git fsck" @@ Store.root t in
           Alcotest.(check int) "fsck" 0 (Sys.command cmd)
         );
         let master = Reference.master in
-        let e = Reference.Ref master in
+        let e = match branch with
+          | None             -> Reference.Ref master
+          | Some (`Ref b)    -> Reference.Ref b
+          | Some (`Commit h) -> Reference.Hash h
+        in
         Store.list t >>= fun sha1s ->
         Lwt_list.iter_s (fun sha1 ->
             Store.read_exn t sha1 >>= fun _v ->
@@ -498,15 +498,15 @@ module Make (Store: Store.S) = struct
       let large = Gri.of_string "https://github.com/ocaml/opam-repository.git" in
       let gh_pages = `Ref (Reference.of_raw "refs/heads/gh-pages") in
       let commit =
-        `Commit (SHA_IO.Commit.of_hex "f7a8f077e4d880db173f3f48a74d5a3fc9210b4e")
+        `Commit (Hash_IO.Commit.of_hex "f7a8f077e4d880db173f3f48a74d5a3fc9210b4e")
       in
-      fetch git   >>= fun () ->
-      fetch https >>= fun () ->
-      fetch git   ~wants:[gh_pages] >>= fun () ->
-      fetch https ~wants:[gh_pages] >>= fun () ->
-      fetch https ~depth:1 ~wants:[commit] >>= fun () ->
-      fetch git   ~depth:3 ~wants:[commit; gh_pages] >>= fun () ->
-      fetch large ~bare:false  >>= fun () ->
+      clone git   >>= fun () ->
+      clone https >>= fun () ->
+      clone git   ~branch:gh_pages >>= fun () ->
+      clone https ~branch:gh_pages >>= fun () ->
+      clone https ~depth:1 ~branch:commit   >>= fun () ->
+      clone git   ~depth:3 ~branch:gh_pages >>= fun () ->
+      clone large ~bare:false  >>= fun () ->
 
       Lwt.return_unit
     in
@@ -520,26 +520,26 @@ module Make (Store: Store.S) = struct
       Alcotest.(check (list sha1)) "empty" [] l;
       let fetch gri (branch, commit) =
         let b = Reference.of_raw ("refs/heads/" ^ branch) in
-        let c = SHA_IO.Commit.of_hex commit in
-        let wants = [`Commit c] in
-        Sync.fetch t ~wants gri  >>= fun r ->
-        Sync.populate ~checkout:false t r >>= fun () ->
+        let c = Hash_IO.of_hex commit in
+        Sync.clone t ~branch:(`Commit (Hash.to_commit c)) ~checkout:false gri
+        >>= fun r ->
         Store.write_reference t b c >>= fun () ->
         if x.shell then (
           let cmd = Printf.sprintf "cd %s && git fsck" @@ Store.root t in
           Alcotest.(check int) "fsck" 0 (Sys.command cmd)
         );
         begin if update then (
-            Store.read_exn t (SHA.of_commit c) >>= function
+            Store.read_exn t c >>= function
             | Value.Commit parent ->
-              let c' = { parent with Commit.message = "foo"; parents = [c] } in
+              let parents = [Hash.to_commit c] in
+              let c' = { parent with Commit.message = "foo"; parents } in
               Store.write t (Value.Commit c') >>= fun k ->
-              Store.write_reference t b (SHA.to_commit k)
+              Store.write_reference t b k
             | _ -> assert false
           ) else
             Lwt.return_unit
-        end >>= fun () ->
-        Lwt.return (Git.Sync.Result.sha1s r)
+        end >|= fun () ->
+        Git.Sync.Result.hashes r
       in
       fetch gri c0 >>= fun _ ->
       fetch gri c1 >>= fun r ->
@@ -552,8 +552,8 @@ module Make (Store: Store.S) = struct
       let c1 = "test-fetch-2", "64beec7402efc772363f4e0a7dfeb0ad2a667367" in
       let c0 = "test-fetch-1", "348199320dc33614bc5d101b1e0e22eaea25b36b" in
       let diff  =
-        let x = SHA_IO.of_hex in
-        SHA.Set.of_list [
+        let x = Hash_IO.of_hex in
+        Hash.Set.of_list [
           x (snd c1); (* commit *)
           x "1700d5cbd2ac8f5faf491a3c07c4562f9e43f016"; (* / *)
           x "2c6368156f499eaee397c5c2d698fabcb1b3114c"; (* overhead/ *)
@@ -606,19 +606,19 @@ let test_read_writes () =
     >>= fun () -> Lwt.join [ write 500; read 1000; write 1000; read 500; ]
   end
 
-module Test_array (D: SHA.DIGEST) = struct
+module Test_array (D: Hash.DIGEST) = struct
 
-  module SHA_IO = SHA.IO(D)
-  module SHA_Array = SHA.Array(D)
+  module Hash_IO = Hash.IO(D)
+  module Hash_Array = Hash.Array(D)
 
   let create len =
     let mk _i = long_random_string () |> D.string in
     let a = Array.init len mk in
-    Array.sort SHA.compare a;
-    let hsize = SHA.(hex_length SHA_IO.zero) / 2 in
+    Array.sort Hash.compare a;
+    let hsize = Hash.(hex_length Hash_IO.zero) / 2 in
     let b = Cstruct.create (len * hsize) in
     for i = 0 to len-1 do
-      let raw = SHA.to_raw a.(i) in
+      let raw = Hash.to_raw a.(i) in
       Cstruct.blit_from_string raw 0 b (i * hsize) hsize
     done;
     a, b
@@ -627,7 +627,7 @@ module Test_array (D: SHA.DIGEST) = struct
     let a, b = create 127 in
     for i = 0 to Array.length a - 1 do
       let msg = Printf.sprintf "get%d" i in
-      Alcotest.(check sha1) msg a.(i) (SHA_Array.get b i);
+      Alcotest.(check sha1) msg a.(i) (Hash_Array.get b i);
     done
 
   let test_lenght () =
@@ -635,13 +635,13 @@ module Test_array (D: SHA.DIGEST) = struct
       let len = 10 + Random.int 1024 in
       let _, b = create len in
       let msg = Printf.sprintf "len%d" len in
-      Alcotest.(check int) msg len (SHA_Array.length b)
+      Alcotest.(check int) msg len (Hash_Array.length b)
     done
 
   let test_linear_search () =
     let a, b = create 127 in
     for i = 0 to 126 do
-      let j = SHA_Array.linear_search b a.(i) in
+      let j = Hash_Array.linear_search b a.(i) in
       let msg = Printf.sprintf "linear-seach %d" i in
       Alcotest.(check (option int)) msg (Some i) j
     done
@@ -649,19 +649,19 @@ module Test_array (D: SHA.DIGEST) = struct
   let test_binary_search () =
     let a, b = create 127 in
     for i = 0 to 126 do
-      let j = SHA_Array.binary_search b a.(i) in
+      let j = Hash_Array.binary_search b a.(i) in
       let msg = Printf.sprintf "binary-seach %d" i in
       Alcotest.(check (option int)) msg (Some i) j
     done
 
   let test_to_list () =
     let a, b = create 127 in
-    let c = SHA_Array.to_list b in
+    let c = Hash_Array.to_list b in
     Alcotest.(check (list sha1)) "to_list" (Array.to_list a) c
 
 end
 
-let array (module D: SHA.DIGEST) =
+let array (module D: Hash.DIGEST) =
   let module Array = Test_array(D) in [
     ("get"          , `Quick, Array.test_get);
     ("length"       , `Quick, Array.test_lenght);

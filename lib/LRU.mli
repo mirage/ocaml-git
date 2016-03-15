@@ -27,5 +27,5 @@
 type 'a t
 val make: int -> 'a t
 val clear: 'a t -> unit
-val add: 'a t -> SHA.t -> 'a -> unit
-val find: 'a t -> SHA.t -> 'a option
+val add: 'a t -> Hash.t -> 'a -> unit
+val find: 'a t -> Hash.t -> 'a option

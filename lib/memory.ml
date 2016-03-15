@@ -22,7 +22,7 @@ let err_not_found n k =
   let str = Printf.sprintf "Git.Memory.%s: %s not found" n k in
   Lwt.fail (Invalid_argument str)
 
-module Make (D: SHA.DIGEST) (I: Inflate.S) = struct
+module Make (D: Hash.DIGEST) (I: Inflate.S) = struct
 
   module Value_IO = Value.IO(D)(I)
 
@@ -30,9 +30,9 @@ module Make (D: SHA.DIGEST) (I: Inflate.S) = struct
     root    : string;
     dot_git : string;
     level   : int;
-    values  : (SHA.t, Value.t Lazy.t) Hashtbl.t;
-    inflated: (SHA.t, string) Hashtbl.t;
-    refs    : (Reference.t, [`S of SHA.Commit.t | `R of Reference.t]) Hashtbl.t;
+    values  : (Hash.t, Value.t Lazy.t) Hashtbl.t;
+    inflated: (Hash.t, string) Hashtbl.t;
+    refs    : (Reference.t, [`H of Hash.t | `R of Reference.t]) Hashtbl.t;
     mutable head : Reference.head_contents option;
   }
 
@@ -79,35 +79,35 @@ module Make (D: SHA.DIGEST) (I: Inflate.S) = struct
     let inflated =
       Misc.with_buffer (fun buf -> Value_IO.add_inflated buf value)
     in
-    let sha1 = D.string inflated in
-    if Hashtbl.mem t.values sha1 then Lwt.return sha1
+    let h = D.string inflated in
+    if Hashtbl.mem t.values h then Lwt.return h
     else (
-      Log.info "Writing %s" (SHA.to_hex sha1);
-      Hashtbl.add t.values sha1 (lazy value);
-      Hashtbl.add t.inflated sha1 inflated;
-      Lwt.return sha1
+      Log.info "Writing %s" (Hash.to_hex h);
+      Hashtbl.add t.values h (lazy value);
+      Hashtbl.add t.inflated h inflated;
+      Lwt.return h
     )
 
   let write_inflated t inflated =
-    let sha1 = D.string inflated in
-    if Hashtbl.mem t.values sha1 then Lwt.return sha1
+    let h = D.string inflated in
+    if Hashtbl.mem t.values h then Lwt.return h
     else (
-      Log.info "Writing %s" (SHA.to_hex sha1);
-      Hashtbl.add t.inflated sha1 inflated;
+      Log.info "Writing %s" (Hash.to_hex h);
+      Hashtbl.add t.inflated h inflated;
       let value =
         (* FIXME: this allocates too much *)
         lazy (Value_IO.input_inflated (Mstruct.of_string inflated))
       in
-      Hashtbl.add t.values sha1 value;
-      Lwt.return sha1
+      Hashtbl.add t.values h value;
+      Lwt.return h
     )
 
-  let read_inflated t sha1 =
-    try Lwt.return (Some (Hashtbl.find t.inflated sha1))
+  let read_inflated t h =
+    try Lwt.return (Some (Hashtbl.find t.inflated h))
     with Not_found -> Lwt.return_none
 
-  let read t sha1 =
-    try Lwt.return (Some (Lazy.force (Hashtbl.find t.values sha1)))
+  let read t h =
+    try Lwt.return (Some (Lazy.force (Hashtbl.find t.values h)))
     with Not_found -> Lwt.return_none
 
   let err_write_pack expected got =
@@ -115,7 +115,7 @@ module Make (D: SHA.DIGEST) (I: Inflate.S) = struct
       Printf.sprintf
         "Git_memory.write_pack: wrong checksum.\n\
          Expecting %s, but got %s."
-        (SHA.pretty expected) (SHA.pretty got)
+        (Hash.pretty expected) (Hash.pretty got)
     in
     failwith str
 
@@ -126,9 +126,9 @@ module Make (D: SHA.DIGEST) (I: Inflate.S) = struct
     Pack_IO.of_raw pack >>= fun pack ->
     Lwt_list.iter_p (fun p ->
         let v = Packed_value_IO.value_of_pic p in
-        let sha1 = Packed_value.PIC.sha1 p in
-        write t v >>= fun sha2 ->
-        if sha1 <> sha2 then err_write_pack sha1 sha2;
+        let name = Packed_value.PIC.name p in
+        write t v >>= fun h ->
+        if not (Hash.equal name h) then err_write_pack name h;
         Lwt.return_unit
       ) pack
     >>= fun () ->
@@ -142,27 +142,24 @@ module Make (D: SHA.DIGEST) (I: Inflate.S) = struct
     Log.debug "list %s" t.root;
     Lwt.return (keys t.values)
 
-  let mem t sha1 =
-    Lwt.return (Hashtbl.mem t.values sha1)
+  let mem t h =
+    Lwt.return (Hashtbl.mem t.values h)
 
-  let read_exn t sha1 =
-    read t sha1 >>= function
-    | None   -> err_not_found "read_exn" (SHA.pretty sha1)
+  let read_exn t h =
+    read t h >>= function
+    | None   -> err_not_found "read_exn" (Hash.pretty h)
     | Some v -> Lwt.return v
 
   let contents t =
     Log.debug "contents";
-    list t >>= fun sha1s ->
-    Lwt_list.map_s (fun sha1 ->
-        read_exn t sha1 >>= fun value ->
-        Lwt.return (sha1, value)
-      ) sha1s
+    list t >>= fun hashes ->
+    Lwt_list.map_s (fun h -> read_exn t h >|= fun value -> h, value) hashes
 
   let dump t =
     contents t >>= fun contents ->
-    List.iter (fun (sha1, value) ->
+    List.iter (fun (h, value) ->
         let typ = Value.type_of value in
-        Printf.eprintf "%s %s\n" (SHA.to_hex sha1) (Object_type.to_string typ)
+        Printf.eprintf "%s %s\n" (Hash.to_hex h) (Object_type.to_string typ)
       ) contents;
     Lwt.return_unit
 
@@ -172,13 +169,13 @@ module Make (D: SHA.DIGEST) (I: Inflate.S) = struct
   let mem_reference t ref =
     Lwt.return (Hashtbl.mem t.refs ref)
 
-  let rec read_reference t ref =
-    Log.info "Reading %s" (Reference.pretty ref);
-    try
-      match Hashtbl.find t.refs ref with
-      | `S s -> Lwt.return (Some s)
+  let rec read_reference t r =
+    Log.info "Reading %s" (Reference.pretty r);
+    try match Hashtbl.find t.refs r with
+      | `H s -> Lwt.return (Some s)
       | `R r -> read_reference t r
-    with Not_found -> Lwt.return_none
+    with Not_found ->
+      Lwt.return_none
 
   let read_head t =
     Log.info "Reading HEAD";
@@ -198,9 +195,9 @@ module Make (D: SHA.DIGEST) (I: Inflate.S) = struct
     t.head <- Some c;
     Lwt.return_unit
 
-  let write_reference t ref sha1 =
-    Log.info "Writing %s" (Reference.pretty ref);
-    Hashtbl.replace t.refs ref (`S sha1);
+  let write_reference t r h =
+    Log.info "Writing %s" (Reference.pretty r);
+    Hashtbl.replace t.refs r (`H h);
     Lwt.return_unit
 
   let read_index _t = Lwt.return Index.empty

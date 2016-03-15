@@ -61,10 +61,10 @@ let type_of_inflated buf =
   | None   ->
     Mstruct.parse_error_buf buf "%S is not a valid object type." obj_type
 
-module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
+module IO (D: Hash.DIGEST) (I: Inflate.S) = struct
 
   include T
-  module SHA_IO = SHA.IO(D)
+  module Hash_IO = Hash.IO(D)
   module Commit_IO = Commit.IO(D)
   module Tag_IO = Tag.IO(D)
   module Tree_IO = Tree.IO(D)
@@ -89,7 +89,7 @@ module IO (D: SHA.DIGEST) (I: Inflate.S) = struct
     add_header buf (type_of t) size;
     Buffer.add_buffer buf tmp
 
-  let sha1 t =
+  let name t =
     let buf = Misc.with_buffer (fun buf -> add_inflated buf t) in
     D.string buf
 
@@ -145,21 +145,21 @@ module Cache = struct
     cache := LRU.make len;
     cache_inflated := LRU.make len
 
-  let find sha1 = LRU.find !cache sha1
-  let find_inflated sha1 = LRU.find !cache_inflated sha1
-  let add sha1 t = LRU.add !cache sha1 t
-  let add_inflated sha1 str = LRU.add !cache_inflated sha1 str
+  let find h = LRU.find !cache h
+  let find_inflated h = LRU.find !cache_inflated h
+  let add h t = LRU.add !cache h t
+  let add_inflated h str = LRU.add !cache_inflated h str
 
 end
 
-type read = SHA.t -> t option Lwt.t
-type read_inflated = SHA.t -> string option Lwt.t
-type write = t -> SHA.t Lwt.t
-type write_inflated = string -> SHA.t Lwt.t
+type read = Hash.t -> t option Lwt.t
+type read_inflated = Hash.t -> string option Lwt.t
+type write = t -> Hash.t Lwt.t
+type write_inflated = string -> Hash.t Lwt.t
 
 module type IO = sig
   include Object.IO with type t = t
-  val sha1: t -> SHA.t
+  val name: t -> Hash.t
   val add_header: Buffer.t -> Object_type.t -> int -> unit
   val add_inflated: Buffer.t -> t -> unit
   val input_inflated: Mstruct.t -> t
