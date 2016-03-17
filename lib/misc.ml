@@ -14,28 +14,12 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Log_make(S: sig val section: string end) =
-struct
-  include Log.Make(S)
-
-  let int_of_level = function
-    | Log.FATAL -> 4
-    | Log.ERROR -> 3
-    | Log.WARN  -> 2
-    | Log.INFO  -> 1
-    | Log.DEBUG -> 0
-
-  let logk level fmt k =
-    if int_of_level level >= int_of_level (Log.get_log_level ())
-    then k (log level fmt)
-  let fatalk fmt k = logk Log.FATAL fmt k
-  let errork fmt k = logk Log.ERROR fmt k
-  let warnk  fmt k = logk Log.WARN  fmt k
-  let infok  fmt k = logk Log.INFO  fmt k
-  let debugk fmt k = logk Log.DEBUG fmt k
-end
-
-module Log = Log_make(struct let section = "misc" end)
+let src_log section =
+  let src =
+    let doc = Printf.sprintf "logs git's %s events" section in
+    Logs.Src.create ("git." ^ section) ~doc
+  in
+  Logs.src_log src
 
 let sp  = '\x20'
 let nul = '\x00'
@@ -88,19 +72,19 @@ let try_assoc elt l =
 
 module type OrderedType = sig
   include Set.OrderedType
-  val pretty: t -> string
+  val pp: t Fmt.t
 end
 
 module type Set = sig
   include Set.S
-  val pretty: t -> string
+  val pp: t Fmt.t
   val to_list: t -> elt list
   val of_list: elt list -> t
 end
 
 module type Map = sig
   include Map.S
-  val pretty: ('a -> string) -> 'a t -> string
+  val pp: 'a Fmt.t -> 'a t Fmt.t
   val keys: 'a t -> key list
   val to_alist: 'a t -> (key * 'a) list
   val of_alist: (key * 'a) list -> 'a t
@@ -117,12 +101,12 @@ module Set (X: OrderedType) = struct
 
   let to_list = elements
 
-  let pretty s = match List.rev (elements s) with
-    | []   -> "{}"
-    | [x]  -> Printf.sprintf "{ %s }" (X.pretty x)
-    | h::t -> Printf.sprintf "{ %s and %s }"
-                (String.concat ", " (List.rev_map X.pretty t))
-                (X.pretty h)
+  let pp ppf s = match List.rev (elements s) with
+    | []   -> Fmt.string ppf "{}"
+    | [x]  -> Fmt.pf ppf "{ %a }" X.pp x
+    | h::t -> Fmt.(pf ppf "{ %a and %a }"
+                     (list ~sep:(const string ", ") X.pp) (List.rev t)
+                     X.pp h)
 end
 
 module Map (X: OrderedType) = struct
@@ -137,11 +121,12 @@ module Map (X: OrderedType) = struct
 
   let to_alist = bindings
 
-  let pretty p m =
-    let binding (k, v) = Printf.sprintf "(%s: %s)" (X.pretty k) (p v) in
+  let pp p ppf m =
+    let binding ppf (k, v) = Fmt.pf ppf "(%a: %a)" X.pp k p v in
     match List.rev (to_alist m) with
-    | [] -> "{}"
-    | x  -> Printf.sprintf "{ %s }" (String.concat " " (List.rev_map binding x))
+    | [] -> Fmt.string ppf "{}"
+    | x  -> Fmt.(pf ppf "{ %a }"
+                   (list ~sep:(const string " ") binding) (List.rev x))
 
   let add_multi key data t =
     try
@@ -155,13 +140,13 @@ end
 module I = struct
   type t = int
   let compare = compare
-  let pretty = string_of_int
+  let pp = Fmt.int
 end
 
 module S = struct
   type t = string
   let compare = String.compare
-  let pretty x = x
+  let pp = Fmt.string
 end
 
 module IntMap = Map(I)
@@ -173,10 +158,3 @@ let list_filter_map f l =
       | Some x -> x :: l
     ) [] l
   |> List.rev
-
-let pretty pp_hum t =
-  let buf = Buffer.create 1024 in
-  let ppf = Format.formatter_of_buffer buf in
-  pp_hum ppf t;
-  Format.pp_print_flush ppf ();
-  Buffer.contents buf

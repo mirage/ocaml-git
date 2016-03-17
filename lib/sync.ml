@@ -16,9 +16,8 @@
 
 open Astring
 open Lwt.Infix
-open Printf
 
-module Log = Misc.Log_make(struct let section = "sync" end)
+module Log = (val Misc.src_log "sync" : Logs.LOG)
 
 type protocol = [ `SSH | `Git | `Smart_HTTP ]
 
@@ -30,37 +29,34 @@ let protocol uri = match Uri.scheme uri with
   | Some x -> `Not_supported x
   | None   -> `Unknown
 
-let err fmt = Printf.ksprintf failwith fmt
+let err fmt = Fmt.kstrf failwith fmt
 let err_unknkown () = err "Unknown Git protocol"
 let err_not_supported x = err "%s is not a supported Git protocol" x
-let err_unknown_tag t = err "%s: unknown tag" (Reference.pretty t)
+let err_unknown_tag t = err "%a: unknown tag" Reference.pp t
 
 let protocol_exn uri = match protocol uri with
   | `Ok x            -> x
   | `Unknown         -> err_unknkown ()
   | `Not_supported x -> err_not_supported x
 
-let pretty_protocol = function
-  | `Git -> "git"
-  | `SSH -> "ssh"
-  | `Smart_HTTP -> "smart-http"
+let pp_protocol ppf = function
+  | `Git -> Fmt.string ppf "git"
+  | `SSH -> Fmt.string ppf "ssh"
+  | `Smart_HTTP -> Fmt.string ppf "smart-http"
 
 type want = [ `Ref of Reference.t | `Commit of Hash.Commit.t ]
 
-let pretty_list f l = "[" ^ String.concat ~sep:", " (List.map f l) ^ "]"
+let pp_want ppf = function
+  | `Commit s -> Fmt.pf ppf "commit:%a" Hash.Commit.pp s
+  | `Ref r    -> Fmt.pf ppf "ref:%a" Reference.pp r
 
-let pretty_want = function
-  | `Commit s -> sprintf "commit:%s" (Hash.Commit.pretty s)
-  | `Ref r    -> sprintf "ref:%s" (Reference.pretty r)
-
-let pretty_wants = function
-  | None   -> "<all>"
-  | Some l -> pretty_list pretty_want l
+let pp_wants ppf = function
+  | None   -> Fmt.string ppf "<all>"
+  | Some l -> Fmt.pf ppf "%a" (Fmt.list pp_want) l
 
 let has_prefix prefix r =
   Reference.is_valid r &&
-  let raw_ref = Reference.to_raw r in
-  String.is_prefix ~affix:prefix raw_ref
+  String.is_prefix ~affix:prefix (Reference.to_raw r)
 
 let is_head = has_prefix "refs/heads/"
 let is_tag  = has_prefix "refs/tags/"
@@ -151,9 +147,12 @@ module Capability = struct
 
   let ogit_agent = `Agent ogit_agent
 
+  let pp = Fmt.of_to_string to_string
+
 end
 
 type capability = Capability.t
+let pp_capability = Capability.pp
 
 module Capabilities = struct
 
@@ -165,8 +164,7 @@ module Capabilities = struct
   let to_string l =
     String.concat ~sep:" " (List.map Capability.to_string l)
 
-  let pretty l =
-    String.concat ~sep:", " (List.map Capability.to_string l)
+  let pp l = Fmt.(list ~sep:(const string ", ") Capability.pp) l
 
   let default = [
     Capability.ogit_agent;
@@ -217,18 +215,15 @@ module Listing = struct
     try Hash.Map.find c t.hashes
     with Not_found -> []
 
-  let pretty t =
-    let buf = Buffer.create 1024 in
-    Printf.bprintf buf "CAPABILITIES:\n%s\n"
-      (Capabilities.to_string t.capabilities);
-    Printf.bprintf buf "\nREFERENCES:\n";
+  let pp ppf t =
+    Fmt.pf ppf "CAPABILITIES:\n%a\n" Capabilities.pp t.capabilities;
+    Fmt.pf ppf "\nREFERENCES:\n";
     Hash.Map.iter
       (fun key data ->
          List.iter (fun r ->
-             Printf.bprintf buf "%s %s\n" (Hash.to_hex key) (Reference.pretty r)
+             Fmt.pf ppf "%a %a\n" Hash.pp key Reference.pp r
            ) data
-      ) t.hashes;
-    Buffer.contents buf
+      ) t.hashes
 
   let guess_reference t c =
     let heads = Hash.Map.find c t.hashes |> List.filter is_head in
@@ -238,8 +233,8 @@ module Listing = struct
       let r =
         if List.mem Reference.master heads then Reference.master else (
           if List.length heads > 1 then
-            Log.info "Ambiguous remote HEAD, picking %s."
-              (Reference.pretty h);
+            Log.info (fun l ->
+                l "Ambiguous remote HEAD, picking %a." Reference.pp h);
           h
         )
       in
@@ -267,25 +262,23 @@ module Result = struct
   let references t = Listing.references t.listing
   let hashes t = t.hashes
 
-  let pretty_head_contents = function
-    | None -> "<none>"
-    | Some (Reference.Ref r) -> Reference.pretty r
-    | Some (Reference.Hash s) -> Hash.Commit.pretty s
+  let pp_head_contents ppf = function
+    | None                    -> Fmt.string ppf "<none>"
+    | Some (Reference.Ref r)  -> Reference.pp ppf r
+    | Some (Reference.Hash s) -> Hash.Commit.pp ppf s
 
-  let pretty_head = function
-    | None   -> ""
-    | Some c -> Hash.Commit.pretty c
+  let pp_head ppf = function
+    | None   -> Fmt.string ppf ""
+    | Some c -> Hash.Commit.pp ppf c
 
-  let pretty_fetch t =
-    let buf = Buffer.create 1024 in
+  let pp_fetch ppf t =
     let hc = head_contents t in
     let h = head t in
-    bprintf buf "HEAD: %s %s\n" (pretty_head_contents hc) (pretty_head h);
+    Fmt.pf ppf "HEAD: %a %a\n" pp_head_contents hc pp_head h;
     Reference.Map.iter (fun key data ->
-        bprintf buf "%s %s\n" (Reference.pretty key) (Hash.to_hex data)
+        Fmt.pf ppf "%a %a\n" Reference.pp key Hash.pp data
       ) (references t);
-    bprintf buf "Keys: %d\n" (Hash.Set.cardinal t.hashes);
-    Buffer.contents buf
+    Fmt.pf ppf "Keys: %d\n" (Hash.Set.cardinal t.hashes)
 
   type ok_or_error = [ `Ok | `Error of string ]
 
@@ -294,14 +287,12 @@ module Result = struct
     commands: (Reference.t * ok_or_error) list;
   }
 
-  let pretty_push t =
-    let buf = Buffer.create 1024 in
-    let aux (ref, result) = match result with
-      | `Ok      -> Printf.bprintf buf "* %s\n" (Reference.pretty ref)
-      | `Error e -> Printf.bprintf buf "! %s: %s\n" (Reference.pretty ref) e
+  let pp_push ppf t =
+    let aux (r, result) = match result with
+      | `Ok      -> Fmt.pf ppf "* %a\n" Reference.pp r
+      | `Error e -> Fmt.pf ppf "! %a: %s\n" Reference.pp r e
     in
-    List.iter aux t.commands;
-    Buffer.contents buf
+    List.iter aux t.commands
 
 end
 
@@ -315,7 +306,7 @@ module Make (IO: IO) (Store: Store.S) = struct
 
   let error fmt =
     Printf.ksprintf (fun msg ->
-        Log.error "%s" msg;
+        Log.err (fun l -> l "%s" msg);
         raise Error
       ) fmt
 
@@ -333,12 +324,12 @@ module Make (IO: IO) (Store: Store.S) = struct
     let output oc = function
       | None  ->
         let flush = "0000" in
-        Log.info "SENDING: %S" flush;
+        Log.info (fun l -> l "SENDING: %S" flush);
         IO.write oc flush >>= fun () ->
         IO.flush oc
       | Some l ->
         let size = Printf.sprintf "%04x" (4 + String.length l) in
-        Log.info "SENDING: %S" (size ^ l);
+        Log.info (fun log -> log "SENDING: %S" (size ^ l));
         IO.write oc size >>= fun () ->
         IO.write oc l    >>= fun () ->
         IO.flush oc
@@ -347,7 +338,7 @@ module Make (IO: IO) (Store: Store.S) = struct
       | None   -> "0000"
       | Some l ->
         let size = Printf.sprintf "%04x" (4 + String.length l) in
-        sprintf "%s%s" size l
+        Printf.sprintf "%s%s" size l
 
     let output_line oc s =
       output oc (Some s)
@@ -368,11 +359,11 @@ module Make (IO: IO) (Store: Store.S) = struct
         String.Ascii.escape s
 
     let input_raw_exn ic: t Lwt.t =
-      Log.debug "PacketLine.input_raw";
+      Log.debug (fun l -> l "PacketLine.input_raw");
       IO.read_exactly ic 4 >>= fun size ->
       match size with
       | "0000" ->
-        Log.debug "RECEIVED: FLUSH";
+        Log.debug (fun l -> l "RECEIVED: FLUSH");
         Lwt.return_none
       | size   ->
         let size =
@@ -381,8 +372,7 @@ module Make (IO: IO) (Store: Store.S) = struct
           with Failure _ -> err_invalid_integer "PacketLine.input" str
         in
         IO.read_exactly ic size >>= fun payload ->
-        Log.debugk "RECEIVED: %s (%d)" (fun log ->
-            log (truncate payload) size);
+        Log.debug (fun l -> l "RECEIVED: %s (%d)"  (truncate payload) size);
         Lwt.return (Some payload)
 
     let input_raw ic =
@@ -395,7 +385,7 @@ module Make (IO: IO) (Store: Store.S) = struct
     let niet = Lwt.return (Some "")
 
     let input ic =
-      Log.debug "PacketLine.input";
+      Log.debug (fun l -> l "PacketLine.input");
       input_raw ic >>= function
       | None    -> Lwt.return_none
       | Some "" -> niet
@@ -418,6 +408,8 @@ module Make (IO: IO) (Store: Store.S) = struct
       | Upload_pack    -> "git-upload-pack"
       | Receive_pack   -> "git-receive-pack"
       | Upload_archive -> "git-upload-archive"
+
+    let pp_request = Fmt.of_to_string string_of_request
 
     type t = {
       request: request;
@@ -455,7 +447,7 @@ module Make (IO: IO) (Store: Store.S) = struct
       PacketLine.string_of_line message
 
     let ssh t =
-      sprintf "%s %s" (string_of_request t.request)
+      Printf.sprintf "%s %s" (string_of_request t.request)
         (Uri.path (Gri.to_uri t.gri))
 
     let smart_http t =
@@ -466,8 +458,8 @@ module Make (IO: IO) (Store: Store.S) = struct
         then [useragent]
         else [
           useragent;
-          "Content-Type",
-          sprintf "application/x-%s-request" (string_of_request t.request);
+          "Content-Type", Printf.sprintf "application/x-%s-request"
+            (string_of_request t.request);
         ]
       in
       Marshal.to_string headers []
@@ -479,8 +471,9 @@ module Make (IO: IO) (Store: Store.S) = struct
       | `Smart_HTTP -> Some (smart_http t)
 
     let create request ~discover gri =
-      Log.debugk "Init.create request=%s discover=%b gri=%s" (fun log ->
-          log (string_of_request request) discover (Gri.to_string gri));
+      Log.debug (fun l ->
+          l "Init.create request=%a discover=%b gri=%s"
+            pp_request request discover (Gri.to_string gri));
       let protocol = protocol_exn (Gri.to_uri gri) in
       let gri = match protocol with
         | `SSH | `Git -> gri
@@ -488,10 +481,9 @@ module Make (IO: IO) (Store: Store.S) = struct
           let service = if discover then "info/refs?service=" else "" in
           let url = Gri.to_string gri in
           let request = string_of_request request in
-          Gri.of_string (sprintf "%s/%s%s" url service request)
+          Gri.of_string (Printf.sprintf "%s/%s%s" url service request)
       in
-      Log.debugk "computed-gri: %s" (fun log ->
-          log (Gri.to_string gri));
+      Log.debug (fun l -> l "computed-gri: %s" (Gri.to_string gri));
       { request; discover; gri }
 
     let upload_pack = create Upload_pack
@@ -505,8 +497,7 @@ module Make (IO: IO) (Store: Store.S) = struct
     include Listing
 
     let input ic protocol =
-      Log.debugk "Listing.input (protocol=%s)" (fun log ->
-          log (pretty_protocol protocol));
+      Log.debug (fun l -> l "Listing.input (protocol=%a)" pp_protocol protocol);
       let error fmt = error ("[SMART-HTTP] Listing.input:" ^^ fmt) in
       let skip_smart_http () =
         match protocol with
@@ -517,7 +508,7 @@ module Make (IO: IO) (Store: Store.S) = struct
           | Some line ->
             match String.cut line ~sep:Misc.sp_str with
             | Some ("#", service) ->
-              Log.debug "skipping %s" service;
+              Log.debug (fun l -> l "skipping %s" service);
               begin PacketLine.input ic >>= function
                 | None   -> Lwt.return_unit
                 | Some x -> error "waiting for pkt-flush, got %S" x
@@ -580,7 +571,7 @@ module Make (IO: IO) (Store: Store.S) = struct
       | Nak
 
     let input ic =
-      Log.debug "Ack.input";
+      Log.debug (fun l -> l "Ack.input");
       PacketLine.input ic >>= function
       | None
       | Some "NAK" -> Lwt.return Nak
@@ -595,7 +586,7 @@ module Make (IO: IO) (Store: Store.S) = struct
         | _ -> error "%S invalid ack" s
 
     let _inputs ic =
-      Log.debug "Ack.inputs";
+      Log.debug (fun l -> l "Ack.inputs");
       let rec aux acc =
         input ic >>= function
         | Nak -> Lwt.return (List.rev (Nak :: acc))
@@ -643,7 +634,7 @@ module Make (IO: IO) (Store: Store.S) = struct
       filter (function Have x -> Some x | _ -> None) l
 
     let input ic: t Lwt.t =
-      Log.debug "Upload.input";
+      Log.debug (fun l -> l "Upload.input");
       let rec aux acc =
         PacketLine.input_raw ic >>= function
         | None   -> Lwt.return (List.rev acc)
@@ -676,7 +667,7 @@ module Make (IO: IO) (Store: Store.S) = struct
 
     (* XXX: handle multi_hack *)
     let output oc t =
-      Log.debug "Upload.output";
+      Log.debug (fun l -> l "Upload.output");
 
       (* output wants *)
       Lwt_list.iteri_s (fun i (id, c) ->
@@ -690,8 +681,8 @@ module Make (IO: IO) (Store: Store.S) = struct
             (* additional-want *)
             let msg = Printf.sprintf "want %s\n" (Hash.Commit.to_hex id) in
             if i <> 0 && c <> [] then
-              Log.warn "additional-want: ignoring %s."
-                (Capabilities.to_string c);
+              Log.warn (fun l ->
+                  l "additional-want: ignoring %a." Capabilities.pp c);
             PacketLine.output_line oc msg
         ) (filter_wants t)
       >>= fun () ->
@@ -741,7 +732,7 @@ module Make (IO: IO) (Store: Store.S) = struct
     (* PHASE1: the client send the the IDs he wants, the sever answers with
        the new shallow state. *)
     let phase1 (ic, oc) ?deepen ~capabilities ~shallows ~wants =
-      Log.debug "Upload.phase1";
+      Log.debug (fun l -> l "Upload.phase1");
       let wants =
         let want id = Want (id, []) in
         match wants with
@@ -838,7 +829,7 @@ module Make (IO: IO) (Store: Store.S) = struct
     exception Error of string
 
     let input ?(progress=fun _ -> ()) ic =
-      Log.debug "Side_band.input";
+      Log.debug (fun l -> l "Side_band.input");
       let size = ref 0 in
       let t0 = Sys.time () in
       let pp s =
@@ -848,7 +839,8 @@ module Make (IO: IO) (Store: Store.S) = struct
         let per_s = total /. (Sys.time () -. t0) in
         let done_ = if s = "" then ", done.\n" else "" in
         let str =
-          sprintf "Receiving objects: %.2f MiB | %.2f MiB/s%s" total per_s done_
+          Printf.sprintf "Receiving objects: %.2f MiB | %.2f MiB/s%s"
+            total per_s done_
         in
         progress str
       in
@@ -864,7 +856,7 @@ module Make (IO: IO) (Store: Store.S) = struct
           | Fatal    -> Lwt.fail (Error payload)
           | Progress ->
             let payload = "remote: " ^ payload in
-            Log.info "%s" payload;
+            Log.info (fun l -> l "%s" payload);
             progress payload;
             aux acc
       in
@@ -891,19 +883,18 @@ module Make (IO: IO) (Store: Store.S) = struct
       | Delete of Reference.t * Hash.Commit.t
       | Update of Reference.t * Hash.Commit.t * Hash.Commit.t
 
-    let pretty_command t =
-      let r = Reference.pretty in
-      let c = Hash.Commit.to_hex in
+    let pp_command ppf t =
+      let r = Reference.pp in
+      let c = Hash.Commit.pp in
       match t with
       | Create (name, new_id)         ->
-        sprintf "create %s %s" (r name) (c new_id)
+        Fmt.pf ppf "create %a %a" r name c new_id
       | Delete (name, old_id)         ->
-        sprintf "delete %s %s" (r name) (c old_id)
+        Fmt.pf ppf "delete %a %a" r name c old_id
       | Update (name, old_id, new_id) ->
-        sprintf "update %s %s %s" (r name) (c old_id) (c new_id)
+        Fmt.pf ppf "update %a %a %a" r name c old_id c new_id
 
-    let pretty_commands l =
-      String.concat ~sep:" & " (List.map pretty_command l)
+    let pp_commands l = Fmt.(list ~sep:(const string " & ") pp_command) l
 
     let output_command buf t =
       let zero = Hash_IO.Commit.zero in
@@ -922,10 +913,10 @@ module Make (IO: IO) (Store: Store.S) = struct
       pack: Pack.t;
     }
 
-    let pretty t =
-      sprintf "UPDATE_REQUEST:\n%s\n%s\npack: %d"
-        (Capabilities.pretty t.capabilities)
-        (pretty_commands t.commands)
+    let pp ppf t =
+      Fmt.pf ppf "UPDATE_REQUEST:\n%a\n%a\npack: %d"
+        Capabilities.pp t.capabilities
+        pp_commands t.commands
         (List.length t.pack)
 
     let output oc t =
@@ -948,7 +939,7 @@ module Make (IO: IO) (Store: Store.S) = struct
         | 0 -> Lwt.return_unit
         | n ->
           let len = min 4096 n in
-          Log.info "SENDING: %d bytes" len;
+          Log.info (fun l -> l "SENDING: %d bytes" len);
           let buf = Mstruct.get_string buf len in
           IO.write oc buf >>=
           send
@@ -998,7 +989,7 @@ module Make (IO: IO) (Store: Store.S) = struct
     unpack      : bool;
     capabilities: Capabilities.t;
     wants       : want list option;
-    update      : bool;
+    clone       : bool;
   }
 
   type op =
@@ -1009,7 +1000,7 @@ module Make (IO: IO) (Store: Store.S) = struct
   module Pack_IO = Pack.IO(Store.Digest)(Store.Inflate)
 
   let push ?ctx t ~branch gri =
-    Log.debug "Sync.push";
+    Log.debug (fun l -> l "Sync.push");
     let init = Init.receive_pack ~discover:true gri in
     match Init.host init with
     | None   -> todo "local-clone"
@@ -1020,8 +1011,7 @@ module Make (IO: IO) (Store: Store.S) = struct
       IO.with_connection ?ctx uri ?init (fun (ic, oc) ->
           Listing.input ic protocol >>= fun listing ->
           (* XXX: check listing.capabilities *)
-          Log.debugk "listing:\n %s" (fun log ->
-              log (Listing.pretty listing));
+          Log.debug (fun l -> l "listing:\n %a" Listing.pp listing);
           Store.read_reference t branch    >>= fun new_obj ->
           let old_obj = Listing.find_reference listing branch in
           let commit = Hash.to_commit in
@@ -1047,15 +1037,14 @@ module Make (IO: IO) (Store: Store.S) = struct
           Graph.pack t ~min ~max >>= fun values ->
           let pack = Pack_IO.create values in
           let request = { Update_request.capabilities; commands; pack } in
-          Log.debugk "request:\n%s" (fun log ->
-              log (Update_request.pretty request));
+          Log.debug (fun l -> l "request:\n%a" Update_request.pp request);
           Update_request.output oc request >>= fun () ->
           Report_status.input ic
         )
 
   let fetch_commits t (ic, oc) ?(progress=fun _ -> ()) f listing wants =
-    Log.debugk "Sync.fetch_commits %s" (fun log ->
-        log (pretty_list Hash.Commit.pretty wants));
+    Log.debug (fun l ->
+        l "Sync.fetch_commits %a" (Fmt.list Hash.Commit.pp) wants);
     let f =
       let server_caps = Listing.capabilities listing in
       (* The client MUST NOT ask for capabilities the server did not
@@ -1081,11 +1070,12 @@ module Make (IO: IO) (Store: Store.S) = struct
       |> Hash.Commit.Set.to_list
     in
     if wants = [] then (
-      Log.debug "Nothing to want: nothing to do! skip the pack file read.";
+      Log.debug (fun l ->
+          l "Nothing to want: nothing to do! skip the pack file read.");
       progress "Already up-to-date.\n";
       Lwt.return { Result.listing; hashes = Hash.Set.empty }
     ) else (
-      Log.debug "PHASE1";
+      Log.debug (fun l -> l "PHASE1");
       let deepen = f.deepen in
       let capabilities = f.capabilities in
       let shallows = f.shallows in
@@ -1096,16 +1086,16 @@ module Make (IO: IO) (Store: Store.S) = struct
       (* XXX: process the shallow / unshallow.  *)
       (* XXX: need a notion of shallow/unshallow in API. *)
 
-      Log.debug "PHASE2";
+      Log.debug (fun l -> l "PHASE2");
       haves >>= fun haves ->
       Upload_request.phase2 (ic,oc) ~haves >>= fun () ->
 
-      Log.debug "PHASE3";
+      Log.debug (fun l -> l "PHASE3");
       progress "Receiving data ...\n";
       Pack_file.input ~capabilities ~progress ic >>= fun bufs ->
 
       let size = List.fold_left (fun acc s -> acc + String.length s) 0 bufs in
-      Log.info "Received a pack file of %d bytes." size;
+      Log.info (fun l -> l "Received a pack file of %d bytes." size);
       let pack = Cstruct.create size in
       let _size = List.fold_left (fun acc buf ->
           let len = String.length buf in
@@ -1113,7 +1103,7 @@ module Make (IO: IO) (Store: Store.S) = struct
           acc + len
         ) 0 bufs in
 
-      Log.debug "unpack=%b" f.unpack;
+      Log.debug (fun l -> l "unpack=%b" f.unpack);
       let read = Store.read_inflated t in
       Pack_IO.Raw.input ~progress ~read (Mstruct.of_cstruct pack) >>= fun pack ->
       let unpack () =
@@ -1125,11 +1115,11 @@ module Make (IO: IO) (Store: Store.S) = struct
       unpack () >>= fun hashes ->
       match Hash.Set.cardinal hashes with
       | 0 ->
-        Log.debug "No new objects";
+        Log.debug (fun l -> l "No new objects");
         progress "Already up-to-date.\n";
         Lwt.return { Result.listing; hashes }
       | n ->
-        Log.debug "%d new objects" n;
+        Log.debug (fun l -> l "%d new objects" n);
         Lwt.return { Result.listing; hashes }
     )
 
@@ -1143,7 +1133,7 @@ module Make (IO: IO) (Store: Store.S) = struct
 
   (* Query the remote store for its references and its HEAD. *)
   let with_listing ?ctx gri k =
-    Log.debug "Sync.with_listing";
+    Log.debug (fun l -> l "Sync.with_listing");
     let init = Init.upload_pack ~discover:true gri in
     match Init.host init with
     | None   -> todo "local-clone"
@@ -1153,17 +1143,16 @@ module Make (IO: IO) (Store: Store.S) = struct
       let init = Init.to_string init in
       IO.with_connection ?ctx uri ?init (fun (ic, oc) ->
           Listing.input ic protocol >>= fun listing ->
-          Log.debugk "listing:\n %s" (fun log ->
-              log (Listing.pretty listing));
+          Log.debug (fun l -> l "listing:\n %a"  Listing.pp listing);
           k (protocol, ic, oc) listing
         )
 
   let err_sha1_not_advertised h =
     err
-      "Cannot fetch %s as the server does not advertise \
+      "Cannot fetch %a as the server does not advertise \
        'allow-reachable-sha1-in-want' and it is not in the \
        list of head commits advertised by `upload-pack`."
-      (Hash.pretty h)
+      Hash.pp h
 
   let fetch_pack ?ctx ?progress t gri op =
     with_listing ?ctx gri (fun (protocol, ic, oc) listing ->
@@ -1217,7 +1206,7 @@ module Make (IO: IO) (Store: Store.S) = struct
               fetch_commits t (ic, oc) ?progress f listing commits
           in
           let update_refs () =
-            if not f.update then Lwt.return_unit
+            if not f.clone then Lwt.return_unit
             else
               Lwt_list.iter_p
                 (fun (r, c) -> write_heads_and_tags t r c)
@@ -1229,16 +1218,16 @@ module Make (IO: IO) (Store: Store.S) = struct
       )
 
   let ls ?ctx t gri =
-    Log.debugk "ls %s" (fun log ->
-        log (Gri.to_string gri));
+    Log.debug (fun l -> l "ls %s" (Gri.to_string gri));
     fetch_pack ?ctx t gri Ls >|= fun r ->
     Result.references r
 
-  let fetch_aux ~update
+  let fetch_aux ~clone
       ?ctx ?deepen ?(unpack=false) ?(capabilities=Capabilities.default)
       ?wants ?progress t gri =
-    Log.debugk "fetch %s wants=%s" (fun log ->
-        log (Gri.to_string gri) (pretty_wants wants));
+    let op = if clone then "clone" else "fetch" in
+    Log.debug (fun l ->
+        l "%s %s wants=%a" op (Gri.to_string gri) pp_wants wants);
     Store.references t >>= fun refs ->
     Lwt_list.fold_left_s (fun haves r ->
         Store.read_reference t r >|= function
@@ -1249,10 +1238,10 @@ module Make (IO: IO) (Store: Store.S) = struct
     let haves = Hash.Set.to_list commits in
     (* XXX: Store.shallows t >>= fun shallows *)
     let shallows = [] in
-    let op = { shallows; haves; deepen; unpack; capabilities; wants; update } in
+    let op = { shallows; haves; deepen; unpack; capabilities; wants; clone } in
     fetch_pack ?ctx ?progress t gri (Fetch op)
 
-  let fetch = fetch_aux ~update:false
+  let fetch = fetch_aux ~clone:false
 
   let populate ?head ?(progress=fun _ -> ()) t ~checkout result =
     let update_head () =
@@ -1269,7 +1258,8 @@ module Make (IO: IO) (Store: Store.S) = struct
         | None      -> Lwt.return_unit
         | Some head ->
           Store.write_index t head >>= fun () ->
-          progress (sprintf "HEAD is now at %s\n" (Hash.Commit.to_hex head));
+          progress
+            (Printf.sprintf "HEAD is now at %s\n" (Hash.Commit.to_hex head));
           Lwt.return_unit
     in
     update_head () >>= update_checkout
@@ -1280,7 +1270,7 @@ module Make (IO: IO) (Store: Store.S) = struct
       | None   -> None
       | Some b -> Some [b]
     in
-    fetch_aux ~update:true ?ctx ?deepen ?unpack ?capabilities ?wants ?progress
+    fetch_aux ~clone:true ?ctx ?deepen ?unpack ?capabilities ?wants ?progress
       t gri >>= fun result ->
     let head = match branch with
       | None              -> None

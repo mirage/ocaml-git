@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Log = Misc.Log_make(struct let section = "tag" end)
+module Log = (val Misc.src_log "tag" : Logs.LOG)
 
 module T = struct
 
@@ -42,8 +42,6 @@ module T = struct
       t.tag
       User.pp t.tagger
       (String.trim t.message)
-
-  let pretty = Misc.pretty pp
 
 end
 

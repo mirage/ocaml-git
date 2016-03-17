@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Log = Misc.Log_make(struct let section = "index" end)
+module Log = (val Misc.src_log "index" : Logs.LOG)
 
 type time = {
   lsb32: int32;
@@ -194,7 +194,7 @@ let output_mode buf t =
   Mstruct.set_be_uint16 buf n
 
 let input_stat_info buf =
-  Log.debug "input_stat_info";
+  Log.debug (fun l -> l "input_stat_info");
   let ctime = input_time buf in
   let mtime = input_time buf in
   let dev = Mstruct.get_be_uint32 buf in
@@ -216,7 +216,7 @@ let add_stat_info buf t =
   uint32 t.gid;
   uint32 t.size
 
-let fail fmt = Format.ksprintf failwith ("Index: " ^^ fmt)
+let fail fmt = Fmt.kstrf failwith ("Index: " ^^ fmt)
 let err_invalid_version v = fail "Only index version 2 is supported (not %ld)" v
 let err_need_more_data = fail "input: need more data! (total:%d current:%d)"
 
@@ -224,8 +224,8 @@ let err_wrong_index_header buf =
   Mstruct.parse_error_buf buf "%s: wrong index header."
 
 let err_wrong_checksum ~got ~expected =
-  fail "Wrong checksum! got %s but was expecting %s."
-    (Hash.pretty got) (Hash.pretty expected)
+  fail "Wrong checksum! got %a but was expecting %a."
+    Hash.pp got Hash.pp expected
 
 let pp_extension ppf e =
   Format.fprintf ppf "@[kind:%s@ size:%d]"
@@ -239,11 +239,10 @@ module IO (D: Hash.DIGEST) = struct
   let equal = equal
   let compare = compare
   let pp = pp
-  let pretty = pretty
   let hash = hash
 
   let input_entry buf =
-    Log.debug "input_entry";
+    Log.debug (fun l -> l "input_entry");
     let offset0 = Mstruct.offset buf in
     let stats = input_stat_info buf in
     let id = Hash_IO.input buf |> Hash.to_blob in
@@ -252,7 +251,7 @@ module IO (D: Hash.DIGEST) = struct
       (i land 0x3000) lsr 12,
       (i land 0x0FFF)
     in
-    Log.debug "stage:%d len:%d" stage len;
+    Log.debug (fun l -> l "stage:%d len:%d" stage len);
     let name = Mstruct.get_string buf len in
     Mstruct.shift buf 1;
     let bytes = Mstruct.offset buf - offset0 in
@@ -260,12 +259,13 @@ module IO (D: Hash.DIGEST) = struct
       | 0 -> 0
       | n -> 8-n in
     Mstruct.shift buf padding;
-    Log.debugk "name:%s id:%s bytes:%d padding:%d" (fun log ->
-        log name (Hash.Blob.to_hex id) bytes padding);
+    Log.debug (fun l ->
+        l "name:%s id:%a bytes:%d padding:%d" name Hash.Blob.pp id bytes padding
+      );
     { stats; id; stage; name }
 
   let add_entry buf t =
-    Log.debug "add_entry";
+    Log.debug (fun l -> l "add_entry");
     let len = 63 + String.length t.name in
     let pad = match len mod 8 with
       | 0 -> 0
@@ -284,7 +284,8 @@ module IO (D: Hash.DIGEST) = struct
 
   let input_entries buf =
     let n = Mstruct.get_be_uint32 buf in
-    Log.debug "input_entries: %ld entries (%db)" n (Mstruct.length buf);
+    Log.debug (fun l ->
+        l "input_entries: %ld entries (%db)" n (Mstruct.length buf));
     let rec loop acc n =
       if n = 0l then List.rev acc
       else
@@ -325,7 +326,7 @@ module IO (D: Hash.DIGEST) = struct
   let add buf ?level:_ t =
     let str = Misc.with_buffer (fun buf ->
         let n = List.length t.entries in
-        Log.debug "add %d entries" n;
+        Log.debug (fun l -> l "add %d entries" n);
         let header = Cstruct.create 12 in
         Mstruct.with_mstruct header (fun header ->
             Mstruct.set_string header "DIRC";

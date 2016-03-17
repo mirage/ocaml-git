@@ -16,7 +16,7 @@
 
 open Astring
 
-module Log = Misc.Log_make(struct let section = "reference" end)
+module Log = (val Misc.src_log "reference" : Logs.LOG)
 
 type t = string
 

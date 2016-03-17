@@ -15,9 +15,8 @@
  *)
 
 open Lwt.Infix
-open Printf
 
-module Log = Misc.Log_make(struct let section = "packed-value" end)
+module Log = (val Misc.src_log "packed-value" : Logs.LOG)
 
 type copy = { copy_offset: int; copy_length: int; }
 
@@ -77,8 +76,6 @@ let pp_kind ppf = function
 let pp ppf { kind; offset } =
   Format.fprintf ppf "offset: %d@,%a" offset pp_kind kind
 
-let pretty = Misc.pretty pp
-
 let create ~offset ~kind = { offset; kind }
 let kind t = t.kind
 let offset t = t.offset
@@ -97,7 +94,7 @@ let source_length t = match t.kind with
   | Off_delta { source_length; _ } -> source_length
   | Raw_value str -> String.length str
 
-let fail fmt = Printf.ksprintf failwith ("Packed_value." ^^ fmt)
+let fail fmt = Fmt.kstrf failwith ("Packed_value." ^^ fmt)
 let err_invalid_size = fail "%s is not a valid size"
 let err_missing_size source = Mstruct.parse_error_buf source "missing size"
 
@@ -143,14 +140,11 @@ module PIC = struct
   let hash x = Hash.hash x.hash
   let compare x y = Hash.compare x.hash y.hash
 
-  let pretty_kind = function
-    | Raw _  -> "RAW"
-    | Link d -> sprintf "link(%s)" (Hash.to_hex @@ d.source.hash)
+  let pp_kind ppf = function
+    | Raw _  -> Fmt.string ppf "RAW"
+    | Link d -> Fmt.pf ppf "link(%a)" Hash.pp @@ d.source.hash
 
-  let pp ppf t =
-    Format.fprintf ppf "@[%a: %s@]" Hash.pp t.hash (pretty_kind t.kind)
-
-  let pretty = Misc.pretty pp
+  let pp ppf t = Format.fprintf ppf "@[%a: %a@]" Hash.pp t.hash pp_kind t.kind
 
   let create ?raw ?(shallow=false) hash kind = { hash; kind; shallow; raw }
   let name t = t.hash
@@ -165,7 +159,7 @@ module PIC = struct
     match Value.Cache.find_inflated h with
     | Some x -> x
     | None   ->
-      Log.debugk "%s: cache miss!" (fun log -> log (Hash.pretty h));
+      Log.debug (fun l -> l "%a: cache miss!" Hash.pp h);
       let x = f () in
       Value.Cache.add_inflated h x;
       x
@@ -173,8 +167,7 @@ module PIC = struct
   let rec unpack t = match raw t with
     | Some str -> str
     | None     ->
-      Log.debugk "unpack %s" (fun log ->
-          log (pretty t));
+      Log.debug (fun l -> l "unpack %a" pp t);
       let raw = with_cache (fun () -> unpack_kind @@ kind t) (name t) in
       t.raw <- Some raw;
       raw
@@ -182,8 +175,7 @@ module PIC = struct
   and unpack_kind = function
     | Raw x  -> x
     | Link d ->
-      Log.debugk "unpack: hop to %s" (fun log ->
-          log (Hash.to_hex @@ name d.source));
+      Log.debug (fun l -> l "unpack: hop to %a" Hash.pp @@ name d.source);
       let source = unpack d.source in
       Misc.with_buffer (fun buf -> add_delta buf { d with source })
 
@@ -191,7 +183,7 @@ module PIC = struct
     type x = t
     type t = x
     let compare = compare
-    let pretty = pretty
+    let pp = pp
   end
   module Map = Misc.Map(X)
 
@@ -366,7 +358,7 @@ module IO (D: Hash.DIGEST) (I: Inflate.S) = struct
           low lor (ss lsl 4)
         else low in
 
-      Log.debug "input: kind:%d size:%d (more=%b)" kind size more;
+      Log.debug (fun l -> l "input: kind:%d size:%d (more=%b)" kind size more);
 
       let mk typ str =
         let size = Cstruct.len str in
@@ -434,8 +426,9 @@ module IO (D: Hash.DIGEST) (I: Inflate.S) = struct
           | Object_type.Blob   -> 0b011
           | Object_type.Tag    -> 0b100 in
       let more = if size > 0x0f then 0x80 else 0 in
-      Log.debug "add kind:%d size:%d (%b %d)"
-        kind size (more=0x80) (size land 0x0f);
+      Log.debug (fun l ->
+          l "add kind:%d size:%d (%b %d)" kind size (more=0x80) (size land 0x0f)
+        );
       let byte = more lor (kind lsl 4) lor (size land 0x0f) in
       Buffer.add_char buf (Char.chr byte);
       if size > 0x0f then
@@ -445,15 +438,13 @@ module IO (D: Hash.DIGEST) (I: Inflate.S) = struct
 
     let pp = pp_kind
 
-    let pretty = Misc.pretty pp_kind
-
   end
 
   module V2 = V(struct let version = 2 end)
   module V3 = V(struct let version = 3 end)
 
   let value_of_pic p =
-    Log.debug "to_value";
+    Log.debug (fun l -> l "to_value");
     let buf = PIC.unpack p in
     (* FIXME: costly, allocate a bigarray *)
     Value_IO.input_inflated (Mstruct.of_string buf)
@@ -465,10 +456,10 @@ module IO (D: Hash.DIGEST) (I: Inflate.S) = struct
     | PIC.Link d ->
       let name = PIC.name d.source in
       match index name with
-      | None   -> fail "of_pic: cannot find %s" (Hash.pretty name)
+      | None   -> fail "of_pic: cannot find %a" Hash.pp name
       | Some o -> return (Off_delta { d with source = offset - o })
 
-  let err_hash_not_found n h = fail "%s: cannot read %s" n (Hash.pretty h)
+  let err_hash_not_found n h = fail "%s: cannot read %a" n Hash.pp h
   let err_offset_not_found = fail "%s: cannot find any object at offset %d"
 
   let to_pic ~read ~offsets ~hashes t =
@@ -495,8 +486,9 @@ module IO (D: Hash.DIGEST) (I: Inflate.S) = struct
     kind >|= fun kind ->
     let raw  = PIC.unpack_kind kind in
     let h = D.string raw in
-    Log.debugk "to_pic(%s) -> %s:%s" (fun log ->
-        log (Misc.pretty pp_kind t.kind) (Hash.pretty h) (PIC.pretty_kind kind));
+    Log.debug (fun l ->
+        l "to_pic(%a) -> %a:%a" pp_kind t.kind Hash.pp h PIC.pp_kind kind
+      );
     PIC.create ~raw h kind
 
   let read_and_add_delta ~read buf delta h =
@@ -519,8 +511,8 @@ module IO (D: Hash.DIGEST) (I: Inflate.S) = struct
     | _ -> fail "pack version should be 2 or 3"
 
   let rec unpack_ref_delta ~lv ~version ~index ~read ba d =
-    Log.debugk "unpack-ref-delta[%d]: d.source=%s" (fun log ->
-        log lv (Hash.to_hex d.source));
+    Log.debug (fun l ->
+        l "unpack-ref-delta[%d]: d.source=%a" lv Hash.pp d.source);
     match index d.source with
     | Some offset ->
       let offset = offset - 12 in (* header skipped *)
@@ -533,12 +525,13 @@ module IO (D: Hash.DIGEST) (I: Inflate.S) = struct
       Misc.with_buffer (fun b -> add_delta b {d with source})
     | None ->
       read d.source >>= function
-      | None     -> fail "unpack: cannot read %s" (Hash.pretty d.source)
+      | None     -> fail "unpack: cannot read %a" Hash.pp d.source
       | Some buf -> Lwt.return buf
 
   and unpack_off_delta ~lv ~version ~index ~read ba d offset =
     let offset = offset - d.source in
-    Log.debug "unpack-off-delta[%d]: offset=%d-%d=%d" lv offset d.source offset;
+    Log.debug (fun l ->
+        l "unpack-off-delta[%d]: offset=%d-%d=%d" lv offset d.source offset);
     let ba_len = Bigarray.Array1.dim ba in
     let len = ba_len - offset in
     let buf = Mstruct.of_bigarray ~off:offset ~len ba in
@@ -550,7 +543,7 @@ module IO (D: Hash.DIGEST) (I: Inflate.S) = struct
   and unpack ~lv ~index ~read ~version ~ba { offset; kind } =
     match kind with
     | Raw_value x ->
-      Log.debug "unpack-raw[%d]" lv; Lwt.return x
+      Log.debug (fun l -> l "unpack-raw[%d]" lv); Lwt.return x
     | Ref_delta d ->
       unpack_ref_delta ~lv ~version ~index ~read ba d
     | Off_delta d ->
@@ -559,7 +552,7 @@ module IO (D: Hash.DIGEST) (I: Inflate.S) = struct
   let unpack = unpack ~lv:0
 
   let to_value ~index ~read ~version ~ba t =
-    Log.debug "to_value";
+    Log.debug (fun l -> l "to_value");
     unpack ~version ~read ~index ~ba t >|= fun u ->
     (* FIXME: costly, allocates a bigarray *)
     Value_IO.input_inflated (Mstruct.of_string u)

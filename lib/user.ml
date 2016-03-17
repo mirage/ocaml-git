@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Log = Misc.Log_make(struct let section = "user" end)
+module Log = (val Misc.src_log "user" : Logs.LOG)
 
 type tz_offset = {
   sign: [`Plus | `Minus];
@@ -62,8 +62,6 @@ let compare = compare
 let pp ppf t =
   Format.fprintf ppf "{@[<hov>name=\"%s\";@ email=\"%s\";@ date=%a@]}"
     t.name t.email pp_date t.date
-
-let pretty = Misc.pretty pp
 
 (* XXX needs to escape name/email/date *)
 let add buf ?level:_ t =

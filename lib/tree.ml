@@ -15,7 +15,7 @@
  *)
 
 open Astring
-module Log = Misc.Log_make(struct let section = "tree" end)
+module Log = (val Misc.src_log "tree" : Logs.LOG)
 
 type perm = [
     `Normal
@@ -56,8 +56,6 @@ module T = struct
     Format.fprintf ppf "[@,";
     List.iter (Format.fprintf ppf "%a;@ " pp_entry) t;
     Format.fprintf ppf "@,@]]"
-
-  let pretty = Misc.pretty pp
 
 end
 

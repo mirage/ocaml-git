@@ -17,15 +17,35 @@
 open Git
 open Lwt.Infix
 
-let verbose () =
-  Log.set_log_level Log.DEBUG;
-  Log.color_on ();
-  Log.set_output stderr
+let pp ppf style h = Fmt.pf ppf "%a " Fmt.(styled style string) h
 
-let quiet () =
-  Log.set_log_level Log.ERROR;
-  Log.color_on ();
-  Log.set_output stderr
+let pad n x =
+  if String.length x > n then x else x ^ String.make (n - String.length x) ' '
+
+let reporter () =
+  let report src level ~over k msgf =
+    let k _ = over (); k () in
+    let ppf = match level with Logs.App -> Fmt.stdout | _ -> Fmt.stderr in
+    let with_stamp h _tags k fmt =
+      let dt = Mtime.to_us (Mtime.elapsed ()) in
+      Fmt.kpf k ppf ("\r%0+04.0fus %a %a @[" ^^ fmt ^^ "@]@.")
+        dt
+        Fmt.(styled `Magenta string) (pad 10 @@ Logs.Src.name src)
+        Logs_fmt.pp_header (level, h)
+    in
+    msgf @@ fun ?header ?tags fmt ->
+    with_stamp header tags k fmt
+  in
+  { Logs.report = report }
+
+let setup_log level =
+  Fmt_tty.setup_std_outputs ();
+  Logs.set_level level;
+  Logs.set_reporter (reporter ());
+  ()
+
+let verbose () = setup_log (Some Logs.Debug)
+let quiet () = setup_log None
 
 let cmp_opt fn x y =
   match x, y with
@@ -53,48 +73,48 @@ module Make (S: Store.S) = struct
   let cmp_list eq comp l1 l2 =
     cmp_list eq (List.sort comp l1) (List.sort comp l2)
 
-  let mk equal compare pretty =
-    let aux (type a) cmp printer msg =
+  let mk equal compare pp =
+    let aux (type a) cmp pp msg =
       let testable: a Alcotest.testable =
         let module M = struct
           type t = a
           let equal = cmp
-          let pp fmt t = Format.pp_print_string fmt (printer t)
+          let pp = pp
         end in
         (module M)
       in
       Alcotest.check testable msg
     in
-    aux equal pretty,
-    aux (cmp_opt equal) (printer_opt pretty),
-    aux (cmp_list equal compare) (printer_list pretty)
+    aux equal pp,
+    aux (cmp_opt equal) Fmt.(option pp),
+    aux (cmp_list equal compare) Fmt.(list pp)
 
   let assert_key_equal, assert_key_opt_equal, assert_keys_equal =
-    mk Hash.equal Hash.compare Hash.to_hex
+    mk Hash.equal Hash.compare Hash.pp
 
   let assert_value_equal, assert_value_opt_equal, assert_values_equal =
-    mk Value.equal Value.compare Value.pretty
+    mk Value.equal Value.compare Value.pp
 
   let assert_tag_equal, assert_tag_opt_equal, assert_tags_equal =
-    mk Tag.equal Tag.compare Tag.pretty
+    mk Tag.equal Tag.compare Tag.pp
 
   let assert_ref_equal, assert_ref_opt_equal, assert_refs_equal =
-    mk Reference.equal Reference.compare Reference.pretty
+    mk Reference.equal Reference.compare Reference.pp
 
   let assert_cstruct_equal, assert_cstruct_opt_equal, assert_cstructs_equal =
-    mk (=) compare Cstruct.debug
+    mk (=) compare (Fmt.of_to_string Cstruct.debug)
 
   let assert_pack_index_equal, assert_pack_index_opt_equal, assert_pack_indexes_equal =
-    mk Pack_index.Raw.equal Pack_index.Raw.compare Pack_index.Raw.pretty
+    mk Pack_index.Raw.equal Pack_index.Raw.compare Pack_index.Raw.pp
 
   let assert_pack_equal, assert_pack_opt_equal, assert_packs_equal =
-    mk Pack.equal Pack.compare Pack.pretty
+    mk Pack.equal Pack.compare Pack.pp
 
   let assert_index_equal, assert_index_opt_equal, assert_indexs_equal =
-    mk Index.equal Index.compare Index.pretty
+    mk Index.equal Index.compare Index.pp
 
   let assert_raw_pack_equal, assert_raw_pack_opt_equal, assert_raw_packs_equal =
-    mk Pack.Raw.equal Pack.Raw.compare Pack.Raw.pretty
+    mk Pack.Raw.equal Pack.Raw.compare Pack.Raw.pp
 
 end
 
@@ -136,6 +156,6 @@ let sha1s =
   let module M = struct
     type t = Hash.Set.t
     let equal = Hash.Set.equal
-    let pp fmt t = Format.pp_print_string fmt (Hash.Set.pretty t)
+    let pp = Hash.Set.pp
   end
   in (module M: Alcotest.TESTABLE with type t = M.t)

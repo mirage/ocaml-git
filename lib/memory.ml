@@ -16,7 +16,7 @@
 
 open Lwt.Infix
 
-module Log = Misc.Log_make(struct let section = "memory" end)
+module Log = (val Misc.src_log "memory" : Logs.LOG)
 
 let err_not_found n k =
   let str = Printf.sprintf "Git.Memory.%s: %s not found" n k in
@@ -44,7 +44,7 @@ module Make (D: Hash.DIGEST) (I: Inflate.S) = struct
   let default_root = "root"
 
   let reset t =
-    Log.debug "reset %s" t.root;
+    Log.debug (fun l -> l "reset %s" t.root);
     Hashtbl.clear t.values;
     Hashtbl.clear t.inflated;
     Hashtbl.clear t.refs;
@@ -82,7 +82,7 @@ module Make (D: Hash.DIGEST) (I: Inflate.S) = struct
     let h = D.string inflated in
     if Hashtbl.mem t.values h then Lwt.return h
     else (
-      Log.info "Writing %s" (Hash.to_hex h);
+      Log.info (fun l -> l "Writing %a" Hash.pp h);
       Hashtbl.add t.values h (lazy value);
       Hashtbl.add t.inflated h inflated;
       Lwt.return h
@@ -92,7 +92,7 @@ module Make (D: Hash.DIGEST) (I: Inflate.S) = struct
     let h = D.string inflated in
     if Hashtbl.mem t.values h then Lwt.return h
     else (
-      Log.info "Writing %s" (Hash.to_hex h);
+      Log.info (fun l -> l "Writing %a" Hash.pp h);
       Hashtbl.add t.inflated h inflated;
       let value =
         (* FIXME: this allocates too much *)
@@ -112,10 +112,10 @@ module Make (D: Hash.DIGEST) (I: Inflate.S) = struct
 
   let err_write_pack expected got =
     let str =
-      Printf.sprintf
+      Fmt.strf
         "Git_memory.write_pack: wrong checksum.\n\
-         Expecting %s, but got %s."
-        (Hash.pretty expected) (Hash.pretty got)
+         Expecting %a, but got %a."
+        Hash.pp expected Hash.pp got
     in
     failwith str
 
@@ -139,7 +139,7 @@ module Make (D: Hash.DIGEST) (I: Inflate.S) = struct
     Hashtbl.fold (fun k _ l -> k :: l) t []
 
   let list t =
-    Log.debug "list %s" t.root;
+    Log.debug (fun l -> l "list %s" t.root);
     Lwt.return (keys t.values)
 
   let mem t h =
@@ -147,11 +147,11 @@ module Make (D: Hash.DIGEST) (I: Inflate.S) = struct
 
   let read_exn t h =
     read t h >>= function
-    | None   -> err_not_found "read_exn" (Hash.pretty h)
+    | None   -> err_not_found "read_exn" (Hash.to_hex h)
     | Some v -> Lwt.return v
 
   let contents t =
-    Log.debug "contents";
+    Log.debug (fun l -> l "contents");
     list t >>= fun hashes ->
     Lwt_list.map_s (fun h -> read_exn t h >|= fun value -> h, value) hashes
 
@@ -170,7 +170,7 @@ module Make (D: Hash.DIGEST) (I: Inflate.S) = struct
     Lwt.return (Hashtbl.mem t.refs ref)
 
   let rec read_reference t r =
-    Log.info "Reading %s" (Reference.pretty r);
+    Log.info (fun l -> l "Reading %a" Reference.pp r);
     try match Hashtbl.find t.refs r with
       | `H s -> Lwt.return (Some s)
       | `R r -> read_reference t r
@@ -178,25 +178,26 @@ module Make (D: Hash.DIGEST) (I: Inflate.S) = struct
       Lwt.return_none
 
   let read_head t =
-    Log.info "Reading HEAD";
+    Log.info (fun l -> l "Reading HEAD");
     Lwt.return t.head
 
-  let remove_reference t ref =
-    Hashtbl.remove t.refs ref;
+  let remove_reference t r =
+    Hashtbl.remove t.refs r;
     Lwt.return_unit
 
-  let read_reference_exn t ref =
-    read_reference t ref >>= function
-    | None   -> err_not_found "read_reference_exn" (Reference.pretty ref)
+  let read_reference_exn t r =
+    read_reference t r >>= function
     | Some s -> Lwt.return s
+    | None   ->
+      err_not_found "read_reference_exn" (Fmt.to_to_string Reference.pp r)
 
   let write_head t c =
-    Log.info "Writing HEAD";
+    Log.info (fun l -> l "Writing HEAD");
     t.head <- Some c;
     Lwt.return_unit
 
   let write_reference t r h =
-    Log.info "Writing %s" (Reference.pretty r);
+    Log.info (fun l -> l "Writing %a" Reference.pp r);
     Hashtbl.replace t.refs r (`H h);
     Lwt.return_unit
 

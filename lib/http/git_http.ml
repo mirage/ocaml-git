@@ -16,7 +16,10 @@
 
 let (>>=) = Lwt.bind
 
-module Log = Log.Make(struct let section = "http" end)
+module Log = struct
+  let src = Logs.Src.create "git.http" ~doc:"logs git's http events"
+  include (val Logs.src_log src : Logs.LOG)
+end
 
 module type CLIENT = sig
   module IO : Cohttp_lwt_s.IO with type 'a t = 'a Lwt.t
@@ -53,7 +56,7 @@ module Flow(HTTP: CLIENT) (IC: CHAN) (OC: CHAN) = struct
   let make_oc oc =
     OC.make
       ~close:(fun () ->
-          Log.debug "Closing outgoing connection.";
+          Log.debug (fun l -> l "Closing outgoing connection.");
           HTTP.close_out oc;
           Lwt.return_unit)
       (fun buf off len ->
@@ -92,14 +95,16 @@ module Flow(HTTP: CLIENT) (IC: CHAN) (OC: CHAN) = struct
     | `POST ->
       OC.make
         ~close:(fun () ->
-            Log.debug "Closing outgoing connection";
+            Log.debug (fun l -> l "Closing outgoing connection");
             HTTP.close_out ctx.oc;
             Lwt.return_unit)
         (fun buf off len ->
            begin
              if not (ctx.state = `Read) then Lwt.return_unit
-             else (Log.debug "Write need reconnects."; reconnect ctx)
-           end >>= fun () ->
+             else (
+               Log.debug (fun l -> l "Write need reconnects.");
+               reconnect ctx
+             ) end >>= fun () ->
            let chunk = Bytes.create len in
            ctx.out_stream <- ctx.out_stream @ [chunk];
            Cstruct.blit_to_string buf off chunk 0 len;
@@ -136,18 +141,18 @@ module Flow(HTTP: CLIENT) (IC: CHAN) (OC: CHAN) = struct
     let status_code = Cohttp.Code.code_of_status status in
     if Cohttp.Code.is_success status_code then fn () else (
       let status = Cohttp.Code.string_of_status status in
-      Log.error "with_http: %s" status;
+      Log.err (fun l -> l "with_http: %s" status);
       failwith status
     )
 
   let flush_oc ctx req =
     if ctx.state = `Write then (
-      Log.debug "Read flushes the outgoing connection";
+      Log.debug (fun l -> l "Read flushes the outgoing connection");
       write_footer ctx.oc (Request.encoding req) >>= fun () ->
       ctx.state <- `Read;
       Lwt.return_unit
     ) else (
-      Log.debug "Read uses the existing connection";
+      Log.debug (fun l -> l "Read uses the existing connection");
       Lwt.return_unit
     )
 
@@ -164,7 +169,7 @@ module Flow(HTTP: CLIENT) (IC: CHAN) (OC: CHAN) = struct
     Lwt.return res
 
   let replay_in_stream read in_stream =
-    Log.debug "Replay the incoming connection history";
+    Log.debug (fun l -> l "Replay the incoming connection history");
     Lwt_list.iter_s (fun s ->
         read_exactly read (String.length s) >>= fun s' ->
         if s <> Cstruct.to_string s' then
@@ -175,15 +180,15 @@ module Flow(HTTP: CLIENT) (IC: CHAN) (OC: CHAN) = struct
         else Lwt.return_unit
       ) in_stream
     >>= fun () ->
-    Log.debug "Replay complete!";
+    Log.debug (fun l -> l "Replay complete!");
     Lwt.return_unit
 
   let replay_out_stream req oc out_stream =
-    Log.debug "Replay the outgoing connection history";
+    Log.debug (fun l -> l "Replay the outgoing connection history");
     Request.write_header req oc >>= fun () ->
     let writer = Request.make_body_writer ~flush:false req oc in
     Lwt_list.iter_s (Request.write_body writer) out_stream >>= fun () ->
-    Log.debug "Replay complete!";
+    Log.debug (fun l -> l "Replay complete!");
     Lwt.return_unit
 
   (* Transform the raw incoming channel [ic] into an higher-level
@@ -222,7 +227,7 @@ module Flow(HTTP: CLIENT) (IC: CHAN) (OC: CHAN) = struct
     in
     IC.make
       ~close:(fun () ->
-          Log.debug "Closing input connection";
+          Log.debug (fun l -> l "Closing input connection");
           HTTP.close_in ctx.ic;
           Lwt.return_unit)
       (fun bytes off len -> match ctx.reader with
@@ -265,7 +270,7 @@ module Flow(HTTP: CLIENT) (IC: CHAN) (OC: CHAN) = struct
       (function e ->
         (* WARNING: do not catch `Unix` exception here, as it will
            bring a unwanted dependency to unix.cma *)
-        Log.debug "Ignoring exn: %s" (Printexc.to_string e);
+        Log.debug (fun l -> l "Ignoring exn: %s" (Printexc.to_string e));
         Lwt.return_unit)
 
   (* The smart HTTP protocols simulates a flow using the following "trick":
@@ -327,7 +332,7 @@ module Flow(HTTP: CLIENT) (IC: CHAN) (OC: CHAN) = struct
       (fun () -> Lwt.wakeup wakeup (); Lwt.return_unit)
 
   let with_http ?init with_conduit uri fn =
-    Log.debug "HTTP connecting to %s" (Uri.to_string uri);
+    Log.debug (fun l -> l "HTTP connecting to %s" (Uri.to_string uri));
     let headers = match init with
       | None -> Cohttp.Header.of_list []
       | Some s ->
@@ -335,8 +340,9 @@ module Flow(HTTP: CLIENT) (IC: CHAN) (OC: CHAN) = struct
         let l = Marshal.from_string s 0 in
         Cohttp.Header.of_list l
     in
-    Log.debug "HTTP headers: %s"
-      (Sexplib.Sexp.to_string (Cohttp.Header.sexp_of_t headers));
+    Log.debug (fun l ->
+        l "HTTP headers: %s"
+          (Sexplib.Sexp.to_string (Cohttp.Header.sexp_of_t headers)));
     let meth =
       let path = Uri.path uri in
       let info = Filename.basename (Filename.dirname path) in

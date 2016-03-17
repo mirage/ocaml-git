@@ -14,6 +14,8 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+module Log = (val Misc.src_log "inflate" : Logs.LOG)
+
 module type S = sig
   val inflate: ?output_size:int -> Mstruct.t -> Mstruct.t option
   val deflate: ?level:int -> Cstruct.t -> Cstruct.t
@@ -150,7 +152,7 @@ module Make (Zlib: ZLIB) = struct
   let inflate ?output_size orig_buf =
     try Some (inflate_exn ?output_size orig_buf)
     with Zlib.Error (s,t) ->
-      Log.error "inflate: error %s %s" s t;
+      Log.err (fun l -> l "inflate: error %s %s" s t);
       None
 
 end

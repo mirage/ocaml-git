@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Log = Misc.Log_make(struct let section = "hash" end)
+module Log = (val Misc.src_log "hash": Logs.LOG)
 
 module type S = sig
   include Object.S
@@ -96,13 +96,12 @@ module Hash_string = struct
   let lt x y = compare x y < 0
   let to_raw x = x.raw
   let of_raw x = { raw=x; padded=false; }
-  let pretty = to_hex
-  let pp ppf t = Format.fprintf ppf "%s" (pretty t)
+  let pp ppf t = Format.fprintf ppf "%s" (to_hex t)
 
   module X = struct
     type t = sha
     let compare = compare
-    let pretty = pretty
+    let pp = pp
   end
   module Map = Misc.Map(X)
   module Set = Misc.Set(X)

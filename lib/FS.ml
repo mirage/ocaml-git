@@ -19,15 +19,16 @@ open Misc.OP
 open Printf
 open Astring
 
+module PackedLog = (val Misc.src_log "fs-packed" : Logs.LOG)
+module LooseLog = (val Misc.src_log "fs-loose" : Logs.LOG)
+
 module ReferenceSet = Misc.Set(Reference)
 
-let fail fmt = Printf.ksprintf failwith ("Git.FS." ^^ fmt)
+let fail fmt = Fmt.kstrf failwith ("Git.FS." ^^ fmt)
 
 let err_not_found n k = fail "%s: %s not found" n k
 
-module LogMake = Misc.Log_make
-
-module Log = LogMake(struct let section = "fs" end)
+module Log = (val Misc.src_log "fs" : Logs.LOG)
 
 module type IO = sig
   val getcwd: unit -> string Lwt.t
@@ -147,13 +148,13 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
     Lwt.return { root = root'; level; dot_git }
 
   let remove t =
-    Log.info "remove %s" t.dot_git;
+    Log.info (fun l -> l "remove %s" t.dot_git);
     IO.remove t.dot_git
 
   (* Loose objects *)
   module Loose = struct
 
-    module Log = LogMake(struct let section = "fs-loose" end)
+    module Log = LooseLog
 
     let file t h =
       let hex = Hash.to_hex h in
@@ -163,7 +164,7 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
 
     let mem t h = IO.file_exists (file t h)
 
-    let ambiguous h = raise (Hash.Ambiguous (Hash.pretty h))
+    let ambiguous h = raise (Hash.Ambiguous (Hash.to_hex h))
 
     let get_file t h =
       IO.directories (t.dot_git / "objects") >>= fun dirs ->
@@ -183,7 +184,7 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
       | []      -> Lwt.return_none
       | _::_::_ -> ambiguous h
       | [dir] ->
-        Log.debug "get_file: %s" dir;
+        Log.debug (fun l -> l "get_file: %s" dir);
         IO.files dir >>= fun files ->
         let fcands =
           if len <= 2 then files
@@ -215,9 +216,9 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
       | Some s -> some (Mstruct.to_string s)
 
     let read_aux name read_file t h =
-      Log.debugk "%s %s" (fun log -> log name (Hash.to_hex h));
+      Log.debug (fun l -> l "%s %a" name Hash.pp h);
       if Hash_IO.is_short h then (
-        Log.debug "read: short hash";
+        Log.debug (fun l -> l "read: short hash");
         get_file t h >>= function
         | Some file -> read_file file
         | None      -> Lwt.return_none
@@ -234,7 +235,9 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
       let h = D.string inflated in
       let file = file t h in
       IO.file_exists file >>= function
-      | true  -> Log.debug "write: file %s already exists!" file; Lwt.return h
+      | true  ->
+        Log.debug (fun l -> l "write: file %s already exists!" file);
+        Lwt.return h
       | false ->
         let level = t.level in
         let deflated = I.deflate ~level (Cstruct.of_string inflated) in
@@ -243,18 +246,20 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
         Lwt.return h
 
     let write t value =
-      Log.debug "write";
+      Log.debug (fun l -> l "write");
       let inflated =
         Misc.with_buffer (fun buf -> Value_IO.add_inflated buf value)
       in
       write_inflated t inflated
 
     let list t =
-      Log.debug "Loose.list %s" t.dot_git;
+      Log.debug (fun l -> l "Loose.list %s" t.dot_git);
       let objects = t.dot_git / "objects" in
       IO.directories objects >>= fun objects ->
       let objects = List.map Filename.basename objects in
-      let objects = List.filter (fun s -> (s <> "info") && (s <> "pack")) objects in
+      let objects =
+        List.filter (fun s -> (s <> "info") && (s <> "pack")) objects
+      in
       Lwt_list.map_s (fun prefix ->
           let dir = t.dot_git / "objects" / prefix in
           IO.files dir >>= fun suffixes ->
@@ -271,7 +276,7 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
 
   module Packed = struct
 
-    module Log = LogMake(struct let section = "fs-packed" end)
+    module Log = PackedLog
 
     let file t h =
       let pack_dir = t.dot_git / "objects" / "pack" in
@@ -279,7 +284,7 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
       pack_dir / pack_file
 
     let list t =
-      Log.debug "list %s" t.dot_git;
+      Log.debug (fun l -> l "list %s" t.dot_git);
       let packs = t.dot_git / "objects" / "pack" in
       IO.files packs >|= fun packs ->
       let parse_pack acc f =
@@ -304,9 +309,11 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
       LRU.clear keys_lru
 
     let read_pack_index t h =
-      Log.debugk "read_pack_index %s" (fun log -> log (Hash.to_hex h));
+      Log.debug (fun l -> l "read_pack_index %a" Hash.pp h);
       match LRU.find index_lru h with
-      | Some i -> Log.debug "read_pack_index cache hit!"; Lwt.return i
+      | Some i ->
+        Log.debug (fun l -> l "read_pack_index cache hit!");
+        Lwt.return i
       | None ->
         let file = index t h in
         IO.file_exists file >>= function
@@ -329,18 +336,18 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
         IO.write_file file ~temp_dir buf
 
     let read_keys t h =
-      Log.debugk "read_keys %s" (fun log -> log (Hash.to_hex h));
+      Log.debug (fun l -> l "read_keys %a" Hash.pp h);
       match LRU.find keys_lru h with
       | Some ks -> Lwt.return ks
       | None    ->
-        Log.debug "read_keys: cache miss!";
+        Log.debug (fun l -> l "read_keys: cache miss!");
         read_pack_index t h >>= fun index ->
         let keys = Pack_index.keys index |> Hash.Set.of_list in
         LRU.add keys_lru h keys;
         Lwt.return keys
 
     let write_pack t h pack =
-      Log.debug "write pack";
+      Log.debug (fun l -> l "write pack");
       let file = file t h in
       IO.file_exists file >>= function
       | true  -> Lwt.return_unit
@@ -350,19 +357,19 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
         IO.write_file file ~temp_dir pack
 
     let mem_in_pack t pack_hash h =
-      Log.debugk "mem_in_pack %s:%s" (fun log ->
-          log (Hash.to_hex pack_hash) (Hash.to_hex h));
+      Log.debug (fun l -> l "mem_in_pack %a:%a" Hash.pp pack_hash Hash.pp h);
       read_pack_index t pack_hash >>= fun idx ->
       Lwt.return (Pack_index.mem idx h)
 
     let read_in_pack name pack_read ~read t pack_hash h =
-      Log.debugk "read_in_pack(%s) %s:%s" (fun log ->
-          log name (Hash.to_hex pack_hash) (Hash.to_hex h));
+      Log.debug (fun l ->
+          l "read_in_pack(%s) %a:%a" name Hash.pp pack_hash Hash.pp h);
       read_pack_index t pack_hash >>= fun i ->
       let index = Pack_index.find_offset i in
       match index h with
       | None   ->
-        Log.debug "read_in_pack: not found"; Lwt.return_none
+        Log.debug (fun l -> l "read_in_pack: not found");
+        Lwt.return_none
       | Some _ ->
         let file = file t pack_hash in
         IO.file_exists file >>= function
@@ -395,7 +402,7 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
   end
 
   let list t =
-    Log.debug "list";
+    Log.debug (fun l -> l "list");
     Loose.list t  >>= fun objects ->
     Packed.list t >>= fun packs   ->
     Lwt_list.map_p (fun p -> Packed.read_keys t p) packs >>= fun keys ->
@@ -412,11 +419,11 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
     | Some v -> Value.Cache.add_inflated h v; Some v
 
   let rec read t h =
-    Log.debugk "read %s" (fun log -> log (Hash.to_hex h));
+    Log.debug (fun l -> l "read %a" Hash.pp h);
     match Value.Cache.find h with
     | Some v -> Lwt.return (Some v)
     | None   ->
-      Log.debug "read: cache miss!";
+      Log.debug (fun l -> l "read: cache miss!");
       begin
         Loose.read t h >>= function
         | Some v -> Lwt.return (Some v)
@@ -427,11 +434,11 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
       cache_add h
 
   and read_inflated t h =
-    Log.debugk "read_inflated %s" (fun log -> log (Hash.to_hex h));
+    Log.debug (fun l -> l "read_inflated %a" Hash.pp h);
     match Value.Cache.find_inflated h with
     | Some v -> Lwt.return (Some v)
     | None   ->
-      Log.debug "read_inflated: cache miss!";
+      Log.debug (fun l -> l "read_inflated: cache miss!");
       begin
         Loose.read_inflated t h >>= function
         | Some v -> Lwt.return (Some v)
@@ -444,19 +451,19 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
   let read_exn t h =
     read t h >>= function
     | Some v -> Lwt.return v
-    | None   -> err_not_found "read_exn" (Hash.pretty h)
+    | None   -> err_not_found "read_exn" (Hash.to_hex h)
 
   let mem t h =
     match Value.Cache.find h with
     | Some _ -> Lwt.return true
     | None   ->
-      Log.debug "mem: cache miss!";
+      Log.debug (fun l -> l "mem: cache miss!");
       Loose.mem t h >>= function
       | true  -> Lwt.return true
       | false -> Packed.mem t h
 
   let contents t =
-    Log.debug "contents";
+    Log.debug (fun l -> l "contents");
     list t >>= fun hs ->
     Lwt_list.map_p (fun h -> read_exn t h >|= fun value -> (h, value)) hs
 
@@ -464,7 +471,7 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
     contents t >>= fun contents ->
     List.iter (fun (h, value) ->
         let typ = Value.type_of value in
-        Log.error "%s %s" (Hash.to_hex h) (Object_type.to_string typ);
+        Log.err (fun l -> l "%a %a" Hash.pp h Object_type.pp typ);
       ) contents;
     Lwt.return_unit
 
@@ -543,22 +550,23 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
   let read_reference_exn t r =
     read_reference t r >>= function
     | Some s -> Lwt.return s
-    | None   -> err_not_found "read_reference_exn" (Reference.pretty r)
+    | None   ->
+      err_not_found "read_reference_exn" (Fmt.to_to_string Reference.pp r)
 
   let write t value =
     Loose.write t value >>= fun h ->
-    Log.debugk "write -> %s" (fun log -> log (Hash.to_hex h));
+    Log.debug (fun l -> l "write -> %a" Hash.pp h);
     Value.Cache.add h value;
     Lwt.return h
 
   let write_inflated t value =
     Loose.write_inflated t value >>= fun h ->
-    Log.debugk "write -> %s" (fun log -> log (Hash.to_hex h));
+    Log.debug (fun l -> l "write -> %a" Hash.pp h);
     Value.Cache.add_inflated h value;
     Lwt.return h
 
   let write_pack t pack =
-    Log.debug "write_pack";
+    Log.debug (fun l -> l "write_pack");
     let name = Pack.Raw.name pack in
     let index = Pack.Raw.index pack in
     Packed.write_pack t name pack   >>= fun () ->
@@ -596,16 +604,15 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
   let id = let n = ref 0 in fun () -> incr n; !n
 
   let load_filesystem t head =
-    Log.debugk "load_filesystem head=%s" (fun log ->
-        log (Hash.Commit.to_hex head));
+    Log.debug (fun l -> l "load_filesystem head=%a" Hash.Commit.pp head);
     let blobs_c = ref 0 in
     let id = id () in
     let error expected got =
-      fail "load_filesystem: expecting a %s, got a %s"
-        expected (Object_type.pretty (Value.type_of got))
+      fail "load_filesystem: expecting a %s, got a %a"
+        expected Object_type.pp (Value.type_of got)
     in
     let blob mode h k =
-      Log.debugk "blob %d %s" (fun log -> log id (Hash.to_hex h));
+      Log.debug (fun l -> l "blob %d %a"id Hash.pp h);
       assert (mode <> `Dir);
       incr blobs_c;
       read_exn t h >>= function
@@ -613,7 +620,7 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
       | obj          -> error "blob" obj
     in
     let rec tree mode h k =
-      Log.debugk "tree %d %s" (fun log -> log id (Hash.to_hex h));
+      Log.debug (fun l -> l "tree %d %a" id Hash.pp h);
       assert (mode = `Dir);
       read_exn t h >>= function
       | Value.Tree t -> tree_entries t [] k
@@ -628,7 +635,7 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
         | mode -> blob mode e.Tree.node k
     in
     let commit h =
-      Log.debugk "commit %d %s" (fun log -> log id (Hash.to_hex h));
+      Log.debug (fun l -> l "commit %d %a" id Hash.pp h);
       read_exn t h >>= function
       | Value.Commit c -> tree `Dir (Hash.of_tree c.Commit.tree) Lwt.return
       | obj            -> error "commit" obj
@@ -639,15 +646,14 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
   let iter_blobs t ~f ~init =
     load_filesystem t init >>= fun (n, trie) ->
     let i = ref 0 in
-    Log.debugk "iter_blobs %s" (fun log ->
-        log (Hash.Commit.to_hex init));
+    Log.debug (fun l -> l "iter_blobs %a" Hash.Commit.pp init);
     iter (fun path (mode, (h, blob)) ->
         incr i;
         f (!i, n) (t.root :: path) mode h blob
       ) trie
 
   let create_file t file mode blob =
-    Log.debug "create_file %s" file;
+    Log.debug (fun l -> l "create_file %s" file);
     let blob = Blob.to_raw blob in
     match mode with
     | `Link -> (*q Lwt_unix.symlink file ??? *) failwith "TODO"
@@ -656,13 +662,14 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
       let contents = Cstruct.of_string blob in
       let rec write n =
         let one () =
-          Log.debug "one %S" file;
+          Log.debug (fun l -> l "one %S" file);
           IO.write_file file ~temp_dir contents
         in
         if n <= 1 then one () else
           Lwt.catch one (fun e ->
-              Log.debugk "write (%d/10): Got %S, retrying." (fun log ->
-                  log (11-n) (Printexc.to_string e));
+              Log.debug (fun l ->
+                  l "write (%d/10): Got %S, retrying."
+                    (11-n) (Printexc.to_string e));
               IO.remove file >>= fun () ->
               write (n-1))
       in
@@ -676,7 +683,7 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
   module Index_IO = Index.IO(D)
 
   let read_index t =
-    Log.debug "read_index";
+    Log.debug (fun l -> l "read_index");
     let file = index_file t in
     IO.file_exists file >>= function
     | false -> Lwt.return Index.empty
@@ -689,12 +696,12 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
 
   let entry_of_file_aux t index file mode h blob =
     IO.realpath file >>= fun file ->
-    Log.debugk "entry_of_file %s %s" (fun log ->
-        log (Hash.Blob.to_hex h) file);
+    Log.debug (fun l -> l "entry_of_file %a %s" Hash.Blob.pp h file);
     begin
       IO.file_exists file >>= function
       | false ->
-        Log.debug "%s does not exist on the filesystem, creating!" file;
+        Log.debug (fun l ->
+            l "%s does not exist on the filesystem, creating!" file);
         create_file t file mode blob
       | true  ->
         let entry =
@@ -706,22 +713,25 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
         in
         match entry with
         | None  ->
-          Log.debug "%s does not exist in the index, adding!" file;
+          Log.debug (fun l -> l "%s does not exist in the index, adding!" file);
           (* in doubt, overide the current version -- git will just refuse
              to do anything in that case. *)
           create_file t file mode blob
         | Some e ->
           if not (Hash.Blob.equal e.Index.id h)then (
-            Log.debug "%s has an old version in the index, updating!" file;
+            Log.debug (fun l ->
+                l "%s has an old version in the index, updating!" file);
             create_file t file mode blob
           ) else
             let stats = IO.stat_info file in
             if e.Index.stats <> stats then (
               (* same thing here, usually Git just stops in that case. *)
-              Log.debug "%s has been modified on the filesystem, reversing!" file;
+              Log.debug (fun l ->
+                  l "%s has been modified on the filesystem, reversing!" file);
               create_file t file mode blob
             ) else (
-              Log.debug "%s: %s unchanged!" (Hash.Blob.to_hex h) file;
+              Log.debug (fun l ->
+                  l "%s: %s unchanged!" (Hash.Blob.to_hex h) file);
               Lwt.return_unit
             )
     end >|= fun () ->
@@ -741,8 +751,7 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
       (function Failure _ | Sys_error _ -> Lwt.return_none | e -> Lwt.fail e)
 
   let write_index t ?index head =
-    Log.debugk "write_index %s" (fun log ->
-        log (Hash.Commit.to_hex head));
+    Log.debug (fun l -> l "write_index %a" Hash.Commit.pp head);
     let buf = Buffer.create 1024 in
     match index with
     | Some index ->
@@ -751,17 +760,17 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
       IO.write_file (index_file t) ~temp_dir
         (Cstruct.of_string (Buffer.contents buf)) >>= fun () ->
       let all = List.length index.Index.entries in
-      Log.info "Checking out files: 100%% (%d/%d), done." all all;
+      Log.info (fun l -> l "Checking out files: 100%% (%d/%d), done." all all);
       Lwt.return_unit
     | None ->
       let entries = ref [] in
       let all = ref 0 in
       read_index t >>= fun index ->
-      Log.info "Checking out files...";
+      Log.info (fun l -> l "Checking out files...");
       iter_blobs t ~init:head ~f:(fun (i,n) path mode h blob ->
           all := n;
           let file = String.concat ~sep:Filename.dir_sep path in
-          Log.debug "write_index: %d/%d blob:%s" i n file;
+          Log.debug (fun l -> l "write_index: %d/%d blob:%s" i n file);
           entry_of_file t index file mode h blob >>= function
           | None   -> Lwt.return_unit
           | Some e -> entries := e :: !entries; Lwt.return_unit
@@ -771,7 +780,7 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
       Index_IO.add buf index;
       IO.write_file (index_file t) ~temp_dir
         (Cstruct.of_string (Buffer.contents buf)) >>= fun () ->
-      Log.info "Checking out files: 100%% (%d/%d), done." !all !all;
+      Log.info (fun l -> l "Checking out files: 100%% (%d/%d), done." !all !all);
       Lwt.return_unit
 
   let kind = `Disk

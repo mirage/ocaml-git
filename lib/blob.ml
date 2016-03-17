@@ -14,8 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Printf
-module Log = Misc.Log_make(struct let section = "blob" end)
+module Log = (val Misc.src_log "blob" : Logs.LOG)
 
 (* FIXME: might want to have an option type with string|cstruct *)
 include Misc.S
@@ -23,8 +22,8 @@ let hash = Hashtbl.hash
 let equal x y = String.compare x y = 0
 
 let pretty t =
-  if String.length t < 70 then sprintf "%S" t
-  else sprintf "\"%s..%d\""
+  if String.length t < 70 then Printf.sprintf "%S" t
+  else Printf.sprintf "\"%s..%d\""
       (String.escaped (String.sub t 0 70))
       (String.length t)
 
