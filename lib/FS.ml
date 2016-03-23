@@ -361,7 +361,7 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
       read_pack_index t pack_hash >>= fun idx ->
       Lwt.return (Pack_index.mem idx h)
 
-    let read_in_pack name pack_read ~read t pack_hash h =
+    let read_in_pack name pack_read t pack_hash h =
       Log.debug (fun l ->
           l "read_in_pack(%s) %a:%a" name Hash.pp pack_hash Hash.pp h);
       read_pack_index t pack_hash >>= fun i ->
@@ -375,22 +375,23 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
         IO.file_exists file >>= function
         | true ->
           File_cache.read file >>= fun buf ->
-          pack_read ~index ~read (Mstruct.of_cstruct buf) h
+          pack_read ~index (Mstruct.of_cstruct buf) h
         | false ->
           fail "read_in_pack: cannot read the pack object %s"
             (Hash.to_hex pack_hash)
 
-    let read_aux read_in_pack ~read t h =
+    let read_aux read_in_pack t h =
       list t >>= fun packs ->
       Lwt_list.fold_left_s (fun acc pack ->
           match acc with
           | Some v -> Lwt.return (Some v)
-          | None   -> read_in_pack ~read t pack h
+          | None   -> read_in_pack t pack h
         ) None packs
 
-    let read = read_aux (read_in_pack "read" Pack_IO.Raw.read)
-    let read_inflated =
-      read_aux (read_in_pack "read_inflated" Pack_IO.Raw.read_inflated)
+    let read t h ~read = read_aux (read_in_pack "read" (Pack_IO.Raw.read ~read)) t h
+    let read_inflated t h ~read =
+      read_aux (read_in_pack "read_inflated" (Pack_IO.Raw.read_inflated ~read)) t h
+    let size = read_aux (read_in_pack "size" Pack_IO.Raw.size)
 
     let mem t h =
       list t >>= fun packs ->
@@ -398,7 +399,6 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
           if acc then Lwt.return acc
           else mem_in_pack t pack h
         ) false packs
-
   end
 
   let list t =
@@ -452,6 +452,19 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
     read t h >>= function
     | Some v -> Lwt.return v
     | None   -> err_not_found "read_exn" (Hash.to_hex h)
+
+  let size t h =
+    let use = function
+      | Value.Blob b -> Lwt.return (Some (String.length (Blob.to_raw b)))
+      | _ -> Lwt.return None in
+    match Value.Cache.find h with
+    | Some v -> use v
+    | None   ->
+      Log.debug (fun l -> l "size: cache miss!");
+      (* Could have a [Loose.size] here... *)
+      Loose.read t h >>= function
+      | Some v -> use v
+      | None   -> Packed.size t h
 
   let mem t h =
     match Value.Cache.find h with

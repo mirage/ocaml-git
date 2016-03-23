@@ -145,6 +145,11 @@ module Make (D: Hash.DIGEST) (I: Inflate.S) = struct
   let mem t h =
     Lwt.return (Hashtbl.mem t.values h)
 
+  let size t h =
+    read t h >|= function
+    | Some (Value.Blob v) -> Some (String.length (Blob.to_raw v))
+    | _ -> None
+
   let read_exn t h =
     read t h >>= function
     | None   -> err_not_found "read_exn" (Hash.to_hex h)

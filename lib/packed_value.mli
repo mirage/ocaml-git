@@ -120,7 +120,13 @@ type pic = PIC.t
 
 module IO (D: Hash.DIGEST) (I: Inflate.S): sig
 
-  module type IO = Object.IO with type t = kind
+  module type IO = sig
+    include Object.IO with type t = kind
+
+    val size: Mstruct.t -> int
+    (** Get size of the value that [input] would return, without actually
+        decompressing the value. *)
+  end
 
   module V2: IO
   (** Packed values version 2. *)

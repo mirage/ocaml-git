@@ -303,6 +303,10 @@ module IO (D: Hash.DIGEST) (I: Inflate.S) = struct
       let hunks = aux [] in
       { source; hunks; source_length; result_length }
 
+    let input_hunks_result_size buf =
+      let _source_length = input_le_base_128 buf in
+      input_le_base_128 buf
+
     let add_hunks buf t =
       let { source_length; result_length; hunks; _ } = t in
       add_le_base_128 buf source_length;
@@ -383,6 +387,30 @@ module IO (D: Hash.DIGEST) (I: Inflate.S) = struct
         let base  = Hash_IO.input buf in
         let hunks = with_inflated buf size (input_hunks base) in
         Ref_delta hunks
+      | _     -> assert false
+
+    let size buf =
+      let byte = Mstruct.get_uint8 buf in
+      let more = (byte land 0x80) <> 0 in
+      let kind = (byte land 0x70) lsr 4 in
+      let size =
+        let low = (byte land 0x0f) in
+        if more then
+          let ss = input_le_base_128 buf in
+          low lor (ss lsl 4)
+        else low in
+      Log.debug (fun l -> l "size: kind:%d size:%d (more=%b)" kind size more);
+      match kind with
+      | 0b000 -> Mstruct.parse_error "invalid: 0 is reserved"
+      | 0b001 | 0b010 | 0b011 | 0b100 -> size
+      | 0b101 -> Mstruct.parse_error "invalid: 5 is reserved"
+      | 0b110 ->
+        ignore (input_be_modified_base_128 buf);
+        (* This is a bit inefficient. We only need to decompress the first few bytes. *)
+        with_inflated buf size input_hunks_result_size
+      | 0b111 ->
+        ignore (Hash_IO.input buf);
+        with_inflated buf size input_hunks_result_size
       | _     -> assert false
 
     let inflated_buffer = Buffer.create 1024
@@ -557,6 +585,9 @@ module IO (D: Hash.DIGEST) (I: Inflate.S) = struct
     (* FIXME: costly, allocates a bigarray *)
     Value_IO.input_inflated (Mstruct.of_string u)
 
-  module type IO = Object.IO with type t = kind
+  module type IO = sig
+    include Object.IO with type t = kind
+    val size: Mstruct.t -> int
+  end
 
 end

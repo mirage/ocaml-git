@@ -51,6 +51,9 @@ module type S = sig
 
   (** {2 Objects} *)
 
+  val size: t -> Hash.t -> int option Lwt.t
+  (** Return the size of the blob having the given Hash name. *)
+
   val read: t -> Hash.t -> Value.t option Lwt.t
   (** Return the object having the given Hash name. *)
 
