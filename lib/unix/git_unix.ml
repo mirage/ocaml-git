@@ -384,7 +384,7 @@ module IO_FS = struct
 
 end
 
-module Zlib = Git.Inflate.Make(Zlib)
+module Zlib = Git.Inflate.Decompress
 
 module SHA1 = struct
 
@@ -440,7 +440,7 @@ module Make (D: Git.Hash.DIGEST) (I: Git.Inflate.S) = struct
 
 end
 
-module M = Make(SHA1)(Zlib)
+module M = Make(SHA1)(Git.Inflate.Decompress)
 include M
 
 module type S = sig

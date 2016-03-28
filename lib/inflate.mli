@@ -49,3 +49,4 @@ module type ZLIB = sig
 end
 
 module Make (Z: ZLIB): S
+module Decompress : S
