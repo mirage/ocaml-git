@@ -122,6 +122,11 @@ module IO (D: Hash.DIGEST) (I: Inflate.S) = struct
       | 3 -> Packed_value_IO.V3.input buf
       | _ -> fail "pack version should be 2 or 3"
 
+    let size_packed_value ~version buf = match version with
+      | 2 -> Packed_value_IO.V2.size buf
+      | 3 -> Packed_value_IO.V3.size buf
+      | _ -> fail "pack version should be 2 or 3"
+
     let read_packed_value name ~index buf hash =
       let `Version version, `Count count = input_header buf in
       Log.debug (fun log ->
@@ -151,6 +156,19 @@ module IO (D: Hash.DIGEST) (I: Inflate.S) = struct
       | Some (version, ba, v) ->
         Packed_value_IO.unpack ~version ~read ~index ~ba v >|=
         fun x -> Some x
+
+    let size ~index buf hash =
+      let `Version version, `Count count = input_header buf in
+      Log.debug (fun log ->
+          log "size: %a version=%d count=%d" Hash.pp hash version count);
+      match index hash with
+      | None -> Lwt.return_none
+      | Some offset ->
+        Log.debug (fun l -> l "size: offset=%d" offset);
+        let orig_off = Mstruct.offset buf in
+        let shift = offset - orig_off in
+        Mstruct.shift buf shift;
+        Lwt.return (Some (size_packed_value ~version buf))
 
     let to_pic ?(progress=fun _ -> ())  ~read values =
       Log.debug (fun l -> l "to_pic");
@@ -419,6 +437,7 @@ module type IO = sig
       Mstruct.t -> Hash.t -> Value.t option Lwt.t
     val read_inflated: index:Pack_index.f -> read:Value.read_inflated ->
       Mstruct.t -> Hash.t -> string option Lwt.t
+    val size: index:Pack_index.f -> Mstruct.t -> Hash.t -> int option Lwt.t
   end
   type raw = Raw.t
   val of_raw: ?progress:(string -> unit) -> Raw.t -> t Lwt.t

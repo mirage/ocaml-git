@@ -109,6 +109,8 @@ module type IO = sig
       Mstruct.t -> Hash.t -> string option Lwt.t
     (** Same as {!read} but for inflated values. *)
 
+    val size: index:Pack_index.f -> Mstruct.t -> Hash.t -> int option Lwt.t
+    (** [size ~index buf h] is the (uncompressed) size of [h]. *)
   end
 
   type raw = Raw.t
