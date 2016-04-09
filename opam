@@ -32,6 +32,7 @@ depends: [
   "hex"
   "astring"
   "crc"
+  "decompress"       {>= "0.4"}
   "alcotest"         {test}
   "mirage-types-lwt" {test}
   "mirage-http"      {test}
