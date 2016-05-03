@@ -139,7 +139,7 @@ let unpack =
   mk_flag ["unpack"] "Unpack the received pack archive."
 
 let run t =
-  Lwt_unix.run (
+  Lwt_main.run (
     Lwt.catch
       (fun () -> t)
       (function e -> eprintf "%s\n%!" (Printexc.to_string e); exit 1)
