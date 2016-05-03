@@ -1,4 +1,4 @@
-### 1.8.0
+### 1.8.0 (2016-05-03)
 
 * References can point to non-commit hashed (#123, @samoht)
 * Rename `Git.SHA` into `Git.Hash` (@samoht)
@@ -7,6 +7,14 @@
 * Fix the API so that references can point to any kind of hashes (#123, @samoht)
 * Fix duplicated references when mixing packed and loose references
   (#124, @samoht)
+* Use astring, logs and fmt (@samoht)
+* Add `Store.size`. Before, the only way to get the size of a file was to
+  decompress the whole thing. The main win comes from getting the size of raw
+  packed objects without decompressing. (#143, @talex5)
+* Workaround a memory leak in lwt: See ocsigen/lwt#229, which caused
+  `IO.rec_file` and thus the watch mechanism on Unix to leak memory
+  (#146, @samoht)
+* Fix performance regression when reading large files (#147, @chambart)
 
 ### 1.7.3 (2016-02-19)
 
