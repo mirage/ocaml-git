@@ -9,7 +9,7 @@
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
-<link title="SHA" rel="Chapter" href="SHA.html">
+<link title="Hash" rel="Chapter" href="Hash.html">
 <link title="Inflate" rel="Chapter" href="Inflate.html">
 <link title="Object" rel="Chapter" href="Object.html">
 <link title="Object_type" rel="Chapter" href="Object_type.html">
@@ -76,9 +76,9 @@ Add the serialization of the value to an already existing
 Append the given object header to a buffer.
 </div>
 </td></tr>
-<tr><td><a href="SHA.H.html#VALadd_hex">add_hex</a> [<a href="SHA.H.html">SHA.H</a>]</td>
+<tr><td><a href="Hash.H.html#VALadd_hex">add_hex</a> [<a href="Hash.H.html">Hash.H</a>]</td>
 <td><div class="info">
-Add the hex-encoding of the SHA value to the buffer.
+Add the hex-encoding of the hash value to the buffer.
 </div>
 </td></tr>
 <tr><td><a href="Value.IO.html#VALadd_inflated">add_inflated</a> [<a href="Value.IO.html">Value.IO</a>]</td>
@@ -100,10 +100,10 @@ Append the inflated representation of a packed value to a given
 <tr><td><a href="Misc.Map.html#VALadd_multi">add_multi</a> [<a href="Misc.Map.html">Misc.Map</a>]</td>
 <td></td></tr>
 <tr><td align="left"><br>B</td></tr>
-<tr><td><a href="SHA.Array.html#VALbinary_search">binary_search</a> [<a href="SHA.Array.html">SHA.Array</a>]</td>
+<tr><td><a href="Hash.Array.html#VALbinary_search">binary_search</a> [<a href="Hash.Array.html">Hash.Array</a>]</td>
 <td><div class="info">
-<code class="code">binary_search buf shat1</code> binary searches through the sorted
-      array of hashes stored in <code class="code">buf</code>.
+<code class="code">binary_search buf h</code> binary searches through the sorted array
+      of hashes stored in <code class="code">buf</code>.
 </div>
 </td></tr>
 <tr><td><a href="Value.html#VALblob">blob</a> [<a href="Value.html">Value</a>]</td>
@@ -140,6 +140,12 @@ Empty the cache.
 <tr><td><a href="Memory.Make.html#VALclear_all">clear_all</a> [<a href="Memory.Make.html">Memory.Make</a>]</td>
 <td><div class="info">
 Remove all the contents store in memory for all roots.
+</div>
+</td></tr>
+<tr><td><a href="Sync.S.html#VALclone">clone</a> [<a href="Sync.S.html">Sync.S</a>]</td>
+<td><div class="info">
+Similar to <a href="Sync.S.html#VALfetch"><code class="code"><span class="constructor">Sync</span>.<span class="constructor">S</span>.fetch</code></a> but also initialise <code class="code"><span class="constructor">HEAD</span></code> and a the
+      specified <code class="code">branch</code>.
 </div>
 </td></tr>
 <tr><td><a href="Global_graph.Make.html#VALclosure">closure</a> [<a href="Global_graph.Make.html">Global_graph.Make</a>]</td>
@@ -201,13 +207,11 @@ Create a (not very well compressed) pack file.
 Create a file on the filesystem, with the given mode.
 </div>
 </td></tr>
-<tr><td><a href="SHA.DIGEST.html#VALcstruct">cstruct</a> [<a href="SHA.DIGEST.html">SHA.DIGEST</a>]</td>
+<tr><td><a href="Hash.DIGEST.html#VALcstruct">cstruct</a> [<a href="Hash.DIGEST.html">Hash.DIGEST</a>]</td>
 <td></td></tr>
 <tr><td><a href="Version.html#VALcurrent">current</a> [<a href="Version.html">Version</a>]</td>
 <td></td></tr>
 <tr><td align="left"><br>D</td></tr>
-<tr><td><a href="Misc.Log_make.html#VALdebugk">debugk</a> [<a href="Misc.Log_make.html">Misc.Log_make</a>]</td>
-<td></td></tr>
 <tr><td><a href="Inflate.S.html#VALdeflate">deflate</a> [<a href="Inflate.S.html">Inflate.S</a>]</td>
 <td><div class="info">
 Deflate an cstruct.
@@ -249,11 +253,7 @@ Are two objects equal?
 Compare head contents.
 </div>
 </td></tr>
-<tr><td><a href="Misc.Log_make.html#VALerrork">errork</a> [<a href="Misc.Log_make.html">Misc.Log_make</a>]</td>
-<td></td></tr>
 <tr><td align="left"><br>F</td></tr>
-<tr><td><a href="Misc.Log_make.html#VALfatalk">fatalk</a> [<a href="Misc.Log_make.html">Misc.Log_make</a>]</td>
-<td></td></tr>
 <tr><td><a href="Sync.S.html#VALfetch">fetch</a> [<a href="Sync.S.html">Sync.S</a>]</td>
 <td><div class="info">
 <code class="code">fetch t uri</code> fetches the contents of <code class="code">uri</code> into the store <code class="code">t</code>.
@@ -276,7 +276,7 @@ List the subfiles.
 </td></tr>
 <tr><td><a href="Packed_refs.html#VALfind">find</a> [<a href="Packed_refs.html">Packed_refs</a>]</td>
 <td><div class="info">
-<code class="code">find t r</code> is <code class="code">r</code>'s SHA1 in <code class="code">t</code>.
+<code class="code">find t r</code> is <code class="code">r</code>'s hash in <code class="code">t</code>.
 </div>
 </td></tr>
 <tr><td><a href="Value.Cache.html#VALfind">find</a> [<a href="Value.Cache.html">Value.Cache</a>]</td>
@@ -292,7 +292,7 @@ Same as <a href="Value.Cache.html#VALfind"><code class="code"><span class="const
 </td></tr>
 <tr><td><a href="Pack_index.Make.html#VALfind_offset">find_offset</a> [<a href="Pack_index.Make.html">Pack_index.Make</a>]</td>
 <td><div class="info">
-<code class="code">find_offset</code> searches the index for the offset of the SHA object.
+<code class="code">find_offset</code> searches the index for the offset of the Hash object.
 </div>
 </td></tr>
 <tr><td><a href="Pack_index.Raw.html#VALfind_offset">find_offset</a> [<a href="Pack_index.Raw.html">Pack_index.Raw</a>]</td>
@@ -311,7 +311,7 @@ Flush the channel.
 </div>
 </td></tr>
 <tr><td align="left"><br>G</td></tr>
-<tr><td><a href="SHA.Array.html#VALget">get</a> [<a href="SHA.Array.html">SHA.Array</a>]</td>
+<tr><td><a href="Hash.Array.html#VALget">get</a> [<a href="Hash.Array.html">Hash.Array</a>]</td>
 <td><div class="info">
 <code class="code">get buf n</code> is the <code class="code">n</code>-th hash in the buffer <code class="code">buf</code>.
 </div>
@@ -327,6 +327,11 @@ Get the current working directory.
 <tr><td><a href="Object.S.html#VALhash">hash</a> [<a href="Object.S.html">Object.S</a>]</td>
 <td><div class="info">
 Hash an object.
+</div>
+</td></tr>
+<tr><td><a href="Sync.Result.html#VALhashes">hashes</a> [<a href="Sync.Result.html">Sync.Result</a>]</td>
+<td><div class="info">
+<code class="code">hashes f</code> are <code class="code">f</code>'s object hashes.
 </div>
 </td></tr>
 <tr><td><a href="Sync.Result.html#VALhead">head</a> [<a href="Sync.Result.html">Sync.Result</a>]</td>
@@ -355,9 +360,9 @@ Build a head contents from a commit hash.
 Parse the contents of HEAD
 </div>
 </td></tr>
-<tr><td><a href="SHA.S.html#VALhex_length">hex_length</a> [<a href="SHA.S.html">SHA.S</a>]</td>
+<tr><td><a href="Hash.S.html#VALhex_length">hex_length</a> [<a href="Hash.S.html">Hash.S</a>]</td>
 <td><div class="info">
-The number of hex digits in the SHA.
+The number of hex digits in the hash.
 </div>
 </td></tr>
 <tr><td align="left"><br>I</td></tr>
@@ -376,8 +381,6 @@ Inflate an mstruct.
 <tr><td><a href="Inflate.ZLIB.html#VALinflate_end">inflate_end</a> [<a href="Inflate.ZLIB.html">Inflate.ZLIB</a>]</td>
 <td></td></tr>
 <tr><td><a href="Inflate.ZLIB.html#VALinflate_init">inflate_init</a> [<a href="Inflate.ZLIB.html">Inflate.ZLIB</a>]</td>
-<td></td></tr>
-<tr><td><a href="Misc.Log_make.html#VALinfok">infok</a> [<a href="Misc.Log_make.html">Misc.Log_make</a>]</td>
 <td></td></tr>
 <tr><td><a href="Pack_index.Make.html#VALinput">input</a> [<a href="Pack_index.Make.html">Pack_index.Make</a>]</td>
 <td><div class="info">
@@ -408,9 +411,9 @@ Build a value from an inflated contents.
       3) and the <code class="code">count</code> of packed values in the pack file.
 </div>
 </td></tr>
-<tr><td><a href="SHA.H.html#VALinput_hex">input_hex</a> [<a href="SHA.H.html">SHA.H</a>]</td>
+<tr><td><a href="Hash.H.html#VALinput_hex">input_hex</a> [<a href="Hash.H.html">Hash.H</a>]</td>
 <td><div class="info">
-Read an hex-encode SHA value.
+Read an hex-encoded hash value.
 </div>
 </td></tr>
 <tr><td><a href="Value.IO.html#VALinput_inflated">input_inflated</a> [<a href="Value.IO.html">Value.IO</a>]</td>
@@ -436,14 +439,14 @@ Check if a packed value is a delta (either a <code class="code"><span class="con
 Is the given reference the HEAD ?
 </div>
 </td></tr>
-<tr><td><a href="SHA.S.html#VALis_prefix">is_prefix</a> [<a href="SHA.S.html">SHA.S</a>]</td>
+<tr><td><a href="Hash.S.html#VALis_prefix">is_prefix</a> [<a href="Hash.S.html">Hash.S</a>]</td>
 <td><div class="info">
-Check if a SHA is a prefix of another SHA.
+Check if a hash is a prefix of another hash.
 </div>
 </td></tr>
-<tr><td><a href="SHA.H.html#VALis_short">is_short</a> [<a href="SHA.H.html">SHA.H</a>]</td>
+<tr><td><a href="Hash.H.html#VALis_short">is_short</a> [<a href="Hash.H.html">Hash.H</a>]</td>
 <td><div class="info">
-Check if the SHA is short.
+Check if the hash is short.
 </div>
 </td></tr>
 <tr><td><a href="Reference.html#VALis_valid">is_valid</a> [<a href="Reference.html">Reference</a>]</td>
@@ -459,7 +462,7 @@ Check if a reference can be stored on disk properly.
 </td></tr>
 <tr><td><a href="Pack_index.Make.html#VALkeys">keys</a> [<a href="Pack_index.Make.html">Pack_index.Make</a>]</td>
 <td><div class="info">
-<code class="code">keys t</code> is the list of SHA1 keys present in <code class="code">t</code>.
+<code class="code">keys t</code> is the list of hash keys present in <code class="code">t</code>.
 </div>
 </td></tr>
 <tr><td><a href="Pack_index.Raw.html#VALkeys">keys</a> [<a href="Pack_index.Raw.html">Pack_index.Raw</a>]</td>
@@ -495,9 +498,9 @@ The kind of backend.
 </div>
 </td></tr>
 <tr><td align="left"><br>L</td></tr>
-<tr><td><a href="SHA.DIGEST.html#VALlength">length</a> [<a href="SHA.DIGEST.html">SHA.DIGEST</a>]</td>
+<tr><td><a href="Hash.DIGEST.html#VALlength">length</a> [<a href="Hash.DIGEST.html">Hash.DIGEST</a>]</td>
 <td></td></tr>
-<tr><td><a href="SHA.Array.html#VALlength">length</a> [<a href="SHA.Array.html">SHA.Array</a>]</td>
+<tr><td><a href="Hash.Array.html#VALlength">length</a> [<a href="Hash.Array.html">Hash.Array</a>]</td>
 <td><div class="info">
 <code class="code">length v</code> is the number of hashes store in <code class="code">t</code>.
 </div>
@@ -516,29 +519,27 @@ The compression <code class="code">level</code> used when creating new Git objec
 </td></tr>
 <tr><td><a href="Misc.html#VALlf">lf</a> [<a href="Misc.html">Misc</a>]</td>
 <td></td></tr>
-<tr><td><a href="SHA.Array.html#VALlinear_search">linear_search</a> [<a href="SHA.Array.html">SHA.Array</a>]</td>
+<tr><td><a href="Hash.Array.html#VALlinear_search">linear_search</a> [<a href="Hash.Array.html">Hash.Array</a>]</td>
 <td><div class="info">
-<code class="code">linear_search buf sha1</code> iterates through the hashes stored in
-      the buffer <code class="code">buf</code>.
+<code class="code">linear_search buf h</code> iterates through the hashes stored in the
+      buffer <code class="code">buf</code>.
 </div>
 </td></tr>
 <tr><td><a href="Store.S.html#VALlist">list</a> [<a href="Store.S.html">Store.S</a>]</td>
 <td><div class="info">
-Return the list of SHA names.
+Return the list of Hash names.
 </div>
 </td></tr>
 <tr><td><a href="Misc.html#VALlist_filter_map">list_filter_map</a> [<a href="Misc.html">Misc</a>]</td>
-<td></td></tr>
-<tr><td><a href="Misc.Log_make.html#VALlogk">logk</a> [<a href="Misc.Log_make.html">Misc.Log_make</a>]</td>
 <td></td></tr>
 <tr><td><a href="Sync.S.html#VALls">ls</a> [<a href="Sync.S.html">Sync.S</a>]</td>
 <td><div class="info">
 List the references of the remote repository.
 </div>
 </td></tr>
-<tr><td><a href="SHA.S.html#VALlt">lt</a> [<a href="SHA.S.html">SHA.S</a>]</td>
+<tr><td><a href="Hash.S.html#VALlt">lt</a> [<a href="Hash.S.html">Hash.S</a>]</td>
 <td><div class="info">
-(&lt;) relation between SHAs.
+(&lt;) relation between hash.
 </div>
 </td></tr>
 <tr><td><a href="Misc.html#VALlt">lt</a> [<a href="Misc.html">Misc</a>]</td>
@@ -562,7 +563,7 @@ Check whether a key belongs to the store.
 </td></tr>
 <tr><td><a href="Pack_index.Make.html#VALmem">mem</a> [<a href="Pack_index.Make.html">Pack_index.Make</a>]</td>
 <td><div class="info">
-<code class="code">mem</code> checks if the SHA object is contained in the index object
+<code class="code">mem</code> checks if the Hash object is contained in the index object
 </div>
 </td></tr>
 <tr><td><a href="Store.S.html#VALmem_reference">mem_reference</a> [<a href="Store.S.html">Store.S</a>]</td>
@@ -576,6 +577,21 @@ Create a directory (and the parent dirs if needed).
 </div>
 </td></tr>
 <tr><td align="left"><br>N</td></tr>
+<tr><td><a href="Packed_value.PIC.html#VALname">name</a> [<a href="Packed_value.PIC.html">Packed_value.PIC</a>]</td>
+<td><div class="info">
+<code class="code">name t</code> is <code class="code">t</code>'s name.
+</div>
+</td></tr>
+<tr><td><a href="Pack.Raw.html#VALname">name</a> [<a href="Pack.Raw.html">Pack.Raw</a>]</td>
+<td><div class="info">
+Get the name of the pack.
+</div>
+</td></tr>
+<tr><td><a href="Value.IO.html#VALname">name</a> [<a href="Value.IO.html">Value.IO</a>]</td>
+<td><div class="info">
+Return the hash of the serialized contents.
+</div>
+</td></tr>
 <tr><td><a href="Misc.html#VALnul">nul</a> [<a href="Misc.html">Misc</a>]</td>
 <td></td></tr>
 <tr><td><a href="Misc.html#VALnul_str">nul_str</a> [<a href="Misc.html">Misc</a>]</td>
@@ -583,19 +599,19 @@ Create a directory (and the parent dirs if needed).
 <tr><td align="left"><br>O</td></tr>
 <tr><td><a href="Misc.Map.html#VALof_alist">of_alist</a> [<a href="Misc.Map.html">Misc.Map</a>]</td>
 <td></td></tr>
-<tr><td><a href="SHA.html#VALof_blob">of_blob</a> [<a href="SHA.html">SHA</a>]</td>
+<tr><td><a href="Hash.html#VALof_blob">of_blob</a> [<a href="Hash.html">Hash</a>]</td>
 <td><div class="info">
 A blob node is also a node.
 </div>
 </td></tr>
-<tr><td><a href="SHA.html#VALof_commit">of_commit</a> [<a href="SHA.html">SHA</a>]</td>
+<tr><td><a href="Hash.html#VALof_commit">of_commit</a> [<a href="Hash.html">Hash</a>]</td>
 <td><div class="info">
 A commit node is also a node.
 </div>
 </td></tr>
-<tr><td><a href="SHA.H.html#VALof_hex">of_hex</a> [<a href="SHA.H.html">SHA.H</a>]</td>
+<tr><td><a href="Hash.H.html#VALof_hex">of_hex</a> [<a href="Hash.H.html">Hash.H</a>]</td>
 <td><div class="info">
-Convert an hex-encoded string into a sha1 value.
+Convert an hex-encoded string into a hash value.
 </div>
 </td></tr>
 <tr><td><a href="Global_graph.Make.html#VALof_keys">of_keys</a> [<a href="Global_graph.Make.html">Global_graph.Make</a>]</td>
@@ -626,14 +642,14 @@ Transform a raw pack file into a position-independant pack
 <td></td></tr>
 <tr><td><a href="Blob.html#VALof_raw">of_raw</a> [<a href="Blob.html">Blob</a>]</td>
 <td></td></tr>
-<tr><td><a href="SHA.S.html#VALof_raw">of_raw</a> [<a href="SHA.S.html">SHA.S</a>]</td>
+<tr><td><a href="Hash.S.html#VALof_raw">of_raw</a> [<a href="Hash.S.html">Hash.S</a>]</td>
 <td><div class="info">
-Abstract a raw SHA value.
+Abstract a raw hash value.
 </div>
 </td></tr>
-<tr><td><a href="SHA.H.html#VALof_short_hex">of_short_hex</a> [<a href="SHA.H.html">SHA.H</a>]</td>
+<tr><td><a href="Hash.H.html#VALof_short_hex">of_short_hex</a> [<a href="Hash.H.html">Hash.H</a>]</td>
 <td><div class="info">
-Same as <a href="SHA.H.html#VALof_hex"><code class="code"><span class="constructor">SHA</span>.<span class="constructor">H</span>.of_hex</code></a> but allow values shorter than 20
+Same as <a href="Hash.H.html#VALof_hex"><code class="code"><span class="constructor">Hash</span>.<span class="constructor">H</span>.of_hex</code></a> but allow values shorter than 20
       characters.
 </div>
 </td></tr>
@@ -644,7 +660,7 @@ Create a GRI from a string.
 </td></tr>
 <tr><td><a href="Object_type.html#VALof_string">of_string</a> [<a href="Object_type.html">Object_type</a>]</td>
 <td></td></tr>
-<tr><td><a href="SHA.html#VALof_tree">of_tree</a> [<a href="SHA.html">SHA</a>]</td>
+<tr><td><a href="Hash.html#VALof_tree">of_tree</a> [<a href="Hash.html">Hash</a>]</td>
 <td><div class="info">
 A tree node is also a node.
 </div>
@@ -665,14 +681,21 @@ Cast from <code class="code"><span class="constructor">Uri</span>.t</code>.
 Return a packed (closed) collection of objects.
 </div>
 </td></tr>
-<tr><td><a href="Sync.S.html#VALpopulate">populate</a> [<a href="Sync.S.html">Sync.S</a>]</td>
-<td><div class="info">
-Populate a fresh repository after a fetch.
-</div>
-</td></tr>
 <tr><td><a href="Object.S.html#VALpp">pp</a> [<a href="Object.S.html">Object.S</a>]</td>
 <td><div class="info">
-Same as <a href="Object.S.html#VALpretty"><code class="code"><span class="constructor">Object</span>.<span class="constructor">S</span>.pretty</code></a> but using a generic formatter.
+<code class="code">pp</code> is the pretty-printer for values of type <code class="code">t</code>.
+</div>
+</td></tr>
+<tr><td><a href="Misc.Map.html#VALpp">pp</a> [<a href="Misc.Map.html">Misc.Map</a>]</td>
+<td></td></tr>
+<tr><td><a href="Misc.Set.html#VALpp">pp</a> [<a href="Misc.Set.html">Misc.Set</a>]</td>
+<td></td></tr>
+<tr><td><a href="Misc.OrderedType.html#VALpp">pp</a> [<a href="Misc.OrderedType.html">Misc.OrderedType</a>]</td>
+<td></td></tr>
+<tr><td><a href="Sync.html#VALpp_capability">pp_capability</a> [<a href="Sync.html">Sync</a>]</td>
+<td><div class="info">
+<code class="code">pp_capability</code> it the pretty-printer for values of type
+    <a href="Sync.html#VALpp_capability"><code class="code"><span class="constructor">Sync</span>.pp_capability</code></a>.
 </div>
 </td></tr>
 <tr><td><a href="Index.html#VALpp_entry">pp_entry</a> [<a href="Index.html">Index</a>]</td>
@@ -683,6 +706,11 @@ Human-readable representation of an index entry.
 <tr><td><a href="Index.html#VALpp_extension">pp_extension</a> [<a href="Index.html">Index</a>]</td>
 <td><div class="info">
 Human-readable representation of the extension.
+</div>
+</td></tr>
+<tr><td><a href="Sync.Result.html#VALpp_fetch">pp_fetch</a> [<a href="Sync.Result.html">Sync.Result</a>]</td>
+<td><div class="info">
+<code class="code">pp_fetch</code> is the pretty-printer for <a href="Sync.Result.html#TYPEfetch"><code class="code"><span class="constructor">Sync</span>.<span class="constructor">Result</span>.fetch</code></a> values.
 </div>
 </td></tr>
 <tr><td><a href="Reference.html#VALpp_head_contents">pp_head_contents</a> [<a href="Reference.html">Reference</a>]</td>
@@ -700,9 +728,19 @@ Pretty-print packed values' kind.
 Pretty print file modes.
 </div>
 </td></tr>
+<tr><td><a href="Sync.Result.html#VALpp_push">pp_push</a> [<a href="Sync.Result.html">Sync.Result</a>]</td>
+<td><div class="info">
+<code class="code">pp_push</code> is the pretty-printer for <a href="Sync.Result.html#TYPEpush"><code class="code"><span class="constructor">Sync</span>.<span class="constructor">Result</span>.push</code></a> values.
+</div>
+</td></tr>
 <tr><td><a href="Index.html#VALpp_stats">pp_stats</a> [<a href="Index.html">Index</a>]</td>
 <td><div class="info">
 Pretty-print file stats.
+</div>
+</td></tr>
+<tr><td><a href="Sync.html#VALpp_want">pp_want</a> [<a href="Sync.html">Sync</a>]</td>
+<td><div class="info">
+<code class="code">pp_want</code> is the pretty-printer for values of type <a href="Sync.html#TYPEwant"><code class="code"><span class="constructor">Sync</span>.want</code></a>.
 </div>
 </td></tr>
 <tr><td><a href="Search.Make.html#VALpred">pred</a> [<a href="Search.Make.html">Search.Make</a>]</td>
@@ -711,32 +749,9 @@ Pretty-print file stats.
       <code class="code">t</code>.
 </div>
 </td></tr>
-<tr><td><a href="Object.S.html#VALpretty">pretty</a> [<a href="Object.S.html">Object.S</a>]</td>
-<td><div class="info">
-Human readable represenation of the object.
-</div>
-</td></tr>
-<tr><td><a href="Misc.Map.html#VALpretty">pretty</a> [<a href="Misc.Map.html">Misc.Map</a>]</td>
-<td></td></tr>
-<tr><td><a href="Misc.Set.html#VALpretty">pretty</a> [<a href="Misc.Set.html">Misc.Set</a>]</td>
-<td></td></tr>
-<tr><td><a href="Misc.OrderedType.html#VALpretty">pretty</a> [<a href="Misc.OrderedType.html">Misc.OrderedType</a>]</td>
-<td></td></tr>
-<tr><td><a href="Misc.html#VALpretty">pretty</a> [<a href="Misc.html">Misc</a>]</td>
-<td></td></tr>
-<tr><td><a href="Sync.Result.html#VALpretty_fetch">pretty_fetch</a> [<a href="Sync.Result.html">Sync.Result</a>]</td>
-<td><div class="info">
-Pretty print a fetch result.
-</div>
-</td></tr>
 <tr><td><a href="Tree.html#VALpretty_perm">pretty_perm</a> [<a href="Tree.html">Tree</a>]</td>
 <td><div class="info">
 Pretty printing of tree permissions.
-</div>
-</td></tr>
-<tr><td><a href="Sync.Result.html#VALpretty_push">pretty_push</a> [<a href="Sync.Result.html">Sync.Result</a>]</td>
-<td><div class="info">
-Pretty print a push status.
 </div>
 </td></tr>
 <tr><td><a href="Sync.html#VALprotocol">protocol</a> [<a href="Sync.html">Sync</a>]</td>
@@ -757,7 +772,7 @@ Push a local branch to a remote store.
 </td></tr>
 <tr><td><a href="Store.S.html#VALread">read</a> [<a href="Store.S.html">Store.S</a>]</td>
 <td><div class="info">
-Return the object having the given SHA name.
+Return the object having the given Hash name.
 </div>
 </td></tr>
 <tr><td><a href="Pack.IO.Raw.html#VALread">read</a> [<a href="Pack.IO.Raw.html">Pack.IO.Raw</a>]</td>
@@ -784,7 +799,7 @@ Read a given number of bytes.
 <tr><td><a href="Store.S.html#VALread_exn">read_exn</a> [<a href="Store.S.html">Store.S</a>]</td>
 <td><div class="info">
 Same as <code class="code">read</code> but raises <code class="code"><span class="constructor">Not_found</span></code> if no object with the given
-      SHA is found.
+      Hash is found.
 </div>
 </td></tr>
 <tr><td><a href="Pack.IO.html#VALread_exn">read_exn</a> [<a href="Pack.IO.html">Pack.IO</a>]</td>
@@ -887,26 +902,6 @@ Empty the current LRU cache, and create a new one with the given
       size.
 </div>
 </td></tr>
-<tr><td><a href="Packed_value.PIC.html#VALsha1">sha1</a> [<a href="Packed_value.PIC.html">Packed_value.PIC</a>]</td>
-<td><div class="info">
-<code class="code">sha1 t</code> is <code class="code">t</code>'s SHA1.
-</div>
-</td></tr>
-<tr><td><a href="Pack.Raw.html#VALsha1">sha1</a> [<a href="Pack.Raw.html">Pack.Raw</a>]</td>
-<td><div class="info">
-Get the name of the pack.
-</div>
-</td></tr>
-<tr><td><a href="Value.IO.html#VALsha1">sha1</a> [<a href="Value.IO.html">Value.IO</a>]</td>
-<td><div class="info">
-Return the SHA of the serialized contents.
-</div>
-</td></tr>
-<tr><td><a href="Sync.Result.html#VALsha1s">sha1s</a> [<a href="Sync.Result.html">Sync.Result</a>]</td>
-<td><div class="info">
-<code class="code">sha1s f</code> are <code class="code">f</code>'s object hashes.
-</div>
-</td></tr>
 <tr><td><a href="Packed_value.PIC.html#VALshallow">shallow</a> [<a href="Packed_value.PIC.html">Packed_value.PIC</a>]</td>
 <td><div class="info">
 <code class="code">shallow t</code> is true iff <code class="code">t</code> is not included in the pack file.
@@ -914,14 +909,30 @@ Return the SHA of the serialized contents.
 </td></tr>
 <tr><td><a href="Packed_value.html#VALshallow">shallow</a> [<a href="Packed_value.html">Packed_value</a>]</td>
 <td><div class="info">
-<code class="code">shallow p t</code> checks whether the SHAs appearing in <code class="code">t</code> also appear
+<code class="code">shallow p t</code> checks whether the Hashs appearing in <code class="code">t</code> also appear
     in the pack file <code class="code">p</code>.
 </div>
 </td></tr>
 <tr><td><a href="Pack.Raw.html#VALshallow">shallow</a> [<a href="Pack.Raw.html">Pack.Raw</a>]</td>
 <td><div class="info">
-<code class="code">shallow t</code> is true if all the SHA references appearing in <code class="code">t</code>
+<code class="code">shallow t</code> is true if all the Hash references appearing in <code class="code">t</code>
       corresponds to objects also in <code class="code">t</code>.
+</div>
+</td></tr>
+<tr><td><a href="Store.S.html#VALsize">size</a> [<a href="Store.S.html">Store.S</a>]</td>
+<td><div class="info">
+Return the size of the blob having the given Hash name.
+</div>
+</td></tr>
+<tr><td><a href="Packed_value.IO.IO.html#VALsize">size</a> [<a href="Packed_value.IO.IO.html">Packed_value.IO.IO</a>]</td>
+<td><div class="info">
+Get size of the value that <code class="code">input</code> would return, without actually
+        decompressing the value.
+</div>
+</td></tr>
+<tr><td><a href="Pack.IO.Raw.html#VALsize">size</a> [<a href="Pack.IO.Raw.html">Pack.IO.Raw</a>]</td>
+<td><div class="info">
+<code class="code">size ~index buf h</code> is the (uncompressed) size of <code class="code">h</code>.
 </div>
 </td></tr>
 <tr><td><a href="Packed_value.html#VALsource_length">source_length</a> [<a href="Packed_value.html">Packed_value</a>]</td>
@@ -933,22 +944,14 @@ Return the lenght of the base (source) object.
 <td></td></tr>
 <tr><td><a href="Misc.html#VALsp_str">sp_str</a> [<a href="Misc.html">Misc</a>]</td>
 <td></td></tr>
+<tr><td><a href="Misc.html#VALsrc_log">src_log</a> [<a href="Misc.html">Misc</a>]</td>
+<td></td></tr>
 <tr><td><a href="FS.IO.html#VALstat_info">stat_info</a> [<a href="FS.IO.html">FS.IO</a>]</td>
 <td><div class="info">
 Return the stats of the given file.
 </div>
 </td></tr>
-<tr><td><a href="SHA.DIGEST.html#VALstring">string</a> [<a href="SHA.DIGEST.html">SHA.DIGEST</a>]</td>
-<td></td></tr>
-<tr><td><a href="Misc.html#VALstring_chop_prefix">string_chop_prefix</a> [<a href="Misc.html">Misc</a>]</td>
-<td></td></tr>
-<tr><td><a href="Misc.html#VALstring_chop_suffix">string_chop_suffix</a> [<a href="Misc.html">Misc</a>]</td>
-<td></td></tr>
-<tr><td><a href="Misc.html#VALstring_exists">string_exists</a> [<a href="Misc.html">Misc</a>]</td>
-<td></td></tr>
-<tr><td><a href="Misc.html#VALstring_forall">string_forall</a> [<a href="Misc.html">Misc</a>]</td>
-<td></td></tr>
-<tr><td><a href="Misc.html#VALstring_mem">string_mem</a> [<a href="Misc.html">Misc</a>]</td>
+<tr><td><a href="Hash.DIGEST.html#VALstring">string</a> [<a href="Hash.DIGEST.html">Hash.DIGEST</a>]</td>
 <td></td></tr>
 <tr><td><a href="Git_mirage.FS.html#VALstring_of_error">string_of_error</a> [<a href="Git_mirage.FS.html">Git_mirage.FS</a>]</td>
 <td><div class="info">
@@ -960,7 +963,7 @@ Pretty-print errors.
 Raw represention of a permission, using the <code class="code"><span class="constructor">Git</span></code> format.
 </div>
 </td></tr>
-<tr><td><a href="SHA.Array.html#VALsub">sub</a> [<a href="SHA.Array.html">SHA.Array</a>]</td>
+<tr><td><a href="Hash.Array.html#VALsub">sub</a> [<a href="Hash.Array.html">Hash.Array</a>]</td>
 <td><div class="info">
 Same as <code class="code"><span class="constructor">Cstruct</span>.sub</code> but where <code class="code">offset</code> and <code class="code">length</code> as hash
       offsets.
@@ -974,12 +977,12 @@ Cast a tag to an object.
 </td></tr>
 <tr><td><a href="Misc.Map.html#VALto_alist">to_alist</a> [<a href="Misc.Map.html">Misc.Map</a>]</td>
 <td></td></tr>
-<tr><td><a href="SHA.html#VALto_blob">to_blob</a> [<a href="SHA.html">SHA</a>]</td>
+<tr><td><a href="Hash.html#VALto_blob">to_blob</a> [<a href="Hash.html">Hash</a>]</td>
 <td><div class="info">
 A node might be a blob node.
 </div>
 </td></tr>
-<tr><td><a href="SHA.html#VALto_commit">to_commit</a> [<a href="SHA.html">SHA</a>]</td>
+<tr><td><a href="Hash.html#VALto_commit">to_commit</a> [<a href="Hash.html">Hash</a>]</td>
 <td><div class="info">
 A node might be a commit.
 </div>
@@ -990,12 +993,12 @@ A node might be a commit.
       of the Git graph.
 </div>
 </td></tr>
-<tr><td><a href="SHA.S.html#VALto_hex">to_hex</a> [<a href="SHA.S.html">SHA.S</a>]</td>
+<tr><td><a href="Hash.S.html#VALto_hex">to_hex</a> [<a href="Hash.S.html">Hash.S</a>]</td>
 <td><div class="info">
-Display the hex encoding of the SHA hash.
+<code class="code">to_hex h</code> is <code class="code">h</code>s' hex encoding.
 </div>
 </td></tr>
-<tr><td><a href="SHA.Array.html#VALto_list">to_list</a> [<a href="SHA.Array.html">SHA.Array</a>]</td>
+<tr><td><a href="Hash.Array.html#VALto_list">to_list</a> [<a href="Hash.Array.html">Hash.Array</a>]</td>
 <td><div class="info">
 <code class="code">to_list t</code> is the list of elements of <code class="code">t</code>.
 </div>
@@ -1018,9 +1021,9 @@ Transform a position-independant pack file into a raw pack and
 <td></td></tr>
 <tr><td><a href="Blob.html#VALto_raw">to_raw</a> [<a href="Blob.html">Blob</a>]</td>
 <td></td></tr>
-<tr><td><a href="SHA.S.html#VALto_raw">to_raw</a> [<a href="SHA.S.html">SHA.S</a>]</td>
+<tr><td><a href="Hash.S.html#VALto_raw">to_raw</a> [<a href="Hash.S.html">Hash.S</a>]</td>
 <td><div class="info">
-Raw SHA value.
+Raw hash value.
 </div>
 </td></tr>
 <tr><td><a href="Gri.html#VALto_string">to_string</a> [<a href="Gri.html">Gri</a>]</td>
@@ -1030,7 +1033,7 @@ Convert a string to a GRI.
 </td></tr>
 <tr><td><a href="Object_type.html#VALto_string">to_string</a> [<a href="Object_type.html">Object_type</a>]</td>
 <td></td></tr>
-<tr><td><a href="SHA.html#VALto_tree">to_tree</a> [<a href="SHA.html">SHA</a>]</td>
+<tr><td><a href="Hash.html#VALto_tree">to_tree</a> [<a href="Hash.html">Hash</a>]</td>
 <td><div class="info">
 A node might be a node.
 </div>
@@ -1080,7 +1083,7 @@ Unpack a PICK value into a string.
 <tr><td><a href="Pack.IO.Raw.html#VALunpack">unpack</a> [<a href="Pack.IO.Raw.html">Pack.IO.Raw</a>]</td>
 <td><div class="info">
 Unpack a whole pack file on disk (by calling <code class="code">write</code> on every
-        values) and return the SHA1s of the written objects.
+        values) and return the Hash1s of the written objects.
 </div>
 </td></tr>
 <tr><td><a href="Packed_value.PIC.html#VALunpack_kind">unpack_kind</a> [<a href="Packed_value.PIC.html">Packed_value.PIC</a>]</td>
@@ -1096,8 +1099,6 @@ Unpack a PIC kind into a string.
 </div>
 </td></tr>
 <tr><td align="left"><br>W</td></tr>
-<tr><td><a href="Misc.Log_make.html#VALwarnk">warnk</a> [<a href="Misc.Log_make.html">Misc.Log_make</a>]</td>
-<td></td></tr>
 <tr><td><a href="Misc.html#VALwith_buffer">with_buffer</a> [<a href="Misc.html">Misc</a>]</td>
 <td><div class="info">
 Create a temporary buffer, apply a function to append stuff to it,
@@ -1118,7 +1119,7 @@ Connect to a remote server, get the corresponding input and
 </td></tr>
 <tr><td><a href="Store.S.html#VALwrite">write</a> [<a href="Store.S.html">Store.S</a>]</td>
 <td><div class="info">
-Write a value and return the SHA of its serialized contents.
+Write a value and return the Hash of its serialized contents.
 </div>
 </td></tr>
 <tr><td><a href="Sync.IO.html#VALwrite">write</a> [<a href="Sync.IO.html">Sync.IO</a>]</td>
@@ -1157,9 +1158,9 @@ Write a reference.
 </div>
 </td></tr>
 <tr><td align="left"><br>Z</td></tr>
-<tr><td><a href="SHA.H.html#VALzero">zero</a> [<a href="SHA.H.html">SHA.H</a>]</td>
+<tr><td><a href="Hash.H.html#VALzero">zero</a> [<a href="Hash.H.html">Hash.H</a>]</td>
 <td><div class="info">
-A SHA full of zero.
+A hash full of zero.
 </div>
 </td></tr>
 </table>

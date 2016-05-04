@@ -12,7 +12,7 @@
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
-<link title="SHA" rel="Chapter" href="SHA.html">
+<link title="Hash" rel="Chapter" href="Hash.html">
 <link title="Inflate" rel="Chapter" href="Inflate.html">
 <link title="Object" rel="Chapter" href="Object.html">
 <link title="Object_type" rel="Chapter" href="Object_type.html">
@@ -80,7 +80,7 @@ The type for position-independent packed values' kind.<br>
 <td align="left" valign="top" >
 <code>&nbsp;&nbsp;</code></td>
 <td align="left" valign="top" >
-<code><span id="TYPEELTt.sha1">sha1</span>&nbsp;: <code class="type">SHA.t</code>;</code></td>
+<code><span id="TYPEELTt.hash">hash</span>&nbsp;: <code class="type">Hash.t</code>;</code></td>
 
 </tr>
 <tr>
@@ -106,12 +106,12 @@ The type for postition-independant packed values. See <code class="code"><span c
 
 <pre><span class="keyword">include</span> <a href="Object.S.html">Object.S</a></pre>
 
-<pre><span id="VALcreate"><span class="keyword">val</span> create</span> : <code class="type">?raw:string -><br>       ?shallow:bool -> SHA.t -> <a href="Packed_value.PIC.html#TYPEkind">kind</a> -> <a href="Packed_value.PIC.html#TYPEt">t</a></code></pre><div class="info ">
+<pre><span id="VALcreate"><span class="keyword">val</span> create</span> : <code class="type">?raw:string -><br>       ?shallow:bool -> Hash.t -> <a href="Packed_value.PIC.html#TYPEkind">kind</a> -> <a href="Packed_value.PIC.html#TYPEt">t</a></code></pre><div class="info ">
 Create a position-independent packed value. By default,
       <code class="code">shallow</code> is <code class="code"><span class="keyword">false</span></code>.<br>
 </div>
 
-<pre><span id="VALof_raw"><span class="keyword">val</span> of_raw</span> : <code class="type">?shallow:bool -> SHA.t -> string -> <a href="Packed_value.PIC.html#TYPEt">t</a></code></pre><div class="info ">
+<pre><span id="VALof_raw"><span class="keyword">val</span> of_raw</span> : <code class="type">?shallow:bool -> Hash.t -> string -> <a href="Packed_value.PIC.html#TYPEt">t</a></code></pre><div class="info ">
 <code class="code">of_raw sha1 raw</code> is the position-independant packed value built
       by parsing <code class="code">raw</code>. By default <code class="code">shallow</code> is <code class="code"><span class="keyword">false</span></code>.<br>
 </div>
@@ -120,8 +120,8 @@ Create a position-independent packed value. By default,
 <code class="code">kind t</code> is <code class="code">t</code>'s kind.<br>
 </div>
 
-<pre><span id="VALsha1"><span class="keyword">val</span> sha1</span> : <code class="type"><a href="Packed_value.PIC.html#TYPEt">t</a> -> SHA.t</code></pre><div class="info ">
-<code class="code">sha1 t</code> is <code class="code">t</code>'s SHA1.<br>
+<pre><span id="VALname"><span class="keyword">val</span> name</span> : <code class="type"><a href="Packed_value.PIC.html#TYPEt">t</a> -> Hash.t</code></pre><div class="info ">
+<code class="code">name t</code> is <code class="code">t</code>'s name.<br>
 </div>
 
 <pre><span id="VALraw"><span class="keyword">val</span> raw</span> : <code class="type"><a href="Packed_value.PIC.html#TYPEt">t</a> -> string option</code></pre><div class="info ">

@@ -8,7 +8,7 @@
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
-<link title="SHA" rel="Chapter" href="SHA.html">
+<link title="Hash" rel="Chapter" href="Hash.html">
 <link title="Inflate" rel="Chapter" href="Inflate.html">
 <link title="Object" rel="Chapter" href="Object.html">
 <link title="Object_type" rel="Chapter" href="Object_type.html">
@@ -36,17 +36,17 @@
 <link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>FS.IO</title>
 </head>
 <body>
-<code class="code"><span class="keyword">sig</span><br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;getcwd&nbsp;:&nbsp;unit&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string&nbsp;<span class="constructor">Lwt</span>.t<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;realpath&nbsp;:&nbsp;string&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string&nbsp;<span class="constructor">Lwt</span>.t<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;mkdir&nbsp;:&nbsp;string&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit&nbsp;<span class="constructor">Lwt</span>.t<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;remove&nbsp;:&nbsp;string&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit&nbsp;<span class="constructor">Lwt</span>.t<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;file_exists&nbsp;:&nbsp;string&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;bool&nbsp;<span class="constructor">Lwt</span>.t<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;directories&nbsp;:&nbsp;string&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string&nbsp;list&nbsp;<span class="constructor">Lwt</span>.t<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;files&nbsp;:&nbsp;string&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string&nbsp;list&nbsp;<span class="constructor">Lwt</span>.t<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;rec_files&nbsp;:&nbsp;string&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string&nbsp;list&nbsp;<span class="constructor">Lwt</span>.t<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;read_file&nbsp;:&nbsp;string&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Cstruct</span>.t&nbsp;<span class="constructor">Lwt</span>.t<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;write_file&nbsp;:&nbsp;string&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;?temp_dir:string&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Cstruct</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit&nbsp;<span class="constructor">Lwt</span>.t<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;chmod&nbsp;:&nbsp;string&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;int&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit&nbsp;<span class="constructor">Lwt</span>.t<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;stat_info&nbsp;:&nbsp;string&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Index</span>.stat_info<br>
+<code class="code"><span class="keyword">sig</span>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;getcwd&nbsp;:&nbsp;unit&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string&nbsp;<span class="constructor">Lwt</span>.t
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;realpath&nbsp;:&nbsp;string&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string&nbsp;<span class="constructor">Lwt</span>.t
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;mkdir&nbsp;:&nbsp;string&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit&nbsp;<span class="constructor">Lwt</span>.t
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;remove&nbsp;:&nbsp;string&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit&nbsp;<span class="constructor">Lwt</span>.t
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;file_exists&nbsp;:&nbsp;string&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;bool&nbsp;<span class="constructor">Lwt</span>.t
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;directories&nbsp;:&nbsp;string&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string&nbsp;list&nbsp;<span class="constructor">Lwt</span>.t
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;files&nbsp;:&nbsp;string&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string&nbsp;list&nbsp;<span class="constructor">Lwt</span>.t
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;rec_files&nbsp;:&nbsp;string&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string&nbsp;list&nbsp;<span class="constructor">Lwt</span>.t
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;read_file&nbsp;:&nbsp;string&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Cstruct</span>.t&nbsp;<span class="constructor">Lwt</span>.t
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;write_file&nbsp;:&nbsp;string&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;?temp_dir:string&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Cstruct</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit&nbsp;<span class="constructor">Lwt</span>.t
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;chmod&nbsp;:&nbsp;string&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;int&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit&nbsp;<span class="constructor">Lwt</span>.t
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;stat_info&nbsp;:&nbsp;string&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Index</span>.stat_info
 <span class="keyword">end</span></code></body></html>

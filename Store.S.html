@@ -11,7 +11,7 @@
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
-<link title="SHA" rel="Chapter" href="SHA.html">
+<link title="Hash" rel="Chapter" href="Hash.html">
 <link title="Inflate" rel="Chapter" href="Inflate.html">
 <link title="Object" rel="Chapter" href="Object.html">
 <link title="Object_type" rel="Chapter" href="Object_type.html">
@@ -87,34 +87,38 @@ The compression <code class="code">level</code> used when creating new Git objec
 Dump the store contents to stderr.<br>
 </div>
 
-<pre><span id="VALcontents"><span class="keyword">val</span> contents</span> : <code class="type"><a href="Store.S.html#TYPEt">t</a> -> (SHA.t * <a href="Value.html#TYPEt">Value.t</a>) list Lwt.t</code></pre><div class="info ">
+<pre><span id="VALcontents"><span class="keyword">val</span> contents</span> : <code class="type"><a href="Store.S.html#TYPEt">t</a> -> (Hash.t * <a href="Value.html#TYPEt">Value.t</a>) list Lwt.t</code></pre><div class="info ">
 Get the full store contents.<br>
 </div>
 <br>
 <h2 id="2_Objects">Objects</h2><br>
 
-<pre><span id="VALread"><span class="keyword">val</span> read</span> : <code class="type"><a href="Store.S.html#TYPEt">t</a> -> SHA.t -> <a href="Value.html#TYPEt">Value.t</a> option Lwt.t</code></pre><div class="info ">
-Return the object having the given SHA name.<br>
+<pre><span id="VALsize"><span class="keyword">val</span> size</span> : <code class="type"><a href="Store.S.html#TYPEt">t</a> -> Hash.t -> int option Lwt.t</code></pre><div class="info ">
+Return the size of the blob having the given Hash name.<br>
 </div>
 
-<pre><span id="VALread_exn"><span class="keyword">val</span> read_exn</span> : <code class="type"><a href="Store.S.html#TYPEt">t</a> -> SHA.t -> <a href="Value.html#TYPEt">Value.t</a> Lwt.t</code></pre><div class="info ">
+<pre><span id="VALread"><span class="keyword">val</span> read</span> : <code class="type"><a href="Store.S.html#TYPEt">t</a> -> Hash.t -> <a href="Value.html#TYPEt">Value.t</a> option Lwt.t</code></pre><div class="info ">
+Return the object having the given Hash name.<br>
+</div>
+
+<pre><span id="VALread_exn"><span class="keyword">val</span> read_exn</span> : <code class="type"><a href="Store.S.html#TYPEt">t</a> -> Hash.t -> <a href="Value.html#TYPEt">Value.t</a> Lwt.t</code></pre><div class="info ">
 Same as <code class="code">read</code> but raises <code class="code"><span class="constructor">Not_found</span></code> if no object with the given
-      SHA is found.<br>
+      Hash is found.<br>
 </div>
 
-<pre><span id="VALmem"><span class="keyword">val</span> mem</span> : <code class="type"><a href="Store.S.html#TYPEt">t</a> -> SHA.t -> bool Lwt.t</code></pre><div class="info ">
+<pre><span id="VALmem"><span class="keyword">val</span> mem</span> : <code class="type"><a href="Store.S.html#TYPEt">t</a> -> Hash.t -> bool Lwt.t</code></pre><div class="info ">
 Check whether a key belongs to the store.<br>
 </div>
 
-<pre><span id="VALlist"><span class="keyword">val</span> list</span> : <code class="type"><a href="Store.S.html#TYPEt">t</a> -> SHA.t list Lwt.t</code></pre><div class="info ">
-Return the list of SHA names.<br>
+<pre><span id="VALlist"><span class="keyword">val</span> list</span> : <code class="type"><a href="Store.S.html#TYPEt">t</a> -> Hash.t list Lwt.t</code></pre><div class="info ">
+Return the list of Hash names.<br>
 </div>
 
-<pre><span id="VALwrite"><span class="keyword">val</span> write</span> : <code class="type"><a href="Store.S.html#TYPEt">t</a> -> <a href="Value.html#TYPEt">Value.t</a> -> SHA.t Lwt.t</code></pre><div class="info ">
-Write a value and return the SHA of its serialized contents.<br>
+<pre><span id="VALwrite"><span class="keyword">val</span> write</span> : <code class="type"><a href="Store.S.html#TYPEt">t</a> -> <a href="Value.html#TYPEt">Value.t</a> -> Hash.t Lwt.t</code></pre><div class="info ">
+Write a value and return the Hash of its serialized contents.<br>
 </div>
 
-<pre><span id="VALwrite_pack"><span class="keyword">val</span> write_pack</span> : <code class="type"><a href="Store.S.html#TYPEt">t</a> -> <a href="Pack.html#TYPEraw">Pack.raw</a> -> SHA.Set.t Lwt.t</code></pre><div class="info ">
+<pre><span id="VALwrite_pack"><span class="keyword">val</span> write_pack</span> : <code class="type"><a href="Store.S.html#TYPEt">t</a> -> <a href="Pack.html#TYPEraw">Pack.raw</a> -> Hash.Set.t Lwt.t</code></pre><div class="info ">
 Write a raw pack file and the corresponding index. Return the
       objects IDs which have been written.<br>
 </div>
@@ -129,11 +133,11 @@ Return the list of references (ie. tags and branches).<br>
 Check if a reference exists.<br>
 </div>
 
-<pre><span id="VALread_reference"><span class="keyword">val</span> read_reference</span> : <code class="type"><a href="Store.S.html#TYPEt">t</a> -> Reference.t -> SHA.Commit.t option Lwt.t</code></pre><div class="info ">
+<pre><span id="VALread_reference"><span class="keyword">val</span> read_reference</span> : <code class="type"><a href="Store.S.html#TYPEt">t</a> -> Reference.t -> Hash.t option Lwt.t</code></pre><div class="info ">
 Read a given reference.<br>
 </div>
 
-<pre><span id="VALread_reference_exn"><span class="keyword">val</span> read_reference_exn</span> : <code class="type"><a href="Store.S.html#TYPEt">t</a> -> Reference.t -> SHA.Commit.t Lwt.t</code></pre><div class="info ">
+<pre><span id="VALread_reference_exn"><span class="keyword">val</span> read_reference_exn</span> : <code class="type"><a href="Store.S.html#TYPEt">t</a> -> Reference.t -> Hash.t Lwt.t</code></pre><div class="info ">
 Read a given reference.<br>
 </div>
 
@@ -145,7 +149,7 @@ Write the HEAD.<br>
 Read the head contents.<br>
 </div>
 
-<pre><span id="VALwrite_reference"><span class="keyword">val</span> write_reference</span> : <code class="type"><a href="Store.S.html#TYPEt">t</a> -> Reference.t -> SHA.Commit.t -> unit Lwt.t</code></pre><div class="info ">
+<pre><span id="VALwrite_reference"><span class="keyword">val</span> write_reference</span> : <code class="type"><a href="Store.S.html#TYPEt">t</a> -> Reference.t -> Hash.t -> unit Lwt.t</code></pre><div class="info ">
 Write a reference.<br>
 </div>
 
@@ -159,7 +163,7 @@ Remove a refernce.<br>
 Return the index file.<br>
 </div>
 
-<pre><span id="VALwrite_index"><span class="keyword">val</span> write_index</span> : <code class="type"><a href="Store.S.html#TYPEt">t</a> -> ?index:<a href="Index.html#TYPEt">Index.t</a> -> SHA.Commit.t -> unit Lwt.t</code></pre><div class="info ">
+<pre><span id="VALwrite_index"><span class="keyword">val</span> write_index</span> : <code class="type"><a href="Store.S.html#TYPEt">t</a> -> ?index:<a href="Index.html#TYPEt">Index.t</a> -> Hash.Commit.t -> unit Lwt.t</code></pre><div class="info ">
 Update the index file for the given revision. A side-effect of
       this operation is that the blobs are expanded into the
       filesystem.
@@ -183,15 +187,15 @@ The kind of backend.<br>
 <br>
 <h2 id="2_Rawvalues">Raw values</h2><br>
 
-<pre><span id="VALread_inflated"><span class="keyword">val</span> read_inflated</span> : <code class="type"><a href="Store.S.html#TYPEt">t</a> -> SHA.t -> string option Lwt.t</code></pre><div class="info ">
+<pre><span id="VALread_inflated"><span class="keyword">val</span> read_inflated</span> : <code class="type"><a href="Store.S.html#TYPEt">t</a> -> Hash.t -> string option Lwt.t</code></pre><div class="info ">
 Read a raw buffer from the store.<br>
 </div>
 
-<pre><span id="VALwrite_inflated"><span class="keyword">val</span> write_inflated</span> : <code class="type"><a href="Store.S.html#TYPEt">t</a> -> string -> SHA.t Lwt.t</code></pre><div class="info ">
+<pre><span id="VALwrite_inflated"><span class="keyword">val</span> write_inflated</span> : <code class="type"><a href="Store.S.html#TYPEt">t</a> -> string -> Hash.t Lwt.t</code></pre><div class="info ">
 Write a raw buffer in the store.<br>
 </div>
 
-<pre><span class="keyword">module</span> <a href="Store.S.Digest.html">Digest</a>: <code class="type"><a href="SHA.DIGEST.html">SHA.DIGEST</a></code><code class="type"> </code></pre><div class="info">
+<pre><span class="keyword">module</span> <a href="Store.S.Digest.html">Digest</a>: <code class="type"><a href="Hash.DIGEST.html">Hash.DIGEST</a></code><code class="type"> </code></pre><div class="info">
 Digest functions that the store is using.
 </div>
 

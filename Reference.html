@@ -13,7 +13,7 @@
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
-<link title="SHA" rel="Chapter" href="SHA.html">
+<link title="Hash" rel="Chapter" href="Hash.html">
 <link title="Inflate" rel="Chapter" href="Inflate.html">
 <link title="Object" rel="Chapter" href="Object.html">
 <link title="Object_type" rel="Chapter" href="Object_type.html">
@@ -77,7 +77,7 @@ Is the given reference the HEAD ?<br>
 <td align="left" valign="top" >
 <code><span class="keyword">|</span></code></td>
 <td align="left" valign="top" >
-<code><span id="TYPEELThead_contents.SHA"><span class="constructor">SHA</span></span> <span class="keyword">of</span> <code class="type">SHA.Commit.t</code></code></td>
+<code><span id="TYPEELThead_contents.Hash"><span class="constructor">Hash</span></span> <span class="keyword">of</span> <code class="type">Hash.Commit.t</code></code></td>
 
 </tr>
 <tr>
@@ -93,11 +93,11 @@ The possible HEAD contents.<br>
 
 
 
-<pre><span id="VALhead_contents_of_string"><span class="keyword">val</span> head_contents_of_string</span> : <code class="type">of_hex:(string -> SHA.t) -> string -> <a href="Reference.html#TYPEhead_contents">head_contents</a></code></pre><div class="info ">
+<pre><span id="VALhead_contents_of_string"><span class="keyword">val</span> head_contents_of_string</span> : <code class="type">of_hex:(string -> Hash.t) -> string -> <a href="Reference.html#TYPEhead_contents">head_contents</a></code></pre><div class="info ">
 Parse the contents of HEAD<br>
 </div>
 
-<pre><span id="VALhead_contents_of_commit"><span class="keyword">val</span> head_contents_of_commit</span> : <code class="type">SHA.Commit.t Map.t -> SHA.Commit.t -> <a href="Reference.html#TYPEhead_contents">head_contents</a></code></pre><div class="info ">
+<pre><span id="VALhead_contents_of_commit"><span class="keyword">val</span> head_contents_of_commit</span> : <code class="type">Hash.Commit.t Map.t -> Hash.Commit.t -> <a href="Reference.html#TYPEhead_contents">head_contents</a></code></pre><div class="info ">
 Build a head contents from a commit hash. The result is either the
     hex representation of the SHA or something like <i>ref: &lt;ref&gt;</i> if
     the SHA has already a reference pointing to it.<br>

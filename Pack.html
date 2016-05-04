@@ -13,7 +13,7 @@
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
-<link title="SHA" rel="Chapter" href="SHA.html">
+<link title="Hash" rel="Chapter" href="Hash.html">
 <link title="Inflate" rel="Chapter" href="Inflate.html">
 <link title="Object" rel="Chapter" href="Object.html">
 <link title="Object_type" rel="Chapter" href="Object_type.html">
@@ -55,11 +55,11 @@ Pack files.<br>
 <pre><span id="TYPEt"><span class="keyword">type</span> <code class="type"></code>t</span> = <code class="type"><a href="Packed_value.html#TYPEpic">Packed_value.pic</a> list</code> </pre>
 <div class="info ">
 A pack value is an ordered list of position-independant packed
-    values and the SHA of the corresponding inflated objects.<br>
+    values and the keys of the corresponding inflated objects.<br>
 </div>
 
 
-<pre><span id="VALkeys"><span class="keyword">val</span> keys</span> : <code class="type"><a href="Pack.html#TYPEt">t</a> -> SHA.Set.t</code></pre><div class="info ">
+<pre><span id="VALkeys"><span class="keyword">val</span> keys</span> : <code class="type"><a href="Pack.html#TYPEt">t</a> -> Hash.Set.t</code></pre><div class="info ">
 Return the keys present in the pack.<br>
 </div>
 
@@ -73,4 +73,4 @@ The type for raw packs.<br>
 
 <pre><span class="keyword">module</span> <a href="Pack.Raw.html">Raw</a>: <code class="code"><span class="keyword">sig</span></code> <a href="Pack.Raw.html">..</a> <code class="code"><span class="keyword">end</span></code></pre>
 <pre><span class="keyword">module type</span> <a href="Pack.IO.html">IO</a> = <code class="code"><span class="keyword">sig</span></code> <a href="Pack.IO.html">..</a> <code class="code"><span class="keyword">end</span></code></pre>
-<pre><span class="keyword">module</span> <a href="Pack.IO.html">IO</a> <code class="code">(</code><code class="code"><span class="constructor">D</span></code><code class="code"> : </code><code class="type"><a href="SHA.DIGEST.html">SHA.DIGEST</a></code><code class="code">) </code> <code class="code">(</code><code class="code"><span class="constructor">I</span></code><code class="code"> : </code><code class="type"><a href="Inflate.S.html">Inflate.S</a></code><code class="code">) </code>: <code class="type"><a href="Pack.IO.html">IO</a></code><code class="type"> </code></pre></body></html>
+<pre><span class="keyword">module</span> <a href="Pack.IO.html">IO</a> <code class="code">(</code><code class="code"><span class="constructor">D</span></code><code class="code"> : </code><code class="type"><a href="Hash.DIGEST.html">Hash.DIGEST</a></code><code class="code">) </code> <code class="code">(</code><code class="code"><span class="constructor">I</span></code><code class="code"> : </code><code class="type"><a href="Inflate.S.html">Inflate.S</a></code><code class="code">) </code>: <code class="type"><a href="Pack.IO.html">IO</a></code><code class="type"> </code></pre></body></html>

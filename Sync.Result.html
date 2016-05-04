@@ -12,7 +12,7 @@
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
-<link title="SHA" rel="Chapter" href="SHA.html">
+<link title="Hash" rel="Chapter" href="Hash.html">
 <link title="Inflate" rel="Chapter" href="Inflate.html">
 <link title="Object" rel="Chapter" href="Object.html">
 <link title="Object_type" rel="Chapter" href="Object_type.html">
@@ -49,7 +49,7 @@
 
 <pre><span id="TYPEfetch"><span class="keyword">type</span> <code class="type"></code>fetch</span> </pre>
 <div class="info ">
-The resulting sha1s and references.<br>
+The resulting hashes and references.<br>
 </div>
 
 
@@ -58,20 +58,20 @@ The resulting sha1s and references.<br>
       remote <i>.git/HEAD</i>).<br>
 </div>
 
-<pre><span id="VALhead"><span class="keyword">val</span> head</span> : <code class="type"><a href="Sync.Result.html#TYPEfetch">fetch</a> -> SHA.Commit.t option</code></pre><div class="info ">
+<pre><span id="VALhead"><span class="keyword">val</span> head</span> : <code class="type"><a href="Sync.Result.html#TYPEfetch">fetch</a> -> Hash.Commit.t option</code></pre><div class="info ">
 <code class="code">head f</code> is <code class="code">f</code>'s head commit.<br>
 </div>
 
-<pre><span id="VALreferences"><span class="keyword">val</span> references</span> : <code class="type"><a href="Sync.Result.html#TYPEfetch">fetch</a> -> SHA.Commit.t Reference.Map.t</code></pre><div class="info ">
+<pre><span id="VALreferences"><span class="keyword">val</span> references</span> : <code class="type"><a href="Sync.Result.html#TYPEfetch">fetch</a> -> Hash.t Reference.Map.t</code></pre><div class="info ">
 <code class="code">references f</code> are <code class="code">f</code>'s references.<br>
 </div>
 
-<pre><span id="VALsha1s"><span class="keyword">val</span> sha1s</span> : <code class="type"><a href="Sync.Result.html#TYPEfetch">fetch</a> -> SHA.Set.t</code></pre><div class="info ">
-<code class="code">sha1s f</code> are <code class="code">f</code>'s object hashes.<br>
+<pre><span id="VALhashes"><span class="keyword">val</span> hashes</span> : <code class="type"><a href="Sync.Result.html#TYPEfetch">fetch</a> -> Hash.Set.t</code></pre><div class="info ">
+<code class="code">hashes f</code> are <code class="code">f</code>'s object hashes.<br>
 </div>
 
-<pre><span id="VALpretty_fetch"><span class="keyword">val</span> pretty_fetch</span> : <code class="type"><a href="Sync.Result.html#TYPEfetch">fetch</a> -> string</code></pre><div class="info ">
-Pretty print a fetch result.<br>
+<pre><span id="VALpp_fetch"><span class="keyword">val</span> pp_fetch</span> : <code class="type"><a href="Sync.Result.html#TYPEfetch">fetch</a> Fmt.t</code></pre><div class="info ">
+<code class="code">pp_fetch</code> is the pretty-printer for <a href="Sync.Result.html#TYPEfetch"><code class="code"><span class="constructor">Sync</span>.<span class="constructor">Result</span>.fetch</code></a> values.<br>
 </div>
 
 <pre><span id="TYPEok_or_error"><span class="keyword">type</span> <code class="type"></code>ok_or_error</span> = <code class="type">[ `Error of string | `Ok ]</code> </pre>
@@ -99,7 +99,7 @@ The result of a push operation.<br>
 </div>
 
 
-<pre><span id="VALpretty_push"><span class="keyword">val</span> pretty_push</span> : <code class="type"><a href="Sync.Result.html#TYPEpush">push</a> -> string</code></pre><div class="info ">
-Pretty print a push status.<br>
+<pre><span id="VALpp_push"><span class="keyword">val</span> pp_push</span> : <code class="type"><a href="Sync.Result.html#TYPEpush">push</a> Fmt.t</code></pre><div class="info ">
+<code class="code">pp_push</code> is the pretty-printer for <a href="Sync.Result.html#TYPEpush"><code class="code"><span class="constructor">Sync</span>.<span class="constructor">Result</span>.push</code></a> values.<br>
 </div>
 </body></html>

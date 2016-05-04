@@ -4,15 +4,16 @@
 <link rel="stylesheet" href="style.css" type="text/css">
 <meta content="text/html; charset=iso-8859-1" http-equiv="Content-Type">
 <link rel="Start" href="index.html">
-<link rel="next" href="SHA.Tree.html">
-<link rel="Up" href="SHA.html">
+<link rel="previous" href="Hash.Tree.html">
+<link rel="next" href="Hash.IO.html">
+<link rel="Up" href="Hash.html">
 <link title="Index of types" rel=Appendix href="index_types.html">
 <link title="Index of exceptions" rel=Appendix href="index_exceptions.html">
 <link title="Index of values" rel=Appendix href="index_values.html">
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
-<link title="SHA" rel="Chapter" href="SHA.html">
+<link title="Hash" rel="Chapter" href="Hash.html">
 <link title="Inflate" rel="Chapter" href="Inflate.html">
 <link title="Object" rel="Chapter" href="Object.html">
 <link title="Object_type" rel="Chapter" href="Object_type.html">
@@ -37,50 +38,51 @@
 <link title="FS" rel="Chapter" href="FS.html">
 <link title="Version" rel="Chapter" href="Version.html">
 <link title="Git_unix" rel="Chapter" href="Git_unix.html">
-<link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><link title="Signature for SHA values" rel="Section" href="#1_SignatureforSHAvalues">
-<title>SHA.Commit</title>
+<link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><link title="Signature for hash values" rel="Section" href="#1_Signatureforhashvalues">
+<title>Hash.Blob</title>
 </head>
 <body>
-<div class="navbar">&nbsp;<a class="up" href="SHA.html" title="SHA">Up</a>
-&nbsp;<a class="post" href="SHA.Tree.html" title="SHA.Tree">Next</a>
+<div class="navbar"><a class="pre" href="Hash.Tree.html" title="Hash.Tree">Previous</a>
+&nbsp;<a class="up" href="Hash.html" title="Hash">Up</a>
+&nbsp;<a class="post" href="Hash.IO.html" title="Hash.IO">Next</a>
 </div>
-<h1>Module <a href="type_SHA.Commit.html">SHA.Commit</a></h1>
+<h1>Module <a href="type_Hash.Blob.html">Hash.Blob</a></h1>
 
-<pre><span class="keyword">module</span> Commit: <code class="type"><a href="SHA.S.html">S</a></code><code class="type"> </code></pre><div class="info module top">
-Commit nodes.<br>
+<pre><span class="keyword">module</span> Blob: <code class="type"><a href="Hash.S.html">S</a></code><code class="type"> </code></pre><div class="info module top">
+Blob nodes.<br>
 </div>
 <hr width="100%">
 <br>
-<h1 id="1_SignatureforSHAvalues">Signature for SHA values</h1><br>
+<h1 id="1_Signatureforhashvalues">Signature for hash values</h1><br>
 
 <pre><span class="keyword">include</span> <a href="Object.S.html">Object.S</a></pre>
 <br>
 The usual compare functions on hashes, but can raise
-      <a href="SHA.html#EXCEPTIONAmbiguous"><code class="code"><span class="constructor">SHA</span>.<span class="constructor">Ambiguous</span></code></a> if one is short hash and is prefix to the other.<br>
+      <a href="Hash.html#EXCEPTIONAmbiguous"><code class="code"><span class="constructor">Hash</span>.<span class="constructor">Ambiguous</span></code></a> if one is short hash and is prefix to the other.<br>
 
 <pre><span id="VALto_raw"><span class="keyword">val</span> to_raw</span> : <code class="type">t -> string</code></pre><div class="info ">
-Raw SHA value.<br>
+Raw hash value.<br>
 </div>
 
 <pre><span id="VALof_raw"><span class="keyword">val</span> of_raw</span> : <code class="type">string -> t</code></pre><div class="info ">
-Abstract a raw SHA value.<br>
+Abstract a raw hash value.<br>
 </div>
 
 <pre><span id="VALto_hex"><span class="keyword">val</span> to_hex</span> : <code class="type">t -> string</code></pre><div class="info ">
-Display the hex encoding of the SHA hash.<br>
+<code class="code">to_hex h</code> is <code class="code">h</code>s' hex encoding.<br>
 </div>
 
 <pre><span id="VALhex_length"><span class="keyword">val</span> hex_length</span> : <code class="type">t -> int</code></pre><div class="info ">
-The number of hex digits in the SHA.<br>
+The number of hex digits in the hash.<br>
 </div>
 
 <pre><span id="VALlt"><span class="keyword">val</span> lt</span> : <code class="type">t -> t -> bool</code></pre><div class="info ">
-(&lt;) relation between SHAs.<br>
+(&lt;) relation between hash.<br>
 </div>
 
 <pre><span id="VALis_prefix"><span class="keyword">val</span> is_prefix</span> : <code class="type">t -> t -> bool</code></pre><div class="info ">
-Check if a SHA is a prefix of another SHA.<br>
+Check if a hash is a prefix of another hash.<br>
 </div>
 
-<pre><span class="keyword">module</span> <a href="SHA.S.Set.html">Set</a>: <code class="type"><a href="Misc.Set.html">Misc.Set</a></code><code class="type">  with type elt = t</code></pre>
-<pre><span class="keyword">module</span> <a href="SHA.S.Map.html">Map</a>: <code class="type"><a href="Misc.Map.html">Misc.Map</a></code><code class="type">  with type key = t</code></pre></body></html>
+<pre><span class="keyword">module</span> <a href="Hash.S.Set.html">Set</a>: <code class="type"><a href="Misc.Set.html">Misc.Set</a></code><code class="type">  with type elt = t</code></pre>
+<pre><span class="keyword">module</span> <a href="Hash.S.Map.html">Map</a>: <code class="type"><a href="Misc.Map.html">Misc.Map</a></code><code class="type">  with type key = t</code></pre></body></html>

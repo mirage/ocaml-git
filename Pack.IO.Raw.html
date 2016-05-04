@@ -11,7 +11,7 @@
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
-<link title="SHA" rel="Chapter" href="SHA.html">
+<link title="Hash" rel="Chapter" href="Hash.html">
 <link title="Inflate" rel="Chapter" href="Inflate.html">
 <link title="Object" rel="Chapter" href="Object.html">
 <link title="Object_type" rel="Chapter" href="Object_type.html">
@@ -56,22 +56,26 @@ Raw pack file: they contains a pack index and a list of
 
 <pre><span id="VALinput"><span class="keyword">val</span> input</span> : <code class="type">?progress:(string -> unit) -><br>       read:<a href="Value.html#TYPEread_inflated">Value.read_inflated</a> -> Mstruct.t -> <a href="Pack.html#TYPEt">Pack.t</a> Lwt.t</code></pre><div class="info ">
 <code class="code">input ~read buf</code> is the raw pack and raw index obtained by
-        reading the buffer <code class="code">buf</code>. External (shallow) SHA1 references are
+        reading the buffer <code class="code">buf</code>. External (shallow) Hash1 references are
         resolved using the <code class="code">read</code> function; these references are needed
         to unpack the list of values stored in the pack file, to then
         compute the full raw index.<br>
 </div>
 
-<pre><span id="VALunpack"><span class="keyword">val</span> unpack</span> : <code class="type">?progress:(string -> unit) -><br>       write:<a href="Value.html#TYPEwrite_inflated">Value.write_inflated</a> -> <a href="Pack.html#TYPEt">Pack.t</a> -> SHA.Set.t Lwt.t</code></pre><div class="info ">
+<pre><span id="VALunpack"><span class="keyword">val</span> unpack</span> : <code class="type">?progress:(string -> unit) -><br>       write:<a href="Value.html#TYPEwrite_inflated">Value.write_inflated</a> -> <a href="Pack.html#TYPEt">Pack.t</a> -> Hash.Set.t Lwt.t</code></pre><div class="info ">
 Unpack a whole pack file on disk (by calling <code class="code">write</code> on every
-        values) and return the SHA1s of the written objects.<br>
+        values) and return the Hash1s of the written objects.<br>
 </div>
 
-<pre><span id="VALread"><span class="keyword">val</span> read</span> : <code class="type">index:<a href="Pack_index.html#TYPEf">Pack_index.f</a> -><br>       read:<a href="Value.html#TYPEread_inflated">Value.read_inflated</a> -> Mstruct.t -> SHA.t -> <a href="Value.html#TYPEt">Value.t</a> option Lwt.t</code></pre><div class="info ">
+<pre><span id="VALread"><span class="keyword">val</span> read</span> : <code class="type">index:<a href="Pack_index.html#TYPEf">Pack_index.f</a> -><br>       read:<a href="Value.html#TYPEread_inflated">Value.read_inflated</a> -> Mstruct.t -> Hash.t -> <a href="Value.html#TYPEt">Value.t</a> option Lwt.t</code></pre><div class="info ">
 Same as the top-level <code class="code">read</code> function but for raw packs.<br>
 </div>
 
-<pre><span id="VALread_inflated"><span class="keyword">val</span> read_inflated</span> : <code class="type">index:<a href="Pack_index.html#TYPEf">Pack_index.f</a> -><br>       read:<a href="Value.html#TYPEread_inflated">Value.read_inflated</a> -> Mstruct.t -> SHA.t -> string option Lwt.t</code></pre><div class="info ">
+<pre><span id="VALread_inflated"><span class="keyword">val</span> read_inflated</span> : <code class="type">index:<a href="Pack_index.html#TYPEf">Pack_index.f</a> -><br>       read:<a href="Value.html#TYPEread_inflated">Value.read_inflated</a> -> Mstruct.t -> Hash.t -> string option Lwt.t</code></pre><div class="info ">
 Same as <a href="Pack.IO.Raw.html#VALread"><code class="code"><span class="constructor">Pack</span>.<span class="constructor">IO</span>.<span class="constructor">Raw</span>.read</code></a> but for inflated values.<br>
+</div>
+
+<pre><span id="VALsize"><span class="keyword">val</span> size</span> : <code class="type">index:<a href="Pack_index.html#TYPEf">Pack_index.f</a> -> Mstruct.t -> Hash.t -> int option Lwt.t</code></pre><div class="info ">
+<code class="code">size ~index buf h</code> is the (uncompressed) size of <code class="code">h</code>.<br>
 </div>
 </body></html>

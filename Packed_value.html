@@ -13,7 +13,7 @@
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
-<link title="SHA" rel="Chapter" href="SHA.html">
+<link title="Hash" rel="Chapter" href="Hash.html">
 <link title="Inflate" rel="Chapter" href="Inflate.html">
 <link title="Object" rel="Chapter" href="Object.html">
 <link title="Object_type" rel="Chapter" href="Object_type.html">
@@ -148,7 +148,7 @@ The type for delta values.<br>
 <td align="left" valign="top" >
 <code><span class="keyword">|</span></code></td>
 <td align="left" valign="top" >
-<code><span id="TYPEELTkind.Ref_delta"><span class="constructor">Ref_delta</span></span> <span class="keyword">of</span> <code class="type">SHA.t <a href="Packed_value.html#TYPEdelta">delta</a></code></code></td>
+<code><span id="TYPEELTkind.Ref_delta"><span class="constructor">Ref_delta</span></span> <span class="keyword">of</span> <code class="type">Hash.t <a href="Packed_value.html#TYPEdelta">delta</a></code></code></td>
 
 </tr>
 <tr>
@@ -186,8 +186,8 @@ The type for packed values.<br>
 </div>
 
 
-<pre><span id="VALshallow"><span class="keyword">val</span> shallow</span> : <code class="type">SHA.Set.t -> <a href="Packed_value.html#TYPEt">t</a> -> bool</code></pre><div class="info ">
-<code class="code">shallow p t</code> checks whether the SHAs appearing in <code class="code">t</code> also appear
+<pre><span id="VALshallow"><span class="keyword">val</span> shallow</span> : <code class="type">Hash.Set.t -> <a href="Packed_value.html#TYPEt">t</a> -> bool</code></pre><div class="info ">
+<code class="code">shallow p t</code> checks whether the Hashs appearing in <code class="code">t</code> also appear
     in the pack file <code class="code">p</code>.<br>
 </div>
 
@@ -231,4 +231,4 @@ The type for position-independant packked values.<br>
 </div>
 
 
-<pre><span class="keyword">module</span> <a href="Packed_value.IO.html">IO</a> <code class="code">(</code><code class="code"><span class="constructor">D</span></code><code class="code"> : </code><code class="type"><a href="SHA.DIGEST.html">SHA.DIGEST</a></code><code class="code">) </code> <code class="code">(</code><code class="code"><span class="constructor">I</span></code><code class="code"> : </code><code class="type"><a href="Inflate.S.html">Inflate.S</a></code><code class="code">) </code>: <code class="code"><span class="keyword">sig</span></code> <a href="Packed_value.IO.html">..</a> <code class="code"><span class="keyword">end</span></code></pre></body></html>
+<pre><span class="keyword">module</span> <a href="Packed_value.IO.html">IO</a> <code class="code">(</code><code class="code"><span class="constructor">D</span></code><code class="code"> : </code><code class="type"><a href="Hash.DIGEST.html">Hash.DIGEST</a></code><code class="code">) </code> <code class="code">(</code><code class="code"><span class="constructor">I</span></code><code class="code"> : </code><code class="type"><a href="Inflate.S.html">Inflate.S</a></code><code class="code">) </code>: <code class="code"><span class="keyword">sig</span></code> <a href="Packed_value.IO.html">..</a> <code class="code"><span class="keyword">end</span></code></pre></body></html>

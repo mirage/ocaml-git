@@ -4,16 +4,15 @@
 <link rel="stylesheet" href="style.css" type="text/css">
 <meta content="text/html; charset=iso-8859-1" http-equiv="Content-Type">
 <link rel="Start" href="index.html">
-<link rel="previous" href="SHA.H.html">
-<link rel="next" href="SHA.DIGEST.html">
-<link rel="Up" href="SHA.html">
+<link rel="previous" href="Hash.S.Set.html">
+<link rel="Up" href="Hash.S.html">
 <link title="Index of types" rel=Appendix href="index_types.html">
 <link title="Index of exceptions" rel=Appendix href="index_exceptions.html">
 <link title="Index of values" rel=Appendix href="index_values.html">
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
-<link title="SHA" rel="Chapter" href="SHA.html">
+<link title="Hash" rel="Chapter" href="Hash.html">
 <link title="Inflate" rel="Chapter" href="Inflate.html">
 <link title="Object" rel="Chapter" href="Object.html">
 <link title="Object_type" rel="Chapter" href="Object_type.html">
@@ -38,19 +37,20 @@
 <link title="FS" rel="Chapter" href="FS.html">
 <link title="Version" rel="Chapter" href="Version.html">
 <link title="Git_unix" rel="Chapter" href="Git_unix.html">
-<link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>SHA.IO</title>
+<link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>Hash.S.Map</title>
 </head>
 <body>
-<div class="navbar"><a class="pre" href="SHA.H.html" title="SHA.H">Previous</a>
-&nbsp;<a class="up" href="SHA.html" title="SHA">Up</a>
-&nbsp;<a class="post" href="SHA.DIGEST.html" title="SHA.DIGEST">Next</a>
-</div>
-<h1>Module type <a href="type_SHA.IO.html">SHA.IO</a></h1>
+<div class="navbar"><a class="pre" href="Hash.S.Set.html" title="Hash.S.Set">Previous</a>
+&nbsp;<a class="up" href="Hash.S.html" title="Hash.S">Up</a>
+&nbsp;</div>
+<h1>Module <a href="type_Hash.S.Map.html">Hash.S.Map</a></h1>
 
-<pre><span class="keyword">module type</span> IO = <code class="code"><span class="keyword">sig</span></code> <a href="SHA.IO.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><hr width="100%">
+<pre><span class="keyword">module</span> Map: <code class="type"><a href="Misc.Map.html">Misc.Map</a></code><code class="type">  with type key = t</code></pre><hr width="100%">
 
-<pre><span class="keyword">include</span> <a href="SHA.H.html">SHA.H</a></pre>
+<pre><span class="keyword">include</span> Map.S</pre>
 
-<pre><span class="keyword">module</span> <a href="SHA.IO.Blob.html">Blob</a>: <code class="type"><a href="SHA.H.html">SHA.H</a></code><code class="type">  with type t = <a href="Blob.html">Blob</a>.t</code></pre>
-<pre><span class="keyword">module</span> <a href="SHA.IO.Tree.html">Tree</a>: <code class="type"><a href="SHA.H.html">SHA.H</a></code><code class="type">  with type t = <a href="Tree.html">Tree</a>.t</code></pre>
-<pre><span class="keyword">module</span> <a href="SHA.IO.Commit.html">Commit</a>: <code class="type"><a href="SHA.H.html">SHA.H</a></code><code class="type">  with type t = <a href="Commit.html">Commit</a>.t</code></pre></body></html>
+<pre><span id="VALpp"><span class="keyword">val</span> pp</span> : <code class="type">'a Fmt.t -> 'a t Fmt.t</code></pre>
+<pre><span id="VALkeys"><span class="keyword">val</span> keys</span> : <code class="type">'a t -> key list</code></pre>
+<pre><span id="VALto_alist"><span class="keyword">val</span> to_alist</span> : <code class="type">'a t -> (key * 'a) list</code></pre>
+<pre><span id="VALof_alist"><span class="keyword">val</span> of_alist</span> : <code class="type">(key * 'a) list -> 'a t</code></pre>
+<pre><span id="VALadd_multi"><span class="keyword">val</span> add_multi</span> : <code class="type">key -> 'a -> 'a list t -> 'a list t</code></pre></body></html>

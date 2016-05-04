@@ -13,7 +13,7 @@
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
-<link title="SHA" rel="Chapter" href="SHA.html">
+<link title="Hash" rel="Chapter" href="Hash.html">
 <link title="Inflate" rel="Chapter" href="Inflate.html">
 <link title="Object" rel="Chapter" href="Object.html">
 <link title="Object_type" rel="Chapter" href="Object_type.html">
@@ -120,25 +120,25 @@ Cast a tag to an object.<br>
 <br>
 <h1 id="1_IOtypes">IO types</h1><br>
 
-<pre><span id="TYPEread"><span class="keyword">type</span> <code class="type"></code>read</span> = <code class="type">SHA.t -> <a href="Value.html#TYPEt">t</a> option Lwt.t</code> </pre>
+<pre><span id="TYPEread"><span class="keyword">type</span> <code class="type"></code>read</span> = <code class="type">Hash.t -> <a href="Value.html#TYPEt">t</a> option Lwt.t</code> </pre>
 <div class="info ">
 The type for functions reading values.<br>
 </div>
 
 
-<pre><span id="TYPEread_inflated"><span class="keyword">type</span> <code class="type"></code>read_inflated</span> = <code class="type">SHA.t -> string option Lwt.t</code> </pre>
+<pre><span id="TYPEread_inflated"><span class="keyword">type</span> <code class="type"></code>read_inflated</span> = <code class="type">Hash.t -> string option Lwt.t</code> </pre>
 <div class="info ">
 The type for functions reading inflated values.<br>
 </div>
 
 
-<pre><span id="TYPEwrite"><span class="keyword">type</span> <code class="type"></code>write</span> = <code class="type"><a href="Value.html#TYPEt">t</a> -> SHA.t Lwt.t</code> </pre>
+<pre><span id="TYPEwrite"><span class="keyword">type</span> <code class="type"></code>write</span> = <code class="type"><a href="Value.html#TYPEt">t</a> -> Hash.t Lwt.t</code> </pre>
 <div class="info ">
 The type for functions writing values.<br>
 </div>
 
 
-<pre><span id="TYPEwrite_inflated"><span class="keyword">type</span> <code class="type"></code>write_inflated</span> = <code class="type">string -> SHA.t Lwt.t</code> </pre>
+<pre><span id="TYPEwrite_inflated"><span class="keyword">type</span> <code class="type"></code>write_inflated</span> = <code class="type">string -> Hash.t Lwt.t</code> </pre>
 <div class="info ">
 The type for functions writing raw values.<br>
 </div>
@@ -146,4 +146,4 @@ The type for functions writing raw values.<br>
 
 <pre><span class="keyword">module</span> <a href="Value.Cache.html">Cache</a>: <code class="code"><span class="keyword">sig</span></code> <a href="Value.Cache.html">..</a> <code class="code"><span class="keyword">end</span></code></pre>
 <pre><span class="keyword">module type</span> <a href="Value.IO.html">IO</a> = <code class="code"><span class="keyword">sig</span></code> <a href="Value.IO.html">..</a> <code class="code"><span class="keyword">end</span></code></pre>
-<pre><span class="keyword">module</span> <a href="Value.IO.html">IO</a> <code class="code">(</code><code class="code"><span class="constructor">D</span></code><code class="code"> : </code><code class="type"><a href="SHA.DIGEST.html">SHA.DIGEST</a></code><code class="code">) </code> <code class="code">(</code><code class="code"><span class="constructor">I</span></code><code class="code"> : </code><code class="type"><a href="Inflate.S.html">Inflate.S</a></code><code class="code">) </code>: <code class="type"><a href="Value.IO.html">IO</a></code><code class="type"> </code></pre></body></html>
+<pre><span class="keyword">module</span> <a href="Value.IO.html">IO</a> <code class="code">(</code><code class="code"><span class="constructor">D</span></code><code class="code"> : </code><code class="type"><a href="Hash.DIGEST.html">Hash.DIGEST</a></code><code class="code">) </code> <code class="code">(</code><code class="code"><span class="constructor">I</span></code><code class="code"> : </code><code class="type"><a href="Inflate.S.html">Inflate.S</a></code><code class="code">) </code>: <code class="type"><a href="Value.IO.html">IO</a></code><code class="type"> </code></pre></body></html>

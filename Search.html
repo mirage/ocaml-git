@@ -13,7 +13,7 @@
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
-<link title="SHA" rel="Chapter" href="SHA.html">
+<link title="Hash" rel="Chapter" href="Hash.html">
 <link title="Inflate" rel="Chapter" href="Inflate.html">
 <link title="Object" rel="Chapter" href="Object.html">
 <link title="Object_type" rel="Chapter" href="Object_type.html">
@@ -52,7 +52,7 @@ Search over the graph of Git objects.<br>
 </div>
 <hr width="100%">
 
-<pre><span id="TYPEpred"><span class="keyword">type</span> <code class="type"></code>pred</span> = <code class="type">[ `Commit of SHA.t<br>       | `Tag of string * SHA.t<br>       | `Tree of string * SHA.t<br>       | `Tree_root of SHA.t ]</code> </pre>
+<pre><span id="TYPEpred"><span class="keyword">type</span> <code class="type"></code>pred</span> = <code class="type">[ `Commit of Hash.t<br>       | `Tag of string * Hash.t<br>       | `Tree of string * Hash.t<br>       | `Tree_root of Hash.t ]</code> </pre>
 <div class="info ">
 The type for <a href="Value.html#TYPEt"><code class="code"><span class="constructor">Value</span>.t</code></a> predecessors.<br>
 </div>

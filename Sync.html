@@ -13,7 +13,7 @@
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
-<link title="SHA" rel="Chapter" href="SHA.html">
+<link title="Hash" rel="Chapter" href="Hash.html">
 <link title="Inflate" rel="Chapter" href="Inflate.html">
 <link title="Object" rel="Chapter" href="Object.html">
 <link title="Object_type" rel="Chapter" href="Object_type.html">
@@ -66,12 +66,21 @@ The type for the different Git protocols.<br>
 <pre><span id="TYPEcapability"><span class="keyword">type</span> <code class="type"></code>capability</span> = <code class="type">[ `Agent of string<br>       | `Allow_reachable_sha1_in_want<br>       | `Delete_refs<br>       | `Include_tag<br>       | `Multi_ack<br>       | `No_progress<br>       | `No_thin<br>       | `Ofs_delta<br>       | `Other of string<br>       | `Report_status<br>       | `Shallow<br>       | `Side_band<br>       | `Side_band_64k<br>       | `Thin_pack ]</code> </pre>
 
 
+<pre><span id="VALpp_capability"><span class="keyword">val</span> pp_capability</span> : <code class="type"><a href="Sync.html#TYPEcapability">capability</a> Fmt.t</code></pre><div class="info ">
+<code class="code">pp_capability</code> it the pretty-printer for values of type
+    <a href="Sync.html#VALpp_capability"><code class="code"><span class="constructor">Sync</span>.pp_capability</code></a>.<br>
+</div>
+
 <pre><span class="keyword">module</span> <a href="Sync.Result.html">Result</a>: <code class="code"><span class="keyword">sig</span></code> <a href="Sync.Result.html">..</a> <code class="code"><span class="keyword">end</span></code></pre>
-<pre><span id="TYPEwant"><span class="keyword">type</span> <code class="type"></code>want</span> = <code class="type">[ `Commit of SHA.Commit.t | `Ref of Reference.t ]</code> </pre>
+<pre><span id="TYPEwant"><span class="keyword">type</span> <code class="type"></code>want</span> = <code class="type">[ `Commit of Hash.Commit.t | `Ref of Reference.t ]</code> </pre>
 <div class="info ">
 The type for values wanted. See <code class="code">fetch</code> for details.<br>
 </div>
 
+
+<pre><span id="VALpp_want"><span class="keyword">val</span> pp_want</span> : <code class="type"><a href="Sync.html#TYPEwant">want</a> Fmt.t</code></pre><div class="info ">
+<code class="code">pp_want</code> is the pretty-printer for values of type <a href="Sync.html#TYPEwant"><code class="code"><span class="constructor">Sync</span>.want</code></a>.<br>
+</div>
 
 <pre><span class="keyword">module type</span> <a href="Sync.S.html">S</a> = <code class="code"><span class="keyword">sig</span></code> <a href="Sync.S.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><br>
 <h2 id="2_Constructor">Constructor</h2><br>

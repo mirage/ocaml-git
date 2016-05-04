@@ -12,7 +12,7 @@
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
-<link title="SHA" rel="Chapter" href="SHA.html">
+<link title="Hash" rel="Chapter" href="Hash.html">
 <link title="Inflate" rel="Chapter" href="Inflate.html">
 <link title="Object" rel="Chapter" href="Object.html">
 <link title="Object_type" rel="Chapter" href="Object_type.html">
@@ -81,7 +81,7 @@ Connection context<br>
 <br>
 <h1 id="1_ThebaseGitprotocolandGitSSH">The base Git protocol and Git+SSH</h1><br>
 
-<pre><span id="VALls"><span class="keyword">val</span> ls</span> : <code class="type">?ctx:<a href="Sync.S.html#TYPEctx">ctx</a> -> <a href="Sync.S.html#TYPEt">t</a> -> <a href="Gri.html#TYPEt">Gri.t</a> -> SHA.Commit.t Reference.Map.t Lwt.t</code></pre><div class="info ">
+<pre><span id="VALls"><span class="keyword">val</span> ls</span> : <code class="type">?ctx:<a href="Sync.S.html#TYPEctx">ctx</a> -> <a href="Sync.S.html#TYPEt">t</a> -> <a href="Gri.html#TYPEt">Gri.t</a> -> Hash.t Reference.Map.t Lwt.t</code></pre><div class="info ">
 List the references of the remote repository.<br>
 </div>
 
@@ -89,7 +89,7 @@ List the references of the remote repository.<br>
 Push a local branch to a remote store.<br>
 </div>
 
-<pre><span id="VALfetch"><span class="keyword">val</span> fetch</span> : <code class="type">?ctx:<a href="Sync.S.html#TYPEctx">ctx</a> -><br>       ?deepen:int -><br>       ?unpack:bool -><br>       ?capabilities:<a href="Sync.html#TYPEcapability">Sync.capability</a> list -><br>       ?wants:<a href="Sync.html#TYPEwant">Sync.want</a> list -><br>       ?update:bool -><br>       ?progress:(string -> unit) -> <a href="Sync.S.html#TYPEt">t</a> -> <a href="Gri.html#TYPEt">Gri.t</a> -> <a href="Sync.Result.html#TYPEfetch">Sync.Result.fetch</a> Lwt.t</code></pre><div class="info ">
+<pre><span id="VALfetch"><span class="keyword">val</span> fetch</span> : <code class="type">?ctx:<a href="Sync.S.html#TYPEctx">ctx</a> -><br>       ?deepen:int -><br>       ?unpack:bool -><br>       ?capabilities:<a href="Sync.html#TYPEcapability">Sync.capability</a> list -><br>       ?wants:<a href="Sync.html#TYPEwant">Sync.want</a> list -><br>       ?progress:(string -> unit) -> <a href="Sync.S.html#TYPEt">t</a> -> <a href="Gri.html#TYPEt">Gri.t</a> -> <a href="Sync.Result.html#TYPEfetch">Sync.Result.fetch</a> Lwt.t</code></pre><div class="info ">
 <code class="code">fetch t uri</code> fetches the contents of <code class="code">uri</code> into the store <code class="code">t</code>.
 <p>
 
@@ -112,22 +112,20 @@ Push a local branch to a remote store.<br>
 
 <p>
 
-      If <code class="code">update</code> is set (default is <code class="code"><span class="keyword">false</span></code>) the references given in
-      <code class="code">wants</code> are updated locally.
-<p>
-
       <b>Note:</b> the local HEAD is not modified when doing a fetch. To do so
       (for instance when doing a clone) do the following:
 <p>
 
-      <pre class="codepre"><code class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fetch&nbsp;t&nbsp;gri&nbsp;&gt;&gt;=&nbsp;<span class="keyword">fun</span>&nbsp;r&nbsp;<span class="keywordsign">-&gt;</span><br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">match</span>&nbsp;<span class="constructor">Result</span>.head_contents&nbsp;r&nbsp;<span class="keyword">with</span><br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">Some</span>&nbsp;h&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Store</span>.write_head&nbsp;t&nbsp;h<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">None</span>&nbsp;&nbsp;&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Lwt</span>.return_unit<br>
+      <pre class="codepre"><code class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fetch&nbsp;t&nbsp;gri&nbsp;&gt;&gt;=&nbsp;<span class="keyword">fun</span>&nbsp;r&nbsp;<span class="keywordsign">-&gt;</span>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">match</span>&nbsp;<span class="constructor">Result</span>.head_contents&nbsp;r&nbsp;<span class="keyword">with</span>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">Some</span>&nbsp;h&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Store</span>.write_head&nbsp;t&nbsp;h
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">None</span>&nbsp;&nbsp;&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Lwt</span>.return_unit
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code></pre><br>
 </div>
 
-<pre><span id="VALpopulate"><span class="keyword">val</span> populate</span> : <code class="type">?head:<a href="Reference.html#TYPEhead_contents">Reference.head_contents</a> -><br>       ?progress:(string -> unit) -><br>       <a href="Sync.S.html#TYPEt">t</a> -> checkout:bool -> <a href="Sync.Result.html#TYPEfetch">Sync.Result.fetch</a> -> unit Lwt.t</code></pre><div class="info ">
-Populate a fresh repository after a fetch.<br>
+<pre><span id="VALclone"><span class="keyword">val</span> clone</span> : <code class="type">?ctx:<a href="Sync.S.html#TYPEctx">ctx</a> -><br>       ?deepen:int -><br>       ?unpack:bool -><br>       ?capabilities:<a href="Sync.html#TYPEcapability">Sync.capability</a> list -><br>       ?branch:<a href="Sync.html#TYPEwant">Sync.want</a> -><br>       ?progress:(string -> unit) -><br>       <a href="Sync.S.html#TYPEt">t</a> -> checkout:bool -> <a href="Gri.html#TYPEt">Gri.t</a> -> <a href="Sync.Result.html#TYPEfetch">Sync.Result.fetch</a> Lwt.t</code></pre><div class="info ">
+Similar to <a href="Sync.S.html#VALfetch"><code class="code"><span class="constructor">Sync</span>.<span class="constructor">S</span>.fetch</code></a> but also initialise <code class="code"><span class="constructor">HEAD</span></code> and a the
+      specified <code class="code">branch</code>. If <code class="code">branch</code> is not specified, initialise all
+      the references that the remote repository exposes.<br>
 </div>
 </body></html>

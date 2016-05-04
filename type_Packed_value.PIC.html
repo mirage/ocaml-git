@@ -8,7 +8,7 @@
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
-<link title="SHA" rel="Chapter" href="SHA.html">
+<link title="Hash" rel="Chapter" href="Hash.html">
 <link title="Inflate" rel="Chapter" href="Inflate.html">
 <link title="Object" rel="Chapter" href="Object.html">
 <link title="Object_type" rel="Chapter" href="Object_type.html">
@@ -36,27 +36,26 @@
 <link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>Packed_value.PIC</title>
 </head>
 <body>
-<code class="code"><span class="keyword">sig</span><br>
-&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;kind&nbsp;=&nbsp;<span class="constructor">Raw</span>&nbsp;<span class="keyword">of</span>&nbsp;string&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">Link</span>&nbsp;<span class="keyword">of</span>&nbsp;<span class="constructor">Packed_value</span>.<span class="constructor">PIC</span>.t&nbsp;<span class="constructor">Packed_value</span>.delta<br>
-&nbsp;&nbsp;<span class="keyword">and</span>&nbsp;t&nbsp;=&nbsp;{<br>
-&nbsp;&nbsp;&nbsp;&nbsp;kind&nbsp;:&nbsp;<span class="constructor">Packed_value</span>.<span class="constructor">PIC</span>.kind;<br>
-&nbsp;&nbsp;&nbsp;&nbsp;sha1&nbsp;:&nbsp;<span class="constructor">SHA</span>.t;<br>
-&nbsp;&nbsp;&nbsp;&nbsp;shallow&nbsp;:&nbsp;bool;<br>
-&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">mutable</span>&nbsp;raw&nbsp;:&nbsp;string&nbsp;option;<br>
-&nbsp;&nbsp;}<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;equal&nbsp;:&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;bool<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;hash&nbsp;:&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;int<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;compare&nbsp;:&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;int<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;pretty&nbsp;:&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;pp&nbsp;:&nbsp;<span class="constructor">Format</span>.formatter&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;create&nbsp;:<br>
-&nbsp;&nbsp;&nbsp;&nbsp;?raw:string&nbsp;<span class="keywordsign">-&gt;</span><br>
-&nbsp;&nbsp;&nbsp;&nbsp;?shallow:bool&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">SHA</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Packed_value</span>.<span class="constructor">PIC</span>.kind&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Packed_value</span>.<span class="constructor">PIC</span>.t<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;of_raw&nbsp;:&nbsp;?shallow:bool&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">SHA</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Packed_value</span>.<span class="constructor">PIC</span>.t<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;kind&nbsp;:&nbsp;<span class="constructor">Packed_value</span>.<span class="constructor">PIC</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Packed_value</span>.<span class="constructor">PIC</span>.kind<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;sha1&nbsp;:&nbsp;<span class="constructor">Packed_value</span>.<span class="constructor">PIC</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">SHA</span>.t<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;raw&nbsp;:&nbsp;<span class="constructor">Packed_value</span>.<span class="constructor">PIC</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string&nbsp;option<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;shallow&nbsp;:&nbsp;<span class="constructor">Packed_value</span>.<span class="constructor">PIC</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;bool<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;unpack_kind&nbsp;:&nbsp;<span class="constructor">Packed_value</span>.<span class="constructor">PIC</span>.kind&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;unpack&nbsp;:&nbsp;<span class="constructor">Packed_value</span>.<span class="constructor">PIC</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string<br>
+<code class="code"><span class="keyword">sig</span>
+&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;kind&nbsp;=&nbsp;<span class="constructor">Raw</span>&nbsp;<span class="keyword">of</span>&nbsp;string&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">Link</span>&nbsp;<span class="keyword">of</span>&nbsp;<span class="constructor">Packed_value</span>.<span class="constructor">PIC</span>.t&nbsp;<span class="constructor">Packed_value</span>.delta
+&nbsp;&nbsp;<span class="keyword">and</span>&nbsp;t&nbsp;=&nbsp;{
+&nbsp;&nbsp;&nbsp;&nbsp;kind&nbsp;:&nbsp;<span class="constructor">Packed_value</span>.<span class="constructor">PIC</span>.kind;
+&nbsp;&nbsp;&nbsp;&nbsp;hash&nbsp;:&nbsp;<span class="constructor">Hash</span>.t;
+&nbsp;&nbsp;&nbsp;&nbsp;shallow&nbsp;:&nbsp;bool;
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">mutable</span>&nbsp;raw&nbsp;:&nbsp;string&nbsp;option;
+&nbsp;&nbsp;}
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;equal&nbsp;:&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;bool
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;hash&nbsp;:&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;int
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;compare&nbsp;:&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;int
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;pp&nbsp;:&nbsp;t&nbsp;<span class="constructor">Fmt</span>.t
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;create&nbsp;:
+&nbsp;&nbsp;&nbsp;&nbsp;?raw:string&nbsp;<span class="keywordsign">-&gt;</span>
+&nbsp;&nbsp;&nbsp;&nbsp;?shallow:bool&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Hash</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Packed_value</span>.<span class="constructor">PIC</span>.kind&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Packed_value</span>.<span class="constructor">PIC</span>.t
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;of_raw&nbsp;:&nbsp;?shallow:bool&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Hash</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Packed_value</span>.<span class="constructor">PIC</span>.t
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;kind&nbsp;:&nbsp;<span class="constructor">Packed_value</span>.<span class="constructor">PIC</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Packed_value</span>.<span class="constructor">PIC</span>.kind
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;name&nbsp;:&nbsp;<span class="constructor">Packed_value</span>.<span class="constructor">PIC</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Hash</span>.t
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;raw&nbsp;:&nbsp;<span class="constructor">Packed_value</span>.<span class="constructor">PIC</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string&nbsp;option
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;shallow&nbsp;:&nbsp;<span class="constructor">Packed_value</span>.<span class="constructor">PIC</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;bool
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;unpack_kind&nbsp;:&nbsp;<span class="constructor">Packed_value</span>.<span class="constructor">PIC</span>.kind&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;unpack&nbsp;:&nbsp;<span class="constructor">Packed_value</span>.<span class="constructor">PIC</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string
 <span class="keyword">end</span></code></body></html>

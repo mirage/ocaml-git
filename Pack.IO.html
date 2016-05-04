@@ -11,7 +11,7 @@
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
-<link title="SHA" rel="Chapter" href="SHA.html">
+<link title="Hash" rel="Chapter" href="Hash.html">
 <link title="Inflate" rel="Chapter" href="Inflate.html">
 <link title="Object" rel="Chapter" href="Object.html">
 <link title="Object_type" rel="Chapter" href="Object_type.html">
@@ -52,21 +52,21 @@ Serialize a pack file into a list of buffers. Return the
       corresponding raw index.<br>
 </div>
 
-<pre><span id="VALinput"><span class="keyword">val</span> input</span> : <code class="type">?progress:(string -> unit) -><br>       index:<a href="Pack_index.html#TYPEf">Pack_index.f</a> -><br>       keys:SHA.Set.t -> read:<a href="Value.html#TYPEread_inflated">Value.read_inflated</a> -> Mstruct.t -> <a href="Pack.html#TYPEt">Pack.t</a> Lwt.t</code></pre><div class="info ">
+<pre><span id="VALinput"><span class="keyword">val</span> input</span> : <code class="type">?progress:(string -> unit) -><br>       index:<a href="Pack_index.html#TYPEf">Pack_index.f</a> -><br>       keys:Hash.Set.t -> read:<a href="Value.html#TYPEread_inflated">Value.read_inflated</a> -> Mstruct.t -> <a href="Pack.html#TYPEt">Pack.t</a> Lwt.t</code></pre><div class="info ">
 The usual <code class="code"><span class="constructor">Object</span>.<span class="constructor">S</span>.input</code> function, but with additionals <code class="code">index</code>
       and <code class="code">keys</code> arguments to speed-up ramdom accesses and <code class="code">read</code> to
       read shallow objects external to the pack file.<br>
 </div>
 
-<pre><span id="VALread"><span class="keyword">val</span> read</span> : <code class="type"><a href="Pack.html#TYPEt">Pack.t</a> -> SHA.t -> <a href="Value.html#TYPEt">Value.t</a> option</code></pre><div class="info ">
+<pre><span id="VALread"><span class="keyword">val</span> read</span> : <code class="type"><a href="Pack.html#TYPEt">Pack.t</a> -> Hash.t -> <a href="Value.html#TYPEt">Value.t</a> option</code></pre><div class="info ">
 Return the value stored in the pack file.<br>
 </div>
 
-<pre><span id="VALread_exn"><span class="keyword">val</span> read_exn</span> : <code class="type"><a href="Pack.html#TYPEt">Pack.t</a> -> SHA.t -> <a href="Value.html#TYPEt">Value.t</a></code></pre><div class="info ">
+<pre><span id="VALread_exn"><span class="keyword">val</span> read_exn</span> : <code class="type"><a href="Pack.html#TYPEt">Pack.t</a> -> Hash.t -> <a href="Value.html#TYPEt">Value.t</a></code></pre><div class="info ">
 Return the value stored in the pack file.<br>
 </div>
 
-<pre><span id="VALcreate"><span class="keyword">val</span> create</span> : <code class="type">(SHA.t * <a href="Value.html#TYPEt">Value.t</a>) list -> <a href="Pack.html#TYPEt">Pack.t</a></code></pre><div class="info ">
+<pre><span id="VALcreate"><span class="keyword">val</span> create</span> : <code class="type">(Hash.t * <a href="Value.html#TYPEt">Value.t</a>) list -> <a href="Pack.html#TYPEt">Pack.t</a></code></pre><div class="info ">
 Create a (not very well compressed) pack file.<br>
 </div>
 

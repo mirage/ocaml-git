@@ -12,7 +12,7 @@
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
-<link title="SHA" rel="Chapter" href="SHA.html">
+<link title="Hash" rel="Chapter" href="Hash.html">
 <link title="Inflate" rel="Chapter" href="Inflate.html">
 <link title="Object" rel="Chapter" href="Object.html">
 <link title="Object_type" rel="Chapter" href="Object_type.html">
@@ -37,8 +37,7 @@
 <link title="FS" rel="Chapter" href="FS.html">
 <link title="Version" rel="Chapter" href="Version.html">
 <link title="Git_unix" rel="Chapter" href="Git_unix.html">
-<link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><link title="Input/output functions" rel="Section" href="#1_Inputoutputfunctions">
-<title>Packed_value.IO.V3</title>
+<link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>Packed_value.IO.V3</title>
 </head>
 <body>
 <div class="navbar"><a class="pre" href="Packed_value.IO.V2.html" title="Packed_value.IO.V2">Previous</a>
@@ -50,24 +49,11 @@
 Packed values version 3.<br>
 </div>
 <hr width="100%">
-<br>
-<h1 id="1_Inputoutputfunctions">Input/output functions</h1><br>
 
-<pre><span class="keyword">include</span> <a href="Object.S.html">Object.S</a></pre>
+<pre><span class="keyword">include</span> <a href="Object.IO.html">Object.IO</a></pre>
 
-<pre><span id="VALinput"><span class="keyword">val</span> input</span> : <code class="type">Mstruct.t -> t</code></pre><div class="info ">
-Build a value from an inflated contents.<br>
-</div>
-
-<pre><span id="VALadd"><span class="keyword">val</span> add</span> : <code class="type">Buffer.t -> ?level:int -> t -> unit</code></pre><div class="info ">
-Add the serialization of the value to an already existing
-      buffer.
-<p>
-
-      The compression <code class="code">level</code> must be between 0 and 9: 1 gives best
-      speed, 9 gives best compression, 0 gives no compression at all
-      (the input data is simply copied a block at a time). The default
-      value (currently equivalent to level 6) requests a default
-      compromise between speed and compression.<br>
+<pre><span id="VALsize"><span class="keyword">val</span> size</span> : <code class="type">Mstruct.t -> int</code></pre><div class="info ">
+Get size of the value that <code class="code">input</code> would return, without actually
+        decompressing the value.<br>
 </div>
 </body></html>

@@ -12,7 +12,7 @@
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
-<link title="SHA" rel="Chapter" href="SHA.html">
+<link title="Hash" rel="Chapter" href="Hash.html">
 <link title="Inflate" rel="Chapter" href="Inflate.html">
 <link title="Object" rel="Chapter" href="Object.html">
 <link title="Object_type" rel="Chapter" href="Object_type.html">
@@ -53,11 +53,11 @@
 Get the raw index asoociated to the raw pack.<br>
 </div>
 
-<pre><span id="VALsha1"><span class="keyword">val</span> sha1</span> : <code class="type"><a href="Pack.html#TYPEt">Pack.t</a> -> SHA.t</code></pre><div class="info ">
+<pre><span id="VALname"><span class="keyword">val</span> name</span> : <code class="type"><a href="Pack.html#TYPEt">Pack.t</a> -> Hash.t</code></pre><div class="info ">
 Get the name of the pack.<br>
 </div>
 
-<pre><span id="VALkeys"><span class="keyword">val</span> keys</span> : <code class="type"><a href="Pack.html#TYPEt">Pack.t</a> -> SHA.Set.t</code></pre><div class="info ">
+<pre><span id="VALkeys"><span class="keyword">val</span> keys</span> : <code class="type"><a href="Pack.html#TYPEt">Pack.t</a> -> Hash.Set.t</code></pre><div class="info ">
 Get the keys present in the raw pack.<br>
 </div>
 
@@ -66,7 +66,7 @@ Get the pack buffer.<br>
 </div>
 
 <pre><span id="VALshallow"><span class="keyword">val</span> shallow</span> : <code class="type"><a href="Pack.html#TYPEt">Pack.t</a> -> bool</code></pre><div class="info ">
-<code class="code">shallow t</code> is true if all the SHA references appearing in <code class="code">t</code>
+<code class="code">shallow t</code> is true if all the Hash references appearing in <code class="code">t</code>
       corresponds to objects also in <code class="code">t</code>.<br>
 </div>
 

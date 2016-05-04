@@ -12,7 +12,7 @@
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
-<link title="SHA" rel="Chapter" href="SHA.html">
+<link title="Hash" rel="Chapter" href="Hash.html">
 <link title="Inflate" rel="Chapter" href="Inflate.html">
 <link title="Object" rel="Chapter" href="Object.html">
 <link title="Object_type" rel="Chapter" href="Object_type.html">
@@ -51,9 +51,9 @@ Mirage backend.<br>
 <hr width="100%">
 
 <pre><span class="keyword">module type</span> <a href="Git_mirage.FS.html">FS</a> = <code class="code"><span class="keyword">sig</span></code> <a href="Git_mirage.FS.html">..</a> <code class="code"><span class="keyword">end</span></code></pre>
-<pre><span class="keyword">module</span> <a href="Git_mirage.FS.html">FS</a> <code class="code">(</code><code class="code"><span class="constructor">FS</span></code><code class="code"> : </code><code class="type"><a href="Git_mirage.FS.html">FS</a></code><code class="code">) </code> <code class="code">(</code><code class="code"><span class="constructor">D</span></code><code class="code"> : </code><code class="type">Git.SHA.DIGEST</code><code class="code">) </code> <code class="code">(</code><code class="code"><span class="constructor">I</span></code><code class="code"> : </code><code class="type">Git.Inflate.S</code><code class="code">) </code>: <code class="type">Git.FS.S</code><code class="type"> </code></pre><div class="info">
+<pre><span class="keyword">module</span> <a href="Git_mirage.FS.html">FS</a> <code class="code">(</code><code class="code"><span class="constructor">FS</span></code><code class="code"> : </code><code class="type"><a href="Git_mirage.FS.html">FS</a></code><code class="code">) </code> <code class="code">(</code><code class="code"><span class="constructor">D</span></code><code class="code"> : </code><code class="type">Git.Hash.DIGEST</code><code class="code">) </code> <code class="code">(</code><code class="code"><span class="constructor">I</span></code><code class="code"> : </code><code class="type">Git.Inflate.S</code><code class="code">) </code>: <code class="type">Git.FS.S</code><code class="type"> </code></pre><div class="info">
 Create a Irmin store from raw block devices handler.
 </div>
 
 <pre><span class="keyword">module</span> <a href="Git_mirage.Sync.html">Sync</a>: <code class="code"><span class="keyword">sig</span></code> <a href="Git_mirage.Sync.html">..</a> <code class="code"><span class="keyword">end</span></code></pre>
-<pre><span class="keyword">module</span> <a href="Git_mirage.SHA1_slow.html">SHA1_slow</a>: <code class="type">Git.SHA.DIGEST</code><code class="type"> </code></pre></body></html>
+<pre><span class="keyword">module</span> <a href="Git_mirage.SHA1_slow.html">SHA1_slow</a>: <code class="type">Git.Hash.DIGEST</code><code class="type"> </code></pre></body></html>

@@ -11,7 +11,7 @@
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
-<link title="SHA" rel="Chapter" href="SHA.html">
+<link title="Hash" rel="Chapter" href="Hash.html">
 <link title="Inflate" rel="Chapter" href="Inflate.html">
 <link title="Object" rel="Chapter" href="Object.html">
 <link title="Object_type" rel="Chapter" href="Object_type.html">
@@ -50,7 +50,7 @@ A map of references.<br>
 
 <pre><span class="keyword">include</span> Map.S</pre>
 
-<pre><span id="VALpretty"><span class="keyword">val</span> pretty</span> : <code class="type">('a -> string) -> 'a t -> string</code></pre>
+<pre><span id="VALpp"><span class="keyword">val</span> pp</span> : <code class="type">'a Fmt.t -> 'a t Fmt.t</code></pre>
 <pre><span id="VALkeys"><span class="keyword">val</span> keys</span> : <code class="type">'a t -> key list</code></pre>
 <pre><span id="VALto_alist"><span class="keyword">val</span> to_alist</span> : <code class="type">'a t -> (key * 'a) list</code></pre>
 <pre><span id="VALof_alist"><span class="keyword">val</span> of_alist</span> : <code class="type">(key * 'a) list -> 'a t</code></pre>

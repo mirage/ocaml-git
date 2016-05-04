@@ -8,7 +8,7 @@
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
-<link title="SHA" rel="Chapter" href="SHA.html">
+<link title="Hash" rel="Chapter" href="Hash.html">
 <link title="Inflate" rel="Chapter" href="Inflate.html">
 <link title="Object" rel="Chapter" href="Object.html">
 <link title="Object_type" rel="Chapter" href="Object_type.html">
@@ -36,18 +36,18 @@
 <link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>Git_unix.S.Sync.Result</title>
 </head>
 <body>
-<code class="code"><span class="keyword">sig</span><br>
-&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;fetch&nbsp;=&nbsp;<span class="constructor">Git</span>.<span class="constructor">Sync</span>.<span class="constructor">Result</span>.fetch<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;head_contents&nbsp;:&nbsp;fetch&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Git</span>.<span class="constructor">Reference</span>.head_contents&nbsp;option<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;head&nbsp;:&nbsp;fetch&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Git</span>.<span class="constructor">SHA</span>.<span class="constructor">Commit</span>.t&nbsp;option<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;references&nbsp;:&nbsp;fetch&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Git</span>.<span class="constructor">SHA</span>.<span class="constructor">Commit</span>.t&nbsp;<span class="constructor">Git</span>.<span class="constructor">Reference</span>.<span class="constructor">Map</span>.t<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;sha1s&nbsp;:&nbsp;fetch&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Git</span>.<span class="constructor">SHA</span>.<span class="constructor">Set</span>.t<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;pretty_fetch&nbsp;:&nbsp;fetch&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string<br>
-&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;ok_or_error&nbsp;=&nbsp;[&nbsp;<span class="keywordsign">`</span><span class="constructor">Error</span>&nbsp;<span class="keyword">of</span>&nbsp;string&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="keywordsign">`</span><span class="constructor">Ok</span>&nbsp;]<br>
-&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;push&nbsp;=<br>
-&nbsp;&nbsp;&nbsp;&nbsp;<span class="constructor">Git</span>.<span class="constructor">Sync</span>.<span class="constructor">Result</span>.push&nbsp;=&nbsp;{<br>
-&nbsp;&nbsp;&nbsp;&nbsp;result&nbsp;:&nbsp;ok_or_error;<br>
-&nbsp;&nbsp;&nbsp;&nbsp;commands&nbsp;:&nbsp;(<span class="constructor">Git</span>.<span class="constructor">Reference</span>.t&nbsp;*&nbsp;ok_or_error)&nbsp;list;<br>
-&nbsp;&nbsp;}<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;pretty_push&nbsp;:&nbsp;push&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string<br>
+<code class="code"><span class="keyword">sig</span>
+&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;fetch&nbsp;=&nbsp;<span class="constructor">Git</span>.<span class="constructor">Sync</span>.<span class="constructor">Result</span>.fetch
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;head_contents&nbsp;:&nbsp;fetch&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Git</span>.<span class="constructor">Reference</span>.head_contents&nbsp;option
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;head&nbsp;:&nbsp;fetch&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Git</span>.<span class="constructor">Hash</span>.<span class="constructor">Commit</span>.t&nbsp;option
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;references&nbsp;:&nbsp;fetch&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Git</span>.<span class="constructor">Hash</span>.t&nbsp;<span class="constructor">Git</span>.<span class="constructor">Reference</span>.<span class="constructor">Map</span>.t
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;hashes&nbsp;:&nbsp;fetch&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Git</span>.<span class="constructor">Hash</span>.<span class="constructor">Set</span>.t
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;pp_fetch&nbsp;:&nbsp;fetch&nbsp;<span class="constructor">Fmt</span>.t
+&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;ok_or_error&nbsp;=&nbsp;[&nbsp;<span class="keywordsign">`</span><span class="constructor">Error</span>&nbsp;<span class="keyword">of</span>&nbsp;string&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="keywordsign">`</span><span class="constructor">Ok</span>&nbsp;]
+&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;push&nbsp;=
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="constructor">Git</span>.<span class="constructor">Sync</span>.<span class="constructor">Result</span>.push&nbsp;=&nbsp;{
+&nbsp;&nbsp;&nbsp;&nbsp;result&nbsp;:&nbsp;ok_or_error;
+&nbsp;&nbsp;&nbsp;&nbsp;commands&nbsp;:&nbsp;(<span class="constructor">Git</span>.<span class="constructor">Reference</span>.t&nbsp;*&nbsp;ok_or_error)&nbsp;list;
+&nbsp;&nbsp;}
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;pp_push&nbsp;:&nbsp;push&nbsp;<span class="constructor">Fmt</span>.t
 <span class="keyword">end</span></code></body></html>

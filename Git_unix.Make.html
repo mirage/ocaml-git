@@ -12,7 +12,7 @@
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
-<link title="SHA" rel="Chapter" href="SHA.html">
+<link title="Hash" rel="Chapter" href="Hash.html">
 <link title="Inflate" rel="Chapter" href="Inflate.html">
 <link title="Object" rel="Chapter" href="Object.html">
 <link title="Object_type" rel="Chapter" href="Object_type.html">
@@ -38,7 +38,6 @@
 <link title="Version" rel="Chapter" href="Version.html">
 <link title="Git_unix" rel="Chapter" href="Git_unix.html">
 <link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><link title="Unix implementation" rel="Section" href="#1_Uniximplementation">
-<link title="Unix implementation" rel="Section" href="#1_Uniximplementation">
 <link title="Synchronisation" rel="Section" href="#1_Synchronisation">
 <link title="Filesystem" rel="Section" href="#1_Filesystem">
 <link title="Git objects" rel="Section" href="#1_Gitobjects">
@@ -50,7 +49,7 @@
 </div>
 <h1>Functor <a href="type_Git_unix.Make.html">Git_unix.Make</a></h1>
 
-<pre><span class="keyword">module</span> Make <code class="code">(</code><code class="code"><span class="constructor">D</span></code><code class="code"> : </code><code class="type">Git.SHA.DIGEST</code><code class="code">) </code> <code class="code">(</code><code class="code"><span class="constructor">I</span></code><code class="code"> : </code><code class="type">Git.Inflate.S</code><code class="code">) </code>: <code class="type"><a href="Git_unix.S.html">S</a></code><code class="type"> </code></pre><div class="info module top">
+<pre><span class="keyword">module</span> Make <code class="code">(</code><code class="code"><span class="constructor">D</span></code><code class="code"> : </code><code class="type">Git.Hash.DIGEST</code><code class="code">) </code> <code class="code">(</code><code class="code"><span class="constructor">I</span></code><code class="code"> : </code><code class="type">Git.Inflate.S</code><code class="code">) </code>: <code class="type"><a href="Git_unix.S.html">S</a></code><code class="type"> </code></pre><div class="info module top">
 Parametrize the Git implementation with different inflate and hash
     algorithms. <b>Note:</b> this might cause your implementation to not
     be compatible with Git anynore!<br>
@@ -64,7 +63,7 @@ Parametrize the Git implementation with different inflate and hash
 <td align="center" valign="top" width="15%">
 <code>D</code></td>
 <td align="center" valign="top">:</td>
-<td><code class="type">Git.SHA.DIGEST</code>
+<td><code class="type">Git.Hash.DIGEST</code>
 <tr>
 <td align="center" valign="top" width="15%">
 <code>I</code></td>
@@ -80,18 +79,8 @@ Parametrize the Git implementation with different inflate and hash
 <p>
 
       The default implementation for Unix fixes the choice of
-      <code class="code"><span class="constructor">Git</span>.<span class="constructor">Inflate</span>.<span class="constructor">S</span></code> and <code class="code"><span class="constructor">Git</span>.<span class="constructor">SHA</span>.<span class="constructor">DIGEST</span></code> by using <code class="code">camlzip</code>'s zlib
-      bindings and <code class="code">nocrypto</code>'s SHA1 implementation.
-<p>
-
-      It also uses <code class="code"><span class="constructor">Lwt_unix</span></code> and <code class="code"><span class="constructor">Lwt_io</span></code> for the IO functions.<br>
-<br>
-<h1 id="1_Uniximplementation">Unix implementation</h1>
-<p>
-
-      The default implementation for Unix fixes the choice of
-      <code class="code"><span class="constructor">Git</span>.<span class="constructor">Inflate</span>.<span class="constructor">S</span></code> and <code class="code"><span class="constructor">Git</span>.<span class="constructor">SHA</span>.<span class="constructor">DIGEST</span></code> by using <code class="code">camlzip</code>'s zlib
-      bindings and <code class="code">nocrypto</code>'s SHA1 implementation.
+      <code class="code"><span class="constructor">Git</span>.<span class="constructor">Inflate</span>.<span class="constructor">S</span></code> and <code class="code"><span class="constructor">Git</span>.<span class="constructor">Hash</span>.<span class="constructor">DIGEST</span></code> by using <code class="code">camlzip</code>'s zlib
+      bindings and <code class="code">nocrypto</code>'s SHA1 and SHA256 implementations.
 <p>
 
       It also uses <code class="code"><span class="constructor">Lwt_unix</span></code> and <code class="code"><span class="constructor">Lwt_io</span></code> for the IO functions.<br>
@@ -111,7 +100,7 @@ In-memory store.
 <br>
 <h1 id="1_Gitobjects">Git objects</h1><br>
 
-<pre><span class="keyword">module</span> <a href="Git_unix.S.SHA_IO.html">SHA_IO</a>: <code class="type">Git.SHA.IO</code><code class="type"> </code></pre>
+<pre><span class="keyword">module</span> <a href="Git_unix.S.Hash_IO.html">Hash_IO</a>: <code class="type">Git.Hash.IO</code><code class="type"> </code></pre>
 <pre><span class="keyword">module</span> <a href="Git_unix.S.Value_IO.html">Value_IO</a>: <code class="type">Git.Value.IO</code><code class="type"> </code></pre>
 <pre><span class="keyword">module</span> <a href="Git_unix.S.Pack_IO.html">Pack_IO</a>: <code class="type">Git.Pack.IO</code><code class="type"> </code></pre>
 <pre><span class="keyword">module</span> <a href="Git_unix.S.Index_IO.html">Index_IO</a>: <code class="type">Git.Index.IO</code><code class="type"> </code></pre></body></html>

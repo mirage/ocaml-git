@@ -12,7 +12,7 @@
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
-<link title="SHA" rel="Chapter" href="SHA.html">
+<link title="Hash" rel="Chapter" href="Hash.html">
 <link title="Inflate" rel="Chapter" href="Inflate.html">
 <link title="Object" rel="Chapter" href="Object.html">
 <link title="Object_type" rel="Chapter" href="Object_type.html">
@@ -61,7 +61,7 @@
 </table>
 <hr width="100%">
 
-<pre><span id="VALkeys"><span class="keyword">val</span> keys</span> : <code class="type">Global_graph.K.t -> SHA.t list</code></pre><div class="info ">
+<pre><span id="VALkeys"><span class="keyword">val</span> keys</span> : <code class="type">Global_graph.K.t -> Hash.t list</code></pre><div class="info ">
 <code class="code">keys g</code> is a topological sort of <code class="code">g</code>'s keys.<br>
 </div>
 
@@ -69,7 +69,7 @@
 Return the graph of keys of the given Git store.<br>
 </div>
 
-<pre><span id="VALclosure"><span class="keyword">val</span> closure</span> : <code class="type">?full:bool -> S.t -> min:SHA.Set.t -> max:SHA.Set.t -> Global_graph.K.t Lwt.t</code></pre><div class="info ">
+<pre><span id="VALclosure"><span class="keyword">val</span> closure</span> : <code class="type">?full:bool -><br>       S.t -> min:Hash.Set.t -> max:Hash.Set.t -> Global_graph.K.t Lwt.t</code></pre><div class="info ">
 Return a consistent cut of the graph of keys, where no elements
       are stricly lesser than the ones in <code class="code">min</code> and none are bigger
       than the ones in <code class="code">max</code>. Elements of <code class="code">min</code> and <code class="code">max</code> are in the
@@ -77,7 +77,7 @@ Return a consistent cut of the graph of keys, where no elements
       the graph of commits.<br>
 </div>
 
-<pre><span id="VALpack"><span class="keyword">val</span> pack</span> : <code class="type">S.t -> min:SHA.Set.t -> max:SHA.Set.t -> (SHA.t * <a href="Value.html#TYPEt">Value.t</a>) list Lwt.t</code></pre><div class="info ">
+<pre><span id="VALpack"><span class="keyword">val</span> pack</span> : <code class="type">S.t -> min:Hash.Set.t -> max:Hash.Set.t -> (Hash.t * <a href="Value.html#TYPEt">Value.t</a>) list Lwt.t</code></pre><div class="info ">
 Return a packed (closed) collection of objects.<br>
 </div>
 

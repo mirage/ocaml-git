@@ -8,7 +8,7 @@
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
-<link title="SHA" rel="Chapter" href="SHA.html">
+<link title="Hash" rel="Chapter" href="Hash.html">
 <link title="Inflate" rel="Chapter" href="Inflate.html">
 <link title="Object" rel="Chapter" href="Object.html">
 <link title="Object_type" rel="Chapter" href="Object_type.html">
@@ -33,7 +33,11 @@
 <link title="FS" rel="Chapter" href="FS.html">
 <link title="Version" rel="Chapter" href="Version.html">
 <link title="Git_unix" rel="Chapter" href="Git_unix.html">
-<link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>Git_unix.S.SHA_IO</title>
+<link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>Hash.DIGEST</title>
 </head>
 <body>
-<code class="code"><span class="constructor">Git</span>.<span class="constructor">SHA</span>.<span class="constructor">IO</span></code></body></html>
+<code class="code"><span class="keyword">sig</span>
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;cstruct&nbsp;:&nbsp;<span class="constructor">Cstruct</span>.t&nbsp;<span class="constructor">Hash</span>.digest
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;string&nbsp;:&nbsp;string&nbsp;<span class="constructor">Hash</span>.digest
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;length&nbsp;:&nbsp;int
+<span class="keyword">end</span></code></body></html>

@@ -12,7 +12,7 @@
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
-<link title="SHA" rel="Chapter" href="SHA.html">
+<link title="Hash" rel="Chapter" href="Hash.html">
 <link title="Inflate" rel="Chapter" href="Inflate.html">
 <link title="Object" rel="Chapter" href="Object.html">
 <link title="Object_type" rel="Chapter" href="Object_type.html">
@@ -68,11 +68,7 @@ Hash an object.<br>
 Compare two objects.<br>
 </div>
 
-<pre><span id="VALpretty"><span class="keyword">val</span> pretty</span> : <code class="type"><a href="Object.S.html#TYPEt">t</a> -> string</code></pre><div class="info ">
-Human readable represenation of the object.<br>
-</div>
-
-<pre><span id="VALpp"><span class="keyword">val</span> pp</span> : <code class="type">Format.formatter -> <a href="Object.S.html#TYPEt">t</a> -> unit</code></pre><div class="info ">
-Same as <a href="Object.S.html#VALpretty"><code class="code"><span class="constructor">Object</span>.<span class="constructor">S</span>.pretty</code></a> but using a generic formatter.<br>
+<pre><span id="VALpp"><span class="keyword">val</span> pp</span> : <code class="type"><a href="Object.S.html#TYPEt">t</a> Fmt.t</code></pre><div class="info ">
+<code class="code">pp</code> is the pretty-printer for values of type <code class="code">t</code>.<br>
 </div>
 </body></html>

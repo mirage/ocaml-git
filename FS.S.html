@@ -12,7 +12,7 @@
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
-<link title="SHA" rel="Chapter" href="SHA.html">
+<link title="Hash" rel="Chapter" href="Hash.html">
 <link title="Inflate" rel="Chapter" href="Inflate.html">
 <link title="Object" rel="Chapter" href="Object.html">
 <link title="Object_type" rel="Chapter" href="Object_type.html">
@@ -57,7 +57,7 @@ Remove all the contents of the store.<br>
 Create a file on the filesystem, with the given mode.<br>
 </div>
 
-<pre><span id="VALentry_of_file"><span class="keyword">val</span> entry_of_file</span> : <code class="type">t -><br>       <a href="Index.html#TYPEt">Index.t</a> -><br>       string -> <a href="Tree.html#TYPEperm">Tree.perm</a> -> SHA.Blob.t -> Blob.t -> <a href="Index.html#TYPEentry">Index.entry</a> option Lwt.t</code></pre><div class="info ">
+<pre><span id="VALentry_of_file"><span class="keyword">val</span> entry_of_file</span> : <code class="type">t -><br>       <a href="Index.html#TYPEt">Index.t</a> -><br>       string -> <a href="Tree.html#TYPEperm">Tree.perm</a> -> Hash.Blob.t -> Blob.t -> <a href="Index.html#TYPEentry">Index.entry</a> option Lwt.t</code></pre><div class="info ">
 Generate a cache entry for the file. Create a fresh file if it
       does not already exist. If <code class="code">root</code> is not set, use the current
       working directory as repository root.<br>

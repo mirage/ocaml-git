@@ -13,7 +13,7 @@
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
-<link title="SHA" rel="Chapter" href="SHA.html">
+<link title="Hash" rel="Chapter" href="Hash.html">
 <link title="Inflate" rel="Chapter" href="Inflate.html">
 <link title="Object" rel="Chapter" href="Object.html">
 <link title="Object_type" rel="Chapter" href="Object_type.html">
@@ -38,27 +38,27 @@
 <link title="FS" rel="Chapter" href="FS.html">
 <link title="Version" rel="Chapter" href="Version.html">
 <link title="Git_unix" rel="Chapter" href="Git_unix.html">
-<link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>SHA</title>
+<link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>Hash</title>
 </head>
 <body>
 <div class="navbar"><a class="pre" href="Misc.html" title="Misc">Previous</a>
 &nbsp;<a class="up" href="index.html" title="Index">Up</a>
 &nbsp;<a class="post" href="Inflate.html" title="Inflate">Next</a>
 </div>
-<h1>Module <a href="type_SHA.html">SHA</a></h1>
+<h1>Module <a href="type_Hash.html">Hash</a></h1>
 
-<pre><span class="keyword">module</span> SHA: <code class="code"><span class="keyword">sig</span></code> <a href="SHA.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><div class="info module top">
-SHA hashes.
+<pre><span class="keyword">module</span> Hash: <code class="code"><span class="keyword">sig</span></code> <a href="Hash.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><div class="info module top">
+Hashing.
 <p>
 
-    This module handles both usual SHA hashes and <i>short</i>
-    hashes, which are shorter sequences of bits with a valid
-    hexadecimal representation. The only way to create short hashes is
-    to use <code class="code">of_hex</code> with the <code class="code">strict</code> argument set to false.
+    This module handles both usual hashes and <i>short</i> hashes, which
+    are shorter sequences of bits with a valid hexadecimal
+    representation. The only way to create short hashes is to use
+    <code class="code">of_hex</code> with the <code class="code">strict</code> argument set to false.
 <p>
 
     When short hashes are used in normal Git operations, they can
-    raise <a href="SHA.html#EXCEPTIONAmbiguous"><code class="code"><span class="constructor">SHA</span>.<span class="constructor">Ambiguous</span></code></a>.
+    raise <a href="Hash.html#EXCEPTIONAmbiguous"><code class="code"><span class="constructor">Hash</span>.<span class="constructor">Ambiguous</span></code></a>.
 <p>
 
     This module define various abstraction to distinguish between
@@ -67,23 +67,23 @@ SHA hashes.
 </div>
 <hr width="100%">
 
-<pre><span class="keyword">module type</span> <a href="SHA.S.html">S</a> = <code class="code"><span class="keyword">sig</span></code> <a href="SHA.S.html">..</a> <code class="code"><span class="keyword">end</span></code></pre>
-<pre><span class="keyword">include</span> <a href="SHA.S.html">SHA.S</a></pre>
+<pre><span class="keyword">module type</span> <a href="Hash.S.html">S</a> = <code class="code"><span class="keyword">sig</span></code> <a href="Hash.S.html">..</a> <code class="code"><span class="keyword">end</span></code></pre>
+<pre><span class="keyword">include</span> <a href="Hash.S.html">Hash.S</a></pre>
 
 <pre><span id="EXCEPTIONAmbiguous"><span class="keyword">exception</span> Ambiguous</span> <span class="keyword">of</span> <code class="type">string</code></pre>
 <div class="info ">
 Exception raised when using short and ambiguous hashes.<br>
 </div>
 
-<pre><span class="keyword">module</span> <a href="SHA.Commit.html">Commit</a>: <code class="type"><a href="SHA.S.html">S</a></code><code class="type"> </code></pre><div class="info">
+<pre><span class="keyword">module</span> <a href="Hash.Commit.html">Commit</a>: <code class="type"><a href="Hash.S.html">S</a></code><code class="type"> </code></pre><div class="info">
 Commit nodes.
 </div>
 
-<pre><span class="keyword">module</span> <a href="SHA.Tree.html">Tree</a>: <code class="type"><a href="SHA.S.html">S</a></code><code class="type"> </code></pre><div class="info">
+<pre><span class="keyword">module</span> <a href="Hash.Tree.html">Tree</a>: <code class="type"><a href="Hash.S.html">S</a></code><code class="type"> </code></pre><div class="info">
 Treee nodes.
 </div>
 
-<pre><span class="keyword">module</span> <a href="SHA.Blob.html">Blob</a>: <code class="type"><a href="SHA.S.html">S</a></code><code class="type"> </code></pre><div class="info">
+<pre><span class="keyword">module</span> <a href="Hash.Blob.html">Blob</a>: <code class="type"><a href="Hash.S.html">S</a></code><code class="type"> </code></pre><div class="info">
 Blob nodes.
 </div>
 
@@ -111,17 +111,17 @@ A blob node is also a node.<br>
 A node might be a blob node.<br>
 </div>
 
-<pre><span class="keyword">module type</span> <a href="SHA.H.html">H</a> = <code class="code"><span class="keyword">sig</span></code> <a href="SHA.H.html">..</a> <code class="code"><span class="keyword">end</span></code></pre>
-<pre><span class="keyword">module type</span> <a href="SHA.IO.html">IO</a> = <code class="code"><span class="keyword">sig</span></code> <a href="SHA.IO.html">..</a> <code class="code"><span class="keyword">end</span></code></pre>
+<pre><span class="keyword">module type</span> <a href="Hash.H.html">H</a> = <code class="code"><span class="keyword">sig</span></code> <a href="Hash.H.html">..</a> <code class="code"><span class="keyword">end</span></code></pre>
+<pre><span class="keyword">module type</span> <a href="Hash.IO.html">IO</a> = <code class="code"><span class="keyword">sig</span></code> <a href="Hash.IO.html">..</a> <code class="code"><span class="keyword">end</span></code></pre>
 <pre><span id="TYPEdigest"><span class="keyword">type</span> <code class="type">'a</code> digest</span> = <code class="type">'a -> t</code> </pre>
 <div class="info ">
 The type for digest functions.<br>
 </div>
 
 
-<pre><span class="keyword">module type</span> <a href="SHA.DIGEST.html">DIGEST</a> = <code class="code"><span class="keyword">sig</span></code> <a href="SHA.DIGEST.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><div class="info">
-The signature to compute SHA digests.
+<pre><span class="keyword">module type</span> <a href="Hash.DIGEST.html">DIGEST</a> = <code class="code"><span class="keyword">sig</span></code> <a href="Hash.DIGEST.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><div class="info">
+The signature to compute hash digests.
 </div>
 
-<pre><span class="keyword">module</span> <a href="SHA.IO.html">IO</a> <code class="code">(</code><code class="code"><span class="constructor">D</span></code><code class="code"> : </code><code class="type"><a href="SHA.DIGEST.html">DIGEST</a></code><code class="code">) </code>: <code class="type"><a href="SHA.IO.html">IO</a></code><code class="type"> </code></pre>
-<pre><span class="keyword">module</span> <a href="SHA.Array.html">Array</a> <code class="code">(</code><code class="code"><span class="constructor">D</span></code><code class="code"> : </code><code class="type"><a href="SHA.DIGEST.html">DIGEST</a></code><code class="code">) </code>: <code class="code"><span class="keyword">sig</span></code> <a href="SHA.Array.html">..</a> <code class="code"><span class="keyword">end</span></code></pre></body></html>
+<pre><span class="keyword">module</span> <a href="Hash.IO.html">IO</a> <code class="code">(</code><code class="code"><span class="constructor">D</span></code><code class="code"> : </code><code class="type"><a href="Hash.DIGEST.html">DIGEST</a></code><code class="code">) </code>: <code class="type"><a href="Hash.IO.html">IO</a></code><code class="type"> </code></pre>
+<pre><span class="keyword">module</span> <a href="Hash.Array.html">Array</a> <code class="code">(</code><code class="code"><span class="constructor">D</span></code><code class="code"> : </code><code class="type"><a href="Hash.DIGEST.html">DIGEST</a></code><code class="code">) </code>: <code class="code"><span class="keyword">sig</span></code> <a href="Hash.Array.html">..</a> <code class="code"><span class="keyword">end</span></code></pre></body></html>

@@ -8,7 +8,7 @@
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
-<link title="SHA" rel="Chapter" href="SHA.html">
+<link title="Hash" rel="Chapter" href="Hash.html">
 <link title="Inflate" rel="Chapter" href="Inflate.html">
 <link title="Object" rel="Chapter" href="Object.html">
 <link title="Object_type" rel="Chapter" href="Object_type.html">
@@ -36,27 +36,29 @@
 <link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>Git_unix.S.Sync.Make</title>
 </head>
 <body>
-<code class="code"><span class="keyword">functor</span>&nbsp;(<span class="constructor">S</span>&nbsp;:&nbsp;<span class="constructor">Git</span>.<span class="constructor">Store</span>.<span class="constructor">S</span>)&nbsp;<span class="keywordsign">-&gt;</span><br>
-&nbsp;&nbsp;<span class="keyword">sig</span><br>
-&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;t&nbsp;=&nbsp;<span class="constructor">S</span>.t<br>
-&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;ctx<br>
-&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;ls&nbsp;:<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;?ctx:ctx&nbsp;<span class="keywordsign">-&gt;</span><br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Git</span>.<span class="constructor">Gri</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Git</span>.<span class="constructor">SHA</span>.<span class="constructor">Commit</span>.t&nbsp;<span class="constructor">Git</span>.<span class="constructor">Reference</span>.<span class="constructor">Map</span>.t&nbsp;<span class="constructor">Lwt</span>.t<br>
-&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;push&nbsp;:<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;?ctx:ctx&nbsp;<span class="keywordsign">-&gt;</span><br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;branch:<span class="constructor">Git</span>.<span class="constructor">Reference</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Git</span>.<span class="constructor">Gri</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Git</span>.<span class="constructor">Sync</span>.<span class="constructor">Result</span>.push&nbsp;<span class="constructor">Lwt</span>.t<br>
-&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;fetch&nbsp;:<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;?ctx:ctx&nbsp;<span class="keywordsign">-&gt;</span><br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;?deepen:int&nbsp;<span class="keywordsign">-&gt;</span><br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;?unpack:bool&nbsp;<span class="keywordsign">-&gt;</span><br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;?capabilities:<span class="constructor">Git</span>.<span class="constructor">Sync</span>.capability&nbsp;list&nbsp;<span class="keywordsign">-&gt;</span><br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;?wants:<span class="constructor">Git</span>.<span class="constructor">Sync</span>.want&nbsp;list&nbsp;<span class="keywordsign">-&gt;</span><br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;?update:bool&nbsp;<span class="keywordsign">-&gt;</span><br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;?progress:(string&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit)&nbsp;<span class="keywordsign">-&gt;</span><br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Git</span>.<span class="constructor">Gri</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Git</span>.<span class="constructor">Sync</span>.<span class="constructor">Result</span>.fetch&nbsp;<span class="constructor">Lwt</span>.t<br>
-&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;populate&nbsp;:<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;?head:<span class="constructor">Git</span>.<span class="constructor">Reference</span>.head_contents&nbsp;<span class="keywordsign">-&gt;</span><br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;?progress:(string&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit)&nbsp;<span class="keywordsign">-&gt;</span><br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;checkout:bool&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Git</span>.<span class="constructor">Sync</span>.<span class="constructor">Result</span>.fetch&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit&nbsp;<span class="constructor">Lwt</span>.t<br>
+<code class="code"><span class="keyword">functor</span>&nbsp;(<span class="constructor">S</span>&nbsp;:&nbsp;<span class="constructor">Git</span>.<span class="constructor">Store</span>.<span class="constructor">S</span>)&nbsp;<span class="keywordsign">-&gt;</span>
+&nbsp;&nbsp;<span class="keyword">sig</span>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;t&nbsp;=&nbsp;<span class="constructor">S</span>.t
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;ctx
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;ls&nbsp;:
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;?ctx:ctx&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Git</span>.<span class="constructor">Gri</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Git</span>.<span class="constructor">Hash</span>.t&nbsp;<span class="constructor">Git</span>.<span class="constructor">Reference</span>.<span class="constructor">Map</span>.t&nbsp;<span class="constructor">Lwt</span>.t
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;push&nbsp;:
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;?ctx:ctx&nbsp;<span class="keywordsign">-&gt;</span>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;branch:<span class="constructor">Git</span>.<span class="constructor">Reference</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Git</span>.<span class="constructor">Gri</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Git</span>.<span class="constructor">Sync</span>.<span class="constructor">Result</span>.push&nbsp;<span class="constructor">Lwt</span>.t
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;fetch&nbsp;:
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;?ctx:ctx&nbsp;<span class="keywordsign">-&gt;</span>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;?deepen:int&nbsp;<span class="keywordsign">-&gt;</span>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;?unpack:bool&nbsp;<span class="keywordsign">-&gt;</span>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;?capabilities:<span class="constructor">Git</span>.<span class="constructor">Sync</span>.capability&nbsp;list&nbsp;<span class="keywordsign">-&gt;</span>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;?wants:<span class="constructor">Git</span>.<span class="constructor">Sync</span>.want&nbsp;list&nbsp;<span class="keywordsign">-&gt;</span>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;?progress:(string&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit)&nbsp;<span class="keywordsign">-&gt;</span>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Git</span>.<span class="constructor">Gri</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Git</span>.<span class="constructor">Sync</span>.<span class="constructor">Result</span>.fetch&nbsp;<span class="constructor">Lwt</span>.t
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;clone&nbsp;:
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;?ctx:ctx&nbsp;<span class="keywordsign">-&gt;</span>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;?deepen:int&nbsp;<span class="keywordsign">-&gt;</span>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;?unpack:bool&nbsp;<span class="keywordsign">-&gt;</span>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;?capabilities:<span class="constructor">Git</span>.<span class="constructor">Sync</span>.capability&nbsp;list&nbsp;<span class="keywordsign">-&gt;</span>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;?branch:<span class="constructor">Git</span>.<span class="constructor">Sync</span>.want&nbsp;<span class="keywordsign">-&gt;</span>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;?progress:(string&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit)&nbsp;<span class="keywordsign">-&gt;</span>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;checkout:bool&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Git</span>.<span class="constructor">Gri</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Git</span>.<span class="constructor">Sync</span>.<span class="constructor">Result</span>.fetch&nbsp;<span class="constructor">Lwt</span>.t
 &nbsp;&nbsp;<span class="keyword">end</span></code></body></html>

@@ -11,7 +11,7 @@
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
-<link title="SHA" rel="Chapter" href="SHA.html">
+<link title="Hash" rel="Chapter" href="Hash.html">
 <link title="Inflate" rel="Chapter" href="Inflate.html">
 <link title="Object" rel="Chapter" href="Object.html">
 <link title="Object_type" rel="Chapter" href="Object_type.html">
@@ -59,7 +59,7 @@
 </table>
 <hr width="100%">
 
-<pre><span id="VALpred"><span class="keyword">val</span> pred</span> : <code class="type">S.t -> ?full:bool -> SHA.t -> <a href="Search.html#TYPEpred">Search.pred</a> list Lwt.t</code></pre><div class="info ">
+<pre><span id="VALpred"><span class="keyword">val</span> pred</span> : <code class="type">S.t -> ?full:bool -> Hash.t -> <a href="Search.html#TYPEpred">Search.pred</a> list Lwt.t</code></pre><div class="info ">
 <code class="code">pred t s</code> is the list of <code class="code">s</code>'s predecessors in the graph
       <code class="code">t</code>. If <code class="code">full</code> is not set (by default it is) only consider
       commits and their history relation.<br>
@@ -71,12 +71,12 @@ The type for path values. See <code class="code">find</code> for details.<br>
 </div>
 
 
-<pre><span id="VALmem"><span class="keyword">val</span> mem</span> : <code class="type">S.t -> SHA.t -> <a href="Search.Make.html#TYPEpath">path</a> -> bool Lwt.t</code></pre><div class="info ">
+<pre><span id="VALmem"><span class="keyword">val</span> mem</span> : <code class="type">S.t -> Hash.t -> <a href="Search.Make.html#TYPEpath">path</a> -> bool Lwt.t</code></pre><div class="info ">
 <code class="code">mem t s p</code> check wether there exists a path <code class="code">p</code> from <code class="code">s</code> in
       <code class="code">t</code>.<br>
 </div>
 
-<pre><span id="VALfind"><span class="keyword">val</span> find</span> : <code class="type">S.t -> SHA.t -> <a href="Search.Make.html#TYPEpath">path</a> -> SHA.t option Lwt.t</code></pre><div class="info ">
+<pre><span id="VALfind"><span class="keyword">val</span> find</span> : <code class="type">S.t -> Hash.t -> <a href="Search.Make.html#TYPEpath">path</a> -> Hash.t option Lwt.t</code></pre><div class="info ">
 <code class="code">find t s p</code> follows the path <code class="code">p</code> from <code class="code">s</code> in <code class="code">t</code>.<br>
 </div>
 </body></html>

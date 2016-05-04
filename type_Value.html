@@ -8,7 +8,7 @@
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
-<link title="SHA" rel="Chapter" href="SHA.html">
+<link title="Hash" rel="Chapter" href="Hash.html">
 <link title="Inflate" rel="Chapter" href="Inflate.html">
 <link title="Object" rel="Chapter" href="Object.html">
 <link title="Object_type" rel="Chapter" href="Object_type.html">
@@ -36,50 +36,48 @@
 <link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>Value</title>
 </head>
 <body>
-<code class="code"><span class="keyword">sig</span><br>
-&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;t&nbsp;=<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="constructor">Blob</span>&nbsp;<span class="keyword">of</span>&nbsp;<span class="constructor">Blob</span>.t<br>
-&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">Commit</span>&nbsp;<span class="keyword">of</span>&nbsp;<span class="constructor">Commit</span>.t<br>
-&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">Tag</span>&nbsp;<span class="keyword">of</span>&nbsp;<span class="constructor">Tag</span>.t<br>
-&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">Tree</span>&nbsp;<span class="keyword">of</span>&nbsp;<span class="constructor">Tree</span>.t<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;equal&nbsp;:&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;bool<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;hash&nbsp;:&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;int<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;compare&nbsp;:&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;int<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;pretty&nbsp;:&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;pp&nbsp;:&nbsp;<span class="constructor">Format</span>.formatter&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;type_of&nbsp;:&nbsp;<span class="constructor">Value</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Object_type</span>.t<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;type_of_inflated&nbsp;:&nbsp;<span class="constructor">Mstruct</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Object_type</span>.t<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;commit&nbsp;:&nbsp;<span class="constructor">Commit</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Value</span>.t<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;blob&nbsp;:&nbsp;<span class="constructor">Blob</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Value</span>.t<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;tree&nbsp;:&nbsp;<span class="constructor">Tree</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Value</span>.t<br>
-&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;tag&nbsp;:&nbsp;<span class="constructor">Tag</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Value</span>.t<br>
-&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;read&nbsp;=&nbsp;<span class="constructor">SHA</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Value</span>.t&nbsp;option&nbsp;<span class="constructor">Lwt</span>.t<br>
-&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;read_inflated&nbsp;=&nbsp;<span class="constructor">SHA</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string&nbsp;option&nbsp;<span class="constructor">Lwt</span>.t<br>
-&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;write&nbsp;=&nbsp;<span class="constructor">Value</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">SHA</span>.t&nbsp;<span class="constructor">Lwt</span>.t<br>
-&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;write_inflated&nbsp;=&nbsp;string&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">SHA</span>.t&nbsp;<span class="constructor">Lwt</span>.t<br>
-&nbsp;&nbsp;<span class="keyword">module</span>&nbsp;<span class="constructor">Cache</span>&nbsp;:<br>
-&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">sig</span><br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;set_size&nbsp;:&nbsp;int&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;clear&nbsp;:&nbsp;unit&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;find&nbsp;:&nbsp;<span class="constructor">SHA</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Value</span>.t&nbsp;option<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;find_inflated&nbsp;:&nbsp;<span class="constructor">SHA</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string&nbsp;option<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;add&nbsp;:&nbsp;<span class="constructor">SHA</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Value</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;add_inflated&nbsp;:&nbsp;<span class="constructor">SHA</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit<br>
-&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">end</span><br>
-&nbsp;&nbsp;<span class="keyword">module</span>&nbsp;<span class="keyword">type</span>&nbsp;<span class="constructor">IO</span>&nbsp;=<br>
-&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">sig</span><br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;t&nbsp;=&nbsp;t<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;equal&nbsp;:&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;bool<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;hash&nbsp;:&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;int<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;compare&nbsp;:&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;int<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;pretty&nbsp;:&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;pp&nbsp;:&nbsp;<span class="constructor">Format</span>.formatter&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;input&nbsp;:&nbsp;<span class="constructor">Mstruct</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;t<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;add&nbsp;:&nbsp;<span class="constructor">Buffer</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;?level:int&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;sha1&nbsp;:&nbsp;<span class="constructor">Value</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">SHA</span>.t<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;add_header&nbsp;:&nbsp;<span class="constructor">Buffer</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Object_type</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;int&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;add_inflated&nbsp;:&nbsp;<span class="constructor">Buffer</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Value</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;input_inflated&nbsp;:&nbsp;<span class="constructor">Mstruct</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Value</span>.t<br>
-&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">end</span><br>
-&nbsp;&nbsp;<span class="keyword">module</span>&nbsp;<span class="constructor">IO</span>&nbsp;:&nbsp;<span class="keyword">functor</span>&nbsp;(<span class="constructor">D</span>&nbsp;:&nbsp;<span class="constructor">SHA</span>.<span class="constructor">DIGEST</span>)&nbsp;(<span class="constructor">I</span>&nbsp;:&nbsp;<span class="constructor">Inflate</span>.<span class="constructor">S</span>)&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">IO</span><br>
+<code class="code"><span class="keyword">sig</span>
+&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;t&nbsp;=
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="constructor">Blob</span>&nbsp;<span class="keyword">of</span>&nbsp;<span class="constructor">Blob</span>.t
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">Commit</span>&nbsp;<span class="keyword">of</span>&nbsp;<span class="constructor">Commit</span>.t
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">Tag</span>&nbsp;<span class="keyword">of</span>&nbsp;<span class="constructor">Tag</span>.t
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">Tree</span>&nbsp;<span class="keyword">of</span>&nbsp;<span class="constructor">Tree</span>.t
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;equal&nbsp;:&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;bool
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;hash&nbsp;:&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;int
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;compare&nbsp;:&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;int
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;pp&nbsp;:&nbsp;t&nbsp;<span class="constructor">Fmt</span>.t
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;type_of&nbsp;:&nbsp;<span class="constructor">Value</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Object_type</span>.t
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;type_of_inflated&nbsp;:&nbsp;<span class="constructor">Mstruct</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Object_type</span>.t
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;commit&nbsp;:&nbsp;<span class="constructor">Commit</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Value</span>.t
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;blob&nbsp;:&nbsp;<span class="constructor">Blob</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Value</span>.t
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;tree&nbsp;:&nbsp;<span class="constructor">Tree</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Value</span>.t
+&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;tag&nbsp;:&nbsp;<span class="constructor">Tag</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Value</span>.t
+&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;read&nbsp;=&nbsp;<span class="constructor">Hash</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Value</span>.t&nbsp;option&nbsp;<span class="constructor">Lwt</span>.t
+&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;read_inflated&nbsp;=&nbsp;<span class="constructor">Hash</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string&nbsp;option&nbsp;<span class="constructor">Lwt</span>.t
+&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;write&nbsp;=&nbsp;<span class="constructor">Value</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Hash</span>.t&nbsp;<span class="constructor">Lwt</span>.t
+&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;write_inflated&nbsp;=&nbsp;string&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Hash</span>.t&nbsp;<span class="constructor">Lwt</span>.t
+&nbsp;&nbsp;<span class="keyword">module</span>&nbsp;<span class="constructor">Cache</span>&nbsp;:
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">sig</span>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;set_size&nbsp;:&nbsp;int&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;clear&nbsp;:&nbsp;unit&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;find&nbsp;:&nbsp;<span class="constructor">Hash</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Value</span>.t&nbsp;option
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;find_inflated&nbsp;:&nbsp;<span class="constructor">Hash</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string&nbsp;option
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;add&nbsp;:&nbsp;<span class="constructor">Hash</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Value</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;add_inflated&nbsp;:&nbsp;<span class="constructor">Hash</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">end</span>
+&nbsp;&nbsp;<span class="keyword">module</span>&nbsp;<span class="keyword">type</span>&nbsp;<span class="constructor">IO</span>&nbsp;=
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">sig</span>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;t&nbsp;=&nbsp;t
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;equal&nbsp;:&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;bool
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;hash&nbsp;:&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;int
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;compare&nbsp;:&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;int
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;pp&nbsp;:&nbsp;t&nbsp;<span class="constructor">Fmt</span>.t
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;input&nbsp;:&nbsp;<span class="constructor">Mstruct</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;t
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;add&nbsp;:&nbsp;<span class="constructor">Buffer</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;?level:int&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;name&nbsp;:&nbsp;<span class="constructor">Value</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Hash</span>.t
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;add_header&nbsp;:&nbsp;<span class="constructor">Buffer</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Object_type</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;int&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;add_inflated&nbsp;:&nbsp;<span class="constructor">Buffer</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Value</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;unit
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;input_inflated&nbsp;:&nbsp;<span class="constructor">Mstruct</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Value</span>.t
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">end</span>
+&nbsp;&nbsp;<span class="keyword">module</span>&nbsp;<span class="constructor">IO</span>&nbsp;:&nbsp;<span class="keyword">functor</span>&nbsp;(<span class="constructor">D</span>&nbsp;:&nbsp;<span class="constructor">Hash</span>.<span class="constructor">DIGEST</span>)&nbsp;(<span class="constructor">I</span>&nbsp;:&nbsp;<span class="constructor">Inflate</span>.<span class="constructor">S</span>)&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">IO</span>
 <span class="keyword">end</span></code></body></html>

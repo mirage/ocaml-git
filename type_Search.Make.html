@@ -8,7 +8,7 @@
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
-<link title="SHA" rel="Chapter" href="SHA.html">
+<link title="Hash" rel="Chapter" href="Hash.html">
 <link title="Inflate" rel="Chapter" href="Inflate.html">
 <link title="Object" rel="Chapter" href="Object.html">
 <link title="Object_type" rel="Chapter" href="Object_type.html">
@@ -36,13 +36,13 @@
 <link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>Search.Make</title>
 </head>
 <body>
-<code class="code"><span class="keyword">functor</span>&nbsp;(<span class="constructor">S</span>&nbsp;:&nbsp;<span class="constructor">Store</span>.<span class="constructor">S</span>)&nbsp;<span class="keywordsign">-&gt;</span><br>
-&nbsp;&nbsp;<span class="keyword">sig</span><br>
-&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;pred&nbsp;:&nbsp;<span class="constructor">S</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;?full:bool&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">SHA</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Search</span>.pred&nbsp;list&nbsp;<span class="constructor">Lwt</span>.t<br>
-&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;path&nbsp;=<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;<span class="keywordsign">`</span><span class="constructor">Commit</span>&nbsp;<span class="keyword">of</span>&nbsp;<span class="constructor">Search</span>.<span class="constructor">Make</span>.path<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="keywordsign">`</span><span class="constructor">Path</span>&nbsp;<span class="keyword">of</span>&nbsp;string&nbsp;list<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="keywordsign">`</span><span class="constructor">Tag</span>&nbsp;<span class="keyword">of</span>&nbsp;string&nbsp;*&nbsp;<span class="constructor">Search</span>.<span class="constructor">Make</span>.path&nbsp;]<br>
-&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;mem&nbsp;:&nbsp;<span class="constructor">S</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">SHA</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Search</span>.<span class="constructor">Make</span>.path&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;bool&nbsp;<span class="constructor">Lwt</span>.t<br>
-&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;find&nbsp;:&nbsp;<span class="constructor">S</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">SHA</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Search</span>.<span class="constructor">Make</span>.path&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">SHA</span>.t&nbsp;option&nbsp;<span class="constructor">Lwt</span>.t<br>
+<code class="code"><span class="keyword">functor</span>&nbsp;(<span class="constructor">S</span>&nbsp;:&nbsp;<span class="constructor">Store</span>.<span class="constructor">S</span>)&nbsp;<span class="keywordsign">-&gt;</span>
+&nbsp;&nbsp;<span class="keyword">sig</span>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;pred&nbsp;:&nbsp;<span class="constructor">S</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;?full:bool&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Hash</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Search</span>.pred&nbsp;list&nbsp;<span class="constructor">Lwt</span>.t
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">type</span>&nbsp;path&nbsp;=
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;<span class="keywordsign">`</span><span class="constructor">Commit</span>&nbsp;<span class="keyword">of</span>&nbsp;<span class="constructor">Search</span>.<span class="constructor">Make</span>.path
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="keywordsign">`</span><span class="constructor">Path</span>&nbsp;<span class="keyword">of</span>&nbsp;string&nbsp;list
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="keywordsign">`</span><span class="constructor">Tag</span>&nbsp;<span class="keyword">of</span>&nbsp;string&nbsp;*&nbsp;<span class="constructor">Search</span>.<span class="constructor">Make</span>.path&nbsp;]
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;mem&nbsp;:&nbsp;<span class="constructor">S</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Hash</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Search</span>.<span class="constructor">Make</span>.path&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;bool&nbsp;<span class="constructor">Lwt</span>.t
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;find&nbsp;:&nbsp;<span class="constructor">S</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Hash</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Search</span>.<span class="constructor">Make</span>.path&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Hash</span>.t&nbsp;option&nbsp;<span class="constructor">Lwt</span>.t
 &nbsp;&nbsp;<span class="keyword">end</span></code></body></html>

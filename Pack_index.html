@@ -13,7 +13,7 @@
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
-<link title="SHA" rel="Chapter" href="SHA.html">
+<link title="Hash" rel="Chapter" href="Hash.html">
 <link title="Inflate" rel="Chapter" href="Inflate.html">
 <link title="Object" rel="Chapter" href="Object.html">
 <link title="Object_type" rel="Chapter" href="Object_type.html">
@@ -58,9 +58,9 @@ Abstract type of pack index.<br>
 </div>
 
 
-<pre><span id="TYPEf"><span class="keyword">type</span> <code class="type"></code>f</span> = <code class="type">SHA.t -> int option</code> </pre>
+<pre><span id="TYPEf"><span class="keyword">type</span> <code class="type"></code>f</span> = <code class="type">Hash.t -> int option</code> </pre>
 <div class="info ">
-The type of functions associating SHA1 keys to offset in the pack
+The type of functions associating Hash1 keys to offset in the pack
     file.<br>
 </div>
 
@@ -70,27 +70,27 @@ The type of functions associating SHA1 keys to offset in the pack
 <td align="left" valign="top" >
 <code>&nbsp;&nbsp;</code></td>
 <td align="left" valign="top" >
-<code><span id="TYPEELTraw.offsets">offsets</span>&nbsp;: <code class="type">int SHA.Map.t</code>;</code></td>
+<code><span id="TYPEELTraw.offsets">offsets</span>&nbsp;: <code class="type">int Hash.Map.t</code>;</code></td>
 
 </tr>
 <tr>
 <td align="left" valign="top" >
 <code>&nbsp;&nbsp;</code></td>
 <td align="left" valign="top" >
-<code><span id="TYPEELTraw.crcs">crcs</span>&nbsp;: <code class="type">int32 SHA.Map.t</code>;</code></td>
+<code><span id="TYPEELTraw.crcs">crcs</span>&nbsp;: <code class="type">int32 Hash.Map.t</code>;</code></td>
 
 </tr>
 <tr>
 <td align="left" valign="top" >
 <code>&nbsp;&nbsp;</code></td>
 <td align="left" valign="top" >
-<code><span id="TYPEELTraw.pack_checksum">pack_checksum</span>&nbsp;: <code class="type">SHA.t</code>;</code></td>
+<code><span id="TYPEELTraw.pack_checksum">pack_checksum</span>&nbsp;: <code class="type">Hash.t</code>;</code></td>
 
 </tr></table>
 }
 
 <div class="info ">
-<code class="code">offsests</code> is the positions of the SHA objects in the
+<code class="code">offsests</code> is the positions of the Hash objects in the
     corresponding raw pack file.
 <p>
 
@@ -103,4 +103,4 @@ The type of functions associating SHA1 keys to offset in the pack
 
 
 <pre><span class="keyword">module</span> <a href="Pack_index.Raw.html">Raw</a>: <code class="code"><span class="keyword">sig</span></code> <a href="Pack_index.Raw.html">..</a> <code class="code"><span class="keyword">end</span></code></pre>
-<pre><span class="keyword">module</span> <a href="Pack_index.Make.html">Make</a> <code class="code">(</code><code class="code"><span class="constructor">D</span></code><code class="code"> : </code><code class="type"><a href="SHA.DIGEST.html">SHA.DIGEST</a></code><code class="code">) </code>: <code class="code"><span class="keyword">sig</span></code> <a href="Pack_index.Make.html">..</a> <code class="code"><span class="keyword">end</span></code></pre></body></html>
+<pre><span class="keyword">module</span> <a href="Pack_index.Make.html">Make</a> <code class="code">(</code><code class="code"><span class="constructor">D</span></code><code class="code"> : </code><code class="type"><a href="Hash.DIGEST.html">Hash.DIGEST</a></code><code class="code">) </code>: <code class="code"><span class="keyword">sig</span></code> <a href="Pack_index.Make.html">..</a> <code class="code"><span class="keyword">end</span></code></pre></body></html>

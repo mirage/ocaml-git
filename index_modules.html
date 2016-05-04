@@ -9,7 +9,7 @@
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
-<link title="SHA" rel="Chapter" href="SHA.html">
+<link title="Hash" rel="Chapter" href="Hash.html">
 <link title="Inflate" rel="Chapter" href="Inflate.html">
 <link title="Object" rel="Chapter" href="Object.html">
 <link title="Object_type" rel="Chapter" href="Object_type.html">
@@ -42,7 +42,7 @@
 <h1>Index of modules</h1>
 <table>
 <tr><td align="left"><br>A</td></tr>
-<tr><td><a href="SHA.Array.html">Array</a> [<a href="SHA.html">SHA</a>]</td>
+<tr><td><a href="Hash.Array.html">Array</a> [<a href="Hash.html">Hash</a>]</td>
 <td></td></tr>
 <tr><td align="left"><br>B</td></tr>
 <tr><td><a href="Blob.html">Blob</a> </td>
@@ -50,9 +50,9 @@
 Binary blobs.
 </div>
 </td></tr>
-<tr><td><a href="SHA.IO.Blob.html">Blob</a> [<a href="SHA.IO.html">SHA.IO</a>]</td>
+<tr><td><a href="Hash.IO.Blob.html">Blob</a> [<a href="Hash.IO.html">Hash.IO</a>]</td>
 <td></td></tr>
-<tr><td><a href="SHA.Blob.html">Blob</a> [<a href="SHA.html">SHA</a>]</td>
+<tr><td><a href="Hash.Blob.html">Blob</a> [<a href="Hash.html">Hash</a>]</td>
 <td><div class="info">
 Blob nodes.
 </div>
@@ -65,9 +65,9 @@ Blob nodes.
 Commits.
 </div>
 </td></tr>
-<tr><td><a href="SHA.IO.Commit.html">Commit</a> [<a href="SHA.IO.html">SHA.IO</a>]</td>
+<tr><td><a href="Hash.IO.Commit.html">Commit</a> [<a href="Hash.IO.html">Hash.IO</a>]</td>
 <td></td></tr>
-<tr><td><a href="SHA.Commit.html">Commit</a> [<a href="SHA.html">SHA</a>]</td>
+<tr><td><a href="Hash.Commit.html">Commit</a> [<a href="Hash.html">Hash</a>]</td>
 <td><div class="info">
 Commit nodes.
 </div>
@@ -115,6 +115,14 @@ Functions to manipulate the graph of Git objects.
 Git ressource identifiers (GRI).
 </div>
 </td></tr>
+<tr><td align="left"><br>H</td></tr>
+<tr><td><a href="Hash.html">Hash</a> </td>
+<td><div class="info">
+Hashing.
+</div>
+</td></tr>
+<tr><td><a href="Git_unix.S.Hash_IO.html">Hash_IO</a> [<a href="Git_unix.S.html">Git_unix.S</a>]</td>
+<td></td></tr>
 <tr><td align="left"><br>I</td></tr>
 <tr><td><a href="Misc.I.html">I</a> [<a href="Misc.html">Misc</a>]</td>
 <td></td></tr>
@@ -140,7 +148,7 @@ Git ressource identifiers (GRI).
 <td></td></tr>
 <tr><td><a href="Tree.IO.html">IO</a> [<a href="Tree.html">Tree</a>]</td>
 <td></td></tr>
-<tr><td><a href="SHA.IO.html">IO</a> [<a href="SHA.html">SHA</a>]</td>
+<tr><td><a href="Hash.IO.html">IO</a> [<a href="Hash.html">Hash</a>]</td>
 <td></td></tr>
 <tr><td><a href="Index.html">Index</a> </td>
 <td><div class="info">
@@ -167,9 +175,6 @@ Zlib Compression.
 The graph of Git keys.
 </div>
 </td></tr>
-<tr><td align="left"><br>L</td></tr>
-<tr><td><a href="Misc.Log_make.html">Log_make</a> [<a href="Misc.html">Misc</a>]</td>
-<td></td></tr>
 <tr><td align="left"><br>M</td></tr>
 <tr><td><a href="Git_mirage.Sync.Make.html">Make</a> [<a href="Git_mirage.Sync.html">Git_mirage.Sync</a>]</td>
 <td></td></tr>
@@ -203,7 +208,7 @@ Create an on-disk store implementation.
 A map of references.
 </div>
 </td></tr>
-<tr><td><a href="SHA.S.Map.html">Map</a> [<a href="SHA.S.html">SHA.S</a>]</td>
+<tr><td><a href="Hash.S.Map.html">Map</a> [<a href="Hash.S.html">Hash.S</a>]</td>
 <td></td></tr>
 <tr><td><a href="Misc.Map.html">Map</a> [<a href="Misc.html">Misc</a>]</td>
 <td></td></tr>
@@ -289,15 +294,10 @@ References.
 <tr><td align="left"><br>S</td></tr>
 <tr><td><a href="Misc.S.html">S</a> [<a href="Misc.html">Misc</a>]</td>
 <td></td></tr>
-<tr><td><a href="SHA.html">SHA</a> </td>
-<td><div class="info">
-SHA hashes.
-</div>
-</td></tr>
 <tr><td><a href="Git_unix.SHA1.html">SHA1</a> [<a href="Git_unix.html">Git_unix</a>]</td>
 <td><div class="info">
 Implementation of the digest signature using <code class="code">ocaml-nocrypto</code>'s
-    SHA1 algorithm.
+    Hash1 algorithm.
 </div>
 </td></tr>
 <tr><td><a href="Git_mirage.SHA1_slow.html">SHA1_slow</a> [<a href="Git_mirage.html">Git_mirage</a>]</td>
@@ -305,17 +305,15 @@ Implementation of the digest signature using <code class="code">ocaml-nocrypto</
 <tr><td><a href="Git_unix.SHA256.html">SHA256</a> [<a href="Git_unix.html">Git_unix</a>]</td>
 <td><div class="info">
 Implementation of the digest signature using <code class="code">ocaml-nocrypto</code>'s
-    SHA256 algorithm.
+    Hash256 algorithm.
 </div>
 </td></tr>
-<tr><td><a href="Git_unix.S.SHA_IO.html">SHA_IO</a> [<a href="Git_unix.S.html">Git_unix.S</a>]</td>
-<td></td></tr>
 <tr><td><a href="Search.html">Search</a> </td>
 <td><div class="info">
 Search over the graph of Git objects.
 </div>
 </td></tr>
-<tr><td><a href="SHA.S.Set.html">Set</a> [<a href="SHA.S.html">SHA.S</a>]</td>
+<tr><td><a href="Hash.S.Set.html">Set</a> [<a href="Hash.S.html">Hash.S</a>]</td>
 <td></td></tr>
 <tr><td><a href="Misc.Set.html">Set</a> [<a href="Misc.html">Misc</a>]</td>
 <td></td></tr>
@@ -344,9 +342,9 @@ Annotated tags.
 Filesystem trees.
 </div>
 </td></tr>
-<tr><td><a href="SHA.IO.Tree.html">Tree</a> [<a href="SHA.IO.html">SHA.IO</a>]</td>
+<tr><td><a href="Hash.IO.Tree.html">Tree</a> [<a href="Hash.IO.html">Hash.IO</a>]</td>
 <td></td></tr>
-<tr><td><a href="SHA.Tree.html">Tree</a> [<a href="SHA.html">SHA</a>]</td>
+<tr><td><a href="Hash.Tree.html">Tree</a> [<a href="Hash.html">Hash</a>]</td>
 <td><div class="info">
 Treee nodes.
 </div>

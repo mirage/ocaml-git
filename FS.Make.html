@@ -11,7 +11,7 @@
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
-<link title="SHA" rel="Chapter" href="SHA.html">
+<link title="Hash" rel="Chapter" href="Hash.html">
 <link title="Inflate" rel="Chapter" href="Inflate.html">
 <link title="Object" rel="Chapter" href="Object.html">
 <link title="Object_type" rel="Chapter" href="Object_type.html">
@@ -43,7 +43,7 @@
 &nbsp;</div>
 <h1>Functor <a href="type_FS.Make.html">FS.Make</a></h1>
 
-<pre><span class="keyword">module</span> Make <code class="code">(</code><code class="code"><span class="constructor">IO</span></code><code class="code"> : </code><code class="type"><a href="FS.IO.html">IO</a></code><code class="code">) </code> <code class="code">(</code><code class="code"><span class="constructor">D</span></code><code class="code"> : </code><code class="type"><a href="SHA.DIGEST.html">SHA.DIGEST</a></code><code class="code">) </code> <code class="code">(</code><code class="code"><span class="constructor">I</span></code><code class="code"> : </code><code class="type"><a href="Inflate.S.html">Inflate.S</a></code><code class="code">) </code>: <code class="type"><a href="FS.S.html">S</a></code><code class="type"> </code></pre><div class="info module top">
+<pre><span class="keyword">module</span> Make <code class="code">(</code><code class="code"><span class="constructor">IO</span></code><code class="code"> : </code><code class="type"><a href="FS.IO.html">IO</a></code><code class="code">) </code> <code class="code">(</code><code class="code"><span class="constructor">D</span></code><code class="code"> : </code><code class="type"><a href="Hash.DIGEST.html">Hash.DIGEST</a></code><code class="code">) </code> <code class="code">(</code><code class="code"><span class="constructor">I</span></code><code class="code"> : </code><code class="type"><a href="Inflate.S.html">Inflate.S</a></code><code class="code">) </code>: <code class="type"><a href="FS.S.html">S</a></code><code class="type"> </code></pre><div class="info module top">
 Create an on-disk store implementation.<br>
 </div>
 <table border="0" cellpadding="3" width="100%">
@@ -60,7 +60,7 @@ Create an on-disk store implementation.<br>
 <td align="center" valign="top" width="15%">
 <code>D</code></td>
 <td align="center" valign="top">:</td>
-<td><code class="type"><a href="SHA.DIGEST.html">SHA.DIGEST</a></code>
+<td><code class="type"><a href="Hash.DIGEST.html">Hash.DIGEST</a></code>
 <tr>
 <td align="center" valign="top" width="15%">
 <code>I</code></td>
@@ -82,7 +82,7 @@ Remove all the contents of the store.<br>
 Create a file on the filesystem, with the given mode.<br>
 </div>
 
-<pre><span id="VALentry_of_file"><span class="keyword">val</span> entry_of_file</span> : <code class="type">t -><br>       <a href="Index.html#TYPEt">Index.t</a> -><br>       string -> <a href="Tree.html#TYPEperm">Tree.perm</a> -> SHA.Blob.t -> Blob.t -> <a href="Index.html#TYPEentry">Index.entry</a> option Lwt.t</code></pre><div class="info ">
+<pre><span id="VALentry_of_file"><span class="keyword">val</span> entry_of_file</span> : <code class="type">t -><br>       <a href="Index.html#TYPEt">Index.t</a> -><br>       string -> <a href="Tree.html#TYPEperm">Tree.perm</a> -> Hash.Blob.t -> Blob.t -> <a href="Index.html#TYPEentry">Index.entry</a> option Lwt.t</code></pre><div class="info ">
 Generate a cache entry for the file. Create a fresh file if it
       does not already exist. If <code class="code">root</code> is not set, use the current
       working directory as repository root.<br>

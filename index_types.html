@@ -9,7 +9,7 @@
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
-<link title="SHA" rel="Chapter" href="SHA.html">
+<link title="Hash" rel="Chapter" href="Hash.html">
 <link title="Inflate" rel="Chapter" href="Inflate.html">
 <link title="Object" rel="Chapter" href="Object.html">
 <link title="Object_type" rel="Chapter" href="Object_type.html">
@@ -65,7 +65,7 @@ Connection context
 The type for delta values.
 </div>
 </td></tr>
-<tr><td><a href="SHA.html#TYPEdigest">digest</a> [<a href="SHA.html">SHA</a>]</td>
+<tr><td><a href="Hash.html#TYPEdigest">digest</a> [<a href="Hash.html">Hash</a>]</td>
 <td><div class="info">
 The type for digest functions.
 </div>
@@ -96,13 +96,13 @@ The type for extension kinds.
 <tr><td align="left"><br>F</td></tr>
 <tr><td><a href="Pack_index.html#TYPEf">f</a> [<a href="Pack_index.html">Pack_index</a>]</td>
 <td><div class="info">
-The type of functions associating SHA1 keys to offset in the pack
+The type of functions associating Hash1 keys to offset in the pack
     file.
 </div>
 </td></tr>
 <tr><td><a href="Sync.Result.html#TYPEfetch">fetch</a> [<a href="Sync.Result.html">Sync.Result</a>]</td>
 <td><div class="info">
-The resulting sha1s and references.
+The resulting hashes and references.
 </div>
 </td></tr>
 <tr><td><a href="Inflate.ZLIB.html#TYPEflush_command">flush_command</a> [<a href="Inflate.ZLIB.html">Inflate.ZLIB</a>]</td>
@@ -171,7 +171,7 @@ The result of a push operation.
 <tr><td align="left"><br>R</td></tr>
 <tr><td><a href="Pack_index.html#TYPEraw">raw</a> [<a href="Pack_index.html">Pack_index</a>]</td>
 <td><div class="info">
-<code class="code">offsests</code> is the positions of the SHA objects in the
+<code class="code">offsests</code> is the positions of the Hash objects in the
     corresponding raw pack file.
 </div>
 </td></tr>
@@ -251,7 +251,7 @@ Abstract type of pack index.
 <tr><td><a href="Pack.html#TYPEt">t</a> [<a href="Pack.html">Pack</a>]</td>
 <td><div class="info">
 A pack value is an ordered list of position-independant packed
-    values and the SHA of the corresponding inflated objects.
+    values and the keys of the corresponding inflated objects.
 </div>
 </td></tr>
 <tr><td><a href="Value.html#TYPEt">t</a> [<a href="Value.html">Value</a>]</td>

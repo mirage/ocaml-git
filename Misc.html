@@ -4,7 +4,7 @@
 <link rel="stylesheet" href="style.css" type="text/css">
 <meta content="text/html; charset=iso-8859-1" http-equiv="Content-Type">
 <link rel="Start" href="index.html">
-<link rel="next" href="SHA.html">
+<link rel="next" href="Hash.html">
 <link rel="Up" href="index.html">
 <link title="Index of types" rel=Appendix href="index_types.html">
 <link title="Index of exceptions" rel=Appendix href="index_exceptions.html">
@@ -12,7 +12,7 @@
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
 <link title="Misc" rel="Chapter" href="Misc.html">
-<link title="SHA" rel="Chapter" href="SHA.html">
+<link title="Hash" rel="Chapter" href="Hash.html">
 <link title="Inflate" rel="Chapter" href="Inflate.html">
 <link title="Object" rel="Chapter" href="Object.html">
 <link title="Object_type" rel="Chapter" href="Object_type.html">
@@ -44,7 +44,7 @@
 </head>
 <body>
 <div class="navbar">&nbsp;<a class="up" href="index.html" title="Index">Up</a>
-&nbsp;<a class="post" href="SHA.html" title="SHA">Next</a>
+&nbsp;<a class="post" href="Hash.html" title="Hash">Next</a>
 </div>
 <h1>Module <a href="type_Misc.html">Misc</a></h1>
 
@@ -94,13 +94,6 @@ Same as <code class="code"><span class="constructor">List</span>.assoc</code> bu
 <pre><span class="keyword">module</span> <a href="Misc.Set.html">Set</a> <code class="code">(</code><code class="code"><span class="constructor">X</span></code><code class="code"> : </code><code class="type"><a href="Misc.OrderedType.html">OrderedType</a></code><code class="code">) </code>: <code class="type"><a href="Misc.Set.html">Set</a></code><code class="type">  with type elt = X.t</code></pre>
 <pre><span class="keyword">module</span> <a href="Misc.Map.html">Map</a> <code class="code">(</code><code class="code"><span class="constructor">X</span></code><code class="code"> : </code><code class="type"><a href="Misc.OrderedType.html">OrderedType</a></code><code class="code">) </code>: <code class="type"><a href="Misc.Map.html">Map</a></code><code class="type">  with type key = X.t</code></pre>
 <pre><span class="keyword">module</span> <a href="Misc.IntMap.html">IntMap</a>: <code class="type"><a href="Misc.Map.html">Map</a></code><code class="type">  with type key = int</code></pre>
-<pre><span id="VALstring_forall"><span class="keyword">val</span> string_forall</span> : <code class="type">(char -> bool) -> string -> bool</code></pre>
-<pre><span id="VALstring_exists"><span class="keyword">val</span> string_exists</span> : <code class="type">(char -> bool) -> string -> bool</code></pre>
-<pre><span id="VALstring_mem"><span class="keyword">val</span> string_mem</span> : <code class="type">char -> string -> bool</code></pre>
-<pre><span id="VALstring_chop_prefix"><span class="keyword">val</span> string_chop_prefix</span> : <code class="type">string -> prefix:string -> string option</code></pre>
-<pre><span id="VALstring_chop_suffix"><span class="keyword">val</span> string_chop_suffix</span> : <code class="type">string -> suffix:string -> string option</code></pre>
 <pre><span id="VALlist_filter_map"><span class="keyword">val</span> list_filter_map</span> : <code class="type">('a -> 'b option) -> 'a list -> 'b list</code></pre>
 <pre><span class="keyword">module</span> <a href="Misc.OP.html">OP</a>: <code class="code"><span class="keyword">sig</span></code> <a href="Misc.OP.html">..</a> <code class="code"><span class="keyword">end</span></code></pre>
-<pre><span id="VALpretty"><span class="keyword">val</span> pretty</span> : <code class="type">(Format.formatter -> 'a -> unit) -> 'a -> string</code></pre>
-<pre><span class="keyword">module</span> <a href="Misc.Log_make.html">Log_make</a> <code class="code">(</code><code class="code"><span class="constructor">S</span></code><code class="code"> : </code><code class="code"><span class="keyword">sig</span></code><div class="sig_block">
-<pre><span id="VALsection"><span class="keyword">val</span> section</span> : <code class="type">string</code></pre></div><code class="code"><span class="keyword">end</span></code><code class="code">) </code>: <code class="code"><span class="keyword">sig</span></code> <a href="Misc.Log_make.html">..</a> <code class="code"><span class="keyword">end</span></code></pre></body></html>
+<pre><span id="VALsrc_log"><span class="keyword">val</span> src_log</span> : <code class="type">string -> (module Logs.LOG)</code></pre></body></html>
