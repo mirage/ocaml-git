@@ -82,15 +82,15 @@ Performance is comparable to the Git tool.
 ### Example
 
 ```ocaml
-# require "git.unix";;
+# #require "git.unix";;
 # open Lwt.Infix;;
 # open Git_unix;;
-# module Search = Git.Search(FS);;
+# module Search = Git.Search.Make(FS);;
 
 # let read file =
     FS.create () >>= fun t ->
     FS.read_reference_exn t Git.Reference.master >>= fun head ->
-    Search.find t (Git.SHA.of_commit head) (`Commit (`Path file)) >>= function
+    Search.find t head (`Commit (`Path file)) >>= function
     | None     -> failwith "file not found"
     | Some sha -> FS.read_exn t sha >>= function
       | Git.Value.Blob b -> Lwt.return (Git.Blob.to_raw b)
