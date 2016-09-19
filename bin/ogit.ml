@@ -507,7 +507,7 @@ let graph = {
       mk_required ["o";"output"] "FILE" "Output file."
         Arg.(some string) None in
     let graph (module S: Store.S) file =
-      let module Graph = Global_graph.Make(S) in
+      let module Graph = Git.Graph.Make(S) in
       run begin
         S.create () >>= fun t ->
         let buf = Buffer.create 1024 in
@@ -573,7 +573,7 @@ let default =
       clone.doc fetch.doc pull.doc push.doc graph.doc in
   Term.(pure usage $ setup_log),
   Term.info "ogit"
-    ~version:Version.current
+    ~version:"%%VERSION%%"
     ~sdocs:global_option_section
     ~doc
     ~man

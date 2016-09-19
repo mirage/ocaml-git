@@ -5,21 +5,22 @@ license:      "ISC"
 homepage:     "https://github.com/mirage/ocaml-git"
 bug-reports:  "https://github.com/mirage/ocaml-git/issues"
 dev-repo:     "https://github.com/mirage/ocaml-git.git"
+doc:          "https://mirage.github.io/ocaml-git/"
 
 build: [
-  ["./configure"
-     "--prefix" prefix
-     "--%{mirage-http+mirage-flow+mirage-types-lwt+channel:enable}%-mirage"
-     "--%{conduit+cohttp+camlzip+nocrypto+base-unix:enable}%-unix"
-  ]
-  [make]
+  "ocaml" "pkg/pkg.ml" "build" "--pinned" "%{pinned}%"
+      "--with-http"   "%{cohttp:installed}%"
+      "--with-unix"   "%{conduit+cohttp+camlzip+nocrypto+base-unix:installed}%"
+      "--with-mirage" "%{mirage-http+mirage-flow+mirage-types-lwt+channel:installed}%"
 ]
 build-test: [
-  ["./configure" "--enable-tests" "--enable-mirage" "--enable-unix"]
-  [make "test"]
+  ["ocaml" "pkg/pkg.ml" "build" "--tests" "true"
+      "--with-http"   "%{cohttp:installed}%"
+      "--with-unix"   "%{conduit+cohttp+camlzip+nocrypto+base-unix:installed}%"
+      "--with-mirage" "%{mirage-http+mirage-flow+mirage-types-lwt+channel:installed}%"]
+  ["ocaml" "pkg/pkg.ml" "test"]
 ]
-install: [make "install"]
-remove: ["ocamlfind" "remove" "git"]
+
 depends: [
   "cmdliner"
   "mstruct"    {>= "1.3.1"}

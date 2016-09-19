@@ -271,7 +271,7 @@ module Make (Store: Store.S) = struct
       Value.Commit { Commit.tree; parents; author; committer = author; message }
     in
     let test () =
-      let buf = Misc.with_buffer (fun buf -> Value_IO.add_inflated buf c) in
+      let buf = Git_misc.with_buffer (fun buf -> Value_IO.add_inflated buf c) in
       let buf = Mstruct.of_string buf in
       let c' = Value_IO.input_inflated buf in
       assert_value_equal "commits: convert" c c';
@@ -372,9 +372,9 @@ module Make (Store: Store.S) = struct
               in
               Git_unix.FS.entry_of_file t Index.empty file mode sha1 blob
             ) files >>= fun entries ->
-          let entries = Misc.list_filter_map (fun x -> x) entries in
+          let entries = Git_misc.list_filter_map (fun x -> x) entries in
           let cache = Index.create entries in
-          let buf = Misc.with_buffer' (fun buf -> Index_IO.add buf cache) in
+          let buf = Git_misc.with_buffer' (fun buf -> Index_IO.add buf cache) in
           let cache2 = Index_IO.input (Mstruct.of_cstruct buf) in
           assert_index_equal "index" cache cache2;
           Lwt.return_unit
@@ -428,7 +428,9 @@ module Make (Store: Store.S) = struct
             begin if Sys.file_exists index then
                 let istr1 = read_file index in
                 let i1    = Pack_index.Raw.input (Mstruct.of_cstruct istr1) in
-                let istr2 = Misc.with_buffer' (fun buf -> Pack_index.Raw.add buf i1) in
+                let istr2 =
+                  Git_misc.with_buffer' (fun buf -> Pack_index.Raw.add buf i1)
+                in
                 let i2    = Pack_index.Raw.input (Mstruct.of_cstruct istr2) in
                 assert_pack_index_equal "pack-index" i1 i2;
                 assert_pack_index_equal "raw-pack-->>--pack-index" i1 i3;

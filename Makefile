@@ -1,71 +1,18 @@
-VERSION = $(shell grep 'Version:' _oasis | sed 's/Version: *//')
-VFILE   = lib/version.ml
+HTTP   ?= true
+UNIX   ?= true
+MIRAGE ?= true
+TESTS  ?= true
 
-SETUP = ocaml setup.ml
+OPTIONS=--with-http ${HTTP} --with-unix ${UNIX} --with-mirage ${MIRAGE} --tests ${TESTS}
 
-build: setup.data $(VFILE)
-	$(SETUP) -build $(BUILDFLAGS)
-
-doc: setup.data build
-	$(SETUP) -doc $(DOCFLAGS)
-
-test: setup.data build
-	$(SETUP) -test $(TESTFLAGS)
-
-all: $(VFILE)
-	$(SETUP) -all $(ALLFLAGS)
-
-install: setup.data
-	$(SETUP) -install $(INSTALLFLAGS)
-
-uninstall: setup.data
-	$(SETUP) -uninstall $(UNINSTALLFLAGS)
-
-reinstall: setup.data
-	$(SETUP) -reinstall $(REINSTALLFLAGS)
+all:
+	ocaml pkg/pkg.ml build ${OPTIONS}
 
 clean:
-	$(SETUP) -clean $(CLEANFLAGS)
-	rm -f $(VFILE)
+	rm -rf _build _tests
+	ocaml pkg/pkg.ml clean
 
-distclean:
-	$(SETUP) -distclean $(DISTCLEANFLAGS)
 
-setup.data:
-	$(SETUP) -configure $(CONFIGUREFLAGS)
-
-configure:
-	$(SETUP) -configure $(CONFIGUREFLAGS)
-
-.PHONY: build doc test all install uninstall reinstall clean distclean configure
-
-$(VFILE): _oasis
-	echo "let current = \"$(VERSION)\"" > $@
-
-init-doc:
-	mkdir -p gh-pages
-	cd gh-pages && ( \
-	  git init && \
-	  git remote add origin git@github.com:mirage/ocaml-git.git && \
-	  git fetch && \
-	  git checkout gh-pages && \
-	  git pull)
-
-update-doc: doc
-	rm -f gh-pages/*.html
-	cd gh-pages && cp ../git.docdir/*.html .
-	cd gh-pages && git add * && git commit -a -m "Update docs"
-	cd gh-pages && git push
-
-VERSION = $(shell grep 'Version:' _oasis | sed 's/Version: *//')
-NAME    = $(shell grep 'Name:' _oasis    | sed 's/Name: *//')
-ARCHIVE = https://github.com/mirage/ocaml-$(NAME)/archive/$(VERSION).tar.gz
-
-release:
-	git tag -a $(VERSION) -m "Version $(VERSION)."
-	git push upstream $(VERSION)
-	$(MAKE) pr
-
-pr:
-	opam publish prepare $(NAME).$(VERSION) $(ARCHIVE)
-	OPAMPUBLISHBYPASSCHECKS=1 OPAMYES=1 opam publish submit $(NAME).$(VERSION) && rm -rf $(NAME).$(VERSION)
+test:
+	ocaml pkg/pkg.ml build ${OPTIONS}
+	ocaml pkg/pkg.ml test

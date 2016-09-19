@@ -1,232 +1,25 @@
-# OASIS_START
-# DO NOT EDIT (digest: 1f887a5c66fe18fa975c85eb35845de1)
-# Ignore VCS directories, you can use the same kind of rule outside
-# OASIS_START/STOP if you want to exclude directories that contains
-# useless stuff for the build process
-true: annot, bin_annot
-<**/.svn>: -traverse
-<**/.svn>: not_hygienic
-".bzr": -traverse
-".bzr": not_hygienic
-".hg": -traverse
-".hg": not_hygienic
-".git": -traverse
-".git": not_hygienic
-"_darcs": -traverse
-"_darcs": not_hygienic
-# Library git
-"lib/git.cmxs": use_git
-"lib/misc.cmx": for-pack(Git)
-"lib/hash.cmx": for-pack(Git)
-"lib/inflate.cmx": for-pack(Git)
-"lib/object.cmx": for-pack(Git)
-"lib/object_type.cmx": for-pack(Git)
-"lib/blob.cmx": for-pack(Git)
-"lib/tree.cmx": for-pack(Git)
-"lib/commit.cmx": for-pack(Git)
-"lib/tag.cmx": for-pack(Git)
-"lib/reference.cmx": for-pack(Git)
-"lib/value.cmx": for-pack(Git)
-"lib/pack.cmx": for-pack(Git)
-"lib/pack_index.cmx": for-pack(Git)
-"lib/packed_value.cmx": for-pack(Git)
-"lib/packed_refs.cmx": for-pack(Git)
-"lib/index.cmx": for-pack(Git)
-"lib/sync.cmx": for-pack(Git)
-"lib/gri.cmx": for-pack(Git)
-"lib/search.cmx": for-pack(Git)
-"lib/global_graph.cmx": for-pack(Git)
-"lib/user.cmx": for-pack(Git)
-"lib/store.cmx": for-pack(Git)
-"lib/memory.cmx": for-pack(Git)
-"lib/FS.cmx": for-pack(Git)
-"lib/version.cmx": for-pack(Git)
-"lib/LRU.cmx": for-pack(Git)
-<lib/*.ml{,i,y}>: pkg_astring
-<lib/*.ml{,i,y}>: pkg_crc
-<lib/*.ml{,i,y}>: pkg_fmt
-<lib/*.ml{,i,y}>: pkg_hex
-<lib/*.ml{,i,y}>: pkg_logs
-<lib/*.ml{,i,y}>: pkg_lwt
-<lib/*.ml{,i,y}>: pkg_mstruct
-<lib/*.ml{,i,y}>: pkg_ocamlgraph
-<lib/*.ml{,i,y}>: pkg_uri
-# Library git_top
-"lib/top/git_top.cmxs": use_git_top
-<lib/top/*.ml{,i,y}>: pkg_compiler-libs.toplevel
-# Library git-http
-"lib/http/git-http.cmxs": use_git-http
-<lib/http/*.ml{,i,y}>: pkg_astring
-<lib/http/*.ml{,i,y}>: pkg_cohttp.lwt
-<lib/http/*.ml{,i,y}>: pkg_crc
-<lib/http/*.ml{,i,y}>: pkg_fmt
-<lib/http/*.ml{,i,y}>: pkg_hex
-<lib/http/*.ml{,i,y}>: pkg_logs
-<lib/http/*.ml{,i,y}>: pkg_lwt
-<lib/http/*.ml{,i,y}>: pkg_mstruct
-<lib/http/*.ml{,i,y}>: pkg_ocamlgraph
-<lib/http/*.ml{,i,y}>: pkg_uri
-<lib/http/*.ml{,i,y}>: pkg_uri.services
-<lib/http/*.ml{,i,y}>: use_git
-# Library git-unix
-"lib/unix/git-unix.cmxs": use_git-unix
-<lib/unix/*.ml{,i,y}>: pkg_astring
-<lib/unix/*.ml{,i,y}>: pkg_cohttp.lwt
-<lib/unix/*.ml{,i,y}>: pkg_conduit.lwt-unix
-<lib/unix/*.ml{,i,y}>: pkg_crc
-<lib/unix/*.ml{,i,y}>: pkg_fmt
-<lib/unix/*.ml{,i,y}>: pkg_hex
-<lib/unix/*.ml{,i,y}>: pkg_logs
-<lib/unix/*.ml{,i,y}>: pkg_lwt
-<lib/unix/*.ml{,i,y}>: pkg_lwt.unix
-<lib/unix/*.ml{,i,y}>: pkg_mstruct
-<lib/unix/*.ml{,i,y}>: pkg_nocrypto
-<lib/unix/*.ml{,i,y}>: pkg_ocamlgraph
-<lib/unix/*.ml{,i,y}>: pkg_uri
-<lib/unix/*.ml{,i,y}>: pkg_uri.services
-<lib/unix/*.ml{,i,y}>: pkg_zip
-<lib/unix/*.ml{,i,y}>: use_git
-<lib/unix/*.ml{,i,y}>: use_git-http
-# Library git-mirage
-"lib/mirage/git-mirage.cmxs": use_git-mirage
-<lib/mirage/*.ml{,i,y}>: pkg_astring
-<lib/mirage/*.ml{,i,y}>: pkg_channel
-<lib/mirage/*.ml{,i,y}>: pkg_cohttp.lwt
-<lib/mirage/*.ml{,i,y}>: pkg_conduit.mirage
-<lib/mirage/*.ml{,i,y}>: pkg_crc
-<lib/mirage/*.ml{,i,y}>: pkg_dns.mirage
-<lib/mirage/*.ml{,i,y}>: pkg_fmt
-<lib/mirage/*.ml{,i,y}>: pkg_hex
-<lib/mirage/*.ml{,i,y}>: pkg_io-page
-<lib/mirage/*.ml{,i,y}>: pkg_logs
-<lib/mirage/*.ml{,i,y}>: pkg_lwt
-<lib/mirage/*.ml{,i,y}>: pkg_mirage-flow
-<lib/mirage/*.ml{,i,y}>: pkg_mirage-http
-<lib/mirage/*.ml{,i,y}>: pkg_mirage-types.lwt
-<lib/mirage/*.ml{,i,y}>: pkg_mstruct
-<lib/mirage/*.ml{,i,y}>: pkg_ocamlgraph
-<lib/mirage/*.ml{,i,y}>: pkg_uri
-<lib/mirage/*.ml{,i,y}>: pkg_uri.services
-<lib/mirage/*.ml{,i,y}>: use_git
-<lib/mirage/*.ml{,i,y}>: use_git-http
-# Executable ogit
-<bin/ogit.{native,byte}>: pkg_astring
-<bin/ogit.{native,byte}>: pkg_cmdliner
-<bin/ogit.{native,byte}>: pkg_cohttp.lwt
-<bin/ogit.{native,byte}>: pkg_conduit.lwt-unix
-<bin/ogit.{native,byte}>: pkg_crc
-<bin/ogit.{native,byte}>: pkg_fmt
-<bin/ogit.{native,byte}>: pkg_fmt.cli
-<bin/ogit.{native,byte}>: pkg_fmt.tty
-<bin/ogit.{native,byte}>: pkg_hex
-<bin/ogit.{native,byte}>: pkg_logs
-<bin/ogit.{native,byte}>: pkg_logs.cli
-<bin/ogit.{native,byte}>: pkg_logs.fmt
-<bin/ogit.{native,byte}>: pkg_lwt
-<bin/ogit.{native,byte}>: pkg_lwt.unix
-<bin/ogit.{native,byte}>: pkg_mstruct
-<bin/ogit.{native,byte}>: pkg_mtime.os
-<bin/ogit.{native,byte}>: pkg_nocrypto
-<bin/ogit.{native,byte}>: pkg_ocamlgraph
-<bin/ogit.{native,byte}>: pkg_uri
-<bin/ogit.{native,byte}>: pkg_uri.services
-<bin/ogit.{native,byte}>: pkg_zip
-<bin/ogit.{native,byte}>: use_git
-<bin/ogit.{native,byte}>: use_git-http
-<bin/ogit.{native,byte}>: use_git-unix
-<bin/*.ml{,i,y}>: pkg_astring
-<bin/*.ml{,i,y}>: pkg_cmdliner
-<bin/*.ml{,i,y}>: pkg_cohttp.lwt
-<bin/*.ml{,i,y}>: pkg_conduit.lwt-unix
-<bin/*.ml{,i,y}>: pkg_crc
-<bin/*.ml{,i,y}>: pkg_fmt
-<bin/*.ml{,i,y}>: pkg_fmt.cli
-<bin/*.ml{,i,y}>: pkg_fmt.tty
-<bin/*.ml{,i,y}>: pkg_hex
-<bin/*.ml{,i,y}>: pkg_logs
-<bin/*.ml{,i,y}>: pkg_logs.cli
-<bin/*.ml{,i,y}>: pkg_logs.fmt
-<bin/*.ml{,i,y}>: pkg_lwt
-<bin/*.ml{,i,y}>: pkg_lwt.unix
-<bin/*.ml{,i,y}>: pkg_mstruct
-<bin/*.ml{,i,y}>: pkg_mtime.os
-<bin/*.ml{,i,y}>: pkg_nocrypto
-<bin/*.ml{,i,y}>: pkg_ocamlgraph
-<bin/*.ml{,i,y}>: pkg_uri
-<bin/*.ml{,i,y}>: pkg_uri.services
-<bin/*.ml{,i,y}>: pkg_zip
-<bin/*.ml{,i,y}>: use_git
-<bin/*.ml{,i,y}>: use_git-http
-<bin/*.ml{,i,y}>: use_git-unix
-# Executable test_git
-<lib_test/test.{native,byte}>: pkg_alcotest
-<lib_test/test.{native,byte}>: pkg_astring
-<lib_test/test.{native,byte}>: pkg_channel
-<lib_test/test.{native,byte}>: pkg_cohttp.lwt
-<lib_test/test.{native,byte}>: pkg_conduit.lwt-unix
-<lib_test/test.{native,byte}>: pkg_conduit.mirage
-<lib_test/test.{native,byte}>: pkg_crc
-<lib_test/test.{native,byte}>: pkg_dns.mirage
-<lib_test/test.{native,byte}>: pkg_fmt
-<lib_test/test.{native,byte}>: pkg_fmt.tty
-<lib_test/test.{native,byte}>: pkg_hex
-<lib_test/test.{native,byte}>: pkg_io-page
-<lib_test/test.{native,byte}>: pkg_io-page.unix
-<lib_test/test.{native,byte}>: pkg_logs
-<lib_test/test.{native,byte}>: pkg_logs.fmt
-<lib_test/test.{native,byte}>: pkg_lwt
-<lib_test/test.{native,byte}>: pkg_lwt.unix
-<lib_test/test.{native,byte}>: pkg_mirage-flow
-<lib_test/test.{native,byte}>: pkg_mirage-fs-unix
-<lib_test/test.{native,byte}>: pkg_mirage-http
-<lib_test/test.{native,byte}>: pkg_mirage-types.lwt
-<lib_test/test.{native,byte}>: pkg_mstruct
-<lib_test/test.{native,byte}>: pkg_mtime.os
-<lib_test/test.{native,byte}>: pkg_nocrypto
-<lib_test/test.{native,byte}>: pkg_ocamlgraph
-<lib_test/test.{native,byte}>: pkg_uri
-<lib_test/test.{native,byte}>: pkg_uri.services
-<lib_test/test.{native,byte}>: pkg_zip
-<lib_test/test.{native,byte}>: use_git
-<lib_test/test.{native,byte}>: use_git-http
-<lib_test/test.{native,byte}>: use_git-mirage
-<lib_test/test.{native,byte}>: use_git-unix
-<lib_test/*.ml{,i,y}>: pkg_alcotest
-<lib_test/*.ml{,i,y}>: pkg_astring
-<lib_test/*.ml{,i,y}>: pkg_channel
-<lib_test/*.ml{,i,y}>: pkg_cohttp.lwt
-<lib_test/*.ml{,i,y}>: pkg_conduit.lwt-unix
-<lib_test/*.ml{,i,y}>: pkg_conduit.mirage
-<lib_test/*.ml{,i,y}>: pkg_crc
-<lib_test/*.ml{,i,y}>: pkg_dns.mirage
-<lib_test/*.ml{,i,y}>: pkg_fmt
-<lib_test/*.ml{,i,y}>: pkg_fmt.tty
-<lib_test/*.ml{,i,y}>: pkg_hex
-<lib_test/*.ml{,i,y}>: pkg_io-page
-<lib_test/*.ml{,i,y}>: pkg_io-page.unix
-<lib_test/*.ml{,i,y}>: pkg_logs
-<lib_test/*.ml{,i,y}>: pkg_logs.fmt
-<lib_test/*.ml{,i,y}>: pkg_lwt
-<lib_test/*.ml{,i,y}>: pkg_lwt.unix
-<lib_test/*.ml{,i,y}>: pkg_mirage-flow
-<lib_test/*.ml{,i,y}>: pkg_mirage-fs-unix
-<lib_test/*.ml{,i,y}>: pkg_mirage-http
-<lib_test/*.ml{,i,y}>: pkg_mirage-types.lwt
-<lib_test/*.ml{,i,y}>: pkg_mstruct
-<lib_test/*.ml{,i,y}>: pkg_mtime.os
-<lib_test/*.ml{,i,y}>: pkg_nocrypto
-<lib_test/*.ml{,i,y}>: pkg_ocamlgraph
-<lib_test/*.ml{,i,y}>: pkg_uri
-<lib_test/*.ml{,i,y}>: pkg_uri.services
-<lib_test/*.ml{,i,y}>: pkg_zip
-<lib_test/*.ml{,i,y}>: use_git
-<lib_test/*.ml{,i,y}>: use_git-http
-<lib_test/*.ml{,i,y}>: use_git-mirage
-<lib_test/*.ml{,i,y}>: use_git-unix
-# OASIS_STOP
-true: debug, bin_annot
+true: bin_annot, debug
 true: warn_error(+1..49), warn(A-4-41-44)
-"test-db": -traverse
-"_tests": -traverse
-"lib_test/_tests": -traverse
-"lib_test/test-db": -traverse
+true: short_paths
+
+true: package(cstruct astring fmt hex logs lwt ocamlgraph re uri crc mstruct)
+
+<lib>: include
+<lib/http>: include
+<lib/unix>: include
+<lib/mirage>: include
+
+<lib_test/*>: package(alcotest logs.fmt mtime.os nocrypto)
+<lib_test/*>: package(mirage-fs-unix io-page.unix)
+<lib_test/*>: package(cohttp.lwt conduit.lwt-unix zip nocrypto logs.cli)
+<lib_test/*>: package(conduit.mirage dns.mirage mirage-http mirage-flow channel)
+
+<lib/top/*>: package(compiler-libs.toplevel)
+<lib/http/*>: package(cohttp.lwt uri)
+<lib/unix/*>: package(cohttp.lwt lwt.unix conduit.lwt-unix zip nocrypto)
+
+<lib/mirage/*>: package(mirage-types.lwt io-page conduit.mirage dns.mirage)
+<lib/mirage/*>: package(mirage-http mirage-flow channel)
+
+<bin/*>: package(cmdliner fmt.cli logs.fmt fmt.tty mtime.os lwt.unix)
+<bin/*>: package(cohttp.lwt conduit.lwt-unix zip nocrypto logs.cli)
