@@ -1,0 +1,58 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<link rel="stylesheet" href="style.css" type="text/css">
+<meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+<link rel="Start" href="index.html">
+<link rel="Up" href="Git.Pack.IO.html">
+<link title="Index of types" rel=Appendix href="index_types.html">
+<link title="Index of exceptions" rel=Appendix href="index_exceptions.html">
+<link title="Index of values" rel=Appendix href="index_values.html">
+<link title="Index of modules" rel=Appendix href="index_modules.html">
+<link title="Index of module types" rel=Appendix href="index_module_types.html">
+<link title="Git" rel="Chapter" href="Git.html">
+<link title="Git_unix" rel="Chapter" href="Git_unix.html">
+<link title="Git_mirage" rel="Chapter" href="Git_mirage.html">
+<link title="Git_http" rel="Chapter" href="Git_http.html"><title>Git.Pack.IO.Raw</title>
+</head>
+<body>
+<div class="navbar">&nbsp;<a class="up" href="Git.Pack.IO.html" title="Git.Pack.IO">Up</a>
+&nbsp;</div>
+<h1>Module <a href="type_Git.Pack.IO.Raw.html">Git.Pack.IO.Raw</a></h1>
+
+<pre><span class="keyword">module</span> Raw: <code class="code"><span class="keyword">sig</span></code> <a href="Git.Pack.IO.Raw.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><hr width="100%">
+<br>
+Raw pack file: they contains a pack index and a list of
+          position-dependant deltas.<br>
+
+<pre><span class="keyword">include</span> <a href="Git.S.html">Git.S</a></pre>
+
+<pre><span id="VALadd"><span class="keyword">val</span> add</span> : <code class="type">[ `Not_defined ]</code></pre><div class="info ">
+<code class="code"><span class="constructor">Pack</span>.<span class="constructor">Raw</span>.add</code> is not defined. Use <code class="code">buffer</code> instead.<br>
+</div>
+
+<pre><span id="VALinput"><span class="keyword">val</span> input</span> : <code class="type">?progress:(string -> unit) -><br>       read:<a href="Git.Value.html#TYPEread_inflated">Git.Value.read_inflated</a> -> Mstruct.t -> <a href="Git.Pack.html#TYPEt">Git.Pack.t</a> Lwt.t</code></pre><div class="info ">
+<code class="code">input ~read buf</code> is the raw pack and raw index obtained by
+          reading the buffer <code class="code">buf</code>. External (shallow) Hash1 references are
+          resolved using the <code class="code">read</code> function; these references are needed
+          to unpack the list of values stored in the pack file, to then
+          compute the full raw index.<br>
+</div>
+
+<pre><span id="VALunpack"><span class="keyword">val</span> unpack</span> : <code class="type">?progress:(string -> unit) -><br>       write:<a href="Git.Value.html#TYPEwrite_inflated">Git.Value.write_inflated</a> -> <a href="Git.Pack.html#TYPEt">Git.Pack.t</a> -> Git.Hash.Set.t Lwt.t</code></pre><div class="info ">
+Unpack a whole pack file on disk (by calling <code class="code">write</code> on every
+          values) and return the Hash1s of the written objects.<br>
+</div>
+
+<pre><span id="VALread"><span class="keyword">val</span> read</span> : <code class="type">index:<a href="Git.Pack_index.html#TYPEf">Git.Pack_index.f</a> -><br>       read:<a href="Git.Value.html#TYPEread_inflated">Git.Value.read_inflated</a> -><br>       Mstruct.t -> Git.Hash.t -> <a href="Git.Value.html#TYPEt">Git.Value.t</a> option Lwt.t</code></pre><div class="info ">
+Same as the top-level <code class="code">read</code> function but for raw packs.<br>
+</div>
+
+<pre><span id="VALread_inflated"><span class="keyword">val</span> read_inflated</span> : <code class="type">index:<a href="Git.Pack_index.html#TYPEf">Git.Pack_index.f</a> -><br>       read:<a href="Git.Value.html#TYPEread_inflated">Git.Value.read_inflated</a> -><br>       Mstruct.t -> Git.Hash.t -> string option Lwt.t</code></pre><div class="info ">
+Same as <a href="Git.Pack.IO.Raw.html#VALread"><code class="code"><span class="constructor">Git</span>.<span class="constructor">Pack</span>.<span class="constructor">IO</span>.<span class="constructor">Raw</span>.read</code></a> but for inflated values.<br>
+</div>
+
+<pre><span id="VALsize"><span class="keyword">val</span> size</span> : <code class="type">index:<a href="Git.Pack_index.html#TYPEf">Git.Pack_index.f</a> -> Mstruct.t -> Git.Hash.t -> int option Lwt.t</code></pre><div class="info ">
+<code class="code">size ~index buf h</code> is the (uncompressed) size of <code class="code">h</code>.<br>
+</div>
+</body></html>

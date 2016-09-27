@@ -1,0 +1,33 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<link rel="stylesheet" href="style.css" type="text/css">
+<meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+<link rel="Start" href="index.html">
+<link rel="previous" href="Git.Hash.S.Set.html">
+<link rel="Up" href="Git.Hash.S.html">
+<link title="Index of types" rel=Appendix href="index_types.html">
+<link title="Index of exceptions" rel=Appendix href="index_exceptions.html">
+<link title="Index of values" rel=Appendix href="index_values.html">
+<link title="Index of modules" rel=Appendix href="index_modules.html">
+<link title="Index of module types" rel=Appendix href="index_module_types.html">
+<link title="Git" rel="Chapter" href="Git.html">
+<link title="Git_unix" rel="Chapter" href="Git_unix.html">
+<link title="Git_mirage" rel="Chapter" href="Git_mirage.html">
+<link title="Git_http" rel="Chapter" href="Git_http.html"><title>Git.Hash.S.Map</title>
+</head>
+<body>
+<div class="navbar"><a class="pre" href="Git.Hash.S.Set.html" title="Git.Hash.S.Set">Previous</a>
+&nbsp;<a class="up" href="Git.Hash.S.html" title="Git.Hash.S">Up</a>
+&nbsp;</div>
+<h1>Module <a href="type_Git.Hash.S.Map.html">Git.Hash.S.Map</a></h1>
+
+<pre><span class="keyword">module</span> Map: <code class="type"><a href="Git.Map.html">Git.Map</a></code><code class="type">  with type key = t</code></pre><hr width="100%">
+
+<pre><span class="keyword">include</span> Map.S</pre>
+
+<pre><span id="VALpp"><span class="keyword">val</span> pp</span> : <code class="type">'a Fmt.t -> 'a t Fmt.t</code></pre>
+<pre><span id="VALkeys"><span class="keyword">val</span> keys</span> : <code class="type">'a t -> key list</code></pre>
+<pre><span id="VALto_alist"><span class="keyword">val</span> to_alist</span> : <code class="type">'a t -> (key * 'a) list</code></pre>
+<pre><span id="VALof_alist"><span class="keyword">val</span> of_alist</span> : <code class="type">(key * 'a) list -> 'a t</code></pre>
+<pre><span id="VALadd_multi"><span class="keyword">val</span> add_multi</span> : <code class="type">key -> 'a -> 'a list t -> 'a list t</code></pre></body></html>

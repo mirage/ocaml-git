@@ -1,0 +1,151 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<link rel="stylesheet" href="style.css" type="text/css">
+<meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+<link rel="Start" href="index.html">
+<link rel="next" href="Git_unix.html">
+<link rel="Up" href="index.html">
+<link title="Index of types" rel=Appendix href="index_types.html">
+<link title="Index of exceptions" rel=Appendix href="index_exceptions.html">
+<link title="Index of values" rel=Appendix href="index_values.html">
+<link title="Index of modules" rel=Appendix href="index_modules.html">
+<link title="Index of module types" rel=Appendix href="index_module_types.html">
+<link title="Git" rel="Chapter" href="Git.html">
+<link title="Git_unix" rel="Chapter" href="Git_unix.html">
+<link title="Git_mirage" rel="Chapter" href="Git_mirage.html">
+<link title="Git_http" rel="Chapter" href="Git_http.html"><link title="Common signatures to all objects" rel="Section" href="#1_Commonsignaturestoallobjects">
+<link title="Base objects" rel="Section" href="#1_Baseobjects">
+<link title="Pack objects" rel="Section" href="#1_Packobjects">
+<link title="Git Stores" rel="Section" href="#1_GitStores">
+<link title="Wire protocol" rel="Section" href="#1_Wireprotocol">
+<link title="Higher level read-only functions" rel="Section" href="#1_Higherlevelreadonlyfunctions">
+<title>Git</title>
+</head>
+<body>
+<div class="navbar">&nbsp;<a class="up" href="index.html" title="Index">Up</a>
+&nbsp;<a class="post" href="Git_unix.html" title="Git_unix">Next</a>
+</div>
+<h1>Module <a href="type_Git.html">Git</a></h1>
+
+<pre><span class="keyword">module</span> Git: <code class="code"><span class="keyword">sig</span></code> <a href="Git.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><div class="info module top">
+Implementation of the Git protocol in pure OCaml
+<p>
+
+    1.8.0-5-g0fc3827<br>
+</div>
+<hr width="100%">
+<br>
+<h1 id="1_Commonsignaturestoallobjects">Common signatures to all objects</h1><br>
+
+<pre><span class="keyword">module type</span> <a href="Git.S.html">S</a> = <code class="code"><span class="keyword">sig</span></code> <a href="Git.S.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><div class="info">
+General functions.
+</div>
+
+<pre><span class="keyword">module type</span> <a href="Git.Set.html">Set</a> = <code class="code"><span class="keyword">sig</span></code> <a href="Git.Set.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><div class="info">
+Extended sets
+</div>
+
+<pre><span class="keyword">module type</span> <a href="Git.Map.html">Map</a> = <code class="code"><span class="keyword">sig</span></code> <a href="Git.Map.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><div class="info">
+Extended maps
+</div>
+
+<pre><span class="keyword">module type</span> <a href="Git.IO.html">IO</a> = <code class="code"><span class="keyword">sig</span></code> <a href="Git.IO.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><br>
+<h1 id="1_Baseobjects">Base objects</h1><br>
+
+<pre><span class="keyword">module</span> <a href="Git.Hash.html">Hash</a>: <code class="code"><span class="keyword">sig</span></code> <a href="Git.Hash.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><div class="info">
+Hashing.
+</div>
+
+<pre><span class="keyword">module</span> <a href="Git.Blob.html">Blob</a>: <code class="code"><span class="keyword">sig</span></code> <a href="Git.Blob.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><div class="info">
+Binary blobs
+</div>
+
+<pre><span class="keyword">module</span> <a href="Git.Tree.html">Tree</a>: <code class="code"><span class="keyword">sig</span></code> <a href="Git.Tree.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><div class="info">
+Filesystem trees.
+</div>
+
+<pre><span class="keyword">module</span> <a href="Git.User.html">User</a>: <code class="code"><span class="keyword">sig</span></code> <a href="Git.User.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><div class="info">
+User actions.
+</div>
+
+<pre><span class="keyword">module</span> <a href="Git.Commit.html">Commit</a>: <code class="code"><span class="keyword">sig</span></code> <a href="Git.Commit.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><div class="info">
+Commits.
+</div>
+
+<pre><span class="keyword">module</span> <a href="Git.Object_type.html">Object_type</a>: <code class="code"><span class="keyword">sig</span></code> <a href="Git.Object_type.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><div class="info">
+Object types.
+</div>
+
+<pre><span class="keyword">module</span> <a href="Git.Tag.html">Tag</a>: <code class="code"><span class="keyword">sig</span></code> <a href="Git.Tag.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><div class="info">
+Annotated tags.
+</div>
+
+<pre><span class="keyword">module</span> <a href="Git.Reference.html">Reference</a>: <code class="code"><span class="keyword">sig</span></code> <a href="Git.Reference.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><div class="info">
+References.
+</div>
+
+<pre><span class="keyword">module</span> <a href="Git.Inflate.html">Inflate</a>: <code class="code"><span class="keyword">sig</span></code> <a href="Git.Inflate.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><div class="info">
+Zlib Compression.
+</div>
+
+<pre><span class="keyword">module</span> <a href="Git.Value.html">Value</a>: <code class="code"><span class="keyword">sig</span></code> <a href="Git.Value.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><div class="info">
+Git values
+</div>
+<br>
+<h1 id="1_Packobjects">Pack objects</h1><br>
+
+<pre><span class="keyword">module</span> <a href="Git.Pack_index.html">Pack_index</a>: <code class="code"><span class="keyword">sig</span></code> <a href="Git.Pack_index.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><div class="info">
+Pack indexes.
+</div>
+
+<pre><span class="keyword">module</span> <a href="Git.Packed_value.html">Packed_value</a>: <code class="code"><span class="keyword">sig</span></code> <a href="Git.Packed_value.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><div class="info">
+Packed values.
+</div>
+
+<pre><span class="keyword">module</span> <a href="Git.Pack.html">Pack</a>: <code class="code"><span class="keyword">sig</span></code> <a href="Git.Pack.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><div class="info">
+Pack files.
+</div>
+
+<pre><span class="keyword">module</span> <a href="Git.Packed_refs.html">Packed_refs</a>: <code class="code"><span class="keyword">sig</span></code> <a href="Git.Packed_refs.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><div class="info">
+Packed references.
+</div>
+
+<pre><span class="keyword">module</span> <a href="Git.Index.html">Index</a>: <code class="code"><span class="keyword">sig</span></code> <a href="Git.Index.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><div class="info">
+Implementation of the V2 Git Index format (as V1 is deprecated).
+</div>
+<br>
+<h1 id="1_GitStores">Git Stores</h1><br>
+
+<pre><span class="keyword">module</span> <a href="Git.Store.html">Store</a>: <code class="code"><span class="keyword">sig</span></code> <a href="Git.Store.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><div class="info">
+General signature for Git stores.
+</div>
+<br>
+<h1 id="1_Wireprotocol">Wire protocol</h1><br>
+
+<pre><span class="keyword">module</span> <a href="Git.Gri.html">Gri</a>: <code class="code"><span class="keyword">sig</span></code> <a href="Git.Gri.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><div class="info">
+Git ressource identifiers (GRI).
+</div>
+
+<pre><span class="keyword">module</span> <a href="Git.Sync.html">Sync</a>: <code class="code"><span class="keyword">sig</span></code> <a href="Git.Sync.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><div class="info">
+Clone/Fecth/Push protocol
+</div>
+
+<pre><span class="keyword">module</span> <a href="Git.Memory.html">Memory</a>: <code class="code"><span class="keyword">sig</span></code> <a href="Git.Memory.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><div class="info">
+Store Git objects in memory.
+</div>
+
+<pre><span class="keyword">module</span> <a href="Git.FS.html">FS</a>: <code class="code"><span class="keyword">sig</span></code> <a href="Git.FS.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><div class="info">
+Store Git objects on the local filesystem.
+</div>
+<br>
+<h1 id="1_Higherlevelreadonlyfunctions">Higher level read-only functions</h1><br>
+
+<pre><span class="keyword">module</span> <a href="Git.Search.html">Search</a>: <code class="code"><span class="keyword">sig</span></code> <a href="Git.Search.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><div class="info">
+Search over the graph of Git objects.
+</div>
+
+<pre><span class="keyword">module</span> <a href="Git.Graph.html">Graph</a>: <code class="code"><span class="keyword">sig</span></code> <a href="Git.Graph.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><div class="info">
+Functions to manipulate the graph of Git objects.
+</div>
+</body></html>

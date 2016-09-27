@@ -1,0 +1,40 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<link rel="stylesheet" href="style.css" type="text/css">
+<meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+<link rel="Start" href="index.html">
+<link rel="previous" href="Git.Memory.html">
+<link rel="next" href="Git.Search.html">
+<link rel="Up" href="Git.html">
+<link title="Index of types" rel=Appendix href="index_types.html">
+<link title="Index of exceptions" rel=Appendix href="index_exceptions.html">
+<link title="Index of values" rel=Appendix href="index_values.html">
+<link title="Index of modules" rel=Appendix href="index_modules.html">
+<link title="Index of module types" rel=Appendix href="index_module_types.html">
+<link title="Git" rel="Chapter" href="Git.html">
+<link title="Git_unix" rel="Chapter" href="Git_unix.html">
+<link title="Git_mirage" rel="Chapter" href="Git_mirage.html">
+<link title="Git_http" rel="Chapter" href="Git_http.html"><link title="Constructor" rel="Section" href="#2_Constructor">
+<title>Git.FS</title>
+</head>
+<body>
+<div class="navbar"><a class="pre" href="Git.Memory.html" title="Git.Memory">Previous</a>
+&nbsp;<a class="up" href="Git.html" title="Git">Up</a>
+&nbsp;<a class="post" href="Git.Search.html" title="Git.Search">Next</a>
+</div>
+<h1>Module <a href="type_Git.FS.html">Git.FS</a></h1>
+
+<pre><span class="keyword">module</span> FS: <code class="code"><span class="keyword">sig</span></code> <a href="Git.FS.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><div class="info module top">
+Store Git objects on the local filesystem.<br>
+</div>
+<hr width="100%">
+
+<pre><span class="keyword">module type</span> <a href="Git.FS.S.html">S</a> = <code class="code"><span class="keyword">sig</span></code> <a href="Git.FS.S.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><br>
+<h2 id="2_Constructor">Constructor</h2><br>
+
+<pre><span class="keyword">module type</span> <a href="Git.FS.IO.html">IO</a> = <code class="code"><span class="keyword">sig</span></code> <a href="Git.FS.IO.html">..</a> <code class="code"><span class="keyword">end</span></code></pre>
+<pre><span class="keyword">module</span> <a href="Git.FS.Make.html">Make</a>: <div class="sig_block"><code class="code"><span class="keyword">functor</span> (</code><code class="code"><span class="constructor">IO</span></code><code class="code"> : </code><code class="type"><a href="Git.FS.IO.html">IO</a></code><code class="code">) <span class="keywordsign">-&gt;</span> </code><div class="sig_block"><code class="code"><span class="keyword">functor</span> (</code><code class="code"><span class="constructor">D</span></code><code class="code"> : </code><code class="type"><a href="Git.Hash.DIGEST.html">Git.Hash.DIGEST</a></code><code class="code">) <span class="keywordsign">-&gt;</span> </code><div class="sig_block"><code class="code"><span class="keyword">functor</span> (</code><code class="code"><span class="constructor">I</span></code><code class="code"> : </code><code class="type"><a href="Git.Inflate.S.html">Git.Inflate.S</a></code><code class="code">) <span class="keywordsign">-&gt;</span> </code><code class="type"><a href="Git.FS.S.html">S</a></code><code class="type"> </code></div></div></div></pre><div class="info">
+Create an on-disk store implementation.
+</div>
+</body></html>

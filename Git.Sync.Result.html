@@ -1,0 +1,82 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<link rel="stylesheet" href="style.css" type="text/css">
+<meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+<link rel="Start" href="index.html">
+<link rel="next" href="Git.Sync.Make.html">
+<link rel="Up" href="Git.Sync.html">
+<link title="Index of types" rel=Appendix href="index_types.html">
+<link title="Index of exceptions" rel=Appendix href="index_exceptions.html">
+<link title="Index of values" rel=Appendix href="index_values.html">
+<link title="Index of modules" rel=Appendix href="index_modules.html">
+<link title="Index of module types" rel=Appendix href="index_module_types.html">
+<link title="Git" rel="Chapter" href="Git.html">
+<link title="Git_unix" rel="Chapter" href="Git_unix.html">
+<link title="Git_mirage" rel="Chapter" href="Git_mirage.html">
+<link title="Git_http" rel="Chapter" href="Git_http.html"><title>Git.Sync.Result</title>
+</head>
+<body>
+<div class="navbar">&nbsp;<a class="up" href="Git.Sync.html" title="Git.Sync">Up</a>
+&nbsp;<a class="post" href="Git.Sync.Make.html" title="Git.Sync.Make">Next</a>
+</div>
+<h1>Module <a href="type_Git.Sync.Result.html">Git.Sync.Result</a></h1>
+
+<pre><span class="keyword">module</span> Result: <code class="code"><span class="keyword">sig</span></code> <a href="Git.Sync.Result.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><hr width="100%">
+
+<pre><span id="TYPEfetch"><span class="keyword">type</span> <code class="type"></code>fetch</span> </pre>
+<div class="info ">
+The resulting hashes and references.<br>
+</div>
+
+
+<pre><span id="VALhead_contents"><span class="keyword">val</span> head_contents</span> : <code class="type"><a href="Git.Sync.Result.html#TYPEfetch">fetch</a> -> <a href="Git.Reference.html#TYPEhead_contents">Git.Reference.head_contents</a> option</code></pre><div class="info ">
+<code class="code">head_contents f</code> is <code class="code">f</code>'s head contents (the value of the
+        remote <i>.git/HEAD</i>).<br>
+</div>
+
+<pre><span id="VALhead"><span class="keyword">val</span> head</span> : <code class="type"><a href="Git.Sync.Result.html#TYPEfetch">fetch</a> -> Hash.Commit.t option</code></pre><div class="info ">
+<code class="code">head f</code> is <code class="code">f</code>'s head commit.<br>
+</div>
+
+<pre><span id="VALreferences"><span class="keyword">val</span> references</span> : <code class="type"><a href="Git.Sync.Result.html#TYPEfetch">fetch</a> -> Git.Hash.t Git.Reference.Map.t</code></pre><div class="info ">
+<code class="code">references f</code> are <code class="code">f</code>'s references.<br>
+</div>
+
+<pre><span id="VALhashes"><span class="keyword">val</span> hashes</span> : <code class="type"><a href="Git.Sync.Result.html#TYPEfetch">fetch</a> -> Git.Hash.Set.t</code></pre><div class="info ">
+<code class="code">hashes f</code> are <code class="code">f</code>'s object hashes.<br>
+</div>
+
+<pre><span id="VALpp_fetch"><span class="keyword">val</span> pp_fetch</span> : <code class="type"><a href="Git.Sync.Result.html#TYPEfetch">fetch</a> Fmt.t</code></pre><div class="info ">
+<code class="code">pp_fetch</code> is the pretty-printer for <a href="Git.Sync.Result.html#TYPEfetch"><code class="code"><span class="constructor">Git</span>.<span class="constructor">Sync</span>.<span class="constructor">Result</span>.fetch</code></a> values.<br>
+</div>
+
+<pre><span id="TYPEok_or_error"><span class="keyword">type</span> <code class="type"></code>ok_or_error</span> = <code class="type">[ `Error of string | `Ok ]</code> </pre>
+
+
+<pre><code><span id="TYPEpush"><span class="keyword">type</span> <code class="type"></code>push</span> = {</code></pre><table class="typetable">
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTpush.result">result</span>&nbsp;: <code class="type"><a href="Git.Sync.Result.html#TYPEok_or_error">ok_or_error</a></code>;</code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTpush.commands">commands</span>&nbsp;: <code class="type">(Git.Reference.t * <a href="Git.Sync.Result.html#TYPEok_or_error">ok_or_error</a>) list</code>;</code></td>
+
+</tr></table>
+}
+
+<div class="info ">
+The result of a push operation.<br>
+</div>
+
+
+<pre><span id="VALpp_push"><span class="keyword">val</span> pp_push</span> : <code class="type"><a href="Git.Sync.Result.html#TYPEpush">push</a> Fmt.t</code></pre><div class="info ">
+<code class="code">pp_push</code> is the pretty-printer for <a href="Git.Sync.Result.html#TYPEpush"><code class="code"><span class="constructor">Git</span>.<span class="constructor">Sync</span>.<span class="constructor">Result</span>.push</code></a> values.<br>
+</div>
+</body></html>

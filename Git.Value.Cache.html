@@ -1,0 +1,57 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<link rel="stylesheet" href="style.css" type="text/css">
+<meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+<link rel="Start" href="index.html">
+<link rel="next" href="Git.Value.IO.html">
+<link rel="Up" href="Git.Value.html">
+<link title="Index of types" rel=Appendix href="index_types.html">
+<link title="Index of exceptions" rel=Appendix href="index_exceptions.html">
+<link title="Index of values" rel=Appendix href="index_values.html">
+<link title="Index of modules" rel=Appendix href="index_modules.html">
+<link title="Index of module types" rel=Appendix href="index_module_types.html">
+<link title="Git" rel="Chapter" href="Git.html">
+<link title="Git_unix" rel="Chapter" href="Git_unix.html">
+<link title="Git_mirage" rel="Chapter" href="Git_mirage.html">
+<link title="Git_http" rel="Chapter" href="Git_http.html"><link title="Global cache of values" rel="Section" href="#1_Globalcacheofvalues">
+<title>Git.Value.Cache</title>
+</head>
+<body>
+<div class="navbar">&nbsp;<a class="up" href="Git.Value.html" title="Git.Value">Up</a>
+&nbsp;<a class="post" href="Git.Value.IO.html" title="Git.Value.IO">Next</a>
+</div>
+<h1>Module <a href="type_Git.Value.Cache.html">Git.Value.Cache</a></h1>
+
+<pre><span class="keyword">module</span> Cache: <code class="code"><span class="keyword">sig</span></code> <a href="Git.Value.Cache.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><hr width="100%">
+<br>
+<h1 id="1_Globalcacheofvalues">Global cache of values</h1><br>
+
+<pre><span id="VALset_size"><span class="keyword">val</span> set_size</span> : <code class="type">int -> unit</code></pre><div class="info ">
+Empty the current LRU cache, and create a new one with the given
+        size.<br>
+</div>
+
+<pre><span id="VALclear"><span class="keyword">val</span> clear</span> : <code class="type">unit -> unit</code></pre><div class="info ">
+Empty the cache.<br>
+</div>
+
+<pre><span id="VALfind"><span class="keyword">val</span> find</span> : <code class="type">Git.Hash.t -> <a href="Git.Value.html#TYPEt">Git.Value.t</a> option</code></pre><div class="info ">
+Cache an inflated values. This is used by various operations, so
+        it could be useful to look into it to speed-up operations which
+        needs to search a pack file.<br>
+</div>
+
+<pre><span id="VALfind_inflated"><span class="keyword">val</span> find_inflated</span> : <code class="type">Git.Hash.t -> string option</code></pre><div class="info ">
+Same as <a href="Git.Value.Cache.html#VALfind"><code class="code"><span class="constructor">Git</span>.<span class="constructor">Value</span>.<span class="constructor">Cache</span>.find</code></a> but store the inflated representation of the
+        value.<br>
+</div>
+
+<pre><span id="VALadd"><span class="keyword">val</span> add</span> : <code class="type">Git.Hash.t -> <a href="Git.Value.html#TYPEt">Git.Value.t</a> -> unit</code></pre><div class="info ">
+Cache a value.<br>
+</div>
+
+<pre><span id="VALadd_inflated"><span class="keyword">val</span> add_inflated</span> : <code class="type">Git.Hash.t -> string -> unit</code></pre><div class="info ">
+Cache an inflated value.<br>
+</div>
+</body></html>

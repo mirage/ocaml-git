@@ -1,0 +1,58 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<link rel="stylesheet" href="style.css" type="text/css">
+<meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+<link rel="Start" href="index.html">
+<link rel="previous" href="Git.Hash.IO.Tree.html">
+<link rel="Up" href="Git.Hash.IO.html">
+<link title="Index of types" rel=Appendix href="index_types.html">
+<link title="Index of exceptions" rel=Appendix href="index_exceptions.html">
+<link title="Index of values" rel=Appendix href="index_values.html">
+<link title="Index of modules" rel=Appendix href="index_modules.html">
+<link title="Index of module types" rel=Appendix href="index_module_types.html">
+<link title="Git" rel="Chapter" href="Git.html">
+<link title="Git_unix" rel="Chapter" href="Git_unix.html">
+<link title="Git_mirage" rel="Chapter" href="Git_mirage.html">
+<link title="Git_http" rel="Chapter" href="Git_http.html"><title>Git.Hash.IO.Commit</title>
+</head>
+<body>
+<div class="navbar"><a class="pre" href="Git.Hash.IO.Tree.html" title="Git.Hash.IO.Tree">Previous</a>
+&nbsp;<a class="up" href="Git.Hash.IO.html" title="Git.Hash.IO">Up</a>
+&nbsp;</div>
+<h1>Module <a href="type_Git.Hash.IO.Commit.html">Git.Hash.IO.Commit</a></h1>
+
+<pre><span class="keyword">module</span> Commit: <code class="type"><a href="Git.Hash.H.html">Git.Hash.H</a></code><code class="type">  with type t = Commit.t</code></pre><hr width="100%">
+
+<pre><span class="keyword">include</span> <a href="Git.Hash.S.html">Git.Hash.S</a></pre>
+
+<pre><span class="keyword">include</span> <a href="Git.IO.html">Git.IO</a></pre>
+
+<pre><span id="VALof_hex"><span class="keyword">val</span> of_hex</span> : <code class="type">string -> t</code></pre><div class="info ">
+Convert an hex-encoded string into a hash value. Raise
+        <a href="Git.Hash.html#EXCEPTIONAmbiguous"><code class="code"><span class="constructor">Git</span>.<span class="constructor">Hash</span>.<span class="constructor">Ambiguous</span></code></a> if the hash is short; in that case use
+        <a href="Git.Hash.H.html#VALof_short_hex"><code class="code"><span class="constructor">Git</span>.<span class="constructor">Hash</span>.<span class="constructor">H</span>.of_short_hex</code></a>.<br>
+</div>
+
+<pre><span id="VALof_short_hex"><span class="keyword">val</span> of_short_hex</span> : <code class="type">string -> t</code></pre><div class="info ">
+Same as <a href="Git.Hash.H.html#VALof_hex"><code class="code"><span class="constructor">Git</span>.<span class="constructor">Hash</span>.<span class="constructor">H</span>.of_hex</code></a> but allow values shorter than 20
+        characters. Such hash values are called <i>short</i> hashes and can
+        cause some functions to raise <a href="Git.Hash.html#EXCEPTIONAmbiguous"><code class="code"><span class="constructor">Git</span>.<span class="constructor">Hash</span>.<span class="constructor">Ambiguous</span></code></a>.<br>
+</div>
+
+<pre><span id="VALinput_hex"><span class="keyword">val</span> input_hex</span> : <code class="type">Mstruct.t -> t</code></pre><div class="info ">
+Read an hex-encoded hash value.<br>
+</div>
+
+<pre><span id="VALadd_hex"><span class="keyword">val</span> add_hex</span> : <code class="type">Buffer.t -> t -> unit</code></pre><div class="info ">
+Add the hex-encoding of the hash value to the buffer.<br>
+</div>
+
+<pre><span id="VALis_short"><span class="keyword">val</span> is_short</span> : <code class="type">t -> bool</code></pre><div class="info ">
+Check if the hash is short.<br>
+</div>
+
+<pre><span id="VALzero"><span class="keyword">val</span> zero</span> : <code class="type">t</code></pre><div class="info ">
+A hash full of zero. Useful for padding.<br>
+</div>
+</body></html>

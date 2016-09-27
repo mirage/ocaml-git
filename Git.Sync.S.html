@@ -1,0 +1,89 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<link rel="stylesheet" href="style.css" type="text/css">
+<meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+<link rel="Start" href="index.html">
+<link rel="next" href="Git.Sync.IO.html">
+<link rel="Up" href="Git.Sync.html">
+<link title="Index of types" rel=Appendix href="index_types.html">
+<link title="Index of exceptions" rel=Appendix href="index_exceptions.html">
+<link title="Index of values" rel=Appendix href="index_values.html">
+<link title="Index of modules" rel=Appendix href="index_modules.html">
+<link title="Index of module types" rel=Appendix href="index_module_types.html">
+<link title="Git" rel="Chapter" href="Git.html">
+<link title="Git_unix" rel="Chapter" href="Git_unix.html">
+<link title="Git_mirage" rel="Chapter" href="Git_mirage.html">
+<link title="Git_http" rel="Chapter" href="Git_http.html"><link title="The base Git protocol and Git+SSH" rel="Section" href="#1_ThebaseGitprotocolandGitSSH">
+<title>Git.Sync.S</title>
+</head>
+<body>
+<div class="navbar">&nbsp;<a class="up" href="Git.Sync.html" title="Git.Sync">Up</a>
+&nbsp;<a class="post" href="Git.Sync.IO.html" title="Git.Sync.IO">Next</a>
+</div>
+<h1>Module type <a href="type_Git.Sync.S.html">Git.Sync.S</a></h1>
+
+<pre><span class="keyword">module type</span> S = <code class="code"><span class="keyword">sig</span></code> <a href="Git.Sync.S.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><hr width="100%">
+
+<pre><span id="TYPEt"><span class="keyword">type</span> <code class="type"></code>t</span> </pre>
+<div class="info ">
+Abstract value for stores.<br>
+</div>
+
+
+<pre><span id="TYPEctx"><span class="keyword">type</span> <code class="type"></code>ctx</span> </pre>
+<div class="info ">
+Connection context<br>
+</div>
+
+<br>
+<h1 id="1_ThebaseGitprotocolandGitSSH">The base Git protocol and Git+SSH</h1><br>
+
+<pre><span id="VALls"><span class="keyword">val</span> ls</span> : <code class="type">?ctx:<a href="Git.Sync.S.html#TYPEctx">ctx</a> -><br>       <a href="Git.Sync.S.html#TYPEt">t</a> -> <a href="Git.Gri.html#TYPEt">Git.Gri.t</a> -> Git.Hash.t Git.Reference.Map.t Lwt.t</code></pre><div class="info ">
+List the references of the remote repository.<br>
+</div>
+
+<pre><span id="VALpush"><span class="keyword">val</span> push</span> : <code class="type">?ctx:<a href="Git.Sync.S.html#TYPEctx">ctx</a> -><br>       <a href="Git.Sync.S.html#TYPEt">t</a> -><br>       branch:Git.Reference.t -> <a href="Git.Gri.html#TYPEt">Git.Gri.t</a> -> <a href="Git.Sync.Result.html#TYPEpush">Git.Sync.Result.push</a> Lwt.t</code></pre><div class="info ">
+Push a local branch to a remote store.<br>
+</div>
+
+<pre><span id="VALfetch"><span class="keyword">val</span> fetch</span> : <code class="type">?ctx:<a href="Git.Sync.S.html#TYPEctx">ctx</a> -><br>       ?deepen:int -><br>       ?unpack:bool -><br>       ?capabilities:<a href="Git.Sync.html#TYPEcapability">Git.Sync.capability</a> list -><br>       ?wants:<a href="Git.Sync.html#TYPEwant">Git.Sync.want</a> list -><br>       ?progress:(string -> unit) -><br>       <a href="Git.Sync.S.html#TYPEt">t</a> -> <a href="Git.Gri.html#TYPEt">Git.Gri.t</a> -> <a href="Git.Sync.Result.html#TYPEfetch">Git.Sync.Result.fetch</a> Lwt.t</code></pre><div class="info ">
+<code class="code">fetch t uri</code> fetches the contents of <code class="code">uri</code> into the store <code class="code">t</code>.
+<p>
+
+        By default, all the remote references are updated. This behavior
+        can be changed by using the <code class="code">wants</code> parameter:
+<p>
+
+        <ul>
+<li>if <code class="code">wants</code> is not specified, the objects corresponding to <b>           all</b> the remote references are downloaded. This is useful
+           when cloning a new repository as the remote references are
+           not yet known.</li>
+<li>If a reference (e.g. a <code class="code"><span class="keywordsign">`</span><span class="constructor">Ref</span></code> <a href="Git.Sync.html#TYPEwant"><code class="code"><span class="constructor">Git</span>.<span class="constructor">Sync</span>.want</code></a> value) appears in the
+           list, the object corresponding to that remote reference are
+           fetched. This works only if the server exports the
+           "allow-reachable-sha1-in-want" (available in Git 2.5.0)</li>
+<li>If a commit hash (e.g. a <code class="code"><span class="keywordsign">`</span><span class="constructor">Commit</span></code> <a href="Git.Sync.html#TYPEwant"><code class="code"><span class="constructor">Git</span>.<span class="constructor">Sync</span>.want</code></a> value) in the
+           list, the objects corresponding to the that remote commits
+           are fetched..</li>
+</ul>
+
+<p>
+
+        <b>Note:</b> the local HEAD is not modified when doing a fetch. To do so
+        (for instance when doing a clone) do the following:
+<p>
+
+        <pre class="codepre"><code class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fetch&nbsp;t&nbsp;gri&nbsp;&gt;&gt;=&nbsp;<span class="keyword">fun</span>&nbsp;r&nbsp;<span class="keywordsign">-&gt;</span>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">match</span>&nbsp;<span class="constructor">Result</span>.head_contents&nbsp;r&nbsp;<span class="keyword">with</span>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">Some</span>&nbsp;h&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Store</span>.write_head&nbsp;t&nbsp;h
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">None</span>&nbsp;&nbsp;&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Lwt</span>.return_unit
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code></pre><br>
+</div>
+
+<pre><span id="VALclone"><span class="keyword">val</span> clone</span> : <code class="type">?ctx:<a href="Git.Sync.S.html#TYPEctx">ctx</a> -><br>       ?deepen:int -><br>       ?unpack:bool -><br>       ?capabilities:<a href="Git.Sync.html#TYPEcapability">Git.Sync.capability</a> list -><br>       ?branch:<a href="Git.Sync.html#TYPEwant">Git.Sync.want</a> -><br>       ?progress:(string -> unit) -><br>       <a href="Git.Sync.S.html#TYPEt">t</a> -> checkout:bool -> <a href="Git.Gri.html#TYPEt">Git.Gri.t</a> -> <a href="Git.Sync.Result.html#TYPEfetch">Git.Sync.Result.fetch</a> Lwt.t</code></pre><div class="info ">
+Similar to <a href="Git.Sync.S.html#VALfetch"><code class="code"><span class="constructor">Git</span>.<span class="constructor">Sync</span>.<span class="constructor">S</span>.fetch</code></a> but also initialise <code class="code"><span class="constructor">HEAD</span></code> and a the
+        specified <code class="code">branch</code>. If <code class="code">branch</code> is not specified, initialise all
+        the references that the remote repository exposes.<br>
+</div>
+</body></html>

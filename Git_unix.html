@@ -2,9 +2,9 @@
 <html>
 <head>
 <link rel="stylesheet" href="style.css" type="text/css">
-<meta content="text/html; charset=iso-8859-1" http-equiv="Content-Type">
+<meta content="text/html; charset=utf-8" http-equiv="Content-Type">
 <link rel="Start" href="index.html">
-<link rel="previous" href="Version.html">
+<link rel="previous" href="Git.html">
 <link rel="next" href="Git_mirage.html">
 <link rel="Up" href="index.html">
 <link title="Index of types" rel=Appendix href="index_types.html">
@@ -12,36 +12,13 @@
 <link title="Index of values" rel=Appendix href="index_values.html">
 <link title="Index of modules" rel=Appendix href="index_modules.html">
 <link title="Index of module types" rel=Appendix href="index_module_types.html">
-<link title="Misc" rel="Chapter" href="Misc.html">
-<link title="Hash" rel="Chapter" href="Hash.html">
-<link title="Inflate" rel="Chapter" href="Inflate.html">
-<link title="Object" rel="Chapter" href="Object.html">
-<link title="Object_type" rel="Chapter" href="Object_type.html">
-<link title="Blob" rel="Chapter" href="Blob.html">
-<link title="Tree" rel="Chapter" href="Tree.html">
-<link title="Commit" rel="Chapter" href="Commit.html">
-<link title="Tag" rel="Chapter" href="Tag.html">
-<link title="Reference" rel="Chapter" href="Reference.html">
-<link title="Value" rel="Chapter" href="Value.html">
-<link title="Pack" rel="Chapter" href="Pack.html">
-<link title="Pack_index" rel="Chapter" href="Pack_index.html">
-<link title="Packed_value" rel="Chapter" href="Packed_value.html">
-<link title="Packed_refs" rel="Chapter" href="Packed_refs.html">
-<link title="Index" rel="Chapter" href="Index.html">
-<link title="Sync" rel="Chapter" href="Sync.html">
-<link title="Gri" rel="Chapter" href="Gri.html">
-<link title="Search" rel="Chapter" href="Search.html">
-<link title="Global_graph" rel="Chapter" href="Global_graph.html">
-<link title="User" rel="Chapter" href="User.html">
-<link title="Store" rel="Chapter" href="Store.html">
-<link title="Memory" rel="Chapter" href="Memory.html">
-<link title="FS" rel="Chapter" href="FS.html">
-<link title="Version" rel="Chapter" href="Version.html">
+<link title="Git" rel="Chapter" href="Git.html">
 <link title="Git_unix" rel="Chapter" href="Git_unix.html">
-<link title="Git_mirage" rel="Chapter" href="Git_mirage.html"><title>Git_unix</title>
+<link title="Git_mirage" rel="Chapter" href="Git_mirage.html">
+<link title="Git_http" rel="Chapter" href="Git_http.html"><title>Git_unix</title>
 </head>
 <body>
-<div class="navbar"><a class="pre" href="Version.html" title="Version">Previous</a>
+<div class="navbar"><a class="pre" href="Git.html" title="Git">Previous</a>
 &nbsp;<a class="up" href="index.html" title="Index">Up</a>
 &nbsp;<a class="post" href="Git_mirage.html" title="Git_mirage">Next</a>
 </div>
@@ -55,22 +32,22 @@ Unix backend.<br>
 <pre><span class="keyword">module type</span> <a href="Git_unix.S.html">S</a> = <code class="code"><span class="keyword">sig</span></code> <a href="Git_unix.S.html">..</a> <code class="code"><span class="keyword">end</span></code></pre>
 <pre><span class="keyword">include</span> <a href="Git_unix.S.html">Git_unix.S</a></pre>
 
-<pre><span class="keyword">module</span> <a href="Git_unix.Make.html">Make</a> <code class="code">(</code><code class="code"><span class="constructor">D</span></code><code class="code"> : </code><code class="type">Git.Hash.DIGEST</code><code class="code">) </code> <code class="code">(</code><code class="code"><span class="constructor">I</span></code><code class="code"> : </code><code class="type">Git.Inflate.S</code><code class="code">) </code>: <code class="type"><a href="Git_unix.S.html">S</a></code><code class="type"> </code></pre><div class="info">
+<pre><span class="keyword">module</span> <a href="Git_unix.Make.html">Make</a>: <div class="sig_block"><code class="code"><span class="keyword">functor</span> (</code><code class="code"><span class="constructor">D</span></code><code class="code"> : </code><code class="type"><a href="Git.Hash.DIGEST.html">Git.Hash.DIGEST</a></code><code class="code">) <span class="keywordsign">-&gt;</span> </code><div class="sig_block"><code class="code"><span class="keyword">functor</span> (</code><code class="code"><span class="constructor">I</span></code><code class="code"> : </code><code class="type"><a href="Git.Inflate.S.html">Git.Inflate.S</a></code><code class="code">) <span class="keywordsign">-&gt;</span> </code><code class="type"><a href="Git_unix.S.html">S</a></code><code class="type"> </code></div></div></pre><div class="info">
 Parametrize the Git implementation with different inflate and hash
     algorithms.
 </div>
 
-<pre><span class="keyword">module</span> <a href="Git_unix.Zlib.html">Zlib</a>: <code class="type">Git.Inflate.S</code><code class="type"> </code></pre><div class="info">
+<pre><span class="keyword">module</span> <a href="Git_unix.Zlib.html">Zlib</a>: <code class="type"><a href="Git.Inflate.S.html">Git.Inflate.S</a></code><code class="type"> </code></pre><div class="info">
 Implementation of the inflate signature using <code class="code">camlzip</code>'s zlib
     bindings.
 </div>
 
-<pre><span class="keyword">module</span> <a href="Git_unix.SHA1.html">SHA1</a>: <code class="type">Git.Hash.DIGEST</code><code class="type"> </code></pre><div class="info">
+<pre><span class="keyword">module</span> <a href="Git_unix.SHA1.html">SHA1</a>: <code class="type"><a href="Git.Hash.DIGEST.html">Git.Hash.DIGEST</a></code><code class="type"> </code></pre><div class="info">
 Implementation of the digest signature using <code class="code">ocaml-nocrypto</code>'s
     Hash1 algorithm.
 </div>
 
-<pre><span class="keyword">module</span> <a href="Git_unix.SHA256.html">SHA256</a>: <code class="type">Git.Hash.DIGEST</code><code class="type"> </code></pre><div class="info">
+<pre><span class="keyword">module</span> <a href="Git_unix.SHA256.html">SHA256</a>: <code class="type"><a href="Git.Hash.DIGEST.html">Git.Hash.DIGEST</a></code><code class="type"> </code></pre><div class="info">
 Implementation of the digest signature using <code class="code">ocaml-nocrypto</code>'s
     Hash256 algorithm.
 </div>

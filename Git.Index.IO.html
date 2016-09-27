@@ -1,0 +1,45 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<link rel="stylesheet" href="style.css" type="text/css">
+<meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+<link rel="Start" href="index.html">
+<link rel="Up" href="Git.Index.html">
+<link title="Index of types" rel=Appendix href="index_types.html">
+<link title="Index of exceptions" rel=Appendix href="index_exceptions.html">
+<link title="Index of values" rel=Appendix href="index_values.html">
+<link title="Index of modules" rel=Appendix href="index_modules.html">
+<link title="Index of module types" rel=Appendix href="index_module_types.html">
+<link title="Git" rel="Chapter" href="Git.html">
+<link title="Git_unix" rel="Chapter" href="Git_unix.html">
+<link title="Git_mirage" rel="Chapter" href="Git_mirage.html">
+<link title="Git_http" rel="Chapter" href="Git_http.html"><link title="Input/output functions" rel="Section" href="#1_Inputoutputfunctions">
+<title>Git.Index.IO</title>
+</head>
+<body>
+<div class="navbar">&nbsp;<a class="up" href="Git.Index.html" title="Git.Index">Up</a>
+&nbsp;</div>
+<h1>Module type <a href="type_Git.Index.IO.html">Git.Index.IO</a></h1>
+
+<pre><span class="keyword">module type</span> IO = <code class="type"><a href="Git.IO.html">Git.IO</a></code><code class="type">  with type t = t</code></pre><hr width="100%">
+<br>
+<h1 id="1_Inputoutputfunctions">Input/output functions</h1><br>
+
+<pre><span class="keyword">include</span> <a href="Git.S.html">Git.S</a></pre>
+
+<pre><span id="VALinput"><span class="keyword">val</span> input</span> : <code class="type">Mstruct.t -> t</code></pre><div class="info ">
+Build a value from an inflated contents.<br>
+</div>
+
+<pre><span id="VALadd"><span class="keyword">val</span> add</span> : <code class="type">Buffer.t -> ?level:int -> t -> unit</code></pre><div class="info ">
+Add the serialization of the value to an already existing
+      buffer.
+<p>
+
+      The compression <code class="code">level</code> must be between 0 and 9: 1 gives best
+      speed, 9 gives best compression, 0 gives no compression at all
+      (the input data is simply copied a block at a time). The default
+      value (currently equivalent to level 6) requests a default
+      compromise between speed and compression.<br>
+</div>
+</body></html>

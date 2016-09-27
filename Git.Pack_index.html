@@ -1,0 +1,83 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<link rel="stylesheet" href="style.css" type="text/css">
+<meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+<link rel="Start" href="index.html">
+<link rel="previous" href="Git.Value.html">
+<link rel="next" href="Git.Packed_value.html">
+<link rel="Up" href="Git.html">
+<link title="Index of types" rel=Appendix href="index_types.html">
+<link title="Index of exceptions" rel=Appendix href="index_exceptions.html">
+<link title="Index of values" rel=Appendix href="index_values.html">
+<link title="Index of modules" rel=Appendix href="index_modules.html">
+<link title="Index of module types" rel=Appendix href="index_module_types.html">
+<link title="Git" rel="Chapter" href="Git.html">
+<link title="Git_unix" rel="Chapter" href="Git_unix.html">
+<link title="Git_mirage" rel="Chapter" href="Git_mirage.html">
+<link title="Git_http" rel="Chapter" href="Git_http.html"><title>Git.Pack_index</title>
+</head>
+<body>
+<div class="navbar"><a class="pre" href="Git.Value.html" title="Git.Value">Previous</a>
+&nbsp;<a class="up" href="Git.html" title="Git">Up</a>
+&nbsp;<a class="post" href="Git.Packed_value.html" title="Git.Packed_value">Next</a>
+</div>
+<h1>Module <a href="type_Git.Pack_index.html">Git.Pack_index</a></h1>
+
+<pre><span class="keyword">module</span> Pack_index: <code class="code"><span class="keyword">sig</span></code> <a href="Git.Pack_index.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><div class="info module top">
+Pack indexes.<br>
+</div>
+<hr width="100%">
+
+<pre><span id="TYPEt"><span class="keyword">type</span> <code class="type"></code>t</span> </pre>
+<div class="info ">
+Abstract type of pack index.<br>
+</div>
+
+
+<pre><span id="TYPEf"><span class="keyword">type</span> <code class="type"></code>f</span> = <code class="type">Git.Hash.t -> int option</code> </pre>
+<div class="info ">
+The type of functions associating Hash1 keys to offset in the pack
+      file.<br>
+</div>
+
+
+<pre><code><span id="TYPEraw"><span class="keyword">type</span> <code class="type"></code>raw</span> = {</code></pre><table class="typetable">
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTraw.offsets">offsets</span>&nbsp;: <code class="type">int Git.Hash.Map.t</code>;</code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTraw.crcs">crcs</span>&nbsp;: <code class="type">int32 Git.Hash.Map.t</code>;</code></td>
+
+</tr>
+<tr>
+<td align="left" valign="top" >
+<code>&nbsp;&nbsp;</code></td>
+<td align="left" valign="top" >
+<code><span id="TYPEELTraw.pack_checksum">pack_checksum</span>&nbsp;: <code class="type">Git.Hash.t</code>;</code></td>
+
+</tr></table>
+}
+
+<div class="info ">
+<code class="code">offsests</code> is the positions of the Hash objects in the
+      corresponding raw pack file.
+<p>
+
+      <code class="code">crcs</code> contains the CRC-32 value of the packed object data.
+<p>
+
+      <code class="code">pack_checksum</code> is the corresponding pack file checksums, value
+      which is needed when writing the pack index file to disk.<br>
+</div>
+
+
+<pre><span class="keyword">module</span> <a href="Git.Pack_index.Raw.html">Raw</a>: <code class="code"><span class="keyword">sig</span></code> <a href="Git.Pack_index.Raw.html">..</a> <code class="code"><span class="keyword">end</span></code></pre>
+<pre><span class="keyword">module</span> <a href="Git.Pack_index.Make.html">Make</a>: <div class="sig_block"><code class="code"><span class="keyword">functor</span> (</code><code class="code"><span class="constructor">D</span></code><code class="code"> : </code><code class="type"><a href="Git.Hash.DIGEST.html">Git.Hash.DIGEST</a></code><code class="code">) <span class="keywordsign">-&gt;</span> </code><code class="code"><span class="keyword">sig</span></code> <a href="Git.Pack_index.Make.html">..</a> <code class="code"><span class="keyword">end</span></code></div></pre></body></html>
