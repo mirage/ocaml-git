@@ -1,6 +1,4 @@
-## ocaml-git
-
-Pure OCaml Git format and protocol -- Guaranteed no C inside.
+## ocaml-git -- Git format and protocol in pure OCaml
 
 Support for on-disk and in-memory Git stores. Can read and write all
 the Git objects: the usual blobs, trees, commits and tags but also
