@@ -1,3 +1,9 @@
+### 1.9.0
+
+* Use safe-string (#160, @samoht)
+* Support camlzip 1.06 (#160, @samoht)
+* Use topkg, remove pack (#158, @samoht)
+
 ### 1.8.0 (2016-05-03)
 
 * References can point to non-commit hashed (#123, @samoht)
