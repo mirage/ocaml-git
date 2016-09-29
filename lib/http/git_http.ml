@@ -61,8 +61,8 @@ module Flow(HTTP: CLIENT) (IC: CHAN) (OC: CHAN) = struct
           Lwt.return_unit)
       (fun buf off len ->
          let str = Bytes.create len in
-         Cstruct.blit_to_string buf off str 0 len;
-         HTTP.IO.write oc str >>= fun () ->
+         Cstruct.blit_to_bytes buf off str 0 len;
+         HTTP.IO.write oc (Bytes.to_string str) >>= fun () ->
          Lwt.return len)
 
   exception Redirect of Uri.t
@@ -106,12 +106,12 @@ module Flow(HTTP: CLIENT) (IC: CHAN) (OC: CHAN) = struct
                reconnect ctx
              ) end >>= fun () ->
            let chunk = Bytes.create len in
-           ctx.out_stream <- ctx.out_stream @ [chunk];
            Cstruct.blit_to_string buf off chunk 0 len;
+           ctx.out_stream <- ctx.out_stream @ [Bytes.to_string chunk];
            let writer =
              Request.make_body_writer ~flush:true req ctx.oc
            in
-           Request.write_body writer chunk >>= fun () ->
+           Request.write_body writer (Bytes.to_string chunk) >>= fun () ->
            Lwt.return len
         )
     | _  -> make_oc ctx.oc

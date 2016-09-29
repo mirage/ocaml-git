@@ -47,7 +47,7 @@ let input_key_value buf ~key:expected input_value =
 let str_buffer = Bytes.create 4
 let add_be_uint32 buf i =
   EndianString.BigEndian.set_int32 str_buffer 0 i;
-  Buffer.add_string buf str_buffer
+  Buffer.add_bytes buf str_buffer
 
 let with_buffer fn =
   let buf = Buffer.create 1024 in

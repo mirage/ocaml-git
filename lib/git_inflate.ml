@@ -117,13 +117,13 @@ module Make (Zlib: ZLIB) = struct
     let n = Cstruct.len input in
     let toread = ref n in
     fun buf ->
-      let m = min !toread (String.length buf) in
-      Cstruct.blit_to_string input (n - !toread) buf 0 m;
+      let m = min !toread (Bytes.length buf) in
+      Cstruct.blit_to_bytes input (n - !toread) buf 0 m;
       toread := !toread - m;
       m
 
   let flush output buf len =
-    Buffer.add_substring output buf 0 len
+    Buffer.add_subbytes output buf 0 len
 
   let deflate ?level input =
     let output = Buffer.create (Cstruct.len input) in
@@ -139,12 +139,12 @@ module Make (Zlib: ZLIB) = struct
     in
     let output = Buffer.create osz in
     let refill input =
-      let n = min (Mstruct.length buf) (String.length input) in
+      let n = min (Mstruct.length buf) (Bytes.length input) in
       let s = Mstruct.get_string buf n in
       String.blit s 0 input 0 n;
       n in
     let flush buf len =
-      Buffer.add_substring output buf 0 len in
+      Buffer.add_subbytes output buf 0 len in
     let size = uncompress_with_size refill flush in
     Mstruct.shift orig_buf size;
     Mstruct.of_string (Buffer.contents output)
