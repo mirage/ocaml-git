@@ -29,7 +29,7 @@ Minimaal signature provided by Zlib.<br>
 
 <pre><span id="EXCEPTIONError"><span class="keyword">exception</span> Error</span> <span class="keyword">of</span> <code class="type">string * string</code></pre>
 
-<pre><span id="VALcompress"><span class="keyword">val</span> compress</span> : <code class="type">?level:int -><br>       ?header:bool -> (string -> int) -> (string -> int -> unit) -> unit</code></pre>
+<pre><span id="VALcompress"><span class="keyword">val</span> compress</span> : <code class="type">?level:int -><br>       ?header:bool -> (bytes -> int) -> (bytes -> int -> unit) -> unit</code></pre>
 <pre><span id="TYPEstream"><span class="keyword">type</span> <code class="type"></code>stream</span> </pre>
 
 
@@ -66,5 +66,5 @@ Minimaal signature provided by Zlib.<br>
 
 
 <pre><span id="VALinflate_init"><span class="keyword">val</span> inflate_init</span> : <code class="type">bool -> <a href="Git.Inflate.ZLIB.html#TYPEstream">stream</a></code></pre>
-<pre><span id="VALinflate"><span class="keyword">val</span> inflate</span> : <code class="type"><a href="Git.Inflate.ZLIB.html#TYPEstream">stream</a> -><br>       string -><br>       int -><br>       int -><br>       string -> int -> int -> <a href="Git.Inflate.ZLIB.html#TYPEflush_command">flush_command</a> -> bool * int * int</code></pre>
+<pre><span id="VALinflate"><span class="keyword">val</span> inflate</span> : <code class="type"><a href="Git.Inflate.ZLIB.html#TYPEstream">stream</a> -><br>       bytes -><br>       int -><br>       int -><br>       bytes -> int -> int -> <a href="Git.Inflate.ZLIB.html#TYPEflush_command">flush_command</a> -> bool * int * int</code></pre>
 <pre><span id="VALinflate_end"><span class="keyword">val</span> inflate_end</span> : <code class="type"><a href="Git.Inflate.ZLIB.html#TYPEstream">stream</a> -> unit</code></pre></body></html>
