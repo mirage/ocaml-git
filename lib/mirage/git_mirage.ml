@@ -205,7 +205,7 @@ module IO_helper (Channel: V1_LWT.CHANNEL) = struct
       Log.err (fun l -> l "%s" err);
       Lwt.fail (Failure err)
     ) else
-      Lwt.return res
+      Lwt.return (Bytes.to_string res)
 
   let flush _ = Lwt.return_unit
 
@@ -466,15 +466,15 @@ module SHA1_slow = struct
     let c = ref 0l in
     let d = ref 0l in
     let e = ref 0l in
-    for i = 0 to ((String.length m) / 64) - 1 do             (* For each block *)
+    for i = 0 to ((Bytes.length m) / 64) - 1 do             (* For each block *)
       (* Fill w *)
       let base = i * 64 in
       for j = 0 to 15 do
         let k = base + (j * 4) in
-        w.(j) <- sl (Int32.of_int (Char.code m.[k])) 24 lor
-                 sl (Int32.of_int (Char.code m.[k + 1])) 16 lor
-                 sl (Int32.of_int (Char.code m.[k + 2])) 8 lor
-                 (Int32.of_int (Char.code m.[k + 3]))
+        w.(j) <- sl (Int32.of_int (Char.code @@ Bytes.get m k)) 24 lor
+                 sl (Int32.of_int (Char.code @@ Bytes.get m (k + 1))) 16 lor
+                 sl (Int32.of_int (Char.code @@ Bytes.get m (k + 2))) 8 lor
+                 (Int32.of_int (Char.code @@ Bytes.get m (k + 3)))
       done;
       (* Loop *)
       a := !h0; b := !h1; c := !h2; d := !h3; e := !h4;
@@ -522,9 +522,9 @@ module SHA1_slow = struct
     i2s h 8 !h2;
     i2s h 12 !h3;
     i2s h 16 !h4;
-    Git.Hash.of_raw h
+    Git.Hash.of_raw (Bytes.to_string h)
 
-  let string = digest ~length:String.length ~blit:Bytes.blit
+  let string = digest ~length:String.length ~blit:String.blit
   let cstruct = digest ~length:Cstruct.len ~blit:Cstruct.blit_to_string
 
   let length = 20

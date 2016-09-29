@@ -368,7 +368,7 @@ module Make (D: Git_hash.DIGEST) = struct
       let str = Bytes.create 8 in
       List.iter (fun cont ->
           EndianString.BigEndian.set_int64 str 0 cont;
-          Buffer.add_string buf str
+          Buffer.add_bytes buf str
         ) (List.rev !conts);
 
       Git_hash_IO.add buf t.pack_checksum;

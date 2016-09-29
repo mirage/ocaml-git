@@ -5,10 +5,9 @@ env:
   global:
     - PACKAGE="git.1.9.0"
   matrix:
-    - OCAML_VERSION=4.01
     - OCAML_VERSION=4.02
-    - OCAML_VERSION=4.01 TESTS=false
+    - OCAML_VERSION=4.03 TESTS=false
       DEPOPTS="conduit cohttp camlzip nocrypto"
-    - OCAML_VERSION=4.02 TESTS=false
+    - OCAML_VERSION=4.03 TESTS=false
       DEPOPTS="mirage-http mirage-flow mirage-types-lwt channel"
-    - OCAML_VERSION=4.02 TESTS=false REVDEPS=*
+    - OCAML_VERSION=4.03 TESTS=false REVDEPS=*

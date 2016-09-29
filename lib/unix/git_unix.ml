@@ -138,7 +138,7 @@ module IO_Sync = struct
       Lwt_io.read_into ic buf 0 len >>= function
       | 0 -> return acc
       | i ->
-        let buf = Bytes.sub buf 0 i in
+        let buf = Bytes.sub_string buf 0 i in
         if len = i then return (buf :: acc)
         else aux (buf :: acc)
     in
@@ -147,7 +147,7 @@ module IO_Sync = struct
   let read_exactly ic n =
     let res = Bytes.create n in
     Lwt_io.read_into_exactly ic res 0 n >>= fun () ->
-    Lwt.return res
+    Lwt.return (Bytes.to_string res)
 
 end
 
