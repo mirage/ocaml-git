@@ -42,7 +42,7 @@ depends: [
   "cohttp"           {test}
   "conduit"          {test}
   "base-unix"        {test}
-  "camlzip"          {test}
+  "camlzip"          {test & >= "1.06"}
   "nocrypto"         {test}
 ]
 depopts: [
