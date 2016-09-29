@@ -39,7 +39,7 @@ module type ZLIB = sig
 
   val compress:
     ?level: int -> ?header: bool ->
-    (string -> int) -> (string -> int -> unit) -> unit
+    (bytes -> int) -> (bytes -> int -> unit) -> unit
 
   type stream
 
@@ -51,7 +51,7 @@ module type ZLIB = sig
 
   val inflate_init: bool -> stream
   val inflate:
-    stream -> string -> int -> int -> string -> int -> int -> flush_command
+    stream -> bytes -> int -> int -> bytes -> int -> int -> flush_command
     -> bool * int * int
   val inflate_end: stream -> unit
 
