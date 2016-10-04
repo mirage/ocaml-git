@@ -388,9 +388,14 @@ module Make (IO: IO) (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
           | None   -> read_in_pack t pack h
         ) None packs
 
-    let read t h ~read = read_aux (read_in_pack "read" (Pack_IO.Raw.read ~read)) t h
-    let read_inflated t h ~read =
-      read_aux (read_in_pack "read_inflated" (Pack_IO.Raw.read_inflated ~read)) t h
+    let read t h ~read ~write =
+      read_aux (read_in_pack "read" (Pack_IO.Raw.read ~read ~write)) t h
+
+    let read_inflated t h ~read ~write =
+      read_aux
+        (read_in_pack "read_inflated"  (Pack_IO.Raw.read_inflated ~read ~write))
+        t h
+
     let size = read_aux (read_in_pack "size" Pack_IO.Raw.size)
 
     let mem t h =
@@ -418,6 +423,18 @@ module Make (IO: IO) (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
     | None   -> None
     | Some v -> Git_value.Cache.add_inflated h v; Some v
 
+  let write t value =
+    Loose.write t value >>= fun h ->
+    Log.debug (fun l -> l "write -> %a" Git_hash.pp h);
+    Git_value.Cache.add h value;
+    Lwt.return h
+
+  let write_inflated t value =
+    Loose.write_inflated t value >>= fun h ->
+    Log.debug (fun l -> l "write -> %a" Git_hash.pp h);
+    Git_value.Cache.add_inflated h value;
+    Lwt.return h
+
   let rec read t h =
     Log.debug (fun l -> l "read %a" Git_hash.pp h);
     match Git_value.Cache.find h with
@@ -429,7 +446,8 @@ module Make (IO: IO) (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
         | Some v -> Lwt.return (Some v)
         | None   ->
           let read = read_inflated t in
-          Packed.read ~read t h
+          let write = write_inflated t in
+          Packed.read ~read ~write t h
       end >|=
       cache_add h
 
@@ -444,7 +462,8 @@ module Make (IO: IO) (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
         | Some v -> Lwt.return (Some v)
         | None   ->
           let read = read_inflated t in
-          Packed.read_inflated ~read t h
+          let write = write_inflated t in
+          Packed.read_inflated ~read ~write t h
       end >|=
       cache_add_inflated h
 
@@ -565,18 +584,6 @@ module Make (IO: IO) (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
     | Some s -> Lwt.return s
     | None   ->
       err_not_found "read_reference_exn" (Fmt.to_to_string Git_reference.pp r)
-
-  let write t value =
-    Loose.write t value >>= fun h ->
-    Log.debug (fun l -> l "write -> %a" Git_hash.pp h);
-    Git_value.Cache.add h value;
-    Lwt.return h
-
-  let write_inflated t value =
-    Loose.write_inflated t value >>= fun h ->
-    Log.debug (fun l -> l "write -> %a" Git_hash.pp h);
-    Git_value.Cache.add_inflated h value;
-    Lwt.return h
 
   let write_pack t pack =
     Log.debug (fun l -> l "write_pack");

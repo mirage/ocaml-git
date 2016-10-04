@@ -83,12 +83,14 @@ module IO (D: Git_hash.DIGEST) (I: Git_inflate.S): sig
     Buffer.t -> t -> unit Lwt.t
 
   val to_value:
-    index:Git_pack_index.f -> read:Git_value.read_inflated -> version:int ->
-    ba:Cstruct.buffer -> t -> Git_value.t Lwt.t
+    index:Git_pack_index.f ->
+    read:Git_value.read_inflated -> write:Git_value.write_inflated ->
+    version:int -> ba:Cstruct.buffer -> t -> Git_value.t Lwt.t
 
   val unpack:
-    index:Git_pack_index.f -> read:Git_value.read_inflated -> version:int ->
-    ba:Cstruct.buffer -> t -> string Lwt.t
+    index:Git_pack_index.f ->
+    read:Git_value.read_inflated -> write:Git_value.write_inflated ->
+    version:int -> ba:Cstruct.buffer -> t -> string Lwt.t
 
   val value_of_pic: pic -> Git_value.t
 
