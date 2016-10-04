@@ -61,13 +61,13 @@ Append the inflated representation of a packed value to a given
         buffer.<br>
 </div>
 
-<pre><span id="VALto_value"><span class="keyword">val</span> to_value</span> : <code class="type">index:<a href="Git.Pack_index.html#TYPEf">Git.Pack_index.f</a> -><br>       read:<a href="Git.Value.html#TYPEread_inflated">Git.Value.read_inflated</a> -><br>       version:int -> ba:Cstruct.buffer -> <a href="Git.Packed_value.html#TYPEt">Git.Packed_value.t</a> -> <a href="Git.Value.html#TYPEt">Git.Value.t</a> Lwt.t</code></pre><div class="info ">
+<pre><span id="VALto_value"><span class="keyword">val</span> to_value</span> : <code class="type">index:<a href="Git.Pack_index.html#TYPEf">Git.Pack_index.f</a> -><br>       read:<a href="Git.Value.html#TYPEread_inflated">Git.Value.read_inflated</a> -><br>       write:<a href="Git.Value.html#TYPEwrite_inflated">Git.Value.write_inflated</a> -><br>       version:int -> ba:Cstruct.buffer -> <a href="Git.Packed_value.html#TYPEt">Git.Packed_value.t</a> -> <a href="Git.Value.html#TYPEt">Git.Value.t</a> Lwt.t</code></pre><div class="info ">
 Unpack the packed value using the provided indexes.<br>
 </div>
 <br>
 <h2 id="2_Positionindependantpackedvalues">Position independant packed values</h2><br>
 
-<pre><span id="VALunpack"><span class="keyword">val</span> unpack</span> : <code class="type">index:<a href="Git.Pack_index.html#TYPEf">Git.Pack_index.f</a> -><br>       read:<a href="Git.Value.html#TYPEread_inflated">Git.Value.read_inflated</a> -><br>       version:int -> ba:Cstruct.buffer -> <a href="Git.Packed_value.html#TYPEt">Git.Packed_value.t</a> -> string Lwt.t</code></pre><div class="info ">
+<pre><span id="VALunpack"><span class="keyword">val</span> unpack</span> : <code class="type">index:<a href="Git.Pack_index.html#TYPEf">Git.Pack_index.f</a> -><br>       read:<a href="Git.Value.html#TYPEread_inflated">Git.Value.read_inflated</a> -><br>       write:<a href="Git.Value.html#TYPEwrite_inflated">Git.Value.write_inflated</a> -><br>       version:int -> ba:Cstruct.buffer -> <a href="Git.Packed_value.html#TYPEt">Git.Packed_value.t</a> -> string Lwt.t</code></pre><div class="info ">
 Same as <code class="code">to_value</code> but for inflated raw buffers.<br>
 </div>
 

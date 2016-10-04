@@ -44,11 +44,11 @@ Unpack a whole pack file on disk (by calling <code class="code">write</code> on 
           values) and return the Hash1s of the written objects.<br>
 </div>
 
-<pre><span id="VALread"><span class="keyword">val</span> read</span> : <code class="type">index:<a href="Git.Pack_index.html#TYPEf">Git.Pack_index.f</a> -><br>       read:<a href="Git.Value.html#TYPEread_inflated">Git.Value.read_inflated</a> -><br>       Mstruct.t -> Git.Hash.t -> <a href="Git.Value.html#TYPEt">Git.Value.t</a> option Lwt.t</code></pre><div class="info ">
+<pre><span id="VALread"><span class="keyword">val</span> read</span> : <code class="type">index:<a href="Git.Pack_index.html#TYPEf">Git.Pack_index.f</a> -><br>       read:<a href="Git.Value.html#TYPEread_inflated">Git.Value.read_inflated</a> -><br>       write:<a href="Git.Value.html#TYPEwrite_inflated">Git.Value.write_inflated</a> -><br>       Mstruct.t -> Git.Hash.t -> <a href="Git.Value.html#TYPEt">Git.Value.t</a> option Lwt.t</code></pre><div class="info ">
 Same as the top-level <code class="code">read</code> function but for raw packs.<br>
 </div>
 
-<pre><span id="VALread_inflated"><span class="keyword">val</span> read_inflated</span> : <code class="type">index:<a href="Git.Pack_index.html#TYPEf">Git.Pack_index.f</a> -><br>       read:<a href="Git.Value.html#TYPEread_inflated">Git.Value.read_inflated</a> -><br>       Mstruct.t -> Git.Hash.t -> string option Lwt.t</code></pre><div class="info ">
+<pre><span id="VALread_inflated"><span class="keyword">val</span> read_inflated</span> : <code class="type">index:<a href="Git.Pack_index.html#TYPEf">Git.Pack_index.f</a> -><br>       read:<a href="Git.Value.html#TYPEread_inflated">Git.Value.read_inflated</a> -><br>       write:<a href="Git.Value.html#TYPEwrite_inflated">Git.Value.write_inflated</a> -><br>       Mstruct.t -> Git.Hash.t -> string option Lwt.t</code></pre><div class="info ">
 Same as <a href="Git.Pack.IO.Raw.html#VALread"><code class="code"><span class="constructor">Git</span>.<span class="constructor">Pack</span>.<span class="constructor">IO</span>.<span class="constructor">Raw</span>.read</code></a> but for inflated values.<br>
 </div>
 

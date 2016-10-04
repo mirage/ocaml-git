@@ -35,11 +35,13 @@
 &nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;to_value&nbsp;:
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index:<span class="constructor">Git</span>.<span class="constructor">Pack_index</span>.f&nbsp;<span class="keywordsign">-&gt;</span>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;read:<span class="constructor">Git</span>.<span class="constructor">Value</span>.read_inflated&nbsp;<span class="keywordsign">-&gt;</span>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;write:<span class="constructor">Git</span>.<span class="constructor">Value</span>.write_inflated&nbsp;<span class="keywordsign">-&gt;</span>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;version:int&nbsp;<span class="keywordsign">-&gt;</span>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ba:<span class="constructor">Cstruct</span>.buffer&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Git</span>.<span class="constructor">Packed_value</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Git</span>.<span class="constructor">Value</span>.t&nbsp;<span class="constructor">Lwt</span>.t
 &nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;unpack&nbsp;:
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;index:<span class="constructor">Git</span>.<span class="constructor">Pack_index</span>.f&nbsp;<span class="keywordsign">-&gt;</span>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;read:<span class="constructor">Git</span>.<span class="constructor">Value</span>.read_inflated&nbsp;<span class="keywordsign">-&gt;</span>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;write:<span class="constructor">Git</span>.<span class="constructor">Value</span>.write_inflated&nbsp;<span class="keywordsign">-&gt;</span>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;version:int&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;ba:<span class="constructor">Cstruct</span>.buffer&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Git</span>.<span class="constructor">Packed_value</span>.t&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;string&nbsp;<span class="constructor">Lwt</span>.t
 &nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;value_of_pic&nbsp;:&nbsp;<span class="constructor">Git</span>.<span class="constructor">Packed_value</span>.pic&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Git</span>.<span class="constructor">Value</span>.t
 &nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">val</span>&nbsp;to_pic&nbsp;:
