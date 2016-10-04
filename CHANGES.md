@@ -1,4 +1,10 @@
-### 1.9.0
+### 1.9.1 (2016-10-04)
+
+* Cache all intermediate values when expending packed values. This
+  speeds-up pack access quite a lot in practice, especially when the
+  pack files are big (#163)
+
+### 1.9.0 (2016-09-30)
 
 * Use safe-string (#160, @samoht)
 * Support camlzip 1.06 (#160, @samoht)
