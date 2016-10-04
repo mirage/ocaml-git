@@ -143,18 +143,18 @@ module IO (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
         let v = Git_packed_value.create ~kind ~offset:shift in
         Some (version, ba, v)
 
-    let read ~index ~read buf hash =
+    let read ~index ~read ~write buf hash =
       match read_packed_value "read" ~index buf hash with
       | None                  -> Lwt.return_none
       | Some (version, ba, v) ->
-        Packed_value_IO.to_value ~version ~read ~index ~ba v >|=
+        Packed_value_IO.to_value ~version ~read ~write ~index ~ba v >|=
         fun x -> Some x
 
-    let read_inflated ~index ~read buf hash =
+    let read_inflated ~index ~read ~write buf hash =
       match read_packed_value "read_inflated" ~index buf hash with
       | None                  -> Lwt.return_none
       | Some (version, ba, v) ->
-        Packed_value_IO.unpack ~version ~read ~index ~ba v >|=
+        Packed_value_IO.unpack ~version ~read ~write ~index ~ba v >|=
         fun x -> Some x
 
     let size ~index buf hash =
@@ -433,9 +433,11 @@ module type IO = sig
       Mstruct.t -> t Lwt.t
     val unpack: ?progress:(string -> unit) -> write:Git_value.write_inflated ->
       t -> Git_hash.Set.t Lwt.t
-    val read: index:Git_pack_index.f -> read:Git_value.read_inflated ->
+    val read: index:Git_pack_index.f ->
+      read:Git_value.read_inflated -> write:Git_value.write_inflated ->
       Mstruct.t -> Git_hash.t -> Git_value.t option Lwt.t
-    val read_inflated: index:Git_pack_index.f -> read:Git_value.read_inflated ->
+    val read_inflated: index:Git_pack_index.f ->
+      read:Git_value.read_inflated -> write:Git_value.write_inflated ->
       Mstruct.t -> Git_hash.t -> string option Lwt.t
     val size: index:Git_pack_index.f -> Mstruct.t -> Git_hash.t -> int option Lwt.t
   end

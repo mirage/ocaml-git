@@ -538,7 +538,7 @@ module IO (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
     | 3 -> V3.input
     | _ -> fail "pack version should be 2 or 3"
 
-  let rec unpack_ref_delta ~lv ~version ~index ~read ba d =
+  let rec unpack_ref_delta ~lv ~version ~index ~read ~write ba d =
     Log.debug (fun l ->
         l "unpack-ref-delta[%d]: d.source=%a" lv Git_hash.pp d.source);
     match index d.source with
@@ -549,14 +549,14 @@ module IO (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
       let buf = Mstruct.of_bigarray ~off:offset ~len ba in
       let kind = input_packed_value version buf in
       let t = { offset; kind } in
-      unpack ~lv:(lv+1) ~read ~version ~index ~ba t >|= fun source ->
+      unpack ~lv:(lv+1) ~read ~write ~version ~index ~ba t >|= fun source ->
       Git_misc.with_buffer (fun b -> add_delta b {d with source})
     | None ->
       read d.source >>= function
       | None     -> fail "unpack: cannot read %a" Git_hash.pp d.source
       | Some buf -> Lwt.return buf
 
-  and unpack_off_delta ~lv ~version ~index ~read ba d offset =
+  and unpack_off_delta ~lv ~version ~index ~read ~write ba d offset =
     let offset = offset - d.source in
     Log.debug (fun l ->
         l "unpack-off-delta[%d]: offset=%d-%d=%d" lv offset d.source offset);
@@ -565,23 +565,25 @@ module IO (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
     let buf = Mstruct.of_bigarray ~off:offset ~len ba in
     let kind = input_packed_value version buf in
     let t = { offset; kind } in
-    unpack ~lv:(lv+1) ~read ~version ~index ~ba t >|= fun source ->
+    unpack ~lv:(lv+1) ~read ~write ~version ~index ~ba t >|= fun source ->
     Git_misc.with_buffer (fun b -> add_delta b {d with source})
 
-  and unpack ~lv ~index ~read ~version ~ba { offset; kind } =
-    match kind with
-    | Raw_value x ->
-      Log.debug (fun l -> l "unpack-raw[%d]" lv); Lwt.return x
-    | Ref_delta d ->
-      unpack_ref_delta ~lv ~version ~index ~read ba d
-    | Off_delta d ->
-      unpack_off_delta ~lv ~version ~index ~read ba d offset
+  and unpack ~lv ~index ~read ~write ~version ~ba { offset=o; kind } =
+    let obj = match kind with
+      | Raw_value v -> Lwt.return v
+      | Ref_delta d -> unpack_ref_delta ~lv ~version ~index ~read ~write ba d
+      | Off_delta d -> unpack_off_delta ~lv ~version ~index ~read ~write ba d o
+    in
+    obj >>= fun x ->
+    write x >|= fun h ->
+    Log.debug (fun l -> l "unpack-raw[%d]: %a" lv Git_hash.pp h);
+    x
 
   let unpack = unpack ~lv:0
 
-  let to_value ~index ~read ~version ~ba t =
+  let to_value ~index ~read ~write ~version ~ba t =
     Log.debug (fun l -> l "to_value");
-    unpack ~version ~read ~index ~ba t >|= fun u ->
+    unpack ~version ~read ~write ~index ~ba t >|= fun u ->
     (* FIXME: costly, allocates a bigarray *)
     Value_IO.input_inflated (Mstruct.of_string u)
 

@@ -752,14 +752,16 @@ module Packed_value: sig
         buffer. *)
 
     val to_value:
-      index:Pack_index.f -> read:Value.read_inflated -> version:int ->
+      index:Pack_index.f ->
+      read:Value.read_inflated -> write:Value.write_inflated -> version:int ->
       ba:Cstruct.buffer -> t -> Value.t Lwt.t
     (** Unpack the packed value using the provided indexes. *)
 
     (** {2 Position independant packed values} *)
 
     val unpack:
-      index:Pack_index.f -> read:Value.read_inflated -> version:int ->
+      index:Pack_index.f ->
+      read:Value.read_inflated -> write:Value.write_inflated -> version:int ->
       ba:Cstruct.buffer -> t -> string Lwt.t
     (** Same as {!to_value} but for inflated raw buffers. *)
 
@@ -870,11 +872,13 @@ module Pack: sig
       (** Unpack a whole pack file on disk (by calling [write] on every
           values) and return the Hash1s of the written objects. *)
 
-      val read: index:Pack_index.f -> read:Value.read_inflated ->
+      val read: index:Pack_index.f ->
+        read:Value.read_inflated -> write:Value.write_inflated ->
         Mstruct.t -> Hash.t -> Value.t option Lwt.t
       (** Same as the top-level [read] function but for raw packs. *)
 
-      val read_inflated: index:Pack_index.f -> read:Value.read_inflated ->
+      val read_inflated: index:Pack_index.f ->
+        read:Value.read_inflated -> write:Value.write_inflated ->
         Mstruct.t -> Hash.t -> string option Lwt.t
       (** Same as {!read} but for inflated values. *)
 
