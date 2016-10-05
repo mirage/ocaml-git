@@ -20,7 +20,7 @@ module type FS = sig
 
   include V1_LWT.FS with type page_aligned_buffer = Cstruct.t
 
-  val connect: unit -> [`Error of error | `Ok of t ] Lwt.t
+  val connect: unit -> t Lwt.t
   (** Every [S] define how to connect to a particular [t]. *)
 
   val string_of_error: error -> string

@@ -23,7 +23,7 @@ end
 
 module type FS = sig
   include V1_LWT.FS with type page_aligned_buffer = Cstruct.t
-  val connect: unit -> [`Error of error | `Ok of t ] Lwt.t
+  val connect: unit -> t Lwt.t
   val string_of_error: error -> string
 end
 
@@ -136,7 +136,7 @@ module FS (FS: FS) (D: Git.Hash.DIGEST) (I: Git.Inflate.S) = struct
     let getcwd () = Lwt.return "/"
     let realpath file = Lwt.return file
     let chmod _t _file _perm = Lwt.return_unit
-    let connect fn = FS.connect () >>| fn
+    let connect fn = FS.connect () >>= fn
     let mkdir dir = connect (fun t -> mkdir t dir)
     let remove file = connect (fun t -> remove t file)
     let file_exists file = connect (fun t -> file_exists t file)
