@@ -39,7 +39,7 @@ module M = struct
   let init () =
     command "rm -rf %s" Test_fs.root;
     command "mkdir %s" Test_fs.root;
-    connect ()  >>| fun t ->
+    connect ()  >>= fun t ->
     mkdir t "/" >>| fun () ->
     Lwt.return_unit
 
