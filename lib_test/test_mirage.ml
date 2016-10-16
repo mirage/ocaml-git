@@ -34,7 +34,9 @@ module M = struct
     | `Ok x    -> f x
     | `Error e -> Lwt.fail (Failure (string_of_error e))
 
-  let connect () = connect Test_fs.root
+  let connect () =
+    connect Test_fs.root >>| fun t ->
+    Lwt.return t
 
   let init () =
     command "rm -rf %s" Test_fs.root;
