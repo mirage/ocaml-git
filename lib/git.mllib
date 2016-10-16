@@ -13,6 +13,7 @@ Git_commit
 Git_tag
 Git_reference
 Git_value
+Git_crc32
 Git_pack
 Git_pack_index
 Git_packed_value

@@ -237,7 +237,7 @@ module IO (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
           let kind = input_packed_value ~version buf in
           let length = Mstruct.offset buf - pos in
           let raw = Cstruct.sub cbuf 0 length in
-          let crc = Crc.Crc32.cstruct raw in
+          let crc = Git_crc32.cstruct raw in
           let v = Git_packed_value.create ~kind ~offset:pos in
           aux ((crc, v) :: acc) (i+1)
       in
@@ -362,7 +362,7 @@ module IO (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
           Buffer.reset buf;
           add_packed_value ~version ?level buf (Git_packed_value.kind p);
           let buf = Buffer.contents buf in
-          let crc32 = Crc.Crc32.string buf 0 (String.length buf) in
+          let crc32 = Git_crc32.string buf 0 (String.length buf) in
           let crcs = Git_hash.Map.add name crc32 crcs in
           let bufs = buf :: bufs in
           bufs, offsets, crcs

@@ -32,7 +32,6 @@ depends: [
   "fmt"
   "hex"
   "astring"
-  "crc"
   "alcotest"         {test}
   "mirage-types-lwt" {test}
   "mirage-http"      {test}
