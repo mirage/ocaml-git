@@ -90,10 +90,8 @@ let update_crc acc c =
   (crc_table.(index) ^^^ (acc >>> 8)) &&& 0xffffffffl
 
 let string ?(crc=0l) str offset length =
-  let x = string_fold_left
-	update_crc crc str offset length in
-  x &&& 0xffffffffl
+  (string_fold_left update_crc (crc ^^^ 0xffffffffl) str offset length) ^^^ 0xffffffffl
 
 let cstruct ?(crc=0l) str =
-  cstruct_fold_left update_crc crc str
+  (cstruct_fold_left update_crc (crc ^^^ 0xffffffffl) str) ^^^ 0xffffffffl
 
