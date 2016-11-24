@@ -162,15 +162,18 @@ module IO_helper (Channel: V1_LWT.CHANNEL) = struct
   let write oc s =
     let buf = Cstruct.of_string s in
     Channel.write_buffer oc buf;
-    Channel.flush oc
+    Channel.flush oc >|= function
+    | Ok () -> ()
+    | Error `Closed ->
+      Log.debug (fun l -> l "Discarding write to closed channel")
+    | Error (`Msg m) ->
+      Log.debug (fun l -> l "Ignoring error on write: %s" m)
 
   let safe_read ~len ic =
-    Lwt.catch
-      (fun () -> Channel.read_some ~len ic >|= fun buf -> Some buf)
-      (fun e ->
-         Log.debug (fun l -> l "Got exn: %s" (Printexc.to_string e));
-         Printexc.print_backtrace stderr;
-         Lwt.return_none)
+    Channel.read_some ~len ic >|= function
+    | Ok `Eof -> None
+    | Ok (`Data buf) -> Some buf
+    | Error (`Msg msg) -> Log.debug (fun l -> l "Got error: %s" msg); None
 
   let read_all ic =
     let len = 4 * 4096 in
@@ -237,15 +240,12 @@ module Git_protocol = struct
   include IO_helper (Channel)
 
   let safe_close c =
-    Lwt.catch
-      (fun () -> Channel.close c)
-      (function
-        | End_of_file -> Lwt.return_unit
-        | e ->
-          (* WARNING: do not catch `Unix` exception here, as it will
-             bring a unwanted dependency to unix.cma *)
-          Log.debug (fun l -> l "Ignoring exn: %s" (Printexc.to_string e));
-          Lwt.return_unit)
+    Channel.close c >>= function
+    | Ok () -> Lwt.return_unit
+    | Error `Closed -> Lwt.return_unit
+    | Error (`Msg m) ->
+      Log.debug (fun l -> l "Ignoring error: %s" m);
+      Lwt.return_unit
 
   let with_connection (resolver, conduit) uri ?init fn =
     assert (Git.Sync.protocol uri = `Ok `Git);
@@ -301,15 +301,10 @@ module Smart_HTTP = struct
   include IO_helper(Fchannel)
 
   let safe_close ic =
-    Lwt.catch
-      (fun () -> Conduit_channel.close ic)
-      (function
-        | End_of_file -> Lwt.return_unit
-        | e ->
-          (* WARNING: do not catch `Unix` exception here, as it will
-             bring a unwanted dependency to unix.cma *)
-          Log.debug (fun l -> l "Ignoring exn: %s" (Printexc.to_string e));
-          Lwt.return_unit)
+    Conduit_channel.close ic >|= function
+    | Ok () -> ()
+    | Error `Closed -> ()
+    | Error (`Msg m) -> Log.debug (fun l -> l "Ignoring error: %s" m)
 
   module HTTP_fn = Git_http.Flow(HTTP)(In_channel)(Out_channel)
   let with_conduit ctx ?init uri fn =
@@ -345,29 +340,15 @@ module IO = struct
     module G = G.Flow
     module H = H.Flow
     type flow = [`Git of G.flow | `HTTP of H.flow ]
-    type error = [ `Git of G.error | `HTTP of H.error ]
-    let error_message = function
-      | `Git e  -> "git: " ^ G.error_message e
-      | `HTTP e -> "http: " ^ H.error_message e
-    let git_err f t =
-      f t >>= function
-      | `Error (x:G.error) -> Lwt.return (`Error (`Git x))
-      | `Ok x -> Lwt.return (`Ok x)
-      | `Eof -> Lwt.return `Eof
-    let http_err f t =
-      f t >>= function
-      | `Error (x:H.error) -> Lwt.return (`Error (`HTTP x))
-      | `Ok x -> Lwt.return (`Ok x)
-      | `Eof -> Lwt.return `Eof
     let read = function
-      | `Git g -> git_err G.read g
-      | `HTTP h -> http_err H.read h
+      | `Git g -> G.read g
+      | `HTTP h -> H.read h
     let write t v = match t with
-      | `Git g -> git_err (G.write g) v
-      | `HTTP h -> http_err (H.write h) v
+      | `Git g -> G.write g v
+      | `HTTP h ->H.write h v
     let writev t v = match t with
-      | `Git g -> git_err (G.writev g) v
-      | `HTTP h -> http_err (H.writev h) v
+      | `Git g -> G.writev g v
+      | `HTTP h -> H.writev h v
     let close = function
       | `Git g -> G.close g
       | `HTTP h -> H.close h
