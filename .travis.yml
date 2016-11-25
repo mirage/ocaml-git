@@ -4,8 +4,6 @@ script: bash -ex .travis-opam.sh
 env:
   global:
     - PACKAGE="git"
-    - PINS="mirage-types:https://github.com/avsm/mirage.git#channel-result mirage-channel:https://github.com/avsm/mirage-channel.git#channel-result mirage-http:https://github.com/avsm/mirage-http.git"
-
   matrix:
     - OCAML_VERSION=4.02
     - OCAML_VERSION=4.03 TESTS=false
