@@ -10,4 +10,6 @@ env:
       DEPOPTS="conduit cohttp camlzip nocrypto"
     - OCAML_VERSION=4.03 TESTS=false
       DEPOPTS="mirage-http mirage-flow mirage-types-lwt channel"
+    - OCAML_VERSION=4.04 TESTS=false
+      DEPOPTS="mirage-http mirage-flow mirage-types-lwt channel"
     - OCAML_VERSION=4.03 TESTS=false REVDEPS=*
