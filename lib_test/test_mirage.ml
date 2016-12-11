@@ -31,12 +31,12 @@ module M = struct
 
   let (>>|) x f =
     x >>= function
-    | `Ok x    -> f x
-    | `Error e -> Lwt.fail (Failure (string_of_error e))
+    | Ok x    -> f x
+    | Error (`Msg e) -> Lwt.fail (Failure e)
+    | Error _ -> Lwt.fail (Failure "Other")
 
   let connect () =
-    connect Test_fs.root >>| fun t ->
-    Lwt.return t
+    connect Test_fs.root
 
   let init () =
     command "rm -rf %s" Test_fs.root;
