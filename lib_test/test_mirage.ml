@@ -31,8 +31,8 @@ module M = struct
 
   let (>>|) x f =
     x >>= function
-    | `Ok x    -> f x
-    | `Error e -> Lwt.fail (Failure (string_of_error e))
+    | Ok x    -> f x
+    | Error e -> Lwt.fail_with @@ Fmt.strf "%a" Mirage_pp.pp_fs_write_error e
 
   let connect () = connect Test_fs.root
 
