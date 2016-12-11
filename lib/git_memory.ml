@@ -82,7 +82,7 @@ module Make (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
     let h = D.string inflated in
     if Hashtbl.mem t.values h then Lwt.return h
     else (
-      Log.info (fun l -> l "Writing %a" Git_hash.pp h);
+      Log.debug (fun l -> l "Writing %a" Git_hash.pp h);
       Hashtbl.add t.values h (lazy value);
       Hashtbl.add t.inflated h inflated;
       Lwt.return h
@@ -92,7 +92,7 @@ module Make (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
     let h = D.string inflated in
     if Hashtbl.mem t.values h then Lwt.return h
     else (
-      Log.info (fun l -> l "Writing %a" Git_hash.pp h);
+      Log.debug (fun l -> l "Writing %a" Git_hash.pp h);
       Hashtbl.add t.inflated h inflated;
       let value =
         (* FIXME: this allocates too much *)
@@ -175,7 +175,7 @@ module Make (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
     Lwt.return (Hashtbl.mem t.refs ref)
 
   let rec read_reference t r =
-    Log.info (fun l -> l "Reading %a" Git_reference.pp r);
+    Log.debug (fun l -> l "Reading %a" Git_reference.pp r);
     try match Hashtbl.find t.refs r with
       | `H s -> Lwt.return (Some s)
       | `R r -> read_reference t r
@@ -183,7 +183,7 @@ module Make (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
       Lwt.return_none
 
   let read_head t =
-    Log.info (fun l -> l "Reading HEAD");
+    Log.debug (fun l -> l "Reading HEAD");
     Lwt.return t.head
 
   let remove_reference t r =
@@ -197,12 +197,12 @@ module Make (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
       err_not_found "read_reference_exn" (Fmt.to_to_string Git_reference.pp r)
 
   let write_head t c =
-    Log.info (fun l -> l "Writing HEAD");
+    Log.debug (fun l -> l "Writing HEAD");
     t.head <- Some c;
     Lwt.return_unit
 
   let write_reference t r h =
-    Log.info (fun l -> l "Writing %a" Git_reference.pp r);
+    Log.debug (fun l -> l "Writing %a" Git_reference.pp r);
     Hashtbl.replace t.refs r (`H h);
     Lwt.return_unit
 

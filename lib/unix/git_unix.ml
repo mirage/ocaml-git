@@ -248,7 +248,7 @@ module IO_FS = struct
     mkdir dir >>= fun () ->
     let tmp = Filename.temp_file ?temp_dir (Filename.basename file) "write" in
     Lwt_pool.use openfile_pool (fun () ->
-        Log.info (fun l -> l "Writing %s (%s)" file tmp);
+        Log.debug (fun l -> l "Writing %s (%s)" file tmp);
         Lwt_unix.(openfile tmp [O_WRONLY; O_NONBLOCK; O_CREAT; O_TRUNC] 0o644)
         >>= fun fd ->
         Lwt.finalize (fun () -> protect fn fd) (fun () -> Lwt_unix.close fd)
@@ -289,7 +289,7 @@ module IO_FS = struct
   let read_file file =
     Unix.handle_unix_error (fun () ->
         Lwt_pool.use openfile_pool (fun () ->
-            Log.info (fun l -> l "Reading %s" file);
+            Log.debug (fun l -> l "Reading %s" file);
             Lwt_unix.stat file >>= fun stats ->
             let size = stats.Lwt_unix.st_size in
             if size >= mmap_threshold then read_file_with_mmap file

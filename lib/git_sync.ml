@@ -324,12 +324,12 @@ module Make (IO: IO) (Store: Git_store.S) = struct
     let output oc = function
       | None  ->
         let flush = "0000" in
-        Log.info (fun l -> l "SENDING: %S" flush);
+        Log.debug (fun l -> l "SENDING: %S" flush);
         IO.write oc flush >>= fun () ->
         IO.flush oc
       | Some l ->
         let size = Printf.sprintf "%04x" (4 + String.length l) in
-        Log.info (fun log -> log "SENDING: %S" (size ^ l));
+        Log.debug (fun log -> log "SENDING: %S" (size ^ l));
         IO.write oc size >>= fun () ->
         IO.write oc l    >>= fun () ->
         IO.flush oc
@@ -939,7 +939,7 @@ module Make (IO: IO) (Store: Git_store.S) = struct
         | 0 -> Lwt.return_unit
         | n ->
           let len = min 4096 n in
-          Log.info (fun l -> l "SENDING: %d bytes" len);
+          Log.debug (fun l -> l "SENDING: %d bytes" len);
           let buf = Mstruct.get_string buf len in
           IO.write oc buf >>=
           send

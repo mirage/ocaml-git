@@ -1,3 +1,12 @@
+### 1.9.3 (2016-11-09)
+
+* Turn a bunch of info message into debug statements (#169, @samoht)
+
+### 1.9.2 (2016-10-16)
+
+* Do not depend on `ocaml-crc` anymore: less C code means, easier to
+  port to other MirageOS backends (#166, @g2p)
+
 ### 1.9.1 (2016-10-04)
 
 * Cache all intermediate values when expending packed values. This

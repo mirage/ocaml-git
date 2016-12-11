@@ -23,9 +23,6 @@ module type FS = sig
   val connect: unit -> t Lwt.t
   (** Every [S] define how to connect to a particular [t]. *)
 
-  val string_of_error: error -> string
-  (** Pretty-print errors. *)
-
 end
 
 module FS (FS: FS) (D: Git.Hash.DIGEST) (I: Git.Inflate.S): Git.FS.S
