@@ -5,9 +5,11 @@ env:
   global:
     - PACKAGE="git" EXTRA_REMOTES="https://github.com/mirage/mirage-dev.git"
   matrix:
-    - OCAML_VERSION=4.02
-    - OCAML_VERSION=4.03 TESTS=false
+    - OCAML_VERSION=4.02 TESTS=false
+    - OCAML_VERSION=4.03 TESTS=true
       DEPOPTS="conduit cohttp camlzip nocrypto"
     - OCAML_VERSION=4.03 TESTS=false
+      DEPOPTS="mirage-http mirage-flow mirage-types-lwt channel"
+    - OCAML_VERSION=4.04 TESTS=false
       DEPOPTS="mirage-http mirage-flow mirage-types-lwt channel"
     - OCAML_VERSION=4.03 TESTS=false REVDEPS=*

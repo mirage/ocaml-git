@@ -24,31 +24,29 @@ end
 module type FS = sig
   include V1_LWT.FS with type page_aligned_buffer = Cstruct.t
   val connect: unit -> t Lwt.t
-  val string_of_error: error -> string
 end
 
 module FS (FS: FS) (D: Git.Hash.DIGEST) (I: Git.Inflate.S) = struct
 
-  let (>>|) x f =
-    x >>= function
-    | `Ok x    -> f x
-    | `Error e ->
-      let str = FS.string_of_error e in
-      Log.err (fun l -> l "%s" str);
-      Lwt.fail (Failure str)
+  let get_exn pp_exn = function
+    | Ok x    -> Lwt.return x
+    | Error e -> Lwt.fail_with @@ Fmt.strf "%a" pp_exn e
+
+  let get_fs_error x = get_exn Mirage_pp.pp_fs_error x
+  let get_fs_write_error x = get_exn Mirage_pp.pp_fs_write_error x
 
   module IO = struct
 
     let file_exists t f =
       Log.debug (fun l -> l "file_exists %s" f);
-      FS.stat t f >>= function
-      | `Ok _    -> Lwt.return true
-      | `Error _ -> Lwt.return false
+      FS.stat t f >|= function
+      | Ok _    -> true
+      | Error _ -> false
 
     let is_directory t dir =
       Log.debug (fun l -> l "is_directory %s" dir);
-      FS.stat t dir >>| fun s ->
-      Lwt.return s.FS.directory
+      FS.stat t dir >>= get_fs_error >|= fun s ->
+      s.FS.directory
 
     let parent_dir = function
       | "/"
@@ -67,8 +65,8 @@ module FS (FS: FS) (D: Git.Hash.DIGEST) (I: Git.Inflate.S) = struct
           | None   -> Lwt.return_unit
           | Some d ->
             aux d >>= fun () ->
-            FS.mkdir t dir >>| fun () ->
-            Lwt.return_unit
+            FS.mkdir t dir >>=
+            get_fs_write_error
       in
       Lwt_pool.use mkdir_pool (fun () -> aux dirname)
 
@@ -76,7 +74,7 @@ module FS (FS: FS) (D: Git.Hash.DIGEST) (I: Git.Inflate.S) = struct
       Log.debug (fun l -> l "list_files %s" dir);
       file_exists t dir >>= function
       | true ->
-        FS.listdir t dir >>| fun l ->
+        FS.listdir t dir >>= get_fs_error >>= fun l ->
         let l = List.filter (fun s -> s <> "." && s <> "..") l in
         let l = List.map (Filename.concat dir) l in
         Lwt_list.filter_s kind l
@@ -99,9 +97,7 @@ module FS (FS: FS) (D: Git.Hash.DIGEST) (I: Git.Inflate.S) = struct
 
     let rec remove t dir =
       Log.debug (fun l -> l "remove %s" dir);
-      let destroy dir =
-        FS.destroy t dir >>| fun () ->
-        Lwt.return_unit in
+      let destroy dir = FS.destroy t dir >>= get_fs_write_error in
       files t dir                   >>= fun ls ->
       Lwt_list.iter_s destroy ls    >>= fun () ->
       directories t dir             >>= fun ds ->
@@ -118,20 +114,19 @@ module FS (FS: FS) (D: Git.Hash.DIGEST) (I: Git.Inflate.S) = struct
 
     let read_file t file =
       Log.debug (fun l -> l "read_file %s" file);
-      FS.stat t file >>| fun s ->
+      FS.stat t file >>= get_fs_error >>= fun s ->
       is_directory t file >>= function
       | false ->
-        FS.read t file 0 (Int64.to_int s.FS.size) >>| fun bs ->
+        FS.read t file 0 (Int64.to_int s.FS.size) >>= get_fs_error >|= fun bs ->
         let s = Cstruct.copyv bs in
-        Lwt.return (Cstruct.of_string s)
+        Cstruct.of_string s
       | true -> Lwt.fail (Failure (Printf.sprintf "%s is a directory" file))
 
     let write_file t ?temp_dir:_ file b =
       Log.debug (fun l -> l "write_file %s" file);
       mkdir t (Filename.dirname file) >>= fun () ->
-      FS.create t file    >>| fun () ->
-      FS.write t file 0 b >>| fun () ->
-      Lwt.return_unit
+      FS.create t file    >>= get_fs_write_error >>= fun () ->
+      FS.write t file 0 b >>= get_fs_write_error
 
     let getcwd () = Lwt.return "/"
     let realpath file = Lwt.return file
