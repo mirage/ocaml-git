@@ -33,7 +33,7 @@ depends: [
   "hex"
   "astring"
   "alcotest"         {test}
-  "mirage-types-lwt" {test}
+  "mirage-types-lwt" {test & >= "3.0.0"}
   "mirage-http"      {test}
   "mirage-flow"      {test}
   "channel"          {test}
@@ -63,5 +63,7 @@ conflicts: [
  "alcotest" {< "0.4.0"}
  "camlzip"  {< "1.06"}
  "nocrypto" {< "0.2.0"}
+ "mirage-types"     {< "3.0.0"}
+ "mirage-types-lwt" {< "3.0.0"}
 ]
 available: [ocaml-version >= "4.02.3"]
