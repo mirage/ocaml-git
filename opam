@@ -8,7 +8,7 @@ dev-repo:     "https://github.com/mirage/ocaml-git.git"
 doc:          "https://mirage.github.io/ocaml-git/"
 
 build: [
-  "ocaml" "pkg/pkg.ml" "build" "--pinned" "%{pinned}%"
+  "ocaml" "pkg/pkg.ml" "build" "--pinned" "%{pinned}%" "--tests" "false"
       "--with-http"   "%{cohttp:installed}%"
       "--with-unix"   "%{conduit+cohttp+camlzip+nocrypto+base-unix:installed}%"
       "--with-mirage" "%{mirage-http+mirage-flow+mirage-types-lwt+channel:installed}%"
