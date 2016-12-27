@@ -358,8 +358,8 @@ module Make (Store: Store.S) = struct
       let test_fs () =
         (* scan the local filesystem *)
         if x.name = "FS" then (
-          if Filename.basename (Sys.getcwd ()) <> "lib_test" then
-            failwith "Tests should run in lib_test/";
+          if Filename.basename (Sys.getcwd ()) <> "test" then
+            failwith "Tests should run in test/";
           files "." >>= fun files ->
           Git_unix.FS.create ~root () >>= fun t ->
           Lwt_list.map_s (fun file ->
@@ -396,7 +396,7 @@ module Make (Store: Store.S) = struct
       let test () =
         files "data/" >>= fun files ->
         if files = [] then
-          failwith "Please run that test in lib_test/";
+          failwith "Please run that test in test/";
         let files = List.filter (fun file ->
             String.is_suffix file ~affix:".pack"
           ) files in

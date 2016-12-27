@@ -4,22 +4,22 @@ true: short_paths
 
 true: package(cstruct astring fmt hex logs lwt ocamlgraph re uri mstruct)
 
-<lib>: include
-<lib/http>: include
-<lib/unix>: include
-<lib/mirage>: include
+<src>: include
+<src/http>: include
+<src/unix>: include
+<src/mirage>: include
 
-<lib_test/*>: package(alcotest logs.fmt mtime.os nocrypto)
-<lib_test/*>: package(mirage-fs-unix io-page.unix)
-<lib_test/*>: package(cohttp.lwt conduit.lwt-unix zip nocrypto logs.cli)
-<lib_test/*>: package(conduit.mirage dns.mirage mirage-http mirage-flow channel)
+<test/*>: package(alcotest logs.fmt mtime.os nocrypto)
+<test/*>: package(mirage-fs-unix io-page.unix)
+<test/*>: package(cohttp.lwt conduit.lwt-unix zip nocrypto logs.cli)
+<test/*>: package(conduit.mirage dns.mirage mirage-http mirage-flow channel)
 
-<lib/top/*>: package(compiler-libs.toplevel)
-<lib/http/*>: package(cohttp.lwt uri)
-<lib/unix/*>: package(cohttp.lwt lwt.unix conduit.lwt-unix zip nocrypto)
+<src/top/*>: package(compiler-libs.toplevel)
+<src/http/*>: package(cohttp.lwt uri)
+<src/unix/*>: package(cohttp.lwt lwt.unix conduit.lwt-unix zip nocrypto)
 
-<lib/mirage/*>: package(mirage-types-lwt io-page conduit.mirage dns.mirage)
-<lib/mirage/*>: package(mirage-http mirage-flow channel)
+<src/mirage/*>: package(mirage-types-lwt io-page conduit.mirage dns.mirage)
+<src/mirage/*>: package(mirage-http mirage-flow channel)
 
 <bin/*>: package(cmdliner fmt.cli logs.fmt fmt.tty mtime.os lwt.unix)
 <bin/*>: package(cohttp.lwt conduit.lwt-unix zip nocrypto logs.cli)
