@@ -32,8 +32,8 @@ module FS (FS: FS) (D: Git.Hash.DIGEST) (I: Git.Inflate.S) = struct
     | Ok x    -> Lwt.return x
     | Error e -> Lwt.fail_with @@ Fmt.strf "%a" pp_exn e
 
-  let get_fs_error x = get_exn Mirage_pp.pp_fs_error x
-  let get_fs_write_error x = get_exn Mirage_pp.pp_fs_write_error x
+  let get_fs_error x = get_exn FS.pp_error x
+  let get_fs_write_error x = get_exn FS.pp_write_error x
 
   module IO = struct
 
@@ -161,14 +161,17 @@ module IO_helper (Channel: V1_LWT.CHANNEL) = struct
     | Ok () -> ()
     | Error `Closed ->
       Log.debug (fun l -> l "Discarding write to closed channel")
-    | Error (`Msg m) ->
-      Log.debug (fun l -> l "Ignoring error on write: %s" m)
+    | Error e ->
+      Log.debug (fun l ->
+          l "Ignoring error on write: %a" Channel.pp_write_error e)
 
   let safe_read ~len ic =
     Channel.read_some ~len ic >|= function
-    | Ok `Eof -> None
+    | Ok `Eof        -> None
     | Ok (`Data buf) -> Some buf
-    | Error (`Msg msg) -> Log.debug (fun l -> l "Got error: %s" msg); None
+    | Error e ->
+      Log.debug (fun l -> l "Got error: %a" Channel.pp_error e);
+      None
 
   let read_all ic =
     let len = 4 * 4096 in
@@ -210,6 +213,7 @@ module IO_helper (Channel: V1_LWT.CHANNEL) = struct
 end
 
 (* channel with functional constructors. *)
+module Fflow = Mirage_flow_lwt.F
 module Fchannel = Channel.Make(Fflow)
 
 module In_channel = struct
@@ -224,9 +228,6 @@ module Out_channel = struct
     create (Fflow.make ?close ~output ())
 end
 
-(* Cohttp IO with functional input/channel constructors *)
-module FIO = Cohttp_mirage_io.Make(Fchannel)
-
 (* handle the git:// connections *)
 module Git_protocol = struct
 
@@ -236,10 +237,10 @@ module Git_protocol = struct
 
   let safe_close c =
     Channel.close c >>= function
-    | Ok () -> Lwt.return_unit
+    | Ok ()
     | Error `Closed -> Lwt.return_unit
-    | Error (`Msg m) ->
-      Log.debug (fun l -> l "Ignoring error: %s" m);
+    | Error e       ->
+      Log.debug (fun l -> l "Ignoring error: %a" Channel.pp_write_error e);
       Lwt.return_unit
 
   let with_connection (resolver, conduit) uri ?init fn =
@@ -270,7 +271,6 @@ module Smart_HTTP = struct
   module Conduit_channel = Channel.Make(Conduit_mirage.Flow)
   module HTTP_IO = Cohttp_mirage_io.Make(Conduit_channel)
   module Net = struct
-    module IO = HTTP_IO
     type ctx = { resolver: Resolver_lwt.t; conduit: Conduit_mirage.t; }
     let default_ctx = {
       resolver = Resolver_mirage.localhost;
@@ -297,9 +297,11 @@ module Smart_HTTP = struct
 
   let safe_close ic =
     Conduit_channel.close ic >|= function
-    | Ok () -> ()
+    | Ok ()
     | Error `Closed -> ()
-    | Error (`Msg m) -> Log.debug (fun l -> l "Ignoring error: %s" m)
+    | Error e       ->
+      Log.debug (fun l ->
+          l "Ignoring error: %a" Conduit_channel.pp_write_error e)
 
   module HTTP_fn = Git_http.Flow(HTTP)(In_channel)(Out_channel)
   let with_conduit ctx ?init uri fn =
@@ -332,9 +334,13 @@ module IO = struct
   module Flow = struct
     type 'a io = 'a Lwt.t
     type buffer = Cstruct.t
-    module G = G.Flow
-    module H = H.Flow
+    module G = Mirage_flow_lwt.Concrete(G.Flow)
+    module H = Mirage_flow_lwt.Concrete(H.Flow)
     type flow = [`Git of G.flow | `HTTP of H.flow ]
+    type error = G.error (* = H.error *)
+    type write_error = G.write_error (* = H.write_error *)
+    let pp_error = G.pp_error
+    let pp_write_error = G.pp_write_error
     let read = function
       | `Git g -> G.read g
       | `HTTP h -> H.read h
