@@ -16,11 +16,11 @@ let () =
   let mirage = Conf.value c mirage in
   let test = unix && http && mirage in
   Ok [
-    Pkg.mllib ~api:["Git"] "lib/git.mllib";
-    Pkg.mllib "lib/top/git-top.mllib";
-    Pkg.mllib ~cond:mirage "lib/mirage/git-mirage.mllib";
-    Pkg.mllib ~cond:http   "lib/http/git-http.mllib";
-    Pkg.mllib ~cond:unix   "lib/unix/git-unix.mllib";
+    Pkg.mllib ~api:["Git"] "src/git.mllib";
+    Pkg.mllib "src/top/git-top.mllib";
+    Pkg.mllib ~cond:mirage "src/mirage/git-mirage.mllib";
+    Pkg.mllib ~cond:http   "src/http/git-http.mllib";
+    Pkg.mllib ~cond:unix   "src/unix/git-unix.mllib";
     Pkg.bin   ~cond:unix   "bin/ogit" ~dst:"ogit";
-    Pkg.test  ~cond:test ~dir:"lib_test" "lib_test/test" ~args:(Cmd.v "-q");
+    Pkg.test  ~cond:test ~dir:"test" "test/test" ~args:(Cmd.v "-q");
   ]
