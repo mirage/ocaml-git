@@ -15,7 +15,6 @@
  *)
 
 open Astring
-module Log = (val Git_misc.src_log "tree" : Logs.LOG)
 
 type perm = [
     `Normal

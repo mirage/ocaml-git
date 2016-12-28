@@ -60,7 +60,6 @@ module Dot = Graph.Graphviz.Dot(struct
 
 module K = Graph.Imperative.Digraph.ConcreteBidirectional(Git_hash)
 module T = Graph.Topological.Make(K)
-module KO = Graph.Oper.I(K)
 
 module Log = (val Git_misc.src_log "graph" : Logs.LOG)
 
