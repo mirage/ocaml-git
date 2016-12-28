@@ -179,14 +179,6 @@ module PIC = struct
       let source = unpack d.source in
       Git_misc.with_buffer (fun buf -> add_delta buf { d with source })
 
-  module X = struct
-    type x = t
-    type t = x
-    let compare = compare
-    let pp = pp
-  end
-  module Map = Git_misc.Map(X)
-
 end
 
 type pic = PIC.t

@@ -14,8 +14,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Log = (val Git_misc.src_log "hash": Logs.LOG)
-
 module type S = sig
   include Git_s.S
   val to_raw: t -> string

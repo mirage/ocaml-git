@@ -59,7 +59,6 @@ module Make (IO: IO) (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
   module Value_IO = Git_value.IO(D)(I)
   module Pack_IO = Git_pack.IO(D)(I)
   module Hash_IO = Git_hash.IO(D)
-  module Packed_value_IO = Git_packed_value.IO(D)(I)
   module Pack_index = Git_pack_index.Make(D)
   module Packed_refs_IO = Git_packed_refs.IO(D)
 
