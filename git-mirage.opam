@@ -9,7 +9,7 @@ dev-repo:     "https://github.com/mirage/ocaml-git.git"
 depends: [
   "mirage-http"
   "mirage-flow"
-  "mirage-types-lwt"
+  "mirage-types-lwt" {>= "3.0.0"}
   "channel"
   "git" {>= "1.6.0"}
 ]
