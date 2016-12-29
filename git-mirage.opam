@@ -10,6 +10,6 @@ depends: [
   "mirage-http"
   "mirage-flow"
   "mirage-types-lwt"
-  "channel"
+  "mirage-channel-lwt"
   "git" {>= "1.6.0"}
 ]
