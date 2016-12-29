@@ -22,7 +22,7 @@ module Log = struct
 end
 
 module type FS = sig
-  include V1_LWT.FS with type page_aligned_buffer = Cstruct.t
+  include Mirage_fs_lwt.S with type page_aligned_buffer = Cstruct.t
   val connect: unit -> t Lwt.t
 end
 
@@ -37,6 +37,8 @@ module FS (FS: FS) (D: Git.Hash.DIGEST) (I: Git.Inflate.S) = struct
 
   module IO = struct
 
+    open Mirage_fs
+
     let file_exists t f =
       Log.debug (fun l -> l "file_exists %s" f);
       FS.stat t f >|= function
@@ -46,7 +48,7 @@ module FS (FS: FS) (D: Git.Hash.DIGEST) (I: Git.Inflate.S) = struct
     let is_directory t dir =
       Log.debug (fun l -> l "is_directory %s" dir);
       FS.stat t dir >>= get_fs_error >|= fun s ->
-      s.FS.directory
+      s.directory
 
     let parent_dir = function
       | "/"
@@ -117,7 +119,7 @@ module FS (FS: FS) (D: Git.Hash.DIGEST) (I: Git.Inflate.S) = struct
       FS.stat t file >>= get_fs_error >>= fun s ->
       is_directory t file >>= function
       | false ->
-        FS.read t file 0 (Int64.to_int s.FS.size) >>= get_fs_error >|= fun bs ->
+        FS.read t file 0 (Int64.to_int s.size) >>= get_fs_error >|= fun bs ->
         let s = Cstruct.copyv bs in
         Cstruct.of_string s
       | true -> Lwt.fail (Failure (Printf.sprintf "%s is a directory" file))
@@ -152,7 +154,7 @@ module FS (FS: FS) (D: Git.Hash.DIGEST) (I: Git.Inflate.S) = struct
 
 end
 
-module IO_helper (Channel: V1_LWT.CHANNEL) = struct
+module IO_helper (Channel: Mirage_channel_lwt.S) = struct
 
   let write oc s =
     let buf = Cstruct.of_string s in
@@ -214,7 +216,7 @@ end
 
 (* channel with functional constructors. *)
 module Fflow = Mirage_flow_lwt.F
-module Fchannel = Channel.Make(Fflow)
+module Fchannel = Mirage_channel_lwt.Make(Fflow)
 
 module In_channel = struct
   include Fchannel
@@ -232,7 +234,7 @@ end
 module Git_protocol = struct
 
   module Flow = Conduit_mirage.Flow
-  module Channel = Channel.Make(Flow)
+  module Channel = Mirage_channel_lwt.Make(Flow)
   include IO_helper (Channel)
 
   let safe_close c =
@@ -268,7 +270,7 @@ end
 (* handle the http(s):// connections *)
 module Smart_HTTP = struct
 
-  module Conduit_channel = Channel.Make(Conduit_mirage.Flow)
+  module Conduit_channel = Mirage_channel_lwt.Make(Conduit_mirage.Flow)
   module HTTP_IO = Cohttp_mirage_io.Make(Conduit_channel)
   module Net = struct
     type ctx = { resolver: Resolver_lwt.t; conduit: Conduit_mirage.t; }
@@ -355,7 +357,7 @@ module IO = struct
       | `HTTP h -> H.close h
   end
 
-  module Channel = Channel.Make(Flow)
+  module Channel = Mirage_channel_lwt.Make(Flow)
   include IO_helper(Channel)
   type ic = Channel.t
   type oc = Channel.t
