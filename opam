@@ -11,13 +11,13 @@ build: [
   "ocaml" "pkg/pkg.ml" "build" "--pinned" "%{pinned}%" "--tests" "false"
       "--with-http"   "%{cohttp:installed}%"
       "--with-unix"   "%{conduit+cohttp+camlzip+nocrypto+base-unix:installed}%"
-      "--with-mirage" "%{mirage-http+mirage-flow+mirage-types-lwt+channel:installed}%"
+      "--with-mirage" "%{mirage-http+mirage-flow+mirage-types-lwt+mirage-channel:installed}%"
 ]
 build-test: [
   ["ocaml" "pkg/pkg.ml" "build" "--tests" "true"
       "--with-http"   "%{cohttp:installed}%"
       "--with-unix"   "%{conduit+cohttp+camlzip+nocrypto+base-unix:installed}%"
-      "--with-mirage" "%{mirage-http+mirage-flow+mirage-types-lwt+channel:installed}%"]
+      "--with-mirage" "%{mirage-http+mirage-flow+mirage-types-lwt+mirage-channel:installed}%"]
   ["ocaml" "pkg/pkg.ml" "test"]
 ]
 
@@ -36,7 +36,7 @@ depends: [
   "mirage-types-lwt" {test & >= "3.0.0"}
   "mirage-http"      {test}
   "mirage-flow"      {test}
-  "channel"          {test}
+  "mirage-channel"   {test}
   "mirage-fs-unix"   {test & >="1.1.4"}
   "cohttp"           {test}
   "conduit"          {test}
@@ -49,7 +49,7 @@ depopts: [
   "mirage-types-lwt"
   "mirage-http"
   "mirage-flow"
-  "channel"
+  "mirage-channel"
   # --enable-unix
   "cohttp"
   "conduit"
