@@ -14,8 +14,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Log = (val Git_misc.src_log "blob" : Logs.LOG)
-
 (* FIXME: might want to have an option type with string|cstruct *)
 include Git_misc.S
 let hash = Hashtbl.hash

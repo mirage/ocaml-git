@@ -62,7 +62,6 @@ let type_of_inflated buf =
 module IO (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
 
   include T
-  module Hash_IO = Git_hash.IO(D)
   module Git_commit_IO = Git_commit.IO(D)
   module Git_tag_IO = Git_tag.IO(D)
   module Git_tree_IO = Git_tree.IO(D)

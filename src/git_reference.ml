@@ -16,8 +16,6 @@
 
 open Astring
 
-module Log = (val Git_misc.src_log "reference" : Logs.LOG)
-
 type t = string
 
 let compare = String.compare

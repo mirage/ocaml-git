@@ -14,8 +14,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Log = (val Git_misc.src_log "tag" : Logs.LOG)
-
 module T = struct
 
   type t = {
