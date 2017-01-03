@@ -7,16 +7,17 @@ bug-reports:  "https://github.com/mirage/ocaml-git/issues"
 dev-repo:     "https://github.com/mirage/ocaml-git.git"
 doc:          "https://mirage.github.io/ocaml-git/"
 
-build: ["ocaml" "pkg/pkg.ml" "build" "--pinned" "%{pinned}%" "-n" name]
+build-test: [
+  ["ocaml" "pkg/pkg.ml" "build" "--pinned" "%{pinned}%" "-n" name "--tests" "true"]
+  ["ocaml" "pkg/pkg.ml" "test"]
+]
 
 depends: [
-  "mirage-http"
-  "mirage-flow-lwt"
-  "mirage-channel-lwt"
-  "mirage-fs-lwt"
-  "mirage-conduit"
-  "git-http" {>= "2.0.0"}
-  "git"      {>= "2.0.0"}
+  "alcotest"
+  "git-http"
+  "git-unix"
+  "git-mirage"
+  "mirage-fs-unix" {>="1.1.4"}
 ]
 
 available: [ocaml-version >= "4.02.3"]

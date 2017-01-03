@@ -1,15 +1,13 @@
-HTTP   ?= true
-UNIX   ?= true
-MIRAGE ?= true
-TESTS  ?= true
-
-OPTIONS=--with-http ${HTTP} --with-unix ${UNIX} --with-mirage ${MIRAGE} \
-	--tests ${TESTS} -q
-
 all:
-	ocaml pkg/pkg.ml build ${OPTIONS}
+	ocaml pkg/pkg.ml build -n git
+	ocaml pkg/pkg.ml build -n git-http
+	ocaml pkg/pkg.ml build -n git-unix
+	ocaml pkg/pkg.ml build -n git-mirage
+	ocaml pkg/pkg.ml build -n git-tests --tests true
 	ocaml pkg/pkg.ml test
 
 clean:
 	rm -rf _build _tests
-	ocaml pkg/pkg.ml clean
+	ocaml pkg/pkg.ml clean -n git
+	ocaml pkg/pkg.ml clean -n git-http
+	ocaml pkg/pkg.ml clean -n git-mirage

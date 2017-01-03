@@ -10,13 +10,7 @@ doc:          "https://mirage.github.io/ocaml-git/"
 build: ["ocaml" "pkg/pkg.ml" "build" "--pinned" "%{pinned}%" "-n" name]
 
 depends: [
-  "mirage-http"
-  "mirage-flow-lwt"
-  "mirage-channel-lwt"
-  "mirage-fs-lwt"
-  "mirage-conduit"
-  "git-http" {>= "2.0.0"}
-  "git"      {>= "2.0.0"}
+  "git"        {>= "2.0.0"}
+  "cohttp"     {>= "0.19.1"}
 ]
-
 available: [ocaml-version >= "4.02.3"]
