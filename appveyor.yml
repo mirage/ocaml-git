@@ -5,6 +5,9 @@ environment:
   CYG_ROOT: "C:\\cygwin"
   CYG_BASH: "%CYG_ROOT%\\bin\\bash -lc"
   TESTS: "false"
+  EXTRA_REMOTES: "https://github.com/mirage/mirage-dev.git"
+  PINS: "git.2.0.0:. git-http.2.0.0:. git-unix.2.0.0:. git-mirage.2.0.0:."
+  PACKAGE: "git-tests"
 
 install:
   - appveyor DownloadFile https://raw.githubusercontent.com/ocaml/ocaml-ci-scripts/master/appveyor-opam.sh
