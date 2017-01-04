@@ -14,7 +14,7 @@ depends: [
   "mirage-flow-lwt"
   "mirage-channel-lwt"
   "mirage-fs-lwt"
-  "mirage-conduit"
+  "mirage-conduit" {>= "2.3.0"}
   "git-http" {>= "2.0.0"}
   "git"      {>= "2.0.0"}
 ]
