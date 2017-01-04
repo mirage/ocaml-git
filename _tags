@@ -5,7 +5,7 @@ true: package(cstruct astring fmt hex logs lwt ocamlgraph re uri mstruct)
 
 <test/*>: package(alcotest logs.fmt mtime.os nocrypto)
 <test/*>: package(mirage-fs-unix io-page.unix)
-<test/*>: package(git-unix git-mirage git-http)
+<test/*>: package(git-unix git-mirage git-http result)
 
 <src/top/*>: package(compiler-libs.toplevel)
 
@@ -16,5 +16,5 @@ true: package(cstruct astring fmt hex logs lwt ocamlgraph re uri mstruct)
 <src/unix/ogit.*>: package(logs.cli)
 
 <src/mirage/*>: package(mirage-flow-lwt mirage-channel-lwt mirage-fs-lwt)
-<src/mirage/*>: package(conduit.mirage)
+<src/mirage/*>: package(conduit.mirage result)
 <src/mirage/*>: package(git git-http mirage-http)
