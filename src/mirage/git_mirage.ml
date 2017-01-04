@@ -15,6 +15,7 @@
  *)
 
 open Lwt.Infix
+open Result
 
 module Log = struct
   let src = Logs.Src.create "git.mirage" ~doc:"logs git's mirage events"

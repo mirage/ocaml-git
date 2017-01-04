@@ -1,0 +1,7 @@
+description = "HTTP backend for the Git protocol"
+version = "%%VERSION_NUM%%"
+requires = "git lwt cohttp.lwt uri.services"
+archive(byte) = "git-http.cma"
+plugin(byte) = "git-http.cma"
+archive(native) = "git-http.cmxa"
+plugin(native) = "git-http.cmxs"

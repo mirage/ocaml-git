@@ -1,51 +1,18 @@
 description = "A low-level interface to Git in pure OCaml"
-version = "%%VERSION%%"
+version = "%%VERSION_NUM%%"
 requires = "mstruct logs ocamlgraph uri lwt hex astring fmt"
 archive(byte) = "git.cma"
 archive(native) = "git.cmxa"
 plugin(byte) = "git.cma"
 plugin(native) = "git.cmxs"
 
-package "unix" (
- description = "Unix backend for the Git protocol"
- version = "%%VERSION%%"
- requires = "git git.http lwt cohttp.lwt lwt.unix conduit.lwt-unix zip nocrypto"
- archive(byte) = "git-unix.cma"
- archive(native) = "git-unix.cmxa"
- plugin(byte) = "git-unix.cma"
- plugin(native) = "git-unix.cmxs"
- exists_if = "git-unix.cma"
-)
-
 package "top" (
  description = "Toplevel printers for Git values"
- version = "%%VERSION%%"
+ version = "%%VERSION_NUM%%"
  requires = "git"
  archive(byte) = "git_top.cma"
  archive(native) = "git_top.cmxa"
  plugin(byte) = "git_top.cma"
  plugin(native) = "git_top.cmxs"
  exists_if = "git_top.cma"
-)
-
-package "mirage" (
- description = "MirageOS backend for the Git protocol"
- version = "%%VERSION%%"
- requires = "git git.http mirage-types-lwt io-page conduit.mirage dns.mirage mirage-http mirage-flow"
- archive(byte) = "git-mirage.cma"
- plugin(byte) = "git-mirage.cma"
- archive(native) = "git-mirage.cmxa"
- plugin(native) = "git-mirage.cmxs"
- exists_if = "git-mirage.cma"
-)
-
-package "http" (
- description = "HTTP backend for the Git protocol"
- version = "%%VERSION%%"
- requires = "git lwt cohttp.lwt uri.services"
- archive(byte) = "git-http.cma"
- plugin(byte) = "git-http.cma"
- archive(native) = "git-http.cmxa"
- plugin(native) = "git-http.cmxs"
- exists_if = "git-http.cma"
 )

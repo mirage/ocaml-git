@@ -17,6 +17,7 @@
 open Lwt.Infix
 open Test_store
 open Git_mirage
+open Result
 
 let command fmt =
   Printf.ksprintf (fun str ->

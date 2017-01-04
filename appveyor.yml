@@ -5,10 +5,13 @@ environment:
   CYG_ROOT: "C:\\cygwin"
   CYG_BASH: "%CYG_ROOT%\\bin\\bash -lc"
   TESTS: "false"
+  EXTRA_REMOTES: "https://github.com/mirage/mirage-dev.git"
+  PINS: "git.2.0.0:. git-http.2.0.0:. git-unix.2.0.0:. git-mirage.2.0.0:."
+  PACKAGE: "git-tests"
 
 install:
   - appveyor DownloadFile https://raw.githubusercontent.com/ocaml/ocaml-ci-scripts/master/appveyor-opam.sh
-  - "%CYG_ROOT%\\setup-x86.exe -qnNdO -R %CYG_ROOT% -s http://cygwin.mirror.constant.com -l C:/cygwin/var/cache/setup -P rsync -P patch -P make -P unzip -P git -P m4 -P perl -P mingw64-x86_64-gcc-core"
+  - "%CYG_ROOT%\\setup-x86.exe -qnNdO -R %CYG_ROOT% -s http://cygwin.mirror.constant.com -l C:/cygwin/var/cache/setup -P rsync -P patch -P make -P unzip -P git -P perl -P mingw64-x86_64-gcc-core"
 
 build_script:
   - "%CYG_BASH% '${APPVEYOR_BUILD_FOLDER}/appveyor-opam.sh'"
