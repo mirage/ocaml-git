@@ -7,7 +7,7 @@ environment:
   TESTS: "false"
   EXTRA_REMOTES: "https://github.com/mirage/mirage-dev.git"
   PINS: "git.2.0.0:. git-http.2.0.0:. git-unix.2.0.0:. git-mirage.2.0.0:."
-  PACKAGE: "git-tests"
+  PACKAGE: "git-unix"
 
 install:
   - appveyor DownloadFile https://raw.githubusercontent.com/ocaml/ocaml-ci-scripts/master/appveyor-opam.sh
