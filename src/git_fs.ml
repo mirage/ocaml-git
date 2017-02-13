@@ -535,7 +535,11 @@ module Make (IO: IO) (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
     let n = String.length (t.dot_git / "") in
     let refs = List.map (fun file ->
         let r = String.with_range file ~first:n in
-        Git_reference.of_raw r
+        if Sys.os_type <> "Win32" then Git_reference.of_raw r
+        else
+          String.cuts ~sep:Filename.dir_sep r
+          |> String.concat ~sep:"/"
+          |> Git_reference.of_raw
       ) files in
     let packed_refs = packed_refs t in
     let packed_refs =
@@ -552,18 +556,22 @@ module Make (IO: IO) (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
       |> elements
     )
 
-  let file_of_ref t r = t.dot_git / Git_reference.to_raw r
+  let raw_ref r =
+    let raw = Git_reference.to_raw r in
+    if Sys.os_type <> "Win32" then raw
+    else
+      String.cuts ~sep:"/" raw
+      |> String.concat ~sep:Filename.dir_sep
 
-  let mem_reference t r =
-    let file = file_of_ref t r in
-    IO.file_exists file
-
-  let lock_file t r = IO.lock_file (t.dot_git / "lock" / Git_reference.to_raw r)
+  let file_of_ref t r = t.dot_git / raw_ref r
+  let mem_reference t r = IO.file_exists (file_of_ref t r)
+  let lock_file t r = IO.lock_file (t.dot_git / "lock" / raw_ref r)
 
   let remove_reference t r =
     let file = file_of_ref t r in
+    let lock = lock_file t r in
     Lwt.catch
-      (fun () -> IO.remove_file ~lock:(lock_file t r) file)
+      (fun () -> IO.remove_file ~lock file)
       (fun _  -> Lwt.return_unit)
 
   let rec read_reference t r =
@@ -616,14 +624,14 @@ module Make (IO: IO) (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
     Lwt.return (Git_pack.Raw.keys pack)
 
   let write_reference t r hash =
-    let file = t.dot_git / Git_reference.to_raw r in
+    let file = file_of_ref t r in
     let contents = Git_hash.to_hex hash in
     let temp_dir = temp_dir t in
     let lock = lock_file t r in
     IO.write_file file ~temp_dir ~lock (Cstruct.of_string contents)
 
   let test_and_set_reference t r ~test ~set =
-    let file = t.dot_git / Git_reference.to_raw r in
+    let file = file_of_ref t r in
     let temp_dir = temp_dir t in
     let raw = function
       | None -> None
