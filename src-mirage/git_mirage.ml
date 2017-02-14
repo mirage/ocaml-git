@@ -70,9 +70,15 @@ module FS (FS: FS) (D: Git.Hash.DIGEST) (I: Git.Inflate.S) = struct
 
     let file_exists t f =
       Log.debug (fun l -> l "file_exists %s" f);
-      FS.stat t f >|= function
-      | Ok _    -> true
-      | Error _ -> false
+      (* FIXME: it seems that mirage-fs-unix can also raise Sys_error,
+         see https://github.com/mirage/mirage-fs-unix/issues/37 *)
+      Lwt.catch (fun () ->
+          FS.stat t f >|= function
+          | Ok _    -> true
+          | Error _ -> false
+        ) (function
+          | Sys_error _ -> Lwt.return_false
+          | e -> Lwt.fail e)
 
     let is_directory t dir =
       Log.debug (fun l -> l "is_directory %s" dir);
