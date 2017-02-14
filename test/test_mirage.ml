@@ -50,8 +50,9 @@ let mkdir dirname =
 
 let command fmt =
   Printf.ksprintf (fun str ->
-      Printf.printf "[exec] %s\n" str;
-      let _ = Sys.command str in
+      Printf.printf "[exec] %s\n%!" str;
+      let i = Sys.command str in
+      if i <> 0 then Printf.printf "[exec] error %d\n%!" i;
       ()
     ) fmt
 
@@ -72,10 +73,7 @@ module M = struct
 
   let init () =
     rmdir root;
-    mkdir root >>= fun () ->
-    FS_unix.connect root  >>= fun t ->
-    FS_unix.mkdir t "/" >>| fun () ->
-    Lwt.return_unit
+    mkdir root
 
   include FS_unix
 
@@ -87,7 +85,7 @@ module S = FS(M)(SHA1_slow)(Git.Inflate.Make(Zlib))
 
 let suite =
   {
-    name  = "MIRAGE-FS";
+    name  = "MIRAGE";
     init  = M.init;
     clean = unit;
     store = (module S);
