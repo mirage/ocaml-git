@@ -16,8 +16,7 @@
 
 module type S = sig
   type t
-  val create: ?root:string -> ?dot_git:string -> ?level:int ->
-    unit -> t Lwt.t
+  val create: ?root:string -> ?dot_git:string -> ?level:int -> unit -> t Lwt.t
   val dot_git: t -> string
   val root: t -> string
   val level: t -> int
@@ -38,6 +37,8 @@ module type S = sig
   val read_head: t -> Git_reference.head_contents option Lwt.t
   val write_reference: t -> Git_reference.t -> Git_hash.t -> unit Lwt.t
   val remove_reference: t -> Git_reference.t -> unit Lwt.t
+  val test_and_set_reference: t -> Git_reference.t ->
+    test:Git_hash.t option -> set:Git_hash.t option -> bool Lwt.t
   val read_index: t -> Git_index.t Lwt.t
   val write_index: t -> ?index:Git_index.t -> Git_hash.Commit.t -> unit Lwt.t
   val kind: [`Memory | `Disk]

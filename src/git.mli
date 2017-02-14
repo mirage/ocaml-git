@@ -476,7 +476,7 @@ module Value: sig
   (** Return the type of the inflated object stored in the given
       buffer. *)
 
-  (** {2 Constructors} *)
+  (** {1 Constructors} *)
 
   val commit: Commit.t -> t
   (** Cast a commit to an object. *)
@@ -536,7 +536,7 @@ module Value: sig
 
     include IO with type t = t
 
-    (** {2 Inflated values} *)
+    (** {1 Inflated values} *)
 
     val name: t -> Hash.t
     (** Return the hash of the serialized contents. *)
@@ -743,7 +743,7 @@ module Packed_value: sig
     module V3: IO
     (** Packed values version 3. *)
 
-    (** {2 Conversion to values} *)
+    (** {1 Conversion to values} *)
 
     val add_inflated_value:
       read:Value.read_inflated -> offsets:(int -> Hash.t option) ->
@@ -757,7 +757,7 @@ module Packed_value: sig
       ba:Cstruct.buffer -> t -> Value.t Lwt.t
     (** Unpack the packed value using the provided indexes. *)
 
-    (** {2 Position independant packed values} *)
+    (** {1 Position independant packed values} *)
 
     val unpack:
       index:Pack_index.f ->
@@ -1070,7 +1070,7 @@ module Store: sig
     val contents: t -> (Hash.t * Value.t) list Lwt.t
     (** Get the full store contents. *)
 
-    (** {2 Objects} *)
+    (** {1 Objects} *)
 
     val size: t -> Hash.t -> int option Lwt.t
     (** Return the size of the blob having the given Hash name. *)
@@ -1095,7 +1095,7 @@ module Store: sig
     (** Write a raw pack file and the corresponding index. Return the
         objects IDs which have been written. *)
 
-    (** {2 References} *)
+    (** {1 References} *)
 
     val references: t -> Reference.t list Lwt.t
     (** Return the list of references (ie. tags and branches). *)
@@ -1121,7 +1121,11 @@ module Store: sig
     val remove_reference: t -> Reference.t -> unit Lwt.t
     (** Remove a refernce. *)
 
-    (** {2 Git index files} *)
+    val test_and_set_reference: t -> Reference.t ->
+      test:Hash.t option -> set:Hash.t option -> bool Lwt.t
+    (** Atomic updates (Test and set) for references. *)
+
+    (** {1 Git index files} *)
 
     val read_index: t -> Index.t Lwt.t
     (** Return the index file. *)
@@ -1139,12 +1143,12 @@ module Store: sig
         If [index] is not set, read the current index and update it with
         the current state of the filesystem. *)
 
-    (** {2 Backend kind} *)
+    (** {1 Backend kind} *)
 
     val kind: [`Memory | `Disk]
     (** The kind of backend. *)
 
-    (** {2 Raw values} *)
+    (** {1 Raw values} *)
 
     val read_inflated: t -> Hash.t -> string option Lwt.t
     (** Read a raw buffer from the store. *)
@@ -1328,7 +1332,7 @@ module Sync: sig
 
   end
 
-  (** {2 Constructor} *)
+  (** {1 Constructor} *)
 
   module type IO = sig
 
@@ -1395,9 +1399,6 @@ module FS: sig
 
     include Store.S
 
-    val remove: t -> unit Lwt.t
-    (** Remove all the contents of the store. *)
-
     val create_file: t -> string -> Tree.perm -> Blob.t -> unit Lwt.t
     (** Create a file on the filesystem, with the given mode. *)
 
@@ -1407,56 +1408,71 @@ module FS: sig
         does not already exist. If [root] is not set, use the current
         working directory as repository root. *)
 
+    val reset: t -> unit Lwt.t
+    (** Reset the store. *)
+
     val clear: unit -> unit
     (** Clear the LRU caches. *)
 
   end
 
-  (** {2 Constructor} *)
+  (** {1 Constructor} *)
 
   module type IO = sig
 
-    val getcwd: unit -> string Lwt.t
-    (** Get the current working directory. *)
+    type path = string
+    (** The type for filesystem paths. *)
 
-    val realpath: string -> string Lwt.t
-    (** Very dumb real-path. Only works for existing directories. *)
+    (** {1 Read Operations} *)
 
-    val mkdir: string -> unit Lwt.t
-    (** Create a directory (and the parent dirs if needed). *)
-
-    val remove: string -> unit Lwt.t
-    (** Remote a file or a directory (even if non-empty). *)
-
-    val file_exists: string -> bool Lwt.t
+    val file_exists: path -> bool Lwt.t
     (** Does the given file exists? See {!Sys.file_exists}*)
 
-    val directories: string -> string list Lwt.t
+    val directories: path -> string list Lwt.t
     (** List the subdirs. *)
 
-    val files: string -> string list Lwt.t
-    (** List the subfiles. *)
+    val files: path -> string list Lwt.t
+    (** List the subfiles. The result filenames are absolute. *)
 
-    val rec_files: string -> string list Lwt.t
-    (** [rec_files dir] is the list of the files recursively present in
-        [dir] and all of its sub-directories. Return filenames prefixed
-        by [dir]. *)
-
-    val read_file: string -> Cstruct.t Lwt.t
+    val read_file: path -> Cstruct.t Lwt.t
     (** Read a file and return a mutable C-like structure with its
         contents. *)
 
-    val write_file: string -> ?temp_dir:string -> Cstruct.t -> unit Lwt.t
-    (** Write a bigarray to a file. Atomicity is guaranteed by writing
-        the file first in [temp_dir] and then moving the file to the
-        right location. By defaut, [temp_dir] is
-        [Filename.get_temp_dir_name]. *)
-
-    val chmod: string -> int -> unit Lwt.t
-    (** Change the file mode. *)
-
-    val stat_info: string -> Index.stat_info
+    val stat_info: path -> Index.stat_info
     (** Return the stats of the given file. *)
+
+    (** {1 Write Operations} *)
+
+    val mkdir: path -> unit Lwt.t
+    (** Create a directory. *)
+
+    type lock
+    (** The type for locks, depends on the backend. *)
+
+    val lock_file: path -> lock
+    (** [lock_file f] is the lock associated to the file [f], which is
+        hold when {!test_and_set_file}, {!set_file} and {!remove_file}
+        are called (if provided to the function calls). Depending on
+        the backend it can be mutexes or flocks. *)
+
+    val write_file: ?temp_dir:string -> ?lock:lock -> path -> Cstruct.t ->
+      unit Lwt.t
+    (** Write a bigarray to a file. Atomicity is guaranteed if [lock]
+        if provided. [temp_dir] can be used to create temporary files,
+        By defaut, [temp_dir] is [Filename.get_temp_dir_name]. *)
+
+    val test_and_set_file: ?temp_dir:string -> lock:lock -> path ->
+      test:Cstruct.t option -> set:Cstruct.t option -> bool Lwt.t
+    (** Atomic update of file contents. [temp_dir] can be used to
+        create temporary files, By defaut, [temp_dir] is
+        [Filename.get_temp_dir_name].*)
+
+    val remove_file: ?lock:lock -> path -> unit Lwt.t
+    (** Remove a file. Atomicity is guaranteed if [lock] is provided. *)
+
+    val chmod: ?lock:lock -> path -> [`Exec ] -> unit Lwt.t
+    (** Change the file mode to exec mode. Atomicity is guaranteed if
+        [lock] is provided. *)
 
   end
 
