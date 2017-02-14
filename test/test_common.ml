@@ -159,3 +159,31 @@ let sha1s =
     let pp = Hash.Set.pp
   end
   in (module M: Alcotest.TESTABLE with type t = M.t)
+
+type t = {
+  name  : string;
+  init  : unit -> unit Lwt.t;
+  clean : unit -> unit Lwt.t;
+  store : (module Store.S);
+  shell : bool;
+}
+
+let unit () = Lwt.return_unit
+
+(* From Git_misc *)
+
+let list_filter_map f l =
+  List.fold_left (fun l elt ->
+      match f elt with
+      | None   -> l
+      | Some x -> x :: l
+    ) [] l
+  |> List.rev
+
+let with_buffer fn =
+  let buf = Buffer.create 1024 in
+  fn buf;
+  Buffer.contents buf
+
+let with_buffer' fn =
+  Cstruct.of_string (with_buffer fn)
