@@ -206,6 +206,18 @@ module Make (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
     Hashtbl.replace t.refs r (`H h);
     Lwt.return_unit
 
+  let test_and_set_reference t r ~test ~set =
+    Log.info (fun l -> l "Test and set: %a" Git_reference.pp r);
+    let v = try Some (Hashtbl.find t.refs r) with Not_found -> None in
+    let replace () = match set with
+      | None   -> Hashtbl.remove t.refs r
+      | Some v -> Hashtbl.replace t.refs r (`H v)
+    in
+    match v, test with
+    | None  , None -> replace (); Lwt.return true
+    | Some (`H x), Some y when Git_hash.equal x y -> replace (); Lwt.return true
+    | _ -> Lwt.return false
+
   let read_index _t = Lwt.return Git_index.empty
   let write_index _t ?index:_ _head = Lwt.return_unit
 

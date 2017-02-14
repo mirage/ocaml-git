@@ -189,7 +189,7 @@ let cat_file = {
     in
     let cat_file (module S: Store.S) ty_flag sz_flag id =
       run begin
-        S.create () >>= fun t ->
+        S.create ~root:(Sys.getcwd ()) () >>= fun t ->
         catch_ambiguous (fun () ->
             S.read_exn t (Hash_IO.of_short_hex id) >>= fun v ->
             let t, c, s = match v with
@@ -224,7 +224,7 @@ let ls_remote = {
     let ls (module S: Store.S) remote =
       let module Sync = Sync.Make(S) in
       run begin
-        S.create ()  >>= fun t ->
+        S.create ~root:(Sys.getcwd ()) ()  >>= fun t ->
         Sync.ls t remote >>= fun references ->
         Printf.printf "From %s\n" (Gri.to_string remote);
         let print r h =
@@ -249,7 +249,7 @@ let ls_files = {
     in
     let ls (module S: Store.S) debug =
       run begin
-        S.create ()    >>= fun t ->
+        S.create ~root:(Sys.getcwd ()) ()    >>= fun t ->
         S.read_index t >>= fun cache ->
         if debug then
           Fmt.(pf stdout) "%a" Index.pp cache
@@ -316,7 +316,7 @@ let ls_tree = {
             ) tree
       in
       run begin
-        S.create () >>= fun t ->
+        S.create ~root:(Sys.getcwd ()) () >>= fun t ->
         let h = Hash_IO.of_short_hex oid in
         catch_ambiguous (fun () -> walk t "" h)
       end in
@@ -337,7 +337,7 @@ let read_tree = {
       Arg.(required & pos 0 (some string) None & doc ) in
     let read (module S: Store.S) commit_str =
       run begin
-        S.create ()    >>= fun t ->
+        S.create ~root:(Sys.getcwd ()) ()    >>= fun t ->
         S.references t >>= fun refs ->
         begin
           let (/) = Filename.concat in
@@ -439,7 +439,7 @@ let fetch = {
     let fetch (module S: Store.S) unpack remote =
       let module Sync = Sync.Make(S) in
       run begin
-        S.create ()                 >>= fun t ->
+        S.create ~root:(Sys.getcwd ()) ()     >>= fun t ->
         Sync.fetch t ~unpack ~progress remote >>= fun _ ->
         Lwt.return_unit
       end in
@@ -455,7 +455,7 @@ let pull = {
     let pull (module S: Store.S) unpack remote =
       let module Sy = Sync.Make(S) in
       run begin
-        S.create ()   >>= fun t ->
+        S.create ~root:(Sys.getcwd ()) () >>= fun t ->
         S.read_head t >>= fun h ->
         Sy.fetch t ~unpack remote >>= fun r ->
         match h with
@@ -485,8 +485,8 @@ let push = {
       let module Result = Sync.Result in
       let module Sync = Sync.Make(S) in
       run begin
-        S.create ()                 >>= fun t ->
-        S.read_reference t branch   >>= fun b ->
+        S.create ~root:(Sys.getcwd ()) () >>= fun t ->
+        S.read_reference t branch >>= fun b ->
         let branch = match b with
           | None   -> reference_of_raw branch
           | Some _ -> branch in
@@ -509,7 +509,7 @@ let graph = {
     let graph (module S: Store.S) file =
       let module Graph = Git.Graph.Make(S) in
       run begin
-        S.create () >>= fun t ->
+        S.create ~root:(Sys.getcwd ()) () >>= fun t ->
         let buf = Buffer.create 1024 in
         Graph.to_dot t buf >>= fun () ->
         Lwt_io.with_file ~mode:Lwt_io.output file (fun oc ->
