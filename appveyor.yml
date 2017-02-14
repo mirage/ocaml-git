@@ -2,12 +2,15 @@ platform:
   - x86
 
 environment:
-  CYG_ROOT: "C:\\cygwin"
-  CYG_BASH: "%CYG_ROOT%\\bin\\bash -lc"
-  TESTS: "false"
-  EXTRA_REMOTES: "https://github.com/mirage/mirage-dev.git"
-  PINS: "git.2.0.0:. git-http.2.0.0:. git-unix.2.0.0:. git-mirage.2.0.0:."
-  PACKAGE: "git-unix"
+  global:
+    CYG_ROOT: "C:\\cygwin"
+    CYG_BASH: "%CYG_ROOT%\\bin\\bash -lc"
+    TESTS: "false"
+    EXTRA_REMOTES: "https://github.com/mirage/mirageos-3-beta.git"
+    PINS: "git.dev:. git-http.dev:. git-unix.dev:. git-mirage.dev:."
+  matrix:
+  - PACKAGE: "git-mirage.dev"
+  - PACKAGE: "git-unix.dev"
 
 install:
   - appveyor DownloadFile https://raw.githubusercontent.com/ocaml/ocaml-ci-scripts/master/appveyor-opam.sh

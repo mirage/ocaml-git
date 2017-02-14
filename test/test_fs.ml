@@ -15,7 +15,7 @@
  *)
 
 open Lwt.Infix
-open Test_store
+open Test_common
 
 let root = "test-db"
 
