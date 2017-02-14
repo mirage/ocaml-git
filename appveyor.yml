@@ -7,6 +7,7 @@ environment:
     CYG_BASH: "%CYG_ROOT%\\bin\\bash -lc"
     EXTRA_REMOTES: "https://github.com/mirage/mirageos-3-beta.git"
     PINS: "git.dev:. git-http.dev:. git-unix.dev:. git-mirage.dev:."
+    ALCOTEST_SHOW_ERRORS: "true"
   matrix:
   - PACKAGE: "git-mirage.dev"
   - PACKAGE: "git-unix.dev"
