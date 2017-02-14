@@ -6,7 +6,7 @@ environment:
   CYG_BASH: "%CYG_ROOT%\\bin\\bash -lc"
   TESTS: "false"
   EXTRA_REMOTES: "https://github.com/mirage/mirage-dev.git"
-  PINS: "git.2.0.0:. git-http.2.0.0:. git-unix.2.0.0:. git-mirage.2.0.0:."
+  PINS: "git.1.10.0:. git-http.1.10.0:. git-unix.1.10.0:. git-mirage.1.10.0:."
   PACKAGE: "git-unix"
 
 install:
