@@ -31,15 +31,15 @@ $ opam install git
 ### What is supported
 
 * The loose object files can be read and written;
-  - [blobs](http://mirage.github.io/ocaml-git/Blob.html) (files)
-  - [trees](http://mirage.github.io/ocaml-git/Tree.html) (directories)
-  - [commits](http://mirage.github.io/ocaml-git/Commit.html) (revision history)
-  - [tags](http://mirage.github.io/ocaml-git/Tag.html) (annotated tags)
-  - [references](http://mirage.github.io/ocaml-git/Reference.html) (branch names)
+  - [blobs](http://mirage.github.io/ocaml-git/Git.Blob.html) (files)
+  - [trees](http://mirage.github.io/ocaml-git/Git.Tree.html) (directories)
+  - [commits](http://mirage.github.io/ocaml-git/Git.Commit.html) (revision history)
+  - [tags](http://mirage.github.io/ocaml-git/Git.Tag.html) (annotated tags)
+  - [references](http://mirage.github.io/ocaml-git/Git.Reference.html) (branch names)
 
-* The [pack files](http://mirage.github.io/ocaml-git/Pack.html)
+* The [pack files](http://mirage.github.io/ocaml-git/Git.Pack.html)
   (collections of compressed loose objects using a binary-diff representation)
-  and [pack indexes](http://mirage.github.io/ocaml-git/Pack_index.html)
+  and [pack indexes](http://mirage.github.io/ocaml-git/Git.Pack_index.html)
   (indexes of pack files) can be read and
   written). The binary diff hunks are exposed using a high-level
   position-independent representation so that they can be manipulated
@@ -50,7 +50,7 @@ $ opam install git
   are fully supported. Which means that `git diff` and `git status`
   will work as expected on a repository created by the library.
 
-* [Cloning and fetching](http://mirage.github.io/ocaml-git/Sync.html)
+* [Cloning and fetching](http://mirage.github.io/ocaml-git/Git.Sync.html)
   (using various options) are fully supported for
   the Git protocol, the smart-HTTP protocol and `git+ssh`. A subset
   of the protocol capabilities are implemented (mainly `thin-pack`,
@@ -58,13 +58,13 @@ $ opam install git
 
 * Pushing is still experimental and need more testing.
 
-* An abstraction for Git [Store](http://mirage.github.io/ocaml-git/Store.S.html)
+* An abstraction for Git [Store](http://mirage.github.io/ocaml-git/Git.Store.S.html)
   is available. Various store implementations are available:
   - An [in-memory](http://mirage.github.io/ocaml-git/Memory.html) implementation;
   - A [unix filesystem](http://mirage.github.io/ocaml-git/Git_unix.S.FS.html)
     implementation;
   - A [mirageOS](http://mirage.github.io/ocaml-git/Git_mirage.html) implementation,
-    requiring an `V1_LWT.FS` implementation.
+    requiring a `V1_LWT.FS` implementation.
 
 ### What is *not* supported
 
