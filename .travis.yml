@@ -8,5 +8,5 @@ env:
   matrix:
     - OCAML_VERSION=4.02 PACKAGE="git-unix"
     - OCAML_VERSION=4.03 PACKAGE="git-unix"
-    - OCAML_VERSION=4.04 PACKAGE="git-unix"
+    - OCAML_VERSION=4.04 PACKAGE="git-mirage"
     - OCAML_VERSION=4.03 PACKAGE="git" REVDEPS=*
