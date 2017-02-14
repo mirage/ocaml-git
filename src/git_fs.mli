@@ -16,26 +16,38 @@
 
 module type S = sig
   include Git_store.S
-  val remove: t -> unit Lwt.t
   val create_file: t -> string -> Git_tree.perm -> Git_blob.t -> unit Lwt.t
   val entry_of_file: t -> Git_index.t -> string -> Git_tree.perm ->
     Git_hash.Blob.t -> Git_blob.t -> Git_index.entry option Lwt.t
+  val reset: t -> unit Lwt.t
   val clear: unit -> unit
 end
 
 module type IO = sig
-  val getcwd: unit -> string Lwt.t
-  val realpath: string -> string Lwt.t
-  val mkdir: string -> unit Lwt.t
-  val remove: string -> unit Lwt.t
-  val file_exists: string -> bool Lwt.t
-  val directories: string -> string list Lwt.t
-  val files: string -> string list Lwt.t
-  val rec_files: string -> string list Lwt.t
-  val read_file: string -> Cstruct.t Lwt.t
-  val write_file: string -> ?temp_dir:string -> Cstruct.t -> unit Lwt.t
-  val chmod: string -> int -> unit Lwt.t
-  val stat_info: string -> Git_index.stat_info
+
+  type path = string
+
+  (* Reads *)
+
+  val file_exists: path -> bool Lwt.t
+  val directories: path -> string list Lwt.t
+  val files: path -> string list Lwt.t
+  val read_file: path -> Cstruct.t Lwt.t
+  val stat_info: path -> Git_index.stat_info
+
+  (* Updates *)
+
+  val mkdir: path -> unit Lwt.t
+
+  type lock
+  val lock_file: path -> lock
+
+  val write_file: ?temp_dir:path -> ?lock:lock -> path -> Cstruct.t -> unit Lwt.t
+  val test_and_set_file: ?temp_dir:path -> lock:lock ->
+    path -> test:Cstruct.t option -> set:Cstruct.t option -> bool Lwt.t
+  val remove_file: ?lock:lock -> path -> unit Lwt.t
+  val chmod: ?lock:lock -> path -> [`Exec] -> unit Lwt.t
+
 end
 
 module Make (IO: IO) (D: Git_hash.DIGEST) (I: Git_inflate.S): S

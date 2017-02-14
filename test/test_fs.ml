@@ -24,7 +24,7 @@ module M = Git_unix.FS
 let init () =
   M.clear ();
   M.create ~root () >>= fun t ->
-  M.remove t
+  M.reset t
 
 let suite =
   {

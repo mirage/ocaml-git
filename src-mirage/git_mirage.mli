@@ -26,7 +26,10 @@ module type FS = sig
 end
 
 module FS (FS: FS) (D: Git.Hash.DIGEST) (I: Git.Inflate.S): Git.FS.S
-(** Create a Irmin store from raw block devices handler. *)
+(** Create a Irmin store from raw block devices handler. The Irmin
+    process should have full and exclusive access to the block device
+    to ensure atomicity of [test_and_set_file], as it uses in-memory
+    locks. *)
 
 module Sync: sig
   module IO: Git.Sync.IO with type ctx = Resolver_lwt.t * Conduit_mirage.t

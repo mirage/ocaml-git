@@ -22,6 +22,90 @@ module Log = struct
   include (val Logs.src_log src : Logs.LOG)
 end
 
+let mkdir_pool = Lwt_pool.create 1 (fun () -> Lwt.return_unit)
+
+let protect_unix_exn = function
+  | Unix.Unix_error _ as e -> Lwt.fail (Failure (Printexc.to_string e))
+  | e -> Lwt.fail e
+
+let ignore_enoent = function
+  | Unix.Unix_error (Unix.ENOENT, _, _) -> Lwt.return_unit
+  | e -> Lwt.fail e
+
+let protect f x = Lwt.catch (fun () -> f x) protect_unix_exn
+let safe f x = Lwt.catch (fun () -> f x) ignore_enoent
+
+let mkdir dirname =
+  let rec aux dir =
+    if Sys.file_exists dir && Sys.is_directory dir then Lwt.return_unit
+    else (
+      let clear =
+        if Sys.file_exists dir then (
+          Log.debug (fun l ->
+              l "%s already exists but is a file, removing." dir);
+          safe Lwt_unix.unlink dir
+        ) else
+          Lwt.return_unit
+      in
+      clear >>= fun () ->
+      aux (Filename.dirname dir) >>= fun () ->
+      Log.debug (fun l -> l "mkdir %s" dir);
+      protect (Lwt_unix.mkdir dir) 0o755;
+    ) in
+  Lwt_pool.use mkdir_pool (fun () -> aux dirname)
+
+module Lock = struct
+
+  let is_stale max_age file =
+    Lwt_unix.file_exists file >>= fun exists ->
+    if exists then (
+      Lwt.catch (fun () ->
+          Lwt_unix.stat file >>= fun s ->
+          let stale = Unix.gettimeofday () -. s.Unix.st_mtime > max_age in
+          Lwt.return stale)
+        (function
+          | Unix.Unix_error (Unix.ENOENT, _, _) -> Lwt.return false
+          | e -> Lwt.fail e)
+    ) else
+      Lwt.return false
+
+  let unlock file =
+    Lwt_unix.unlink file
+
+  let lock ?(max_age = 10. *. 60. (* 10 minutes *)) ?(sleep = 0.001) file =
+    let rec aux i =
+      Log.debug (fun f -> f "lock %s %d" file i);
+      is_stale max_age file >>= fun is_stale ->
+      if is_stale then (
+        Log.err (fun f -> f "%s is stale, removing it." file);
+        unlock file >>= fun () ->
+        aux 1
+      ) else
+        let create () =
+          let pid = Unix.getpid () in
+          mkdir (Filename.dirname file) >>= fun () ->
+          Lwt_unix.openfile file [Unix.O_CREAT; Unix.O_RDWR; Unix.O_EXCL] 0o600
+          >>= fun fd ->
+          let oc = Lwt_io.of_fd ~mode:Lwt_io.Output fd in
+          Lwt_io.write_int oc pid >>= fun () ->
+          Lwt_unix.close fd
+        in
+        Lwt.catch create (function
+            | Unix.Unix_error(Unix.EEXIST, _, _) ->
+              let backoff = 1. +. Random.float (let i = float i in i *. i) in
+              Lwt_unix.sleep (sleep *. backoff) >>= fun () ->
+              aux (i+1)
+            | e -> Lwt.fail e)
+    in
+    aux 1
+
+  let with_lock file fn =
+    match file with
+    | None   -> fn ()
+    | Some f -> lock f >>= fun () -> Lwt.finalize fn (fun () -> unlock f)
+
+end
+
 let mmap_threshold = 4096
 (* Files smaller than this are loaded using [read].
 
@@ -38,8 +122,6 @@ let mmap_threshold = 4096
 
 (* Pool of opened files *)
 let openfile_pool = Lwt_pool.create 200 (fun () -> Lwt.return_unit)
-
-let mkdir_pool = Lwt_pool.create 1 (fun () -> Lwt.return_unit)
 
 module IO_Sync = struct
 
@@ -153,37 +235,13 @@ end
 
 module IO_FS = struct
 
-  let protect_unix_exn = function
-    | Unix.Unix_error _ as e -> Lwt.fail (Failure (Printexc.to_string e))
-    | e -> Lwt.fail e
+  let mkdir = mkdir
 
-  let ignore_enoent = function
-    | Unix.Unix_error (Unix.ENOENT, _, _) -> Lwt.return_unit
-    | e -> Lwt.fail e
+  type path = string
 
-  let protect f x = Lwt.catch (fun () -> f x) protect_unix_exn
-  let safe f x = Lwt.catch (fun () -> f x) ignore_enoent
-
-  let remove_file f = safe Lwt_unix.unlink f
-
-  let mkdir dirname =
-    let rec aux dir =
-      if Sys.file_exists dir && Sys.is_directory dir then Lwt.return_unit
-      else (
-        let clear =
-          if Sys.file_exists dir then (
-            Log.debug (fun l ->
-                l "%s already exists but is a file, removing." dir);
-            remove_file dir;
-          ) else
-            Lwt.return_unit
-        in
-        clear >>= fun () ->
-        aux (Filename.dirname dir) >>= fun () ->
-        Log.debug (fun l -> l "mkdir %s" dir);
-        protect (Lwt_unix.mkdir dir) 0o755;
-      ) in
-    Lwt_pool.use mkdir_pool (fun () -> aux dirname)
+  (* we use file locking *)
+  type lock = path
+  let lock_file x = x
 
   let list_files kind dir =
     if Sys.file_exists dir && Sys.is_directory dir then
@@ -205,13 +263,6 @@ module IO_FS = struct
     list_files (fun f ->
         try not (Sys.is_directory f) with Sys_error _ -> false
       ) dir
-
-  let rec_files dir =
-    let rec aux accu dir =
-      directories dir >>= fun ds ->
-      files dir       >>= fun fs ->
-      Lwt_list.fold_left_s aux (fs @ accu) ds in
-    aux [] dir
 
   let write_cstruct fd b =
     let rec rwrite fd buf ofs len =
@@ -256,9 +307,6 @@ module IO_FS = struct
         rename tmp file
       )
 
-  let write_file file ?temp_dir b =
-    with_write_file file ?temp_dir (fun fd -> write_cstruct fd b)
-
   let read_file_with_read file size =
     let chunk_size = max 4096 (min size 0x100000) in
     let buf = Cstruct.create size in
@@ -297,27 +345,6 @@ module IO_FS = struct
           )
     ) ()
 
-  let realdir dir =
-    if Sys.file_exists dir && Sys.is_directory dir then (
-      let d = Sys.getcwd () in
-      Unix.chdir dir;
-      let e = Sys.getcwd () in
-      Sys.chdir d;
-      e
-    ) else dir
-
-  (* FIXME: this is crazy *)
-  let realpath file =
-    let rec aux file =
-      if Sys.file_exists file && Sys.is_directory file then
-        realdir file
-      else
-        let dirname = Filename.dirname file in
-        let basename = Filename.basename file in
-        Filename.concat (aux dirname) basename
-    in
-    Lwt.return (aux file)
-
   let stat_info path =
     let open Index in
     let stats = Unix.stat path in
@@ -350,28 +377,40 @@ module IO_FS = struct
     let size = Int32.of_int stats.Unix.st_size in
     { ctime; mtime; dev; inode; uid; gid; mode; size }
 
-  let file_exists f =
-    Lwt.return (Sys.file_exists f)
+  let file_exists f = Lwt_unix.file_exists f
 
-  let rm_command =
-    if Sys.os_type = "Win32" then
-      "cmd /d /v:off /c rd /s /q"
-    else
-      "rm -rf"
+  let chmod ?lock f `Exec =
+    Lock.with_lock lock (fun () -> Lwt_unix.chmod f 0o755)
 
-  let remove f =
-    if Sys.file_exists f && not (Sys.is_directory f) then remove_file f
-    else if not (Sys.file_exists f) then Lwt.return_unit
-    else
-      (* FIXME: eeek *)
-      let i = Sys.command (Printf.sprintf "%s %s" rm_command f) in
-      if i = 0 then Lwt.return_unit else Lwt.fail (Failure ("Cannot remove " ^ f))
+  let write_file ?temp_dir ?lock file b =
+    Lock.with_lock lock (fun () ->
+        with_write_file file ?temp_dir (fun fd -> write_cstruct fd b)
+      )
 
-  let chmod f i =
-    Lwt.return (Unix.chmod f i)
+  let remove_file ?lock file =
+    Lock.with_lock lock (fun () ->
+        try Lwt_unix.unlink file with _ -> Lwt.return_unit
+      )
 
-  let getcwd () =
-    Lwt.return (Sys.getcwd ())
+  let test_and_set_file ?temp_dir ~lock file ~test ~set =
+    Lock.with_lock (Some lock) (fun () ->
+        (Lwt_unix.file_exists file >>= function
+          | false -> Lwt.return_none
+          | true  -> read_file file >|= fun v -> Some v)
+        >>= fun v ->
+        let equal = match test, v with
+          | None  , None   -> true
+          | Some x, Some y -> Cstruct.equal x y
+          | _ -> false
+        in
+        if not equal then Lwt.return false
+        else
+          (match set with
+           | None   -> remove_file file
+           | Some v -> write_file ?temp_dir file v)
+          >|= fun () ->
+          true
+      )
 
 end
 

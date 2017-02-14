@@ -31,26 +31,38 @@ let err_not_found n k = fail "%s: %s not found" n k
 module Log = (val Git_misc.src_log "fs" : Logs.LOG)
 
 module type IO = sig
-  val getcwd: unit -> string Lwt.t
-  val realpath: string -> string Lwt.t
-  val mkdir: string -> unit Lwt.t
-  val remove: string -> unit Lwt.t
-  val file_exists: string -> bool Lwt.t
-  val directories: string -> string list Lwt.t
-  val files: string -> string list Lwt.t
-  val rec_files: string -> string list Lwt.t
-  val read_file: string -> Cstruct.t Lwt.t
-  val write_file: string -> ?temp_dir:string -> Cstruct.t -> unit Lwt.t
-  val chmod: string -> int -> unit Lwt.t
-  val stat_info: string -> Git_index.stat_info
+
+  type path = string
+
+  (* Reads *)
+
+  val file_exists: path -> bool Lwt.t
+  val directories: path -> string list Lwt.t
+  val files: path -> string list Lwt.t
+  val read_file: path -> Cstruct.t Lwt.t
+  val stat_info: path -> Git_index.stat_info
+
+  (* Updates *)
+
+  val mkdir: path -> unit Lwt.t
+
+  type lock
+  val lock_file: path -> lock
+
+  val write_file: ?temp_dir:path -> ?lock:lock -> path -> Cstruct.t -> unit Lwt.t
+  val test_and_set_file: ?temp_dir:path -> lock:lock ->
+    path -> test:Cstruct.t option -> set:Cstruct.t option -> bool Lwt.t
+  val remove_file: ?lock:lock -> path -> unit Lwt.t
+  val chmod: ?lock:lock -> path -> [`Exec] -> unit Lwt.t
+
 end
 
 module type S = sig
   include Git_store.S
-  val remove: t -> unit Lwt.t
   val create_file: t -> string -> Git_tree.perm -> Git_blob.t -> unit Lwt.t
   val entry_of_file: t -> Git_index.t ->
     string -> Git_tree.perm -> Git_hash.Blob.t -> Git_blob.t -> Git_index.entry option Lwt.t
+  val reset: t -> unit Lwt.t
   val clear: unit -> unit
 end
 
@@ -131,24 +143,33 @@ module Make (IO: IO) (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
 
   let temp_dir t = t.dot_git / "tmp"
 
-  let create ?root ?dot_git ?(level=6) () =
+  let create ?(root="/tmp/ogit") ?dot_git ?(level=6) () =
     if level < 0 || level > 9 then
       fail "create: level should be between 0 and 9";
-    begin match root with
-      | None   -> IO.getcwd ()
-      | Some r ->
-        IO.mkdir r >>= fun () ->
-        IO.realpath r
-    end >>= fun root' ->
     let dot_git = match dot_git with
-      | None    -> root' / ".git"
+      | None    -> root / ".git"
       | Some s -> s
     in
-    Lwt.return { root = root'; level; dot_git }
+    IO.mkdir root    >>= fun () ->
+    IO.mkdir dot_git >|= fun () ->
+    { root; level; dot_git }
 
-  let remove t =
+  let rec_files dir =
+    let rec aux accu dir =
+      IO.directories dir >>= fun ds ->
+      IO.files dir       >>= fun fs ->
+      Lwt_list.fold_left_s aux (fs @ accu) ds in
+    aux [] dir
+
+  let reset t =
     Log.info (fun l -> l "remove %s" t.dot_git);
-    IO.remove t.dot_git
+    let lock_file f = match String.cut ~sep:(t.dot_git / "") f with
+      | Some (_, f) -> IO.lock_file (t.dot_git / "lock" / f)
+      | None        -> assert false
+    in
+    rec_files t.dot_git >>= fun files ->
+    (* slow, but we probably don't care *)
+    Lwt_list.iter_s (fun f -> IO.remove_file ~lock:(lock_file f) f) files
 
   (* Loose objects *)
   module Loose = struct
@@ -510,7 +531,7 @@ module Make (IO: IO) (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
 
   let references t =
     let refs = t.dot_git / "refs" in
-    IO.rec_files refs >>= fun files ->
+    rec_files refs >>= fun files ->
     let n = String.length (t.dot_git / "") in
     let refs = List.map (fun file ->
         let r = String.with_range file ~first:n in
@@ -537,11 +558,13 @@ module Make (IO: IO) (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
     let file = file_of_ref t r in
     IO.file_exists file
 
+  let lock_file t r = IO.lock_file (t.dot_git / "lock" / Git_reference.to_raw r)
+
   let remove_reference t r =
     let file = file_of_ref t r in
     Lwt.catch
-      (fun () -> IO.remove file)
-      (fun _ -> Lwt.return_unit)
+      (fun () -> IO.remove_file ~lock:(lock_file t r) file)
+      (fun _  -> Lwt.return_unit)
 
   let rec read_reference t r =
     let file = file_of_ref t r in
@@ -596,10 +619,22 @@ module Make (IO: IO) (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
     let file = t.dot_git / Git_reference.to_raw r in
     let contents = Git_hash.to_hex hash in
     let temp_dir = temp_dir t in
-    IO.write_file file ~temp_dir (Cstruct.of_string contents)
+    let lock = lock_file t r in
+    IO.write_file file ~temp_dir ~lock (Cstruct.of_string contents)
+
+  let test_and_set_reference t r ~test ~set =
+    let file = t.dot_git / Git_reference.to_raw r in
+    let temp_dir = temp_dir t in
+    let raw = function
+      | None -> None
+      | Some v -> Some (Cstruct.of_string (Git_hash.to_hex v))
+    in
+    let lock = lock_file t r in
+    IO.test_and_set_file file ~temp_dir ~lock ~test:(raw test) ~set:(raw set)
 
   let write_head t = function
-    | Git_reference.Hash h -> write_reference t Git_reference.head (Git_hash.of_commit h)
+    | Git_reference.Hash h ->
+      write_reference t Git_reference.head (Git_hash.of_commit h)
     | Git_reference.Ref  r ->
       let file = t.dot_git / "HEAD" in
       let contents = sprintf "ref: %s" (Git_reference.to_raw r) in
@@ -689,12 +724,12 @@ module Make (IO: IO) (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
               Log.debug (fun l ->
                   l "write (%d/10): Got %S, retrying."
                     (11-n) (Printexc.to_string e));
-              IO.remove file >>= fun () ->
+              IO.remove_file file >>= fun () ->
               write (n-1))
       in
       write 10 >>= fun () ->
       match mode with
-      | `Exec -> IO.chmod file 0o755
+      | `Exec -> IO.chmod file `Exec
       | _     -> Lwt.return_unit
 
   let index_file t = t.dot_git / "index"
@@ -714,7 +749,6 @@ module Make (IO: IO) (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
       Lwt.return (Index_IO.input buf)
 
   let entry_of_file_aux t index file mode h blob =
-    IO.realpath file >>= fun file ->
     Log.debug (fun l -> l "entry_of_file %a %s" Git_hash.Blob.pp h file);
     begin
       IO.file_exists file >>= function
@@ -788,7 +822,7 @@ module Make (IO: IO) (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
       Log.info (fun l -> l "Checking out files...");
       iter_blobs t ~init:head ~f:(fun (i,n) path mode h blob ->
           all := n;
-          let file = String.concat ~sep:Filename.dir_sep path in
+          let file = String.concat ~sep:Filename.dir_sep (t.root :: path) in
           Log.debug (fun l -> l "write_index: %d/%d blob:%s" i n file);
           entry_of_file t index file mode h blob >>= function
           | None   -> Lwt.return_unit

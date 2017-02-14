@@ -27,6 +27,30 @@ module type FS = sig
   val connect: unit -> t Lwt.t
 end
 
+module Lock = struct
+
+  module H = Hashtbl.Make(struct
+      type t = string
+      let equal = String.equal
+      let hash = Hashtbl.hash
+    end)
+
+  let locks = H.create 24
+
+  let file_lock file =
+    try H.find locks file
+    with Not_found ->
+      let l = Lwt_mutex.create () in
+      H.add locks file l;
+      l
+
+  let with_lock l f =
+    match l with
+    | None   -> f ()
+    | Some l -> Lwt_mutex.with_lock l f
+
+end
+
 module FS (FS: FS) (D: Git.Hash.DIGEST) (I: Git.Inflate.S) = struct
 
   let get_exn pp_exn = function
@@ -39,6 +63,10 @@ module FS (FS: FS) (D: Git.Hash.DIGEST) (I: Git.Inflate.S) = struct
   module IO = struct
 
     open Mirage_fs
+
+    type path = string
+    type lock = Lwt_mutex.t
+    let lock_file = Lock.file_lock
 
     let file_exists t f =
       Log.debug (fun l -> l "file_exists %s" f);
@@ -98,23 +126,6 @@ module FS (FS: FS) (D: Git.Hash.DIGEST) (I: Git.Inflate.S) = struct
                        (fun _ -> Lwt.return false)
                    ) dir
 
-    let rec remove t dir =
-      Log.debug (fun l -> l "remove %s" dir);
-      let destroy dir = FS.destroy t dir >>= get_fs_write_error in
-      files t dir                   >>= fun ls ->
-      Lwt_list.iter_s destroy ls    >>= fun () ->
-      directories t dir             >>= fun ds ->
-      Lwt_list.iter_s (remove t) ds >>= fun () ->
-      destroy dir
-
-    let rec_files t dir =
-      Log.debug (fun l -> l "rec_files %s" dir);
-      let rec aux accu dir =
-        directories t dir >>= fun ds ->
-        files t dir       >>= fun fs ->
-        Lwt_list.fold_left_s aux (fs @ accu) ds in
-      aux [] dir
-
     let read_file t file =
       Log.debug (fun l -> l "read_file %s" file);
       FS.stat t file >>= get_fs_error >>= fun s ->
@@ -125,27 +136,55 @@ module FS (FS: FS) (D: Git.Hash.DIGEST) (I: Git.Inflate.S) = struct
         Cstruct.of_string s
       | true -> Lwt.fail (Failure (Printf.sprintf "%s is a directory" file))
 
-    let write_file t ?temp_dir:_ file b =
+    let write_file ?lock t file b =
       Log.debug (fun l -> l "write_file %s" file);
       mkdir t (Filename.dirname file) >>= fun () ->
-      FS.create t file    >>= get_fs_write_error >>= fun () ->
-      FS.write t file 0 b >>= get_fs_write_error
+      Lock.with_lock lock (fun () ->
+          FS.create t file    >>= get_fs_write_error >>= fun () ->
+          FS.write t file 0 b >>= get_fs_write_error
+        )
 
-    let getcwd () = Lwt.return "/"
-    let realpath file = Lwt.return file
-    let chmod _t _file _perm = Lwt.return_unit
+    let remove_file ?lock t file =
+      Log.debug (fun l -> l "remove_file %s" file);
+      Lock.with_lock lock (fun () ->
+          FS.destroy t file >>= get_fs_write_error
+        )
+
+    let test_and_set_file ~lock t file ~test ~set =
+      Log.debug (fun l -> l "test_and_set_file %s" file);
+      mkdir t (Filename.dirname file) >>= fun () ->
+      Lock.with_lock (Some lock) (fun () ->
+          let set () =
+            (match set with
+             | None   -> remove_file t file
+             | Some v -> write_file t file v)
+            >|= fun () -> true
+          in
+          file_exists t file >>= function
+          | false -> if test = None then set () else Lwt.return_false
+          | true  ->
+            read_file t file >>= fun old ->
+            match test with
+            | Some x when Cstruct.equal old x -> set ()
+            | _ -> Lwt.return false
+        )
+
     let connect fn = FS.connect () >>= fn
     let mkdir dir = connect (fun t -> mkdir t dir)
-    let remove file = connect (fun t -> remove t file)
     let file_exists file = connect (fun t -> file_exists t file)
     let directories dir = connect (fun t -> directories t dir)
     let files dir = connect (fun t -> files t dir)
-    let rec_files dir = connect (fun t -> rec_files t dir)
     let read_file file = connect (fun t -> read_file t file)
-    let chmod file perm = connect (fun t -> chmod t file perm)
+    let chmod ?lock:_ _file _perm = connect (fun _t -> Lwt.return_unit)
 
-    let write_file file ?temp_dir buf =
-      connect (fun t -> write_file t ?temp_dir file buf)
+    let remove_file ?lock file =
+      connect (fun t -> remove_file ?lock t file)
+
+    let write_file ?temp_dir:_ ?lock file buf =
+      connect (fun t -> write_file t ?lock file buf)
+
+    let test_and_set_file ?temp_dir:_ ~lock file ~test ~set =
+      connect (fun t -> test_and_set_file t ~lock file ~test ~set)
 
     let stat_info _file = failwith "TODO"
 
