@@ -348,7 +348,8 @@ module Make (Store: Store.S) = struct
   let test_packs x () =
     if x.name = "FS" then
       let test () =
-        files "../test/data/" >>= fun files ->
+        let (/) = Filename.concat in
+        files (".."/"test"/"data") >>= fun files ->
         if files = [] then
           failwith "Please run that test in _build/";
         let files = List.filter (fun file ->
