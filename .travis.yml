@@ -3,13 +3,10 @@ install: wget https://raw.githubusercontent.com/ocaml/ocaml-travisci-skeleton/ma
 script: bash -ex .travis-opam.sh
 env:
   global:
-    - PACKAGE="git"
+    - EXTRA_REMOTES="https://github.com/mirage/mirage-dev.git"
+    - PINS="git.2.0.0:. git-http.2.0.0:. git-unix.2.0.0:. git-mirage.2.0.0:."
   matrix:
-    - OCAML_VERSION=4.02 TESTS=false
-    - OCAML_VERSION=4.03 TESTS=true
-      DEPOPTS="conduit cohttp camlzip nocrypto"
-    - OCAML_VERSION=4.03 TESTS=false
-      DEPOPTS="mirage-http mirage-flow mirage-types-lwt channel"
-    - OCAML_VERSION=4.04 TESTS=false
-      DEPOPTS="mirage-http mirage-flow mirage-types-lwt channel"
-    - OCAML_VERSION=4.03 TESTS=false REVDEPS=*
+    - OCAML_VERSION=4.02 PACKAGE="git-tests"
+    - OCAML_VERSION=4.03 PACKAGE="git-tests"
+    - OCAML_VERSION=4.04 PACKAGE="git-tests"
+    - OCAML_VERSION=4.03 PACKAGE="git" REVDEPS=*
