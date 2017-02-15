@@ -175,14 +175,16 @@ module Make (Store: Store.S) = struct
           files "." >>= fun files ->
           Git_unix.FS.create ~root () >>= fun t ->
           Lwt_list.map_s (fun file ->
-              Git_unix.FS.IO.read_file file >>= fun str ->
-              let blob = Blob.of_raw (Cstruct.to_string str) in
-              let sha1 = Hash.to_blob (Value_IO.name (Value.Blob blob)) in
-              let mode =
-                let p = (Unix.stat file).Unix.st_perm in
-                if p land 0o100 = 0o100 then `Exec else `Normal
-              in
-              Git_unix.FS.entry_of_file t Index.empty file mode sha1 blob
+              Git_unix.FS.IO.read_file file >>= function
+              | None     -> Alcotest.fail "empty read"
+              | Some str ->
+                let blob = Blob.of_raw (Cstruct.to_string str) in
+                let sha1 = Hash.to_blob (Value_IO.name (Value.Blob blob)) in
+                let mode =
+                  let p = (Unix.stat file).Unix.st_perm in
+                  if p land 0o100 = 0o100 then `Exec else `Normal
+                in
+                Git_unix.FS.entry_of_file t Index.empty file mode sha1 blob
             ) files >>= fun entries ->
           let entries = list_filter_map (fun x -> x) entries in
           let cache = Index.create entries in
@@ -216,10 +218,12 @@ let test_read_writes () =
     let rec read = function
       | 0 -> Lwt.return_unit
       | i ->
-        Git_unix.FS.IO.read_file file >>= fun r ->
-        Alcotest.(check string) "concurrent read/write"
-          (Cstruct.to_string payload) (Cstruct.to_string r);
-        read (i-1)
+        Git_unix.FS.IO.read_file file >>= function
+        | None   -> Alcotest.fail "no file"
+        | Some r ->
+          Alcotest.(check string) "concurrent read/write"
+            (Cstruct.to_string payload) (Cstruct.to_string r);
+          read (i-1)
     in
     write 1
     >>= fun () -> Lwt.join [ write 500; read 1000; write 1000; read 500; ]

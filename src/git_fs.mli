@@ -32,8 +32,8 @@ module type IO = sig
   val file_exists: path -> bool Lwt.t
   val directories: path -> string list Lwt.t
   val files: path -> string list Lwt.t
-  val read_file: path -> Cstruct.t Lwt.t
-  val stat_info: path -> Git_index.stat_info
+  val read_file: path -> Cstruct.t option Lwt.t
+  val stat_info: path -> Git_index.stat_info option Lwt.t
 
   (* Updates *)
 
@@ -46,6 +46,7 @@ module type IO = sig
   val test_and_set_file: ?temp_dir:path -> lock:lock ->
     path -> test:Cstruct.t option -> set:Cstruct.t option -> bool Lwt.t
   val remove_file: ?lock:lock -> path -> unit Lwt.t
+  val remove_dir: path -> unit Lwt.t
   val chmod: ?lock:lock -> path -> [`Exec] -> unit Lwt.t
 
 end

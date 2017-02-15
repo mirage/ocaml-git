@@ -134,13 +134,15 @@ module FS (FS: FS) (D: Git.Hash.DIGEST) (I: Git.Inflate.S) = struct
 
     let read_file t file =
       Log.debug (fun l -> l "read_file %s" file);
-      FS.stat t file >>= get_fs_error >>= fun s ->
-      is_directory t file >>= function
-      | false ->
-        FS.read t file 0 (Int64.to_int s.size) >>= get_fs_error >|= fun bs ->
-        let s = Cstruct.copyv bs in
-        Cstruct.of_string s
-      | true -> Lwt.fail (Failure (Printf.sprintf "%s is a directory" file))
+      FS.stat t file >>= function
+      | Error _ -> Lwt.return_none
+      | Ok s    ->
+        is_directory t file >>= function
+        | true -> Lwt.fail (Failure (Printf.sprintf "%s is a directory" file))
+        | false ->
+          FS.read t file 0 (Int64.to_int s.size) >|= function
+          | Error _ -> None
+          | Ok bs   -> Some (Cstruct.of_string (Cstruct.copyv bs))
 
     let write_file ?lock t file b =
       Log.debug (fun l -> l "write_file %s" file);
@@ -149,6 +151,10 @@ module FS (FS: FS) (D: Git.Hash.DIGEST) (I: Git.Inflate.S) = struct
           FS.create t file    >>= get_fs_write_error >>= fun () ->
           FS.write t file 0 b >>= get_fs_write_error
         )
+
+    let remove_dir t dir =
+      Log.debug (fun l -> l "remove_dir %s" dir);
+      FS.destroy t dir >>= get_fs_write_error
 
     let remove_file ?lock t file =
       Log.debug (fun l -> l "remove_file %s" file);
@@ -166,13 +172,11 @@ module FS (FS: FS) (D: Git.Hash.DIGEST) (I: Git.Inflate.S) = struct
              | Some v -> write_file t file v)
             >|= fun () -> true
           in
-          file_exists t file >>= function
-          | false -> if test = None then set () else Lwt.return_false
-          | true  ->
-            read_file t file >>= fun old ->
-            match test with
-            | Some x when Cstruct.equal old x -> set ()
-            | _ -> Lwt.return false
+          read_file t file >>= fun old ->
+          match old, test with
+          | None, None -> set ()
+          | Some old, Some x when Cstruct.equal old x -> set ()
+          | _ -> Lwt.return false
         )
 
     let connect fn = FS.connect () >>= fn
@@ -182,6 +186,7 @@ module FS (FS: FS) (D: Git.Hash.DIGEST) (I: Git.Inflate.S) = struct
     let files dir = connect (fun t -> files t dir)
     let read_file file = connect (fun t -> read_file t file)
     let chmod ?lock:_ _file _perm = connect (fun _t -> Lwt.return_unit)
+    let remove_dir dir = connect (fun t -> remove_dir t dir)
 
     let remove_file ?lock file =
       connect (fun t -> remove_file ?lock t file)

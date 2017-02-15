@@ -24,9 +24,9 @@ module LooseLog = (val Git_misc.src_log "fs-loose" : Logs.LOG)
 
 module ReferenceSet = Git_misc.Set(Git_reference)
 
-let fail fmt = Fmt.kstrf failwith ("Git.FS." ^^ fmt)
+let failf fmt = Fmt.kstrf failwith ("Git.FS." ^^ fmt)
 
-let err_not_found n k = fail "%s: %s not found" n k
+let err_not_found n k = failf "%s: %s not found" n k
 
 module Log = (val Git_misc.src_log "fs" : Logs.LOG)
 
@@ -39,8 +39,8 @@ module type IO = sig
   val file_exists: path -> bool Lwt.t
   val directories: path -> string list Lwt.t
   val files: path -> string list Lwt.t
-  val read_file: path -> Cstruct.t Lwt.t
-  val stat_info: path -> Git_index.stat_info
+  val read_file: path -> Cstruct.t option Lwt.t
+  val stat_info: path -> Git_index.stat_info option Lwt.t
 
   (* Updates *)
 
@@ -53,8 +53,8 @@ module type IO = sig
   val test_and_set_file: ?temp_dir:path -> lock:lock ->
     path -> test:Cstruct.t option -> set:Cstruct.t option -> bool Lwt.t
   val remove_file: ?lock:lock -> path -> unit Lwt.t
+  val remove_dir: path -> unit Lwt.t
   val chmod: ?lock:lock -> path -> [`Exec] -> unit Lwt.t
-
 end
 
 module type S = sig
@@ -75,7 +75,7 @@ module Make (IO: IO) (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
   module Packed_refs_IO = Git_packed_refs.IO(D)
 
   module File_cache : sig
-    val read : string -> Cstruct.t Lwt.t
+    val read : string -> Cstruct.t option Lwt.t
     val clear: unit -> unit
   end = struct
 
@@ -127,11 +127,11 @@ module Make (IO: IO) (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
 
     let read file =
       match find file with
-      | Some v -> Lwt.return v
+      | Some _ as v -> Lwt.return v
       | None ->
-        IO.read_file file >>= fun cs ->
-        add file cs;
-        Lwt.return cs
+        IO.read_file file >|= fun v ->
+        (match v with None -> () | Some cs -> add file cs);
+        v
 
   end
 
@@ -142,10 +142,11 @@ module Make (IO: IO) (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
   let level t = t.level
 
   let temp_dir t = t.dot_git / "tmp"
+  let lock_dir t = t.dot_git / "lock"
 
   let create ?(root="/tmp/ogit") ?dot_git ?(level=6) () =
     if level < 0 || level > 9 then
-      fail "create: level should be between 0 and 9";
+      failf "create: level should be between 0 and 9";
     let dot_git = match dot_git with
       | None    -> root / ".git"
       | Some s -> s
@@ -168,8 +169,13 @@ module Make (IO: IO) (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
       | None        -> assert false
     in
     rec_files t.dot_git >>= fun files ->
-    (* slow, but we probably don't care *)
+    (* remove all files with lock (in case someone else is writing
+       some stuff). Slow, but we probably don't care *)
     Lwt_list.iter_s (fun f -> IO.remove_file ~lock:(lock_file f) f) files
+    >>= fun () ->
+    (* remove .git *)
+    Log.warn (fun l -> l "removing %s" t.dot_git);
+    IO.remove_dir t.dot_git
 
   (* Loose objects *)
   module Loose = struct
@@ -224,16 +230,17 @@ module Make (IO: IO) (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
     let some x = Lwt.return (Some x)
 
     let value_of_file file =
-      File_cache.read file >>= fun buf ->
-      Mstruct.of_cstruct buf
-      |> Value_IO.input
-      |> some
+      File_cache.read file >|= function
+      | None     -> None
+      | Some buf -> Some (Value_IO.input (Mstruct.of_cstruct buf))
 
     let inflated_of_file file =
-      File_cache.read file >>= fun buf ->
-      match I.inflate (Mstruct.of_cstruct buf) with
-      | None   -> fail "%s is not a valid compressed file." file;
-      | Some s -> some (Mstruct.to_string s)
+      File_cache.read file >>= function
+      | None     -> Lwt.return None
+      | Some buf ->
+        match I.inflate (Mstruct.of_cstruct buf) with
+        | None   -> failf "%s is not a valid compressed file." file;
+        | Some s -> some (Mstruct.to_string s)
 
     let read_aux name read_file t h =
       Log.debug (fun l -> l "%s %a" name Git_hash.pp h);
@@ -243,10 +250,7 @@ module Make (IO: IO) (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
         | Some file -> read_file file
         | None      -> Lwt.return_none
       ) else (
-        let file = file t h in
-        IO.file_exists file >>= function
-        | false -> Lwt.return_none
-        | true  -> read_file file
+        read_file (file t h)
       )
     let read  = read_aux "read" value_of_file
     let read_inflated = read_aux "read_inflated" inflated_of_file
@@ -336,13 +340,12 @@ module Make (IO: IO) (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
         Lwt.return i
       | None ->
         let file = index t h in
-        IO.file_exists file >>= function
-        | true ->
-          File_cache.read file >>= fun buf ->
+        File_cache.read file >>= function
+        | None     -> failf "read_pack_index: %s does not exist" file
+        | Some buf ->
           let index = Pack_index.input (Cstruct.to_bigarray buf) in
           Git_lru.add index_lru h index;
           Lwt.return index
-        | false -> fail "read_pack_index: %s does not exist" file
 
     let write_pack_index t h idx =
       let file = index t h in
@@ -392,13 +395,12 @@ module Make (IO: IO) (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
         Lwt.return_none
       | Some _ ->
         let file = file t pack_hash in
-        IO.file_exists file >>= function
-        | true ->
-          File_cache.read file >>= fun buf ->
-          pack_read ~index (Mstruct.of_cstruct buf) h
-        | false ->
-          fail "read_in_pack: cannot read the pack object %s"
+        File_cache.read file >>= function
+        | Some buf -> pack_read ~index (Mstruct.of_cstruct buf) h
+        | None     ->
+          failf "read_in_pack: cannot read the pack object %s"
             (Git_hash.to_hex pack_hash)
+
 
     let read_aux read_in_pack t h =
       list t >>= fun packs ->
@@ -543,12 +545,11 @@ module Make (IO: IO) (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
       ) files in
     let packed_refs = packed_refs t in
     let packed_refs =
-      IO.file_exists packed_refs >>= function
-      | false -> Lwt.return_nil
-      | true  ->
-        IO.read_file packed_refs >>= fun buf ->
+      IO.read_file packed_refs >|= function
+      | None     -> []
+      | Some buf ->
         let pr = Packed_refs_IO.input (Mstruct.of_cstruct buf) in
-        Lwt.return (Git_packed_refs.references pr)
+        Git_packed_refs.references pr
     in
     packed_refs >|= fun packed_refs ->
     ReferenceSet.(
@@ -565,7 +566,7 @@ module Make (IO: IO) (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
 
   let file_of_ref t r = t.dot_git / raw_ref r
   let mem_reference t r = IO.file_exists (file_of_ref t r)
-  let lock_file t r = IO.lock_file (t.dot_git / "lock" / raw_ref r)
+  let lock_file t r = IO.lock_file (lock_dir t / raw_ref r)
 
   let remove_reference t r =
     let file = file_of_ref t r in
@@ -576,38 +577,34 @@ module Make (IO: IO) (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
 
   let rec read_reference t r =
     let file = file_of_ref t r in
-    IO.file_exists file >>= fun exists ->
-    if exists then
-      (* We use `IO.read_file` here as the contents of the file might
-         change. *)
-      IO.read_file file >>= fun buf ->
+    (* We use `IO.read_file` here as the contents of the file might
+       change. *)
+    IO.read_file file >>= function
+    | Some buf ->
       let str = Cstruct.to_string buf in
-      match Git_reference.head_contents_of_string ~of_hex:Hash_IO.of_hex str with
-      | Git_reference.Hash x -> Lwt.return (Some (Git_hash.of_commit x))
-      | Git_reference.Ref r -> read_reference t r
-    else
+      let r = Git_reference.head_contents_of_string ~of_hex:Hash_IO.of_hex str in
+      (match r with
+       | Git_reference.Hash x -> Lwt.return (Some (Git_hash.of_commit x))
+       | Git_reference.Ref r -> read_reference t r)
+    | None ->
       let packed_refs = packed_refs t in
-      IO.file_exists packed_refs >>= function
-      | false -> Lwt.return_none
-      | true  ->
-        (* We use `IO.read_file` here as the contents of the file
-           might change. *)
-        IO.read_file packed_refs >>= fun buf ->
+      (* We use `IO.read_file` here as the contents of the file
+         might change. *)
+      IO.read_file packed_refs >|= function
+      | None -> None
+      | Some buf ->
         let refs = Packed_refs_IO.input (Mstruct.of_cstruct buf) in
-        let h = Git_packed_refs.find refs r in
-        Lwt.return h
+        Git_packed_refs.find refs r
 
   let read_head t =
     let file = file_of_ref t Git_reference.head in
-    IO.file_exists file >>= function
-    | true ->
-      (* We use `IO.read_file` here as the contents of the file might
+    (* We use `IO.read_file` here as the contents of the file might
          change. *)
-      IO.read_file file >|= fun buf ->
+    IO.read_file file >|= function
+    | None     -> None
+    | Some buf ->
       let str = Cstruct.to_string buf in
       Some (Git_reference.head_contents_of_string ~of_hex:Hash_IO.of_hex str)
-    | false ->
-      Lwt.return None
 
   let read_reference_exn t r =
     read_reference t r >>= function
@@ -670,7 +667,7 @@ module Make (IO: IO) (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
     let blobs_c = ref 0 in
     let id = id () in
     let error expected got =
-      fail "load_filesystem: expecting a %s, got a %a"
+      failf "load_filesystem: expecting a %s, got a %a"
         expected Git_object_type.pp (Git_value.type_of got)
     in
     let blob mode h k =
@@ -711,7 +708,7 @@ module Make (IO: IO) (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
     Log.debug (fun l -> l "iter_blobs %a" Git_hash.Commit.pp init);
     iter (fun path (mode, (h, blob)) ->
         incr i;
-        f (!i, n) (t.root :: path) mode h blob
+        f (!i, n) path mode h blob
       ) trie
 
   let create_file t file mode blob =
@@ -747,14 +744,11 @@ module Make (IO: IO) (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
   let read_index t =
     Log.debug (fun l -> l "read_index");
     let file = index_file t in
-    IO.file_exists file >>= function
-    | false -> Lwt.return Git_index.empty
-    | true  ->
-      (* We use `IO.read_file` here as the contents of the file might
-         change. *)
-      IO.read_file file >>= fun buf ->
-      let buf = Mstruct.of_cstruct buf in
-      Lwt.return (Index_IO.input buf)
+    (* We use `IO.read_file` here as the contents of the file might
+       change. *)
+    IO.read_file file >|= function
+    | None     -> Git_index.empty
+    | Some buf -> Index_IO.input (Mstruct.of_cstruct buf)
 
   let entry_of_file_aux t index file mode h blob =
     Log.debug (fun l -> l "entry_of_file %a %s" Git_hash.Blob.pp h file);
@@ -767,7 +761,9 @@ module Make (IO: IO) (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
       | true  ->
         let entry =
           try
-            List.find (fun e -> t.root / e.Git_index.name = file) index.Git_index.entries
+            List.find (fun e ->
+                t.root / e.Git_index.name = file
+              ) index.Git_index.entries
             |> fun x -> Some x
           with Not_found ->
             None
@@ -784,27 +780,31 @@ module Make (IO: IO) (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
                 l "%s has an old version in the index, updating!" file);
             create_file t file mode blob
           ) else
-            let stats = IO.stat_info file in
-            if e.Git_index.stats <> stats then (
-              (* same thing here, usually Git just stops in that case. *)
-              Log.debug (fun l ->
-                  l "%s has been modified on the filesystem, reversing!" file);
-              create_file t file mode blob
-            ) else (
-              Log.debug (fun l ->
-                  l "%s: %s unchanged!" (Git_hash.Blob.to_hex h) file);
-              Lwt.return_unit
-            )
-    end >|= fun () ->
-    let id = h in
-    let stats = IO.stat_info file in
-    let stage = 0 in
-    let prefix = t.root / "" in
-    if not (String.is_prefix file ~affix:prefix) then None
-    else
-      let name = String.with_range file ~first:(String.length prefix) in
-      let entry = { Git_index.stats; id; stage; name } in
-      Some entry
+            IO.stat_info file >>= function
+            | None       -> Lwt.return_unit
+            | Some stats ->
+              if e.Git_index.stats <> stats then (
+                (* same thing here, usually Git just stops in that case. *)
+                Log.debug (fun l ->
+                    l "%s has been modified on the filesystem, reversing!" file);
+                create_file t file mode blob
+              ) else (
+                Log.debug (fun l ->
+                    l "%s: %s unchanged!" (Git_hash.Blob.to_hex h) file);
+                Lwt.return_unit
+              )
+    end >>= fun () ->
+    IO.stat_info file >|= function
+    | None       -> None
+    | Some stats ->
+      let id = h in
+      let stage = 0 in
+      let prefix = t.root / "" in
+      if not (String.is_prefix file ~affix:prefix) then None
+      else
+        let name = String.with_range file ~first:(String.length prefix) in
+        let entry = { Git_index.stats; id; stage; name } in
+        Some entry
 
   let entry_of_file t index file mode h blob =
     Lwt.catch

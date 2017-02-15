@@ -57,10 +57,10 @@ let command fmt =
     ) fmt
 
 let rmdir dir =
-    if Sys.os_type = "Win32" then
-      command "cmd /d /v:off /c rd /s /q %S" dir
-    else
-      command "rm -rf %S" dir
+  if Sys.os_type = "Win32" then
+    command "cmd /d /v:off /c rd /s /q %S" dir
+  else
+    command "rm -rf %S" dir
 
 module M = struct
 
