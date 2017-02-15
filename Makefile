@@ -33,7 +33,7 @@ pkg-%:
 	topkg opam pkg -n $*
 	mkdir -p $(PACKAGES)/$*
 	cp -r _build/$*.* $(PACKAGES)/$*/
-	rm $(PACKAGES)/$*/$*.opam
+	rm -f $(PACKAGES)/$*/$*.opam
 	cd $(PACKAGES) && git add $*
 
 opam-pkg:
