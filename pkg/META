@@ -31,7 +31,7 @@ package "top" (
 package "mirage" (
  description = "MirageOS backend for the Git protocol"
  version = "%%VERSION_NUM%%"
- requires = "git git.http mirage-types.lwt io-page conduit.mirage dns.mirage mirage-http mirage-flow channel"
+ requires = "git git.http mirage-types-lwt io-page conduit.mirage dns.mirage mirage-http mirage-flow channel"
  archive(byte) = "git-mirage.cma"
  plugin(byte) = "git-mirage.cma"
  archive(native) = "git-mirage.cmxa"

@@ -18,7 +18,7 @@ true: package(cstruct astring fmt hex logs lwt ocamlgraph re uri mstruct)
 <lib/http/*>: package(cohttp.lwt uri)
 <lib/unix/*>: package(cohttp.lwt lwt.unix conduit.lwt-unix zip nocrypto)
 
-<lib/mirage/*>: package(mirage-types.lwt io-page conduit.mirage dns.mirage)
+<lib/mirage/*>: package(mirage-types-lwt io-page conduit.mirage dns.mirage)
 <lib/mirage/*>: package(mirage-http mirage-flow channel)
 
 <bin/*>: package(cmdliner fmt.cli logs.fmt fmt.tty mtime.os lwt.unix)
