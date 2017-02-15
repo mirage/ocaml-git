@@ -1,3 +1,11 @@
+### 1.10.0 (2016-02-15)
+
+* Adapt to Mirage3 (@samoht, @avsm, @yomimono, @hannesm)
+* Add IO.test_and_set to automatically update references (#185, @samoht)
+* Better Windows support (#187, @samoht)
+  - unix: Translate Git references into valid Windows filenames
+  - fix/work-around upstream issues to make the tests pass on Windows
+
 ### 1.9.3 (2016-11-09)
 
 * Turn a bunch of info message into debug statements (#169, @samoht)
