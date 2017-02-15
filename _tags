@@ -3,19 +3,19 @@ true: warn_error(+1..49+60), warn(A-4-41-44)
 
 true: package(cstruct astring fmt hex logs lwt ocamlgraph re uri mstruct)
 
-<src-unix>: include
 <test/*>: package(alcotest logs.fmt mtime.os nocrypto)
 <test/*>: package(mirage-fs-unix io-page.unix)
-<test/*>: package(git git-mirage git-http result camlzip)
+<test/*>: package(result camlzip)
 
 <src-top/*>: package(compiler-libs.toplevel)
 
-<src-http/*>: package(git cohttp.lwt uri)
+<src-http/*>: package(cohttp.lwt uri)
 
-<src-unix/*>: package(git git-http lwt.unix conduit.lwt-unix camlzip nocrypto)
+<src-unix/*>: package(lwt.unix conduit.lwt-unix camlzip nocrypto)
 <src-unix/ogit.*>: package(cmdliner fmt.cli logs.fmt fmt.tty mtime.os lwt.unix)
 <src-unix/ogit.*>: package(logs.cli)
 
 <src-mirage/*>: package(mirage-flow-lwt mirage-channel-lwt mirage-fs-lwt)
-<src-mirage/*>: package(conduit.mirage result)
-<src-mirage/*>: package(git git-http mirage-http)
+<src-mirage/*>: package(conduit.mirage result mirage-http)
+<test/test_mirage.*>: package(mirage-flow-lwt mirage-channel-lwt)
+<test/test_mirage.*>: package(mirage-channel-lwt conduit.mirage mirage-http)

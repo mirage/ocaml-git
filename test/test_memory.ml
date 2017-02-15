@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Test_store
+open Test_common
 
 module Memory = Git.Memory.Make(Git_unix.SHA1)(Git_unix.Zlib)
 
