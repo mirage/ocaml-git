@@ -24,3 +24,19 @@ clean:
 	ocaml pkg/pkg.ml clean -n git-http
 	ocaml pkg/pkg.ml clean -n git-mirage
 	ocaml pkg/pkg.ml clean -n git-unix
+
+REPO=../opam-repository
+PACKAGES=$(REPO)/packages
+
+# until we have https://github.com/ocaml/opam-publish/issues/38
+pkg-%:
+	topkg opam pkg -n $*
+	mkdir -p $(PACKAGES)/$*
+	cp -r _build/$*.* $(PACKAGES)/$*/
+	cd $(PACKAGES) && git add $*
+
+opam-pkg:
+	$(MAKE) pkg-git
+	$(MAKE) pkg-git-http
+	$(MAKE) pkg-git-mirage
+	$(MAKE) pkg-git-unix
