@@ -47,12 +47,12 @@ List the subdirs.<br>
 List the subfiles. The result filenames are absolute.<br>
 </div>
 
-<pre><span id="VALread_file"><span class="keyword">val</span> read_file</span> : <code class="type"><a href="Git.FS.IO.html#TYPEpath">path</a> -> Cstruct.t Lwt.t</code></pre><div class="info ">
+<pre><span id="VALread_file"><span class="keyword">val</span> read_file</span> : <code class="type"><a href="Git.FS.IO.html#TYPEpath">path</a> -> Cstruct.t option Lwt.t</code></pre><div class="info ">
 Read a file and return a mutable C-like structure with its
-        contents.<br>
+        contents. Return <code class="code"><span class="constructor">None</span></code> is the file does not exist.<br>
 </div>
 
-<pre><span id="VALstat_info"><span class="keyword">val</span> stat_info</span> : <code class="type"><a href="Git.FS.IO.html#TYPEpath">path</a> -> <a href="Git.Index.html#TYPEstat_info">Git.Index.stat_info</a></code></pre><div class="info ">
+<pre><span id="VALstat_info"><span class="keyword">val</span> stat_info</span> : <code class="type"><a href="Git.FS.IO.html#TYPEpath">path</a> -> <a href="Git.Index.html#TYPEstat_info">Git.Index.stat_info</a> option Lwt.t</code></pre><div class="info ">
 Return the stats of the given file.<br>
 </div>
 <br>
@@ -89,6 +89,12 @@ Atomic update of file contents. <code class="code">temp_dir</code> can be used t
 
 <pre><span id="VALremove_file"><span class="keyword">val</span> remove_file</span> : <code class="type">?lock:<a href="Git.FS.IO.html#TYPElock">lock</a> -> <a href="Git.FS.IO.html#TYPEpath">path</a> -> unit Lwt.t</code></pre><div class="info ">
 Remove a file. Atomicity is guaranteed if <code class="code">lock</code> is provided.<br>
+</div>
+
+<pre><span id="VALremove_dir"><span class="keyword">val</span> remove_dir</span> : <code class="type"><a href="Git.FS.IO.html#TYPEpath">path</a> -> unit Lwt.t</code></pre><div class="info ">
+Remove a directory, recursively. All the files it contains
+        will be deleted, without taking any lock, so use <code class="code">remove_file</code>
+        recursively first for atomicity guarantees.<br>
 </div>
 
 <pre><span id="VALchmod"><span class="keyword">val</span> chmod</span> : <code class="type">?lock:<a href="Git.FS.IO.html#TYPElock">lock</a> -> <a href="Git.FS.IO.html#TYPEpath">path</a> -> [ `Exec ] -> unit Lwt.t</code></pre><div class="info ">
