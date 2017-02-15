@@ -54,10 +54,16 @@ let mkdir dirname =
     ) in
   Lwt_pool.use mkdir_pool (fun () -> aux dirname)
 
+let file_exists f =
+  Lwt.catch (fun () -> Lwt_unix.file_exists f) (function
+      (* See https://github.com/ocsigen/lwt/issues/316 *)
+      | Unix.Unix_error (Unix.ENOTDIR, _, _) -> Lwt.return_false
+      | e -> Lwt.fail e)
+
 module Lock = struct
 
   let is_stale max_age file =
-    Lwt_unix.file_exists file >>= fun exists ->
+    file_exists file >>= fun exists ->
     if exists then (
       Lwt.catch (fun () ->
           Lwt_unix.stat file >>= fun s ->
@@ -243,6 +249,8 @@ module IO_FS = struct
   type lock = path
   let lock_file x = x
 
+  let file_exists = file_exists
+
   let list_files kind dir =
     if Sys.file_exists dir && Sys.is_directory dir then
       let d = Sys.readdir dir in
@@ -386,21 +394,14 @@ module IO_FS = struct
         | Sys_error _ | Unix.Unix_error _ -> Lwt.return_none
         | e -> Lwt.fail e)
 
-  let file_exists f = Lwt_unix.file_exists f
-
   let chmod ?lock f `Exec =
     Lock.with_lock lock (fun () -> Lwt_unix.chmod f 0o755)
 
-  let write_file ?temp_dir ?lock file b =
-    Lock.with_lock lock (fun () ->
-        with_write_file file ?temp_dir (fun fd -> write_cstruct fd b)
-      )
-
   let command fmt =
     Printf.ksprintf (fun str ->
-        Log.debug (fun l -> l "[exec] %s\n%!" str);
+        Log.debug (fun l -> l "[exec] %s" str);
         let i = Sys.command str in
-        if i <> 0 then Log.debug (fun l -> l "[exec] error %d\n%!" i);
+        if i <> 0 then Log.debug (fun l -> l "[exec] error %d" i);
         Lwt.return_unit
       ) fmt
 
@@ -418,6 +419,17 @@ module IO_FS = struct
             | Unix.Unix_error (Unix.EISDIR, _, _) -> remove_dir file
             | Unix.Unix_error (Unix.ENOENT, _, _) -> Lwt.return_unit
             | e -> Lwt.fail e)
+      )
+
+  let write_file ?temp_dir ?lock file b =
+    let write () =
+      with_write_file file ?temp_dir (fun fd -> write_cstruct fd b)
+    in
+    Lock.with_lock lock (fun () ->
+        Lwt.catch write (function
+            | Unix.Unix_error (Unix.EISDIR, _, _) -> remove_dir file >>= write
+            | e -> Lwt.fail e
+          )
       )
 
   let test_and_set_file ?temp_dir ~lock file ~test ~set =
