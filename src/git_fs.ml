@@ -708,7 +708,7 @@ module Make (IO: IO) (D: Git_hash.DIGEST) (I: Git_inflate.S) = struct
     Log.debug (fun l -> l "iter_blobs %a" Git_hash.Commit.pp init);
     iter (fun path (mode, (h, blob)) ->
         incr i;
-        f (!i, n) (t.root :: path) mode h blob
+        f (!i, n) path mode h blob
       ) trie
 
   let create_file t file mode blob =
