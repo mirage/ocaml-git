@@ -5,6 +5,8 @@
 * Better Windows support (#187, @samoht)
   - unix: Translate Git references into valid Windows filenames
   - fix/work-around upstream issues to make the tests pass on Windows
+* Split the package into 4 packages: `git`, `git-http`, `git-unix` and
+  `git-mirage` (#189, @samoht)
 
 ### 1.9.3 (2016-11-09)
 
