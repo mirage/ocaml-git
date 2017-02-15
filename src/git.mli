@@ -1434,11 +1434,11 @@ module FS: sig
     val files: path -> string list Lwt.t
     (** List the subfiles. The result filenames are absolute. *)
 
-    val read_file: path -> Cstruct.t Lwt.t
+    val read_file: path -> Cstruct.t option Lwt.t
     (** Read a file and return a mutable C-like structure with its
-        contents. *)
+        contents. Return [None] is the file does not exist. *)
 
-    val stat_info: path -> Index.stat_info
+    val stat_info: path -> Index.stat_info option Lwt.t
     (** Return the stats of the given file. *)
 
     (** {1 Write Operations} *)
@@ -1469,6 +1469,11 @@ module FS: sig
 
     val remove_file: ?lock:lock -> path -> unit Lwt.t
     (** Remove a file. Atomicity is guaranteed if [lock] is provided. *)
+
+    val remove_dir: path -> unit Lwt.t
+    (** Remove a directory, recursively. All the files it contains
+        will be deleted, without taking any lock, so use [remove_file]
+        recursively first for atomicity guarantees. *)
 
     val chmod: ?lock:lock -> path -> [`Exec ] -> unit Lwt.t
     (** Change the file mode to exec mode. Atomicity is guaranteed if

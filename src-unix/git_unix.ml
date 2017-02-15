@@ -335,17 +335,21 @@ module IO_FS = struct
     Lwt.return (Cstruct.of_bigarray ba)
 
   let read_file file =
-    Unix.handle_unix_error (fun () ->
+    Lwt.catch (fun () ->
         Lwt_pool.use openfile_pool (fun () ->
             Log.debug (fun l -> l "Reading %s" file);
             Lwt_unix.stat file >>= fun stats ->
             let size = stats.Lwt_unix.st_size in
-            if size >= mmap_threshold then read_file_with_mmap file
-            else read_file_with_read file size
+            (if size >= mmap_threshold then read_file_with_mmap file
+             else read_file_with_read file size
+            ) >|= fun buf ->
+            Some buf
           )
-    ) ()
+      ) (function
+        | Unix.Unix_error _ | Sys_error _ -> Lwt.return_none
+        | e -> Lwt.fail e)
 
-  let stat_info path =
+  let stat_info_unsafe path =
     let open Index in
     let stats = Unix.stat path in
     let ctime = { lsb32 = Int32.of_float stats.Unix.st_ctime; nsec = 0l } in
@@ -377,6 +381,11 @@ module IO_FS = struct
     let size = Int32.of_int stats.Unix.st_size in
     { ctime; mtime; dev; inode; uid; gid; mode; size }
 
+  let stat_info path =
+    Lwt.catch (fun () -> Lwt.return (Some (stat_info_unsafe path))) (function
+        | Sys_error _ | Unix.Unix_error _ -> Lwt.return_none
+        | e -> Lwt.fail e)
+
   let file_exists f = Lwt_unix.file_exists f
 
   let chmod ?lock f `Exec =
@@ -387,17 +396,33 @@ module IO_FS = struct
         with_write_file file ?temp_dir (fun fd -> write_cstruct fd b)
       )
 
+  let command fmt =
+    Printf.ksprintf (fun str ->
+        Log.debug (fun l -> l "[exec] %s\n%!" str);
+        let i = Sys.command str in
+        if i <> 0 then Log.debug (fun l -> l "[exec] error %d\n%!" i);
+        Lwt.return_unit
+      ) fmt
+
+  let remove_dir dir =
+    if Sys.os_type = "Win32" then
+      command "cmd /d /v:off /c rd /s /q %S" dir
+    else
+      command "rm -rf %S" dir
+
   let remove_file ?lock file =
     Lock.with_lock lock (fun () ->
-        try Lwt_unix.unlink file with _ -> Lwt.return_unit
+        Lwt.catch
+          (fun () -> Lwt_unix.unlink file)
+          (function
+            | Unix.Unix_error (Unix.EISDIR, _, _) -> remove_dir file
+            | Unix.Unix_error (Unix.ENOENT, _, _) -> Lwt.return_unit
+            | e -> Lwt.fail e)
       )
 
   let test_and_set_file ?temp_dir ~lock file ~test ~set =
     Lock.with_lock (Some lock) (fun () ->
-        (Lwt_unix.file_exists file >>= function
-          | false -> Lwt.return_none
-          | true  -> read_file file >|= fun v -> Some v)
-        >>= fun v ->
+        read_file file >>= fun v ->
         let equal = match test, v with
           | None  , None   -> true
           | Some x, Some y -> Cstruct.equal x y
