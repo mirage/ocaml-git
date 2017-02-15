@@ -1,0 +1,8 @@
+description = "MirageOS backend for the Git protocol"
+version = "%%VERSION_NUM%%"
+requires = "git git-http io-page conduit.mirage dns.mirage mirage-http mirage-flow mirage-channel-lwt"
+archive(byte) = "git-mirage.cma"
+plugin(byte) = "git-mirage.cma"
+archive(native) = "git-mirage.cmxa"
+plugin(native) = "git-mirage.cmxs"
+exists_if = "git-mirage.cma"

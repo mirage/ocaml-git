@@ -1,5 +1,10 @@
-PKG cstruct logs ocamlgraph re zip uri lwt mstruct cmdliner mirage-types
-PKG nocrypto hex cohttp.lwt mirage-flow tcpip mirage-http alcotest fmt
-PKG mirage-fs-unix astring mtime.os
+PKG cstruct logs ocamlgraph re zip uri lwt mstruct cmdliner mirage-fs-lwt
+PKG nocrypto hex cohttp.lwt mirage-flow-lwt tcpip mirage-http alcotest fmt
+PKG mirage-fs-unix astring mtime.os mirage-channel-lwt git git-unix
 B _build/**
-S lib/
+S src/
+S src-top/
+S src-mirage/
+S src-http/
+S src-unix/
+S test/

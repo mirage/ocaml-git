@@ -1,25 +1,21 @@
-true: bin_annot, debug, safe_string
-true: warn_error(+1..49), warn(A-4-41-44)
-true: short_paths
+true: short_paths, safe_string, package(bytes)
+true: warn_error(+1..49+60), warn(A-4-41-44)
 
 true: package(cstruct astring fmt hex logs lwt ocamlgraph re uri mstruct)
 
-<lib>: include
-<lib/http>: include
-<lib/unix>: include
-<lib/mirage>: include
+<test/*>: package(alcotest logs.fmt mtime.os nocrypto)
+<test/*>: package(mirage-fs-unix io-page.unix)
+<test/*>: package(result camlzip)
 
-<lib_test/*>: package(alcotest logs.fmt mtime.os nocrypto)
-<lib_test/*>: package(mirage-fs-unix io-page.unix)
-<lib_test/*>: package(cohttp.lwt conduit.lwt-unix zip nocrypto logs.cli)
-<lib_test/*>: package(conduit.mirage dns.mirage mirage-http mirage-flow channel)
+<src-top/*>: package(compiler-libs.toplevel)
 
-<lib/top/*>: package(compiler-libs.toplevel)
-<lib/http/*>: package(cohttp.lwt uri)
-<lib/unix/*>: package(cohttp.lwt lwt.unix conduit.lwt-unix zip nocrypto)
+<src-http/*>: package(cohttp.lwt uri)
 
-<lib/mirage/*>: package(mirage-types.lwt io-page conduit.mirage dns.mirage)
-<lib/mirage/*>: package(mirage-http mirage-flow channel)
+<src-unix/*>: package(lwt.unix conduit.lwt-unix camlzip nocrypto)
+<src-unix/ogit.*>: package(cmdliner fmt.cli logs.fmt fmt.tty mtime.os lwt.unix)
+<src-unix/ogit.*>: package(logs.cli)
 
-<bin/*>: package(cmdliner fmt.cli logs.fmt fmt.tty mtime.os lwt.unix)
-<bin/*>: package(cohttp.lwt conduit.lwt-unix zip nocrypto logs.cli)
+<src-mirage/*>: package(mirage-flow-lwt mirage-channel-lwt mirage-fs-lwt)
+<src-mirage/*>: package(conduit.mirage result mirage-http)
+<test/test_mirage.*>: package(mirage-flow-lwt mirage-channel-lwt)
+<test/test_mirage.*>: package(mirage-channel-lwt conduit.mirage mirage-http)
