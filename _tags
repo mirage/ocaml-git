@@ -11,11 +11,11 @@ true: package(cstruct astring fmt hex logs lwt ocamlgraph re uri mstruct)
 
 <src-http/*>: package(cohttp.lwt uri)
 
-<src-unix/*>: package(lwt.unix conduit.lwt-unix camlzip nocrypto)
+<src-unix/*>: package(lwt.unix conduit.lwt-unix camlzip nocrypto git)
 <src-unix/ogit.*>: package(cmdliner fmt.cli logs.fmt fmt.tty mtime.os lwt.unix)
 <src-unix/ogit.*>: package(logs.cli)
 
-<src-mirage/*>: package(mirage-flow-lwt mirage-channel-lwt mirage-fs-lwt)
+<src-mirage/*>: package(mirage-flow-lwt mirage-channel-lwt mirage-fs-lwt git)
 <src-mirage/*>: package(conduit.mirage result mirage-http)
 <test/test_mirage.*>: package(mirage-flow-lwt mirage-channel-lwt)
 <test/test_mirage.*>: package(mirage-channel-lwt conduit.mirage mirage-http)

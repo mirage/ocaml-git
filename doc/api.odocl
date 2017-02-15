@@ -1,4 +1,4 @@
-Git
-Git_unix
-Git_mirage
-Git_http
+src/Git
+src-unix/Git_unix
+src-mirage/Git_mirage
+src-http/Git_http
