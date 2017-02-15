@@ -2,6 +2,7 @@
 <head>
 <link rel="stylesheet" href="style.css" type="text/css">
 <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="Start" href="index.html">
 <link title="Index of types" rel=Appendix href="index_types.html">
 <link title="Index of exceptions" rel=Appendix href="index_exceptions.html">
@@ -71,7 +72,7 @@ Append the inflated representation of a packed value to a given
 <tr><td align="left"><br>B</td></tr>
 <tr><td><a href="Git.Hash.Array.html#VALbinary_search">binary_search</a> [<a href="Git.Hash.Array.html">Git.Hash.Array</a>]</td>
 <td><div class="info">
-<code class="code">binary_search buf h</code> binary searches through the sorted array
+<code class="code">binary_search&nbsp;buf&nbsp;h</code> binary searches through the sorted array
         of hashes stored in <code class="code">buf</code>.
 </div>
 </td></tr>
@@ -88,7 +89,7 @@ Get the pack buffer.
 <tr><td align="left"><br>C</td></tr>
 <tr><td><a href="Git.FS.IO.html#VALchmod">chmod</a> [<a href="Git.FS.IO.html">Git.FS.IO</a>]</td>
 <td><div class="info">
-Change the file mode.
+Change the file mode to exec mode.
 </div>
 </td></tr>
 <tr><td><a href="Git.FS.S.html#VALclear">clear</a> [<a href="Git.FS.S.html">Git.FS.S</a>]</td>
@@ -227,7 +228,7 @@ Compare head contents.
 <tr><td align="left"><br>F</td></tr>
 <tr><td><a href="Git.Sync.S.html#VALfetch">fetch</a> [<a href="Git.Sync.S.html">Git.Sync.S</a>]</td>
 <td><div class="info">
-<code class="code">fetch t uri</code> fetches the contents of <code class="code">uri</code> into the store <code class="code">t</code>.
+<code class="code">fetch&nbsp;t&nbsp;uri</code> fetches the contents of <code class="code">uri</code> into the store <code class="code">t</code>.
 </div>
 </td></tr>
 <tr><td><a href="Git.FS.IO.html#VALfile_exists">file_exists</a> [<a href="Git.FS.IO.html">Git.FS.IO</a>]</td>
@@ -242,12 +243,12 @@ List the subfiles.
 </td></tr>
 <tr><td><a href="Git.Search.Make.html#VALfind">find</a> [<a href="Git.Search.Make.html">Git.Search.Make</a>]</td>
 <td><div class="info">
-<code class="code">find t s p</code> follows the path <code class="code">p</code> from <code class="code">s</code> in <code class="code">t</code>.
+<code class="code">find&nbsp;t&nbsp;s&nbsp;p</code> follows the path <code class="code">p</code> from <code class="code">s</code> in <code class="code">t</code>.
 </div>
 </td></tr>
 <tr><td><a href="Git.Packed_refs.html#VALfind">find</a> [<a href="Git.Packed_refs.html">Git.Packed_refs</a>]</td>
 <td><div class="info">
-<code class="code">find t r</code> is <code class="code">r</code>'s hash in <code class="code">t</code>.
+<code class="code">find&nbsp;t&nbsp;r</code> is <code class="code">r</code>'s hash in <code class="code">t</code>.
 </div>
 </td></tr>
 <tr><td><a href="Git.Value.Cache.html#VALfind">find</a> [<a href="Git.Value.Cache.html">Git.Value.Cache</a>]</td>
@@ -285,12 +286,7 @@ Flush the channel.
 <tr><td align="left"><br>G</td></tr>
 <tr><td><a href="Git.Hash.Array.html#VALget">get</a> [<a href="Git.Hash.Array.html">Git.Hash.Array</a>]</td>
 <td><div class="info">
-<code class="code">get buf n</code> is the <code class="code">n</code>-th hash in the buffer <code class="code">buf</code>.
-</div>
-</td></tr>
-<tr><td><a href="Git.FS.IO.html#VALgetcwd">getcwd</a> [<a href="Git.FS.IO.html">Git.FS.IO</a>]</td>
-<td><div class="info">
-Get the current working directory.
+<code class="code">get&nbsp;buf&nbsp;n</code> is the <code class="code">n</code>-th hash in the buffer <code class="code">buf</code>.
 </div>
 </td></tr>
 <tr><td align="left"><br>H</td></tr>
@@ -301,12 +297,12 @@ Hash an object.
 </td></tr>
 <tr><td><a href="Git.Sync.Result.html#VALhashes">hashes</a> [<a href="Git.Sync.Result.html">Git.Sync.Result</a>]</td>
 <td><div class="info">
-<code class="code">hashes f</code> are <code class="code">f</code>'s object hashes.
+<code class="code">hashes&nbsp;f</code> are <code class="code">f</code>'s object hashes.
 </div>
 </td></tr>
 <tr><td><a href="Git.Sync.Result.html#VALhead">head</a> [<a href="Git.Sync.Result.html">Git.Sync.Result</a>]</td>
 <td><div class="info">
-<code class="code">head f</code> is <code class="code">f</code>'s head commit.
+<code class="code">head&nbsp;f</code> is <code class="code">f</code>'s head commit.
 </div>
 </td></tr>
 <tr><td><a href="Git.Reference.html#VALhead">head</a> [<a href="Git.Reference.html">Git.Reference</a>]</td>
@@ -316,7 +312,7 @@ The repository HEAD.
 </td></tr>
 <tr><td><a href="Git.Sync.Result.html#VALhead_contents">head_contents</a> [<a href="Git.Sync.Result.html">Git.Sync.Result</a>]</td>
 <td><div class="info">
-<code class="code">head_contents f</code> is <code class="code">f</code>'s head contents (the value of the
+<code class="code">head_contents&nbsp;f</code> is <code class="code">f</code>'s head contents (the value of the
         remote <i>.git/HEAD</i>).
 </div>
 </td></tr>
@@ -354,7 +350,7 @@ Inflate an mstruct.
 <td></td></tr>
 <tr><td><a href="Git.Pack.IO.Raw.html#VALinput">input</a> [<a href="Git.Pack.IO.Raw.html">Git.Pack.IO.Raw</a>]</td>
 <td><div class="info">
-<code class="code">input ~read buf</code> is the raw pack and raw index obtained by
+<code class="code">input&nbsp;~read&nbsp;buf</code> is the raw pack and raw index obtained by
           reading the buffer <code class="code">buf</code>.
 </div>
 </td></tr>
@@ -377,7 +373,7 @@ Build a value from an inflated contents.
 </td></tr>
 <tr><td><a href="Git.Pack.Raw.html#VALinput_header">input_header</a> [<a href="Git.Pack.Raw.html">Git.Pack.Raw</a>]</td>
 <td><div class="info">
-<code class="code">input_head buf</code> reads the pack <code class="code">version</code> number (could be 2 or
+<code class="code">input_head&nbsp;buf</code> reads the pack <code class="code">version</code> number (could be 2 or
         3) and the <code class="code">count</code> of packed values in the pack file.
 </div>
 </td></tr>
@@ -420,7 +416,7 @@ Check if a reference can be stored on disk properly.
 <tr><td align="left"><br>K</td></tr>
 <tr><td><a href="Git.Graph.Make.html#VALkeys">keys</a> [<a href="Git.Graph.Make.html">Git.Graph.Make</a>]</td>
 <td><div class="info">
-<code class="code">keys g</code> is a topological sort of <code class="code">g</code>'s keys.
+<code class="code">keys&nbsp;g</code> is a topological sort of <code class="code">g</code>'s keys.
 </div>
 </td></tr>
 <tr><td><a href="Git.Pack.Raw.html#VALkeys">keys</a> [<a href="Git.Pack.Raw.html">Git.Pack.Raw</a>]</td>
@@ -435,7 +431,7 @@ Return the keys present in the pack.
 </td></tr>
 <tr><td><a href="Git.Pack_index.Make.html#VALkeys">keys</a> [<a href="Git.Pack_index.Make.html">Git.Pack_index.Make</a>]</td>
 <td><div class="info">
-<code class="code">keys t</code> is the list of hash keys present in <code class="code">t</code>.
+<code class="code">keys&nbsp;t</code> is the list of hash keys present in <code class="code">t</code>.
 </div>
 </td></tr>
 <tr><td><a href="Git.Pack_index.Raw.html#VALkeys">keys</a> [<a href="Git.Pack_index.Raw.html">Git.Pack_index.Raw</a>]</td>
@@ -452,12 +448,12 @@ The kind of backend.
 </td></tr>
 <tr><td><a href="Git.Packed_value.PIC.html#VALkind">kind</a> [<a href="Git.Packed_value.PIC.html">Git.Packed_value.PIC</a>]</td>
 <td><div class="info">
-<code class="code">kind t</code> is <code class="code">t</code>'s kind.
+<code class="code">kind&nbsp;t</code> is <code class="code">t</code>'s kind.
 </div>
 </td></tr>
 <tr><td><a href="Git.Packed_value.html#VALkind">kind</a> [<a href="Git.Packed_value.html">Git.Packed_value</a>]</td>
 <td><div class="info">
-<code class="code">kind t</code> is <code class="code">t</code>'s kind.
+<code class="code">kind&nbsp;t</code> is <code class="code">t</code>'s kind.
 </div>
 </td></tr>
 <tr><td align="left"><br>L</td></tr>
@@ -465,7 +461,7 @@ The kind of backend.
 <td></td></tr>
 <tr><td><a href="Git.Hash.Array.html#VALlength">length</a> [<a href="Git.Hash.Array.html">Git.Hash.Array</a>]</td>
 <td><div class="info">
-<code class="code">length v</code> is the number of hashes store in <code class="code">t</code>.
+<code class="code">length&nbsp;v</code> is the number of hashes store in <code class="code">t</code>.
 </div>
 </td></tr>
 <tr><td><a href="Git.Pack_index.Raw.html#VALlengths">lengths</a> [<a href="Git.Pack_index.Raw.html">Git.Pack_index.Raw</a>]</td>
@@ -482,13 +478,20 @@ The compression <code class="code">level</code> used when creating new Git objec
 </td></tr>
 <tr><td><a href="Git.Hash.Array.html#VALlinear_search">linear_search</a> [<a href="Git.Hash.Array.html">Git.Hash.Array</a>]</td>
 <td><div class="info">
-<code class="code">linear_search buf h</code> iterates through the hashes stored in the
+<code class="code">linear_search&nbsp;buf&nbsp;h</code> iterates through the hashes stored in the
         buffer <code class="code">buf</code>.
 </div>
 </td></tr>
 <tr><td><a href="Git.Store.S.html#VALlist">list</a> [<a href="Git.Store.S.html">Git.Store.S</a>]</td>
 <td><div class="info">
 Return the list of Hash names.
+</div>
+</td></tr>
+<tr><td><a href="Git.FS.IO.html#VALlock_file">lock_file</a> [<a href="Git.FS.IO.html">Git.FS.IO</a>]</td>
+<td><div class="info">
+<code class="code">lock_file&nbsp;f</code> is the lock associated to the file <code class="code">f</code>, which is
+        hold when <a href="Git.FS.IO.html#VALtest_and_set_file"><code class="code"><span class="constructor">Git</span>.<span class="constructor">FS</span>.<span class="constructor">IO</span>.test_and_set_file</code></a>, <code class="code">set_file</code> and <a href="Git.FS.IO.html#VALremove_file"><code class="code"><span class="constructor">Git</span>.<span class="constructor">FS</span>.<span class="constructor">IO</span>.remove_file</code></a>
+        are called (if provided to the function calls).
 </div>
 </td></tr>
 <tr><td><a href="Git.Sync.S.html#VALls">ls</a> [<a href="Git.Sync.S.html">Git.Sync.S</a>]</td>
@@ -511,7 +514,7 @@ The master branch.
 </td></tr>
 <tr><td><a href="Git.Search.Make.html#VALmem">mem</a> [<a href="Git.Search.Make.html">Git.Search.Make</a>]</td>
 <td><div class="info">
-<code class="code">mem t s p</code> check wether there exists a path <code class="code">p</code> from <code class="code">s</code> in
+<code class="code">mem&nbsp;t&nbsp;s&nbsp;p</code> check wether there exists a path <code class="code">p</code> from <code class="code">s</code> in
         <code class="code">t</code>.
 </div>
 </td></tr>
@@ -532,7 +535,7 @@ Check if a reference exists.
 </td></tr>
 <tr><td><a href="Git.FS.IO.html#VALmkdir">mkdir</a> [<a href="Git.FS.IO.html">Git.FS.IO</a>]</td>
 <td><div class="info">
-Create a directory (and the parent dirs if needed).
+Create a directory.
 </div>
 </td></tr>
 <tr><td align="left"><br>N</td></tr>
@@ -543,7 +546,7 @@ Get the name of the pack.
 </td></tr>
 <tr><td><a href="Git.Packed_value.PIC.html#VALname">name</a> [<a href="Git.Packed_value.PIC.html">Git.Packed_value.PIC</a>]</td>
 <td><div class="info">
-<code class="code">name t</code> is <code class="code">t</code>'s name.
+<code class="code">name&nbsp;t</code> is <code class="code">t</code>'s name.
 </div>
 </td></tr>
 <tr><td><a href="Git.Value.IO.html#VALname">name</a> [<a href="Git.Value.IO.html">Git.Value.IO</a>]</td>
@@ -589,7 +592,7 @@ Transform a raw pack file into a position-independant pack
 </td></tr>
 <tr><td><a href="Git.Packed_value.PIC.html#VALof_raw">of_raw</a> [<a href="Git.Packed_value.PIC.html">Git.Packed_value.PIC</a>]</td>
 <td><div class="info">
-<code class="code">of_raw sha1 raw</code> is the position-independant packed value built
+<code class="code">of_raw&nbsp;sha1&nbsp;raw</code> is the position-independant packed value built
         by parsing <code class="code">raw</code>.
 </div>
 </td></tr>
@@ -627,7 +630,7 @@ Cast from <code class="code"><span class="constructor">Uri</span>.t</code>.
 </td></tr>
 <tr><td><a href="Git.Packed_value.html#VALoffset">offset</a> [<a href="Git.Packed_value.html">Git.Packed_value</a>]</td>
 <td><div class="info">
-<code class="code">offset t</code> is <code class="code">t</code>'s offset.
+<code class="code">offset&nbsp;t</code> is <code class="code">t</code>'s offset.
 </div>
 </td></tr>
 <tr><td align="left"><br>P</td></tr>
@@ -698,7 +701,7 @@ Pretty-print file stats.
 </td></tr>
 <tr><td><a href="Git.Search.Make.html#VALpred">pred</a> [<a href="Git.Search.Make.html">Git.Search.Make</a>]</td>
 <td><div class="info">
-<code class="code">pred t s</code> is the list of <code class="code">s</code>'s predecessors in the graph
+<code class="code">pred&nbsp;t&nbsp;s</code> is the list of <code class="code">s</code>'s predecessors in the graph
         <code class="code">t</code>.
 </div>
 </td></tr>
@@ -709,7 +712,7 @@ Pretty printing of tree permissions.
 </td></tr>
 <tr><td><a href="Git.Sync.html#VALprotocol">protocol</a> [<a href="Git.Sync.html">Git.Sync</a>]</td>
 <td><div class="info">
-<code class="code">protocol uri</code> is the Git protocol associated to <code class="code">uri</code>.
+<code class="code">protocol&nbsp;uri</code> is the Git protocol associated to <code class="code">uri</code>.
 </div>
 </td></tr>
 <tr><td><a href="Git.Sync.S.html#VALpush">push</a> [<a href="Git.Sync.S.html">Git.Sync.S</a>]</td>
@@ -720,7 +723,7 @@ Push a local branch to a remote store.
 <tr><td align="left"><br>R</td></tr>
 <tr><td><a href="Git.Packed_value.PIC.html#VALraw">raw</a> [<a href="Git.Packed_value.PIC.html">Git.Packed_value.PIC</a>]</td>
 <td><div class="info">
-<code class="code">raw t</code> is <code class="code">t</code>'s raw represation.
+<code class="code">raw&nbsp;t</code> is <code class="code">t</code>'s raw represation.
 </div>
 </td></tr>
 <tr><td><a href="Git.Store.S.html#VALread">read</a> [<a href="Git.Store.S.html">Git.Store.S</a>]</td>
@@ -796,20 +799,9 @@ Read a given reference.
 Read a given reference.
 </div>
 </td></tr>
-<tr><td><a href="Git.FS.IO.html#VALrealpath">realpath</a> [<a href="Git.FS.IO.html">Git.FS.IO</a>]</td>
-<td><div class="info">
-Very dumb real-path.
-</div>
-</td></tr>
-<tr><td><a href="Git.FS.IO.html#VALrec_files">rec_files</a> [<a href="Git.FS.IO.html">Git.FS.IO</a>]</td>
-<td><div class="info">
-<code class="code">rec_files dir</code> is the list of the files recursively present in
-        <code class="code">dir</code> and all of its sub-directories.
-</div>
-</td></tr>
 <tr><td><a href="Git.Sync.Result.html#VALreferences">references</a> [<a href="Git.Sync.Result.html">Git.Sync.Result</a>]</td>
 <td><div class="info">
-<code class="code">references f</code> are <code class="code">f</code>'s references.
+<code class="code">references&nbsp;f</code> are <code class="code">f</code>'s references.
 </div>
 </td></tr>
 <tr><td><a href="Git.Store.S.html#VALreferences">references</a> [<a href="Git.Store.S.html">Git.Store.S</a>]</td>
@@ -819,22 +811,22 @@ Return the list of references (ie.
 </td></tr>
 <tr><td><a href="Git.Packed_refs.html#VALreferences">references</a> [<a href="Git.Packed_refs.html">Git.Packed_refs</a>]</td>
 <td><div class="info">
-<code class="code">references t</code> is the list of <code class="code">t</code>'s references.
+<code class="code">references&nbsp;t</code> is the list of <code class="code">t</code>'s references.
 </div>
 </td></tr>
-<tr><td><a href="Git.FS.IO.html#VALremove">remove</a> [<a href="Git.FS.IO.html">Git.FS.IO</a>]</td>
+<tr><td><a href="Git.FS.IO.html#VALremove_file">remove_file</a> [<a href="Git.FS.IO.html">Git.FS.IO</a>]</td>
 <td><div class="info">
-Remote a file or a directory (even if non-empty).
-</div>
-</td></tr>
-<tr><td><a href="Git.FS.S.html#VALremove">remove</a> [<a href="Git.FS.S.html">Git.FS.S</a>]</td>
-<td><div class="info">
-Remove all the contents of the store.
+Remove a file.
 </div>
 </td></tr>
 <tr><td><a href="Git.Store.S.html#VALremove_reference">remove_reference</a> [<a href="Git.Store.S.html">Git.Store.S</a>]</td>
 <td><div class="info">
 Remove a refernce.
+</div>
+</td></tr>
+<tr><td><a href="Git.FS.S.html#VALreset">reset</a> [<a href="Git.FS.S.html">Git.FS.S</a>]</td>
+<td><div class="info">
+Reset the store.
 </div>
 </td></tr>
 <tr><td><a href="Git.Packed_value.html#VALresult_length">result_length</a> [<a href="Git.Packed_value.html">Git.Packed_value</a>]</td>
@@ -857,18 +849,18 @@ Empty the current LRU cache, and create a new one with the given
 </td></tr>
 <tr><td><a href="Git.Pack.Raw.html#VALshallow">shallow</a> [<a href="Git.Pack.Raw.html">Git.Pack.Raw</a>]</td>
 <td><div class="info">
-<code class="code">shallow t</code> is true if all the Hash references appearing in <code class="code">t</code>
+<code class="code">shallow&nbsp;t</code> is true if all the Hash references appearing in <code class="code">t</code>
         corresponds to objects also in <code class="code">t</code>.
 </div>
 </td></tr>
 <tr><td><a href="Git.Packed_value.PIC.html#VALshallow">shallow</a> [<a href="Git.Packed_value.PIC.html">Git.Packed_value.PIC</a>]</td>
 <td><div class="info">
-<code class="code">shallow t</code> is true iff <code class="code">t</code> is not included in the pack file.
+<code class="code">shallow&nbsp;t</code> is true iff <code class="code">t</code> is not included in the pack file.
 </div>
 </td></tr>
 <tr><td><a href="Git.Packed_value.html#VALshallow">shallow</a> [<a href="Git.Packed_value.html">Git.Packed_value</a>]</td>
 <td><div class="info">
-<code class="code">shallow p t</code> checks whether the Hashs appearing in <code class="code">t</code> also appear
+<code class="code">shallow&nbsp;p&nbsp;t</code> checks whether the Hashs appearing in <code class="code">t</code> also appear
       in the pack file <code class="code">p</code>.
 </div>
 </td></tr>
@@ -879,7 +871,7 @@ Return the size of the blob having the given Hash name.
 </td></tr>
 <tr><td><a href="Git.Pack.IO.Raw.html#VALsize">size</a> [<a href="Git.Pack.IO.Raw.html">Git.Pack.IO.Raw</a>]</td>
 <td><div class="info">
-<code class="code">size ~index buf h</code> is the (uncompressed) size of <code class="code">h</code>.
+<code class="code">size&nbsp;~index&nbsp;buf&nbsp;h</code> is the (uncompressed) size of <code class="code">h</code>.
 </div>
 </td></tr>
 <tr><td><a href="Git.Packed_value.IO.IO.html#VALsize">size</a> [<a href="Git.Packed_value.IO.IO.html">Git.Packed_value.IO.IO</a>]</td>
@@ -900,11 +892,6 @@ Return the stats of the given file.
 </td></tr>
 <tr><td><a href="Git.Hash.DIGEST.html#VALstring">string</a> [<a href="Git.Hash.DIGEST.html">Git.Hash.DIGEST</a>]</td>
 <td></td></tr>
-<tr><td><a href="Git_mirage.FS.html#VALstring_of_error">string_of_error</a> [<a href="Git_mirage.FS.html">Git_mirage.FS</a>]</td>
-<td><div class="info">
-Pretty-print errors.
-</div>
-</td></tr>
 <tr><td><a href="Git.Tree.html#VALstring_of_perm">string_of_perm</a> [<a href="Git.Tree.html">Git.Tree</a>]</td>
 <td><div class="info">
 Raw represention of a permission, using the <code class="code"><span class="constructor">Git</span></code> format.
@@ -922,6 +909,16 @@ Same as <code class="code"><span class="constructor">Cstruct</span>.sub</code> b
 Cast a tag to an object.
 </div>
 </td></tr>
+<tr><td><a href="Git.FS.IO.html#VALtest_and_set_file">test_and_set_file</a> [<a href="Git.FS.IO.html">Git.FS.IO</a>]</td>
+<td><div class="info">
+Atomic update of file contents.
+</div>
+</td></tr>
+<tr><td><a href="Git.Store.S.html#VALtest_and_set_reference">test_and_set_reference</a> [<a href="Git.Store.S.html">Git.Store.S</a>]</td>
+<td><div class="info">
+Atomic updates (Test and set) for references.
+</div>
+</td></tr>
 <tr><td><a href="Git.Map.html#VALto_alist">to_alist</a> [<a href="Git.Map.html">Git.Map</a>]</td>
 <td></td></tr>
 <tr><td><a href="Git.Hash.html#VALto_blob">to_blob</a> [<a href="Git.Hash.html">Git.Hash</a>]</td>
@@ -936,25 +933,25 @@ A node might be a commit.
 </td></tr>
 <tr><td><a href="Git.Graph.Make.html#VALto_dot">to_dot</a> [<a href="Git.Graph.Make.html">Git.Graph.Make</a>]</td>
 <td><div class="info">
-<code class="code">to_dot g buffer</code> fille <code class="code">buffer</code> with the `.dot` representation
+<code class="code">to_dot&nbsp;g&nbsp;buffer</code> fille <code class="code">buffer</code> with the `.dot` representation
         of the Git graph.
 </div>
 </td></tr>
 <tr><td><a href="Git.Hash.S.html#VALto_hex">to_hex</a> [<a href="Git.Hash.S.html">Git.Hash.S</a>]</td>
 <td><div class="info">
-<code class="code">to_hex h</code> is <code class="code">h</code>s' hex encoding.
+<code class="code">to_hex&nbsp;h</code> is <code class="code">h</code>s' hex encoding.
 </div>
 </td></tr>
 <tr><td><a href="Git.Hash.Array.html#VALto_list">to_list</a> [<a href="Git.Hash.Array.html">Git.Hash.Array</a>]</td>
 <td><div class="info">
-<code class="code">to_list t</code> is the list of elements of <code class="code">t</code>.
+<code class="code">to_list&nbsp;t</code> is the list of elements of <code class="code">t</code>.
 </div>
 </td></tr>
 <tr><td><a href="Git.Set.html#VALto_list">to_list</a> [<a href="Git.Set.html">Git.Set</a>]</td>
 <td></td></tr>
 <tr><td><a href="Git.Packed_value.IO.html#VALto_pic">to_pic</a> [<a href="Git.Packed_value.IO.html">Git.Packed_value.IO</a>]</td>
 <td><div class="info">
-<code class="code">to_pic t</code> is the position-independant representation of the
+<code class="code">to_pic&nbsp;t</code> is the position-independant representation of the
         packed value <code class="code">t</code>.
 </div>
 </td></tr>
@@ -1036,7 +1033,7 @@ Unpack a PIC kind into a string.
 <tr><td align="left"><br>V</td></tr>
 <tr><td><a href="Git.Packed_value.IO.html#VALvalue_of_pic">value_of_pic</a> [<a href="Git.Packed_value.IO.html">Git.Packed_value.IO</a>]</td>
 <td><div class="info">
-<code class="code">to_value p</code> unpacks the packed position-independant value
+<code class="code">to_value&nbsp;p</code> unpacks the packed position-independant value
         <code class="code">p</code>.
 </div>
 </td></tr>

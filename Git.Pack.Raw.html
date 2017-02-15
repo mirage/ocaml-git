@@ -3,6 +3,7 @@
 <head>
 <link rel="stylesheet" href="style.css" type="text/css">
 <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="Start" href="index.html">
 <link rel="next" href="Git.Pack.IO.html">
 <link rel="Up" href="Git.Pack.html">
@@ -43,12 +44,12 @@ Get the pack buffer.<br>
 </div>
 
 <pre><span id="VALshallow"><span class="keyword">val</span> shallow</span> : <code class="type"><a href="Git.Pack.html#TYPEt">Git.Pack.t</a> -> bool</code></pre><div class="info ">
-<code class="code">shallow t</code> is true if all the Hash references appearing in <code class="code">t</code>
+<code class="code">shallow&nbsp;t</code> is true if all the Hash references appearing in <code class="code">t</code>
         corresponds to objects also in <code class="code">t</code>.<br>
 </div>
 
 <pre><span id="VALinput_header"><span class="keyword">val</span> input_header</span> : <code class="type">Mstruct.t -> [ `Version of int ] * [ `Count of int ]</code></pre><div class="info ">
-<code class="code">input_head buf</code> reads the pack <code class="code">version</code> number (could be 2 or
+<code class="code">input_head&nbsp;buf</code> reads the pack <code class="code">version</code> number (could be 2 or
         3) and the <code class="code">count</code> of packed values in the pack file.<br>
 </div>
 </body></html>

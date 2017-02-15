@@ -3,6 +3,7 @@
 <head>
 <link rel="stylesheet" href="style.css" type="text/css">
 <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="Start" href="index.html">
 <link rel="next" href="Git.FS.IO.html">
 <link rel="Up" href="Git.FS.html">
@@ -26,10 +27,6 @@
 
 <pre><span class="keyword">include</span> <a href="Git.Store.S.html">Git.Store.S</a></pre>
 
-<pre><span id="VALremove"><span class="keyword">val</span> remove</span> : <code class="type">t -> unit Lwt.t</code></pre><div class="info ">
-Remove all the contents of the store.<br>
-</div>
-
 <pre><span id="VALcreate_file"><span class="keyword">val</span> create_file</span> : <code class="type">t -> string -> <a href="Git.Tree.html#TYPEperm">Git.Tree.perm</a> -> Git.Blob.t -> unit Lwt.t</code></pre><div class="info ">
 Create a file on the filesystem, with the given mode.<br>
 </div>
@@ -38,6 +35,10 @@ Create a file on the filesystem, with the given mode.<br>
 Generate a cache entry for the file. Create a fresh file if it
         does not already exist. If <code class="code">root</code> is not set, use the current
         working directory as repository root.<br>
+</div>
+
+<pre><span id="VALreset"><span class="keyword">val</span> reset</span> : <code class="type">t -> unit Lwt.t</code></pre><div class="info ">
+Reset the store.<br>
 </div>
 
 <pre><span id="VALclear"><span class="keyword">val</span> clear</span> : <code class="type">unit -> unit</code></pre><div class="info ">

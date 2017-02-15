@@ -3,6 +3,7 @@
 <head>
 <link rel="stylesheet" href="style.css" type="text/css">
 <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="Start" href="index.html">
 <link rel="next" href="Git_unix.S.FS.html">
 <link rel="Up" href="Git_unix.S.html">
@@ -28,4 +29,4 @@
 <pre><span class="keyword">module</span> <a href="Git_unix.S.Sync.Result.html">Result</a>: <code class="type">module type of Sync.Result</code><code class="type"> 
                      with type fetch = Sync.Result.fetch
                       and type push  = Sync.Result.push</code></pre>
-<pre><span class="keyword">module</span> <a href="Git_unix.S.Sync.Make.html">Make</a>: <div class="sig_block"><code class="code"><span class="keyword">functor</span> (</code><code class="code"><span class="constructor">S</span></code><code class="code"> : </code><code class="type"><a href="Git.Store.S.html">Git.Store.S</a></code><code class="code">) <span class="keywordsign">-&gt;</span> </code><code class="type">Sync.S</code><code class="type">  with type t = S.t</code></div></pre></body></html>
+<pre><span class="keyword">module</span> <a href="Git_unix.S.Sync.Make.html">Make</a>: <div class="sig_block"><code class="code"><span class="keyword">functor</span>&nbsp;(</code><code class="code"><span class="constructor">S</span></code><code class="code">&nbsp;:&nbsp;</code><code class="type"><a href="Git.Store.S.html">Git.Store.S</a></code><code class="code">)&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;</code><code class="type">Sync.S</code><code class="type">  with type t = S.t</code></div></pre></body></html>

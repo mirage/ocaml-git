@@ -3,6 +3,7 @@
 <head>
 <link rel="stylesheet" href="style.css" type="text/css">
 <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="Start" href="index.html">
 <link rel="Up" href="Git.Store.html">
 <link title="Index of types" rel=Appendix href="index_types.html">
@@ -13,11 +14,11 @@
 <link title="Git" rel="Chapter" href="Git.html">
 <link title="Git_unix" rel="Chapter" href="Git_unix.html">
 <link title="Git_mirage" rel="Chapter" href="Git_mirage.html">
-<link title="Git_http" rel="Chapter" href="Git_http.html"><link title="Objects" rel="Section" href="#2_Objects">
-<link title="References" rel="Section" href="#2_References">
-<link title="Git index files" rel="Section" href="#2_Gitindexfiles">
-<link title="Backend kind" rel="Section" href="#2_Backendkind">
-<link title="Raw values" rel="Section" href="#2_Rawvalues">
+<link title="Git_http" rel="Chapter" href="Git_http.html"><link title="Objects" rel="Section" href="#1_Objects">
+<link title="References" rel="Section" href="#1_References">
+<link title="Git index files" rel="Section" href="#1_Gitindexfiles">
+<link title="Backend kind" rel="Section" href="#1_Backendkind">
+<link title="Raw values" rel="Section" href="#1_Rawvalues">
 <title>Git.Store.S</title>
 </head>
 <body>
@@ -66,7 +67,7 @@ Dump the store contents to stderr.<br>
 Get the full store contents.<br>
 </div>
 <br>
-<h2 id="2_Objects">Objects</h2><br>
+<h1 id="1_Objects">Objects</h1><br>
 
 <pre><span id="VALsize"><span class="keyword">val</span> size</span> : <code class="type"><a href="Git.Store.S.html#TYPEt">t</a> -> Git.Hash.t -> int option Lwt.t</code></pre><div class="info ">
 Return the size of the blob having the given Hash name.<br>
@@ -98,7 +99,7 @@ Write a raw pack file and the corresponding index. Return the
         objects IDs which have been written.<br>
 </div>
 <br>
-<h2 id="2_References">References</h2><br>
+<h1 id="1_References">References</h1><br>
 
 <pre><span id="VALreferences"><span class="keyword">val</span> references</span> : <code class="type"><a href="Git.Store.S.html#TYPEt">t</a> -> Git.Reference.t list Lwt.t</code></pre><div class="info ">
 Return the list of references (ie. tags and branches).<br>
@@ -131,8 +132,12 @@ Write a reference.<br>
 <pre><span id="VALremove_reference"><span class="keyword">val</span> remove_reference</span> : <code class="type"><a href="Git.Store.S.html#TYPEt">t</a> -> Git.Reference.t -> unit Lwt.t</code></pre><div class="info ">
 Remove a refernce.<br>
 </div>
+
+<pre><span id="VALtest_and_set_reference"><span class="keyword">val</span> test_and_set_reference</span> : <code class="type"><a href="Git.Store.S.html#TYPEt">t</a> -><br>       Git.Reference.t -><br>       test:Git.Hash.t option -> set:Git.Hash.t option -> bool Lwt.t</code></pre><div class="info ">
+Atomic updates (Test and set) for references.<br>
+</div>
 <br>
-<h2 id="2_Gitindexfiles">Git index files</h2><br>
+<h1 id="1_Gitindexfiles">Git index files</h1><br>
 
 <pre><span id="VALread_index"><span class="keyword">val</span> read_index</span> : <code class="type"><a href="Git.Store.S.html#TYPEt">t</a> -> <a href="Git.Index.html#TYPEt">Git.Index.t</a> Lwt.t</code></pre><div class="info ">
 Return the index file.<br>
@@ -154,13 +159,13 @@ Update the index file for the given revision. A side-effect of
         the current state of the filesystem.<br>
 </div>
 <br>
-<h2 id="2_Backendkind">Backend kind</h2><br>
+<h1 id="1_Backendkind">Backend kind</h1><br>
 
 <pre><span id="VALkind"><span class="keyword">val</span> kind</span> : <code class="type">[ `Disk | `Memory ]</code></pre><div class="info ">
 The kind of backend.<br>
 </div>
 <br>
-<h2 id="2_Rawvalues">Raw values</h2><br>
+<h1 id="1_Rawvalues">Raw values</h1><br>
 
 <pre><span id="VALread_inflated"><span class="keyword">val</span> read_inflated</span> : <code class="type"><a href="Git.Store.S.html#TYPEt">t</a> -> Git.Hash.t -> string option Lwt.t</code></pre><div class="info ">
 Read a raw buffer from the store.<br>

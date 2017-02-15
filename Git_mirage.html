@@ -3,6 +3,7 @@
 <head>
 <link rel="stylesheet" href="style.css" type="text/css">
 <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="Start" href="index.html">
 <link rel="previous" href="Git_unix.html">
 <link rel="next" href="Git_http.html">
@@ -30,7 +31,7 @@ Mirage backend.<br>
 <hr width="100%">
 
 <pre><span class="keyword">module type</span> <a href="Git_mirage.FS.html">FS</a> = <code class="code"><span class="keyword">sig</span></code> <a href="Git_mirage.FS.html">..</a> <code class="code"><span class="keyword">end</span></code></pre>
-<pre><span class="keyword">module</span> <a href="Git_mirage.FS.html">FS</a>: <div class="sig_block"><code class="code"><span class="keyword">functor</span> (</code><code class="code"><span class="constructor">FS</span></code><code class="code"> : </code><code class="type"><a href="Git_mirage.FS.html">FS</a></code><code class="code">) <span class="keywordsign">-&gt;</span> </code><div class="sig_block"><code class="code"><span class="keyword">functor</span> (</code><code class="code"><span class="constructor">D</span></code><code class="code"> : </code><code class="type"><a href="Git.Hash.DIGEST.html">Git.Hash.DIGEST</a></code><code class="code">) <span class="keywordsign">-&gt;</span> </code><div class="sig_block"><code class="code"><span class="keyword">functor</span> (</code><code class="code"><span class="constructor">I</span></code><code class="code"> : </code><code class="type"><a href="Git.Inflate.S.html">Git.Inflate.S</a></code><code class="code">) <span class="keywordsign">-&gt;</span> </code><code class="type"><a href="Git.FS.S.html">Git.FS.S</a></code><code class="type"> </code></div></div></div></pre><div class="info">
+<pre><span class="keyword">module</span> <a href="Git_mirage.FS.html">FS</a>: <div class="sig_block"><code class="code"><span class="keyword">functor</span>&nbsp;(</code><code class="code"><span class="constructor">FS</span></code><code class="code">&nbsp;:&nbsp;</code><code class="type"><a href="Git_mirage.FS.html">FS</a></code><code class="code">)&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;</code><div class="sig_block"><code class="code"><span class="keyword">functor</span>&nbsp;(</code><code class="code"><span class="constructor">D</span></code><code class="code">&nbsp;:&nbsp;</code><code class="type"><a href="Git.Hash.DIGEST.html">Git.Hash.DIGEST</a></code><code class="code">)&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;</code><div class="sig_block"><code class="code"><span class="keyword">functor</span>&nbsp;(</code><code class="code"><span class="constructor">I</span></code><code class="code">&nbsp;:&nbsp;</code><code class="type"><a href="Git.Inflate.S.html">Git.Inflate.S</a></code><code class="code">)&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;</code><code class="type"><a href="Git.FS.S.html">Git.FS.S</a></code><code class="type"> </code></div></div></div></pre><div class="info">
 Create a Irmin store from raw block devices handler.
 </div>
 

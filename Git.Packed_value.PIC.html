@@ -3,6 +3,7 @@
 <head>
 <link rel="stylesheet" href="style.css" type="text/css">
 <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="Start" href="index.html">
 <link rel="next" href="Git.Packed_value.IO.html">
 <link rel="Up" href="Git.Packed_value.html">
@@ -89,24 +90,24 @@ Create a position-independent packed value. By default,
 </div>
 
 <pre><span id="VALof_raw"><span class="keyword">val</span> of_raw</span> : <code class="type">?shallow:bool -> Git.Hash.t -> string -> <a href="Git.Packed_value.PIC.html#TYPEt">t</a></code></pre><div class="info ">
-<code class="code">of_raw sha1 raw</code> is the position-independant packed value built
+<code class="code">of_raw&nbsp;sha1&nbsp;raw</code> is the position-independant packed value built
         by parsing <code class="code">raw</code>. By default <code class="code">shallow</code> is <code class="code"><span class="keyword">false</span></code>.<br>
 </div>
 
 <pre><span id="VALkind"><span class="keyword">val</span> kind</span> : <code class="type"><a href="Git.Packed_value.PIC.html#TYPEt">t</a> -> <a href="Git.Packed_value.PIC.html#TYPEkind">kind</a></code></pre><div class="info ">
-<code class="code">kind t</code> is <code class="code">t</code>'s kind.<br>
+<code class="code">kind&nbsp;t</code> is <code class="code">t</code>'s kind.<br>
 </div>
 
 <pre><span id="VALname"><span class="keyword">val</span> name</span> : <code class="type"><a href="Git.Packed_value.PIC.html#TYPEt">t</a> -> Git.Hash.t</code></pre><div class="info ">
-<code class="code">name t</code> is <code class="code">t</code>'s name.<br>
+<code class="code">name&nbsp;t</code> is <code class="code">t</code>'s name.<br>
 </div>
 
 <pre><span id="VALraw"><span class="keyword">val</span> raw</span> : <code class="type"><a href="Git.Packed_value.PIC.html#TYPEt">t</a> -> string option</code></pre><div class="info ">
-<code class="code">raw t</code> is <code class="code">t</code>'s raw represation.<br>
+<code class="code">raw&nbsp;t</code> is <code class="code">t</code>'s raw represation.<br>
 </div>
 
 <pre><span id="VALshallow"><span class="keyword">val</span> shallow</span> : <code class="type"><a href="Git.Packed_value.PIC.html#TYPEt">t</a> -> bool</code></pre><div class="info ">
-<code class="code">shallow t</code> is true iff <code class="code">t</code> is not included in the pack file.<br>
+<code class="code">shallow&nbsp;t</code> is true iff <code class="code">t</code> is not included in the pack file.<br>
 </div>
 
 <pre><span id="VALunpack_kind"><span class="keyword">val</span> unpack_kind</span> : <code class="type"><a href="Git.Packed_value.PIC.html#TYPEkind">kind</a> -> string</code></pre><div class="info ">

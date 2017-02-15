@@ -3,6 +3,7 @@
 <head>
 <link rel="stylesheet" href="style.css" type="text/css">
 <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="Start" href="index.html">
 <link rel="next" href="Git.Sync.IO.html">
 <link rel="Up" href="Git.Sync.html">
@@ -48,7 +49,7 @@ Push a local branch to a remote store.<br>
 </div>
 
 <pre><span id="VALfetch"><span class="keyword">val</span> fetch</span> : <code class="type">?ctx:<a href="Git.Sync.S.html#TYPEctx">ctx</a> -><br>       ?deepen:int -><br>       ?unpack:bool -><br>       ?capabilities:<a href="Git.Sync.html#TYPEcapability">Git.Sync.capability</a> list -><br>       ?wants:<a href="Git.Sync.html#TYPEwant">Git.Sync.want</a> list -><br>       ?progress:(string -> unit) -><br>       <a href="Git.Sync.S.html#TYPEt">t</a> -> <a href="Git.Gri.html#TYPEt">Git.Gri.t</a> -> <a href="Git.Sync.Result.html#TYPEfetch">Git.Sync.Result.fetch</a> Lwt.t</code></pre><div class="info ">
-<code class="code">fetch t uri</code> fetches the contents of <code class="code">uri</code> into the store <code class="code">t</code>.
+<code class="code">fetch&nbsp;t&nbsp;uri</code> fetches the contents of <code class="code">uri</code> into the store <code class="code">t</code>.
 <p>
 
         By default, all the remote references are updated. This behavior
@@ -74,11 +75,11 @@ Push a local branch to a remote store.<br>
         (for instance when doing a clone) do the following:
 <p>
 
-        <pre class="codepre"><code class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fetch&nbsp;t&nbsp;gri&nbsp;&gt;&gt;=&nbsp;<span class="keyword">fun</span>&nbsp;r&nbsp;<span class="keywordsign">-&gt;</span>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">match</span>&nbsp;<span class="constructor">Result</span>.head_contents&nbsp;r&nbsp;<span class="keyword">with</span>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">Some</span>&nbsp;h&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Store</span>.write_head&nbsp;t&nbsp;h
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keywordsign">|</span>&nbsp;<span class="constructor">None</span>&nbsp;&nbsp;&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;<span class="constructor">Lwt</span>.return_unit
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code></pre><br>
+        <pre class="codepre"><code class="code">          fetch t gri &gt;&gt;= <span class="keyword">fun</span> r <span class="keywordsign">-&gt;</span>
+          <span class="keyword">match</span> <span class="constructor">Result</span>.head_contents r <span class="keyword">with</span>
+          <span class="keywordsign">|</span> <span class="constructor">Some</span> h <span class="keywordsign">-&gt;</span> <span class="constructor">Store</span>.write_head t h
+          <span class="keywordsign">|</span> <span class="constructor">None</span>   <span class="keywordsign">-&gt;</span> <span class="constructor">Lwt</span>.return_unit
+        </code></pre><br>
 </div>
 
 <pre><span id="VALclone"><span class="keyword">val</span> clone</span> : <code class="type">?ctx:<a href="Git.Sync.S.html#TYPEctx">ctx</a> -><br>       ?deepen:int -><br>       ?unpack:bool -><br>       ?capabilities:<a href="Git.Sync.html#TYPEcapability">Git.Sync.capability</a> list -><br>       ?branch:<a href="Git.Sync.html#TYPEwant">Git.Sync.want</a> -><br>       ?progress:(string -> unit) -><br>       <a href="Git.Sync.S.html#TYPEt">t</a> -> checkout:bool -> <a href="Git.Gri.html#TYPEt">Git.Gri.t</a> -> <a href="Git.Sync.Result.html#TYPEfetch">Git.Sync.Result.fetch</a> Lwt.t</code></pre><div class="info ">

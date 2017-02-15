@@ -3,6 +3,7 @@
 <head>
 <link rel="stylesheet" href="style.css" type="text/css">
 <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="Start" href="index.html">
 <link rel="Up" href="Git.FS.html">
 <link title="Index of types" rel=Appendix href="index_types.html">
@@ -20,7 +21,7 @@
 &nbsp;</div>
 <h1>Functor <a href="type_Git.FS.Make.html">Git.FS.Make</a></h1>
 
-<pre><span class="keyword">module</span> Make: <div class="sig_block"><code class="code"><span class="keyword">functor</span> (</code><code class="code"><span class="constructor">IO</span></code><code class="code"> : </code><code class="type"><a href="Git.FS.IO.html">IO</a></code><code class="code">) <span class="keywordsign">-&gt;</span> </code><div class="sig_block"><code class="code"><span class="keyword">functor</span> (</code><code class="code"><span class="constructor">D</span></code><code class="code"> : </code><code class="type"><a href="Git.Hash.DIGEST.html">Git.Hash.DIGEST</a></code><code class="code">) <span class="keywordsign">-&gt;</span> </code><div class="sig_block"><code class="code"><span class="keyword">functor</span> (</code><code class="code"><span class="constructor">I</span></code><code class="code"> : </code><code class="type"><a href="Git.Inflate.S.html">Git.Inflate.S</a></code><code class="code">) <span class="keywordsign">-&gt;</span> </code><code class="type"><a href="Git.FS.S.html">S</a></code><code class="type"> </code></div></div></div></pre><div class="info module top">
+<pre><span class="keyword">module</span> Make: <div class="sig_block"><code class="code"><span class="keyword">functor</span>&nbsp;(</code><code class="code"><span class="constructor">IO</span></code><code class="code">&nbsp;:&nbsp;</code><code class="type"><a href="Git.FS.IO.html">IO</a></code><code class="code">)&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;</code><div class="sig_block"><code class="code"><span class="keyword">functor</span>&nbsp;(</code><code class="code"><span class="constructor">D</span></code><code class="code">&nbsp;:&nbsp;</code><code class="type"><a href="Git.Hash.DIGEST.html">Git.Hash.DIGEST</a></code><code class="code">)&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;</code><div class="sig_block"><code class="code"><span class="keyword">functor</span>&nbsp;(</code><code class="code"><span class="constructor">I</span></code><code class="code">&nbsp;:&nbsp;</code><code class="type"><a href="Git.Inflate.S.html">Git.Inflate.S</a></code><code class="code">)&nbsp;<span class="keywordsign">-&gt;</span>&nbsp;</code><code class="type"><a href="Git.FS.S.html">S</a></code><code class="type"> </code></div></div></div></pre><div class="info module top">
 Create an on-disk store implementation.<br>
 </div>
 <table border="0" cellpadding="3" width="100%">
@@ -51,10 +52,6 @@ Create an on-disk store implementation.<br>
 
 <pre><span class="keyword">include</span> <a href="Git.Store.S.html">Git.Store.S</a></pre>
 
-<pre><span id="VALremove"><span class="keyword">val</span> remove</span> : <code class="type">t -> unit Lwt.t</code></pre><div class="info ">
-Remove all the contents of the store.<br>
-</div>
-
 <pre><span id="VALcreate_file"><span class="keyword">val</span> create_file</span> : <code class="type">t -> string -> <a href="Git.Tree.html#TYPEperm">Git.Tree.perm</a> -> Git.Blob.t -> unit Lwt.t</code></pre><div class="info ">
 Create a file on the filesystem, with the given mode.<br>
 </div>
@@ -63,6 +60,10 @@ Create a file on the filesystem, with the given mode.<br>
 Generate a cache entry for the file. Create a fresh file if it
         does not already exist. If <code class="code">root</code> is not set, use the current
         working directory as repository root.<br>
+</div>
+
+<pre><span id="VALreset"><span class="keyword">val</span> reset</span> : <code class="type">t -> unit Lwt.t</code></pre><div class="info ">
+Reset the store.<br>
 </div>
 
 <pre><span id="VALclear"><span class="keyword">val</span> clear</span> : <code class="type">unit -> unit</code></pre><div class="info ">

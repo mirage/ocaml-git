@@ -3,6 +3,7 @@
 <head>
 <link rel="stylesheet" href="style.css" type="text/css">
 <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="Start" href="index.html">
 <link rel="next" href="Git.Sync.Make.html">
 <link rel="Up" href="Git.Sync.html">
@@ -31,20 +32,20 @@ The resulting hashes and references.<br>
 
 
 <pre><span id="VALhead_contents"><span class="keyword">val</span> head_contents</span> : <code class="type"><a href="Git.Sync.Result.html#TYPEfetch">fetch</a> -> <a href="Git.Reference.html#TYPEhead_contents">Git.Reference.head_contents</a> option</code></pre><div class="info ">
-<code class="code">head_contents f</code> is <code class="code">f</code>'s head contents (the value of the
+<code class="code">head_contents&nbsp;f</code> is <code class="code">f</code>'s head contents (the value of the
         remote <i>.git/HEAD</i>).<br>
 </div>
 
 <pre><span id="VALhead"><span class="keyword">val</span> head</span> : <code class="type"><a href="Git.Sync.Result.html#TYPEfetch">fetch</a> -> Hash.Commit.t option</code></pre><div class="info ">
-<code class="code">head f</code> is <code class="code">f</code>'s head commit.<br>
+<code class="code">head&nbsp;f</code> is <code class="code">f</code>'s head commit.<br>
 </div>
 
 <pre><span id="VALreferences"><span class="keyword">val</span> references</span> : <code class="type"><a href="Git.Sync.Result.html#TYPEfetch">fetch</a> -> Git.Hash.t Git.Reference.Map.t</code></pre><div class="info ">
-<code class="code">references f</code> are <code class="code">f</code>'s references.<br>
+<code class="code">references&nbsp;f</code> are <code class="code">f</code>'s references.<br>
 </div>
 
 <pre><span id="VALhashes"><span class="keyword">val</span> hashes</span> : <code class="type"><a href="Git.Sync.Result.html#TYPEfetch">fetch</a> -> Git.Hash.Set.t</code></pre><div class="info ">
-<code class="code">hashes f</code> are <code class="code">f</code>'s object hashes.<br>
+<code class="code">hashes&nbsp;f</code> are <code class="code">f</code>'s object hashes.<br>
 </div>
 
 <pre><span id="VALpp_fetch"><span class="keyword">val</span> pp_fetch</span> : <code class="type"><a href="Git.Sync.Result.html#TYPEfetch">fetch</a> Fmt.t</code></pre><div class="info ">

@@ -3,6 +3,7 @@
 <head>
 <link rel="stylesheet" href="style.css" type="text/css">
 <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="Start" href="index.html">
 <link rel="previous" href="Git.FS.S.html">
 <link rel="Up" href="Git.FS.html">
@@ -14,7 +15,9 @@
 <link title="Git" rel="Chapter" href="Git.html">
 <link title="Git_unix" rel="Chapter" href="Git_unix.html">
 <link title="Git_mirage" rel="Chapter" href="Git_mirage.html">
-<link title="Git_http" rel="Chapter" href="Git_http.html"><title>Git.FS.IO</title>
+<link title="Git_http" rel="Chapter" href="Git_http.html"><link title="Read Operations" rel="Section" href="#1_ReadOperations">
+<link title="Write Operations" rel="Section" href="#1_WriteOperations">
+<title>Git.FS.IO</title>
 </head>
 <body>
 <div class="navbar"><a class="pre" href="Git.FS.S.html" title="Git.FS.S">Previous</a>
@@ -24,57 +27,72 @@
 
 <pre><span class="keyword">module type</span> IO = <code class="code"><span class="keyword">sig</span></code> <a href="Git.FS.IO.html">..</a> <code class="code"><span class="keyword">end</span></code></pre><hr width="100%">
 
-<pre><span id="VALgetcwd"><span class="keyword">val</span> getcwd</span> : <code class="type">unit -> string Lwt.t</code></pre><div class="info ">
-Get the current working directory.<br>
+<pre><span id="TYPEpath"><span class="keyword">type</span> <code class="type"></code>path</span> = <code class="type">string</code> </pre>
+<div class="info ">
+The type for filesystem paths.<br>
 </div>
 
-<pre><span id="VALrealpath"><span class="keyword">val</span> realpath</span> : <code class="type">string -> string Lwt.t</code></pre><div class="info ">
-Very dumb real-path. Only works for existing directories.<br>
-</div>
+<br>
+<h1 id="1_ReadOperations">Read Operations</h1><br>
 
-<pre><span id="VALmkdir"><span class="keyword">val</span> mkdir</span> : <code class="type">string -> unit Lwt.t</code></pre><div class="info ">
-Create a directory (and the parent dirs if needed).<br>
-</div>
-
-<pre><span id="VALremove"><span class="keyword">val</span> remove</span> : <code class="type">string -> unit Lwt.t</code></pre><div class="info ">
-Remote a file or a directory (even if non-empty).<br>
-</div>
-
-<pre><span id="VALfile_exists"><span class="keyword">val</span> file_exists</span> : <code class="type">string -> bool Lwt.t</code></pre><div class="info ">
+<pre><span id="VALfile_exists"><span class="keyword">val</span> file_exists</span> : <code class="type"><a href="Git.FS.IO.html#TYPEpath">path</a> -> bool Lwt.t</code></pre><div class="info ">
 Does the given file exists? See <code class="code"><span class="constructor">Sys</span>.file_exists</code><br>
 </div>
 
-<pre><span id="VALdirectories"><span class="keyword">val</span> directories</span> : <code class="type">string -> string list Lwt.t</code></pre><div class="info ">
+<pre><span id="VALdirectories"><span class="keyword">val</span> directories</span> : <code class="type"><a href="Git.FS.IO.html#TYPEpath">path</a> -> string list Lwt.t</code></pre><div class="info ">
 List the subdirs.<br>
 </div>
 
-<pre><span id="VALfiles"><span class="keyword">val</span> files</span> : <code class="type">string -> string list Lwt.t</code></pre><div class="info ">
-List the subfiles.<br>
+<pre><span id="VALfiles"><span class="keyword">val</span> files</span> : <code class="type"><a href="Git.FS.IO.html#TYPEpath">path</a> -> string list Lwt.t</code></pre><div class="info ">
+List the subfiles. The result filenames are absolute.<br>
 </div>
 
-<pre><span id="VALrec_files"><span class="keyword">val</span> rec_files</span> : <code class="type">string -> string list Lwt.t</code></pre><div class="info ">
-<code class="code">rec_files dir</code> is the list of the files recursively present in
-        <code class="code">dir</code> and all of its sub-directories. Return filenames prefixed
-        by <code class="code">dir</code>.<br>
-</div>
-
-<pre><span id="VALread_file"><span class="keyword">val</span> read_file</span> : <code class="type">string -> Cstruct.t Lwt.t</code></pre><div class="info ">
+<pre><span id="VALread_file"><span class="keyword">val</span> read_file</span> : <code class="type"><a href="Git.FS.IO.html#TYPEpath">path</a> -> Cstruct.t Lwt.t</code></pre><div class="info ">
 Read a file and return a mutable C-like structure with its
         contents.<br>
 </div>
 
-<pre><span id="VALwrite_file"><span class="keyword">val</span> write_file</span> : <code class="type">string -> ?temp_dir:string -> Cstruct.t -> unit Lwt.t</code></pre><div class="info ">
-Write a bigarray to a file. Atomicity is guaranteed by writing
-        the file first in <code class="code">temp_dir</code> and then moving the file to the
-        right location. By defaut, <code class="code">temp_dir</code> is
+<pre><span id="VALstat_info"><span class="keyword">val</span> stat_info</span> : <code class="type"><a href="Git.FS.IO.html#TYPEpath">path</a> -> <a href="Git.Index.html#TYPEstat_info">Git.Index.stat_info</a></code></pre><div class="info ">
+Return the stats of the given file.<br>
+</div>
+<br>
+<h1 id="1_WriteOperations">Write Operations</h1><br>
+
+<pre><span id="VALmkdir"><span class="keyword">val</span> mkdir</span> : <code class="type"><a href="Git.FS.IO.html#TYPEpath">path</a> -> unit Lwt.t</code></pre><div class="info ">
+Create a directory.<br>
+</div>
+
+<pre><span id="TYPElock"><span class="keyword">type</span> <code class="type"></code>lock</span> </pre>
+<div class="info ">
+The type for locks, depends on the backend.<br>
+</div>
+
+
+<pre><span id="VALlock_file"><span class="keyword">val</span> lock_file</span> : <code class="type"><a href="Git.FS.IO.html#TYPEpath">path</a> -> <a href="Git.FS.IO.html#TYPElock">lock</a></code></pre><div class="info ">
+<code class="code">lock_file&nbsp;f</code> is the lock associated to the file <code class="code">f</code>, which is
+        hold when <a href="Git.FS.IO.html#VALtest_and_set_file"><code class="code"><span class="constructor">Git</span>.<span class="constructor">FS</span>.<span class="constructor">IO</span>.test_and_set_file</code></a>, <code class="code">set_file</code> and <a href="Git.FS.IO.html#VALremove_file"><code class="code"><span class="constructor">Git</span>.<span class="constructor">FS</span>.<span class="constructor">IO</span>.remove_file</code></a>
+        are called (if provided to the function calls). Depending on
+        the backend it can be mutexes or flocks.<br>
+</div>
+
+<pre><span id="VALwrite_file"><span class="keyword">val</span> write_file</span> : <code class="type">?temp_dir:string -><br>       ?lock:<a href="Git.FS.IO.html#TYPElock">lock</a> -> <a href="Git.FS.IO.html#TYPEpath">path</a> -> Cstruct.t -> unit Lwt.t</code></pre><div class="info ">
+Write a bigarray to a file. Atomicity is guaranteed if <code class="code">lock</code>
+        if provided. <code class="code">temp_dir</code> can be used to create temporary files,
+        By defaut, <code class="code">temp_dir</code> is <code class="code"><span class="constructor">Filename</span>.get_temp_dir_name</code>.<br>
+</div>
+
+<pre><span id="VALtest_and_set_file"><span class="keyword">val</span> test_and_set_file</span> : <code class="type">?temp_dir:string -><br>       lock:<a href="Git.FS.IO.html#TYPElock">lock</a> -><br>       <a href="Git.FS.IO.html#TYPEpath">path</a> -> test:Cstruct.t option -> set:Cstruct.t option -> bool Lwt.t</code></pre><div class="info ">
+Atomic update of file contents. <code class="code">temp_dir</code> can be used to
+        create temporary files, By defaut, <code class="code">temp_dir</code> is
         <code class="code"><span class="constructor">Filename</span>.get_temp_dir_name</code>.<br>
 </div>
 
-<pre><span id="VALchmod"><span class="keyword">val</span> chmod</span> : <code class="type">string -> int -> unit Lwt.t</code></pre><div class="info ">
-Change the file mode.<br>
+<pre><span id="VALremove_file"><span class="keyword">val</span> remove_file</span> : <code class="type">?lock:<a href="Git.FS.IO.html#TYPElock">lock</a> -> <a href="Git.FS.IO.html#TYPEpath">path</a> -> unit Lwt.t</code></pre><div class="info ">
+Remove a file. Atomicity is guaranteed if <code class="code">lock</code> is provided.<br>
 </div>
 
-<pre><span id="VALstat_info"><span class="keyword">val</span> stat_info</span> : <code class="type">string -> <a href="Git.Index.html#TYPEstat_info">Git.Index.stat_info</a></code></pre><div class="info ">
-Return the stats of the given file.<br>
+<pre><span id="VALchmod"><span class="keyword">val</span> chmod</span> : <code class="type">?lock:<a href="Git.FS.IO.html#TYPElock">lock</a> -> <a href="Git.FS.IO.html#TYPEpath">path</a> -> [ `Exec ] -> unit Lwt.t</code></pre><div class="info ">
+Change the file mode to exec mode. Atomicity is guaranteed if
+        <code class="code">lock</code> is provided.<br>
 </div>
 </body></html>

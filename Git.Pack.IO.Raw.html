@@ -3,6 +3,7 @@
 <head>
 <link rel="stylesheet" href="style.css" type="text/css">
 <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="Start" href="index.html">
 <link rel="Up" href="Git.Pack.IO.html">
 <link title="Index of types" rel=Appendix href="index_types.html">
@@ -32,7 +33,7 @@ Raw pack file: they contains a pack index and a list of
 </div>
 
 <pre><span id="VALinput"><span class="keyword">val</span> input</span> : <code class="type">?progress:(string -> unit) -><br>       read:<a href="Git.Value.html#TYPEread_inflated">Git.Value.read_inflated</a> -> Mstruct.t -> <a href="Git.Pack.html#TYPEt">Git.Pack.t</a> Lwt.t</code></pre><div class="info ">
-<code class="code">input ~read buf</code> is the raw pack and raw index obtained by
+<code class="code">input&nbsp;~read&nbsp;buf</code> is the raw pack and raw index obtained by
           reading the buffer <code class="code">buf</code>. External (shallow) Hash1 references are
           resolved using the <code class="code">read</code> function; these references are needed
           to unpack the list of values stored in the pack file, to then
@@ -53,6 +54,6 @@ Same as <a href="Git.Pack.IO.Raw.html#VALread"><code class="code"><span class="c
 </div>
 
 <pre><span id="VALsize"><span class="keyword">val</span> size</span> : <code class="type">index:<a href="Git.Pack_index.html#TYPEf">Git.Pack_index.f</a> -> Mstruct.t -> Git.Hash.t -> int option Lwt.t</code></pre><div class="info ">
-<code class="code">size ~index buf h</code> is the (uncompressed) size of <code class="code">h</code>.<br>
+<code class="code">size&nbsp;~index&nbsp;buf&nbsp;h</code> is the (uncompressed) size of <code class="code">h</code>.<br>
 </div>
 </body></html>
