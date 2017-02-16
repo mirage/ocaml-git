@@ -282,18 +282,26 @@ module IO_FS = struct
     | 0   -> Lwt.return_unit
     | len -> rwrite fd (Cstruct.to_bigarray b) 0 len
 
+  let delays = Array.init 20 (fun i -> 0.1 *. (float i) ** 2.)
+
   let rename =
     if Sys.os_type <> "Win32" then Lwt_unix.rename
     else
       fun tmp file ->
-        let delays = [| 0.; 1.; 10.; 20.; 40. |] in
         let rec aux i =
           Lwt.catch
             (fun () -> Lwt_unix.rename tmp file)
             (function
+              (* On Windows, [EACCES] can also occur in an attempt to
+                 rename a file or directory or to remove an existing
+                 directory. *)
               | Unix.Unix_error (Unix.EACCES, _, _) as e ->
                 if i >= Array.length delays then Lwt.fail e
-                else Lwt_unix.sleep delays.(i) >>= fun () -> aux (i+1)
+                else (
+                  Log.debug (fun l ->
+                      l "Got EACCES, retrying in %.1fs" delays.(i));
+                  Lwt_unix.sleep delays.(i) >>= fun () -> aux (i+1)
+                )
               | e -> Lwt.fail e)
         in
         aux 0
@@ -416,6 +424,10 @@ module IO_FS = struct
         Lwt.catch
           (fun () -> Lwt_unix.unlink file)
           (function
+            (* On Windows, [EACCES] can also occur in an attempt to
+               rename a file or directory or to remove an existing
+               directory. *)
+            | Unix.Unix_error (Unix.EACCES, _, _)
             | Unix.Unix_error (Unix.EISDIR, _, _) -> remove_dir file
             | Unix.Unix_error (Unix.ENOENT, _, _) -> Lwt.return_unit
             | e -> Lwt.fail e)
