@@ -4,7 +4,7 @@ true: warn_error(+1..49+60), warn(A-4-41-44)
 true: package(cstruct astring fmt hex logs lwt ocamlgraph re uri mstruct)
 
 <test/*>: package(alcotest logs.fmt mtime.os nocrypto)
-<test/*>: package(mirage-fs-unix io-page.unix)
+<test/test_mirage.*>: package(mirage-fs-unix io-page.unix)
 <test/*>: package(result camlzip)
 
 <src-top/*>: package(compiler-libs.toplevel)
