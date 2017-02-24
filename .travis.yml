@@ -3,7 +3,6 @@ install: wget https://raw.githubusercontent.com/ocaml/ocaml-travisci-skeleton/ma
 script: bash -ex .travis-opam.sh
 env:
   global:
-    - EXTRA_REMOTES="https://github.com/mirage/mirageos-3-beta.git"
     - PINS="git.dev:. git-http.dev:. git-unix.dev:. git-mirage.dev:."
   matrix:
     - OCAML_VERSION=4.02 PACKAGE="git-unix.dev"
