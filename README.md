@@ -45,7 +45,7 @@ $ opam install git
   position-independent representation so that they can be manipulated
   more easily. Pack file can be created but will not be compressed yet.
 
-* The [index file] (https://github.com/samoht/ocaml-git/blob/master/lib/index.mli)
+* The [index file](http://mirage.github.io/ocaml-git/Git.Index.html)
   (used as for managing the stagging area)
   are fully supported. Which means that `git diff` and `git status`
   will work as expected on a repository created by the library.
@@ -60,7 +60,7 @@ $ opam install git
 
 * An abstraction for Git [Store](http://mirage.github.io/ocaml-git/Git.Store.S.html)
   is available. Various store implementations are available:
-  - An [in-memory](http://mirage.github.io/ocaml-git/Memory.html) implementation;
+  - An [in-memory](http://mirage.github.io/ocaml-git/Git.Memory.html) implementation;
   - A [unix filesystem](http://mirage.github.io/ocaml-git/Git_unix.S.FS.html)
     implementation;
   - A [mirageOS](http://mirage.github.io/ocaml-git/Git_mirage.html) implementation,
