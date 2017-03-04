@@ -14,8 +14,9 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-type time = {
 
+(** The type for a time represented by its [lsb32] and [nsec] parts. *)
+type time = {
   lsb32: Int32.t;
   nsec : Int32.t;
 }
@@ -27,7 +28,9 @@ type mode =
   | `Gitlink ]
 
 val pp_mode: Format.formatter -> mode -> unit
+(** [pp_mode] is the pretty-printer for modes. *)
 
+(** The type for file-system stat information. *)
 type stat_info = {
   ctime: time;
   mtime: time;
@@ -40,7 +43,9 @@ type stat_info = {
 }
 
 val pp_stats: Format.formatter -> stat_info -> unit
+(** [pp_stats] is the pretty-printer for stat_info. *)
 
+(** The type for a Git index entry. *)
 type entry = {
   stats : stat_info;
   id    : Git_hash.Blob.t;
@@ -49,6 +54,7 @@ type entry = {
 }
 
 val pp_entry: Format.formatter -> entry -> unit
+(** [pp_entry] is the pretty-printer for entry. *)
 
 type extension_kind = [ `Tree | `Reuc | `Link | `Other of string ]
 
@@ -58,6 +64,7 @@ type extension = {
 }
 
 val pp_extension: Format.formatter -> extension -> unit
+(** [pp_extension] is the pretty-printer for extension. *)
 
 type t = private {
   entries   : entry list;

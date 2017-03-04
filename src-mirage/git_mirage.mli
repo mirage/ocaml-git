@@ -21,7 +21,7 @@ module type FS = sig
   include Mirage_fs_lwt.S with type page_aligned_buffer = Cstruct.t
 
   val connect: unit -> t Lwt.t
-  (** Every [S] define how to connect to a particular [t]. *)
+  (** Every [S] defines how to connect to a particular [t]. *)
 
 end
 
