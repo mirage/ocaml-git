@@ -110,4 +110,6 @@ lives).
 
 ### License
 
-MIT, see LICENSE file for its text.
+MIT, see [LICENSE.md] file for its text.
+
+[LICENSE.md]: ./LICENSE.md
