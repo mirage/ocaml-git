@@ -19,7 +19,7 @@ the API exposed `ocaml-git` (and hence using only OCaml code).
 The API documentation is available
 [online](http://mirage.github.io/ocaml-git/).
 
-[![Build Status](https://travis-ci.org/mirage/ocaml-git.png?branch=master)](https://travis-ci.org/mirage/ocaml-git)
+[![Build Status](https://travis-ci.org/mirage/ocaml-git.svg?branch=master)](https://travis-ci.org/mirage/ocaml-git)
 
 ### Build and Install Instructions
 
