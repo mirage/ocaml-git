@@ -16,30 +16,30 @@
 
 (** HTTP helpers to implement Git's Smart-HTTP protocol.
 
-    The "smart" HTTP connection simulate normal channel by a sequence
+    The "smart" HTTP connection simulates a normal channel by a sequence
     of RPC calls (the HTTP requests and responses) by:
 
     {ul
     {- allowing a read only after a write: the write is in the HTTP
     request, the read is in the HTTP response.}
-    {- replaying all the previous communication in both direction
-    everytime. The new thing to read or write is appended to the
+    {- replaying all the previous communication in both directions
+    every time. The new thing to read or write is appended to the
     history and part of a new RPC.}}
 
     This looks like a terrible idea, but in practice there are very
     few round-trips between the client and the server with relatively
-    small amount of data. These round trips correspond to the
-    negociation phase, where the client and the server needs to find
+    small amounts of data. These round-trips correspond to the
+    negotiation phase, where the client and the server need to find
     which hashes they have in common. Once this is done, the final RPC
     response contains the pack file, which is where most of the data
-    are.
+    is.
 
     The good thing with that scheme (I guess) is that the server
     doesn't have to keep any client state. Note: there are more
-    clever way to do this ...
+    clever ways to do this...
 
-    That module implements a "restartable" HTTP channels, which hides
-    all that reconnection and replay complexity behind an usual
+    That module implements a "restartable" HTTP channel, which hides
+    all that reconnection and replay complexity behind a regular
     channel interface.
 *)
 
@@ -65,9 +65,9 @@ module Flow (HTTP: CLIENT) (IC: CHAN) (OC: CHAN): sig
   type 'a callback = Uri.t -> (IC.t * OC.t -> 'a Lwt.t) -> 'a Lwt.t
 
   val with_http: ?init:string -> 'a http_callback -> 'a callback
-  (** Connect to an HTTP-endpoint using conduit. The method is infered
+  (** Connect to an HTTP endpoint using conduit. The method is inferred
       from the URI by the Git protocol, the [init] string contains a
       marshaled S-expression representation of the actual header to
-      use (which are set by {!Git.Sync}. *)
+      use (which is set by {!Git.Sync}. *)
 
 end

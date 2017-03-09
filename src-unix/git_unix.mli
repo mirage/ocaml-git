@@ -61,9 +61,9 @@ end
 include S
 
 module Make (D: Git.Hash.DIGEST) (I: Git.Inflate.S): S
-(** Parametrize the Git implementation with different inflate and hash
+(** Parameterize the Git implementation with different inflate and hash
     algorithms. {b Note:} this might cause your implementation to not
-    be compatible with Git anynore! *)
+    be compatible with Git anymore! *)
 
 module Zlib: Inflate.S
 (** Implementation of the inflate signature using [camlzip]'s zlib

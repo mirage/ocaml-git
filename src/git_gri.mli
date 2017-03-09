@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** Git ressource identifiers (GRI). *)
+(** Git resource identifiers (GRI). *)
 
 (** GRIs are similar to URIs, but Git also allows some blend of URL
     and SSH remote files such as:
@@ -24,7 +24,7 @@
 *)
 
 type t
-(** Git ressource identifier values. *)
+(** Git resource identifier values. *)
 
 val of_string: string -> t
 (** Create a GRI from a string. *)
