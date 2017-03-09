@@ -19,7 +19,7 @@ the API exposed `ocaml-git` (and hence using only OCaml code).
 The API documentation is available
 [online](http://mirage.github.io/ocaml-git/).
 
-[![Build Status](https://travis-ci.org/mirage/ocaml-git.png?branch=master)](https://travis-ci.org/mirage/ocaml-git)
+[![Build Status](https://travis-ci.org/mirage/ocaml-git.svg?branch=master)](https://travis-ci.org/mirage/ocaml-git)
 
 ### Build and Install Instructions
 
@@ -46,7 +46,7 @@ $ opam install git
   more easily. Pack file can be created but will not be compressed yet.
 
 * The [index file](http://mirage.github.io/ocaml-git/Git.Index.html)
-  (used as for managing the stagging area)
+  (used as for managing the staging area)
   are fully supported. Which means that `git diff` and `git status`
   will work as expected on a repository created by the library.
 
@@ -56,7 +56,7 @@ $ opam install git
   of the protocol capabilities are implemented (mainly `thin-pack`,
   `ofs-delta`, `side-band-64k` and `allow-reachable-sha1-in-want`).
 
-* Pushing is still experimental and need more testing.
+* Pushing is still experimental and needs more testing.
 
 * An abstraction for Git [Store](http://mirage.github.io/ocaml-git/Git.Store.S.html)
   is available. Various store implementations are available:
@@ -64,7 +64,7 @@ $ opam install git
   - A [unix filesystem](http://mirage.github.io/ocaml-git/Git_unix.S.FS.html)
     implementation;
   - A [mirageOS](http://mirage.github.io/ocaml-git/Git_mirage.html) implementation,
-    requiring a `V1_LWT.FS` implementation.
+    requiring a `Mirage_fs_lwt` implementation.
 
 ### What is *not* supported
 
@@ -98,7 +98,7 @@ Performance is comparable to the Git tool.
 
 # Lwt_main.run (read ["README.md"] >|= print_string)
 
-Pure OCaml Git format and protocol -- Guaranteed no C inside.
+ocaml-git -- Git format and protocol in pure OCaml
 
 Support for on-disk and in-memory Git stores. Can read and write all
 the Git objects: the usual blobs, trees, commits and tags but also
@@ -110,4 +110,6 @@ lives).
 
 ### License
 
-MIT, see LICENSE file for its text.
+MIT, see [LICENSE.md] file for its text.
+
+[LICENSE.md]: ./LICENSE.md
