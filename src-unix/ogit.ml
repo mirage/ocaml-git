@@ -85,21 +85,21 @@ let mk_flag ?section flags doc =
   let doc = Arg.info ?docs:section ~doc flags in
   Arg.(value & flag & doc)
 
-let mk_opt ?section flags value doc conv default =
+let mk_opt ?section flags value doc mk default =
   let doc = Arg.info ?docs:section ~docv:value ~doc flags in
-  Arg.(value & opt conv default & doc)
+  Arg.(value & opt mk default & doc)
 
-let mk_required ?section flags value doc conv default =
+let mk_required ?section flags value doc mk default =
   let doc = Arg.info ?docs:section ~docv:value ~doc flags in
-  Arg.(required & opt conv default & doc)
+  Arg.(required & opt mk default & doc)
 
 let term_info title ~doc ~man =
   let man = man @ help_sections in
   Term.info ~sdocs:global_option_section ~doc ~man title
 
-let arg_list name doc conv =
+let arg_list name doc mk =
   let doc = Arg.info ~docv:name ~doc [] in
-  Arg.(non_empty & pos_all conv [] & doc)
+  Arg.(non_empty & pos_all mk [] & doc)
 
 let gri =
   let parse str = `Ok (Gri.of_string str) in
