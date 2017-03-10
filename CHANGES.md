@@ -2,6 +2,7 @@
 
 * Improve API docs (#201, @olleolleolle)
 * Compat with cmdliner 1.0 (#202, @samoht)
+* Fix typos and links in docs (@smeruelo and @olleolleolle)
 
 ### 1.10.0 (2016-02-15)
 
