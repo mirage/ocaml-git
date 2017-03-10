@@ -1,3 +1,8 @@
+### 1.10.1 (2016-09-15)
+
+* Improve API docs (#201, @olleolleolle)
+* Compat with cmdliner 1.0 (#202, @samoht)
+
 ### 1.10.0 (2016-02-15)
 
 * Adapt to Mirage3 (@samoht, @avsm, @yomimono, @hannesm)
