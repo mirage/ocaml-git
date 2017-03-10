@@ -30,13 +30,13 @@ let protocol uri = match Uri.scheme uri with
   | None   -> `Unknown
 
 let err fmt = Fmt.kstrf failwith fmt
-let err_unknkown () = err "Unknown Git protocol"
+let err_unknown () = err "Unknown Git protocol"
 let err_not_supported x = err "%s is not a supported Git protocol" x
 let err_unknown_tag t = err "%a: unknown tag" Git_reference.pp t
 
 let protocol_exn uri = match protocol uri with
   | `Ok x            -> x
-  | `Unknown         -> err_unknkown ()
+  | `Unknown         -> err_unknown ()
   | `Not_supported x -> err_not_supported x
 
 let pp_protocol ppf = function
