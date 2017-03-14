@@ -27,15 +27,15 @@
 HTTP helpers to implement Git's Smart-HTTP protocol.
 <p>
 
-    The "smart" HTTP connection simulate normal channel by a sequence
+    The "smart" HTTP connection simulates a normal channel by a sequence
     of RPC calls (the HTTP requests and responses) by:
 <p>
 
     <ul>
 <li>allowing a read only after a write: the write is in the HTTP
     request, the read is in the HTTP response.</li>
-<li>replaying all the previous communication in both direction
-    everytime. The new thing to read or write is appended to the
+<li>replaying all the previous communication in both directions
+    every time. The new thing to read or write is appended to the
     history and part of a new RPC.</li>
 </ul>
 
@@ -43,20 +43,20 @@ HTTP helpers to implement Git's Smart-HTTP protocol.
 
     This looks like a terrible idea, but in practice there are very
     few round-trips between the client and the server with relatively
-    small amount of data. These round trips correspond to the
-    negociation phase, where the client and the server needs to find
+    small amounts of data. These round-trips correspond to the
+    negotiation phase, where the client and the server need to find
     which hashes they have in common. Once this is done, the final RPC
     response contains the pack file, which is where most of the data
-    are.
+    is.
 <p>
 
     The good thing with that scheme (I guess) is that the server
     doesn't have to keep any client state. Note: there are more
-    clever way to do this ...
+    clever ways to do this...
 <p>
 
-    That module implements a "restartable" HTTP channels, which hides
-    all that reconnection and replay complexity behind an usual
+    That module implements a "restartable" HTTP channel, which hides
+    all that reconnection and replay complexity behind a regular
     channel interface.<br>
 </div>
 <hr width="100%">
