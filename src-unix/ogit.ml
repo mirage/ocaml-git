@@ -354,6 +354,37 @@ let read_tree = {
     Term.(mk read $ backend $ commit)
 }
 
+(* COMMIT-ADD-PARENT *)
+let commit_add_parent = {
+  name = "commit-add-parent";
+  doc  = "Copy a commit object and adds a new parent to it";
+  man  = [];
+  term =
+    let commit =
+      let doc = Arg.info [] ~docv:"COMMIT" ~doc:"The commit to copy" in
+      Arg.(required & pos 0 (some string) None & doc )
+    in
+    let parent =
+      let doc = Arg.info [] ~docv:"PARENT" ~doc:"The parent to add" in
+      Arg.(required & pos 1 (some string) None & doc )
+    in
+    let read (module S: Store.S) commit_str parent_str =
+      run begin
+        S.create ~root:(Sys.getcwd ()) ()    >>= fun t ->
+        S.read_exn t (Hash_IO.of_short_hex commit_str) >>= function
+        | Value.Commit commit ->
+          let parent = Hash_IO.Commit.of_short_hex parent_str in
+          let new_commit =
+            { commit with Commit.parents = parent :: commit.Commit.parents }
+          in
+          S.write t (Value.Commit new_commit) >|= fun hash ->
+          Printf.printf "%s\n%!" (Hash.to_hex hash)
+        | _ ->
+          Printf.printf "%s is not a valid commit ID\n%!" commit_str;
+          exit 1
+      end in
+    Term.(mk read $ backend $ commit $ parent)
+}
 let reference_of_raw branch =
   Reference.of_raw ("refs/heads/" ^ Reference.to_raw branch)
 
@@ -585,6 +616,7 @@ let commands = List.map command [
     ls_files;
     ls_tree;
     read_tree;
+    commit_add_parent;
     clone;
     fetch;
     pull;
