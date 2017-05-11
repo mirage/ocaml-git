@@ -1,0 +1,7 @@
+(jbuild_version 1)
+
+(library
+ ((name        git)
+  (public_name git)
+  (libraries   (cstruct fmt lwt mstruct uri ocamlgraph logs astring hex
+                decompress))))

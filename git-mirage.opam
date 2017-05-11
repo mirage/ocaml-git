@@ -7,14 +7,11 @@ bug-reports:  "https://github.com/mirage/ocaml-git/issues"
 dev-repo:     "https://github.com/mirage/ocaml-git.git"
 doc:          "https://mirage.github.io/ocaml-git/"
 
-build: ["ocaml" "pkg/pkg.ml" "build" "--pinned" "%{pinned}%" "-n" name "--tests" "false"]
-
-build-test: [
-  ["ocaml" "pkg/pkg.ml" "build" "--pinned" "%{pinned}%" "-n" name "--tests" "true"]
-  ["ocaml" "pkg/pkg.ml" "test"]
-]
+build: ["jbuilder" "build" "-p" name "-j" jobs]
+build-test: ["jbuilder" "runtest" "test/git-mirage"]
 
 depends: [
+  "jbuilder" {build}
   "mirage-http"
   "mirage-flow-lwt"
   "mirage-channel-lwt"

@@ -1,0 +1,6 @@
+(jbuild_version 1)
+
+(library
+ ((name        git_top)
+  (public_name git.top)
+  (libraries   (git compiler-libs.toplevel))))
