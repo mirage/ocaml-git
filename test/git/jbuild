@@ -1,0 +1,11 @@
+(jbuild_version 1)
+
+(executable
+ ((name      test)
+  (package   git)
+  (libraries (test))))
+
+(alias
+ ((name runtest)
+  (deps (test.exe))
+  (action (run ${exe:test.exe} -q --color=always))))

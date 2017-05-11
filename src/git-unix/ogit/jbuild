@@ -1,0 +1,7 @@
+(jbuild_version 1)
+
+(executable
+  ((name        main)
+   (package     git-unix)
+   (public_name ogit)
+   (libraries   (git-unix cmdliner mtime.os fmt.cli logs.cli fmt.tty))))
