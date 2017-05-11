@@ -20,8 +20,8 @@ depends: [
   "fmt"
   "hex"
   "astring"
+  "decompress"
   "alcotest" {test}
-  "camlzip"  {test}
   "nocrypto" {test}
 ]
 available: [ocaml-version >= "4.02.3"]

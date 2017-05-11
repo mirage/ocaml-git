@@ -22,7 +22,6 @@ depends: [
   "git"      {>= "1.10.0"}
   "alcotest"       {test}
   "mirage-fs-unix" {test & >= "1.3.0"}
-  "camlzip"        {test & >= "1.07"}
   "nocrypto"       {test & >= "0.5.4"}
   "io-page"        {test & >= "1.6.1"}
 ]
