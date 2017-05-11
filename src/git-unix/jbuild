@@ -1,0 +1,7 @@
+(jbuild_version 1)
+
+(library
+ ((name        git_unix)
+  (public_name git-unix)
+  (libraries   (git cmdliner mtime.os conduit.lwt-unix git-http cohttp.lwt
+                camlzip))))

@@ -1,0 +1,11 @@
+(jbuild_version 1)
+
+(executable
+ ((name      test)
+  (package   git-mirage)
+  (libraries (test git-mirage mirage-fs-unix io-page.unix))))
+
+(alias
+ ((name runtest)
+  (deps (test.exe))
+  (action (run ${exe:test.exe} -q --color=always))))
