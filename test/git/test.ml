@@ -18,9 +18,9 @@ open Git
 open Lwt.Infix
 open Test_common
 
-(* To avoid depending on git-unix *)
-module Zlib = Git.Inflate.Make(Zlib)
+module Zlib = Git.Inflate.M
 
+(* To avoid depending on git-unix *)
 module SHA1 = struct
 
   let cstruct buf =
