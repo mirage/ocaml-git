@@ -4,4 +4,5 @@
   ((name        main)
    (package     git-unix)
    (public_name ogit)
-   (libraries   (git-unix cmdliner mtime.os fmt.cli logs.cli fmt.tty))))
+   (libraries   (git-unix cmdliner mtime mtime.clock.os fmt.cli logs.cli
+                 fmt.tty))))
