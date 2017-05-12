@@ -1,29 +1,9 @@
+BUILD=jbuilder build --dev
+RUNTEST=jbuilder runtest -j 1
+
 all:
-	$(MAKE) core
-	$(MAKE) http
-	$(MAKE) mirage
-	$(MAKE) unix
-
-core:
-	ocaml pkg/pkg.ml build -n git
-
-http:
-	ocaml pkg/pkg.ml build -n git-http
-
-mirage:
-	ocaml pkg/pkg.ml build -n git-mirage --tests true
-	ocaml pkg/pkg.ml test
-
-unix:
-	ocaml pkg/pkg.ml build -n git-unix --tests true
-	ocaml pkg/pkg.ml test
-
-clean:
-	rm -rf _build _tests
-	ocaml pkg/pkg.ml clean -n git
-	ocaml pkg/pkg.ml clean -n git-http
-	ocaml pkg/pkg.ml clean -n git-mirage
-	ocaml pkg/pkg.ml clean -n git-unix
+	$(BUILD)
+	$(RUNTEST)
 
 REPO=../opam-repository
 PACKAGES=$(REPO)/packages
@@ -36,8 +16,6 @@ pkg-%:
 	rm -f $(PACKAGES)/$*/$*.opam
 	cd $(PACKAGES) && git add $*
 
+PKGS=$(basename $(wildcard *.opam))
 opam-pkg:
-	$(MAKE) pkg-git
-	$(MAKE) pkg-git-http
-	$(MAKE) pkg-git-mirage
-	$(MAKE) pkg-git-unix
+	$(MAKE) $(PKGS:%=pkg-%)
