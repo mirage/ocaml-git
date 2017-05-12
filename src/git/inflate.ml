@@ -34,59 +34,74 @@ module None = struct
 end
 
 module M = struct
-
   open Decompress
+
+  let size_buffer   = 0x8000
+  let input_buffer  = Bytes.create size_buffer
+  let output_buffer = Bytes.create size_buffer
+  let window = Window.create ~proof:B.proof_bytes
 
   exception Deflate_error of Deflate.error
 
-  let deflate ?(level = 4) data =
-    let input_buffer = Bytes.create 0xFFFF in
-    let output_buffer = Bytes.create 0xFFFF in
+  let deflate ?(level = 4) buff =
     let pos = ref 0 in
-    let res = Buffer.create (Cstruct.len data) in
-    Deflate.bytes input_buffer output_buffer (fun input_buffer -> function
-        | Some max ->
-          let n = min max (min 0xFFFF (Cstruct.len data - !pos)) in
-          Cstruct.blit_to_string data !pos input_buffer 0 n;
-          pos := !pos + n;
-          n
-        | None ->
-          let n = min 0xFFFF (Cstruct.len data - !pos) in
-          Cstruct.blit_to_string data !pos input_buffer 0 n;
-          pos := !pos + n;
-          n
-      ) (fun output_buffer len ->
-        Buffer.add_subbytes res output_buffer 0 len;
-        0xFFFF)
-      (Deflate.default ~proof:B.proof_bytes level)
-    |> function
-    | Ok _ -> Buffer.contents res |> Cstruct.of_string
-    | Error exn -> raise (Deflate_error exn)
+    let res = Buffer.create (Cstruct.len buff) in
 
-  let inflate ?output_size (data:Mstruct.t) =
-    let data = Mstruct.clone data in
-    let input_buffer = Bytes.create 0xFFFF in
-    let output_buffer = Bytes.create 0xFFFF in
-    let window = Window.create ~proof:B.proof_bytes in
-    let pos = ref 0 in
-    let res = match output_size with
-      | None   -> Buffer.create (Mstruct.length data)
-      | Some n -> Buffer.create n
-    in
-    Inflate.bytes input_buffer output_buffer (fun input_buffer ->
-        let n = min 0xFFFF (Mstruct.length data - !pos) in
-        let i = Mstruct.get_string data n in
-        Bytes.blit i 0 input_buffer 0 n;
+    Deflate.bytes
+      input_buffer output_buffer
+      (fun input_buffer -> function
+      | Some max ->
+        let n = min max (min size_buffer (Cstruct.len buff - !pos)) in
+        Cstruct.blit_to_bytes buff !pos input_buffer 0 n;
         pos := !pos + n;
         n
-      ) (fun output_buffer len ->
-        Buffer.add_subbytes res output_buffer 0 len;
-        0xFFFF)
-      (Inflate.default window)
+      | None ->
+        let n = min size_buffer (Cstruct.len buff - !pos) in
+        Cstruct.blit_to_bytes buff !pos input_buffer 0 n;
+        pos := !pos + n;
+        n)
+      (fun output_buffer len ->
+      Buffer.add_subbytes res output_buffer 0 len;
+      size_buffer)
+      (Deflate.default ~proof:B.proof_bytes level)
     |> function
-    | Ok _    -> Some (Mstruct.of_string (Buffer.contents res))
-    | Error _ -> None
+    | Ok _ -> Cstruct.of_string @@ Buffer.contents res
+    | Error exn -> raise (Deflate_error exn)
 
+  let inflate ?output_size orig =
+    let res = Buffer.create (match output_size with Some len -> len | None -> size_buffer) in
+
+    let open Inflate in
+
+    let rec loop ~refill:rest t =
+      match eval (B.from_bytes input_buffer) (B.from_bytes output_buffer) t with
+      | `Await t ->
+        Mstruct.shift orig (used_in t - rest);
+
+        let len = min size_buffer (Mstruct.length orig) in
+
+        (match Mstruct.pick_string orig len with
+        | Some str ->
+          Bytes.blit_string str 0 input_buffer 0 len;
+          loop ~refill:0 (refill 0 len t)
+        | None -> failwith "Inflate.inflate")
+      | `Flush t ->
+        Mstruct.shift orig (used_in t - rest);
+
+        Buffer.add_subbytes res output_buffer 0 (used_out t);
+        loop ~refill:(used_in t) (flush 0 size_buffer t)
+      | `Error _ -> None
+      | `End t ->
+        Mstruct.shift orig (used_in t - rest);
+
+        if used_out t <> 0
+        then begin
+          Buffer.add_subbytes res output_buffer 0 (used_out t);
+          Some (Mstruct.of_string (Buffer.contents res))
+        end else Some (Mstruct.of_string (Buffer.contents res))
+    in
+
+    loop ~refill:0 (default (Window.reset window))
 end
 
 module type ZLIB = sig
