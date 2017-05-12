@@ -467,7 +467,7 @@ module IO_FS = struct
 
 end
 
-module Zlib = Git.Inflate.Make(Zlib)
+module Zlib = Git.Inflate.M
 
 module SHA1 = struct
 

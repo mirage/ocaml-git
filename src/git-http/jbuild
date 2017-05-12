@@ -3,4 +3,4 @@
 (library
  ((name        git_http)
   (public_name git-http)
-  (libraries   (git cohttp uri))))
+  (libraries   (git cohttp uri sexplib))))
