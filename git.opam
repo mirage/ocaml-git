@@ -21,8 +21,8 @@ depends: [
   "hex"
   "astring"
   "decompress" {>= "0.6"}
+  "digestif"
   "alcotest" {test}
-  "nocrypto" {test}
   "mtime"    {test & >= "1.0.0"}
 ]
 available: [ocaml-version >= "4.02.3"]

@@ -21,12 +21,10 @@ open Astring
 
 (*****************)
 
+let () = Random.self_init ()
+
 let long_random_string () =
-  let t  = Unix.gettimeofday () in
-  let cs = Cstruct.create 8 in
-  Cstruct.BE.set_uint64 cs 0 Int64.(of_float (t *. 1000.)) ;
-  Nocrypto.Rng.reseed cs;
-  Cstruct.to_string (Nocrypto.Rng.generate 1024)
+  Bytes.init 1024 (fun _ -> Char.of_byte (Random.int 255))
 
 module Make (Store: Store.S) = struct
 

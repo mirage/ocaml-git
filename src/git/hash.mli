@@ -77,3 +77,6 @@ module Array (D: DIGEST): sig
   val linear_search: Cstruct.t -> t -> int option
   val binary_search: Cstruct.t -> t ->  int option
 end
+
+module SHA1: DIGEST
+module SHA256: DIGEST

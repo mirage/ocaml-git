@@ -250,44 +250,26 @@ let suite (speed, x) =
   ]
 
 let extra = [
-  "OPS"        , ["Concurrent read/writes", `Quick, test_read_writes];
-  "SHA1-unix"  , Test_store.array (module Git_unix.SHA1);
-  "SHA256-unix", Test_store.array (module Git_unix.SHA256);
+  "OPS", ["Concurrent read/writes", `Quick, test_read_writes];
 ]
-
-module Memory = Git.Mem.Make(Git_unix.SHA1)(Git_unix.Zlib)
-
-let mem_init () =
-  Git.Value.Cache.clear ();
-  Memory.clear_all ();
-  Lwt.return_unit
-
-let mem_suite = {
-  name  = "MEM";
-  init  = mem_init;
-  clean = unit;
-  store = (module Memory);
-  shell = false;
-}
 
 module FS = Git_unix.FS
 
-let fs_init () =
+let init () =
   FS.clear ();
   FS.create ~root () >>= fun t ->
   FS.reset t
 
-let fs_suite =
+let suite =
   {
     name  = "FS";
-    init  = fs_init;
+    init;
     clean = unit;
     store = (module FS);
     shell = true;
   }
 
 let () =
-  Test_store.run ~extra "git" [
-    `Quick, mem_suite;
-    `Quick, fs_suite;
+  Test_store.run ~extra "git-unix" [
+    `Quick, suite;
   ]
