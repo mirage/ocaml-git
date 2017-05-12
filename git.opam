@@ -20,7 +20,7 @@ depends: [
   "fmt"
   "hex"
   "astring"
-  "decompress"
+  "decompress" {>= "0.6"}
   "alcotest" {test}
   "nocrypto" {test}
   "mtime"    {test & >= "1.0.0"}
