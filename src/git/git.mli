@@ -432,6 +432,10 @@ module Inflate: sig
   module None: S
   (** No compression. *)
 
+  module M: S
+  (** Default Zlib compression in pure OCaml, provided by
+      [Decompress]. *)
+
   (** Minimaal signature provided by Zlib. *)
   module type ZLIB = sig
     exception Error of string * string

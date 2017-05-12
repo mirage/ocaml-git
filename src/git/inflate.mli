@@ -20,6 +20,7 @@ module type S = sig
 end
 
 module None: S
+module M: S
 
 module type ZLIB = sig
   exception Error of string * string
