@@ -14,8 +14,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Git
-open Lwt.Infix
 open Test_common
 
 module Zlib = Git.Inflate.M
