@@ -28,7 +28,7 @@ let reporter () =
     let ppf = match level with Logs.App -> Fmt.stdout | _ -> Fmt.stderr in
     let with_stamp h _tags k fmt =
       let dt = Mtime.Span.to_us (Mtime_clock.elapsed ()) in
-      Fmt.kpf k ppf ("\r%0+04.0fus %a %a @[" ^^ fmt ^^ "@]@.")
+      Fmt.kpf k ppf ("\r%+04.0fus %a %a @[" ^^ fmt ^^ "@]@.")
         dt
         Fmt.(styled `Magenta string) (pad 10 @@ Logs.Src.name src)
         Logs_fmt.pp_header (level, h)
