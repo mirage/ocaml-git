@@ -1,8 +1,0 @@
-description = "Unix backend for the Git protocol"
-version = "%%VERSION_NUM%%"
-requires = "git git-http lwt cohttp.lwt lwt.unix conduit.lwt-unix zip nocrypto"
-archive(byte) = "git-unix.cma"
-archive(native) = "git-unix.cmxa"
-plugin(byte) = "git-unix.cma"
-plugin(native) = "git-unix.cmxs"
-exists_if = "git-unix.cma"
