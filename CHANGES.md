@@ -1,3 +1,11 @@
+### 1.11.0 (2016-06-01)
+
+* Add `ogit add-commit-parent` to add a new parent to a given commit
+  (#208, @samoht)
+* port to jbuilder (#209, @samoht)
+* port to mtime 1.0 (#212, @dinosaure and @samoht)
+* use Decompress instead of camlzip (#211, @dinosaure and @samoht)
+
 ### 1.10.1 (2016-09-15)
 
 * Improve API docs (#201, @olleolleolle)
