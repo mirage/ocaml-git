@@ -7,7 +7,10 @@ bug-reports:  "https://github.com/mirage/ocaml-git/issues"
 dev-repo:     "https://github.com/mirage/ocaml-git.git"
 doc:          "https://mirage.github.io/ocaml-git/"
 
-build: ["jbuilder" "build" "-p" name "-j" jobs]
+build: [
+  ["jbuilder" "subst" name] {pinned}
+  ["jbuilder" "build" "-p" name "-j" jobs]
+]
 build-test: ["jbuilder" "build" "test/git"]
 
 depends: [
