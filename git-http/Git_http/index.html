@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Git_http (git-http.Git_http)</title><link rel="stylesheet" href="../../odoc.css"/><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/><meta name="generator" content="doc-ock-html v1.0.0-1-g1fc9bf0"/></head><body><nav id="top"><a href="../index.html">Up</a> &mdash; <span class="package">package <a href="../index.html">git-http</a></span></nav><header><h1><span class="keyword">Module</span> <span class="module-path">Git_http</span></h1></header><p>HTTP helpers to implement Git's Smart-HTTP protocol.</p><p>The &quot;smart&quot; HTTP connection simulates a normal channel by a sequence
+of RPC calls (the HTTP requests and responses) by:</p><ul><li>allowing a read only after a write: the write is in the HTTP
+request, the read is in the HTTP response.</li><li>replaying all the previous communication in both directions
+every time. The new thing to read or write is appended to the
+history and part of a new RPC.</li></ul><p>This looks like a terrible idea, but in practice there are very
+few round-trips between the client and the server with relatively
+small amounts of data. These round-trips correspond to the
+negotiation phase, where the client and the server need to find
+which hashes they have in common. Once this is done, the final RPC
+response contains the pack file, which is where most of the data
+is.</p><p>The good thing with that scheme (I guess) is that the server
+doesn't have to keep any client state. Note: there are more
+clever ways to do this...</p><p>That module implements a &quot;restartable&quot; HTTP channel, which hides
+all that reconnection and replay complexity behind a regular
+channel interface.</p><div class="spec module-type" id="module-type-CLIENT"><a href="#module-type-CLIENT" class="anchor"></a><div class="def module-type"><code><span class="keyword">module type </span><a href="module-type-CLIENT/index.html">CLIENT</a> : <span class="keyword">sig</span> ... <span class="keyword">end</span></code></div><div class="doc"></div></div><div class="spec module-type" id="module-type-CHAN"><a href="#module-type-CHAN" class="anchor"></a><div class="def module-type"><code><span class="keyword">module type </span><a href="module-type-CHAN/index.html">CHAN</a> : <span class="keyword">sig</span> ... <span class="keyword">end</span></code></div><div class="doc"><p>The module type for buildable channels (see <a href="module-type-CHAN/index.html#val-make">CHAN.make</a>).</p></div></div><div class="spec module" id="module-Flow"><a href="#module-Flow" class="anchor"></a><div class="def module"><code><span class="keyword">module </span><a href="Flow/index.html">Flow</a> : <span class="keyword">functor</span> (<a href="Flow/argument-1-HTTP/index.html">HTTP</a> : <a href="index.html#module-type-CLIENT">CLIENT</a>) -&gt; <span class="keyword">functor</span> (<a href="Flow/argument-2-IC/index.html">IC</a> : <a href="index.html#module-type-CHAN">CHAN</a>) -&gt; <span class="keyword">functor</span> (<a href="Flow/argument-3-OC/index.html">OC</a> : <a href="index.html#module-type-CHAN">CHAN</a>) -&gt; <span class="keyword">sig</span> ... <span class="keyword">end</span></code></div><div class="doc"></div></div></body></html>
