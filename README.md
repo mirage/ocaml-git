@@ -31,26 +31,26 @@ $ opam install git
 ### What is supported
 
 * The loose object files can be read and written;
-  - [blobs](http://mirage.github.io/ocaml-git/Git.Blob.html) (files)
-  - [trees](http://mirage.github.io/ocaml-git/Git.Tree.html) (directories)
-  - [commits](http://mirage.github.io/ocaml-git/Git.Commit.html) (revision history)
-  - [tags](http://mirage.github.io/ocaml-git/Git.Tag.html) (annotated tags)
-  - [references](http://mirage.github.io/ocaml-git/Git.Reference.html) (branch names)
+  - [blobs](http://mirage.github.io/ocaml-git/git/Git/Blob/index.html) (files)
+  - [trees](http://mirage.github.io/ocaml-git/git/Git/Tree/index.html) (directories)
+  - [commits](http://mirage.github.io/ocaml-git/git/Git/Commit/index.html) (revision history)
+  - [tags](http://mirage.github.io/ocaml-git/git/Git/Tag/index.html) (annotated tags)
+  - [references](http://mirage.github.io/ocaml-git/git/Git/Reference/index.html) (branch names)
 
-* The [pack files](http://mirage.github.io/ocaml-git/Git.Pack.html)
+* The [pack files](http://mirage.github.io/ocaml-git/git/Git/Pack/index.html)
   (collections of compressed loose objects using a binary-diff representation)
-  and [pack indexes](http://mirage.github.io/ocaml-git/Git.Pack_index.html)
+  and [pack indexes](http://mirage.github.io/ocaml-git/git/Git/Pack_index/index.html)
   (indexes of pack files) can be read and
   written). The binary diff hunks are exposed using a high-level
   position-independent representation so that they can be manipulated
   more easily. Pack file can be created but will not be compressed yet.
 
-* The [index file](http://mirage.github.io/ocaml-git/Git.Index.html)
+* The [index file](http://mirage.github.io/ocaml-git/git/Git/Index/index.html)
   (used as for managing the staging area)
   are fully supported. Which means that `git diff` and `git status`
   will work as expected on a repository created by the library.
 
-* [Cloning and fetching](http://mirage.github.io/ocaml-git/Git.Sync.html)
+* [Cloning and fetching](http://mirage.github.io/ocaml-git/git/Git/Sync/index.html)
   (using various options) are fully supported for
   the Git protocol, the smart-HTTP protocol and `git+ssh`. A subset
   of the protocol capabilities are implemented (mainly `thin-pack`,
@@ -58,12 +58,12 @@ $ opam install git
 
 * Pushing is still experimental and needs more testing.
 
-* An abstraction for Git [Store](http://mirage.github.io/ocaml-git/Git.Store.S.html)
-  is available. Various store implementations are available:
-  - An [in-memory](http://mirage.github.io/ocaml-git/Git.Memory.html) implementation;
-  - A [unix filesystem](http://mirage.github.io/ocaml-git/Git_unix.S.FS.html)
+* An abstraction for Git [Store](http://mirage.github.io/ocaml-git/git/Git/Store/module-type-S/index.html)
+  Is available. Various store implementations are available:
+  - An [in-memory](http://mirage.github.io/ocaml-git/git/Git/Mem/index.html) implementation;
+  - A [unix filesystem](http://mirage.github.io/ocaml-git/git-unix/Git_unix/FS/index.html)
     implementation;
-  - A [mirageOS](http://mirage.github.io/ocaml-git/Git_mirage.html) implementation,
+  - A [mirageOS](http://mirage.github.io/ocaml-git/git-mirage/Git_mirage/index.html) implementation,
     requiring a `Mirage_fs_lwt` implementation.
 
 ### What is *not* supported
