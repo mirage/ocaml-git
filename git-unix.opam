@@ -16,9 +16,10 @@ build-test: ["jbuilder" "runtest" "test/git-unix"]
 depends: [
   "jbuilder" {build}
   "cmdliner"
-  "logs"
+  "fmt" {>= "0.8.3"}
+  "logs" {>= "0.6.2"}
   "git-http" {>= "1.11.0"}
-  "conduit"  {>= "0.8.4"}
+  "conduit"  {> "0.15.4"}
   "nocrypto" {>= "0.2.0"}
   "mtime"    {>= "1.0.0"}
   "base-unix"
