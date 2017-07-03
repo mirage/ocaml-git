@@ -23,6 +23,7 @@ depends: [
   "fmt"
   "hex"
   "astring"
+  "ocplib-endian"
   "decompress" {>= "0.6"}
   "alcotest" {test}
   "nocrypto" {test}
