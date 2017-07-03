@@ -64,15 +64,3 @@ module Make (D: Git.Hash.DIGEST) (I: Git.Inflate.S): S
 (** Parameterize the Git implementation with different inflate and hash
     algorithms. {b Note:} this might cause your implementation to not
     be compatible with Git anymore! *)
-
-module Zlib: Inflate.S
-(** Implementation of the inflate signature using [camlzip]'s zlib
-    bindings. *)
-
-module SHA1: Git.Hash.DIGEST
-(** Implementation of the digest signature using [ocaml-nocrypto]'s
-    Hash1 algorithm. *)
-
-module SHA256: Git.Hash.DIGEST
-(** Implementation of the digest signature using [ocaml-nocrypto]'s
-    Hash256 algorithm. *)

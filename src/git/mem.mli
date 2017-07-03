@@ -14,8 +14,11 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Make (D: Hash.DIGEST) (I: Inflate.S): sig
+module type S = sig
   include Store.S
   val clear: ?root:string -> unit -> unit
   val clear_all: unit -> unit
 end
+
+module Make (D: Hash.DIGEST) (I: Inflate.S): S
+include S

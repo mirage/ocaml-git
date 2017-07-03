@@ -16,6 +16,12 @@
 
 open Lwt.Infix
 
+module type S = sig
+  include Store.S
+  val clear: ?root:string -> unit -> unit
+  val clear_all: unit -> unit
+end
+
 module Log = (val Misc.src_log "memory" : Logs.LOG)
 
 let err_not_found n k =
@@ -226,3 +232,5 @@ module Make (D: Hash.DIGEST) (I: Inflate.S) = struct
   module Digest = D
   module Inflate = I
 end
+
+include Make (Hash.SHA1)(Inflate.M)

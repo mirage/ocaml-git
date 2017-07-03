@@ -19,7 +19,6 @@ depends: [
   "logs"
   "git-http" {>= "1.11.0"}
   "conduit"  {>= "0.8.4"}
-  "nocrypto" {>= "0.2.0"}
   "mtime"    {>= "1.0.0"}
   "base-unix"
   "alcotest" {test}

@@ -208,6 +208,12 @@ module Hash: sig
     val length: int
   end
 
+  module SHA1: DIGEST
+  (** SHA1 digests. *)
+
+  module SHA256: DIGEST
+  (** SHA256 digests. *)
+
   module IO (D: DIGEST): IO
 
   module Array (D: DIGEST): sig
@@ -1381,7 +1387,7 @@ end
 (** Store Git objects in memory. *)
 module Mem: sig
 
-  module Make (D: Hash.DIGEST) (I: Inflate.S): sig
+  module type S =sig
 
     include Store.S
 
@@ -1393,6 +1399,11 @@ module Mem: sig
     (** Remove all the contents store in memory for all roots. *)
 
   end
+
+  module Make (D: Hash.DIGEST) (I: Inflate.S): S
+
+  include S
+  (** Default Git implementation. *)
 
 end
 

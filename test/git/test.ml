@@ -16,41 +16,25 @@
 
 open Test_common
 
-module Zlib = Git.Inflate.M
-
-(* To avoid depending on git-unix *)
-module SHA1 = struct
-
-  let cstruct buf =
-    buf
-    |> Nocrypto.Hash.SHA1.digest
-    |> Cstruct.to_string
-    |> fun x -> Git.Hash.of_raw x
-
-  let string str =
-    Cstruct.of_string str
-    |> cstruct
-
-  let length = Nocrypto.Hash.SHA1.digest_size
-
-end
-
-module Memory = Git.Mem.Make(SHA1)(Zlib)
-
 let init () =
   Git.Value.Cache.clear ();
-  Memory.clear_all ();
+  Git.Mem.clear_all ();
   Lwt.return_unit
 
 let suite = {
   name  = "MEM";
   init  = init;
   clean = unit;
-  store = (module Memory);
+  store = (module Git.Mem);
   shell = false;
 }
 
+let extra = [
+  "SHA1-unix"  , Test_store.array (module Git.Hash.SHA1);
+  "SHA256-unix", Test_store.array (module Git.Hash.SHA256);
+]
+
 let () =
-  Test_store.run "git" [
+  Test_store.run ~extra "git" [
     `Quick, suite;
   ]

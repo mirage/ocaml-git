@@ -243,3 +243,39 @@ module Array (D: DIGEST) = struct
     aux buf
 
 end
+
+module SHA1 = struct
+
+  let string buf =
+    buf
+    |> Rakia.SHA1.Bytes.digest
+    |> of_raw
+
+  let cstruct buf =
+    buf
+    |> Cstruct.to_bigarray
+    |> Rakia.SHA1.Bigstring.digest
+    |> Rakia.Bi.to_string
+    |> of_raw
+
+  let length = Rakia.SHA1.digest_size
+
+end
+
+module SHA256 = struct
+
+  let string buf =
+    buf
+    |> Rakia.SHA256.Bytes.digest
+    |> of_raw
+
+  let cstruct buf =
+    buf
+    |> Cstruct.to_bigarray
+    |> Rakia.SHA256.Bigstring.digest
+    |> Rakia.Bi.to_string
+    |> of_raw
+
+  let length = Rakia.SHA256.digest_size
+
+end
