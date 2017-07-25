@@ -18,7 +18,8 @@ depends: [
   "cmdliner"
   "logs"
   "git-http" {>= "1.11.0"}
-  "conduit"  {>= "0.8.4" < "1.0.0"}
+  "conduit-lwt-unix" {>= "1.0.0"}
+  "cohttp-lwt-unix"  {>= "0.99.0"}
   "nocrypto" {>= "0.2.0"}
   "mtime"    {>= "1.0.0"}
   "base-unix"
