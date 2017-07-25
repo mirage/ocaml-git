@@ -1,9 +1,13 @@
-BUILD=jbuilder build --dev
-RUNTEST=jbuilder runtest -j 1 --dev
+.PHONY: all test clean
 
 all:
-	$(BUILD)
-	$(RUNTEST)
+	jbuilder build --dev
+
+test:
+	jbuilder runtest -j 1 --dev
+
+clean:
+	jbuilder clean
 
 REPO=../opam-repository
 PACKAGES=$(REPO)/packages
