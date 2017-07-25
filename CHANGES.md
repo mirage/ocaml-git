@@ -1,3 +1,8 @@
+### 1.11.1 (2017-07-25)
+
+- [git-unix] Fix linking issue of the `ogit` binary on some package
+  configurations (#225, @samoht)
+
 ### 1.11.0 (2016-06-01)
 
 * Add `ogit add-commit-parent` to add a new parent to a given commit
@@ -6,13 +11,13 @@
 * port to mtime 1.0 (#212, @dinosaure and @samoht)
 * use Decompress instead of camlzip (#211, @dinosaure and @samoht)
 
-### 1.10.1 (2016-09-15)
+### 1.10.1 (2017-04-15)
 
 * Improve API docs (#201, @olleolleolle)
 * Compat with cmdliner 1.0 (#202, @samoht)
 * Fix typos and links in docs (@smeruelo and @olleolleolle)
 
-### 1.10.0 (2016-02-15)
+### 1.10.0 (2017-02-15)
 
 * Adapt to Mirage3 (@samoht, @avsm, @yomimono, @hannesm)
 * Add IO.test_and_set to automatically update references (#185, @samoht)
