@@ -5,4 +5,4 @@
    (package     git-unix)
    (public_name ogit)
    (libraries   (git-unix cmdliner mtime mtime.clock.os fmt.cli logs.cli
-                 fmt.tty))))
+                 fmt.tty logs.fmt))))
