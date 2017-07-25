@@ -1,0 +1,4 @@
+true: safe_string, bin_annot, debug, keep_locs, use_menhir
+<*/**>: warn(@20@25@26@33@39)
+
+<*/**.{ml,mli,byte,native}>: package(fpath cstruct lwt lwt.unix angstrom faraday farfadet digestif.c bos decompress lru camlzip uri astring), linkdep(crc32_stubs.o), linkdep(rabin_stubs.o)
