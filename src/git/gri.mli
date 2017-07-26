@@ -23,7 +23,7 @@
 
 *)
 
-type t
+type t = private Uri.t
 (** Git resource identifier values. *)
 
 val of_string: string -> t

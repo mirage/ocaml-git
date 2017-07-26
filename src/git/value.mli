@@ -1,54 +1,96 @@
-(*
- * Copyright (c) 2013-2017 Thomas Gazagnaire <thomas@gazagnaire.org>
- *
- * Permission to use, copy, modify, and distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
- *
- * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
- * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
- * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
- * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
- * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
- * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- *)
+module type S =
+sig
+  module Digest
+    : Ihash.IDIGEST
+  (** The [Digest] module used to make the module. *)
 
-type t =
-  | Blob   of Blob.t
-  | Commit of Commit.t
-  | Tag    of Tag.t
-  | Tree   of Tree.t
+  module Inflate
+    : Common.INFLATE
+  (** The [Inflate] module used to make the module. *)
 
-include S.S with type t := t
+  module Deflate
+    : Common.DEFLATE
+  (** The [Deflate] module used to make the module. *)
 
-val type_of: t -> Object_type.t
-val type_of_inflated: Mstruct.t -> Object_type.t
-val commit: Commit.t -> t
-val blob: Blob.t -> t
-val tree: Tree.t -> t
-val tag: Tag.t -> t
+  module Hash
+    : Common.BASE
+  (** The Hash module. *)
 
-type read = Hash.t -> t option Lwt.t
-type read_inflated = Hash.t -> string option Lwt.t
-type write = t -> Hash.t Lwt.t
-type write_inflated = string -> Hash.t Lwt.t
+  module Blob
+    : Blob.S with type Hash.t = Hash.t
+  (** The {!Blob} module. *)
 
-module Cache: sig
-  val set_size: int -> unit
-  val clear: unit -> unit
-  val find: Hash.t -> t option
-  val find_inflated: Hash.t -> string option
-  val add: Hash.t -> t -> unit
-  val add_inflated: Hash.t -> string -> unit
+  module Commit
+    : Commit.S with type Hash.t = Hash.t
+  (** The {!Commit} module. *)
+
+  module Tree
+    : Tree.S with type Hash.t = Hash.t
+  (** The {!Tree} module. *)
+
+  module Tag
+    : Tag.S with type Hash.t = Hash.t
+  (** The {!Tag} module. *)
+
+  type t =
+    | Blob   of Blob.t   (** The {!Blob.t} OCaml value. *)
+    | Commit of Commit.t (** The {!Commit.t} OCaml value. *)
+    | Tree   of Tree.t   (** The {!Tree.t} OCaml value. *)
+    | Tag    of Tag.t    (** The {!Tag.t} OCaml value. *)
+  (** OCaml value which represents a Git object. *)
+
+  module A
+    : Common.ANGSTROM with type t = t
+  (** The Angstrom decoder of the Git object. *)
+
+  module F
+    : Common.FARADAY  with type t = t
+  (** The Faraday encoder of the Git object. *)
+
+  module D
+    : Common.DECODER  with type t = t
+                       and type raw = Cstruct.t
+                       and type init = Inflate.window * Cstruct.t * Cstruct.t
+                       and type error = [ `Decoder of string | `Inflate of Inflate.error ]
+  (** The decoder of the Git object. We constraint the input to be an
+      {!Inflate.window} and a {Cstruct.t} which used by the {Inflate} module and an
+      other {Cstruct.t} as an internal buffer.
+
+      All error from the {!Inflate} module is relayed to the [`Inflate] error
+      value. *)
+
+  module M
+    : Common.MINIENC  with type t = t
+  (** The {!Minienc} encoder of the Git object. *)
+
+  module E
+    : Common.ENCODER  with type t = t
+                       and type raw = Cstruct.t
+                       and type init = int * t * int * Cstruct.t
+                       and type error = [ `Deflate of Deflate.error ]
+  (** The encoder (which uses a {!Minienc.encoder}) of the Git object. We
+      constraint the output to be a {Cstruct.t}. This encoder needs the level of the
+      compression, the value {!t}, the memory consumption of the encoder (in bytes)
+      and an internal buffer between the compression and the encoder.
+
+      All error from the {!Deflate} module is relayed to the [`Deflate] error
+      value. *)
+
+  include Ihash.DIGEST with type t := t
+                        and type hash := Hash.t
+  include Common.BASE with type t := t
 end
 
-module type IO = sig
-  include S.IO with type t = t
-  val name: t -> Hash.t
-  val add_header: Buffer.t -> Object_type.t -> int -> unit
-  val add_inflated: Buffer.t -> t -> unit
-  val input_inflated: Mstruct.t -> t
-end
-
-module IO (D: Hash.DIGEST) (I: Inflate.S): IO
+module Make
+    (Digest : Ihash.IDIGEST with type t = Bytes.t
+                             and type buffer = Cstruct.t)
+    (Inflate : Common.INFLATE)
+    (Deflate : Common.DEFLATE)
+  : S with type Hash.t = Digest.t
+       and module Digest = Digest
+       and module Inflate = Inflate
+       and module Deflate = Deflate
+(** The {i functor} to make the OCaml representation of the Git object by a
+    specific hash, an {!Inflate} implementation for the compression and a {!Deflate}
+    implementation for the decompression. We constraint the {!IDIGEST} module to
+    generate a {Bytes.t} and compute a {Cstruct.t}. *)

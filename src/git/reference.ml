@@ -1,85 +1,167 @@
-(*
- * Copyright (c) 2013-2017 Thomas Gazagnaire <thomas@gazagnaire.org>
- *
- * Permission to use, copy, modify, and distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
- *
- * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
- * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
- * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
- * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
- * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
- * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- *)
+module type S =
+sig
+  module Digest     : Ihash.IDIGEST
+  module Path       : Path.S
+  module FileSystem : Fs.S
+  module Hash       : Common.BASE
 
-open Astring
+  type t = private string
 
-type t = string
+  val head    : t
+  val master  : t
 
-let compare = String.compare
-let equal = (=)
-let hash = Hashtbl.hash
+  val is_head : t -> bool
 
-let add _buf ?level:_ _t = failwith "TODO: Reference.add"
-let input _buf = failwith "TODO: Reference.input"
+  val of_string : string -> t
+  val to_string : t -> string
 
-let to_raw x = x
-let of_raw x = x
-let pretty x = String.Ascii.escape x
-let pp ppf x = Format.fprintf ppf "%s" (pretty x)
+  include Common.BASE with type t := t
 
-module Map = Misc.Map(Misc.S)
+  type head_contents =
+    | Hash of Hash.t
+    | Ref of t
 
-let compare x y =
-  match x, y with
-  | "HEAD", "HEAD" -> 0
-  | "HEAD", _      -> (-1)
-  | _     , "HEAD" -> 1
-  | _     , _      -> compare x y
+  val pp_head_contents : Format.formatter -> head_contents -> unit
 
-let head = "HEAD"
+  module A : Common.ANGSTROM with type t = head_contents
+  module D : Common.DECODER with type t = head_contents
+                             and type raw = Cstruct.t
+                             and type init = Cstruct.t
+                             and type error = [ `Decoder of string ]
 
-type head_contents =
-  | Hash of Hash.Commit.t
-  | Ref of string
+  type error =
+    [ FileSystem.File.error
+    | D.error ]
 
-let pp_head_contents ppf = function
-  | Hash x -> Format.fprintf ppf "Hash %a" Hash.Commit.pp x
-  | Ref x -> Format.pp_print_string ppf x
+  val pp_error  : Format.formatter -> error -> unit
 
-let equal_head_contents x y = match x, y with
-  | Hash x, Hash y -> Hash.Commit.equal x y
-  | Ref x, Ref y -> String.compare x y = 0
-  | _ -> false
+  val from_file : Path.t -> dtmp:Cstruct.t -> raw:Cstruct.t -> ((t * head_contents), error) result Lwt.t
+end
 
-let err_head_contents str =
-  let err = Printf.sprintf "%S is not a valid HEAD contents" str in
-  failwith err
+module Make
+    (Digest : Ihash.IDIGEST with type t = Bytes.t
+                             and type buffer = Cstruct.t)
+    (Path : Path.S)
+    (FileSystem : Fs.S with type path = Path.t
+                        and type File.error = [ `System of string ]
+                        and type File.raw = Cstruct.t)
+  : S with type Hash.t = Digest.t
+       and module Digest = Digest
+       and module Path = Path
+       and module FileSystem = FileSystem
+= struct
+  module Digest = Digest
+  module Path = Path
+  module FileSystem = FileSystem
+  module Hash = Helper.BaseBytes
 
-let is_head x =
-  String.compare head x = 0
+  let hash_of_hex_string x =
+    Helper.BaseBytes.of_hex (Bytes.unsafe_of_string x)
 
-let head_contents_of_commit refs h =
-  let refs = Map.remove "HEAD" refs in
-  let alist = Misc.inverse_assoc (Map.to_alist refs) in
-  match Misc.try_assoc h alist with
-  | None   -> Hash h
-  | Some r -> Ref r
+  type t = string
 
-let master = "refs/heads/master"
+  let head    = "HEAD"
+  let is_head = String.equal head
+  let master  = "refs/heads/master"
 
-let is_valid r =
-  String.for_all (function
-      | '{'
-      | '}'
-      | '^' -> false
-      | _   -> true
-    ) r
+  let of_string x = x
+  let to_string x = x
 
-let head_contents_of_string ~of_hex str =
-  match String.cuts ~sep:" " (String.trim str) with
-  | [h]   -> Hash (of_hex h |> Hash.to_raw |> Hash.Commit.of_raw)
-  | [_;r] -> Ref (of_raw r)
-  | _     -> err_head_contents str
+  let pp fmt x =
+    Format.fprintf fmt "%s" (String.escaped x)
+
+  let equal   = String.equal
+  let hash    = Hashtbl.hash
+
+  let compare x y =
+    match x, y with
+    | "HEAD", "HEAD" -> 0
+    | "HEAD", _      -> (-1)
+    | _     , "HEAD" -> 1
+    | _     , _      -> compare x y
+
+  module Set = Set.Make(struct type nonrec t = t let compare = compare end)
+  module Map = Map.Make(struct type nonrec t = t let compare = compare end)
+
+  type head_contents =
+    | Hash of Hash.t
+    | Ref of t
+
+  let pp_head_contents fmt = function
+    | Hash hash -> Format.fprintf fmt "(Hash %a)" Hash.pp hash
+    | Ref t -> Format.fprintf fmt "(Ref %a)" pp t
+
+  module A =
+  struct
+    type nonrec t = head_contents
+
+    open Angstrom
+
+    let refname =
+      take_while (function '\000' .. '\039' -> false
+                         | '\127'           -> false
+                         | ' ' | '~' | '^'
+                         | ':' | '?' | '*'
+                         | '['              -> false
+                         | _                -> true)
+
+    let hash = take (Digest.length * 2)
+      >>| hash_of_hex_string
+
+    let decoder =
+      (string "ref: " *> refname <* end_of_line >>| fun refname -> Ref refname)
+      <|> (hash <* end_of_line >>| fun hash -> Hash hash)
+  end
+
+  module D = Helper.MakeDecoder(A)
+
+  type error =
+    [ FileSystem.File.error
+    | D.error ]
+
+  let pp_error fmt = function
+    | #FileSystem.File.error as err -> Format.fprintf fmt "%a" FileSystem.File.pp_error err
+    | #D.error as err -> Format.fprintf fmt "%a" D.pp_error err
+
+  let normalize path =
+    let segs = Path.segs path in
+
+    List.fold_left
+      (fun (stop, acc) ->
+         if stop then fun x -> (true, x :: acc)
+         else function
+           | "HEAD" as x -> (true, x :: acc)
+           (* XXX(dinosaure): special case, HEAD can be stored in a refs
+              sub-directory or can be in root of dotgit (so, without refs). *)
+           | "refs" as x -> (true, [ x ])
+           | _ -> (false, []))
+      (false, []) segs
+    |> fun (_, refs) -> List.rev refs |> String.concat "/"
+
+  let from_file path ~dtmp ~raw =
+    let decoder = D.default dtmp in
+
+    let open Lwt.Infix in
+
+    FileSystem.File.open_r ~mode:0o400 ~lock:(Lwt.return ()) path
+    >>= function
+    | Error (#FileSystem.File.error as err) -> Lwt.return (Error err)
+    | Ok read ->
+      let rec loop decoder = match D.eval decoder with
+        | `Await decoder ->
+          FileSystem.File.read raw read >>=
+          (function
+            | Error (#FileSystem.File.error as err) -> Lwt.return (Error err)
+            | Ok n -> match D.refill (Cstruct.sub raw 0 n) decoder with
+              | Ok decoder -> loop decoder
+              | Error (#D.error as err) -> Lwt.return (Error err))
+        | `End (rest, value) -> Lwt.return (Ok value)
+        | `Error (res, (#D.error as err)) -> Lwt.return (Error err)
+      in
+
+      loop decoder
+      >|= function
+      | Ok head_contents ->
+        Ok (normalize path, head_contents)
+      | Error _ as e -> e
+end

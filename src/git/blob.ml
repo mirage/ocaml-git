@@ -1,32 +1,206 @@
-(*
- * Copyright (c) 2013-2017 Thomas Gazagnaire <thomas@gazagnaire.org>
- *
- * Permission to use, copy, modify, and distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
- *
- * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
- * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
- * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
- * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
- * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
- * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- *)
+module type S =
+sig
+  module Digest
+    : Ihash.IDIGEST
 
-(* FIXME: might want to have an option type with string|cstruct *)
-include Misc.S
-let hash = Hashtbl.hash
-let equal x y = String.compare x y = 0
+  type t = private Cstruct.t
 
-let pretty t =
-  if String.length t < 70 then Printf.sprintf "%S" t
-  else Printf.sprintf "\"%s..%d\""
-      (String.escaped (String.sub t 0 70))
-      (String.length t)
+  module Hash
+    : Common.BASE
+  module D
+    : Common.DECODER with type t = t
+                      and type raw = Cstruct.t
+                      and type init = Cstruct.t
+                      and type error = [ `Decoder of string ]
+  module E
+    : Common.ENCODER with type t = t
+                      and type raw = Cstruct.t
+  module A
+    : Common.ANGSTROM with type t = t
+  module F
+    : Common.FARADAY  with type t = t
 
-let pp ppf t = Format.fprintf ppf "%s" (pretty t)
-let to_raw x = x
-let of_raw x = x
-let input buf = Mstruct.to_string buf
-let add buf ?level:_ t = Buffer.add_string buf t
+  include Ihash.DIGEST with type t := t
+                        and type hash := Hash.t
+  include Common.BASE with type t := t
+end
+
+module Make
+    (Digest : Ihash.IDIGEST with type t = Bytes.t
+                             and type buffer = Cstruct.t)
+  : S with type Hash.t = Digest.t
+       and module Digest = Digest
+= struct
+  module Digest = Digest
+
+  type t = Cstruct.t
+
+  module Hash = Helper.BaseBytes
+
+  module A =
+  struct
+    type nonrec t = t
+
+    let decoder =
+      let buf = Buffer.create 32 in
+      let open Angstrom in
+
+      fix @@ fun m ->
+      available >>= function
+      | 0 ->
+        peek_char
+        >>= (function
+            | Some _ -> commit *> m
+            | None ->
+              let cs = Cstruct.of_string (Buffer.contents buf) in
+              Buffer.clear buf;
+              return cs <* commit)
+      | n -> take n >>= fun chunk ->
+        Buffer.add_string buf chunk;
+        commit *> m
+  end
+
+  module F =
+  struct
+    type nonrec t = t
+
+    let length : t -> int64 = fun t ->
+      Int64.of_int (Cstruct.len t)
+
+    let encoder : t Farfadet.t = fun e t ->
+      Farfadet.bigstring e (Cstruct.to_bigarray t)
+  end
+
+  module D =
+  struct
+    (* XXX(dinosaure): may be need to compare the performance between this
+       module and [Helper.MakeDecoder(A)]. *)
+
+    type nonrec t = t
+    type init = Cstruct.t
+
+    type error = [ `Decoder of string ]
+
+    let pp_error fmt = function
+      | `Decoder err -> Format.fprintf fmt "(`Decoder %s)" err
+
+    type decoder = { res : t
+                   ; cur : Cstruct.t
+                   ; abs : int
+                   ; final : bool }
+    and raw = Cstruct.t
+
+    let default raw =
+      { res = raw
+      ; cur = Cstruct.sub raw 0 0
+      ; abs = 0
+      ; final = false }
+
+    let ensure decoder =
+      let available = Cstruct.len decoder.res - decoder.abs in
+
+      if available < Cstruct.len decoder.cur
+      then begin
+        let size = ref (Cstruct.len decoder.res) in
+        while !size - decoder.abs < Cstruct.len decoder.cur
+        do size := (3 * !size) / 2 done;
+
+        let res' = Cstruct.create !size in
+        Cstruct.blit decoder.res 0 res' 0 decoder.abs;
+        { decoder with res = res' }
+      end else decoder
+
+    let eval decoder =
+      if decoder.final
+      then `End (decoder.cur, (decoder.res : t))
+      else begin
+        let decoder = ensure decoder in
+        Cstruct.blit decoder.cur 0 decoder.res decoder.abs (Cstruct.len decoder.cur);
+        `Await { decoder with abs = decoder.abs + Cstruct.len decoder.cur }
+      end
+
+    let refill input decoder =
+      Ok { decoder with cur = input }
+
+    let finish decoder =
+      let res' = Cstruct.sub decoder.res 0 decoder.abs in
+      { decoder with final = true
+                   ; res = res' }
+
+    let to_result input = Ok input
+  end
+
+  module E =
+  struct
+    type nonrec t = t
+    type init = t
+
+    type error = [ `Encoder of string ]
+
+    let pp_error fmt = function
+      | `Encoder err -> Format.fprintf fmt "(`Encoder %s)" err
+
+    type encoder =
+      { abs  : int
+      ; off  : int
+      ; pos  : int
+      ; len  : int
+      ; blob : t }
+    and raw = Cstruct.t
+
+    let default blob =
+      { abs = 0
+      ; off = 0
+      ; pos = 0
+      ; len = 0
+      ; blob }
+
+    let eval raw encoder =
+      if Cstruct.len encoder.blob = encoder.abs
+      then `End (encoder, Cstruct.len encoder.blob)
+      else begin
+        let n = min (Cstruct.len encoder.blob - encoder.abs) encoder.len in
+
+        Cstruct.blit encoder.blob encoder.abs raw encoder.off encoder.len;
+
+        if encoder.abs + n = Cstruct.len encoder.blob
+        then `End ({ encoder with abs = encoder.abs + n
+                                ; pos = encoder.pos + n },
+                   Cstruct.len encoder.blob )
+        else `Flush ({ encoder with abs = encoder.abs + n
+                                  ; pos = encoder.pos + n })
+      end
+
+    let used encoder = encoder.pos
+
+    let flush off len encoder =
+      { encoder with off = off
+                   ; len = len
+                   ; pos = 0 }
+
+    let to_result raw = Ok raw
+  end
+
+  let digest cs =
+    let ctx = Digest.init () in
+    let hdr = Format.sprintf "blob %Ld\000" (F.length cs) in
+
+    Digest.feed ctx (Cstruct.of_string hdr);
+    Digest.feed ctx cs;
+    Digest.get ctx
+
+  let cstruct_pp fmt cs =
+    for i = 0 to Cstruct.len cs - 1
+    do match Cstruct.get_char cs i with
+      | '\000' .. '\031' | '\127' -> Format.fprintf fmt "."
+      | chr -> Format.fprintf fmt "%c" chr
+    done
+
+  let pp      = cstruct_pp
+  let equal   = Cstruct.equal
+  let compare = Cstruct.compare
+  let hash    = Hashtbl.hash
+
+  module Set = Set.Make(struct type nonrec t = t let compare = compare end)
+  module Map = Map.Make(struct type nonrec t = t let compare = compare end)
+end
