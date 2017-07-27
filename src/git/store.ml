@@ -39,6 +39,8 @@ sig
   val raw_p : window:Inflate.window -> ztmp:Cstruct.t -> dtmp:Cstruct.t -> raw:Cstruct.t -> state -> Hash.t -> ([ `Commit | `Tree | `Tag | `Blob ] * Cstruct.t, error) result Lwt.t
   val raw_s : state -> Hash.t -> ([ `Commit | `Tree | `Tag | `Blob ] * Cstruct.t, error) result Lwt.t
   val raw : state -> Hash.t -> ([ `Commit | `Tree | `Tag | `Blob ] * Cstruct.t, error) result Lwt.t
+  val raw_wa : window:Inflate.window -> ztmp:Cstruct.t -> dtmp:Cstruct.t -> raw:Cstruct.t -> result:Cstruct.t -> state -> Hash.t -> ([ `Commit | `Tree | `Tag | `Blob ] * Cstruct.t, error) result Lwt.t
+  val raw_was : Cstruct.t -> state -> Hash.t -> ([ `Commit | `Tree | `Tag | `Blob ] * Cstruct.t, error) result Lwt.t
 
   module D : Common.DECODER with type t = t
                              and type raw = Cstruct.t
@@ -79,6 +81,8 @@ sig
   val read_p : ztmp:Cstruct.t -> window:Inflate.window -> state -> Hash.t -> (t, error) result Lwt.t
   val read_s : state -> Hash.t -> (t, error) result Lwt.t
   val read : state -> Hash.t -> (t, error) result Lwt.t
+  val read_wa : ?htmp:Cstruct.t array -> ztmp:Cstruct.t -> window:Inflate.window -> result:Cstruct.t * Cstruct.t -> state -> Hash.t -> (t, error) result Lwt.t
+  val read_was : ?htmp:Cstruct.t array -> (Cstruct.t * Cstruct.t) -> state -> Hash.t -> (t, error) result Lwt.t
   val size_p : ztmp:Cstruct.t -> window:Inflate.window -> state -> Hash.t -> (int, error) result Lwt.t
   val size_s : state -> Hash.t -> (int, error) result Lwt.t
   val size : state -> Hash.t -> (int, error) result Lwt.t
@@ -171,6 +175,7 @@ sig
   val buffer_zl : t -> Cstruct.t
   val buffer_de : t -> Cstruct.t
   val buffer_io : t -> Cstruct.t
+  val indexes : t -> Hash.t list
   val fold : t -> ('a -> ?name:Path.t -> length:int64 -> Hash.t -> Value.t -> 'a Lwt.t) -> path:Path.t -> 'a -> Hash.t -> 'a Lwt.t
 
   module Ref :
@@ -663,7 +668,7 @@ module Make
 
     let read = read_s
 
-    let read_wa ~ztmp ~window ~result state hash =
+    let read_wa ?htmp ~ztmp ~window ~result state hash =
       let open Lwt.Infix in
 
       lookup state hash >>= function
@@ -673,16 +678,17 @@ module Make
 
         match CachePack.find hash_idx state.cache.packs with
         | Some pack ->
-          PACKDecoder.optimized_get ~limit:true pack hash (a, b, 0) ztmp window
+          PACKDecoder.optimized_get ~limit:true ?h_tmp:htmp pack hash (a, b, 0) ztmp window
           >|= Rresult.R.reword_error (fun err -> `PackDecoder err)
         | None -> load_pack state hash_idx (path_idx state hash_idx) >>= function
           | Ok pack ->
-            PACKDecoder.optimized_get ~limit:true pack hash (a, b, 0) ztmp window
+            PACKDecoder.optimized_get ~limit:true ?h_tmp:htmp pack hash (a, b, 0) ztmp window
             >|= Rresult.R.reword_error (fun err -> `PackDecoder err)
           | Error err -> Lwt.return (Error err)
 
-    let read_was result t hash =
+    let read_was ?htmp result t hash =
       read_wa
+        ?htmp
         ~ztmp:t.buffer.zl
         ~window:t.buffer.window
         ~result
@@ -802,12 +808,14 @@ module Make
         | Error #Loose.error -> Lwt.return None
         | Ok v -> Lwt.return (Some v)
 
-  let raw_was results t hash =
+  let raw_was ?htmp result t hash =
     raw_wa
+      ?htmp
       ~ztmp:t.buffer.zl
       ~dtmp:t.buffer.de
       ~raw:t.buffer.io
       ~window:t.buffer.window
+      ~result
       t hash
 
   let hash_of_hex_string x = Hash.of_hex_string x
@@ -1155,4 +1163,7 @@ module Make
   let buffer_zl { buffer; _ } = buffer.zl
   let buffer_de { buffer; _ } = buffer.de
   let buffer_io { buffer; _ } = buffer.io
+
+  (* XXX(dinosaure): clash of name with [indexes] below. *)
+  let indexes t = List.map fst t.idxs
 end

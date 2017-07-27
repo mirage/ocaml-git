@@ -190,10 +190,11 @@ sig
       {- [raw] is a buffer used to store the input flow}}
 
       This function can be used in a concurrency context only if the specified
-      buffers are not used by another process. This function does not allocate
-      any buffer and uses only the specified buffers to store the {i raw-data}
-      in an allocated {!Cstruct.t}. The {i raw-data} respects the predicate
-      [digest(header + raw-data) = hash]. Otherwise, we return an {!error}:
+      buffers are not used by another process. This function allocate only one
+      buffer in the major-heap and uses only the specified buffers to compute
+      the {i raw-data} in the allocated {!Cstruct.t}. The {i raw-data} respects
+      the predicate [digest(header + raw-data) = hash]. Otherwise, we return an
+      {!error}:
 
       {ul
       {- {!FileSystem.File.error} when we can not access to the git object in
@@ -211,6 +212,55 @@ sig
 
   val raw : state -> Hash.t -> ([ `Commit | `Tree | `Tag | `Blob ] * Cstruct.t, error) result Lwt.t
   (** Alias of {!raw_s}. *)
+
+  val raw_wa :
+    window:Inflate.window ->
+    ztmp:Cstruct.t ->
+    dtmp:Cstruct.t ->
+    raw:Cstruct.t ->
+    result:Cstruct.t ->
+    state -> Hash.t -> ([ `Commit | `Tree | `Tag | `Blob ] * Cstruct.t, error) result Lwt.t
+  (** [raw_wa ~window ~ztmp ~dtmp ~raw ~result state hash] can retrieve a git {i
+      loose} object from thefile-system. However, this function {b does not}
+      de-serialize the git object and returns the kind of the object and the {i
+      raw-data} inflated. Precisely, it decodes only the header. This function needs
+      some buffers:
+
+      {ul
+      {- [window] is a buffer used by the {!Inflate} module}
+      {- [ztmp] is a buffer used to store the inflated flow}
+      {- [dtmp] is a buffer used by the decoder to save the inflated flow (and
+      keep it for an alteration)}
+      {- [raw] is a buffer used to the input flow}
+      {- [result] is a buffer to store the result of this process}}
+
+      The suffix [wa] refers to: Without Allocation. Indeed, this function
+      allocates {b only} any data in the minor-heap. All other needed OCaml
+      objects must be noticed by the client. However, the client needs to notice
+      a well sized [result] (otherwise, the client can retrieve an error). He
+      can get this information by {!size}.
+
+      This function can be used in a concurrency context only if the specified
+      buffers are not used by another process. The {i raw-data} respects the
+      predicate [digest(header + raw-data) = hash]. Otherwise, we return an
+      {!error}:
+
+      {ul
+      {- {!FileSystem.File.error} when we can not access to the git object in
+      the file-system (because it does not exist or the structure of the git
+      repository is wrong).}
+      {- {!Value.D.error} when we can not de-serialize xor inflate the requested
+      git {i loose} object. That means, the git {i loose} object has a wrong
+      header or it is corrupted.}}
+
+      In a server context, this function should be used to limit the allocation.
+  *)
+
+  val raw_was : Cstruct.t ->
+    state -> Hash.t -> ([ `Commit | `Tree | `Tag | `Blob ] * Cstruct.t, error) result Lwt.t
+  (** [raw_was result state hash] is the same process than {!raw_wa} but we use
+      the state-defined buffer. That means the client can not use this function in a
+      concurrency context with the same [state]. *)
 
   module D
     : Common.DECODER with type t = t
@@ -367,6 +417,54 @@ sig
 
   val read : state -> Hash.t -> (t, error) result Lwt.t
   (** Alias of {!read_s}. *)
+
+  val read_wa : ?htmp:Cstruct.t array ->
+    ztmp:Cstruct.t ->
+    window:Inflate.window ->
+    result:Cstruct.t * Cstruct.t ->
+    state -> Hash.t -> (t, error) result Lwt.t
+  (** [read_wa ?htmp ~ztmp ~window state hash] can retrieve a git {i packed}
+      object from any {i PACK} files available in the current git repository
+      [state]. It just inflates the git object and informs some meta-data (like
+      kind, CRC-32 check-sum, length, etc.) about it. Then, the client can use the
+      related decoder to get the OCaml value. This function needs some buffers:
+
+      {ul
+      {- [window] is a buffer used y the {!Inflate} module}
+      {- [ztmp] is a buffer used to store the inflated flow}}
+      {- [result] is a couple of buffers to store the result of this processi in
+      one of these buffers}}
+
+      [htmp] is an array of buffer used for the delta-ification. If you know
+      where is the Git object (which {i PACK} file) and the maximum depth of the
+      PACK file, you can allocate an array, which one store [Insert] hunks for
+      each level of the delta-ification instead to allocate (if [htmp = None]).
+      In other side, this will raise an error (typically,
+      [Index_out_of_bounds]).
+
+      This function can be used in a concurrency context only if the specified
+      buffers are not used by another process. This function does not allocate
+      any {!Cstruct.t}. The couple of buffers [result] is used to re-construct
+      the Git object requested in any depth of the delta-ification. Then, the
+      returned value is physically equal to one of these buffers.
+
+      Otherwise, we return an {!error}:
+
+      {ul
+      {- {!FileSystem.File.error} or {!FileSystem.Dir.error} or
+      {!FileSystem.Mapper.error} when we retrieve a file-system error}
+      {- {!PACKDecoder.error} when we retrieve an error about the decoding of
+      the {i packed} git object in the founded {i PACK}i file}
+      {- {!IDXDecoder.error} when we retrieve an error about the decoding of an
+      {i IDX} file}
+      {- [`Not_found] when the requested object is not {i packed}}}
+  *)
+
+  val read_was : ?htmp:Cstruct.t array
+    -> (Cstruct.t * Cstruct.t) -> state -> Hash.t -> (t, error) result Lwt.t
+  (** [read_was result state hash] is the same process than {!read_wa} ut we use
+      the state-defined buffers. That means the client can not use this function in
+      a concurrency context with the same [state].*)
 
   val size_p : ztmp:Cstruct.t -> window:Inflate.window -> state -> Hash.t -> (int, error) result Lwt.t
   (** [size_p ~ztmp ~window state hash] returns the size of the git {i packed}
@@ -616,6 +714,9 @@ sig
   val buffer_io : t -> Cstruct.t
   (** [buffer_io state] returns the state-defined buffer used to store the input
       flow. *)
+
+  val indexes : t -> Hash.t list
+  (** [indexes state] returns all available IDX files in the current git repository [state]. *)
 
   val fold : t ->
     ('a -> ?name:Path.t -> length:int64 -> Hash.t -> Value.t -> 'a Lwt.t) ->
