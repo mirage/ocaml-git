@@ -80,7 +80,7 @@ module Make
                            | _      -> false)
         *> take_while (function '\000' .. '\039' -> false
                               | '\127'           -> false
-                              | ' ' | '~' | '^'
+                              | '~' | '^'
                               | ':' | '?' | '*'
                               | '['              -> false
                               | _                -> true)
