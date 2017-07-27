@@ -857,27 +857,10 @@ struct
       (function Uncaught_hash hash -> Error (Invalid_hash hash) |> Lwt.return)
 end
 
-module type Z =
-sig
-  type t
-  type error
-
-  val pp_error : Format.formatter -> error -> unit
-
-  val default    : int -> t
-  val flush      : int -> int -> t -> t
-  val no_flush   : int -> int -> t -> t
-  val sync_flush : int -> int -> t -> t
-  val finish     : t -> t
-  val used_in    : t -> int
-  val used_out   : t -> int
-  val eval       : Cstruct.t -> Cstruct.t -> t -> [ `Flush of t | `Await of t | `Error of (t * error) | `End of t ]
-end
-
 module type ENCODER =
 sig
   module Hash : HASH
-  module Deflate : Z
+  module Deflate : Common.DEFLATE
 
   module Entry :
   sig
@@ -980,7 +963,7 @@ sig
   val eval : Cstruct.t -> Cstruct.t -> t -> [ `Flush of t | `Await of t | `End of (t * Hash.t) | `Error of (t * error) ]
 end
 
-module MakePACKEncoder (Hash : HASH) (Deflate : Z)
+module MakePACKEncoder (Hash : HASH) (Deflate : Common.DEFLATE)
   : ENCODER with module Hash = Hash
              and module Deflate = Deflate =
 struct

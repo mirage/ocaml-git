@@ -21,23 +21,6 @@ sig
   val to_hex_string : t -> string
 end
 
-module type Z =
-sig
-  type t
-  type error
-
-  val pp_error : Format.formatter -> error -> unit
-
-  val default    : int -> t
-  val flush      : int -> int -> t -> t
-  val no_flush   : int -> int -> t -> t
-  val sync_flush : int -> int -> t -> t
-  val finish     : t -> t
-  val used_in    : t -> int
-  val used_out   : t -> int
-  val eval       : Cstruct.t -> Cstruct.t -> t -> [ `Flush of t | `Await of t | `Error of (t * error) | `End of t ]
-end
-
 module Kind :
 sig
   type t =
@@ -60,7 +43,7 @@ end
 module type ENCODER =
 sig
   module Hash : HASH
-  module Deflate : Z
+  module Deflate : Common.DEFLATE
 
   (** The entry module. It used to able to manipulate the meta-data only needed
      by the delta-ification of the git object (and avoid to de-serialize all of
@@ -316,6 +299,6 @@ sig
   val eval : Cstruct.t -> Cstruct.t -> t -> [ `Flush of t | `Await of t | `End of (t * Hash.t) | `Error of (t * error) ]
 end
 
-module MakePACKEncoder (Hash : HASH) (Deflate : Z) : ENCODER
+module MakePACKEncoder (Hash : HASH) (Deflate : Common.DEFLATE) : ENCODER
   with module Hash = Hash
    and module Deflate = Deflate
