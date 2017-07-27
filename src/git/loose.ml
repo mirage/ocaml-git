@@ -15,7 +15,7 @@ sig
                | D.error
                | E.error ]
 
-  val pp_error : Format.formatter -> error -> unit
+  val pp_error : error Fmt.t
 
   val exists  :
     root:Path.t ->
@@ -96,21 +96,20 @@ module Make
     | D.error
     | E.error ]
 
-  let pp_error fmt = function
-    | #D.error as err -> Format.fprintf fmt "%a" D.pp_error err
-    | #E.error as err -> Format.fprintf fmt "%a" E.pp_error err
-    | #FileSystem.File.error as err -> Format.fprintf fmt "%a" FileSystem.File.pp_error err
-    (* | #FileSystem.Dir.error as err -> Format.fprintf fmt "%a" FileSystem.Dir.pp_error err *)
+  let pp_error ppf = function
+    | #D.error as err -> D.pp_error ppf err
+    | #E.error as err -> E.pp_error ppf err
+    | #FileSystem.File.error as err -> FileSystem.File.pp_error ppf err
 
   let hash_get : Hash.t -> int -> int = fun h i -> Char.code @@ Bytes.get h i
 
   let explode hash =
-    Format.sprintf "%02x" (hash_get hash 0),
+    Fmt.strf "%02x" (hash_get hash 0),
     let buf = Buffer.create ((Digest.length - 1) * 2) in
-    let fmt = Format.formatter_of_buffer buf in
+    let ppf = Fmt.with_buffer buf in
 
     for i = 1 to Digest.length - 1
-    do Format.fprintf fmt "%02x%!" (hash_get hash i) done;
+    do Fmt.pf ppf "%02x%!" (hash_get hash i) done;
 
     Buffer.contents buf
 

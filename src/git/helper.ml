@@ -1,3 +1,6 @@
+let ppe ~name ppv =
+  Fmt.braces (fun ppf -> Fmt.pf ppf "%s %a" name (Fmt.hvbox ppv))
+
 module BaseBigstring
   : Common.BASE with type t = (char, Bigarray.int8_unsigned_elt, Bigarray.c_layout) Bigarray.Array1.t =
 struct
@@ -25,9 +28,9 @@ struct
 
   let hash = Hashtbl.hash
 
-  let pp fmt ba =
+  let pp ppf ba =
     for i = 0 to length ba - 1
-    do Format.fprintf fmt "%02x" (uget ba i) done
+    do Fmt.pf ppf "%02x" (uget ba i) done
 
   module Set = Set.Make(struct type nonrec t = t let compare = compare end)
   module Map = Map.Make(struct type nonrec t = t let compare = compare end)
@@ -48,9 +51,7 @@ end = struct
   let compare = compare
   let hash = Hashtbl.hash
 
-  let pp fmt ba =
-    for i = 0 to length ba - 1
-    do Format.fprintf fmt "%02x" (Char.code (get ba i)) done
+  let pp = Fmt.iter Bytes.iter (Fmt.using Char.code (fun ppf -> Fmt.pf ppf "%02x"))
 
   module Set = Set.Make(struct type nonrec t = t let compare = compare end)
   module Map = Map.Make(struct type nonrec t = t let compare = compare end)
@@ -134,7 +135,7 @@ module MakeDecoder (A : Common.ANGSTROM)
   type raw = Cstruct.t
   type t = A.t
 
-  let pp_error fmt = function `Decoder err -> Format.fprintf fmt "(`Decoder %s)" err
+  let pp_error ppf (`Decoder err) = ppe ~name:"`Decoder" Fmt.string ppf err
 
   type decoder =
     { state    : Angstrom.input -> Angstrom.Unbuffered.more -> A.t Angstrom.Unbuffered.state
@@ -193,7 +194,9 @@ module MakeDecoder (A : Common.ANGSTROM)
     let len = Cstruct.len input in
 
     if len > decoder.max
-    then Error (`Decoder (Format.sprintf "Input is too huge: we authorized only an input lower or equal than %d" decoder.max))
+    then
+      Error (`Decoder (Fmt.strf "Input is too huge: we authorized only an \
+                                 input lower or equal than %d" decoder.max))
     else
 
       let _trailing_space =
@@ -251,9 +254,11 @@ struct
     ; inf : Z.t
     ; dec : D.decoder }
 
-  let pp_error fmt = function
-    | `Decoder err -> Format.fprintf fmt "(`Decoder %s)" err
-    | `Inflate err -> Format.fprintf fmt "(`Inflate @[<hov>%a@])" Z.pp_error err
+  let pp_error ppf = function
+    | `Decoder err ->
+      ppe ~name:"`Decoder" Fmt.string ppf err
+    | `Inflate err ->
+      ppe ~name:"`Inflate" (Fmt.hvbox Z.pp_error) ppf err
 
   let default (window, raw0, raw1) =
     { cur = Cstruct.sub raw0 0 0
@@ -311,7 +316,7 @@ module MakeEncoder (M : Common.MINIENC)
   type init = int * t
   type error = [ `Never ]
 
-  let pp_error fmt = function `Never -> Format.fprintf fmt "`Never"
+  let pp_error ppf `Never = Fmt.string ppf "`Never"
 
   type encoder =
       { o_off : int
@@ -341,15 +346,6 @@ module MakeEncoder (M : Common.MINIENC)
         Cstruct.blit_from_string x off cs cs_off (max len); max len
 
   exception Drain of int
-
-  let pp_list pp_data ?(sep = (fun fmt () -> ())) fmt lst =
-    let rec go = function
-      | [] -> ()
-      | [ x ] -> pp_data fmt x
-      | x :: r -> pp_data fmt x; sep fmt (); go r
-    in
-
-    go lst
 
   let rec eval current e = match e.state with
     | Minienc.End minienc ->
@@ -411,7 +407,8 @@ module MakeDeflater (Z : Common.DEFLATE) (M : Common.MINIENC)
   type init = int * t * int * Cstruct.t
   type error = [ `Deflate of Z.error ]
 
-  let pp_error fmt = function `Deflate err -> Format.fprintf fmt "(`Deflate %a)" Z.pp_error err
+  let pp_error ppf (`Deflate err) =
+    ppe ~name:"`Deflate" (Fmt.hvbox Z.pp_error) ppf err
 
   module E = MakeEncoder(M)
 
@@ -483,7 +480,7 @@ let fdigest
     let module Digest = (val digest) in
     let module M      = (val encoder) in
 
-    let hdr = Format.sprintf "%s %Ld\000" kind (length value) in
+    let hdr = Fmt.strf "%s %Ld\000" kind (length value) in
 
     let ctx = Digest.init () in
 
@@ -521,7 +518,7 @@ let digest
     let module Digest = (val digest) in
     let module F      = (val faraday) in
 
-    let hdr = Format.sprintf "%s %Ld\000" kind (F.length value) in
+    let hdr = Fmt.strf "%s %Ld\000" kind (F.length value) in
     let ctx = Digest.init () in
     let raw = Cstruct.create (Int64.to_int (F.length value)) in (* XXX(dinosaure): to digest. *)
     let enc = Faraday.of_bigstring (Cstruct.to_bigarray raw) in

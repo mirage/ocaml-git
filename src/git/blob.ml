@@ -81,8 +81,8 @@ module Make
 
     type error = [ `Decoder of string ]
 
-    let pp_error fmt = function
-      | `Decoder err -> Format.fprintf fmt "(`Decoder %s)" err
+    let pp_error ppf (`Decoder err) =
+      Helper.ppe ~name:"`Decoder" Fmt.string ppf err
 
     type decoder = { res : t
                    ; cur : Cstruct.t
@@ -137,8 +137,8 @@ module Make
 
     type error = [ `Encoder of string ]
 
-    let pp_error fmt = function
-      | `Encoder err -> Format.fprintf fmt "(`Encoder %s)" err
+    let pp_error ppf (`Encoder err) =
+      Helper.ppe ~name:"`Encoder" Fmt.string ppf err
 
     type encoder =
       { abs  : int
@@ -183,20 +183,20 @@ module Make
 
   let digest cs =
     let ctx = Digest.init () in
-    let hdr = Format.sprintf "blob %Ld\000" (F.length cs) in
+    let hdr = Fmt.strf "blob %Ld\000" (F.length cs) in
 
     Digest.feed ctx (Cstruct.of_string hdr);
     Digest.feed ctx cs;
     Digest.get ctx
 
-  let cstruct_pp fmt cs =
+  let pp_cstruct ppf cs =
     for i = 0 to Cstruct.len cs - 1
     do match Cstruct.get_char cs i with
-      | '\000' .. '\031' | '\127' -> Format.fprintf fmt "."
-      | chr -> Format.fprintf fmt "%c" chr
+      | '\000' .. '\031' | '\127' -> Fmt.const Fmt.char '.' ppf ()
+      | chr -> Fmt.char ppf chr
     done
 
-  let pp      = cstruct_pp
+  let pp      = pp_cstruct
   let equal   = Cstruct.equal
   let compare = Cstruct.compare
   let hash    = Hashtbl.hash

@@ -22,7 +22,7 @@ sig
                | Value.D.error
                | Value.E.error ]
 
-  val pp_error : Format.formatter -> error -> unit
+  val pp_error : error Fmt.t
   val lookup_p : state -> Hash.t -> Hash.t option Lwt.t
   val lookup : state -> Hash.t -> Hash.t option Lwt.t
   val exists : state -> Hash.t -> bool Lwt.t
@@ -71,7 +71,7 @@ sig
                | `PackDecoder of PACKDecoder.error
                | `Not_found ]
 
-  val pp_error : Format.formatter -> error -> unit
+  val pp_error : error Fmt.t
   val lookup_p : state -> Hash.t -> (Hash.t * (Crc32.t * int64)) option Lwt.t
   val lookup : state -> Hash.t -> (Hash.t * (Crc32.t * int64)) option Lwt.t
   val exists : state -> Hash.t -> bool Lwt.t
@@ -150,7 +150,7 @@ sig
     [ Loose.error
     | Pack.error ]
 
-  val pp_error : Format.formatter -> error -> unit
+  val pp_error : error Fmt.t
   val create : ?root:Path.t -> ?dotgit:Path.t -> ?compression:int -> unit -> (t, error) result Lwt.t
   val dotgit : t -> Path.t
   val root : t -> Path.t
@@ -179,7 +179,7 @@ sig
       [ error
       | `Invalid_reference of Reference.t ]
 
-    val pp_error : Format.formatter -> error -> unit
+    val pp_error : error Fmt.t
     val graph_p : t -> dtmp:Cstruct.t -> raw:Cstruct.t -> (Hash.t Reference.Map.t, error) result Lwt.t
     val graph : t -> (Hash.t Reference.Map.t, error) result Lwt.t
     val normalize : Hash.t Reference.Map.t -> Reference.head_contents -> (Hash.t, error) result Lwt.t
@@ -433,11 +433,13 @@ module Make
                  | `Not_found
                  | FileSystem.File.error (* | FileSystem.Dir.error | FileSystem.Mapper.error *) ]
 
-    let pp_error fmt = function
-      | `PackDecoder err -> Format.fprintf fmt "(`PackDecoder @[<hov>%a@])" PACKDecoder.pp_error err
-      | `IndexDecoder err -> Format.fprintf fmt "(`IndexDecoder @[<hov>%a@])" IDXDecoder.pp_error err
-      | `Not_found -> Format.fprintf fmt "`Not_found"
-      | #FileSystem.File.error as err -> FileSystem.File.pp_error fmt err
+    let pp_error ppf = function
+      | `PackDecoder err ->
+        Helper.ppe ~name:"`PackDecoder" (Fmt.hvbox PACKDecoder.pp_error) ppf err
+      | `IndexDecoder err ->
+        Helper.ppe ~name:"`IndexDecoder" (Fmt.hvbox IDXDecoder.pp_error) ppf err
+      | `Not_found -> Fmt.string ppf "`Not_found"
+      | #FileSystem.File.error as err -> FileSystem.File.pp_error ppf err
 
     type t = PACKDecoder.Object.t
 
@@ -484,9 +486,9 @@ module Make
 
     let path_idx state hash_idx =
       let buf = Buffer.create (5 + Digest.length * 2) in
-      let fmt = Format.formatter_of_buffer buf in
+      let ppf = Fmt.with_buffer buf in
 
-      Format.fprintf fmt "pack-%a%!" Hash.pp hash_idx;
+      Fmt.pf ppf "pack-%a%!" Hash.pp hash_idx;
       let filename_pack = Buffer.contents buf in
 
       Path.((state.dotgit / "objects" / "pack" / filename_pack) + "pack")
@@ -723,9 +725,9 @@ module Make
 
   type error = [ Loose.error | Pack.error ]
 
-  let pp_error fmt = function
-    | #Loose.error as err -> Format.fprintf fmt "%a" Loose.pp_error err
-    | #Pack.error as err -> Format.fprintf fmt "%a" Pack.pp_error err
+  let pp_error ppf = function
+    | #Loose.error as err -> Fmt.pf ppf "%a" Loose.pp_error err
+    | #Pack.error as err -> Fmt.pf ppf "%a" Pack.pp_error err
 
   let read_p ~ztmp ~dtmp ~raw ~window state hash =
     let open Lwt.Infix in
@@ -786,7 +788,7 @@ module Make
 
   let raw = raw_s
 
-  let raw_wa ~ztmp ~dtmp ~raw ~window ~result state hash =
+  let raw_wa ?htmp ~ztmp ~dtmp ~raw ~window ~result state hash =
     let open Lwt.Infix in
 
     Pack.read_wa ~ztmp ~window ~result state hash >>= function
@@ -972,9 +974,10 @@ module Make
 
   module Ref =
   struct
-    let pp_error fmt = function
-      | #error as err -> Format.fprintf fmt "%a" pp_error err
-      | `Invalid_reference r -> Format.fprintf fmt "(`Invalid_reference %s)" (Reference.to_string r)
+    let pp_error ppf = function
+      | #error as err -> Fmt.pf ppf "%a" pp_error err
+      | `Invalid_reference err ->
+        Helper.ppe ~name:"`Invalid_reference" Reference.pp ppf err
 
     type nonrec error =
       [ error

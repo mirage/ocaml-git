@@ -1,3 +1,5 @@
+val ppe : name:string -> 'a Fmt.t -> 'a Fmt.t
+
 module BaseBigstring
   : Common.BASE with type t = (char, Bigarray.int8_unsigned_elt, Bigarray.c_layout) Bigarray.Array1.t
 

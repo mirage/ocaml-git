@@ -66,19 +66,17 @@ module Make
     | `Not_found
     | Store.FileSystem.File.error (* | Store.FileSystem.Dir.error | Store.FileSystem.Mapper.error *) ]
 
-  let pp_error fmt = function
-    | `SmartPack err -> Format.fprintf fmt "(`SmartPack %s)" err
-    | `Unpack err    -> Format.fprintf fmt "(`Unpack @[<hov>%a@])" PACKDecoder.pp_error err
-    | `Pack err      -> Format.fprintf fmt "(`Pack @[<hov>%a@])" PACKEncoder.pp_error err
-    | `Decoder err   -> Format.fprintf fmt "(`Decoder @[<hov>%a@])" Decoder.pp_error err
-    | `Clone err     -> Format.fprintf fmt "(`Clone %s)" err
-    | `Push err      -> Format.fprintf fmt "(`Push %s)" err
-    | `Ls err        -> Format.fprintf fmt "(`Ls %s)" err
-    | `Not_found     -> Format.fprintf fmt "`Not_found"
-    | `Idx err       -> Format.fprintf fmt "(`Idx @[<hov%a@])" IDXEncoder.pp_error err
-    | #Store.FileSystem.File.error as err -> Format.fprintf fmt "%a" Store.FileSystem.File.pp_error err
-    (* | #Store.FileSystem.Dir.error as err    -> Format.fprintf fmt "%a" Store.FileSystem.File.pp_error err
-       | #Store.FileSystem.Mapper.error as err -> Format.fprintf fmt "%a" Store.FileSystem.File.pp_error err *)
+  let pp_error ppf = function
+    | `SmartPack err -> Helper.ppe ~name:"`SmartPack" Fmt.string ppf err
+    | `Unpack err    -> Helper.ppe ~name:"`Unpack" (Fmt.hvbox PACKDecoder.pp_error) ppf err
+    | `Pack err      -> Helper.ppe ~name:"`Pack" (Fmt.hvbox PACKEncoder.pp_error) ppf err
+    | `Decoder err   -> Helper.ppe ~name:"`Decoder" (Fmt.hvbox Decoder.pp_error) ppf err
+    | `Clone err     -> Helper.ppe ~name:"`Clone" Fmt.string ppf err
+    | `Push err      -> Helper.ppe ~name:"`Push" Fmt.string ppf err
+    | `Ls err        -> Helper.ppe ~name:"`Ls" Fmt.string ppf err
+    | `Not_found     -> Fmt.string ppf "`Not_found"
+    | `Idx err       -> Helper.ppe ~name:"`Idx" (Fmt.hvbox IDXEncoder.pp_error) ppf err
+    | #Store.FileSystem.File.error as err -> Store.FileSystem.File.pp_error ppf err
 
   type t =
     { socket : Net.socket
@@ -88,9 +86,9 @@ module Make
 
   let err_unexpected_result result =
     let buf = Buffer.create 64 in
-    let fmt = Format.formatter_of_buffer buf in
+    let ppf = Fmt.with_buffer buf in
 
-    Format.fprintf fmt "Unexpected result: @[<hov>%a@]%!" Client.pp_result result;
+    Fmt.pf ppf "Unexpected result: %a%!" (Fmt.hvbox Client.pp_result) result;
     Buffer.contents buf
 
   let rec process t result =
@@ -214,7 +212,7 @@ module Make
       Bytes.unsafe_to_string raw
 
     let pack_filename () =
-      Format.asprintf "pack-%s.pack" (random_string 10)
+      Fmt.strf "pack-%s.pack" (random_string 10)
 
     module Graph = Map.Make(Int64)
 
@@ -370,7 +368,7 @@ module Make
                       | _ -> assert false
                     in
 
-                    let hdr = Format.asprintf "%s %Ld\000" hdr_kind (Int64.of_int (PACKDecoder.length pack)) in
+                    let hdr = Fmt.strf "%s %Ld\000" hdr_kind (Int64.of_int (PACKDecoder.length pack)) in
                     let ctx = Hash.init () in
 
                     Hash.feed ctx (Cstruct.of_string hdr);
@@ -426,7 +424,7 @@ module Make
                     | PACKDecoder.Tree
                     | PACKDecoder.Tag
                     | PACKDecoder.Blob) as kind, None ->
-                    let hdr = Format.asprintf "%s 0\000" (string_of_kind kind) in
+                    let hdr = Fmt.strf "%s 0\000" (string_of_kind kind) in
                     let ctx = Hash.init () in
 
                     assert (PACKDecoder.length pack = 0);
@@ -465,7 +463,7 @@ module Make
         | `Tag    -> "tag"
       in
 
-      let hdr = Format.asprintf "%s %Ld\000" hdr_kind o.Decoder.Object.length in
+      let hdr = Fmt.strf "%s %Ld\000" hdr_kind o.Decoder.Object.length in
 
       Hash.feed ctx (Cstruct.of_string hdr);
       if Cstruct.len o.Decoder.Object.raw > 0 then Hash.feed ctx o.Decoder.Object.raw;
@@ -719,11 +717,11 @@ module Make
       | Ok (filename, tree, hash) ->
         let open Lwt.Infix in
 
-        let pack_obj = Store.Path.(Store.dotgit git / "objects" / "pack" / (Format.asprintf "pack-%a.pack" Hash.pp hash)) in
+        let pack_obj = Store.Path.(Store.dotgit git / "objects" / "pack" / (Fmt.strf "pack-%a.pack" Hash.pp hash)) in
         Store.FileSystem.File.move filename pack_obj >>= function
         | Error (#Store.FileSystem.File.error as err) -> Lwt.return (Error err)
         | Ok () ->
-          let idx = Store.Path.(Store.dotgit git / "objects" / "pack" / (Format.asprintf "pack-%a.idx" Hash.pp hash)) in
+          let idx = Store.Path.(Store.dotgit git / "objects" / "pack" / (Fmt.strf "pack-%a.idx" Hash.pp hash)) in
 
           Store.FileSystem.File.open_w idx ~mode:0o644 ~lock:(Lwt.return ()) >>= function
           | Error (#Store.FileSystem.File.error as err) -> Lwt.return (Error err)

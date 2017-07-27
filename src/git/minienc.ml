@@ -114,16 +114,9 @@ struct
     to_seq q (fun x -> l := x :: !l);
     List.rev !l
 
-  let pp pp_data fmt q =
-    let lst = to_list q in
-
-    let rec aux = function
-      | [] -> ()
-      | [ x ] -> pp_data fmt x
-      | x :: r -> Format.fprintf fmt "%a;@ " pp_data x; aux r
-    in
-
-    aux lst
+  let pp ppv ppf q =
+    Fmt.pf ppf "[ %a ]"
+    (Fmt.hvbox (Fmt.list ~sep:(fun ppf () -> Fmt.pf ppf ";@ ") ppv)) (to_list q)
 end
 
 module type VALUE =
@@ -131,7 +124,7 @@ sig
   type t
 
   val weight : t -> int
-  val pp     : Format.formatter -> t -> unit
+  val pp     : t Fmt.t
 end
 
 module RBQ (V : VALUE) =
@@ -146,11 +139,11 @@ struct
     ; w = 0
     ; q = Queue.empty }
 
-  let pp fmt { c; w; q; } =
-    Format.fprintf fmt "{ @[<hov>c = %d;@ \
-                                 w = %d;@ \
-                                 q = @[<hov>%a@];@] }"
-      c w (Queue.pp V.pp) q
+  let pp ppf { c; w; q; } =
+    Fmt.pf ppf "{ @[<hov>c = %d;@ \
+                         w = %d;@ \
+                         q = %a;@] }"
+      c w (Fmt.hvbox (Queue.pp V.pp)) q
 
   let available t =
     t.c - t.w
@@ -186,40 +179,42 @@ end
 
 type bigstring = (char, Bigarray.int8_unsigned_elt, Bigarray.c_layout) Bigarray.Array1.t
 
-let pp_char fmt = function
-  | '\032' .. '\126' as chr -> Format.fprintf fmt "%c" chr
-  | _ -> Format.fprintf fmt "."
+let pp_chr =
+  Fmt.using
+    (function '\032' .. '\126' as x -> x
+            | _ -> '.')
+    Fmt.char
 
-let pp_scalar : type buffer. get:(buffer -> int -> char) -> length:(buffer -> int) -> Format.formatter -> buffer -> unit
-  = fun ~get ~length fmt b ->
+let pp_scalar : type buffer. get:(buffer -> int -> char) -> length:(buffer -> int) -> buffer Fmt.t
+  = fun ~get ~length ppf b ->
   let l = length b in
 
   for i = 0 to l / 16
-  do Format.fprintf fmt "%08x: " (i * 16);
+  do Fmt.pf ppf "%08x: " (i * 16);
     let j = ref 0 in
 
     while !j < 16
     do if (i * 16) + !j < l
-      then Format.fprintf fmt "%02x" (Char.code @@ get b ((i * 16) + !j))
-      else Format.fprintf fmt "  ";
+      then Fmt.pf ppf "%02x" (Char.code @@ get b ((i * 16) + !j))
+      else Fmt.pf ppf "  ";
 
-      if !j mod 2 <> 0 then Format.fprintf fmt " ";
+      if !j mod 2 <> 0 then Fmt.pf ppf " ";
 
       incr j;
     done;
 
-    Format.fprintf fmt "  ";
+    Fmt.pf ppf "  ";
     j := 0;
 
     while !j < 16
     do if (i * 16) + !j < l
-      then Format.fprintf fmt "%a" pp_char (get b ((i * 16) + !j))
-      else Format.fprintf fmt " ";
+      then Fmt.pf ppf "%a" pp_chr (get b ((i * 16) + !j))
+      else Fmt.pf ppf " ";
 
       incr j;
     done;
 
-    Format.fprintf fmt "@\n"
+    Fmt.pf ppf "@\n"
   done
 
 module RBA =
@@ -236,8 +231,8 @@ struct
     ; c = capacity
     ; b = Bigarray.Array1.create Bigarray.char Bigarray.c_layout capacity }
 
-  let pp fmt { r; w; c; b; } =
-    Format.fprintf fmt
+  let pp ppf { r; w; c; b; } =
+    Fmt.pf ppf
       "{ @[<hov>r = %d;@ \
                 w = %d;@ \
                 c = %d;@ \
@@ -324,20 +319,26 @@ struct
     | `String raw -> String.length raw
     | `Bytes raw -> Bytes.length raw
 
-  let ppw_bigstring fmt b =
+  let ppw_bigstring ppf b =
     let len = Bigarray.Array1.dim b in
     for i = 0 to len - 1
-    do Format.pp_print_char fmt (Bigarray.Array1.unsafe_get b i) done
+    do Fmt.char ppf (Bigarray.Array1.unsafe_get b i) done
 
-  let ppw fmt = function
-    | `Bigstring b -> ppw_bigstring fmt b
-    | `String b -> Format.pp_print_string fmt b
-    | `Bytes b -> Format.pp_print_string fmt (Bytes.unsafe_to_string b)
+  let ppw ppf = function
+    | `Bigstring b -> ppw_bigstring ppf b
+    | `String b -> Fmt.string ppf b
+    | `Bytes b -> Fmt.string ppf (Bytes.unsafe_to_string b)
 
-  let pp fmt = function
-    | `Bigstring b -> Format.fprintf fmt "(`Bigstring @[<hov>%a@])" (pp_scalar ~get:Bigarray.Array1.get ~length:Bigarray.Array1.dim) b
-    | `Bytes b -> Format.fprintf fmt "(`Bytes @[<hov>%a@])" (pp_scalar ~get:Bytes.get ~length:Bytes.length) b
-    | `String b -> Format.fprintf fmt "(`String @[hov>%a@])" (pp_scalar ~get:String.get ~length:String.length) b
+  let pp ppf = function
+    | `Bigstring b ->
+      Fmt.pf ppf "(`Bigstring %a)"
+        (Fmt.hvbox @@ pp_scalar ~get:Bigarray.Array1.get ~length:Bigarray.Array1.dim) b
+    | `Bytes b ->
+      Fmt.pf ppf "(`Bytes %a)"
+        (Fmt.hvbox @@ pp_scalar ~get:Bytes.get ~length:Bytes.length) b
+    | `String b ->
+      Fmt.pf ppf "(`String %a)"
+        (Fmt.hvbox @@ pp_scalar ~get:String.get ~length:String.length) b
 
   let sub buffer off len = match buffer with
     | `Bigstring b -> `Bigstring (Bigarray.Array1.sub b off len)
@@ -380,29 +381,22 @@ struct
     ; off = 0
     ; len = len - n}
 
-  let ppw fmt = function
+  let ppw ppf = function
     | { buffer = `Bigstring b
       ; off
-      ; len } -> Buffer.ppw_bigstring fmt (Bigarray.Array1.sub b off len)
+      ; len } -> Buffer.ppw_bigstring ppf (Bigarray.Array1.sub b off len)
     | { buffer = `String b
       ; off
-      ; len } -> Format.pp_print_string fmt (String.sub b off len)
+      ; len } -> Fmt.string ppf (String.sub b off len)
     | { buffer = `Bytes b
       ; off
-      ; len } -> Format.pp_print_string fmt (Bytes.sub_string b off len)
+      ; len } -> Fmt.string ppf (Bytes.sub_string b off len)
 
-  let ppwv fmt lst =
-    let rec aux = function
-      | [] -> ()
-      | x :: r -> ppw fmt x; aux r
-    in
-    aux lst
-
-  let pp fmt { buffer; off; len; } =
-    Format.fprintf fmt "{ @[<hov>buffer = @[<hov>%a@];@ \
-                                 off = %d;@ \
-                                 len = %d:@] }"
-      Buffer.pp buffer off len
+  let pp ppf { buffer; off; len; } =
+    Fmt.pf ppf "{ @[<hov>buffer = %a;@ \
+                         off = %d;@ \
+                         len = %d:@] }"
+      (Fmt.hvbox Buffer.pp) buffer off len
 end
 
 module RBS = RBQ(IOVec)
@@ -412,10 +406,10 @@ type encoder =
   ; write : RBA.t
   ; flush : (int * (unit -> unit)) Queue.t }
 
-let pp fmt { sched; write; _ } =
-  Format.fprintf fmt "{ @[<hov>sched = @[<hov>%a@];@ \
-                               write = @[<hov>%a@];@] }"
-    RBS.pp sched RBA.pp write
+let pp ppf { sched; write; _ } =
+  Fmt.pf ppf "{ @[<hov>sched = %a;@ \
+                       write = %a;@] }"
+    (Fmt.hvbox RBS.pp) sched (Fmt.hvbox RBA.pp) write
 
 type 'v state =
   | Flush    of { continue : int -> 'v state

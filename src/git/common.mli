@@ -2,7 +2,7 @@ module type BASE =
 sig
   type t
 
-  val pp      : Format.formatter -> t -> unit
+  val pp      : t Fmt.t
   val compare : t -> t -> int
   val hash    : t -> int
   val equal   : t -> t -> bool
@@ -28,7 +28,7 @@ sig
   type error
   type encoder
 
-  val pp_error  : Format.formatter -> error -> unit
+  val pp_error  : error Fmt.t
 
   val default   : init -> encoder
   val eval      : raw -> encoder -> [ `Flush of encoder | `End of (encoder * int) | `Error of error ]
@@ -44,7 +44,7 @@ sig
   type error
   type decoder
 
-  val pp_error  : Format.formatter -> error -> unit
+  val pp_error  : error Fmt.t
 
   val to_result : raw -> (t, error) result
 
@@ -82,8 +82,8 @@ sig
   type error
   type window
 
-  val pp_error     : Format.formatter -> error -> unit
-  val pp           : Format.formatter -> t -> unit
+  val pp_error     : error Fmt.t
+  val pp           : t Fmt.t
 
   val window_reset : window -> window
   val window       : unit -> window
@@ -102,7 +102,7 @@ sig
   type t
   type error
 
-  val pp_error : Format.formatter -> error -> unit
+  val pp_error   : error Fmt.t
 
   val default    : int -> t
   val flush      : int -> int -> t -> t

@@ -24,40 +24,16 @@ type unpacked_entry =
   ; hash      : int
   ; next      : ptr }
 
-let pp_list ?(sep = (fun fmt () -> ())) pp_data fmt lst =
-  let rec aux = function
-    | [] -> ()
-    | [ x ] -> pp_data fmt x
-    | x :: r -> Format.fprintf fmt "%a%a" pp_data x sep (); aux r
-  in
-  aux lst
-
-let pp_unpacked_entry fmt entry =
-  let pp_next fmt = function
-    | Entry idx -> Format.fprintf fmt "%d" idx
-    | Null -> Format.fprintf fmt "<null>"
+let pp_unpacked_entry ppf entry =
+  let pp_next ppf = function
+    | Entry idx -> Fmt.int ppf idx
+    | Null -> Fmt.string ppf "<null>"
   in
 
-  Format.fprintf fmt "{ @[<hov>offset = %d;@ \
-                               hash = %x;@ \
-                               next = %a;@] }"
+  Fmt.pf ppf "{ @[<hov>offset = %d;@ \
+                       hash = %x;@ \
+                       next = %a;@] }"
     entry.offset entry.hash pp_next entry.next
-
-let pp_array pp_data fmt arr =
-  let len = Array.length arr in
-
-  let rec aux fmt idx =
-    if idx = len
-    then ()
-    else if idx = len - 1
-    then Format.fprintf fmt "%05d: %a" idx pp_data arr.(idx)
-    else begin
-      Format.fprintf fmt "%05d: %a;@ " idx pp_data arr.(idx);
-      aux fmt (idx + 1);
-    end
-  in
-
-  Format.fprintf fmt "[| @[<hov>%a@] |]"aux 0
 
 let unsafe = function Entry idx -> idx | Null -> assert false
 let safe arr = function Entry idx -> arr.(idx).next | Null -> Null
@@ -68,9 +44,9 @@ struct
     { offset : int
     ; hash   : int }
 
-  let pp fmt entry =
-    Format.fprintf fmt "{ @[<hov>offset = %d;@ \
-                                 hash = %x;@] }"
+  let pp ppf entry =
+    Fmt.pf ppf "{ @[<hov>offset = %d;@ \
+                         hash = %x;@] }"
       entry.offset entry.hash
 
   let memory_size _ = 2
@@ -86,33 +62,11 @@ struct
   let memory_size { hash; mask; buff; } =
     3 + (Cstruct.len buff + 1) + 1 + (Array.fold_left (fun acc x -> List.length x * 4 + 1 + acc) 1 hash)
 
-  let pp fmt index =
-    let pp_lst fmt lst =
-      let rec aux fmt = function
-        | [] -> ()
-        | [ x ] -> Entry.pp fmt x
-        | x :: r -> Format.fprintf fmt "%a;@ " Entry.pp x; aux fmt r
-      in
-      Format.fprintf fmt "[ @[<hov>%a@] ]" aux lst
-    in
-
-    let pp_arr fmt arr =
-      let len = Array.length arr in
-
-      let rec aux fmt idx =
-        if idx = len then ()
-        else if idx = len - 1
-        then Format.fprintf fmt "%05d: %a" idx pp_lst arr.(idx)
-        else begin Format.fprintf fmt "%05d: %a;@ " idx pp_lst arr.(idx); aux fmt (idx + 1) end
-      in
-
-      Format.fprintf fmt "[| @[<hov>%a@] |]" aux 0
-    in
-
-    Format.fprintf fmt "{ @[<hov>hash = @[<hov>%a@];@ \
-                                 mask = %x;@ \
-                                 buff = #raw;@] }"
-      pp_arr index.hash index.mask
+  let pp ppf index =
+    Fmt.pf ppf "{ @[<hov>hash = %a;@ \
+                         mask = %x;@ \
+                         buff = #raw;@] }"
+      (Fmt.hvbox (Fmt.array (Fmt.list Entry.pp))) index.hash index.mask
 
   let unsafe_make buf =
     let len = min (Cstruct.len buf) 0xFFFFFFFE in
@@ -342,9 +296,9 @@ type e =
   | C of (int * int)
   | I of (int * int)
 
-let pp fmt = function
-  | C (off, len) -> Format.fprintf fmt "(Copy (%d, %d))" off len
-  | I (off, len) -> Format.fprintf fmt "(Insert (%d, %d))" off len
+let pp ppf = function
+  | C (off, len) -> Fmt.pf ppf "(Copy (%d, %d))" off len
+  | I (off, len) -> Fmt.pf ppf "(Insert (%d, %d))" off len
 
 let delta index buf =
   let make (acc, (copy_off, copy_len), current_hash) offset _ =

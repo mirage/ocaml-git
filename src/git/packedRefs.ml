@@ -149,9 +149,9 @@ module Make
     [ FileSystem.File.error
     | D.error ]
 
-  let pp_error fmt = function
-    | #FileSystem.File.error as err -> Format.fprintf fmt "%a" FileSystem.File.pp_error err
-    | #D.error as err -> Format.fprintf fmt "%a" D.pp_error err
+  let pp_error ppf = function
+    | #FileSystem.File.error as err -> FileSystem.File.pp_error ppf err
+    | #D.error as err -> D.pp_error ppf err
 
   let read ~root ~dtmp ~raw =
     let decoder = D.default dtmp in

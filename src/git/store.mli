@@ -48,7 +48,7 @@ sig
                       error. *)
                ] (** The type error. *)
 
-  val pp_error : Format.formatter -> error -> unit
+  val pp_error : error Fmt.t
   (** Pretty-printer of {!error}. *)
 
   val lookup_p : state -> Hash.t -> Hash.t option Lwt.t
@@ -307,7 +307,7 @@ sig
                      {i packed} git object. *)
                ] (** The type error. *)
 
-  val pp_error : Format.formatter -> error -> unit
+  val pp_error : error Fmt.t
   (** Pretty-printer of {!error}. *)
 
   val lookup_p : state -> Hash.t -> (Hash.t * (Crc32.t * int64)) option Lwt.t
@@ -483,7 +483,7 @@ sig
                  (** Appears when the {!Pack} module returns an error. *)
                ] (** The type error. *)
 
-  val pp_error : Format.formatter -> error -> unit
+  val pp_error : error Fmt.t
   (** Pretty-printer of {!error}. *)
 
   val create : ?root:Path.t ->
@@ -655,7 +655,7 @@ sig
       (** Appears when we can not retrieve the final value of the reference [ref]. *)
       ] (** The type error. *)
 
-    val pp_error : Format.formatter -> error -> unit
+    val pp_error : error Fmt.t
     (** Pretty-printer of {!error}. *)
 
     val graph_p : t -> dtmp:Cstruct.t -> raw:Cstruct.t -> (Hash.t Reference.Map.t, error) result Lwt.t

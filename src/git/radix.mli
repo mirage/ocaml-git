@@ -45,6 +45,6 @@ sig
   val to_list     : 'a t -> (Key.t * 'a) list
   (** [to_list t] makes an associated list from the radix-tree. *)
 
-  val pp          : (Format.formatter -> Key.t -> 'a -> unit) -> Format.formatter -> 'a t -> unit
+  val pp          : (Key.t * 'a) Fmt.t -> 'a t Fmt.t
   (** A pretty-printer for the radix-tree. *)
 end

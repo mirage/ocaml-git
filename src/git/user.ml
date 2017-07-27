@@ -8,25 +8,22 @@ type t =
   ; email : string
   ; date  : int64 * tz_offset option }
 
-let pp_sign fmt = function
-  | `Plus -> Format.fprintf fmt "`Plus"
-  | `Minus -> Format.fprintf fmt "`Minus"
+let pp_sign ppf = function
+  | `Plus -> Fmt.pf ppf "`Plus"
+  | `Minus -> Fmt.pf ppf "`Minus"
 
-let pp_tz_offset fmt { sign; hours; minutes; } =
-  Format.fprintf fmt "{ @[<hov>sign = @[<hov>%a@];@ \
-                               hours = %02d;@ \
-                               minutes = %02d;@] }"
-    pp_sign sign hours minutes
+let pp_tz_offset ppf { sign; hours; minutes; } =
+  Fmt.pf ppf "{ @[<hov>sign = %a;@ \
+                       hours = %02d;@ \
+                       minutes = %02d;@] }"
+    (Fmt.hvbox pp_sign) sign hours minutes
 
-let pp_option pp_data fmt = function
-  | Some x -> pp_data fmt x
-  | None -> Format.fprintf fmt "<none>"
-
-let pp fmt { name; email; date = (n, tz_offset) } =
-  Format.fprintf fmt "{ @[<hov>name = @[<hov>%s@];@ \
-                               email = @[<hov>%s@];@ \
-                               date = @[<hov>(%Ld, %a)@];@] }"
-    name email n (pp_option pp_tz_offset) tz_offset
+let pp ppf { name; email; date = (n, tz_offset) } =
+  Fmt.pf ppf "{ @[<hov>name = %s;@ \
+                       email = %s;@ \
+                       date = %a;@] }"
+    name email
+    (Fmt.hvbox (Fmt.pair Fmt.int64 (Fmt.option pp_tz_offset))) (n, tz_offset)
 
 module A =
 struct

@@ -12,7 +12,7 @@ sig
   val inside : int64 -> t -> bool
   (** [inside off t] checks if the offset [off] is available inside in [ŧ]. *)
 
-  val pp : Format.formatter -> t -> unit
+  val pp : t Fmt.t
   (** A pretty-printer of {!t}. *)
 end
 
@@ -20,7 +20,7 @@ module type HASH =
 sig
   type t = Bytes.t
 
-  val pp        : Format.formatter -> t -> unit
+  val pp        : t Fmt.t
   val length    : int
   val of_string : string -> t
 end
@@ -38,7 +38,7 @@ sig
         bigger than it's possible to store into the target or because it does
         not correspond to a valid area from the source). *)
 
-  val pp_error : Format.formatter -> error -> unit
+  val pp_error : error Fmt.t
 
   (** The type of the Hunk decoder. *)
   type t =
@@ -94,13 +94,13 @@ sig
   (** [partial_hunks t] returns a partial hunks to get some available
       information. {!hunks.hunks} is not available. *)
 
-  val pp_reference : Format.formatter -> reference -> unit
+  val pp_reference : reference Fmt.t
   (** A pretty-printer of {!reference}. *)
 
-  val pp_hunks : Format.formatter -> hunks -> unit
+  val pp_hunks : hunks Fmt.t
   (** A pretty-printer of {!hunks}. *)
 
-  val pp : Format.formatter -> t -> unit
+  val pp : t Fmt.t
   (** A pretty-printer of the decoder {!t}. *)
 
   val eval : Cstruct.t -> t -> [ `Hunk of t * hunk | `Await of t | `Error of t * error | `Ok of t * hunks ]
@@ -193,13 +193,13 @@ sig
     (** Appears when the length of the inflated object does not correspond by
         what was it noticed by the PACK file. *)
 
-  val pp_error : Format.formatter -> error -> unit
+  val pp_error : error Fmt.t
   (** A pretty-printer for an {!error}. *)
 
   type t
   (** The type of the decoder. *)
 
-  val pp : Format.formatter -> t -> unit
+  val pp : t Fmt.t
   (** A pretty-printer for {!t}. *)
 
   type kind =
@@ -414,7 +414,7 @@ sig
     (** Appears when we have an {!P.error}. *)
     | Mapper_error of Mapper.error
 
-  val pp_error : Format.formatter -> error -> unit
+  val pp_error : error Fmt.t
   (** A pretty-printer for {!error}. *)
 
   type t
@@ -469,7 +469,7 @@ sig
       (** The type of the git object (after we processed all necessary
          undelta-ification). *)
 
-    val pp : Format.formatter -> t -> unit
+    val pp : t Fmt.t
     (** A pretty-printer for {!t}. *)
 
     val first_crc_exn : t -> Crc32.t

@@ -195,26 +195,20 @@ module Make
   module D = Helper.MakeDecoder(A)
   module E = Helper.MakeEncoder(M)
 
-  let list_pp ?(sep = (fun fmt () -> ())) pp_data fmt lst =
-    let rec aux = function
-      | [] -> ()
-      | [ x ] -> pp_data fmt x
-      | x :: r -> Format.fprintf fmt "%a%a" pp_data x sep (); aux r
-    in
-    aux lst
+  let pp ppf { tree; parents; author; committer; message; } =
+    let chr = Fmt.using (function '\000' .. '\031' | '\127' -> '.' | x -> x) Fmt.char in
 
-  let pp fmt { tree; parents; author; committer; message; } =
-    Format.fprintf fmt
-      "{ @[<hov>tree = @[<hov>%a@];@ \
-                parents = [ @[<hov>%a@] ];@ \
-                author = @[<hov>%a@];@ \
-                committer = @[<hov>%a@];@ \
-                message = @[<hov>%S@];@] }"
-      Hash.pp tree
-      (list_pp ~sep:(fun fmt () -> Format.fprintf fmt ";@ ") Hash.pp) parents
-      User.pp author
-      User.pp committer
-      message
+    Fmt.pf ppf
+      "{ @[<hov>tree = %a;@ \
+                parents = [ %a ];@ \
+                author = %a;@ \
+                committer = %a;@ \
+                message = %a;@] }"
+      (Fmt.hvbox Hash.pp) tree
+      (Fmt.list ~sep:(fun ppf () -> Fmt.pf ppf ";@ ") Hash.pp) parents
+      (Fmt.hvbox User.pp) author
+      (Fmt.hvbox User.pp) committer
+      (Fmt.hvbox (Fmt.iter ~sep:Fmt.nop String.iter chr)) message
 
   let digest value =
     let tmp = Cstruct.create 0x100 in

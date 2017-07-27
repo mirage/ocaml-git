@@ -48,32 +48,24 @@ module Make (Digest : Ihash.IDIGEST with type t = Bytes.t
 
   let hashes tree = List.map (fun { node; _ } -> node) tree
 
-  let pp_entry fmt { perm
+  let pp_entry ppf { perm
                    ; name
                    ; node } =
-    Format.fprintf fmt "{ @[<hov>perm = %s;@ \
-                                 name = %s;@ \
-                                 node = %a;@] }"
+    Fmt.pf ppf "{ @[<hov>perm = %s;@ \
+                         name = %s;@ \
+                         node = %a;@] }"
       (match perm with
-       | `Normal -> "normal"
+       | `Normal    -> "normal"
        | `Everybody -> "everybody"
-       | `Exec -> "exec"
-       | `Link -> "link"
-       | `Dir -> "dir"
-       | `Commit -> "commit")
-      name Hash.pp node
+       | `Exec      -> "exec"
+       | `Link      -> "link"
+       | `Dir       -> "dir"
+       | `Commit    -> "commit")
+      name (Fmt.hvbox Hash.pp) node
 
-  let list_pp ?(sep = (fun fmt () -> ())) pp_data fmt lst =
-    let rec aux = function
-      | [] -> ()
-      | [ x ] -> pp_data fmt x
-      | x :: r -> Format.fprintf fmt "%a%a" pp_data x sep (); aux r
-    in
-    aux lst
-
-  let pp fmt tree =
-    Format.fprintf fmt "[ @[<hov>%a@] ]"
-      (list_pp ~sep:(fun fmt () -> Format.fprintf fmt "; ") pp_entry) tree
+  let pp ppf tree =
+    Fmt.pf ppf "[ @[<hov>%a@] ]"
+      (Fmt.list ~sep:(fun ppf () -> Fmt.pf ppf ";@ ") pp_entry) tree
 
   let string_of_perm = function
     | `Normal    -> "100644"
@@ -102,14 +94,12 @@ module Make (Digest : Ihash.IDIGEST with type t = Bytes.t
 
     let hash = Angstrom.take Digest.length
 
-    let sp = Format.sprintf
-
     let entry =
       let open Angstrom in
 
       take_while is_not_sp >>= fun perm ->
         (try return (perm_of_string perm)
-         with _ -> fail (sp "Invalid permission %s" perm))
+         with _ -> fail (Fmt.strf "Invalid permission %s" perm))
         <* commit
       >>= fun perm -> take 1 *> take_while is_not_nl <* commit
       >>= fun name -> take 1 *> hash <* commit

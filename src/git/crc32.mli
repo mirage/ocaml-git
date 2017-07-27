@@ -24,7 +24,7 @@ val of_int32 : int32 -> t
 val to_int32 : t -> int32
 (** Casts the CRC-32 checksum to an [int32] value. *)
 
-val pp : Format.formatter -> t -> unit
+val pp : t Fmt.t
 (** A pretty-print for {!t}. *)
 
 val default : t

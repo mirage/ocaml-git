@@ -97,7 +97,7 @@ let digestv t cs =
 external of_int32 : int32 -> t = "%identity"
 external to_int32 : t -> int32 = "%identity"
 
-let pp fmt x = Format.fprintf fmt "%04lx" x
+let pp ppf x = Fmt.pf ppf "%04lx" x
 
 let default = 0l
 

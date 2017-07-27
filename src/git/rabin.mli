@@ -6,7 +6,7 @@ sig
   type t
   (** The type of the index. *)
 
-  val pp : Format.formatter -> t -> unit
+  val pp : t Fmt.t
   (** A pretty-printer for {!t}. *)
 
   val memory_size : t -> int
@@ -26,7 +26,7 @@ type e =
   | I of (int * int)
   (** It's the insert opcode to keep a specific byte range of the target. *)
 
-val pp : Format.formatter -> e -> unit
+val pp : e Fmt.t
 (** A pretty-printer for {!e}. *)
 
 val delta : Index.t -> Cstruct.t -> e list

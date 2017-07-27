@@ -4,7 +4,7 @@ sig
   type ctx
   type buffer = Cstruct.t
 
-  val pp      : Format.formatter -> t -> unit
+  val pp      : t Fmt.t
   val length  : int
   val feed    : ctx -> buffer -> unit
   val get     : ctx -> t
@@ -30,7 +30,7 @@ sig
     | Invalid_bigoffset_index of int
     (** Appear when we try to read a big offset value and we can't catch it. *)
 
-  val pp_error : Format.formatter -> error -> unit
+  val pp_error : error Fmt.t
   (** [pp_error fmt err] prints [err] in [fmt]. *)
 
   type t
@@ -69,13 +69,13 @@ sig
     | Invalid_hash of Hash.t * Hash.t
     (** Appear when the hash produced when we un-serialize the IDX file does not correspond with the hash provided. *)
 
-  val pp_error : Format.formatter -> error -> unit
+  val pp_error : error Fmt.t
   (** [pp_error fmt err] prints [err] in [fmt]. *)
 
   type t
   (** The decoder state. *)
 
-  val pp : Format.formatter -> t -> unit
+  val pp : t Fmt.t
   (** Pretty-print of the decoder {!t}. *)
 
   val make : unit -> t
@@ -113,13 +113,13 @@ sig
   type error
   (** We can't have an error to serialize a PACK file. *)
 
-  val pp_error : Format.formatter -> error -> unit
+  val pp_error : error Fmt.t
   (** A pretty-print for an {!error}. *)
 
   type t
   (** The encoder state. *)
 
-  val pp : Format.formatter -> t -> unit
+  val pp : t Fmt.t
   (** Pretty-print of the encoder {!t}. *)
 
   type 'a sequence = ('a -> unit) -> unit

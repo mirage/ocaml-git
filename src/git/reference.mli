@@ -69,7 +69,7 @@ sig
     | Hash of Hash.t (** A pointer to an hash. *)
     | Ref of t (** A reference which one can point to an other reference or an hash. *)
 
-  val pp_head_contents : Format.formatter -> head_contents -> unit
+  val pp_head_contents : head_contents Fmt.t
   (** Pretty-printer of {!head_contents}. *)
 
   module A
@@ -89,7 +89,7 @@ sig
     | D.error (** The decoder {!D} error. *)
     ] (** The type of error. *)
 
-  val pp_error : Format.formatter -> error -> unit
+  val pp_error : error Fmt.t
   (** Pretty-printer of {!error}. *)
 
   val from_file : Path.t -> dtmp:Cstruct.t -> raw:Cstruct.t -> ((t * head_contents), error) result Lwt.t

@@ -21,7 +21,7 @@ sig
     | Hash of Hash.t
     | Ref of t
 
-  val pp_head_contents : Format.formatter -> head_contents -> unit
+  val pp_head_contents : head_contents Fmt.t
 
   module A : Common.ANGSTROM with type t = head_contents
   module D : Common.DECODER with type t = head_contents
@@ -33,7 +33,7 @@ sig
     [ FileSystem.File.error
     | D.error ]
 
-  val pp_error  : Format.formatter -> error -> unit
+  val pp_error  : error Fmt.t
 
   val from_file : Path.t -> dtmp:Cstruct.t -> raw:Cstruct.t -> ((t * head_contents), error) result Lwt.t
 end
@@ -67,8 +67,8 @@ module Make
   let of_string x = x
   let to_string x = x
 
-  let pp fmt x =
-    Format.fprintf fmt "%s" (String.escaped x)
+  let pp ppf x =
+    Fmt.pf ppf "%s" (String.escaped x)
 
   let equal   = String.equal
   let hash    = Hashtbl.hash
@@ -87,9 +87,9 @@ module Make
     | Hash of Hash.t
     | Ref of t
 
-  let pp_head_contents fmt = function
-    | Hash hash -> Format.fprintf fmt "(Hash %a)" Hash.pp hash
-    | Ref t -> Format.fprintf fmt "(Ref %a)" pp t
+  let pp_head_contents ppf = function
+    | Hash hash -> Fmt.pf ppf "(Hash %a)" Hash.pp hash
+    | Ref t -> Fmt.pf ppf "(Ref %a)" pp t
 
   module A =
   struct
@@ -119,9 +119,9 @@ module Make
     [ FileSystem.File.error
     | D.error ]
 
-  let pp_error fmt = function
-    | #FileSystem.File.error as err -> Format.fprintf fmt "%a" FileSystem.File.pp_error err
-    | #D.error as err -> Format.fprintf fmt "%a" D.pp_error err
+  let pp_error ppf = function
+    | #FileSystem.File.error as err -> FileSystem.File.pp_error ppf err
+    | #D.error as err -> D.pp_error ppf err
 
   let normalize path =
     let segs = Path.segs path in

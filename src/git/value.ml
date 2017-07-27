@@ -65,11 +65,11 @@ module Make (Digest : Ihash.IDIGEST with type t = Bytes.t
     | Tree   of Tree.t
     | Tag    of Tag.t
 
-  let pp fmt = function
-    | Blob blob     -> Format.fprintf fmt "(Blob @[<hov>%a@])" Blob.pp blob
-    | Commit commit -> Format.fprintf fmt "(Commit @[<hov>%a@])" Commit.pp commit
-    | Tree tree     -> Format.fprintf fmt "(Tree @[<hov>%a@])" Tree.pp tree
-    | Tag tag       -> Format.fprintf fmt "(Tag @[<hov>%a@])" Tag.pp tag
+  let pp ppf = function
+    | Blob blob     -> Fmt.pf ppf "(Blob %a)" (Fmt.hvbox Blob.pp) blob
+    | Commit commit -> Fmt.pf ppf "(Commit %a)" (Fmt.hvbox Commit.pp) commit
+    | Tree tree     -> Fmt.pf ppf "(Tree %a)" (Fmt.hvbox Tree.pp) tree
+    | Tag tag       -> Fmt.pf ppf "(Tag %a)" (Fmt.hvbox Tag.pp) tag
 
   module A =
   struct

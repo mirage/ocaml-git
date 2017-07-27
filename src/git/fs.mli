@@ -3,7 +3,7 @@ sig
   type path
   type error = [ `System of string ]
 
-  val pp_error : Format.formatter -> error -> unit
+  val pp_error : error Fmt.t
 
   val exists   : path -> (bool, error) result Lwt.t
   val delete   : path -> (unit, error) result Lwt.t
@@ -27,7 +27,7 @@ sig
   type path
   type error = [ `System of string ]
 
-  val pp_error : Format.formatter -> error -> unit
+  val pp_error : error Fmt.t
 
   val openfile : path -> (fd, error) result Lwt.t
   val length   : fd -> (int64, error) result Lwt.t
@@ -40,7 +40,7 @@ sig
   type path
   type error = [ `System of string ]
 
-  val pp_error : Format.formatter -> error -> unit
+  val pp_error : error Fmt.t
 
   val exists   : path -> (bool, error) result Lwt.t
   val create   : ?path:bool -> ?mode:int -> path -> (bool, error) result Lwt.t
@@ -55,7 +55,7 @@ sig
   type path
   type error
 
-  val pp_error  : Format.formatter -> error -> unit
+  val pp_error  : error Fmt.t
 
   val is_dir    : path -> (bool, error) result Lwt.t
   val is_file   : path -> (bool, error) result Lwt.t

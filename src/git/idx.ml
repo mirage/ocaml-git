@@ -6,7 +6,7 @@ sig
   type ctx
   type buffer = Cstruct.t
 
-  val pp      : Format.formatter -> t -> unit
+  val pp      : t Fmt.t
   val length  : int
   val feed    : ctx -> buffer -> unit
   val get     : ctx -> t
@@ -27,7 +27,7 @@ sig
     | Expected_bigoffset_table
     | Invalid_bigoffset_index of int
 
-  val pp_error : Format.formatter -> error -> unit
+  val pp_error : error Fmt.t
 
   type t
 
@@ -48,18 +48,17 @@ struct
     | Expected_bigoffset_table
     | Invalid_bigoffset_index of int
 
-  let pp = Format.fprintf
-  let pp_error fmt = function
+  let pp_error ppf = function
     | Invalid_header header ->
-      pp fmt "(Invalid_header %s)" header
+      Fmt.pf ppf "(Invalid_header %s)" header
     | Invalid_version version ->
-      pp fmt "(Invalid_version %ld)" version
+      Fmt.pf ppf "(Invalid_version %ld)" version
     | Invalid_index ->
-      pp fmt "Invalid_index"
+      Fmt.pf ppf "Invalid_index"
     | Expected_bigoffset_table ->
-      pp fmt "Expected_bigoffset_table"
+      Fmt.pf ppf "Expected_bigoffset_table"
     | Invalid_bigoffset_index index ->
-      pp fmt "(Invalid_bigoffset_index %d)" index
+      Fmt.pf ppf "(Invalid_bigoffset_index %d)" index
 
   module Cache = Lru.M.Make(Hash)(struct type t = Crc32.t * int64 let weight _ = 1 end)
 
@@ -75,7 +74,7 @@ struct
 
   let has map off len =
     if (off < 0 || len < 0 || off + len > Cstruct.len map)
-    then raise (Invalid_argument (Printf.sprintf "%d:%d:%d" off len (Cstruct.len map)))
+    then raise (Invalid_argument (Fmt.strf "%d:%d:%d" off len (Cstruct.len map)))
     else true
 
   let check_header map =
@@ -270,11 +269,11 @@ sig
     | Expected_bigoffset_table
     | Invalid_hash of Hash.t * Hash.t
 
-  val pp_error : Format.formatter -> error -> unit
+  val pp_error : error Fmt.t
 
   type t
 
-  val pp     : Format.formatter -> t -> unit
+  val pp     : t Fmt.t
   val make   : unit -> t
   val refill : int -> int -> t -> t
   val eval   : Cstruct.t -> t -> [ `Await of t | `End of t * Hash.t | `Hash of t * (Hash.t * Crc32.t * int64) | `Error of t * error ]
@@ -291,14 +290,17 @@ struct
     | Expected_bigoffset_table
     | Invalid_hash of Hash.t * Hash.t
 
-  let pp = Format.fprintf
-
-  let pp_error fmt = function
-    | Invalid_byte byte              -> pp fmt "(Invalid_byte %02x)" byte
-    | Invalid_version version        -> pp fmt "(Invalid_version %ld)" version
-    | Invalid_index_of_bigoffset idx -> pp fmt "(Invalid_index_of_bigoffset %d)" idx
-    | Expected_bigoffset_table       -> pp fmt "Expected_bigoffset_table"
-    | Invalid_hash (has, expect)     -> pp fmt "(Invalid_hash (%a, %a))" Hash.pp has Hash.pp expect
+  let pp_error ppf = function
+    | Invalid_byte byte ->
+      Fmt.pf ppf "(Invalid_byte %02x)" byte
+    | Invalid_version version ->
+      Fmt.pf ppf "(Invalid_version %ld)" version
+    | Invalid_index_of_bigoffset idx ->
+      Fmt.pf ppf "(Invalid_index_of_bigoffset %d)" idx
+    | Expected_bigoffset_table ->
+      Fmt.pf ppf "Expected_bigoffset_table"
+    | Invalid_hash (has, expect) ->
+      Fmt.pf ppf "(Invalid_hash (%a, %a))" Hash.pp has Hash.pp expect
 
   type t =
     { i_off     : int
@@ -328,30 +330,39 @@ struct
     | Result of t * (Hash.t * Crc32.t * Int64.t)
     | Ok     of t * Hash.t
 
-  let pp_state fmt = function
-    | Header _                  -> pp fmt "(Header #k)"
-    | Fanout _                  -> pp fmt "(Fanout #k)"
-    | Hashes _                  -> pp fmt "(Hashes #k)"
-    | Crcs _                    -> pp fmt "(Crcs #k)"
-    | Offsets _                 -> pp fmt "(Offsets #k)"
-    | Hash _                    -> pp fmt "(Hash #k)"
-    | Ret (boffs, hash_idx, hash_pack) -> pp fmt "(Ret (big offsets:%d, idx:%a, pack:%a))"
-                                            (Option.value ~default:0 (Option.bind Array.length boffs))
-                                            Hash.pp hash_idx Hash.pp hash_pack
-    | End hash_pack             -> pp fmt "(End %a)" Hash.pp hash_pack
-    | Exception exn             -> pp fmt "(Exception %a)" pp_error exn
+  let pp_state ppf = function
+    | Header _ ->
+      Fmt.pf ppf "(Header #k)"
+    | Fanout _ ->
+      Fmt.pf ppf "(Fanout #k)"
+    | Hashes _ ->
+      Fmt.pf ppf "(Hashes #k)"
+    | Crcs _ ->
+      Fmt.pf ppf "(Crcs #k)"
+    | Offsets _ ->
+      Fmt.pf ppf "(Offsets #k)"
+    | Hash _ ->
+      Fmt.pf ppf "(Hash #k)"
+    | Ret (boffs, hash_idx, hash_pack) ->
+      Fmt.pf ppf "(Ret (big offsets:%d, idx:%a, pack:%a))"
+        (Option.value ~default:0 (Option.bind Array.length boffs))
+        Hash.pp hash_idx Hash.pp hash_pack
+    | End hash_pack ->
+      Fmt.pf ppf "(End %a)" Hash.pp hash_pack
+    | Exception exn ->
+      Fmt.pf ppf "(Exception %a)" pp_error exn
 
-  let pp fmt t =
-    pp fmt "{ @[<hov>i_off = %d;@ \
-                     i_pos = %d;@ \
-                     i_len = %d;@ \
-                     fanout = #table;@ \
-                     hashes = #queue;@ \
-                     crcs = #queue;@ \
-                     offsets = #queue;@ \
-                     hash = #ctx;@ \
-                     state = %a;@] }"
-      t.i_off t.i_pos t.i_len pp_state t.state
+  let pp ppf t =
+    Fmt.pf ppf "{ @[<hov>i_off = %d;@ \
+                         i_pos = %d;@ \
+                         i_len = %d;@ \
+                         fanout = #table;@ \
+                         hashes = #queue;@ \
+                         crcs = #queue;@ \
+                         offsets = #queue;@ \
+                         hash = #ctx;@ \
+                         state = %a;@] }"
+      t.i_off t.i_pos t.i_len (Fmt.hvbox pp_state) t.state
 
   let await src t =
     let () = Hash.feed t.hash (Cstruct.sub src t.i_off t.i_pos) in
@@ -612,15 +623,13 @@ struct
     ; hash    = Hash.init ()
     ; state   = Header header }
 
-  let sp = Format.sprintf
-
   let refill off len t =
     if (t.i_len - t.i_pos) = 0
     then { t with i_off = off
                 ; i_len = len
                 ; i_pos = 0 }
-    else raise (Invalid_argument (sp "I.refill: you lost something \
-                                      (pos: %d, len: %d)" t.i_pos t.i_len))
+    else raise (Invalid_argument (Fmt.strf "I.refill: you lost something \
+                                            (pos: %d, len: %d)" t.i_pos t.i_len))
 
   let eval src t =
     let eval0 t = match t.state with
@@ -653,11 +662,11 @@ sig
 
   type error
 
-  val pp_error : Format.formatter -> error -> unit
+  val pp_error : error Fmt.t
 
   type t
 
-  val pp : Format.formatter -> t -> unit
+  val pp : t Fmt.t
 
   type 'a sequence = ('a -> unit) -> unit
 
@@ -671,9 +680,9 @@ module Encoder (Hash : HASH) : ENCODER with module Hash = Hash =
 struct
   module Hash = Hash
 
-  type error = unit
+  type error
 
-  let pp_error fmt () = ()
+  let pp_error = Fmt.nop (* no error. *)
 
   module K =
   struct
@@ -717,29 +726,35 @@ struct
                      the first goal is to work!
    *)
 
-  let pp = Format.fprintf
+  let pp_state ppf = function
+    | Header _ ->
+      Fmt.pf ppf "(Header #k)"
+    | Fanout _ ->
+      Fmt.pf ppf "(Fanout #k)"
+    | Hashes _ ->
+      Fmt.pf ppf "(Hashes #k)"
+    | Crcs _ ->
+      Fmt.pf ppf "(Crcs #k)"
+    | Offsets _ ->
+      Fmt.pf ppf "(Offsets #k)"
+    | BigOffsets _ ->
+      Fmt.pf ppf "(BigOffsets #k)"
+    | Hash _ ->
+      Fmt.pf ppf "(Hash #k)"
+    | End ->
+      Fmt.pf ppf "End"
 
-  let pp_state fmt = function
-    | Header _     -> pp fmt "(Header #k)"
-    | Fanout _     -> pp fmt "(Fanout #k)"
-    | Hashes _     -> pp fmt "(Hashes #k)"
-    | Crcs _       -> pp fmt "(Crcs #k)"
-    | Offsets _    -> pp fmt "(Offsets #k)"
-    | BigOffsets _ -> pp fmt "(BigOffsets #k)"
-    | Hash _       -> pp fmt "(Hash #k)"
-    | End          -> pp fmt "End"
-
-  let pp fmt { o_off; o_pos; o_len; write; table; boffsets; hash; pack; state; } =
-    pp fmt "{ @[<hov>o_off = %d;@ \
-                     o_pos = %d;@ \
-                     o_len = %d;@ \
-                     write = %d;@ \
-                     table = #table;@ \
-                     boffsets = #table;@ \
-                     hash = #ctx;@ \
-                     pack = %a;@ \
-                     state = %a;@] }"
-      o_off o_pos o_len write Hash.pp pack pp_state state
+  let pp ppf { o_off; o_pos; o_len; write; table; boffsets; hash; pack; state; } =
+    Fmt.pf ppf "{ @[<hov>o_off = %d;@ \
+                         o_pos = %d;@ \
+                         o_len = %d;@ \
+                         write = %d;@ \
+                         table = #table;@ \
+                         boffsets = #table;@ \
+                         hash = #ctx;@ \
+                         pack = %a;@ \
+                         state = %a;@] }"
+      o_off o_pos o_len write Hash.pp pack (Fmt.hvbox pp_state) state
 
   let flush dst t =
     Hash.feed t.hash (Cstruct.sub dst t.o_off t.o_pos);

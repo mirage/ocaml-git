@@ -1,23 +1,3 @@
-let pp_list ?(sep = (fun fmt () -> ()) )pp_data fmt lst =
-  let rec aux = function
-    | [] -> ()
-    | [ x ] -> pp_data fmt x
-    | x :: r -> Format.fprintf fmt "%a%a" pp_data x sep (); aux r
-  in aux lst
-
-let pp_cstruct fmt cs =
-  Format.fprintf fmt "\"";
-  for i = 0 to Cstruct.len cs - 1
-  do if Cstruct.get_uint8 cs i > 32 && Cstruct.get_uint8 cs i < 127
-    then Format.fprintf fmt "%c" (Cstruct.get_char cs i)
-    else Format.fprintf fmt "."
-  done;
-  Format.fprintf fmt "\""
-
-let pp_array pp_data fmt arr =
-  Format.fprintf fmt "[| @[<hov>%a@] |]"
-    (pp_list ~sep:(fun fmt () -> Format.fprintf fmt ";@ ") pp_data) (Array.to_list arr)
-
 module type HASH =
 sig
   type t = Bytes.t
@@ -25,7 +5,7 @@ sig
   type buffer = Cstruct.t
 
   val length    : int
-  val pp        : Format.formatter -> t -> unit
+  val pp        : t Fmt.t
 
   val init      : unit -> ctx
   val feed      : ctx -> buffer -> unit
@@ -76,11 +56,11 @@ struct
     | Blob -> 0b011
     | Tag -> 0b100
 
-  let pp fmt = function
-    | Commit -> Format.fprintf fmt "Commit"
-    | Tree -> Format.fprintf fmt "Tree"
-    | Blob -> Format.fprintf fmt "Blob"
-    | Tag -> Format.fprintf fmt "Tag"
+  let pp ppf = function
+    | Commit -> Fmt.pf ppf "Commit"
+    | Tree -> Fmt.pf ppf "Tree"
+    | Blob -> Fmt.pf ppf "Blob"
+    | Tag -> Fmt.pf ppf "Tag"
 end
 
 module Entry (Hash : HASH) =
@@ -98,30 +78,29 @@ struct
     | None
   (* XXX(dinosaure): I try to use GADT in this case and ... god I'm crazy. *)
 
-  let pp_source fmt = function
-    | From hash -> Format.fprintf fmt "Δ(%a)" Hash.pp hash
-    | None -> Format.fprintf fmt "Τ"
+  let pp_source ppf = function
+    | From hash -> Fmt.pf ppf "Δ(%a)" Hash.pp hash
+    | None -> Fmt.string ppf "Τ"
 
-  let pp_option pp_data fmt = function
-    | Some x -> pp_data fmt x
-    | None -> Format.fprintf fmt "<none>"
-
-  let pp
-    : type delta. Format.formatter -> t -> unit
-    = fun fmt { hash_name; hash_object; name; kind; preferred; delta; length; } ->
-      Format.fprintf fmt "{ @[<hov>name = %d and @[<hov>%a@];@ \
-                          hash = @[<hov>%a@];@ \
-                          kind = @[<hov>%a@];@ \
-                          preferred = %b;@ \
-                          delta = @[<hov>%a@];@ \
-                          length = %Ld;@] }"
+  let pp ppf { hash_name
+             ; hash_object
+             ; name
+             ; kind
+             ; preferred
+             ; delta
+             ; length; } =
+      Fmt.pf ppf "{ @[<hov>name = @[<hov>%x and %a@];@ \
+                           hash = %a;@ \
+                           kind = %a;@ \
+                           preferred = %b;@ \
+                           delta = %a;@ \
+                           length = %Ld;@] }"
         hash_name
-        (pp_option Format.pp_print_string)
-        name
-        Hash.pp hash_object
-        Kind.pp kind
+        (Fmt.option Fmt.string) name
+        (Fmt.hvbox Hash.pp) hash_object
+        (Fmt.hvbox Kind.pp) kind
         preferred
-        pp_source delta
+        (Fmt.hvbox pp_source) delta
         length
 
   (* XXX(dinosaure): hash from git to sort git objects. in git, this hash is
@@ -257,7 +236,7 @@ module MakeHunkEncoder (Hash : HASH) =
 struct
   type error
 
-  let pp_error fmt exn = () (* no error *)
+  let pp_error = Fmt.nop (* no error. *)
 
   type t =
     { o_off         : int
@@ -295,41 +274,47 @@ struct
     | Wait  of t
     | Ok    of t
 
-  let pp = Format.fprintf
+  let pp_state ppf = function
+    | Header k ->
+      Fmt.pf ppf "(Header #k)"
+    | List ->
+      Fmt.pf ppf "List"
+    | Hunk k ->
+      Fmt.pf ppf "(Hunk #k)"
+    | Insert k ->
+      Fmt.pf ppf "(Insert #k)"
+    | Copy k ->
+      Fmt.pf ppf "(Copy #k)"
+    | End ->
+      Fmt.pf ppf "End"
+    | Consume ->
+      Fmt.pf ppf "Consume"
+    | Exception err ->
+      Fmt.pf ppf "(Error %a)" (Fmt.hvbox pp_error) err
 
-  let pp_state fmt = function
-    | Header k -> pp fmt "(Header #k)"
-    | List -> pp fmt "List"
-    | Hunk k -> pp fmt "(Hunk #k)"
-    | Insert k -> pp fmt "(Insert #k)"
-    | Copy k -> pp fmt "(Copy #k)"
-    | End -> pp fmt "End"
-    | Consume -> pp fmt "Consume"
-    | Exception exn -> pp fmt "(Error %a)" pp_error exn
+  let pp_reference ppf = function
+    | Offset off -> Fmt.pf ppf "(Offset %Ld)" off
+    | Hash hash -> Fmt.pf ppf "(Hash %a)" Hash.pp hash
 
-  let pp_reference fmt = function
-    | Offset off -> pp fmt "(Offset %Ld)" off
-    | Hash hash -> pp fmt "(Hash %a)" Hash.pp hash
-
-  let pp fmt t =
-    pp fmt "{ @[<hov>o_off = %d;@ \
-                     o_pos = %d;@ \
-                     o_len = %d;@ \
-                     i_off = %d;@ \
-                     i_pos = %d;@ \
-                     i_len = %d;@ \
-                     i_abs = %d;@ \
-                     write = %d;@ \
-                     reference = %a;@ \
-                     source_length = %d;@ \
-                     target_length = %d;@ \
-                     hunks = @[<hov>%a@];@ \
-                     state = @[<hov>%a@]@] }"
+  let pp ppf t =
+    Fmt.pf ppf "{ @[<hov>o_off = %d;@ \
+                         o_pos = %d;@ \
+                         o_len = %d;@ \
+                         i_off = %d;@ \
+                         i_pos = %d;@ \
+                         i_len = %d;@ \
+                         i_abs = %d;@ \
+                         write = %d;@ \
+                         reference = %a;@ \
+                         source_length = %d;@ \
+                         target_length = %d;@ \
+                         hunks = %a;@ \
+                         state = %a;@] }"
       t.o_off t.o_pos t.o_len
       t.i_off t.i_pos t.i_len t.i_abs
       t.write pp_reference t.reference t.source_length t.target_length
-      (pp_list ~sep:(fun fmt () -> pp fmt ";@ ") Rabin.pp) t.hunks
-      pp_state t.state
+      (Fmt.hvbox (Fmt.list ~sep:(fun ppf () -> Fmt.pf ppf ";@ ") Rabin.pp)) t.hunks
+      (Fmt.hvbox pp_state) t.state
 
   let ok t = Ok { t with state = End }
   let flush t = Flush t
@@ -614,23 +599,26 @@ struct
   module type WINDOW = Lru.F.S with type k = Entry.t and type v = t * Cstruct.t * Rabin.Index.t
   type window = (module WINDOW)
 
-  let rec pp_delta fmt = function
-    | Z -> Format.fprintf fmt "Τ"
+  let rec pp_delta ppf = function
+    | Z -> Fmt.string ppf "Τ"
     | S { length; depth; hunks; src; src_length; } ->
-      Format.fprintf fmt "(Δ { @[<hov>length = %d;@ \
-                                      depth = %d;@ \
-                                      hunks = @[<hov>%a@];@ \
-                                      src = @[<hov>%a@];@ \
-                                      src_length = %Ld;@] }"
-        length depth (pp_list ~sep:(fun fmt () -> Format.fprintf fmt ";@ ") Rabin.pp) hunks pp src src_length
-  and pp fmt { delta; } =
-    Format.fprintf fmt "{ @[<hov>delta = @[<hov>%a@];@] }"
-      pp_delta delta
+      Fmt.pf ppf "(Δ { @[<hov>length = %d;@ \
+                              depth = %d;@ \
+                              hunks = %a;@ \
+                              src = %a;@ \
+                              src_length = %Ld;@] }"
+        length depth
+        (Fmt.hvbox (Fmt.list ~sep:(fun ppf () -> Fmt.pf ppf ";@ ") Rabin.pp)) hunks
+        (Fmt.hvbox pp) src
+        src_length
+  and pp ppf { delta; } =
+    Fmt.pf ppf "{ @[<hov>delta = @[<hov>%a@];@] }"
+      (Fmt.hvbox pp_delta) delta
 
   type error = Invalid_hash of Hash.t
 
-  let pp_error fmt = function
-    | Invalid_hash hash -> Format.fprintf fmt "(Invalid_hash %a)" Hash.pp hash
+  let pp_error ppf (Invalid_hash hash) =
+    Fmt.pf ppf "(Invalid_hash %a)" Hash.pp hash
 
   let depth = function
     | { delta = S { depth; _ } } -> depth
@@ -714,24 +702,12 @@ struct
 
   let int_of_bool v = if v then 1 else 0
 
-  let pp_option pp_data fmt = function
-    | Some x -> pp_data fmt x
-    | None -> Format.fprintf fmt "<none>"
-
   let ok v = Ok v
 
   type write =
     { mutable fill : bool
     ; tagged       : bool
     ; entry        : Entry.t * t }
-
-  let pp_list ?(sep = fun fmt () -> ()) pp_data fmt lst =
-    let rec aux = function
-      | [] -> ()
-      | [ x ] -> pp_data fmt x
-      | x :: r -> pp_data fmt x; sep fmt (); aux r
-    in
-    aux lst
 
   (* XXX(dinosaure): git prioritize some entries in imperative weird way. we
      can't reproduce the same with a small cost. We need to take care about the
@@ -911,8 +887,8 @@ sig
       | From of Hash.t
       | None
 
-    val pp : Format.formatter -> t -> unit
-    val pp_source : Format.formatter -> source -> unit
+    val pp : t Fmt.t
+    val pp_source : source Fmt.t
 
     val hash : string -> int
 
@@ -942,7 +918,7 @@ sig
 
     type error = Invalid_hash of Hash.t
 
-    val pp_error : Format.formatter -> error -> unit
+    val pp_error : error Fmt.t
 
     val deltas :
       ?memory:bool -> Entry.t list ->
@@ -957,7 +933,7 @@ sig
   sig
     type error
 
-    val pp_error : Format.formatter -> error -> unit
+    val pp_error : error Fmt.t
 
     type t
 
@@ -965,7 +941,7 @@ sig
       | Offset of int64
       | Hash of Hash.t
 
-    val pp : Format.formatter -> t -> unit
+    val pp : t Fmt.t
 
     val default : reference -> int -> int -> Rabin.e list -> t
 
@@ -985,7 +961,7 @@ sig
     | Invalid_entry of Entry.t * Delta.t
     | Invalid_hash of Hash.t
 
-  val pp_error : Format.formatter -> error -> unit
+  val pp_error : error Fmt.t
 
   type t
 
@@ -1022,20 +998,16 @@ struct
     | Invalid_entry of Entry.t * Delta.t
     | Invalid_hash of Hash.t
 
-  let pp_error fmt = function
-    | Deflate_error exn ->
-      Format.fprintf fmt "(Deflate_error %a)" Deflate.pp_error exn
-    | Hunk_error exn ->
-      Format.fprintf fmt "(Hunk_error %a)" H.pp_error exn
+  let pp_error ppf = function
+    | Deflate_error err ->
+      Fmt.pf ppf "(Deflate_error %a)" (Fmt.hvbox Deflate.pp_error) err
+    | Hunk_error err ->
+      Fmt.pf ppf "(Hunk_error %a)" (Fmt.hvbox H.pp_error) err
     | Invalid_entry (entry, delta) ->
-      Format.fprintf fmt "(Invalid_entry @[<hov>(%a,@ %a)@])"
-        Entry.pp entry Delta.pp delta
+      Fmt.pf ppf "(Invalid_entry %a)"
+        (Fmt.hvbox (Fmt.pair (Fmt.hvbox Entry.pp) (Fmt.hvbox Delta.pp))) (entry, delta)
     | Invalid_hash hash ->
-      Format.fprintf fmt "(Invalid_hash %a)" Hash.pp hash
-
-  let pp_option pp_data fmt = function
-    | Some x -> pp_data fmt x
-    | None -> Format.fprintf fmt "<none>"
+      Fmt.pf ppf "(Invalid_hash %a)" Hash.pp hash
 
   type t =
     { o_off   : int
@@ -1084,8 +1056,6 @@ struct
     | KindOffset
     | KindHash
     | KindRaw
-
-  let pp = Format.fprintf
 
   let flush dst t =
     Hash.feed t.hash (Cstruct.sub dst t.o_off t.o_pos);
@@ -1512,7 +1482,8 @@ struct
         { t with o_off = offset
                ; o_len = len
                ; o_pos = 0 }
-      | _ -> raise (Invalid_argument (Format.sprintf "PACKEncoder.flush: you lost something (pos: %d, len: %d)" t.o_pos t.o_len))
+      | _ -> raise (Invalid_argument (Fmt.strf "PACKEncoder.flush: you lost something \
+                                                (pos: %d, len: %d)" t.o_pos t.o_len))
 
   let expect t =
     match t.state with
@@ -1531,7 +1502,7 @@ struct
         | Kind.Tag -> "tag"
       in
 
-      Format.sprintf "%s %Ld\000" typename entry.Entry.length
+      Fmt.strf "%s %Ld\000" typename entry.Entry.length
     | _ -> raise (Invalid_argument "PACKEncoder.header_of_expected: bad state")
 
   let refill offset len t =
@@ -1551,7 +1522,8 @@ struct
       | _ -> { t with i_off = offset
                     ; i_len = len
                     ; i_pos = 0 }
-    else raise (Invalid_argument (Format.sprintf "PACKEncoder.refill: you lost something (pos: %d, len: %d)" t.i_pos t.i_len))
+    else raise (Invalid_argument (Fmt.strf "PACKEncoder.refill: you lost something \
+                                            (pos: %d, len: %d)" t.i_pos t.i_len))
 
   let finish t =
     if (t.i_len - t.i_pos) = 0
@@ -1561,7 +1533,8 @@ struct
       | WriteH { x; r; crc; off; ui; z; h; } ->
         { t with state = WriteH { x; r; crc; off; ui; z; h = H.finish h } }
       | _ -> t
-    else raise (Invalid_argument (Format.sprintf "PACKEncoder.finish: you lost something (pos: %d, len: %d)" t.i_pos t.i_len))
+    else raise (Invalid_argument (Fmt.strf "PACKEncoder.finish: you lost something \
+                                            (pos: %d, len: %d)" t.i_pos t.i_len))
 
   let used_in t = match t.state with
     | WriteZ { z; _ } -> Deflate.used_in z

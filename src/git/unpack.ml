@@ -8,10 +8,10 @@ struct
   let inside offset t =
     offset >= t.off && offset < Int64.add t.off (Int64.of_int t.len)
 
-  let pp fmt window =
-    Format.fprintf fmt "{ @[<hov>raw = #raw;@ \
-                                 off = %Ld;@ \
-                                 len = %d;@] }"
+  let pp ppf window =
+    Fmt.pf ppf "{ @[<hov>raw = #raw;@ \
+                         off = %Ld;@ \
+                         len = %d;@] }"
       window.off window.len
 end
 
@@ -19,7 +19,7 @@ module type HASH =
 sig
   type t = Bytes.t
 
-  val pp        : Format.formatter -> t -> unit
+  val pp        : t Fmt.t
   val length    : int
   val of_string : string -> t
 end
@@ -32,7 +32,7 @@ sig
     | Reserved_opcode of int
     | Wrong_copy_hunk of int * int * int
 
-  val pp_error : Format.formatter -> error -> unit
+  val pp_error : error Fmt.t
 
   type t =
     { i_off          : int
@@ -74,9 +74,9 @@ sig
 
   val partial_hunks : t -> hunks
 
-  val pp_reference : Format.formatter -> reference -> unit
-  val pp_hunks : Format.formatter -> hunks -> unit
-  val pp : Format.formatter -> t -> unit
+  val pp_reference : reference Fmt.t
+  val pp_hunks : hunks Fmt.t
+  val pp : t Fmt.t
 
   val eval : Cstruct.t -> t -> [ `Hunk of t * hunk | `Await of t | `Error of t * error | `Ok of t * hunks ]
 
@@ -100,11 +100,12 @@ struct
     | Reserved_opcode of int
     | Wrong_copy_hunk of int * int * int
 
-  let pp_error fmt = function
+  let pp_error ppf = function
     | Reserved_opcode byte ->
-      Format.fprintf fmt "(Reserved_opcode %02x)" byte
+      Fmt.pf ppf "(Reserved_opcode %02x)" byte
     | Wrong_copy_hunk (off, len, source) ->
-      Format.fprintf fmt "(Wrong_copy_hunk (off: %d, len: %d, source: %d))" off len source
+      Fmt.pf ppf "(Wrong_copy_hunk (i@[<hov>off: %d,@ len: %d,@ source: %d@]))"
+        off len source
 
   type t =
     { i_off          : int
@@ -169,47 +170,49 @@ struct
     ; source_length = t._source_length
     ; target_length = t._target_length }
 
-  let pp_reference fmt = function
-    | Hash hash -> Format.fprintf fmt "(Reference %a)" Hash.pp hash
-    | Offset off -> Format.fprintf fmt "(Offset %Ld)" off
+  let pp_reference ppf = function
+    | Hash hash -> Fmt.pf ppf "(Reference %a)" Hash.pp hash
+    | Offset off -> Fmt.pf ppf "(Offset %Ld)" off
 
-  let pp_state fmt = function
+  let pp_state ppf = function
     | Header k ->
-      Format.fprintf fmt "(Header #k)"
+      Fmt.string ppf "(Header #k)"
     | Stop ->
-      Format.fprintf fmt "Stop"
+      Fmt.string ppf "Stop"
     | List k ->
-      Format.fprintf fmt "(List #k)"
+      Fmt.string ppf "(List #k)"
     | Is_insert (raw, off, len) ->
-      Format.fprintf fmt "(Is_insert (#raw, %d, %d))" off len
+      Fmt.pf ppf "(Is_insert (#raw, %d, %d))" off len
     | Is_copy k ->
-      Format.fprintf fmt "(Is_copy #k)"
+      Fmt.string ppf "(Is_copy #k)"
     | End ->
-      Format.fprintf fmt "End"
+      Fmt.string ppf "End"
     | Exception exn ->
-      Format.fprintf fmt "(Exception @[<hov>%a@])" pp_error exn
+      Fmt.pf ppf "(Exception %a)" (Fmt.hvbox pp_error) exn
 
-  let pp_hunks fmt hunks =
-    Format.fprintf fmt "{ @[<hov>reference = @[<hov>%a@];@ \
-                                length = %d;@ \
-                                source_length = %d;@ \
-                                target_length = %d@] }"
-      pp_reference hunks.reference
+  let pp_hunks ppf hunks =
+    Fmt.pf ppf "{ @[<hov>reference = %a;@ \
+                         length = %d;@ \
+                         source_length = %d;@ \
+                         target_length = %d@] }"
+      (Fmt.hvbox pp_reference) hunks.reference
       hunks.length hunks.source_length hunks.target_length
 
-  let pp fmt t =
-    Format.fprintf fmt "{ @[<hov>i_off = %d;@ \
-                                 i_pos = %d;@ \
-                                 i_len = %d;@ \
-                                 read = %d;@ \
-                                 length = %d;@ \
-                                 reference = @[<hov>%a@];@ \
-                                 source_length = %d;@ \
-                                 target_length = %d;@ \
-                                 state = @[<hov>%a@];@] }"
+  let pp ppf t =
+    Fmt.pf ppf "{ @[<hov>i_off = %d;@ \
+                         i_pos = %d;@ \
+                         i_len = %d;@ \
+                         read = %d;@ \
+                         length = %d;@ \
+                         reference = %a;@ \
+                         source_length = %d;@ \
+                         target_length = %d;@ \
+                         state = %a;@] }"
       t.i_off t.i_pos t.i_len t.read
-      t._length pp_reference t._reference t._source_length t._target_length
-      pp_state t.state
+      t._length
+      (Fmt.hvbox pp_reference) t._reference
+      t._source_length t._target_length
+      (Fmt.hvbox pp_state) t.state
 
   let await t     = Wait t
   let error t exn = Error ({ t with state = Exception exn }, exn)
@@ -385,7 +388,7 @@ struct
     then { t with i_off = off
                 ; i_len = len
                 ; i_pos = 0 }
-    else raise (Invalid_argument (Format.sprintf "HunkDecoder.refill: you lost something"))
+    else raise (Invalid_argument (Fmt.strf "HunkDecoder.refill: you lost something"))
 
   let continue t =
     match t.state with
@@ -435,11 +438,11 @@ sig
     | Hunk_input of int * int
     | Invalid_length of int * int
 
-  val pp_error : Format.formatter -> error -> unit
+  val pp_error : error Fmt.t
 
   type t
 
-  val pp : Format.formatter -> t -> unit
+  val pp : t Fmt.t
 
   type kind =
     | Commit
@@ -489,14 +492,14 @@ module MakePACKDecoder (H : HASH) (Inflate : Common.INFLATE)
     | Hunk_input of int * int
     | Invalid_length of int * int
 
-  let pp_error fmt = function
-    | Invalid_byte byte              -> Format.fprintf fmt "(Invalid_byte %02x)" byte
-    | Reserved_kind byte             -> Format.fprintf fmt "(Reserved_byte %02x)" byte
-    | Invalid_kind byte              -> Format.fprintf fmt "(Invalid_kind %02x)" byte
-    | Inflate_error err              -> Format.fprintf fmt "(Inflate_error %a)" Inflate.pp_error err
-    | Invalid_length (expected, has) -> Format.fprintf fmt "(Invalid_length (%d <> %d))" expected has
-    | Hunk_error err                 -> Format.fprintf fmt "(Hunk_error %a)" H.pp_error err
-    | Hunk_input (expected, has)     -> Format.fprintf fmt "(Hunk_input (%d <> %d))" expected has
+  let pp_error ppf = function
+    | Invalid_byte byte              -> Fmt.pf ppf "(Invalid_byte %02x)" byte
+    | Reserved_kind byte             -> Fmt.pf ppf "(Reserved_byte %02x)" byte
+    | Invalid_kind byte              -> Fmt.pf ppf "(Invalid_kind %02x)" byte
+    | Inflate_error err              -> Fmt.pf ppf "(Inflate_error %a)" (Fmt.hvbox Inflate.pp_error) err
+    | Invalid_length (expected, has) -> Fmt.pf ppf "(Invalid_length (%d <> %d))" expected has
+    | Hunk_error err                 -> Fmt.pf ppf "(Hunk_error %a)" H.pp_error err
+    | Hunk_input (expected, has)     -> Fmt.pf ppf "(Hunk_input (%d <> %d))" expected has
 
   type process =
     [ `All
@@ -569,76 +572,76 @@ module MakePACKDecoder (H : HASH) (Inflate : Common.INFLATE)
     | Tag
     | Hunk of H.hunks
 
-  let pp_kind fmt = function
-    | Commit     -> Format.fprintf fmt "Commit"
-    | Tree       -> Format.fprintf fmt "Tree"
-    | Blob       -> Format.fprintf fmt "Blob"
-    | Tag        -> Format.fprintf fmt "Tag"
-    | Hunk hunks -> Format.fprintf fmt "(Hunks @[<hov>%a@])" H.pp_hunks hunks
+  let pp_kind ppf = function
+    | Commit     -> Fmt.pf ppf "Commit"
+    | Tree       -> Fmt.pf ppf "Tree"
+    | Blob       -> Fmt.pf ppf "Blob"
+    | Tag        -> Fmt.pf ppf "Tag"
+    | Hunk hunks -> Fmt.pf ppf "(Hunks %a)" (Fmt.hvbox H.pp_hunks) hunks
 
-  let pp_hunks_state fmt { offset; length; consumed; z; h; } =
-      Format.fprintf fmt "{ @[<hov>offset = %Ld;@ \
-                                   consumed = %d;@ \
-                                   length = %d;@ \
-                                   z = %a;@ \
-                                   h = @[<hov>%a@];@] })"
-        offset consumed length
-        Inflate.pp z H.pp h
+  let pp_hunks_state ppf { offset; length; consumed; z; h; } =
+    Fmt.pf ppf "{ @[<hov>offset = %Ld;@ \
+                         consumed = %d;@ \
+                         length = %d;@ \
+                         z = %a;@ \
+                         h = %a;@] })"
+      offset consumed length
+      (Fmt.hvbox Inflate.pp) z (Fmt.hvbox H.pp) h
 
-  let pp_state fmt = function
-    | Header k ->
-      Format.fprintf fmt "(Header #k)"
+  let pp_state ppf = function
+    | Header _ ->
+      Fmt.string ppf "(Header #k)"
     | Object k ->
-      Format.fprintf fmt "(Object #k)"
+      Fmt.string ppf "(Object #k)"
     | VariableLength k ->
-      Format.fprintf fmt "(VariableLength #k)"
+      Fmt.string ppf "(VariableLength #k)"
     | Unzip { offset
             ; consumed
             ; length
             ; kind
             ; z } ->
-      Format.fprintf fmt "(Unzip { @[<hov>offset = %Ld;@ \
-                                          consumed = %d;@ \
-                                          length = %d;@ \
-                                          kind = @[<hov>%a@];@ \
-                                          z = @[<hov>%a@];@] })"
+      Fmt.pf ppf "(Unzip { @[<hov>offset = %Ld;@ \
+                                  consumed = %d;@ \
+                                  length = %d;@ \
+                                  kind = %a;@ \
+                                  z = %a;@] })"
         offset consumed length pp_kind kind
-        Inflate.pp z
+        (Fmt.hvbox Inflate.pp) z
     | Hunks hs ->
-      Format.fprintf fmt "(Hunks %a)"
-        pp_hunks_state hs
+      Fmt.pf ppf "(Hunks %a)"
+        (Fmt.hvbox pp_hunks_state) hs
     | StopHunks hs ->
-      Format.fprintf fmt "(StopHunks %a)"
-        pp_hunks_state hs
+      Fmt.pf ppf "(StopHunks %a)"
+        (Fmt.hvbox pp_hunks_state) hs
     | Next { offset
           ; consumed
           ; length
           ; length' } ->
-      Format.fprintf fmt "(Next { @[<hov>offset = %Ld;@ \
-                                        consumed = %d;@ \
-                                        length = %d;@ \
-                                        length' = %d;@] })"
+      Fmt.pf ppf "(Next { @[<hov>offset = %Ld;@ \
+                                 consumed = %d;@ \
+                                 length = %d;@ \
+                                 length' = %d;@] })"
         offset consumed length length'
     | Checksum k ->
-      Format.fprintf fmt "(Checksum #k)"
+      Fmt.string ppf "(Checksum #k)"
     | End hash ->
-      Format.fprintf fmt "(End @[<hov>%a@])" Hash.pp hash
+      Fmt.pf ppf "(End %a)" Hash.pp hash
     | Exception err ->
-      Format.fprintf fmt "(Exception @[<hov>%a@])" pp_error err
+      Fmt.pf ppf "(Exception %a)" (Fmt.hvbox pp_error) err
 
-  let pp fmt t =
-    Format.fprintf fmt "{ @[<hov>i_off = %d;@ \
-                                i_pos = %d;@ \
-                                i_len = %d;@ \
-                                version = %ld;@ \
-                                objects = %ld;@ \
-                                counter = %ld;@ \
-                                state = @[<hov>%a@];@] }"
+  let pp ppf t =
+    Fmt.pf ppf "{ @[<hov>i_off = %d;@ \
+                         i_pos = %d;@ \
+                         i_len = %d;@ \
+                         version = %ld;@ \
+                         objects = %ld;@ \
+                         counter = %ld;@ \
+                         state = %a;@] }"
       t.i_off t.i_pos t.i_len
       t.version
       t.objects
       t.counter
-      pp_state t.state
+      (Fmt.hvbox pp_state) t.state
 
   (* TODO: need to compute the hash of the input. *)
   let await t      = Wait t
@@ -1065,7 +1068,8 @@ module MakePACKDecoder (H : HASH) (Inflate : Common.INFLATE)
                 ; i_len = len
                 ; i_pos = 0 }
       (* XXX(dinosaure): at the end, we don't care if we lost something. *)
-    else raise (Invalid_argument (Format.sprintf "PACKDecoder.refill: you lost something (pos: %d, len: %d)" t.i_pos t.i_len))
+    else raise (Invalid_argument (Fmt.strf "PACKDecoder.refill: you lost something \
+                                            (pos: %d, len: %d)" t.i_pos t.i_len))
 
   let flush off len t = match t.state with
     | Unzip { offset; length; consumed; crc; kind; z } ->
@@ -1212,7 +1216,7 @@ sig
     | Unpack_error of P.t * Window.t * P.error
     | Mapper_error of Mapper.error
 
-  val pp_error : Format.formatter -> error -> unit
+  val pp_error : error Fmt.t
 
   type t
 
@@ -1239,7 +1243,7 @@ sig
       ; from   : from
       ; }
 
-    val pp : Format.formatter -> t -> unit
+    val pp : t Fmt.t
 
     val first_crc_exn : t -> Crc32.t
   end
@@ -1293,29 +1297,31 @@ struct
     | Unpack_error of P.t * Window.t * P.error
     | Mapper_error of Mapper.error
 
-  let pp_error fmt = function
+  let pp_error ppf = function
     | Invalid_hash hash ->
-      Format.fprintf fmt "(Invalid_hash %a)" Hash.pp hash
+      Fmt.pf ppf "(Invalid_hash %a)" Hash.pp hash
     | Invalid_offset off ->
-      Format.fprintf fmt "(Invalid_offset %Ld)" off
+      Fmt.pf ppf "(Invalid_offset %Ld)" off
     | Invalid_target (has, expected) ->
-      Format.fprintf fmt "(Invalid_target (%d, %d))"
+      Fmt.pf ppf "(Invalid_target (%d, %d))"
         has expected
     | Unpack_error (state, window, exn) ->
-      Format.fprintf fmt "(Unpack_error { @[<hov>state = @[<hov>%a@];@ \
-                                                 window = @[<hov>%a@];@ \
-                                                 exn = @[<hov>%a@];@] })"
-        P.pp state Window.pp window P.pp_error exn
+      Fmt.pf ppf "(Unpack_error { @[<hov>state = %a;@ \
+                                         window = %a;@ \
+                                         exn = %a;@] })"
+        (Fmt.hvbox P.pp) state
+        (Fmt.hvbox Window.pp) window
+        (Fmt.hvbox P.pp_error) exn
     | Mapper_error err ->
-      Format.fprintf fmt "(Mapper_error @[<hov>%a@])" Mapper.pp_error err
+      Fmt.pf ppf "(Mapper_error %a)" (Fmt.hvbox Mapper.pp_error) err
 
   type kind = [ `Commit | `Blob | `Tree | `Tag ]
 
-  let pp_kind fmt = function
-    | `Commit -> Format.fprintf fmt "Commit"
-    | `Blob -> Format.fprintf fmt "Blob"
-    | `Tree -> Format.fprintf fmt "Tree"
-    | `Tag -> Format.fprintf fmt "Tag"
+  let pp_kind ppf = function
+    | `Commit -> Fmt.pf ppf "Commit"
+    | `Blob -> Fmt.pf ppf "Blob"
+    | `Tree -> Fmt.pf ppf "Tree"
+    | `Tag -> Fmt.pf ppf "Tag"
 
   type partial =
     { _length : int
@@ -1357,28 +1363,30 @@ struct
       | _ -> raise (Invalid_argument "Object.to_partial: this object is external of the current PACK file")
 
 
-    let rec pp_from fmt = function
+    let rec pp_from ppf = function
       | Offset { length; consumed; offset; crc; base; } ->
-        Format.fprintf fmt "(Hunk { @[<hov>length = %d;@ \
-                                           consumed = %d;@ \
-                                           offset = %Lx;@ \
-                                           crc = @[<hov>%a@];@ \
-                                           base = @[<hov>%a@];@] })"
-          length consumed offset Crc32.pp crc pp_from base
+        Fmt.pf ppf "(Hunk { @[<hov>length = %d;@ \
+                                   consumed = %d;@ \
+                                   offset = %Lx;@ \
+                                   crc = %a;@ \
+                                   base = %a;@] })"
+          length consumed offset
+          Crc32.pp crc
+          (Fmt.hvbox pp_from) base
       | External hash ->
-        Format.fprintf fmt "(External @[<hov>%a@])" Hash.pp hash
+        Fmt.pf ppf "(External %a)" Hash.pp hash
       | Direct { consumed; offset; crc; } ->
-        Format.fprintf fmt "(Direct { @[<hov>consumed = %d;@ \
-                                             offset = %Lx;@ \
-                                             crc = @[<hov>%a@];@] })"
+        Fmt.pf ppf "(Direct { @[<hov>consumed = %d;@ \
+                                     offset = %Lx;@ \
+                                     crc = %a;@] })"
           consumed offset Crc32.pp crc
 
-    let pp fmt t =
-      Format.fprintf fmt "{ @[<hov>kind = @[<hov>%a@];@ \
-                                   raw = #raw;@ \
-                                   length = %Ld;@ \
-                                   from = @[<hov>%a@];@] }"
-        pp_kind t.kind t.length pp_from t.from
+    let pp ppf t =
+      Fmt.pf ppf "{ @[<hov>kind = %a;@ \
+                           raw = #raw;@ \
+                           length = %Ld;@ \
+                           from = %a;@] }"
+        pp_kind t.kind t.length (Fmt.hvbox pp_from) t.from
 
     let first_crc_exn t =
       match t.from with
@@ -1465,7 +1473,7 @@ struct
 
   let get_pack_object ?(chunk = 0x8000) ?(limit = false) ?h_tmp t reference source_length source_offset z_tmp z_win r_tmp =
     if Cstruct.len r_tmp < source_length && not limit
-    then raise (Invalid_argument (Format.sprintf "Decoder.delta: expect %d and have %d" source_length (Cstruct.len r_tmp)));
+    then raise (Invalid_argument (Fmt.strf "Decoder.delta: expect %d and have %d" source_length (Cstruct.len r_tmp)));
 
     let open Lwt.Infix in
 

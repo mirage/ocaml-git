@@ -46,31 +46,27 @@ module Make (Digest : Ihash.IDIGEST with type t = Bytes.t
   let hash_to_hex_string x =
     Helper.BaseBytes.to_hex x |> Bytes.unsafe_to_string
 
-  let pp_kind fmt = function
-    | Blob   -> Format.fprintf fmt "Blob"
-    | Commit -> Format.fprintf fmt "Commit"
-    | Tag    -> Format.fprintf fmt "Tag"
-    | Tree   -> Format.fprintf fmt "Tree"
+  let pp_kind ppf = function
+    | Blob   -> Fmt.string ppf "Blob"
+    | Commit -> Fmt.string ppf "Commit"
+    | Tag    -> Fmt.string ppf "Tag"
+    | Tree   -> Fmt.string ppf "Tree"
 
-  let pp_option pp_data fmt = function
-    | Some x -> pp_data fmt x
-    | None -> Format.fprintf fmt "<none>"
-
-  let pp fmt { obj
+  let pp ppf { obj
              ; kind
              ; tag
              ; tagger
              ; message } =
-    Format.fprintf fmt "{ @[<hov>obj = %a;@ \
-                                 kind = %a;@ \
-                                 tag = %s;@ \
-                                 tagger = %a;@ \
-                                 message = @[<hov>%a@]@] }"
+    Fmt.pf ppf "{ @[<hov>obj = %a;@ \
+                         kind = %a;@ \
+                         tag = %s;@ \
+                         tagger = %a;@ \
+                         message = %a@] }"
       Hash.pp obj
       pp_kind kind
       tag
-      (pp_option User.pp) tagger
-      Format.pp_print_text message
+      (Fmt.hvbox (Fmt.option User.pp)) tagger
+      (Fmt.hvbox Fmt.text) message
 
   let string_of_kind = function
     | Commit -> "commit"

@@ -182,7 +182,7 @@ val capability_of_string : ?value:string -> string -> capability
 (** [capability_of_capability s] tries to decode [s] to a capability. If the
     capability excepts a value, we raise [Capability_expect_value]. *)
 
-val pp_capability : Format.formatter -> capability -> unit
+val pp_capability : capability Fmt.t
 (** Pretty-printer of {!capability}. *)
 
 module type DECODER =
@@ -217,7 +217,7 @@ sig
       (** Appears when we encountered the end of the input and we don't expect this. *)
     ] (** The type error. *)
 
-  val pp_error : Format.formatter -> error -> unit
+  val pp_error : error Fmt.t
   (** Pretty-printer of {!error}. *)
 
   type 'a state =
@@ -251,7 +251,7 @@ sig
       capabilities by the server. [shallow] contains all informed shallowed
       hashes in the server. *)
 
-  val pp_advertised_refs : Format.formatter -> advertised_refs -> unit
+  val pp_advertised_refs : advertised_refs Fmt.t
   (** Pretty-printer of {!advertised_refs}. *)
 
   type shallow_update =
@@ -270,7 +270,7 @@ sig
 
       This type represents this information. *)
 
-  val pp_shallow_update : Format.formatter -> shallow_update -> unit
+  val pp_shallow_update : shallow_update Fmt.t
   (** Pretty-printer of {!shallow_update}. *)
 
   type acks =
@@ -308,7 +308,7 @@ sig
       This type represents this information.
   *)
 
-  val pp_acks : Format.formatter -> acks -> unit
+  val pp_acks : acks Fmt.t
   (** Pretty-printer of {!acks}. *)
 
   type negociation_result =
@@ -328,7 +328,7 @@ sig
 
         This type represents this information. *)
 
-  val pp_negociation_result : Format.formatter -> negociation_result -> unit
+  val pp_negociation_result : negociation_result Fmt.t
   (** Pretty-printer of {!negociation_result}. *)
 
   type pack =
@@ -367,7 +367,7 @@ sig
 
       This type represents this information. *)
 
-  val pp_report_status : Format.formatter -> report_status -> unit
+  val pp_report_status : report_status Fmt.t
   (** Pretty-printer of {!report_status}. *)
 
   type _ transaction =
@@ -580,7 +580,7 @@ sig
   (** [decode t k ctx] starts to decode an expected {!Decoder.transaction} [t]
       and call [k] at the end of the decoding. *)
 
-  val pp_result : Format.formatter -> result -> unit
+  val pp_result : result Fmt.t
   (** Pretty-print of {!result}. *)
 
   type action =

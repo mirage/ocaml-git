@@ -1,14 +1,3 @@
-let () = Printexc.record_backtrace true
-
-let pp_list pp_data ?(sep = fun fmt () -> ()) fmt lst =
-  let rec aux = function
-    | [] -> ()
-    | [ x ] -> pp_data fmt x
-    | x :: r -> pp_data fmt x; sep fmt (); aux r
-  in
-
-  aux lst
-
 type capability =
   [ `Multi_ack
   | `Multi_ack_detailed
@@ -42,7 +31,7 @@ let string_of_capability = function
   | `Side_band                    -> "side-band"
   | `Side_band_64k                -> "side-band-64k"
   | `Ofs_delta                    -> "ofs-delta"
-  | `Agent agent                  -> Format.sprintf "agent=%s" agent
+  | `Agent agent                  -> Fmt.strf "agent=%s" agent
   | `Shallow                      -> "shallow"
   | `Deepen_since                 -> "deepen-since"
   | `Deepen_not                   -> "deepen-not"
@@ -55,9 +44,9 @@ let string_of_capability = function
   | `Push_options                 -> "push-options"
   | `Allow_tip_sha1_in_want       -> "allow-tip-sha1-in-want"
   | `Allow_reachable_sha1_in_want -> "allow-reachable-sha1-in-want"
-  | `Push_cert cert               -> Format.sprintf "push-cert=%s" cert
+  | `Push_cert cert               -> Fmt.strf "push-cert=%s" cert
   | `Other capability             -> capability
-  | `Parameter (key, value)       -> Format.sprintf "%s=%s" key value
+  | `Parameter (key, value)       -> Fmt.strf "%s=%s" key value
 
 exception Capability_expect_value of string
 
@@ -90,29 +79,29 @@ let capability_of_string ?value = function
     | None -> `Other capability
 
 let pp_capability ppf = function
-  | `Multi_ack                    -> Format.fprintf ppf "Multi-ACK"
-  | `Multi_ack_detailed           -> Format.fprintf ppf "Multi-ACK-detailed"
-  | `No_done                      -> Format.fprintf ppf "No-done"
-  | `Thin_pack                    -> Format.fprintf ppf "Thin-PACK"
-  | `Side_band                    -> Format.fprintf ppf "Side-Band"
-  | `Side_band_64k                -> Format.fprintf ppf "Side-Band-64K"
-  | `Ofs_delta                    -> Format.fprintf ppf "Offset-delta"
-  | `Agent agent                  -> Format.fprintf ppf "(Agent %s)" agent
-  | `Shallow                      -> Format.fprintf ppf "Shallow"
-  | `Deepen_since                 -> Format.fprintf ppf "Deepen-Since"
-  | `Deepen_not                   -> Format.fprintf ppf "Deepen-Not"
-  | `No_progress                  -> Format.fprintf ppf "No-Progress"
-  | `Include_tag                  -> Format.fprintf ppf "Include-Tag"
-  | `Report_status                -> Format.fprintf ppf "Report-Status"
-  | `Delete_refs                  -> Format.fprintf ppf "Delete-Refs"
-  | `Quiet                        -> Format.fprintf ppf "Quiet"
-  | `Atomic                       -> Format.fprintf ppf "Atomic"
-  | `Push_options                 -> Format.fprintf ppf "Push-Options"
-  | `Allow_tip_sha1_in_want       -> Format.fprintf ppf "Allow-Tip-SHA1-in-Want"
-  | `Allow_reachable_sha1_in_want -> Format.fprintf ppf "Allow-Reachable-SHA1-in-Want"
-  | `Push_cert cert               -> Format.fprintf ppf "(Push Cert %s)" cert
-  | `Other capability             -> Format.fprintf ppf "(other %s)" capability
-  | `Parameter (key, value)       -> Format.fprintf ppf "(%s %s)" key value
+  | `Multi_ack                    -> Fmt.pf ppf "Multi-ACK"
+  | `Multi_ack_detailed           -> Fmt.pf ppf "Multi-ACK-detailed"
+  | `No_done                      -> Fmt.pf ppf "No-done"
+  | `Thin_pack                    -> Fmt.pf ppf "Thin-PACK"
+  | `Side_band                    -> Fmt.pf ppf "Side-Band"
+  | `Side_band_64k                -> Fmt.pf ppf "Side-Band-64K"
+  | `Ofs_delta                    -> Fmt.pf ppf "Offset-delta"
+  | `Agent agent                  -> Fmt.pf ppf "(Agent %s)" agent
+  | `Shallow                      -> Fmt.pf ppf "Shallow"
+  | `Deepen_since                 -> Fmt.pf ppf "Deepen-Since"
+  | `Deepen_not                   -> Fmt.pf ppf "Deepen-Not"
+  | `No_progress                  -> Fmt.pf ppf "No-Progress"
+  | `Include_tag                  -> Fmt.pf ppf "Include-Tag"
+  | `Report_status                -> Fmt.pf ppf "Report-Status"
+  | `Delete_refs                  -> Fmt.pf ppf "Delete-Refs"
+  | `Quiet                        -> Fmt.pf ppf "Quiet"
+  | `Atomic                       -> Fmt.pf ppf "Atomic"
+  | `Push_options                 -> Fmt.pf ppf "Push-Options"
+  | `Allow_tip_sha1_in_want       -> Fmt.pf ppf "Allow-Tip-SHA1-in-Want"
+  | `Allow_reachable_sha1_in_want -> Fmt.pf ppf "Allow-Reachable-SHA1-in-Want"
+  | `Push_cert cert               -> Fmt.pf ppf "(Push Cert %s)" cert
+  | `Other capability             -> Fmt.pf ppf "(other %s)" capability
+  | `Parameter (key, value)       -> Fmt.pf ppf "(%s %s)" key value
 
 module type DECODER =
 sig
@@ -131,7 +120,7 @@ sig
     | `Malformed_pkt_line
     | `Unexpected_end_of_input ]
 
-  val pp_error : Format.formatter -> error -> unit
+  val pp_error : error Fmt.t
 
   type 'a state =
     | Ok of 'a
@@ -148,27 +137,27 @@ sig
     ; refs         : (Hash.t * string * bool) list
     ; capabilities : capability list }
 
-  val pp_advertised_refs : Format.formatter -> advertised_refs -> unit
+  val pp_advertised_refs : advertised_refs Fmt.t
 
   type shallow_update =
     { shallow   : Hash.t list
     ; unshallow : Hash.t list }
 
-  val pp_shallow_update : Format.formatter -> shallow_update -> unit
+  val pp_shallow_update : shallow_update Fmt.t
 
   type acks =
     { shallow   : Hash.t list
     ; unshallow : Hash.t list
     ; acks      : (Hash.t * [ `Common | `Ready | `Continue | `ACK ]) list }
 
-  val pp_acks : Format.formatter -> acks -> unit
+  val pp_acks : acks Fmt.t
 
   type negociation_result =
     | NAK
     | ACK of Hash.t
     | ERR of string
 
-  val pp_negociation_result : Format.formatter -> negociation_result -> unit
+  val pp_negociation_result : negociation_result Fmt.t
 
   type pack =
     [ `Raw of Cstruct.t
@@ -179,7 +168,7 @@ sig
     { unpack   : (unit, string) result
     ; commands : (string, string * string) result list }
 
-  val pp_report_status : Format.formatter -> report_status -> unit
+  val pp_report_status : report_status Fmt.t
 
   type _ transaction =
     | ReferenceDiscovery : advertised_refs transaction
@@ -308,7 +297,7 @@ sig
   val set_capabilities : context -> capability list -> unit
   val encode : Encoder.action -> (context -> process) -> context -> process
   val decode : 'a Decoder.transaction -> ('a -> context -> process) -> context -> process
-  val pp_result : Format.formatter -> result -> unit
+  val pp_result : result Fmt.t
   val run : context -> action -> process
   val context : Encoder.git_proto_request -> context * process
 end
@@ -409,15 +398,15 @@ struct
   let err_malformed_pkt_line         decoder = (`Malformed_pkt_line, decoder.buffer, decoder.pos)
   let err_unexpected_flush_pkt_line  decoder = (`Unexpected_flush_pkt_line, decoder.buffer, decoder.pos)
 
-  let pp_error fmt = function
-    | `Expected_char chr -> Format.fprintf fmt "(`Expected_char %c)" chr
-    | `Unexpected_char chr -> Format.fprintf fmt "(`Unexpected_char %c)" chr
-    | `No_assert_predicate predicate -> Format.fprintf fmt "(`No_assert_predicate #predicate)"
-    | `Expected_string s -> Format.fprintf fmt "(`Expected_string %s)" s
-    | `Unexpected_empty_pkt_line -> Format.fprintf fmt "`Unexpected_empty_pkt_line"
-    | `Malformed_pkt_line -> Format.fprintf fmt "`Malformed_pkt_line"
-    | `Unexpected_end_of_input -> Format.fprintf fmt "`Unexpected_end_of_input"
-    | `Unexpected_flush_pkt_line -> Format.fprintf fmt "`Unexpected_flush_pkt_line"
+  let pp_error ppf = function
+    | `Expected_char chr -> Fmt.pf ppf "(`Expected_char %c)" chr
+    | `Unexpected_char chr -> Fmt.pf ppf "(`Unexpected_char %c)" chr
+    | `No_assert_predicate predicate -> Fmt.pf ppf "(`No_assert_predicate #predicate)"
+    | `Expected_string s -> Fmt.pf ppf "(`Expected_string %s)" s
+    | `Unexpected_empty_pkt_line -> Fmt.pf ppf "`Unexpected_empty_pkt_line"
+    | `Malformed_pkt_line -> Fmt.pf ppf "`Malformed_pkt_line"
+    | `Unexpected_end_of_input -> Fmt.pf ppf "`Unexpected_end_of_input"
+    | `Unexpected_flush_pkt_line -> Fmt.pf ppf "`Unexpected_flush_pkt_line"
 
   type 'a state =
     | Ok of 'a
@@ -707,20 +696,20 @@ struct
     ; refs         : (Hash.t * string * bool) list
     ; capabilities : capability list }
 
-  let pp_advertised_refs fmt { shallow; refs; capabilities; } =
-    let sep fmt () = Format.fprintf fmt ";@ " in
-    let pp_ref fmt (hash, refname, peeled) =
+  let pp_advertised_refs ppf { shallow; refs; capabilities; } =
+    let sep ppf () = Fmt.pf ppf ";@ " in
+    let pp_ref ppf (hash, refname, peeled) =
       match peeled with
-      | true -> Format.fprintf fmt "%a %s^{}" Hash.pp hash refname
-      | false -> Format.fprintf fmt "%a %s" Hash.pp hash refname
+      | true -> Fmt.pf ppf "%a %s^{}" Hash.pp hash refname
+      | false -> Fmt.pf ppf "%a %s" Hash.pp hash refname
     in
 
-    Format.fprintf fmt "{ @[<hov>shallow = [ @[<hov>%a@] ];@ \
-                                 refs = [ @[<hov>%a@] ];@ \
-                                 capabilites = [ @[<hov>%a@] ]; }"
-      (pp_list ~sep Hash.pp) shallow
-      (pp_list ~sep pp_ref) refs
-      (pp_list ~sep pp_capability) capabilities
+    Fmt.pf ppf "{ @[<hov>shallow = %a;@ \
+                         refs = %a;@ \
+                         capabilites = %a;@] }"
+      (Fmt.hvbox @@ Fmt.list ~sep Hash.pp) shallow
+      (Fmt.hvbox @@ Fmt.list ~sep pp_ref) refs
+      (Fmt.hvbox @@ Fmt.list ~sep pp_capability) capabilities
 
   let rec p_advertised_refs ~pkt ~first ~shallow_state refs decoder =
     match pkt with
@@ -776,13 +765,13 @@ struct
     { shallow   : Hash.t list
     ; unshallow : Hash.t list }
 
-  let pp_shallow_update fmt { shallow; unshallow; } =
-    let sep fmt () = Format.fprintf fmt ";@ " in
+  let pp_shallow_update ppf { shallow; unshallow; } =
+    let sep ppf () = Fmt.pf ppf ";@ " in
 
-    Format.fprintf fmt "{ @[<hov>shallow = [ @[<hov>%a@] ];@ \
-                                 unshallow = [ @[<hov>%a@] ];@] }"
-      (pp_list ~sep Hash.pp) shallow
-      (pp_list ~sep Hash.pp) unshallow
+    Fmt.pf ppf "{ @[<hov>shallow = %a;@ \
+                         unshallow = %a;@] }"
+      (Fmt.hvbox @@ Fmt.list ~sep Hash.pp) shallow
+      (Fmt.hvbox @@ Fmt.list ~sep Hash.pp) unshallow
 
   let rec p_shallow_update ~pkt lst decoder = match pkt with
     | `Flush -> p_return lst decoder
@@ -847,25 +836,25 @@ struct
     ; unshallow : Hash.t list
     ; acks      : (Hash.t * [ `Common | `Ready | `Continue | `ACK ]) list }
 
-  let pp_ack fmt (hash, detail) =
-    let pp_detail fmt = function
-      | `Common -> Format.fprintf fmt "`Common"
-      | `Ready -> Format.fprintf fmt "`Ready"
-      | `Continue -> Format.fprintf fmt "`Continue"
-      | `ACK -> Format.fprintf fmt "`ACK"
+  let pp_ack ppf (hash, detail) =
+    let pp_detail ppf = function
+      | `Common -> Fmt.string ppf "`Common"
+      | `Ready -> Fmt.string ppf "`Ready"
+      | `Continue -> Fmt.string ppf "`Continue"
+      | `ACK -> Fmt.string ppf "`ACK"
     in
 
-    Format.fprintf fmt "(%a, %a)" Hash.pp hash pp_detail detail
+    (Fmt.pair Hash.pp pp_detail) ppf (hash, detail)
 
-  let pp_acks fmt { shallow; unshallow; acks; } =
-    let sep fmt () = Format.fprintf fmt ";@ " in
+  let pp_acks ppf { shallow; unshallow; acks; } =
+    let sep ppf () = Fmt.pf ppf ";@ " in
 
-    Format.fprintf fmt "{ @[<hov>shallow = [ @[<hov>%a@] ];@ \
-                                 unshallow = [ @[<hov>%a@] ];@ \
-                                 acks = [ @[<hov>%a@] ];@] }"
-      (pp_list ~sep Hash.pp) shallow
-      (pp_list ~sep Hash.pp) unshallow
-      (pp_list ~sep pp_ack) acks
+    Fmt.pf ppf "{ @[<hov>shallow = %a;@ \
+                         unshallow = %a;@ \
+                         acks = %a;@] }"
+      (Fmt.hvbox @@ Fmt.list ~sep Hash.pp) shallow
+      (Fmt.hvbox @@ Fmt.list ~sep Hash.pp) unshallow
+      (Fmt.hvbox @@ Fmt.list ~sep pp_ack) acks
 
   let rec p_negociation ~pkt ~mode lst decoder = match pkt with
     | `Flush -> raise (Leave (err_unexpected_flush_pkt_line decoder))
@@ -912,10 +901,10 @@ struct
     | ACK of Hash.t
     | ERR of string
 
-  let pp_negociation_result fmt = function
-    | NAK -> Format.fprintf fmt "NAK"
-    | ACK hash -> Format.fprintf fmt "(ACK %a)" Hash.pp hash
-    | ERR err -> Format.fprintf fmt "(ERR %s)" err
+  let pp_negociation_result ppf = function
+    | NAK -> Fmt.pf ppf "NAK"
+    | ACK hash -> Fmt.pf ppf "(ACK %a)" Hash.pp hash
+    | ERR err -> Fmt.pf ppf "(ERR %s)" err
 
   let p_negociation_result ~pkt decoder = match pkt with
     | `Flush -> raise (Leave (err_unexpected_flush_pkt_line decoder))
@@ -972,33 +961,15 @@ struct
     { unpack   : (unit, string) result
     ; commands : (string, string * string) result list }
 
-  let pp_result (type a) (type b)
-      (pp_ok : Format.formatter -> 'a -> unit)
-      (pp_err : Format.formatter -> 'b -> unit)
-      fmt
-      (value : ('a, 'b) result)
-    = match value with
-    | Ok v -> Format.fprintf fmt "(Ok @[<hov>%a@])" pp_ok v
-    | Error err -> Format.fprintf fmt "(Error @[<hov>%a@])" pp_err err
+  let pp_report_status ppf { unpack; commands; } =
+    let sep ppf () = Fmt.pf ppf ";@ " in
 
-  let pp_report_status fmt { unpack; commands; } =
-    let pp_unit fmt ()   = Format.fprintf fmt "()" in
-    let pp_string fmt s  = Format.fprintf fmt "%S" s in
-    let sep fmt ()       = Format.fprintf fmt ";@ " in
-    let pp_refname fmt r = Format.fprintf fmt "%s" r in
-    let pp_pair pp_a pp_b fmt (a, b) =
-      Format.fprintf fmt "(@[<hov>[@<hov>%a], @[<hov>%a@]@])"
-        pp_a a pp_b b
-    in
+    let pp_command = Fmt.result ~ok:Fmt.string ~error:(Fmt.pair Fmt.string Fmt.string) in
 
-    let pp_command fmt command =
-      pp_result pp_refname (pp_pair pp_refname pp_string) fmt command
-    in
-
-    Format.fprintf fmt "{ @[<hov>unpack = @[<hov>%a@];@ \
-                                 commands = [ @[<hov>%a@] ];@] }"
-      (pp_result pp_unit pp_string) unpack
-      (pp_list ~sep pp_command) commands
+    Fmt.pf ppf "{ @[<hov>unpack = %a;@ \
+                         commands = %a;@] }"
+      (Fmt.result ~ok:(Fmt.unit "ok") ~error:Fmt.string) unpack
+      (Fmt.hvbox @@ Fmt.list ~sep pp_command) commands
 
   let p_unpack decoder : (unit, string) result =
     ignore @@ p_string "unpack" decoder;
@@ -1158,7 +1129,7 @@ struct
   let pkt_line ?(lf = false) writes k encoder =
     let pkt_len encoder =
       let has = encoder.pos in
-      let hdr = Format.sprintf "%04x" has in
+      let hdr = Fmt.strf "%04x" has in
 
       Cstruct.blit_from_string hdr 0 encoder.payload 0 4;
       flush k encoder
@@ -1220,13 +1191,13 @@ struct
   let w_deepen depth k encoder =
     (writes "deepen"
      @@ w_space
-     @@ writes (Format.sprintf "%d" depth) k)
+     @@ writes (Fmt.strf "%d" depth) k)
       encoder
 
   let w_deepen_since timestamp k encoder =
     (writes "deepen-since"
      @@ w_space
-     @@ writes (Format.sprintf "%Ld" timestamp) k)
+     @@ writes (Fmt.strf "%Ld" timestamp) k)
       encoder
 
   let w_deepen_not refname k encoder =
@@ -1300,7 +1271,7 @@ struct
         (writes "host="
          @@ writes host
          @@ writes ":"
-         @@ writes (Format.sprintf "%d" port)
+         @@ writes (Fmt.strf "%d" port)
          @@ w_null k)
           encoder
       | Some (host, None) ->
@@ -1538,32 +1509,32 @@ struct
     | `Error of (Decoder.error * Cstruct.t * int)
     | result ]
 
-  let pp_result fmt = function
+  let pp_result ppf = function
     | `Refs refs ->
-      Format.fprintf fmt "(`Refs @[<hov>%a@])" Decoder.pp_advertised_refs refs
+      Fmt.pf ppf "(`Refs %a)" (Fmt.hvbox Decoder.pp_advertised_refs) refs
     | `ShallowUpdate shallow_update ->
-      Format.fprintf fmt "(`ShallowUpdate @[<hov>%a@])" Decoder.pp_shallow_update shallow_update
+      Fmt.pf ppf "(`ShallowUpdate %a)" (Fmt.hvbox Decoder.pp_shallow_update) shallow_update
     | `Negociation acks ->
-      Format.fprintf fmt "(`Negociation [ @[<hov>%a@] ])"
-        Decoder.pp_acks acks
+      Fmt.pf ppf "(`Negociation %a)"
+        (Fmt.hvbox Decoder.pp_acks) acks
     | `NegociationResult result ->
-      Format.fprintf fmt "(`NegociationResult @[<hov>%a@])" Decoder.pp_negociation_result result
+      Fmt.pf ppf "(`NegociationResult %a)" (Fmt.hvbox Decoder.pp_negociation_result) result
     | `PACK (`Err _) ->
-      Format.fprintf fmt "(`Pack stderr)"
+      Fmt.pf ppf "(`Pack stderr)"
     | `PACK (`Out _) ->
-      Format.fprintf fmt "(`Pack stdout)"
+      Fmt.pf ppf "(`Pack stdout)"
     | `PACK (`Raw _) ->
-      Format.fprintf fmt "(`Pack pack)"
+      Fmt.pf ppf "(`Pack pack)"
     | `PACK `End ->
-      Format.fprintf fmt "(`Pack `End)"
+      Fmt.pf ppf "(`Pack `End)"
     | `Flush ->
-      Format.fprintf fmt "`Flush"
+      Fmt.pf ppf "`Flush"
     | `Nothing ->
-      Format.fprintf fmt "`Nothing"
+      Fmt.pf ppf "`Nothing"
     | `ReadyPACK raw ->
-      Format.fprintf fmt "(`ReadyPACK #raw)"
+      Fmt.pf ppf "(`ReadyPACK #raw)"
     | `ReportStatus status ->
-      Format.fprintf fmt "(`ReportStatus @[<hov>%a@])" Decoder.pp_report_status status
+      Fmt.pf ppf "(`ReportStatus %a)" (Fmt.hvbox Decoder.pp_report_status) status
 
   type action =
     [ `GitProtoRequest of Encoder.git_proto_request

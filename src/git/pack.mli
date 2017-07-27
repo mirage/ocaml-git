@@ -5,7 +5,7 @@ sig
   type buffer = Cstruct.t
 
   val length    : int
-  val pp        : Format.formatter -> t -> unit
+  val pp        : t Fmt.t
 
   val init      : unit -> ctx
   val feed      : ctx -> buffer -> unit
@@ -53,7 +53,7 @@ sig
   val to_bin : t -> int
   (** [to_bin t] returns a binary code to serialize the kind [t]. *)
 
-  val pp : Format.formatter -> t -> unit
+  val pp : t Fmt.t
   (** A pretty-printer of {!t}. *)
 end
 
@@ -77,10 +77,10 @@ sig
       | None
       (** To notice than no user-defined source exists. *)
 
-    val pp : Format.formatter -> t -> unit
+    val pp : t Fmt.t
     (** A pretty-printer for {!t}. *)
 
-    val pp_source : Format.formatter -> source -> unit
+    val pp_source : source Fmt.t
     (** A pretty-printer for {!source}. *)
 
     val hash : string -> int
@@ -156,7 +156,7 @@ sig
     type error = Invalid_hash of Hash.t
     (** Appears when we have an invalid hash. *)
 
-    val pp_error : Format.formatter -> error -> unit
+    val pp_error : error Fmt.t
     (** A pretty-printer for {!error}. *)
 
     val deltas : ?memory:bool -> Entry.t list -> (Hash.t -> Cstruct.t option Lwt.t) -> (Entry.t -> bool) -> int -> int -> ((Entry.t * t) list, error) result Lwt.t
@@ -189,7 +189,7 @@ sig
     type error
     (** The type of error. *)
 
-    val pp_error : Format.formatter -> error -> unit
+    val pp_error : error Fmt.t
     (** The pretty-printer of {!error}. *)
 
     type t
@@ -201,7 +201,7 @@ sig
       | Offset of int64
       | Hash of Hash.t
 
-    val pp : Format.formatter -> t -> unit
+    val pp : t Fmt.t
     (** The pretty-printer of {!t}. *)
 
     val default : reference -> int -> int -> Rabin.e list -> t
@@ -264,7 +264,7 @@ sig
     | Invalid_hash of Hash.t
       (** Appears when the hash requested does not exist. *)
 
-  val pp_error : Format.formatter -> error -> unit
+  val pp_error : error Fmt.t
   (** A pretty-printer for {!error}. *)
 
   type t

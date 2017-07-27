@@ -25,16 +25,7 @@ struct
   let to_popped x     = x lor popped
   let to_alternate x  = x lor alternate
 
-  let pp_list pp_data ?(sep = fun fmt () -> ()) fmt lst =
-    let rec aux = function
-      | [] -> ()
-      | [ x ] -> pp_data fmt x
-      | x :: r -> pp_data fmt x; sep fmt (); aux r
-    in
-
-    aux lst
-
-  let pp fmt x =
+  let pp ppf x =
     let flags =
       [ if is x complete
         then [ "COMPLETE" ] else  []
@@ -50,7 +41,7 @@ struct
         then [ "ALTERNATE" ] else [] ]
       |> List.concat
     in
-    pp_list ~sep:(fun fmt () -> Format.fprintf fmt " |@ ") Format.pp_print_string fmt flags
+    Fmt.list ~sep:(fun ppf () -> Fmt.pf ppf " |@ ") Fmt.string ppf flags
 end
 
 (* XXX(dinosaure): see this paper
@@ -74,11 +65,11 @@ module Make
     let compare a b =
       Store.Value.Commit.compare b.commit a.commit
 
-    let pp fmt { commit; flags; } =
-      Format.fprintf fmt "{ @[<hov>commit = @[<hov>%a@];@ \
-                                   flags = [ @[<hov>%a@] ];@] }"
-        Store.Value.Commit.pp commit
-        Flag.pp flags
+    let pp ppf { commit; flags; } =
+      Fmt.pf ppf "{ @[<hov>commit = %a;@ \
+                           flags = [ %a ];@] }"
+        (Fmt.hvbox Store.Value.Commit.pp) commit
+        (Fmt.hvbox Flag.pp) flags
   end
 
   module Pq      = Psq.Make(Store.Hash)(V)
