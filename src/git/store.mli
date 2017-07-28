@@ -346,7 +346,7 @@ sig
   (** The Hash module. *)
 
   module IDXDecoder
-    : Idx.LAZY
+    : Index_pack.LAZY
   (** The [IDXDecoder] module, which decodes {i IDX} file. *)
 
   module PACKDecoder
@@ -552,7 +552,7 @@ sig
   (** The Reference module, which represents the Git reference. *)
 
   module IDXDecoder
-    : Idx.LAZY with type Hash.t = Hash.t
+    : Index_pack.LAZY with type Hash.t = Hash.t
   (** The [IDXDecoder] module used to decode an {i IDX} file. *)
 
   module PACKDecoder

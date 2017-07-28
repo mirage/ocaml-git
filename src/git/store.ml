@@ -78,7 +78,7 @@ sig
   module FileSystem  : Fs.S with type path = Path.t
   module Inflate : S.INFLATE
   module Hash : S.BASE with type t = Bytes.t
-  module IDXDecoder : Idx.LAZY
+  module IDXDecoder : Index_pack.LAZY
   module PACKDecoder : Unpack.DECODER with module Inflate = Inflate
 
   type error = [ FileSystem.File.error
@@ -134,7 +134,7 @@ sig
                    and module FileSystem = FileSystem
 
   module IDXDecoder
-    : Idx.LAZY with type Hash.t = Hash.t
+    : Index_pack.LAZY with type Hash.t = Hash.t
   module PACKDecoder
     : Unpack.DECODER with type Hash.t = Hash.t
                       and module Inflate = Inflate
@@ -283,7 +283,7 @@ module Make
   module PACKDecoder = Unpack.MakeDecoder(Hash)(FileSystem.Mapper)(Inflate)
   module PACKEncoder = Pack.MakePACKEncoder(Hash)(Deflate)
   module Reference = Reference.Make(Digest)(Path)(FileSystem)
-  module IDXDecoder = Idx.Lazy(Hash)
+  module IDXDecoder = Index_pack.Lazy(Hash)
   module DoubleHash =
   struct
     type t = Hash.t * Hash.t

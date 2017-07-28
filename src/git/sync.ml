@@ -67,7 +67,7 @@ module Make
 
   module PACKDecoder = Unpack.MakePACKDecoder(Hash)(Inflate)
   module PACKEncoder = Pack.MakePACKEncoder(Hash)(Deflate)
-  module IDXEncoder  = Idx.Encoder(Hash)
+  module IDXEncoder  = Index_pack.Encoder(Hash)
   module Decoder     = Unpack.MakeDecoder(Hash)(Store.FileSystem.Mapper)(Inflate)
   module Tree        : module type of Radix.Make(Bytes) = Radix.Make(Bytes)
 
