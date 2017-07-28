@@ -1006,7 +1006,7 @@ module Make
       [ error
       | `Invalid_reference of Reference.t ]
 
-    module PackedRefs = PackedRefs.Make(Digest)(Path)(FileSystem)
+    module Packed_refs = Packed_refs.Make(Digest)(Path)(FileSystem)
 
     let ( >>== ) v f =
       let open Lwt.Infix in
@@ -1054,7 +1054,7 @@ module Make
                | refname, Reference.Ref link -> Lwt.return ((refname, link) :: rest, graph))
             ([], Graph.empty) lst
         >>= fun (partial, graph) ->
-        PackedRefs.read ~root:t.dotgit ~dtmp ~raw >>= function
+        Packed_refs.read ~root:t.dotgit ~dtmp ~raw >>= function
         | Ok packed_refs ->
           Lwt_list.fold_left_s
             (fun graph -> function
@@ -1067,7 +1067,7 @@ module Make
                with Not_found -> Lwt.return graph)
             graph partial
           >|= fun graph -> Ok graph
-        | Error #PackedRefs.error ->
+        | Error #Packed_refs.error ->
           Lwt_list.fold_left_s
             (fun graph (refname, link) ->
                try let hash = Graph.find link graph in Lwt.return (Graph.add refname hash graph)
