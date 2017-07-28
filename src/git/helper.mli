@@ -18,52 +18,52 @@
 val ppe : name:string -> 'a Fmt.t -> 'a Fmt.t
 
 module BaseBigstring
-  : Common.BASE with type t = (char, Bigarray.int8_unsigned_elt, Bigarray.c_layout) Bigarray.Array1.t
+  : S.BASE with type t = (char, Bigarray.int8_unsigned_elt, Bigarray.c_layout) Bigarray.Array1.t
 
 module BaseBytes :
 sig
-  include Common.BASE with type t = Bytes.t
+  include S.BASE with type t = Bytes.t
 
   val to_hex : t -> string
   val of_hex : string -> t
 end
 
-module MakeDecoder (A : Common.ANGSTROM)
-  : Common.DECODER with type t = A.t
-                    and type raw = Cstruct.t
-                    and type init = Cstruct.t
-                    and type error = [ `Decoder of string ]
+module MakeDecoder (A : S.ANGSTROM)
+  : S.DECODER with type t = A.t
+               and type raw = Cstruct.t
+               and type init = Cstruct.t
+               and type error = [ `Decoder of string ]
 
-module MakeInflater (Z : Common.INFLATE) (A : Common.ANGSTROM)
-  : Common.DECODER with type t = A.t
-                    and type raw = Cstruct.t
-                    and type init = Z.window * Cstruct.t * Cstruct.t
-                    and type error = [ `Decoder of string | `Inflate of Z.error ]
+module MakeInflater (Z : S.INFLATE) (A : S.ANGSTROM)
+  : S.DECODER with type t = A.t
+               and type raw = Cstruct.t
+               and type init = Z.window * Cstruct.t * Cstruct.t
+               and type error = [ `Decoder of string | `Inflate of Z.error ]
 
-module MakeEncoder (M : Common.MINIENC)
-  : Common.ENCODER with type t = M.t
-                    and type raw = Cstruct.t
-                    and type init = int * M.t
-                    and type error = [ `Never ]
+module MakeEncoder (M : S.MINIENC)
+  : S.ENCODER with type t = M.t
+               and type raw = Cstruct.t
+               and type init = int * M.t
+               and type error = [ `Never ]
 
-module MakeDeflater (Z : Common.DEFLATE) (M : Common.MINIENC)
-  : Common.ENCODER with type t = M.t
-                    and type raw = Cstruct.t
-                    and type init = int * M.t * int * Cstruct.t
-                    and type error = [ `Deflate of Z.error ]
+module MakeDeflater (Z : S.DEFLATE) (M : S.MINIENC)
+  : S.ENCODER with type t = M.t
+               and type raw = Cstruct.t
+               and type init = int * M.t * int * Cstruct.t
+               and type error = [ `Deflate of Z.error ]
 
 val digest :
   (module Ihash.IDIGEST with type buffer = Cstruct.t
                          and type t = 'hash) ->
-  (module Common.FARADAY with type t = 't) -> kind:string -> 't -> 'hash
+  (module S.FARADAY with type t = 't) -> kind:string -> 't -> 'hash
 
 val fdigest :
   (module Ihash.IDIGEST with type buffer = Cstruct.t
                          and type t = 'hash) ->
-  (module Common.ENCODER with type t = 't
-                          and type raw = Cstruct.t
-                          and type init = int * 't
-                          and type error = [ `Never ]) ->
+  (module S.ENCODER with type t = 't
+                     and type raw = Cstruct.t
+                     and type init = int * 't
+                     and type error = [ `Never ]) ->
   ?capacity:int -> tmp:Cstruct.t -> kind:string -> length:('t -> int64) -> 't -> 'hash
 
 module type ENCODER =

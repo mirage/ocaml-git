@@ -25,34 +25,34 @@ sig
   (** A Git Blob object. *)
 
   module Hash
-    : Common.BASE
+    : S.BASE
   (** The Hash module. *)
 
   module D
-    : Common.DECODER with type t = t
-                      and type raw = Cstruct.t
-                      and type init = Cstruct.t
-                      and type error = [ `Decoder of string ]
+    : S.DECODER with type t = t
+                 and type raw = Cstruct.t
+                 and type init = Cstruct.t
+                 and type error = [ `Decoder of string ]
   (** The decoder of the Git Blob object. We constraint the input to be a
       {Cstruct.t}. This decoder needs a {Cstruct.t} as an internal buffer. *)
 
   module E
-    : Common.ENCODER with type t = t
-                      and type raw = Cstruct.t
+    : S.ENCODER with type t = t
+                 and type raw = Cstruct.t
   (** The encoder of the Git Blob object. *)
 
   module A
-    : Common.ANGSTROM with type t = t
+    : S.ANGSTROM with type t = t
   (** The Angstrom decoder of the Git Blob object. *)
 
   module F
-    : Common.FARADAY  with type t = t
+    : S.FARADAY  with type t = t
   (** The Faraday encoder of the Git Blob object. *)
 
   include Ihash.DIGEST with type t := t
                         and type hash := Hash.t
 
-  include Common.BASE with type t := t
+  include S.BASE with type t := t
 end
 
 module Make

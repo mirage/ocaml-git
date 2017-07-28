@@ -20,19 +20,19 @@ sig
   module Digest     : Ihash.IDIGEST
   module Path       : Path.S
   module FileSystem : Fs.S
-  module Hash       : Common.BASE
+  module Hash       : S.BASE
 
   type t = [ `Peeled of Hash.t | `Ref of string * Hash.t ] list
 
-  module A : Common.ANGSTROM with type t = t
-  module D : Common.DECODER  with type t = t
-                              and type raw = Cstruct.t
-                              and type init = Cstruct.t
-                              and type error = [ `Decoder of string ]
-  module M : Common.MINIENC with type t = t
-  module E : Common.ENCODER with type t = t
-                             and type raw = Cstruct.t
-                             and type init = int * t
+  module A : S.ANGSTROM with type t = t
+  module D : S.DECODER  with type t = t
+                         and type raw = Cstruct.t
+                         and type init = Cstruct.t
+                         and type error = [ `Decoder of string ]
+  module M : S.MINIENC with type t = t
+  module E : S.ENCODER with type t = t
+                        and type raw = Cstruct.t
+                        and type init = int * t
 
   type error = [ FileSystem.File.error
                | D.error ]

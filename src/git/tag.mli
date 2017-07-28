@@ -29,36 +29,36 @@ sig
       name. *)
 
   module Hash
-    : Common.BASE
+    : S.BASE
   (** The Hash module. *)
 
   module D
-    : Common.DECODER  with type t = t
-                       and type raw = Cstruct.t
-                       and type init = Cstruct.t
-                       and type error = [ `Decoder of string ]
+    : S.DECODER  with type t = t
+                  and type raw = Cstruct.t
+                  and type init = Cstruct.t
+                  and type error = [ `Decoder of string ]
   (** The decoder of the Git Tag object.
       We constraint the input to be a
       {Cstruct.t}. This decoder needs a
       {Cstruct.t} as an internal buffer. *)
 
   module A
-    : Common.ANGSTROM with type t = t
+    : S.ANGSTROM with type t = t
   (** The Angstrom decoder of the Git Tag object. *)
 
   module F
-    : Common.FARADAY  with type t = t
+    : S.FARADAY  with type t = t
   (** The Faraday encoder of the Git Tag object. *)
 
   module M
-    : Common.MINIENC  with type t = t
+    : S.MINIENC  with type t = t
   (** The {!Minienc} encoder of the Git Tag object. *)
 
   module E
-    : Common.ENCODER  with type t = t
-                       and type raw = Cstruct.t
-                       and type init = int * t
-                       and type error = [ `Never ]
+    : S.ENCODER  with type t = t
+                  and type raw = Cstruct.t
+                  and type init = int * t
+                  and type error = [ `Never ]
   (** The encoder (which uses a {!Minienc.encoder}) of the Git Tag object. We
       constraint the output to be a {Cstruct.t}. This encoder needs the Tag OCaml
       value and the memory consumption of the encoder (in bytes). The encoder can
@@ -68,7 +68,7 @@ sig
       because the encoder can not fail, we define the error as [`Never]. *)
 
   include Ihash.DIGEST with type t := t and type hash = Hash.t
-  include Common.BASE with type t := t
+  include S.BASE with type t := t
 
   val obj : t -> Hash.t
   (** [obj t] returns the pointed hash of the Tag [t]. *)

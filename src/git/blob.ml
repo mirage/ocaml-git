@@ -23,23 +23,23 @@ sig
   type t = private Cstruct.t
 
   module Hash
-    : Common.BASE
+    : S.BASE
   module D
-    : Common.DECODER with type t = t
-                      and type raw = Cstruct.t
-                      and type init = Cstruct.t
-                      and type error = [ `Decoder of string ]
+    : S.DECODER with type t = t
+                 and type raw = Cstruct.t
+                 and type init = Cstruct.t
+                 and type error = [ `Decoder of string ]
   module E
-    : Common.ENCODER with type t = t
+    : S.ENCODER with type t = t
                       and type raw = Cstruct.t
   module A
-    : Common.ANGSTROM with type t = t
+    : S.ANGSTROM with type t = t
   module F
-    : Common.FARADAY  with type t = t
+    : S.FARADAY  with type t = t
 
   include Ihash.DIGEST with type t := t
                         and type hash := Hash.t
-  include Common.BASE with type t := t
+  include S.BASE with type t := t
 end
 
 module Make

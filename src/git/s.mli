@@ -93,8 +93,6 @@ sig
   val encoder : t -> (Minienc.encoder -> 'a Minienc.state) -> Minienc.encoder -> 'a Minienc.state
 end
 
-(* XXX(dinosaure): non blocking interface comes from [Decompress] but we can
-   produce the same with [Camlzip]. *)
 module type INFLATE =
 sig
   type t
@@ -116,8 +114,6 @@ sig
   val refill       : int -> int -> t -> t
 end
 
-(* XXX(dinosaure): non blocking interface comes from [Decompress] but we can
-   produce the same with [Camlzip]. *)
 module type DEFLATE =
 sig
   type t

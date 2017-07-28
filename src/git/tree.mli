@@ -22,7 +22,7 @@ sig
   (** The [Digest] module used to make the module. *)
 
   module Hash
-    : Common.BASE
+    : S.BASE
   (** The Hash module *)
 
   type entry =
@@ -47,7 +47,7 @@ sig
       {i filename}. *)
 
   module D
-    : Common.DECODER  with type t = t
+    : S.DECODER  with type t = t
                        and type raw = Cstruct.t
                        and type init = Cstruct.t
                        and type error = [ `Decoder of string ]
@@ -55,21 +55,21 @@ sig
       {Cstruct.t}. This decoder needs a {Cstruct.t} as an internal buffer. *)
 
   module A
-    : Common.ANGSTROM with type t = t
+    : S.ANGSTROM with type t = t
   (** The Angstrom decoder of the Git Tree object. *)
 
   module F
-    : Common.FARADAY  with type t = t
+    : S.FARADAY  with type t = t
   (** The Faraday encoder of the Git Tree object. *)
 
   module M
-    : Common.MINIENC  with type t = t
+    : S.MINIENC  with type t = t
   (** The {!Minienc} encoder of the Git Tree object. *)
 
-  module E : Common.ENCODER  with type t = t
-                              and type raw = Cstruct.t
-                              and type init = int * t
-                              and type error = [ `Never ]
+  module E : S.ENCODER  with type t = t
+                         and type raw = Cstruct.t
+                         and type init = int * t
+                         and type error = [ `Never ]
   (** The encoder (which uses a {Minienc.encoder}) of the Git Tree object. We
       constraint the output to be a {Cstruct.t}. This encoder needs the Tree OCaml
       value and the memory consumption of the encoder (in bytes). The encoder can
@@ -79,7 +79,7 @@ sig
       because the encoder can not fail, we define the error as [`Never]. *)
 
   include Ihash.DIGEST with type t := t and type hash = Hash.t
-  include Common.BASE with type t := t
+  include S.BASE with type t := t
 
   val hashes : t -> Hash.t list
   (** [hashes t] returns all pointer of the tree [t]. *)

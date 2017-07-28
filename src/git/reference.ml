@@ -20,7 +20,7 @@ sig
   module Digest     : Ihash.IDIGEST
   module Path       : Path.S
   module FileSystem : Fs.S
-  module Hash       : Common.BASE
+  module Hash       : S.BASE
 
   type t = private string
 
@@ -32,7 +32,7 @@ sig
   val of_string : string -> t
   val to_string : t -> string
 
-  include Common.BASE with type t := t
+  include S.BASE with type t := t
 
   type head_contents =
     | Hash of Hash.t
@@ -40,11 +40,11 @@ sig
 
   val pp_head_contents : head_contents Fmt.t
 
-  module A : Common.ANGSTROM with type t = head_contents
-  module D : Common.DECODER with type t = head_contents
-                             and type raw = Cstruct.t
-                             and type init = Cstruct.t
-                             and type error = [ `Decoder of string ]
+  module A : S.ANGSTROM with type t = head_contents
+  module D : S.DECODER with type t = head_contents
+                        and type raw = Cstruct.t
+                        and type init = Cstruct.t
+                        and type error = [ `Decoder of string ]
 
   type error =
     [ FileSystem.File.error

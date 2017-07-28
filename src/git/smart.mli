@@ -209,7 +209,7 @@ sig
   (** The [Digest] module used to make the module. *)
 
   module Hash
-    : Common.BASE
+    : S.BASE
   (** The Hash module. *)
 
   type decoder
@@ -435,7 +435,7 @@ sig
   (** The [Digest] module used to make the module. *)
 
   module Hash
-    : Common.BASE
+    : S.BASE
   (** The Hash module. *)
 
   type encoder
@@ -558,7 +558,7 @@ sig
   (** The {!Encoder} module constrained by the same [Digest] module. *)
 
   module Hash
-    : Common.BASE
+    : S.BASE
   (** The Hash module. *)
 
   type context

@@ -36,15 +36,15 @@ sig
   (** The [FileSystem] module used to make the module. *)
 
   module Inflate
-    : Common.INFLATE
+    : S.INFLATE
   (** The [Inflate] module used to make the module. *)
 
   module Deflate
-    : Common.DEFLATE
+    : S.DEFLATE
   (** The [Deflate] module used to make the module. *)
 
   module Hash
-    : Common.BASE
+    : S.BASE
   (** The Hash module. *)
 
   module Value
@@ -280,7 +280,7 @@ sig
       concurrency context with the same [state]. *)
 
   module D
-    : Common.DECODER with type t = t
+    : S.DECODER with type t = t
                       and type raw = Cstruct.t
                       and type init = Inflate.window * Cstruct.t * Cstruct.t
                       and type error = Value.D.error
@@ -297,7 +297,7 @@ sig
   *)
 
   module E
-    : Common.ENCODER with type t = t
+    : S.ENCODER with type t = t
                       and type raw = Cstruct.t
                       and type init = int * t * int * Cstruct.t
                       and type error = Value.E.error
@@ -338,11 +338,11 @@ sig
   (** The [FileSystem] module used to make the module. *)
 
   module Inflate
-    : Common.INFLATE
+    : S.INFLATE
   (** The [Inflate] module used to make the module. *)
 
   module Hash
-    : Common.BASE with type t = Bytes.t
+    : S.BASE with type t = Bytes.t
   (** The Hash module. *)
 
   module IDXDecoder
@@ -519,11 +519,11 @@ sig
   (** The [Path] module used to make the module. *)
 
   module Inflate
-    : Common.INFLATE
+    : S.INFLATE
   (** The [Inflate] module used to make the module. *)
 
   module Deflate
-    : Common.DEFLATE
+    : S.DEFLATE
   (** The [Deflate] module used to make the module. *)
 
   module FileSystem
@@ -531,7 +531,7 @@ sig
   (** The [FileSystem] module used to make the module. *)
 
   module Hash
-    : Common.BASE with type t = Bytes.t
+    : S.BASE with type t = Bytes.t
   (** The Hash module. This module is constrained by [type t = Bytes.t]. This
       constraint appear on the {!PACKDecoder}, {!PACKEncoder} and {!IDXDecoder}
       module. *)
@@ -845,8 +845,8 @@ module Make
                         and type Dir.error = [ `System of string ]
                         and type Mapper.error = [`System of string ]
                         and type Mapper.raw = Cstruct.t)
-    (Inflate : Common.INFLATE)
-    (Deflate : Common.DEFLATE)
+    (Inflate : S.INFLATE)
+    (Deflate : S.DEFLATE)
   : S with type Hash.t = Digest.t
        and module Digest = Digest
        and module Path = Path

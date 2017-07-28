@@ -869,7 +869,7 @@ end
 module type ENCODER =
 sig
   module Hash : HASH
-  module Deflate : Common.DEFLATE
+  module Deflate : S.DEFLATE
 
   module Entry :
   sig
@@ -972,7 +972,7 @@ sig
   val eval : Cstruct.t -> Cstruct.t -> t -> [ `Flush of t | `Await of t | `End of (t * Hash.t) | `Error of (t * error) ]
 end
 
-module MakePACKEncoder (Hash : HASH) (Deflate : Common.DEFLATE)
+module MakePACKEncoder (Hash : HASH) (Deflate : S.DEFLATE)
   : ENCODER with module Hash = Hash
              and module Deflate = Deflate =
 struct

@@ -60,7 +60,7 @@ end
 module type ENCODER =
 sig
   module Hash : HASH
-  module Deflate : Common.DEFLATE
+  module Deflate : S.DEFLATE
 
   (** The entry module. It used to able to manipulate the meta-data only needed
      by the delta-ification of the git object (and avoid to de-serialize all of
@@ -316,6 +316,6 @@ sig
   val eval : Cstruct.t -> Cstruct.t -> t -> [ `Flush of t | `Await of t | `End of (t * Hash.t) | `Error of (t * error) ]
 end
 
-module MakePACKEncoder (Hash : HASH) (Deflate : Common.DEFLATE) : ENCODER
+module MakePACKEncoder (Hash : HASH) (Deflate : S.DEFLATE) : ENCODER
   with module Hash = Hash
    and module Deflate = Deflate

@@ -23,9 +23,9 @@ sig
   module Digest : Ihash.IDIGEST
   module Path : Path.S
   module FileSystem : Fs.S with type path = Path.t
-  module Inflate : Common.INFLATE
-  module Deflate : Common.DEFLATE
-  module Hash : Common.BASE
+  module Inflate : S.INFLATE
+  module Deflate : S.DEFLATE
+  module Hash : S.BASE
 
   module Value : Value.S with type Hash.t = Hash.t
                           and module Digest = Digest
@@ -57,15 +57,15 @@ sig
   val raw_wa : window:Inflate.window -> ztmp:Cstruct.t -> dtmp:Cstruct.t -> raw:Cstruct.t -> result:Cstruct.t -> state -> Hash.t -> ([ `Commit | `Tree | `Tag | `Blob ] * Cstruct.t, error) result Lwt.t
   val raw_was : Cstruct.t -> state -> Hash.t -> ([ `Commit | `Tree | `Tag | `Blob ] * Cstruct.t, error) result Lwt.t
 
-  module D : Common.DECODER with type t = t
-                             and type raw = Cstruct.t
-                             and type init = Inflate.window * Cstruct.t * Cstruct.t
-                             and type error = [ `Decoder of string | `Inflate of Inflate.error ]
+  module D : S.DECODER with type t = t
+                        and type raw = Cstruct.t
+                        and type init = Inflate.window * Cstruct.t * Cstruct.t
+                        and type error = [ `Decoder of string | `Inflate of Inflate.error ]
 
-  module E : Common.ENCODER with type t = t
-                             and type raw = Cstruct.t
-                             and type init = int * t * int * Cstruct.t
-                             and type error = [ `Deflate of Deflate.error ]
+  module E : S.ENCODER with type t = t
+                        and type raw = Cstruct.t
+                        and type init = int * t * int * Cstruct.t
+                        and type error = [ `Deflate of Deflate.error ]
 end
 
 module type PACK =
@@ -76,8 +76,8 @@ sig
   module Digest : Ihash.IDIGEST
   module Path : Path.S
   module FileSystem  : Fs.S with type path = Path.t
-  module Inflate : Common.INFLATE
-  module Hash : Common.BASE with type t = Bytes.t
+  module Inflate : S.INFLATE
+  module Hash : S.BASE with type t = Bytes.t
   module IDXDecoder : Idx.LAZY
   module PACKDecoder : Unpack.DECODER with module Inflate = Inflate
 
@@ -113,14 +113,14 @@ sig
   module Path
     : Path.S
   module Inflate
-    : Common.INFLATE
+    : S.INFLATE
   module Deflate
-    : Common.DEFLATE
+    : S.DEFLATE
   module FileSystem
     : Fs.S with type path = Path.t
 
   module Hash
-    : Common.BASE with type t = Bytes.t
+    : S.BASE with type t = Bytes.t
   module Value
     : Value.S with type Hash.t = Hash.t
                and module Digest = Digest
@@ -225,8 +225,8 @@ module Make
                         and type Dir.error = [ `System of string ]
                         and type Mapper.error = [ `System of string ]
                         and type Mapper.raw = Cstruct.t)
-    (Inflate : Common.INFLATE)
-    (Deflate : Common.DEFLATE)
+    (Inflate : S.INFLATE)
+    (Deflate : S.DEFLATE)
   : S with type Hash.t = Digest.t
        and module Digest = Digest
        and module Path = Path
@@ -423,13 +423,13 @@ module Make
         ~result
         t hash
 
-    module D : Common.DECODER with type t = t
+    module D : S.DECODER with type t = t
                                and type raw = Cstruct.t
                                and type init = Inflate.window * Cstruct.t * Cstruct.t
                                and type error = Value.D.error
       = Value.D
 
-    module E : Common.ENCODER with type t = t
+    module E : S.ENCODER with type t = t
                                and type raw = Cstruct.t
                                and type init = int * t * int * Cstruct.t
                                and type error = Value.E.error

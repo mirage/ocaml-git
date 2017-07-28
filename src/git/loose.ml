@@ -74,8 +74,8 @@ module Make
     (FileSystem : Fs.S with type path = Path.t
                         and type File.error = [ `System of string ]
                         and type File.raw = Cstruct.t)
-    (Inflate : Common.INFLATE)
-    (Deflate : Common.DEFLATE)
+    (Inflate : S.INFLATE)
+    (Deflate : S.DEFLATE)
   : S with type Hash.t = Digest.t
        and module Digest = Digest
        and module Path = Path
@@ -151,7 +151,7 @@ module Make
         [] firsts
 
   type 't decoder =
-    (module Common.DECODER with type t = 't
+    (module S.DECODER with type t = 't
                             and type raw = Cstruct.t
                             and type init = Inflate.window * Cstruct.t * Cstruct.t
                             and type error = [ `Decoder of string

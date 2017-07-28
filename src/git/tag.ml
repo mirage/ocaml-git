@@ -21,22 +21,22 @@ sig
 
   type t
 
-  module Hash : Common.BASE
+  module Hash : S.BASE
 
-  module D : Common.DECODER  with type t = t
-                              and type raw = Cstruct.t
-                              and type init = Cstruct.t
-                              and type error = [ `Decoder of string ]
-  module A : Common.ANGSTROM with type t = t
-  module F : Common.FARADAY  with type t = t
-  module M : Common.MINIENC  with type t = t
-  module E : Common.ENCODER  with type t = t
-                              and type raw = Cstruct.t
-                              and type init = int * t
-                              and type error = [ `Never ]
+  module D : S.DECODER  with type t = t
+                         and type raw = Cstruct.t
+                         and type init = Cstruct.t
+                         and type error = [ `Decoder of string ]
+  module A : S.ANGSTROM with type t = t
+  module F : S.FARADAY  with type t = t
+  module M : S.MINIENC  with type t = t
+  module E : S.ENCODER  with type t = t
+                         and type raw = Cstruct.t
+                         and type init = int * t
+                         and type error = [ `Never ]
 
   include Ihash.DIGEST with type t := t and type hash = Hash.t
-  include Common.BASE with type t := t
+  include S.BASE with type t := t
 
   val obj : t -> Hash.t
 end

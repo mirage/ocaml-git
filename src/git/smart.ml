@@ -123,7 +123,7 @@ let pp_capability ppf = function
 module type DECODER =
 sig
   module Digest : Ihash.IDIGEST
-  module Hash : Common.BASE
+  module Hash : S.BASE
 
   type decoder
 
@@ -215,7 +215,7 @@ end
 module type ENCODER =
 sig
   module Digest : Ihash.IDIGEST
-  module Hash : Common.BASE
+  module Hash : S.BASE
 
   type encoder
 
@@ -279,7 +279,7 @@ sig
   module Digest : Ihash.IDIGEST with type t = Bytes.t
   module Decoder : DECODER with type Hash.t = Digest.t and module Digest = Digest
   module Encoder : ENCODER with type Hash.t = Digest.t and module Digest = Digest
-  module Hash : Common.BASE
+  module Hash : S.BASE
 
   type context
 

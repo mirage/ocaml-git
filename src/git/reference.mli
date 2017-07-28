@@ -30,7 +30,7 @@ sig
   (** The [FileSystem] module used to make the module. *)
 
   module Hash
-    : Common.BASE
+    : S.BASE
   (** The Hash module. *)
 
   type t = private string
@@ -80,7 +80,7 @@ sig
   val to_string : t -> string
   (** [to_string t] returns the string value of the reference [t]. *)
 
-  include Common.BASE with type t := t
+  include S.BASE with type t := t
 
   type head_contents =
     | Hash of Hash.t (** A pointer to an hash. *)
@@ -90,11 +90,11 @@ sig
   (** Pretty-printer of {!head_contents}. *)
 
   module A
-    : Common.ANGSTROM with type t = head_contents
+    : S.ANGSTROM with type t = head_contents
   (** The Angstrom decoder of the Git Reference object. *)
 
   module D
-    : Common.DECODER with type t = head_contents
+    : S.DECODER with type t = head_contents
                       and type raw = Cstruct.t
                       and type init = Cstruct.t
                       and type error = [ `Decoder of string ]

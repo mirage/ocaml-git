@@ -19,7 +19,7 @@ let ppe ~name ppv =
   Fmt.braces (fun ppf -> Fmt.pf ppf "%s %a" name (Fmt.hvbox ppv))
 
 module BaseBigstring
-  : Common.BASE with type t = (char, Bigarray.int8_unsigned_elt, Bigarray.c_layout) Bigarray.Array1.t =
+  : S.BASE with type t = (char, Bigarray.int8_unsigned_elt, Bigarray.c_layout) Bigarray.Array1.t =
 struct
   open Bigarray
 
@@ -55,7 +55,7 @@ end
 
 module BaseBytes :
 sig
-  include Common.BASE with type t = Bytes.t
+  include S.BASE with type t = Bytes.t
 
   val to_hex : t -> string
   val of_hex : string -> t
@@ -79,11 +79,11 @@ end = struct
     Hex.to_string (`Hex x) |> Bytes.unsafe_of_string
 end
 
-module MakeDecoder (A : Common.ANGSTROM)
-  : Common.DECODER with type t = A.t
-                    and type raw = Cstruct.t
-                    and type init = Cstruct.t
-                    and type error = [ `Decoder of string ]
+module MakeDecoder (A : S.ANGSTROM)
+  : S.DECODER with type t = A.t
+               and type raw = Cstruct.t
+               and type init = Cstruct.t
+               and type error = [ `Decoder of string ]
 = struct
   (* XXX(dinosaure): this decoder is on top of some assertion about the decoding
      of a git object. [Angstrom] can not consume all input (when we have an
@@ -207,8 +207,8 @@ module MakeDecoder (A : Common.ANGSTROM)
     { decoder with final = Angstrom.Unbuffered.Complete }
 end
 
-module MakeInflater (Z : Common.INFLATE) (A : Common.ANGSTROM)
-  : Common.DECODER with type t = A.t
+module MakeInflater (Z : S.INFLATE) (A : S.ANGSTROM)
+  : S.DECODER with type t = A.t
                     and type raw = Cstruct.t
                     and type init = Z.window * Cstruct.t * Cstruct.t
                     and type error = [ `Decoder of string | `Inflate of Z.error ]
@@ -279,8 +279,8 @@ struct
   let to_result x = assert false
 end
 
-module MakeEncoder (M : Common.MINIENC)
-  : Common.ENCODER with type t = M.t
+module MakeEncoder (M : S.MINIENC)
+  : S.ENCODER with type t = M.t
                     and type raw = Cstruct.t
                     and type init = int * M.t
                     and type error = [ `Never ]
@@ -370,8 +370,8 @@ module MakeEncoder (M : Common.MINIENC)
   let used { o_pos; _ } = o_pos
 end
 
-module MakeDeflater (Z : Common.DEFLATE) (M : Common.MINIENC)
-  : Common.ENCODER with type t = M.t
+module MakeDeflater (Z : S.DEFLATE) (M : S.MINIENC)
+  : S.ENCODER with type t = M.t
                     and type raw = Cstruct.t
                     and type init = int * M.t * int * Cstruct.t
                     and type error = [ `Deflate of Z.error ]
@@ -440,7 +440,7 @@ end
 let fdigest
   : type t hash. (module Ihash.IDIGEST with type t = hash
                                         and type buffer = Cstruct.t)
-    -> (module Common.ENCODER with type t = t
+    -> (module S.ENCODER with type t = t
                                and type raw = Cstruct.t
                                and type init = (int * t)
                                and type error = [ `Never ])
@@ -484,7 +484,7 @@ let fdigest
 let digest
   : type t hash. (module Ihash.IDIGEST with type t = hash
                                         and type buffer = Cstruct.t)
-    -> (module Common.FARADAY with type t = t)
+    -> (module S.FARADAY with type t = t)
     -> kind:string
     -> t
     -> hash

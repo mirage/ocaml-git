@@ -22,15 +22,15 @@ sig
   (** The [Digest] module used to make the module. *)
 
   module Inflate
-    : Common.INFLATE
+    : S.INFLATE
   (** The [Inflate] module used to make the module. *)
 
   module Deflate
-    : Common.DEFLATE
+    : S.DEFLATE
   (** The [Deflate] module used to make the module. *)
 
   module Hash
-    : Common.BASE
+    : S.BASE
   (** The Hash module. *)
 
   module Blob
@@ -57,18 +57,18 @@ sig
   (** OCaml value which represents a Git object. *)
 
   module A
-    : Common.ANGSTROM with type t = t
+    : S.ANGSTROM with type t = t
   (** The Angstrom decoder of the Git object. *)
 
   module F
-    : Common.FARADAY  with type t = t
+    : S.FARADAY  with type t = t
   (** The Faraday encoder of the Git object. *)
 
   module D
-    : Common.DECODER  with type t = t
-                       and type raw = Cstruct.t
-                       and type init = Inflate.window * Cstruct.t * Cstruct.t
-                       and type error = [ `Decoder of string | `Inflate of Inflate.error ]
+    : S.DECODER  with type t = t
+                  and type raw = Cstruct.t
+                  and type init = Inflate.window * Cstruct.t * Cstruct.t
+                  and type error = [ `Decoder of string | `Inflate of Inflate.error ]
   (** The decoder of the Git object. We constraint the input to be an
       {!Inflate.window} and a {Cstruct.t} which used by the {Inflate} module and an
       other {Cstruct.t} as an internal buffer.
@@ -77,14 +77,14 @@ sig
       value. *)
 
   module M
-    : Common.MINIENC  with type t = t
+    : S.MINIENC  with type t = t
   (** The {!Minienc} encoder of the Git object. *)
 
   module E
-    : Common.ENCODER  with type t = t
-                       and type raw = Cstruct.t
-                       and type init = int * t * int * Cstruct.t
-                       and type error = [ `Deflate of Deflate.error ]
+    : S.ENCODER  with type t = t
+                  and type raw = Cstruct.t
+                  and type init = int * t * int * Cstruct.t
+                  and type error = [ `Deflate of Deflate.error ]
   (** The encoder (which uses a {!Minienc.encoder}) of the Git object. We
       constraint the output to be a {Cstruct.t}. This encoder needs the level of the
       compression, the value {!t}, the memory consumption of the encoder (in bytes)
@@ -95,14 +95,14 @@ sig
 
   include Ihash.DIGEST with type t := t
                         and type hash := Hash.t
-  include Common.BASE with type t := t
+  include S.BASE with type t := t
 end
 
 module Make
     (Digest : Ihash.IDIGEST with type t = Bytes.t
                              and type buffer = Cstruct.t)
-    (Inflate : Common.INFLATE)
-    (Deflate : Common.DEFLATE)
+    (Inflate : S.INFLATE)
+    (Deflate : S.DEFLATE)
   : S with type Hash.t = Digest.t
        and module Digest = Digest
        and module Inflate = Inflate

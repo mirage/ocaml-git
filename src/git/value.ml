@@ -20,12 +20,12 @@ sig
   module Digest
     : Ihash.IDIGEST
   module Inflate
-    : Common.INFLATE
+    : S.INFLATE
   module Deflate
-    : Common.DEFLATE
+    : S.DEFLATE
 
   module Hash
-    : Common.BASE
+    : S.BASE
   module Blob
     : Blob.S with type Hash.t = Hash.t
   module Commit
@@ -41,26 +41,26 @@ sig
     | Tree   of Tree.t
     | Tag    of Tag.t
 
-  module A : Common.ANGSTROM with type t = t
-  module F : Common.FARADAY  with type t = t
-  module D : Common.DECODER  with type t = t
-                              and type raw = Cstruct.t
-                              and type init = Inflate.window * Cstruct.t * Cstruct.t
-                              and type error = [ `Decoder of string | `Inflate of Inflate.error ]
-  module M : Common.MINIENC  with type t = t
-  module E : Common.ENCODER  with type t = t
-                              and type raw = Cstruct.t
-                              and type init = int * t * int * Cstruct.t
-                              and type error = [ `Deflate of Deflate.error ]
+  module A : S.ANGSTROM with type t = t
+  module F : S.FARADAY  with type t = t
+  module D : S.DECODER  with type t = t
+                         and type raw = Cstruct.t
+                         and type init = Inflate.window * Cstruct.t * Cstruct.t
+                         and type error = [ `Decoder of string | `Inflate of Inflate.error ]
+  module M : S.MINIENC  with type t = t
+  module E : S.ENCODER  with type t = t
+                         and type raw = Cstruct.t
+                         and type init = int * t * int * Cstruct.t
+                         and type error = [ `Deflate of Deflate.error ]
 
   include Ihash.DIGEST with type t := t and type hash := Hash.t
-  include Common.BASE with type t := t
+  include S.BASE with type t := t
 end
 
 module Make (Digest : Ihash.IDIGEST with type t = Bytes.t
                                     and type buffer = Cstruct.t)
-    (Inflate : Common.INFLATE)
-    (Deflate : Common.DEFLATE)
+    (Inflate : S.INFLATE)
+    (Deflate : S.DEFLATE)
   : S with type Hash.t = Digest.t
        and module Digest = Digest
        and module Inflate = Inflate

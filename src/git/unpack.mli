@@ -184,7 +184,7 @@ module MakeHunkDecoder (Hash : HASH) : H with module Hash = Hash
 module type P =
 sig
   module Hash    : HASH
-  module Inflate : Common.INFLATE
+  module Inflate : S.INFLATE
   module H       : H with module Hash = Hash
 
   type error =
@@ -402,7 +402,7 @@ sig
       {!kind} or {!length}).}} *)
 end
 
-module MakePACKDecoder (H : HASH) (Inflate : Common.INFLATE) : P
+module MakePACKDecoder (H : HASH) (Inflate : S.INFLATE) : P
   with module Hash = H
    and module Inflate = Inflate
    and module H = MakeHunkDecoder(H)
@@ -412,7 +412,7 @@ module type DECODER =
 sig
   module Hash    : HASH
   module Mapper  : Fs.MAPPER
-  module Inflate : Common.INFLATE
+  module Inflate : S.INFLATE
 
   module H       : H with module Hash = Hash
   module P       : P with module Hash = Hash
@@ -610,7 +610,7 @@ sig
   val get_with_allocation' : ?chunk:int -> ?h_tmp:Cstruct.t array -> t -> int64 -> Cstruct.t -> Inflate.window -> (Object.t, error) result Lwt.t
 end
 
-module MakeDecoder (H : HASH) (Mapper : Fs.MAPPER with type raw = Cstruct.t) (Inflate : Common.INFLATE)
+module MakeDecoder (H : HASH) (Mapper : Fs.MAPPER with type raw = Cstruct.t) (Inflate : S.INFLATE)
   : DECODER with type Hash.t = H.t
              and module Hash = H
              and module Mapper = Mapper
