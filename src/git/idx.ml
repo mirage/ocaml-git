@@ -1,4 +1,3 @@
-let () = Printexc.record_backtrace true
 (*
  * Copyright (c) 2013-2017 Thomas Gazagnaire <thomas@gazagnaire.org>
  * and Romain Calascibetta <romain.calascibetta@gmail.com>
