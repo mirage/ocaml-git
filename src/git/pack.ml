@@ -292,22 +292,14 @@ struct
     | Ok    of t
 
   let pp_state ppf = function
-    | Header k ->
-      Fmt.pf ppf "(Header #k)"
-    | List ->
-      Fmt.pf ppf "List"
-    | Hunk k ->
-      Fmt.pf ppf "(Hunk #k)"
-    | Insert k ->
-      Fmt.pf ppf "(Insert #k)"
-    | Copy k ->
-      Fmt.pf ppf "(Copy #k)"
-    | End ->
-      Fmt.pf ppf "End"
-    | Consume ->
-      Fmt.pf ppf "Consume"
-    | Exception err ->
-      Fmt.pf ppf "(Error %a)" (Fmt.hvbox pp_error) err
+    | Header k      -> Fmt.pf ppf "(Header #k)"
+    | List          -> Fmt.pf ppf "List"
+    | Hunk k        -> Fmt.pf ppf "(Hunk #k)"
+    | Insert k      -> Fmt.pf ppf "(Insert #k)"
+    | Copy k        -> Fmt.pf ppf "(Copy #k)"
+    | End           -> Fmt.pf ppf "End"
+    | Consume       -> Fmt.pf ppf "Consume"
+    | Exception err -> Fmt.pf ppf "(Error %a)" (Fmt.hvbox pp_error) err
 
   let pp_reference ppf = function
     | Offset off -> Fmt.pf ppf "(Offset %Ld)" off

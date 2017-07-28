@@ -64,16 +64,11 @@ struct
     | Invalid_bigoffset_index of int
 
   let pp_error ppf = function
-    | Invalid_header header ->
-      Fmt.pf ppf "(Invalid_header %s)" header
-    | Invalid_version version ->
-      Fmt.pf ppf "(Invalid_version %ld)" version
-    | Invalid_index ->
-      Fmt.pf ppf "Invalid_index"
-    | Expected_bigoffset_table ->
-      Fmt.pf ppf "Expected_bigoffset_table"
-    | Invalid_bigoffset_index index ->
-      Fmt.pf ppf "(Invalid_bigoffset_index %d)" index
+    | Invalid_header header         -> Fmt.pf ppf "(Invalid_header %s)" header
+    | Invalid_version version       -> Fmt.pf ppf "(Invalid_version %ld)" version
+    | Invalid_index                 -> Fmt.pf ppf "Invalid_index"
+    | Expected_bigoffset_table      -> Fmt.pf ppf "Expected_bigoffset_table"
+    | Invalid_bigoffset_index index -> Fmt.pf ppf "(Invalid_bigoffset_index %d)" index
 
   module Cache = Lru.M.Make(Hash)(struct type t = Crc32.t * int64 let weight _ = 1 end)
 
@@ -306,16 +301,11 @@ struct
     | Invalid_hash of Hash.t * Hash.t
 
   let pp_error ppf = function
-    | Invalid_byte byte ->
-      Fmt.pf ppf "(Invalid_byte %02x)" byte
-    | Invalid_version version ->
-      Fmt.pf ppf "(Invalid_version %ld)" version
-    | Invalid_index_of_bigoffset idx ->
-      Fmt.pf ppf "(Invalid_index_of_bigoffset %d)" idx
-    | Expected_bigoffset_table ->
-      Fmt.pf ppf "Expected_bigoffset_table"
-    | Invalid_hash (has, expect) ->
-      Fmt.pf ppf "(Invalid_hash (%a, %a))" Hash.pp has Hash.pp expect
+    | Invalid_byte byte              -> Fmt.pf ppf "(Invalid_byte %02x)" byte
+    | Invalid_version version        -> Fmt.pf ppf "(Invalid_version %ld)" version
+    | Invalid_index_of_bigoffset idx -> Fmt.pf ppf "(Invalid_index_of_bigoffset %d)" idx
+    | Expected_bigoffset_table       -> Fmt.pf ppf "Expected_bigoffset_table"
+    | Invalid_hash (has, expect)     -> Fmt.pf ppf "(Invalid_hash (%a, %a))" Hash.pp has Hash.pp expect
 
   type t =
     { i_off     : int
@@ -346,26 +336,18 @@ struct
     | Ok     of t * Hash.t
 
   let pp_state ppf = function
-    | Header _ ->
-      Fmt.pf ppf "(Header #k)"
-    | Fanout _ ->
-      Fmt.pf ppf "(Fanout #k)"
-    | Hashes _ ->
-      Fmt.pf ppf "(Hashes #k)"
-    | Crcs _ ->
-      Fmt.pf ppf "(Crcs #k)"
-    | Offsets _ ->
-      Fmt.pf ppf "(Offsets #k)"
-    | Hash _ ->
-      Fmt.pf ppf "(Hash #k)"
+    | Header _      -> Fmt.pf ppf "(Header #k)"
+    | Fanout _      -> Fmt.pf ppf "(Fanout #k)"
+    | Hashes _      -> Fmt.pf ppf "(Hashes #k)"
+    | Crcs _        -> Fmt.pf ppf "(Crcs #k)"
+    | Offsets _     -> Fmt.pf ppf "(Offsets #k)"
+    | Hash _        -> Fmt.pf ppf "(Hash #k)"
+    | End hash_pack -> Fmt.pf ppf "(End %a)" Hash.pp hash_pack
+    | Exception exn -> Fmt.pf ppf "(Exception %a)" pp_error exn
     | Ret (boffs, hash_idx, hash_pack) ->
       Fmt.pf ppf "(Ret (big offsets:%d, idx:%a, pack:%a))"
         (Option.value ~default:0 (Option.bind Array.length boffs))
         Hash.pp hash_idx Hash.pp hash_pack
-    | End hash_pack ->
-      Fmt.pf ppf "(End %a)" Hash.pp hash_pack
-    | Exception exn ->
-      Fmt.pf ppf "(Exception %a)" pp_error exn
 
   let pp ppf t =
     Fmt.pf ppf "{ @[<hov>i_off = %d;@ \
@@ -742,22 +724,14 @@ struct
    *)
 
   let pp_state ppf = function
-    | Header _ ->
-      Fmt.pf ppf "(Header #k)"
-    | Fanout _ ->
-      Fmt.pf ppf "(Fanout #k)"
-    | Hashes _ ->
-      Fmt.pf ppf "(Hashes #k)"
-    | Crcs _ ->
-      Fmt.pf ppf "(Crcs #k)"
-    | Offsets _ ->
-      Fmt.pf ppf "(Offsets #k)"
-    | BigOffsets _ ->
-      Fmt.pf ppf "(BigOffsets #k)"
-    | Hash _ ->
-      Fmt.pf ppf "(Hash #k)"
-    | End ->
-      Fmt.pf ppf "End"
+    | Header _     -> Fmt.pf ppf "(Header #k)"
+    | Fanout _     -> Fmt.pf ppf "(Fanout #k)"
+    | Hashes _     -> Fmt.pf ppf "(Hashes #k)"
+    | Crcs _       -> Fmt.pf ppf "(Crcs #k)"
+    | Offsets _    -> Fmt.pf ppf "(Offsets #k)"
+    | BigOffsets _ -> Fmt.pf ppf "(BigOffsets #k)"
+    | Hash _       -> Fmt.pf ppf "(Hash #k)"
+    | End          -> Fmt.pf ppf "End"
 
   let pp ppf { o_off; o_pos; o_len; write; table; boffsets; hash; pack; state; } =
     Fmt.pf ppf "{ @[<hov>o_off = %d;@ \
