@@ -325,12 +325,12 @@ struct
                          reference = %a;@ \
                          source_length = %d;@ \
                          target_length = %d;@ \
-                         hunks = %a;@ \
+                         hunks = [ %a ];@ \
                          state = %a;@] }"
       t.o_off t.o_pos t.o_len
       t.i_off t.i_pos t.i_len t.i_abs
       t.write pp_reference t.reference t.source_length t.target_length
-      (Fmt.hvbox (Fmt.list ~sep:(fun ppf () -> Fmt.pf ppf ";@ ") Rabin.pp)) t.hunks
+      (Fmt.hvbox (Fmt.list ~sep:(Fmt.unit ";@ ") Rabin.pp)) t.hunks
       (Fmt.hvbox pp_state) t.state
 
   let ok t = Ok { t with state = End }
@@ -621,11 +621,11 @@ struct
     | S { length; depth; hunks; src; src_length; } ->
       Fmt.pf ppf "(Δ { @[<hov>length = %d;@ \
                               depth = %d;@ \
-                              hunks = %a;@ \
+                              hunks = [ %a ];@ \
                               src = %a;@ \
                               src_length = %Ld;@] }"
         length depth
-        (Fmt.hvbox (Fmt.list ~sep:(fun ppf () -> Fmt.pf ppf ";@ ") Rabin.pp)) hunks
+        (Fmt.hvbox (Fmt.list ~sep:(Fmt.unit ";@ ") Rabin.pp)) hunks
         (Fmt.hvbox pp) src
         src_length
   and pp ppf { delta; } =

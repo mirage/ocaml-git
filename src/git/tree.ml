@@ -81,8 +81,8 @@ module Make (Digest : Ihash.IDIGEST with type t = Bytes.t
       name (Fmt.hvbox Hash.pp) node
 
   let pp ppf tree =
-    Fmt.pf ppf "[ @[<hov>%a@] ]"
-      (Fmt.list ~sep:(fun ppf () -> Fmt.pf ppf ";@ ") pp_entry) tree
+    Fmt.pf ppf "[ %a ]"
+      (Fmt.hvbox @@ Fmt.list ~sep:(Fmt.unit ";@ ") pp_entry) tree
 
   let string_of_perm = function
     | `Normal    -> "100644"

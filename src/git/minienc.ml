@@ -133,7 +133,7 @@ struct
 
   let pp ppv ppf q =
     Fmt.pf ppf "[ %a ]"
-    (Fmt.hvbox (Fmt.list ~sep:(fun ppf () -> Fmt.pf ppf ";@ ") ppv)) (to_list q)
+    (Fmt.hvbox (Fmt.list ~sep:(Fmt.unit ";@ ") ppv)) (to_list q)
 end
 
 module type VALUE =

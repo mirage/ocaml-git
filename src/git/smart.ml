@@ -714,16 +714,16 @@ struct
     ; capabilities : capability list }
 
   let pp_advertised_refs ppf { shallow; refs; capabilities; } =
-    let sep ppf () = Fmt.pf ppf ";@ " in
+    let sep = Fmt.unit ";@ " in
     let pp_ref ppf (hash, refname, peeled) =
       match peeled with
       | true -> Fmt.pf ppf "%a %s^{}" Hash.pp hash refname
       | false -> Fmt.pf ppf "%a %s" Hash.pp hash refname
     in
 
-    Fmt.pf ppf "{ @[<hov>shallow = %a;@ \
-                         refs = %a;@ \
-                         capabilites = %a;@] }"
+    Fmt.pf ppf "{ @[<hov>shallow = [ %a ];@ \
+                         refs = [ %a ];@ \
+                         capabilites = [ %a ];@] }"
       (Fmt.hvbox @@ Fmt.list ~sep Hash.pp) shallow
       (Fmt.hvbox @@ Fmt.list ~sep pp_ref) refs
       (Fmt.hvbox @@ Fmt.list ~sep pp_capability) capabilities
@@ -783,10 +783,10 @@ struct
     ; unshallow : Hash.t list }
 
   let pp_shallow_update ppf { shallow; unshallow; } =
-    let sep ppf () = Fmt.pf ppf ";@ " in
+    let sep = Fmt.unit ";@ " in
 
-    Fmt.pf ppf "{ @[<hov>shallow = %a;@ \
-                         unshallow = %a;@] }"
+    Fmt.pf ppf "{ @[<hov>shallow = [ %a ];@ \
+                         unshallow = [ %a ];@] }"
       (Fmt.hvbox @@ Fmt.list ~sep Hash.pp) shallow
       (Fmt.hvbox @@ Fmt.list ~sep Hash.pp) unshallow
 
@@ -864,11 +864,11 @@ struct
     (Fmt.pair Hash.pp pp_detail) ppf (hash, detail)
 
   let pp_acks ppf { shallow; unshallow; acks; } =
-    let sep ppf () = Fmt.pf ppf ";@ " in
+    let sep = Fmt.unit ";@ " in
 
-    Fmt.pf ppf "{ @[<hov>shallow = %a;@ \
-                         unshallow = %a;@ \
-                         acks = %a;@] }"
+    Fmt.pf ppf "{ @[<hov>shallow = [ %a ];@ \
+                         unshallow = [ %a ];@ \
+                         acks = [ %a ];@] }"
       (Fmt.hvbox @@ Fmt.list ~sep Hash.pp) shallow
       (Fmt.hvbox @@ Fmt.list ~sep Hash.pp) unshallow
       (Fmt.hvbox @@ Fmt.list ~sep pp_ack) acks
@@ -979,12 +979,12 @@ struct
     ; commands : (string, string * string) result list }
 
   let pp_report_status ppf { unpack; commands; } =
-    let sep ppf () = Fmt.pf ppf ";@ " in
+    let sep = Fmt.unit ";@ " in
 
     let pp_command = Fmt.result ~ok:Fmt.string ~error:(Fmt.pair Fmt.string Fmt.string) in
 
     Fmt.pf ppf "{ @[<hov>unpack = %a;@ \
-                         commands = %a;@] }"
+                         commands = [ %a ];@] }"
       (Fmt.result ~ok:(Fmt.unit "ok") ~error:Fmt.string) unpack
       (Fmt.hvbox @@ Fmt.list ~sep pp_command) commands
 

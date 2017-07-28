@@ -58,7 +58,7 @@ struct
         then [ "ALTERNATE" ] else [] ]
       |> List.concat
     in
-    Fmt.list ~sep:(fun ppf () -> Fmt.pf ppf " |@ ") Fmt.string ppf flags
+    Fmt.list ~sep:(Fmt.unit " |@ ") Fmt.string ppf flags
 end
 
 (* XXX(dinosaure): see this paper

@@ -80,7 +80,7 @@ struct
     3 + (Cstruct.len buff + 1) + 1 + (Array.fold_left (fun acc x -> List.length x * 4 + 1 + acc) 1 hash)
 
   let pp ppf index =
-    Fmt.pf ppf "{ @[<hov>hash = %a;@ \
+    Fmt.pf ppf "{ @[<hov>hash = [ %a ];@ \
                          mask = %x;@ \
                          buff = #raw;@] }"
       (Fmt.hvbox (Fmt.array (Fmt.list Entry.pp))) index.hash index.mask

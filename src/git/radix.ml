@@ -219,6 +219,6 @@ struct
 
   let pp ppv ppf radix =
     Fmt.pf ppf "[ %a ]"
-      (Fmt.hvbox (Fmt.list ~sep:(fun ppf () -> Fmt.pf ppf ";@ ") (fun ppf x -> ppv ppf x)))
+      (Fmt.hvbox (Fmt.list ~sep:(Fmt.unit ";@ ") (fun ppf x -> ppv ppf x)))
       (to_list radix)
 end
