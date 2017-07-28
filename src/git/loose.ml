@@ -1,20 +1,3 @@
-(*
- * Copyright (c) 2013-2017 Thomas Gazagnaire <thomas@gazagnaire.org>
- * and Romain Calascibetta <romain.calascibetta@gmail.com>
- *
- * Permission to use, copy, modify, and distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
- *
- * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
- * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
- * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
- * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
- * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
- * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- *)
-
 module type S =
 sig
   module Path : Path.S
@@ -139,33 +122,6 @@ module Make
     >>= function Ok v -> Lwt.return true
                | Error (`System err) -> Lwt.return false
 
-  (* XXX(dinosaure): it's come from [digestif] library. *)
-  let of_hex hex =
-    let code x = match x with
-      | '0' .. '9' -> Char.code x - 48
-      | 'A' .. 'F' -> Char.code x - 55
-      | 'a' .. 'z' -> Char.code x - 87
-      | _ -> raise (Invalid_argument "of_hex")
-    in
-
-    let wsp = function ' ' | '\t' | '\r' | '\n' -> true | _ -> false in
-    let fold_s f a s = let r = ref a in Bytes.iter (fun x -> r := f !r x) s; !r in
-
-    fold_s
-      (fun (res, i, acc) -> function
-         | chr when wsp chr -> (res, i, acc)
-         | chr ->
-           match acc, code chr with
-           | None, x -> (res, i, Some (x lsl 4))
-           | Some y, x -> Bytes.set res i (Char.unsafe_chr (x lor y)); (res, succ i, None))
-      (Bytes.create Digest.length, 0, None)
-      hex
-    |> function (_, _, Some _)  -> raise (Invalid_argument "of_hex")
-              | (res, i, _) ->
-                if i = Digest.length
-                then res
-                else (for i = i to Digest.length - 1 do Bytes.set res i '\000' done; res)
-
   (* XXX(dinosaure): make this function more resilient: if [of_hex] fails), avoid the path. *)
   let list ~root =
     let open Lwt.Infix in
@@ -186,7 +142,7 @@ module Make
              Lwt_list.fold_left_s
                (fun acc path ->
                   try
-                    (of_hex Path.(Bytes.unsafe_of_string ((to_string first) ^ (to_string path))))
+                    (Helper.BaseBytes.of_hex Path.((to_string first) ^ (to_string path)))
                     |> fun v -> Lwt.return (v :: acc)
                   with _ -> Lwt.return acc)
                acc
