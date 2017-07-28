@@ -47,7 +47,7 @@ sig
 
   val parents : t -> Hash.t list
   val tree : t -> Hash.t
-  val compare_with_date : t -> t -> int
+  val compare_by_date : t -> t -> int
 end
 
 module Make
@@ -237,10 +237,10 @@ module Make
   let parents { parents; _ } = parents
   let tree { tree; _ } = tree
 
-  let compare_with_date a b =
+  let compare_by_date a b =
     Int64.compare (fst a.author.User.date) (fst b.author.User.date)
 
-  let compare = compare_with_date
+  let compare = compare_by_date
 
   module Set = Set.Make(struct type nonrec t = t let compare = compare end)
   module Map = Map.Make(struct type nonrec t = t let compare = compare end)

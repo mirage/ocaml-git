@@ -75,8 +75,8 @@ sig
   (** [tree c] returns the hash of top-level {!Tree.t} of the Git Commit object
       [c]. *)
 
-  val compare_with_date : t -> t -> int
-  (** [compare_with_date a b] compares the Git Commit object [a] and [b] by the
+  val compare_by_date : t -> t -> int
+  (** [compare_by_date a b] compares the Git Commit object [a] and [b] by the
       date of the author. *)
 end
 
