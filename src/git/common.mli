@@ -106,7 +106,7 @@ sig
   val window       : unit -> window
 
   val default      : window -> t
-  val eval         : Cstruct.t -> Cstruct.t -> t -> [ `Await of t | `Flush of t | `Error of (t * error) | `End of t ]
+  val eval         : src:Cstruct.t -> dst:Cstruct.t -> t -> [ `Await of t | `Flush of t | `Error of (t * error) | `End of t ]
   val used_in      : t -> int
   val used_out     : t -> int
   val write        : t -> int
@@ -128,5 +128,5 @@ sig
   val finish     : t -> t
   val used_in    : t -> int
   val used_out   : t -> int
-  val eval       : Cstruct.t -> Cstruct.t -> t -> [ `Flush of t | `Await of t | `Error of (t * error) | `End of t ]
+  val eval       : src:Cstruct.t -> dst:Cstruct.t -> t -> [ `Flush of t | `Await of t | `Error of (t * error) | `End of t ]
 end

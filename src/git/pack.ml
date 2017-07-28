@@ -1321,7 +1321,7 @@ struct
     | _, _ -> assert false
 
   let writez src dst t x r crc off used_in z =
-    match Deflate.eval src dst z with
+    match Deflate.eval ~src ~dst z with
       | `Await z ->
         await { t with state = WriteZ { x; r; crc; off; ui = used_in; z; }
                      ; i_pos = Deflate.used_in z }
@@ -1342,7 +1342,7 @@ struct
       | `Error (z, exn) -> error t (Deflate_error exn)
 
   let writeh src dst t ((entry, entry_delta) as x) r crc off used_in h z =
-    match Deflate.eval t.h_tmp dst z with
+    match Deflate.eval ~src:t.h_tmp ~dst z with
     | `Await z ->
       (match H.eval src t.h_tmp h with
        | `Await h ->

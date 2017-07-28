@@ -286,7 +286,7 @@ struct
 
   let rec eval decoder = match D.eval decoder.dec with
     | `Await dec ->
-      (match Z.eval decoder.cur decoder.tmp decoder.inf with
+      (match Z.eval ~src:decoder.cur ~dst:decoder.tmp decoder.inf with
        | `Await inf ->
          `Await { decoder with cur = Cstruct.shift decoder.cur (Z.used_in inf)
                              ; inf = inf
@@ -442,7 +442,7 @@ module MakeDeflater (Z : Common.DEFLATE) (M : Common.MINIENC)
     ; used_in = 0 }
 
   let rec eval dst encoder =
-    match Z.eval encoder.internal dst encoder.z with
+    match Z.eval ~src:encoder.internal ~dst encoder.z with
     | `Await z ->
       (match E.eval encoder.internal encoder.e with
        | `Flush e ->

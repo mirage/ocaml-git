@@ -38,7 +38,7 @@ let refill off len t =
 let flush off len t =
   { t with out_pos = off; out_len = len; used_out = 0 }
 
-let eval src' dst' t =
+let eval ~src:src' ~dst:dst' t =
   if t.finish
   then `End t
   else if t.in_len - t.used_in = 0

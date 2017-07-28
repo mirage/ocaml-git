@@ -791,7 +791,7 @@ module MakePACKDecoder (H : HASH) (Inflate : Common.INFLATE)
   let hunks src t offset length consumed crc z h =
     match H.eval t.o_z h with
     | `Await h ->
-      (match Inflate.eval src t.o_z z with
+      (match Inflate.eval ~src ~dst:t.o_z z with
        | `Await z ->
          let consumed = consumed + Inflate.used_in z in
          let crc = Crc32.digest ~off:(t.i_off + t.i_pos) ~len:(Inflate.used_in z) crc src in
@@ -934,7 +934,7 @@ module MakePACKDecoder (H : HASH) (Inflate : Common.INFLATE)
       src t
 
   let unzip src t offset length consumed crc kind z =
-    match Inflate.eval src t.o_z z with
+    match Inflate.eval ~src ~dst:t.o_z z with
     | `Await z ->
       let crc = Crc32.digest ~off:(t.i_off + t.i_pos) ~len:(Inflate.used_in z) crc src in
       let consumed = consumed + Inflate.used_in z in

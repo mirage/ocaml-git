@@ -14,7 +14,7 @@ let no_flush   = Deflate.no_flush
 let sync_flush = Deflate.sync_flush
 let flush      = Deflate.flush
 
-let eval src' dst' t =
+let eval ~src:src' ~dst:dst' t =
   let src = B.from_bigstring @@ Cstruct.to_bigarray src' in
   let dst = B.from_bigstring @@ Cstruct.to_bigarray dst' in
 

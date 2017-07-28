@@ -12,7 +12,7 @@ let window () = Window.create ~proof:B.proof_bigstring
 
 let default = Inflate.default
 
-let eval src dst t =
+let eval ~src ~dst t =
   let src' = B.from_bigstring (Cstruct.to_bigarray src) in
   let dst' = B.from_bigstring (Cstruct.to_bigarray dst) in
   Inflate.eval src' dst' t
