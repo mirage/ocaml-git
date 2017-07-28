@@ -57,8 +57,8 @@ module BaseBytes :
 sig
   include Common.BASE with type t = Bytes.t
 
-  val to_hex : t -> Bytes.t
-  val of_hex : Bytes.t -> t
+  val to_hex : t -> string
+  val of_hex : string -> t
 end = struct
   open Bytes
 
@@ -73,53 +73,10 @@ end = struct
   module Set = Set.Make(struct type nonrec t = t let compare = compare end)
   module Map = Map.Make(struct type nonrec t = t let compare = compare end)
 
-  let to_hex hash =
-    let digest_size = Bytes.length hash in
-    let res = Bytes.create (digest_size * 2) in
-
-    let chr x = match x with
-      | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 -> Char.chr (48 + x)
-      | _ -> Char.chr (97 + (x - 10))
-    in
-
-    for i = 0 to digest_size - 1
-    do
-      let v = Char.code (Bytes.get hash i) in
-      Bytes.set res (i * 2) (chr (v lsr 4));
-      Bytes.set res (i * 2 + 1) (chr (v land 0x0F));
-    done;
-
-    res
-
-  let fold_s f a s =
-    let r = ref a in
-    Bytes.iter (fun x -> r := f !r x) s; !r
-
-  let of_hex hex =
-    let digest_size = Bytes.length hex / 2 in
-    let code x = match x with
-      | '0' .. '9' -> Char.code x - 48
-      | 'A' .. 'F' -> Char.code x - 55
-      | 'a' .. 'z' -> Char.code x - 87
-      | _ -> raise (Invalid_argument "of_hex")
-    in
-
-    let wsp = function ' ' | '\t' | '\r' | '\n' -> true | _ -> false in
-
-    fold_s
-      (fun (res, i, acc) -> function
-         | chr when wsp chr -> (res, i, acc)
-         | chr ->
-           match acc, code chr with
-           | None, x -> (res, i, Some (x lsl 4))
-           | Some y, x -> Bytes.set res i (Char.unsafe_chr (x lor y)); (res, succ i, None))
-      (Bytes.create digest_size, 0, None)
-      hex
-    |> function (_, _, Some _)  -> raise (Invalid_argument "of_hex")
-              | (res, i, _) ->
-                if i = digest_size
-                then res
-                else (for i = i to digest_size - 1 do Bytes.set res i '\000' done; res)
+  let to_hex x =
+    let `Hex v = Hex.of_string (Bytes.unsafe_to_string x) in v
+  let of_hex x =
+    Hex.to_string (`Hex x) |> Bytes.unsafe_of_string
 end
 
 module MakeDecoder (A : Common.ANGSTROM)

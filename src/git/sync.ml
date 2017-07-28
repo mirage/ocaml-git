@@ -61,8 +61,8 @@ module Make
     let of_string x = Bytes.unsafe_of_string x
     let to_string x = Bytes.unsafe_to_string x
 
-    let to_hex_string x = Helper.BaseBytes.to_hex x |> Bytes.unsafe_to_string
-    let of_hex_string x = Helper.BaseBytes.of_hex (Bytes.unsafe_of_string x)
+    let to_hex_string x = Helper.BaseBytes.to_hex x
+    let of_hex_string x = Helper.BaseBytes.of_hex x
   end
 
   module PACKDecoder = Unpack.MakePACKDecoder(Hash)(Inflate)

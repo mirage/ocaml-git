@@ -59,9 +59,9 @@ module Make (Digest : Ihash.IDIGEST with type t = Bytes.t
   and hash = Hash.t
 
   let hash_of_hex_string x =
-    Helper.BaseBytes.of_hex (Bytes.unsafe_of_string x)
+    Helper.BaseBytes.of_hex x
   let hash_to_hex_string x =
-    Helper.BaseBytes.to_hex x |> Bytes.unsafe_to_string
+    Helper.BaseBytes.to_hex x
 
   let pp_kind ppf = function
     | Blob   -> Fmt.string ppf "Blob"

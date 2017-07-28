@@ -619,7 +619,7 @@ struct
     end
 
   let hash_of_hex_string x =
-    Helper.BaseBytes.of_hex (Bytes.unsafe_of_string x)
+    Helper.BaseBytes.of_hex x
 
   let zero_id = String.make (Digest.length * 2) '0' |> hash_of_hex_string
 
@@ -1159,7 +1159,7 @@ struct
     flush k encoder
 
   let hash_to_hex_string x =
-    Helper.BaseBytes.to_hex x |> Bytes.to_string
+    Helper.BaseBytes.to_hex x
 
   let zero_id = Bytes.make Digest.length '\000'
 

@@ -73,7 +73,7 @@ module Make
   module Hash = Helper.BaseBytes
 
   let hash_of_hex_string x =
-    Helper.BaseBytes.of_hex (Bytes.unsafe_of_string x)
+    Helper.BaseBytes.of_hex x
 
   type t = string
 

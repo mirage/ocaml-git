@@ -24,8 +24,8 @@ module BaseBytes :
 sig
   include Common.BASE with type t = Bytes.t
 
-  val to_hex : t -> Bytes.t
-  val of_hex : Bytes.t -> t
+  val to_hex : t -> string
+  val of_hex : string -> t
 end
 
 module MakeDecoder (A : Common.ANGSTROM)

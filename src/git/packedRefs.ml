@@ -63,11 +63,10 @@ module Make
   and hash = Hash.t
 
   let hash_of_hex_string x =
-    Helper.BaseBytes.of_hex (Bytes.unsafe_of_string x)
+    Helper.BaseBytes.of_hex x
 
   let hash_to_hex_string x =
     Helper.BaseBytes.to_hex x
-    |> Bytes.to_string
 
   module A =
   struct
