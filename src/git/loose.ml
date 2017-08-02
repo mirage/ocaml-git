@@ -192,14 +192,7 @@ module Make
   struct
     type t = [ `Commit | `Blob | `Tag | `Tree ] * Cstruct.t
 
-    let kind =
-      let open Angstrom in
-
-      (string "blob" *> return `Blob
-      <|> string "commit" *> return `Commit
-      <|> string "tag" *> return `Tag
-      <|> string "tree" *> return `Tree)
-    (* XXX(dinosaure): come from [Value] but not exposed in the interface. *)
+    let kind = Value.A.kind
 
     let int64 =
       let open Angstrom in

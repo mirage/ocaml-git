@@ -39,7 +39,12 @@ sig
     | Tree   of Tree.t
     | Tag    of Tag.t
 
-  module A : S.ANGSTROM with type t = t
+  module A : sig
+    include S.ANGSTROM with type t = t
+
+    val kind : [ `Commit | `Tree | `Tag | `Blob ] Angstrom.t
+  end
+
   module F : S.FARADAY  with type t = t
   module D : S.DECODER  with type t = t
                          and type raw = Cstruct.t
