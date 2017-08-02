@@ -1,3 +1,7 @@
+### 1.11.2 (2017-08-02)
+
+- Update to conduit.1.0 and cohttp.0.99 (#226, @samoht)
+
 ### 1.11.1 (2017-07-25)
 
 - [git-unix] Fix linking issue of the `ogit` binary on some package
