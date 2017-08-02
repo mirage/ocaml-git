@@ -20,15 +20,13 @@ sig
   type t
   type state
 
-  module Digest : Ihash.IDIGEST
+  module Hash : Ihash.S
   module Path : Path.S
   module FileSystem : Fs.S with type path = Path.t
   module Inflate : S.INFLATE
   module Deflate : S.DEFLATE
-  module Hash : S.BASE
 
-  module Value : Value.S with type Hash.t = Hash.t
-                          and module Digest = Digest
+  module Value : Value.S with module Hash = Hash
                           and module Inflate = Inflate
                           and module Deflate = Deflate
 
@@ -73,13 +71,14 @@ sig
   type t
   type state
 
-  module Digest : Ihash.IDIGEST
+  module Hash : Ihash.S
   module Path : Path.S
   module FileSystem  : Fs.S with type path = Path.t
   module Inflate : S.INFLATE
-  module Hash : S.BASE with type t = Bytes.t
   module IDXDecoder : Index_pack.LAZY
-  module PACKDecoder : Unpack.DECODER with module Inflate = Inflate
+  module PACKDecoder
+    : Unpack.DECODER with module Hash = Hash
+                      and module Inflate = Inflate
 
   type error = [ FileSystem.File.error
                | FileSystem.Dir.error
@@ -108,8 +107,8 @@ sig
   type t
 
   (* XXX(dinosaure): Functorized module. *)
-  module Digest
-    : Ihash.IDIGEST
+  module Hash
+    : Ihash.S
   module Path
     : Path.S
   module Inflate
@@ -119,35 +118,29 @@ sig
   module FileSystem
     : Fs.S with type path = Path.t
 
-  module Hash
-    : S.BASE with type t = Bytes.t
   module Value
-    : Value.S with type Hash.t = Hash.t
-               and module Digest = Digest
+    : Value.S with module Hash = Hash
                and module Inflate = Inflate
                and module Deflate = Deflate
   module Reference
-    : Reference.S with type Hash.t = Hash.t
-                   and type Path.t = Path.t
-                   and module Digest = Digest
+    : Reference.S with module Hash = Hash
+                   and module Path = Path
                    and module Path = Path
                    and module FileSystem = FileSystem
 
   module IDXDecoder
-    : Index_pack.LAZY with type Hash.t = Hash.t
+    : Index_pack.LAZY with module Hash = Hash
   module PACKDecoder
-    : Unpack.DECODER with type Hash.t = Hash.t
+    : Unpack.DECODER with module Hash = Hash
                       and module Inflate = Inflate
   module PACKEncoder
-    : Pack.ENCODER with type Hash.t = Hash.t
+    : Pack.ENCODER with module Hash = Hash
                     and module Deflate = Deflate
 
   module Loose
     : LOOSE with type t = Value.t
              and type state = t
-             and type Hash.t = Hash.t
-             and type Path.t = Path.t
-             and module Digest = Digest
+             and module Hash = Hash
              and module Path = Path
              and module Inflate = Inflate
              and module Deflate = Deflate
@@ -156,9 +149,7 @@ sig
   module Pack
     : PACK with type t = PACKDecoder.Object.t
             and type state = t
-            and type Hash.t = Hash.t
-            and type Path.t = Path.t
-            and module Digest = Digest
+            and module Hash = Hash
             and module Path = Path
             and module FileSystem = FileSystem
             and module Inflate = Inflate
@@ -216,74 +207,52 @@ struct
 end
 
 module Make
-    (Digest : Ihash.IDIGEST with type t = Bytes.t
-                            and type buffer = Cstruct.t)
-    (Path : Path.S)
-    (FileSystem : Fs.S with type path = Path.t
-                        and type File.error = [ `System of string ]
-                        and type File.raw = Cstruct.t
-                        and type Dir.error = [ `System of string ]
-                        and type Mapper.error = [ `System of string ]
-                        and type Mapper.raw = Cstruct.t)
-    (Inflate : S.INFLATE)
-    (Deflate : S.DEFLATE)
-  : S with type Hash.t = Digest.t
-       and module Digest = Digest
-       and module Path = Path
-       and module FileSystem = FileSystem
-       and module Inflate = Inflate
-       and module Deflate = Deflate
+    (H : Ihash.S with type Digest.buffer = Cstruct.t
+                  and type hex = string)
+    (P : Path.S)
+    (FS : Fs.S with type path = P.t
+                and type File.error = [ `System of string ]
+                and type File.raw = Cstruct.t
+                and type Dir.error = [ `System of string ]
+                and type Mapper.error = [ `System of string ]
+                and type Mapper.raw = Cstruct.t)
+    (I : S.INFLATE)
+    (D : S.DEFLATE)
+  : S with module Hash = H
+       and module Path = P
+       and module FileSystem = FS
+       and module Inflate = I
+       and module Deflate = D
 = struct
-  module Digest     = Digest
-  module Path       = Path
-  module Inflate    = Inflate
-  module Deflate    = Deflate
-  module FileSystem = FileSystem
-
-  (* XXX(dinosaure): digest + hash. *)
-  module Hash =
-  struct
-    include Digest
-
-    let compare = Helper.BaseBytes.compare
-    let equal   = Helper.BaseBytes.equal
-    let pp      = Helper.BaseBytes.pp
-    let hash    = Helper.BaseBytes.hash
-
-    let of_string x = Bytes.unsafe_of_string x
-    let to_string x = Bytes.unsafe_to_string x
-
-    let to_hex_string x = Helper.BaseBytes.to_hex x
-    let of_hex_string x = Helper.BaseBytes.of_hex x
-
-    module Set = Helper.BaseBytes.Set
-    module Map = Helper.BaseBytes.Map
-  end
+  module Hash = H
+  module Path = P
+  module Inflate = I
+  module Deflate = D
+  module FileSystem = FS
 
   module LooseImpl
-    : Loose.S with type Hash.t = Hash.t
-               and type Path.t = Path.t
-               and module Digest = Digest
+    : Loose.S with module Hash = Hash
+               and module Path = Path
                and module Inflate = Inflate
                and module Deflate = Deflate
-    = Loose.Make(Digest)(Path)(FileSystem)(Inflate)(Deflate)
+   = Loose.Make(H)(P)(FS)(I)(D)
 
   module Value
-    : Value.S with type Hash.t = Hash.t
+    : Value.S with module Hash = Hash
+               and module Inflate = Inflate
+               and module Deflate = Deflate 
                and module Blob = LooseImpl.Blob
                and module Tree = LooseImpl.Tree
                and module Tag = LooseImpl.Tag
                and module Commit = LooseImpl.Commit
-               and module Digest = Digest
-               and module Inflate = Inflate
-               and module Deflate = Deflate
                and type t = LooseImpl.t
     = LooseImpl
 
-  module PACKDecoder = Unpack.MakeDecoder(Hash)(FileSystem.Mapper)(Inflate)
-  module PACKEncoder = Pack.MakePACKEncoder(Hash)(Deflate)
-  module Reference = Reference.Make(Digest)(Path)(FileSystem)
-  module IDXDecoder = Index_pack.Lazy(Hash)
+  module PACKDecoder = Unpack.MakeDecoder(H)(FS.Mapper)(I)
+  module PACKEncoder = Pack.MakePACKEncoder(H)(D)
+  module Reference = Reference.Make(H)(P)(FS)
+  module IDXDecoder = Index_pack.Lazy(H)
+
   module DoubleHash =
   struct
     type t = Hash.t * Hash.t
@@ -334,12 +303,11 @@ module Make
 
   module Loose =
   struct
-    module Digest = Digest
+    module Hash = Hash
     module Path = Path
     module FileSystem = FileSystem
     module Inflate = Inflate
     module Deflate = Deflate
-    module Hash = Hash
     module Value = Value
 
     type state = t
@@ -440,7 +408,6 @@ module Make
   struct
     type state = t
 
-    module Digest = Digest
     module Path = Path
     module FileSystem = FileSystem
     module Inflate = Inflate
@@ -505,7 +472,7 @@ module Make
       lookup state hash >|= function Some _ -> true | None -> false
 
     let path_idx state hash_idx =
-      let buf = Buffer.create (5 + Digest.length * 2) in
+      let buf = Buffer.create (5 + Hash.Digest.length * 2) in
       let ppf = Fmt.with_buffer buf in
 
       Fmt.pf ppf "pack-%a%!" Hash.pp hash_idx;
@@ -833,12 +800,10 @@ module Make
       ~result
       t hash
 
-  let hash_of_hex_string x = Hash.of_hex_string x
-
   let indexes git =
     let hash path =
       let basename = Path.basename (Path.rem_ext path) in
-      Scanf.sscanf basename "pack-%s" (fun x -> hash_of_hex_string x)
+      Scanf.sscanf basename "pack-%s" (fun x -> Hash.of_hex x)
     in
 
     let open Lwt.Infix in
@@ -1006,7 +971,7 @@ module Make
       [ error
       | `Invalid_reference of Reference.t ]
 
-    module Packed_refs = Packed_refs.Make(Digest)(Path)(FileSystem)
+    module Packed_refs = Packed_refs.Make(Hash)(Path)(FileSystem)
 
     let ( >>== ) v f =
       let open Lwt.Infix in

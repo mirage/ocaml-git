@@ -5,8 +5,7 @@ sig
 
   include Value.S
 
-  module Value : Value.S with type Hash.t = Hash.t
-                          and module Digest = Digest
+  module Value : Value.S with module Hash = Hash
                           and module Inflate = Inflate
                           and module Deflate = Deflate
 
@@ -68,25 +67,27 @@ sig
 end
 
 module Make
-    (Digest : Ihash.IDIGEST with type t = Bytes.t
-                            and type buffer = Cstruct.t)
-    (Path : Path.S)
-    (FileSystem : Fs.S with type path = Path.t
-                        and type File.error = [ `System of string ]
-                        and type File.raw = Cstruct.t)
-    (Inflate : S.INFLATE)
-    (Deflate : S.DEFLATE)
-  : S with type Hash.t = Digest.t
-       and module Digest = Digest
-       and module Path = Path
-       and module FileSystem = FileSystem
-       and module Inflate = Inflate
-       and module Deflate = Deflate
+    (H : Ihash.S with type Digest.buffer = Cstruct.t
+                  and type hex = string)
+    (P : Path.S)
+    (FS : Fs.S with type path = P.t
+                and type File.error = [ `System of string ]
+                and type File.raw = Cstruct.t)
+    (I : S.INFLATE)
+    (D : S.DEFLATE)
+  : S with module Hash = H
+       and module Path = P
+       and module FileSystem = FS
+       and module Inflate = I
+       and module Deflate = D
 = struct
-  module Path = Path
-  module FileSystem = FileSystem
+  module Path = P
+  module FileSystem = FS
 
-  module Value = Value.Make(Digest)(Inflate)(Deflate)
+  module Value : Value.S with module Hash = H
+                          and module Inflate = I
+                          and module Deflate = D
+    = Value.Make(H)(I)(D)
 
   include Value
 
@@ -101,14 +102,14 @@ module Make
     | #E.error as err -> E.pp_error ppf err
     | #FileSystem.File.error as err -> FileSystem.File.pp_error ppf err
 
-  let hash_get : Hash.t -> int -> int = fun h i -> Char.code @@ Bytes.get h i
+  let hash_get : Hash.t -> int -> int = fun h i -> Char.code @@ Hash.get h i
 
   let explode hash =
     Fmt.strf "%02x" (hash_get hash 0),
-    let buf = Buffer.create ((Digest.length - 1) * 2) in
+    let buf = Buffer.create ((Hash.Digest.length - 1) * 2) in
     let ppf = Fmt.with_buffer buf in
 
-    for i = 1 to Digest.length - 1
+    for i = 1 to Hash.Digest.length - 1
     do Fmt.pf ppf "%02x%!" (hash_get hash i) done;
 
     Buffer.contents buf
@@ -142,7 +143,7 @@ module Make
              Lwt_list.fold_left_s
                (fun acc path ->
                   try
-                    (Helper.BaseBytes.of_hex Path.((to_string first) ^ (to_string path)))
+                    (Hash.of_hex Path.((to_string first) ^ (to_string path)))
                     |> fun v -> Lwt.return (v :: acc)
                   with _ -> Lwt.return acc)
                acc

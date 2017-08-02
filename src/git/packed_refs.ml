@@ -17,10 +17,9 @@
 
 module type S =
 sig
-  module Digest     : Ihash.IDIGEST
-  module Path       : Path.S
+  module Hash : Ihash.S
+  module Path : Path.S
   module FileSystem : Fs.S
-  module Hash       : S.BASE
 
   type t = [ `Peeled of Hash.t | `Ref of string * Hash.t ] list
 
@@ -42,31 +41,22 @@ sig
 end
 
 module Make
-    (Digest : Ihash.IDIGEST with type t = Bytes.t
-                             and type buffer = Cstruct.t)
-    (Path : Path.S)
-    (FileSystem : Fs.S with type path = Path.t
-                        and type File.error = [ `System of string ]
-                        and type File.raw = Cstruct.t)
-  : S with type Hash.t = Digest.t
-       and module Digest = Digest
-       and module Path = Path
-       and module FileSystem = FileSystem
+    (H : Ihash.S with type Digest.buffer = Cstruct.t
+                  and type hex = string)
+    (P : Path.S)
+    (FS : Fs.S with type path = P.t
+                and type File.error = [ `System of string ]
+                and type File.raw = Cstruct.t)
+  : S with module Hash = H
+       and module Path = P
+       and module FileSystem = FS
 = struct
-  module Digest = Digest
-  module Path = Path
-  module FileSystem = FileSystem
-
-  module Hash = Helper.BaseBytes
+  module Hash = H
+  module Path = P
+  module FileSystem = FS
 
   type t = [ `Peeled of hash | `Ref of string * hash ] list
   and hash = Hash.t
-
-  let hash_of_hex_string x =
-    Helper.BaseBytes.of_hex x
-
-  let hash_to_hex_string x =
-    Helper.BaseBytes.to_hex x
 
   module A =
   struct
@@ -75,8 +65,8 @@ module Make
     open Angstrom
 
     let hash =
-      take (Digest.length * 2)
-      >>| hash_of_hex_string
+      take (Hash.Digest.length * 2)
+      >>| Hash.of_hex
 
     let end_of_line =
       skip_while (function '\r' | '\n' -> false | _ -> true)
@@ -126,7 +116,7 @@ module Make
       else write_string "\n" k e
 
     let write_hash x k e =
-      write_string (hash_to_hex_string x) k e
+      write_string (Hash.to_hex x) k e
 
     let write_info x k e = match x with
       | `Peeled hash ->

@@ -15,29 +15,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module type HASH =
-sig
-  type t = Bytes.t
-  type ctx
-  type buffer = Cstruct.t
-
-  val length    : int
-  val pp        : t Fmt.t
-
-  val init      : unit -> ctx
-  val feed      : ctx -> buffer -> unit
-  val get       : ctx -> t
-
-  val of_string : string -> t
-  val to_string : t -> string
-
-  val equal     : t -> t -> bool
-  val compare   : t -> t -> int
-
-  val of_hex_string : string -> t
-  val to_hex_string : t -> string
-end
-
 module Kind :
 sig
   type t =
@@ -59,7 +36,7 @@ end
 
 module type ENCODER =
 sig
-  module Hash : HASH
+  module Hash : Ihash.S
   module Deflate : S.DEFLATE
 
   (** The entry module. It used to able to manipulate the meta-data only needed
@@ -182,7 +159,7 @@ sig
         If you want to understand the algorithm, look the source code. *)
   end
 
-  module Radix : module type of Radix.Make(Bytes)
+  module Radix : module type of Radix.Make(struct type t = Hash.t let get = Hash.get let length _ = Hash.Digest.length end)
 
   module H :
   sig
@@ -316,6 +293,6 @@ sig
   val eval : Cstruct.t -> Cstruct.t -> t -> [ `Flush of t | `Await of t | `End of (t * Hash.t) | `Error of (t * error) ]
 end
 
-module MakePACKEncoder (Hash : HASH) (Deflate : S.DEFLATE) : ENCODER
-  with module Hash = Hash
-   and module Deflate = Deflate
+module MakePACKEncoder (H : Ihash.S with type Digest.buffer = Cstruct.t) (D : S.DEFLATE) : ENCODER
+  with module Hash = H
+   and module Deflate = D

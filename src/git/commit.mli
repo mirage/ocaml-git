@@ -17,18 +17,14 @@
 
 module type S =
 sig
-  module Digest
-    : Ihash.IDIGEST
-  (** The [Digest] module used to make the module. *)
+  module Hash
+    : Ihash.S
+  (** The [Hash] module used to make this interface. *)
 
   type t
   (** A Git Commit object. Which specifies the top-level {!Tree.t} for the
       snapshot of the project at a point; the author/{i committer} information and
       the commit message. *)
-
-  module Hash
-    : S.BASE
-  (** The Hash module. *)
 
   module D
     : S.DECODER  with type t = t
@@ -81,10 +77,9 @@ sig
 end
 
 module Make
-    (Digest : Ihash.IDIGEST with type t = Bytes.t
-                             and type buffer = Cstruct.t)
-  : S with type Hash.t = Digest.t
-       and module Digest = Digest
+    (H : Ihash.S with type Digest.buffer = Cstruct.t
+                  and type hex = string)
+  : S with module Hash = H
 (** The {i functor} to make the OCaml representation of the Git Commit object by
     a specific hash implementation. We constraint the {!IDIGEST} module to
     generate a {!Bytes.t} and compute a {Cstruct.t}. *)

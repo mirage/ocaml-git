@@ -44,6 +44,23 @@ sig
   val length : int
 end
 
+module type S =
+sig
+  include S.BASE
+
+  module Digest : IDIGEST with type t = t
+
+  val get : t -> int -> char
+
+  val to_string : t -> string
+  val of_string : string -> t
+
+  type hex
+
+  val to_hex : t -> hex
+  val of_hex : hex -> t
+end
+
 module type DIGEST =
 sig
   type t

@@ -17,23 +17,21 @@
 
 module type S =
 sig
-  module Digest
-    : Ihash.IDIGEST
+  module Hash
+    : Ihash.S
   module Inflate
     : S.INFLATE
   module Deflate
     : S.DEFLATE
 
-  module Hash
-    : S.BASE
   module Blob
-    : Blob.S with type Hash.t = Hash.t
+    : Blob.S   with type Hash.t = Hash.t
   module Commit
     : Commit.S with type Hash.t = Hash.t
   module Tree
-    : Tree.S with type Hash.t = Hash.t
+    : Tree.S   with type Hash.t = Hash.t
   module Tag
-    : Tag.S with type Hash.t = Hash.t
+    : Tag.S    with type Hash.t = Hash.t
 
   type t =
     | Blob   of Blob.t
@@ -57,24 +55,22 @@ sig
   include S.BASE with type t := t
 end
 
-module Make (Digest : Ihash.IDIGEST with type t = Bytes.t
-                                    and type buffer = Cstruct.t)
-    (Inflate : S.INFLATE)
-    (Deflate : S.DEFLATE)
-  : S with type Hash.t = Digest.t
-       and module Digest = Digest
-       and module Inflate = Inflate
-       and module Deflate = Deflate
+module Make (H : Ihash.S with type Digest.buffer = Cstruct.t
+                          and type hex = string)
+    (I : S.INFLATE)
+    (D : S.DEFLATE)
+  : S with module Hash = H
+       and module Inflate = I
+       and module Deflate = D
 = struct
-  module Digest = Digest
-  module Inflate = Inflate
-  module Deflate = Deflate
-  module Hash = Helper.BaseBytes
+  module Hash = H
+  module Inflate = I
+  module Deflate = D
 
-  module Blob   = Blob.Make(Digest)
-  module Commit = Commit.Make(Digest)
-  module Tree   = Tree.Make(Digest)
-  module Tag    = Tag.Make(Digest)
+  module Blob   = Blob.Make(H)
+  module Commit = Commit.Make(H)
+  module Tree   = Tree.Make(H)
+  module Tag    = Tag.Make(H)
 
   type t =
     | Blob   of Blob.t

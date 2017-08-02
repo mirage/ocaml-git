@@ -16,9 +16,7 @@
  *)
 
 module Make
-    (Store : Store.S with type Digest.t = Bytes.t
-                      and type Digest.buffer = Cstruct.t
-                      and type Hash.t = Bytes.t (* Digest.t: FIXME! *)
+    (Store : Store.S with type Hash.Digest.buffer = Cstruct.t
                       and type FileSystem.File.error = [ `System of string ]
                       and type FileSystem.File.raw = Cstruct.t
                       and type FileSystem.Dir.error = [ `System of string ]

@@ -15,29 +15,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module type HASH =
-sig
-  type t = Bytes.t
-  type ctx
-  type buffer = Cstruct.t
-
-  val length    : int
-  val pp        : t Fmt.t
-
-  val init      : unit -> ctx
-  val feed      : ctx -> buffer -> unit
-  val get       : ctx -> t
-
-  val of_string : string -> t
-  val to_string : t -> string
-
-  val equal     : t -> t -> bool
-  val compare   : t -> t -> int
-
-  val of_hex_string : string -> t
-  val to_hex_string : t -> string
-end
-
 module Option =
 struct
   let value ~default = function
@@ -80,8 +57,10 @@ struct
     | Tag -> Fmt.pf ppf "Tag"
 end
 
-module Entry (Hash : HASH) =
+module Entry (H : Ihash.S) =
 struct
+  module Hash = H
+
   type t =
     { hash_name   : int
     ; hash_object : Hash.t
@@ -249,8 +228,10 @@ struct
   let ( / ) = Int64.div
 end
 
-module MakeHunkEncoder (Hash : HASH) =
+module MakeHunkEncoder (H : Ihash.S) =
 struct
+  module Hash = H
+
   type error
 
   let pp_error = Fmt.nop (* no error. *)
@@ -571,9 +552,10 @@ struct
            ; o_pos = t.o_pos - off}
 end
 
-module MakeDelta (Hash : HASH) =
+module MakeDelta (H : Ihash.S) =
 struct
-  module Entry  = Entry(Hash)
+  module Hash = H
+  module Entry = Entry(H)
 
   type t =
     { mutable delta : delta }
@@ -868,7 +850,7 @@ end
 
 module type ENCODER =
 sig
-  module Hash : HASH
+  module Hash : Ihash.S
   module Deflate : S.DEFLATE
 
   module Entry :
@@ -919,7 +901,7 @@ sig
       int -> int -> ((Entry.t * t) list, error) result Lwt.t
   end
 
-  module Radix : module type of Radix.Make(Bytes)
+  module Radix : module type of Radix.Make(struct type t = Hash.t let get = Hash.get let length _ = Hash.Digest.length end)
 
   module H :
   sig
@@ -972,17 +954,19 @@ sig
   val eval : Cstruct.t -> Cstruct.t -> t -> [ `Flush of t | `Await of t | `End of (t * Hash.t) | `Error of (t * error) ]
 end
 
-module MakePACKEncoder (Hash : HASH) (Deflate : S.DEFLATE)
-  : ENCODER with module Hash = Hash
-             and module Deflate = Deflate =
+module MakePACKEncoder
+    (H : Ihash.S with type Digest.buffer = Cstruct.t)
+    (D : S.DEFLATE)
+  : ENCODER with module Hash = H
+             and module Deflate = D =
 struct
-  module Hash = Hash
-  module Deflate = Deflate
+  module Hash = H
+  module Deflate = D
 
-  module Entry = Entry(Hash)
-  module Delta = MakeDelta(Hash)
-  module Radix = Radix.Make(Bytes)
-  module H     = MakeHunkEncoder(Hash)
+  module Entry = Entry(H)
+  module Delta = MakeDelta(H)
+  module Radix = Radix.Make(struct type t = Hash.t let get = Hash.get let length _ = Hash.Digest.length end)
+  module H     = MakeHunkEncoder(H)
 
   type error =
     | Deflate_error of Deflate.error
@@ -1010,7 +994,7 @@ struct
     ; i_len   : int
     ; write   : int64
     ; radix   : (Crc32.t * int64) Radix.t
-    ; hash    : Hash.ctx
+    ; hash    : Hash.Digest.ctx
     ; h_tmp   : Cstruct.t
     ; state   : state }
   and k = Cstruct.t -> t -> res
@@ -1050,7 +1034,7 @@ struct
     | KindRaw
 
   let flush dst t =
-    Hash.feed t.hash (Cstruct.sub dst t.o_off t.o_pos);
+    Hash.Digest.feed t.hash (Cstruct.sub dst t.o_off t.o_pos);
     Flush t
 
   let await t = Wait t
@@ -1160,14 +1144,14 @@ struct
       loop !pos crc dst t
 
     let hash hash crc k dst t =
-      if t.o_len - t.o_pos >= Hash.length
+      if t.o_len - t.o_pos >= Hash.Digest.length
       then begin
-        let crc = Crc32.digest crc hash in
+        let crc = Crc32.digests crc hash in
 
-        Cstruct.blit hash 0 dst (t.o_off + t.o_pos) Hash.length;
+        Cstruct.blit_from_bytes hash 0 dst (t.o_off + t.o_pos) Hash.Digest.length;
 
-        k crc dst { t with o_pos = t.o_pos + Hash.length
-                         ; write = Int64.add t.write (Int64.of_int Hash.length) }
+        k crc dst { t with o_pos = t.o_pos + Hash.Digest.length
+                         ; write = Int64.add t.write (Int64.of_int Hash.Digest.length) }
       end else
         let rec loop rest crc dst t =
           if rest = 0
@@ -1178,16 +1162,16 @@ struct
             if n = 0
             then flush dst { t with state = Hash (loop rest crc) }
             else begin
-              let crc = Crc32.digest crc ~off:(Hash.length - rest) ~len:n hash in
+              let crc = Crc32.digests crc ~off:(Hash.Digest.length - rest) ~len:n hash in
 
-              Cstruct.blit hash (Hash.length - rest) dst (t.o_off + t.o_pos) n;
+              Cstruct.blit_from_bytes hash (Hash.Digest.length - rest) dst (t.o_off + t.o_pos) n;
 
               loop (rest - n) crc dst { t with o_pos = t.o_pos + n
                                              ; write = Int64.add t.write (Int64.of_int n) }
             end
         in
 
-        loop Hash.length crc dst t
+        loop Hash.Digest.length crc dst t
   end
 
   module KHash =
@@ -1201,11 +1185,11 @@ struct
       end else Flush { t with state = Hash (put_byte byte k) }
 
     let put_hash hash k dst t =
-      if t.o_len - t.o_pos >= Hash.length
+      if t.o_len - t.o_pos >= Hash.Digest.length
       then begin
-        Cstruct.blit_from_bytes hash 0 dst (t.o_off + t.o_pos) Hash.length;
-        k dst { t with o_pos = t.o_pos + Hash.length
-                     ; write = Int64.add t.write (Int64.of_int Hash.length) }
+        Cstruct.blit_from_string hash 0 dst (t.o_off + t.o_pos) Hash.Digest.length;
+        k dst { t with o_pos = t.o_pos + Hash.Digest.length
+                     ; write = Int64.add t.write (Int64.of_int Hash.Digest.length) }
       end else
         let rec loop rest dst t =
           if rest = 0
@@ -1216,21 +1200,21 @@ struct
             if n = 0
             then Flush { t with state = Hash (loop rest) }
             else begin
-              Cstruct.blit_from_bytes hash (Hash.length - rest) dst (t.o_off + t.o_pos) n;
+              Cstruct.blit_from_string hash (Hash.Digest.length - rest) dst (t.o_off + t.o_pos) n;
               Flush { t with state = Hash (loop (rest - n))
                            ; o_pos = t.o_pos + n
                            ; write = Int64.add t.write (Int64.of_int n) }
             end
         in
 
-        loop Hash.length dst t
+        loop Hash.Digest.length dst t
   end
 
   let hash dst t =
-    Hash.feed t.hash (Cstruct.sub dst t.o_off t.o_pos);
-    let hash = Hash.get t.hash in
+    Hash.Digest.feed t.hash (Cstruct.sub dst t.o_off t.o_pos);
+    let hash = Hash.Digest.get t.hash in
 
-    KHash.put_hash hash (fun dst t -> ok t hash) dst t
+    KHash.put_hash (Hash.to_string hash) (fun dst t -> ok t hash) dst t
 
   let writek kind entry entry_delta rest dst t =
     match kind, entry_delta with
@@ -1268,7 +1252,7 @@ struct
       in
 
       (KWriteK.header 0b111 (Int64.of_int length) Crc32.default
-       @@ fun crc -> KWriteK.hash (Cstruct.of_bytes src_hash) crc
+       @@ fun crc -> KWriteK.hash (Hash.to_string src_hash |> Bytes.unsafe_of_string) crc
        @@ fun crc dst t ->
        let z = Deflate.default 4 in
        let z = Deflate.flush (t.o_off + t.o_pos) (t.o_len - t.o_pos) z in
@@ -1543,6 +1527,6 @@ struct
     ; write = 0L
     ; radix = Radix.empty
     ; h_tmp
-    ; hash = Hash.init ()
+    ; hash = Hash.Digest.init ()
     ; state = (Header (header objects)) }
 end

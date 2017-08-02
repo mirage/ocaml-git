@@ -17,13 +17,10 @@
 
 module type S =
 sig
-  module Digest
-    : Ihash.IDIGEST
-
   type t = private Cstruct.t
 
   module Hash
-    : S.BASE
+    : Ihash.S
   module D
     : S.DECODER with type t = t
                  and type raw = Cstruct.t
@@ -43,16 +40,12 @@ sig
 end
 
 module Make
-    (Digest : Ihash.IDIGEST with type t = Bytes.t
-                             and type buffer = Cstruct.t)
-  : S with type Hash.t = Digest.t
-       and module Digest = Digest
+    (H : Ihash.S with type Digest.buffer = Cstruct.t)
+  : S with module Hash = H
 = struct
-  module Digest = Digest
+  module Hash = H
 
   type t = Cstruct.t
-
-  module Hash = Helper.BaseBytes
 
   module A =
   struct
@@ -199,12 +192,12 @@ module Make
   end
 
   let digest cs =
-    let ctx = Digest.init () in
+    let ctx = Hash.Digest.init () in
     let hdr = Fmt.strf "blob %Ld\000" (F.length cs) in
 
-    Digest.feed ctx (Cstruct.of_string hdr);
-    Digest.feed ctx cs;
-    Digest.get ctx
+    Hash.Digest.feed ctx (Cstruct.of_string hdr);
+    Hash.Digest.feed ctx cs;
+    Hash.Digest.get ctx
 
   let pp_cstruct ppf cs =
     for i = 0 to Cstruct.len cs - 1

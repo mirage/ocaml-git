@@ -17,10 +17,9 @@
 
 module type S =
 sig
-  module Digest     : Ihash.IDIGEST
-  module Path       : Path.S
+  module Hash : Ihash.S
+  module Path : Path.S
   module FileSystem : Fs.S
-  module Hash       : S.BASE
 
   type t = private string
 
@@ -56,24 +55,19 @@ sig
 end
 
 module Make
-    (Digest : Ihash.IDIGEST with type t = Bytes.t
-                             and type buffer = Cstruct.t)
-    (Path : Path.S)
-    (FileSystem : Fs.S with type path = Path.t
-                        and type File.error = [ `System of string ]
-                        and type File.raw = Cstruct.t)
-  : S with type Hash.t = Digest.t
-       and module Digest = Digest
-       and module Path = Path
-       and module FileSystem = FileSystem
+    (H : Ihash.S with type Digest.buffer = Cstruct.t
+                  and type hex = string)
+    (P : Path.S)
+    (FS : Fs.S with type path = P.t
+                and type File.error = [ `System of string ]
+                and type File.raw = Cstruct.t)
+  : S with module Hash = H
+       and module Path = P
+       and module FileSystem = FS
 = struct
-  module Digest = Digest
-  module Path = Path
-  module FileSystem = FileSystem
-  module Hash = Helper.BaseBytes
-
-  let hash_of_hex_string x =
-    Helper.BaseBytes.of_hex x
+  module Hash = H
+  module Path = P
+  module FileSystem = FS
 
   type t = string
 
@@ -122,8 +116,8 @@ module Make
                          | '['              -> false
                          | _                -> true)
 
-    let hash = take (Digest.length * 2)
-      >>| hash_of_hex_string
+    let hash = take (Hash.Digest.length * 2)
+      >>| Hash.of_hex
 
     let decoder =
       (string "ref: " *> refname <* end_of_line >>| fun refname -> Ref refname)

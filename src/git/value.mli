@@ -17,21 +17,17 @@
 
 module type S =
 sig
-  module Digest
-    : Ihash.IDIGEST
-  (** The [Digest] module used to make the module. *)
+  module Hash
+    : Ihash.S
+  (** The [Hash] module used to make the module. *)
 
   module Inflate
     : S.INFLATE
-  (** The [Inflate] module used to make the module. *)
+  (** The [Inflate] module used to make this interface. *)
 
   module Deflate
     : S.DEFLATE
-  (** The [Deflate] module used to make the module. *)
-
-  module Hash
-    : S.BASE
-  (** The Hash module. *)
+  (** The [Deflate] module used to make this interface. *)
 
   module Blob
     : Blob.S with type Hash.t = Hash.t
@@ -99,14 +95,13 @@ sig
 end
 
 module Make
-    (Digest : Ihash.IDIGEST with type t = Bytes.t
-                             and type buffer = Cstruct.t)
-    (Inflate : S.INFLATE)
-    (Deflate : S.DEFLATE)
-  : S with type Hash.t = Digest.t
-       and module Digest = Digest
-       and module Inflate = Inflate
-       and module Deflate = Deflate
+    (H : Ihash.S with type Digest.buffer = Cstruct.t
+                  and type hex = string)
+    (I : S.INFLATE)
+    (D : S.DEFLATE)
+  : S with module Hash = H
+       and module Inflate = I
+       and module Deflate = D
 (** The {i functor} to make the OCaml representation of the Git object by a
     specific hash, an {!Inflate} implementation for the compression and a {!Deflate}
     implementation for the decompression. We constraint the {!IDIGEST} module to

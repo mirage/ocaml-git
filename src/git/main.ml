@@ -55,7 +55,7 @@ module Store
   = Store.Make(Sha1)(Fpath)(Fs_lwt_unix)(C_inflate)(Ocaml_deflate)
 module Sync
   : module type of Sync.Make(SNet)(Store)(Capabilities)
-    with module Digest = Store.Digest
+    with module Hash = Store.Hash
   = Sync.Make(SNet)(Store)(Capabilities)
 module Negociator
   : module type of Negociator.Make(Store)

@@ -32,18 +32,9 @@ struct
       window.off window.len
 end
 
-module type HASH =
-sig
-  type t = Bytes.t
-
-  val pp        : t Fmt.t
-  val length    : int
-  val of_string : string -> t
-end
-
 module type H =
 sig
-  module Hash : HASH
+  module Hash : Ihash.S
 
   type error =
     | Reserved_opcode of int
@@ -109,9 +100,9 @@ sig
 end
 
 (* Implementation of deserialization of a list of hunks (from a PACK file) *)
-module MakeHunkDecoder (Hash : HASH) : H with module Hash = Hash  =
+module MakeHunkDecoder (H : Ihash.S) : H with module Hash = H  =
 struct
-  module Hash = Hash
+  module Hash = H
 
   type error =
     | Reserved_opcode of int
@@ -442,9 +433,9 @@ end
 
 module type P =
 sig
-  module Hash    : HASH
+  module Hash : Ihash.S
   module Inflate : S.INFLATE
-  module H       : H with module Hash = Hash
+  module H : H with module Hash = Hash
 
   type error =
     | Invalid_byte of int
@@ -491,14 +482,14 @@ sig
 end
 
 (* Implementatioon of deserialization of a PACK file *)
-module MakePACKDecoder (H : HASH) (Inflate : S.INFLATE)
-  : P with module Hash    = H
-       and module Inflate = Inflate
-       and module H       = MakeHunkDecoder(H)
+module MakePACKDecoder (H : Ihash.S) (I : S.INFLATE)
+  : P with module Hash = H
+       and module Inflate = I
+       and module H = MakeHunkDecoder(H)
 = struct
-  module Hash    = H
-  module Inflate = Inflate
-  module H       = MakeHunkDecoder(H)
+  module Hash = H
+  module Inflate = I
+  module H = MakeHunkDecoder(H)
 
   type error =
     | Invalid_byte of int
@@ -674,10 +665,10 @@ module MakePACKDecoder (H : HASH) (Inflate : S.INFLATE)
     else await { t with state = ctor (fun src t -> (get_byte[@tailcall]) ~ctor k src t) }
 
   let get_hash ~ctor k src t =
-    let buf = Buffer.create Hash.length in
+    let buf = Buffer.create Hash.Digest.length in
 
     let rec loop i src t =
-      if i = Hash.length
+      if i = Hash.Digest.length
       then k (Hash.of_string (Buffer.contents buf)) src t
       else
         get_byte ~ctor
@@ -903,11 +894,11 @@ module MakePACKDecoder (H : HASH) (Inflate : S.INFLATE)
     | 0b111 ->
       KObject.get_hash
         (fun hash src t ->
-          let crc = Crc32.digests crc hash in
+          let crc = Crc32.digests crc (Hash.to_string hash |> Bytes.unsafe_of_string) in
 
           Cont { t with state = Hunks { offset   = off
                                       ; length   = len
-                                      ; consumed = Hash.length + size_of_variable_length len
+                                      ; consumed = Hash.Digest.length + size_of_variable_length len
                                       ; crc
                                       ; z = Inflate.flush 0 (Cstruct.len t.o_z)
                                             @@ Inflate.refill (t.i_off + t.i_pos) (t.i_len - t.i_pos)
@@ -1111,7 +1102,7 @@ module MakePACKDecoder (H : HASH) (Inflate : S.INFLATE)
                   ; counter = Int32.pred t.counter }
       else { t with state = Object kind
                   ; counter = Int32.pred t.counter }
-    | Next _ -> { t with state = End (Hash.of_string (String.make Hash.length '\000')) }
+    | Next _ -> { t with state = End (Hash.of_string (String.make Hash.Digest.length '\000')) }
       (* XXX(dinosaure): in the local case, the user don't care about the hash of the PACK file. *)
     | _ -> raise (Invalid_argument "PACKDecoder.next_object: bad state")
 
@@ -1218,14 +1209,15 @@ end
 
 module type DECODER =
 sig
-  module Hash    : HASH
-  module Mapper  : Fs.MAPPER
+  module Hash : Ihash.S
+  module Mapper : Fs.MAPPER
   module Inflate : S.INFLATE
 
   module H : H with module Hash = Hash
   module P : P with module Hash = Hash
                 and module Inflate = Inflate
                 and module H = H
+
   type error =
     | Invalid_hash of Hash.t
     | Invalid_offset of int64
@@ -1294,18 +1286,17 @@ sig
   val get_with_allocation' : ?chunk:int -> ?h_tmp:Cstruct.t array -> t -> int64 -> Cstruct.t -> Inflate.window -> (Object.t, error) result Lwt.t
 end
 
-module MakeDecoder (Hash : HASH) (Mapper : Fs.MAPPER with type raw = Cstruct.t) (Inflate : S.INFLATE)
-  : DECODER with type Hash.t = Hash.t
-             and module Hash = Hash
-             and module Mapper = Mapper
-             and module Inflate = Inflate =
+module MakeDecoder (H : Ihash.S) (M : Fs.MAPPER with type raw = Cstruct.t) (I : S.INFLATE)
+  : DECODER with module Hash = H
+             and module Mapper = M
+             and module Inflate = I =
 struct
-  module Hash    = Hash
-  module Mapper  = Mapper
-  module Inflate = Inflate
+  module Hash = H
+  module Mapper = M
+  module Inflate = I
 
-  module P       = MakePACKDecoder(Hash)(Inflate)
-  module H       = MakeHunkDecoder(Hash)
+  module P = MakePACKDecoder(Hash)(Inflate)
+  module H = MakeHunkDecoder(Hash)
 
   type error =
     | Invalid_hash of Hash.t
@@ -1666,7 +1657,7 @@ struct
                      ; idx
                      ; rev
                      ; get = get' (* XXX(dinosaure): clash of name with [Lwt.geŧ]. *)
-                     ; hash = (Hash.of_string (String.make Hash.length '\000')) (* TODO *) })
+                     ; hash = (Hash.of_string (String.make Hash.Digest.length '\000')) (* TODO *) })
     | Error err -> Lwt.return (Error err)
 
   let idx { idx; _ } = idx

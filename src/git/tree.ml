@@ -17,8 +17,7 @@
 
 module type S =
 sig
-  module Digest : Ihash.IDIGEST
-  module Hash : S.BASE
+  module Hash : Ihash.S
 
   type entry =
     { perm : perm
@@ -46,13 +45,11 @@ sig
   val hashes : t -> Hash.t list
 end
 
-module Make (Digest : Ihash.IDIGEST with type t = Bytes.t
-                                    and type buffer = Cstruct.t)
-  : S with type Hash.t = Digest.t
-       and module Digest = Digest
+module Make (H : Ihash.S with type Digest.buffer = Cstruct.t
+                          and type hex = string)
+  : S with module Hash = H
 = struct
-  module Digest = Digest
-  module Hash = Helper.BaseBytes
+  module Hash = H
 
   type entry =
     { perm : perm
@@ -109,7 +106,7 @@ module Make (Digest : Ihash.IDIGEST with type t = Bytes.t
     let is_not_sp chr = chr <> ' '
     let is_not_nl chr = chr <> '\x00'
 
-    let hash = Angstrom.take Digest.length
+    let hash = Angstrom.take Hash.Digest.length
 
     let entry =
       let open Angstrom in
@@ -123,7 +120,7 @@ module Make (Digest : Ihash.IDIGEST with type t = Bytes.t
       >>= fun hash ->
         return { perm
                ; name
-               ; node = Bytes.unsafe_of_string hash }
+               ; node = Hash.of_string hash }
       <* commit
 
     let decoder = Angstrom.many entry
@@ -138,7 +135,12 @@ module Make (Digest : Ihash.IDIGEST with type t = Bytes.t
       let ( + ) = Int64.add in
 
       let entry acc x =
-        (string (string_of_perm x.perm)) + 1L + (string x.name) + 1L + (Int64.of_int Digest.length) + acc
+        (string (string_of_perm x.perm))
+        + 1L
+        + (string x.name)
+        + 1L
+        + (Int64.of_int Hash.Digest.length)
+        + acc
       in
       List.fold_left entry 0L t
 
@@ -151,7 +153,7 @@ module Make (Digest : Ihash.IDIGEST with type t = Bytes.t
       eval e [ !!string; char $ sp; !!string; char $ nl; !!string ]
         (string_of_perm t.perm)
         t.name
-        (Bytes.unsafe_to_string t.node)
+        (Hash.to_string t.node)
 
     let encoder e t =
       (Farfadet.list entry) e t
@@ -171,7 +173,7 @@ module Make (Digest : Ihash.IDIGEST with type t = Bytes.t
        @@ write_char sp
        @@ write_string x.name
        @@ write_char nl
-       @@ write_string (Bytes.unsafe_to_string x.node) k)
+       @@ write_string (Hash.to_string x.node) k)
         e
 
     let encoder x k e =
@@ -191,7 +193,7 @@ module Make (Digest : Ihash.IDIGEST with type t = Bytes.t
 
   let digest value =
     let tmp = Cstruct.create 0x100 in
-    Helper.fdigest (module Digest) (module E) ~tmp ~kind:"tree" ~length:F.length value
+    Helper.fdigest (module Hash.Digest) (module E) ~tmp ~kind:"tree" ~length:F.length value
 
   let equal   = (=)
   let compare = Pervasives.compare
@@ -200,4 +202,3 @@ module Make (Digest : Ihash.IDIGEST with type t = Bytes.t
   module Set = Set.Make(struct type nonrec t = t let compare = compare end)
   module Map = Map.Make(struct type nonrec t = t let compare = compare end)
 end
-

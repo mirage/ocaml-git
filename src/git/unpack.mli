@@ -33,19 +33,10 @@ sig
   (** A pretty-printer of {!t}. *)
 end
 
-module type HASH =
-sig
-  type t = Bytes.t
-
-  val pp        : t Fmt.t
-  val length    : int
-  val of_string : string -> t
-end
-
 (** The non-blocking decoder of the Hunks stream. *)
 module type H =
 sig
-  module Hash : HASH
+  module Hash : Ihash.S
 
   type error =
     | Reserved_opcode of int
@@ -178,12 +169,12 @@ sig
       the new decoder. *)
 end
 
-module MakeHunkDecoder (Hash : HASH) : H with module Hash = Hash
+module MakeHunkDecoder (Hash : Ihash.S) : H with module Hash = Hash
 
 (** The non-blocking decoder of the PACK stream. *)
 module type P =
 sig
-  module Hash    : HASH
+  module Hash    : Ihash.S
   module Inflate : S.INFLATE
   module H       : H with module Hash = Hash
 
@@ -402,7 +393,7 @@ sig
       {!kind} or {!length}).}} *)
 end
 
-module MakePACKDecoder (H : HASH) (Inflate : S.INFLATE) : P
+module MakePACKDecoder (H : Ihash.S) (Inflate : S.INFLATE) : P
   with module Hash = H
    and module Inflate = Inflate
    and module H = MakeHunkDecoder(H)
@@ -410,14 +401,14 @@ module MakePACKDecoder (H : HASH) (Inflate : S.INFLATE) : P
 (** The toolbox about the PACK file. *)
 module type DECODER =
 sig
-  module Hash    : HASH
-  module Mapper  : Fs.MAPPER
+  module Hash : Ihash.S
+  module Mapper : Fs.MAPPER
   module Inflate : S.INFLATE
 
-  module H       : H with module Hash = Hash
-  module P       : P with module Hash = Hash
-                      and module Inflate = Inflate
-                      and module H = H
+  module H : H with module Hash = Hash
+  module P : P with module Hash = Hash
+                and module Inflate = Inflate
+                and module H = H
 
   type error =
     | Invalid_hash of Hash.t
@@ -610,7 +601,7 @@ sig
   val get_with_allocation' : ?chunk:int -> ?h_tmp:Cstruct.t array -> t -> int64 -> Cstruct.t -> Inflate.window -> (Object.t, error) result Lwt.t
 end
 
-module MakeDecoder (H : HASH) (Mapper : Fs.MAPPER with type raw = Cstruct.t) (Inflate : S.INFLATE)
+module MakeDecoder (H : Ihash.S) (Mapper : Fs.MAPPER with type raw = Cstruct.t) (Inflate : S.INFLATE)
   : DECODER with type Hash.t = H.t
              and module Hash = H
              and module Mapper = Mapper

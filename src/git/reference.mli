@@ -17,8 +17,8 @@
 
 module type S =
 sig
-  module Digest
-    : Ihash.IDIGEST
+  module Hash
+    : Ihash.S
   (** The [Digest] module used to make the module. *)
 
   module Path
@@ -28,10 +28,6 @@ sig
   module FileSystem
     : Fs.S
   (** The [FileSystem] module used to make the module. *)
-
-  module Hash
-    : S.BASE
-  (** The Hash module. *)
 
   type t = private string
   (** A Git Reference object. Which contains a hash to point to an other
@@ -119,17 +115,15 @@ sig
 end
 
 module Make
-    (Digest : Ihash.IDIGEST with type t = Bytes.t
-                             and type buffer = Cstruct.t)
-    (Path : Path.S)
-    (FileSystem : Fs.S with type path = Path.t
-                        and type File.error = [ `System of string ]
-                        and type File.raw = Cstruct.t)
-  : S with type Hash.t = Digest.t
-       and type Path.t = Path.t
-       and module Digest = Digest
-       and module Path = Path
-       and module FileSystem = FileSystem
+    (H : Ihash.S with type Digest.buffer = Cstruct.t
+                  and type hex = string)
+    (P : Path.S)
+    (FS : Fs.S with type path = P.t
+                and type File.error = [ `System of string ]
+                and type File.raw = Cstruct.t)
+  : S with module Hash = H
+       and module Path = P
+       and module FileSystem = FS
 (** The {i functor} to make the OCaml representation of the Git Reference object
     by a specific hash, a defined path and an access to the file-system. We
     constraint the {!IDIGEST} module to generate a {Bytes.t} and compute a

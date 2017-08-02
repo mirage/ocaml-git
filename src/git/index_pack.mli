@@ -15,25 +15,9 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module type HASH =
-sig
-  type t = Bytes.t
-  type ctx
-  type buffer = Cstruct.t
-
-  val pp      : t Fmt.t
-  val length  : int
-  val feed    : ctx -> buffer -> unit
-  val get     : ctx -> t
-  val init    : unit -> ctx
-  val compare : t -> t -> int
-  val hash    : t -> int
-  val equal   : t -> t -> bool
-end
-
 module type LAZY =
 sig
-  module Hash : HASH
+  module Hash : Ihash.S
 
   type error =
     | Invalid_header of string
@@ -68,11 +52,11 @@ sig
   (** Fold in the IDX file. *)
 end
 
-module Lazy (Hash : HASH) : LAZY with module Hash = Hash
+module Lazy (H : Ihash.S) : LAZY with module Hash = H
 
 module type DECODER =
 sig
-  module Hash : HASH
+  module Hash : Ihash.S
 
   type error =
     | Invalid_byte of int
@@ -121,11 +105,11 @@ sig
       can't continue and sticks in this situation.}} *)
 end
 
-module Decoder (Hash : HASH) : DECODER with module Hash = Hash
+module Decoder (H : Ihash.S with type Digest.buffer = Cstruct.t) : DECODER with module Hash = H
 
 module type ENCODER =
 sig
-  module Hash : HASH
+  module Hash : Ihash.S
 
   type error
   (** We can't have an error to serialize a PACK file. *)
@@ -173,4 +157,4 @@ sig
      can't continue and sticks in this situation.}} *)
 end
 
-module Encoder (Hash : HASH) : ENCODER with module Hash = Hash
+module Encoder (H : Ihash.S with type Digest.buffer = Cstruct.t) : ENCODER with module Hash = H

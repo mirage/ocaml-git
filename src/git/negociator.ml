@@ -65,9 +65,8 @@ end
    https://github.com/ocamllabs/papers/blob/master/irmin/2014.08.matthieu/rapport.pdf *)
 
 module Make
-    (Store : Store.S with type Digest.t = Bytes.t
-                      and type Digest.buffer = Cstruct.t
-                      and type Hash.t = Bytes.t (* Digest.t: FIXME! *)
+    (Store : Store.S with type Hash.Digest.buffer = Cstruct.t
+                      and type Hash.hex = string
                       and type FileSystem.File.error = [ `System of string ]
                       and type FileSystem.File.raw = Cstruct.t
                       and type FileSystem.Dir.error = [ `System of string ]
@@ -91,9 +90,9 @@ module Make
 
   module Pq      = Psq.Make(Store.Hash)(V)
   module Decoder
-    : module type of Smart.Decoder(Store.Digest)
+    : module type of Smart.Decoder(Store.Hash)
         with type Hash.t = Store.Hash.t
-    = Smart.Decoder(Store.Digest)
+    = Smart.Decoder(Store.Hash)
   (* XXX(dinosaure): short-cut of the smart decoder module, the common way is to
      load the [Sync] module but, I don't want. And because we annotated some
      constraints about the type (and specifically about the hash), we can

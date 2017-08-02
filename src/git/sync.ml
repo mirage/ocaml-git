@@ -32,9 +32,8 @@ end
 
 module Make
     (Net : NET)
-    (Store : Store.S with type Digest.t = Bytes.t
-                      and type Digest.buffer = Cstruct.t
-                      and type Hash.t = Bytes.t (* Digest.t: FIXME! *)
+    (Store : Store.S with type Hash.Digest.buffer = Cstruct.t
+                      and type Hash.hex = string
                       and type FileSystem.File.error = [ `System of string ]
                       and type FileSystem.File.raw = Cstruct.t
                       and type FileSystem.Dir.error = [ `System of string ]
@@ -42,34 +41,22 @@ module Make
                       and type FileSystem.Mapper.raw = Cstruct.t)
     (Capabilities : C)
 = struct
-  module Client = Smart.Client(Store.Digest)
-  module Digest = Store.Digest
+  module Client = Smart.Client(Store.Hash)
+  module Hash = Store.Hash
   module Inflate = Store.Inflate
   module Deflate = Store.Deflate
   module Path = Store.Path
   module Revision = Revision.Make(Store)
 
-  module Hash =
-  struct
-    include Store.Digest
-
-    let compare = Helper.BaseBytes.compare
-    let equal   = Helper.BaseBytes.equal
-    let pp      = Helper.BaseBytes.pp
-    let hash    = Helper.BaseBytes.hash
-
-    let of_string x = Bytes.unsafe_of_string x
-    let to_string x = Bytes.unsafe_to_string x
-
-    let to_hex_string x = Helper.BaseBytes.to_hex x
-    let of_hex_string x = Helper.BaseBytes.of_hex x
-  end
-
-  module PACKDecoder = Unpack.MakePACKDecoder(Hash)(Inflate)
-  module PACKEncoder = Pack.MakePACKEncoder(Hash)(Deflate)
+  module PACKDecoder = Unpack.MakePACKDecoder
+      (Hash)
+      (Inflate)
+  module PACKEncoder = Pack.MakePACKEncoder
+      (Hash)
+      (Deflate)
   module IDXEncoder  = Index_pack.Encoder(Hash)
   module Decoder     = Unpack.MakeDecoder(Hash)(Store.FileSystem.Mapper)(Inflate)
-  module Tree        : module type of Radix.Make(Bytes) = Radix.Make(Bytes)
+  module Tree        = PACKEncoder.Radix
 
   type error =
     [ `SmartPack of string
@@ -323,7 +310,7 @@ module Make
     type pack_state =
       { pack  : PACKDecoder.t
       ; tree  : (Crc32.t * int64) Tree.t
-      ; hash  : Hash.ctx option
+      ; hash  : Hash.Digest.ctx option
       ; rofs  : (PACKDecoder.H.hunks * Crc32.t * int64) list
       ; rext  : (PACKDecoder.H.hunks * Crc32.t * int64) list
       ; graph : int Graph.t
@@ -374,7 +361,7 @@ module Make
 
                 let hash = match t.hash with
                   | Some ctx ->
-                    if n > 0 then Hash.feed ctx (Cstruct.sub o 0 n);
+                    if n > 0 then Hash.Digest.feed ctx (Cstruct.sub o 0 n);
                     Some ctx
                   | None ->
                     let hdr_kind = match PACKDecoder.kind pack with
@@ -386,10 +373,10 @@ module Make
                     in
 
                     let hdr = Fmt.strf "%s %Ld\000" hdr_kind (Int64.of_int (PACKDecoder.length pack)) in
-                    let ctx = Hash.init () in
+                    let ctx = Hash.Digest.init () in
 
-                    Hash.feed ctx (Cstruct.of_string hdr);
-                    if n > 0 then Hash.feed ctx (Cstruct.sub o 0 n);
+                    Hash.Digest.feed ctx (Cstruct.of_string hdr);
+                    if n > 0 then Hash.Digest.feed ctx (Cstruct.sub o 0 n);
 
                     Some ctx
                 in
@@ -407,7 +394,7 @@ module Make
                     | PACKDecoder.Tag
                     | PACKDecoder.Blob), Some ctx ->
 
-                    let hash = Hash.get ctx in
+                    let hash = Hash.Digest.get ctx in
 
                     { t with pack = PACKDecoder.next_object pack
                            ; hash = None
@@ -442,12 +429,12 @@ module Make
                     | PACKDecoder.Tag
                     | PACKDecoder.Blob) as kind, None ->
                     let hdr = Fmt.strf "%s 0\000" (string_of_kind kind) in
-                    let ctx = Hash.init () in
+                    let ctx = Hash.Digest.init () in
 
                     assert (PACKDecoder.length pack = 0);
-                    Hash.feed ctx (Cstruct.of_string hdr);
+                    Hash.Digest.feed ctx (Cstruct.of_string hdr);
 
-                    let hash = Hash.get ctx in
+                    let hash = Hash.Digest.get ctx in
 
                     { t with pack = PACKDecoder.next_object pack
                            ; hash = None
@@ -471,7 +458,7 @@ module Make
       | result -> Lwt.return (Error (`Clone (err_unexpected_result result)))
 
     let hash_of_object o =
-      let ctx = Hash.init () in
+      let ctx = Hash.Digest.init () in
 
       let hdr_kind = match o.Decoder.Object.kind with
         | `Commit -> "commit"
@@ -482,10 +469,10 @@ module Make
 
       let hdr = Fmt.strf "%s %Ld\000" hdr_kind o.Decoder.Object.length in
 
-      Hash.feed ctx (Cstruct.of_string hdr);
-      if Cstruct.len o.Decoder.Object.raw > 0 then Hash.feed ctx o.Decoder.Object.raw;
+      Hash.Digest.feed ctx (Cstruct.of_string hdr);
+      if Cstruct.len o.Decoder.Object.raw > 0 then Hash.Digest.feed ctx o.Decoder.Object.raw;
 
-      Hash.get ctx
+      Hash.Digest.get ctx
 
     exception Leave of Decoder.error
 

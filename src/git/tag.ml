@@ -17,11 +17,9 @@
 
 module type S =
 sig
-  module Digest : Ihash.IDIGEST
+  module Hash : Ihash.S
 
   type t
-
-  module Hash : S.BASE
 
   module D : S.DECODER  with type t = t
                          and type raw = Cstruct.t
@@ -41,13 +39,11 @@ sig
   val obj : t -> Hash.t
 end
 
-module Make (Digest : Ihash.IDIGEST with type t = Bytes.t
-                                    and type buffer = Cstruct.t)
-  : S with type Hash.t = Digest.t
-       and module Digest = Digest
+module Make (H : Ihash.S with type Digest.buffer = Cstruct.t
+                          and type hex = string)
+  : S with module Hash = H
 = struct
-  module Digest = Digest
-  module Hash = Helper.BaseBytes
+  module Hash = H
 
   type t =
     { obj     : Hash.t
@@ -57,11 +53,6 @@ module Make (Digest : Ihash.IDIGEST with type t = Bytes.t
     ; message : string }
   and kind = Blob | Commit | Tag | Tree
   and hash = Hash.t
-
-  let hash_of_hex_string x =
-    Helper.BaseBytes.of_hex x
-  let hash_to_hex_string x =
-    Helper.BaseBytes.to_hex x
 
   let pp_kind ppf = function
     | Blob   -> Fmt.string ppf "Blob"
@@ -99,7 +90,7 @@ module Make (Digest : Ihash.IDIGEST with type t = Bytes.t
     let lf = Angstrom.char '\x0a'
     let is_not_lf chr = chr <> '\x0a'
 
-    let obj = Angstrom.take (Digest.length * 2)
+    let obj = Angstrom.take (Hash.Digest.length * 2)
 
     let kind =
       let open Angstrom in
@@ -144,7 +135,7 @@ module Make (Digest : Ihash.IDIGEST with type t = Bytes.t
                         <* commit
       >>= fun tagger -> take 1 *> commit *> to_end 1024 <* commit
       >>= fun message ->
-        return { obj = hash_of_hex_string obj
+        return { obj = Hash.of_hex obj
                ; kind
                ; tag
                ; tagger
@@ -164,7 +155,7 @@ module Make (Digest : Ihash.IDIGEST with type t = Bytes.t
         | Some user -> (string "tagger") + 1L + (User.F.length user) + 1L
         | None -> 0L
       in
-      (string "object") + 1L + (Int64.of_int (Digest.length * 2)) + 1L
+      (string "object") + 1L + (Int64.of_int (Hash.Digest.length * 2)) + 1L
       + (string "type") + 1L + (string (string_of_kind t.kind)) + 1L
       + (string "tag") + 1L + (string t.tag) + 1L
       + user_length
@@ -189,7 +180,7 @@ module Make (Digest : Ihash.IDIGEST with type t = Bytes.t
              ; string $ "tag"; char $ sp; !!string; char $ lf
              ; !!(option tagger); char $ lf
              ; !!string ]
-        (hash_to_hex_string t.obj)
+        (Hash.to_hex t.obj)
         (string_of_kind t.kind)
         t.tag
         t.tagger
@@ -224,7 +215,7 @@ module Make (Digest : Ihash.IDIGEST with type t = Bytes.t
 
       (write_string "object"
        @@ write_char sp
-       @@ write_string (hash_to_hex_string x.obj)
+       @@ write_string (Hash.to_hex x.obj)
        @@ write_char lf
        @@ write_string "type"
        @@ write_char sp
@@ -247,7 +238,7 @@ module Make (Digest : Ihash.IDIGEST with type t = Bytes.t
 
   let digest value =
     let tmp = Cstruct.create 0x100 in
-    Helper.fdigest (module Digest) (module E) ~tmp ~kind:"tag" ~length:F.length value
+    Helper.fdigest (module Hash.Digest) (module E) ~tmp ~kind:"tag" ~length:F.length value
 
   let equal   = (=)
   let compare = Pervasives.compare
@@ -256,4 +247,3 @@ module Make (Digest : Ihash.IDIGEST with type t = Bytes.t
   module Set = Set.Make(struct type nonrec t = t let compare = compare end)
   module Map = Map.Make(struct type nonrec t = t let compare = compare end)
 end
-

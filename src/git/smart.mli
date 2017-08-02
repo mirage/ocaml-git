@@ -204,13 +204,9 @@ val pp_capability : capability Fmt.t
 
 module type DECODER =
 sig
-  module Digest
-    : Ihash.IDIGEST
-  (** The [Digest] module used to make the module. *)
-
   module Hash
-    : S.BASE
-  (** The Hash module. *)
+    : Ihash.S
+  (** The [Digest] module used to make the module. *)
 
   type decoder
   (** The type decoder. *)
@@ -422,21 +418,16 @@ sig
 end
 
 module Decoder
-    (Digest : Ihash.IDIGEST with type t = Bytes.t)
-  : DECODER with type Hash.t = Digest.t
-             and module Digest = Digest
+    (H : Ihash.S with type hex = string)
+  : DECODER with module Hash = H
 (** The {i functor} to make the Decoder by a specific hash implementation. We
     constraint the {!IDGEST} module to generate a {!Bytes.t}. *)
 
 module type ENCODER =
 sig
-  module Digest
-    : Ihash.IDIGEST
-  (** The [Digest] module used to make the module. *)
-
   module Hash
-    : S.BASE
-  (** The Hash module. *)
+    : Ihash.S
+  (** The [Digest] module used to make the module. *)
 
   type encoder
   (** The type encoder. *)
@@ -537,29 +528,24 @@ sig
 end
 
 module Encoder
-    (Digest : Ihash.IDIGEST with type t = Bytes.t)
-  : ENCODER with type Hash.t = Digest.t
-             and module Digest = Digest
+    (H : Ihash.S with type hex = string)
+  : ENCODER with module Hash = H
 (** The {i functor} to make the Encoder by a specific hash implementation. We
     constraint the {!IDIGEST} module to generate a {!Bytes.t}. *)
 
 module type CLIENT =
 sig
-  module Digest
-    : Ihash.IDIGEST with type t = Bytes.t
+  module Hash
+    : Ihash.S
   (** The [Digest] module used to make the module. *)
 
   module Decoder
-    : DECODER with type Hash.t = Digest.t and module Digest = Digest
+    : DECODER with module Hash = Hash
   (** The {!Decoder} module constrained by the same [Digest] module. *)
 
   module Encoder
-    : ENCODER with type Hash.t = Digest.t and module Digest = Digest
+    : ENCODER with module Hash = Hash
   (** The {!Encoder} module constrained by the same [Digest] module. *)
-
-  module Hash
-    : S.BASE
-  (** The Hash module. *)
 
   type context
   (** The type context. *)
@@ -623,9 +609,8 @@ sig
 end
 
 module Client
-    (Digest : Ihash.IDIGEST with type t = Bytes.t)
-  : CLIENT with type Hash.t = Digest.t
-            and module Digest = Digest
+    (H : Ihash.S with type hex = string)
+  : CLIENT with module Hash = H
 (** The {i functor} to make the Client by a specific hash
     implementation. we constraint the {!IDIGEST} module to
     generate a {Bytes.t}. *)

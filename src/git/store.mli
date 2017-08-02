@@ -23,33 +23,28 @@ sig
   type state
   (** The type of the Git state. *)
 
-  module Digest
-    : Ihash.IDIGEST
-  (** The [Digest] module used to make the module. *)
+  module Hash
+    : Ihash.S
+  (** The [Hash] module used to make this interface. *)
 
   module Path
     : Path.S
-  (** The [Path] module used to make the module. *)
+  (** The [Path] module used to make this interface. *)
 
   module FileSystem
     : Fs.S with type path = Path.t
-  (** The [FileSystem] module used to make the module. *)
+  (** The [FileSystem] module used to make this interface. *)
 
   module Inflate
     : S.INFLATE
-  (** The [Inflate] module used to make the module. *)
+  (** The [Inflate] module used to make this interface. *)
 
   module Deflate
     : S.DEFLATE
-  (** The [Deflate] module used to make the module. *)
-
-  module Hash
-    : S.BASE
-  (** The Hash module. *)
+  (** The [Deflate] module used to make this interface. *)
 
   module Value
-    : Value.S with type Hash.t = Hash.t
-               and module Digest = Digest
+    : Value.S with module Hash = Hash
                and module Inflate = Inflate
                and module Deflate = Deflate
   (** The Value module, which represents the Git object. *)
@@ -325,32 +320,28 @@ sig
   type state
   (** The type of the Git state. *)
 
-  module Digest
-    : Ihash.IDIGEST
-  (** The [Digest] module used to make the module. *)
+  module Hash
+    : Ihash.S
+  (** The [Hash] module used to make this interface. *)
 
   module Path
     : Path.S
-  (** The [Path] module used to make the module. *)
+  (** The [Path] module used to make this interface. *)
 
   module FileSystem
     : Fs.S with type path = Path.t
-  (** The [FileSystem] module used to make the module. *)
+  (** The [FileSystem] module used to make this interface. *)
 
   module Inflate
     : S.INFLATE
-  (** The [Inflate] module used to make the module. *)
-
-  module Hash
-    : S.BASE with type t = Bytes.t
-  (** The Hash module. *)
+  (** The [Inflate] module used to make this interface. *)
 
   module IDXDecoder
     : Index_pack.LAZY
   (** The [IDXDecoder] module, which decodes {i IDX} file. *)
 
   module PACKDecoder
-    : Unpack.DECODER with type Hash.t = Hash.t
+    : Unpack.DECODER with module Hash = Hash
                       and module Inflate = Inflate
   (** The [PACKDecoder] module, which decodes {i PACK} file. *)
 
@@ -510,8 +501,8 @@ sig
   type t
   (** The type of the git repository. *)
 
-  module Digest
-    : Ihash.IDIGEST
+  module Hash
+    : Ihash.S
   (** The [Digest] module used to make the module. *)
 
   module Path
@@ -530,47 +521,36 @@ sig
     : Fs.S with type path = Path.t
   (** The [FileSystem] module used to make the module. *)
 
-  module Hash
-    : S.BASE with type t = Bytes.t
-  (** The Hash module. This module is constrained by [type t = Bytes.t]. This
-      constraint appear on the {!PACKDecoder}, {!PACKEncoder} and {!IDXDecoder}
-      module. *)
-
   module Value
-    : Value.S with type Hash.t = Hash.t
-               and module Digest = Digest
+    : Value.S with module Hash = Hash
                and module Inflate = Inflate
                and module Deflate = Deflate
   (** The Value module, which represents the Git object. *)
 
   module Reference
-    : Reference.S with type Hash.t = Hash.t
-                   and type Path.t = Path.t
-                   and module Digest = Digest
+    : Reference.S with module Hash = Hash
                    and module Path = Path
                    and module FileSystem = FileSystem
   (** The Reference module, which represents the Git reference. *)
 
   module IDXDecoder
-    : Index_pack.LAZY with type Hash.t = Hash.t
+    : Index_pack.LAZY with module Hash = Hash
   (** The [IDXDecoder] module used to decode an {i IDX} file. *)
 
   module PACKDecoder
-    : Unpack.DECODER with type Hash.t = Hash.t
+    : Unpack.DECODER with module Hash = Hash
                       and module Inflate = Inflate
   (** The [PACKDecoder] module used to decode a {i PACK} file. *)
 
   module PACKEncoder
-    : Pack.ENCODER with type Hash.t = Hash.t
+    : Pack.ENCODER with module Hash = Hash
                     and module Deflate = Deflate
   (** The [PACKEncoder] module used to encoder a {i PACK} file. *)
 
   module Loose
     : LOOSE with type t = Value.t
              and type state = t
-             and type Hash.t = Hash.t
-             and type Path.t = Path.t
-             and module Digest = Digest
+             and module Hash = Hash
              and module Path = Path
              and module FileSystem = FileSystem
              and module Inflate = Inflate
@@ -581,9 +561,7 @@ sig
   module Pack
     : PACK with type t = PACKDecoder.Object.t
             and type state = t
-            and type Hash.t = Hash.t
-            and type Path.t = Path.t
-            and module Digest = Digest
+            and module Hash = Hash
             and module Path = Path
             and module FileSystem = FileSystem
             and module Inflate = Inflate
@@ -836,20 +814,19 @@ sig
 end
 
 module Make
-    (Digest : Ihash.IDIGEST with type buffer = Cstruct.t
-                             and type t = Bytes.t)
-    (Path : Path.S)
-    (FileSystem : Fs.S with type path = Path.t
-                        and type File.error = [ `System of string ]
-                        and type File.raw = Cstruct.t
-                        and type Dir.error = [ `System of string ]
-                        and type Mapper.error = [`System of string ]
-                        and type Mapper.raw = Cstruct.t)
+    (H : Ihash.S with type Digest.buffer = Cstruct.t
+                  and type hex = string)
+    (P : Path.S)
+    (FS : Fs.S with type path = P.t
+                and type File.error = [ `System of string ]
+                and type File.raw = Cstruct.t
+                and type Dir.error = [ `System of string ]
+                and type Mapper.error = [`System of string ]
+                and type Mapper.raw = Cstruct.t)
     (Inflate : S.INFLATE)
     (Deflate : S.DEFLATE)
-  : S with type Hash.t = Digest.t
-       and module Digest = Digest
-       and module Path = Path
+  : S with module Hash = H
+       and module Path = P
        and module Inflate = Inflate
        and module Deflate = Deflate
-       and module FileSystem = FileSystem
+       and module FileSystem = FS

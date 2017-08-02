@@ -122,8 +122,7 @@ let pp_capability ppf = function
 
 module type DECODER =
 sig
-  module Digest : Ihash.IDIGEST
-  module Hash : S.BASE
+  module Hash : Ihash.S
 
   type decoder
 
@@ -214,8 +213,7 @@ end
 
 module type ENCODER =
 sig
-  module Digest : Ihash.IDIGEST
-  module Hash : S.BASE
+  module Hash : Ihash.S
 
   type encoder
 
@@ -276,10 +274,10 @@ end
 
 module type CLIENT =
 sig
-  module Digest : Ihash.IDIGEST with type t = Bytes.t
-  module Decoder : DECODER with type Hash.t = Digest.t and module Digest = Digest
-  module Encoder : ENCODER with type Hash.t = Digest.t and module Digest = Digest
-  module Hash : S.BASE
+  module Hash : Ihash.S
+
+  module Decoder : DECODER with module Hash = Hash
+  module Encoder : ENCODER with module Hash = Hash
 
   type context
 
@@ -319,12 +317,10 @@ sig
   val context : Encoder.git_proto_request -> context * process
 end
 
-module Decoder (Digest : Ihash.IDIGEST with type t = Bytes.t)
-  : DECODER with type Hash.t = Digest.t
-             and module Digest = Digest =
+module Decoder (H : Ihash.S with type hex = string)
+  : DECODER with module Hash = H =
 struct
-  module Digest = Digest
-  module Hash   = Helper.BaseBytes
+  module Hash = H
 
   (* XXX(dinosaure): Why this decoder? We can use Angstrom instead or another
      library. It's not my first library about the parsing (see Mr. MIME) and I
@@ -618,15 +614,12 @@ struct
       loop decoder.max
     end
 
-  let hash_of_hex_string x =
-    Helper.BaseBytes.of_hex x
-
-  let zero_id = String.make (Digest.length * 2) '0' |> hash_of_hex_string
+  let zero_id = String.make Hash.Digest.length '\000' |> Hash.of_string
 
   let p_hash decoder =
     p_while1 (function '0' .. '9' | 'a' .. 'f' -> true | _ -> false) decoder
     |> Cstruct.to_string
-    |> hash_of_hex_string
+    |> Hash.of_hex
 
   let not_null = (<>) '\000'
 
@@ -1085,12 +1078,10 @@ struct
     ; eop    = None }
 end
 
-module Encoder (Digest : Ihash.IDIGEST with type t = Bytes.t)
-  : ENCODER with type Hash.t = Digest.t
-             and module Digest = Digest =
+module Encoder (H : Ihash.S with type hex = string)
+  : ENCODER with module Hash = H =
 struct
-  module Digest = Digest
-  module Hash = Helper.BaseBytes
+  module Hash = H
 
   type encoder =
     { mutable payload : Cstruct.t
@@ -1158,10 +1149,7 @@ struct
     Cstruct.blit_from_string "0000" 0 encoder.payload 0 4;
     flush k encoder
 
-  let hash_to_hex_string x =
-    Helper.BaseBytes.to_hex x
-
-  let zero_id = Bytes.make Digest.length '\000'
+  let zero_id = String.make Hash.Digest.length '\000' |> Hash.of_string
 
   let w_space k encoder =
     writes " " k encoder
@@ -1183,7 +1171,7 @@ struct
     loop lst encoder
 
   let w_hash hash k encoder =
-    writes (hash_to_hex_string hash) k encoder
+    writes (Hash.to_hex hash) k encoder
 
   let w_first_want obj_id capabilities k encoder =
     (writes "want"
@@ -1472,15 +1460,12 @@ struct
     ; pos     = 4 }
 end
 
-module Client (Digest : Ihash.IDIGEST with type t = Bytes.t)
-  : CLIENT with type Hash.t = Digest.t
-            and module Digest = Digest =
+module Client (H : Ihash.S with type hex = string)
+  : CLIENT with module Hash = H =
 struct
-  module Decoder = Decoder(Digest)
-  module Encoder = Encoder(Digest)
-
-  module Digest = Digest
-  module Hash   = Helper.BaseBytes
+  module Hash = H
+  module Decoder = Decoder(H)
+  module Encoder = Encoder(H)
 
   type context =
     { decoder      : Decoder.decoder

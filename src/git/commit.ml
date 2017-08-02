@@ -17,13 +17,10 @@
 
 module type S =
 sig
-  module Digest
-    : Ihash.IDIGEST
-
   type t
 
   module Hash
-    : S.BASE
+    : Ihash.S
   module D
     : S.DECODER  with type t = t
                   and type raw = Cstruct.t
@@ -51,13 +48,11 @@ sig
 end
 
 module Make
-    (Digest : Ihash.IDIGEST with type t = Bytes.t
-                             and type buffer = Cstruct.t)
-  : S with type Hash.t = Digest.t
-       and module Digest = Digest
+    (H : Ihash.S with type Digest.buffer = Cstruct.t
+                  and type hex = string)
+  : S with module Hash = H
 = struct
-  module Digest = Digest
-  module Hash = Helper.BaseBytes
+  module Hash = H
 
   (* XXX(dinosaure): git seems to be very resilient with the commit.
      Indeed, it's not a mandatory to have an author or a committer
@@ -72,11 +67,6 @@ module Make
     ; committer : User.t
     ; message   : string }
   and hash = Hash.t
-
-  let hash_of_hex_string x =
-    Helper.BaseBytes.of_hex x
-  let hash_to_hex_string x =
-    Helper.BaseBytes.to_hex x
 
   module A =
   struct
@@ -121,8 +111,8 @@ module Make
                            <* commit
       >>= fun committer -> to_end 1024 <* commit
       >>= fun message ->
-          return { tree = hash_of_hex_string tree
-                 ; parents = List.map hash_of_hex_string parents
+          return { tree = Hash.of_hex tree
+                 ; parents = List.map Hash.of_hex parents
                  ; author
                  ; committer
                  ; message }
@@ -139,7 +129,7 @@ module Make
       let parents =
         List.fold_left (fun acc _ -> (string "parent") + 1L + (Int64.of_int (Digest.length * 2)) + 1L + acc) 0L t.parents
       in
-      (string "tree") + 1L + (Int64.of_int (Digest.length * 2)) + 1L
+      (string "tree") + 1L + (Int64.of_int (Hash.Digest.length * 2)) + 1L
       + parents
       + (string "author") + 1L + (User.F.length t.author) + 1L
       + (string "committer") + 1L + (User.F.length t.committer) + 1L
@@ -150,7 +140,7 @@ module Make
 
     let parents e x =
       let open Farfadet in
-      eval e [ string $ "parent"; char $ sp; !!string ] (hash_to_hex_string x)
+      eval e [ string $ "parent"; char $ sp; !!string ] (Hash.to_hex x)
 
     let encoder e t =
       let open Farfadet in
@@ -161,7 +151,7 @@ module Make
              ; string $ "author"; char $ sp; !!User.F.encoder; char $ lf
              ; string $ "committer"; char $ sp; !!User.F.encoder; char $ lf
              ; !!string ]
-        (hash_to_hex_string t.tree)
+        (Hash.to_hex t.tree)
         (match t.parents with [] -> None | lst -> Some (lst, ()))
         t.author
         t.committer
@@ -180,7 +170,7 @@ module Make
     let parents x k e =
       (write_string "parent"
        @@ write_char sp
-       @@ write_string (hash_to_hex_string x) k)
+       @@ write_string (Hash.to_hex x) k)
       e
 
     let encoder x k e =
@@ -194,7 +184,7 @@ module Make
 
       (write_string "tree"
        @@ write_char sp
-       @@ write_string (hash_to_hex_string x.tree)
+       @@ write_string (Hash.to_hex x.tree)
        @@ write_char lf
        @@ list x.parents
        @@ write_string "author"
@@ -229,7 +219,7 @@ module Make
 
   let digest value =
     let tmp = Cstruct.create 0x100 in
-    Helper.fdigest (module Digest) (module E) ~tmp ~kind:"commit" ~length:F.length value
+    Helper.fdigest (module Hash.Digest) (module E) ~tmp ~kind:"commit" ~length:F.length value
 
   let equal   = (=)
   let hash    = Hashtbl.hash
