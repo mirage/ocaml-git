@@ -31,6 +31,9 @@ sig
   val of_string : string -> t
   val to_string : t -> string
 
+  val of_path : Path.t -> t
+  val to_path : t -> Path.t
+
   include S.BASE with type t := t
 
   type head_contents =
@@ -76,6 +79,11 @@ module Make
 
   let of_string x = x
   let to_string x = x
+
+  let to_path x = match Path.of_string x with
+    | Error (`Msg x) -> raise (Invalid_argument x)
+    | Ok v -> v
+  let of_path = Path.to_string
 
   let pp ppf x =
     Fmt.pf ppf "%s" (String.escaped x)

@@ -76,6 +76,9 @@ sig
   val to_string : t -> string
   (** [to_string t] returns the string value of the reference [t]. *)
 
+  val of_path : Path.t -> t
+  val to_path : t -> Path.t
+
   include S.BASE with type t := t
 
   type head_contents =
