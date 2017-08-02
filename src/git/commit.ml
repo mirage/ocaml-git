@@ -127,7 +127,14 @@ module Make
       let ( + ) = Int64.add in
 
       let parents =
-        List.fold_left (fun acc _ -> (string "parent") + 1L + (Int64.of_int (Digest.length * 2)) + 1L + acc) 0L t.parents
+        List.fold_left
+          (fun acc _ ->
+             (string "parent")
+             + 1L
+             + (Int64.of_int (Hash.Digest.length * 2))
+             + 1L
+             + acc)
+          0L t.parents
       in
       (string "tree") + 1L + (Int64.of_int (Hash.Digest.length * 2)) + 1L
       + parents
@@ -203,7 +210,12 @@ module Make
   module E = Helper.MakeEncoder(M)
 
   let pp ppf { tree; parents; author; committer; message; } =
-    let chr = Fmt.using (function '\000' .. '\031' | '\127' -> '.' | x -> x) Fmt.char in
+    let chr =
+      Fmt.using
+        (function '\000' .. '\031'
+                | '\127' -> '.' | x -> x)
+        Fmt.char
+    in
 
     Fmt.pf ppf
       "{ @[<hov>tree = %a;@ \
