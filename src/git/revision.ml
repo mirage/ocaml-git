@@ -16,12 +16,7 @@
  *)
 
 module Make
-    (Store : Store.S with type Hash.Digest.buffer = Cstruct.t
-                      and type FileSystem.File.error = [ `System of string ]
-                      and type FileSystem.File.raw = Cstruct.t
-                      and type FileSystem.Dir.error = [ `System of string ]
-                      and type FileSystem.Mapper.error = [ `System of string ]
-                      and type FileSystem.Mapper.raw = Cstruct.t)
+    (Store : Store.S with type Hash.Digest.buffer = Cstruct.t)
 = struct
   type t =
     | Reference of Store.Reference.t (* <refname> *)

@@ -9,8 +9,8 @@ sig
                           and module Inflate = Inflate
                           and module Deflate = Deflate
 
-  type error = [ FileSystem.File.error
-               | FileSystem.Dir.error
+  type error = [ `SystemFile of FileSystem.File.error
+               | `SystemDirectory of FileSystem.Dir.error
                | D.error
                | E.error ]
 
@@ -71,7 +71,6 @@ module Make
                   and type hex = string)
     (P : Path.S)
     (FS : Fs.S with type path = P.t
-                and type File.error = [ `System of string ]
                 and type File.raw = Cstruct.t)
     (I : S.INFLATE)
     (D : S.DEFLATE)
@@ -92,15 +91,16 @@ module Make
   include Value
 
   type error =
-    [ FileSystem.File.error
-    | FileSystem.Dir.error
+    [ `SystemFile of FileSystem.File.error
+    | `SystemDirectory of FileSystem.Dir.error
     | D.error
     | E.error ]
 
   let pp_error ppf = function
     | #D.error as err -> D.pp_error ppf err
     | #E.error as err -> E.pp_error ppf err
-    | #FileSystem.File.error as err -> FileSystem.File.pp_error ppf err
+    | `SystemFile sys_err -> Helper.ppe ~name:"`SystemFile" FileSystem.File.pp_error ppf sys_err
+    | `SystemDirectory sys_err -> Helper.ppe ~name:"`SystemDirectory" FileSystem.Dir.pp_error ppf sys_err
 
   let hash_get : Hash.t -> int -> int = fun h i -> Char.code @@ Hash.get h i
 
@@ -121,7 +121,7 @@ module Make
 
     FileSystem.File.exists Path.(root / "objects" / first / rest)
     >>= function Ok v -> Lwt.return true
-               | Error (`System err) -> Lwt.return false
+               | Error _ -> Lwt.return false
 
   (* XXX(dinosaure): make this function more resilient: if [of_hex] fails), avoid the path. *)
   let list ~root =
@@ -132,7 +132,7 @@ module Make
       ~rel:true
       Path.(root / "objects")
     >>= function
-    | Error (`System sys_err) ->
+    | Error sys_err ->
       Lwt.return []
     | Ok firsts ->
       Lwt_list.fold_left_s
@@ -148,7 +148,7 @@ module Make
                   with _ -> Lwt.return acc)
                acc
                paths
-           | Error (`System err) -> Lwt.return acc)
+           | Error sys_err -> Lwt.return acc)
         [] firsts
 
   type 't decoder =
@@ -167,14 +167,14 @@ module Make
     let open Lwt.Infix in
 
     FileSystem.File.open_r ~mode:0o400 ~lock:(Lwt.return ()) Path.(root / "objects" / first / rest)
-    >>= function Error (#FileSystem.File.error as err) -> Lwt.return (Error err)
+    >>= function Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
                | Ok read ->
 
     let rec loop decoder = match D.eval decoder with
       | `Await decoder ->
         FileSystem.File.read raw read >>=
         (function
-          | Error (#FileSystem.File.error as err) -> Lwt.return (Error err)
+          | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
           | Ok n -> match D.refill (Cstruct.sub raw 0 n) decoder with
             | Ok decoder -> loop decoder
             | Error (#D.error as err) -> Lwt.return (Error err))
@@ -274,25 +274,25 @@ module Make
     let open Lwt.Infix in
 
     FileSystem.File.open_r ~mode:0o400 ~lock:(Lwt.return ()) Path.(root / "objects" / first / rest)
-    >>= function Error (#FileSystem.File.error as err) -> Lwt.return (Error err)
-               | Ok read ->
+    >>= function
+    | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
+    | Ok read ->
+      let rec loop decoder = match S.eval decoder with
+        | `Await decoder ->
+          FileSystem.File.read raw read >>=
+          (function
+            | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
+            | Ok n -> match S.refill (Cstruct.sub raw 0 n) decoder with
+              | Ok decoder -> loop decoder
+              | Error (#S.error as err) -> Lwt.return (Error err))
+        | `End (rest, (kind, size)) -> Lwt.return (Ok size)
+        (* XXX(dinosaure): [gen] checks if we consume all of the input. But
+           for this compute, we don't need to compute all. It's
+           redundant. *)
+        | `Error (res, (#S.error as err)) -> Lwt.return (Error err)
+      in
 
-    let rec loop decoder = match S.eval decoder with
-      | `Await decoder ->
-        FileSystem.File.read raw read >>=
-        (function
-          | Error (#FileSystem.File.error as err) -> Lwt.return (Error err)
-          | Ok n -> match S.refill (Cstruct.sub raw 0 n) decoder with
-            | Ok decoder -> loop decoder
-            | Error (#S.error as err) -> Lwt.return (Error err))
-      | `End (rest, (kind, size)) -> Lwt.return (Ok size)
-      (* XXX(dinosaure): [gen] checks if we consume all of the input. But
-        for this compute, we don't need to compute all. It's
-        redundant. *)
-      | `Error (res, (#S.error as err)) -> Lwt.return (Error err)
-    in
-
-    loop decoder
+      loop decoder
 
   let write ~root ?(capacity = 0x100) ?(level = 4) ~ztmp ~raw value =
     let hash        = digest value in
@@ -302,31 +302,17 @@ module Make
     let open Lwt.Infix in
 
     FileSystem.File.open_w ~mode:644 ~lock:(Lwt.return ()) Path.(root / "objects" / first / rest)
-    >>= function Error (#FileSystem.File.error as err) -> Lwt.return (Error err)
-               | Ok write ->
-
-    (* XXX(dinosaure): replace this code by [Helper.safe_encoder_to_file]. *)
-    let rec loop encoder = match E.eval raw encoder with
-      | `Flush encoder ->
-        (if E.used encoder > 0
-         then FileSystem.File.write raw ~len:(E.used encoder) write
-         else Lwt.return (Ok 0)) >>=
-        (function
-          | Error (#FileSystem.File.error as err) -> Lwt.return (Error err)
-          | Ok n ->
-            if n = E.used encoder
-            then loop (E.flush 0 (Cstruct.len raw) encoder)
-            else begin
-              let rest = E.used encoder - n in
-              Cstruct.blit raw n raw 0 rest;
-              loop (E.flush rest (Cstruct.len raw - rest) encoder)
-            end)
-      | `End (encoder, w) ->
-        if E.used encoder > 0
-        then begin
-          FileSystem.File.write raw ~len:(E.used encoder) write >>=
+    >>= function
+    | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
+    | Ok write ->
+      (* XXX(dinosaure): replace this code by [Helper.safe_encoder_to_file]. *)
+      let rec loop encoder = match E.eval raw encoder with
+        | `Flush encoder ->
+          (if E.used encoder > 0
+           then FileSystem.File.write raw ~len:(E.used encoder) write
+           else Lwt.return (Ok 0)) >>=
           (function
-            | Error (#FileSystem.File.error as err) -> Lwt.return (Error err)
+            | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
             | Ok n ->
               if n = E.used encoder
               then loop (E.flush 0 (Cstruct.len raw) encoder)
@@ -335,11 +321,25 @@ module Make
                 Cstruct.blit raw n raw 0 rest;
                 loop (E.flush rest (Cstruct.len raw - rest) encoder)
               end)
-        end else
-          FileSystem.File.close write
-          >|= (function Ok ()-> Ok w | Error (#FileSystem.File.error as err) -> Error err)
-      | `Error (#E.error as err) -> Lwt.return (Error err)
-    in
+        | `End (encoder, w) ->
+          if E.used encoder > 0
+          then begin
+            FileSystem.File.write raw ~len:(E.used encoder) write >>=
+            (function
+              | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
+              | Ok n ->
+                if n = E.used encoder
+                then loop (E.flush 0 (Cstruct.len raw) encoder)
+                else begin
+                  let rest = E.used encoder - n in
+                  Cstruct.blit raw n raw 0 rest;
+                  loop (E.flush rest (Cstruct.len raw - rest) encoder)
+                end)
+          end else
+            FileSystem.File.close write
+            >|= (function Ok ()-> Ok w | Error sys_err -> Error (`SystemFile sys_err))
+        | `Error (#E.error as err) -> Lwt.return (Error err)
+      in
 
-    loop encoder >|= function Ok w -> Ok (hash, w) | Error err -> Error err
+      loop encoder >|= function Ok w -> Ok (hash, w) | Error err -> Error err
 end

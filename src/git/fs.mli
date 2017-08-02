@@ -18,7 +18,7 @@
 module type FILE =
 sig
   type path
-  type error = [ `System of string ]
+  type error
 
   val pp_error : error Fmt.t
 
@@ -42,7 +42,7 @@ sig
   type fd
   type raw
   type path
-  type error = [ `System of string ]
+  type error
 
   val pp_error : error Fmt.t
 
@@ -55,7 +55,7 @@ end
 module type DIR =
 sig
   type path
-  type error = [ `System of string ]
+  type error
 
   val pp_error : error Fmt.t
 

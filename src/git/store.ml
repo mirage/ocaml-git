@@ -30,8 +30,8 @@ sig
                           and module Inflate = Inflate
                           and module Deflate = Deflate
 
-  type error = [ FileSystem.File.error
-               | FileSystem.Dir.error
+  type error = [ `SystemFile of FileSystem.File.error
+               | `SystemDirectory of FileSystem.Dir.error
                | Value.D.error
                | Value.E.error ]
 
@@ -80,9 +80,9 @@ sig
     : Unpack.DECODER with module Hash = Hash
                       and module Inflate = Inflate
 
-  type error = [ FileSystem.File.error
-               | FileSystem.Dir.error
-               | FileSystem.Mapper.error
+  type error = [ `SystemFile of FileSystem.File.error
+               | `SystemDirectory of FileSystem.Dir.error
+               | `SystemMapper of FileSystem.Mapper.error
                | `IndexDecoder of IDXDecoder.error
                | `PackDecoder of PACKDecoder.error
                | `Not_found ]
@@ -211,10 +211,7 @@ module Make
                   and type hex = string)
     (P : Path.S)
     (FS : Fs.S with type path = P.t
-                and type File.error = [ `System of string ]
                 and type File.raw = Cstruct.t
-                and type Dir.error = [ `System of string ]
-                and type Mapper.error = [ `System of string ]
                 and type Mapper.raw = Cstruct.t)
     (I : S.INFLATE)
     (D : S.DEFLATE)
@@ -233,6 +230,7 @@ module Make
   module LooseImpl
     : Loose.S with module Hash = Hash
                and module Path = Path
+               and module FileSystem = FileSystem
                and module Inflate = Inflate
                and module Deflate = Deflate
    = Loose.Make(H)(P)(FS)(I)(D)
@@ -240,7 +238,7 @@ module Make
   module Value
     : Value.S with module Hash = Hash
                and module Inflate = Inflate
-               and module Deflate = Deflate 
+               and module Deflate = Deflate
                and module Blob = LooseImpl.Blob
                and module Tree = LooseImpl.Tree
                and module Tag = LooseImpl.Tag
@@ -322,7 +320,7 @@ module Make
     let write_p ~ztmp ~raw t value =
       LooseImpl.write ~root:t.dotgit ~ztmp ~raw ~level:t.compression value
 
-    let pp_error  = LooseImpl.pp_error
+    let pp_error = LooseImpl.pp_error
 
     let exists t =
       LooseImpl.exists
@@ -418,7 +416,9 @@ module Make
     type error = [ `IndexDecoder of IDXDecoder.error
                  | `PackDecoder of PACKDecoder.error
                  | `Not_found
-                 | FileSystem.File.error (* | FileSystem.Dir.error | FileSystem.Mapper.error *) ]
+                 | `SystemFile of FileSystem.File.error
+                 | `SystemDirectory of FileSystem.Dir.error
+                 | `SystemMapper of FileSystem.Mapper.error ]
 
     let pp_error ppf = function
       | `PackDecoder err ->
@@ -426,7 +426,9 @@ module Make
       | `IndexDecoder err ->
         Helper.ppe ~name:"`IndexDecoder" (Fmt.hvbox IDXDecoder.pp_error) ppf err
       | `Not_found -> Fmt.string ppf "`Not_found"
-      | #FileSystem.File.error as err -> FileSystem.File.pp_error ppf err
+      | `SystemFile sys_err -> Helper.ppe ~name:"`SystemFile" FileSystem.File.pp_error ppf sys_err
+      | `SystemDirectory sys_err -> Helper.ppe ~name:"`SystemDirectory" FileSystem.Dir.pp_error ppf sys_err
+      | `SystemMapper sys_err -> Helper.ppe ~name:"`SystemMapper" FileSystem.Mapper.pp_error ppf sys_err
 
     type t = PACKDecoder.Object.t
 
@@ -439,7 +441,7 @@ module Make
                       | Error err -> Lwt.return (Error err))
                   | Error err -> Lwt.return (Error err))
       >|= (function
-          | Error (#FileSystem.Mapper.error as sys_err) -> Error sys_err
+          | Error sys_err -> Error (`SystemMapper sys_err)
           | Ok map ->
             IDXDecoder.make map
             |> function
@@ -492,7 +494,7 @@ module Make
       let open Lwt.Infix in
 
       FileSystem.File.open_r ~mode:0o644 ~lock:(Lwt.return ()) path >>= function
-      | Error #FileSystem.File.error as err -> Lwt.return err
+      | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
       | Ok fd ->
         let state = PACKDecoder.P.default ztmp window in
 
@@ -509,7 +511,7 @@ module Make
                 | Ok n ->
                   let t = PACKDecoder.P.refill 0 n t in
                   go length graph t
-                | Error #FileSystem.File.error as err -> Lwt.return err)
+                | Error sys_err -> Lwt.return (Error (`SystemFile sys_err)))
           | `End (t, hash) ->
             assert (Hash.equal hash hash_idx);
 
@@ -563,14 +565,14 @@ module Make
       | Ok idx ->
         FileSystem.Mapper.openfile path_pack
         >>= function
-        | Error (#FileSystem.Mapper.error as sys_err) -> Lwt.return (Error sys_err)
+        | Error sys_err -> Lwt.return (Error (`SystemMapper sys_err))
         | Ok fd -> PACKDecoder.make fd
                      (fun hash -> CacheObject.find (hash_idx, hash) state.cache.objects)
                      (IDXDecoder.find idx)
                      (fun offset -> CacheRevIndex.find (hash_idx, offset) state.cache.revindexes)
                      (extern state) >>= function
           | Ok pack -> CachePack.add hash_idx pack state.cache.packs; Lwt.return (Ok pack)
-          | Error (#FileSystem.Mapper.error as sys_err) -> Lwt.return (Error sys_err)
+          | Error sys_err -> Lwt.return (Error (`SystemMapper sys_err))
     and extern state hash =
       (* XXX(dinosaure): [extern] is only used for the source to reconstruct an object. *)
       let open Lwt.Infix in
@@ -1004,7 +1006,7 @@ module Make
       let open Lwt.Infix in
 
       contents Path.(t.dotgit / "refs") >>= function
-      | Error (#FileSystem.Dir.error as err) -> Lwt.return (Error err)
+      | Error sys_err -> Lwt.return (Error (`SystemDirectory sys_err))
       | Ok files ->
         Lwt_list.fold_left_s
           (fun acc path ->
@@ -1120,7 +1122,7 @@ module Make
                          ; idxs
                          ; cache = cache ()
                          ; buffer = buffer () })
-        | Error (#FileSystem.Dir.error as sys_err) -> Lwt.return (Error sys_err))
+        | Error sys_err -> Lwt.return (Error sys_err))
      | Some root, Some dotgit ->
        sanitize_filesystem root dotgit
        >>== fun () -> indexes dotgit
@@ -1133,7 +1135,7 @@ module Make
                       ; buffer = buffer () }))
     >>= function
     | Ok t -> Lwt.return (Ok t)
-    | Error (#FileSystem.Dir.error as err) -> Lwt.return (Error err)
+    | Error sys_err -> Lwt.return (Error (`SystemDirectory sys_err))
 
   let dotgit      { dotgit; _ }      = dotgit
   let root        { root; _ }        = root

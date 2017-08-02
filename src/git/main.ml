@@ -88,7 +88,7 @@ let load_context () =
   Fpath.of_string Sys.argv.(1)
   |> function
   | Ok root -> Store.create ~root ()
-  | Error (`Msg sys_err) -> Lwt.return (Error (`System sys_err))
+  | Error (`Msg sys_err) -> assert false
 
 let notify _ = Lwt.return ()
 

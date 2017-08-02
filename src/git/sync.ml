@@ -34,10 +34,7 @@ module Make
     (Net : NET)
     (Store : Store.S with type Hash.Digest.buffer = Cstruct.t
                       and type Hash.hex = string
-                      and type FileSystem.File.error = [ `System of string ]
                       and type FileSystem.File.raw = Cstruct.t
-                      and type FileSystem.Dir.error = [ `System of string ]
-                      and type FileSystem.Mapper.error = [ `System of string ]
                       and type FileSystem.Mapper.raw = Cstruct.t)
     (Capabilities : C)
 = struct
@@ -68,19 +65,23 @@ module Make
     | `Push      of string
     | `Idx       of IDXEncoder.error
     | `Not_found
-    | Store.FileSystem.File.error (* | Store.FileSystem.Dir.error | Store.FileSystem.Mapper.error *) ]
+    | `SystemFile of Store.FileSystem.File.error
+    | `SystemDirectory of Store.FileSystem.Dir.error
+    | `SystemMapper of Store.FileSystem.Mapper.error ]
 
   let pp_error ppf = function
-    | `SmartPack err -> Helper.ppe ~name:"`SmartPack" Fmt.string ppf err
-    | `Unpack err    -> Helper.ppe ~name:"`Unpack" (Fmt.hvbox PACKDecoder.pp_error) ppf err
-    | `Pack err      -> Helper.ppe ~name:"`Pack" (Fmt.hvbox PACKEncoder.pp_error) ppf err
-    | `Decoder err   -> Helper.ppe ~name:"`Decoder" (Fmt.hvbox Decoder.pp_error) ppf err
-    | `Clone err     -> Helper.ppe ~name:"`Clone" Fmt.string ppf err
-    | `Push err      -> Helper.ppe ~name:"`Push" Fmt.string ppf err
-    | `Ls err        -> Helper.ppe ~name:"`Ls" Fmt.string ppf err
-    | `Not_found     -> Fmt.string ppf "`Not_found"
-    | `Idx err       -> Helper.ppe ~name:"`Idx" (Fmt.hvbox IDXEncoder.pp_error) ppf err
-    | #Store.FileSystem.File.error as err -> Store.FileSystem.File.pp_error ppf err
+    | `SmartPack err           -> Helper.ppe ~name:"`SmartPack" Fmt.string ppf err
+    | `Unpack err              -> Helper.ppe ~name:"`Unpack" (Fmt.hvbox PACKDecoder.pp_error) ppf err
+    | `Pack err                -> Helper.ppe ~name:"`Pack" (Fmt.hvbox PACKEncoder.pp_error) ppf err
+    | `Decoder err             -> Helper.ppe ~name:"`Decoder" (Fmt.hvbox Decoder.pp_error) ppf err
+    | `Clone err               -> Helper.ppe ~name:"`Clone" Fmt.string ppf err
+    | `Push err                -> Helper.ppe ~name:"`Push" Fmt.string ppf err
+    | `Ls err                  -> Helper.ppe ~name:"`Ls" Fmt.string ppf err
+    | `Not_found               -> Fmt.string ppf "`Not_found"
+    | `Idx err                 -> Helper.ppe ~name:"`Idx" (Fmt.hvbox IDXEncoder.pp_error) ppf err
+    | `SystemFile sys_err      -> Helper.ppe ~name:"`SystemFile" Store.FileSystem.File.pp_error ppf sys_err
+    | `SystemDirectory sys_err -> Helper.ppe ~name:"`SystemDirectory" Store.FileSystem.Dir.pp_error ppf sys_err
+    | `SystemMapper sys_err    -> Helper.ppe ~name:"`SystemMapper" Store.FileSystem.Mapper.pp_error ppf sys_err
 
   type t =
     { socket : Net.socket
@@ -342,13 +343,13 @@ module Make
          | `End (pack, hash_pack) ->
            Store.FileSystem.File.close w >>= (function
                | Ok () -> k t.max_length max_depth hash_pack t.tree t.rofs t.rext
-               | Error (#Store.FileSystem.File.error as err) -> Lwt.return (Error err))
+               | Error sys_err -> Lwt.return (Error (`SystemFile sys_err)))
          | _ -> Lwt.return (Error (`SmartPack "bad end state")))
       | `PACK (`Raw raw) ->
         Store.FileSystem.File.write raw w >>=
         (function
-          | Error (#Store.FileSystem.File.error as err) ->
-            Lwt.return (Error err)
+          | Error sys_err ->
+            Lwt.return (Error (`SystemFile sys_err))
           | Ok n ->
             let rec go t = match PACKDecoder.eval raw t.pack with
               | `Await pack ->
@@ -454,7 +455,7 @@ module Make
             then match go { t with pack = PACKDecoder.refill 0 (Cstruct.len raw) t.pack } with
               | Ok t -> Client.run c.ctx `ReceivePACK |> process c >>= pack_handler k c t w
               | Error (`Unpack err) -> Lwt.return (Error (`Unpack err))
-            else Lwt.return (Error (`System "Loose something when we write the PACK file received")))
+            else Lwt.return (Error (`SystemIO "Loose something when we write the PACK file received")))
       | result -> Lwt.return (Error (`Clone (err_unexpected_result result)))
 
     let hash_of_object o =
@@ -498,7 +499,7 @@ module Make
 
       Store.FileSystem.Mapper.openfile pack_filename
       >>= function
-      | Error (#Store.FileSystem.Mapper.error as err) -> Lwt.return (Error err)
+      | Error sys_err -> Lwt.return (Error (`SystemMapper sys_err))
       | Ok fd ->
         Decoder.make fd
             (fun hash -> None)
@@ -547,10 +548,12 @@ module Make
           >>= fun res ->
           Format.printf "\rResolving delta: 100%% (%d/%d), done.\n%!" max max;
 
+          (* XXX(dinosaure): TODO! We need to close the file descriptor. *)
+
           (* Store.FileSystem.Mapper.close fd *) Lwt.return (Ok ()) >>=
           (function Ok () -> Lwt.return res
-                  | Error (#Store.FileSystem.Mapper.error as err) -> Lwt.return (Error err))
-        | Error (#Store.FileSystem.Mapper.error as err) -> Lwt.return (Error err)
+                  | Error sys_err -> Lwt.return (Error (`SystemMapper sys_err)))
+        | Error sys_err -> Lwt.return (Error (`SystemMapper sys_err))
     and extern git hash =
       Store.raw git hash
 
@@ -692,7 +695,7 @@ module Make
         let abs_new_pack_filename = Store.Path.(temp / new_pack_filename) in
 
         Store.FileSystem.File.open_w abs_new_pack_filename ~mode:0o644 ~lock:(Lwt.return ()) >>= function
-        | Error (#Store.FileSystem.File.error as err) -> Lwt.return (Error err)
+        | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
         | Ok fd ->
           let input = Cstruct.create 0x8000 in
 
@@ -704,13 +707,13 @@ module Make
           >>= function
           | Ok { E.tree; E.hash; } -> Store.FileSystem.File.close fd >>= (function
               | Ok () -> Lwt.return (Ok (abs_new_pack_filename, tree, hash))
-              | Error (#Store.FileSystem.File.error as err) -> Lwt.return (Error err))
+              | Error sys_err -> Lwt.return (Error (`SystemFile sys_err)))
           | Error err ->
             Store.FileSystem.File.close fd >>= function
-            | Error (#Store.FileSystem.File.error as err) -> Lwt.return (Error err)
+            | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
             | Ok () -> match err with
-              | `Stack -> Lwt.return (Error (`System "Impossible to store the PACK file"))
-              | `Writer (#Store.FileSystem.File.error as err) -> Lwt.return (Error err)
+              | `Stack -> Lwt.return (Error (`SystemIO "Impossible to store the PACK file"))
+              | `Writer sys_err -> Lwt.return (Error (`SystemFile sys_err))
               | `Encoder err -> Lwt.return (Error (`Pack err))
   end
 
@@ -723,12 +726,12 @@ module Make
 
         let pack_obj = Store.Path.(Store.dotgit git / "objects" / "pack" / (Fmt.strf "pack-%a.pack" Hash.pp hash)) in
         Store.FileSystem.File.move filename pack_obj >>= function
-        | Error (#Store.FileSystem.File.error as err) -> Lwt.return (Error err)
+        | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
         | Ok () ->
           let idx = Store.Path.(Store.dotgit git / "objects" / "pack" / (Fmt.strf "pack-%a.idx" Hash.pp hash)) in
 
           Store.FileSystem.File.open_w idx ~mode:0o644 ~lock:(Lwt.return ()) >>= function
-          | Error (#Store.FileSystem.File.error as err) -> Lwt.return (Error err)
+          | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
           | Ok fd ->
             let state = IDXEncoder.default (Tree.to_sequence tree) hash in
             let input = Store.buffer_de git in
@@ -762,13 +765,13 @@ module Make
             >>= function
             | Ok () -> Store.FileSystem.File.close fd >>= (function
                 | Ok () -> Lwt.return (Ok ())
-                | Error (#Store.FileSystem.File.error as err) -> Lwt.return (Error err))
+                | Error sys_err -> Lwt.return (Error (`SystemFile sys_err)))
             | Error err ->
               Store.FileSystem.File.close fd >>= function
-              | Error (#Store.FileSystem.File.error as err) -> Lwt.return (Error err)
+              | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
               | Ok () -> match err with
-                | `Stack -> Lwt.return (Error (`System "Impossible to store the IDX file"))
-                | `Writer (#Store.FileSystem.File.error as err) -> Lwt.return (Error err)
+                | `Stack -> Lwt.return (Error (`SystemIO "Impossible to store the IDX file"))
+                | `Writer sys_err -> Lwt.return (Error (`SystemFile sys_err))
                 | `Encoder err -> Lwt.return (Error (`Idx err))
   end
 
@@ -800,7 +803,7 @@ module Make
                >>= (function
                    | Ok info -> Idx.save git (Ok (abs_pack_filename, info.Pack.tree, info.Pack.hash))
                    | Error _ as err ->  Idx.save git err)
-          | Error (#Store.FileSystem.File.error as err) -> Lwt.return (Error err))
+          | Error sys_err -> Lwt.return (Error (`SystemFile sys_err)))
     | `ShallowUpdate shallow_update ->
       Client.run t.ctx (`Has []) |> process t >>= clone_handler git t
     | `Refs refs ->
@@ -864,15 +867,15 @@ module Make
                   (if thin
                    then Store.FileSystem.Mapper.close info.Pack.fd >>= function
                      | Ok () -> Idx.save git (Ok (abs_pack_filename, info.Pack.tree, info.Pack.hash))
-                     | Error #Store.FileSystem.Mapper.error as err -> Lwt.return err
+                     | Error sys_err -> Lwt.return (Error (`SystemMapper sys_err))
                    else Pack.canonicalize_pack git info >>= function
                      | Error _ as err ->
                        Store.FileSystem.Mapper.close info.Pack.fd >>= fun _ -> Lwt.return err
                      | Ok _ as value -> Store.FileSystem.Mapper.close info.Pack.fd >>= function
                        | Ok () -> Idx.save git value
-                       | Error #Store.FileSystem.Mapper.error as err -> Lwt.return err)
+                       | Error sys_err -> Lwt.return (Error (`SystemMapper sys_err)))
                 | Error _ as err -> Lwt.return err)
-          | Error (#Store.FileSystem.File.error as err) -> Lwt.return (Error err))
+          | Error sys_err -> Lwt.return (Error (`SystemFile sys_err)))
     in
 
     let rec aux t state = function

@@ -49,8 +49,8 @@ sig
                and module Deflate = Deflate
   (** The Value module, which represents the Git object. *)
 
-  type error = [ FileSystem.File.error
-               | FileSystem.Dir.error
+  type error = [ `SystemFile of FileSystem.File.error
+               | `SystemDirectory of FileSystem.Dir.error
                (** Appears when the file-system returns an error. *)
                | Value.D.error
                (** Appears when the decoder of the Git object returns an
@@ -345,13 +345,13 @@ sig
                       and module Inflate = Inflate
   (** The [PACKDecoder] module, which decodes {i PACK} file. *)
 
-  type error = [ FileSystem.File.error
+  type error = [ `SystemFile of FileSystem.File.error
                (** Appears when the file-system returns an error when we try to
                    compute a file. *)
-               | FileSystem.Dir.error
+               | `SystemDirectory of FileSystem.Dir.error
                (** Appears when the file-system returns an error when we try to
                    compute a directory. *)
-               | FileSystem.Mapper.error
+               | `SystemMapper of FileSystem.Mapper.error
                (** Appears when the file-system returns an error when we try to
                    [mmap] a file. *)
                | `IndexDecoder of IDXDecoder.error
@@ -818,10 +818,7 @@ module Make
                   and type hex = string)
     (P : Path.S)
     (FS : Fs.S with type path = P.t
-                and type File.error = [ `System of string ]
                 and type File.raw = Cstruct.t
-                and type Dir.error = [ `System of string ]
-                and type Mapper.error = [`System of string ]
                 and type Mapper.raw = Cstruct.t)
     (Inflate : S.INFLATE)
     (Deflate : S.DEFLATE)

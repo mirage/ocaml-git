@@ -46,7 +46,7 @@ sig
                         and type error = [ `Decoder of string ]
 
   type error =
-    [ FileSystem.File.error
+    [ `SystemFile of FileSystem.File.error
     | D.error ]
 
   val pp_error  : error Fmt.t
@@ -59,7 +59,6 @@ module Make
                   and type hex = string)
     (P : Path.S)
     (FS : Fs.S with type path = P.t
-                and type File.error = [ `System of string ]
                 and type File.raw = Cstruct.t)
   : S with module Hash = H
        and module Path = P
@@ -127,11 +126,11 @@ module Make
   module D = Helper.MakeDecoder(A)
 
   type error =
-    [ FileSystem.File.error
+    [ `SystemFile of FileSystem.File.error
     | D.error ]
 
   let pp_error ppf = function
-    | #FileSystem.File.error as err -> FileSystem.File.pp_error ppf err
+    | `SystemFile sys_err -> Helper.ppe ~name:"`SystemFile" FileSystem.File.pp_error ppf sys_err
     | #D.error as err -> D.pp_error ppf err
 
   let normalize path =
@@ -156,13 +155,13 @@ module Make
 
     FileSystem.File.open_r ~mode:0o400 ~lock:(Lwt.return ()) path
     >>= function
-    | Error (#FileSystem.File.error as err) -> Lwt.return (Error err)
+    | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
     | Ok read ->
       let rec loop decoder = match D.eval decoder with
         | `Await decoder ->
           FileSystem.File.read raw read >>=
           (function
-            | Error (#FileSystem.File.error as err) -> Lwt.return (Error err)
+            | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
             | Ok n -> match D.refill (Cstruct.sub raw 0 n) decoder with
               | Ok decoder -> loop decoder
               | Error (#D.error as err) -> Lwt.return (Error err))

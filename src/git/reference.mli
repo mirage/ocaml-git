@@ -98,7 +98,7 @@ sig
       {!Cstruct.t}. This decoder needs a {!Cstruct.t} as an internal buffer. *)
 
   type error =
-    [ FileSystem.File.error (** The [FileSystem] error *)
+    [ `SystemFile of FileSystem.File.error (** The [FileSystem] error *)
     | D.error (** The decoder {!D} error. *)
     ] (** The type of error. *)
 
@@ -119,7 +119,6 @@ module Make
                   and type hex = string)
     (P : Path.S)
     (FS : Fs.S with type path = P.t
-                and type File.error = [ `System of string ]
                 and type File.raw = Cstruct.t)
   : S with module Hash = H
        and module Path = P

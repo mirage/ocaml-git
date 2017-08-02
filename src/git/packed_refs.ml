@@ -33,7 +33,8 @@ sig
                         and type raw = Cstruct.t
                         and type init = int * t
 
-  type error = [ FileSystem.File.error
+  type error = [ `SystemFile of FileSystem.File.error
+               | `SystemIO of string
                | D.error ]
 
   val write : root:Path.t -> ?capacity:int -> raw:Cstruct.t -> t -> (unit, error) result Lwt.t
@@ -45,7 +46,6 @@ module Make
                   and type hex = string)
     (P : Path.S)
     (FS : Fs.S with type path = P.t
-                and type File.error = [ `System of string ]
                 and type File.raw = Cstruct.t)
   : S with module Hash = H
        and module Path = P
@@ -152,11 +152,13 @@ module Make
   module E = Helper.MakeEncoder(M)
 
   type error =
-    [ FileSystem.File.error
+    [ `SystemFile of FileSystem.File.error
+    | `SystemIO of string
     | D.error ]
 
   let pp_error ppf = function
-    | #FileSystem.File.error as err -> FileSystem.File.pp_error ppf err
+    | `SystemFile sys_err -> Helper.ppe ~name:"`SystemFile" FileSystem.File.pp_error ppf sys_err
+    | `SystemIO sys_err -> Helper.ppe ~name:"`SystemIO" Fmt.string ppf sys_err
     | #D.error as err -> D.pp_error ppf err
 
   let read ~root ~dtmp ~raw =
@@ -166,13 +168,13 @@ module Make
 
     FileSystem.File.open_r ~mode:0o400 ~lock:(Lwt.return ()) Path.(root / "packed-refs")
     >>= function
-    | Error (#FileSystem.File.error as err) -> Lwt.return (Error err)
+    | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
     | Ok read ->
       let rec loop decoder = match D.eval decoder with
         | `Await decoder ->
           FileSystem.File.read raw read >>=
           (function
-            | Error (#FileSystem.File.error as err) -> Lwt.return (Error err)
+            | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
             | Ok 0 -> loop (D.finish decoder)
             | Ok n -> match D.refill (Cstruct.sub raw 0 n) decoder with
               | Ok decoder -> loop decoder
@@ -210,7 +212,7 @@ module Make
 
     FileSystem.File.open_w ~mode:0o644 ~lock:(Lwt.return ()) Path.(root / "packed-refs")
     >>= function
-    | Error (#FileSystem.File.error as err) -> Lwt.return (Error err)
+    | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
     | Ok write ->
       Helper.safe_encoder_to_file
         ~limit:50
@@ -221,12 +223,12 @@ module Make
       | Ok _ -> FileSystem.File.close write >>=
         (function
           | Ok () -> Lwt.return (Ok ())
-          | Error (#FileSystem.File.error as err) -> Lwt.return (Error err))
+          | Error sys_err -> Lwt.return (Error (`SystemFile sys_err)))
       | Error err ->
         FileSystem.File.close write >>= function
-        | Error (#FileSystem.File.error as err) -> Lwt.return (Error err)
+        | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
         | Ok () -> match err with
-          | `Stack -> Lwt.return (Error (`System "Impossible to store the packed-refs file"))
-          | `Writer (#FileSystem.File.error as err) -> Lwt.return (Error err)
+          | `Stack -> Lwt.return (Error (`SystemIO "Impossible to store the packed-refs file"))
+          | `Writer sys_err -> Lwt.return (Error (`SystemFile sys_err))
           | `Encoder `Never -> assert false
 end
