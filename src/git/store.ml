@@ -26,9 +26,10 @@ sig
   module Inflate : S.INFLATE
   module Deflate : S.DEFLATE
 
-  module Value : Value.S with module Hash = Hash
-                          and module Inflate = Inflate
-                          and module Deflate = Deflate
+  module Value
+    : Value.S with module Hash = Hash
+               and module Inflate = Inflate
+               and module Deflate = Deflate
 
   type error = [ `SystemFile of FileSystem.File.error
                | `SystemDirectory of FileSystem.Dir.error

@@ -785,7 +785,7 @@ sig
         complete or if the link is broken.}}
     *)
 
-    val list_p      : t
+    val list_p : t
       -> dtmp:Cstruct.t
       -> raw:Cstruct.t
       -> ((Reference.t * Hash.t) list, error) result Lwt.t
