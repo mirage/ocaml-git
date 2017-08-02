@@ -47,14 +47,21 @@ sig
                         and type raw = Cstruct.t
                         and type init = Cstruct.t
                         and type error = [ `Decoder of string ]
+  module M : S.MINIENC with type t = head_contents
+  module E : S.ENCODER with type t = head_contents
+                        and type raw = Cstruct.t
+                        and type init = int * head_contents
+                        and type error = [ `Never ]
 
   type error =
     [ `SystemFile of FileSystem.File.error
+    | `SystemIO of string
     | D.error ]
 
   val pp_error  : error Fmt.t
 
-  val from_file : Path.t -> dtmp:Cstruct.t -> raw:Cstruct.t -> ((t * head_contents), error) result Lwt.t
+  val read : root:Path.t -> t -> dtmp:Cstruct.t -> raw:Cstruct.t -> ((t * head_contents), error) result Lwt.t
+  val write : root:Path.t -> ?capacity:int -> raw:Cstruct.t -> t -> head_contents -> (unit, error) result Lwt.t
 end
 
 module Make
@@ -131,14 +138,32 @@ module Make
       <|> (hash <* end_of_line >>| fun hash -> Hash hash)
   end
 
+  module M =
+  struct
+    type t  = head_contents
+
+    open Minienc
+
+    let encoder x k e = match x with
+      | Hash hash ->
+        write_string (Hash.to_hex hash) k e
+      | Ref refname ->
+        (write_string "ref: "
+         @@ write_string refname k)
+          e
+  end
+
   module D = Helper.MakeDecoder(A)
+  module E = Helper.MakeEncoder(M)
 
   type error =
     [ `SystemFile of FileSystem.File.error
+    | `SystemIO of string
     | D.error ]
 
   let pp_error ppf = function
     | `SystemFile sys_err -> Helper.ppe ~name:"`SystemFile" FileSystem.File.pp_error ppf sys_err
+    | `SystemIO sys_err -> Helper.ppe ~name:"`SystemIO" Fmt.string ppf sys_err
     | #D.error as err -> D.pp_error ppf err
 
   let normalize path =
@@ -156,10 +181,12 @@ module Make
       (false, []) segs
     |> fun (_, refs) -> List.rev refs |> String.concat "/"
 
-  let from_file path ~dtmp ~raw =
+  let read ~root reference ~dtmp ~raw =
     let decoder = D.default dtmp in
 
     let open Lwt.Infix in
+
+    let path = Path.(root // (to_path reference)) in
 
     FileSystem.File.open_r ~mode:0o400 ~lock:(Lwt.return ()) path
     >>= function
@@ -180,6 +207,59 @@ module Make
       loop decoder
       >|= function
       | Ok head_contents ->
+        let reference' = normalize path in
+
+        assert (String.equal reference reference');
+
         Ok (normalize path, head_contents)
       | Error _ as e -> e
+
+  let write ~root ?(capacity = 0x100) ~raw reference value =
+    let open Lwt.Infix in
+
+    let state = E.default (capacity, value) in
+
+    let module E =
+    struct
+      type state  = E.encoder
+      type raw    = Cstruct.t
+      type result = int
+      type error  = E.error
+
+      let raw_length = Cstruct.len
+      let raw_blit   = Cstruct.blit
+
+      type rest = [ `Flush of state | `End of (state * result) ]
+
+      let eval raw state = match E.eval raw state with
+        | `Error err -> Lwt.return (`Error (state, err))
+        | #rest as rest -> Lwt.return rest
+
+      let used  = E.used
+      let flush = E.flush
+    end in
+
+    let path = Path.(root // (to_path reference)) in
+
+    FileSystem.File.open_w ~mode:0o644 ~lock:(Lwt.return ()) path
+    >>= function
+    | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
+    | Ok write ->
+      Helper.safe_encoder_to_file
+        ~limit:50
+        (module E)
+        FileSystem.File.write
+        write raw state
+      >>= function
+      | Ok _ -> FileSystem.File.close write >>=
+        (function
+          | Ok () -> Lwt.return (Ok ())
+          | Error sys_err -> Lwt.return (Error (`SystemFile sys_err)))
+      | Error err ->
+        FileSystem.File.close write >>= function
+        | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
+        | Ok () -> match err with
+          | `Stack -> Lwt.return (Error (`SystemIO (Fmt.strf "Impossible to store the reference: %a" pp reference)))
+          | `Writer sys_err -> Lwt.return (Error (`SystemFile sys_err))
+          | `Encoder `Never -> assert false
 end

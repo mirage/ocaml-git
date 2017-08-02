@@ -100,19 +100,44 @@ sig
   (** The decoder of the Git Reference object. We constraint the input to be a
       {!Cstruct.t}. This decoder needs a {!Cstruct.t} as an internal buffer. *)
 
+  module M
+    : S.MINIENC with type t = head_contents
+  (** The {!Minienc} encoder of the Git Reference object. *)
+
+  module E
+    : S.ENCODER with type t = head_contents
+                 and type raw = Cstruct.t
+                 and type init = int * head_contents
+                 and type error = [ `Never ]
+  (** The encoder (which uses a {Minienc.encoder}) of the Git Reference object.
+      We constraint the output to be a {Cstruct.t}. This encoder needs the Reference
+      OCaml value and the memory consumption of the encoder (in bytes). The encoder
+      can not fail.
+
+      NOTE: we can not unspecified the error type (it needs to be concrete) but,
+      because the encoder can not fail, we define the error as [`Never]. *)
+
   type error =
     [ `SystemFile of FileSystem.File.error (** The [FileSystem] error *)
+    | `SystemIO of string (** Appears when the write action is blocking too long. *)
     | D.error (** The decoder {!D} error. *)
     ] (** The type of error. *)
 
   val pp_error : error Fmt.t
   (** Pretty-printer of {!error}. *)
 
-  val from_file : Path.t -> dtmp:Cstruct.t -> raw:Cstruct.t -> ((t * head_contents), error) result Lwt.t
-  (** [from_file path dtmp raw] returns the value contains in the file [path]
-      and the reference semantically equal to [path]. [dtmp] and [raw] are
-      buffers used by the decoder (respectively for the decoder as an internal
-      buffer and the input buffer).
+  val read : root:Path.t -> t -> dtmp:Cstruct.t -> raw:Cstruct.t -> ((t * head_contents), error) result Lwt.t
+  (** [read ~root reference dtmp raw] returns the value contains in the
+      reference [reference] (available in the git repository [root]). [dtmp] and
+      [raw] are buffers used by the decoder (respectively for the decoder as an
+      internal buffer and the input buffer).
+
+      This function can returns an {!error}. *)
+
+  val write : root:Path.t -> ?capacity:int -> raw:Cstruct.t -> t -> head_contents -> (unit, error) result Lwt.t
+  (** [write ~root ~raw reference value] writes the value [value] in the mutable
+      representation of the [reference] in the git repository [root]. [raw] is a
+      buffer used by the decoder to keep the input.
 
       This function can returns an {!error}. *)
 end

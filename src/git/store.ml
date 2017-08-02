@@ -1010,8 +1010,10 @@ module Make
       | Error sys_err -> Lwt.return (Error (`SystemDirectory sys_err))
       | Ok files ->
         Lwt_list.fold_left_s
-          (fun acc path ->
-             Reference.from_file path ~dtmp ~raw
+          (fun acc abs_ref ->
+             (* XXX(dinosaure): we already canonicalize the reference (which is
+                absolute). so we consider than the root as [/]. *)
+             Reference.read ~root:(Path.v "/") (Reference.of_path abs_ref) ~dtmp ~raw
              >|= function
              | Ok v -> v :: acc
              | Error _ -> acc)
