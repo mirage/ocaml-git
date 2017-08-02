@@ -86,5 +86,6 @@ module Make
                   and type hex = string)
   : S with module Hash = H
 (** The {i functor} to make the OCaml representation of the Git Tree object by a
-    specific hash implementation. We constraint the {!IDIGEST} module to
-    generate a {!Bytes.t} and compute a {Cstruct.t}. *)
+    specific hash implementation. We constraint the {!Ihash.S} module to compute
+    a {Cstruct.t} flow and generate a [string] as the hexadecimal representation
+    of the hash. *)

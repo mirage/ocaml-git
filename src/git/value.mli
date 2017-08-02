@@ -103,6 +103,7 @@ module Make
        and module Inflate = I
        and module Deflate = D
 (** The {i functor} to make the OCaml representation of the Git object by a
-    specific hash, an {!Inflate} implementation for the compression and a {!Deflate}
-    implementation for the decompression. We constraint the {!IDIGEST} module to
-    generate a {Bytes.t} and compute a {Cstruct.t}. *)
+    specific hash, an {!Inflate} implementation for the compression and a
+    {!Deflate} implementation for the decompression. We constraint the
+    {!IDIGEST} module to compute a {Cstruct.t} flow and generate a [string] as
+    the hexadecimal representation of the hash. *)

@@ -55,5 +55,5 @@ module Make
     (H : Ihash.S with type Digest.buffer = Cstruct.t)
   : S with module Hash = H
 (** The {i functor} to make the OCaml representation of the Git Blob object by a
-    specific hash implementation. We constraint the {!IDIGEST} module to
-    generate a {!Bytes.t} and compute a {Cstruct.t}. *)
+    specific hash implementation. We constraint the {!Ihash.S} module to
+    compute a {Cstruct.t} flow. *)
