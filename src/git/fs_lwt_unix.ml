@@ -399,6 +399,8 @@ module File
     | `Unlink err -> Fmt.pf ppf "(`Unlink %s)" err
     | `Mkdir err  -> Fmt.pf ppf "(`Mkdir %s)" err
 
+  let lock x = Fpath.add_ext "lock" x
+
   open Lwt.Infix
 
   let open_w ?lock path ~mode =

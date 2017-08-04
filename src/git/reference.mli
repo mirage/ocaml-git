@@ -140,6 +140,9 @@ sig
       buffer used by the decoder to keep the input.
 
       This function can returns an {!error}. *)
+
+  val test_and_set : root:Path.t -> t -> test:head_contents option -> set:head_contents option -> (bool, error) result Lwt.t
+  (** Atomic updates (test and set) for references. *)
 end
 
 module Make

@@ -27,6 +27,8 @@ sig
   val delete   : ?lock:lock -> path -> (unit, error) result Lwt.t
   val move     : ?lock:lock -> path -> path -> (unit, error) result Lwt.t
 
+  val lock     : path -> lock
+
   type raw
   type 'a fd constraint 'a = [< `Read | `Write ]
 

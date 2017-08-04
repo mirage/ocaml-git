@@ -62,7 +62,7 @@ sig
 
   val read : root:Path.t -> t -> dtmp:Cstruct.t -> raw:Cstruct.t -> ((t * head_contents), error) result Lwt.t
   val write : root:Path.t -> ?capacity:int -> raw:Cstruct.t -> t -> head_contents -> (unit, error) result Lwt.t
-  val test_and_set : root:Path.t -> t -> test:Cstruct.t option -> set:Cstruct.t option -> (bool, error) Lwt.t
+  val test_and_set : root:Path.t -> t -> test:head_contents option -> set:head_contents option -> (bool, error) result Lwt.t
 end
 
 module Make
@@ -116,6 +116,10 @@ module Make
   let pp_head_contents ppf = function
     | Hash hash -> Fmt.pf ppf "(Hash %a)" Hash.pp hash
     | Ref t -> Fmt.pf ppf "(Ref %a)" pp t
+
+  let head_contents_to_string = function
+    | Hash hash -> Hash.to_hex hash
+    | Ref refname -> Fmt.strf "ref: %a" pp refname (* XXX(dinosaure): [pp] or [Fmt.string]? *)
 
   module A =
   struct
@@ -269,11 +273,16 @@ module Make
 
     let raw = function
       | None -> None
-      | Some value -> Some (Cstruct.of_string (Hash.to_hex value))
+      | Some value -> Some (Cstruct.of_string (head_contents_to_string value))
     in
+
+    let open Lwt.Infix in
 
     FileSystem.File.test_and_set
       path
       ~test:(raw test)
-      ~set:(raw test)
+      ~set:(raw set)
+    >>= function
+    | Ok _ as v -> Lwt.return v
+    | Error err -> Lwt.return (Error (`SystemFile err))
 end
