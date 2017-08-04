@@ -100,6 +100,8 @@ let safe_mkdir ?(path = true) ?(mode = 0o755) dir =
 
 module Lock =
 struct
+  type t = Fpath.t
+
   let rec is_stale max_age path =
     let open Lwt.Infix in
 
@@ -158,6 +160,8 @@ struct
 
         go ()
     in step 1
+
+  let lock path = lock path
 
   let with_lock path f =
     let open Lwt.Infix in
@@ -363,6 +367,7 @@ end
 
 module File
   : Fs.FILE with type path = path
+             and type lock = Lock.t
              and type error = [ `Open of string
                               | `Write of string
                               | `Read of string
@@ -371,6 +376,7 @@ module File
                               | `Rename of string
                               | `Unlink of string
                               | `Mkdir of string ]
+             and type raw = Cstruct.t
 = struct
   type error =
     [ `Open of string
@@ -382,7 +388,7 @@ module File
     | `Unlink of string
     | `Mkdir of string ]
 
-  type lock = Fpath.t
+  type lock = Lock.t
   type path = Fpath.t
   type raw = Cstruct.t
 

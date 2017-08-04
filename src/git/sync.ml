@@ -694,7 +694,7 @@ module Make
 
         let abs_new_pack_filename = Store.Path.(temp / new_pack_filename) in
 
-        Store.FileSystem.File.open_w abs_new_pack_filename ~mode:0o644 ~lock:(Lwt.return ()) >>= function
+        Store.FileSystem.File.open_w abs_new_pack_filename ~mode:0o644 >>= function
         | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
         | Ok fd ->
           let input = Cstruct.create 0x8000 in
@@ -730,7 +730,7 @@ module Make
         | Ok () ->
           let idx = Store.Path.(Store.dotgit git / "objects" / "pack" / (Fmt.strf "pack-%a.idx" Hash.pp hash)) in
 
-          Store.FileSystem.File.open_w idx ~mode:0o644 ~lock:(Lwt.return ()) >>= function
+          Store.FileSystem.File.open_w idx ~mode:0o644 >>= function
           | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
           | Ok fd ->
             let state = IDXEncoder.default (Tree.to_sequence tree) hash in
@@ -792,7 +792,7 @@ module Make
 
       let abs_pack_filename = Store.Path.(temp / pack_filename) in
 
-      Store.FileSystem.File.open_w ~lock:(Lwt.return ()) ~mode:0o644
+      Store.FileSystem.File.open_w ~mode:0o644
         abs_pack_filename
       >>= (function
           | Ok w ->
@@ -849,7 +849,7 @@ module Make
 
       let abs_pack_filename = Store.Path.(temp / pack_filename) in
 
-      Store.FileSystem.File.open_w ~lock:(Lwt.return ()) ~mode:0o644 abs_pack_filename
+      Store.FileSystem.File.open_w ~mode:0o644 abs_pack_filename
       >>= (function
           | Ok w ->
             Client.run t.ctx `ReceivePACK

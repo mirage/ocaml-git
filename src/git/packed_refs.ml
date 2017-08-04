@@ -166,7 +166,7 @@ module Make
 
     let open Lwt.Infix in
 
-    FileSystem.File.open_r ~mode:0o400 ~lock:(Lwt.return ()) Path.(root / "packed-refs")
+    FileSystem.File.open_r ~mode:0o400 Path.(root / "packed-refs")
     >>= function
     | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
     | Ok read ->
@@ -210,7 +210,7 @@ module Make
       let flush = E.flush
     end in
 
-    FileSystem.File.open_w ~mode:0o644 ~lock:(Lwt.return ()) Path.(root / "packed-refs")
+    FileSystem.File.open_w ~mode:0o644 Path.(root / "packed-refs")
     >>= function
     | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
     | Ok write ->

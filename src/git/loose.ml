@@ -167,7 +167,7 @@ module Make
 
     let open Lwt.Infix in
 
-    FileSystem.File.open_r ~mode:0o400 ~lock:(Lwt.return ()) Path.(root / "objects" / first / rest)
+    FileSystem.File.open_r ~mode:0o400 Path.(root / "objects" / first / rest)
     >>= function Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
                | Ok read ->
 
@@ -267,7 +267,7 @@ module Make
 
     let open Lwt.Infix in
 
-    FileSystem.File.open_r ~mode:0o400 ~lock:(Lwt.return ()) Path.(root / "objects" / first / rest)
+    FileSystem.File.open_r ~mode:0o400 Path.(root / "objects" / first / rest)
     >>= function
     | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
     | Ok read ->
@@ -295,7 +295,7 @@ module Make
 
     let open Lwt.Infix in
 
-    FileSystem.File.open_w ~mode:644 ~lock:(Lwt.return ()) Path.(root / "objects" / first / rest)
+    FileSystem.File.open_w ~mode:644 Path.(root / "objects" / first / rest)
     >>= function
     | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
     | Ok write ->

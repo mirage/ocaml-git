@@ -517,8 +517,13 @@ sig
     : S.DEFLATE
   (** The [Deflate] module used to make the module. *)
 
+  module Lock
+    : Lock.S
+  (** The [Lock] module used to make this interface. *)
+
   module FileSystem
     : Fs.S with type path = Path.t
+            and type File.lock = Lock.t
   (** The [FileSystem] module used to make the module. *)
 
   module Value
@@ -530,6 +535,7 @@ sig
   module Reference
     : Reference.S with module Hash = Hash
                    and module Path = Path
+                   and module Lock = Lock
                    and module FileSystem = FileSystem
   (** The Reference module, which represents the Git reference. *)
 
@@ -817,13 +823,16 @@ module Make
     (H : Ihash.S with type Digest.buffer = Cstruct.t
                   and type hex = string)
     (P : Path.S)
+    (L : Lock.S)
     (FS : Fs.S with type path = P.t
                 and type File.raw = Cstruct.t
+                and type File.lock = L.t
                 and type Mapper.raw = Cstruct.t)
     (Inflate : S.INFLATE)
     (Deflate : S.DEFLATE)
   : S with module Hash = H
        and module Path = P
+       and module Lock = L
        and module Inflate = Inflate
        and module Deflate = Deflate
        and module FileSystem = FS

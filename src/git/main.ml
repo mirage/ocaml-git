@@ -52,7 +52,7 @@ struct
 end
 
 module Store
-  = Store.Make(Sha1)(Fpath)(Fs_lwt_unix)(C_inflate)(Ocaml_deflate)
+  = Store.Make(Sha1)(Fpath)(Fs_lwt_unix.Lock)(Fs_lwt_unix)(C_inflate)(Ocaml_deflate)
 module Sync
   : module type of Sync.Make(SNet)(Store)(Capabilities)
     with module Hash = Store.Hash

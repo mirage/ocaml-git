@@ -25,6 +25,10 @@ sig
     : Path.S
   (** The [Path] module used to make the module. *)
 
+  module Lock
+    : Lock.S
+  (** The [Lock] module used to make the module. *)
+
   module FileSystem
     : Fs.S
   (** The [FileSystem] module used to make the module. *)
@@ -134,25 +138,35 @@ sig
 
       This function can returns an {!error}. *)
 
-  val write : root:Path.t -> ?capacity:int -> raw:Cstruct.t -> t -> head_contents -> (unit, error) result Lwt.t
+  val write : root:Path.t -> lockdir:Path.t -> ?capacity:int -> raw:Cstruct.t -> t -> head_contents -> (unit, error) result Lwt.t
   (** [write ~root ~raw reference value] writes the value [value] in the mutable
       representation of the [reference] in the git repository [root]. [raw] is a
       buffer used by the decoder to keep the input.
 
       This function can returns an {!error}. *)
 
-  val test_and_set : root:Path.t -> t -> test:head_contents option -> set:head_contents option -> (bool, error) result Lwt.t
+  val test_and_set : root:Path.t -> lockdir:Path.t -> t -> test:head_contents option -> set:head_contents option -> (bool, error) result Lwt.t
   (** Atomic updates (test and set) for references. *)
+
+  val remove : root:Path.t -> lockdir:Path.t -> t -> (unit, error) result Lwt.t
+  (** [remove ~root ~lockdir reference] removes the reference from the git
+      repository [root]. [lockdir] is to store a {!Lock.t} and avoid race
+      condition on the reference [reference].
+
+      This function can returns an {!error}. *)
 end
 
 module Make
     (H : Ihash.S with type Digest.buffer = Cstruct.t
                   and type hex = string)
     (P : Path.S)
+    (L : Lock.S)
     (FS : Fs.S with type path = P.t
-                and type File.raw = Cstruct.t)
+                and type File.raw = Cstruct.t
+                and type File.lock = L.t)
   : S with module Hash = H
        and module Path = P
+       and module Lock = L
        and module FileSystem = FS
 (** The {i functor} to make the OCaml representation of the Git Reference object
     by a specific hash, a defined path and an access to the file-system. We

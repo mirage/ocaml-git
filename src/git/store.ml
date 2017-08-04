@@ -116,8 +116,11 @@ sig
     : S.INFLATE
   module Deflate
     : S.DEFLATE
+  module Lock
+    : Lock.S
   module FileSystem
     : Fs.S with type path = Path.t
+            and type File.lock = Lock.t
 
   module Value
     : Value.S with module Hash = Hash
@@ -126,7 +129,7 @@ sig
   module Reference
     : Reference.S with module Hash = Hash
                    and module Path = Path
-                   and module Path = Path
+                   and module Lock = Lock
                    and module FileSystem = FileSystem
 
   module IDXDecoder
@@ -211,13 +214,16 @@ module Make
     (H : Ihash.S with type Digest.buffer = Cstruct.t
                   and type hex = string)
     (P : Path.S)
+    (L : Lock.S)
     (FS : Fs.S with type path = P.t
                 and type File.raw = Cstruct.t
+                and type File.lock = L.t
                 and type Mapper.raw = Cstruct.t)
     (I : S.INFLATE)
     (D : S.DEFLATE)
   : S with module Hash = H
        and module Path = P
+       and module Lock = L
        and module FileSystem = FS
        and module Inflate = I
        and module Deflate = D
@@ -226,6 +232,7 @@ module Make
   module Path = P
   module Inflate = I
   module Deflate = D
+  module Lock = L
   module FileSystem = FS
 
   module LooseImpl
@@ -249,7 +256,7 @@ module Make
 
   module PACKDecoder = Unpack.MakeDecoder(H)(FS.Mapper)(I)
   module PACKEncoder = Pack.MakePACKEncoder(H)(D)
-  module Reference = Reference.Make(H)(P)(FS)
+  module Reference = Reference.Make(H)(P)(L)(FS)
   module IDXDecoder = Index_pack.Lazy(H)
 
   module DoubleHash =
@@ -494,7 +501,7 @@ module Make
 
       let open Lwt.Infix in
 
-      FileSystem.File.open_r ~mode:0o644 ~lock:(Lwt.return ()) path >>= function
+      FileSystem.File.open_r ~mode:0o644 path >>= function
       | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
       | Ok fd ->
         let state = PACKDecoder.P.default ztmp window in

@@ -19,6 +19,7 @@ module type S =
 sig
   module Hash : Ihash.S
   module Path : Path.S
+  module Lock : Lock.S
   module FileSystem : Fs.S
 
   type t = private string
@@ -61,22 +62,26 @@ sig
   val pp_error  : error Fmt.t
 
   val read : root:Path.t -> t -> dtmp:Cstruct.t -> raw:Cstruct.t -> ((t * head_contents), error) result Lwt.t
-  val write : root:Path.t -> ?capacity:int -> raw:Cstruct.t -> t -> head_contents -> (unit, error) result Lwt.t
-  val test_and_set : root:Path.t -> t -> test:head_contents option -> set:head_contents option -> (bool, error) result Lwt.t
+  val write : root:Path.t -> lockdir:Path.t -> ?capacity:int -> raw:Cstruct.t -> t -> head_contents -> (unit, error) result Lwt.t
+  val test_and_set : root:Path.t -> lockdir:Path.t -> t -> test:head_contents option -> set:head_contents option -> (bool, error) result Lwt.t
 end
 
 module Make
     (H : Ihash.S with type Digest.buffer = Cstruct.t
                   and type hex = string)
     (P : Path.S)
+    (L : Lock.S)
     (FS : Fs.S with type path = P.t
-                and type File.raw = Cstruct.t)
+                and type File.raw = Cstruct.t
+                and type File.lock = L.t)
   : S with module Hash = H
        and module Path = P
+       and module Lock = L
        and module FileSystem = FS
 = struct
   module Hash = H
   module Path = P
+  module Lock = L
   module FileSystem = FS
 
   type t = string
@@ -193,7 +198,7 @@ module Make
 
     let path = Path.(root // (to_path reference)) in
 
-    FileSystem.File.open_r ~mode:0o400 ~lock:(Lwt.return ()) path
+    FileSystem.File.open_r ~mode:0o400 path
     >>= function
     | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
     | Ok read ->
@@ -219,7 +224,7 @@ module Make
         Ok (normalize path, head_contents)
       | Error _ as e -> e
 
-  let write ~root ?(capacity = 0x100) ~raw reference value =
+  let write ~root ~lockdir ?(capacity = 0x100) ~raw reference value =
     let open Lwt.Infix in
 
     let state = E.default (capacity, value) in
@@ -245,8 +250,11 @@ module Make
     end in
 
     let path = Path.(root // (to_path reference)) in
+    let lock = FileSystem.File.lock Path.(lockdir // (to_path reference)) in
 
-    FileSystem.File.open_w ~mode:0o644 ~lock:(Lwt.return ()) path
+    Lock.with_lock (Some lock)
+    @@ fun () ->
+    FileSystem.File.open_w ~mode:0o644 path
     >>= function
     | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
     | Ok write ->
@@ -268,8 +276,9 @@ module Make
           | `Writer sys_err -> Lwt.return (Error (`SystemFile sys_err))
           | `Encoder `Never -> assert false
 
-  let test_and_set ~root t ~test ~set =
+  let test_and_set ~root ~lockdir t ~test ~set =
     let path = Path.(root // (to_path t)) in
+    let lock = FileSystem.File.lock Path.(lockdir // (to_path t)) in
 
     let raw = function
       | None -> None
@@ -279,6 +288,7 @@ module Make
     let open Lwt.Infix in
 
     FileSystem.File.test_and_set
+      ~lock
       path
       ~test:(raw test)
       ~set:(raw set)
