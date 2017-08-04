@@ -1018,7 +1018,7 @@ module Make
       | Ok files ->
         Lwt_list.fold_left_s
           (fun acc abs_ref ->
-             (* XXX(dinosaure): we already canonicalize the reference (which is
+             (* XXX(dinosaure): we already normalize the reference (which is
                 absolute). so we consider than the root as [/]. *)
              Reference.read ~root:(Path.v "/") (Reference.of_path abs_ref) ~dtmp ~raw
              >|= function
