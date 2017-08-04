@@ -62,6 +62,7 @@ sig
 
   val read : root:Path.t -> t -> dtmp:Cstruct.t -> raw:Cstruct.t -> ((t * head_contents), error) result Lwt.t
   val write : root:Path.t -> ?capacity:int -> raw:Cstruct.t -> t -> head_contents -> (unit, error) result Lwt.t
+  val test_and_set : root:Path.t -> t -> test:Cstruct.t option -> set:Cstruct.t option -> (bool, error) Lwt.t
 end
 
 module Make
@@ -262,4 +263,17 @@ module Make
           | `Stack -> Lwt.return (Error (`SystemIO (Fmt.strf "Impossible to store the reference: %a" pp reference)))
           | `Writer sys_err -> Lwt.return (Error (`SystemFile sys_err))
           | `Encoder `Never -> assert false
+
+  let test_and_set ~root t ~test ~set =
+    let path = Path.(root // (to_path t)) in
+
+    let raw = function
+      | None -> None
+      | Some value -> Some (Cstruct.of_string (Hash.to_hex value))
+    in
+
+    FileSystem.File.test_and_set
+      path
+      ~test:(raw test)
+      ~set:(raw test)
 end
