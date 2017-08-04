@@ -64,6 +64,7 @@ sig
   val read : root:Path.t -> t -> dtmp:Cstruct.t -> raw:Cstruct.t -> ((t * head_contents), error) result Lwt.t
   val write : root:Path.t -> lockdir:Path.t -> ?capacity:int -> raw:Cstruct.t -> t -> head_contents -> (unit, error) result Lwt.t
   val test_and_set : root:Path.t -> lockdir:Path.t -> t -> test:head_contents option -> set:head_contents option -> (bool, error) result Lwt.t
+  val remove : root:Path.t -> lockdir:Path.t -> t -> (unit, error) result Lwt.t
 end
 
 module Make
@@ -293,6 +294,16 @@ module Make
       ~test:(raw test)
       ~set:(raw set)
     >>= function
+    | Ok _ as v -> Lwt.return v
+    | Error err -> Lwt.return (Error (`SystemFile err))
+
+  let remove ~root ~lockdir t =
+    let path = Path.(root // (to_path t)) in
+    let lock = FileSystem.File.lock Path.(lockdir // (to_path t)) in
+
+    let open Lwt.Infix in
+
+    FileSystem.File.delete ~lock path >>= function
     | Ok _ as v -> Lwt.return v
     | Error err -> Lwt.return (Error (`SystemFile err))
 end
