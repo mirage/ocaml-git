@@ -19,8 +19,6 @@ module type S =
 sig
   module Hash : Ihash.S
   module Path : Path.S
-  module Lock : Lock.S
-  module FileSystem : Fs.S
 
   type t = private string
 
@@ -53,6 +51,14 @@ sig
                         and type raw = Cstruct.t
                         and type init = int * head_contents
                         and type error = [ `Never ]
+end
+
+module type IO =
+sig
+  module Lock : Lock.S
+  module FileSystem : Fs.S
+
+  include S
 
   type error =
     [ `SystemFile of FileSystem.File.error
@@ -71,19 +77,11 @@ module Make
     (H : Ihash.S with type Digest.buffer = Cstruct.t
                   and type hex = string)
     (P : Path.S)
-    (L : Lock.S)
-    (FS : Fs.S with type path = P.t
-                and type File.raw = Cstruct.t
-                and type File.lock = L.t)
   : S with module Hash = H
        and module Path = P
-       and module Lock = L
-       and module FileSystem = FS
 = struct
   module Hash = H
   module Path = P
-  module Lock = L
-  module FileSystem = FS
 
   type t = string
 
@@ -122,10 +120,6 @@ module Make
   let pp_head_contents ppf = function
     | Hash hash -> Fmt.pf ppf "(Hash %a)" Hash.pp hash
     | Ref t -> Fmt.pf ppf "(Ref %a)" pp t
-
-  let head_contents_to_string = function
-    | Hash hash -> Hash.to_hex hash
-    | Ref refname -> Fmt.strf "ref: %a" pp refname (* XXX(dinosaure): [pp] or [Fmt.string]? *)
 
   module A =
   struct
@@ -166,6 +160,29 @@ module Make
 
   module D = Helper.MakeDecoder(A)
   module E = Helper.MakeEncoder(M)
+end
+
+module IO
+    (H : Ihash.S with type Digest.buffer = Cstruct.t
+                  and type hex = string)
+    (P : Path.S)
+    (L : Lock.S)
+    (FS : Fs.S with type path = P.t
+                and type File.raw = Cstruct.t
+                and type File.lock = L.t)
+  : IO with module Hash = H
+        and module Path = P
+        and module Lock = L
+        and module FileSystem = FS
+= struct
+  module Lock = L
+  module FileSystem = FS
+
+  include Make(H)(P)
+
+  let head_contents_to_string = function
+    | Hash hash -> Hash.to_hex hash
+    | Ref refname -> Fmt.strf "ref: %a" pp refname (* XXX(dinosaure): [pp] or [Fmt.string]? *)
 
   type error =
     [ `SystemFile of FileSystem.File.error
@@ -190,7 +207,7 @@ module Make
            | "refs" as x -> (true, [ x ])
            | _ -> (false, []))
       (false, []) segs
-    |> fun (_, refs) -> List.rev refs |> String.concat "/"
+    |> fun (_, refs) -> List.rev refs |> String.concat "/" |> of_string
 
   let read ~root reference ~dtmp ~raw =
     let decoder = D.default dtmp in
@@ -220,7 +237,7 @@ module Make
       | Ok head_contents ->
         let reference' = normalize path in
 
-        assert (String.equal reference reference');
+        assert (equal reference reference');
 
         Ok (normalize path, head_contents)
       | Error _ as e -> e

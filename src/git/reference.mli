@@ -25,14 +25,6 @@ sig
     : Path.S
   (** The [Path] module used to make the module. *)
 
-  module Lock
-    : Lock.S
-  (** The [Lock] module used to make the module. *)
-
-  module FileSystem
-    : Fs.S
-  (** The [FileSystem] module used to make the module. *)
-
   type t = private string
   (** A Git Reference object. Which contains a hash to point to an other
       object. *)
@@ -121,6 +113,15 @@ sig
       NOTE: we can not unspecified the error type (it needs to be concrete) but,
       because the encoder can not fail, we define the error as [`Never]. *)
 
+end
+
+module type IO =
+sig
+  module Lock : Lock.S
+  module FileSystem : Fs.S
+
+  include S
+
   type error =
     [ `SystemFile of FileSystem.File.error (** The [FileSystem] error *)
     | `SystemIO of string (** Appears when the write action is blocking too long. *)
@@ -160,17 +161,24 @@ module Make
     (H : Ihash.S with type Digest.buffer = Cstruct.t
                   and type hex = string)
     (P : Path.S)
-    (L : Lock.S)
-    (FS : Fs.S with type path = P.t
-                and type File.raw = Cstruct.t
-                and type File.lock = L.t)
   : S with module Hash = H
        and module Path = P
-       and module Lock = L
-       and module FileSystem = FS
 (** The {i functor} to make the OCaml representation of the Git Reference object
     by a specific hash, a defined path and an access to the file-system. We
     constraint the {!IDIGEST} module to generate a {Bytes.t} and compute a
     {Cstruct.t}. Then, the content of a file need to be a {Cstruct.t}. The path
     provided by the {!Path} module need to be semantically the same than which
     used by the [FileSystem] module. *)
+
+module IO
+    (H : Ihash.S with type Digest.buffer = Cstruct.t
+                  and type hex = string)
+    (P : Path.S)
+    (L : Lock.S)
+    (FS : Fs.S with type path = P.t
+                and type File.raw = Cstruct.t
+                and type File.lock = L.t)
+  : IO with module Hash = H
+        and module Path = P
+        and module Lock = L
+        and module FileSystem = FS
