@@ -60,6 +60,45 @@ sig
   include S.BASE with type t := t
 end
 
+module type BUFFER =
+sig
+  type t
+  type raw
+  type fixe
+
+  val create : int -> t
+  val contents : t -> raw
+  val add : t -> fixe -> unit
+  val clear : t -> unit
+  val reset : t -> unit
+end
+
+module type RAW =
+sig
+  module Buffer
+    : BUFFER
+
+  include S
+
+  module EE
+    : S.ENCODER
+      with type t = t
+       and type raw = Cstruct.t
+       and type init = int * t
+       and type error = [ `Never ]
+
+  module DD
+    : S.DECODER
+      with type t = t
+       and type raw = Cstruct.t
+       and type init = Cstruct.t
+       and type error = [ `Decoder of string ]
+
+  val to_deflated_raw : ?capacity:int -> ?level:int -> ztmp:Cstruct.t -> t -> (Buffer.raw, E.error) result
+  val to_raw : ?capacity:int -> t -> (Buffer.raw, EE.error) result
+  val of_raw : Cstruct.t -> (t, DD.error) result
+end
+
 module Make (H : Ihash.S with type Digest.buffer = Cstruct.t
                           and type hex = string)
     (I : S.INFLATE)
@@ -223,3 +262,147 @@ module Make (H : Ihash.S with type Digest.buffer = Cstruct.t
   module Set = Set.Make(struct type nonrec t = t let compare = compare end)
   module Map = Map.Make(struct type nonrec t = t let compare = compare end)
 end
+
+module Raw
+    (H : Ihash.S with type Digest.buffer = Cstruct.t
+                  and type hex = string)
+    (I : S.INFLATE)
+    (D : S.DEFLATE)
+    (B : BUFFER with type raw = string
+                 and type fixe = Cstruct.t)
+    : RAW with module Hash = H
+           and module Inflate = I
+           and module Deflate = D
+           and module Buffer = B
+= struct
+  module Buffer = B
+
+  module Value : S with module Hash = H
+                    and module Inflate = I
+                    and module Deflate = D
+    = Make(H)(I)(D)
+
+  include Value
+
+  module EE = Helper.MakeEncoder(M)
+  (* XXX(dinosaure): the [Value] module expose only an encoder to a deflated
+     value. We provide an encoder for a serialized encoder. *)
+
+  module type ENCODER =
+  sig
+    type state
+    type raw
+    type result
+    type error
+
+    val raw_length : raw -> int
+    val raw_sub : raw -> int -> int -> raw
+
+    val eval : raw -> state -> [ `Flush of state
+                               | `End of (state * result)
+                               | `Error of (state * error) ]
+    val used : state -> int
+    val flush : int -> int -> state -> state
+  end
+  (* XXX(dinosaure): this is close to [Helper.Encoder] used to save a value to a
+     file but without Lwt. *)
+
+  type ('state, 'raw, 'result, 'error) encoder =
+    (module ENCODER with type state = 'state
+                     and type raw = 'raw
+                     and type result = 'result
+                     and type error = 'error)
+
+  let to_ (type state) (type res) (type err_encoder)
+      (encoder : (state, Buffer.fixe, res, err_encoder) encoder)
+      (buffer : Buffer.t)
+      (raw : Buffer.fixe)
+      (state : state) : (Buffer.raw, err_encoder) result
+    =
+    let module E =
+      (val encoder : ENCODER with type state = state
+                              and type raw = Buffer.fixe
+                              and type result = res
+                              and type error = err_encoder)
+    in
+
+    let rec go state = match E.eval raw state with
+      | `Error (state, err) -> Error err
+      | `End (state, res) ->
+        if E.used state > 0
+        then Buffer.add buffer (E.raw_sub raw 0 (E.used state));
+
+        Ok (Buffer.contents buffer)
+      | `Flush state ->
+        if E.used state > 0
+        then Buffer.add buffer (E.raw_sub raw 0 (E.used state));
+
+        go (E.flush 0 (E.raw_length raw) state)
+    in
+
+    go state
+
+  let to_deflated_raw ?(capacity = 0x100) ?(level = 4) ~ztmp value =
+    let encoder = E.default (capacity, value, level, ztmp) in
+    let raw = Cstruct.create capacity in
+    let buffer = Buffer.create (Int64.to_int (F.length value)) in
+    (* XXX(dinosaure): it's an heuristic to consider than the size of the result
+       is lower than [F.length value]. In most of cases, it's true but sometimes, a
+       deflated Git object can be bigger than a serialized Git object. *)
+
+    let module SpecializedEncoder =
+    struct
+      type state = E.encoder
+      type raw = Cstruct.t
+      type result = int
+      type error = E.error
+
+      let raw_length = Cstruct.len
+      let raw_sub = Cstruct.sub
+
+      type rest = [ `Flush of state | `End of (state * result) ]
+
+      let eval raw state = match E.eval raw state with
+        | #rest as rest -> rest
+        | `Error err -> `Error (state, err)
+
+      let used = E.used
+      let flush = E.flush
+    end in
+
+    to_ (module SpecializedEncoder) buffer raw encoder
+
+  let to_raw ?(capacity = 0x100) value =
+    let encoder = EE.default (capacity, value) in
+    let raw = Cstruct.create capacity in
+    let buffer = Buffer.create (Int64.to_int (F.length value)) in
+    (* XXX(dinosaure): we are sure than the serialized object has the size
+       [F.length value]. So, the [buffer] should not growth. *)
+
+    let module SpecializedEncoder =
+    struct
+      type state = EE.encoder
+      type raw = Cstruct.t
+      type result = int
+      type error = EE.error
+
+      let raw_length = Cstruct.len
+      let raw_sub = Cstruct.sub
+
+      type rest = [ `Flush of state | `End of (state * result) ]
+
+      let eval raw state = match EE.eval raw state with
+        | #rest as rest -> rest
+        | `Error err -> `Error (state, err)
+
+      let used = EE.used
+      let flush = EE.flush
+    end in
+
+    to_ (module SpecializedEncoder) buffer raw encoder
+
+  module DD = Helper.MakeDecoder(A)
+
+  let of_raw inflated = DD.to_result inflated
+end
+
