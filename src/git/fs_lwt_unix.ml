@@ -30,7 +30,7 @@ let mkdir_pool = Lwt_pool.create 1 (fun () -> Lwt.return ())
 (* XXX(samoht): Files smaller than this are loaded using [read].
 
    Use of mmap is necessary to handle PACK files efficiently. Since these are
-   stored in a weak map,we don't run out of open files if we keep accessing the
+   stored in a weak map, we don't run out of open files if we keep accessing the
    same one.
 
    Using read is necessary to handle references, since these are mutable and
@@ -89,14 +89,14 @@ let safe_mkdir ?(path = true) ?(mode = 0o755) dir =
       let rec create_them dirs () = match dirs with
         | [] -> Lwt.return (Ok ())
         | dir :: dirs -> mkdir dir mode >>= function
-          | Error err -> Lwt.return (Error err)
+          | Error _ as err -> Lwt.return err
           | Ok () -> create_them dirs ()
       in
 
       dirs_to_create dir []
       >>= (function Ok dirs -> create_them dirs ()
-                  | Error err -> Lwt.return (Error err))
-      >|= result_bind (fun x -> Ok true)
+                  | Error _ as err -> Lwt.return err)
+      >|= result_bind (fun _ -> Ok true)
 
 module Lock =
 struct
@@ -317,7 +317,7 @@ module Dir
         (match Fpath.of_string f with
           | Ok f -> readdir dh ((if rel then f else Fpath.(dir // f)) :: acc)
           | Error (`Msg err) ->
-            Lwt.return (Error (`Path (Fmt.strf "directory contents %s: connot parse element to a path (%S)"
+            Lwt.return (Error (`Path (Fmt.strf "directory contents %s: cannot parse element to a path (%S)"
                                         (Fpath.to_string dir) f))))
       | Some _ -> readdir dh acc
     in
