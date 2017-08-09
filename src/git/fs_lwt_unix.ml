@@ -251,7 +251,7 @@ module Dir
               Lwt.try_bind
                 (fun () -> delete_dir_files dh [])
                 (fun v -> Lwt_unix.closedir dh >>= fun () -> match v with
-                  | Ok dirs -> delete_dir_files dh dirs
+                  | Ok dirs -> delete_files (dir :: to_rmdir) (List.rev_append dirs todo)
                   | Error _ as err -> Lwt.return err)
                 (function exn -> Lwt_unix.closedir dh >>= fun () -> Lwt.fail exn))
           (function Unix.Unix_error (Unix.ENOENT, _, _) -> delete_files to_rmdir todo
