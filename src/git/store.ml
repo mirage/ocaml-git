@@ -127,10 +127,10 @@ sig
                and module Inflate = Inflate
                and module Deflate = Deflate
   module Reference
-    : Reference.S with module Hash = Hash
-                   and module Path = Path
-                   and module Lock = Lock
-                   and module FileSystem = FileSystem
+    : Reference.IO with module Hash = Hash
+                    and module Path = Path
+                    and module Lock = Lock
+                    and module FileSystem = FileSystem
 
   module IDXDecoder
     : Index_pack.LAZY with module Hash = Hash
@@ -256,7 +256,7 @@ module Make
 
   module PACKDecoder = Unpack.MakeDecoder(H)(FS.Mapper)(I)
   module PACKEncoder = Pack.MakePACKEncoder(H)(D)
-  module Reference = Reference.Make(H)(P)(L)(FS)
+  module Reference = Reference.IO(H)(P)(L)(FS)
   module IDXDecoder = Index_pack.Lazy(H)
 
   module DoubleHash =
