@@ -68,6 +68,9 @@ sig
 
   val obj : t -> Hash.t
   (** [obj t] returns the pointed hash of the Tag [t]. *)
+
+  val tag : t -> string
+  (** [tag t] returns the tag information of [t]. *)
 end
 
 module Make

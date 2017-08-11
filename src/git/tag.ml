@@ -37,6 +37,7 @@ sig
   include S.BASE with type t := t
 
   val obj : t -> Hash.t
+  val tag : t -> string
 end
 
 module Make (H : Ihash.S with type Digest.buffer = Cstruct.t
@@ -235,6 +236,7 @@ module Make (H : Ihash.S with type Digest.buffer = Cstruct.t
   module E = Helper.MakeEncoder(M)
 
   let obj { obj; _ } = obj
+  let tag { tag; _ } = tag
 
   let digest value =
     let tmp = Cstruct.create 0x100 in
