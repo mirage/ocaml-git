@@ -51,6 +51,23 @@ struct
   let socket host port = assert false
 end
 
+module Gamma =
+struct
+  type path = Fpath.t
+
+  let current = Fpath.v "./"
+  let temp = Fpath.v "/tmp/"
+end
+
+module FS_unix =
+struct
+  include FS_unix
+
+  let connect () = connect "./"
+end
+
+module MirageStore
+  = Store.Make(Sha1)(Fpath)(Fs_lwt_mirage.Lock)(Fs_lwt_mirage.Make(Gamma)(FS_unix))(Ocaml_inflate)(Ocaml_deflate)
 module Store
   = Store.Make(Sha1)(Fpath)(Fs_lwt_unix.Lock)(Fs_lwt_unix)(C_inflate)(Ocaml_deflate)
 module Sync
