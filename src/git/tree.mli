@@ -79,6 +79,8 @@ sig
 
   val hashes : t -> Hash.t list
   (** [hashes t] returns all pointer of the tree [t]. *)
+
+  val list : t -> (string * Hash.t) list
 end
 
 module Make

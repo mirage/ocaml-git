@@ -43,6 +43,7 @@ sig
   include S.BASE with type t := t
 
   val hashes : t -> Hash.t list
+  val list : t -> (string * Hash.t) list
 end
 
 module Make (H : Ihash.S with type Digest.buffer = Cstruct.t
@@ -61,6 +62,8 @@ module Make (H : Ihash.S with type Digest.buffer = Cstruct.t
   and hash = Hash.t
 
   let hashes tree = List.map (fun { node; _ } -> node) tree
+
+  let list tree = List.map (fun { node; name; _ } -> (name, node)) tree
 
   let pp_entry ppf { perm
                    ; name
