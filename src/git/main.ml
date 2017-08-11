@@ -79,6 +79,8 @@ module Negociator
   = Negociator.Make(Store)
 module Revision
   = Revision.Make(Store)
+module ObjectGraph
+  = Object_graph.Make(Store)
 
 
 let head t =
