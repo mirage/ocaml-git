@@ -35,7 +35,6 @@ sig
   val test_and_set : ?lock:lock -> ?temp:path -> path -> test:Cstruct.t option -> set:Cstruct.t option -> (bool, error) result Lwt.t
   val open_w       : ?lock:lock -> path -> mode:int -> ([ `Write ] fd, error) result Lwt.t
   val open_r       : ?lock:lock -> path -> mode:int -> ([ `Read ] fd, error) result Lwt.t
-  val open_wr      : ?lock:lock -> path -> mode:int -> ([ `Read | `Write ] fd, error) result Lwt.t
   val write        : raw -> ?off:int -> ?len:int -> [> `Write ] fd -> (int, error) result Lwt.t
   val read         : raw -> ?off:int -> ?len:int -> [> `Read ] fd -> (int, error) result Lwt.t
   val close        : 'a fd -> (unit, error) result Lwt.t
