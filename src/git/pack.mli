@@ -118,7 +118,7 @@ sig
              (** Length of the PACK object. *)
              ; depth      : int
              (** Depth of the PACK object. *)
-             ; hunks      : Rabin.e list
+             ; hunks      : Rabin.t list
              (** Compression list. *)
              ; src        : t
              (** Source. *)
@@ -181,7 +181,7 @@ sig
     val pp : t Fmt.t
     (** The pretty-printer of {!t}. *)
 
-    val default : reference -> int -> int -> Rabin.e list -> t
+    val default : reference -> int -> int -> Rabin.t list -> t
     (** Make a new encoder state {!t} from a {!reference}. We need to notice the
         length of the inflated source and the length of the inflated target then,
         the compression list. *)
