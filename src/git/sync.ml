@@ -17,7 +17,7 @@
 
 module type C =
 sig
-  val default : Smart.capability list
+  val default : Capability.t list
 end
 
 module type NET =

@@ -15,111 +15,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-type capability =
-  [ `Multi_ack
-  | `Multi_ack_detailed
-  | `No_done
-  | `Thin_pack
-  | `Side_band
-  | `Side_band_64k
-  | `Ofs_delta
-  | `Agent of string
-  | `Shallow
-  | `Deepen_since
-  | `Deepen_not
-  | `No_progress
-  | `Include_tag
-  | `Report_status
-  | `Delete_refs
-  | `Quiet
-  | `Atomic
-  | `Push_options
-  | `Allow_tip_sha1_in_want
-  | `Allow_reachable_sha1_in_want
-  | `Push_cert of string
-  | `Other of string
-  | `Parameter of string * string ]
-
-let string_of_capability = function
-  | `Multi_ack                    -> "multi_ack"
-  | `Multi_ack_detailed           -> "multi_ack_detailed"
-  | `No_done                      -> "no-done"
-  | `Thin_pack                    -> "thin-pack"
-  | `Side_band                    -> "side-band"
-  | `Side_band_64k                -> "side-band-64k"
-  | `Ofs_delta                    -> "ofs-delta"
-  | `Agent agent                  -> Fmt.strf "agent=%s" agent
-  | `Shallow                      -> "shallow"
-  | `Deepen_since                 -> "deepen-since"
-  | `Deepen_not                   -> "deepen-not"
-  | `No_progress                  -> "no-progress"
-  | `Include_tag                  -> "include-tag"
-  | `Report_status                -> "report-status"
-  | `Delete_refs                  -> "delete-refs"
-  | `Quiet                        -> "quiet"
-  | `Atomic                       -> "atomic"
-  | `Push_options                 -> "push-options"
-  | `Allow_tip_sha1_in_want       -> "allow-tip-sha1-in-want"
-  | `Allow_reachable_sha1_in_want -> "allow-reachable-sha1-in-want"
-  | `Push_cert cert               -> Fmt.strf "push-cert=%s" cert
-  | `Other capability             -> capability
-  | `Parameter (key, value)       -> Fmt.strf "%s=%s" key value
-
-exception Capability_expect_value of string
-
-let capability_of_string ?value = function
-  | "multi_ack"                    -> `Multi_ack
-  | "multi_ack_detailed"           -> `Multi_ack_detailed
-  | "no-done"                      -> `No_done
-  | "thin-pack"                    -> `Thin_pack
-  | "side-band"                    -> `Side_band
-  | "side-band-64k"                -> `Side_band_64k
-  | "ofs-delta"                    -> `Ofs_delta
-  | "shallow"                      -> `Shallow
-  | "deepen-since"                 -> `Deepen_since
-  | "deepen-not"                   -> `Deepen_not
-  | "no-progress"                  -> `No_progress
-  | "include-tag"                  -> `Include_tag
-  | "report-status"                -> `Report_status
-  | "delete-refs"                  -> `Delete_refs
-  | "quiet"                        -> `Quiet
-  | "atomic"                       -> `Atomic
-  | "push-options"                 -> `Push_options
-  | "allow-tip-sha1-in-want"       -> `Allow_tip_sha1_in_want
-  | "allow-reachable-sha1-in-want" -> `Allow_reachable_sha1_in_want
-  | "agent"                        ->
-    (match value with
-     | Some value -> `Agent value
-     | None -> raise (Capability_expect_value "agent"))
-  | capability -> match value with
-    | Some value -> `Parameter (capability, value)
-    | None -> `Other capability
-
-let pp_capability ppf = function
-  | `Multi_ack                    -> Fmt.pf ppf "Multi-ACK"
-  | `Multi_ack_detailed           -> Fmt.pf ppf "Multi-ACK-detailed"
-  | `No_done                      -> Fmt.pf ppf "No-done"
-  | `Thin_pack                    -> Fmt.pf ppf "Thin-PACK"
-  | `Side_band                    -> Fmt.pf ppf "Side-Band"
-  | `Side_band_64k                -> Fmt.pf ppf "Side-Band-64K"
-  | `Ofs_delta                    -> Fmt.pf ppf "Offset-delta"
-  | `Agent agent                  -> Fmt.pf ppf "(Agent %s)" agent
-  | `Shallow                      -> Fmt.pf ppf "Shallow"
-  | `Deepen_since                 -> Fmt.pf ppf "Deepen-Since"
-  | `Deepen_not                   -> Fmt.pf ppf "Deepen-Not"
-  | `No_progress                  -> Fmt.pf ppf "No-Progress"
-  | `Include_tag                  -> Fmt.pf ppf "Include-Tag"
-  | `Report_status                -> Fmt.pf ppf "Report-Status"
-  | `Delete_refs                  -> Fmt.pf ppf "Delete-Refs"
-  | `Quiet                        -> Fmt.pf ppf "Quiet"
-  | `Atomic                       -> Fmt.pf ppf "Atomic"
-  | `Push_options                 -> Fmt.pf ppf "Push-Options"
-  | `Allow_tip_sha1_in_want       -> Fmt.pf ppf "Allow-Tip-SHA1-in-Want"
-  | `Allow_reachable_sha1_in_want -> Fmt.pf ppf "Allow-Reachable-SHA1-in-Want"
-  | `Push_cert cert               -> Fmt.pf ppf "(Push Cert %s)" cert
-  | `Other capability             -> Fmt.pf ppf "(other %s)" capability
-  | `Parameter (key, value)       -> Fmt.pf ppf "(%s %s)" key value
-
 module type DECODER =
 sig
   module Hash : Ihash.S
@@ -151,7 +46,7 @@ sig
   type advertised_refs =
     { shallow      : Hash.t list
     ; refs         : (Hash.t * string * bool) list
-    ; capabilities : capability list }
+    ; capabilities : Capability.t list }
 
   val pp_advertised_refs : advertised_refs Fmt.t
 
@@ -229,7 +124,7 @@ sig
 
   type upload_request =
     { want         : Hash.t * Hash.t list
-    ; capabilities : capability list
+    ; capabilities : Capability.t list
     ; shallow      : Hash.t list
     ; deep         : [ `Depth of int | `Timestamp of int64 | `Ref of string ] option }
   type request_command =
@@ -246,7 +141,7 @@ sig
   and update_request =
     { shallow      : Hash.t list
     ; requests     : (command * command list, push_certificate) either
-    ; capabilities : capability list }
+    ; capabilities : Capability.t list }
   and command =
     | Create of Hash.t * string
     | Delete of Hash.t * string
@@ -308,8 +203,8 @@ sig
     | `SendPACK of int
     | `FinishPACK ]
 
-  val capabilities : context -> capability list
-  val set_capabilities : context -> capability list -> unit
+  val capabilities : context -> Capability.t list
+  val set_capabilities : context -> Capability.t list -> unit
   val encode : Encoder.action -> (context -> process) -> context -> process
   val decode : 'a Decoder.transaction -> ('a -> context -> process) -> context -> process
   val pp_result : result Fmt.t
@@ -635,9 +530,9 @@ struct
       let value =
         p_while1 (function '\033' .. '\126' -> true | _ -> false) decoder
         |> Cstruct.to_string in
-      capability_of_string ~value capability
+      Capability.capability_of_string ~value capability
     | _ ->
-      capability_of_string capability
+      Capability.capability_of_string capability
 
   let p_capabilities1 decoder =
     let acc = [ p_capability decoder ] in
@@ -704,7 +599,7 @@ struct
   type advertised_refs =
     { shallow      : Hash.t list
     ; refs         : (Hash.t * string * bool) list
-    ; capabilities : capability list }
+    ; capabilities : Capability.t list }
 
   let pp_advertised_refs ppf { shallow; refs; capabilities; } =
     let sep = Fmt.unit ";@ " in
@@ -719,7 +614,7 @@ struct
                          capabilites = [ %a ];@] }"
       (Fmt.hvbox @@ Fmt.list ~sep Hash.pp) shallow
       (Fmt.hvbox @@ Fmt.list ~sep pp_ref) refs
-      (Fmt.hvbox @@ Fmt.list ~sep pp_capability) capabilities
+      (Fmt.hvbox @@ Fmt.list ~sep Capability.pp_capability) capabilities
 
   let rec p_advertised_refs ~pkt ~first ~shallow_state refs decoder =
     match pkt with
@@ -1160,9 +1055,9 @@ struct
   let w_capabilities lst k encoder =
     let rec loop lst encoder = match lst with
       | [] -> k encoder
-      | [ x ] -> writes (string_of_capability x) k encoder
+      | [ x ] -> writes (Capability.string_of_capability x) k encoder
       | x :: r ->
-        (writes (string_of_capability x)
+        (writes (Capability.string_of_capability x)
          @@ w_space
          @@ loop r)
         encoder
@@ -1226,7 +1121,7 @@ struct
 
   type upload_request =
     { want         : Hash.t * Hash.t list
-    ; capabilities : capability list
+    ; capabilities : Capability.t list
     ; shallow      : Hash.t list
     ; deep         : [ `Depth of int | `Timestamp of int64 | `Ref of string ] option }
 
@@ -1334,7 +1229,7 @@ struct
   type update_request =
     { shallow      : Hash.t list
     ; requests     : (command * command list, push_certificate) either
-    ; capabilities : capability list }
+    ; capabilities : Capability.t list }
   and command =
     | Create of Hash.t * string (* XXX(dinosaure): break the dependence with [Store] and consider the reference name as a string. *)
     | Delete of Hash.t * string
@@ -1470,7 +1365,7 @@ struct
   type context =
     { decoder      : Decoder.decoder
     ; encoder      : Encoder.encoder
-    ; mutable capabilities : capability list }
+    ; mutable capabilities : Capability.t list }
 
   let capabilities { capabilities; _ } = capabilities
   let set_capabilities context capabilities =
