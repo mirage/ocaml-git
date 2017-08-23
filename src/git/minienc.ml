@@ -248,19 +248,30 @@ struct
     ; c = capacity
     ; b = Bigarray.Array1.create Bigarray.char Bigarray.c_layout capacity }
 
-  let pp ppf { r; w; c; b; } =
-    Fmt.pf ppf
-      "{ @[<hov>r = %d;@ \
-                w = %d;@ \
-                c = %d;@ \
-                b = @[<hov>%a@];@] }"
-      r w c (pp_scalar ~get:Bigarray.Array1.get ~length:Bigarray.Array1.dim) b
-
   let mask t v = v land (t.c - 1)
   let empty t = t.r = t.w
   let size t = t.w - t.r
   let available t = t.c - size t
   let full t = size t = t.c
+
+  let pp ppf ({ r; w; c; b; } as t) =
+    let pp_rb r w m ppf b =
+      if (mask t r) <= (mask t w)
+      then
+        Fmt.pf ppf "%a"
+          (Fmt.hvbox (pp_scalar ~get:Bigarray.Array1.get ~length:Bigarray.Array1.dim))
+          (Bigarray.Array1.sub b (mask t r) (w - r))
+      else Fmt.pf ppf "@[<hov>%a and %a@]"
+          (Fmt.hvbox (pp_scalar ~get:Bigarray.Array1.get ~length:Bigarray.Array1.dim)) (Bigarray.Array1.sub b (mask t r) (m - r))
+          (Fmt.hvbox (pp_scalar ~get:Bigarray.Array1.get ~length:Bigarray.Array1.dim)) (Bigarray.Array1.sub b 0 w)
+    in
+
+    Fmt.pf ppf
+      "{ @[<hov>r = %d;@ \
+                w = %d;@ \
+                c = %d;@ \
+                b = %a;@] }"
+      r w c (Fmt.hvbox (pp_rb r w c)) b
 
   let push t v =
     assert (not (full t));
