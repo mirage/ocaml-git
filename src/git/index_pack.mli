@@ -18,6 +18,7 @@
 module type LAZY =
 sig
   module Hash : Ihash.S
+  (** The [Hash] module used to make this interface. *)
 
   type error =
     | Invalid_header of string
@@ -32,18 +33,18 @@ sig
     (** Appear when we try to read a big offset value and we can't catch it. *)
 
   val pp_error : error Fmt.t
-  (** [pp_error fmt err] prints [err] in [fmt]. *)
+  (** Pretty-printer of {!error}. *)
 
   type t
   (** State of the IDX file. *)
 
   val make : ?cache:int -> Cstruct.t -> (t, error) result
   (** Make a new state from a [Cstruct.t] buffer. You can specify how many
-     elements we can store to the cache. This function returns the state [t] or
-     an {!error}. *)
+      elements we can store to the cache. This function returns the state [t] or
+      an {!error}. *)
 
   val find : t -> Hash.t -> (Crc32.t * int64) option
-  (** Get the CRC-32 check-sum and the absolute offset from an [hash]. *)
+  (** Get the CRC-32 checksum and the absolute offset from an [hash]. *)
 
   val iter : t -> (Hash.t -> (Crc32.t * int64) -> unit) -> unit
   (** Iteration in the IDX file. *)
@@ -52,11 +53,17 @@ sig
   (** Fold in the IDX file. *)
 end
 
-module Lazy (H : Ihash.S) : LAZY with module Hash = H
+module Lazy (H : Ihash.S)
+  : LAZY with module Hash = H
+(** The {i functor} to make the {i lazy} decoder of the IDX file. Internally, we
+    use a [Cstruct.t] representation of the IDX file notified to the [make]
+    function. This [Cstruct.t] should never change by the client. All processes
+    available in this module read only the content. *)
 
 module type DECODER =
 sig
   module Hash : Ihash.S
+  (** The [Hash] module used to make this interface. *)
 
   type error =
     | Invalid_byte of int
@@ -71,75 +78,89 @@ sig
     (** Appear when the hash produced when we un-serialize the IDX file does not correspond with the hash provided. *)
 
   val pp_error : error Fmt.t
-  (** [pp_error fmt err] prints [err] in [fmt]. *)
+  (** Pretty-printer of {!error}. *)
 
   type t
   (** The decoder state. *)
 
   val pp : t Fmt.t
-  (** Pretty-print of the decoder {!t}. *)
+  (** Pretty-printer of the decoder {!t}. *)
 
   val make : unit -> t
   (** Make a new decoder state {!t}. *)
 
   val refill : int -> int -> t -> t
   (** [refill off len t] provides a new [t] with [len] bytes to read, starting
-     at [off]. This byte range is read by calls to {!eval} with [t] until
+      at [off]. This byte range is read by calls to {!eval} with [t] until
       [`Await] is returned. *)
 
-  val eval : Cstruct.t -> t -> [ `Await of t | `End of t * Hash.t | `Hash of t * (Hash.t * Crc32.t * int64) | `Error of t * error ]
+  val eval : Cstruct.t -> t ->
+    [ `Await of t
+    | `End of t * Hash.t
+    | `Hash of t * (Hash.t * Crc32.t * int64)
+    | `Error of t * error ]
   (** [eval src t] is:
 
-      {ul {- [`Await t] iff [t] needs more input storage. The client must use
-     {!refill} to provide a new buffer and then call {!eval} with [`Await] until
-     other value returned.}
+      {ul
+
+      {- [`Await t] iff [t] needs more input storage. The client must use
+      {!refill} to provide a new buffer and then call {!eval} with [`Await] until
+      other value returned.}
 
       {- [`End (t, hash)] when [t] is done. We returns the hash of the IDX
-     file.}
+      file.}
 
       {- [`Hash (t, (hash, crc, offset))] when [t] can returns a new value
-     [(hash, crc, offset)]. The client can call {!eval} to continue the process.
-     The value will be consumed then.}
+      [(hash, crc, offset)]. The client can call {!eval} to continue the process.
+      The value will be consumed then.}
 
       {- [`Error (t, exn)] iff the decoder meet an {!error} [exn]. The decoder
       can't continue and sticks in this situation.}} *)
 end
 
-module Decoder (H : Ihash.S with type Digest.buffer = Cstruct.t) : DECODER with module Hash = H
+module Decoder (H : Ihash.S with type Digest.buffer = Cstruct.t)
+  : DECODER with module Hash = H
+(** The {i functor} to make the decoder module by a specific hash
+    implementation. We constraint the {!Ihash.S} module to compute a {Cstruct.t}
+    flow. This module is a {i non-blocking} decoder with a pure state of the IDX
+    file. It's better to use this module instead {!Lazy} if the client wants an
+    OCaml representation of the IDX file - he can construct this specific OCaml
+    value step by step with this decoder. *)
 
 module type ENCODER =
 sig
   module Hash : Ihash.S
+  (** The [Hash] module used to make this interface. *)
 
   type error
-  (** We can't have an error to serialize a PACK file. *)
+  (** We can't have an error to serialize an IDX file. *)
 
   val pp_error : error Fmt.t
-  (** A pretty-print for an {!error}. *)
+  (** A pretty-printer of {!error}. *)
 
   type t
   (** The encoder state. *)
 
   val pp : t Fmt.t
-  (** Pretty-print of the encoder {!t}. *)
+  (** Pretty-printer of the encoder {!t}. *)
 
   type 'a sequence = ('a -> unit) -> unit
   (** An abstract representation of an iterative container. *)
 
   val default : (Hash.t * (Crc32.t * int64)) sequence -> Hash.t -> t
   (** [default seq pack_hash] makes a new {!encoder} to serialize [seq] and
-     associates the IDX stream produced with the [pack_hash] PACK file. This
-     function takes care about the order of [seq], so the client does not need
+      associates the IDX stream produced with the [pack_hash] PACK file. This
+      function takes care about the order of [seq], so the client does not need
       to sort the iterative container. *)
 
   val flush : int -> int -> t -> t
   (** [flush off len t] provides [t] with [len] bytes to write, starting at
-     [off]. This byte range is written by calls to {!eval} with [t] until
-     [`Flush] is returned. Use {!used_out} to know how many byte [t] wrote. *)
+      [off]. This byte range is written by calls to {!eval} with [t] until
+      [`Flush] is returned. Use {!used_out} to know how many byte [t] wrote. *)
 
   val used_out : t -> int
   (** [used_out t] returns how many byte [t] wrote in the current buffer noticed
-     to the previous call of {!eval}. *)
+      to the previous call of {!eval}. *)
 
   val eval : Cstruct.t -> t -> [ `Flush of t | `End of t | `Error of t * error ]
   (** [eval dst t] is:
@@ -147,14 +168,18 @@ sig
       {ul
 
       {- [`Flush t] iff [t] needs more output storage. The client must use
-     {!flush} to provide a new buffer and then call {!eval} with [`Flush] until
-     [`End] is returned.}
+      {!flush} to provide a new buffer and then call {!eval} with [`Flush] until
+      [`End] is returned.}
 
       {- [`End t] when the encoder is done. [t] sticks to this situation. The
-     client can remove it.}
+      client can remove it.}
 
       {- [`Error (t, exn)] ff the encoder meet an {!error} [exn]. The encoder
-     can't continue and sticks in this situation.}} *)
+      can't continue and sticks in this situation.}} *)
 end
 
-module Encoder (H : Ihash.S with type Digest.buffer = Cstruct.t) : ENCODER with module Hash = H
+module Encoder (H : Ihash.S with type Digest.buffer = Cstruct.t)
+  : ENCODER with module Hash = H
+(** The {i functor} to make the encoder module by a specific hash
+    implementation. We constraint the {!Ihash.S} module to compute a {Cstruct.t}
+    flow. *)

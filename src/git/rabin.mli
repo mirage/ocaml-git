@@ -39,8 +39,8 @@ sig
 
   val make : ?copy:bool -> Cstruct.t -> t
   (** [make ?copy raw] returns a Rabin's fingerprint of [raw]. [?copy] signals
-     to copy the input buffer [raw] or not because [make] expects to take the
-     ownership. *)
+      to copy the input buffer [raw] or not because [make] expects to take the
+      ownership. *)
 end
 
 (** The type of the compression. *)
