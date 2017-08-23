@@ -927,6 +927,7 @@ module Make
 
     PACKEncoder.Delta.deltas ~memory entries read tagger depth window
 
+  (* XXX(dinosaure): see Irmin implementation. *)
   let fold t (f : ('acc -> ?name:Path.t -> length:int64 -> Hash.t -> Value.t -> 'acc Lwt.t)) ~path acc hash =
     let names = Hashtbl.create 0x100 in
 

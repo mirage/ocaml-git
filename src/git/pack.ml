@@ -426,6 +426,13 @@ struct
     let o2 = (off land 0xFF0000) lsr 16 in
     let o3 = (off land 0xFF000000) lsr 24 in
 
+    (* XXX(dinosaure): we have a big problem in the last line. Indeed, this line
+       believe than the integer is fully encoder in 32-bits. In a 64-bits
+       architecture, we don't have problem but in 32-bits, this code can not
+       compile (he compiler checks statically the value).
+
+       A solution is to consider [off] as an [int32]. *)
+
     let l0 = len land 0xFF in
     let l1 = (len land 0xFF00) lsr 8 in
     let l2 = (len land 0xFF0000) lsr 16 in
