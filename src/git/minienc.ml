@@ -653,6 +653,11 @@ let bigarray_blit_from_bytes src src_off dst dst_off len =
 let bigarray_blit src src_off dst dst_off len =
   Bigarray.Array1.(blit (sub src src_off len) (sub dst dst_off len))
 
+let bigarray_blit_to_bytes src src_off dst dst_off len =
+  for i = 0 to len - 1
+  do Bytes.set dst (dst_off + i)
+      (Bigarray.Array1.unsafe_get src (src_off + i)) done
+
 let write_string =
   let length = String.length in
   let blit = bigarray_blit_from_string in
