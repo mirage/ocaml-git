@@ -419,9 +419,11 @@ end
 module RBS = RBQ(IOVec)
 
 type encoder =
-  { sched : RBS.t
-  ; write : RBA.t
-  ; flush : (int * (unit -> unit)) Queue.t }
+  { sched    : RBS.t
+  ; write    : RBA.t
+  ; flush    : (int * (int -> encoder -> unit)) Queue.t
+  ; written  : int
+  ; received : int }
 
 let pp ppf { sched; write; _ } =
   Fmt.pf ppf "{ @[<hov>sched = %a;@ \
@@ -439,7 +441,9 @@ and 'v k = encoder -> 'v
 let create len =
   { sched = RBS.make (len * 2)
   ; write = RBA.create len
-  ; flush = Queue.empty }
+  ; flush = Queue.empty
+  ; written = 0
+  ; received = 0 }
 
 (* XXX(dinosaure): this code checks if a [`Bigstring] [iovec] is a sub of
    [t.write.RBA.b]. *)
@@ -456,7 +460,7 @@ let check iovec t = match iovec with
     (sub_ptr >= raw_ptr && sub_ptr <= end_ptr)
   | _ -> false
 
-let shift n t =
+let shift_buffers n t =
   let rec aux rest acc t = match RBS.shift t.sched with
     | (Some iovec, shifted) ->
       let len = IOVec.length iovec in
@@ -469,7 +473,7 @@ let shift n t =
       else if rest > 0
       then let last, rest = IOVec.split iovec rest in
         List.rev (last :: acc),
-        { t with sched = RBS.cons_exn shifted rest 
+        { t with sched = RBS.cons_exn shifted rest
                ; write = if check iovec t
                    then RBA.N.shift t.write (IOVec.length last)
                    else t.write }
@@ -479,6 +483,23 @@ let shift n t =
   in
 
   aux n [] t
+
+let shift_flushes n t =
+  let rec aux t =
+    try
+      let (threshold, f) as x, flush = Queue.shift t.flush in
+
+      if compare (t.written + n - min_int) (threshold - min_int) >= 0 (* unsigned int *)
+      then let () = f n { t with flush } in aux { t with flush }
+      else t
+    with Queue.Empty -> t
+  in
+
+  aux t
+
+let shift n t =
+  let lst, t = shift_buffers n t in
+  lst, (shift_flushes (IOVec.lengthv lst) t |> fun t -> { t with written = t.written + n })
 
 let has t =
   RBS.weight t.sched
@@ -501,12 +522,14 @@ let drain drain t =
       { t with sched }
   in
 
-  go drain t
+  go drain t |> fun t -> { t with written = t.written + drain }
 
 let flush k t =
+  let t = shift_flushes (has t) t in
+
   let continue n =
     let t = drain n t in
-    k t
+    k { t with written = t.written + n }
   in
 
   Flush { continue
@@ -524,7 +547,8 @@ let rec schedule k ~length ~buffer ?(off = 0) ?len v t =
 
   match RBS.push t.sched (IOVec.make (buffer v) off len) with
   | Ok sched ->
-    continue k { t with sched }
+    continue k { t with sched
+                      ; received = t.received + len }
   | Error _ ->
     let max = RBS.available t.sched in
 
@@ -547,6 +571,9 @@ let schedule_bigstring =
   let length = Bigarray.Array1.dim in
   let buffer x = `Bigstring x in
   fun k t ?(off = 0) ?len v -> schedule k ~length ~buffer ~off ?len v t
+
+let schedule_flush f t =
+  { t with flush = Queue.push t.flush (t.received, f) }
 
 external identity : 'a -> 'a = "%identity"
 
