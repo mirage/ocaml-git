@@ -233,7 +233,11 @@ struct
       (Fmt.hvbox (Fmt.array (Fmt.list Entry.pp))) index.hash index.mask
 
   let unsafe_make buf =
-    let len = min (Cstruct.len buf) 0xFFFFFFFE in
+    let len =
+      if Sys.word_size = 64
+      then min (Cstruct.len buf) 0xFFFFFFFE
+      else min (Cstruct.len buf) max_int
+    in
     (* XXX(dinosaure): in git, we can't encode on offset upper than
        [0xFFFFFFFE]. So we limit the index to this area. *)
     let max = (len - 1) / V.window in
