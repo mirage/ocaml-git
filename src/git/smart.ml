@@ -229,7 +229,7 @@ struct
      So, about the smart Git protocol, I have the choice between Angstrom,
      something similar than the PACK decoder or this decoder.
 
-     - Angstrom is good to describe the smart Git protocol. The expressivitu is
+     - Angstrom is good to describe the smart Git protocol. The expressivity is
        good and the performance is another good point. A part of Angstrom is
        about the alteration when you have some possibilities about the input. We
        have some examples when we compute the format of the Git object.
@@ -240,10 +240,9 @@ struct
        something described by Angstrom).
 
        For all of this, it's a good way to use Angstrom in this case. But it's
-       not the best. Indeed, the smart Git protocol is thinked in all state
-       about the length of the input by the /pkt-line/ format. Which one
-       describes all the time the length of the payload and limit this payload
-       to 65520 bytes.
+       not the best. Indeed, the smart Git protocol is think in all state about
+       the length of the input by the /pkt-line/ format. Which one describes all
+       the time the length of the payload and limit this payload to 65520 bytes.
 
        So the big constraint about the alteration and when we need to keep some
        bytes in the current input buffer to retry the next alteration if the
@@ -259,15 +258,15 @@ struct
        So if you want to do something fast and hacky in some contexts (like
        switch between a common functional way and a imperative way easily)
        because you know the constraint about your protocol/format, it's a good
-       way. But you need a long time to do this is not composable so much
-       because closely specific to your protocol/format.
+       way. But you need a long time to do this and it is not easily composable
+       like Angstrom because it's closely specific to your protocol/format.
 
-     - like ocaml-imap. The IMAP protocol is very close the smart Git protocol
-       in some way and the interface seems to be good to have an user-friendly
-       interface to communicate with a Git server without a big overhead because
-       the decoder is funded on some assertions about the protocol (like the PKT
-       line for the smart Git protocol or the end of line for the IMAP
-       protocol).
+     - like ocaml-imap. The IMAP protocol is very close to the smart Git
+       protocol in some way and the interface seems to be good to have an
+       user-friendly interface to communicate with a Git server without a big
+       overhead because the decoder is funded on some assertions about the
+       protocol (like the PKT line for the smart Git protocol or the end of line
+       for the IMAP protocol).
 
        Then, the decoder is very hacky because we don't use the continuation all
        the time (like Angstrom) to keep a complex state but just fuck all up by

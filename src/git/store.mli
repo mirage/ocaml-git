@@ -169,9 +169,9 @@ sig
       {- {!Value.E.error} when we can not serialize xor deflate the requested
       git {i loose} object. This kind of error should be never happen.}}
 
-      NOTE: the current implementation does not limit the memory consumption of
+      TODO: the current implementation does not limit the memory consumption of
       the deflate computation (i.e. {i zlib} and the flush method). Depending of
-      the object [v], the process can consume a lot of memory. TODO!
+      the object [v], the process can consume a lot of memory.
   *)
 
   val write_s : state -> t -> (Hash.t * int, error) result Lwt.t

@@ -110,32 +110,35 @@ sig
   (** The type of input. *)
 
   val create : int -> t
-  (** [create n] returns a fresh buffer, initially empty. The [n] parameter is
-      the initial size of the internal byte sequence that holds the buffer contents.
-      That byte sequence is automatically reallocated when more than [n] bytes are
-      stored in the buffer, but shrinks back to [n] bytes when [reset] is called.
+  (** [create n] returns a fresh buffer, initially empty. The [n]
+      parameter is the initial size of the internal byte sequence that
+      holds the buffer contents.  That byte sequence is automatically
+      reallocated when more than [n] bytes are stored in the buffer,
+      but shrinks back to [n] bytes when [reset] is called.
 
-      For best performance, [n] should be of the same order of magnitude as the
-      number of characters that are expected to be stored in the buffer. Nothing
-      bad will happen if the buffer grows beyond that limit, however. *)
+      For best performance, [n] should be of the same order of
+      magnitude as the number of characters that are expected to be
+      stored in the buffer. Nothing bad will happen if the buffer
+      grows beyond that limit, however. *)
 
   val contents : t -> raw
-  (** Return a copy of the current contents of the buffer. The buffer itself is
-      unchanged. *)
+  (** Return a copy of the current contents of the buffer. The buffer
+      itself is unchanged. *)
 
   val add : t -> fixe -> unit
-  (** [add fixe buffer] appends the fixed-size buffer [fixe] at the end of the
-      buffer [buffer]. *)
+  (** [add fixe buffer] appends the fixed-size buffer [fixe] at the
+      end of the buffer [buffer]. *)
 
   val clear : t -> unit
   (** Empty the buffer. *)
 
   val reset : t -> unit
-  (** Empty the buffer and {i de-allocate} the internal byte sequence holding the
-      buffer contents, replacing it with the initial internal byte sequence of
-      length [n] that was allocated by {!Buffer.create} [n]. For long-lived buffers
-      that may have grown a lot, [reset] allows faster reclamation of the space used
-      by the buffer. *)
+  (** Empty the buffer and {i de-allocate} the internal byte sequence
+      holding the buffer contents, replacing it with the initial
+      internal byte sequence of length [n] that was allocated by
+      {!Buffer.create} [n]. For long-lived buffers that may have grown
+      a lot, [reset] allows faster reclamation of the space used by
+      the buffer. *)
 end
 
 module type RAW =
@@ -170,18 +173,20 @@ sig
        and type error = [ `Decoder of string ]
 
   val to_deflated_raw : ?capacity:int -> ?level:int -> ztmp:Cstruct.t -> t -> (Buffer.raw, E.error) result
-  (** [to_deflated_raw ?capacity ?level ~ztmp value] serializes and deflates the
-      value [value]. [capacity] is the memory consumption of the encoder in bytes
-      (default to [0x100]), [level] is the level of the compression (default to [4])
-      and [ztmp] is an internal buffer used to store the serialized value before the
-      {i deflation}.
+  (** [to_deflated_raw ?capacity ?level ~ztmp value] serializes and
+      deflates the value [value]. [capacity] is the memory consumption
+      of the encoder in bytes (default to [0x100]), [level] is the
+      level of the compression (default to [4]) and [ztmp] is an
+      internal buffer used to store the serialized value before the {i
+      deflation}.
 
-      All error from the {!Deflate} module is relayed to the [`Deflate] error
-      value. *)
+      All error from the {!Deflate} module is relayed to the
+      [`Deflate] error value. *)
 
   val to_raw : ?capacity:int -> t -> (Buffer.raw, EE.error) result
-  (** [to_raw ?capacity value] serializes the value [value]. [capacity] is the
-      memory consumption of the encoder in bytes (default to [0x100]).
+  (** [to_raw ?capacity value] serializes the value
+      [value]. [capacity] is the memory consumption of the encoder in
+      bytes (default to [0x100]).
 
       This function can not returns an {!EE.error} (see {!EE}). *)
 
@@ -206,11 +211,12 @@ module Make
   : S with module Hash = H
        and module Inflate = I
        and module Deflate = D
-(** The {i functor} to make the OCaml representation of the Git object by a
-    specific hash implementation, an {!S.INFLATE} implementation for the
-    decompression and a {!S.DEFLATE} implementation for the compression. We
-    constraint the {!Ihash.S} module to compute a {Cstruct.t} flow and generate
-    a [string] as the hexadecimal representation of the hash. *)
+(** The {i functor} to make the OCaml representation of the Git object
+    by a specific hash implementation, an {!S.INFLATE} implementation
+    for the decompression and a {!S.DEFLATE} implementation for the
+    compression. We constraint the {!Ihash.S} module to compute a
+    {Cstruct.t} flow and generate a [string] as the hexadecimal
+    representation of the hash. *)
 
 module Raw
     (H : Ihash.S with type Digest.buffer = Cstruct.t
@@ -223,13 +229,15 @@ module Raw
          and module Inflate = I
          and module Deflate = D
          and module Buffer = B
-(** The {i functor} to make the OCaml representation of the Git object by a
-    specific hash implementation, and {!S.INFLATE} implementation for the
-    decompression and a {!S.DEFLATE} implementation for the compression We
-    constraint the {!Ihash.S} module to compute a {Cstruct.t} flow and generate a
-    [string] as the hexadecimal representation of the hash.
+(** The {i functor} to make the OCaml representation of the Git object
+    by a specific hash implementation, and {!S.INFLATE} implementation
+    for the decompression and a {!S.DEFLATE} implementation for the
+    compression We constraint the {!Ihash.S} module to compute a
+    {Cstruct.t} flow and generate a [string] as the hexadecimal
+    representation of the hash.
 
-    This module provide a {i blocking} implementation of the serialization and
-    the de-serialization of the Git object in a {!BUFFER}. We constraint the
-    {!BUFFER} to save a fixed-size buffer {Cstruct.t} in the {!BUFFER.t} and
-    return a {Cstruct.t} as a result. *)
+    This module provide a {i blocking} implementation of the
+    serialization and the de-serialization of the Git object in a
+    {!BUFFER}. We constraint the {!BUFFER} to save a fixed-size buffer
+    {Cstruct.t} in the {!BUFFER.t} and return a {Cstruct.t} as a
+    result. *)

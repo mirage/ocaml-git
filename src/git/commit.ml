@@ -55,10 +55,11 @@ module Make
   module Hash = H
 
   (* XXX(dinosaure): git seems to be very resilient with the commit.
-     Indeed, it's not a mandatory to have an author or a committer
-     and for these information, it's not mandatory to have a date.
+     Indeed, it's not a mandatory to have an author or a committer and
+     for these information, it's not mandatory to have a date.
 
-     Follow this issue if we have any problem with the commit format. *)
+     Follow this issue if we have any problem with the commit
+     format. *)
 
   type t =
     { tree      : Hash.t
