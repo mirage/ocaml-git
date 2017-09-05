@@ -175,9 +175,9 @@ sig
   *)
 
   val write_s : state -> t -> (Hash.t * int, error) result Lwt.t
-  (** [write_s state v] is the same process than {!write_p} bu we use the
-      state-defined buffer. That means the client can not use this function in a
-      concurrency context with the same [state]. *)
+  (** [write_s state v] is the same process than {!write_p} but we use
+      the state-defined buffer. That means the client can not use this
+      function in a concurrency context with the same [state]. *)
 
   val write : state -> t -> (Hash.t * int, error) result Lwt.t
   (** Alias of {!write_s}. *)
@@ -636,6 +636,47 @@ sig
 
   val read : t -> Hash.t -> (Value.t, error) result Lwt.t
   (** Alias of {!read_s}. *)
+
+  val read_exn : t -> Hash.t -> Value.t Lwt.t
+  (** [read_exn state hash] is an alias of {!read} but raise an
+      exception (instead to return a {!result}) if the git object
+      requested does not exist or we catch any other errors. *)
+
+  val write_p : ztmp:Cstruct.t ->
+    raw:Cstruct.t ->
+    t -> Value.t -> (Hash.t * int, error) result Lwt.t
+  (** [write_p ~ztmp ~raw state v] writes as a {b loose} git object
+      the value [v] in the file-system. It serializes and deflates the
+      value to a new file. which respect the internal structure of a
+      git repository. This function needs some buffers:
+
+      {ul
+      {- [ztmp] is a buffer used to store the deflated flow}
+      {- [raw] is a buffer used to store the input flow}}
+
+      This function can be used in a concurrency context only if the
+      specified buffers are not used by another process. This function
+      does not allocate any buffer and uses only the specified buffers
+      to store the OCaml value to the file-system. Then, the OCaml
+      value will be available by [read state digest(v)]. Otherwise, we
+      return an {!error}:
+
+      {ul
+
+      {- {!FileSystem.File.error} when we can not create a new file in
+      the file-system.} 
+      {- {!Value.E.error} when we can not serialize xor deflate the
+      requested git {i loose} object. This kind of error should be
+      never happen.}}
+  *)
+
+  val write_s : t -> Value.t -> (Hash.t * int, error) result Lwt.t
+  (** [write_s state v] is the process than {!write_p} but we use the
+      state-defined buffer. That means the client can not use this
+      function in a concurrency context with te same [state]. *)
+
+  val write : t -> Value.t -> (Hash.t * int, error) result Lwt.t
+  (** Alias of {!write_s}. *)
 
   val size_p : ztmp:Cstruct.t ->
     dtmp:Cstruct.t ->

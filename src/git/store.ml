@@ -174,6 +174,10 @@ sig
   val read_p : ztmp:Cstruct.t -> dtmp:Cstruct.t -> raw:Cstruct.t -> window:Inflate.window -> t -> Hash.t -> (Value.t, error) result Lwt.t
   val read_s : t -> Hash.t -> (Value.t, error) result Lwt.t
   val read : t -> Hash.t -> (Value.t, error) result Lwt.t
+  val read_exn : t -> Hash.t -> Value.t Lwt.t
+  val write_p : ztmp:Cstruct.t -> raw:Cstruct.t -> t -> Value.t -> (Hash.t * int, error) result Lwt.t
+  val write_s : t -> Value.t -> (Hash.t * int, error) result Lwt.t
+  val write : t -> Value.t -> (Hash.t * int, error) result Lwt.t
   val size_p : ztmp:Cstruct.t -> dtmp:Cstruct.t -> raw:Cstruct.t -> window:Inflate.window -> t -> Hash.t -> (int64, error) result Lwt.t
   val size_s : t -> Hash.t -> (int64, error) result Lwt.t
   val size : t -> Hash.t -> (int64, error) result Lwt.t
@@ -763,6 +767,29 @@ module Make
       t hash
 
   let read = read_s
+
+  let read_exn t hash =
+    let open Lwt.Infix in
+
+    read t hash >>= function
+    | Error _ ->
+      let err = Fmt.strf "Git.Store.read_exn: %a not found" Hash.pp hash in
+      Lwt.fail (Invalid_argument err)
+    | Ok v -> Lwt.return v
+
+  let write_p ~ztmp ~raw state hash =
+    let open Lwt.Infix in
+    Loose.write_p ~ztmp ~raw state hash >|= function
+    | Error (#LooseImpl.error as err) -> Error (err :> error)
+    | Ok v -> Ok v
+
+  let write_s state hash =
+    let open Lwt.Infix in
+    Loose.write_s state hash >|= function
+    | Error (#LooseImpl.error as err) -> Error (err :> error)
+    | Ok v -> Ok v
+
+  let write = write_s
 
   let raw_p ~ztmp ~dtmp ~raw ~window state hash =
     let open Lwt.Infix in
