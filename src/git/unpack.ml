@@ -921,7 +921,7 @@ module MakePACKDecoder (H : Ihash.S) (I : S.INFLATE)
         let msb = byte land 0x80 <> 0 in
         let typ = (byte land 0x70) lsr 4 in
         let crc = Crc32.digestc Crc32.default byte in
-        length msb (byte land 0x0F, 4) crc (switch typ offset) src t)
+        length msb (byte land 0x0F, 4) crc (fun len crc src t -> Cont { t with state = Object (fun src t -> switch typ offset len crc src t) }) src t)
       src t
 
   let unzip src t offset length consumed crc kind z =
