@@ -1458,16 +1458,16 @@ struct
     then raise (Invalid_argument "Decoder.apply");
 
     let target_length = List.fold_left
-      (fun acc -> function
-        | Insert insert ->
-          Cstruct.blit insert 0 raw acc (Cstruct.len insert); acc + Cstruct.len insert
-        | Copy (off, len) ->
-          Cstruct.blit base.Object.raw off raw acc len; acc + len)
-      0 hunks
-      in
+        (fun acc -> function
+           | Insert insert ->
+             Cstruct.blit insert 0 raw acc (Cstruct.len insert); acc + Cstruct.len insert
+           | Copy (off, len) ->
+             Cstruct.blit base.Object.raw off raw acc len; acc + len)
+        0 hunks
+    in
 
-      if (target_length = hunks_header.H.target_length)
-      then Ok Object.{ kind     = base.Object.kind
+    if (target_length = hunks_header.H.target_length)
+    then Ok Object.{ kind     = base.Object.kind
                    ; raw      = Cstruct.sub raw 0 target_length
                    ; length   = Int64.of_int hunks_header.H.target_length
                    ; from     = Offset { length   = partial_hunks._length
@@ -1475,7 +1475,7 @@ struct
                                        ; offset   = partial_hunks._offset
                                        ; crc      = partial_hunks._crc
                                        ; base     = base.from } }
-      else Error (Invalid_target (target_length, hunks_header.H.target_length))
+    else Error (Invalid_target (target_length, hunks_header.H.target_length))
 
   let result_bind ~err f = function Ok a -> f a | Error exn -> err
 
