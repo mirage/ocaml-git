@@ -75,7 +75,7 @@ sig
   val write_reference : t -> Reference.t -> Hash.t -> unit Lwt.t
   val remove_reference : t -> Reference.t -> unit Lwt.t
   val test_and_set_reference : t -> Reference.t -> test:Hash.t option -> set:Hash.t option -> bool Lwt.t
-  val read_inflated : t -> Hash.t -> string option Lwt.t
+  val read_inflated : t -> Hash.t -> ([ `Commit | `Tag | `Blob | `Tree ] * string) option Lwt.t
   val write_inflated : t -> kind:[ `Commit | `Tree | `Blob | `Tag ] -> Cstruct.t -> Hash.t Lwt.t
 end
 
@@ -107,7 +107,7 @@ module Make
     ; dot_git  : string
     ; level    : int
     ; values   : (Hash.t, Value.t Lazy.t) Hashtbl.t
-    ; inflated : (Hash.t, string) Hashtbl.t
+    ; inflated     : (Hash.t, ([ `Commit | `Tree | `Blob | `Tag ] * string)) Hashtbl.t
     ; refs     : (Reference.t, [ `H of Hash.t | `R of Reference.t ]) Hashtbl.t
     ; mutable head : Reference.head_contents option }
 
@@ -157,15 +157,21 @@ module Make
 
   let write t value =
     let hash = Value.digest value in
+    let kind = match value with
+      | Value.Commit _ -> `Commit
+      | Value.Blob _ -> `Blob
+      | Value.Tree _ -> `Tree
+      | Value.Tag _ -> `Tag
+    in
 
     if Hashtbl.mem t.values hash
-    then Lwt.return hash
+    then Lwt.return (Ok (hash, 0))
     else match Value.to_raw value with
       | Error `Never -> assert false
       | Ok inflated ->
         Hashtbl.add t.values hash (lazy value);
-        Hashtbl.add t.inflated hash inflated;
-        Lwt.return hash
+        Hashtbl.add t.inflated hash (kind, inflated);
+        Lwt.return (Ok (hash, String.length inflated) : ((Hash.t * int, error) result)) 
 
   let digest kind raw =
     let len = Cstruct.len raw in

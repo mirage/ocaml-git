@@ -69,7 +69,7 @@ sig
   val write_reference : t -> Reference.t -> Hash.t -> unit Lwt.t
   val remove_reference : t -> Reference.t -> unit Lwt.t
   val test_and_set_reference : t -> Reference.t -> test:Hash.t option -> set:Hash.t option -> bool Lwt.t
-  val read_inflated : t -> Hash.t -> string option Lwt.t
+  val read_inflated : t -> Hash.t -> ([ `Commit | `Tag | `Blob | `Tree ] * string) option Lwt.t
   val write_inflated : t -> kind:[ `Commit | `Tree | `Blob | `Tag ] -> Cstruct.t -> Hash.t Lwt.t
 end
 
