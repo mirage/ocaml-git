@@ -185,7 +185,17 @@ sig
 
       This function can not returns an {!EE.error} (see {!EE}). *)
 
-  val of_raw : Cstruct.t -> (t, DD.error) result
+  val of_raw : kind:[ `Commit | `Blob | `Tree | `Tag ] -> Cstruct.t -> (t, [ `Decoder of string ]) result
+  (** [of_raw ~kind inflated] makes a Git object as an OCaml value
+      {!t}. This decoder does not expect an {i header} to recognize
+      which kind of Git object is it. That means the [inflated] raw
+      should not contain [kind size\000] at the beginning (in this
+      case, you should use {!of_raw_with_header}. *)
+
+  val of_raw_with_header : Cstruct.t -> (t, DD.error) result
+  (** [of_raw_with_header inflated] makes a Git object as an OCaml
+      value {!t}. This decoder expects an {i header} to choose which Git
+      object it is. *)
 end
 
 module Make

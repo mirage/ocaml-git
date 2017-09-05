@@ -96,7 +96,8 @@ sig
 
   val to_deflated_raw : ?capacity:int -> ?level:int -> ztmp:Cstruct.t -> t -> (Buffer.raw, E.error) result
   val to_raw : ?capacity:int -> t -> (Buffer.raw, EE.error) result
-  val of_raw : Cstruct.t -> (t, DD.error) result
+  val of_raw : kind:[ `Commit | `Tree | `Tag | `Blob ] -> Cstruct.t -> (t, [ `Decoder of string ]) result
+  val of_raw_with_header : Cstruct.t -> (t, DD.error) result
 end
 
 module Make (H : Ihash.S with type Digest.buffer = Cstruct.t
@@ -403,6 +404,23 @@ module Raw
 
   module DD = Helper.MakeDecoder(A)
 
-  let of_raw inflated = DD.to_result inflated
+  let of_raw_with_header inflated = DD.to_result inflated
+  let of_raw ~kind inflated = match kind with
+    | `Commit ->
+      Value.Commit.D.to_result inflated |> (function
+          | Ok commit -> Ok (Commit commit)
+          | Error (`Decoder err) -> Error (`Decoder err))
+    | `Tree ->
+      Value.Tree.D.to_result inflated |> (function
+          | Ok tree -> Ok (Tree tree)
+          | Error (`Decoder err) -> Error (`Decoder err))
+    | `Tag ->
+      Value.Tag.D.to_result inflated  |> (function
+          | Ok tag -> Ok (Tag tag)
+          | Error (`Decoder err) -> Error (`Decoder err))
+    | `Blob ->
+      Value.Blob.D.to_result inflated  |> (function
+          | Ok blob -> Ok (Blob blob)
+          | Error (`Decoder err) -> Error (`Decoder err))
 end
 

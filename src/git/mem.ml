@@ -76,7 +76,7 @@ sig
   val remove_reference : t -> Reference.t -> unit Lwt.t
   val test_and_set_reference : t -> Reference.t -> test:Hash.t option -> set:Hash.t option -> bool Lwt.t
   val read_inflated : t -> Hash.t -> string option Lwt.t
-  val write_inflated : t -> Cstruct.t -> Hash.t Lwt.t
+  val write_inflated : t -> kind:[ `Commit | `Tree | `Blob | `Tag ] -> Cstruct.t -> Hash.t Lwt.t
 end
 
 module Make
@@ -167,18 +167,29 @@ module Make
         Hashtbl.add t.inflated hash inflated;
         Lwt.return hash
 
-  let digest raw =
+  let digest kind raw =
+    let len = Cstruct.len raw in
     let ctx = Hash.Digest.init () in
+    let hdr = Fmt.strf "%s %d\000%!"
+        (match kind with
+         | `Commit -> "commit"
+         | `Blob -> "blob"
+         | `Tree -> "tree"
+         | `Tag -> "tag")
+        len
+    in
+    Hash.Digest.feed ctx (Cstruct.of_string hdr);
     Hash.Digest.feed ctx raw;
     Hash.Digest.get ctx
 
-  let write_inflated t inflated =
-    let hash = digest inflated in
+  let write_inflated t ~kind inflated =
+    let hash = digest kind inflated in
 
     if Hashtbl.mem t.values hash
     then Lwt.return hash
     else
-      let value = lazy (match Value.of_raw inflated with Error (`Decoder err) -> raise (Failure err) | Ok value -> value) in
+      let value = lazy (match Value.of_raw ~kind inflated with Error (`Decoder err) -> raise (Failure err) | Ok value -> value) in
+      Hashtbl.add t.inflated hash (kind, Cstruct.to_string inflated);
       Hashtbl.add t.values hash value;
       Lwt.return hash
 
