@@ -23,58 +23,8 @@ let err_not_found n k =
 
 module type S =
 sig
-  module Hash
-    : Ihash.S
+  include Minimal.S
 
-  module Path
-    : Path.S
-
-  module Inflate
-    : S.INFLATE
-
-  module Deflate
-    : S.DEFLATE
-
-  module Buffer
-    : Value.BUFFER
-
-  module Value
-    : Value.RAW
-      with module Hash = Hash
-       and module Inflate = Inflate
-       and module Deflate = Deflate
-       and module Buffer = Buffer
-
-  module Reference
-    : Reference.S
-      with module Hash = Hash
-       and module Path = Path
-
-  type t
-
-  val create : ?root:string -> ?dot_git:string -> ?level:int -> unit -> t Lwt.t
-
-  val dot_git : t -> string
-  val root : t -> string
-  val level : t -> int
-
-  val dump : Format.formatter -> t -> unit Lwt.t
-  val contents : t -> (Hash.t * Value.t) list Lwt.t
-  val size : t -> Hash.t -> int option Lwt.t
-  val read : t -> Hash.t -> Value.t option Lwt.t
-  val read_exn : t -> Hash.t -> Value.t Lwt.t
-  val mem : t -> Hash.t -> bool Lwt.t
-  val list : t -> Hash.t list Lwt.t
-  val write : t -> Value.t -> Hash.t Lwt.t
-  val references : t -> Reference.t list Lwt.t
-  val mem_reference : t -> Reference.t -> bool Lwt.t
-  val read_reference : t -> Reference.t -> Hash.t option Lwt.t
-  val read_reference_exn : t -> Reference.t -> Hash.t Lwt.t
-  val write_head : t -> Reference.head_contents -> unit Lwt.t
-  val read_head : t -> Reference.head_contents option Lwt.t
-  val write_reference : t -> Reference.t -> Hash.t -> unit Lwt.t
-  val remove_reference : t -> Reference.t -> unit Lwt.t
-  val test_and_set_reference : t -> Reference.t -> test:Hash.t option -> set:Hash.t option -> bool Lwt.t
   val read_inflated : t -> Hash.t -> ([ `Commit | `Tag | `Blob | `Tree ] * string) option Lwt.t
   val write_inflated : t -> kind:[ `Commit | `Tree | `Blob | `Tag ] -> Cstruct.t -> Hash.t Lwt.t
 end
@@ -105,20 +55,25 @@ module Make
   module Reference = Reference.Make(H)(P)
 
   type t =
-    { root     : string
-    ; dot_git  : string
-    ; level    : int
-    ; values   : (Hash.t, Value.t Lazy.t) Hashtbl.t
+    { root         : Path.t
+    ; dotgit       : Path.t
+    ; compression  : int
+    ; values       : (Hash.t, Value.t Lazy.t) Hashtbl.t
     ; inflated     : (Hash.t, ([ `Commit | `Tree | `Blob | `Tag ] * string)) Hashtbl.t
-    ; refs     : (Reference.t, [ `H of Hash.t | `R of Reference.t ]) Hashtbl.t
+    ; refs         : (Reference.t, [ `H of Hash.t | `R of Reference.t ]) Hashtbl.t
     ; mutable head : Reference.head_contents option }
 
+  type error = [ `Not_found ]
+
+  let pp_error ppf = function
+    | `Not_found -> Fmt.pf ppf "`Not_found"
+
   let root t = t.root
-  let dot_git t = t.dot_git
-  let level t = t.level
+  let dotgit t = t.dotgit
+  let compression t = t.compression
 
   let stores = Hashtbl.create 1024
-  let default_root = "root"
+  let default_root = Path.v "root"
 
   let reset t =
     Hashtbl.clear t.values;
@@ -133,10 +88,8 @@ module Make
   let clear_all () =
     Hashtbl.iter (fun _ t -> reset t) stores
 
-  let (/) = Filename.concat
-
-  let create ?(root = default_root) ?(dot_git = default_root / ".git") ?(level = 6) () =
-    if level < 0 || level > 9
+  let create ?(root = default_root) ?(dotgit = Path.(default_root / ".git")) ?(compression = 6) () =
+    if compression < 0 || compression > 9
     then failwith "level should be between 0 and 9";
 
     let t =
@@ -144,8 +97,8 @@ module Make
       with Not_found ->
         let t =
           { root
-          ; level
-          ; dot_git
+          ; compression
+          ; dotgit
           ; values   = Hashtbl.create 1024
           ; inflated = Hashtbl.create 1024
           ; refs     = Hashtbl.create 8
@@ -155,7 +108,7 @@ module Make
         Hashtbl.add stores root t;
         t
     in
-    Lwt.return t
+    Lwt.return (Ok t : (t, error) result)
 
   let write t value =
     let hash = Value.digest value in
@@ -206,8 +159,8 @@ module Make
     with Not_found -> Lwt.return_none
 
   let read t h =
-    try Lwt.return (Some (Lazy.force (Hashtbl.find t.values h)))
-    with Not_found -> Lwt.return_none
+    try Lwt.return (Ok (Lazy.force (Hashtbl.find t.values h)))
+    with Not_found -> Lwt.return (Error `Not_found)
 
   let keys t =
     Hashtbl.fold (fun k _ l -> k :: l) t []
@@ -215,33 +168,23 @@ module Make
   let list t =
     Lwt.return (keys t.values)
 
-  let mem t h =
+  let exists t h =
     Lwt.return (Hashtbl.mem t.values h)
 
   let size t h =
     read t h >|= function
-    | Some (Value.Blob v) -> Some (Int64.to_int (Value.Blob.F.length v))
-    | _ -> None
+    | Ok (Value.Blob v) -> Ok (Value.Blob.F.length v)
+    | _ -> Error `Not_found
 
   let read_exn t h =
     read t h >>= function
-    | None   -> err_not_found "read_exn" (Hash.to_hex h)
-    | Some v -> Lwt.return v
+    | Error _ -> err_not_found "read_exn" (Hash.to_hex h)
+    | Ok v -> Lwt.return v
 
   let contents t =
     list t >>= fun hashes ->
-    Lwt_list.map_s (fun h -> read_exn t h >|= fun value -> h, value) hashes
-
-  let dump ppf t =
-    contents t >|= fun contents ->
-    let f = function
-      | (hash, Value.Blob _)   -> Fmt.pf ppf "%a %s\n%!" Hash.pp hash "blob"
-      | (hash, Value.Commit _) -> Fmt.pf ppf "%a %s\n%!" Hash.pp hash "commit"
-      | (hash, Value.Tag _)    -> Fmt.pf ppf "%a %s\n%!" Hash.pp hash "tag"
-      | (hash, Value.Tree _)   -> Fmt.pf ppf "%a %s\n%!" Hash.pp hash "tree"
-    in
-
-    List.iter f contents
+    Lwt_list.map_s (fun h -> read_exn t h >|= fun value -> h, value) hashes >|= fun values ->
+    (Ok values : ((Hash.t * Value.t) list, error) result)
 
   module Ref =
   struct

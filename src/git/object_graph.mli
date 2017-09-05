@@ -15,11 +15,11 @@
  *)
 
 
-module Make (S : Store.S
+module Make (S : Minimal.S
              with type Hash.Digest.buffer = Cstruct.t
               and type Hash.hex = string) :
 sig
-  module Store : Store.S
+  module Store : Minimal.S
 
   module K : Graph.Sig.I with type V.t = Store.Hash.t
 

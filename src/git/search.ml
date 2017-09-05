@@ -16,7 +16,7 @@
 
 open Lwt.Infix
 
-module Make (S : Store.S) =
+module Make (S : Minimal.S) =
 struct
   module Store = S
 

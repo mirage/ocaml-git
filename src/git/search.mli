@@ -14,9 +14,9 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Make (S : Store.S) :
+module Make (S : Minimal.S) :
 sig
-  module Store : Store.S
+  module Store : Minimal.S
 
   type pred =
     [ `Commit of Store.Hash.t

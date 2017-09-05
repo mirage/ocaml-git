@@ -16,7 +16,7 @@
 
 open Lwt.Infix
 
-module Make (S : Store.S with type Hash.Digest.buffer = Cstruct.t
+module Make (S : Minimal.S with type Hash.Digest.buffer = Cstruct.t
                               and type Hash.hex = string)
 = struct
   module Store = S
