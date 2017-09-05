@@ -68,9 +68,9 @@ sig
   val pp_error  : error Fmt.t
 
   val read : root:Path.t -> t -> dtmp:Cstruct.t -> raw:Cstruct.t -> ((t * head_contents), error) result Lwt.t
-  val write : root:Path.t -> lockdir:Path.t -> ?capacity:int -> raw:Cstruct.t -> t -> head_contents -> (unit, error) result Lwt.t
-  val test_and_set : root:Path.t -> lockdir:Path.t -> t -> test:head_contents option -> set:head_contents option -> (bool, error) result Lwt.t
-  val remove : root:Path.t -> lockdir:Path.t -> t -> (unit, error) result Lwt.t
+  val write : root:Path.t -> ?locks:Lock.t -> ?capacity:int -> raw:Cstruct.t -> t -> head_contents -> (unit, error) result Lwt.t
+  val test_and_set : root:Path.t -> ?locks:Lock.t -> t -> test:head_contents option -> set:head_contents option -> (bool, error) result Lwt.t
+  val remove : root:Path.t -> ?locks:Lock.t -> t -> (unit, error) result Lwt.t
 end
 
 module Make
@@ -166,10 +166,10 @@ module IO
     (H : Ihash.S with type Digest.buffer = Cstruct.t
                   and type hex = string)
     (P : Path.S)
-    (L : Lock.S)
+    (L : Lock.S with type key = P.t)
     (FS : Fs.S with type path = P.t
                 and type File.raw = Cstruct.t
-                and type File.lock = L.t)
+                and type File.lock = L.elt)
   : IO with module Hash = H
         and module Path = P
         and module Lock = L
@@ -242,7 +242,7 @@ module IO
         Ok (normalize path, head_contents)
       | Error _ as e -> e
 
-  let write ~root ~lockdir ?(capacity = 0x100) ~raw reference value =
+  let write ~root ?locks ?(capacity = 0x100) ~raw reference value =
     let open Lwt.Infix in
 
     let state = E.default (capacity, value) in
@@ -268,9 +268,12 @@ module IO
     end in
 
     let path = Path.(root // (to_path reference)) in
-    let lock = FileSystem.File.lock Path.(lockdir // (to_path reference)) in
+    let lock = match locks with
+      | Some locks -> Some (Lock.make locks (to_path reference))
+      | None -> None
+    in
 
-    Lock.with_lock (Some lock)
+    Lock.with_lock lock
     @@ fun () ->
     FileSystem.File.open_w ~mode:0o644 path
     >>= function
@@ -294,9 +297,12 @@ module IO
           | `Writer sys_err -> Lwt.return (Error (`SystemFile sys_err))
           | `Encoder `Never -> assert false
 
-  let test_and_set ~root ~lockdir t ~test ~set =
+  let test_and_set ~root ?locks t ~test ~set =
     let path = Path.(root // (to_path t)) in
-    let lock = FileSystem.File.lock Path.(lockdir // (to_path t)) in
+    let lock = match locks with
+      | Some locks -> Some (Lock.make locks (to_path t))
+      | None -> None
+    in
 
     let raw = function
       | None -> None
@@ -306,7 +312,7 @@ module IO
     let open Lwt.Infix in
 
     FileSystem.File.test_and_set
-      ~lock
+      ?lock
       path
       ~test:(raw test)
       ~set:(raw set)
@@ -314,13 +320,16 @@ module IO
     | Ok _ as v -> Lwt.return v
     | Error err -> Lwt.return (Error (`SystemFile err))
 
-  let remove ~root ~lockdir t =
+  let remove ~root ?locks t =
     let path = Path.(root // (to_path t)) in
-    let lock = FileSystem.File.lock Path.(lockdir // (to_path t)) in
+    let lock = match locks with
+      | Some locks -> Some (Lock.make locks (to_path t))
+      | None -> None
+    in
 
     let open Lwt.Infix in
 
-    FileSystem.File.delete ~lock path >>= function
+    FileSystem.File.delete ?lock path >>= function
     | Ok _ as v -> Lwt.return v
     | Error err -> Lwt.return (Error (`SystemFile err))
 end

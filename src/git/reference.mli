@@ -139,17 +139,17 @@ sig
 
       This function can returns an {!error}. *)
 
-  val write : root:Path.t -> lockdir:Path.t -> ?capacity:int -> raw:Cstruct.t -> t -> head_contents -> (unit, error) result Lwt.t
+  val write : root:Path.t -> ?locks:Lock.t -> ?capacity:int -> raw:Cstruct.t -> t -> head_contents -> (unit, error) result Lwt.t
   (** [write ~root ~raw reference value] writes the value [value] in the mutable
       representation of the [reference] in the git repository [root]. [raw] is a
       buffer used by the decoder to keep the input.
 
       This function can returns an {!error}. *)
 
-  val test_and_set : root:Path.t -> lockdir:Path.t -> t -> test:head_contents option -> set:head_contents option -> (bool, error) result Lwt.t
+  val test_and_set : root:Path.t -> ?locks:Lock.t -> t -> test:head_contents option -> set:head_contents option -> (bool, error) result Lwt.t
   (** Atomic updates (test and set) for references. *)
 
-  val remove : root:Path.t -> lockdir:Path.t -> t -> (unit, error) result Lwt.t
+  val remove : root:Path.t -> ?locks:Lock.t -> t -> (unit, error) result Lwt.t
   (** [remove ~root ~lockdir reference] removes the reference from the git
       repository [root]. [lockdir] is to store a {!Lock.t} and avoid race
       condition on the reference [reference].
@@ -174,10 +174,10 @@ module IO
     (H : Ihash.S with type Digest.buffer = Cstruct.t
                   and type hex = string)
     (P : Path.S)
-    (L : Lock.S)
+    (L : Lock.S with type key = P.t)
     (FS : Fs.S with type path = P.t
                 and type File.raw = Cstruct.t
-                and type File.lock = L.t)
+                and type File.lock = L.elt)
   : IO with module Hash = H
         and module Path = P
         and module Lock = L

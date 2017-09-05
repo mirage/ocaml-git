@@ -83,18 +83,20 @@ module Make
     (H : Ihash.S with type Digest.buffer = Cstruct.t
                   and type hex = string)
     (P : Path.S)
+    (L : Lock.S with type key = P.t)
     (I : S.INFLATE)
     (D : S.DEFLATE)
     (B : Value.BUFFER with type raw = string
                        and type fixe = Cstruct.t)
   : S with module Hash = H
        and module Path = P
+       and module Lock = L
        and module Inflate = I
        and module Deflate = D
-       and module Buffer = B
 = struct
   module Hash = H
   module Path = P
+  module Lock = L
   module Inflate = I
   module Deflate = D
   module Buffer = B
@@ -241,50 +243,79 @@ module Make
 
     List.iter f contents
 
-  let references t =
-    Lwt.return (keys t.refs)
+  module Ref =
+  struct
+    type error = [ `Not_found ]
 
-  let mem_reference t ref =
-    Lwt.return (Hashtbl.mem t.refs ref)
+    let pp_error ppf = function
+      | `Not_found -> Fmt.pf ppf "`Not_found"
 
-  let rec read_reference t r =
-    try match Hashtbl.find t.refs r with
-      | `H s -> Lwt.return (Some s)
-      | `R r -> read_reference t r
-    with Not_found ->
-      Lwt.return_none
+    module Graph = Reference.Map
 
-  let read_head t =
-    Lwt.return t.head
+    let list t =
+      let graph, rest =
+        Hashtbl.fold
+          (fun k -> function
+             | `R ptr -> fun (a, r) -> a, (k, ptr) :: r
+             | `H hash -> fun (a, r) -> Graph.add k hash a, r)
+          t.refs (Graph.empty, [])
+      in
 
-  let remove_reference t r =
-    Hashtbl.remove t.refs r;
-    Lwt.return_unit
+      let graph =
+        List.fold_left (fun a (k, ptr) ->
+            try let v = Graph.find ptr a in
+              Graph.add k v a
+            with Not_found -> a)
+          graph rest
+      in
 
-  let read_reference_exn t r =
-    read_reference t r >>= function
-    | Some s -> Lwt.return s
-    | None   ->
-      err_not_found "read_reference_exn" (Fmt.to_to_string Reference.pp r)
+      Graph.fold (fun k v a -> (k, v) :: a) graph []
+      |> Lwt.return
 
-  let write_head t c =
-    t.head <- Some c;
-    Lwt.return_unit
+    let exists t ref =
+      Lwt.return (Hashtbl.mem t.refs ref)
 
-  let write_reference t r h =
-    Hashtbl.replace t.refs r (`H h);
-    Lwt.return_unit
+    let rec read t r =
+      try match Hashtbl.find t.refs r with
+        | `H s -> Lwt.return (Ok (r, Reference.Hash s))
+        | `R r -> read t r
+      with Not_found -> Lwt.return (Error `Not_found)
 
-  let test_and_set_reference t r ~test ~set =
-    let v = try Some (Hashtbl.find t.refs r) with Not_found -> None in
-    let replace () = match set with
-      | None   -> Hashtbl.remove t.refs r
-      | Some v -> Hashtbl.replace t.refs r (`H v)
-    in
-    match v, test with
-    | None  , None -> replace (); Lwt.return true
-    | Some (`H x), Some y when Hash.equal x y -> replace (); Lwt.return true
-    | _ -> Lwt.return false
+    let remove t ?locks:_ r =
+      Hashtbl.remove t.refs r;
+      Lwt.return (Ok ())
 
-  let kind = `Mem
+    let write t ?locks r value =
+      let head_contents = match value with
+        | Reference.Hash hash -> `H hash
+        | Reference.Ref refname -> `R refname
+      in
+
+      let lock = match locks with
+        | Some locks -> Some (Lock.make locks (Reference.to_path r))
+        | None -> None
+      in
+
+      Lock.with_lock lock
+      @@ (fun () ->
+          Hashtbl.replace t.refs r head_contents; Lwt.return (Ok ()))
+
+    let test_and_set t ?locks:_ r ~test ~set =
+      (* XXX(dinosaure): not sure about the semantic. *)
+      let v =
+        try Some (Hashtbl.find t.refs r)
+            |> function Some (`R refname) -> Some (Reference.Ref refname)
+                      | Some (`H hash) -> Some (Reference.Hash hash) 
+                      | None -> None
+        with Not_found -> None in
+      let replace () = match set with
+        | None   -> Hashtbl.remove t.refs r
+        | Some (Reference.Hash hash) -> Hashtbl.replace t.refs r (`H hash)
+        | Some (Reference.Ref refname) -> Hashtbl.replace t.refs r (`R refname)
+      in
+      match v, test with
+      | None  , None -> replace (); Lwt.return (Ok true)
+      | Some (Reference.Hash x), Some (Reference.Hash y) when Hash.equal x y -> replace (); Lwt.return (Ok true)
+      | _ -> Lwt.return (Ok false)
+  end
 end

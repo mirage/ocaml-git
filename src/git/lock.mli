@@ -1,8 +1,12 @@
 module type S =
 sig
+  type key
+  type elt
   type t
 
-  val unlock    : t -> unit Lwt.t
-  val lock      : t -> unit Lwt.t
-  val with_lock : t option -> (unit -> 'a Lwt.t) -> 'a Lwt.t
+  val unlock    : elt -> unit Lwt.t
+  val lock      : elt -> unit Lwt.t
+  val with_lock : elt option -> (unit -> 'a Lwt.t) -> 'a Lwt.t
+
+  val make      : t -> key -> elt
 end

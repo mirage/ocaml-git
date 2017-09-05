@@ -120,7 +120,7 @@ sig
     : Lock.S
   module FileSystem
     : Fs.S with type path = Path.t
-            and type File.lock = Lock.t
+            and type File.lock = Lock.elt
 
   module Value
     : Value.S with module Hash = Hash
@@ -214,10 +214,10 @@ module Make
     (H : Ihash.S with type Digest.buffer = Cstruct.t
                   and type hex = string)
     (P : Path.S)
-    (L : Lock.S)
+    (L : Lock.S with type key = P.t)
     (FS : Fs.S with type path = P.t
                 and type File.raw = Cstruct.t
-                and type File.lock = L.t
+                and type File.lock = L.elt
                 and type Mapper.raw = Cstruct.t)
     (I : S.INFLATE)
     (D : S.DEFLATE)

@@ -77,12 +77,14 @@ module Make
     (H : Ihash.S with type Digest.buffer = Cstruct.t
                   and type hex = string)
     (P : Path.S)
+    (L : Lock.S with type key = P.t)
     (I : S.INFLATE)
     (D : S.DEFLATE)
     (B : Value.BUFFER with type raw = string
                        and type fixe = Cstruct.t)
   : S with module Hash = H
        and module Path = P
+       and module Lock = L
        and module Inflate = I
        and module Deflate = D
        and module Buffer = B
