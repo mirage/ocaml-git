@@ -37,6 +37,8 @@ sig
                | `SystemIO of string
                | D.error ]
 
+  val pp_error : error Fmt.t
+
   val write : root:Path.t -> ?capacity:int -> raw:Cstruct.t -> t -> (unit, error) result Lwt.t
   val read  : root:Path.t -> dtmp:Cstruct.t -> raw:Cstruct.t -> (t, error) result Lwt.t
 end
