@@ -110,7 +110,7 @@ sig
         it's specified. *)
 
     val test_and_set : t ->
-         ?locks:Lock.key
+         ?locks:Lock.t
       -> Reference.t
       -> test:Reference.head_contents option
       -> set:Reference.head_contents option
