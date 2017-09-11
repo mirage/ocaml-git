@@ -104,7 +104,7 @@ sig
         [state]). *)
 
     val write : t -> ?locks:Lock.t -> Reference.t -> Reference.head_contents -> (unit, error) result Lwt.t
-    (** [write state ?lock reference value] writes the value [value]
+    (** [write state ?locks reference value] writes the value [value]
         in the mutable representation of the [reference] in the git
         repository [state]. The [?lock] avoids the race condition if
         it's specified. *)

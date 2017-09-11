@@ -18,7 +18,7 @@
 module type S =
 sig
   include Minimal.S
-            
+
   val read_inflated : t -> Hash.t -> ([ `Commit | `Tag | `Blob | `Tree ] * string) option Lwt.t
   val write_inflated : t -> kind:[ `Commit | `Tree | `Blob | `Tag ] -> Cstruct.t -> Hash.t Lwt.t
 end

@@ -662,9 +662,8 @@ sig
       return an {!error}:
 
       {ul
-
       {- {!FileSystem.File.error} when we can not create a new file in
-      the file-system.} 
+      the file-system.}
       {- {!Value.E.error} when we can not serialize xor deflate the
       requested git {i loose} object. This kind of error should be
       never happen.}}
