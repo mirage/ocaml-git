@@ -792,8 +792,14 @@ sig
 
   module Ref :
   sig
+    module Packed_refs
+      : Packed_refs.S with module Hash = Hash
+                       and module Path = Path
+                       and module FileSystem = FileSystem
+
     type nonrec error =
-      [ error
+      [ Packed_refs.error
+      | error
       | `Invalid_reference of Reference.t
       (** Appears when we can not retrieve the final value of the reference [ref]. *)
       ] (** The type error. *)
@@ -835,28 +841,110 @@ sig
     val list_p : t
       -> dtmp:Cstruct.t
       -> raw:Cstruct.t
-      -> ((Reference.t * Hash.t) list, error) result Lwt.t
-    (** [list_p state ~dtmp ~raw] returns an associated list between reference
-        and its bind hash. This function is the same than:
+      -> (Reference.t * Hash.t) list Lwt.t
+    (** [list_p state ~dtmp ~raw] returns an associated list between
+        reference and its bind hash. This function is the same than:
 
         > graph state >|= Reference.Map.fold (fun x acc -> x :: acc)
 
-        As {!graph_p}, this function needs some buffers. And, as {!graph_p},
-        this function can be used in a concurrency context only f the specified
-        buffers are not used by another process. Finally, as {!graph_p}, if we
-        encountered any {!error}, we make it silent and continue the process.
+        As {!graph_p}, this function needs some buffers. And, as
+        {!graph_p}, this function can be used in a concurrency context
+        only f the specified buffers are not used by another process.
+        Finally, as {!graph_p}, if we encountered any {!error}, we
+        make it silent and continue the process. *)
 
-        NOTE: because we don't catch any error while the process, this function
-        should not return a [result] type.
+    val list_s      : t -> (Reference.t * Hash.t) list Lwt.t
+    (** [list_s state] is the same process than {!list_p} but we use
+        the state-defined buffer. That means the client can not use
+        this function in a concurrency context with the same
+        [state]. *)
+
+    val list        : t -> (Reference.t * Hash.t) list Lwt.t
+    (** Alias of {!list_s}. *)
+
+    val remove_p : t -> dtmp:Cstruct.t -> raw:Cstruct.t -> ?locks:Lock.t -> Reference.t -> (unit, error) result Lwt.t
+    (** [remove_p state ~dtmp ~raw ?locks reference] removes the
+        reference [reference] from the git repository [state]. The
+        [?locks] avoids the race condition if it's specified. This
+        function needs some buffers:
+
+        {ul
+        {- [dtmp] is a buffer used by the decoder to save the input
+        flow (and keep it for an alteration)}
+        {- [raw] is a buffer used to store the input flow}}
+
+        This function can {b not} used in a concurrency context. By
+        the mutable caracteristic of the reference, we need to protect
+        any modification against the data race condition with the
+        [?locks] argument.
+
+        However, we provide this function to allow to use a
+        user-defined buffer instead the state-defined buffer (could be
+        used by something else). *)
+
+    val remove_s : t -> ?locks:Lock.t -> Reference.t -> (unit, error) result Lwt.t
+    (** [remove_s state ?locks reference] is the same process than
+        {!remove_p} but we use the state-defined buffer. That means
+        the client can not use thus function in a concurrency context
+        with the same [state]. *)
+
+    val remove : t -> ?locks:Lock.t -> Reference.t -> (unit, error) result Lwt.t
+    (** [remove state reference] removes the reference [reference] from
+        the git repository [state]. The [?lock] avoids the race condition if
+        it's specified. *)
+
+    val read_p : t -> dtmp:Cstruct.t -> raw:Cstruct.t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
+    (** [read_p state ~dtmp ~raw reference] returns the value contains
+        in the reference [reference] (available in the git repository
+        [state]). This function needs some buffers:
+
+        {ul
+        {- [dtmp] is a buffer used by the decoder to save the flow
+        (and keep it for an alteration)}
+        {- [raw] is a buffer used to store the input flow}}
+
+        This function can be used in a concurrency context only if the
+        specifed buffers are not used by another process.
     *)
 
-    val list_s      : t -> ((Reference.t * Hash.t) list, error) result Lwt.t
-    (** [list_s state] is the same process than {!list_p} but we use the
-        state-defined buffer. That means the client can not use this function in a
-        concurrency context with the same [state]. *)
+    val read_s : t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
+    (** [read_s state reference] is the same process than
+        {!read_p} but we use the state-defined buffer. That means the
+        client can not use this function in a concurrency context with
+        the same [state]. *)
 
-    val list        : t -> ((Reference.t * Hash.t) list, error) result Lwt.t
-    (** Alias of {!list_s}. *)
+    val read : t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
+    (** Alias of {!read_s}. *)
+
+    val write_p : t -> ?locks:Lock.t -> dtmp:Cstruct.t -> raw:Cstruct.t -> Reference.t -> Reference.head_contents -> (unit, error) result Lwt.t
+    (** [write_p state ?locks ~dtmp ~raw reference value] writes the
+        value [value] in the mutable representation of the [reference] in
+        the git repository [state]. The {?locks] avoids the race condition
+        if it's specified.
+
+        As {!read_p}, this function needs some buffers. However, it
+        can not use in a concurrency context by the mutable
+        caracteristic of the reference. In other side, we let the
+        client to specify an user-defined buffer instead the
+        state-defined buffer of {!write_s} to use in a concurrency
+        context an other operation. *)
+
+    val write_s : t -> ?locks:Lock.t -> Reference.t -> Reference.head_contents -> (unit, error) result Lwt.t
+    (** [write_s state ?locks reference value] is the same process
+        than {!read_p} but we use the state-defined buffer. *)
+
+    val write : t -> ?locks:Lock.t -> Reference.t -> Reference.head_contents -> (unit, error) result Lwt.t
+    (** Alias of {!write_s}. *)
+
+    val test_and_set : t
+      -> ?locks:Lock.t
+      -> Reference.t
+      -> test:Reference.head_contents option
+      -> set:Reference.head_contents option
+      -> (bool, error) result Lwt.t
+    (** [test_and_set state ?locks reference ~test ~set] is an
+        atomic update of the reference [reference] in the git
+        repository [state]. *)
   end
 end
 

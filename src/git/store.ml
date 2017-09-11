@@ -194,17 +194,32 @@ sig
 
   module Ref :
   sig
+    module Packed_refs : Packed_refs.S with module Hash = Hash
+                                        and module Path = Path
+                                        and module FileSystem = FileSystem
+
     type nonrec error =
-      [ error
+      [ Packed_refs.error
+      | error
       | `Invalid_reference of Reference.t ]
 
     val pp_error : error Fmt.t
     val graph_p : t -> dtmp:Cstruct.t -> raw:Cstruct.t -> (Hash.t Reference.Map.t, error) result Lwt.t
     val graph : t -> (Hash.t Reference.Map.t, error) result Lwt.t
     val normalize : Hash.t Reference.Map.t -> Reference.head_contents -> (Hash.t, error) result Lwt.t
-    val list_p : t -> dtmp:Cstruct.t -> raw:Cstruct.t -> ((Reference.t * Hash.t) list, error) result Lwt.t
-    val list_s : t -> ((Reference.t * Hash.t) list, error) result Lwt.t
-    val list : t -> ((Reference.t * Hash.t) list, error) result Lwt.t
+    val list_p : t -> dtmp:Cstruct.t -> raw:Cstruct.t -> (Reference.t * Hash.t) list Lwt.t
+    val list_s : t -> (Reference.t * Hash.t) list Lwt.t
+    val list : t -> (Reference.t * Hash.t) list Lwt.t
+    val remove_p : t -> dtmp:Cstruct.t -> raw:Cstruct.t -> ?locks:Lock.t -> Reference.t -> (unit, error) result Lwt.t
+    val remove_s : t -> ?locks:Lock.t -> Reference.t -> (unit, error) result Lwt.t
+    val remove : t -> ?locks:Lock.t -> Reference.t -> (unit, error) result Lwt.t
+    val read_p : t -> dtmp:Cstruct.t -> raw:Cstruct.t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
+    val read_s : t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
+    val read : t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
+    val write_p : t -> ?locks:Lock.t -> dtmp:Cstruct.t -> raw:Cstruct.t -> Reference.t -> Reference.head_contents -> (unit, error) result Lwt.t
+    val write_s : t -> ?locks:Lock.t -> Reference.t -> Reference.head_contents -> (unit, error) result Lwt.t
+    val write : t -> ?locks:Lock.t -> Reference.t -> Reference.head_contents -> (unit, error) result Lwt.t
+    val test_and_set : t -> ?locks:Lock.t -> Reference.t -> test:Reference.head_contents option -> set:Reference.head_contents option -> (bool, error) result Lwt.t
   end
 end
 
@@ -1000,16 +1015,20 @@ module Make
 
   module Ref =
   struct
+    module Packed_refs = Packed_refs.Make(Hash)(Path)(FileSystem)
+    (* XXX(dinosaure): we need to check the packed references when we write and remove. *)
+
     let pp_error ppf = function
+      | #Packed_refs.error as err -> Fmt.pf ppf "%a" Packed_refs.pp_error err
       | #error as err -> Fmt.pf ppf "%a" pp_error err
       | `Invalid_reference err ->
         Helper.ppe ~name:"`Invalid_reference" Reference.pp ppf err
 
     type nonrec error =
-      [ error
+      [ Packed_refs.error
+      | error
       | `Invalid_reference of Reference.t ]
 
-    module Packed_refs = Packed_refs.Make(Hash)(Path)(FileSystem)
 
     let ( >>== ) v f =
       let open Lwt.Infix in
@@ -1095,12 +1114,170 @@ module Make
       | Ok graph ->
         Graph.fold (fun refname hash acc -> (refname, hash) :: acc) graph []
         |> List.stable_sort (fun (a, _) (b, _) -> Reference.compare a b)
-        |> fun lst -> Lwt.return (Ok lst)
-      | Error _ as err -> Lwt.return err
+        |> fun lst -> Lwt.return lst
+      | Error _ -> Lwt.return []
 
     let list_s t = list_p t ~dtmp:t.buffer.de ~raw:t.buffer.io
 
     let list = list_s
+
+    let remove_p t ~dtmp ~raw ?locks reference =
+      let open Lwt.Infix in
+
+      let lock = match locks with
+        | Some locks -> Some (Lock.make locks Path.(t.dotgit / "references"))
+        | None -> None
+      in
+
+      Lock.with_lock lock @@ fun () ->
+      (Packed_refs.read ~root:t.dotgit ~dtmp ~raw >>= function
+        | Error _ -> Lwt.return None
+        | Ok packed_refs ->
+          Lwt_list.exists_p
+            (function
+              | `Peeled hash -> Lwt.return false
+              | `Ref (refname, _) ->
+                Lwt.return Reference.(equal (of_string refname) reference))
+            packed_refs
+          >>= function
+          | false -> Lwt.return None
+          | true ->
+            Lwt_list.fold_left_s
+              (fun acc -> function
+                 | `Peeled hash -> Lwt.return (`Peeled hash :: acc)
+                 | `Ref (refname, hash) when not Reference.(equal (of_string refname) reference) ->
+                   Lwt.return (`Ref (refname, hash) :: acc)
+                 | _ -> Lwt.return acc)
+              [] packed_refs
+            >|= fun packed_refs' -> Some packed_refs')
+      >>= (function
+          | None -> Lwt.return (Ok ())
+          | Some packed_refs' ->
+            Packed_refs.write ~root:t.dotgit ~raw packed_refs' >>= function
+            | Ok () -> Lwt.return (Ok ())
+            | Error (#Packed_refs.error as err) -> Lwt.return (Error (err : error)))
+      >>= function
+      | Error _ as err -> Lwt.return err
+      | Ok () ->
+        Reference.remove ~root:t.dotgit reference >>= function
+        | Ok () -> Lwt.return (Ok ())
+        | Error (#Reference.error as err) -> Lwt.return (Error (err : error))
+
+    let remove_s t ?locks reference =
+      remove_p t ?locks ~dtmp:t.buffer.de ~raw:t.buffer.io reference
+
+    let remove = remove_s
+
+    let read_p t ~dtmp ~raw reference =
+      let open Lwt.Infix in
+
+      FileSystem.is_file Path.(t.dotgit // (Reference.to_path reference)) >>= function
+      | Ok true ->
+        (Reference.read ~root:t.dotgit ~dtmp ~raw reference >|= function
+         | Ok _ as v -> v
+         | Error (#Reference.error as err) -> Error (err : error))
+      | Ok false | Error _ ->
+        Packed_refs.read ~root:t.dotgit ~dtmp ~raw >>= function
+        | Error (#Packed_refs.error as err) -> Lwt.return (Error (err : error))
+        | Ok lst ->
+          Lwt.catch
+            (fun () -> Lwt_list.find_s
+                (function `Peeled _ -> Lwt.return false
+                        | `Ref (refname, hash) -> Lwt.return Reference.(equal (of_string refname) reference))
+                lst >|= function `Ref (_, hash) -> Ok (reference, Reference.Hash hash)
+                               | `Peeled _ -> assert false)
+            (function exn -> Lwt.return (Error `Not_found))
+
+    let read_s t reference =
+      read_p t ~dtmp:t.buffer.de ~raw:t.buffer.io reference
+
+    let read = read_s
+
+    let write_p t ?locks ~dtmp ~raw reference value =
+      let open Lwt.Infix in
+
+      let lock = match locks with
+        | Some locks -> Some (Lock.make locks Path.(t.dotgit / "references"))
+        | None -> None
+      in
+
+      Lock.with_lock lock @@ fun () ->
+      Reference.write ~root:t.dotgit ~raw reference value >>= function
+      | Error (#Reference.error as err) -> Lwt.return (Error (err : error))
+      | Ok () ->
+        Packed_refs.read ~root:t.dotgit ~dtmp ~raw >>= function
+        | Error _ -> Lwt.return (Ok ())
+        | Ok packed_refs ->
+          Lwt_list.exists_s (function `Peeled _ -> Lwt.return false
+                                  | `Ref (refname, hash) -> Lwt.return Reference.(equal (of_string refname) reference))
+            packed_refs
+          >>= function
+          | false -> Lwt.return (Ok ())
+          | true ->
+            Lwt_list.fold_left_s
+              (fun acc -> function
+                 | `Peeled _ as v -> Lwt.return (v :: acc)
+                 | `Ref (refname, hash) when not Reference.(equal (of_string refname) reference) -> Lwt.return (`Ref (refname, hash) :: acc)
+                 | _ -> Lwt.return acc)
+              [] packed_refs
+            >>= fun packed_refs' ->
+            Packed_refs.write ~root:t.dotgit ~raw packed_refs' >>= function
+            | Ok () -> Lwt.return (Ok ())
+            | Error (#Packed_refs.error as err) -> Lwt.return (Error (err : error))
+
+    let write_s t ?locks reference value =
+      write_p t ?locks ~dtmp:t.buffer.de ~raw:t.buffer.io reference value
+
+    let write = write_s
+
+    let unpack_reference t ~dtmp ~raw ?locks reference =
+      let open Lwt.Infix in
+
+      let lock = match locks with
+        | Some locks -> Some (Lock.make locks Path.(t.dotgit / "references"))
+        | None -> None
+      in
+
+      Lock.with_lock lock @@ fun () ->
+      Packed_refs.read ~root:t.dotgit ~dtmp ~raw >>= function
+      | Error _ -> Lwt.return (Ok ())
+      | Ok packed_refs ->
+        Lwt_list.exists_s (function
+            | `Peeled _ -> Lwt.return false
+            | `Ref (refname, hash) -> Lwt.return Reference.(equal (of_string refname) reference))
+          packed_refs >>= function
+        | false -> Lwt.return (Ok ())
+        | true ->
+          Lwt_list.fold_left_s (fun (pi, acc) -> function
+              | `Peeled hash -> Lwt.return (pi, `Peeled hash :: acc)
+              | `Ref (refname, hash) when not Reference.(equal reference (of_string refname)) ->
+                Lwt.return (pi, `Ref (refname, hash) :: acc)
+              | `Ref (refname, hash) -> Lwt.return (Some (reference, hash), acc))
+            (None, []) packed_refs
+          >>= function
+          | None, _ -> assert false
+          (* XXX(dinosaure): we prove than reference is in packed_refs, so it's
+             a mandatory to return a [Some v]. *)
+          | (Some (_, hash), packed_refs') -> Packed_refs.write ~root:t.dotgit ~raw packed_refs
+            >>= function
+            | Error (#Packed_refs.error as err) -> Lwt.return (Error (err : error))
+            | Ok () -> Reference.write ~root:t.dotgit ~raw reference (Reference.Hash hash) >|= function
+              | Ok () -> Ok ()
+              | Error (#Reference.error as err) -> Error (err : error)
+
+    let test_and_set t ?locks reference ~test ~set =
+      let open Lwt.Infix in
+
+      let lock = match locks with
+        | Some locks -> Some (Lock.make locks Path.(t.dotgit / "references"))
+        | None -> None
+      in
+
+      Lock.with_lock lock @@ fun () ->
+      unpack_reference t ~dtmp:t.buffer.de ~raw:t.buffer.io reference >>= fun _ ->
+      Reference.test_and_set ~root:t.dotgit reference ~test ~set >|= function
+      | Error (#Reference.error as err) -> Error (err : error)
+      | Ok _ as v -> v
   end
 
   let cache ?(indexes = 5) ?(packs = 5) ?(objects = 5) ?(values = 5) ?(revindexes = 5) () =
