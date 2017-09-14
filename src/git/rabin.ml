@@ -221,7 +221,7 @@ struct
   let memory_size { hash; buff; _ } =
     3 + (Cstruct.len buff + 1) + 1 + (Array.fold_left (fun acc x -> List.length x * 4 + 1 + acc) 1 hash)
 
-  let pp ppf index =
+  let pp : t Fmt.t = fun ppf index ->
     Fmt.pf ppf "{ @[<hov>hash = [ %a ];@ \
                          mask = %lxu;@ \
                          buff = #raw;@] }"

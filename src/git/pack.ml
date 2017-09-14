@@ -298,10 +298,9 @@ struct
       (Fmt.hvbox (Fmt.list ~sep:(Fmt.unit ";@ ") Rabin.pp)) t.hunks
       (Fmt.hvbox pp_state) t.state
 
-  let ok t = Ok { t with state = End }
-  let flush t = Flush t
-  let await t = Wait t
-  let error t exn = Error ({ t with state = Exception exn }, exn)
+  let ok t        : res = Ok { t with state = End }
+  let await t     : res = Wait t
+  let error t exn : res = Error ({ t with state = Exception exn }, exn)
 
   let rec put_byte ~ctor byte k dst t =
     if (t.o_len - t.o_pos) > 0
@@ -1019,9 +1018,9 @@ struct
     Hash.Digest.feed t.hash (Cstruct.sub dst t.o_off t.o_pos);
     Flush t
 
-  let await t = Wait t
-  let error t exn = Error ({ t with state = Exception exn }, exn)
-  let ok t hash   = Ok ({ t with state = End hash }, hash)
+  let await t     : res = Wait t
+  let error t exn : res = Error ({ t with state = Exception exn }, exn)
+  let ok t hash   : res = Ok ({ t with state = End hash }, hash)
 
   module KHeader =
   struct

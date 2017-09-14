@@ -222,13 +222,13 @@ struct
       t._source_length t._target_length
       (Fmt.hvbox pp_state) t.state
 
-  let await t     = Wait t
-  let error t exn = Error ({ t with state = Exception exn }, exn)
-  let ok t        = Ok ({ t with state = End },
-                          { reference     = t._reference
-                          ; length        = t._length
-                          ; source_length = t._source_length
-                          ; target_length = t._target_length })
+  let await t     : res = Wait t
+  let error t exn : res = Error ({ t with state = Exception exn }, exn)
+  let ok t        : res = Ok ({ t with state = End },
+                              { reference     = t._reference
+                              ; length        = t._length
+                              ; source_length = t._source_length
+                              ; target_length = t._target_length })
 
   let rec get_byte ~ctor k src t =
       if (t.i_len - t.i_pos) > 0
@@ -666,10 +666,10 @@ module MakePACKDecoder (H : S.HASH) (I : S.INFLATE)
       (Fmt.hvbox pp_state) t.state
 
   (* TODO: need to compute the hash of the input. *)
-  let await t      = Wait t
-  let flush t      = Flush t
-  let error t exn  = Error ({ t with state = Exception exn }, exn)
-  let ok t hash    = Ok ({ t with state = End hash }, hash)
+  let await t     : res = Wait t
+  let flush t     : res = Flush t
+  let error t exn : res = Error ({ t with state = Exception exn }, exn)
+  let ok t hash   : res = Ok ({ t with state = End hash }, hash)
 
   let rec get_byte ~ctor k src t =
     if (t.i_len - t.i_pos) > 0
@@ -2000,7 +2000,7 @@ struct
                Lwt.return (Ok Object.{ kind
                                      ; raw
                                      ; length = Int64.of_int (Cstruct.len raw)
-                                     ; from   = External hash })
+                                     ; from   = Object.External hash })
            in
 
            (undelta 1 partial_hunks hunks_header swap >>= function

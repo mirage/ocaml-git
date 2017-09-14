@@ -327,9 +327,9 @@ struct
 
   exception Leave of (error * Cstruct.t * int)
 
-  let p_return x decoder = Ok x
+  let p_return (type a) (x : a) _ : a state = Ok x
 
-  let p_safe k decoder =
+  let p_safe k decoder : 'a state =
     try k decoder
     with Leave (err, buf, pos) ->
       Error { err

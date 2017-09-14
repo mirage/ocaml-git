@@ -364,8 +364,8 @@ struct
   let await src t =
     let () = Hash.Digest.feed t.hash (Cstruct.sub src t.i_off t.i_pos) in
     Wait t
-  let error t exn = Error ({ t with state = Exception exn }, exn)
-  let ok t hash   = Ok ({ t with state = End hash }, hash)
+  let error t exn : res = Error ({ t with state = Exception exn }, exn)
+  let ok t hash   : res = Ok ({ t with state = End hash }, hash)
 
   let to_int32 b0 b1 b2 b3 =
     let ( << ) = Int32.shift_left in (* >> (tuareg) *)
@@ -907,7 +907,7 @@ struct
         loop Hash.Digest.length dst t
   end
 
-  let ok t = Ok { t with state = End }
+  let ok t : res = Ok { t with state = End }
 
   let is_big_offset integer =
     Int64.(integer >> 31) <> 0L
