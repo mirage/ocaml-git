@@ -1,4 +1,19 @@
-true: safe_string, bin_annot, debug, keep_locs, use_menhir
-<*/**>: warn(@20@25@26@33@39)
+true: safe_string, bin_annot, debug, keep_locs
 
-<*/**.{ml,mli,byte,native}>: package(fpath cstruct lwt lwt.unix angstrom faraday farfadet digestif.c bos decompress lru camlzip uri astring hex mirage-fs-unix ocamlgraph)
+# Party-hard
+<*/**>: warn(@1..31@33..36@38..40@43..44@46..48)
+
+# see MPR 7624
+<*/**>: warn(-32)
+# only one case, Index_pack.Encoder.Error
+<*/**>: warn(-37)
+# lazy to determine which label/constructor we have
+<*/**>: warn(-41)
+# same above
+<*/**>: warn(-42)
+# same above
+<*/**>: warn(-45)
+# where is the *.cmi?
+<*/**>: warn(-49)
+
+<*/**.{ml,mli,cma,cmxa}>: package(fpath lwt angstrom faraday farfadet astring hex fmt cstruct lru uri ocamlgraph rresult logs)
