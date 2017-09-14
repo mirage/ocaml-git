@@ -22,7 +22,7 @@ sig
 
   module Hash : S.HASH
   module Path : Path.S
-  module FileSystem : Fs.S with type path = Path.t
+  module FileSystem : S.FS with type path = Path.t
   module Inflate : S.INFLATE
   module Deflate : S.DEFLATE
 
@@ -74,7 +74,7 @@ sig
 
   module Hash : S.HASH
   module Path : Path.S
-  module FileSystem  : Fs.S with type path = Path.t
+  module FileSystem  : S.FS with type path = Path.t
   module Inflate : S.INFLATE
   module IDXDecoder : Index_pack.LAZY
   module PACKDecoder
@@ -119,7 +119,7 @@ sig
   module Lock
     : S.LOCK
   module FileSystem
-    : Fs.S with type path = Path.t
+    : S.FS with type path = Path.t
             and type File.lock = Lock.elt
 
   module Value
@@ -235,10 +235,11 @@ module Make
     (P : Path.S)
     (L : S.LOCK with type key = P.t
                  and type +'a io = 'a Lwt.t)
-    (FS : Fs.S with type path = P.t
+    (FS : S.FS with type path = P.t
                 and type File.raw = Cstruct.t
                 and type File.lock = L.elt
-                and type Mapper.raw = Cstruct.t)
+                and type Mapper.raw = Cstruct.t
+                and type +'a io = 'a Lwt.t)
     (I : S.INFLATE)
     (D : S.DEFLATE)
   : S with module Hash = H

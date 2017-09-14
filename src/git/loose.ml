@@ -1,7 +1,7 @@
 module type S =
 sig
   module Path : Path.S
-  module FileSystem : Fs.S
+  module FileSystem : S.FS
 
   include Value.S
 
@@ -71,8 +71,9 @@ module Make
     (H : S.HASH with type Digest.buffer = Cstruct.t
                  and type hex = string)
     (P : Path.S)
-    (FS : Fs.S with type path = P.t
-                and type File.raw = Cstruct.t)
+    (FS : S.FS with type path = P.t
+                and type File.raw = Cstruct.t
+                and type +'a io = 'a Lwt.t)
     (I : S.INFLATE)
     (D : S.DEFLATE)
   : S with module Hash = H

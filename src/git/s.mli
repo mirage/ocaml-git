@@ -199,3 +199,79 @@ sig
 
   val make      : t -> key -> elt
 end
+
+module type FILE =
+sig
+  type +'a io
+
+  type path
+  type error
+  type lock
+
+  val pp_error : error Fmt.t
+
+  val exists : path -> (bool, error) result io
+  val delete : ?lock:lock -> path -> (unit, error) result io
+  val move : ?lock:lock -> path -> path -> (unit, error) result io
+
+  type raw
+  type 'a fd constraint 'a = [< `Read | `Write ]
+
+  val test_and_set : ?lock:lock -> ?temp:path -> path -> test:Cstruct.t option -> set:Cstruct.t option -> (bool, error) result io
+  val open_w : ?lock:lock -> path -> mode:int -> ([ `Write ] fd, error) result io
+  val open_r : ?lock:lock -> path -> mode:int -> ([ `Read ] fd, error) result io
+  val write : raw -> ?off:int -> ?len:int -> [> `Write ] fd -> (int, error) result io
+  val read : raw -> ?off:int -> ?len:int -> [> `Read ] fd -> (int, error) result io
+  val close : 'a fd -> (unit, error) result io
+end
+
+module type MAPPER =
+sig
+  type +'a io
+
+  type fd
+  type raw
+  type path
+  type error
+
+  val pp_error : error Fmt.t
+
+  val openfile : path -> (fd, error) result io
+  val length : fd -> (int64, error) result io
+  val map : fd -> ?pos:int64 -> share:bool -> int -> (raw, error) result io
+  val close : fd -> (unit, error) result io
+end
+
+module type DIR =
+sig
+  type +'a io
+
+  type path
+  type error
+
+  val pp_error : error Fmt.t
+
+  val exists : path -> (bool, error) result io
+  val create : ?path:bool -> ?mode:int -> path -> (bool, error) result io
+  val delete : ?recurse:bool -> path -> (unit, error) result io
+  val contents : ?dotfiles:bool -> ?rel:bool -> path -> (path list, error) result io
+  val current : unit -> (path, error) result io
+  val temp : unit -> path io
+end
+
+module type FS =
+sig
+  type +'a io
+
+  type path
+  type error
+
+  val pp_error : error Fmt.t
+
+  val is_dir : path -> (bool, error) result io
+  val is_file : path -> (bool, error) result io
+
+  module File : FILE with type path = path and type +'a io = 'a io
+  module Dir : DIR with type path = path and type +'a io = 'a io
+  module Mapper : MAPPER with type path = path and type +'a io = 'a io
+end

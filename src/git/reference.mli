@@ -102,20 +102,20 @@ sig
                  and type raw = Cstruct.t
                  and type init = int * head_contents
                  and type error = [ `Never ]
-  (** The encoder (which uses a {Minienc.encoder}) of the Git Reference object.
-      We constraint the output to be a {Cstruct.t}. This encoder needs the Reference
-      OCaml value and the memory consumption of the encoder (in bytes). The encoder
-      can not fail.
+  (** The encoder (which uses a {Minienc.encoder}) of the Git
+      Reference object. We constraint the output to be a {Cstruct.t}.
+      This encoder needs the Reference OCaml value and the memory
+      consumption of the encoder (in bytes). The encoder can not fail.
 
-      NOTE: we can not unspecified the error type (it needs to be concrete) but,
-      because the encoder can not fail, we define the error as [`Never]. *)
-
+      NOTE: we can not unspecified the error type (it needs to be
+      concrete) but, because the encoder can not fail, we define the
+      error as [`Never]. *)
 end
 
 module type IO =
 sig
   module Lock : S.LOCK
-  module FileSystem : Fs.S
+  module FileSystem : S.FS
 
   include S
 
@@ -174,9 +174,10 @@ module IO
     (P : Path.S)
     (L : S.LOCK with type key = P.t
                  and type +'a io = 'a Lwt.t)
-    (FS : Fs.S with type path = P.t
+    (FS : S.FS with type path = P.t
                 and type File.raw = Cstruct.t
-                and type File.lock = L.elt)
+                and type File.lock = L.elt
+                and type +'a io = 'a Lwt.t)
   : IO with module Hash = H
         and module Path = P
         and module Lock = L

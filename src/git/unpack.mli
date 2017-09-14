@@ -402,7 +402,7 @@ module MakePACKDecoder (H : S.HASH) (Inflate : S.INFLATE) : P
 module type DECODER =
 sig
   module Hash : S.HASH
-  module Mapper : Fs.MAPPER
+  module Mapper : S.MAPPER
   module Inflate : S.INFLATE
 
   module H : H with module Hash = Hash
@@ -603,7 +603,8 @@ end
 
 module MakeDecoder
     (H : S.HASH)
-    (Mapper : Fs.MAPPER with type raw = Cstruct.t)
+    (Mapper : S.MAPPER with type raw = Cstruct.t
+                        and type +'a io = 'a Lwt.t)
     (Inflate : S.INFLATE)
   : DECODER with type Hash.t = H.t
              and module Hash = H

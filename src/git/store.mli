@@ -32,7 +32,7 @@ sig
   (** The [Path] module used to make this interface. *)
 
   module FileSystem
-    : Fs.S with type path = Path.t
+    : S.FS with type path = Path.t
   (** The [FileSystem] module used to make this interface. *)
 
   module Inflate
@@ -329,7 +329,7 @@ sig
   (** The [Path] module used to make this interface. *)
 
   module FileSystem
-    : Fs.S with type path = Path.t
+    : S.FS with type path = Path.t
   (** The [FileSystem] module used to make this interface. *)
 
   module Inflate
@@ -522,7 +522,7 @@ sig
   (** The [Lock] module used to make this interface. *)
 
   module FileSystem
-    : Fs.S with type path = Path.t
+    : S.FS with type path = Path.t
             and type File.lock = Lock.elt
   (** The [FileSystem] module used to make the module. *)
 
@@ -953,10 +953,11 @@ module Make
     (P : Path.S)
     (L : S.LOCK with type key = P.t
                  and type +'a io = 'a Lwt.t)
-    (FS : Fs.S with type path = P.t
+    (FS : S.FS with type path = P.t
                 and type File.raw = Cstruct.t
                 and type File.lock = L.elt
-                and type Mapper.raw = Cstruct.t)
+                and type Mapper.raw = Cstruct.t
+                and type +'a io = 'a Lwt.t)
     (Inflate : S.INFLATE)
     (Deflate : S.DEFLATE)
   : S with module Hash = H

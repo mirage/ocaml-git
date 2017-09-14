@@ -19,7 +19,7 @@ module type S =
 sig
   module Hash : S.HASH
   module Path : Path.S
-  module FileSystem : Fs.S
+  module FileSystem : S.FS
 
   type t = [ `Peeled of Hash.t | `Ref of string * Hash.t ] list
 
@@ -47,8 +47,9 @@ module Make
     (H : S.HASH with type Digest.buffer = Cstruct.t
                  and type hex = string)
     (P : Path.S)
-    (FS : Fs.S with type path = P.t
-                and type File.raw = Cstruct.t)
+    (FS : S.FS with type path = P.t
+                and type File.raw = Cstruct.t
+                and type +'a io = 'a Lwt.t)
   : S with module Hash = H
        and module Path = P
        and module FileSystem = FS

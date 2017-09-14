@@ -35,7 +35,8 @@ module Make
     (Store : Store.S with type Hash.Digest.buffer = Cstruct.t
                       and type Hash.hex = string
                       and type FileSystem.File.raw = Cstruct.t
-                      and type FileSystem.Mapper.raw = Cstruct.t)
+                      and type FileSystem.Mapper.raw = Cstruct.t
+                      and type +'a FileSystem.io = 'a Lwt.t)
     (Capabilities : C)
 = struct
   module Client = Smart.Client(Store.Hash)
