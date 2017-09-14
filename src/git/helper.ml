@@ -338,11 +338,11 @@ module MakeEncoder (M : S.MINIENC)
   let pp_error ppf `Never = Fmt.string ppf "`Never"
 
   type encoder =
-      { o_off : int
-      ; o_pos : int
-      ; o_len : int
-      ; w_acc : int
-      ; state : Minienc.encoder Minienc.state }
+    { o_off : int
+    ; o_pos : int
+    ; o_len : int
+    ; w_acc : int
+    ; state : Minienc.encoder Minienc.state }
 
   let default (capacity, x) =
     Log.debug (fun l -> l "Starting to encode a Git object with \

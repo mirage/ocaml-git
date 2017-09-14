@@ -256,7 +256,7 @@ module Make
       let v =
         try Some (Hashtbl.find t.refs r)
             |> function Some (`R refname) -> Some (Reference.Ref refname)
-                      | Some (`H hash) -> Some (Reference.Hash hash) 
+                      | Some (`H hash) -> Some (Reference.Hash hash)
                       | None -> None
         with Not_found -> None in
       let replace () = match set with

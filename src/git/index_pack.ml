@@ -115,30 +115,30 @@ struct
     *> check_version map
     *> number_of_hashes map
     >>= fun (fanout_offset, number_of_hashes) ->
-      let number_of_hashes = Int32.to_int number_of_hashes in
-      let hashes_offset = 8 + (256 * 4) in
-      let crcs_offset   = 8 + (256 * 4) + (number_of_hashes * 20) in
-      let values_offset = 8 + (256 * 4) + (number_of_hashes * 20) + (number_of_hashes * 4) in
-      let v64_offset    = 8 + (256 * 4) + (number_of_hashes * 20) + (number_of_hashes * 4) + (number_of_hashes * 4) in
+    let number_of_hashes = Int32.to_int number_of_hashes in
+    let hashes_offset = 8 + (256 * 4) in
+    let crcs_offset   = 8 + (256 * 4) + (number_of_hashes * 20) in
+    let values_offset = 8 + (256 * 4) + (number_of_hashes * 20) + (number_of_hashes * 4) in
+    let v64_offset    = 8 + (256 * 4) + (number_of_hashes * 20) + (number_of_hashes * 4) + (number_of_hashes * 4) in
 
-      let v64_offset = if v64_offset + (Hash.Digest.length * 2) = Cstruct.len map then None else Some v64_offset in
+    let v64_offset = if v64_offset + (Hash.Digest.length * 2) = Cstruct.len map then None else Some v64_offset in
 
-      Ok { map
-         ; number_of_hashes
-         ; fanout_offset
-         ; hashes_offset
-         ; crcs_offset
-         ; values_offset
-         ; v64_offset
-         ; cache = Cache.create ~random:true cache }
+    Ok { map
+       ; number_of_hashes
+       ; fanout_offset
+       ; hashes_offset
+       ; crcs_offset
+       ; values_offset
+       ; v64_offset
+       ; cache = Cache.create ~random:true cache }
 
   exception Break
 
   let compare buf off hash =
     try for i = 0 to Hash.Digest.length - 1
-        do if Cstruct.get_char buf (off + i) <> Cstruct.get_char hash i
-           then raise Break
-        done; true
+      do if Cstruct.get_char buf (off + i) <> Cstruct.get_char hash i
+        then raise Break
+      done; true
     with Break -> false
 
   exception ReturnT
@@ -146,13 +146,13 @@ struct
 
   let lt buf off hash =
     try for i = 0 to Hash.Digest.length - 1
-        do let a = Cstruct.get_uint8 buf (off + i) in
-           let b = Cstruct.get_uint8 hash i in
+      do let a = Cstruct.get_uint8 buf (off + i) in
+        let b = Cstruct.get_uint8 hash i in
 
-           if a > b
-           then raise ReturnT
-           else if a <> b then raise ReturnF;
-        done; false
+        if a > b
+        then raise ReturnT
+        else if a <> b then raise ReturnF;
+      done; false
     with ReturnT -> true
        | ReturnF -> false
 
@@ -438,12 +438,12 @@ struct
       else error { t with i_pos = t.i_pos + 1 }
                  (Invalid_byte (Cstruct.get_uint8 src (t.i_off + t.i_pos)))
 
-    let get_u32  = get_u32  ~ctor:(fun k -> Header k)
+    let get_u32 = get_u32 ~ctor:(fun k -> Header k)
   end
 
   module KFanoutTable =
   struct
-    let get_u32  = get_u32  ~ctor:(fun k -> Fanout k)
+    let get_u32 = get_u32 ~ctor:(fun k -> Fanout k)
   end
 
   module KHashes =
@@ -595,7 +595,7 @@ struct
     | _ ->
       KFanoutTable.get_u32
         (fun entry src t ->
-         Array.set t.fanout idx entry; (fanout[@tailcall]) (idx + 1) src t)
+           Array.set t.fanout idx entry; (fanout[@tailcall]) (idx + 1) src t)
         src t
 
   let header src t =

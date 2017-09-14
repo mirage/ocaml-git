@@ -294,8 +294,8 @@ module Make
         | (Some hash, rev) ->
           consume (hash :: have)
             { state with rev
-                        ; count = state.count + 1
-                        ; vain  = state.vain  + 1 }
+                       ; count = state.count + 1
+                       ; vain  = state.vain  + 1 }
             (n - 1)
     in
 
@@ -326,8 +326,8 @@ module Make
 
             mark_common t bucket ~ancestors:false hash value state.rev >|=
             (if ack = `Ready
-            then fun _ -> { rev with pq = Pq.empty }
-            else fun x -> x)
+             then fun _ -> { rev with pq = Pq.empty }
+             else fun x -> x)
             >>= fun rev ->
             go { state with rev
                           ; continue = true

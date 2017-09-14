@@ -975,10 +975,10 @@ module Make
              | Error _ -> acc)
           [] (Path.(t.dotgit / "HEAD") :: files)
         >>= fun lst -> Lwt_list.fold_left_s
-            (fun (rest, graph) -> function
-               | refname, Reference.Hash hash -> Lwt.return (rest, Graph.add refname hash graph)
-               | refname, Reference.Ref link -> Lwt.return ((refname, link) :: rest, graph))
-            ([], Graph.empty) lst
+          (fun (rest, graph) -> function
+             | refname, Reference.Hash hash -> Lwt.return (rest, Graph.add refname hash graph)
+             | refname, Reference.Ref link -> Lwt.return ((refname, link) :: rest, graph))
+          ([], Graph.empty) lst
         >>= fun (partial, graph) ->
         Packed_refs.read ~root:t.dotgit ~dtmp ~raw >>= function
         | Ok packed_refs ->

@@ -253,8 +253,8 @@ module Make
       kind <* take 1
       >>= fun kind -> int64 <* advance 1
       >>= fun length -> (match result with
-      | Some result -> to_end result
-      | None -> to_end (Cstruct.create (Int64.to_int length)))
+          | Some result -> to_end result
+          | None -> to_end (Cstruct.create (Int64.to_int length)))
       >>| fun cs -> kind, cs
   end
 

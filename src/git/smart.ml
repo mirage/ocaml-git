@@ -306,13 +306,13 @@ struct
   let err_unexpected_flush_pkt_line  decoder = (`Unexpected_flush_pkt_line, decoder.buffer, decoder.pos)
 
   let pp_error ppf = function
-    | `Expected_char chr -> Fmt.pf ppf "(`Expected_char %c)" chr
-    | `Unexpected_char chr -> Fmt.pf ppf "(`Unexpected_char %c)" chr
-    | `No_assert_predicate predicate -> Fmt.pf ppf "(`No_assert_predicate #predicate)"
-    | `Expected_string s -> Fmt.pf ppf "(`Expected_string %s)" s
+    | `Expected_char chr         -> Fmt.pf ppf "(`Expected_char %c)" chr
+    | `Unexpected_char chr       -> Fmt.pf ppf "(`Unexpected_char %c)" chr
+    | `No_assert_predicate _     -> Fmt.pf ppf "(`No_assert_predicate #predicate)"
+    | `Expected_string s         -> Fmt.pf ppf "(`Expected_string %s)" s
     | `Unexpected_empty_pkt_line -> Fmt.pf ppf "`Unexpected_empty_pkt_line"
-    | `Malformed_pkt_line -> Fmt.pf ppf "`Malformed_pkt_line"
-    | `Unexpected_end_of_input -> Fmt.pf ppf "`Unexpected_end_of_input"
+    | `Malformed_pkt_line        -> Fmt.pf ppf "`Malformed_pkt_line"
+    | `Unexpected_end_of_input   -> Fmt.pf ppf "`Unexpected_end_of_input"
     | `Unexpected_flush_pkt_line -> Fmt.pf ppf "`Unexpected_flush_pkt_line"
 
   type 'a state =

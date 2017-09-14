@@ -34,7 +34,7 @@ sig
                  and type error = [ `Decoder of string ]
   module E
     : S.ENCODER with type t = t
-                      and type raw = Cstruct.t
+                 and type raw = Cstruct.t
   module A
     : S.ANGSTROM with type t = t
   module F

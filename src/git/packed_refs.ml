@@ -125,12 +125,12 @@ module Make
       | `Peeled hash ->
         (write_char '^'
          @@ write_hash hash k)
-        e
+          e
       | `Ref (refname, hash) ->
         (write_hash hash
          @@ write_char ' '
          @@ write_string refname k)
-        e
+          e
 
     let write_list ?(sep = fun k e -> k e) write_data lst k e =
       let rec aux l e = match l with
@@ -140,7 +140,7 @@ module Make
           (write_data x
            @@ sep
            @@ aux r)
-          e
+            e
       in
       aux lst e
 
@@ -148,7 +148,7 @@ module Make
       (write_string "# pack-refs with: peeled fully-peeled"
        @@ write_newline
        @@ write_list ~sep:write_newline write_info l k)
-      e
+        e
   end
 
   module D = Helper.MakeDecoder(A)
