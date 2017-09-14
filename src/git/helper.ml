@@ -411,7 +411,7 @@ module MakeEncoder (M : S.MINIENC)
       eval current { e with state = continue encoder }
     | Minienc.Flush { continue; iovecs; } ->
       let max = min (e.o_len - e.o_pos) (Minienc.IOVec.lengthv iovecs) in
-      try
+      try (* XXX(dinosaure): wtf?! pourquoi j'ai fait ce code (peut être pour ne pas utiliser [fold_left]. *)
         let pos = ref e.o_pos in
 
         List.iter (fun iovec ->

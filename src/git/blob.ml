@@ -136,6 +136,8 @@ module Make
     let eval decoder =
       if decoder.final
       then `End (decoder.cur, (decoder.res : t))
+      (* XXX(dinosaure): [finish] takes care about [decoder.res] -
+         sub exactly the blob part. *)
       else begin
         let decoder = ensure decoder in
         Cstruct.blit decoder.cur 0 decoder.res decoder.abs (Cstruct.len decoder.cur);
