@@ -275,15 +275,13 @@ module Make
     let open Lwt.Infix in
 
     Store.Ref.list t >>=
-    (function
-      | Error _ -> Lwt.return rev
-      | Ok refs ->
-        Lwt_list.fold_left_s
-          (fun rev (refname, hash) ->
-             Bucket.get t bucket hash >|= function
-             | Ok value -> push hash value Flag.seen rev
-             | Error _ -> rev)
-          rev refs)
+    (fun refs ->
+       Lwt_list.fold_left_s
+         (fun rev (_, hash) ->
+            Bucket.get t bucket hash >|= function
+            | Ok value -> push hash value Flag.seen rev
+            | Error _ -> rev)
+         rev refs)
     >>= fun rev ->
 
     let rec consume have state = function
