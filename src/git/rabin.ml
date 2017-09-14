@@ -26,9 +26,6 @@ module UInt32 =
 struct
   include Int32
 
-  let div a b = assert false
-  let rem a b = assert false
-
   (* XXX(dinosaure): we use the [int32] representation as a fake unsigned
      [int32]. So we consider than all number between [-2147483648 .. 0[ is, in
      reality, ]2147483647 .. 4294967295]. Obviously, this hack in only available
@@ -155,7 +152,6 @@ module type BUFFER =
 sig
   type t
 
-  val length : t -> int
   val get : t -> int -> char
 end
 
@@ -186,7 +182,9 @@ type unpacked_entry =
   ; hash      : UInt32.t
   ; next      : ptr }
 
-let pp_unpacked_entry ppf entry =
+(* XXX(dinosaure): may be my prince will fix [@warning "-32"]. *)
+
+let[@warning "-32"] pp_unpacked_entry ppf entry =
   let pp_next ppf = function
     | Entry idx -> Fmt.int ppf idx
     | Null -> Fmt.string ppf "<null>"
@@ -206,24 +204,22 @@ struct
     { offset : int
     ; hash   : UInt32.t }
 
-  let pp ppf entry =
+  let pp : t Fmt.t = fun ppf entry ->
     Fmt.pf ppf "{ @[<hov>offset = %d;@ \
                          hash = %lxu;@] }"
       entry.offset entry.hash
-
-  let memory_size _ = 2
 end
 
 module Index (V : VALUE) =
 struct
-  module Hash = Make(struct type t = Cstruct.t let get = Cstruct.get_char let length = Cstruct.len end)(V)
+  module Hash = Make(struct type t = Cstruct.t let get = Cstruct.get_char end)(V)
 
   type t =
     { hash : Entry.t list array
     ; mask : UInt32.t
     ; buff : Cstruct.t }
 
-  let memory_size { hash; mask; buff; } =
+  let memory_size { hash; buff; _ } =
     3 + (Cstruct.len buff + 1) + 1 + (Array.fold_left (fun acc x -> List.length x * 4 + 1 + acc) 1 hash)
 
   let pp ppf index =
@@ -508,9 +504,9 @@ struct
           `Cont, (Insert (offset, 1) :: acc, (offset, 0), current_hash)
       else
         let revsame = match acc with
-          | Insert (poff, plen) :: r ->
+          | Insert (poff, _) :: _ ->
             revsame ~limit:(offset - poff) (index.Index.buff, copy_off - 1) (buf, offset - 1)
-          | _ -> 0
+          | Copy _ :: _ | [] -> 0
           (* XXX(dinosaure): this case concerns an empty list and a list started
              with a [C]. in any case, we can't move back. *)
         in
@@ -522,7 +518,7 @@ struct
             else if revsame > 0
             then Insert (poff, plen - revsame) :: r
             else Insert (poff, plen) :: r
-          | lst -> lst
+          | (Copy _ :: _ | []) as lst -> lst
         in
 
         (* XXX(dinosaure): in git, the length of a pattern can't be upper than 0x10000. *)

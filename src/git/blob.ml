@@ -200,8 +200,6 @@ module Make
       { encoder with off = off
                    ; len = len
                    ; pos = 0 }
-
-    let to_result raw = Ok raw
   end
 
   let digest cs =

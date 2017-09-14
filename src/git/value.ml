@@ -139,7 +139,7 @@ module Make
       let open Angstrom in
       kind <* take 1
       >>= fun kind -> int64 <* advance 1
-      >>= fun length -> match kind with
+      >>= fun _ -> match kind with
       | `Commit -> Commit.A.decoder >>| fun commit -> Commit commit
       | `Blob   -> Blob.A.decoder   >>| fun blob -> Blob blob
       | `Tree   -> Tree.A.decoder   >>| fun tree -> Tree tree
@@ -318,8 +318,8 @@ module Raw
     in
 
     let rec go state = match E.eval raw state with
-      | `Error (state, err) -> Error err
-      | `End (state, res) ->
+      | `Error (_, err) -> Error err
+      | `End (state, _) ->
         if E.used state > 0
         then Buffer.add buffer (E.raw_sub raw 0 (E.used state));
 

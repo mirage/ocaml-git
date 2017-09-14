@@ -109,7 +109,7 @@ module Make
       Cstruct.blit_to_bytes buffer off t.output 0 len;
       Net.write t.socket t.output 0 len >>= fun n ->
       process t (continue n)
-    | `Error (err, buf, committed) ->
+    | `Error _ ->
       assert false (* TODO *)
     | #Client.result as result -> Lwt.return result
 
@@ -117,7 +117,7 @@ module Make
     | Some v -> Some (f v)
     | None -> None
 
-  let packer ~window ~depth git ~ofs_delta remote commands =
+  let packer ~window ~depth git ~ofs_delta:_ remote commands =
     let open Lwt.Infix in
 
     let commands' =
@@ -158,14 +158,14 @@ module Make
 
         Store.fold git
           (fun (acc, max_length) ?name ~length hash -> function
-              | Store.Value.Commit commit ->
+              | Store.Value.Commit _ ->
                 PACKEncoder.Entry.make hash
                   Pack.Kind.Commit
                   length
                 |> fun entry ->
                 Store.Hash.Map.add hash entry acc
                 |> fun acc -> Lwt.return (acc, max max_length length)
-              | Store.Value.Tree tree ->
+              | Store.Value.Tree _ ->
                 PACKEncoder.Entry.make hash
                   ?name:(option_map Path.to_string name)
                   Pack.Kind.Tree
@@ -173,7 +173,7 @@ module Make
                 |> fun entry ->
                 Store.Hash.Map.add hash entry acc
                 |> fun acc -> Lwt.return (acc, max max_length length)
-              | Store.Value.Blob blob ->
+              | Store.Value.Blob _ ->
                 PACKEncoder.Entry.make hash
                   ?name:(option_map Path.to_string name)
                   Pack.Kind.Blob
@@ -181,7 +181,7 @@ module Make
                 |> fun entry ->
                 Store.Hash.Map.add hash entry acc
                 |> fun acc -> Lwt.return (acc, max max_length length)
-              | Store.Value.Tag tag ->
+              | Store.Value.Tag _ ->
                 PACKEncoder.Entry.make hash
                   Pack.Kind.Tag
                   length
@@ -190,7 +190,7 @@ module Make
                 |> fun acc -> Lwt.return (acc, max max_length length))
           ~path:(Path.v "/") acc commit)
       (Store.Hash.Map.empty, 0L) (Store.Hash.Set.elements elements)
-    >>= fun (entries, max) ->
+    >>= fun (entries, _) ->
     PACKEncoder.Delta.deltas
       ~memory:false
       (Store.Hash.Map.bindings entries |> List.map snd)
@@ -331,17 +331,17 @@ module Make
       let open Lwt.Infix in
 
       match r with
-      | `PACK (`Out raw) ->
+      | `PACK (`Out _) ->
         Client.run c.ctx `ReceivePACK |> process c >>= pack_handler k c t w
       | `PACK (`Err raw) ->
         let err = Cstruct.to_string raw in
         Lwt.return (Error (`SmartPack err))
       | `PACK `End ->
 
-        let max_depth = Graph.fold (fun off depth acc -> max depth acc) t.graph 0 in
+        let max_depth = Graph.fold (fun _ depth acc -> max depth acc) t.graph 0 in
 
         (match PACKDecoder.eval (Cstruct.create 0) t.pack with
-         | `End (pack, hash_pack) ->
+         | `End (_, hash_pack) ->
            Store.FileSystem.File.close w >>= (function
                | Ok () -> k t.max_length max_depth hash_pack t.tree t.rofs t.rext
                | Error sys_err -> Lwt.return (Error (`SystemFile sys_err)))
@@ -355,9 +355,9 @@ module Make
             let rec go t = match PACKDecoder.eval raw t.pack with
               | `Await pack ->
                 Ok { t with pack; }
-              | `End (pack, hash) ->
+              | `End (pack, _) ->
                 Ok { t with pack = PACKDecoder.refill 0 0 pack; }
-              | `Error (pack, err) -> Error (`Unpack err)
+              | `Error (_, err) -> Error (`Unpack err)
               | `Flush pack ->
                 let o, n = PACKDecoder.output pack in
 
@@ -503,9 +503,9 @@ module Make
       | Error sys_err -> Lwt.return (Error (`SystemMapper sys_err))
       | Ok fd ->
         Decoder.make fd
-            (fun hash -> None)
+            (fun _ -> None)
             (fun hash -> Tree.lookup !tree' hash)
-            (fun offset -> None)
+            (fun _ -> None)
             (extern git)
         >>= function
         | Ok decoder ->
@@ -521,7 +521,7 @@ module Make
 
           Lwt.try_bind
             (fun () -> Lwt_list.fold_left_s
-                (fun (n, graph) (hunks, crc, offset) ->
+                (fun (n, graph) (_, crc, offset) ->
                    Decoder.optimized_get' ~h_tmp:htmp decoder offset rtmp ztmp wtmp >>= function
                    | Ok o ->
                      let hash = hash_of_object o in
@@ -532,7 +532,7 @@ module Make
                      Lwt.return (n + 1, Graph.add offset hash graph)
                    | Error err -> Lwt.fail (Leave err))
                 (0, Graph.empty) (rofs @ rext))
-            (fun (n, graph) -> Lwt.return (Ok { tree = !tree'
+            (fun (_, graph) -> Lwt.return (Ok { tree = !tree'
                                               ; hash = hash_pack
                                               ; rofs
                                               ; rext
@@ -568,7 +568,7 @@ module Make
         | `Tag -> Pack.Kind.Tag
       in
 
-      let make acc (hash, (crc, off)) =
+      let make acc (hash, (_, off)) =
         Format.printf "hash: %a\n%!" Hash.pp hash;
 
         Decoder.optimized_get' ~h_tmp:info.htmp info.decoder off info.rtmp info.ztmp info.wtmp >>= function
@@ -618,7 +618,7 @@ module Make
       let get hash =
         if Tree.exists info.tree hash
         then Decoder.get_with_allocation ~h_tmp:info.htmp info.decoder hash info.ztmp info.wtmp >>= function
-          | Error err ->
+          | Error _ ->
             Lwt.return None
           | Ok o -> Lwt.return (Some o.Decoder.Object.raw)
         else Store.raw git hash >>= function
@@ -626,7 +626,7 @@ module Make
           | None -> Lwt.return None
       in
 
-      let tag hash = false in
+      let tag _ = false in
 
       Tree.to_list info.tree |> Lwt_list.fold_left_s make [] >>= plus >>= fun entries ->
       PACKEncoder.Delta.deltas ~memory:false entries get tag 10 50 >>= function
@@ -654,9 +654,6 @@ module Make
             | None -> default
 
           let empty = Cstruct.create 0
-
-          type await' = [ `Await of state ]
-          type rest' = [ `Flush of state | `End of (state * result) | `Error of (state * error) ]
 
           let rec eval dst state =
             match PACKEncoder.eval (option_value ~default:empty state.src) dst state.pack with
@@ -780,11 +777,11 @@ module Make
     let open Lwt.Infix in
 
     match r with
-    | `Negociation l ->
+    | `Negociation _ ->
       Client.run t.ctx `Done
       |> process t
       >>= clone_handler git t
-    | `NegociationResult status ->
+    | `NegociationResult _ ->
       let ztmp = Store.buffer_zl git in
       let wtmp = Store.buffer_window git in
       let pack_filename = Pack.pack_filename () in
@@ -805,11 +802,11 @@ module Make
                    | Ok info -> Idx.save git (Ok (abs_pack_filename, info.Pack.tree, info.Pack.hash))
                    | Error _ as err ->  Idx.save git err)
           | Error sys_err -> Lwt.return (Error (`SystemFile sys_err)))
-    | `ShallowUpdate shallow_update ->
+    | `ShallowUpdate _ ->
       Client.run t.ctx (`Has []) |> process t >>= clone_handler git t
     | `Refs refs ->
       (try
-         let (hash_head, head, peeled) =
+         let (hash_head, _, _) =
            List.find
              (fun (_, refname, peeled) -> refname = "HEAD" && not peeled)
              refs.Client.Decoder.refs
@@ -827,7 +824,7 @@ module Make
                     | result -> Lwt.return (Error (`Clone (err_unexpected_result result))))
     | result -> Lwt.return (Error (`Clone (err_unexpected_result result)))
 
-  let ls_handler git t r =
+  let ls_handler _ t r =
     let open Lwt.Infix in
 
     match r with
@@ -886,12 +883,12 @@ module Make
       | `Negociation acks ->
         fn acks state >>=
         (function
-          | `Ready, state -> pack ~thin t
+          | `Ready, _ -> pack ~thin t
           | `Done, state ->
             Client.run t.ctx `Done |> process t >>= aux t state
           | `Again has, state ->
             Client.run t.ctx (`Has has) |> process t >>= aux t state)
-      | `NegociationResult status -> pack ~thin t
+      | `NegociationResult _ -> pack ~thin t
       | `Refs refs ->
         want refs.Client.Decoder.refs >>=
         (function
@@ -921,11 +918,11 @@ module Make
       let rec go src dst state t =
         match PACKEncoder.eval (option_value ~default:empty src) dst state with
         | `Flush state -> Lwt.return (Ok (`Continue (state, src)))
-        | `End (state, hash) ->
+        | `End (state, _) ->
           (if PACKEncoder.used_out state = 0
             then Lwt.return (Ok `Finish)
             else Lwt.return (Ok (`Continue (state, src))))
-        | `Error (state, err) -> Lwt.return (Error (`Pack err))
+        | `Error (_, err) -> Lwt.return (Error (`Pack err))
         | `Await state ->
           (match src with
             | Some _ ->

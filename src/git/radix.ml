@@ -104,9 +104,9 @@ struct
   let rec first_key = function
     | L (k, _) -> k
     | T (_, k, _) -> k
-    | B (l, r, _, _) ->
-      first_key l (* XXX(dinosaure): could take the shortest path if [B] node
-                                    embed he size of tree. *)
+    | B (l, _, _, _) ->
+      first_key l (* XXX(dinosaure): could take the shortest path if
+                     [B] node embed he size of tree. *)
 
   let rec bind key off keylen value tree = match tree with
     | L (k, v) ->
@@ -193,7 +193,7 @@ struct
     | T (m, k, v) ->
       let acc' = f (k, v) acc in
       fold f acc' m
-    | B (l, r, i, b) ->
+    | B (l, r, _, _) ->
       let acc' = fold f acc l in
       fold f acc' r
 
@@ -204,7 +204,7 @@ struct
   let rec iter f tree = match tree with
     | L (k, v) -> f (k, v)
     | T (m, k, v) -> let () = f (k, v) in iter f m
-    | B (l, r, i, b) ->
+    | B (l, r, _, _) ->
       let () = iter f l in iter f r
 
   let iter f = function

@@ -213,7 +213,7 @@ module Make
           | [] -> Lwt.return rev
           | hash :: rest ->
             Bucket.get t bucket hash >>= function
-            | Ok ({ V.commit; flags; } as value) ->
+            | Ok ({ V.flags; _ } as value) ->
               let rev =
                 if not (Flag.is_seen flags)
                 then push hash value marks rev
@@ -302,7 +302,7 @@ module Make
     let continue { Decoder.acks; _ } state =
       let rec go state have = function
         | [] -> Lwt.return (state, have)
-        | (hash, `ACK) :: _ ->
+        | (_, `ACK) :: _ ->
           (* XXX(dinosaure): without multi-ack or multi-ack-detailed,
             upload-pack sends 'ACK obj-id' on the first common object it finds.
             After that is says nothing until the client gives it a "done". *)
@@ -408,7 +408,7 @@ module Make
       (* XXX(dinosaure): we keep one window "ahead" of the other side, and will
          wait for an ACK only on the next one. *)
       consume [] state state.flush >>= function
-      | in_fly, `Not_enough state ->
+      | _, `Not_enough state ->
         Lwt.return (have,
                     { state with finish = true },
                     fun _ state -> Lwt.return (`Done, { state with finish = true }))

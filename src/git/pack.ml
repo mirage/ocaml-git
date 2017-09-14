@@ -24,10 +24,6 @@ struct
   let ( >>| ) a f = match a with
     | Some a -> Some (f a)
     | None -> None
-
-  let map f = function
-    | Some a -> Some (f a)
-    | None -> None
 end
 
 module Kind =
@@ -114,10 +110,8 @@ struct
   (* XXX(dinosaure): git hashes only the basename. *)
   let hash name = hash (Filename.basename name)
 
-  let name entry = entry.name
-
   let make
-    : type delta. Hash.t -> ?name:string -> ?preferred:bool -> ?delta:source -> Kind.t -> int64 -> t
+    : Hash.t -> ?name:string -> ?preferred:bool -> ?delta:source -> Kind.t -> int64 -> t
     = fun hash_object ?name ?(preferred = false) ?(delta = None) kind length ->
     let hash_name = Option.(value ~default:0 (name >>| hash)) in
 
@@ -221,10 +215,8 @@ struct
   include Int64
 
   let ( && ) = Int64.logand
-  let ( || ) = Int64.logor
   let ( - )  = Int64.sub
   let ( >> ) = Int64.shift_right
-  let ( << ) = Int64.shift_left (* >> (tuareg) *)
   let ( / ) = Int64.div
 end
 
@@ -273,11 +265,11 @@ struct
     | Ok    of t
 
   let pp_state ppf = function
-    | Header k      -> Fmt.pf ppf "(Header #k)"
+    | Header _      -> Fmt.pf ppf "(Header #k)"
     | List          -> Fmt.pf ppf "List"
-    | Hunk k        -> Fmt.pf ppf "(Hunk #k)"
-    | Insert k      -> Fmt.pf ppf "(Insert #k)"
-    | Copy k        -> Fmt.pf ppf "(Copy #k)"
+    | Hunk _        -> Fmt.pf ppf "(Hunk #k)"
+    | Insert _      -> Fmt.pf ppf "(Insert #k)"
+    | Copy _        -> Fmt.pf ppf "(Copy #k)"
     | End           -> Fmt.pf ppf "End"
     | Consume       -> Fmt.pf ppf "Consume"
     | Exception err -> Fmt.pf ppf "(Error %a)" (Fmt.hvbox pp_error) err
@@ -378,13 +370,6 @@ struct
       else k dst t
   end
 
-  let size_of_variable_length vl =
-    let rec loop acc = function
-      | 0 -> acc
-      | n -> loop (acc + 1) (n lsr 7)
-    in
-    loop 1 (vl lsr 7)
-
   let how_many_bytes n =
     let rec aux acc n =
       if n = 0 then acc else aux (acc + 1) (n lsr 8)
@@ -411,16 +396,16 @@ struct
             [absolute_offset] but inside the current [src] and the interval
             [t.i_off (t.i_off + t.i_len)[. *)
          (KInsert.put_raw ((t.i_off + relative_offset + (len - res)), n)
-          @@ fun src dst t -> Cont { t with state = Insert (insert (res - n) absolute_offset len)
-                                          (* XXX(dinosaure): we need to keep how
-                                             many bytes we rode because,
-                                             externally, we could use
-                                             [used_in]. *)
-                                          ; i_pos = relative_offset + (len - res) + n })
+          @@ fun _ _  t -> Cont { t with state = Insert (insert (res - n) absolute_offset len)
+                                       (* XXX(dinosaure): we need to
+                                          keep how many bytes we rode
+                                          because, externally, we
+                                          could use [used_in]. *)
+                                       ; i_pos = relative_offset + (len - res) + n })
            src dst t
        else await { t with i_pos = t.i_len })
 
-  let copy (off, (flag_o1, flag_o2, flag_o3)) (len, (flag_len1, flag_len2)) dst t =
+  let copy (off, _) (len, _) dst t =
     let o0 = off land 0xFF in
     let o1 = (off land 0xFF00) lsr 8 in
     let o2 = (off land 0xFF0000) lsr 16 in
@@ -444,14 +429,14 @@ struct
      @@ KCopy.put_byte ~force:true l0
      @@ KCopy.put_byte ~force:(l2 <> 0) l1
      @@ KCopy.put_byte l2
-     @@ fun dst t ->
+     @@ fun _ t ->
         Cont { t with state = List })
       dst t
 
   let consume t =
     await { t with i_pos = t.i_len }
 
-  let list src dst t = match t.hunks with
+  let list _ dst t = match t.hunks with
     | [] -> Cont { t with state = Consume }
     | hunk :: r ->
       match hunk with
@@ -462,8 +447,8 @@ struct
 
         let byte = len land 0x7F in
 
-        KHunk.put_byte byte (fun dst t -> Cont { t with state = Insert (insert len off len)
-                                                      ; hunks = r }) dst t
+        KHunk.put_byte byte (fun _ t -> Cont { t with state = Insert (insert len off len)
+                                                    ; hunks = r }) dst t
       | Rabin.Copy (off, len) ->
         let n_offset = how_many_bytes off in
         let n_length = if len = 0x10000 then 1 else how_many_bytes len in
@@ -490,7 +475,7 @@ struct
   let header dst t =
     (KHeader.length t.source_length
      @@ KHeader.length t.target_length
-     @@ fun dst t -> Cont { t with state = List })
+     @@ fun _ t -> Cont { t with state = List })
     dst t
 
   let eval src dst t =
@@ -553,10 +538,6 @@ struct
   let used_in t = t.i_pos
 
   let used_out t = t.o_pos
-
-  let consume off t =
-    { t with o_off = off
-           ; o_pos = t.o_pos - off}
 end
 
 module MakeDelta (H : S.HASH) =
@@ -595,7 +576,6 @@ struct
   module WeightByElement = struct type nonrec t = t * Cstruct.t * Rabin.Default.Index.t let weight _ = 1 end
 
   module type WINDOW = Lru.F.S with type k = Entry.t and type v = t * Cstruct.t * Rabin.Default.Index.t
-  type window = (module WINDOW)
 
   let rec pp_delta ppf = function
     | Z -> Fmt.string ppf "Τ"
@@ -698,14 +678,7 @@ struct
       then Window.fold apply None window
       else None
 
-  let int_of_bool v = if v then 1 else 0
-
   let ok v = Ok v
-
-  type write =
-    { mutable fill : bool
-    ; tagged       : bool
-    ; entry        : Entry.t * t }
 
   (* XXX(dinosaure): git prioritize some entries in imperative weird way. we
      can't reproduce the same with a small cost. We need to take care about the
@@ -715,11 +688,11 @@ struct
      This function needs to take about this and recompute the writing order. If
      a PACK file was not accepted by a server, may be the problem can be found
      here. TODO! *)
-  let sort tag lst =
-    let edges, rest = List.partition (function (e, { delta = Z }) -> true | _ -> false) lst in
+  let sort _ lst =
+    let edges, rest = List.partition (function (_, { delta = Z }) -> true | (_, { delta = S _ }) -> false) lst in
 
     let deps hash =
-      try List.filter (fun (e, d) -> Hash.equal e.Entry.hash_object hash) lst
+      try List.filter (fun (e, _) -> Hash.equal e.Entry.hash_object hash) lst
       with Not_found -> []
     in
 
@@ -729,11 +702,11 @@ struct
         if progress
         then loop acc [] later false
         else raise (Invalid_argument "Delta.sort: un-orderable list")
-      | ((e, { delta = Z }) as x) :: r, later ->
+      | ((_, { delta = Z }) as x) :: r, later ->
         loop (x :: acc) later r true
-      | ((e, { delta = S { src_hash; } }) as x) :: r, later ->
+      | ((_, { delta = S { src_hash; _ } }) as x) :: r, later ->
         let deps = deps src_hash in
-        let ensure = List.for_all (fun (e, _) -> List.exists (fun x -> Hash.equal e.Entry.hash_object e.Entry.hash_object) acc) deps in
+        let ensure = List.for_all (fun (e, _) -> List.exists (fun (x, _) -> Hash.equal x.Entry.hash_object e.Entry.hash_object) acc) deps in
 
         if ensure
         then loop (x :: acc) later r true
@@ -833,7 +806,7 @@ struct
                 | None -> Lwt.return (window, (entry, base) :: acc)
                 | Some (src_entry, hunks, length) ->
                   match Window.find ~promote:true src_entry window with
-                  | Some ((src, src_raw, rabin), window) ->
+                  | Some ((src, _, _), window) ->
                     let depth  = depth src + 1 in
 
                     base.delta <- S { length
@@ -847,7 +820,7 @@ struct
                     Lwt.return (window, ({ entry with Entry.delta = Entry.From src_entry.Entry.hash_object }, base) :: acc)
                   | None -> Lwt.return (window, (entry, base) :: acc))
            (window, []) tries)
-      (fun (window, tries) ->
+      (fun (_, tries) ->
          Lwt.try_bind
            (fun () -> normalize untries)
            (fun untries -> List.append tries untries |> sort tag |> ok |> Lwt.return)
@@ -1184,14 +1157,6 @@ struct
 
   module KHash =
   struct
-    let rec put_byte byte k dst t =
-      if (t.o_len - t.o_pos) > 0
-      then begin
-        Cstruct.set_uint8 dst (t.o_off + t.o_pos) byte;
-        k dst { t with o_pos = t.o_pos + 1
-                     ; write = Int64.add t.write 1L }
-      end else Flush { t with state = Hash (put_byte byte k) }
-
     let put_hash hash k dst t =
       if t.o_len - t.o_pos >= Hash.Digest.length
       then begin
@@ -1222,7 +1187,7 @@ struct
     Hash.Digest.feed t.hash (Cstruct.sub dst t.o_off t.o_pos);
     let hash = Hash.Digest.get t.hash in
 
-    KHash.put_hash (Hash.to_string hash) (fun dst t -> ok t hash) dst t
+    KHash.put_hash (Hash.to_string hash) (fun _ t -> ok t hash) dst t
 
   let writek kind entry entry_delta rest dst t =
     match kind, entry_delta with
@@ -1230,7 +1195,7 @@ struct
       let abs_off = t.write in
 
       (KWriteK.header (Kind.to_bin entry.Entry.kind) entry.Entry.length Crc32.default
-       @@ fun crc dst t ->
+       @@ fun crc _ t ->
        let z = Deflate.default 4 in
        let z = Deflate.flush (t.o_off + t.o_pos) (t.o_len - t.o_pos) z in
 
@@ -1245,7 +1210,7 @@ struct
                    ; i_len = 0 })
         dst t
 
-    | KindHash, { Delta.delta = Delta.S { length; depth; hunks; src; src_length; src_hash; } } ->
+    | KindHash, { Delta.delta = Delta.S { length; hunks; src_length; src_hash; _ } } ->
       let trg_length = entry.Entry.length in
       let abs_off    = t.write in
 
@@ -1261,7 +1226,7 @@ struct
 
       (KWriteK.header 0b111 (Int64.of_int length) Crc32.default
        @@ fun crc -> KWriteK.hash (Hash.to_string src_hash |> Bytes.unsafe_of_string) crc
-       @@ fun crc dst t ->
+       @@ fun crc _ t ->
        let z = Deflate.default 4 in
        let z = Deflate.flush (t.o_off + t.o_pos) (t.o_len - t.o_pos) z in
 
@@ -1277,9 +1242,9 @@ struct
                    ; i_pos = 0 })
         dst t
 
-    | KindOffset, { Delta.delta = Delta.S { length; depth; hunks; src; src_length; src_hash; } } ->
+    | KindOffset, { Delta.delta = Delta.S { length; hunks; src_length; src_hash; _ } } ->
       (match Radix.lookup t.radix src_hash with
-       | Some (src_crc, src_off) ->
+       | Some (_, src_off) ->
          let trg_length = entry.Entry.length in
          let abs_off    = t.write in
          let rel_off    = Int64.sub abs_off src_off in
@@ -1293,7 +1258,7 @@ struct
 
          (KWriteK.header 0b110 (Int64.of_int length) Crc32.default
           @@ fun crc -> KWriteK.offset rel_off crc
-          @@ fun crc dst t ->
+          @@ fun crc _ t ->
           let z = Deflate.default 4 in
           let z = Deflate.flush (t.o_off + t.o_pos) (t.o_len - t.o_pos) z in
 
@@ -1333,9 +1298,9 @@ struct
                     ; o_pos = t.o_pos + (Deflate.used_out z)
                     ; i_pos = Deflate.used_in z
                     ; write = Int64.add t.write (Int64.of_int (Deflate.used_out z)) }
-      | `Error (z, exn) -> error t (Deflate_error exn)
+      | `Error (_, exn) -> error t (Deflate_error exn)
 
-  let writeh src dst t ((entry, entry_delta) as x) r crc off used_in h z =
+  let writeh src dst t ((entry, _) as x) r crc off used_in h z =
     match Deflate.eval ~src:t.h_tmp ~dst z with
     | `Await z ->
       (match H.eval src t.h_tmp h with
@@ -1364,7 +1329,7 @@ struct
 
          Cont { t with state = WriteH { x; r; crc; off; ui; h; z; }
                      ; i_pos = H.used_in h }
-       | `Error (h, exn) -> error t (Hunk_error exn))
+       | `Error (_, exn) -> error t (Hunk_error exn))
     | `Flush z ->
       let crc = Crc32.digest ~off:(t.o_off + t.o_pos) ~len:(Deflate.used_out z) crc dst in
       let used_in' = used_in + Deflate.used_in z in
@@ -1382,9 +1347,9 @@ struct
                   ; i_len = 0
                   ; i_off = 0
                   ; write = Int64.add t.write (Int64.of_int (Deflate.used_out z)) }
-    | `Error (z, exn) -> error t (Deflate_error exn)
+    | `Error (_, exn) -> error t (Deflate_error exn)
 
-  let iter lst dst t = match lst with
+  let iter lst _ t = match lst with
     | [] -> Cont { t with state = Hash hash }
     | (entry, delta) :: r ->
       match entry.Entry.delta, delta with
@@ -1397,25 +1362,25 @@ struct
       | (Entry.None | Entry.From _),
         { Delta.delta = (Delta.S _ | Delta.Z) } -> error t (Invalid_hash entry.Entry.hash_object)
 
-  let save dst t x r crc off =
+  let save _ t x r crc off =
     Cont { t with state = Object (iter r)
                 ; radix = Radix.bind t.radix x.Entry.hash_object (crc, off) }
 
   let number lst dst t =
     (* XXX(dinosaure): problem in 32-bits architecture. TODO! *)
     KHeader.put_u32 (Int32.of_int (List.length lst))
-      (fun dst t -> Cont { t with state = Object (iter lst) })
+      (fun _ t -> Cont { t with state = Object (iter lst) })
       dst t
 
   let version lst dst t =
-    KHeader.put_u32 2l (fun dst t -> Cont { t with state = Header (number lst) }) dst t
+    KHeader.put_u32 2l (fun _ t -> Cont { t with state = Header (number lst) }) dst t
 
   let header lst dst t =
     (KHeader.put_byte (Char.code 'P')
      @@ KHeader.put_byte (Char.code 'A')
      @@ KHeader.put_byte (Char.code 'C')
      @@ KHeader.put_byte (Char.code 'K')
-     @@ fun dst t -> Cont { t with state = Header (version lst) })
+     @@ fun _ t -> Cont { t with state = Header (version lst) })
       dst t
 
   let used_out t = t.o_pos

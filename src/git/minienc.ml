@@ -278,7 +278,7 @@ struct
     Bigarray.Array1.set t.b (mask t t.w) v;
     { t with w = t.w + 1 }
 
-  let shift t v =
+  let shift t _ =
     assert (not (empty t));
     let r = Bigarray.Array1.get t.b (mask t t.r) in
     r, { t with r = t.r + 1 }
@@ -498,7 +498,7 @@ let shift_buffers n t =
 let shift_flushes n t =
   let rec aux t =
     try
-      let (threshold, f) as x, flush = Queue.shift t.flush in
+      let (threshold, f), flush = Queue.shift t.flush in
 
       if compare (t.written + n - min_int) (threshold - min_int) >= 0 (* unsigned int *)
       then let () = f n { t with flush } in aux { t with flush }
@@ -677,7 +677,7 @@ let write_bigstring =
     write k ~blit ~length ~off ?len a t
 
 let write_char =
-  let length a = assert false in
+  let length _ = assert false in
   let blit src src_off dst dst_off len =
     assert (src_off = 0);
     assert (len = 1);
@@ -686,7 +686,7 @@ let write_char =
   fun a k t -> write k ~length ~blit ~off:0 ~len:1 a t
 
 let write_uint8 =
-  let length a = assert false in
+  let length _ = assert false in
   let blit src src_off dst dst_off len =
     assert (src_off = 0);
     assert (len = 1);
@@ -699,7 +699,7 @@ module type EndianBytesSig = EndianBytes.EndianBytesSig
 
 module MakeE (EBigstring : EndianBigstringSig) =
 struct
-  let _length a = assert false
+  let _length _ = assert false
 
   let write_uint16 =
     let length = _length in

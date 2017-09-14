@@ -509,7 +509,7 @@ struct
       loop 0 src t
   end
 
-  let rest ?boffsets (hash_idx, hash_pack) src t =
+  let rest ?boffsets (hash_idx, hash_pack) _ t =
     match Queue.pop t.hashes, Queue.pop t.crcs, Queue.pop t.offsets with
     | hash, crc, (offset, true) -> Result ({ t with state = Ret (boffsets, hash_idx, hash_pack) }, (hash, crc, Int64.of_int32 offset))
     | exception Queue.Empty -> ok t hash_pack
@@ -591,7 +591,7 @@ struct
     match idx with
     | 256 ->
       Cont { t with state = Hashes (hashes 0l (Array.fold_left max 0l t.fanout)) }
-    | n ->
+    | _ ->
       KFanoutTable.get_u32
         (fun entry src t ->
          Array.set t.fanout idx entry; (fanout[@tailcall]) (idx + 1) src t)
@@ -603,7 +603,7 @@ struct
      @@ KHeader.check_byte '\079'
      @@ KHeader.check_byte '\099'
      @@ KHeader.get_u32
-     @@ fun version src t ->
+     @@ fun version _ t ->
         if version = 2l
         then Cont { t with state = Fanout (fanout 0) }
         else error t (Invalid_version version))
@@ -733,7 +733,7 @@ struct
     | Hash _       -> Fmt.pf ppf "(Hash #k)"
     | End          -> Fmt.pf ppf "End"
 
-  let pp ppf { o_off; o_pos; o_len; write; table; boffsets; hash; pack; state; } =
+  let pp ppf { o_off; o_pos; o_len; write; pack; state; _ } =
     Fmt.pf ppf "{ @[<hov>o_off = %d;@ \
                          o_pos = %d;@ \
                          o_len = %d;@ \
@@ -984,7 +984,7 @@ struct
      @@ KHeader.put_byte '\079'
      @@ KHeader.put_byte '\099'
      @@ KHeader.put_int32 2l
-     @@ fun dst t -> Cont { t with state = Fanout (fanout 0 0l) })
+     @@ fun _ t -> Cont { t with state = Fanout (fanout 0 0l) })
     dst t
 
   let flush off len t =

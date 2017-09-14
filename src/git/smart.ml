@@ -1340,14 +1340,14 @@ struct
     | `Shallow of Hash.t list ]
 
   let encode encoder = function
-    | `GitProtoRequest c -> w_git_proto_request c (fun encoder -> Ok ()) encoder
-    | `UploadRequest i   -> w_upload_request i (fun encoder -> Ok ()) encoder
-    | `UpdateRequest i   -> w_update_request i (fun encoder -> Ok ()) encoder
-    | `Has l             -> w_has l (fun encoder -> Ok ()) encoder
-    | `Done              -> w_done (fun encoder -> Ok ()) encoder
-    | `Flush             -> w_flush (fun encoder -> Ok ()) encoder
-    | `Shallow l         -> w_shallow l (fun encoder -> Ok ()) encoder
-    | `PACK n            -> w_pack n (fun encoder -> Ok ()) encoder
+    | `GitProtoRequest c -> w_git_proto_request c (fun _ -> Ok ()) encoder
+    | `UploadRequest i   -> w_upload_request i (fun _ -> Ok ()) encoder
+    | `UpdateRequest i   -> w_update_request i (fun _ -> Ok ()) encoder
+    | `Has l             -> w_has l (fun _ -> Ok ()) encoder
+    | `Done              -> w_done (fun _ -> Ok ()) encoder
+    | `Flush             -> w_flush (fun _ -> Ok ()) encoder
+    | `Shallow l         -> w_shallow l (fun _ -> Ok ()) encoder
+    | `PACK n            -> w_pack n (fun _ -> Ok ()) encoder
 
   let encoder () =
     { payload = Cstruct.create 65535
@@ -1427,7 +1427,7 @@ struct
       Fmt.pf ppf "`Flush"
     | `Nothing ->
       Fmt.pf ppf "`Nothing"
-    | `ReadyPACK raw ->
+    | `ReadyPACK _ ->
       Fmt.pf ppf "(`ReadyPACK #raw)"
     | `ReportStatus status ->
       Fmt.pf ppf "(`ReportStatus %a)" (Fmt.hvbox Decoder.pp_report_status) status
@@ -1454,7 +1454,7 @@ struct
               `Refs refs))
         context
     | `Flush ->
-      encode `Flush (fun context -> `Flush) context
+      encode `Flush (fun _ -> `Flush) context
     | `UploadRequest (descr : Encoder.upload_request) ->
       let common = List.filter (fun x -> List.exists ((=) x) context.capabilities) descr.Encoder.capabilities in
       (* XXX(dinosaure): we update with the shared capabilities between the
@@ -1465,9 +1465,9 @@ struct
       let next = match descr.Encoder.deep with
         | Some (`Depth n) ->
           if n > 0
-          then decode Decoder.ShallowUpdate (fun shallow_update context -> `ShallowUpdate shallow_update)
-          else (fun context -> `ShallowUpdate { Decoder.shallow = []; unshallow = []; })
-        | _ -> (fun context -> `ShallowUpdate { Decoder.shallow = []; unshallow = []; })
+          then decode Decoder.ShallowUpdate (fun shallow_update _ -> `ShallowUpdate shallow_update)
+          else (fun _ -> `ShallowUpdate { Decoder.shallow = []; unshallow = []; })
+        | _ -> (fun _ -> `ShallowUpdate { Decoder.shallow = []; unshallow = []; })
       in
       encode (`UploadRequest descr) next context
     | `UpdateRequest (descr : Encoder.update_request) ->
@@ -1491,9 +1491,9 @@ struct
         else `Ack
       in
 
-      encode (`Has has) (decode (Decoder.Negociation ackmode) (fun status context -> `Negociation status)) context
+      encode (`Has has) (decode (Decoder.Negociation ackmode) (fun status _ -> `Negociation status)) context
     | `Done ->
-      encode `Done (decode Decoder.NegociationResult (fun result context -> `NegociationResult result)) context
+      encode `Done (decode Decoder.NegociationResult (fun result _ -> `NegociationResult result)) context
     | `ReceivePACK ->
       let sideband =
         if List.exists ((=) `Side_band_64k) context.capabilities
@@ -1502,7 +1502,7 @@ struct
         then `Side_band
         else `No_multiplexe
       in
-      (decode (Decoder.PACK sideband) (fun flow context -> `PACK flow)) context
+      (decode (Decoder.PACK sideband) (fun flow _ -> `PACK flow)) context
     | `SendPACK w ->
       encode (`PACK w)
         (fun { encoder; _ } ->
@@ -1521,12 +1521,12 @@ struct
       in
 
       if List.exists ((=) `Report_status) context.capabilities
-      then decode (Decoder.ReportStatus sideband) (fun result context -> `ReportStatus result) context
+      then decode (Decoder.ReportStatus sideband) (fun result _ -> `ReportStatus result) context
       else `Nothing
     (* XXX(dinosaure): the specification does not explain what the server send
        when we don't have the capability [report-status]. *)
     | `Shallow l ->
-      encode (`Shallow l) (fun context -> `Nothing) context
+      encode (`Shallow l) (fun _ -> `Nothing) context
 
   let context c =
     let context =

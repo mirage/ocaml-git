@@ -183,15 +183,15 @@ struct
     | Offset off -> Fmt.pf ppf "(Offset %Ld)" off
 
   let pp_state ppf = function
-    | Header k ->
+    | Header _ ->
       Fmt.string ppf "(Header #k)"
     | Stop ->
       Fmt.string ppf "Stop"
-    | List k ->
+    | List _ ->
       Fmt.string ppf "(List #k)"
-    | Is_insert (raw, off, len) ->
+    | Is_insert (_, off, len) ->
       Fmt.pf ppf "(Is_insert (#raw, %d, %d))" off len
-    | Is_copy k ->
+    | Is_copy _ ->
       Fmt.string ppf "(Is_copy #k)"
     | End ->
       Fmt.string ppf "End"
@@ -284,7 +284,7 @@ struct
      @@ fun o3 -> get_byte (opcode land 0x10 <> 0)
      @@ fun l0 -> get_byte (opcode land 0x20 <> 0)
      @@ fun l1 -> get_byte (opcode land 0x40 <> 0)
-     @@ fun l2 src t ->
+     @@ fun l2 _ t ->
 
        let dst = ref 0 in
        let len = ref 0 in
@@ -312,12 +312,12 @@ struct
                      ; _hunk = Some (Copy (dst, len)) })
     src t
 
-  let stop src t = Cont t
+  let stop _ t = Cont t
 
   let list src t =
     if t.read < t._length
     then KList.get_byte
-        (fun opcode  src t ->
+        (fun opcode  _ t ->
             if opcode = 0 then error t (Reserved_opcode opcode)
             else match opcode land 0x80 with
               | 0 ->
@@ -347,7 +347,7 @@ struct
   let header src t =
     (KHeader.length
     @@ fun _source_length -> KHeader.length
-    @@ fun _target_length src t ->
+    @@ fun _target_length _ t ->
         Cont ({ t with state = List list
                     ; _source_length
                     ; _target_length }))
@@ -609,9 +609,9 @@ module MakePACKDecoder (H : S.HASH) (I : S.INFLATE)
   let pp_state ppf = function
     | Header _ ->
       Fmt.string ppf "(Header #k)"
-    | Object k ->
+    | Object _ ->
       Fmt.string ppf "(Object #k)"
-    | VariableLength k ->
+    | VariableLength _ ->
       Fmt.string ppf "(VariableLength #k)"
     | Unzip { offset
             ; consumed
@@ -640,7 +640,7 @@ module MakePACKDecoder (H : S.HASH) (I : S.INFLATE)
                                  length = %d;@ \
                                  length' = %d;@] })"
         offset consumed length length'
-    | Checksum k ->
+    | Checksum _ ->
       Fmt.string ppf "(Checksum #k)"
     | End hash ->
       Fmt.pf ppf "(End %a)" Hash.pp hash
@@ -767,7 +767,7 @@ module MakePACKDecoder (H : S.HASH) (I : S.INFLATE)
         src t
     | false -> k off crc src t
 
-  let stop_hunks src t hs =
+  let stop_hunks _ t hs =
     Cont { t with state = StopHunks hs }
 
   (* XXX(dinosaure): Need an explanation. We must compute firstly the evaluation
@@ -820,10 +820,10 @@ module MakePACKDecoder (H : S.HASH) (I : S.INFLATE)
                      ; read  = Int64.(add t.read (of_int (Inflate.used_in z))) }
        | `Error (z, exn) -> error { t with i_pos = t.i_pos + Inflate.used_in z
                                          ; read  = Int64.(add t.read (of_int (Inflate.used_in z))) } (Inflate_error exn))
-    | `Hunk (h, hunk) ->
+    | `Hunk (h, _) ->
       Cont { t with state = StopHunks { offset; length; consumed; crc; z; h; } }
-    | `Error (h, exn) -> error t (Hunk_error exn)
-    | `Ok (h, hunks) ->
+    | `Error (_, exn) -> error t (Hunk_error exn)
+    | `Ok (_, hunks) ->
       Cont { t with state = Next { length
                                  ; length' = Inflate.write z
                                  ; offset
@@ -890,7 +890,7 @@ module MakePACKDecoder (H : S.HASH) (I : S.INFLATE)
           let msb = byte land 0x80 <> 0 in
           let crc = Crc32.digestc crc byte in
           offset msb (Int64.of_int (byte land 0x7F)) crc
-            (fun offset crc src t ->
+            (fun offset crc _ t ->
                Cont { t with state = Hunks { offset   = off
                                            ; length   = len
                                            ; consumed = size_of_variable_length len
@@ -904,7 +904,7 @@ module MakePACKDecoder (H : S.HASH) (I : S.INFLATE)
         src t
     | 0b111 ->
       KObject.get_hash
-        (fun hash src t ->
+        (fun hash _ t ->
           let crc = Crc32.digests crc (Hash.to_string hash |> Bytes.unsafe_of_string) in
 
           Cont { t with state = Hunks { offset   = off
@@ -921,7 +921,7 @@ module MakePACKDecoder (H : S.HASH) (I : S.INFLATE)
   (* TODO: check the hash procuded and the hash noticed. *)
   let checksum src t =
     KChecksum.get_hash
-      (fun hash src t -> ok t hash)
+      (fun hash _ t -> ok t hash)
       src t
 
   let kind src t =
@@ -932,7 +932,7 @@ module MakePACKDecoder (H : S.HASH) (I : S.INFLATE)
         let msb = byte land 0x80 <> 0 in
         let typ = (byte land 0x70) lsr 4 in
         let crc = Crc32.digestc Crc32.default byte in
-        length msb (byte land 0x0F, 4) crc (fun len crc src t -> Cont { t with state = Object (fun src t -> switch typ offset len crc src t) }) src t)
+        length msb (byte land 0x0F, 4) crc (fun len crc _ t -> Cont { t with state = Object (fun src t -> switch typ offset len crc src t) }) src t)
       src t
 
   let unzip src t offset length consumed crc kind z =
@@ -976,14 +976,14 @@ module MakePACKDecoder (H : S.HASH) (I : S.INFLATE)
       error { t with i_pos = t.i_pos + Inflate.used_in z
                    ; read  = Int64.(add t.read (of_int (Inflate.used_in z ))) } (Inflate_error exn)
 
-  let next src t length length' kind =
+  let next _ t length length' _ =
     if length = length'
     then Cont t
     else error t (Invalid_length (length, length'))
 
   let number src t =
     KHeader.get_u32
-      (fun objects src t ->
+      (fun objects _ t ->
         Cont { t with objects = objects
                     ; counter = objects
                     ; state = Object kind })
@@ -1526,7 +1526,7 @@ struct
                                        ; base     = base.from } }
     else Error (Invalid_target (target_length, hunks_header.H.target_length))
 
-  let result_bind ~err f = function Ok a -> f a | Error exn -> err
+  let result_bind ~err f = function Ok a -> f a | Error _ -> err
 
   let get_pack_object ?(chunk = 0x8000) ?(limit = false) ?h_tmp t reference source_length source_offset z_tmp z_win r_tmp =
     if Cstruct.len r_tmp < source_length && not limit
@@ -1627,7 +1627,7 @@ struct
               (P.next_object state)
           | `Error (state, exn) ->
             Lwt.return (Error (Unpack_error (state, window, exn)))
-          | `End (state, _) ->
+          | `End _ ->
             match git_object with
             | Some (kind, partial) ->
               Lwt.return (Ok (kind, partial))
@@ -1671,7 +1671,7 @@ struct
       | Some base ->
         Lwt.return (Ok (Object (base.Object.kind, Object.to_partial base, base.Object.raw)))
       | None -> match t.idx hash with
-        | Some (crc, absolute_offset) ->
+        | Some (_, absolute_offset) ->
           let absolute_offset =
             if absolute_offset < t.max && absolute_offset >= 0L
             then Ok absolute_offset
@@ -1749,7 +1749,7 @@ struct
                       relative_offset
                       (P.refill 0 0 state))
           | `Error (state, exn) -> Lwt.return (Error (Unpack_error (state, window, exn)))
-          | `End (state, _) -> assert false
+          | `End _ -> assert false
           | `Flush state
           | `Length state ->
             match P.kind state with
@@ -1801,7 +1801,7 @@ struct
           | `Flush state ->
             Lwt.return (`Direct (P.length state))
           | `Error (state, exn) -> Lwt.return (`Error (Unpack_error (state, window, exn)))
-          | `End (state, _) -> assert false
+          | `End _ -> assert false
           | `Length state ->
             match P.kind state with
             | P.Hunk ({ H.reference = H.Offset off; _ } as hunks) ->
@@ -1881,7 +1881,7 @@ struct
      For this call, we don't case about the meta-data of the object requested
      (where it come from, the CRC-32 checksum, etc.) and just want the raw data.
   *)
-  let optimized_get' ?(chunk = 0x8000) ?(limit = false) ?h_tmp t absolute_offset (raw0, raw1, length) z_tmp z_win =
+  let optimized_get' ?(chunk = 0x8000) ?(limit = false) ?h_tmp t absolute_offset (raw0, raw1, _) z_tmp z_win =
     let get_free_raw = function
       | true -> raw0
       | false -> raw1
@@ -2020,7 +2020,7 @@ struct
              (P.next_object state))
       | `Error (state, exn) ->
         Lwt.return (Error (Unpack_error (state, window, exn)))
-      | `End (t, _) -> match git_object with
+      | `End _ -> match git_object with
         | Some obj ->
           Lwt.return (Ok obj)
         | None -> assert false

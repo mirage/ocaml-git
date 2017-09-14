@@ -100,7 +100,7 @@ module Make (H : S.HASH with type Digest.buffer = Cstruct.t
     | "120000" -> `Link
     | "40000"  -> `Dir
     | "160000" -> `Commit
-    | s -> raise (Invalid_argument "perm_of_string")
+    | _ -> raise (Invalid_argument "perm_of_string")
 
   module A =
   struct

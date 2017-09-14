@@ -216,9 +216,9 @@ struct
 
       let rec go = function
         | Angstrom.Unbuffered.Done (_, value) -> Lwt.return (Ok value)
-        | Angstrom.Unbuffered.Fail (_, path, err) -> Lwt.return (Error err)
+        | Angstrom.Unbuffered.Fail (_, _, err) -> Lwt.return (Error err)
         | Angstrom.Unbuffered.Jump jump -> (go[@tailcall]) (jump ())
-        | Angstrom.Unbuffered.Partial { Angstrom.Unbuffered.committed; continue; } ->
+        | Angstrom.Unbuffered.Partial { Angstrom.Unbuffered.continue; _ } ->
           get () >>= function
           | None -> continue empty Angstrom.Unbuffered.Complete |> go
           | Some (raw, off, len) ->
@@ -247,7 +247,7 @@ struct
   let pkt_line kk k encoder =
     let open Minienc in
 
-    let write_header shift encoder =
+    let write_header shift _ =
       let has = shift in
 
       if has > 0xFFFF
@@ -335,12 +335,12 @@ struct
 
   let encode request x =
     let k encoder = match x with
-      | `UploadRequest x -> w_compute_request x (fun encoder -> Minienc.End ()) encoder
+      | `UploadRequest x -> w_compute_request x (fun _ -> Minienc.End ()) encoder
     in
 
     let producer consumer =
       let raw = Cstruct.create 0x800 in
-      
+
       let rec go state =
 
         match state with

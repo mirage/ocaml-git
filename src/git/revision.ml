@@ -48,7 +48,7 @@ module Make
 
     match rev with
     | Commit (Complete hash) -> Lwt.return (Ok hash)
-    | Commit (Incomplete partial) -> assert false
+    | Commit (Incomplete _) -> assert false
     | Parent (rev, n) ->
       normalize git rev >>= (function
           | Ok hash ->
@@ -101,7 +101,7 @@ module Make
 
       Store.read git hash >|= function
       | Ok (Store.Value.Commit commit) -> Store.Value.Commit.parents commit
-      | Ok (Store.Value.Tree tree) -> []
+      | Ok (Store.Value.Tree _) -> []
       | Ok (Store.Value.Blob _) -> []
       | Ok (Store.Value.Tag tag) -> [ Store.Value.Tag.obj tag ]
       | Error _ -> []

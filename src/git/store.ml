@@ -389,7 +389,7 @@ module Make
             >|= fun x -> (Some x)
           | [] -> Lwt.return None)
         Lwt.return
-        (fun exn -> Lwt.return None)
+        (fun _ -> Lwt.return None)
 
     let lookup = lookup_p
 
@@ -461,7 +461,7 @@ module Make
 
     type t = PACKDecoder.Object.t
 
-    let load_idx state hash_idx path =
+    let load_idx _ _ path =
       let open Lwt.Infix in
 
       FileSystem.Mapper.openfile path
@@ -482,7 +482,7 @@ module Make
 
       Lwt_list.fold_left_s
         (function
-          | Some value -> fun x -> Lwt.return (Some value)
+          | Some value -> fun _ -> Lwt.return (Some value)
           | None -> fun (hash_idx, path) ->
             match CacheIndex.find hash_idx state.cache.indexes with
             | Some idx ->
@@ -493,7 +493,7 @@ module Make
               | Ok idx ->
                 CacheIndex.add hash_idx idx state.cache.indexes; (* XXX(dinosaure): thread-safe? *)
                 IDXDecoder.find idx hash |> Option.map (fun v -> (hash_idx, v))
-              | Error err -> None)
+              | Error _ -> None)
         None state.idxs
 
     let lookup = lookup_p
@@ -511,74 +511,7 @@ module Make
 
       Path.((state.dotgit / "objects" / "pack" / filename_pack) + "pack")[@warning "-44"]
 
-    type info =
-      { max_length : int
-      ; max_depth  : int }
-
     module Graph = Map.Make(Int64)
-
-    let info_from_pack state ~raw ~ztmp ~window hash_idx =
-      let path = path_idx state hash_idx in
-
-      let open Lwt.Infix in
-
-      FileSystem.File.open_r ~mode:0o644 path >>= function
-      | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
-      | Ok fd ->
-        let state = PACKDecoder.P.default ztmp window in
-
-        let rec go length graph t = match PACKDecoder.P.eval raw t with
-          | `Flush t ->
-            let o, n = PACKDecoder.P.output t in
-            go length graph (PACKDecoder.P.flush 0 (Cstruct.len o) t)
-          | `Hunk (t, _) ->
-            go length graph (PACKDecoder.P.continue t)
-          | `Error (err, t) ->
-            Lwt.return (Error (`PackDecoder err))
-          | `Await t ->
-            FileSystem.File.read raw ~off:0 ~len:(Cstruct.len raw) fd >>= (function
-                | Ok n ->
-                  let t = PACKDecoder.P.refill 0 n t in
-                  go length graph t
-                | Error sys_err -> Lwt.return (Error (`SystemFile sys_err)))
-          | `End (t, hash) ->
-            assert (Hash.equal hash hash_idx);
-
-            Lwt.return (Ok { max_depth = Graph.fold (fun _ -> max) graph 0; max_length = length })
-          | `Object t ->
-            match PACKDecoder.P.kind t with
-            | PACKDecoder.P.Commit
-            | PACKDecoder.P.Tree
-            | PACKDecoder.P.Tag
-            | PACKDecoder.P.Blob ->
-              go (max (PACKDecoder.P.length t) length) graph (PACKDecoder.P.next_object t)
-            | PACKDecoder.P.Hunk ({ PACKDecoder.P.H.reference = PACKDecoder.P.H.Offset rel_off; _ } as hunks) ->
-              let off = PACKDecoder.P.offset t in
-              let length =
-                max length
-                @@ max (PACKDecoder.P.length t)
-                @@ max hunks.PACKDecoder.P.H.target_length hunks.PACKDecoder.P.H.source_length
-              in
-              let graph =
-                let depth_base =
-                  try Graph.find Int64.(sub off rel_off) graph
-                  with Not_found -> 0
-                in
-
-                Graph.add off (depth_base + 1) graph
-              in
-
-              go length graph (PACKDecoder.P.next_object t)
-            | PACKDecoder.P.Hunk hunks ->
-              let length =
-                max length
-                @@ max (PACKDecoder.P.length t)
-                @@ max hunks.PACKDecoder.P.H.target_length hunks.PACKDecoder.P.H.source_length
-              in
-              go length graph (PACKDecoder.P.next_object t)
-        in
-
-        go 0 Graph.empty state
 
     let rec load_pack state hash_idx path_idx =
       let open Lwt.Infix in
@@ -608,7 +541,7 @@ module Make
 
       lookup state hash >>= (function
           | None -> Lwt.return `Not_found
-          | Some (hash_idx, (crc32, absolute_offset)) ->
+          | Some (hash_idx, (_, absolute_offset)) ->
             CacheRevIndex.add (hash_idx, absolute_offset) hash state.cache.revindexes;
             match CachePack.find hash_idx state.cache.packs with
             | None -> load_pack state hash_idx (path_idx state hash_idx) >>= (function
@@ -638,7 +571,7 @@ module Make
           Loose.raw_s state hash
           >|= (function
               | Ok v -> Some v
-              | Error err -> None)
+              | Error _ -> None)
         | None -> match pack_result with
           | `Not_found | `Error _ -> Lwt.return None
 
@@ -657,7 +590,7 @@ module Make
              | Ok idx ->
                CacheIndex.add hash_idx idx state.cache.indexes;
                IDXDecoder.fold idx (fun hash _ acc -> hash :: acc) []
-             | Error err -> acc)
+             | Error _ -> acc)
         [] state.idxs
 
     let read_p ~ztmp ~window state hash =
@@ -730,16 +663,6 @@ module Make
         state hash
 
     let size = size_s
-
-    let entry_of_value hash ?preferred ?delta ?path:name value =
-      let kind = match value with
-        | Value.Commit _ -> Pack.Kind.Commit
-        | Value.Tree _   -> Pack.Kind.Tree
-        | Value.Tag _    -> Pack.Kind.Tag
-        | Value.Blob _   -> Pack.Kind.Blob
-      in
-
-      PACKEncoder.Entry.make ?preferred ?delta hash ?name kind (Value.F.length value)
   end
 
   type error = [ Loose.error | Pack.error ]
@@ -814,7 +737,7 @@ module Make
     Pack.read_p ~ztmp ~window state hash >>= function
     | Ok o ->
       Lwt.return (Some (o.PACKDecoder.Object.kind, o.PACKDecoder.Object.raw))
-    | Error err -> Loose.lookup state hash >>= function
+    | Error _ -> Loose.lookup state hash >>= function
       | None -> Lwt.return None
       | Some _ -> Loose.raw_p ~window ~ztmp ~dtmp ~raw state hash >>= function
         | Error #Loose.error -> Lwt.return None
@@ -830,7 +753,7 @@ module Make
 
   let raw = raw_s
 
-  let raw_wa ?htmp ~ztmp ~dtmp ~raw ~window ~result state hash =
+  let raw_wa ?htmp:_ ~ztmp ~dtmp ~raw ~window ~result state hash =
     let open Lwt.Infix in
 
     Pack.read_wa ~ztmp ~window ~result state hash >>= function
@@ -870,7 +793,7 @@ module Make
            if Path.has_ext "idx" path
            then
              try let hash = hash path in Lwt.return ((hash, path) :: acc)
-             with exn -> Lwt.return acc
+             with _ -> Lwt.return acc
            else Lwt.return acc)
         [] lst
       >>= fun v -> Lwt.return (Ok v)
@@ -881,7 +804,7 @@ module Make
 
     Pack.lookup state hash
     >>= function
-    | Some (hash_pack, (absolute_offset, crc32)) -> Lwt.return (`PackDecoder (hash_pack, absolute_offset))
+    | Some (hash_pack, (absolute_offset, _)) -> Lwt.return (`PackDecoder (hash_pack, absolute_offset))
     | None -> Loose.lookup state hash >>= function
       | Some _ -> Lwt.return `Loose
       | None -> Lwt.return `Not_found
@@ -938,36 +861,11 @@ module Make
         (fun lst -> Lwt.return (Ok lst))
         (function Leave err -> Lwt.return (Error err))
 
-  let normalize entries state =
-    let cache = Hashtbl.create (List.length entries) in
-
-    let open Lwt.Infix in
-
-    contents state
-    >>= (function
-        | Ok lst ->
-          Lwt_list.iter_s
-            (function
-              | (_, Value.Tree tree) ->
-                Lwt_list.iter_s (fun { Value.Tree.name; node; _ } -> Hashtbl.add cache node name; Lwt.return ()) tree
-              | _ -> Lwt.return ())
-            lst
-        | Error _ -> Lwt.return ())
-    (* XXX(dinosaure): I unsound the error because is not mandatory to compute
-       all name for each entry. It's just better to make an optimized PACK file. *)
-    >>= fun () ->
-    Lwt_list.map_p
-      (fun entry ->
-         try let name = Hashtbl.find cache (PACKEncoder.Entry.id entry) in
-           Lwt.return (PACKEncoder.Entry.name entry name)
-         with Not_found -> Lwt.return entry)
-      entries
-
   let delta entries tagger ?(depth = 50) ?(window = `Object 10) state =
     let open Lwt.Infix in
 
     let memory, window = match window with `Object w -> false, w | `Memory w -> true, w  in
-    let read hash = raw_s state hash >|= function Some (kind, raw) -> Some raw | None -> None in
+    let read hash = raw_s state hash >|= function Some (_, raw) -> Some raw | None -> None in
 
     PACKEncoder.Delta.deltas ~memory entries read tagger depth window
 
@@ -1052,7 +950,7 @@ module Make
 
         Lwt_list.fold_left_s
           (function Ok acc -> fun x -> lookup acc x
-                  | Error _ as e -> fun x -> Lwt.return e)
+                  | Error _ as e -> fun _ -> Lwt.return e)
           (Ok acc) dirs >>== fun acc -> Lwt.return (Ok (acc @ files))
       in
 
@@ -1086,7 +984,7 @@ module Make
         | Ok packed_refs ->
           Lwt_list.fold_left_s
             (fun graph -> function
-               | `Peeled tagged -> Lwt.return graph
+               | `Peeled _ -> Lwt.return graph
                | `Ref (refname, hash) -> Lwt.return (Graph.add (Reference.of_string refname) hash graph))
             graph packed_refs
           >>= fun graph -> Lwt_list.fold_left_s
@@ -1140,7 +1038,7 @@ module Make
         | Ok packed_refs ->
           Lwt_list.exists_p
             (function
-              | `Peeled hash -> Lwt.return false
+              | `Peeled _ -> Lwt.return false
               | `Ref (refname, _) ->
                 Lwt.return Reference.(equal (of_string refname) reference))
             packed_refs
@@ -1188,10 +1086,10 @@ module Make
           Lwt.catch
             (fun () -> Lwt_list.find_s
                 (function `Peeled _ -> Lwt.return false
-                        | `Ref (refname, hash) -> Lwt.return Reference.(equal (of_string refname) reference))
+                        | `Ref (refname, _) -> Lwt.return Reference.(equal (of_string refname) reference))
                 lst >|= function `Ref (_, hash) -> Ok (reference, Reference.Hash hash)
                                | `Peeled _ -> assert false)
-            (function exn -> Lwt.return (Error `Not_found))
+            (function _ -> Lwt.return (Error `Not_found))
 
     let read_s t reference =
       read_p t ~dtmp:t.buffer.de ~raw:t.buffer.io reference
@@ -1214,7 +1112,7 @@ module Make
         | Error _ -> Lwt.return (Ok ())
         | Ok packed_refs ->
           Lwt_list.exists_s (function `Peeled _ -> Lwt.return false
-                                  | `Ref (refname, hash) -> Lwt.return Reference.(equal (of_string refname) reference))
+                                  | `Ref (refname, _) -> Lwt.return Reference.(equal (of_string refname) reference))
             packed_refs
           >>= function
           | false -> Lwt.return (Ok ())
@@ -1249,7 +1147,7 @@ module Make
       | Ok packed_refs ->
         Lwt_list.exists_s (function
             | `Peeled _ -> Lwt.return false
-            | `Ref (refname, hash) -> Lwt.return Reference.(equal (of_string refname) reference))
+            | `Ref (refname, _) -> Lwt.return Reference.(equal (of_string refname) reference))
           packed_refs >>= function
         | false -> Lwt.return (Ok ())
         | true ->
@@ -1257,13 +1155,13 @@ module Make
               | `Peeled hash -> Lwt.return (pi, `Peeled hash :: acc)
               | `Ref (refname, hash) when not Reference.(equal reference (of_string refname)) ->
                 Lwt.return (pi, `Ref (refname, hash) :: acc)
-              | `Ref (refname, hash) -> Lwt.return (Some (reference, hash), acc))
+              | `Ref (_, hash) -> Lwt.return (Some (reference, hash), acc))
             (None, []) packed_refs
           >>= function
           | None, _ -> assert false
           (* XXX(dinosaure): we prove than reference is in packed_refs, so it's
              a mandatory to return a [Some v]. *)
-          | (Some (_, hash), packed_refs') -> Packed_refs.write ~root:t.dotgit ~raw packed_refs
+          | (Some (_, hash), packed_refs') -> Packed_refs.write ~root:t.dotgit ~raw packed_refs'
             >>= function
             | Error (#Packed_refs.error as err) -> Lwt.return (Error (err : error))
             | Ok () -> Reference.write ~root:t.dotgit ~raw reference (Reference.Hash hash) >|= function

@@ -102,7 +102,7 @@ module Make
       (peek_char >>= function
         | Some '#' ->
           end_of_line *> m
-        | Some chr ->
+        | Some _ ->
           info >>= fun x -> m >>= fun r -> return (x :: r)
         | None -> return [])
   end
@@ -182,8 +182,8 @@ module Make
             | Ok n -> match D.refill (Cstruct.sub raw 0 n) decoder with
               | Ok decoder -> loop decoder
               | Error (#D.error as err) -> Lwt.return (Error err))
-        | `End (rest, value) -> Lwt.return (Ok value)
-        | `Error (res, (#D.error as err)) -> Lwt.return (Error err)
+        | `End (_, value) -> Lwt.return (Ok value)
+        | `Error (_, (#D.error as err)) -> Lwt.return (Error err)
       in
 
       loop decoder

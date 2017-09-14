@@ -173,7 +173,7 @@ module MakeDecoder (A : S.ANGSTROM)
                                  ; state = continue } in
       `Await decoder
 
-  let compress input decoder =
+  let compress _ decoder =
     let off, len = 0, Cstruct.len decoder.internal in
     let buffer = Cstruct.of_bigarray ~off ~len decoder.internal.Cstruct.buffer in
     Log.debug (fun l -> l "Compressing the internal buffer of the current decoding.");
