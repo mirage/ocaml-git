@@ -36,7 +36,7 @@ end
 
 module type ENCODER =
 sig
-  module Hash : Ihash.S
+  module Hash : S.HASH
   module Deflate : S.DEFLATE
 
   (** The entry module. It used to able to manipulate the meta-data only needed
@@ -293,6 +293,8 @@ sig
   val eval : Cstruct.t -> Cstruct.t -> t -> [ `Flush of t | `Await of t | `End of (t * Hash.t) | `Error of (t * error) ]
 end
 
-module MakePACKEncoder (H : Ihash.S with type Digest.buffer = Cstruct.t) (D : S.DEFLATE) : ENCODER
+module MakePACKEncoder
+    (H : S.HASH with type Digest.buffer = Cstruct.t)
+    (D : S.DEFLATE) : ENCODER
   with module Hash = H
    and module Deflate = D

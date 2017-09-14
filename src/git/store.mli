@@ -24,7 +24,7 @@ sig
   (** The type of the Git state. *)
 
   module Hash
-    : Ihash.S
+    : S.HASH
   (** The [Hash] module used to make this interface. *)
 
   module Path
@@ -321,7 +321,7 @@ sig
   (** The type of the Git state. *)
 
   module Hash
-    : Ihash.S
+    : S.HASH
   (** The [Hash] module used to make this interface. *)
 
   module Path
@@ -502,7 +502,7 @@ sig
   (** The type of the git repository. *)
 
   module Hash
-    : Ihash.S
+    : S.HASH
   (** The [Digest] module used to make the module. *)
 
   module Path
@@ -948,8 +948,8 @@ sig
 end
 
 module Make
-    (H : Ihash.S with type Digest.buffer = Cstruct.t
-                  and type hex = string)
+    (H : S.HASH with type Digest.buffer = Cstruct.t
+                 and type hex = string)
     (P : Path.S)
     (L : Lock.S with type key = P.t)
     (FS : Fs.S with type path = P.t

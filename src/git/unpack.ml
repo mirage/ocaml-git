@@ -34,7 +34,7 @@ end
 
 module type H =
 sig
-  module Hash : Ihash.S
+  module Hash : S.HASH
 
   type error =
     | Reserved_opcode of int
@@ -100,7 +100,7 @@ sig
 end
 
 (* Implementation of deserialization of a list of hunks (from a PACK file) *)
-module MakeHunkDecoder (H : Ihash.S) : H with module Hash = H  =
+module MakeHunkDecoder (H : S.HASH) : H with module Hash = H  =
 struct
   module Hash = H
 
@@ -433,7 +433,7 @@ end
 
 module type P =
 sig
-  module Hash : Ihash.S
+  module Hash : S.HASH
   module Inflate : S.INFLATE
   module H : H with module Hash = Hash
 
@@ -482,7 +482,7 @@ sig
 end
 
 (* Implementatioon of deserialization of a PACK file *)
-module MakePACKDecoder (H : Ihash.S) (I : S.INFLATE)
+module MakePACKDecoder (H : S.HASH) (I : S.INFLATE)
   : P with module Hash = H
        and module Inflate = I
        and module H = MakeHunkDecoder(H)
@@ -1209,7 +1209,7 @@ end
 
 module type DECODER =
 sig
-  module Hash : Ihash.S
+  module Hash : S.HASH
   module Mapper : Fs.MAPPER
   module Inflate : S.INFLATE
 
@@ -1286,7 +1286,10 @@ sig
   val get_with_allocation' : ?chunk:int -> ?h_tmp:Cstruct.t array -> t -> int64 -> Cstruct.t -> Inflate.window -> (Object.t, error) result Lwt.t
 end
 
-module MakeDecoder (H : Ihash.S) (M : Fs.MAPPER with type raw = Cstruct.t) (I : S.INFLATE)
+module MakeDecoder
+    (H : S.HASH)
+    (M : Fs.MAPPER with type raw = Cstruct.t)
+    (I : S.INFLATE)
   : DECODER with module Hash = H
              and module Mapper = M
              and module Inflate = I =

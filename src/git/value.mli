@@ -18,7 +18,7 @@
 module type S =
 sig
   module Hash
-    : Ihash.S
+    : S.HASH
   (** The [Hash] module used to make the module. *)
 
   module Inflate
@@ -95,12 +95,11 @@ sig
       All error from the {!Deflate} module is relayed to the [`Deflate] error
       value. *)
 
-  include Ihash.DIGEST with type t := t
-                        and type hash := Hash.t
+  include S.DIGEST with type t := t
+                    and type hash := Hash.t
   include S.BASE with type t := t
 end
 
-module type BUFFER =
 sig
   type t
   (** The abstract type of buffers. *)
@@ -204,8 +203,8 @@ sig
 end
 
 module Make
-    (H : Ihash.S with type Digest.buffer = Cstruct.t
-                  and type hex = string)
+    (H : S.HASH with type Digest.buffer = Cstruct.t
+                 and type hex = string)
     (I : S.INFLATE)
     (D : S.DEFLATE)
   : S with module Hash = H
@@ -214,12 +213,12 @@ module Make
 (** The {i functor} to make the OCaml representation of the Git object
     by a specific hash implementation, an {!S.INFLATE} implementation
     for the decompression and a {!S.DEFLATE} implementation for the
-    compression. We constraint the {!Ihash.S} module to compute a
+    compression. We constraint the {!S.HASH} module to compute a
     {Cstruct.t} flow and generate a [string] as the hexadecimal
     representation of the hash. *)
 
 module Raw
-    (H : Ihash.S with type Digest.buffer = Cstruct.t
+    (H : S.HASH with type Digest.buffer = Cstruct.t
                   and type hex = string)
     (I : S.INFLATE)
     (D : S.DEFLATE)
@@ -232,7 +231,7 @@ module Raw
 (** The {i functor} to make the OCaml representation of the Git object
     by a specific hash implementation, and {!S.INFLATE} implementation
     for the decompression and a {!S.DEFLATE} implementation for the
-    compression We constraint the {!Ihash.S} module to compute a
+    compression We constraint the {!S.HASH} module to compute a
     {Cstruct.t} flow and generate a [string] as the hexadecimal
     representation of the hash.
 

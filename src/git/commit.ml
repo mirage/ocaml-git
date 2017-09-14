@@ -20,7 +20,7 @@ sig
   type t
 
   module Hash
-    : Ihash.S
+    : S.HASH
   module D
     : S.DECODER  with type t = t
                   and type raw = Cstruct.t
@@ -38,8 +38,8 @@ sig
                   and type init = int * t
                   and type error = [ `Never ]
 
-  include Ihash.DIGEST with type t := t
-                       and type hash = Hash.t
+  include S.DIGEST with type t := t
+                    and type hash = Hash.t
   include S.BASE with type t := t
 
   val parents : t -> Hash.t list
@@ -48,8 +48,8 @@ sig
 end
 
 module Make
-    (H : Ihash.S with type Digest.buffer = Cstruct.t
-                  and type hex = string)
+    (H : S.HASH with type Digest.buffer = Cstruct.t
+                 and type hex = string)
   : S with module Hash = H
 = struct
   module Hash = H

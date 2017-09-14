@@ -53,13 +53,13 @@ module MakeDeflater (Z : S.DEFLATE) (M : S.MINIENC)
                and type error = [ `Deflate of Z.error ]
 
 val digest :
-  (module Ihash.IDIGEST with type buffer = Cstruct.t
-                         and type t = 'hash) ->
+  (module S.IDIGEST with type buffer = Cstruct.t
+                     and type t = 'hash) ->
   (module S.FARADAY with type t = 't) -> kind:string -> 't -> 'hash
 
 val fdigest :
-  (module Ihash.IDIGEST with type buffer = Cstruct.t
-                         and type t = 'hash) ->
+  (module S.IDIGEST with type buffer = Cstruct.t
+                     and type t = 'hash) ->
   (module S.ENCODER with type t = 't
                      and type raw = Cstruct.t
                      and type init = int * 't

@@ -18,7 +18,7 @@
 module type S =
 sig
   module Hash
-    : Ihash.S
+    : S.HASH
   module Inflate
     : S.INFLATE
   module Deflate
@@ -56,7 +56,7 @@ sig
                          and type init = int * t * int * Cstruct.t
                          and type error = [ `Deflate of Deflate.error ]
 
-  include Ihash.DIGEST with type t := t and type hash := Hash.t
+  include S.DIGEST with type t := t and type hash := Hash.t
   include S.BASE with type t := t
 end
 
@@ -100,8 +100,9 @@ sig
   val of_raw_with_header : Cstruct.t -> (t, DD.error) result
 end
 
-module Make (H : Ihash.S with type Digest.buffer = Cstruct.t
-                          and type hex = string)
+module Make
+    (H : S.HASH with type Digest.buffer = Cstruct.t
+                 and type hex = string)
     (I : S.INFLATE)
     (D : S.DEFLATE)
   : S with module Hash = H
@@ -265,8 +266,8 @@ module Make (H : Ihash.S with type Digest.buffer = Cstruct.t
 end
 
 module Raw
-    (H : Ihash.S with type Digest.buffer = Cstruct.t
-                  and type hex = string)
+    (H : S.HASH with type Digest.buffer = Cstruct.t
+                 and type hex = string)
     (I : S.INFLATE)
     (D : S.DEFLATE)
     (B : BUFFER with type raw = string

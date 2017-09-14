@@ -68,8 +68,8 @@ sig
 end
 
 module Make
-    (H : Ihash.S with type Digest.buffer = Cstruct.t
-                  and type hex = string)
+    (H : S.HASH with type Digest.buffer = Cstruct.t
+                 and type hex = string)
     (P : Path.S)
     (FS : Fs.S with type path = P.t
                 and type File.raw = Cstruct.t)

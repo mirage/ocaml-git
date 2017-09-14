@@ -20,7 +20,7 @@ sig
   type t
   type state
 
-  module Hash : Ihash.S
+  module Hash : S.HASH
   module Path : Path.S
   module FileSystem : Fs.S with type path = Path.t
   module Inflate : S.INFLATE
@@ -72,7 +72,7 @@ sig
   type t
   type state
 
-  module Hash : Ihash.S
+  module Hash : S.HASH
   module Path : Path.S
   module FileSystem  : Fs.S with type path = Path.t
   module Inflate : S.INFLATE
@@ -109,7 +109,7 @@ sig
 
   (* XXX(dinosaure): Functorized module. *)
   module Hash
-    : Ihash.S
+    : S.HASH
   module Path
     : Path.S
   module Inflate
@@ -230,8 +230,8 @@ struct
 end
 
 module Make
-    (H : Ihash.S with type Digest.buffer = Cstruct.t
-                  and type hex = string)
+    (H : S.HASH with type Digest.buffer = Cstruct.t
+                 and type hex = string)
     (P : Path.S)
     (L : Lock.S with type key = P.t)
     (FS : Fs.S with type path = P.t

@@ -30,7 +30,7 @@
    sub-layer HTTP protocol. *)
 
 module Decoder
-    (H : Ihash.S with type hex = string)
+    (H : S.HASH with type hex = string)
     (W : Web.S with type +'a io = 'a Lwt.t
                 and type raw = Cstruct.buffer) =
 struct
@@ -230,7 +230,7 @@ struct
 end
 
 module Encoder
-    (H : Ihash.S with type hex = string)
+    (H : S.HASH with type hex = string)
     (W : Web.S with type +'a io = 'a Lwt.t
                 and type raw = Cstruct.buffer) =
 struct

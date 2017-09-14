@@ -17,7 +17,7 @@
 
 module type DECODER =
 sig
-  module Hash : Ihash.S
+  module Hash : S.HASH
 
   type decoder
 
@@ -108,7 +108,7 @@ end
 
 module type ENCODER =
 sig
-  module Hash : Ihash.S
+  module Hash : S.HASH
 
   type encoder
 
@@ -169,7 +169,7 @@ end
 
 module type CLIENT =
 sig
-  module Hash : Ihash.S
+  module Hash : S.HASH
 
   module Decoder : DECODER with module Hash = Hash
   module Encoder : ENCODER with module Hash = Hash
@@ -212,7 +212,7 @@ sig
   val context : Encoder.git_proto_request -> context * process
 end
 
-module Decoder (H : Ihash.S with type hex = string)
+module Decoder (H : S.HASH with type hex = string)
   : DECODER with module Hash = H =
 struct
   module Hash = H
@@ -972,7 +972,7 @@ struct
     ; eop    = None }
 end
 
-module Encoder (H : Ihash.S with type hex = string)
+module Encoder (H : S.HASH with type hex = string)
   : ENCODER with module Hash = H =
 struct
   module Hash = H
@@ -1354,7 +1354,7 @@ struct
     ; pos     = 4 }
 end
 
-module Client (H : Ihash.S with type hex = string)
+module Client (H : S.HASH with type hex = string)
   : CLIENT with module Hash = H =
 struct
   module Hash = H

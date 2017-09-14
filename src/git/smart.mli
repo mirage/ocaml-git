@@ -18,7 +18,7 @@
 module type DECODER =
 sig
   module Hash
-    : Ihash.S
+    : S.HASH
   (** The [Digest] module used to make the module. *)
 
   type decoder
@@ -231,7 +231,7 @@ sig
 end
 
 module Decoder
-    (H : Ihash.S with type hex = string)
+    (H : S.HASH with type hex = string)
   : DECODER with module Hash = H
 (** The {i functor} to make the Decoder by a specific hash implementation. We
     constraint the {!IDGEST} module to generate a {!Bytes.t}. *)
@@ -239,7 +239,7 @@ module Decoder
 module type ENCODER =
 sig
   module Hash
-    : Ihash.S
+    : S.HASH
   (** The [Digest] module used to make the module. *)
 
   type encoder
@@ -341,7 +341,7 @@ sig
 end
 
 module Encoder
-    (H : Ihash.S with type hex = string)
+    (H : S.HASH with type hex = string)
   : ENCODER with module Hash = H
 (** The {i functor} to make the Encoder by a specific hash implementation. We
     constraint the {!IDIGEST} module to generate a {!Bytes.t}. *)
@@ -349,7 +349,7 @@ module Encoder
 module type CLIENT =
 sig
   module Hash
-    : Ihash.S
+    : S.HASH
   (** The [Digest] module used to make the module. *)
 
   module Decoder
@@ -422,10 +422,10 @@ sig
 end
 
 module Client
-    (H : Ihash.S with type hex = string)
+    (H : S.HASH with type hex = string)
   : CLIENT with module Hash = H
 (** The {i functor} to make the Client by a specific hash
-    implementation. we constraint the {!IDIGEST} module to
+    implementation. we constraint the {!S.HASH} module to
     generate a {Bytes.t}. *)
 
 

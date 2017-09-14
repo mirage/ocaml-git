@@ -18,7 +18,7 @@
 module type S =
 sig
   module Hash
-    : Ihash.S
+    : S.HASH
   (** The [Hash] module used to make this interface. *)
 
   type entry =
@@ -74,7 +74,7 @@ sig
       NOTE: we can not unspecified the error type (it needs to be concrete) but,
       because the encoder can not fail, we define the error as [`Never]. *)
 
-  include Ihash.DIGEST with type t := t and type hash = Hash.t
+  include S.DIGEST with type t := t and type hash = Hash.t
   include S.BASE with type t := t
 
   val hashes : t -> Hash.t list
@@ -84,10 +84,10 @@ sig
 end
 
 module Make
-    (H : Ihash.S with type Digest.buffer = Cstruct.t
-                  and type hex = string)
+    (H : S.HASH with type Digest.buffer = Cstruct.t
+                 and type hex = string)
   : S with module Hash = H
-(** The {i functor} to make the OCaml representation of the Git Tree object by a
-    specific hash implementation. We constraint the {!Ihash.S} module to compute
-    a {Cstruct.t} flow and generate a [string] as the hexadecimal representation
-    of the hash. *)
+(** The {i functor} to make the OCaml representation of the Git Tree
+    object by a specific hash implementation. We constraint the
+    {!S.HASH} module to compute a {Cstruct.t} flow and generate a
+    [string] as the hexadecimal representation of the hash. *)

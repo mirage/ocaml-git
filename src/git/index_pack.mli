@@ -17,7 +17,7 @@
 
 module type LAZY =
 sig
-  module Hash : Ihash.S
+  module Hash : S.HASH
   (** The [Hash] module used to make this interface. *)
 
   type error =
@@ -53,7 +53,7 @@ sig
   (** Fold in the IDX file. *)
 end
 
-module Lazy (H : Ihash.S)
+module Lazy (H : S.HASH)
   : LAZY with module Hash = H
 (** The {i functor} to make the {i lazy} decoder of the IDX file. Internally, we
     use a [Cstruct.t] representation of the IDX file notified to the [make]
@@ -62,7 +62,7 @@ module Lazy (H : Ihash.S)
 
 module type DECODER =
 sig
-  module Hash : Ihash.S
+  module Hash : S.HASH
   (** The [Hash] module used to make this interface. *)
 
   type error =
@@ -118,18 +118,19 @@ sig
       can't continue and sticks in this situation.}} *)
 end
 
-module Decoder (H : Ihash.S with type Digest.buffer = Cstruct.t)
+module Decoder (H : S.HASH with type Digest.buffer = Cstruct.t)
   : DECODER with module Hash = H
 (** The {i functor} to make the decoder module by a specific hash
-    implementation. We constraint the {!Ihash.S} module to compute a {Cstruct.t}
-    flow. This module is a {i non-blocking} decoder with a pure state of the IDX
-    file. It's better to use this module instead {!Lazy} if the client wants an
-    OCaml representation of the IDX file - he can construct this specific OCaml
-    value step by step with this decoder. *)
+    implementation. We constraint the {!Hash.S} module to compute a
+    {Cstruct.t} flow. This module is a {i non-blocking} decoder with a
+    pure state of the IDX file. It's better to use this module instead
+    {!Lazy} if the client wants an OCaml representation of the IDX
+    file - he can construct this specific OCaml value step by step
+    with this decoder. *)
 
 module type ENCODER =
 sig
-  module Hash : Ihash.S
+  module Hash : S.HASH
   (** The [Hash] module used to make this interface. *)
 
   type error
@@ -178,8 +179,8 @@ sig
       can't continue and sticks in this situation.}} *)
 end
 
-module Encoder (H : Ihash.S with type Digest.buffer = Cstruct.t)
+module Encoder (H : S.HASH with type Digest.buffer = Cstruct.t)
   : ENCODER with module Hash = H
 (** The {i functor} to make the encoder module by a specific hash
-    implementation. We constraint the {!Ihash.S} module to compute a {Cstruct.t}
-    flow. *)
+    implementation. We constraint the {!Hash.S} module to compute a
+    {Cstruct.t} flow. *)

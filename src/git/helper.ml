@@ -438,8 +438,8 @@ module MakeDeflater (Z : S.DEFLATE) (M : S.MINIENC)
 end
 
 let fdigest
-  : type t hash. (module Ihash.IDIGEST with type t = hash
-                                        and type buffer = Cstruct.t)
+  : type t hash. (module S.IDIGEST with type t = hash
+                                    and type buffer = Cstruct.t)
     -> (module S.ENCODER with type t = t
                                and type raw = Cstruct.t
                                and type init = (int * t)
@@ -482,8 +482,8 @@ let fdigest
     loop encoder
 
 let digest
-  : type t hash. (module Ihash.IDIGEST with type t = hash
-                                        and type buffer = Cstruct.t)
+  : type t hash. (module S.IDIGEST with type t = hash
+                                    and type buffer = Cstruct.t)
     -> (module S.FARADAY with type t = t)
     -> kind:string
     -> t

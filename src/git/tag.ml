@@ -17,7 +17,7 @@
 
 module type S =
 sig
-  module Hash : Ihash.S
+  module Hash : S.HASH
 
   type t
 
@@ -33,15 +33,15 @@ sig
                          and type init = int * t
                          and type error = [ `Never ]
 
-  include Ihash.DIGEST with type t := t and type hash = Hash.t
+  include S.DIGEST with type t := t and type hash = Hash.t
   include S.BASE with type t := t
 
   val obj : t -> Hash.t
   val tag : t -> string
 end
 
-module Make (H : Ihash.S with type Digest.buffer = Cstruct.t
-                          and type hex = string)
+module Make (H : S.HASH with type Digest.buffer = Cstruct.t
+                         and type hex = string)
   : S with module Hash = H
 = struct
   module Hash = H

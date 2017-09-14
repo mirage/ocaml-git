@@ -21,7 +21,7 @@ sig
   (** A Git Blob object. *)
 
   module Hash
-    : Ihash.S
+    : S.HASH
   (** The [Hash] module used to make this interface. *)
 
   module D
@@ -45,15 +45,15 @@ sig
     : S.FARADAY  with type t = t
   (** The Faraday encoder of the Git Blob object. *)
 
-  include Ihash.DIGEST with type t := t
-                        and type hash := Hash.t
+  include S.DIGEST with type t := t
+                    and type hash := Hash.t
 
   include S.BASE with type t := t
 end
 
 module Make
-    (H : Ihash.S with type Digest.buffer = Cstruct.t)
+    (H : S.HASH with type Digest.buffer = Cstruct.t)
   : S with module Hash = H
 (** The {i functor} to make the OCaml representation of the Git Blob object by a
-    specific hash implementation. We constraint the {!Ihash.S} module to
+    specific hash implementation. We constraint the {!Hash.S} module to
     compute a {Cstruct.t} flow. *)

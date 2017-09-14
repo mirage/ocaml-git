@@ -1,7 +1,7 @@
 module type S =
 sig
   module Hash
-    : Ihash.S
+    : S.HASH
 
   module Path
     : Path.S

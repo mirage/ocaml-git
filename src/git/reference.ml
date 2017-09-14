@@ -17,7 +17,7 @@
 
 module type S =
 sig
-  module Hash : Ihash.S
+  module Hash : S.HASH
   module Path : Path.S
 
   type t = private string
@@ -74,8 +74,8 @@ sig
 end
 
 module Make
-    (H : Ihash.S with type Digest.buffer = Cstruct.t
-                  and type hex = string)
+    (H : S.HASH with type Digest.buffer = Cstruct.t
+                 and type hex = string)
     (P : Path.S)
   : S with module Hash = H
        and module Path = P
@@ -163,8 +163,8 @@ module Make
 end
 
 module IO
-    (H : Ihash.S with type Digest.buffer = Cstruct.t
-                  and type hex = string)
+    (H : S.HASH with type Digest.buffer = Cstruct.t
+                 and type hex = string)
     (P : Path.S)
     (L : Lock.S with type key = P.t)
     (FS : Fs.S with type path = P.t

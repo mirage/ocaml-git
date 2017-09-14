@@ -18,7 +18,7 @@
 module type S =
 sig
   module Hash
-    : Ihash.S
+    : S.HASH
   (** The [Digest] module used to make the module. *)
 
   module Path
@@ -61,11 +61,8 @@ sig
       anywhere.}
 
       {- They cannot end with a slash ['/'] or a dot ['.'].}
-
       {- They cannot end with the sequence [".lock"].}
-
       {- They cannot contain a sequence ["@{"].}
-
       {- They cannot contain a ['\\'].}}
   *)
 
@@ -158,21 +155,22 @@ sig
 end
 
 module Make
-    (H : Ihash.S with type Digest.buffer = Cstruct.t
-                  and type hex = string)
+    (H : S.HASH with type Digest.buffer = Cstruct.t
+                 and type hex = string)
     (P : Path.S)
   : S with module Hash = H
        and module Path = P
-(** The {i functor} to make the OCaml representation of the Git Reference object
-    by a specific hash, a defined path and an access to the file-system. We
-    constraint the {!IDIGEST} module to generate a {Bytes.t} and compute a
-    {Cstruct.t}. Then, the content of a file need to be a {Cstruct.t}. The path
-    provided by the {!Path} module need to be semantically the same than which
-    used by the [FileSystem] module. *)
+(** The {i functor} to make the OCaml representation of the Git
+    Reference object by a specific hash, a defined path and an access
+    to the file-system. We constraint the {!IDIGEST} module to
+    generate a {Bytes.t} and compute a {Cstruct.t}. Then, the content
+    of a file need to be a {Cstruct.t}. The path provided by the
+    {!Path} module need to be semantically the same than which used by
+    the [FileSystem] module. *)
 
 module IO
-    (H : Ihash.S with type Digest.buffer = Cstruct.t
-                  and type hex = string)
+    (H : S.HASH with type Digest.buffer = Cstruct.t
+                 and type hex = string)
     (P : Path.S)
     (L : Lock.S with type key = P.t)
     (FS : Fs.S with type path = P.t

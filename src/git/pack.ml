@@ -57,7 +57,7 @@ struct
     | Tag -> Fmt.pf ppf "Tag"
 end
 
-module Entry (H : Ihash.S) =
+module Entry (H : S.HASH) =
 struct
   module Hash = H
 
@@ -228,7 +228,7 @@ struct
   let ( / ) = Int64.div
 end
 
-module MakeHunkEncoder (H : Ihash.S) =
+module MakeHunkEncoder (H : S.HASH) =
 struct
   module Hash = H
 
@@ -559,7 +559,7 @@ struct
            ; o_pos = t.o_pos - off}
 end
 
-module MakeDelta (H : Ihash.S) =
+module MakeDelta (H : S.HASH) =
 struct
   module Hash = H
   module Entry = Entry(H)
@@ -857,7 +857,8 @@ end
 
 module type ENCODER =
 sig
-  module Hash : Ihash.S
+  module Hash : S.HASH
+
   module Deflate : S.DEFLATE
 
   module Entry :
@@ -962,7 +963,7 @@ sig
 end
 
 module MakePACKEncoder
-    (H : Ihash.S with type Digest.buffer = Cstruct.t)
+    (H : S.HASH with type Digest.buffer = Cstruct.t)
     (D : S.DEFLATE)
   : ENCODER with module Hash = H
              and module Deflate = D =

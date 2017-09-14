@@ -17,7 +17,7 @@
 
 module type LAZY =
 sig
-  module Hash : Ihash.S
+  module Hash : S.HASH
 
   type error =
     | Invalid_header of string
@@ -36,7 +36,7 @@ sig
   val fold : t -> (Hash.t -> (Crc32.t * int64) -> 'a -> 'a) -> 'a -> 'a
 end
 
-module Lazy (H : Ihash.S) : LAZY with module Hash = H =
+module Lazy (H : S.HASH) : LAZY with module Hash = H =
 struct
   module Hash = H
 
@@ -254,7 +254,7 @@ end
 
 module type DECODER =
 sig
-  module Hash : Ihash.S
+  module Hash : S.HASH
 
   type error =
     | Invalid_byte of int
@@ -273,7 +273,7 @@ sig
   val eval   : Cstruct.t -> t -> [ `Await of t | `End of t * Hash.t | `Hash of t * (Hash.t * Crc32.t * int64) | `Error of t * error ]
 end
 
-module Decoder (H : Ihash.S with type Digest.buffer = Cstruct.t) : DECODER with module Hash = H =
+module Decoder (H : S.HASH with type Digest.buffer = Cstruct.t) : DECODER with module Hash = H =
 struct
   module Hash = H
 
@@ -639,7 +639,7 @@ end
 
 module type ENCODER =
 sig
-  module Hash : Ihash.S
+  module Hash : S.HASH
 
   type error
 
@@ -657,7 +657,7 @@ sig
   val eval     : Cstruct.t -> t -> [ `Flush of t | `End of t | `Error of t * error ]
 end
 
-module Encoder (H : Ihash.S with type Digest.buffer = Cstruct.t) : ENCODER with module Hash = H =
+module Encoder (H : S.HASH with type Digest.buffer = Cstruct.t) : ENCODER with module Hash = H =
 struct
   module Hash = H
 

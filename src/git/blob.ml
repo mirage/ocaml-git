@@ -20,7 +20,7 @@ sig
   type t = private Cstruct.t
 
   module Hash
-    : Ihash.S
+    : S.HASH
   module D
     : S.DECODER with type t = t
                  and type raw = Cstruct.t
@@ -34,13 +34,13 @@ sig
   module F
     : S.FARADAY  with type t = t
 
-  include Ihash.DIGEST with type t := t
-                        and type hash := Hash.t
+  include S.DIGEST with type t := t
+                    and type hash := Hash.t
   include S.BASE with type t := t
 end
 
 module Make
-    (H : Ihash.S with type Digest.buffer = Cstruct.t)
+    (H : S.HASH with type Digest.buffer = Cstruct.t)
   : S with module Hash = H
 = struct
   module Hash = H
