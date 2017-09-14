@@ -55,7 +55,7 @@ end
 
 module type IO =
 sig
-  module Lock : Lock.S
+  module Lock : S.LOCK
   module FileSystem : Fs.S
 
   include S
@@ -166,7 +166,8 @@ module IO
     (H : S.HASH with type Digest.buffer = Cstruct.t
                  and type hex = string)
     (P : Path.S)
-    (L : Lock.S with type key = P.t)
+    (L : S.LOCK with type key = P.t
+                 and type +'a io = 'a Lwt.t)
     (FS : Fs.S with type path = P.t
                 and type File.raw = Cstruct.t
                 and type File.lock = L.elt)

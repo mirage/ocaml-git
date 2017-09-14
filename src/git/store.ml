@@ -117,7 +117,7 @@ sig
   module Deflate
     : S.DEFLATE
   module Lock
-    : Lock.S
+    : S.LOCK
   module FileSystem
     : Fs.S with type path = Path.t
             and type File.lock = Lock.elt
@@ -233,7 +233,8 @@ module Make
     (H : S.HASH with type Digest.buffer = Cstruct.t
                  and type hex = string)
     (P : Path.S)
-    (L : Lock.S with type key = P.t)
+    (L : S.LOCK with type key = P.t
+                 and type +'a io = 'a Lwt.t)
     (FS : Fs.S with type path = P.t
                 and type File.raw = Cstruct.t
                 and type File.lock = L.elt

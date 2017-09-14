@@ -33,7 +33,8 @@ module Make
     (H : S.HASH with type Digest.buffer = Cstruct.t
                  and type hex = string)
     (P : Path.S)
-    (L : Lock.S with type key = P.t)
+    (L : S.LOCK with type key = P.t
+                 and type +'a io = 'a Lwt.t)
     (I : S.INFLATE)
     (D : S.DEFLATE)
     (B : Value.BUFFER with type raw = string

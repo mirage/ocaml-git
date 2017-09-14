@@ -518,7 +518,7 @@ sig
   (** The [Deflate] module used to make the module. *)
 
   module Lock
-    : Lock.S
+    : S.LOCK
   (** The [Lock] module used to make this interface. *)
 
   module FileSystem
@@ -951,7 +951,8 @@ module Make
     (H : S.HASH with type Digest.buffer = Cstruct.t
                  and type hex = string)
     (P : Path.S)
-    (L : Lock.S with type key = P.t)
+    (L : S.LOCK with type key = P.t
+                 and type +'a io = 'a Lwt.t)
     (FS : Fs.S with type path = P.t
                 and type File.raw = Cstruct.t
                 and type File.lock = L.elt

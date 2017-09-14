@@ -7,7 +7,7 @@ sig
     : Path.S
 
   module Lock
-    : Lock.S
+    : S.LOCK
 
   module Inflate
     : S.INFLATE

@@ -27,7 +27,10 @@ module Make
     (H : S.HASH with type Digest.buffer = Cstruct.t
                  and type hex = string)
     (P : Path.S)
-    (L : Lock.S with type key = P.t)
+    (L : S.LOCK with type key = P.t
+                 and type +'a io = 'a Lwt.t)
+    (* XXX(dinosaure): we constraint +'a io to use Lwt but the goal is
+       to cut the Lwt dependence with the memory back-end. *)
     (I : S.INFLATE)
     (D : S.DEFLATE)
     (B : Value.BUFFER with type raw = string

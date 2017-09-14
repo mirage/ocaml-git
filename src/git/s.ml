@@ -184,3 +184,18 @@ sig
 
   val digest : t -> hash
 end
+
+module type LOCK =
+sig
+  type +'a io
+
+  type key
+  type elt
+  type t
+
+  val unlock    : elt -> unit io
+  val lock      : elt -> unit io
+  val with_lock : elt option -> (unit -> 'a Lwt.t) -> 'a io
+
+  val make      : t -> key -> elt
+end
