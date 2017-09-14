@@ -171,16 +171,16 @@ type t =
   (** Unrecognized capability with a value. *)
   ]
 
-val string_of_capability : t -> string
-(** [string_of_capability c] returns a string representaiton of the capability
+val to_string : t -> string
+(** [to_string c] returns a string representaiton of the capability
     [c]. *)
 
 exception Capability_expect_value of string
 (** Exception to inform than the capability expects a value. *)
 
-val capability_of_string : ?value:string -> string -> t
-(** [capability_of_capability s] tries to decode [s] to a capability. If the
+val of_string : ?value:string -> string -> t
+(** [of_capability s] tries to decode [s] to a capability. If the
     capability excepts a value, we raise [Capability_expect_value]. *)
 
-val pp_capability : t Fmt.t
+val pp : t Fmt.t
 (** Pretty-printer of {!t}. *)

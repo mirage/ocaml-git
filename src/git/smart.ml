@@ -529,9 +529,9 @@ struct
       let value =
         p_while1 (function '\033' .. '\126' -> true | _ -> false) decoder
         |> Cstruct.to_string in
-      Capability.capability_of_string ~value capability
+      Capability.of_string ~value capability
     | _ ->
-      Capability.capability_of_string capability
+      Capability.of_string capability
 
   let p_capabilities1 decoder =
     let acc = [ p_capability decoder ] in
@@ -1054,9 +1054,9 @@ struct
   let w_capabilities lst k encoder =
     let rec loop lst encoder = match lst with
       | [] -> k encoder
-      | [ x ] -> writes (Capability.string_of_capability x) k encoder
+      | [ x ] -> writes (Capability.to_string x) k encoder
       | x :: r ->
-        (writes (Capability.string_of_capability x)
+        (writes (Capability.to_string x)
          @@ w_space
          @@ loop r)
         encoder

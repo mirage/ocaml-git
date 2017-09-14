@@ -132,9 +132,9 @@ struct
     take_while is >>= fun capability -> peek_char >>= function
     | Some '=' ->
       take 1 *> take_while is_not_sp_and_lf >>| fun value ->
-      Capability.capability_of_string ~value capability
+      Capability.of_string ~value capability
     | Some _ | None ->
-      return (Capability.capability_of_string capability)
+      return (Capability.of_string capability)
 
   let cap_list =
     let open Angstrom in
@@ -301,7 +301,7 @@ struct
     aux l k e
 
   let w_capability capability k encoder =
-    let s = Capability.string_of_capability capability in
+    let s = Capability.to_string capability in
     Minienc.write_string s k encoder
 
   let w_cap_list l k encoder =

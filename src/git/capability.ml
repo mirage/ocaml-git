@@ -23,7 +23,7 @@ type t =
   | `Other of string
   | `Parameter of string * string ]
 
-let string_of_capability = function
+let to_string = function
   | `Multi_ack                    -> "multi_ack"
   | `Multi_ack_detailed           -> "multi_ack_detailed"
   | `No_done                      -> "no-done"
@@ -50,7 +50,7 @@ let string_of_capability = function
 
 exception Capability_expect_value of string
 
-let capability_of_string ?value = function
+let of_string ?value = function
   | "multi_ack"                    -> `Multi_ack
   | "multi_ack_detailed"           -> `Multi_ack_detailed
   | "no-done"                      -> `No_done
@@ -78,7 +78,7 @@ let capability_of_string ?value = function
     | Some value -> `Parameter (capability, value)
     | None -> `Other capability
 
-let pp_capability ppf = function
+let pp ppf = function
   | `Multi_ack                    -> Fmt.pf ppf "Multi-ACK"
   | `Multi_ack_detailed           -> Fmt.pf ppf "Multi-ACK-detailed"
   | `No_done                      -> Fmt.pf ppf "No-done"
