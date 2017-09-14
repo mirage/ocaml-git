@@ -182,7 +182,7 @@ module Make
   let size t h =
     read t h >|= function
     | Ok (Value.Blob v) -> Ok (Value.Blob.F.length v)
-    | _ -> Error `Not_found
+    | Ok (Value.Commit _ | Value.Tag _ | Value.Tree _) | Error _ -> Error `Not_found
 
   let read_exn t h =
     read t h >>= function
@@ -265,8 +265,11 @@ module Make
         | Some (Reference.Ref refname) -> Hashtbl.replace t.refs r (`R refname)
       in
       match v, test with
-      | None  , None -> replace (); Lwt.return (Ok true)
+      | None, None -> replace (); Lwt.return (Ok true)
       | Some (Reference.Hash x), Some (Reference.Hash y) when Hash.equal x y -> replace (); Lwt.return (Ok true)
-      | _ -> Lwt.return (Ok false)
+      | Some (Reference.Ref _ | Reference.Hash _),
+        Some (Reference.Ref _ | Reference.Hash _)
+      | Some (Reference.Ref _ | Reference.Hash _), None
+      | None, Some (Reference.Ref _ | Reference.Hash _) -> Lwt.return (Ok false)
   end
 end

@@ -119,7 +119,9 @@ module Make
 
           Hashtbl.add bucket hash value;
           Lwt.return (Ok value)
-        | Ok _ -> Lwt.return (Error (`Invalid_hash hash))
+        | Ok (Store.Value.Tree _
+             | Store.Value.Tag _
+             | Store.Value.Blob _) -> Lwt.return (Error (`Invalid_hash hash))
         | Error #Store.error as err -> Lwt.return err
   end
 

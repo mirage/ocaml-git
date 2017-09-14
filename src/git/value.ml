@@ -238,7 +238,8 @@ module Make
     | Blob a, Blob b -> Blob.compare a b
     | Tree a, Tree b -> Tree.compare a b
     | Tag a, Tag b -> Tag.compare a b
-    | a, b ->
+    | ((Commit _ | Blob _ | Tree _ | Tag _) as a),
+      ((Commit _ | Blob _ | Tree _ | Tag _) as b) ->
       if int_of_kind a > int_of_kind b
       then (-1)
       else if int_of_kind a < int_of_kind b

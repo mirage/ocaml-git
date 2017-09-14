@@ -42,7 +42,7 @@ struct
 
   let is_empty = function
     | Shallow Zero -> true
-    | _ -> false
+    | Shallow (One _ | Two _ | Three _) | Deep _ -> false
 
   let _empty = Lazy.from_val empty
 

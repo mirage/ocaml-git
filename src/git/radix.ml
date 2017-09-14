@@ -168,7 +168,7 @@ struct
       match Compare.compare key off keylen k off kl with
       | Compare.Eq | Compare.Prefix -> Some v
       | Compare.Contain -> lookup key kl keylen m
-      | _ -> None)
+      | Compare.Inf _ | Compare.Sup _ -> None)
     | B (l, r, i, b) ->
       if keylen > i
       then let dir = if ((Char.code (Key.get key i)) land (1 lsl b)) = 0

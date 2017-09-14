@@ -227,7 +227,7 @@ module Make
       | PACKDecoder.Tree   -> "tree"
       | PACKDecoder.Blob   -> "blob"
       | PACKDecoder.Tag    -> "tag"
-      | _ -> raise (Invalid_argument "string_of_kind")
+      | PACKDecoder.Hunk _ -> raise (Invalid_argument "string_of_kind")
 
     (* XXX(dinosaure): I explain this big code. This explanation includes
        [normalize_tree]. Firstly, about the Smart protocol:
@@ -371,7 +371,7 @@ module Make
                         | PACKDecoder.Blob
                         | PACKDecoder.Tag
                         | PACKDecoder.Tree) as kind -> string_of_kind kind
-                      | _ -> assert false
+                      | PACKDecoder.Hunk _ -> assert false
                     in
 
                     let hdr = Fmt.strf "%s %Ld\000" hdr_kind (Int64.of_int (PACKDecoder.length pack)) in
@@ -418,7 +418,7 @@ module Make
                            ; max_length = max t.max_length
                                @@ max (PACKDecoder.length pack)
                                @@ max hunks.PACKDecoder.H.target_length hunks.PACKDecoder.H.source_length }
-                  | PACKDecoder.Hunk hunks, None ->
+                  | PACKDecoder.Hunk ({ PACKDecoder.H.reference = PACKDecoder.H.Hash _; _ } as hunks), None ->
                     { t with pack = PACKDecoder.next_object pack
                            ; rext = (hunks, crc, off) :: t.rext
                            ; graph = Graph.add off 1 t.graph
@@ -587,13 +587,13 @@ module Make
       in
 
       let ext = List.fold_left (fun acc -> function
-          | ({ PACKDecoder.H.reference = PACKDecoder.H.Hash hash; _ }, _, _) ->
+          | { PACKDecoder.H.reference = PACKDecoder.H.Hash hash; _ }, _, _ ->
             (match Tree.lookup info.tree hash with
              | Some _ -> acc (* XXX(dinosaure): available in the thin-pack. *)
              | None ->
                try List.find (Hash.equal hash) acc |> fun _ -> acc (* XXX(dinosaure): avoid duplicate. *)
                with Not_found -> hash :: acc)
-          | _ -> assert false)
+          | { PACKDecoder.H.reference = PACKDecoder.H.Offset _; _ }, _, _ -> assert false)
           []
           info.rext
       in

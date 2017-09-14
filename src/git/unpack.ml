@@ -368,9 +368,12 @@ struct
     let rec loop t =
       match eval0 t with
       | Cont ({ state = Stop
-              ; _hunk = Some hunk } as t) -> `Hunk (t, hunk)
-      | Cont ({ state = Stop }) -> assert false
-      | Cont t -> loop t
+              ; _hunk = Some hunk
+              ; _ } as t) -> `Hunk (t, hunk)
+      | Cont ({ state = Stop
+              ; _ }) -> assert false
+      | Cont ({ state = (Header _ | List _ | Is_insert _ | Is_copy _ | End | Exception _)
+              ; _ } as t) -> loop t
       | Wait t -> `Await t
       | Error (t, exn) -> `Error (t, exn)
       | Ok (t, objs) -> `Ok (t, objs)
@@ -401,12 +404,19 @@ struct
   let continue t =
     match t.state with
     | Stop -> { t with state = List list }
-    | _ -> raise (Invalid_argument "HunkDecoder.continue: bad state")
+    | Header _ | List _ | Is_insert _ | Is_copy _ | End | Exception _ ->
+      raise (Invalid_argument "HunkDecoder.continue: bad state")
 
   let current t = match t with
     | { state = Stop
-      ; _hunk = Some hunk } -> hunk
-    | _ -> raise (Invalid_argument "HunkDecoder.current: bad state")
+      ; _hunk = Some hunk
+      ; _ } -> hunk
+    | { state = Stop
+      ; _hunk = None
+      ; _ }
+    | { state = (Header _ | List _ | Is_insert _ | Is_copy _ | End | Exception _)
+      ; _hunk = (Some _ | None)
+      ; _ } -> raise (Invalid_argument "HunkDecoder.current: bad state")
 
   let available_in t = t.i_len
   let used_in t      = t.i_pos
@@ -1045,7 +1055,10 @@ module MakePACKDecoder (H : S.HASH) (I : S.INFLATE)
     ; counter = 1l
     ; state   = Object kind }
 
-  let is_end { state; _ } = match state with End _ -> true | _ -> false
+  let is_end { state; _ } = match state with
+    | End _ -> true
+    | Header _ | Object _ | VariableLength _ | Unzip _
+    | Hunks _ | StopHunks _ | Next _ | Checksum _ | Exception _ -> false
 
   let refill off len t =
     if (t.i_len - t.i_pos) = 0 && not (is_end t)
@@ -1069,9 +1082,11 @@ module MakePACKDecoder (H : S.HASH) (I : S.INFLATE)
                                   ; consumed
                                   ; crc
                                   ; z = Inflate.refill off len z; h; } }
-        | _ -> { t with i_off = off
-                      ; i_len = len
-                      ; i_pos = 0 }
+        | Header _ | Object _ | VariableLength _ | End _
+        | StopHunks _ | Next _ | Checksum _ | Exception _ ->
+          { t with i_off = off
+                 ; i_len = len
+                 ; i_pos = 0 }
     else if is_end t
     then { t with i_off = off
                 ; i_len = len
@@ -1088,12 +1103,16 @@ module MakePACKDecoder (H : S.HASH) (I : S.INFLATE)
                              ; crc
                              ; kind
                              ; z = Inflate.flush off len z } }
-    | _ -> raise (Invalid_argument "PACKDecoder.flush: bad state")
+    | End _ | Header _ | Object _ | VariableLength _
+    | Hunks _ | StopHunks _ | Next _ | Checksum _ | Exception _ ->
+      raise (Invalid_argument "PACKDecoder.flush: bad state")
 
   let output t = match t.state with
     | Unzip { z; _ } ->
       t.o_z, Inflate.used_out z
-    | _ -> raise (Invalid_argument "PACKDecoder.output: bad state")
+    | End _ | Header _ | Object _ | VariableLength _
+    | Hunks _ | StopHunks _ | Next _ | Checksum _ | Exception _ ->
+      raise (Invalid_argument "PACKDecoder.output: bad state")
 
   let next_object t =
     match t.state with
@@ -1105,21 +1124,27 @@ module MakePACKDecoder (H : S.HASH) (I : S.INFLATE)
                   ; counter = Int32.pred t.counter }
     | Next _ -> { t with state = End (Hash.of_string (String.make Hash.Digest.length '\000')) }
       (* XXX(dinosaure): in the local case, the user don't care about the hash of the PACK file. *)
-    | _ -> raise (Invalid_argument "PACKDecoder.next_object: bad state")
+    | End _ | Header _ | Object _ | VariableLength _
+    | Hunks _ | StopHunks _ | Unzip _ | Checksum _ | Exception _ ->
+      raise (Invalid_argument "PACKDecoder.next_object: bad state")
 
   let kind t = match t.state with
     | Unzip { kind; _ } -> kind
     | StopHunks { h; _ }
     | Hunks { h; _ } -> Hunk (H.partial_hunks h)
     | Next { kind; _ } -> kind
-    | _ -> raise (Invalid_argument "PACKDecoder.kind: bad state")
+    | End _ | Header _ | Object _ | VariableLength _
+    | Checksum _ | Exception _ ->
+      raise (Invalid_argument "PACKDecoder.kind: bad state")
 
   let length t = match t.state with
     | Unzip { length; _ } -> length
     | StopHunks { length; _ } -> length
     | Hunks { length; _ } -> length
     | Next { length; _ } -> length
-    | _ -> raise (Invalid_argument "PACKDecoder.length: bad state")
+    | End _ | Header _ | Object _ | VariableLength _
+    | Checksum _ | Exception _ ->
+      raise (Invalid_argument "PACKDecoder.length: bad state")
 
   (* XXX(dinosaure): The consumed value calculated in this deserialization is
      different from what git says (a diff of 1 or 2 bytes) - may be it come from
@@ -1127,24 +1152,32 @@ module MakePACKDecoder (H : S.HASH) (I : S.INFLATE)
      It's not very important but FIXME! *)
   let consumed t = match t.state with
     | Next { consumed; _ } -> consumed
-    | _ -> raise (Invalid_argument "PACKDecoder.consumed: bad state")
+    | End _ | Header _ | Object _ | VariableLength _
+    | Hunks _ | StopHunks _ | Unzip _ | Checksum _ | Exception _ ->
+      raise (Invalid_argument "PACKDecoder.consumed: bad state")
 
   let offset t = match t.state with
     | Unzip { offset; _ } -> offset
     | StopHunks { offset; _ } -> offset
     | Hunks { offset; _ } -> offset
     | Next { offset; _ } -> offset
-    | _ -> raise (Invalid_argument "PACKDecoder.offset: bad state")
+    | End _ | Header _ | Object _ | VariableLength _
+    | Checksum _ | Exception _ ->
+      raise (Invalid_argument "PACKDecoder.offset: bad state")
 
   let crc t = match t.state with
     | Next { crc; _ } -> crc
-    | _ -> raise (Invalid_argument "PACKDecoder.crc: bad state")
+    | End _ | Header _ | Object _ | VariableLength _
+    | Hunks _ | StopHunks _ | Unzip _ | Checksum _ | Exception _ ->
+      raise (Invalid_argument "PACKDecoder.crc: bad state")
 
   let continue t =
     match t.state with
     | StopHunks hs ->
       { t with state = Hunks { hs with h = H.continue hs.h } }
-    | _ -> raise (Invalid_argument "PACKDecoder.continue: bad state")
+    | End _ | Header _ | Object _ | VariableLength _
+    | Hunks _ | Next _ | Unzip _ | Checksum _ | Exception _ ->
+      raise (Invalid_argument "PACKDecoder.continue: bad state")
 
   let eval0 src t =
     match t.state with
@@ -1168,7 +1201,8 @@ module MakePACKDecoder (H : S.HASH) (I : S.INFLATE)
         `Object t
       | Cont ({ state = StopHunks hs } as t) ->
         `Hunk (t, H.current hs.h)
-      | Cont t -> loop t
+      | Cont ({ state = (Header _ | Object _ | VariableLength _
+                        | Unzip _ | Hunks _ | Checksum _ | End _ | Exception _); _ }) -> loop t
       | Wait t -> `Await t
       | Flush t -> `Flush t
       | Ok (t, hash) -> `End (t, hash)
@@ -1179,9 +1213,14 @@ module MakePACKDecoder (H : S.HASH) (I : S.INFLATE)
 
   let eval_length src t =
     let rec loop t =
-      match eval0 src t with
-      | Cont (({ state = Next _ } | { state = Unzip _ } | { state = Hunks { h = { H.state = H.List _ } } }) as t) -> `Length t
-      | Cont ({ state = StopHunks hs } as t) -> loop (continue t)
+      (* XXX(dinosaure): pattern is fragile. *)
+
+      match[@warning "-4"] eval0 src t with
+      | Cont (({ state = Next _; _ }
+              | { state = Unzip _; _ }
+              | { state = Hunks { h = { H.state = H.List _; _ }; _ }; _ }) as t) ->
+        `Length t
+      | Cont ({ state = StopHunks _; _ } as t) -> loop (continue t)
       | Cont t -> loop t
       | Wait t -> `Await t
       | Flush t -> `Flush t
@@ -1194,9 +1233,13 @@ module MakePACKDecoder (H : S.HASH) (I : S.INFLATE)
 
   let eval_metadata src t =
     let rec loop t =
-      match eval0 src t with
-      | Cont (({ state = Next _ } | { state = Unzip _ } | { state = Hunks _ }) as t) -> `Metadata t
-      | Cont ({ state = StopHunks hs } as t) -> loop (continue t)
+      (* XXX(dinosaure): pattern is fragile. *)
+
+      match[@warning "-4"] eval0 src t with
+      | Cont (({ state = Next _; _ }
+              | { state = Unzip _; _ }
+              | { state = Hunks _; _ }) as t) -> `Metadata t
+      | Cont ({ state = StopHunks _; _ } as t) -> loop (continue t)
       | Cont t -> loop t
       | Wait t -> `Await t
       | Flush t -> `Flush t
@@ -1373,7 +1416,8 @@ struct
         ; _offset = offset
         ; _crc = crc
         ; _hunks = [] }
-      | _ -> raise (Invalid_argument "Object.to_partial: this object is external of the current PACK file")
+      | { from = External _; _ } ->
+        raise (Invalid_argument "Object.to_partial: this object is external of the current PACK file")
 
 
     let rec pp_from ppf = function
@@ -1428,7 +1472,7 @@ struct
     | P.Blob -> `Blob
     | P.Tree -> `Tree
     | P.Tag -> `Tag
-    | _ -> assert false
+    | P.Hunk _ -> assert false
 
   let map_window t offset_requested =
     let open Lwt.Infix in
@@ -1595,7 +1639,7 @@ struct
         loop window relative_offset 0 0 [] None state >>= function
         | Ok (P.Hunk hunks, partial) ->
           Lwt.return (Ok (Hunks (partial, hunks)))
-        | Ok (kind, partial) ->
+        | Ok ((P.Commit | P.Blob | P.Tag | P.Tree) as kind, partial) ->
           let r_tmp =
             if (not limit) || (partial._length < 0x10000FFFE && limit)
             then Cstruct.sub r_tmp 0 partial._length
@@ -1711,7 +1755,10 @@ struct
             match P.kind state with
             | P.Hunk hunks ->
               Lwt.return (Ok hunks.H.target_length)
-            | _ -> Lwt.return (Ok (P.length state))
+            | P.Commit
+            | P.Blob
+            | P.Tree
+            | P.Tag -> Lwt.return (Ok (P.length state))
         in
 
         loop window relative_offset state
@@ -1761,7 +1808,7 @@ struct
               Lwt.return (`IndirectOff (Int64.sub (P.offset state) off, max (P.length state) @@ max hunks.H.target_length hunks.H.source_length))
             | P.Hunk ({ H.reference = H.Hash hash; _ } as hunks) ->
               Lwt.return (`IndirectHash (hash, max (P.length state) @@ max hunks.H.target_length hunks.H.source_length))
-            | _ -> Lwt.return (`Direct (P.length state))
+            | P.Commit | P.Blob | P.Tree | P.Tag -> Lwt.return (`Direct (P.length state))
       in
 
       loop window relative_offset state
@@ -1954,7 +2001,7 @@ struct
                    (P.next_object state)
                | Error exn -> Lwt.return (Error exn))
             | Error exn -> Lwt.return (Error exn))
-         | kind ->
+         | (P.Commit | P.Tag | P.Tree | P.Blob) as kind ->
            let obj =
              Object.{ kind   = to_kind kind
                     ; raw    =

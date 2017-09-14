@@ -55,7 +55,7 @@ module Make (S : Minimal.S with type Hash.Digest.buffer = Cstruct.t
       let vertex_attributes (_,o) =
         match o with
         | Store.Value.Commit _ -> [`Shape `Doublecircle]
-        | _ -> []
+        | Store.Value.Blob _ | Store.Value.Tree _ | Store.Value.Tag _ -> []
       let get_subgraph _ = None
       let default_edge_attributes _ = []
       let edge_attributes (_,l,_) =
@@ -93,7 +93,7 @@ module Make (S : Minimal.S with type Hash.Digest.buffer = Cstruct.t
                 let l, h = label s in
                 Store.read t h >>= function
                 | Ok v -> C.add_edge_e g (src, l, (h, v)); Lwt.return_unit
-                | _ -> Lwt.return () (* XXX(dinosaure): quiet this error? *)
+                | Error _ -> Lwt.return () (* XXX(dinosaure): quiet this error? *)
               ) preds
           ) nodes
       end >>= fun () -> Lwt.return g

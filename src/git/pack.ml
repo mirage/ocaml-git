@@ -172,7 +172,7 @@ struct
       List.map (function
           | ({ delta = From hash; hash_object; _ } as x) ->
             if Hash.equal hash hash_object then { x with delta = None } else x
-          | x -> x)
+          | ({ delta = None; _ } as x) -> x)
         lst
     in
 
@@ -202,7 +202,7 @@ struct
         if ensure
         then loop (x :: acc) later r true
         else loop acc (x :: later) r progress
-      | x :: r, later -> loop (x :: acc) later r true
+      | ({ delta = None; _ } as x) :: r, later -> loop (x :: acc) later r true
     in
 
     loop edges [] rest false
@@ -750,7 +750,7 @@ struct
   let deltas ?(memory = false) entries get tag window max =
     let to_delta e = match e.Entry.delta, e.Entry.preferred with
       | Entry.None, false -> e.Entry.length >= 50L
-      | _ -> false
+      | (Entry.From _ | Entry.None), _  -> false
     in
 
     let tries =
@@ -1310,7 +1310,9 @@ struct
            dst t
        | None -> assert false)
 
-    | _, _ -> assert false
+    | (KindRaw | KindHash | KindOffset),
+      { Delta.delta = (Delta.S _ | Delta.Z); _ } -> assert false
+      (* XXX(dinosaure): impossible case, the code below never produce this combinaison. *)
 
   let writez src dst t x r crc off used_in z =
     match Deflate.eval ~src ~dst z with
@@ -1392,7 +1394,8 @@ struct
         else Cont { t with state = WriteK (writek KindHash entry delta r) }
       | Entry.None, { Delta.delta = Delta.Z } ->
         Cont { t with state = WriteK (writek KindRaw entry delta r) }
-      | _, _ -> error t (Invalid_hash entry.Entry.hash_object)
+      | (Entry.None | Entry.From _),
+        { Delta.delta = (Delta.S _ | Delta.Z) } -> error t (Invalid_hash entry.Entry.hash_object)
 
   let save dst t x r crc off =
     Cont { t with state = Object (iter r)
@@ -1457,7 +1460,7 @@ struct
                ; o_len = len
                ; o_pos = 0
                ; state = WriteH { x; r; crc; off; ui; h; z = Deflate.flush offset len z } }
-      | _ ->
+      | (Header _ | Object _ | WriteK _ | Save _ | Hash _ | End _ | Exception _) ->
         { t with o_off = offset
                ; o_len = len
                ; o_pos = 0 }
@@ -1466,28 +1469,31 @@ struct
         { t with o_off = offset
                ; o_len = len
                ; o_pos = 0 }
-      | _ -> raise (Invalid_argument (Fmt.strf "PACKEncoder.flush: you lost something \
-                                                (pos: %d, len: %d)" t.o_pos t.o_len))
+      | (Header _ | Object _ | WriteK _ | WriteZ _ | WriteH _ | Save _ | Hash _ | Exception _) ->
+        raise (Invalid_argument (Fmt.strf "PACKEncoder.flush: you lost something \
+                                           (pos: %d, len: %d)" t.o_pos t.o_len))
 
   let expect t =
     match t.state with
     | WriteH { x = ({ Entry.hash_object; _ }, _); _ } -> hash_object
     | WriteZ { x = { Entry.hash_object; _ }; _ } -> hash_object
-    | _ -> raise (Invalid_argument "PACKEncoder.expecti: bad state")
+    | (Header _ | Object _ | WriteK _ | Save _ | Hash _ | End _ | Exception _) ->
+      raise (Invalid_argument "PACKEncoder.expecti: bad state")
 
-  let header_of_expected t =
-    match t.state with
-    | WriteH { x = (entry, _); _ }
-    | WriteZ { x = entry; _ } ->
-      let typename = match entry.Entry.kind with
-        | Kind.Commit -> "commit"
-        | Kind.Tree -> "tree"
-        | Kind.Blob -> "blob"
-        | Kind.Tag -> "tag"
-      in
+  (* let header_of_expected t =
+       match t.state with
+       | WriteH { x = (entry, _); _ }
+       | WriteZ { x = entry; _ } ->
+       let typename = match entry.Entry.kind with
+           | Kind.Commit -> "commit"
+           | Kind.Tree -> "tree"
+           | Kind.Blob -> "blob"
+           | Kind.Tag -> "tag"
+       in
 
-      Fmt.strf "%s %Ld\000" typename entry.Entry.length
-    | _ -> raise (Invalid_argument "PACKEncoder.header_of_expected: bad state")
+       Fmt.strf "%s %Ld\000" typename entry.Entry.length
+       | (Header _ | Object _ | WriteK _ | Save _ | Hash _ | End _ | Exception _) ->
+       raise (Invalid_argument "PACKEncoder.header_of_expected: bad state") *)
 
   let refill offset len t =
     if (t.i_len - t.i_pos) = 0
@@ -1503,9 +1509,10 @@ struct
                ; i_len = len
                ; i_pos = 0
                ; state = WriteH { x; r; crc; off; ui; z; h = H.refill offset len h } }
-      | _ -> { t with i_off = offset
-                    ; i_len = len
-                    ; i_pos = 0 }
+      | (Header _ | Object _ | WriteK _ | Save _ | Hash _ | End _ | Exception _) ->
+        { t with i_off = offset
+               ; i_len = len
+               ; i_pos = 0 }
     else raise (Invalid_argument (Fmt.strf "PACKEncoder.refill: you lost something \
                                             (pos: %d, len: %d)" t.i_pos t.i_len))
 
@@ -1516,14 +1523,15 @@ struct
         { t with state = WriteZ { x; r; crc; off; ui; z = Deflate.finish z } }
       | WriteH { x; r; crc; off; ui; z; h; } ->
         { t with state = WriteH { x; r; crc; off; ui; z; h = H.finish h } }
-      | _ -> t
+      | (Header _ | Object _ | WriteK _ | Save _ | Hash _ | End _ | Exception _) -> t
     else raise (Invalid_argument (Fmt.strf "PACKEncoder.finish: you lost something \
                                             (pos: %d, len: %d)" t.i_pos t.i_len))
 
   let used_in t = match t.state with
     | WriteZ { z; _ } -> Deflate.used_in z
     | WriteH { h; _ } -> H.used_in h
-    | _ -> raise (Invalid_argument "PACKEncoder.used_in: bad state")
+    | (Header _ | Object _ | WriteK _ | Save _ | Hash _ | End _ | Exception _) ->
+      raise (Invalid_argument "PACKEncoder.used_in: bad state")
 
   let default h_tmp objects =
     { o_off = 0

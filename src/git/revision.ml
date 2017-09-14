@@ -40,7 +40,7 @@ module Make
     Store.read git hash >>= function
     | Ok (Store.Value.Commit commit) -> Lwt.return (Ok commit)
     | Ok (Store.Value.Tag tag) -> commit git (Store.Value.Tag.obj tag)
-    | Ok _ -> Lwt.return (Error (`Expected_commit hash))
+    | Ok (Store.Value.Blob _ | Store.Value.Tree _) -> Lwt.return (Error (`Expected_commit hash))
     | Error #Store.error as err -> Lwt.return err
 
   let rec normalize git rev =
