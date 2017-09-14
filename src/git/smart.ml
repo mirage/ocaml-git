@@ -611,9 +611,9 @@ struct
     Fmt.pf ppf "{ @[<hov>shallow = [ %a ];@ \
                          refs = [ %a ];@ \
                          capabilites = [ %a ];@] }"
-      (Fmt.hvbox @@ Fmt.list ~sep Hash.pp) shallow
-      (Fmt.hvbox @@ Fmt.list ~sep pp_ref) refs
-      (Fmt.hvbox @@ Fmt.list ~sep Capability.pp_capability) capabilities
+      (Fmt.hvbox (Fmt.list ~sep Hash.pp)) shallow
+      (Fmt.hvbox (Fmt.list ~sep pp_ref)) refs
+      (Fmt.hvbox (Fmt.list ~sep Capability.pp)) capabilities
 
   let rec p_advertised_refs ~pkt ~first ~shallow_state refs decoder =
     match pkt with
@@ -674,8 +674,8 @@ struct
 
     Fmt.pf ppf "{ @[<hov>shallow = [ %a ];@ \
                          unshallow = [ %a ];@] }"
-      (Fmt.hvbox @@ Fmt.list ~sep Hash.pp) shallow
-      (Fmt.hvbox @@ Fmt.list ~sep Hash.pp) unshallow
+      (Fmt.hvbox (Fmt.list ~sep Hash.pp)) shallow
+      (Fmt.hvbox (Fmt.list ~sep Hash.pp)) unshallow
 
   let rec p_shallow_update ~pkt lst decoder = match pkt with
     | `Flush -> p_return lst decoder
@@ -756,9 +756,9 @@ struct
     Fmt.pf ppf "{ @[<hov>shallow = [ %a ];@ \
                          unshallow = [ %a ];@ \
                          acks = [ %a ];@] }"
-      (Fmt.hvbox @@ Fmt.list ~sep Hash.pp) shallow
-      (Fmt.hvbox @@ Fmt.list ~sep Hash.pp) unshallow
-      (Fmt.hvbox @@ Fmt.list ~sep pp_ack) acks
+      (Fmt.hvbox (Fmt.list ~sep Hash.pp)) shallow
+      (Fmt.hvbox (Fmt.list ~sep Hash.pp)) unshallow
+      (Fmt.hvbox (Fmt.list ~sep pp_ack)) acks
 
   let rec p_negociation ~pkt ~mode lst decoder = match pkt with
     | `Flush -> raise (Leave (err_unexpected_flush_pkt_line decoder))
@@ -873,7 +873,7 @@ struct
     Fmt.pf ppf "{ @[<hov>unpack = %a;@ \
                          commands = [ %a ];@] }"
       (Fmt.result ~ok:(Fmt.unit "ok") ~error:Fmt.string) unpack
-      (Fmt.hvbox @@ Fmt.list ~sep pp_command) commands
+      (Fmt.hvbox (Fmt.list ~sep pp_command)) commands
 
   let p_unpack decoder : (unit, string) result =
     ignore @@ p_string "unpack" decoder;

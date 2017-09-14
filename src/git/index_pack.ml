@@ -206,7 +206,7 @@ struct
       Log.debug (fun l -> l "Retrieving the information of %a from the cache." Hash.pp hash);
       Some (crc, offset)
     | None ->
-      match fanout_idx t (Hash.to_string hash |> Cstruct.of_string) with
+      match fanout_idx t (Cstruct.of_string (Hash.to_string hash)) with
       | Ok idx ->
         let crc = Cstruct.BE.get_uint32 t.map (t.crcs_offset + (idx * 4)) in
         let off = Cstruct.BE.get_uint32 t.map (t.values_offset + (idx * 4)) in

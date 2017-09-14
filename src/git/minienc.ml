@@ -360,13 +360,13 @@ struct
   let pp ppf = function
     | `Bigstring b ->
       Fmt.pf ppf "(`Bigstring %a)"
-        (Fmt.hvbox @@ pp_scalar ~get:Bigarray.Array1.get ~length:Bigarray.Array1.dim) b
+        (Fmt.hvbox (pp_scalar ~get:Bigarray.Array1.get ~length:Bigarray.Array1.dim)) b
     | `Bytes b ->
       Fmt.pf ppf "(`Bytes %a)"
-        (Fmt.hvbox @@ pp_scalar ~get:Bytes.get ~length:Bytes.length) b
+        (Fmt.hvbox (pp_scalar ~get:Bytes.get ~length:Bytes.length)) b
     | `String b ->
       Fmt.pf ppf "(`String %a)"
-        (Fmt.hvbox @@ pp_scalar ~get:String.get ~length:String.length) b
+        (Fmt.hvbox (pp_scalar ~get:String.get ~length:String.length)) b
 
   let sub buffer off len = match buffer with
     | `Bigstring b -> `Bigstring (Bigarray.Array1.sub b off len)

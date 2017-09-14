@@ -227,7 +227,7 @@ module Make
                 committer = %a;@ \
                 message = %a;@] }"
       (Fmt.hvbox Hash.pp) tree
-      (Fmt.hvbox @@ Fmt.list ~sep:(Fmt.unit ";@ ") Hash.pp) parents
+      (Fmt.hvbox (Fmt.list ~sep:(Fmt.unit ";@ ") Hash.pp)) parents
       (Fmt.hvbox User.pp) author
       (Fmt.hvbox User.pp) committer
       (Fmt.hvbox (Fmt.iter ~sep:Fmt.nop String.iter chr)) message

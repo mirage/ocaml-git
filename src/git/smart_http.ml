@@ -108,8 +108,8 @@ struct
 
     Fmt.pf ppf "{ @[<hov>refs = [ %a ];@ \
                 capabilites = [ %a ];@] }"
-      (Fmt.hvbox @@ Fmt.list ~sep (Fmt.hvbox pp_ref)) refs
-      (Fmt.hvbox @@ Fmt.list ~sep Capability.pp_capability) capabilities
+      (Fmt.hvbox (Fmt.list ~sep (Fmt.hvbox pp_ref))) refs
+      (Fmt.hvbox (Fmt.list ~sep Capability.pp)) capabilities
   (* XXX(dinosaure): OK, this is the same as the Smart protocol with a strongly
      constraint about peeled reference. Then, the shallow information is not
      available. *)

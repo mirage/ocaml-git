@@ -82,7 +82,7 @@ module Make (H : S.HASH with type Digest.buffer = Cstruct.t
 
   let pp ppf tree =
     Fmt.pf ppf "[ %a ]"
-      (Fmt.hvbox @@ Fmt.list ~sep:(Fmt.unit ";@ ") pp_entry) tree
+      (Fmt.hvbox (Fmt.list ~sep:(Fmt.unit ";@ ") pp_entry)) tree
 
   let string_of_perm = function
     | `Normal    -> "100644"
