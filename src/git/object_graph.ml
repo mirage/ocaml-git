@@ -116,6 +116,25 @@ module Make (S : Minimal.S with type Hash.Digest.buffer = Cstruct.t
       end >>= fun () ->
       Lwt.return g
 
+  let of_commits t =
+    let g = K.create () in
+    Store.contents t >>=function
+    | Error _ -> Lwt.return g
+    | Ok nodes ->
+      List.iter (function
+          | (k, Store.Value.Commit _) -> K.add_vertex g k
+          | (_, (Store.Value.Tree _ | Store.Value.Tag _ | Store.Value.Blob _ )) -> ()) nodes;
+      begin
+        Lwt_list.iter_p (fun (src, _) ->
+            Search.pred ~full:false t src >>= fun succs ->
+            Lwt_list.iter_p (fun s ->
+                let _, h = label s in
+                if K.mem_vertex g h then K.add_edge g src h;
+                Lwt.return ())
+              succs
+          ) nodes
+      end >>= fun () -> Lwt.return g
+
   let to_dot t buf =
     let fmt = Format.formatter_of_buffer buf in
     of_store t >>= fun g ->
