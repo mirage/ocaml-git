@@ -681,7 +681,7 @@ struct
         || (depth src) = max
         || (limit src) = 0
         || (limit src) <= diff
-        || trg_entry.Entry.length < Int64.(src_entry.Entry.length / 32L)
+        || trg_entry.Entry.length < Int64.(src_entry.Entry.length / 32L)[@warning "-44"]
         || Hash.equal src_entry.Entry.hash_object trg_entry.Entry.hash_object
         then best
         else
@@ -1067,10 +1067,10 @@ struct
                      ; write = Int64.add t.write 4L }
       end else if (t.o_len - t.o_pos) > 0
       then begin
-        let a1 = Int32.(to_int ((integer && 0xFF000000l) >> 24)) in
-        let a2 = Int32.(to_int ((integer && 0x00FF0000l) >> 16)) in
-        let a3 = Int32.(to_int ((integer && 0x0000FF00l) >> 8)) in
-        let a4 = Int32.(to_int (integer && 0x000000FFl)) in
+        let a1 = Int32.(to_int ((integer && 0xFF000000l) >> 24))[@warning "-44"] in
+        let a2 = Int32.(to_int ((integer && 0x00FF0000l) >> 16))[@warning "-44"] in
+        let a3 = Int32.(to_int ((integer && 0x0000FF00l) >> 8))[@warning "-44"] in
+        let a4 = Int32.(to_int (integer && 0x000000FFl))[@warning "-44"] in
 
         (put_byte a1
          @@ put_byte a2
@@ -1096,15 +1096,15 @@ struct
     let tmp_header = Bytes.create 10
 
     let header kind len crc k dst t =
-      let byt = ref ((kind lsl 4) lor Int64.(to_int (len && 15L))) in
+      let byt = ref ((kind lsl 4) lor Int64.(to_int (len && 15L))[@warning "-44"]) in
       let len = ref Int64.(len >> 4) in
       let pos = ref 0 in
 
       while !len <> 0L
       do
         Bytes.set tmp_header !pos (Char.unsafe_chr (!byt lor 0x80));
-        byt := Int64.(to_int (!len && 0x7FL));
-        len := Int64.(!len >> 7);
+        byt := Int64.(to_int (!len && 0x7FL))[@warning "-44"];
+        len := Int64.(!len >> 7)[@warning "-44"];
         pos := !pos + 1;
       done;
 
@@ -1129,13 +1129,13 @@ struct
       let pos = ref 9 in
       let off = ref n in
 
-      Bytes.set tmp_offset !pos (Char.chr Int64.(to_int (!off && 127L)));
+      Bytes.set tmp_offset !pos (Char.chr Int64.(to_int (!off && 127L))[@warning "-44"]);
 
       while Int64.(!off >> 7) <> 0L
       do
         off := Int64.(!off >> 7);
         pos := !pos - 1;
-        Bytes.set tmp_offset !pos (Char.chr (128 lor Int64.(to_int ((!off - 1L) && 127L))));
+        Bytes.set tmp_offset !pos (Char.chr (128 lor Int64.(to_int ((!off - 1L) && 127L))[@warning "-44"]));
         off := Int64.sub !off 1L;
       done;
 

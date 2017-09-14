@@ -60,6 +60,8 @@ sig
   val to_hex : t -> string
   val of_hex : string -> t
 end = struct
+  [@@@warning "-44"] (* XXX(dinosaure): shadowing of [compare] and [equal]. *)
+
   open Bytes
 
   type nonrec t = t

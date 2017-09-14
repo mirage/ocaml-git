@@ -15,6 +15,8 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+[@@@warning "-44"] (* XXX(dinosaure): shadowing by [Astring]. *)
+
 open Astring
 
 type t = Uri.t

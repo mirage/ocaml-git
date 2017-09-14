@@ -271,6 +271,7 @@ struct
          kk (fun encoder -> End encoder) encoder |> go)
      @@ flush k)
       encoder
+     [@@warning "-44"]
 
   let w_hash hash k encoder =
     let x = Hash.to_hex hash in
@@ -318,7 +319,7 @@ struct
     w_list noop (fun hash -> pkt_line (fun k -> write_string "have " @@ w_hash hash @@ w_lf k)) l k encoder
 
   let w_request_end k encoder =
-    Minienc.(write_string "0000" (flush k) encoder)
+    Minienc.(write_string "0000" (flush k) encoder)[@warning "-44"]
 
   let w_done k encoder =
     pkt_line (fun k -> Minienc.write_string "done" @@ w_lf k) k encoder

@@ -771,18 +771,19 @@ struct
     then begin
       Cstruct.BE.set_uint32 dst (t.o_off + t.o_pos) integer;
       k dst { t with o_pos = t.o_pos + 4
-                    ; write = t.write + 4 }
+                   ; write = t.write + 4 }
     end else if (t.o_len - t.o_pos) > 0
-    then let i1 = Char.unsafe_chr @@ Int32.(! ((integer && 0xFF000000l) >> 24)) in
-          let i2 = Char.unsafe_chr @@ Int32.(! ((integer && 0x00FF0000l) >> 16)) in
-          let i3 = Char.unsafe_chr @@ Int32.(! ((integer && 0x0000FF00l) >> 8)) in
-          let i4 = Char.unsafe_chr @@ Int32.(! (integer && 0x000000FFl)) in
+    then
+      let i1 = Char.unsafe_chr @@ Int32.(! ((integer && 0xFF000000l) >> 24))[@warning "-44"] in
+      let i2 = Char.unsafe_chr @@ Int32.(! ((integer && 0x00FF0000l) >> 16))[@warning "-44"] in
+      let i3 = Char.unsafe_chr @@ Int32.(! ((integer && 0x0000FF00l) >> 8))[@warning "-44"] in
+      let i4 = Char.unsafe_chr @@ Int32.(! (integer && 0x000000FFl))[@warning "-44"] in
 
-          (put_byte ~ctor i1
-          @@ put_byte ~ctor i2
-          @@ put_byte ~ctor i3
-          @@ put_byte ~ctor i4 k)
-          dst t
+      (put_byte ~ctor i1
+       @@ put_byte ~ctor i2
+       @@ put_byte ~ctor i3
+       @@ put_byte ~ctor i4 k)
+        dst t
     else flush dst { t with state = ctor (fun dst t -> (put_int32[@tailcall]) ~ctor integer k dst t) }
 
   module KHeader =
@@ -854,24 +855,25 @@ struct
         k dst { t with o_pos = t.o_pos + 8
                      ; write = t.write + 8 }
       end else if (t.o_len - t.o_pos) > 0
-      then let i1 = Char.unsafe_chr @@ Int64.(! ((integer && 0xFF00000000000000L) >> 56)) in
-           let i2 = Char.unsafe_chr @@ Int64.(! ((integer && 0x00FF000000000000L) >> 48)) in
-           let i3 = Char.unsafe_chr @@ Int64.(! ((integer && 0x0000FF0000000000L) >> 40)) in
-           let i4 = Char.unsafe_chr @@ Int64.(! ((integer && 0x000000FF00000000L) >> 32)) in
-           let i5 = Char.unsafe_chr @@ Int64.(! ((integer && 0x00000000FF000000L) >> 24)) in
-           let i6 = Char.unsafe_chr @@ Int64.(! ((integer && 0x0000000000FF0000L) >> 16)) in
-           let i7 = Char.unsafe_chr @@ Int64.(! ((integer && 0x000000000000FF00L) >> 8)) in
-           let i8 = Char.unsafe_chr @@ Int64.(! (integer && 0x00000000000000FFL)) in
+      then
+        let i1 = Char.unsafe_chr @@ Int64.(! ((integer && 0xFF00000000000000L) >> 56))[@warning "-44"] in
+        let i2 = Char.unsafe_chr @@ Int64.(! ((integer && 0x00FF000000000000L) >> 48))[@warning "-44"] in
+        let i3 = Char.unsafe_chr @@ Int64.(! ((integer && 0x0000FF0000000000L) >> 40))[@warning "-44"] in
+        let i4 = Char.unsafe_chr @@ Int64.(! ((integer && 0x000000FF00000000L) >> 32))[@warning "-44"] in
+        let i5 = Char.unsafe_chr @@ Int64.(! ((integer && 0x00000000FF000000L) >> 24))[@warning "-44"] in
+        let i6 = Char.unsafe_chr @@ Int64.(! ((integer && 0x0000000000FF0000L) >> 16))[@warning "-44"] in
+        let i7 = Char.unsafe_chr @@ Int64.(! ((integer && 0x000000000000FF00L) >> 8))[@warning "-44"] in
+        let i8 = Char.unsafe_chr @@ Int64.(! (integer && 0x00000000000000FFL))[@warning "-44"] in
 
-           (put_byte i1
-            @@ put_byte i2
-            @@ put_byte i3
-            @@ put_byte i4
-            @@ put_byte i5
-            @@ put_byte i6
-            @@ put_byte i7
-            @@ put_byte i8 k)
-           dst t
+        (put_byte i1
+         @@ put_byte i2
+         @@ put_byte i3
+         @@ put_byte i4
+         @@ put_byte i5
+         @@ put_byte i6
+         @@ put_byte i7
+         @@ put_byte i8 k)
+          dst t
       else flush dst { t with state = BigOffsets (put_int64 integer k) }
   end
 
@@ -933,7 +935,7 @@ struct
            | [] -> Cont { t with state = Offsets (offsets (idx + 1) idx_boffs) }
            | (_, (_, off)) :: r ->
                if is_big_offset off
-               then let integer = Int32.(0x40000000l && (Int32.of_int idx_boffs)) in
+               then let integer = Int32.(0x40000000l && (Int32.of_int idx_boffs))[@warning "-44"] in
                     KOffsets.put_int32 integer (aux r (idx_boffs + 1)) dst t
                else KOffsets.put_int32 (Int64.to_int32 off) (aux r idx_boffs) dst t
                     (* XXX(dinosaure): safe to convert the offset to an int32. *)

@@ -693,7 +693,7 @@ module Make
 
         Store.FileSystem.Dir.temp () >>= fun temp ->
 
-        let abs_new_pack_filename = Store.Path.(temp / new_pack_filename) in
+        let abs_new_pack_filename = Store.Path.(temp / new_pack_filename)[@warning "-44"] in
 
         Store.FileSystem.File.open_w abs_new_pack_filename ~mode:0o644 >>= function
         | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
@@ -725,11 +725,11 @@ module Make
       | Ok (filename, tree, hash) ->
         let open Lwt.Infix in
 
-        let pack_obj = Store.Path.(Store.dotgit git / "objects" / "pack" / (Fmt.strf "pack-%a.pack" Hash.pp hash)) in
+        let pack_obj = Store.Path.(Store.dotgit git / "objects" / "pack" / (Fmt.strf "pack-%a.pack" Hash.pp hash))[@warning "-44"] in
         Store.FileSystem.File.move filename pack_obj >>= function
         | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
         | Ok () ->
-          let idx = Store.Path.(Store.dotgit git / "objects" / "pack" / (Fmt.strf "pack-%a.idx" Hash.pp hash)) in
+          let idx = Store.Path.(Store.dotgit git / "objects" / "pack" / (Fmt.strf "pack-%a.idx" Hash.pp hash))[@warning "-44"] in
 
           Store.FileSystem.File.open_w idx ~mode:0o644 >>= function
           | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
@@ -791,7 +791,7 @@ module Make
 
       Store.FileSystem.Dir.temp () >>= fun temp ->
 
-      let abs_pack_filename = Store.Path.(temp / pack_filename) in
+      let abs_pack_filename = Store.Path.(temp / pack_filename)[@warning "-44"] in
 
       Store.FileSystem.File.open_w ~mode:0o644
         abs_pack_filename
@@ -848,7 +848,7 @@ module Make
 
       Store.FileSystem.Dir.temp () >>= fun temp ->
 
-      let abs_pack_filename = Store.Path.(temp / pack_filename) in
+      let abs_pack_filename = Store.Path.(temp / pack_filename)[@warning "-44"] in
 
       Store.FileSystem.File.open_w ~mode:0o644 abs_pack_filename
       >>= (function
@@ -856,7 +856,7 @@ module Make
             Client.run t.ctx `ReceivePACK
             |> process t
             >>= Pack.pack_handler
-              (Pack.normalize_tree git Store.Path.(temp / pack_filename))
+              (Pack.normalize_tree git Store.Path.(temp / pack_filename)[@warning "-44"])
               t (Pack.make_pack ztmp wtmp) w
             >>= (function
                 | Ok info ->

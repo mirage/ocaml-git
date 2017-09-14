@@ -130,8 +130,8 @@ module Make
                   Hash.pp hash
                   Path.pp Path.(root / "objects" / first / rest)[@warning "-44"]);
 
-    FileSystem.File.exists Path.(root / "objects" / first / rest)
-    >>= function Ok v -> Lwt.return true
+    FileSystem.File.exists Path.(root / "objects" / first / rest)[@warning "-44"]
+    >>= function Ok _ -> Lwt.return true
                | Error _ -> Lwt.return false
 
   (* XXX(dinosaure): make this function more resilient: if [of_hex] fails), avoid the path. *)
@@ -141,7 +141,7 @@ module Make
     FileSystem.Dir.contents
       ~dotfiles:false
       ~rel:true
-      Path.(root / "objects")
+      Path.(root / "objects")[@warning "-44"]
     >>= function
     | Error sys_err ->
       Log.warn (fun l -> l "Retrieving a file-system error: %a." FileSystem.Dir.pp_error sys_err);
@@ -149,7 +149,7 @@ module Make
     | Ok firsts ->
       Lwt_list.fold_left_s
         (fun acc first ->
-           FileSystem.Dir.contents ~dotfiles:false ~rel:true (Path.(append (root / "objects") first))
+           FileSystem.Dir.contents ~dotfiles:false ~rel:true (Path.(append (root / "objects") first)[@warning "-44"])
            >>= function
            | Ok paths ->
              Lwt_list.fold_left_s
@@ -320,9 +320,9 @@ module Make
     let open Lwt.Infix in
 
     Log.debug (fun l -> l "Writing a new loose object %a."
-                  Path.pp Path.(root / "objects" / first / rest));
+                  Path.pp Path.(root / "objects" / first / rest)[@warning "-44"]);
 
-    FileSystem.File.open_w ~mode:644 Path.(root / "objects" / first / rest)
+    FileSystem.File.open_w ~mode:644 Path.(root / "objects" / first / rest)[@warning "-44"]
     >>= function
     | Error sys_err ->
       Log.err (fun l -> l "Retrieving a file-system error: %a." FileSystem.File.pp_error sys_err);

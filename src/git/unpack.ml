@@ -700,6 +700,7 @@ module MakePACKDecoder (H : S.HASH) (I : S.INFLATE)
       || (of_int b1 << 16) (* >> (tuareg) *)
       || (of_int b2 << 8)  (* >> (tuareg) *)
       || (of_int b3)
+      [@@warning "-44"]
 
     let rec get_u32 k src t =
       if (t.i_len - t.i_pos) > 3
@@ -1431,7 +1432,7 @@ struct
 
   let map_window t offset_requested =
     let open Lwt.Infix in
-    let pos = Int64.((offset_requested / 1024L) * 1024L) in (* padding *)
+    let pos = Int64.((offset_requested / 1024L) * 1024L)[@warning "-44"] in (* padding *)
     Mapper.map t.file ~pos ~share:false (1024 * 1024)
     >>= function
     | Ok map ->
@@ -1445,14 +1446,14 @@ struct
 
     match Bucket.find t.win predicate with
     | Some window ->
-      let relative_offset = Int64.to_int Int64.(offset_requested - window.Window.off) in
+      let relative_offset = Int64.to_int Int64.(offset_requested - window.Window.off)[@warning "-44"] in
       Lwt.return (Ok (window, relative_offset))
     | None ->
       let open Lwt.Infix in
       map_window t offset_requested
       >>= function
       | Ok window ->
-        let relative_offset = Int64.to_int Int64.(offset_requested - window.Window.off) in
+        let relative_offset = Int64.to_int Int64.(offset_requested - window.Window.off)[@warning "-44"] in
         let () = Bucket.add t.win window in
         Lwt.return (Ok (window, relative_offset))
       | Error err -> Lwt.return (Error err)
@@ -1510,7 +1511,7 @@ struct
                 hunks git_object
                 (P.refill consumed_in_window rest_in_window state)
             else
-              (find t Int64.(window.Window.off + (of_int consumed_in_window))
+              (find t Int64.(window.Window.off + (of_int consumed_in_window))[@warning "-44"]
                >>= function
                | Error err -> Lwt.return (Error (Mapper_error err))
                | Ok (window, relative_offset) ->
@@ -1647,6 +1648,7 @@ struct
           t.get hash >>= function
           | Some (kind, raw) -> Lwt.return (Ok (External (hash, kind, raw)))
           | None -> Lwt.return (Error (Invalid_hash hash))
+          [@@warning "-44"]
 
   let make ?(bucket = 10) file cache idx rev get' =
     let open Lwt.Infix in
@@ -1695,7 +1697,7 @@ struct
                 (consumed_in_window + rest_in_window)
                 (P.refill consumed_in_window rest_in_window state)
             else
-              find t Int64.(window.Window.off + (of_int consumed_in_window))
+              find t Int64.(window.Window.off + (of_int consumed_in_window))[@warning "-44"]
               >>= (function
                   | Error err -> Lwt.return (Error (Mapper_error err))
                   | Ok (window, relative_offset) ->
@@ -1742,7 +1744,7 @@ struct
                 (consumed_in_window + rest_in_window)
                 (P.refill consumed_in_window rest_in_window state)
             else
-              find t Int64.(window.Window.off + (of_int consumed_in_window))
+              find t Int64.(window.Window.off + (of_int consumed_in_window))[@warning "-44"]
               >>= (function
                   | Error err -> Lwt.return (`Error (Mapper_error err))
                   | Ok (window, relative_offset) ->
@@ -1857,7 +1859,7 @@ struct
               hunks swap git_object
               (P.refill consumed_in_window rest_in_window state)
           else
-            find t Int64.(window.Window.off + (of_int consumed_in_window))
+            find t Int64.(window.Window.off + (of_int consumed_in_window))[@warning "-44"]
             >>= (function
                 | Error err -> Lwt.return (Error (Mapper_error err))
                 | Ok (window, relative_offset) ->

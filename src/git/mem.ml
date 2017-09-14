@@ -96,7 +96,7 @@ module Make
   let clear_all () =
     Hashtbl.iter (fun _ t -> reset t) stores
 
-  let create ?(root = default_root) ?(dotgit = Path.(default_root / ".git")) ?(compression = 6) () =
+  let[@warning "-44"] create ?(root = default_root) ?(dotgit = Path.(default_root / ".git")) ?(compression = 6) () =
     if compression < 0 || compression > 9
     then failwith "level should be between 0 and 9";
 

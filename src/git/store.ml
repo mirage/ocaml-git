@@ -509,7 +509,7 @@ module Make
       Fmt.pf ppf "pack-%a%!" Hash.pp hash_idx;
       let filename_pack = Buffer.contents buf in
 
-      Path.((state.dotgit / "objects" / "pack" / filename_pack) + "pack")
+      Path.((state.dotgit / "objects" / "pack" / filename_pack) + "pack")[@warning "-44"]
 
     type info =
       { max_length : int
@@ -862,7 +862,7 @@ module Make
 
     let open Lwt.Infix in
 
-    FileSystem.Dir.contents ~dotfiles:false ~rel:false Path.(git / "objects" / "pack")
+    FileSystem.Dir.contents ~dotfiles:false ~rel:false Path.(git / "objects" / "pack")[@warning "-44"]
     >>= function
     | Ok lst ->
       Lwt_list.fold_left_s
@@ -997,7 +997,9 @@ module Make
             walk close' rest' queue acc'
           | Ok (Value.Tree tree as value) ->
             let path = try Hashtbl.find names hash with Not_found -> path in
-            Lwt_list.iter_s (fun { Value.Tree.name; node; _ } -> Hashtbl.add names node Path.(path / name); Lwt.return ()) tree >>= fun () ->
+            Lwt_list.iter_s (fun { Value.Tree.name; node; _ } ->
+                Hashtbl.add names node Path.(path / name)[@warning "-44"];
+                Lwt.return ()) tree >>= fun () ->
             let rest' = rest @ List.map (fun { Value.Tree.node; _ } -> node) tree in
             f acc ~name:path ~length:(Value.Tree.F.length tree) hash value >>= fun acc' ->
             walk close' rest' queue acc'
@@ -1100,6 +1102,7 @@ module Make
                with Not_found -> Lwt.return graph)
             graph partial
           >|= fun graph -> Ok graph
+    [@@warning "-44"]
 
     let graph t = graph_p t ~dtmp:t.buffer.de ~raw:t.buffer.io
 
@@ -1127,7 +1130,7 @@ module Make
       let open Lwt.Infix in
 
       let lock = match locks with
-        | Some locks -> Some (Lock.make locks Path.(t.dotgit / "references"))
+        | Some locks -> Some (Lock.make locks Path.(t.dotgit / "references"))[@warning "-44"]
         | None -> None
       in
 
@@ -1199,7 +1202,7 @@ module Make
       let open Lwt.Infix in
 
       let lock = match locks with
-        | Some locks -> Some (Lock.make locks Path.(t.dotgit / "references"))
+        | Some locks -> Some (Lock.make locks Path.(t.dotgit / "references"))[@warning "-44"]
         | None -> None
       in
 
@@ -1236,7 +1239,7 @@ module Make
       let open Lwt.Infix in
 
       let lock = match locks with
-        | Some locks -> Some (Lock.make locks Path.(t.dotgit / "references"))
+        | Some locks -> Some (Lock.make locks Path.(t.dotgit / "references"))[@warning "-44"]
         | None -> None
       in
 
@@ -1271,7 +1274,7 @@ module Make
       let open Lwt.Infix in
 
       let lock = match locks with
-        | Some locks -> Some (Lock.make locks Path.(t.dotgit / "references"))
+        | Some locks -> Some (Lock.make locks Path.(t.dotgit / "references"))[@warning "-44"]
         | None -> None
       in
 
@@ -1309,9 +1312,9 @@ module Make
     >>== fun _ ->
     FileSystem.Dir.create ~path:true dotgit
     >>== fun _ ->
-    FileSystem.Dir.create ~path:true Path.(dotgit / "objects")
+    FileSystem.Dir.create ~path:true Path.(dotgit / "objects")[@warning "-44"]
     >>== fun _ ->
-    FileSystem.Dir.create ~path:true Path.(dotgit / "objects" / "pack")
+    FileSystem.Dir.create ~path:true Path.(dotgit / "objects" / "pack")[@warning "-44"]
     >>== fun _ -> Lwt.return (Ok ())
 
   let create ?root ?dotgit ?(compression = 4) () =
@@ -1328,7 +1331,7 @@ module Make
         >>= function
         | Ok current ->
           let root = Option.get ~default:current root in
-          let dotgit  = Option.get ~default:Path.(root / ".git") dotgit in
+          let[@warning "-44"] dotgit  = Option.get ~default:Path.(root / ".git") dotgit in
 
           sanitize_filesystem root dotgit
           >>== fun () -> indexes dotgit
