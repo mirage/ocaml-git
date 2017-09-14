@@ -315,7 +315,22 @@ struct
   let finish decoder =
     { decoder with dec = D.finish decoder.dec }
 
-  let to_result x = assert false
+  let to_result deflated =
+    let window = Z.window () in
+    let i = Cstruct.create 0x800 in
+    let o = Cstruct.create 0x800 in
+    let t = default (window, i, o) in
+
+    let rec go t = match eval t with
+      | `Await t ->
+        (refill (Cstruct.sub deflated 0 0x800) t |> function
+         | Ok t -> go t
+         | Error _ as err -> err)
+      | `Error (_, err) -> Error err
+      | `End (_, value) -> Ok value
+    in
+
+    go t
 end
 
 module MakeEncoder (M : S.MINIENC)
