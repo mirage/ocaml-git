@@ -15,6 +15,12 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+module Log =
+struct
+  let src = Logs.Src.create "git.blob" ~doc:"logs git's blob event"
+  include (val Logs.src_log src : Logs.LOG)
+end
+
 module type S =
 sig
   type t = private Cstruct.t
@@ -101,6 +107,8 @@ module Make
     and raw = Cstruct.t
 
     let default raw =
+      Log.debug (fun l -> l "Starting to decode a Blob.");
+
       { res = raw
       ; cur = Cstruct.sub raw 0 0
       ; abs = 0
@@ -114,6 +122,11 @@ module Make
         let size = ref (Cstruct.len decoder.res) in
         while !size - decoder.abs < Cstruct.len decoder.cur
         do size := (3 * !size) / 2 done;
+
+        Log.debug (fun l -> l "Growing the internal buffer to decode \
+                               the Blob object: from %d to %d."
+                    (Cstruct.len decoder.res)
+                    !size);
 
         let res' = Cstruct.create !size in
         Cstruct.blit decoder.res 0 res' 0 decoder.abs;

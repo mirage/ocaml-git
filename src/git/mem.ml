@@ -17,8 +17,15 @@
 
 open Lwt.Infix
 
+module Log =
+struct
+  let src = Logs.Src.create "git.mem" ~doc:"logs git's memory back-end"
+  include (val Logs.src_log src : Logs.LOG)
+end
+
 let err_not_found n k =
   let str = Printf.sprintf "Git.Mem.%s: %s not found" n k in
+  Log.err (fun l -> l "Raising an invalid argument from %s" n);
   Lwt.fail (Invalid_argument str)
 
 module type S =

@@ -82,6 +82,12 @@ module Make
        and module Inflate = I
        and module Deflate = D
 = struct
+  module Log =
+  struct
+    let src = Logs.Src.create "git.loose" ~doc:"logs git's loose event"
+    include (val Logs.src_log src : Logs.LOG)
+  end
+
   module Path = P
   module FileSystem = FS
 
@@ -120,6 +126,9 @@ module Make
     let open Lwt.Infix in
 
     let first, rest = explode hash in
+    Log.debug (fun l -> l "Checking if the object %a is a loose file (%a)."
+                  Hash.pp hash
+                  Path.pp Path.(root / "objects" / first / rest)[@warning "-44"]);
 
     FileSystem.File.exists Path.(root / "objects" / first / rest)
     >>= function Ok v -> Lwt.return true
@@ -135,6 +144,7 @@ module Make
       Path.(root / "objects")
     >>= function
     | Error sys_err ->
+      Log.warn (fun l -> l "Retrieving a file-system error: %a." FileSystem.Dir.pp_error sys_err);
       Lwt.return []
     | Ok firsts ->
       Lwt_list.fold_left_s
@@ -147,7 +157,10 @@ module Make
                   try
                     (Hash.of_hex Path.((to_string first) ^ (to_string path)))
                     |> fun v -> Lwt.return (v :: acc)
-                  with _ -> Lwt.return acc)
+                  with _ ->
+                    Log.warn (fun l -> l "Retrieving a malformed file: %s."
+                                 Path.((to_string first) ^ (to_string path)));
+                    Lwt.return acc)
                acc
                paths
            | Error sys_err -> Lwt.return acc)
@@ -168,23 +181,28 @@ module Make
 
     let open Lwt.Infix in
 
-    FileSystem.File.open_r ~mode:0o400 Path.(root / "objects" / first / rest)
-    >>= function Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
-               | Ok read ->
+    Log.debug (fun l -> l "Reading the loose object %a."
+                  Path.pp Path.(root / "objects" / first / rest)[@warning "-44"]);
 
-    let rec loop decoder = match D.eval decoder with
-      | `Await decoder ->
-        FileSystem.File.read raw read >>=
-        (function
-          | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
-          | Ok n -> match D.refill (Cstruct.sub raw 0 n) decoder with
-            | Ok decoder -> loop decoder
-            | Error (#D.error as err) -> Lwt.return (Error err))
-      | `End (rest, value) -> Lwt.return (Ok value)
-      | `Error (res, (#D.error as err)) -> Lwt.return (Error err)
-    in
+    FileSystem.File.open_r ~mode:0o400 Path.(root / "objects" / first / rest)[@warning "-44"]
+    >>= function
+    | Error sys_err ->
+      Log.err (fun l -> l "Retrieving a file-system error: %a." FileSystem.File.pp_error sys_err);
+      Lwt.return (Error (`SystemFile sys_err))
+    | Ok read ->
+      let rec loop decoder = match D.eval decoder with
+        | `Await decoder ->
+          FileSystem.File.read raw read >>=
+          (function
+            | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
+            | Ok n -> match D.refill (Cstruct.sub raw 0 n) decoder with
+              | Ok decoder -> loop decoder
+              | Error (#D.error as err) -> Lwt.return (Error err))
+        | `End (_, value) -> Lwt.return (Ok value)
+        | `Error (_, (#D.error as err)) -> Lwt.return (Error err)
+      in
 
-    loop decoder
+      loop decoder
 
   let read ~root ~window ~ztmp ~dtmp ~raw hash =
     gen ~root ~window ~ztmp ~dtmp ~raw (module D) hash
@@ -268,9 +286,14 @@ module Make
 
     let open Lwt.Infix in
 
-    FileSystem.File.open_r ~mode:0o400 Path.(root / "objects" / first / rest)
+    Log.debug (fun l -> l "Reading the loose object %a."
+                  Path.pp Path.(root / "objects" / first / rest)[@warning "-44"]);
+
+    FileSystem.File.open_r ~mode:0o400 Path.(root / "objects" / first / rest)[@warning "-44"]
     >>= function
-    | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
+    | Error sys_err ->
+      Log.err (fun l -> l "Retrieving a file-system error: %a." FileSystem.File.pp_error sys_err);
+      Lwt.return (Error (`SystemFile sys_err))
     | Ok read ->
       let rec loop decoder = match S.eval decoder with
         | `Await decoder ->
@@ -296,9 +319,14 @@ module Make
 
     let open Lwt.Infix in
 
+    Log.debug (fun l -> l "Writing a new loose object %a."
+                  Path.pp Path.(root / "objects" / first / rest));
+
     FileSystem.File.open_w ~mode:644 Path.(root / "objects" / first / rest)
     >>= function
-    | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
+    | Error sys_err ->
+      Log.err (fun l -> l "Retrieving a file-system error: %a." FileSystem.File.pp_error sys_err);
+      Lwt.return (Error (`SystemFile sys_err))
     | Ok write ->
       (* XXX(dinosaure): replace this code by [Helper.safe_encoder_to_file]. *)
       let rec loop encoder = match E.eval raw encoder with

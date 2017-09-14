@@ -38,6 +38,12 @@ end
 
 module Lazy (H : S.HASH) : LAZY with module Hash = H =
 struct
+  module Log =
+  struct
+    let src = Logs.Src.create "git.index-pack.lazy" ~doc:"logs git's internal lazy index-pack decoder"
+    include (val Logs.src_log src : Logs.LOG)
+  end
+
   module Hash = H
 
   type error =
@@ -72,6 +78,8 @@ struct
     else true
 
   let check_header map =
+    Log.debug (fun l -> l "Checking the IDX header.");
+
     if has map 0 4
     then (if Cstruct.get_char map 0 = '\255'
           && Cstruct.get_char map 1 = '\116'
@@ -82,6 +90,8 @@ struct
     else Error Invalid_index
 
   let check_version map =
+    Log.debug (fun l -> l "Checking the IDX version.");
+
     if has map 4 4
     then (if Cstruct.BE.get_uint32 map 4 = 2l
           then Ok ()
@@ -90,9 +100,11 @@ struct
 
   let number_of_hashes map =
     if has map 8 (256 * 4)
-    then let n = Cstruct.BE.get_uint32 map (8 + (255 * 4)) in
-         Ok (8, n)
-    else Error Invalid_index
+    then begin
+      let n = Cstruct.BE.get_uint32 map (8 + (255 * 4)) in
+      Log.debug (fun l -> l "Current IDX file has %ld objects." n);
+      Ok (8, n)
+    end else Error Invalid_index
 
   let bind v f = match v with Ok v -> f v | Error _ as e -> e
   let ( >>= ) = bind
@@ -190,7 +202,9 @@ struct
 
   let find t hash =
     match Cache.find hash t.cache with
-    | Some (crc, offset) -> Some (crc, offset)
+    | Some (crc, offset) ->
+      Log.debug (fun l -> l "Retrieving the information of %a from the cache." Hash.pp hash);
+      Some (crc, offset)
     | None ->
       match fanout_idx t (Hash.to_string hash |> Cstruct.of_string) with
       | Ok idx ->
@@ -202,6 +216,8 @@ struct
           then Ok (Int64.of_int32 off)
           else (match t.v64_offset with
               | Some v64_offset ->
+                Log.debug (fun l -> l "Retrieving a big offset of %a." Hash.pp hash);
+
                 let n = Int32.to_int (Int32.logand off 0x7FFFFFFFl) in
 
                 if has t.map (v64_offset + (n * 8)) 8
