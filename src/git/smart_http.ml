@@ -31,7 +31,7 @@
 
 module Decoder
     (H : S.HASH with type hex = string)
-    (W : Web.S with type +'a io = 'a Lwt.t
+    (W : S.WEB with type +'a io = 'a Lwt.t
                 and type raw = Cstruct.buffer) =
 struct
   module Hash = H
@@ -231,7 +231,7 @@ end
 
 module Encoder
     (H : S.HASH with type hex = string)
-    (W : Web.S with type +'a io = 'a Lwt.t
+    (W : S.WEB with type +'a io = 'a Lwt.t
                 and type raw = Cstruct.buffer) =
 struct
   module Hash = H
