@@ -94,6 +94,7 @@ struct
     let tz_offset_length = 5L in
     (string t.name) + 1L + 1L + (string t.email) + 1L + 1L + (string (Int64.to_string (fst t.date))) + 1L + tz_offset_length
 
+  [@@@warning "-45"] (* XXX(dinosaure): shadowing the (::) operator. *)
   open Farfadet
 
   let lt = '<'

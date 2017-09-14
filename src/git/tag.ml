@@ -186,6 +186,7 @@ module Make (H : S.HASH with type Digest.buffer = Cstruct.t
         t.tag
         t.tagger
         t.message
+      [@@warning "-45"] (* XXX(dinosaure): shadowing [] and (::). *)
   end
 
   module M =

@@ -149,6 +149,7 @@ module Make
     let parents e x =
       let open Farfadet in
       eval e [ string $ "parent"; char $ sp; !!string ] (Hash.to_hex x)
+      [@@warning "-45"] (* XXX(dinosaure): shadowing [] and (::). *)
 
     let encoder e t =
       let open Farfadet in
@@ -164,6 +165,7 @@ module Make
         t.author
         t.committer
         t.message
+      [@@warning "-45"] (* XXX(dinosaure): shadowing [] and (::). *)
   end
 
   module M =

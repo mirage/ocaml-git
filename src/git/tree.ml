@@ -157,6 +157,7 @@ module Make (H : S.HASH with type Digest.buffer = Cstruct.t
         (string_of_perm t.perm)
         t.name
         (Hash.to_string t.node)
+      [@@warning "-45"] (* XXX(dinosaure): shadowing [] and (::). *)
 
     let encoder e t =
       (Farfadet.list entry) e t

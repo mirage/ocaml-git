@@ -178,6 +178,7 @@ module Make
       | Blob blob     -> Blob.F.encoder e blob
       | Tag tag       -> Tag.F.encoder e tag
       | Tree tree     -> Tree.F.encoder e tree
+      [@@warning "-45"] (* XXX(dinosaure): shadowing [] and (::). *)
   end
 
   module M =
