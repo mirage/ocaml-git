@@ -37,8 +37,8 @@ module Make
                  and type +'a io = 'a Lwt.t)
     (I : S.INFLATE)
     (D : S.DEFLATE)
-    (B : Value.BUFFER with type raw = string
-                       and type fixe = Cstruct.t)
+    (B : S.BUFFER with type raw = string
+                   and type fixe = Cstruct.t)
   : S with module Hash = H
        and module Path = P
        and module Lock = L

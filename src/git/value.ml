@@ -60,23 +60,10 @@ sig
   include S.BASE with type t := t
 end
 
-module type BUFFER =
-sig
-  type t
-  type raw
-  type fixe
-
-  val create : int -> t
-  val contents : t -> raw
-  val add : t -> fixe -> unit
-  val clear : t -> unit
-  val reset : t -> unit
-end
-
 module type RAW =
 sig
   module Buffer
-    : BUFFER
+    : S.BUFFER
 
   include S
 
@@ -270,8 +257,8 @@ module Raw
                  and type hex = string)
     (I : S.INFLATE)
     (D : S.DEFLATE)
-    (B : BUFFER with type raw = string
-                 and type fixe = Cstruct.t)
+    (B : S.BUFFER with type raw = string
+                   and type fixe = Cstruct.t)
     : RAW with module Hash = H
            and module Inflate = I
            and module Deflate = D
