@@ -881,7 +881,7 @@ struct
     let msg = p_while1 (fun _ -> true) decoder in
     match Cstruct.to_string msg with
     | "ok" -> Ok ()
-    | err  -> (Error err)
+    | err  -> Error err
 
   let p_command_status decoder : (string, string * string) result =
     let status = p_while1 (function ' ' -> false | _ -> true) decoder in
