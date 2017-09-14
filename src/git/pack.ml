@@ -579,7 +579,7 @@ struct
 
   let rec pp_delta ppf = function
     | Z -> Fmt.string ppf "Τ"
-    | S { length; depth; hunks; src; src_length; } ->
+    | S { length; depth; hunks; src; src_length; _ } ->
       Fmt.pf ppf "(Δ { @[<hov>length = %d;@ \
                               depth = %d;@ \
                               hunks = [ %a ];@ \

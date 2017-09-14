@@ -597,7 +597,7 @@ module MakePACKDecoder (H : S.HASH) (I : S.INFLATE)
     | Tag        -> Fmt.pf ppf "Tag"
     | Hunk hunks -> Fmt.pf ppf "(Hunks %a)" (Fmt.hvbox H.pp_hunks) hunks
 
-  let pp_hunks_state ppf { offset; length; consumed; z; h; } =
+  let pp_hunks_state ppf { offset; length; consumed; z; h; _ } =
     Fmt.pf ppf "{ @[<hov>offset = %Ld;@ \
                          consumed = %d;@ \
                          length = %d;@ \
@@ -617,7 +617,8 @@ module MakePACKDecoder (H : S.HASH) (I : S.INFLATE)
             ; consumed
             ; length
             ; kind
-            ; z } ->
+            ; z
+            ; _ } ->
       Fmt.pf ppf "(Unzip { @[<hov>offset = %Ld;@ \
                                   consumed = %d;@ \
                                   length = %d;@ \
@@ -632,9 +633,10 @@ module MakePACKDecoder (H : S.HASH) (I : S.INFLATE)
       Fmt.pf ppf "(StopHunks %a)"
         (Fmt.hvbox pp_hunks_state) hs
     | Next { offset
-          ; consumed
-          ; length
-          ; length' } ->
+           ; consumed
+           ; length
+           ; length'
+           ; _ } ->
       Fmt.pf ppf "(Next { @[<hov>offset = %Ld;@ \
                                  consumed = %d;@ \
                                  length = %d;@ \
@@ -1186,10 +1188,10 @@ module MakePACKDecoder (H : S.HASH) (I : S.INFLATE)
     | VariableLength k -> k src t
     | Unzip { offset; length; consumed; crc; kind; z; } ->
       unzip src t offset length consumed crc kind z
-    | Hunks { offset; length; consumed; crc; z; h; } ->
+    | Hunks { offset; length; consumed; crc; z; h; _ } ->
       hunks src t offset length consumed crc z h
     | StopHunks hs -> stop_hunks src t hs
-    | Next { length; length'; kind; } -> next src t length length' kind
+    | Next { length; length'; kind; _ } -> next src t length length' kind
     | Checksum k -> k src t
     | End hash -> ok t hash
     | Exception exn -> error t exn
@@ -1197,9 +1199,9 @@ module MakePACKDecoder (H : S.HASH) (I : S.INFLATE)
   let eval src t =
     let rec loop t =
       match eval0 src t with
-      | Cont ({ state = Next _ } as t) ->
+      | Cont ({ state = Next _; _ } as t) ->
         `Object t
-      | Cont ({ state = StopHunks hs } as t) ->
+      | Cont ({ state = StopHunks hs; _ } as t) ->
         `Hunk (t, H.current hs.h)
       | Cont ({ state = (Header _ | Object _ | VariableLength _
                         | Unzip _ | Hunks _ | Checksum _ | End _ | Exception _); _ }) -> loop t
@@ -1409,8 +1411,8 @@ struct
       ; from     : from }
 
     let to_partial = function
-      | { length; from = Offset { consumed; crc; offset; _ } }
-      | { length; from = Direct { consumed; crc; offset; } } ->
+      | { length; from = Offset { consumed; crc; offset; _ }; _ }
+      | { length; from = Direct { consumed; crc; offset; _ }; _ } ->
         { _length = Int64.to_int length
         ; _consumed = consumed
         ; _offset = offset

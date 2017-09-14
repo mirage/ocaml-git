@@ -198,7 +198,7 @@ module MakeDecoder (A : S.ANGSTROM)
       in
 
       let _writable_space =
-        let { Cstruct.buffer; off; len } = decoder.internal in
+        let { Cstruct.buffer; len; _ } = decoder.internal in
         Bigarray.Array1.dim buffer - len
       in
 

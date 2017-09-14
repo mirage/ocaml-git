@@ -121,7 +121,7 @@ struct
   let rec fold : 'a 'b. ('b -> 'a -> 'b) -> 'b -> 'a t -> 'b
     = fun func acc q -> match q with
       | Shallow d -> _fold_digit func acc d
-      | Deep { f; m = lazy q'; r } ->
+      | Deep { f; m = lazy q'; r; _ } ->
         let acc = _fold_digit func acc f in
         let acc = fold (fun acc (x, y) -> func (func acc x) y) acc q' in
         _fold_digit func acc r
@@ -460,8 +460,7 @@ let create len =
    [t.write.RBA.b]. *)
 let check iovec t = match iovec with
   | { IOVec.buffer = `Bigstring bigstring
-    ; off
-    ; len } ->
+    ; _ } ->
     let stop = Bigarray.Array1.sub t.write.RBA.b (Bigarray.Array1.dim t.write.RBA.b) 0 in
 
     let sub_ptr : int = Obj.obj @@ Obj.field (Obj.repr bigstring) 1 in
