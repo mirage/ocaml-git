@@ -21,7 +21,7 @@ sig
   type state
 
   module Hash : S.HASH
-  module Path : Path.S
+  module Path : S.PATH
   module FileSystem : S.FS with type path = Path.t
   module Inflate : S.INFLATE
   module Deflate : S.DEFLATE
@@ -73,7 +73,7 @@ sig
   type state
 
   module Hash : S.HASH
-  module Path : Path.S
+  module Path : S.PATH
   module FileSystem  : S.FS with type path = Path.t
   module Inflate : S.INFLATE
   module IDXDecoder : Index_pack.LAZY
@@ -111,7 +111,7 @@ sig
   module Hash
     : S.HASH
   module Path
-    : Path.S
+    : S.PATH
   module Inflate
     : S.INFLATE
   module Deflate
@@ -232,7 +232,7 @@ end
 module Make
     (H : S.HASH with type Digest.buffer = Cstruct.t
                  and type hex = string)
-    (P : Path.S)
+    (P : S.PATH)
     (L : S.LOCK with type key = P.t
                  and type +'a io = 'a Lwt.t)
     (FS : S.FS with type path = P.t

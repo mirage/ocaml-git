@@ -4,7 +4,7 @@ sig
     : S.HASH
 
   module Path
-    : Path.S
+    : S.PATH
 
   module Lock
     : S.LOCK

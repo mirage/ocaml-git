@@ -200,6 +200,11 @@ sig
   val make      : t -> key -> elt
 end
 
+module type PATH =
+sig
+  include module type of Fpath
+end
+
 module type FILE =
 sig
   type +'a io

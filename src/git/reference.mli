@@ -22,7 +22,7 @@ sig
   (** The [Digest] module used to make the module. *)
 
   module Path
-    : Path.S
+    : S.PATH
   (** The [Path] module used to make the module. *)
 
   type t = private string
@@ -157,7 +157,7 @@ end
 module Make
     (H : S.HASH with type Digest.buffer = Cstruct.t
                  and type hex = string)
-    (P : Path.S)
+    (P : S.PATH)
   : S with module Hash = H
        and module Path = P
 (** The {i functor} to make the OCaml representation of the Git
@@ -171,7 +171,7 @@ module Make
 module IO
     (H : S.HASH with type Digest.buffer = Cstruct.t
                  and type hex = string)
-    (P : Path.S)
+    (P : S.PATH)
     (L : S.LOCK with type key = P.t
                  and type +'a io = 'a Lwt.t)
     (FS : S.FS with type path = P.t

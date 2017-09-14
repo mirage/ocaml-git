@@ -26,7 +26,7 @@ end
 module Make
     (H : S.HASH with type Digest.buffer = Cstruct.t
                  and type hex = string)
-    (P : Path.S)
+    (P : S.PATH)
     (L : S.LOCK with type key = P.t
                  and type +'a io = 'a Lwt.t)
     (* XXX(dinosaure): we constraint +'a io to use Lwt but the goal is
