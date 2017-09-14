@@ -56,9 +56,9 @@ sig
     include S.ANGSTROM with type t = t
 
     val kind : [ `Commit | `Tree | `Tag | `Blob ] Angstrom.t
-    (** A convenience parser to recognize the kind of the Git object. It's used
-        in the {i loose} implementation and it's better to provide in the
-        interface this parser. *)
+    (** A convenience parser to recognize the kind of the Git object.
+        It's used in the {i loose} implementation and it's better to
+        provide in the interface this parser. *)
   end
   (** The Angstrom decoder of the Git object. *)
 
@@ -72,11 +72,11 @@ sig
                   and type init = Inflate.window * Cstruct.t * Cstruct.t
                   and type error = [ `Decoder of string | `Inflate of Inflate.error ]
   (** The decoder of the Git object. We constraint the input to be an
-      {!Inflate.window} and a {Cstruct.t} which used by the {Inflate} module and an
-      other {Cstruct.t} as an internal buffer.
+      {!Inflate.window} and a {Cstruct.t} which used by the {Inflate}
+      module and an other {Cstruct.t} as an internal buffer.
 
-      All error from the {!Inflate} module is relayed to the [`Inflate] error
-      value. *)
+      All error from the {!Inflate} module is relayed to the
+      [`Inflate] error value. *)
 
   module M
     : S.MINIENC  with type t = t
@@ -87,13 +87,14 @@ sig
                   and type raw = Cstruct.t
                   and type init = int * t * int * Cstruct.t
                   and type error = [ `Deflate of Deflate.error ]
-  (** The encoder (which uses a {!Minienc.encoder}) of the Git object. We
-      constraint the output to be a {Cstruct.t}. This encoder needs the level of the
-      compression, the value {!t}, the memory consumption of the encoder (in bytes)
-      and an internal buffer between the compression and the encoder.
+  (** The encoder (which uses a {!Minienc.encoder}) of the Git object.
+      We constraint the output to be a {Cstruct.t}. This encoder needs
+      the level of the compression, the value {!t}, the memory
+      consumption of the encoder (in bytes) and an internal buffer
+      between the compression and the encoder.
 
-      All error from the {!Deflate} module is relayed to the [`Deflate] error
-      value. *)
+      All error from the {!Deflate} module is relayed to the
+      [`Deflate] error value. *)
 
   include S.DIGEST with type t := t
                     and type hash := Hash.t
@@ -114,15 +115,16 @@ sig
        and type raw = Cstruct.t
        and type init = int * t
        and type error = [ `Never ]
-  (** The encoder (which uses a {!Minienc.encoder}) of the Git object. We
-      constraint the output to be a {Cstruct.t}. This encoder needs the value
-      {!t} and the memory consumption of the encoder (in bytes). The encoder can
-      not fail.
+  (** The encoder (which uses a {!Minienc.encoder}) of the Git object.
+      We constraint the output to be a {Cstruct.t}. This encoder needs
+      the value {!t} and the memory consumption of the encoder (in
+      bytes). The encoder can not fail.
 
       This encoder does not {i deflate} the content (instead {!E}).
 
-      NOTE: we can not unspecified the error type (it needs to be concrete) but,
-      because the encoder can not fail, we define the error as [`Never]. *)
+      NOTE: we can not unspecified the error type (it needs to be
+      concrete) but, because the encoder can not fail, we define the
+      error as [`Never]. *)
 
   module DD
     : S.DECODER
@@ -158,8 +160,8 @@ sig
 
   val of_raw_with_header : Cstruct.t -> (t, DD.error) result
   (** [of_raw_with_header inflated] makes a Git object as an OCaml
-      value {!t}. This decoder expects an {i header} to choose which Git
-      object it is. *)
+      value {!t}. This decoder expects an {i header} to choose which
+      Git object it is. *)
 end
 
 module Make

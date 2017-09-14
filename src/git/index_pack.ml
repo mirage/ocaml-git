@@ -586,7 +586,8 @@ struct
               (hashes[@tailcall]) (Int32.succ idx) max src t)
            src t
 
-  (* XXX(dinosaure): Fix this compute. See the serialization to understand. *)
+  (* XXX(dinosaure): Fix this compute. See the serialization to
+     understand. *)
   let rec fanout idx src t =
     match idx with
     | 256 ->
@@ -716,12 +717,10 @@ struct
     | Flush  of t
     | Cont   of t
     | Ok     of t
-    [@warning "-37"]
 
-  (* XXX(dinosaure): the state contains only a closure. May be we can optimize
-                     the serialization with an hot loop (like Decompress). But
-                     the first goal is to work!
-   *)
+  (* XXX(dinosaure): the state contains only a closure. May be we can
+     optimize the serialization with an hot loop (like Decompress).
+     But the first goal is to work! *)
 
   let pp_state ppf = function
     | Header _     -> Fmt.pf ppf "(Header #k)"
@@ -962,8 +961,8 @@ struct
       let lst =
         Fanout.get idx t.table
         |> List.map (fun (hash, crc32) -> Cstruct.of_string (Hash.to_string hash), crc32)
-        (* XXX(dinosaure): may be we can optimize this and allocate a big
-           [Cstruct.t] instead to use the case. *)
+        (* XXX(dinosaure): may be we can optimize this and allocate a
+           big [Cstruct.t] instead to use the case. *)
       in
 
       aux lst dst t
@@ -1018,12 +1017,11 @@ struct
 
   type 'a sequence = ('a -> unit) -> unit
 
-  (* XXX(dinosaure): The sequence type is an abstraction of the iteration of a
-                     data structure. The order of the iteration is not
-                     important, the Fanout module takes care about that. So, we
-                     let the user to use any data structure to store the CRC and
-                     the Offset for each hash.
-   *)
+  (* XXX(dinosaure): The sequence type is an abstraction of the
+     iteration of a data structure. The order of the iteration is not
+     important, the Fanout module takes care about that. So, we let
+     the user to use any data structure to store the CRC and the
+     Offset for each hash. *)
   let default : (Hash.t * (Crc32.t * int64)) sequence -> Hash.t -> t = fun seq hash ->
 
     let boffsets = ref [] in

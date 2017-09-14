@@ -304,8 +304,8 @@ module Make
         | [] -> Lwt.return (state, have)
         | (_, `ACK) :: _ ->
           (* XXX(dinosaure): without multi-ack or multi-ack-detailed,
-            upload-pack sends 'ACK obj-id' on the first common object it finds.
-            After that is says nothing until the client gives it a "done". *)
+             upload-pack sends 'ACK obj-id' on the first common object it finds.
+             After that is says nothing until the client gives it a "done". *)
           Lwt.fail (Jump (have, state))
         | (hash, ((`Common | `Ready | `Continue) as ack)) :: rest ->
           Bucket.get t bucket hash >>= function
@@ -315,12 +315,12 @@ module Make
               if ack = `Common && Flag.is_common value.V.flags
               then 0, hash :: have
               (* XXX(dinosaure): we need to replay the have for this object on
-                the next RPC request so the peer knows it is in common with
-                us. *)
+                 the next RPC request so the peer knows it is in common with
+                 us. *)
               else if ack <> `Common
               then 0, have
               (* XXX(dinosaure): reset [limit] because an ACK for this commit
-                has not been seen. *)
+                 has not been seen. *)
               else state.vain + 1, have
             in
 

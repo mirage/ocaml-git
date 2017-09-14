@@ -554,16 +554,18 @@ module MakePACKDecoder (H : S.HASH) (I : S.INFLATE)
                    ; consumed : int
                    ; length   : int
                    ; length'  : int
-                   (* XXX(dinosaure): [length] is the value decoded. [length']
-                      is the value returned when we inflate the raw. It must to
-                      be the same. However, we can inflate a huge object (like a
-                      [Blob] which is not delta-ified).
+                   (* XXX(dinosaure): [length] is the value decoded.
+                      [length'] is the value returned when we inflate
+                      the raw. It must to be the same. However, we can
+                      inflate a huge object (like a [Blob] which is
+                      not delta-ified).
 
-                                      The length of the object can be upper than
-                      [max_native_int] (but can't be upper than [max_int64]). So
-                      we need to switch these values to [int64]. However, the
-                      [Inflate] algorithm provide only a [native_int]. We can
-                      bypass this limit and count the length of the object by
+                      The length of the object can be upper than
+                      [max_native_int] (but can't be upper than
+                      [max_int64]). So we need to switch these values
+                      to [int64]. However, the [Inflate] algorithm
+                      provide only a [native_int]. We can bypass this
+                      limit and count the length of the object by
                       ourselves with an [int64]. TODO! *)
                    ; crc      : Crc32.t
                    ; kind     : kind }
@@ -1605,16 +1607,17 @@ struct
                                  ; _offset   = P.offset state
                                  ; _crc      = Crc32.default
                                  ; _hunks    = [] }))
-          (* XXX(dinosaure): to be clear, this situation appear only when we
-             have a [limit = true] and the git object is bigger than 0x10000FFFE
-             bytes - so, not a common case. In this case, we are interested only
-             by the raw data (and we don't care about the meta-data) to compute
-             the undelta-ification.
+          (* XXX(dinosaure): to be clear, this situation appear only
+             when we have a [limit = true] and the git object is
+             bigger than 0x10000FFFE bytes - so, not a common case. In
+             this case, we are interested only by the raw data (and we
+             don't care about the meta-data) to compute the
+             undelta-ification.
 
-             When [r_tmp] is full, we returns partial information because, we
-             only need the raw-data to construct in a top of this call the git
-             object requested (necessarily different that this current git
-             object). *)
+             When [r_tmp] is full, we returns partial information
+             because, we only need the raw-data to construct in a top
+             of this call the git object requested (necessarily
+             different that this current git object). *)
 
           | `Object state ->
             loop window
@@ -1634,8 +1637,9 @@ struct
             | Some (kind, partial) ->
               Lwt.return (Ok (kind, partial))
             | None -> assert false
-            (* XXX: This is not possible, the [`End] state comes only after the
-               [`Object] state and this state changes [kind] to [Some x]. *)
+            (* XXX: This is not possible, the [`End] state comes only
+               after the [`Object] state and this state changes [kind]
+               to [Some x]. *)
         in
 
         loop window relative_offset 0 0 [] None state >>= function
@@ -1657,10 +1661,11 @@ struct
       let absolute_offset =
         if off < t.max && off >= 0L
         then Ok (Int64.sub source_offset off)
-        (* XXX(dinosaure): git has an invariant, [source_offset > off]. That
-           means, the source referenced is only in the past from the current
-           object. git did a topological sort to produce a PACK file to ensure
-           all sources are before all targets. *)
+        (* XXX(dinosaure): git has an invariant, [source_offset >
+           off]. That means, the source referenced is only in the past
+           from the current object. git did a topological sort to
+           produce a PACK file to ensure all sources are before all
+           targets. *)
         else Error (Invalid_offset off)
       in (match result_bind ~err:None t.rev absolute_offset with
           | None -> aux absolute_offset
@@ -1683,14 +1688,15 @@ struct
         | None ->
           let open Lwt.Infix in
 
-          (* XXX(dinosaure): in this case, we can have an allocation. A good
-             idea is to send [r_tmp] to [t.get] and keep the control about the
-             memory consumption. TODO!
+          (* XXX(dinosaure): in this case, we can have an allocation.
+             A good idea is to send [r_tmp] to [t.get] and keep the
+             control about the memory consumption. TODO!
 
-             In real case, we can not determine what is needed to get this
-             external object. But, if [limit = true], that means we don't care
-             about the object and want only the raw data. In this case, and only
-             in this case, it's probably better to use [r_tmp]. *)
+             In real case, we can not determine what is needed to get
+             this external object. But, if [limit = true], that means
+             we don't care about the object and want only the raw
+             data. In this case, and only in this case, it's probably
+             better to use [r_tmp]. *)
           t.get hash >>= function
           | Some (kind, raw) -> Lwt.return (Ok (External (hash, kind, raw)))
           | None -> Lwt.return (Error (Invalid_hash hash))
@@ -1836,10 +1842,10 @@ struct
   let needed ?(chunk = 0x8000) ?(cache = (fun _ -> None)) t hash z_tmp z_win =
     needed' ~chunk ~cache t (`IndirectHash (hash, 0)) z_tmp z_win
 
-  (* XXX(dinosaure): Need an explanation. This function does not allocate any
-     [Cstruct.t]. The purpose of this function is to get a git object from a
-     PACK file (represented by [t]). The user requests the git object by the
-     [hash].
+  (* XXX(dinosaure): Need an explanation. This function does not
+     allocate any [Cstruct.t]. The purpose of this function is to get
+     a git object from a PACK file (represented by [t]). The user
+     requests the git object by the [hash].
 
      Then, to get the git object, we need 4 buffers.
 
@@ -1849,40 +1855,44 @@ struct
 
      We can have 2 two cases in this function:
 
-     - We get directly the git object (so, we just need to inflate the PACK
-     object)
+     - We get directly the git object (so, we just need to inflate the
+     PACK object)
 
-     - We get a {!H.hunks} object. In this case, we need to undelta-ify the
-     object
+     - We get a {!H.hunks} object. In this case, we need to
+     undelta-ify the object
 
-     So, we use 2 [Cstruct.t] and swap themselves for each undelta-ification.
-     Then, we return a {!Object.t} git object and return the true [Cstruct.t].
+     So, we use 2 [Cstruct.t] and swap themselves for each
+     undelta-ification. Then, we return a {!Object.t} git object and
+     return the true [Cstruct.t].
 
-     However, to be clear, this function allocates some buffers but in same way
-     as [git]. To read a PACK file, we need to allocate a buffer which contains
-     the data of the PACK file. It's the purpose of the {!MAPPER} module.
+     However, to be clear, this function allocates some buffers but in
+     same way as [git]. To read a PACK file, we need to allocate a
+     buffer which contains the data of the PACK file. It's the purpose
+     of the {!MAPPER} module.
 
-     So, we [mmap] a part of the PACK file (a part of [1024 * 1024] bytes) which
-     contains the offset of the PACK object requested - it's a {!Window.t}.
-     Then, we compute the deserialization of the PACK object (note: sometimes,
-     the {!Window.t} is not sufficient to deserialize the PACK object requested,
-     so we allocate a new {!Window.t} which contains the rest of the PACK
-     object).
+     So, we [mmap] a part of the PACK file (a part of [1024 * 1024]
+     bytes) which contains the offset of the PACK object requested -
+     it's a {!Window.t}. Then, we compute the deserialization of the
+     PACK object (note: sometimes, the {!Window.t} is not sufficient
+     to deserialize the PACK object requested, so we allocate a new
+     {!Window.t} which contains the rest of the PACK object).
 
-     Finally, we limit the number of {!Window.t} available by 10 (value by
-     default) and limit the allocation. Hopefully, we amortized the allocation
-     because, for one {!Window.t}, we can compute some PACK objects.
+     Finally, we limit the number of {!Window.t} available by 10
+     (value by default) and limit the allocation. Hopefully, we
+     amortized the allocation because, for one {!Window.t}, we can
+     compute some PACK objects.
 
-     Another point is about the [limit] argument. Sometimes we want an object
-     only to construction by the undelta-ification an other git object. In this
-     case, we need only 0x10000FFFE bytes of this object (according to the limit
-     of the offset described by the PACK format). So, we notice to this function
-     than we want to store the git object in a limited (fixed) size buffer and
-     if the object if upper than 0x10000FFFE bytes, we discard the rest.
+     Another point is about the [limit] argument. Sometimes we want an
+     object only to construction by the undelta-ification an other git
+     object. In this case, we need only 0x10000FFFE bytes of this
+     object (according to the limit of the offset described by the
+     PACK format). So, we notice to this function than we want to
+     store the git object in a limited (fixed) size buffer and if the
+     object if upper than 0x10000FFFE bytes, we discard the rest.
 
-     For this call, we don't case about the meta-data of the object requested
-     (where it come from, the CRC-32 checksum, etc.) and just want the raw data.
-  *)
+     For this call, we don't case about the meta-data of the object
+     requested (where it come from, the CRC-32 checksum, etc.) and
+     just want the raw data. *)
   let optimized_get' ?(chunk = 0x8000) ?(limit = false) ?h_tmp t absolute_offset (raw0, raw1, _) z_tmp z_win =
     let get_free_raw = function
       | true -> raw0

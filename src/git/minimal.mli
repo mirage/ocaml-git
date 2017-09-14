@@ -40,8 +40,8 @@ sig
 
   val dotgit : t -> Path.t
   (** [dotgit state] returns the current [".git"] path used - eg. the
-      default [?dotgit] value of {!create} if the client does not notice a
-      specific value. *)
+      default [?dotgit] value of {!create} if the client does not
+      notice a specific value. *)
 
   val root : t -> Path.t
   (** [root state] returns the current path of the repository. eg. the
@@ -50,14 +50,14 @@ sig
 
   val compression : t -> int
   (** [compression state] returns the current level of the compression
-      used to write a Git object - eg. the default value [?compression]
-      value of {!create} if the client does not notice a specific
-      value. *)
+      used to write a Git object - eg. the default value
+      [?compression] value of {!create} if the client does not notice
+      a specific value. *)
 
   val contents : t -> ((Hash.t * Value.t) list, error) result Lwt.t
   (** [contents state] returns an associated list between the hash and
-      its bind git object. This list contains all git objects available in
-      the current git repository [state]. *)
+      its bind git object. This list contains all git objects
+      available in the current git repository [state]. *)
 
   val size : t -> Hash.t -> (int64, error) result Lwt.t
   (** [size state hash] returns the size of the git object which
@@ -95,8 +95,8 @@ sig
     (** Pretty-printer of {!error}. *)
 
     val list : t -> (Reference.t * Hash.t) list Lwt.t
-    (** [list state] returns an associated list between reference and its
-        bind hash. *)
+    (** [list state] returns an associated list between reference and
+        its bind hash. *)
 
     val read : t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
     (** [read state reference] returns the value contains in the

@@ -22,17 +22,18 @@ sig
   (** The [Hash] module used to make this interface. *)
 
   type t
-  (** A Git Commit object. Which specifies the top-level {!Tree.t} for the
-      snapshot of the project at a point; the author/{i committer} information and
-      the commit message. *)
+  (** A Git Commit object. Which specifies the top-level {!Tree.t} for
+      the snapshot of the project at a point; the author/{i committer}
+      information and the commit message. *)
 
   module D
     : S.DECODER  with type t = t
                   and type raw = Cstruct.t
                   and type init = Cstruct.t
                   and type error = [ `Decoder of string ]
-  (** The decoder of the Git Commit object. We constraint the input to be a
-      {Cstruct.t}. This decoder needs a {Cstruct.t} as an internal buffer. *)
+  (** The decoder of the Git Commit object. We constraint the input to
+      be a {Cstruct.t}. This decoder needs a {Cstruct.t} as an
+      internal buffer. *)
 
   module A
     : S.ANGSTROM with type t = t
@@ -51,13 +52,14 @@ sig
                   and type raw = Cstruct.t
                   and type init = int * t
                   and type error = [ `Never ]
-  (** The encoder (which uses a {!Minienc.encoder}) of the Git Commit object. We
-      constraint the output to be a {Cstruct.t}. This encoder needs the Commit
-      OCaml value and the memory consumption of the encoder (in bytes). The
-      encoder can not fail.
+  (** The encoder (which uses a {!Minienc.encoder}) of the Git Commit
+      object. We constraint the output to be a {Cstruct.t}. This
+      encoder needs the Commit OCaml value and the memory consumption
+      of the encoder (in bytes). The encoder can not fail.
 
-      NOTE: we can not unspecified the error type (it needs to be concrete) but,
-      because the encoder can not fail, we define the error as [`Never]. *)
+      NOTE: we can not unspecified the error type (it needs to be
+      concrete) but, because the encoder can not fail, we define the
+      error as [`Never]. *)
 
   include S.DIGEST with type t := t
                     and type hash = Hash.t
@@ -68,12 +70,12 @@ sig
   (** [parents c] returns all parents of the Git Commit object [c]. *)
 
   val tree : t -> Hash.t
-  (** [tree c] returns the hash of top-level {!Tree.t} of the Git Commit object
-      [c]. *)
+  (** [tree c] returns the hash of top-level {!Tree.t} of the Git
+      Commit object [c]. *)
 
   val compare_by_date : t -> t -> int
-  (** [compare_by_date a b] compares the Git Commit object [a] and [b] by the
-      date of the author. *)
+  (** [compare_by_date a b] compares the Git Commit object [a] and [b]
+      by the date of the author. *)
 end
 
 module Make

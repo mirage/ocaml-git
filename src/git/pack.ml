@@ -379,22 +379,22 @@ struct
     if res = 0
     then Cont { t with state = List }
     else
-      (* XXX(dinosaure): We ensure than the [absolute_offset] requested is
-         available inside [src]. So, [t.i_abs] keep how many bytes we computed
-         before __continuously__ and correspond to the current absolute offset
-         of [src].
+      (* XXX(dinosaure): We ensure than the [absolute_offset]
+         requested is available inside [src]. So, [t.i_abs] keep how
+         many bytes we computed before __continuously__ and correspond
+         to the current absolute offset of [src].
 
-         We just need to check if what we need to write is available inside the
-         interval [t.i_abs (t.i_abs + t.i_len)[. *)
+         We just need to check if what we need to write is available
+         inside the interval [t.i_abs (t.i_abs + t.i_len)[. *)
       (if absolute_offset + (len - res) >= t.i_abs
        && absolute_offset + (len - res) < t.i_abs + t.i_len
        then
          let relative_offset = (absolute_offset - t.i_abs) in
          let n = min res (t.i_len - (relative_offset + (len - res))) in
 
-         (* XXX(dinosaure): then, we have a [relative_offset] correspond to the
-            [absolute_offset] but inside the current [src] and the interval
-            [t.i_off (t.i_off + t.i_len)[. *)
+         (* XXX(dinosaure): then, we have a [relative_offset]
+            correspond to the [absolute_offset] but inside the current
+            [src] and the interval [t.i_off (t.i_off + t.i_len)[. *)
          (KInsert.put_raw ((t.i_off + relative_offset + (len - res)), n)
           @@ fun _ _  t -> Cont { t with state = Insert (insert (res - n) absolute_offset len)
                                        (* XXX(dinosaure): we need to
@@ -680,14 +680,15 @@ struct
 
   let ok v = Ok v
 
-  (* XXX(dinosaure): git prioritize some entries in imperative weird way. we
-     can't reproduce the same with a small cost. We need to take care about the
-     writing order. Indeed, [git] has an assumption about this and consider all
-     base object is before delta-ified object.
+  (* XXX(dinosaure): git prioritize some entries in imperative weird
+     way. we can't reproduce the same with a small cost. We need to
+     take care about the writing order. Indeed, [git] has an
+     assumption about this and consider all base object is before
+     delta-ified object.
 
-     This function needs to take about this and recompute the writing order. If
-     a PACK file was not accepted by a server, may be the problem can be found
-     here. TODO! *)
+     This function needs to take about this and recompute the writing
+     order. If a PACK file was not accepted by a server, may be the
+     problem can be found here. TODO! *)
   let sort _ lst =
     let edges, rest = List.partition (function (_, { delta = Z }) -> true | (_, { delta = S _ }) -> false) lst in
 
@@ -1215,7 +1216,7 @@ struct
       let abs_off    = t.write in
 
       (* XXX(dinosaure): we can obtain the source hash by [entry.delta]. TODO!
-         *)
+      *)
 
       let h =
         H.flush 0 (Cstruct.len t.h_tmp)

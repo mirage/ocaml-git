@@ -134,7 +134,8 @@ module Make
     >>= function Ok _ -> Lwt.return true
                | Error _ -> Lwt.return false
 
-  (* XXX(dinosaure): make this function more resilient: if [of_hex] fails), avoid the path. *)
+  (* XXX(dinosaure): make this function more resilient: if [of_hex]
+     fails), avoid the path. *)
   let list ~root =
     let open Lwt.Infix in
 
@@ -230,16 +231,17 @@ module Make
             | None ->
               return (Cstruct.sub cs 0 !pos))
       | n -> take n >>= fun chunk ->
-        (* XXX(dinosaure): this code [blit] only what is possible to copy to
-           [cs]. It can be happen than we don't store all of the git object in
-           [cs] but in specific context (when we want to decode a source of a
-           delta-ification), this is what we want, store only what is needed and
-           limit the memory consumption.
+        (* XXX(dinosaure): this code [blit] only what is possible to
+           copy to [cs]. It can be happen than we don't store all of
+           the git object in [cs] but in specific context (when we
+           want to decode a source of a delta-ification), this is what
+           we want, store only what is needed and limit the memory
+           consumption.
 
-           This code is close to the [~result] argument of [decoder] and, in
-           fact, if we don't want to store the git object in a specific user
-           defined buffer, we ensure to allocate what is needed to store all of
-           the git object. *)
+           This code is close to the [~result] argument of [decoder]
+           and, in fact, if we don't want to store the git object in a
+           specific user defined buffer, we ensure to allocate what is
+           needed to store all of the git object. *)
         let n' = min n (Cstruct.len cs - !pos) in
         Cstruct.blit_from_string chunk 0 cs !pos n';
         pos := !pos + n;

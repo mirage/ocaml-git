@@ -87,24 +87,25 @@ module MakeDecoder (A : S.ANGSTROM)
                and type init = Cstruct.t
                and type error = [ `Decoder of string ]
 = struct
-  (* XXX(dinosaure): this decoder is on top of some assertion about the decoding
-     of a git object. [Angstrom] can not consume all input (when we have an
-     alteration specifically) and the client need to keep a part of the previous
-     input but continue to feed the parser with a new input (to determine the
-     choice of the alteration). In the git format, we can have this problem but for
-     few bytes (something like ten bytes). So, we consider to use an internal
-     buffer (than the size is bigger than what is needed) and we ensure than is not
-     possible to keep more than the size of the internal buffer when we parse a Git
-     object.
+  (* XXX(dinosaure): this decoder is on top of some assertion about
+     the decoding of a git object. [Angstrom] can not consume all
+     input (when we have an alteration specifically) and the client
+     need to keep a part of the previous input but continue to feed
+     the parser with a new input (to determine the choice of the
+     alteration). In the git format, we can have this problem but for
+     few bytes (something like ten bytes). So, we consider to use an
+     internal buffer (than the size is bigger than what is needed) and
+     we ensure than is not possible to keep more than the size of the
+     internal buffer when we parse a Git object.
 
-     However, this case appear in the code (when we don't have enough trailing
-     space and writable space). This case appear when we don't parse a Git
-     object but something else (which is not respect our assertions). And if
-     this case appear, we can consider that someone try to cheat you. So we
-     prefer to return an error.
+     However, this case appear in the code (when we don't have enough
+     trailing space and writable space). This case appear when we
+     don't parse a Git object but something else (which is not respect
+     our assertions). And if this case appear, we can consider that
+     someone try to cheat you. So we prefer to return an error.
 
-     Obviously, in a better world with unicorn and pineapple pizza, we can just
-     avoid this case. *)
+     Obviously, in a better world with unicorn and pineapple pizza, we
+     can just avoid this case. *)
 
   module Log =
   struct
@@ -134,10 +135,11 @@ module MakeDecoder (A : S.ANGSTROM)
   let default raw =
     if Cstruct.len raw < 25 * 2
     then raise (Invalid_argument "The internal buffer is not enough to parse");
-    (* XXX(dinosaure): So, if you read the comment before, you understand than
-       the internal buffer need to be bigger than an alteration. I decide
-       (because I'm the God) to accept only a buffer bigger than 25 bytes.
-       Otherwise, we raise an [Invalid_argument]. *)
+    (* XXX(dinosaure): So, if you read the comment before, you
+       understand than the internal buffer need to be bigger than an
+       alteration. I decide (because I'm the God) to accept only a
+       buffer bigger than 25 bytes. Otherwise, we raise an
+       [Invalid_argument]. *)
 
     Log.debug (fun l -> l "Starting to decode a Git object with \
                            a internal buffer (%d)." (Cstruct.len raw));
@@ -388,7 +390,8 @@ module MakeEncoder (M : S.MINIENC)
                         ; w_acc = e.w_acc + shift
                         ; state = Minienc.End shifted }, e.w_acc + shift)
     | Minienc.Continue { encoder; continue; } ->
-      (* XXX(dinosaure): we can shift the minienc at this time, but it's very useful? *)
+      (* XXX(dinosaure): we can shift the minienc at this time, but
+         it's very useful? *)
       Log.debug (fun l -> l "Trampoline jump (case to shift the encoder) appears.");
       eval current { e with state = continue encoder }
     | Minienc.Flush { continue; iovecs; } ->
@@ -480,8 +483,8 @@ module MakeDeflater (Z : S.DEFLATE) (M : S.MINIENC)
          eval dst { encoder with e; z; used_in; }
        | `Error `Never -> assert false)
     (* XXX(dinosaure): [`Never] is a trick just to constraint the type
-                       error to be a polymorphic variant. But this case
-                       never happens. *)
+       error to be a polymorphic variant. But this case never
+       happens. *)
     | `Flush z ->
       `Flush { encoder with z; }
     | `End z ->
@@ -597,29 +600,31 @@ type ('state, 'raw, 'result, 'error) encoder =
                    and type error  = 'error)
 and ('fd, 'raw, 'error) writer = 'raw -> ?off:int -> ?len:int -> 'fd -> (int, 'error) result Lwt.t
 
-(* XXX(dinosaure): this function takes care about how many byte(s) we write to
-   the file-descriptor and retry to write while the limit is not retrieved. In
-   some case (but not common), the writer does not write all bytes available by
-   the encoder. In this case, we compress the internal buffer [raw] and retry to
-   write (and, at the same time, feed the rest of the internal buffer).
+(* XXX(dinosaure): this function takes care about how many byte(s) we
+   write to the file-descriptor and retry to write while the limit is
+   not retrieved. In some case (but not common), the writer does not
+   write all bytes available by the encoder. In this case, we compress
+   the internal buffer [raw] and retry to write (and, at the same
+   time, feed the rest of the internal buffer).
 
-   If the internal buffer is full, we start to count how many call we need to
-   write something and if we arrive to the limit before writing would be only
-   one byte, we stop (but not close the file-descriptor) the process and return
-   [`Stack].
+   If the internal buffer is full, we start to count how many call we
+   need to write something and if we arrive to the limit before
+   writing would be only one byte, we stop (but not close the
+   file-descriptor) the process and return [`Stack].
 
-   If we arrive at the end and the buffer is not empty, we count how many call
-   we need to flush the buffer, and, as below, if we arrive to the limit, we
-   stop the process and return [`Stack].
+   If we arrive at the end and the buffer is not empty, we count how
+   many call we need to flush the buffer, and, as below, if we arrive
+   to the limit, we stop the process and return [`Stack].
 
-   That means, if the client receives [`Stack], he can consider than the file is
-   incomplete and he needs to deal with this partial writing in other way than
-   the [writer] - abort and use an other way to write what he wants.
+   That means, if the client receives [`Stack], he can consider than
+   the file is incomplete and he needs to deal with this partial
+   writing in other way than the [writer] - abort and use an other way
+   to write what he wants.
 
-   * If the [writer] returns an error, we stop the process and return [`Writer
-   error].
-   * If the [encoder] returns an error, we stop the process and return [`Encoder
-   error].
+   * If the [writer] returns an error, we stop the process and return
+   [`Writer error].
+   * If the [encoder] returns an error, we stop the process and return
+   [`Encoder error].
 
    In all case, we don't close the file-descriptor.
 

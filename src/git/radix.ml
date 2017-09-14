@@ -32,10 +32,9 @@
    Copyright 2012 Be Sport
 
    XXX(dinosaure): This module is originally provided by
-                   https://github.com/khigia/ocaml-stringset but Ludo (aka
-                   khigia) did not put a LICENSE. Then, Hugo (from BeSport)
-                   improved the project. So, this module is a mix between
-                   ocaml-stringset and ocaml-aliases.
+   https://github.com/khigia/ocaml-stringset but Ludo (aka khigia) did
+   not put a LICENSE. Then, Hugo (from BeSport) improved the project.
+   So, this module is a mix between ocaml-stringset and ocaml-aliases.
 *)
 
 module type KEY =
@@ -85,7 +84,8 @@ struct
     if c1 = c2
     then raise Not_found
     else aux 7 (Char.code c1) (Char.code c2)
-        (* XXX(dinosaure): a XOR and find first bit should be more efficient. *)
+  (* XXX(dinosaure): a XOR and find first bit should be more
+     efficient. *)
 
   type 'a node =
     | L of Key.t * 'a

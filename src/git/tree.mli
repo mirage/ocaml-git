@@ -34,21 +34,23 @@ sig
     | `Commit (** A sub-module ({!Commit.t}). *)
     ]
   and t = entry list
-  (** A Git Tree object. Git stores content in a manner similar to a UNIX {i
-      filesystem}, but a bit simplified. All the content is stored as tree and
-      {Blob.t} objects, with trees corresponding to UNIX directory entries and blobs
-      corresponding more or less to {i inodes} or file contents. A single tree
-      object contains one or more tree entries, each of which contains a hash
-      pointer to a {Blob.t} or sub-tree with its associated mode, type, and
-      {i filename}. *)
+  (** A Git Tree object. Git stores content in a manner similar to a
+      UNIX {i filesystem}, but a bit simplified. All the content is
+      stored as tree and {Blob.t} objects, with trees corresponding to
+      UNIX directory entries and blobs corresponding more or less to
+      {i inodes} or file contents. A single tree object contains one
+      or more tree entries, each of which contains a hash pointer to a
+      {Blob.t} or sub-tree with its associated mode, type, and {i
+      filename}. *)
 
   module D
     : S.DECODER  with type t = t
                        and type raw = Cstruct.t
                        and type init = Cstruct.t
                        and type error = [ `Decoder of string ]
-  (** The decoder of the Git Tree object. We constraint the input to be a
-      {Cstruct.t}. This decoder needs a {Cstruct.t} as an internal buffer. *)
+  (** The decoder of the Git Tree object. We constraint the input to
+      be a {Cstruct.t}. This decoder needs a {Cstruct.t} as an
+      internal buffer. *)
 
   module A
     : S.ANGSTROM with type t = t
@@ -66,13 +68,14 @@ sig
                          and type raw = Cstruct.t
                          and type init = int * t
                          and type error = [ `Never ]
-  (** The encoder (which uses a {Minienc.encoder}) of the Git Tree object. We
-      constraint the output to be a {Cstruct.t}. This encoder needs the Tree OCaml
-      value and the memory consumption of the encoder (in bytes). The encoder can
-      not fail.
+  (** The encoder (which uses a {Minienc.encoder}) of the Git Tree
+      object. We constraint the output to be a {Cstruct.t}. This
+      encoder needs the Tree OCaml value and the memory consumption of
+      the encoder (in bytes). The encoder can not fail.
 
-      NOTE: we can not unspecified the error type (it needs to be concrete) but,
-      because the encoder can not fail, we define the error as [`Never]. *)
+      NOTE: we can not unspecified the error type (it needs to be
+      concrete) but, because the encoder can not fail, we define the
+      error as [`Never]. *)
 
   include S.DIGEST with type t := t and type hash = Hash.t
   include S.BASE with type t := t

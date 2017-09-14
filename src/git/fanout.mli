@@ -23,8 +23,9 @@ sig
   val get     : t -> int -> char
 end
 
-(** A Fanout table is a container to associate a key [Key.t] with a value.
-    Internally, we order bindings by the first byte of the [Key.t]. *)
+(** A Fanout table is a container to associate a key [Key.t] with a
+    value. Internally, we order bindings by the first byte of the
+    [Key.t]. *)
 module Make (Key : KEY) :
 sig
   type 'a t
@@ -40,6 +41,6 @@ sig
   (** [length t] returns the length of [t]. *)
 
   val get : int -> 'a t -> (Key.t * 'a) list
-  (** [get byte t] gets a list of bindings where the key start with the byte
-      [byte]. *)
+  (** [get byte t] gets a list of bindings where the key start with
+      the byte [byte]. *)
 end
