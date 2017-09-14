@@ -712,8 +712,8 @@ struct
     | BigOffsets of k
     | Hash       of k
     | End
-  and res =
-    | Error  of t * error
+  and[@warning "-37"] res =
+    | Error  of t * error (* XXX(dinosaure): unused constructor. *)
     | Flush  of t
     | Cont   of t
     | Ok     of t
