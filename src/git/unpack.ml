@@ -1206,7 +1206,7 @@ module MakePACKDecoder (H : S.HASH) (I : S.INFLATE)
       | Cont ({ state = StopHunks hs; _ } as t) ->
         `Hunk (t, H.current hs.h)
       | Cont ({ state = (Header _ | Object _ | VariableLength _
-                        | Unzip _ | Hunks _ | Checksum _ | End _ | Exception _); _ }) -> loop t
+                        | Unzip _ | Hunks _ | Checksum _ | End _ | Exception _); _ } as t) -> loop t
       | Wait t -> `Await t
       | Flush t -> `Flush t
       | Ok (t, hash) -> `End (t, hash)
