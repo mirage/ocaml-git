@@ -499,7 +499,8 @@ module Make
       let buf = Buffer.create (5 + Hash.Digest.length * 2) in
       let ppf = Fmt.with_buffer buf in
 
-      Fmt.pf ppf "pack-%a%!" Hash.pp hash_idx;
+      Fmt.pf ppf "pack-%s%!" (Hash.to_hex hash_idx);
+      (* XXX(dinosaure): don't use [Hash.pp]. *)
       let filename_pack = Buffer.contents buf in
 
       Path.((state.dotgit / "objects" / "pack" / filename_pack) + "pack")[@warning "-44"]
