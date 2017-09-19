@@ -131,7 +131,7 @@ module Make
                   Path.pp Path.(root / "objects" / first / rest)[@warning "-44"]);
 
     FileSystem.File.exists Path.(root / "objects" / first / rest)[@warning "-44"]
-    >>= function Ok _ -> Lwt.return true
+    >>= function Ok v -> Lwt.return v
                | Error _ -> Lwt.return false
 
   (* XXX(dinosaure): make this function more resilient: if [of_hex]
