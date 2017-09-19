@@ -1528,7 +1528,7 @@ struct
     | `Shallow l ->
       encode (`Shallow l) (fun _ -> `Nothing) context
 
-  let context c =
+  let context _ =
     let context =
       { decoder = Decoder.decoder ()
       ; encoder = Encoder.encoder ()
