@@ -20,9 +20,14 @@
 (** Common Value for the [libXdiff] algorithm. *)
 module type VALUE =
 sig
-  val window : int (** Length of the Rabin Window. *)
-  val shift  : int (** How many bits we need to shift to get a bounded index to [T] (this value must be [23]). *)
-  val limit  : int (** Limit the number of entries per hashes (default = 64). *)
+  val window : int
+  (** Length of the Rabin Window. *)
+
+  val shift  : int
+  (** How many bits we need to shift to get a bounded index to [T] (this value must be [23]). *)
+
+  val limit  : int
+  (** Limit the number of entries per hashes (default = 64). *)
 end
 
 (** Index module. *)

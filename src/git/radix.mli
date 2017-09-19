@@ -28,6 +28,7 @@ module Make (Key : KEY) :
 sig
   type 'a t
   (** The radix-tree. *)
+
   type 'a sequence = ('a -> unit) -> unit
   (** An abstract representation of a iterative container. *)
 

@@ -24,24 +24,29 @@ sig
   type decoder
   (** The type decoder. *)
 
+  (** The type error. *)
   type error =
     [ `Expected_char of char
-    (** Appears when we encountered an other character than what we expected stricly. *)
+    (** Appears when we encountered an other character than what we
+        expected stricly. *)
     | `Unexpected_char of char
-    (** Appears when we encountered a character and we don't know what we can do with this. *)
+    (** Appears when we encountered a character and we don't know what
+        we can do with this. *)
     | `Unexpected_flush_pkt_line
-    (** Appears when we encountered a flush packet and we don't expect this. *)
+    (** Appears when we encountered a flush packet and we don't expect
+        this. *)
     | `No_assert_predicate of (char -> bool)
     (** Appears when one character does not respect the predicate. *)
     | `Expected_string of string
     (** Appears when we don't have strictly the string expected. *)
     | `Unexpected_empty_pkt_line
-    (** Appears when we encountered an empty packet and we don't expect this. *)
+    (** Appears when we encountered an empty packet and we don't
+        expect this. *)
     | `Malformed_pkt_line
-    (** Appears when we encountered a flow which does not respect the packet format. *)
+    (** Appears when we encountered a flow which does not respect the
+        packet format. *)
     | `Unexpected_end_of_input
-      (** Appears when we encountered the end of the input and we don't expect this. *)
-    ] (** The type error. *)
+    ]
 
   val pp_error : error Fmt.t
   (** Pretty-printer of {!error}. *)
@@ -204,22 +209,30 @@ sig
     | PACK               : side_band -> flow transaction
     | ReportStatus       : side_band -> report_status transaction
     (** The type transaction to describe what is expected to decode/receive. *)
+
+  (** The ACK mode type to describe which mode is shared by the client
+        and the server. *)
   and ack_mode =
     [ `Ack
     | `Multi_ack
     | `Multi_ack_detailed
-    ] (** The ACK mode type to describe which mode is shared by the client and the server. *)
+    ]
+
+  (** The representation of the output side-band. *)
   and flow =
     [ `Raw of Cstruct.t
     | `End
     | `Err of Cstruct.t
     | `Out of Cstruct.t
-    ] (** The representation of the output side-band. *)
+    ]
+
+  (** The side-band mode type to describe which mode is shared by the
+        client and the server. *)
   and side_band =
     [ `Side_band
     | `Side_band_64k
     | `No_multiplexe
-    ] (** The side-band mode type to describe which mode is shared by the client and the server. *)
+    ]
 
   val decode : decoder -> 'result transaction -> 'result state
   (** [decode decoder transaction] decodes the input represented by [decoder] in
@@ -298,17 +311,19 @@ sig
   type ('a, 'b) either =
     | L of 'a
     | R of 'b
+
+  (** Once the client knows what the references the server is at, it can
+        send a list of reference update requests. For each reference on
+        the server that it wants to update, it sends a line listing the
+        obj-id currently on the server, the obj-id the client would like
+        to update it to and the name of the reference.
+
+        This type represents this information. *)
   and update_request =
     { shallow      : Hash.t list
     ; requests     : (command * command list, push_certificate) either
     ; capabilities : Capability.t list }
-  (** Once the client knows what the references the server is at, it can send
-      a list of reference update requests. For each reference on the server that
-      it wants to update, it sends a line listing the obj-id currently on the
-      server, the obj-id the client would like to update it to and the name of the
-      reference.
 
-      This type represents this information. *)
   and command =
     | Create of Hash.t * string (** When the client wants to create a new reference. *)
     | Delete of Hash.t * string (** When the client wants to delete an existing reference in the server side. *)

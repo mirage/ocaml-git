@@ -119,11 +119,11 @@ sig
 
   include S
 
+  (** The type of error. *)
   type error =
-    [ `SystemFile of FileSystem.File.error (** The [FileSystem] error *)
-    | `SystemIO of string (** Appears when the write action is blocking too long. *)
-    | D.error (** The decoder {!D} error. *)
-    ] (** The type of error. *)
+    [ `SystemFile of FileSystem.File.error
+    | `SystemIO of string
+    | D.error ]
 
   val pp_error : error Fmt.t
   (** Pretty-printer of {!error}. *)

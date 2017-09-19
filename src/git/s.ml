@@ -455,8 +455,10 @@ module type BUFFER =
 sig
   type t
   (** The abstract type of buffers. *)
+
   type raw
   (** The type of result. *)
+
   type fixe
   (** The type of input. *)
 
