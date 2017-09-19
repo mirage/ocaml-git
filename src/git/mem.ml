@@ -83,19 +83,6 @@ module Make
   let stores = Hashtbl.create 1024
   let default_root = Path.v "root"
 
-  let reset t =
-    Hashtbl.clear t.values;
-    Hashtbl.clear t.inflated;
-    Hashtbl.clear t.refs;
-    t.head <- None
-
-  let clear ?(root=default_root) () =
-    let () = try reset (Hashtbl.find stores root) with Not_found -> () in
-    Hashtbl.remove stores root
-
-  let clear_all () =
-    Hashtbl.iter (fun _ t -> reset t) stores
-
   let[@warning "-44"] create ?(root = default_root) ?(dotgit = Path.(default_root / ".git")) ?(compression = 6) () =
     if compression < 0 || compression > 9
     then failwith "level should be between 0 and 9";
@@ -222,9 +209,6 @@ module Make
 
       Graph.fold (fun k v a -> (k, v) :: a) graph []
       |> Lwt.return
-
-    let exists t ref =
-      Lwt.return (Hashtbl.mem t.refs ref)
 
     let rec read t r =
       try match Hashtbl.find t.refs r with
