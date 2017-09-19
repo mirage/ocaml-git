@@ -217,7 +217,6 @@ struct
       let rec go = function
         | Angstrom.Unbuffered.Done (_, value) -> Lwt.return (Ok value)
         | Angstrom.Unbuffered.Fail (_, _, err) -> Lwt.return (Error err)
-        | Angstrom.Unbuffered.Jump jump -> (go[@tailcall]) (jump ())
         | Angstrom.Unbuffered.Partial { Angstrom.Unbuffered.continue; _ } ->
           get () >>= function
           | None -> continue empty Angstrom.Unbuffered.Complete |> go
