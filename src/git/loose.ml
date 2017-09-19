@@ -199,8 +199,11 @@ module Make
             | Ok n -> match D.refill (Cstruct.sub raw 0 n) decoder with
               | Ok decoder -> loop decoder
               | Error (#D.error as err) -> Lwt.return (Error err))
-        | `End (_, value) -> Lwt.return (Ok value)
         | `Error (_, (#D.error as err)) -> Lwt.return (Error err)
+        | `End (_, value) ->
+          FileSystem.File.close read >|= function
+          | Ok () -> (Ok value)
+          | Error sys_err -> Error (`SystemFile sys_err)
       in
 
       loop decoder
@@ -305,11 +308,14 @@ module Make
             | Ok n -> match S.refill (Cstruct.sub raw 0 n) decoder with
               | Ok decoder -> loop decoder
               | Error (#S.error as err) -> Lwt.return (Error err))
-        | `End (_, (_, size)) -> Lwt.return (Ok size)
+        | `Error (_, (#S.error as err)) -> Lwt.return (Error err)
+        | `End (_, (_, size)) ->
+          FileSystem.File.close read >|= function
+          | Ok () -> Ok size
+          | Error sys_err -> Error (`SystemFile sys_err)
         (* XXX(dinosaure): [gen] checks if we consume all of the
            input. But for this compute, we don't need to compute all.
            It's redundant. *)
-        | `Error (_, (#S.error as err)) -> Lwt.return (Error err)
       in
 
       loop decoder
