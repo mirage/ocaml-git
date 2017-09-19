@@ -138,10 +138,11 @@ module Make
     let decoder =
       let open Angstrom in
       kind <* take 1
-      >>= fun kind -> int64 <* advance 1
-      >>= fun _ -> match kind with
+      >>= fun kind -> int64 <* take 1
+      >>= fun length -> match kind with
       | `Commit -> Commit.A.decoder >>| fun commit -> Commit commit
-      | `Blob   -> Blob.A.decoder   >>| fun blob -> Blob blob
+      | `Blob   -> Blob.A.decoder (Int64.to_int length) >>| fun blob -> Blob blob
+          (* XXX(dinosaure): need to take care about this cast. TODO! *)
       | `Tree   -> Tree.A.decoder   >>| fun tree -> Tree tree
       | `Tag    -> Tag.A.decoder    >>| fun tag -> Tag tag
   end

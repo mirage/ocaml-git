@@ -36,7 +36,7 @@ sig
     : S.ENCODER with type t = t
                  and type raw = Cstruct.t
   module A
-    : S.ANGSTROM with type t = t
+    : sig type nonrec t = t val decoder : int -> t Angstrom.t end
   module F
     : S.FARADAY  with type t = t
 
@@ -57,12 +57,13 @@ module Make
   struct
     type nonrec t = t
 
-    let decoder =
-      let buf = Buffer.create 32 in
+    let decoder len =
+      let buf = Buffer.create len in
       let open Angstrom in
 
       fix @@ fun m ->
-      available >>= function
+      available >>= fun n ->
+      match n with
       | 0 ->
         peek_char
         >>= (function
@@ -71,7 +72,8 @@ module Make
               let cs = Cstruct.of_string (Buffer.contents buf) in
               Buffer.clear buf;
               return cs <* commit)
-      | n -> take n >>= fun chunk ->
+      | n ->
+        take n >>= fun chunk ->
         Buffer.add_string buf chunk;
         commit *> m
   end

@@ -38,7 +38,7 @@ sig
   (** The encoder of the Git Blob object. *)
 
   module A
-    : S.ANGSTROM with type t = t
+    : sig type nonrec t = t val decoder : int -> t Angstrom.t end
   (** The Angstrom decoder of the Git Blob object. *)
 
   module F
