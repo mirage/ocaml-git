@@ -236,16 +236,17 @@ struct
     | `Inflate err ->
       ppe ~name:"`Inflate" (Fmt.hvbox Z.pp_error) ppf err
 
+  let empty = Cstruct.create 0
+
   let default (window, raw0, raw1) =
     Log.debug (fun l -> l "Starting to inflate and decode a Git object.");
 
-    { cur = Cstruct.sub raw0 0 0
+    { cur = empty
     ; tmp = raw0
     ; inf = Z.flush 0 (Cstruct.len raw0)
             @@ Z.default (Z.window_reset window)
     ; dec = D.default raw1 }
 
-  let rec eval decoder = match D.eval decoder.dec with
     | `Await dec ->
       (match Z.eval ~src:decoder.cur ~dst:decoder.tmp decoder.inf with
        | `Await inf ->
