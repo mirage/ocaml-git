@@ -18,40 +18,6 @@
 let ppe ~name ppv =
   Fmt.braces (fun ppf -> Fmt.pf ppf "%s %a" name (Fmt.hvbox ppv))
 
-module BaseBigstring
-  : S.BASE with type t = (char, Bigarray.int8_unsigned_elt, Bigarray.c_layout) Bigarray.Array1.t =
-struct
-  open Bigarray
-
-  type t = (char, int8_unsigned_elt, c_layout) Array1.t
-
-  let length x = Array1.dim x
-
-  exception Break of int
-
-  external uget : t -> int -> int = "%caml_ba_ref_1"
-
-  let compare a b =
-    if length a <> length b
-    then 0
-    else
-      try
-        for i = 0 to length a - 1
-        do if uget a i <> uget b i then raise (Break ((uget a i) - (uget b i))) done;
-        0
-      with Break n -> n
-
-  let equal a b = compare a b = 0
-
-  let hash = Hashtbl.hash
-
-  let pp ppf ba =
-    for i = 0 to length ba - 1
-    do Fmt.pf ppf "%02x" (uget ba i) done
-
-  module Set = Set.Make(struct type nonrec t = t let compare = compare end)
-  module Map = Map.Make(struct type nonrec t = t let compare = compare end)
-end
 
 module BaseBytes :
 sig

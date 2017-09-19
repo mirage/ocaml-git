@@ -17,9 +17,6 @@
 
 val ppe : name:string -> 'a Fmt.t -> 'a Fmt.t
 
-module BaseBigstring
-  : S.BASE with type t = (char, Bigarray.int8_unsigned_elt, Bigarray.c_layout) Bigarray.Array1.t
-
 module BaseBytes :
 sig
   include S.BASE with type t = Bytes.t
