@@ -850,12 +850,14 @@ module Make
     Lwt.try_bind
       (fun () -> Lwt_list.map_s
           (fun hash -> read state hash
-            >|= function
-            | Ok v -> (hash, v)
-            | Error err -> raise (Leave err))
+            >>= function
+            | Ok v -> Lwt.return (hash, v)
+            | Error err ->
+              Lwt.fail (Leave err))
             lst)
         (fun lst -> Lwt.return (Ok lst))
-        (function Leave err -> Lwt.return (Error err))
+        (function Leave err -> Lwt.return (Error err)
+                | exn -> Lwt.fail exn)
 
   let delta entries tagger ?(depth = 50) ?(window = `Object 10) state =
     let open Lwt.Infix in
