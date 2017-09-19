@@ -1,5 +1,6 @@
 (*
  * Copyright (c) 2013-2017 Thomas Gazagnaire <thomas@gazagnaire.org>
+ * and Romain Calascibetta <romain.calascibetta@gmail.com>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -13,3 +14,14 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
+
+module Store : Git.Store.S
+                 with module Hash = Sha1
+                  and module Path = Fpath
+                  and module Lock = Fs_lwt_unix.Lock
+                  and module FileSystem = Fs_lwt_unix.Fs
+
+module Graph : module type of Git.Object_graph.Make(Store)
+
+val printers : string list
+val install_printers : string list -> bool

@@ -15,7 +15,6 @@ build-test: ["jbuilder" "build" "test/git"]
 
 depends: [
   "jbuilder"   {build}
-  "mstruct"    {>= "1.3.1"}
   "ocamlgraph"
   "uri"        {>= "1.3.12"}
   "lwt"        {>= "2.4.7"}
@@ -23,10 +22,10 @@ depends: [
   "fmt"
   "hex"
   "astring"
-  "ocplib-endian"
-  "decompress" {>= "0.6"}
-  "alcotest" {test}
-  "nocrypto" {test}
-  "mtime"    {test & >= "1.0.0"}
+  "cstruct"
+  "angstrom"   {>= "0.6.0"}
+  "farfadet"
+  "faraday"
+  "rresult"
 ]
 available: [ocaml-version >= "4.02.3"]

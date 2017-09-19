@@ -3,4 +3,4 @@
 (library
  ((name        git_top)
   (public_name git.top)
-  (libraries   (git compiler-libs.toplevel))))
+  (libraries   (git decompress digestif.ocaml logs.fmt lwt.unix compiler-libs.toplevel))))

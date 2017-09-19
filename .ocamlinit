@@ -1,0 +1,32 @@
+#use "topfind";;
+
+#require "fpath";;
+#require "cstruct";;
+#require "fmt";;
+#require "uri";;
+#require "lwt";;
+#require "logs";;
+#require "astring";;
+#require "hex";;
+#require "lru";;
+#require "rresult";;
+#require "angstrom";;
+#require "farfadet";;
+#require "faraday";;
+#require "ocamlgraph";;
+
+#require "digestif.ocaml";;
+#require "decompress";;
+#require "lwt.unix";;
+#require "compiler-libs.toplevel";;
+#require "logs.fmt";;
+
+#directory "_build/default/src/git/";;
+#directory "_build/default/src/git-top/";;
+
+#load "git.cma";;
+#load "git_top.cma";;
+
+let _ = Git_top.install_printers Git_top.printers;;
+
+open Lwt.Infix;;

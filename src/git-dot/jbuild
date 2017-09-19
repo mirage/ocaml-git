@@ -1,0 +1,6 @@
+(jbuild_version 1)
+
+(executables
+ ((libraries (git decompress digestif.ocaml logs.fmt lwt.unix))
+  (modules (git_dot ocaml_deflate ocaml_inflate sha1 fs_lwt_unix))
+  (names (git_dot))))

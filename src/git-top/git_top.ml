@@ -1,5 +1,6 @@
 (*
  * Copyright (c) 2013-2017 Thomas Gazagnaire <thomas@gazagnaire.org>
+ * and Romain Calascibetta <romain.calascibetta@gmail.com>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,29 +15,24 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-let printers = [
-  "Git.SHA.pp";
-  "Git.SHA.Blob.pp";
-  "Git.SHA.Tree.pp";
-  "Git.SHA.Commit.pp";
-  "Git.Blob.pp";
-  "Git.Tree.pp";
-  "Git.Commit.pp";
-  "Git.Value.pp";
-  "Git.Index.pp";
-  "Git.Index.pp_mode";
-  "Git.Index.pp_stats";
-  "Git.Index.pp_entry";
-  "Git.Object_type.pp";
-  "Git.Pack.pp";
-  (*  "Git.Pack_index.pp_hum"; *)
-  "Git.Packed_value.pp";
-  "Git.Packed_refs.pp";
-  "Git.Reference.pp";
-  "Git.Reference.pp_head_contents";
-  "Git.Tag.pp";
-  "Git.User.pp";
-]
+module Store = Git.Store.Make(Sha1)(Fpath)(Fs_lwt_unix.Lock)(Fs_lwt_unix.Fs)(Ocaml_inflate)(Ocaml_deflate)
+module Graph = Git.Object_graph.Make(Store)
+
+let printers =
+  [ "Git.Crc32.pp"
+  ; "Git.User.pp"
+  ; "Git.Minienc.pp"
+  ; "Git_top.Store.Value.pp"
+  ; "Git_top.Store.Value.Commit.pp"
+  ; "Git_top.Store.Value.Blob.pp"
+  ; "Git_top.Store.Value.Tree.pp"
+  ; "Git_top.Store.Value.Tag.pp"
+  ; "Git_top.Store.Hash.pp"
+  ; "Git_top.Store.Reference.pp"
+  ; "Git_top.Store.Inflate.pp"
+  (* ; "Backend.Store.pp" *)
+  ; "Git_top.Store.Path.pp"
+  ; "Git_top.Store.pp_error" ]
 
 let eval_string
       ?(print_outcome = false) ?(err_formatter = Format.err_formatter) str =
@@ -50,6 +46,7 @@ let rec install_printers = function
       let cmd = Printf.sprintf "#install_printer %s;;" printer in
       eval_string cmd && install_printers printers
 
-let () =
-  if not (install_printers printers) then
-    Format.eprintf "Problem installing git-printers@."
+let () = Printexc.record_backtrace true
+let () = Fmt.set_style_renderer Fmt.stderr `Ansi_tty
+let () = Logs.set_reporter (Logs_fmt.reporter ~dst:Fmt.stderr ~pp_header:Logs_fmt.pp_header ())
+let () = Logs.set_level ~all:true (Some Logs.Debug)
