@@ -170,21 +170,21 @@ module MakeDecoder (A : S.ANGSTROM)
         Bigarray.Array1.dim buffer - len
       in
 
-      if _trailing_space >= len
-      then Ok decoder
-      else if _writable_space >= len
-      then Ok (compress input decoder)
-      else begin
-        Log.err (fun l -> l "trailing space:%d and writable space:%d, \
-                             the alteration is not done, the error could \
-                             be the size of the internal buffer (%d) or the input \
-                             is malicious."
-                    _trailing_space
-                    _writable_space
-                    (Bigarray.Array1.dim decoder.internal.Cstruct.buffer));
-        Error (`Decoder "Input does not respect assertion, it may be malicious");
-      end
-
+      (if _trailing_space >= len
+       then Ok decoder
+       else if _writable_space >= len
+       then Ok (compress input decoder)
+       else begin
+         Log.err (fun l -> l "trailing space:%d and writable space:%d, \
+                              the alteration is not done, the error could \
+                              be the size of the internal buffer (%d) or the input \
+                              is malicious."
+                     _trailing_space
+                     _writable_space
+                     (Bigarray.Array1.dim decoder.internal.Cstruct.buffer));
+         Log.err (fun l -> l "Production of the error in Helper.MakeDecoder.refill.");
+         Error (`Decoder "Input does not respect assertion, it may be malicious");
+       end)
       |> function Error err -> Error err
                 | Ok decoder ->
                   let internal = Cstruct.add_len decoder.internal len in
