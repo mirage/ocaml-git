@@ -87,7 +87,7 @@ module MakeDecoder (A : S.ANGSTROM)
   let pp_error ppf (`Decoder err) = ppe ~name:"`Decoder" Fmt.string ppf err
 
   type decoder =
-    { state    : Angstrom.input -> Angstrom.Unbuffered.more -> A.t Angstrom.Unbuffered.state
+    { state    : Angstrom.bigstring -> Angstrom.Unbuffered.more -> A.t Angstrom.Unbuffered.state
     ; final    : Angstrom.Unbuffered.more
     ; internal : Cstruct.t
     ; max      : int }
@@ -129,7 +129,7 @@ module MakeDecoder (A : S.ANGSTROM)
     ; max      = len }
 
   let eval decoder =
-    match decoder.state (`Bigstring (Cstruct.to_bigarray decoder.internal)) decoder.final with
+    match decoder.state (Cstruct.to_bigarray decoder.internal) decoder.final with
     | Angstrom.Unbuffered.Done (consumed, value) -> `End (Cstruct.shift decoder.internal consumed, value)
     | Angstrom.Unbuffered.Fail (consumed, path, err) ->
       Log.err (fun l -> l "Retrieving an error in the current decoding: %s (%s)."
@@ -197,10 +197,12 @@ module MakeDecoder (A : S.ANGSTROM)
                   let off = Cstruct.len internal - len in
                   let ()  = Cstruct.blit input 0 internal off len in
 
+                  Log.debug (fun l -> l "Refill the internal buffer in the current decoding.");
+
                   Ok { decoder with internal = internal }
 
   let to_result input =
-    Angstrom.parse_only A.decoder (`Bigstring (Cstruct.to_bigarray input))
+    Angstrom.parse_bigstring A.decoder (Cstruct.to_bigarray input)
     |> function Ok v -> Ok v
               | Error err -> Error (`Decoder err)
 
@@ -252,6 +254,8 @@ struct
             @@ Z.default (Z.window_reset window)
     ; dec = D.default raw1 }
 
+  let rec eval decoder =
+    match D.eval decoder.dec with
     | `Await dec ->
       (match Z.eval ~src:decoder.cur ~dst:decoder.tmp decoder.inf with
        | `Await inf ->
