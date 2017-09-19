@@ -692,6 +692,8 @@ struct
 
   module Fanout = Fanout.Make(K)
 
+  [@@@warning "-37"]
+
   type t =
     { o_off    : int
     ; o_pos    : int
@@ -712,7 +714,7 @@ struct
     | BigOffsets of k
     | Hash       of k
     | End
-  and[@warning "-37"] res =
+  and res =
     | Error  of t * error (* XXX(dinosaure): unused constructor. *)
     | Flush  of t
     | Cont   of t

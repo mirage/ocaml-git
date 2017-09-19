@@ -767,6 +767,8 @@ module Make
         | Error #Loose.error -> Lwt.return None
         | Ok v -> Lwt.return (Some v)
 
+  [@@@warning "-32"]
+
   let raw_was ?htmp result t hash =
     raw_wa
       ?htmp

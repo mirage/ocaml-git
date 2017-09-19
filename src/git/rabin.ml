@@ -182,6 +182,7 @@ type unpacked_entry =
   ; next      : ptr }
 
 (* XXX(dinosaure): may be my prince will fix [@warning "-32"]. *)
+[@@@warning "-32"]
 
 let[@warning "-32"] pp_unpacked_entry ppf entry =
   let pp_next ppf = function
