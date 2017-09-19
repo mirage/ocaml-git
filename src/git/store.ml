@@ -377,19 +377,12 @@ module Make
       write_p ~ztmp:t.buffer.zl ~raw:t.buffer.io t value
     let write = write_s
 
-    let lookup_p state hash =
+    let lookup_p t hash =
       let open Lwt.Infix in
 
-      Lwt.try_bind
-        (fun () ->
-          list state
-          >>= function
-          | (_ :: _) as lst ->
-            Lwt_list.find_s (fun x -> Hash.equal hash x |> Lwt.return) lst
-            >|= fun x -> (Some x)
-          | [] -> Lwt.return None)
-        Lwt.return
-        (fun _ -> Lwt.return None)
+      LooseImpl.exists ~root:t.dotgit hash >|= function
+      | true -> Some hash
+      | false -> None
 
     let lookup = lookup_p
 
