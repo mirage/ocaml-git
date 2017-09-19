@@ -188,6 +188,11 @@ module MakeDecoder (A : S.ANGSTROM)
       |> function Error err -> Error err
                 | Ok decoder ->
                   let internal = Cstruct.add_len decoder.internal len in
+                  (* XXX(dinosaure): see the function store.ml:buffer
+                     (). C'est à cette endroit où si on considère
+                     [decoder.internal] comme un [Cstruct.t] appartennant
+                     à un [Bigarray] plus grand, il peut arriver que
+                     celui ci empiète sur le buffer [io]. *)
 
                   let off = Cstruct.len internal - len in
                   let ()  = Cstruct.blit input 0 internal off len in
