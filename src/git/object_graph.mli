@@ -29,5 +29,5 @@ sig
   val of_commits : Store.t -> K.t Lwt.t
   val closure : ?full:bool -> Store.t -> min:Store.Hash.Set.t -> max:Store.Hash.Set.t -> K.t Lwt.t
   val pack : Store.t -> min:Store.Hash.Set.t -> max:Store.Hash.Set.t -> (Store.Hash.t * Store.Value.t) list Lwt.t
-  val to_dot : Store.t -> Buffer.t -> unit Lwt.t
+  val to_dot : Store.t -> Format.formatter -> unit Lwt.t
 end with module Store = S

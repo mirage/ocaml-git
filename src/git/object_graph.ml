@@ -154,10 +154,9 @@ module Make (S : Minimal.S with type Hash.Digest.buffer = Cstruct.t
           ) nodes
       end >>= fun () -> Lwt.return g
 
-  let to_dot t buf =
-    let fmt = Format.formatter_of_buffer buf in
+  let to_dot t ppf =
     of_store t >>= fun g ->
-    Dot.fprint_graph fmt g;
+    Dot.fprint_graph ppf g;
     Lwt.return_unit
 
   let closure ?(full=true) t ~min ~max =
