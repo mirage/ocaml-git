@@ -266,7 +266,7 @@ struct
        | `End inf ->
          (match D.refill (Cstruct.sub decoder.tmp 0 (Z.used_out inf)) dec with
           | Ok dec -> eval { decoder with cur = Cstruct.shift decoder.cur (Z.used_in inf)
-                                        ; inf = Z.flush 0 0 inf
+                                        ; inf = Z.flush 0 0 (Z.refill 0 0 inf)
                                         ; dec = D.finish dec }
           | Error (`Decoder err) -> `Error (decoder.cur, `Decoder err)))
     | `Error (unconsumed, `Decoder err) ->
