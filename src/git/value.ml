@@ -117,6 +117,12 @@ module Make
     | Tree tree     -> Fmt.pf ppf "(Tree %a)" (Fmt.hvbox Tree.pp) tree
     | Tag tag       -> Fmt.pf ppf "(Tag %a)" (Fmt.hvbox Tag.pp) tag
 
+  module Log =
+  struct
+    let src = Logs.Src.create "git.value" ~doc:"logs git's internal value computation"
+    include (val Logs.src_log src : Logs.LOG)
+  end
+
   module A =
   struct
     type nonrec t = t
@@ -127,13 +133,22 @@ module Make
        <|> ((string "commit" *> return `Commit) <?> "commit")
        <|> ((string "tag" *> return `Tag) <?> "tag")
        <|> ((string "tree" *> return `Tree) <?> "tree"))
-      <* commit
+      <?> "kind" <* commit >>= fun kind ->
+      Log.debug (fun l -> l "Kind of the current object: %s."
+                    (match kind with
+                     | `Commit -> "commit"
+                     | `Blob -> "blob"
+                     | `Tag -> "tag"
+                     | `Tree -> "tree"));
+      return kind
 
     let int64 =
       let open Angstrom in
       take_while (function '0' .. '9' -> true | _ -> false)
       >>| Int64.of_string
-      <* commit
+      <?> "size" <* commit >>= fun size ->
+      Log.debug (fun l -> l "Length of the current object: %Ld." size);
+      return size
 
     let decoder =
       let open Angstrom in

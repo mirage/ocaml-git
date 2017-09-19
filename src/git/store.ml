@@ -426,6 +426,12 @@ module Make
 
   module Pack =
   struct
+    module Log =
+    struct
+      let src = Logs.Src.create "git.store.pack" ~doc:"logs git's store event (pack)"
+      include (val Logs.src_log src : Logs.LOG)
+    end
+
     type state = t
 
     module Path = Path
@@ -593,11 +599,18 @@ module Make
       lookup state hash >>= function
       | None -> Lwt.return (Error `Not_found)
       | Some (hash_idx, _) ->
+        Log.debug (fun l -> l "Git object %a found in the PACK file %a." Hash.pp hash Hash.pp hash_idx);
+
         match CachePack.find hash_idx state.cache.packs with
         | Some pack ->
+          Log.debug (fun l -> l "PACK file %a already loaded." Hash.pp hash_idx);
+
           PACKDecoder.get_with_allocation pack hash ztmp window
           >|= Rresult.R.reword_error (fun err -> `PackDecoder err)
-        | None -> load_pack state hash_idx (path_idx state hash_idx) >>= function
+        | None ->
+          Log.debug (fun l -> l "Loading of the PACK file %a." Hash.pp hash_idx);
+
+          load_pack state hash_idx (path_idx state hash_idx) >>= function
           | Ok pack ->
             PACKDecoder.get_with_allocation pack hash ztmp window
             >|= Rresult.R.reword_error (fun err -> `PackDecoder err)
@@ -659,6 +672,12 @@ module Make
     let size = size_s
   end
 
+  module Log =
+  struct
+    let src = Logs.Src.create "git.store" ~doc:"logs git's store event"
+    include (val Logs.src_log src : Logs.LOG)
+  end
+
   type error = [ Loose.error | Pack.error ]
 
   let pp_error ppf = function
@@ -693,6 +712,8 @@ module Make
         | Ok v -> Lwt.return (Ok v)
 
   let read_s t hash =
+    Log.debug (fun l -> l ~header:"read_s" "Request to read %a in the current Git repository." Hash.pp hash);
+
     read_p
       ~ztmp:t.buffer.zl
       ~dtmp:t.buffer.de
@@ -700,7 +721,9 @@ module Make
       ~window:t.buffer.window
       t hash
 
-  let read = read_s
+  let read =
+    Log.debug (fun l -> l ~header:"read" "Use the alias of read_s");
+    read_s
 
   let read_exn t hash =
     let open Lwt.Infix in
@@ -853,6 +876,7 @@ module Make
             >>= function
             | Ok v -> Lwt.return (hash, v)
             | Error err ->
+              Log.err (fun l -> l ~header:"contents" "Retrieve an error: %a." pp_error err);
               Lwt.fail (Leave err))
             lst)
         (fun lst -> Lwt.return (Ok lst))

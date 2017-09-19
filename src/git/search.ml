@@ -21,6 +21,12 @@ module Make (S : Minimal.S) =
 struct
   module Store = S
 
+  module Log =
+  struct
+    let src = Logs.Src.create "git.search" ~doc:"logs git's internal search computation"
+    include (val Logs.src_log src : Logs.LOG)
+  end
+
   type pred =
     [ `Commit of Store.Hash.t
     | `Tag of string * Store.Hash.t
@@ -29,8 +35,15 @@ struct
 
   let pred t ?(full=true) h =
     let tag t = `Tag (Store.Value.Tag.tag t, Store.Value.Tag.obj t) in
+
+    Log.debug (fun l -> l ~header:"predecessor" "Read the object: %a." Store.Hash.pp h);
+
     Store.read t h >|= function
-    | Error _                   -> []
+    | Error err ->
+      Log.err (fun l -> l ~header:"predecessor"
+                  "Retrieve an error when the search engine try \
+                   to read %a: %a." Store.Hash.pp h Store.pp_error err);
+      []
     | Ok (Store.Value.Blob _)   -> []
     | Ok (Store.Value.Commit c) ->
       (if full then [ `Tree_root (Store.Value.Commit.tree c) ] else [])

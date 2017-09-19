@@ -67,6 +67,12 @@ module Make (S : Minimal.S with type Hash.Digest.buffer = Cstruct.t
   module K = Graph.Imperative.Digraph.ConcreteBidirectional(Store.Hash)
   module T = Graph.Topological.Make(K)
 
+  module Log =
+  struct
+    let src = Logs.Src.create "git.object_graph" ~doc:"logs git's internal graph computation"
+    include (val Logs.src_log src : Logs.LOG)
+  end
+
   module Search = struct
     include Search.Make(Store)
     include Search
@@ -79,21 +85,34 @@ module Make (S : Minimal.S with type Hash.Digest.buffer = Cstruct.t
     | `Tree_root s -> "/"       , s
 
   let of_store t =
+    let header = "of_store" in
     let g = C.create () in
 
+    Log.debug (fun l -> l ~header "Loading the current Git repository.");
+
     Store.contents t >>= function
-    | Error _ -> Lwt.return g
+    | Error err ->
+      Log.err (fun l -> l ~header "Retrieve an error when we list the git repository: %a." Store.pp_error err);
+      Lwt.return g
     | Ok nodes ->
+      Log.debug (fun l -> l ~header "Loading vertex in the graph.");
       List.iter (C.add_vertex g) nodes;
 
       begin
-        Lwt_list.iter_p (fun (id, _ as src) ->
+        Lwt_list.iter_s (fun (id, _ as src) ->
+            Log.debug (fun l -> l ~header "Search predecessors of %a." Store.Hash.pp id);
+
             Search.pred t id >>= fun preds ->
-            Lwt_list.iter_p (fun s ->
+            Lwt_list.iter_s (fun s ->
                 let l, h = label s in
+
+                Log.debug (fun l -> l ~header "Read the object: %a." Store.Hash.pp h);
+
                 Store.read t h >>= function
-                | Ok v -> C.add_edge_e g (src, l, (h, v)); Lwt.return_unit
-                | Error _ -> Lwt.return () (* XXX(dinosaure): quiet this error? *)
+                | Ok v -> C.add_edge_e g (src, l, (h, v)); Lwt.return ()
+                | Error err ->
+                  Log.err (fun l -> l ~header "Retrieve an error when we try to read %a: %a." Store.Hash.pp h Store.pp_error err);
+                  Lwt.return () (* XXX(dinosaure): quiet this error? *)
               ) preds
           ) nodes
       end >>= fun () -> Lwt.return g

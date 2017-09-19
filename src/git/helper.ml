@@ -15,9 +15,14 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+module Log =
+struct
+  let src = Logs.Src.create "git.helper" ~doc:"logs git's internal helper"
+  include (val Logs.src_log src : Logs.LOG)
+end
+
 let ppe ~name ppv =
   Fmt.braces (fun ppf -> Fmt.pf ppf "%s %a" name (Fmt.hvbox ppv))
-
 
 module BaseBytes :
 sig
@@ -129,14 +134,23 @@ module MakeDecoder (A : S.ANGSTROM)
     ; max      = len }
 
   let eval decoder =
+    Log.debug (fun l -> l "Start to decode a partial chunk of the flow (%d) (final:%b)."
+                  (Cstruct.len decoder.internal)
+                  (decoder.final = Angstrom.Unbuffered.Complete));
+
     match decoder.state (Cstruct.to_bigarray decoder.internal) decoder.final with
-    | Angstrom.Unbuffered.Done (consumed, value) -> `End (Cstruct.shift decoder.internal consumed, value)
+    | Angstrom.Unbuffered.Done (consumed, value) ->
+      Log.debug (fun l -> l "End of the decoding.");
+
+      `End (Cstruct.shift decoder.internal consumed, value)
     | Angstrom.Unbuffered.Fail (consumed, path, err) ->
       Log.err (fun l -> l "Retrieving an error in the current decoding: %s (%s)."
                   err (String.concat " > " path));
       `Error (Cstruct.shift decoder.internal consumed, `Decoder (String.concat " > " path ^ ": " ^ err))
     | Angstrom.Unbuffered.Partial
         { Angstrom.Unbuffered.committed; continue; } ->
+      Log.debug (fun l -> l "Current decoding waits more input (committed: %d)." committed);
+
       let decoder = { decoder with internal = Cstruct.shift decoder.internal committed
                                  ; state = continue } in
       `Await decoder
@@ -151,11 +165,15 @@ module MakeDecoder (A : S.ANGSTROM)
   let refill input decoder =
     let len = Cstruct.len input in
 
+    Log.debug (fun l -> l "Starting to refill the internal buffer \
+                           of the current decoding (len: %d)." (Cstruct.len input));
+
     if len > decoder.max
     then begin
       (* XXX(dinosaure): it's to avoid to grow the internal buffer. *)
       Log.err (fun l -> l "The client want to refill the internal buffer by a bigger input.");
 
+      Log.err (fun l -> l "Production of the error in Helper.MakeDecoder.refill.");
       Error (`Decoder (Fmt.strf "Input is too huge: we authorized only an \
                                  input lower or equal than %d" decoder.max))
     end else
@@ -255,17 +273,28 @@ struct
     ; dec = D.default raw1 }
 
   let rec eval decoder =
+    Log.debug (fun l -> l "Start to inflate a partial chunk of the flow.");
+
     match D.eval decoder.dec with
     | `Await dec ->
+      Log.debug (fun l -> l "Decoder waits.");
+
       (match Z.eval ~src:decoder.cur ~dst:decoder.tmp decoder.inf with
        | `Await inf ->
+         Log.debug (fun l -> l "Inflator waits.");
+
          `Await { decoder with cur = Cstruct.shift decoder.cur (Z.used_in inf)
                              ; inf = inf
                              ; dec = dec }
        | `Flush inf ->
+         Log.debug (fun l -> l "Inflator flushes: %a" (Fmt.hvbox Z.pp) inf);
+
          (match D.refill (Cstruct.sub decoder.tmp 0 (Z.used_out inf)) dec with
           | Ok dec ->
+
             let inf = Z.flush 0 (Cstruct.len decoder.tmp) inf in
+
+            Log.debug (fun l -> l "Internal buffer of the current decoding refilled: %a" (Fmt.hvbox Z.pp) inf);
 
             eval { decoder with dec = dec
                               ; inf = inf }
@@ -274,6 +303,8 @@ struct
          Log.err (fun l -> l "Inflate error: %a." (Fmt.hvbox Z.pp_error) err);
          `Error (Cstruct.shift decoder.cur (Z.used_in inf), `Inflate err)
        | `End inf ->
+         Log.debug (fun l -> l "Inflator finished with the current decoding flow.");
+
          (match D.refill (Cstruct.sub decoder.tmp 0 (Z.used_out inf)) dec with
           | Ok dec -> eval { decoder with cur = Cstruct.shift decoder.cur (Z.used_in inf)
                                         ; inf = Z.flush 0 0 (Z.refill 0 0 inf)

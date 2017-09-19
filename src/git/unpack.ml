@@ -1343,6 +1343,12 @@ module MakeDecoder
              and module Mapper = M
              and module Inflate = I =
 struct
+  module Log =
+  struct
+    let src = Logs.Src.create "git.unpack" ~doc:"logs git's unpack event"
+    include (val Logs.src_log src : Logs.LOG)
+  end
+
   module Hash = H
   module Mapper = M
   module Inflate = I
@@ -1494,9 +1500,13 @@ struct
 
     match Bucket.find t.win predicate with
     | Some window ->
+      Log.debug (fun l -> l "Reusing a window already loaded: [%Ld:%d]" window.Window.off window.Window.len);
+
       let relative_offset = Int64.to_int Int64.(offset_requested - window.Window.off)[@warning "-44"] in
       Lwt.return (Ok (window, relative_offset))
     | None ->
+      Log.debug (fun l -> l "Loading a new window for the %Ld offset requested." offset_requested);
+
       let open Lwt.Infix in
       map_window t offset_requested
       >>= function
@@ -1909,6 +1919,8 @@ struct
       let rec loop window consumed_in_window writed_in_raw writed_in_hnk hunks swap git_object state =
         match P.eval window.Window.raw state with
         | `Await state ->
+          Log.debug (fun l -> l ~header:"get" "PACK decoder waits.");
+
           let rest_in_window = min (window.Window.len - consumed_in_window) chunk in
 
           if rest_in_window > 0
@@ -1926,124 +1938,148 @@ struct
                     relative_offset writed_in_raw writed_in_hnk
                     hunks swap git_object
                     (P.refill 0 0 state))
-      | `Flush state ->
-        let o, n = P.output state in
-        let n' = min (Cstruct.len (get_free_raw swap) - writed_in_raw) n in
+        | `Flush state ->
+          Logs.debug (fun l -> l ~header:"get" "PACK decoder flushes.");
 
-        Cstruct.blit o 0 (get_free_raw swap) writed_in_raw n';
+          let o, n = P.output state in
+          let n' = min (Cstruct.len (get_free_raw swap) - writed_in_raw) n in
 
-        if n' > 0
-        then
-          loop window
-            consumed_in_window (writed_in_raw + n) writed_in_hnk
-            hunks swap git_object
-            (P.flush 0 (Cstruct.len o) state)
-        else Lwt.return (Ok (Object.{ kind = to_kind (P.kind state)
-                                    ; raw  = get_free_raw swap
-                                    ; length = Int64.of_int (P.length state)
-                                    ; from   = Direct { consumed = 0
-                                                      ; offset   = P.offset state
-                                                      ; crc      = Crc32.default }}))
-      | `Hunk (state, hunk) ->
-        (match h_tmp, hunk with
-         | Some hnks, P.H.Insert raw ->
-           let len = Cstruct.len raw in
-           Cstruct.blit raw 0 hnks.(0)  writed_in_hnk len;
-           loop window
-             consumed_in_window writed_in_raw (writed_in_hnk + len)
-             (Insert (Cstruct.sub hnks.(0) writed_in_hnk len) :: hunks)
-             swap git_object (P.continue state)
-         | None, P.H.Insert raw ->
-           let len = Cstruct.len raw in
-           let res = Cstruct.create len in
-           Cstruct.blit raw 0 res 0 len;
-           loop window
-             consumed_in_window writed_in_raw writed_in_hnk
-             (Insert res :: hunks) swap git_object
-             (P.continue state)
-         | _, P.H.Copy (off, len) ->
-           loop window consumed_in_window writed_in_raw writed_in_hnk
-             (Copy (off, len) :: hunks) swap git_object
-             (P.continue state))
-      | `Object state ->
-        (match P.kind state with
-         | P.Hunk hunks_header ->
-           let partial_hunks =
-             { _length   = P.length state
-             ; _consumed = P.consumed state
-             ; _offset   = P.offset state
-             ; _crc      = P.crc state
-             ; _hunks    = List.rev hunks }
-           in
+          Cstruct.blit o 0 (get_free_raw swap) writed_in_raw n';
 
-           let rec undelta depth partial hunks swap =
-             get_pack_object
-               ~chunk
-               ?h_tmp:(match h_tmp with Some hnks -> Some hnks.(depth) | None -> None)
-               t
-               hunks.H.reference hunks.H.source_length partial._offset z_tmp z_win (get_free_raw swap)
-             >>= function
-             | Error exn -> Lwt.return (Error exn)
-             | Ok (Hunks (partial_hunks, hunks)) ->
-               (undelta (depth + 1) partial_hunks hunks (not swap) >|= function
-                | Ok base ->
-                  apply partial_hunks hunks partial_hunks._hunks base (get_free_raw swap)
-                | Error exn -> Error exn)
-             | Ok (Object (kind, partial, raw)) ->
-               Lwt.return (Ok Object.{ kind
-                                     ; raw
-                                     ; length = Int64.of_int partial._length
-                                     ; from   = Direct { consumed = partial._consumed
-                                                       ; offset   = partial._offset
-                                                       ; crc      = partial._crc } })
-             | Ok (External (hash, kind, raw)) ->
-               Lwt.return (Ok Object.{ kind
-                                     ; raw
-                                     ; length = Int64.of_int (Cstruct.len raw)
-                                     ; from   = Object.External hash })
-           in
+          if n' > 0
+          then
+            loop window
+              consumed_in_window (writed_in_raw + n) writed_in_hnk
+              hunks swap git_object
+              (P.flush 0 (Cstruct.len o) state)
+          else Lwt.return (Ok (Object.{ kind = to_kind (P.kind state)
+                                      ; raw  = get_free_raw swap
+                                      ; length = Int64.of_int (P.length state)
+                                      ; from   = Direct { consumed = 0
+                                                        ; offset   = P.offset state
+                                                        ; crc      = Crc32.default }}))
+        | `Hunk (state, hunk) ->
+          Log.debug (fun l -> l ~header:"get" "PACK decoder return an hunk.");
 
-           (undelta 1 partial_hunks hunks_header swap >>= function
-            | Ok base ->
-              (match apply partial_hunks hunks_header partial_hunks._hunks base (get_free_raw (not swap)) with
-               | Ok obj ->
-                 loop window
-                   consumed_in_window writed_in_raw writed_in_hnk
-                   hunks swap (Some obj)
-                   (P.next_object state)
+          (match h_tmp, hunk with
+           | Some hnks, P.H.Insert raw ->
+             let len = Cstruct.len raw in
+             Cstruct.blit raw 0 hnks.(0)  writed_in_hnk len;
+             loop window
+               consumed_in_window writed_in_raw (writed_in_hnk + len)
+               (Insert (Cstruct.sub hnks.(0) writed_in_hnk len) :: hunks)
+               swap git_object (P.continue state)
+           | None, P.H.Insert raw ->
+             let len = Cstruct.len raw in
+             let res = Cstruct.create len in
+             Cstruct.blit raw 0 res 0 len;
+             loop window
+               consumed_in_window writed_in_raw writed_in_hnk
+               (Insert res :: hunks) swap git_object
+               (P.continue state)
+           | _, P.H.Copy (off, len) ->
+             loop window consumed_in_window writed_in_raw writed_in_hnk
+               (Copy (off, len) :: hunks) swap git_object
+               (P.continue state))
+        | `Object state ->
+          Log.debug (fun l -> l ~header:"get" "PACK decoder retrieve an object.");
+
+          (match P.kind state with
+           | P.Hunk hunks_header ->
+             Log.debug (fun l -> l ~header:"get" "The Git object requested is delta-ified.");
+
+             let partial_hunks =
+               { _length   = P.length state
+               ; _consumed = P.consumed state
+               ; _offset   = P.offset state
+               ; _crc      = P.crc state
+               ; _hunks    = List.rev hunks }
+             in
+
+             let rec undelta depth partial hunks swap =
+               Log.debug (fun l -> l ~header:"get" "Undelta the object at the depth: %d." depth);
+
+               get_pack_object
+                 ~chunk
+                 ?h_tmp:(match h_tmp with Some hnks -> Some hnks.(depth) | None -> None)
+                 t
+                 hunks.H.reference hunks.H.source_length partial._offset z_tmp z_win (get_free_raw swap)
+               >>= function
+               | Error exn -> Lwt.return (Error exn)
+               | Ok (Hunks (partial_hunks, hunks)) ->
+                 (undelta (depth + 1) partial_hunks hunks (not swap) >|= function
+                   | Ok base ->
+                     Log.debug (fun l -> l ~header:"get" "Applying hunks (depth: %d)." depth);
+
+                     apply partial_hunks hunks partial_hunks._hunks base (get_free_raw swap)
+                   | Error exn -> Error exn)
+               | Ok (Object (kind, partial, raw)) ->
+                 Lwt.return (Ok Object.{ kind
+                                       ; raw
+                                       ; length = Int64.of_int partial._length
+                                       ; from   = Direct { consumed = partial._consumed
+                                                         ; offset   = partial._offset
+                                                         ; crc      = partial._crc } })
+               | Ok (External (hash, kind, raw)) ->
+                 Lwt.return (Ok Object.{ kind
+                                       ; raw
+                                       ; length = Int64.of_int (Cstruct.len raw)
+                                       ; from   = Object.External hash })
+             in
+
+             (undelta 1 partial_hunks hunks_header swap >>= function
+               | Ok base ->
+                 (match apply partial_hunks hunks_header partial_hunks._hunks base (get_free_raw (not swap)) with
+                  | Ok obj ->
+                    loop window
+                      consumed_in_window writed_in_raw writed_in_hnk
+                      hunks swap (Some obj)
+                      (P.next_object state)
+                  | Error exn -> Lwt.return (Error exn))
                | Error exn -> Lwt.return (Error exn))
-            | Error exn -> Lwt.return (Error exn))
-         | (P.Commit | P.Tag | P.Tree | P.Blob) as kind ->
-           let obj =
-             Object.{ kind   = to_kind kind
-                    ; raw    =
-                      if (not limit) || ((P.length state) < 0x10000FFFE && limit)
-                      then Cstruct.sub (get_free_raw swap) 0 (P.length state)
-                      else (get_free_raw swap)
-                    ; length = Int64.of_int (P.length state)
-                    ; from   = Direct { consumed = P.consumed state
-                                      ; offset   = P.offset state
-                                      ; crc      = P.crc state } }
-           in
+           | (P.Commit | P.Tag | P.Tree | P.Blob) as kind ->
+             Log.debug (fun l -> l ~header:"get" "The Git object requested is not delta-ified.");
 
-           loop window
-             consumed_in_window writed_in_raw writed_in_hnk
-             hunks (not swap) (Some obj)
-             (P.next_object state))
-      | `Error (state, exn) ->
-        Lwt.return (Error (Unpack_error (state, window, exn)))
-      | `End _ -> match git_object with
-        | Some obj ->
-          Lwt.return (Ok obj)
-        | None -> assert false
-    in
+             let obj =
+               Object.{ kind   = to_kind kind
+                      ; raw    =
+                          if (not limit) || ((P.length state) < 0x10000FFFE && limit)
+                          then Cstruct.sub (get_free_raw swap) 0 (P.length state)
+                          else (get_free_raw swap)
+                      ; length = Int64.of_int (P.length state)
+                      ; from   = Direct { consumed = P.consumed state
+                                        ; offset   = P.offset state
+                                        ; crc      = P.crc state } }
+             in
 
-    loop window relative_offset 0 0 [] true None state
+             loop window
+               consumed_in_window writed_in_raw writed_in_hnk
+               hunks (not swap) (Some obj)
+               (P.next_object state))
+        | `Error (state, exn) ->
+          Log.err (fun l -> l ~header:"get" "Retrieve an error: %a." P.pp_error exn);
+
+          Lwt.return (Error (Unpack_error (state, window, exn)))
+        | `End _ -> match git_object with
+          | Some obj ->
+            Lwt.return (Ok obj)
+          | None -> assert false
+      in
+
+      loop window relative_offset 0 0 [] true None state
 
   let optimized_get ?(chunk = 0x8000) ?(limit = false) ?h_tmp t hash v_tmp z_tmp z_win =
     match t.idx hash with
-    | Some (_, absolute_offset) -> optimized_get' ~chunk ~limit ?h_tmp t absolute_offset v_tmp z_tmp z_win
-    | None -> Lwt.return (Error (Invalid_hash hash))
+    | Some (crc32, absolute_offset) ->
+      Log.debug (fun l -> l ~header:"get/hash" "Information of the Git object %a: (crc32: %a, offset: %Ld)."
+                    Hash.pp hash Crc32.pp crc32 absolute_offset);
+
+      optimized_get' ~chunk ~limit ?h_tmp t absolute_offset v_tmp z_tmp z_win
+    | None ->
+      Log.err (fun l -> l ~header:"get/hash" "The Git object %a does not exists in the current PACK file."
+                  Hash.pp hash);
+
+      Lwt.return (Error (Invalid_hash hash))
 
   let get' ?chunk t absolute_offset z_tmp z_win (raw0, raw1) =
     let open Lwt.Infix in
@@ -2074,6 +2110,8 @@ struct
     needed t hash z_tmp z_win >>= function
     | Error exn -> Lwt.return (Error exn)
     | Ok length ->
+      Log.debug (fun l -> l ~header:"get+allocation/hash" "Git object %a need %d byte(s) (allocation)." Hash.pp hash length);
+
       let tmp = Cstruct.create length, Cstruct.create length, length in
 
       optimized_get ?chunk ?h_tmp t hash tmp z_tmp z_win

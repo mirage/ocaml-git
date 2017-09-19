@@ -145,7 +145,7 @@ module Make
       Path.(root / "objects")[@warning "-44"]
     >>= function
     | Error sys_err ->
-      Log.warn (fun l -> l "Retrieving a file-system error: %a." FileSystem.Dir.pp_error sys_err);
+      Log.err (fun l -> l "Retrieving a file-system error: %a." FileSystem.Dir.pp_error sys_err);
       Lwt.return []
     | Ok firsts ->
       Lwt_list.fold_left_s
@@ -159,8 +159,8 @@ module Make
                     (Hash.of_hex Path.((to_string first) ^ (to_string path)))
                     |> fun v -> Lwt.return (v :: acc)
                   with _ ->
-                    Log.warn (fun l -> l "Retrieving a malformed file: %s."
-                                 Path.((to_string first) ^ (to_string path)));
+                    Log.warn (fun l -> l "Retrieving a malformed file: %s / %s."
+                                 (Path.to_string first) (Path.to_string path));
                     Lwt.return acc)
                acc
                paths
@@ -196,7 +196,10 @@ module Make
           FileSystem.File.read raw read >>=
           (function
             | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
-            | Ok n -> match D.refill (Cstruct.sub raw 0 n) decoder with
+            | Ok n ->
+              Log.debug (fun l -> l "Reading %d byte(s) of the file-descriptor" n);
+
+              match D.refill (Cstruct.sub raw 0 n) decoder with
               | Ok decoder -> loop decoder
               | Error (#D.error as err) -> Lwt.return (Error err))
         | `Error (_, (#D.error as err)) -> Lwt.return (Error err)
