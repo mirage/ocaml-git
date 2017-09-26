@@ -943,6 +943,14 @@ sig
           update of the reference [reference] in the git repository
           [state]. *)
   end
+
+  val clear : ?locks:Lock.t -> t -> unit Lwt.t
+  (** [clear ?locks t] drops all values stored in the internal caches
+      binded with the git repository [t]. *)
+
+  val reset : ?locks:Lock.t -> t -> (unit, Ref.error) result Lwt.t
+  (** [reset ?locks t] removes all things of the git repository [t]
+      and ensures it will be empty. *)
 end
 
 module Make

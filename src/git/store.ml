@@ -221,6 +221,9 @@ sig
     val write : t -> ?locks:Lock.t -> Reference.t -> Reference.head_contents -> (unit, error) result Lwt.t
     val test_and_set : t -> ?locks:Lock.t -> Reference.t -> test:Reference.head_contents option -> set:Reference.head_contents option -> (bool, error) result Lwt.t
   end
+
+  val clear       : ?locks:Lock.t -> t -> unit Lwt.t
+  val reset       : ?locks:Lock.t -> t -> (unit, Ref.error) result Lwt.t
 end
 
 module Option =
@@ -1306,6 +1309,61 @@ module Make
     >>= function
     | Ok t -> Lwt.return (Ok t)
     | Error sys_err -> Lwt.return (Error (`SystemDirectory sys_err))
+
+  let clear ?locks t =
+    let lock = match locks with
+      | Some locks -> Some (Lock.make locks Path.(t.dotgit / "global"))[@warning "-44"]
+      | None -> None
+    in
+
+    Lock.with_lock lock @@ fun () ->
+    CacheIndex.drop_lru t.cache.indexes;
+    CacheRevIndex.drop_lru t.cache.revindexes;
+    CachePack.drop_lru t.cache.packs;
+    CacheValue.drop_lru t.cache.values;
+    CacheObject.drop_lru t.cache.objects;
+    Lwt.return ()
+
+  let reset ?locks t =
+    let delete_files directory =
+      let open Lwt_result in
+
+      FileSystem.Dir.contents ~dotfiles:true ~rel:false directory
+      >>= fun lst ->
+      ok (Lwt_list.fold_left_s
+            (fun acc path -> Lwt.Infix.(FileSystem.is_file path >|= function
+               | Ok true -> path :: acc
+               | _ -> acc))
+            [] lst)
+      >>= fun lst ->
+      ok (Lwt_list.iter_p
+            (fun path -> Lwt.Infix.(FileSystem.File.delete path >|= function
+               | Ok () -> ()
+               | Error _ -> ())) lst)
+    in
+
+    let lock = match locks with
+      | Some locks -> Some (Lock.make locks Path.(t.dotgit / "global"))[@warning "-44"]
+      | None -> None
+    in
+
+    let open Lwt_result in
+
+    let ( >>! ) v f = bind_lwt_err v f in
+
+    Lock.with_lock lock @@ fun () ->
+    (FileSystem.Dir.delete ~recurse:true Path.(t.root / "objects")
+     >>= fun _ -> FileSystem.Dir.create Path.(t.root / "objects")
+     >>= fun _ -> FileSystem.Dir.create Path.(t.root / "objects" / "info")
+     >>= fun _ -> FileSystem.Dir.create Path.(t.root / "objects" / "pack")
+     >>= fun _ -> FileSystem.Dir.delete ~recurse:true Path.(t.root / "refs")
+     >>= fun _ -> FileSystem.Dir.create Path.(t.root / "refs" / "heads")
+     >>= fun _ -> FileSystem.Dir.create Path.(t.root / "refs" / "tags"))
+    >>! (fun err -> Lwt.return (`SystemDirectory err))
+    >>= fun _ -> (delete_files t.root >>! (fun err -> Lwt.return (`SystemDirectory err)))
+    >>= fun _ -> Ref.write t Reference.head Reference.(Ref (of_string "refs/heads/master"))
+  (* XXX(dinosaure): an empty git repository has HEAD which points
+     to a non-existing refs/heads/master. *)
 
   let dotgit      { dotgit; _ }      = dotgit
   let root        { root; _ }        = root

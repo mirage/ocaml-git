@@ -134,4 +134,12 @@ sig
         from the git repository [state]. The [?lock] avoids the race
         condition if it's specified. *)
   end
+
+  val reset : ?locks:Lock.t -> t -> (unit, Ref.error) result Lwt.t
+  (** [reset ?locks t] removes all things of the git repository [t]
+      and ensures it will be empty. *)
+
+  val clear : ?locks:Lock.t -> t -> unit Lwt.t
+  (** [clear ?locks t] drops all values stored in the internal caches
+      binded with the git repository [t]. *)
 end

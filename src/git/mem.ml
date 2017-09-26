@@ -97,6 +97,20 @@ module Make
     in
     Lwt.return (Ok t : (t, error) result)
 
+  let reset ?locks t =
+    let lock = match locks with
+      | Some locks -> Some (Lock.make locks Path.(t.root / "global"))
+      | None -> None
+    in
+
+    Lock.with_lock lock @@ fun () ->
+    Hashtbl.clear t.values;
+    Hashtbl.clear t.inflated;
+    Hashtbl.clear t.refs;
+    Lwt.return (Ok ())
+
+  let clear ?locks:_ _ = Lwt.return ()
+
   let write t value =
     let hash = Value.digest value in
     let kind = match value with
