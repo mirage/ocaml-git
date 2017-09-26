@@ -80,7 +80,6 @@ module Make
   let dotgit t = t.dotgit
   let compression t = t.compression
 
-  let stores = Hashtbl.create 1024
   let default_root = Path.v "root"
 
   let[@warning "-44"] create ?(root = default_root) ?(dotgit = Path.(default_root / ".git")) ?(compression = 6) () =
@@ -88,20 +87,13 @@ module Make
     then failwith "level should be between 0 and 9";
 
     let t =
-      try Hashtbl.find stores root
-      with Not_found ->
-        let t =
-          { root
-          ; compression
-          ; dotgit
-          ; values   = Hashtbl.create 1024
-          ; inflated = Hashtbl.create 1024
-          ; refs     = Hashtbl.create 8
-          ; head     = None }
-        in
-
-        Hashtbl.add stores root t;
-        t
+      { root
+      ; compression
+      ; dotgit
+      ; values   = Hashtbl.create 1024
+      ; inflated = Hashtbl.create 1024
+      ; refs     = Hashtbl.create 8
+      ; head     = None }
     in
     Lwt.return (Ok t : (t, error) result)
 
