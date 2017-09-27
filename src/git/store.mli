@@ -944,9 +944,9 @@ sig
           [state]. *)
   end
 
-  val clear : ?locks:Lock.t -> t -> unit Lwt.t
-  (** [clear ?locks t] drops all values stored in the internal caches
-      binded with the git repository [t]. *)
+  val clear_caches : ?locks:Lock.t -> t -> unit Lwt.t
+  (** [clear_caches ?locks t] drops all values stored in the internal
+      caches binded with the git repository [t]. *)
 
   val reset : ?locks:Lock.t -> t -> (unit, Ref.error) result Lwt.t
   (** [reset ?locks t] removes all things of the git repository [t]

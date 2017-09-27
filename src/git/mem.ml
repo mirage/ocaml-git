@@ -109,7 +109,7 @@ module Make
     Hashtbl.clear t.refs;
     Lwt.return (Ok ())
 
-  let clear ?locks:_ _ = Lwt.return ()
+  let clear_caches ?locks:_ _ = Lwt.return ()
 
   let write t value =
     let hash = Value.digest value in

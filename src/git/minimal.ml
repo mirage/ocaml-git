@@ -139,7 +139,7 @@ sig
   (** [reset ?locks t] removes all things of the git repository [t]
       and ensures it will be empty. *)
 
-  val clear : ?locks:Lock.t -> t -> unit Lwt.t
-  (** [clear ?locks t] drops all values stored in the internal caches
-      binded with the git repository [t]. *)
+  val clear_caches : ?locks:Lock.t -> t -> unit Lwt.t
+  (** [clear_caches ?locks t] drops all values stored in the internal
+      caches binded with the git repository [t]. *)
 end

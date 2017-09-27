@@ -222,8 +222,8 @@ sig
     val test_and_set : t -> ?locks:Lock.t -> Reference.t -> test:Reference.head_contents option -> set:Reference.head_contents option -> (bool, error) result Lwt.t
   end
 
-  val clear       : ?locks:Lock.t -> t -> unit Lwt.t
-  val reset       : ?locks:Lock.t -> t -> (unit, Ref.error) result Lwt.t
+  val clear_caches : ?locks:Lock.t -> t -> unit Lwt.t
+  val reset        : ?locks:Lock.t -> t -> (unit, Ref.error) result Lwt.t
 end
 
 module Option =
@@ -1310,7 +1310,7 @@ module Make
     | Ok t -> Lwt.return (Ok t)
     | Error sys_err -> Lwt.return (Error (`SystemDirectory sys_err))
 
-  let clear ?locks t =
+  let clear_caches ?locks t =
     let lock = match locks with
       | Some locks -> Some (Lock.make locks Path.(t.dotgit / "global"))[@warning "-44"]
       | None -> None
