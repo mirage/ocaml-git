@@ -144,7 +144,7 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
   let temp_dir t = t.dot_git / "tmp"
   let lock_dir t = t.dot_git / "lock"
 
-  let create ?(root="/tmp/ogit") ?dot_git ?(level=6) () =
+  let create ?(root=".") ?dot_git ?(level=6) () =
     if level < 0 || level > 9 then
       failf "create: level should be between 0 and 9";
     let dot_git = match dot_git with
