@@ -86,7 +86,7 @@ Performance is comparable to the Git tool.
 # module Search = Git.Search.Make(FS);;
 
 # let read file =
-    FS.create () >>= fun t ->
+    FS.create ~root:"." () >>= fun t ->
     FS.read_reference_exn t Git.Reference.master >>= fun head ->
     Search.find t head (`Commit (`Path file)) >>= function
     | None     -> failwith "file not found"
