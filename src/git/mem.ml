@@ -28,14 +28,6 @@ let err_not_found n k =
   Log.err (fun l -> l "Raising an invalid argument from %s" n);
   Lwt.fail (Invalid_argument str)
 
-module type S =
-sig
-  include Minimal.S
-
-  val read_inflated : t -> Hash.t -> ([ `Commit | `Tag | `Blob | `Tree ] * string) option Lwt.t
-  val write_inflated : t -> kind:[ `Commit | `Tree | `Blob | `Tag ] -> Cstruct.t -> Hash.t Lwt.t
-end
-
 module Make
     (H : S.HASH with type Digest.buffer = Cstruct.t
                  and type hex = string)
@@ -46,7 +38,8 @@ module Make
     (D : S.DEFLATE)
     (B : S.BUFFER with type raw = string
                    and type fixe = Cstruct.t)
-  : S with module Hash = H
+  : Minimal.S
+    with module Hash = H
        and module Path = P
        and module Lock = L
        and module Inflate = I

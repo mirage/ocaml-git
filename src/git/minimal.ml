@@ -142,4 +142,7 @@ sig
   val clear_caches : ?locks:Lock.t -> t -> unit Lwt.t
   (** [clear_caches ?locks t] drops all values stored in the internal
       caches binded with the git repository [t]. *)
+
+  val read_inflated : t -> Hash.t -> ([ `Commit | `Tag | `Blob | `Tree ] * Cstruct.t) option Lwt.t
+  val write_inflated : t -> kind:[ `Commit | `Tree | `Blob | `Tag ] -> Cstruct.t -> Hash.t Lwt.t
 end
