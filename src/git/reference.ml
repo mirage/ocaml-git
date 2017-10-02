@@ -96,7 +96,7 @@ module Make
   let to_path x = match Path.of_string x with
     | Error (`Msg x) -> raise (Invalid_argument x)
     | Ok v -> v
-  let of_path = Path.to_string
+  let of_path path = Path.(to_string (v "refs" // path))
 
   let pp ppf x =
     Fmt.pf ppf "%s" (String.escaped x)
