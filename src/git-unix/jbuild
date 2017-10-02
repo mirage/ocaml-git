@@ -3,4 +3,4 @@
 (library
  ((name        git_unix)
   (public_name git-unix)
-  (libraries   (git conduit.lwt-unix git-http cohttp.lwt nocrypto))))
+  (libraries   (git camlzip digestif.c logs.fmt lwt.unix))))
