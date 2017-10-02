@@ -218,6 +218,8 @@ sig
   type raw
   (** The type of the buffer. *)
 
+  type uri
+
   module HTTP :
   sig
     type headers
@@ -287,6 +289,9 @@ sig
       val user_agent : name
       (** User-Agent. *)
 
+      val content_type : name
+      (** Content-Type. *)
+
       val access_control_allow_origin : name
       (** Access-Control-Allow-Origin. *)
 
@@ -302,6 +307,8 @@ sig
       val def_multi : name -> string list -> headers -> headers
       (** [def_multi n vs hs] is [hs] with [n] bound to the multi-value [vs].
           @raise Invalid_argument if [vs] is [[]]. *)
+
+      val merge : headers -> headers -> headers
     end
   end
 
@@ -318,27 +325,14 @@ sig
 
   module Request :
   sig
-    type consumer = (raw * int * int) option -> unit
-    (** The type for request consumers.
-        Request consumers are provided by the connector to get the body produced
-        by a request. Request bodies call the consumer with [Some (byte, pos,
-        len)], to output data. The bytes are not modified by the consumer and
-        only read from [pos] to [pos+len]. The producer signals the end of body
-        by calling the consumer with [None]. *)
-
-    type body =
-      [ `Stream of (consumer -> unit io) ]
+    type body
     (** The type for request bodies. *)
 
-    val stream_body : (consumer -> unit io) -> body
-    (** [stream_body producer] is a request body stream produced by [produced]
-        on the consumer it will be given to. *)
+    val body : req -> body
 
-    val string_body : string -> body
-    (** [string_body s] is a request body made of string [s]. *)
+    val meth : req -> HTTP.meth
 
-    val empty_body : body
-    (** [empty_body] is an empty body. *)
+    val uri : req -> uri
 
     val headers : req -> HTTP.headers
     (** [headers r] is [r]'s information. Initially empty it can be used be
@@ -360,7 +354,7 @@ sig
 
   module Response :
   sig
-    type body = unit -> (raw * int * int) option io
+    type body
     (** The type for request bodies.contents
         A body is a function that yields byte chunks of the request body as
         [Some (bytes, pos, len)] values. The bytes value must not be modified
