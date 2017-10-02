@@ -202,10 +202,12 @@ sig
   (** Pretty-printer of {!report_status}. *)
 
   type _ transaction =
+    | HttpReferenceDiscovery : string -> advertised_refs transaction
     | ReferenceDiscovery : advertised_refs transaction
     | ShallowUpdate      : shallow_update transaction
     | Negociation        : ack_mode -> acks transaction
     | NegociationResult  : negociation_result transaction
+    | HttpPACK           : ((negociation_result -> bool) * side_band) -> flow transaction
     | PACK               : side_band -> flow transaction
     | ReportStatus       : side_band -> report_status transaction
     (** The type transaction to describe what is expected to decode/receive. *)
@@ -339,6 +341,7 @@ sig
   type action =
     [ `GitProtoRequest of git_proto_request
     | `UploadRequest of upload_request
+    | `HttpUploadRequest of upload_request
     | `UpdateRequest of update_request
     | `Has of Hash.t list
     | `Done

@@ -82,10 +82,12 @@ sig
   val pp_report_status : report_status Fmt.t
 
   type _ transaction =
+    | HttpReferenceDiscovery : string -> advertised_refs transaction
     | ReferenceDiscovery : advertised_refs transaction
     | ShallowUpdate      : shallow_update transaction
     | Negociation        : ack_mode -> acks transaction
     | NegociationResult  : negociation_result transaction
+    | HttpPACK           : ((negociation_result -> bool) * side_band) -> flow transaction
     | PACK               : side_band -> flow transaction
     | ReportStatus       : side_band -> report_status transaction
   and ack_mode =
@@ -156,6 +158,7 @@ sig
   type action =
     [ `GitProtoRequest of git_proto_request
     | `UploadRequest of upload_request
+    | `HttpUploadRequest of upload_request
     | `UpdateRequest of update_request
     | `Has of Hash.t list
     | `Done
@@ -615,7 +618,7 @@ struct
       (Fmt.hvbox (Fmt.list ~sep pp_ref)) refs
       (Fmt.hvbox (Fmt.list ~sep Capability.pp)) capabilities
 
-  let rec p_advertised_refs ~pkt ~first ~shallow_state refs decoder =
+  let rec p_advertised_refs' ~pkt ~first ~shallow_state refs decoder =
     match pkt with
     | `Flush ->
       p_return refs decoder
@@ -625,7 +628,7 @@ struct
       match p_peek_char decoder with
       | Some 's' ->
         let rest = shallow decoder in
-        p_pkt_line (p_advertised_refs
+        p_pkt_line (p_advertised_refs'
                       ~first:true
                       ~shallow_state:true
                       { refs with shallow = rest :: refs.shallow })
@@ -634,20 +637,20 @@ struct
         if first = false
         then match p_first_ref decoder with
           | `NoRef capabilities ->
-            p_pkt_line (p_advertised_refs
+            p_pkt_line (p_advertised_refs'
                           ~first:true
                           ~shallow_state:false
                           { refs with capabilities })
               decoder
           | `Ref (first, capabilities) ->
-            p_pkt_line (p_advertised_refs
+            p_pkt_line (p_advertised_refs'
                           ~first:true
                           ~shallow_state:false
                           { refs with capabilities
                                     ; refs = [ first ] })
               decoder
         else let rest = other_ref decoder in
-          p_pkt_line (p_advertised_refs
+          p_pkt_line (p_advertised_refs'
                         ~first:true
                         ~shallow_state:false
                         { refs with refs = rest :: refs.refs })
@@ -657,12 +660,36 @@ struct
 
   let p_advertised_refs decoder =
     p_pkt_line
-      (p_advertised_refs
+      (p_advertised_refs'
          ~first:false
          ~shallow_state:false
          { shallow = []
          ; refs = []
          ; capabilities = [] })
+      decoder
+
+  let p_http_advertised_refs ~service ~pkt decoder =
+    match pkt with
+    | `Flush -> raise (Leave (err_unexpected_flush_pkt_line decoder))
+    | `Empty -> raise (Leave (err_unexpected_empty_pkt_line decoder))
+    | `Malformed -> raise (Leave (err_malformed_pkt_line decoder))
+    | `Line _ ->
+      ignore @@ p_string "# service=" decoder;
+      ignore @@ p_string service decoder;
+      p_pkt_line (fun ~pkt decoder -> match pkt with
+          | `Flush -> p_advertised_refs decoder
+          | `Empty -> raise (Leave (err_unexpected_empty_pkt_line decoder))
+          | `Malformed -> raise (Leave (err_malformed_pkt_line decoder))
+          | `Line _ as pkt -> p_advertised_refs' ~pkt ~first:false ~shallow_state:false
+                         { shallow = []
+                         ; refs = []
+                         ; capabilities = [] }
+                         decoder)
+        decoder
+
+  let p_http_advertised_refs ~service decoder =
+    p_pkt_line
+      (p_http_advertised_refs ~service)
       decoder
 
   type shallow_update =
@@ -810,7 +837,7 @@ struct
     | ACK hash -> Fmt.pf ppf "(ACK %a)" Hash.pp hash
     | ERR err -> Fmt.pf ppf "(ERR %s)" err
 
-  let p_negociation_result ~pkt decoder = match pkt with
+  let p_negociation_result' ~pkt k decoder = match pkt with
     | `Flush -> raise (Leave (err_unexpected_flush_pkt_line decoder))
     | `Empty -> raise (Leave (err_unexpected_empty_pkt_line decoder))
     | `Malformed -> raise (Leave (err_malformed_pkt_line decoder))
@@ -818,29 +845,29 @@ struct
       match p_peek_char decoder with
       | Some 'N' ->
         ignore @@ p_string "NAK" decoder;
-        p_return NAK decoder
+        k NAK decoder
       | Some 'A' ->
         ignore @@ p_string "ACK" decoder;
         p_space decoder;
         let hash = p_hash decoder in
-        p_return (ACK hash) decoder
+        k (ACK hash) decoder
       | Some 'E' ->
         ignore @@ p_string "ERR" decoder;
         p_space decoder;
         let msg = Cstruct.to_string @@ p_while1 (fun _ -> true) decoder in
-        p_return (ERR msg) decoder
+        k (ERR msg) decoder
       | Some chr -> raise (Leave (err_unexpected_char chr decoder))
       | None -> raise (Leave (err_unexpected_end_of_input decoder))
 
   let p_negociation_result decoder =
-    p_pkt_line p_negociation_result decoder
+    p_pkt_line (p_negociation_result' p_return) decoder
 
   type pack =
     [ `Raw of Cstruct.t
     | `Out of Cstruct.t
     | `Err of Cstruct.t ]
 
-  let p_pack ~pkt ~mode decoder = match pkt, mode with
+  let p_pack' ~pkt ~mode decoder = match pkt, mode with
     | `Malformed, _ -> raise (Leave (err_malformed_pkt_line decoder))
     | `Empty, _ -> raise (Leave (err_unexpected_empty_pkt_line decoder))
     | `Line n, `No_multiplexe ->
@@ -859,7 +886,16 @@ struct
       | None -> raise (Leave (err_unexpected_end_of_input decoder))
 
   let p_pack ~mode decoder =
-    p_pkt_line ~strict:true (p_pack ~mode) decoder
+    p_pkt_line ~strict:true (p_pack' ~mode) decoder
+
+  let p_http_pack ~expect ~mode decoder =
+    p_pkt_line (fun ~pkt decoder ->
+        p_negociation_result' ~pkt
+          (fun has decoder -> match expect has with
+             | true -> p_pkt_line ~strict:true (p_pack' ~mode) decoder
+             | false -> assert false)
+          decoder)
+      decoder
 
   type report_status =
     { unpack   : (unit, string) result
@@ -942,10 +978,12 @@ struct
 
   (* XXX(dinosaure): désolé mais ce GADT, c'est quand même la classe. *)
   type _ transaction =
+    | HttpReferenceDiscovery : string -> advertised_refs transaction
     | ReferenceDiscovery : advertised_refs transaction
     | ShallowUpdate      : shallow_update transaction
     | Negociation        : ack_mode -> acks transaction
     | NegociationResult  : negociation_result transaction
+    | HttpPACK           : ((negociation_result -> bool) * side_band) -> flow transaction
     | PACK               : side_band -> flow transaction
     | ReportStatus       : side_band -> report_status transaction
   and ack_mode =
@@ -958,10 +996,12 @@ struct
   let decode
     : type result. decoder -> result transaction -> result state
     = fun decoder -> function
+    | HttpReferenceDiscovery service -> p_safe (p_http_advertised_refs ~service) decoder
     | ReferenceDiscovery    -> p_safe p_advertised_refs decoder
     | ShallowUpdate         -> p_safe p_shallow_update decoder
     | Negociation ackmode   -> p_safe (p_negociation ~mode:ackmode) decoder
     | NegociationResult     -> p_safe p_negociation_result decoder
+    | HttpPACK (expect, sideband) -> p_safe (p_http_pack ~expect ~mode:sideband) decoder
     | PACK sideband         -> p_safe (p_pack ~mode:sideband) decoder
     | ReportStatus sideband -> p_safe (p_report_status sideband) decoder
 
@@ -1105,18 +1145,20 @@ struct
      @@ writes refname k)
       encoder
 
-  let w_first_want obj_id capabilities k encoder =
-    pkt_line (w_first_want obj_id capabilities) k encoder
-  let w_want obj_id k encoder =
-    pkt_line (w_want obj_id) k encoder
-  let w_shallow obj_id k encoder =
-    pkt_line (w_shallow obj_id) k encoder
-  let w_deepen depth k encoder =
-    pkt_line (w_deepen depth) k encoder
-  let w_deepen_since timestamp k encoder =
-    pkt_line (w_deepen_since timestamp) k encoder
-  let w_deepen_not refname k encoder =
-    pkt_line (w_deepen_not refname) k encoder
+  let w_first_want ?lf obj_id capabilities k encoder =
+    pkt_line ?lf (w_first_want obj_id capabilities) k encoder
+  let w_want ?lf obj_id k encoder =
+    pkt_line ?lf (w_want obj_id) k encoder
+  let w_shallow ?lf obj_id k encoder =
+    pkt_line ?lf (w_shallow obj_id) k encoder
+  let w_deepen ?lf depth k encoder =
+    pkt_line ?lf (w_deepen depth) k encoder
+  let w_deepen_since ?lf timestamp k encoder =
+    pkt_line ?lf (w_deepen_since timestamp) k encoder
+  let w_deepen_not ?lf refname k encoder =
+    pkt_line ?lf (w_deepen_not refname) k encoder
+  let w_done_and_lf k encoder =
+    pkt_line ~lf:true (writes "done") k encoder
 
   type upload_request =
     { want         : Hash.t * Hash.t list
@@ -1132,18 +1174,23 @@ struct
     in
     aux l encoder
 
-  let w_upload_request upload_request k encoder =
+  let w_upload_request ?lf upload_request k encoder =
     let first, rest = upload_request.want in
 
-    (w_first_want first upload_request.capabilities
-     @@ (w_list w_want rest)
-     @@ (w_list w_shallow upload_request.shallow)
+    (w_first_want ?lf first upload_request.capabilities
+     @@ (w_list (w_want ?lf) rest)
+     @@ (w_list (w_shallow ?lf) upload_request.shallow)
      @@ (match upload_request.deep with
-         | Some (`Depth depth)  -> w_deepen depth
-         | Some (`Timestamp t) -> w_deepen_since t
-         | Some (`Ref refname)  -> w_deepen_not refname
+         | Some (`Depth depth)  -> w_deepen ?lf depth
+         | Some (`Timestamp t) -> w_deepen_since ?lf t
+         | Some (`Ref refname)  -> w_deepen_not ?lf refname
          | None -> noop)
      @@ pkt_flush k)
+      encoder
+
+  let w_http_upload_request upload_request k encoder =
+    (w_upload_request ~lf:true upload_request
+     @@ w_done_and_lf k)
       encoder
 
   let w_flush k encoder =
@@ -1332,6 +1379,7 @@ struct
   type action =
     [ `GitProtoRequest of git_proto_request
     | `UploadRequest of upload_request
+    | `HttpUploadRequest of upload_request
     | `UpdateRequest of update_request
     | `Has of Hash.t list
     | `Done
@@ -1340,14 +1388,15 @@ struct
     | `Shallow of Hash.t list ]
 
   let encode encoder = function
-    | `GitProtoRequest c -> w_git_proto_request c (fun _ -> Ok ()) encoder
-    | `UploadRequest i   -> w_upload_request i (fun _ -> Ok ()) encoder
-    | `UpdateRequest i   -> w_update_request i (fun _ -> Ok ()) encoder
-    | `Has l             -> w_has l (fun _ -> Ok ()) encoder
-    | `Done              -> w_done (fun _ -> Ok ()) encoder
-    | `Flush             -> w_flush (fun _ -> Ok ()) encoder
-    | `Shallow l         -> w_shallow l (fun _ -> Ok ()) encoder
-    | `PACK n            -> w_pack n (fun _ -> Ok ()) encoder
+    | `GitProtoRequest c   -> w_git_proto_request c (fun _ -> Ok ()) encoder
+    | `UploadRequest i     -> w_upload_request i (fun _ -> Ok ()) encoder
+    | `HttpUploadRequest i -> w_http_upload_request i (fun _ -> Ok ()) encoder
+    | `UpdateRequest i     -> w_update_request i (fun _ -> Ok ()) encoder
+    | `Has l               -> w_has l (fun _ -> Ok ()) encoder
+    | `Done                -> w_done (fun _ -> Ok ()) encoder
+    | `Flush               -> w_flush (fun _ -> Ok ()) encoder
+    | `Shallow l           -> w_shallow l (fun _ -> Ok ()) encoder
+    | `PACK n              -> w_pack n (fun _ -> Ok ()) encoder
 
   let encoder () =
     { payload = Cstruct.create 65535
