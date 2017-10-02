@@ -62,6 +62,7 @@ sig
 
   type error =
     [ `SystemFile of FileSystem.File.error
+    | `SystemDirectory of FileSystem.Dir.error
     | `SystemIO of string
     | D.error ]
 
@@ -188,11 +189,13 @@ module IO
 
   type error =
     [ `SystemFile of FileSystem.File.error
+    | `SystemDirectory of FileSystem.Dir.error
     | `SystemIO of string
     | D.error ]
 
   let pp_error ppf = function
     | `SystemFile sys_err -> Helper.ppe ~name:"`SystemFile" FileSystem.File.pp_error ppf sys_err
+    | `SystemDirectory sys_err -> Helper.ppe ~name:"`SystemDirectory" FileSystem.Dir.pp_error ppf sys_err
     | `SystemIO sys_err -> Helper.ppe ~name:"`SystemIO" Fmt.string ppf sys_err
     | #D.error as err -> D.pp_error ppf err
 
@@ -277,27 +280,30 @@ module IO
 
     Lock.with_lock lock
     @@ fun () ->
-    FileSystem.File.open_w ~mode:0o644 path
-    >>= function
-    | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
-    | Ok write ->
-      Helper.safe_encoder_to_file
-        ~limit:50
-        (module E)
-        FileSystem.File.write
-        write raw state
+    FileSystem.Dir.create ~path:true Path.(root // (parent (to_path reference))) >>= function
+    | Error sys_err -> Lwt.return (Error (`SystemDirectory sys_err))
+    | Ok (true | false) ->
+      FileSystem.File.open_w ~mode:0o644 path
       >>= function
-      | Ok _ -> FileSystem.File.close write >>=
-        (function
-          | Ok () -> Lwt.return (Ok ())
-          | Error sys_err -> Lwt.return (Error (`SystemFile sys_err)))
-      | Error err ->
-        FileSystem.File.close write >>= function
-        | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
-        | Ok () -> match err with
-          | `Stack -> Lwt.return (Error (`SystemIO (Fmt.strf "Impossible to store the reference: %a" pp reference)))
-          | `Writer sys_err -> Lwt.return (Error (`SystemFile sys_err))
-          | `Encoder `Never -> assert false
+      | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
+      | Ok write ->
+        Helper.safe_encoder_to_file
+          ~limit:50
+          (module E)
+          FileSystem.File.write
+          write raw state
+        >>= function
+        | Ok _ -> FileSystem.File.close write >>=
+          (function
+            | Ok () -> Lwt.return (Ok ())
+            | Error sys_err -> Lwt.return (Error (`SystemFile sys_err)))
+        | Error err ->
+          FileSystem.File.close write >>= function
+          | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
+          | Ok () -> match err with
+            | `Stack -> Lwt.return (Error (`SystemIO (Fmt.strf "Impossible to store the reference: %a" pp reference)))
+            | `Writer sys_err -> Lwt.return (Error (`SystemFile sys_err))
+            | `Encoder `Never -> assert false
 
   let test_and_set ~root ?locks t ~test ~set =
     let path = Path.(root // (to_path t)) in

@@ -122,6 +122,7 @@ sig
   (** The type of error. *)
   type error =
     [ `SystemFile of FileSystem.File.error
+    | `SystemDirectory of FileSystem.Dir.error
     | `SystemIO of string
     | D.error ]
 
