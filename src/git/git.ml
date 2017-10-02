@@ -28,7 +28,6 @@ module Capability   = Capability
 module Sync         = Sync
 module Sync_http    = Sync_http
 module Smart        = Smart
-module Smart_http   = Smart_http
 
 module Loose        = Loose
 module Packed_refs  = Packed_refs
