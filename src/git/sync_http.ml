@@ -15,8 +15,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-[@@@warning "-32"]
-[@@@warning "-27"]
 
 module type CLIENT =
 sig
