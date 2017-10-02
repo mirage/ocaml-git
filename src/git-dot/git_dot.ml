@@ -40,7 +40,7 @@ let pp_header ppf (level, title) =
 let reporter ppf =
   let report src level ~over k msgf =
     let k _ = over (); k () in
-    let with_src h tags k ppf fmt =
+    let with_src h _ k ppf fmt =
       let src = Logs.Src.name src in
       Format.kfprintf k ppf ("%a %a: @[" ^^ fmt ^^ "@]@.")
         pp_header (level, h) (Fmt.styled `Magenta Fmt.string) src
