@@ -1,5 +1,6 @@
 opam-version: "1.2"
-maintainer:   "thomas@gazagnaire.org"
+maintainer:   [ "thomas@gazagnaire.org"
+                "romain.calascibetta@gmail.com" ]
 authors:      "Thomas Gazagnaire"
 license:      "ISC"
 homepage:     "https://github.com/mirage/ocaml-git"
@@ -27,5 +28,7 @@ depends: [
   "farfadet"
   "faraday"
   "rresult"
+  "fpath"
+  "lru"
 ]
 available: [ocaml-version >= "4.02.3"]
