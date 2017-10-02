@@ -15,7 +15,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Store = Git.Store.Make(Sha1)(Fpath)(Fs_lwt_unix.Lock)(Fs_lwt_unix.Fs)(Ocaml_inflate)(Ocaml_deflate)
+module Store = Git_unix.Store
 module Graph = Git.Object_graph.Make(Store)
 
 let pp_level ppf level =

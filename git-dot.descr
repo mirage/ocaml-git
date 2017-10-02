@@ -1,0 +1,3 @@
+Binary executable to produce a dot file of a Git repository
+
+This program produces a dot file from a Git repository.
