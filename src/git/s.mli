@@ -479,6 +479,10 @@ sig
   (** Return a copy of the current contents of the buffer. The buffer
       itself is unchanged. *)
 
+  val unsafe_contents : t -> fixe
+
+  val has : t -> int
+
   val add : t -> fixe -> unit
   (** [add fixe buffer] appends the fixed-size buffer [fixe] at the
       end of the buffer [buffer]. *)
