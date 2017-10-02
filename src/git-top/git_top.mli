@@ -15,12 +15,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Store : Git.Store.S
-                 with module Hash = Sha1
-                  and module Path = Fpath
-                  and module Lock = Fs_lwt_unix.Lock
-                  and module FileSystem = Fs_lwt_unix.Fs
-
+module Store : module type of Git_unix.Store
 module Graph : module type of Git.Object_graph.Make(Store)
 
 val printers : string list
