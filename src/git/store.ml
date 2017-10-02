@@ -20,6 +20,12 @@ sig
   type t
   type state
 
+  type kind =
+    [ `Commit
+    | `Tree
+    | `Tag
+    | `Blob ]
+
   module Hash : S.HASH
   module Path : S.PATH
   module FileSystem : S.FS with type path = Path.t
@@ -31,10 +37,12 @@ sig
                and module Inflate = Inflate
                and module Deflate = Deflate
 
-  type error = [ `SystemFile of FileSystem.File.error
-               | `SystemDirectory of FileSystem.Dir.error
-               | Value.D.error
-               | Value.E.error ]
+  type error =
+    [ `SystemFile of FileSystem.File.error
+    | `SystemDirectory of FileSystem.Dir.error
+    | `SystemIO of string
+    | Value.D.error
+    | Value.E.error ]
 
   val pp_error : error Fmt.t
   val lookup_p : state -> Hash.t -> Hash.t option Lwt.t
@@ -50,6 +58,7 @@ sig
   val write_p : ztmp:Cstruct.t -> raw:Cstruct.t -> state -> t -> (Hash.t * int, error) result Lwt.t
   val write_s : state -> t -> (Hash.t * int, error) result Lwt.t
   val write : state -> t -> (Hash.t * int, error) result Lwt.t
+  val write_inflated : state -> kind:kind -> Cstruct.t -> Hash.t Lwt.t
   val raw_p : window:Inflate.window -> ztmp:Cstruct.t -> dtmp:Cstruct.t -> raw:Cstruct.t -> state -> Hash.t -> ([ `Commit | `Tree | `Tag | `Blob ] * Cstruct.t, error) result Lwt.t
   val raw_s : state -> Hash.t -> ([ `Commit | `Tree | `Tag | `Blob ] * Cstruct.t, error) result Lwt.t
   val raw : state -> Hash.t -> ([ `Commit | `Tree | `Tag | `Blob ] * Cstruct.t, error) result Lwt.t
@@ -160,6 +169,12 @@ sig
             and module PACKDecoder = PACKDecoder
             and module IDXDecoder = IDXDecoder
 
+  type kind =
+    [ `Commit
+    | `Tree
+    | `Tag
+    | `Blob ]
+
   type error =
     [ Loose.error
     | Pack.error ]
@@ -184,6 +199,8 @@ sig
   val raw_p : ztmp:Cstruct.t -> dtmp:Cstruct.t -> raw:Cstruct.t -> window:Inflate.window -> t -> Hash.t -> ([ `Commit | `Tree | `Tag | `Blob ] * Cstruct.t) option Lwt.t
   val raw_s : t -> Hash.t -> ([ `Commit | `Tree | `Tag | `Blob ] * Cstruct.t) option Lwt.t
   val raw : t -> Hash.t -> ([ `Commit | `Tree | `Tag | `Blob ] * Cstruct.t) option Lwt.t
+  val read_inflated  : t -> Hash.t -> (kind * Cstruct.t) option Lwt.t
+  val write_inflated : t -> kind:kind -> Cstruct.t -> Hash.t Lwt.t
   val contents : t -> ((Hash.t * Value.t) list, error) result Lwt.t
   val buffer_window : t -> Inflate.window
   val buffer_zl : t -> Cstruct.t
@@ -343,6 +360,8 @@ module Make
     type state = t
     type t = LooseImpl.t
 
+    type kind = LooseImpl.kind
+
     type error = LooseImpl.error
 
     let read_p ~ztmp ~dtmp ~raw ~window t =
@@ -413,6 +432,18 @@ module Make
         ~dtmp:t.buffer.de
         ~result
         t hash
+
+    let write_inflated t ~kind value =
+      let open Lwt.Infix in
+
+      LooseImpl.write_inflated
+        ~root:t.dotgit
+        ~level:t.compression
+        ~raw:t.buffer.io
+        ~kind
+        value >>= function
+      | Ok hash -> Lwt.return hash
+      | Error (#LooseImpl.error as err) -> Lwt.fail (Failure (Fmt.strf "%a" LooseImpl.pp_error err))
 
     module D : S.DECODER with type t = t
                                and type raw = Cstruct.t
@@ -683,6 +714,12 @@ module Make
 
   type error = [ Loose.error | Pack.error ]
 
+  type kind =
+    [ `Commit
+    | `Blob
+    | `Tree
+    | `Tag ]
+
   let pp_error ppf = function
     | #Loose.error as err -> Fmt.pf ppf "%a" Loose.pp_error err
     | #Pack.error as err -> Fmt.pf ppf "%a" Pack.pp_error err
@@ -798,6 +835,12 @@ module Make
       ~window:t.buffer.window
       ~result
       t hash
+
+  let read_inflated t hash =
+    raw_s t hash
+
+  let write_inflated t ~kind value =
+    Loose.write_inflated t ~kind value
 
   let indexes git =
     let hash path =

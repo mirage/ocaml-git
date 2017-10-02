@@ -10,10 +10,18 @@ sig
                and module Inflate = Inflate
                and module Deflate = Deflate
 
-  type error = [ `SystemFile of FileSystem.File.error
-               | `SystemDirectory of FileSystem.Dir.error
-               | D.error
-               | E.error ]
+  type error =
+    [ `SystemFile of FileSystem.File.error
+    | `SystemDirectory of FileSystem.Dir.error
+    | `SystemIO of string
+    | D.error
+    | E.error ]
+
+  type kind =
+    [ `Commit
+    | `Tree
+    | `Tag
+    | `Blob ]
 
   val pp_error : error Fmt.t
 
@@ -65,6 +73,13 @@ sig
     ztmp:Cstruct.t ->
     raw:Cstruct.t ->
     t -> (Hash.t * int, error) result Lwt.t
+
+  val write_inflated :
+    root:Path.t ->
+    ?level:int ->
+    raw:Cstruct.t ->
+    kind:kind ->
+    Cstruct.t -> (Hash.t, error) result Lwt.t
 end
 
 module Make
@@ -101,12 +116,20 @@ module Make
   type error =
     [ `SystemFile of FileSystem.File.error
     | `SystemDirectory of FileSystem.Dir.error
+    | `SystemIO of string
     | D.error
     | E.error ]
+
+  type kind =
+    [ `Commit
+    | `Tree
+    | `Tag
+    | `Blob ]
 
   let pp_error ppf = function
     | #D.error as err -> D.pp_error ppf err
     | #E.error as err -> E.pp_error ppf err
+    | `SystemIO err -> Helper.ppe ~name:"`SystemIO" Fmt.string ppf err
     | `SystemFile sys_err -> Helper.ppe ~name:"`SystemFile" FileSystem.File.pp_error ppf sys_err
     | `SystemDirectory sys_err -> Helper.ppe ~name:"`SystemDirectory" FileSystem.Dir.pp_error ppf sys_err
 
@@ -323,6 +346,76 @@ module Make
       in
 
       loop decoder
+
+  let write_inflated ~root ?(level = 4) ~raw ~kind value =
+    let open Lwt.Infix in
+
+    let header = Cstruct.of_string
+        (Fmt.strf "%s %d\000%!"
+           (match kind with
+           | `Commit -> "commit"
+           | `Blob -> "blob"
+           | `Tree -> "tree"
+           | `Tag -> "tag")
+           (Cstruct.len value))
+    in
+
+    let digest value' =
+      let ctx = Hash.Digest.init () in
+      Hash.Digest.feed ctx value';
+      Hash.Digest.get ctx
+    in
+
+    let value' = Cstruct.concat [ header; value ] in
+    let state = Deflate.no_flush 0 (Cstruct.len value') (Deflate.default level) in
+    let hash = digest value' in
+    let first, rest = explode hash in
+
+    let module E =
+    struct
+      type state  = Deflate.t
+      type raw    = Cstruct.t
+      type result = unit
+      type error  = Deflate.error
+
+      let raw_length = Cstruct.len
+      let raw_blit   = Cstruct.blit
+
+      let rec eval raw state =
+        match Deflate.eval ~src:value' ~dst:raw state with
+        | `Await state -> eval raw (Deflate.finish state)
+        | `Flush state -> Lwt.return (`Flush state)
+        | `Error (state, error) -> Lwt.return (`Error (state, error))
+        | `End state -> Lwt.return (`End (state, ()))
+
+      let used = Deflate.used_out
+      let flush = Deflate.flush
+    end in
+
+    FileSystem.Dir.create ~path:true Path.(root / "objects" / first) >>= function
+    | Error err -> Lwt.return (Error (`SystemDirectory err))
+    | Ok (true | false) ->
+      FileSystem.File.open_w ~mode:0o644 Path.(root / "objects" / first / rest)[@warning "-44"] (* XXX(dinosaure): shadowing ( / ). *)
+      >>= function
+      | Error sys_error -> Lwt.return (Error (`SystemFile sys_error))
+      | Ok write ->
+        Helper.safe_encoder_to_file
+          ~limit:50
+          (module E)
+          FileSystem.File.write
+          write raw state
+        >>= function
+        | Ok () -> FileSystem.File.close write >>=
+          (function
+            | Ok () -> Lwt.return (Ok hash)
+            | Error sys_err -> Lwt.return (Error (`SystemFile sys_err)))
+        | Error err ->
+          FileSystem.File.close write >>= function
+          | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
+          | Ok () -> match err with
+            | `Stack -> Lwt.return (Error (`SystemIO (Fmt.strf "Impossible to store the loosed Git object %a" (Fmt.hvbox Hash.pp) hash)))
+            | `Writer sys_err -> Lwt.return (Error (`SystemFile sys_err))
+            | `Encoder err -> Lwt.return (Error (`Deflate err))
 
   let write ~root ?(capacity = 0x100) ?(level = 4) ~ztmp ~raw value =
     let hash        = digest value in

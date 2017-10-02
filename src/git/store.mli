@@ -23,6 +23,13 @@ sig
   type state
   (** The type of the Git state. *)
 
+  type kind =
+    [ `Commit
+    | `Tree
+    | `Tag
+    | `Blob ]
+  (** Kind of the {i loosed} Git object. *)
+
   module Hash
     : S.HASH
   (** The [Hash] module used to make this interface. *)
@@ -49,11 +56,13 @@ sig
                and module Deflate = Deflate
   (** The Value module, which represents the Git object. *)
 
-  type error = [ `SystemFile of FileSystem.File.error
-               | `SystemDirectory of FileSystem.Dir.error
-               | Value.D.error
-               | Value.E.error
-               ] (** The type error. *)
+  type error =
+    [ `SystemFile of FileSystem.File.error
+    | `SystemDirectory of FileSystem.Dir.error
+    | `SystemIO of string
+    | Value.D.error
+    | Value.E.error
+    ] (** The type error. *)
 
   val pp_error : error Fmt.t
   (** Pretty-printer of {!error}. *)
@@ -180,12 +189,14 @@ sig
   val write : state -> t -> (Hash.t * int, error) result Lwt.t
   (** Alias of {!write_s}. *)
 
+  val write_inflated : state -> kind:kind -> Cstruct.t -> Hash.t Lwt.t
+
   val raw_p :
     window:Inflate.window ->
     ztmp:Cstruct.t ->
     dtmp:Cstruct.t ->
     raw:Cstruct.t ->
-    state -> Hash.t -> ([ `Commit | `Tree | `Tag | `Blob ] * Cstruct.t, error) result Lwt.t
+    state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
   (** [raw_p ~window ~ztmp ~dtmp ~raw state hash] can retrieve a git
       {i loose} object from the file-system. However, this function {b
       does not} de-serialize the git object and returns the kind of
@@ -215,12 +226,12 @@ sig
       requested git {i loose} object. That means, the git {i loose}
       object has a wrong header or it is corrupted.}} *)
 
-  val raw_s : state -> Hash.t -> ([ `Commit | `Tree | `Tag | `Blob ] * Cstruct.t, error) result Lwt.t
+  val raw_s : state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
   (** [raw_s state hash] is the same process than {!raw_p} but we use
       the state-defined buffer. That means the client can not use this
       function in a concurrency context with the same [state]. *)
 
-  val raw : state -> Hash.t -> ([ `Commit | `Tree | `Tag | `Blob ] * Cstruct.t, error) result Lwt.t
+  val raw : state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
   (** Alias of {!raw_s}. *)
 
   val raw_wa :
@@ -229,7 +240,7 @@ sig
     dtmp:Cstruct.t ->
     raw:Cstruct.t ->
     result:Cstruct.t ->
-    state -> Hash.t -> ([ `Commit | `Tree | `Tag | `Blob ] * Cstruct.t, error) result Lwt.t
+    state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
   (** [raw_wa ~window ~ztmp ~dtmp ~raw ~result state hash] can
       retrieve a git {i loose} object from thefile-system. However,
       this function {b does not} de-serialize the git object and
@@ -471,7 +482,8 @@ sig
       not use this function in a concurrency context with the same
       [state].*)
 
-  val size_p : ztmp:Cstruct.t -> window:Inflate.window -> state -> Hash.t -> (int, error) result Lwt.t
+  val size_p : ztmp:Cstruct.t
+    -> window:Inflate.window -> state -> Hash.t -> (int, error) result Lwt.t
   (** [size_p ~ztmp ~window state hash] returns the size of the git {i
       packed} object which respects the predicate [digest(object) =
       hash]. The size is how many byte(s) are needed to store the
@@ -572,6 +584,13 @@ sig
             and module IDXDecoder = IDXDecoder
   (** The [Pack] module which represents any {i packed} git object
       available in the git repository. *)
+
+  type kind =
+    [ `Commit
+    | `Tree
+    | `Tag
+    | `Blob ]
+  (** Kind of the {i packed} Git object. *)
 
   type error = [ Loose.error
                | Pack.error
@@ -703,7 +722,7 @@ sig
     dtmp:Cstruct.t ->
     raw:Cstruct.t ->
     window:Inflate.window ->
-    t -> Hash.t -> ([ `Commit | `Tree | `Tag | `Blob ] * Cstruct.t) option Lwt.t
+    t -> Hash.t -> (kind * Cstruct.t) option Lwt.t
   (** [raw_p ~window ~ztmp ~dtmp ~raw state hash] can retrieve a git
       object available in the current git repository [state]. However,
       this function {b does not} de-serialize the git object and
@@ -725,13 +744,18 @@ sig
       if the requested git object is a {i packed} git object.
       Otherwise, we return an {!error}. *)
 
-  val raw_s : t -> Hash.t -> ([ `Commit | `Tree | `Tag | `Blob ] * Cstruct.t) option Lwt.t
+  val raw_s : t -> Hash.t -> (kind * Cstruct.t) option Lwt.t
   (** [raw_s state hash] is the same process than {!raw_p} but we use
       the state-defined buffer. That means the client can not use this
       function in a concurrency context with the same [state]. *)
 
-  val raw : t -> Hash.t -> ([ `Commit | `Tree | `Tag | `Blob ] * Cstruct.t) option Lwt.t
+  val raw : t -> Hash.t -> (kind * Cstruct.t) option Lwt.t
   (** Alias of {!raw_s}. *)
+
+  val read_inflated : t -> Hash.t -> (kind * Cstruct.t) option Lwt.t
+  (** Alias of {!raw_s}. *)
+
+  val write_inflated : t -> kind:kind -> Cstruct.t -> Hash.t Lwt.t
 
   val contents : t -> ((Hash.t * Value.t) list, error) result Lwt.t
   (** [contents state] returns an associated list between the hash and
