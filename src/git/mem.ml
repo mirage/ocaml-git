@@ -60,7 +60,7 @@ module Make
     ; dotgit       : Path.t
     ; compression  : int
     ; values       : (Hash.t, Value.t Lazy.t) Hashtbl.t
-    ; inflated     : (Hash.t, ([ `Commit | `Tree | `Blob | `Tag ] * string)) Hashtbl.t
+    ; inflated     : (Hash.t, ([ `Commit | `Tree | `Blob | `Tag ] * Cstruct.t)) Hashtbl.t
     ; refs         : (Reference.t, [ `H of Hash.t | `R of Reference.t ]) Hashtbl.t
     ; mutable head : Reference.head_contents option }
 
@@ -119,8 +119,8 @@ module Make
       | Error `Never -> assert false
       | Ok inflated ->
         Hashtbl.add t.values hash (lazy value);
-        Hashtbl.add t.inflated hash (kind, inflated);
-        Lwt.return (Ok (hash, String.length inflated) : ((Hash.t * int, error) result)) 
+        Hashtbl.add t.inflated hash (kind, (Cstruct.of_string inflated));
+        Lwt.return (Ok (hash, String.length inflated) : ((Hash.t * int, error) result))
 
   let digest kind raw =
     let len = Cstruct.len raw in
@@ -144,13 +144,13 @@ module Make
     then Lwt.return hash
     else
       let value = lazy (match Value.of_raw ~kind inflated with Error (`Decoder err) -> raise (Failure err) | Ok value -> value) in
-      Hashtbl.add t.inflated hash (kind, Cstruct.to_string inflated);
+      Hashtbl.add t.inflated hash (kind, inflated);
       Hashtbl.add t.values hash value;
       Lwt.return hash
 
   let read_inflated t h =
     try Lwt.return (Some (Hashtbl.find t.inflated h))
-    with Not_found -> Lwt.return_none
+    with Not_found -> Lwt.return None
 
   let read t h =
     try Lwt.return (Ok (Lazy.force (Hashtbl.find t.values h)))
