@@ -1000,26 +1000,25 @@ module Make
       | `Invalid_reference of Reference.t ]
 
 
-    let ( >>== ) v f =
-      let open Lwt.Infix in
-
-      v >>= function
-      | Ok v -> f v
-      | Error _ as e -> Lwt.return e
-
     let contents dir =
       let open Lwt.Infix in
 
+      let ( >?= ) = Lwt_result.bind in
+
       let rec lookup acc dir =
         FileSystem.Dir.contents dir
-        >>== fun l ->
-        Lwt_list.filter_p (fun x -> FileSystem.is_dir x >|= function Ok v -> v | Error _ -> false) l >>= fun dirs ->
-        Lwt_list.filter_p (fun x -> FileSystem.is_file x >|= function Ok v -> v | Error _ -> false) l >>= fun files ->
+        >?= fun l ->
+        Lwt_list.filter_p
+          (fun x -> FileSystem.is_dir x >|= function Ok v -> v | Error _ -> false) l
+        >>= fun dirs ->
+        Lwt_list.filter_p
+          (fun x -> FileSystem.is_file x >|= function Ok v -> v | Error _ -> false) l
+        >>= fun files ->
 
         Lwt_list.fold_left_s
           (function Ok acc -> fun x -> lookup acc x
                   | Error _ as e -> fun _ -> Lwt.return e)
-          (Ok acc) dirs >>== fun acc -> Lwt.return (Ok (acc @ files))
+          (Ok acc) dirs >?= fun acc -> Lwt.return (Ok (acc @ files))
       in
 
       lookup [] dir
@@ -1297,21 +1296,14 @@ module Make
     ; io = Cstruct.sub raw 0x8000 0x8000 }
 
   let sanitize_filesystem root dotgit =
-    let open Lwt.Infix in
-
-    let ( >>== ) v f = v >>= function
-      | Ok v -> f v
-      | Error _ as err -> Lwt.return err
-    in
+    let ( >?= ) = Lwt_result.bind in
 
     FileSystem.Dir.create ~path:true root
-    >>== fun _ ->
-    FileSystem.Dir.create ~path:true dotgit
-    >>== fun _ ->
-    FileSystem.Dir.create ~path:true Path.(dotgit / "objects")[@warning "-44"]
-    >>== fun _ ->
-    FileSystem.Dir.create ~path:true Path.(dotgit / "objects" / "pack")[@warning "-44"]
-    >>== fun _ -> Lwt.return (Ok ())
+    >?= fun _ -> FileSystem.Dir.create ~path:true dotgit
+    >?= fun _ -> FileSystem.Dir.create ~path:true Path.(dotgit / "objects")[@warning "-44"]
+    >?= fun _ -> FileSystem.Dir.create ~path:true Path.(dotgit / "objects" / "pack")[@warning "-44"]
+    >?= fun _ -> FileSystem.Dir.create ~path:true Path.(dotgit / "objects" / "info")[@warning "-44"]
+    >?= fun _ -> Lwt.return (Ok ())
 
   let create ?root ?dotgit ?(compression = 4) () =
     let open Lwt.Infix in
