@@ -232,7 +232,7 @@ module Make
         >>= (function
             | Some _ -> m
             | None ->
-              return (Cstruct.sub cs 0 !pos))
+              commit *> return (Cstruct.sub cs 0 !pos))
       | n -> take n >>= fun chunk ->
         (* XXX(dinosaure): this code [blit] only what is possible to
            copy to [cs]. It can be happen than we don't store all of
@@ -249,15 +249,19 @@ module Make
         Cstruct.blit_from_string chunk 0 cs !pos n';
         pos := !pos + n;
 
-        if n = 0 then return cs else m
+        commit *> (if n = 0 then return cs else m)
+
+    let sp = ' '
+    let nl = '\000'
 
     let decoder ~result =
       let open Angstrom in
-      kind <* take 1
-      >>= fun kind -> int64 <* advance 1
-      >>= fun length -> (match result with
-          | Some result -> to_end result
-          | None -> to_end (Cstruct.create (Int64.to_int length)))
+      kind <* char sp
+      >>= fun kind -> int64 <* char nl <* commit
+      >>= fun length ->
+      (match result with
+       | Some result -> to_end result
+       | None -> to_end (Cstruct.create (Int64.to_int length)))
       >>| fun cs -> kind, cs
   end
 
