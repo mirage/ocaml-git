@@ -59,6 +59,11 @@ sig
     (** A convenience parser to recognize the kind of the Git object.
         It's used in the {i loose} implementation and it's better to
         provide in the interface this parser. *)
+
+    val length : int64 Angstrom.t
+    (** A convenience parser to get the length of of the Git object.
+        It's used in the {i loose} implementation and it's better to
+        provide in the interface this parser. *)
   end
   (** The Angstrom decoder of the Git object. *)
 

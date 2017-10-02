@@ -219,10 +219,7 @@ module Make
     type t = [ `Commit | `Blob | `Tag | `Tree ] * Cstruct.t
 
     let kind = Value.A.kind
-
-    let int64 =
-      let open Angstrom in
-      take_while (function '0' .. '9' -> true | _ -> false) >>| Int64.of_string
+    let int64 = Value.A.length
 
     let to_end cs =
       let open Angstrom in

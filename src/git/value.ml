@@ -43,6 +43,7 @@ sig
     include S.ANGSTROM with type t = t
 
     val kind : [ `Commit | `Tree | `Tag | `Blob ] Angstrom.t
+    val length : int64 Angstrom.t
   end
 
   module F : S.FARADAY  with type t = t
@@ -149,6 +150,8 @@ module Make
       <?> "size" <* commit >>= fun size ->
       Log.debug (fun l -> l "Length of the current object: %Ld." size);
       return size
+
+    let length = int64
 
     let decoder =
       let open Angstrom in
