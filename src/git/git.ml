@@ -24,7 +24,9 @@ module Search       = Search
 module Negociator   = Negociator
 module Revision     = Revision
 
+module Capability   = Capability
 module Sync         = Sync
+module Sync_http    = Sync_http
 module Smart        = Smart
 module Smart_http   = Smart_http
 
