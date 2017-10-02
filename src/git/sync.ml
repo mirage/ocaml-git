@@ -15,7 +15,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module type C =
+module type CAPABILITIES =
 sig
   val default : Capability.t list
 end
@@ -37,7 +37,7 @@ module Make
                       and type FileSystem.File.raw = Cstruct.t
                       and type FileSystem.Mapper.raw = Cstruct.t
                       and type +'a FileSystem.io = 'a Lwt.t)
-    (Capabilities : C)
+    (Capabilities : CAPABILITIES)
 = struct
   module Client = Smart.Client(Store.Hash)
   module Hash = Store.Hash
