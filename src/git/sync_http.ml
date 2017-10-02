@@ -471,43 +471,5 @@ module Make
       | Error err ->
         Log.err (fun l -> l ~header:"clone" "The HTTP decoder returns an error: %a." Decoder.pp_error err);
         Lwt.return (Error (`Decoder err))
-(*
-
-      let body, consumer = Lwt_stream.create () in
-
-      let go req =
-        let `Stream producer = Web.Request.body req in
-        producer (function
-            | Some (buf, off, len) ->
-              consumer (Some (buf, off, len))
-            | None -> consumer None)
-      in
-
-      go req >>= fun () ->
-
-      Log.debug (fun l -> l ~header:"clone" "Launch the POST request to %a."
-                    Uri.pp_hum (Web.Request.uri req
-                                |> (fun uri -> Uri.with_scheme uri (Some "http"))
-                                |> (fun uri -> Uri.with_host uri (Some host))
-                                |> (fun uri -> Uri.with_port uri (Some port))));
-
-      >>= fun resp ->
-      Decoder.decode resp Decoder.nak >>= function
-      | Error err ->
-      | Ok first ->
-        let stream =
-          let first =
-            let buffer = Cstruct.of_string first in
-
-            Lwt_stream.of_list [ buffer, 0, String.length first ]
-          in
-
-          Lwt_stream.(append first (from (Web.Response.body resp)))
-        in
-
-        Lwt.catch Lwt_result.(fun () -> populate git (fun () ->
-          Lwt_stream.get stream) >>= fun () -> Lwt.return (Ok expect))
-          (function Failure err -> Lwt.return (Error (`Apply err)))
-*)
 end
 
