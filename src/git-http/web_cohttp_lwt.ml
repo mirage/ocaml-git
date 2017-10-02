@@ -6,7 +6,7 @@ type uri = Uri.t
 type req =
   { req   : Cohttp.Request.t
   ; query : (string * string list) list
-  ; body  : [ `Stream of (((raw * int * int) option -> unit) -> unit Lwt.t) ] }
+  ; body  : (raw * int * int) option -> unit Lwt.t }
 
 type resp =
   { resp : Cohttp.Response.t
@@ -60,10 +60,7 @@ let s200_ok = 200
 
 module Request =
 struct
-  type consumer = (raw * int * int) option -> unit
-
-  type body =
-    [ `Stream of (consumer -> unit Lwt.t) ]
+  type body = (raw * int * int) option -> unit Lwt.t
 
   let headers { req; _ } = Cohttp.Request.headers req
 

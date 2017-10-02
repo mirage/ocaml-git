@@ -5,7 +5,7 @@ type uri = Uri.t
 type req =
   { req : Cohttp.Request.t
   ; query : (string * string list) list
-  ; body : [ `Stream of ((raw * int * int) option -> unit) -> unit Lwt.t ] }
+  ; body : (raw * int * int) option -> unit Lwt.t }
 
 type resp =
   { resp : Cohttp.Response.t
@@ -52,12 +52,11 @@ val s200_ok       : int
 
 module Request :
 sig
-  type consumer = (raw * int * int) option -> unit
-  type body = [ `Stream of consumer -> unit Lwt.t ]
+  type body = (raw * int * int) option -> unit Lwt.t
 
   val with_headers : req -> Cohttp.Header.t -> req
   val with_path    : req -> string list -> req
-  val with_body    : req -> [ `Stream of ((raw * int * int) option -> unit) -> unit Lwt.t ] -> req
+  val with_body    : req -> ((raw * int * int) option -> unit Lwt.t) -> req
 
   val v :
     ?version:int * int ->
@@ -65,10 +64,10 @@ sig
     path:string list ->
     ?query:(string * string list) list ->
     HTTP.headers ->
-    [ `Stream of ((raw * int * int) option -> unit) -> unit Lwt.t ] -> req
+    ((raw * int * int) option -> unit Lwt.t) -> req
 
   val headers : req -> Cohttp.Header.t
-  val body    : req -> [ `Stream of ((raw * int * int) option -> unit) -> unit Lwt.t ]
+  val body    : req -> (raw * int * int) option -> unit Lwt.t
   val uri     : req -> Uri.t
   val meth    : req -> Cohttp.Code.meth
 end
