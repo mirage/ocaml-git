@@ -226,7 +226,7 @@ module Make
       in
 
       let lock = match locks with
-        | Some locks -> Some (Lock.make locks (Reference.to_path r))
+        | Some locks -> Some (Lock.make locks Path.(t.root / "global"))
         | None -> None
       in
 

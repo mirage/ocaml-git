@@ -1096,7 +1096,7 @@ module Make
       let open Lwt.Infix in
 
       let lock = match locks with
-        | Some locks -> Some (Lock.make locks Path.(t.dotgit / "references"))[@warning "-44"]
+        | Some locks -> Some (Lock.make locks Path.(v "global"))[@warning "-44"]
         | None -> None
       in
 
@@ -1168,7 +1168,7 @@ module Make
       let open Lwt.Infix in
 
       let lock = match locks with
-        | Some locks -> Some (Lock.make locks Path.(t.dotgit / "references"))[@warning "-44"]
+        | Some locks -> Some (Lock.make locks Path.(v "global"))[@warning "-44"]
         | None -> None
       in
 
@@ -1205,7 +1205,7 @@ module Make
       let open Lwt.Infix in
 
       let lock = match locks with
-        | Some locks -> Some (Lock.make locks Path.(t.dotgit / "references"))[@warning "-44"]
+        | Some locks -> Some (Lock.make locks Path.(v "global"))[@warning "-44"]
         | None -> None
       in
 
@@ -1240,7 +1240,7 @@ module Make
       let open Lwt.Infix in
 
       let lock = match locks with
-        | Some locks -> Some (Lock.make locks Path.(t.dotgit / "references"))[@warning "-44"]
+        | Some locks -> Some (Lock.make locks Path.(v "global"))[@warning "-44"]
         | None -> None
       in
 
@@ -1355,7 +1355,7 @@ module Make
 
   let clear_caches ?locks t =
     let lock = match locks with
-      | Some locks -> Some (Lock.make locks Path.(t.dotgit / "global"))[@warning "-44"]
+      | Some locks -> Some (Lock.make locks Path.(v "global"))[@warning "-44"]
       | None -> None
     in
 
@@ -1386,7 +1386,7 @@ module Make
     in
 
     let lock = match locks with
-      | Some locks -> Some (Lock.make locks Path.(t.dotgit / "global"))[@warning "-44"]
+      | Some locks -> Some (Lock.make locks Path.(v "global"))[@warning "-44"]
       | None -> None
     in
 
