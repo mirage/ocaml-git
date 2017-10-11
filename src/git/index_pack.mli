@@ -49,6 +49,10 @@ sig
   (** Get the CRC-32 checksum and the absolute offset from an
       [hash]. *)
 
+  val exists : t -> Hash.t -> bool
+  (** [exists t hash] returns [true] if [hash] exists in the IDX file
+      [t]. Otherwise, it returns [false]. *)
+
   val iter : t -> (Hash.t -> (Crc32.t * int64) -> unit) -> unit
   (** Iteration in the IDX file. *)
 

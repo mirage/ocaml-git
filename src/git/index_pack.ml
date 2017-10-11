@@ -30,10 +30,11 @@ sig
 
   type t
 
-  val make : ?cache:int -> Cstruct.t -> (t, error) result
-  val find : t -> Hash.t -> (Crc32.t * int64) option
-  val iter : t -> (Hash.t -> (Crc32.t * int64) -> unit) -> unit
-  val fold : t -> (Hash.t -> (Crc32.t * int64) -> 'a -> 'a) -> 'a -> 'a
+  val make   : ?cache:int -> Cstruct.t -> (t, error) result
+  val find   : t -> Hash.t -> (Crc32.t * int64) option
+  val exists : t -> Hash.t -> bool
+  val iter   : t -> (Hash.t -> (Crc32.t * int64) -> unit) -> unit
+  val fold   : t -> (Hash.t -> (Crc32.t * int64) -> 'a -> 'a) -> 'a -> 'a
 end
 
 module Lazy (H : S.HASH) : LAZY with module Hash = H =
@@ -199,6 +200,14 @@ struct
       then Ok off
       else Error Invalid_index
     | Error err -> Error err
+
+  let exists t hash =
+    match Cache.find hash t.cache with
+    | Some _ -> true
+    | None ->
+      match fanout_idx t (Cstruct.of_string (Hash.to_string hash)) with
+      | Ok _ -> true
+      | Error _ -> false
 
   let find t hash =
     match Cache.find hash t.cache with
