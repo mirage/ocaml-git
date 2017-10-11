@@ -1,20 +1,3 @@
-(*
- * Copyright (c) 2013-2017 Thomas Gazagnaire <thomas@gazagnaire.org>
- * and Romain Calascibetta <romain.calascibetta@gmail.com>
- *
- * Permission to use, copy, modify, and distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
- *
- * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
- * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
- * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
- * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
- * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
- * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- *)
-
 (* Copyright (c) 2011, Jonathan Derque - MIT licensed *)
 
 let (&&&) = Int32.logand
@@ -86,37 +69,55 @@ let crc_table = [|
     0xbad03605l; 0xcdd70693l; 0x54de5729l; 0x23d967bfl;
     0xb3667a2el; 0xc4614ab8l; 0x5d681b02l; 0x2a6f2b94l;
     0xb40bbe37l; 0xc30c8ea1l; 0x5a05df1bl; 0x2d02ef8dl
-  |]
+|]
 
-type t = Int32.t
+let string_fold_left f acc str offset length =
+  let acc_r = ref acc in
+  for i = offset to offset + length - 1 do
+    acc_r := f !acc_r str.[i]
+  done;
+  !acc_r
 
-let digestc t code =
-  let index = Int32.to_int ((t ^^^ (Int32.of_int code)) &&& 0xffl) in
-  (crc_table.(index) ^^^ (t >>> 8)) &&& 0xffffffffl
+let cstruct_fold_left f acc str =
+  let acc_r = ref acc in
+  for i = 0 to (Cstruct.len str) - 1 do
+    acc_r := f !acc_r @@ Cstruct.get_char str i
+  done;
+  !acc_r
 
-let digest t ?(off = 0) ?len cs =
-  let len = match len with Some len -> len | None -> Cstruct.len cs in
-  let t' = ref t in
-  for i = 0 to len - 1
-  do t' := digestc !t' (Cstruct.get_uint8 cs (off + i)) done;
-  !t'
+type t = int32
 
-let digests t ?(off = 0) ?len s =
-  let len = match len with Some len -> len | None -> Bytes.length s in
-  let t' = ref t in
-  for i = 0 to len - 1
-  do t' := digestc !t' (Char.code (Bytes.get s (off + i))) done;
-  !t'
+let update_crc acc c =
+  let index = Int32.to_int ((acc ^^^ (Int32.of_int (int_of_char c))) &&& 0xffl) in
+  (crc_table.(index) ^^^ (acc >>> 8)) &&& 0xffffffffl
 
-let digestv t cs =
-  List.fold_left (fun acc x -> digest acc x) t cs
+let string ?(crc=0l) str offset length =
+  (string_fold_left update_crc (crc ^^^ 0xffffffffl) str offset length) ^^^ 0xffffffffl
+
+let cstruct ?(crc=0l) str =
+  (cstruct_fold_left update_crc (crc ^^^ 0xffffffffl) str) ^^^ 0xffffffffl
+
+
+let digest (crc : t) ?(off = 0) ?len buf =
+  let len = match len with Some len -> len | None -> Cstruct.len buf - off in
+  cstruct ~crc:(crc :> int32) (Cstruct.sub buf off len)
+
+let digestv =
+  List.fold_left (fun acc v -> digest acc v)
+
+let digestc (crc : t) byte =
+  (update_crc (crc ^^^ 0xffffffffl) (Char.chr byte)) ^^^ 0xffffffffl
+
+let digests (crc : t) ?(off = 0) ?len buf =
+  let len = match len with Some len -> len | None -> String.length buf - off in
+  string ~crc:(crc :> int32) buf off len
 
 external of_int32 : int32 -> t = "%identity"
 external to_int32 : t -> int32 = "%identity"
 
-let pp ppf x = Fmt.pf ppf "%04lx" x
+let pp ppf v = Fmt.pf ppf "%04lx" (v :> int32)
 
 let default = 0l
 
-let eq a b = Int32.equal a b
+let eq = Int32.equal
 let neq a b = not (eq a b)

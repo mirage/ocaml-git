@@ -15,7 +15,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-type t
+type t = int32
 (** The type of the CRC-32 checksum. *)
 
 val digest : t -> ?off:int -> ?len:int -> Cstruct.t -> t
