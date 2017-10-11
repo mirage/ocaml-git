@@ -62,8 +62,6 @@ sig
   val raw_p : window:Inflate.window -> ztmp:Cstruct.t -> dtmp:Cstruct.t -> raw:Cstruct.t -> state -> Hash.t -> ([ `Commit | `Tree | `Tag | `Blob ] * Cstruct.t, error) result Lwt.t
   val raw_s : state -> Hash.t -> ([ `Commit | `Tree | `Tag | `Blob ] * Cstruct.t, error) result Lwt.t
   val raw : state -> Hash.t -> ([ `Commit | `Tree | `Tag | `Blob ] * Cstruct.t, error) result Lwt.t
-  val raw_wa : window:Inflate.window -> ztmp:Cstruct.t -> dtmp:Cstruct.t -> raw:Cstruct.t -> result:Cstruct.t -> state -> Hash.t -> ([ `Commit | `Tree | `Tag | `Blob ] * Cstruct.t, error) result Lwt.t
-  val raw_was : Cstruct.t -> state -> Hash.t -> ([ `Commit | `Tree | `Tag | `Blob ] * Cstruct.t, error) result Lwt.t
 
   module D : S.DECODER with type t = t
                         and type raw = Cstruct.t
@@ -79,37 +77,82 @@ end
 module type PACK =
 sig
   type t
+  type value
   type state
 
-  module Hash : S.HASH
-  module Path : S.PATH
-  module FileSystem  : S.FS with type path = Path.t
-  module Inflate : S.INFLATE
-  module IDXDecoder : Index_pack.LAZY
+  module Hash
+    : S.HASH
+  module Path
+    : S.PATH
+  module FileSystem
+    : S.FS
+      with type path = Path.t
+  module Inflate
+    : S.INFLATE
+  module Deflate
+    : S.DEFLATE
   module PACKDecoder
-    : Unpack.DECODER with module Hash = Hash
-                      and module Inflate = Inflate
+    : Unpack.DECODER
+      with module Hash = Hash
+       and module Inflate = Inflate
+  module PACKEncoder
+    : Pack.ENCODER
+      with module Hash = Hash
+       and module Deflate = Deflate
+  module IDXDecoder
+    : Index_pack.LAZY
+      with module Hash = Hash
+  module IDXEncoder
+    : Index_pack.ENCODER
+      with module Hash = Hash
+  module Pack_info
+    : Pack_info.S
+      with module Hash = Hash
+       and module Inflate = Inflate
 
-  type error = [ `SystemFile of FileSystem.File.error
-               | `SystemDirectory of FileSystem.Dir.error
-               | `SystemMapper of FileSystem.Mapper.error
-               | `IndexDecoder of IDXDecoder.error
-               | `PackDecoder of PACKDecoder.error
-               | `Not_found ]
+  type error =
+    [ `PackDecoder of PACKDecoder.error
+    | `PackEncoder of PACKEncoder.error
+    | `PackInfo of Pack_info.error
+    | `IdxDecoder of IDXDecoder.error
+    | `IdxEncoder of IDXEncoder.error
+    | `SystemFile of FileSystem.File.error
+    | `SystemMapper of FileSystem.Mapper.error
+    | `SystemDir of FileSystem.Dir.error
+    | `Invalid_hash of Hash.t
+    | `SystemIO of string
+    | `Integrity of string
+    | `Not_found ]
 
   val pp_error : error Fmt.t
-  val lookup_p : state -> Hash.t -> (Hash.t * (Crc32.t * int64)) option Lwt.t
+
   val lookup : state -> Hash.t -> (Hash.t * (Crc32.t * int64)) option Lwt.t
+
   val exists : state -> Hash.t -> bool Lwt.t
+
   val list : state -> Hash.t list Lwt.t
-  val read_p : ztmp:Cstruct.t -> window:Inflate.window -> state -> Hash.t -> (t, error) result Lwt.t
+
+  val read_p :
+       ztmp:Cstruct.t
+    -> window:Inflate.window
+    -> state -> Hash.t -> (t, error) result Lwt.t
+
   val read_s : state -> Hash.t -> (t, error) result Lwt.t
   val read : state -> Hash.t -> (t, error) result Lwt.t
-  val read_wa : ?htmp:Cstruct.t array -> ztmp:Cstruct.t -> window:Inflate.window -> result:Cstruct.t * Cstruct.t -> state -> Hash.t -> (t, error) result Lwt.t
-  val read_was : ?htmp:Cstruct.t array -> (Cstruct.t * Cstruct.t) -> state -> Hash.t -> (t, error) result Lwt.t
-  val size_p : ztmp:Cstruct.t -> window:Inflate.window -> state -> Hash.t -> (int, error) result Lwt.t
+
+  val size_p :
+       ztmp:Cstruct.t
+    -> window:Inflate.window
+    -> state -> Hash.t -> (int, error) result Lwt.t
+
   val size_s : state -> Hash.t -> (int, error) result Lwt.t
   val size : state -> Hash.t -> (int, error) result Lwt.t
+
+  type stream = unit -> Cstruct.t option Lwt.t
+
+  val from : state -> stream -> (Hash.t * int, error) result Lwt.t
+
+  val make : state -> ?window:[ `Object of int | `Memory of int ] -> ?depth:int -> value list -> (stream, error) result Lwt.t
 end
 
 module type S =
@@ -141,14 +184,14 @@ sig
                     and module Lock = Lock
                     and module FileSystem = FileSystem
 
-  module IDXDecoder
-    : Index_pack.LAZY with module Hash = Hash
   module PACKDecoder
-    : Unpack.DECODER with module Hash = Hash
-                      and module Inflate = Inflate
+    : Unpack.DECODER
+      with module Hash = Hash
+       and module Inflate = Inflate
   module PACKEncoder
-    : Pack.ENCODER with module Hash = Hash
-                    and module Deflate = Deflate
+    : Pack.ENCODER
+      with module Hash = Hash
+       and module Deflate = Deflate
 
   module Loose
     : LOOSE with type t = Value.t
@@ -160,14 +203,14 @@ sig
              and module FileSystem = FileSystem
 
   module Pack
-    : PACK with type t = PACKDecoder.Object.t
-            and type state = t
-            and module Hash = Hash
-            and module Path = Path
-            and module FileSystem = FileSystem
-            and module Inflate = Inflate
-            and module PACKDecoder = PACKDecoder
-            and module IDXDecoder = IDXDecoder
+    : PACK
+      with type t = PACKDecoder.Object.t
+       and type value = Value.t
+       and type state = t
+       and module Hash = Hash
+       and module Path = Path
+       and module FileSystem = FileSystem
+       and module Inflate = Inflate
 
   type kind =
     [ `Commit
@@ -284,6 +327,15 @@ module Make
                and module Deflate = Deflate
    = Loose.Make(H)(P)(FS)(I)(D)
 
+  module PackImpl
+    : Pack_engine.S
+      with module Hash = Hash
+       and module Path = Path
+       and module FileSystem = FileSystem
+       and module Inflate = Inflate
+       and module Deflate = Deflate
+    = Pack_engine.Make(H)(P)(FS)(I)(D)
+
   module Value
     : Value.S with module Hash = Hash
                and module Inflate = Inflate
@@ -295,10 +347,11 @@ module Make
                and type t = LooseImpl.t
     = LooseImpl
 
-  module PACKDecoder = Unpack.MakeDecoder(H)(FS.Mapper)(I)
-  module PACKEncoder = Pack.MakePACKEncoder(H)(D)
+  module PACKDecoder = PackImpl.PACKDecoder
+  module PACKEncoder = PackImpl.PACKEncoder
+  module IDXDecoder = PackImpl.IDXDecoder
+
   module Reference = Reference.IO(H)(P)(L)(FS)
-  module IDXDecoder = Index_pack.Lazy(H)
 
   module DoubleHash =
   struct
@@ -344,9 +397,9 @@ module Make
     { dotgit      : Path.t
     ; root        : Path.t
     ; compression : int
-    ; idxs        : (Hash.t * Path.t) list
     ; cache       : cache
-    ; buffer      : buffer }
+    ; buffer      : buffer
+    ; engine      : PackImpl.t }
 
   module Loose =
   struct
@@ -460,6 +513,18 @@ module Make
 
   module Pack =
   struct
+    module Hash = Hash
+    module Path = Path
+    module FileSystem = FileSystem
+    module Inflate = Inflate
+    module Deflate = Deflate
+
+    module Pack_info = PackImpl.Pack_info
+    module IDXEncoder = PackImpl.IDXEncoder
+    module IDXDecoder = PackImpl.IDXDecoder
+    module PACKEncoder = PackImpl.PACKEncoder
+    module PACKDecoder = PackImpl.PACKDecoder
+
     module Log =
     struct
       let src = Logs.Src.create "git.store.pack" ~doc:"logs git's store event (pack)"
@@ -468,242 +533,442 @@ module Make
 
     type state = t
 
-    module Path = Path
-    module FileSystem = FileSystem
-    module Inflate = Inflate
-    module Hash = Hash
-    module IDXDecoder = IDXDecoder
-    module PACKDecoder = PACKDecoder
-
-    type error = [ `IndexDecoder of IDXDecoder.error
-                 | `PackDecoder of PACKDecoder.error
-                 | `Not_found
-                 | `SystemFile of FileSystem.File.error
-                 | `SystemDirectory of FileSystem.Dir.error
-                 | `SystemMapper of FileSystem.Mapper.error ]
+    type error =
+      [ `SystemIO of string
+      | PackImpl.error ]
 
     let pp_error ppf = function
-      | `PackDecoder err ->
-        Helper.ppe ~name:"`PackDecoder" (Fmt.hvbox PACKDecoder.pp_error) ppf err
-      | `IndexDecoder err ->
-        Helper.ppe ~name:"`IndexDecoder" (Fmt.hvbox IDXDecoder.pp_error) ppf err
-      | `Not_found -> Fmt.string ppf "`Not_found"
-      | `SystemFile sys_err -> Helper.ppe ~name:"`SystemFile" FileSystem.File.pp_error ppf sys_err
-      | `SystemDirectory sys_err -> Helper.ppe ~name:"`SystemDirectory" FileSystem.Dir.pp_error ppf sys_err
-      | `SystemMapper sys_err -> Helper.ppe ~name:"`SystemMapper" FileSystem.Mapper.pp_error ppf sys_err
+      | `SystemIO err -> Fmt.pf ppf "(`SystemIO %s)" err
+      | #PackImpl.error as err -> PackImpl.pp_error ppf err
 
     type t = PACKDecoder.Object.t
+    type value = Value.t
 
-    let load_idx _ _ path =
+    let lookup t hash =
+      PackImpl.lookup t.engine hash
+
+    let exists t hash =
+      PackImpl.exists t.engine hash
+
+    let list t =
+      PackImpl.list t.engine
+
+    let read_p ~ztmp ~window t hash =
       let open Lwt.Infix in
 
-      FileSystem.Mapper.openfile path
-      >>= (function Ok fd -> FileSystem.Mapper.length fd
-          >>= (function Ok length -> FileSystem.Mapper.map ~share:false fd (Int64.to_int length)
-                      | Error err -> Lwt.return (Error err))
-                  | Error err -> Lwt.return (Error err))
-      >|= (function
-          | Error sys_err -> Error (`SystemMapper sys_err)
-          | Ok map ->
-            IDXDecoder.make map
-            |> function
-            | Ok idx -> Ok idx
-            | Error err -> Error (`IndexDecoder err))
+      exists t hash >>= function
+      | false -> Lwt.return (Error `Not_found)
+      | true ->
+        Log.debug (fun l -> l "Git object %a found in a PACK file."
+                      Hash.pp hash);
 
-    let lookup_p state hash =
-      let open Lwt.Infix in
+        let ( >!= ) = Lwt_result.bind_lwt_err in
 
-      Lwt_list.fold_left_s
-        (function
-          | Some value -> fun _ -> Lwt.return (Some value)
-          | None -> fun (hash_idx, path) ->
-            match CacheIndex.find hash_idx state.cache.indexes with
-            | Some idx ->
-              Lwt.return (IDXDecoder.find idx hash |> Option.map (fun v -> (hash_idx, v)))
-            | None ->
-              load_idx state hash_idx path
-              >|= function
-              | Ok idx ->
-                CacheIndex.add hash_idx idx state.cache.indexes; (* XXX(dinosaure): thread-safe? *)
-                IDXDecoder.find idx hash |> Option.map (fun v -> (hash_idx, v))
-              | Error _ -> None)
-        None state.idxs
+        PackImpl.read ~root:t.dotgit ~ztmp ~window t.engine hash
+        >!= (fun err -> Lwt.return (err :> error))
 
-    let lookup = lookup_p
-
-    let exists state hash =
-      let open Lwt.Infix in
-      lookup state hash >|= function Some _ -> true | None -> false
-
-    let path_idx state hash_idx =
-      let buf = Buffer.create (5 + Hash.Digest.length * 2) in
-      let ppf = Fmt.with_buffer buf in
-
-      Fmt.pf ppf "pack-%s%!" (Hash.to_hex hash_idx);
-      (* XXX(dinosaure): don't use [Hash.pp]. *)
-      let filename_pack = Buffer.contents buf in
-
-      Path.((state.dotgit / "objects" / "pack" / filename_pack) + "pack")[@warning "-44"]
-
-    module Graph = Map.Make(Int64)
-
-    let rec load_pack state hash_idx path_idx =
-      let open Lwt.Infix in
-      let path_pack = Path.set_ext "pack" path_idx in
-
-      (match CacheIndex.find hash_idx state.cache.indexes with
-       | Some idx -> Lwt.return (Ok idx)
-       | None -> load_idx state hash_idx path_idx >|= function
-         | Ok idx -> CacheIndex.add hash_idx idx state.cache.indexes; Ok idx
-         | Error err -> Error err)
-      >>= function
-      | Error err -> Lwt.return (Error err)
-      | Ok idx ->
-        FileSystem.Mapper.openfile path_pack
-        >>= function
-        | Error sys_err -> Lwt.return (Error (`SystemMapper sys_err))
-        | Ok fd -> PACKDecoder.make fd
-                     (fun hash -> CacheObject.find (hash_idx, hash) state.cache.objects)
-                     (IDXDecoder.find idx)
-                     (fun offset -> CacheRevIndex.find (hash_idx, offset) state.cache.revindexes)
-                     (extern state) >>= function
-          | Ok pack -> CachePack.add hash_idx pack state.cache.packs; Lwt.return (Ok pack)
-          | Error sys_err -> Lwt.return (Error (`SystemMapper sys_err))
-    and extern state hash =
-      (* XXX(dinosaure): [extern] is only used for the source to reconstruct an object. *)
-      let open Lwt.Infix in
-
-      lookup state hash >>= (function
-          | None -> Lwt.return `Not_found
-          | Some (hash_idx, (_, absolute_offset)) ->
-            CacheRevIndex.add (hash_idx, absolute_offset) hash state.cache.revindexes;
-            match CachePack.find hash_idx state.cache.packs with
-            | None -> load_pack state hash_idx (path_idx state hash_idx) >>= (function
-                | Ok pack ->
-                  CachePack.add hash_idx pack state.cache.packs;
-                  PACKDecoder.get_with_allocation pack hash state.buffer.zl state.buffer.window >>= (function
-                      | Ok o ->
-                        CacheObject.add (hash_idx, hash) o state.cache.objects;
-                        (* XXX(dinosaure): need to check if it's safe to save
-                           this object. Check if [object.raw] is not a shared
-                           buffer. *)
-                        Lwt.return (`Object (o.PACKDecoder.Object.kind, o.PACKDecoder.Object.raw))
-                      | Error err -> Lwt.return (`Error (`PackDecoder err)))
-                | Error err -> Lwt.return (`Error err))
-            | Some pack -> PACKDecoder.get_with_allocation pack hash state.buffer.zl state.buffer.window >>= (function
-                | Ok o ->
-                  CacheObject.add (hash_idx, hash) o state.cache.objects;
-                  (* XXX(dinosaure): same as below. *)
-                  Lwt.return (`Object (o.PACKDecoder.Object.kind, o.PACKDecoder.Object.raw))
-                | Error err -> Lwt.return (`Error (`PackDecoder err))))
-      >>= function
-      | `Object o ->
-        Lwt.return (Some o)
-      | (`Not_found | `Error _) as pack_result ->
-        Loose.lookup state hash >>= function
-        | Some _ ->
-          Loose.raw_s state hash
-          >|= (function
-              | Ok v -> Some v
-              | Error _ -> None)
-        | None -> match pack_result with
-          | `Not_found | `Error _ -> Lwt.return None
-
-    (* XXX(dinosaure): consider than [extern] is total. That means, when we
-       request a git object, if [extern] returns [None], this object does not exist
-       as loosed object or packed object. *)
-
-    let list state =
-      let open Lwt.Infix in
-
-      Lwt_list.fold_left_s
-        (fun acc (hash_idx, path) -> match CacheIndex.find hash_idx state.cache.indexes with
-           | Some idx -> IDXDecoder.fold idx (fun hash _ acc -> hash :: acc) [] |> Lwt.return
-           | None -> load_idx state hash_idx path
-             >|= function
-             | Ok idx ->
-               CacheIndex.add hash_idx idx state.cache.indexes;
-               IDXDecoder.fold idx (fun hash _ acc -> hash :: acc) []
-             | Error _ -> acc)
-        [] state.idxs
-
-    let read_p ~ztmp ~window state hash =
-      let open Lwt.Infix in
-
-      lookup state hash >>= function
-      | None -> Lwt.return (Error `Not_found)
-      | Some (hash_idx, _) ->
-        Log.debug (fun l -> l "Git object %a found in the PACK file %a." Hash.pp hash Hash.pp hash_idx);
-
-        match CachePack.find hash_idx state.cache.packs with
-        | Some pack ->
-          Log.debug (fun l -> l "PACK file %a already loaded." Hash.pp hash_idx);
-
-          PACKDecoder.get_with_allocation pack hash ztmp window
-          >|= Rresult.R.reword_error (fun err -> `PackDecoder err)
-        | None ->
-          Log.debug (fun l -> l "Loading of the PACK file %a." Hash.pp hash_idx);
-
-          load_pack state hash_idx (path_idx state hash_idx) >>= function
-          | Ok pack ->
-            PACKDecoder.get_with_allocation pack hash ztmp window
-            >|= Rresult.R.reword_error (fun err -> `PackDecoder err)
-          | Error err -> Lwt.return (Error err)
-
-    let read_s state hash =
-      read_p ~ztmp:state.buffer.zl ~window:state.buffer.window state hash
+    let read_s t hash =
+      read_p ~ztmp:t.buffer.zl ~window:t.buffer.window t hash
 
     let read = read_s
 
-    let read_wa ?htmp ~ztmp ~window ~result state hash =
+    let size_p ~ztmp ~window t hash =
       let open Lwt.Infix in
 
-      lookup state hash >>= function
-      | None -> Lwt.return (Error `Not_found)
-      | Some (hash_idx, _) ->
-        let (a, b) = result in
+      exists t hash >>= function
+      | false -> Lwt.return (Error `Not_found)
+      | true ->
+        let ( >!= ) = Lwt_result.bind_lwt_err in
 
-        match CachePack.find hash_idx state.cache.packs with
-        | Some pack ->
-          PACKDecoder.optimized_get ~limit:true ?h_tmp:htmp pack hash (a, b, 0) ztmp window
-          >|= Rresult.R.reword_error (fun err -> `PackDecoder err)
-        | None -> load_pack state hash_idx (path_idx state hash_idx) >>= function
-          | Ok pack ->
-            PACKDecoder.optimized_get ~limit:true ?h_tmp:htmp pack hash (a, b, 0) ztmp window
-            >|= Rresult.R.reword_error (fun err -> `PackDecoder err)
-          | Error err -> Lwt.return (Error err)
+        PackImpl.size ~root:t.dotgit ~ztmp ~window t.engine hash
+        >!= (fun err -> Lwt.return (err :> error))
 
-    let read_was ?htmp result t hash =
-      read_wa
-        ?htmp
+    let size_s t hash =
+      size_p
         ~ztmp:t.buffer.zl
         ~window:t.buffer.window
-        ~result
         t hash
 
-    let size_p ~ztmp ~window state hash =
+    let size = size_s
+
+    type stream = unit -> Cstruct.t option Lwt.t
+
+    let random_string len =
+      let gen () = match Random.int (26 + 26 + 10) with
+        | n when n < 26 -> int_of_char 'a' + n
+        | n when n < 26 + 26 -> int_of_char 'A' + n - 26
+        | n -> int_of_char '0' + n - 26 - 26
+      in
+      let gen () = char_of_int (gen ()) in
+
+      Bytes.create len |> fun raw ->
+      for i = 0 to len - 1 do Bytes.set raw i (gen ()) done;
+      Bytes.unsafe_to_string raw
+
+
+    let to_temp_file fmt stream =
+      let filename_of_pack = fmt (random_string 10) in
+
       let open Lwt.Infix in
 
-      lookup state hash >>= function
-      | None -> Lwt.return (Error `Not_found)
-      | Some (hash_idx, _) ->
-        match CachePack.find hash_idx state.cache.packs with
-        | Some pack ->
-          PACKDecoder.length pack hash ztmp window
-          >|= Rresult.R.reword_error (fun err -> `PackDecoder err)
-        | None -> load_pack state hash_idx (path_idx state hash_idx) >>= function
-          | Ok pack ->
-            PACKDecoder.length pack hash ztmp window
-            >|= Rresult.R.reword_error (fun err -> `PackDecoder err)
-          | Error err -> Lwt.return (Error err)
+      FileSystem.Dir.temp () >>= fun temp_dir ->
+      FileSystem.File.open_w ~mode:0o644 Path.(temp_dir / filename_of_pack) >>= function
+      | Error err -> Lwt.return (Error (`SystemFile err))
+      | Ok fd ->
+        Log.debug (fun l -> l ~header:"to_temp_file" "Save the pack stream to the file %a."
+                      Path.pp Path.(temp_dir / filename_of_pack));
 
-    let size_s state hash =
-      size_p
-        ~ztmp:state.buffer.zl
-        ~window:state.buffer.window
-        state hash
+        let rec go ?chunk ~call () = Lwt_stream.peek stream >>= function
+          | None ->
+            Log.debug (fun l -> l ~header:"to_temp_file" "Pack stream saved to the file %a."
+                          Path.pp Path.(temp_dir / filename_of_pack));
 
-    let size = size_s
+            (FileSystem.File.close fd >>= function
+              | Ok () -> Lwt.return (Ok Path.(temp_dir / filename_of_pack))
+              | Error err ->
+                Log.err (fun l -> l ~header:"to_temp_file" "Cannot close the file: %s." filename_of_pack);
+                Lwt.return (Error (`SystemFile err)))
+          | Some raw ->
+            Log.debug (fun l -> l ~header:"to_temp_file" "Receive a chunk of the pack stream (length: %d)."
+                          (Cstruct.len raw));
+
+            let off, len = match chunk with
+              | Some (off, len) -> off, len
+              | None -> 0, Cstruct.len raw
+            in
+
+            FileSystem.File.write raw ~off ~len fd >>= function
+            | Ok 0 when len <> 0 ->
+              if call = 50 (* XXX(dinosaure): as argument? *)
+              then
+                let err = Fmt.strf "Impossible to store the file: %s." filename_of_pack in
+
+                FileSystem.File.close fd >>= function
+                | Ok () -> Lwt.return (Error (`SystemIO err))
+                | Error _ ->
+                  Log.err (fun l -> l ~header:"to_temp_file" "Cannot close the file: %s." filename_of_pack);
+                  Lwt.return (Error (`SystemIO err))
+              else go ?chunk ~call:(call + 1) ()
+            | Ok n when n = len ->
+              Log.debug (fun l -> l ~header:"to_temp_file" "Consume current chunk of the pack stream.");
+              Lwt_stream.junk stream >>= fun () -> go ~call:0 ()
+            | Ok n ->
+              let chunk = (off + n, len - n) in
+              go ~chunk ~call:0 ()
+            | Error err ->
+              FileSystem.File.close fd >>= function
+              | Ok () -> Lwt.return (Error (`SystemFile err))
+              | Error _ ->
+                Log.err (fun l -> l ~header:"to_temp_file" "Cannot close the file: %s." filename_of_pack);
+                Lwt.return (Error (`SystemFile err))
+        in
+
+        go ~call:0 ()
+
+    let extern git hash =
+      let open Lwt.Infix in
+
+      read_p
+        ~ztmp:git.buffer.zl
+        ~window:git.buffer.window
+        git hash >>= function
+      | Ok o ->
+        Lwt.return (Some (o.PACKDecoder.Object.kind, o.PACKDecoder.Object.raw))
+      | Error _ -> Loose.lookup git hash >>= function
+        | None -> Lwt.return None
+        | Some _ ->
+          Loose.raw_p
+            ~window:git.buffer.window
+            ~ztmp:git.buffer.zl
+            ~dtmp:git.buffer.de
+            ~raw:git.buffer.io
+            git hash >>= function
+          | Error #Loose.error -> Lwt.return None
+          | Ok v -> Lwt.return (Some v)
+
+    let make _ ?window:(_= `Object 10) ?depth:(_= 50) _ = assert false
+
+    let canonicalize git path_pack decoder_pack fdp ~htmp ~rtmp ~ztmp ~window delta info =
+      let k2k = function
+        | `Commit -> Pack.Kind.Commit
+        | `Blob -> Pack.Kind.Blob
+        | `Tree -> Pack.Kind.Tree
+        | `Tag -> Pack.Kind.Tag
+      in
+
+      let open Lwt.Infix in
+
+      let make acc (hash, (_, offset)) =
+        PACKDecoder.optimized_get' ~h_tmp:htmp decoder_pack offset rtmp ztmp window >>= function
+        | Error err ->
+          Log.err (fun l -> l ~header:"from" "Retrieve an error when we try to \
+                                              resolve the object at the offset %Ld \
+                                              in the temporary pack file %a: %a."
+                      offset Path.pp path_pack PACKDecoder.pp_error err);
+          Lwt.return acc
+        | Ok obj ->
+          let delta = match obj.PACKDecoder.Object.from with
+            | PACKDecoder.Object.External hash -> Some (PACKEncoder.Entry.From hash)
+            | PACKDecoder.Object.Direct _ -> None
+            | PACKDecoder.Object.Offset { offset; _ } ->
+              try let (_, hash) = Pack_info.Graph.find offset info.Pack_info.graph in
+                Option.map (fun hash -> PACKEncoder.Entry.From hash) hash
+              with Not_found -> None
+          in
+
+          Lwt.return (PACKEncoder.Entry.make hash ?delta (k2k obj.PACKDecoder.Object.kind) obj.PACKDecoder.Object.length :: acc)
+      in
+
+      let external_ressources acc =
+        List.fold_left
+          (fun acc (_, hunks_descr) ->
+             let open Pack_info in
+
+             match hunks_descr.PACKDecoder.H.reference with
+             | PACKDecoder.H.Hash hash when not (Radix.exists info.tree hash) ->
+               (try List.find (Hash.equal hash) acc |> fun _ -> acc
+                with Not_found -> hash :: acc)
+             | _ -> acc)
+          [] delta
+        |> Lwt_list.fold_left_s
+          (fun acc hash -> extern git hash >>= function
+             | None ->
+               Lwt.return acc
+             | Some (kind, raw) ->
+               let entry = PACKEncoder.Entry.make hash (k2k kind) (Int64.of_int (Cstruct.len raw)) in
+               Lwt.return (entry :: acc))
+          acc
+      in
+
+      let get hash =
+        if Pack_info.Radix.exists info.Pack_info.tree hash
+        then PACKDecoder.get_with_allocation
+            ~h_tmp:htmp
+            decoder_pack
+            hash
+            ztmp window >>= function
+          | Error _ ->
+            Lwt.return None
+          | Ok obj -> Lwt.return (Some obj.PACKDecoder.Object.raw)
+        else extern git hash >|= function
+          | Some (_, raw) -> Some raw
+          | None -> None
+      in
+
+      let tag _ = false in
+
+      Pack_info.Radix.to_list info.Pack_info.tree
+      |> Lwt_list.fold_left_s make []
+      >>= external_ressources
+      >>= fun entries -> PACKEncoder.Delta.deltas ~memory:false entries get tag 10 50
+      >>= function
+      | Error _ -> assert false
+      | Ok entries ->
+        PackImpl.save_pack_file
+          (Fmt.strf "pack-%s.pack")
+          entries
+          (fun hash ->
+             if Pack_info.Radix.exists info.Pack_info.tree hash
+             then PACKDecoder.get_with_allocation
+                 ~h_tmp:htmp
+                 decoder_pack
+                 hash
+                 ztmp window >>= function
+               | Error _ ->
+                 Lwt.return None
+               | Ok obj ->
+                 Lwt.return (Some (obj.PACKDecoder.Object.raw))
+             else extern git hash >|= function
+               | Some (_, raw) -> Some raw
+               | None -> None)
+          >>= function
+          | Error _ as err -> Lwt.return err
+          | Ok (path, sequence, hash_pack) ->
+            PackImpl.save_idx_file ~root:git.dotgit sequence hash_pack >>= function
+            | Error _ as err -> Lwt.return err
+            | Ok () ->
+              let filename_pack = Fmt.strf "pack-%s.pack" (Hash.to_hex hash_pack) in
+
+              (FileSystem.File.move path Path.(git.dotgit / "objects" / "pack" / filename_pack) >>= function
+              | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
+              | Ok () -> Lwt.return (Ok (hash_pack, List.length entries)))
+              >>= fun ret ->
+              FileSystem.Mapper.close fdp >>= function
+              | Error sys_err ->
+                Log.err (fun l -> l ~header:"canonicalize" "Impossible to close the pack file %a: %a."
+                            Path.pp path_pack FileSystem.Mapper.pp_error sys_err);
+                Lwt.return ret
+              | Ok () -> Lwt.return ret
+
+    let from git stream =
+      let open Lwt.Infix in
+
+      let ztmp = Cstruct.create 0x8000 in
+      let window = Inflate.window () in
+
+      let stream0, stream1 =
+        let stream', push' = Lwt_stream.create () in
+
+        Lwt_stream.from
+          (fun () -> stream () >>= function
+             | Some raw ->
+               Log.debug (fun l -> l ~header:"from" "Dispatch a chunk of the PACK stream (length: %d)."
+                             (Cstruct.len raw));
+               push' (Some raw);
+               Lwt.return (Some raw)
+             | None ->
+               Log.debug (fun l -> l ~header:"from" "Dispatch end of the PACK stream.");
+               push' None;
+               Lwt.return None),
+        stream'
+      in
+
+      let info = Pack_info.v (Hash.of_hex (String.make (Hash.Digest.length * 2) '0')) in
+
+      let ( >!= ) = Lwt_result.bind_lwt_err in
+
+      let open Lwt_result in
+
+      (Pack_info.from_stream ~ztmp ~window info (fun () -> Lwt_stream.get stream0)
+       >!= (fun sys_err -> Lwt.return (`PackInfo sys_err))) >>= fun info ->
+      to_temp_file (Fmt.strf "pack-%s.pack") stream1 >>= fun path ->
+
+      let module Graph = Pack_info.Graph in
+      let open Lwt.Infix in
+
+      FileSystem.Mapper.openfile path >>= function
+      | Error _ -> assert false
+      | Ok fdp ->
+        let `Partial { Pack_info.Partial.hash = hash_pack; Pack_info.Partial.delta; } = info.Pack_info.state in
+
+        let htmp =
+          let raw = Cstruct.create (info.Pack_info.max_length_insert_hunks * (info.Pack_info.max_depth + 1)) in
+          Array.init
+            (info.Pack_info.max_depth + 1)
+            (fun i -> Cstruct.sub raw (i * info.Pack_info.max_length_insert_hunks) info.Pack_info.max_length_insert_hunks)
+        in
+
+        let rtmp =
+          Cstruct.create info.Pack_info.max_length_object,
+          Cstruct.create info.Pack_info.max_length_object,
+          info.Pack_info.max_length_object
+        in
+
+        PACKDecoder.make fdp
+          (fun _ -> None)
+          (fun hash -> Pack_info.Radix.lookup info.Pack_info.tree hash)
+          (* XXX(dinosaure): this function will be updated. *)
+          (fun _ -> None)
+          (fun hash -> extern git hash)
+        >>= function
+        | Error err -> Lwt.return (Error (`SystemMapper err))
+        | Ok decoder ->
+          let hash_of_object obj =
+            let ctx = Hash.Digest.init () in
+            let hdr = Fmt.strf "%s %Ld\000"
+                (match obj.PACKDecoder.Object.kind with
+                 | `Commit -> "commit"
+                 | `Blob   -> "blob"
+                 | `Tree   -> "tree"
+                 | `Tag    -> "tag")
+                obj.PACKDecoder.Object.length
+            in
+
+            Hash.Digest.feed ctx (Cstruct.of_string hdr);
+            Hash.Digest.feed ctx obj.PACKDecoder.Object.raw;
+            Hash.Digest.get ctx
+          in
+
+          let crc obj = match obj.PACKDecoder.Object.from with
+            | PACKDecoder.Object.Offset { crc; _ } -> crc
+            | PACKDecoder.Object.External _ ->
+              raise (Invalid_argument "Try to get the CRC-32 checksum from an external ressource.")
+            | PACKDecoder.Object.Direct { crc; _ } -> crc
+          in
+
+          Lwt_list.fold_left_s
+            (fun ((decoder, tree, graph) as acc) (offset, hunks_descr) ->
+               PACKDecoder.optimized_get'
+                 ~h_tmp:htmp
+                 decoder
+                 offset
+                 rtmp ztmp window >>= function
+               | Ok obj ->
+                 let hash = hash_of_object obj in
+                 let crc = crc obj in
+                 let tree = Pack_info.Radix.bind tree hash (crc, offset) in
+
+                 let graph =
+                   let open Pack_info in
+
+                   let depth_source, _ = match hunks_descr.PACKDecoder.H.reference with
+                     | PACKDecoder.H.Offset rel_off ->
+                       (try Graph.find Int64.(sub offset rel_off) graph
+                        with Not_found -> 0, None)
+                     | PACKDecoder.H.Hash hash_source ->
+                       try match Radix.lookup tree hash_source with
+                         | Some (_, abs_off) -> Graph.find abs_off graph
+                         | None -> 0, None
+                       with Not_found -> 0, None
+                   in
+
+                   Graph.add offset (depth_source + 1, Some hash) graph
+                 in
+
+                 Lwt.return
+                   (PACKDecoder.update_idx (Pack_info.Radix.lookup tree) decoder,
+                    tree, graph)
+               | Error err ->
+                 Log.err (fun l -> l ~header:"from" "Retrieve an error when we try to \
+                                                     resolve the object at the offset %Ld \
+                                                     in the temporary pack file %a: %a."
+                             offset Path.pp path PACKDecoder.pp_error err);
+                 Lwt.return acc)
+            (decoder, info.Pack_info.tree, info.Pack_info.graph) delta
+          >>= fun (decoder, tree', graph') ->
+
+          let is_total =
+            Pack_info.Graph.for_all
+              (fun _ -> function (_, Some _) -> true | (_, None) -> false)
+              graph'
+          in
+
+          if is_total
+          then
+            Lwt_list.for_all_p
+              (fun (_, hunks_descr) ->
+                 let open Pack_info in
+
+                 match hunks_descr.PACKDecoder.H.reference with
+                 | PACKDecoder.H.Offset _ -> Lwt.return true
+                 | PACKDecoder.H.Hash hash ->
+                   Lwt.return (Radix.exists tree' hash))
+              delta
+            >>= fun is_not_thin ->
+            if is_not_thin
+            then
+              let open Lwt_result in
+
+              let info =
+                { info with Pack_info.tree = tree'
+                          ; Pack_info.graph = graph'
+                          ; Pack_info.state =
+                              `Full { Pack_info.Full.thin = not is_not_thin
+                                    ; Pack_info.Full.hash = hash_pack } }
+              in
+
+              (FileSystem.Mapper.close fdp
+               >!= fun sys_err -> Lwt.return (`SystemMapper sys_err))
+              >>= fun () -> PackImpl.add_total ~root:git.dotgit git.engine path info
+            else
+              let open Lwt_result in
+
+              canonicalize git path decoder fdp ~htmp ~rtmp ~ztmp ~window delta info
+              >>= fun (hash, count) -> PackImpl.add_exists ~root:git.dotgit git.engine hash
+              >>= fun () -> Lwt.return (Ok (hash, count))
+          else Lwt.return
+              (Error (`Integrity (Fmt.strf "Impossible to get all informations from the file: %a."
+                                    Hash.pp hash_pack)))
   end
 
   module Log =
@@ -810,32 +1075,6 @@ module Make
 
   let raw = raw_s
 
-  let raw_wa ?htmp:_ ~ztmp ~dtmp ~raw ~window ~result state hash =
-    let open Lwt.Infix in
-
-    Pack.read_wa ~ztmp ~window ~result state hash >>= function
-    | Ok o ->
-      Lwt.return (Some (o.PACKDecoder.Object.kind, o.PACKDecoder.Object.raw))
-    | Error #Pack.error -> Loose.lookup state hash >>= function
-      | None -> Lwt.return None
-      | Some _ ->
-        let (result, _) = result in
-        Loose.raw_wa ~window ~ztmp ~dtmp ~raw ~result state hash >>= function
-        | Error #Loose.error -> Lwt.return None
-        | Ok v -> Lwt.return (Some v)
-
-  [@@@warning "-32"]
-
-  let raw_was ?htmp result t hash =
-    raw_wa
-      ?htmp
-      ~ztmp:t.buffer.zl
-      ~dtmp:t.buffer.de
-      ~raw:t.buffer.io
-      ~window:t.buffer.window
-      ~result
-      t hash
-
   let read_inflated t hash =
     raw_s t hash
 
@@ -843,11 +1082,6 @@ module Make
     Loose.write_inflated t ~kind value
 
   let indexes git =
-    let hash path =
-      let basename = Path.basename (Path.rem_ext path) in
-      Scanf.sscanf basename "pack-%s" (fun x -> Hash.of_hex x)
-    in
-
     let open Lwt.Infix in
 
     FileSystem.Dir.contents ~dotfiles:false ~rel:false Path.(git / "objects" / "pack")[@warning "-44"]
@@ -856,12 +1090,10 @@ module Make
       Lwt_list.fold_left_s
         (fun acc path ->
            if Path.has_ext "idx" path
-           then
-             try let hash = hash path in Lwt.return ((hash, path) :: acc)
-             with _ -> Lwt.return acc
+           then Lwt.return (path :: acc)
            else Lwt.return acc)
         [] lst
-      >>= fun v -> Lwt.return (Ok v)
+      >>= PackImpl.v >|= fun v -> Ok v
     | Error err -> Lwt.return (Error err)
 
   let lookup_p state hash =
@@ -869,7 +1101,7 @@ module Make
 
     Pack.lookup state hash
     >>= function
-    | Some (hash_pack, (absolute_offset, _)) -> Lwt.return (`PackDecoder (hash_pack, absolute_offset))
+    | Some (hash_pack, (_, offset)) -> Lwt.return (`PackDecoder (hash_pack, offset))
     | None -> Loose.lookup state hash >>= function
       | Some _ -> Lwt.return `Loose
       | None -> Lwt.return `Not_found
@@ -924,10 +1156,10 @@ module Make
             | Error err ->
               Log.err (fun l -> l ~header:"contents" "Retrieve an error: %a." pp_error err);
               Lwt.fail (Leave err))
-            lst)
-        (fun lst -> Lwt.return (Ok lst))
-        (function Leave err -> Lwt.return (Error err)
-                | exn -> Lwt.fail exn)
+          lst)
+      (fun lst -> Lwt.return (Ok lst))
+      (function Leave err -> Lwt.return (Error err)
+              | exn -> Lwt.fail exn)
 
   let delta entries tagger ?(depth = 50) ?(window = `Object 10) state =
     let open Lwt.Infix in
@@ -1323,22 +1555,22 @@ module Make
 
           sanitize_filesystem root dotgit
           >>== fun () -> indexes dotgit
-          >>== fun idxs ->
+          >>== fun engine ->
           Lwt.return (Ok { dotgit
                          ; root
                          ; compression
-                         ; idxs
+                         ; engine
                          ; cache = cache ()
                          ; buffer = buffer () })
         | Error sys_err -> Lwt.return (Error sys_err))
      | Some root, Some dotgit ->
        sanitize_filesystem root dotgit
        >>== fun () -> indexes dotgit
-       >>== fun idxs ->
+       >>== fun engine ->
        Lwt.return (Ok { dotgit
                       ; root
                       ; compression
-                      ; idxs
+                      ; engine
                       ; cache = cache ()
                       ; buffer = buffer () }))
     >>= function

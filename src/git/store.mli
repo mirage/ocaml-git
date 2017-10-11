@@ -333,6 +333,9 @@ sig
   type state
   (** The type of the Git state. *)
 
+  type value
+  (** The type of the Git value. *)
+
   module Hash
     : S.HASH
   (** The [Hash] module used to make this interface. *)
@@ -349,36 +352,58 @@ sig
     : S.INFLATE
   (** The [Inflate] module used to make this interface. *)
 
-  module IDXDecoder
-    : Index_pack.LAZY
-  (** The [IDXDecoder] module, which decodes {i IDX} file. *)
+  module Deflate
+    : S.DEFLATE
 
   module PACKDecoder
-    : Unpack.DECODER with module Hash = Hash
-                      and module Inflate = Inflate
+    : Unpack.DECODER
+      with module Hash = Hash
+       and module Inflate = Inflate
   (** The [PACKDecoder] module, which decodes {i PACK} file. *)
 
-  type error = [ `SystemFile of FileSystem.File.error
-               | `SystemDirectory of FileSystem.Dir.error
-               | `SystemMapper of FileSystem.Mapper.error
-               | `IndexDecoder of IDXDecoder.error
-               | `PackDecoder of PACKDecoder.error
-               | `Not_found
-               ]
+  module PACKEncoder
+    : Pack.ENCODER
+      with module Hash = Hash
+       and module Deflate = Deflate
+
+  module IDXDecoder
+    : Index_pack.LAZY
+      with module Hash = Hash
+  (** The [IDXDecoder] module, which decodes {i IDX} file. *)
+
+  module IDXEncoder
+    : Index_pack.ENCODER
+      with module Hash = Hash
+
+  module Pack_info
+    : Pack_info.S
+      with module Hash = Hash
+       and module Inflate = Inflate
+
+  type error =
+    [ `PackDecoder of PACKDecoder.error
+    | `PackEncoder of PACKEncoder.error
+    | `PackInfo of Pack_info.error
+    | `IdxDecoder of IDXDecoder.error
+    | `IdxEncoder of IDXEncoder.error
+    | `SystemFile of FileSystem.File.error
+    | `SystemMapper of FileSystem.Mapper.error
+    | `SystemDir of FileSystem.Dir.error
+    | `Invalid_hash of Hash.t
+    | `SystemIO of string
+    | `Integrity of string
+    | `Not_found ]
 
   val pp_error : error Fmt.t
   (** Pretty-printer of {!error}. *)
 
-  val lookup_p : state -> Hash.t -> (Hash.t * (Crc32.t * int64)) option Lwt.t
-  (** [lookup_p state hash] try to find the object associated by the
+  val lookup : state -> Hash.t -> (Hash.t * (Crc32.t * int64)) option Lwt.t
+  (** [lookup state hash] try to find the object associated by the
       hash [hash] in all {i IDX} files available in the current git
       repository [state]. This function can be used in a concurrency
       context. This function returns [None] if the Git object does not
       exist in any {i IDX} files or it does not exists in the current
       repository. *)
-
-  val lookup : state -> Hash.t -> (Hash.t * (Crc32.t * int64)) option Lwt.t
-  (** An alias of {!lookup_p}. *)
 
   val exists : state -> Hash.t -> bool Lwt.t
   (** [exists state hash] checks if one object satisfies the predicate
@@ -431,57 +456,6 @@ sig
   val read : state -> Hash.t -> (t, error) result Lwt.t
   (** Alias of {!read_s}. *)
 
-  val read_wa : ?htmp:Cstruct.t array ->
-    ztmp:Cstruct.t ->
-    window:Inflate.window ->
-    result:Cstruct.t * Cstruct.t ->
-    state -> Hash.t -> (t, error) result Lwt.t
-  (** [read_wa ?htmp ~ztmp ~window state hash] can retrieve a git {i
-      packed} object from any {i PACK} files available in the current
-      git repository [state]. It just inflates the git object and
-      informs some meta-data (like kind, CRC-32 check-sum, length,
-      etc.) about it. Then, the client can use the related decoder to
-      get the OCaml value. This function needs some buffers:
-
-      {ul
-      {- [window] is a buffer used y the {!Inflate} module}
-      {- [ztmp] is a buffer used to store the inflated flow}}
-      {- [result] is a couple of buffers to store the result of this
-      processi in one of these buffers}}
-
-      [htmp] is an array of buffer used for the delta-ification. If
-      you know where is the Git object (which {i PACK} file) and the
-      maximum depth of the PACK file, you can allocate an array, which
-      one store [Insert] hunks for each level of the delta-ification
-      instead to allocate (if [htmp = None]). In other side, this will
-      raise an error (typically, [Index_out_of_bounds]).
-
-      This function can be used in a concurrency context only if the
-      specified buffers are not used by another process. This function
-      does not allocate any {!Cstruct.t}. The couple of buffers
-      [result] is used to re-construct the Git object requested in any
-      depth of the delta-ification. Then, the returned value is
-      physically equal to one of these buffers.
-
-      Otherwise, we return an {!error}:
-
-      {ul
-      {- {!FileSystem.File.error} or {!FileSystem.Dir.error} or
-      {!FileSystem.Mapper.error} when we retrieve a file-system error}
-      {- {!PACKDecoder.error} when we retrieve an error about the
-      decoding of the {i packed} git object in the founded {i PACK}i
-      file}
-      {- {!IDXDecoder.error} when we retrieve an error about the
-      decoding of an {i IDX} file}
-      {- [`Not_found] when the requested object is not {i packed}}} *)
-
-  val read_was : ?htmp:Cstruct.t array
-    -> (Cstruct.t * Cstruct.t) -> state -> Hash.t -> (t, error) result Lwt.t
-  (** [read_was result state hash] is the same process than {!read_wa}
-      ut we use the state-defined buffers. That means the client can
-      not use this function in a concurrency context with the same
-      [state].*)
-
   val size_p : ztmp:Cstruct.t
     -> window:Inflate.window -> state -> Hash.t -> (int, error) result Lwt.t
   (** [size_p ~ztmp ~window state hash] returns the size of the git {i
@@ -503,6 +477,12 @@ sig
 
   val size : state -> Hash.t -> (int, error) result Lwt.t
   (** Alias of {size_s}. *)
+
+  type stream = unit -> Cstruct.t option Lwt.t
+
+  val from : state -> stream -> (Hash.t * int, error) result Lwt.t
+
+  val make : state -> ?window:[ `Object of int | `Memory of int ] -> ?depth:int -> value list -> (stream, error) result Lwt.t
 end
 
 module type S =
@@ -548,18 +528,16 @@ sig
                     and module FileSystem = FileSystem
   (** The Reference module, which represents the Git reference. *)
 
-  module IDXDecoder
-    : Index_pack.LAZY with module Hash = Hash
-  (** The [IDXDecoder] module used to decode an {i IDX} file. *)
-
   module PACKDecoder
-    : Unpack.DECODER with module Hash = Hash
-                      and module Inflate = Inflate
+    : Unpack.DECODER
+      with module Hash = Hash
+       and module Inflate = Inflate
   (** The [PACKDecoder] module used to decode a {i PACK} file. *)
 
   module PACKEncoder
-    : Pack.ENCODER with module Hash = Hash
-                    and module Deflate = Deflate
+    : Pack.ENCODER
+      with module Hash = Hash
+       and module Deflate = Deflate
   (** The [PACKEncoder] module used to encoder a {i PACK} file. *)
 
   module Loose
@@ -574,14 +552,14 @@ sig
       available in git repository. *)
 
   module Pack
-    : PACK with type t = PACKDecoder.Object.t
-            and type state = t
-            and module Hash = Hash
-            and module Path = Path
-            and module FileSystem = FileSystem
-            and module Inflate = Inflate
-            and module PACKDecoder = PACKDecoder
-            and module IDXDecoder = IDXDecoder
+    : PACK
+      with type t = PACKDecoder.Object.t
+       and type value = Value.t
+       and type state = t
+       and module Hash = Hash
+       and module Path = Path
+       and module FileSystem = FileSystem
+       and module Inflate = Inflate
   (** The [Pack] module which represents any {i packed} git object
       available in the git repository. *)
 
