@@ -19,6 +19,7 @@ module Rabin        = Rabin
 
 module Minienc      = Minienc
 
+module Gc           = Gc
 module Object_graph = Object_graph
 module Search       = Search
 module Negociator   = Negociator
@@ -30,6 +31,8 @@ module Sync_http    = Sync_http
 module Smart        = Smart
 
 module Loose        = Loose
+module Pack_info    = Pack_info
+module Pack_engine  = Pack_engine
 module Packed_refs  = Packed_refs
 module Pack         = Pack
 module Unpack       = Unpack
