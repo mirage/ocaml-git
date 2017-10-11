@@ -56,6 +56,12 @@ module Make
   module Decoder     = Unpack.MakeDecoder(Hash)(Store.FileSystem.Mapper)(Inflate)
   module Tree        = PACKEncoder.Radix
 
+  module Log =
+  struct
+    let src = Logs.Src.create "git.sync" ~doc:"logs git's sync event"
+    include (val Logs.src_log src : Logs.LOG)
+  end
+
   type error =
     [ `SmartPack of string
     | `Pack      of PACKEncoder.error
@@ -205,572 +211,49 @@ module Make
 
   module Pack =
   struct
-    let random_string len =
-      let gen () = match Random.int (26 + 26 + 10) with
-        | n when n < 26 -> int_of_char 'a' + n
-        | n when n < 26 + 26 -> int_of_char 'A' + n - 26
-        | n -> int_of_char '0' + n - 26 - 26
+    let default_stdout raw =
+      Log.info (fun l -> l ~header:"populate:stdout" "%S" (Cstruct.to_string raw));
+      Lwt.return ()
+
+    let default_stderr raw =
+      Log.err (fun l -> l ~header:"populate:stderr" "%S" (Cstruct.to_string raw));
+      Lwt.return ()
+
+    let populate git ?(stdout = default_stdout) ?(stderr = default_stderr) ctx first =
+      let stream, push = Lwt_stream.create () in
+
+      let cstruct_copy cs =
+        let ln = Cstruct.len cs in
+        let rs = Cstruct.create ln in
+        Cstruct.blit cs 0 rs 0 ln;
+        rs
       in
-      let gen () = char_of_int (gen ()) in
 
-      Bytes.create len |> fun raw ->
-      for i = 0 to len - 1 do Bytes.set raw i (gen ()) done;
-      Bytes.unsafe_to_string raw
-
-    let pack_filename () =
-      Fmt.strf "pack-%s.pack" (random_string 10)
-
-    module Graph = Map.Make(Int64)
-
-    let string_of_kind = function
-      | PACKDecoder.Commit -> "commit"
-      | PACKDecoder.Tree   -> "tree"
-      | PACKDecoder.Blob   -> "blob"
-      | PACKDecoder.Tag    -> "tag"
-      | PACKDecoder.Hunk _ -> raise (Invalid_argument "string_of_kind")
-
-    (* XXX(dinosaure): I explain this big code. This explanation includes
-       [normalize_tree]. Firstly, about the Smart protocol:
-
-       - the Smart module takes care about the side-band, so if the capabilities
-       does not mention the side-band or the side-band-64K, [`PACK (`Out _)] and
-       [`PACK (`Err _)] should never appear). Then, the [raw] is already cleaned
-       (you can manipulate [raw] as it is).
-
-       - secondly, about the computation of the stream. As you know, the
-       PACKDecoder is a non-blocking decoder of the PACK file. We start a first
-       pass to decode the PACK file received. So, it's easy by the API provided by
-       PACKDecoder and the semantic of the PACKDecoder state.
-
-       In this pass, we try to collect hash, CRC-32 check-sum and offset for each
-       non-delta-ified objects. This case appears in [`Flush]. At same time, we
-       calculate the dependency-graph for the delta-ified objects. This
-       computation is very close to an heuristic of the PACK file: the base of
-       the object is always before the object (in the writing order).
-
-       So, we populate a tree (to store the binding [hash -> (crc, offset)]),
-       which contains partially what the PACK contains (only non-delta-ified
-       object) and lists, which contain all delta-ified objects (with
-       meta-data: crc and offset).
-
-       Then, with the dependency-graph, we can calculate the biggest depth of
-       the delta-ification. In real world, this value ca not be upper than 50.
-
-       We can start the second pass [normalize_tree]. It consists to construct
-       all delta-ified object to compute the hash and complete the partial tree.
-       Because we know the deepest object, we can allocate what is really needed
-       to construct all object of this specific PACK file.
-
-       So, we use the complex function [optimized_get'] from the Decoder module
-       which does not allocate any buffer in the major heap. This last point is
-       very important because for a large PACK file, you can be close to the
-       [Out_of_memory] problem.
-
-       Finally, we generate from the complete tree the IDX file and it's done!
-
-       I'm joking. Indeed, when we fetch to a repository, we can receive a
-       _thin-pack_ (that means some references can be extern of the PACK file).
-       The previous compute retains its validity but we store a _thin-pack_ in
-       the store. It seems that git does not do the same and recompute a new
-       PACK file from the _thin-pack_ which one is canonical (that means all
-       reference can be found in the PACK file).
-
-       We talked about lists for delta-ified objects. Indeed, we define 2 lists,
-       one contains all delta-ified object with an internal reference
-       ({!PACKEncoder.H.Offset}). The second list contains all other delta-ified
-       objects which the reference is external.
-
-       Then, for the first list, we follow the same delta-ification provided by
-       the server (found in the _thin-pack_). We don't try to recalculate the
-       best delta-ification for these objects. We agglomerate the external
-       object then and mark as free to try any delta-ification.
-
-       We compute finally the delta-ification. The [get] function is very
-       special because the _thin-pack_ stay on the [temp] directory. So any
-       object from this _thin-pack_ is not available from the store. Otherwise,
-       for the external object, by the negotiation engine than we can believe it is
-       available.
-
-       In the end, we encode the new PACK file with [safe_encoder_to_file] and
-       continue to use the previous buffers allocated in [normalize_tree] to get
-       any object.
-
-       NOTE: we have different way to optimize in memory and in computation this
-       last process. But consider this process as slow. Read a _thin-pack_,
-       populate a tree, process a new PACK file and encode it is slow. And it's
-       not mandatory to do this process as git because we can store a
-       _thin-pack_ directly and ocaml-git or git can handle that.
-
-       TODO:
-
-       - instead to re-generate the Rabin's fingerprint between 2 objects,
-       which the delta-ification is provided by the server, we can only
-       copy/paste the raw from the _thin-pack_ to the new PACK file and just
-       change the relative offset stored in the object's header.
-
-    *)
-    type pack_state =
-      { pack  : PACKDecoder.t
-      ; tree  : (Crc32.t * int64) Tree.t
-      ; hash  : Hash.Digest.ctx option
-      ; rofs  : (PACKDecoder.H.hunks * Crc32.t * int64) list
-      ; rext  : (PACKDecoder.H.hunks * Crc32.t * int64) list
-      ; graph : int Graph.t
-      ; max_length : int }
-
-    let make_pack ztmp wtmp =
-      { pack = PACKDecoder.default ztmp wtmp
-      ; tree = Tree.empty
-      ; hash = None
-      ; rofs = []
-      ; rext = []
-      ; graph = Graph.empty
-      ; max_length = 0 }
-
-    let rec pack_handler k c t w r =
       let open Lwt.Infix in
 
-      match r with
-      | `PACK (`Out _) ->
-        Client.run c.ctx `ReceivePACK |> process c >>= pack_handler k c t w
-      | `PACK (`Err raw) ->
-        let err = Cstruct.to_string raw in
-        Lwt.return (Error (`SmartPack err))
-      | `PACK `End ->
-
-        let max_depth = Graph.fold (fun _ depth acc -> max depth acc) t.graph 0 in
-
-        (match PACKDecoder.eval (Cstruct.create 0) t.pack with
-         | `End (_, hash_pack) ->
-           Store.FileSystem.File.close w >>= (function
-               | Ok () -> k t.max_length max_depth hash_pack t.tree t.rofs t.rext
-               | Error sys_err -> Lwt.return (Error (`SystemFile sys_err)))
-         | _ -> Lwt.return (Error (`SmartPack "bad end state")))
-      | `PACK (`Raw raw) ->
-        Store.FileSystem.File.write raw w >>=
-        (function
-          | Error sys_err ->
-            Lwt.return (Error (`SystemFile sys_err))
-          | Ok n ->
-            let rec go t = match PACKDecoder.eval raw t.pack with
-              | `Await pack ->
-                Ok { t with pack; }
-              | `End (pack, _) ->
-                Ok { t with pack = PACKDecoder.refill 0 0 pack; }
-              | `Error (_, err) -> Error (`Unpack err)
-              | `Flush pack ->
-                let o, n = PACKDecoder.output pack in
-
-                let hash = match t.hash with
-                  | Some ctx ->
-                    if n > 0 then Hash.Digest.feed ctx (Cstruct.sub o 0 n);
-                    Some ctx
-                  | None ->
-                    let hdr_kind = match PACKDecoder.kind pack with
-                      | (PACKDecoder.Commit
-                        | PACKDecoder.Blob
-                        | PACKDecoder.Tag
-                        | PACKDecoder.Tree) as kind -> string_of_kind kind
-                      | PACKDecoder.Hunk _ -> assert false
-                    in
-
-                    let hdr = Fmt.strf "%s %Ld\000" hdr_kind (Int64.of_int (PACKDecoder.length pack)) in
-                    let ctx = Hash.Digest.init () in
-
-                    Hash.Digest.feed ctx (Cstruct.of_string hdr);
-                    if n > 0 then Hash.Digest.feed ctx (Cstruct.sub o 0 n);
-
-                    Some ctx
-                in
-
-                go { t with hash; pack = PACKDecoder.flush 0 (Cstruct.len o) pack }
-              | `Hunk (pack, _) ->
-                go { t with pack = PACKDecoder.continue pack }
-              | `Object pack ->
-                let crc = PACKDecoder.crc pack in
-                let off = PACKDecoder.offset pack in
-
-                let t = match PACKDecoder.kind pack, t.hash with
-                  | (PACKDecoder.Commit
-                    | PACKDecoder.Tree
-                    | PACKDecoder.Tag
-                    | PACKDecoder.Blob), Some ctx ->
-
-                    let hash = Hash.Digest.get ctx in
-
-                    { t with pack = PACKDecoder.next_object pack
-                           ; hash = None
-                           ; tree = Tree.bind t.tree hash (crc, off)
-                           ; max_length = max t.max_length (PACKDecoder.length pack) }
-                  | PACKDecoder.Hunk ({ PACKDecoder.H.reference = PACKDecoder.H.Offset rel_off; _ } as hunks), None ->
-                    let graph =
-                      let depth_base =
-                        try Graph.find Int64.(sub off rel_off) t.graph
-                        with Not_found -> 0
-                      in
-
-                      Graph.add off (depth_base + 1) t.graph
-                    in
-
-                    { t with pack = PACKDecoder.next_object pack
-                           ; rofs = (hunks, crc, off) :: t.rofs
-                           ; graph
-                           ; max_length = max t.max_length
-                               @@ max (PACKDecoder.length pack)
-                               @@ max hunks.PACKDecoder.H.target_length hunks.PACKDecoder.H.source_length }
-                  | PACKDecoder.Hunk ({ PACKDecoder.H.reference = PACKDecoder.H.Hash _; _ } as hunks), None ->
-                    { t with pack = PACKDecoder.next_object pack
-                           ; rext = (hunks, crc, off) :: t.rext
-                           ; graph = Graph.add off 1 t.graph
-                           ; max_length = max t.max_length
-                               @@ max (PACKDecoder.length pack)
-                               @@ max hunks.PACKDecoder.H.target_length hunks.PACKDecoder.H.source_length }
-
-                  | (PACKDecoder.Commit
-                    | PACKDecoder.Tree
-                    | PACKDecoder.Tag
-                    | PACKDecoder.Blob) as kind, None ->
-                    let hdr = Fmt.strf "%s 0\000" (string_of_kind kind) in
-                    let ctx = Hash.Digest.init () in
-
-                    assert (PACKDecoder.length pack = 0);
-                    Hash.Digest.feed ctx (Cstruct.of_string hdr);
-
-                    let hash = Hash.Digest.get ctx in
-
-                    { t with pack = PACKDecoder.next_object pack
-                           ; hash = None
-                           ; tree = Tree.bind t.tree hash (crc, off) }
-                  | PACKDecoder.Hunk _, Some _ -> assert false
-                in
-
-                go t
-            in
-
-            (* XXX(dinosaure): we can compress [raw] and recall [go] and avoid
-               the error - this is the same problem than
-               [Helper.safe_encoder_to_file] but I'm lazy to handle for this
-               moment that. TODO! *)
-
-            if n = Cstruct.len raw
-            then match go { t with pack = PACKDecoder.refill 0 (Cstruct.len raw) t.pack } with
-              | Ok t -> Client.run c.ctx `ReceivePACK |> process c >>= pack_handler k c t w
-              | Error (`Unpack err) -> Lwt.return (Error (`Unpack err))
-            else Lwt.return (Error (`SystemIO "Loose something when we write the PACK file received")))
-      | result -> Lwt.return (Error (`Clone (err_unexpected_result result)))
-
-    let hash_of_object o =
-      let ctx = Hash.Digest.init () in
-
-      let hdr_kind = match o.Decoder.Object.kind with
-        | `Commit -> "commit"
-        | `Blob   -> "blob"
-        | `Tree   -> "tree"
-        | `Tag    -> "tag"
+      let rec dispatch ctx = function
+        | `PACK (`Out raw) ->
+          stdout raw >>= fun () ->
+          Client.run ctx.ctx `ReceivePACK |> process ctx >>= dispatch ctx
+        | `PACK (`Err raw) ->
+          stderr raw >>= fun () ->
+          Client.run ctx.ctx `ReceivePACK |> process ctx >>= dispatch ctx
+        | `PACK (`Raw raw) ->
+          push (Some (cstruct_copy raw));
+          Client.run ctx.ctx `ReceivePACK |> process ctx >>= dispatch ctx
+        | `PACK `End ->
+          push None;
+          Lwt.return (Ok ())
+        | _ -> assert false
       in
 
-      let hdr = Fmt.strf "%s %Ld\000" hdr_kind o.Decoder.Object.length in
+      let open Lwt_result in
 
-      Hash.Digest.feed ctx (Cstruct.of_string hdr);
-      if Cstruct.len o.Decoder.Object.raw > 0 then Hash.Digest.feed ctx o.Decoder.Object.raw;
+      let ( >!= ) = Lwt_result.bind_lwt_err in
 
-      Hash.Digest.get ctx
-
-    exception Leave of Decoder.error
-
-    type info =
-      { tree       : (Crc32.t * int64) Tree.t
-      ; hash       : Hash.t
-      ; rofs       : (PACKDecoder.H.hunks * Crc32.t * int64) list
-      ; rext       : (PACKDecoder.H.hunks * Crc32.t * int64) list
-      ; graph      : Hash.t Graph.t
-      ; max_length : int (* XXX(dinosaure): we can remove this information available in [rtmp]. *)
-      ; max_depth  : int
-      ; decoder    : Decoder.t
-      ; fd         : Store.FileSystem.Mapper.fd
-      ; ztmp       : Cstruct.t
-      ; htmp       : Cstruct.t array
-      ; rtmp       : Cstruct.t * Cstruct.t * int
-      ; wtmp       : Inflate.window }
-
-    let rec normalize_tree git pack_filename max_length max_depth hash_pack partial_tree rofs rext =
-      let open Lwt.Infix in
-
-      let tree' = ref partial_tree in
-
-      Store.FileSystem.Mapper.openfile pack_filename
-      >>= function
-      | Error sys_err -> Lwt.return (Error (`SystemMapper sys_err))
-      | Ok fd ->
-        Decoder.make fd
-            (fun _ -> None)
-            (fun hash -> Tree.lookup !tree' hash)
-            (fun _ -> None)
-            (extern git)
-        >>= function
-        | Ok decoder ->
-          let rtmp = (Cstruct.create max_length, Cstruct.create max_length, max_length) in
-          let htmp =
-            Cstruct.create (max_length * (max_depth + 1))
-            |> fun raw -> Array.init (max_depth + 1) (fun i -> Cstruct.sub raw (i * max_length) max_length)
-          in
-          let ztmp = Store.buffer_zl git in
-          let wtmp = Store.buffer_window git in
-
-          let max = List.length (rofs @ rext) in
-
-          Lwt.try_bind
-            (fun () -> Lwt_list.fold_left_s
-                (fun (n, graph) (_, crc, offset) ->
-                   Decoder.optimized_get' ~h_tmp:htmp decoder offset rtmp ztmp wtmp >>= function
-                   | Ok o ->
-                     let hash = hash_of_object o in
-
-                     Format.printf "\rResolving delta: %d%% (%d/%d)." (n * 100 / max) n max;
-
-                     tree' := Tree.bind !tree' hash (crc, offset);
-                     Lwt.return (n + 1, Graph.add offset hash graph)
-                   | Error err -> Lwt.fail (Leave err))
-                (0, Graph.empty) (rofs @ rext))
-            (fun (_, graph) -> Lwt.return (Ok { tree = !tree'
-                                              ; hash = hash_pack
-                                              ; rofs
-                                              ; rext
-                                              ; graph
-                                              ; max_length
-                                              ; max_depth
-                                              ; decoder
-                                              ; fd
-                                              ; ztmp
-                                              ; htmp
-                                              ; rtmp
-                                              ; wtmp }))
-            (function Leave err -> Lwt.return (Error (`Decoder err)))
-          >>= fun res ->
-          Format.printf "\rResolving delta: 100%% (%d/%d), done.\n%!" max max;
-
-          (* XXX(dinosaure): TODO! We need to close the file descriptor. *)
-
-          (* Store.FileSystem.Mapper.close fd *) Lwt.return (Ok ()) >>=
-          (function Ok () -> Lwt.return res
-                  | Error sys_err -> Lwt.return (Error (`SystemMapper sys_err)))
-        | Error sys_err -> Lwt.return (Error (`SystemMapper sys_err))
-    and extern git hash =
-      Store.raw git hash
-
-    let canonicalize_pack git info =
-      let open Lwt.Infix in
-
-      let k2k = function
-        | `Commit -> Pack.Kind.Commit
-        | `Blob -> Pack.Kind.Blob
-        | `Tree -> Pack.Kind.Tree
-        | `Tag -> Pack.Kind.Tag
-      in
-
-      let make acc (hash, (_, off)) =
-        Format.printf "hash: %a\n%!" Hash.pp hash;
-
-        Decoder.optimized_get' ~h_tmp:info.htmp info.decoder off info.rtmp info.ztmp info.wtmp >>= function
-        | Error err ->
-          Lwt.fail (Leave err)
-        | Ok o ->
-          let delta = match o.Decoder.Object.from with
-            | Decoder.Object.External hash -> Some (PACKEncoder.Entry.From hash)
-            | Decoder.Object.Direct _ -> None
-            | Decoder.Object.Offset { offset; _ } ->
-              try Some (PACKEncoder.Entry.From (Graph.find offset info.graph))
-              with Not_found -> None
-          in
-
-          Lwt.return (PACKEncoder.Entry.make hash ?delta (k2k o.Decoder.Object.kind) o.Decoder.Object.length :: acc)
-      in
-
-      let ext = List.fold_left (fun acc -> function
-          | { PACKDecoder.H.reference = PACKDecoder.H.Hash hash; _ }, _, _ ->
-            (match Tree.lookup info.tree hash with
-             | Some _ -> acc (* XXX(dinosaure): available in the thin-pack. *)
-             | None ->
-               try List.find (Hash.equal hash) acc |> fun _ -> acc (* XXX(dinosaure): avoid duplicate. *)
-               with Not_found -> hash :: acc)
-          | { PACKDecoder.H.reference = PACKDecoder.H.Offset _; _ }, _, _ -> assert false)
-          []
-          info.rext
-      in
-
-      let plus acc =
-        Lwt_list.fold_left_s
-          (fun acc hash ->
-             Store.raw_p
-              ~ztmp:(Store.buffer_zl git)
-              ~dtmp:(Store.buffer_de git)
-              ~raw:(Store.buffer_io git)
-              ~window:(Store.buffer_window git)
-              git hash
-            >>= function
-            | Some (kind, raw) ->
-              Lwt.return (PACKEncoder.Entry.make hash (k2k kind) (Int64.of_int (Cstruct.len raw)) :: acc)
-            | None ->
-              Lwt.fail (Leave (Decoder.Invalid_hash hash)))
-          acc ext
-      in
-
-      let get hash =
-        if Tree.exists info.tree hash
-        then Decoder.get_with_allocation ~h_tmp:info.htmp info.decoder hash info.ztmp info.wtmp >>= function
-          | Error _ ->
-            Lwt.return None
-          | Ok o -> Lwt.return (Some o.Decoder.Object.raw)
-        else Store.raw git hash >>= function
-          | Some (_, raw) -> Lwt.return (Some raw)
-          | None -> Lwt.return None
-      in
-
-      let tag _ = false in
-
-      Tree.to_list info.tree |> Lwt_list.fold_left_s make [] >>= plus >>= fun entries ->
-      PACKEncoder.Delta.deltas ~memory:false entries get tag 10 50 >>= function
-      | Error (PACKEncoder.Delta.Invalid_hash hash) ->
-        Lwt.fail (Leave (Decoder.Invalid_hash hash))
-      | Ok entries ->
-        let ztmp  = Cstruct.create 0x8000 in
-        let state = PACKEncoder.default ztmp entries in
-
-        let module E =
-        struct
-          type state  = { pack : PACKEncoder.t
-                        ; src  : Cstruct.t option }
-
-          type raw    = Cstruct.t
-          type result = { tree : (Crc32.t * int64) Tree.t
-                        ; hash : Hash.t }
-          type error  = PACKEncoder.error
-
-          let raw_length = Cstruct.len
-          let raw_blit   = Cstruct.blit
-
-          let option_value ~default = function
-            | Some v -> v
-            | None -> default
-
-          let empty = Cstruct.create 0
-
-          let rec eval dst state =
-            match PACKEncoder.eval (option_value ~default:empty state.src) dst state.pack with
-            | `End (pack, hash) ->
-              Lwt.return (`End ({ state with pack; }, { tree = (PACKEncoder.idx pack)
-                                                      ; hash }))
-            | `Error (pack, err) ->
-              Lwt.return (`Error ({ state with pack; }, err))
-            | `Flush pack ->
-              Lwt.return (`Flush { state with pack; })
-            | `Await pack ->
-              match state.src with
-              | Some _ -> eval dst { pack = PACKEncoder.finish pack
-                                   ; src  = None }
-              | None ->
-                let hash = PACKEncoder.expect pack in
-
-                (if Tree.exists info.tree hash
-                 then Decoder.optimized_get ~h_tmp:info.htmp info.decoder hash info.rtmp info.ztmp info.wtmp >>= function
-                   | Error err -> Lwt.fail (Leave err)
-                   | Ok o -> Lwt.return o.Decoder.Object.raw
-                 else Store.raw git hash >>= function
-                   | Some (_, raw) -> Lwt.return raw
-                   | None -> Lwt.fail (Leave (Decoder.Invalid_hash hash)))
-                >>= fun raw -> eval dst { pack = PACKEncoder.refill 0 (Cstruct.len raw) pack
-                                        ; src  = Some raw }
-
-
-          let flush off len ({ pack; _ } as state) = { state with pack = PACKEncoder.flush off len pack }
-          let used { pack; _ } = PACKEncoder.used_out pack
-        end in
-
-        let new_pack_filename = pack_filename () in
-
-        Store.FileSystem.Dir.temp () >>= fun temp ->
-
-        let abs_new_pack_filename = Store.Path.(temp / new_pack_filename)[@warning "-44"] in
-
-        Store.FileSystem.File.open_w abs_new_pack_filename ~mode:0o644 >>= function
-        | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
-        | Ok fd ->
-          let input = Cstruct.create 0x8000 in
-
-          Helper.safe_encoder_to_file
-            ~limit:50
-            (module E)
-            Store.FileSystem.File.write
-            fd input { E.src = None; pack = state; }
-          >>= function
-          | Ok { E.tree; E.hash; } -> Store.FileSystem.File.close fd >>= (function
-              | Ok () -> Lwt.return (Ok (abs_new_pack_filename, tree, hash))
-              | Error sys_err -> Lwt.return (Error (`SystemFile sys_err)))
-          | Error err ->
-            Store.FileSystem.File.close fd >>= function
-            | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
-            | Ok () -> match err with
-              | `Stack -> Lwt.return (Error (`SystemIO "Impossible to store the PACK file"))
-              | `Writer sys_err -> Lwt.return (Error (`SystemFile sys_err))
-              | `Encoder err -> Lwt.return (Error (`Pack err))
-  end
-
-  module Idx =
-  struct
-    let save git = function
-      | Error err -> Lwt.return (Error err)
-      | Ok (filename, tree, hash) ->
-        let open Lwt.Infix in
-
-        let pack_obj = Store.Path.(Store.dotgit git / "objects" / "pack" / (Fmt.strf "pack-%a.pack" Hash.pp hash))[@warning "-44"] in
-        Store.FileSystem.File.move filename pack_obj >>= function
-        | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
-        | Ok () ->
-          let idx = Store.Path.(Store.dotgit git / "objects" / "pack" / (Fmt.strf "pack-%a.idx" Hash.pp hash))[@warning "-44"] in
-
-          Store.FileSystem.File.open_w idx ~mode:0o644 >>= function
-          | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
-          | Ok fd ->
-            let state = IDXEncoder.default (Tree.to_sequence tree) hash in
-            let input = Store.buffer_de git in
-
-            let module E =
-            struct
-              type state  = IDXEncoder.t
-              type raw    = Cstruct.t
-              type result = unit
-              type error  = IDXEncoder.error
-
-              let raw_length = Cstruct.len
-              let raw_blit   = Cstruct.blit
-
-              type end' = [ `End of state ]
-              type rest = [ `Flush of state | `Error of state * error ]
-
-              let eval raw state = match IDXEncoder.eval raw state with
-                | #end' as v -> let `End state = v in Lwt.return (`End (state, ()))
-                | #rest as res -> Lwt.return res
-
-              let flush = IDXEncoder.flush
-              let used = IDXEncoder.used_out
-            end in
-
-            Helper.safe_encoder_to_file
-              ~limit:50
-              (module E)
-              Store.FileSystem.File.write
-              fd input state
-            >>= function
-            | Ok () -> Store.FileSystem.File.close fd >>= (function
-                | Ok () -> Lwt.return (Ok ())
-                | Error sys_err -> Lwt.return (Error (`SystemFile sys_err)))
-            | Error err ->
-              Store.FileSystem.File.close fd >>= function
-              | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
-              | Ok () -> match err with
-                | `Stack -> Lwt.return (Error (`SystemIO "Impossible to store the IDX file"))
-                | `Writer sys_err -> Lwt.return (Error (`SystemFile sys_err))
-                | `Encoder err -> Lwt.return (Error (`Idx err))
+      dispatch ctx first >>= fun () ->
+      (Store.Pack.from git (fun () -> Lwt_stream.get stream)
+       >!= fun err -> Lwt.return (`StorePack err))
   end
 
   let rec clone_handler git t r =
@@ -782,26 +265,9 @@ module Make
       |> process t
       >>= clone_handler git t
     | `NegociationResult _ ->
-      let ztmp = Store.buffer_zl git in
-      let wtmp = Store.buffer_window git in
-      let pack_filename = Pack.pack_filename () in
-
-      Store.FileSystem.Dir.temp () >>= fun temp ->
-
-      let abs_pack_filename = Store.Path.(temp / pack_filename)[@warning "-44"] in
-
-      Store.FileSystem.File.open_w ~mode:0o644
-        abs_pack_filename
-      >>= (function
-          | Ok w ->
-            Client.run t.ctx `ReceivePACK
-            |> process t
-            >>= Pack.pack_handler
-              (Pack.normalize_tree git abs_pack_filename) t (Pack.make_pack ztmp wtmp) w
-               >>= (function
-                   | Ok info -> Idx.save git (Ok (abs_pack_filename, info.Pack.tree, info.Pack.hash))
-                   | Error _ as err ->  Idx.save git err)
-          | Error sys_err -> Lwt.return (Error (`SystemFile sys_err)))
+      Client.run t.ctx `ReceivePACK
+      |> process t
+      >>= Pack.populate git t
     | `ShallowUpdate _ ->
       Client.run t.ctx (`Has []) |> process t >>= clone_handler git t
     | `Refs refs ->
@@ -835,45 +301,13 @@ module Make
                   | result -> Lwt.return (Error (`Ls (err_unexpected_result result))))
     | result -> Lwt.return (Error (`Ls (err_unexpected_result result)))
 
-  let fetch_handler git ?(shallow = []) ~notify ~negociate:(fn, state) ~has ~want ?deepen ~thin t r =
+  let fetch_handler git ?(shallow = []) ~notify ~negociate:(fn, state) ~has ~want ?deepen ~thin:_ t r =
     let open Lwt.Infix in
 
-    let pack ~thin t =
-      let ztmp = Store.buffer_zl git in
-      let wtmp = Store.buffer_window git in
-      let pack_filename = Pack.pack_filename () in
-
-      Store.FileSystem.Dir.temp () >>= fun temp ->
-
-      let abs_pack_filename = Store.Path.(temp / pack_filename)[@warning "-44"] in
-
-      Store.FileSystem.File.open_w ~mode:0o644 abs_pack_filename
-      >>= (function
-          | Ok w ->
-            Client.run t.ctx `ReceivePACK
-            |> process t
-            >>= Pack.pack_handler
-              (Pack.normalize_tree git Store.Path.(temp / pack_filename)[@warning "-44"])
-              t (Pack.make_pack ztmp wtmp) w
-            >>= (function
-                | Ok info ->
-                  (* XXX(dinosaure): we take care about [info.fd] and close it
-                     when we don't need to use [info.decoder] - this is happen
-                     only before [Idx.save], [Pack.canonicalize_pack] needs
-                     [info.decoder]. *)
-
-                  (if thin
-                   then Store.FileSystem.Mapper.close info.Pack.fd >>= function
-                     | Ok () -> Idx.save git (Ok (abs_pack_filename, info.Pack.tree, info.Pack.hash))
-                     | Error sys_err -> Lwt.return (Error (`SystemMapper sys_err))
-                   else Pack.canonicalize_pack git info >>= function
-                     | Error _ as err ->
-                       Store.FileSystem.Mapper.close info.Pack.fd >>= fun _ -> Lwt.return err
-                     | Ok _ as value -> Store.FileSystem.Mapper.close info.Pack.fd >>= function
-                       | Ok () -> Idx.save git value
-                       | Error sys_err -> Lwt.return (Error (`SystemMapper sys_err)))
-                | Error _ as err -> Lwt.return err)
-          | Error sys_err -> Lwt.return (Error (`SystemFile sys_err)))
+    let pack t =
+      Client.run t.ctx `ReceivePACK
+      |> process t
+      >>= Pack.populate git t
     in
 
     let rec aux t state = function
@@ -883,12 +317,12 @@ module Make
       | `Negociation acks ->
         fn acks state >>=
         (function
-          | `Ready, _ -> pack ~thin t
+          | `Ready, _ -> pack t
           | `Done, state ->
             Client.run t.ctx `Done |> process t >>= aux t state
           | `Again has, state ->
             Client.run t.ctx (`Has has) |> process t >>= aux t state)
-      | `NegociationResult _ -> pack ~thin t
+      | `NegociationResult _ -> pack t
       | `Refs refs ->
         want refs.Client.Decoder.refs >>=
         (function
@@ -901,7 +335,8 @@ module Make
             >>= aux t state
           | [] -> Client.run t.ctx `Flush
                   |> process t
-            >>= (function `Flush -> Lwt.return (Ok ())
+            >>= (function `Flush -> Lwt.return (Ok (Hash.of_string (String.make (Hash.Digest.length * 2) '0'), 0))
+                                      (* XXX(dinosaure): better return? *)
                         | result -> Lwt.return (Error (`Fetch (err_unexpected_result result)))))
       | result -> Lwt.return (Error (`Ls (err_unexpected_result result)))
     in
