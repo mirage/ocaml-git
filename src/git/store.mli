@@ -755,10 +755,6 @@ sig
   (** [buffer_io state] returns the state-defined buffer used to store
       the input flow. *)
 
-  val indexes : t -> Hash.t list
-  (** [indexes state] returns all available IDX files in the current
-      git repository [state]. *)
-
   val fold : t ->
     ('a -> ?name:Path.t -> length:int64 -> Hash.t -> Value.t -> 'a Lwt.t) ->
     path:Path.t -> 'a -> Hash.t -> 'a Lwt.t

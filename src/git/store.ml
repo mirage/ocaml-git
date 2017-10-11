@@ -249,7 +249,6 @@ sig
   val buffer_zl : t -> Cstruct.t
   val buffer_de : t -> Cstruct.t
   val buffer_io : t -> Cstruct.t
-  val indexes : t -> Hash.t list
   val fold : t -> ('a -> ?name:Path.t -> length:int64 -> Hash.t -> Value.t -> 'a Lwt.t) -> path:Path.t -> 'a -> Hash.t -> 'a Lwt.t
 
   module Ref :
@@ -1640,7 +1639,4 @@ module Make
   let buffer_zl { buffer; _ } = buffer.zl
   let buffer_de { buffer; _ } = buffer.de
   let buffer_io { buffer; _ } = buffer.io
-
-  (* XXX(dinosaure): clash of name with [indexes] below. *)
-  let indexes t = List.map fst t.idxs
 end
