@@ -244,6 +244,10 @@ sig
 
       This state does not allocate any large caml value. *)
 
+  val many : t -> int32
+  (** [many t] returns how many objects will/did compute for the
+      current stream. *)
+
   val from_window : Window.t -> int -> Cstruct.t -> Inflate.window -> t
   (** [from_window pack_window off_in_window tmp window] makes a new
       decoder of a PACK file specialized from a {!Window.t}. This

@@ -470,6 +470,7 @@ sig
     | Hunk of H.hunks
 
   val default : Cstruct.t -> Inflate.window -> t
+  val many : t -> int32
   val from_window : Window.t -> int -> Cstruct.t -> Inflate.window -> t
   val process_length : Window.t -> int -> Cstruct.t -> Inflate.window -> t
   val process_metadata : Window.t -> int -> Cstruct.t -> Inflate.window -> t
@@ -1019,6 +1020,8 @@ module MakePACKDecoder (H : S.HASH) (I : S.INFLATE)
     ; objects = 0l
     ; counter = 0l
     ; state   = Header header }
+
+  let many { objects; _ } = objects
 
   let from_window window win_offset z_tmp z_win =
     { i_off   = 0
