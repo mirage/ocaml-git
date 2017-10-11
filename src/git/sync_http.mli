@@ -62,6 +62,7 @@ sig
     [ `Decoder of Decoder.error
     | `DecoderFlow of string
     | `PackDecoder of PACKDecoder.error
+    | `StorePack of Store.Pack.error
     | `Unresolved_object
     | `Apply of string ]
 
@@ -69,6 +70,8 @@ sig
 
   val clone :
        Store.t
+    -> ?stdout:(Cstruct.t -> unit Lwt.t)
+    -> ?stderr:(Cstruct.t -> unit Lwt.t)
     -> ?headers:Web.HTTP.headers
     -> ?port:int
     -> ?reference:Store.Reference.t
