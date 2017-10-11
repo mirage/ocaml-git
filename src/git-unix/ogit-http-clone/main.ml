@@ -15,6 +15,8 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+let () = Random.self_init ()
+
 module Client =
 struct
   type headers = Cohttp.Header.t
@@ -99,7 +101,8 @@ let setup_logs style_renderer level ppf =
   Fmt_tty.setup_std_outputs ?style_renderer ();
   Logs.set_level level;
   Logs.set_reporter (reporter ppf);
-  ()
+  let quiet = match style_renderer with Some _ -> true | None -> false in
+  quiet, ppf
 
 type error =
   [ `Store of Git_unix.Store.error
@@ -111,7 +114,7 @@ let pp_error ppf = function
   | `Reference err -> Fmt.pf ppf "(`Reference %a)" Git_unix.Store.Ref.pp_error err
   | `Sync err -> Fmt.pf ppf "(`Sync %a)" Sync_http.pp_error err
 
-let main _ origin branch repository directory =
+let main ppf progress origin branch repository directory =
   let name =
     Uri.path repository
     |> Astring.String.cuts ~empty:false ~sep:Fpath.dir_sep
@@ -127,8 +130,20 @@ let main _ origin branch repository directory =
 
   let ( >!= ) v f = map_err f v in
 
+  let stdout =
+    if progress
+    then Some (fun raw -> Fmt.pf ppf "%s%!" (Cstruct.to_string raw); Lwt.return ())
+    else None
+  in
+
+  let stderr =
+    if progress
+    then Some (fun raw -> Fmt.(pf stderr) "%s%!" (Cstruct.to_string raw); Lwt.return ())
+    else None
+  in
+
   (Git_unix.Store.create ~root () >!= fun err -> `Store err) >>= fun git ->
-  (Sync_http.clone git ?port:(Uri.port repository) ~reference:branch
+  (Sync_http.clone git ?stdout ?stderr ?port:(Uri.port repository) ~reference:branch
      (option_value_exn
         (fun () -> raise (Failure "Invalid repository: no host."))
         (Uri.host repository))
@@ -155,19 +170,26 @@ open Cmdliner
 
 module Flag =
 struct
-  let output =
-    let values =
-      [ Fmt.stdout, Arg.info ["stdout"] ~doc:"Standard output"
-      ; Fmt.stderr, Arg.info ["stderr"] ~doc:"Standard error output" ]
+  let output_value =
+    let parse str = match str with
+      | "stdout" -> Ok Fmt.stdout
+      | "stderr" -> Ok Fmt.stderr
+      | s -> Error (`Msg (Fmt.strf "%s is not an output." s))
     in
-    Arg.(value & vflag Fmt.stdout values)
+    let print ppf v = Fmt.pf ppf "%s"
+        (if v == Fmt.stdout
+         then "stdout"
+         else "stderr")
+    in
+    Arg.conv ~docv:"<output>" (parse, print)
 
-  let quiet =
+  let output =
     let doc =
-      "Operate qietly. Progress is not reported to the standard error stream. This flag is \
-       also passed to the `rsync` command when given."
+      "Output of the progress status"
     in
-    Arg.(value & flag & info ["q"; "quiet"] ~doc)
+    Arg.(value
+         & opt output_value Fmt.stdout
+         & info [ "output" ] ~doc ~docv:"<output>")
 
   let progress =
     let doc =
@@ -216,8 +238,8 @@ end
 let setup_log =
   Term.(const setup_logs $ Fmt_cli.style_renderer () $ Logs_cli.level () $ Flag.output)
 
-let main progress origin branch directory repository _ =
-  match Lwt_main.run (main progress origin branch directory repository) with
+let main progress origin branch directory repository (quiet, ppf) =
+  match Lwt_main.run (main ppf (not quiet && progress) origin branch directory repository) with
   | Ok () -> `Ok ()
   | Error (#error as err) -> `Error (false, Fmt.strf "%a" pp_error err)
 
