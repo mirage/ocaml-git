@@ -46,19 +46,30 @@ sig
     val length : int64 Angstrom.t
   end
 
-  module F : S.FARADAY  with type t = t
-  module D : S.DECODER  with type t = t
-                         and type raw = Cstruct.t
-                         and type init = Inflate.window * Cstruct.t * Cstruct.t
-                         and type error = [ `Decoder of string | `Inflate of Inflate.error ]
-  module M : S.MINIENC  with type t = t
-  module E : S.ENCODER  with type t = t
-                         and type raw = Cstruct.t
-                         and type init = int * t * int * Cstruct.t
-                         and type error = [ `Deflate of Deflate.error ]
+  module F
+    : S.FARADAY
+      with type t = t
+  module D
+    : S.DECODER
+      with type t = t
+       and type raw = Cstruct.t
+       and type init = Inflate.window * Cstruct.t * Cstruct.t
+       and type error = [ `Decoder of string
+                        | `Inflate of Inflate.error ]
+  module M
+    : S.MINIENC
+      with type t = t
+  module E
+    : S.ENCODER
+      with type t = t
+       and type raw = Cstruct.t
+       and type init = int * t * int * Cstruct.t
+       and type error = [ `Deflate of Deflate.error ]
 
-  include S.DIGEST with type t := t and type hash := Hash.t
-  include S.BASE with type t := t
+  include S.DIGEST
+    with type t := t and type hash := Hash.t
+  include
+    S.BASE with type t := t
 end
 
 module type RAW =

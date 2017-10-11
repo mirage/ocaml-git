@@ -1,14 +1,17 @@
 module type S =
 sig
-  module Path : S.PATH
-  module FileSystem : S.FS
+  module Path
+    : S.PATH
+  module FileSystem
+    : S.FS
 
   include Value.S
 
   module Value
-    : Value.S with module Hash = Hash
-               and module Inflate = Inflate
-               and module Deflate = Deflate
+    : Value.S
+      with module Hash = Hash
+       and module Inflate = Inflate
+       and module Deflate = Deflate
 
   type error =
     [ `SystemFile of FileSystem.File.error
@@ -25,11 +28,11 @@ sig
 
   val pp_error : error Fmt.t
 
-  val exists  :
+  val exists :
     root:Path.t ->
     Hash.t -> bool Lwt.t
 
-  val read    :
+  val read :
     root:Path.t ->
     window:Inflate.window ->
     ztmp:Cstruct.t ->
@@ -43,7 +46,7 @@ sig
     ztmp:Cstruct.t ->
     dtmp:Cstruct.t ->
     raw:Cstruct.t ->
-    Hash.t -> ([ `Commit | `Blob | `Tree | `Tag ] * Cstruct.t, error) result Lwt.t
+    Hash.t -> (kind * Cstruct.t, error) result Lwt.t
 
   val inflate_wa :
     root:Path.t ->
@@ -52,13 +55,13 @@ sig
     dtmp:Cstruct.t ->
     raw:Cstruct.t ->
     result:Cstruct.t ->
-    Hash.t -> ([ `Commit | `Blob | `Tree | `Tag ] * Cstruct.t, error) result Lwt.t
+    Hash.t -> (kind * Cstruct.t, error) result Lwt.t
 
-  val list    :
+  val list :
     root:Path.t ->
     Hash.t list Lwt.t
 
-  val size    :
+  val size :
     root:Path.t ->
     window:Inflate.window ->
     ztmp:Cstruct.t ->
@@ -106,9 +109,10 @@ module Make
   module Path = P
   module FileSystem = FS
 
-  module Value : Value.S with module Hash = H
-                          and module Inflate = I
-                          and module Deflate = D
+  module Value :
+    Value.S with module Hash = H
+             and module Inflate = I
+             and module Deflate = D
     = Value.Make(H)(I)(D)
 
   include Value
@@ -191,11 +195,12 @@ module Make
         [] firsts
 
   type 't decoder =
-    (module S.DECODER with type t = 't
-                            and type raw = Cstruct.t
-                            and type init = Inflate.window * Cstruct.t * Cstruct.t
-                            and type error = [ `Decoder of string
-                                             | `Inflate of Inflate.error ])
+    (module S.DECODER
+      with type t = 't
+       and type raw = Cstruct.t
+       and type init = Inflate.window * Cstruct.t * Cstruct.t
+       and type error = [ `Decoder of string
+                        | `Inflate of Inflate.error ])
 
   let gen (type t) ~root ~window ~ztmp ~dtmp ~raw (decoder : t decoder) hash : (t, error) result Lwt.t =
     let module D = (val decoder) in

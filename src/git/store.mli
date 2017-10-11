@@ -51,9 +51,10 @@ sig
   (** The [Deflate] module used to make this interface. *)
 
   module Value
-    : Value.S with module Hash = Hash
-               and module Inflate = Inflate
-               and module Deflate = Deflate
+    : Value.S
+      with module Hash = Hash
+       and module Inflate = Inflate
+       and module Deflate = Deflate
   (** The Value module, which represents the Git object. *)
 
   type error =
@@ -86,11 +87,12 @@ sig
       file-system. The list returned does not contain all git object
       available in your repository but only which {i loosed} one. *)
 
-  val read_p : ztmp:Cstruct.t ->
-    dtmp:Cstruct.t ->
-    raw:Cstruct.t ->
-    window:Inflate.window ->
-    state -> Hash.t -> (t, error) result Lwt.t
+  val read_p :
+       ztmp:Cstruct.t
+    -> dtmp:Cstruct.t
+    -> raw:Cstruct.t
+    -> window:Inflate.window
+    -> state -> Hash.t -> (t, error) result Lwt.t
   (** [read_p ~ztmp ~dtmp ~raw ~window state hash] can retrieve a git
       {i loose} object from the file-system. It de-serializes the git
       object to an OCaml value. This function needs some buffers:
@@ -125,11 +127,12 @@ sig
   val read : state -> Hash.t -> (t, error) result Lwt.t
   (** Alias of {!read_s}. *)
 
-  val size_p : ztmp:Cstruct.t ->
-    dtmp:Cstruct.t ->
-    raw:Cstruct.t ->
-    window:Inflate.window ->
-    state -> Hash.t -> (int64, error) result Lwt.t
+  val size_p :
+       ztmp:Cstruct.t
+    -> dtmp:Cstruct.t
+    -> raw:Cstruct.t
+    -> window:Inflate.window
+    -> state -> Hash.t -> (int64, error) result Lwt.t
   (** [size_p ~ztmp ~dtmp ~raw ~window state hash] returns the size of
       the git {i loose} object which respects the predicate
       [digest(object) = hash]. The size is how many byte(s) are needed
@@ -150,9 +153,10 @@ sig
   val size : state -> Hash.t -> (int64, error) result Lwt.t
   (** Alias of {!size_s}. *)
 
-  val write_p : ztmp:Cstruct.t ->
-    raw:Cstruct.t ->
-    state -> t -> (Hash.t * int, error) result Lwt.t
+  val write_p :
+       ztmp:Cstruct.t
+    -> raw:Cstruct.t
+    -> state -> t -> (Hash.t * int, error) result Lwt.t
   (** [write_p ~ztmp ~raw state v] writes as a {i loose} git object
       the value [v] in the file-system. It serializes and deflates the
       value to a new file, which respects the internal structure of a
@@ -192,11 +196,11 @@ sig
   val write_inflated : state -> kind:kind -> Cstruct.t -> Hash.t Lwt.t
 
   val raw_p :
-    window:Inflate.window ->
-    ztmp:Cstruct.t ->
-    dtmp:Cstruct.t ->
-    raw:Cstruct.t ->
-    state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
+       ztmp:Cstruct.t
+    -> dtmp:Cstruct.t
+    -> window:Inflate.window
+    -> raw:Cstruct.t
+    -> state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
   (** [raw_p ~window ~ztmp ~dtmp ~raw state hash] can retrieve a git
       {i loose} object from the file-system. However, this function {b
       does not} de-serialize the git object and returns the kind of
@@ -235,12 +239,12 @@ sig
   (** Alias of {!raw_s}. *)
 
   val raw_wa :
-    window:Inflate.window ->
-    ztmp:Cstruct.t ->
-    dtmp:Cstruct.t ->
-    raw:Cstruct.t ->
-    result:Cstruct.t ->
-    state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
+       ztmp:Cstruct.t
+    -> dtmp:Cstruct.t
+    -> window:Inflate.window
+    -> raw:Cstruct.t
+    -> result:Cstruct.t
+    -> state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
   (** [raw_wa ~window ~ztmp ~dtmp ~raw ~result state hash] can
       retrieve a git {i loose} object from thefile-system. However,
       this function {b does not} de-serialize the git object and
@@ -280,17 +284,18 @@ sig
       allocation. *)
 
   val raw_was : Cstruct.t ->
-    state -> Hash.t -> ([ `Commit | `Tree | `Tag | `Blob ] * Cstruct.t, error) result Lwt.t
+    state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
   (** [raw_was result state hash] is the same process than {!raw_wa}
       but we use the state-defined buffer. That means the client can
       not use this function in a concurrency context with the same
       [state]. *)
 
   module D
-    : S.DECODER with type t = t
-                      and type raw = Cstruct.t
-                      and type init = Inflate.window * Cstruct.t * Cstruct.t
-                      and type error = Value.D.error
+    : S.DECODER
+      with type t = t
+       and type raw = Cstruct.t
+       and type init = Inflate.window * Cstruct.t * Cstruct.t
+       and type error = Value.D.error
   (** The decoder of the Git object. We constraint the input to be an
       {!Inflate.window} and a {Cstruct.t} which used by the {Inflate}
       module and an other {Cstruct.t} as an internal buffer.
@@ -303,10 +308,11 @@ sig
       de-serialized Git {i loose} object. *)
 
   module E
-    : S.ENCODER with type t = t
-                      and type raw = Cstruct.t
-                      and type init = int * t * int * Cstruct.t
-                      and type error = Value.E.error
+    : S.ENCODER
+      with type t = t
+       and type raw = Cstruct.t
+       and type init = int * t * int * Cstruct.t
+       and type error = Value.E.error
   (** The encoder (which uses a {!Minienc.encoder}) of the Git object.
       We constraint the output to be a {Cstruct.t}. This encoder needs
       the level of the compression, the value {!t}, the memory
@@ -416,9 +422,10 @@ sig
       we encountered any error, we make it silent and continue the
       process. *)
 
-  val read_p : ztmp:Cstruct.t ->
-    window:Inflate.window ->
-    state -> Hash.t -> (t, error) result Lwt.t
+  val read_p :
+       ztmp:Cstruct.t
+    -> window:Inflate.window
+    -> state -> Hash.t -> (t, error) result Lwt.t
   (** [read_p ~ztmp ~window state hash] can retrieve a git {i packed}
       object from any {i PACK} files available in the current git
       repository [state]. It just inflates the git object and informs
@@ -456,8 +463,10 @@ sig
   val read : state -> Hash.t -> (t, error) result Lwt.t
   (** Alias of {!read_s}. *)
 
-  val size_p : ztmp:Cstruct.t
-    -> window:Inflate.window -> state -> Hash.t -> (int, error) result Lwt.t
+  val size_p :
+       ztmp:Cstruct.t
+    -> window:Inflate.window
+    -> state -> Hash.t -> (int, error) result Lwt.t
   (** [size_p ~ztmp ~window state hash] returns the size of the git {i
       packed} object which respects the predicate [digest(object) =
       hash]. The size is how many byte(s) are needed to store the
@@ -541,13 +550,14 @@ sig
   (** The [PACKEncoder] module used to encoder a {i PACK} file. *)
 
   module Loose
-    : LOOSE with type t = Value.t
-             and type state = t
-             and module Hash = Hash
-             and module Path = Path
-             and module FileSystem = FileSystem
-             and module Inflate = Inflate
-             and module Deflate = Deflate
+    : LOOSE
+      with type t = Value.t
+       and type state = t
+       and module Hash = Hash
+       and module Path = Path
+       and module FileSystem = FileSystem
+       and module Inflate = Inflate
+       and module Deflate = Deflate
   (** The [Loose] module which represents any {i loose} git object
       available in git repository. *)
 
@@ -570,17 +580,18 @@ sig
     | `Blob ]
   (** Kind of the {i packed} Git object. *)
 
-  type error = [ Loose.error
-               | Pack.error
-               ]
+  type error =
+    [ Loose.error
+    | Pack.error ]
 
   val pp_error : error Fmt.t
   (** Pretty-printer of {!error}. *)
 
-  val create : ?root:Path.t ->
-    ?dotgit:Path.t ->
-    ?compression:int ->
-    unit -> (t, error) result Lwt.t
+  val create :
+       ?root:Path.t
+    -> ?dotgit:Path.t
+    -> ?compression:int
+    -> unit -> (t, error) result Lwt.t
 
   val dotgit : t -> Path.t
   (** [dotgit state] returns the current [".git"] path used. *)
@@ -601,7 +612,8 @@ sig
   (** [list state] lists all git objects available in the current
       repository [state]. *)
 
-  val read_p : ztmp:Cstruct.t
+  val read_p :
+       ztmp:Cstruct.t
     -> dtmp:Cstruct.t
     -> raw:Cstruct.t
     -> window:Inflate.window
@@ -637,9 +649,10 @@ sig
       exception (instead to return a {!result}) if the git object
       requested does not exist or we catch any other errors. *)
 
-  val write_p : ztmp:Cstruct.t ->
-    raw:Cstruct.t ->
-    t -> Value.t -> (Hash.t * int, error) result Lwt.t
+  val write_p :
+       ztmp:Cstruct.t
+    -> raw:Cstruct.t
+    -> t -> Value.t -> (Hash.t * int, error) result Lwt.t
   (** [write_p ~ztmp ~raw state v] writes as a {b loose} git object
       the value [v] in the file-system. It serializes and deflates the
       value to a new file. which respect the internal structure of a
@@ -671,11 +684,12 @@ sig
   val write : t -> Value.t -> (Hash.t * int, error) result Lwt.t
   (** Alias of {!write_s}. *)
 
-  val size_p : ztmp:Cstruct.t ->
-    dtmp:Cstruct.t ->
-    raw:Cstruct.t ->
-    window:Inflate.window ->
-    t -> Hash.t -> (int64, error) result Lwt.t
+  val size_p :
+    ztmp:Cstruct.t
+    -> dtmp:Cstruct.t
+    -> raw:Cstruct.t
+    -> window:Inflate.window
+    -> t -> Hash.t -> (int64, error) result Lwt.t
   (** [size_p ~ztmp ~dtmp ~raw ~window state hash] returns the size of
       the git object which respects the predicate [digest(object) =
       hash]. The size is how many byte(s) are needed to store the
@@ -696,11 +710,12 @@ sig
   val size : t -> Hash.t -> (int64, error) result Lwt.t
   (** Alias of {!size_s}. *)
 
-  val raw_p : ztmp:Cstruct.t ->
-    dtmp:Cstruct.t ->
-    raw:Cstruct.t ->
-    window:Inflate.window ->
-    t -> Hash.t -> (kind * Cstruct.t) option Lwt.t
+  val raw_p :
+       ztmp:Cstruct.t
+    -> dtmp:Cstruct.t
+    -> raw:Cstruct.t
+    -> window:Inflate.window
+    -> t -> Hash.t -> (kind * Cstruct.t) option Lwt.t
   (** [raw_p ~window ~ztmp ~dtmp ~raw state hash] can retrieve a git
       object available in the current git repository [state]. However,
       this function {b does not} de-serialize the git object and
@@ -804,7 +819,10 @@ sig
     val pp_error : error Fmt.t
     (** Pretty-printer of {!error}. *)
 
-    val graph_p : t -> dtmp:Cstruct.t -> raw:Cstruct.t -> (Hash.t Reference.Map.t, error) result Lwt.t
+    val graph_p :
+         dtmp:Cstruct.t
+      -> raw:Cstruct.t
+      -> t -> (Hash.t Reference.Map.t, error) result Lwt.t
     (** [graph_p state ~dtmp ~raw] returns a graph which contains all
         reference and its pointed final hash available in the current
         git repository [state]. This function needs some buffers:
@@ -834,10 +852,10 @@ sig
         don't find the final pointed hash. This case can appear if the
         graph is not complete or if the link is broken.}} *)
 
-    val list_p : t
-      -> dtmp:Cstruct.t
+    val list_p :
+         dtmp:Cstruct.t
       -> raw:Cstruct.t
-      -> (Reference.t * Hash.t) list Lwt.t
+      -> t -> (Reference.t * Hash.t) list Lwt.t
     (** [list_p state ~dtmp ~raw] returns an associated list between
         reference and its bind hash. This function is the same than:
 
@@ -849,16 +867,20 @@ sig
         Finally, as {!graph_p}, if we encountered any {!error}, we
         make it silent and continue the process. *)
 
-    val list_s      : t -> (Reference.t * Hash.t) list Lwt.t
+    val list_s : t -> (Reference.t * Hash.t) list Lwt.t
     (** [list_s state] is the same process than {!list_p} but we use
         the state-defined buffer. That means the client can not use
         this function in a concurrency context with the same
         [state]. *)
 
-    val list        : t -> (Reference.t * Hash.t) list Lwt.t
+    val list : t -> (Reference.t * Hash.t) list Lwt.t
     (** Alias of {!list_s}. *)
 
-    val remove_p : t -> dtmp:Cstruct.t -> raw:Cstruct.t -> ?locks:Lock.t -> Reference.t -> (unit, error) result Lwt.t
+    val remove_p :
+        dtmp:Cstruct.t
+     -> raw:Cstruct.t
+     -> ?locks:Lock.t
+     -> t -> Reference.t -> (unit, error) result Lwt.t
     (** [remove_p state ~dtmp ~raw ?locks reference] removes the
         reference [reference] from the git repository [state]. The
         [?locks] avoids the race condition if it's specified. This
@@ -889,7 +911,10 @@ sig
         from the git repository [state]. The [?lock] avoids the race
         condition if it's specified. *)
 
-    val read_p : t -> dtmp:Cstruct.t -> raw:Cstruct.t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
+    val read_p :
+         dtmp:Cstruct.t
+      -> raw:Cstruct.t
+      -> t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
     (** [read_p state ~dtmp ~raw reference] returns the value contains
         in the reference [reference] (available in the git repository
         [state]). This function needs some buffers:
@@ -911,7 +936,10 @@ sig
     val read : t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
     (** Alias of {!read_s}. *)
 
-    val write_p : t -> ?locks:Lock.t -> dtmp:Cstruct.t -> raw:Cstruct.t -> Reference.t -> Reference.head_contents -> (unit, error) result Lwt.t
+    val write_p :
+         ?locks:Lock.t
+      -> dtmp:Cstruct.t
+      -> raw:Cstruct.t -> t -> Reference.t -> Reference.head_contents -> (unit, error) result Lwt.t
     (** [write_p state ?locks ~dtmp ~raw reference value] writes the
         value [value] in the mutable representation of the [reference]
         in the git repository [state]. The {?locks] avoids the race
@@ -931,7 +959,8 @@ sig
     val write : t -> ?locks:Lock.t -> Reference.t -> Reference.head_contents -> (unit, error) result Lwt.t
     (** Alias of {!write_s}. *)
 
-    val test_and_set : t
+    val test_and_set :
+         t
       -> ?locks:Lock.t
       -> Reference.t
       -> test:Reference.head_contents option

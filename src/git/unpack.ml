@@ -756,6 +756,7 @@ module MakePACKDecoder (H : S.HASH) (I : S.INFLATE)
         (fun byte src t ->
           let msb = byte land 0x80 <> 0 in
           let crc = Crc32.digestc crc byte in
+
           (length[@tailcall]) msb (len lor ((byte land 0x7F) lsl bit), bit + 7) crc
           k src t)
         src t
@@ -767,6 +768,7 @@ module MakePACKDecoder (H : S.HASH) (I : S.INFLATE)
         (fun byte src t ->
           let msb = byte land 0x80 <> 0 in
           let crc = Crc32.digestc crc byte in
+
           (offset[@tailcall]) msb (Int64.logor (Int64.shift_left (Int64.add off 1L) 7) (Int64.of_int (byte land 0x7F))) crc
           k src t)
         src t
@@ -818,6 +820,7 @@ module MakePACKDecoder (H : S.HASH) (I : S.INFLATE)
             So, we compute the CRC-32 checksum and update [consumed]. *)
          let consumed = consumed + Inflate.used_in z in
          let crc = Crc32.digest ~off:(t.i_off + t.i_pos) ~len:(Inflate.used_in z) crc src in
+
          let h = H.refill 0 (Inflate.used_out z) h in
 
          Cont { t with state = Hunks { offset; length; consumed; crc; z = Inflate.refill 0 0 z; h; }
@@ -894,6 +897,7 @@ module MakePACKDecoder (H : S.HASH) (I : S.INFLATE)
         (fun byte src t ->
           let msb = byte land 0x80 <> 0 in
           let crc = Crc32.digestc crc byte in
+
           offset msb (Int64.of_int (byte land 0x7F)) crc
             (fun offset crc _ t ->
                Cont { t with state = Hunks { offset   = off
@@ -937,6 +941,7 @@ module MakePACKDecoder (H : S.HASH) (I : S.INFLATE)
         let msb = byte land 0x80 <> 0 in
         let typ = (byte land 0x70) lsr 4 in
         let crc = Crc32.digestc Crc32.default byte in
+
         length msb (byte land 0x0F, 4) crc (fun len crc _ t -> Cont { t with state = Object (fun src t -> switch typ offset len crc src t) }) src t)
       src t
 
@@ -1103,7 +1108,7 @@ module MakePACKDecoder (H : S.HASH) (I : S.INFLATE)
                                             (pos: %d, len: %d)" t.i_pos t.i_len))
 
   let flush off len t = match t.state with
-    | Unzip { offset; length; consumed; crc; kind; z } ->
+    | Unzip { offset; length; consumed; crc; kind; z; } ->
       { t with state = Unzip { offset
                              ; length
                              ; consumed
@@ -1300,8 +1305,7 @@ sig
       { kind   : kind
       ; raw    : Cstruct.t
       ; length : int64
-      ; from   : from
-      ; }
+      ; from   : from }
 
     val pp : t Fmt.t
 

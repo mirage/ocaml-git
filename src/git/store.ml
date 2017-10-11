@@ -26,16 +26,23 @@ sig
     | `Tag
     | `Blob ]
 
-  module Hash : S.HASH
-  module Path : S.PATH
-  module FileSystem : S.FS with type path = Path.t
-  module Inflate : S.INFLATE
-  module Deflate : S.DEFLATE
+  module Hash
+    : S.HASH
+  module Path
+    : S.PATH
+  module FileSystem
+    : S.FS
+      with type path = Path.t
+  module Inflate
+    : S.INFLATE
+  module Deflate
+    : S.DEFLATE
 
   module Value
-    : Value.S with module Hash = Hash
-               and module Inflate = Inflate
-               and module Deflate = Deflate
+    : Value.S
+      with module Hash = Hash
+       and module Inflate = Inflate
+       and module Deflate = Deflate
 
   type error =
     [ `SystemFile of FileSystem.File.error
@@ -45,33 +52,77 @@ sig
     | Value.E.error ]
 
   val pp_error : error Fmt.t
+
   val lookup_p : state -> Hash.t -> Hash.t option Lwt.t
   val lookup : state -> Hash.t -> Hash.t option Lwt.t
+
   val exists : state -> Hash.t -> bool Lwt.t
+
   val list : state -> Hash.t list Lwt.t
-  val read_p : ztmp:Cstruct.t -> dtmp:Cstruct.t -> raw:Cstruct.t -> window:Inflate.window -> state -> Hash.t -> (t, error) result Lwt.t
+
+  val read_p :
+       ztmp:Cstruct.t
+    -> dtmp:Cstruct.t
+    -> raw:Cstruct.t
+    -> window:Inflate.window
+    -> state -> Hash.t -> (t, error) result Lwt.t
+
   val read_s : state -> Hash.t -> (t, error) result Lwt.t
   val read : state -> Hash.t -> (t, error) result Lwt.t
-  val size_p : ztmp:Cstruct.t -> dtmp:Cstruct.t -> raw:Cstruct.t -> window:Inflate.window -> state -> Hash.t -> (int64, error) result Lwt.t
+
+  val size_p :
+       ztmp:Cstruct.t
+    -> dtmp:Cstruct.t
+    -> raw:Cstruct.t
+    -> window:Inflate.window
+    -> state -> Hash.t -> (int64, error) result Lwt.t
+
   val size_s : state -> Hash.t -> (int64, error) result Lwt.t
   val size : state -> Hash.t -> (int64, error) result Lwt.t
-  val write_p : ztmp:Cstruct.t -> raw:Cstruct.t -> state -> t -> (Hash.t * int, error) result Lwt.t
+
+  val write_p :
+       ztmp:Cstruct.t
+    -> raw:Cstruct.t
+    -> state -> t -> (Hash.t * int, error) result Lwt.t
+
   val write_s : state -> t -> (Hash.t * int, error) result Lwt.t
   val write : state -> t -> (Hash.t * int, error) result Lwt.t
+
   val write_inflated : state -> kind:kind -> Cstruct.t -> Hash.t Lwt.t
-  val raw_p : window:Inflate.window -> ztmp:Cstruct.t -> dtmp:Cstruct.t -> raw:Cstruct.t -> state -> Hash.t -> ([ `Commit | `Tree | `Tag | `Blob ] * Cstruct.t, error) result Lwt.t
-  val raw_s : state -> Hash.t -> ([ `Commit | `Tree | `Tag | `Blob ] * Cstruct.t, error) result Lwt.t
-  val raw : state -> Hash.t -> ([ `Commit | `Tree | `Tag | `Blob ] * Cstruct.t, error) result Lwt.t
 
-  module D : S.DECODER with type t = t
-                        and type raw = Cstruct.t
-                        and type init = Inflate.window * Cstruct.t * Cstruct.t
-                        and type error = [ `Decoder of string | `Inflate of Inflate.error ]
+  val raw_p :
+       ztmp:Cstruct.t
+    -> dtmp:Cstruct.t
+    -> window:Inflate.window
+    -> raw:Cstruct.t
+    -> state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
 
-  module E : S.ENCODER with type t = t
-                        and type raw = Cstruct.t
-                        and type init = int * t * int * Cstruct.t
-                        and type error = [ `Deflate of Deflate.error ]
+  val raw_s : state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
+  val raw : state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
+
+  val raw_wa :
+       ztmp:Cstruct.t
+    -> dtmp:Cstruct.t
+    -> window:Inflate.window
+    -> raw:Cstruct.t
+    -> result:Cstruct.t
+    -> state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
+
+  val raw_was : Cstruct.t -> state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
+
+  module D
+    : S.DECODER
+      with type t = t
+       and type raw = Cstruct.t
+       and type init = Inflate.window * Cstruct.t * Cstruct.t
+       and type error = [ `Decoder of string | `Inflate of Inflate.error ]
+
+  module E
+    : S.ENCODER
+      with type t = t
+       and type raw = Cstruct.t
+       and type init = int * t * int * Cstruct.t
+       and type error = [ `Deflate of Deflate.error ]
 end
 
 module type PACK =
@@ -171,18 +222,21 @@ sig
   module Lock
     : S.LOCK
   module FileSystem
-    : S.FS with type path = Path.t
-            and type File.lock = Lock.elt
+    : S.FS
+      with type path = Path.t
+       and type File.lock = Lock.elt
 
   module Value
-    : Value.S with module Hash = Hash
-               and module Inflate = Inflate
-               and module Deflate = Deflate
+    : Value.S
+      with module Hash = Hash
+       and module Inflate = Inflate
+       and module Deflate = Deflate
   module Reference
-    : Reference.IO with module Hash = Hash
-                    and module Path = Path
-                    and module Lock = Lock
-                    and module FileSystem = FileSystem
+    : Reference.IO
+      with module Hash = Hash
+       and module Path = Path
+       and module Lock = Lock
+       and module FileSystem = FileSystem
 
   module PACKDecoder
     : Unpack.DECODER
@@ -194,13 +248,14 @@ sig
        and module Deflate = Deflate
 
   module Loose
-    : LOOSE with type t = Value.t
-             and type state = t
-             and module Hash = Hash
-             and module Path = Path
-             and module Inflate = Inflate
-             and module Deflate = Deflate
-             and module FileSystem = FileSystem
+    : LOOSE
+      with type t = Value.t
+       and type state = t
+       and module Hash = Hash
+       and module Path = Path
+       and module Inflate = Inflate
+       and module Deflate = Deflate
+       and module FileSystem = FileSystem
 
   module Pack
     : PACK
@@ -223,39 +278,80 @@ sig
     | Pack.error ]
 
   val pp_error : error Fmt.t
-  val create : ?root:Path.t -> ?dotgit:Path.t -> ?compression:int -> unit -> (t, error) result Lwt.t
+
+  val create :
+       ?root:Path.t
+    -> ?dotgit:Path.t
+    -> ?compression:int
+    -> unit -> (t, error) result Lwt.t
+
   val dotgit : t -> Path.t
   val root : t -> Path.t
   val compression : t -> int
+
   val exists : t -> Hash.t -> bool Lwt.t
+
   val list : t -> Hash.t list Lwt.t
-  val read_p : ztmp:Cstruct.t -> dtmp:Cstruct.t -> raw:Cstruct.t -> window:Inflate.window -> t -> Hash.t -> (Value.t, error) result Lwt.t
+
+  val read_p :
+       ztmp:Cstruct.t
+    -> dtmp:Cstruct.t
+    -> raw:Cstruct.t
+    -> window:Inflate.window
+    -> t -> Hash.t -> (Value.t, error) result Lwt.t
+
   val read_s : t -> Hash.t -> (Value.t, error) result Lwt.t
   val read : t -> Hash.t -> (Value.t, error) result Lwt.t
   val read_exn : t -> Hash.t -> Value.t Lwt.t
-  val write_p : ztmp:Cstruct.t -> raw:Cstruct.t -> t -> Value.t -> (Hash.t * int, error) result Lwt.t
+
+  val write_p :
+       ztmp:Cstruct.t
+    -> raw:Cstruct.t
+    -> t -> Value.t -> (Hash.t * int, error) result Lwt.t
+
   val write_s : t -> Value.t -> (Hash.t * int, error) result Lwt.t
   val write : t -> Value.t -> (Hash.t * int, error) result Lwt.t
-  val size_p : ztmp:Cstruct.t -> dtmp:Cstruct.t -> raw:Cstruct.t -> window:Inflate.window -> t -> Hash.t -> (int64, error) result Lwt.t
+
+  val size_p :
+       ztmp:Cstruct.t
+    -> dtmp:Cstruct.t
+    -> raw:Cstruct.t
+    -> window:Inflate.window
+    -> t -> Hash.t -> (int64, error) result Lwt.t
+
   val size_s : t -> Hash.t -> (int64, error) result Lwt.t
   val size : t -> Hash.t -> (int64, error) result Lwt.t
-  val raw_p : ztmp:Cstruct.t -> dtmp:Cstruct.t -> raw:Cstruct.t -> window:Inflate.window -> t -> Hash.t -> ([ `Commit | `Tree | `Tag | `Blob ] * Cstruct.t) option Lwt.t
-  val raw_s : t -> Hash.t -> ([ `Commit | `Tree | `Tag | `Blob ] * Cstruct.t) option Lwt.t
-  val raw : t -> Hash.t -> ([ `Commit | `Tree | `Tag | `Blob ] * Cstruct.t) option Lwt.t
+
+  val raw_p :
+       ztmp:Cstruct.t
+    -> dtmp:Cstruct.t
+    -> raw:Cstruct.t
+    -> window:Inflate.window
+    -> t -> Hash.t -> (kind * Cstruct.t) option Lwt.t
+
+  val raw_s : t -> Hash.t -> (kind * Cstruct.t) option Lwt.t
+  val raw : t -> Hash.t -> (kind * Cstruct.t) option Lwt.t
+
   val read_inflated  : t -> Hash.t -> (kind * Cstruct.t) option Lwt.t
+
   val write_inflated : t -> kind:kind -> Cstruct.t -> Hash.t Lwt.t
+
   val contents : t -> ((Hash.t * Value.t) list, error) result Lwt.t
+
   val buffer_window : t -> Inflate.window
   val buffer_zl : t -> Cstruct.t
   val buffer_de : t -> Cstruct.t
   val buffer_io : t -> Cstruct.t
+
   val fold : t -> ('a -> ?name:Path.t -> length:int64 -> Hash.t -> Value.t -> 'a Lwt.t) -> path:Path.t -> 'a -> Hash.t -> 'a Lwt.t
 
   module Ref :
   sig
-    module Packed_refs : Packed_refs.S with module Hash = Hash
-                                        and module Path = Path
-                                        and module FileSystem = FileSystem
+    module Packed_refs
+      : Packed_refs.S
+        with module Hash = Hash
+         and module Path = Path
+         and module FileSystem = FileSystem
 
     type nonrec error =
       [ Packed_refs.error
@@ -263,22 +359,57 @@ sig
       | `Invalid_reference of Reference.t ]
 
     val pp_error : error Fmt.t
-    val graph_p : t -> dtmp:Cstruct.t -> raw:Cstruct.t -> (Hash.t Reference.Map.t, error) result Lwt.t
+
+    val graph_p :
+         dtmp:Cstruct.t
+      -> raw:Cstruct.t
+      -> t -> (Hash.t Reference.Map.t, error) result Lwt.t
+
     val graph : t -> (Hash.t Reference.Map.t, error) result Lwt.t
+
     val normalize : Hash.t Reference.Map.t -> Reference.head_contents -> (Hash.t, error) result Lwt.t
-    val list_p : t -> dtmp:Cstruct.t -> raw:Cstruct.t -> (Reference.t * Hash.t) list Lwt.t
+
+    val list_p :
+         dtmp:Cstruct.t
+      -> raw:Cstruct.t
+      -> t -> (Reference.t * Hash.t) list Lwt.t
+
     val list_s : t -> (Reference.t * Hash.t) list Lwt.t
     val list : t -> (Reference.t * Hash.t) list Lwt.t
-    val remove_p : t -> dtmp:Cstruct.t -> raw:Cstruct.t -> ?locks:Lock.t -> Reference.t -> (unit, error) result Lwt.t
+
+    val remove_p :
+         dtmp:Cstruct.t
+      -> raw:Cstruct.t
+      -> ?locks:Lock.t
+      -> t -> Reference.t -> (unit, error) result Lwt.t
+
     val remove_s : t -> ?locks:Lock.t -> Reference.t -> (unit, error) result Lwt.t
     val remove : t -> ?locks:Lock.t -> Reference.t -> (unit, error) result Lwt.t
-    val read_p : t -> dtmp:Cstruct.t -> raw:Cstruct.t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
+
+    val read_p :
+         dtmp:Cstruct.t
+      -> raw:Cstruct.t
+      -> t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
+
     val read_s : t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
     val read : t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
-    val write_p : t -> ?locks:Lock.t -> dtmp:Cstruct.t -> raw:Cstruct.t -> Reference.t -> Reference.head_contents -> (unit, error) result Lwt.t
+
+    val write_p :
+         ?locks:Lock.t
+      -> dtmp:Cstruct.t
+      -> raw:Cstruct.t
+      -> t -> Reference.t -> Reference.head_contents -> (unit, error) result Lwt.t
+
     val write_s : t -> ?locks:Lock.t -> Reference.t -> Reference.head_contents -> (unit, error) result Lwt.t
     val write : t -> ?locks:Lock.t -> Reference.t -> Reference.head_contents -> (unit, error) result Lwt.t
-    val test_and_set : t -> ?locks:Lock.t -> Reference.t -> test:Reference.head_contents option -> set:Reference.head_contents option -> (bool, error) result Lwt.t
+
+    val test_and_set :
+        t
+     -> ?locks:Lock.t
+     -> Reference.t
+     -> test:Reference.head_contents option
+     -> set:Reference.head_contents option
+     -> (bool, error) result Lwt.t
   end
 
   val clear_caches : ?locks:Lock.t -> t -> unit Lwt.t
@@ -288,7 +419,7 @@ end
 module Option =
 struct
   let get ~default = function Some x -> x | None -> default
-  let map f = function Some v -> Some (f v) | None -> None
+  let map f a = match a with Some a -> Some (f a) | None -> None
 end
 
 module Make
@@ -319,12 +450,13 @@ module Make
   module FileSystem = FS
 
   module LooseImpl
-    : Loose.S with module Hash = Hash
-               and module Path = Path
-               and module FileSystem = FileSystem
-               and module Inflate = Inflate
-               and module Deflate = Deflate
-   = Loose.Make(H)(P)(FS)(I)(D)
+    : Loose.S
+      with module Hash = Hash
+       and module Path = Path
+       and module FileSystem = FileSystem
+       and module Inflate = Inflate
+       and module Deflate = Deflate
+    = Loose.Make(H)(P)(FS)(I)(D)
 
   module PackImpl
     : Pack_engine.S
@@ -336,14 +468,15 @@ module Make
     = Pack_engine.Make(H)(P)(FS)(I)(D)
 
   module Value
-    : Value.S with module Hash = Hash
-               and module Inflate = Inflate
-               and module Deflate = Deflate
-               and module Blob = LooseImpl.Blob
-               and module Tree = LooseImpl.Tree
-               and module Tag = LooseImpl.Tag
-               and module Commit = LooseImpl.Commit
-               and type t = LooseImpl.t
+    : Value.S
+      with module Hash = Hash
+       and module Inflate = Inflate
+       and module Deflate = Deflate
+       and module Blob = LooseImpl.Blob
+       and module Tree = LooseImpl.Tree
+       and module Tag = LooseImpl.Tag
+       and module Commit = LooseImpl.Commit
+       and type t = LooseImpl.t
     = LooseImpl
 
   module PACKDecoder = PackImpl.PACKDecoder
@@ -372,9 +505,10 @@ module Make
       Hash.equal a c && Int64.equal b d
   end
 
-  (* XXX(dinosaure): need to limit the weight of [CacheObject] and [CacheValue]
-     by the memory consumption of the data stored - and not by the number of
-     theses data. Indeed, 5 commits is more cheaper than 1 blob sometimes. *)
+  (* XXX(dinosaure): need to limit the weight of [CacheObject] and
+     [CacheValue] by the memory consumption of the data stored - and
+     not by the number of theses data. Indeed, 5 commits is more
+     cheaper than 1 blob sometimes. *)
   module CacheObject   = Lru.M.Make(DoubleHash)(struct type t = PACKDecoder.Object.t let weight _ = 1 end)
   module CacheValue    = Lru.M.Make(Hash)(struct type t = Value.t let weight _ = 1 end)
   module CachePack     = Lru.M.Make(Hash)(struct type t = PACKDecoder.t let weight _ = 1 end) (* fixed size *)
@@ -416,14 +550,14 @@ module Make
 
     type error = LooseImpl.error
 
+    let pp_error = LooseImpl.pp_error
+
     let read_p ~ztmp ~dtmp ~raw ~window t =
       LooseImpl.read ~root:t.dotgit ~window ~ztmp ~dtmp ~raw
     let size_p ~ztmp ~dtmp ~raw ~window t =
       LooseImpl.size ~root:t.dotgit ~window ~ztmp ~dtmp ~raw
     let write_p ~ztmp ~raw t value =
       LooseImpl.write ~root:t.dotgit ~ztmp ~raw ~level:t.compression value
-
-    let pp_error = LooseImpl.pp_error
 
     let exists t =
       LooseImpl.exists
@@ -460,7 +594,7 @@ module Make
 
     let lookup = lookup_p
 
-    let raw_p ~window ~ztmp ~dtmp ~raw t hash =
+    let raw_p ~ztmp ~dtmp ~window ~raw t hash =
       LooseImpl.inflate ~root:t.dotgit ~window ~ztmp ~dtmp ~raw hash
 
     let raw_s t hash =
@@ -473,7 +607,7 @@ module Make
 
     let raw = raw_s
 
-    let raw_wa ~window ~ztmp ~dtmp ~raw ~result t hash =
+    let raw_wa ~ztmp ~dtmp ~window ~raw ~result t hash =
       LooseImpl.inflate_wa ~root:t.dotgit ~window ~ztmp ~dtmp ~raw ~result hash
 
     let raw_was result t hash =
@@ -495,18 +629,23 @@ module Make
         ~kind
         value >>= function
       | Ok hash -> Lwt.return hash
-      | Error (#LooseImpl.error as err) -> Lwt.fail (Failure (Fmt.strf "%a" LooseImpl.pp_error err))
+      | Error (#LooseImpl.error as err) ->
+        Lwt.fail (Failure (Fmt.strf "%a" LooseImpl.pp_error err))
 
-    module D : S.DECODER with type t = t
-                               and type raw = Cstruct.t
-                               and type init = Inflate.window * Cstruct.t * Cstruct.t
-                               and type error = Value.D.error
+    module D
+      : S.DECODER
+        with type t = t
+         and type raw = Cstruct.t
+         and type init = Inflate.window * Cstruct.t * Cstruct.t
+         and type error = Value.D.error
       = Value.D
 
-    module E : S.ENCODER with type t = t
-                               and type raw = Cstruct.t
-                               and type init = int * t * int * Cstruct.t
-                               and type error = Value.E.error
+    module E
+      : S.ENCODER
+        with type t = t
+         and type raw = Cstruct.t
+         and type init = int * t * int * Cstruct.t
+         and type error = Value.E.error
       = Value.E
   end
 
@@ -1239,17 +1378,17 @@ module Make
       let rec lookup acc dir =
         FileSystem.Dir.contents dir
         >?= fun l ->
-        Lwt_list.filter_p
-          (fun x -> FileSystem.is_dir x >|= function Ok v -> v | Error _ -> false) l
-        >>= fun dirs ->
-        Lwt_list.filter_p
-          (fun x -> FileSystem.is_file x >|= function Ok v -> v | Error _ -> false) l
-        >>= fun files ->
+          Lwt_list.filter_p
+            (fun x -> FileSystem.is_dir x >|= function Ok v -> v | Error _ -> false) l
+          >>= fun dirs ->
+          Lwt_list.filter_p
+            (fun x -> FileSystem.is_file x >|= function Ok v -> v | Error _ -> false) l
+          >>= fun files ->
 
-        Lwt_list.fold_left_s
-          (function Ok acc -> fun x -> lookup acc x
-                  | Error _ as e -> fun _ -> Lwt.return e)
-          (Ok acc) dirs >?= fun acc -> Lwt.return (Ok (acc @ files))
+          Lwt_list.fold_left_s
+            (function Ok acc -> fun x -> lookup acc x
+                    | Error _ as e -> fun _ -> Lwt.return e)
+            (Ok acc) dirs >?= fun acc -> Lwt.return (Ok (acc @ files))
       in
 
       lookup [] dir
@@ -1257,7 +1396,7 @@ module Make
     module Graph = Reference.Map
 
     (* XXX(dinosaure): this function does not return any {!Error} value. *)
-    let graph_p t ~dtmp ~raw =
+    let graph_p ~dtmp ~raw t =
       let open Lwt.Infix in
 
       contents Path.(t.dotgit / "refs") >>= function
@@ -1308,7 +1447,7 @@ module Make
         try Lwt.return (Ok (Graph.find refname graph))
         with Not_found -> Lwt.return (Error (`Invalid_reference refname))
 
-    let list_p t ~dtmp ~raw =
+    let list_p ~dtmp ~raw t =
       let open Lwt.Infix in
 
       graph_p t ~dtmp ~raw >>= function
@@ -1322,7 +1461,7 @@ module Make
 
     let list = list_s
 
-    let remove_p t ~dtmp ~raw ?locks reference =
+    let remove_p ~dtmp ~raw ?locks t reference =
       let open Lwt.Infix in
 
       let lock = match locks with
@@ -1369,14 +1508,14 @@ module Make
 
     let remove = remove_s
 
-    let read_p t ~dtmp ~raw reference =
+    let read_p ~dtmp ~raw t reference =
       let open Lwt.Infix in
 
       FileSystem.is_file Path.(t.dotgit // (Reference.to_path reference)) >>= function
       | Ok true ->
         (Reference.read ~root:t.dotgit ~dtmp ~raw reference >|= function
-         | Ok _ as v -> v
-         | Error (#Reference.error as err) -> Error (err : error))
+          | Ok _ as v -> v
+          | Error (#Reference.error as err) -> Error (err : error))
       | Ok false | Error _ ->
         Packed_refs.read ~root:t.dotgit ~dtmp ~raw >>= function
         | Error (#Packed_refs.error as err) -> Lwt.return (Error (err : error))
@@ -1394,7 +1533,7 @@ module Make
 
     let read = read_s
 
-    let write_p t ?locks ~dtmp ~raw reference value =
+    let write_p ?locks ~dtmp ~raw t reference value =
       let open Lwt.Infix in
 
       let lock = match locks with
@@ -1410,7 +1549,7 @@ module Make
         | Error _ -> Lwt.return (Ok ())
         | Ok packed_refs ->
           Lwt_list.exists_s (function `Peeled _ -> Lwt.return false
-                                  | `Ref (refname, _) -> Lwt.return Reference.(equal (of_string refname) reference))
+                                    | `Ref (refname, _) -> Lwt.return Reference.(equal (of_string refname) reference))
             packed_refs
           >>= function
           | false -> Lwt.return (Ok ())
