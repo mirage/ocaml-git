@@ -87,6 +87,25 @@ sig
   (** [write state v] writes the value [v] in the git repository
       [state]. *)
 
+  module Pack :
+  sig
+    type stream = unit -> Cstruct.t option Lwt.t
+     (** The stream contains the PACK flow. *)
+
+    type nonrec error
+
+    val pp_error : error Fmt.t
+    (** Pretty-printer of {!error}. *)
+
+    val from : t -> stream -> (Hash.t * int, error) result Lwt.t
+    (** [from git stream] populates the Git repository [git] from the
+        PACK flow [stream]. If any error is encountered, any Git
+        objects of the PACK flow are not added in the Git
+        repository. *)
+
+    val make : t -> ?window:[ `Object of int | `Memory of int ] -> ?depth:int -> Value.t list -> (stream, error) result Lwt.t
+  end
+
   module Ref :
   sig
     type nonrec error
