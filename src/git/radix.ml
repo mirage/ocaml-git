@@ -45,8 +45,12 @@ sig
   val length : t -> int
 end
 
-module Make (Key : KEY) =
+type 'a sequence = ('a -> unit) -> unit
+
+module Make (K : KEY) =
 struct
+  module Key = K
+
   module Compare =
   struct
     type t =
@@ -93,7 +97,7 @@ struct
     | B of 'a node * 'a node * int * int
 
   type 'a t = 'a node option
-  type 'a sequence = ('a -> unit) -> unit
+  type nonrec 'a sequence = 'a sequence
 
   let empty = None
 

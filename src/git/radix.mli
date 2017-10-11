@@ -23,13 +23,17 @@ sig
   val length : t -> int
 end
 
+type 'a sequence = ('a -> unit) -> unit
+
 (** A Radix tree is a optimized container to bind a [Key.t] with a value. *)
-module Make (Key : KEY) :
+module Make (K : KEY) :
 sig
   type 'a t
   (** The radix-tree. *)
 
-  type 'a sequence = ('a -> unit) -> unit
+  module Key : KEY
+
+  type nonrec 'a sequence = 'a sequence
   (** An abstract representation of a iterative container. *)
 
   val empty       : 'a t
@@ -65,4 +69,4 @@ sig
 
   val pp          : (Key.t * 'a) Fmt.t -> 'a t Fmt.t
   (** A pretty-printer for the radix-tree. *)
-end
+end with module Key = K
