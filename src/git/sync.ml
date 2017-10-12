@@ -32,11 +32,8 @@ end
 
 module Make
     (Net : NET)
-    (Store : Store.S with type Hash.Digest.buffer = Cstruct.t
-                      and type Hash.hex = string
-                      and type FileSystem.File.raw = Cstruct.t
-                      and type FileSystem.Mapper.raw = Cstruct.t
-                      and type +'a FileSystem.io = 'a Lwt.t)
+    (Store : Minimal.S with type Hash.Digest.buffer = Cstruct.t
+                        and type Hash.hex = string)
     (Capabilities : CAPABILITIES)
 = struct
   module Client = Smart.Client(Store.Hash)
@@ -46,15 +43,9 @@ module Make
   module Path = Store.Path
   module Revision = Revision.Make(Store)
 
-  module PACKDecoder = Unpack.MakePACKDecoder
-      (Hash)
-      (Inflate)
   module PACKEncoder = Pack.MakePACKEncoder
       (Hash)
       (Deflate)
-  module IDXEncoder  = Index_pack.Encoder(Hash)
-  module Decoder     = Unpack.MakeDecoder(Hash)(Store.FileSystem.Mapper)(Inflate)
-  module Tree        = PACKEncoder.Radix
 
   module Log =
   struct
@@ -65,30 +56,18 @@ module Make
   type error =
     [ `SmartPack of string
     | `Pack      of PACKEncoder.error
-    | `Unpack    of PACKDecoder.error
-    | `Decoder   of Decoder.error
     | `Clone     of string
     | `Ls        of string
     | `Push      of string
-    | `Idx       of IDXEncoder.error
-    | `Not_found
-    | `SystemFile of Store.FileSystem.File.error
-    | `SystemDirectory of Store.FileSystem.Dir.error
-    | `SystemMapper of Store.FileSystem.Mapper.error ]
+    | `Not_found ]
 
   let pp_error ppf = function
     | `SmartPack err           -> Helper.ppe ~name:"`SmartPack" Fmt.string ppf err
-    | `Unpack err              -> Helper.ppe ~name:"`Unpack" (Fmt.hvbox PACKDecoder.pp_error) ppf err
     | `Pack err                -> Helper.ppe ~name:"`Pack" (Fmt.hvbox PACKEncoder.pp_error) ppf err
-    | `Decoder err             -> Helper.ppe ~name:"`Decoder" (Fmt.hvbox Decoder.pp_error) ppf err
     | `Clone err               -> Helper.ppe ~name:"`Clone" Fmt.string ppf err
     | `Push err                -> Helper.ppe ~name:"`Push" Fmt.string ppf err
     | `Ls err                  -> Helper.ppe ~name:"`Ls" Fmt.string ppf err
     | `Not_found               -> Fmt.string ppf "`Not_found"
-    | `Idx err                 -> Helper.ppe ~name:"`Idx" (Fmt.hvbox IDXEncoder.pp_error) ppf err
-    | `SystemFile sys_err      -> Helper.ppe ~name:"`SystemFile" Store.FileSystem.File.pp_error ppf sys_err
-    | `SystemDirectory sys_err -> Helper.ppe ~name:"`SystemDirectory" Store.FileSystem.Dir.pp_error ppf sys_err
-    | `SystemMapper sys_err    -> Helper.ppe ~name:"`SystemMapper" Store.FileSystem.Mapper.pp_error ppf sys_err
 
   type t =
     { socket : Net.socket
@@ -128,42 +107,42 @@ module Make
 
     let commands' =
       (List.map (fun (hash, refname, _) -> Client.Encoder.Delete (hash, refname)) remote
-      @ commands)
+       @ commands)
     in
 
     (* XXX(dinosaure): we don't want to delete remote references but we want to
-      exclude any commit already stored remotely. So, we « delete » remote
-      references from the result set. *)
+       exclude any commit already stored remotely. So, we « delete » remote
+       references from the result set. *)
 
     Lwt_list.fold_left_s
       (fun acc -> function
-          | Client.Encoder.Create _ -> Lwt.return acc
-          | Client.Encoder.Update (hash, _, _) ->
-            Revision.(Range.normalize git (Range.Include (from_hash hash)))
-            >|= Store.Hash.Set.union acc
-          | Client.Encoder.Delete (hash, _) ->
-            Revision.(Range.normalize git (Range.Include (from_hash hash)))
-            >|= Store.Hash.Set.union acc)
+         | Client.Encoder.Create _ -> Lwt.return acc
+         | Client.Encoder.Update (hash, _, _) ->
+           Revision.(Range.normalize git (Range.Include (from_hash hash)))
+           >|= Store.Hash.Set.union acc
+         | Client.Encoder.Delete (hash, _) ->
+           Revision.(Range.normalize git (Range.Include (from_hash hash)))
+           >|= Store.Hash.Set.union acc)
       Store.Hash.Set.empty commands'
     >>= fun negative ->
     Lwt_list.fold_left_s
       (fun acc -> function
-        | Client.Encoder.Create (hash, _) ->
-          Revision.(Range.normalize git (Range.Include (from_hash hash)))
-          >|= Store.Hash.Set.union acc
-        | Client.Encoder.Update (_, hash, _) ->
-          Revision.(Range.normalize git (Range.Include (from_hash hash)))
-          >|= Store.Hash.Set.union acc
-        | Client.Encoder.Delete _ -> Lwt.return acc)
+         | Client.Encoder.Create (hash, _) ->
+           Revision.(Range.normalize git (Range.Include (from_hash hash)))
+           >|= Store.Hash.Set.union acc
+         | Client.Encoder.Update (_, hash, _) ->
+           Revision.(Range.normalize git (Range.Include (from_hash hash)))
+           >|= Store.Hash.Set.union acc
+         | Client.Encoder.Delete _ -> Lwt.return acc)
       Store.Hash.Set.empty commands'
     >|= (fun positive -> Revision.Range.E.diff positive negative)
     >>= fun elements ->
     Lwt_list.fold_left_s
       (fun acc commit ->
-        Format.printf "send commit: %a\n%!" Store.Hash.pp commit;
+         Format.printf "send commit: %a\n%!" Store.Hash.pp commit;
 
-        Store.fold git
-          (fun (acc, max_length) ?name ~length hash -> function
+         Store.fold git
+           (fun (acc, max_length) ?name ~length hash -> function
               | Store.Value.Commit _ ->
                 PACKEncoder.Entry.make hash
                   Pack.Kind.Commit
@@ -194,13 +173,13 @@ module Make
                 |> fun entry ->
                 Store.Hash.Map.add hash entry acc
                 |> fun acc -> Lwt.return (acc, max max_length length))
-          ~path:(Path.v "/") acc commit)
+           ~path:(Path.v "/") acc commit)
       (Store.Hash.Map.empty, 0L) (Store.Hash.Set.elements elements)
     >>= fun (entries, _) ->
     PACKEncoder.Delta.deltas
       ~memory:false
       (Store.Hash.Map.bindings entries |> List.map snd)
-      (fun hash -> Store.raw git hash >|= function Some (_, raw) -> Some raw | None -> None)
+      (fun hash -> Store.read_inflated git hash >|= function Some (_, raw) -> Some raw | None -> None)
       (fun _ -> false) (* TODO *)
       window depth
     >|= function
@@ -244,7 +223,7 @@ module Make
         | `PACK `End ->
           push None;
           Lwt.return (Ok ())
-        | _ -> assert false
+        | result -> Lwt.return (Error (`SmartPack (err_unexpected_result result)))
       in
 
       let open Lwt_result in
@@ -336,7 +315,7 @@ module Make
           | [] -> Client.run t.ctx `Flush
                   |> process t
             >>= (function `Flush -> Lwt.return (Ok (Hash.of_string (String.make (Hash.Digest.length * 2) '0'), 0))
-                                      (* XXX(dinosaure): better return? *)
+                        (* XXX(dinosaure): better return? *)
                         | result -> Lwt.return (Error (`Fetch (err_unexpected_result result)))))
       | result -> Lwt.return (Error (`Ls (err_unexpected_result result)))
     in
@@ -355,21 +334,21 @@ module Make
         | `Flush state -> Lwt.return (Ok (`Continue (state, src)))
         | `End (state, _) ->
           (if PACKEncoder.used_out state = 0
-            then Lwt.return (Ok `Finish)
-            else Lwt.return (Ok (`Continue (state, src))))
+           then Lwt.return (Ok `Finish)
+           else Lwt.return (Ok (`Continue (state, src))))
         | `Error (_, err) -> Lwt.return (Error (`Pack err))
         | `Await state ->
           (match src with
-            | Some _ ->
-              Lwt.return (Ok (None, PACKEncoder.finish state))
-            | None ->
-              let hash = PACKEncoder.expect state in
+           | Some _ ->
+             Lwt.return (Ok (None, PACKEncoder.finish state))
+           | None ->
+             let hash = PACKEncoder.expect state in
 
-              Store.raw git hash >>= function
-              | Some (_, raw) -> Lwt.return (Ok (Some raw, PACKEncoder.refill 0 (Cstruct.len raw) state))
-              | None -> Lwt.return (Error (`Pack (PACKEncoder.Invalid_hash hash))))
+             Store.read_inflated git hash >>= function
+             | Some (_, raw) -> Lwt.return (Ok (Some raw, PACKEncoder.refill 0 (Cstruct.len raw) state))
+             | None -> Lwt.return (Error (`Pack (PACKEncoder.Invalid_hash hash))))
           >>= function Ok (src, state) -> go src dst state t
-                      | Error _ as err -> Lwt.return err
+                     | Error _ as err -> Lwt.return err
       in
 
       match r with
@@ -423,8 +402,8 @@ module Make
            why we have an [assert false]. *)
 
         packer git ~ofs_delta refs commands >>= (function
-          | Ok state -> pack None state t result
-          | Error _ as err -> Lwt.return err)
+            | Ok state -> pack None state t result
+            | Error _ as err -> Lwt.return err)
       | result -> Lwt.return (Error (`Push (err_unexpected_result result)))
     in
 
