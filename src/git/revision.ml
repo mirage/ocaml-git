@@ -16,7 +16,7 @@
  *)
 
 module Make
-    (Store : Store.S with type Hash.Digest.buffer = Cstruct.t)
+    (Store : Minimal.S with type Hash.Digest.buffer = Cstruct.t)
 = struct
   type t =
     | Reference of Store.Reference.t (* <refname> *)
@@ -41,7 +41,7 @@ module Make
     | Ok (Store.Value.Commit commit) -> Lwt.return (Ok commit)
     | Ok (Store.Value.Tag tag) -> commit git (Store.Value.Tag.obj tag)
     | Ok (Store.Value.Blob _ | Store.Value.Tree _) -> Lwt.return (Error (`Expected_commit hash))
-    | Error #Store.error as err -> Lwt.return err
+    | Error err -> Lwt.return (Error (`Store err))
 
   let rec normalize git rev =
     let open Lwt.Infix in
@@ -76,12 +76,9 @@ module Make
             go hash n
           | Error _ as err -> Lwt.return err)
     | Reference reference ->
-      Store.Ref.graph git >>= function
-      | Error #Store.Ref.error as err -> Lwt.return err
-      | Ok graph ->
-        Store.Ref.normalize graph (Store.Reference.Ref reference) >>= function
-        | Error #Store.Ref.error as err -> Lwt.return err
-        | Ok _ as value-> Lwt.return value
+      Store.Ref.list git >>= fun lst ->
+      try let hash = List.assoc reference lst in Lwt.return (Ok hash)
+      with Not_found -> Lwt.return (Error `Not_found)
 
   module Range =
   struct
