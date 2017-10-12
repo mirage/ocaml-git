@@ -76,6 +76,12 @@ sig
 
   val pp_error : error Fmt.t
 
+  val ls :
+       Store.t
+    -> ?headers:Web.HTTP.headers
+    -> ?port:int
+    -> string -> string -> (Decoder.advertised_refs, error) result Lwt.t
+
   val clone :
        Store.t
     -> ?stdout:(Cstruct.t -> unit Lwt.t)
@@ -188,6 +194,62 @@ module Make
     dispatch () >>= fun () ->
     (Store.Pack.from git (fun () -> Lwt_stream.get stream')
      >!= fun err -> Lwt.return (`StorePack err))
+
+  let ls _ ?headers ?(port = 80) host path =
+    let open Lwt.Infix in
+
+    let uri =
+      Uri.empty
+      |> (fun uri -> Uri.with_scheme uri (Some "http"))
+      |> (fun uri -> Uri.with_host uri (Some host))
+      |> (fun uri -> Uri.with_path uri (String.concat "/" [ path; "info"; "refs" ]))
+      |> (fun uri -> Uri.with_port uri (Some port))
+      |> (fun uri -> Uri.add_query_param uri ("service", [ "git-upload-pack" ]))
+    in
+
+    Log.debug (fun l -> l ~header:"ls" "Launch the GET request to %a."
+                  Uri.pp_hum uri);
+
+    let git_agent =
+      List.fold_left (fun acc -> function `Agent s -> Some s | _ -> acc) None K.default
+      |> function
+      | Some git_agent -> git_agent
+      | None -> raise (Invalid_argument "Expected an user agent in capabilities.")
+    in
+
+    let headers =
+      option_map_default
+        Web.HTTP.Headers.(def user_agent git_agent)
+        Web.HTTP.Headers.(def user_agent git_agent empty)
+        headers
+    in
+
+    Client.call ~headers `GET uri >>= fun resp ->
+
+    let decoder = Decoder.decoder () in
+
+    let rec consume stream ?keep state =
+      match state with
+      | Decoder.Ok v -> Lwt.return (Ok v)
+      | Decoder.Error { err; _ } -> Lwt.return (Error err)
+      | Decoder.Read { buffer; off; len; continue; } ->
+        (match keep with
+         | Some (raw, off', len') -> Lwt.return (Some (raw, off', len'))
+         | None -> stream ()) >>= function
+        | Some (raw, off', len') ->
+          let len'' = min len len' in
+          Cstruct.blit raw off' buffer off len'';
+
+          if len' - len'' = 0
+          then consume stream (continue len'')
+          else consume stream ~keep:(raw, off' + len'', len' - len'') (continue len'')
+        | None -> consume stream (continue 0)
+    in
+
+    let ( >!= ) = Lwt_result.bind_lwt_err in
+
+    consume (Web.Response.body resp) (Decoder.decode decoder (Decoder.HttpReferenceDiscovery "git-upload-pack"))
+    >!= (fun err -> Lwt.return (`Decoder err))
 
   let clone git ?stdout ?stderr ?headers ?(port = 80) ?(reference = Store.Reference.head) host path =
     let open Lwt.Infix in

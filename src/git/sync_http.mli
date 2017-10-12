@@ -68,6 +68,12 @@ sig
 
   val pp_error : error Fmt.t
 
+  val ls :
+       Store.t
+    -> ?headers:Web.HTTP.headers
+    -> ?port:int
+    -> string -> string -> (Decoder.advertised_refs, error) result Lwt.t
+
   val clone :
        Store.t
     -> ?stdout:(Cstruct.t -> unit Lwt.t)
