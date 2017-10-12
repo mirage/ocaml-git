@@ -180,6 +180,21 @@ module Make
     Lwt_list.map_s (fun h -> read_exn t h >|= fun value -> h, value) hashes >|= fun values ->
     (Ok values : ((Hash.t * Value.t) list, error) result)
 
+  module T =
+    Traverse_bfs.Make(struct
+      module Hash = Hash
+      module Path = Path
+      module Value = Value
+
+      type nonrec t = t
+      type nonrec error = error
+
+      let pp_error = pp_error
+      let read = read
+    end)
+
+  let fold = T.fold
+
   module Pack =
   struct
     type stream = unit -> Cstruct.t option Lwt.t

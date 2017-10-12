@@ -19,6 +19,7 @@ module Rabin        = Rabin
 
 module Minienc      = Minienc
 
+module Traverse_bfs = Traverse_bfs
 module Gc           = Gc
 module Object_graph = Object_graph
 module Search       = Search

@@ -87,6 +87,14 @@ sig
   (** [write state v] writes the value [v] in the git repository
       [state]. *)
 
+  val fold :
+       t
+    -> ('acc -> ?name:Path.t -> length:int64 -> Hash.t -> Value.t -> 'acc Lwt.t)
+    -> path:Path.t
+    -> 'acc
+    -> Hash.t
+    -> 'acc Lwt.t
+
   module Pack :
   sig
     type stream = unit -> Cstruct.t option Lwt.t

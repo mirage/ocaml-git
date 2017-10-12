@@ -1299,6 +1299,7 @@ module Make
       (function Leave err -> Lwt.return (Error err)
               | exn -> Lwt.fail exn)
 
+  (*
   let delta entries tagger ?(depth = 50) ?(window = `Object 10) state =
     let open Lwt.Infix in
 
@@ -1307,51 +1308,193 @@ module Make
 
     PACKEncoder.Delta.deltas ~memory entries read tagger depth window
 
-  (* XXX(dinosaure): see Irmin implementation. *)
-  let fold t (f : ('acc -> ?name:Path.t -> length:int64 -> Hash.t -> Value.t -> 'acc Lwt.t)) ~path acc hash =
-    let names = Hashtbl.create 0x100 in
+  let gc git =
+    let window = `Object 10 in
+    let depth = 50 in
 
     let open Lwt.Infix in
 
-    let rec walk close rest queue acc =
-      match rest with
-      | [] ->
-        (match Queue.pop queue with
-         | rest -> walk close rest queue acc
-         | exception Queue.Empty -> Lwt.return acc)
-      | hash :: rest ->
-        if Hash.Set.exists ((=) hash) close
-        then walk close rest queue acc
-        else
-          let close' = Hash.Set.add hash close in
+    let memory, window = match window with `Object w -> false, w | `Memory w -> true, w in
+    let read hash = raw_s git hash >|= function Some (_, raw) -> Some raw | None -> None in
+    let tagger _ = false in
 
-          read t hash >>= function
-          | Ok (Value.Commit commit as value) ->
-            let rest' = rest @ Value.Commit.parents commit in
-            Queue.add [ Value.Commit.tree commit ] queue;
-            f acc ~length:(Value.Commit.F.length commit) hash value >>= fun acc' ->
-            walk close' rest' queue acc'
-          | Ok (Value.Tree tree as value) ->
-            let path = try Hashtbl.find names hash with Not_found -> path in
-            Lwt_list.iter_s (fun { Value.Tree.name; node; _ } ->
-                Hashtbl.add names node Path.(path / name)[@warning "-44"];
-                Lwt.return ()) tree >>= fun () ->
-            let rest' = rest @ List.map (fun { Value.Tree.node; _ } -> node) tree in
-            f acc ~name:path ~length:(Value.Tree.F.length tree) hash value >>= fun acc' ->
-            walk close' rest' queue acc'
-          | Ok (Value.Blob blob as value) ->
-            let path = try Hashtbl.find names hash with Not_found -> path in
-            f acc ~name:path ~length:(Value.Blob.F.length blob) hash value >>= fun acc' ->
-            walk close' rest queue acc'
-          | Ok (Value.Tag tag as value) ->
-            let rest' = rest @ [ Value.Tag.obj tag ] in
-            f acc ~length:(Value.Tag.F.length tag) hash value >>= fun acc' ->
-            walk close' rest' queue acc'
-          | Error _ ->
-            walk close' rest queue acc
+    let names = Hashtbl.create 1024 in
+
+    let make (hash, value) =
+      let name =
+        try Some (Hashtbl.find names hash)
+        with Not_found -> None
+      in
+
+      let kind = match value with
+        | Value.Commit _ -> Pack.Kind.Commit
+        | Value.Tree _ -> Pack.Kind.Tree
+        | Value.Tag _ -> Pack.Kind.Tag
+        | Value.Blob _ -> Pack.Kind.Blob
+      in
+
+      let entry =
+        PACKEncoder.Entry.make
+          hash
+          ?name
+          kind
+          (Value.F.length value)
+      in
+
+      Lwt.return entry
     in
 
-    walk Hash.Set.empty [ hash ] (Queue.create ()) acc
+    let random_string len =
+      let gen () = match Random.int (26 + 26 + 10) with
+        | n when n < 26 -> int_of_char 'a' + n
+        | n when n < 26 + 26 -> int_of_char 'A' + n - 26
+        | n -> int_of_char '0' + n - 26 - 26
+      in
+
+      let gen () = char_of_int (gen ()) in
+      Bytes.create len |> fun raw ->
+      for i = 0 to len - 1 do Bytes.set raw i (gen ()) done;
+      Bytes.unsafe_to_string raw
+    in
+
+    let pack_filename = Fmt.strf "pack-%s.pack" (random_string 10) in
+
+    contents git >>= function
+    | Error _ -> assert false
+    | Ok objects ->
+      Lwt_list.iter_p (fun (_, value) -> match value with
+          | Value.Tree tree ->
+            Lwt_list.iter_p
+              (fun entry ->
+                 Hashtbl.add names
+                   entry.Value.Tree.node
+                   entry.Value.Tree.name;
+                 Lwt.return ())
+              (tree :> Value.Tree.entry list)
+          | _ -> Lwt.return ())
+        objects
+      >>= fun () ->
+      Lwt.Infix.(Lwt_list.map_p make objects)
+      >>= fun entries ->
+      PACKEncoder.Delta.deltas ~memory entries read tagger depth window >>= function
+      | Error _ -> assert false
+      | Ok entries ->
+        let ztmp = Cstruct.create 0x8000 in
+        let state = PACKEncoder.default ztmp entries in
+
+        let module EncoderPack =
+        struct
+          type state = PACKEncoder.t
+          type raw = Cstruct.t
+          type result = Hash.t * (Crc32.t * int64) PACKEncoder.Radix.t
+          type error = PACKEncoder.error
+
+          let raw_length = Cstruct.len
+          let raw_blit = Cstruct.blit
+
+          let raw_empty = Cstruct.create 0
+
+          let eval dst state =
+            let rec go ?(src = raw_empty) state = match PACKEncoder.eval src dst state with
+              | `Flush state -> Lwt.return (`Flush state)
+              | `End (state, hash) -> Lwt.return (`End (state, (hash, PACKEncoder.idx state)))
+              | `Error (state, err) -> Lwt.return (`Error (state, err))
+              | `Await state ->
+                let hash = PACKEncoder.expect state in
+
+                raw_s git hash >>= function
+                | Some (_, raw) -> go ~src:raw (PACKEncoder.refill 0 (Cstruct.len raw) state)
+                | None -> Lwt.fail (Failure (Fmt.strf "Invalid requested hash: %a." Hash.pp hash))
+            in
+            go state
+
+          let flush = PACKEncoder.flush
+          let used = PACKEncoder.used_out
+        end
+        in
+
+        let raw = Cstruct.create 0x8000 in
+        let ( >?= ) a f = Lwt_result.map_err f a in
+
+        let open Lwt_result in
+
+        Lwt.Infix.(FileSystem.Dir.temp () >>= fun path -> Lwt.return (Ok path)) >>= fun temp ->
+        (FileSystem.File.open_w ~mode:0o644 Path.(temp / pack_filename)
+         >?= fun err -> `SystemFile err)
+        >>= fun write ->
+        Lwt.Infix.(
+          Helper.safe_encoder_to_file
+            ~limit:50
+            (module EncoderPack)
+            FileSystem.File.write
+            write raw state
+          >>= (fun v -> FileSystem.File.close write >>= fun v' -> match v, v' with
+            (* XXX(dinosaure): this semantic is, when we catch an
+               error from the close() syscall, we quiet in all case
+               expect when the encoder returns [Ok _]. *)
+
+            | v, Ok () -> Lwt.return v
+            | (Ok _ as v), Error sys_err ->
+              Log.err (fun l -> l ~header:"gc" "Catch an error when we close the PACK file: %a."
+                          FileSystem.File.pp_error sys_error);
+              Lwt.return v
+            | Error v, Error v' ->
+              Log.err (fun l -> l ~header:"gc" "Error from the encoder and from the close() syscall (%a)."
+                          FileSystem.File.pp_error v')
+            | Ok _, Error v' -> Lwt.return (Error (`FileSystem v')))
+              >?= (function
+                  | `Stack -> `SystemIO (Fmt.strf "Impossible to store the pack file.")
+                  | `Encoder err -> `PackEncoder err
+                  | `Writer err -> `SystemFile err))
+        >>= fun (hash, idx) ->
+        let pack_filename' = Fmt.strf "pack-%a.pack" Hash.pp hash in
+        (FileSystem.File.move Path.(temp / pack_filename) Path.(t.dotgit / "objects" / "pack" / pack_filename')
+         >?= fun err -> `SystemFile err)
+        >>= fun () ->
+
+        let state = IDXEncoder.default (PACKEncoder.Radix.to_sequence idx) hash in
+
+        let module EncoderIdx =
+        struct
+          type state = IDXEncoder.t
+          type raw = Cstruct.t
+          type result = unit
+          type error =IDXEncoder.error
+
+          let raw_length = Cstruct.len
+          let raw_blit = Cstruct.blit
+
+          let eval dst state = match IDXEncoder.eval dst state with
+            | `Flush state -> Lwt.return (`Flush state)
+            | `End state -> Lwt.return (`End (state, ()))
+            | `Error _ as err -> Lwt.return err
+
+          let flush = IDXEncoder.flush
+          let used = IDXEncoder.used_out
+        end
+        in
+
+        let idx_filename = Fmt.strf "pack-%a.idx" Hash.pp hash in
+
+        (FileSystem.File.open_w ~mode:0o644 Path.(
+
+        assert false
+  *)
+
+  module T =
+    Traverse_bfs.Make(struct
+      module Hash = Hash
+      module Path = Path
+      module Value = Value
+
+      type nonrec t = t
+      type nonrec error = error
+
+      let pp_error = pp_error
+      let read = read
+    end)
+
+  let fold = T.fold
 
   module Ref =
   struct
