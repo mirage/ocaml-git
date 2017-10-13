@@ -261,9 +261,9 @@ module Make
   let clone git ?stdout ?stderr ?headers ?(https = false) ?port ?(reference = Store.Reference.head) host path =
     let open Lwt.Infix in
 
-    let scheme, port =
-      if https then match port with Some x -> "https", x | None -> "https", 443
-      else match port with Some x -> "http", x | None -> "http", 80
+    let scheme =
+      if https then "https"
+      else "http"
     in
 
     let uri =
@@ -271,7 +271,7 @@ module Make
       |> (fun uri -> Uri.with_scheme uri (Some scheme))
       |> (fun uri -> Uri.with_host uri (Some host))
       |> (fun uri -> Uri.with_path uri (String.concat "/" [ path; "info"; "refs" ]))
-      |> (fun uri -> Uri.with_port uri (Some port))
+      |> (fun uri -> Uri.with_port uri port)
       |> (fun uri -> Uri.add_query_param uri ("service", [ "git-upload-pack" ]))
     in
 
@@ -360,9 +360,9 @@ module Make
                                                ; deep = None })))
         (Web.Request.meth req)
         (Web.Request.uri req
-         |> (fun uri -> Uri.with_scheme uri (Some "http"))
+         |> (fun uri -> Uri.with_scheme uri (Some scheme))
          |> (fun uri -> Uri.with_host uri (Some host))
-         |> (fun uri -> Uri.with_port uri (Some port)))
+         |> (fun uri -> Uri.with_port uri port))
       >>= fun resp ->
 
       let sideband =
