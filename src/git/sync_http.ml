@@ -79,6 +79,7 @@ sig
   val ls :
        Store.t
     -> ?headers:Web.HTTP.headers
+    -> ?https:bool
     -> ?port:int
     -> string -> string -> (Decoder.advertised_refs, error) result Lwt.t
 
@@ -87,6 +88,7 @@ sig
     -> ?stdout:(Cstruct.t -> unit Lwt.t)
     -> ?stderr:(Cstruct.t -> unit Lwt.t)
     -> ?headers:Web.HTTP.headers
+    -> ?https:bool
     -> ?port:int
     -> ?reference:Store.Reference.t
     -> string -> string -> (Store.Hash.t, error) result Lwt.t
@@ -195,15 +197,20 @@ module Make
     (Store.Pack.from git (fun () -> Lwt_stream.get stream')
      >!= fun err -> Lwt.return (`StorePack err))
 
-  let ls _ ?headers ?(port = 80) host path =
+  let ls _ ?headers ?(https = false) ?port host path =
     let open Lwt.Infix in
+
+    let scheme =
+      if https then "https"
+      else "http"
+    in
 
     let uri =
       Uri.empty
-      |> (fun uri -> Uri.with_scheme uri (Some "http"))
+      |> (fun uri -> Uri.with_scheme uri (Some scheme))
       |> (fun uri -> Uri.with_host uri (Some host))
       |> (fun uri -> Uri.with_path uri (String.concat "/" [ path; "info"; "refs" ]))
-      |> (fun uri -> Uri.with_port uri (Some port))
+      |> (fun uri -> Uri.with_port uri port)
       |> (fun uri -> Uri.add_query_param uri ("service", [ "git-upload-pack" ]))
     in
 
@@ -251,12 +258,17 @@ module Make
     consume (Web.Response.body resp) (Decoder.decode decoder (Decoder.HttpReferenceDiscovery "git-upload-pack"))
     >!= (fun err -> Lwt.return (`Decoder err))
 
-  let clone git ?stdout ?stderr ?headers ?(port = 80) ?(reference = Store.Reference.head) host path =
+  let clone git ?stdout ?stderr ?headers ?(https = false) ?port ?(reference = Store.Reference.head) host path =
     let open Lwt.Infix in
+
+    let scheme, port =
+      if https then match port with Some x -> "https", x | None -> "https", 443
+      else match port with Some x -> "http", x | None -> "http", 80
+    in
 
     let uri =
       Uri.empty
-      |> (fun uri -> Uri.with_scheme uri (Some "http"))
+      |> (fun uri -> Uri.with_scheme uri (Some scheme))
       |> (fun uri -> Uri.with_host uri (Some host))
       |> (fun uri -> Uri.with_path uri (String.concat "/" [ path; "info"; "refs" ]))
       |> (fun uri -> Uri.with_port uri (Some port))

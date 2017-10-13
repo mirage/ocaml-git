@@ -29,6 +29,12 @@ struct
 
   type +'a io = 'a Lwt.t
 
+  module Log =
+  struct
+    let src = Logs.Src.create "cohttp" ~doc:"logs cohttp event"
+    include (val Logs.src_log src : Logs.LOG)
+  end
+
   let call ?headers ?body meth uri =
     let open Lwt.Infix in
 
@@ -42,8 +48,21 @@ struct
 
     (* XXX(dinosaure): [~chunked:true] is mandatory, I don't want to
        explain why (I lost one day to find this bug) but believe me. *)
-    Cohttp_lwt_unix.Client.call ?headers ?body ~chunked:false meth uri >|= fun (resp, body) ->
-    { resp; body; }
+    Cohttp_lwt_unix.Client.call ?headers ?body ~chunked:false meth uri >>= fun ((resp, _) as v) ->
+    if Cohttp.Code.is_redirection (Cohttp.Code.code_of_status (Cohttp.Response.status resp))
+    then begin
+      let uri =
+        Cohttp.Response.headers resp
+        |> Cohttp.Header.to_list
+        |> List.assoc "location"
+        |> Uri.of_string
+      in
+
+      Log.info (fun l -> l ~header:"call" "Redirection to %a." Uri.pp_hum uri);
+
+      Cohttp_lwt_unix.Client.call ?headers ?body ~chunked:false meth uri >>= fun (resp, body) ->
+      Lwt.return { resp; body; }
+    end else Lwt.return { resp; body = snd v; }
 end
 
 module Sync_http = Git_http.Make(Git_http.Default)(Client)(Git_unix.Store)
@@ -64,7 +83,6 @@ let pad n x =
   if String.length x > n
   then x
   else x ^ String.make (n - String.length x) ' '
-
 
 let pp_header ppf (level, header) =
   let level_style =
@@ -142,8 +160,14 @@ let main ppf progress origin branch repository directory =
     else None
   in
 
+  let https =
+    match Uri.scheme repository with
+    | Some "https" -> true
+    | _ -> false
+  in
+
   (Git_unix.Store.create ~root () >!= fun err -> `Store err) >>= fun git ->
-  (Sync_http.clone git ?stdout ?stderr ?port:(Uri.port repository) ~reference:branch
+  (Sync_http.clone git ?stdout ?stderr ~https ?port:(Uri.port repository) ~reference:branch
      (option_value_exn
         (fun () -> raise (Failure "Invalid repository: no host."))
         (Uri.host repository))

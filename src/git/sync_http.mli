@@ -71,6 +71,7 @@ sig
   val ls :
        Store.t
     -> ?headers:Web.HTTP.headers
+    -> ?https:bool
     -> ?port:int
     -> string -> string -> (Decoder.advertised_refs, error) result Lwt.t
 
@@ -79,6 +80,7 @@ sig
     -> ?stdout:(Cstruct.t -> unit Lwt.t)
     -> ?stderr:(Cstruct.t -> unit Lwt.t)
     -> ?headers:Web.HTTP.headers
+    -> ?https:bool
     -> ?port:int
     -> ?reference:Store.Reference.t
     -> string -> string -> (Store.Hash.t, error) result Lwt.t
