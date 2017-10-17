@@ -89,7 +89,7 @@ module Make (S : STORE with type Hash.Digest.buffer = Cstruct.t
                  entry.Store.Value.Tree.node
                  entry.Store.Value.Tree.name;
                Lwt.return ())
-            (tree :> Store.Value.Tree.entry list)
+            (Store.Value.Tree.to_list tree)
         | _ -> Lwt.return ())
         objects >|= fun () -> Ok ())
     >>= fun () ->

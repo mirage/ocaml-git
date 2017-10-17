@@ -55,8 +55,8 @@ struct
             let path = try Hashtbl.find names hash with Not_found -> path in
             Lwt_list.iter_s (fun { Value.Tree.name; node; _ } ->
                 Hashtbl.add names node Path.(path / name)[@warning "-44"];
-                Lwt.return ()) tree >>= fun () ->
-            let rest' = rest @ List.map (fun { Value.Tree.node; _ } -> node) tree in
+                Lwt.return ()) (Value.Tree.to_list tree) >>= fun () ->
+            let rest' = rest @ List.map (fun { Value.Tree.node; _ } -> node) (Value.Tree.to_list tree) in
             f acc ~name:path ~length:(Value.Tree.F.length tree) hash value >>= fun acc' ->
             walk close' rest' queue acc'
           | Ok (Value.Blob blob as value) ->

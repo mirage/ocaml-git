@@ -33,7 +33,7 @@ sig
     | `Dir    (** A sub-{!Tree.t}. *)
     | `Commit (** A sub-module ({!Commit.t}). *)
     ]
-  and t = entry list
+  and t
   (** A Git Tree object. Git stores content in a manner similar to a
       UNIX {i filesystem}, but a bit simplified. All the content is
       stored as tree and {Blob.t} objects, with trees corresponding to
@@ -83,7 +83,8 @@ sig
   val hashes : t -> Hash.t list
   (** [hashes t] returns all pointer of the tree [t]. *)
 
-  val list : t -> (string * Hash.t) list
+  val to_list : t -> entry list
+  val of_list : entry list -> t
 end
 
 module Make

@@ -50,7 +50,7 @@ struct
       @ List.map (fun x -> `Commit x) (Store.Value.Commit.parents c)
     | Ok (Store.Value.Tag t)    -> if full then [ tag t ] else []
     | Ok (Store.Value.Tree t)   ->
-      if full then List.map (fun x -> `Tree x) (Store.Value.Tree.list t) else []
+      if full then List.map (fun { Store.Value.Tree.name; node; _ } -> `Tree (name, node)) (Store.Value.Tree.to_list t) else []
 
   type path = [
     | `Tag of string * path

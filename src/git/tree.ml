@@ -25,7 +25,7 @@ sig
     ; node : Hash.t }
   and perm =
     [ `Normal | `Everybody | `Exec | `Link | `Dir | `Commit ]
-  and t = entry list
+  and t
 
   module D : S.DECODER  with type t = t
                          and type raw = Cstruct.t
@@ -43,7 +43,8 @@ sig
   include S.BASE with type t := t
 
   val hashes : t -> Hash.t list
-  val list : t -> (string * Hash.t) list
+  val to_list : t -> entry list
+  val of_list : entry list -> t
 end
 
 module Make (H : S.HASH with type Digest.buffer = Cstruct.t
@@ -62,8 +63,6 @@ module Make (H : S.HASH with type Digest.buffer = Cstruct.t
   and hash = Hash.t
 
   let hashes tree = List.map (fun { node; _ } -> node) tree
-
-  let list tree = List.map (fun { node; name; _ } -> (name, node)) tree
 
   let pp_entry ppf { perm
                    ; name
@@ -102,6 +101,56 @@ module Make (H : S.HASH with type Digest.buffer = Cstruct.t
     | "160000" -> `Commit
     | _ -> raise (Invalid_argument "perm_of_string")
 
+  external to_list : t -> entry list = "%identity"
+
+  type value =
+    | Contents : string -> value
+    | Node     : string -> value
+
+  let str = function Contents s -> s | Node s -> s
+
+  exception Result of int
+
+  let compare x y = match x, y with
+    | Contents x, Contents y -> String.compare x y
+    | _ ->
+      let xs = str x and ys = str y in
+      let lenx = String.length xs in
+      let leny = String.length ys in
+
+      let i = ref 0 in
+
+      try
+        while !i < lenx && !i < leny
+        do match Char.compare (String.unsafe_get xs !i) (String.unsafe_get ys !i) with
+          | 0 -> incr i
+          | i -> raise (Result i)
+        done;
+
+        let get len s i =
+          if i < len then String.unsafe_get (str s) i
+          else if i = len then match s with
+            | Node _ -> '/'
+            | Contents _ -> '\000'
+          else '\000'
+        in
+
+        match Char.compare (get lenx x !i) (get leny y !i) with
+        | 0 -> Char.compare (get lenx x (!i + 1)) (get leny y (!i + 1))
+        | i -> i
+      with Result i -> i
+
+  let of_contents c = Contents c
+  let of_node n = Node n
+  let of_entry = function
+    | { name = n; perm = `Dir; _ } -> of_node n
+    | { name = n; _ } -> of_contents n
+
+  let of_list entries : t =
+    List.map (fun x -> of_entry x, x) entries
+    |> List.sort (fun (a, _) (b, _) -> compare a b)
+    |> List.map snd
+
   module A =
   struct
     type nonrec t = t
@@ -115,15 +164,15 @@ module Make (H : S.HASH with type Digest.buffer = Cstruct.t
       let open Angstrom in
 
       take_while is_not_sp >>= fun perm ->
-        (try return (perm_of_string perm)
-         with _ -> fail (Fmt.strf "Invalid permission %s" perm))
-        <* commit
+      (try return (perm_of_string perm)
+       with _ -> fail (Fmt.strf "Invalid permission %s" perm))
+      <* commit
       >>= fun perm -> take 1 *> take_while is_not_nl <* commit
       >>= fun name -> take 1 *> hash <* commit
       >>= fun hash ->
-        return { perm
-               ; name
-               ; node = Hash.of_string hash }
+      return { perm
+             ; name
+             ; node = Hash.of_string hash }
       <* commit
 
     let decoder = Angstrom.many entry
@@ -157,7 +206,7 @@ module Make (H : S.HASH with type Digest.buffer = Cstruct.t
         (string_of_perm t.perm)
         t.name
         (Hash.to_string t.node)
-      [@@warning "-45"] (* XXX(dinosaure): shadowing [] and (::). *)
+    [@@warning "-45"] (* XXX(dinosaure): shadowing [] and (::). *)
 
     let encoder e t =
       (Farfadet.list entry) e t
