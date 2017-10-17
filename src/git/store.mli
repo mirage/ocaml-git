@@ -396,6 +396,7 @@ sig
     | `SystemMapper of FileSystem.Mapper.error
     | `SystemDir of FileSystem.Dir.error
     | `Invalid_hash of Hash.t
+    | `Delta of PACKEncoder.Delta.error
     | `SystemIO of string
     | `Integrity of string
     | `Not_found ]

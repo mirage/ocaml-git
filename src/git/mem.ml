@@ -55,12 +55,14 @@ module Make
   module Value = Value.Raw(H)(I)(D)(B)
   module Reference = Reference.Make(H)(P)
 
+  type kind = [ `Commit | `Tree | `Blob | `Tag ]
+
   type t =
     { root         : Path.t
     ; dotgit       : Path.t
     ; compression  : int
     ; values       : (Hash.t, Value.t Lazy.t) Hashtbl.t
-    ; inflated     : (Hash.t, ([ `Commit | `Tree | `Blob | `Tag ] * Cstruct.t)) Hashtbl.t
+    ; inflated     : (Hash.t, (kind * Cstruct.t)) Hashtbl.t
     ; refs         : (Reference.t, [ `H of Hash.t | `R of Reference.t ]) Hashtbl.t
     ; mutable head : Reference.head_contents option }
 
@@ -212,7 +214,23 @@ module Make
       | `DecoderFlow s -> Fmt.pf ppf "(`PackFlow %s)" s
       | `PackDecoder e -> Fmt.pf ppf "(`PackDecoder %a)" PACKDecoder.pp_error e
 
-    let make _ ?window:(_= `Object 10) ?depth:(_= 50) _ = assert false
+    module GC =
+      Gc.Make(struct
+        module Hash = Hash
+        module Path = Path
+        module Value = Value
+        module Deflate = Deflate
+
+        type nonrec t = t
+        type nonrec error = error
+        type nonrec kind = kind
+
+        let pp_error = pp_error
+        let read_inflated = read_inflated
+        let contents _ = assert false
+      end)
+
+    let make = GC.make_stream
 
     let option_map f v = match v with Some v -> Some (f v) | None -> None
     let option_map_default f d v = match v with Some v -> f v | None -> d

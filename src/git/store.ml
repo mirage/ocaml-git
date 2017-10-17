@@ -171,6 +171,7 @@ sig
     | `SystemMapper of FileSystem.Mapper.error
     | `SystemDir of FileSystem.Dir.error
     | `Invalid_hash of Hash.t
+    | `Delta of PACKEncoder.Delta.error
     | `SystemIO of string
     | `Integrity of string
     | `Not_found ]
@@ -673,10 +674,12 @@ module Make
 
     type error =
       [ `SystemIO of string
+      | `Delta of PACKEncoder.Delta.error
       | PackImpl.error ]
 
     let pp_error ppf = function
       | `SystemIO err -> Fmt.pf ppf "(`SystemIO %s)" err
+      | `Delta err -> Fmt.pf ppf "(`Delta %a)" PACKEncoder.Delta.pp_error err
       | #PackImpl.error as err -> PackImpl.pp_error ppf err
 
     type t = PACKDecoder.Object.t
@@ -824,7 +827,23 @@ module Make
           | Error #Loose.error -> Lwt.return None
           | Ok v -> Lwt.return (Some v)
 
-    let make _ ?window:(_= `Object 10) ?depth:(_= 50) _ = assert false
+    module GC =
+      Gc.Make(struct
+        module Hash = Hash
+        module Path = Path
+        module Value = Value
+        module Deflate = Deflate
+
+        type nonrec t = state
+        type nonrec error = error
+        type kind = PACKDecoder.kind
+
+        let pp_error = pp_error
+        let read_inflated = extern
+        let contents _ = assert false
+      end)
+
+    let make = GC.make_stream
 
     let canonicalize git path_pack decoder_pack fdp ~htmp ~rtmp ~ztmp ~window delta info =
       let k2k = function
@@ -900,7 +919,7 @@ module Make
       >>= external_ressources
       >>= fun entries -> PACKEncoder.Delta.deltas ~memory:false entries get tag 10 50
       >>= function
-      | Error _ -> assert false
+      | Error err -> Lwt.return (Error (`Delta err))
       | Ok entries ->
         PackImpl.save_pack_file
           (Fmt.strf "pack-%s.pack")
@@ -920,10 +939,10 @@ module Make
                | Some (_, raw) -> Some raw
                | None -> None)
           >>= function
-          | Error _ as err -> Lwt.return err
+          | Error err -> Lwt.return (Error (err :> error))
           | Ok (path, sequence, hash_pack) ->
             PackImpl.save_idx_file ~root:git.dotgit sequence hash_pack >>= function
-            | Error _ as err -> Lwt.return err
+            | Error err -> Lwt.return (Error (err :> error))
             | Ok () ->
               let filename_pack = Fmt.strf "pack-%s.pack" (Hash.to_hex hash_pack) in
 
@@ -975,7 +994,7 @@ module Make
       let open Lwt.Infix in
 
       FileSystem.Mapper.openfile path >>= function
-      | Error _ -> assert false
+      | Error err -> Lwt.return (Error (`SystemMapper err))
       | Ok fdp ->
         let `Partial { Pack_info.Partial.hash = hash_pack; Pack_info.Partial.delta; } = info.Pack_info.state in
 
@@ -1098,11 +1117,14 @@ module Make
               (FileSystem.Mapper.close fdp
                >!= fun sys_err -> Lwt.return (`SystemMapper sys_err))
               >>= fun () -> PackImpl.add_total ~root:git.dotgit git.engine path info
+              >!= fun err -> Lwt.return (err :> error)
             else
               let open Lwt_result in
 
               canonicalize git path decoder fdp ~htmp ~rtmp ~ztmp ~window delta info
-              >>= fun (hash, count) -> PackImpl.add_exists ~root:git.dotgit git.engine hash
+              >>= fun (hash, count) ->
+              (PackImpl.add_exists ~root:git.dotgit git.engine hash
+               >!= (fun err -> Lwt.return (err :> error)))
               >>= fun () -> Lwt.return (Ok (hash, count))
           else Lwt.return
               (Error (`Integrity (Fmt.strf "Impossible to get all informations from the file: %a."
