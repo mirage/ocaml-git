@@ -17,7 +17,6 @@ build-test: ["jbuilder" "runtest" "test/git-unix"]
 depends: [
   "jbuilder" {build}
   "git-unix"
-  "compilers-libs.toplevel"
 ]
 
 available: [ocaml-version >= "4.02.3"]
