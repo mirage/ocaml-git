@@ -145,6 +145,12 @@ module Make
     let decoder =
       (string "ref: " *> refname <* end_of_line >>| fun refname -> Ref refname)
       <|> (hash <* end_of_line >>| fun hash -> Hash hash)
+
+    (* XXX(dinosaure): [end_of_line] expect a LF at the end of the
+       input. In the RFC, it's not clear if we need to write LF
+       character or not. In general, we found the LF character but if
+       we have a problem to read a reference, may be is about this
+       issue. *)
   end
 
   module M =
@@ -153,12 +159,15 @@ module Make
 
     open Minienc
 
+    let lf = '\n'
+
     let encoder x k e = match x with
       | Hash hash ->
-        write_string (Hash.to_hex hash) k e
+        write_string (Hash.to_hex hash) (write_char lf k) e
       | Ref refname ->
         (write_string "ref: "
-         @@ write_string refname k)
+         @@ write_string refname
+         @@ write_char lf k)
           e
   end
 
