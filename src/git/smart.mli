@@ -207,9 +207,8 @@ sig
     | HttpReferenceDiscovery : string -> advertised_refs transaction
     | ReferenceDiscovery : advertised_refs transaction
     | ShallowUpdate      : shallow_update transaction
-    | Negociation        : ack_mode -> acks transaction
+    | Negociation        : Hash.t list * ack_mode -> acks transaction
     | NegociationResult  : negociation_result transaction
-    | HttpPACK           : ((negociation_result -> bool) * side_band) -> flow transaction
     | PACK               : side_band -> flow transaction
     | ReportStatus       : side_band -> report_status transaction
     (** The type transaction to describe what is expected to decode/receive. *)
@@ -296,6 +295,13 @@ sig
 
       This type represents this information. *)
 
+  type http_upload_request =
+    { want         : Hash.t * Hash.t list
+    ; capabilities : Capability.t list
+    ; shallow      : Hash.t list
+    ; deep         : [ `Depth of int | `Timestamp of int64 | `Ref of string ] option
+    ; has          : Hash.t list }
+
   type request_command =
     [ `UploadPack (** When the client wants to fetch/clone. *)
     | `ReceivePack (** When the client wants to push. *)
@@ -343,7 +349,7 @@ sig
   type action =
     [ `GitProtoRequest of git_proto_request
     | `UploadRequest of upload_request
-    | `HttpUploadRequest of upload_request
+    | `HttpUploadRequest of bool * http_upload_request
     | `UpdateRequest of update_request
     | `Has of Hash.t list
     | `Done
