@@ -64,10 +64,37 @@ end
 (* XXX(dinosaure): see this paper
    https://github.com/ocamllabs/papers/blob/master/irmin/2014.08.matthieu/rapport.pdf *)
 
+type 'a acks =
+  { shallow   : 'a list
+  ; unshallow : 'a list
+  ; acks      : ('a * [ `Common | `Ready | `Continue | `ACK ]) list }
+
+module type S =
+sig
+  module Store
+    : Minimal.S
+      with type Hash.Digest.buffer = Cstruct.t
+       and type Hash.hex = string
+  module Decoder
+    : Smart.DECODER
+      with module Hash = Store.Hash
+
+  type state
+  type nonrec acks = Store.Hash.t acks
+
+  val find_common : Store.t -> (Store.Hash.t list * state * (acks -> state -> ([ `Again of Store.Hash.t list | `Done | `Ready ] * state) Lwt.t)) Lwt.t
+end
+
 module Make
-    (Store : Store.S with type Hash.Digest.buffer = Cstruct.t
-                      and type Hash.hex = string)
+    (G : Minimal.S with type Hash.Digest.buffer = Cstruct.t
+                    and type Hash.hex = string)
+  : S with module Store = G
 = struct
+  module Store = G
+
+  [@@@warning "-32"]
+  [@@@warning "-34"]
+
   module V =
   struct
     type t = { commit : Store.Value.Commit.t
@@ -83,10 +110,10 @@ module Make
         (Fmt.hvbox Flag.pp) flags
   end
 
-  module Pq      = Psq.Make(Store.Hash)(V)
+  module Pq = Psq.Make(Store.Hash)(V)
+
   module Decoder
     : module type of Smart.Decoder(Store.Hash)
-        with type Hash.t = Store.Hash.t
     = Smart.Decoder(Store.Hash)
   (* XXX(dinosaure): short-cut of the smart decoder module, the common way is to
      load the [Sync] module but, I don't want. And because we annotated some
@@ -122,7 +149,7 @@ module Make
         | Ok (Store.Value.Tree _
              | Store.Value.Tag _
              | Store.Value.Blob _) -> Lwt.return (Error (`Invalid_hash hash))
-        | Error #Store.error as err -> Lwt.return err
+        | Error err -> Lwt.return (Error (`Store err))
   end
 
   type rev =
@@ -188,50 +215,50 @@ module Make
       if rev.non_common_revs = 0
       then Lwt.return (None, rev)
       else match Pq.pop rev.pq with
-      | None -> Lwt.return (None, rev)
-      | Some ((hash, ({ V.commit; flags; } as value)), pq) ->
-        value.V.flags <- Flag.to_popped flags;
+        | None -> Lwt.return (None, rev)
+        | Some ((hash, ({ V.commit; flags; } as value)), pq) ->
+          value.V.flags <- Flag.to_popped flags;
 
-        let non_common_revs =
-          if not (Flag.is_common flags)
-          then rev.non_common_revs - 1
-          else rev.non_common_revs
-        in
+          let non_common_revs =
+            if not (Flag.is_common flags)
+            then rev.non_common_revs - 1
+            else rev.non_common_revs
+          in
 
-        let leave, marks =
-          if Flag.is_common flags
-          then false, Flag.to_common @@ Flag.to_seen @@ Flag.default
-          (* XXX(dinosaure): do not send "have", and ignore ancestors. *)
-          else if Flag.is_common_ref flags
-          then true,  Flag.to_common @@ Flag.to_seen @@ Flag.default
-          (* XXX(dinosaure): send "have" and ignore ancestors. *)
-          else true,  Flag.to_seen @@ Flag.default
-          (* XXX(dinosaure): send "have", also for its ancestors. *)
-        in
+          let leave, marks =
+            if Flag.is_common flags
+            then false, Flag.to_common @@ Flag.to_seen @@ Flag.default
+            (* XXX(dinosaure): do not send "have", and ignore ancestors. *)
+            else if Flag.is_common_ref flags
+            then true,  Flag.to_common @@ Flag.to_seen @@ Flag.default
+            (* XXX(dinosaure): send "have" and ignore ancestors. *)
+            else true,  Flag.to_seen @@ Flag.default
+            (* XXX(dinosaure): send "have", also for its ancestors. *)
+          in
 
-        let rec gogo rev = function
-          | [] -> Lwt.return rev
-          | hash :: rest ->
-            Bucket.get t bucket hash >>= function
-            | Ok ({ V.flags; _ } as value) ->
-              let rev =
-                if not (Flag.is_seen flags)
-                then push hash value marks rev
-                else rev
-              in
+          let rec gogo rev = function
+            | [] -> Lwt.return rev
+            | hash :: rest ->
+              Bucket.get t bucket hash >>= function
+              | Ok ({ V.flags; _ } as value) ->
+                let rev =
+                  if not (Flag.is_seen flags)
+                  then push hash value marks rev
+                  else rev
+                in
 
-              (if Flag.is_common marks
-               then mark_common t bucket ~ancestors:true hash value rev
-               else Lwt.return rev)
-              >>= fun rev -> gogo rev rest
-            | Error _ -> Lwt.return rev
-        in
+                (if Flag.is_common marks
+                 then mark_common t bucket ~ancestors:true hash value rev
+                 else Lwt.return rev)
+                >>= fun rev -> gogo rev rest
+              | Error _ -> Lwt.return rev
+          in
 
-        gogo { pq; non_common_revs; } (Store.Value.Commit.parents commit) >>= fun rev ->
+          gogo { pq; non_common_revs; } (Store.Value.Commit.parents commit) >>= fun rev ->
 
-        if leave
-        then Lwt.return  (Some hash, rev)
-        else go rev
+          if leave
+          then Lwt.return  (Some hash, rev)
+          else go rev
     in
 
     go rev
@@ -245,6 +272,7 @@ module Make
     ; vain     : int  (* how many vainly hashes we have *)
     ; rev      : rev  (* priority queue *)
     ; in_fly   : Store.Hash.t list }
+  type nonrec acks = Store.Hash.t acks
 
   (* XXX(dinosaure): to be clear, this implementation is very bad and we need to
      change it (TODO). For example, the [in_fly] field is used only one time (in
@@ -253,7 +281,7 @@ module Make
      apparently, it's not the best. *)
 
   exception Jump of Store.Hash.t list * state
-  exception Invalid_commit of [ Store.error | `Invalid_hash of Store.Hash.t ]
+  exception Invalid_commit of [ `Store of Store.error | `Invalid_hash of Store.Hash.t ]
 
   let _INITIAL_FLUSH  = 16
   let _PIPESAFE_FLUSH = 32
@@ -262,6 +290,12 @@ module Make
      will skip ahead and send the next 32 immediately, so that there always a
      block of 32 "in-flight on the wire" at a time. *)
   let _VAIN = 128
+
+  module Log =
+  struct
+    let src = Logs.Src.create "negociator" ~doc:"logs negociator's event"
+    include (val Logs.src_log src : Logs.LOG)
+  end
 
   let update_flush count =
     if count < _PIPESAFE_FLUSH
@@ -276,10 +310,14 @@ module Make
 
     Store.Ref.list t >>=
     (fun refs ->
+       Log.debug (fun l -> l "Local references: %a."
+                     (Fmt.hvbox (Fmt.list (Fmt.pair Store.Reference.pp Store.Hash.pp))) refs);
+
        Lwt_list.fold_left_s
          (fun rev (_, hash) ->
             Bucket.get t bucket hash >|= function
-            | Ok value -> push hash value Flag.seen rev
+            | Ok value ->
+              push hash value Flag.seen rev
             | Error _ -> rev)
          rev refs)
     >>= fun rev ->
@@ -297,7 +335,7 @@ module Make
             (n - 1)
     in
 
-    let continue { Decoder.acks; _ } state =
+    let continue { acks; _ } state =
       let rec go state have = function
         | [] -> Lwt.return (state, have)
         | (_, `ACK) :: _ ->
