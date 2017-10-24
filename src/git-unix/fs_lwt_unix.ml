@@ -203,7 +203,7 @@ module Dir
            [ `Stat of string
            | `Unlink of string
            | `Rmdir of string
-           | `Opendir of string
+           | `Opendir of (string * Fpath.t)
            | `Path of string
            | `Getcwd of string
            | `Mkdir of string ]
@@ -217,7 +217,7 @@ module Dir
     [ `Stat of string
     | `Unlink of string
     | `Rmdir of string
-    | `Opendir of string
+    | `Opendir of (string * Fpath.t)
     | `Path of string
     | `Getcwd of string
     | `Mkdir of string ]
@@ -226,7 +226,7 @@ module Dir
     | `Stat err    -> Fmt.pf ppf "(`Stat %s)" err
     | `Unlink err  -> Fmt.pf ppf "(`Unlink %s)" err
     | `Rmdir err   -> Fmt.pf ppf "(`Rmdir %s)" err
-    | `Opendir err -> Fmt.pf ppf "(`Opendir %s)" err
+    | `Opendir err -> Fmt.pf ppf "(`Opendir %a)" (Fmt.Dump.pair Fmt.string Fpath.pp) err
     | `Path err    -> Fmt.pf ppf "(`Path %s)" err
     | `Getcwd err  -> Fmt.pf ppf "(`Getcwd %s)" err
     | `Mkdir err   -> Fmt.pf ppf "(`Mkdir %s)" err
@@ -359,7 +359,7 @@ module Dir
            (fun () -> readdir dh [])
            (fun rs -> Lwt_unix.closedir dh >|= fun () -> rs)
            (function exn -> Lwt_unix.closedir dh >>= fun () -> Lwt.fail exn))
-      (function Unix.Unix_error _ as err -> Lwt.return (error_to_result ~ctor:(fun x -> `Opendir x) err))
+      (function Unix.Unix_error _ as err -> Lwt.return (error_to_result ~ctor:(fun x -> `Opendir (x, dir)) err))
 
   let rec current () =
     Lwt.try_bind
@@ -774,7 +774,7 @@ module Fs
               and type Dir.error = [ `Stat of string
                                    | `Unlink of string
                                    | `Rmdir of string
-                                   | `Opendir of string
+                                   | `Opendir of (string * Fpath.t)
                                    | `Path of string
                                    | `Getcwd of string
                                    | `Mkdir of string ]
