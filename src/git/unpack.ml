@@ -996,7 +996,7 @@ module MakePACKDecoder (H : S.HASH) (I : S.INFLATE)
       (fun objects _ t ->
         Cont { t with objects = objects
                     ; counter = objects
-                    ; state = Object kind })
+                    ; state = if objects = 0l then Checksum checksum else Object kind })
       src t
 
   let version src t =
