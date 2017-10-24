@@ -24,6 +24,8 @@ sig
   type decoder
   (** The type decoder. *)
 
+  val pp_decoder : decoder Fmt.t
+
   (** The type error. *)
   type error =
     [ `Expected_char of char

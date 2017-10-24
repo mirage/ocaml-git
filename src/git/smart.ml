@@ -21,6 +21,8 @@ sig
 
   type decoder
 
+  val pp_decoder : decoder Fmt.t
+
   type error =
     [ `Expected_char of char
     | `Unexpected_char of char
@@ -288,6 +290,17 @@ struct
     ; mutable pos    : int
     ; mutable eop    : int option (* end of packet *)
     ; mutable max    : int }
+
+  let pp_decoder ppf { buffer; pos; eop; max; } =
+    let pp = Minienc.pp_scalar ~get:Cstruct.get_char ~length:Cstruct.len in
+
+    match eop with
+    | Some eop ->
+      Fmt.pf ppf "{ @[<hov>current = %a;@ \
+                           next = %a;@] }"
+        (Fmt.hvbox pp) (Cstruct.sub buffer pos eop)
+        (Fmt.hvbox pp) (Cstruct.sub buffer eop max)
+    | None -> Fmt.pf ppf "#raw"
 
   type error =
     [ `Expected_char of char
