@@ -1,7 +1,7 @@
 module Default =
 struct
   let default =
-    [ `Multi_ack
+    [ `Multi_ack_detailed
     ; `Thin_pack
     ; `Side_band_64k
     ; `Ofs_delta
