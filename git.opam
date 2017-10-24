@@ -19,6 +19,7 @@ depends: [
   "ocamlgraph"
   "uri"        {>= "1.3.12"}
   "lwt"        {>= "2.4.7"}
+  "digestif"   {>= "0.3"}
   "logs"
   "fmt"
   "hex"
