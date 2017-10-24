@@ -195,6 +195,12 @@ module IO
 
   include Make(H)(P)
 
+  module Log =
+  struct
+    let src = Logs.Src.create "git.reference" ~doc:"logs git's reference I/O event"
+    include (val Logs.src_log src : Logs.LOG)
+  end
+
   let head_contents_to_string = function
     | Hash hash -> Hash.to_hex hash
     | Ref refname -> Fmt.strf "ref: %a" pp refname (* XXX(dinosaure): [pp] or [Fmt.string]? *)
@@ -233,9 +239,14 @@ module IO
 
     let path = Path.(root // (to_path reference)) in
 
+    Log.debug (fun l -> l ~header:"read" "Reading the reference: %a." Path.pp path);
+
     FileSystem.File.open_r ~mode:0o400 path
     >>= function
-    | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
+    | Error sys_err ->
+      Log.err (fun l -> l ~header:"read" "Retrieve an error when we read the reference %a: %a."
+                  pp reference FileSystem.File.pp_error sys_err);
+      Lwt.return (Error (`SystemFile sys_err))
     | Ok read ->
       let rec loop decoder = match D.eval decoder with
         | `Await decoder ->
@@ -254,6 +265,8 @@ module IO
       | Ok head_contents ->
         let reference' = normalize path in
 
+        Log.debug (fun l -> l ~header:"read" "Normalize reference %a = %a."
+                      pp reference pp reference');
         assert (equal reference reference');
 
         Ok (normalize path, head_contents)
