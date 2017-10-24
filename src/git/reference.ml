@@ -95,8 +95,11 @@ module Make
 
   let to_path x = match Path.of_string x with
     | Error (`Msg x) -> raise (Invalid_argument x)
-    | Ok v -> v
-  let of_path path = Path.(to_string (v "refs" // path))
+    | Ok v -> Path.normalize v
+  let of_path path =
+    match List.rev @@ Path.segs path with
+    | "HEAD" :: _ -> head
+    | _ -> Path.(to_string (normalize (v "refs" // path)))
 
   let pp ppf x =
     Fmt.pf ppf "%s" (String.escaped x)
