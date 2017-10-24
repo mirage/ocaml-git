@@ -50,16 +50,20 @@ end
 
 module type S =
 sig
-  module Web : S.WEB
+  module Web    : S.WEB
   module Client : CLIENT
     with type headers = Web.HTTP.headers
      and type meth = Web.HTTP.meth
      and type uri = Web.uri
      and type resp = Web.resp
-  module Store : Minimal.S
+  module Store  : Minimal.S
+    with type Hash.Digest.buffer = Cstruct.t
+     and type Hash.hex = string
   module Buffer : S.BUFFER
 
   module Decoder : Smart.DECODER
+    with module Hash = Store.Hash
+  module Encoder : Smart.ENCODER
     with module Hash = Store.Hash
 
   module PACKDecoder : Unpack.P
@@ -82,6 +86,20 @@ sig
     -> ?https:bool
     -> ?port:int
     -> string -> string -> (Decoder.advertised_refs, error) result Lwt.t
+
+  val fetch :
+       Store.t
+    -> ?shallow:Store.Hash.t list
+    -> ?stdout:(Cstruct.t -> unit Lwt.t)
+    -> ?stderr:(Cstruct.t -> unit Lwt.t)
+    -> ?headers:Web.HTTP.headers
+    -> ?https:bool
+    -> negociate:((Decoder.acks -> 'state -> ([ `Ready | `Done | `Again of Store.Hash.t list ] * 'state) Lwt.t) * 'state)
+    -> has:Store.Hash.t list
+    -> want:((Store.Hash.t * string * bool) list -> Store.Hash.t list Lwt.t)
+    -> ?deepen:[ `Depth of int | `Timestamp of int64 | `Ref of string ]
+    -> ?port:int
+    -> string -> string -> (Store.Hash.t list * int, error) result Lwt.t
 
   val clone :
        Store.t
@@ -111,20 +129,23 @@ module Make
                     and type Hash.hex = string)
     (B : S.BUFFER with type raw = string
                    and type fixe = Cstruct.t)
-  : S with module Web = W
-       and module Client = C
-       and module Store = G
-       and module Buffer = B
+  : S with module Web     = W
+       and module Client  = C
+       and module Store   = G
+       and module Buffer  = B
 = struct
-  module Web = W
+  module Web    = W
   module Client = C
-  module Store = G
+  module Store  = G
   module Buffer = B
 
-  module Decoder = Smart.Decoder(Store.Hash)
-  module Encoder = Smart.Encoder(Store.Hash)
+  module Decoder
+    = Smart.Decoder(Store.Hash)
+  module Encoder
+    = Smart.Encoder(Store.Hash)
 
-  module PACKDecoder = Unpack.MakePACKDecoder(Store.Hash)(Store.Inflate)
+  module PACKDecoder
+    = Unpack.MakePACKDecoder(Store.Hash)(Store.Inflate)
 
   type error =
     [ `Decoder of Decoder.error
@@ -197,14 +218,39 @@ module Make
     (Store.Pack.from git (fun () -> Lwt_stream.get stream')
      >!= fun err -> Lwt.return (`StorePack err))
 
+  let producer state =
+    let state' = ref (fun () -> state) in
+
+    let go () = match !state' () with
+      | Encoder.Write { buffer; off; len; continue; } ->
+        state' := (fun () -> continue len);
+        Lwt.return (Some (buffer, off, len))
+      | Encoder.Ok () -> Lwt.return None
+    in go
+
+  let rec consume stream ?keep state =
+    let open Lwt.Infix in
+
+    match state with
+    | Decoder.Ok v -> Lwt.return (Ok v)
+    | Decoder.Error { err; _ } -> Lwt.return (Error err)
+    | Decoder.Read { buffer; off; len; continue; } ->
+      (match keep with
+       | Some (raw, off', len') -> Lwt.return (Some (raw, off', len'))
+       | None -> stream ()) >>= function
+      | Some (raw, off', len') ->
+        let len'' = min len len' in
+        Cstruct.blit raw off' buffer off len'';
+
+        if len' - len'' = 0
+        then consume stream (continue len'')
+        else consume stream ~keep:(raw, off' + len'', len' - len'') (continue len'')
+      | None -> consume stream (continue 0)
+
   let ls _ ?headers ?(https = false) ?port host path =
     let open Lwt.Infix in
 
-    let scheme =
-      if https then "https"
-      else "http"
-    in
-
+    let scheme = if https then "https" else "http" in
     let uri =
       Uri.empty
       |> (fun uri -> Uri.with_scheme uri (Some scheme))
@@ -235,37 +281,138 @@ module Make
 
     let decoder = Decoder.decoder () in
 
-    let rec consume stream ?keep state =
-      match state with
-      | Decoder.Ok v -> Lwt.return (Ok v)
-      | Decoder.Error { err; _ } -> Lwt.return (Error err)
-      | Decoder.Read { buffer; off; len; continue; } ->
-        (match keep with
-         | Some (raw, off', len') -> Lwt.return (Some (raw, off', len'))
-         | None -> stream ()) >>= function
-        | Some (raw, off', len') ->
-          let len'' = min len len' in
-          Cstruct.blit raw off' buffer off len'';
-
-          if len' - len'' = 0
-          then consume stream (continue len'')
-          else consume stream ~keep:(raw, off' + len'', len' - len'') (continue len'')
-        | None -> consume stream (continue 0)
-    in
-
     let ( >!= ) = Lwt_result.bind_lwt_err in
 
     consume (Web.Response.body resp) (Decoder.decode decoder (Decoder.HttpReferenceDiscovery "git-upload-pack"))
     >!= (fun err -> Lwt.return (`Decoder err))
 
+  let fetch git ?(shallow = []) ?stdout ?stderr ?headers ?(https = false) ~negociate:(negociate, nstate) ~has ~want ?deepen ?port host path =
+    let open Lwt.Infix in
+
+    let scheme = if https then "https" else "http" in
+    let uri =
+      Uri.empty
+      |> (fun uri -> Uri.with_scheme uri (Some scheme))
+      |> (fun uri -> Uri.with_host uri (Some host))
+      |> (fun uri -> Uri.with_path uri (String.concat "/" [ path; "info"; "refs" ]))
+      |> (fun uri -> Uri.with_port uri port)
+      |> (fun uri -> Uri.add_query_param uri ("service", [ "git-upload-pack" ]))
+    in
+
+    Log.debug (fun l -> l ~header:"fetch" "Launch the GET request to %a."
+                  Uri.pp_hum uri);
+
+    let git_agent =
+      List.fold_left (fun acc -> function `Agent s -> Some s | _ -> acc) None K.default
+      |> function
+      | Some git_agent -> git_agent
+      | None -> raise (Invalid_argument "Expected an user agent in capabilities.")
+    in
+
+    let headers =
+      option_map_default
+        Web.HTTP.Headers.(def user_agent git_agent)
+        Web.HTTP.Headers.(def user_agent git_agent empty)
+        headers
+    in
+
+    Client.call ~headers `GET uri >>= fun resp ->
+
+    let decoder = Decoder.decoder () in
+    let encoder = Encoder.encoder () in
+    let keeper = Lwt_mvar.create has in
+
+    consume (Web.Response.body resp) (Decoder.decode decoder (Decoder.HttpReferenceDiscovery "git-upload-pack")) >>= function
+    | Error err ->
+      Log.err (fun l -> l ~header:"fetch" "The HTTP decoder returns an error: %a." Decoder.pp_error err);
+      Lwt.return (Error (`Decoder err))
+    | Ok refs ->
+      let common = List.filter (fun x -> List.exists ((=) x) K.default) refs.Decoder.capabilities in
+
+      let sideband =
+        if List.exists ((=) `Side_band_64k) common
+        then `Side_band_64k
+        else if List.exists ((=) `Side_band) common
+        then `Side_band
+        else `No_multiplexe
+      in
+
+      let ack_mode =
+        if List.exists ((=) `Multi_ack_detailed) common
+        then `Multi_ack_detailed
+        else if List.exists ((=) `Multi_ack) common
+        then `Multi_ack
+        else `Ack
+      in
+
+      want refs.Decoder.refs >>= function
+      | [] -> Lwt.return (Ok ([], 0))
+      | first :: rest ->
+        let negociation_request final has =
+          Log.debug (fun l -> l ~header:"fetch" "Send a POST negociation request (done:%b): %a."
+                        final (Fmt.Dump.list Store.Hash.pp) has);
+
+          let req =
+            Web.Request.v
+              `POST
+              ~path:[ path; "git-upload-pack" ]
+              Web.HTTP.Headers.(def content_type "application/x-git-upload-pack-request" headers)
+              (fun _ -> Lwt.return ())
+          in
+
+          Client.call
+            ~headers:(Web.Request.headers req |> Web.HTTP.Headers.merge headers)
+            ~body:(producer (Encoder.encode encoder
+                               (`HttpUploadRequest (final,
+                                                    { Encoder.want = first, rest
+                                                    ; capabilities = K.default
+                                                    ; shallow
+                                                    ; deep = deepen
+                                                    ; has }))))
+            (Web.Request.meth req)
+            (Web.Request.uri req
+             |> (fun uri -> Uri.with_scheme uri (Some scheme))
+             |> (fun uri -> Uri.with_host uri (Some host))
+             |> (fun uri -> Uri.with_port uri port))
+        in
+
+        negociation_request false has >>= fun resp ->
+
+        let next resp =
+          consume (Web.Response.body resp)
+            (Decoder.decode decoder Decoder.NegociationResult) >>= function
+          | Error err -> Lwt.return (Error (`Decoder err))
+          | Ok _ -> (* TODO: check negociation result. *)
+            let stream () = consume (Web.Response.body resp) (Decoder.decode decoder (Decoder.PACK sideband)) in
+            Lwt_result.(populate ?stdout ?stderr git stream >>= fun (_, n) -> Lwt.return (Ok (first :: rest, n)))
+        in
+
+        let rec loop ~final state resp = match final with
+          | true -> next resp
+          | false ->
+            Lwt_mvar.take keeper >>= fun has -> Lwt_mvar.put keeper has >>= fun () ->
+            consume (Web.Response.body resp)
+              (Decoder.decode decoder (Decoder.Negociation (has, ack_mode))) >>= function
+            | Error err ->
+              Lwt.return (Error (`Decoder err))
+            | Ok acks ->
+              negociate acks state >>= function
+              | `Ready, _ -> next resp
+              | `Again has', state ->
+                Lwt_mvar.take keeper >>= fun has ->
+                let has = has @ has' in
+                Lwt_mvar.put keeper has >>= fun () ->
+
+                negociation_request false has >>= loop ~final:false state
+              | `Done, _ -> next resp
+        in
+
+        loop ~final:(List.length has = 0) nstate resp
+
   let clone git ?stdout ?stderr ?headers ?(https = false) ?port ?(reference = Store.Reference.head) host path =
     let open Lwt.Infix in
 
-    let scheme =
-      if https then "https"
-      else "http"
-    in
-
+    let scheme = if https then "https" else "http" in
     let uri =
       Uri.empty
       |> (fun uri -> Uri.with_scheme uri (Some scheme))
@@ -297,24 +444,6 @@ module Make
     let decoder = Decoder.decoder () in
     let encoder = Encoder.encoder () in
 
-    let rec consume stream ?keep state =
-      match state with
-      | Decoder.Ok v -> Lwt.return (Ok v)
-      | Decoder.Error { err; _ } -> Lwt.return (Error err)
-      | Decoder.Read { buffer; off; len; continue; } ->
-        (match keep with
-         | Some (raw, off', len') -> Lwt.return (Some (raw, off', len'))
-         | None -> stream ()) >>= function
-        | Some (raw, off', len') ->
-          let len'' = min len len' in
-          Cstruct.blit raw off' buffer off len'';
-
-          if len' - len'' = 0
-          then consume stream (continue len'')
-          else consume stream ~keep:(raw, off' + len'', len' - len'') (continue len'')
-        | None -> consume stream (continue 0)
-    in
-
     consume (Web.Response.body resp) (Decoder.decode decoder (Decoder.HttpReferenceDiscovery "git-upload-pack")) >>= function
     | Error err ->
       Log.err (fun l -> l ~header:"clone" "The HTTP decoder returns an error: %a." Decoder.pp_error err);
@@ -332,17 +461,6 @@ module Make
                     Store.Reference.pp reference
                     Store.Hash.pp expect);
 
-      let producer state =
-        let state' = ref (fun () -> state) in
-
-        let go () = match !state' () with
-          | Encoder.Write { buffer; off; len; continue; } ->
-            state' := (fun () -> continue len);
-            Lwt.return (Some (buffer, off, len))
-          | Encoder.Ok () -> Lwt.return None
-        in go
-      in
-
       let req =
         Web.Request.v
           `POST
@@ -354,10 +472,12 @@ module Make
       Client.call
         ~headers:(Web.Request.headers req |> Web.HTTP.Headers.merge headers)
         ~body:(producer (Encoder.encode encoder
-                           (`HttpUploadRequest { Encoder.want = expect, []
-                                               ; capabilities = K.default
-                                               ; shallow = []
-                                               ; deep = None })))
+                           (`HttpUploadRequest (true,
+                                                { Encoder.want = expect, []
+                                                ; capabilities = K.default
+                                                ; shallow = []
+                                                ; deep = None
+                                                ; has = [] }))))
         (Web.Request.meth req)
         (Web.Request.uri req
          |> (fun uri -> Uri.with_scheme uri (Some scheme))
@@ -375,17 +495,10 @@ module Make
 
       consume
         (Web.Response.body resp)
-        (Decoder.decode decoder (Decoder.HttpPACK ((function Decoder.NAK -> true | _ -> false), sideband)))
+        (Decoder.decode decoder Decoder.NegociationResult)
       >>= function
-      | Ok first ->
-        let consumed = ref false in
-
-        let stream () =
-          if not !consumed
-          then (consumed := true; Lwt.return (Ok first))
-          else consume (Web.Response.body resp) (Decoder.decode decoder (Decoder.PACK sideband))
-        in
-
+      | Ok _ -> (* TODO: check the negociation result. *)
+        let stream () = consume (Web.Response.body resp) (Decoder.decode decoder (Decoder.PACK sideband)) in
         Lwt_result.(populate ?stdout ?stderr git stream >>= fun _ -> Lwt.return (Ok expect))
       | Error err ->
         Log.err (fun l -> l ~header:"clone" "The HTTP decoder returns an error: %a." Decoder.pp_error err);

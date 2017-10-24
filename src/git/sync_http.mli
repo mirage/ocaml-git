@@ -42,16 +42,20 @@ module Lwt_cstruct_flow : FLOW with type raw = Cstruct.t and type +'a io = 'a Lw
 
 module type S =
 sig
-  module Web : S.WEB
+  module Web    : S.WEB
   module Client : CLIENT
     with type headers = Web.HTTP.headers
-     and type meth = Web.HTTP.meth
-     and type uri = Web.uri
-     and type resp = Web.resp
-  module Store : Minimal.S
+     and type meth    = Web.HTTP.meth
+     and type uri     = Web.uri
+     and type resp    = Web.resp
+  module Store  : Minimal.S
+    with type Hash.Digest.buffer = Cstruct.t
+     and type Hash.hex = string
   module Buffer : S.BUFFER
 
   module Decoder : Smart.DECODER
+    with module Hash = Store.Hash
+  module Encoder : Smart.ENCODER
     with module Hash = Store.Hash
 
   module PACKDecoder : Unpack.P
@@ -74,6 +78,20 @@ sig
     -> ?https:bool
     -> ?port:int
     -> string -> string -> (Decoder.advertised_refs, error) result Lwt.t
+
+  val fetch :
+       Store.t
+    -> ?shallow:Store.Hash.t list
+    -> ?stdout:(Cstruct.t -> unit Lwt.t)
+    -> ?stderr:(Cstruct.t -> unit Lwt.t)
+    -> ?headers:Web.HTTP.headers
+    -> ?https:bool
+    -> negociate:((Decoder.acks -> 'state -> ([ `Ready | `Done | `Again of Store.Hash.t list ] * 'state) Lwt.t) * 'state)
+    -> has:Store.Hash.t list
+    -> want:((Store.Hash.t * string * bool) list -> Store.Hash.t list Lwt.t)
+    -> ?deepen:[ `Depth of int | `Timestamp of int64 | `Ref of string ]
+    -> ?port:int
+    -> string -> string -> (Store.Hash.t list * int, error) result Lwt.t
 
   val clone :
        Store.t
@@ -103,7 +121,7 @@ module Make
                     and type Hash.hex = string)
     (B : S.BUFFER with type raw = string
                    and type fixe = Cstruct.t)
-  : S with module Web = W
-       and module Client = C
-       and module Store = G
-       and module Buffer = B
+  : S with module Web     = W
+       and module Client  = C
+       and module Store   = G
+       and module Buffer  = B
