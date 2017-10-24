@@ -125,6 +125,8 @@ sig
                ; continue  : int -> 'a state }
     | Ok of 'a
 
+  [@@@warning "-30"]
+
   type upload_request =
     { want         : Hash.t * Hash.t list
     ; capabilities : Capability.t list

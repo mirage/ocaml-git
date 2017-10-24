@@ -254,6 +254,8 @@ module Decoder
 
 module type ENCODER =
 sig
+  [@@@warning "-30"]
+
   module Hash
     : S.HASH
   (** The [Digest] module used to make the module. *)
