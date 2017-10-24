@@ -1534,52 +1534,70 @@ module Make
       | error
       | `Invalid_reference of Reference.t ]
 
-
-    let contents dir =
+    let contents top =
       let open Lwt.Infix in
 
       let ( >?= ) = Lwt_result.bind in
 
       let rec lookup acc dir =
-        FileSystem.Dir.contents dir
+        FileSystem.Dir.contents ~rel:true Path.(top // dir)
         >?= fun l ->
           Lwt_list.filter_p
-            (fun x -> FileSystem.is_dir x >|= function Ok v -> v | Error _ -> false) l
+            (fun x -> FileSystem.is_dir Path.(top // dir // x) >|= function Ok v -> v | Error _ -> false) l
           >>= fun dirs ->
           Lwt_list.filter_p
-            (fun x -> FileSystem.is_file x >|= function Ok v -> v | Error _ -> false) l
-          >>= fun files ->
+            (fun x -> FileSystem.is_file Path.(top // dir // x) >|= function Ok v -> v | Error _ -> false) l
+          >>= Lwt_list.map_p (fun file -> Lwt.return (Path.append dir file)) >>= fun files ->
 
           Lwt_list.fold_left_s
-            (function Ok acc -> fun x -> lookup acc x
+            (function Ok acc -> fun x -> lookup acc Path.(dir // x)
                     | Error _ as e -> fun _ -> Lwt.return e)
             (Ok acc) dirs >?= fun acc -> Lwt.return (Ok (acc @ files))
       in
 
-      lookup [] dir
+      lookup [] (Path.v ".")
 
     module Graph = Reference.Map
+
+    module Log =
+    struct
+      let src = Logs.Src.create "git.store.ref" ~doc:"logs git's store reference event"
+      include (val Logs.src_log src : Logs.LOG)
+    end
 
     (* XXX(dinosaure): this function does not return any {!Error} value. *)
     let graph_p ~dtmp ~raw t =
       let open Lwt.Infix in
 
       contents Path.(t.dotgit / "refs") >>= function
-      | Error sys_err -> Lwt.return (Error (`SystemDirectory sys_err))
+      | Error sys_err ->
+        Log.err (fun l -> l ~header:"graph_p" "Retrieve an error: %a." FileSystem.Dir.pp_error sys_err);
+        Lwt.return (Error (`SystemDirectory sys_err))
       | Ok files ->
+        Log.debug (fun l -> l ~header:"graph_p" "Retrieve these files: %a."
+                      (Fmt.hvbox (Fmt.list Path.pp)) files);
+
         Lwt_list.fold_left_s
           (fun acc abs_ref ->
              (* XXX(dinosaure): we already normalize the reference (which is
                 absolute). so we consider than the root as [/]. *)
-             Reference.read ~root:(Path.v "/") (Reference.of_path abs_ref) ~dtmp ~raw
+             Reference.read ~root:t.dotgit (Reference.of_path abs_ref) ~dtmp ~raw
              >|= function
              | Ok v -> v :: acc
-             | Error _ -> acc)
-          [] (Path.(t.dotgit / "HEAD") :: files)
+             | Error err ->
+               Log.err (fun l -> l ~header:"graph_p" "Retrieve an error when we read reference %a: %a."
+                           Reference.pp (Reference.of_path abs_ref)
+                           Reference.pp_error err);
+               acc)
+          [] (Reference.(to_path head) :: files)
         >>= fun lst -> Lwt_list.fold_left_s
           (fun (rest, graph) -> function
-             | refname, Reference.Hash hash -> Lwt.return (rest, Graph.add refname hash graph)
-             | refname, Reference.Ref link -> Lwt.return ((refname, link) :: rest, graph))
+             | refname, Reference.Hash hash ->
+               Lwt.return (rest, Graph.add refname hash graph)
+             | refname, Reference.Ref link ->
+               Log.debug (fun l -> l ~header:"graph_p" "Putting the reference %a -> %a as a partial value."
+                             Reference.pp refname Reference.pp link);
+               Lwt.return ((refname, link) :: rest, graph))
           ([], Graph.empty) lst
         >>= fun (partial, graph) ->
         Packed_refs.read ~root:t.dotgit ~dtmp ~raw >>= function
@@ -1591,6 +1609,9 @@ module Make
             graph packed_refs
           >>= fun graph -> Lwt_list.fold_left_s
             (fun graph (refname, link) ->
+               Log.debug (fun l -> l ~header:"graph_p" "Resolving the reference %a -> %a."
+                             Reference.pp refname Reference.pp link);
+
                try let hash = Graph.find link graph in Lwt.return (Graph.add refname hash graph)
                with Not_found -> Lwt.return graph)
             graph partial
@@ -1598,6 +1619,9 @@ module Make
         | Error #Packed_refs.error ->
           Lwt_list.fold_left_s
             (fun graph (refname, link) ->
+               Log.debug (fun l -> l ~header:"graph_p" "Resolving the reference %a -> %a."
+                             Reference.pp refname Reference.pp link);
+
                try let hash = Graph.find link graph in Lwt.return (Graph.add refname hash graph)
                with Not_found -> Lwt.return graph)
             graph partial
