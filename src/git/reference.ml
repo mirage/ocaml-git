@@ -40,6 +40,7 @@ sig
     | Ref of t
 
   val pp_head_contents : head_contents Fmt.t
+  val equal_head_contents : head_contents -> head_contents -> bool
 
   module A : S.ANGSTROM with type t = head_contents
   module D : S.DECODER with type t = head_contents
@@ -124,6 +125,11 @@ module Make
   let pp_head_contents ppf = function
     | Hash hash -> Fmt.pf ppf "(Hash %a)" Hash.pp hash
     | Ref t -> Fmt.pf ppf "(Ref %a)" pp t
+
+  let equal_head_contents a b = match a, b with
+    | Ref a', Ref b' -> equal a' b'
+    | Hash a', Hash b' -> Hash.equal a' b'
+    | _, _ -> false
 
   module A =
   struct

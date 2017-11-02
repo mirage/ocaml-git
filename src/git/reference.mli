@@ -80,6 +80,16 @@ sig
   val pp_head_contents : head_contents Fmt.t
   (** Pretty-printer of {!head_contents}. *)
 
+  val equal_head_contents : head_contents -> head_contents -> bool
+  (** [equal_head_contents a b]
+      implies [a = Ref a'] and [b = Ref b'] and [Reference.equal a' b' = true]
+      or [a = Hash a'] and [b = Hash b'] and [Hash.equal a' b'].
+
+      However, semantically [Ref a'] could be equal to [Hash b'] iff
+      [Hash b'] is come from the reference [a']. That means this
+      function does not handle any indirection when it tests your
+      values. *)
+
   module A
     : S.ANGSTROM with type t = head_contents
   (** The Angstrom decoder of the Git Reference object. *)
