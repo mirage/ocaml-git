@@ -17,55 +17,7 @@
 
 let () = Random.self_init ()
 
-module Client =
-struct
-  type headers = Cohttp.Header.t
-  type resp = Git_http.Web_cohttp_lwt.resp =
-    { resp : Cohttp.Response.t
-    ; body : Cohttp_lwt.Body.t }
-  type body = unit -> (Cstruct.t * int * int) option Lwt.t
-  type meth = Cohttp.Code.meth
-  type uri = Uri.t
-
-  type +'a io = 'a Lwt.t
-
-  module Log =
-  struct
-    let src = Logs.Src.create "cohttp" ~doc:"logs cohttp event"
-    include (val Logs.src_log src : Logs.LOG)
-  end
-
-  let call ?headers ?body meth uri =
-    let open Lwt.Infix in
-
-    let body = match body with
-      | None -> None
-      | Some stream ->
-        Lwt_stream.from stream
-        |> Lwt_stream.map (fun (buf, off, len) -> Cstruct.to_string (Cstruct.sub buf off len))
-        |> fun stream -> Some (`Stream stream)
-    in
-
-    (* XXX(dinosaure): [~chunked:true] is mandatory, I don't want to
-       explain why (I lost one day to find this bug) but believe me. *)
-    Cohttp_lwt_unix.Client.call ?headers ?body ~chunked:false meth uri >>= fun ((resp, _) as v) ->
-    if Cohttp.Code.is_redirection (Cohttp.Code.code_of_status (Cohttp.Response.status resp))
-    then begin
-      let uri =
-        Cohttp.Response.headers resp
-        |> Cohttp.Header.to_list
-        |> List.assoc "location"
-        |> Uri.of_string
-      in
-
-      Log.info (fun l -> l ~header:"call" "Redirection to %a." Uri.pp_hum uri);
-
-      Cohttp_lwt_unix.Client.call ?headers ?body ~chunked:false meth uri >>= fun (resp, body) ->
-      Lwt.return { resp; body; }
-    end else Lwt.return { resp; body = snd v; }
-end
-
-module Sync_http = Git_http.Make(Git_http.Default)(Client)(Git_unix.Store)
+module Sync_http = Git_cohttp_lwt_unix.Make(Git_http.Default)(Git_unix.Store)
 
 let option_map f = function
   | Some v -> Some (f v)

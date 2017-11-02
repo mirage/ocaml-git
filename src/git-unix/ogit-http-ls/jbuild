@@ -4,7 +4,7 @@
   ((name        main)
    (package     git-unix)
    (public_name ogit-http-ls)
-   (libraries   (git-unix git-http
+   (libraries   (git-unix git-cohttp-lwt-unix
                  cohttp-lwt-unix
                  cmdliner
                  mtime mtime.clock.os
