@@ -52,6 +52,17 @@ sig
     | Tag    of Tag.t    (** The {!Tag.t} OCaml value. *)
   (** OCaml value which represents a Git object. *)
 
+  val blob   : Blob.t -> t
+  val commit : Commit.t -> t
+  val tree   : Tree.t -> t
+  val tag    : Tag.t -> t
+
+  val kind    : t -> [ `Commit | `Blob | `Tree | `Tag ]
+  (** [kind o] returns the kind of the Git object. *)
+
+  val pp_kind : [ `Commit | `Blob | `Tree | `Tag ] Fmt.t
+  (** [pp_kind ppf kind] is a human readable pretty-printer of {!kind}. *)
+
   module A : sig
     include S.ANGSTROM with type t = t
 

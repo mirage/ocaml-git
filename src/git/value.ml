@@ -39,6 +39,14 @@ sig
     | Tree   of Tree.t
     | Tag    of Tag.t
 
+  val blob   : Blob.t -> t
+  val commit : Commit.t -> t
+  val tree   : Tree.t -> t
+  val tag    : Tag.t -> t
+  val kind   : t -> [ `Commit | `Blob | `Tree | `Tag ]
+
+  val pp_kind : [ `Commit | `Blob | `Tree | `Tag ] Fmt.t
+
   module A : sig
     include S.ANGSTROM with type t = t
 
@@ -122,6 +130,23 @@ module Make
     | Commit of Commit.t
     | Tree   of Tree.t
     | Tag    of Tag.t
+
+  let blob blob = Blob blob (* blob *)
+  let commit commit = Commit commit
+  let tree tree = Tree tree
+  let tag tag = Tag tag
+
+  let kind = function
+    | Commit _ -> `Commit
+    | Blob _ -> `Blob
+    | Tree _ -> `Tree
+    | Tag _ -> `Tag
+
+  let pp_kind ppf = function
+    | `Commit -> Fmt.pf ppf "commit"
+    | `Tree -> Fmt.pf ppf "tree"
+    | `Tag -> Fmt.pf ppf "tag"
+    | `Blob -> Fmt.pf ppf "blob"
 
   let pp ppf = function
     | Blob blob     -> Fmt.pf ppf "(Blob %a)" (Fmt.hvbox Blob.pp) blob
