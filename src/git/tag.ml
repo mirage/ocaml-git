@@ -20,6 +20,9 @@ sig
   module Hash : S.HASH
 
   type t
+  type kind = Blob | Commit | Tag | Tree
+
+  val make : Hash.t -> kind -> ?tagger:User.t -> tag:string -> string -> t
 
   module D : S.DECODER  with type t = t
                          and type raw = Cstruct.t
@@ -54,6 +57,13 @@ module Make (H : S.HASH with type Digest.buffer = Cstruct.t
     ; message : string }
   and kind = Blob | Commit | Tag | Tree
   and hash = Hash.t
+
+  let make target kind ?tagger ~tag message =
+    { obj = target
+    ; kind
+    ; tag
+    ; tagger
+    ; message }
 
   let pp_kind ppf = function
     | Blob   -> Fmt.string ppf "Blob"

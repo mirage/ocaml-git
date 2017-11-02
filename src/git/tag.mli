@@ -28,6 +28,10 @@ sig
       never moves - it always points to the same commit but gives it a friendlier
       name. *)
 
+  type kind = Blob | Commit | Tag | Tree
+
+  val make : Hash.t -> kind -> ?tagger:User.t -> tag:string -> string -> t
+
   module D
     : S.DECODER  with type t = t
                   and type raw = Cstruct.t
