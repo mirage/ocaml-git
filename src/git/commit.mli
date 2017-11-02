@@ -26,6 +26,8 @@ sig
       the snapshot of the project at a point; the author/{i committer}
       information and the commit message. *)
 
+  val make : author:User.t -> committer:User.t -> ?parents:Hash.t list -> tree:Hash.t -> string -> t
+
   module D
     : S.DECODER  with type t = t
                   and type raw = Cstruct.t
@@ -72,6 +74,10 @@ sig
   val tree : t -> Hash.t
   (** [tree c] returns the hash of top-level {!Tree.t} of the Git
       Commit object [c]. *)
+
+  val committer : t -> User.t
+  val author : t -> User.t
+  val message : t -> string
 
   val compare_by_date : t -> t -> int
   (** [compare_by_date a b] compares the Git Commit object [a] and [b]

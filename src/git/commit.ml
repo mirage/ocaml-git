@@ -21,6 +21,9 @@ sig
 
   module Hash
     : S.HASH
+
+  val make : author:User.t -> committer:User.t -> ?parents:Hash.t list -> tree:Hash.t -> string -> t
+
   module D
     : S.DECODER  with type t = t
                   and type raw = Cstruct.t
@@ -44,6 +47,9 @@ sig
 
   val parents : t -> Hash.t list
   val tree : t -> Hash.t
+  val committer : t -> User.t
+  val author : t -> User.t
+  val message : t -> string
   val compare_by_date : t -> t -> int
 end
 
@@ -68,6 +74,13 @@ module Make
     ; committer : User.t
     ; message   : string }
   and hash = Hash.t
+
+  let make ~author ~committer ?(parents = []) ~tree message =
+    { tree
+    ; parents
+    ; author
+    ; committer
+    ; message }
 
   module A =
   struct
@@ -241,6 +254,9 @@ module Make
 
   let parents { parents; _ } = parents
   let tree { tree; _ } = tree
+  let committer { committer; _ } = committer
+  let author { author; _ } = author
+  let message { message; _ } = message
 
   let compare_by_date a b =
     Int64.compare (fst a.author.User.date) (fst b.author.User.date)
