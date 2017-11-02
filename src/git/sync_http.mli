@@ -68,6 +68,7 @@ sig
     | `PackDecoder of PACKDecoder.error
     | `StorePack of Store.Pack.error
     | `Unresolved_object
+    | `Clone of string
     | `Apply of string ]
 
   val pp_error : error Fmt.t
@@ -88,10 +89,10 @@ sig
     -> ?https:bool
     -> negociate:((Decoder.acks -> 'state -> ([ `Ready | `Done | `Again of Store.Hash.t list ] * 'state) Lwt.t) * 'state)
     -> has:Store.Hash.t list
-    -> want:((Store.Hash.t * string * bool) list -> Store.Hash.t list Lwt.t)
+    -> want:((Store.Hash.t * string * bool) list -> (Store.Reference.t * Store.Hash.t) list Lwt.t)
     -> ?deepen:[ `Depth of int | `Timestamp of int64 | `Ref of string ]
     -> ?port:int
-    -> string -> string -> (Store.Hash.t list * int, error) result Lwt.t
+    -> string -> string -> ((Store.Reference.t * Store.Hash.t) list * int, error) result Lwt.t
 
   val clone :
        Store.t

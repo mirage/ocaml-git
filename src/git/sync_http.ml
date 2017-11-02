@@ -76,6 +76,7 @@ sig
     | `PackDecoder of PACKDecoder.error
     | `StorePack of Store.Pack.error
     | `Unresolved_object
+    | `Clone of string
     | `Apply of string ]
 
   val pp_error : error Fmt.t
@@ -96,10 +97,10 @@ sig
     -> ?https:bool
     -> negociate:((Decoder.acks -> 'state -> ([ `Ready | `Done | `Again of Store.Hash.t list ] * 'state) Lwt.t) * 'state)
     -> has:Store.Hash.t list
-    -> want:((Store.Hash.t * string * bool) list -> Store.Hash.t list Lwt.t)
+    -> want:((Store.Hash.t * string * bool) list -> (Store.Reference.t * Store.Hash.t) list Lwt.t)
     -> ?deepen:[ `Depth of int | `Timestamp of int64 | `Ref of string ]
     -> ?port:int
-    -> string -> string -> (Store.Hash.t list * int, error) result Lwt.t
+    -> string -> string -> ((Store.Reference.t * Store.Hash.t) list * int, error) result Lwt.t
 
   val clone :
        Store.t
@@ -153,6 +154,7 @@ module Make
     | `PackDecoder of PACKDecoder.error
     | `StorePack of Store.Pack.error
     | `Unresolved_object
+    | `Clone of string
     | `Apply of string ]
 
   let pp_error ppf = function
@@ -161,6 +163,7 @@ module Make
     | `PackDecoder err   -> Fmt.pf ppf "(`PackDecoder %a)" (Fmt.hvbox PACKDecoder.pp_error) err
     | `StorePack err     -> Fmt.pf ppf "(`StorePack %a)" Store.Pack.pp_error err
     | `Unresolved_object -> Fmt.pf ppf "`Unresolved_object"
+    | `Clone err         -> Fmt.pf ppf "(`Clone %s)" err
     | `Apply err         -> Fmt.pf ppf "(`Apply %s)" err
 
   module Log =
@@ -364,7 +367,7 @@ module Make
             ~headers:(Web.Request.headers req |> Web.HTTP.Headers.merge headers)
             ~body:(producer (Encoder.encode encoder
                                (`HttpUploadRequest (final,
-                                                    { Encoder.want = first, rest
+                                                    { Encoder.want = snd first, List.map snd rest
                                                     ; capabilities = K.default
                                                     ; shallow
                                                     ; deep = deepen
@@ -410,98 +413,25 @@ module Make
         loop ~final:(List.length has = 0) nstate resp
 
   let clone git ?stdout ?stderr ?headers ?(https = false) ?port ?(reference = Store.Reference.head) host path =
+    let want refs =
+      Lwt.try_bind
+        (fun () -> Lwt_list.find_s (fun (_, refname, _) -> Lwt.return (Store.Reference.(equal (of_string refname) reference))) refs)
+        (fun (hash, _, _) -> Lwt.return [ reference, hash ])
+        (fun _ -> Lwt.return [])
+    in
+
     let open Lwt.Infix in
 
-    let scheme = if https then "https" else "http" in
-    let uri =
-      Uri.empty
-      |> (fun uri -> Uri.with_scheme uri (Some scheme))
-      |> (fun uri -> Uri.with_host uri (Some host))
-      |> (fun uri -> Uri.with_path uri (String.concat "/" [ path; "info"; "refs" ]))
-      |> (fun uri -> Uri.with_port uri port)
-      |> (fun uri -> Uri.add_query_param uri ("service", [ "git-upload-pack" ]))
-    in
-
-    Log.debug (fun l -> l ~header:"clone" "Launch the GET request to %a."
-                  Uri.pp_hum uri);
-
-    let git_agent =
-      List.fold_left (fun acc -> function `Agent s -> Some s | _ -> acc) None K.default
-      |> function
-      | Some git_agent -> git_agent
-      | None -> raise (Invalid_argument "Expected an user agent in capabilities.")
-    in
-
-    let headers =
-      option_map_default
-        Web.HTTP.Headers.(def user_agent git_agent)
-        Web.HTTP.Headers.(def user_agent git_agent empty)
-        headers
-    in
-
-    Client.call ~headers `GET uri >>= fun resp ->
-
-    let decoder = Decoder.decoder () in
-    let encoder = Encoder.encoder () in
-
-    consume (Web.Response.body resp) (Decoder.decode decoder (Decoder.HttpReferenceDiscovery "git-upload-pack")) >>= function
-    | Error err ->
-      Log.err (fun l -> l ~header:"clone" "The HTTP decoder returns an error: %a." Decoder.pp_error err);
-      Lwt.return (Error (`Decoder err))
-    | Ok v ->
-      let common = List.filter (fun x -> List.exists ((=) x) K.default) v.Decoder.capabilities in
-
-      let (expect, _, _) =
-        List.find
-          (fun (_, refname, _) -> Store.Reference.(equal (of_string refname) reference))
-          v.Decoder.refs
-      in
-
-      Log.debug (fun l -> l ~header:"clone" "%a is %a"
-                    Store.Reference.pp reference
-                    Store.Hash.pp expect);
-
-      let req =
-        Web.Request.v
-          `POST
-          ~path:[ path; "git-upload-pack" ]
-          Web.HTTP.Headers.(def content_type "application/x-git-upload-pack-request" headers)
-          (fun _ -> Lwt.return ())
-      in
-
-      Client.call
-        ~headers:(Web.Request.headers req |> Web.HTTP.Headers.merge headers)
-        ~body:(producer (Encoder.encode encoder
-                           (`HttpUploadRequest (true,
-                                                { Encoder.want = expect, []
-                                                ; capabilities = K.default
-                                                ; shallow = []
-                                                ; deep = None
-                                                ; has = [] }))))
-        (Web.Request.meth req)
-        (Web.Request.uri req
-         |> (fun uri -> Uri.with_scheme uri (Some scheme))
-         |> (fun uri -> Uri.with_host uri (Some host))
-         |> (fun uri -> Uri.with_port uri port))
-      >>= fun resp ->
-
-      let sideband =
-        if List.exists ((=) `Side_band_64k) common
-        then `Side_band_64k
-        else if List.exists ((=) `Side_band) common
-        then `Side_band
-        else `No_multiplexe
-      in
-
-      consume
-        (Web.Response.body resp)
-        (Decoder.decode decoder Decoder.NegociationResult)
-      >>= function
-      | Ok _ -> (* TODO: check the negociation result. *)
-        let stream () = consume (Web.Response.body resp) (Decoder.decode decoder (Decoder.PACK sideband)) in
-        Lwt_result.(populate ?stdout ?stderr git stream >>= fun _ -> Lwt.return (Ok expect))
-      | Error err ->
-        Log.err (fun l -> l ~header:"clone" "The HTTP decoder returns an error: %a." Decoder.pp_error err);
-        Lwt.return (Error (`Decoder err))
+    fetch git ?stdout ?stderr ?headers ~https ~negociate:((fun _ () -> Lwt.return (`Done, ())), ())
+      ~has:[]
+      ~want
+      ?port host path
+    >>= function
+    | Ok ([ _, hash ], _) -> Lwt.return (Ok hash)
+    | Ok (expect, _) ->
+      Lwt.return (Error (`Clone (Fmt.strf "Unexpected result: %a."
+                                   (Fmt.hvbox (Fmt.Dump.list (Fmt.Dump.pair Store.Reference.pp Store.Hash.pp)))
+                                   expect)))
+    | Error _ as err -> Lwt.return err
 end
 
