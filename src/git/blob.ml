@@ -43,6 +43,11 @@ sig
   include S.DIGEST with type t := t
                     and type hash := Hash.t
   include S.BASE with type t := t
+
+  val of_cstruct : Cstruct.t -> t
+  val to_cstruct : t -> Cstruct.t
+  val of_string  : string -> t
+  val to_string  : t -> string
 end
 
 module Make
@@ -52,6 +57,12 @@ module Make
   module Hash = H
 
   type t = Cstruct.t
+
+  external of_cstruct : Cstruct.t -> t = "%identity"
+  external to_cstruct : t -> Cstruct.t = "%identity"
+
+  let of_string x : t = Cstruct.of_string x
+  let to_string (x : t) = Cstruct.to_string x
 
   module A =
   struct

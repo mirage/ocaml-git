@@ -49,6 +49,21 @@ sig
                     and type hash := Hash.t
 
   include S.BASE with type t := t
+
+  val of_cstruct : Cstruct.t -> t
+  (** [of_cstruct cs] returns the blob value of a [Cstruct.t]. This
+      function does not take the ownership on [cs]. So, consider at
+      this time to not change [cs] and consider it as a constant. *)
+
+  val to_cstruct : t -> Cstruct.t
+  (** [to_cstruct blob] returns the [Cstruct.t] of the Blob [blob].
+      This function does not create a fresh [Cstruct.t], so consider
+      it as a constant [Cstruct.t] ([set] functions not allowed). *)
+
+  val of_string : string -> t
+  (** [of_string s] returns the blob value of a [string]. *)
+
+  val to_string : t -> string
 end
 
 module Make
