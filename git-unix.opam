@@ -18,7 +18,7 @@ depends: [
   "jbuilder" {build}
   "cmdliner"
   "logs"
-  "git-http" {>= "1.11.0"}
+  "git-cohttp-lwt-unix" {>= "1.11.0"}
   "cohttp"   {>= "0.99.0"}
   "nocrypto" {>= "0.2.0"}
   "mtime"    {>= "1.0.0"}
