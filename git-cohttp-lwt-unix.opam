@@ -12,7 +12,8 @@ build: ["jbuilder" "build" "-p" name "-j" jobs]
 
 depends: [
   "jbuilder"        {build}
-  "git"             {>= "1.10.0"}
+  "git"
+  "git-http"
   "cohttp"          {>= "0.19.1"}
   "cohttp-lwt-unix" {>= "0.19.1"}
 ]

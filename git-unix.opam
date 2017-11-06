@@ -15,16 +15,13 @@ build: [
 build-test: ["jbuilder" "runtest" "test/git-unix"]
 
 depends: [
-  "jbuilder" {build}
+  "jbuilder"            {build}
   "cmdliner"
-  "logs"
-  "git-cohttp-lwt-unix" {>= "1.11.0"}
-  "cohttp"   {>= "0.99.0"}
-  "nocrypto" {>= "0.2.0"}
-  "mtime"    {>= "1.0.0"}
+  "git-cohttp-lwt-unix"
+  "mtime"               {>= "1.0.0"}
   "base-unix"
-  "alcotest" {test}
-  "io-page"  {test & >= "1.6.1"}
+  "alcotest"            {test}
+  "io-page"             {test & >= "1.6.1"}
 ]
 
 available: [ocaml-version >= "4.02.3"]

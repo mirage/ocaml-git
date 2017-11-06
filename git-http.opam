@@ -12,7 +12,7 @@ build: ["jbuilder" "build" "-p" name "-j" jobs]
 
 depends: [
   "jbuilder" {build}
-  "git"      {>= "1.10.0"}
+  "git"
   "cohttp"   {>= "0.19.1"}
 ]
 available: [ocaml-version >= "4.02.3"]
