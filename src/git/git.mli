@@ -31,6 +31,7 @@ module Sync         = Sync
 module Sync_http    = Sync_http
 module Smart        = Smart
 
+module Index        = Index
 module Loose        = Loose
 module Pack_info    = Pack_info
 module Pack_engine  = Pack_engine
