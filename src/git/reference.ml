@@ -52,6 +52,7 @@ sig
                         and type raw = Cstruct.t
                         and type init = int * head_contents
                         and type error = [ `Never ]
+  val compare_head_contents : head_contents -> head_contents -> int
 end
 
 module type IO =
@@ -130,6 +131,12 @@ module Make
     | Ref a', Ref b' -> equal a' b'
     | Hash a', Hash b' -> Hash.equal a' b'
     | _, _ -> false
+
+  let compare_head_contents a b = match a, b with
+    | Ref a', Ref b' -> compare a' b'
+    | Hash a', Hash b' -> Hash.compare a' b'
+    | Ref _, Hash _ -> 1
+    | Hash _, Ref _ -> -1
 
   module A =
   struct

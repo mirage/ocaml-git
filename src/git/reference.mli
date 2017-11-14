@@ -90,6 +90,8 @@ sig
       function does not handle any indirection when it tests your
       values. *)
 
+  val compare_head_contents : head_contents -> head_contents -> int
+
   module A
     : S.ANGSTROM with type t = head_contents
   (** The Angstrom decoder of the Git Reference object. *)
