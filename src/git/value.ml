@@ -95,6 +95,13 @@ sig
        and type init = int * t
        and type error = [ `Never ]
 
+  module EEE
+    : S.ENCODER
+      with type t = t
+       and type raw = Cstruct.t
+       and type init = int * t
+       and type error = [ `Never ]
+
   module DD
     : S.DECODER
       with type t = t
@@ -104,6 +111,7 @@ sig
 
   val to_deflated_raw : ?capacity:int -> ?level:int -> ztmp:Cstruct.t -> t -> (Buffer.raw, E.error) result
   val to_raw : ?capacity:int -> t -> (Buffer.raw, EE.error) result
+  val to_raw_without_header : ?capacity:int -> t -> (Buffer.raw, EEE.error) result
   val of_raw : kind:[ `Commit | `Tree | `Tag | `Blob ] -> Cstruct.t -> (t, [ `Decoder of string ]) result
   val of_raw_with_header : Cstruct.t -> (t, DD.error) result
 end
@@ -341,6 +349,27 @@ module Raw
   (* XXX(dinosaure): the [Value] module expose only an encoder to a deflated
      value. We provide an encoder for a serialized encoder. *)
 
+  module MM =
+  struct
+    type nonrec t = t
+
+    open Minienc
+
+    let encoder x k e =
+      ((match x with
+          | Tree tree ->
+            Tree.M.encoder tree
+          | Tag tag ->
+            Tag.M.encoder tag
+          | Blob blob ->
+            write_bigstring (Cstruct.to_bigarray (blob :> Cstruct.t))
+          | Commit commit ->
+            Commit.M.encoder commit) k)
+        e
+  end
+
+  module EEE = Helper.MakeEncoder(MM)
+
   module type ENCODER =
   sig
     type state
@@ -450,6 +479,35 @@ module Raw
 
       let used = EE.used
       let flush = EE.flush
+    end in
+
+    to_ (module SpecializedEncoder) buffer raw encoder
+
+  let to_raw_without_header ?(capacity = 0x100) value =
+    let encoder = EEE.default (capacity, value) in
+    let raw = Cstruct.create capacity in
+    let buffer = Buffer.create (Int64.to_int (F.length value)) in
+    (* XXX(dinosaure): we are sure than the serialized object has the size
+       [F.length value]. So, the [buffer] should not growth. *)
+
+    let module SpecializedEncoder =
+    struct
+      type state = EEE.encoder
+      type raw = Cstruct.t
+      type result = int
+      type error = EEE.error
+
+      let raw_length = Cstruct.len
+      let raw_sub = Cstruct.sub
+
+      type rest = [ `Flush of state | `End of (state * result) ]
+
+      let eval raw state = match EEE.eval raw state with
+        | #rest as rest -> rest
+        | `Error err -> `Error (state, err)
+
+      let used = EEE.used
+      let flush = EEE.flush
     end in
 
     to_ (module SpecializedEncoder) buffer raw encoder

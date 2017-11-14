@@ -143,6 +143,13 @@ sig
       concrete) but, because the encoder can not fail, we define the
       error as [`Never]. *)
 
+  module EEE
+    : S.ENCODER
+      with type t = t
+       and type raw = Cstruct.t
+       and type init = int * t
+       and type error = [ `Never ]
+
   module DD
     : S.DECODER
       with type t = t
@@ -167,6 +174,8 @@ sig
       bytes (default to [0x100]).
 
       This function can not returns an {!EE.error} (see {!EE}). *)
+
+  val to_raw_without_header : ?capacity:int -> t -> (Buffer.raw, EEE.error) result
 
   val of_raw : kind:[ `Commit | `Blob | `Tree | `Tag ] -> Cstruct.t -> (t, [ `Decoder of string ]) result
   (** [of_raw ~kind inflated] makes a Git object as an OCaml value
