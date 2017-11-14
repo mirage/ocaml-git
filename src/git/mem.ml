@@ -151,7 +151,18 @@ module Make
       Lwt.return hash
 
   let read_inflated t h =
-    try Lwt.return (Some (Hashtbl.find t.inflated h))
+    try
+      let value = Lazy.force (Hashtbl.find t.values h) in
+      let kind = match value with
+        | Value.Commit _ -> `Commit
+        | Value.Blob _ -> `Blob
+        | Value.Tree _ -> `Tree
+        | Value.Tag _ -> `Tag
+      in
+
+      match Value.to_raw_without_header value with
+      | Ok raw -> Lwt.return (Some (kind, Cstruct.of_string raw))
+      | Error `Never -> assert false
     with Not_found -> Lwt.return None
 
   let read t h =
