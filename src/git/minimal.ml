@@ -132,6 +132,10 @@ sig
     (** [list state] returns an associated list between reference and
         its bind hash. *)
 
+    val exists : t -> Reference.t -> bool Lwt.t
+    (** [exists state ref] returns [true] iff [ref] exists in [state],
+        otherwise returns [false]. *)
+
     val read : t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
     (** [read state reference] returns the value contains in the
         reference [reference] (available in the git repository

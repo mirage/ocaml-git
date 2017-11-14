@@ -141,6 +141,11 @@ sig
   val pp_error : error Fmt.t
   (** Pretty-printer of {!error}. *)
 
+  val exists : root:Path.t -> t -> (bool, error) result Lwt.t
+  (** [exists ~root reference] returns [true] iff we found the
+      [reference] find in the git repository [root]. Otherwise, we returns
+      [false]. *)
+
   val read : root:Path.t -> t -> dtmp:Cstruct.t -> raw:Cstruct.t -> ((t * head_contents), error) result Lwt.t
   (** [read ~root reference dtmp raw] returns the value contains in
       the reference [reference] (available in the git repository

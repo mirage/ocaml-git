@@ -459,6 +459,10 @@ module Make
       Graph.fold (fun k v a -> (k, v) :: a) graph []
       |> Lwt.return
 
+    let exists t r =
+      try let _ = Hashtbl.find t.refs r in Lwt.return true
+      with Not_found -> Lwt.return false
+
     let rec read t r =
       try match Hashtbl.find t.refs r with
         | `H s -> Lwt.return (Ok (r, Reference.Hash s))

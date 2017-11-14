@@ -378,6 +378,15 @@ sig
 
     val pp_error : error Fmt.t
 
+    val exists_p :
+         dtmp:Cstruct.t
+      -> raw:Cstruct.t
+      -> t -> Reference.t -> bool Lwt.t
+
+    val exists_s : t -> Reference.t -> bool Lwt.t
+
+    val exists : t -> Reference.t -> bool Lwt.t
+
     val graph_p :
          dtmp:Cstruct.t
       -> raw:Cstruct.t
@@ -1671,6 +1680,36 @@ module Make
     let list_s t = list_p t ~dtmp:t.buffer.de ~raw:t.buffer.io
 
     let list = list_s
+
+    let exists_p ~dtmp ~raw t reference =
+      let open Lwt.Infix in
+
+      let in_packed_refs () =
+        Packed_refs.read ~root:t.dotgit ~dtmp ~raw >>= function
+        | Ok packed_refs ->
+          Lwt_list.exists_p
+            (function
+              | `Ref (reference', _) -> Lwt.return Reference.(equal reference (of_string reference'))
+              | `Peeled _ -> Lwt.return false)
+            packed_refs
+        | Error err ->
+          Log.warn (fun l -> l ~header:"exists" "Retrieve an error when we read packed-refs for %a: %a."
+                       Reference.pp reference Packed_refs.pp_error err);
+          Lwt.return false
+      in
+
+      Reference.exists ~root:t.dotgit reference >>= function
+      | Ok true -> Lwt.return true
+      | Ok false -> in_packed_refs ()
+      | Error err ->
+        Log.warn (fun l -> l ~header:"exists" "Retrieve an error for %a: %a."
+                     Reference.pp reference Reference.pp_error err);
+        in_packed_refs ()
+
+    let exists_s t reference =
+      exists_p ~dtmp:t.buffer.de ~raw:t.buffer.io t reference
+
+    let exists = exists_s
 
     let remove_p ~dtmp ~raw ?locks t reference =
       let open Lwt.Infix in

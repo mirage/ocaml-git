@@ -74,6 +74,9 @@ sig
   val write : root:Path.t -> ?locks:Lock.t -> ?capacity:int -> raw:Cstruct.t -> t -> head_contents -> (unit, error) result Lwt.t
   val test_and_set : root:Path.t -> ?locks:Lock.t -> t -> test:head_contents option -> set:head_contents option -> (bool, error) result Lwt.t
   val remove : root:Path.t -> ?locks:Lock.t -> t -> (unit, error) result Lwt.t
+  val exists :
+       root:Path.t
+    -> t -> (bool, error) result Lwt.t
 end
 
 module Make
@@ -244,6 +247,15 @@ module IO
            | _ -> (false, []))
       (false, []) segs
     |> fun (_, refs) -> List.rev refs |> String.concat "/" |> of_string
+
+  let exists ~root reference =
+    let path = Path.(root // (to_path reference)) in
+    let open Lwt.Infix in
+
+    FileSystem.File.exists path >>= function
+    | Ok v -> Lwt.return (Ok v)
+    | Error err ->
+      Lwt.return (Error (`SystemFile err))
 
   let read ~root reference ~dtmp ~raw =
     let decoder = D.default dtmp in

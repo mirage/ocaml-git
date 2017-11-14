@@ -835,6 +835,15 @@ sig
     val pp_error : error Fmt.t
     (** Pretty-printer of {!error}. *)
 
+    val exists_p :
+         dtmp:Cstruct.t
+      -> raw:Cstruct.t
+      -> t -> Reference.t -> bool Lwt.t
+
+    val exists_s : t -> Reference.t -> bool Lwt.t
+
+    val exists : t -> Reference.t -> bool Lwt.t
+
     val graph_p :
          dtmp:Cstruct.t
       -> raw:Cstruct.t
