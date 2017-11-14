@@ -213,16 +213,19 @@ module Make
     type stream = unit -> Cstruct.t option Lwt.t
 
     module PACKDecoder = Unpack.MakePACKDecoder(Hash)(Inflate)
+    module PACKEncoder = Pack.MakePACKEncoder(Hash)(Deflate)
     module Revidx = Map.Make(Int64)
 
     type error =
       [ `Unresolved_object
       | `DecoderFlow of string
+      | `Delta of PACKEncoder.Delta.error
       | `PackDecoder of PACKDecoder.error ]
 
     let pp_error ppf = function
       | `Unresolved_object -> Fmt.pf ppf "`Unresolved_object"
       | `DecoderFlow s -> Fmt.pf ppf "(`PackFlow %s)" s
+      | `Delta e -> Fmt.pf ppf "(`Delta %a)" PACKEncoder.Delta.pp_error e
       | `PackDecoder e -> Fmt.pf ppf "(`PackDecoder %a)" PACKDecoder.pp_error e
 
     module GC =
@@ -231,6 +234,7 @@ module Make
         module Path = Path
         module Value = Value
         module Deflate = Deflate
+        module PACKEncoder = PACKEncoder
 
         type nonrec t = t
         type nonrec error = error
@@ -240,6 +244,8 @@ module Make
         let read_inflated = read_inflated
         let contents _ = assert false
       end)
+
+    module Graph = GC.Graph
 
     let make = GC.make_stream
 

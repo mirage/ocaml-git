@@ -107,6 +107,8 @@ sig
     type stream = unit -> Cstruct.t option Lwt.t
      (** The stream contains the PACK flow. *)
 
+    module Graph : Map.S with type key = Hash.t
+
     type nonrec error
 
     val pp_error : error Fmt.t
@@ -118,7 +120,11 @@ sig
         objects of the PACK flow are not added in the Git
         repository. *)
 
-    val make : t -> ?window:[ `Object of int | `Memory of int ] -> ?depth:int -> Value.t list -> (stream, error) result Lwt.t
+    val make : t
+      -> ?window:[ `Object of int | `Memory of int ]
+      -> ?depth:int
+      -> Value.t list
+      -> (stream * (Crc32.t * int64) Graph.t Lwt_mvar.t, error) result Lwt.t
   end
 
   module Ref :

@@ -208,9 +208,15 @@ sig
 
   type stream = unit -> Cstruct.t option Lwt.t
 
+  module Graph : Map.S with type key = Hash.t
+
   val from : state -> stream -> (Hash.t * int, error) result Lwt.t
 
-  val make : state -> ?window:[ `Object of int | `Memory of int ] -> ?depth:int -> value list -> (stream, error) result Lwt.t
+  val make : state
+    -> ?window:[ `Object of int | `Memory of int ]
+    -> ?depth:int
+    -> value list
+    -> (stream * (Crc32.t * int64) Graph.t Lwt_mvar.t, error) result Lwt.t
 end
 
 module type S =
@@ -864,6 +870,7 @@ module Make
         module Path = Path
         module Value = Value
         module Deflate = Deflate
+        module PACKEncoder = PACKEncoder
 
         type nonrec t = state
         type nonrec error = error
@@ -873,6 +880,8 @@ module Make
         let read_inflated = extern
         let contents _ = assert false
       end)
+
+    module Graph = GC.Graph
 
     let make = GC.make_stream
 

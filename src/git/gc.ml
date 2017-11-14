@@ -26,6 +26,10 @@ sig
       with module Hash = Hash
   module Deflate
     : S.DEFLATE
+  module PACKEncoder
+    : Pack.ENCODER
+        with module Hash = Hash
+         and module Deflate = Deflate
 
   type t
   type error
@@ -45,7 +49,6 @@ module Make (S : STORE with type Hash.Digest.buffer = Cstruct.t
                         and type Hash.hex = string)
 = struct
   module Store = S
-  module PACKEncoder = Pack.MakePACKEncoder(Store.Hash)(Store.Deflate)
 
   let delta ?(window = `Object 10) ?(depth = 50) git objects =
     let open Lwt_result in
@@ -69,7 +72,7 @@ module Make (S : STORE with type Hash.Digest.buffer = Cstruct.t
       in
 
       let entry =
-        PACKEncoder.Entry.make
+        S.PACKEncoder.Entry.make
           hash
           ?name
           kind
@@ -95,15 +98,16 @@ module Make (S : STORE with type Hash.Digest.buffer = Cstruct.t
     >>= fun () ->
     Lwt.Infix.(Lwt_list.map_p make objects >|= fun entries -> Ok entries)
     >>= fun entries ->
-    (PACKEncoder.Delta.deltas
+    (S.PACKEncoder.Delta.deltas
        ~memory
        entries
-       Lwt.Infix.(fun hash -> Store.read_inflated git hash >|= function
-         | Some (_, raw) -> Some raw
-         | None -> None)
+       Lwt.Infix.(fun hash ->
+           Store.read_inflated git hash >|= function
+           | Some (_, raw) -> Some raw
+           | None -> None)
        (fun _ -> false)
        window depth
-     >?= fun err -> `PackEncoder err)
+     >?= fun err -> `Delta err)
 
   let delta_all ?window ?depth git =
     let open Lwt.Infix in
@@ -121,7 +125,7 @@ module Make (S : STORE with type Hash.Digest.buffer = Cstruct.t
 
     delta ?window ?depth git objects >>= function
     | Ok entries ->
-      let state = PACKEncoder.default ztmp entries in
+      let state = S.PACKEncoder.default ztmp entries in
 
       Lwt.return (Ok state)
     | Error _ as err -> Lwt.return err
@@ -133,42 +137,65 @@ module Make (S : STORE with type Hash.Digest.buffer = Cstruct.t
 
     delta_all ?window ?depth git >>= function
     | Ok entries ->
-      let state = PACKEncoder.default ztmp entries in
+      let state = S.PACKEncoder.default ztmp entries in
 
       Lwt.return (Ok state)
     | Error _ as err -> Lwt.return err
+
+  exception PackEncoder of S.PACKEncoder.error
+
+  module Graph = Map.Make(S.Hash)
 
   let make_stream git ?(window = `Object 10) ?(depth = 50) objects =
     let open Lwt.Infix in
 
     make git ~window ~depth objects >>= function
-    | Error _ -> assert false
+    | Error _ as err -> Lwt.return err
     | Ok state ->
       let dtmp = Cstruct.create 0x8000 in
+      let empty = Cstruct.create 0 in
 
-      let src   = ref (Cstruct.create 0) in
+      let value ~default = function Some x -> x | None -> default in
+      let mvar = Lwt_mvar.create_empty () in
+
+      let src   = ref None in
       let state = ref state in
+      let write = ref 0 in
 
       let rec stream () =
-        match PACKEncoder.eval !src dtmp !state with
+        match S.PACKEncoder.eval (value ~default:empty !src) dtmp !state with
         | `Flush state' ->
-          state := PACKEncoder.flush 0 (PACKEncoder.used_out state') state';
-          Lwt.return (Some (Cstruct.sub dtmp 0 (PACKEncoder.used_out state')))
+          write := !write + (S.PACKEncoder.used_out state');
+          state := S.PACKEncoder.flush 0 (Cstruct.len dtmp) state';
+          Lwt.return (Some (Cstruct.sub dtmp 0 (S.PACKEncoder.used_out state')))
         | `End (state', _) ->
+          if S.PACKEncoder.used_out state' > 0
+          then begin
+            state := S.PACKEncoder.flush 0 0 state';
+            Lwt.return (Some (Cstruct.sub dtmp 0 (S.PACKEncoder.used_out state')))
+          end else begin
+            state := state';
+            let graph = S.PACKEncoder.Radix.fold (fun (key, value) acc -> Graph.add key value acc) Graph.empty (S.PACKEncoder.idx state') in
+            Lwt_mvar.put mvar graph >>= fun () -> Lwt.return None
+          end
+        | `Error (state', err) ->
           state := state';
-          Lwt.return None
-        | `Error (state', _) ->
-          state := state';
-          assert false
-        | `Await state' ->
-          let expect = PACKEncoder.expect state' in
-          Store.read_inflated git expect >>= (function
-              | Some (_, raw) ->
-                src := raw; Lwt.return ()
-              | None -> assert false) >>= fun () ->
-          state := PACKEncoder.refill 0 (Cstruct.len !src) state';
-          stream ()
+          Lwt.fail (PackEncoder err)
+        | `Await state' -> match !src with
+          | Some _ ->
+            src := None;
+            state := S.PACKEncoder.finish state';
+            stream ()
+          | None ->
+            let expect = S.PACKEncoder.expect state' in
+            Store.read_inflated git expect >>= (function
+                | Some (_, raw) ->
+                  src := Some raw;
+                  Lwt.return raw
+                | None -> assert false) >>= fun raw ->
+            state := S.PACKEncoder.refill 0 (Cstruct.len raw) state';
+            stream ()
       in
 
-      Lwt.return (Ok stream)
+      Lwt.return (Ok (stream, mvar))
 end
