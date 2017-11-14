@@ -425,7 +425,7 @@ module MakeEncoder (M : S.MINIENC)
             let write = cstruct_blit_iovec iovec current (e.o_off + !pos) (Some (e.o_len - !pos)) in
 
             if !pos + write = max
-            then raise (Drain !pos)
+            then raise (Drain (!pos + write))
             else pos := !pos + write)
           iovecs;
 
