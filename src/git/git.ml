@@ -38,6 +38,7 @@ module Pack_engine  = Pack_engine
 module Packed_refs  = Packed_refs
 module Pack         = Pack
 module Unpack       = Unpack
+module Index_pack   = Index_pack
 
 module Mem          = Mem
 module Store        = Store
