@@ -1214,8 +1214,8 @@ struct
       let trg_length = entry.Entry.length in
       let abs_off    = t.write in
 
-      (* XXX(dinosaure): we can obtain the source hash by [entry.delta]. TODO!
-      *)
+      (* XXX(dinosaure): we can obtain the source hash by
+         [entry.delta]. TODO! *)
 
       let h =
         H.flush 0 (Cstruct.len t.h_tmp)
@@ -1350,7 +1350,8 @@ struct
     | `Error (_, exn) -> error t (Deflate_error exn)
 
   let iter lst _ t = match lst with
-    | [] -> Cont { t with state = Hash hash }
+    | [] ->
+      Cont { t with state = Hash hash }
     | (entry, delta) :: r ->
       match entry.Entry.delta, delta with
       | Entry.From src_hash, { Delta.delta = Delta.S _ } ->

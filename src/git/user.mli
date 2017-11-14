@@ -25,18 +25,23 @@ type t =
   ; email : string
   ; date  : int64 * tz_offset option }
 
-include S.BASE with type t := t
+include S.BASE
+  with type t := t
 
 module A
-  : S.ANGSTROM with type t = t
+  : S.ANGSTROM
+    with type t = t
 module F
-  : S.FARADAY with type t = t
+  : S.FARADAY
+    with type t = t
 module M
-  : S.MINIENC with type t = t
+  : S.MINIENC
+    with type t = t
 module D
-  : S.DECODER  with type t = t
-                and type raw = Cstruct.t
-                and type init = Cstruct.t
-                and type error = [ `Decoder of string ]
+  : S.DECODER
+    with type t = t
+     and type raw = Cstruct.t
+     and type init = Cstruct.t
+     and type error = [ `Decoder of string ]
 
 

@@ -112,7 +112,7 @@ struct
     | Reserved_opcode byte ->
       Fmt.pf ppf "(Reserved_opcode %02x)" byte
     | Wrong_copy_hunk (off, len, source) ->
-      Fmt.pf ppf "(Wrong_copy_hunk (i@[<hov>off: %d,@ len: %d,@ source: %d@]))"
+      Fmt.pf ppf "(Wrong_copy_hunk (@[<hov>off: %d,@ len: %d,@ source: %d@]))"
         off len source
 
   type t =
@@ -222,13 +222,18 @@ struct
       t._source_length t._target_length
       (Fmt.hvbox pp_state) t.state
 
-  let await t     : res = Wait t
-  let error t exn : res = Error ({ t with state = Exception exn }, exn)
-  let ok t        : res = Ok ({ t with state = End },
-                              { reference     = t._reference
-                              ; length        = t._length
-                              ; source_length = t._source_length
-                              ; target_length = t._target_length })
+  let await t : res =
+    Wait t
+
+  let error t exn : res =
+    Error ({ t with state = Exception exn }, exn)
+
+  let ok t : res =
+    Ok ({ t with state = End },
+        { reference     = t._reference
+        ; length        = t._length
+        ; source_length = t._source_length
+        ; target_length = t._target_length })
 
   let rec get_byte ~ctor k src t =
       if (t.i_len - t.i_pos) > 0

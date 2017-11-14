@@ -381,7 +381,8 @@ module MakeEncoder (M : S.MINIENC)
 
   exception Drain of int
 
-  let rec eval current e = match e.state with
+  let rec eval current e =
+    match e.state with
     | Minienc.End minienc ->
       let shift  = min (e.o_len - e.o_pos) (Minienc.has minienc) in
       let iovecs, shifted = Minienc.shift shift minienc in
@@ -404,10 +405,10 @@ module MakeEncoder (M : S.MINIENC)
     | Minienc.Continue { encoder; continue; } ->
       (* XXX(dinosaure): we can shift the minienc at this time, but
          it's very useful? *)
-      Log.debug (fun l -> l "Trampoline jump (case to shift the encoder) appears.");
       eval current { e with state = continue encoder }
     | Minienc.Flush { continue; iovecs; } ->
       let max = min (e.o_len - e.o_pos) (Minienc.IOVec.lengthv iovecs) in
+
       try (* XXX(dinosaure): wtf?! pourquoi j'ai fait ce code (peut être pour ne pas utiliser [fold_left]. *)
         let pos = ref e.o_pos in
 

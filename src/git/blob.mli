@@ -25,16 +25,18 @@ sig
   (** The [Hash] module used to make this interface. *)
 
   module D
-    : S.DECODER with type t = t
-                 and type raw = Cstruct.t
-                 and type init = Cstruct.t
-                 and type error = [ `Decoder of string ]
+    : S.DECODER
+      with type t = t
+       and type raw = Cstruct.t
+       and type init = Cstruct.t
+       and type error = [ `Decoder of string ]
   (** The decoder of the Git Blob object. We constraint the input to be a
       {Cstruct.t}. This decoder needs a {Cstruct.t} as an internal buffer. *)
 
   module E
-    : S.ENCODER with type t = t
-                 and type raw = Cstruct.t
+    : S.ENCODER
+      with type t = t
+       and type raw = Cstruct.t
   (** The encoder of the Git Blob object. *)
 
   module A
@@ -42,13 +44,15 @@ sig
   (** The Angstrom decoder of the Git Blob object. *)
 
   module F
-    : S.FARADAY  with type t = t
+    : S.FARADAY
+      with type t = t
   (** The Faraday encoder of the Git Blob object. *)
 
-  include S.DIGEST with type t := t
-                    and type hash := Hash.t
-
-  include S.BASE with type t := t
+  include S.DIGEST
+    with type t := t
+     and type hash := Hash.t
+  include S.BASE
+    with type t := t
 
   val of_cstruct : Cstruct.t -> t
   (** [of_cstruct cs] returns the blob value of a [Cstruct.t]. This

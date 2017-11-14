@@ -41,18 +41,26 @@ sig
 
   val pp_head_contents : head_contents Fmt.t
   val equal_head_contents : head_contents -> head_contents -> bool
-
-  module A : S.ANGSTROM with type t = head_contents
-  module D : S.DECODER with type t = head_contents
-                        and type raw = Cstruct.t
-                        and type init = Cstruct.t
-                        and type error = [ `Decoder of string ]
-  module M : S.MINIENC with type t = head_contents
-  module E : S.ENCODER with type t = head_contents
-                        and type raw = Cstruct.t
-                        and type init = int * head_contents
-                        and type error = [ `Never ]
   val compare_head_contents : head_contents -> head_contents -> int
+
+  module A
+    : S.ANGSTROM
+      with type t = head_contents
+  module D
+    : S.DECODER
+      with type t = head_contents
+       and type raw = Cstruct.t
+       and type init = Cstruct.t
+       and type error = [ `Decoder of string ]
+  module M
+    : S.MINIENC
+      with type t = head_contents
+  module E
+    : S.ENCODER
+      with type t = head_contents
+       and type raw = Cstruct.t
+       and type init = int * head_contents
+       and type error = [ `Never ]
 end
 
 module type IO =
@@ -70,13 +78,33 @@ sig
 
   val pp_error  : error Fmt.t
 
-  val read : root:Path.t -> t -> dtmp:Cstruct.t -> raw:Cstruct.t -> ((t * head_contents), error) result Lwt.t
-  val write : root:Path.t -> ?locks:Lock.t -> ?capacity:int -> raw:Cstruct.t -> t -> head_contents -> (unit, error) result Lwt.t
-  val test_and_set : root:Path.t -> ?locks:Lock.t -> t -> test:head_contents option -> set:head_contents option -> (bool, error) result Lwt.t
-  val remove : root:Path.t -> ?locks:Lock.t -> t -> (unit, error) result Lwt.t
   val exists :
        root:Path.t
     -> t -> (bool, error) result Lwt.t
+  val read :
+       root:Path.t
+    -> t
+    -> dtmp:Cstruct.t
+    -> raw:Cstruct.t
+    -> ((t * head_contents), error) result Lwt.t
+  val write :
+       root:Path.t
+    -> ?locks:Lock.t
+    -> ?capacity:int
+    -> raw:Cstruct.t
+    -> t -> head_contents
+    -> (unit, error) result Lwt.t
+  val test_and_set :
+       root:Path.t
+    -> ?locks:Lock.t
+    -> t
+    -> test:head_contents option
+    -> set:head_contents option
+    -> (bool, error) result Lwt.t
+  val remove :
+       root:Path.t
+    -> ?locks:Lock.t
+    -> t -> (unit, error) result Lwt.t
 end
 
 module Make

@@ -28,21 +28,26 @@ sig
   module Hash
     : S.HASH
   module D
-    : S.DECODER with type t = t
-                 and type raw = Cstruct.t
-                 and type init = Cstruct.t
-                 and type error = [ `Decoder of string ]
+    : S.DECODER
+      with type t = t
+       and type raw = Cstruct.t
+       and type init = Cstruct.t
+       and type error = [ `Decoder of string ]
   module E
-    : S.ENCODER with type t = t
-                 and type raw = Cstruct.t
+    : S.ENCODER
+      with type t = t
+       and type raw = Cstruct.t
   module A
     : sig type nonrec t = t val decoder : int -> t Angstrom.t end
   module F
-    : S.FARADAY  with type t = t
+    : S.FARADAY
+      with type t = t
 
-  include S.DIGEST with type t := t
-                    and type hash := Hash.t
-  include S.BASE with type t := t
+  include S.DIGEST
+    with type t := t
+     and type hash := Hash.t
+  include S.BASE
+    with type t := t
 
   val of_cstruct : Cstruct.t -> t
   val to_cstruct : t -> Cstruct.t
