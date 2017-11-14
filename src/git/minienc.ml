@@ -256,14 +256,16 @@ struct
 
   let pp ppf ({ r; w; c; b; } as t) =
     let pp_rb r w m ppf b =
-      if (mask t r) <= (mask t w)
+      if (mask t r) < (mask t w)
       then
         Fmt.pf ppf "%a"
           (Fmt.hvbox (pp_scalar ~get:Bigarray.Array1.get ~length:Bigarray.Array1.dim))
           (Bigarray.Array1.sub b (mask t r) (w - r))
+      else if empty t
+      then Fmt.pf ppf "<empty>"
       else Fmt.pf ppf "@[<hov>%a and %a@]"
-          (Fmt.hvbox (pp_scalar ~get:Bigarray.Array1.get ~length:Bigarray.Array1.dim)) (Bigarray.Array1.sub b (mask t r) (m - r))
-          (Fmt.hvbox (pp_scalar ~get:Bigarray.Array1.get ~length:Bigarray.Array1.dim)) (Bigarray.Array1.sub b 0 w)
+          (Fmt.hvbox (pp_scalar ~get:Bigarray.Array1.get ~length:Bigarray.Array1.dim)) (Bigarray.Array1.sub b (mask t r) (m - (mask t r)))
+          (Fmt.hvbox (pp_scalar ~get:Bigarray.Array1.get ~length:Bigarray.Array1.dim)) (Bigarray.Array1.sub b 0 (mask t w))
     in
 
     Fmt.pf ppf
