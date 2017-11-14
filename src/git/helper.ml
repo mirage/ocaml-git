@@ -52,12 +52,7 @@ end = struct
     Hex.to_string (`Hex x) |> Bytes.unsafe_of_string
 end
 
-module MakeDecoder (A : S.ANGSTROM)
-  : S.DECODER with type t = A.t
-               and type raw = Cstruct.t
-               and type init = Cstruct.t
-               and type error = [ `Decoder of string ]
-= struct
+module MakeDecoder (A : S.ANGSTROM) = struct
   (* XXX(dinosaure): this decoder is on top of some assertion about
      the decoding of a git object. [Angstrom] can not consume all
      input (when we have an alteration specifically) and the client
@@ -229,12 +224,7 @@ module MakeDecoder (A : S.ANGSTROM)
 end
 
 module MakeInflater (Z : S.INFLATE) (A : S.ANGSTROM)
-  : S.DECODER with type t = A.t
-                    and type raw = Cstruct.t
-                    and type init = Z.window * Cstruct.t * Cstruct.t
-                    and type error = [ `Decoder of string | `Inflate of Z.error ]
-=
-struct
+= struct
   module Log =
   struct
     let src = Logs.Src.create "git.inflater.decoder" ~doc:"logs git's internal inflater/decoder"

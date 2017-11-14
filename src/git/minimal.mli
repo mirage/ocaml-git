@@ -2,6 +2,8 @@ module type S =
 sig
   module Hash
     : S.HASH
+      with type Digest.buffer = Cstruct.t
+       and type hex = string
 
   module Path
     : S.PATH
@@ -20,6 +22,11 @@ sig
       with module Hash = Hash
        and module Inflate = Inflate
        and module Deflate = Deflate
+       and module Blob = Blob.Make(Hash)
+       and module Commit = Commit.Make(Hash)
+       and module Tree = Tree.Make(Hash)
+       and module Tag = Tag.Make(Hash)
+       and type t = Value.Make(Hash)(Inflate)(Deflate).t
 
   module Reference
     : Reference.S

@@ -32,6 +32,8 @@ sig
 
   module Hash
     : S.HASH
+      with type Digest.buffer = Cstruct.t
+       and type hex = string
   (** The [Hash] module used to make this interface. *)
 
   module Path
@@ -55,6 +57,11 @@ sig
       with module Hash = Hash
        and module Inflate = Inflate
        and module Deflate = Deflate
+       and module Blob = Blob.Make(Hash)
+       and module Commit = Commit.Make(Hash)
+       and module Tree = Tree.Make(Hash)
+       and module Tag = Tag.Make(Hash)
+       and type t = Value.Make(Hash)(Inflate)(Deflate).t
   (** The Value module, which represents the Git object. *)
 
   type error =
@@ -502,6 +509,8 @@ sig
 
   module Hash
     : S.HASH
+      with type Digest.buffer = Cstruct.t
+       and type hex = string
   (** The [Digest] module used to make the module. *)
 
   module Path
@@ -526,9 +535,15 @@ sig
   (** The [FileSystem] module used to make the module. *)
 
   module Value
-    : Value.S with module Hash = Hash
-               and module Inflate = Inflate
-               and module Deflate = Deflate
+    : Value.S
+        with module Hash = Hash
+         and module Inflate = Inflate
+         and module Deflate = Deflate
+         and module Blob = Blob.Make(Hash)
+         and module Commit = Commit.Make(Hash)
+         and module Tree = Tree.Make(Hash)
+         and module Tag = Tag.Make(Hash)
+         and type t = Value.Make(Hash)(Inflate)(Deflate).t
   (** The Value module, which represents the Git object. *)
 
   module Reference

@@ -52,8 +52,8 @@ module Make
   module Deflate = D
   module Buffer = B
 
-  module Value = Value.Raw(H)(I)(D)(B)
-  module Reference = Reference.Make(H)(P)
+  module Value = Value.Raw(Hash)(Inflate)(Deflate)(Buffer)
+  module Reference = Reference.Make(Hash)(Path)
 
   type kind = [ `Commit | `Tree | `Blob | `Tag ]
 

@@ -30,19 +30,19 @@ sig
   (** The [Deflate] module used to make this interface. *)
 
   module Blob
-    : Blob.S with type Hash.t = Hash.t
+    : Blob.S with module Hash = Hash
   (** The {!Blob} module. *)
 
   module Commit
-    : Commit.S with type Hash.t = Hash.t
+    : Commit.S with module Hash = Hash
   (** The {!Commit} module. *)
 
   module Tree
-    : Tree.S with type Hash.t = Hash.t
+    : Tree.S with module Hash = Hash
   (** The {!Tree} module. *)
 
   module Tag
-    : Tag.S with type Hash.t = Hash.t
+    : Tag.S with module Hash = Hash
   (** The {!Tag} module. *)
 
   type t =
@@ -123,7 +123,8 @@ sig
     : S.BUFFER
   (** The [Buffer] module used to make this module. *)
 
-  include S
+  module Value : S
+  include module type of Value
 
   module EE
     : S.ENCODER
@@ -188,24 +189,46 @@ module Make
   : S with module Hash = H
        and module Inflate = I
        and module Deflate = D
+       and module Blob    = Blob.Make(H)
+       and module Commit  = Commit.Make(H)
+       and module Tree    = Tree.Make(H)
+       and module Tag     = Tag.Make(H)
 (** The {i functor} to make the OCaml representation of the Git object
     by a specific hash implementation, an {!S.INFLATE} implementation
     for the decompression and a {!S.DEFLATE} implementation for the
     compression. We constraint the {!S.HASH} module to compute a
     {Cstruct.t} flow and generate a [string] as the hexadecimal
-    representation of the hash. *)
+    representation of the hash.
+
+    The constraints on git objects can cut the path to let the user to
+    make the value module and keep the structural equality. If the
+    [Hash] module is the same. That means:
+
+    ```ocaml
+    module V1 = Value.Make(SHA1)(C_inflate)(C_deflate)
+    module V2 = Value.Make(SHA1)(OCaml_inflate)(OCaml_deflate)
+    ```
+
+   Types [V1.t] and [V2.t] are equal.
+*)
 
 module Raw
     (H : S.HASH with type Digest.buffer = Cstruct.t
-                  and type hex = string)
+                 and type hex = string)
     (I : S.INFLATE)
     (D : S.DEFLATE)
     (B : S.BUFFER with type raw = string
                    and type fixe = Cstruct.t)
-  : RAW with module Hash = H
+  : RAW with module Hash    = H
          and module Inflate = I
          and module Deflate = D
-         and module Buffer = B
+         and module Buffer  = B
+         and module Value   = Make(H)(I)(D)
+         and module Blob    = Blob.Make(H)
+         and module Commit  = Commit.Make(H)
+         and module Tree    = Tree.Make(H)
+         and module Tag     = Tag.Make(H)
+         and type t         = Make(H)(I)(D).t
 (** The {i functor} to make the OCaml representation of the Git object
     by a specific hash implementation, and {!S.INFLATE} implementation
     for the decompression and a {!S.DEFLATE} implementation for the

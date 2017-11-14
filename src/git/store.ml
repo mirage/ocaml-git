@@ -27,7 +27,8 @@ sig
     | `Blob ]
 
   module Hash
-    : S.HASH
+    : S.HASH with type Digest.buffer = Cstruct.t
+              and type hex = string
   module Path
     : S.PATH
   module FileSystem
@@ -40,9 +41,14 @@ sig
 
   module Value
     : Value.S
-      with module Hash = Hash
-       and module Inflate = Inflate
-       and module Deflate = Deflate
+        with module Hash = Hash
+         and module Inflate = Inflate
+         and module Deflate = Deflate
+         and module Blob = Blob.Make(Hash)
+         and module Commit = Commit.Make(Hash)
+         and module Tree = Tree.Make(Hash)
+         and module Tag = Tag.Make(Hash)
+         and type t = Value.Make(Hash)(Inflate)(Deflate).t
 
   type error =
     [ `SystemFile of FileSystem.File.error
@@ -213,15 +219,20 @@ sig
 
   (* XXX(dinosaure): Functorized module. *)
   module Hash
-    : S.HASH
+    : S.HASH with type Digest.buffer = Cstruct.t
+              and type hex = string
   module Path
     : S.PATH
+
   module Inflate
     : S.INFLATE
+
   module Deflate
     : S.DEFLATE
+
   module Lock
     : S.LOCK
+
   module FileSystem
     : S.FS
       with type path = Path.t
@@ -232,6 +243,12 @@ sig
       with module Hash = Hash
        and module Inflate = Inflate
        and module Deflate = Deflate
+       and module Blob = Blob.Make(Hash)
+       and module Commit = Commit.Make(Hash)
+       and module Tree = Tree.Make(Hash)
+       and module Tag = Tag.Make(Hash)
+       and type t = Value.Make(Hash)(Inflate)(Deflate).t
+
   module Reference
     : Reference.IO
       with module Hash = Hash
@@ -452,12 +469,17 @@ module Make
 
   module LooseImpl
     : Loose.S
-      with module Hash = Hash
-       and module Path = Path
-       and module FileSystem = FileSystem
-       and module Inflate = Inflate
-       and module Deflate = Deflate
-    = Loose.Make(H)(P)(FS)(I)(D)
+      with module Hash = H
+       and module Inflate = I
+       and module Deflate = D
+       and module Path = P
+       and module FileSystem = FS
+       and module Blob = Blob.Make(Hash)
+       and module Commit = Commit.Make(Hash)
+       and module Tree = Tree.Make(Hash)
+       and module Tag = Tag.Make(Hash)
+       and type t = Value.Make(Hash)(Inflate)(Deflate).t
+    = Loose.Make(Hash)(Path)(FileSystem)(Inflate)(Deflate)
 
   module PackImpl
     : Pack_engine.S
@@ -470,15 +492,15 @@ module Make
 
   module Value
     : Value.S
-      with module Hash = Hash
-       and module Inflate = Inflate
-       and module Deflate = Deflate
-       and module Blob = LooseImpl.Blob
-       and module Tree = LooseImpl.Tree
-       and module Tag = LooseImpl.Tag
-       and module Commit = LooseImpl.Commit
-       and type t = LooseImpl.t
-    = LooseImpl
+      with module Hash = H
+       and module Inflate = I
+       and module Deflate = D
+       and module Blob = Blob.Make(Hash)
+       and module Commit = Commit.Make(Hash)
+       and module Tree = Tree.Make(Hash)
+       and module Tag = Tag.Make(Hash)
+       and type t = Value.Make(Hash)(Inflate)(Deflate).t
+    = Value.Make(Hash)(Inflate)(Deflate)
 
   module PACKDecoder = PackImpl.PACKDecoder
   module PACKEncoder = PackImpl.PACKEncoder

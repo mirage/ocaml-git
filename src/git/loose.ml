@@ -5,13 +5,9 @@ sig
   module FileSystem
     : S.FS
 
-  include Value.S
-
   module Value
     : Value.S
-      with module Hash = Hash
-       and module Inflate = Inflate
-       and module Deflate = Deflate
+  include module type of Value
 
   type error =
     [ `SystemFile of FileSystem.File.error
@@ -95,10 +91,15 @@ module Make
     (I : S.INFLATE)
     (D : S.DEFLATE)
   : S with module Hash = H
-       and module Path = P
-       and module FileSystem = FS
        and module Inflate = I
        and module Deflate = D
+       and module Path = P
+       and module FileSystem = FS
+       and module Blob = Blob.Make(H)
+       and module Commit = Commit.Make(H)
+       and module Tree = Tree.Make(H)
+       and module Tag = Tag.Make(H)
+       and type t = Value.Make(H)(I)(D).t
 = struct
   module Log =
   struct
@@ -109,12 +110,7 @@ module Make
   module Path = P
   module FileSystem = FS
 
-  module Value :
-    Value.S with module Hash = H
-             and module Inflate = I
-             and module Deflate = D
-    = Value.Make(H)(I)(D)
-
+  module Value = Value.Make(H)(I)(D)
   include Value
 
   type error =

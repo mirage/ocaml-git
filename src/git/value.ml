@@ -25,13 +25,13 @@ sig
     : S.DEFLATE
 
   module Blob
-    : Blob.S   with type Hash.t = Hash.t
+    : Blob.S   with module Hash = Hash
   module Commit
-    : Commit.S with type Hash.t = Hash.t
+    : Commit.S with module Hash = Hash
   module Tree
-    : Tree.S   with type Hash.t = Hash.t
+    : Tree.S   with module Hash = Hash
   module Tag
-    : Tag.S    with type Hash.t = Hash.t
+    : Tag.S    with module Hash = Hash
 
   type t =
     | Blob   of Blob.t
@@ -85,7 +85,8 @@ sig
   module Buffer
     : S.BUFFER
 
-  include S
+  module Value : S
+  include module type of Value
 
   module EE
     : S.ENCODER
@@ -112,9 +113,13 @@ module Make
                  and type hex = string)
     (I : S.INFLATE)
     (D : S.DEFLATE)
-  : S with module Hash = H
+  : S with module Hash    = H
        and module Inflate = I
        and module Deflate = D
+       and module Blob    = Blob.Make(H)
+       and module Commit  = Commit.Make(H)
+       and module Tree    = Tree.Make(H)
+       and module Tag     = Tag.Make(H)
 = struct
   module Hash = H
   module Inflate = I
@@ -320,13 +325,15 @@ module Raw
            and module Inflate = I
            and module Deflate = D
            and module Buffer = B
+           and module Value = Make(H)(I)(D)
+           and module Blob = Blob.Make(H)
+           and module Commit = Commit.Make(H)
+           and module Tree = Tree.Make(H)
+           and module Tag = Tag.Make(H)
+           and type t = Make(H)(I)(D).t
 = struct
   module Buffer = B
-
-  module Value : S with module Hash = H
-                    and module Inflate = I
-                    and module Deflate = D
-    = Make(H)(I)(D)
+  module Value = Make(H)(I)(D)
 
   include Value
 
