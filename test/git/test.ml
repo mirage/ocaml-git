@@ -16,41 +16,17 @@
 
 open Test_common
 
-module Zlib = Git.Inflate.M
+module Store = Git.Mem.Make(Sha1)(Fpath)(Lwt_lock)(Ocaml_inflate)(Ocaml_deflate)(Cstruct_buffer)
 
-(* To avoid depending on git-unix *)
-module SHA1 = struct
+let init () = Lwt.return ()
 
-  let cstruct buf =
-    buf
-    |> Nocrypto.Hash.SHA1.digest
-    |> Cstruct.to_string
-    |> fun x -> Git.Hash.of_raw x
-
-  let string str =
-    Cstruct.of_string str
-    |> cstruct
-
-  let length = Nocrypto.Hash.SHA1.digest_size
-
-end
-
-module Memory = Git.Mem.Make(SHA1)(Zlib)
-
-let init () =
-  Git.Value.Cache.clear ();
-  Memory.clear_all ();
-  Lwt.return_unit
-
-let suite = {
-  name  = "MEM";
-  init  = init;
-  clean = unit;
-  store = (module Memory);
-  shell = false;
-}
+let suite =
+  { name  = "Memory"
+  ; init  = (fun () -> Lwt.return ())
+  ; clean = unit
+  ; store = (module Store)
+  ; shell = false }
 
 let () =
-  Test_store.run "git" [
-    `Quick, suite;
-  ]
+  Test_store.run "git"
+    [ `Quick, suite ]

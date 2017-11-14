@@ -14,7 +14,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Git
 open Lwt.Infix
 
 let pp ppf style h = Fmt.pf ppf "%a " Fmt.(styled style string) h
@@ -64,18 +63,16 @@ let rec cmp_list fn x y =
   | []    , []     -> true
   | _              -> false
 
-let printer_list f = function
-  | [] -> "[]"
-  | l  -> Printf.sprintf "[ %s ]" (String.concat ", " (List.map f l))
+let printer_list pp_data = Fmt.hvbox (Fmt.Dump.list pp_data)
 
-module Make (S: Store.S) = struct
+module Make (S : Git.Minimal.S) = struct
 
   let cmp_list eq comp l1 l2 =
     cmp_list eq (List.sort comp l1) (List.sort comp l2)
 
   let mk equal compare pp =
     let aux (type a) cmp pp msg =
-      let testable: a Alcotest.testable =
+      let testable : a Alcotest.testable =
         let module M = struct
           type t = a
           let equal = cmp
@@ -90,44 +87,74 @@ module Make (S: Store.S) = struct
     aux (cmp_list equal compare) Fmt.(list pp)
 
   let assert_key_equal, assert_key_opt_equal, assert_keys_equal =
-    mk Hash.equal Hash.compare Hash.pp
+    mk S.Hash.equal S.Hash.compare S.Hash.pp
 
   let assert_value_equal, assert_value_opt_equal, assert_values_equal =
-    mk Value.equal Value.compare Value.pp
+    mk S.Value.equal S.Value.compare S.Value.pp
 
   let assert_tag_equal, assert_tag_opt_equal, assert_tags_equal =
-    mk Tag.equal Tag.compare Tag.pp
+    mk S.Value.Tag.equal S.Value.Tag.compare S.Value.Tag.pp
 
   let assert_ref_equal, assert_ref_opt_equal, assert_refs_equal =
-    mk Reference.equal Reference.compare Reference.pp
+    mk S.Reference.equal S.Reference.compare S.Reference.pp
+
+  let assert_head_contents_equal, assert_head_contents_opt_equal, assert_heads_contents_equal =
+    mk S.Reference.equal_head_contents S.Reference.compare_head_contents S.Reference.pp_head_contents
 
   let assert_cstruct_equal, assert_cstruct_opt_equal, assert_cstructs_equal =
     mk (=) compare (Fmt.of_to_string Cstruct.debug)
 
-  let assert_pack_index_equal, assert_pack_index_opt_equal, assert_pack_indexes_equal =
-    mk Pack_index.Raw.equal Pack_index.Raw.compare Pack_index.Raw.pp
+  let assert_cstruct_data_equal, assert_cstruct_data_opt_equal, assert_cstructs_data_equal =
+    mk (fun a b -> String.equal (Cstruct.to_string a) (Cstruct.to_string b))
+      (fun a b -> String.compare (Cstruct.to_string a) (Cstruct.to_string b))
+      (Fmt.hvbox (Git.Minienc.pp_scalar ~get:Cstruct.get_char ~length:Cstruct.len))
 
-  let assert_pack_equal, assert_pack_opt_equal, assert_packs_equal =
-    mk Pack.equal Pack.compare Pack.pp
+  let assert_ref_and_hash_equal, assert_ref_and_hash_opt_equal, assert_refs_and_hashes_equal =
+    mk
+      (fun (r, h) (r', h') -> S.Reference.equal r r' && S.Hash.equal h h')
+      (fun (r, h) (r', h') -> match S.Reference.compare r r' with
+         | 0 -> S.Hash.compare h h'
+         | n -> n)
+      (Fmt.Dump.pair S.Reference.pp S.Hash.pp)
 
-  let assert_index_equal, assert_index_opt_equal, assert_indexs_equal =
-    mk Index.equal Index.compare Index.pp
+  module Radix =
+    Git.Radix.Make(struct
+      type t = S.Hash.t
 
-  let assert_raw_pack_equal, assert_raw_pack_opt_equal, assert_raw_packs_equal =
-    mk Pack.Raw.equal Pack.Raw.compare Pack.Raw.pp
+      let compare = S.Hash.compare
+      let equal = S.Hash.equal
+      let get = S.Hash.get
+      let length _ = S.Hash.Digest.length
+    end)
 
+  let assert_index_pack_equal, assert_index_pack_opt_equal, assert_index_packs_equal =
+    let equal_value (h1, (c1, o1)) (h2, (c2, o2)) = S.Hash.equal h1 h2 && Git.Crc32.eq c1 c2 && Int64.equal o1 o2 in
+
+    let pp_value : (S.Hash.t * (Git.Crc32.t * int64)) Fmt.t =
+      Fmt.pair ~sep:(Fmt.const Fmt.string " -> ")
+        S.Hash.pp Fmt.(Dump.pair Git.Crc32.pp int64)
+    in
+
+    let compare a b = if cmp_list equal_value (fun (a, _) (b, _) -> S.Hash.compare a b) a b then 0 else 1 in
+    let equal a b = cmp_list equal_value (fun (a, _) (b, _) -> S.Hash.compare a b) a b in
+    let pp = Fmt.Dump.list pp_value in
+
+    mk
+      (fun a b -> equal (Radix.to_list a) (Radix.to_list b))
+      (fun a b -> compare (Radix.to_list a) (Radix.to_list b))
+      (fun ppf a -> pp ppf (Radix.to_list a))
 end
 
 let list_files kind dir =
-  if Sys.file_exists dir then (
+  if Sys.file_exists dir
+  then begin
     let s = Lwt_unix.files_of_directory dir in
     let s = Lwt_stream.filter (fun s -> s <> "." && s <> "..") s in
     let s = Lwt_stream.map (Filename.concat dir) s in
     let s = Lwt_stream.filter kind s in
     Lwt_stream.to_list s >>= fun l ->
     Lwt.return l
-  ) else
-    Lwt.return_nil
+  end else Lwt.return_nil
 
 let directories dir =
   list_files (fun f -> try Sys.is_directory f with _ -> false) dir
@@ -142,35 +169,33 @@ let rec_files dir =
     Lwt_list.fold_left_s aux (fs @ accu) ds in
   aux [] dir
 
-let head_contents =
-  let module M = struct
-    type t = Reference.head_contents
-    let equal = Reference.equal_head_contents
-    let pp = Reference.pp_head_contents
-    end
-  in (module M: Alcotest.TESTABLE with type t = M.t)
+module SHA1 =
+struct
+  include Digestif.SHA1.Bytes
 
-let sha1 = (module Hash: Alcotest.TESTABLE with type t = Hash.t)
+  let equal = Bytes.equal
+end
+
+module SHA1Set = Set.Make(SHA1)
+
+let sha1 = (module SHA1 : Alcotest.TESTABLE with type t = Bytes.t)
 
 let sha1s =
   let module M = struct
-    type t = Hash.Set.t
-    let equal = Hash.Set.equal
-    let pp = Hash.Set.pp
+    type t = SHA1Set.t
+    let equal = SHA1Set.equal
+    let pp ppf set = (Fmt.hvbox (Fmt.Dump.list SHA1.pp)) ppf (SHA1Set.elements set)
   end
   in (module M: Alcotest.TESTABLE with type t = M.t)
 
-type t = {
-  name  : string;
-  init  : unit -> unit Lwt.t;
-  clean : unit -> unit Lwt.t;
-  store : (module Store.S);
-  shell : bool;
-}
+type t =
+  { name  : string
+  ; init  : unit -> unit Lwt.t
+  ; clean : unit -> unit Lwt.t
+  ; store : (module Git.Minimal.S)
+  ; shell : bool }
 
 let unit () = Lwt.return_unit
-
-(* From Git_misc *)
 
 let list_filter_map f l =
   List.fold_left (fun l elt ->
