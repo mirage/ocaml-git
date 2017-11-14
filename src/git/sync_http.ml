@@ -77,7 +77,8 @@ sig
     | `StorePack of Store.Pack.error
     | `Unresolved_object
     | `Clone of string
-    | `Apply of string ]
+    | `Apply of string
+    | `ReportStatus of string ]
 
   val pp_error : error Fmt.t
 
@@ -87,6 +88,19 @@ sig
     -> ?https:bool
     -> ?port:int
     -> string -> string -> (Decoder.advertised_refs, error) result Lwt.t
+
+  type command =
+    [ `Create of (Store.Hash.t * string)
+    | `Delete of (Store.Hash.t * string)
+    | `Update of (Store.Hash.t * Store.Hash.t * string) ]
+
+  val push :
+       Store.t
+    -> push:(Store.t -> (Store.Hash.t * string * bool) list -> (Store.Hash.t list * command list) Lwt.t)
+    -> ?headers:Web.HTTP.headers
+    -> ?https:bool
+    -> ?port:int
+    -> string -> string -> ((string, string * string) result list, error) result Lwt.t
 
   val fetch :
        Store.t
@@ -155,7 +169,8 @@ module Make
     | `StorePack of Store.Pack.error
     | `Unresolved_object
     | `Clone of string
-    | `Apply of string ]
+    | `Apply of string
+    | `ReportStatus of string ]
 
   let pp_error ppf = function
     | `Decoder err       -> Fmt.pf ppf "(`Decoder %a)" Decoder.pp_error err
@@ -165,6 +180,7 @@ module Make
     | `Unresolved_object -> Fmt.pf ppf "`Unresolved_object"
     | `Clone err         -> Fmt.pf ppf "(`Clone %s)" err
     | `Apply err         -> Fmt.pf ppf "(`Apply %s)" err
+    | `ReportStatus err  -> Fmt.pf ppf "(`ReportStatus %s)" err
 
   module Log =
   struct
@@ -221,14 +237,17 @@ module Make
     (Store.Pack.from git (fun () -> Lwt_stream.get stream')
      >!= fun err -> Lwt.return (`StorePack err))
 
-  let producer state =
+  let producer ?(final = (fun () -> Lwt.return None)) state =
     let state' = ref (fun () -> state) in
 
     let go () = match !state' () with
       | Encoder.Write { buffer; off; len; continue; } ->
         state' := (fun () -> continue len);
         Lwt.return (Some (buffer, off, len))
-      | Encoder.Ok () -> Lwt.return None
+      | Encoder.Ok () ->
+        (* ensure to jump only in this case (it's a concat stream). *)
+        state' := (fun () -> Encoder.Ok ());
+        final ()
     in go
 
   let rec consume stream ?keep state =
@@ -288,6 +307,154 @@ module Make
 
     consume (Web.Response.body resp) (Decoder.decode decoder (Decoder.HttpReferenceDiscovery "git-upload-pack"))
     >!= (fun err -> Lwt.return (`Decoder err))
+
+  type command =
+    [ `Create of (Store.Hash.t * string)
+    | `Delete of (Store.Hash.t * string)
+    | `Update of (Store.Hash.t * Store.Hash.t * string) ]
+
+  module Revision = Revision.Make(Store)
+
+  let packer ~window ~depth git ~ofs_delta:_ remote commands =
+    let open Lwt.Infix in
+
+    let commands' =
+      (List.map (fun (hash, refname, _) -> Encoder.Delete (hash, refname)) remote)
+      @ commands
+    in
+
+    (* XXX(dinosaure): we don't want to delete remote references but
+       we want to exclude any commit already stored remotely. Se, we «
+       delete » remote references from the result set. *)
+
+    Lwt_list.fold_left_s
+      (fun acc -> function
+         | Encoder.Create _ -> Lwt.return acc
+         | Encoder.Update (hash, _, _) ->
+           Revision.(Range.normalize git (Range.Include (from_hash hash)))
+           >|= Store.Hash.Set.union acc
+         | Encoder.Delete (hash, _) ->
+           Revision.(Range.normalize git (Range.Include (from_hash hash)))
+           >|= Store.Hash.Set.union acc)
+      Store.Hash.Set.empty commands'
+    >>= fun negative ->
+    Lwt_list.fold_left_s
+      (fun acc -> function
+         | Encoder.Create (hash, _) ->
+           Revision.(Range.normalize git (Range.Include (from_hash hash)))
+           >|= Store.Hash.Set.union acc
+         | Encoder.Update (_, hash, _) ->
+           Revision.(Range.normalize git (Range.Include (from_hash hash)))
+           >|= Store.Hash.Set.union acc
+         | Encoder.Delete _ -> Lwt.return acc)
+      Store.Hash.Set.empty commands
+    >|= (fun positive -> Revision.Range.E.diff positive negative)
+    >>= fun elements ->
+    Lwt_list.fold_left_s
+      (fun acc commit ->
+         Store.fold git
+           (fun acc ?name:_ ~length:_ _ value -> Lwt.return (value :: acc))
+           ~path:(Store.Path.v "/") acc commit)
+      [] (Store.Hash.Set.elements elements)
+    >>= fun entries -> Store.Pack.make git ~window ~depth entries
+
+  let push git ~push ?headers ?(https = false) ?port host path =
+    let open Lwt.Infix in
+
+    let scheme = if https then "https" else "http" in
+    let uri =
+      Uri.empty
+      |> (fun uri -> Uri.with_scheme uri (Some scheme))
+      |> (fun uri -> Uri.with_host uri (Some host))
+      |> (fun uri -> Uri.with_path uri (String.concat "/" [ path; "info"; "refs" ]))
+      |> (fun uri -> Uri.with_port uri port)
+      |> (fun uri -> Uri.add_query_param uri ("service", [ "git-receive-pack" ]))
+    in
+
+    Log.debug (fun l -> l ~header:"push" "Launch the GET request to %a."
+                  Uri.pp_hum uri);
+
+    let git_agent =
+      List.fold_left (fun acc -> function `Agent s -> Some s | _ -> acc) None K.default
+      |> function
+      | Some git_agent -> git_agent
+      | None -> raise (Invalid_argument "Expected an user agent in capabilities.")
+    in
+
+    let headers =
+      option_map_default
+        Web.HTTP.Headers.(def user_agent git_agent)
+        Web.HTTP.Headers.(def user_agent git_agent empty)
+        headers
+    in
+
+    Client.call ~headers `GET uri >>= fun resp ->
+
+    let decoder = Decoder.decoder () in
+    let encoder = Encoder.encoder () in
+
+    consume (Web.Response.body resp) (Decoder.decode decoder (Decoder.HttpReferenceDiscovery "git-receive-pack")) >>= function
+    | Error err ->
+      Log.err (fun l -> l ~header:"push" "The HTTP decoder returns an error: %a." Decoder.pp_error err);
+      Lwt.return (Error (`Decoder err))
+    | Ok refs ->
+      let common = List.filter (fun x -> List.exists ((=) x) K.default) refs.Decoder.capabilities in
+
+      let sideband =
+        if List.exists ((=) `Side_band_64k) common
+        then `Side_band_64k
+        else if List.exists ((=) `Side_band) common
+        then `Side_band
+        else `No_multiplexe
+      in
+
+      push git refs.Decoder.refs >>= function
+      | (_, []) -> Lwt.return (Ok [])
+      | (shallow, commands) ->
+        let req =
+          Web.Request.v
+            `POST
+            ~path:[ path; "git-receive-pack" ]
+            Web.HTTP.Headers.(def content_type "application/x-git-receive-pack-request" headers)
+            (fun _ -> Lwt.return ())
+        in
+
+        let x, r =
+          List.map (function
+              | `Create (hash, refname) -> Encoder.Create (hash, refname)
+              | `Delete (hash, refname) -> Encoder.Delete (hash, refname)
+              | `Update (_of, _to, refname) -> Encoder.Update (_of, _to, refname))
+            commands
+          |> fun commands -> List.hd commands, List.tl commands
+        in
+
+        packer ~window:(`Object 10) ~depth:50 ~ofs_delta:true git refs.Decoder.refs (x :: r) >>= function
+        | Error _ -> assert false
+        | Ok (stream, _) ->
+          let stream () = stream () >>= function
+            | Some buf -> Lwt.return (Some (buf, 0, Cstruct.len buf))
+            | None -> Lwt.return None
+          in
+
+          Client.call
+            ~headers:(Web.Request.headers req |> Web.HTTP.Headers.merge headers)
+            ~body:(producer ~final:stream
+                     (Encoder.encode encoder
+                        (`HttpUpdateRequest { Encoder.shallow
+                                            ; requests = Encoder.L (x, r)
+                                            ; capabilities = K.default })))
+            (Web.Request.meth req)
+            (Web.Request.uri req
+             |> (fun uri -> Uri.with_scheme uri (Some scheme))
+             |> (fun uri -> Uri.with_host uri (Some host))
+             |> (fun uri -> Uri.with_port uri port))
+          >>= fun resp ->
+          consume (Web.Response.body resp) (Decoder.decode decoder (Decoder.HttpReportStatus sideband)) >>= function
+          | Ok { Decoder.unpack = Ok (); commands; } ->
+            Lwt.return (Ok commands)
+          | Ok { Decoder.unpack = Error err; _ } ->
+            Lwt.return (Error (`ReportStatus err))
+          | Error err -> Lwt.return (Error (`Decoder err))
 
   let fetch git ?(shallow = []) ?stdout ?stderr ?headers ?(https = false) ~negociate:(negociate, nstate) ~has ~want ?deepen ?port host path =
     let open Lwt.Infix in

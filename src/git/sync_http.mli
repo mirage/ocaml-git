@@ -69,7 +69,8 @@ sig
     | `StorePack of Store.Pack.error
     | `Unresolved_object
     | `Clone of string
-    | `Apply of string ]
+    | `Apply of string
+    | `ReportStatus of string ]
 
   val pp_error : error Fmt.t
 
@@ -79,6 +80,19 @@ sig
     -> ?https:bool
     -> ?port:int
     -> string -> string -> (Decoder.advertised_refs, error) result Lwt.t
+
+  type command =
+    [ `Create of (Store.Hash.t * string)
+    | `Delete of (Store.Hash.t * string)
+    | `Update of (Store.Hash.t * Store.Hash.t * string) ]
+
+  val push :
+       Store.t
+    -> push:(Store.t -> (Store.Hash.t * string * bool) list -> (Store.Hash.t list * command list) Lwt.t)
+    -> ?headers:Web.HTTP.headers
+    -> ?https:bool
+    -> ?port:int
+    -> string -> string -> ((string, string * string) result list, error) result Lwt.t
 
   val fetch :
        Store.t
