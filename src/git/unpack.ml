@@ -1843,9 +1843,11 @@ struct
       | `IndirectHash (hash, length') ->
         (match cache hash with
          | Some length'' -> Lwt.return (Ok (max length (max length' length'')))
-         | None -> (match t.idx hash with
+         | None -> match t.idx hash with
              | Some (_, off) -> (get off >>= loop (max length length'))
-             | None -> Lwt.return (Error (Invalid_hash hash))))
+             | None -> t.get hash >>= function
+               | Some (_, raw) -> Lwt.return (Ok (Cstruct.len raw))
+               | None -> Lwt.return (Error (Invalid_hash hash)))
       | `IndirectOff (absolute_offset, length') ->
         (get absolute_offset
          >>= loop (max length length'))
