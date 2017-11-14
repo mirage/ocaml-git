@@ -82,4 +82,32 @@ module Make
 
     fetch t ~https ?port:(Uri.port repository) ~negociate:(continue, state) ~has ~want host (Uri.path_and_query repository)
 
+  let easy_update t ~reference repository =
+    let open Lwt.Infix in
+
+    let push_handler git remote_refs =
+      S.Ref.list git >>=
+      Lwt_list.find_s (fun (reference', _) -> Lwt.return S.Reference.(equal reference reference')) >>= fun (_, local_hash) ->
+      Lwt_list.find_s (function (_, refname, false) -> Lwt.return S.Reference.(equal reference (of_string refname))
+                              | (_, _, true) -> Lwt.return false) remote_refs >>= fun (remote_hash, remote_refname, _) ->
+      if S.Hash.equal local_hash remote_hash
+      then Lwt.return ([], [])
+      else Lwt.return ([], [ `Update (remote_hash, local_hash, remote_refname) ])
+    in
+
+    let host = match Uri.host repository with
+      | Some host -> host
+      | None -> raise (Invalid_argument (Fmt.strf "Expected an http url with host: %a." Uri.pp_hum repository))
+    in
+    let https = match Uri.scheme repository with
+      | Some "https" -> true
+      | _ -> false
+    in
+
+    let open Lwt_result in
+
+    push t ~push:push_handler ~https ?port:(Uri.port repository) host (Uri.path_and_query repository) >>= fun lst ->
+    ok (Lwt_list.map_p (function
+        | Ok refname -> Lwt.return (Ok (S.Reference.of_string refname))
+        | Error (refname, err) -> Lwt.return (Error (S.Reference.of_string refname, err))) lst)
 end

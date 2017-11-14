@@ -23,4 +23,5 @@ module Make
      and module Buffer := Git_http.Cstruct_buffer
 
   val fetch_all : S.t -> Uri.t -> ((S.Reference.t * S.Hash.t) list * int, error) result Lwt.t
+  val easy_update : S.t -> reference:S.Reference.t -> Uri.t -> ((S.Reference.t, S.Reference.t * string) result list, error) result Lwt.t
 end
