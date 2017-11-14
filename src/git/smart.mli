@@ -205,12 +205,13 @@ sig
 
   type _ transaction =
     | HttpReferenceDiscovery : string -> advertised_refs transaction
-    | ReferenceDiscovery : advertised_refs transaction
-    | ShallowUpdate      : shallow_update transaction
-    | Negociation        : Hash.t list * ack_mode -> acks transaction
-    | NegociationResult  : negociation_result transaction
-    | PACK               : side_band -> flow transaction
-    | ReportStatus       : side_band -> report_status transaction
+    | ReferenceDiscovery     : advertised_refs transaction
+    | ShallowUpdate          : shallow_update transaction
+    | Negociation            : Hash.t list * ack_mode -> acks transaction
+    | NegociationResult      : negociation_result transaction
+    | PACK                   : side_band -> flow transaction
+    | ReportStatus           : side_band -> report_status transaction
+    | HttpReportStatus       : side_band -> report_status transaction
     (** The type transaction to describe what is expected to decode/receive. *)
 
   (** The ACK mode type to describe which mode is shared by the client
@@ -353,6 +354,7 @@ sig
     | `UploadRequest of upload_request
     | `HttpUploadRequest of bool * http_upload_request
     | `UpdateRequest of update_request
+    | `HttpUpdateRequest of update_request
     | `Has of Hash.t list
     | `Done
     | `Flush

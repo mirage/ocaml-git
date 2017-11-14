@@ -91,6 +91,7 @@ sig
     | NegociationResult      : negociation_result transaction
     | PACK                   : side_band -> flow transaction
     | ReportStatus           : side_band -> report_status transaction
+    | HttpReportStatus       : side_band -> report_status transaction
   and ack_mode =
     [ `Ack
     | `Multi_ack
@@ -169,6 +170,7 @@ sig
     | `UploadRequest of upload_request
     | `HttpUploadRequest of bool * http_upload_request
     | `UpdateRequest of update_request
+    | `HttpUpdateRequest of update_request
     | `Has of Hash.t list
     | `Done
     | `Flush
@@ -957,6 +959,60 @@ struct
       Error (refname, msg)
     | _ -> raise (Leave (err_unexpected_char '\000' decoder))
 
+  (* XXX(dinosaure): The Smart protocol is a shit. *)
+  let rec p_http_report_status ~pkt ~unpack ~commands ~sideband decoder =
+    let rec go ~pkt k unpack commands decoder = match pkt, unpack, commands with
+      | `Malformed, _, _ -> raise (Leave (err_malformed_pkt_line decoder))
+      | `Flush, Some unpack, Some (_ :: _ as commands) -> k { unpack; commands; } decoder
+      | `Flush, _, _ -> raise (Leave (err_unexpected_flush_pkt_line decoder))
+      | `Empty, _, _ -> raise (Leave (err_unexpected_empty_pkt_line decoder))
+      | `Line _, _, _ ->
+        match p_peek_char decoder with
+        | Some 'u' ->
+          let unpack = p_unpack decoder in
+          p_pkt_line (go k (Some unpack) commands) decoder
+        | Some ('o' | 'n') ->
+          let command = p_command_status decoder in
+          let commands = match commands with
+            | Some rest -> Some (command :: rest)
+            | None -> Some [ command ]
+          in
+
+          p_pkt_line (go k unpack commands) decoder
+        | Some chr -> raise (Leave (err_unexpected_char chr decoder))
+        | None -> raise (Leave (err_unexpected_end_of_input decoder))
+    in
+
+    match pkt, sideband, unpack, commands with
+    | `Malformed, _, _, _ -> raise (Leave (err_malformed_pkt_line decoder))
+    | `Flush, _, Some unpack, Some (_ :: _ as commands) -> p_return { unpack; commands; } decoder
+    | `Flush, _, _, _ -> raise (Leave (err_unexpected_flush_pkt_line decoder))
+    | `Empty, _, _, _ -> raise (Leave (err_unexpected_empty_pkt_line decoder))
+    | `Line _, (`Side_band | `Side_band_64k), unpack, commands ->
+      (match p_peek_char decoder with
+       | Some '\001' ->
+         p_junk_char decoder;
+         let k { unpack; commands; } decoder =
+           p_pkt_line (p_http_report_status ~unpack:(Some unpack) ~commands:(Some commands) ~sideband) decoder in
+         p_pkt_line (go k unpack commands) decoder
+       | Some '\002' ->
+         ignore @@ p_while0 (fun _ -> true) decoder;
+         p_pkt_line (p_http_report_status ~unpack ~commands ~sideband) decoder
+       | Some '\003' ->
+         ignore @@ p_while0 (fun _ -> true) decoder;
+         p_pkt_line (p_http_report_status ~unpack ~commands ~sideband) decoder
+       | Some chr ->
+         raise (Leave (err_unexpected_char chr decoder))
+       | None ->
+         raise (Leave (err_unexpected_end_of_input decoder)))
+    | `Line _ as pkt, _, unpack, commands ->
+      let k { unpack; commands; } decoder =
+        p_pkt_line (p_http_report_status ~unpack:(Some unpack) ~commands:(Some commands) ~sideband) decoder in
+      go ~pkt k unpack commands decoder
+
+  let p_http_report_status sideband decoder =
+    p_pkt_line (p_http_report_status ~unpack:None ~commands:None ~sideband) decoder
+
   let rec p_report_status ~pkt ~unpack ~commands ~sideband decoder =
     let go unpack commands sideband decoder =
       match p_peek_char decoder with
@@ -1008,6 +1064,7 @@ struct
     | NegociationResult  : negociation_result transaction
     | PACK               : side_band -> flow transaction
     | ReportStatus       : side_band -> report_status transaction
+    | HttpReportStatus   : side_band -> report_status transaction
   and ack_mode =
     [ `Ack | `Multi_ack | `Multi_ack_detailed ]
   and flow =
@@ -1025,6 +1082,7 @@ struct
     | NegociationResult              -> p_safe p_negociation_result decoder
     | PACK sideband                  -> p_safe (p_pack ~mode:sideband) decoder
     | ReportStatus sideband          -> p_safe (p_report_status sideband) decoder
+    | HttpReportStatus sideband      -> p_safe (p_http_report_status sideband) decoder
 
   let decoder () =
     { buffer = Cstruct.create 65535
@@ -1409,11 +1467,17 @@ struct
     encoder.pos <- encoder.pos + n;
     flush_pack k encoder
 
+  let w_http_update_request i k encoder =
+    (w_update_request i
+     @@ w_flush k)
+      encoder
+
   type action =
     [ `GitProtoRequest of git_proto_request
     | `UploadRequest of upload_request
     | `HttpUploadRequest of bool * http_upload_request
     | `UpdateRequest of update_request
+    | `HttpUpdateRequest of update_request
     | `Has of Hash.t list
     | `Done
     | `Flush
@@ -1425,6 +1489,7 @@ struct
     | `UploadRequest i          -> w_upload_request i (fun _ -> Ok ()) encoder
     | `HttpUploadRequest (f, i) -> w_http_upload_request ~final:f i (fun _ -> Ok ()) encoder
     | `UpdateRequest i          -> w_update_request i (fun _ -> Ok ()) encoder
+    | `HttpUpdateRequest i      -> w_http_update_request i (fun _ -> Ok ()) encoder
     | `Has l                    -> w_has l (fun _ -> Ok ()) encoder
     | `Done                     -> w_done (fun _ -> Ok ()) encoder
     | `Flush                    -> w_flush (fun _ -> Ok ()) encoder
