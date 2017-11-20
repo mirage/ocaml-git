@@ -1,3 +1,7 @@
+### 1.11.3 (2017-11-20)
+
+- add ocplib-endian to dependencies of git (#233, @hannesm)
+
 ### 1.11.2 (2017-08-02)
 
 - Update to conduit.1.0 and cohttp.0.99 (#226, @samoht)
