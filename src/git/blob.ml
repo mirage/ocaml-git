@@ -130,6 +130,7 @@ module Make
       { res = raw
       ; cur = Cstruct.sub raw 0 0
       ; abs = 0
+      ; owner = false
       ; final = false }
 
     let ensure decoder =
@@ -148,12 +149,18 @@ module Make
 
         let res' = Cstruct.create !size in
         Cstruct.blit decoder.res 0 res' 0 decoder.abs;
-        { decoder with res = res' }
+        { decoder with res = res'; owner = true; }
       end else decoder
+
+    let cstruct_copy cs =
+      let ln = Cstruct.len cs in
+      let rs = Cstruct.create ln in
+      Cstruct.blit cs 0 rs 0 ln;
+      rs
 
     let eval decoder =
       if decoder.final
-      then `End (decoder.cur, (decoder.res : t))
+      then `End (decoder.cur, if decoder.owner then (decoder.res : t) else (cstruct_copy decoder.res : t))
       (* XXX(dinosaure): [finish] takes care about [decoder.res] -
          sub exactly the blob part. *)
       else begin
@@ -170,7 +177,8 @@ module Make
       { decoder with final = true
                    ; res = res' }
 
-    let to_result input = Ok input
+    let to_result input = Ok (cstruct_copy input)
+    (* XXX(dinosaure): we need to take the ownership by default but need to improve the API (TODO). *)
   end
 
   module E =
