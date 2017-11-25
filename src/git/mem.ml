@@ -456,7 +456,13 @@ module Make
 
     module Graph = Reference.Map
 
-    let list t =
+    let list ?locks t =
+      let lock = match locks with
+        | Some locks -> Some (Lock.make locks Path.(t.root / "global"))
+        | None -> None
+      in
+
+      Lock.with_lock lock @@ fun () ->
       let graph, rest =
         Hashtbl.fold
           (fun k -> function
@@ -480,7 +486,7 @@ module Make
       try let _ = Hashtbl.find t.refs r in Lwt.return true
       with Not_found -> Lwt.return false
 
-    let rec read t r =
+    let rec read ?locks:_ t r =
       try match Hashtbl.find t.refs r with
         | `H s -> Lwt.return (Ok (r, Reference.Hash s))
         | `R r -> read t r
