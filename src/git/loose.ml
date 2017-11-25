@@ -437,50 +437,58 @@ module Make
 
     let open Lwt.Infix in
 
-    Log.debug (fun l -> l "Writing a new loose object %a."
+    Log.debug (fun l -> l ~header:"write" "Writing a new loose object %a."
                   Path.pp Path.(root / "objects" / first / rest)[@warning "-44"]);
 
-    FileSystem.File.open_w ~mode:644 Path.(root / "objects" / first / rest)[@warning "-44"]
-    >>= function
-    | Error sys_err ->
-      Log.err (fun l -> l "Retrieving a file-system error: %a." FileSystem.File.pp_error sys_err);
-      Lwt.return (Error (`SystemFile sys_err))
-    | Ok write ->
-      (* XXX(dinosaure): replace this code by [Helper.safe_encoder_to_file]. *)
-      let rec loop encoder = match E.eval raw encoder with
-        | `Flush encoder ->
-          (if E.used encoder > 0
-           then FileSystem.File.write raw ~len:(E.used encoder) write
-           else Lwt.return (Ok 0)) >>=
-          (function
-            | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
-            | Ok n ->
-              if n = E.used encoder
-              then loop (E.flush 0 (Cstruct.len raw) encoder)
-              else begin
-                let rest = E.used encoder - n in
-                Cstruct.blit raw n raw 0 rest;
-                loop (E.flush rest (Cstruct.len raw - rest) encoder)
-              end)
-        | `End (encoder, w) ->
-          if E.used encoder > 0
-          then begin
-            FileSystem.File.write raw ~len:(E.used encoder) write >>=
-            (function
-              | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
-              | Ok n ->
-                if n = E.used encoder
-                then loop (E.flush 0 (Cstruct.len raw) encoder)
-                else begin
-                  let rest = E.used encoder - n in
-                  Cstruct.blit raw n raw 0 rest;
-                  loop (E.flush rest (Cstruct.len raw - rest) encoder)
-                end)
-          end else
-            FileSystem.File.close write
-            >|= (function Ok ()-> Ok w | Error sys_err -> Error (`SystemFile sys_err))
-        | `Error (#E.error as err) -> Lwt.return (Error err)
-      in
+    let module E =
+    struct
+      type state  = E.encoder
+      type raw    = Cstruct.t
+      type result = int
+      type error  = E.error
 
-      loop encoder >|= function Ok w -> Ok (hash, w) | Error err -> Error err
+      let raw_length = Cstruct.len
+      let raw_blit   = Cstruct.blit
+
+      let eval raw state =
+        match E.eval raw state with
+        | `Flush state -> Lwt.return (`Flush state)
+        | `Error error -> Lwt.return (`Error (state, error))
+        | `End state -> Lwt.return (`End state)
+
+      let used = E.used
+      let flush = E.flush
+    end in
+
+    FileSystem.Dir.create ~path:true Path.(root / "objects" / first) >>= function
+    | Error err ->
+      Lwt.return (Error (`SystemDirectory err))
+    | Ok (true | false) ->
+      FileSystem.File.open_w ~mode:0o644 Path.(root / "objects" / first / rest)[@warning "-44"] (* XXX(dinosaure): shadowing ( / ). *)
+      >>= function
+      | Error sys_error ->
+        Lwt.return (Error (`SystemFile sys_error))
+      | Ok oc ->
+        Lwt.finalize
+          (fun () ->
+             Helper.safe_encoder_to_file
+               ~limit:50
+               (module E)
+               FileSystem.File.write
+               oc raw encoder)
+          (fun () -> FileSystem.File.close oc >>= function
+             | Ok () -> Lwt.return ()
+             | Error sys_err ->
+               Log.err (fun l -> l ~header:"write" "Retrieve an error when we close the file-descriptor: %a."
+                           FileSystem.File.pp_error sys_err);
+               Lwt.return ())
+        >>= function
+        | Ok r ->
+          Log.debug (fun l -> l ~header:"write" "Finish to write the object %s / %s." first rest);
+          Lwt.return (Ok (hash, r))
+        | Error err ->
+          match err with
+          | `Stack -> Lwt.return (Error (`SystemIO (Fmt.strf "Impossible to store the loosed Git object %a" (Fmt.hvbox Hash.pp) hash)))
+          | `Writer sys_err -> Lwt.return (Error (`SystemFile sys_err))
+          | `Encoder (`Deflate err) -> Lwt.return (Error (`Deflate err))
 end
