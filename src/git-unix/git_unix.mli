@@ -16,6 +16,12 @@
 
 (** Unix backend. *)
 
+module Inflate = C_inflate
+module Deflate = C_deflate
+module Sha1 = Sha1
+module Fs = Fs_lwt_unix.Fs
+module Lock = Fs_lwt_unix.Lock
+
 module Store : Git.Store.S
   with module Hash = Sha1
    and module Path = Fpath

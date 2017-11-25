@@ -14,4 +14,10 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+module Inflate = C_inflate
+module Deflate = C_deflate
+module Sha1 = Sha1
+module Fs = Fs_lwt_unix.Fs
+module Lock = Fs_lwt_unix.Lock
+
 module Store = Git.Store.Make(Sha1)(Fpath)(Fs_lwt_unix.Lock)(Fs_lwt_unix.Fs)(C_inflate)(C_deflate)
