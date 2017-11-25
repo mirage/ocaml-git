@@ -238,14 +238,7 @@ module Make
     Hash.Digest.feed ctx cs;
     Hash.Digest.get ctx
 
-  let pp_cstruct ppf cs =
-    for i = 0 to Cstruct.len cs - 1
-    do match Cstruct.get_char cs i with
-      | '\000' .. '\031' | '\127' -> Fmt.const Fmt.char '.' ppf ()
-      | chr -> Fmt.char ppf chr
-    done
-
-  let pp      = pp_cstruct
+  let pp ppf blob = (Fmt.hvbox (Minienc.pp_scalar ~get:Cstruct.get_char ~length:Cstruct.len)) ppf blob
   let equal   = Cstruct.equal
   let compare = Cstruct.compare
   let hash    = Hashtbl.hash
