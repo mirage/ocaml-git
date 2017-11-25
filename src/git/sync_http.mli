@@ -63,13 +63,9 @@ sig
      and module Inflate = Store.Inflate
 
   type error =
-    [ `Decoder of Decoder.error
-    | `DecoderFlow of string
-    | `PackDecoder of PACKDecoder.error
+    [ `SmartDecoder of Decoder.error
     | `StorePack of Store.Pack.error
-    | `Unresolved_object
     | `Clone of string
-    | `Apply of string
     | `ReportStatus of string ]
 
   val pp_error : error Fmt.t

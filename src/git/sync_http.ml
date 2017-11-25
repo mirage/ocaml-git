@@ -71,13 +71,9 @@ sig
      and module Inflate = Store.Inflate
 
   type error =
-    [ `Decoder of Decoder.error
-    | `DecoderFlow of string
-    | `PackDecoder of PACKDecoder.error
+    [ `SmartDecoder of Decoder.error
     | `StorePack of Store.Pack.error
-    | `Unresolved_object
     | `Clone of string
-    | `Apply of string
     | `ReportStatus of string ]
 
   val pp_error : error Fmt.t
@@ -163,23 +159,15 @@ module Make
     = Unpack.MakePACKDecoder(Store.Hash)(Store.Inflate)
 
   type error =
-    [ `Decoder of Decoder.error
-    | `DecoderFlow of string
-    | `PackDecoder of PACKDecoder.error
+    [ `SmartDecoder of Decoder.error
     | `StorePack of Store.Pack.error
-    | `Unresolved_object
     | `Clone of string
-    | `Apply of string
     | `ReportStatus of string ]
 
   let pp_error ppf = function
-    | `Decoder err       -> Fmt.pf ppf "(`Decoder %a)" Decoder.pp_error err
-    | `DecoderFlow err   -> Fmt.pf ppf "(`DecoderFlow %s)" err
-    | `PackDecoder err   -> Fmt.pf ppf "(`PackDecoder %a)" (Fmt.hvbox PACKDecoder.pp_error) err
+    | `SmartDecoder err  -> Fmt.pf ppf "(`SmartDecoder %a)" Decoder.pp_error err
     | `StorePack err     -> Fmt.pf ppf "(`StorePack %a)" Store.Pack.pp_error err
-    | `Unresolved_object -> Fmt.pf ppf "`Unresolved_object"
     | `Clone err         -> Fmt.pf ppf "(`Clone %s)" err
-    | `Apply err         -> Fmt.pf ppf "(`Apply %s)" err
     | `ReportStatus err  -> Fmt.pf ppf "(`ReportStatus %s)" err
 
   module Log =
@@ -226,7 +214,7 @@ module Make
         Log.debug (fun l -> l ~header:"dispatch" "Retrieve end of the PACK stream.");
         push None;
         Lwt.return (Ok ())
-      | Error err -> Lwt.return (Error (`Decoder err))
+      | Error err -> Lwt.return (Error (`SmartDecoder err))
     in
 
     let open Lwt_result in
@@ -306,7 +294,7 @@ module Make
     let ( >!= ) = Lwt_result.bind_lwt_err in
 
     consume (Web.Response.body resp) (Decoder.decode decoder (Decoder.HttpReferenceDiscovery "git-upload-pack"))
-    >!= (fun err -> Lwt.return (`Decoder err))
+    >!= (fun err -> Lwt.return (`SmartDecoder err))
 
   type command =
     [ `Create of (Store.Hash.t * string)
@@ -396,7 +384,7 @@ module Make
     consume (Web.Response.body resp) (Decoder.decode decoder (Decoder.HttpReferenceDiscovery "git-receive-pack")) >>= function
     | Error err ->
       Log.err (fun l -> l ~header:"push" "The HTTP decoder returns an error: %a." Decoder.pp_error err);
-      Lwt.return (Error (`Decoder err))
+      Lwt.return (Error (`SmartDecoder err))
     | Ok refs ->
       let common = List.filter (fun x -> List.exists ((=) x) K.default) refs.Decoder.capabilities in
 
@@ -454,7 +442,7 @@ module Make
             Lwt.return (Ok commands)
           | Ok { Decoder.unpack = Error err; _ } ->
             Lwt.return (Error (`ReportStatus err))
-          | Error err -> Lwt.return (Error (`Decoder err))
+          | Error err -> Lwt.return (Error (`SmartDecoder err))
 
   let fetch git ?(shallow = []) ?stdout ?stderr ?headers ?(https = false) ~negociate:(negociate, nstate) ~has ~want ?deepen ?port host path =
     let open Lwt.Infix in
@@ -495,7 +483,7 @@ module Make
     consume (Web.Response.body resp) (Decoder.decode decoder (Decoder.HttpReferenceDiscovery "git-upload-pack")) >>= function
     | Error err ->
       Log.err (fun l -> l ~header:"fetch" "The HTTP decoder returns an error: %a." Decoder.pp_error err);
-      Lwt.return (Error (`Decoder err))
+      Lwt.return (Error (`SmartDecoder err))
     | Ok refs ->
       let common = List.filter (fun x -> List.exists ((=) x) K.default) refs.Decoder.capabilities in
 
@@ -548,10 +536,12 @@ module Make
 
         negociation_request false has >>= fun resp ->
 
+        Log.debug (fun l -> l ~header:"fetch" "Receiving the first negotiation response.");
+
         let next resp =
           consume (Web.Response.body resp)
             (Decoder.decode decoder Decoder.NegociationResult) >>= function
-          | Error err -> Lwt.return (Error (`Decoder err))
+          | Error err -> Lwt.return (Error (`SmartDecoder err))
           | Ok _ -> (* TODO: check negociation result. *)
             let stream () = consume (Web.Response.body resp) (Decoder.decode decoder (Decoder.PACK sideband)) in
             Lwt_result.(populate ?stdout ?stderr git stream >>= fun (_, n) -> Lwt.return (Ok (first :: rest, n)))
@@ -564,7 +554,7 @@ module Make
             consume (Web.Response.body resp)
               (Decoder.decode decoder (Decoder.Negociation (has, ack_mode))) >>= function
             | Error err ->
-              Lwt.return (Error (`Decoder err))
+              Lwt.return (Error (`SmartDecoder err))
             | Ok acks ->
               negociate acks state >>= function
               | `Ready, _ -> next resp
@@ -596,9 +586,12 @@ module Make
     >>= function
     | Ok ([ _, hash ], _) -> Lwt.return (Ok hash)
     | Ok (expect, _) ->
-      Lwt.return (Error (`Clone (Fmt.strf "Unexpected result: %a."
-                                   (Fmt.hvbox (Fmt.Dump.list (Fmt.Dump.pair Store.Reference.pp Store.Hash.pp)))
-                                   expect)))
+      Lwt.return
+        (Error
+           (`Clone
+              (Fmt.strf "Unexpected result: %a."
+                 (Fmt.hvbox (Fmt.Dump.list (Fmt.Dump.pair Store.Reference.pp Store.Hash.pp)))
+                 expect)))
     | Error _ as err -> Lwt.return err
 end
 
