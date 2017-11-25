@@ -134,7 +134,7 @@ sig
     val pp_error : error Fmt.t
     (** Pretty-printer of {!error}. *)
 
-    val list : t -> (Reference.t * Hash.t) list Lwt.t
+    val list : ?locks:Lock.t -> t -> (Reference.t * Hash.t) list Lwt.t
     (** [list state] returns an associated list between reference and
         its bind hash. *)
 
@@ -142,7 +142,7 @@ sig
     (** [exists state ref] returns [true] iff [ref] exists in [state],
         otherwise returns [false]. *)
 
-    val read : t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
+    val read : ?locks:Lock.t -> t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
     (** [read state reference] returns the value contains in the
         reference [reference] (available in the git repository
         [state]). *)
@@ -179,7 +179,7 @@ sig
         condition if it's specified. *)
   end
 
-  val reset : ?locks:Lock.t -> t -> (unit, Ref.error) result Lwt.t
+  val reset : ?locks:Lock.t -> t -> (unit, [ `Store of error | `Ref of Ref.error ]) result Lwt.t
   (** [reset ?locks t] removes all things of the git repository [t]
       and ensures it will be empty. *)
 
