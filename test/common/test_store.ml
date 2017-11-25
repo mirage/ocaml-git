@@ -14,11 +14,11 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+let () = Printexc.record_backtrace true
+
 open Test_common
 open Lwt.Infix
 open Git
-
-(*****************)
 
 let long_random_cstruct () =
   let t  = Unix.gettimeofday () in
@@ -31,23 +31,22 @@ let long_random_string () =
   Cstruct.to_string (long_random_cstruct ())
 
 module Make
-    (Store : Minimal.S with type Hash.Digest.buffer = Cstruct.t
-                        and type Hash.hex = string)
+    (Store : Minimal.S
+     with type Hash.Digest.buffer = Cstruct.t
+      and type Hash.hex = string)
 = struct
-
   module Common = Make(Store)
 
   open Common
 
   module Search = Search.Make(Store)
 
-  let run x test =
-    try Lwt_main.run (x.init () >>= test >>= x.clean)
-    with e ->
-      Lwt_main.run (x.clean ());
-      raise e
+  exception Reset of [ `Store of Store.error | `Ref of Store.Ref.error ]
 
-  let () = quiet ()
+  let run x test =
+    Lwt_main.run (test () >>= fun t -> Store.reset t >>= function
+      | Ok () -> Lwt.return ()
+      | Error err -> Lwt.fail (Reset err))
 
   let v0  = Store.Value.blob (Store.Value.Blob.of_cstruct (long_random_cstruct ()))
   let kv0 = Store.Value.digest v0
@@ -59,7 +58,7 @@ module Make
   let kv2 = Store.Value.digest v2
 
   (* Create a node containing t1 -w-> v1 *)
-  let w = "a\000bbb\047"
+  let w = "a\042bbb\047"
   let t0 = Store.Value.tree
       (Store.Value.Tree.of_list
          [ { Store.Value.Tree.perm = `Normal
@@ -169,16 +168,16 @@ module Make
   (* r2: c2 *)
   let r2 = Store.Reference.of_string "refs/upstream/head"
 
-  let () = verbose ()
-
   let check_write t name k v =
     let open Lwt_result in
 
-    Store.write t v    >>= fun (k', _) ->
+    Store.write t v
+    >>= fun (k', _) ->
     assert_key_equal (name ^ "-key-1") k k';
     Store.read t k     >>= fun v' ->
     assert_value_equal name v v';
-    Store.write t v'   >>= fun (k'', _) ->
+    Store.write t v'
+    >>= fun (k'', _) ->
     assert_key_equal (name ^ "-key-2") k k'';
     Lwt.return (Ok ())
 
@@ -187,14 +186,14 @@ module Make
     assert_key_opt_equal (name ^ "-find") (Some e) k';
     Lwt.return (Ok ())
 
-  let root = Store.Path.v "test-db"
+  let root = Store.Path.v "test-git-store"
 
-  let create ?(index=false) () =
+  let create ~root ?(index=false) () =
     let ( >/= ) = Lwt_result.bind_lwt in
 
     Store.create ~root () >/= fun t  ->
-      Lwt_list.iter_p
-        (fun v -> Store.write t v >>= fun _ -> Lwt.return_unit)
+      Lwt_list.iter_s
+        (fun v -> Store.write t v >>= fun _ -> Lwt.return ())
         (if not index then [
             v0; v1; v2;
             t0; t1; t2; t3; t4;
@@ -214,32 +213,43 @@ module Make
 
   let check_keys t name typ expected =
     Store.list t                     >>= fun ks ->
-    Lwt_list.filter_p (is_ typ t) ks >>= fun ks ->
+    Lwt_list.filter_s (is_ typ t) ks >>= fun ks ->
     Lwt.return (Ok (assert_keys_equal name expected ks))
+
+  module IndexDecoder = Git.Index_pack.Decoder(Store.Hash)
+  module IndexEncoder = Git.Index_pack.Encoder(Store.Hash)
+  module PackDecoder  = Git.Unpack.MakePACKDecoder(Store.Hash)(Store.Inflate)
+  module PackEncoder  = Git.Pack.MakePACKEncoder(Store.Hash)(Store.Deflate)
 
   exception Store of Store.error
   exception Ref of Store.Ref.error
+  exception Pack of Store.Pack.error
+
+  exception IndexDecoder of IndexDecoder.error
+  exception IndexEncoder of IndexEncoder.error
+  exception PackDecoder of PackDecoder.error
+  exception PackEncoder of PackEncoder.error
 
   let test_blobs x () =
     let open Lwt_result in
 
     let test () =
-      create ()                 >>= fun t     ->
+      create ~root ()           >>= fun t     ->
       check_write t "v1" kv1 v1 >>= fun () ->
       check_write t "v2" kv2 v2 >>= fun () ->
 
       check_keys t "blobs" `Blob [kv0; kv1; kv2] >>= fun () ->
-      Lwt.return (Ok ())
+      Lwt.return (Ok t)
     in
     run x (fun () -> let open Lwt.Infix in test () >>= function
-      | Ok () -> Lwt.return ()
+      | Ok t -> Lwt.return t
       | Error err -> Lwt.fail (Store err))
 
   let test_trees x () =
     let test () =
       let open Lwt_result in
 
-      create ()                 >>= fun t  ->
+      create ~root ()           >>= fun t  ->
       check_write t "t1" kt1 t1 >>= fun () ->
       check_write t "t2" kt2 t2 >>= fun () ->
       check_write t "t3" kt3 t3 >>= fun () ->
@@ -258,10 +268,10 @@ module Make
       check_keys t "trees" `Tree [kt0; kt1; kt2; kt3; kt4] >>=
       fun () ->
 
-      Lwt.return (Ok ())
+      Lwt.return (Ok t)
     in
     run x (fun () -> let open Lwt.Infix in test () >>= function
-      | Ok () -> Lwt.return ()
+      | Ok t -> Lwt.return t
       | Error err -> Lwt.fail (Store err))
 
   module B : Git.S.BUFFER with type raw = string and type fixe = Cstruct.t = Cstruct_buffer
@@ -313,7 +323,7 @@ module Make
 
           let open Lwt_result in
 
-          create ()                 >>= fun t   ->
+          create ~root ()           >>= fun t   ->
           check_write t "c1" kc1 c1 >>= fun () ->
           check_write t "c2" kc2 c2 >>= fun () ->
 
@@ -325,18 +335,19 @@ module Make
 
           check_keys t "commits" `Commit [kc1; kc2; kc3] >>= fun () ->
 
-          Lwt.return (Ok ())
-        | _ -> assert false (* TODO: better error? *)
+          Lwt.return (Ok t)
+        | Error (`Decoder err) ->
+          Alcotest.fail (Fmt.strf "(`Decoder %s)" err)
     in
     run x (fun () -> let open Lwt.Infix in test () >>= function
-      | Ok () -> Lwt.return ()
+      | Ok t -> Lwt.return t
       | Error err -> Lwt.fail (Store err))
 
   let test_tags x () =
     let test () =
       let open Lwt_result in
 
-      create () >>= fun t   ->
+      create ~root ()                 >>= fun t   ->
       check_write t "tag1" ktag1 tag1 >>= fun () ->
       check_write t "tag2" ktag2 tag2 >>= fun () ->
 
@@ -347,10 +358,10 @@ module Make
 
       check_keys t "tags" `Tag [ktag1; ktag2] >>= fun () ->
 
-      Lwt.return (Ok ())
+      Lwt.return (Ok t)
     in
     run x (fun () -> let open Lwt.Infix in test () >>= function
-      | Ok () -> Lwt.return ()
+      | Ok t -> Lwt.return t
       | Error err -> Lwt.fail (Store err))
 
   let test_refs x () =
@@ -358,7 +369,7 @@ module Make
       let open Lwt_result in
       let ( >!= ) = Lwt.bind in
 
-      create () >!= function
+      create ~root () >!= function
         | Error err -> Lwt.fail (Store err)
         | Ok t ->
           Store.Ref.write t r1 (Store.Reference.Hash kt4) >>= fun ()   ->
@@ -370,16 +381,16 @@ module Make
           assert_head_contents_equal "r2" (Store.Reference.Hash kc2) kc2';
 
           Store.Ref.list t                 >!= fun rs   ->
-          assert_refs_and_hashes_equal "refs" [r1, kt4; r2, kc2] rs;
+            assert_refs_and_hashes_equal "refs" [r1, kt4; r2, kc2] rs;
 
-          let commit = Store.Hash.of_hex "21930ccb5f7b97e80a068371cb554b1f5ce8e55a" in
-          Store.Ref.write t Store.Reference.head (Store.Reference.Hash commit) >>= fun () ->
-          Store.Ref.read t Store.Reference.head >>= fun (head, value) ->
-          Alcotest.(check head_contents) "head" (Store.Reference.Hash commit) value;
-          Lwt.return (Ok ())
+            let commit = Store.Hash.of_hex "21930ccb5f7b97e80a068371cb554b1f5ce8e55a" in
+            Store.Ref.write t Store.Reference.head (Store.Reference.Hash commit) >>= fun () ->
+            Store.Ref.read t Store.Reference.head >>= fun (head, value) ->
+            Alcotest.(check head_contents) "head" (Store.Reference.Hash commit) value;
+            Lwt.return (Ok t)
     in
     run x (fun () -> let open Lwt.Infix in test () >>= function
-      | Ok () -> Lwt.return ()
+      | Ok t -> Lwt.return t
       | Error err -> Lwt.fail (Ref err))
 
   let test_search x () =
@@ -388,49 +399,25 @@ module Make
 
       let ( >!= ) = Lwt.bind in
 
-      create () >>= fun t ->
+      create ~root () >>= fun t ->
 
       let check k path v =
         Search.find t k path >!= fun v' ->
-        Alcotest.(check (option hash)) "search" (Some v) v';
-        Lwt.return (Ok ())
+          Alcotest.(check (option hash)) "search" (Some v) v';
+          Lwt.return (Ok ())
       in
 
       check kt4 (`Path ["a";"b";"x"]) kv1 >>= fun () ->
       check kc2 (`Commit (`Path ["a";"b";"x"])) kv1 >>= fun () ->
       check kc2 (`Commit (`Path ["a"])) kt2 >>= fun () ->
-      Lwt.return (Ok ())
+      Lwt.return (Ok t)
     in
     run x (fun () -> let open Lwt.Infix in test () >>= function
-      | Ok () -> Lwt.return ()
+      | Ok t -> Lwt.return t
       | Error err -> Lwt.fail (Store err))
-
-  let (/) = Filename.concat
-
-  let get_root () =
-    let pack =
-      "test" / "data" / "pack-328f72997ab8388e268c85b62ea034ab82a7589b.idx"
-    in
-    let rec aux dir =
-      if Sys.file_exists (dir / pack) then dir
-      else if dir = "/" then failwith "no data"
-      else aux (Filename.dirname dir)
-    in
-    aux (Sys.getcwd ())
 
   let filename_index_pack = Fpath.(v "test" / "data" / "pack-328f72997ab8388e268c85b62ea034ab82a7589b.idx")
   let filename_pack = Fpath.(v "test" / "data" / "pack-328f72997ab8388e268c85b62ea034ab82a7589b.pack")
-
-  module IndexDecoder = Git.Index_pack.Decoder(Store.Hash)
-  module IndexEncoder = Git.Index_pack.Encoder(Store.Hash)
-  module PackDecoder = Git.Unpack.MakePACKDecoder(Store.Hash)(Store.Inflate)
-  module PackEncoder = Git.Pack.MakePACKEncoder(Store.Hash)(Store.Deflate)
-
-  exception IndexDecoder of IndexDecoder.error
-  exception IndexEncoder of IndexEncoder.error
-  exception PackDecoder of PackDecoder.error
-  exception PackEncoder of PackEncoder.error
-  exception Pack of Store.Pack.error
 
   module RefIndexPack = Test_index_pack.Value(Store.Hash)
 
@@ -458,21 +445,24 @@ module Make
           if IndexEncoder.used_out state > 0
           then Cstruct_buffer.add buf (Cstruct.sub tmp 0 (IndexEncoder.used_out state));
           Lwt.return (Ok ())
-        | `Error (state, err) -> Lwt.fail (IndexEncoder err)
+        | `Error (state, err) -> Lwt.return (Error err)
       in
 
-      let open Lwt_result in
+      Store.create ~root () >>= function
+      | Error err -> Lwt.fail (Store err)
+      | Ok t ->
+        let open Lwt_result in
 
-      go state >>= fun () ->
-      let buf = Cstruct_buffer.unsafe_contents buf in
-      let res = read_file (Fpath.to_string filename_index_pack) in
+        go state >>= fun () ->
+        let buf = Cstruct_buffer.unsafe_contents buf in
+        let res = read_file (Fpath.to_string filename_index_pack) in
 
-      assert_cstruct_data_equal "raw data" buf res;
-      Lwt.return (Ok ())
+        assert_cstruct_data_equal "raw data" buf res;
+        Lwt.return (Ok t)
     in
     run x (fun () -> let open Lwt.Infix in test () >>= function
-      | Ok () -> Lwt.return ()
-      | Error err -> Lwt.fail (Store err))
+      | Ok t -> Lwt.return t
+      | Error err -> Lwt.fail (IndexEncoder err))
 
   let test_decoder_index_pack x () =
     let module Radix = Common.Radix in
@@ -488,19 +478,22 @@ module Make
         | `End (state, hash) -> Lwt.return (Ok acc)
         | `Hash (state, (hash, crc, off)) ->
           go (Radix.bind acc hash (crc, off)) state
-        | `Error (_, err) -> Lwt.fail (IndexDecoder err)
+        | `Error (_, err) -> Lwt.return (Error err)
       in
 
-      let open Lwt_result in
+      Store.create ~root () >>= function
+      | Error err -> Lwt.fail (Store err)
+      | Ok t ->
+        let open Lwt_result in
 
-      go Radix.empty (IndexDecoder.make ()) >>= fun tree ->
-      assert_index_pack_equal "reference index pack" tree
-        (List.fold_left (fun a (h, v) -> Radix.bind a h v) Radix.empty RefIndexPack.values);
-      Lwt.return (Ok ())
+        go Radix.empty (IndexDecoder.make ()) >>= fun tree ->
+        assert_index_pack_equal "reference index pack" tree
+          (List.fold_left (fun a (h, v) -> Radix.bind a h v) Radix.empty RefIndexPack.values);
+        Lwt.return (Ok t)
     in
     run x (fun () -> let open Lwt.Infix in test () >>= function
-      | Ok () -> Lwt.return ()
-      | Error err -> Lwt.fail (Store err))
+      | Ok t -> Lwt.return t
+      | Error err -> Lwt.fail (IndexDecoder err))
 
   module Graph = Map.Make(Int64)
   module Pack = Common.Radix
@@ -554,6 +547,7 @@ module Make
         0 hunks
       |> fun length' ->
       assert (length = length');
+
       let hash = Store.Hash.Digest.get ctx in
       hash, kind, Cstruct.to_string raw
     in
@@ -563,7 +557,7 @@ module Make
         Lwt_bytes.read ic (Cstruct.to_bigarray src) 0 (Cstruct.len src) >>= fun len ->
         go ~pack ~graph ?current (PackDecoder.refill 0 len state)
       | `End (state, hash) -> Lwt.return (Ok (pack, graph, hash))
-      | `Error (state, err) -> Lwt.fail (PackDecoder err)
+      | `Error (state, err) -> Lwt.return (Error err)
       | `Flush state ->
         let o, n = PackDecoder.output state in
         let current = match current with
@@ -654,16 +648,19 @@ module Make
 
   let test_decoder_pack x () =
     let test () =
-      let open Lwt_result in
+      Store.create ~root () >>= function
+      | Error err -> Lwt.fail (Store err)
+      | Ok t ->
+        let open Lwt_result in
 
-      decode_pack_file filename_pack >>= fun (pack, _, hash) ->
-      assert_index_pack_equal "reference index pack" pack
-        (List.fold_left (fun a (h, v) -> Radix.bind a h v) Radix.empty RefIndexPack.values);
-      Lwt.return (Ok ())
+        decode_pack_file filename_pack >>= fun (pack, _, hash) ->
+        assert_index_pack_equal "reference index pack" pack
+          (List.fold_left (fun a (h, v) -> Radix.bind a h v) Radix.empty RefIndexPack.values);
+        Lwt.return (Ok t)
     in
     run x (fun () -> let open Lwt.Infix in test () >>= function
-      | Ok () -> Lwt.return ()
-      | Error err -> Lwt.fail (Store err))
+      | Ok t -> Lwt.return t
+      | Error err -> Lwt.fail (PackDecoder err))
 
   let cstruct_copy cs =
     let ln = Cstruct.len cs in
@@ -675,7 +672,7 @@ module Make
     let test () =
       let open Lwt_result in
 
-      create () >>= fun t ->
+      Store.create ~root () >>= fun t ->
       let open Lwt.Infix in
 
       Lwt_unix.openfile (Fpath.to_string filename_pack) [O_RDONLY] 0o644 >>= fun ic ->
@@ -688,14 +685,17 @@ module Make
       in
 
       Store.Pack.from t stream >>= function
-      | Error err -> Lwt.fail (Pack err)
+      | Error err ->
+        Lwt.fail (Pack err)
       | Ok _ ->
         Store.contents t >>= function
-        | Error err -> Lwt.fail (Store err)
+        | Error err ->
+          Lwt.fail (Store err)
         | Ok lst ->
           let snd (a, b) = Lwt.return b in
-          Lwt_list.map_p snd lst >>= Store.Pack.make t >>= function
-          | Error err -> assert false
+          Lwt_list.map_s snd lst >>= Store.Pack.make t >>= function
+          | Error err ->
+            Lwt.fail (Pack err)
           | Ok (stream, graph) ->
             let thread, u = Lwt.wait () in
 
@@ -724,8 +724,8 @@ module Make
                 let len = min (Cstruct.len raw - pos) len in
                 Lwt.return (Ok (Cstruct.sub raw pos len))
               let close _ = Lwt.return (Ok ())
-            end
-            in
+            end in
+
             let module Decoder = Unpack.MakeDecoder(Store.Hash)(Mapper)(Store.Inflate) in
             let ztmp = Cstruct.create 0x8000 in
             let wtmp = Store.Inflate.window () in
@@ -733,25 +733,27 @@ module Make
             Decoder.make pack_raw
               (fun _ -> None)
               (fun hash ->
-                try let (crc, off) = Store.Pack.Graph.find hash graph in
-                    Some (crc, off)
-                with _ -> None)
+                 try let (crc, off) = Store.Pack.Graph.find hash graph in
+                   Some (crc, off)
+                 with _ -> None)
               (fun _ -> None)
               (fun hash -> Store.read_inflated t hash)
             >>= function
             | Ok state ->
               let fst (a, b) = Lwt.return a in
-              Lwt_list.map_p fst lst >>=
-              Lwt_list.iter_p
+              Lwt_list.map_s fst lst >>=
+              Lwt_list.iter_s
                 (fun hash ->
                    Decoder.get_with_allocation state hash ztmp wtmp >>= function
                    | Ok _ -> Lwt.return ();
                    | Error err -> assert false)
-              >>= fun () -> Lwt.return (Ok ())
+              >>= fun () -> Lwt.return (Ok t)
             | Error () -> assert false
+            (* XXX(dinosaure): this error should never happen
+               because [Mapper.map] returns [Ok] every times. *)
     in
     run x (fun () -> let open Lwt.Infix in test () >>= function
-      | Ok () -> Lwt.return ()
+      | Ok t -> Lwt.return t
       | Error err -> Lwt.fail (Store err))
 end
 
@@ -769,7 +771,3 @@ let suite (speed, x) =
   ; "Index pack encoder"        , speed, T.test_encoder_index_pack x
   ; "Pack decoder"              , `Slow, T.test_decoder_pack x
   ; "Pack encoder"              , `Slow, T.test_encoder_pack x ]
-
-let run name ?(extra=[]) tl =
-  verbose ();
-  Alcotest.run name (extra @ List.map suite tl)

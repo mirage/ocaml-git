@@ -1,5 +1,6 @@
 (*
  * Copyright (c) 2013-2017 Thomas Gazagnaire <thomas@gazagnaire.org>
+ * and Romain Calascibetta <romain.calascibetta@gmail.com>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -18,82 +19,117 @@ open Git
 open Lwt.Infix
 open Test_common
 
-let root = "test-db"
+module Make
+    (Store : Minimal.S
+     with type Hash.Digest.buffer = Cstruct.t
+      and type Hash.hex = string)
+= struct
+  module Sync = Git_tcp_unix.Make(Git_tcp_unix.Default)(Store)
+  module HttpSync = Git_cohttp_lwt_unix.Make(Git_http.Default)(Store)
 
-module Make (Store: Store.S) = struct
+  exception Sync of Sync.error'
 
-  module Sync = Git_unix.Sync.Make(Store)
   module T = Test_store.Make(Store)
   include T
 
-  let test_basic_remote x () =
+  let root = Store.Path.v "test-git-unix-store"
+
+  let test_tcp_remote x () =
     let test () =
-      let gri = Gri.of_string "git://localhost/" in
-      create () >>= fun t ->
-      Store.read_head t >>= fun head ->
-      Alcotest.(check (option head_contents)) "no head" None head;
-      Sync.fetch t gri >>= fun _ ->
-      Sync.push t gri ~branch:Reference.master >>= fun _ ->
-      Lwt.return_unit
+      let uri = Uri.of_string "git://localhost/" in
+
+      create ~root () >>= function
+      | Error err -> Lwt.return (Error err)
+      | Ok t ->
+        (* XXX(dinosaure): an empty repository has the HEAD reference
+           points to refs/heads/master which one does not exists. If
+           we want to know if a repository is empty, we need to check
+           [Store.Reference.master]. *)
+        Store.Ref.exists t Store.Reference.master >>= function
+        | true ->
+          Alcotest.fail "non-empty repository!"
+        | false ->
+          Sync.fetch_all t uri >>= function
+          | Error err -> Lwt.fail (Sync err)
+          | Ok () ->
+            Sync.easy_update t ~reference:Store.Reference.master uri >>= function
+            | Error err ->
+              Lwt.fail (Sync err)
+            | Ok [] -> Lwt.return (Ok t)
+            | Ok (_ :: _) ->
+              Alcotest.fail "de-synchronization of the git repository"
     in
-    run x test
+    run x (fun () -> let open Lwt.Infix in test () >>= function
+      | Ok t -> Lwt.return t
+      | Error err -> Lwt.fail (Store err))
 
   let test_clone x () =
     let test () =
+      let open Lwt_result in
+
       Store.create ~root () >>= fun t ->
-      let clone ?depth ?(bare=true) ?branch gri =
-        x.init () >>= fun () ->
-        Store.list t >>= fun l ->
-        Alcotest.(check (list sha1))
-          (Printf.sprintf "empty depth=%s branch=%s uri=%s"
-             (match depth with None -> "<none>" | Some d -> string_of_int d)
-             (match branch with
-              | None   -> "<none>"
-              | Some h -> Fmt.to_to_string Git.Sync.pp_want h)
-             (Gri.to_string gri))
-          l [];
-        Sync.clone t ?deepen:depth ?branch ~checkout:(not bare) gri >>= fun _ ->
-        if x.shell then (
-          let cmd = Printf.sprintf "cd %s && git fsck" @@ Store.root t in
-          Alcotest.(check int) "fsck" 0 (Sys.command cmd)
-        );
-        let master = Reference.master in
-        let e = match branch with
-          | None             -> Reference.Ref master
-          | Some (`Ref b)    -> Reference.Ref b
-          | Some (`Commit h) -> Reference.Hash h
-        in
-        Store.list t >>= fun sha1s ->
-        Lwt_list.iter_s (fun sha1 ->
-            Store.read_exn t sha1 >>= fun _v ->
-            Lwt.return_unit
-          ) sha1s
+
+      let clone_tcp ?(reference = Store.Reference.master) t uri =
+        let open Lwt.Infix in
+
+        Sync.easy_clone t ~reference uri >>= fun _ ->
+        let open Lwt.Infix in
+
+        Store.list t
+        >>= Lwt_list.iter_s
+          (fun hash ->
+             Store.read_exn t hash >>= fun _ -> Lwt.return ())
         >>= fun () ->
-        Store.read_head t >>= function
-        | None   -> Alcotest.fail "empty clone!"
-        | Some h ->
-          Alcotest.(check head_contents) "correct head contents" e h;
-          Lwt.return_unit
+        Store.Ref.read t Store.Reference.head >>= function
+        | Error _ -> Alcotest.fail "empty clone!"
+        | Ok (_, v) -> Store.reset t
+          >>= function
+          | Ok () -> Lwt.return ()
+          | Error (`Store err) -> Lwt.fail (Store err)
+          | Error (`Ref err) -> Lwt.fail (Ref err)
       in
-      let git = Gri.of_string "git://github.com/mirage/ocaml-git.git" in
-      let https = Gri.of_string "https://github.com/mirage/ocaml-git.git" in
-      (* let large = Gri.of_string "https://github.com/ocaml/opam-repository.git" in *)
-      let gh_pages = `Ref (Reference.of_raw "refs/heads/gh-pages") in
-      let commit =
-        `Commit (Hash_IO.Commit.of_hex "f7a8f077e4d880db173f3f48a74d5a3fc9210b4e")
-      in
-      clone git   >>= fun () ->
-      clone https >>= fun () ->
-      clone git   ~branch:gh_pages >>= fun () ->
-      clone https ~branch:gh_pages >>= fun () ->
-      clone https ~depth:1 ~branch:commit   >>= fun () ->
-      clone git   ~depth:3 ~branch:gh_pages >>= fun () ->
-      (* clone large ~bare:false  >>= fun () -> *)
 
-      Lwt.return_unit
+      let clone_http ?(reference = Store.Reference.master) t uri =
+        let open Lwt.Infix in
+
+        HttpSync.easy_clone t ~reference uri >>= fun _ ->
+        let open Lwt.Infix in
+
+        Store.list t
+        >>= Lwt_list.iter_s
+          (fun hash ->
+             Store.read_exn t hash >>= fun _ -> Lwt.return ())
+        >>= fun () ->
+        Store.Ref.read t Store.Reference.head >>= function
+        | Error _ -> Alcotest.fail "empty clone!"
+        | Ok _ -> Store.reset t
+          >>= function
+          | Ok () -> Lwt.return ()
+          | Error (`Store err) -> Lwt.fail (Store err)
+          | Error (`Ref err) -> Lwt.fail (Ref err)
+      in
+
+      let tcp_ocaml_git   = Uri.of_string "git://github.com/mirage/ocaml-git.git" in
+      let http_ocaml_git  = Uri.of_string "http://github.com/mirage/ocaml-git.git" in
+      let https_ocaml_git = Uri.of_string "https://github.com/mirage/ocaml-git.git" in
+
+      let gh_pages  = Store.Reference.of_string "refs/heads/gh-pages" in
+
+      let open Lwt.Infix in
+
+      clone_tcp  t tcp_ocaml_git                      >>= fun () ->
+      clone_tcp  t tcp_ocaml_git  ~reference:gh_pages >>= fun () ->
+      clone_http t http_ocaml_git                     >>= fun () ->
+      clone_http t https_ocaml_git                    >>= fun () ->
+      clone_http t http_ocaml_git ~reference:gh_pages >>= fun () ->
+
+      Lwt.return (Ok t)
     in
-    run x test
+    run x (fun () -> let open Lwt.Infix in test () >>= function
+      | Ok t -> Lwt.return t
+      | Error err -> Lwt.fail (Store err))
 
+(*
   let test_fetch x () =
     let test_one gri c0 c1 ?(update=false) diff =
       x.init () >>= fun () ->
@@ -103,7 +139,7 @@ module Make (Store: Store.S) = struct
       let fetch gri (branch, commit) =
         let b = Reference.of_raw ("refs/heads/" ^ branch) in
         let c = Hash_IO.of_hex commit in
-        Sync.clone t ~branch:(`Commit (Hash.to_commit c)) ~checkout:false gri
+>        Sync.clone t ~branch:(`Commit (Hash.to_commit c)) ~checkout:false gri
         >>= fun r ->
         Store.write_reference t b c >>= fun () ->
         if x.shell then (
@@ -205,9 +241,11 @@ module Make (Store: Store.S) = struct
       Lwt.return_unit
     in
     run x test
+*)
 
 end
 
+(*
 let test_read_writes () =
   Lwt_main.run begin
     let file = "/tmp/test-git" in
@@ -229,65 +267,31 @@ let test_read_writes () =
     write 1
     >>= fun () -> Lwt.join [ write 500; read 1000; write 1000; read 500; ]
   end
+*)
 
 let suite (speed, x) =
   let (module S) = x.store in
   let module T = Make(S) in
   x.name,
-  [
-    "Operations on blobs"       , speed, T.test_blobs x;
-    "Operations on trees"       , speed, T.test_trees x;
-    "Operations on commits"     , speed, T.test_commits x;
-    "Operations on tags"        , speed, T.test_tags x;
-    "Operations on references"  , speed, T.test_refs x;
-    "Operations on index"       , speed, T.test_index x;
-    "Operations on pack files"  , speed, T.test_packs x;
-    "Search"                    , speed, T.test_search x;
-    "Resource leaks"            , `Slow, T.test_leaks x;
-    "Basic Remote operations"   , `Slow, T.test_basic_remote x;
-    "Fetching remote repos"     , `Slow, T.test_fetch x;
-    "Cloning remote repos"      , `Slow, T.test_clone x;
-  ]
+  [ "TCP Remote operations"          , `Slow, T.test_tcp_remote x
+  ; "TCP & HTTP Cloning remote repos", `Slow, T.test_clone x ]
 
-let extra = [
-  "OPS"        , ["Concurrent read/writes", `Quick, test_read_writes];
-  "SHA1-unix"  , Test_store.array (module Git_unix.SHA1);
-  "SHA256-unix", Test_store.array (module Git_unix.SHA256);
-]
+module MemStore = Git.Mem.Make(Git_unix.Sha1)(Fpath)(Lwt_lock)(Git_unix.Inflate)(Git_unix.Deflate)(Cstruct_buffer)
+module UnixStore = Git_unix.Store
 
-module Memory = Git.Mem.Make(Git_unix.SHA1)(Git_unix.Zlib)
+let mem_backend =
+  { name  = "Memory"
+  ; store = (module MemStore)
+  ; shell = false }
 
-let mem_init () =
-  Git.Value.Cache.clear ();
-  Memory.clear_all ();
-  Lwt.return_unit
-
-let mem_suite = {
-  name  = "MEM";
-  init  = mem_init;
-  clean = unit;
-  store = (module Memory);
-  shell = false;
-}
-
-module FS = Git_unix.FS
-
-let fs_init () =
-  FS.clear ();
-  FS.create ~root () >>= fun t ->
-  FS.reset t
-
-let fs_suite =
-  {
-    name  = "FS";
-    init  = fs_init;
-    clean = unit;
-    store = (module FS);
-    shell = true;
-  }
+let unix_backend =
+  { name  = "Unix Store"
+  ; store = (module UnixStore)
+  ; shell = true }
 
 let () =
-  Test_store.run ~extra "git" [
-    `Quick, mem_suite;
-    `Quick, fs_suite;
-  ]
+  Alcotest.run "git-unix"
+    [ Test_store.suite (`Quick, mem_backend)
+    ; Test_store.suite (`Quick, unix_backend)
+    ; suite (`Slow, mem_backend)
+    ; suite (`Slow, unix_backend) ]

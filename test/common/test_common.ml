@@ -16,6 +16,8 @@
 
 open Lwt.Infix
 
+let () = Random.self_init ()
+
 let pp ppf style h = Fmt.pf ppf "%a " Fmt.(styled style string) h
 
 let pad n x =
@@ -46,20 +48,20 @@ let setup_log level =
 let verbose () = setup_log (Some Logs.Debug)
 let quiet () = setup_log None
 
-let cmp_opt fn x y =
+let compare_option fn x y =
   match x, y with
   | Some x, Some y -> fn x y
   | None  , None   -> true
   | Some _, None
   | None  , Some _ -> false
 
-let printer_opt fn = function
+let printer_option fn = function
   | None   -> "<none>"
   | Some v -> fn v
 
-let rec cmp_list fn x y =
+let rec compare_list fn x y =
   match x, y with
-  | xh::xt, yh::yt -> fn xh yh && cmp_list fn xt yt
+  | xh::xt, yh::yt -> fn xh yh && compare_list fn xt yt
   | []    , []     -> true
   | _              -> false
 
@@ -67,15 +69,15 @@ let printer_list pp_data = Fmt.hvbox (Fmt.Dump.list pp_data)
 
 module Make (S : Git.Minimal.S) = struct
 
-  let cmp_list eq comp l1 l2 =
-    cmp_list eq (List.sort comp l1) (List.sort comp l2)
+  let compare_list equal compare l1 l2 =
+    compare_list equal (List.sort compare l1) (List.sort compare l2)
 
   let mk equal compare pp =
-    let aux (type a) cmp pp msg =
+    let aux (type a) compare pp msg =
       let testable : a Alcotest.testable =
         let module M = struct
           type t = a
-          let equal = cmp
+          let equal = compare
           let pp = pp
         end in
         (module M)
@@ -83,8 +85,8 @@ module Make (S : Git.Minimal.S) = struct
       Alcotest.check testable msg
     in
     aux equal pp,
-    aux (cmp_opt equal) Fmt.(option pp),
-    aux (cmp_list equal compare) Fmt.(list pp)
+    aux (compare_option equal) Fmt.(option pp),
+    aux (compare_list equal compare) Fmt.(list pp)
 
   let assert_key_equal, assert_key_opt_equal, assert_keys_equal =
     mk S.Hash.equal S.Hash.compare S.Hash.pp
@@ -135,8 +137,8 @@ module Make (S : Git.Minimal.S) = struct
         S.Hash.pp Fmt.(Dump.pair Git.Crc32.pp int64)
     in
 
-    let compare a b = if cmp_list equal_value (fun (a, _) (b, _) -> S.Hash.compare a b) a b then 0 else 1 in
-    let equal a b = cmp_list equal_value (fun (a, _) (b, _) -> S.Hash.compare a b) a b in
+    let compare a b = if compare_list equal_value (fun (a, _) (b, _) -> S.Hash.compare a b) a b then 0 else 1 in
+    let equal a b = compare_list equal_value (fun (a, _) (b, _) -> S.Hash.compare a b) a b in
     let pp = Fmt.Dump.list pp_value in
 
     mk
@@ -162,53 +164,14 @@ let directories dir =
 let files dir =
   list_files (fun f -> try not (Sys.is_directory f) with _ -> false) dir
 
-let rec_files dir =
+let recursive_files dir =
   let rec aux accu dir =
     directories dir >>= fun ds ->
     files dir       >>= fun fs ->
     Lwt_list.fold_left_s aux (fs @ accu) ds in
   aux [] dir
 
-module SHA1 =
-struct
-  include Digestif.SHA1.Bytes
-
-  let equal = Bytes.equal
-end
-
-module SHA1Set = Set.Make(SHA1)
-
-let sha1 = (module SHA1 : Alcotest.TESTABLE with type t = Bytes.t)
-
-let sha1s =
-  let module M = struct
-    type t = SHA1Set.t
-    let equal = SHA1Set.equal
-    let pp ppf set = (Fmt.hvbox (Fmt.Dump.list SHA1.pp)) ppf (SHA1Set.elements set)
-  end
-  in (module M: Alcotest.TESTABLE with type t = M.t)
-
 type t =
   { name  : string
-  ; init  : unit -> unit Lwt.t
-  ; clean : unit -> unit Lwt.t
   ; store : (module Git.Minimal.S)
   ; shell : bool }
-
-let unit () = Lwt.return_unit
-
-let list_filter_map f l =
-  List.fold_left (fun l elt ->
-      match f elt with
-      | None   -> l
-      | Some x -> x :: l
-    ) [] l
-  |> List.rev
-
-let with_buffer fn =
-  let buf = Buffer.create 1024 in
-  fn buf;
-  Buffer.contents buf
-
-let with_buffer' fn =
-  Cstruct.of_string (with_buffer fn)
