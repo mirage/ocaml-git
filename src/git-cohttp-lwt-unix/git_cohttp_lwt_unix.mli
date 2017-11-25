@@ -22,6 +22,12 @@ module Make
      and module Store  := S
      and module Buffer := Git_http.Cstruct_buffer
 
-  val fetch_all : S.t -> Uri.t -> ((S.Reference.t * S.Hash.t) list * int, error) result Lwt.t
-  val easy_update : S.t -> reference:S.Reference.t -> Uri.t -> ((S.Reference.t, S.Reference.t * string) result list, error) result Lwt.t
+  type error' =
+    [ `StoreRef of S.Ref.error
+    | `Sync of error ]
+
+  val fetch_all : S.t -> ?locks:S.Lock.t -> Uri.t -> (unit, error') result Lwt.t
+  val fetch_one : S.t -> ?locks:S.Lock.t -> reference:S.Reference.t -> Uri.t -> (unit, error') result Lwt.t
+  val easy_clone : S.t -> ?locks:S.Lock.t -> reference:S.Reference.t -> Uri.t -> (unit, error') result Lwt.t
+  val easy_update : S.t -> reference:S.Reference.t -> Uri.t -> ((S.Reference.t, S.Reference.t * string) result list, error') result Lwt.t
 end

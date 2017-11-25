@@ -33,6 +33,9 @@ struct
 
     (* XXX(dinosaure): [~chunked:false] is mandatory, I don't want to
        explain why (I lost one day to find this bug) but believe me. *)
+
+    Log.debug (fun l -> l ~header:"call" "Send a request to %a." Uri.pp_hum uri);
+
     Cohttp_lwt_unix.Client.call ?headers ?body ~chunked:false meth uri >>= fun ((resp, _) as v) ->
     if Cohttp.Code.is_redirection (Cohttp.Code.code_of_status (Cohttp.Response.status resp))
     then begin
@@ -51,15 +54,29 @@ struct
     end else Lwt.return { resp; body = snd v; }
 end
 
+module Option =
+struct
+  let mem v x ~equal = match v with Some x' -> equal x x' | None -> false
+  let value_exn v ~error = match v with Some v -> v | None -> raise (Invalid_argument error)
+end
+
 module Make
     (K : Git.Sync.CAPABILITIES)
-    (S : Git.Minimal.S with type Hash.Digest.buffer = Cstruct.t
-                        and type Hash.hex = string)
+    (S : Git.Minimal.S
+     with type Hash.Digest.buffer = Cstruct.t
+      and type Hash.hex = string)
 = struct
   include Git_http.Make(K)(CohttpClient)(S)
+
+  type error' =
+    [ `StoreRef of S.Ref.error
+    | `Sync of error ]
+
   module Negociator = Git.Negociator.Make(S)
 
-  let fetch_all t repository =
+  exception Jump of S.Ref.error
+
+  let fetch_all t ?locks repository =
     let open Lwt.Infix in
 
     Negociator.find_common t >>= fun (has, state, continue) ->
@@ -72,20 +89,78 @@ module Make
         (function (hash, refname, false) ->
            let reference = S.Reference.of_string refname in
            Lwt.return (Some (reference, hash))
-           (* XXX(dinosaure): we consider than remote reference was binded with local reference (which has the same name). *)
                 | _ -> Lwt.return None)
         refs
     in
-    let host = match Uri.host repository with
-      | Some host -> host
-      | None -> raise (Invalid_argument (Fmt.strf "Expected an http url with host: %a." Uri.pp_hum repository))
-    in
-    let https = match Uri.scheme repository with
-      | Some "https" -> true
-      | _ -> false
-    in
+
+    let host = Option.value_exn (Uri.host repository) ~error:(Fmt.strf "Expected an http url with host: %a." Uri.pp_hum repository) in
+    let https = Option.mem (Uri.scheme repository) "https" ~equal:String.equal in
+
+    let open Lwt_result in
+    let ( >!= ) = Lwt_result.bind_lwt_err in
 
     fetch t ~https ?port:(Uri.port repository) ~negociate:(continue, state) ~has ~want host (Uri.path_and_query repository)
+    >!= (fun err -> Lwt.return (`Sync err))
+    >>= fun (lst, _) ->
+    Lwt.catch
+      (fun () ->
+         let open Lwt.Infix in
+         Lwt_list.iter_s
+           (fun (reference, hash) ->
+              S.Ref.write t ?locks reference (S.Reference.Hash hash) >>= function
+              | Ok _ -> Lwt.return ()
+              | Error err -> Lwt.fail (Jump err))
+           lst >>= fun () -> Lwt.return (Ok ()))
+      (function Jump err -> Lwt.return (Error (`StoreRef err)))
+
+  let easy_clone t ?locks ~reference repository =
+    let host = Option.value_exn (Uri.host repository) ~error:(Fmt.strf "Expected an http url with host: %a." Uri.pp_hum repository) in
+    let https = Option.mem (Uri.scheme repository) "https" ~equal:String.equal in
+
+    let open Lwt_result in
+    let ( >!= ) = Lwt_result.bind_lwt_err in
+
+    clone t ~https ?port:(Uri.port repository) host (Uri.path_and_query repository)
+    >!= (fun err -> Lwt.return (`Sync err))
+    >>= function
+    | hash' ->
+      S.Ref.write t ?locks reference (S.Reference.Hash hash')
+      >!= (fun err -> Lwt.return (`StoreRef err))
+      >>= fun () -> S.Ref.write t ?locks S.Reference.head (S.Reference.Ref reference)
+      >!= (fun err -> Lwt.return (`StoreRef err))
+
+  let fetch_one t ?locks ~reference repository =
+    let open Lwt.Infix in
+
+    Negociator.find_common t >>= fun (has, state, continue) ->
+    let continue { Decoder.acks; shallow; unshallow } state =
+      continue { Git.Negociator.acks; shallow; unshallow } state
+    in
+
+    let want refs =
+      Lwt_list.filter_map_p
+        (function (hash, refname, false) ->
+           let reference' = S.Reference.of_string refname in
+           if S.Reference.equal reference reference'
+           then Lwt.return (Some (reference, hash))
+           else Lwt.return None
+                | _ -> Lwt.return None)
+        refs
+    in
+
+    let host = Option.value_exn (Uri.host repository) ~error:(Fmt.strf "Expected an http url with host: %a." Uri.pp_hum repository) in
+    let https = Option.mem (Uri.scheme repository) "https" ~equal:String.equal in
+
+    let open Lwt_result in
+    let ( >!= ) = Lwt_result.bind_lwt_err in
+
+    fetch t ~https ?port:(Uri.port repository) ~negociate:(continue, state) ~has ~want host (Uri.path_and_query repository)
+    >!= (fun err -> Lwt.return (`Sync err))
+    >>= function
+    | [ (reference', hash') ], _ ->
+      S.Ref.write t ?locks reference' (S.Reference.Hash hash')
+      >!= (fun err -> Lwt.return (`StoreRef err))
+    | _ -> Lwt.return (Ok ()) (* TODO *)
 
   let easy_update t ~reference repository =
     let open Lwt.Infix in
@@ -100,18 +175,15 @@ module Make
       else Lwt.return ([], [ `Update (remote_hash, local_hash, remote_refname) ])
     in
 
-    let host = match Uri.host repository with
-      | Some host -> host
-      | None -> raise (Invalid_argument (Fmt.strf "Expected an http url with host: %a." Uri.pp_hum repository))
-    in
-    let https = match Uri.scheme repository with
-      | Some "https" -> true
-      | _ -> false
-    in
+    let host = Option.value_exn (Uri.host repository) ~error:(Fmt.strf "Expected an http url with host: %a." Uri.pp_hum repository) in
+    let https = Option.mem (Uri.scheme repository) "https" ~equal:String.equal in
 
     let open Lwt_result in
+    let ( >!= ) = Lwt_result.bind_lwt_err in
 
-    push t ~push:push_handler ~https ?port:(Uri.port repository) host (Uri.path_and_query repository) >>= fun lst ->
+    push t ~push:push_handler ~https ?port:(Uri.port repository) host (Uri.path_and_query repository)
+    >!= (fun err -> Lwt.return (`Sync err))
+    >>= fun lst ->
     ok (Lwt_list.map_p (function
         | Ok refname -> Lwt.return (Ok (S.Reference.of_string refname))
         | Error (refname, err) -> Lwt.return (Error (S.Reference.of_string refname, err))) lst)
