@@ -1865,13 +1865,13 @@ module Make
     let ( >>! ) v f = bind_lwt_err v f in
 
     Lock.with_lock lock @@ fun () ->
-    (FileSystem.Dir.delete ~recurse:true Path.(t.root / "objects")
-     >>= fun _ -> FileSystem.Dir.create Path.(t.root / "objects")
-     >>= fun _ -> FileSystem.Dir.create Path.(t.root / "objects" / "info")
-     >>= fun _ -> FileSystem.Dir.create Path.(t.root / "objects" / "pack")
-     >>= fun _ -> FileSystem.Dir.delete ~recurse:true Path.(t.root / "refs")
-     >>= fun _ -> FileSystem.Dir.create Path.(t.root / "refs" / "heads")
-     >>= fun _ -> FileSystem.Dir.create Path.(t.root / "refs" / "tags"))
+    (FileSystem.Dir.delete ~recurse:true Path.(t.dotgit / "objects")
+     >>= fun _ -> FileSystem.Dir.create Path.(t.dotgit / "objects")
+     >>= fun _ -> FileSystem.Dir.create Path.(t.dotgit / "objects" / "info")
+     >>= fun _ -> FileSystem.Dir.create Path.(t.dotgit / "objects" / "pack")
+     >>= fun _ -> FileSystem.Dir.delete ~recurse:true Path.(t.dotgit / "refs")
+     >>= fun _ -> FileSystem.Dir.create Path.(t.dotgit / "refs" / "heads")
+     >>= fun _ -> FileSystem.Dir.create Path.(t.dotgit / "refs" / "tags"))
     >>! (fun err -> Lwt.return (`Store (`SystemDirectory err)))
     >>= fun _ -> (delete_files t.root >>! (fun err -> Lwt.return (`Store (`SystemDirectory err))))
     >>= fun _ -> Ref.write t Reference.head Reference.(Ref (of_string "refs/heads/master"))
