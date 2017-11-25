@@ -401,30 +401,34 @@ module Make
       let flush = Deflate.flush
     end in
 
-    FileSystem.Dir.create ~path:true Path.(root / "objects" / first) >>= function
+    FileSystem.Dir.create ~path:true Path.(root / "objects" / first)
+    >>= function
     | Error err -> Lwt.return (Error (`SystemDirectory err))
     | Ok (true | false) ->
       FileSystem.File.open_w ~mode:0o644 Path.(root / "objects" / first / rest)[@warning "-44"] (* XXX(dinosaure): shadowing ( / ). *)
       >>= function
       | Error sys_error -> Lwt.return (Error (`SystemFile sys_error))
-      | Ok write ->
-        Helper.safe_encoder_to_file
-          ~limit:50
-          (module E)
-          FileSystem.File.write
-          write raw state
+      | Ok oc ->
+        Lwt.finalize
+          (fun () -> Helper.safe_encoder_to_file
+              ~limit:50
+              (module E)
+              FileSystem.File.write
+              oc raw state)
+          (fun () -> FileSystem.File.close oc >>= function
+             | Ok () -> Lwt.return ()
+             | Error sys_err ->
+               Log.err (fun l -> l ~header:"write_inflated" "Retrieve an error when we close the file-descriptor: %a."
+                           FileSystem.File.pp_error sys_err);
+               Lwt.return ())
         >>= function
-        | Ok () -> FileSystem.File.close write >>=
-          (function
-            | Ok () -> Lwt.return (Ok hash)
-            | Error sys_err -> Lwt.return (Error (`SystemFile sys_err)))
+        | Ok () ->
+          Lwt.return (Ok hash)
         | Error err ->
-          FileSystem.File.close write >>= function
-          | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
-          | Ok () -> match err with
-            | `Stack -> Lwt.return (Error (`SystemIO (Fmt.strf "Impossible to store the loosed Git object %a" (Fmt.hvbox Hash.pp) hash)))
-            | `Writer sys_err -> Lwt.return (Error (`SystemFile sys_err))
-            | `Encoder err -> Lwt.return (Error (`Deflate err))
+          match err with
+          | `Stack -> Lwt.return (Error (`SystemIO (Fmt.strf "Impossible to store the loosed Git object %a" (Fmt.hvbox Hash.pp) hash)))
+          | `Writer sys_err -> Lwt.return (Error (`SystemFile sys_err))
+          | `Encoder err -> Lwt.return (Error (`Deflate err))
 
   let write ~root ?(capacity = 0x100) ?(level = 4) ~ztmp ~raw value =
     let hash        = digest value in
