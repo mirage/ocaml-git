@@ -118,10 +118,12 @@ module Make
     let pp_error ppf (`Decoder err) =
       Helper.ppe ~name:"`Decoder" Fmt.string ppf err
 
-    type decoder = { res : t
-                   ; cur : Cstruct.t
-                   ; abs : int
-                   ; final : bool }
+    type decoder =
+      { res : t
+      ; cur : Cstruct.t
+      ; abs : int
+      ; owner : bool
+      ; final : bool }
     and raw = Cstruct.t
 
     let default raw =

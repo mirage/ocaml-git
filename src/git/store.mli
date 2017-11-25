@@ -553,10 +553,11 @@ sig
   (** The Value module, which represents the Git object. *)
 
   module Reference
-    : Reference.IO with module Hash = Hash
-                    and module Path = Path
-                    and module Lock = Lock
-                    and module FileSystem = FileSystem
+    : Reference.IO
+      with module Hash = Hash
+       and module Path = Path
+       and module Lock = Lock
+       and module FileSystem = FileSystem
   (** The Reference module, which represents the Git reference. *)
 
   module PACKDecoder

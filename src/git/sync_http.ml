@@ -50,13 +50,13 @@ end
 
 module type S =
 sig
-  module Web    : S.WEB
+  module Web : S.WEB
   module Client : CLIENT
     with type headers = Web.HTTP.headers
      and type meth = Web.HTTP.meth
      and type uri = Web.uri
      and type resp = Web.resp
-  module Store  : Minimal.S
+  module Store : Minimal.S
     with type Hash.Digest.buffer = Cstruct.t
      and type Hash.hex = string
   module Buffer : S.BUFFER
@@ -125,21 +125,25 @@ end
 
 module Make
     (K : Sync.CAPABILITIES)
-    (W : S.WEB with type +'a io = 'a Lwt.t
-                and type raw = Cstruct.t
-                and type uri = Uri.t
-                and type Request.body = Lwt_cstruct_flow.i
-                and type Response.body = Lwt_cstruct_flow.o)
-    (C : CLIENT with type +'a io = 'a W.io
-                 and type headers = W.HTTP.headers
-                 and type body = Lwt_cstruct_flow.o
-                 and type meth = W.HTTP.meth
-                 and type uri = W.uri
-                 and type resp = W.resp)
-    (G : Minimal.S with type Hash.Digest.buffer = Cstruct.t
-                    and type Hash.hex = string)
-    (B : S.BUFFER with type raw = string
-                   and type fixe = Cstruct.t)
+    (W : S.WEB
+     with type +'a io = 'a Lwt.t
+      and type raw = Cstruct.t
+      and type uri = Uri.t
+      and type Request.body = Lwt_cstruct_flow.i
+      and type Response.body = Lwt_cstruct_flow.o)
+    (C : CLIENT
+     with type +'a io = 'a W.io
+      and type headers = W.HTTP.headers
+      and type body = Lwt_cstruct_flow.o
+      and type meth = W.HTTP.meth
+      and type uri = W.uri
+      and type resp = W.resp)
+    (G : Minimal.S
+     with type Hash.Digest.buffer = Cstruct.t
+      and type Hash.hex = string)
+    (B : S.BUFFER
+     with type raw = string
+      and type fixe = Cstruct.t)
   : S with module Web     = W
        and module Client  = C
        and module Store   = G
@@ -246,8 +250,10 @@ module Make
     | Decoder.Error { err; _ } -> Lwt.return (Error err)
     | Decoder.Read { buffer; off; len; continue; } ->
       (match keep with
-       | Some (raw, off', len') -> Lwt.return (Some (raw, off', len'))
-       | None -> stream ()) >>= function
+       | Some (raw, off', len') ->
+         Lwt.return (Some (raw, off', len'))
+       | None ->
+         stream ()) >>= function
       | Some (raw, off', len') ->
         let len'' = min len len' in
         Cstruct.blit raw off' buffer off len'';
@@ -255,7 +261,8 @@ module Make
         if len' - len'' = 0
         then consume stream (continue len'')
         else consume stream ~keep:(raw, off' + len'', len' - len'') (continue len'')
-      | None -> consume stream (continue 0)
+      | None ->
+        consume stream (continue 0)
 
   let ls _ ?headers ?(https = false) ?port host path =
     let open Lwt.Infix in

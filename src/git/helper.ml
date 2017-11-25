@@ -223,7 +223,9 @@ module MakeDecoder (A : S.ANGSTROM) = struct
     { decoder with final = Angstrom.Unbuffered.Complete }
 end
 
-module MakeInflater (Z : S.INFLATE) (A : S.ANGSTROM)
+module MakeInflater
+    (Z : S.INFLATE)
+    (A : S.ANGSTROM)
 = struct
   module Log =
   struct
@@ -435,10 +437,11 @@ module MakeEncoder (M : S.MINIENC)
 end
 
 module MakeDeflater (Z : S.DEFLATE) (M : S.MINIENC)
-  : S.ENCODER with type t = M.t
-                    and type raw = Cstruct.t
-                    and type init = int * M.t * int * Cstruct.t
-                    and type error = [ `Deflate of Z.error ]
+  : S.ENCODER
+    with type t = M.t
+     and type raw = Cstruct.t
+     and type init = int * M.t * int * Cstruct.t
+     and type error = [ `Deflate of Z.error ]
 = struct
   module Log =
   struct

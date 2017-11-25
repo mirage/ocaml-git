@@ -780,7 +780,6 @@ module Make
       for i = 0 to len - 1 do Bytes.set raw i (gen ()) done;
       Bytes.unsafe_to_string raw
 
-
     let to_temp_file fmt stream =
       let filename_of_pack = fmt (random_string 10) in
 
@@ -1062,7 +1061,8 @@ module Make
           (fun _ -> None)
           (fun hash -> extern git hash)
         >>= function
-        | Error err -> Lwt.return (Error (`SystemMapper err))
+        | Error err ->
+          Lwt.return (Error (`SystemMapper err))
         | Ok decoder ->
           let hash_of_object obj =
             let ctx = Hash.Digest.init () in
@@ -1147,7 +1147,7 @@ module Make
               delta
             >>= fun is_not_thin ->
             if is_not_thin
-            then
+            then begin
               let open Lwt_result in
 
               let info =
@@ -1161,8 +1161,8 @@ module Make
               (FileSystem.Mapper.close fdp
                >!= fun sys_err -> Lwt.return (`SystemMapper sys_err))
               >>= fun () -> PackImpl.add_total ~root:git.dotgit git.engine path info
-              >!= fun err -> Lwt.return (err :> error)
-            else
+                            >!= fun err -> Lwt.return (err :> error)
+            end else
               let open Lwt_result in
 
               canonicalize git path decoder fdp ~htmp ~rtmp ~ztmp ~window delta info

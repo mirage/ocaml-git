@@ -362,10 +362,10 @@ module Make
     let header = Cstruct.of_string
         (Fmt.strf "%s %d\000%!"
            (match kind with
-           | `Commit -> "commit"
-           | `Blob -> "blob"
-           | `Tree -> "tree"
-           | `Tag -> "tag")
+            | `Commit -> "commit"
+            | `Blob -> "blob"
+            | `Tree -> "tree"
+            | `Tag -> "tag")
            (Cstruct.len value))
     in
 

@@ -677,7 +677,8 @@ struct
                           { refs with capabilities
                                     ; refs = [ first ] })
               decoder
-        else let rest = other_ref decoder in
+        else
+          let rest = other_ref decoder in
           p_pkt_line (p_advertised_refs
                         ~first:true
                         ~shallow_state:false

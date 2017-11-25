@@ -33,7 +33,7 @@ struct
     | `Tree of string * Store.Hash.t
     | `Tree_root of Store.Hash.t ]
 
-  let pred t ?(full=true) h =
+  let pred t ?(full = true) h =
     let tag t = `Tag (Store.Value.Tag.tag t, Store.Value.Tag.obj t) in
 
     Log.debug (fun l -> l ~header:"predecessor" "Read the object: %a." Store.Hash.pp h);
@@ -52,11 +52,10 @@ struct
     | Ok (Store.Value.Tree t)   ->
       if full then List.map (fun { Store.Value.Tree.name; node; _ } -> `Tree (name, node)) (Store.Value.Tree.to_list t) else []
 
-  type path = [
-    | `Tag of string * path
+  type path =
+    [ `Tag of string * path
     | `Commit of path
-    | `Path of string list
-  ]
+    | `Path of string list ]
 
   let find_list f l =
     List.fold_left (fun acc x ->
@@ -93,6 +92,7 @@ struct
       end
     | `Path (h::p) ->
       pred t hash >>= fun preds ->
+
       match find_tree h preds with
       | None   -> Lwt.return_none
       | Some s -> find t s (`Path p)
