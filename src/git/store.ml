@@ -1003,12 +1003,19 @@ module Make
       let stream0, stream1 =
         let stream', push' = Lwt_stream.create () in
 
+        let cstruct_copy cs =
+          let ln = Cstruct.len cs in
+          let rs = Cstruct.create ln in
+          Cstruct.blit cs 0 rs 0 ln;
+          rs
+        in
+
         Lwt_stream.from
           (fun () -> stream () >>= function
              | Some raw ->
                Log.debug (fun l -> l ~header:"from" "Dispatch a chunk of the PACK stream (length: %d)."
                              (Cstruct.len raw));
-               push' (Some raw);
+               push' (Some (cstruct_copy raw));
                Lwt.return (Some raw)
              | None ->
                Log.debug (fun l -> l ~header:"from" "Dispatch end of the PACK stream.");
