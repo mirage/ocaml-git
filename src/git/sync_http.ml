@@ -474,6 +474,8 @@ module Make
         headers
     in
 
+    Log.debug (fun l -> l ~header:"fetch" "Send the GET (reference discovery) request.");
+
     Client.call ~headers `GET uri >>= fun resp ->
 
     let decoder = Decoder.decoder () in
@@ -551,11 +553,16 @@ module Make
           | true -> next resp
           | false ->
             Lwt_mvar.take keeper >>= fun has -> Lwt_mvar.put keeper has >>= fun () ->
+
+            Log.debug (fun l -> l ~header:"fetch" "Receiving a negotiation response.");
+
             consume (Web.Response.body resp)
               (Decoder.decode decoder (Decoder.Negociation (has, ack_mode))) >>= function
             | Error err ->
               Lwt.return (Error (`SmartDecoder err))
             | Ok acks ->
+              Log.debug (fun l -> l ~header:"fetch" "ACK response received: %a." Decoder.pp_acks acks);
+
               negociate acks state >>= function
               | `Ready, _ -> next resp
               | `Again has', state ->

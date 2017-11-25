@@ -294,6 +294,12 @@ struct
      land about all). So enjoy it!
   *)
 
+  module Log =
+  struct
+    let src = Logs.Src.create "git.smart.decoder" ~doc:"logs git's smart decoder event"
+    include (val Logs.src_log src : Logs.LOG)
+  end
+
   type decoder =
     { mutable buffer : Cstruct.t
     ; mutable pos    : int

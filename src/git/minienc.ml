@@ -15,6 +15,12 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+module Log =
+struct
+  let src = Logs.Src.create "encoder" ~doc:"logs git's internal encoder"
+  include (val Logs.src_log src : Logs.LOG)
+end
+
 module Queue =
 struct
   type 'a digit =
@@ -517,6 +523,8 @@ let has t =
   RBS.weight t.sched
 
 let drain drain t =
+  Log.debug (fun l -> l ~header:"drain" "Start to drain %d byte(s)." drain);
+
   let rec go rest t = match RBS.shift t.sched with
     | (Some iovec, shifted) ->
       let len = IOVec.length iovec in
@@ -540,6 +548,8 @@ let flush k t =
   let t = shift_flushes (has t) t in
 
   let continue n =
+    Log.debug (fun l -> l ~header:"flush/continue" "continue and drain %d byte(s)." n);
+
     let t = drain n t in
     k { t with written = t.written + n }
   in

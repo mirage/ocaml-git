@@ -32,7 +32,7 @@ struct
     Cohttp_lwt_unix.Client.call ?headers ?body ~chunked:false meth uri >>= fun ((resp, _) as v) ->
     if Cohttp.Code.is_redirection (Cohttp.Code.code_of_status (Cohttp.Response.status resp))
     then begin
-      let uri =
+      let uri' =
         Cohttp.Response.headers resp
         |> Cohttp.Header.to_list
         |> List.assoc "location"

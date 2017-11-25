@@ -149,7 +149,7 @@ module Make
     let open Lwt.Infix in
 
     let first, rest = explode hash in
-    Log.debug (fun l -> l "Checking if the object %a is a loose file (%a)."
+    Log.debug (fun l -> l ~header:"exists" "Checking if the object %a is a loose file (%a)."
                   Hash.pp hash
                   Path.pp Path.(root / "objects" / first / rest)[@warning "-44"]);
 
@@ -168,7 +168,7 @@ module Make
       Path.(root / "objects")[@warning "-44"]
     >>= function
     | Error sys_err ->
-      Log.err (fun l -> l "Retrieving a file-system error: %a." FileSystem.Dir.pp_error sys_err);
+      Log.err (fun l -> l ~header:"list" "Retrieving a file-system error: %a." FileSystem.Dir.pp_error sys_err);
       Lwt.return []
     | Ok firsts ->
       Lwt_list.fold_left_s
@@ -182,7 +182,7 @@ module Make
                     (Hash.of_hex Path.((to_string first) ^ (to_string path)))
                     |> fun v -> Lwt.return (v :: acc)
                   with _ ->
-                    Log.warn (fun l -> l "Retrieving a malformed file: %s / %s."
+                    Log.warn (fun l -> l ~header:"list" "Retrieving a malformed file: %s / %s."
                                  (Path.to_string first) (Path.to_string path));
                     Lwt.return acc)
                acc
@@ -206,13 +206,13 @@ module Make
 
     let open Lwt.Infix in
 
-    Log.debug (fun l -> l "Reading the loose object %a."
+    Log.debug (fun l -> l ~header:"read" "Reading the loose object %a."
                   Path.pp Path.(root / "objects" / first / rest)[@warning "-44"]);
 
     FileSystem.File.open_r ~mode:0o400 Path.(root / "objects" / first / rest)[@warning "-44"]
     >>= function
     | Error sys_err ->
-      Log.err (fun l -> l "Retrieving a file-system error: %a." FileSystem.File.pp_error sys_err);
+      Log.err (fun l -> l ~header:"read" "Retrieving a file-system error: %a." FileSystem.File.pp_error sys_err);
       Lwt.return (Error (`SystemFile sys_err))
     | Ok ic ->
       let rec loop decoder = match D.eval decoder with
@@ -221,7 +221,7 @@ module Make
           (function
             | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
             | Ok n ->
-              Log.debug (fun l -> l "Reading %d byte(s) of the file-descriptor" n);
+              Log.debug (fun l -> l ~header:"read" "Reading %d byte(s) of the file-descriptor (object: %a)." n Hash.pp hash);
 
               match D.refill (Cstruct.sub raw 0 n) decoder with
               | Ok decoder -> loop decoder
@@ -327,13 +327,13 @@ module Make
 
     let open Lwt.Infix in
 
-    Log.debug (fun l -> l "Reading the loose object %a."
+    Log.debug (fun l -> l ~header:"size" "Reading the loose object %a."
                   Path.pp Path.(root / "objects" / first / rest)[@warning "-44"]);
 
     FileSystem.File.open_r ~mode:0o400 Path.(root / "objects" / first / rest)[@warning "-44"]
     >>= function
     | Error sys_err ->
-      Log.err (fun l -> l "Retrieving a file-system error: %a." FileSystem.File.pp_error sys_err);
+      Log.err (fun l -> l ~header:"size" "Retrieving a file-system error: %a." FileSystem.File.pp_error sys_err);
       Lwt.return (Error (`SystemFile sys_err))
     | Ok read ->
       let rec loop decoder = match S.eval decoder with

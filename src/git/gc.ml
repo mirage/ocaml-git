@@ -50,6 +50,12 @@ module Make (S : STORE with type Hash.Digest.buffer = Cstruct.t
 = struct
   module Store = S
 
+  module Log =
+  struct
+    let src = Logs.Src.create "git.gc" ~doc:"logs git's GC event"
+    include (val Logs.src_log src : Logs.LOG)
+  end
+
   let delta ?(window = `Object 10) ?(depth = 50) git objects =
     let open Lwt_result in
 
@@ -79,6 +85,9 @@ module Make (S : STORE with type Hash.Digest.buffer = Cstruct.t
           (Store.Value.F.length value)
       in
 
+      Log.debug (fun l -> l ~header:"delta" "Add the object %a in the new PACK file."
+                    S.Hash.pp hash);
+
       Lwt.return entry
     in
 
@@ -102,6 +111,8 @@ module Make (S : STORE with type Hash.Digest.buffer = Cstruct.t
        ~memory
        entries
        Lwt.Infix.(fun hash ->
+           Log.debug (fun l -> l ~header:"delta" "Ask to try to delta-ify the object %a." S.Hash.pp hash);
+
            Store.read_inflated git hash >|= function
            | Some (_, raw) -> Some raw
            | None -> None)

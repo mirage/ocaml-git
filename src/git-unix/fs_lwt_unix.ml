@@ -62,7 +62,9 @@ let result_bind f a = match a with
 let safe_mkdir ?(path = true) ?(mode = 0o755) dir =
   let mkdir d mode =
     Lwt.try_bind
-      (fun () -> Lwt_unix.mkdir (Fpath.to_string d) mode)
+      (fun () ->
+         Log.debug (fun l -> l ~header:"safe-mkdir" "create a new directory %s." (Fpath.to_string d));
+         Lwt_unix.mkdir (Fpath.to_string d) mode)
       (fun () -> Lwt.return (Ok ()))
       (function
         | Unix.Unix_error (Unix.EEXIST, _, _) -> Lwt.return (Ok ())

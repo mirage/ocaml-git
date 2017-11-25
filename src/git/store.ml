@@ -1350,12 +1350,15 @@ module Make
     >>= fun lst ->
     Lwt.try_bind
       (fun () -> Lwt_list.map_s
-          (fun hash -> read state hash
-            >>= function
-            | Ok v -> Lwt.return (hash, v)
-            | Error err ->
-              Log.err (fun l -> l ~header:"contents" "Retrieve an error: %a." pp_error err);
-              Lwt.fail (Leave err))
+          (fun hash ->
+             Log.debug (fun l -> l ~header:"contents" "Try to read the object: %a." Hash.pp hash);
+
+             read state hash
+             >>= function
+             | Ok v -> Lwt.return (hash, v)
+             | Error err ->
+               Log.err (fun l -> l ~header:"contents" "Retrieve an error: %a." pp_error err);
+               Lwt.fail (Leave err))
           lst)
       (fun lst -> Lwt.return (Ok lst))
       (function Leave err -> Lwt.return (Error err)
@@ -1989,6 +1992,8 @@ module Make
     Lwt.return ()
 
   let reset ?locks t =
+    Log.info (fun l -> l ~header:"reset" "Start to reset the Git repository");
+
     let delete_files directory =
       let open Lwt_result in
 

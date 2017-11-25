@@ -129,22 +129,22 @@ module MakeDecoder (A : S.ANGSTROM) = struct
     ; max      = len }
 
   let eval decoder =
-    Log.debug (fun l -> l "Start to decode a partial chunk of the flow (%d) (final:%b)."
+    Log.debug (fun l -> l ~header:"eval" "Start to decode a partial chunk of the flow (%d) (final:%b)."
                   (Cstruct.len decoder.internal)
                   (decoder.final = Angstrom.Unbuffered.Complete));
 
     match decoder.state (Cstruct.to_bigarray decoder.internal) decoder.final with
     | Angstrom.Unbuffered.Done (consumed, value) ->
-      Log.debug (fun l -> l "End of the decoding.");
+      Log.debug (fun l -> l ~header:"eval" "End of the decoding.");
 
       `End (Cstruct.shift decoder.internal consumed, value)
     | Angstrom.Unbuffered.Fail (consumed, path, err) ->
-      Log.err (fun l -> l "Retrieving an error in the current decoding: %s (%s)."
+      Log.err (fun l -> l ~header:"eval" "Retrieving an error in the current decoding: %s (%s)."
                   err (String.concat " > " path));
       `Error (Cstruct.shift decoder.internal consumed, `Decoder (String.concat " > " path ^ ": " ^ err))
     | Angstrom.Unbuffered.Partial
         { Angstrom.Unbuffered.committed; continue; } ->
-      Log.debug (fun l -> l "Current decoding waits more input (committed: %d)." committed);
+      Log.debug (fun l -> l ~header:"eval" "Current decoding waits more input (committed: %d)." committed);
 
       let decoder = { decoder with internal = Cstruct.shift decoder.internal committed
                                  ; state = continue } in
@@ -153,7 +153,7 @@ module MakeDecoder (A : S.ANGSTROM) = struct
   let compress _ decoder =
     let off, len = 0, Cstruct.len decoder.internal in
     let buffer = Cstruct.of_bigarray ~off ~len decoder.internal.Cstruct.buffer in
-    Log.debug (fun l -> l "Compressing the internal buffer of the current decoding.");
+    Log.debug (fun l -> l ~header:"compress" "Compressing the internal buffer of the current decoding.");
     Cstruct.blit decoder.internal 0 buffer 0 len;
     { decoder with internal = buffer }
 
@@ -263,37 +263,37 @@ module MakeInflater (Z : S.INFLATE) (A : S.ANGSTROM)
     ; dec = D.default raw1 }
 
   let rec eval decoder =
-    Log.debug (fun l -> l "Start to inflate a partial chunk of the flow.");
+    Log.debug (fun l -> l ~header:"eval" "Start to inflate a partial chunk of the flow.");
 
     match D.eval decoder.dec with
     | `Await dec ->
-      Log.debug (fun l -> l "Decoder waits.");
+      Log.debug (fun l -> l ~header:"eval" "Decoder waits.");
 
       (match Z.eval ~src:decoder.cur ~dst:decoder.tmp decoder.inf with
        | `Await inf ->
-         Log.debug (fun l -> l "Inflator waits.");
+         Log.debug (fun l -> l ~header:"eval" "Inflator waits.");
 
          `Await { decoder with cur = Cstruct.shift decoder.cur (Z.used_in inf)
                              ; inf = inf
                              ; dec = dec }
        | `Flush inf ->
-         Log.debug (fun l -> l "Inflator flushes: %a" (Fmt.hvbox Z.pp) inf);
+         Log.debug (fun l -> l ~header:"eval" "Inflator flushes: %a." (Fmt.hvbox Z.pp) inf);
 
          (match D.refill (Cstruct.sub decoder.tmp 0 (Z.used_out inf)) dec with
           | Ok dec ->
 
             let inf = Z.flush 0 (Cstruct.len decoder.tmp) inf in
 
-            Log.debug (fun l -> l "Internal buffer of the current decoding refilled: %a" (Fmt.hvbox Z.pp) inf);
+            Log.debug (fun l -> l ~header:"eval" "Internal buffer of the current decoding refilled: %a." (Fmt.hvbox Z.pp) inf);
 
             eval { decoder with dec = dec
                               ; inf = inf }
           | Error (`Decoder err) -> `Error (decoder.cur, `Decoder err))
        | `Error (inf, err) ->
-         Log.err (fun l -> l "Inflate error: %a." (Fmt.hvbox Z.pp_error) err);
+         Log.err (fun l -> l ~header:"eval" "Inflate error: %a." (Fmt.hvbox Z.pp_error) err);
          `Error (Cstruct.shift decoder.cur (Z.used_in inf), `Inflate err)
        | `End inf ->
-         Log.debug (fun l -> l "Inflator finished with the current decoding flow.");
+         Log.debug (fun l -> l ~header:"eval" "Inflator finished with the current decoding flow.");
 
          (match D.refill (Cstruct.sub decoder.tmp 0 (Z.used_out inf)) dec with
           | Ok dec -> eval { decoder with cur = Cstruct.shift decoder.cur (Z.used_in inf)
@@ -357,8 +357,8 @@ module MakeEncoder (M : S.MINIENC)
     ; state : Minienc.encoder Minienc.state }
 
   let default (capacity, x) =
-    Log.debug (fun l -> l "Starting to encode a Git object with \
-                           a capacity = %d." capacity);
+    Log.debug (fun l -> l ~header:"default" "Starting to encode a Git object with \
+                                             a capacity = %d." capacity);
 
     let encoder = Minienc.create capacity in
     let state   = M.encoder x (fun encoder -> Minienc.End encoder) encoder in
@@ -392,7 +392,7 @@ module MakeEncoder (M : S.MINIENC)
           (e.o_off + e.o_pos) iovecs
       in
 
-      Log.debug (fun l -> l "Ensure than we wrote exactly [shift = %d] byte(s)." shift);
+      Log.debug (fun l -> l ~header:"encoder" "Ensure than we wrote exactly [shift = %d] byte(s)." shift);
       assert (e.o_off + e.o_pos + shift = shift');
 
       if Minienc.has shifted > 0
@@ -463,8 +463,8 @@ module MakeDeflater (Z : S.DEFLATE) (M : S.MINIENC)
     ; used_in  : int }
 
   let default (capacity, value, level, internal) =
-    Log.debug (fun l -> l "Starting to deflate and encode a \
-                           Git object (level of compression: %d, internal buffer: %d)."
+    Log.debug (fun l -> l ~header:"default" "Starting to deflate and encode a \
+                                             Git object (level of compression: %d, internal buffer: %d)."
                   level (Cstruct.len internal));
 
     { e = E.default (capacity, value)
@@ -671,23 +671,26 @@ let safe_encoder_to_file
     if stack < limit
     then E.eval raw state >>= function
       | `Error (_, err) ->
-        EncoderLog.err (fun l -> l "Retrieving an encoder error when we \
-                                    serialize the value to a file-descriptor.");
+        EncoderLog.err (fun l -> l ~header:"go" "Retrieving an encoder error when we \
+                                                 serialize the value to a file-descriptor.");
         Lwt.return (Error (`Encoder err))
       | `End (state, res) ->
         if E.used state + rest > 0
-        then writer raw ~off:0 ~len:(rest + E.used state) fd >>= function
+        then begin
+          EncoderLog.debug (fun l -> l ~header:"go" "Final step to write entirely the file (rest: %d)." (E.used state + rest));
+
+          writer raw ~off:0 ~len:(rest + E.used state) fd >>= function
           | Ok n ->
             if n = E.used state + rest
             then Lwt.return (Ok res)
             else begin
-              EncoderLog.warn (fun l -> l "Loop back to writing the rest (%d) \
-                                           of the encoding (stack: %d)."
+              EncoderLog.warn (fun l -> l ~header:"go" "Loop back to writing the rest (%d) \
+                                                        of the encoding (stack: %d)."
                                   (E.used state + rest - n) stack);
               go ~stack:(stack + 1) (E.flush n ((E.used state + rest) - n) state)
             end
           | Error err -> Lwt.return (Error (`Writer err))
-        else Lwt.return (Ok res)
+        end else Lwt.return (Ok res)
       | `Flush state ->
         writer raw ~off:0 ~len:(rest + E.used state) fd >>= function
         | Ok n ->
@@ -696,7 +699,7 @@ let safe_encoder_to_file
           else begin
             let rest = (rest + E.used state) - n in
             E.raw_blit raw n raw 0 rest;
-            EncoderLog.debug (fun l -> l "The I/O encoder writes %d (rest: %d, loop back: %b)."
+            EncoderLog.debug (fun l -> l ~header:"go" "The I/O encoder writes %d (rest: %d, loop back: %b)."
                                  n (E.raw_length raw - rest) (E.raw_length raw - rest = 0));
             go
               ~stack:(if E.raw_length raw - rest = 0 then stack + 1 else 0)
@@ -705,7 +708,7 @@ let safe_encoder_to_file
           end
         | Error err -> Lwt.return (Error (`Writer err))
     else begin
-      EncoderLog.err (fun l -> l "Retrieving a [`Stack] error. Impossible \
+      EncoderLog.err (fun l -> l ~header:"go" "Retrieving a [`Stack] error. Impossible \
                                   to serialize and write the Git object.");
       Lwt.return (Error `Stack)
     end
