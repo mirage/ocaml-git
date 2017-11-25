@@ -1675,14 +1675,14 @@ struct
     | `Shallow l ->
       encode (`Shallow l) (fun _ -> `Nothing) context
 
-  let context _ =
+  let context c =
     let context =
       { decoder = Decoder.decoder ()
       ; encoder = Encoder.encoder ()
       ; capabilities = [] }
     in
 
-    context, (* encode (`GitProtoRequest c) *)
+    context, encode (`GitProtoRequest c)
       (decode Decoder.ReferenceDiscovery
          (fun refs ctx ->
             ctx.capabilities <- refs.Decoder.capabilities;
