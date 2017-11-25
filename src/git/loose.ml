@@ -214,10 +214,10 @@ module Make
     | Error sys_err ->
       Log.err (fun l -> l "Retrieving a file-system error: %a." FileSystem.File.pp_error sys_err);
       Lwt.return (Error (`SystemFile sys_err))
-    | Ok read ->
+    | Ok ic ->
       let rec loop decoder = match D.eval decoder with
         | `Await decoder ->
-          FileSystem.File.read raw read >>=
+          FileSystem.File.read raw ic >>=
           (function
             | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
             | Ok n ->
@@ -227,13 +227,21 @@ module Make
               | Ok decoder -> loop decoder
               | Error (#D.error as err) -> Lwt.return (Error err))
         | `Error (_, (#D.error as err)) -> Lwt.return (Error err)
-        | `End (_, value) ->
-          FileSystem.File.close read >|= function
-          | Ok () -> (Ok value)
-          | Error sys_err -> Error (`SystemFile sys_err)
+        | `End (_, value) -> Lwt.return (Ok value)
       in
 
-      loop decoder
+      Lwt.finalize
+        (fun () -> loop decoder)
+        (fun () -> FileSystem.File.close ic >>= function
+           | Ok () -> Lwt.return ()
+           | Error sys_err ->
+             Log.err (fun l -> l ~header:"read" "Retrieve an error when we close the file-descriptor: %a."
+                         FileSystem.File.pp_error sys_err);
+             Lwt.return ())
+      >>= fun ret ->
+      Log.debug (fun l -> l ~header:"read" "Finish to read the object %s / %s."
+                    first rest);
+      Lwt.return ret
 
   let read ~root ~window ~ztmp ~dtmp ~raw hash =
     gen ~root ~window ~ztmp ~dtmp ~raw (module D) hash
