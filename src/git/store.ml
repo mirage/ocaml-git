@@ -1776,6 +1776,7 @@ module Make
     >?= fun _ -> FileSystem.Dir.create ~path:true Path.(dotgit / "objects")[@warning "-44"]
     >?= fun _ -> FileSystem.Dir.create ~path:true Path.(dotgit / "objects" / "pack")[@warning "-44"]
     >?= fun _ -> FileSystem.Dir.create ~path:true Path.(dotgit / "objects" / "info")[@warning "-44"]
+    >?= fun _ -> FileSystem.Dir.create ~path:true Path.(dotgit / "refs")[@warning "-44"]
     >?= fun _ -> Lwt.return (Ok ())
 
   let create ?root ?dotgit ?(compression = 4) () =
