@@ -30,22 +30,90 @@ sig
   val close  : socket -> unit Lwt.t
 end
 
+module type S =
+sig
+  module Store
+    : Minimal.S
+      with type Hash.Digest.buffer = Cstruct.t
+       and type Hash.hex = string
+  module Net : NET
+
+  module Client
+    : Smart.CLIENT
+      with module Hash = Store.Hash
+
+  type error =
+    [ `SmartPack of string
+    | `Pack      of Store.Pack.error
+    | `Clone     of string
+    | `Fetch     of string
+    | `Ls        of string
+    | `Push      of string
+    | `Not_found ]
+
+  val pp_error : error Fmt.t
+
+  type command =
+    [ `Create of (Store.Hash.t * string)
+    | `Delete of (Store.Hash.t * string)
+    | `Update of (Store.Hash.t * Store.Hash.t * string) ]
+
+  val push :
+       Store.t
+    -> push:(Store.t -> (Store.Hash.t * string * bool) list -> (Store.Hash.t list * command list) Lwt.t)
+    -> ?port:int
+    -> string
+    -> string
+    -> ((string, string * string) result list, error) result Lwt.t
+
+  val ls :
+       Store.t
+    -> ?port:int
+    -> string
+    -> string
+    -> ((Store.Hash.t * string * bool) list, error) result Lwt.t
+
+  val fetch :
+       Store.t
+    -> ?shallow:Store.Hash.t list
+    -> notify:(Client.Decoder.shallow_update -> unit Lwt.t)
+    -> negociate:((Client.Decoder.acks -> 'state -> ([ `Ready | `Done | `Again of Store.Hash.t list ] * 'state) Lwt.t) * 'state)
+    -> has:Store.Hash.t list
+    -> want:((Store.Hash.t * string * bool) list -> (Store.Reference.t * Store.Hash.t) list Lwt.t)
+    -> ?deepen:[ `Depth of int | `Timestamp of int64 | `Ref of string ]
+    -> ?port:int
+    -> string
+    -> string
+    -> ((Store.Reference.t * Store.Hash.t) list * int, error) result Lwt.t
+
+  val clone :
+       Store.t
+    -> ?port:int
+    -> ?reference:Store.Reference.t
+    -> string
+    -> string
+    -> (Store.Hash.t, error) result Lwt.t
+end
+
 module Make
-    (Net : NET)
-    (Store : Minimal.S with type Hash.Digest.buffer = Cstruct.t
+    (N : NET)
+    (S : Minimal.S with type Hash.Digest.buffer = Cstruct.t
                         and type Hash.hex = string)
-    (Capabilities : CAPABILITIES)
+    (C : CAPABILITIES)
+    : S with module Store = S
+         and module Net = N
 = struct
+  module Store        = S
+  module Net          = N
+  module Capabilities = C
+
   module Client = Smart.Client(Store.Hash)
   module Hash = Store.Hash
   module Inflate = Store.Inflate
   module Deflate = Store.Deflate
   module Path = Store.Path
   module Revision = Revision.Make(Store)
-
-  module PACKEncoder = Pack.MakePACKEncoder
-      (Hash)
-      (Deflate)
+  module PACKEncoder = Pack.MakePACKEncoder(Hash)(Deflate)
 
   module Log =
   struct
@@ -55,19 +123,26 @@ module Make
 
   type error =
     [ `SmartPack of string
-    | `Pack      of PACKEncoder.error
+    | `Pack      of Store.Pack.error
     | `Clone     of string
+    | `Fetch     of string
     | `Ls        of string
     | `Push      of string
     | `Not_found ]
 
   let pp_error ppf = function
     | `SmartPack err           -> Helper.ppe ~name:"`SmartPack" Fmt.string ppf err
-    | `Pack err                -> Helper.ppe ~name:"`Pack" (Fmt.hvbox PACKEncoder.pp_error) ppf err
+    | `Pack err                -> Helper.ppe ~name:"`Pack" Store.Pack.pp_error ppf err
     | `Clone err               -> Helper.ppe ~name:"`Clone" Fmt.string ppf err
+    | `Fetch err               -> Helper.ppe ~name:"`Fetch" Fmt.string ppf err
     | `Push err                -> Helper.ppe ~name:"`Push" Fmt.string ppf err
     | `Ls err                  -> Helper.ppe ~name:"`Ls" Fmt.string ppf err
     | `Not_found               -> Fmt.string ppf "`Not_found"
+
+  type command =
+    [ `Create of (Store.Hash.t * string)
+    | `Delete of (Store.Hash.t * string)
+    | `Update of (Store.Hash.t * Store.Hash.t * string) ]
 
   type t =
     { socket : Net.socket
@@ -87,106 +162,61 @@ module Make
 
     match result with
     | `Read (buffer, off, len, continue) ->
-      Net.read t.socket t.input 0 len >>= fun n ->
+      Net.read t.socket t.input 0 len >>= fun len ->
       Cstruct.blit_from_bytes t.input 0 buffer off len;
-      process t (continue n)
+      process t (continue len)
     | `Write (buffer, off, len, continue) ->
       Cstruct.blit_to_bytes buffer off t.output 0 len;
       Net.write t.socket t.output 0 len >>= fun n ->
       process t (continue n)
     | `Error _ ->
       assert false (* TODO *)
-    | #Client.result as result -> Lwt.return result
+    | #Client.result as result ->
+      Lwt.return result
 
-  let option_map f = function
-    | Some v -> Some (f v)
-    | None -> None
-
-  let packer ~window ~depth git ~ofs_delta:_ remote commands =
+  let packer ?(window = `Object 10) ?(depth = 50) git ~ofs_delta:_ remote commands =
     let open Lwt.Infix in
+    let open Client in
 
     let commands' =
-      (List.map (fun (hash, refname, _) -> Client.Encoder.Delete (hash, refname)) remote
-       @ commands)
+      (List.map (fun (hash, refname, _) -> Encoder.Delete (hash, refname)) remote)
+      @ commands
     in
 
-    (* XXX(dinosaure): we don't want to delete remote references but we want to
-       exclude any commit already stored remotely. So, we « delete » remote
-       references from the result set. *)
+    (* XXX(dinosaure): we don't want to delete remote references but
+       we want to exclude any commit already stored remotely. Se, we «
+       delete » remote references from the result set. *)
 
     Lwt_list.fold_left_s
       (fun acc -> function
-         | Client.Encoder.Create _ -> Lwt.return acc
-         | Client.Encoder.Update (hash, _, _) ->
+         | Encoder.Create _ -> Lwt.return acc
+         | Encoder.Update (hash, _, _) ->
            Revision.(Range.normalize git (Range.Include (from_hash hash)))
            >|= Store.Hash.Set.union acc
-         | Client.Encoder.Delete (hash, _) ->
+         | Encoder.Delete (hash, _) ->
            Revision.(Range.normalize git (Range.Include (from_hash hash)))
            >|= Store.Hash.Set.union acc)
       Store.Hash.Set.empty commands'
     >>= fun negative ->
     Lwt_list.fold_left_s
       (fun acc -> function
-         | Client.Encoder.Create (hash, _) ->
+         | Encoder.Create (hash, _) ->
            Revision.(Range.normalize git (Range.Include (from_hash hash)))
            >|= Store.Hash.Set.union acc
-         | Client.Encoder.Update (_, hash, _) ->
+         | Encoder.Update (_, hash, _) ->
            Revision.(Range.normalize git (Range.Include (from_hash hash)))
            >|= Store.Hash.Set.union acc
-         | Client.Encoder.Delete _ -> Lwt.return acc)
-      Store.Hash.Set.empty commands'
+         | Encoder.Delete _ -> Lwt.return acc)
+      Store.Hash.Set.empty commands
     >|= (fun positive -> Revision.Range.E.diff positive negative)
     >>= fun elements ->
     Lwt_list.fold_left_s
       (fun acc commit ->
-         Format.printf "send commit: %a\n%!" Store.Hash.pp commit;
-
          Store.fold git
-           (fun (acc, max_length) ?name ~length hash -> function
-              | Store.Value.Commit _ ->
-                PACKEncoder.Entry.make hash
-                  Pack.Kind.Commit
-                  length
-                |> fun entry ->
-                Store.Hash.Map.add hash entry acc
-                |> fun acc -> Lwt.return (acc, max max_length length)
-              | Store.Value.Tree _ ->
-                PACKEncoder.Entry.make hash
-                  ?name:(option_map Path.to_string name)
-                  Pack.Kind.Tree
-                  length
-                |> fun entry ->
-                Store.Hash.Map.add hash entry acc
-                |> fun acc -> Lwt.return (acc, max max_length length)
-              | Store.Value.Blob _ ->
-                PACKEncoder.Entry.make hash
-                  ?name:(option_map Path.to_string name)
-                  Pack.Kind.Blob
-                  length
-                |> fun entry ->
-                Store.Hash.Map.add hash entry acc
-                |> fun acc -> Lwt.return (acc, max max_length length)
-              | Store.Value.Tag _ ->
-                PACKEncoder.Entry.make hash
-                  Pack.Kind.Tag
-                  length
-                |> fun entry ->
-                Store.Hash.Map.add hash entry acc
-                |> fun acc -> Lwt.return (acc, max max_length length))
-           ~path:(Path.v "/") acc commit)
-      (Store.Hash.Map.empty, 0L) (Store.Hash.Set.elements elements)
-    >>= fun (entries, _) ->
-    PACKEncoder.Delta.deltas
-      ~memory:false
-      (Store.Hash.Map.bindings entries |> List.map snd)
-      (fun hash -> Store.read_inflated git hash >|= function Some (_, raw) -> Some raw | None -> None)
-      (fun _ -> false) (* TODO *)
-      window depth
-    >|= function
-    | Ok lst ->
-      let htmp = Cstruct.create 0x8000 in
-      Ok (PACKEncoder.default htmp lst)
-    | Error (PACKEncoder.Delta.Invalid_hash hash) -> Error (`Pack (PACKEncoder.Invalid_hash hash))
+           (fun acc ?name:_ ~length:_ _ value -> Lwt.return (value :: acc))
+           ~path:(Store.Path.v "/") acc commit)
+      [] (Store.Hash.Set.elements elements)
+    >>= fun entries -> Store.Pack.make git ~window ~depth entries
 
   module Pack =
   struct
@@ -232,28 +262,32 @@ module Make
 
       dispatch ctx first >>= fun () ->
       (Store.Pack.from git (fun () -> Lwt_stream.get stream)
-       >!= fun err -> Lwt.return (`StorePack err))
+       >!= fun err -> Lwt.return (`Pack err))
   end
 
-  let rec clone_handler git t r =
+  let rec clone_handler git reference t r =
     let open Lwt.Infix in
 
     match r with
     | `Negociation _ ->
       Client.run t.ctx `Done
       |> process t
-      >>= clone_handler git t
+      >>= clone_handler git reference t
     | `NegociationResult _ ->
       Client.run t.ctx `ReceivePACK
       |> process t
       >>= Pack.populate git t
+      >>= (function
+          | Ok (hash, _) -> Lwt.return (Ok hash)
+          | Error _ as err -> Lwt.return err)
     | `ShallowUpdate _ ->
-      Client.run t.ctx (`Has []) |> process t >>= clone_handler git t
+      Client.run t.ctx (`Has []) |> process t
+      >>= clone_handler git reference t
     | `Refs refs ->
       (try
          let (hash_head, _, _) =
            List.find
-             (fun (_, refname, peeled) -> refname = "HEAD" && not peeled)
+             (fun (_, refname, peeled) -> Store.Reference.(equal reference (of_string refname)) && not peeled)
              refs.Client.Decoder.refs
          in
          Client.run t.ctx (`UploadRequest { Client.Encoder.want = hash_head, [ hash_head ]
@@ -261,7 +295,7 @@ module Make
                                           ; shallow = []
                                           ; deep = None })
          |> process t
-         >>= clone_handler git t
+         >>= clone_handler git reference t
        with Not_found ->
          Client.run t.ctx `Flush
          |> process t
@@ -280,94 +314,105 @@ module Make
                   | result -> Lwt.return (Error (`Ls (err_unexpected_result result))))
     | result -> Lwt.return (Error (`Ls (err_unexpected_result result)))
 
-  let fetch_handler git ?(shallow = []) ~notify ~negociate:(fn, state) ~has ~want ?deepen ~thin:_ t r =
+  let fetch_handler git ?(shallow = []) ~notify ~negociate:(fn, state) ~has ~want ?deepen t r =
     let open Lwt.Infix in
 
-    let pack t =
+    let pack asked t =
       Client.run t.ctx `ReceivePACK
       |> process t
       >>= Pack.populate git t
+      >>= function
+      | Ok (_, n) -> Lwt.return (Ok (asked, n))
+      | Error err -> Lwt.return (Error err)
     in
 
-    let rec aux t state = function
+    let rec aux t asked state = function
       | `ShallowUpdate shallow_update ->
         notify shallow_update >>= fun () ->
-        Client.run t.ctx (`Has has) |> process t >>= aux t state
+        Client.run t.ctx (`Has has) |> process t >>= aux t asked state
       | `Negociation acks ->
         fn acks state >>=
         (function
-          | `Ready, _ -> pack t
+          | `Ready, _ -> pack asked t
           | `Done, state ->
-            Client.run t.ctx `Done |> process t >>= aux t state
+            Client.run t.ctx `Done |> process t >>= aux t asked state
           | `Again has, state ->
-            Client.run t.ctx (`Has has) |> process t >>= aux t state)
-      | `NegociationResult _ -> pack t
+            Client.run t.ctx (`Has has) |> process t >>= aux t asked state)
+      | `NegociationResult _ -> pack asked t
       | `Refs refs ->
         want refs.Client.Decoder.refs >>=
         (function
           | first :: rest ->
-            Client.run t.ctx (`UploadRequest { Client.Encoder.want = first, rest
-                                             ; capabilities = Capabilities.default
-                                             ; shallow
-                                             ; deep = deepen })
+            Client.run t.ctx
+              (`UploadRequest { Client.Encoder.want = snd first, List.map snd rest
+                              ; capabilities = Capabilities.default
+                              ; shallow
+                              ; deep = deepen })
             |> process t
-            >>= aux t state
+            >>= aux t (first :: rest) state
           | [] -> Client.run t.ctx `Flush
                   |> process t
-            >>= (function `Flush -> Lwt.return (Ok (Hash.of_string (String.make (Hash.Digest.length * 2) '0'), 0))
+            >>= (function `Flush -> Lwt.return (Ok ([], 0))
                         (* XXX(dinosaure): better return? *)
                         | result -> Lwt.return (Error (`Fetch (err_unexpected_result result)))))
       | result -> Lwt.return (Error (`Ls (err_unexpected_result result)))
     in
 
-    aux t state r
+    aux t [] state r
 
-  let push_handler git ~push ~packer t r =
+  let push_handler git ~push t r =
     let open Lwt.Infix in
 
-    let empty = Cstruct.create 0 in
-    let option_value ~default = function Some v -> v | None -> default in
+    let send_pack stream t r =
+      let rec go ?keep t r =
+        let consume ?keep dst =
+          match keep with
+          | Some keep ->
+            let n = min (Cstruct.len keep) (Cstruct.len dst) in
+            Cstruct.blit keep 0 dst 0 n;
+            let keep = Cstruct.shift keep n in
+            if Cstruct.len keep > 0
+            then Lwt.return (`Continue (Some keep, n))
+            else Lwt.return (`Continue (None, n))
+          | None ->
+            stream () >>= function
+            | Some keep ->
+              let n = min (Cstruct.len keep) (Cstruct.len dst) in
+              Cstruct.blit keep 0 dst 0 n;
+              let keep = Cstruct.shift keep n in
+              if Cstruct.len keep > 0
+              then Lwt.return (`Continue (Some keep, n))
+              else Lwt.return (`Continue (None, n))
+            | None -> Lwt.return `Finish
+        in
 
-    let rec pack src state t r =
-      let rec go src dst state t =
-        match PACKEncoder.eval (option_value ~default:empty src) dst state with
-        | `Flush state -> Lwt.return (Ok (`Continue (state, src)))
-        | `End (state, _) ->
-          (if PACKEncoder.used_out state = 0
-           then Lwt.return (Ok `Finish)
-           else Lwt.return (Ok (`Continue (state, src))))
-        | `Error (_, err) -> Lwt.return (Error (`Pack err))
-        | `Await state ->
-          (match src with
-           | Some _ ->
-             Lwt.return (Ok (None, PACKEncoder.finish state))
-           | None ->
-             let hash = PACKEncoder.expect state in
-
-             Store.read_inflated git hash >>= function
-             | Some (_, raw) -> Lwt.return (Ok (Some raw, PACKEncoder.refill 0 (Cstruct.len raw) state))
-             | None -> Lwt.return (Error (`Pack (PACKEncoder.Invalid_hash hash))))
-          >>= function Ok (src, state) -> go src dst state t
-                     | Error _ as err -> Lwt.return err
-      in
-
-      match r with
-      | `ReadyPACK dst ->
-        go src dst (PACKEncoder.flush 0 (Cstruct.len dst) state) t >>= (function
-            | Ok (`Continue (state, src)) ->
-              Client.run t.ctx (`SendPACK (PACKEncoder.used_out state))
+        match r with
+        | `ReadyPACK dst ->
+          (consume ?keep dst >>= function
+            | `Continue (keep, n) ->
+              Client.run t.ctx (`SendPACK n)
               |> process t
-              >>= pack src state t
-            | Ok `Finish ->
+              >>= go ?keep t
+            | `Finish ->
               Client.run t.ctx `FinishPACK
               |> process t
-              >>= pack src state t
-            | Error (`Pack _ as err) -> Lwt.return (Error err))
-      | result -> Lwt.return (Error (`Push (err_unexpected_result result)))
+              >>= go t)
+        | `Nothing -> Lwt.return (Ok [])
+        | `ReportStatus { Client.Decoder.unpack = Ok (); commands; } ->
+          Lwt.return (Ok commands)
+        | `ReportStatus { Client.Decoder.unpack = Error err; _ } ->
+          Lwt.return (Error (`Push err))
+        | result -> Lwt.return (Error (`Push (err_unexpected_result result)))
+      in
+
+      go t r
     in
 
     let rec aux t refs commands = function
       | `Refs refs ->
+        Log.debug (fun l -> l ~header:"push_handler" "Receiving reference: %a."
+                      (Fmt.hvbox Client.Decoder.pp_advertised_refs) refs);
+
         let capabilities =
           List.filter (function
               | `Report_status | `Delete_refs | `Ofs_delta | `Push_options | `Agent _ | `Side_band | `Side_band_64k -> true
@@ -379,15 +424,36 @@ module Make
           | (_,  []) ->
             Client.run t.ctx `Flush
             |> process t
-            >>= (function `Flush -> Lwt.return (Ok ())
+            >>= (function `Flush -> Lwt.return (Ok [])
                         | result -> Lwt.return (Error (`Push (err_unexpected_result result))))
-          | (shallow, (x :: r as commands)) ->
+          | (shallow, commands) ->
+            Log.debug (fun l ->
+                let pp_command ppf = function
+                  | `Create (hash, refname) -> Fmt.pf ppf "(`Create (%a, %s))" S.Hash.pp hash refname
+                  | `Delete (hash, refname) -> Fmt.pf ppf "(`Delete (%a, %s))" S.Hash.pp hash refname
+                  | `Update (_of, _to, refname) -> Fmt.pf ppf "(`Update (of:%a, to:%a, %s))" S.Hash.pp _of S.Hash.pp _to refname
+                in
+
+                l ~header:"push_handler" "Sending command(s): %a."
+                  (Fmt.hvbox (Fmt.Dump.list pp_command)) commands);
+
+            let x, r =
+              List.map (function
+                  | `Create (hash, refname) -> Client.Encoder.Create (hash, refname)
+                  | `Delete (hash, refname) -> Client.Encoder.Delete (hash, refname)
+                  | `Update (_of, _to, refname) -> Client.Encoder.Update (_of, _to, refname))
+                commands
+              |> fun commands -> List.hd commands, List.tl commands
+            in
+
             Client.run t.ctx (`UpdateRequest { Client.Encoder.shallow
                                              ; requests = Client.Encoder.L (x, r)
                                              ; capabilities })
             |> process t
-            >>= aux t (Some refs.Client.Decoder.refs) (Some commands))
+            >>= aux t (Some refs.Client.Decoder.refs) (Some (x :: r)))
       | `ReadyPACK _ as result ->
+        Log.debug (fun l -> l ~header:"push_handler" "The server is ready to receive the PACK file.");
+
         let ofs_delta = List.exists ((=) `Ofs_delta) (Client.capabilities t.ctx) in
         let commands = match commands with Some commands -> commands | None -> assert false in
         let refs     = match refs with Some refs -> refs | None -> assert false in
@@ -402,14 +468,15 @@ module Make
            why we have an [assert false]. *)
 
         packer git ~ofs_delta refs commands >>= (function
-            | Ok state -> pack None state t result
-            | Error _ as err -> Lwt.return err)
+            | Ok (stream, _) ->
+              send_pack stream t result
+            | Error err -> Lwt.return (Error (`Pack err)))
       | result -> Lwt.return (Error (`Push (err_unexpected_result result)))
     in
 
     aux t None None r
 
-  let push git ~push ~packer ?(port = 9418) host path =
+  let push git ~push ?(port = 9418) host path =
     let open Lwt.Infix in
 
     Net.socket host port >>= fun socket ->
@@ -422,7 +489,12 @@ module Make
             ; output = Bytes.create 65535
             ; ctx }
     in
-    process t state >>= push_handler git ~push ~packer t >>= fun v -> Net.close socket >>= fun () -> Lwt.return v
+    Log.debug (fun l -> l ~header:"push" "Start to process the flow");
+
+    process t state
+    >>= push_handler git ~push t
+    >>= fun v -> Net.close socket
+    >>= fun () -> Lwt.return v
 
   let ls git ?(port = 9418) host path =
     let open Lwt.Infix in
@@ -437,27 +509,14 @@ module Make
             ; output = Bytes.create 65535
             ; ctx }
     in
-    process t state >>= ls_handler git t >>= fun v -> Net.close socket >>= fun () -> Lwt.return v
+    Log.debug (fun l -> l ~header:"ls" "Start to process the flow.");
 
-  let fetch git ?(shallow = []) ~notify ~negociate ~has ~want ?deepen ~thin ?(port = 9418) host path =
-    let open Lwt.Infix in
-
-    Net.socket host port >>= fun socket ->
-    let ctx, state = Client.context { Client.Encoder.pathname = path
-                                    ; host = Some (host, Some port)
-                                    ; request_command = `UploadPack }
-    in
-    let t = { socket
-            ; input = Bytes.create 65535
-            ; output = Bytes.create 65535
-            ; ctx }
-    in
     process t state
-    >>= fetch_handler git ~shallow ~notify ~negociate ~has ~want ?deepen ~thin t
+    >>= ls_handler git t
     >>= fun v -> Net.close socket
     >>= fun () -> Lwt.return v
 
-  let clone git ?(port = 9418) host path =
+  let fetch git ?(shallow = []) ~notify ~negociate ~has ~want ?deepen ?(port = 9418) host path =
     let open Lwt.Infix in
 
     Net.socket host port >>= fun socket ->
@@ -470,5 +529,30 @@ module Make
             ; output = Bytes.create 65535
             ; ctx }
     in
-    process t state >>= clone_handler git t >>= fun v -> Net.close socket >>= fun () -> Lwt.return v
+    Log.debug (fun l -> l ~header:"fetch" "Start to process the flow.");
+
+    process t state
+    >>= fetch_handler git ~shallow ~notify ~negociate ~has ~want ?deepen t
+    >>= fun v -> Net.close socket
+    >>= fun () -> Lwt.return v
+
+  let clone git ?(port = 9418) ?(reference = Store.Reference.master) host path =
+    let open Lwt.Infix in
+
+    Net.socket host port >>= fun socket ->
+    let ctx, state = Client.context { Client.Encoder.pathname = path
+                                    ; host = Some (host, Some port)
+                                    ; request_command = `UploadPack }
+    in
+    let t = { socket
+            ; input = Bytes.create 65535
+            ; output = Bytes.create 65535
+            ; ctx }
+    in
+    Log.debug (fun l -> l ~header:"clone" "Start to process the flow.");
+
+    process t state
+    >>= clone_handler git reference t
+    >>= fun v -> Net.close socket
+    >>= fun () -> Lwt.return v
 end
