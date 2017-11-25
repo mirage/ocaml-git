@@ -19,15 +19,19 @@ struct
   let call ?headers ?body meth uri =
     let open Lwt.Infix in
 
+    let body_if_redirection, push = Lwt_stream.create () in
+
     let body = match body with
       | None -> None
       | Some stream ->
         Lwt_stream.from stream
-        |> Lwt_stream.map (fun (buf, off, len) -> Cstruct.to_string (Cstruct.sub buf off len))
+        |> Lwt_stream.map (fun (buf, off, len) ->
+            let s = Cstruct.to_string (Cstruct.sub buf off len) in
+            push (Some s); s)
         |> fun stream -> Some (`Stream stream)
     in
 
-    (* XXX(dinosaure): [~chunked:true] is mandatory, I don't want to
+    (* XXX(dinosaure): [~chunked:false] is mandatory, I don't want to
        explain why (I lost one day to find this bug) but believe me. *)
     Cohttp_lwt_unix.Client.call ?headers ?body ~chunked:false meth uri >>= fun ((resp, _) as v) ->
     if Cohttp.Code.is_redirection (Cohttp.Code.code_of_status (Cohttp.Response.status resp))
@@ -39,9 +43,10 @@ struct
         |> Uri.of_string
       in
 
-      Log.info (fun l -> l ~header:"call" "Redirection to %a." Uri.pp_hum uri);
+      push None;
+      Log.debug (fun l -> l ~header:"call" "Redirection from %a to %a." Uri.pp_hum uri Uri.pp_hum uri');
 
-      Cohttp_lwt_unix.Client.call ?headers ?body ~chunked:false meth uri >>= fun (resp, body) ->
+      Cohttp_lwt_unix.Client.call ?headers ~body:(`Stream body_if_redirection) ~chunked:false meth uri' >>= fun (resp, body) ->
       Lwt.return { resp; body; }
     end else Lwt.return { resp; body = snd v; }
 end
