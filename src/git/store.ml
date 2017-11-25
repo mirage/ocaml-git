@@ -384,31 +384,26 @@ sig
 
     val pp_error : error Fmt.t
 
-    val exists_p :
-         dtmp:Cstruct.t
-      -> raw:Cstruct.t
-      -> t -> Reference.t -> bool Lwt.t
-
-    val exists_s : t -> Reference.t -> bool Lwt.t
-
     val exists : t -> Reference.t -> bool Lwt.t
 
     val graph_p :
          dtmp:Cstruct.t
       -> raw:Cstruct.t
+      -> ?locks:Lock.t
       -> t -> (Hash.t Reference.Map.t, error) result Lwt.t
 
-    val graph : t -> (Hash.t Reference.Map.t, error) result Lwt.t
+    val graph : ?locks:Lock.t -> t -> (Hash.t Reference.Map.t, error) result Lwt.t
 
     val normalize : Hash.t Reference.Map.t -> Reference.head_contents -> (Hash.t, error) result Lwt.t
 
     val list_p :
          dtmp:Cstruct.t
       -> raw:Cstruct.t
+      -> ?locks:Lock.t
       -> t -> (Reference.t * Hash.t) list Lwt.t
 
-    val list_s : t -> (Reference.t * Hash.t) list Lwt.t
-    val list : t -> (Reference.t * Hash.t) list Lwt.t
+    val list_s : ?locks:Lock.t -> t -> (Reference.t * Hash.t) list Lwt.t
+    val list : ?locks:Lock.t -> t -> (Reference.t * Hash.t) list Lwt.t
 
     val remove_p :
          dtmp:Cstruct.t
@@ -422,10 +417,11 @@ sig
     val read_p :
          dtmp:Cstruct.t
       -> raw:Cstruct.t
+      -> ?locks:Lock.t
       -> t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
 
-    val read_s : t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
-    val read : t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
+    val read_s : ?locks:Lock.t -> t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
+    val read : ?locks:Lock.t -> t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
 
     val write_p :
          ?locks:Lock.t
@@ -446,7 +442,7 @@ sig
   end
 
   val clear_caches : ?locks:Lock.t -> t -> unit Lwt.t
-  val reset        : ?locks:Lock.t -> t -> (unit, Ref.error) result Lwt.t
+  val reset        : ?locks:Lock.t -> t -> (unit, [ `Store of error | `Ref of Ref.error ]) result Lwt.t
 end
 
 module Option =
@@ -570,6 +566,7 @@ module Make
     ; compression : int
     ; cache       : cache
     ; buffer      : buffer
+    ; packed      : (Reference.t, Hash.t) Hashtbl.t
     ; engine      : PackImpl.t }
 
   module Loose =
@@ -652,8 +649,8 @@ module Make
       raw_wa
         ~window:t.buffer.window
         ~ztmp:t.buffer.zl
-        ~raw:t.buffer.io
         ~dtmp:t.buffer.de
+        ~raw:t.buffer.io
         ~result
         t hash
 
@@ -1577,7 +1574,7 @@ module Make
       | error
       | `Invalid_reference of Reference.t ]
 
-    let contents top =
+    let contents ?locks top =
       let open Lwt.Infix in
 
       let ( >?= ) = Lwt_result.bind in
@@ -1598,7 +1595,13 @@ module Make
             (Ok acc) dirs >?= fun acc -> Lwt.return (Ok (acc @ files))
       in
 
-      lookup [] (Path.v ".")
+      let lock = match locks with
+        | Some locks -> Some (Lock.make locks Path.(v "global"))
+        | None -> None
+      in
+
+      Lock.with_lock lock
+      (fun () -> lookup [] (Path.v "."))
 
     module Graph = Reference.Map
 
@@ -1609,10 +1612,20 @@ module Make
     end
 
     (* XXX(dinosaure): this function does not return any {!Error} value. *)
-    let graph_p ~dtmp ~raw t =
+    let graph_p ~dtmp ~raw ?locks t =
       let open Lwt.Infix in
 
-      contents Path.(t.dotgit / "refs") >>= function
+      let lock_gbl = match locks with
+        | Some locks -> Some (Lock.make locks Path.(v "global"))
+        | None -> None
+      in
+
+      let lock_ref reference = match locks with
+        | Some locks -> Some (Lock.make locks Path.(v ("r-" ^ (Path.filename (Reference.to_path reference)))))
+        | None -> None
+      in
+
+      contents ?locks Path.(t.dotgit / "refs") >>= function
       | Error sys_err ->
         Log.err (fun l -> l ~header:"graph_p" "Retrieve an error: %a." FileSystem.Dir.pp_error sys_err);
         Lwt.return (Error (`SystemDirectory sys_err))
@@ -1624,7 +1637,8 @@ module Make
           (fun acc abs_ref ->
              (* XXX(dinosaure): we already normalize the reference (which is
                 absolute). so we consider than the root as [/]. *)
-             Reference.read ~root:t.dotgit (Reference.of_path abs_ref) ~dtmp ~raw
+             Lock.with_lock (lock_ref (Reference.of_path abs_ref))
+               (fun () -> Reference.read ~root:t.dotgit (Reference.of_path abs_ref) ~dtmp ~raw)
              >|= function
              | Ok v -> v :: acc
              | Error err ->
@@ -1643,7 +1657,18 @@ module Make
                Lwt.return ((refname, link) :: rest, graph))
           ([], Graph.empty) lst
         >>= fun (partial, graph) ->
-        Packed_refs.read ~root:t.dotgit ~dtmp ~raw >>= function
+        Lock.with_lock lock_gbl
+          (fun () -> Packed_refs.read ~root:t.dotgit ~dtmp ~raw >>= function
+             | Ok packed_refs ->
+               Hashtbl.reset t.packed;
+               List.iter (function
+                   | `Ref (refname, hash) ->
+                     Hashtbl.add t.packed (Reference.of_string refname) hash
+                   | `Peeled _ -> ())
+                 packed_refs;
+               Lwt.return (Ok packed_refs)
+             | Error _ as err -> Lwt.return err)
+        >>= function
         | Ok packed_refs ->
           Lwt_list.fold_left_s
             (fun graph -> function
@@ -1671,7 +1696,7 @@ module Make
           >|= fun graph -> Ok graph
     [@@warning "-44"]
 
-    let graph t = graph_p t ~dtmp:t.buffer.de ~raw:t.buffer.io
+    let graph ?locks t = graph_p ~dtmp:t.buffer.de ~raw:t.buffer.io ?locks t
 
     let normalize graph = function
       | Reference.Hash hash -> Lwt.return (Ok hash)
@@ -1679,49 +1704,32 @@ module Make
         try Lwt.return (Ok (Graph.find refname graph))
         with Not_found -> Lwt.return (Error (`Invalid_reference refname))
 
-    let list_p ~dtmp ~raw t =
+    let list_p ~dtmp ~raw ?locks t =
       let open Lwt.Infix in
 
-      graph_p t ~dtmp ~raw >>= function
+      graph_p ~dtmp ~raw ?locks t >>= function
       | Ok graph ->
         Graph.fold (fun refname hash acc -> (refname, hash) :: acc) graph []
         |> List.stable_sort (fun (a, _) (b, _) -> Reference.compare a b)
         |> fun lst -> Lwt.return lst
       | Error _ -> Lwt.return []
 
-    let list_s t = list_p t ~dtmp:t.buffer.de ~raw:t.buffer.io
+    let list_s ?locks t = list_p ?locks ~dtmp:t.buffer.de ~raw:t.buffer.io t
 
     let list = list_s
 
-    let exists_p ~dtmp ~raw t reference =
+    let exists t reference =
       let open Lwt.Infix in
 
-      let in_packed_refs () =
-        Packed_refs.read ~root:t.dotgit ~dtmp ~raw >>= function
-        | Ok packed_refs ->
-          Lwt_list.exists_p
-            (function
-              | `Ref (reference', _) -> Lwt.return Reference.(equal reference (of_string reference'))
-              | `Peeled _ -> Lwt.return false)
-            packed_refs
-        | Error err ->
-          Log.warn (fun l -> l ~header:"exists" "Retrieve an error when we read packed-refs for %a: %a."
-                       Reference.pp reference Packed_refs.pp_error err);
-          Lwt.return false
-      in
+      let in_packed_refs () = Hashtbl.mem t.packed reference in
 
       Reference.exists ~root:t.dotgit reference >>= function
       | Ok true -> Lwt.return true
-      | Ok false -> in_packed_refs ()
+      | Ok false -> let v = in_packed_refs () in Lwt.return v
       | Error err ->
         Log.warn (fun l -> l ~header:"exists" "Retrieve an error for %a: %a."
                      Reference.pp reference Reference.pp_error err);
-        in_packed_refs ()
-
-    let exists_s t reference =
-      exists_p ~dtmp:t.buffer.de ~raw:t.buffer.io t reference
-
-    let exists = exists_s
+        let v = in_packed_refs () in Lwt.return v
 
     let remove_p ~dtmp ~raw ?locks t reference =
       let open Lwt.Infix in
@@ -1770,52 +1778,55 @@ module Make
 
     let remove = remove_s
 
-    let read_p ~dtmp ~raw t reference =
+    let read_p ~dtmp ~raw ?locks t reference =
       let open Lwt.Infix in
+
+      let lock = match locks with
+        | Some locks -> Some (Lock.make locks Path.(v ("r-" ^ (Path.filename (Reference.to_path reference)))))
+        | None -> None
+      in
 
       FileSystem.is_file Path.(t.dotgit // (Reference.to_path reference)) >>= function
       | Ok true ->
-        (Reference.read ~root:t.dotgit ~dtmp ~raw reference >|= function
-          | Ok _ as v -> v
-          | Error (#Reference.error as err) -> Error (err : error))
+        Lock.with_lock lock
+          (fun () -> Reference.read ~root:t.dotgit ~dtmp ~raw reference >|= function
+             | Ok _ as v -> v
+             | Error (#Reference.error as err) -> Error (err : error))
       | Ok false | Error _ ->
-        Packed_refs.read ~root:t.dotgit ~dtmp ~raw >>= function
-        | Error (#Packed_refs.error as err) -> Lwt.return (Error (err : error))
-        | Ok lst ->
-          Lwt.catch
-            (fun () -> Lwt_list.find_s
-                (function `Peeled _ -> Lwt.return false
-                        | `Ref (refname, _) -> Lwt.return Reference.(equal (of_string refname) reference))
-                lst >|= function `Ref (_, hash) -> Ok (reference, Reference.Hash hash)
-                               | `Peeled _ -> assert false)
-            (function _ -> Lwt.return (Error `Not_found))
+        if Hashtbl.mem t.packed reference
+        then
+          try Lwt.return (Ok (reference, Reference.Hash (Hashtbl.find t.packed reference)))
+          with Not_found -> Lwt.return (Error `Not_found)
+        else Lwt.return (Error `Not_found)
 
-    let read_s t reference =
-      read_p t ~dtmp:t.buffer.de ~raw:t.buffer.io reference
+    let read_s ?locks t reference =
+      read_p t ?locks ~dtmp:t.buffer.de ~raw:t.buffer.io reference
 
     let read = read_s
 
     let write_p ?locks ~dtmp ~raw t reference value =
       let open Lwt.Infix in
 
-      let lock = match locks with
-        | Some locks -> Some (Lock.make locks Path.(v "global"))[@warning "-44"]
+      let lock_ref = match locks with
+        | Some locks -> Some (Lock.make locks Path.(v ("w-" ^ (Path.filename (Reference.to_path reference)))))
         | None -> None
       in
 
-      Lock.with_lock lock @@ fun () ->
-      Reference.write ~root:t.dotgit ~raw reference value >>= function
+      let lock_gbl = match locks with
+        | Some locks -> Some (Lock.make locks Path.(v "global"))
+        | None -> None
+      in
+
+      Lock.with_lock lock_ref @@ (fun () ->
+          Reference.write ~root:t.dotgit ~raw reference value) >>= function
       | Error (#Reference.error as err) -> Lwt.return (Error (err : error))
       | Ok () ->
-        Packed_refs.read ~root:t.dotgit ~dtmp ~raw >>= function
-        | Error _ -> Lwt.return (Ok ())
-        | Ok packed_refs ->
-          Lwt_list.exists_s (function `Peeled _ -> Lwt.return false
-                                    | `Ref (refname, _) -> Lwt.return Reference.(equal (of_string refname) reference))
-            packed_refs
-          >>= function
-          | false -> Lwt.return (Ok ())
-          | true ->
+        match Hashtbl.mem t.packed reference with
+        | false -> Lwt.return (Ok ())
+        | true ->
+          Packed_refs.read ~root:t.dotgit ~dtmp ~raw >>= function
+          | Error (#Packed_refs.error as err) -> Lwt.return (Error (err : error))
+          | Ok packed_refs ->
             Lwt_list.fold_left_s
               (fun acc -> function
                  | `Peeled _ as v -> Lwt.return (v :: acc)
@@ -1823,6 +1834,14 @@ module Make
                  | _ -> Lwt.return acc)
               [] packed_refs
             >>= fun packed_refs' ->
+            Lock.with_lock lock_gbl @@ fun () ->
+
+            Hashtbl.reset t.packed;
+            List.iter
+              (function `Ref (refname, hash) -> Hashtbl.add t.packed (Reference.of_string refname) hash
+                      | `Peeled _ -> ())
+              packed_refs';
+
             Packed_refs.write ~root:t.dotgit ~raw packed_refs' >>= function
             | Ok () -> Lwt.return (Ok ())
             | Error (#Packed_refs.error as err) -> Lwt.return (Error (err : error))
@@ -1836,20 +1855,17 @@ module Make
       let open Lwt.Infix in
 
       let lock = match locks with
-        | Some locks -> Some (Lock.make locks Path.(v "global"))[@warning "-44"]
+        | Some locks -> Some (Lock.make locks Path.(v "global"))
         | None -> None
       in
 
       Lock.with_lock lock @@ fun () ->
-      Packed_refs.read ~root:t.dotgit ~dtmp ~raw >>= function
-      | Error _ -> Lwt.return (Ok ())
-      | Ok packed_refs ->
-        Lwt_list.exists_s (function
-            | `Peeled _ -> Lwt.return false
-            | `Ref (refname, _) -> Lwt.return Reference.(equal (of_string refname) reference))
-          packed_refs >>= function
-        | false -> Lwt.return (Ok ())
-        | true ->
+      match Hashtbl.mem t.packed reference with
+      | false -> Lwt.return (Ok ())
+      | true ->
+        Packed_refs.read ~root:t.dotgit ~dtmp ~raw >>= function
+        | Error (#Packed_refs.error as err) -> Lwt.return (Error (err : error))
+        | Ok packed_refs ->
           Lwt_list.fold_left_s (fun (pi, acc) -> function
               | `Peeled hash -> Lwt.return (pi, `Peeled hash :: acc)
               | `Ref (refname, hash) when not Reference.(equal reference (of_string refname)) ->
@@ -1960,6 +1976,7 @@ module Make
                          ; root
                          ; compression
                          ; engine
+                         ; packed = Hashtbl.create 64
                          ; cache = cache ()
                          ; buffer = buffer () })
         | Error sys_err -> Lwt.return (Error sys_err))
@@ -1971,6 +1988,7 @@ module Make
                       ; root
                       ; compression
                       ; engine
+                      ; packed = Hashtbl.create 64
                       ; cache = cache ()
                       ; buffer = buffer () }))
     >>= function
@@ -2028,9 +2046,10 @@ module Make
      >>= fun _ -> FileSystem.Dir.delete ~recurse:true Path.(t.root / "refs")
      >>= fun _ -> FileSystem.Dir.create Path.(t.root / "refs" / "heads")
      >>= fun _ -> FileSystem.Dir.create Path.(t.root / "refs" / "tags"))
-    >>! (fun err -> Lwt.return (`SystemDirectory err))
-    >>= fun _ -> (delete_files t.root >>! (fun err -> Lwt.return (`SystemDirectory err)))
+    >>! (fun err -> Lwt.return (`Store (`SystemDirectory err)))
+    >>= fun _ -> (delete_files t.root >>! (fun err -> Lwt.return (`Store (`SystemDirectory err))))
     >>= fun _ -> Ref.write t Reference.head Reference.(Ref (of_string "refs/heads/master"))
+    >>! (fun err -> Lwt.return (`Ref err))
   (* XXX(dinosaure): an empty git repository has HEAD which points
      to a non-existing refs/heads/master. *)
 

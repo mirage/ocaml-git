@@ -841,18 +841,12 @@ sig
     val pp_error : error Fmt.t
     (** Pretty-printer of {!error}. *)
 
-    val exists_p :
-         dtmp:Cstruct.t
-      -> raw:Cstruct.t
-      -> t -> Reference.t -> bool Lwt.t
-
-    val exists_s : t -> Reference.t -> bool Lwt.t
-
     val exists : t -> Reference.t -> bool Lwt.t
 
     val graph_p :
          dtmp:Cstruct.t
       -> raw:Cstruct.t
+      -> ?locks:Lock.t
       -> t -> (Hash.t Reference.Map.t, error) result Lwt.t
     (** [graph_p state ~dtmp ~raw] returns a graph which contains all
         reference and its pointed final hash available in the current
@@ -868,7 +862,7 @@ sig
         encountered any {!error}, we make it silent and continue the
         process. *)
 
-    val graph : t -> (Hash.t Reference.Map.t, error) result Lwt.t
+    val graph : ?locks:Lock.t -> t -> (Hash.t Reference.Map.t, error) result Lwt.t
     (** [graph state] is the same process than {!graph_p} but we use
         the state-defined buffer. That means the client can not use
         this function in a concurrency context with the same
@@ -886,6 +880,7 @@ sig
     val list_p :
          dtmp:Cstruct.t
       -> raw:Cstruct.t
+      -> ?locks:Lock.t
       -> t -> (Reference.t * Hash.t) list Lwt.t
     (** [list_p state ~dtmp ~raw] returns an associated list between
         reference and its bind hash. This function is the same than:
@@ -898,13 +893,13 @@ sig
         Finally, as {!graph_p}, if we encountered any {!error}, we
         make it silent and continue the process. *)
 
-    val list_s : t -> (Reference.t * Hash.t) list Lwt.t
+    val list_s : ?locks:Lock.t -> t -> (Reference.t * Hash.t) list Lwt.t
     (** [list_s state] is the same process than {!list_p} but we use
         the state-defined buffer. That means the client can not use
         this function in a concurrency context with the same
         [state]. *)
 
-    val list : t -> (Reference.t * Hash.t) list Lwt.t
+    val list : ?locks:Lock.t -> t -> (Reference.t * Hash.t) list Lwt.t
     (** Alias of {!list_s}. *)
 
     val remove_p :
@@ -945,6 +940,7 @@ sig
     val read_p :
          dtmp:Cstruct.t
       -> raw:Cstruct.t
+      -> ?locks:Lock.t
       -> t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
     (** [read_p state ~dtmp ~raw reference] returns the value contains
         in the reference [reference] (available in the git repository
@@ -958,13 +954,13 @@ sig
         This function can be used in a concurrency context only if the
         specifed buffers are not used by another process. *)
 
-    val read_s : t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
+    val read_s : ?locks:Lock.t -> t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
     (** [read_s state reference] is the same process than {!read_p}
         but we use the state-defined buffer. That means the client can
         not use this function in a concurrency context with the same
         [state]. *)
 
-    val read : t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
+    val read : ?locks:Lock.t -> t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
     (** Alias of {!read_s}. *)
 
     val write_p :
@@ -1006,7 +1002,7 @@ sig
   (** [clear_caches ?locks t] drops all values stored in the internal
       caches binded with the git repository [t]. *)
 
-  val reset : ?locks:Lock.t -> t -> (unit, Ref.error) result Lwt.t
+  val reset : ?locks:Lock.t -> t -> (unit, [ `Store of error | `Ref of Ref.error ]) result Lwt.t
   (** [reset ?locks t] removes all things of the git repository [t]
       and ensures it will be empty. *)
 end
