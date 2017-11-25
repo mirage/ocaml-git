@@ -410,10 +410,10 @@ module MakeEncoder (M : S.MINIENC)
       let max = min (e.o_len - e.o_pos) (Minienc.IOVec.lengthv iovecs) in
 
       try (* XXX(dinosaure): wtf?! pourquoi j'ai fait ce code (peut être pour ne pas utiliser [fold_left]. *)
-        let pos = ref e.o_pos in
+        let pos = ref 0 in
 
         List.iter (fun iovec ->
-            let write = cstruct_blit_iovec iovec current (e.o_off + !pos) (Some (e.o_len - !pos)) in
+            let write = cstruct_blit_iovec iovec current (e.o_off + e.o_pos + !pos) (Some (max - !pos)) in
 
             if !pos + write = max
             then raise (Drain (!pos + write))
