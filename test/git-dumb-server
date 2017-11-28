@@ -55,8 +55,22 @@ let files =
 let (/) = Filename.concat
 let tmp = Filename.temp_dir_name
 
+let () = Random.self_init ()
+
+let random_string len =
+  let gen () = match Random.int (26 + 26 + 10) with
+    | n when n < 26 -> int_of_char 'a' + n
+    | n when n < 26 + 26 -> int_of_char 'A' + n - 26
+    | n -> int_of_char '0' + n - 26 - 26
+  in
+  let gen () = char_of_int (gen ()) in
+
+  Bytes.create len |> fun raw ->
+  for i = 0 to len - 1 do Bytes.set raw i (gen ()) done;
+  Bytes.unsafe_to_string raw
+
 let () =
-  let repo = tmp / "ogit" / "xxx" in
+  let repo = tmp / "ocaml-git" / (random_string 3) in
   rmdir repo;
   git_init repo files;
   git_daemon repo
