@@ -234,7 +234,7 @@ module Make
     let open Lwt_result in
 
     let test () =
-      create ~root ()           >>= fun t     ->
+      create ~root ()           >>= fun t  ->
       check_write t "v1" kv1 v1 >>= fun () ->
       check_write t "v2" kv2 v2 >>= fun () ->
 
