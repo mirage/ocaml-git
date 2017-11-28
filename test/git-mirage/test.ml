@@ -1,5 +1,6 @@
 (*
  * Copyright (c) 2013-2017 Thomas Gazagnaire <thomas@gazagnaire.org>
+ * and Romain Calascibetta <romain.calascibetta@gmail.com>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,12 +15,10 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Lwt.Infix
+let () = Printexc.record_backtrace true
+
 open Test_common
 open Git_mirage
-open Result
-
-(* FIXME: this should probably go somewhere else ... *)
 
 let protect_unix_exn = function
   | Unix.Unix_error _ as e -> Lwt.fail (Failure (Printexc.to_string e))
@@ -33,28 +32,30 @@ let protect f x = Lwt.catch (fun () -> f x) protect_unix_exn
 let safe f x = Lwt.catch (fun () -> f x) ignore_enoent
 
 let mkdir dirname =
+  let open Lwt.Infix in
+
   let rec aux dir =
     if Sys.file_exists dir && Sys.is_directory dir then Lwt.return_unit
-    else (
+    else
       let clear =
-        if Sys.file_exists dir then (
-          safe Lwt_unix.unlink dir
-        ) else
-          Lwt.return_unit
+        if Sys.file_exists dir
+        then safe Lwt_unix.unlink dir
+        else Lwt.return ()
       in
       clear >>= fun () ->
       aux (Filename.dirname dir) >>= fun () ->
       protect (Lwt_unix.mkdir dir) 0o755;
-    ) in
+    in
   aux dirname
 
 let command fmt =
-  Printf.ksprintf (fun str ->
-      Printf.printf "[exec] %s\n%!" str;
+  Printf.ksprintf
+    (fun str ->
+      Fmt.(pf stdout) "[exec] %s\n%!" str;
       let i = Sys.command str in
-      if i <> 0 then Printf.printf "[exec] error %d\n%!" i;
-      ()
-    ) fmt
+      if i <> 0 then Fmt.(pf stderr) "[exec] error %d\n%!" i;
+      ())
+    fmt
 
 let rmdir dir =
   if Sys.os_type = "Win32" then
@@ -62,41 +63,45 @@ let rmdir dir =
   else
     command "rm -rf %S" dir
 
-module M = struct
+module M =
+struct
+  let root = "test-git-mirage-store"
 
-  let root = "test-db"
+  let ( >>| ) x f =
+    let open Lwt.Infix in
 
-  let (>>|) x f =
     x >>= function
     | Ok x    -> f x
     | Error e -> Fmt.kstrf Lwt.fail_with "%a" FS_unix.pp_write_error e
 
   let init () =
     rmdir root;
-    mkdir root
+    let open Lwt.Infix in
+    mkdir root >>= fun () -> mkdir Filename.(concat root "temp")
 
   include FS_unix
 
   let connect () = FS_unix.connect root
-
 end
 
-module S = FS(M)(SHA1_slow)(Git.Inflate.M)
+module Gamma =
+struct
+  type path = Fpath.t
 
-let suite =
-  {
-    name  = "MIRAGE";
-    init  = M.init;
-    clean = unit;
-    store = (module S);
-    shell = true;
-  }
+  let temp = Fpath.(v M.root / "temp")
+  let current = Fpath.v M.root
+end
 
-let extra = [
-  "SHA1-mirage", Test_store.array (module Git_mirage.SHA1_slow);
-]
+module Fs = Git_mirage.Fs.Make(Gamma)(M)
+module MirageStore = Git_mirage.Make(Git_mirage.Fs.Lock)(Fs)
+
+let mirage_backend =
+  { name  = "Mirage"
+  ; store = (module MirageStore)
+  ; shell = true }
 
 let () =
-  Test_store.run ~extra "git-mirage" [
-    `Quick, suite;
-  ]
+  let () = Lwt_main.run (M.init ()) in
+  let () = verbose () in
+  Alcotest.run "git-mirage"
+    [ Test_store.suite (`Quick, mirage_backend) ]
