@@ -462,11 +462,17 @@ module Make
 
     FileSystem.Dir.create ~path:true Path.(root / "objects" / first) >>= function
     | Error err ->
+      Log.err (fun l -> l ~header:"write" "Retrieve an error when we try to create the directory %a: %a."
+                  Path.pp Path.(root / "objects" / first)
+                  FileSystem.Dir.pp_error err);
       Lwt.return (Error (`SystemDirectory err))
     | Ok (true | false) ->
       FileSystem.File.open_w ~mode:0o644 Path.(root / "objects" / first / rest)[@warning "-44"] (* XXX(dinosaure): shadowing ( / ). *)
       >>= function
       | Error sys_error ->
+        Log.err (fun l -> l ~header:"write" "Retrieve an error when we open/create the file %a: %a."
+                    Path.pp Path.(root / "objects" / first / rest)
+                    FileSystem.File.pp_error sys_error);
         Lwt.return (Error (`SystemFile sys_error))
       | Ok oc ->
         Lwt.finalize
