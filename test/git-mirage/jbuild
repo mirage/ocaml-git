@@ -6,5 +6,5 @@
 
 (alias
  ((name runtest)
-  (deps (test.exe))
+  (deps (test.exe ../data/pack.idx ../data/pack.pack))
   (action (run ${exe:test.exe} -q --color=always))))
