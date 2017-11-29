@@ -416,8 +416,8 @@ module Make
       | Ok t -> Lwt.return t
       | Error err -> Lwt.fail (Store err))
 
-  let filename_index_pack = Fpath.(v "test" / "data" / "pack-328f72997ab8388e268c85b62ea034ab82a7589b.idx")
-  let filename_pack = Fpath.(v "test" / "data" / "pack-328f72997ab8388e268c85b62ea034ab82a7589b.pack")
+  let filename_index_pack = Fpath.(v "../" / "data" / "pack.idx")
+  let filename_pack = Fpath.(v "../" / "data" / "pack.pack")
 
   module RefIndexPack = Test_index_pack.Value(Store.Hash)
 
