@@ -14,7 +14,7 @@ depends: [
   "jbuilder"        {build}
   "git"
   "git-http"
-  "cohttp"          {>= "0.19.1"}
-  "cohttp-lwt-unix" {>= "0.19.1"}
+  "cohttp"          {>= "0.99.0"}
+  "cohttp-lwt-unix" {>= "0.99.0"}
 ]
-available: [ocaml-version >= "4.02.3"]
+available: [ocaml-version >= "4.03.0"]

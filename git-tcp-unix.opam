@@ -13,6 +13,5 @@ build: ["jbuilder" "build" "-p" name "-j" jobs]
 depends: [
   "jbuilder"        {build}
   "git"
-  "lwt"
 ]
 available: [ocaml-version >= "4.02.3"]
