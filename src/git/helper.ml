@@ -583,11 +583,7 @@ let digest
     Faraday.serialize enc
       (fun iovecs ->
           let len = List.fold_left (fun acc -> function
-              | { Faraday.buffer = `String buf; off; len; } ->
-                Digest.feed ctx (Cstruct.of_string (String.sub buf off len)); acc + len
-              | { Faraday.buffer = `Bytes buf; off; len; } ->
-                Digest.feed ctx (Cstruct.of_bytes (Bytes.sub buf off len)); acc + len
-              | { Faraday.buffer = `Bigstring buf; off; len; } ->
+              | { Faraday.buffer = buf; off; len; } ->
                 Digest.feed ctx (Cstruct.of_bigarray ~off ~len buf); acc + len)
               0 iovecs
           in `Ok len)
