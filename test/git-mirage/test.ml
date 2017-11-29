@@ -18,7 +18,6 @@
 let () = Printexc.record_backtrace true
 
 open Test_common
-open Git_mirage
 
 let protect_unix_exn = function
   | Unix.Unix_error _ as e -> Lwt.fail (Failure (Printexc.to_string e))

@@ -82,7 +82,7 @@ module Make
         >>= fun () ->
         Store.Ref.read t Store.Reference.head >>= function
         | Error _ -> Alcotest.fail "empty clone!"
-        | Ok (_, v) -> Store.reset t
+        | Ok _ -> Store.reset t
           >>= function
           | Ok () -> Lwt.return ()
           | Error (`Store err) -> Lwt.fail (Store err)
@@ -269,7 +269,7 @@ let test_read_writes () =
   end
 *)
 
-let suite (speed, x) =
+let suite (_, x) =
   let (module S) = x.store in
   let module T = Make(S) in
   x.name,

@@ -43,7 +43,7 @@ module Make
 
   exception Reset of [ `Store of Store.error | `Ref of Store.Ref.error ]
 
-  let run x test =
+  let run _ test =
     Lwt_main.run (test () >>= fun t -> Store.reset t >>= function
       | Ok () -> Lwt.return ()
       | Error err -> Lwt.fail (Reset err))
@@ -385,7 +385,7 @@ module Make
 
             let commit = Store.Hash.of_hex "21930ccb5f7b97e80a068371cb554b1f5ce8e55a" in
             Store.Ref.write t Store.Reference.head (Store.Reference.Hash commit) >>= fun () ->
-            Store.Ref.read t Store.Reference.head >>= fun (head, value) ->
+            Store.Ref.read t Store.Reference.head >>= fun (_, value) ->
             Alcotest.(check head_contents) "head" (Store.Reference.Hash commit) value;
             Lwt.return (Ok t)
     in
@@ -445,7 +445,7 @@ module Make
           if IndexEncoder.used_out state > 0
           then Cstruct_buffer.add buf (Cstruct.sub tmp 0 (IndexEncoder.used_out state));
           Lwt.return (Ok ())
-        | `Error (state, err) -> Lwt.return (Error err)
+        | `Error (_, err) -> Lwt.return (Error err)
       in
 
       Store.create ~root () >>= function
@@ -475,7 +475,7 @@ module Make
         | `Await state ->
           Lwt_bytes.read ic (Cstruct.to_bigarray src) 0 (Cstruct.len src) >>= fun len ->
           go acc (IndexDecoder.refill 0 len state)
-        | `End (state, hash) -> Lwt.return (Ok acc)
+        | `End _ -> Lwt.return (Ok acc)
         | `Hash (state, (hash, crc, off)) ->
           go (Radix.bind acc hash (crc, off)) state
         | `Error (_, err) -> Lwt.return (Error err)
@@ -556,8 +556,8 @@ module Make
       | `Await state ->
         Lwt_bytes.read ic (Cstruct.to_bigarray src) 0 (Cstruct.len src) >>= fun len ->
         go ~pack ~graph ?current (PackDecoder.refill 0 len state)
-      | `End (state, hash) -> Lwt.return (Ok (pack, graph, hash))
-      | `Error (state, err) -> Lwt.return (Error err)
+      | `End (_, hash) -> Lwt.return (Ok (pack, graph, hash))
+      | `Error (_, err) -> Lwt.return (Error err)
       | `Flush state ->
         let o, n = PackDecoder.output state in
         let current = match current with
@@ -653,7 +653,7 @@ module Make
       | Ok t ->
         let open Lwt_result in
 
-        decode_pack_file filename_pack >>= fun (pack, _, hash) ->
+        decode_pack_file filename_pack >>= fun (pack, _, _) ->
         assert_index_pack_equal "reference index pack" pack
           (List.fold_left (fun a (h, v) -> Radix.bind a h v) Radix.empty RefIndexPack.values);
         Lwt.return (Ok t)
@@ -692,7 +692,7 @@ module Make
         | Error err ->
           Lwt.fail (Store err)
         | Ok lst ->
-          let snd (a, b) = Lwt.return b in
+          let snd (_, b) = Lwt.return b in
           Lwt_list.map_s snd lst >>= Store.Pack.make t >>= function
           | Error err ->
             Lwt.fail (Pack err)
@@ -740,13 +740,13 @@ module Make
               (fun hash -> Store.read_inflated t hash)
             >>= function
             | Ok state ->
-              let fst (a, b) = Lwt.return a in
+              let fst (a, _) = Lwt.return a in
               Lwt_list.map_s fst lst >>=
               Lwt_list.iter_s
                 (fun hash ->
                    Decoder.get_with_allocation state hash ztmp wtmp >>= function
                    | Ok _ -> Lwt.return ();
-                   | Error err -> assert false)
+                   | Error _ -> assert false)
               >>= fun () -> Lwt.return (Ok t)
             | Error () -> assert false
             (* XXX(dinosaure): this error should never happen

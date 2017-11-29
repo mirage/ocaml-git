@@ -123,8 +123,6 @@ module Make (S : Git.Minimal.S) = struct
     Git.Radix.Make(struct
       type t = S.Hash.t
 
-      let compare = S.Hash.compare
-      let equal = S.Hash.equal
       let get = S.Hash.get
       let length _ = S.Hash.Digest.length
     end)
