@@ -9,21 +9,22 @@ dev-repo:     "https://github.com/mirage/ocaml-git.git"
 doc:          "https://mirage.github.io/ocaml-git/"
 
 build: [
-  ["jbuilder" "subst" "-n" name] {pinned}
+  ["jbuilder" "subst"] {pinned}
   ["jbuilder" "build" "-p" name "-j" jobs]
 ]
-build-test: ["jbuilder" "runtest" "test/git-unix"]
+build-test: ["jbuilder" "runtest" "-p" name]
 
 depends: [
-  "jbuilder"            {build}
+  "jbuilder"        {build & >= "1.0+beta10"}
   "cmdliner"
-  "git-cohttp-lwt-unix"
-  "mtime"               {>= "1.0.0"}
-  "decompress"          {>= "0.7"}
+  "git-http"
+  "cohttp"          {>= "1.0.0"}
+  "cohttp-lwt-unix" {>= "1.0.0"}
+  "mtime"           {>= "1.0.0"}
   "base-unix"
-  "alcotest"            {test}
-  "nocrypto"            {test & >= "0.5.4"}
-  "io-page"             {test & >= "1.6.1"}
+  "alcotest"        {test}
+  "nocrypto"        {test & >= "0.5.4"}
+  "io-page"         {test & >= "1.6.1"}
 ]
 
 available: [ocaml-version >= "4.02.3"]

@@ -8,11 +8,14 @@ bug-reports:  "https://github.com/mirage/ocaml-git/issues"
 dev-repo:     "https://github.com/mirage/ocaml-git.git"
 doc:          "https://mirage.github.io/ocaml-git/"
 
-build: ["jbuilder" "build" "-p" name "-j" jobs]
-build-test: ["jbuilder" "runtest" "test/git-mirage"]
+build: [
+  ["jbuilder" "subst"] {pinned}
+  ["jbuilder" "build" "-p" name "-j" jobs]
+]
+build-test: ["jbuilder" "runtest" "-p" name]
 
 depends: [
-  "jbuilder"       {build}
+  "jbuilder"       {build & >= "1.0+beta10"}
   "cohttp-mirage"  {>= "1.0.0"}
   "mirage-flow-lwt"
   "mirage-channel-lwt"

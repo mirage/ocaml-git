@@ -4,4 +4,5 @@
  ((name        git)
   (public_name git)
   (libraries   (fpath cstruct fmt lwt uri logs astring hex lru rresult
-                angstrom farfadet faraday ocamlgraph ocplib-endian ocplib-endian.bigstring))))
+                angstrom farfadet faraday ocamlgraph ocplib-endian
+                ocplib-endian.bigstring decompress digestif.ocaml))))

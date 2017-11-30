@@ -59,7 +59,6 @@ sig
   module Store : Minimal.S
     with type Hash.Digest.buffer = Cstruct.t
      and type Hash.hex = string
-  module Buffer : S.BUFFER
 
   module Decoder : Smart.DECODER
     with module Hash = Store.Hash
@@ -141,18 +140,13 @@ module Make
     (G : Minimal.S
      with type Hash.Digest.buffer = Cstruct.t
       and type Hash.hex = string)
-    (B : S.BUFFER
-     with type raw = string
-      and type fixe = Cstruct.t)
   : S with module Web     = W
        and module Client  = C
        and module Store   = G
-       and module Buffer  = B
 = struct
   module Web    = W
   module Client = C
   module Store  = G
-  module Buffer = B
 
   module Decoder
     = Smart.Decoder(Store.Hash)
@@ -608,4 +602,3 @@ module Make
                  expect)))
     | Error _ as err -> Lwt.return err
 end
-

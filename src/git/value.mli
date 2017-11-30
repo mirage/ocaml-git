@@ -119,9 +119,6 @@ end
 
 module type RAW =
 sig
-  module Buffer
-    : S.BUFFER
-  (** The [Buffer] module used to make this module. *)
 
   module Value : S
   include module type of Value
@@ -157,7 +154,8 @@ sig
        and type init = Cstruct.t
        and type error = [ `Decoder of string ]
 
-  val to_deflated_raw : ?capacity:int -> ?level:int -> ztmp:Cstruct.t -> t -> (Buffer.raw, E.error) result
+  val to_deflated_raw : ?capacity:int -> ?level:int -> ztmp:Cstruct.t -> t ->
+    (string, E.error) result
   (** [to_deflated_raw ?capacity ?level ~ztmp value] serializes and
       deflates the value [value]. [capacity] is the memory consumption
       of the encoder in bytes (default to [0x100]), [level] is the
@@ -168,14 +166,14 @@ sig
       All error from the {!Deflate} module is relayed to the
       [`Deflate] error value. *)
 
-  val to_raw : ?capacity:int -> t -> (Buffer.raw, EE.error) result
+  val to_raw : ?capacity:int -> t -> (string, EE.error) result
   (** [to_raw ?capacity value] serializes the value
       [value]. [capacity] is the memory consumption of the encoder in
       bytes (default to [0x100]).
 
       This function can not returns an {!EE.error} (see {!EE}). *)
 
-  val to_raw_without_header : ?capacity:int -> t -> (Buffer.raw, EEE.error) result
+  val to_raw_without_header : ?capacity:int -> t -> (string, EEE.error) result
 
   val of_raw : kind:[ `Commit | `Blob | `Tree | `Tag ] -> Cstruct.t -> (t, [ `Decoder of string ]) result
   (** [of_raw ~kind inflated] makes a Git object as an OCaml value
@@ -226,12 +224,9 @@ module Raw
                  and type hex = string)
     (I : S.INFLATE)
     (D : S.DEFLATE)
-    (B : S.BUFFER with type raw = string
-                   and type fixe = Cstruct.t)
   : RAW with module Hash    = H
          and module Inflate = I
          and module Deflate = D
-         and module Buffer  = B
          and module Value   = Make(H)(I)(D)
          and module Blob    = Blob.Make(H)
          and module Commit  = Commit.Make(H)

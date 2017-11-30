@@ -274,18 +274,15 @@ module Make
       | Ok t -> Lwt.return t
       | Error err -> Lwt.fail (Store err))
 
-  module B : Git.S.BUFFER with type raw = string and type fixe = Cstruct.t = Cstruct_buffer
-
   module ValueIO
     : Git.Value.RAW
       with module Hash = Store.Hash
-       and module Buffer = B
        and module Blob = Store.Value.Blob
        and module Commit = Store.Value.Commit
        and module Tree = Store.Value.Tree
        and module Tag = Store.Value.Tag
        and type t = Store.Value.t
-    = Git.Value.Raw(Store.Hash)(Store.Inflate)(Store.Deflate)(B)
+    = Git.Value.Raw(Store.Hash)(Store.Inflate)(Store.Deflate)
 
   let head_contents =
     let module M = struct
@@ -433,17 +430,17 @@ module Make
 
     let test () =
       let seq f = List.iter f RefIndexPack.values in
-      let buf = Cstruct_buffer.create 0x8000 in
+      let buf = Git.Buffer.create 0x8000 in
       let tmp = Cstruct.create 0x800 in
       let state = IndexEncoder.default seq RefIndexPack.hash in
 
       let rec go state = match IndexEncoder.eval tmp state with
         | `Flush state ->
-          Cstruct_buffer.add buf (Cstruct.sub tmp 0 (IndexEncoder.used_out state));
+          Git.Buffer.add buf (Cstruct.sub tmp 0 (IndexEncoder.used_out state));
           go (IndexEncoder.flush 0 (Cstruct.len tmp) state)
         | `End state ->
           if IndexEncoder.used_out state > 0
-          then Cstruct_buffer.add buf (Cstruct.sub tmp 0 (IndexEncoder.used_out state));
+          then Git.Buffer.add buf (Cstruct.sub tmp 0 (IndexEncoder.used_out state));
           Lwt.return (Ok ())
         | `Error (_, err) -> Lwt.return (Error err)
       in
@@ -454,7 +451,7 @@ module Make
         let open Lwt_result in
 
         go state >>= fun () ->
-        let buf = Cstruct_buffer.unsafe_contents buf in
+        let buf = Git.Buffer.unsafe_contents buf in
         let res = read_file (Fpath.to_string filename_index_pack) in
 
         assert_cstruct_data_equal "raw data" buf res;
@@ -501,7 +498,7 @@ module Make
   let decode_pack_file filename_pack =
     Lwt_unix.openfile (Fpath.to_string filename_pack) [O_RDONLY] 0o644 >>= fun ic ->
     let src = Cstruct.create 0x8000 in
-    let buf = Cstruct_buffer.create 0x8000 in
+    let buf = Git.Buffer.create 0x8000 in
 
     let string_of_kind = function
       | PackDecoder.Commit -> "commit"
@@ -540,7 +537,7 @@ module Make
             Cstruct.blit src 0 raw pos len;
             pos + len
           | `Insert (off, len) ->
-            let src = Cstruct.sub (Cstruct_buffer.unsafe_contents buf) off len in
+            let src = Cstruct.sub (Git.Buffer.unsafe_contents buf) off len in
             Store.Hash.Digest.feed ctx src;
             Cstruct.blit src 0 raw pos len;
             pos + len)
@@ -572,21 +569,21 @@ module Make
           | Some (`Hunks _) -> assert false
         in
 
-        Cstruct_buffer.add buf (Cstruct.sub o 0 n);
+        Git.Buffer.add buf (Cstruct.sub o 0 n);
         go ~pack ~graph ?current (PackDecoder.flush 0 (Cstruct.len o) state)
       | `Hunk (state, hunk) ->
         let current = match current, hunk with
           | Some (`Hunks hunks), PackDecoder.H.Copy (off, len) ->
             Some (`Hunks (`Copy (off, len) :: hunks))
           | Some (`Hunks hunks), PackDecoder.H.Insert raw ->
-            let off, len = Cstruct_buffer.has buf, Cstruct.len raw in
-            Cstruct_buffer.add buf raw;
+            let off, len = Git.Buffer.has buf, Cstruct.len raw in
+            Git.Buffer.add buf raw;
             Some (`Hunks (`Insert (off, len) :: hunks))
           | None, PackDecoder.H.Copy (off, len) ->
             Some (`Hunks [ `Copy (off, len) ])
           | None, PackDecoder.H.Insert raw ->
-            let off, len = Cstruct_buffer.has buf, Cstruct.len raw in
-            Cstruct_buffer.add buf raw;
+            let off, len = Git.Buffer.has buf, Cstruct.len raw in
+            Git.Buffer.add buf raw;
             Some (`Hunks [ `Insert (off, len) ])
           | Some (`Ctx _), _ -> assert false
         in
@@ -601,7 +598,7 @@ module Make
             Some (`Ctx ctx) ->
             let hash = Store.Hash.Digest.get ctx in
             Pack.bind pack hash (PackDecoder.crc state, PackDecoder.offset state),
-            (PackDecoder.offset state, kind, Cstruct_buffer.contents buf)
+            (PackDecoder.offset state, kind, Git.Buffer.contents buf)
           | (PackDecoder.Commit
             | PackDecoder.Tree
             | PackDecoder.Tag
@@ -633,7 +630,7 @@ module Make
           | _, _ -> assert false
         in
         let graph = Graph.add off (raw, kind) graph in
-        Cstruct_buffer.clear buf;
+        Git.Buffer.clear buf;
         go ~pack ~graph (PackDecoder.next_object state)
     in
 

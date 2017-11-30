@@ -1,6 +1,0 @@
-(jbuild_version 1)
-
-(library
- ((name        git_tcp_unix)
-  (public_name git-tcp-unix)
-  (libraries   (git lwt.unix))))

@@ -3,4 +3,5 @@
 (library
  ((name        git_unix)
   (public_name git-unix)
-  (libraries   (git decompress digestif.c logs.fmt lwt.unix))))
+  (wrapped     false)
+  (libraries   (git logs.fmt lwt.unix git-http cohttp-lwt-unix))))

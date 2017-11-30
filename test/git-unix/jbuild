@@ -2,7 +2,7 @@
 
 (executable
  ((name      test)
-  (libraries (test git-unix git-tcp-unix git-cohttp-lwt-unix))))
+  (libraries (test git-unix))))
 
 (alias
  ((name runtest)

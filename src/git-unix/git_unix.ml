@@ -14,10 +14,9 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Inflate = Ocaml_inflate
-module Deflate = Ocaml_deflate
-module Sha1 = Sha1
 module Fs = Fs_lwt_unix.Fs
 module Lock = Fs_lwt_unix.Lock
 
-module Store = Git.Store.Make(Sha1)(Fpath)(Fs_lwt_unix.Lock)(Fs_lwt_unix.Fs)(Ocaml_inflate)(Ocaml_deflate)
+module Store =
+  Git.Store.Make(Git.Sha1)(Fpath)(Fs_lwt_unix.Lock)(Fs_lwt_unix.Fs)
+    (Git.Inflate)(Git.Deflate)

@@ -1,4 +1,4 @@
-module CohttpClient
+module Client
   : Git.Sync_http.CLIENT
     with type +'a io  = 'a Lwt.t
      and type headers = Git_http.Web_cohttp_lwt.HTTP.headers
@@ -18,9 +18,8 @@ module Make
 
   include Git.Sync_http.S
     with module Web    := Git_http.Web_cohttp_lwt
-     and module Client := CohttpClient
+     and module Client := Client
      and module Store  := S
-     and module Buffer := Git_http.Cstruct_buffer
 
   type error' =
     [ `StoreRef of S.Ref.error

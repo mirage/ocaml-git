@@ -1,6 +1,0 @@
-(jbuild_version 1)
-
-(library
- ((name        git_cohttp_lwt_unix)
-  (public_name git-cohttp-lwt-unix)
-  (libraries   (git git-http cohttp-lwt-unix))))

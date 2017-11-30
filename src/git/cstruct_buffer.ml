@@ -1,3 +1,5 @@
+module String = Buffer
+
 type t =
   { mutable buf : Cstruct.t
   ; mutable pos : int
@@ -15,6 +17,11 @@ let create n =
 
 let contents { buf; pos; _ } =
   Cstruct.copy buf 0 pos
+
+let unsafe_contents { buf; pos; _ } =
+  Cstruct.sub buf 0 pos
+
+let has { pos; _ } = pos
 
 let resize t more =
   let len = t.len in

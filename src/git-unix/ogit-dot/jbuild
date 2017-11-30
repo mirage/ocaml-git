@@ -2,6 +2,6 @@
 
 (executables
  ((names       (git_dot))
-  (package     git-dot)
-  (public_names (git-dot))
+  (package     git-unix)
+  (public_names (ogit-dot))
   (libraries   (git-unix))))

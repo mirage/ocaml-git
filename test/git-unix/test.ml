@@ -24,8 +24,8 @@ module Make
      with type Hash.Digest.buffer = Cstruct.t
       and type Hash.hex = string)
 = struct
-  module Sync = Git_tcp_unix.Make(Git_tcp_unix.Default)(Store)
-  module HttpSync = Git_cohttp_lwt_unix.Make(Git_http.Default)(Store)
+  module Sync = Git_unix_tcp.Make(Git_unix_tcp.Default)(Store)
+  module HttpSync = Git_unix_http.Make(Git_http.Default)(Store)
 
   exception Sync of Sync.error'
 
@@ -137,7 +137,7 @@ let suite (_, x) =
   [ "TCP Remote operations"          , `Slow, T.test_tcp_remote x
   ; "TCP & HTTP Cloning remote repos", `Slow, T.test_clone x ]
 
-module MemStore = Git.Mem.Make(Git_unix.Sha1)(Fpath)(Lwt_lock)(Git_unix.Inflate)(Git_unix.Deflate)(Cstruct_buffer)
+module MemStore = Git.Mem.Make(Git.Sha1)(Fpath)(Lwt_lock)(Git.Inflate)(Git.Deflate)
 module UnixStore = Git_unix.Store
 
 let mem_backend =

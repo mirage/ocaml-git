@@ -4,7 +4,6 @@ sig
 end
 
 module Web_cohttp_lwt = Web_cohttp_lwt
-module Cstruct_buffer = Cstruct_buffer
 
 module Make
     (K : Git.Sync.CAPABILITIES)
@@ -22,4 +21,3 @@ module Make
     with module Web    := Web_cohttp_lwt
      and module Client := C
      and module Store  := S
-     and module Buffer := Cstruct_buffer

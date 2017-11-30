@@ -36,8 +36,6 @@ module Make
                  and type +'a io = 'a Lwt.t)
     (I : S.INFLATE)
     (D : S.DEFLATE)
-    (B : S.BUFFER with type raw = string
-                   and type fixe = Cstruct.t)
   : Minimal.S
     with module Hash = H
        and module Path = P
@@ -50,9 +48,9 @@ module Make
   module Lock = L
   module Inflate = I
   module Deflate = D
-  module Buffer = B
+  module Buffer = Cstruct_buffer
 
-  module Value = Value.Raw(Hash)(Inflate)(Deflate)(Buffer)
+  module Value = Value.Raw(Hash)(Inflate)(Deflate)
   module Reference = Reference.Make(Hash)(Path)
 
   type kind = [ `Commit | `Tree | `Blob | `Tag ]

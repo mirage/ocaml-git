@@ -16,14 +16,11 @@
 
 (** Unix backend. *)
 
-module Inflate = Ocaml_inflate
-module Deflate = Ocaml_deflate
-module Sha1 = Sha1
 module Fs = Fs_lwt_unix.Fs
 module Lock = Fs_lwt_unix.Lock
 
 module Store : Git.Store.S
-  with module Hash = Sha1
+  with module Hash = Git.Sha1
    and module Path = Fpath
    and module Lock = Fs_lwt_unix.Lock
    and module FileSystem = Fs_lwt_unix.Fs

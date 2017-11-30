@@ -1,4 +1,4 @@
-module CohttpClient =
+module Client =
 struct
   type headers = Cohttp.Header.t
   type resp = Git_http.Web_cohttp_lwt.resp =
@@ -66,7 +66,7 @@ module Make
      with type Hash.Digest.buffer = Cstruct.t
       and type Hash.hex = string)
 = struct
-  include Git_http.Make(K)(CohttpClient)(S)
+  include Git_http.Make(K)(Client)(S)
 
   type error' =
     [ `StoreRef of S.Ref.error

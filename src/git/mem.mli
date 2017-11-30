@@ -25,8 +25,6 @@ module Make
        to cut the Lwt dependence with the memory back-end. *)
     (I : S.INFLATE)
     (D : S.DEFLATE)
-    (B : S.BUFFER with type raw = string
-                   and type fixe = Cstruct.t)
   : Minimal.S
     with module Hash = H
        and module Path = P

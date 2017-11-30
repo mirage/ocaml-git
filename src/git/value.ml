@@ -82,9 +82,6 @@ end
 
 module type RAW =
 sig
-  module Buffer
-    : S.BUFFER
-
   module Value : S
   include module type of Value
 
@@ -109,9 +106,9 @@ sig
        and type init = Cstruct.t
        and type error = [ `Decoder of string ]
 
-  val to_deflated_raw : ?capacity:int -> ?level:int -> ztmp:Cstruct.t -> t -> (Buffer.raw, E.error) result
-  val to_raw : ?capacity:int -> t -> (Buffer.raw, EE.error) result
-  val to_raw_without_header : ?capacity:int -> t -> (Buffer.raw, EEE.error) result
+  val to_deflated_raw : ?capacity:int -> ?level:int -> ztmp:Cstruct.t -> t -> (string, E.error) result
+  val to_raw : ?capacity:int -> t -> (string, EE.error) result
+  val to_raw_without_header : ?capacity:int -> t -> (string, EEE.error) result
   val of_raw : kind:[ `Commit | `Tree | `Tag | `Blob ] -> Cstruct.t -> (t, [ `Decoder of string ]) result
   val of_raw_with_header : Cstruct.t -> (t, DD.error) result
 end
@@ -327,12 +324,9 @@ module Raw
                  and type hex = string)
     (I : S.INFLATE)
     (D : S.DEFLATE)
-    (B : S.BUFFER with type raw = string
-                   and type fixe = Cstruct.t)
     : RAW with module Hash = H
            and module Inflate = I
            and module Deflate = D
-           and module Buffer = B
            and module Value = Make(H)(I)(D)
            and module Blob = Blob.Make(H)
            and module Commit = Commit.Make(H)
@@ -340,7 +334,6 @@ module Raw
            and module Tag = Tag.Make(H)
            and type t = Make(H)(I)(D).t
 = struct
-  module Buffer = B
   module Value = Make(H)(I)(D)
 
   include Value
@@ -396,14 +389,14 @@ module Raw
                      and type error = 'error)
 
   let to_ (type state) (type res) (type err_encoder)
-      (encoder : (state, Buffer.fixe, res, err_encoder) encoder)
-      (buffer : Buffer.t)
-      (raw : Buffer.fixe)
-      (state : state) : (Buffer.raw, err_encoder) result
+      (encoder : (state, Cstruct.t, res, err_encoder) encoder)
+      (buffer : Cstruct_buffer.t)
+      (raw : Cstruct.t)
+      (state : state) : (string, err_encoder) result
     =
     let module E =
       (val encoder : ENCODER with type state = state
-                              and type raw = Buffer.fixe
+                              and type raw = Cstruct.t
                               and type result = res
                               and type error = err_encoder)
     in
@@ -412,12 +405,12 @@ module Raw
       | `Error (_, err) -> Error err
       | `End (state, _) ->
         if E.used state > 0
-        then Buffer.add buffer (E.raw_sub raw 0 (E.used state));
+        then Cstruct_buffer.add buffer (E.raw_sub raw 0 (E.used state));
 
-        Ok (Buffer.contents buffer)
+        Ok (Cstruct_buffer.contents buffer)
       | `Flush state ->
         if E.used state > 0
-        then Buffer.add buffer (E.raw_sub raw 0 (E.used state));
+        then Cstruct_buffer.add buffer (E.raw_sub raw 0 (E.used state));
 
         go (E.flush 0 (E.raw_length raw) state)
     in
@@ -427,7 +420,7 @@ module Raw
   let to_deflated_raw ?(capacity = 0x100) ?(level = 4) ~ztmp value =
     let encoder = E.default (capacity, value, level, ztmp) in
     let raw = Cstruct.create capacity in
-    let buffer = Buffer.create (Int64.to_int (F.length value)) in
+    let buffer = Cstruct_buffer.create (Int64.to_int (F.length value)) in
     (* XXX(dinosaure): it's an heuristic to consider than the size of the result
        is lower than [F.length value]. In most of cases, it's true but sometimes, a
        deflated Git object can be bigger than a serialized Git object. *)
@@ -457,7 +450,7 @@ module Raw
   let to_raw ?(capacity = 0x100) value =
     let encoder = EE.default (capacity, value) in
     let raw = Cstruct.create capacity in
-    let buffer = Buffer.create (Int64.to_int (F.length value)) in
+    let buffer = Cstruct_buffer.create (Int64.to_int (F.length value)) in
     (* XXX(dinosaure): we are sure than the serialized object has the size
        [F.length value]. So, the [buffer] should not growth. *)
 
@@ -486,7 +479,7 @@ module Raw
   let to_raw_without_header ?(capacity = 0x100) value =
     let encoder = EEE.default (capacity, value) in
     let raw = Cstruct.create capacity in
-    let buffer = Buffer.create (Int64.to_int (F.length value)) in
+    let buffer = Cstruct_buffer.create (Int64.to_int (F.length value)) in
     (* XXX(dinosaure): we are sure than the serialized object has the size
        [F.length value]. So, the [buffer] should not growth. *)
 
@@ -533,4 +526,3 @@ module Raw
           | Ok blob -> Ok (Blob blob)
           | Error (`Decoder err) -> Error (`Decoder err))
 end
-

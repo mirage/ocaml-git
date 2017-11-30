@@ -51,7 +51,6 @@ sig
   module Store  : Minimal.S
     with type Hash.Digest.buffer = Cstruct.t
      and type Hash.hex = string
-  module Buffer : S.BUFFER
 
   module Decoder : Smart.DECODER
     with module Hash = Store.Hash
@@ -130,9 +129,6 @@ module Make
                  and type resp = W.resp)
     (G : Minimal.S with type Hash.Digest.buffer = Cstruct.t
                     and type Hash.hex = string)
-    (B : S.BUFFER with type raw = string
-                   and type fixe = Cstruct.t)
   : S with module Web     = W
        and module Client  = C
        and module Store   = G
-       and module Buffer  = B

@@ -17,7 +17,7 @@
 
 let () = Random.self_init ()
 
-module Sync_http = Git_cohttp_lwt_unix.Make(Git_http.Default)(Git_unix.Store)
+module Sync_http = Git_unix_http.Make(Git_http.Default)(Git_unix.Store)
 
 let option_map f = function
   | Some v -> Some (f v)

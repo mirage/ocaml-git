@@ -9,13 +9,13 @@ dev-repo:     "https://github.com/mirage/ocaml-git.git"
 doc:          "https://mirage.github.io/ocaml-git/"
 
 build: [
-  ["jbuilder" "subst" "-n" name] {pinned}
+  ["jbuilder" "subst"] {pinned}
   ["jbuilder" "build" "-p" name "-j" jobs]
 ]
-build-test: ["jbuilder" "build" "test/git"]
+build-test: ["jbuilder" "runtest" "-p" name]
 
 depends: [
-  "jbuilder"   {build}
+  "jbuilder"   {build & >= "1.0+beta10"}
   "uri"        {>= "1.9.0"}
   "lwt"        {>= "2.4.7"}
   "angstrom"   {>= "0.7.0"}
@@ -24,6 +24,7 @@ depends: [
   "fpath"      {>= "0.7.0"}
   "digestif"   {>= "0.4"}
   "lru"        {>= "0.2.0"}
+  "decompress" {>= "0.7"}
   "ocplib-endian"
   "rresult"
   "logs"
