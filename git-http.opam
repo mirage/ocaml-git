@@ -11,8 +11,9 @@ doc:          "https://mirage.github.io/ocaml-git/"
 build: ["jbuilder" "build" "-p" name "-j" jobs]
 
 depends: [
-  "jbuilder" {build}
+  "jbuilder"     {build}
   "git"
-  "cohttp"   {>= "1.0.0"}
+  "cohttp"       {>= "1.0.0"}
+  "cohttp-lwt"   {>= "1.0.0"}
 ]
 available: [ocaml-version >= "4.03.0"]
