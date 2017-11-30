@@ -105,7 +105,8 @@ module Make
               | Ok _ -> Lwt.return ()
               | Error err -> Lwt.fail (Jump err))
            lst >>= fun () -> Lwt.return (Ok ()))
-      (function Jump err -> Lwt.return (Error (`StoreRef err)))
+      (function Jump err -> Lwt.return (Error (`StoreRef err))
+              | exn -> Lwt.fail exn) (* XXX(dinosaure): should never happen. *)
 
   let fetch_one t ?locks ~reference repository =
     let open Lwt.Infix in
