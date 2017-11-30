@@ -33,5 +33,8 @@ depends: [
   "astring"
   "cstruct"
   "ocamlgraph"
+  "alcotest" {test}
+  "nocrypto" {test & >= "0.5.4"}
+  "mtime"    {test & >= "1.0.0"}
 ]
 available: [ocaml-version >= "4.03.0"]
