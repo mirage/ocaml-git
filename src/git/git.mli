@@ -45,5 +45,4 @@ module Store        = Store
 
 module Inflate      = Inflate
 module Deflate      = Deflate
-module Sha1         = Sha1
 module Buffer       = Cstruct_buffer

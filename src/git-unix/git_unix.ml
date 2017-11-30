@@ -18,5 +18,5 @@ module Fs = Fs_lwt_unix.Fs
 module Lock = Fs_lwt_unix.Lock
 
 module Store =
-  Git.Store.Make(Git.Sha1)(Fpath)(Fs_lwt_unix.Lock)(Fs_lwt_unix.Fs)
+  Git.Store.Make(Git_sha1)(Fpath)(Fs_lwt_unix.Lock)(Fs_lwt_unix.Fs)
     (Git.Inflate)(Git.Deflate)

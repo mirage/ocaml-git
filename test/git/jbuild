@@ -2,7 +2,7 @@
 
 (executable
  ((name      test)
-  (libraries (test decompress digestif.ocaml fpath lwt))))
+  (libraries (test decompress git.ocaml fpath lwt))))
 
 (alias
  ((name runtest)

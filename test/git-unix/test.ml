@@ -137,7 +137,7 @@ let suite (_, x) =
   [ "TCP Remote operations"          , `Slow, T.test_tcp_remote x
   ; "TCP & HTTP Cloning remote repos", `Slow, T.test_clone x ]
 
-module MemStore = Git.Mem.Make(Git.Sha1)(Fpath)(Lwt_lock)(Git.Inflate)(Git.Deflate)
+module MemStore = Git.Mem.Make(Git_sha1)(Fpath)(Lwt_lock)(Git.Inflate)(Git.Deflate)
 module UnixStore = Git_unix.Store
 
 let mem_backend =

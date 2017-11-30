@@ -10,5 +10,5 @@ module Make
                     and type File.raw = Cstruct.t
                     and type Mapper.raw = Cstruct.t) =
 struct
-  include Git.Store.Make(Git.Sha1)(Fpath)(L)(Fs)(Git.Inflate)(Git.Deflate)
+  include Git.Store.Make(Git_sha1)(Fpath)(L)(Fs)(Git.Inflate)(Git.Deflate)
 end

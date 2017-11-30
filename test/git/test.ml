@@ -16,7 +16,7 @@
 
 open Test_common
 
-module Store = Git.Mem.Make(Git.Sha1)(Fpath)(Lwt_lock)(Git.Inflate)(Git.Deflate)
+module Store = Git.Mem.Make(Git_sha1)(Fpath)(Lwt_lock)(Git.Inflate)(Git.Deflate)
 
 let backend =
   { name  = "Memory"

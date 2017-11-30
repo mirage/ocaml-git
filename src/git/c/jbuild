@@ -1,0 +1,7 @@
+(jbuild_version 1)
+
+(library
+ ((name        git_c)
+  (public_name git.c)
+  (wrapped     false)
+  (libraries   (git digestif.c))))

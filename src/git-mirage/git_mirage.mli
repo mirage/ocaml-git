@@ -10,7 +10,7 @@ module Make
                     and type File.raw = Cstruct.t
                     and type Mapper.raw = Cstruct.t)
   : Git.Store.S
-      with module Hash = Git.Sha1
+      with module Hash = Git_sha1
        and module Path = Fpath
        and module Lock = L
        and module FileSystem = Fs
