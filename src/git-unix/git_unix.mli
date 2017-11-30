@@ -16,8 +16,8 @@
 
 (** Unix backend. *)
 
-module Inflate = C_inflate
-module Deflate = C_deflate
+module Inflate = Ocaml_inflate
+module Deflate = Ocaml_deflate
 module Sha1 = Sha1
 module Fs = Fs_lwt_unix.Fs
 module Lock = Fs_lwt_unix.Lock

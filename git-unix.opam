@@ -19,6 +19,7 @@ depends: [
   "cmdliner"
   "git-cohttp-lwt-unix"
   "mtime"               {>= "1.0.0"}
+  "decompress"          {>= "0.7"}
   "base-unix"
   "alcotest"            {test}
   "nocrypto"            {test & >= "0.5.4"}
