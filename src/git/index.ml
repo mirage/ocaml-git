@@ -33,6 +33,7 @@ struct
     | Invalid_byte of int
     | Invalid_mode of int32 * int32
     | Invalid_hash of Hash.t * Hash.t
+    | Unrecognized_extension of string
     | Malformed_extension
 
   let pp_error ppf = function
@@ -40,6 +41,7 @@ struct
     | Invalid_mode (kind, perm)  -> Fmt.pf ppf "(Invalid_mode (kind:%lx, perm:%lx))" kind perm
     | Invalid_hash (expect, has) -> Fmt.pf ppf "(Invalid_hash (expect:%a, has:%a))"
                                       Hash.pp expect Hash.pp has
+    | Unrecognized_extension ext -> Fmt.pf ppf "(Unrecognized_extension %s)" ext
     | Malformed_extension        -> Fmt.string ppf "Malformed_extension"
 
   type kind = Normal | Exec | Symlink | Gitlink
@@ -1059,6 +1061,7 @@ let eval src t =
     | Extension (rest, Reuc k) -> k rest src t
     | Extension (rest, Link k) -> k rest src t
     | Extension (rest, Untr k) -> k rest src t
+    | Extension (_, ext) -> Error (t, Unrecognized_extension (Fmt.strf "%a" pp_extension ext))
     | Hash hash' -> hash hash' src t
     | End -> Ok (t, t.entries, t.extensions)
     | Exception err -> Error (t, err)
