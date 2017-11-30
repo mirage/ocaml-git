@@ -6,7 +6,7 @@ environment:
     FORK_USER: ocaml
     FORK_BRANCH: master
     CYG_ROOT: C:\cygwin64
-    PINS: "git.dev:. git-http.dev:. git-cohttp-lwt-unix.dev:. git-dot.dev:. git-tcp-unix.dev:. git-top.dev:. git-unix.dev:. git-mirage.dev:."
+    PINS: "git.dev:. git-http.dev:. git-unix.dev:. git-mirage.dev:. angstrom:https://github.com/dinosaure/angstrom.git#fix-peek-char"
   matrix:
   - PACKAGE: "git-mirage.dev"
   - PACKAGE: "git-unix.dev"
