@@ -3,7 +3,7 @@ install: wget https://raw.githubusercontent.com/ocaml/ocaml-travisci-skeleton/ma
 script: bash -ex .travis-opam.sh
 env:
   global:
-    - PINS="git.dev:. git-http.dev:. git-unix.dev:. git-mirage.dev:."
+    - PINS="git.dev:. git-http.dev:. git-unix.dev:. git-mirage.dev:. angstrom:https://github.com/dinosaure/angstrom.git##fix-peek-char"
   matrix:
     - OCAML_VERSION=4.04 PACKAGE="git-unix.dev"
     - OCAML_VERSION=4.03 PACKAGE="git-unix.dev"
