@@ -12,9 +12,13 @@ type error = [ `System of string ]
 
 let pp_error ppf (`System err) = Fmt.pf ppf "(`System %s)" err
 
+let expected_unix_error exn =
+  raise (Invalid_argument (Fmt.strf "Expected an unix error: %s." (Printexc.to_string exn)))
+
 let error_to_result ~ctor = function
   | Unix.Unix_error (err_code, caller, _) ->
     Error (ctor (Format.sprintf "%s: %s" caller (Unix.error_message err_code)))
+  | exn -> expected_unix_error exn
 
 let is_file path =
   Lwt.try_bind
@@ -22,7 +26,8 @@ let is_file path =
     (fun stat -> Lwt.return (Ok (stat.Lwt_unix.st_kind = Lwt_unix.S_REG)))
     (function
       | Unix.Unix_error (Unix.ENOENT, _, _) -> Lwt.return (Ok false)
-      | Unix.Unix_error _ as err -> Lwt.return (error_to_result ~ctor:(fun x -> `System x) err))
+      | Unix.Unix_error _ as err -> Lwt.return (error_to_result ~ctor:(fun x -> `System x) err)
+      | exn -> expected_unix_error exn)
 
 let is_dir path =
   Lwt.try_bind
@@ -30,7 +35,8 @@ let is_dir path =
     (fun stat -> Lwt.return (Ok (stat.Lwt_unix.st_kind = Lwt_unix.S_DIR)))
     (function
       | Unix.Unix_error (Unix.ENOENT, _, _) -> Lwt.return (Ok false)
-      | Unix.Unix_error _ as err -> Lwt.return (error_to_result ~ctor:(fun x -> `System x) err))
+      | Unix.Unix_error _ as err -> Lwt.return (error_to_result ~ctor:(fun x -> `System x) err)
+      | exn -> expected_unix_error exn)
 
 let open_pool = Lwt_pool.create 200 (fun () -> Lwt.return ())
 let mkdir_pool = Lwt_pool.create 1 (fun () -> Lwt.return ())
@@ -76,7 +82,8 @@ let safe_mkdir ?(path = true) ?(mode = 0o755) dir =
           else Lwt.return (Error (`Mkdir (Format.sprintf "create directory %s: %s: %s"
                                             (Fpath.to_string dir)
                                             (Fpath.to_string d)
-                                            (Unix.error_message e)))))
+                                            (Unix.error_message e))))
+        | exn -> expected_unix_error exn)
   in
 
   let open Lwt.Infix in
@@ -239,7 +246,8 @@ module Dir
       (fun stat -> Lwt.return (Ok (stat.Lwt_unix.st_kind = Lwt_unix.S_DIR)))
       (function
         | Unix.Unix_error (Unix.ENOENT, _, _) -> Lwt.return (Ok false)
-        | Unix.Unix_error _ as err -> Lwt.return (error_to_result ~ctor:(fun x -> `Stat x) err))
+        | Unix.Unix_error _ as err -> Lwt.return (error_to_result ~ctor:(fun x -> `Stat x) err)
+        | exn -> expected_unix_error exn)
 
   let create = safe_mkdir
 
@@ -269,7 +277,8 @@ module Dir
                           Lwt.return (Ok (file :: dirs))
                         | Unix.Unix_error (Unix.EINTR, _, _) -> try_unlink file
                         | Unix.Unix_error (e, _, _) ->
-                          Lwt.return (Error (`Unlink (Fmt.strf "%s: %s" (Fpath.to_string file) (Unix.error_message e)))))
+                          Lwt.return (Error (`Unlink (Fmt.strf "%s: %s" (Fpath.to_string file) (Unix.error_message e))))
+                        | exn -> expected_unix_error exn)
             in
 
             try_unlink Fpath.(dir / file) >>= function
@@ -289,7 +298,8 @@ module Dir
           (function Unix.Unix_error (Unix.ENOENT, _, _) -> delete_files to_rmdir todo
                   | Unix.Unix_error (Unix.EINTR, _, _) -> delete_files to_rmdir dirs
                   | Unix.Unix_error (e, _, _) ->
-                    Lwt.return (Error (`Unlink (Fmt.strf "%s: %s" (Fpath.to_string dir) (Unix.error_message e)))))
+                    Lwt.return (Error (`Unlink (Fmt.strf "%s: %s" (Fpath.to_string dir) (Unix.error_message e))))
+                  | exn -> expected_unix_error exn)
     in
 
     let rec delete_dirs = function
@@ -301,7 +311,8 @@ module Dir
             (fun () -> Lwt.return (Ok ()))
             (function Unix.Unix_error (Unix.ENOENT, _, _) -> Lwt.return (Ok ())
                     | Unix.Unix_error (Unix.EINTR, _, _) -> rmdir dir
-                    | Unix.Unix_error (e, _, _) -> Lwt.return (Error (`Rmdir (Unix.error_message e))))
+                    | Unix.Unix_error (e, _, _) -> Lwt.return (Error (`Rmdir (Unix.error_message e)))
+                    | exn -> expected_unix_error exn)
         in
         rmdir dir >>= function
         | Ok () -> delete_dirs dirs
@@ -317,7 +328,8 @@ module Dir
                (function Unix.Unix_error (Unix.ENOENT, _, _) -> Lwt.return (Ok ())
                        | Unix.Unix_error (Unix.EINTR, _, _) -> rmdir dir
                        | Unix.Unix_error (e, _, _) ->
-                         Lwt.return (Error (`Rmdir (Unix.error_message e))))
+                         Lwt.return (Error (`Rmdir (Unix.error_message e)))
+                       | exn -> expected_unix_error exn)
         in
         rmdir dir
       else
@@ -361,7 +373,8 @@ module Dir
            (fun () -> readdir dh [])
            (fun rs -> Lwt_unix.closedir dh >|= fun () -> rs)
            (function exn -> Lwt_unix.closedir dh >>= fun () -> Lwt.fail exn))
-      (function Unix.Unix_error _ as err -> Lwt.return (error_to_result ~ctor:(fun x -> `Opendir (x, dir)) err))
+      (function Unix.Unix_error _ as err -> Lwt.return (error_to_result ~ctor:(fun x -> `Opendir (x, dir)) err)
+              | exn -> expected_unix_error exn)
 
   let rec current () =
     Lwt.try_bind
@@ -379,7 +392,8 @@ module Dir
       (function Unix.Unix_error (Unix.EINTR, _, _) -> current ()
               | Unix.Unix_error (e, _, _) ->
                 Lwt.return (Error (`Getcwd (Fmt.strf "get current working directory: \
-                                                      %s" (Unix.error_message e)))))
+                                                      %s" (Unix.error_message e))))
+              | exn -> expected_unix_error exn)
 
   let temp () =
     let from_env var ~absent =
@@ -468,7 +482,8 @@ module File
             go ()
           | Unix.Unix_error _ as err ->
             Log.err (fun l -> l "Retrieve an exception: %s." (Printexc.to_string err));
-            Lwt.return (error_to_result ~ctor:(fun x -> `Open x) err))
+            Lwt.return (error_to_result ~ctor:(fun x -> `Open x) err)
+          | exn -> expected_unix_error exn)
     in
     go ()
 
@@ -481,7 +496,8 @@ module File
         (fun fd -> Lwt.return (Ok (fd :> [ `Read ] fd)))
         (function
           | Unix.Unix_error (Unix.EINTR, _ ,_) -> go ()
-          | Unix.Unix_error _ as err -> Lwt.return (error_to_result ~ctor:(fun x -> `Open x) err))
+          | Unix.Unix_error _ as err -> Lwt.return (error_to_result ~ctor:(fun x -> `Open x) err)
+          | exn -> expected_unix_error exn)
     in
     go ()
 
@@ -492,7 +508,8 @@ module File
         (fun n -> Lwt.return (Ok n))
         (function
           | Unix.Unix_error (Unix.EINTR, _, _) -> go ()
-          | Unix.Unix_error _ as err -> Lwt.return (error_to_result ~ctor:(fun x -> `Write x) err))
+          | Unix.Unix_error _ as err -> Lwt.return (error_to_result ~ctor:(fun x -> `Write x) err)
+          | exn -> expected_unix_error exn)
     in
     go ()
 
@@ -503,7 +520,8 @@ module File
         (fun n -> Lwt.return (Ok n))
         (function
           | Unix.Unix_error (Unix.EINTR, _ ,_) -> go ()
-          | Unix.Unix_error _ as err -> Lwt.return (error_to_result ~ctor:(fun x -> `Read x) err))
+          | Unix.Unix_error _ as err -> Lwt.return (error_to_result ~ctor:(fun x -> `Read x) err)
+          | exn -> expected_unix_error exn)
     in
     go ()
 
@@ -514,7 +532,8 @@ module File
         (fun () -> Lwt.return (Ok ()))
         (function
           | Unix.Unix_error (Unix.EINTR, _ ,_) -> go ()
-          | Unix.Unix_error _ as err -> Lwt.return (error_to_result ~ctor:(fun x -> `Close x) err))
+          | Unix.Unix_error _ as err -> Lwt.return (error_to_result ~ctor:(fun x -> `Close x) err)
+          | exn -> expected_unix_error exn)
     in
     go ()
 
@@ -526,7 +545,8 @@ module File
         (function
           | Unix.Unix_error (Unix.EINTR, _, _) -> go ()
           | Unix.Unix_error (Unix.ENOENT, _, _) -> Lwt.return (Ok false)
-          | Unix.Unix_error _ as err -> Lwt.return (error_to_result ~ctor:(fun x -> `Stat x) err))
+          | Unix.Unix_error _ as err -> Lwt.return (error_to_result ~ctor:(fun x -> `Stat x) err)
+          | exn -> expected_unix_error exn)
     in
     go ()
 
@@ -539,7 +559,8 @@ module File
         (fun () -> Lwt.return (Ok ()))
         (function
           | Unix.Unix_error (Unix.EINTR, _, _) -> go ()
-          | Unix.Unix_error _ as err -> Lwt.return (error_to_result ~ctor:(fun x -> `Rename x) err))
+          | Unix.Unix_error _ as err -> Lwt.return (error_to_result ~ctor:(fun x -> `Rename x) err)
+          | exn -> expected_unix_error exn)
     in
     go ()
 
@@ -555,7 +576,8 @@ module File
           | Unix.Unix_error (Unix.ENOENT, _ ,_ ) -> Lwt.return (Ok ())
           (* XXX(dinosaure) decides to quiet this error. *)
           | Unix.Unix_error _ as err ->
-            Lwt.return (error_to_result ~ctor:(fun x -> `Unlink x) err))
+            Lwt.return (error_to_result ~ctor:(fun x -> `Unlink x) err)
+          | exn -> expected_unix_error exn)
     in
     go ()
 
@@ -747,7 +769,8 @@ module Mapper
       (fun () -> Lwt.return (Ok ()))
       (function Unix.Unix_error _ as err ->
          Log.err (fun l -> l ~header:"Unix.close" "Retrieve an exception: %s." (Printexc.to_string err));
-         Lwt.return (error_to_result ~ctor:(fun x -> `Close x) err))
+         Lwt.return (error_to_result ~ctor:(fun x -> `Close x) err)
+              | exn -> expected_unix_error exn)
 
   let map fd ?pos ~share:_ len =
     length fd >>= function

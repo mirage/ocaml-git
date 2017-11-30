@@ -162,7 +162,8 @@ let main ppf progress references directory repository =
                          | Ok _ -> Lwt.return ())
            updated)
       (fun () -> Lwt.return (Ok ()))
-      (function Write err -> Lwt.return (Error (`Reference err)))
+      (function Write err -> Lwt.return (Error (`Reference err))
+              | exn -> Lwt.fail exn) (* XXX(dinosaure): should never happen. *)
 
 open Cmdliner
 

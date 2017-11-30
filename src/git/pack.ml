@@ -824,8 +824,10 @@ struct
          Lwt.try_bind
            (fun () -> normalize untries)
            (fun untries -> List.append tries untries |> sort tag |> ok |> Lwt.return)
-           (function Uncaught_hash hash -> Error (Invalid_hash hash) |> Lwt.return))
-      (function Uncaught_hash hash -> Error (Invalid_hash hash) |> Lwt.return)
+           (function Uncaught_hash hash -> Error (Invalid_hash hash) |> Lwt.return
+                   | exn -> Lwt.fail exn)) (* XXX(dinosaure): could we have a better choice? *)
+      (function Uncaught_hash hash -> Error (Invalid_hash hash) |> Lwt.return
+              | exn -> Lwt.fail exn) (* XXX(dinosaure): same as below. *)
 end
 
 module type ENCODER =

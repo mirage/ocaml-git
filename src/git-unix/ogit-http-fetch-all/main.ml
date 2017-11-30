@@ -177,7 +177,8 @@ let main ppf progress directory repository =
              (Git_unix.Store.Reference.(Ref master)) >!= (fun err -> Lwt.return (`Reference err))
            else Lwt.return (Ok ())
          with Not_found -> Lwt.return (Ok ()))
-      (function Write err -> Lwt.return (Error (`Reference err)))
+      (function Write err -> Lwt.return (Error (`Reference err))
+              | exn -> Lwt.fail exn) (* XXX(dinosaure): should never happen *)
 
 open Cmdliner
 

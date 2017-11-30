@@ -586,7 +586,8 @@ module Make
             | (Error `Stack
               | Error (`Writer _)
               | Error (`Encoder _)) as err -> Lwt.return err)
-          (function Leave hash -> Lwt.return (Error (`Invalid_hash hash))))
+          (function Leave hash -> Lwt.return (Error (`Invalid_hash hash))
+                  | exn -> Lwt.fail exn)) (* XXX(dinosaure): should never happen. *)
        >!= close
        >>= (fun ret -> close (Ok ret)))
       >>= function
