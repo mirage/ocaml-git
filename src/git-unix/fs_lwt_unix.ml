@@ -791,7 +791,7 @@ module Mapper
     | Error err -> return (Error err)
 end
 
-module Fs
+module FS
   : Git.S.FS with type path = Fpath.t
               and type error = [ `System of string ]
               and type +'a io = 'a Lwt.t

@@ -14,9 +14,9 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Fs = Fs_lwt_unix.Fs
+module FS = Fs_lwt_unix.FS
 module Lock = Fs_lwt_unix.Lock
 
 module Store =
-  Git.Store.Make(Git_sha1)(Fpath)(Fs_lwt_unix.Lock)(Fs_lwt_unix.Fs)
+  Git.Store.Make(Git_sha1)(Fpath)(Fs_lwt_unix.Lock)(Fs_lwt_unix.FS)
     (Git.Inflate)(Git.Deflate)
