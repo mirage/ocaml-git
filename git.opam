@@ -22,7 +22,7 @@ depends: [
   "farfadet"   {>= "0.2"}
   "faraday"    {>= "0.5.0"}
   "fpath"      {>= "0.7.0"}
-  "digestif"   {>= "0.4"}
+  "digestif"   {>= "0.5.0"}
   "lru"        {>= "0.2.0"}
   "decompress" {>= "0.7"}
   "hex"

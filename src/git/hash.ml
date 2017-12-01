@@ -1,7 +1,7 @@
 type t = Bytes.t
 type hex = string
 
-module Make (D: Digestif.S) = struct
+module Make (D: Digestif_sig.S) = struct
   type nonrec t = t
   type nonrec hex = hex
   module Digest = struct
