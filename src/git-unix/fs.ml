@@ -1,226 +1,14 @@
-module Log =
-struct
-  let src = Logs.Src.create "fs.unix" ~doc:"logs unix file-system's event"
-  include (val Logs.src_log src : Logs.LOG)
-end
+open Misc
+open Lwt.Infix
 
-type +'a io = 'a Lwt.t
-
-type path = Fpath.t
+let src = Logs.Src.create "git-unix.fs" ~doc:"logs unix file-system's event"
+module Log = (val Logs.src_log src : Logs.LOG)
 
 type error = [ `System of string ]
 
 let pp_error ppf (`System err) = Fmt.pf ppf "(`System %s)" err
 
-let expected_unix_error exn =
-  raise (Invalid_argument (Fmt.strf "Expected an unix error: %s." (Printexc.to_string exn)))
-
-let error_to_result ~ctor = function
-  | Unix.Unix_error (err_code, caller, _) ->
-    Error (ctor (Format.sprintf "%s: %s" caller (Unix.error_message err_code)))
-  | exn -> expected_unix_error exn
-
-let is_file path =
-  Lwt.try_bind
-    (fun () -> Lwt_unix.stat (Fpath.to_string path))
-    (fun stat -> Lwt.return (Ok (stat.Lwt_unix.st_kind = Lwt_unix.S_REG)))
-    (function
-      | Unix.Unix_error (Unix.ENOENT, _, _) -> Lwt.return (Ok false)
-      | Unix.Unix_error _ as err -> Lwt.return (error_to_result ~ctor:(fun x -> `System x) err)
-      | exn -> expected_unix_error exn)
-
-let is_dir path =
-  Lwt.try_bind
-    (fun () -> Lwt_unix.stat (Fpath.to_string path))
-    (fun stat -> Lwt.return (Ok (stat.Lwt_unix.st_kind = Lwt_unix.S_DIR)))
-    (function
-      | Unix.Unix_error (Unix.ENOENT, _, _) -> Lwt.return (Ok false)
-      | Unix.Unix_error _ as err -> Lwt.return (error_to_result ~ctor:(fun x -> `System x) err)
-      | exn -> expected_unix_error exn)
-
-let open_pool = Lwt_pool.create 200 (fun () -> Lwt.return ())
-let mkdir_pool = Lwt_pool.create 1 (fun () -> Lwt.return ())
-
-(* XXX(samoht): Files smaller than this are loaded using [read].
-
-   Use of mmap is necessary to handle PACK files efficiently. Since
-   these are stored in a weak map, we don't run out of open files if
-   we keep accessing the same one.
-
-   Using read is necessary to handle references, since these are
-   mutable and can't be cached. Using mmap here leads to hitting the
-   OS limit on the number of open files.
-
-   This threshold must be larger than the size of a reference.
-
-   XXX(dinosaure): About the PACK file, we use directly mmap by the
-   [MAPPER] abstraction to compute efficiently all. I don't know if
-   it's reliable to keep this behaviour when we ensure than we use
-   [read] only for the loose object and mmap for the PACK file.
-
-   But, I think, it stills relevant for the blob object. *)
-let mmap_threshold = 4096
-
-let result_bind f a = match a with
-  | Ok x -> f x
-  | Error err -> Error err
-
-let safe_mkdir ?(path = true) ?(mode = 0o755) dir =
-  let mkdir d mode =
-    Lwt.try_bind
-      (fun () ->
-         Log.debug (fun l -> l ~header:"safe-mkdir" "create a new directory %s." (Fpath.to_string d));
-         Lwt_unix.mkdir (Fpath.to_string d) mode)
-      (fun () -> Lwt.return (Ok ()))
-      (function
-        | Unix.Unix_error (Unix.EEXIST, _, _) -> Lwt.return (Ok ())
-        | Unix.Unix_error (e, _, _) ->
-          if d = dir
-          then Lwt.return (Error (`Mkdir (Format.sprintf "create directory %s: %s"
-                                            (Fpath.to_string d)
-                                            (Unix.error_message e))))
-          else Lwt.return (Error (`Mkdir (Format.sprintf "create directory %s: %s: %s"
-                                            (Fpath.to_string dir)
-                                            (Fpath.to_string d)
-                                            (Unix.error_message e))))
-        | exn -> expected_unix_error exn)
-  in
-
-  let open Lwt.Infix in
-
-  is_dir dir >>= function
-  | Error (`System err) ->
-    Lwt.return (Error (`Stat err))
-  | Ok true ->
-    Log.debug (fun l -> l ~header:"mkdir" "The directory %a already exists" Fpath.pp dir);
-    Lwt.return (Ok false)
-  | Ok false ->
-    Log.debug (fun l -> l ~header:"mkdir" "The directory %a does not exist" Fpath.pp dir);
-
-    match path with
-    | false -> Lwt_pool.use mkdir_pool (fun () -> mkdir dir mode) >|= result_bind (fun _ -> Ok false)
-    | true ->
-      let rec dirs_to_create p acc =
-        is_dir p >>= function
-        | Error (`System err) -> Lwt.return (Error (`Stat err))
-        | Ok true -> Lwt.return (Ok acc)
-        | Ok false -> dirs_to_create (Fpath.parent p) (p :: acc)
-      in
-
-      let rec create_them dirs () = match dirs with
-        | [] -> Lwt.return (Ok ())
-        | dir :: dirs -> mkdir dir mode >>= function
-          | Error _ as err -> Lwt.return err
-          | Ok () -> create_them dirs ()
-      in
-
-      dirs_to_create dir []
-      >>= (function Ok dirs -> create_them dirs ()
-                  | Error _ as err -> Lwt.return err)
-      >|= result_bind (fun _ -> Ok true)
-
-module Lock
-    : Git.S.LOCK
-        with type +'a io = 'a Lwt.t
-         and type key = Fpath.t
-         and type elt = Fpath.t
-         and type t = Fpath.t
-= struct
-  type +'a io = 'a Lwt.t
-
-  type t = Fpath.t
-  type key = Fpath.t
-  type elt = Fpath.t
-
-  let rec is_stale max_age path =
-    let open Lwt.Infix in
-
-    Lwt_unix.file_exists (Fpath.to_string path) >>= function
-    | true ->
-      Lwt.try_bind
-        (fun () -> Lwt_unix.stat (Fpath.to_string path))
-        (fun s -> Lwt.return (Unix.gettimeofday () -. s.Unix.st_mtime > max_age))
-        (function
-          | Unix.Unix_error (Unix.EINTR, _, _) -> is_stale max_age path
-          | Unix.Unix_error (Unix.ENOENT, _, _) -> Lwt.return false
-          | exn -> Lwt.fail exn)
-    | false -> Lwt.return false
-
-  let rec unlock path =
-    Lwt.catch
-      (fun () -> Lwt_unix.unlink (Fpath.to_string path))
-      (function
-        | Unix.Unix_error (Unix.EINTR, _, _) -> unlock path
-        | exn -> Lwt.fail exn)
-
-  let lock ?(max_age = 10. *. 60. (* 10 minutes *)) ?(sleep = 0.001) path =
-    let open Lwt.Infix in
-
-    let rec step i =
-      is_stale max_age path >>= function
-      | true -> unlock path >>= fun () -> step 1
-      | false ->
-        let make () =
-          let pid = Unix.getpid () in
-          safe_mkdir (Fpath.parent path) >>= function
-          | Error _ -> assert false (* TODO *)
-          | Ok _ ->
-            Log.debug (fun l -> l ~header:"lock" "Create the lock file %a." Fpath.pp path);
-
-            Lwt_unix.openfile
-              (Fpath.to_string path)
-              [ Unix.O_CREAT
-              ; Unix.O_RDWR
-              ; Unix.O_EXCL ]
-              0o600
-            >>= fun fd ->
-            let oc = Lwt_io.of_fd ~mode:Lwt_io.Output fd in
-            Lwt_io.write_int oc pid >>= fun () ->
-            Lwt_unix.close fd
-        in
-
-        let rec go () =
-          Lwt.catch make
-            (function
-              | Unix.Unix_error (Unix.EEXIST, _, _) ->
-                let backoff = 1. +. Random.float (let i = float i in i *. i) in
-                Lwt_unix.sleep (sleep *. backoff) >>= fun () ->
-                step (i + 1)
-              | Unix.Unix_error (Unix.EINTR, _, _) -> go ()
-              | exn -> Lwt.fail exn)
-        in
-
-        go ()
-    in step 1
-
-  let make root key = Fpath.(root // (add_ext "lock" key))
-
-  let lock path = lock path
-
-  let with_lock path f =
-    let open Lwt.Infix in
-
-    match path with
-    | None -> f ()
-    | Some path -> lock path >>= fun () -> Lwt.finalize f (fun () -> unlock path)
-end
-
-module Dir
-  : Git.S.DIR
-    with type path = path
-     and type error =
-           [ `Stat of string
-           | `Unlink of string
-           | `Rmdir of string
-           | `Opendir of (string * Fpath.t)
-           | `Path of string
-           | `Getcwd of string
-           | `Mkdir of string ]
-     and type +'a io = 'a Lwt.t
-= struct
-  type +'a io = 'a Lwt.t
-
-  type path = Fpath.t
+module Dir = struct
 
   type error =
     [ `Stat of string
@@ -347,8 +135,6 @@ module Dir
 
 
   let contents ?(dotfiles = false) ?(rel = false) dir =
-    let open Lwt.Infix in
-
     let rec readdir dh acc =
       Lwt.try_bind
         (fun () -> Lwt_unix.readdir dh)
@@ -411,27 +197,7 @@ module Dir
     |> Lwt.return
 end
 
-module File
-  : Git.S.FILE with type path = path
-                and type lock = Lock.t
-                and type error = [ `Open of string
-                                 | `Write of string
-                                 | `Read of string
-                                 | `Close of string
-                                 | `Stat of string
-                                 | `Rename of string
-                                 | `Unlink of string
-                                 | `Mkdir of string ]
-                and type raw = Cstruct.t
-                and type +'a io = 'a Lwt.t
-= struct
-  module Log =
-  struct
-    let src = Logs.Src.create "fs_lwt_unix.file" ~doc:"logs file-system's (file) event"
-    include (val Logs.src_log src : Logs.LOG)
-  end
-
-  type +'a io = 'a Lwt.t
+module File = struct
 
   type error =
     [ `Open of string
@@ -444,8 +210,6 @@ module File
     | `Mkdir of string ]
 
   type lock = Lock.t
-  type path = Fpath.t
-  type raw = Cstruct.t
 
   type 'a fd = Lwt_unix.file_descr
     constraint 'a = [< `Read | `Write ]
@@ -459,8 +223,6 @@ module File
     | `Rename err -> Fmt.pf ppf "(`Rename %s)" err
     | `Unlink err -> Fmt.pf ppf "(`Unlink %s)" err
     | `Mkdir err  -> Fmt.pf ppf "(`Mkdir %s)" err
-
-  open Lwt.Infix
 
   let open_w ?lock path ~mode =
     Lock.with_lock lock
@@ -712,22 +474,7 @@ module File
        >|= result_bind (fun () -> Ok true))
 end
 
-module Mapper
-  : Git.S.MAPPER with type raw = Cstruct.t
-                  and type path = path
-                  and type error = [ `Stat of string
-                                   | `Close of string
-                                   | `Mmap of string
-                                   | `Open of string ]
-                  and type +'a io = 'a Lwt.t
-= struct
-  module Log =
-  struct
-    let src = Logs.Src.create "fs_lwt_unix.mapper" ~doc:"logs file-system's (mapper) event"
-    include (val Logs.src_log src : Logs.LOG)
-  end
-
-  type +'a io = 'a Lwt.t
+module Mapper = struct
 
   type error =
     [ `Stat of string
@@ -742,26 +489,22 @@ module Mapper
     | `Open err -> Fmt.pf ppf "(`Open %s)" err
 
   type fd = Unix.file_descr
-  type raw = Cstruct.t
-  type path = Fpath.t
-
-  open Lwt
 
   let length fd =
     Lwt.try_bind
       (fun () -> Unix.LargeFile.fstat fd |> Lwt.return)
-      (fun fstat -> return (Ok fstat.Unix.LargeFile.st_size))
+      (fun fstat -> Lwt.return (Ok fstat.Unix.LargeFile.st_size))
       (function exn ->
          Log.err (fun l -> l ~header:"Unix.LargeFile.fstat" "Retrieve an exception %s." (Printexc.to_string exn));
-         return (Error (`Stat "Invalid file descriptor")))
+         Lwt.return (Error (`Stat "Invalid file descriptor")))
 
   let openfile path =
     Lwt.try_bind
       (fun () -> Unix.openfile (Fpath.to_string path) [ Lwt_unix.O_RDONLY ] 0o644 |> Lwt.return)
-      (fun fd -> return (Ok fd))
+      (fun fd -> Lwt.return (Ok fd))
       (function exn ->
          Log.err (fun l -> l ~header:"Unix.openfile" "Retrieve an exception: %s." (Printexc.to_string exn));
-         return (Error (`Open (Fmt.strf "Invalid file: %s" (Fpath.to_string path)))))
+         Lwt.return (Error (`Open (Fmt.strf "Invalid file: %s" (Fpath.to_string path)))))
 
   let close fd =
     Lwt.try_bind
@@ -784,57 +527,12 @@ module Mapper
         (fun () ->
            Lwt_bytes.map_file ~fd ?pos ~shared:false ~size:(Int64.to_int (min (Int64.of_int len) max)) ()
            |> Lwt.return)
-        (fun rs -> return (Ok (Cstruct.of_bigarray rs)))
+        (fun rs -> Lwt.return (Ok (Cstruct.of_bigarray rs)))
         (function exn ->
            Log.err (fun l -> l ~header:"Lwt_bytes.map_file" "Retrieve an exception %s." (Printexc.to_string exn));
-           return (Error (`Mmap "Impossible to map the file descriptor")))
-    | Error err -> return (Error err)
+           Lwt.return (Error (`Mmap "Impossible to map the file descriptor")))
+    | Error err -> Lwt.return (Error err)
 end
 
-module FS
-  : Git.S.FS with type path = Fpath.t
-              and type error = [ `System of string ]
-              and type +'a io = 'a Lwt.t
-              and type Dir.path = path
-              and type Dir.error = [ `Stat of string
-                                   | `Unlink of string
-                                   | `Rmdir of string
-                                   | `Opendir of (string * Fpath.t)
-                                   | `Path of string
-                                   | `Getcwd of string
-                                   | `Mkdir of string ]
-              and type +'a Dir.io = 'a Lwt.t
-              and type File.path = path
-              and type File.lock = Lock.t
-              and type File.error = [ `Open of string
-                                    | `Write of string
-                                    | `Read of string
-                                    | `Close of string
-                                    | `Stat of string
-                                    | `Rename of string
-                                    | `Unlink of string
-                                    | `Mkdir of string ]
-              and type File.raw = Cstruct.t
-              and type +'a File.io = 'a Lwt.t
-              and type Mapper.raw = Cstruct.t
-              and type Mapper.path = path
-              and type Mapper.error = [ `Stat of string
-                                      | `Close of string
-                                      | `Mmap of string
-                                      | `Open of string ]
-              and type +'a Mapper.io = 'a Lwt.t
-= struct
-  type +'a io = 'a Lwt.t
-
-  type path = Fpath.t
-
-  type error = [ `System of string ]
-
-  let pp_error = pp_error
-  let is_dir = is_dir
-  let is_file = is_file
-
-  module File = File
-  module Dir = Dir
-  module Mapper = Mapper
-end
+let is_dir = is_dir
+let is_file = is_file

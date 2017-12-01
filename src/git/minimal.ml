@@ -1,24 +1,11 @@
-module type S =
-sig
-  module Hash
-    : S.HASH
-      with type Digest.buffer = Cstruct.t
-       and type hex = string
+module type S = sig
 
-  module Path
-    : S.PATH
+  module Hash: S.HASH
+  module Lock: S.LOCK
+  module Inflate: S.INFLATE
+  module Deflate: S.DEFLATE
 
-  module Lock
-    : S.LOCK
-
-  module Inflate
-    : S.INFLATE
-
-  module Deflate
-    : S.DEFLATE
-
-  module Value
-    : Value.S
+  module Value: Value.S
       with module Hash = Hash
        and module Inflate = Inflate
        and module Deflate = Deflate
@@ -28,10 +15,7 @@ sig
        and module Tag = Tag.Make(Hash)
        and type t = Value.Make(Hash)(Inflate)(Deflate).t
 
-  module Reference
-    : Reference.S
-      with module Hash = Hash
-       and module Path = Path
+  module Reference: Reference.S with module Hash = Hash
 
   type t
 
@@ -40,17 +24,17 @@ sig
   val pp_error : error Fmt.t
   (** Pretty-printer of {!error}. *)
 
-  val create : ?root:Path.t ->
-    ?dotgit:Path.t ->
+  val create : ?root:Fpath.t ->
+    ?dotgit:Fpath.t ->
     ?compression:int ->
     unit -> (t, error) result Lwt.t
 
-  val dotgit : t -> Path.t
+  val dotgit : t -> Fpath.t
   (** [dotgit state] returns the current [".git"] path used - eg. the
       default [?dotgit] value of {!create} if the client does not
       notice a specific value. *)
 
-  val root : t -> Path.t
+  val root : t -> Fpath.t
   (** [root state] returns the current path of the repository. eg. the
       default value [?root] value of {!create} if the client does not
       notice a specific value. *)
@@ -96,8 +80,8 @@ sig
 
   val fold :
        t
-    -> ('acc -> ?name:Path.t -> length:int64 -> Hash.t -> Value.t -> 'acc Lwt.t)
-    -> path:Path.t
+    -> ('acc -> ?name:Fpath.t -> length:int64 -> Hash.t -> Value.t -> 'acc Lwt.t)
+    -> path:Fpath.t
     -> 'acc
     -> Hash.t
     -> 'acc Lwt.t

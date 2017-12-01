@@ -1,12 +1,6 @@
-module type STORE =
-sig
-  module Hash
-    : S.HASH
-  module Path
-    : S.PATH
-  module Value
-    : Value.S
-      with module Hash = Hash
+module type STORE = sig
+  module Hash: S.HASH
+  module Value: Value.S with module Hash = Hash
 
   type t
   type error
@@ -15,8 +9,7 @@ sig
   val read : t -> Hash.t -> (Value.t, error) result Lwt.t
 end
 
-module Make (S : STORE) =
-struct
+module Make (S : STORE) = struct
   open S
 
   module Log =
@@ -28,7 +21,7 @@ struct
   (* XXX(dinosaure): convenience and common part between the
      file-system and the mem back-end - to avoid redundant code. *)
 
-  let fold t (f : ('acc -> ?name:Path.t -> length:int64 -> Hash.t -> Value.t -> 'acc Lwt.t)) ~path acc hash =
+  let fold t (f : ('acc -> ?name:Fpath.t -> length:int64 -> Hash.t -> Value.t -> 'acc Lwt.t)) ~path acc hash =
     let names = Hashtbl.create 0x100 in
 
     let open Lwt.Infix in
@@ -54,7 +47,7 @@ struct
           | Ok (Value.Tree tree as value) ->
             let path = try Hashtbl.find names hash with Not_found -> path in
             Lwt_list.iter_s (fun { Value.Tree.name; node; _ } ->
-                Hashtbl.add names node Path.(path / name)[@warning "-44"];
+                Hashtbl.add names node Fpath.(path / name)[@warning "-44"];
                 Lwt.return ()) (Value.Tree.to_list tree) >>= fun () ->
             let rest' = rest @ List.map (fun { Value.Tree.node; _ } -> node) (Value.Tree.to_list tree) in
             f acc ~name:path ~length:(Value.Tree.F.length tree) hash value >>= fun acc' ->

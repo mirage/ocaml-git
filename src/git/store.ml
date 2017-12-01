@@ -15,8 +15,8 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module type LOOSE =
-sig
+module type LOOSE = sig
+
   type t
   type state
 
@@ -26,18 +26,10 @@ sig
     | `Tag
     | `Blob ]
 
-  module Hash
-    : S.HASH with type Digest.buffer = Cstruct.t
-              and type hex = string
-  module Path
-    : S.PATH
-  module FileSystem
-    : S.FS
-      with type path = Path.t
-  module Inflate
-    : S.INFLATE
-  module Deflate
-    : S.DEFLATE
+  module Hash: S.HASH
+  module FileSystem : S.FS
+  module Inflate: S.INFLATE
+  module Deflate: S.DEFLATE
 
   module Value
     : Value.S
@@ -116,56 +108,39 @@ sig
 
   val raw_was : Cstruct.t -> state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
 
-  module D
-    : S.DECODER
-      with type t = t
-       and type raw = Cstruct.t
-       and type init = Inflate.window * Cstruct.t * Cstruct.t
-       and type error = [ `Decoder of string | `Inflate of Inflate.error ]
+  module D: S.DECODER
+    with type t = t
+     and type init = Inflate.window * Cstruct.t * Cstruct.t
+     and type error = [ `Decoder of string | `Inflate of Inflate.error ]
 
-  module E
-    : S.ENCODER
-      with type t = t
-       and type raw = Cstruct.t
-       and type init = int * t * int * Cstruct.t
-       and type error = [ `Deflate of Deflate.error ]
+  module E: S.ENCODER
+    with type t = t
+     and type init = int * t * int * Cstruct.t
+     and type error = [ `Deflate of Deflate.error ]
 end
 
-module type PACK =
-sig
+module type PACK = sig
   type t
   type value
   type state
 
-  module Hash
-    : S.HASH
-  module Path
-    : S.PATH
-  module FileSystem
-    : S.FS
-      with type path = Path.t
-  module Inflate
-    : S.INFLATE
-  module Deflate
-    : S.DEFLATE
-  module PACKDecoder
-    : Unpack.DECODER
-      with module Hash = Hash
-       and module Inflate = Inflate
-  module PACKEncoder
-    : Pack.ENCODER
-      with module Hash = Hash
-       and module Deflate = Deflate
-  module IDXDecoder
-    : Index_pack.LAZY
-      with module Hash = Hash
-  module IDXEncoder
-    : Index_pack.ENCODER
-      with module Hash = Hash
-  module Pack_info
-    : Pack_info.S
-      with module Hash = Hash
-       and module Inflate = Inflate
+  module Hash: S.HASH
+  module FileSystem: S.FS
+  module Inflate: S.INFLATE
+  module Deflate: S.DEFLATE
+  module PACKDecoder: Unpack.DECODER
+    with module Hash = Hash
+     and module Inflate = Inflate
+  module PACKEncoder: Pack.ENCODER
+    with module Hash = Hash
+     and module Deflate = Deflate
+  module IDXDecoder: Index_pack.LAZY
+    with module Hash = Hash
+  module IDXEncoder: Index_pack.ENCODER
+    with module Hash = Hash
+  module Pack_info: Pack_info.S
+    with module Hash = Hash
+     and module Inflate = Inflate
 
   type error =
     [ `PackDecoder of PACKDecoder.error
@@ -219,77 +194,54 @@ sig
     -> (stream * (Crc32.t * int64) Graph.t Lwt_mvar.t, error) result Lwt.t
 end
 
-module type S =
-sig
+module type S = sig
   type t
 
-  (* XXX(dinosaure): Functorized module. *)
-  module Hash
-    : S.HASH with type Digest.buffer = Cstruct.t
-              and type hex = string
-  module Path
-    : S.PATH
+  module Hash : S.HASH
+  module Inflate: S.INFLATE
+  module Deflate: S.DEFLATE
+  module Lock: S.LOCK
 
-  module Inflate
-    : S.INFLATE
+  module FileSystem: S.FS with type File.lock = Lock.elt
 
-  module Deflate
-    : S.DEFLATE
+  module Value: Value.S
+    with module Hash = Hash
+     and module Inflate = Inflate
+     and module Deflate = Deflate
+     and module Blob = Blob.Make(Hash)
+     and module Commit = Commit.Make(Hash)
+     and module Tree = Tree.Make(Hash)
+     and module Tag = Tag.Make(Hash)
+     and type t = Value.Make(Hash)(Inflate)(Deflate).t
 
-  module Lock
-    : S.LOCK
+  module Reference: Reference.IO
+    with module Hash = Hash
+     and module Lock = Lock
+     and module FileSystem = FileSystem
 
-  module FileSystem
-    : S.FS
-      with type path = Path.t
-       and type File.lock = Lock.elt
+  module PACKDecoder: Unpack.DECODER
+    with module Hash = Hash
+     and module Inflate = Inflate
 
-  module Value
-    : Value.S
-      with module Hash = Hash
-       and module Inflate = Inflate
-       and module Deflate = Deflate
-       and module Blob = Blob.Make(Hash)
-       and module Commit = Commit.Make(Hash)
-       and module Tree = Tree.Make(Hash)
-       and module Tag = Tag.Make(Hash)
-       and type t = Value.Make(Hash)(Inflate)(Deflate).t
+  module PACKEncoder: Pack.ENCODER
+    with module Hash = Hash
+     and module Deflate = Deflate
 
-  module Reference
-    : Reference.IO
-      with module Hash = Hash
-       and module Path = Path
-       and module Lock = Lock
-       and module FileSystem = FileSystem
+  module Loose: LOOSE
+    with type t = Value.t
+     and type state = t
+     and module Hash = Hash
+     and module Inflate = Inflate
+     and module Deflate = Deflate
+     and module FileSystem = FileSystem
 
-  module PACKDecoder
-    : Unpack.DECODER
-      with module Hash = Hash
-       and module Inflate = Inflate
-  module PACKEncoder
-    : Pack.ENCODER
-      with module Hash = Hash
-       and module Deflate = Deflate
-
-  module Loose
-    : LOOSE
-      with type t = Value.t
-       and type state = t
-       and module Hash = Hash
-       and module Path = Path
-       and module Inflate = Inflate
-       and module Deflate = Deflate
-       and module FileSystem = FileSystem
-
-  module Pack
-    : PACK
-      with type t = PACKDecoder.Object.t
-       and type value = Value.t
-       and type state = t
-       and module Hash = Hash
-       and module Path = Path
-       and module FileSystem = FileSystem
-       and module Inflate = Inflate
+  module Pack: PACK
+    with type t = PACKDecoder.Object.t
+     and type value = Value.t
+     and type state = t
+     and module Hash = Hash
+     and module FileSystem = FileSystem
+     and module Inflate = Inflate
 
   type kind =
     [ `Commit
@@ -304,13 +256,13 @@ sig
   val pp_error : error Fmt.t
 
   val create :
-       ?root:Path.t
-    -> ?dotgit:Path.t
+       ?root:Fpath.t
+    -> ?dotgit:Fpath.t
     -> ?compression:int
     -> unit -> (t, error) result Lwt.t
 
-  val dotgit : t -> Path.t
-  val root : t -> Path.t
+  val dotgit : t -> Fpath.t
+  val root : t -> Fpath.t
   val compression : t -> int
 
   val exists : t -> Hash.t -> bool Lwt.t
@@ -367,15 +319,12 @@ sig
   val buffer_de : t -> Cstruct.t
   val buffer_io : t -> Cstruct.t
 
-  val fold : t -> ('a -> ?name:Path.t -> length:int64 -> Hash.t -> Value.t -> 'a Lwt.t) -> path:Path.t -> 'a -> Hash.t -> 'a Lwt.t
+  val fold : t -> ('a -> ?name:Fpath.t -> length:int64 -> Hash.t -> Value.t -> 'a Lwt.t) -> path:Fpath.t -> 'a -> Hash.t -> 'a Lwt.t
 
-  module Ref :
-  sig
-    module Packed_refs
-      : Packed_refs.S
-        with module Hash = Hash
-         and module Path = Path
-         and module FileSystem = FileSystem
+  module Ref: sig
+    module Packed_refs: Packed_refs.S
+      with module Hash = Hash
+       and module FileSystem = FileSystem
 
     type nonrec error =
       [ Packed_refs.error
@@ -453,25 +402,17 @@ end
 
 module Make
     (H: S.HASH)
-    (P : S.PATH)
-    (L : S.LOCK with type key = P.t
-                 and type +'a io = 'a Lwt.t)
-    (FS : S.FS with type path = P.t
-                and type File.raw = Cstruct.t
-                and type File.lock = L.elt
-                and type Mapper.raw = Cstruct.t
-                and type +'a io = 'a Lwt.t)
+    (L : S.LOCK)
+    (FS : S.FS with type File.lock = L.elt)
     (I : S.INFLATE)
     (D : S.DEFLATE)
   : S with module Hash = H
-       and module Path = P
        and module Lock = L
        and module FileSystem = FS
        and module Inflate = I
        and module Deflate = D
 = struct
   module Hash = H
-  module Path = P
   module Inflate = I
   module Deflate = D
   module Lock = L
@@ -482,23 +423,21 @@ module Make
       with module Hash = H
        and module Inflate = I
        and module Deflate = D
-       and module Path = P
        and module FileSystem = FS
        and module Blob = Blob.Make(Hash)
        and module Commit = Commit.Make(Hash)
        and module Tree = Tree.Make(Hash)
        and module Tag = Tag.Make(Hash)
        and type t = Value.Make(Hash)(Inflate)(Deflate).t
-    = Loose.Make(Hash)(Path)(FileSystem)(Inflate)(Deflate)
+    = Loose.Make(Hash)(FileSystem)(Inflate)(Deflate)
 
   module PackImpl
     : Pack_engine.S
       with module Hash = Hash
-       and module Path = Path
        and module FileSystem = FileSystem
        and module Inflate = Inflate
        and module Deflate = Deflate
-    = Pack_engine.Make(H)(P)(FS)(I)(D)
+    = Pack_engine.Make(H)(FS)(I)(D)
 
   module Value
     : Value.S
@@ -516,7 +455,7 @@ module Make
   module PACKEncoder = PackImpl.PACKEncoder
   module IDXDecoder = PackImpl.IDXDecoder
 
-  module Reference = Reference.IO(H)(P)(L)(FS)
+  module Reference = Reference.IO(H)(L)(FS)
 
   module DoubleHash =
   struct
@@ -560,18 +499,16 @@ module Make
     ; zl          : Cstruct.t
     ; de          : Cstruct.t }
   and t =
-    { dotgit      : Path.t
-    ; root        : Path.t
+    { dotgit      : Fpath.t
+    ; root        : Fpath.t
     ; compression : int
     ; cache       : cache
     ; buffer      : buffer
     ; packed      : (Reference.t, Hash.t) Hashtbl.t
     ; engine      : PackImpl.t }
 
-  module Loose =
-  struct
+  module Loose = struct
     module Hash = Hash
-    module Path = Path
     module FileSystem = FileSystem
     module Inflate = Inflate
     module Deflate = Deflate
@@ -666,27 +603,21 @@ module Make
       | Error (#LooseImpl.error as err) ->
         Lwt.fail (Failure (Fmt.strf "%a" LooseImpl.pp_error err))
 
-    module D
-      : S.DECODER
+    module D: S.DECODER
         with type t = t
-         and type raw = Cstruct.t
          and type init = Inflate.window * Cstruct.t * Cstruct.t
          and type error = Value.D.error
       = Value.D
 
-    module E
-      : S.ENCODER
+    module E: S.ENCODER
         with type t = t
-         and type raw = Cstruct.t
          and type init = int * t * int * Cstruct.t
          and type error = Value.E.error
       = Value.E
   end
 
-  module Pack =
-  struct
+  module Pack = struct
     module Hash = Hash
-    module Path = Path
     module FileSystem = FileSystem
     module Inflate = Inflate
     module Deflate = Deflate
@@ -785,19 +716,19 @@ module Make
       let open Lwt.Infix in
 
       FileSystem.Dir.temp () >>= fun temp_dir ->
-      FileSystem.File.open_w ~mode:0o644 Path.(temp_dir / filename_of_pack) >>= function
+      FileSystem.File.open_w ~mode:0o644 Fpath.(temp_dir / filename_of_pack) >>= function
       | Error err -> Lwt.return (Error (`SystemFile err))
       | Ok fd ->
         Log.debug (fun l -> l ~header:"to_temp_file" "Save the pack stream to the file %a."
-                      Path.pp Path.(temp_dir / filename_of_pack));
+                      Fpath.pp Fpath.(temp_dir / filename_of_pack));
 
         let rec go ?chunk ~call () = Lwt_stream.peek stream >>= function
           | None ->
             Log.debug (fun l -> l ~header:"to_temp_file" "Pack stream saved to the file %a."
-                          Path.pp Path.(temp_dir / filename_of_pack));
+                          Fpath.pp Fpath.(temp_dir / filename_of_pack));
 
             (FileSystem.File.close fd >>= function
-              | Ok () -> Lwt.return (Ok Path.(temp_dir / filename_of_pack))
+              | Ok () -> Lwt.return (Ok Fpath.(temp_dir / filename_of_pack))
               | Error err ->
                 Log.err (fun l -> l ~header:"to_temp_file" "Cannot close the file: %s." filename_of_pack);
                 Lwt.return (Error (`SystemFile err)))
@@ -862,7 +793,6 @@ module Make
     module GC =
       Gc.Make(struct
         module Hash = Hash
-        module Path = Path
         module Value = Value
         module Deflate = Deflate
         module PACKEncoder = PACKEncoder
@@ -896,7 +826,7 @@ module Make
           Log.err (fun l -> l ~header:"from" "Retrieve an error when we try to \
                                               resolve the object at the offset %Ld \
                                               in the temporary pack file %a: %a."
-                      offset Path.pp path_pack PACKDecoder.pp_error err);
+                      offset Fpath.pp path_pack PACKDecoder.pp_error err);
           Lwt.return acc
         | Ok obj ->
           let delta = match obj.PACKDecoder.Object.from with
@@ -981,14 +911,14 @@ module Make
             | Ok () ->
               let filename_pack = Fmt.strf "pack-%s.pack" (Hash.to_hex hash_pack) in
 
-              (FileSystem.File.move path Path.(git.dotgit / "objects" / "pack" / filename_pack) >>= function
+              (FileSystem.File.move path Fpath.(git.dotgit / "objects" / "pack" / filename_pack) >>= function
               | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
               | Ok () -> Lwt.return (Ok (hash_pack, List.length entries)))
               >>= fun ret ->
               FileSystem.Mapper.close fdp >>= function
               | Error sys_err ->
                 Log.err (fun l -> l ~header:"canonicalize" "Impossible to close the pack file %a: %a."
-                            Path.pp path_pack FileSystem.Mapper.pp_error sys_err);
+                            Fpath.pp path_pack FileSystem.Mapper.pp_error sys_err);
                 Lwt.return ret
               | Ok () -> Lwt.return ret
 
@@ -1122,7 +1052,7 @@ module Make
                  Log.err (fun l -> l ~header:"from" "Retrieve an error when we try to \
                                                      resolve the object at the offset %Ld \
                                                      in the temporary pack file %a: %a."
-                             offset Path.pp path PACKDecoder.pp_error err);
+                             offset Fpath.pp path PACKDecoder.pp_error err);
                  Lwt.return acc)
             (decoder, info.Pack_info.tree, info.Pack_info.graph) delta
           >>= fun (decoder, tree', graph') ->
@@ -1287,12 +1217,12 @@ module Make
   let indexes git =
     let open Lwt.Infix in
 
-    FileSystem.Dir.contents ~dotfiles:false ~rel:false Path.(git / "objects" / "pack")[@warning "-44"]
+    FileSystem.Dir.contents ~dotfiles:false ~rel:false Fpath.(git / "objects" / "pack")[@warning "-44"]
     >>= function
     | Ok lst ->
       Lwt_list.fold_left_s
         (fun acc path ->
-           if Path.has_ext "idx" path
+           if Fpath.has_ext "idx" path
            then Lwt.return (path :: acc)
            else Lwt.return acc)
         [] lst
@@ -1370,7 +1300,6 @@ module Make
   module T =
     Traverse_bfs.Make(struct
       module Hash = Hash
-      module Path = Path
       module Value = Value
 
       type nonrec t = t
@@ -1384,7 +1313,7 @@ module Make
 
   module Ref =
   struct
-    module Packed_refs = Packed_refs.Make(Hash)(Path)(FileSystem)
+    module Packed_refs = Packed_refs.Make(Hash)(FileSystem)
     (* XXX(dinosaure): we need to check the packed references when we write and remove. *)
 
     let pp_error ppf = function
@@ -1404,28 +1333,28 @@ module Make
       let ( >?= ) = Lwt_result.bind in
 
       let rec lookup acc dir =
-        FileSystem.Dir.contents ~rel:true Path.(top // dir)
+        FileSystem.Dir.contents ~rel:true Fpath.(top // dir)
         >?= fun l ->
           Lwt_list.filter_p
-            (fun x -> FileSystem.is_dir Path.(top // dir // x) >|= function Ok v -> v | Error _ -> false) l
+            (fun x -> FileSystem.is_dir Fpath.(top // dir // x) >|= function Ok v -> v | Error _ -> false) l
           >>= fun dirs ->
           Lwt_list.filter_p
-            (fun x -> FileSystem.is_file Path.(top // dir // x) >|= function Ok v -> v | Error _ -> false) l
-          >>= Lwt_list.map_p (fun file -> Lwt.return (Path.append dir file)) >>= fun files ->
+            (fun x -> FileSystem.is_file Fpath.(top // dir // x) >|= function Ok v -> v | Error _ -> false) l
+          >>= Lwt_list.map_p (fun file -> Lwt.return (Fpath.append dir file)) >>= fun files ->
 
           Lwt_list.fold_left_s
-            (function Ok acc -> fun x -> lookup acc Path.(dir // x)
+            (function Ok acc -> fun x -> lookup acc Fpath.(dir // x)
                     | Error _ as e -> fun _ -> Lwt.return e)
             (Ok acc) dirs >?= fun acc -> Lwt.return (Ok (acc @ files))
       in
 
       let lock = match locks with
-        | Some locks -> Some (Lock.make locks Path.(v "global"))
+        | Some locks -> Some (Lock.make locks Fpath.(v "global"))
         | None -> None
       in
 
       Lock.with_lock lock
-      (fun () -> lookup [] (Path.v "."))
+      (fun () -> lookup [] (Fpath.v "."))
 
     module Graph = Reference.Map
 
@@ -1440,22 +1369,22 @@ module Make
       let open Lwt.Infix in
 
       let lock_gbl = match locks with
-        | Some locks -> Some (Lock.make locks Path.(v "global"))
+        | Some locks -> Some (Lock.make locks Fpath.(v "global"))
         | None -> None
       in
 
       let lock_ref reference = match locks with
-        | Some locks -> Some (Lock.make locks Path.(v ("r-" ^ (Path.filename (Reference.to_path reference)))))
+        | Some locks -> Some (Lock.make locks Fpath.(v ("r-" ^ (Fpath.filename (Reference.to_path reference)))))
         | None -> None
       in
 
-      contents ?locks Path.(t.dotgit / "refs") >>= function
+      contents ?locks Fpath.(t.dotgit / "refs") >>= function
       | Error sys_err ->
         Log.err (fun l -> l ~header:"graph_p" "Retrieve an error: %a." FileSystem.Dir.pp_error sys_err);
         Lwt.return (Error (`SystemDirectory sys_err))
       | Ok files ->
         Log.debug (fun l -> l ~header:"graph_p" "Retrieve these files: %a."
-                      (Fmt.hvbox (Fmt.list Path.pp)) files);
+                      (Fmt.hvbox (Fmt.list Fpath.pp)) files);
 
         Lwt_list.fold_left_s
           (fun acc abs_ref ->
@@ -1559,7 +1488,7 @@ module Make
       let open Lwt.Infix in
 
       let lock = match locks with
-        | Some locks -> Some (Lock.make locks Path.(v "global"))[@warning "-44"]
+        | Some locks -> Some (Lock.make locks Fpath.(v "global"))[@warning "-44"]
         | None -> None
       in
 
@@ -1606,11 +1535,11 @@ module Make
       let open Lwt.Infix in
 
       let lock = match locks with
-        | Some locks -> Some (Lock.make locks Path.(v ("r-" ^ (Path.filename (Reference.to_path reference)))))
+        | Some locks -> Some (Lock.make locks Fpath.(v ("r-" ^ (Fpath.filename (Reference.to_path reference)))))
         | None -> None
       in
 
-      FileSystem.is_file Path.(t.dotgit // (Reference.to_path reference)) >>= function
+      FileSystem.is_file Fpath.(t.dotgit // (Reference.to_path reference)) >>= function
       | Ok true ->
         Lock.with_lock lock
           (fun () -> Reference.read ~root:t.dotgit ~dtmp ~raw reference >|= function
@@ -1632,12 +1561,12 @@ module Make
       let open Lwt.Infix in
 
       let lock_ref = match locks with
-        | Some locks -> Some (Lock.make locks Path.(v ("w-" ^ (Path.filename (Reference.to_path reference)))))
+        | Some locks -> Some (Lock.make locks Fpath.(v ("w-" ^ (Fpath.filename (Reference.to_path reference)))))
         | None -> None
       in
 
       let lock_gbl = match locks with
-        | Some locks -> Some (Lock.make locks Path.(v "global"))
+        | Some locks -> Some (Lock.make locks Fpath.(v "global"))
         | None -> None
       in
 
@@ -1679,7 +1608,7 @@ module Make
       let open Lwt.Infix in
 
       let lock = match locks with
-        | Some locks -> Some (Lock.make locks Path.(v "global"))
+        | Some locks -> Some (Lock.make locks Fpath.(v "global"))
         | None -> None
       in
 
@@ -1711,7 +1640,7 @@ module Make
       let open Lwt.Infix in
 
       let lock = match locks with
-        | Some locks -> Some (Lock.make locks Path.(v "global"))[@warning "-44"]
+        | Some locks -> Some (Lock.make locks Fpath.(v "global"))[@warning "-44"]
         | None -> None
       in
 
@@ -1772,10 +1701,10 @@ module Make
 
     FileSystem.Dir.create ~path:true root
     >?= fun _ -> FileSystem.Dir.create ~path:true dotgit
-    >?= fun _ -> FileSystem.Dir.create ~path:true Path.(dotgit / "objects")[@warning "-44"]
-    >?= fun _ -> FileSystem.Dir.create ~path:true Path.(dotgit / "objects" / "pack")[@warning "-44"]
-    >?= fun _ -> FileSystem.Dir.create ~path:true Path.(dotgit / "objects" / "info")[@warning "-44"]
-    >?= fun _ -> FileSystem.Dir.create ~path:true Path.(dotgit / "refs")[@warning "-44"]
+    >?= fun _ -> FileSystem.Dir.create ~path:true Fpath.(dotgit / "objects")[@warning "-44"]
+    >?= fun _ -> FileSystem.Dir.create ~path:true Fpath.(dotgit / "objects" / "pack")[@warning "-44"]
+    >?= fun _ -> FileSystem.Dir.create ~path:true Fpath.(dotgit / "objects" / "info")[@warning "-44"]
+    >?= fun _ -> FileSystem.Dir.create ~path:true Fpath.(dotgit / "refs")[@warning "-44"]
     >?= fun _ -> Lwt.return (Ok ())
 
   let create ?root ?dotgit ?(compression = 4) () =
@@ -1792,7 +1721,7 @@ module Make
         >>= function
         | Ok current ->
           let root = Option.get ~default:current root in
-          let[@warning "-44"] dotgit  = Option.get ~default:Path.(root / ".git") dotgit in
+          let[@warning "-44"] dotgit  = Option.get ~default:Fpath.(root / ".git") dotgit in
 
           sanitize_filesystem root dotgit
           >>== fun () -> indexes dotgit
@@ -1822,7 +1751,7 @@ module Make
 
   let clear_caches ?locks t =
     let lock = match locks with
-      | Some locks -> Some (Lock.make locks Path.(v "global"))[@warning "-44"]
+      | Some locks -> Some (Lock.make locks Fpath.(v "global"))[@warning "-44"]
       | None -> None
     in
 
@@ -1855,7 +1784,7 @@ module Make
     in
 
     let lock = match locks with
-      | Some locks -> Some (Lock.make locks Path.(v "global"))[@warning "-44"]
+      | Some locks -> Some (Lock.make locks Fpath.(v "global"))[@warning "-44"]
       | None -> None
     in
 
@@ -1864,13 +1793,13 @@ module Make
     let ( >>! ) v f = bind_lwt_err v f in
 
     Lock.with_lock lock @@ fun () ->
-    (FileSystem.Dir.delete ~recurse:true Path.(t.dotgit / "objects")
-     >>= fun _ -> FileSystem.Dir.create Path.(t.dotgit / "objects")
-     >>= fun _ -> FileSystem.Dir.create Path.(t.dotgit / "objects" / "info")
-     >>= fun _ -> FileSystem.Dir.create Path.(t.dotgit / "objects" / "pack")
-     >>= fun _ -> FileSystem.Dir.delete ~recurse:true Path.(t.dotgit / "refs")
-     >>= fun _ -> FileSystem.Dir.create Path.(t.dotgit / "refs" / "heads")
-     >>= fun _ -> FileSystem.Dir.create Path.(t.dotgit / "refs" / "tags"))
+    (FileSystem.Dir.delete ~recurse:true Fpath.(t.dotgit / "objects")
+     >>= fun _ -> FileSystem.Dir.create Fpath.(t.dotgit / "objects")
+     >>= fun _ -> FileSystem.Dir.create Fpath.(t.dotgit / "objects" / "info")
+     >>= fun _ -> FileSystem.Dir.create Fpath.(t.dotgit / "objects" / "pack")
+     >>= fun _ -> FileSystem.Dir.delete ~recurse:true Fpath.(t.dotgit / "refs")
+     >>= fun _ -> FileSystem.Dir.create Fpath.(t.dotgit / "refs" / "heads")
+     >>= fun _ -> FileSystem.Dir.create Fpath.(t.dotgit / "refs" / "tags"))
     >>! (fun err -> Lwt.return (`Store (`SystemDirectory err)))
     >>= fun _ -> (delete_files t.root >>! (fun err -> Lwt.return (`Store (`SystemDirectory err))))
     >>= fun _ -> Ref.write t Reference.head Reference.(Ref (of_string "refs/heads/master"))

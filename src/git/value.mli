@@ -15,34 +15,27 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module type S =
-sig
-  module Hash
-    : S.HASH
+module type S = sig
+
+  module Hash: S.HASH
   (** The [Hash] module used to make the module. *)
 
-  module Inflate
-    : S.INFLATE
+  module Inflate: S.INFLATE
   (** The [Inflate] module used to make this interface. *)
 
-  module Deflate
-    : S.DEFLATE
+  module Deflate: S.DEFLATE
   (** The [Deflate] module used to make this interface. *)
 
-  module Blob
-    : Blob.S with module Hash = Hash
+  module Blob: Blob.S with module Hash = Hash
   (** The {!Blob} module. *)
 
-  module Commit
-    : Commit.S with module Hash = Hash
+  module Commit: Commit.S with module Hash = Hash
   (** The {!Commit} module. *)
 
-  module Tree
-    : Tree.S with module Hash = Hash
+  module Tree: Tree.S with module Hash = Hash
   (** The {!Tree} module. *)
 
-  module Tag
-    : Tag.S with module Hash = Hash
+  module Tag: Tag.S with module Hash = Hash
   (** The {!Tag} module. *)
 
   type t =
@@ -63,7 +56,7 @@ sig
   val pp_kind : [ `Commit | `Blob | `Tree | `Tag ] Fmt.t
   (** [pp_kind ppf kind] is a human readable pretty-printer of {!kind}. *)
 
-  module A : sig
+  module A: sig
     include S.ANGSTROM with type t = t
 
     val kind : [ `Commit | `Tree | `Tag | `Blob ] Angstrom.t
@@ -78,15 +71,13 @@ sig
   end
   (** The Angstrom decoder of the Git object. *)
 
-  module F
-    : S.FARADAY  with type t = t
+  module F: S.FARADAY  with type t = t
   (** The Faraday encoder of the Git object. *)
 
-  module D
-    : S.DECODER  with type t = t
-                  and type raw = Cstruct.t
-                  and type init = Inflate.window * Cstruct.t * Cstruct.t
-                  and type error = [ `Decoder of string | `Inflate of Inflate.error ]
+  module D: S.DECODER
+    with type t = t
+     and type init = Inflate.window * Cstruct.t * Cstruct.t
+     and type error = [ `Decoder of string | `Inflate of Inflate.error ]
   (** The decoder of the Git object. We constraint the input to be an
       {!Inflate.window} and a {Cstruct.t} which used by the {Inflate}
       module and an other {Cstruct.t} as an internal buffer.
@@ -94,15 +85,13 @@ sig
       All error from the {!Inflate} module is relayed to the
       [`Inflate] error value. *)
 
-  module M
-    : S.MINIENC  with type t = t
+  module M: S.MINIENC  with type t = t
   (** The {!Minienc} encoder of the Git object. *)
 
-  module E
-    : S.ENCODER  with type t = t
-                  and type raw = Cstruct.t
-                  and type init = int * t * int * Cstruct.t
-                  and type error = [ `Deflate of Deflate.error ]
+  module E: S.ENCODER
+    with type t = t
+     and type init = int * t * int * Cstruct.t
+     and type error = [ `Deflate of Deflate.error ]
   (** The encoder (which uses a {!Minienc.encoder}) of the Git object.
       We constraint the output to be a {Cstruct.t}. This encoder needs
       the level of the compression, the value {!t}, the memory
@@ -112,21 +101,17 @@ sig
       All error from the {!Deflate} module is relayed to the
       [`Deflate] error value. *)
 
-  include S.DIGEST with type t := t
-                    and type hash := Hash.t
+  include S.DIGEST with type t := t and type hash := Hash.t
   include S.BASE with type t := t
 end
 
-module type RAW =
-sig
+module type RAW = sig
 
-  module Value : S
+  module Value: S
   include module type of Value
 
-  module EE
-    : S.ENCODER
+  module EE: S.ENCODER
       with type t = t
-       and type raw = Cstruct.t
        and type init = int * t
        and type error = [ `Never ]
   (** The encoder (which uses a {!Minienc.encoder}) of the Git object.
@@ -140,21 +125,17 @@ sig
       concrete) but, because the encoder can not fail, we define the
       error as [`Never]. *)
 
-  module EEE
-    : S.ENCODER
+  module EEE: S.ENCODER
       with type t = t
-       and type raw = Cstruct.t
        and type init = int * t
        and type error = [ `Never ]
 
-  module DD
-    : S.DECODER
+  module DD: S.DECODER
       with type t = t
-       and type raw = Cstruct.t
        and type init = Cstruct.t
        and type error = [ `Decoder of string ]
 
-  val to_deflated_raw : ?capacity:int -> ?level:int -> ztmp:Cstruct.t -> t ->
+  val to_deflated_raw: ?capacity:int -> ?level:int -> ztmp:Cstruct.t -> t ->
     (string, E.error) result
   (** [to_deflated_raw ?capacity ?level ~ztmp value] serializes and
       deflates the value [value]. [capacity] is the memory consumption
@@ -166,40 +147,37 @@ sig
       All error from the {!Deflate} module is relayed to the
       [`Deflate] error value. *)
 
-  val to_raw : ?capacity:int -> t -> (string, EE.error) result
+  val to_raw: ?capacity:int -> t -> (string, EE.error) result
   (** [to_raw ?capacity value] serializes the value
       [value]. [capacity] is the memory consumption of the encoder in
       bytes (default to [0x100]).
 
       This function can not returns an {!EE.error} (see {!EE}). *)
 
-  val to_raw_without_header : ?capacity:int -> t -> (string, EEE.error) result
+  val to_raw_without_header: ?capacity:int -> t -> (string, EEE.error) result
 
-  val of_raw : kind:[ `Commit | `Blob | `Tree | `Tag ] -> Cstruct.t -> (t, [ `Decoder of string ]) result
+  val of_raw: kind:[ `Commit | `Blob | `Tree | `Tag ] -> Cstruct.t ->
+    (t, [ `Decoder of string ]) result
   (** [of_raw ~kind inflated] makes a Git object as an OCaml value
       {!t}. This decoder does not expect an {i header} to recognize
       which kind of Git object is it. That means the [inflated] raw
       should not contain [kind size\000] at the beginning (in this
       case, you should use {!of_raw_with_header}. *)
 
-  val of_raw_with_header : Cstruct.t -> (t, DD.error) result
+  val of_raw_with_header: Cstruct.t -> (t, DD.error) result
   (** [of_raw_with_header inflated] makes a Git object as an OCaml
       value {!t}. This decoder expects an {i header} to choose which
       Git object it is. *)
 end
 
-module Make
-    (H : S.HASH with type Digest.buffer = Cstruct.t
-                 and type hex = string)
-    (I : S.INFLATE)
-    (D : S.DEFLATE)
-  : S with module Hash = H
-       and module Inflate = I
-       and module Deflate = D
-       and module Blob    = Blob.Make(H)
-       and module Commit  = Commit.Make(H)
-       and module Tree    = Tree.Make(H)
-       and module Tag     = Tag.Make(H)
+module Make (H : S.HASH) (I : S.INFLATE) (D : S.DEFLATE): S
+  with module Hash = H
+   and module Inflate = I
+   and module Deflate = D
+   and module Blob    = Blob.Make(H)
+   and module Commit  = Commit.Make(H)
+   and module Tree    = Tree.Make(H)
+   and module Tag     = Tag.Make(H)
 (** The {i functor} to make the OCaml representation of the Git object
     by a specific hash implementation, an {!S.INFLATE} implementation
     for the decompression and a {!S.DEFLATE} implementation for the
@@ -219,20 +197,16 @@ module Make
    Types [V1.t] and [V2.t] are equal.
 *)
 
-module Raw
-    (H : S.HASH with type Digest.buffer = Cstruct.t
-                 and type hex = string)
-    (I : S.INFLATE)
-    (D : S.DEFLATE)
-  : RAW with module Hash    = H
-         and module Inflate = I
-         and module Deflate = D
-         and module Value   = Make(H)(I)(D)
-         and module Blob    = Blob.Make(H)
-         and module Commit  = Commit.Make(H)
-         and module Tree    = Tree.Make(H)
-         and module Tag     = Tag.Make(H)
-         and type t         = Make(H)(I)(D).t
+module Raw (H : S.HASH) (I : S.INFLATE) (D : S.DEFLATE): RAW
+  with module Hash    = H
+   and module Inflate = I
+   and module Deflate = D
+   and module Value   = Make(H)(I)(D)
+   and module Blob    = Blob.Make(H)
+   and module Commit  = Commit.Make(H)
+   and module Tree    = Tree.Make(H)
+   and module Tag     = Tag.Make(H)
+   and type t         = Make(H)(I)(D).t
 (** The {i functor} to make the OCaml representation of the Git object
     by a specific hash implementation, and {!S.INFLATE} implementation
     for the decompression and a {!S.DEFLATE} implementation for the

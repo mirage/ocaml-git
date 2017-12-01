@@ -17,46 +17,44 @@
 
 module type S =
 sig
-  module Hash : S.HASH
+  module Hash: S.HASH
 
   type entry =
-    { perm : perm
-    ; name : string
-    ; node : Hash.t }
+    { perm: perm
+    ; name: string
+    ; node: Hash.t }
   and perm =
     [ `Normal | `Everybody | `Exec | `Link | `Dir | `Commit ]
   and t
 
-  module D : S.DECODER  with type t = t
-                         and type raw = Cstruct.t
-                         and type init = Cstruct.t
-                         and type error = [ `Decoder of string ]
-  module A : S.ANGSTROM with type t = t
-  module F : S.FARADAY  with type t = t
-  module M : S.MINIENC  with type t = t
-  module E : S.ENCODER  with type t = t
-                              and type raw = Cstruct.t
-                              and type init = int * t
-                              and type error = [ `Never ]
+  module D: S.DECODER  with type t = t
+                        and type init = Cstruct.t
+                        and type error = [ `Decoder of string ]
+  module A: S.ANGSTROM with type t = t
+  module F: S.FARADAY  with type t = t
+  module M: S.MINIENC  with type t = t
+  module E: S.ENCODER  with type t = t
+                        and type init = int * t
+                        and type error = [ `Never ]
 
   include S.DIGEST with type t := t and type hash = Hash.t
   include S.BASE with type t := t
 
-  val hashes : t -> Hash.t list
-  val to_list : t -> entry list
-  val of_list : entry list -> t
+  val hashes: t -> Hash.t list
+  val to_list: t -> entry list
+  val of_list: entry list -> t
 end
 
-module Make (H : S.HASH with type Digest.buffer = Cstruct.t
+module Make (H: S.HASH with type Digest.buffer = Cstruct.t
                          and type hex = string)
-  : S with module Hash = H
+: S with module Hash = H
 = struct
   module Hash = H
 
   type entry =
-    { perm : perm
-    ; name : string
-    ; node : Hash.t }
+    { perm: perm
+    ; name: string
+    ; node: Hash.t }
   and perm =
     [ `Normal | `Everybody | `Exec | `Link | `Dir | `Commit ]
   and t = entry list
@@ -101,11 +99,11 @@ module Make (H : S.HASH with type Digest.buffer = Cstruct.t
     | "160000" -> `Commit
     | _ -> raise (Invalid_argument "perm_of_string")
 
-  external to_list : t -> entry list = "%identity"
+  external to_list: t -> entry list = "%identity"
 
   type value =
-    | Contents : string -> value
-    | Node     : string -> value
+    | Contents: string -> value
+    | Node    : string -> value
 
   let str = function Contents s -> s | Node s -> s
 
@@ -146,7 +144,7 @@ module Make (H : S.HASH with type Digest.buffer = Cstruct.t
     | { name = n; perm = `Dir; _ } -> of_node n
     | { name = n; _ } -> of_contents n
 
-  let of_list entries : t =
+  let of_list entries: t =
     List.map (fun x -> of_entry x, x) entries
     |> List.sort (fun (a, _) (b, _) -> compare a b)
     |> List.map snd

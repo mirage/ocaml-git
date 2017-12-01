@@ -1,20 +1,11 @@
-module Default :
-sig
-  val default : Git.Capability.t list
+module Default: sig
+  val default: Git.Capability.t list
 end
 
-module Make
-    (K : Git.Sync.CAPABILITIES)
-    (S : Git.Minimal.S
-     with type Hash.Digest.buffer = Cstruct.t
-      and type Hash.hex = string)
-: sig
-  module Negociator
-    : Git.Negociator.S
-      with module Store := S
+module Make (K: Git.Sync.CAPABILITIES) (S: Git.S): sig
+  module Negociator : Git.Negociator.S with module Store := S
 
-  include Git.Sync.S
-    with module Store := S
+  include Git.Sync.S with module Store := S
 
   type error' =
     [ `StoreRef of S.Ref.error

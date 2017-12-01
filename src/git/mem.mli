@@ -16,18 +16,12 @@
  *)
 
 module Make
-    (H : S.HASH with type Digest.buffer = Cstruct.t
-                 and type hex = string)
-    (P : S.PATH)
-    (L : S.LOCK with type key = P.t
-                 and type +'a io = 'a Lwt.t)
-    (* XXX(dinosaure): we constraint +'a io to use Lwt but the goal is
-       to cut the Lwt dependence with the memory back-end. *)
+    (H : S.HASH)
+    (L : S.LOCK)
     (I : S.INFLATE)
     (D : S.DEFLATE)
   : Minimal.S
     with module Hash = H
-       and module Path = P
        and module Lock = L
        and module Inflate = I
        and module Deflate = D

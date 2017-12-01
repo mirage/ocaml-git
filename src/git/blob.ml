@@ -23,34 +23,20 @@ end
 
 type t = Cstruct.t
 
-module type S =
-sig
+module type S = sig
 
   type nonrec t = t
 
-  module Hash
-    : S.HASH
-  module D
-    : S.DECODER
+  module Hash: S.HASH
+  module D: S.DECODER
       with type t = t
-       and type raw = Cstruct.t
        and type init = Cstruct.t
        and type error = [ `Decoder of string ]
-  module E
-    : S.ENCODER
-      with type t = t
-       and type raw = Cstruct.t
-  module A
-    : sig type nonrec t = t val decoder : int -> t Angstrom.t end
-  module F
-    : S.FARADAY
-      with type t = t
-
-  include S.DIGEST
-    with type t := t
-     and type hash := Hash.t
-  include S.BASE
-    with type t := t
+  module E: S.ENCODER with type t = t
+  module A: sig type nonrec t = t val decoder : int -> t Angstrom.t end
+  module F: S.FARADAY with type t = t
+  include S.DIGEST with type t := t and type hash := Hash.t
+  include S.BASE with type t := t
 
   val of_cstruct : Cstruct.t -> t
   val to_cstruct : t -> Cstruct.t
@@ -58,10 +44,7 @@ sig
   val to_string  : t -> string
 end
 
-module Make
-    (H : S.HASH with type Digest.buffer = Cstruct.t)
-  : S with module Hash = H
-= struct
+module Make (H : S.HASH): S with module Hash = H = struct
   module Hash = H
 
   type nonrec t = t
@@ -72,8 +55,7 @@ module Make
   let of_string x : t = Cstruct.of_string x
   let to_string (x : t) = Cstruct.to_string x
 
-  module A =
-  struct
+  module A = struct
     type nonrec t = t
 
     let decoder len =
@@ -97,8 +79,7 @@ module Make
         commit *> m
   end
 
-  module F =
-  struct
+  module F = struct
     type nonrec t = t
 
     let length : t -> int64 = fun t ->
@@ -108,8 +89,7 @@ module Make
       Farfadet.bigstring e (Cstruct.to_bigarray t)
   end
 
-  module D =
-  struct
+  module D = struct
     (* XXX(dinosaure): may be need to compare the performance between this
        module and [Helper.MakeDecoder(A)]. *)
 
@@ -127,7 +107,6 @@ module Make
       ; abs : int
       ; owner : bool
       ; final : bool }
-    and raw = Cstruct.t
 
     let default raw =
       Log.debug (fun l -> l "Starting to decode a Blob.");
@@ -186,8 +165,7 @@ module Make
     (* XXX(dinosaure): we need to take the ownership by default but need to improve the API (TODO). *)
   end
 
-  module E =
-  struct
+  module E = struct
     type nonrec t = t
     type init = t
 
@@ -202,7 +180,6 @@ module Make
       ; pos  : int
       ; len  : int
       ; blob : t }
-    and raw = Cstruct.t
 
     let default blob =
       { abs = 0

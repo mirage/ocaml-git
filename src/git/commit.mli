@@ -15,10 +15,9 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module type S =
-sig
-  module Hash
-    : S.HASH
+module type S = sig
+
+  module Hash: S.HASH
   (** The [Hash] module used to make this interface. *)
 
   type t
@@ -26,34 +25,30 @@ sig
       the snapshot of the project at a point; the author/{i committer}
       information and the commit message. *)
 
-  val make : author:User.t -> committer:User.t -> ?parents:Hash.t list -> tree:Hash.t -> string -> t
+  val make :
+    author:User.t -> committer:User.t -> ?parents:Hash.t list ->
+    tree:Hash.t -> string -> t
 
   module D
     : S.DECODER  with type t = t
-                  and type raw = Cstruct.t
                   and type init = Cstruct.t
                   and type error = [ `Decoder of string ]
   (** The decoder of the Git Commit object. We constraint the input to
       be a {Cstruct.t}. This decoder needs a {Cstruct.t} as an
       internal buffer. *)
 
-  module A
-    : S.ANGSTROM with type t = t
+  module A: S.ANGSTROM with type t = t
   (** The Angstrom decoder of the Git Commit object. *)
 
-  module F
-    : S.FARADAY  with type t = t
+  module F: S.FARADAY  with type t = t
   (** The Faraday encoder of the Git Commit object. *)
 
-  module M
-    : S.MINIENC  with type t = t
+  module M: S.MINIENC  with type t = t
   (** The {!Minienc} encoder of the Git Commit object. *)
 
-  module E
-    : S.ENCODER  with type t = t
-                  and type raw = Cstruct.t
-                  and type init = int * t
-                  and type error = [ `Never ]
+  module E: S.ENCODER  with type t = t
+                        and type init = int * t
+                        and type error = [ `Never ]
   (** The encoder (which uses a {!Minienc.encoder}) of the Git Commit
       object. We constraint the output to be a {Cstruct.t}. This
       encoder needs the Commit OCaml value and the memory consumption
@@ -68,26 +63,23 @@ sig
 
   include S.BASE with type t := t
 
-  val parents : t -> Hash.t list
+  val parents: t -> Hash.t list
   (** [parents c] returns all parents of the Git Commit object [c]. *)
 
-  val tree : t -> Hash.t
+  val tree: t -> Hash.t
   (** [tree c] returns the hash of top-level {!Tree.t} of the Git
       Commit object [c]. *)
 
-  val committer : t -> User.t
-  val author : t -> User.t
-  val message : t -> string
+  val committer: t -> User.t
+  val author: t -> User.t
+  val message: t -> string
 
-  val compare_by_date : t -> t -> int
+  val compare_by_date: t -> t -> int
   (** [compare_by_date a b] compares the Git Commit object [a] and [b]
       by the date of the author. *)
 end
 
-module Make
-    (H : S.HASH with type Digest.buffer = Cstruct.t
-                  and type hex = string)
-  : S with module Hash = H
+module Make (H : S.HASH): S with module Hash = H
 (** The {i functor} to make the OCaml representation of the Git Commit
     object by a specific hash implementation. We constraint the
     {!Hash.S} module to compute a {Cstruct.t} flow and generate a

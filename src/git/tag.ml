@@ -15,8 +15,8 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module type S =
-sig
+module type S = sig
+
   module Hash : S.HASH
 
   type t
@@ -24,29 +24,25 @@ sig
 
   val make : Hash.t -> kind -> ?tagger:User.t -> tag:string -> string -> t
 
-  module D : S.DECODER  with type t = t
-                         and type raw = Cstruct.t
-                         and type init = Cstruct.t
-                         and type error = [ `Decoder of string ]
-  module A : S.ANGSTROM with type t = t
-  module F : S.FARADAY  with type t = t
-  module M : S.MINIENC  with type t = t
-  module E : S.ENCODER  with type t = t
-                         and type raw = Cstruct.t
-                         and type init = int * t
-                         and type error = [ `Never ]
+  module D: S.DECODER  with type t = t
+                        and type init = Cstruct.t
+                        and type error = [ `Decoder of string ]
+  module A: S.ANGSTROM with type t = t
+  module F: S.FARADAY  with type t = t
+  module M: S.MINIENC  with type t = t
+  module E: S.ENCODER  with type t = t
+                        and type init = int * t
+                        and type error = [ `Never ]
 
   include S.DIGEST with type t := t and type hash = Hash.t
   include S.BASE with type t := t
 
-  val obj : t -> Hash.t
-  val tag : t -> string
+  val obj: t -> Hash.t
+  val tag: t -> string
 end
 
-module Make (H : S.HASH with type Digest.buffer = Cstruct.t
-                         and type hex = string)
-  : S with module Hash = H
-= struct
+module Make (H: S.HASH): S with module Hash = H = struct
+
   module Hash = H
 
   type t =
@@ -93,8 +89,7 @@ module Make (H : S.HASH with type Digest.buffer = Cstruct.t
     | Tree -> "tree"
     | Blob -> "blob"
 
-  module A =
-  struct
+  module A = struct
     type nonrec t = t
 
     let sp = Angstrom.char ' '
@@ -154,8 +149,7 @@ module Make (H : S.HASH with type Digest.buffer = Cstruct.t
       <* commit
   end
 
-  module F =
-  struct
+  module F = struct
     type nonrec t = t
 
     let length t =
@@ -199,8 +193,7 @@ module Make (H : S.HASH with type Digest.buffer = Cstruct.t
       [@@warning "-45"] (* XXX(dinosaure): shadowing [] and (::). *)
   end
 
-  module M =
-  struct
+  module M = struct
     type nonrec t = t
 
     open Minienc
@@ -251,7 +244,9 @@ module Make (H : S.HASH with type Digest.buffer = Cstruct.t
 
   let digest value =
     let tmp = Cstruct.create 0x100 in
-    Helper.fdigest (module Hash.Digest) (module E) ~tmp ~kind:"tag" ~length:F.length value
+    Helper.fdigest
+      (module Hash.Digest) (module E)
+      ~tmp ~kind:"tag" ~length:F.length value
 
   let equal   = (=)
   let compare = Pervasives.compare

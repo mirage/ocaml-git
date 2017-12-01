@@ -16,8 +16,7 @@
 (*                                                                     *)
 (***********************************************************************)
 
-module Stack =
-struct
+module Stack = struct
   type 'a t =
     { mutable data : 'a Weak.t
     ; mutable length : int
@@ -96,8 +95,7 @@ struct
       top s
 end
 
-module Make (H : Hashtbl.HashedType)
-  : Hashtbl.S with type key = H.t
+module Make (H : Hashtbl.HashedType): Hashtbl.S with type key = H.t
 = struct
   type box = H.t Weak.t
 
@@ -236,12 +234,13 @@ module Make (H : Hashtbl.HashedType)
   let reset _ = assert false
 end
 
-module H = Make(struct type t = Fpath.t let equal = Fpath.equal let hash = Hashtbl.hash end)
-
-type +'a io = 'a Lwt.t
+module H = Make(struct
+    type t = Fpath.t
+    let equal = Fpath.equal
+    let hash = Hashtbl.hash
+  end)
 
 type t = elt H.t
-and key = H.key
 and elt = Lwt_mutex.t
 
 let locks = H.create 24

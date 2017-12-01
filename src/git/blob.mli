@@ -18,44 +18,33 @@
 type t = private Cstruct.t
 (** A Git Blob object. *)
 
-module type S =
-sig
+module type S = sig
 
   type nonrec t = t
 
-  module Hash
-    : S.HASH
+  module Hash: S.HASH
   (** The [Hash] module used to make this interface. *)
 
-  module D
-    : S.DECODER
+  module D: S.DECODER
       with type t = t
-       and type raw = Cstruct.t
        and type init = Cstruct.t
        and type error = [ `Decoder of string ]
-  (** The decoder of the Git Blob object. We constraint the input to be a
-      {Cstruct.t}. This decoder needs a {Cstruct.t} as an internal buffer. *)
+  (** The decoder of the Git Blob object. We constraint the input to
+      be a {Cstruct.t}. This decoder needs a {Cstruct.t} as an
+      internal buffer. *)
 
-  module E
-    : S.ENCODER
-      with type t = t
-       and type raw = Cstruct.t
+  module E: S.ENCODER with type t = t
   (** The encoder of the Git Blob object. *)
 
-  module A
-    : sig type nonrec t = t val decoder : int -> t Angstrom.t end
+  module A: sig type nonrec t = t val decoder : int -> t Angstrom.t end
   (** The Angstrom decoder of the Git Blob object. *)
 
-  module F
-    : S.FARADAY
-      with type t = t
+  module F: S.FARADAY with type t = t
   (** The Faraday encoder of the Git Blob object. *)
 
-  include S.DIGEST
-    with type t := t
-     and type hash := Hash.t
-  include S.BASE
-    with type t := t
+  include S.DIGEST with type t := t and type hash := Hash.t
+
+  include S.BASE with type t := t
 
   val of_cstruct : Cstruct.t -> t
   (** [of_cstruct cs] returns the blob value of a [Cstruct.t]. This
@@ -73,9 +62,7 @@ sig
   val to_string : t -> string
 end
 
-module Make
-    (H : S.HASH with type Digest.buffer = Cstruct.t)
-  : S with module Hash = H
-(** The {i functor} to make the OCaml representation of the Git Blob object by a
-    specific hash implementation. We constraint the {!Hash.S} module to
-    compute a {Cstruct.t} flow. *)
+module Make (H : S.HASH): S with module Hash = H
+(** The {i functor} to make the OCaml representation of the Git Blob
+    object by a specific hash implementation. We constraint the
+    {!Hash.S} module to compute a {Cstruct.t} flow. *)

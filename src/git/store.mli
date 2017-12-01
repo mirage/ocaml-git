@@ -15,8 +15,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module type LOOSE =
-sig
+module type LOOSE = sig
   type t
   (** The type of the {i loosed} Git object. *)
 
@@ -30,38 +29,27 @@ sig
     | `Blob ]
   (** Kind of the {i loosed} Git object. *)
 
-  module Hash
-    : S.HASH
-      with type Digest.buffer = Cstruct.t
-       and type hex = string
+  module Hash: S.HASH
   (** The [Hash] module used to make this interface. *)
 
-  module Path
-    : S.PATH
-  (** The [Path] module used to make this interface. *)
-
-  module FileSystem
-    : S.FS with type path = Path.t
+  module FileSystem: S.FS
   (** The [FileSystem] module used to make this interface. *)
 
-  module Inflate
-    : S.INFLATE
+  module Inflate: S.INFLATE
   (** The [Inflate] module used to make this interface. *)
 
-  module Deflate
-    : S.DEFLATE
+  module Deflate: S.DEFLATE
   (** The [Deflate] module used to make this interface. *)
 
-  module Value
-    : Value.S
-      with module Hash = Hash
-       and module Inflate = Inflate
-       and module Deflate = Deflate
-       and module Blob = Blob.Make(Hash)
-       and module Commit = Commit.Make(Hash)
-       and module Tree = Tree.Make(Hash)
-       and module Tag = Tag.Make(Hash)
-       and type t = Value.Make(Hash)(Inflate)(Deflate).t
+  module Value: Value.S
+    with module Hash = Hash
+     and module Inflate = Inflate
+     and module Deflate = Deflate
+     and module Blob = Blob.Make(Hash)
+     and module Commit = Commit.Make(Hash)
+     and module Tree = Tree.Make(Hash)
+     and module Tag = Tag.Make(Hash)
+     and type t = Value.Make(Hash)(Inflate)(Deflate).t
   (** The Value module, which represents the Git object. *)
 
   type error =
@@ -72,24 +60,24 @@ sig
     | Value.E.error
     ] (** The type error. *)
 
-  val pp_error : error Fmt.t
+  val pp_error: error Fmt.t
   (** Pretty-printer of {!error}. *)
 
-  val lookup_p : state -> Hash.t -> Hash.t option Lwt.t
+  val lookup_p: state -> Hash.t -> Hash.t option Lwt.t
   (** [lookup_p state hash] try to find the object associated by the
       hash [hash] in the file-system. This function can be use in the
       concurrency context. This function returns [None] if the Git
       object does not exist or is not stored as a {i loose} object. *)
 
-  val lookup : state -> Hash.t -> Hash.t option Lwt.t
+  val lookup: state -> Hash.t -> Hash.t option Lwt.t
   (** An alias of {!lookup_p}. *)
 
-  val exists : state -> Hash.t -> bool Lwt.t
+  val exists: state -> Hash.t -> bool Lwt.t
   (** [exists state hash] checks if one object satisfies the predicate
       [digest(object) = hash]. This function is the same as [lookup
       state hash <> None]. *)
 
-  val list : state -> Hash.t list Lwt.t
+  val list: state -> Hash.t list Lwt.t
   (** [list state] lists all available git {i loose} objects in the
       file-system. The list returned does not contain all git object
       available in your repository but only which {i loosed} one. *)
@@ -126,12 +114,12 @@ sig
       requested git {i loose} object. That means, the git {i loose}
       object does not respect the Git format.}} *)
 
-  val read_s : state -> Hash.t -> (t, error) result Lwt.t
+  val read_s: state -> Hash.t -> (t, error) result Lwt.t
   (** [read_s state hash] is the same process than {!read_p} but we
       use the state-defined buffer. That means the client can not use
       this function in a concurrency context with the same [state]. *)
 
-  val read : state -> Hash.t -> (t, error) result Lwt.t
+  val read: state -> Hash.t -> (t, error) result Lwt.t
   (** Alias of {!read_s}. *)
 
   val size_p :
@@ -152,12 +140,12 @@ sig
 
       As {!read_p}, {!size_p} can return an {!error}. *)
 
-  val size_s : state -> Hash.t -> (int64, error) result Lwt.t
+  val size_s: state -> Hash.t -> (int64, error) result Lwt.t
   (** [size_s state hash] is the same process than {!size_p} but we
       use the state-defined buffer. That means the client can not use
       this function in a concurrency context with the same [state]. *)
 
-  val size : state -> Hash.t -> (int64, error) result Lwt.t
+  val size: state -> Hash.t -> (int64, error) result Lwt.t
   (** Alias of {!size_s}. *)
 
   val write_p :
@@ -192,15 +180,15 @@ sig
       flush method). Depending of the object [v], the process can
       consume a lot of memory. *)
 
-  val write_s : state -> t -> (Hash.t * int, error) result Lwt.t
+  val write_s: state -> t -> (Hash.t * int, error) result Lwt.t
   (** [write_s state v] is the same process than {!write_p} but we use
       the state-defined buffer. That means the client can not use this
       function in a concurrency context with the same [state]. *)
 
-  val write : state -> t -> (Hash.t * int, error) result Lwt.t
+  val write: state -> t -> (Hash.t * int, error) result Lwt.t
   (** Alias of {!write_s}. *)
 
-  val write_inflated : state -> kind:kind -> Cstruct.t -> Hash.t Lwt.t
+  val write_inflated: state -> kind:kind -> Cstruct.t -> Hash.t Lwt.t
 
   val raw_p :
        ztmp:Cstruct.t
@@ -237,12 +225,12 @@ sig
       requested git {i loose} object. That means, the git {i loose}
       object has a wrong header or it is corrupted.}} *)
 
-  val raw_s : state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
+  val raw_s: state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
   (** [raw_s state hash] is the same process than {!raw_p} but we use
       the state-defined buffer. That means the client can not use this
       function in a concurrency context with the same [state]. *)
 
-  val raw : state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
+  val raw: state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
   (** Alias of {!raw_s}. *)
 
   val raw_wa :
@@ -290,19 +278,17 @@ sig
       In a server context, this function should be used to limit the
       allocation. *)
 
-  val raw_was : Cstruct.t ->
+  val raw_was: Cstruct.t ->
     state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
   (** [raw_was result state hash] is the same process than {!raw_wa}
       but we use the state-defined buffer. That means the client can
       not use this function in a concurrency context with the same
       [state]. *)
 
-  module D
-    : S.DECODER
-      with type t = t
-       and type raw = Cstruct.t
-       and type init = Inflate.window * Cstruct.t * Cstruct.t
-       and type error = Value.D.error
+  module D: S.DECODER
+    with type t = t
+     and type init = Inflate.window * Cstruct.t * Cstruct.t
+     and type error = Value.D.error
   (** The decoder of the Git object. We constraint the input to be an
       {!Inflate.window} and a {Cstruct.t} which used by the {Inflate}
       module and an other {Cstruct.t} as an internal buffer.
@@ -314,12 +300,10 @@ sig
       not correspond directly to a de-serialized Git object but a
       de-serialized Git {i loose} object. *)
 
-  module E
-    : S.ENCODER
-      with type t = t
-       and type raw = Cstruct.t
-       and type init = int * t * int * Cstruct.t
-       and type error = Value.E.error
+  module E: S.ENCODER
+    with type t = t
+     and type init = int * t * int * Cstruct.t
+     and type error = Value.E.error
   (** The encoder (which uses a {!Minienc.encoder}) of the Git object.
       We constraint the output to be a {Cstruct.t}. This encoder needs
       the level of the compression, the value {!t}, the memory
@@ -338,8 +322,7 @@ sig
   *)
 end
 
-module type PACK =
-sig
+module type PACK = sig
   type t
   (** The type of the {i packed} Git object. *)
 
@@ -350,48 +333,35 @@ sig
   (** The type of the Git value. *)
 
   module Hash
-    : S.HASH
+   : S.HASH
   (** The [Hash] module used to make this interface. *)
 
-  module Path
-    : S.PATH
-  (** The [Path] module used to make this interface. *)
-
-  module FileSystem
-    : S.FS with type path = Path.t
+  module FileSystem: S.FS
   (** The [FileSystem] module used to make this interface. *)
 
-  module Inflate
-    : S.INFLATE
+  module Inflate: S.INFLATE
   (** The [Inflate] module used to make this interface. *)
 
-  module Deflate
-    : S.DEFLATE
+  module Deflate: S.DEFLATE
 
-  module PACKDecoder
-    : Unpack.DECODER
-      with module Hash = Hash
-       and module Inflate = Inflate
+  module PACKDecoder: Unpack.DECODER
+    with module Hash = Hash
+     and module Inflate = Inflate
   (** The [PACKDecoder] module, which decodes {i PACK} file. *)
 
-  module PACKEncoder
-    : Pack.ENCODER
-      with module Hash = Hash
-       and module Deflate = Deflate
+  module PACKEncoder: Pack.ENCODER
+    with module Hash = Hash
+     and module Deflate = Deflate
 
-  module IDXDecoder
-    : Index_pack.LAZY
-      with module Hash = Hash
+  module IDXDecoder: Index_pack.LAZY with module Hash = Hash
   (** The [IDXDecoder] module, which decodes {i IDX} file. *)
 
-  module IDXEncoder
-    : Index_pack.ENCODER
-      with module Hash = Hash
+  module IDXEncoder: Index_pack.ENCODER
+    with module Hash = Hash
 
-  module Pack_info
-    : Pack_info.S
-      with module Hash = Hash
-       and module Inflate = Inflate
+  module Pack_info: Pack_info.S
+    with module Hash = Hash
+     and module Inflate = Inflate
 
   type error =
     [ `PackDecoder of PACKDecoder.error
@@ -408,10 +378,10 @@ sig
     | `Integrity of string
     | `Not_found ]
 
-  val pp_error : error Fmt.t
+  val pp_error: error Fmt.t
   (** Pretty-printer of {!error}. *)
 
-  val lookup : state -> Hash.t -> (Hash.t * (Crc32.t * int64)) option Lwt.t
+  val lookup: state -> Hash.t -> (Hash.t * (Crc32.t * int64)) option Lwt.t
   (** [lookup state hash] try to find the object associated by the
       hash [hash] in all {i IDX} files available in the current git
       repository [state]. This function can be used in a concurrency
@@ -419,12 +389,12 @@ sig
       exist in any {i IDX} files or it does not exists in the current
       repository. *)
 
-  val exists : state -> Hash.t -> bool Lwt.t
+  val exists: state -> Hash.t -> bool Lwt.t
   (** [exists state hash] checks if one object satisfies the predicate
       [digest(object) = hash]. This function is the same as [lookup
       state hash <> None]. *)
 
-  val list : state -> Hash.t list Lwt.t
+  val list: state -> Hash.t list Lwt.t
   (** [list state] lists all {i packed} git object noticed by all {i
       IDX} files available in the current git repository [state]. If
       we encountered any error, we make it silent and continue the
@@ -463,12 +433,12 @@ sig
       decoding of an {i IDX} file}
       {- [`Not_found] when the requested object is not {i packed}}} *)
 
-  val read_s : state -> Hash.t -> (t, error) result Lwt.t
+  val read_s: state -> Hash.t -> (t, error) result Lwt.t
   (** [read_s state hash] is the same process than {!read_p} but we
       use the state-defined buffer. That means the client can not use
       this function in a concurrency context with the same [state]. *)
 
-  val read : state -> Hash.t -> (t, error) result Lwt.t
+  val read: state -> Hash.t -> (t, error) result Lwt.t
   (** Alias of {!read_s}. *)
 
   val size_p :
@@ -487,21 +457,21 @@ sig
 
       As {!read_p}, {!size_p} can return an {!error}. *)
 
-  val size_s : state -> Hash.t -> (int, error) result Lwt.t
+  val size_s: state -> Hash.t -> (int, error) result Lwt.t
   (** [size_s state hash] is the same process than {!size_p} but we
       use the state-defined buffer. That means the client can not use
       this function in a concurrency context with the same [state]. *)
 
-  val size : state -> Hash.t -> (int, error) result Lwt.t
+  val size: state -> Hash.t -> (int, error) result Lwt.t
   (** Alias of {size_s}. *)
 
   type stream = unit -> Cstruct.t option Lwt.t
 
-  module Graph : Map.S with type key = Hash.t
+  module Graph: Map.S with type key = Hash.t
 
-  val from : state -> stream -> (Hash.t * int, error) result Lwt.t
+  val from: state -> stream -> (Hash.t * int, error) result Lwt.t
 
-  val make : state
+  val make: state
     -> ?window:[ `Object of int | `Memory of int ]
     -> ?depth:int
     -> value list
@@ -514,85 +484,70 @@ sig
   (** The type of the git repository. *)
 
   module Hash
-    : S.HASH
+   : S.HASH
       with type Digest.buffer = Cstruct.t
        and type hex = string
   (** The [Digest] module used to make the module. *)
 
-  module Path
-    : S.PATH
-  (** The [Path] module used to make the module. *)
-
   module Inflate
-    : S.INFLATE
+   : S.INFLATE
   (** The [Inflate] module used to make the module. *)
 
   module Deflate
-    : S.DEFLATE
+   : S.DEFLATE
   (** The [Deflate] module used to make the module. *)
 
   module Lock
-    : S.LOCK
+   : S.LOCK
   (** The [Lock] module used to make this interface. *)
 
-  module FileSystem
-    : S.FS with type path = Path.t
-            and type File.lock = Lock.elt
+  module FileSystem : S.FS with type File.lock = Lock.elt
   (** The [FileSystem] module used to make the module. *)
 
-  module Value
-    : Value.S
-        with module Hash = Hash
-         and module Inflate = Inflate
-         and module Deflate = Deflate
-         and module Blob = Blob.Make(Hash)
-         and module Commit = Commit.Make(Hash)
-         and module Tree = Tree.Make(Hash)
-         and module Tag = Tag.Make(Hash)
-         and type t = Value.Make(Hash)(Inflate)(Deflate).t
+  module Value: Value.S
+    with module Hash = Hash
+     and module Inflate = Inflate
+     and module Deflate = Deflate
+     and module Blob = Blob.Make(Hash)
+     and module Commit = Commit.Make(Hash)
+     and module Tree = Tree.Make(Hash)
+     and module Tag = Tag.Make(Hash)
+     and type t = Value.Make(Hash)(Inflate)(Deflate).t
   (** The Value module, which represents the Git object. *)
 
-  module Reference
-    : Reference.IO
-      with module Hash = Hash
-       and module Path = Path
-       and module Lock = Lock
-       and module FileSystem = FileSystem
+  module Reference: Reference.IO
+    with module Hash = Hash
+     and module Lock = Lock
+     and module FileSystem = FileSystem
   (** The Reference module, which represents the Git reference. *)
 
-  module PACKDecoder
-    : Unpack.DECODER
-      with module Hash = Hash
-       and module Inflate = Inflate
+  module PACKDecoder: Unpack.DECODER
+    with module Hash = Hash
+     and module Inflate = Inflate
   (** The [PACKDecoder] module used to decode a {i PACK} file. *)
 
-  module PACKEncoder
-    : Pack.ENCODER
-      with module Hash = Hash
-       and module Deflate = Deflate
+  module PACKEncoder: Pack.ENCODER
+    with module Hash = Hash
+     and module Deflate = Deflate
   (** The [PACKEncoder] module used to encoder a {i PACK} file. *)
 
-  module Loose
-    : LOOSE
-      with type t = Value.t
-       and type state = t
-       and module Hash = Hash
-       and module Path = Path
-       and module FileSystem = FileSystem
-       and module Inflate = Inflate
-       and module Deflate = Deflate
+  module Loose: LOOSE
+    with type t = Value.t
+     and type state = t
+     and module Hash = Hash
+     and module FileSystem = FileSystem
+     and module Inflate = Inflate
+     and module Deflate = Deflate
   (** The [Loose] module which represents any {i loose} git object
       available in git repository. *)
 
-  module Pack
-    : PACK
-      with type t = PACKDecoder.Object.t
-       and type value = Value.t
-       and type state = t
-       and module Hash = Hash
-       and module Path = Path
-       and module FileSystem = FileSystem
-       and module Inflate = Inflate
+  module Pack: PACK
+    with type t = PACKDecoder.Object.t
+     and type value = Value.t
+     and type state = t
+     and module Hash = Hash
+     and module FileSystem = FileSystem
+     and module Inflate = Inflate
   (** The [Pack] module which represents any {i packed} git object
       available in the git repository. *)
 
@@ -607,31 +562,31 @@ sig
     [ Loose.error
     | Pack.error ]
 
-  val pp_error : error Fmt.t
+  val pp_error: error Fmt.t
   (** Pretty-printer of {!error}. *)
 
   val create :
-       ?root:Path.t
-    -> ?dotgit:Path.t
+       ?root:Fpath.t
+    -> ?dotgit:Fpath.t
     -> ?compression:int
     -> unit -> (t, error) result Lwt.t
 
-  val dotgit : t -> Path.t
+  val dotgit: t -> Fpath.t
   (** [dotgit state] returns the current [".git"] path used. *)
 
-  val root : t -> Path.t
+  val root: t -> Fpath.t
   (** [root state] returns the current path of the repository. *)
 
-  val compression : t -> int
+  val compression: t -> int
   (** [compression state] returns the current level of the compression
       used to write a git object. *)
 
-  val exists : t -> Hash.t -> bool Lwt.t
+  val exists: t -> Hash.t -> bool Lwt.t
   (** [exists state hash] checks if one object of the current
       repository [state] satisfies the predicate [digest(object) =
       hash]. *)
 
-  val list : t -> Hash.t list Lwt.t
+  val list: t -> Hash.t list Lwt.t
   (** [list state] lists all git objects available in the current
       repository [state]. *)
 
@@ -659,15 +614,15 @@ sig
       if the requested git object is a {i packed} git object.
       Otherwise, we return an {!error}. *)
 
-  val read_s : t -> Hash.t -> (Value.t, error) result Lwt.t
+  val read_s: t -> Hash.t -> (Value.t, error) result Lwt.t
   (** [read_s state hash] is the same process than {!read_p} but we
       use the state-defined buffer. That means the client can not use
       this function in a concurrency context with the same [state]. *)
 
-  val read : t -> Hash.t -> (Value.t, error) result Lwt.t
+  val read: t -> Hash.t -> (Value.t, error) result Lwt.t
   (** Alias of {!read_s}. *)
 
-  val read_exn : t -> Hash.t -> Value.t Lwt.t
+  val read_exn: t -> Hash.t -> Value.t Lwt.t
   (** [read_exn state hash] is an alias of {!read} but raise an
       exception (instead to return a {!result}) if the git object
       requested does not exist or we catch any other errors. *)
@@ -699,12 +654,12 @@ sig
       requested git {i loose} object. This kind of error should be
       never happen.}} *)
 
-  val write_s : t -> Value.t -> (Hash.t * int, error) result Lwt.t
+  val write_s: t -> Value.t -> (Hash.t * int, error) result Lwt.t
   (** [write_s state v] is the process than {!write_p} but we use the
       state-defined buffer. That means the client can not use this
       function in a concurrency context with te same [state]. *)
 
-  val write : t -> Value.t -> (Hash.t * int, error) result Lwt.t
+  val write: t -> Value.t -> (Hash.t * int, error) result Lwt.t
   (** Alias of {!write_s}. *)
 
   val size_p :
@@ -725,12 +680,12 @@ sig
 
       As {!read_p}, {!size_p} can return an {!error}. *)
 
-  val size_s : t -> Hash.t -> (int64, error) result Lwt.t
+  val size_s: t -> Hash.t -> (int64, error) result Lwt.t
   (** [size_s state hash] is the same process than {!size_p} but we
       use the state-defined buffer. That means the client can not use
       this function in a concurrency context with the same [state]. *)
 
-  val size : t -> Hash.t -> (int64, error) result Lwt.t
+  val size: t -> Hash.t -> (int64, error) result Lwt.t
   (** Alias of {!size_s}. *)
 
   val raw_p :
@@ -760,42 +715,42 @@ sig
       if the requested git object is a {i packed} git object.
       Otherwise, we return an {!error}. *)
 
-  val raw_s : t -> Hash.t -> (kind * Cstruct.t) option Lwt.t
+  val raw_s: t -> Hash.t -> (kind * Cstruct.t) option Lwt.t
   (** [raw_s state hash] is the same process than {!raw_p} but we use
       the state-defined buffer. That means the client can not use this
       function in a concurrency context with the same [state]. *)
 
-  val raw : t -> Hash.t -> (kind * Cstruct.t) option Lwt.t
+  val raw: t -> Hash.t -> (kind * Cstruct.t) option Lwt.t
   (** Alias of {!raw_s}. *)
 
-  val read_inflated : t -> Hash.t -> (kind * Cstruct.t) option Lwt.t
+  val read_inflated: t -> Hash.t -> (kind * Cstruct.t) option Lwt.t
   (** Alias of {!raw_s}. *)
 
-  val write_inflated : t -> kind:kind -> Cstruct.t -> Hash.t Lwt.t
+  val write_inflated: t -> kind:kind -> Cstruct.t -> Hash.t Lwt.t
 
-  val contents : t -> ((Hash.t * Value.t) list, error) result Lwt.t
+  val contents: t -> ((Hash.t * Value.t) list, error) result Lwt.t
   (** [contents state] returns an associated list between the hash and
       its bind git object. This list contains all git objects
       available in the current git repository [state]. *)
 
-  val buffer_window : t -> Inflate.window
+  val buffer_window: t -> Inflate.window
   (** [buffer_window state] returns the state-defined [window]. *)
 
-  val buffer_zl : t -> Cstruct.t
+  val buffer_zl: t -> Cstruct.t
   (** [buffer_zl state] returns the state-defined buffer used to store
       any inflated flow. *)
 
-  val buffer_de : t -> Cstruct.t
+  val buffer_de: t -> Cstruct.t
   (** [buffer_de state] returns the state-defined buffer used as
       internal buffer for any decoder. *)
 
-  val buffer_io : t -> Cstruct.t
+  val buffer_io: t -> Cstruct.t
   (** [buffer_io state] returns the state-defined buffer used to store
       the input flow. *)
 
-  val fold : t ->
-    ('a -> ?name:Path.t -> length:int64 -> Hash.t -> Value.t -> 'a Lwt.t) ->
-    path:Path.t -> 'a -> Hash.t -> 'a Lwt.t
+  val fold: t ->
+    ('a -> ?name:Fpath.t -> length:int64 -> Hash.t -> Value.t -> 'a Lwt.t) ->
+    path:Fpath.t -> 'a -> Hash.t -> 'a Lwt.t
   (** [fold f ~path acc hash] walks from the source [hash] in the {i
       sub-graph}. If the hash points to:
 
@@ -829,8 +784,7 @@ sig
   module Ref :
   sig
     module Packed_refs
-      : Packed_refs.S with module Hash = Hash
-                       and module Path = Path
+     : Packed_refs.S with module Hash = Hash
                        and module FileSystem = FileSystem
 
     type nonrec error =
@@ -839,10 +793,10 @@ sig
       | `Invalid_reference of Reference.t
       ] (** The type error. *)
 
-    val pp_error : error Fmt.t
+    val pp_error: error Fmt.t
     (** Pretty-printer of {!error}. *)
 
-    val exists : t -> Reference.t -> bool Lwt.t
+    val exists: t -> Reference.t -> bool Lwt.t
 
     val graph_p :
          dtmp:Cstruct.t
@@ -863,13 +817,13 @@ sig
         encountered any {!error}, we make it silent and continue the
         process. *)
 
-    val graph : ?locks:Lock.t -> t -> (Hash.t Reference.Map.t, error) result Lwt.t
+    val graph: ?locks:Lock.t -> t -> (Hash.t Reference.Map.t, error) result Lwt.t
     (** [graph state] is the same process than {!graph_p} but we use
         the state-defined buffer. That means the client can not use
         this function in a concurrency context with the same
         [state]. *)
 
-    val normalize : Hash.t Reference.Map.t -> Reference.head_contents -> (Hash.t, error) result Lwt.t
+    val normalize: Hash.t Reference.Map.t -> Reference.head_contents -> (Hash.t, error) result Lwt.t
     (** [normalize graph ref] returns the final hash pointed by the
         reference [ref]. This function can return an error:
 
@@ -894,13 +848,13 @@ sig
         Finally, as {!graph_p}, if we encountered any {!error}, we
         make it silent and continue the process. *)
 
-    val list_s : ?locks:Lock.t -> t -> (Reference.t * Hash.t) list Lwt.t
+    val list_s: ?locks:Lock.t -> t -> (Reference.t * Hash.t) list Lwt.t
     (** [list_s state] is the same process than {!list_p} but we use
         the state-defined buffer. That means the client can not use
         this function in a concurrency context with the same
         [state]. *)
 
-    val list : ?locks:Lock.t -> t -> (Reference.t * Hash.t) list Lwt.t
+    val list: ?locks:Lock.t -> t -> (Reference.t * Hash.t) list Lwt.t
     (** Alias of {!list_s}. *)
 
     val remove_p :
@@ -927,13 +881,13 @@ sig
         user-defined buffer instead the state-defined buffer (could be
         used by something else). *)
 
-    val remove_s : t -> ?locks:Lock.t -> Reference.t -> (unit, error) result Lwt.t
+    val remove_s: t -> ?locks:Lock.t -> Reference.t -> (unit, error) result Lwt.t
     (** [remove_s state ?locks reference] is the same process than
         {!remove_p} but we use the state-defined buffer. That means
         the client can not use thus function in a concurrency context
         with the same [state]. *)
 
-    val remove : t -> ?locks:Lock.t -> Reference.t -> (unit, error) result Lwt.t
+    val remove: t -> ?locks:Lock.t -> Reference.t -> (unit, error) result Lwt.t
     (** [remove state reference] removes the reference [reference]
         from the git repository [state]. The [?lock] avoids the race
         condition if it's specified. *)
@@ -955,13 +909,13 @@ sig
         This function can be used in a concurrency context only if the
         specifed buffers are not used by another process. *)
 
-    val read_s : ?locks:Lock.t -> t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
+    val read_s: ?locks:Lock.t -> t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
     (** [read_s state reference] is the same process than {!read_p}
         but we use the state-defined buffer. That means the client can
         not use this function in a concurrency context with the same
         [state]. *)
 
-    val read : ?locks:Lock.t -> t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
+    val read: ?locks:Lock.t -> t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
     (** Alias of {!read_s}. *)
 
     val write_p :
@@ -980,11 +934,11 @@ sig
         state-defined buffer of {!write_s} to use in a concurrency
         context an other operation. *)
 
-    val write_s : t -> ?locks:Lock.t -> Reference.t -> Reference.head_contents -> (unit, error) result Lwt.t
+    val write_s: t -> ?locks:Lock.t -> Reference.t -> Reference.head_contents -> (unit, error) result Lwt.t
     (** [write_s state ?locks reference value] is the same process
         than {!read_p} but we use the state-defined buffer. *)
 
-    val write : t -> ?locks:Lock.t -> Reference.t -> Reference.head_contents -> (unit, error) result Lwt.t
+    val write: t -> ?locks:Lock.t -> Reference.t -> Reference.head_contents -> (unit, error) result Lwt.t
     (** Alias of {!write_s}. *)
 
     val test_and_set :
@@ -999,30 +953,22 @@ sig
           [state]. *)
   end
 
-  val clear_caches : ?locks:Lock.t -> t -> unit Lwt.t
+  val clear_caches: ?locks:Lock.t -> t -> unit Lwt.t
   (** [clear_caches ?locks t] drops all values stored in the internal
       caches binded with the git repository [t]. *)
 
-  val reset : ?locks:Lock.t -> t -> (unit, [ `Store of error | `Ref of Ref.error ]) result Lwt.t
+  val reset: ?locks:Lock.t -> t -> (unit, [ `Store of error | `Ref of Ref.error ]) result Lwt.t
   (** [reset ?locks t] removes all things of the git repository [t]
       and ensures it will be empty. *)
 end
 
 module Make
-    (H : S.HASH with type Digest.buffer = Cstruct.t
-                 and type hex = string)
-    (P : S.PATH)
-    (L : S.LOCK with type key = P.t
-                 and type +'a io = 'a Lwt.t)
-    (FS : S.FS with type path = P.t
-                and type File.raw = Cstruct.t
-                and type File.lock = L.elt
-                and type Mapper.raw = Cstruct.t
-                and type +'a io = 'a Lwt.t)
-    (Inflate : S.INFLATE)
-    (Deflate : S.DEFLATE)
-  : S with module Hash = H
-       and module Path = P
+    (H: S.HASH)
+    (L: S.LOCK)
+    (FS: S.FS with type File.lock = L.elt)
+    (Inflate: S.INFLATE)
+    (Deflate: S.DEFLATE)
+ : S with module Hash = H
        and module Lock = L
        and module Inflate = Inflate
        and module Deflate = Deflate

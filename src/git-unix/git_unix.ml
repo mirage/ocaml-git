@@ -14,10 +14,10 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module FS = Fs_lwt_unix.FS
-module Lock = Fs_lwt_unix.Lock
+module FS = Fs
+module Lock = Lock
 module SHA1 = Git.Hash.Make(Digestif.SHA1)
+module TCP = Tcp
+module HTTP = Http
 
-module Store =
-  Git.Store.Make(SHA1)(Fpath)(Fs_lwt_unix.Lock)(Fs_lwt_unix.FS)
-    (Git.Inflate)(Git.Deflate)
+module Store = Git.Store.Make(SHA1)(Lock)(FS)(Git.Inflate)(Git.Deflate)

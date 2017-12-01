@@ -17,10 +17,8 @@
 
 type t = string
 
-module type S =
-sig
-  module Hash : S.HASH
-  module Path : S.PATH
+module type S =sig
+  module Hash: S.HASH
 
   type nonrec t = t
 
@@ -32,8 +30,8 @@ sig
   val of_string : string -> t
   val to_string : t -> string
 
-  val of_path : Path.t -> t
-  val to_path : t -> Path.t
+  val of_path : Fpath.t -> t
+  val to_path : t -> Fpath.t
 
   include S.BASE with type t := t
 
@@ -45,30 +43,21 @@ sig
   val equal_head_contents : head_contents -> head_contents -> bool
   val compare_head_contents : head_contents -> head_contents -> int
 
-  module A
-    : S.ANGSTROM
-      with type t = head_contents
-  module D
-    : S.DECODER
-      with type t = head_contents
-       and type raw = Cstruct.t
-       and type init = Cstruct.t
-       and type error = [ `Decoder of string ]
-  module M
-    : S.MINIENC
-      with type t = head_contents
-  module E
-    : S.ENCODER
-      with type t = head_contents
-       and type raw = Cstruct.t
-       and type init = int * head_contents
-       and type error = [ `Never ]
+  module A: S.ANGSTROM with type t = head_contents
+  module D : S.DECODER
+    with type t = head_contents
+     and type init = Cstruct.t
+     and type error = [ `Decoder of string ]
+  module M: S.MINIENC with type t = head_contents
+  module E: S.ENCODER
+    with type t = head_contents
+     and type init = int * head_contents
+     and type error = [ `Never ]
 end
 
-module type IO =
-sig
-  module Lock : S.LOCK
-  module FileSystem : S.FS
+module type IO = sig
+  module Lock: S.LOCK
+  module FileSystem: S.FS
 
   include S
 
@@ -81,43 +70,36 @@ sig
   val pp_error  : error Fmt.t
 
   val exists :
-       root:Path.t
+       root:Fpath.t
     -> t -> (bool, error) result Lwt.t
   val read :
-       root:Path.t
+       root:Fpath.t
     -> t
     -> dtmp:Cstruct.t
     -> raw:Cstruct.t
     -> ((t * head_contents), error) result Lwt.t
   val write :
-       root:Path.t
+       root:Fpath.t
     -> ?locks:Lock.t
     -> ?capacity:int
     -> raw:Cstruct.t
     -> t -> head_contents
     -> (unit, error) result Lwt.t
   val test_and_set :
-       root:Path.t
+       root:Fpath.t
     -> ?locks:Lock.t
     -> t
     -> test:head_contents option
     -> set:head_contents option
     -> (bool, error) result Lwt.t
   val remove :
-       root:Path.t
+       root:Fpath.t
     -> ?locks:Lock.t
     -> t -> (unit, error) result Lwt.t
 end
 
-module Make
-    (H : S.HASH with type Digest.buffer = Cstruct.t
-                 and type hex = string)
-    (P : S.PATH)
-  : S with module Hash = H
-       and module Path = P
-= struct
+module Make(H : S.HASH): S with module Hash = H = struct
   module Hash = H
-  module Path = P
 
   type t = string
 
@@ -128,13 +110,13 @@ module Make
   let of_string x = x
   let to_string x = x
 
-  let to_path x = match Path.of_string x with
+  let to_path x = match Fpath.of_string x with
     | Error (`Msg x) -> raise (Invalid_argument x)
-    | Ok v -> Path.normalize v
+    | Ok v -> Fpath.normalize v
   let of_path path =
-    match List.rev @@ Path.segs path with
+    match List.rev @@ Fpath.segs path with
     | "HEAD" :: _ -> head
-    | _ -> Path.(to_string (normalize (v "refs" // path)))
+    | _ -> Fpath.(to_string (normalize (v "refs" // path)))
 
   let pp ppf x =
     Fmt.pf ppf "%s" (String.escaped x)
@@ -222,24 +204,17 @@ module Make
 end
 
 module IO
-    (H : S.HASH with type Digest.buffer = Cstruct.t
-                 and type hex = string)
-    (P : S.PATH)
-    (L : S.LOCK with type key = P.t
-                 and type +'a io = 'a Lwt.t)
-    (FS : S.FS with type path = P.t
-                and type File.raw = Cstruct.t
-                and type File.lock = L.elt
-                and type +'a io = 'a Lwt.t)
+    (H : S.HASH)
+    (L : S.LOCK)
+    (FS: S.FS with type File.lock = L.elt)
   : IO with module Hash = H
-        and module Path = P
         and module Lock = L
         and module FileSystem = FS
 = struct
   module Lock = L
   module FileSystem = FS
 
-  include Make(H)(P)
+  include Make(H)
 
   module Log =
   struct
@@ -264,7 +239,7 @@ module IO
     | #D.error as err -> D.pp_error ppf err
 
   let normalize path =
-    let segs = Path.segs path in
+    let segs = Fpath.segs path in
 
     List.fold_left
       (fun (stop, acc) ->
@@ -279,7 +254,7 @@ module IO
     |> fun (_, refs) -> List.rev refs |> String.concat "/" |> of_string
 
   let exists ~root reference =
-    let path = Path.(root // (to_path reference)) in
+    let path = Fpath.(root // (to_path reference)) in
     let open Lwt.Infix in
 
     FileSystem.File.exists path >>= function
@@ -292,9 +267,9 @@ module IO
 
     let open Lwt.Infix in
 
-    let path = Path.(root // (to_path reference)) in
+    let path = Fpath.(root // (to_path reference)) in
 
-    Log.debug (fun l -> l ~header:"read" "Reading the reference: %a." Path.pp path);
+    Log.debug (fun l -> l ~header:"read" "Reading the reference: %a." Fpath.pp path);
 
     FileSystem.File.open_r ~mode:0o400 path
     >>= function
@@ -352,7 +327,7 @@ module IO
       let flush = E.flush
     end in
 
-    let path = Path.(root // (to_path reference)) in
+    let path = Fpath.(root // (to_path reference)) in
     let lock = match locks with
       | Some locks -> Some (Lock.make locks (to_path reference))
       | None -> None
@@ -360,7 +335,7 @@ module IO
 
     Lock.with_lock lock
     @@ fun () ->
-    FileSystem.Dir.create ~path:true Path.(root // (parent (to_path reference))) >>= function
+    FileSystem.Dir.create ~path:true Fpath.(root // (parent (to_path reference))) >>= function
     | Error sys_err -> Lwt.return (Error (`SystemDirectory sys_err))
     | Ok (true | false) ->
       FileSystem.File.open_w ~mode:0o644 path
@@ -386,7 +361,7 @@ module IO
             | `Encoder `Never -> assert false
 
   let test_and_set ~root ?locks t ~test ~set =
-    let path = Path.(root // (to_path t)) in
+    let path = Fpath.(root // (to_path t)) in
     let lock = match locks with
       | Some locks -> Some (Lock.make locks (to_path t))
       | None -> None
@@ -409,7 +384,7 @@ module IO
     | Error err -> Lwt.return (Error (`SystemFile err))
 
   let remove ~root ?locks t =
-    let path = Path.(root // (to_path t)) in
+    let path = Fpath.(root // (to_path t)) in
     let lock = match locks with
       | Some locks -> Some (Lock.make locks (to_path t))
       | None -> None

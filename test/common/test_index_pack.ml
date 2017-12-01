@@ -1,5 +1,4 @@
-module Value (H : Git.S.HASH  with type hex = string) =
-struct
+module Value (H : Git.HASH) = struct
   module Hash = H
 
   let hashes =

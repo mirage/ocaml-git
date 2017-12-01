@@ -1348,8 +1348,7 @@ end
 
 module MakeDecoder
     (H : S.HASH)
-    (M : S.MAPPER with type raw = Cstruct.t
-                   and type +'a io = 'a Lwt.t)
+    (M : S.MAPPER)
     (I : S.INFLATE)
   : DECODER with module Hash = H
              and module Mapper = M

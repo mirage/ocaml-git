@@ -15,72 +15,63 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module type S =
-sig
-  module Hash
-    : S.HASH
+module type S = sig
+
+  module Hash: S.HASH
   (** The [Hash] module used to make this interface. *)
 
   type t
-  (** A Git Tag object. The tag object is very much like a {!Commit.t} object -
-      it contains a {i tagger}, a date, a message, and a pointer. Generally, the tag
-      points to a commit rather than a tree. It's like a branch reference, but it
-      never moves - it always points to the same commit but gives it a friendlier
+  (** A Git Tag object. The tag object is very much like a {!Commit.t}
+      object - it contains a {i tagger}, a date, a message, and a
+      pointer. Generally, the tag points to a commit rather than a
+      tree. It's like a branch reference, but it never moves - it
+      always points to the same commit but gives it a friendlier
       name. *)
 
   type kind = Blob | Commit | Tag | Tree
 
   val make : Hash.t -> kind -> ?tagger:User.t -> tag:string -> string -> t
 
-  module D
-    : S.DECODER  with type t = t
-                  and type raw = Cstruct.t
-                  and type init = Cstruct.t
-                  and type error = [ `Decoder of string ]
-  (** The decoder of the Git Tag object.
-      We constraint the input to be a
-      {Cstruct.t}. This decoder needs a
-      {Cstruct.t} as an internal buffer. *)
+  module D: S.DECODER with type t = t
+                       and type init = Cstruct.t
+                       and type error = [ `Decoder of string ]
+  (** The decoder of the Git Tag object. We constraint the input to be
+      a {Cstruct.t}. This decoder needs a {Cstruct.t} as an internal
+      buffer. *)
 
-  module A
-    : S.ANGSTROM with type t = t
+  module A: S.ANGSTROM with type t = t
   (** The Angstrom decoder of the Git Tag object. *)
 
-  module F
-    : S.FARADAY  with type t = t
+  module F: S.FARADAY with type t = t
   (** The Faraday encoder of the Git Tag object. *)
 
-  module M
-    : S.MINIENC  with type t = t
+  module M: S.MINIENC with type t = t
   (** The {!Minienc} encoder of the Git Tag object. *)
 
-  module E
-    : S.ENCODER  with type t = t
-                  and type raw = Cstruct.t
-                  and type init = int * t
-                  and type error = [ `Never ]
-  (** The encoder (which uses a {!Minienc.encoder}) of the Git Tag object. We
-      constraint the output to be a {Cstruct.t}. This encoder needs the Tag OCaml
-      value and the memory consumption of the encoder (in bytes). The encoder can
-      not fail.
+  module E: S.ENCODER with type t = t
+                       and type init = int * t
+                       and type error = [ `Never ]
+  (** The encoder (which uses a {!Minienc.encoder}) of the Git Tag
+      object. We constraint the output to be a {Cstruct.t}. This
+      encoder needs the Tag OCaml value and the memory consumption of
+      the encoder (in bytes). The encoder can not fail.
 
-      NOTE: we can not unspecified the error type (it needs to be concrete) but,
-      because the encoder can not fail, we define the error as [`Never]. *)
+      NOTE: we can not unspecified the error type (it needs to be
+      concrete) but, because the encoder can not fail, we define the
+      error as [`Never]. *)
 
   include S.DIGEST with type t := t and type hash = Hash.t
+
   include S.BASE with type t := t
 
-  val obj : t -> Hash.t
+  val obj: t -> Hash.t
   (** [obj t] returns the pointed hash of the Tag [t]. *)
 
-  val tag : t -> string
+  val tag: t -> string
   (** [tag t] returns the tag information of [t]. *)
 end
 
-module Make
-    (H : S.HASH with type Digest.buffer = Cstruct.t
-                 and type hex = string)
-  : S with module Hash = H
+module Make (H : S.HASH): S with module Hash = H
 (** The {i functor} to make the OCaml representation of the Git Tag
     object by a specific hash implementation. We constraint the
     {!S.HASH} module to compute a {Cstruct.t} flow and generate a

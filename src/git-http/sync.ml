@@ -50,22 +50,20 @@ end
 
 module type S =
 sig
-  module Web : S.WEB
+  module Web : Web.S
   module Client : CLIENT
     with type headers = Web.HTTP.headers
      and type meth = Web.HTTP.meth
      and type uri = Web.uri
      and type resp = Web.resp
-  module Store : Minimal.S
-    with type Hash.Digest.buffer = Cstruct.t
-     and type Hash.hex = string
+  module Store : Git.S
 
-  module Decoder : Smart.DECODER
+  module Decoder : Git.Smart.DECODER
     with module Hash = Store.Hash
-  module Encoder : Smart.ENCODER
+  module Encoder : Git.Smart.ENCODER
     with module Hash = Store.Hash
 
-  module PACKDecoder : Unpack.P
+  module PACKDecoder : Git.Unpack.P
     with module Hash = Store.Hash
      and module Inflate = Store.Inflate
 
@@ -123,8 +121,8 @@ sig
 end
 
 module Make
-    (K : Sync.CAPABILITIES)
-    (W : S.WEB
+    (K : Git.Sync.CAPABILITIES)
+    (W : Web.S
      with type +'a io = 'a Lwt.t
       and type raw = Cstruct.t
       and type uri = Uri.t
@@ -137,9 +135,7 @@ module Make
       and type meth = W.HTTP.meth
       and type uri = W.uri
       and type resp = W.resp)
-    (G : Minimal.S
-     with type Hash.Digest.buffer = Cstruct.t
-      and type Hash.hex = string)
+    (G : Git.S)
   : S with module Web     = W
        and module Client  = C
        and module Store   = G
@@ -148,13 +144,11 @@ module Make
   module Client = C
   module Store  = G
 
-  module Decoder
-    = Smart.Decoder(Store.Hash)
-  module Encoder
-    = Smart.Encoder(Store.Hash)
+  module Decoder = Git.Smart.Decoder(Store.Hash)
+  module Encoder = Git.Smart.Encoder(Store.Hash)
 
   module PACKDecoder
-    = Unpack.MakePACKDecoder(Store.Hash)(Store.Inflate)
+    = Git.Unpack.MakePACKDecoder(Store.Hash)(Store.Inflate)
 
   type error =
     [ `SmartDecoder of Decoder.error
@@ -302,7 +296,7 @@ module Make
     | `Delete of (Store.Hash.t * string)
     | `Update of (Store.Hash.t * Store.Hash.t * string) ]
 
-  module Revision = Revision.Make(Store)
+  module Revision = Git.Revision.Make(Store)
 
   let packer ~window ~depth git ~ofs_delta:_ remote commands =
     let open Lwt.Infix in
@@ -343,7 +337,7 @@ module Make
       (fun acc commit ->
          Store.fold git
            (fun acc ?name:_ ~length:_ _ value -> Lwt.return (value :: acc))
-           ~path:(Store.Path.v "/") acc commit)
+           ~path:(Fpath.v "/") acc commit)
       [] (Store.Hash.Set.elements elements)
     >>= fun entries -> Store.Pack.make git ~window ~depth entries
 

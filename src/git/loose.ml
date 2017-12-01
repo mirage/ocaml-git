@@ -1,12 +1,6 @@
-module type S =
-sig
-  module Path
-    : S.PATH
-  module FileSystem
-    : S.FS
-
-  module Value
-    : Value.S
+module type S = sig
+  module FileSystem: S.FS
+  module Value: Value.S
   include module type of Value
 
   type error =
@@ -25,11 +19,11 @@ sig
   val pp_error : error Fmt.t
 
   val exists :
-    root:Path.t ->
+    root:Fpath.t ->
     Hash.t -> bool Lwt.t
 
   val read :
-    root:Path.t ->
+    root:Fpath.t ->
     window:Inflate.window ->
     ztmp:Cstruct.t ->
     dtmp:Cstruct.t ->
@@ -37,7 +31,7 @@ sig
     Hash.t -> (t, error) result Lwt.t
 
   val inflate :
-    root:Path.t ->
+    root:Fpath.t ->
     window:Inflate.window ->
     ztmp:Cstruct.t ->
     dtmp:Cstruct.t ->
@@ -45,7 +39,7 @@ sig
     Hash.t -> (kind * Cstruct.t, error) result Lwt.t
 
   val inflate_wa :
-    root:Path.t ->
+    root:Fpath.t ->
     window:Inflate.window ->
     ztmp:Cstruct.t ->
     dtmp:Cstruct.t ->
@@ -54,11 +48,11 @@ sig
     Hash.t -> (kind * Cstruct.t, error) result Lwt.t
 
   val list :
-    root:Path.t ->
+    root:Fpath.t ->
     Hash.t list Lwt.t
 
   val size :
-    root:Path.t ->
+    root:Fpath.t ->
     window:Inflate.window ->
     ztmp:Cstruct.t ->
     dtmp:Cstruct.t ->
@@ -66,7 +60,7 @@ sig
     Hash.t -> (int64, error) result Lwt.t
 
   val write :
-    root:Path.t ->
+    root:Fpath.t ->
     ?capacity:int ->
     ?level:int ->
     ztmp:Cstruct.t ->
@@ -74,7 +68,7 @@ sig
     t -> (Hash.t * int, error) result Lwt.t
 
   val write_inflated :
-    root:Path.t ->
+    root:Fpath.t ->
     ?level:int ->
     raw:Cstruct.t ->
     kind:kind ->
@@ -82,18 +76,13 @@ sig
 end
 
 module Make
-    (H : S.HASH with type Digest.buffer = Cstruct.t
-                 and type hex = string)
-    (P : S.PATH)
-    (FS : S.FS with type path = P.t
-                and type File.raw = Cstruct.t
-                and type +'a io = 'a Lwt.t)
+    (H : S.HASH)
+    (FS : S.FS)
     (I : S.INFLATE)
     (D : S.DEFLATE)
   : S with module Hash = H
        and module Inflate = I
        and module Deflate = D
-       and module Path = P
        and module FileSystem = FS
        and module Blob = Blob.Make(H)
        and module Commit = Commit.Make(H)
@@ -107,7 +96,6 @@ module Make
     include (val Logs.src_log src : Logs.LOG)
   end
 
-  module Path = P
   module FileSystem = FS
 
   module Value = Value.Make(H)(I)(D)
@@ -151,9 +139,9 @@ module Make
     let first, rest = explode hash in
     Log.debug (fun l -> l ~header:"exists" "Checking if the object %a is a loose file (%a)."
                   Hash.pp hash
-                  Path.pp Path.(root / "objects" / first / rest)[@warning "-44"]);
+                  Fpath.pp Fpath.(root / "objects" / first / rest)[@warning "-44"]);
 
-    FileSystem.File.exists Path.(root / "objects" / first / rest)[@warning "-44"]
+    FileSystem.File.exists Fpath.(root / "objects" / first / rest)[@warning "-44"]
     >>= function Ok v -> Lwt.return v
                | Error _ -> Lwt.return false
 
@@ -165,7 +153,7 @@ module Make
     FileSystem.Dir.contents
       ~dotfiles:false
       ~rel:true
-      Path.(root / "objects")[@warning "-44"]
+      Fpath.(root / "objects")[@warning "-44"]
     >>= function
     | Error sys_err ->
       Log.err (fun l -> l ~header:"list" "Retrieving a file-system error: %a." FileSystem.Dir.pp_error sys_err);
@@ -173,17 +161,17 @@ module Make
     | Ok firsts ->
       Lwt_list.fold_left_s
         (fun acc first ->
-           FileSystem.Dir.contents ~dotfiles:false ~rel:true (Path.(append (root / "objects") first)[@warning "-44"])
+           FileSystem.Dir.contents ~dotfiles:false ~rel:true (Fpath.(append (root / "objects") first)[@warning "-44"])
            >>= function
            | Ok paths ->
              Lwt_list.fold_left_s
                (fun acc path ->
                   try
-                    (Hash.of_hex Path.((to_string first) ^ (to_string path)))
+                    (Hash.of_hex Fpath.((to_string first) ^ (to_string path)))
                     |> fun v -> Lwt.return (v :: acc)
                   with _ ->
                     Log.warn (fun l -> l ~header:"list" "Retrieving a malformed file: %s / %s."
-                                 (Path.to_string first) (Path.to_string path));
+                                 (Fpath.to_string first) (Fpath.to_string path));
                     Lwt.return acc)
                acc
                paths
@@ -206,9 +194,9 @@ module Make
     let open Lwt.Infix in
 
     Log.debug (fun l -> l ~header:"read" "Reading the loose object %a."
-                  Path.pp Path.(root / "objects" / first / rest)[@warning "-44"]);
+                  Fpath.pp Fpath.(root / "objects" / first / rest)[@warning "-44"]);
 
-    FileSystem.File.open_r ~mode:0o400 Path.(root / "objects" / first / rest)[@warning "-44"]
+    FileSystem.File.open_r ~mode:0o400 Fpath.(root / "objects" / first / rest)[@warning "-44"]
     >>= function
     | Error sys_err ->
       Log.err (fun l -> l ~header:"read" "Retrieving a file-system error: %a." FileSystem.File.pp_error sys_err);
@@ -327,9 +315,9 @@ module Make
     let open Lwt.Infix in
 
     Log.debug (fun l -> l ~header:"size" "Reading the loose object %a."
-                  Path.pp Path.(root / "objects" / first / rest)[@warning "-44"]);
+                  Fpath.pp Fpath.(root / "objects" / first / rest)[@warning "-44"]);
 
-    FileSystem.File.open_r ~mode:0o400 Path.(root / "objects" / first / rest)[@warning "-44"]
+    FileSystem.File.open_r ~mode:0o400 Fpath.(root / "objects" / first / rest)[@warning "-44"]
     >>= function
     | Error sys_err ->
       Log.err (fun l -> l ~header:"size" "Retrieving a file-system error: %a." FileSystem.File.pp_error sys_err);
@@ -400,11 +388,11 @@ module Make
       let flush = Deflate.flush
     end in
 
-    FileSystem.Dir.create ~path:true Path.(root / "objects" / first)
+    FileSystem.Dir.create ~path:true Fpath.(root / "objects" / first)
     >>= function
     | Error err -> Lwt.return (Error (`SystemDirectory err))
     | Ok (true | false) ->
-      FileSystem.File.open_w ~mode:0o644 Path.(root / "objects" / first / rest)[@warning "-44"] (* XXX(dinosaure): shadowing ( / ). *)
+      FileSystem.File.open_w ~mode:0o644 Fpath.(root / "objects" / first / rest)[@warning "-44"] (* XXX(dinosaure): shadowing ( / ). *)
       >>= function
       | Error sys_error -> Lwt.return (Error (`SystemFile sys_error))
       | Ok oc ->
@@ -437,7 +425,7 @@ module Make
     let open Lwt.Infix in
 
     Log.debug (fun l -> l ~header:"write" "Writing a new loose object %a."
-                  Path.pp Path.(root / "objects" / first / rest)[@warning "-44"]);
+                  Fpath.pp Fpath.(root / "objects" / first / rest)[@warning "-44"]);
 
     let module E =
     struct
@@ -459,18 +447,18 @@ module Make
       let flush = E.flush
     end in
 
-    FileSystem.Dir.create ~path:true Path.(root / "objects" / first) >>= function
+    FileSystem.Dir.create ~path:true Fpath.(root / "objects" / first) >>= function
     | Error err ->
       Log.err (fun l -> l ~header:"write" "Retrieve an error when we try to create the directory %a: %a."
-                  Path.pp Path.(root / "objects" / first)
+                  Fpath.pp Fpath.(root / "objects" / first)
                   FileSystem.Dir.pp_error err);
       Lwt.return (Error (`SystemDirectory err))
     | Ok (true | false) ->
-      FileSystem.File.open_w ~mode:0o644 Path.(root / "objects" / first / rest)[@warning "-44"] (* XXX(dinosaure): shadowing ( / ). *)
+      FileSystem.File.open_w ~mode:0o644 Fpath.(root / "objects" / first / rest)[@warning "-44"] (* XXX(dinosaure): shadowing ( / ). *)
       >>= function
       | Error sys_error ->
         Log.err (fun l -> l ~header:"write" "Retrieve an error when we open/create the file %a: %a."
-                    Path.pp Path.(root / "objects" / first / rest)
+                    Fpath.pp Fpath.(root / "objects" / first / rest)
                     FileSystem.File.pp_error sys_error);
         Lwt.return (Error (`SystemFile sys_error))
       | Ok oc ->

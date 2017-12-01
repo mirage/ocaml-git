@@ -24,10 +24,8 @@ struct
   let ( && ) = Int32.logand
 end
 
-module MakeIndexDecoder (H : S.HASH with type Digest.buffer = Cstruct.t) (P : S.PATH) =
-struct
+module MakeIndexDecoder (H : S.HASH) = struct
   module Hash = H
-  module Path = P
 
   type error =
     | Invalid_byte of int
@@ -115,7 +113,7 @@ struct
     { info  : info
     ; hash  : Hash.t
     ; flag  : extend flag
-    ; path  : Path.t }
+    ; path  : Fpath.t }
 
   let pp_entry ppf { info; hash; flag; path; } =
     Fmt.pf ppf "{ @[<hov>info = %a;@ \
@@ -125,7 +123,7 @@ struct
       (Fmt.hvbox pp_info) info
       (Fmt.hvbox Hash.pp) hash
       (Fmt.hvbox (pp_flag pp_extend)) flag
-      (Fmt.hvbox Path.pp) path
+      (Fmt.hvbox Fpath.pp) path
 
   type index = entry list
 
@@ -143,7 +141,7 @@ struct
       else raise (Invalid_argument (Fmt.strf "Invalid signature: %S." x))
 
     type cached_tree =
-      { path    : Path.t
+      { path    : Fpath.t
       ; covered : int
       ; subtree : int
       ; hash    : Hash.t }
@@ -153,17 +151,17 @@ struct
                   covered = %d;@ \
                   subtree = %d;@ \
                   hash = %a;@] }"
-        Path.pp path covered subtree Hash.pp hash
+        Fpath.pp path covered subtree Hash.pp hash
 
     type resolve_undo =
-      { path    : Path.t
+      { path    : Fpath.t
       ; stages  : (mode * Hash.t) list }
     and mode = int
 
     let pp_resolve_undo ppf { path; stages; } =
       Fmt.pf ppf "{ @[<hov>path = %a;@ \
                   stages = %a;@] }"
-        Path.pp path
+        Fpath.pp path
         Fmt.(hvbox (Dump.list (Dump.pair int Hash.pp))) stages
 
     type ewah = unit (* TODO *)
@@ -173,7 +171,7 @@ struct
     type untracked =
       { environments : string list
       ; exclude      : (info * Hash.t) option * (info * Hash.t) option
-      ; gitignore    : Path.t
+      ; gitignore    : Fpath.t
       ; entries      : directory list }
     and directory =
       { untracked    : string list
@@ -216,7 +214,7 @@ struct
           Fmt.(hvbox (Dump.list string)) environments
           Fmt.(hvbox (Dump.option (pair pp_info Hash.pp))) exclude
           Fmt.(hvbox (Dump.option (pair pp_info Hash.pp))) core
-          Path.pp gitignore
+          Fpath.pp gitignore
           Fmt.(hvbox (Dump.list pp_entry)) entries
       | _ -> Fmt.pf ppf "(Un-pretty-printable extension value)"
   end
@@ -664,7 +662,7 @@ struct
        @@ fun path -> get_digit
        @@ fun covered -> space @@ get_digit
        @@ fun subtree -> lf @@ get_hash
-       @@ fun hash rest src t -> k { Ext.path = Path.v path; covered; subtree; hash; } rest src t)
+       @@ fun hash rest src t -> k { Ext.path = Fpath.v path; covered; subtree; hash; } rest src t)
       rest src t
   end
 
@@ -684,19 +682,19 @@ struct
        @@ fun mode2 -> nul @@ fun rest src t ->
        let k = match mode0, mode1, mode2 with
          | 0o0, 0o0, 0o0 ->
-           k { Ext.path = Path.v path; stages = [] }
+           k { Ext.path = Fpath.v path; stages = [] }
          | mode0, 0o0, 0o0 ->
            get_hash @@ fun hash0 ->
-           k { Ext.path = Path.v path; stages = [ mode0, hash0 ] }
+           k { Ext.path = Fpath.v path; stages = [ mode0, hash0 ] }
          | mode0, mode1, 0o0 ->
            get_hash @@ fun hash0 ->
            get_hash @@ fun hash1 ->
-           k { Ext.path = Path.v path; stages = [ mode0, hash0; mode1, hash1 ] }
+           k { Ext.path = Fpath.v path; stages = [ mode0, hash0; mode1, hash1 ] }
          | mode0, mode1, mode2 ->
            get_hash @@ fun hash0 ->
            get_hash @@ fun hash1 ->
            get_hash @@ fun hash2 ->
-           k { Ext.path = Path.v path; stages = [ mode0, hash0; mode1, hash1; mode2, hash2 ] }
+           k { Ext.path = Fpath.v path; stages = [ mode0, hash0; mode1, hash1; mode2, hash2 ] }
        in k rest src t)
         rest src t
   end
@@ -722,10 +720,10 @@ let path info hash flag src t =
     then None
     else match t.entries with
       | [] -> None
-      | { path; _ } :: _ -> Some (Path.to_string path)
+      | { path; _ } :: _ -> Some (Fpath.to_string path)
       (* XXX(dinosaure): we are not sure the current entry want to
          split on '/', so it's better to use [String.concat] instead
-         [Path.append]. *)
+         [Fpath.append]. *)
   in
 
   match previous_name with
@@ -735,7 +733,7 @@ let path info hash flag src t =
      let lead = String.sub previous_name (String.length previous_name - len') len' in
      KEntry.to_nul
      @@ fun rest _ t ->
-     let entry = { info; hash; flag; path = Path.v (lead ^ rest) } in
+     let entry = { info; hash; flag; path = Fpath.v (lead ^ rest) } in
      Cont { t with entries = entry :: t.entries
                  ; state = Padding 1 })
       src t
@@ -743,13 +741,13 @@ let path info hash flag src t =
     if flag.length = 0xFFF
     then (KEntry.to_nul
           @@ fun name _ t ->
-          let entry = { info; hash; flag = { flag with length = String.length name; }; path = Path.v name } in
+          let entry = { info; hash; flag = { flag with length = String.length name; }; path = Fpath.v name } in
           Cont { t with entries = entry :: t.entries
                       ; state = Padding 1 })
         src t
     else (KEntry.take flag.length
           @@ fun name _ t ->
-          let entry = { info; hash; flag; path = Path.v name } in
+          let entry = { info; hash; flag; path = Fpath.v name } in
           Cont { t with entries = entry :: t.entries
                       ; state = Padding 1 })
         src t
@@ -1085,22 +1083,13 @@ let refill off len t =
 let used_in t = t.i_pos
 end
 
-module Make
-    (H : S.HASH with type Digest.buffer = Cstruct.t)
-    (P : S.PATH)
-    (FS : S.FS with type path = P.t
-                and type File.raw = Cstruct.t
-                and type +'a io = 'a Lwt.t)
-=
-struct
+module Make (H : S.HASH) (FS : S.FS) = struct
+
   module Hash = H
-  module Path = P
   module FileSystem = FS
+  module IndexDecoder = MakeIndexDecoder(H)
 
-  module IndexDecoder = MakeIndexDecoder(H)(P)
-
-  module Log =
-  struct
+  module Log = struct
     let src = Logs.Src.create "git.index" ~doc:"logs git's index event"
     include (val Logs.src_log src : Logs.LOG)
   end
@@ -1116,7 +1105,7 @@ struct
   let load ~root ~dtmp =
     let open Lwt.Infix in
 
-    FileSystem.File.open_r ~mode:0o400 Path.(root / "index")[@warning "-44"]
+    FileSystem.File.open_r ~mode:0o400 Fpath.(root / "index")[@warning "-44"]
     >>= function
     | Error sys_err ->
       Log.debug (fun l -> l "Retrieve a file-system error: %a." FileSystem.File.pp_error sys_err);

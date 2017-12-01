@@ -1,15 +1,9 @@
-module Fs = Fs_lwt_mirage
-module Net = Net_lwt_mirage
+module FS = Fs
+module Lock = Lock
+module Net = Net
 module SHA1 = Git.Hash.Make(Digestif.SHA1)
 
-module Make
-    (L : Git.S.LOCK with type +'a io = 'a Lwt.t
-                     and type key = Fpath.t)
-    (Fs : Git.S.FS with type +'a io = 'a Lwt.t
-                    and type path = Fpath.t
-                    and type File.lock = L.elt
-                    and type File.raw = Cstruct.t
-                    and type Mapper.raw = Cstruct.t) =
+module Make (L : Git.LOCK) (FS: Git.FS with type File.lock = L.elt) =
 struct
-  include Git.Store.Make(SHA1)(Fpath)(L)(Fs)(Git.Inflate)(Git.Deflate)
+  include Git.Store.Make(SHA1)(L)(FS)(Git.Inflate)(Git.Deflate)
 end

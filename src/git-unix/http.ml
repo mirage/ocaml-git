@@ -1,5 +1,4 @@
-module Client =
-struct
+module Client = struct
   type headers = Cohttp.Header.t
   type resp = Git_http.Web_cohttp_lwt.resp =
     { resp : Cohttp.Response.t
@@ -60,12 +59,8 @@ struct
   let value_exn v ~error = match v with Some v -> v | None -> raise (Invalid_argument error)
 end
 
-module Make
-    (K : Git.Sync.CAPABILITIES)
-    (S : Git.Minimal.S
-     with type Hash.Digest.buffer = Cstruct.t
-      and type Hash.hex = string)
-= struct
+module Make (K : Git.Sync.CAPABILITIES) (S : Git.S) = struct
+
   include Git_http.Make(K)(Client)(S)
 
   type error' =

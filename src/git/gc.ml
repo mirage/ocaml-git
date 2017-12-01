@@ -15,21 +15,13 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module type STORE =
-sig
-  module Hash
-    : S.HASH
-  module Path
-    : S.PATH
-  module Value
-    : Value.S
-      with module Hash = Hash
-  module Deflate
-    : S.DEFLATE
-  module PACKEncoder
-    : Pack.ENCODER
-        with module Hash = Hash
-         and module Deflate = Deflate
+module type STORE = sig
+  module Hash: S.HASH
+  module Value: Value.S with module Hash = Hash
+  module Deflate: S.DEFLATE
+  module PACKEncoder: Pack.ENCODER
+    with module Hash = Hash
+     and module Deflate = Deflate
 
   type t
   type error
@@ -45,9 +37,7 @@ sig
   val contents : t -> ((Hash.t * Value.t) list, error) result Lwt.t
 end
 
-module Make (S : STORE with type Hash.Digest.buffer = Cstruct.t
-                        and type Hash.hex = string)
-= struct
+module Make (S : STORE) = struct
   module Store = S
 
   module Log =

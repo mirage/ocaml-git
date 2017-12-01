@@ -1,41 +1,27 @@
-module type S =
-sig
-  module Hash
-    : S.HASH
-      with type Digest.buffer = Cstruct.t
-       and type hex = string
-  module Inflate
-    : S.INFLATE
-  module Deflate
-    : S.DEFLATE
-  module Path
-    : S.PATH
-  module FileSystem
-    : S.FS
+module type S = sig
+  module Hash: S.HASH
+  module Inflate: S.INFLATE
+  module Deflate: S.DEFLATE
+  module FileSystem: S.FS
 
-  module PACKDecoder
-    : Unpack.DECODER
-      with module Hash = Hash
-       and module Mapper = FileSystem.Mapper
-       and module Inflate = Inflate
+  module PACKDecoder: Unpack.DECODER
+    with module Hash = Hash
+     and module Mapper = FileSystem.Mapper
+     and module Inflate = Inflate
 
-  module PACKEncoder
-    : Pack.ENCODER
-      with module Hash = Hash
-       and module Deflate = Deflate
+  module PACKEncoder: Pack.ENCODER
+    with module Hash = Hash
+     and module Deflate = Deflate
 
-  module IDXDecoder
-    : Index_pack.LAZY
-      with module Hash = Hash
+  module IDXDecoder: Index_pack.LAZY
+    with module Hash = Hash
 
-  module IDXEncoder
-    : Index_pack.ENCODER
-      with module Hash = Hash
+  module IDXEncoder: Index_pack.ENCODER
+    with module Hash = Hash
 
-  module Pack_info
-    : Pack_info.S
-      with module Hash = Hash
-       and module Inflate = Inflate
+  module Pack_info: Pack_info.S
+    with module Hash = Hash
+     and module Inflate = Inflate
 
   type t
   type loaded
@@ -56,17 +42,17 @@ sig
 
   val pp_error : error Fmt.t
 
-  val v : Path.t list -> t Lwt.t
+  val v : Fpath.t list -> t Lwt.t
 
   val add_total :
-       root:Path.t
+       root:Fpath.t
     -> t
-    -> Path.t
+    -> Fpath.t
     -> Pack_info.full Pack_info.t
     -> (Hash.t * int, error) result Lwt.t
 
   val add_exists :
-       root:Path.t
+       root:Fpath.t
     -> t
     -> Hash.t
     -> (unit, error) result Lwt.t
@@ -74,11 +60,11 @@ sig
   val merge : t -> [> Pack_info.partial | Pack_info.full ] Pack_info.t -> unit Lwt.t
 
   val load_index :
-       Path.t
-    -> (Hash.t * IDXDecoder.t * FileSystem.Mapper.fd, Path.t * error) result Lwt.t
+       Fpath.t
+    -> (Hash.t * IDXDecoder.t * FileSystem.Mapper.fd, Fpath.t * error) result Lwt.t
 
   val load_partial :
-       root:Path.t
+       root:Fpath.t
     -> t
     -> Hash.t
     -> IDXDecoder.t
@@ -97,7 +83,7 @@ sig
   val list : t -> Hash.t list Lwt.t
 
   val read :
-       root:Path.t
+       root:Fpath.t
     -> ztmp:Cstruct.t
     -> window:Inflate.window
     -> t
@@ -105,7 +91,7 @@ sig
     -> (PACKDecoder.Object.t, error) result Lwt.t
 
   val size :
-       root:Path.t
+       root:Fpath.t
     -> ztmp:Cstruct.t
     -> window:Inflate.window
     -> t
@@ -113,7 +99,7 @@ sig
     -> (int, error) result Lwt.t
 
   val save_idx_file :
-       root:Path.t
+       root:Fpath.t
     -> (Hash.t * (Crc32.t * int64)) Radix.sequence
     -> Hash.t
     -> (unit, error) result Lwt.t
@@ -121,23 +107,13 @@ sig
        (string -> string)
     -> (PACKEncoder.Entry.t * PACKEncoder.Delta.t) list
     -> (Hash.t -> Cstruct.t option Lwt.t)
-    -> (Path.t * (Hash.t * (Crc32.t * int64)) Radix.sequence * Hash.t, error) result Lwt.t
+    -> (Fpath.t * (Hash.t * (Crc32.t * int64)) Radix.sequence * Hash.t, error) result Lwt.t
 end
 
-module Make
-    (H : S.HASH with type Digest.buffer = Cstruct.t
-                 and type hex = string)
-    (P : S.PATH)
-    (FS : S.FS with type path = P.t
-                and type File.raw = Cstruct.t
-                and type Mapper.raw = Cstruct.t
-                and type +'a io = 'a Lwt.t)
-    (I : S.INFLATE)
-    (D : S.DEFLATE)
-  : S with module Hash = H
+module Make (H : S.HASH) (FS : S.FS) (I : S.INFLATE) (D : S.DEFLATE):
+    S with module Hash = H
        and module Inflate = I
        and module Deflate = D
-       and module Path = P
        and module FileSystem = FS
 = struct
   module Log =
@@ -149,7 +125,6 @@ module Make
   module Hash = H
   module Inflate = I
   module Deflate = D
-  module Path = P
   module FileSystem = FS
 
   module Pack_info
@@ -316,7 +291,7 @@ module Make
       | Ok () -> Lwt.return sys_err
       | Error sys_err' ->
         Log.err (fun l -> l ~header:"load_index" "Impossible to cloe the index fd: %a: %a."
-                    Path.pp path FileSystem.Mapper.pp_error sys_err');
+                    Fpath.pp path FileSystem.Mapper.pp_error sys_err');
         Lwt.return sys_err
     in
 
@@ -337,7 +312,7 @@ module Make
       >!= (fun sys_err -> Lwt.return (`IdxDecoder sys_err)))
      >>= (fun decoder_idx ->
          let hash_idx =
-           let basename = Path.basename (Path.rem_ext path) in
+           let basename = Fpath.basename (Fpath.rem_ext path) in
            Scanf.sscanf basename "pack-%s" (fun x -> Hash.of_hex x)
            (* XXX(dinosaure): check if [sscanf] raises an exception. *)
          in
@@ -357,7 +332,7 @@ module Make
           Lwt.return (Graph.add hash (Exists { idx; fdi; }) acc)
         | Error (path, err) ->
           Log.err (fun l -> l ~header:"make" "Retrieve an error when we compute the IDX file %a: %a."
-                      Path.pp path
+                      Fpath.pp path
                       pp_error err);
           Lwt.return acc)
       Graph.empty lst >>= fun graph ->
@@ -458,7 +433,7 @@ module Make
     let ( >!= ) = Lwt_result.bind_lwt_err in
     let open Lwt.Infix in
 
-    FileSystem.File.open_w ~mode:0o644 Path.(root / "objects" / "pack" / filename_idx) >>= function
+    FileSystem.File.open_w ~mode:0o644 Fpath.(root / "objects" / "pack" / filename_idx) >>= function
     | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
     | Ok fd ->
       Helper.safe_encoder_to_file
@@ -471,13 +446,13 @@ module Make
         ((FileSystem.File.close fd >>= function
            | Error sys_err ->
              Log.err (fun l -> l ~header:"v_total" "Impossible to close the file %a: %a."
-                         Path.pp Path.(root / "objects" / "pack" / filename_idx)
+                         Fpath.pp Fpath.(root / "objects" / "pack" / filename_idx)
                          FileSystem.File.pp_error sys_err);
              Lwt.return ()
            | Ok () -> Lwt.return ()) >>= fun () -> match err with
          | `Stack ->
            Lwt.return (Error (`SystemIO (Fmt.strf "Impossible to store the IDX file: %a."
-                                           Path.pp Path.(root / "objects" / "pack" / filename_idx))))
+                                           Fpath.pp Fpath.(root / "objects" / "pack" / filename_idx))))
          | `Writer sys_err ->
            Lwt.return (Error (`SystemFile sys_err))
          | `Encoder err ->
@@ -557,7 +532,7 @@ module Make
     let ( >!= ) = Lwt_result.bind_lwt_err in
 
     FileSystem.Dir.temp () >>= fun temp ->
-    FileSystem.File.open_w ~mode:0o644 Path.(temp / filename_pack) >>= function
+    FileSystem.File.open_w ~mode:0o644 Fpath.(temp / filename_pack) >>= function
     | Error sys_err ->
       Lwt.return (Error (`SystemFile sys_err))
     | Ok fd ->
@@ -567,7 +542,7 @@ module Make
          FileSystem.File.close fd >>= function
          | Error sys_err ->
            Log.err (fun l -> l ~header:"save_pack_file" "Impossible to close the pack file %a: %a."
-                       Path.pp Path.(temp / filename_pack)
+                       Fpath.pp Fpath.(temp / filename_pack)
                        FileSystem.File.pp_error sys_err);
            Lwt.return value
          | Ok () -> Lwt.return value
@@ -595,17 +570,17 @@ module Make
         Lwt.return err
       | Error `Stack ->
         Lwt.return (Error (`SystemIO (Fmt.strf "Impossible to store the PACK file: %a."
-                                        Path.pp Path.(temp / filename_pack))))
+                                        Fpath.pp Fpath.(temp / filename_pack))))
       | Error (`Writer sys_err) ->
         Lwt.return (Error (`SystemFile sys_err))
       | Error (`Encoder err) ->
         Lwt.return (Error (`PackEncoder err))
       | Ok { E.tree; E.hash; } ->
-        Lwt.return (Ok (Path.(temp / filename_pack), PACKEncoder.Radix.to_sequence tree, hash))
+        Lwt.return (Ok (Fpath.(temp / filename_pack), PACKEncoder.Radix.to_sequence tree, hash))
 
   let add_exists ~root t hash =
     let filename_idx = Fmt.strf "pack-%s.idx" (Hash.to_hex hash) in
-    let path_idx = Path.(root / "objects" / "pack" / filename_idx) in
+    let path_idx = Fpath.(root / "objects" / "pack" / filename_idx) in
 
     let open Lwt.Infix in
 
@@ -628,10 +603,10 @@ module Make
     let filename_pack = Fmt.strf "pack-%s.pack" (Hash.to_hex hash_pack) in
     let filename_idx = Fmt.strf "pack-%s.idx" (Hash.to_hex hash_pack) in
 
-    FileSystem.File.move path Path.(root / "objects" / "pack" / filename_pack) >>= function
+    FileSystem.File.move path Fpath.(root / "objects" / "pack" / filename_pack) >>= function
     | Error err -> Lwt.return (Error (`SystemFile err))
     | Ok () ->
-      FileSystem.File.open_w ~mode:0o644 Path.(root / "objects" / "pack" / filename_idx) >>= function
+      FileSystem.File.open_w ~mode:0o644 Fpath.(root / "objects" / "pack" / filename_idx) >>= function
       | Error err -> Lwt.return (Error (`SystemFile err))
       | Ok fdi ->
         let sequence = Pack_info.Radix.to_sequence info.Pack_info.tree in
@@ -674,13 +649,13 @@ module Make
           ((FileSystem.File.close fdi >>= function
              | Error sys_err ->
                Log.err (fun l -> l ~header:"v_total" "Impossible to close the file %a: %a."
-                           Path.pp Path.(root / "objects" / "pack" / filename_idx)
+                           Fpath.pp Fpath.(root / "objects" / "pack" / filename_idx)
                            FileSystem.File.pp_error sys_err);
                Lwt.return ()
              | Ok () -> Lwt.return ()) >>= fun () -> match err with
            | `Stack ->
              Lwt.return (Error (`SystemIO (Fmt.strf "Impossible to store the IDX file: %a."
-                                             Path.pp Path.(root / "objects" / "pack" / filename_idx))))
+                                             Fpath.pp Fpath.(root / "objects" / "pack" / filename_idx))))
            | `Writer sys_err ->
              Lwt.return (Error (`SystemFile sys_err))
            | `Encoder err ->
@@ -692,7 +667,7 @@ module Make
 
             let open Lwt_result in
 
-            (FileSystem.Mapper.openfile Path.(root / "objects" / "pack" / filename_pack)
+            (FileSystem.Mapper.openfile Fpath.(root / "objects" / "pack" / filename_pack)
              >!= fun sys_err -> Lwt.return (`SystemMapper sys_err))
             >>= fun fdp ->
             let fun_cache _ = None in
@@ -855,7 +830,7 @@ module Make
       >>= fun _ -> Lwt.return sys_err
     in
 
-    (FileSystem.Mapper.openfile Path.(root / "objects" / "pack" / filename_pack)
+    (FileSystem.Mapper.openfile Fpath.(root / "objects" / "pack" / filename_pack)
      >!= (fun sys_err -> let open Lwt.Infix in
            (* XXX(dinosaure): delete from the
               git repository. *)
@@ -879,7 +854,7 @@ module Make
       >!= (fun err -> Lwt.return (`SystemMapper err)))
      >!= (fun sys_err -> close_all fdi fdp sys_err))
     >>= fun decoder_pack ->
-    ((FileSystem.File.open_r ~mode:0o644 Path.(root / "objects" / "pack" / filename_pack)
+    ((FileSystem.File.open_r ~mode:0o644 Fpath.(root / "objects" / "pack" / filename_pack)
       >!= (fun sys_err -> Lwt.return (`SystemFile sys_err)))
      >!= (fun sys_err -> close_all fdi fdp sys_err))
     >>= fun fd ->

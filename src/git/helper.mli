@@ -27,25 +27,21 @@ end
 
 module MakeDecoder (A : S.ANGSTROM)
   : S.DECODER with type t = A.t
-               and type raw = Cstruct.t
                and type init = Cstruct.t
                and type error = [ `Decoder of string ]
 
 module MakeInflater (Z : S.INFLATE) (A : S.ANGSTROM)
   : S.DECODER with type t = A.t
-               and type raw = Cstruct.t
                and type init = Z.window * Cstruct.t * Cstruct.t
                and type error = [ `Decoder of string | `Inflate of Z.error ]
 
 module MakeEncoder (M : S.MINIENC)
   : S.ENCODER with type t = M.t
-               and type raw = Cstruct.t
                and type init = int * M.t
                and type error = [ `Never ]
 
 module MakeDeflater (Z : S.DEFLATE) (M : S.MINIENC)
   : S.ENCODER with type t = M.t
-               and type raw = Cstruct.t
                and type init = int * M.t * int * Cstruct.t
                and type error = [ `Deflate of Z.error ]
 

@@ -15,8 +15,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module type CLIENT =
-sig
+module type CLIENT = sig
   type headers
   type body
   type resp
@@ -25,11 +24,10 @@ sig
 
   type +'a io
 
-  val call : ?headers:headers -> ?body:body -> meth -> uri -> resp io
+  val call: ?headers:headers -> ?body:body -> meth -> uri -> resp io
 end
 
-module type FLOW =
-sig
+module type FLOW = sig
   type raw
 
   type +'a io
@@ -38,26 +36,25 @@ sig
   type o = unit -> (raw * int * int) option io
 end
 
-module Lwt_cstruct_flow : FLOW with type raw = Cstruct.t and type +'a io = 'a Lwt.t
+module Lwt_cstruct_flow:
+  FLOW with type raw = Cstruct.t and type +'a io = 'a Lwt.t
 
-module type S =
-sig
-  module Web    : S.WEB
-  module Client : CLIENT
+
+module type S = sig
+  module Web  : Web.S
+  module Client: CLIENT
     with type headers = Web.HTTP.headers
      and type meth    = Web.HTTP.meth
      and type uri     = Web.uri
      and type resp    = Web.resp
-  module Store  : Minimal.S
-    with type Hash.Digest.buffer = Cstruct.t
-     and type Hash.hex = string
+  module Store: Git.S
 
-  module Decoder : Smart.DECODER
+  module Decoder: Git.Smart.DECODER
     with module Hash = Store.Hash
-  module Encoder : Smart.ENCODER
+  module Encoder: Git.Smart.ENCODER
     with module Hash = Store.Hash
 
-  module PACKDecoder : Unpack.P
+  module PACKDecoder: Git.Unpack.P
     with module Hash = Store.Hash
      and module Inflate = Store.Inflate
 
@@ -67,7 +64,7 @@ sig
     | `Clone of string
     | `ReportStatus of string ]
 
-  val pp_error : error Fmt.t
+  val pp_error: error Fmt.t
 
   val ls :
        Store.t
@@ -115,20 +112,19 @@ sig
 end
 
 module Make
-    (K : Sync.CAPABILITIES)
-    (W : S.WEB with type +'a io = 'a Lwt.t
+    (K: Git.Sync.CAPABILITIES)
+    (W: Web.S with type +'a io = 'a Lwt.t
                 and type raw = Cstruct.t
                 and type uri = Uri.t
                 and type Request.body = Lwt_cstruct_flow.i
                 and type Response.body = Lwt_cstruct_flow.o)
-    (C : CLIENT with type +'a io = 'a W.io
+    (C: CLIENT with type +'a io = 'a W.io
                  and type headers = W.HTTP.headers
                  and type body = Lwt_cstruct_flow.o
                  and type meth = W.HTTP.meth
                  and type uri = W.uri
                  and type resp = W.resp)
-    (G : Minimal.S with type Hash.Digest.buffer = Cstruct.t
-                    and type Hash.hex = string)
-  : S with module Web     = W
+    (G: Git.S)
+: S with module Web     = W
        and module Client  = C
        and module Store   = G

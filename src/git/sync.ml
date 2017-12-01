@@ -111,7 +111,6 @@ module Make
   module Hash = Store.Hash
   module Inflate = Store.Inflate
   module Deflate = Store.Deflate
-  module Path = Store.Path
   module Revision = Revision.Make(Store)
   module PACKEncoder = Pack.MakePACKEncoder(Hash)(Deflate)
 
@@ -214,7 +213,7 @@ module Make
       (fun acc commit ->
          Store.fold git
            (fun acc ?name:_ ~length:_ _ value -> Lwt.return (value :: acc))
-           ~path:(Store.Path.v "/") acc commit)
+           ~path:(Fpath.v "/") acc commit)
       [] (Store.Hash.Set.elements elements)
     >>= fun entries -> Store.Pack.make git ~window ~depth entries
 

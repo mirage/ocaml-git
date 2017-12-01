@@ -1,17 +1,10 @@
-module Fs = Fs_lwt_mirage
-module Net = Net_lwt_mirage
-module SHA1: Git.S.HASH
+module FS = Fs
+module Lock = Lock
+module Net = Net
+module SHA1: Git.HASH
 
-module Make
-    (L : Git.S.LOCK with type +'a io = 'a Lwt.t
-                     and type key = Fpath.t)
-    (Fs : Git.S.FS with type +'a io = 'a Lwt.t
-                    and type path = Fpath.t
-                    and type File.lock = L.elt
-                    and type File.raw = Cstruct.t
-                    and type Mapper.raw = Cstruct.t)
+module Make (L: Git.LOCK) (Fs: Git.FS with type File.lock = L.elt)
   : Git.Store.S
-      with module Hash = SHA1
-       and module Path = Fpath
-       and module Lock = L
-       and module FileSystem = Fs
+    with module Hash = SHA1
+     and module Lock = L
+     and module FileSystem = Fs

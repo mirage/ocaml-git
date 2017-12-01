@@ -21,13 +21,8 @@ type t = private string
 
 module type S =
 sig
-  module Hash
-    : S.HASH
+  module Hash: S.HASH
   (** The [Digest] module used to make the module. *)
-
-  module Path
-    : S.PATH
-  (** The [Path] module used to make the module. *)
 
   type nonrec t = t
 
@@ -70,8 +65,8 @@ sig
   val to_string : t -> string
   (** [to_string t] returns the string value of the reference [t]. *)
 
-  val of_path : Path.t -> t
-  val to_path : t -> Path.t
+  val of_path : Fpath.t -> t
+  val to_path : t -> Fpath.t
 
   include S.BASE with type t := t
 
@@ -83,9 +78,9 @@ sig
   (** Pretty-printer of {!head_contents}. *)
 
   val equal_head_contents : head_contents -> head_contents -> bool
-  (** [equal_head_contents a b]
-      implies [a = Ref a'] and [b = Ref b'] and [Reference.equal a' b' = true]
-      or [a = Hash a'] and [b = Hash b'] and [Hash.equal a' b'].
+  (** [equal_head_contents a b] implies [a = Ref a'] and [b = Ref b']
+      and [Reference.equal a' b' = true] or [a = Hash a'] and [b =
+      Hash b'] and [Hash.equal a' b'].
 
       However, semantically [Ref a'] could be equal to [Hash b'] iff
       [Hash b'] is come from the reference [a']. That means this
@@ -94,26 +89,20 @@ sig
 
   val compare_head_contents : head_contents -> head_contents -> int
 
-  module A
-    : S.ANGSTROM with type t = head_contents
+  module A: S.ANGSTROM with type t = head_contents
   (** The Angstrom decoder of the Git Reference object. *)
 
-  module D
-    : S.DECODER with type t = head_contents
-                      and type raw = Cstruct.t
+  module D: S.DECODER with type t = head_contents
                       and type init = Cstruct.t
                       and type error = [ `Decoder of string ]
   (** The decoder of the Git Reference object. We constraint the input
       to be a {!Cstruct.t}. This decoder needs a {!Cstruct.t} as an
       internal buffer. *)
 
-  module M
-    : S.MINIENC with type t = head_contents
+  module M: S.MINIENC with type t = head_contents
   (** The {!Minienc} encoder of the Git Reference object. *)
 
-  module E
-    : S.ENCODER with type t = head_contents
-                 and type raw = Cstruct.t
+  module E: S.ENCODER with type t = head_contents
                  and type init = int * head_contents
                  and type error = [ `Never ]
   (** The encoder (which uses a {Minienc.encoder}) of the Git
@@ -143,12 +132,12 @@ sig
   val pp_error : error Fmt.t
   (** Pretty-printer of {!error}. *)
 
-  val exists : root:Path.t -> t -> (bool, error) result Lwt.t
+  val exists : root:Fpath.t -> t -> (bool, error) result Lwt.t
   (** [exists ~root reference] returns [true] iff we found the
       [reference] find in the git repository [root]. Otherwise, we returns
       [false]. *)
 
-  val read : root:Path.t -> t -> dtmp:Cstruct.t -> raw:Cstruct.t -> ((t * head_contents), error) result Lwt.t
+  val read : root:Fpath.t -> t -> dtmp:Cstruct.t -> raw:Cstruct.t -> ((t * head_contents), error) result Lwt.t
   (** [read ~root reference dtmp raw] returns the value contains in
       the reference [reference] (available in the git repository
       [root]). [dtmp] and [raw] are buffers used by the decoder
@@ -157,7 +146,7 @@ sig
 
       This function can returns an {!error}. *)
 
-  val write : root:Path.t -> ?locks:Lock.t -> ?capacity:int -> raw:Cstruct.t -> t -> head_contents -> (unit, error) result Lwt.t
+  val write : root:Fpath.t -> ?locks:Lock.t -> ?capacity:int -> raw:Cstruct.t -> t -> head_contents -> (unit, error) result Lwt.t
   (** [write ~root ~raw reference value] writes the value [value] in
       the mutable representation of the [reference] in the git
       repository [root]. [raw] is a buffer used by the decoder to keep
@@ -165,10 +154,10 @@ sig
 
       This function can returns an {!error}. *)
 
-  val test_and_set : root:Path.t -> ?locks:Lock.t -> t -> test:head_contents option -> set:head_contents option -> (bool, error) result Lwt.t
+  val test_and_set : root:Fpath.t -> ?locks:Lock.t -> t -> test:head_contents option -> set:head_contents option -> (bool, error) result Lwt.t
   (** Atomic updates (test and set) for references. *)
 
-  val remove : root:Path.t -> ?locks:Lock.t -> t -> (unit, error) result Lwt.t
+  val remove : root:Fpath.t -> ?locks:Lock.t -> t -> (unit, error) result Lwt.t
   (** [remove ~root ~lockdir reference] removes the reference from the
       git repository [root]. [lockdir] is to store a {!Lock.t} and
       avoid race condition on the reference [reference].
@@ -176,12 +165,7 @@ sig
       This function can returns an {!error}. *)
 end
 
-module Make
-    (H : S.HASH with type Digest.buffer = Cstruct.t
-                 and type hex = string)
-    (P : S.PATH)
-  : S with module Hash = H
-       and module Path = P
+module Make (H: S.HASH): S with module Hash = H
 (** The {i functor} to make the OCaml representation of the Git
     Reference object by a specific hash, a defined path and an access
     to the file-system. We constraint the {!IDIGEST} module to
@@ -191,16 +175,9 @@ module Make
     the [FileSystem] module. *)
 
 module IO
-    (H : S.HASH with type Digest.buffer = Cstruct.t
-                 and type hex = string)
-    (P : S.PATH)
-    (L : S.LOCK with type key = P.t
-                 and type +'a io = 'a Lwt.t)
-    (FS : S.FS with type path = P.t
-                and type File.raw = Cstruct.t
-                and type File.lock = L.elt
-                and type +'a io = 'a Lwt.t)
+    (H : S.HASH)
+    (L : S.LOCK)
+    (FS: S.FS with type File.lock = L.elt)
   : IO with module Hash = H
-        and module Path = P
         and module Lock = L
         and module FileSystem = FS

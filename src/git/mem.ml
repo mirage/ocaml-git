@@ -29,35 +29,30 @@ let err_not_found n k =
   Lwt.fail (Invalid_argument str)
 
 module Make
-    (H : S.HASH with type Digest.buffer = Cstruct.t
-                 and type hex = string)
-    (P : S.PATH)
-    (L : S.LOCK with type key = P.t
-                 and type +'a io = 'a Lwt.t)
+    (H : S.HASH)
+    (L : S.LOCK)
     (I : S.INFLATE)
     (D : S.DEFLATE)
   : Minimal.S
     with module Hash = H
-       and module Path = P
        and module Lock = L
        and module Inflate = I
        and module Deflate = D
 = struct
   module Hash = H
-  module Path = P
   module Lock = L
   module Inflate = I
   module Deflate = D
   module Buffer = Cstruct_buffer
 
   module Value = Value.Raw(Hash)(Inflate)(Deflate)
-  module Reference = Reference.Make(Hash)(Path)
+  module Reference = Reference.Make(Hash)
 
   type kind = [ `Commit | `Tree | `Blob | `Tag ]
 
   type t =
-    { root         : Path.t
-    ; dotgit       : Path.t
+    { root         : Fpath.t
+    ; dotgit       : Fpath.t
     ; compression  : int
     ; values       : (Hash.t, Value.t Lazy.t) Hashtbl.t
     ; inflated     : (Hash.t, (kind * Cstruct.t)) Hashtbl.t
@@ -73,9 +68,9 @@ module Make
   let dotgit t = t.dotgit
   let compression t = t.compression
 
-  let default_root = Path.v "root"
+  let default_root = Fpath.v "root"
 
-  let[@warning "-44"] create ?(root = default_root) ?(dotgit = Path.(default_root / ".git")) ?(compression = 6) () =
+  let[@warning "-44"] create ?(root = default_root) ?(dotgit = Fpath.(default_root / ".git")) ?(compression = 6) () =
     if compression < 0 || compression > 9
     then failwith "level should be between 0 and 9";
 
@@ -92,7 +87,7 @@ module Make
 
   let reset ?locks t =
     let lock = match locks with
-      | Some locks -> Some (Lock.make locks Path.(t.root / "global"))
+      | Some locks -> Some (Lock.make locks Fpath.(t.root / "global"))
       | None -> None
     in
 
@@ -194,7 +189,6 @@ module Make
   module T =
     Traverse_bfs.Make(struct
       module Hash = Hash
-      module Path = Path
       module Value = Value
 
       type nonrec t = t
@@ -229,7 +223,6 @@ module Make
     module GC =
       Gc.Make(struct
         module Hash = Hash
-        module Path = Path
         module Value = Value
         module Deflate = Deflate
         module PACKEncoder = PACKEncoder
@@ -456,7 +449,7 @@ module Make
 
     let list ?locks t =
       let lock = match locks with
-        | Some locks -> Some (Lock.make locks Path.(t.root / "global"))
+        | Some locks -> Some (Lock.make locks Fpath.(t.root / "global"))
         | None -> None
       in
 
@@ -501,7 +494,7 @@ module Make
       in
 
       let lock = match locks with
-        | Some locks -> Some (Lock.make locks Path.(t.root / "global"))
+        | Some locks -> Some (Lock.make locks Fpath.(t.root / "global"))
         | None -> None
       in
 

@@ -15,54 +15,43 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module type S =
-sig
+module type S = sig
   module Hash : S.HASH
-  module Path : S.PATH
   module FileSystem : S.FS
 
   type t = [ `Peeled of Hash.t | `Ref of string * Hash.t ] list
 
-  module A : S.ANGSTROM with type t = t
-  module D : S.DECODER  with type t = t
-                         and type raw = Cstruct.t
-                         and type init = Cstruct.t
-                         and type error = [ `Decoder of string ]
-  module M : S.MINIENC with type t = t
-  module E : S.ENCODER with type t = t
-                        and type raw = Cstruct.t
-                        and type init = int * t
+  module A: S.ANGSTROM with type t = t
+  module D: S.DECODER  with type t = t
+                        and type init = Cstruct.t
+                        and type error = [ `Decoder of string ]
+  module M: S.MINIENC with type t = t
+  module E: S.ENCODER with type t = t
+                       and type init = int * t
 
   type error = [ `SystemFile of FileSystem.File.error
                | `SystemIO of string
                | D.error ]
 
-  val pp_error : error Fmt.t
+  val pp_error: error Fmt.t
 
-  val write : root:Path.t -> ?capacity:int -> raw:Cstruct.t -> t -> (unit, error) result Lwt.t
-  val read  : root:Path.t -> dtmp:Cstruct.t -> raw:Cstruct.t -> (t, error) result Lwt.t
+  val write: root:Fpath.t -> ?capacity:int -> raw:Cstruct.t -> t ->
+    (unit, error) result Lwt.t
+
+  val read: root:Fpath.t -> dtmp:Cstruct.t -> raw:Cstruct.t ->
+    (t, error) result Lwt.t
 end
 
-module Make
-    (H : S.HASH with type Digest.buffer = Cstruct.t
-                 and type hex = string)
-    (P : S.PATH)
-    (FS : S.FS with type path = P.t
-                and type File.raw = Cstruct.t
-                and type +'a io = 'a Lwt.t)
-  : S with module Hash = H
-       and module Path = P
-       and module FileSystem = FS
+module Make (H : S.HASH) (FS : S.FS)
+  : S with module Hash = H and module FileSystem = FS
 = struct
   module Hash = H
-  module Path = P
   module FileSystem = FS
 
   type t = [ `Peeled of hash | `Ref of string * hash ] list
   and hash = Hash.t
 
-  module A =
-  struct
+  module A = struct
     type nonrec t = t
 
     open Angstrom
@@ -107,8 +96,7 @@ module Make
         | None -> return [])
   end
 
-  module M =
-  struct
+  module M = struct
     type nonrec t = t
 
     open Minienc
@@ -169,7 +157,7 @@ module Make
 
     let open Lwt.Infix in
 
-    FileSystem.File.open_r ~mode:0o400 Path.(root / "packed-refs")[@warning "-44"] (* XXX(dinosaure): shadowing ( / ). *)
+    FileSystem.File.open_r ~mode:0o400 Fpath.(root / "packed-refs")[@warning "-44"] (* XXX(dinosaure): shadowing ( / ). *)
     >>= function
     | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
     | Ok read ->
@@ -213,7 +201,7 @@ module Make
       let flush = E.flush
     end in
 
-    FileSystem.File.open_w ~mode:0o644 Path.(root / "packed-refs")[@warning "-44"] (* XXX(dinosaure): shadowing ( / ). *)
+    FileSystem.File.open_w ~mode:0o644 Fpath.(root / "packed-refs")[@warning "-44"] (* XXX(dinosaure): shadowing ( / ). *)
     >>= function
     | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
     | Ok write ->

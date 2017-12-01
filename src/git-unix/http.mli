@@ -1,5 +1,4 @@
-module Client
-  : Git.Sync_http.CLIENT
+module Client: Git_http.Sync.CLIENT
     with type +'a io  = 'a Lwt.t
      and type headers = Git_http.Web_cohttp_lwt.HTTP.headers
      and type body    = unit -> (Cstruct.t * int * int) option Lwt.t
@@ -7,16 +6,11 @@ module Client
      and type uri     = Git_http.Web_cohttp_lwt.uri
      and type resp    = Git_http.Web_cohttp_lwt.resp
 
-module Make
-    (K : Git.Sync.CAPABILITIES)
-    (S : Git.Minimal.S with type Hash.Digest.buffer = Cstruct.t
-                        and type Hash.hex = string)
-: sig
-  module Negociator
-    : Git.Negociator.S
-      with module Store := S
+module Make (K : Git.Sync.CAPABILITIES) (S : Git.S) : sig
 
-  include Git.Sync_http.S
+  module Negociator: Git.Negociator.S with module Store := S
+
+  include Git_http.Sync.S
     with module Web    := Git_http.Web_cohttp_lwt
      and module Client := Client
      and module Store  := S

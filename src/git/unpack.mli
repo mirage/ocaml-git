@@ -610,11 +610,7 @@ sig
   val get_with_allocation' : ?chunk:int -> ?h_tmp:Cstruct.t array -> t -> int64 -> Cstruct.t -> Inflate.window -> (Object.t, error) result Lwt.t
 end
 
-module MakeDecoder
-    (H : S.HASH)
-    (Mapper : S.MAPPER with type raw = Cstruct.t
-                        and type +'a io = 'a Lwt.t)
-    (Inflate : S.INFLATE)
+module MakeDecoder (H : S.HASH) (Mapper : S.MAPPER) (Inflate : S.INFLATE)
   : DECODER with type Hash.t = H.t
              and module Hash = H
              and module Mapper = Mapper

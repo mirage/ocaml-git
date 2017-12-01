@@ -40,12 +40,7 @@ struct
     Lwt_unix.connect socket (Unix.ADDR_INET (he.Unix.h_addr_list.(0), port)) >|= fun () -> socket
 end
 
-module Make
-    (K : Git.Sync.CAPABILITIES)
-    (S : Git.Minimal.S
-           with type Hash.Digest.buffer = Cstruct.t
-            and type Hash.hex = string)
-= struct
+module Make (K: Git.Sync.CAPABILITIES) (S: Git.S) = struct
   include Git.Sync.Make(Net)(S)(K)
 
   type error' =

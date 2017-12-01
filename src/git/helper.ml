@@ -81,7 +81,6 @@ module MakeDecoder (A : S.ANGSTROM) = struct
 
   type error = [ `Decoder of string ]
   type init = Cstruct.t
-  type raw = Cstruct.t
   type t = A.t
 
   let pp_error ppf (`Decoder err) = ppe ~name:"`Decoder" Fmt.string ppf err
@@ -236,7 +235,6 @@ module MakeInflater
   module D = MakeDecoder(A)
 
   type t = A.t
-  type raw = Cstruct.t
   type init = Z.window * Cstruct.t * Cstruct.t
   type error =
     [ `Decoder of string
@@ -334,7 +332,6 @@ end
 
 module MakeEncoder (M : S.MINIENC)
   : S.ENCODER with type t = M.t
-                    and type raw = Cstruct.t
                     and type init = int * M.t
                     and type error = [ `Never ]
 = struct
@@ -345,7 +342,6 @@ module MakeEncoder (M : S.MINIENC)
   end
 
   type t = M.t
-  type raw = Cstruct.t
   type init = int * t
   type error = [ `Never ]
 
@@ -436,10 +432,9 @@ module MakeEncoder (M : S.MINIENC)
   let used { o_pos; _ } = o_pos
 end
 
-module MakeDeflater (Z : S.DEFLATE) (M : S.MINIENC)
+module MakeDeflater (Z: S.DEFLATE) (M: S.MINIENC)
   : S.ENCODER
     with type t = M.t
-     and type raw = Cstruct.t
      and type init = int * M.t * int * Cstruct.t
      and type error = [ `Deflate of Z.error ]
 = struct
@@ -450,7 +445,6 @@ module MakeDeflater (Z : S.DEFLATE) (M : S.MINIENC)
   end
 
   type t = M.t
-  type raw = Cstruct.t
   type init = int * t * int * Cstruct.t
   type error = [ `Deflate of Z.error ]
 

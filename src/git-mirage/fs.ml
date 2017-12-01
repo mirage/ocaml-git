@@ -12,10 +12,8 @@ let mkdir_pool = Lwt_pool.create 1 (fun () -> Lwt.return ())
 
 module type GAMMA =
 sig
-  type path
-
-  val current : path
-  val temp    : path
+  val current : Fpath.t
+  val temp    : Fpath.t
 end
 
 module type FS =
@@ -27,40 +25,10 @@ sig
   val connect : unit -> t Lwt.t
 end
 
-module Lock = Lwt_lock
+module Make (Gamma: GAMMA) (FS: FS) = struct
 
-module Make
-    (Gamma : GAMMA with type path = Fpath.t)
-    (FS : FS)
-  : Git.S.FS
-    with type path = Fpath.t
-     and type +'a io = 'a Lwt.t
-     and type error = [ `System of string ]
-     and type File.path = Fpath.t
-     and type File.lock = Lock.elt
-     and type File.error = [ `Stat of string
-                           | Mirage_fs.write_error
-                           | Mirage_fs.error ]
-     and type File.raw = Cstruct.t
-     and type +'a File.io = 'a Lwt.t
-     and type Dir.path = Fpath.t
-     and type Dir.error = [ `Destroy of string
-                          | `Listdir of string
-                          | `Stat of string
-                          | `Path of string
-                          | Mirage_fs.write_error ]
-     and type +'a Dir.io = 'a Lwt.t
-     and type Mapper.raw = Cstruct.t
-     and type Mapper.path = Fpath.t
-     and type Mapper.error = Mirage_fs.error
-     and type +'a Mapper.io = 'a Lwt.t
-     (* XXX(Jean Gabin): oui, je sais. *)
-= struct
   let connect fn =
     Lwt.bind (FS.connect ()) fn
-
-  type path = Fpath.t
-  type +'a io = 'a Lwt.t
 
   type error = [ `System of string ]
 
@@ -97,17 +65,13 @@ module Make
           Lwt.return (Error (`System (Printexc.to_string exn))))
 
   module Dir
-    : Git.S.DIR
-      with type path = path
-       and type +'a io = 'a Lwt.t
-       and type error = [ `Destroy of string
+    : Git.DIR
+      with type error = [ `Destroy of string
                         | `Listdir of string
                         | `Stat of string
                         | `Path of string
                         | Mirage_fs.write_error ]
   = struct
-    type path = Fpath.t
-    type +'a io = 'a Lwt.t
 
     type error =
       [ `Destroy of string
@@ -280,19 +244,13 @@ module Make
   end
 
   module File
-    : Git.S.FILE
-      with type path = path
-       and type +'a io = 'a Lwt.t
-       and type lock = Lock.elt
+    : Git.FILE
+      with type lock = Lock.elt
        and type error = [ `Stat of string
                         | Mirage_fs.error
                         | Mirage_fs.write_error ]
-       and type raw = Cstruct.t
   = struct
-    type path = Fpath.t
     type lock = Lock.elt
-    type raw = Cstruct.t
-    type +'a io = 'a Lwt.t
 
     type error =
       [ `Stat of string
@@ -464,19 +422,11 @@ module Make
     let read raw ?off ?len fd = connect @@ fun t -> read t raw ?off ?len fd
   end
 
-  module Mapper
-    : Git.S.MAPPER
-      with type raw = Cstruct.t
-       and type +'a io = 'a Lwt.t
-       and type path = path
-       and type error = Mirage_fs.error
+  module Mapper: Git.MAPPER with type error = Mirage_fs.error
   = struct
     type fd = { fd : string
               ; sz : int64 }
-    type raw = Cstruct.t
-    type path = Fpath.t
     type error = Mirage_fs.error
-    type +'a io = 'a Lwt.t
 
     let pp_error = Mirage_fs.pp_error
 

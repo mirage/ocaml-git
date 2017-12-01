@@ -67,7 +67,7 @@ let rec compare_list fn x y =
 
 let printer_list pp_data = Fmt.hvbox (Fmt.Dump.list pp_data)
 
-module Make (S : Git.Minimal.S) = struct
+module Make (S: Git.S) = struct
 
   let compare_list equal compare l1 l2 =
     compare_list equal (List.sort compare l1) (List.sort compare l2)
@@ -171,5 +171,5 @@ let recursive_files dir =
 
 type t =
   { name  : string
-  ; store : (module Git.Minimal.S)
+  ; store : (module Git.S)
   ; shell : bool }

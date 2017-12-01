@@ -30,11 +30,8 @@ let long_random_cstruct () =
 let long_random_string () =
   Cstruct.to_string (long_random_cstruct ())
 
-module Make
-    (Store : Minimal.S
-     with type Hash.Digest.buffer = Cstruct.t
-      and type Hash.hex = string)
-= struct
+module Make (Store : Git.S) = struct
+
   module Common = Make(Store)
 
   open Common
@@ -186,7 +183,7 @@ module Make
     assert_key_opt_equal (name ^ "-find") (Some e) k';
     Lwt.return (Ok ())
 
-  let root = Store.Path.v "test-git-store"
+  let root = Fpath.v "test-git-store"
 
   let create ~root ?(index=false) () =
     let ( >/= ) = Lwt_result.bind_lwt in
@@ -705,16 +702,12 @@ module Make
 
             cstruct_of_stream (Cstruct.create 0) >>= fun pack_raw -> thread >>= fun graph ->
 
-            let module Mapper =
-            struct
-              type +'a io = 'a Lwt.t
+            let module Mapper = struct
               type fd = Cstruct.t
-              type raw = Cstruct.t
-              type path = unit
               type error = unit
 
               let pp_error = Fmt.nop
-              let openfile () = Lwt.return (Ok pack_raw)
+              let openfile _ = Lwt.return (Ok pack_raw)
               let length raw = Lwt.return (Ok (Int64.of_int (Cstruct.len raw)))
               let map raw ?(pos = 0L) ~share:_ len =
                 let pos = Int64.to_int pos in

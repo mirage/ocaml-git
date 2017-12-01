@@ -15,23 +15,14 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module type S =
-sig
-  module Hash
-    : S.HASH
-  module Inflate
-    : S.INFLATE
-  module Deflate
-    : S.DEFLATE
-
-  module Blob
-    : Blob.S   with module Hash = Hash
-  module Commit
-    : Commit.S with module Hash = Hash
-  module Tree
-    : Tree.S   with module Hash = Hash
-  module Tag
-    : Tag.S    with module Hash = Hash
+module type S = sig
+  module Hash: S.HASH
+  module Inflate: S.INFLATE
+  module Deflate: S.DEFLATE
+  module Blob: Blob.S   with module Hash = Hash
+  module Commit: Commit.S with module Hash = Hash
+  module Tree: Tree.S   with module Hash = Hash
+  module Tag: Tag.S    with module Hash = Hash
 
   type t =
     | Blob   of Blob.t
@@ -54,57 +45,40 @@ sig
     val length : int64 Angstrom.t
   end
 
-  module F
-    : S.FARADAY
-      with type t = t
-  module D
-    : S.DECODER
-      with type t = t
-       and type raw = Cstruct.t
-       and type init = Inflate.window * Cstruct.t * Cstruct.t
-       and type error = [ `Decoder of string
-                        | `Inflate of Inflate.error ]
-  module M
-    : S.MINIENC
-      with type t = t
-  module E
-    : S.ENCODER
-      with type t = t
-       and type raw = Cstruct.t
-       and type init = int * t * int * Cstruct.t
-       and type error = [ `Deflate of Deflate.error ]
+  module F: S.FARADAY with type t = t
+  module D: S.DECODER
+    with type t = t
+     and type init = Inflate.window * Cstruct.t * Cstruct.t
+     and type error = [ `Decoder of string
+                      | `Inflate of Inflate.error ]
+  module M: S.MINIENC with type t = t
+  module E: S.ENCODER
+    with type t = t
+     and type init = int * t * int * Cstruct.t
+     and type error = [ `Deflate of Deflate.error ]
 
-  include S.DIGEST
-    with type t := t and type hash := Hash.t
-  include
-    S.BASE with type t := t
+  include S.DIGEST with type t := t and type hash := Hash.t
+  include S.BASE with type t := t
 end
 
-module type RAW =
-sig
+module type RAW = sig
   module Value : S
   include module type of Value
 
-  module EE
-    : S.ENCODER
-      with type t = t
-       and type raw = Cstruct.t
-       and type init = int * t
-       and type error = [ `Never ]
+  module EE: S.ENCODER
+    with type t = t
+     and type init = int * t
+     and type error = [ `Never ]
 
-  module EEE
-    : S.ENCODER
-      with type t = t
-       and type raw = Cstruct.t
-       and type init = int * t
-       and type error = [ `Never ]
+  module EEE: S.ENCODER
+    with type t = t
+     and type init = int * t
+     and type error = [ `Never ]
 
-  module DD
-    : S.DECODER
-      with type t = t
-       and type raw = Cstruct.t
-       and type init = Cstruct.t
-       and type error = [ `Decoder of string ]
+  module DD: S.DECODER
+    with type t = t
+     and type init = Cstruct.t
+     and type error = [ `Decoder of string ]
 
   val to_deflated_raw : ?capacity:int -> ?level:int -> ztmp:Cstruct.t -> t -> (string, E.error) result
   val to_raw : ?capacity:int -> t -> (string, EE.error) result
@@ -113,11 +87,7 @@ sig
   val of_raw_with_header : Cstruct.t -> (t, DD.error) result
 end
 
-module Make
-    (H : S.HASH with type Digest.buffer = Cstruct.t
-                 and type hex = string)
-    (I : S.INFLATE)
-    (D : S.DEFLATE)
+module Make (H : S.HASH) (I : S.INFLATE) (D : S.DEFLATE)
   : S with module Hash    = H
        and module Inflate = I
        and module Deflate = D
@@ -320,8 +290,7 @@ module Make
 end
 
 module Raw
-    (H : S.HASH with type Digest.buffer = Cstruct.t
-                 and type hex = string)
+    (H : S.HASH)
     (I : S.INFLATE)
     (D : S.DEFLATE)
     : RAW with module Hash = H
@@ -363,8 +332,7 @@ module Raw
 
   module EEE = Helper.MakeEncoder(MM)
 
-  module type ENCODER =
-  sig
+  module type ENCODER = sig
     type state
     type raw
     type result
@@ -379,8 +347,8 @@ module Raw
     val used : state -> int
     val flush : int -> int -> state -> state
   end
-  (* XXX(dinosaure): this is close to [Helper.Encoder] used to save a value to a
-     file but without Lwt. *)
+  (* XXX(dinosaure): this is close to [Helper.Encoder] used to save a
+     value to a file but without Lwt. *)
 
   type ('state, 'raw, 'result, 'error) encoder =
     (module ENCODER with type state = 'state
@@ -483,8 +451,7 @@ module Raw
     (* XXX(dinosaure): we are sure than the serialized object has the size
        [F.length value]. So, the [buffer] should not growth. *)
 
-    let module SpecializedEncoder =
-    struct
+    let module SpecializedEncoder = struct
       type state = EEE.encoder
       type raw = Cstruct.t
       type result = int

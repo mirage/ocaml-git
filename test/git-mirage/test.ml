@@ -91,8 +91,8 @@ struct
   let current = Fpath.v M.root
 end
 
-module Fs = Git_mirage.Fs.Make(Gamma)(M)
-module MirageStore = Git_mirage.Make(Git_mirage.Fs.Lock)(Fs)
+module Fs = Git_mirage.FS.Make(Gamma)(M)
+module MirageStore = Git_mirage.Make(Git_mirage.Lock)(Fs)
 
 let mirage_backend =
   { name  = "Mirage"

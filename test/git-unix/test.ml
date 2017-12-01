@@ -15,24 +15,19 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Git
 open Lwt.Infix
 open Test_common
 
-module Make
-    (Store : Minimal.S
-     with type Hash.Digest.buffer = Cstruct.t
-      and type Hash.hex = string)
-= struct
-  module Sync = Git_unix_tcp.Make(Git_unix_tcp.Default)(Store)
-  module HttpSync = Git_unix_http.Make(Git_http.Default)(Store)
+module Make (Store : Git.S) = struct
+  module Sync = Git_unix.TCP.Make(Git_unix.TCP.Default)(Store)
+  module HttpSync = Git_unix.HTTP.Make(Git_http.Default)(Store)
 
   exception Sync of Sync.error'
 
   module T = Test_store.Make(Store)
   include T
 
-  let root = Store.Path.v "test-git-unix-store"
+  let root = Fpath.v "test-git-unix-store"
 
   let test_tcp_remote x () =
     let test () =
@@ -137,7 +132,8 @@ let suite (_, x) =
   [ "TCP Remote operations"          , `Slow, T.test_tcp_remote x
   ; "TCP & HTTP Cloning remote repos", `Slow, T.test_clone x ]
 
-module MemStore = Git.Mem.Make(Git_unix.SHA1)(Fpath)(Lwt_lock)(Git.Inflate)(Git.Deflate)
+module MemStore =
+  Git.Mem.Make(Git_unix.SHA1)(Lwt_lock)(Git.Inflate)(Git.Deflate)
 module UnixStore = Git_unix.Store
 
 let mem_backend =

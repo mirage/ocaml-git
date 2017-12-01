@@ -1,5 +1,5 @@
-module Minimal      = Minimal
-module S            = S
+include S
+module type S = Minimal.S
 
 module Crc32        = Crc32
 
@@ -28,7 +28,6 @@ module Revision     = Revision
 
 module Capability   = Capability
 module Sync         = Sync
-module Sync_http    = Sync_http
 module Smart        = Smart
 
 module Index        = Index

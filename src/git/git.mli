@@ -1,6 +1,3 @@
-module Minimal      = Minimal
-module S            = S
-
 module Crc32        = Crc32
 
 module Blob         = Blob
@@ -28,7 +25,6 @@ module Revision     = Revision
 
 module Capability   = Capability
 module Sync         = Sync
-module Sync_http    = Sync_http
 module Smart        = Smart
 
 module Index        = Index
@@ -47,3 +43,11 @@ module Inflate      = Inflate
 module Deflate      = Deflate
 module Buffer       = Cstruct_buffer
 module Hash         = Hash
+
+module type FILE = S.FILE
+module type MAPPER = S.MAPPER
+module type DIR = S.DIR
+module type FS = S.FS
+module type LOCK = S.LOCK
+module type HASH = S.HASH
+module type S = Minimal.S
