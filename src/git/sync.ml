@@ -168,7 +168,11 @@ module Make
       Cstruct.blit_to_bytes buffer off t.output 0 len;
       Net.write t.socket t.output 0 len >>= fun n ->
       process t (continue n)
-    | `Error _ ->
+    | `Error (err, buf, committed) ->
+      let raw = Cstruct.sub buf committed (Cstruct.len buf - committed) in
+      Log.err (fun l -> l ~header:"process" "Retrieve an error (%a) on: %a."
+                  Client.Decoder.pp_error err
+                  (Fmt.hvbox (Minienc.pp_scalar ~get:Cstruct.get_char ~length:Cstruct.len)) raw);
       assert false (* TODO *)
     | #Client.result as result ->
       Lwt.return result
@@ -330,14 +334,23 @@ module Make
         notify shallow_update >>= fun () ->
         Client.run t.ctx (`Has has) |> process t >>= aux t asked state
       | `Negociation acks ->
+        Log.debug (fun l -> l ~header:"fetch_handler" "Retrieve the negotiation: %a."
+                      (Fmt.hvbox Client.Decoder.pp_acks) acks);
+
         fn acks state >>=
         (function
-          | `Ready, _ -> pack asked t
+          | `Ready, _ ->
+            Log.debug (fun l -> l ~header:"fetch_handler" "Retrieve `Ready ACK from negotiation engine.");
+            Client.run t.ctx `Done |> process t >>= aux t asked state
           | `Done, state ->
+            Log.debug (fun l -> l ~header:"fetch_handler" "Retrieve `Done ACK from negotiation engine.");
             Client.run t.ctx `Done |> process t >>= aux t asked state
           | `Again has, state ->
+            Log.debug (fun l -> l ~header:"fetch_handler" "Retrieve `Again ACK from negotiation engine.");
             Client.run t.ctx (`Has has) |> process t >>= aux t asked state)
-      | `NegociationResult _ -> pack asked t
+      | `NegociationResult _ ->
+        Log.debug (fun l -> l ~header:"fetch_handler" "Retrieve a negotiation result.");
+        pack asked t
       | `Refs refs ->
         want refs.Client.Decoder.refs >>=
         (function

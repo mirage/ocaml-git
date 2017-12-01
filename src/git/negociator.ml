@@ -378,7 +378,9 @@ module Make
         Lwt.try_bind
           (fun () -> go { state with in_fly = [] } state.in_fly acks)
           (fun (state, have) ->
-             if state.continue && state.vain > _VAIN
+             if state .ready
+             then Lwt.return (`Ready, state)
+             else if state.continue && state.vain > _VAIN
              then Lwt.return (`Again have, { state with finish = true })
              else
                let rec go state have =
@@ -406,8 +408,13 @@ module Make
                  acceptable common base commit) and we will receive then the
                  PACK file even if we don't write "done". *)
               if not state.ready
-              then Lwt.return (`Again have, { state with finish = true })
-              else Lwt.return (`Ready, state)
+              then begin
+                Log.debug (fun l -> l ~header:"find_common" "We catch a jump exception to get out of the main loop and return `Again.");
+                Lwt.return (`Again have, { state with finish = true })
+              end else begin
+                Log.debug (fun l -> l ~header:"find_common" "We catch a jump exception to get out of the main loop and return `Ready.");
+                Lwt.return (`Ready, state)
+              end
             | exn -> Lwt.fail exn)
           (* XXX(dinosaure): you need to take care about the exception
              [Invalid_commit]. This can be happens when the server ACK a wrong
