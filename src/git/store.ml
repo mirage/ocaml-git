@@ -452,8 +452,7 @@ struct
 end
 
 module Make
-    (H : S.HASH with type Digest.buffer = Cstruct.t
-                 and type hex = string)
+    (H: S.HASH)
     (P : S.PATH)
     (L : S.LOCK with type key = P.t
                  and type +'a io = 'a Lwt.t)

@@ -21,9 +21,12 @@ struct
   include (val Logs.src_log src : Logs.LOG)
 end
 
+type t = Cstruct.t
+
 module type S =
 sig
-  type t = private Cstruct.t
+
+  type nonrec t = t
 
   module Hash
     : S.HASH
@@ -61,7 +64,7 @@ module Make
 = struct
   module Hash = H
 
-  type t = Cstruct.t
+  type nonrec t = t
 
   external of_cstruct : Cstruct.t -> t = "%identity"
   external to_cstruct : t -> Cstruct.t = "%identity"

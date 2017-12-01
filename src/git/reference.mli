@@ -15,6 +15,10 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+type t = private string
+(** A Git Reference object. Which contains a hash to point to an other
+    object. *)
+
 module type S =
 sig
   module Hash
@@ -25,9 +29,7 @@ sig
     : S.PATH
   (** The [Path] module used to make the module. *)
 
-  type t = private string
-  (** A Git Reference object. Which contains a hash to point to an
-      other object. *)
+  type nonrec t = t
 
   val head : t
   (** [head] is the {i user-friendly} value of HEAD Git reference. *)

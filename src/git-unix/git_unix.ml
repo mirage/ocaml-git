@@ -16,7 +16,8 @@
 
 module FS = Fs_lwt_unix.FS
 module Lock = Fs_lwt_unix.Lock
+module SHA1 = Git.Hash.Make(Digestif.SHA1)
 
 module Store =
-  Git.Store.Make(Git_sha1)(Fpath)(Fs_lwt_unix.Lock)(Fs_lwt_unix.FS)
+  Git.Store.Make(SHA1)(Fpath)(Fs_lwt_unix.Lock)(Fs_lwt_unix.FS)
     (Git.Inflate)(Git.Deflate)

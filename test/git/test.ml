@@ -16,7 +16,9 @@
 
 open Test_common
 
-module Store = Git.Mem.Make(Git_sha1)(Fpath)(Lwt_lock)(Git.Inflate)(Git.Deflate)
+module SHA1 = Git.Hash.Make(Digestif.SHA1)
+
+module Store = Git.Mem.Make(SHA1)(Fpath)(Lwt_lock)(Git.Inflate)(Git.Deflate)
 
 let backend =
   { name  = "Memory"

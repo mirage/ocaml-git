@@ -193,7 +193,6 @@ module Make
   type 't decoder =
     (module S.DECODER
       with type t = 't
-       and type raw = Cstruct.t
        and type init = Inflate.window * Cstruct.t * Cstruct.t
        and type error = [ `Decoder of string
                         | `Inflate of Inflate.error ])

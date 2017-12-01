@@ -15,10 +15,13 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+type t = private Cstruct.t
+(** A Git Blob object. *)
+
 module type S =
 sig
-  type t = private Cstruct.t
-  (** A Git Blob object. *)
+
+  type nonrec t = t
 
   module Hash
     : S.HASH

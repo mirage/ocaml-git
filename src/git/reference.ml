@@ -15,12 +15,14 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+type t = string
+
 module type S =
 sig
   module Hash : S.HASH
   module Path : S.PATH
 
-  type t = private string
+  type nonrec t = t
 
   val head    : t
   val master  : t

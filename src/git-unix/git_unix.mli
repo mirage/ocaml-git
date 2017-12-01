@@ -18,9 +18,10 @@
 
 module FS = Fs_lwt_unix.FS
 module Lock = Fs_lwt_unix.Lock
+module SHA1:  Git.S.HASH
 
 module Store : Git.Store.S
-  with module Hash = Git_sha1
+  with module Hash = SHA1
    and module Path = Fpath
    and module Lock = Fs_lwt_unix.Lock
    and module FileSystem = Fs_lwt_unix.FS

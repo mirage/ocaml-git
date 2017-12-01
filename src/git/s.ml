@@ -40,7 +40,7 @@ end
 module type ENCODER =
 sig
   type t
-  type raw
+  type raw = Cstruct.t
   type init
   type error
   type encoder
@@ -56,7 +56,7 @@ end
 module type DECODER =
 sig
   type t
-  type raw
+  type raw = Cstruct.t
   type init
   type error
   type decoder
@@ -151,7 +151,7 @@ module type IDIGEST =
 sig
   type t
   type ctx
-  type buffer
+  type buffer = Cstruct.t
 
   val init   : unit -> ctx
   val feed   : ctx -> buffer -> unit
@@ -162,7 +162,7 @@ end
 
 module type HASH =
 sig
-  include BASE
+  include BASE with type t = Bytes.t
 
   module Digest : IDIGEST with type t = t
 
@@ -171,7 +171,7 @@ sig
   val to_string : t -> string
   val of_string : string -> t
 
-  type hex
+  type hex = string
 
   val to_hex : t -> hex
   val of_hex : hex -> t
