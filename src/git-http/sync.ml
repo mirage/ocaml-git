@@ -244,7 +244,7 @@ module Make
          stream ()) >>= function
       | Some (raw, off', len') ->
         Log.debug (fun l -> l ~header:"consume" "%a"
-                      (Fmt.hvbox (Minienc.pp_scalar ~get:Cstruct.get_char ~length:Cstruct.len))
+                      (Fmt.hvbox (Git.Minienc.pp_scalar ~get:Cstruct.get_char ~length:Cstruct.len))
                       (Cstruct.sub raw off' len'));
 
         let len'' = min len len' in
