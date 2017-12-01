@@ -71,10 +71,10 @@ let crc_table = [|
     0xb40bbe37l; 0xc30c8ea1l; 0x5a05df1bl; 0x2d02ef8dl
 |]
 
-let string_fold_left f acc str offset length =
+let bytes_fold_left f acc str offset length =
   let acc_r = ref acc in
   for i = offset to offset + length - 1 do
-    acc_r := f !acc_r str.[i]
+    acc_r := f !acc_r (Bytes.get str i)
   done;
   !acc_r
 
@@ -91,8 +91,8 @@ let update_crc acc c =
   let index = Int32.to_int ((acc ^^^ (Int32.of_int (int_of_char c))) &&& 0xffl) in
   (crc_table.(index) ^^^ (acc >>> 8)) &&& 0xffffffffl
 
-let string ?(crc=0l) str offset length =
-  (string_fold_left update_crc (crc ^^^ 0xffffffffl) str offset length) ^^^ 0xffffffffl
+let bytes ?(crc=0l) str offset length =
+  (bytes_fold_left update_crc (crc ^^^ 0xffffffffl) str offset length) ^^^ 0xffffffffl
 
 let cstruct ?(crc=0l) str =
   (cstruct_fold_left update_crc (crc ^^^ 0xffffffffl) str) ^^^ 0xffffffffl
@@ -109,8 +109,8 @@ let digestc (crc : t) byte =
   (update_crc (crc ^^^ 0xffffffffl) (Char.chr byte)) ^^^ 0xffffffffl
 
 let digests (crc : t) ?(off = 0) ?len buf =
-  let len = match len with Some len -> len | None -> String.length buf - off in
-  string ~crc:(crc :> int32) buf off len
+  let len = match len with Some len -> len | None -> Bytes.length buf - off in
+  bytes ~crc:(crc :> int32) buf off len
 
 external of_int32 : int32 -> t = "%identity"
 external to_int32 : t -> int32 = "%identity"

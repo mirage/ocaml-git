@@ -819,7 +819,7 @@ let rec signature src t =
          Bytes.set consumed 2 (Char.unsafe_chr byte2);
          Bytes.set consumed 3 (Char.unsafe_chr byte3);
 
-         Hash.Digest.feed t.hash (Cstruct.of_string (Bytes.unsafe_of_string consumed));
+         Hash.Digest.feed t.hash (Cstruct.of_bytes consumed);
 
          (* XXX(dinosaure): you need to read the comment below to
             understand why we did not digest bytes and we digest
