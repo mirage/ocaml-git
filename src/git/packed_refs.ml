@@ -17,7 +17,7 @@
 
 module type S = sig
   module Hash : S.HASH
-  module FileSystem : S.FS
+  module FS : S.FS
 
   type t = [ `Peeled of Hash.t | `Ref of string * Hash.t ] list
 
@@ -29,7 +29,7 @@ module type S = sig
   module E: S.ENCODER with type t = t
                        and type init = int * t
 
-  type error = [ `SystemFile of FileSystem.File.error
+  type error = [ `SystemFile of FS.File.error
                | `SystemIO of string
                | D.error ]
 
@@ -43,10 +43,10 @@ module type S = sig
 end
 
 module Make (H : S.HASH) (FS : S.FS)
-  : S with module Hash = H and module FileSystem = FS
+  : S with module Hash = H and module FS = FS
 = struct
   module Hash = H
-  module FileSystem = FS
+  module FS = FS
 
   type t = [ `Peeled of hash | `Ref of string * hash ] list
   and hash = Hash.t
@@ -143,12 +143,12 @@ module Make (H : S.HASH) (FS : S.FS)
   module E = Helper.MakeEncoder(M)
 
   type error =
-    [ `SystemFile of FileSystem.File.error
+    [ `SystemFile of FS.File.error
     | `SystemIO of string
     | D.error ]
 
   let pp_error ppf = function
-    | `SystemFile sys_err -> Helper.ppe ~name:"`SystemFile" FileSystem.File.pp_error ppf sys_err
+    | `SystemFile sys_err -> Helper.ppe ~name:"`SystemFile" FS.File.pp_error ppf sys_err
     | `SystemIO sys_err -> Helper.ppe ~name:"`SystemIO" Fmt.string ppf sys_err
     | #D.error as err -> D.pp_error ppf err
 
@@ -157,13 +157,13 @@ module Make (H : S.HASH) (FS : S.FS)
 
     let open Lwt.Infix in
 
-    FileSystem.File.open_r ~mode:0o400 Fpath.(root / "packed-refs")[@warning "-44"] (* XXX(dinosaure): shadowing ( / ). *)
+    FS.File.open_r ~mode:0o400 Fpath.(root / "packed-refs")[@warning "-44"] (* XXX(dinosaure): shadowing ( / ). *)
     >>= function
     | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
     | Ok read ->
       let rec loop decoder = match D.eval decoder with
         | `Await decoder ->
-          FileSystem.File.read raw read >>=
+          FS.File.read raw read >>=
           (function
             | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
             | Ok 0 -> loop (D.finish decoder)
@@ -201,22 +201,22 @@ module Make (H : S.HASH) (FS : S.FS)
       let flush = E.flush
     end in
 
-    FileSystem.File.open_w ~mode:0o644 Fpath.(root / "packed-refs")[@warning "-44"] (* XXX(dinosaure): shadowing ( / ). *)
+    FS.File.open_w ~mode:0o644 Fpath.(root / "packed-refs")[@warning "-44"] (* XXX(dinosaure): shadowing ( / ). *)
     >>= function
     | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
     | Ok write ->
       Helper.safe_encoder_to_file
         ~limit:50
         (module E)
-        FileSystem.File.write
+        FS.File.write
         write raw state
       >>= function
-      | Ok _ -> FileSystem.File.close write >>=
+      | Ok _ -> FS.File.close write >>=
         (function
           | Ok () -> Lwt.return (Ok ())
           | Error sys_err -> Lwt.return (Error (`SystemFile sys_err)))
       | Error err ->
-        FileSystem.File.close write >>= function
+        FS.File.close write >>= function
         | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
         | Ok () -> match err with
           | `Stack -> Lwt.return (Error (`SystemIO "Impossible to store the packed-refs file"))

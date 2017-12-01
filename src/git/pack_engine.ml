@@ -2,11 +2,11 @@ module type S = sig
   module Hash: S.HASH
   module Inflate: S.INFLATE
   module Deflate: S.DEFLATE
-  module FileSystem: S.FS
+  module FS: S.FS
 
   module PACKDecoder: Unpack.DECODER
     with module Hash = Hash
-     and module Mapper = FileSystem.Mapper
+     and module Mapper = FS.Mapper
      and module Inflate = Inflate
 
   module PACKEncoder: Pack.ENCODER
@@ -32,9 +32,9 @@ module type S = sig
     | `PackInfo of Pack_info.error
     | `IdxDecoder of IDXDecoder.error
     | `IdxEncoder of IDXEncoder.error
-    | `SystemFile of FileSystem.File.error
-    | `SystemMapper of FileSystem.Mapper.error
-    | `SystemDir of FileSystem.Dir.error
+    | `SystemFile of FS.File.error
+    | `SystemMapper of FS.Mapper.error
+    | `SystemDir of FS.Dir.error
     | `Invalid_hash of Hash.t
     | `SystemIO of string
     | `Integrity of string
@@ -61,24 +61,24 @@ module type S = sig
 
   val load_index :
        Fpath.t
-    -> (Hash.t * IDXDecoder.t * FileSystem.Mapper.fd, Fpath.t * error) result Lwt.t
+    -> (Hash.t * IDXDecoder.t * FS.Mapper.fd, Fpath.t * error) result Lwt.t
 
   val load_partial :
        root:Fpath.t
     -> t
     -> Hash.t
     -> IDXDecoder.t
-    -> FileSystem.Mapper.fd
+    -> FS.Mapper.fd
     -> (loaded, error) result Lwt.t
 
   val force_total :
        t
     -> loaded
-    -> ((PACKDecoder.t * FileSystem.Mapper.fd * Pack_info.full Pack_info.t), error) result Lwt.t
+    -> ((PACKDecoder.t * FS.Mapper.fd * Pack_info.full Pack_info.t), error) result Lwt.t
 
   val lookup : t -> Hash.t -> (Hash.t * (Crc32.t * int64)) option Lwt.t
 
-  val exists : t -> Hash.t -> bool Lwt.t
+  val mem : t -> Hash.t -> bool Lwt.t
 
   val list : t -> Hash.t list Lwt.t
 
@@ -114,7 +114,7 @@ module Make (H : S.HASH) (FS : S.FS) (I : S.INFLATE) (D : S.DEFLATE):
     S with module Hash = H
        and module Inflate = I
        and module Deflate = D
-       and module FileSystem = FS
+       and module FS = FS
 = struct
   module Log =
   struct
@@ -125,7 +125,7 @@ module Make (H : S.HASH) (FS : S.FS) (I : S.INFLATE) (D : S.DEFLATE):
   module Hash = H
   module Inflate = I
   module Deflate = D
-  module FileSystem = FS
+  module FS = FS
 
   module Pack_info
     : module type of Pack_info.Make(H)(I)
@@ -137,7 +137,7 @@ module Make (H : S.HASH) (FS : S.FS) (I : S.INFLATE) (D : S.DEFLATE):
     : Unpack.DECODER
       with module Hash = Hash
        and module Inflate = Inflate
-       and module Mapper = FileSystem.Mapper
+       and module Mapper = FS.Mapper
     = Unpack.MakeDecoder(H)(FS.Mapper)(I)
   module PACKEncoder = Pack.MakePACKEncoder(H)(D)
   module IDXDecoder = Index_pack.Lazy(H)
@@ -228,16 +228,16 @@ module Make (H : S.HASH) (FS : S.FS) (I : S.INFLATE) (D : S.DEFLATE):
   type loaded =
     { decoder : PACKDecoder.t
     ; idx     : IDXDecoder.t
-    ; fdp     : FileSystem.Mapper.fd
-    ; fdi     : FileSystem.Mapper.fd
+    ; fdp     : FS.Mapper.fd
+    ; fdi     : FS.Mapper.fd
     ; info    : Pack_info.partial Pack_info.t }
 
   type pack =
     | Exists of { idx : IDXDecoder.t
-                ; fdi : FileSystem.Mapper.fd }
+                ; fdi : FS.Mapper.fd }
     | Loaded of loaded
     | Total of  { decoder : PACKDecoder.t
-                ; fdp     : FileSystem.Mapper.fd
+                ; fdp     : FS.Mapper.fd
                 ; info    : Pack_info.full Pack_info.t }
 
   module Graph = Map.Make(Hash)
@@ -256,9 +256,9 @@ module Make (H : S.HASH) (FS : S.FS) (I : S.INFLATE) (D : S.DEFLATE):
     | `PackInfo of Pack_info.error
     | `IdxDecoder of IDXDecoder.error
     | `IdxEncoder of IDXEncoder.error
-    | `SystemFile of FileSystem.File.error
-    | `SystemMapper of FileSystem.Mapper.error
-    | `SystemDir of FileSystem.Dir.error
+    | `SystemFile of FS.File.error
+    | `SystemMapper of FS.Mapper.error
+    | `SystemDir of FS.Dir.error
     | `Invalid_hash of Hash.t
     | `SystemIO of string
     | `Integrity of string
@@ -269,9 +269,9 @@ module Make (H : S.HASH) (FS : S.FS) (I : S.INFLATE) (D : S.DEFLATE):
     | `PackEncoder err      -> Fmt.pf ppf "(`PackEncoder %a)" PACKEncoder.pp_error err
     | `IdxDecoder err       -> Fmt.pf ppf "(`IdxDecoder %a)" IDXDecoder.pp_error err
     | `IdxEncoder err       -> Fmt.pf ppf "(`IdxEncoder %a)" IDXEncoder.pp_error err
-    | `SystemFile sys_err   -> Fmt.pf ppf "(`SystemFile %a)" FileSystem.File.pp_error sys_err
-    | `SystemDir sys_err    -> Fmt.pf ppf "(`SystemDir %a)" FileSystem.Dir.pp_error sys_err
-    | `SystemMapper sys_err -> Fmt.pf ppf "(`SystemMapper %a)" FileSystem.Mapper.pp_error sys_err
+    | `SystemFile sys_err   -> Fmt.pf ppf "(`SystemFile %a)" FS.File.pp_error sys_err
+    | `SystemDir sys_err    -> Fmt.pf ppf "(`SystemDir %a)" FS.Dir.pp_error sys_err
+    | `SystemMapper sys_err -> Fmt.pf ppf "(`SystemMapper %a)" FS.Mapper.pp_error sys_err
     | `Invalid_hash hash    -> Fmt.pf ppf "(`Invalid_hash %a)" Hash.pp hash
     | `SystemIO err         -> Fmt.pf ppf "(`SystemIO %s)" err
     | `Integrity err        -> Fmt.pf ppf "(`Integrity %s)" err
@@ -287,22 +287,22 @@ module Make (H : S.HASH) (FS : S.FS) (I : S.INFLATE) (D : S.DEFLATE):
     let close fd sys_err =
       let open Lwt.Infix in
 
-      FileSystem.Mapper.close fd >>= function
+      FS.Mapper.close fd >>= function
       | Ok () -> Lwt.return sys_err
       | Error sys_err' ->
         Log.err (fun l -> l ~header:"load_index" "Impossible to cloe the index fd: %a: %a."
-                    Fpath.pp path FileSystem.Mapper.pp_error sys_err');
+                    Fpath.pp path FS.Mapper.pp_error sys_err');
         Lwt.return sys_err
     in
 
-    ((FileSystem.Mapper.openfile path
+    ((FS.Mapper.openfile path
       >!= (fun sys_err -> Lwt.return (`SystemMapper sys_err))
-      >>= fun fd -> FileSystem.Mapper.length fd
+      >>= fun fd -> FS.Mapper.length fd
       >!= (fun sys_err -> close fd sys_err)
       >!= (fun sys_err -> Lwt.return (`SystemMapper sys_err))
       >|= fun length -> (fd, length))
      >>= fun (fd, length) ->
-     (FileSystem.Mapper.map ~share:false fd (Int64.to_int length)
+     (FS.Mapper.map ~share:false fd (Int64.to_int length)
       >!= (fun sys_err -> close fd sys_err)
       >!= (fun sys_err -> Lwt.return (`SystemMapper sys_err))
       >>= fun map -> Lwt.return (Ok (fd, map)))
@@ -433,21 +433,21 @@ module Make (H : S.HASH) (FS : S.FS) (I : S.INFLATE) (D : S.DEFLATE):
     let ( >!= ) = Lwt_result.bind_lwt_err in
     let open Lwt.Infix in
 
-    FileSystem.File.open_w ~mode:0o644 Fpath.(root / "objects" / "pack" / filename_idx) >>= function
+    FS.File.open_w ~mode:0o644 Fpath.(root / "objects" / "pack" / filename_idx) >>= function
     | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
     | Ok fd ->
       Helper.safe_encoder_to_file
         ~limit:50
         (module E)
-        FileSystem.File.write
+        FS.File.write
         fd raw encoder_idx
       >>= function
       | Error err ->
-        ((FileSystem.File.close fd >>= function
+        ((FS.File.close fd >>= function
            | Error sys_err ->
              Log.err (fun l -> l ~header:"v_total" "Impossible to close the file %a: %a."
                          Fpath.pp Fpath.(root / "objects" / "pack" / filename_idx)
-                         FileSystem.File.pp_error sys_err);
+                         FS.File.pp_error sys_err);
              Lwt.return ()
            | Ok () -> Lwt.return ()) >>= fun () -> match err with
          | `Stack ->
@@ -458,7 +458,7 @@ module Make (H : S.HASH) (FS : S.FS) (I : S.INFLATE) (D : S.DEFLATE):
          | `Encoder err ->
            Lwt.return (Error (`IdxEncoder err)))
       | Ok () ->
-        FileSystem.File.close fd
+        FS.File.close fd
         >!= (fun sys_err -> Lwt.return (`SystemFile sys_err))
 
   exception Leave of Hash.t
@@ -531,19 +531,19 @@ module Make (H : S.HASH) (FS : S.FS) (I : S.INFLATE) (D : S.DEFLATE):
     let filename_pack = fmt (random_string 10) in
     let ( >!= ) = Lwt_result.bind_lwt_err in
 
-    FileSystem.Dir.temp () >>= fun temp ->
-    FileSystem.File.open_w ~mode:0o644 Fpath.(temp / filename_pack) >>= function
+    FS.Dir.temp () >>= fun temp ->
+    FS.File.open_w ~mode:0o644 Fpath.(temp / filename_pack) >>= function
     | Error sys_err ->
       Lwt.return (Error (`SystemFile sys_err))
     | Ok fd ->
       let raw = Cstruct.create 0x8000 in
 
       (let close value =
-         FileSystem.File.close fd >>= function
+         FS.File.close fd >>= function
          | Error sys_err ->
            Log.err (fun l -> l ~header:"save_pack_file" "Impossible to close the pack file %a: %a."
                        Fpath.pp Fpath.(temp / filename_pack)
-                       FileSystem.File.pp_error sys_err);
+                       FS.File.pp_error sys_err);
            Lwt.return value
          | Ok () -> Lwt.return value
        in
@@ -554,7 +554,7 @@ module Make (H : S.HASH) (FS : S.FS) (I : S.INFLATE) (D : S.DEFLATE):
           (fun () -> Helper.safe_encoder_to_file
               ~limit:50
               (module E)
-              FileSystem.File.write
+              FS.File.write
               fd raw { E.src = None; pack = state })
           (function
             | Ok _ as v -> Lwt.return v
@@ -603,10 +603,10 @@ module Make (H : S.HASH) (FS : S.FS) (I : S.INFLATE) (D : S.DEFLATE):
     let filename_pack = Fmt.strf "pack-%s.pack" (Hash.to_hex hash_pack) in
     let filename_idx = Fmt.strf "pack-%s.idx" (Hash.to_hex hash_pack) in
 
-    FileSystem.File.move path Fpath.(root / "objects" / "pack" / filename_pack) >>= function
+    FS.File.move path Fpath.(root / "objects" / "pack" / filename_pack) >>= function
     | Error err -> Lwt.return (Error (`SystemFile err))
     | Ok () ->
-      FileSystem.File.open_w ~mode:0o644 Fpath.(root / "objects" / "pack" / filename_idx) >>= function
+      FS.File.open_w ~mode:0o644 Fpath.(root / "objects" / "pack" / filename_idx) >>= function
       | Error err -> Lwt.return (Error (`SystemFile err))
       | Ok fdi ->
         let sequence = Pack_info.Radix.to_sequence info.Pack_info.tree in
@@ -642,15 +642,15 @@ module Make (H : S.HASH) (FS : S.FS) (I : S.INFLATE) (D : S.DEFLATE):
         Helper.safe_encoder_to_file
           ~limit:50
           (module E)
-          FileSystem.File.write
+          FS.File.write
           fdi raw encoder_idx
         >>= function
         | Error err ->
-          ((FileSystem.File.close fdi >>= function
+          ((FS.File.close fdi >>= function
              | Error sys_err ->
                Log.err (fun l -> l ~header:"v_total" "Impossible to close the file %a: %a."
                            Fpath.pp Fpath.(root / "objects" / "pack" / filename_idx)
-                           FileSystem.File.pp_error sys_err);
+                           FS.File.pp_error sys_err);
                Lwt.return ()
              | Ok () -> Lwt.return ()) >>= fun () -> match err with
            | `Stack ->
@@ -660,14 +660,14 @@ module Make (H : S.HASH) (FS : S.FS) (I : S.INFLATE) (D : S.DEFLATE):
              Lwt.return (Error (`SystemFile sys_err))
            | `Encoder err ->
              Lwt.return (Error (`IdxEncoder err)))
-        | Ok () -> FileSystem.File.close fdi >>= function
+        | Ok () -> FS.File.close fdi >>= function
           | Error err -> Lwt.return (Error (`SystemFile err))
           | Ok () ->
             let ( >!= ) = Lwt_result.bind_lwt_err in
 
             let open Lwt_result in
 
-            (FileSystem.Mapper.openfile Fpath.(root / "objects" / "pack" / filename_pack)
+            (FS.Mapper.openfile Fpath.(root / "objects" / "pack" / filename_pack)
              >!= fun sys_err -> Lwt.return (`SystemMapper sys_err))
             >>= fun fdp ->
             let fun_cache _ = None in
@@ -759,13 +759,13 @@ module Make (H : S.HASH) (FS : S.FS) (I : S.INFLATE) (D : S.DEFLATE):
         | Some _ as x -> fun _ -> Lwt.return x
         | None ->
           fun (hash, pack) -> match pack with
-            | Exists { idx; fdi; } when IDXDecoder.exists idx request ->
+            | Exists { idx; fdi; } when IDXDecoder.mem idx request ->
               (load_partial ~root t hash idx fdi >>= function
                 | Ok loaded -> strong_weight_read loaded.decoder loaded.info request hash
                 | Error _ -> Lwt.return None)
-            | Loaded { idx; decoder; info; _ } when IDXDecoder.exists idx request ->
+            | Loaded { idx; decoder; info; _ } when IDXDecoder.mem idx request ->
               strong_weight_read decoder info request hash
-            | Total { decoder; info; _ } when Pack_info.Radix.exists info.Pack_info.tree request ->
+            | Total { decoder; info; _ } when Pack_info.Radix.mem info.Pack_info.tree request ->
               strong_weight_read decoder info request hash
             | _ -> Lwt.return None)
       None
@@ -816,32 +816,32 @@ module Make (H : S.HASH) (FS : S.FS) (I : S.INFLATE) (D : S.DEFLATE):
       Lwt_mvar.take t.packs >>= fun packs ->
       Lwt_mvar.put t.packs (Graph.remove hash packs) >>= fun () ->
 
-      (FileSystem.Mapper.close fdi
+      (FS.Mapper.close fdi
        >!= fun sys_err' ->
          Log.err (fun l -> l ~header:"log" "Impossible to close the index fd: %a"
-                     FileSystem.Mapper.pp_error sys_err');
+                     FS.Mapper.pp_error sys_err');
          Lwt.return ())
       >>= fun _ ->
-      (FileSystem.Mapper.close fdp
+      (FS.Mapper.close fdp
        >!= fun sys_err' ->
         Log.err (fun l -> l ~header:"log" "Impossible to close the pack fd: %a"
-                    FileSystem.Mapper.pp_error sys_err');
+                    FS.Mapper.pp_error sys_err');
         Lwt.return ())
       >>= fun _ -> Lwt.return sys_err
     in
 
-    (FileSystem.Mapper.openfile Fpath.(root / "objects" / "pack" / filename_pack)
+    (FS.Mapper.openfile Fpath.(root / "objects" / "pack" / filename_pack)
      >!= (fun sys_err -> let open Lwt.Infix in
            (* XXX(dinosaure): delete from the
               git repository. *)
            Lwt_mvar.take t.packs >>= fun packs ->
            Lwt_mvar.put t.packs (Graph.remove hash packs) >>= fun () ->
 
-           FileSystem.Mapper.close fdi >|= function
+           FS.Mapper.close fdi >|= function
            | Ok () -> sys_err
            | Error sys_err' ->
              Log.err (fun l -> l ~header:"load" "Impossible to close the index fd: %a."
-                         FileSystem.Mapper.pp_error sys_err');
+                         FS.Mapper.pp_error sys_err');
              sys_err)
      >!= (fun sys_err -> Lwt.return (`SystemMapper sys_err)))
     >>= fun fdp ->
@@ -854,7 +854,7 @@ module Make (H : S.HASH) (FS : S.FS) (I : S.INFLATE) (D : S.DEFLATE):
       >!= (fun err -> Lwt.return (`SystemMapper err)))
      >!= (fun sys_err -> close_all fdi fdp sys_err))
     >>= fun decoder_pack ->
-    ((FileSystem.File.open_r ~mode:0o644 Fpath.(root / "objects" / "pack" / filename_pack)
+    ((FS.File.open_r ~mode:0o644 Fpath.(root / "objects" / "pack" / filename_pack)
       >!= (fun sys_err -> Lwt.return (`SystemFile sys_err)))
      >!= (fun sys_err -> close_all fdi fdp sys_err))
     >>= fun fd ->
@@ -863,12 +863,12 @@ module Make (H : S.HASH) (FS : S.FS) (I : S.INFLATE) (D : S.DEFLATE):
      let stream () =
        let open Lwt.Infix in
 
-       FileSystem.File.read raw fd >>= function
+       FS.File.read raw fd >>= function
        | Ok 0 -> Lwt.return None
        | Ok len -> Lwt.return (Some (Cstruct.sub raw 0 len))
        | Error sys_err ->
          Log.err (fun l -> l ~header:"load" "Retrieve an error when we read the PACK file %s: %a."
-                     filename_pack FileSystem.File.pp_error sys_err);
+                     filename_pack FS.File.pp_error sys_err);
          Lwt.return None
      in
 
@@ -880,11 +880,11 @@ module Make (H : S.HASH) (FS : S.FS) (I : S.INFLATE) (D : S.DEFLATE):
      >!= (fun sys_err ->
          let open Lwt.Infix in
 
-         FileSystem.File.close fd >>= function
+         FS.File.close fd >>= function
          | Ok () -> Lwt.return sys_err
          | Error sys_err' ->
            Log.err (fun l -> l ~header:"load" "Impossible to close the fd of the PACK file (to analyze it): %a."
-                       FileSystem.File.pp_error sys_err');
+                       FS.File.pp_error sys_err');
            Lwt.return sys_err))
     >>= fun info ->
 
@@ -986,7 +986,7 @@ module Make (H : S.HASH) (FS : S.FS) (I : S.INFLATE) (D : S.DEFLATE):
            match hunks_descr.PACKDecoder.H.reference with
            | PACKDecoder.H.Offset _ -> Lwt.return true
            | PACKDecoder.H.Hash hash ->
-             Lwt.return (Radix.exists tree' hash))
+             Lwt.return (Radix.mem tree' hash))
         delta
       >>= fun is_not_thin ->
       Lwt.return (Ok (loaded.decoder,
@@ -1022,7 +1022,7 @@ module Make (H : S.HASH) (FS : S.FS) (I : S.INFLATE) (D : S.DEFLATE):
       Lwt.return None
     with Found (hash_pack, offset) -> Lwt.return (Some (hash_pack, offset))
 
-  let exists t hash =
+  let mem t hash =
     let open Lwt.Infix in
 
     lookup t hash >>= function

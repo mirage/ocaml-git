@@ -26,17 +26,17 @@ sig
 
   type nonrec t = t
 
-  val head : t
+  val head: t
   (** [head] is the {i user-friendly} value of HEAD Git reference. *)
 
-  val master : t
+  val master: t
   (** [master] is the {i user-friendly} value of [refs/heads/master]
       Git reference. *)
 
-  val is_head : t -> bool
+  val is_head: t -> bool
   (** [is_head t] returns [true] if [t = head]. *)
 
-  val of_string : string -> t
+  val of_string: string -> t
   (** [of_string s] returns a valid reference value. A valid value
       means:
 
@@ -62,11 +62,11 @@ sig
       {- They cannot contain a ['\\'].}}
   *)
 
-  val to_string : t -> string
+  val to_string: t -> string
   (** [to_string t] returns the string value of the reference [t]. *)
 
-  val of_path : Fpath.t -> t
-  val to_path : t -> Fpath.t
+  val of_path: Fpath.t -> t
+  val to_path: t -> Fpath.t
 
   include S.BASE with type t := t
 
@@ -74,10 +74,10 @@ sig
     | Hash of Hash.t (** A pointer to an hash. *)
     | Ref of t (** A reference which one can point to an other reference or an hash. *)
 
-  val pp_head_contents : head_contents Fmt.t
+  val pp_head_contents: head_contents Fmt.t
   (** Pretty-printer of {!head_contents}. *)
 
-  val equal_head_contents : head_contents -> head_contents -> bool
+  val equal_head_contents: head_contents -> head_contents -> bool
   (** [equal_head_contents a b] implies [a = Ref a'] and [b = Ref b']
       and [Reference.equal a' b' = true] or [a = Hash a'] and [b =
       Hash b'] and [Hash.equal a' b'].
@@ -87,7 +87,7 @@ sig
       function does not handle any indirection when it tests your
       values. *)
 
-  val compare_head_contents : head_contents -> head_contents -> int
+  val compare_head_contents: head_contents -> head_contents -> int
 
   module A: S.ANGSTROM with type t = head_contents
   (** The Angstrom decoder of the Git Reference object. *)
@@ -117,27 +117,27 @@ end
 
 module type IO =
 sig
-  module Lock : S.LOCK
-  module FileSystem : S.FS
+  module Lock: S.LOCK
+  module FS: S.FS
 
   include S
 
   (** The type of error. *)
   type error =
-    [ `SystemFile of FileSystem.File.error
-    | `SystemDirectory of FileSystem.Dir.error
+    [ `SystemFile of FS.File.error
+    | `SystemDirectory of FS.Dir.error
     | `SystemIO of string
     | D.error ]
 
-  val pp_error : error Fmt.t
+  val pp_error: error Fmt.t
   (** Pretty-printer of {!error}. *)
 
-  val exists : root:Fpath.t -> t -> (bool, error) result Lwt.t
-  (** [exists ~root reference] returns [true] iff we found the
+  val mem: root:Fpath.t -> t -> (bool, error) result Lwt.t
+  (** [mem ~root reference] returns [true] iff we found the
       [reference] find in the git repository [root]. Otherwise, we returns
       [false]. *)
 
-  val read : root:Fpath.t -> t -> dtmp:Cstruct.t -> raw:Cstruct.t -> ((t * head_contents), error) result Lwt.t
+  val read: root:Fpath.t -> t -> dtmp:Cstruct.t -> raw:Cstruct.t -> ((t * head_contents), error) result Lwt.t
   (** [read ~root reference dtmp raw] returns the value contains in
       the reference [reference] (available in the git repository
       [root]). [dtmp] and [raw] are buffers used by the decoder
@@ -146,7 +146,7 @@ sig
 
       This function can returns an {!error}. *)
 
-  val write : root:Fpath.t -> ?locks:Lock.t -> ?capacity:int -> raw:Cstruct.t -> t -> head_contents -> (unit, error) result Lwt.t
+  val write: root:Fpath.t -> ?locks:Lock.t -> ?capacity:int -> raw:Cstruct.t -> t -> head_contents -> (unit, error) result Lwt.t
   (** [write ~root ~raw reference value] writes the value [value] in
       the mutable representation of the [reference] in the git
       repository [root]. [raw] is a buffer used by the decoder to keep
@@ -154,10 +154,10 @@ sig
 
       This function can returns an {!error}. *)
 
-  val test_and_set : root:Fpath.t -> ?locks:Lock.t -> t -> test:head_contents option -> set:head_contents option -> (bool, error) result Lwt.t
+  val test_and_set: root:Fpath.t -> ?locks:Lock.t -> t -> test:head_contents option -> set:head_contents option -> (bool, error) result Lwt.t
   (** Atomic updates (test and set) for references. *)
 
-  val remove : root:Fpath.t -> ?locks:Lock.t -> t -> (unit, error) result Lwt.t
+  val remove: root:Fpath.t -> ?locks:Lock.t -> t -> (unit, error) result Lwt.t
   (** [remove ~root ~lockdir reference] removes the reference from the
       git repository [root]. [lockdir] is to store a {!Lock.t} and
       avoid race condition on the reference [reference].
@@ -172,12 +172,12 @@ module Make (H: S.HASH): S with module Hash = H
     generate a {Bytes.t} and compute a {Cstruct.t}. Then, the content
     of a file need to be a {Cstruct.t}. The path provided by the
     {!Path} module need to be semantically the same than which used by
-    the [FileSystem] module. *)
+    the [FS] module. *)
 
 module IO
-    (H : S.HASH)
-    (L : S.LOCK)
+    (H: S.HASH)
+    (L: S.LOCK)
     (FS: S.FS with type File.lock = L.elt)
-  : IO with module Hash = H
+ : IO with module Hash = H
         and module Lock = L
-        and module FileSystem = FS
+        and module FS = FS

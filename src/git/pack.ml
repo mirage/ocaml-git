@@ -1357,7 +1357,7 @@ struct
     | (entry, delta) :: r ->
       match entry.Entry.delta, delta with
       | Entry.From src_hash, { Delta.delta = Delta.S _ } ->
-        if Radix.exists t.radix src_hash
+        if Radix.mem t.radix src_hash
         then Cont { t with state = WriteK (writek KindOffset entry delta r) }
         else Cont { t with state = WriteK (writek KindHash entry delta r) }
       | Entry.None, { Delta.delta = Delta.Z } ->

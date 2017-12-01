@@ -50,8 +50,8 @@ sig
   (** [lookup t k] returns the current binding of [k] in [t] or returns [None]
      if no such binding exists. *)
 
-  val exists      : 'a t -> Key.t -> bool
-  (** [exists t k] checks if at least we have one binding with the key [k]. *)
+  val mem      : 'a t -> Key.t -> bool
+  (** [mem t k] checks if at least we have one binding with the key [k]. *)
 
   val fold        : (Key.t * 'a -> 'b -> 'b) -> 'b -> 'a t -> 'b
   (** [fold f a t] computes [(f kN dN (f k1 d1 a))], where [k1 .. kN] are the

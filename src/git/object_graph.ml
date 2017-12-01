@@ -17,9 +17,19 @@
 
 open Lwt.Infix
 
-module Make (S : Minimal.S with type Hash.Digest.buffer = Cstruct.t
-                              and type Hash.hex = string)
-= struct
+module type S = sig
+  module Store: Minimal.S
+  module K: Graph.Sig.I with type V.t = Store.Hash.t
+  val keys: K.t -> Store.Hash.t list
+  val of_keys: Store.t -> K.t Lwt.t
+  val of_commits: Store.t -> K.t Lwt.t
+  val closure: ?full:bool -> Store.t -> min:Store.Hash.Set.t -> max:Store.Hash.Set.t -> K.t Lwt.t
+  val pack: Store.t -> min:Store.Hash.Set.t -> max:Store.Hash.Set.t -> (Store.Hash.t * Store.Value.t) list Lwt.t
+  val to_dot: Store.t -> Format.formatter -> unit Lwt.t
+end
+
+module Make (S : Minimal.S) = struct
+
   module Store = S
 
   let to_string node =
@@ -166,7 +176,7 @@ module Make (S : Minimal.S with type Hash.Digest.buffer = Cstruct.t
     let has_mark key = Hashtbl.mem marks key in
     let min = Store.Hash.Set.fold (fun x a -> x :: a) min [] in
     Lwt_list.iter_p (fun k ->
-        Store.exists t k >>= function
+        Store.mem t k >>= function
         | false -> Lwt.return_unit
         | true  ->
           mark k;
@@ -177,7 +187,7 @@ module Make (S : Minimal.S with type Hash.Digest.buffer = Cstruct.t
       if has_mark key then Lwt.return ()
       else (
         mark key;
-        Store.exists t key >>= function
+        Store.mem t key >>= function
         | false -> Lwt.return_unit
         | true  ->
           if not (K.mem_vertex g key) then K.add_vertex g key;

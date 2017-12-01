@@ -32,8 +32,8 @@ module type LOOSE = sig
   module Hash: S.HASH
   (** The [Hash] module used to make this interface. *)
 
-  module FileSystem: S.FS
-  (** The [FileSystem] module used to make this interface. *)
+  module FS: S.FS
+  (** The [FS] module used to make this interface. *)
 
   module Inflate: S.INFLATE
   (** The [Inflate] module used to make this interface. *)
@@ -53,8 +53,8 @@ module type LOOSE = sig
   (** The Value module, which represents the Git object. *)
 
   type error =
-    [ `SystemFile of FileSystem.File.error
-    | `SystemDirectory of FileSystem.Dir.error
+    [ `SystemFile of FS.File.error
+    | `SystemDirectory of FS.Dir.error
     | `SystemIO of string
     | Value.D.error
     | Value.E.error
@@ -72,8 +72,8 @@ module type LOOSE = sig
   val lookup: state -> Hash.t -> Hash.t option Lwt.t
   (** An alias of {!lookup_p}. *)
 
-  val exists: state -> Hash.t -> bool Lwt.t
-  (** [exists state hash] checks if one object satisfies the predicate
+  val mem: state -> Hash.t -> bool Lwt.t
+  (** [mem state hash] checks if one object satisfies the predicate
       [digest(object) = hash]. This function is the same as [lookup
       state hash <> None]. *)
 
@@ -107,7 +107,7 @@ module type LOOSE = sig
       {!error}:
 
       {ul
-      {- {!FileSystem.File.error} when we can not access to the git
+      {- {!FS.File.error} when we can not access to the git
       object in the file-system (because it does not exist or the
       structure of the git repository is wrong).}
       {- {!Value.D.error} when we can not de-serialize xor inflate the
@@ -169,7 +169,7 @@ module type LOOSE = sig
       return an {!error}:
 
       {ul
-      {- {!FileSystem.File.error} when we can not create a new file in
+      {- {!FS.File.error} when we can not create a new file in
       the file-system.}
       {- {!Value.E.error} when we can not serialize xor deflate the
       requested git {i loose} object. This kind of error should be
@@ -218,7 +218,7 @@ module type LOOSE = sig
       {!error}:
 
       {ul
-      {- {!FileSystem.File.error} when we can not access to the git
+      {- {!FS.File.error} when we can not access to the git
       object in the file-system (because it does not exist or the
       structure of the git repository is wrong).}
       {- {!Value.D.error} when we can not de-serialize xor inflate the
@@ -268,7 +268,7 @@ module type LOOSE = sig
       hash]. Otherwise, we return an {!error}:
 
       {ul
-      {- {!FileSystem.File.error} when we can not access to the git
+      {- {!FS.File.error} when we can not access to the git
       object in the file-system (because it does not exist or the
       structure of the git repository is wrong).}
       {- {!Value.D.error} when we can not de-serialize xor inflate the
@@ -336,8 +336,8 @@ module type PACK = sig
    : S.HASH
   (** The [Hash] module used to make this interface. *)
 
-  module FileSystem: S.FS
-  (** The [FileSystem] module used to make this interface. *)
+  module FS: S.FS
+  (** The [FS] module used to make this interface. *)
 
   module Inflate: S.INFLATE
   (** The [Inflate] module used to make this interface. *)
@@ -369,9 +369,9 @@ module type PACK = sig
     | `PackInfo of Pack_info.error
     | `IdxDecoder of IDXDecoder.error
     | `IdxEncoder of IDXEncoder.error
-    | `SystemFile of FileSystem.File.error
-    | `SystemMapper of FileSystem.Mapper.error
-    | `SystemDir of FileSystem.Dir.error
+    | `SystemFile of FS.File.error
+    | `SystemMapper of FS.Mapper.error
+    | `SystemDir of FS.Dir.error
     | `Invalid_hash of Hash.t
     | `Delta of PACKEncoder.Delta.error
     | `SystemIO of string
@@ -389,8 +389,8 @@ module type PACK = sig
       exist in any {i IDX} files or it does not exists in the current
       repository. *)
 
-  val exists: state -> Hash.t -> bool Lwt.t
-  (** [exists state hash] checks if one object satisfies the predicate
+  val mem: state -> Hash.t -> bool Lwt.t
+  (** [mem state hash] checks if one object satisfies the predicate
       [digest(object) = hash]. This function is the same as [lookup
       state hash <> None]. *)
 
@@ -424,8 +424,8 @@ module type PACK = sig
       Otherwise, we return an {!error}:
 
       {ul
-      {- {!FileSystem.File.error} or {!FileSystem.Dir.error} or
-      {!FileSystem.Mapper.error} when we retrieve a file-system error}
+      {- {!FS.File.error} or {!FS.Dir.error} or
+      {!FS.Mapper.error} when we retrieve a file-system error}
       {- {!PACKDecoder.error} when we retrieve an error about the
       decoding of the {i packed} git object in the founded {i PACK}i
       file}
@@ -501,8 +501,8 @@ sig
    : S.LOCK
   (** The [Lock] module used to make this interface. *)
 
-  module FileSystem : S.FS with type File.lock = Lock.elt
-  (** The [FileSystem] module used to make the module. *)
+  module FS : S.FS with type File.lock = Lock.elt
+  (** The [FS] module used to make the module. *)
 
   module Value: Value.S
     with module Hash = Hash
@@ -518,7 +518,7 @@ sig
   module Reference: Reference.IO
     with module Hash = Hash
      and module Lock = Lock
-     and module FileSystem = FileSystem
+     and module FS = FS
   (** The Reference module, which represents the Git reference. *)
 
   module PACKDecoder: Unpack.DECODER
@@ -535,7 +535,7 @@ sig
     with type t = Value.t
      and type state = t
      and module Hash = Hash
-     and module FileSystem = FileSystem
+     and module FS = FS
      and module Inflate = Inflate
      and module Deflate = Deflate
   (** The [Loose] module which represents any {i loose} git object
@@ -546,7 +546,7 @@ sig
      and type value = Value.t
      and type state = t
      and module Hash = Hash
-     and module FileSystem = FileSystem
+     and module FS = FS
      and module Inflate = Inflate
   (** The [Pack] module which represents any {i packed} git object
       available in the git repository. *)
@@ -581,8 +581,8 @@ sig
   (** [compression state] returns the current level of the compression
       used to write a git object. *)
 
-  val exists: t -> Hash.t -> bool Lwt.t
-  (** [exists state hash] checks if one object of the current
+  val mem: t -> Hash.t -> bool Lwt.t
+  (** [mem state hash] checks if one object of the current
       repository [state] satisfies the predicate [digest(object) =
       hash]. *)
 
@@ -648,7 +648,7 @@ sig
       return an {!error}:
 
       {ul
-      {- {!FileSystem.File.error} when we can not create a new file in
+      {- {!FS.File.error} when we can not create a new file in
       the file-system.}
       {- {!Value.E.error} when we can not serialize xor deflate the
       requested git {i loose} object. This kind of error should be
@@ -785,7 +785,7 @@ sig
   sig
     module Packed_refs
      : Packed_refs.S with module Hash = Hash
-                       and module FileSystem = FileSystem
+                       and module FS = FS
 
     type nonrec error =
       [ Packed_refs.error
@@ -796,7 +796,7 @@ sig
     val pp_error: error Fmt.t
     (** Pretty-printer of {!error}. *)
 
-    val exists: t -> Reference.t -> bool Lwt.t
+    val mem: t -> Reference.t -> bool Lwt.t
 
     val graph_p :
          dtmp:Cstruct.t
@@ -972,4 +972,4 @@ module Make
        and module Lock = L
        and module Inflate = Inflate
        and module Deflate = Deflate
-       and module FileSystem = FS
+       and module FS = FS

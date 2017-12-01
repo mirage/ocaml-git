@@ -15,8 +15,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Kind :
-sig
+module Kind: sig
   type t =
     | Commit
     | Tag
@@ -24,21 +23,21 @@ sig
     | Blob
     (** The type of kind. *)
 
-  val to_int : t -> int
+  val to_int: t -> int
   (** [to_int t] returns an unique [int] value of the kind [t]. This
       value can be used to sort a list of kinds. *)
 
-  val to_bin : t -> int
+  val to_bin: t -> int
   (** [to_bin t] returns a binary code to serialize the kind [t]. *)
 
-  val pp : t Fmt.t
+  val pp: t Fmt.t
   (** A pretty-printer of {!t}. *)
 end
 
 module type ENCODER =
 sig
-  module Hash : S.HASH
-  module Deflate : S.DEFLATE
+  module Hash: S.HASH
+  module Deflate: S.DEFLATE
 
   (** The entry module. It used to able to manipulate the meta-data
       only needed by the delta-ification of the git object (and avoid
@@ -57,16 +56,16 @@ sig
       | None
       (** To notice than no user-defined source exists. *)
 
-    val pp : t Fmt.t
+    val pp: t Fmt.t
     (** A pretty-printer for {!t}. *)
 
-    val pp_source : source Fmt.t
+    val pp_source: source Fmt.t
     (** A pretty-printer for {!source}. *)
 
-    val hash : string -> int
+    val hash: string -> int
     (** [hash path] produces a integer to correspond with [path]. *)
 
-    val make : Hash.t -> ?name:string -> ?preferred:bool -> ?delta:source -> Kind.t -> int64 -> t
+    val make: Hash.t -> ?name:string -> ?preferred:bool -> ?delta:source -> Kind.t -> int64 -> t
     (** [make hash ?name ?preferred ?delta kind length] returns a new
         entry when:
 
@@ -83,13 +82,13 @@ sig
         {- [length] corresponds to the real inflated length of the
         object.}} *)
 
-    val id : t -> Hash.t
+    val id: t -> Hash.t
     (** [id t] returns the unique identifier of the entry [t]. *)
 
-    val name : t -> string -> t
+    val name: t -> string -> t
     (** [name t name] provides a new [t] with the specified [name]. *)
 
-    val compare : t -> t -> int
+    val compare: t -> t -> int
     (** The comparison function for the entry {!t}. It returns [0]
         when [a] equal [b]. It returns a negative integer if [a] is {i
         less} than [b] and a positive integer when [a] is {i greater}
@@ -100,7 +99,7 @@ sig
         the optional name of the entry (hashed by {!hash}) and sorted
         by size (larger to smaller). *)
 
-    val topological_sort : t list -> t list
+    val topological_sort: t list -> t list
     (** [topological_sort lst] orders [lst] so that no entry precedes
         an entry it depends upon. So you will find any entries
         considered as a source before any entries when you apply the
@@ -111,20 +110,20 @@ sig
   sig
     (** The type of the delta-ification. *)
     type t =
-      { mutable delta : delta }
+      { mutable delta: delta }
     and delta =
       | Z (** Means no delta-ification. *)
-      | S of { length     : int
+      | S of { length    : int
              (** Length of the PACK object. *)
-             ; depth      : int
+             ; depth     : int
              (** Depth of the PACK object. *)
-             ; hunks      : Rabin.t list
+             ; hunks     : Rabin.t list
              (** Compression list. *)
-             ; src        : t
+             ; src       : t
              (** Source. *)
-             ; src_length : int64
+             ; src_length: int64
              (** Length of the source object. *)
-             ; src_hash   : Hash.t
+             ; src_hash  : Hash.t
              (** Hash of the source object. *)
              ; }
              (** Delta-ification with a description of the source. *)
@@ -133,10 +132,10 @@ sig
     type error = Invalid_hash of Hash.t
     (** Appears when we have an invalid hash. *)
 
-    val pp_error : error Fmt.t
+    val pp_error: error Fmt.t
     (** A pretty-printer for {!error}. *)
 
-    val deltas : ?memory:bool -> Entry.t list -> (Hash.t -> Cstruct.t option Lwt.t) -> (Entry.t -> bool) -> int -> int -> ((Entry.t * t) list, error) result Lwt.t
+    val deltas: ?memory:bool -> Entry.t list -> (Hash.t -> Cstruct.t option Lwt.t) -> (Entry.t -> bool) -> int -> int -> ((Entry.t * t) list, error) result Lwt.t
     (** [deltas ?memory lst getter tagger window depth].
 
         This is the main algorithm about the serialization of the git
@@ -162,14 +161,14 @@ sig
         code. *)
   end
 
-  module Radix : module type of Radix.Make(struct type t = Hash.t let get = Hash.get let length _ = Hash.Digest.length end)
+  module Radix: module type of Radix.Make(struct type t = Hash.t let get = Hash.get let length _ = Hash.Digest.length end)
 
   module H :
   sig
     type error
     (** The type of error. *)
 
-    val pp_error : error Fmt.t
+    val pp_error: error Fmt.t
     (** The pretty-printer of {!error}. *)
 
     type t
@@ -181,15 +180,15 @@ sig
       | Offset of int64
       | Hash of Hash.t
 
-    val pp : t Fmt.t
+    val pp: t Fmt.t
     (** The pretty-printer of {!t}. *)
 
-    val default : reference -> int -> int -> Rabin.t list -> t
+    val default: reference -> int -> int -> Rabin.t list -> t
     (** Make a new encoder state {!t} from a {!reference}. We need to
         notice the length of the inflated source and the length of the
         inflated target then, the compression list. *)
 
-    val refill : int -> int -> t -> t
+    val refill: int -> int -> t -> t
     (** [refill off len t] provides a new [t] with [len] bytes to
         read, starting at [off]. This byte range is read by calls to
         {!eval} with [t] until [`Await] is returned. The encoder
@@ -198,16 +197,16 @@ sig
         because internally, we assert than a continuous stream of the
         target raw and pick only the needed byte range. *)
 
-    val flush : int -> int -> t -> t
+    val flush: int -> int -> t -> t
     (** [flush off len t] provides [t] with [len] bytes to write,
         starting at [off]. This byte range is written by calls to
         {!eval} with [t] until [`Flush] is returned. *)
 
-    val finish : t -> t
+    val finish: t -> t
     (** [finish t] provides a new [t] which does not expect any
         input. *)
 
-    val eval : Cstruct.t -> Cstruct.t -> t -> [ `Await of t | `Flush of t | `End of t | `Error of (t * error) ]
+    val eval: Cstruct.t -> Cstruct.t -> t -> [ `Await of t | `Flush of t | `End of t | `Error of (t * error) ]
     (** [eval src t] is:
 
         {ul
@@ -223,11 +222,11 @@ sig
         [exn]. The encoder can't continue and sticks in this
         situation.}} *)
 
-    val used_in : t -> int
+    val used_in: t -> int
     (** [used_in ŧ] returns how many byte [t] consumed in the current
         buffer noticed to the previous call of {!eval}. *)
 
-    val used_out : t -> int
+    val used_out: t -> int
     (** [used_out ŧ] returns how many byte [t] wrote in the current
         buffer noticed to the previous call of {!eval}. *)
   end
@@ -244,47 +243,47 @@ sig
     | Invalid_hash of Hash.t
     (** Appears when the hash requested does not exist. *)
 
-  val pp_error : error Fmt.t
+  val pp_error: error Fmt.t
   (** A pretty-printer for {!error}. *)
 
   type t
   (** The type of the encoder. *)
 
-  val used_out : t -> int
+  val used_out: t -> int
   (** [used_out ŧ] returns how many byte [t] wrote in the current
       buffer noticed to the previous call of {!eval}. *)
 
-  val used_in : t -> int
+  val used_in: t -> int
   (** [used_in ŧ] returns how many byte [t] consumed in the current
       buffer noticed to the previous call of {!eval}. *)
 
-  val flush : int -> int -> t -> t
+  val flush: int -> int -> t -> t
   (** [flush off len t] provides [t] with [len] bytes to write,
       starting at [off]. This byte range is written by calls to
       {!eval} with [t] until [`Flush] is returned. *)
 
-  val refill : int -> int -> t -> t
+  val refill: int -> int -> t -> t
   (** [refill off len t] provides a new [t] with [len] bytes to read,
       starting at [off]. This byte range is read by calls to {!eval}
       with [t] until [`Await] is returned. The client should fill by
       the {!expect} git object. *)
 
-  val finish : t -> t
+  val finish: t -> t
   (** [finish t] provides a new [t] which terminate to serialize the
       current git object. *)
 
-  val expect : t -> Hash.t
+  val expect: t -> Hash.t
   (** [expect t] returns the object expected to the serialization. At
       this time, the serializer requests the inflated raw of this git
       object. The client is able to use it only when {!eval} return
       [`Await]. *)
 
-  val idx : t -> (Crc32.t * int64) Radix.t
+  val idx: t -> (Crc32.t * int64) Radix.t
   (** [idx t] returns a {!Radix} tree which contains the CRC-32
       checksum and the absolute offset for each git object
       serialized. *)
 
-  val default : Cstruct.t -> (Entry.t * Delta.t) list -> t
+  val default: Cstruct.t -> (Entry.t * Delta.t) list -> t
   (** Make a new encoder {!t} of the PACK stream.
 
       [tmp] is a [Cstruct.t] used as an internal output of the Hunk
@@ -295,11 +294,11 @@ sig
       Then, the client need to notice the ordered list of what he
       wants to serialize. *)
 
-  val eval : Cstruct.t -> Cstruct.t -> t -> [ `Flush of t | `Await of t | `End of (t * Hash.t) | `Error of (t * error) ]
+  val eval: Cstruct.t -> Cstruct.t -> t -> [ `Flush of t | `Await of t | `End of (t * Hash.t) | `Error of (t * error) ]
 end
 
 module MakePACKEncoder
-    (H : S.HASH with type Digest.buffer = Cstruct.t)
-    (D : S.DEFLATE) : ENCODER
+    (H: S.HASH with type Digest.buffer = Cstruct.t)
+    (D: S.DEFLATE): ENCODER
   with module Hash = H
    and module Deflate = D

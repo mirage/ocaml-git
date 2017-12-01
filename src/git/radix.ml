@@ -187,7 +187,7 @@ struct
       let keylen = Key.length key in
       lookup key 0 keylen tree
 
-  let exists tree key =
+  let mem tree key =
     match lookup tree key with
     | None -> false
     | Some _ -> true

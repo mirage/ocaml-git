@@ -1,11 +1,11 @@
 module type S = sig
-  module FileSystem: S.FS
+  module FS: S.FS
   module Value: Value.S
   include module type of Value
 
   type error =
-    [ `SystemFile of FileSystem.File.error
-    | `SystemDirectory of FileSystem.Dir.error
+    [ `SystemFile of FS.File.error
+    | `SystemDirectory of FS.Dir.error
     | `SystemIO of string
     | D.error
     | E.error ]
@@ -18,7 +18,7 @@ module type S = sig
 
   val pp_error : error Fmt.t
 
-  val exists :
+  val mem:
     root:Fpath.t ->
     Hash.t -> bool Lwt.t
 
@@ -83,7 +83,7 @@ module Make
   : S with module Hash = H
        and module Inflate = I
        and module Deflate = D
-       and module FileSystem = FS
+       and module FS = FS
        and module Blob = Blob.Make(H)
        and module Commit = Commit.Make(H)
        and module Tree = Tree.Make(H)
@@ -96,14 +96,14 @@ module Make
     include (val Logs.src_log src : Logs.LOG)
   end
 
-  module FileSystem = FS
+  module FS = FS
 
   module Value = Value.Make(H)(I)(D)
   include Value
 
   type error =
-    [ `SystemFile of FileSystem.File.error
-    | `SystemDirectory of FileSystem.Dir.error
+    [ `SystemFile of FS.File.error
+    | `SystemDirectory of FS.Dir.error
     | `SystemIO of string
     | D.error
     | E.error ]
@@ -118,8 +118,8 @@ module Make
     | #D.error as err -> D.pp_error ppf err
     | #E.error as err -> E.pp_error ppf err
     | `SystemIO err -> Helper.ppe ~name:"`SystemIO" Fmt.string ppf err
-    | `SystemFile sys_err -> Helper.ppe ~name:"`SystemFile" FileSystem.File.pp_error ppf sys_err
-    | `SystemDirectory sys_err -> Helper.ppe ~name:"`SystemDirectory" FileSystem.Dir.pp_error ppf sys_err
+    | `SystemFile sys_err -> Helper.ppe ~name:"`SystemFile" FS.File.pp_error ppf sys_err
+    | `SystemDirectory sys_err -> Helper.ppe ~name:"`SystemDirectory" FS.Dir.pp_error ppf sys_err
 
   let hash_get : Hash.t -> int -> int = fun h i -> Char.code @@ Hash.get h i
 
@@ -133,15 +133,15 @@ module Make
 
     Buffer.contents buf
 
-  let exists ~root hash =
+  let mem ~root hash =
     let open Lwt.Infix in
 
     let first, rest = explode hash in
-    Log.debug (fun l -> l ~header:"exists" "Checking if the object %a is a loose file (%a)."
+    Log.debug (fun l -> l ~header:"mem" "Checking if the object %a is a loose file (%a)."
                   Hash.pp hash
                   Fpath.pp Fpath.(root / "objects" / first / rest)[@warning "-44"]);
 
-    FileSystem.File.exists Fpath.(root / "objects" / first / rest)[@warning "-44"]
+    FS.File.exists Fpath.(root / "objects" / first / rest)[@warning "-44"]
     >>= function Ok v -> Lwt.return v
                | Error _ -> Lwt.return false
 
@@ -150,18 +150,18 @@ module Make
   let list ~root =
     let open Lwt.Infix in
 
-    FileSystem.Dir.contents
+    FS.Dir.contents
       ~dotfiles:false
       ~rel:true
       Fpath.(root / "objects")[@warning "-44"]
     >>= function
     | Error sys_err ->
-      Log.err (fun l -> l ~header:"list" "Retrieving a file-system error: %a." FileSystem.Dir.pp_error sys_err);
+      Log.err (fun l -> l ~header:"list" "Retrieving a file-system error: %a." FS.Dir.pp_error sys_err);
       Lwt.return []
     | Ok firsts ->
       Lwt_list.fold_left_s
         (fun acc first ->
-           FileSystem.Dir.contents ~dotfiles:false ~rel:true (Fpath.(append (root / "objects") first)[@warning "-44"])
+           FS.Dir.contents ~dotfiles:false ~rel:true (Fpath.(append (root / "objects") first)[@warning "-44"])
            >>= function
            | Ok paths ->
              Lwt_list.fold_left_s
@@ -196,15 +196,15 @@ module Make
     Log.debug (fun l -> l ~header:"read" "Reading the loose object %a."
                   Fpath.pp Fpath.(root / "objects" / first / rest)[@warning "-44"]);
 
-    FileSystem.File.open_r ~mode:0o400 Fpath.(root / "objects" / first / rest)[@warning "-44"]
+    FS.File.open_r ~mode:0o400 Fpath.(root / "objects" / first / rest)[@warning "-44"]
     >>= function
     | Error sys_err ->
-      Log.err (fun l -> l ~header:"read" "Retrieving a file-system error: %a." FileSystem.File.pp_error sys_err);
+      Log.err (fun l -> l ~header:"read" "Retrieving a file-system error: %a." FS.File.pp_error sys_err);
       Lwt.return (Error (`SystemFile sys_err))
     | Ok ic ->
       let rec loop decoder = match D.eval decoder with
         | `Await decoder ->
-          FileSystem.File.read raw ic >>=
+          FS.File.read raw ic >>=
           (function
             | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
             | Ok n ->
@@ -219,11 +219,11 @@ module Make
 
       Lwt.finalize
         (fun () -> loop decoder)
-        (fun () -> FileSystem.File.close ic >>= function
+        (fun () -> FS.File.close ic >>= function
            | Ok () -> Lwt.return ()
            | Error sys_err ->
              Log.err (fun l -> l ~header:"read" "Retrieve an error when we close the file-descriptor: %a."
-                         FileSystem.File.pp_error sys_err);
+                         FS.File.pp_error sys_err);
              Lwt.return ())
       >>= fun ret ->
       Log.debug (fun l -> l ~header:"read" "Finish to read the object %s / %s."
@@ -317,15 +317,15 @@ module Make
     Log.debug (fun l -> l ~header:"size" "Reading the loose object %a."
                   Fpath.pp Fpath.(root / "objects" / first / rest)[@warning "-44"]);
 
-    FileSystem.File.open_r ~mode:0o400 Fpath.(root / "objects" / first / rest)[@warning "-44"]
+    FS.File.open_r ~mode:0o400 Fpath.(root / "objects" / first / rest)[@warning "-44"]
     >>= function
     | Error sys_err ->
-      Log.err (fun l -> l ~header:"size" "Retrieving a file-system error: %a." FileSystem.File.pp_error sys_err);
+      Log.err (fun l -> l ~header:"size" "Retrieving a file-system error: %a." FS.File.pp_error sys_err);
       Lwt.return (Error (`SystemFile sys_err))
     | Ok read ->
       let rec loop decoder = match S.eval decoder with
         | `Await decoder ->
-          FileSystem.File.read raw read >>=
+          FS.File.read raw read >>=
           (function
             | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
             | Ok n -> match S.refill (Cstruct.sub raw 0 n) decoder with
@@ -333,7 +333,7 @@ module Make
               | Error (#S.error as err) -> Lwt.return (Error err))
         | `Error (_, (#S.error as err)) -> Lwt.return (Error err)
         | `End (_, (_, size)) ->
-          FileSystem.File.close read >|= function
+          FS.File.close read >|= function
           | Ok () -> Ok size
           | Error sys_err -> Error (`SystemFile sys_err)
         (* XXX(dinosaure): [gen] checks if we consume all of the
@@ -388,11 +388,11 @@ module Make
       let flush = Deflate.flush
     end in
 
-    FileSystem.Dir.create ~path:true Fpath.(root / "objects" / first)
+    FS.Dir.create ~path:true Fpath.(root / "objects" / first)
     >>= function
     | Error err -> Lwt.return (Error (`SystemDirectory err))
     | Ok (true | false) ->
-      FileSystem.File.open_w ~mode:0o644 Fpath.(root / "objects" / first / rest)[@warning "-44"] (* XXX(dinosaure): shadowing ( / ). *)
+      FS.File.open_w ~mode:0o644 Fpath.(root / "objects" / first / rest)[@warning "-44"] (* XXX(dinosaure): shadowing ( / ). *)
       >>= function
       | Error sys_error -> Lwt.return (Error (`SystemFile sys_error))
       | Ok oc ->
@@ -400,13 +400,13 @@ module Make
           (fun () -> Helper.safe_encoder_to_file
               ~limit:50
               (module E)
-              FileSystem.File.write
+              FS.File.write
               oc raw state)
-          (fun () -> FileSystem.File.close oc >>= function
+          (fun () -> FS.File.close oc >>= function
              | Ok () -> Lwt.return ()
              | Error sys_err ->
                Log.err (fun l -> l ~header:"write_inflated" "Retrieve an error when we close the file-descriptor: %a."
-                           FileSystem.File.pp_error sys_err);
+                           FS.File.pp_error sys_err);
                Lwt.return ())
         >>= function
         | Ok () ->
@@ -447,19 +447,19 @@ module Make
       let flush = E.flush
     end in
 
-    FileSystem.Dir.create ~path:true Fpath.(root / "objects" / first) >>= function
+    FS.Dir.create ~path:true Fpath.(root / "objects" / first) >>= function
     | Error err ->
       Log.err (fun l -> l ~header:"write" "Retrieve an error when we try to create the directory %a: %a."
                   Fpath.pp Fpath.(root / "objects" / first)
-                  FileSystem.Dir.pp_error err);
+                  FS.Dir.pp_error err);
       Lwt.return (Error (`SystemDirectory err))
     | Ok (true | false) ->
-      FileSystem.File.open_w ~mode:0o644 Fpath.(root / "objects" / first / rest)[@warning "-44"] (* XXX(dinosaure): shadowing ( / ). *)
+      FS.File.open_w ~mode:0o644 Fpath.(root / "objects" / first / rest)[@warning "-44"] (* XXX(dinosaure): shadowing ( / ). *)
       >>= function
       | Error sys_error ->
         Log.err (fun l -> l ~header:"write" "Retrieve an error when we open/create the file %a: %a."
                     Fpath.pp Fpath.(root / "objects" / first / rest)
-                    FileSystem.File.pp_error sys_error);
+                    FS.File.pp_error sys_error);
         Lwt.return (Error (`SystemFile sys_error))
       | Ok oc ->
         Lwt.finalize
@@ -467,13 +467,13 @@ module Make
              Helper.safe_encoder_to_file
                ~limit:50
                (module E)
-               FileSystem.File.write
+               FS.File.write
                oc raw encoder)
-          (fun () -> FileSystem.File.close oc >>= function
+          (fun () -> FS.File.close oc >>= function
              | Ok () -> Lwt.return ()
              | Error sys_err ->
                Log.err (fun l -> l ~header:"write" "Retrieve an error when we close the file-descriptor: %a."
-                           FileSystem.File.pp_error sys_err);
+                           FS.File.pp_error sys_err);
                Lwt.return ())
         >>= function
         | Ok r ->

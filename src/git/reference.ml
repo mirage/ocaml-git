@@ -57,19 +57,19 @@ end
 
 module type IO = sig
   module Lock: S.LOCK
-  module FileSystem: S.FS
+  module FS: S.FS
 
   include S
 
   type error =
-    [ `SystemFile of FileSystem.File.error
-    | `SystemDirectory of FileSystem.Dir.error
+    [ `SystemFile of FS.File.error
+    | `SystemDirectory of FS.Dir.error
     | `SystemIO of string
     | D.error ]
 
   val pp_error  : error Fmt.t
 
-  val exists :
+  val mem :
        root:Fpath.t
     -> t -> (bool, error) result Lwt.t
   val read :
@@ -209,10 +209,10 @@ module IO
     (FS: S.FS with type File.lock = L.elt)
   : IO with module Hash = H
         and module Lock = L
-        and module FileSystem = FS
+        and module FS = FS
 = struct
   module Lock = L
-  module FileSystem = FS
+  module FS = FS
 
   include Make(H)
 
@@ -227,14 +227,14 @@ module IO
     | Ref refname -> Fmt.strf "ref: %a" pp refname (* XXX(dinosaure): [pp] or [Fmt.string]? *)
 
   type error =
-    [ `SystemFile of FileSystem.File.error
-    | `SystemDirectory of FileSystem.Dir.error
+    [ `SystemFile of FS.File.error
+    | `SystemDirectory of FS.Dir.error
     | `SystemIO of string
     | D.error ]
 
   let pp_error ppf = function
-    | `SystemFile sys_err -> Helper.ppe ~name:"`SystemFile" FileSystem.File.pp_error ppf sys_err
-    | `SystemDirectory sys_err -> Helper.ppe ~name:"`SystemDirectory" FileSystem.Dir.pp_error ppf sys_err
+    | `SystemFile sys_err -> Helper.ppe ~name:"`SystemFile" FS.File.pp_error ppf sys_err
+    | `SystemDirectory sys_err -> Helper.ppe ~name:"`SystemDirectory" FS.Dir.pp_error ppf sys_err
     | `SystemIO sys_err -> Helper.ppe ~name:"`SystemIO" Fmt.string ppf sys_err
     | #D.error as err -> D.pp_error ppf err
 
@@ -253,11 +253,11 @@ module IO
       (false, []) segs
     |> fun (_, refs) -> List.rev refs |> String.concat "/" |> of_string
 
-  let exists ~root reference =
+  let mem ~root reference =
     let path = Fpath.(root // (to_path reference)) in
     let open Lwt.Infix in
 
-    FileSystem.File.exists path >>= function
+    FS.File.exists path >>= function
     | Ok v -> Lwt.return (Ok v)
     | Error err ->
       Lwt.return (Error (`SystemFile err))
@@ -271,16 +271,16 @@ module IO
 
     Log.debug (fun l -> l ~header:"read" "Reading the reference: %a." Fpath.pp path);
 
-    FileSystem.File.open_r ~mode:0o400 path
+    FS.File.open_r ~mode:0o400 path
     >>= function
     | Error sys_err ->
       Log.err (fun l -> l ~header:"read" "Retrieve an error when we read the reference %a: %a."
-                  pp reference FileSystem.File.pp_error sys_err);
+                  pp reference FS.File.pp_error sys_err);
       Lwt.return (Error (`SystemFile sys_err))
     | Ok read ->
       let rec loop decoder = match D.eval decoder with
         | `Await decoder ->
-          FileSystem.File.read raw read >>=
+          FS.File.read raw read >>=
           (function
             | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
             | Ok n -> match D.refill (Cstruct.sub raw 0 n) decoder with
@@ -335,25 +335,25 @@ module IO
 
     Lock.with_lock lock
     @@ fun () ->
-    FileSystem.Dir.create ~path:true Fpath.(root // (parent (to_path reference))) >>= function
+    FS.Dir.create ~path:true Fpath.(root // (parent (to_path reference))) >>= function
     | Error sys_err -> Lwt.return (Error (`SystemDirectory sys_err))
     | Ok (true | false) ->
-      FileSystem.File.open_w ~mode:0o644 path
+      FS.File.open_w ~mode:0o644 path
       >>= function
       | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
       | Ok write ->
         Helper.safe_encoder_to_file
           ~limit:50
           (module E)
-          FileSystem.File.write
+          FS.File.write
           write raw state
         >>= function
-        | Ok _ -> FileSystem.File.close write >>=
+        | Ok _ -> FS.File.close write >>=
           (function
             | Ok () -> Lwt.return (Ok ())
             | Error sys_err -> Lwt.return (Error (`SystemFile sys_err)))
         | Error err ->
-          FileSystem.File.close write >>= function
+          FS.File.close write >>= function
           | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
           | Ok () -> match err with
             | `Stack -> Lwt.return (Error (`SystemIO (Fmt.strf "Impossible to store the reference: %a" pp reference)))
@@ -374,7 +374,7 @@ module IO
 
     let open Lwt.Infix in
 
-    FileSystem.File.test_and_set
+    FS.File.test_and_set
       ?lock
       path
       ~test:(raw test)
@@ -392,7 +392,7 @@ module IO
 
     let open Lwt.Infix in
 
-    FileSystem.File.delete ?lock path >>= function
+    FS.File.delete ?lock path >>= function
     | Ok _ as v -> Lwt.return v
     | Error err -> Lwt.return (Error (`SystemFile err))
 end

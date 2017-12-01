@@ -15,19 +15,15 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+module type S = sig
+  module Store: Minimal.S
+  module K: Graph.Sig.I with type V.t = Store.Hash.t
+  val keys: K.t -> Store.Hash.t list
+  val of_keys: Store.t -> K.t Lwt.t
+  val of_commits: Store.t -> K.t Lwt.t
+  val closure: ?full:bool -> Store.t -> min:Store.Hash.Set.t -> max:Store.Hash.Set.t -> K.t Lwt.t
+  val pack: Store.t -> min:Store.Hash.Set.t -> max:Store.Hash.Set.t -> (Store.Hash.t * Store.Value.t) list Lwt.t
+  val to_dot: Store.t -> Format.formatter -> unit Lwt.t
+end
 
-module Make (S : Minimal.S
-             with type Hash.Digest.buffer = Cstruct.t
-              and type Hash.hex = string) :
-sig
-  module Store : Minimal.S
-
-  module K : Graph.Sig.I with type V.t = Store.Hash.t
-
-  val keys : K.t -> Store.Hash.t list
-  val of_keys : Store.t -> K.t Lwt.t
-  val of_commits : Store.t -> K.t Lwt.t
-  val closure : ?full:bool -> Store.t -> min:Store.Hash.Set.t -> max:Store.Hash.Set.t -> K.t Lwt.t
-  val pack : Store.t -> min:Store.Hash.Set.t -> max:Store.Hash.Set.t -> (Store.Hash.t * Store.Value.t) list Lwt.t
-  val to_dot : Store.t -> Format.formatter -> unit Lwt.t
-end with module Store = S
+module Make (S: Minimal.S): S with module Store = S

@@ -168,8 +168,7 @@ module Make
   let list t =
     Lwt.return (keys t.values)
 
-  let exists t h =
-    Lwt.return (Hashtbl.mem t.values h)
+  let mem t h = Lwt.return (Hashtbl.mem t.values h)
 
   let size t h =
     read t h >|= function
@@ -423,7 +422,8 @@ module Make
         let n = Int32.to_int n in
 
         Queue.fold (fun acc x -> x :: acc) [] queue
-        |> Lwt_list.fold_left_s (fun acc (_, _, _, _, hash) -> exists git hash >|= function
+        |> Lwt_list.fold_left_s (fun acc (_, _, _, _, hash) ->
+            mem git hash >|= function
           | true -> acc + 1
           | false -> acc) 0
         >>= function
@@ -473,7 +473,7 @@ module Make
       Graph.fold (fun k v a -> (k, v) :: a) graph []
       |> Lwt.return
 
-    let exists t r =
+    let mem t r =
       try let _ = Hashtbl.find t.refs r in Lwt.return true
       with Not_found -> Lwt.return false
 

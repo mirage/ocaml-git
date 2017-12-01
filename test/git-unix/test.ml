@@ -40,7 +40,7 @@ module Make (Store : Git.S) = struct
            points to refs/heads/master which one does not exists. If
            we want to know if a repository is empty, we need to check
            [Store.Reference.master]. *)
-        Store.Ref.exists t Store.Reference.master >>= function
+        Store.Ref.mem t Store.Reference.master >>= function
         | true ->
           Alcotest.fail "non-empty repository!"
         | false ->

@@ -25,4 +25,4 @@ module HTTP = Http
 module Store : Git.Store.S
   with module Hash = SHA1
    and module Lock = Lock
-   and module FileSystem = FS
+   and module FS = FS

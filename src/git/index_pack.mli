@@ -17,7 +17,7 @@
 
 module type LAZY =
 sig
-  module Hash : S.HASH
+  module Hash: S.HASH
   (** The [Hash] module used to make this interface. *)
 
   type error =
@@ -34,34 +34,34 @@ sig
     (** Appear when we try to read a big offset value and we can't
         catch it. *)
 
-  val pp_error : error Fmt.t
+  val pp_error: error Fmt.t
   (** Pretty-printer of {!error}. *)
 
   type t
   (** State of the IDX file. *)
 
-  val make : ?cache:int -> Cstruct.t -> (t, error) result
+  val make: ?cache:int -> Cstruct.t -> (t, error) result
   (** Make a new state from a [Cstruct.t] buffer. You can specify how
       many elements we can store to the cache. This function returns
       the state [t] or an {!error}. *)
 
-  val find : t -> Hash.t -> (Crc32.t * int64) option
+  val find: t -> Hash.t -> (Crc32.t * int64) option
   (** Get the CRC-32 checksum and the absolute offset from an
       [hash]. *)
 
-  val exists : t -> Hash.t -> bool
-  (** [exists t hash] returns [true] if [hash] exists in the IDX file
+  val mem: t -> Hash.t -> bool
+  (** [mem t hash] returns [true] if [hash] exists in the IDX file
       [t]. Otherwise, it returns [false]. *)
 
-  val iter : t -> (Hash.t -> (Crc32.t * int64) -> unit) -> unit
+  val iter: t -> (Hash.t -> (Crc32.t * int64) -> unit) -> unit
   (** Iteration in the IDX file. *)
 
-  val fold : t -> (Hash.t -> (Crc32.t * int64) -> 'a -> 'a) -> 'a -> 'a
+  val fold: t -> (Hash.t -> (Crc32.t * int64) -> 'a -> 'a) -> 'a -> 'a
   (** Fold in the IDX file. *)
 end
 
-module Lazy (H : S.HASH)
-  : LAZY with module Hash = H
+module Lazy (H: S.HASH)
+ : LAZY with module Hash = H
 (** The {i functor} to make the {i lazy} decoder of the IDX file.
     Internally, we use a [Cstruct.t] representation of the IDX file
     notified to the [make] function. This [Cstruct.t] should never
@@ -70,7 +70,7 @@ module Lazy (H : S.HASH)
 
 module type DECODER =
 sig
-  module Hash : S.HASH
+  module Hash: S.HASH
   (** The [Hash] module used to make this interface. *)
 
   type error =
@@ -89,24 +89,24 @@ sig
     (** Appear when the hash produced when we un-serialize the IDX
         file does not correspond with the hash provided. *)
 
-  val pp_error : error Fmt.t
+  val pp_error: error Fmt.t
   (** Pretty-printer of {!error}. *)
 
   type t
   (** The decoder state. *)
 
-  val pp : t Fmt.t
+  val pp: t Fmt.t
   (** Pretty-printer of the decoder {!t}. *)
 
-  val make : unit -> t
+  val make: unit -> t
   (** Make a new decoder state {!t}. *)
 
-  val refill : int -> int -> t -> t
+  val refill: int -> int -> t -> t
   (** [refill off len t] provides a new [t] with [len] bytes to read,
       starting at [off]. This byte range is read by calls to {!eval}
       with [t] until [`Await] is returned. *)
 
-  val eval : Cstruct.t -> t ->
+  val eval: Cstruct.t -> t ->
     [ `Await of t
     | `End of t * Hash.t
     | `Hash of t * (Hash.t * Crc32.t * int64)
@@ -127,8 +127,8 @@ sig
       decoder can't continue and sticks in this situation.}} *)
 end
 
-module Decoder (H : S.HASH with type Digest.buffer = Cstruct.t)
-  : DECODER with module Hash = H
+module Decoder (H: S.HASH with type Digest.buffer = Cstruct.t)
+ : DECODER with module Hash = H
 (** The {i functor} to make the decoder module by a specific hash
     implementation. We constraint the {!Hash.S} module to compute a
     {Cstruct.t} flow. This module is a {i non-blocking} decoder with a
@@ -139,42 +139,42 @@ module Decoder (H : S.HASH with type Digest.buffer = Cstruct.t)
 
 module type ENCODER =
 sig
-  module Hash : S.HASH
+  module Hash: S.HASH
   (** The [Hash] module used to make this interface. *)
 
   type error
   (** We can't have an error to serialize an IDX file. *)
 
-  val pp_error : error Fmt.t
+  val pp_error: error Fmt.t
   (** A pretty-printer of {!error}. *)
 
   type t
   (** The encoder state. *)
 
-  val pp : t Fmt.t
+  val pp: t Fmt.t
   (** Pretty-printer of the encoder {!t}. *)
 
   type 'a sequence = ('a -> unit) -> unit
   (** An abstract representation of an iterative container. *)
 
-  val default : (Hash.t * (Crc32.t * int64)) sequence -> Hash.t -> t
+  val default: (Hash.t * (Crc32.t * int64)) sequence -> Hash.t -> t
   (** [default seq pack_hash] makes a new {!encoder} to serialize
       [seq] and associates the IDX stream produced with the
       [pack_hash] PACK file. This function takes care about the order
       of [seq], so the client does not need to sort the iterative
       container. *)
 
-  val flush : int -> int -> t -> t
+  val flush: int -> int -> t -> t
   (** [flush off len t] provides [t] with [len] bytes to write,
       starting at [off]. This byte range is written by calls to
       {!eval} with [t] until [`Flush] is returned. Use {!used_out} to
       know how many byte [t] wrote. *)
 
-  val used_out : t -> int
+  val used_out: t -> int
   (** [used_out t] returns how many byte [t] wrote in the current
       buffer noticed to the previous call of {!eval}. *)
 
-  val eval : Cstruct.t -> t -> [ `Flush of t | `End of t | `Error of t * error ]
+  val eval: Cstruct.t -> t -> [ `Flush of t | `End of t | `Error of t * error ]
   (** [eval dst t] is:
 
       {ul
@@ -187,8 +187,8 @@ sig
       encoder can't continue and sticks in this situation.}} *)
 end
 
-module Encoder (H : S.HASH with type Digest.buffer = Cstruct.t)
-  : ENCODER with module Hash = H
+module Encoder (H: S.HASH with type Digest.buffer = Cstruct.t)
+ : ENCODER with module Hash = H
 (** The {i functor} to make the encoder module by a specific hash
     implementation. We constraint the {!Hash.S} module to compute a
     {Cstruct.t} flow. *)

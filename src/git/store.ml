@@ -15,6 +15,10 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+open Lwt.Infix
+let ( >!= ) = Lwt_result.bind_lwt_err
+let ( >?= ) = Lwt_result.bind
+
 module type LOOSE = sig
 
   type t
@@ -27,7 +31,7 @@ module type LOOSE = sig
     | `Blob ]
 
   module Hash: S.HASH
-  module FileSystem : S.FS
+  module FS : S.FS
   module Inflate: S.INFLATE
   module Deflate: S.DEFLATE
 
@@ -43,8 +47,8 @@ module type LOOSE = sig
          and type t = Value.Make(Hash)(Inflate)(Deflate).t
 
   type error =
-    [ `SystemFile of FileSystem.File.error
-    | `SystemDirectory of FileSystem.Dir.error
+    [ `SystemFile of FS.File.error
+    | `SystemDirectory of FS.Dir.error
     | `SystemIO of string
     | Value.D.error
     | Value.E.error ]
@@ -54,7 +58,7 @@ module type LOOSE = sig
   val lookup_p : state -> Hash.t -> Hash.t option Lwt.t
   val lookup : state -> Hash.t -> Hash.t option Lwt.t
 
-  val exists : state -> Hash.t -> bool Lwt.t
+  val mem : state -> Hash.t -> bool Lwt.t
 
   val list : state -> Hash.t list Lwt.t
 
@@ -125,7 +129,7 @@ module type PACK = sig
   type state
 
   module Hash: S.HASH
-  module FileSystem: S.FS
+  module FS: S.FS
   module Inflate: S.INFLATE
   module Deflate: S.DEFLATE
   module PACKDecoder: Unpack.DECODER
@@ -148,9 +152,9 @@ module type PACK = sig
     | `PackInfo of Pack_info.error
     | `IdxDecoder of IDXDecoder.error
     | `IdxEncoder of IDXEncoder.error
-    | `SystemFile of FileSystem.File.error
-    | `SystemMapper of FileSystem.Mapper.error
-    | `SystemDir of FileSystem.Dir.error
+    | `SystemFile of FS.File.error
+    | `SystemMapper of FS.Mapper.error
+    | `SystemDir of FS.Dir.error
     | `Invalid_hash of Hash.t
     | `Delta of PACKEncoder.Delta.error
     | `SystemIO of string
@@ -161,7 +165,7 @@ module type PACK = sig
 
   val lookup : state -> Hash.t -> (Hash.t * (Crc32.t * int64)) option Lwt.t
 
-  val exists : state -> Hash.t -> bool Lwt.t
+  val mem : state -> Hash.t -> bool Lwt.t
 
   val list : state -> Hash.t list Lwt.t
 
@@ -202,7 +206,7 @@ module type S = sig
   module Deflate: S.DEFLATE
   module Lock: S.LOCK
 
-  module FileSystem: S.FS with type File.lock = Lock.elt
+  module FS: S.FS with type File.lock = Lock.elt
 
   module Value: Value.S
     with module Hash = Hash
@@ -217,7 +221,7 @@ module type S = sig
   module Reference: Reference.IO
     with module Hash = Hash
      and module Lock = Lock
-     and module FileSystem = FileSystem
+     and module FS = FS
 
   module PACKDecoder: Unpack.DECODER
     with module Hash = Hash
@@ -233,14 +237,14 @@ module type S = sig
      and module Hash = Hash
      and module Inflate = Inflate
      and module Deflate = Deflate
-     and module FileSystem = FileSystem
+     and module FS = FS
 
   module Pack: PACK
     with type t = PACKDecoder.Object.t
      and type value = Value.t
      and type state = t
      and module Hash = Hash
-     and module FileSystem = FileSystem
+     and module FS = FS
      and module Inflate = Inflate
 
   type kind =
@@ -265,7 +269,7 @@ module type S = sig
   val root : t -> Fpath.t
   val compression : t -> int
 
-  val exists : t -> Hash.t -> bool Lwt.t
+  val mem : t -> Hash.t -> bool Lwt.t
 
   val list : t -> Hash.t list Lwt.t
 
@@ -324,7 +328,7 @@ module type S = sig
   module Ref: sig
     module Packed_refs: Packed_refs.S
       with module Hash = Hash
-       and module FileSystem = FileSystem
+       and module FS = FS
 
     type nonrec error =
       [ Packed_refs.error
@@ -333,7 +337,7 @@ module type S = sig
 
     val pp_error : error Fmt.t
 
-    val exists : t -> Reference.t -> bool Lwt.t
+    val mem : t -> Reference.t -> bool Lwt.t
 
     val graph_p :
          dtmp:Cstruct.t
@@ -408,7 +412,7 @@ module Make
     (D : S.DEFLATE)
   : S with module Hash = H
        and module Lock = L
-       and module FileSystem = FS
+       and module FS = FS
        and module Inflate = I
        and module Deflate = D
 = struct
@@ -416,25 +420,24 @@ module Make
   module Inflate = I
   module Deflate = D
   module Lock = L
-  module FileSystem = FS
+  module FS = FS
 
-  module LooseImpl
-    : Loose.S
-      with module Hash = H
-       and module Inflate = I
-       and module Deflate = D
-       and module FileSystem = FS
-       and module Blob = Blob.Make(Hash)
-       and module Commit = Commit.Make(Hash)
-       and module Tree = Tree.Make(Hash)
-       and module Tag = Tag.Make(Hash)
-       and type t = Value.Make(Hash)(Inflate)(Deflate).t
-    = Loose.Make(Hash)(FileSystem)(Inflate)(Deflate)
+  module LooseImpl: Loose.S
+    with module Hash = H
+     and module Inflate = I
+     and module Deflate = D
+     and module FS = FS
+     and module Blob = Blob.Make(Hash)
+     and module Commit = Commit.Make(Hash)
+     and module Tree = Tree.Make(Hash)
+     and module Tag = Tag.Make(Hash)
+     and type t = Value.Make(Hash)(Inflate)(Deflate).t
+    = Loose.Make(Hash)(FS)(Inflate)(Deflate)
 
   module PackImpl
     : Pack_engine.S
       with module Hash = Hash
-       and module FileSystem = FileSystem
+       and module FS = FS
        and module Inflate = Inflate
        and module Deflate = Deflate
     = Pack_engine.Make(H)(FS)(I)(D)
@@ -509,7 +512,7 @@ module Make
 
   module Loose = struct
     module Hash = Hash
-    module FileSystem = FileSystem
+    module FS = FS
     module Inflate = Inflate
     module Deflate = Deflate
     module Value = Value
@@ -530,8 +533,8 @@ module Make
     let write_p ~ztmp ~raw t value =
       LooseImpl.write ~root:t.dotgit ~ztmp ~raw ~level:t.compression value
 
-    let exists t =
-      LooseImpl.exists
+    let mem t =
+      LooseImpl.mem
         ~root:t.dotgit
     let read_s t =
       LooseImpl.read
@@ -557,9 +560,7 @@ module Make
     let write = write_s
 
     let lookup_p t hash =
-      let open Lwt.Infix in
-
-      LooseImpl.exists ~root:t.dotgit hash >|= function
+      LooseImpl.mem ~root:t.dotgit hash >|= function
       | true -> Some hash
       | false -> None
 
@@ -591,8 +592,6 @@ module Make
         t hash
 
     let write_inflated t ~kind value =
-      let open Lwt.Infix in
-
       LooseImpl.write_inflated
         ~root:t.dotgit
         ~level:t.compression
@@ -618,7 +617,7 @@ module Make
 
   module Pack = struct
     module Hash = Hash
-    module FileSystem = FileSystem
+    module FS = FS
     module Inflate = Inflate
     module Deflate = Deflate
 
@@ -652,22 +651,18 @@ module Make
     let lookup t hash =
       PackImpl.lookup t.engine hash
 
-    let exists t hash =
-      PackImpl.exists t.engine hash
+    let mem t hash =
+      PackImpl.mem t.engine hash
 
     let list t =
       PackImpl.list t.engine
 
     let read_p ~ztmp ~window t hash =
-      let open Lwt.Infix in
-
-      exists t hash >>= function
+      mem t hash >>= function
       | false -> Lwt.return (Error `Not_found)
       | true ->
         Log.debug (fun l -> l "Git object %a found in a PACK file."
                       Hash.pp hash);
-
-        let ( >!= ) = Lwt_result.bind_lwt_err in
 
         PackImpl.read ~root:t.dotgit ~ztmp ~window t.engine hash
         >!= (fun err -> Lwt.return (err :> error))
@@ -678,13 +673,9 @@ module Make
     let read = read_s
 
     let size_p ~ztmp ~window t hash =
-      let open Lwt.Infix in
-
-      exists t hash >>= function
+      mem t hash >>= function
       | false -> Lwt.return (Error `Not_found)
       | true ->
-        let ( >!= ) = Lwt_result.bind_lwt_err in
-
         PackImpl.size ~root:t.dotgit ~ztmp ~window t.engine hash
         >!= (fun err -> Lwt.return (err :> error))
 
@@ -712,11 +703,8 @@ module Make
 
     let to_temp_file fmt stream =
       let filename_of_pack = fmt (random_string 10) in
-
-      let open Lwt.Infix in
-
-      FileSystem.Dir.temp () >>= fun temp_dir ->
-      FileSystem.File.open_w ~mode:0o644 Fpath.(temp_dir / filename_of_pack) >>= function
+      FS.Dir.temp () >>= fun temp_dir ->
+      FS.File.open_w ~mode:0o644 Fpath.(temp_dir / filename_of_pack) >>= function
       | Error err -> Lwt.return (Error (`SystemFile err))
       | Ok fd ->
         Log.debug (fun l -> l ~header:"to_temp_file" "Save the pack stream to the file %a."
@@ -727,7 +715,7 @@ module Make
             Log.debug (fun l -> l ~header:"to_temp_file" "Pack stream saved to the file %a."
                           Fpath.pp Fpath.(temp_dir / filename_of_pack));
 
-            (FileSystem.File.close fd >>= function
+            (FS.File.close fd >>= function
               | Ok () -> Lwt.return (Ok Fpath.(temp_dir / filename_of_pack))
               | Error err ->
                 Log.err (fun l -> l ~header:"to_temp_file" "Cannot close the file: %s." filename_of_pack);
@@ -741,13 +729,13 @@ module Make
               | None -> 0, Cstruct.len raw
             in
 
-            FileSystem.File.write raw ~off ~len fd >>= function
+            FS.File.write raw ~off ~len fd >>= function
             | Ok 0 when len <> 0 ->
               if call = 50 (* XXX(dinosaure): as argument? *)
               then
                 let err = Fmt.strf "Impossible to store the file: %s." filename_of_pack in
 
-                FileSystem.File.close fd >>= function
+                FS.File.close fd >>= function
                 | Ok () -> Lwt.return (Error (`SystemIO err))
                 | Error _ ->
                   Log.err (fun l -> l ~header:"to_temp_file" "Cannot close the file: %s." filename_of_pack);
@@ -760,7 +748,7 @@ module Make
               let chunk = (off + n, len - n) in
               go ~chunk ~call:0 ()
             | Error err ->
-              FileSystem.File.close fd >>= function
+              FS.File.close fd >>= function
               | Ok () -> Lwt.return (Error (`SystemFile err))
               | Error _ ->
                 Log.err (fun l -> l ~header:"to_temp_file" "Cannot close the file: %s." filename_of_pack);
@@ -770,8 +758,6 @@ module Make
         go ~call:0 ()
 
     let extern git hash =
-      let open Lwt.Infix in
-
       read_p
         ~ztmp:git.buffer.zl
         ~window:git.buffer.window
@@ -817,9 +803,6 @@ module Make
         | `Tree -> Pack.Kind.Tree
         | `Tag -> Pack.Kind.Tag
       in
-
-      let open Lwt.Infix in
-
       let make acc (hash, (_, offset)) =
         PACKDecoder.optimized_get' ~h_tmp:htmp decoder_pack offset rtmp ztmp window >>= function
         | Error err ->
@@ -847,7 +830,7 @@ module Make
              let open Pack_info in
 
              match hunks_descr.PACKDecoder.H.reference with
-             | PACKDecoder.H.Hash hash when not (Radix.exists info.tree hash) ->
+             | PACKDecoder.H.Hash hash when not (Radix.mem info.tree hash) ->
                (try List.find (Hash.equal hash) acc |> fun _ -> acc
                 with Not_found -> hash :: acc)
              | _ -> acc)
@@ -863,7 +846,7 @@ module Make
       in
 
       let get hash =
-        if Pack_info.Radix.exists info.Pack_info.tree hash
+        if Pack_info.Radix.mem info.Pack_info.tree hash
         then PACKDecoder.get_with_allocation
             ~h_tmp:htmp
             decoder_pack
@@ -890,7 +873,7 @@ module Make
           (Fmt.strf "pack-%s.pack")
           entries
           (fun hash ->
-             if Pack_info.Radix.exists info.Pack_info.tree hash
+             if Pack_info.Radix.mem info.Pack_info.tree hash
              then PACKDecoder.get_with_allocation
                  ~h_tmp:htmp
                  decoder_pack
@@ -911,20 +894,18 @@ module Make
             | Ok () ->
               let filename_pack = Fmt.strf "pack-%s.pack" (Hash.to_hex hash_pack) in
 
-              (FileSystem.File.move path Fpath.(git.dotgit / "objects" / "pack" / filename_pack) >>= function
+              (FS.File.move path Fpath.(git.dotgit / "objects" / "pack" / filename_pack) >>= function
               | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
               | Ok () -> Lwt.return (Ok (hash_pack, List.length entries)))
               >>= fun ret ->
-              FileSystem.Mapper.close fdp >>= function
+              FS.Mapper.close fdp >>= function
               | Error sys_err ->
                 Log.err (fun l -> l ~header:"canonicalize" "Impossible to close the pack file %a: %a."
-                            Fpath.pp path_pack FileSystem.Mapper.pp_error sys_err);
+                            Fpath.pp path_pack FS.Mapper.pp_error sys_err);
                 Lwt.return ret
               | Ok () -> Lwt.return ret
 
     let from git stream =
-      let open Lwt.Infix in
-
       let ztmp = Cstruct.create 0x8000 in
       let window = Inflate.window () in
 
@@ -954,21 +935,18 @@ module Make
 
       let info = Pack_info.v (Hash.of_hex (String.make (Hash.Digest.length * 2) '0')) in
 
-      let ( >!= ) = Lwt_result.bind_lwt_err in
-
-      let open Lwt_result in
-
       (Pack_info.from_stream ~ztmp ~window info (fun () -> Lwt_stream.get stream0)
-       >!= (fun sys_err -> Lwt.return (`PackInfo sys_err))) >>= fun info ->
-      to_temp_file (Fmt.strf "pack-%s.pack") stream1 >>= fun path ->
+       >!= (fun sys_err -> Lwt.return (`PackInfo sys_err))) >?= fun info ->
+      to_temp_file (Fmt.strf "pack-%s.pack") stream1 >?= fun path ->
 
       let module Graph = Pack_info.Graph in
-      let open Lwt.Infix in
 
-      FileSystem.Mapper.openfile path >>= function
+      FS.Mapper.openfile path >>= function
       | Error err -> Lwt.return (Error (`SystemMapper err))
       | Ok fdp ->
-        let `Partial { Pack_info.Partial.hash = hash_pack; Pack_info.Partial.delta; } = info.Pack_info.state in
+        let `Partial { Pack_info.Partial.hash = hash_pack;
+                       Pack_info.Partial.delta; } = info.Pack_info.state
+        in
 
         let htmp =
           let raw = Cstruct.create (info.Pack_info.max_length_insert_hunks * (info.Pack_info.max_depth + 1)) in
@@ -1072,13 +1050,11 @@ module Make
                  match hunks_descr.PACKDecoder.H.reference with
                  | PACKDecoder.H.Offset _ -> Lwt.return true
                  | PACKDecoder.H.Hash hash ->
-                   Lwt.return (Radix.exists tree' hash))
+                   Lwt.return (Radix.mem tree' hash))
               delta
             >>= fun is_not_thin ->
             if is_not_thin
             then begin
-              let open Lwt_result in
-
               let info =
                 { info with Pack_info.tree = tree'
                           ; Pack_info.graph = graph'
@@ -1087,18 +1063,16 @@ module Make
                                     ; Pack_info.Full.hash = hash_pack } }
               in
 
-              (FileSystem.Mapper.close fdp
+              (FS.Mapper.close fdp
                >!= fun sys_err -> Lwt.return (`SystemMapper sys_err))
-              >>= fun () -> PackImpl.add_total ~root:git.dotgit git.engine path info
+              >?= fun () -> PackImpl.add_total ~root:git.dotgit git.engine path info
                             >!= fun err -> Lwt.return (err :> error)
             end else
-              let open Lwt_result in
-
               canonicalize git path decoder fdp ~htmp ~rtmp ~ztmp ~window delta info
-              >>= fun (hash, count) ->
+              >?= fun (hash, count) ->
               (PackImpl.add_exists ~root:git.dotgit git.engine hash
                >!= (fun err -> Lwt.return (err :> error)))
-              >>= fun () -> Lwt.return (Ok (hash, count))
+              >?= fun () -> Lwt.return (Ok (hash, count))
           else Lwt.return
               (Error (`Integrity (Fmt.strf "Impossible to get all informations from the file: %a."
                                     Hash.pp hash_pack)))
@@ -1123,8 +1097,6 @@ module Make
     | #Pack.error as err -> Fmt.pf ppf "%a" Pack.pp_error err
 
   let read_p ~ztmp ~dtmp ~raw ~window state hash =
-    let open Lwt.Infix in
-
     Pack.read_p ~ztmp ~window state hash >>= function
     | Ok o ->
       (match o.PACKDecoder.Object.kind with
@@ -1164,8 +1136,6 @@ module Make
     read_s
 
   let read_exn t hash =
-    let open Lwt.Infix in
-
     read t hash >>= function
     | Error _ ->
       let err = Fmt.strf "Git.Store.read_exn: %a not found" Hash.pp hash in
@@ -1173,13 +1143,11 @@ module Make
     | Ok v -> Lwt.return v
 
   let write_p ~ztmp ~raw state hash =
-    let open Lwt.Infix in
     Loose.write_p ~ztmp ~raw state hash >|= function
     | Error (#LooseImpl.error as err) -> Error (err :> error)
     | Ok v -> Ok v
 
   let write_s state hash =
-    let open Lwt.Infix in
     Loose.write_s state hash >|= function
     | Error (#LooseImpl.error as err) -> Error (err :> error)
     | Ok v -> Ok v
@@ -1187,8 +1155,6 @@ module Make
   let write = write_s
 
   let raw_p ~ztmp ~dtmp ~raw ~window state hash =
-    let open Lwt.Infix in
-
     Pack.read_p ~ztmp ~window state hash >>= function
     | Ok o ->
       Lwt.return (Some (o.PACKDecoder.Object.kind, o.PACKDecoder.Object.raw))
@@ -1215,9 +1181,7 @@ module Make
     Loose.write_inflated t ~kind value
 
   let indexes git =
-    let open Lwt.Infix in
-
-    FileSystem.Dir.contents ~dotfiles:false ~rel:false Fpath.(git / "objects" / "pack")[@warning "-44"]
+    FS.Dir.contents ~dotfiles:false ~rel:false Fpath.(git / "objects" / "pack")[@warning "-44"]
     >>= function
     | Ok lst ->
       Lwt_list.fold_left_s
@@ -1230,8 +1194,6 @@ module Make
     | Error err -> Lwt.return (Error err)
 
   let lookup_p state hash =
-    let open Lwt.Infix in
-
     Pack.lookup state hash
     >>= function
     | Some (hash_pack, (_, offset)) -> Lwt.return (`PackDecoder (hash_pack, offset))
@@ -1241,26 +1203,21 @@ module Make
 
   let lookup = lookup_p
 
-  let exists state hash =
-    let open Lwt.Infix in
-
+  let mem state hash =
     lookup state hash >|= function
     | `Not_found -> false
     | _ -> true
 
   let list state =
-    let open Lwt.Infix in
-
     Loose.list state
     >>= fun looses -> Pack.list state
     >|= fun packed -> List.append looses packed
 
   let size_p ~ztmp ~dtmp ~raw ~window state hash =
-    let open Lwt.Infix in
     Pack.size_p ~ztmp ~window state hash >>= function
     | Ok v -> Lwt.return (Ok (Int64.of_int v))
     | Error (#Pack.error as err) ->
-      Loose.exists state hash >>= function
+      Loose.mem state hash >>= function
       | true -> Loose.size_p ~ztmp ~dtmp ~raw ~window state hash >|= Rresult.R.reword_error (fun x -> (x :> error))
       | false -> Lwt.return (Error (err :> error))
 
@@ -1277,8 +1234,6 @@ module Make
   exception Leave of error
 
   let contents state =
-    let open Lwt.Infix in
-
     list state
     >>= fun lst ->
     Lwt.try_bind
@@ -1313,7 +1268,7 @@ module Make
 
   module Ref =
   struct
-    module Packed_refs = Packed_refs.Make(Hash)(FileSystem)
+    module Packed_refs = Packed_refs.Make(Hash)(FS)
     (* XXX(dinosaure): we need to check the packed references when we write and remove. *)
 
     let pp_error ppf = function
@@ -1328,18 +1283,15 @@ module Make
       | `Invalid_reference of Reference.t ]
 
     let contents ?locks top =
-      let open Lwt.Infix in
-
-      let ( >?= ) = Lwt_result.bind in
 
       let rec lookup acc dir =
-        FileSystem.Dir.contents ~rel:true Fpath.(top // dir)
+        FS.Dir.contents ~rel:true Fpath.(top // dir)
         >?= fun l ->
           Lwt_list.filter_p
-            (fun x -> FileSystem.is_dir Fpath.(top // dir // x) >|= function Ok v -> v | Error _ -> false) l
+            (fun x -> FS.is_dir Fpath.(top // dir // x) >|= function Ok v -> v | Error _ -> false) l
           >>= fun dirs ->
           Lwt_list.filter_p
-            (fun x -> FileSystem.is_file Fpath.(top // dir // x) >|= function Ok v -> v | Error _ -> false) l
+            (fun x -> FS.is_file Fpath.(top // dir // x) >|= function Ok v -> v | Error _ -> false) l
           >>= Lwt_list.map_p (fun file -> Lwt.return (Fpath.append dir file)) >>= fun files ->
 
           Lwt_list.fold_left_s
@@ -1366,8 +1318,6 @@ module Make
 
     (* XXX(dinosaure): this function does not return any {!Error} value. *)
     let graph_p ~dtmp ~raw ?locks t =
-      let open Lwt.Infix in
-
       let lock_gbl = match locks with
         | Some locks -> Some (Lock.make locks Fpath.(v "global"))
         | None -> None
@@ -1380,7 +1330,7 @@ module Make
 
       contents ?locks Fpath.(t.dotgit / "refs") >>= function
       | Error sys_err ->
-        Log.err (fun l -> l ~header:"graph_p" "Retrieve an error: %a." FileSystem.Dir.pp_error sys_err);
+        Log.err (fun l -> l ~header:"graph_p" "Retrieve an error: %a." FS.Dir.pp_error sys_err);
         Lwt.return (Error (`SystemDirectory sys_err))
       | Ok files ->
         Log.debug (fun l -> l ~header:"graph_p" "Retrieve these files: %a."
@@ -1458,8 +1408,6 @@ module Make
         with Not_found -> Lwt.return (Error (`Invalid_reference refname))
 
     let list_p ~dtmp ~raw ?locks t =
-      let open Lwt.Infix in
-
       graph_p ~dtmp ~raw ?locks t >>= function
       | Ok graph ->
         Graph.fold (fun refname hash acc -> (refname, hash) :: acc) graph []
@@ -1471,12 +1419,10 @@ module Make
 
     let list = list_s
 
-    let exists t reference =
-      let open Lwt.Infix in
-
+    let mem t reference =
       let in_packed_refs () = Hashtbl.mem t.packed reference in
 
-      Reference.exists ~root:t.dotgit reference >>= function
+      Reference.mem ~root:t.dotgit reference >>= function
       | Ok true -> Lwt.return true
       | Ok false -> let v = in_packed_refs () in Lwt.return v
       | Error err ->
@@ -1485,8 +1431,6 @@ module Make
         let v = in_packed_refs () in Lwt.return v
 
     let remove_p ~dtmp ~raw ?locks t reference =
-      let open Lwt.Infix in
-
       let lock = match locks with
         | Some locks -> Some (Lock.make locks Fpath.(v "global"))[@warning "-44"]
         | None -> None
@@ -1532,14 +1476,12 @@ module Make
     let remove = remove_s
 
     let read_p ~dtmp ~raw ?locks t reference =
-      let open Lwt.Infix in
-
       let lock = match locks with
         | Some locks -> Some (Lock.make locks Fpath.(v ("r-" ^ (Fpath.filename (Reference.to_path reference)))))
         | None -> None
       in
 
-      FileSystem.is_file Fpath.(t.dotgit // (Reference.to_path reference)) >>= function
+      FS.is_file Fpath.(t.dotgit // (Reference.to_path reference)) >>= function
       | Ok true ->
         Lock.with_lock lock
           (fun () -> Reference.read ~root:t.dotgit ~dtmp ~raw reference >|= function
@@ -1558,8 +1500,6 @@ module Make
     let read = read_s
 
     let write_p ?locks ~dtmp ~raw t reference value =
-      let open Lwt.Infix in
-
       let lock_ref = match locks with
         | Some locks -> Some (Lock.make locks Fpath.(v ("w-" ^ (Fpath.filename (Reference.to_path reference)))))
         | None -> None
@@ -1605,8 +1545,6 @@ module Make
     let write = write_s
 
     let unpack_reference t ~dtmp ~raw ?locks reference =
-      let open Lwt.Infix in
-
       let lock = match locks with
         | Some locks -> Some (Lock.make locks Fpath.(v "global"))
         | None -> None
@@ -1637,8 +1575,6 @@ module Make
               | Error (#Reference.error as err) -> Error (err : error)
 
     let test_and_set t ?locks reference ~test ~set =
-      let open Lwt.Infix in
-
       let lock = match locks with
         | Some locks -> Some (Lock.make locks Fpath.(v "global"))[@warning "-44"]
         | None -> None
@@ -1697,19 +1633,15 @@ module Make
     ; io = Cstruct.sub raw 0x8000 0x8000 }
 
   let sanitize_filesystem root dotgit =
-    let ( >?= ) = Lwt_result.bind in
-
-    FileSystem.Dir.create ~path:true root
-    >?= fun _ -> FileSystem.Dir.create ~path:true dotgit
-    >?= fun _ -> FileSystem.Dir.create ~path:true Fpath.(dotgit / "objects")[@warning "-44"]
-    >?= fun _ -> FileSystem.Dir.create ~path:true Fpath.(dotgit / "objects" / "pack")[@warning "-44"]
-    >?= fun _ -> FileSystem.Dir.create ~path:true Fpath.(dotgit / "objects" / "info")[@warning "-44"]
-    >?= fun _ -> FileSystem.Dir.create ~path:true Fpath.(dotgit / "refs")[@warning "-44"]
+    FS.Dir.create ~path:true root
+    >?= fun _ -> FS.Dir.create ~path:true dotgit
+    >?= fun _ -> FS.Dir.create ~path:true Fpath.(dotgit / "objects")[@warning "-44"]
+    >?= fun _ -> FS.Dir.create ~path:true Fpath.(dotgit / "objects" / "pack")[@warning "-44"]
+    >?= fun _ -> FS.Dir.create ~path:true Fpath.(dotgit / "objects" / "info")[@warning "-44"]
+    >?= fun _ -> FS.Dir.create ~path:true Fpath.(dotgit / "refs")[@warning "-44"]
     >?= fun _ -> Lwt.return (Ok ())
 
   let create ?root ?dotgit ?(compression = 4) () =
-    let open Lwt.Infix in
-
     let ( >>== ) v f = v >>= function
       | Ok v -> f v
       | Error _ as err -> Lwt.return err
@@ -1717,7 +1649,7 @@ module Make
 
     (match root, dotgit with
      | None, _ | _, None ->
-       (FileSystem.Dir.current ()
+       (FS.Dir.current ()
         >>= function
         | Ok current ->
           let root = Option.get ~default:current root in
@@ -1767,18 +1699,16 @@ module Make
     Log.info (fun l -> l ~header:"reset" "Start to reset the Git repository");
 
     let delete_files directory =
-      let open Lwt_result in
-
-      FileSystem.Dir.contents ~dotfiles:true ~rel:false directory
-      >>= fun lst ->
-      ok (Lwt_list.fold_left_s
-            (fun acc path -> Lwt.Infix.(FileSystem.is_file path >|= function
+      FS.Dir.contents ~dotfiles:true ~rel:false directory
+      >?= fun lst ->
+      Lwt_result.ok (Lwt_list.fold_left_s
+            (fun acc path -> Lwt.Infix.(FS.is_file path >|= function
                | Ok true -> path :: acc
                | _ -> acc))
             [] lst)
-      >>= fun lst ->
-      ok (Lwt_list.iter_p
-            (fun path -> Lwt.Infix.(FileSystem.File.delete path >|= function
+      >?= fun lst ->
+      Lwt_result.ok (Lwt_list.iter_p
+            (fun path -> Lwt.Infix.(FS.File.delete path >|= function
                | Ok () -> ()
                | Error _ -> ())) lst)
     in
@@ -1788,22 +1718,18 @@ module Make
       | None -> None
     in
 
-    let open Lwt_result in
-
-    let ( >>! ) v f = bind_lwt_err v f in
-
     Lock.with_lock lock @@ fun () ->
-    (FileSystem.Dir.delete ~recurse:true Fpath.(t.dotgit / "objects")
-     >>= fun _ -> FileSystem.Dir.create Fpath.(t.dotgit / "objects")
-     >>= fun _ -> FileSystem.Dir.create Fpath.(t.dotgit / "objects" / "info")
-     >>= fun _ -> FileSystem.Dir.create Fpath.(t.dotgit / "objects" / "pack")
-     >>= fun _ -> FileSystem.Dir.delete ~recurse:true Fpath.(t.dotgit / "refs")
-     >>= fun _ -> FileSystem.Dir.create Fpath.(t.dotgit / "refs" / "heads")
-     >>= fun _ -> FileSystem.Dir.create Fpath.(t.dotgit / "refs" / "tags"))
-    >>! (fun err -> Lwt.return (`Store (`SystemDirectory err)))
-    >>= fun _ -> (delete_files t.root >>! (fun err -> Lwt.return (`Store (`SystemDirectory err))))
+    (FS.Dir.delete ~recurse:true Fpath.(t.dotgit / "objects")
+     >>= fun _ -> FS.Dir.create Fpath.(t.dotgit / "objects")
+     >>= fun _ -> FS.Dir.create Fpath.(t.dotgit / "objects" / "info")
+     >>= fun _ -> FS.Dir.create Fpath.(t.dotgit / "objects" / "pack")
+     >>= fun _ -> FS.Dir.delete ~recurse:true Fpath.(t.dotgit / "refs")
+     >>= fun _ -> FS.Dir.create Fpath.(t.dotgit / "refs" / "heads")
+     >>= fun _ -> FS.Dir.create Fpath.(t.dotgit / "refs" / "tags"))
+    >!= (fun err -> Lwt.return (`Store (`SystemDirectory err)))
+    >>= fun _ -> (delete_files t.root >!= (fun err -> Lwt.return (`Store (`SystemDirectory err))))
     >>= fun _ -> Ref.write t Reference.head Reference.(Ref (of_string "refs/heads/master"))
-    >>! (fun err -> Lwt.return (`Ref err))
+    >!= (fun err -> Lwt.return (`Ref err))
   (* XXX(dinosaure): an empty git repository has HEAD which points
      to a non-existing refs/heads/master. *)
 
