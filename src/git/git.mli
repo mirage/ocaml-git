@@ -50,4 +50,6 @@ module type DIR = S.DIR
 module type FS = S.FS
 module type LOCK = S.LOCK
 module type HASH = S.HASH
+module type DIGEST = S.DIGEST
+
 module type S = Minimal.S

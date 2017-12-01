@@ -16,6 +16,24 @@
  *)
 
 type t = string
+let of_string x = x
+let to_string x = x
+
+let head    = "HEAD"
+let is_head = String.equal head
+let master  = "refs/heads/master"
+
+let to_path x = match Fpath.of_string x with
+  | Error (`Msg x) -> raise (Invalid_argument x)
+  | Ok v -> Fpath.normalize v
+
+let of_path path =
+  match List.rev @@ Fpath.segs path with
+  | "HEAD" :: _ -> head
+  | _ -> Fpath.(to_string (normalize (v "refs" // path)))
+
+let pp ppf x =
+  Fmt.pf ppf "%s" (String.escaped x)
 
 module type S =sig
   module Hash: S.HASH
@@ -101,25 +119,16 @@ end
 module Make(H : S.HASH): S with module Hash = H = struct
   module Hash = H
 
-  type t = string
+  type nonrec t = t
 
-  let head    = "HEAD"
-  let is_head = String.equal head
-  let master  = "refs/heads/master"
-
-  let of_string x = x
-  let to_string x = x
-
-  let to_path x = match Fpath.of_string x with
-    | Error (`Msg x) -> raise (Invalid_argument x)
-    | Ok v -> Fpath.normalize v
-  let of_path path =
-    match List.rev @@ Fpath.segs path with
-    | "HEAD" :: _ -> head
-    | _ -> Fpath.(to_string (normalize (v "refs" // path)))
-
-  let pp ppf x =
-    Fmt.pf ppf "%s" (String.escaped x)
+  let master = master
+  let head = head
+  let is_head = is_head
+  let of_string = of_string
+  let to_string = to_string
+  let to_path = to_path
+  let of_path = of_path
+  let pp = pp
 
   let equal   = String.equal
   let hash    = Hashtbl.hash
