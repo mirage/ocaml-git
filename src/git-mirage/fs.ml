@@ -1,8 +1,9 @@
-module Log =
-struct
-  let src = Logs.Src.create "fs.mirage" ~doc:"logs mirage file-system's event"
-  include (val Logs.src_log src : Logs.LOG)
-end
+open Lwt.Infix
+let ( >!= ) = Lwt_result.bind_lwt_err
+let ( >?= ) = Lwt_result.bind
+
+let src = Logs.Src.create "git-mirage.fs" ~doc:"logs mirage file-system's event"
+module Log = (val Logs.src_log src : Logs.LOG)
 
 let result_bind f a = match a with
   | Ok x -> f x
@@ -47,21 +48,27 @@ module Make (Gamma: GAMMA) (FS: FS) = struct
         | exn -> Lwt.return (Error (`System (Printexc.to_string exn))))
 
   let is_dir t path =
-    Log.debug (fun l -> l ~header:"is_dir" "Check if %a already exists as a directory." Fpath.pp path);
+    Log.debug (fun l ->
+        l ~header:"is_dir" "Check if %a already exists as a directory."
+          Fpath.pp path);
 
     Lwt.try_bind
       (fun () ->  FS.stat t (Fpath.to_string path))
       (function
         | Ok { Mirage_fs.directory; _ } -> Lwt.return (Ok directory)
         | Error _ ->
-          Log.debug (fun l -> l ~header:"is_dir" "%a does not exists (as file or as directory)." Fpath.pp path);
+          Log.debug (fun l ->
+              l ~header:"is_dir" "%a does not exists (as file or as directory)."
+                Fpath.pp path);
           Lwt.return (Ok false))
       (* FIXME: see above. *)
       (function
-        | Sys_error _ ->
+        | Sys_error e ->
+          Log.debug (fun l -> l ~header:"is_dir" "%a: %s" Fpath.pp path e);
           Lwt.return (Ok false)
         | exn ->
-          Log.err (fun l -> l ~header:"is_dir" "Retrieve an exception: %s." (Printexc.to_string exn));
+          Log.err (fun l ->
+              l ~header:"is_dir" "Retrieve an exception: %a." Fmt.exn exn);
           Lwt.return (Error (`System (Printexc.to_string exn))))
 
   module Dir
@@ -88,8 +95,6 @@ module Make (Gamma: GAMMA) (FS: FS) = struct
       | #Mirage_fs.write_error as err -> Mirage_fs.pp_write_error ppf err
 
     let exists t path =
-      let open Lwt.Infix in
-
       is_dir t path >>= function
       | Ok _ as v -> Lwt.return v
       | Error (`System err) -> Lwt.return (Error (`Stat err))
@@ -97,17 +102,17 @@ module Make (Gamma: GAMMA) (FS: FS) = struct
     let create t ?(path = true) ?mode:_ dir =
       let mkdir d =
         Log.debug (fun l -> l ~header:"create" "mkdir %a." Fpath.pp d);
-        FS.mkdir t (Fpath.to_string d) in
-
-      let open Lwt.Infix in
-
+        FS.mkdir t (Fpath.to_string d)
+      in
       is_dir t dir >>= function
       | Error (`System err) ->
-        Log.err (fun l -> l ~header:"create" "Retrieve an error from [is_dir]: %s." err);
+        Log.err (fun l ->
+            l ~header:"create" "Retrieve an error from [is_dir]: %s." err);
         Lwt.return (Error (`Stat err))
       | Ok true -> Lwt.return (Ok false)
       | Ok false ->
-        Log.debug (fun l -> l ~header:"create" "Make the new directory %a." Fpath.pp dir);
+        Log.debug (fun l ->
+            l ~header:"create" "Make the new directory %a." Fpath.pp dir);
 
         match path with
         | false -> Lwt_pool.use mkdir_pool (fun () -> mkdir dir) >>=
@@ -123,7 +128,8 @@ module Make (Gamma: GAMMA) (FS: FS) = struct
 
           let rec create_them dirs () = match dirs with
             | [] -> Lwt.return (Ok ())
-            | dir :: dirs -> Lwt_pool.use mkdir_pool (fun () -> mkdir dir) >>= function
+            | dir :: dirs -> Lwt_pool.use mkdir_pool (fun () -> mkdir dir)
+              >>= function
               | Error #Mirage_fs.write_error as err -> Lwt.return err
               | Ok () -> create_them dirs ()
           in
@@ -134,8 +140,6 @@ module Make (Gamma: GAMMA) (FS: FS) = struct
           >|= result_bind (fun _ -> Ok true)
 
     let delete t ?(recurse = false) dir =
-      let open Lwt.Infix in
-
       let rec delete_files to_rmdir dirs = match dirs with
         | [] -> Lwt.return (Ok to_rmdir)
         | dir :: todo ->
@@ -268,17 +272,12 @@ module Make (Gamma: GAMMA) (FS: FS) = struct
       constraint 'a = [< `Read | `Write ]
 
     let exists t path =
-      let open Lwt.Infix in
-
       is_file t path >|= function
       | Ok _ as v -> v
       | Error (`System err) -> Error (`Stat err)
 
     let open' t ?lock path ~mode:_ =
-      let open Lwt.Infix in
-
-      Lock.with_lock lock
-      @@ fun () ->
+      Lock.with_lock lock  @@ fun () ->
       let fd = Fpath.to_string path in
       FS.stat t fd >>= function
       | Ok { Mirage_fs.directory = false; _ } -> Lwt.return (Ok fd)
@@ -293,23 +292,19 @@ module Make (Gamma: GAMMA) (FS: FS) = struct
        if [seek <= max]. *)
 
     let open_r t ?lock path ~mode =
-      let open Lwt.Infix in
-      open' t ?lock path ~mode >|= result_bind (fun fd -> Ok ({ fd; seek = 0 } :> [ `Read ] fd))
+      open' t ?lock path ~mode >|=
+      result_bind (fun fd -> Ok ({ fd; seek = 0 } :> [ `Read ] fd))
 
     let open_w t ?lock path ~mode =
-      let open Lwt.Infix in
-      open' t ?lock path ~mode >|= result_bind (fun fd -> Ok ({ fd; seek = 0 } :> [ `Write ] fd))
+      open' t ?lock path ~mode >|=
+      result_bind (fun fd -> Ok ({ fd; seek = 0 } :> [ `Write ] fd))
 
     let write t raw ?(off = 0) ?(len = Cstruct.len raw) fd =
-      let open Lwt.Infix in
-
       FS.write t fd.fd fd.seek (Cstruct.sub raw off len) >|= function
       | Ok () -> fd.seek <- fd.seek + len; Ok len
       | Error (#Mirage_fs.write_error as err) -> Error (err :> error)
 
     let read t dst ?(off = 0) ?(len = Cstruct.len dst) fd =
-      let open Lwt.Infix in
-
       FS.read t fd.fd fd.seek len >|= function
       | Error (#Mirage_fs.error as err) -> Error (err :> error)
       | Ok src ->
@@ -320,32 +315,26 @@ module Make (Gamma: GAMMA) (FS: FS) = struct
     let close _ = Lwt.return (Ok ())
 
     let delete t ?lock path =
-      let open Lwt.Infix in
-
-      Lock.with_lock lock
-      @@ fun () ->
+      Lock.with_lock lock @@ fun () ->
       FS.destroy t (Fpath.to_string path) >|= function
       | Ok _ as v -> v
       | Error (#Mirage_fs.write_error as err) -> Error (err :> error)
 
     let atomic_read t path =
-      let open Lwt.Infix in
-
       FS.stat t (Fpath.to_string path) >>= function
       | Error _ -> Lwt.return None
       | Ok stat ->
         if stat.Mirage_fs.directory
         then Lwt.fail (Failure (Fmt.strf "%a is a directory" Fpath.pp path))
-        else FS.read t (Fpath.to_string path) 0 (Int64.to_int stat.Mirage_fs.size) >|= function
+        else
+          FS.read t (Fpath.to_string path) 0 (Int64.to_int stat.Mirage_fs.size)
+          >|= function
           | Error _ -> None
           | Ok cs -> Some (Cstruct.of_string (Cstruct.copyv cs))
 
     let atomic_write t ?lock path content =
-      let open Lwt.Infix in
-
       FS.mkdir t (Filename.dirname (Fpath.to_string path)) >>= fun _ ->
-      Lock.with_lock lock
-      @@ fun () ->
+      Lock.with_lock lock @@ fun () ->
       FS.create t (Fpath.to_string path) >>= function
       | Error (#Mirage_fs.write_error as err) -> Lwt.return (Error (err :> error))
       | Ok () -> FS.write t (Fpath.to_string path) 0 content >|= function
@@ -353,11 +342,8 @@ module Make (Gamma: GAMMA) (FS: FS) = struct
         | Error (#Mirage_fs.write_error as err) -> Error (err :> error)
 
     let test_and_set t ?lock ?temp:_ file ~test ~set =
-      let open Lwt.Infix in
-
       FS.mkdir t (Filename.dirname (Fpath.to_string file)) >>= fun _ ->
-      Lock.with_lock lock
-      @@ fun () ->
+      Lock.with_lock lock @@ fun () ->
       let set () =
         (match set with
          | None   -> delete t file
@@ -372,15 +358,13 @@ module Make (Gamma: GAMMA) (FS: FS) = struct
       | _ -> Lwt.return (Ok false)
 
     let move t ?lock patha pathb =
-      let open Lwt_result in
-
-      let ( >!= ) = Lwt_result.bind_lwt_err in
-
-      Lock.with_lock lock
-      @@ fun () ->
-      (open' t patha ~mode:0o644 >!= fun err -> Lwt.return (err :> error)) >>= fun fda ->
-      (open' t pathb ~mode:0o644 >!= fun err -> Lwt.return (err :> error)) >>= fun fdb ->
-      (FS.size t fda >!= function #Mirage_fs.error as err -> Lwt.return (err :> error)) >>= fun size ->
+      Lock.with_lock lock @@ fun () ->
+      (open' t patha ~mode:0o644 >!= fun err ->
+          Lwt.return (err :> error)) >?= fun fda ->
+      (open' t pathb ~mode:0o644 >!= fun err ->
+          Lwt.return (err :> error)) >?= fun fdb ->
+      (FS.size t fda >!= function #Mirage_fs.error as err ->
+          Lwt.return (err :> error)) >?= fun size ->
 
       let stream, push = Lwt_stream.create () in
 
@@ -389,7 +373,7 @@ module Make (Gamma: GAMMA) (FS: FS) = struct
           push None; Lwt.return (Ok ())
         | rest ->
           let len = Int64.to_int (min (Int64.of_int max_int) rest) in
-          FS.read t fda pos len >>= fun cs ->
+          FS.read t fda pos len >?= fun cs ->
           push (Some (Cstruct.concat cs));
           read (pos + len) Int64.(sub rest (of_int len))
       in
