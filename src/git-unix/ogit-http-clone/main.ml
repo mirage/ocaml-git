@@ -17,7 +17,7 @@
 
 let () = Random.self_init ()
 
-module Sync_http = Git_unix.HTTP.Make(Git_http.Default)(Git_unix.Store)
+module Sync_http = Git_unix.HTTP(Git_unix.Store)
 
 let option_map f = function
   | Some v -> Some (f v)
@@ -119,7 +119,8 @@ let main ppf progress origin branch repository directory =
   in
 
   (Git_unix.Store.create ~root () >!= fun err -> `Store err) >>= fun git ->
-  (Sync_http.clone git ?stdout ?stderr ~https ?port:(Uri.port repository) ~reference:branch
+  (Sync_http.clone_ext git ?stdout ?stderr ~https
+     ?port:(Uri.port repository) ~reference:branch
      (option_value_exn
         (fun () -> raise (Failure "Invalid repository: no host."))
         (Uri.host repository))

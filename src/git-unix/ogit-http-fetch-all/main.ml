@@ -18,8 +18,8 @@
 let () = Random.self_init ()
 let () = Printexc.record_backtrace true
 
-module Sync_http = Git_unix.HTTP.Make(Git_http.Default)(Git_unix.Store)
-module Negociator = Sync_http.Negociator
+module Sync_http = Git_unix.HTTP(Git_unix.Store)
+module Negociator = Git.Negociator.Make(Git_unix.Store)
 
 module Log =
 struct

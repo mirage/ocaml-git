@@ -69,27 +69,22 @@ type 'a acks =
   ; unshallow : 'a list
   ; acks      : ('a * [ `Common | `Ready | `Continue | `ACK ]) list }
 
-module type S =
-sig
-  module Store
-    : Minimal.S
-      with type Hash.Digest.buffer = Cstruct.t
-       and type Hash.hex = string
-  module Decoder
-    : Smart.DECODER
-      with module Hash = Store.Hash
+module type S = sig
+  module Store : Minimal.S
+  module Decoder: Smart.DECODER with module Hash = Store.Hash
 
   type state
   type nonrec acks = Store.Hash.t acks
 
-  val find_common : Store.t -> (Store.Hash.t list * state * (acks -> state -> ([ `Again of Store.Hash.t list | `Done | `Ready ] * state) Lwt.t)) Lwt.t
+  val find_common: Store.t ->
+    (Store.Hash.t list
+     * state
+     * (acks -> state ->
+        ([ `Again of Store.Hash.t list | `Done | `Ready ]* state) Lwt.t)
+    ) Lwt.t
 end
 
-module Make
-    (G : Minimal.S with type Hash.Digest.buffer = Cstruct.t
-                    and type Hash.hex = string)
-  : S with module Store = G
-= struct
+module Make (G : Minimal.S): S with module Store = G = struct
   module Store = G
 
   [@@@warning "-32"]

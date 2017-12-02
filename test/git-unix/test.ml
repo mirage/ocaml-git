@@ -17,12 +17,13 @@
 
 open Lwt.Infix
 open Test_common
+let (>>?=) = Lwt_result.bind
 
 module Make (Store : Git.S) = struct
-  module Sync = Git_unix.TCP.Make(Git_unix.TCP.Default)(Store)
-  module HttpSync = Git_unix.HTTP.Make(Git_http.Default)(Store)
+  module Sync = Git_unix.Sync(Store)
+  module HTTP = Git_unix.HTTP(Store)
 
-  exception Sync of Sync.error'
+  exception Sync of Sync.error
 
   module T = Test_store.Make(Store)
   include T
@@ -47,53 +48,40 @@ module Make (Store : Git.S) = struct
           Sync.fetch_all t uri >>= function
           | Error err -> Lwt.fail (Sync err)
           | Ok () ->
-            Sync.easy_update t ~reference:Store.Reference.master uri >>= function
+            Sync.update t ~reference:Store.Reference.master uri >>= function
             | Error err ->
               Lwt.fail (Sync err)
             | Ok [] -> Lwt.return (Ok t)
             | Ok (_ :: _) ->
               Alcotest.fail "de-synchronization of the git repository"
     in
-    run x (fun () -> let open Lwt.Infix in test () >>= function
+    run x (fun () -> test () >>= function
       | Ok t -> Lwt.return t
       | Error err -> Lwt.fail (Store err))
 
   let test_clone x () =
     let test () =
-      let open Lwt_result in
-
-      Store.create ~root () >>= fun t ->
+      Store.create ~root () >>?= fun t ->
 
       let clone_tcp ?(reference = Store.Reference.master) t uri =
-        let open Lwt.Infix in
-
-        Sync.easy_clone t ~reference uri >>= fun _ ->
-        let open Lwt.Infix in
-
-        Store.list t
-        >>= Lwt_list.iter_s
-          (fun hash ->
-             Store.read_exn t hash >>= fun _ -> Lwt.return ())
+        Sync.clone t ~reference uri >>= fun _ ->
+        Store.list t >>=
+        Lwt_list.iter_s (fun hash -> Store.read_exn t hash >>= fun _ -> Lwt.return ())
         >>= fun () ->
         Store.Ref.read t Store.Reference.head >>= function
         | Error _ -> Alcotest.fail "empty clone!"
-        | Ok _ -> Store.reset t
-          >>= function
+        | Ok _ ->
+          Store.reset t >>= function
           | Ok () -> Lwt.return ()
           | Error (`Store err) -> Lwt.fail (Store err)
           | Error (`Ref err) -> Lwt.fail (Ref err)
       in
 
       let clone_http ?(reference = Store.Reference.master) t uri =
-        let open Lwt.Infix in
-
-        HttpSync.easy_clone t ~reference uri >>= fun _ ->
-        let open Lwt.Infix in
-
-        Store.list t
-        >>= Lwt_list.iter_s
-          (fun hash ->
-             Store.read_exn t hash >>= fun _ -> Lwt.return ())
+        HTTP.clone t ~reference uri >>= fun _ ->
+        Store.list t >>=
+        Lwt_list.iter_s
+          (fun hash -> Store.read_exn t hash >>= fun _ -> Lwt.return ())
         >>= fun () ->
         Store.Ref.read t Store.Reference.head >>= function
         | Error _ -> Alcotest.fail "empty clone!"
@@ -110,8 +98,6 @@ module Make (Store : Git.S) = struct
 
       let gh_pages  = Store.Reference.of_string "refs/heads/gh-pages" in
 
-      let open Lwt.Infix in
-
       clone_tcp  t tcp_ocaml_git                      >>= fun () ->
       clone_tcp  t tcp_ocaml_git  ~reference:gh_pages >>= fun () ->
       clone_http t http_ocaml_git                     >>= fun () ->
@@ -120,7 +106,7 @@ module Make (Store : Git.S) = struct
 
       Lwt.return (Ok t)
     in
-    run x (fun () -> let open Lwt.Infix in test () >>= function
+    run x (fun () -> test () >>= function
       | Ok t -> Lwt.return t
       | Error err -> Lwt.fail (Store err))
 end

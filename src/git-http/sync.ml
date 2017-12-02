@@ -15,8 +15,29 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module type CLIENT =
-sig
+open Lwt.Infix
+let ( >!= ) = Lwt_result.bind_lwt_err
+let ( >?= ) = Lwt_result.bind
+
+module Default = struct
+  let capabilites =
+    [ `Multi_ack_detailed
+    ; `Thin_pack
+    ; `Side_band_64k
+    ; `Ofs_delta
+    ; `Agent "git/2.0.0"
+    ; `Report_status
+    ; `No_done ]
+end
+
+module Option =
+struct
+  let mem v x ~equal = match v with Some x' -> equal x x' | None -> false
+  let value_exn v ~error =
+    match v with Some v -> v | None -> raise (Invalid_argument error)
+end
+
+module type CLIENT = sig
   type headers
   type body
   type resp
@@ -28,8 +49,7 @@ sig
   val call : ?headers:headers -> ?body:body -> meth -> uri -> resp io
 end
 
-module type FLOW =
-sig
+module type FLOW = sig
   type raw
 
   type +'a io
@@ -38,8 +58,7 @@ sig
   type o = unit -> (raw * int * int) option io
 end
 
-module Lwt_cstruct_flow =
-struct
+module Lwt_cstruct_flow = struct
   type raw = Cstruct.t
 
   type +'a io = 'a Lwt.t
@@ -48,8 +67,7 @@ struct
   type o = unit -> (raw * int * int) option io
 end
 
-module type S =
-sig
+module type S_EXT = sig
   module Web : Web.S
   module Client : CLIENT
     with type headers = Web.HTTP.headers
@@ -71,7 +89,8 @@ sig
     [ `SmartDecoder of Decoder.error
     | `StorePack of Store.Pack.error
     | `Clone of string
-    | `ReportStatus of string ]
+    | `ReportStatus of string
+    | `Ref of Store.Ref.error ]
 
   val pp_error : error Fmt.t
 
@@ -80,6 +99,7 @@ sig
     -> ?headers:Web.HTTP.headers
     -> ?https:bool
     -> ?port:int
+    -> ?capabilities:Git.Capability.t list
     -> string -> string -> (Decoder.advertised_refs, error) result Lwt.t
 
   type command =
@@ -93,6 +113,7 @@ sig
     -> ?headers:Web.HTTP.headers
     -> ?https:bool
     -> ?port:int
+    -> ?capabilities:Git.Capability.t list
     -> string -> string -> ((string, string * string) result list, error) result Lwt.t
 
   val fetch :
@@ -102,6 +123,7 @@ sig
     -> ?stderr:(Cstruct.t -> unit Lwt.t)
     -> ?headers:Web.HTTP.headers
     -> ?https:bool
+    -> ?capabilities:Git.Capability.t list
     -> negociate:((Decoder.acks -> 'state -> ([ `Ready | `Done | `Again of Store.Hash.t list ] * 'state) Lwt.t) * 'state)
     -> has:Store.Hash.t list
     -> want:((Store.Hash.t * string * bool) list -> (Store.Reference.t * Store.Hash.t) list Lwt.t)
@@ -109,7 +131,7 @@ sig
     -> ?port:int
     -> string -> string -> ((Store.Reference.t * Store.Hash.t) list * int, error) result Lwt.t
 
-  val clone :
+  val clone_ext :
        Store.t
     -> ?stdout:(Cstruct.t -> unit Lwt.t)
     -> ?stderr:(Cstruct.t -> unit Lwt.t)
@@ -117,11 +139,43 @@ sig
     -> ?https:bool
     -> ?port:int
     -> ?reference:Store.Reference.t
+    -> ?capabilities:Git.Capability.t list
     -> string -> string -> (Store.Hash.t, error) result Lwt.t
+
+  val fetch_all :
+    Store.t -> ?locks:Store.Lock.t ->
+    ?capabilities:Git.Capability.t list ->
+    Uri.t -> (unit, error) result Lwt.t
+
+  val fetch_one :
+    Store.t -> ?locks:Store.Lock.t ->
+    ?capabilities:Git.Capability.t list ->
+    reference:Store.Reference.t -> Uri.t -> (unit, error) result Lwt.t
+
+  val clone :
+    Store.t -> ?locks:Store.Lock.t ->
+    ?capabilities:Git.Capability.t list ->
+    reference:Store.Reference.t -> Uri.t -> (unit, error) result Lwt.t
+
+  val update : Store.t ->
+    ?capabilities:Git.Capability.t list ->
+    reference:Store.Reference.t -> Uri.t ->
+    ((Store.Reference.t, Store.Reference.t * string) result list, error) result Lwt.t
+
 end
 
-module Make
-    (K : Git.Sync.CAPABILITIES)
+
+module type S = S_EXT
+  with type Web.req = Web_cohttp_lwt.req
+   and type Web.resp = Web_cohttp_lwt.resp
+   and type 'a Web.io = 'a Web_cohttp_lwt.io
+   and type Web.raw = Web_cohttp_lwt.raw
+   and type Web.uri = Web_cohttp_lwt.uri
+   and type Web.Request.body = Web_cohttp_lwt.Request.body
+   and type Web.Response.body = Web_cohttp_lwt.Response.body
+   and type Web.HTTP.headers = Web_cohttp_lwt.HTTP.headers
+
+module Make_ext
     (W : Web.S
      with type +'a io = 'a Lwt.t
       and type raw = Cstruct.t
@@ -136,9 +190,6 @@ module Make
       and type uri = W.uri
       and type resp = W.resp)
     (G : Git.S)
-  : S with module Web     = W
-       and module Client  = C
-       and module Store   = G
 = struct
   module Web    = W
   module Client = C
@@ -154,13 +205,15 @@ module Make
     [ `SmartDecoder of Decoder.error
     | `StorePack of Store.Pack.error
     | `Clone of string
-    | `ReportStatus of string ]
+    | `ReportStatus of string
+    | `Ref of Store.Ref.error ]
 
   let pp_error ppf = function
     | `SmartDecoder err  -> Fmt.pf ppf "(`SmartDecoder %a)" Decoder.pp_error err
     | `StorePack err     -> Fmt.pf ppf "(`StorePack %a)" Store.Pack.pp_error err
     | `Clone err         -> Fmt.pf ppf "(`Clone %s)" err
     | `ReportStatus err  -> Fmt.pf ppf "(`ReportStatus %s)" err
+    | `Ref err           -> Fmt.pf ppf "(`Ref %a)" Store.Ref.pp_error err
 
   module Log =
   struct
@@ -187,10 +240,7 @@ module Make
       Cstruct.blit cs 0 rt 0 ln;
       rt
     in
-
-    let open Lwt.Infix in
     let stream', push = Lwt_stream.create () in
-
     let rec dispatch () =
       stream () >>= function
       | Ok (`Out raw) ->
@@ -208,12 +258,7 @@ module Make
         Lwt.return (Ok ())
       | Error err -> Lwt.return (Error (`SmartDecoder err))
     in
-
-    let open Lwt_result in
-
-    let ( >!= ) = Lwt_result.bind_lwt_err in
-
-    dispatch () >>= fun () ->
+    dispatch () >?= fun () ->
     (Store.Pack.from git (fun () -> Lwt_stream.get stream')
      >!= fun err -> Lwt.return (`StorePack err))
 
@@ -231,8 +276,6 @@ module Make
     in go
 
   let rec consume stream ?keep state =
-    let open Lwt.Infix in
-
     match state with
     | Decoder.Ok v -> Lwt.return (Ok v)
     | Decoder.Error { err; _ } -> Lwt.return (Error err)
@@ -256,9 +299,8 @@ module Make
       | None ->
         consume stream (continue 0)
 
-  let ls _ ?headers ?(https = false) ?port host path =
-    let open Lwt.Infix in
-
+  let ls _ ?headers ?(https = false) ?port ?(capabilities=Default.capabilites)
+      host path =
     let scheme = if https then "https" else "http" in
     let uri =
       Uri.empty
@@ -268,30 +310,23 @@ module Make
       |> (fun uri -> Uri.with_port uri port)
       |> (fun uri -> Uri.add_query_param uri ("service", [ "git-upload-pack" ]))
     in
-
     Log.debug (fun l -> l ~header:"ls" "Launch the GET request to %a."
                   Uri.pp_hum uri);
-
     let git_agent =
-      List.fold_left (fun acc -> function `Agent s -> Some s | _ -> acc) None K.default
+      List.fold_left (fun acc -> function `Agent s -> Some s | _ -> acc)
+        None capabilities
       |> function
       | Some git_agent -> git_agent
       | None -> raise (Invalid_argument "Expected an user agent in capabilities.")
     in
-
     let headers =
       option_map_default
         Web.HTTP.Headers.(def user_agent git_agent)
         Web.HTTP.Headers.(def user_agent git_agent empty)
         headers
     in
-
     Client.call ~headers `GET uri >>= fun resp ->
-
     let decoder = Decoder.decoder () in
-
-    let ( >!= ) = Lwt_result.bind_lwt_err in
-
     consume (Web.Response.body resp) (Decoder.decode decoder (Decoder.HttpReferenceDiscovery "git-upload-pack"))
     >!= (fun err -> Lwt.return (`SmartDecoder err))
 
@@ -303,8 +338,6 @@ module Make
   module Revision = Git.Revision.Make(Store)
 
   let packer ~window ~depth git ~ofs_delta:_ remote commands =
-    let open Lwt.Infix in
-
     let commands' =
       (List.map (fun (hash, refname, _) -> Encoder.Delete (hash, refname)) remote)
       @ commands
@@ -345,9 +378,9 @@ module Make
       [] (Store.Hash.Set.elements elements)
     >>= fun entries -> Store.Pack.make git ~window ~depth entries
 
-  let push git ~push ?headers ?(https = false) ?port host path =
-    let open Lwt.Infix in
-
+  let push git ~push
+      ?headers ?(https = false) ?port ?(capabilities=Default.capabilites)
+      host path =
     let scheme = if https then "https" else "http" in
     let uri =
       Uri.empty
@@ -362,7 +395,8 @@ module Make
                   Uri.pp_hum uri);
 
     let git_agent =
-      List.fold_left (fun acc -> function `Agent s -> Some s | _ -> acc) None K.default
+      List.fold_left (fun acc -> function `Agent s -> Some s | _ -> acc)
+        None capabilities
       |> function
       | Some git_agent -> git_agent
       | None -> raise (Invalid_argument "Expected an user agent in capabilities.")
@@ -385,8 +419,11 @@ module Make
       Log.err (fun l -> l ~header:"push" "The HTTP decoder returns an error: %a." Decoder.pp_error err);
       Lwt.return (Error (`SmartDecoder err))
     | Ok refs ->
-      let common = List.filter (fun x -> List.exists ((=) x) K.default) refs.Decoder.capabilities in
-
+      let common =
+        List.filter (fun x ->
+            List.exists ((=) x) capabilities
+          ) refs.Decoder.capabilities
+      in
       let sideband =
         if List.exists ((=) `Side_band_64k) common
         then `Side_band_64k
@@ -429,7 +466,7 @@ module Make
                      (Encoder.encode encoder
                         (`HttpUpdateRequest { Encoder.shallow
                                             ; requests = Encoder.L (x, r)
-                                            ; capabilities = K.default })))
+                                            ; capabilities })))
             (Web.Request.meth req)
             (Web.Request.uri req
              |> (fun uri -> Uri.with_scheme uri (Some scheme))
@@ -443,9 +480,9 @@ module Make
             Lwt.return (Error (`ReportStatus err))
           | Error err -> Lwt.return (Error (`SmartDecoder err))
 
-  let fetch git ?(shallow = []) ?stdout ?stderr ?headers ?(https = false) ~negociate:(negociate, nstate) ~has ~want ?deepen ?port host path =
-    let open Lwt.Infix in
-
+  let fetch git ?(shallow = []) ?stdout ?stderr ?headers ?(https = false)
+      ?(capabilities=Default.capabilites)
+      ~negociate:(negociate, nstate) ~has ~want ?deepen ?port host path =
     let scheme = if https then "https" else "http" in
     let uri =
       Uri.empty
@@ -460,7 +497,8 @@ module Make
                   Uri.pp_hum uri);
 
     let git_agent =
-      List.fold_left (fun acc -> function `Agent s -> Some s | _ -> acc) None K.default
+      List.fold_left (fun acc -> function `Agent s -> Some s | _ -> acc)
+        None capabilities
       |> function
       | Some git_agent -> git_agent
       | None -> raise (Invalid_argument "Expected an user agent in capabilities.")
@@ -486,8 +524,11 @@ module Make
       Log.err (fun l -> l ~header:"fetch" "The HTTP decoder returns an error: %a." Decoder.pp_error err);
       Lwt.return (Error (`SmartDecoder err))
     | Ok refs ->
-      let common = List.filter (fun x -> List.exists ((=) x) K.default) refs.Decoder.capabilities in
-
+      let common =
+        List.filter (fun x ->
+            List.exists ((=) x) capabilities
+          ) refs.Decoder.capabilities
+      in
       let sideband =
         if List.exists ((=) `Side_band_64k) common
         then `Side_band_64k
@@ -524,7 +565,7 @@ module Make
             ~body:(producer (Encoder.encode encoder
                                (`HttpUploadRequest (final,
                                                     { Encoder.want = snd first, List.map snd rest
-                                                    ; capabilities = K.default
+                                                    ; capabilities
                                                     ; shallow
                                                     ; deep = deepen
                                                     ; has }))))
@@ -575,17 +616,20 @@ module Make
 
         loop ~final:(List.length has = 0) nstate resp
 
-  let clone git ?stdout ?stderr ?headers ?(https = false) ?port ?(reference = Store.Reference.head) host path =
+  let clone_ext git ?stdout ?stderr ?headers ?(https = false) ?port
+      ?(reference = Store.Reference.head) ?capabilities
+      host path =
     let want refs =
       Lwt.try_bind
-        (fun () -> Lwt_list.find_s (fun (_, refname, _) -> Lwt.return (Store.Reference.(equal (of_string refname) reference))) refs)
+        (fun () -> Lwt_list.find_s (fun (_, refname, _) ->
+             Lwt.return (Store.Reference.(equal (of_string refname) reference)))
+             refs)
         (fun (hash, _, _) -> Lwt.return [ reference, hash ])
         (fun _ -> Lwt.return [])
     in
 
-    let open Lwt.Infix in
-
-    fetch git ?stdout ?stderr ?headers ~https ~negociate:((fun _ () -> Lwt.return (`Done, ())), ())
+    fetch git ?stdout ?stderr ?headers ?capabilities ~https
+      ~negociate:((fun _ () -> Lwt.return (`Done, ())), ())
       ~has:[]
       ~want
       ?port host path
@@ -599,4 +643,137 @@ module Make
                  (Fmt.hvbox (Fmt.Dump.list (Fmt.Dump.pair Store.Reference.pp Store.Hash.pp)))
                  expect)))
     | Error _ as err -> Lwt.return err
+
+  module Negociator = Git.Negociator.Make(Store)
+
+  exception Jump of Store.Ref.error
+
+  let fetch_all t ?locks ?capabilities repository =
+    Negociator.find_common t >>= fun (has, state, continue) ->
+    let continue { Decoder.acks; shallow; unshallow } state =
+      continue { Git.Negociator.acks; shallow; unshallow } state
+    in
+    let want refs =
+      Lwt_list.filter_map_p (function
+          | (hash, refname, false) ->
+            let reference = Store.Reference.of_string refname in
+            Lwt.return (Some (reference, hash))
+          | _ -> Lwt.return None
+        ) refs
+    in
+    let host =
+      Option.value_exn (Uri.host repository)
+        ~error:(Fmt.strf "Expected an http url with host: %a."
+                  Uri.pp_hum repository)
+    in
+    let https =
+      Option.mem (Uri.scheme repository) "https" ~equal:String.equal
+    in
+    fetch t ~https ?port:(Uri.port repository) ?capabilities
+      ~negociate:(continue, state) ~has ~want host
+      (Uri.path_and_query repository)
+    >?= fun (lst, _) ->
+      Lwt.catch (fun () ->
+          Lwt_list.iter_s
+            (fun (reference, hash) ->
+               Store.Ref.write t ?locks reference (Store.Reference.Hash hash)
+               >>= function
+               | Ok _ -> Lwt.return ()
+               | Error err -> Lwt.fail (Jump err)
+            ) lst >>= fun () ->
+          Lwt.return (Ok ()))
+        (function
+          | Jump err -> Lwt.return (Error (`Ref err))
+          | exn -> Lwt.fail exn) (* XXX(dinosaure): should never happen. *)
+
+  let clone t ?locks ?capabilities ~reference repository =
+    let host =
+      Option.value_exn (Uri.host repository)
+        ~error:(Fmt.strf "Expected an http url with host: %a."
+                  Uri.pp_hum repository)
+    in
+    let https = Option.mem (Uri.scheme repository) "https" ~equal:String.equal in
+    clone_ext t ~https ?port:(Uri.port repository) ?capabilities
+      host (Uri.path_and_query repository)
+    >?= fun hash' ->
+      Store.Ref.write t ?locks reference (Store.Reference.Hash hash')
+      >!= (fun err -> Lwt.return (`Ref err))
+      >?= fun () ->
+        Store.Ref.write t ?locks Store.Reference.head
+          (Store.Reference.Ref reference)
+        >!= (fun err -> Lwt.return (`Ref err))
+
+  let fetch_one t ?locks ?capabilities ~reference repository =
+    Negociator.find_common t >>= fun (has, state, continue) ->
+    let continue { Decoder.acks; shallow; unshallow } state =
+      continue { Git.Negociator.acks; shallow; unshallow } state
+    in
+    let want refs =
+      Lwt_list.filter_map_p (function
+          | (hash, refname, false) ->
+            let reference' = Store.Reference.of_string refname in
+            if Store.Reference.equal reference reference'
+            then Lwt.return (Some (reference, hash))
+            else Lwt.return None
+          | _ -> Lwt.return None
+        ) refs
+    in
+    let host =
+      Option.value_exn (Uri.host repository)
+        ~error:(Fmt.strf "Expected an http url with host: %a."
+                  Uri.pp_hum repository) in
+    let https =
+      Option.mem (Uri.scheme repository) "https" ~equal:String.equal
+    in
+    fetch t ~https ?port:(Uri.port repository) ?capabilities
+      ~negociate:(continue, state) ~has ~want host
+      (Uri.path_and_query repository)
+    >?= function
+      | [ (reference', hash') ], _ ->
+        Store.Ref.write t ?locks reference' (Store.Reference.Hash hash')
+        >!= (fun err -> Lwt.return (`Ref err))
+      | _ -> Lwt.return (Ok ()) (* TODO *)
+
+  let update t ?capabilities ~reference repository =
+    let push_handler git remote_refs =
+      Store.Ref.list git >>=
+      Lwt_list.find_s (fun (reference', _) ->
+          Lwt.return Store.Reference.(equal reference reference')
+        ) >>= fun (_, local_hash) ->
+      Lwt_list.find_s (function
+          | (_, refname, false) ->
+            Lwt.return Store.Reference.(equal reference (of_string refname))
+          | (_, _, true) -> Lwt.return false
+        ) remote_refs >|= fun (remote_hash, remote_refname, _) ->
+      if Store.Hash.equal local_hash remote_hash
+      then ([], [])
+      else ([], [ `Update (remote_hash, local_hash, remote_refname) ])
+    in
+    let host =
+      Option.value_exn (Uri.host repository)
+        ~error:(Fmt.strf "Expected an http url with host: %a."
+                  Uri.pp_hum repository)
+    in
+    let https =
+      Option.mem (Uri.scheme repository) "https" ~equal:String.equal
+    in
+    push t ~push:push_handler ~https ?capabilities ?port:(Uri.port repository)
+      host (Uri.path_and_query repository)
+    >?= fun lst ->
+    Lwt_result.ok (Lwt_list.map_p (function
+          | Ok refname -> Lwt.return (Ok (Store.Reference.of_string refname))
+          | Error (refname, err) ->
+            Lwt.return (Error (Store.Reference.of_string refname, err))
+        ) lst)
+
 end
+
+module Make
+    (C: CLIENT with type +'a io = 'a Lwt.t
+                and type headers = Web_cohttp_lwt.HTTP.headers
+                and type body = Lwt_cstruct_flow.o
+                and type meth = Web_cohttp_lwt.HTTP.meth
+                and type uri = Web_cohttp_lwt.uri
+                and type resp = Web_cohttp_lwt.resp)
+    (S: Git.S)
+  = Make_ext(Web_cohttp_lwt)(C)(S)

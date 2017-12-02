@@ -19,10 +19,12 @@
 module FS = Fs
 module Lock = Lock
 module SHA1:  Git.HASH
-module TCP = Tcp
-module HTTP = Http
+module Net = Net
 
 module Store : Git.Store.S
   with module Hash = SHA1
    and module Lock = Lock
    and module FS = FS
+
+module Sync (S: Git.S): Git.Sync.S with module Store = S and module Net = Net
+module HTTP (S: Git.S): Git_http.Sync.S with module Store = S

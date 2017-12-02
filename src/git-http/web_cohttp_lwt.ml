@@ -12,8 +12,7 @@ type resp =
   { resp : Cohttp.Response.t
   ; body : Cohttp_lwt.Body.t }
 
-module HTTP =
-struct
+module HTTP = struct
   type headers = Cohttp.Header.t
 
   type path = string list

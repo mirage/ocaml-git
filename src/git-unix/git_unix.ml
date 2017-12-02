@@ -15,9 +15,10 @@
  *)
 
 module FS = Fs
+module Net = Net
 module Lock = Lock
 module SHA1 = Git.Hash.Make(Digestif.SHA1)
-module TCP = Tcp
-module HTTP = Http
+module Sync = Git.Sync.Make(Net)
+module HTTP = Http.Make
 
 module Store = Git.Store.Make(SHA1)(Lock)(FS)(Git.Inflate)(Git.Deflate)

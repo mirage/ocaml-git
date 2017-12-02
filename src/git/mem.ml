@@ -293,8 +293,6 @@ module Make
         | PACKDecoder.Hunk _ -> raise (Invalid_argument "k2k")
       in
 
-      let open Lwt.Infix in
-
       let empty        = Cstruct.create 0 in
       let buffer       = Buffer.create 0x800 in
       let buffer_hunks = Buffer.create 0x800 in
@@ -523,4 +521,5 @@ module Make
       | Some (Reference.Ref _ | Reference.Hash _), None
       | None, Some (Reference.Ref _ | Reference.Hash _) -> Lwt.return (Ok false)
   end
+
 end
