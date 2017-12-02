@@ -23,14 +23,16 @@ let head    = "HEAD"
 let is_head = String.equal head
 let master  = "refs/heads/master"
 
-let to_path x = match Fpath.of_string x with
+let to_path x = match Fpath.of_string (String.concat Fpath.dir_sep (Astring.String.cuts ~sep:"/" x)) with
   | Error (`Msg x) -> raise (Invalid_argument x)
   | Ok v -> Fpath.normalize v
 
 let of_path path =
   match List.rev @@ Fpath.segs path with
   | "HEAD" :: _ -> head
-  | _ -> Fpath.(to_string (normalize (v "refs" // path)))
+  | _ ->
+    let segs = Fpath.(segs (normalize (v "refs" // path))) in
+    String.concat "/" segs
 
 let pp ppf x =
   Fmt.pf ppf "%s" (String.escaped x)
@@ -248,7 +250,7 @@ module IO
     | #D.error as err -> D.pp_error ppf err
 
   let normalize path =
-    let segs = Fpath.segs path in
+    let segs = Astring.String.cuts ~sep:Fpath.dir_sep (Fpath.to_string path) in
 
     List.fold_left
       (fun (stop, acc) ->
