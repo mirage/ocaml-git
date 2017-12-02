@@ -7,3 +7,6 @@ module Make (L : Git.LOCK) (FS: Git.FS with type File.lock = L.elt) =
 struct
   include Git.Store.Make(SHA1)(L)(FS)(Git.Inflate)(Git.Deflate)
 end
+
+module Sync = Git.Sync.Make(Net)
+(* XXX: module HTTP = Git_http.Sync.Make(Net) *)
