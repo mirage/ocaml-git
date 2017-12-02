@@ -15,6 +15,8 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+open Lwt.Infix
+
 let () = Printexc.record_backtrace true
 
 open Test_common
@@ -31,8 +33,6 @@ let protect f x = Lwt.catch (fun () -> f x) protect_unix_exn
 let safe f x = Lwt.catch (fun () -> f x) ignore_enoent
 
 let mkdir dirname =
-  let open Lwt.Infix in
-
   let rec aux dir =
     if Sys.file_exists dir && Sys.is_directory dir then Lwt.return_unit
     else
@@ -62,29 +62,38 @@ let rmdir dir =
   else
     command "rm -rf %S" dir
 
-module M =
-struct
+module M = struct
   let root = "test-git-mirage-store"
 
   let ( >>| ) x f =
-    let open Lwt.Infix in
-
     x >>= function
     | Ok x    -> f x
     | Error e -> Fmt.kstrf Lwt.fail_with "%a" FS_unix.pp_write_error e
 
   let init () =
-    rmdir root;
-    let open Lwt.Infix in
+    if Sys.file_exists root then rmdir root;
     mkdir root >>= fun () -> mkdir Filename.(concat root "temp")
 
   include FS_unix
 
+  let path p =
+    if Sys.os_type <> "Win32" then p
+    else
+      let segs = Fpath.(segs (normalize (v p))) in
+      String.concat "/" segs
+
+  let read x p = read x (path p)
+  let size x p = size x (path p)
+  let create x p = create x (path p)
+  let mkdir x p = mkdir x (path p)
+  let destroy x p = destroy x (path p)
+  let stat x p = stat x (path p)
+  let listdir x p = listdir x (path p)
+  let write x p = write x (path p)
   let connect () = FS_unix.connect root
 end
 
-module Gamma =
-struct
+module Gamma = struct
   type path = Fpath.t
 
   let temp = Fpath.(v M.root / "temp")

@@ -9,4 +9,4 @@ struct
 end
 
 module Sync = Git.Sync.Make(Net)
-(* XXX: module HTTP = Git_http.Sync.Make(Net) *)
+(* module HTTP = Git_http.Sync.Make(Client) *)
