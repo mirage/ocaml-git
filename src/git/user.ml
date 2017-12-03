@@ -1,5 +1,6 @@
 (*
  * Copyright (c) 2013-2017 Thomas Gazagnaire <thomas@gazagnaire.org>
+ * and Romain Calascibetta <romain.calascibetta@gmail.com>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,94 +15,164 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-type tz_offset = {
-  sign: [`Plus | `Minus];
-  hours: int;
-  min: int;
-}
+type tz_offset =
+  { sign    : [ `Plus | `Minus ]
+  ; hours   : int
+  ; minutes : int }
 
-let default_tz_offset =
-  { sign = `Plus; hours=0; min= 0}
+type t =
+  { name  : string
+  ; email : string
+  ; date  : int64 * tz_offset option }
 
-let pp_tz_offset ppf t =
-  let pp_sign ppf = function
-    | `Plus -> Format.fprintf ppf "`Plus"
-    | `Minus -> Format.fprintf ppf "`Minus"
-  in
-  Format.fprintf ppf "{@[<hov 2>sign = '%a';@ hours = %d;@ min = %d@ @]}"
-    pp_sign t.sign t.hours t.min
+let pp_sign ppf = function
+  | `Plus -> Fmt.pf ppf "`Plus"
+  | `Minus -> Fmt.pf ppf "`Minus"
 
-type t = {
-  name : string;
-  email: string;
-  date : int64 * tz_offset option;
-}
+let pp_tz_offset ppf { sign; hours; minutes; } =
+  Fmt.pf ppf "{ @[<hov>sign = %a;@ \
+                       hours = %02d;@ \
+                       minutes = %02d;@] }"
+    (Fmt.hvbox pp_sign) sign hours minutes
 
-let pp_date ppf (date, tz) =
-  let pp_tz ppf = function
-    | None   -> Format.fprintf ppf "None"
-    | Some o -> Format.fprintf ppf "Some %a" pp_tz_offset o
-  in
-  Format.fprintf ppf "@[<hov 2>(%LdL,@ %a)@]" date pp_tz tz
+let pp ppf { name; email; date = (n, tz_offset) } =
+  Fmt.pf ppf "{ @[<hov>name = %s;@ \
+                       email = %s;@ \
+                       date = %a;@] }"
+    name email
+    (Fmt.hvbox (Fmt.pair Fmt.int64 (Fmt.option pp_tz_offset))) (n, tz_offset)
 
-let add_date buf (date, tz) =
-  Buffer.add_string buf (Int64.to_string date);
-  Buffer.add_char buf ' ';
-  match tz with
-  | None    -> Buffer.add_string buf "+0000"
-  | Some tz ->
-    let sign = match tz.sign with `Plus -> "+" | `Minus -> "-" in
-    Printf.bprintf buf "%s%02d%02d" sign tz.hours tz.min
+module A =
+struct
+  type nonrec t = t
 
-let hash = Hashtbl.hash
-let equal = (=)
-let compare = compare
+  let sp = Angstrom.char ' '
+  let pl = Angstrom.char '+'
+  let mn = Angstrom.char '-'
 
-let pp ppf t =
-  Format.fprintf ppf "{@[<hov>name=\"%s\";@ email=\"%s\";@ date=%a@]}"
-    t.name t.email pp_date t.date
+  let is_not_lt chr = chr <> '<'
+  let is_not_gt chr = chr <> '>'
 
-(* XXX needs to escape name/email/date *)
-let add buf ?level:_ t =
-  Buffer.add_string buf t.name ;
-  Buffer.add_string buf " <"   ;
-  Buffer.add_string buf t.email;
-  Buffer.add_string buf "> "   ;
-  add_date buf t.date
+  let int64 =
+    let open Angstrom in
+    take_while (function '0' .. '9' -> true | _ -> false) >>| Int64.of_string
 
-let input buf =
-  let i = match Mstruct.index buf Misc.lt with
-    | Some i -> i-1
-    | None   -> Mstruct.parse_error_buf buf "invalid user name" in
-  let name = Mstruct.get_string buf i in
-  Mstruct.shift buf 2;
-  let j = match Mstruct.index buf Misc.gt with
-    | Some j -> j
-    | None   -> Mstruct.parse_error_buf buf "invalid user email" in
-  let email = Mstruct.get_string buf j in
-  (* skip 2 bytes *)
-  Mstruct.shift buf 2;
-  let seconds = match Mstruct.get_string_delim buf ' ' with
-    | None   -> Mstruct.parse_error_buf buf "Invalid Git date"
-    | Some s -> Int64.of_string s
-  in
-  let sign = match Mstruct.get_char buf with
-    | '+' -> `Plus
-    | '-' -> `Minus
-    | c   -> Mstruct.parse_error_buf buf "wrong sign: %d" (Char.code c)
-  in
-  let hours =
-    let str = Mstruct.get_string buf 2 in
-    try int_of_string str
-    with Failure _ ->
-      Mstruct.parse_error_buf buf "%S is not a valid hour" str
-  in
-  let min =
-    let str = Mstruct.get_string buf 2 in
-    try int_of_string str
-    with Failure _ ->
-      Mstruct.parse_error_buf buf "%S is not a valid hour" str
-  in
-  let tz = { sign; hours; min } in
-  let tz = if tz = default_tz_offset then None else Some tz in
-  { name; email; date = (seconds, tz) }
+  let decoder =
+    let open Angstrom in
+    take_while is_not_lt <* take 1 <* commit
+    >>= fun name    -> let name = String.sub name 0 (String.length name - 1) in
+                        take_while is_not_gt <* commit
+    >>= fun email   -> take 2 *> int64 <* commit
+    >>= fun second  -> sp *> ((pl *> return `Plus)
+                                <|> (mn *> return `Minus))
+                        <* commit
+    >>= fun sign    -> take 2 >>| int_of_string <* commit
+    >>= fun hours   -> take 2 >>| int_of_string <* commit
+    >>= fun minutes ->
+      let tz_offset =
+        if sign = `Plus
+        && hours = 0
+        && minutes = 0
+        then None else Some { sign
+                            ; hours
+                            ; minutes }
+      in
+      return { name
+             ; email
+             ; date = (second, tz_offset) }
+    <* commit
+end
+
+module F =
+struct
+  type nonrec t = t
+
+  let length t =
+    let string x = Int64.of_int (String.length x) in
+    let ( + ) = Int64.add in
+
+    let tz_offset_length = 5L in
+    (string t.name) + 1L + 1L + (string t.email) + 1L + 1L + (string (Int64.to_string (fst t.date))) + 1L + tz_offset_length
+
+  [@@@warning "-45"] (* XXX(dinosaure): shadowing the (::) operator. *)
+  open Farfadet
+
+  let lt = '<'
+  let gt = '>'
+  let sp = ' '
+
+  let int64 e x = string e (Int64.to_string x)
+
+  let digit e x =
+    if x < 10
+    then eval e [ char $ '0'; !!string ] (string_of_int x)
+    else if x < 100
+    then string e (string_of_int x)
+    else raise (Invalid_argument "User.F.digit")
+
+  let sign' e = function
+    | `Plus -> char e '+'
+    | `Minus -> char e '-'
+
+  let date e = function
+    | None -> string e "+0000"
+    | Some { sign; hours; minutes } ->
+      eval e [ !!sign'; !!digit; !!digit ] sign hours minutes
+
+  let encoder e t =
+    eval e [ !!string; char $ sp; char $ lt; !!string; char $ gt; char $ sp; !!int64; char $ sp; !!date ]
+      t.name t.email (fst t.date) (snd t.date)
+end
+
+module M =
+struct
+  type nonrec t = t
+
+  open Minienc
+
+  let lt = '<'
+  let gt = '>'
+  let sp = ' '
+
+  let write_int64 x k e = write_string (Int64.to_string x) k e
+
+  let write_digit x k e =
+    if x < 10
+    then (write_char '0' @@ write_string (string_of_int x) k) e
+    else if x < 100
+    then write_string (string_of_int x) k e
+    else raise (Invalid_argument "User.M.digit")
+
+  let write_sign x k e = match x with
+    | `Plus -> write_char '+' k e
+    | `Minus -> write_char '-' k e
+
+  let write_date x k e = match x with
+    | None -> write_string "+0000" k e
+    | Some { sign; hours; minutes; } ->
+      (write_sign sign
+       @@ write_digit hours
+       @@ write_digit minutes k)
+        e
+
+  let encoder x k e =
+    (write_string x.name
+     @@ write_char sp
+     @@ write_char lt
+     @@ write_string x.email
+     @@ write_char gt
+     @@ write_char sp
+     @@ write_int64 (fst x.date)
+     @@ write_char sp
+     @@ write_date (snd x.date) k)
+    e
+end
+
+module D = Helper.MakeDecoder(A)
+
+let equal   = (=)
+let compare = Pervasives.compare
+let hash    = Hashtbl.hash
+
+module Set = Set.Make(struct type nonrec t = t let compare = compare end)
+module Map = Map.Make(struct type nonrec t = t let compare = compare end)

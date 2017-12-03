@@ -1,5 +1,6 @@
 (*
  * Copyright (c) 2013-2017 Thomas Gazagnaire <thomas@gazagnaire.org>
+ * and Romain Calascibetta <romain.calascibetta@gmail.com>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,12 +15,15 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module K: Graph.Sig.I with type V.t = Hash.t
-
-module Make (S: Store.S): sig
-  val keys: K.t -> Hash.t list
-  val of_keys: S.t -> K.t Lwt.t
-  val closure: ?full:bool -> S.t -> min:Hash.Set.t -> max:Hash.Set.t -> K.t Lwt.t
-  val pack: S.t -> min:Hash.Set.t -> max:Hash.Set.t -> (Hash.t * Value.t) list Lwt.t
-  val to_dot: S.t -> Buffer.t -> unit Lwt.t
+module type S = sig
+  module Store: Minimal.S
+  module K: Graph.Sig.I with type V.t = Store.Hash.t
+  val keys: K.t -> Store.Hash.t list
+  val of_keys: Store.t -> K.t Lwt.t
+  val of_commits: Store.t -> K.t Lwt.t
+  val closure: ?full:bool -> Store.t -> min:Store.Hash.Set.t -> max:Store.Hash.Set.t -> K.t Lwt.t
+  val pack: Store.t -> min:Store.Hash.Set.t -> max:Store.Hash.Set.t -> (Store.Hash.t * Store.Value.t) list Lwt.t
+  val to_dot: Store.t -> Format.formatter -> unit Lwt.t
 end
+
+module Make (S: Minimal.S): S with module Store = S

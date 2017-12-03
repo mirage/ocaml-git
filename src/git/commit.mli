@@ -1,5 +1,6 @@
 (*
  * Copyright (c) 2013-2017 Thomas Gazagnaire <thomas@gazagnaire.org>
+ * and Romain Calascibetta <romain.calascibetta@gmail.com>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,14 +15,72 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-type t = {
-  tree     : Hash.Tree.t;
-  parents  : Hash.Commit.t list;
-  author   : User.t;
-  committer: User.t;
-  message  : string;
-}
+module type S = sig
 
-include S.S with type t := t
+  module Hash: S.HASH
+  (** The [Hash] module used to make this interface. *)
 
-module IO (D: Hash.DIGEST): S.IO with type t = t
+  type t
+  (** A Git Commit object. Which specifies the top-level {!Tree.t} for
+      the snapshot of the project at a point; the author/{i committer}
+      information and the commit message. *)
+
+  val make :
+    author:User.t -> committer:User.t -> ?parents:Hash.t list ->
+    tree:Hash.t -> string -> t
+
+  module D
+    : S.DECODER  with type t = t
+                  and type init = Cstruct.t
+                  and type error = [ `Decoder of string ]
+  (** The decoder of the Git Commit object. We constraint the input to
+      be a {Cstruct.t}. This decoder needs a {Cstruct.t} as an
+      internal buffer. *)
+
+  module A: S.ANGSTROM with type t = t
+  (** The Angstrom decoder of the Git Commit object. *)
+
+  module F: S.FARADAY  with type t = t
+  (** The Faraday encoder of the Git Commit object. *)
+
+  module M: S.MINIENC  with type t = t
+  (** The {!Minienc} encoder of the Git Commit object. *)
+
+  module E: S.ENCODER  with type t = t
+                        and type init = int * t
+                        and type error = [ `Never ]
+  (** The encoder (which uses a {!Minienc.encoder}) of the Git Commit
+      object. We constraint the output to be a {Cstruct.t}. This
+      encoder needs the Commit OCaml value and the memory consumption
+      of the encoder (in bytes). The encoder can not fail.
+
+      NOTE: we can not unspecified the error type (it needs to be
+      concrete) but, because the encoder can not fail, we define the
+      error as [`Never]. *)
+
+  include S.DIGEST with type t := t
+                    and type hash = Hash.t
+
+  include S.BASE with type t := t
+
+  val parents: t -> Hash.t list
+  (** [parents c] returns all parents of the Git Commit object [c]. *)
+
+  val tree: t -> Hash.t
+  (** [tree c] returns the hash of top-level {!Tree.t} of the Git
+      Commit object [c]. *)
+
+  val committer: t -> User.t
+  val author: t -> User.t
+  val message: t -> string
+
+  val compare_by_date: t -> t -> int
+  (** [compare_by_date a b] compares the Git Commit object [a] and [b]
+      by the date of the author. *)
+end
+
+module Make (H : S.HASH): S with module Hash = H
+(** The {i functor} to make the OCaml representation of the Git Commit
+    object by a specific hash implementation. We constraint the
+    {!Hash.S} module to compute a {Cstruct.t} flow and generate a
+    [string] as the hexadecimal representation of the hash. *)

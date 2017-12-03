@@ -1,5 +1,6 @@
 (*
  * Copyright (c) 2013-2017 Thomas Gazagnaire <thomas@gazagnaire.org>
+ * and Romain Calascibetta <romain.calascibetta@gmail.com>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -16,35 +17,45 @@
 
 open Lwt.Infix
 
-type pred = [
-  |`Commit of Hash.t
-  | `Tag of string * Hash.t
-  | `Tree of string * Hash.t
-  | `Tree_root of Hash.t
-]
+module Make (S : Minimal.S) =
+struct
+  module Store = S
 
-module Make (Store: Store.S) = struct
+  module Log =
+  struct
+    let src = Logs.Src.create "git.search" ~doc:"logs git's internal search computation"
+    include (val Logs.src_log src : Logs.LOG)
+  end
 
-  let pred t ?(full=true) h =
-    let commit c = `Commit (Hash.of_commit c) in
-    let tree l s = `Tree (l, s) in
-    let tree_root s = `Tree_root (Hash.of_tree s) in
-    let tag t = `Tag (t.Tag.tag, t.Tag.obj) in
+  type pred =
+    [ `Commit of Store.Hash.t
+    | `Tag of string * Store.Hash.t
+    | `Tree of string * Store.Hash.t
+    | `Tree_root of Store.Hash.t ]
+
+  let pred t ?(full = true) h =
+    let tag t = `Tag (Store.Value.Tag.tag t, Store.Value.Tag.obj t) in
+
+    Log.debug (fun l -> l ~header:"predecessor" "Read the object: %a." Store.Hash.pp h);
+
     Store.read t h >|= function
-    | None                  -> []
-    | Some (Value.Blob _)   -> []
-    | Some (Value.Commit c) ->
-      (if full then [tree_root c.Commit.tree] else [])
-      @ List.map commit c.Commit.parents
-    | Some (Value.Tag t)    -> if full then [tag t] else []
-    | Some (Value.Tree t)   ->
-      if full then List.map (fun e -> tree e.Tree.name e.Tree.node) t else []
+    | Error err ->
+      Log.err (fun l -> l ~header:"predecessor"
+                  "Retrieve an error when the search engine try \
+                   to read %a: %a." Store.Hash.pp h Store.pp_error err);
+      []
+    | Ok (Store.Value.Blob _)   -> []
+    | Ok (Store.Value.Commit c) ->
+      (if full then [ `Tree_root (Store.Value.Commit.tree c) ] else [])
+      @ List.map (fun x -> `Commit x) (Store.Value.Commit.parents c)
+    | Ok (Store.Value.Tag t)    -> if full then [ tag t ] else []
+    | Ok (Store.Value.Tree t)   ->
+      if full then List.map (fun { Store.Value.Tree.name; node; _ } -> `Tree (name, node)) (Store.Value.Tree.to_list t) else []
 
-  type path = [
-    | `Tag of string * path
+  type path =
+    [ `Tag of string * path
     | `Commit of path
-    | `Path of string list
-  ]
+    | `Path of string list ]
 
   let find_list f l =
     List.fold_left (fun acc x ->
@@ -54,6 +65,7 @@ module Make (Store: Store.S) = struct
       ) None l
 
   let _find_commit = find_list (function `Commit x -> Some x | _ -> None)
+
   let find_tree_root = find_list (function `Tree_root x -> Some x | _ -> None)
 
   let find_tag l =
@@ -80,6 +92,7 @@ module Make (Store: Store.S) = struct
       end
     | `Path (h::p) ->
       pred t hash >>= fun preds ->
+
       match find_tree h preds with
       | None   -> Lwt.return_none
       | Some s -> find t s (`Path p)
@@ -89,5 +102,4 @@ module Make (Store: Store.S) = struct
     find t h path >>= function
     | None   -> Lwt.return false
     | Some _ -> Lwt.return true
-
 end

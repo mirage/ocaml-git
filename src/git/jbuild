@@ -3,5 +3,6 @@
 (library
  ((name        git)
   (public_name git)
-  (libraries   (cstruct fmt lwt mstruct uri ocamlgraph logs astring hex
-                decompress ocplib-endian ocplib-endian.bigstring))))
+  (libraries   (fpath cstruct fmt lwt uri logs astring hex lru rresult
+                angstrom farfadet faraday ocamlgraph ocplib-endian
+                ocplib-endian.bigstring decompress digestif))))

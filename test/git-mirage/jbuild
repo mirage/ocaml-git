@@ -6,5 +6,6 @@
 
 (alias
  ((name runtest)
-  (deps (test.exe))
-  (action (run ${exe:test.exe} -q --color=always))))
+  (package git-mirage)
+  (deps (test.exe ../data/pack.idx ../data/pack.pack))
+  (action (run ${exe:test.exe} -q --color=always -v))))

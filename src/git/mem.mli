@@ -1,5 +1,6 @@
 (*
  * Copyright (c) 2013-2017 Thomas Gazagnaire <thomas@gazagnaire.org>
+ * and Romain Calascibetta <romain.calascibetta@gmail.com>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,8 +15,13 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Make (D: Hash.DIGEST) (I: Inflate.S): sig
-  include Store.S
-  val clear: ?root:string -> unit -> unit
-  val clear_all: unit -> unit
-end
+module Make
+    (H : S.HASH)
+    (L : S.LOCK)
+    (I : S.INFLATE)
+    (D : S.DEFLATE)
+  : Minimal.S
+    with module Hash = H
+       and module Lock = L
+       and module Inflate = I
+       and module Deflate = D

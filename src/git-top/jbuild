@@ -2,5 +2,5 @@
 
 (library
  ((name        git_top)
-  (public_name git.top)
-  (libraries   (git compiler-libs.toplevel))))
+  (public_name git-unix.top)
+  (libraries   (git-unix compiler-libs.toplevel))))

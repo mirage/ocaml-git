@@ -1,39 +1,48 @@
-(*
- * Copyright (c) 2013-2017 Thomas Gazagnaire <thomas@gazagnaire.org>
- *
- * Permission to use, copy, modify, and distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
- *
- * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
- * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
- * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
- * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
- * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
- * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- *)
-
 include S
-module Hash = Hash
-module Blob = Blob
-module Tree = Tree
-module User = User
-module Commit = Commit
-module Reference = Reference
-module Inflate = Inflate
-module Object_type = Object_type
-module Value = Value
-module Pack = Pack
-module Pack_index = Pack_index
-module Packed_value = Packed_value
-module Packed_refs = Packed_refs
-module Index = Index
-module Sync = Sync
-module Gri = Gri
-module Search = Search
-module Graph = Object_graph
-module Store = Store
-module Mem = Mem
-module FS = Fs
-module Tag = Tag
+module type S = Minimal.S
+
+module Crc32        = Crc32
+
+module Blob         = Blob
+module Commit       = Commit
+module Tree         = Tree
+module Tag          = Tag
+module Reference    = Reference
+module User         = User
+module Value        = Value
+module Gri          = Gri
+
+module Fanout       = Fanout
+module Bucket       = Bucket
+module Radix        = Radix
+module Rabin        = Rabin
+
+module Minienc      = Minienc
+
+module Traverse_bfs = Traverse_bfs
+module Gc           = Gc
+module Object_graph = Object_graph
+module Search       = Search
+module Negociator   = Negociator
+module Revision     = Revision
+
+module Capability   = Capability
+module Sync         = Sync
+module Smart        = Smart
+
+module Index        = Index
+module Loose        = Loose
+module Pack_info    = Pack_info
+module Pack_engine  = Pack_engine
+module Packed_refs  = Packed_refs
+module Pack         = Pack
+module Unpack       = Unpack
+module Index_pack   = Index_pack
+
+module Mem          = Mem
+module Store        = Store
+
+module Inflate      = Inflate
+module Deflate      = Deflate
+module Buffer       = Cstruct_buffer
+module Hash         = Hash

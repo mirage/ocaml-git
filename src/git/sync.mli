@@ -1,5 +1,6 @@
 (*
  * Copyright (c) 2013-2017 Thomas Gazagnaire <thomas@gazagnaire.org>
+ * and Romain Calascibetta <romain.calascibetta@gmail.com>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,85 +15,98 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-type protocol = [ `SSH | `Git | `Smart_HTTP ]
+module type NET = sig
+  type socket
 
-val protocol: Uri.t -> [`Ok of protocol | `Not_supported of string | `Unknown]
-
-type capability =
-  [ `Multi_ack
-  | `Thin_pack
-  | `No_thin
-  | `Side_band
-  | `Side_band_64k
-  | `Ofs_delta
-  | `Shallow
-  | `No_progress
-  | `Include_tag
-  | `Report_status
-  | `Delete_refs
-  | `Allow_reachable_sha1_in_want (* in Git 2.5 only *)
-  | `Agent of string
-  | `Other of string ]
-
-val pp_capability: capability Fmt.t
-
-module Result: sig
-
-  type fetch
-
-  val head_contents: fetch -> Reference.head_contents option
-  val head: fetch -> Hash.Commit.t option
-  val references: fetch -> Hash.t Reference.Map.t
-  val hashes: fetch -> Hash.Set.t
-  val pp_fetch: fetch Fmt.t
-  type ok_or_error = [`Ok | `Error of string]
-
-  type push = {
-    result  : ok_or_error;
-    commands: (Reference.t * ok_or_error) list;
-  }
-
-  val pp_push: push Fmt.t
-
+  val read   : socket -> Bytes.t -> int -> int -> int Lwt.t
+  val write  : socket -> Bytes.t -> int -> int -> int Lwt.t
+  val socket : string -> int -> socket Lwt.t
+  val close  : socket -> unit Lwt.t
 end
-
-type want = [ `Ref of Reference.t | `Commit of Hash.Commit.t ]
-
-val pp_want: want Fmt.t
 
 module type S = sig
-  type t
-  type ctx
-  val ls: ?ctx:ctx -> t -> Gri.t -> Hash.t Reference.Map.t Lwt.t
-  val push: ?ctx:ctx -> t -> branch:Reference.t -> Gri.t -> Result.push Lwt.t
-  val fetch:
-    ?ctx:ctx ->
-    ?deepen:int ->
-    ?unpack:bool ->
-    ?capabilities:capability list ->
-    ?wants:want list ->
-    ?progress:(string -> unit) ->
-    t -> Gri.t -> Result.fetch Lwt.t
-  val clone:
-    ?ctx:ctx ->
-    ?deepen:int ->
-    ?unpack:bool ->
-    ?capabilities:capability list ->
-    ?branch:want ->
-    ?progress:(string -> unit) ->
-    t -> checkout:bool -> Gri.t -> Result.fetch Lwt.t
+  module Store: Minimal.S
+  module Net : NET
+  module Client: Smart.CLIENT with module Hash = Store.Hash
+
+  type error =
+    [ `SmartPack of string
+    | `Pack      of Store.Pack.error
+    | `Clone     of string
+    | `Fetch     of string
+    | `Ls        of string
+    | `Push      of string
+    | `Ref       of Store.Ref.error
+    | `Not_found ]
+
+  val pp_error : error Fmt.t
+
+  type command =
+    [ `Create of (Store.Hash.t * string)
+    | `Delete of (Store.Hash.t * string)
+    | `Update of (Store.Hash.t * Store.Hash.t * string) ]
+
+  val push:
+    Store.t
+    -> push:(Store.t -> (Store.Hash.t * string * bool) list -> (Store.Hash.t list * command list) Lwt.t)
+    -> ?port:int
+    -> ?capabilities:Capability.t list
+    -> string
+    -> string
+    -> ((string, string * string) result list, error) result Lwt.t
+
+  val ls :
+    Store.t
+    -> ?port:int
+    -> ?capabilities:Capability.t list
+    -> string
+    -> string
+    -> ((Store.Hash.t * string * bool) list, error) result Lwt.t
+
+  val fetch_ext:
+    Store.t
+    -> ?shallow:Store.Hash.t list
+    -> ?capabilities:Capability.t list
+    -> notify:(Client.Decoder.shallow_update -> unit Lwt.t)
+    -> negociate:((Client.Decoder.acks -> 'state -> ([ `Ready | `Done | `Again of Store.Hash.t list ] * 'state) Lwt.t) * 'state)
+    -> has:Store.Hash.t list
+    -> want:((Store.Hash.t * string * bool) list -> (Store.Reference.t * Store.Hash.t) list Lwt.t)
+    -> ?deepen:[ `Depth of int | `Timestamp of int64 | `Ref of string ]
+    -> ?port:int
+    -> string
+    -> string
+    -> ((Store.Reference.t * Store.Hash.t) list * int, error) result Lwt.t
+
+  val clone_ext :
+    Store.t
+    -> ?port:int
+    -> ?reference:Store.Reference.t
+    -> ?capabilities:Capability.t list
+    -> string
+    -> string
+    -> (Store.Hash.t, error) result Lwt.t
+
+  val fetch_all: Store.t -> ?locks:Store.Lock.t ->
+    ?capabilities:Capability.t list ->
+    Uri.t ->
+    (unit, error) result Lwt.t
+
+  val fetch_one: Store.t -> ?locks:Store.Lock.t ->
+    ?capabilities:Capability.t list ->
+    reference:Reference.t ->
+    Uri.t -> (unit, error) result Lwt.t
+
+  val clone: Store.t -> ?locks:Store.Lock.t ->
+    ?capabilities:Capability.t list ->
+    reference:Reference.t -> Uri.t ->
+    (unit, error) result Lwt.t
+
+  val update: Store.t -> ?capabilities:Capability.t list ->
+    reference:Reference.t -> Uri.t ->
+    ((Reference.t, Reference.t * string) result list, error) result Lwt.t
+
 end
 
-module type IO = sig
-  type ic
-  type oc
-  type ctx
-  val with_connection: ?ctx:ctx -> Uri.t -> ?init:string ->
-    (ic * oc -> 'a Lwt.t) -> 'a Lwt.t
-  val read_all: ic -> string list Lwt.t
-  val read_exactly: ic -> int -> string Lwt.t
-  val write: oc -> string -> unit Lwt.t
-  val flush: oc -> unit Lwt.t
-end
-
-module Make (IO: IO) (S: Store.S): S with type t = S.t and type ctx = IO.ctx
+module Make (N : NET) (S : Minimal.S)
+    : S with module Store = S
+         and module Net = N

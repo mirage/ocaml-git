@@ -16,41 +16,15 @@
 
 open Test_common
 
-module Zlib = Git.Inflate.M
+module SHA1 = Git.Hash.Make(Digestif.SHA1)
 
-(* To avoid depending on git-unix *)
-module SHA1 = struct
+module Store = Git.Mem.Make(SHA1)(Lwt_lock)(Git.Inflate)(Git.Deflate)
 
-  let cstruct buf =
-    buf
-    |> Nocrypto.Hash.SHA1.digest
-    |> Cstruct.to_string
-    |> fun x -> Git.Hash.of_raw x
-
-  let string str =
-    Cstruct.of_string str
-    |> cstruct
-
-  let length = Nocrypto.Hash.SHA1.digest_size
-
-end
-
-module Memory = Git.Mem.Make(SHA1)(Zlib)
-
-let init () =
-  Git.Value.Cache.clear ();
-  Memory.clear_all ();
-  Lwt.return_unit
-
-let suite = {
-  name  = "MEM";
-  init  = init;
-  clean = unit;
-  store = (module Memory);
-  shell = false;
-}
+let backend =
+  { name  = "Memory"
+  ; store = (module Store)
+  ; shell = false }
 
 let () =
-  Test_store.run "git" [
-    `Quick, suite;
-  ]
+  Alcotest.run "git"
+    [ Test_store.suite (`Quick, backend) ]

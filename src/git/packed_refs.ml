@@ -1,5 +1,6 @@
 (*
  * Copyright (c) 2013-2017 Thomas Gazagnaire <thomas@gazagnaire.org>
+ * and Romain Calascibetta <romain.calascibetta@gmail.com>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,81 +15,211 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Astring
+module type S = sig
+  module Hash : S.HASH
+  module FS : S.FS
 
-type entry =
-  [ `Newline
-  | `Comment of string
-  | `Entry of (Hash.t * Reference.t) ]
+  type t = [ `Peeled of Hash.t | `Ref of string * Hash.t ] list
 
-let to_line ppf = function
-  | `Newline -> Format.fprintf ppf "\n"
-  | `Comment c -> Format.fprintf ppf "# %s\n" c
-  | `Entry (s,r) ->
-    Format.fprintf ppf "%s %s" (Hash.to_hex s) (Reference.to_raw r)
+  module A: S.ANGSTROM with type t = t
+  module D: S.DECODER  with type t = t
+                        and type init = Cstruct.t
+                        and type error = [ `Decoder of string ]
+  module M: S.MINIENC with type t = t
+  module E: S.ENCODER with type t = t
+                       and type init = int * t
 
-module T = struct
-  type t = entry list
-  let equal t1 t2 = List.length t1 = List.length t2 && t1 = t2
-  let hash = Hashtbl.hash
-  let compare = Pervasives.compare
-  let pp ppf t = List.iter (to_line ppf) t
+  type error = [ `SystemFile of FS.File.error
+               | `SystemIO of string
+               | D.error ]
+
+  val pp_error: error Fmt.t
+
+  val write: root:Fpath.t -> ?capacity:int -> raw:Cstruct.t -> t ->
+    (unit, error) result Lwt.t
+
+  val read: root:Fpath.t -> dtmp:Cstruct.t -> raw:Cstruct.t ->
+    (t, error) result Lwt.t
 end
 
-include T
+module Make (H : S.HASH) (FS : S.FS)
+  : S with module Hash = H and module FS = FS
+= struct
+  module Hash = H
+  module FS = FS
 
-let find t r =
-  let rec aux = function
-    | [] -> None
-    | (`Newline | `Comment _) :: t -> aux t
-    | `Entry (x, y) :: t -> if Reference.equal y r then Some x else aux t
-  in
-  aux t
+  type t = [ `Peeled of hash | `Ref of string * hash ] list
+  and hash = Hash.t
 
-module Set = Set.Make(Reference)
+  module A = struct
+    type nonrec t = t
 
-let references (t:t) =
-  let rec aux acc = function
-    | [] -> Set.elements acc
-    | (`Newline | `Comment _) :: t -> aux acc t
-    | `Entry (_, r) :: t -> aux (Set.add r acc) t
-  in
-  aux Set.empty t
+    open Angstrom
 
-module IO (D: Hash.DIGEST) = struct
+    let hash =
+      take (Hash.Digest.length * 2)
+      >>| Hash.of_hex
 
-  module Hash_IO = Hash.IO(D)
-  include T
+    let end_of_line =
+      skip_while (function '\r' | '\n' -> false | _ -> true)
+      *> peek_char >>= function
+      | Some '\n' -> take 1 >>= fun _ -> return ()
+      | Some '\r' -> take 2 >>= fun _ -> return ()
+      | Some _ -> assert false
+      | None -> return ()
 
-  let of_line line =
-    let line = String.trim line in
-    if String.length line = 0 then Some `Newline
-    else if line.[0] = '#' then
-      let str = String.with_range line ~first:1 in
-      Some (`Comment str)
-    else match String.cut line ~sep:" " with
-      | None  -> None
-      | Some (h, r) ->
-        let h = Hash_IO.of_hex h in
-        let r = Reference.of_raw r in
-        Some (`Entry (h, r))
+    let info =
+      (option false (char '^' *> return true)) >>= fun peeled ->
+      hash >>= fun hash -> match peeled with
+      | true  -> end_of_line *> return (`Peeled hash)
+      | false ->
+        take_while (function '\x20'
+                           | '\x09' -> true
+                           | _      -> false)
+        *> take_while (function '\000' .. '\039' -> false
+                              | '\127'           -> false
+                              | '~' | '^'
+                              | ':' | '?' | '*'
+                              | '['              -> false
+                              | _                -> true)
+        >>= fun refname ->
+        end_of_line >>= fun () ->
+        return (`Ref (refname, hash))
 
-  let add buf ?level:_ t =
-    let ppf = Format.formatter_of_buffer buf in
-    List.iter (to_line ppf) t
+    let decoder =
+      fix @@ fun m ->
+      (peek_char >>= function
+        | Some '#' ->
+          end_of_line *> m
+        | Some _ ->
+          info >>= fun x -> m >>= fun r -> return (x :: r)
+        | None -> return [])
+  end
 
-  let input buf =
-    let rec aux acc =
-      let line, cont = match Mstruct.get_string_delim buf '\n' with
-        | None   -> Mstruct.to_string buf, false
-        | Some s -> s, true
+  module M = struct
+    type nonrec t = t
+
+    open Minienc
+
+    let write_newline k e =
+      if Sys.win32
+      then write_string "\r\n" k e
+      else write_string "\n" k e
+
+    let write_hash x k e =
+      write_string (Hash.to_hex x) k e
+
+    let write_info x k e = match x with
+      | `Peeled hash ->
+        (write_char '^'
+         @@ write_hash hash k)
+          e
+      | `Ref (refname, hash) ->
+        (write_hash hash
+         @@ write_char ' '
+         @@ write_string refname k)
+          e
+
+    let write_list ?(sep = fun k e -> k e) write_data lst k e =
+      let rec aux l e = match l with
+        | [] -> k e
+        | [ x ] -> write_data x k e
+        | x :: r ->
+          (write_data x
+           @@ sep
+           @@ aux r)
+            e
       in
-      let acc = match of_line line with
-        | None   -> acc
-        | Some e -> e :: acc
-      in
-      if cont then aux acc else List.rev acc
-    in
-    aux []
+      aux lst e
 
+    let encoder l k e =
+      (write_string "# pack-refs with: peeled fully-peeled"
+       @@ write_newline
+       @@ write_list ~sep:write_newline write_info l k)
+        e
+  end
+
+  module D = Helper.MakeDecoder(A)
+  module E = Helper.MakeEncoder(M)
+
+  type error =
+    [ `SystemFile of FS.File.error
+    | `SystemIO of string
+    | D.error ]
+
+  let pp_error ppf = function
+    | `SystemFile sys_err -> Helper.ppe ~name:"`SystemFile" FS.File.pp_error ppf sys_err
+    | `SystemIO sys_err -> Helper.ppe ~name:"`SystemIO" Fmt.string ppf sys_err
+    | #D.error as err -> D.pp_error ppf err
+
+  let read ~root ~dtmp ~raw =
+    let decoder = D.default dtmp in
+
+    let open Lwt.Infix in
+
+    FS.File.open_r ~mode:0o400 Fpath.(root / "packed-refs")[@warning "-44"] (* XXX(dinosaure): shadowing ( / ). *)
+    >>= function
+    | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
+    | Ok read ->
+      let rec loop decoder = match D.eval decoder with
+        | `Await decoder ->
+          FS.File.read raw read >>=
+          (function
+            | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
+            | Ok 0 -> loop (D.finish decoder)
+            | Ok n -> match D.refill (Cstruct.sub raw 0 n) decoder with
+              | Ok decoder -> loop decoder
+              | Error (#D.error as err) -> Lwt.return (Error err))
+        | `End (_, value) -> Lwt.return (Ok value)
+        | `Error (_, (#D.error as err)) -> Lwt.return (Error err)
+      in
+
+      loop decoder
+
+  let write ~root ?(capacity = 0x100) ~raw value =
+    let open Lwt.Infix in
+
+    let state = E.default (capacity, value) in
+
+    let module E =
+    struct
+      type state  = E.encoder
+      type raw    = Cstruct.t
+      type result = int
+      type error  = E.error
+
+      let raw_length = Cstruct.len
+      let raw_blit   = Cstruct.blit
+
+      type rest = [ `Flush of state | `End of (state * result) ]
+
+      let eval raw state = match E.eval raw state with
+        | `Error err -> Lwt.return (`Error (state, err))
+        | #rest as rest -> Lwt.return rest
+
+      let used  = E.used
+      let flush = E.flush
+    end in
+
+    FS.File.open_w ~mode:0o644 Fpath.(root / "packed-refs")[@warning "-44"] (* XXX(dinosaure): shadowing ( / ). *)
+    >>= function
+    | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
+    | Ok write ->
+      Helper.safe_encoder_to_file
+        ~limit:50
+        (module E)
+        FS.File.write
+        write raw state
+      >>= function
+      | Ok _ -> FS.File.close write >>=
+        (function
+          | Ok () -> Lwt.return (Ok ())
+          | Error sys_err -> Lwt.return (Error (`SystemFile sys_err)))
+      | Error err ->
+        FS.File.close write >>= function
+        | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
+        | Ok () -> match err with
+          | `Stack -> Lwt.return (Error (`SystemIO "Impossible to store the packed-refs file"))
+          | `Writer sys_err -> Lwt.return (Error (`SystemFile sys_err))
+          | `Encoder `Never -> assert false
 end

@@ -1,5 +1,6 @@
 (*
  * Copyright (c) 2013-2017 Thomas Gazagnaire <thomas@gazagnaire.org>
+ * and Romain Calascibetta <romain.calascibetta@gmail.com>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,20 +15,23 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-type pred = [
-  | `Commit of Hash.t
-  | `Tag of string * Hash.t
-  | `Tree of string * Hash.t
-  | `Tree_root of Hash.t
-]
+module Make (S : Minimal.S) :
+sig
+  module Store : Minimal.S
 
-module Make (S: Store.S): sig
-  val pred: S.t -> ?full:bool -> Hash.t -> pred list Lwt.t
-  type path = [
-    | `Tag of string * path
+  type pred =
+    [ `Commit of Store.Hash.t
+    | `Tag of string * Store.Hash.t
+    | `Tree of string * Store.Hash.t
+    | `Tree_root of Store.Hash.t ]
+
+  val pred : Store.t -> ?full:bool -> Store.Hash.t -> pred list Lwt.t
+
+  type path =
+    [ `Tag of string * path
     | `Commit of path
-    | `Path of string list
-  ]
-  val mem: S.t -> Hash.t -> path -> bool Lwt.t
-  val find: S.t -> Hash.t -> path -> Hash.t option Lwt.t
-end
+    | `Path of string list ]
+
+  val mem : Store.t -> Store.Hash.t -> path -> bool Lwt.t
+  val find : Store.t -> Store.Hash.t -> path -> Store.Hash.t option Lwt.t
+end with module Store = S

@@ -1,5 +1,6 @@
 (*
  * Copyright (c) 2013-2017 Thomas Gazagnaire <thomas@gazagnaire.org>
+ * and Romain Calascibetta <romain.calascibetta@gmail.com>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,157 +15,241 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Astring
+module type S =
+sig
+  module Hash: S.HASH
 
-type perm = [
-    `Normal
-  | `Exec
-  | `Link
-  | `Dir
-  | `Commit
-]
+  type entry =
+    { perm: perm
+    ; name: string
+    ; node: Hash.t }
+  and perm =
+    [ `Normal | `Everybody | `Exec | `Link | `Dir | `Commit ]
+  and t
 
-type entry = {
-  perm: perm;
-  name: string;
-  node: Hash.t;
-}
+  module D: S.DECODER  with type t = t
+                        and type init = Cstruct.t
+                        and type error = [ `Decoder of string ]
+  module A: S.ANGSTROM with type t = t
+  module F: S.FARADAY  with type t = t
+  module M: S.MINIENC  with type t = t
+  module E: S.ENCODER  with type t = t
+                        and type init = int * t
+                        and type error = [ `Never ]
 
-module T = struct
+  include S.DIGEST with type t := t and type hash = Hash.t
+  include S.BASE with type t := t
 
-  type t = entry list
-
-  let hash = Hashtbl.hash
-  let compare = compare
-  let equal = (=)
-
-  let pretty_perm = function
-    | `Normal -> "normal"
-    | `Exec   -> "exec"
-    | `Link   -> "link"
-    | `Dir    -> "dir"
-    | `Commit -> "commit"
-
-  let pp_entry ppf e =
-    Format.fprintf ppf "{@[<hov 2>perm = %s;@ node = \"%a\";@ name = %S;@]}"
-      (pretty_perm e.perm)
-      Hash.pp e.node
-      e.name
-
-  let pp ppf t =
-    Format.fprintf ppf "[@,";
-    List.iter (Format.fprintf ppf "%a;@ " pp_entry) t;
-    Format.fprintf ppf "@,@]]"
-
+  val hashes: t -> Hash.t list
+  val to_list: t -> entry list
+  val of_list: entry list -> t
 end
 
-include T
+module Make (H: S.HASH with type Digest.buffer = Cstruct.t
+                         and type hex = string)
+: S with module Hash = H
+= struct
+  module Hash = H
 
-let perm_of_string buf = function
-  | "44"
-  | "100644" -> `Normal
-  | "100755" -> `Exec
-  | "120000" -> `Link
-  | "40000"  -> `Dir
-  | "160000" -> `Commit
-  | x        -> Mstruct.parse_error_buf buf "%S is not a valid permission." x
+  type entry =
+    { perm: perm
+    ; name: string
+    ; node: Hash.t }
+  and perm =
+    [ `Normal | `Everybody | `Exec | `Link | `Dir | `Commit ]
+  and t = entry list
+  and hash = Hash.t
 
-let string_of_perm = function
-  | `Normal -> "100644"
-  | `Exec   -> "100755"
-  | `Link   -> "120000"
-  | `Dir    -> "40000"
-  | `Commit -> "160000"
+  let hashes tree = List.map (fun { node; _ } -> node) tree
 
-let fixed_length_string_of_perm = function
-  | `Normal -> "100644"
-  | `Exec   -> "100755"
-  | `Link   -> "120000"
-  | `Dir    -> "040000"
-  | `Commit -> "160000"
+  let pp_entry ppf { perm
+                   ; name
+                   ; node } =
+    Fmt.pf ppf "{ @[<hov>perm = %s;@ \
+                         name = %s;@ \
+                         node = %a;@] }"
+      (match perm with
+       | `Normal    -> "normal"
+       | `Everybody -> "everybody"
+       | `Exec      -> "exec"
+       | `Link      -> "link"
+       | `Dir       -> "dir"
+       | `Commit    -> "commit")
+      name (Fmt.hvbox Hash.pp) node
 
-let escape = Char.of_byte 42
-let escaped_chars = escape :: List.map Char.of_byte [ 0x00; 0x2f ]
-let needs_escape x = List.mem x escaped_chars
+  let pp ppf tree =
+    Fmt.pf ppf "[ %a ]"
+      (Fmt.hvbox (Fmt.list ~sep:(Fmt.unit ";@ ") pp_entry)) tree
 
-let encode path =
-  if not (String.exists needs_escape path) then
-    path
-  else
-    let n = String.length path in
-    let b = Buffer.create n in
-    let last = ref 0 in
-    for i = 0 to n - 1 do
-      if needs_escape path.[i] then (
-        let c = Char.of_byte (Char.to_int path.[i] + 1) in
-        if i - !last > 0 then Buffer.add_substring b path !last (i - !last);
-        Buffer.add_char b escape;
-        Buffer.add_char b c;
-        last := i + 1;
-      )
-    done;
-    if n - !last > 0 then
-      Buffer.add_substring b path !last (n - !last);
-    Buffer.contents b
+  let string_of_perm = function
+    | `Normal    -> "100644"
+    | `Everybody -> "100664"
+    | `Exec      -> "100755"
+    | `Link      -> "120000"
+    | `Dir       -> "40000"
+    | `Commit    -> "160000"
 
-module IO (D: Hash.DIGEST) = struct
+  let perm_of_string = function
+    | "44"
+    | "100644" -> `Normal
+    | "100664" -> `Everybody
+    | "100755" -> `Exec
+    | "120000" -> `Link
+    | "40000"  -> `Dir
+    | "160000" -> `Commit
+    | _ -> raise (Invalid_argument "perm_of_string")
 
-  module Hash_IO = Hash.IO(D)
-  include T
+  external to_list: t -> entry list = "%identity"
 
-  let add_entry buf e =
-    Buffer.add_string buf (string_of_perm e.perm);
-    Buffer.add_char buf Misc.sp;
-    Buffer.add_string buf (encode e.name);
-    Buffer.add_char buf Misc.nul;
-    Hash_IO.add buf e.node
+  type value =
+    | Contents: string -> value
+    | Node    : string -> value
 
-  let decode path =
-    if not (String.exists ((=) escape) path) then path
-    else
-      let n = String.length path in
-      let b = Buffer.create n in
-      let last = ref 0 in
-      for i = 0 to n - 1 do
-        if path.[i] = escape then (
-          if i - !last > 0 then Buffer.add_substring b path !last (i - !last);
-          if i + 1 < n then (
-            let c = Char.of_byte (Char.to_int path.[i+1] - 1) in
-            Buffer.add_char b c;
-          );
-          last := i + 2;
-        );
-      done;
-      if n - !last > 0 then
-        Buffer.add_substring b path !last (n - !last);
-      Buffer.contents b
+  let str = function Contents s -> s | Node s -> s
 
-  let input_entry buf =
-    let perm = match Mstruct.get_string_delim buf Misc.sp with
-      | None      -> Mstruct.parse_error_buf buf "invalid perm"
-      | Some perm -> perm in
-    let name = match Mstruct.get_string_delim buf Misc.nul with
-      | None      -> Mstruct.parse_error_buf buf "invalid filename"
-      | Some name -> name in
-    let name = decode name in
-    let node = Hash_IO.input buf in
-    let entry = {
-      perm = perm_of_string buf perm;
-      name; node
-    } in
-    Some entry
+  exception Result of int
 
-  let add buf ?level:_ t =
-    List.iter (add_entry buf) t
+  let compare x y = match x, y with
+    | Contents x, Contents y -> String.compare x y
+    | _ ->
+      let xs = str x and ys = str y in
+      let lenx = String.length xs in
+      let leny = String.length ys in
 
-  let input buf =
-    let rec aux entries =
-      if Mstruct.length buf <= 0 then
-        List.rev entries
-      else
-        match input_entry buf with
-        | None   -> List.rev entries
-        | Some e -> aux (e :: entries) in
-    aux []
+      let i = ref 0 in
 
+      try
+        while !i < lenx && !i < leny
+        do match Char.compare (String.unsafe_get xs !i) (String.unsafe_get ys !i) with
+          | 0 -> incr i
+          | i -> raise (Result i)
+        done;
+
+        let get len s i =
+          if i < len then String.unsafe_get (str s) i
+          else if i = len then match s with
+            | Node _ -> '/'
+            | Contents _ -> '\000'
+          else '\000'
+        in
+
+        match Char.compare (get lenx x !i) (get leny y !i) with
+        | 0 -> Char.compare (get lenx x (!i + 1)) (get leny y (!i + 1))
+        | i -> i
+      with Result i -> i
+
+  let of_contents c = Contents c
+  let of_node n = Node n
+  let of_entry = function
+    | { name = n; perm = `Dir; _ } -> of_node n
+    | { name = n; _ } -> of_contents n
+
+  let of_list entries: t =
+    List.map (fun x -> of_entry x, x) entries
+    |> List.sort (fun (a, _) (b, _) -> compare a b)
+    |> List.map snd
+
+  module A =
+  struct
+    type nonrec t = t
+
+    let is_not_sp chr = chr <> ' '
+    let is_not_nl chr = chr <> '\x00'
+
+    let hash = Angstrom.take Hash.Digest.length
+
+    let entry =
+      let open Angstrom in
+
+      take_while is_not_sp >>= fun perm ->
+      (try return (perm_of_string perm)
+       with _ -> fail (Fmt.strf "Invalid permission %s" perm))
+      <* commit
+      >>= fun perm -> take 1 *> take_while is_not_nl <* commit
+      >>= fun name -> take 1 *> hash <* commit
+      >>= fun hash ->
+      return { perm
+             ; name
+             ; node = Hash.of_string hash }
+      <* commit
+
+    let decoder = Angstrom.many entry
+  end
+
+  module F =
+  struct
+    type nonrec t = t
+
+    let length t =
+      let string x = Int64.of_int (String.length x) in
+      let ( + ) = Int64.add in
+
+      let entry acc x =
+        (string (string_of_perm x.perm))
+        + 1L
+        + (string x.name)
+        + 1L
+        + (Int64.of_int Hash.Digest.length)
+        + acc
+      in
+      List.fold_left entry 0L t
+
+    let sp = ' '
+    let nl = '\x00'
+
+    let entry e t =
+      let open Farfadet in
+
+      eval e [ !!string; char $ sp; !!string; char $ nl; !!string ]
+        (string_of_perm t.perm)
+        t.name
+        (Hash.to_string t.node)
+    [@@warning "-45"] (* XXX(dinosaure): shadowing [] and (::). *)
+
+    let encoder e t =
+      (Farfadet.list entry) e t
+  end
+
+  module M =
+  struct
+    open Minienc
+
+    type nonrec t = t
+
+    let sp = ' '
+    let nl = '\x00'
+
+    let entry x k e =
+      (write_string (string_of_perm x.perm)
+       @@ write_char sp
+       @@ write_string x.name
+       @@ write_char nl
+       @@ write_string (Hash.to_string x.node) k)
+        e
+
+    let encoder x k e =
+      let rec list l k e = match l with
+        | x :: r ->
+          (entry x
+           @@ list r k)
+            e
+        | [] -> k e
+      in
+
+      list x k e
+  end
+
+  module D = Helper.MakeDecoder(A)
+  module E = Helper.MakeEncoder(M)
+
+  let digest value =
+    let tmp = Cstruct.create 0x100 in
+    Helper.fdigest (module Hash.Digest) (module E) ~tmp ~kind:"tree" ~length:F.length value
+
+  let equal   = (=)
+  let compare = Pervasives.compare
+  let hash    = Hashtbl.hash
+
+  module Set = Set.Make(struct type nonrec t = t let compare = compare end)
+  module Map = Map.Make(struct type nonrec t = t let compare = compare end)
 end

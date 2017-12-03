@@ -1,5 +1,6 @@
 (*
  * Copyright (c) 2013-2017 Thomas Gazagnaire <thomas@gazagnaire.org>
+ * and Romain Calascibetta <romain.calascibetta@gmail.com>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,16 +15,25 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-type tz_offset = {
-  sign: [`Plus | `Minus];
-  hours: int;
-  min: int;
-}
+type tz_offset =
+  { sign    : [ `Plus | `Minus ]
+  ; hours   : int
+  ; minutes : int }
 
-type t = {
-  name : string;
-  email: string;
-  date : int64 * tz_offset option;
-}
+type t =
+  { name  : string
+  ; email : string
+  ; date  : int64 * tz_offset option }
 
-include S.IO with type t := t
+include S.BASE with type t := t
+
+module A: S.ANGSTROM with type t = t
+
+module F: S.FARADAY with type t = t
+
+module M: S.MINIENC with type t = t
+
+module D: S.DECODER
+    with type t = t
+     and type init = Cstruct.t
+     and type error = [ `Decoder of string ]

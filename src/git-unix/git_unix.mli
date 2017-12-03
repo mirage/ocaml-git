@@ -16,63 +16,15 @@
 
 (** Unix backend. *)
 
-open Git
+module FS = Fs
+module Lock = Lock
+module SHA1:  Git.HASH
+module Net = Net
 
-module type S = sig
+module Store : Git.Store.S
+  with module Hash = SHA1
+   and module Lock = Lock
+   and module FS = FS
 
-  (** {1 Unix implementation}
-
-      The default implementation for Unix fixes the choice of
-      [Git.Inflate.S] and [Git.Hash.DIGEST] by using [camlzip]'s zlib
-      bindings and [nocrypto]'s SHA1 and SHA256 implementations.
-
-      It also uses [Lwt_unix] and [Lwt_io] for the IO functions. *)
-
-  (** {1 Synchronisation} *)
-
-  module Sync: sig
-    module IO: Sync.IO
-    module Result: (module type of Sync.Result
-                     with type fetch = Sync.Result.fetch
-                      and type push  = Sync.Result.push)
-    module Make (S: Store.S): Sync.S with type t = S.t
-  end
-
-  (** {1 Filesystem} *)
-
-  (** Implementation of the on-disk Git protocol using [Lwt_unix]. *)
-  module FS: sig
-    module IO: FS.IO
-    include FS.S
-  end
-
-  module Mem: Store.S
-  (** In-memory store. *)
-
-  (** {1 Git objects} *)
-
-  module Hash_IO: Hash.IO
-  module Value_IO: Value.IO
-  module Pack_IO: Pack.IO
-  module Index_IO: Index.IO
-
-end
-
-include S
-
-module Make (D: Git.Hash.DIGEST) (I: Git.Inflate.S): S
-(** Parameterize the Git implementation with different inflate and hash
-    algorithms. {b Note:} this might cause your implementation to not
-    be compatible with Git anymore! *)
-
-module Zlib: Inflate.S
-(** Implementation of the inflate signature using [camlzip]'s zlib
-    bindings. *)
-
-module SHA1: Git.Hash.DIGEST
-(** Implementation of the digest signature using [ocaml-nocrypto]'s
-    Hash1 algorithm. *)
-
-module SHA256: Git.Hash.DIGEST
-(** Implementation of the digest signature using [ocaml-nocrypto]'s
-    Hash256 algorithm. *)
+module Sync (S: Git.S): Git.Sync.S with module Store = S and module Net = Net
+module HTTP (S: Git.S): Git_http.Sync.S with module Store = S
