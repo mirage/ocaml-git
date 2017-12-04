@@ -18,7 +18,7 @@
 module type S = sig
 
   module Hash: S.HASH
-  (** The [Hash] module used to make this interface. *)
+  (** The [Hash] module used to make the implementation. *)
 
   type t
   (** A Git Tag object. The tag object is very much like a {!Commit.t}
@@ -30,11 +30,12 @@ module type S = sig
 
   type kind = Blob | Commit | Tag | Tree
 
-  val make : Hash.t -> kind -> ?tagger:User.t -> tag:string -> string -> t
+  val make: Hash.t -> kind -> ?tagger:User.t -> tag:string -> string -> t
 
-  module D: S.DECODER with type t = t
-                       and type init = Cstruct.t
-                       and type error = [ `Decoder of string ]
+  module D: S.DECODER
+    with type t = t
+     and type init = Cstruct.t
+     and type error = [ `Decoder of string ]
   (** The decoder of the Git Tag object. We constraint the input to be
       a {Cstruct.t}. This decoder needs a {Cstruct.t} as an internal
       buffer. *)
@@ -48,9 +49,10 @@ module type S = sig
   module M: S.MINIENC with type t = t
   (** The {!Minienc} encoder of the Git Tag object. *)
 
-  module E: S.ENCODER with type t = t
-                       and type init = int * t
-                       and type error = [ `Never ]
+  module E: S.ENCODER
+    with type t = t
+     and type init = int * t
+     and type error = [ `Never ]
   (** The encoder (which uses a {!Minienc.encoder}) of the Git Tag
       object. We constraint the output to be a {Cstruct.t}. This
       encoder needs the Tag OCaml value and the memory consumption of
@@ -71,8 +73,6 @@ module type S = sig
   (** [tag t] returns the tag information of [t]. *)
 end
 
-module Make (H : S.HASH): S with module Hash = H
+module Make (H: S.HASH): S with module Hash = H
 (** The {i functor} to make the OCaml representation of the Git Tag
-    object by a specific hash implementation. We constraint the
-    {!S.HASH} module to compute a {Cstruct.t} flow and generate a
-    [string] as the hexadecimal representation of the hash. *)
+    object by a specific hash implementation. *)

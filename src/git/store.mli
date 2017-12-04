@@ -30,16 +30,16 @@ module type LOOSE = sig
   (** Kind of the {i loosed} Git object. *)
 
   module Hash: S.HASH
-  (** The [Hash] module used to make this interface. *)
+  (** The [Hash] module used to make the implementation. *)
 
   module FS: S.FS
-  (** The [FS] module used to make this interface. *)
+  (** The [FS] module used to make the implementation. *)
 
   module Inflate: S.INFLATE
-  (** The [Inflate] module used to make this interface. *)
+  (** The [Inflate] module used to make the implementation. *)
 
   module Deflate: S.DEFLATE
-  (** The [Deflate] module used to make this interface. *)
+  (** The [Deflate] module used to make the implementation. *)
 
   module Value: Value.S
     with module Hash = Hash
@@ -148,7 +148,7 @@ module type LOOSE = sig
   val size: state -> Hash.t -> (int64, error) result Lwt.t
   (** Alias of {!size_s}. *)
 
-  val write_p :
+  val write_p:
        ztmp:Cstruct.t
     -> raw:Cstruct.t
     -> state -> t -> (Hash.t * int, error) result Lwt.t
@@ -190,7 +190,7 @@ module type LOOSE = sig
 
   val write_inflated: state -> kind:kind -> Cstruct.t -> Hash.t Lwt.t
 
-  val raw_p :
+  val raw_p:
        ztmp:Cstruct.t
     -> dtmp:Cstruct.t
     -> window:Inflate.window
@@ -233,7 +233,7 @@ module type LOOSE = sig
   val raw: state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
   (** Alias of {!raw_s}. *)
 
-  val raw_wa :
+  val raw_wa:
        ztmp:Cstruct.t
     -> dtmp:Cstruct.t
     -> window:Inflate.window
@@ -332,15 +332,14 @@ module type PACK = sig
   type value
   (** The type of the Git value. *)
 
-  module Hash
-   : S.HASH
-  (** The [Hash] module used to make this interface. *)
+  module Hash: S.HASH
+  (** The [Hash] module used to make the implementation. *)
 
   module FS: S.FS
-  (** The [FS] module used to make this interface. *)
+  (** The [FS] module used to make the implementation. *)
 
   module Inflate: S.INFLATE
-  (** The [Inflate] module used to make this interface. *)
+  (** The [Inflate] module used to make the implementation. *)
 
   module Deflate: S.DEFLATE
 
@@ -783,9 +782,9 @@ sig
 
   module Ref :
   sig
-    module Packed_refs
-     : Packed_refs.S with module Hash = Hash
-                       and module FS = FS
+    module Packed_refs: Packed_refs.S
+      with module Hash = Hash
+       and module FS = FS
 
     type nonrec error =
       [ Packed_refs.error

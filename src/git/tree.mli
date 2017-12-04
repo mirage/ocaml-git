@@ -18,7 +18,7 @@
 module type S = sig
 
   module Hash: S.HASH
-  (** The [Hash] module used to make this interface. *)
+  (** The [Hash] module used to make the implementation. *)
 
   type entry =
     { perm : perm
@@ -42,9 +42,10 @@ module type S = sig
       {Blob.t} or sub-tree with its associated mode, type, and {i
       filename}. *)
 
-  module D: S.DECODER with type t = t
-                       and type init = Cstruct.t
-                       and type error = [ `Decoder of string ]
+  module D: S.DECODER
+    with type t = t
+     and type init = Cstruct.t
+     and type error = [ `Decoder of string ]
   (** The decoder of the Git Tree object. We constraint the input to
       be a {Cstruct.t}. This decoder needs a {Cstruct.t} as an
       internal buffer. *)
@@ -52,15 +53,16 @@ module type S = sig
   module A: S.ANGSTROM with type t = t
   (** The Angstrom decoder of the Git Tree object. *)
 
-  module F: S.FARADAY  with type t = t
+  module F: S.FARADAY with type t = t
   (** The Faraday encoder of the Git Tree object. *)
 
-  module M: S.MINIENC  with type t = t
+  module M: S.MINIENC with type t = t
   (** The {!Minienc} encoder of the Git Tree object. *)
 
-  module E: S.ENCODER  with type t = t
-                        and type init = int * t
-                        and type error = [ `Never ]
+  module E: S.ENCODER
+    with type t = t
+     and type init = int * t
+     and type error = [ `Never ]
   (** The encoder (which uses a {Minienc.encoder}) of the Git Tree
       object. We constraint the output to be a {Cstruct.t}. This
       encoder needs the Tree OCaml value and the memory consumption of
@@ -82,6 +84,4 @@ end
 
 module Make (H : S.HASH): S with module Hash = H
 (** The {i functor} to make the OCaml representation of the Git Tree
-    object by a specific hash implementation. We constraint the
-    {!S.HASH} module to compute a {Cstruct.t} flow and generate a
-    [string] as the hexadecimal representation of the hash. *)
+    object by a specific hash implementation. *)

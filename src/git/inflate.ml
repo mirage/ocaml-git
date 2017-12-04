@@ -10,17 +10,17 @@ struct
   include (val Logs.src_log src : Logs.LOG)
 end
 
-let pp_error : error Fmt.t = fun ppf -> function `Inflate err ->
+let pp_error: error Fmt.t = fun ppf -> function `Inflate err ->
   Fmt.pf ppf "(`Inflate %a)" (Fmt.hvbox Inflate.pp_error) err
 
-let pp : t Fmt.t = Inflate.pp
+let pp: t Fmt.t = Inflate.pp
 
-let window_reset : window -> window = Window.reset
+let window_reset: window -> window = Window.reset
 let window () = Window.create ~proof:B.proof_bigstring
 
-let default : window -> t = Inflate.default
+let default: window -> t = Inflate.default
 
-let eval ~src ~dst t : [ `Await of t | `End of t | `Error of t * error | `Flush of t ] =
+let eval ~src ~dst t: [ `Await of t | `End of t | `Error of t * error | `Flush of t ] =
   Log.debug (fun l -> l "evaluation of %a." (Fmt.hvbox Inflate.pp) t);
 
   let src' = B.from_bigstring (Cstruct.to_bigarray src) in

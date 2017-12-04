@@ -18,13 +18,13 @@
 module type S = sig
 
   module Hash: S.HASH
-  (** The [Hash] module used to make the module. *)
+  (** The [Hash] module used to make the implementation. *)
 
   module Inflate: S.INFLATE
-  (** The [Inflate] module used to make this interface. *)
+  (** The [Inflate] module used to make the implementation. *)
 
   module Deflate: S.DEFLATE
-  (** The [Deflate] module used to make this interface. *)
+  (** The [Deflate] module used to make the implementation. *)
 
   module Blob: Blob.S with module Hash = Hash
   (** The {!Blob} module. *)
@@ -45,26 +45,26 @@ module type S = sig
     | Tag    of Tag.t    (** The {!Tag.t} OCaml value. *)
   (** OCaml value which represents a Git object. *)
 
-  val blob   : Blob.t -> t
-  val commit : Commit.t -> t
-  val tree   : Tree.t -> t
-  val tag    : Tag.t -> t
+  val blob: Blob.t -> t
+  val commit: Commit.t -> t
+  val tree: Tree.t -> t
+  val tag: Tag.t -> t
 
-  val kind    : t -> [ `Commit | `Blob | `Tree | `Tag ]
+  val kind: t -> [ `Commit | `Blob | `Tree | `Tag ]
   (** [kind o] returns the kind of the Git object. *)
 
-  val pp_kind : [ `Commit | `Blob | `Tree | `Tag ] Fmt.t
+  val pp_kind: [ `Commit | `Blob | `Tree | `Tag ] Fmt.t
   (** [pp_kind ppf kind] is a human readable pretty-printer of {!kind}. *)
 
   module A: sig
     include S.ANGSTROM with type t = t
 
-    val kind : [ `Commit | `Tree | `Tag | `Blob ] Angstrom.t
+    val kind: [ `Commit | `Tree | `Tag | `Blob ] Angstrom.t
     (** A convenience parser to recognize the kind of the Git object.
         It's used in the {i loose} implementation and it's better to
         provide in the interface this parser. *)
 
-    val length : int64 Angstrom.t
+    val length: int64 Angstrom.t
     (** A convenience parser to get the length of of the Git object.
         It's used in the {i loose} implementation and it's better to
         provide in the interface this parser. *)
@@ -111,9 +111,9 @@ module type RAW = sig
   include module type of Value
 
   module EE: S.ENCODER
-      with type t = t
-       and type init = int * t
-       and type error = [ `Never ]
+    with type t = t
+     and type init = int * t
+     and type error = [ `Never ]
   (** The encoder (which uses a {!Minienc.encoder}) of the Git object.
       We constraint the output to be a {Cstruct.t}. This encoder needs
       the value {!t} and the memory consumption of the encoder (in
@@ -126,14 +126,14 @@ module type RAW = sig
       error as [`Never]. *)
 
   module EEE: S.ENCODER
-      with type t = t
-       and type init = int * t
-       and type error = [ `Never ]
+    with type t = t
+     and type init = int * t
+     and type error = [ `Never ]
 
   module DD: S.DECODER
-      with type t = t
-       and type init = Cstruct.t
-       and type error = [ `Decoder of string ]
+    with type t = t
+     and type init = Cstruct.t
+     and type error = [ `Decoder of string ]
 
   val to_deflated_raw: ?capacity:int -> ?level:int -> ztmp:Cstruct.t -> t ->
     (string, E.error) result
@@ -170,20 +170,18 @@ module type RAW = sig
       Git object it is. *)
 end
 
-module Make (H : S.HASH) (I : S.INFLATE) (D : S.DEFLATE): S
+module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE): S
   with module Hash = H
    and module Inflate = I
    and module Deflate = D
-   and module Blob    = Blob.Make(H)
-   and module Commit  = Commit.Make(H)
-   and module Tree    = Tree.Make(H)
-   and module Tag     = Tag.Make(H)
+   and module Blob = Blob.Make(H)
+   and module Commit = Commit.Make(H)
+   and module Tree = Tree.Make(H)
+   and module Tag = Tag.Make(H)
 (** The {i functor} to make the OCaml representation of the Git object
     by a specific hash implementation, an {!S.INFLATE} implementation
     for the decompression and a {!S.DEFLATE} implementation for the
-    compression. We constraint the {!S.HASH} module to compute a
-    {Cstruct.t} flow and generate a [string] as the hexadecimal
-    representation of the hash.
+    compression.
 
     The constraints on git objects can cut the path to let the user to
     make the value module and keep the structural equality. If the
@@ -197,25 +195,17 @@ module Make (H : S.HASH) (I : S.INFLATE) (D : S.DEFLATE): S
    Types [V1.t] and [V2.t] are equal.
 *)
 
-module Raw (H : S.HASH) (I : S.INFLATE) (D : S.DEFLATE): RAW
-  with module Hash    = H
+module Raw (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE): RAW
+  with module Hash = H
    and module Inflate = I
    and module Deflate = D
-   and module Value   = Make(H)(I)(D)
-   and module Blob    = Blob.Make(H)
-   and module Commit  = Commit.Make(H)
-   and module Tree    = Tree.Make(H)
-   and module Tag     = Tag.Make(H)
-   and type t         = Make(H)(I)(D).t
+   and module Value = Make(H)(I)(D)
+   and module Blob = Blob.Make(H)
+   and module Commit = Commit.Make(H)
+   and module Tree = Tree.Make(H)
+   and module Tag = Tag.Make(H)
+   and type t = Make(H)(I)(D).t
 (** The {i functor} to make the OCaml representation of the Git object
     by a specific hash implementation, and {!S.INFLATE} implementation
     for the decompression and a {!S.DEFLATE} implementation for the
-    compression We constraint the {!S.HASH} module to compute a
-    {Cstruct.t} flow and generate a [string] as the hexadecimal
-    representation of the hash.
-
-    This module provide a {i blocking} implementation of the
-    serialization and the de-serialization of the Git object in a
-    {!S.BUFFER}. We constraint the {!S.BUFFER} to save a fixed-size
-    buffer {Cstruct.t} in the {!S.BUFFER.t} and return a {Cstruct.t}
-    as a result. *)
+    compression. *)

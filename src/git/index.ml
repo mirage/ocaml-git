@@ -24,7 +24,8 @@ struct
   let ( && ) = Int32.logand
 end
 
-module MakeIndexDecoder (H : S.HASH) = struct
+module MakeIndexDecoder (H: S.HASH) = struct
+
   module Hash = H
 
   type error =
@@ -251,7 +252,7 @@ module MakeIndexDecoder (H : S.HASH) = struct
 
 (* XXX(dinosaure): we use the open type only for the main developper.
    That means, we don't let the user to put a new extension in the
-   decoder. It's just /more easy/ integrate an extension in the
+   decoder. It's just /more easy/ to integrate an extension in the
    decoder.
 
    In fact, this is consist to define the extension value in {!Ext},
@@ -260,8 +261,8 @@ module MakeIndexDecoder (H : S.HASH) = struct
    to the [extensions] hash-table.
 
    Then, the decoder resolve alone which parser to use depending on
-   the signature. You should return a [Ext.value] and the decoder
-   put it internally in [t.extensions].
+   the signature. You should return an [Ext.value] and the decoder put
+   it internally in [t.extensions].
 
    We does not allow the user to add a new extension because he needs
    to interact directly with the internal state [t] (in the [k]
@@ -839,7 +840,7 @@ let rec signature src t =
 
        (* XXX(dinosaure): at this stage, the specification does not
           explain which input could be mark the end of the index file.
-          It's an alteration between sinature and resulting hash.
+          It's an alteration between signature and resulting hash.
 
           That means, we need to get 4 bytes, find if it's an existing
           extension. The problem is: the 4 bytes could be a
@@ -1083,7 +1084,7 @@ let refill off len t =
 let used_in t = t.i_pos
 end
 
-module Make (H : S.HASH) (FS : S.FS) = struct
+module Make (H: S.HASH) (FS: S.FS) = struct
 
   module Hash = H
   module FileSystem = FS

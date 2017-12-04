@@ -49,6 +49,7 @@ module type NET = sig
 end
 
 module type S = sig
+
   module Store: Minimal.S
   module Net: NET
   module Client: Smart.CLIENT with module Hash = Store.Hash
@@ -70,7 +71,7 @@ module type S = sig
     | `Delete of (Store.Hash.t * string)
     | `Update of (Store.Hash.t * Store.Hash.t * string) ]
 
-  val push :
+  val push:
     Store.t
     -> push:(Store.t -> (Store.Hash.t * string * bool) list -> (Store.Hash.t list * command list) Lwt.t)
     -> ?port:int
@@ -79,7 +80,7 @@ module type S = sig
     -> string
     -> ((string, string * string) result list, error) result Lwt.t
 
-  val ls :
+  val ls:
     Store.t
     -> ?port:int
     -> ?capabilities:Capability.t list
@@ -133,8 +134,9 @@ module type S = sig
 end
 
 module Make (N: NET) (S: Minimal.S) = struct
-  module Store        = S
-  module Net          = N
+
+  module Store = S
+  module Net= N
 
   module Client = Smart.Client(Store.Hash)
   module Hash = Store.Hash

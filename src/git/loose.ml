@@ -1,4 +1,5 @@
 module type S = sig
+
   module FS: S.FS
   module Value: Value.S
   include module type of Value
@@ -22,7 +23,7 @@ module type S = sig
     root:Fpath.t ->
     Hash.t -> bool Lwt.t
 
-  val read :
+  val read:
     root:Fpath.t ->
     window:Inflate.window ->
     ztmp:Cstruct.t ->
@@ -30,7 +31,7 @@ module type S = sig
     raw:Cstruct.t ->
     Hash.t -> (t, error) result Lwt.t
 
-  val inflate :
+  val inflate:
     root:Fpath.t ->
     window:Inflate.window ->
     ztmp:Cstruct.t ->
@@ -38,7 +39,7 @@ module type S = sig
     raw:Cstruct.t ->
     Hash.t -> (kind * Cstruct.t, error) result Lwt.t
 
-  val inflate_wa :
+  val inflate_wa:
     root:Fpath.t ->
     window:Inflate.window ->
     ztmp:Cstruct.t ->
@@ -47,11 +48,11 @@ module type S = sig
     result:Cstruct.t ->
     Hash.t -> (kind * Cstruct.t, error) result Lwt.t
 
-  val list :
+  val list:
     root:Fpath.t ->
     Hash.t list Lwt.t
 
-  val size :
+  val size:
     root:Fpath.t ->
     window:Inflate.window ->
     ztmp:Cstruct.t ->
@@ -59,7 +60,7 @@ module type S = sig
     raw:Cstruct.t ->
     Hash.t -> (int64, error) result Lwt.t
 
-  val write :
+  val write:
     root:Fpath.t ->
     ?capacity:int ->
     ?level:int ->
@@ -67,7 +68,7 @@ module type S = sig
     raw:Cstruct.t ->
     t -> (Hash.t * int, error) result Lwt.t
 
-  val write_inflated :
+  val write_inflated:
     root:Fpath.t ->
     ?level:int ->
     raw:Cstruct.t ->
@@ -76,10 +77,10 @@ module type S = sig
 end
 
 module Make
-    (H : S.HASH)
-    (FS : S.FS)
-    (I : S.INFLATE)
-    (D : S.DEFLATE)
+    (H: S.HASH)
+    (FS: S.FS)
+    (I: S.INFLATE)
+    (D: S.DEFLATE)
   : S with module Hash = H
        and module Inflate = I
        and module Deflate = D
@@ -291,7 +292,7 @@ module Make
 
   let inflate_wa ~root ~window ~ztmp ~dtmp ~raw ~result hash =
     let module P = Helper.MakeInflater(Inflate)(struct include HeaderAndBody let decoder = decoder ~result:(Some result) end) in
-    gen ~root ~window ~ztmp ~dtmp ~raw (module I) hash
+    gen ~root ~window ~ztmp ~dtmp ~raw (module P) hash
 
   module HeaderOnly =
   struct
@@ -336,9 +337,9 @@ module Make
           FS.File.close read >|= function
           | Ok () -> Ok size
           | Error sys_err -> Error (`SystemFile sys_err)
-        (* XXX(dinosaure): [gen] checks if we consume all of the
-           input. But for this compute, we don't need to compute all.
-           It's redundant. *)
+          (* XXX(dinosaure): [gen] checks if we consume all of the
+             input. But for this compute, we don't need to compute all.
+             It's redundant. *)
       in
 
       loop decoder

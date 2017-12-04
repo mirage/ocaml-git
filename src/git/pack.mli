@@ -15,6 +15,10 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+(** PACK serializer implementation. *)
+
+(** This module represents the kind of a Git object - but only the
+    kind, {!Kind.t} does not have the Git value. *)
 module Kind: sig
   type t =
     | Commit
@@ -31,17 +35,21 @@ module Kind: sig
   (** [to_bin t] returns a binary code to serialize the kind [t]. *)
 
   val pp: t Fmt.t
-  (** A pretty-printer of {!t}. *)
+  (** Pretty-printer of {!t}. *)
 end
 
+(** Interface which describes the encoder of the PACK file. *)
 module type ENCODER =
 sig
   module Hash: S.HASH
+  (** The [Hash] module used to make the implementation. *)
+
   module Deflate: S.DEFLATE
+  (** The [Deflate] module used to make the implementation. *)
 
   (** The entry module. It used to able to manipulate the meta-data
-      only needed by the delta-ification of the git object (and avoid
-      to de-serialize all of the git object to compute the
+      only needed by the delta-ification of the Git object (and avoid
+      to de-serialize all of the Git object to compute the
       delta-ification). *)
   module Entry :
   sig
@@ -57,15 +65,22 @@ sig
       (** To notice than no user-defined source exists. *)
 
     val pp: t Fmt.t
-    (** A pretty-printer for {!t}. *)
+    (** Pretty-printer for {!t}. *)
 
     val pp_source: source Fmt.t
-    (** A pretty-printer for {!source}. *)
+    (** Pretty-printer for {!source}. *)
 
     val hash: string -> int
     (** [hash path] produces a integer to correspond with [path]. *)
 
-    val make: Hash.t -> ?name:string -> ?preferred:bool -> ?delta:source -> Kind.t -> int64 -> t
+    val make:
+      Hash.t
+      -> ?name:string
+      -> ?preferred:bool
+      -> ?delta:source
+      -> Kind.t
+      -> int64
+      -> t
     (** [make hash ?name ?preferred ?delta kind length] returns a new
         entry when:
 
@@ -93,9 +108,9 @@ sig
         when [a] equal [b]. It returns a negative integer if [a] is {i
         less} than [b] and a positive integer when [a] is {i greater}
         than [b]. This function is used to sort a list of entries with
-        the git heuristic and produce an optimal delta-ification.
+        the Git heuristic and produce an optimal delta-ification.
 
-        According to git, it's a lexicographic sort by the {!Kind.t},
+        According to Git, it's a lexicographic sort by the {!Kind.t},
         the optional name of the entry (hashed by {!hash}) and sorted
         by size (larger to smaller). *)
 
@@ -106,7 +121,29 @@ sig
         delta-ification. *)
   end
 
-  module Delta :
+  (** This module is the engine to delta-ify Git objects together. The
+      current implementation is a stop the world process which can not
+      compute iteratively the delta-ification for some Git objects.
+
+      This process is the biggest process about memory consumption.
+      Indeed, for each computation, we need to keep some Git objects
+      to get the best diff between them. As Git, this process keeps 10
+      objects while we do the delta-ification for all - these objects
+      are represented as inflated raw data in a {!Cstruct.t}.
+
+      However, if we try to delta-ify big objects (like your
+      repository has the season 1 of Narcos), we should explose your
+      memory (because we will load 10 movies in your memory). So the
+      client can restrict the delta-ification by the weigth of the
+      window (which contains your objects) instead by the number of
+      objects inside.
+
+      Then, the final result does not keep Git objects loaded - the
+      OCaml GC will delete them - but a lighter representation of the
+      diff for each entry. And it's why, for the serialization of the
+      PACK file, we re-ask (and re-load) your objects (however, in
+      this last case, we don't need the ownership - see {!expect}). *)
+  module Delta:
   sig
     (** The type of the delta-ification. *)
     type t =
@@ -126,50 +163,69 @@ sig
              ; src_hash  : Hash.t
              (** Hash of the source object. *)
              ; }
-             (** Delta-ification with a description of the source. *)
+      (** Delta-ification with a description of the source. *)
 
     (** The type of error. *)
     type error = Invalid_hash of Hash.t
     (** Appears when we have an invalid hash. *)
 
     val pp_error: error Fmt.t
-    (** A pretty-printer for {!error}. *)
+    (** Pretty-printer for {!error}. *)
 
-    val deltas: ?memory:bool -> Entry.t list -> (Hash.t -> Cstruct.t option Lwt.t) -> (Entry.t -> bool) -> int -> int -> ((Entry.t * t) list, error) result Lwt.t
-    (** [deltas ?memory lst getter tagger window depth].
+    val deltas:
+      ?memory:bool
+      -> Entry.t list
+      -> (Hash.t -> Cstruct.t option Lwt.t)
+      -> (Entry.t -> bool)
+      -> int
+      -> int
+      -> ((Entry.t * t) list, error) result Lwt.t
+      (** [deltas ?memory lst getter tagger window depth].
 
-        This is the main algorithm about the serialization of the git
-        object in a PACK file. The purpose is to order and delta-ify
-        entries.
+          This is the main algorithm about the serialization of the git
+          object in a PACK file. The purpose is to order and delta-ify
+          entries.
 
-        [getter] is a function to access to the real inflated raw of
-        the git object requested by the hash. This function must
-        allocate the raw. The algorithm takes the ownership anyway.
+          [getter] is a function to access to the real inflated raw of
+          the git object requested by the hash. This function must
+          allocate the raw (or let the ownership to this function). The
+          algorithm takes the ownership anyway.
 
-        [tagger] is a function to annotate an entry as preferred to
-        serialize firstly.
+          [tagger] is a function to annotate an entry as preferred to
+          serialize firstly.
 
-        [window] corresponds to the number of how many object(s) we
-        keep for the delta-ification or, if [memory] is [true], ho
-        many byte(s) we keep for the delta-ification. The client can
-        control the memory consumption of this algorithm precisely if
-        he wants.
+          [window] corresponds to the number of how many object(s) we
+          keep for the delta-ification or, if [memory] is [true], how
+          many byte(s) we keep for the delta-ification. The client can
+          control the memory consumption of this algorithm precisely if
+          he wants.
 
-        [depth] is the maximum of the delta-ification allowed.
+          [depth] is the maximum of the delta-ification allowed.
 
-        If you want to understand the algorithm, look the source
-        code. *)
+          If you want to understand the algorithm, look the source
+          code. *)
   end
 
-  module Radix: module type of Radix.Make(struct type t = Hash.t let get = Hash.get let length _ = Hash.Digest.length end)
+  module Radix: module type of Radix.Make(struct
+      type t = Hash.t
 
-  module H :
-  sig
+      let get = Hash.get
+      let length _ = Hash.Digest.length
+    end)
+  (** The Radix tree zhich zill represent the IDX file of the PACK
+      stream. *)
+
+  (** This module is the serialiser of the list of hunks in the PACK
+      entry when we retrieve a delta-ified Git object. This encoder is a
+      non-blocking encoder used in the same time than the {!Deflater} -
+      that means the content produced is always deflated. *)
+  module H: sig
+
     type error
     (** The type of error. *)
 
     val pp_error: error Fmt.t
-    (** The pretty-printer of {!error}. *)
+    (** Pretty-printer of {!error}. *)
 
     type t
     (** The type of the encoder. *)
@@ -181,7 +237,7 @@ sig
       | Hash of Hash.t
 
     val pp: t Fmt.t
-    (** The pretty-printer of {!t}. *)
+    (** Pretty-printer of {!t}. *)
 
     val default: reference -> int -> int -> Rabin.t list -> t
     (** Make a new encoder state {!t} from a {!reference}. We need to
@@ -203,10 +259,15 @@ sig
         {!eval} with [t] until [`Flush] is returned. *)
 
     val finish: t -> t
-    (** [finish t] provides a new [t] which does not expect any
-        input. *)
+    (** [finish t] provides a new [t] which does not expect any input.
+        An {!eval} of the new [t] will never return an [`Await] value
+        then. *)
 
-    val eval: Cstruct.t -> Cstruct.t -> t -> [ `Await of t | `Flush of t | `End of t | `Error of (t * error) ]
+    val eval: Cstruct.t -> Cstruct.t -> t ->
+      [ `Await of t
+      | `Flush of t
+      | `End of t
+      | `Error of (t * error) ]
     (** [eval src t] is:
 
         {ul
@@ -244,7 +305,7 @@ sig
     (** Appears when the hash requested does not exist. *)
 
   val pp_error: error Fmt.t
-  (** A pretty-printer for {!error}. *)
+  (** Pretty-printer for {!error}. *)
 
   type t
   (** The type of the encoder. *)
@@ -270,18 +331,23 @@ sig
 
   val finish: t -> t
   (** [finish t] provides a new [t] which terminate to serialize the
-      current git object. *)
+      current Git object. The next call of {!eval} should not return
+      an [`Await] value unless the output space is enough to start to
+      serialize the next entry. *)
 
   val expect: t -> Hash.t
   (** [expect t] returns the object expected to the serialization. At
       this time, the serializer requests the inflated raw of this git
       object. The client is able to use it only when {!eval} return
-      [`Await]. *)
+      [`Await]. The encoder does not wqnt the ownership of the
+      inflated raw, it access on it only as a read-only flow (that
+      means, the src {!Cstruct.t} could be physicaly the same. *)
 
   val idx: t -> (Crc32.t * int64) Radix.t
   (** [idx t] returns a {!Radix} tree which contains the CRC-32
-      checksum and the absolute offset for each git object
-      serialized. *)
+      checksum and the absolute offset for each Git object serialized.
+      The client is able to use it only when {!eval} returns
+      [`End]. *)
 
   val default: Cstruct.t -> (Entry.t * Delta.t) list -> t
   (** Make a new encoder {!t} of the PACK stream.
@@ -294,11 +360,32 @@ sig
       Then, the client need to notice the ordered list of what he
       wants to serialize. *)
 
-  val eval: Cstruct.t -> Cstruct.t -> t -> [ `Flush of t | `Await of t | `End of (t * Hash.t) | `Error of (t * error) ]
+  val eval: Cstruct.t -> Cstruct.t -> t ->
+    [ `Flush of t
+    | `Await of t
+    | `End of (t * Hash.t)
+    | `Error of (t * error) ]
+    (** [eval src t] is:
+
+        {ul
+        {- [`Await t] iff [t] needs more input storage. The client
+        must use {!refill} to provide a new buffer and then call
+        {!eval} with [`Await] until other value returned.}
+        {- [`Flush t] iff [t] needs more output storage. The client
+        must use {!flush} to provide a new buffer and then call
+        {!eval} with [`Flush] until other value returned.}
+        {- [`End (t, hash)] when [t] is done. Then, [t] sticks on this
+        situation, the client can remove it. [hash] is the hash
+        calculated of the PACK stream.}
+        {- [`Error (t, exn)] iff the encoder [t] meet an {!error}
+        [exn]. The encoder can't continue and sticks in this
+        situation.}} *)
 end
 
 module MakePACKEncoder
-    (H: S.HASH with type Digest.buffer = Cstruct.t)
+    (H: S.HASH)
     (D: S.DEFLATE): ENCODER
   with module Hash = H
    and module Deflate = D
+(** The {i functor} to make the PACK encoder by a specific hash
+    implementation and a specific deflate algorithm. *)

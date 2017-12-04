@@ -15,49 +15,51 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+(** Implementation of the CRC-32 checksum in OCaml. *)
+
 type t = int32
 (** The type of the CRC-32 checksum. *)
 
-val digest : t -> ?off:int -> ?len:int -> Cstruct.t -> t
+val digest: t -> ?off:int -> ?len:int -> Cstruct.t -> t
 (** [digest crc cs] digests the buffer [cs] and produce a new CRC-32
     checksum (derived from [crc]). The default value of [off] is 0 and
     the default value of [len] is the length of [cs]
     ({!Cstruct.len}). *)
 
-val digestv : t -> Cstruct.t list -> t
+val digestv: t -> Cstruct.t list -> t
 (** [digest crc css] applies {!digest} for each [Cstruct.t] elements
-    of [css] with the default argument and return the new CRC-32
+    of [css] with the default arguments and return the new CRC-32
     checksum.
 
     Is equivalent to: [(digest .. (digest crc cs1) csN)]. *)
 
-val digestc : t -> int -> t
-(** [digestc crc byte] derives the checksum CRC-32 [crc] with the byte
+val digestc: t -> int -> t
+(** [digestc crc byte] derives the CRC-32 checksum [crc] with the byte
     [byte]. *)
 
-val digests : t -> ?off:int -> ?len:int -> Bytes.t -> t
+val digests: t -> ?off:int -> ?len:int -> Bytes.t -> t
 (** [digest crc by] digests the buffer [by] and produce a new CRC-32
     checksum (derived from [crc]). The default value of [off] is 0 and
     the default value of [len] is the length of [by]
     ({!Bytes.length}). *)
 
-val of_int32 : int32 -> t
-(** Casts an [int32] value to a CRC-32 checksum. *)
+val of_int32: int32 -> t
+(** [of_int32 v] casts an [int32] value to a CRC-32 checksum. *)
 
-val to_int32 : t -> int32
-(** Casts the CRC-32 checksum to an [int32] value. *)
+val to_int32: t -> int32
+(** [to_int32 crc] casts the CRC-32 checksum to an [int32] value. *)
 
-val pp : t Fmt.t
-(** A pretty-print for {!t}. *)
+val pp: t Fmt.t
+(** Pretty-printer for {!t}. *)
 
-val default : t
+val default: t
 (** A default and first value (without derivation) of the CRC-32
     checksum. *)
 
-val eq : t -> t -> bool
+val eq: t -> t -> bool
 (** [eq a b] returns [true] only when [a] equal [b]. Otherwise, it
     returns [false]. *)
 
-val neq : t -> t -> bool
+val neq: t -> t -> bool
 (** [neq a b] returns [true] only when [a] is different to [b].
     Otherwise, it returns [true]. Is equivalent to: [not (eq a b)]. *)

@@ -17,7 +17,7 @@
 
 module type LAZY =
 sig
-  module Hash : S.HASH
+  module Hash: S.HASH
 
   type error =
     | Invalid_header of string
@@ -26,23 +26,23 @@ sig
     | Expected_bigoffset_table
     | Invalid_bigoffset_index of int
 
-  val pp_error : error Fmt.t
+  val pp_error: error Fmt.t
 
   type t
 
   val make: ?cache:int -> Cstruct.t -> (t, error) result
   val find: t -> Hash.t -> (Crc32.t * int64) option
-  val mem : t -> Hash.t -> bool
+  val mem: t -> Hash.t -> bool
   val iter: t -> (Hash.t -> (Crc32.t * int64) -> unit) -> unit
   val fold: t -> (Hash.t -> (Crc32.t * int64) -> 'a -> 'a) -> 'a -> 'a
 end
 
-module Lazy (H : S.HASH) : LAZY with module Hash = H =
+module Lazy (H: S.HASH): LAZY with module Hash = H =
 struct
   module Log =
   struct
     let src = Logs.Src.create "git.index-pack.lazy" ~doc:"logs git's internal lazy index-pack decoder"
-    include (val Logs.src_log src : Logs.LOG)
+    include (val Logs.src_log src: Logs.LOG)
   end
 
   module Hash = H
@@ -279,7 +279,7 @@ end
 
 module type DECODER =
 sig
-  module Hash : S.HASH
+  module Hash: S.HASH
 
   type error =
     | Invalid_byte of int
@@ -288,17 +288,23 @@ sig
     | Expected_bigoffset_table
     | Invalid_hash of Hash.t * Hash.t
 
-  val pp_error : error Fmt.t
+  val pp_error: error Fmt.t
 
   type t
 
-  val pp     : t Fmt.t
-  val make   : unit -> t
-  val refill : int -> int -> t -> t
-  val eval   : Cstruct.t -> t -> [ `Await of t | `End of t * Hash.t | `Hash of t * (Hash.t * Crc32.t * int64) | `Error of t * error ]
+  val pp: t Fmt.t
+  val make: unit -> t
+  val refill: int -> int -> t -> t
+  val eval:
+       Cstruct.t
+    -> t
+    -> [ `Await of t
+       | `End of t * Hash.t
+       | `Hash of t * (Hash.t * Crc32.t * int64)
+       | `Error of t * error ]
 end
 
-module Decoder (H : S.HASH with type Digest.buffer = Cstruct.t) : DECODER with module Hash = H =
+module Decoder (H: S.HASH with type Digest.buffer = Cstruct.t): DECODER with module Hash = H =
 struct
   module Hash = H
 
@@ -373,8 +379,8 @@ struct
   let await src t =
     let () = Hash.Digest.feed t.hash (Cstruct.sub src t.i_off t.i_pos) in
     Wait t
-  let error t exn : res = Error ({ t with state = Exception exn }, exn)
-  let ok t hash   : res = Ok ({ t with state = End hash }, hash)
+  let error t exn: res = Error ({ t with state = Exception exn }, exn)
+  let ok t hash: res = Ok ({ t with state = End hash }, hash)
 
   let to_int32 b0 b1 b2 b3 =
     let ( << ) = Int32.shift_left in (* >> (tuareg) *)
@@ -608,7 +614,7 @@ struct
         src t
 
   let header src t =
-    (KHeader.check_byte '\255'
+    (   KHeader.check_byte '\255'
      @@ KHeader.check_byte '\116'
      @@ KHeader.check_byte '\079'
      @@ KHeader.check_byte '\099'
@@ -665,25 +671,30 @@ end
 
 module type ENCODER =
 sig
-  module Hash : S.HASH
+  module Hash: S.HASH
 
   type error
 
-  val pp_error : error Fmt.t
+  val pp_error: error Fmt.t
 
   type t
 
-  val pp : t Fmt.t
+  val pp: t Fmt.t
 
   type 'a sequence = ('a -> unit) -> unit
 
-  val default  : (Hash.t * (Crc32.t * int64)) sequence -> Hash.t -> t
-  val flush    : int -> int -> t -> t
-  val used_out : t -> int
-  val eval     : Cstruct.t -> t -> [ `Flush of t | `End of t | `Error of t * error ]
+  val default: (Hash.t * (Crc32.t * int64)) sequence -> Hash.t -> t
+  val flush: int -> int -> t -> t
+  val used_out: t -> int
+  val eval:
+       Cstruct.t
+    -> t
+    -> [ `Flush of t
+       | `End of t
+       | `Error of t * error ]
 end
 
-module Encoder (H : S.HASH with type Digest.buffer = Cstruct.t) : ENCODER with module Hash = H =
+module Encoder (H: S.HASH with type Digest.buffer = Cstruct.t): ENCODER with module Hash = H =
 struct
   module Hash = H
 
@@ -918,7 +929,7 @@ struct
         loop Hash.Digest.length dst t
   end
 
-  let ok t : res = Ok { t with state = End }
+  let ok t: res = Ok { t with state = End }
 
   let is_big_offset integer =
     Int64.(integer >> 31) <> 0L
@@ -1033,7 +1044,7 @@ struct
      important, the Fanout module takes care about that. So, we let
      the user to use any data structure to store the CRC and the
      Offset for each hash. *)
-  let default : (Hash.t * (Crc32.t * int64)) sequence -> Hash.t -> t = fun seq hash ->
+  let default: (Hash.t * (Crc32.t * int64)) sequence -> Hash.t -> t = fun seq hash ->
 
     let boffsets = ref [] in
     let table    = Fanout.make () in

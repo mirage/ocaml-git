@@ -28,7 +28,7 @@ module type S = sig
   val to_dot: Store.t -> Format.formatter -> unit Lwt.t
 end
 
-module Make (S : Minimal.S) = struct
+module Make (S: Minimal.S) = struct
 
   module Store = S
 

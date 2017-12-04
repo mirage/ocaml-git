@@ -17,39 +17,48 @@
 
 module type S =
 sig
+
   type t
 
-  module Hash
-    : S.HASH
+  module Hash: S.HASH
 
-  val make : author:User.t -> committer:User.t -> ?parents:Hash.t list -> tree:Hash.t -> string -> t
+  val make:
+       author:User.t
+    -> committer:User.t
+    -> ?parents:Hash.t list
+    -> tree:Hash.t
+    -> string
+    -> t
 
-  module D: S.DECODER  with type t = t
-                        and type init = Cstruct.t
-                        and type error = [ `Decoder of string ]
+  module D: S.DECODER
+    with type t = t
+     and type init = Cstruct.t
+     and type error = [ `Decoder of string ]
+
   module A: S.ANGSTROM with type t = t
-  module F: S.FARADAY  with type t = t
-  module M: S.MINIENC  with type t = t
-  module E: S.ENCODER  with type t = t
-                        and type init = int * t
-                        and type error = [ `Never ]
+
+  module F: S.FARADAY with type t = t
+
+  module M: S.MINIENC with type t = t
+
+  module E: S.ENCODER
+    with type t = t
+     and type init = int * t
+     and type error = [ `Never ]
 
   include S.DIGEST with type t := t and type hash = Hash.t
   include S.BASE with type t := t
 
-  val parents : t -> Hash.t list
-  val tree : t -> Hash.t
-  val committer : t -> User.t
-  val author : t -> User.t
-  val message : t -> string
-  val compare_by_date : t -> t -> int
+  val parents: t -> Hash.t list
+  val tree: t -> Hash.t
+  val committer: t -> User.t
+  val author: t -> User.t
+  val message: t -> string
+  val compare_by_date: t -> t -> int
 end
 
-module Make
-    (H : S.HASH with type Digest.buffer = Cstruct.t
-                 and type hex = string)
-  : S with module Hash = H
-= struct
+module Make (H: S.HASH): S with module Hash = H = struct
+
   module Hash = H
 
   (* XXX(dinosaure): git seems to be very resilient with the commit.
@@ -74,8 +83,8 @@ module Make
     ; committer
     ; message }
 
-  module A =
-  struct
+  module A = struct
+
     type nonrec t = t
 
     let sp = Angstrom.char ' '
@@ -108,24 +117,26 @@ module Make
       let open Angstrom in
 
       binding ~key:"tree" ~value:(take_while is_not_lf) <* commit
-      >>= fun tree      -> many (binding ~key:"parent"
-                                         ~value:(take_while is_not_lf))
-                           <* commit
-      >>= fun parents   -> binding ~key:"author" ~value:User.A.decoder
-                           <* commit
-      >>= fun author    -> binding ~key:"committer" ~value:User.A.decoder
-                           <* commit
+      >>= fun tree ->
+      many (binding ~key:"parent" ~value:(take_while is_not_lf))
+      <* commit
+      >>= fun parents ->
+      binding ~key:"author" ~value:User.A.decoder
+      <* commit
+      >>= fun author ->
+      binding ~key:"committer" ~value:User.A.decoder
+      <* commit
       >>= fun committer -> to_end 1024 <* commit
       >>= fun message ->
-          return { tree = Hash.of_hex tree
-                 ; parents = List.map Hash.of_hex parents
-                 ; author
-                 ; committer
-                 ; message }
+      return { tree = Hash.of_hex tree
+             ; parents = List.map Hash.of_hex parents
+             ; author
+             ; committer
+             ; message }
   end
 
-  module F =
-  struct
+  module F = struct
+
     type nonrec t = t
 
     let length t =
@@ -173,8 +184,8 @@ module Make
       [@@warning "-45"] (* XXX(dinosaure): shadowing [] and (::). *)
   end
 
-  module M =
-  struct
+  module M = struct
+
     open Minienc
 
     type nonrec t = t
@@ -241,8 +252,8 @@ module Make
     let tmp = Cstruct.create 0x100 in
     Helper.fdigest (module Hash.Digest) (module E) ~tmp ~kind:"commit" ~length:F.length value
 
-  let equal   = (=)
-  let hash    = Hashtbl.hash
+  let equal = (=)
+  let hash = Hashtbl.hash
 
   let parents { parents; _ } = parents
   let tree { tree; _ } = tree
