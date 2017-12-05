@@ -24,5 +24,6 @@ let backend =
   ; shell = false }
 
 let () =
+  verbose ();
   Alcotest.run "git"
     [ Test_store.suite (`Quick, backend) ]

@@ -108,7 +108,9 @@ let mirage_backend =
   ; store = (module MirageStore)
   ; shell = true }
 
+
 let () =
+  verbose ();
   let () = Lwt_main.run (M.init ()) in
   Alcotest.run "git-mirage"
     [ Test_store.suite (`Quick, mirage_backend) ]

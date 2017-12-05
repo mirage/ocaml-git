@@ -51,7 +51,8 @@ module Make (Store : Git.S) = struct
             Sync.update t ~reference:Store.Reference.master uri >>= function
             | Error err ->
               Lwt.fail (Sync err)
-            | Ok [] -> Lwt.return (Ok t)
+            | Ok [] ->
+              Lwt.return (Ok t)
             | Ok (_ :: _) ->
               Alcotest.fail "de-synchronization of the git repository"
     in
@@ -132,6 +133,7 @@ let unix_backend =
   ; shell = true }
 
 let () =
+  verbose ();
   Alcotest.run "git-unix"
     [ Test_store.suite (`Quick, mem_backend)
     ; Test_store.suite (`Quick, unix_backend)
