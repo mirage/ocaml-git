@@ -15,6 +15,8 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+(** A Git Tag object. *)
+
 module type S = sig
 
   module Hash: S.HASH
@@ -30,7 +32,20 @@ module type S = sig
 
   type kind = Blob | Commit | Tag | Tree
 
-  val make: Hash.t -> kind -> ?tagger:User.t -> tag:string -> string -> t
+  val make:
+       Hash.t
+    -> kind
+    -> ?tagger:User.t
+    -> tag:string
+    -> string
+    -> t
+  (** [make hash kind ?tagger ~tag descr] makes a new tag to a Git
+      object with the kind [kind] by the [tagger] with the name [tag] and
+      the description [descr].
+
+      This function does not check if the Git object pointed by the
+      hash has really the kind [kind] - and obviously if the [hash] is
+      valid. *)
 
   module D: S.DECODER
     with type t = t

@@ -15,6 +15,8 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+(** A Git Tree object. *)
+
 module type S = sig
 
   module Hash: S.HASH
@@ -47,7 +49,7 @@ module type S = sig
      and type init = Cstruct.t
      and type error = [ `Decoder of string ]
   (** The decoder of the Git Tree object. We constraint the input to
-      be a {Cstruct.t}. This decoder needs a {Cstruct.t} as an
+      be a {!Cstruct.t}. This decoder needs a {!Cstruct.t} as an
       internal buffer. *)
 
   module A: S.ANGSTROM with type t = t
@@ -63,8 +65,8 @@ module type S = sig
     with type t = t
      and type init = int * t
      and type error = [ `Never ]
-  (** The encoder (which uses a {Minienc.encoder}) of the Git Tree
-      object. We constraint the output to be a {Cstruct.t}. This
+  (** The encoder (which uses a {!Minienc.encoder}) of the Git Tree
+      object. We constraint the output to be a {!Cstruct.t}. This
       encoder needs the Tree OCaml value and the memory consumption of
       the encoder (in bytes). The encoder can not fail.
 

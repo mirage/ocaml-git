@@ -697,7 +697,7 @@ module Make (N: NET) (S: Minimal.S) = struct
     push t ~push:push_handler ?port:(Uri.port repository) ?capabilities
       host (Uri.path_and_query repository)
     >?= fun lst ->
-    Lwt_result.ok (Lwt_list.map_p (function
+      Lwt_result.ok (Lwt_list.map_p (function
           | Ok refname -> Lwt.return (Ok (S.Reference.of_string refname))
           | Error (refname, err) ->
             Lwt.return (Error (S.Reference.of_string refname, err))

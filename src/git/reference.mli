@@ -15,6 +15,8 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+(** The Git Reference module. *)
+
 type t = private string
 (** A Git Reference object. Which contains a hash to point to an other
     object. *)
@@ -48,7 +50,7 @@ val of_string: string -> t
     {- They cannot have ASCII control characters (i.e. bytes whose
     values are lower than [\040] or [\177] DEL), space, tilde ['~'],
     caret ['^'], colon [':'], question-mark ['?'], asterisk ['*'],
-    or open bracket ['['] anywhere.}
+    or open bracket ['\['] anywhere.}
     {- They cannot end with a slash ['/'] or a dot ['.'].}
     {- They cannot end with the sequence [".lock"].}
     {- They cannot contain a sequence ["@{"].}
@@ -59,8 +61,12 @@ val to_string: t -> string
 (** [to_string t] returns the string value of the reference [t]. *)
 
 val of_path: Fpath.t -> t
-val to_path: t -> Fpath.t
+(** [of_path path] casts a path to a reference. *)
 
+val to_path: t -> Fpath.t
+(** [to_path ref] casts a reference [ref] to a path (as a Window path or Unix path). *)
+
+(**  Interface to describe the Git reference value [head_contents]. *)
 module type S = sig
 
   module Hash: S.HASH
@@ -78,6 +84,7 @@ module type S = sig
 
   include S.BASE with type t := t
 
+  (** The type of the value of a Git reference. *)
   type head_contents =
     | Hash of Hash.t (** A pointer to an hash. *)
     | Ref of t (** A reference which one can point to an other reference or an hash. *)
@@ -125,6 +132,7 @@ module type S = sig
       error as [`Never]. *)
 end
 
+(** The interface which describes any I/O operations on Git reference. *)
 module type IO =
 sig
   module Lock: S.LOCK

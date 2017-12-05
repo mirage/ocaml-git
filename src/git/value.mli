@@ -15,6 +15,9 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+(** The Value module which represents the Git object. *)
+
+(** Interface which describes the Git object. *)
 module type S = sig
 
   module Hash: S.HASH
@@ -105,6 +108,8 @@ module type S = sig
   include S.BASE with type t := t
 end
 
+(** Interface which describes raw operations. That means all
+    serialization/unserialization to a {!Cstruct.t}. *)
 module type RAW = sig
 
   module Value: S

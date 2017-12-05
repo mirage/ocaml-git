@@ -15,6 +15,8 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+(** The Radix tree. *)
+
 module type KEY =
 sig
   type t
@@ -23,6 +25,7 @@ sig
   val length: t -> int
 end
 
+(** A concrete iterable structure. *)
 type 'a sequence = ('a -> unit) -> unit
 
 (** A Radix tree is a optimized container to bind a [Key.t] with a

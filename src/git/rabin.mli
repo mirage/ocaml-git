@@ -30,7 +30,8 @@ sig
   (** Limit the number of entries per hashes (default = 64). *)
 end
 
-(** Index module. *)
+(** Index module which represents an efficient hashtbl associated to a
+    {!Cstruct.t}. *)
 module Index (V: VALUE) :
 sig
   type t

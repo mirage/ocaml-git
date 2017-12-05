@@ -15,7 +15,19 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+(** Implementation of a Git repository with a file-system back-end.
+
+    This implementation is more complete than the memory back-end
+    because firstly, Git was think to be use on a file-system. Then,
+    because for each operations, we let the client to control the
+    memory consumption.
+
+    So we provide a more powerful API which let the user to notice
+    aready allocated buffers outside this scope and process some I/O
+    operations on pools. *)
+
 module type LOOSE = sig
+
   type t
   (** The type of the {i loosed} Git object. *)
 
@@ -79,7 +91,7 @@ module type LOOSE = sig
 
   val list: state -> Hash.t list Lwt.t
   (** [list state] lists all available git {i loose} objects in the
-      file-system. The list returned does not contain all git object
+      file-system. The list returned does not contain all git objects
       available in your repository but only which {i loosed} one. *)
 
   val read_p :
@@ -175,10 +187,10 @@ module type LOOSE = sig
       requested git {i loose} object. This kind of error should be
       never happen.}}
 
-      TODO: the current implementation does not limit the memory
-      consumption of the deflate computation (i.e. {i zlib} and the
-      flush method). Depending of the object [v], the process can
-      consume a lot of memory. *)
+      The current implementation does not limit the memory consumption
+      of the deflate computation (i.e. {i zlib} and the flush method).
+      Depending of the object [v], the process can consume a lot of
+      memory. *)
 
   val write_s: state -> t -> (Hash.t * int, error) result Lwt.t
   (** [write_s state v] is the same process than {!write_p} but we use
@@ -189,6 +201,16 @@ module type LOOSE = sig
   (** Alias of {!write_s}. *)
 
   val write_inflated: state -> kind:kind -> Cstruct.t -> Hash.t Lwt.t
+  (** [write_inflated state kind raw] writes the git object in the git
+      repository [state] and associates the kind to this object. This
+      function does not verify if the raw data is well-defined (and
+      respects the Git format). Then, this function returns the hash
+      produced from the kind and the inflated raw to let the user to
+      retrieve it.
+
+      If we retrieve any error error while the I/O operations, we {b
+      raise} 9by {!Lwt.fail} a [Failure] which describe in a [string]
+      the error encountered. *)
 
   val raw_p:
        ztmp:Cstruct.t
@@ -241,7 +263,7 @@ module type LOOSE = sig
     -> result:Cstruct.t
     -> state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
   (** [raw_wa ~window ~ztmp ~dtmp ~raw ~result state hash] can
-      retrieve a git {i loose} object from thefile-system. However,
+      retrieve a git {i loose} object from the file-system. However,
       this function {b does not} de-serialize the git object and
       returns the kind of the object and the {i raw-data} inflated.
       Precisely, it decodes only the header. This function needs some
@@ -296,33 +318,34 @@ module type LOOSE = sig
       All error from the {!Inflate} module is relayed to the
       [`Inflate] error value.
 
-      NOTE: The decoder includes an header process. This decoder does
-      not correspond directly to a de-serialized Git object but a
+      The decoder includes an header process. This decoder does not
+      correspond directly to a de-serialized Git object but a
       de-serialized Git {i loose} object. *)
 
   module E: S.ENCODER
     with type t = t
      and type init = int * t * int * Cstruct.t
      and type error = Value.E.error
+
   (** The encoder (which uses a {!Minienc.encoder}) of the Git object.
       We constraint the output to be a {Cstruct.t}. This encoder needs
       the level of the compression, the value {!t}, the memory
-      consumption of the encoder (in bytes) and an internal buffer
-      between the compression and the encoder.
+      consumption of the encoder (in bytes - must be a power of two)
+      and an internal buffer between the compression and the encoder.
 
       All error from the {!Deflate} module is relayed to the
       [`Deflate] error value.
 
-      NOTE: The encoder includes an header process. This encoder does
-      not correspond directly to a serialized Git object but a
-      serialized Git {i loose} object. That means we put in front of
-      the Git object an header:
+      The encoder includes an header process. This encoder does not
+      correspond directly to a serialized Git object but a serialized
+      Git {i loose} object. That means we put in front of the Git
+      object an header:
 
-      > kind length\000 ...
-  *)
+      > kind length\000 ... *)
 end
 
 module type PACK = sig
+
   type t
   (** The type of the {i packed} Git object. *)
 
@@ -342,6 +365,7 @@ module type PACK = sig
   (** The [Inflate] module used to make the implementation. *)
 
   module Deflate: S.DEFLATE
+  (** The [Deflate] module used to make the implementation. *)
 
   module PACKDecoder: Unpack.DECODER
     with module Hash = Hash
@@ -362,6 +386,7 @@ module type PACK = sig
     with module Hash = Hash
      and module Inflate = Inflate
 
+  (** The type error. *)
   type error =
     [ `PackDecoder of PACKDecoder.error
     | `PackEncoder of PACKEncoder.error
@@ -465,16 +490,37 @@ module type PACK = sig
   (** Alias of {size_s}. *)
 
   type stream = unit -> Cstruct.t option Lwt.t
+  (** The stream contains the PACK flow. *)
 
   module Graph: Map.S with type key = Hash.t
 
   val from: state -> stream -> (Hash.t * int, error) result Lwt.t
+  (** [from git stream] populates the Git repository [git] from the
+      PACK flow [stream]. If any error is encountered, any Git objects
+      of the PACK flow are not added in the Git repository. *)
 
   val make: state
     -> ?window:[ `Object of int | `Memory of int ]
     -> ?depth:int
     -> value list
     -> (stream * (Crc32.t * int64) Graph.t Lwt_mvar.t, error) result Lwt.t
+  (** [make ?window ?depth values] makes a PACK stream from a list of
+      {!Value.t}.
+
+      [?window] specifies the weight of the window while the
+      delta-ification. The client can limit the weight by the number
+      of objects in the windoz (by default, is 10) or by the weight in
+      byte of the window in your memory.
+
+      [depth] (default is [50]) limits the depth of the
+      delta-ification.
+
+      Then, the function returns a stream and a protected variable
+      which contains a representation of the associated IDX file of
+      the PACK stream. This protected variable is available
+      ([Lwt_mvar.take]) only {b at the end} of the PACK stream. That
+      means, the client needs to consume all of the stream and only
+      then he can take the [Graph.t] associated. *)
 end
 
 module type S =
@@ -482,26 +528,23 @@ sig
   type t
   (** The type of the git repository. *)
 
-  module Hash
-   : S.HASH
-      with type Digest.buffer = Cstruct.t
-       and type hex = string
-  (** The [Digest] module used to make the module. *)
+  module Hash: S.HASH
+  (** The [Digest] module used to make the implementation. *)
 
   module Inflate
    : S.INFLATE
-  (** The [Inflate] module used to make the module. *)
+  (** The [Inflate] module used to make the implementation. *)
 
   module Deflate
    : S.DEFLATE
-  (** The [Deflate] module used to make the module. *)
+  (** The [Deflate] module used to make the implementation. *)
 
   module Lock
    : S.LOCK
-  (** The [Lock] module used to make this interface. *)
+  (** The [Lock] module used to make this implementation. *)
 
   module FS : S.FS with type File.lock = Lock.elt
-  (** The [FS] module used to make the module. *)
+  (** The [FS] module used to make the implementation. *)
 
   module Value: Value.S
     with module Hash = Hash
@@ -557,6 +600,7 @@ sig
     | `Blob ]
   (** Kind of the {i packed} Git object. *)
 
+  (** The type error. *)
   type error =
     [ Loose.error
     | Pack.error ]
@@ -569,6 +613,11 @@ sig
     -> ?dotgit:Fpath.t
     -> ?compression:int
     -> unit -> (t, error) result Lwt.t
+  (** [create ?root ?dotgit ?compression ()] creates a new store
+      represented by the path [root] (default is ["."]), where the Git
+      objects are located in [dotgit] (default is [root / ".git"] and
+      when Git objects are compressed by the [level] (default is
+      [4]). *)
 
   val dotgit: t -> Fpath.t
   (** [dotgit state] returns the current [".git"] path used. *)
@@ -581,9 +630,8 @@ sig
       used to write a git object. *)
 
   val mem: t -> Hash.t -> bool Lwt.t
-  (** [mem state hash] checks if one object of the current
-      repository [state] satisfies the predicate [digest(object) =
-      hash]. *)
+  (** [mem state hash] checks if one object of the current repository
+      [state] satisfies the predicate [digest(object) = hash]. *)
 
   val list: t -> Hash.t list Lwt.t
   (** [list state] lists all git objects available in the current
@@ -624,16 +672,16 @@ sig
   val read_exn: t -> Hash.t -> Value.t Lwt.t
   (** [read_exn state hash] is an alias of {!read} but raise an
       exception (instead to return a {!result}) if the git object
-      requested does not exist or we catch any other errors. *)
+      requested does not exist or if we catch any other errors. *)
 
   val write_p :
        ztmp:Cstruct.t
     -> raw:Cstruct.t
     -> t -> Value.t -> (Hash.t * int, error) result Lwt.t
   (** [write_p ~ztmp ~raw state v] writes as a {b loose} git object
-      the value [v] in the file-system. It serializes and deflates the
-      value to a new file. which respect the internal structure of a
-      git repository. This function needs some buffers:
+      [v] in the file-system. It serializes and deflates the value to
+      a new file. which respect the internal structure of a git
+      repository. This function needs some buffers:
 
       {ul
       {- [ztmp] is a buffer used to store the deflated flow}
@@ -726,6 +774,16 @@ sig
   (** Alias of {!raw_s}. *)
 
   val write_inflated: t -> kind:kind -> Cstruct.t -> Hash.t Lwt.t
+  (** [write_inflated state kind raw] writes the git object in the git
+      repository [state] and associates the kind to this object. This
+      function does not verify if the raw data is well-defined (and
+      respects the Git format). Then, this function returns the hash
+      produced from the kind and the inflated raw to let the user to
+      retrieve it.
+
+      If we retrieve any error error while the I/O operations, we {b
+      raise} 9by {!Lwt.fail} a [Failure] which describe in a [string]
+      the error encountered. *)
 
   val contents: t -> ((Hash.t * Value.t) list, error) result Lwt.t
   (** [contents state] returns an associated list between the hash and
@@ -747,38 +805,44 @@ sig
   (** [buffer_io state] returns the state-defined buffer used to store
       the input flow. *)
 
-  val fold: t ->
-    ('a -> ?name:Fpath.t -> length:int64 -> Hash.t -> Value.t -> 'a Lwt.t) ->
-    path:Fpath.t -> 'a -> Hash.t -> 'a Lwt.t
-  (** [fold f ~path acc hash] walks from the source [hash] in the {i
-      sub-graph}. If the hash points to:
+  val fold:
+       t
+    -> ('a -> ?name:Fpath.t -> length:int64 -> Hash.t -> Value.t -> 'a Lwt.t)
+    -> path:Fpath.t
+    -> 'a
+    -> Hash.t
+    -> 'a Lwt.t
+  (** [fold state f ~path acc hash] iters on any git objects reachable
+      by the git object [hash] which located in [path] (for example,
+      if you iter on a commit, [path] should be ["."] - however, if
+      you iter on a tree, [path] should be the directory path
+      represented by your tree). For each git objects, we notice the
+      path [name] (derived from [path]) if the object is a Blob or a
+      Tree, the [length] or the git object (see {!size}), the [hash]
+      and the [value].
+
+      If the [hash] points to:
 
       {ul
-
       {- {!Value.Blob.t}: [f] is called only one time with the OCaml
-      value of the {i blob}}
-      {- {!Value.Tree.t}: [f] is called firstly with the OCaml value
+      value of the {i blob}.}
+      {- {!Value.Tree.t}: [f] is called firstly with the Ocaml value
       of the pointed {i tree} by the hash [hash]. Then, we {i iter}
-      (and call [f] for each iterations) in the OCaml {i tree} value.
-      For each iteration, we notice the pointed hash, the length of
-      the pointed git object, the OCaml value of the pointed git
-      object, and the [name] which is a composition between the
-      current [path] and the notified name by the current OCaml {i
-      tree} value. Then, we retrieve recursively all sub-git objects
-      for each pointed hash (ascending path). [f] is never called more
-      than one time for each hashes}
+      (and call [f] for each iteration) in the list of entries of the
+      {i tree}. Finally, we retrieve recursively all sub-tree objects
+      and do an ascending walk. [f] is never called more than one time
+      for each hash.}
       {- {!Value.Commit.t}: [f] is called firstly with the OCaml value
-      of the pointed {i commit} by the hash [hash]. Then, it follows
-      recursively all parents of the current commit. Finally, it
+      of the pointed {i commit} by the hash [hash]. Then, it follozs
+      recursively all parents of the current commit, Finallym it
       starts a [fold] inside the pointed root {i tree} git object of
-      each {i commits} previously retrieved. [f] is never called more
-      than one time for each hashes.}
+      each {i commit} previously retrieved. [f] never called more than
+      one time for each hash.}
       {- {!Value.Tag.t}: [f] is called firstly with the OCaml value of
       the pointed {i tag} by the hash [hash]. Then, it follows the git
       object pointed by the {i tag}.}}
 
-      Any retrieved {!error} is missed.
-  *)
+      Any retrieved {!error} is missed. *)
 
   module Ref :
   sig
@@ -796,6 +860,8 @@ sig
     (** Pretty-printer of {!error}. *)
 
     val mem: t -> Reference.t -> bool Lwt.t
+    (** [mem state ref] returns [true] iff [ref] exists in [state],
+        otherwise returns [false]. *)
 
     val graph_p :
          dtmp:Cstruct.t
@@ -803,8 +869,9 @@ sig
       -> ?locks:Lock.t
       -> t -> (Hash.t Reference.Map.t, error) result Lwt.t
     (** [graph_p state ~dtmp ~raw] returns a graph which contains all
-        reference and its pointed final hash available in the current
-        git repository [state]. This function needs some buffers:
+        reference and its pointed to final hash available in the
+        current git repository [state]. This function needs some
+        buffers:
 
         {ul
         {- [dtmp] is a buffer used by the decoder to save the input
@@ -923,7 +990,7 @@ sig
       -> raw:Cstruct.t -> t -> Reference.t -> Reference.head_contents -> (unit, error) result Lwt.t
     (** [write_p state ?locks ~dtmp ~raw reference value] writes the
         value [value] in the mutable representation of the [reference]
-        in the git repository [state]. The {?locks] avoids the race
+        in the git repository [state]. The [?locks] avoids the race
         condition if it's specified.
 
         As {!read_p}, this function needs some buffers. However, it
@@ -967,7 +1034,7 @@ module Make
     (FS: S.FS with type File.lock = L.elt)
     (Inflate: S.INFLATE)
     (Deflate: S.DEFLATE)
- : S with module Hash = H
+  : S with module Hash = H
        and module Lock = L
        and module Inflate = Inflate
        and module Deflate = Deflate

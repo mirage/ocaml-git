@@ -35,16 +35,15 @@ module type LOOSE = sig
   module Inflate: S.INFLATE
   module Deflate: S.DEFLATE
 
-  module Value
-    : Value.S
-      with module Hash = Hash
-       and module Inflate = Inflate
-       and module Deflate = Deflate
-       and module Blob = Blob.Make(Hash)
-       and module Commit = Commit.Make(Hash)
-       and module Tree = Tree.Make(Hash)
-       and module Tag = Tag.Make(Hash)
-       and type t = Value.Make(Hash)(Inflate)(Deflate).t
+  module Value: Value.S
+    with module Hash = Hash
+     and module Inflate = Inflate
+     and module Deflate = Deflate
+     and module Blob = Blob.Make(Hash)
+     and module Commit = Commit.Make(Hash)
+     and module Tree = Tree.Make(Hash)
+     and module Tag = Tag.Make(Hash)
+     and type t = Value.Make(Hash)(Inflate)(Deflate).t
 
   type error =
     [ `SystemFile of FS.File.error
@@ -110,6 +109,7 @@ module type LOOSE = sig
 end
 
 module type PACK = sig
+
   type t
   type value
   type state
@@ -177,9 +177,10 @@ module type PACK = sig
 end
 
 module type S = sig
+
   type t
 
-  module Hash : S.HASH
+  module Hash: S.HASH
   module Inflate: S.INFLATE
   module Deflate: S.DEFLATE
   module Lock: S.LOCK

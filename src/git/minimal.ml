@@ -146,23 +146,23 @@ module type S = sig
       -> ?depth:int
       -> Value.t list
       -> (stream * (Crc32.t * int64) Graph.t Lwt_mvar.t, error) result Lwt.t
-      (** [make ?window ?depth values] makes a PACK stream from a list
-          of {!Value.t}.
+    (** [make ?window ?depth values] makes a PACK stream from a list
+        of {!Value.t}.
 
-          [?window] specifies the weight of the window while the
-          delta-ification. The client can limit the weight by the
-          number of objects in the windoz (by default, is 10) or by
-          the weight in byte of the window in your memory.
+        [?window] specifies the weight of the window while the
+        delta-ification. The client can limit the weight by the number
+        of objects in the windoz (by default, is 10) or by the weight
+        in byte of the window in your memory.
 
-          [depth] (default is [50]) limits the depth of the
-          delta-ification.
+        [depth] (default is [50]) limits the depth of the
+        delta-ification.
 
-          Then, the function returns a stream and a protected variable
-          which contains a representation of the associated IDX file
-          of the PACK stream. This protected variable is available
-          ([Lwt_mvar.take]) only {b at the end} of the PACK stream.
-          That means, the client needs to consume all of the stream
-          and only then he can take the [Graph.t] associated. *)
+        Then, the function returns a stream and a protected variable
+        which contains a representation of the associated IDX file of
+        the PACK stream. This protected variable is available
+        ([Lwt_mvar.take]) only {b at the end} of the PACK stream. That
+        means, the client needs to consume all of the stream and only
+        then he can take the [Graph.t] associated. *)
   end
 
   module Ref: sig
@@ -208,7 +208,7 @@ module type S = sig
         {- If [test = None], we set [reference] to [set] if
         [reference] does not exist.}
         {- If [test = Some v], we set [reference] to [set] only if
-        [reference] exists and [reference = v].
+        [reference] exists and [reference = v].}
         {- If [set = None], we ensure than [reference] will no longer
         exists iff [test] returns [true].}
         {- If [set = Some v], we ensure than [reference] will be equal
@@ -240,7 +240,7 @@ module type S = sig
   val write_inflated: t -> kind:[ `Commit | `Tree | `Blob | `Tag ] ->
     Cstruct.t -> Hash.t Lwt.t
   (** [write_inflated state kind raw] writes the git object in the git
-      repository [state] and associate the kind to this object. This
+      repository [state] and associates the kind to this object. This
       function does not verify if the raw data is well-defined (and
       respects the Git format). Then, this function returns the hash
       produced from the kind and the inflated raw to let the user to

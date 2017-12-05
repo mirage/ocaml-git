@@ -15,6 +15,9 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+(** Implementation of a fanout table (which orders value like the IDX
+    file). *)
+
 module type KEY =
 sig
   type t
