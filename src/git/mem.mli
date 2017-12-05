@@ -66,3 +66,15 @@ module Make
     Qbout the [Lock] module and the constraint to use the [Lwt] monad,
     we zork on it to discard this constraint - and have a store
     back-end free-ed from monad. *)
+
+module Lock: S.LOCK with type elt = Lwt_mutex.t
+
+module Make
+    (H : S.HASH)
+    (L : S.LOCK)
+    (I : S.INFLATE)
+    (D : S.DEFLATE)
+  : Minimal.S with module Hash = H
+               and module Lock = L
+               and module Inflate = I
+               and module Deflate = D

@@ -11,7 +11,7 @@ end
 
 module Make (Gamma: GAMMA) (FS: FS): Git.FS
   with type error = [ `System of string ]
-   and type File.lock = Lock.elt
+   and type File.lock = Git.Mem.Lock.elt
    and type File.error = [ `Stat of string
                          | Mirage_fs.write_error
                          | Mirage_fs.error ]

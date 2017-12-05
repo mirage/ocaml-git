@@ -1,5 +1,4 @@
 module FS = Fs
-module Lock = Lock
 module Net = Net
 module SHA1: Git.HASH
 module Sync (S: Git.S): Git.Sync.S with module Store = S and module Net = Net

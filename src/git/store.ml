@@ -735,7 +735,7 @@ module Make
           | Ok v -> Lwt.return (Some v)
 
     module GC =
-      Gc.Make(struct
+      Collector.Make(struct
         module Hash = Hash
         module Value = Value
         module Deflate = Deflate

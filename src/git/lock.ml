@@ -16,6 +16,8 @@
 (*                                                                     *)
 (***********************************************************************)
 
+(* XXX: remove *)
+
 module Stack = struct
   type 'a t =
     { mutable data : 'a Weak.t

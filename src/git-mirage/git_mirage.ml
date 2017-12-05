@@ -1,5 +1,4 @@
 module FS = Fs
-module Lock = Lock
 module Net = Net
 module SHA1 = Git.Hash.Make(Digestif.SHA1)
 

@@ -17,8 +17,7 @@
 
 open Lwt.Infix
 
-module Log =
-struct
+module Log = struct
   let src = Logs.Src.create "git.mem" ~doc:"logs git's memory back-end"
   include (val Logs.src_log src : Logs.LOG)
 end
@@ -44,7 +43,6 @@ module Make
   module Inflate = I
   module Deflate = D
   module Buffer = Cstruct_buffer
-
   module Value = Value.Raw(Hash)(Inflate)(Deflate)
   module Reference = Reference.Make(Hash)
 
@@ -220,7 +218,7 @@ module Make
       | `PackDecoder e -> Fmt.pf ppf "(`PackDecoder %a)" PACKDecoder.pp_error e
 
     module GC =
-      Gc.Make(struct
+      Collector.Make(struct
         module Hash = Hash
         module Value = Value
         module Deflate = Deflate
@@ -523,3 +521,11 @@ module Make
   end
 
 end
+
+module Lock = Lock
+
+module Make
+    (H : S.HASH)
+    (I : S.INFLATE)
+    (D : S.DEFLATE)
+  = Make_ext(H)(Lock)(I)(D)
