@@ -15,6 +15,8 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+(** The Git Reference module. *)
+
 type t = private string
 (** A Git Reference object. Which contains a hash to point to an other
     object. *)
@@ -23,8 +25,8 @@ val head: t
 (** [head] is the {i user-friendly} value of HEAD Git reference. *)
 
 val master: t
-(** [master] is the {i user-friendly} value of [refs/heads/master]
-    Git reference. *)
+(** [master] is the {i user-friendly} value of [refs/heads/master] Git
+    reference. *)
 
 val is_head: t -> bool
 (** [is_head t] returns [true] if [t = head]. *)
@@ -48,7 +50,7 @@ val of_string: string -> t
     {- They cannot have ASCII control characters (i.e. bytes whose
     values are lower than [\040] or [\177] DEL), space, tilde ['~'],
     caret ['^'], colon [':'], question-mark ['?'], asterisk ['*'],
-    or open bracket ['['] anywhere.}
+    or open bracket ['\['] anywhere.}
     {- They cannot end with a slash ['/'] or a dot ['.'].}
     {- They cannot end with the sequence [".lock"].}
     {- They cannot contain a sequence ["@{"].}
@@ -59,13 +61,19 @@ val to_string: t -> string
 (** [to_string t] returns the string value of the reference [t]. *)
 
 val of_path: Fpath.t -> t
-val to_path: t -> Fpath.t
+(** [of_path path] casts a path to a reference. *)
 
+val to_path: t -> Fpath.t
+(** [to_path ref] casts a reference [ref] to a path (as a Window path or Unix path). *)
+
+(**  Interface to describe the Git reference value [head_contents]. *)
 module type S = sig
+
   module Hash: S.HASH
   (** The [Digest] module used to make the module. *)
 
   type nonrec t = t
+
   val head: t
   val master: t
   val is_head: t -> bool
@@ -76,6 +84,7 @@ module type S = sig
 
   include S.BASE with type t := t
 
+  (** The type of the value of a Git reference. *)
   type head_contents =
     | Hash of Hash.t (** A pointer to an hash. *)
     | Ref of t (** A reference which one can point to an other reference or an hash. *)
@@ -98,9 +107,10 @@ module type S = sig
   module A: S.ANGSTROM with type t = head_contents
   (** The Angstrom decoder of the Git Reference object. *)
 
-  module D: S.DECODER with type t = head_contents
-                      and type init = Cstruct.t
-                      and type error = [ `Decoder of string ]
+  module D: S.DECODER
+    with type t = head_contents
+     and type init = Cstruct.t
+     and type error = [ `Decoder of string ]
   (** The decoder of the Git Reference object. We constraint the input
       to be a {!Cstruct.t}. This decoder needs a {!Cstruct.t} as an
       internal buffer. *)
@@ -108,9 +118,10 @@ module type S = sig
   module M: S.MINIENC with type t = head_contents
   (** The {!Minienc} encoder of the Git Reference object. *)
 
-  module E: S.ENCODER with type t = head_contents
-                 and type init = int * head_contents
-                 and type error = [ `Never ]
+  module E: S.ENCODER
+    with type t = head_contents
+     and type init = int * head_contents
+     and type error = [ `Never ]
   (** The encoder (which uses a {Minienc.encoder}) of the Git
       Reference object. We constraint the output to be a {Cstruct.t}.
       This encoder needs the Reference OCaml value and the memory
@@ -121,6 +132,7 @@ module type S = sig
       error as [`Never]. *)
 end
 
+(** The interface which describes any I/O operations on Git reference. *)
 module type IO =
 sig
   module Lock: S.LOCK
@@ -173,12 +185,7 @@ end
 
 module Make (H: S.HASH): S with module Hash = H
 (** The {i functor} to make the OCaml representation of the Git
-    Reference object by a specific hash, a defined path and an access
-    to the file-system. We constraint the {!IDIGEST} module to
-    generate a {Bytes.t} and compute a {Cstruct.t}. Then, the content
-    of a file need to be a {Cstruct.t}. The path provided by the
-    {!Path} module need to be semantically the same than which used by
-    the [FS] module. *)
+    Reference object by a specific hash. *)
 
 module IO
     (H: S.HASH)
@@ -187,3 +194,5 @@ module IO
  : IO with module Hash = H
         and module Lock = L
         and module FS = FS
+(** The {i functor} to make a module which implements I/O operations
+    on references on a file-system. *)

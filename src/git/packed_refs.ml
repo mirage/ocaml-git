@@ -16,18 +16,21 @@
  *)
 
 module type S = sig
-  module Hash : S.HASH
-  module FS : S.FS
+
+  module Hash: S.HASH
+  module FS: S.FS
 
   type t = [ `Peeled of Hash.t | `Ref of string * Hash.t ] list
 
   module A: S.ANGSTROM with type t = t
-  module D: S.DECODER  with type t = t
-                        and type init = Cstruct.t
-                        and type error = [ `Decoder of string ]
+  module D: S.DECODER
+    with type t = t
+     and type init = Cstruct.t
+     and type error = [ `Decoder of string ]
   module M: S.MINIENC with type t = t
-  module E: S.ENCODER with type t = t
-                       and type init = int * t
+  module E: S.ENCODER
+    with type t = t
+     and type init = int * t
 
   type error = [ `SystemFile of FS.File.error
                | `SystemIO of string
@@ -42,9 +45,9 @@ module type S = sig
     (t, error) result Lwt.t
 end
 
-module Make (H : S.HASH) (FS : S.FS)
-  : S with module Hash = H and module FS = FS
+module Make (H: S.HASH) (FS: S.FS): S with module Hash = H and module FS = FS
 = struct
+
   module Hash = H
   module FS = FS
 

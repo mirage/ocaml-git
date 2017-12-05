@@ -41,13 +41,13 @@ module type KEY =
 sig
   type t
 
-  val get : t -> int -> char
-  val length : t -> int
+  val get: t -> int -> char
+  val length: t -> int
 end
 
 type 'a sequence = ('a -> unit) -> unit
 
-module Make (K : KEY) =
+module Make (K: KEY) =
 struct
   module Key = K
 

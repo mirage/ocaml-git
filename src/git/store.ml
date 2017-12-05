@@ -35,16 +35,15 @@ module type LOOSE = sig
   module Inflate: S.INFLATE
   module Deflate: S.DEFLATE
 
-  module Value
-    : Value.S
-        with module Hash = Hash
-         and module Inflate = Inflate
-         and module Deflate = Deflate
-         and module Blob = Blob.Make(Hash)
-         and module Commit = Commit.Make(Hash)
-         and module Tree = Tree.Make(Hash)
-         and module Tag = Tag.Make(Hash)
-         and type t = Value.Make(Hash)(Inflate)(Deflate).t
+  module Value: Value.S
+    with module Hash = Hash
+     and module Inflate = Inflate
+     and module Deflate = Deflate
+     and module Blob = Blob.Make(Hash)
+     and module Commit = Commit.Make(Hash)
+     and module Tree = Tree.Make(Hash)
+     and module Tag = Tag.Make(Hash)
+     and type t = Value.Make(Hash)(Inflate)(Deflate).t
 
   type error =
     [ `SystemFile of FS.File.error
@@ -53,64 +52,50 @@ module type LOOSE = sig
     | Value.D.error
     | Value.E.error ]
 
-  val pp_error : error Fmt.t
-
-  val lookup_p : state -> Hash.t -> Hash.t option Lwt.t
-  val lookup : state -> Hash.t -> Hash.t option Lwt.t
-
-  val mem : state -> Hash.t -> bool Lwt.t
-
-  val list : state -> Hash.t list Lwt.t
-
-  val read_p :
+  val pp_error: error Fmt.t
+  val lookup_p: state -> Hash.t -> Hash.t option Lwt.t
+  val lookup: state -> Hash.t -> Hash.t option Lwt.t
+  val mem: state -> Hash.t -> bool Lwt.t
+  val list: state -> Hash.t list Lwt.t
+  val read_p:
        ztmp:Cstruct.t
     -> dtmp:Cstruct.t
     -> raw:Cstruct.t
     -> window:Inflate.window
     -> state -> Hash.t -> (t, error) result Lwt.t
-
-  val read_s : state -> Hash.t -> (t, error) result Lwt.t
-  val read : state -> Hash.t -> (t, error) result Lwt.t
-
-  val size_p :
+  val read_s: state -> Hash.t -> (t, error) result Lwt.t
+  val read: state -> Hash.t -> (t, error) result Lwt.t
+  val size_p:
        ztmp:Cstruct.t
     -> dtmp:Cstruct.t
     -> raw:Cstruct.t
     -> window:Inflate.window
     -> state -> Hash.t -> (int64, error) result Lwt.t
-
-  val size_s : state -> Hash.t -> (int64, error) result Lwt.t
-  val size : state -> Hash.t -> (int64, error) result Lwt.t
-
-  val write_p :
+  val size_s: state -> Hash.t -> (int64, error) result Lwt.t
+  val size: state -> Hash.t -> (int64, error) result Lwt.t
+  val write_p:
        ztmp:Cstruct.t
     -> raw:Cstruct.t
     -> state -> t -> (Hash.t * int, error) result Lwt.t
-
-  val write_s : state -> t -> (Hash.t * int, error) result Lwt.t
-  val write : state -> t -> (Hash.t * int, error) result Lwt.t
-
-  val write_inflated : state -> kind:kind -> Cstruct.t -> Hash.t Lwt.t
-
-  val raw_p :
+  val write_s: state -> t -> (Hash.t * int, error) result Lwt.t
+  val write: state -> t -> (Hash.t * int, error) result Lwt.t
+  val write_inflated: state -> kind:kind -> Cstruct.t -> Hash.t Lwt.t
+  val raw_p:
        ztmp:Cstruct.t
     -> dtmp:Cstruct.t
     -> window:Inflate.window
     -> raw:Cstruct.t
     -> state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
-
-  val raw_s : state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
-  val raw : state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
-
-  val raw_wa :
+  val raw_s: state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
+  val raw: state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
+  val raw_wa:
        ztmp:Cstruct.t
     -> dtmp:Cstruct.t
     -> window:Inflate.window
     -> raw:Cstruct.t
     -> result:Cstruct.t
     -> state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
-
-  val raw_was : Cstruct.t -> state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
+  val raw_was: Cstruct.t -> state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
 
   module D: S.DECODER
     with type t = t
@@ -124,6 +109,7 @@ module type LOOSE = sig
 end
 
 module type PACK = sig
+
   type t
   type value
   type state
@@ -161,37 +147,29 @@ module type PACK = sig
     | `Integrity of string
     | `Not_found ]
 
-  val pp_error : error Fmt.t
-
-  val lookup : state -> Hash.t -> (Hash.t * (Crc32.t * int64)) option Lwt.t
-
-  val mem : state -> Hash.t -> bool Lwt.t
-
-  val list : state -> Hash.t list Lwt.t
-
-  val read_p :
+  val pp_error: error Fmt.t
+  val lookup: state -> Hash.t -> (Hash.t * (Crc32.t * int64)) option Lwt.t
+  val mem: state -> Hash.t -> bool Lwt.t
+  val list: state -> Hash.t list Lwt.t
+  val read_p:
        ztmp:Cstruct.t
     -> window:Inflate.window
     -> state -> Hash.t -> (t, error) result Lwt.t
-
-  val read_s : state -> Hash.t -> (t, error) result Lwt.t
-  val read : state -> Hash.t -> (t, error) result Lwt.t
-
-  val size_p :
+  val read_s: state -> Hash.t -> (t, error) result Lwt.t
+  val read: state -> Hash.t -> (t, error) result Lwt.t
+  val size_p:
        ztmp:Cstruct.t
     -> window:Inflate.window
     -> state -> Hash.t -> (int, error) result Lwt.t
-
-  val size_s : state -> Hash.t -> (int, error) result Lwt.t
-  val size : state -> Hash.t -> (int, error) result Lwt.t
+  val size_s: state -> Hash.t -> (int, error) result Lwt.t
+  val size: state -> Hash.t -> (int, error) result Lwt.t
 
   type stream = unit -> Cstruct.t option Lwt.t
 
   module Graph : Map.S with type key = Hash.t
 
-  val from : state -> stream -> (Hash.t * int, error) result Lwt.t
-
-  val make : state
+  val from: state -> stream -> (Hash.t * int, error) result Lwt.t
+  val make: state
     -> ?window:[ `Object of int | `Memory of int ]
     -> ?depth:int
     -> value list
@@ -199,9 +177,10 @@ module type PACK = sig
 end
 
 module type S = sig
+
   type t
 
-  module Hash : S.HASH
+  module Hash: S.HASH
   module Inflate: S.INFLATE
   module Deflate: S.DEFLATE
   module Lock: S.LOCK
@@ -257,75 +236,66 @@ module type S = sig
     [ Loose.error
     | Pack.error ]
 
-  val pp_error : error Fmt.t
-
-  val create :
+  val pp_error: error Fmt.t
+  val create:
        ?root:Fpath.t
     -> ?dotgit:Fpath.t
     -> ?compression:int
     -> unit -> (t, error) result Lwt.t
-
-  val dotgit : t -> Fpath.t
-  val root : t -> Fpath.t
+  val dotgit: t -> Fpath.t
+  val root: t -> Fpath.t
   val compression : t -> int
-
-  val mem : t -> Hash.t -> bool Lwt.t
-
-  val list : t -> Hash.t list Lwt.t
-
-  val read_p :
+  val mem: t -> Hash.t -> bool Lwt.t
+  val list: t -> Hash.t list Lwt.t
+  val read_p:
        ztmp:Cstruct.t
     -> dtmp:Cstruct.t
     -> raw:Cstruct.t
     -> window:Inflate.window
     -> t -> Hash.t -> (Value.t, error) result Lwt.t
-
-  val read_s : t -> Hash.t -> (Value.t, error) result Lwt.t
-  val read : t -> Hash.t -> (Value.t, error) result Lwt.t
-  val read_exn : t -> Hash.t -> Value.t Lwt.t
-
-  val write_p :
+  val read_s: t -> Hash.t -> (Value.t, error) result Lwt.t
+  val read: t -> Hash.t -> (Value.t, error) result Lwt.t
+  val read_exn: t -> Hash.t -> Value.t Lwt.t
+  val write_p:
        ztmp:Cstruct.t
     -> raw:Cstruct.t
     -> t -> Value.t -> (Hash.t * int, error) result Lwt.t
-
-  val write_s : t -> Value.t -> (Hash.t * int, error) result Lwt.t
-  val write : t -> Value.t -> (Hash.t * int, error) result Lwt.t
-
-  val size_p :
+  val write_s: t -> Value.t -> (Hash.t * int, error) result Lwt.t
+  val write: t -> Value.t -> (Hash.t * int, error) result Lwt.t
+  val size_p:
        ztmp:Cstruct.t
     -> dtmp:Cstruct.t
     -> raw:Cstruct.t
     -> window:Inflate.window
     -> t -> Hash.t -> (int64, error) result Lwt.t
-
-  val size_s : t -> Hash.t -> (int64, error) result Lwt.t
-  val size : t -> Hash.t -> (int64, error) result Lwt.t
-
-  val raw_p :
+  val size_s: t -> Hash.t -> (int64, error) result Lwt.t
+  val size: t -> Hash.t -> (int64, error) result Lwt.t
+  val raw_p:
        ztmp:Cstruct.t
     -> dtmp:Cstruct.t
     -> raw:Cstruct.t
     -> window:Inflate.window
     -> t -> Hash.t -> (kind * Cstruct.t) option Lwt.t
+  val raw_s: t -> Hash.t -> (kind * Cstruct.t) option Lwt.t
+  val raw: t -> Hash.t -> (kind * Cstruct.t) option Lwt.t
+  val read_inflated: t -> Hash.t -> (kind * Cstruct.t) option Lwt.t
+  val write_inflated: t -> kind:kind -> Cstruct.t -> Hash.t Lwt.t
+  val contents: t -> ((Hash.t * Value.t) list, error) result Lwt.t
+  val buffer_window: t -> Inflate.window
+  val buffer_zl: t -> Cstruct.t
+  val buffer_de: t -> Cstruct.t
+  val buffer_io: t -> Cstruct.t
 
-  val raw_s : t -> Hash.t -> (kind * Cstruct.t) option Lwt.t
-  val raw : t -> Hash.t -> (kind * Cstruct.t) option Lwt.t
-
-  val read_inflated  : t -> Hash.t -> (kind * Cstruct.t) option Lwt.t
-
-  val write_inflated : t -> kind:kind -> Cstruct.t -> Hash.t Lwt.t
-
-  val contents : t -> ((Hash.t * Value.t) list, error) result Lwt.t
-
-  val buffer_window : t -> Inflate.window
-  val buffer_zl : t -> Cstruct.t
-  val buffer_de : t -> Cstruct.t
-  val buffer_io : t -> Cstruct.t
-
-  val fold : t -> ('a -> ?name:Fpath.t -> length:int64 -> Hash.t -> Value.t -> 'a Lwt.t) -> path:Fpath.t -> 'a -> Hash.t -> 'a Lwt.t
+  val fold:
+       t
+    -> ('a -> ?name:Fpath.t -> length:int64 -> Hash.t -> Value.t -> 'a Lwt.t)
+    -> path:Fpath.t
+    -> 'a
+    -> Hash.t
+    -> 'a Lwt.t
 
   module Ref: sig
+
     module Packed_refs: Packed_refs.S
       with module Hash = Hash
        and module FS = FS
@@ -335,57 +305,44 @@ module type S = sig
       | error
       | `Invalid_reference of Reference.t ]
 
-    val pp_error : error Fmt.t
-
-    val mem : t -> Reference.t -> bool Lwt.t
-
-    val graph_p :
+    val pp_error: error Fmt.t
+    val mem: t -> Reference.t -> bool Lwt.t
+    val graph_p:
          dtmp:Cstruct.t
       -> raw:Cstruct.t
       -> ?locks:Lock.t
       -> t -> (Hash.t Reference.Map.t, error) result Lwt.t
-
-    val graph : ?locks:Lock.t -> t -> (Hash.t Reference.Map.t, error) result Lwt.t
-
-    val normalize : Hash.t Reference.Map.t -> Reference.head_contents -> (Hash.t, error) result Lwt.t
-
-    val list_p :
+    val graph: ?locks:Lock.t -> t -> (Hash.t Reference.Map.t, error) result Lwt.t
+    val normalize: Hash.t Reference.Map.t -> Reference.head_contents -> (Hash.t, error) result Lwt.t
+    val list_p:
          dtmp:Cstruct.t
       -> raw:Cstruct.t
       -> ?locks:Lock.t
       -> t -> (Reference.t * Hash.t) list Lwt.t
-
-    val list_s : ?locks:Lock.t -> t -> (Reference.t * Hash.t) list Lwt.t
-    val list : ?locks:Lock.t -> t -> (Reference.t * Hash.t) list Lwt.t
-
-    val remove_p :
+    val list_s: ?locks:Lock.t -> t -> (Reference.t * Hash.t) list Lwt.t
+    val list: ?locks:Lock.t -> t -> (Reference.t * Hash.t) list Lwt.t
+    val remove_p:
          dtmp:Cstruct.t
       -> raw:Cstruct.t
       -> ?locks:Lock.t
       -> t -> Reference.t -> (unit, error) result Lwt.t
-
-    val remove_s : t -> ?locks:Lock.t -> Reference.t -> (unit, error) result Lwt.t
-    val remove : t -> ?locks:Lock.t -> Reference.t -> (unit, error) result Lwt.t
-
-    val read_p :
+    val remove_s: t -> ?locks:Lock.t -> Reference.t -> (unit, error) result Lwt.t
+    val remove: t -> ?locks:Lock.t -> Reference.t -> (unit, error) result Lwt.t
+    val read_p:
          dtmp:Cstruct.t
       -> raw:Cstruct.t
       -> ?locks:Lock.t
       -> t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
-
-    val read_s : ?locks:Lock.t -> t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
-    val read : ?locks:Lock.t -> t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
-
-    val write_p :
+    val read_s: ?locks:Lock.t -> t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
+    val read: ?locks:Lock.t -> t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
+    val write_p:
          ?locks:Lock.t
       -> dtmp:Cstruct.t
       -> raw:Cstruct.t
       -> t -> Reference.t -> Reference.head_contents -> (unit, error) result Lwt.t
-
-    val write_s : t -> ?locks:Lock.t -> Reference.t -> Reference.head_contents -> (unit, error) result Lwt.t
-    val write : t -> ?locks:Lock.t -> Reference.t -> Reference.head_contents -> (unit, error) result Lwt.t
-
-    val test_and_set :
+    val write_s: t -> ?locks:Lock.t -> Reference.t -> Reference.head_contents -> (unit, error) result Lwt.t
+    val write: t -> ?locks:Lock.t -> Reference.t -> Reference.head_contents -> (unit, error) result Lwt.t
+    val test_and_set:
         t
      -> ?locks:Lock.t
      -> Reference.t
@@ -394,8 +351,8 @@ module type S = sig
      -> (bool, error) result Lwt.t
   end
 
-  val clear_caches : ?locks:Lock.t -> t -> unit Lwt.t
-  val reset        : ?locks:Lock.t -> t -> (unit, [ `Store of error | `Ref of Ref.error ]) result Lwt.t
+  val clear_caches: ?locks:Lock.t -> t -> unit Lwt.t
+  val reset: ?locks:Lock.t -> t -> (unit, [ `Store of error | `Ref of Ref.error ]) result Lwt.t
 end
 
 module Option =
@@ -406,10 +363,10 @@ end
 
 module Make
     (H: S.HASH)
-    (L : S.LOCK)
-    (FS : S.FS with type File.lock = L.elt)
-    (I : S.INFLATE)
-    (D : S.DEFLATE)
+    (L: S.LOCK)
+    (FS: S.FS with type File.lock = L.elt)
+    (I: S.INFLATE)
+    (D: S.DEFLATE)
   : S with module Hash = H
        and module Lock = L
        and module FS = FS
@@ -616,6 +573,7 @@ module Make
   end
 
   module Pack = struct
+
     module Hash = Hash
     module FS = FS
     module Inflate = Inflate

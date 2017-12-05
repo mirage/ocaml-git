@@ -1,4 +1,22 @@
+(*
+ * Copyright (c) 2013-2017 Thomas Gazagnaire <thomas@gazagnaire.org>
+ * and Romain Calascibetta <romain.calascibetta@gmail.com>
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ *)
+
 module type S = sig
+
   module Hash: S.HASH
   module Inflate: S.INFLATE
   module Deflate: S.DEFLATE
@@ -40,30 +58,30 @@ module type S = sig
     | `Integrity of string
     | `Not_found ]
 
-  val pp_error : error Fmt.t
+  val pp_error: error Fmt.t
 
-  val v : Fpath.t list -> t Lwt.t
+  val v: Fpath.t list -> t Lwt.t
 
-  val add_total :
+  val add_total:
        root:Fpath.t
     -> t
     -> Fpath.t
     -> Pack_info.full Pack_info.t
     -> (Hash.t * int, error) result Lwt.t
 
-  val add_exists :
+  val add_exists:
        root:Fpath.t
     -> t
     -> Hash.t
     -> (unit, error) result Lwt.t
 
-  val merge : t -> [> Pack_info.partial | Pack_info.full ] Pack_info.t -> unit Lwt.t
+  val merge: t -> [> Pack_info.partial | Pack_info.full ] Pack_info.t -> unit Lwt.t
 
-  val load_index :
+  val load_index:
        Fpath.t
     -> (Hash.t * IDXDecoder.t * FS.Mapper.fd, Fpath.t * error) result Lwt.t
 
-  val load_partial :
+  val load_partial:
        root:Fpath.t
     -> t
     -> Hash.t
@@ -71,18 +89,18 @@ module type S = sig
     -> FS.Mapper.fd
     -> (loaded, error) result Lwt.t
 
-  val force_total :
+  val force_total:
        t
     -> loaded
     -> ((PACKDecoder.t * FS.Mapper.fd * Pack_info.full Pack_info.t), error) result Lwt.t
 
-  val lookup : t -> Hash.t -> (Hash.t * (Crc32.t * int64)) option Lwt.t
+  val lookup: t -> Hash.t -> (Hash.t * (Crc32.t * int64)) option Lwt.t
 
-  val mem : t -> Hash.t -> bool Lwt.t
+  val mem: t -> Hash.t -> bool Lwt.t
 
-  val list : t -> Hash.t list Lwt.t
+  val list: t -> Hash.t list Lwt.t
 
-  val read :
+  val read:
        root:Fpath.t
     -> ztmp:Cstruct.t
     -> window:Inflate.window
@@ -90,7 +108,7 @@ module type S = sig
     -> Hash.t
     -> (PACKDecoder.Object.t, error) result Lwt.t
 
-  val size :
+  val size:
        root:Fpath.t
     -> ztmp:Cstruct.t
     -> window:Inflate.window
@@ -98,23 +116,24 @@ module type S = sig
     -> Hash.t
     -> (int, error) result Lwt.t
 
-  val save_idx_file :
+  val save_idx_file:
        root:Fpath.t
     -> (Hash.t * (Crc32.t * int64)) Radix.sequence
     -> Hash.t
     -> (unit, error) result Lwt.t
-  val save_pack_file :
+
+  val save_pack_file:
        (string -> string)
     -> (PACKEncoder.Entry.t * PACKEncoder.Delta.t) list
     -> (Hash.t -> Cstruct.t option Lwt.t)
     -> (Fpath.t * (Hash.t * (Crc32.t * int64)) Radix.sequence * Hash.t, error) result Lwt.t
 end
 
-module Make (H : S.HASH) (FS : S.FS) (I : S.INFLATE) (D : S.DEFLATE):
-    S with module Hash = H
-       and module Inflate = I
-       and module Deflate = D
-       and module FS = FS
+module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
+  S with module Hash = H
+     and module Inflate = I
+     and module Deflate = D
+     and module FS = FS
 = struct
   module Log =
   struct
@@ -155,7 +174,7 @@ module Make (H : S.HASH) (FS : S.FS) (I : S.INFLATE) (D : S.DEFLATE):
        than external source is a function which allocates the
        requested object.
 
-       In this way, the decoder wants 2 fixed-size buffer (one to
+       In this way, the decoder wants 2 fixed-size buffers (one to
        inflate and the zlib's window). However, the decoder will
        traverse the path to construct the requested object to
        calculate the biggest needed object. Then, it allocates 2
@@ -298,8 +317,8 @@ module Make (H : S.HASH) (FS : S.FS) (I : S.INFLATE) (D : S.DEFLATE):
     ((FS.Mapper.openfile path
       >!= (fun sys_err -> Lwt.return (`SystemMapper sys_err))
       >>= fun fd -> FS.Mapper.length fd
-      >!= (fun sys_err -> close fd sys_err)
-      >!= (fun sys_err -> Lwt.return (`SystemMapper sys_err))
+                    >!= (fun sys_err -> close fd sys_err)
+                    >!= (fun sys_err -> Lwt.return (`SystemMapper sys_err))
       >|= fun length -> (fd, length))
      >>= fun (fd, length) ->
      (FS.Mapper.map ~share:false fd (Int64.to_int length)
@@ -824,9 +843,9 @@ module Make (H : S.HASH) (FS : S.FS) (I : S.INFLATE) (D : S.DEFLATE):
       >>= fun _ ->
       (FS.Mapper.close fdp
        >!= fun sys_err' ->
-        Log.err (fun l -> l ~header:"log" "Impossible to close the pack fd: %a"
-                    FS.Mapper.pp_error sys_err');
-        Lwt.return ())
+         Log.err (fun l -> l ~header:"log" "Impossible to close the pack fd: %a"
+                     FS.Mapper.pp_error sys_err');
+         Lwt.return ())
       >>= fun _ -> Lwt.return sys_err
     in
 

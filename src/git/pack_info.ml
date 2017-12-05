@@ -1,35 +1,50 @@
+(*
+ * Copyright (c) 2013-2017 Thomas Gazagnaire <thomas@gazagnaire.org>
+ * and Romain Calascibetta <romain.calascibetta@gmail.com>
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ *)
+
 module type S =
 sig
-  module Hash
-    : S.HASH
-  module Inflate
-    : S.INFLATE
+  module Hash: S.HASH
+  module Inflate: S.INFLATE
 
   module Radix
     : module type of Radix.Make(struct include Hash let length _ = Hash.Digest.length end)
-  module Graph
-    : Map.S
-      with type key = int64
-  module PACKDecoder
-    : Unpack.P
-      with module Hash = Hash
-       and module Inflate = Inflate
+
+  module Graph: Map.S
+    with type key = int64
+
+  module PACKDecoder: Unpack.P
+    with module Hash = Hash
+     and module Inflate = Inflate
 
   type error =
     [ `Unexpected_end_of_input
     | `Unexpected_chunk of string
     | `PackDecoder of PACKDecoder.error ]
 
-  val pp_error : error Fmt.t
+  val pp_error: error Fmt.t
 
-  module Partial :
+  module Partial:
   sig
     type t =
-      { hash : Hash.t
+      { hash  : Hash.t
       ; delta : (int64 * PACKDecoder.H.hunks) list }
   end
 
-  module Full :
+  module Full:
   sig
     type t =
       { hash : Hash.t
@@ -54,20 +69,24 @@ sig
     ; state                   : 'a }
   constraint 'a = [< state ]
 
-  val v :
+  val v:
        ?max_length_object:int
     -> ?max_length_insert_hunks:int
     -> ?tree:(Crc32.t * int64) Radix.t
     -> ?graph:(int * Hash.t option) Graph.t
     -> Hash.t -> [> empty ] t
 
-  val from_stream : ztmp:Cstruct.t -> window:Inflate.window -> [> empty ] t -> (unit -> Cstruct.t option Lwt.t) -> (partial t, error) result Lwt.t
+  val from_stream:
+       ztmp:Cstruct.t
+    -> window:Inflate.window
+    -> [> empty ] t
+    -> (unit -> Cstruct.t option Lwt.t)
+    -> (partial t, error) result Lwt.t
 end
 
 module Make
-    (H : S.HASH with type Digest.buffer = Cstruct.t
-                 and type hex = string)
-    (I : S.INFLATE)
+    (H: S.HASH)
+    (I: S.INFLATE)
   : S with module Hash = H
        and module Inflate = I
 = struct
@@ -129,7 +148,7 @@ module Make
     ; tree                    : (Crc32.t * Int64.t) Radix.t
     ; graph                   : (int * Hash.t option) Graph.t
     ; state                   : 'a }
-  constraint 'a = [< state ]
+    constraint 'a = [< state ]
 
   let option_default a v = match a with Some v -> v | None -> v
 

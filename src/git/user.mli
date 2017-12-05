@@ -34,6 +34,6 @@ module F: S.FARADAY with type t = t
 module M: S.MINIENC with type t = t
 
 module D: S.DECODER
-    with type t = t
-     and type init = Cstruct.t
-     and type error = [ `Decoder of string ]
+  with type t = t
+   and type init = Cstruct.t
+   and type error = [ `Decoder of string ]

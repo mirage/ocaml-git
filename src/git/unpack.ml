@@ -34,7 +34,7 @@ end
 
 module type H =
 sig
-  module Hash : S.HASH
+  module Hash: S.HASH
 
   type error =
     | Reserved_opcode of int
@@ -80,23 +80,18 @@ sig
     ; source_length : int
     ; target_length : int }
 
-  val partial_hunks : t -> hunks
-
-  val pp_reference : reference Fmt.t
-  val pp_hunks : hunks Fmt.t
-  val pp : t Fmt.t
-
-  val eval : Cstruct.t -> t -> [ `Hunk of t * hunk | `Await of t | `Error of t * error | `Ok of t * hunks ]
-
-  val default : int -> reference -> t
-  val refill : int -> int -> t -> t
-  val continue : t -> t
-
-  val current : t -> hunk
-
-  val used_in : t -> int
-  val available_in : t -> int
-  val read : t -> int
+  val partial_hunks: t -> hunks
+  val pp_reference: reference Fmt.t
+  val pp_hunks: hunks Fmt.t
+  val pp: t Fmt.t
+  val eval: Cstruct.t -> t -> [ `Hunk of t * hunk | `Await of t | `Error of t * error | `Ok of t * hunks ]
+  val default: int -> reference -> t
+  val refill: int -> int -> t -> t
+  val continue: t -> t
+  val current: t -> hunk
+  val used_in: t -> int
+  val available_in: t -> int
+  val read: t -> int
 end
 
 (* Implementation of deserialization of a list of hunks (from a PACK file) *)
@@ -222,13 +217,13 @@ struct
       t._source_length t._target_length
       (Fmt.hvbox pp_state) t.state
 
-  let await t : res =
+  let await t: res =
     Wait t
 
-  let error t exn : res =
+  let error t exn: res =
     Error ({ t with state = Exception exn }, exn)
 
-  let ok t : res =
+  let ok t: res =
     Ok ({ t with state = End },
         { reference     = t._reference
         ; length        = t._length
@@ -448,9 +443,9 @@ end
 
 module type P =
 sig
-  module Hash : S.HASH
-  module Inflate : S.INFLATE
-  module H : H with module Hash = Hash
+  module Hash: S.HASH
+  module Inflate: S.INFLATE
+  module H: H with module Hash = Hash
 
   type error =
     | Invalid_byte of int
@@ -461,11 +456,11 @@ sig
     | Hunk_input of int * int
     | Invalid_length of int * int
 
-  val pp_error : error Fmt.t
+  val pp_error: error Fmt.t
 
   type t
 
-  val pp : t Fmt.t
+  val pp: t Fmt.t
 
   type kind =
     | Commit
@@ -474,31 +469,28 @@ sig
     | Tag
     | Hunk of H.hunks
 
-  val default : Cstruct.t -> Inflate.window -> t
-  val many : t -> int32
-  val from_window : Window.t -> int -> Cstruct.t -> Inflate.window -> t
-  val process_length : Window.t -> int -> Cstruct.t -> Inflate.window -> t
-  val process_metadata : Window.t -> int -> Cstruct.t -> Inflate.window -> t
-
-  val refill : int -> int -> t -> t
-  val flush : int -> int -> t -> t
-  val next_object : t -> t
-  val continue : t -> t
-
-  val kind : t -> kind
-  val length : t -> int
-  val offset : t -> int64
-  val consumed : t -> int
-  val crc : t -> Crc32.t
-  val output : t -> Cstruct.t * int
-
-  val eval : Cstruct.t -> t -> [ `Object of t | `Hunk of t * H.hunk | `Await of t | `Flush of t | `End of t * Hash.t | `Error of t * error ]
-  val eval_length : Cstruct.t -> t -> [ `Length of t | `Await of t | `Flush of t | `End of (t * Hash.t) | `Error of (t * error) ]
-  val eval_metadata : Cstruct.t -> t -> [ `Metadata of t | `Await of t | `Flush of t | `End of (t * Hash.t) | `Error of (t * error) ]
+  val default: Cstruct.t -> Inflate.window -> t
+  val many: t -> int32
+  val from_window: Window.t -> int -> Cstruct.t -> Inflate.window -> t
+  val process_length: Window.t -> int -> Cstruct.t -> Inflate.window -> t
+  val process_metadata: Window.t -> int -> Cstruct.t -> Inflate.window -> t
+  val refill: int -> int -> t -> t
+  val flush: int -> int -> t -> t
+  val next_object: t -> t
+  val continue: t -> t
+  val kind: t -> kind
+  val length: t -> int
+  val offset: t -> int64
+  val consumed: t -> int
+  val crc: t -> Crc32.t
+  val output: t -> Cstruct.t * int
+  val eval: Cstruct.t -> t -> [ `Object of t | `Hunk of t * H.hunk | `Await of t | `Flush of t | `End of t * Hash.t | `Error of t * error ]
+  val eval_length: Cstruct.t -> t -> [ `Length of t | `Await of t | `Flush of t | `End of (t * Hash.t) | `Error of (t * error) ]
+  val eval_metadata: Cstruct.t -> t -> [ `Metadata of t | `Await of t | `Flush of t | `End of (t * Hash.t) | `Error of (t * error) ]
 end
 
 (* Implementatioon of deserialization of a PACK file *)
-module MakePACKDecoder (H : S.HASH) (I : S.INFLATE)
+module MakePACKDecoder (H: S.HASH) (I: S.INFLATE)
   : P with module Hash = H
        and module Inflate = I
        and module H = MakeHunkDecoder(H)
@@ -672,10 +664,10 @@ module MakePACKDecoder (H : S.HASH) (I : S.INFLATE)
       (Fmt.hvbox pp_state) t.state
 
   (* TODO: need to compute the hash of the input. *)
-  let await t     : res = Wait t
-  let flush t     : res = Flush t
-  let error t exn : res = Error ({ t with state = Exception exn }, exn)
-  let ok t hash   : res = Ok ({ t with state = End hash }, hash)
+  let await t: res = Wait t
+  let flush t: res = Flush t
+  let error t exn: res = Error ({ t with state = Exception exn }, exn)
+  let ok t hash: res = Ok ({ t with state = End hash }, hash)
 
   let rec get_byte ~ctor k src t =
     if (t.i_len - t.i_pos) > 0
@@ -1270,14 +1262,15 @@ end
 
 module type DECODER =
 sig
-  module Hash : S.HASH
-  module Mapper : S.MAPPER
-  module Inflate : S.INFLATE
+  module Hash: S.HASH
+  module Mapper: S.MAPPER
+  module Inflate: S.INFLATE
 
-  module H : H with module Hash = Hash
-  module P : P with module Hash = Hash
-                and module Inflate = Inflate
-                and module H = H
+  module H: H with module Hash = Hash
+  module P: P
+    with module Hash = Hash
+     and module Inflate = Inflate
+     and module H = H
 
   type error =
     | Invalid_hash of Hash.t
@@ -1286,13 +1279,13 @@ sig
     | Unpack_error of P.t * Window.t * P.error
     | Mapper_error of Mapper.error
 
-  val pp_error : error Fmt.t
+  val pp_error: error Fmt.t
 
   type t
 
   type kind = [ `Commit | `Blob | `Tree | `Tag ]
 
-  module Object :
+  module Object:
   sig
     type from =
       | Offset of { length   : int
@@ -1312,47 +1305,102 @@ sig
       ; length : int64
       ; from   : from }
 
-    val pp : t Fmt.t
-
-    val first_crc_exn : t -> Crc32.t
+    val pp: t Fmt.t
+    val first_crc_exn: t -> Crc32.t
   end
 
-  val find : t -> int64 -> ((Window.t * int), Mapper.error) result Lwt.t
-
-  val make : ?bucket:int -> Mapper.fd
+  val find: t -> int64 -> ((Window.t * int), Mapper.error) result Lwt.t
+  val make: ?bucket:int -> Mapper.fd
     -> (Hash.t -> Object.t option)
     -> (Hash.t -> (Crc32.t * int64) option)
     -> (int64 -> Hash.t option)
     -> (Hash.t -> (kind * Cstruct.t) option Lwt.t)
     -> (t, Mapper.error) result Lwt.t
-
-  val idx : t -> (Hash.t -> (Crc32.t * int64) option)
-  val cache : t -> (Hash.t -> Object.t option)
-  val revidx : t -> (int64 -> Hash.t option)
-  val extern : t -> (Hash.t -> (kind * Cstruct.t) option Lwt.t)
-
-  val update_idx    : (Hash.t -> (Crc32.t * int64) option) -> t -> t
-  val update_cache  : (Hash.t -> Object.t option) -> t -> t
-  val update_revidx : (int64 -> Hash.t option) -> t -> t
-  val update_extern : (Hash.t -> (kind * Cstruct.t) option Lwt.t) -> t -> t
-
-  val length : ?chunk:int -> t -> Hash.t -> Cstruct.t -> Inflate.window -> (int, error) result Lwt.t
-  val needed : ?chunk:int -> ?cache:(Hash.t -> int option) -> t -> Hash.t -> Cstruct.t -> Inflate.window -> (int, error) result Lwt.t
-  val optimized_get' : ?chunk:int -> ?limit:bool -> ?h_tmp:Cstruct.t array -> t -> int64 -> (Cstruct.t * Cstruct.t * int) -> Cstruct.t -> Inflate.window -> (Object.t, error) result Lwt.t
-  val optimized_get : ?chunk:int -> ?limit:bool -> ?h_tmp:Cstruct.t array -> t -> Hash.t -> (Cstruct.t * Cstruct.t * int) -> Cstruct.t -> Inflate.window -> (Object.t, error) result Lwt.t
-  val get' : ?chunk:int -> t -> int64 -> Cstruct.t -> Inflate.window -> (Cstruct.t * Cstruct.t) -> (Object.t, error) result Lwt.t
-  val get : ?chunk:int -> t -> Hash.t -> Cstruct.t -> Inflate.window -> (Cstruct.t * Cstruct.t) -> (Object.t, error) result Lwt.t
-  val get_with_allocation : ?chunk:int -> ?h_tmp:Cstruct.t array -> t -> Hash.t -> Cstruct.t -> Inflate.window -> (Object.t, error) result Lwt.t
-  val get_with_allocation' : ?chunk:int -> ?h_tmp:Cstruct.t array -> t -> int64 -> Cstruct.t -> Inflate.window -> (Object.t, error) result Lwt.t
+  val idx: t -> (Hash.t -> (Crc32.t * int64) option)
+  val cache: t -> (Hash.t -> Object.t option)
+  val revidx: t -> (int64 -> Hash.t option)
+  val extern: t -> (Hash.t -> (kind * Cstruct.t) option Lwt.t)
+  val update_idx: (Hash.t -> (Crc32.t * int64) option) -> t -> t
+  val update_cache: (Hash.t -> Object.t option) -> t -> t
+  val update_revidx: (int64 -> Hash.t option) -> t -> t
+  val update_extern: (Hash.t -> (kind * Cstruct.t) option Lwt.t) -> t -> t
+  val length:
+       ?chunk:int
+    -> t
+    -> Hash.t
+    -> Cstruct.t
+    -> Inflate.window
+    -> (int, error) result Lwt.t
+  val needed:
+       ?chunk:int
+    -> ?cache:(Hash.t -> int option)
+    -> t
+    -> Hash.t
+    -> Cstruct.t
+    -> Inflate.window
+    -> (int, error) result Lwt.t
+  val optimized_get':
+       ?chunk:int
+    -> ?limit:bool
+    -> ?h_tmp:Cstruct.t array
+    -> t
+    -> int64
+    -> (Cstruct.t * Cstruct.t * int)
+    -> Cstruct.t
+    -> Inflate.window
+    -> (Object.t, error) result Lwt.t
+  val optimized_get:
+       ?chunk:int
+    -> ?limit:bool
+    -> ?h_tmp:Cstruct.t array
+    -> t
+    -> Hash.t
+    -> (Cstruct.t * Cstruct.t * int)
+    -> Cstruct.t
+    -> Inflate.window
+    -> (Object.t, error) result Lwt.t
+  val get':
+       ?chunk:int
+    -> t
+    -> int64
+    -> Cstruct.t
+    -> Inflate.window
+    -> (Cstruct.t * Cstruct.t)
+    -> (Object.t, error) result Lwt.t
+  val get:
+       ?chunk:int
+    -> t
+    -> Hash.t
+    -> Cstruct.t
+    -> Inflate.window
+    -> (Cstruct.t * Cstruct.t)
+    -> (Object.t, error) result Lwt.t
+  val get_with_allocation:
+       ?chunk:int
+    -> ?h_tmp:Cstruct.t array
+    -> t
+    -> Hash.t
+    -> Cstruct.t
+    -> Inflate.window
+    -> (Object.t, error) result Lwt.t
+  val get_with_allocation':
+       ?chunk:int
+    -> ?h_tmp:Cstruct.t array
+    -> t
+    -> int64
+    -> Cstruct.t
+    -> Inflate.window
+    -> (Object.t, error) result Lwt.t
 end
 
 module MakeDecoder
-    (H : S.HASH)
-    (M : S.MAPPER)
-    (I : S.INFLATE)
-  : DECODER with module Hash = H
-             and module Mapper = M
-             and module Inflate = I =
+    (H: S.HASH)
+    (M: S.MAPPER)
+    (I: S.INFLATE)
+  : DECODER
+    with module Hash = H
+     and module Mapper = M
+     and module Inflate = I =
 struct
   module Log =
   struct
@@ -1384,8 +1432,8 @@ struct
         has expected
     | Unpack_error (state, window, exn) ->
       Fmt.pf ppf "(Unpack_error { @[<hov>state = %a;@ \
-                                         window = %a;@ \
-                                         exn = %a;@] })"
+                  window = %a;@ \
+                  exn = %a;@] })"
         (Fmt.hvbox P.pp) state
         (Fmt.hvbox Window.pp) window
         (Fmt.hvbox P.pp_error) exn
@@ -1444,10 +1492,10 @@ struct
     let rec pp_from ppf = function
       | Offset { length; consumed; offset; crc; base; } ->
         Fmt.pf ppf "(Hunk { @[<hov>length = %d;@ \
-                                   consumed = %d;@ \
-                                   offset = %Lx;@ \
-                                   crc = %a;@ \
-                                   base = %a;@] })"
+                    consumed = %d;@ \
+                    offset = %Lx;@ \
+                    crc = %a;@ \
+                    base = %a;@] })"
           length consumed offset
           Crc32.pp crc
           (Fmt.hvbox pp_from) base
@@ -1455,15 +1503,15 @@ struct
         Fmt.pf ppf "(External %a)" Hash.pp hash
       | Direct { consumed; offset; crc; } ->
         Fmt.pf ppf "(Direct { @[<hov>consumed = %d;@ \
-                                     offset = %Lx;@ \
-                                     crc = %a;@] })"
+                    offset = %Lx;@ \
+                    crc = %a;@] })"
           consumed offset Crc32.pp crc
 
     let pp ppf t =
       Fmt.pf ppf "{ @[<hov>kind = %a;@ \
-                           raw = #raw;@ \
-                           length = %Ld;@ \
-                           from = %a;@] }"
+                  raw = #raw;@ \
+                  length = %Ld;@ \
+                  from = %a;@] }"
         pp_kind t.kind t.length (Fmt.hvbox pp_from) t.from
 
     let first_crc_exn t =
@@ -1502,8 +1550,8 @@ struct
     >>= function
     | Ok map ->
       Lwt.return (Ok { Window.raw = map
-                 ; off   = pos
-                 ; len   = Cstruct.len map })
+                     ; off   = pos
+                     ; len   = Cstruct.len map })
     | Error err -> Lwt.return (Error err)
 
   let find t offset_requested =
@@ -1566,115 +1614,115 @@ struct
         >>= function
         | Error err -> Lwt.return (Error (Mapper_error err))
         | Ok (window, relative_offset) ->
-        let state    = P.from_window window relative_offset z_tmp z_win in
+          let state    = P.from_window window relative_offset z_tmp z_win in
 
-        let rec loop window consumed_in_window writed_in_raw writed_in_hnk hunks git_object state =
-          match P.eval window.Window.raw state with
-          | `Await state ->
-            let rest_in_window = min (window.Window.len - consumed_in_window) chunk in
+          let rec loop window consumed_in_window writed_in_raw writed_in_hnk hunks git_object state =
+            match P.eval window.Window.raw state with
+            | `Await state ->
+              let rest_in_window = min (window.Window.len - consumed_in_window) chunk in
 
-            if rest_in_window > 0
-            then
-              loop window
-                (consumed_in_window + rest_in_window) writed_in_raw writed_in_hnk
-                hunks git_object
-                (P.refill consumed_in_window rest_in_window state)
-            else
-              (find t Int64.(window.Window.off + (of_int consumed_in_window))[@warning "-44"]
-               >>= function
-               | Error err -> Lwt.return (Error (Mapper_error err))
-               | Ok (window, relative_offset) ->
-                 (* XXX(dinosaure): we try to find a new window to compute the rest of the current object. *)
+              if rest_in_window > 0
+              then
+                loop window
+                  (consumed_in_window + rest_in_window) writed_in_raw writed_in_hnk
+                  hunks git_object
+                  (P.refill consumed_in_window rest_in_window state)
+              else
+                (find t Int64.(window.Window.off + (of_int consumed_in_window))[@warning "-44"]
+                 >>= function
+                 | Error err -> Lwt.return (Error (Mapper_error err))
+                 | Ok (window, relative_offset) ->
+                   (* XXX(dinosaure): we try to find a new window to compute the rest of the current object. *)
+                   loop window
+                     relative_offset writed_in_raw writed_in_hnk
+                     hunks git_object
+                     (P.refill 0 0 state))
+            | `Hunk (state, hunk) ->
+              (match h_tmp, hunk with
+               | Some hnk, P.H.Insert raw ->
+                 let len = Cstruct.len raw in
+                 Cstruct.blit raw 0 hnk writed_in_hnk len;
                  loop window
-                   relative_offset writed_in_raw writed_in_hnk
-                   hunks git_object
-                   (P.refill 0 0 state))
-          | `Hunk (state, hunk) ->
-            (match h_tmp, hunk with
-             | Some hnk, P.H.Insert raw ->
-               let len = Cstruct.len raw in
-               Cstruct.blit raw 0 hnk writed_in_hnk len;
-               loop window
-                 consumed_in_window writed_in_raw (writed_in_hnk + len)
-                 (Insert (Cstruct.sub hnk writed_in_hnk len) :: hunks) git_object
-                 (P.continue state)
-             | None, P.H.Insert raw ->
-               let len = Cstruct.len raw in
-               let res = Cstruct.create len in
-               Cstruct.blit raw 0 res 0 len;
-               loop window
-                 consumed_in_window writed_in_raw writed_in_hnk
-                 (Insert res :: hunks) git_object
-                 (P.continue state)
-             | _, P.H.Copy (off, len) ->
-               loop window
-                 consumed_in_window writed_in_raw writed_in_hnk
-                 (Copy (off, len) :: hunks) git_object
-                 (P.continue state))
-          | `Flush state ->
-            let o, n = P.output state in
-            let n' = min n (Cstruct.len r_tmp - writed_in_raw) in
-            Cstruct.blit o 0 r_tmp writed_in_raw n';
+                   consumed_in_window writed_in_raw (writed_in_hnk + len)
+                   (Insert (Cstruct.sub hnk writed_in_hnk len) :: hunks) git_object
+                   (P.continue state)
+               | None, P.H.Insert raw ->
+                 let len = Cstruct.len raw in
+                 let res = Cstruct.create len in
+                 Cstruct.blit raw 0 res 0 len;
+                 loop window
+                   consumed_in_window writed_in_raw writed_in_hnk
+                   (Insert res :: hunks) git_object
+                   (P.continue state)
+               | _, P.H.Copy (off, len) ->
+                 loop window
+                   consumed_in_window writed_in_raw writed_in_hnk
+                   (Copy (off, len) :: hunks) git_object
+                   (P.continue state))
+            | `Flush state ->
+              let o, n = P.output state in
+              let n' = min n (Cstruct.len r_tmp - writed_in_raw) in
+              Cstruct.blit o 0 r_tmp writed_in_raw n';
 
-            if n' > 0
-            then
+              if n' > 0
+              then
+                loop window
+                  consumed_in_window (writed_in_raw + n) writed_in_hnk
+                  hunks git_object
+                  (P.flush 0 n state)
+              else Lwt.return (Ok (P.kind state,
+                                   { _length   = P.length state
+                                   ; _consumed = 0
+                                   ; _offset   = P.offset state
+                                   ; _crc      = Crc32.default
+                                   ; _hunks    = [] }))
+            (* XXX(dinosaure): to be clear, this situation appear only
+               when we have a [limit = true] and the git object is
+               bigger than 0x10000FFFE bytes - so, not a common case. In
+               this case, we are interested only by the raw data (and we
+               don't care about the meta-data) to compute the
+               undelta-ification.
+
+               When [r_tmp] is full, we returns partial information
+               because, we only need the raw-data to construct in a top
+               of this call the git object requested (necessarily
+               different that this current git object). *)
+
+            | `Object state ->
               loop window
-                consumed_in_window (writed_in_raw + n) writed_in_hnk
-                hunks git_object
-                (P.flush 0 n state)
-            else Lwt.return (Ok (P.kind state,
-                                 { _length   = P.length state
-                                 ; _consumed = 0
-                                 ; _offset   = P.offset state
-                                 ; _crc      = Crc32.default
-                                 ; _hunks    = [] }))
-          (* XXX(dinosaure): to be clear, this situation appear only
-             when we have a [limit = true] and the git object is
-             bigger than 0x10000FFFE bytes - so, not a common case. In
-             this case, we are interested only by the raw data (and we
-             don't care about the meta-data) to compute the
-             undelta-ification.
-
-             When [r_tmp] is full, we returns partial information
-             because, we only need the raw-data to construct in a top
-             of this call the git object requested (necessarily
-             different that this current git object). *)
-
-          | `Object state ->
-            loop window
-              consumed_in_window writed_in_raw writed_in_hnk
-              hunks
-              (Some (P.kind state,
-                    { _length   = P.length state
-                    ; _consumed = P.consumed state
-                    ; _offset   = P.offset state
-                    ; _crc      = P.crc state
-                    ; _hunks    = List.rev hunks }))
-              (P.next_object state)
-          | `Error (state, exn) ->
-            Lwt.return (Error (Unpack_error (state, window, exn)))
-          | `End _ ->
-            match git_object with
-            | Some (kind, partial) ->
-              Lwt.return (Ok (kind, partial))
-            | None -> assert false
-            (* XXX: This is not possible, the [`End] state comes only
-               after the [`Object] state and this state changes [kind]
-               to [Some x]. *)
-        in
-
-        loop window relative_offset 0 0 [] None state >>= function
-        | Ok (P.Hunk hunks, partial) ->
-          Lwt.return (Ok (Hunks (partial, hunks)))
-        | Ok ((P.Commit | P.Blob | P.Tag | P.Tree) as kind, partial) ->
-          let r_tmp =
-            if (not limit) || (partial._length < 0x10000FFFE && limit)
-            then Cstruct.sub r_tmp 0 partial._length
-            else r_tmp
+                consumed_in_window writed_in_raw writed_in_hnk
+                hunks
+                (Some (P.kind state,
+                       { _length   = P.length state
+                       ; _consumed = P.consumed state
+                       ; _offset   = P.offset state
+                       ; _crc      = P.crc state
+                       ; _hunks    = List.rev hunks }))
+                (P.next_object state)
+            | `Error (state, exn) ->
+              Lwt.return (Error (Unpack_error (state, window, exn)))
+            | `End _ ->
+              match git_object with
+              | Some (kind, partial) ->
+                Lwt.return (Ok (kind, partial))
+              | None -> assert false
+              (* XXX: This is not possible, the [`End] state comes only
+                 after the [`Object] state and this state changes [kind]
+                 to [Some x]. *)
           in
 
-          Lwt.return (Ok (Object (to_kind kind, partial, r_tmp)))
-        | Error exn -> Lwt.return (Error exn)
+          loop window relative_offset 0 0 [] None state >>= function
+          | Ok (P.Hunk hunks, partial) ->
+            Lwt.return (Ok (Hunks (partial, hunks)))
+          | Ok ((P.Commit | P.Blob | P.Tag | P.Tree) as kind, partial) ->
+            let r_tmp =
+              if (not limit) || (partial._length < 0x10000FFFE && limit)
+              then Cstruct.sub r_tmp 0 partial._length
+              else r_tmp
+            in
+
+            Lwt.return (Ok (Object (to_kind kind, partial, r_tmp)))
+          | Error exn -> Lwt.return (Error exn)
     in
 
     match reference with
@@ -1721,7 +1769,7 @@ struct
           t.get hash >>= function
           | Some (kind, raw) -> Lwt.return (Ok (External (hash, kind, raw)))
           | None -> Lwt.return (Error (Invalid_hash hash))
-          [@@warning "-44"]
+  [@@warning "-44"]
 
   let make ?(bucket = 10) file cache idx rev get' =
     let open Lwt.Infix in
@@ -1838,9 +1886,9 @@ struct
             | P.Hunk ({ H.reference = H.Hash hash; _ } as hunks) ->
               Lwt.return (`IndirectHash (hash, max (P.length state) @@ max hunks.H.target_length hunks.H.source_length))
             | P.Commit | P.Blob | P.Tree | P.Tag -> Lwt.return (`Direct (P.length state))
-      in
+        in
 
-      loop window relative_offset state
+        loop window relative_offset state
     in
 
     let rec loop length = function
@@ -1848,10 +1896,10 @@ struct
         (match cache hash with
          | Some length'' -> Lwt.return (Ok (max length (max length' length'')))
          | None -> match t.idx hash with
-             | Some (_, off) -> (get off >>= loop (max length length'))
-             | None -> t.get hash >>= function
-               | Some (_, raw) -> Lwt.return (Ok (Cstruct.len raw))
-               | None -> Lwt.return (Error (Invalid_hash hash)))
+           | Some (_, off) -> (get off >>= loop (max length length'))
+           | None -> t.get hash >>= function
+             | Some (_, raw) -> Lwt.return (Ok (Cstruct.len raw))
+             | None -> Lwt.return (Error (Invalid_hash hash)))
       | `IndirectOff (absolute_offset, length') ->
         (get absolute_offset
          >>= loop (max length length'))
