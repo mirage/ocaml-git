@@ -102,6 +102,43 @@ end
 
 module Fs = Git_mirage.FS.Make(Gamma)(M)
 module MirageStore = Git_mirage.Make(Git.Mem.Lock)(Fs)
+module MirageConduit: Git_mirage.Net.CONDUIT = struct
+  include Conduit_mirage
+  module C = Conduit_mirage.With_tcp(Tcpip_stack_socket)
+  module R = Resolver_mirage.Make_with_stack(Time)(Tcpip_stack_socket)
+
+  type context = t
+
+  let stack =
+    Lwt_main.run (
+      Tcpv4_socket.connect None >>= fun tcp ->
+      Udpv4_socket.connect None >>= fun udp ->
+      let interface = [Ipaddr.V4.of_string_exn "0.0.0.0"] in
+      let config = { Mirage_stack_lwt.name = "stackv4_socket"; interface } in
+      Tcpip_stack_socket.connect config udp tcp
+    )
+
+  let context =
+    Lwt_main.run (
+      C.connect stack Conduit_mirage.empty
+    )
+
+  type resolver = Resolver_lwt.t
+
+  let resolver =
+    let ns = None in let ns_port = None in
+    R.R.init ?ns ?ns_port ~stack:stack ()
+end
+
+module TCP = Test_sync.Make(struct
+    module M = Git_mirage.Sync(MirageConduit)(Git.Mem.Store(Digestif.SHA1))
+    module Store = M.Store
+    type error = M.error
+    let clone t ~reference uri = M.clone t ~reference uri
+    let fetch_all t uri = M.fetch_all t uri
+    let update t ~reference uri = M.update t ~reference uri
+    let kind = `TCP
+  end)
 
 let mirage_backend =
   { name  = "mirage"
@@ -112,5 +149,7 @@ let mirage_backend =
 let () =
   verbose ();
   let () = Lwt_main.run (M.init ()) in
-  Alcotest.run "git-mirage"
-    [ Test_store.suite (`Quick, mirage_backend) ]
+  Alcotest.run "git-mirage" [
+    Test_store.suite (`Quick, mirage_backend);
+    TCP.suite { mirage_backend with name = "mirage-tcp-sync"} ;
+  ]

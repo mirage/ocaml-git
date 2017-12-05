@@ -1,5 +1,6 @@
 module FS = Fs
 module Net = Net
+
 module SHA1 = Git.Hash.Make(Digestif.SHA1)
 
 module Make (L : Git.LOCK) (FS: Git.FS with type File.lock = L.elt) = struct
