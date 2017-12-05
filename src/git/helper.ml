@@ -15,11 +15,8 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Log =
-struct
-  let src = Logs.Src.create "git.helper" ~doc:"logs git's internal helper"
-  include (val Logs.src_log src : Logs.LOG)
-end
+let src = Logs.Src.create "git.helper" ~doc:"logs git's internal helper"
+module Log = (val Logs.src_log src : Logs.LOG)
 
 let ppe ~name ppv =
   Fmt.braces (fun ppf -> Fmt.pf ppf "%s %a" name (Fmt.hvbox ppv))
@@ -73,11 +70,8 @@ module MakeDecoder (A: S.ANGSTROM) = struct
      Obviously, in a better world with unicorn and pineapple pizza, we
      can just avoid this case. *)
 
-  module Log =
-  struct
-    let src = Logs.Src.create "git.decoder" ~doc:"logs git's internal decoder"
-    include (val Logs.src_log src : Logs.LOG)
-  end
+  let src = Logs.Src.create "git.decoder" ~doc:"logs git's internal decoder"
+  module Log = (val Logs.src_log src : Logs.LOG)
 
   type error = [ `Decoder of string ]
   type init = Cstruct.t
@@ -233,11 +227,9 @@ module MakeInflater
     (Z: S.INFLATE)
     (A: S.ANGSTROM)
 = struct
-  module Log =
-  struct
-    let src = Logs.Src.create "git.inflater.decoder" ~doc:"logs git's internal inflater/decoder"
-    include (val Logs.src_log src : Logs.LOG)
-  end
+
+  let src = Logs.Src.create "git.inflater.decoder" ~doc:"logs git's internal inflater/decoder"
+  module Log = (val Logs.src_log src : Logs.LOG)
 
   module D = MakeDecoder(A)
 
@@ -342,11 +334,9 @@ module MakeEncoder (M: S.MINIENC): S.ENCODER
    and type init = int * M.t
    and type error = [ `Never ]
 = struct
-  module Log =
-  struct
-    let src = Logs.Src.create "git.encoder" ~doc:"logs git's internal encoder"
-    include (val Logs.src_log src : Logs.LOG)
-  end
+
+  let src = Logs.Src.create "git.encoder" ~doc:"logs git's internal encoder"
+  module Log = (val Logs.src_log src : Logs.LOG)
 
   type t = M.t
   type init = int * t
@@ -397,7 +387,9 @@ module MakeEncoder (M: S.MINIENC): S.ENCODER
           (e.o_off + e.o_pos) iovecs
       in
 
-      Log.debug (fun l -> l ~header:"encoder" "Ensure than we wrote exactly [shift = %d] byte(s)." shift);
+      Log.debug (fun l ->
+          l ~header:"encoder" "Ensure than we wrote exactly [shift = %d] \
+                               byte(s)." shift);
       assert (e.o_off + e.o_pos + shift = shift');
 
       if Minienc.has shifted > 0
@@ -448,11 +440,9 @@ module MakeDeflater (Z: S.DEFLATE) (M: S.MINIENC): S.ENCODER
    and type init = int * M.t * int * Cstruct.t
    and type error = [ `Deflate of Z.error ]
 = struct
-  module Log =
-  struct
-    let src = Logs.Src.create "git.deflater.encoder" ~doc:"logs git's internal deflater/encoder"
-    include (val Logs.src_log src : Logs.LOG)
-  end
+
+  let src = Logs.Src.create "git.deflater.encoder" ~doc:"logs git's internal deflater/encoder"
+  module Log = (val Logs.src_log src : Logs.LOG)
 
   type t = M.t
   type init = int * t * int * Cstruct.t
@@ -470,9 +460,11 @@ module MakeDeflater (Z: S.DEFLATE) (M: S.MINIENC): S.ENCODER
     ; used_in  : int }
 
   let default (capacity, value, level, internal) =
-    Log.debug (fun l -> l ~header:"default" "Starting to deflate and encode a \
-                                             Git object (level of compression: %d, internal buffer: %d)."
-                  level (Cstruct.len internal));
+    Log.debug (fun l ->
+        l ~header:"default" "Starting to deflate and encode a \
+                             Git object (level of compression: %d, internal \
+                             buffer: %d)."
+          level (Cstruct.len internal));
 
     { e = E.default (capacity, value)
     ; z = Z.default level
@@ -662,11 +654,8 @@ and ('fd, 'raw, 'error) writer = 'raw -> ?off:int -> ?len:int -> 'fd -> (int, 'e
 
    Otherwise, we return [Ok result] with the result of the encoder. *)
 
-module EncoderLog =
-struct
-  let src = Logs.Src.create "git.encoder.io" ~doc:"logs git's internal I/O encoder"
-  include (val Logs.src_log src : Logs.LOG)
-end
+let src = Logs.Src.create "git.encoder.io" ~doc:"logs git's internal I/O encoder"
+module ELog = (val Logs.src_log src : Logs.LOG)
 
 let safe_encoder_to_file
     (type state) (type raw) (type res) (type err_encoder) (type err_writer)
@@ -690,22 +679,25 @@ let safe_encoder_to_file
     if stack < limit
     then E.eval raw state >>= function
       | `Error (_, err) ->
-        EncoderLog.err (fun l -> l ~header:"go" "Retrieving an encoder error when we \
-                                                 serialize the value to a file-descriptor.");
+        ELog.err (fun l ->
+            l ~header:"go" "Retrieving an encoder error when we serialize \
+                            the value to a file-descriptor.");
         Lwt.return (Error (`Encoder err))
       | `End (state, res) ->
         if E.used state + rest > 0
         then begin
-          EncoderLog.debug (fun l -> l ~header:"go" "Final step to write entirely the file (rest: %d)." (E.used state + rest));
-
+          ELog.debug (fun l ->
+              l ~header:"go" "Final step to write entirely the file \
+                              (rest: %d)." (E.used state + rest));
           writer raw ~off:0 ~len:(rest + E.used state) fd >>= function
           | Ok n ->
             if n = E.used state + rest
             then Lwt.return (Ok res)
             else begin
-              EncoderLog.warn (fun l -> l ~header:"go" "Loop back to writing the rest (%d) \
-                                                        of the encoding (stack: %d)."
-                                  (E.used state + rest - n) stack);
+              ELog.warn (fun l ->
+                  l ~header:"go" "Loop back to writing the rest (%d) \
+                                  of the encoding (stack: %d)."
+                    (E.used state + rest - n) stack);
               go ~stack:(stack + 1) (E.flush n ((E.used state + rest) - n) state)
             end
           | Error err -> Lwt.return (Error (`Writer err))
@@ -718,17 +710,17 @@ let safe_encoder_to_file
           else begin
             let rest = (rest + E.used state) - n in
             E.raw_blit raw n raw 0 rest;
-            EncoderLog.debug (fun l -> l ~header:"go" "The I/O encoder writes %d (rest: %d, loop back: %b)."
-                                 n (E.raw_length raw - rest) (E.raw_length raw - rest = 0));
-            go
-              ~stack:(if E.raw_length raw - rest = 0 then stack + 1 else 0)
+            ELog.debug (fun l ->
+                l ~header:"go" "The I/O encoder writes %d (rest: %d, loop back: %b)."
+                  n (E.raw_length raw - rest) (E.raw_length raw - rest = 0));
+            go ~stack:(if E.raw_length raw - rest = 0 then stack + 1 else 0)
               ~rest
               (E.flush rest (E.raw_length raw - rest) state)
           end
         | Error err -> Lwt.return (Error (`Writer err))
     else begin
-      EncoderLog.err (fun l -> l ~header:"go" "Retrieving a [`Stack] error. Impossible \
-                                  to serialize and write the Git object.");
+      ELog.err (fun l -> l ~header:"go" "Retrieving a [`Stack] error. Impossible \
+                                        to serialize and write the Git object.");
       Lwt.return (Error `Stack)
     end
   in

@@ -69,12 +69,8 @@ module Make
 
 module Lock: S.LOCK with type elt = Lwt_mutex.t
 
-module Make
-    (H : S.HASH)
-    (L : S.LOCK)
-    (I : S.INFLATE)
-    (D : S.DEFLATE)
-  : Minimal.S with module Hash = H
-               and module Lock = L
-               and module Inflate = I
-               and module Deflate = D
+module Store (H : Digestif_sig.S):
+  Minimal.S with module Hash = Hash.Make(H)
+             and module Lock = Lock
+             and module Inflate = Inflate
+             and module Deflate = Deflate

@@ -101,15 +101,14 @@ module Gamma = struct
 end
 
 module Fs = Git_mirage.FS.Make(Gamma)(M)
-module MirageStore = Git_mirage.Make(Git_mirage.Lock)(Fs)
+module MirageStore = Git_mirage.Make(Git.Mem.Lock)(Fs)
 
 let mirage_backend =
-  { name  = "Mirage"
+  { name  = "mirage"
   ; store = (module MirageStore)
   ; shell = true }
 
 let () =
   let () = Lwt_main.run (M.init ()) in
-  let () = verbose () in
   Alcotest.run "git-mirage"
     [ Test_store.suite (`Quick, mirage_backend) ]

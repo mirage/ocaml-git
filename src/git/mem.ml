@@ -524,8 +524,4 @@ end
 
 module Lock = Lock
 
-module Make
-    (H : S.HASH)
-    (I : S.INFLATE)
-    (D : S.DEFLATE)
-  = Make_ext(H)(Lock)(I)(D)
+module Store (H : Digestif_sig.S) = Make(Hash.Make(H))(Lock)(Inflate)(Deflate)

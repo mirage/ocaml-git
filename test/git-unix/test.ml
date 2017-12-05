@@ -118,17 +118,16 @@ let suite (_, x) =
   [ "TCP Remote operations"          , `Slow, T.test_tcp_remote x
   ; "TCP & HTTP Cloning remote repos", `Slow, T.test_clone x ]
 
-module MemStore =
-  Git.Mem.Make(Git_unix.SHA1)(Lwt_lock)(Git.Inflate)(Git.Deflate)
+module MemStore = Git.Mem.Store(Digestif.SHA1)
 module UnixStore = Git_unix.Store
 
 let mem_backend =
-  { name  = "Memory"
+  { name  = "mem"
   ; store = (module MemStore)
   ; shell = false }
 
 let unix_backend =
-  { name  = "Unix Store"
+  { name  = "unix"
   ; store = (module UnixStore)
   ; shell = true }
 
@@ -136,5 +135,5 @@ let () =
   Alcotest.run "git-unix"
     [ Test_store.suite (`Quick, mem_backend)
     ; Test_store.suite (`Quick, unix_backend)
-    ; suite (`Slow, { mem_backend with name = "Memory & Sync" })
-    ; suite (`Slow, { unix_backend with name = "Unix & Sync" }) ]
+    ; suite (`Slow, { mem_backend with name = "mem-sync" })
+    ; suite (`Slow, { unix_backend with name = "unix-sync" }) ]
