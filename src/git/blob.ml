@@ -18,7 +18,7 @@
 module Log =
 struct
   let src = Logs.Src.create "git.blob" ~doc:"logs git's blob event"
-  include (val Logs.src_log src : Logs.LOG)
+  include (val Logs.src_log src: Logs.LOG)
 end
 
 type t = Cstruct.t
@@ -29,31 +29,32 @@ module type S = sig
 
   module Hash: S.HASH
   module D: S.DECODER
-      with type t = t
-       and type init = Cstruct.t
-       and type error = [ `Decoder of string ]
+    with type t = t
+     and type init = Cstruct.t
+     and type error = [ `Decoder of string ]
   module E: S.ENCODER with type t = t
   module A: sig type nonrec t = t val decoder : int -> t Angstrom.t end
   module F: S.FARADAY with type t = t
   include S.DIGEST with type t := t and type hash := Hash.t
   include S.BASE with type t := t
 
-  val of_cstruct : Cstruct.t -> t
-  val to_cstruct : t -> Cstruct.t
-  val of_string  : string -> t
-  val to_string  : t -> string
+  val of_cstruct: Cstruct.t -> t
+  val to_cstruct: t -> Cstruct.t
+  val of_string: string -> t
+  val to_string: t -> string
 end
 
-module Make (H : S.HASH): S with module Hash = H = struct
+module Make (H: S.HASH): S with module Hash = H = struct
+
   module Hash = H
 
   type nonrec t = t
 
-  external of_cstruct : Cstruct.t -> t = "%identity"
-  external to_cstruct : t -> Cstruct.t = "%identity"
+  external of_cstruct: Cstruct.t -> t = "%identity"
+  external to_cstruct: t -> Cstruct.t = "%identity"
 
-  let of_string x : t = Cstruct.of_string x
-  let to_string (x : t) = Cstruct.to_string x
+  let of_string x: t = Cstruct.of_string x
+  let to_string (x: t) = Cstruct.to_string x
 
   module A = struct
     type nonrec t = t
@@ -82,16 +83,16 @@ module Make (H : S.HASH): S with module Hash = H = struct
   module F = struct
     type nonrec t = t
 
-    let length : t -> int64 = fun t ->
+    let length: t -> int64 = fun t ->
       Int64.of_int (Cstruct.len t)
 
-    let encoder : t Farfadet.t = fun e t ->
+    let encoder: t Farfadet.t = fun e t ->
       Farfadet.bigstring e (Cstruct.to_bigarray t)
   end
 
   module D = struct
-    (* XXX(dinosaure): may be need to compare the performance between this
-       module and [Helper.MakeDecoder(A)]. *)
+    (* XXX(dinosaure): may be need to compare the performance between
+       this module and [Helper.MakeDecoder(A)]. *)
 
     type nonrec t = t
     type init = Cstruct.t
@@ -102,18 +103,18 @@ module Make (H : S.HASH): S with module Hash = H = struct
       Helper.ppe ~name:"`Decoder" Fmt.string ppf err
 
     type decoder =
-      { res : t
-      ; cur : Cstruct.t
-      ; abs : int
+      { res   : t
+      ; cur   : Cstruct.t
+      ; abs   : int
       ; owner : bool
       ; final : bool }
 
     let default raw =
-      Log.debug (fun l -> l "Starting to decode a Blob.");
+      Log.debug (fun l -> l ~header:"default" "Starting to decode a Blob.");
 
-      { res = raw
-      ; cur = Cstruct.sub raw 0 0
-      ; abs = 0
+      { res   = raw
+      ; cur   = Cstruct.sub raw 0 0
+      ; abs   = 0
       ; owner = false
       ; final = false }
 
@@ -126,10 +127,10 @@ module Make (H : S.HASH): S with module Hash = H = struct
         while !size - decoder.abs < Cstruct.len decoder.cur
         do size := (3 * !size) / 2 done;
 
-        Log.debug (fun l -> l "Growing the internal buffer to decode \
-                               the Blob object: from %d to %d."
-                    (Cstruct.len decoder.res)
-                    !size);
+        Log.debug (fun l -> l ~header:"ensure" "Growing the internal buffer to decode \
+                                                the Blob object: from %d to %d."
+                      (Cstruct.len decoder.res)
+                      !size);
 
         let res' = Cstruct.create !size in
         Cstruct.blit decoder.res 0 res' 0 decoder.abs;
@@ -166,6 +167,7 @@ module Make (H : S.HASH): S with module Hash = H = struct
   end
 
   module E = struct
+
     type nonrec t = t
     type init = t
 
@@ -221,9 +223,9 @@ module Make (H : S.HASH): S with module Hash = H = struct
     Hash.Digest.get ctx
 
   let pp ppf blob = (Fmt.hvbox (Minienc.pp_scalar ~get:Cstruct.get_char ~length:Cstruct.len)) ppf blob
-  let equal   = Cstruct.equal
+  let equal = Cstruct.equal
   let compare = Cstruct.compare
-  let hash    = Hashtbl.hash
+  let hash = Hashtbl.hash
 
   module Set = Set.Make(struct type nonrec t = t let compare = compare end)
   module Map = Map.Make(struct type nonrec t = t let compare = compare end)
