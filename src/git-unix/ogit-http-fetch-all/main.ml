@@ -94,91 +94,18 @@ let pp_error ppf = function
 
 exception Write of Git_unix.Store.Ref.error
 
-let main ppf progress directory repository =
+let main directory repository =
   let root = option_map_default Fpath.(v (Sys.getcwd ())) Fpath.v directory in
 
   let open Lwt_result in
 
   let ( >!= ) v f = map_err f v in
 
-  let stdout =
-    if progress
-    then Some (fun raw -> Fmt.pf ppf "%s%!" (Cstruct.to_string raw); Lwt.return ())
-    else None
-  in
-
-  let stderr =
-    if progress
-    then Some (fun raw -> Fmt.(pf stderr) "%s%!" (Cstruct.to_string raw); Lwt.return ())
-    else None
-  in
-
-  let https =
-    match Uri.scheme repository with
-    | Some "https" -> true
-    | _ -> false
-  in
-
-  let want refs =
-    List.filter (function
-        | (_, _, false) -> true
-        | _ -> false)
-      refs
-    |> List.map (fun (hash, refname, _) -> (Git_unix.Store.Reference.of_string refname, hash))
-    |> Lwt.return
-  in
-
   Log.debug (fun l -> l ~header:"main" "root:%a, repository:%a.\n"
                 Fpath.pp root Uri.pp_hum repository);
 
   (Git_unix.Store.create ~root () >!= fun err -> `Store err) >>= fun git ->
-  (ok (Negociator.find_common git)) >>= fun (has, state, continue) ->
-  let continue { Sync_http.Decoder.acks; shallow; unshallow } state = continue { Git.Negociator.acks; shallow; unshallow } state in
-  (* structural typing god! *)
-
-  (Sync_http.fetch git ?stdout ?stderr ~https ~negociate:(continue, state) ~has ~want ?port:(Uri.port repository)
-     (option_value_exn
-        (fun () -> raise (Failure "Invalid repository: no host."))
-        (Uri.host repository))
-     (Uri.path_and_query repository)
-   >!= fun err -> `Sync err) >>= function
-  | [], 0 ->
-    Log.debug (fun l -> l ~header:"main" "Git repository already updated.");
-    Lwt.return (Ok ())
-  | updated, n ->
-    Log.debug (fun l -> l ~header:"main" "New version (%d object(s) added): %a."
-                  n (Fmt.hvbox (Fmt.Dump.list (Fmt.pair Git_unix.Store.Reference.pp Git_unix.Store.Hash.pp)))
-                  updated);
-
-    Lwt.try_bind
-      (fun () ->
-         Lwt_list.iter_s
-           (fun (dst, hash) ->
-              let open Lwt.Infix in
-
-              Git_unix.Store.Ref.write git ~locks:(Git_unix.Store.dotgit git) dst
-                (Git_unix.Store.Reference.Hash hash)
-              >>= function Error err -> Lwt.fail (Write err)
-                         | Ok _ ->
-                           Log.debug (fun l -> l ~header:"main" "Reference %a updated: %a."
-                                         Git_unix.Store.Reference.pp dst
-                                         Git_unix.Store.Hash.pp hash);
-                           Lwt.return ())
-           updated)
-      (fun () ->
-         try
-           let (_, master) = List.find (fun (dst, _) -> Git_unix.Store.Reference.(equal dst master)) updated in
-           let (_, head) = List.find (fun (dst, _) -> Git_unix.Store.Reference.(equal dst head)) updated in
-
-           let ( >!= ) = Lwt_result.bind_lwt_err in
-
-           if Git_unix.Store.Hash.equal master head
-           then Git_unix.Store.Ref.write git ~locks:(Git_unix.Store.dotgit git) Git_unix.Store.Reference.head
-             (Git_unix.Store.Reference.(Ref master)) >!= (fun err -> Lwt.return (`Reference err))
-           else Lwt.return (Ok ())
-         with Not_found -> Lwt.return (Ok ()))
-      (function Write err -> Lwt.return (Error (`Reference err))
-              | exn -> Lwt.fail exn) (* XXX(dinosaure): should never happen *)
+  (Sync_http.fetch_all git ~locks:Fpath.(root / ".locks") repository >!= fun err -> `Sync err)
 
 open Cmdliner
 
@@ -243,8 +170,8 @@ end
 let setup_log =
   Term.(const setup_logs $ Fmt_cli.style_renderer () $ Logs_cli.level () $ Flag.output)
 
-let main progress directory repository (quiet, ppf) =
-  match Lwt_main.run (main ppf (not quiet && progress) directory repository) with
+let main _ directory repository _ =
+  match Lwt_main.run (main directory repository) with
   | Ok () -> `Ok ()
   | Error (#error as err) -> `Error (false, Fmt.strf "%a" pp_error err)
 

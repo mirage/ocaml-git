@@ -75,13 +75,13 @@ module type S_EXT = sig
     -> string -> string -> (Decoder.advertised_refs, error) result Lwt.t
 
   type command =
-    [ `Create of (Store.Hash.t * string)
-    | `Delete of (Store.Hash.t * string)
-    | `Update of (Store.Hash.t * Store.Hash.t * string) ]
+    [ `Create of (Store.Hash.t * Store.Reference.t)
+    | `Delete of (Store.Hash.t * Store.Reference.t)
+    | `Update of (Store.Hash.t * Store.Hash.t * Store.Reference.t) ]
 
   val push :
     Store.t
-    -> push:(Store.t -> (Store.Hash.t * string * bool) list -> (Store.Hash.t list * command list) Lwt.t)
+    -> push:(Store.t -> (Store.Hash.t * Store.Reference.t * bool) list -> (Store.Hash.t list * command list) Lwt.t)
     -> ?headers:Web.HTTP.headers
     -> ?https:bool
     -> ?port:int
@@ -98,7 +98,7 @@ module type S_EXT = sig
     -> ?capabilities:Git.Capability.t list
     -> negociate:((Decoder.acks -> 'state -> ([ `Ready | `Done | `Again of Store.Hash.t list ] * 'state) Lwt.t) * 'state)
     -> has:Store.Hash.t list
-    -> want:((Store.Hash.t * string * bool) list -> (Store.Reference.t * Store.Hash.t) list Lwt.t)
+    -> want:((Store.Hash.t * Store.Reference.t * bool) list -> (Store.Reference.t * Store.Hash.t) list Lwt.t)
     -> ?deepen:[ `Depth of int | `Timestamp of int64 | `Ref of string ]
     -> ?port:int
     -> string -> string -> ((Store.Reference.t * Store.Hash.t) list * int, error) result Lwt.t
@@ -123,6 +123,11 @@ module type S_EXT = sig
     Store.t -> ?locks:Store.Lock.t ->
     ?capabilities:Git.Capability.t list ->
     reference:Store.Reference.t -> Uri.t -> (unit, error) result Lwt.t
+
+  val fetch_some:
+    Store.t -> ?locks:Store.Lock.t ->
+    ?capabilities:Git.Capability.t list ->
+    references:Store.Reference.t list -> Uri.t -> (unit, error) result Lwt.t
 
   val clone :
     Store.t -> ?locks:Store.Lock.t ->
