@@ -626,7 +626,7 @@ module Make_ext
 
         loop ~final:(List.length has = 0) nstate resp
 
-  let want requested local_refs remote_refs =
+  let want git requested local_refs remote_refs =
     Lwt_list.filter_map_p (function
         | (remote_hash, remote_ref, false) ->
           (requested remote_ref >>= function
@@ -642,9 +642,13 @@ module Make_ext
                                  Store.Hash.pp local_hash
                                  Store.Hash.pp remote_hash);
 
-                   if Store.Hash.equal remote_hash local_hash
-                   then Lwt.return None
-                   else Lwt.return (Some (remote_ref, remote_hash)))
+                   Store.mem git remote_hash >>= function
+                   | true ->
+                     Log.debug (fun l -> l ~header:"want" "The remote hash %a is already available on the local store."
+                                   Store.Hash.pp remote_hash);
+                     Lwt.return None
+                   | false ->
+                     Lwt.return (Some (remote_ref, remote_hash)))
                 (fun _ ->
                    Log.debug (fun l -> l ~header:"want" "We did not find the reference %a as an expected reference but we will download it."
                                  Store.Reference.pp remote_ref);
@@ -663,7 +667,7 @@ module Make_ext
       host path =
     Store.Ref.list git >>= fun local_references ->
 
-    let want = want
+    let want = want git
         (fun reference' ->
            Lwt.return Store.Reference.(equal reference reference'))
         local_references in
@@ -705,12 +709,12 @@ module Make_ext
           (Store.Reference.Ref local_ref)
         >!= (fun err -> Lwt.return (`Ref err))
 
-  let fetch_and_update t ?locks ?capabilities ~choose ~create ~references repository =
-    Negociator.find_common t >>= fun (has, state, continue) ->
+  let fetch_and_update git ?locks ?capabilities ~choose ~create ~references repository =
+    Negociator.find_common git >>= fun (has, state, continue) ->
     let continue { Decoder.acks; shallow; unshallow } state =
       continue { Git.Negociator.acks; shallow; unshallow } state in
 
-    Store.Ref.list ?locks t >>=
+    Store.Ref.list ?locks git >>=
     Lwt_list.filter_map_p
       (fun (local_ref, local_hash) ->
          Lwt.try_bind
@@ -723,14 +727,14 @@ module Make_ext
               Lwt.return (Some (remote_ref, local_hash)))
            (fun _ -> Lwt.return None))
     >>= fun local_refs_binded_with_remote_refs ->
-    let want = want choose local_refs_binded_with_remote_refs in
+    let want = want git choose local_refs_binded_with_remote_refs in
     let host =
       Option.value_exn (Uri.host repository)
         ~error:(Fmt.strf "Expected an http url with host: %a."
                   Uri.pp_hum repository) in
     let https =
       Option.mem (Uri.scheme repository) "https" ~equal:String.equal in
-    fetch t ~https ?port:(Uri.port repository) ?capabilities
+    fetch git ~https ?port:(Uri.port repository) ?capabilities
       ~negociate:(continue, state) ~has ~want host
       (Uri.path_and_query repository)
     >?= fun (lst, _) ->
@@ -764,7 +768,7 @@ module Make_ext
       Lwt.catch (fun () ->
           Lwt_list.iter_s
             (fun (reference, hash) ->
-               Store.Ref.write t ?locks reference (Store.Reference.Hash hash)
+               Store.Ref.write git ?locks reference (Store.Reference.Hash hash)
                >>= function
                | Ok _ -> Lwt.return ()
                | Error err -> Lwt.fail (Jump err)
