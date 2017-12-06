@@ -114,25 +114,94 @@ module type S_EXT = sig
     -> ?capabilities:Git.Capability.t list
     -> string -> string -> (Store.Hash.t, error) result Lwt.t
 
+  val fetch_some:
+    Store.t -> ?locks:Store.Lock.t ->
+    ?capabilities:Git.Capability.t list ->
+    references:(Store.Reference.t * Store.Reference.t) list ->
+    Uri.t -> (unit, error) result Lwt.t
+  (** [fetch_some git ?locks ?capabilities ~references repository] will
+      fetch some references specified by [references].
+
+      [references] is an associated list which:
+      {ul
+      {- the key is the local reference where the client wants to
+      store the updated hash.}
+      {- the value is the remote reference when the client wants to be
+      synchronized with the server.}}
+
+      If a reference inside [references] does not appear on the server
+      side, we miss it.
+
+      This function compares the hash pointed by the local reference
+      binded with the remote branch to see if the update is necessary
+      or not. Then, it updates local references by the hash noticed by
+      the server and associated to the remote reference. For example:
+
+      > references = [refs/heads/master, refs/heads/master]
+
+      Will update the reference [refs/heads/master] to the last
+      version of the [refs/heads/master] reference on the server side.
+      However, usually, Git launch the fetch command with:
+
+      > references = [refs/remotes/master, refs/heads/master]
+
+      Then, it updateds [refs/heads/master] to point indirectly to
+      [refs/remotes/master] and finally set the [HEAD] reference to
+      point to [refs/heads/master].
+
+      [locks] is the place which is a {i data-structure} which
+      contains lock representation. By {i data-structure} we can mean
+      a directory or a data-structure whcih contains {i mutex}.
+
+      [capabilities] is a list of {!Capabilities.t} which describe how
+      to communicate with the server. If you don't understand what I
+      mean, it's better to not precise (and use the default value)
+      this argument. In other side, it's better to use directly
+      {!fetch} than this helper function.
+
+      Finally, we need to repository address which needs to have the
+      [http] or the [https] scheme. The process to send a request (and
+      handle a redirection for example) is not the part of
+      [fetch_some] but described on the {!Client} module. *)
+
   val fetch_all:
     Store.t -> ?locks:Store.Lock.t ->
     ?capabilities:Git.Capability.t list ->
-    Uri.t -> (unit, error) result Lwt.t
+    references:(Store.Reference.t * Store.Reference.t) list ->
+    Uri.t -> ((Store.Reference.t * Store.Hash.t) list, error) result Lwt.t
+  (** [fetch_all git ?locks ?capabilities ~references repository] is a
+      specific call of {!fetch_some}. This function will download all
+      references from the server.
+
+      Then, for all references founded in the associated list
+      [references], we updated the binded local reference. This list
+      could not be exhaustive. So for all references downloaded from
+      the server, if we not find them in the [references] associated
+      list and only if they have this format:
+
+      > refs/heads/{branch}
+
+      We create/{b replace} a new local references on this form:
+
+      > refs/remotes/{branch}
+
+      To keep updated hashes locally. For any other references, we
+      miss this update but return an associated list between these
+      remote references and binded hashes. *)
 
   val fetch_one:
     Store.t -> ?locks:Store.Lock.t ->
     ?capabilities:Git.Capability.t list ->
-    reference:Store.Reference.t -> Uri.t -> (unit, error) result Lwt.t
-
-  val fetch_some:
-    Store.t -> ?locks:Store.Lock.t ->
-    ?capabilities:Git.Capability.t list ->
-    references:Store.Reference.t list -> Uri.t -> (unit, error) result Lwt.t
+    reference:(Store.Reference.t * Store.Reference.t) ->
+    Uri.t -> (unit, error) result Lwt.t
+  (** [fetch_one git ?locks //capabilities ~reference repository] is a
+      specific call of {!fetch_some} with only one reference. *)
 
   val clone:
     Store.t -> ?locks:Store.Lock.t ->
     ?capabilities:Git.Capability.t list ->
-    reference:Store.Reference.t -> Uri.t -> (unit, error) result Lwt.t
+    reference:(Store.Reference.t * Store.Reference.t) ->
+    Uri.t -> (unit, error) result Lwt.t
 
   val update: Store.t ->
     ?capabilities:Git.Capability.t list ->

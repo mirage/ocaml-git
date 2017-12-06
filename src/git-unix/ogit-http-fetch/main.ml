@@ -101,7 +101,7 @@ let main references directory repository =
   let ( >!= ) v f = map_err f v in
 
   (Git_unix.Store.create ~root () >!= fun err -> `Store err) >>= fun git ->
-  (Sync_http.fetch_some git ~references:(List.map snd references) repository
+  (Sync_http.fetch_some git ~locks:Fpath.(Git_unix.Store.root git / ".locks") ~references repository
    >!= fun err -> `Sync err)
 
 open Cmdliner
