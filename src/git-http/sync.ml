@@ -723,12 +723,7 @@ module Make_ext
               Lwt.return (Some (remote_ref, local_hash)))
            (fun _ -> Lwt.return None))
     >>= fun local_refs_binded_with_remote_refs ->
-    let want = want
-        (fun remote_ref -> Lwt_list.exists_p
-            (fun (expected_local_ref, expected_remote_ref) ->
-               Lwt.return (choose expected_local_ref remote_ref expected_remote_ref))
-            references)
-        local_refs_binded_with_remote_refs in
+    let want = want choose local_refs_binded_with_remote_refs in
     let host =
       Option.value_exn (Uri.host repository)
         ~error:(Fmt.strf "Expected an http url with host: %a."
@@ -780,7 +775,7 @@ module Make_ext
           | exn -> Lwt.fail exn) (* XXX(dinosaure): should never happen. *)
 
   let fetch_all git ?locks ?capabilities ~references repository =
-    let choose _ _ _ = true in
+    let choose _ = Lwt.return true in
     let create remote_ref =
       match Fpath.segs (Store.Reference.to_path remote_ref) with
       | "refs" :: "heads" :: branch when List.length branch > 0 ->
@@ -799,8 +794,12 @@ module Make_ext
       git repository
 
   let fetch_some git ?locks ?capabilities ~references repository =
-    let choose _ remote_ref expected_remote_ref =
-      Store.Reference.(equal remote_ref expected_remote_ref) in
+    let choose remote_ref =
+      Lwt_list.exists_p
+        (fun (_, expected_remote_ref) ->
+           Lwt.return Store.Reference.(equal remote_ref expected_remote_ref))
+        references
+    in
     let create _ = None in
     fetch_and_update
       ~choose
@@ -818,9 +817,9 @@ module Make_ext
                     discard);
         Lwt.return (Ok ()) (* XXX(dinosaure): should return an error? *)
 
-  let fetch_one git ?locks ?capabilities ~reference repository =
-    let choose _ remote_ref expected_remote_ref =
-      Store.Reference.(equal remote_ref expected_remote_ref) in
+  let fetch_one git ?locks ?capabilities ~reference:((_, expected_remote_ref) as reference) repository =
+    let choose remote_ref =
+      Lwt.return Store.Reference.(equal remote_ref expected_remote_ref) in
     let create _ = None in
     fetch_and_update
       ~choose
