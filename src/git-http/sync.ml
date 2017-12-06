@@ -267,8 +267,8 @@ module Make_ext
       | Error err -> Lwt.return (Error (`SmartDecoder err))
     in
     dispatch () >?= fun () ->
-    (Store.Pack.from git (fun () -> Lwt_stream.get stream')
-     >!= fun err -> Lwt.return (`StorePack err))
+      (Store.Pack.from git (fun () -> Lwt_stream.get stream')
+       >!= fun err -> Lwt.return (`StorePack err))
 
   let producer ?(final = (fun () -> Lwt.return None)) state =
     let state' = ref (fun () -> state) in
@@ -630,6 +630,10 @@ module Make_ext
     Lwt_list.filter_map_p (function
         | (remote_hash, remote_ref, false) ->
           (requested remote_ref >>= function
+            | false ->
+              Log.debug (fun l -> l ~header:"want" " We discard the reference %a."
+                            Store.Reference.pp remote_ref);
+              Lwt.return None
             | true ->
               Lwt.try_bind
                 (fun () -> Lwt_list.find_s
@@ -637,33 +641,31 @@ module Make_ext
                        Lwt.return Store.Reference.(equal local_ref remote_ref))
                     local_refs)
                 (fun (_, local_hash) ->
-                   Log.debug (fun l -> l ~header:"want" "The local hash of the expected reference %a is %a and the server hash is %a."
+                   Log.debug (fun l -> l ~header:"want"
+                                 "The local hash of the expected reference %a \
+                                  is %a and the server hash is %a."
                                  Store.Reference.pp remote_ref
                                  Store.Hash.pp local_hash
                                  Store.Hash.pp remote_hash);
-
-                   Store.mem git remote_hash >>= function
-                   | true ->
-                     Log.debug (fun l -> l ~header:"want" "The remote hash %a is already available on the local store."
-                                   Store.Hash.pp remote_hash);
-                     Lwt.return None
-                   | false ->
-                     Lwt.return (Some (remote_ref, remote_hash)))
+                   Lwt.return (Some (remote_ref, remote_hash)))
                 (fun _ ->
-                   Log.debug (fun l -> l ~header:"want" "We did not find the reference %a as an expected reference but we will download it."
+                   Log.debug (fun l -> l ~header:"want"
+                                 "We did not find the reference %a \
+                                  as an expected reference but we will probably download it."
                                  Store.Reference.pp remote_ref);
 
                    Lwt.return (Some (remote_ref, remote_hash)))
-            | false ->
-              Log.debug (fun l -> l ~header:"want" " We discard the reference %a."
-                            Store.Reference.pp remote_ref);
-
-              Lwt.return None)
+              >>= function
+              | None -> Lwt.return None
+              | Some (remote_ref, remote_hash) ->
+                Store.mem git remote_hash >>= function
+                | true -> Lwt.return None
+                | false -> Lwt.return (Some (remote_ref, remote_hash)))
         | _ -> Lwt.return None
       ) remote_refs
 
   let clone_ext git ?stdout ?stderr ?headers ?(https = false) ?port
-      ?(reference = Store.Reference.head) ?capabilities
+      ?(reference = Store.Reference.master) ?capabilities
       host path =
     Store.Ref.list git >>= fun local_references ->
 
@@ -773,12 +775,12 @@ module Make_ext
                | Ok _ -> Lwt.return ()
                | Error err -> Lwt.fail (Jump err)
             ) update_lst >>= fun () ->
-          Lwt.return (Ok discard_lst))
+          Lwt.return (Ok (update_lst, discard_lst)))
         (function
           | Jump err -> Lwt.return (Error (`Ref err))
           | exn -> Lwt.fail exn) (* XXX(dinosaure): should never happen. *)
 
-  let fetch_all git ?locks ?capabilities ~references repository =
+  let fetch_all git ?locks ?capabilities ~references ?(origin = "origin") repository =
     let choose _ = Lwt.return true in
     let create remote_ref =
       match Fpath.segs (Store.Reference.to_path remote_ref) with
@@ -786,7 +788,8 @@ module Make_ext
         Some (Store.Reference.of_string
                 (String.concat "/"
                    ([ "refs"
-                    ; "remotes" ] @ branch)))
+                    ; "remotes"
+                    ; origin ] @ branch)))
       | _ -> None
     in
     fetch_and_update
@@ -867,7 +870,7 @@ module Make_ext
     push t ~push:push_handler ~https ?capabilities ?port:(Uri.port repository)
       host (Uri.path_and_query repository)
     >?= fun lst ->
-    Lwt_result.ok (Lwt_list.map_p (function
+      Lwt_result.ok (Lwt_list.map_p (function
           | Ok refname -> Lwt.return (Ok (Store.Reference.of_string refname))
           | Error (refname, err) ->
             Lwt.return (Error (Store.Reference.of_string refname, err))
