@@ -18,8 +18,8 @@
 let () = Random.self_init ()
 let () = Printexc.record_backtrace true
 
-module Sync_http = Git_unix.HTTP(Git_unix.Store)
-module Negociator = Git.Negociator.Make(Git_unix.Store)
+module Sync_http = Git_unix.HTTP(Git_unix.FS)
+module Negociator = Git.Negociator.Make(Git_unix.FS)
 
 module Log =
 struct
@@ -83,16 +83,16 @@ let setup_logs style_renderer level ppf =
   quiet, ppf
 
 type error =
-  [ `Store of Git_unix.Store.error
-  | `Reference of Git_unix.Store.Ref.error
+  [ `Store of Git_unix.FS.error
+  | `Reference of Git_unix.FS.Ref.error
   | `Sync of Sync_http.error ]
 
 let pp_error ppf = function
-  | `Store err -> Fmt.pf ppf "(`Store %a)" Git_unix.Store.pp_error err
-  | `Reference err -> Fmt.pf ppf "(`Reference %a)" Git_unix.Store.Ref.pp_error err
+  | `Store err -> Fmt.pf ppf "(`Store %a)" Git_unix.FS.pp_error err
+  | `Reference err -> Fmt.pf ppf "(`Reference %a)" Git_unix.FS.Ref.pp_error err
   | `Sync err -> Fmt.pf ppf "(`Sync %a)" Sync_http.pp_error err
 
-exception Write of Git_unix.Store.Ref.error
+exception Write of Git_unix.FS.Ref.error
 
 let main ppf progress directory repository =
   let root = option_map_default Fpath.(v (Sys.getcwd ())) Fpath.v directory in
@@ -124,14 +124,14 @@ let main ppf progress directory repository =
         | (_, _, false) -> true
         | _ -> false)
       refs
-    |> List.map (fun (hash, refname, _) -> (Git_unix.Store.Reference.of_string refname, hash))
+    |> List.map (fun (hash, refname, _) -> (Git_unix.FS.Reference.of_string refname, hash))
     |> Lwt.return
   in
 
   Log.debug (fun l -> l ~header:"main" "root:%a, repository:%a.\n"
                 Fpath.pp root Uri.pp_hum repository);
 
-  (Git_unix.Store.create ~root () >!= fun err -> `Store err) >>= fun git ->
+  (Git_unix.FS.create ~root () >!= fun err -> `Store err) >>= fun git ->
   (ok (Negociator.find_common git)) >>= fun (has, state, continue) ->
   let continue { Sync_http.Decoder.acks; shallow; unshallow } state = continue { Git.Negociator.acks; shallow; unshallow } state in
   (* structural typing god! *)
@@ -147,7 +147,7 @@ let main ppf progress directory repository =
     Lwt.return (Ok ())
   | updated, n ->
     Log.debug (fun l -> l ~header:"main" "New version (%d object(s) added): %a."
-                  n (Fmt.hvbox (Fmt.Dump.list (Fmt.pair Git_unix.Store.Reference.pp Git_unix.Store.Hash.pp)))
+                  n (Fmt.hvbox (Fmt.Dump.list (Fmt.pair Git_unix.FS.Reference.pp Git_unix.FS.Hash.pp)))
                   updated);
 
     Lwt.try_bind
@@ -156,25 +156,25 @@ let main ppf progress directory repository =
            (fun (dst, hash) ->
               let open Lwt.Infix in
 
-              Git_unix.Store.Ref.write git ~locks:(Git_unix.Store.dotgit git) dst
-                (Git_unix.Store.Reference.Hash hash)
+              Git_unix.FS.Ref.write git ~locks:(Git_unix.FS.dotgit git) dst
+                (Git_unix.FS.Reference.Hash hash)
               >>= function Error err -> Lwt.fail (Write err)
                          | Ok _ ->
                            Log.debug (fun l -> l ~header:"main" "Reference %a updated: %a."
-                                         Git_unix.Store.Reference.pp dst
-                                         Git_unix.Store.Hash.pp hash);
+                                         Git_unix.FS.Reference.pp dst
+                                         Git_unix.FS.Hash.pp hash);
                            Lwt.return ())
            updated)
       (fun () ->
          try
-           let (_, master) = List.find (fun (dst, _) -> Git_unix.Store.Reference.(equal dst master)) updated in
-           let (_, head) = List.find (fun (dst, _) -> Git_unix.Store.Reference.(equal dst head)) updated in
+           let (_, master) = List.find (fun (dst, _) -> Git_unix.FS.Reference.(equal dst master)) updated in
+           let (_, head) = List.find (fun (dst, _) -> Git_unix.FS.Reference.(equal dst head)) updated in
 
            let ( >!= ) = Lwt_result.bind_lwt_err in
 
-           if Git_unix.Store.Hash.equal master head
-           then Git_unix.Store.Ref.write git ~locks:(Git_unix.Store.dotgit git) Git_unix.Store.Reference.head
-             (Git_unix.Store.Reference.(Ref master)) >!= (fun err -> Lwt.return (`Reference err))
+           if Git_unix.FS.Hash.equal master head
+           then Git_unix.FS.Ref.write git ~locks:(Git_unix.FS.dotgit git) Git_unix.FS.Reference.head
+             (Git_unix.FS.Reference.(Ref master)) >!= (fun err -> Lwt.return (`Reference err))
            else Lwt.return (Ok ())
          with Not_found -> Lwt.return (Ok ()))
       (function Write err -> Lwt.return (Error (`Reference err))
@@ -218,8 +218,8 @@ struct
     Arg.(value & flag & info ["all"] ~doc)
 
  let reference =
-    let parse str = Ok (Git_unix.Store.Reference.of_string str) in
-    let print = Git_unix.Store.Reference.pp in
+    let parse str = Ok (Git_unix.FS.Reference.of_string str) in
+    let print = Git_unix.FS.Reference.pp in
     Arg.conv ~docv:"<name>" (parse, print)
 
   let uri =

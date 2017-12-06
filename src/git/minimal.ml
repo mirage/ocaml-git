@@ -245,4 +245,10 @@ module type S = sig
       respects the Git format). Then, this function returns the hash
       produced from the kind and the inflated raw to let the user to
       retrieve it. *)
+
+
+  (** {1 Backend Features} *)
+
+  val has_global_watches: bool
+  val has_global_checkout: bool
 end

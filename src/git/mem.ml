@@ -17,10 +17,8 @@
 
 open Lwt.Infix
 
-module Log = struct
-  let src = Logs.Src.create "git.mem" ~doc:"logs git's memory back-end"
-  include (val Logs.src_log src : Logs.LOG)
-end
+let src = Logs.Src.create "git.mem" ~doc:"logs git's memory back-end"
+module Log = (val Logs.src_log src : Logs.LOG)
 
 let err_not_found n k =
   let str = Printf.sprintf "Git.Mem.%s: %s not found" n k in
@@ -520,6 +518,8 @@ module Make
       | None, Some (Reference.Ref _ | Reference.Hash _) -> Lwt.return (Ok false)
   end
 
+  let has_global_watches = false
+  let has_global_checkout = false
 end
 
 module Lock = Lock

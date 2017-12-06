@@ -3,13 +3,13 @@ module type GAMMA = sig
   val temp    : Fpath.t
 end
 
-module type FS = sig
+module type S = sig
   include Mirage_fs_lwt.S
   val connect : unit -> t Lwt.t
   (* XXX: the constructor should not be there *)
 end
 
-module Make (Gamma: GAMMA) (FS: FS): Git.FS
+module Make (Gamma: GAMMA) (FS: S): Git.FS
   with type error = [ `System of string ]
    and type File.lock = Git.Mem.Lock.elt
    and type File.error = [ `Stat of string

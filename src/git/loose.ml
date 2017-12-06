@@ -220,7 +220,7 @@ module Make
       Log.err (fun l -> l ~header:"read" "Retrieving a file-system error: %a." FS.File.pp_error sys_err);
       Lwt.return (Error (`SystemFile sys_err))
     | Ok ic ->
-      let rec loop decoder = match D.eval decoder with
+      let rec loop decoder = match D.eval "loose" decoder with
         | `Await decoder ->
           FS.File.read raw ic >>=
           (function
@@ -341,7 +341,7 @@ module Make
       Log.err (fun l -> l ~header:"size" "Retrieving a file-system error: %a." FS.File.pp_error sys_err);
       Lwt.return (Error (`SystemFile sys_err))
     | Ok read ->
-      let rec loop decoder = match S.eval decoder with
+      let rec loop decoder = match S.eval "loose" decoder with
         | `Await decoder ->
           FS.File.read raw read >>=
           (function
@@ -395,9 +395,9 @@ module Make
       let raw_length = Cstruct.len
       let raw_blit   = Cstruct.blit
 
-      let rec eval raw state =
+      let rec eval dbg raw state =
         match Deflate.eval ~src:value' ~dst:raw state with
-        | `Await state -> eval raw (Deflate.finish state)
+        | `Await state -> eval dbg raw (Deflate.finish state)
         | `Flush state -> Lwt.return (`Flush state)
         | `Error (state, error) -> Lwt.return (`Error (state, error))
         | `End state -> Lwt.return (`End (state, ()))
@@ -415,7 +415,7 @@ module Make
       | Error sys_error -> Lwt.return (Error (`SystemFile sys_error))
       | Ok oc ->
         Lwt.finalize
-          (fun () -> Helper.safe_encoder_to_file
+          (fun () -> Helper.safe_encoder_to_file "loose"
               ~limit:50
               (module E)
               FS.File.write
@@ -455,8 +455,8 @@ module Make
       let raw_length = Cstruct.len
       let raw_blit   = Cstruct.blit
 
-      let eval raw state =
-        match E.eval raw state with
+      let eval dbg raw state =
+        match E.eval dbg raw state with
         | `Flush state -> Lwt.return (`Flush state)
         | `Error error -> Lwt.return (`Error (state, error))
         | `End state -> Lwt.return (`End state)
@@ -482,7 +482,7 @@ module Make
       | Ok oc ->
         Lwt.finalize
           (fun () ->
-             Helper.safe_encoder_to_file
+             Helper.safe_encoder_to_file "loose"
                ~limit:50
                (module E)
                FS.File.write

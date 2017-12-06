@@ -17,14 +17,11 @@
 
 let () = Random.self_init ()
 
-module Sync_http = Git_unix.HTTP(Git_unix.Store)
-module Negociator = Git.Negociator.Make(Git_unix.Store)
+module Sync_http = Git_unix.HTTP(Git_unix.FS)
+module Negociator = Git.Negociator.Make(Git_unix.FS)
 
-module Log =
-struct
-  let src = Logs.Src.create "main" ~doc:"logs binary event"
-  include (val Logs.src_log src : Logs.LOG)
-end
+let src = Logs.Src.create "ogit-http-fetch" ~doc:"logs binary event"
+module Log = (val Logs.src_log src : Logs.LOG)
 
 let option_map f = function
   | Some v -> Some (f v)
@@ -82,16 +79,16 @@ let setup_logs style_renderer level ppf =
   quiet, ppf
 
 type error =
-  [ `Store of Git_unix.Store.error
-  | `Reference of Git_unix.Store.Ref.error
+  [ `Store of Git_unix.FS.error
+  | `Reference of Git_unix.FS.Ref.error
   | `Sync of Sync_http.error ]
 
 let pp_error ppf = function
-  | `Store err -> Fmt.pf ppf "(`Store %a)" Git_unix.Store.pp_error err
-  | `Reference err -> Fmt.pf ppf "(`Reference %a)" Git_unix.Store.Ref.pp_error err
+  | `Store err -> Fmt.pf ppf "(`Store %a)" Git_unix.FS.pp_error err
+  | `Reference err -> Fmt.pf ppf "(`Reference %a)" Git_unix.FS.Ref.pp_error err
   | `Sync err -> Fmt.pf ppf "(`Sync %a)" Sync_http.pp_error err
 
-exception Write of Git_unix.Store.Ref.error
+exception Write of Git_unix.FS.Ref.error
 
 let main ppf progress references directory repository =
   let root = option_map_default Fpath.(v (Sys.getcwd ())) Fpath.v directory in
@@ -120,10 +117,10 @@ let main ppf progress references directory repository =
 
   let want =
     Lwt_list.filter_map_p (fun (refname, hash, _) ->
-        let reference = Git_unix.Store.Reference.of_string refname in
+        let reference = Git_unix.FS.Reference.of_string refname in
 
         Lwt.try_bind
-          (fun () -> Lwt_list.find_s (fun (src, _) -> Lwt.return (Git_unix.Store.Reference.equal reference src)) references)
+          (fun () -> Lwt_list.find_s (fun (src, _) -> Lwt.return (Git_unix.FS.Reference.equal reference src)) references)
           (fun (_, dst) -> Lwt.return (Some (dst, hash)))
           (fun _ -> Lwt.return None))
   in
@@ -131,7 +128,7 @@ let main ppf progress references directory repository =
   Log.debug (fun l -> l ~header:"main" "root:%a, repository:%a.\n"
                 Fpath.pp root Uri.pp_hum repository);
 
-  (Git_unix.Store.create ~root () >!= fun err -> `Store err) >>= fun git ->
+  (Git_unix.FS.create ~root () >!= fun err -> `Store err) >>= fun git ->
   (ok (Negociator.find_common git)) >>= fun (has, state, continue) ->
   let continue { Sync_http.Decoder.acks; shallow; unshallow } state = continue { Git.Negociator.acks; shallow; unshallow } state in
   (* structural typing god! *)
@@ -147,7 +144,7 @@ let main ppf progress references directory repository =
     Lwt.return (Ok ())
   | updated, n ->
     Log.debug (fun l -> l ~header:"main" "New version (%d object(s) added): %a."
-                  n (Fmt.hvbox (Fmt.Dump.list (Fmt.pair Git_unix.Store.Reference.pp Git_unix.Store.Hash.pp)))
+                  n (Fmt.hvbox (Fmt.Dump.list (Fmt.pair Git_unix.FS.Reference.pp Git_unix.FS.Hash.pp)))
                   updated);
 
     Lwt.try_bind
@@ -156,8 +153,8 @@ let main ppf progress references directory repository =
            (fun (dst, hash) ->
               let open Lwt.Infix in
 
-              Git_unix.Store.Ref.write git ~locks:(Git_unix.Store.dotgit git) dst
-                (Git_unix.Store.Reference.Hash hash)
+              Git_unix.FS.Ref.write git ~locks:(Git_unix.FS.dotgit git) dst
+                (Git_unix.FS.Reference.Hash hash)
               >>= function Error err -> Lwt.fail (Write err)
                          | Ok _ -> Lwt.return ())
            updated)
@@ -203,8 +200,8 @@ struct
     Arg.(value & flag & info ["all"] ~doc)
 
  let reference =
-    let parse str = Ok (Git_unix.Store.Reference.of_string str) in
-    let print = Git_unix.Store.Reference.pp in
+    let parse str = Ok (Git_unix.FS.Reference.of_string str) in
+    let print = Git_unix.FS.Reference.pp in
     Arg.conv ~docv:"<name>" (parse, print)
 
   let uri =

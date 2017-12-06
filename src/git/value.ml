@@ -405,7 +405,7 @@ module Raw
 
       type rest = [ `Flush of state | `End of (state * result) ]
 
-      let eval raw state = match E.eval raw state with
+      let eval raw state = match E.eval "reference" raw state with
         | #rest as rest -> rest
         | `Error err -> `Error (state, err)
 
@@ -434,7 +434,7 @@ module Raw
 
       type rest = [ `Flush of state | `End of (state * result) ]
 
-      let eval raw state = match EE.eval raw state with
+      let eval raw state = match EE.eval "value" raw state with
         | #rest as rest -> rest
         | `Error err -> `Error (state, err)
 
@@ -462,7 +462,7 @@ module Raw
 
       type rest = [ `Flush of state | `End of (state * result) ]
 
-      let eval raw state = match EEE.eval raw state with
+      let eval raw state = match EEE.eval "value" raw state with
         | #rest as rest -> rest
         | `Error err -> `Error (state, err)
 
@@ -474,22 +474,22 @@ module Raw
 
   module DD = Helper.MakeDecoder(A)
 
-  let of_raw_with_header inflated = DD.to_result inflated
+  let of_raw_with_header inflated = DD.to_result "value" inflated
   let of_raw ~kind inflated = match kind with
     | `Commit ->
-      Value.Commit.D.to_result inflated |> (function
+      Value.Commit.D.to_result "value" inflated |> (function
           | Ok commit -> Ok (Commit commit)
           | Error (`Decoder err) -> Error (`Decoder err))
     | `Tree ->
-      Value.Tree.D.to_result inflated |> (function
+      Value.Tree.D.to_result "value" inflated |> (function
           | Ok tree -> Ok (Tree tree)
           | Error (`Decoder err) -> Error (`Decoder err))
     | `Tag ->
-      Value.Tag.D.to_result inflated  |> (function
+      Value.Tag.D.to_result "value" inflated  |> (function
           | Ok tag -> Ok (Tag tag)
           | Error (`Decoder err) -> Error (`Decoder err))
     | `Blob ->
-      Value.Blob.D.to_result inflated  |> (function
+      Value.Blob.D.to_result "value" inflated  |> (function
           | Ok blob -> Ok (Blob blob)
           | Error (`Decoder err) -> Error (`Decoder err))
 end

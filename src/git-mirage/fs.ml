@@ -17,7 +17,7 @@ sig
   val temp    : Fpath.t
 end
 
-module type FS =
+module type S =
 sig
   include Mirage_fs.S
     with type page_aligned_buffer = Cstruct.t
@@ -26,7 +26,7 @@ sig
   val connect : unit -> t Lwt.t
 end
 
-module Make (Gamma: GAMMA) (FS: FS) = struct
+module Make (Gamma: GAMMA) (FS: S) = struct
 
   let connect fn =
     Lwt.bind (FS.connect ()) fn
@@ -439,4 +439,7 @@ module Make (Gamma: GAMMA) (FS: FS) = struct
 
   let is_dir path = connect @@ fun t -> is_dir t path
   let is_file path = connect @@ fun t -> is_file t path
+
+  let has_global_watches = false
+  let has_global_checkout = false
 end

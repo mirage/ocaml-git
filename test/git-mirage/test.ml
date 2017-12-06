@@ -15,11 +15,13 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Lwt.Infix
-
-let () = Printexc.record_backtrace true
+let () =
+  Printexc.record_backtrace true;
+  Lwt.async_exception_hook :=
+    (fun e -> Fmt.kstrf failwith "%a" Fmt.exn e)
 
 open Test_common
+open Lwt.Infix
 
 let protect_unix_exn = function
   | Unix.Unix_error _ as e -> Lwt.fail (Failure (Printexc.to_string e))
@@ -95,35 +97,32 @@ end
 
 module Gamma = struct
   type path = Fpath.t
-
   let temp = Fpath.(v M.root / "temp")
   let current = Fpath.v M.root
 end
 
-module Fs = Git_mirage.FS.Make(Gamma)(M)
-module MirageStore = Git_mirage.Make(Git.Mem.Lock)(Fs)
+module MirageStore = Git_mirage.Store(Gamma)(M)
 module MirageConduit: Git_mirage.Net.CONDUIT = struct
   include Conduit_mirage
   module C = Conduit_mirage.With_tcp(Tcpip_stack_socket)
   module R = Resolver_mirage.Make_with_stack(Time)(Tcpip_stack_socket)
 
-  type context = t
+  let run f =
+    Lwt_main.run (
+      Lwt.catch f (fun e  -> Alcotest.failf "cannot connect: %a" Fmt.exn e)
+    )
 
   let stack =
-    Lwt_main.run (
-      Tcpv4_socket.connect None >>= fun tcp ->
-      Udpv4_socket.connect None >>= fun udp ->
-      let interface = [Ipaddr.V4.of_string_exn "0.0.0.0"] in
-      let config = { Mirage_stack_lwt.name = "stackv4_socket"; interface } in
-      Tcpip_stack_socket.connect config udp tcp
-    )
+    run @@ fun () ->
+    Tcpv4_socket.connect None >>= fun tcp ->
+    Udpv4_socket.connect None >>= fun udp ->
+    let interface = [Ipaddr.V4.of_string_exn "0.0.0.0"] in
+    let config = { Mirage_stack_lwt.name = "stackv4_socket"; interface } in
+    Tcpip_stack_socket.connect config udp tcp
 
   let context =
-    Lwt_main.run (
-      C.connect stack Conduit_mirage.empty
-    )
-
-  type resolver = Resolver_lwt.t
+    run @@ fun () ->
+    C.connect stack Conduit_mirage.empty
 
   let resolver =
     let ns = None in let ns_port = None in
@@ -145,11 +144,10 @@ let mirage_backend =
   ; store = (module MirageStore)
   ; shell = true }
 
-
 let () =
-  verbose ();
+  Test_common.verbose ();
   let () = Lwt_main.run (M.init ()) in
   Alcotest.run "git-mirage" [
     Test_store.suite (`Quick, mirage_backend);
-    TCP.suite { mirage_backend with name = "mirage-tcp-sync"} ;
+    TCP.suite { mirage_backend with name = "mirage-tcp-sync"};
   ]

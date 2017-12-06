@@ -15,6 +15,8 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+open Lwt.Infix
+
 let src = Logs.Src.create "git.refs" ~doc:"Git references"
 module Log = (val Logs.src_log src : Logs.LOG)
 
@@ -167,8 +169,7 @@ module Make(H : S.HASH): S with module Hash = H = struct
     | Ref _, Hash _ -> 1
     | Hash _, Ref _ -> -1
 
-  module A =
-  struct
+  module A = struct
     type nonrec t = head_contents
 
     open Angstrom
@@ -195,8 +196,7 @@ module Make(H : S.HASH): S with module Hash = H = struct
        issue. *)
   end
 
-  module M =
-  struct
+  module M = struct
     type t  = head_contents
 
     open Minienc
@@ -204,8 +204,7 @@ module Make(H : S.HASH): S with module Hash = H = struct
     let lf = '\n'
 
     let encoder x k e = match x with
-      | Hash hash ->
-        write_string (Hash.to_hex hash) (write_char lf k) e
+      | Hash hash   -> write_string (Hash.to_hex hash) (write_char lf k) e
       | Ref refname ->
         (write_string "ref: "
          @@ write_string refname
@@ -264,8 +263,6 @@ module IO
 
   let mem ~root reference =
     let path = Fpath.(root // (to_path reference)) in
-    let open Lwt.Infix in
-
     FS.File.exists path >>= function
     | Ok v -> Lwt.return (Ok v)
     | Error err ->
@@ -273,51 +270,37 @@ module IO
 
   let read ~root reference ~dtmp ~raw =
     let decoder = D.default dtmp in
-
-    let open Lwt.Infix in
-
     let path = Fpath.(root // (to_path reference)) in
-
     Log.debug (fun l -> l ~header:"read" "Reading the reference: %a." Fpath.pp path);
-
-    FS.File.open_r ~mode:0o400 path
-    >>= function
+    FS.File.open_r ~mode:0o400 path >>= function
     | Error sys_err ->
-      Log.err (fun l -> l ~header:"read" "Retrieve an error when we read the reference %a: %a."
-                  pp reference FS.File.pp_error sys_err);
+      Log.err (fun l ->
+          l "Got an error while reading %a: %a."
+            pp reference FS.File.pp_error sys_err);
       Lwt.return (Error (`SystemFile sys_err))
     | Ok read ->
-      let rec loop decoder = match D.eval decoder with
-        | `Await decoder ->
-          FS.File.read raw read >>=
-          (function
-            | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
-            | Ok n -> match D.refill (Cstruct.sub raw 0 n) decoder with
-              | Ok decoder -> loop decoder
-              | Error (#D.error as err) -> Lwt.return (Error err))
-        | `End (_, value) -> Lwt.return (Ok value)
+      let rec loop decoder = match D.eval "reference" decoder with
+        | `End (_, value)               -> Lwt.return (Ok value)
         | `Error (_, (#D.error as err)) -> Lwt.return (Error err)
+        | `Await decoder ->
+          FS.File.read raw read >>= function
+          | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
+          | Ok n -> match D.refill (Cstruct.sub raw 0 n) decoder with
+            | Ok decoder              -> loop decoder
+            | Error (#D.error as err) -> Lwt.return (Error err)
       in
-
-      loop decoder
-      >|= function
+      loop decoder >|= function
+      | Error _ as e     -> e
       | Ok head_contents ->
         let reference' = normalize path in
-
-        Log.debug (fun l -> l ~header:"read" "Normalize reference %a = %a."
-                      pp reference pp reference');
+        Log.debug (fun l ->
+            l "Normalize reference %a = %a." pp reference pp reference');
         assert (equal reference reference');
-
         Ok (normalize path, head_contents)
-      | Error _ as e -> e
 
   let write ~root ?locks ?(capacity = 0x100) ~raw reference value =
-    let open Lwt.Infix in
-
     let state = E.default (capacity, value) in
-
-    let module E =
-    struct
+    let module E = struct
       type state  = E.encoder
       type raw    = Cstruct.t
       type result = int
@@ -328,61 +311,59 @@ module IO
 
       type rest = [ `Flush of state | `End of (state * result) ]
 
-      let eval raw state = match E.eval raw state with
+      let eval _ raw state = match E.eval "reference" raw state with
         | `Error err -> Lwt.return (`Error (state, err))
         | #rest as rest -> Lwt.return rest
 
       let used  = E.used
       let flush = E.flush
     end in
-
     let path = Fpath.(root // (to_path reference)) in
     let lock = match locks with
       | Some locks -> Some (Lock.make locks (to_path reference))
-      | None -> None
+      | None       -> None
     in
-
-    Lock.with_lock lock
-    @@ fun () ->
-    FS.Dir.create ~path:true Fpath.(root // (parent (to_path reference))) >>= function
+    Lock.with_lock lock @@ fun () ->
+    FS.Dir.create ~path:true Fpath.(root // (parent (to_path reference)))
+    >>= function
     | Error sys_err -> Lwt.return (Error (`SystemDirectory sys_err))
     | Ok (true | false) ->
       FS.File.open_w ~mode:0o644 path
       >>= function
       | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
       | Ok write ->
-        Helper.safe_encoder_to_file
+        Helper.safe_encoder_to_file "reference"
           ~limit:50
           (module E)
           FS.File.write
           write raw state
         >>= function
-        | Ok _ -> FS.File.close write >>=
+        | Ok _ ->
+          FS.File.close write >|=
           (function
-            | Ok () -> Lwt.return (Ok ())
-            | Error sys_err -> Lwt.return (Error (`SystemFile sys_err)))
+            | Ok () -> Ok ()
+            | Error sys_err -> Error (`SystemFile sys_err))
         | Error err ->
-          FS.File.close write >>= function
-          | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
-          | Ok () -> match err with
-            | `Stack -> Lwt.return (Error (`SystemIO (Fmt.strf "Impossible to store the reference: %a" pp reference)))
-            | `Writer sys_err -> Lwt.return (Error (`SystemFile sys_err))
+          FS.File.close write >|= function
+          | Error sys_err -> Error (`SystemFile sys_err)
+          | Ok ()         -> match err with
+            | `Writer sys_err -> Error (`SystemFile sys_err)
             | `Encoder `Never -> assert false
+            | `Stack          ->
+              Fmt.kstrf (fun x -> Error (`SystemIO x))
+                "Impossible to store the reference: %a" pp reference
 
+  (* FIXME: why this doesn't use the encode??? *)
   let test_and_set ~root ?locks t ~test ~set =
     let path = Fpath.(root // (to_path t)) in
     let lock = match locks with
       | Some locks -> Some (Lock.make locks (to_path t))
       | None -> None
     in
-
     let raw = function
-      | None -> None
-      | Some value -> Some (Cstruct.of_string (head_contents_to_string value))
+      | None       -> None
+      | Some value -> Some (Cstruct.of_string (head_contents_to_string value)) (* XXX: why a copy? *)
     in
-
-    let open Lwt.Infix in
-
     FS.File.test_and_set
       ?lock
       path
@@ -396,12 +377,10 @@ module IO
     let path = Fpath.(root // (to_path t)) in
     let lock = match locks with
       | Some locks -> Some (Lock.make locks (to_path t))
-      | None -> None
+      | None       -> None
     in
+    FS.File.delete ?lock path >|= function
+    | Ok _ as v -> v
+    | Error err -> Error (`SystemFile err)
 
-    let open Lwt.Infix in
-
-    FS.File.delete ?lock path >>= function
-    | Ok _ as v -> Lwt.return v
-    | Error err -> Lwt.return (Error (`SystemFile err))
 end

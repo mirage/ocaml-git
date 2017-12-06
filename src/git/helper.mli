@@ -121,7 +121,7 @@ sig
   val raw_length: raw -> int
   val raw_blit: raw -> int -> raw -> int -> int -> unit
 
-  val eval: raw -> state ->
+  val eval: string -> raw -> state ->
     [ `Flush of state
     | `End of (state * result)
     | `Error of (state * error) ] Lwt.t
@@ -155,6 +155,7 @@ and ('fd, 'raw, 'error) writer = 'raw -> ?off:int -> ?len:int -> 'fd -> (int, 'e
     your file-system - and you need to take care about that.
 *)
 val safe_encoder_to_file:
+  string ->
   limit:int ->
   ('state, 'raw, 'res, 'err_encoder) encoder ->
   ('fd, 'raw, 'err_writer) writer ->

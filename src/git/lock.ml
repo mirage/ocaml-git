@@ -245,11 +245,9 @@ module H = Make(struct
 type t = elt H.t
 and elt = Lwt_mutex.t
 
-let locks = H.create 24
+let v _ = H.create 24
 
-let make locks' path =
-  assert (locks == locks');
-
+let make locks path =
   try H.find locks path
   with Not_found ->
     let m = Lwt_mutex.create () in

@@ -124,8 +124,10 @@ module MakeDecoder (A: S.ANGSTROM) = struct
        free-ed. *)
     ; max      = len }
 
-  let eval decoder =
-    Log.debug (fun l -> l ~header:"eval" "Start to decode a partial chunk of the flow (%d) (final:%b)."
+  let eval dbg decoder =
+    Log.debug (fun l -> l "%s: Start to decode a partial chunk of the flow (%d) \
+                           (final:%b)."
+                  dbg
                   (Cstruct.len decoder.internal)
                   (decoder.final = Angstrom.Unbuffered.Complete));
 
@@ -210,11 +212,12 @@ module MakeDecoder (A: S.ANGSTROM) = struct
                   let off = Cstruct.len internal - len in
                   let ()  = Cstruct.blit input 0 internal off len in
 
-                  Log.debug (fun l -> l ~header:"refill" "Refill the internal buffer in the current decoding.");
+                  Log.debug (fun l -> l "Refill the internal buffer in the \
+                                         current decoding.");
 
                   Ok { decoder with internal = internal }
 
-  let to_result input =
+  let to_result _ input =
     Angstrom.parse_bigstring A.decoder (Cstruct.to_bigarray input)
     |> function Ok v -> Ok v
               | Error err -> Error (`Decoder err)
@@ -261,10 +264,10 @@ module MakeInflater
         @@ Z.default (Z.window_reset window)
     ; dec = D.default raw1 }
 
-  let rec eval decoder =
-    Log.debug (fun l -> l ~header:"eval" "Start to inflate a partial chunk of the flow.");
+  let rec eval dbg decoder =
+    Log.debug (fun l -> l ~header:dbg "Start to inflate a partial chunk of the flow.");
 
-    match D.eval decoder.dec with
+    match D.eval dbg decoder.dec with
     | `Await dec ->
       Log.debug (fun l -> l ~header:"eval" "Decoder waits.");
 
@@ -285,7 +288,7 @@ module MakeInflater
 
             Log.debug (fun l -> l ~header:"eval" "Internal buffer of the current decoding refilled: %a." (Fmt.hvbox Z.pp) inf);
 
-            eval { decoder with dec = dec
+            eval dbg { decoder with dec = dec
                               ; inf = inf }
           | Error (`Decoder err) -> `Error (decoder.cur, `Decoder err))
        | `Error (inf, err) ->
@@ -295,7 +298,7 @@ module MakeInflater
          Log.debug (fun l -> l ~header:"eval" "Inflator finished with the current decoding flow.");
 
          (match D.refill (Cstruct.sub decoder.tmp 0 (Z.used_out inf)) dec with
-          | Ok dec -> eval { decoder with cur = Cstruct.shift decoder.cur (Z.used_in inf)
+          | Ok dec -> eval dbg { decoder with cur = Cstruct.shift decoder.cur (Z.used_in inf)
                                         ; inf = Z.flush 0 0 (Z.refill 0 0 inf)
                                         ; dec = D.finish dec }
           | Error (`Decoder err) -> `Error (decoder.cur, `Decoder err)))
@@ -311,13 +314,13 @@ module MakeInflater
   let finish decoder =
     { decoder with dec = D.finish decoder.dec }
 
-  let to_result deflated =
+  let to_result dbg deflated =
     let window = Z.window () in
     let i = Cstruct.create 0x800 in
     let o = Cstruct.create 0x800 in
     let t = default (window, i, o) in
 
-    let rec go t = match eval t with
+    let rec go t = match eval dbg t with
       | `Await t ->
         (refill (Cstruct.sub deflated 0 0x800) t |> function
           | Ok t -> go t
@@ -376,7 +379,7 @@ module MakeEncoder (M: S.MINIENC): S.ENCODER
 
   exception Drain of int
 
-  let rec eval current e =
+  let rec eval dbg current e =
     match e.state with
     | Minienc.End minienc ->
       let shift  = min (e.o_len - e.o_pos) (Minienc.has minienc) in
@@ -402,7 +405,7 @@ module MakeEncoder (M: S.MINIENC): S.ENCODER
     | Minienc.Continue { encoder; continue; } ->
       (* XXX(dinosaure): we can shift the minienc at this time, but
          it's very useful? *)
-      eval current { e with state = continue encoder }
+      eval dbg current { e with state = continue encoder }
     | Minienc.Flush { continue; iovecs; } ->
       let max = min (e.o_len - e.o_pos) (Minienc.IOVec.lengthv iovecs) in
 
@@ -471,10 +474,10 @@ module MakeDeflater (Z: S.DEFLATE) (M: S.MINIENC): S.ENCODER
     ; internal
     ; used_in = 0 }
 
-  let rec eval dst encoder =
+  let rec eval dbg dst encoder =
     match Z.eval ~src:encoder.internal ~dst encoder.z with
     | `Await z ->
-      (match E.eval encoder.internal encoder.e with
+      (match E.eval dbg encoder.internal encoder.e with
        | `Flush e ->
          let used_in' = encoder.used_in + Z.used_in z in
          let z, e, used_in =
@@ -483,7 +486,7 @@ module MakeDeflater (Z: S.DEFLATE) (M: S.MINIENC): S.ENCODER
            else Z.no_flush used_in' (E.used e - used_in') z, e, used_in'
          in
 
-         eval dst { encoder with e; z; used_in; }
+         eval dbg dst { encoder with e; z; used_in; }
        | `End (e, _) ->
          let used_in' = encoder.used_in + Z.used_in z in
          let z, e, used_in =
@@ -492,7 +495,7 @@ module MakeDeflater (Z: S.DEFLATE) (M: S.MINIENC): S.ENCODER
            else Z.no_flush used_in' (E.used e - used_in') z, e, used_in'
          in
 
-         eval dst { encoder with e; z; used_in; }
+         eval dbg dst { encoder with e; z; used_in; }
        | `Error `Never -> assert false)
     (* XXX(dinosaure): [`Never] is a trick just to constraint the type
        error to be a polymorphic variant. But this case never
@@ -553,14 +556,14 @@ let fdigest: type t hash.
     Digest.feed ctx (Cstruct.of_string hdr);
     let encoder = M.default (capacity, value) in
 
-    let rec loop encoder = match M.eval tmp encoder with
+    let rec loop dbg encoder = match M.eval dbg tmp encoder with
       | `Flush encoder ->
         if M.used encoder > 0
         then begin
           Digest.feed ctx (Cstruct.sub tmp 0 (M.used encoder))
         end;
 
-        loop (M.flush 0 (Cstruct.len tmp) encoder)
+        loop dbg (M.flush 0 (Cstruct.len tmp) encoder)
       | `End (encoder, _) ->
         if M.used encoder > 0
         then begin
@@ -571,7 +574,7 @@ let fdigest: type t hash.
       | `Error `Never -> assert false
     in
 
-    loop encoder
+    loop kind encoder
 
 let digest
   : type t hash. (module S.IDIGEST with type t = hash)
@@ -612,7 +615,7 @@ sig
   val raw_length : raw -> int
   val raw_blit   : raw -> int -> raw -> int -> int -> unit
 
-  val eval  : raw -> state -> [ `Flush of state | `End of (state * result) | `Error of (state * error) ] Lwt.t
+  val eval  : string -> raw -> state -> [ `Flush of state | `End of (state * result) | `Error of (state * error) ] Lwt.t
   val used  : state -> int
   val flush : int -> int -> state -> state
 end
@@ -659,6 +662,7 @@ module ELog = (val Logs.src_log src : Logs.LOG)
 
 let safe_encoder_to_file
     (type state) (type raw) (type res) (type err_encoder) (type err_writer)
+    (dbg: string)
     ~limit
     (encoder : (state, raw, res, err_encoder) encoder)
     (writer : ('fd, raw, err_writer) writer)
@@ -675,9 +679,9 @@ let safe_encoder_to_file
 
   let open Lwt.Infix in
 
-  let rec go ~stack ?(rest = 0) state =
+  let rec go dbg ~stack ?(rest = 0) state =
     if stack < limit
-    then E.eval raw state >>= function
+    then E.eval dbg raw state >>= function
       | `Error (_, err) ->
         ELog.err (fun l ->
             l ~header:"go" "Retrieving an encoder error when we serialize \
@@ -698,7 +702,7 @@ let safe_encoder_to_file
                   l ~header:"go" "Loop back to writing the rest (%d) \
                                   of the encoding (stack: %d)."
                     (E.used state + rest - n) stack);
-              go ~stack:(stack + 1) (E.flush n ((E.used state + rest) - n) state)
+              go dbg ~stack:(stack + 1) (E.flush n ((E.used state + rest) - n) state)
             end
           | Error err -> Lwt.return (Error (`Writer err))
         end else Lwt.return (Ok res)
@@ -706,14 +710,14 @@ let safe_encoder_to_file
         writer raw ~off:0 ~len:(rest + E.used state) fd >>= function
         | Ok n ->
           if n = rest + E.used state
-          then go ~stack:0 (E.flush 0 (E.raw_length raw) state)
+          then go dbg ~stack:0 (E.flush 0 (E.raw_length raw) state)
           else begin
             let rest = (rest + E.used state) - n in
             E.raw_blit raw n raw 0 rest;
             ELog.debug (fun l ->
                 l ~header:"go" "The I/O encoder writes %d (rest: %d, loop back: %b)."
                   n (E.raw_length raw - rest) (E.raw_length raw - rest = 0));
-            go ~stack:(if E.raw_length raw - rest = 0 then stack + 1 else 0)
+            go dbg ~stack:(if E.raw_length raw - rest = 0 then stack + 1 else 0)
               ~rest
               (E.flush rest (E.raw_length raw - rest) state)
           end
@@ -725,4 +729,4 @@ let safe_encoder_to_file
     end
   in
 
-  go ~stack:0 state
+  go dbg ~stack:0 state

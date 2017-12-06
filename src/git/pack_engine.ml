@@ -434,7 +434,7 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
       type end' = [ `End of state ]
       type rest = [ `Flush of state | `Error of state * error ]
 
-      let eval raw state = match IDXEncoder.eval raw state with
+      let eval _dbg raw state = match IDXEncoder.eval raw state with
         | #end' as v -> let `End state = v in Lwt.return (`End (state, ()))
         | #rest as res -> Lwt.return res
 
@@ -449,7 +449,7 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
     FS.File.open_w ~mode:0o644 Fpath.(root / "objects" / "pack" / filename_idx) >>= function
     | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
     | Ok fd ->
-      Helper.safe_encoder_to_file
+      Helper.safe_encoder_to_file "pack-engine"
         ~limit:50
         (module E)
         FS.File.write
@@ -512,7 +512,7 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
 
       let empty = Cstruct.create 0
 
-      let rec eval dst state =
+      let rec eval dbg dst state =
         match PACKEncoder.eval (option_get ~default:empty state.src) dst state.pack with
         | `End (pack, hash) ->
           Lwt.return (`End ({ state with pack; },
@@ -525,14 +525,14 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
         | `Await pack ->
           match state.src with
           | Some _ ->
-            eval dst { pack = PACKEncoder.finish pack
+            eval dbg dst { pack = PACKEncoder.finish pack
                      ; src = None }
           | None ->
             let hash = PACKEncoder.expect pack in
 
             get hash >>= function
             | Some raw ->
-              eval dst { pack = PACKEncoder.refill 0 (Cstruct.len raw) pack
+              eval dbg dst { pack = PACKEncoder.refill 0 (Cstruct.len raw) pack
                        ; src = Some raw }
             | None -> Lwt.fail (Leave hash)
 
@@ -564,7 +564,7 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
        let open Lwt_result in
 
        (Lwt.try_bind
-          (fun () -> Helper.safe_encoder_to_file
+          (fun () -> Helper.safe_encoder_to_file "pack-engine"
               ~limit:50
               (module E)
               FS.File.write
@@ -642,7 +642,7 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
           type end' = [ `End of state ]
           type rest = [ `Flush of state | `Error of state * error ]
 
-          let eval raw state = match IDXEncoder.eval raw state with
+          let eval _dbg raw state = match IDXEncoder.eval raw state with
             | #end' as v -> let `End state = v in Lwt.return (`End (state, ()))
             | #rest as res -> Lwt.return res
 
@@ -652,7 +652,7 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
 
         let raw = Cstruct.create 0x8000 in
 
-        Helper.safe_encoder_to_file
+        Helper.safe_encoder_to_file "pack-engine"
           ~limit:50
           (module E)
           FS.File.write

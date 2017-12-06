@@ -15,7 +15,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Store = Git_unix.Store
+module Store = Git_unix.FS
 module Graph = Git.Object_graph.Make(Store)
 
 let printers =

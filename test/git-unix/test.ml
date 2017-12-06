@@ -15,11 +15,10 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Lwt.Infix
 open Test_common
 
 module TCP = Test_sync.Make(struct
-    module M = Git_unix.Sync(Git_unix.Store)
+    module M = Git_unix.Sync(Git_unix.FS)
     module Store = M.Store
     type error = M.error
     let clone t ~reference uri = M.clone t ~reference uri
@@ -29,7 +28,7 @@ module TCP = Test_sync.Make(struct
   end)
 
 module HTTP = Test_sync.Make(struct
-    module M = Git_unix.HTTP(Git_unix.Store)
+    module M = Git_unix.HTTP(Git_unix.FS)
     module Store = M.Store
     type error = M.error
     let clone t ~reference uri = M.clone t ~reference uri
@@ -39,7 +38,7 @@ module HTTP = Test_sync.Make(struct
   end)
 
 module HTTPS = Test_sync.Make(struct
-    module M = Git_unix.HTTP(Git_unix.Store)
+    module M = Git_unix.HTTP(Git_unix.FS)
     module Store = M.Store
     type error = M.error
     let clone t ~reference uri = M.clone t ~reference uri
@@ -49,7 +48,7 @@ module HTTPS = Test_sync.Make(struct
   end)
 
 module MemStore = Git.Mem.Store(Digestif.SHA1)
-module UnixStore = Git_unix.Store
+module UnixStore = Git_unix.FS
 
 let mem_backend =
   { name  = "mem"

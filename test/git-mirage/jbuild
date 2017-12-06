@@ -2,7 +2,7 @@
 
 (executable
  ((name      test)
-  (libraries (test git-mirage mirage-fs-unix io-page.unix mirage-conduit
+  (libraries (test_git git-mirage mirage-fs-unix io-page.unix mirage-conduit
               tcpip.udpv4-socket tcpip.tcpv4-socket tcpip.unix
               tcpip.stack-socket mirage-time-unix))))
 
