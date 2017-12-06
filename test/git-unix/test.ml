@@ -78,7 +78,7 @@ module Make (Store : Git.S) = struct
       in
 
       let clone_http ?(reference = Store.Reference.master) t uri =
-        HTTP.clone t ~reference uri >>= fun _ ->
+        HTTP.clone t ~reference:(reference, reference) uri >>= fun _ ->
         Store.list t >>=
         Lwt_list.iter_s
           (fun hash -> Store.read_exn t hash >>= fun _ -> Lwt.return ())
