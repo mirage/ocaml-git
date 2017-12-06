@@ -118,7 +118,7 @@ module type S_EXT = sig
     Store.t -> ?locks:Store.Lock.t ->
     ?capabilities:Git.Capability.t list ->
     references:(Store.Reference.t * Store.Reference.t) list ->
-    Uri.t -> (unit, error) result Lwt.t
+    Uri.t -> ((Store.Reference.t * Store.Hash.t) list, error) result Lwt.t
   (** [fetch_some git ?locks ?capabilities ~references repository] will
       fetch some references specified by [references].
 
@@ -168,7 +168,9 @@ module type S_EXT = sig
     Store.t -> ?locks:Store.Lock.t ->
     ?capabilities:Git.Capability.t list ->
     references:(Store.Reference.t * Store.Reference.t) list ->
-    Uri.t -> ((Store.Reference.t * Store.Hash.t) list, error) result Lwt.t
+    ?origin:string ->
+    Uri.t -> ((Store.Reference.t * Store.Hash.t) list
+              * (Store.Reference.t * Store.Hash.t) list, error) result Lwt.t
   (** [fetch_all git ?locks ?capabilities ~references repository] is a
       specific call of {!fetch_some}. This function will download all
       references from the server.
@@ -183,7 +185,7 @@ module type S_EXT = sig
 
       We create/{b replace} a new local references on this form:
 
-      > refs/remotes/{branch}
+      > refs/remotes/{origin}/{branch}
 
       To keep updated hashes locally. For any other references, we
       miss this update but return an associated list between these
@@ -193,7 +195,7 @@ module type S_EXT = sig
     Store.t -> ?locks:Store.Lock.t ->
     ?capabilities:Git.Capability.t list ->
     reference:(Store.Reference.t * Store.Reference.t) ->
-    Uri.t -> (unit, error) result Lwt.t
+    Uri.t -> (Store.Reference.t * Store.Hash.t, error) result Lwt.t
   (** [fetch_one git ?locks //capabilities ~reference repository] is a
       specific call of {!fetch_some} with only one reference. *)
 

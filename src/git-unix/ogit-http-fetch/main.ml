@@ -102,7 +102,7 @@ let main references directory repository =
 
   (Git_unix.Store.create ~root () >!= fun err -> `Store err) >>= fun git ->
   (Sync_http.fetch_some git ~locks:Fpath.(Git_unix.Store.root git / ".locks") ~references repository
-   >!= fun err -> `Sync err)
+   >!= fun err -> `Sync err) >>= fun _ -> Lwt.return (Ok ())
 
 open Cmdliner
 

@@ -146,19 +146,21 @@ module type S_EXT = sig
     Store.t -> ?locks:Store.Lock.t ->
     ?capabilities:Git.Capability.t list ->
     references:(Store.Reference.t * Store.Reference.t) list ->
-    Uri.t -> (unit, error) result Lwt.t
+    Uri.t -> ((Store.Reference.t * Store.Hash.t) list, error) result Lwt.t
 
   val fetch_all:
     Store.t -> ?locks:Store.Lock.t ->
     ?capabilities:Git.Capability.t list ->
     references:(Store.Reference.t * Store.Reference.t) list ->
-    Uri.t -> ((Store.Reference.t * Store.Hash.t) list, error) result Lwt.t
+    ?origin:string ->
+    Uri.t -> ((Store.Reference.t * Store.Hash.t) list
+              * (Store.Reference.t * Store.Hash.t) list, error) result Lwt.t
 
   val fetch_one:
     Store.t -> ?locks:Store.Lock.t ->
     ?capabilities:Git.Capability.t list ->
     reference:(Store.Reference.t * Store.Reference.t) ->
-    Uri.t -> (unit, error) result Lwt.t
+    Uri.t -> (Store.Reference.t * Store.Hash.t, error) result Lwt.t
 
   val clone:
     Store.t -> ?locks:Store.Lock.t ->
@@ -816,15 +818,15 @@ module Make_ext
       ~references
       git repository
     >?= function
-      | [] -> Lwt.return (Ok ())
-      | discard ->
+      | updated, [] -> Lwt.return (Ok updated)
+      | updated, discard ->
         Log.err (fun l -> l ~header:"fetch_some"
                     "We discard some server-side references: %a."
                     Fmt.(hvbox (Dump.list (Dump.pair Store.Reference.pp Store.Hash.pp)))
                     discard);
-        Lwt.return (Ok ()) (* XXX(dinosaure): should return an error? *)
+        Lwt.return (Ok updated) (* XXX(dinosaure): should return an error? *)
 
-  let fetch_one git ?locks ?capabilities ~reference:((_, expected_remote_ref) as reference) repository =
+  let fetch_one git ?locks ?capabilities ~reference:((expected_local_ref, expected_remote_ref) as reference) repository =
     let choose remote_ref =
       Lwt.return Store.Reference.(equal remote_ref expected_remote_ref) in
     let create _ = None in
@@ -836,13 +838,20 @@ module Make_ext
       ~references:[ reference ]
       git repository
     >?= function
-      | [] -> Lwt.return (Ok ())
-      | discard ->
+      | [ updated ], [] -> Lwt.return (Ok updated)
+      | updated, discard ->
         Log.err (fun l -> l ~header:"fetch_one"
                     "We discard some server-side references: %a."
                     Fmt.(hvbox (Dump.list (Dump.pair Store.Reference.pp Store.Hash.pp)))
                     discard);
-        Lwt.return (Ok ()) (* XXX(dinosaure): should return an error? *)
+        Log.err (fun l -> l ~header:"fetch_one"
+                    "We updated too many local references: %a."
+                    Fmt.(hvbox (Dump.list (Dump.pair Store.Reference.pp Store.Hash.pp)))
+                    updated);
+        Lwt_list.find_s
+          (fun (local_ref, _) ->
+             Lwt.return Store.Reference.(equal expected_local_ref local_ref))
+          updated >>= fun updated -> Lwt.return (Ok updated)
 
   let update t ?capabilities ~reference repository =
     let push_handler git remote_refs =
