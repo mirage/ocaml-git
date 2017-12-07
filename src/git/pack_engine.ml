@@ -15,6 +15,14 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+open Lwt.Infix
+let ( >>!= ) a f = Lwt_result.bind_lwt_err a f
+let ( >>?= ) = Lwt_result.bind
+let ( >>|= ) = Lwt_result.map
+
+let src = Logs.Src.create "git.pack" ~doc:"Git pack engine"
+module Log = (val Logs.src_log src : Logs.LOG)
+
 module type S = sig
 
   module Hash: S.HASH
@@ -135,11 +143,6 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
      and module Deflate = D
      and module FS = FS
 = struct
-  module Log =
-  struct
-    let src = Logs.Src.create "git.pack.engine" ~doc:"logs git's store event (pack)"
-    include (val Logs.src_log src : Logs.LOG)
-  end
 
   module Hash = H
   module Inflate = I
@@ -299,62 +302,54 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
 
   (* XXX(dinosaure): to make a _unloaded_ pack object. *)
   let load_index path =
-    let ( >!= ) a f = Lwt_result.bind_lwt_err a f in
-
-    let open Lwt_result in
-
     let close fd sys_err =
-      let open Lwt.Infix in
-
       FS.Mapper.close fd >>= function
-      | Ok () -> Lwt.return sys_err
+      | Ok ()          -> Lwt.return sys_err
       | Error sys_err' ->
-        Log.err (fun l -> l ~header:"load_index" "Impossible to cloe the index fd: %a: %a."
-                    Fpath.pp path FS.Mapper.pp_error sys_err');
+        Log.err (fun l ->
+            l "Error while closing the index fd: %a: %a."
+              Fpath.pp path FS.Mapper.pp_error sys_err');
         Lwt.return sys_err
     in
-
+    let open Lwt_result in
+    (* FIXME: this code is horrible *)
     ((FS.Mapper.openfile path
-      >!= (fun sys_err -> Lwt.return (`SystemMapper sys_err))
+      >>!= (fun sys_err -> Lwt.return (`SystemMapper sys_err))
       >>= fun fd -> FS.Mapper.length fd
-                    >!= (fun sys_err -> close fd sys_err)
-                    >!= (fun sys_err -> Lwt.return (`SystemMapper sys_err))
+      >>!= (fun sys_err -> close fd sys_err)
+      >>!= (fun sys_err -> Lwt.return (`SystemMapper sys_err))
       >|= fun length -> (fd, length))
-     >>= fun (fd, length) ->
-     (FS.Mapper.map ~share:false fd (Int64.to_int length)
-      >!= (fun sys_err -> close fd sys_err)
-      >!= (fun sys_err -> Lwt.return (`SystemMapper sys_err))
-      >>= fun map -> Lwt.return (Ok (fd, map)))
-     >>= fun (fd, map) ->
-     (Lwt.return (IDXDecoder.make map)
-      >!= close fd
-      >!= (fun sys_err -> Lwt.return (`IdxDecoder sys_err)))
-     >>= (fun decoder_idx ->
-         let hash_idx =
-           let basename = Fpath.basename (Fpath.rem_ext path) in
-           Scanf.sscanf basename "pack-%s" (fun x -> Hash.of_hex x)
-           (* XXX(dinosaure): check if [sscanf] raises an exception. *)
-         in
-
-         Log.debug (fun l -> l ~header:"load_index" "We loaded the IDX file: %a."
-                       Hash.pp hash_idx);
-
-         Lwt.return (Ok (hash_idx, decoder_idx, fd))))
-    >!= (fun err -> Lwt.return (path, err))
+     >>= fun (fd, length) -> (
+       FS.Mapper.map ~share:false fd (Int64.to_int length)
+       >>!= (fun sys_err -> close fd sys_err)
+       >>!= (fun sys_err -> Lwt.return (`SystemMapper sys_err))
+       >|= fun map -> (fd, map)
+     ) >>= fun (fd, map) -> (
+       Lwt.return (IDXDecoder.make map)
+       >>!= close fd
+       >>!= (fun sys_err -> Lwt.return (`IdxDecoder sys_err))
+     ) >>= fun decoder_idx -> (
+       let hash_idx =
+         let basename = Fpath.basename (Fpath.rem_ext path) in
+         Scanf.sscanf basename "pack-%s" (fun x -> Hash.of_hex x)
+         (* XXX(dinosaure): check if [sscanf] raises an exception. *)
+       in
+       Log.debug (fun l -> l "IDX file %a is loaded." Hash.pp hash_idx);
+       Lwt.return (Ok (hash_idx, decoder_idx, fd)))
+     ) >>!= (fun err -> Lwt.return (path, err))
 
   let v lst =
-    let open Lwt.Infix in
-
     Lwt_list.map_p load_index lst >>= fun lst ->
     Lwt_list.fold_left_s (fun acc -> function
         | Ok (hash, idx, fdi) ->
           Lwt.return (Graph.add hash (Exists { idx; fdi; }) acc)
         | Error (path, err) ->
-          Log.err (fun l -> l ~header:"make" "Retrieve an error when we compute the IDX file %a: %a."
-                      Fpath.pp path
-                      pp_error err);
-          Lwt.return acc)
-      Graph.empty lst >>= fun graph ->
+          Log.err (fun l ->
+              l "Error while computing the IDX file %a: %a."
+                Fpath.pp path pp_error err);
+          Lwt.return acc
+      ) Graph.empty lst
+    >|= fun graph ->
     let packs = Lwt_mvar.create graph in
     let buffers =
       let empty = Cstruct.create 0 in
@@ -362,8 +357,7 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
                       ; hunks = empty
                       ; depth = 1 }
     in
-
-    Lwt.return { packs; buffers; }
+    { packs; buffers; }
 
   (* XXX(dinosaure): this function update the internal buffers of [t]
      from a /fresh/ information of a pack file. It's thread-safe. *)

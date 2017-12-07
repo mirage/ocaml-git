@@ -15,6 +15,9 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+let src = Logs.Src.create "git.refs" ~doc:"Git references"
+module Log = (val Logs.src_log src : Logs.LOG)
+
 type t = string
 let of_string x = x
 let to_string x = x
@@ -226,12 +229,6 @@ module IO
   module FS = FS
 
   include Make(H)
-
-  module Log =
-  struct
-    let src = Logs.Src.create "git.reference" ~doc:"logs git's reference I/O event"
-    include (val Logs.src_log src : Logs.LOG)
-  end
 
   (* XXX(samoht): why this doesn't use the serializer? *)
   let head_contents_to_string = function
