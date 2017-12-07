@@ -15,11 +15,16 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module type LAZY =
-sig
-  module Hash: S.HASH
-  (** The [Hash] module used to make this interface. *)
+(** Index pack implementation (serialization/unserialization). *)
 
+(** Interface which describes the lazy implementation of the decoder
+    of an IDX file. *)
+module type LAZY = sig
+
+  module Hash: S.HASH
+  (** The [Hash] module used to make the implementation. *)
+
+  (** The type error. *)
   type error =
     | Invalid_header of string
     (** Appear when the header of the IDX file is incorrect. *)
@@ -38,20 +43,25 @@ sig
   (** Pretty-printer of {!error}. *)
 
   type t
-  (** State of the IDX file. *)
+  (** State of the IDX lzy decoder. *)
 
   val make: ?cache:int -> Cstruct.t -> (t, error) result
   (** Make a new state from a [Cstruct.t] buffer. You can specify how
       many elements we can store to the cache. This function returns
-      the state [t] or an {!error}. *)
+      the state [t] or an {!error}.
+
+      Indeed, in this function we check if the IDX file stored
+      entirely on the {!Cstruct.t} is well-formed. Otherwise, we
+      return an explicit error. *)
 
   val find: t -> Hash.t -> (Crc32.t * int64) option
-  (** Get the CRC-32 checksum and the absolute offset from an
-      [hash]. *)
+  (** [find t hash] get the CRC-32 checksum and the absolute offset
+      binded on [hash] in the IDX file represented by [t] only if
+      [hash] exists. Otherwise, it returns [None]. *)
 
   val mem: t -> Hash.t -> bool
   (** [mem t hash] returns [true] if [hash] exists in the IDX file
-      [t]. Otherwise, it returns [false]. *)
+      represented by [t]. Otherwise, it returns [false]. *)
 
   val iter: t -> (Hash.t -> (Crc32.t * int64) -> unit) -> unit
   (** Iteration in the IDX file. *)
@@ -60,19 +70,28 @@ sig
   (** Fold in the IDX file. *)
 end
 
-module Lazy (H: S.HASH)
- : LAZY with module Hash = H
+module Lazy (H: S.HASH): LAZY with module Hash = H
 (** The {i functor} to make the {i lazy} decoder of the IDX file.
     Internally, we use a [Cstruct.t] representation of the IDX file
     notified to the [make] function. This [Cstruct.t] should never
     change by the client. All processes available in this module read
-    only the content. *)
+    only the content.
 
+    By {i lazy}, we mean that we don't try to make an OCaml value
+    which contains all binded values available in the IDX file - and,
+    by this way, we don't process entirely the file. We read values
+    only when the client ask to get these values - {i call by need}.
+    Use this decoder with the {i syscall} [mmap] to get the expected
+    {!Cstruct.t} could be useful when [mmap] do a lazy read. *)
+
+(** Interface which describes the implementation of the decoder of an
+    IDX file. *)
 module type DECODER =
 sig
   module Hash: S.HASH
-  (** The [Hash] module used to make this interface. *)
+  (** The [Hash] module used to make the implementation. *)
 
+  (** The error type. *)
   type error =
     | Invalid_byte of int
     (** Appear when we expect a specific byte and we catch another
@@ -135,18 +154,27 @@ module Decoder (H: S.HASH with type Digest.buffer = Cstruct.t)
     pure state of the IDX file. It's better to use this module instead
     {!Lazy} if the client wants an OCaml representation of the IDX
     file - he can construct this specific OCaml value step by step
-    with this decoder. *)
+    with this decoder like a Radix tree.
 
+    In the result, if the client construct an efficient data-structure
+    (like a Radix tree) when he decodes the IDX file, the [find]
+    operation should be more fast than the {!Lazy.find}. However, the
+    {!Lazy.make} operation could be more fast than to decode and to
+    construct an OCaml value. *)
+
+(** Interface which describes the implementation of the encoder of an
+    IDX file. *)
 module type ENCODER =
 sig
   module Hash: S.HASH
-  (** The [Hash] module used to make this interface. *)
+  (** The [Hash] module used to make the implementation. *)
 
   type error
-  (** We can't have an error to serialize an IDX file. *)
+  (** The type error. We can't have an error to serialize an IDX file
+      - it's just to homogenize interfaces each others. *)
 
   val pp_error: error Fmt.t
-  (** A pretty-printer of {!error}. *)
+  (** Pretty-printer of {!error}. *)
 
   type t
   (** The encoder state. *)
@@ -174,7 +202,10 @@ sig
   (** [used_out t] returns how many byte [t] wrote in the current
       buffer noticed to the previous call of {!eval}. *)
 
-  val eval: Cstruct.t -> t -> [ `Flush of t | `End of t | `Error of t * error ]
+  val eval: Cstruct.t -> t ->
+    [ `Flush of t
+    | `End of t
+    | `Error of t * error ]
   (** [eval dst t] is:
 
       {ul
@@ -183,12 +214,10 @@ sig
       [`Flush] until [`End] is returned.}
       {- [`End t] when the encoder is done. [t] sticks to this
       situation. The client can remove it.}
-      {- [`Error (t, exn)] ff the encoder meet an {!error} [exn]. The
+      {- [`Error (t, exn)] iff the encoder meet an {!error} [exn]. The
       encoder can't continue and sticks in this situation.}} *)
 end
 
-module Encoder (H: S.HASH with type Digest.buffer = Cstruct.t)
- : ENCODER with module Hash = H
+module Encoder (H: S.HASH): ENCODER with module Hash = H
 (** The {i functor} to make the encoder module by a specific hash
-    implementation. We constraint the {!Hash.S} module to compute a
-    {Cstruct.t} flow. *)
+    implementation. *)

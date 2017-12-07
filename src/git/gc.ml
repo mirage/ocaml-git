@@ -32,12 +32,13 @@ module type STORE = sig
     | `Tag
     | `Blob ]
 
-  val pp_error : error Fmt.t
-  val read_inflated : t -> Hash.t -> (kind * Cstruct.t) option Lwt.t
-  val contents : t -> ((Hash.t * Value.t) list, error) result Lwt.t
+  val pp_error: error Fmt.t
+  val read_inflated: t -> Hash.t -> (kind * Cstruct.t) option Lwt.t
+  val contents: t -> ((Hash.t * Value.t) list, error) result Lwt.t
 end
 
-module Make (S : STORE) = struct
+module Make (S: STORE) = struct
+
   module Store = S
 
   module Log =

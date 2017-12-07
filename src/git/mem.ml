@@ -29,15 +29,15 @@ let err_not_found n k =
   Lwt.fail (Invalid_argument str)
 
 module Make
-    (H : S.HASH)
-    (L : S.LOCK)
-    (I : S.INFLATE)
-    (D : S.DEFLATE)
+    (H: S.HASH)
+    (L: S.LOCK)
+    (I: S.INFLATE)
+    (D: S.DEFLATE)
   : Minimal.S
     with module Hash = H
-       and module Lock = L
-       and module Inflate = I
-       and module Deflate = D
+     and module Lock = L
+     and module Inflate = I
+     and module Deflate = D
 = struct
   module Hash = H
   module Lock = L
@@ -422,8 +422,8 @@ module Make
         Queue.fold (fun acc x -> x :: acc) [] queue
         |> Lwt_list.fold_left_s (fun acc (_, _, _, _, hash) ->
             mem git hash >|= function
-          | true -> acc + 1
-          | false -> acc) 0
+            | true -> acc + 1
+            | false -> acc) 0
         >>= function
         | 0 ->
           if Queue.is_empty queue

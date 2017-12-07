@@ -15,36 +15,49 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+(** The synchronization commands to a git repository. *)
+
+(** This interface describes the minimal I/O operations to a git
+    repository. *)
 module type NET = sig
   type socket
 
-  val read   : socket -> Bytes.t -> int -> int -> int Lwt.t
-  val write  : socket -> Bytes.t -> int -> int -> int Lwt.t
-  val socket : string -> int -> socket Lwt.t
-  val close  : socket -> unit Lwt.t
+  val read: socket -> Bytes.t -> int -> int -> int Lwt.t
+  val write: socket -> Bytes.t -> int -> int -> int Lwt.t
+  val socket: string -> int -> socket Lwt.t
+  val close: socket -> unit Lwt.t
 end
 
 module type S = sig
+
   module Store: Minimal.S
-  module Net : NET
+  module Net: NET
   module Client: Smart.CLIENT with module Hash = Store.Hash
 
+  (** The error type. *)
   type error =
-    [ `SmartPack of string
-    | `Pack      of Store.Pack.error
-    | `Clone     of string
-    | `Fetch     of string
-    | `Ls        of string
-    | `Push      of string
-    | `Ref       of Store.Ref.error
-    | `Not_found ]
+    [ `SmartPack of string (** Appear when we retrieve a decoder's error about Smart protocol. *)
+    | `Pack      of Store.Pack.error (** Appear when we retrieve a PACK error from the {!Store.Pack}. *)
+    | `Clone     of string (** Appear when we don't follow operations on the clone command. *)
+    | `Fetch     of string (** Appear when we don't follow operations on the fetch command. *)
+    | `Ls        of string (** Appear when we don't follow operations on the ls-remote command. *)
+    | `Push      of string (** Appear when we don't follow operations on the push command. *)
+    | `Ref       of Store.Ref.error (** Appear when we retrieve a reference I/O error from the {!Store.Ref}. *)
+    | `Not_found (** Appear when we don't find the reference requested by the client on the server. *) ]
 
-  val pp_error : error Fmt.t
+  val pp_error: error Fmt.t
+  (** Pretty-printer of {!error}. *)
 
+  (** A push command to interact with the server. *)
   type command =
     [ `Create of (Store.Hash.t * string)
+    (** To create a new reference on the server. *)
     | `Delete of (Store.Hash.t * string)
-    | `Update of (Store.Hash.t * Store.Hash.t * string) ]
+    (** To delete an existing reference on the server -
+        [`Delete_refs] needs to be available in both side as
+        a {!Capability.t}. *)
+    | `Update of (Store.Hash.t * Store.Hash.t * string)
+    (** To update a reference from a commit hash to a new commit hash. *) ]
 
   val push:
     Store.t
@@ -107,6 +120,6 @@ module type S = sig
 
 end
 
-module Make (N : NET) (S : Minimal.S)
-    : S with module Store = S
-         and module Net = N
+module Make (N: NET) (S: Minimal.S)
+  : S with module Store = S
+       and module Net = N

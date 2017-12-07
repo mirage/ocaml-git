@@ -24,12 +24,12 @@ end
 let ppe ~name ppv =
   Fmt.braces (fun ppf -> Fmt.pf ppf "%s %a" name (Fmt.hvbox ppv))
 
-module BaseBytes :
+module BaseBytes:
 sig
   include S.BASE with type t = Bytes.t
 
-  val to_hex : t -> string
-  val of_hex : string -> t
+  val to_hex: t -> string
+  val of_hex: string -> t
 end = struct
   [@@@warning "-44"] (* XXX(dinosaure): shadowing of [compare] and [equal]. *)
 
@@ -52,13 +52,13 @@ end = struct
     Hex.to_string (`Hex x) |> Bytes.unsafe_of_string
 end
 
-module MakeDecoder (A : S.ANGSTROM) = struct
-  (* XXX(dinosaure): this decoder is on top of some assertion about
-     the decoding of a git object. [Angstrom] can not consume all
+module MakeDecoder (A: S.ANGSTROM) = struct
+  (* XXX(dinosaure): This decoder is on top of some assertion about
+     the decoding of a Git object. [Angstrom] can not consume all
      input (when we have an alteration specifically) and the client
      need to keep a part of the previous input but continue to feed
      the parser with a new input (to determine the choice of the
-     alteration). In the git format, we can have this problem but for
+     alteration). In the Git format, we can have this problem but for
      few bytes (something like ten bytes). So, we consider to use an
      internal buffer (than the size is bigger than what is needed) and
      we ensure than is not possible to keep more than the size of the
@@ -106,8 +106,9 @@ module MakeDecoder (A : S.ANGSTROM) = struct
        buffer bigger than 25 bytes. Otherwise, we raise an
        [Invalid_argument]. *)
 
-    Log.debug (fun l -> l "Starting to decode a Git object with \
-                           a internal buffer (%d)." (Cstruct.len raw));
+    Log.debug (fun l -> l ~header:"default"
+                  "Starting to decode a Git object with \
+                   a internal buffer (%d)." (Cstruct.len raw));
 
     let len = Cstruct.len raw in
 
@@ -117,14 +118,16 @@ module MakeDecoder (A : S.ANGSTROM) = struct
           | Angstrom.Unbuffered.Fail (committed, path, err) ->
             kfail (committed, path, err)
           | Angstrom.Unbuffered.Partial { Angstrom.Unbuffered.committed; continue; } ->
-            Log.debug (fun l -> l "Retrieving Partial's angstrom result which \
-                                   parsed %d byte(s) (= 0)." committed);
+            Log.debug (fun l -> l ~header:"default"
+                          "Retrieving Partial's angstrom result which \
+                           parsed %d byte(s) (= 0)." committed);
             assert (committed = 0);
             continue)
     ; final = Angstrom.Unbuffered.Incomplete
     ; internal = Cstruct.sub raw 0 0
-    (* XXX(dinosaure): first, we consider than the internal buffer is empty. But
-       keep calm, the physical buffer will not be free-ed. *)
+    (* XXX(dinosaure): first, we consider than the internal buffer is
+       empty. But keep calm, the physical buffer will not be
+       free-ed. *)
     ; max      = len }
 
   let eval decoder =
@@ -159,15 +162,16 @@ module MakeDecoder (A : S.ANGSTROM) = struct
   let refill input decoder =
     let len = Cstruct.len input in
 
-    Log.debug (fun l -> l "Starting to refill the internal buffer \
-                           of the current decoding (len: %d)." (Cstruct.len input));
+    Log.debug (fun l -> l ~header:"refill"
+                  "Starting to refill the internal buffer \
+                   of the current decoding (len: %d)." (Cstruct.len input));
 
     if len > decoder.max
     then begin
       (* XXX(dinosaure): it's to avoid to grow the internal buffer. *)
-      Log.err (fun l -> l "The client want to refill the internal buffer by a bigger input.");
+      Log.err (fun l -> l ~header:"refill"
+                  "The client want to refill the internal buffer by a bigger input.");
 
-      Log.err (fun l -> l "Production of the error in Helper.MakeDecoder.refill.");
       Error (`Decoder (Fmt.strf "Input is too huge: we authorized only an \
                                  input lower or equal than %d" decoder.max))
     end else
@@ -187,14 +191,16 @@ module MakeDecoder (A : S.ANGSTROM) = struct
        else if _writable_space >= len
        then Ok (compress input decoder)
        else begin
-         Log.err (fun l -> l "trailing space:%d and writable space:%d, \
-                              the alteration is not done, the error could \
-                              be the size of the internal buffer (%d) or the input \
-                              is malicious."
+         Log.err (fun l -> l ~header:"refill"
+                     "trailing space:%d and writable space:%d, \
+                      the alteration is not done, the error could \
+                      be the size of the internal buffer (%d) or the input \
+                      is malicious."
                      _trailing_space
                      _writable_space
                      (Bigarray.Array1.dim decoder.internal.Cstruct.buffer));
-         Log.err (fun l -> l "Production of the error in Helper.MakeDecoder.refill.");
+         Log.err (fun l -> l ~header:"refill"
+                     "Production of the error in Helper.MakeDecoder.refill.");
          Error (`Decoder "Input does not respect assertion, it may be malicious");
        end)
       |> function Error err -> Error err
@@ -202,14 +208,15 @@ module MakeDecoder (A : S.ANGSTROM) = struct
                   let internal = Cstruct.add_len decoder.internal len in
                   (* XXX(dinosaure): see the function store.ml:buffer
                      (). C'est à cette endroit où si on considère
-                     [decoder.internal] comme un [Cstruct.t] appartennant
-                     à un [Bigarray] plus grand, il peut arriver que
-                     celui ci empiète sur le buffer [io]. *)
+                     [decoder.internal] comme un [Cstruct.t]
+                     appartennant à un [Bigarray] plus grand, il peut
+                     arriver que celui ci empiète sur le buffer
+                     [io]. *)
 
                   let off = Cstruct.len internal - len in
                   let ()  = Cstruct.blit input 0 internal off len in
 
-                  Log.debug (fun l -> l "Refill the internal buffer in the current decoding.");
+                  Log.debug (fun l -> l ~header:"refill" "Refill the internal buffer in the current decoding.");
 
                   Ok { decoder with internal = internal }
 
@@ -223,8 +230,8 @@ module MakeDecoder (A : S.ANGSTROM) = struct
 end
 
 module MakeInflater
-    (Z : S.INFLATE)
-    (A : S.ANGSTROM)
+    (Z: S.INFLATE)
+    (A: S.ANGSTROM)
 = struct
   module Log =
   struct
@@ -254,12 +261,12 @@ module MakeInflater
   let empty = Cstruct.create 0
 
   let default (window, raw0, raw1) =
-    Log.debug (fun l -> l "Starting to inflate and decode a Git object.");
+    Log.debug (fun l -> l ~header:"default" "Starting to inflate and decode a Git object.");
 
     { cur = empty
     ; tmp = raw0
     ; inf = Z.flush 0 (Cstruct.len raw0)
-            @@ Z.default (Z.window_reset window)
+        @@ Z.default (Z.window_reset window)
     ; dec = D.default raw1 }
 
   let rec eval decoder =
@@ -321,8 +328,8 @@ module MakeInflater
     let rec go t = match eval t with
       | `Await t ->
         (refill (Cstruct.sub deflated 0 0x800) t |> function
-         | Ok t -> go t
-         | Error _ as err -> err)
+          | Ok t -> go t
+          | Error _ as err -> err)
       | `Error (_, err) -> Error err
       | `End (_, value) -> Ok value
     in
@@ -330,10 +337,10 @@ module MakeInflater
     go t
 end
 
-module MakeEncoder (M : S.MINIENC)
-  : S.ENCODER with type t = M.t
-                    and type init = int * M.t
-                    and type error = [ `Never ]
+module MakeEncoder (M: S.MINIENC): S.ENCODER
+  with type t = M.t
+   and type init = int * M.t
+   and type error = [ `Never ]
 = struct
   module Log =
   struct
@@ -370,12 +377,12 @@ module MakeEncoder (M : S.MINIENC)
     let max = fun len -> match limit with Some limit -> min limit len | None -> len in
 
     match iovec with
-      | { Minienc.IOVec.buffer = `Bigstring x; off; len; } ->
-        Cstruct.blit (Cstruct.of_bigarray ~off ~len x) 0 cs cs_off (max len); max len
-      | { Minienc.IOVec.buffer = `Bytes x; off; len; } ->
-        Cstruct.blit_from_bytes x off cs cs_off (max len); max len
-      | { Minienc.IOVec.buffer = `String x; off; len; } ->
-        Cstruct.blit_from_string x off cs cs_off (max len); max len
+    | { Minienc.IOVec.buffer = `Bigstring x; off; len; } ->
+      Cstruct.blit (Cstruct.of_bigarray ~off ~len x) 0 cs cs_off (max len); max len
+    | { Minienc.IOVec.buffer = `Bytes x; off; len; } ->
+      Cstruct.blit_from_bytes x off cs cs_off (max len); max len
+    | { Minienc.IOVec.buffer = `String x; off; len; } ->
+      Cstruct.blit_from_string x off cs cs_off (max len); max len
 
   exception Drain of int
 
@@ -407,7 +414,11 @@ module MakeEncoder (M : S.MINIENC)
     | Minienc.Flush { continue; iovecs; } ->
       let max = min (e.o_len - e.o_pos) (Minienc.IOVec.lengthv iovecs) in
 
-      try (* XXX(dinosaure): wtf?! pourquoi j'ai fait ce code (peut être pour ne pas utiliser [fold_left]. *)
+      try
+        (* XXX(dinosaure): wtf?! pourquoi j'ai fait ce code (peut être
+           pour ne pas utiliser [fold_left]. It's an optimization to
+           jump directly when we fill entirely the buffer - but the
+           code is not safe. *)
         let pos = ref 0 in
 
         List.iter (fun iovec ->
@@ -432,11 +443,10 @@ module MakeEncoder (M : S.MINIENC)
   let used { o_pos; _ } = o_pos
 end
 
-module MakeDeflater (Z: S.DEFLATE) (M: S.MINIENC)
-  : S.ENCODER
-    with type t = M.t
-     and type init = int * M.t * int * Cstruct.t
-     and type error = [ `Deflate of Z.error ]
+module MakeDeflater (Z: S.DEFLATE) (M: S.MINIENC): S.ENCODER
+  with type t = M.t
+   and type init = int * M.t * int * Cstruct.t
+   and type error = [ `Deflate of Z.error ]
 = struct
   module Log =
   struct
@@ -510,17 +520,36 @@ module MakeDeflater (Z: S.DEFLATE) (M: S.MINIENC)
     Z.used_out z
 end
 
-let fdigest
-  : type t hash. (module S.IDIGEST with type t = hash)
-    -> (module S.ENCODER with type t = t
-                               and type init = (int * t)
-                               and type error = [ `Never ])
-    -> ?capacity:int
-    -> tmp:Cstruct.t
-    -> kind:string
-    -> length:(t -> int64)
-    -> t
-    -> hash
+(* XXX(dinosaure): The purpose between [fdigest] and [digest] is why
+   we create the module {!Minienc}. In fact, if we take care about the
+   memory consumption of this library, we need to control how much we
+   exactly need to compute the hash of an object.
+
+   In fact, with Faraday, the common way to serialize a data is to
+   have 2 threads, one to fill and one other to flush the shared state
+   of Faraday. This case oes not appear when we want to compute the
+   hash of the Git object - it could be appear but we don't want to
+   constraint the client on this pattern.
+
+   So, we decide to create a new encoder which limit the memory
+   consumption. When we fill entirely the internal buffer, we ask to
+   the client to flush it and we don't continue to fill it until the
+   client does not free some spaces.
+
+   Then, we control the memory consumption when we compute the hash of
+   the Git object and we never grow the internal buffer. *)
+let fdigest: type t hash.
+     (module S.IDIGEST with type t = hash)
+  -> (module S.ENCODER
+       with type t = t
+        and type init = (int * t)
+        and type error = [ `Never ])
+  -> ?capacity:int
+  -> tmp:Cstruct.t
+  -> kind:string
+  -> length:(t -> int64)
+  -> t
+  -> hash
   = fun digest encoder ?(capacity = 0x100) ~tmp ~kind ~length value ->
     let module Digest = (val digest) in
     let module M      = (val encoder) in

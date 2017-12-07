@@ -70,7 +70,7 @@ type 'a acks =
   ; acks      : ('a * [ `Common | `Ready | `Continue | `ACK ]) list }
 
 module type S = sig
-  module Store : Minimal.S
+  module Store: Minimal.S
   module Decoder: Smart.DECODER with module Hash = Store.Hash
 
   type state
@@ -84,7 +84,7 @@ module type S = sig
     ) Lwt.t
 end
 
-module Make (G : Minimal.S): S with module Store = G = struct
+module Make (G: Minimal.S): S with module Store = G = struct
   module Store = G
 
   [@@@warning "-32"]
@@ -373,7 +373,10 @@ module Make (G : Minimal.S): S with module Store = G = struct
         Lwt.try_bind
           (fun () -> go { state with in_fly = [] } state.in_fly acks)
           (fun (state, have) ->
-             if state .ready
+             (* XXX(dinosaure): this test does not appear on the Git
+                code base but it's the default case to end up the
+                negotiation engine. *)
+             if state.ready
              then Lwt.return (`Ready, state)
              else if state.continue && state.vain > _VAIN
              then Lwt.return (`Again have, { state with finish = true })

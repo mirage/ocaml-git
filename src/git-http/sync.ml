@@ -68,20 +68,20 @@ module Lwt_cstruct_flow = struct
 end
 
 module type S_EXT = sig
-  module Web : Web.S
-  module Client : CLIENT
+  module Web: Web.S
+  module Client: CLIENT
     with type headers = Web.HTTP.headers
      and type meth = Web.HTTP.meth
      and type uri = Web.uri
      and type resp = Web.resp
-  module Store : Git.S
+  module Store: Git.S
 
-  module Decoder : Git.Smart.DECODER
+  module Decoder: Git.Smart.DECODER
     with module Hash = Store.Hash
-  module Encoder : Git.Smart.ENCODER
+  module Encoder: Git.Smart.ENCODER
     with module Hash = Store.Hash
 
-  module PACKDecoder : Git.Unpack.P
+  module PACKDecoder: Git.Unpack.P
     with module Hash = Store.Hash
      and module Inflate = Store.Inflate
 
@@ -92,9 +92,9 @@ module type S_EXT = sig
     | `ReportStatus of string
     | `Ref of Store.Ref.error ]
 
-  val pp_error : error Fmt.t
+  val pp_error: error Fmt.t
 
-  val ls :
+  val ls:
        Store.t
     -> ?headers:Web.HTTP.headers
     -> ?https:bool
@@ -107,7 +107,7 @@ module type S_EXT = sig
     | `Delete of (Store.Hash.t * string)
     | `Update of (Store.Hash.t * Store.Hash.t * string) ]
 
-  val push :
+  val push:
        Store.t
     -> push:(Store.t -> (Store.Hash.t * string * bool) list -> (Store.Hash.t list * command list) Lwt.t)
     -> ?headers:Web.HTTP.headers
@@ -116,7 +116,7 @@ module type S_EXT = sig
     -> ?capabilities:Git.Capability.t list
     -> string -> string -> ((string, string * string) result list, error) result Lwt.t
 
-  val fetch :
+  val fetch:
        Store.t
     -> ?shallow:Store.Hash.t list
     -> ?stdout:(Cstruct.t -> unit Lwt.t)
@@ -131,7 +131,7 @@ module type S_EXT = sig
     -> ?port:int
     -> string -> string -> ((Store.Reference.t * Store.Hash.t) list * int, error) result Lwt.t
 
-  val clone_ext :
+  val clone_ext:
        Store.t
     -> ?stdout:(Cstruct.t -> unit Lwt.t)
     -> ?stderr:(Cstruct.t -> unit Lwt.t)
@@ -142,22 +142,22 @@ module type S_EXT = sig
     -> ?capabilities:Git.Capability.t list
     -> string -> string -> (Store.Hash.t, error) result Lwt.t
 
-  val fetch_all :
+  val fetch_all:
     Store.t -> ?locks:Store.Lock.t ->
     ?capabilities:Git.Capability.t list ->
     Uri.t -> (unit, error) result Lwt.t
 
-  val fetch_one :
+  val fetch_one:
     Store.t -> ?locks:Store.Lock.t ->
     ?capabilities:Git.Capability.t list ->
     reference:Store.Reference.t -> Uri.t -> (unit, error) result Lwt.t
 
-  val clone :
+  val clone:
     Store.t -> ?locks:Store.Lock.t ->
     ?capabilities:Git.Capability.t list ->
     reference:Store.Reference.t -> Uri.t -> (unit, error) result Lwt.t
 
-  val update : Store.t ->
+  val update: Store.t ->
     ?capabilities:Git.Capability.t list ->
     reference:Store.Reference.t -> Uri.t ->
     ((Store.Reference.t, Store.Reference.t * string) result list, error) result Lwt.t
@@ -176,24 +176,24 @@ module type S = S_EXT
    and type Web.HTTP.headers = Web_cohttp_lwt.HTTP.headers
 
 module Make_ext
-    (W : Web.S
+    (W: Web.S
      with type +'a io = 'a Lwt.t
       and type raw = Cstruct.t
       and type uri = Uri.t
       and type Request.body = Lwt_cstruct_flow.i
       and type Response.body = Lwt_cstruct_flow.o)
-    (C : CLIENT
+    (C: CLIENT
      with type +'a io = 'a W.io
       and type headers = W.HTTP.headers
       and type body = Lwt_cstruct_flow.o
       and type meth = W.HTTP.meth
       and type uri = W.uri
       and type resp = W.resp)
-    (G : Git.S)
+    (G: Git.S)
 = struct
-  module Web    = W
+  module Web = W
   module Client = C
-  module Store  = G
+  module Store = G
 
   module Decoder = Git.Smart.Decoder(Store.Hash)
   module Encoder = Git.Smart.Encoder(Store.Hash)
@@ -769,11 +769,12 @@ module Make_ext
 end
 
 module Make
-    (C: CLIENT with type +'a io = 'a Lwt.t
-                and type headers = Web_cohttp_lwt.HTTP.headers
-                and type body = Lwt_cstruct_flow.o
-                and type meth = Web_cohttp_lwt.HTTP.meth
-                and type uri = Web_cohttp_lwt.uri
-                and type resp = Web_cohttp_lwt.resp)
+    (C: CLIENT
+     with type +'a io = 'a Lwt.t
+      and type headers = Web_cohttp_lwt.HTTP.headers
+      and type body = Lwt_cstruct_flow.o
+      and type meth = Web_cohttp_lwt.HTTP.meth
+      and type uri = Web_cohttp_lwt.uri
+      and type resp = Web_cohttp_lwt.resp)
     (S: Git.S)
   = Make_ext(Web_cohttp_lwt)(C)(S)

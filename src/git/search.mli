@@ -15,9 +15,9 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Make (S : Minimal.S) :
-sig
-  module Store : Minimal.S
+module Make (S: Minimal.S): sig
+
+  module Store: Minimal.S
 
   type pred =
     [ `Commit of Store.Hash.t
@@ -25,13 +25,13 @@ sig
     | `Tree of string * Store.Hash.t
     | `Tree_root of Store.Hash.t ]
 
-  val pred : Store.t -> ?full:bool -> Store.Hash.t -> pred list Lwt.t
+  val pred: Store.t -> ?full:bool -> Store.Hash.t -> pred list Lwt.t
 
   type path =
     [ `Tag of string * path
     | `Commit of path
     | `Path of string list ]
 
-  val mem : Store.t -> Store.Hash.t -> path -> bool Lwt.t
-  val find : Store.t -> Store.Hash.t -> path -> Store.Hash.t option Lwt.t
+  val mem: Store.t -> Store.Hash.t -> path -> bool Lwt.t
+  val find: Store.t -> Store.Hash.t -> path -> Store.Hash.t option Lwt.t
 end with module Store = S

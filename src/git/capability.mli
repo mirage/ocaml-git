@@ -1,6 +1,19 @@
+(** Capabilities module.
+
+    When the client talks with the server, it needs to inform
+    capabilities (what it can handle). This is the exhaustive list of
+    capabilities on the current Smart protocol. Then, the server
+    responds too with capabilities.
+
+    The common part between the client and the server of capabilities
+    should diverge how we handle the Smart protocol. For example, if
+    the client does not allow [`Shallow] objects, we permit to define
+    shallow objects on the API of the fetch command but we don't use
+    them to notice to the server. *)
+
 type t =
   [ `Multi_ack
-  (** The ["multi-ack"] capability allows the server to return ["ACK
+  (** The [`Multi-ack] capability allows the server to return ["ACK
       obj-id continue"] as soon as it finds a commit that it can use
       as a common base, between the client's wants and the client's
       have set.
@@ -44,7 +57,7 @@ type t =
       NOT send a thin pack if the server advertises the [`No_thin]
       capability. *)
   | `Side_band
-  (** See [`Side_band_64k]. *)
+  (** See {!`Side_band_64k}. *)
   | `Side_band_64k
   (** This capability means that server can send, and client
       understand multiplexed progress reports and error into
@@ -101,7 +114,7 @@ type t =
   (** This capability adds [`Deepen_not] command to
       fetch-pacj/upload-pack protocol so the client can request
       shallow clones that are cut at a specific revision, instead of
-      depth. Internanlly it's quivalent of doing ["git rev-list --not
+      depth. Internanlly it's equivalent of doing ["git rev-list --not
       <rev>"] on the server side. [`Deepen_not] cannot be used with
       [`Deepen], but can be used with [`Deepen_since]. *)
   | `No_progress
