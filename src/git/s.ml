@@ -44,7 +44,7 @@ module type ENCODER = sig
   val pp_error  : error Fmt.t
 
   val default   : init -> encoder
-  val eval      : string -> Cstruct.t -> encoder -> [ `Flush of encoder | `End of (encoder * int) | `Error of error ]
+  val eval      : Cstruct.t -> encoder -> [ `Flush of encoder | `End of (encoder * int) | `Error of error ]
   val flush     : int -> int -> encoder -> encoder
   val used      : encoder -> int
 end
@@ -57,10 +57,10 @@ module type DECODER = sig
 
   val pp_error  : error Fmt.t
 
-  val to_result : string -> Cstruct.t -> (t, error) result
+  val to_result : Cstruct.t -> (t, error) result
 
   val default   : init -> decoder
-  val eval      : string -> decoder -> [ `Await of decoder | `End of (Cstruct.t * t) | `Error of (Cstruct.t * error) ]
+  val eval      : decoder -> [ `Await of decoder | `End of (Cstruct.t * t) | `Error of (Cstruct.t * error) ]
   val refill    : Cstruct.t -> decoder -> (decoder, error) result
   val finish    : decoder -> decoder
 end

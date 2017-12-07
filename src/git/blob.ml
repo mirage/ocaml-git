@@ -143,7 +143,7 @@ module Make (H: S.HASH): S with module Hash = H = struct
       Cstruct.blit cs 0 rs 0 ln;
       rs
 
-    let eval _dbg decoder =
+    let eval decoder =
       if decoder.final
       then `End (decoder.cur, if decoder.owner then (decoder.res : t) else (cstruct_copy decoder.res : t))
       (* XXX(dinosaure): [finish] takes care about [decoder.res] -
@@ -162,7 +162,7 @@ module Make (H: S.HASH): S with module Hash = H = struct
       { decoder with final = true
                    ; res = res' }
 
-    let to_result _ input = Ok (cstruct_copy input)
+    let to_result input = Ok (cstruct_copy input)
     (* XXX(dinosaure): we need to take the ownership by default but need to improve the API (TODO). *)
   end
 
@@ -190,7 +190,7 @@ module Make (H: S.HASH): S with module Hash = H = struct
       ; len = 0
       ; blob }
 
-    let eval _dbg raw encoder =
+    let eval raw encoder =
       if Cstruct.len encoder.blob = encoder.abs
       then `End (encoder, Cstruct.len encoder.blob)
       else begin

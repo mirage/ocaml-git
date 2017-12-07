@@ -279,7 +279,7 @@ module IO
             pp reference FS.File.pp_error sys_err);
       Lwt.return (Error (`SystemFile sys_err))
     | Ok read ->
-      let rec loop decoder = match D.eval "reference" decoder with
+      let rec loop decoder = match D.eval decoder with
         | `End (_, value)               -> Lwt.return (Ok value)
         | `Error (_, (#D.error as err)) -> Lwt.return (Error err)
         | `Await decoder ->
@@ -305,16 +305,12 @@ module IO
       type raw    = Cstruct.t
       type result = int
       type error  = E.error
-
       let raw_length = Cstruct.len
       let raw_blit   = Cstruct.blit
-
       type rest = [ `Flush of state | `End of (state * result) ]
-
-      let eval _ raw state = match E.eval "reference" raw state with
+      let eval raw state = match E.eval raw state with
         | `Error err -> Lwt.return (`Error (state, err))
         | #rest as rest -> Lwt.return rest
-
       let used  = E.used
       let flush = E.flush
     end in
@@ -332,11 +328,8 @@ module IO
       >>= function
       | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
       | Ok write ->
-        Helper.safe_encoder_to_file "reference"
-          ~limit:50
-          (module E)
-          FS.File.write
-          write raw state
+        Helper.safe_encoder_to_file ~limit:50 (module E)
+          FS.File.write write raw state
         >>= function
         | Ok _ ->
           FS.File.close write >|=

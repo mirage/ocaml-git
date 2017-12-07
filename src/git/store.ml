@@ -1057,16 +1057,16 @@ module FS
     | Ok o ->
       (match o.PACKDecoder.Object.kind with
        | `Commit ->
-         Value.Commit.D.to_result "commit" o.PACKDecoder.Object.raw
+         Value.Commit.D.to_result o.PACKDecoder.Object.raw
          |> Rresult.R.map (fun v -> Value.Commit v)
        | `Blob ->
-         Value.Blob.D.to_result "blob" o.PACKDecoder.Object.raw
+         Value.Blob.D.to_result o.PACKDecoder.Object.raw
          |> Rresult.R.map (fun v -> Value.Blob v)
        | `Tree ->
-         Value.Tree.D.to_result "tree" o.PACKDecoder.Object.raw
+         Value.Tree.D.to_result o.PACKDecoder.Object.raw
          |> Rresult.R.map (fun v -> Value.Tree v)
        | `Tag ->
-         Value.Tag.D.to_result "tag" o.PACKDecoder.Object.raw
+         Value.Tag.D.to_result o.PACKDecoder.Object.raw
          |> Rresult.R.map (fun v -> Value.Tag v))
       |> (function
           | Error (`Decoder err) -> Lwt.return (Error (`Decoder err))
@@ -1092,10 +1092,10 @@ module FS
 
   let read_exn t hash =
     read t hash >>= function
+    | Ok v    -> Lwt.return v
     | Error _ ->
       let err = Fmt.strf "Git.Store.read_exn: %a not found" Hash.pp hash in
       Lwt.fail (Invalid_argument err)
-    | Ok v -> Lwt.return v
 
   let write_p ~ztmp ~raw state hash =
     Loose.write_p ~ztmp ~raw state hash >|= function
