@@ -233,9 +233,10 @@ module IO
     include (val Logs.src_log src : Logs.LOG)
   end
 
+  (* XXX(samoht): why this doesn't use the serializer? *)
   let head_contents_to_string = function
-    | Hash hash -> Hash.to_hex hash
-    | Ref refname -> Fmt.strf "ref: %a" pp refname (* XXX(dinosaure): [pp] or [Fmt.string]? *)
+    | Hash hash   -> Fmt.strf "%s\n" (Hash.to_hex hash)
+    | Ref refname -> Fmt.strf "ref: %a\n" pp refname (* XXX(dinosaure): [pp] or [Fmt.string]? *)
 
   type error =
     [ `SystemFile of FS.File.error
