@@ -19,11 +19,29 @@ type t = string
 let of_string x = x
 let to_string x = x
 
+let sep = "/"
+
+module Infix =
+struct
+  type partial = string
+  type branch = string
+
+  let ( // ) partial partial : partial = String.concat sep [ partial; partial ]
+  let ( / ) partial branch : t = String.concat sep [ partial; branch ]
+
+  let refs : partial = "refs"
+  let heads : partial = "refs/heads"
+  let remotes : partial = "refs/remotes"
+  let origin : partial = "refs/remotes/origin"
+
+  let master : branch = "master"
+end
+
 let head    = "HEAD"
 let is_head = String.equal head
 let master  = "refs/heads/master"
 
-let to_path x = match Fpath.of_string (String.concat Fpath.dir_sep (Astring.String.cuts ~sep:"/" x)) with
+let to_path x = match Fpath.of_string (String.concat Fpath.dir_sep (Astring.String.cuts ~sep x)) with
   | Error (`Msg x) -> raise (Invalid_argument x)
   | Ok v -> Fpath.normalize v
 
@@ -32,15 +50,30 @@ let of_path path =
   | "HEAD" :: _ -> head
   | _ ->
     let segs = Fpath.(segs (normalize (v "refs" // path))) in
-    String.concat "/" segs
+    String.concat sep segs
 
 let pp ppf x =
   Fmt.pf ppf "%s" (String.escaped x)
 
-module type S =sig
+module type S = sig
   module Hash: S.HASH
 
   type nonrec t = t
+
+  module Infix : sig
+    type partial
+    type branch
+
+    val ( // ) : partial -> partial -> partial
+    val ( / ) : partial -> branch -> t
+
+    val refs : partial
+    val heads : partial
+    val remotes : partial
+    val origin : partial
+
+    val master : branch
+  end
 
   val head    : t
   val master  : t
@@ -122,6 +155,8 @@ module Make(H : S.HASH): S with module Hash = H = struct
   module Hash = H
 
   type nonrec t = t
+
+  module Infix = Infix
 
   let master = master
   let head = head
