@@ -174,10 +174,6 @@ module Make (H : Hashtbl.HashedType): Hashtbl.S with type key = H.t
   let find tbl key =
     top_value (WX.find tbl (dummy key))
 
-  let find_opt tbl key =
-    try Some (find tbl key)
-    with _ -> None
-
   let add tbl key data =
     let bd = bind_new key data in
     let cls =

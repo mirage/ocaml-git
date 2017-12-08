@@ -168,7 +168,7 @@ module type S = sig
   module Ref: sig
 
     (** The type error. *)
-    type nonrec error = private [> `Not_found]
+    type error = private [> `Not_found]
 
     val pp_error: error Fmt.t
     (** Pretty-printer of {!error}. *)
