@@ -2,11 +2,10 @@
 
 (executable
  ((name      test)
-  (libraries (test git-unix))))
+  (libraries (test_git git-unix))))
 
 (alias
  ((name runtest)
   (package git-unix)
   (deps (test.exe ../data/pack.idx ../data/pack.pack))
-  (action
-     (run ${exe:test.exe} -q --color=always))))
+  (action (run ${exe:test.exe} -q --color=always))))

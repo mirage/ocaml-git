@@ -173,6 +173,7 @@ end
 module type LOCK = sig
   type elt
   type t
+  val v: Fpath.t -> t
 
   val unlock    : elt -> unit Lwt.t
   val lock      : elt -> unit Lwt.t
@@ -237,4 +238,7 @@ module type FS = sig
   module File  : FILE
   module Dir   : DIR
   module Mapper: MAPPER
+
+  val has_global_watches: bool
+  val has_global_checkout: bool
 end

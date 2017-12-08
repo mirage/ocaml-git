@@ -24,7 +24,7 @@ module type NET = sig
 
   val read: socket -> Bytes.t -> int -> int -> int Lwt.t
   val write: socket -> Bytes.t -> int -> int -> int Lwt.t
-  val socket: string -> int -> socket Lwt.t
+  val socket: Uri.t -> socket Lwt.t
   val close: socket -> unit Lwt.t
 end
 
@@ -62,18 +62,14 @@ module type S = sig
   val push:
     Store.t
     -> push:(Store.t -> (Store.Hash.t * string * bool) list -> (Store.Hash.t list * command list) Lwt.t)
-    -> ?port:int
     -> ?capabilities:Capability.t list
-    -> string
-    -> string
+    -> Uri.t
     -> ((string, string * string) result list, error) result Lwt.t
 
   val ls :
     Store.t
-    -> ?port:int
     -> ?capabilities:Capability.t list
-    -> string
-    -> string
+    -> Uri.t
     -> ((Store.Hash.t * string * bool) list, error) result Lwt.t
 
   val fetch_ext:
@@ -85,18 +81,14 @@ module type S = sig
     -> has:Store.Hash.t list
     -> want:((Store.Hash.t * string * bool) list -> (Store.Reference.t * Store.Hash.t) list Lwt.t)
     -> ?deepen:[ `Depth of int | `Timestamp of int64 | `Ref of string ]
-    -> ?port:int
-    -> string
-    -> string
+    -> Uri.t
     -> ((Store.Reference.t * Store.Hash.t) list * int, error) result Lwt.t
 
   val clone_ext :
     Store.t
-    -> ?port:int
     -> ?reference:Store.Reference.t
     -> ?capabilities:Capability.t list
-    -> string
-    -> string
+    -> Uri.t
     -> (Store.Hash.t, error) result Lwt.t
 
   val fetch_all: Store.t -> ?locks:Store.Lock.t ->

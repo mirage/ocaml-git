@@ -204,20 +204,16 @@ module Make (H : S.HASH) (I : S.INFLATE) (D : S.DEFLATE)
 
     let encoder e x =
       let open Farfadet in
-
       eval e [ !!string; char $ sp; !!int64; char $ nl ]
         (string_of_value x) (length x);
-
       match x with
       | Commit commit -> Commit.F.encoder e commit
       | Blob blob     -> Blob.F.encoder e blob
       | Tag tag       -> Tag.F.encoder e tag
       | Tree tree     -> Tree.F.encoder e tree
-      [@@warning "-45"] (* XXX(dinosaure): shadowing [] and (::). *)
   end
 
-  module M =
-  struct
+  module M = struct
     type nonrec t = t
 
     open Minienc
@@ -392,27 +388,20 @@ module Raw
     (* XXX(dinosaure): it's an heuristic to consider than the size of the result
        is lower than [F.length value]. In most of cases, it's true but sometimes, a
        deflated Git object can be bigger than a serialized Git object. *)
-
-    let module SpecializedEncoder =
-    struct
+    let module SpecializedEncoder = struct
       type state = E.encoder
       type raw = Cstruct.t
       type result = int
       type error = E.error
-
       let raw_length = Cstruct.len
       let raw_sub = Cstruct.sub
-
       type rest = [ `Flush of state | `End of (state * result) ]
-
       let eval raw state = match E.eval raw state with
         | #rest as rest -> rest
-        | `Error err -> `Error (state, err)
-
+        | `Error err    -> `Error (state, err)
       let used = E.used
       let flush = E.flush
     end in
-
     to_ (module SpecializedEncoder) buffer raw encoder
 
   let to_raw ?(capacity = 0x100) value =
@@ -421,27 +410,20 @@ module Raw
     let buffer = Cstruct_buffer.create (Int64.to_int (F.length value)) in
     (* XXX(dinosaure): we are sure than the serialized object has the size
        [F.length value]. So, the [buffer] should not growth. *)
-
-    let module SpecializedEncoder =
-    struct
+    let module SpecializedEncoder = struct
       type state = EE.encoder
       type raw = Cstruct.t
       type result = int
       type error = EE.error
-
       let raw_length = Cstruct.len
       let raw_sub = Cstruct.sub
-
       type rest = [ `Flush of state | `End of (state * result) ]
-
       let eval raw state = match EE.eval raw state with
         | #rest as rest -> rest
-        | `Error err -> `Error (state, err)
-
+        | `Error err    -> `Error (state, err)
       let used = EE.used
       let flush = EE.flush
     end in
-
     to_ (module SpecializedEncoder) buffer raw encoder
 
   let to_raw_without_header ?(capacity = 0x100) value =
@@ -456,16 +438,12 @@ module Raw
       type raw = Cstruct.t
       type result = int
       type error = EEE.error
-
       let raw_length = Cstruct.len
       let raw_sub = Cstruct.sub
-
       type rest = [ `Flush of state | `End of (state * result) ]
-
       let eval raw state = match EEE.eval raw state with
         | #rest as rest -> rest
-        | `Error err -> `Error (state, err)
-
+        | `Error err    -> `Error (state, err)
       let used = EEE.used
       let flush = EEE.flush
     end in
@@ -477,19 +455,19 @@ module Raw
   let of_raw_with_header inflated = DD.to_result inflated
   let of_raw ~kind inflated = match kind with
     | `Commit ->
-      Value.Commit.D.to_result inflated |> (function
-          | Ok commit -> Ok (Commit commit)
-          | Error (`Decoder err) -> Error (`Decoder err))
+      (Value.Commit.D.to_result inflated |> function
+        | Ok commit            -> Ok (Commit commit)
+        | Error (`Decoder err) -> Error (`Decoder err))
     | `Tree ->
-      Value.Tree.D.to_result inflated |> (function
-          | Ok tree -> Ok (Tree tree)
-          | Error (`Decoder err) -> Error (`Decoder err))
+      (Value.Tree.D.to_result inflated |> function
+        | Ok tree              -> Ok (Tree tree)
+        | Error (`Decoder err) -> Error (`Decoder err))
     | `Tag ->
-      Value.Tag.D.to_result inflated  |> (function
-          | Ok tag -> Ok (Tag tag)
-          | Error (`Decoder err) -> Error (`Decoder err))
+      (Value.Tag.D.to_result inflated |> function
+        | Ok tag               -> Ok (Tag tag)
+        | Error (`Decoder err) -> Error (`Decoder err))
     | `Blob ->
-      Value.Blob.D.to_result inflated  |> (function
-          | Ok blob -> Ok (Blob blob)
-          | Error (`Decoder err) -> Error (`Decoder err))
+      (Value.Blob.D.to_result inflated |> function
+        | Ok blob -> Ok (Blob blob)
+        | Error (`Decoder err) -> Error (`Decoder err))
 end

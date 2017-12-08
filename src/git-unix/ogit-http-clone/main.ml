@@ -17,7 +17,7 @@
 
 let () = Random.self_init ()
 
-module Sync_http = Git_unix.HTTP(Git_unix.Store)
+module Sync_http = Git_unix.HTTP(Git_unix.FS)
 
 let option_map f = function
   | Some v -> Some (f v)
@@ -75,13 +75,13 @@ let setup_logs style_renderer level ppf =
   quiet, ppf
 
 type error =
-  [ `Store of Git_unix.Store.error
-  | `Reference of Git_unix.Store.Ref.error
+  [ `Store of Git_unix.FS.error
+  | `Reference of Git_unix.FS.Ref.error
   | `Sync of Sync_http.error ]
 
 let pp_error ppf = function
-  | `Store err -> Fmt.pf ppf "(`Store %a)" Git_unix.Store.pp_error err
-  | `Reference err -> Fmt.pf ppf "(`Reference %a)" Git_unix.Store.Ref.pp_error err
+  | `Store err -> Fmt.pf ppf "(`Store %a)" Git_unix.FS.pp_error err
+  | `Reference err -> Fmt.pf ppf "(`Reference %a)" Git_unix.FS.Ref.pp_error err
   | `Sync err -> Fmt.pf ppf "(`Sync %a)" Sync_http.pp_error err
 
 let main ppf progress origin branch repository directory =
@@ -118,7 +118,7 @@ let main ppf progress origin branch repository directory =
     | _ -> false
   in
 
-  (Git_unix.Store.create ~root () >!= fun err -> `Store err) >>= fun git ->
+  (Git_unix.FS.create ~root () >!= fun err -> `Store err) >>= fun git ->
   (Sync_http.clone_ext git ?stdout ?stderr ~https
      ?port:(Uri.port repository) ~reference:branch
      (option_value_exn
@@ -126,20 +126,20 @@ let main ppf progress origin branch repository directory =
         (Uri.host repository))
      (Uri.path_and_query repository)
    >!= fun err -> `Sync err) >>= fun hash ->
-  (Git_unix.Store.Ref.write git ~locks:(Git_unix.Store.dotgit git)
-     branch (Git_unix.Store.Reference.Hash hash)
+  (Git_unix.FS.Ref.write git ~locks:(Git_unix.FS.dotgit git)
+     branch (Git_unix.FS.Reference.Hash hash)
    >!= fun err -> `Reference err)
   >>= fun _ ->
-  let branch_name = Fpath.base (Git_unix.Store.Reference.to_path branch) in
+  let branch_name = Fpath.base (Git_unix.FS.Reference.to_path branch) in
 
-  (Git_unix.Store.Ref.write git ~locks:(Git_unix.Store.dotgit git)
-     (Git_unix.Store.Reference.of_path Fpath.(v "remotes" / origin // branch_name))
-     (Git_unix.Store.Reference.Hash hash)
+  (Git_unix.FS.Ref.write git ~locks:(Git_unix.FS.dotgit git)
+     (Git_unix.FS.Reference.of_path Fpath.(v "remotes" / origin // branch_name))
+     (Git_unix.FS.Reference.Hash hash)
    >!= fun err -> `Reference err)
   >>= fun _ ->
-  (Git_unix.Store.Ref.write git ~locks:(Git_unix.Store.dotgit git)
-     Git_unix.Store.Reference.head
-     (Git_unix.Store.Reference.Ref branch)
+  (Git_unix.FS.Ref.write git ~locks:(Git_unix.FS.dotgit git)
+     Git_unix.FS.Reference.head
+     (Git_unix.FS.Reference.Ref branch)
    >!= fun err -> `Reference err)
   >>= fun _ -> Lwt.return (Ok ())
 
@@ -184,8 +184,8 @@ struct
     Arg.(value & opt string "origin" & info ["o"; "origin"] ~doc ~docv:"<name>")
 
   let reference =
-    let parse str = Ok (Git_unix.Store.Reference.of_string str) in
-    let print = Git_unix.Store.Reference.pp in
+    let parse str = Ok (Git_unix.FS.Reference.of_string str) in
+    let print = Git_unix.FS.Reference.pp in
     Arg.conv ~docv:"<name>" (parse, print)
 
   let branch =
@@ -195,7 +195,7 @@ struct
        detaches the HEAD at that commit in the resulting repository."
     in
     Arg.(value
-         & opt reference Git_unix.Store.Reference.master
+         & opt reference Git_unix.FS.Reference.master
          & info ["b"; "branch"] ~doc ~docv:"<name>")
 
   let uri =

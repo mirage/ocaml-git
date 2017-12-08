@@ -16,15 +16,14 @@
 
 open Test_common
 
-module SHA1 = Git.Hash.Make(Digestif.SHA1)
-
-module Store = Git.Mem.Make(SHA1)(Lwt_lock)(Git.Inflate)(Git.Deflate)
+module Store = Git.Mem.Store(Digestif.SHA1)
 
 let backend =
-  { name  = "Memory"
+  { name  = "mem"
   ; store = (module Store)
   ; shell = false }
 
 let () =
+  verbose ();
   Alcotest.run "git"
     [ Test_store.suite (`Quick, backend) ]

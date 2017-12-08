@@ -2,10 +2,12 @@
 
 (executable
  ((name      test)
-  (libraries (test git-mirage mirage-fs-unix io-page.unix))))
+  (libraries (test_git git-mirage mirage-fs-unix io-page.unix mirage-conduit
+              tcpip.udpv4-socket tcpip.tcpv4-socket tcpip.unix
+              tcpip.stack-socket mirage-time-unix))))
 
 (alias
  ((name runtest)
   (package git-mirage)
   (deps (test.exe ../data/pack.idx ../data/pack.pack))
-  (action (run ${exe:test.exe} -q --color=always -v))))
+  (action (run ${exe:test.exe} -q --color=always))))

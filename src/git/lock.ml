@@ -16,6 +16,8 @@
 (*                                                                     *)
 (***********************************************************************)
 
+(* XXX: remove *)
+
 module Stack = struct
   type 'a t =
     { mutable data : 'a Weak.t
@@ -27,13 +29,6 @@ module Stack = struct
     { data = Weak.create len
     ; length = len
     ; cursor = 0 }
-
-  let iter f s =
-    for i = s.cursor - 1 downto 0
-    do match Weak.get s.data i with
-      | Some x -> f x
-      | _ -> ()
-    done
 
   let length s =
     let flag = ref false
@@ -48,12 +43,6 @@ module Stack = struct
     done;
     s.cursor <- !pt;
     s.cursor
-
-  let copy s =
-    let s' = create s.length in
-    Weak.blit s.data 0 s'.data 0 s.cursor;
-    s'.cursor <- s.cursor;
-    s'
 
   let rec push x s =
     if s.cursor < s.length
@@ -95,8 +84,8 @@ module Stack = struct
       top s
 end
 
-module Make (H : Hashtbl.HashedType): Hashtbl.S with type key = H.t
-= struct
+module Make (H : Hashtbl.HashedType) = struct
+
   type box = H.t Weak.t
 
   let inject k =
@@ -131,50 +120,20 @@ module Make (H : Hashtbl.HashedType): Hashtbl.S with type key = H.t
   and top_value cls =
     snd (top_bind cls)
 
-  let all_bind cls =
-    let l = ref [] in
-    let f (bk, v) = match project bk with
-      | Some k ->
-        l := (k, Obj.obj v) :: !l
-      | _ -> ()
-    in Stack.iter f cls;
-    List.rev !l
-
-  let all_value cls =
-    List.map snd (all_bind cls)
-
-  module HX =
-  struct
+  module HX = struct
     type t = cls
-
-    let hash x =
-      try H.hash (top_key x)
-      with Not_found -> 0
-
-    let equal x y =
-      try H.equal (top_key x) (top_key y)
-      with Not_found -> false
+    let hash x = try H.hash (top_key x) with Not_found -> 0
+    let equal x y = try H.equal (top_key x) (top_key y) with Not_found -> false
   end
 
   module WX = Weak.Make(HX)
 
-  type key = H.t and 'a t = WX.t
+  type 'a t = WX.t
 
-  let create =
-    WX.create
-  and clear =
-    WX.clear
-
-  let find_all tbl key =
-    try all_value (WX.find tbl (dummy key))
-    with Not_found -> []
+  let create = WX.create
 
   let find tbl key =
     top_value (WX.find tbl (dummy key))
-
-  let find_opt tbl key =
-    try Some (find tbl key)
-    with _ -> None
 
   let add tbl key data =
     let bd = bind_new key data in
@@ -183,55 +142,11 @@ module Make (H : Hashtbl.HashedType): Hashtbl.S with type key = H.t
       with Not_found -> let c = cls_new bd in WX.add tbl c; c
     in
     let final _ = ignore bd; ignore cls in
-
     try Gc.finalise final key
     with Invalid_argument _ ->
       Gc.finalise final bd;
       Gc.finalise final cls
 
-  let remove tbl key =
-    try ignore (Stack.pop (WX.find tbl (dummy key)))
-    with Not_found -> ()
-
-  let replace tbl key data =
-    remove tbl key;
-    add tbl key data
-
-  let mem tbl key =
-    try ignore (find tbl key); true
-    with Not_found -> false
-
-  let iter f tbl =
-    let f' (bk, v) = match project bk with Some k -> f k (Obj.obj v) | None -> () in
-    WX.iter (Stack.iter f') tbl
-
-  let fold f tbl acc =
-    let acc' = ref acc in
-    let f' k v = acc' := f k v !acc' in
-    iter f' tbl; !acc'
-
-  let length tbl = WX.fold (fun cls -> (+) (Stack.length cls)) tbl 0
-
-  let copy tbl =
-    let tbl' = WX.create (WX.count tbl * 3 / 2 + 2) in
-    WX.iter (fun cls -> WX.add tbl' (Stack.copy cls)) tbl;
-    tbl'
-
-  let filter_map_inplace f tbl =
-    let delta = ref [] in
-
-    iter
-      (fun k v -> match f k v with
-         | Some v' when v' == v -> ()
-         | other -> delta := (k, other) :: !delta) tbl;
-    let handle_delta = function
-      | (k, None) -> remove tbl k
-      | (k, Some v) -> remove tbl k; add tbl k v
-    in
-    List.iter handle_delta !delta
-
-  let stats _ = assert false
-  let reset _ = assert false
 end
 
 module H = Make(struct
@@ -243,11 +158,9 @@ module H = Make(struct
 type t = elt H.t
 and elt = Lwt_mutex.t
 
-let locks = H.create 24
+let v _ = H.create 24
 
-let make locks' path =
-  assert (locks == locks');
-
+let make locks path =
   try H.find locks path
   with Not_found ->
     let m = Lwt_mutex.create () in

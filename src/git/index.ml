@@ -15,8 +15,10 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Int32 =
-struct
+let src = Logs.Src.create "git.idx" ~doc:"Git index decoder"
+module Log = (val Logs.src_log src : Logs.LOG)
+
+module Int32 = struct
   include Int32
 
   let ( << ) = Int32.shift_left (* >> (tuareg) *)
@@ -304,12 +306,6 @@ let pp ppf t =
     (Fmt.hvbox pp_index) t.entries
     (Fmt.hvbox (Fmt.Dump.list Ext.pp_value)) t.extensions
     (Fmt.hvbox pp_state) t.state
-
-module Log =
-struct
-  let src = Logs.Src.create "git.index.decoder" ~doc:"logs git's index decoder event"
-  include (val Logs.src_log src : Logs.LOG)
-end
 
 let digest_and_await src t : res =
   let () = Hash.Digest.feed t.hash (Cstruct.sub src t.i_off t.i_len) in
@@ -1089,11 +1085,6 @@ module Make (H: S.HASH) (FS: S.FS) = struct
   module Hash = H
   module FileSystem = FS
   module IndexDecoder = MakeIndexDecoder(H)
-
-  module Log = struct
-    let src = Logs.Src.create "git.index" ~doc:"logs git's index event"
-    include (val Logs.src_log src : Logs.LOG)
-  end
 
   type error =
     [ `IndexDecoder of IndexDecoder.error

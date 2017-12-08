@@ -225,40 +225,43 @@ module File = struct
     | `Mkdir err  -> Fmt.pf ppf "(`Mkdir %s)" err
 
   let open_w ?lock path ~mode =
-    Lock.with_lock lock
-    @@ fun () ->
-    Lwt_pool.use open_pool
-    @@ fun () ->
+    Lock.with_lock lock @@ fun () ->
+    Lwt_pool.use open_pool @@ fun () ->
     let rec go () =
-      Lwt.try_bind
-        (fun () -> Lwt_unix.openfile
-            (Fpath.to_string path)
-            [ Lwt_unix.O_CREAT
-            ; Lwt_unix.O_WRONLY
-            ; Lwt_unix.O_TRUNC
-            ; Lwt_unix.O_NONBLOCK ] mode)
+      Lwt.try_bind (fun () ->
+          Lwt_unix.openfile (Fpath.to_string path) [
+            Lwt_unix.O_CREAT;
+            Lwt_unix.O_WRONLY;
+            Lwt_unix.O_TRUNC;
+            Lwt_unix.O_NONBLOCK;
+          ] mode)
         (fun fd -> Lwt.return (Ok (fd :> [ `Write ] fd)))
         (function
           | Unix.Unix_error (Unix.EINTR, _, _) ->
-            Log.warn (fun l -> l "Retrieve EINTR unix error code.");
+            Log.warn (fun l ->
+                l "Got EINTR while trying to open %a, trying again."
+                  Fpath.pp path);
             go ()
           | Unix.Unix_error _ as err ->
-            Log.err (fun l -> l "Retrieve an exception: %s." (Printexc.to_string err));
+            Log.err (fun l ->
+                l "Got an error while trying to open %a: %a."
+                  Fpath.pp path Fmt.exn err);
             Lwt.return (error_to_result ~ctor:(fun x -> `Open x) err)
           | exn -> expected_unix_error exn)
     in
     go ()
 
   let open_r ?lock:_ path ~mode =
-    Lwt_pool.use open_pool
-    @@ fun () ->
+    Lwt_pool.use open_pool @@ fun () ->
     let rec go () =
       Lwt.try_bind
-        (fun () -> Lwt_unix.openfile (Fpath.to_string path) [ Lwt_unix.O_RDONLY; ] mode)
+        (fun () ->
+           Lwt_unix.openfile (Fpath.to_string path) [Lwt_unix.O_RDONLY] mode)
         (fun fd -> Lwt.return (Ok (fd :> [ `Read ] fd)))
         (function
           | Unix.Unix_error (Unix.EINTR, _ ,_) -> go ()
-          | Unix.Unix_error _ as err -> Lwt.return (error_to_result ~ctor:(fun x -> `Open x) err)
+          | Unix.Unix_error _ as err ->
+            Lwt.return (error_to_result ~ctor:(fun x -> `Open x) err)
           | exn -> expected_unix_error exn)
     in
     go ()
@@ -270,7 +273,8 @@ module File = struct
         (fun n -> Lwt.return (Ok n))
         (function
           | Unix.Unix_error (Unix.EINTR, _, _) -> go ()
-          | Unix.Unix_error _ as err -> Lwt.return (error_to_result ~ctor:(fun x -> `Write x) err)
+          | Unix.Unix_error _ as err ->
+            Lwt.return (error_to_result ~ctor:(fun x -> `Write x) err)
           | exn -> expected_unix_error exn)
     in
     go ()
@@ -282,7 +286,8 @@ module File = struct
         (fun n -> Lwt.return (Ok n))
         (function
           | Unix.Unix_error (Unix.EINTR, _ ,_) -> go ()
-          | Unix.Unix_error _ as err -> Lwt.return (error_to_result ~ctor:(fun x -> `Read x) err)
+          | Unix.Unix_error _ as err ->
+            Lwt.return (error_to_result ~ctor:(fun x -> `Read x) err)
           | exn -> expected_unix_error exn)
     in
     go ()
@@ -294,7 +299,8 @@ module File = struct
         (fun () -> Lwt.return (Ok ()))
         (function
           | Unix.Unix_error (Unix.EINTR, _ ,_) -> go ()
-          | Unix.Unix_error _ as err -> Lwt.return (error_to_result ~ctor:(fun x -> `Close x) err)
+          | Unix.Unix_error _ as err ->
+            Lwt.return (error_to_result ~ctor:(fun x -> `Close x) err)
           | exn -> expected_unix_error exn)
     in
     go ()
@@ -307,28 +313,28 @@ module File = struct
         (function
           | Unix.Unix_error (Unix.EINTR, _, _) -> go ()
           | Unix.Unix_error (Unix.ENOENT, _, _) -> Lwt.return (Ok false)
-          | Unix.Unix_error _ as err -> Lwt.return (error_to_result ~ctor:(fun x -> `Stat x) err)
+          | Unix.Unix_error _ as err ->
+            Lwt.return (error_to_result ~ctor:(fun x -> `Stat x) err)
           | exn -> expected_unix_error exn)
     in
     go ()
 
   let move ?lock path_a path_b =
-    Lock.with_lock lock
-    @@ fun () ->
+    Lock.with_lock lock @@ fun () ->
     let rec go () =
-      Lwt.try_bind
-        (fun () -> Lwt_unix.rename (Fpath.to_string path_a) (Fpath.to_string path_b))
+      Lwt.try_bind (fun () ->
+          Lwt_unix.rename (Fpath.to_string path_a) (Fpath.to_string path_b))
         (fun () -> Lwt.return (Ok ()))
         (function
           | Unix.Unix_error (Unix.EINTR, _, _) -> go ()
-          | Unix.Unix_error _ as err -> Lwt.return (error_to_result ~ctor:(fun x -> `Rename x) err)
+          | Unix.Unix_error _ as err ->
+            Lwt.return (error_to_result ~ctor:(fun x -> `Rename x) err)
           | exn -> expected_unix_error exn)
     in
     go ()
 
   let delete ?lock path =
-    Lock.with_lock lock
-    @@ fun () ->
+    Lock.with_lock lock @@ fun () ->
     let rec go () =
       Lwt.try_bind
         (fun () -> Lwt_unix.unlink (Fpath.to_string path))
@@ -348,38 +354,34 @@ module File = struct
     let res = Cstruct.create size in
     let flg = [ Unix.O_RDONLY ] in
     let prm = 0o644 in
-
     Lwt_unix.openfile (Fpath.to_string path) flg prm >>= fun fd ->
-
     let rec go off =
       let len = min chunk (size - off) in
       Lwt_bytes.read fd res.Cstruct.buffer off len >>= fun rd ->
       let off = off + rd in
-
       if off >= size
       then Lwt.return res
       else go off
     in
-
     Lwt.finalize
       (fun () -> go 0)
       (fun () -> Lwt_unix.close fd)
 
   let atomic_read_with_mmap path =
-    let fd = Unix.(openfile (Fpath.to_string path) [ O_RDONLY; O_NONBLOCK; ] 0o644) in
+    let fd =
+      Unix.(openfile (Fpath.to_string path) [ O_RDONLY; O_NONBLOCK; ] 0o644)
+    in
     let ba = Lwt_bytes.map_file ~fd ~shared:false () in
     Unix.close fd;
     Lwt.return (Cstruct.of_bigarray ba)
 
   let atomic_read path =
-    Lwt.try_bind
-      (fun () ->
-         Lwt_unix.stat (Fpath.to_string path) >>= fun stats ->
-         let size = stats.Lwt_unix.st_size in
-
-         if size >= mmap_threshold
-         then atomic_read_with_mmap path
-         else atomic_read_with_read path size)
+    Lwt.try_bind (fun () ->
+        Lwt_unix.stat (Fpath.to_string path) >>= fun stats ->
+        let size = stats.Lwt_unix.st_size in
+        if size >= mmap_threshold
+        then atomic_read_with_mmap path
+        else atomic_read_with_read path size)
       (fun res -> Lwt.return (Some res))
       (function
         | Unix.Unix_error _ | Sys_error _ -> Lwt.return None
@@ -388,14 +390,14 @@ module File = struct
   let make_temp ?temp path prefix =
     let dir, file = Fpath.split_base path in
     let x = Fmt.strf "%s-%a" prefix Fpath.pp file in
-
     match temp with
     | Some temp -> Fpath.(temp / x)
     | None -> Fpath.(dir / x)
 
   let with_atomic_write ?lock ?temp path writer =
     (match temp with
-     | None -> Lwt.return (Ok false) (* XXX(dinosaure): keep the semantic of [safe_mkdir]. *)
+     | None -> Lwt.return (Ok false)
+     (* XXX(dinosaure): keep the semantic of [safe_mkdir]. *)
      | Some dir -> safe_mkdir dir)
     >>= function
     | Error _ as err -> Lwt.return err
@@ -405,16 +407,19 @@ module File = struct
       | Error _ as err -> Lwt.return err
       | Ok _ ->
         let tmp = make_temp ?temp path "write" in
-
-        Lwt_pool.use open_pool
-        @@ fun () ->
-        Lwt_unix.(openfile (Fpath.to_string tmp) [ O_WRONLY; O_NONBLOCK; O_CREAT; O_TRUNC; ] 0o644) >>= fun fd ->
-        Lwt.finalize
-          (fun () ->
-             Lwt.try_bind
-               (fun () -> writer fd)
-               (fun v -> Lwt.return (Ok v))
-               (fun exn -> Lwt.return (Error exn)))
+        Lwt_pool.use open_pool @@ fun () ->
+        Lwt_unix.(openfile (Fpath.to_string tmp) [
+            O_WRONLY;
+            O_NONBLOCK;
+            O_CREAT;
+            O_TRUNC;
+          ] 0o644)
+        >>= fun fd ->
+        Lwt.finalize (fun () ->
+            Lwt.try_bind
+              (fun () -> writer fd)
+              (fun v -> Lwt.return (Ok v))
+              (fun exn -> Lwt.return (Error exn)))
           (fun () -> Lwt_unix.close fd)
         >>= function
         | Ok () -> move ?lock tmp path
@@ -437,7 +442,6 @@ module File = struct
           | Unix.Unix_error (Unix.EINTR, _, _) -> go fd buf off len
           | exn -> Lwt.fail exn)
     in
-
     match Cstruct.len cs with
     | 0 -> Lwt.return ()
     | n -> go fd (Cstruct.to_bigarray cs) 0 n
@@ -446,30 +450,38 @@ module File = struct
     let writer () =
       with_atomic_write ?temp path (fun fd -> write_cstruct fd value)
     in
+    Lock.with_lock lock @@ fun () ->
+    Lwt.catch writer @@ function
+    | Unix.Unix_error (Unix.EISDIR, _, _) ->
+      Dir.delete ~recurse:true path >>= fun _ ->
+      writer ()
+    | exn -> Lwt.fail exn
 
-    Lock.with_lock lock
-    @@ fun () ->
-    Lwt.catch writer
-      (function
-        | Unix.Unix_error (Unix.EISDIR, _, _) ->
-          Dir.delete ~recurse:true path >>= fun _ -> writer ()
-        | exn -> Lwt.fail exn)
+  let trim s =
+    let len = Cstruct.len s in
+    if len >= 2
+    && Cstruct.get_char s (len - 1) = '\n'
+    && Cstruct.get_char s (len - 2) = '\r'
+    then
+      Cstruct.sub s 0 (len - 2)
+    else if len >= 1 && Cstruct.get_char s (len - 1) = '\n' then
+      Cstruct.sub s 0 (len - 1)
+    else
+      s
 
   let test_and_set ?lock ?temp path ~test ~set =
-    Lock.with_lock lock
-    @@ fun () ->
+    Lock.with_lock lock @@ fun () ->
     atomic_read path >>= fun v ->
     let equal = match test, v with
-      | None, None -> true
-      | Some x, Some y -> Cstruct.equal x y
+      | None  , None   -> true
+      | Some x, Some y -> Cstruct.equal (trim x) (trim y)
       | _ -> false
     in
-
     (if not equal
      then Lwt.return (Ok false)
      else
        (match set with
-        | None -> delete path
+        | None   -> delete path
         | Some v -> atomic_write ?temp path v)
        >|= result_bind (fun () -> Ok true))
 end
@@ -532,7 +544,10 @@ module Mapper = struct
            Log.err (fun l -> l ~header:"Lwt_bytes.map_file" "Retrieve an exception %s." (Printexc.to_string exn));
            Lwt.return (Error (`Mmap "Impossible to map the file descriptor")))
     | Error err -> Lwt.return (Error err)
+
 end
 
 let is_dir = is_dir
 let is_file = is_file
+let has_global_checkout = true
+let has_global_watches = true

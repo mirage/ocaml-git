@@ -45,68 +45,70 @@ module Make (Store : Git.S) = struct
       | Ok () -> Lwt.return ()
       | Error err -> Lwt.fail (Reset err))
 
-  let v0  = Store.Value.blob (Store.Value.Blob.of_cstruct (long_random_cstruct ()))
-  let kv0 = Store.Value.digest v0
+  let (!!) = Lazy.force
 
-  let v1  = Store.Value.blob (Store.Value.Blob.of_string "hoho")
-  let kv1 = Store.Value.digest v1
+  let v0  = lazy (Store.Value.blob (Store.Value.Blob.of_cstruct (long_random_cstruct ())))
+  let kv0 = lazy (Store.Value.digest !!v0)
 
-  let v2  = Store.Value.blob (Store.Value.Blob.of_string "")
-  let kv2 = Store.Value.digest v2
+  let v1  = lazy (Store.Value.blob (Store.Value.Blob.of_string "hoho"))
+  let kv1 = lazy (Store.Value.digest !!v1)
+
+  let v2  = lazy (Store.Value.blob (Store.Value.Blob.of_string ""))
+  let kv2 = lazy (Store.Value.digest !!v2)
 
   (* Create a node containing t1 -w-> v1 *)
   let w = "a\042bbb\047"
-  let t0 = Store.Value.tree
-      (Store.Value.Tree.of_list
-         [ { Store.Value.Tree.perm = `Normal
-           ; name = w
-           ; node = kv1 } ])
-  let kt0 = Store.Value.digest t0
+  let t0 = lazy (Store.Value.tree
+                   (Store.Value.Tree.of_list
+                      [ { Store.Value.Tree.perm = `Normal
+                        ; name = w
+                        ; node = !!kv1 } ]))
+  let kt0 = lazy (Store.Value.digest !!t0)
 
-  let t1 = Store.Value.tree
-      (Store.Value.Tree.of_list
-         [ { Store.Value.Tree.perm = `Normal
-           ; name = "x"
-           ; node = kv1 } ])
-  let kt1 = Store.Value.digest t1
+  let t1 = lazy (Store.Value.tree
+                   (Store.Value.Tree.of_list
+                      [ { Store.Value.Tree.perm = `Normal
+                        ; name = "x"
+                        ; node = !!kv1 } ]))
+  let kt1 = lazy (Store.Value.digest !!t1)
 
   (* Create the tree t2 -b-> t1 -x-> v1 *)
-  let t2 = Store.Value.tree
-      (Store.Value.Tree.of_list
-         [ { Store.Value.Tree.perm = `Dir
-           ; name = "b"
-           ; node = kt1 } ])
-  let kt2 = Store.Value.digest t2
+  let t2 = lazy (Store.Value.tree
+                   (Store.Value.Tree.of_list
+                      [ { Store.Value.Tree.perm = `Dir
+                        ; name = "b"
+                        ; node = !!kt1 } ]))
+  let kt2 = lazy (Store.Value.digest !!t2)
 
   (* Create the tree t3 -a-> t2 -b-> t1 -x-> v1 *)
-  let t3 = Store.Value.tree
-      (Store.Value.Tree.of_list
-         [ { Store.Value.Tree.perm = `Dir
-           ; name = "a"
-           ; node = kt2 } ])
-  let kt3 = Store.Value.digest t3
+  let t3 = lazy (Store.Value.tree
+                   (Store.Value.Tree.of_list
+                      [ { Store.Value.Tree.perm = `Dir
+                        ; name = "a"
+                        ; node = !!kt2 } ]))
+  let kt3 = lazy (Store.Value.digest !!t3)
 
   (* Create the tree t4 -a-> t2 -b-> t1 -x-> v1
                        \-c-> v2 *)
-  let t4 = Store.Value.tree
-      (Store.Value.Tree.of_list
-         [ { Store.Value.Tree.perm = `Exec
-           ; name = "c"
-           ; node = kv2 }
-         ; { Store.Value.Tree.perm = `Dir
-           ; name = "a"
-           ; node = kt2 } ])
-  let kt4 = Store.Value.digest t4
+  let t4 = lazy (Store.Value.tree
+                   (Store.Value.Tree.of_list
+                      [ { Store.Value.Tree.perm = `Exec
+                        ; name = "c"
+                        ; node = !!kv2 }
+                      ; { Store.Value.Tree.perm = `Dir
+                        ; name = "a"
+                        ; node = !!kt2 } ]))
+  let kt4 = lazy (Store.Value.digest !!t4)
 
-  let t5 = Store.Value.tree
-      (Store.Value.Tree.of_list
-         [ { Store.Value.Tree.perm = `Normal
-           ; name = long_random_string ()
-           ; node = kv2 }
-         ; { Store.Value.Tree.perm = `Dir
-           ; name = "a"
-           ; node = kt2 } ])
-  let kt5 = Store.Value.digest t5
+  let t5 = lazy (Store.Value.tree
+                   (Store.Value.Tree.of_list
+                      [ { Store.Value.Tree.perm = `Normal
+                        ; name = long_random_string ()
+                        ; node = !!kv2 }
+                      ; { Store.Value.Tree.perm = `Dir
+                        ; name = "a"
+                        ; node = !!kt2 } ]))
+  let kt5 = lazy (Store.Value.digest !!t5)
 
   let john_doe =
     { User.name  = "John Doe"
@@ -114,50 +116,50 @@ module Make (Store : Git.S) = struct
     ; date  = 0L, None }
 
   (* c1 : t2 *)
-  let c1 =
+  let c1 = lazy (
     Store.Value.commit
       (Store.Value.Commit.make
          ~author:john_doe
          ~committer:john_doe
-         ~tree:kt2
-         "hello r1")
-  let kc1 = Store.Value.digest c1
+         ~tree:!!kt2
+         "hello r1"))
+  let kc1 = lazy (Store.Value.digest !!c1)
 
   (* c1 -> c2 : t4 *)
-  let c2 =
+  let c2 = lazy (
     Store.Value.commit
       (Store.Value.Commit.make
          ~author:john_doe
          ~committer:john_doe
-         ~parents:[ kc1 ]
-         ~tree:kt4
-         "hello r1!")
-  let kc2 = Store.Value.digest c2
+         ~parents:[ !!kc1 ]
+         ~tree:!!kt4
+         "hello r1!"))
+  let kc2 = lazy (Store.Value.digest !!c2)
 
-  let c3 =
-    let c2 = match c2 with Store.Value.Commit x -> x | _ -> assert false in
+  let c3 = lazy (
+    let c2 = match !!c2 with Store.Value.Commit x -> x | _ -> assert false in
     Store.Value.(commit
                    (Commit.make
                       ~author:(Commit.author c2)
                       ~committer:(Commit.committer c2)
                       ~parents:(Commit.parents c2)
-                      ~tree:kt5
-                      (Commit.message c2)))
-  let kc3 = Store.Value.digest c3
+                      ~tree:!!kt5
+                      (Commit.message c2))))
+  let kc3 = lazy (Store.Value.digest !!c3)
 
   (* tag1: c1 *)
-  let tag1 =
+  let tag1 = lazy (
     Store.Value.(tag
                    (Tag.make
-                      kc1 Tag.Commit ~tag:"foo" ~tagger:john_doe "Ho yeah!"))
-  let ktag1 = Store.Value.digest tag1
+                      !!kc1 Tag.Commit ~tag:"foo" ~tagger:john_doe "Ho yeah!")))
+  let ktag1 = lazy (Store.Value.digest !!tag1)
 
   (* tag2: c2 *)
-  let tag2 =
+  let tag2 = lazy (
     Store.Value.(tag
                    (Tag.make
-                      kc2 Tag.Commit ~tag:"bar" ~tagger:john_doe "Haha!"))
-  let ktag2 = Store.Value.digest tag2
+                      !!kc2 Tag.Commit ~tag:"bar" ~tagger:john_doe "Haha!")))
+  let ktag2 = lazy (Store.Value.digest !!tag2)
 
   (* r1: t4 *)
   let r1 = Store.Reference.of_string "refs/origin/head"
@@ -192,13 +194,13 @@ module Make (Store : Git.S) = struct
       Lwt_list.iter_s
         (fun v -> Store.write t v >>= fun _ -> Lwt.return ())
         (if not index then [
-            v0; v1; v2;
-            t0; t1; t2; t3; t4;
-            c1; c2; c3;
+            !!v0; !!v1; !!v2;
+            !!t0; !!t1; !!t2; !!t3; !!t4;
+            !!c1; !!c2; !!c3;
           ] else [
-           v1; v2;
-           t1; t2; t4;
-           c1; c2;
+           !!v1; !!v2;
+           !!t1; !!t2; !!t4;
+           !!c1; !!c2;
          ])
       >>= fun () -> Lwt.return t
 
@@ -231,11 +233,11 @@ module Make (Store : Git.S) = struct
     let open Lwt_result in
 
     let test () =
-      create ~root ()           >>= fun t  ->
-      check_write t "v1" kv1 v1 >>= fun () ->
-      check_write t "v2" kv2 v2 >>= fun () ->
+      create ~root ()               >>= fun t  ->
+      check_write t "v1" !!kv1 !!v1 >>= fun () ->
+      check_write t "v2" !!kv2 !!v2 >>= fun () ->
 
-      check_keys t "blobs" `Blob [kv0; kv1; kv2] >>= fun () ->
+      check_keys t "blobs" `Blob [!!kv0; !!kv1; !!kv2] >>= fun () ->
       Lwt.return (Ok t)
     in
     run x (fun () -> let open Lwt.Infix in test () >>= function
@@ -246,23 +248,23 @@ module Make (Store : Git.S) = struct
     let test () =
       let open Lwt_result in
 
-      create ~root ()           >>= fun t  ->
-      check_write t "t1" kt1 t1 >>= fun () ->
-      check_write t "t2" kt2 t2 >>= fun () ->
-      check_write t "t3" kt3 t3 >>= fun () ->
-      check_write t "t4" kt4 t4 >>= fun () ->
+      create ~root ()               >>= fun t  ->
+      check_write t "t1" !!kt1 !!t1 >>= fun () ->
+      check_write t "t2" !!kt2 !!t2 >>= fun () ->
+      check_write t "t3" !!kt3 !!t3 >>= fun () ->
+      check_write t "t4" !!kt4 !!t4 >>= fun () ->
 
       let p x = `Path x in
-      check_find t "kt0:w"     kt0 (p [w])           kv1 >>= fun () ->
-      check_find t "kt1:w"     kt1 (p ["x"])         kv1 >>= fun () ->
-      check_find t "kt2:b"     kt2 (p ["b"])         kt1 >>= fun () ->
-      check_find t "kt2:b/x"   kt2 (p ["b";"x"])     kv1 >>= fun () ->
-      check_find t "kt3:a"     kt3 (p ["a"])         kt2 >>= fun () ->
-      check_find t "kt3:a/b"   kt3 (p ["a";"b"])     kt1 >>= fun () ->
-      check_find t "kt3:a/b/x" kt3 (p ["a";"b";"x"]) kv1 >>= fun () ->
-      check_find t "kt4:c"     kt4 (p ["c"])         kv2 >>= fun () ->
+      check_find t "kt0:w"     !!kt0 (p [w])           !!kv1 >>= fun () ->
+      check_find t "kt1:w"     !!kt1 (p ["x"])         !!kv1 >>= fun () ->
+      check_find t "kt2:b"     !!kt2 (p ["b"])         !!kt1 >>= fun () ->
+      check_find t "kt2:b/x"   !!kt2 (p ["b";"x"])     !!kv1 >>= fun () ->
+      check_find t "kt3:a"     !!kt3 (p ["a"])         !!kt2 >>= fun () ->
+      check_find t "kt3:a/b"   !!kt3 (p ["a";"b"])     !!kt1 >>= fun () ->
+      check_find t "kt3:a/b/x" !!kt3 (p ["a";"b";"x"]) !!kv1 >>= fun () ->
+      check_find t "kt4:c"     !!kt4 (p ["c"])         !!kv2 >>= fun () ->
 
-      check_keys t "trees" `Tree [kt0; kt1; kt2; kt3; kt4] >>=
+      check_keys t "trees" `Tree [!!kt0; !!kt1; !!kt2; !!kt3; !!kt4] >>=
       fun () ->
 
       Lwt.return (Ok t)
@@ -317,17 +319,17 @@ module Make (Store : Git.S) = struct
 
           let open Lwt_result in
 
-          create ~root ()           >>= fun t   ->
-          check_write t "c1" kc1 c1 >>= fun () ->
-          check_write t "c2" kc2 c2 >>= fun () ->
+          create ~root ()               >>= fun t   ->
+          check_write t "c1" !!kc1 !!c1 >>= fun () ->
+          check_write t "c2" !!kc2 !!c2 >>= fun () ->
 
           let p x = `Commit (`Path x) in
-          check_find t "c1:b"     kc1 (p ["b"])          kt1 >>= fun () ->
-          check_find t "c1:b/x"   kc1 (p ["b"; "x"])     kv1 >>= fun () ->
-          check_find t "c2:a/b/x" kc2 (p ["a";"b"; "x"]) kv1 >>= fun () ->
-          check_find t "c2:c"     kc2 (p ["c"])          kv2 >>= fun () ->
+          check_find t "c1:b"     !!kc1 (p ["b"])          !!kt1 >>= fun () ->
+          check_find t "c1:b/x"   !!kc1 (p ["b"; "x"])     !!kv1 >>= fun () ->
+          check_find t "c2:a/b/x" !!kc2 (p ["a";"b"; "x"]) !!kv1 >>= fun () ->
+          check_find t "c2:c"     !!kc2 (p ["c"])          !!kv2 >>= fun () ->
 
-          check_keys t "commits" `Commit [kc1; kc2; kc3] >>= fun () ->
+          check_keys t "commits" `Commit [!!kc1; !!kc2; !!kc3] >>= fun () ->
 
           Lwt.return (Ok t)
         | Error (`Decoder err) ->
@@ -341,16 +343,16 @@ module Make (Store : Git.S) = struct
     let test () =
       let open Lwt_result in
 
-      create ~root ()                 >>= fun t   ->
-      check_write t "tag1" ktag1 tag1 >>= fun () ->
-      check_write t "tag2" ktag2 tag2 >>= fun () ->
+      create ~root ()                     >>= fun t   ->
+      check_write t "tag1" !!ktag1 !!tag1 >>= fun () ->
+      check_write t "tag2" !!ktag2 !!tag2 >>= fun () ->
 
       let p l x = `Tag (l, `Commit (`Path x)) in
-      check_find t "tag1:b" ktag1 (p "foo" ["b"]) kt1 >>= fun () ->
-      check_find t "tag2:a" ktag2 (p "bar" ["a"]) kt2 >>= fun () ->
-      check_find t "tag2:c" ktag2 (p "bar" ["c"]) kv2 >>= fun () ->
+      check_find t "tag1:b" !!ktag1 (p "foo" ["b"]) !!kt1 >>= fun () ->
+      check_find t "tag2:a" !!ktag2 (p "bar" ["a"]) !!kt2 >>= fun () ->
+      check_find t "tag2:c" !!ktag2 (p "bar" ["c"]) !!kv2 >>= fun () ->
 
-      check_keys t "tags" `Tag [ktag1; ktag2] >>= fun () ->
+      check_keys t "tags" `Tag [!!ktag1; !!ktag2] >>= fun () ->
 
       Lwt.return (Ok t)
     in
@@ -366,16 +368,16 @@ module Make (Store : Git.S) = struct
       create ~root () >!= function
         | Error err -> Lwt.fail (Store err)
         | Ok t ->
-          Store.Ref.write t r1 (Store.Reference.Hash kt4) >>= fun ()   ->
+          Store.Ref.write t r1 (Store.Reference.Hash !!kt4) >>= fun ()   ->
           Store.Ref.read  t r1      >>= fun (_, kt4') ->
-          assert_head_contents_equal "r1" (Store.Reference.Hash kt4) kt4';
+          assert_head_contents_equal "r1" (Store.Reference.Hash !!kt4) kt4';
 
-          Store.Ref.write t r2 (Store.Reference.Hash kc2) >>= fun ()   ->
+          Store.Ref.write t r2 (Store.Reference.Hash !!kc2) >>= fun ()   ->
           Store.Ref.read  t r2      >>= fun (_, kc2') ->
-          assert_head_contents_equal "r2" (Store.Reference.Hash kc2) kc2';
+          assert_head_contents_equal "r2" (Store.Reference.Hash !!kc2) kc2';
 
           Store.Ref.list t                 >!= fun rs   ->
-            assert_refs_and_hashes_equal "refs" [r1, kt4; r2, kc2] rs;
+            assert_refs_and_hashes_equal "refs" [r1, !!kt4; r2, !!kc2] rs;
 
             let commit = Store.Hash.of_hex "21930ccb5f7b97e80a068371cb554b1f5ce8e55a" in
             Store.Ref.write t Store.Reference.head (Store.Reference.Hash commit) >>= fun () ->
@@ -401,9 +403,9 @@ module Make (Store : Git.S) = struct
           Lwt.return (Ok ())
       in
 
-      check kt4 (`Path ["a";"b";"x"]) kv1 >>= fun () ->
-      check kc2 (`Commit (`Path ["a";"b";"x"])) kv1 >>= fun () ->
-      check kc2 (`Commit (`Path ["a"])) kt2 >>= fun () ->
+      check !!kt4 (`Path ["a";"b";"x"]) !!kv1 >>= fun () ->
+      check !!kc2 (`Commit (`Path ["a";"b";"x"])) !!kv1 >>= fun () ->
+      check !!kc2 (`Commit (`Path ["a"])) !!kt2 >>= fun () ->
       Lwt.return (Ok t)
     in
     run x (fun () -> let open Lwt.Infix in test () >>= function
@@ -745,6 +747,7 @@ module Make (Store : Git.S) = struct
     run x (fun () -> let open Lwt.Infix in test () >>= function
       | Ok t -> Lwt.return t
       | Error err -> Lwt.fail (Store err))
+
 end
 
 let suite (speed, x) =

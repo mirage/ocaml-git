@@ -1026,9 +1026,12 @@ sig
   val reset: ?locks:Lock.t -> t -> (unit, [ `Store of error | `Ref of Ref.error ]) result Lwt.t
   (** [reset ?locks t] removes all things of the git repository [t]
       and ensures it will be empty. *)
+
+  val has_global_watches: bool
+  val has_global_checkout: bool
 end
 
-module Make
+module FS
     (H: S.HASH)
     (L: S.LOCK)
     (FS: S.FS with type File.lock = L.elt)

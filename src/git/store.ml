@@ -19,6 +19,9 @@ open Lwt.Infix
 let ( >!= ) = Lwt_result.bind_lwt_err
 let ( >?= ) = Lwt_result.bind
 
+let src = Logs.Src.create "git.store" ~doc:"logs git's store event"
+module Log = (val Logs.src_log src : Logs.LOG)
+
 module type LOOSE = sig
 
   type t
@@ -106,6 +109,7 @@ module type LOOSE = sig
     with type t = t
      and type init = int * t * int * Cstruct.t
      and type error = [ `Deflate of Deflate.error ]
+
 end
 
 module type PACK = sig
@@ -353,20 +357,22 @@ module type S = sig
 
   val clear_caches: ?locks:Lock.t -> t -> unit Lwt.t
   val reset: ?locks:Lock.t -> t -> (unit, [ `Store of error | `Ref of Ref.error ]) result Lwt.t
+
+  val has_global_watches: bool
+  val has_global_checkout: bool
 end
 
-module Option =
-struct
+module Option = struct
   let get ~default = function Some x -> x | None -> default
   let map f a = match a with Some a -> Some (f a) | None -> None
 end
 
-module Make
-    (H: S.HASH)
-    (L: S.LOCK)
+module FS
+    (H : S.HASH)
+    (L : S.LOCK)
     (FS: S.FS with type File.lock = L.elt)
-    (I: S.INFLATE)
-    (D: S.DEFLATE)
+    (I : S.INFLATE)
+    (D : S.DEFLATE)
   : S with module Hash = H
        and module Lock = L
        and module FS = FS
@@ -378,6 +384,9 @@ module Make
   module Deflate = D
   module Lock = L
   module FS = FS
+
+  let has_global_watches = FS.has_global_watches
+  let has_global_checkout = FS.has_global_checkout
 
   module LooseImpl: Loose.S
     with module Hash = H
@@ -585,12 +594,6 @@ module Make
     module PACKEncoder = PackImpl.PACKEncoder
     module PACKDecoder = PackImpl.PACKDecoder
 
-    module Log =
-    struct
-      let src = Logs.Src.create "git.store.pack" ~doc:"logs git's store event (pack)"
-      include (val Logs.src_log src : Logs.LOG)
-    end
-
     type state = t
 
     type error =
@@ -735,7 +738,7 @@ module Make
           | Ok v -> Lwt.return (Some v)
 
     module GC =
-      Gc.Make(struct
+      Collector.Make(struct
         module Hash = Hash
         module Value = Value
         module Deflate = Deflate
@@ -1035,12 +1038,6 @@ module Make
                                     Hash.pp hash_pack)))
   end
 
-  module Log =
-  struct
-    let src = Logs.Src.create "git.store" ~doc:"logs git's store event"
-    include (val Logs.src_log src : Logs.LOG)
-  end
-
   type error = [ Loose.error | Pack.error ]
 
   type kind =
@@ -1054,6 +1051,7 @@ module Make
     | #Pack.error as err -> Fmt.pf ppf "%a" Pack.pp_error err
 
   let read_p ~ztmp ~dtmp ~raw ~window state hash =
+    Log.debug (fun l -> l "read_p %a" Hash.pp hash);
     Pack.read_p ~ztmp ~window state hash >>= function
     | Ok o ->
       (match o.PACKDecoder.Object.kind with
@@ -1079,8 +1077,7 @@ module Make
         | Ok v -> Lwt.return (Ok v)
 
   let read_s t hash =
-    Log.debug (fun l -> l ~header:"read_s" "Request to read %a in the current Git repository." Hash.pp hash);
-
+    Log.debug (fun l -> l "read_s %a" Hash.pp hash);
     read_p
       ~ztmp:t.buffer.zl
       ~dtmp:t.buffer.de
@@ -1094,10 +1091,10 @@ module Make
 
   let read_exn t hash =
     read t hash >>= function
+    | Ok v    -> Lwt.return v
     | Error _ ->
       let err = Fmt.strf "Git.Store.read_exn: %a not found" Hash.pp hash in
       Lwt.fail (Invalid_argument err)
-    | Ok v -> Lwt.return v
 
   let write_p ~ztmp ~raw state hash =
     Loose.write_p ~ztmp ~raw state hash >|= function
@@ -1223,8 +1220,8 @@ module Make
 
   let fold = T.fold
 
-  module Ref =
-  struct
+  module Ref = struct
+
     module Packed_refs = Packed_refs.Make(Hash)(FS)
     (* XXX(dinosaure): we need to check the packed references when we write and remove. *)
 
@@ -1267,93 +1264,98 @@ module Make
 
     module Graph = Reference.Map
 
-    module Log =
-    struct
-      let src = Logs.Src.create "git.store.ref" ~doc:"logs git's store reference event"
-      include (val Logs.src_log src : Logs.LOG)
-    end
-
     (* XXX(dinosaure): this function does not return any {!Error} value. *)
     let graph_p ~dtmp ~raw ?locks t =
+      Log.debug (fun l -> l "graph_p");
       let lock_gbl = match locks with
+        | None       -> None
         | Some locks -> Some (Lock.make locks Fpath.(v "global"))
-        | None -> None
       in
-
       let lock_ref reference = match locks with
-        | Some locks -> Some (Lock.make locks Fpath.(v ("r-" ^ (Fpath.filename (Reference.to_path reference)))))
-        | None -> None
+        | None       -> None
+        | Some locks ->
+          let name = "r-" ^ Fpath.filename (Reference.to_path reference) in
+          Some (Lock.make locks Fpath.(v name))
       in
-
       contents ?locks Fpath.(t.dotgit / "refs") >>= function
       | Error sys_err ->
-        Log.err (fun l -> l ~header:"graph_p" "Retrieve an error: %a." FS.Dir.pp_error sys_err);
-        Lwt.return (Error (`SystemDirectory sys_err))
+        Log.err (fun l -> l "Got an error: %a." FS.Dir.pp_error sys_err);
+        Lwt_result.fail (`SystemDirectory sys_err)
       | Ok files ->
-        Log.debug (fun l -> l ~header:"graph_p" "Retrieve these files: %a."
-                      (Fmt.hvbox (Fmt.list Fpath.pp)) files);
-
-        Lwt_list.fold_left_s
-          (fun acc abs_ref ->
-             (* XXX(dinosaure): we already normalize the reference (which is
-                absolute). so we consider than the root as [/]. *)
-             Lock.with_lock (lock_ref (Reference.of_path abs_ref))
-               (fun () -> Reference.read ~root:t.dotgit (Reference.of_path abs_ref) ~dtmp ~raw)
-             >|= function
-             | Ok v -> v :: acc
-             | Error err ->
-               Log.err (fun l -> l ~header:"graph_p" "Retrieve an error when we read reference %a: %a."
-                           Reference.pp (Reference.of_path abs_ref)
-                           Reference.pp_error err);
-               acc)
+        Log.debug (fun l ->
+            let pp_files = Fmt.hvbox (Fmt.list Fpath.pp) in
+            l "contents files: %a." pp_files files);
+        Lwt_list.fold_left_s (fun acc abs_ref ->
+            (* XXX(dinosaure): we already normalize the reference
+               (which is absolute). so we consider than the root as
+               [/]. *)
+            let lock = Reference.of_path abs_ref in
+            Lock.with_lock (lock_ref lock) (fun () ->
+                Reference.read ~root:t.dotgit lock ~dtmp ~raw
+              ) >|= function
+            | Ok v -> v :: acc
+            | Error err ->
+              Log.err (fun l ->
+                  l "Error while reading %a: %a."
+                    Reference.pp lock
+                    Reference.pp_error err);
+              acc)
           [] (Reference.(to_path head) :: files)
-        >>= fun lst -> Lwt_list.fold_left_s
-          (fun (rest, graph) -> function
-             | refname, Reference.Hash hash ->
-               Lwt.return (rest, Graph.add refname hash graph)
-             | refname, Reference.Ref link ->
-               Log.debug (fun l -> l ~header:"graph_p" "Putting the reference %a -> %a as a partial value."
-                             Reference.pp refname Reference.pp link);
-               Lwt.return ((refname, link) :: rest, graph))
-          ([], Graph.empty) lst
-        >>= fun (partial, graph) ->
-        Lock.with_lock lock_gbl
-          (fun () -> Packed_refs.read ~root:t.dotgit ~dtmp ~raw >>= function
-             | Ok packed_refs ->
-               Hashtbl.reset t.packed;
-               List.iter (function
-                   | `Ref (refname, hash) ->
-                     Hashtbl.add t.packed (Reference.of_string refname) hash
-                   | `Peeled _ -> ())
-                 packed_refs;
-               Lwt.return (Ok packed_refs)
-             | Error _ as err -> Lwt.return err)
-        >>= function
+        >>= fun lst ->
+        let partial, graph =
+          List.fold_left (fun (rest, graph) -> function
+              | r, Reference.Hash hash -> (rest, Graph.add r hash graph)
+              | r, Reference.Ref link ->
+                Log.debug (fun l ->
+                    l "adding ref %a -> %a as a partial value."
+                      Reference.pp r Reference.pp link);
+                (r, link) :: rest, graph
+            ) ([], Graph.empty) lst
+        in
+        Lock.with_lock lock_gbl (fun () ->
+            Packed_refs.read ~root:t.dotgit ~dtmp ~raw >>= function
+            | Error _ as err -> Lwt.return err
+            | Ok packed_refs ->
+              Hashtbl.reset t.packed;
+              List.iter (function
+                  | `Peeled _            -> ()
+                  | `Ref (refname, hash) ->
+                    Hashtbl.add t.packed (Reference.of_string refname) hash
+                ) packed_refs;
+              Lwt.return (Ok packed_refs))
+        >|= function
         | Ok packed_refs ->
-          Lwt_list.fold_left_s
-            (fun graph -> function
-               | `Peeled _ -> Lwt.return graph
-               | `Ref (refname, hash) -> Lwt.return (Graph.add (Reference.of_string refname) hash graph))
-            graph packed_refs
-          >>= fun graph -> Lwt_list.fold_left_s
-            (fun graph (refname, link) ->
-               Log.debug (fun l -> l ~header:"graph_p" "Resolving the reference %a -> %a."
-                             Reference.pp refname Reference.pp link);
-
-               try let hash = Graph.find link graph in Lwt.return (Graph.add refname hash graph)
-               with Not_found -> Lwt.return graph)
-            graph partial
-          >|= fun graph -> Ok graph
+          let graph =
+            List.fold_left (fun graph -> function
+                | `Peeled _      -> graph
+                | `Ref (r, hash) -> Graph.add (Reference.of_string r) hash graph
+              ) graph packed_refs
+          in
+          let graph =
+            List.fold_left (fun graph (refname, link) ->
+                Log.debug (fun l ->
+                    l "Resolving the reference %a -> %a."
+                      Reference.pp refname Reference.pp link);
+                try
+                  let hash = Graph.find link graph in
+                  Graph.add refname hash graph
+                with Not_found -> graph
+              ) graph partial
+          in
+          Ok graph
         | Error #Packed_refs.error ->
-          Lwt_list.fold_left_s
-            (fun graph (refname, link) ->
-               Log.debug (fun l -> l ~header:"graph_p" "Resolving the reference %a -> %a."
-                             Reference.pp refname Reference.pp link);
-
-               try let hash = Graph.find link graph in Lwt.return (Graph.add refname hash graph)
-               with Not_found -> Lwt.return graph)
-            graph partial
-          >|= fun graph -> Ok graph
+          let graph =
+            List.fold_left (fun graph (refname, link) ->
+                Log.debug (fun l ->
+                    l "Resolving the reference %a -> %a."
+                      Reference.pp refname Reference.pp link);
+                try
+                  let hash = Graph.find link graph in
+                  Graph.add refname hash graph
+                with Not_found -> graph
+              ) graph partial
+          in
+          Ok graph
     [@@warning "-44"]
 
     let graph ?locks t = graph_p ~dtmp:t.buffer.de ~raw:t.buffer.io ?locks t
