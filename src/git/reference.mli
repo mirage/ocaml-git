@@ -21,7 +21,7 @@ type t = private string
 (** A Git Reference object. Which contains a hash to point to an other
     object. *)
 
-module Infix : sig
+module Path : sig
   type partial
   (** Type of the left part of a reference. *)
   type branch = string
@@ -99,19 +99,19 @@ module type S = sig
 
   type nonrec t = t
 
-  module Infix : sig
+  module Path: sig
     type partial
     type branch
 
-    val ( // ) : partial -> partial -> partial
-    val ( / ) : partial -> branch -> t
+    val ( // ): partial -> partial -> partial
+    val ( / ): partial -> branch -> t
 
-    val refs : partial
-    val heads : partial
-    val remotes : partial
-    val origin : partial
+    val refs: partial
+    val heads: partial
+    val remotes: partial
+    val origin: partial
 
-    val master : branch
+    val master: branch
   end
 
   val head: t

@@ -21,7 +21,7 @@ let to_string x = x
 
 let sep = "/"
 
-module Infix =
+module Path =
 struct
   type partial = string
   type branch = string
@@ -60,31 +60,31 @@ module type S = sig
 
   type nonrec t = t
 
-  module Infix : sig
+  module Path : sig
     type partial
     type branch
 
-    val ( // ) : partial -> partial -> partial
-    val ( / ) : partial -> branch -> t
+    val ( // ): partial -> partial -> partial
+    val ( / ): partial -> branch -> t
 
-    val refs : partial
-    val heads : partial
-    val remotes : partial
-    val origin : partial
+    val refs: partial
+    val heads: partial
+    val remotes: partial
+    val origin: partial
 
-    val master : branch
+    val master: branch
   end
 
-  val head    : t
-  val master  : t
+  val head: t
+  val master: t
 
-  val is_head : t -> bool
+  val is_head: t -> bool
 
-  val of_string : string -> t
-  val to_string : t -> string
+  val of_string: string -> t
+  val to_string: t -> string
 
-  val of_path : Fpath.t -> t
-  val to_path : t -> Fpath.t
+  val of_path: Fpath.t -> t
+  val to_path: t -> Fpath.t
 
   include S.BASE with type t := t
 
@@ -92,12 +92,12 @@ module type S = sig
     | Hash of Hash.t
     | Ref of t
 
-  val pp_head_contents : head_contents Fmt.t
-  val equal_head_contents : head_contents -> head_contents -> bool
-  val compare_head_contents : head_contents -> head_contents -> int
+  val pp_head_contents: head_contents Fmt.t
+  val equal_head_contents: head_contents -> head_contents -> bool
+  val compare_head_contents: head_contents -> head_contents -> int
 
   module A: S.ANGSTROM with type t = head_contents
-  module D : S.DECODER
+  module D: S.DECODER
     with type t = head_contents
      and type init = Cstruct.t
      and type error = [ `Decoder of string ]
