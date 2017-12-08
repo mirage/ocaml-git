@@ -81,7 +81,7 @@ module type S_EXT = sig
 
   val push:
     Store.t
-    -> push:(Store.t -> (Store.Hash.t * Store.Reference.t * bool) list -> (Store.Hash.t list * command list) Lwt.t)
+    -> push:((Store.Hash.t * Store.Reference.t * bool) list -> (Store.Hash.t list * command list) Lwt.t)
     -> ?headers:Web.HTTP.headers
     -> ?https:bool
     -> ?port:int
@@ -117,87 +117,91 @@ module type S_EXT = sig
   val fetch_some:
     Store.t -> ?locks:Store.Lock.t ->
     ?capabilities:Git.Capability.t list ->
-    references:(Store.Reference.t * Store.Reference.t) list ->
-    Uri.t -> ((Store.Reference.t * Store.Hash.t) list, error) result Lwt.t
+    references:Store.Reference.t list Store.Reference.Map.t ->
+    Uri.t -> (Store.Hash.t Store.Reference.Map.t
+              * Store.Reference.t list Store.Reference.Map.t, error) result Lwt.t
   (** [fetch_some git ?locks ?capabilities ~references repository] will
-      fetch some references specified by [references].
+      fetch some remote references specified by [references].
 
-      [references] is an associated list which:
+      [references] is a map which:
       {ul
-      {- the key is the local reference where the client wants to
-      store the updated hash.}
-      {- the value is the remote reference when the client wants to be
-      synchronized with the server.}}
+      {- the key is the {b remote} reference.}
+      {- the value is a list of {b local} references - which may not exist yet.}}
 
-      If a reference inside [references] does not appear on the server
-      side, we miss it.
+      Then, the function will try to download all of these remote
+      references and returns 2 maps:
 
-      This function compares the hash pointed by the local reference
-      binded with the remote branch to see if the update is necessary
-      or not. Then, it updates local references by the hash noticed by
-      the server and associated to the remote reference. For example:
+      {ul
 
-      > references = [refs/heads/master, refs/heads/master]
+      {- the first map contains all local references updated by the
+      new hash. This new hash is come from the server as the
+      downloaded remote reference asked by the client by [references].
+      Then, from associated local references with remote references,
+      we updated them with the associated hash.}
 
-      Will update the reference [refs/heads/master] to the last
-      version of the [refs/heads/master] reference on the server side.
-      However, usually, Git launch the fetch command with:
+      For examplem, if [references] is:
+      { "refs/heads/master": [ "refs/remotes/origin/master"
+                             ; "refs/heads/master" ] }
 
-      > references = [refs/remotes/master, refs/heads/master]
+      Will update (or create) "refs/remotes/origin/master" and
+      "refs/heads/master" with the new hash downloaded from the remote
+      reference "refs/heads/master" only if it's necessary (only if we
+      did not find the hash referenced by "refs/heads/master" in the
+      local store).
 
-      Then, it updateds [refs/heads/master] to point indirectly to
-      [refs/remotes/master] and finally set the [HEAD] reference to
-      point to [refs/heads/master].
+      {- the second map is a {b subset} of [references] which contains all binder of:
 
-      [locks] is the place which is a {i data-structure} which
-      contains lock representation. By {i data-structure} we can mean
-      a directory or a data-structure whcih contains {i mutex}.
+      {ul
+      {- remote references which does not exist on the server side.}
+      {- remote references which references to a already existing in
+      the local store hash.}}
 
-      [capabilities] is a list of {!Capabilities.t} which describe how
-      to communicate with the server. If you don't understand what I
-      mean, it's better to not precise (and use the default value)
-      this argument. In other side, it's better to use directly
-      {!fetch} than this helper function.
+      The client should not put the same local reference as a value of
+      some remote references. The client can define non-existing
+      remote references (then, they appear on the second map). The
+      client can want to set non-existing local references - we will
+      create them.
 
-      Finally, we need to repository address which needs to have the
-      [http] or the [https] scheme. The process to send a request (and
-      handle a redirection for example) is not the part of
-      [fetch_some] but described on the {!Client} module. *)
+      If the processus encountered an error when it update references,
+      it leaves but, it did partially some update on some local
+      references. *)
 
   val fetch_all:
     Store.t -> ?locks:Store.Lock.t ->
     ?capabilities:Git.Capability.t list ->
-    references:(Store.Reference.t * Store.Reference.t) list ->
-    ?origin:string ->
-    Uri.t -> ((Store.Reference.t * Store.Hash.t) list
-              * (Store.Reference.t * Store.Hash.t) list, error) result Lwt.t
-  (** [fetch_all git ?locks ?capabilities ~references repository] is a
-      specific call of {!fetch_some}. This function will download all
-      references from the server.
+    references:Store.Reference.t list Store.Reference.Map.t ->
+    Uri.t -> (Store.Hash.t Store.Reference.Map.t
+              * Store.Reference.t list Store.Reference.Map.t
+              * Store.Hash.t Store.Reference.Map.t, error) result Lwt.t
+  (** [fetch_all git ?locks ?capabilities ~references repository] has
+      the same semantic than {!fetch_some} for any remote references found
+      on [references]. However, [fetch all] will download all remote
+      references available on the server (and whose hash is not available
+      on the local store). If these remote references are not associated
+      with some local references, we return a third map which contains
+      these remote references binded with the new hash downloaded.
 
-      Then, for all references founded in the associated list
-      [references], we updated the binded local reference. This list
-      could not be exhaustive. So for all references downloaded from
-      the server, if we not find them in the [references] associated
-      list and only if they have this format:
+      We {b don't} notice any non-downloaded remote references not
+      found on the [references] map and whose hash already exists on
+      the local store.
 
-      > refs/heads/{branch}
-
-      We create/{b replace} a new local references on this form:
-
-      > refs/remotes/{origin}/{branch}
-
-      To keep updated hashes locally. For any other references, we
-      miss this update but return an associated list between these
-      remote references and binded hashes. *)
+      Then, the client can bind these new hashes with specific local
+      references or just give up. *)
 
   val fetch_one:
     Store.t -> ?locks:Store.Lock.t ->
     ?capabilities:Git.Capability.t list ->
-    reference:(Store.Reference.t * Store.Reference.t) ->
-    Uri.t -> (Store.Reference.t * Store.Hash.t, error) result Lwt.t
-  (** [fetch_one git ?locks //capabilities ~reference repository] is a
-      specific call of {!fetch_some} with only one reference. *)
+    reference:(Store.Reference.t * Store.Reference.t list) ->
+    Uri.t -> ([ `AlreadySync | `Sync of Store.Hash.t Store.Reference.Map.t ], error) result Lwt.t
+  (** [fetch_one git ?locks ?capabilities ~reference repository] is a
+      specific call of {!fetch_some} with only one reference. Then, it
+      retuns:
+
+      {ul
+      {- [`AlreadySync] if the hash of the requested reference already
+      exists on the local store}
+      {- [`Sync updated] if we downloaded [new_hash] and
+      set [local_ref] with this new hash.}} *)
 
   val clone:
     Store.t -> ?locks:Store.Lock.t ->
@@ -207,9 +211,8 @@ module type S_EXT = sig
 
   val update: Store.t ->
     ?capabilities:Git.Capability.t list ->
-    reference:Store.Reference.t -> Uri.t ->
+    references:(Store.Reference.t * Store.Reference.t) list -> Uri.t ->
     ((Store.Reference.t, Store.Reference.t * string) result list, error) result Lwt.t
-
 end
 
 module Make_ext

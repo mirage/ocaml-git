@@ -109,7 +109,7 @@ module type S_EXT = sig
 
   val push:
        Store.t
-    -> push:(Store.t -> (Store.Hash.t * Store.Reference.t * bool) list -> (Store.Hash.t list * command list) Lwt.t)
+    -> push:((Store.Hash.t * Store.Reference.t * bool) list -> (Store.Hash.t list * command list) Lwt.t)
     -> ?headers:Web.HTTP.headers
     -> ?https:bool
     -> ?port:int
@@ -145,22 +145,23 @@ module type S_EXT = sig
   val fetch_some:
     Store.t -> ?locks:Store.Lock.t ->
     ?capabilities:Git.Capability.t list ->
-    references:(Store.Reference.t * Store.Reference.t) list ->
-    Uri.t -> ((Store.Reference.t * Store.Hash.t) list, error) result Lwt.t
+    references:Store.Reference.t list Store.Reference.Map.t ->
+    Uri.t -> (Store.Hash.t Store.Reference.Map.t
+              * Store.Reference.t list Store.Reference.Map.t, error) result Lwt.t
 
   val fetch_all:
     Store.t -> ?locks:Store.Lock.t ->
     ?capabilities:Git.Capability.t list ->
-    references:(Store.Reference.t * Store.Reference.t) list ->
-    ?origin:string ->
-    Uri.t -> ((Store.Reference.t * Store.Hash.t) list
-              * (Store.Reference.t * Store.Hash.t) list, error) result Lwt.t
+    references:Store.Reference.t list Store.Reference.Map.t ->
+    Uri.t -> (Store.Hash.t Store.Reference.Map.t
+              * Store.Reference.t list Store.Reference.Map.t
+              * Store.Hash.t Store.Reference.Map.t, error) result Lwt.t
 
   val fetch_one:
     Store.t -> ?locks:Store.Lock.t ->
     ?capabilities:Git.Capability.t list ->
-    reference:(Store.Reference.t * Store.Reference.t) ->
-    Uri.t -> (Store.Reference.t * Store.Hash.t, error) result Lwt.t
+    reference:(Store.Reference.t * Store.Reference.t list) ->
+    Uri.t -> ([ `AlreadySync | `Sync of Store.Hash.t Store.Reference.Map.t ], error) result Lwt.t
 
   val clone:
     Store.t -> ?locks:Store.Lock.t ->
@@ -170,9 +171,8 @@ module type S_EXT = sig
 
   val update: Store.t ->
     ?capabilities:Git.Capability.t list ->
-    reference:Store.Reference.t -> Uri.t ->
-    ((Store.Reference.t, Store.Reference.t * string) result list, error) result Lwt.t
-
+    references:(Store.Reference.t * Store.Reference.t) list ->
+    Uri.t -> ((Store.Reference.t, Store.Reference.t * string) result list, error) result Lwt.t
 end
 
 module type S = S_EXT
@@ -443,7 +443,7 @@ module Make_ext
       in
 
       Lwt_list.map_p (fun (hash, refname, peeled) -> Lwt.return (hash, Store.Reference.of_string refname, peeled)) refs.Decoder.refs
-      >>= push git >>= function
+      >>= push >>= function
       | (_, []) -> Lwt.return (Ok [])
       | (shallow, commands) ->
         let req =
@@ -560,9 +560,14 @@ module Make_ext
       >>= want >>= function
       | [] -> Lwt.return (Ok ([], 0))
       | first :: rest ->
-        let negociation_request final has =
-          Log.debug (fun l -> l ~header:"fetch" "Send a POST negociation request (done:%b): %a."
-                        final (Fmt.Dump.list Store.Hash.pp) has);
+        let negociation_request done_or_flush has =
+          let pp_done_or_flush ppf = function
+            | `Done -> Fmt.pf ppf "`Done"
+            | `Flush -> Fmt.pf ppf "`Flush"
+          in
+
+          Log.debug (fun l -> l ~header:"fetch" "Send a POST negociation request (done:%a): %a."
+                        pp_done_or_flush done_or_flush (Fmt.Dump.list Store.Hash.pp) has);
 
           let req =
             Web.Request.v
@@ -575,7 +580,7 @@ module Make_ext
           Client.call
             ~headers:(Web.Request.headers req |> Web.HTTP.Headers.merge headers)
             ~body:(producer (Encoder.encode encoder
-                               (`HttpUploadRequest (final,
+                               (`HttpUploadRequest (done_or_flush,
                                                     { Encoder.want = snd first, List.map snd rest
                                                     ; capabilities
                                                     ; shallow
@@ -588,11 +593,11 @@ module Make_ext
              |> (fun uri -> Uri.with_port uri port))
         in
 
-        negociation_request false has >>= fun resp ->
+        negociation_request `Flush has >>= fun resp ->
 
         Log.debug (fun l -> l ~header:"fetch" "Receiving the first negotiation response.");
 
-        let next resp =
+        let result resp =
           consume (Web.Response.body resp)
             (Decoder.decode decoder Decoder.NegociationResult) >>= function
           | Error err -> Lwt.return (Error (`SmartDecoder err))
@@ -601,9 +606,9 @@ module Make_ext
             Lwt_result.(populate ?stdout ?stderr git stream >>= fun (_, n) -> Lwt.return (Ok (first :: rest, n)))
         in
 
-        let rec loop ~final state resp = match final with
-          | true -> next resp
-          | false ->
+        let rec loop ?(done_or_flush = `Flush) state resp = match done_or_flush with
+          | `Done -> result resp
+          | `Flush ->
             Lwt_mvar.take keeper >>= fun has -> Lwt_mvar.put keeper has >>= fun () ->
 
             Log.debug (fun l -> l ~header:"fetch" "Receiving a negotiation response.");
@@ -616,70 +621,54 @@ module Make_ext
               Log.debug (fun l -> l ~header:"fetch" "ACK response received: %a." Decoder.pp_acks acks);
 
               negociate acks state >>= function
-              | `Ready, _ -> next resp
+              | `Ready, _ -> result resp
               | `Again has', state ->
                 Lwt_mvar.take keeper >>= fun has ->
                 let has = has @ has' in
                 Lwt_mvar.put keeper has >>= fun () ->
 
-                negociation_request false has >>= loop ~final:false state
-              | `Done, _ -> next resp
+                negociation_request `Flush has >>= loop state
+              | `Done, _ -> result resp
         in
 
-        loop ~final:(List.length has = 0) nstate resp
+        loop ~done_or_flush:(if List.length has = 0 then `Done else `Flush) nstate resp
 
-  let want git requested local_refs remote_refs =
+  let want_handler git choose remote_refs =
+    (* XXX(dinosaure): in this /engine/, for each remote references,
+       we took or not only if this reference is not /peeled/. Then,
+       [choose] returns [true] or [false] if he wants to download the
+       reference or not. Finally, we check if we don't have already
+       the remote hash. and if it's the case, we don't download it. *)
     Lwt_list.filter_map_p (function
         | (remote_hash, remote_ref, false) ->
-          (requested remote_ref >>= function
+          (choose remote_ref >>= function
             | false ->
-              Log.debug (fun l -> l ~header:"want" " We discard the reference %a."
+              Log.debug (fun l -> l ~header:"want_handler" "We missed the reference %a."
                             Store.Reference.pp remote_ref);
               Lwt.return None
             | true ->
-              Lwt.try_bind
-                (fun () -> Lwt_list.find_s
-                    (fun (local_ref, _) ->
-                       Lwt.return Store.Reference.(equal local_ref remote_ref))
-                    local_refs)
-                (fun (_, local_hash) ->
-                   Log.debug (fun l -> l ~header:"want"
-                                 "The local hash of the expected reference %a \
-                                  is %a and the server hash is %a."
-                                 Store.Reference.pp remote_ref
-                                 Store.Hash.pp local_hash
-                                 Store.Hash.pp remote_hash);
-                   Lwt.return (Some (remote_ref, remote_hash)))
-                (fun _ ->
-                   Log.debug (fun l -> l ~header:"want"
-                                 "We did not find the reference %a \
-                                  as an expected reference but we will probably download it."
-                                 Store.Reference.pp remote_ref);
-
-                   Lwt.return (Some (remote_ref, remote_hash)))
-              >>= function
+              Lwt.return (Some (remote_ref, remote_hash)))
+          >>= (function
               | None -> Lwt.return None
               | Some (remote_ref, remote_hash) ->
                 Store.mem git remote_hash >>= function
                 | true -> Lwt.return None
                 | false -> Lwt.return (Some (remote_ref, remote_hash)))
-        | _ -> Lwt.return None
-      ) remote_refs
+        | _ -> Lwt.return None)
+      remote_refs
 
   let clone_ext git ?stdout ?stderr ?headers ?(https = false) ?port
       ?(reference = Store.Reference.master) ?capabilities
       host path =
-    Store.Ref.list git >>= fun local_references ->
-
-    let want = want git
+    let want_handler = want_handler git
         (fun reference' ->
            Lwt.return Store.Reference.(equal reference reference'))
-        local_references in
+    in
 
     fetch git ?stdout ?stderr ?headers ?capabilities ~https
       ~negociate:((fun _ () -> Lwt.return (`Done, ())), ())
       ~has:[]
-      ~want
+      ~want:want_handler
       ?port host path
     >>= function
     | Ok ([ _, hash ], _) -> Lwt.return (Ok hash)
@@ -696,42 +685,28 @@ module Make_ext
 
   exception Jump of Store.Ref.error
 
-  let clone t ?locks ?capabilities ~reference:(local_ref, remote_ref) repository =
+  let clone git ?locks ?capabilities ~reference:(local_ref, remote_ref) repository =
     let host =
       Option.value_exn (Uri.host repository)
         ~error:(Fmt.strf "Expected an http url with host: %a."
                   Uri.pp_hum repository)
     in
     let https = Option.mem (Uri.scheme repository) "https" ~equal:String.equal in
-    clone_ext t ~https ?port:(Uri.port repository) ?capabilities
+    clone_ext git ~https ?port:(Uri.port repository) ?capabilities
       ~reference:remote_ref host (Uri.path_and_query repository)
     >?= fun hash' ->
-      Store.Ref.write t ?locks local_ref (Store.Reference.Hash hash')
+      Store.Ref.write git ?locks local_ref (Store.Reference.Hash hash')
       >!= (fun err -> Lwt.return (`Ref err))
       >?= fun () ->
-        Store.Ref.write t ?locks Store.Reference.head
+        Store.Ref.write git ?locks Store.Reference.head
           (Store.Reference.Ref local_ref)
         >!= (fun err -> Lwt.return (`Ref err))
 
-  let fetch_and_update git ?locks ?capabilities ~choose ~create ~references repository =
+  let fetch_and_set_references git ?locks ?capabilities ~choose ~references repository =
     Negociator.find_common git >>= fun (has, state, continue) ->
     let continue { Decoder.acks; shallow; unshallow } state =
       continue { Git.Negociator.acks; shallow; unshallow } state in
-
-    Store.Ref.list ?locks git >>=
-    Lwt_list.filter_map_p
-      (fun (local_ref, local_hash) ->
-         Lwt.try_bind
-           (fun () ->
-              Lwt_list.find_s
-                (fun (local_ref', _) ->
-                   Lwt.return Store.Reference.(equal local_ref local_ref'))
-                references)
-           (fun (_, remote_ref) ->
-              Lwt.return (Some (remote_ref, local_hash)))
-           (fun _ -> Lwt.return None))
-    >>= fun local_refs_binded_with_remote_refs ->
-    let want = want git choose local_refs_binded_with_remote_refs in
+    let want_handler = want_handler git choose in
     let host =
       Option.value_exn (Uri.host repository)
         ~error:(Fmt.strf "Expected an http url with host: %a."
@@ -739,64 +714,41 @@ module Make_ext
     let https =
       Option.mem (Uri.scheme repository) "https" ~equal:String.equal in
     fetch git ~https ?port:(Uri.port repository) ?capabilities
-      ~negociate:(continue, state) ~has ~want host
+      ~negociate:(continue, state) ~has ~want:want_handler host
       (Uri.path_and_query repository)
-    >?= fun (lst, _) ->
-      Lwt_list.filter_map_p
-        (fun (remote_ref, local_hash) ->
-           Lwt.try_bind
-             (fun () -> Lwt_list.find_s
-                 (fun (_, expected_remote_ref) ->
-                    Lwt.return Store.Reference.(equal remote_ref expected_remote_ref))
-                 references)
-             (fun (expected_local_ref, _) ->
-                Lwt.return (Some (expected_local_ref, local_hash)))
-             (fun _ -> match create remote_ref with
-                | Some local_ref -> Lwt.return (Some (local_ref, local_hash))
-                | None -> Lwt.return None))
-        lst
-      >>= fun update_lst ->
-      Lwt_list.filter_map_p
-        (fun (remote_ref, local_hash) ->
-           Lwt.try_bind
-             (fun () -> Lwt_list.find_s
-                 (fun (_, expected_remote_ref) ->
-                    Lwt.return Store.Reference.(equal remote_ref expected_remote_ref))
-                 references)
-             (fun _ -> Lwt.return None)
-             (fun _ -> match create remote_ref with
-                | Some _ -> Lwt.return None
-                | None -> Lwt.return (Some (remote_ref, local_hash))))
-        lst
-      >>= fun discard_lst ->
-      Lwt.catch (fun () ->
-          Lwt_list.iter_s
-            (fun (reference, hash) ->
-               Store.Ref.write git ?locks reference (Store.Reference.Hash hash)
-               >>= function
-               | Ok _ -> Lwt.return ()
-               | Error err -> Lwt.fail (Jump err)
-            ) update_lst >>= fun () ->
-          Lwt.return (Ok (update_lst, discard_lst)))
+    >?= fun (results, _) ->
+      let results = List.fold_left
+          (fun results (remote_ref, hash) -> Store.Reference.Map.add remote_ref hash results)
+          Store.Reference.Map.empty results in
+      let updated, missed = Store.Reference.Map.partition
+          (fun remote_ref _ -> Store.Reference.Map.mem remote_ref results)
+          references in
+      let updated, downloaded = Store.Reference.Map.fold
+          (fun remote_ref new_hash (updated', downloaded) ->
+             try
+               let local_refs = Store.Reference.Map.find remote_ref updated in
+               List.fold_left (fun updated' local_ref -> Store.Reference.Map.add local_ref new_hash updated')
+                 updated' local_refs, downloaded
+             with Not_found -> updated', Store.Reference.Map.add remote_ref new_hash downloaded)
+          results Store.Reference.Map.(empty, empty) in
+      Lwt.try_bind
+        (fun () ->
+           Lwt_list.iter_p
+             (fun (local_ref, new_hash) ->
+                Store.Ref.write git ?locks local_ref (Store.Reference.Hash new_hash)
+                >>= function
+                | Ok _ -> Lwt.return ()
+                | Error err -> Lwt.fail (Jump err))
+             (Store.Reference.Map.bindings updated))
+        (fun () -> Lwt.return (Ok (updated, missed, downloaded)))
         (function
           | Jump err -> Lwt.return (Error (`Ref err))
-          | exn -> Lwt.fail exn) (* XXX(dinosaure): should never happen. *)
+          | exn -> Lwt.fail exn)
 
-  let fetch_all git ?locks ?capabilities ~references ?(origin = "origin") repository =
+  let fetch_all git ?locks ?capabilities ~references repository =
     let choose _ = Lwt.return true in
-    let create remote_ref =
-      match Fpath.segs (Store.Reference.to_path remote_ref) with
-      | "refs" :: "heads" :: branch when List.length branch > 0 ->
-        Some (Store.Reference.of_string
-                (String.concat "/"
-                   ([ "refs"
-                    ; "remotes"
-                    ; origin ] @ branch)))
-      | _ -> None
-    in
-    fetch_and_update
+    fetch_and_set_references
       ~choose
-      ~create
       ?locks
       ?capabilities
       ~references
@@ -804,70 +756,96 @@ module Make_ext
 
   let fetch_some git ?locks ?capabilities ~references repository =
     let choose remote_ref =
-      Lwt_list.exists_p
-        (fun (_, expected_remote_ref) ->
-           Lwt.return Store.Reference.(equal remote_ref expected_remote_ref))
-        references
-    in
-    let create _ = None in
-    fetch_and_update
+      Lwt.return (Store.Reference.Map.mem remote_ref references) in
+    fetch_and_set_references
       ~choose
-      ~create
       ?locks
       ?capabilities
       ~references
       git repository
-    >?= function
-      | updated, [] -> Lwt.return (Ok updated)
-      | updated, discard ->
-        Log.err (fun l -> l ~header:"fetch_some"
-                    "We discard some server-side references: %a."
-                    Fmt.(hvbox (Dump.list (Dump.pair Store.Reference.pp Store.Hash.pp)))
-                    discard);
-        Lwt.return (Ok updated) (* XXX(dinosaure): should return an error? *)
+    >?= fun (updated, missed, downloaded) ->
+        if Store.Reference.Map.is_empty downloaded
+        then Lwt.return (Ok (updated, missed))
+        else begin
+          Log.err (fun l -> l ~header:"fetch_some" "This case should not appear, we download: %a."
+                      Fmt.Dump.(list (pair Store.Reference.pp Store.Hash.pp))
+                      (Store.Reference.Map.bindings downloaded));
 
-  let fetch_one git ?locks ?capabilities ~reference:((expected_local_ref, expected_remote_ref) as reference) repository =
+          Lwt.return (Ok (updated, missed))
+        end
+
+  let fetch_one git ?locks ?capabilities ~reference:(remote_ref, local_refs) repository =
+    let references = Store.Reference.Map.singleton remote_ref local_refs in
     let choose remote_ref =
-      Lwt.return Store.Reference.(equal remote_ref expected_remote_ref) in
-    let create _ = None in
-    fetch_and_update
+      Lwt.return (Store.Reference.Map.mem remote_ref references) in
+    fetch_and_set_references
       ~choose
-      ~create
       ?locks
       ?capabilities
-      ~references:[ reference ]
+      ~references
       git repository
-    >?= function
-      | [ updated ], [] -> Lwt.return (Ok updated)
-      | updated, discard ->
-        Log.err (fun l -> l ~header:"fetch_one"
-                    "We discard some server-side references: %a."
-                    Fmt.(hvbox (Dump.list (Dump.pair Store.Reference.pp Store.Hash.pp)))
-                    discard);
-        Log.err (fun l -> l ~header:"fetch_one"
-                    "We updated too many local references: %a."
-                    Fmt.(hvbox (Dump.list (Dump.pair Store.Reference.pp Store.Hash.pp)))
-                    updated);
-        Lwt_list.find_s
-          (fun (local_ref, _) ->
-             Lwt.return Store.Reference.(equal expected_local_ref local_ref))
-          updated >>= fun updated -> Lwt.return (Ok updated)
+    >?= fun (updated, missed, downloaded) ->
+      if not (Store.Reference.Map.is_empty downloaded)
+      then Log.err (fun l -> l ~header:"fetch_some" "This case should not appear, we downloaded: %a."
+                       Fmt.Dump.(list (pair Store.Reference.pp Store.Hash.pp))
+                       (Store.Reference.Map.bindings downloaded));
 
-  let update t ?capabilities ~reference repository =
-    let push_handler git remote_refs =
-      Store.Ref.list git >>=
-      Lwt_list.find_s (fun (reference', _) ->
-          Lwt.return Store.Reference.(equal reference reference')
-        ) >>= fun (_, local_hash) ->
-      Lwt_list.find_s (function
-          | (_, reference', false) ->
-            Lwt.return Store.Reference.(equal reference reference')
-          | (_, _, true) -> Lwt.return false
-        ) remote_refs >|= fun (remote_hash, remote_reference, _) ->
-      if Store.Hash.equal local_hash remote_hash
-      then ([], [])
-      else ([], [ `Update (remote_hash, local_hash, remote_reference) ])
-    in
+      match Store.Reference.Map.(bindings updated, bindings missed) with
+      | [], [ _ ] -> Lwt.return (Ok `AlreadySync)
+      | _ :: _, [] -> Lwt.return (Ok (`Sync updated))
+      | [], missed ->
+        Log.err
+          (fun l -> l ~header:"fetch_one" "This case should not appear, we missed too many references: %a."
+                       Fmt.Dump.(list (pair Store.Reference.pp (list Store.Reference.pp)))
+                       missed);
+        Lwt.return (Ok `AlreadySync)
+      | _ :: _, missed ->
+        Log.err
+          (fun l -> l ~header:"fetch_one" "This case should not appear, we missed too many references: %a."
+                       Fmt.Dump.(list (pair Store.Reference.pp (list Store.Reference.pp)))
+                       missed);
+        Lwt.return (Ok (`Sync updated))
+
+  let push_handler git associated_refs remote_refs =
+    Store.Ref.list git >>= fun locals ->
+    Lwt_list.filter_map_p
+      (fun (local_ref, remote_ref) ->
+         Lwt.try_bind
+           (fun () ->
+              Lwt_list.find_s
+                (fun (local_ref', _) ->
+                   Lwt.return Store.Reference.(equal local_ref local_ref'))
+                locals)
+           (fun (_, local_hash) ->
+              Lwt.return (Some (remote_ref, local_hash)))
+           (fun _ -> Lwt.return None))
+      associated_refs >>= fun associated_refs ->
+    Lwt_list.filter_map_p (function
+        | (remote_hash, remote_ref, false) ->
+          Lwt.try_bind
+            (fun () ->
+               Lwt_list.find_s
+                 (fun (remote_ref', _) ->
+                    Lwt.return Store.Reference.(equal remote_ref remote_ref'))
+                 associated_refs)
+            (fun (remote_ref, local_hash) ->
+               Lwt.return (Some (remote_ref, remote_hash, local_hash)))
+            (fun _ -> Lwt.return None)
+          >>= (function
+              | None -> Lwt.return None
+              | Some (remote_ref, remote_hash, local_hash) ->
+                Store.mem git remote_hash >>= function
+                | true -> Lwt.return (Some (remote_ref, remote_hash, local_hash))
+                | false -> Lwt.return None)
+        | _ -> Lwt.return None)
+      remote_refs
+
+  let update git ?capabilities ~references repository =
+    let push_handler remote_refs =
+      push_handler git references remote_refs
+      >>= Lwt_list.map_p (fun (remote_ref, remote_hash, local_hash) ->
+          Lwt.return (`Update (remote_hash, local_hash, remote_ref)))
+      >>= fun update -> Lwt.return ([], update) in
     let host =
       Option.value_exn (Uri.host repository)
         ~error:(Fmt.strf "Expected an http url with host: %a."
@@ -876,7 +854,7 @@ module Make_ext
     let https =
       Option.mem (Uri.scheme repository) "https" ~equal:String.equal
     in
-    push t ~push:push_handler ~https ?capabilities ?port:(Uri.port repository)
+    push git ~push:push_handler ~https ?capabilities ?port:(Uri.port repository)
       host (Uri.path_and_query repository)
     >?= fun lst ->
       Lwt_result.ok (Lwt_list.map_p (function
