@@ -754,6 +754,12 @@ module Make
 
     let make = GC.make_stream
 
+    let cstruct_copy cs =
+      let ln = Cstruct.len cs in
+      let rs = Cstruct.create ln in
+      Cstruct.blit cs 0 rs 0 ln;
+      rs
+
     let canonicalize git path_pack decoder_pack fdp ~htmp ~rtmp ~ztmp ~window delta info =
       let k2k = function
         | `Commit -> Pack.Kind.Commit
@@ -814,7 +820,7 @@ module Make
             Lwt.return None
           | Ok obj -> Lwt.return (Some obj.PACKDecoder.Object.raw)
         else extern git hash >|= function
-          | Some (_, raw) -> Some raw
+          | Some (_, raw) -> Some (cstruct_copy raw)
           | None -> None
       in
 
@@ -869,13 +875,6 @@ module Make
 
       let stream0, stream1 =
         let stream', push' = Lwt_stream.create () in
-
-        let cstruct_copy cs =
-          let ln = Cstruct.len cs in
-          let rs = Cstruct.create ln in
-          Cstruct.blit cs 0 rs 0 ln;
-          rs
-        in
 
         Lwt_stream.from
           (fun () -> stream () >>= function
