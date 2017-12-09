@@ -169,9 +169,9 @@ module type S_EXT = sig
     reference:(Store.Reference.t * Store.Reference.t) ->
     Uri.t -> (unit, error) result Lwt.t
 
-  val update: Store.t ->
+  val update_and_create: Store.t ->
     ?capabilities:Git.Capability.t list ->
-    references:(Store.Reference.t * Store.Reference.t) list ->
+    references:Store.Reference.t list Store.Reference.Map.t ->
     Uri.t -> ((Store.Reference.t, Store.Reference.t * string) result list, error) result Lwt.t
 end
 
@@ -639,7 +639,7 @@ module Make_ext
        [choose] returns [true] or [false] if he wants to download the
        reference or not. Finally, we check if we don't have already
        the remote hash. and if it's the case, we don't download it. *)
-    Lwt_list.filter_map_p (function
+    Lwt_list.filter_map_s (function
         | (remote_hash, remote_ref, false) ->
           (choose remote_ref >>= function
             | false ->
@@ -806,54 +806,55 @@ module Make_ext
                        missed);
         Lwt.return (Ok (`Sync updated))
 
-  let push_handler git associated_refs remote_refs =
-    Store.Ref.list git >>= fun locals ->
-    Lwt_list.filter_map_p
-      (fun (local_ref, remote_ref) ->
-         Lwt.try_bind
-           (fun () ->
-              Lwt_list.find_s
-                (fun (local_ref', _) ->
-                   Lwt.return Store.Reference.(equal local_ref local_ref'))
-                locals)
-           (fun (_, local_hash) ->
-              Lwt.return (Some (remote_ref, local_hash)))
-           (fun _ -> Lwt.return None))
-      associated_refs >>= fun associated_refs ->
+  let push_handler git references remote_refs =
+    Store.Ref.list git >>= fun local_refs ->
+    let local_refs = List.fold_left
+        (fun local_refs (local_ref, local_hash) ->
+           Store.Reference.Map.add local_ref local_hash local_refs)
+        Store.Reference.Map.empty local_refs in
+
     Lwt_list.filter_map_p (function
-        | (remote_hash, remote_ref, false) ->
-          Lwt.try_bind
-            (fun () ->
-               Lwt_list.find_s
-                 (fun (remote_ref', _) ->
-                    Lwt.return Store.Reference.(equal remote_ref remote_ref'))
-                 associated_refs)
-            (fun (remote_ref, local_hash) ->
-               Lwt.return (Some (remote_ref, remote_hash, local_hash)))
-            (fun _ -> Lwt.return None)
-          >>= (function
-              | None -> Lwt.return None
-              | Some (remote_ref, remote_hash, local_hash) ->
-                Store.mem git remote_hash >>= function
-                | true -> Lwt.return (Some (remote_ref, remote_hash, local_hash))
-                | false -> Lwt.return None)
+        | (remote_hash, remote_ref, false) -> Lwt.return (Some (remote_ref, remote_hash))
         | _ -> Lwt.return None)
       remote_refs
+    >>= fun remote_refs ->
+    let actions =
+      Store.Reference.Map.fold
+        (fun local_ref local_hash actions ->
+           try let remote_refs' = Store.Reference.Map.find local_ref references in
+             List.fold_left (fun actions remote_ref ->
+                 try let remote_hash = List.assoc remote_ref remote_refs in
+                   `Update (remote_hash, local_hash, remote_ref) :: actions
+                 with Not_found -> `Create (local_hash, remote_ref) :: actions)
+               actions remote_refs'
+            with Not_found -> actions)
+        local_refs []
+    in
 
-  let update git ?capabilities ~references repository =
+    Lwt_list.filter_map_s
+      (fun action -> match action with
+        | `Update (remote_hash, local_hash, _) ->
+          Store.mem git remote_hash >>= fun has_remote_hash ->
+          Store.mem git local_hash >>= fun has_local_hash ->
+
+          if has_remote_hash && has_local_hash
+          then Lwt.return (Some action)
+          else Lwt.return None
+        | `Create (local_hash, _) ->
+          Store.mem git local_hash >>= function
+          | true -> Lwt.return (Some action)
+          | false -> Lwt.return None)
+      actions
+
+  let update_and_create git ?capabilities ~references repository =
     let push_handler remote_refs =
-      push_handler git references remote_refs
-      >>= Lwt_list.map_p (fun (remote_ref, remote_hash, local_hash) ->
-          Lwt.return (`Update (remote_hash, local_hash, remote_ref)))
-      >>= fun update -> Lwt.return ([], update) in
+      push_handler git references remote_refs >|= fun actions -> ([], actions) in
     let host =
       Option.value_exn (Uri.host repository)
         ~error:(Fmt.strf "Expected an http url with host: %a."
-                  Uri.pp_hum repository)
-    in
+                  Uri.pp_hum repository) in
     let https =
-      Option.mem (Uri.scheme repository) "https" ~equal:String.equal
-    in
+      Option.mem (Uri.scheme repository) "https" ~equal:String.equal in
     push git ~push:push_handler ~https ?capabilities ?port:(Uri.port repository)
       host (Uri.path_and_query repository)
     >?= fun lst ->
@@ -862,7 +863,6 @@ module Make_ext
           | Error (refname, err) ->
             Lwt.return (Error (Store.Reference.of_string refname, err))
         ) lst)
-
 end
 
 module Make

@@ -100,17 +100,17 @@ let main references directory repository =
   let references =
     List.fold_left
       (fun references (remote_ref, local_ref) ->
-         try let local_refs = Git_unix.Store.Reference.Map.find remote_ref references in
-           if List.exists (Git_unix.Store.Reference.equal local_ref) local_refs
+         try let local_refs = Git_unix.FS.Reference.Map.find remote_ref references in
+           if List.exists (Git_unix.FS.Reference.equal local_ref) local_refs
            then references
-           else Git_unix.Store.Reference.Map.add remote_ref (local_ref :: local_refs) references
+           else Git_unix.FS.Reference.Map.add remote_ref (local_ref :: local_refs) references
          with Not_found ->
-           Git_unix.Store.Reference.Map.add remote_ref [ local_ref ] references)
-      Git_unix.Store.Reference.Map.empty references
+           Git_unix.FS.Reference.Map.add remote_ref [ local_ref ] references)
+      Git_unix.FS.Reference.Map.empty references
   in
 
-  (Git_unix.Store.create ~root () >!= fun err -> `Store err) >>= fun git ->
-  (Sync_http.fetch_some git ~locks:Fpath.(Git_unix.Store.root git / ".locks") ~references repository
+  (Git_unix.FS.create ~root () >!= fun err -> `Store err) >>= fun git ->
+  (Sync_http.fetch_some git ~locks:Fpath.(Git_unix.FS.root git / ".locks") ~references repository
    >!= fun err -> `Sync err) >>= fun _ -> Lwt.return (Ok ())
 
 open Cmdliner
