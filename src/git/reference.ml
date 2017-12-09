@@ -31,7 +31,7 @@ struct
   type partial = string
   type branch = string
 
-  let ( // ) partial partial : partial = String.concat sep [ partial; partial ]
+  let ( // ) partial0 partial1 : partial = String.concat sep [ partial0; partial1 ]
   let ( / ) partial branch : t = String.concat sep [ partial; branch ]
 
   let refs : partial = "refs"
@@ -161,7 +161,7 @@ module Make(H : S.HASH): S with module Hash = H = struct
 
   type nonrec t = t
 
-  module Infix = Infix
+  module Path = Path
 
   let master = master
   let head = head
