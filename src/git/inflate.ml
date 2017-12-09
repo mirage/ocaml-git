@@ -21,8 +21,7 @@ type t = (B.bs, B.bs) Inflate.t
 type error = [ `Inflate of Inflate.error ]
 type window = B.bs Window.t
 
-module Log =
-struct
+module Log = struct
   let src = Logs.Src.create "decompress.inflate" ~doc:"logs inflate event"
   include (val Logs.src_log src : Logs.LOG)
 end

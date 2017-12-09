@@ -17,11 +17,8 @@
 
 open Lwt.Infix
 
-module Log =
-struct
-  let src = Logs.Src.create "git.mem" ~doc:"logs git's memory back-end"
-  include (val Logs.src_log src : Logs.LOG)
-end
+let src = Logs.Src.create "git.mem" ~doc:"logs git's memory back-end"
+module Log = (val Logs.src_log src : Logs.LOG)
 
 let err_not_found n k =
   let str = Printf.sprintf "Git.Mem.%s: %s not found" n k in
@@ -44,7 +41,6 @@ module Make
   module Inflate = I
   module Deflate = D
   module Buffer = Cstruct_buffer
-
   module Value = Value.Raw(Hash)(Inflate)(Deflate)
   module Reference = Reference.Make(Hash)
 
@@ -220,7 +216,7 @@ module Make
       | `PackDecoder e -> Fmt.pf ppf "(`PackDecoder %a)" PACKDecoder.pp_error e
 
     module GC =
-      Gc.Make(struct
+      Collector.Make(struct
         module Hash = Hash
         module Value = Value
         module Deflate = Deflate
@@ -522,4 +518,10 @@ module Make
       | None, Some (Reference.Ref _ | Reference.Hash _) -> Lwt.return (Ok false)
   end
 
+  let has_global_watches = false
+  let has_global_checkout = false
 end
+
+module Lock = Lock
+
+module Store (H : Digestif_sig.S) = Make(Hash.Make(H))(Lock)(Inflate)(Deflate)

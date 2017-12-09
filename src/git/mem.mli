@@ -66,3 +66,12 @@ module Make
     Qbout the [Lock] module and the constraint to use the [Lwt] monad,
     we zork on it to discard this constraint - and have a store
     back-end free-ed from monad. *)
+
+module Lock: S.LOCK with type elt = Lwt_mutex.t
+
+module Store (H : Digestif_sig.S):
+  Minimal.S with module Hash    = Hash.Make(H)
+             and type Lock.t    = Lock.t
+             and type Lock.elt  = Lock.elt
+             and module Inflate = Inflate
+             and module Deflate = Deflate

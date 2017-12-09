@@ -17,7 +17,7 @@
 
 let () = Random.self_init ()
 
-module Sync_http = Git_unix.HTTP(Git_unix.Store)
+module Sync_http = Git_unix.HTTP(Git_unix.FS)
 
 let option_map f = function
   | Some v -> Some (f v)
@@ -75,11 +75,11 @@ let setup_logs style_renderer level =
   quiet, Fmt.stdout
 
 type error =
-  [ `Store of Git_unix.Store.error
+  [ `Store of Git_unix.FS.error
   | `Sync of Sync_http.error ]
 
 let pp_error ppf = function
-  | `Store err -> Fmt.pf ppf "(`Store %a)" Git_unix.Store.pp_error err
+  | `Store err -> Fmt.pf ppf "(`Store %a)" Git_unix.FS.pp_error err
   | `Sync err -> Fmt.pf ppf "(`Sync %a)" Sync_http.pp_error err
 
 let main show_tags show_heads repository =
@@ -95,7 +95,7 @@ let main show_tags show_heads repository =
     | _ -> false
   in
 
-  (Git_unix.Store.create ~root () >!= fun err -> `Store err) >>= fun git ->
+  (Git_unix.FS.create ~root () >!= fun err -> `Store err) >>= fun git ->
   (Sync_http.ls git ~https ?port:(Uri.port repository)
      (option_value_exn
         (fun () -> raise (Failure "Invalid repository: no host."))
@@ -111,11 +111,11 @@ let main show_tags show_heads repository =
   in
 
   List.iter (fun (hash, refname, peeled) ->
-      let reference = Git_unix.Store.Reference.of_string refname in
+      let reference = Git_unix.FS.Reference.of_string refname in
 
       Fmt.(pf stdout) "%a      %a%s\n%!"
-        Git_unix.Store.Hash.pp hash
-        Git_unix.Store.Reference.pp reference
+        Git_unix.FS.Hash.pp hash
+        Git_unix.FS.Reference.pp reference
         (if peeled then "^{}" else ""))
     refs;
 

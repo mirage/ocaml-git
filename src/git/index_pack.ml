@@ -15,8 +15,11 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module type LAZY =
-sig
+let src = Logs.Src.create "git.idx-pack"
+    ~doc:"Git internal lazy index-pack decoder"
+module Log = (val Logs.src_log src: Logs.LOG)
+
+module type LAZY = sig
   module Hash: S.HASH
 
   type error =
@@ -37,13 +40,7 @@ sig
   val fold: t -> (Hash.t -> (Crc32.t * int64) -> 'a -> 'a) -> 'a -> 'a
 end
 
-module Lazy (H: S.HASH): LAZY with module Hash = H =
-struct
-  module Log =
-  struct
-    let src = Logs.Src.create "git.index-pack.lazy" ~doc:"logs git's internal lazy index-pack decoder"
-    include (val Logs.src_log src: Logs.LOG)
-  end
+module Lazy (H: S.HASH): LAZY with module Hash = H = struct
 
   module Hash = H
 
@@ -188,8 +185,17 @@ struct
        then let off1 = Int32.to_int @@ Cstruct.BE.get_uint32 t.map (t.fanout_offset + (4 * idx)) in
          let off0 = Int32.to_int @@ Cstruct.BE.get_uint32 t.map (t.fanout_offset + (4 * (idx - 1))) in
 
-         if has t.map (t.hashes_offset + (off0 * Hash.Digest.length)) ((off1 - off0) * Hash.Digest.length) && (off1 - off0) > 0
-         then Ok (off0 + binary_search (Cstruct.sub t.map (t.hashes_offset + (off0 * Hash.Digest.length)) ((off1 - off0) * Hash.Digest.length)) hash)
+         if has t.map
+             (t.hashes_offset + (off0 * Hash.Digest.length))
+             ((off1 - off0) * Hash.Digest.length)
+         && (off1 - off0) > 0
+         then
+           Ok (off0
+               + binary_search
+                 (Cstruct.sub t.map
+                    (t.hashes_offset + (off0 * Hash.Digest.length))
+                    ((off1 - off0) * Hash.Digest.length))
+                 hash)
          else Error Invalid_index
        else Error Invalid_index)
     |> function

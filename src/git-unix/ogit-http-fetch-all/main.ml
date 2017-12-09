@@ -18,8 +18,8 @@
 let () = Random.self_init ()
 let () = Printexc.record_backtrace true
 
-module Sync_http = Git_unix.HTTP(Git_unix.Store)
-module Negociator = Git.Negociator.Make(Git_unix.Store)
+module Sync_http = Git_unix.HTTP(Git_unix.FS)
+module Negociator = Git.Negociator.Make(Git_unix.FS)
 
 module Log =
 struct
@@ -83,16 +83,16 @@ let setup_logs style_renderer level ppf =
   quiet, ppf
 
 type error =
-  [ `Store of Git_unix.Store.error
-  | `Reference of Git_unix.Store.Ref.error
+  [ `Store of Git_unix.FS.error
+  | `Reference of Git_unix.FS.Ref.error
   | `Sync of Sync_http.error ]
 
 let pp_error ppf = function
-  | `Store err -> Fmt.pf ppf "(`Store %a)" Git_unix.Store.pp_error err
-  | `Reference err -> Fmt.pf ppf "(`Reference %a)" Git_unix.Store.Ref.pp_error err
+  | `Store err -> Fmt.pf ppf "(`Store %a)" Git_unix.FS.pp_error err
+  | `Reference err -> Fmt.pf ppf "(`Reference %a)" Git_unix.FS.Ref.pp_error err
   | `Sync err -> Fmt.pf ppf "(`Sync %a)" Sync_http.pp_error err
 
-exception Write of Git_unix.Store.Ref.error
+exception Write of Git_unix.FS.Ref.error
 
 let main directory repository =
   let root = option_map_default Fpath.(v (Sys.getcwd ())) Fpath.v directory in
@@ -146,8 +146,8 @@ struct
     Arg.(value & flag & info ["all"] ~doc)
 
  let reference =
-    let parse str = Ok (Git_unix.Store.Reference.of_string str) in
-    let print = Git_unix.Store.Reference.pp in
+    let parse str = Ok (Git_unix.FS.Reference.of_string str) in
+    let print = Git_unix.FS.Reference.pp in
     Arg.conv ~docv:"<name>" (parse, print)
 
   let uri =

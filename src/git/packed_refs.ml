@@ -197,7 +197,7 @@ module Make (H: S.HASH) (FS: S.FS): S with module Hash = H and module FS = FS
       type rest = [ `Flush of state | `End of (state * result) ]
 
       let eval raw state = match E.eval raw state with
-        | `Error err -> Lwt.return (`Error (state, err))
+        | `Error err    -> Lwt.return (`Error (state, err))
         | #rest as rest -> Lwt.return rest
 
       let used  = E.used
@@ -209,10 +209,7 @@ module Make (H: S.HASH) (FS: S.FS): S with module Hash = H and module FS = FS
     | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
     | Ok write ->
       Helper.safe_encoder_to_file
-        ~limit:50
-        (module E)
-        FS.File.write
-        write raw state
+        ~limit:50 (module E) FS.File.write write raw state
       >>= function
       | Ok _ -> FS.File.close write >>=
         (function

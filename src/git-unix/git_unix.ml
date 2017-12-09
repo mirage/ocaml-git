@@ -13,12 +13,10 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
-
-module FS = Fs
 module Net = Net
 module Lock = Lock
 module SHA1 = Git.Hash.Make(Digestif.SHA1)
 module Sync = Git.Sync.Make(Net)
 module HTTP = Http.Make
 
-module Store = Git.Store.Make(SHA1)(Lock)(FS)(Git.Inflate)(Git.Deflate)
+module FS = Git.Store.FS(SHA1)(Lock)(Fs)(Git.Inflate)(Git.Deflate)

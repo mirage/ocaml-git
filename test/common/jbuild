@@ -1,6 +1,6 @@
 (jbuild_version 1)
 
 (library
-  ((name      test)
+  ((name      test_git)
    (wrapped   false)
    (libraries (git mtime mtime.clock.os alcotest nocrypto lwt.unix logs.fmt))))

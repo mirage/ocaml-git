@@ -17,7 +17,7 @@ sig
   val temp    : Fpath.t
 end
 
-module type FS =
+module type S =
 sig
   include Mirage_fs.S
     with type page_aligned_buffer = Cstruct.t
@@ -26,7 +26,7 @@ sig
   val connect : unit -> t Lwt.t
 end
 
-module Make (Gamma: GAMMA) (FS: FS) = struct
+module Make (Gamma: GAMMA) (FS: S) = struct
 
   let connect fn =
     Lwt.bind (FS.connect ()) fn
@@ -249,12 +249,12 @@ module Make (Gamma: GAMMA) (FS: FS) = struct
 
   module File
     : Git.FILE
-      with type lock = Lock.elt
+      with type lock = Git.Mem.Lock.elt
        and type error = [ `Stat of string
                         | Mirage_fs.error
                         | Mirage_fs.write_error ]
   = struct
-    type lock = Lock.elt
+    type lock = Git.Mem.Lock.elt
 
     type error =
       [ `Stat of string
@@ -277,7 +277,7 @@ module Make (Gamma: GAMMA) (FS: FS) = struct
       | Error (`System err) -> Error (`Stat err)
 
     let open' t ?lock path ~mode:_ =
-      Lock.with_lock lock  @@ fun () ->
+      Git.Mem.Lock.with_lock lock  @@ fun () ->
       let fd = Fpath.to_string path in
       FS.stat t fd >>= function
       | Ok { Mirage_fs.directory = false; _ } -> Lwt.return (Ok fd)
@@ -315,7 +315,7 @@ module Make (Gamma: GAMMA) (FS: FS) = struct
     let close _ = Lwt.return (Ok ())
 
     let delete t ?lock path =
-      Lock.with_lock lock @@ fun () ->
+      Git.Mem.Lock.with_lock lock @@ fun () ->
       FS.destroy t (Fpath.to_string path) >|= function
       | Ok _ as v -> v
       | Error (#Mirage_fs.write_error as err) -> Error (err :> error)
@@ -334,7 +334,7 @@ module Make (Gamma: GAMMA) (FS: FS) = struct
 
     let atomic_write t ?lock path content =
       FS.mkdir t (Filename.dirname (Fpath.to_string path)) >>= fun _ ->
-      Lock.with_lock lock @@ fun () ->
+      Git.Mem.Lock.with_lock lock @@ fun () ->
       FS.create t (Fpath.to_string path) >>= function
       | Error (#Mirage_fs.write_error as err) -> Lwt.return (Error (err :> error))
       | Ok () -> FS.write t (Fpath.to_string path) 0 content >|= function
@@ -343,7 +343,7 @@ module Make (Gamma: GAMMA) (FS: FS) = struct
 
     let test_and_set t ?lock ?temp:_ file ~test ~set =
       FS.mkdir t (Filename.dirname (Fpath.to_string file)) >>= fun _ ->
-      Lock.with_lock lock @@ fun () ->
+      Git.Mem.Lock.with_lock lock @@ fun () ->
       let set () =
         (match set with
          | None   -> delete t file
@@ -358,7 +358,7 @@ module Make (Gamma: GAMMA) (FS: FS) = struct
       | _ -> Lwt.return (Ok false)
 
     let move t ?lock patha pathb =
-      Lock.with_lock lock @@ fun () ->
+      Git.Mem.Lock.with_lock lock @@ fun () ->
       (open' t patha ~mode:0o644 >!= fun err ->
           Lwt.return (err :> error)) >?= fun fda ->
       (open' t pathb ~mode:0o644 >!= fun err ->
@@ -439,4 +439,7 @@ module Make (Gamma: GAMMA) (FS: FS) = struct
 
   let is_dir path = connect @@ fun t -> is_dir t path
   let is_file path = connect @@ fun t -> is_file t path
+
+  let has_global_watches = false
+  let has_global_checkout = false
 end
