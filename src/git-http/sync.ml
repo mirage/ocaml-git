@@ -733,7 +733,7 @@ module Make_ext
           results Store.Reference.Map.(empty, empty) in
       Lwt.try_bind
         (fun () ->
-           Lwt_list.iter_p
+           Lwt_list.iter_s
              (fun (local_ref, new_hash) ->
                 Store.Ref.write git ?locks local_ref (Store.Reference.Hash new_hash)
                 >>= function
