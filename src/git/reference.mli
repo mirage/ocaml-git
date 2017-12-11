@@ -105,7 +105,7 @@ module type S = sig
 
   module Path: sig
     type partial
-    type branch
+    type branch = string
 
     val ( // ): partial -> partial -> partial
     val ( / ): partial -> branch -> t
