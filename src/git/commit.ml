@@ -73,7 +73,7 @@ module Make (H: S.HASH): S with module Hash = H = struct
     ; parents   : Hash.t list
     ; author    : User.t
     ; committer : User.t
-    ; message   : string }
+    ; message   : string option }
   and hash = Hash.t
 
   let make ~author ~committer ?(parents = []) ~tree message =
@@ -81,7 +81,7 @@ module Make (H: S.HASH): S with module Hash = H = struct
     ; parents
     ; author
     ; committer
-    ; message }
+    ; message = Some message }
 
   module A = struct
 
@@ -127,6 +127,13 @@ module Make (H: S.HASH): S with module Hash = H = struct
       binding ~key:"committer" ~value:User.A.decoder
       <* commit
       >>= fun committer -> to_end 1024 <* commit
+      >>| (function
+      | "" -> None
+      | "\n" -> Some ""
+      | lf_message ->
+        let message = String.sub lf_message 1 (String.length lf_message - 1) in
+        assert (String.get lf_message 0 = '\x0a');
+        Some message)
       >>= fun message ->
       return { tree = Hash.of_hex tree
              ; parents = List.map Hash.of_hex parents
@@ -157,10 +164,19 @@ module Make (H: S.HASH): S with module Hash = H = struct
       + parents
       + (string "author") + 1L + (User.F.length t.author) + 1L
       + (string "committer") + 1L + (User.F.length t.committer) + 1L
-      + (string t.message)
+      + (match t.message with
+          | None -> 0L
+          | Some "" -> 1L
+          | Some x -> 1L + (string x))
 
     let sp = ' '
     let lf = '\x0a'
+
+    let message e x = let open Farfadet in match x with
+      | None -> ()
+      | Some "" -> char e lf
+      | Some x ->
+        eval e [ char $ lf; !!string ] x
 
     let parents e x =
       let open Farfadet in
@@ -175,7 +191,7 @@ module Make (H: S.HASH): S with module Hash = H = struct
              ; !!(option (seq (list ~sep parents) (fun e () -> char e lf)))
              ; string $ "author"; char $ sp; !!User.F.encoder; char $ lf
              ; string $ "committer"; char $ sp; !!User.F.encoder; char $ lf
-             ; !!string ]
+             ; !!message ]
         (Hash.to_hex t.tree)
         (match t.parents with [] -> None | lst -> Some (lst, ()))
         t.author
@@ -199,6 +215,11 @@ module Make (H: S.HASH): S with module Hash = H = struct
        @@ write_string (Hash.to_hex x) k)
       e
 
+    let message x k e = match x with
+      | None -> k e
+      | Some "" -> write_char lf k e
+      | Some x -> write_char lf (write_string x k) e
+
     let encoder x k e =
       let rec list l k e = match l with
         | [] -> k e
@@ -221,8 +242,8 @@ module Make (H: S.HASH): S with module Hash = H = struct
        @@ write_char sp
        @@ User.M.encoder x.committer
        @@ write_char lf
-       @@ write_string x.message k)
-      e
+       @@ message x.message k)
+        e
   end
 
   module D = Helper.MakeDecoder(A)
@@ -236,6 +257,11 @@ module Make (H: S.HASH): S with module Hash = H = struct
         Fmt.char
     in
 
+    let pp_message ppf = function
+      | None | Some "" -> Fmt.string ppf "<empty>"
+      | Some x -> Fmt.iter ~sep:Fmt.nop String.iter chr ppf x
+    in
+
     Fmt.pf ppf
       "{ @[<hov>tree = %a;@ \
                 parents = [ %a ];@ \
@@ -246,7 +272,7 @@ module Make (H: S.HASH): S with module Hash = H = struct
       (Fmt.hvbox (Fmt.list ~sep:(Fmt.unit ";@ ") Hash.pp)) parents
       (Fmt.hvbox User.pp) author
       (Fmt.hvbox User.pp) committer
-      (Fmt.hvbox (Fmt.iter ~sep:Fmt.nop String.iter chr)) message
+      (Fmt.hvbox pp_message) message
 
   let digest value =
     let tmp = Cstruct.create 0x100 in
@@ -259,7 +285,9 @@ module Make (H: S.HASH): S with module Hash = H = struct
   let tree { tree; _ } = tree
   let committer { committer; _ } = committer
   let author { author; _ } = author
-  let message { message; _ } = message
+  let message { message; _ } = match message with
+    | None -> ""
+    | Some x -> x
 
   let compare_by_date a b =
     Int64.compare (fst a.author.User.date) (fst b.author.User.date)
