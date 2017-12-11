@@ -24,6 +24,7 @@ type t = private string
 module Path : sig
   type partial
   (** Type of the left part of a reference. *)
+
   type branch = string
   (** Tyoe of the right part of a reference. *)
 
@@ -35,10 +36,13 @@ module Path : sig
 
   val refs: partial
   (** [refs/] *)
+
   val heads: partial
-  (** [refs/heads/} *)
+  (** [refs/heads/] *)
+
   val remotes: partial
   (** [refs/remotes/] *)
+
   val origin: partial
   (** [refs/remotes/origin] *)
 
@@ -101,7 +105,7 @@ module type S = sig
 
   module Path: sig
     type partial
-    type branch
+    type branch = string
 
     val ( // ): partial -> partial -> partial
     val ( / ): partial -> branch -> t

@@ -166,16 +166,16 @@ sig
     ; deep         : [ `Depth of int | `Timestamp of int64 | `Ref of string ] option
     ; has          : Hash.t list }
   type action =
-    [ `GitProtoRequest of git_proto_request
-    | `UploadRequest of upload_request
-    | `HttpUploadRequest of bool * http_upload_request
-    | `UpdateRequest of update_request
+    [ `GitProtoRequest   of git_proto_request
+    | `UploadRequest     of upload_request
+    | `HttpUploadRequest of [ `Done | `Flush ] * http_upload_request
+    | `UpdateRequest     of update_request
     | `HttpUpdateRequest of update_request
-    | `Has of Hash.t list
+    | `Has               of Hash.t list
     | `Done
     | `Flush
-    | `Shallow of Hash.t list
-    | `PACK of int ]
+    | `Shallow           of Hash.t list
+    | `PACK              of int ]
 
   val encode : encoder -> action -> unit state
   val encoder : unit -> encoder
@@ -1289,13 +1289,15 @@ struct
 
   let w_has ?lf hash k encoder = pkt_line ?lf (w_has hash) k encoder
 
-  let w_http_upload_request ?(final = false) http_upload_request k encoder =
+  let w_http_upload_request at_the_end http_upload_request k encoder =
     (w_upload_request ~lf:true { want         = http_upload_request.want
                                ; capabilities = http_upload_request.capabilities
                                ; shallow      = http_upload_request.shallow
                                ; deep         = http_upload_request.deep }
      @@ (w_list (w_has ~lf:true) http_upload_request.has)
-     @@ (if List.length http_upload_request.has = 0 || final then w_done_and_lf k else pkt_flush k))
+     @@ (if List.length http_upload_request.has = 0 || at_the_end = `Done
+         then w_done_and_lf k
+         else pkt_flush k))
       encoder
 
   let w_flush k encoder =
@@ -1480,28 +1482,28 @@ struct
       encoder
 
   type action =
-    [ `GitProtoRequest of git_proto_request
-    | `UploadRequest of upload_request
-    | `HttpUploadRequest of bool * http_upload_request
-    | `UpdateRequest of update_request
+    [ `GitProtoRequest   of git_proto_request
+    | `UploadRequest     of upload_request
+    | `HttpUploadRequest of [ `Done | `Flush ] * http_upload_request
+    | `UpdateRequest     of update_request
     | `HttpUpdateRequest of update_request
-    | `Has of Hash.t list
+    | `Has               of Hash.t list
     | `Done
     | `Flush
-    | `PACK of int
-    | `Shallow of Hash.t list ]
+    | `PACK              of int
+    | `Shallow           of Hash.t list ]
 
   let encode encoder = function
-    | `GitProtoRequest c        -> w_git_proto_request c (fun _ -> Ok ()) encoder
-    | `UploadRequest i          -> w_upload_request i (fun _ -> Ok ()) encoder
-    | `HttpUploadRequest (f, i) -> w_http_upload_request ~final:f i (fun _ -> Ok ()) encoder
-    | `UpdateRequest i          -> w_update_request i (fun _ -> Ok ()) encoder
-    | `HttpUpdateRequest i      -> w_http_update_request i (fun _ -> Ok ()) encoder
-    | `Has l                    -> w_has l (fun _ -> Ok ()) encoder
-    | `Done                     -> w_done (fun _ -> Ok ()) encoder
-    | `Flush                    -> w_flush (fun _ -> Ok ()) encoder
-    | `Shallow l                -> w_shallow l (fun _ -> Ok ()) encoder
-    | `PACK n                   -> w_pack n (fun _ -> Ok ()) encoder
+    | `GitProtoRequest c        -> w_git_proto_request c     (fun _ -> Ok ()) encoder
+    | `UploadRequest i          -> w_upload_request i        (fun _ -> Ok ()) encoder
+    | `HttpUploadRequest (v, i) -> w_http_upload_request v i (fun _ -> Ok ()) encoder
+    | `UpdateRequest i          -> w_update_request i        (fun _ -> Ok ()) encoder
+    | `HttpUpdateRequest i      -> w_http_update_request i   (fun _ -> Ok ()) encoder
+    | `Has l                    -> w_has l                   (fun _ -> Ok ()) encoder
+    | `Done                     -> w_done                    (fun _ -> Ok ()) encoder
+    | `Flush                    -> w_flush                   (fun _ -> Ok ()) encoder
+    | `Shallow l                -> w_shallow l               (fun _ -> Ok ()) encoder
+    | `PACK n                   -> w_pack n                  (fun _ -> Ok ()) encoder
 
   let encoder () =
     { payload = Cstruct.create 65535

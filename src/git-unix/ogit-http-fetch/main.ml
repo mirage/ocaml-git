@@ -90,77 +90,28 @@ let pp_error ppf = function
 
 exception Write of Git_unix.FS.Ref.error
 
-let main ppf progress references directory repository =
+let main references directory repository =
   let root = option_map_default Fpath.(v (Sys.getcwd ())) Fpath.v directory in
 
   let open Lwt_result in
 
   let ( >!= ) v f = map_err f v in
 
-  let stdout =
-    if progress
-    then Some (fun raw -> Fmt.pf ppf "%s%!" (Cstruct.to_string raw); Lwt.return ())
-    else None
+  let references =
+    List.fold_left
+      (fun references (remote_ref, local_ref) ->
+         try let local_refs = Git_unix.FS.Reference.Map.find remote_ref references in
+           if List.exists (Git_unix.FS.Reference.equal local_ref) local_refs
+           then references
+           else Git_unix.FS.Reference.Map.add remote_ref (local_ref :: local_refs) references
+         with Not_found ->
+           Git_unix.FS.Reference.Map.add remote_ref [ local_ref ] references)
+      Git_unix.FS.Reference.Map.empty references
   in
-
-  let stderr =
-    if progress
-    then Some (fun raw -> Fmt.(pf stderr) "%s%!" (Cstruct.to_string raw); Lwt.return ())
-    else None
-  in
-
-  let https =
-    match Uri.scheme repository with
-    | Some "https" -> true
-    | _ -> false
-  in
-
-  let want =
-    Lwt_list.filter_map_p (fun (refname, hash, _) ->
-        let reference = Git_unix.FS.Reference.of_string refname in
-
-        Lwt.try_bind
-          (fun () -> Lwt_list.find_s (fun (src, _) -> Lwt.return (Git_unix.FS.Reference.equal reference src)) references)
-          (fun (_, dst) -> Lwt.return (Some (dst, hash)))
-          (fun _ -> Lwt.return None))
-  in
-
-  Log.debug (fun l -> l ~header:"main" "root:%a, repository:%a.\n"
-                Fpath.pp root Uri.pp_hum repository);
 
   (Git_unix.FS.create ~root () >!= fun err -> `Store err) >>= fun git ->
-  (ok (Negociator.find_common git)) >>= fun (has, state, continue) ->
-  let continue { Sync_http.Decoder.acks; shallow; unshallow } state = continue { Git.Negociator.acks; shallow; unshallow } state in
-  (* structural typing god! *)
-
-  (Sync_http.fetch git ?stdout ?stderr ~https ~negociate:(continue, state) ~has ~want ?port:(Uri.port repository)
-     (option_value_exn
-        (fun () -> raise (Failure "Invalid repository: no host."))
-        (Uri.host repository))
-     (Uri.path_and_query repository)
-   >!= fun err -> `Sync err) >>= function
-  | [], 0 ->
-    Log.debug (fun l -> l ~header:"main" "Git repository already updated.");
-    Lwt.return (Ok ())
-  | updated, n ->
-    Log.debug (fun l -> l ~header:"main" "New version (%d object(s) added): %a."
-                  n (Fmt.hvbox (Fmt.Dump.list (Fmt.pair Git_unix.FS.Reference.pp Git_unix.FS.Hash.pp)))
-                  updated);
-
-    Lwt.try_bind
-      (fun () ->
-         Lwt_list.iter_p
-           (fun (dst, hash) ->
-              let open Lwt.Infix in
-
-              Git_unix.FS.Ref.write git ~locks:(Git_unix.FS.dotgit git) dst
-                (Git_unix.FS.Reference.Hash hash)
-              >>= function Error err -> Lwt.fail (Write err)
-                         | Ok _ -> Lwt.return ())
-           updated)
-      (fun () -> Lwt.return (Ok ()))
-      (function Write err -> Lwt.return (Error (`Reference err))
-              | exn -> Lwt.fail exn) (* XXX(dinosaure): should never happen. *)
+  (Sync_http.fetch_some git ~locks:Fpath.(Git_unix.FS.root git / ".locks") ~references repository
+   >!= fun err -> `Sync err) >>= fun _ -> Lwt.return (Ok ())
 
 open Cmdliner
 
@@ -225,8 +176,8 @@ end
 let setup_log =
   Term.(const setup_logs $ Fmt_cli.style_renderer () $ Logs_cli.level () $ Flag.output)
 
-let main progress references directory repository (quiet, ppf) =
-  match Lwt_main.run (main ppf (not quiet && progress) references directory repository) with
+let main _ references directory repository _ =
+  match Lwt_main.run (main references directory repository) with
   | Ok () -> `Ok ()
   | Error (#error as err) -> `Error (false, Fmt.strf "%a" pp_error err)
 

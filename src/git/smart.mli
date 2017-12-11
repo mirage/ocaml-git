@@ -367,16 +367,16 @@ sig
     ; gpg      : string list }
 
   type action =
-    [ `GitProtoRequest of git_proto_request
-    | `UploadRequest of upload_request
-    | `HttpUploadRequest of bool * http_upload_request
-    | `UpdateRequest of update_request
+    [ `GitProtoRequest   of git_proto_request
+    | `UploadRequest     of upload_request
+    | `HttpUploadRequest of [ `Done | `Flush ] * http_upload_request
+    | `UpdateRequest     of update_request
     | `HttpUpdateRequest of update_request
-    | `Has of Hash.t list
+    | `Has               of Hash.t list
     | `Done
     | `Flush
-    | `Shallow of Hash.t list
-    | `PACK of int ]
+    | `Shallow           of Hash.t list
+    | `PACK              of int ]
   (** The type action to describe what is expected to encode/send. *)
 
   val encode : encoder -> action -> unit state
