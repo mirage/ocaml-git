@@ -22,6 +22,7 @@ module Object_graph = Object_graph
 module Search       = Search
 module Negociator   = Negociator
 module Revision     = Revision
+module Sync_common  = Sync_common
 
 module Capability   = Capability
 module Sync         = Sync

@@ -133,9 +133,28 @@ module TCP = Test_sync.Make(struct
     module M = Git_mirage.Sync(MirageConduit)(Git.Mem.Store(Digestif.SHA1))
     module Store = M.Store
     type error = M.error
-    let clone t ~reference uri = M.clone t ~reference uri
-    let fetch_all t uri = M.fetch_all t uri
-    let update t ~reference uri = M.update t ~reference uri
+    let clone t ~reference uri = M.clone t ~reference:(reference, reference) uri
+
+    exception Jump of Store.Ref.error
+
+    let fetch_all t uri =
+      let open Lwt.Infix in
+
+      M.fetch_all t ~references:Store.Reference.Map.empty uri >>= function
+      | Error _ as err -> Lwt.return err
+      | Ok (_, _, downloaded) ->
+        Lwt.try_bind
+          (fun () -> Lwt_list.iter_s
+              (fun (remote_ref, new_hash) ->
+                 Store.Ref.write t remote_ref (Store.Reference.Hash new_hash) >>= function
+                 | Ok () -> Lwt.return ()
+                 | Error err -> Lwt.fail (Jump err))
+              (Store.Reference.Map.bindings downloaded))
+          (fun () -> Lwt.return (Ok ()))
+          (function Jump err -> Lwt. return (Error (`Ref err))
+                  | err -> Lwt.fail err)
+
+    let update t ~reference uri = M.update_and_create t ~references:(Store.Reference.Map.singleton reference [ reference ]) uri
     let kind = `TCP
   end)
 
