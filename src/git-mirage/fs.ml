@@ -1,46 +1,57 @@
 open Lwt.Infix
-let ( >!= ) = Lwt_result.bind_lwt_err
-let ( >?= ) = Lwt_result.bind
+let ( >>!= ) x f = Lwt_result.map_err f x
+let ( >>?= ) = Lwt_result.bind
+let ( >|?= ) = Lwt_result.(>|=)
 
 let src = Logs.Src.create "git-mirage.fs" ~doc:"logs mirage file-system's event"
 module Log = (val Logs.src_log src : Logs.LOG)
 
-let result_bind f a = match a with
-  | Ok x -> f x
-  | Error err -> Error err
-
-let mkdir_pool = Lwt_pool.create 1 (fun () -> Lwt.return ())
-
-module type GAMMA =
-sig
+(* XXX(samoht): this should be removed *)
+module type GAMMA = sig
   val current : Fpath.t
   val temp    : Fpath.t
 end
 
-module type S =
-sig
-  include Mirage_fs.S
-    with type page_aligned_buffer = Cstruct.t
-     and type +'a io = 'a Lwt.t
-
+(* XXX(samoht): this should be removed *)
+module type S = sig
+  include Mirage_fs_lwt.S
   val connect : unit -> t Lwt.t
 end
 
-(* XXX(samoht): this should probably be fixed in mirage-fs-unix *)
-let fpath_to_string path = Fpath.(to_string @@ rem_empty_seg path)
+(* mirage-fs-unix paths are separated by '/' and should not end by a
+   separator. XXX(samoht): there is probably something to revisit
+   in mirage-fs-unix here... *)
+let fpath_to_string path =
+  match Fpath.(segs @@ rem_empty_seg path) with
+  | [] -> "."
+  | x  -> String.concat "/" x
+
+let fpath_of_string str =
+  let segs = Astring.String.cuts ~sep:"/" str in
+  Fpath.of_string (String.concat Fpath.dir_sep segs)
+
+let err_exn e = Error (`Exn e)
+let err_stat p fmt = Fmt.kstrf (fun e -> Error (`Stat (p, e))) fmt
+let err_read p fmt = Fmt.kstrf (fun e -> Error (`Read (p, e))) fmt
+let err_fs_read e = Error (`FS_read e)
+let err_fs_write e = Error (`FS_write e)
+let fs_read e = `FS_read e
+let fs_write e = `FS_write e
+
+let err_listdir p fmt =
+  Fmt.kstrf (fun e -> Lwt.return (Error (`Listdir (p, e)))) fmt
 
 module Make (Gamma: GAMMA) (FS: S) = struct
 
-  let connect fn =
-    Lwt.bind (FS.connect ()) fn
+  let connect fn =  Lwt.bind (FS.connect ()) fn
 
-  type error = [ `System of string ]
-
-  let pp_error ppf (`System err) = Fmt.pf ppf "(`System %s)" err
+  type error = [ `Exn of exn ]
+  let pp_error ppf (`Exn e) = Fmt.pf ppf "System error: %a" Fmt.exn e
 
   let is_file t path =
+    let str_path = fpath_to_string path in
     Lwt.try_bind
-      (fun () -> FS.stat t (fpath_to_string path))
+      (fun () -> FS.stat t str_path)
       (function
         | Ok { Mirage_fs.directory; _ } -> Lwt.return (Ok (not directory))
         | Error _ -> Lwt.return (Ok false))
@@ -48,218 +59,102 @@ module Make (Gamma: GAMMA) (FS: S) = struct
          see https://github.com/mirage/mirage-fs-unix/issues/37 *)
       (function
         | Sys_error _ -> Lwt.return (Ok false)
-        | exn -> Lwt.return (Error (`System (Printexc.to_string exn))))
+        | exn         -> Lwt.return (err_exn exn))
 
   let is_dir t path =
-    Log.debug (fun l ->l "Check if %a is a directory." Fpath.pp path);
+    let str_path = fpath_to_string path in
     Lwt.try_bind
-      (fun () ->  FS.stat t (fpath_to_string path))
+      (fun () -> FS.stat t str_path)
       (function
         | Ok { Mirage_fs.directory; _ } -> Lwt.return (Ok directory)
-        | Error _ ->
-          Log.debug (fun l -> l "%a does not exists" Fpath.pp path);
-          Lwt.return (Ok false))
+        | Error _ -> Lwt.return (Ok false))
       (* FIXME: see above. *)
       (function
-        | Sys_error e ->
-          Log.debug (fun l -> l "%s: Sys_error %a" e Fpath.pp path);
-          Lwt.return (Ok false)
-        | exn ->
-          Log.err (fun l ->
-              l "Got an error while stating %a: %a" Fpath.pp path Fmt.exn exn);
-          Lwt.return (Error (`System (Printexc.to_string exn))))
+        | Sys_error _ -> Lwt.return (Ok false)
+        | exn         -> Lwt.return (err_exn exn))
 
-  module Dir
-    : Git.DIR
-      with type error = [ `Destroy of string
-                        | `Listdir of string
-                        | `Stat of string
-                        | `Path of string
-                        | Mirage_fs.write_error ]
-  = struct
+  module Dir = struct
 
     type error =
-      [ `Destroy of string
-      | `Listdir of string
-      | `Stat of string
-      | `Path of string
-      | Mirage_fs.write_error ]
+      [ `Destroy of Fpath.t * string
+      | `Listdir of Fpath.t * string
+      | `Stat of Fpath.t * string
+      | `Read of Fpath.t * string
+      | `FS_read of FS.error
+      | `FS_write of FS.write_error ]
 
     let pp_error ppf = function
-      | `Destroy err -> Fmt.pf ppf "(`Destroy %s)" err
-      | `Listdir err -> Fmt.pf ppf "(`Listdir %s)" err
-      | `Stat err -> Fmt.pf ppf "(`Stat %s)" err
-      | `Path err -> Fmt.pf ppf "(`Path %s)" err
-      | #Mirage_fs.write_error as err -> Mirage_fs.pp_write_error ppf err
+      | `Destroy(f,e) -> Fmt.pf ppf "Error while destroying %a: %s" Fpath.pp f e
+      | `Listdir(f,e) -> Fmt.pf ppf "Error while listing %a: %s" Fpath.pp f e
+      | `Stat(f,e)    -> Fmt.pf ppf "Error while stating %a: %s" Fpath.pp f e
+      | `Read(f,e)    -> Fmt.pf ppf "Error while reading %a: %s" Fpath.pp f e
+      | `FS_read e    -> FS.pp_error ppf e
+      | `FS_write e   -> FS.pp_write_error ppf e
 
     let exists t path =
+      Log.debug (fun l -> l "Dir.exists %s" @@ fpath_to_string path);
       is_dir t path >|= function
-      | Ok _ as v           -> v
-      | Error (`System err) -> Error (`Stat err)
+      | Ok _ as v        -> v
+      | Error (`Exn err) -> err_stat path "%a" Fmt.exn err
 
-    let mkdir t d =
-      Log.debug (fun l -> l "mkdir %a." Fpath.pp d);
-      FS.mkdir t (fpath_to_string d)
+    let create t d =
+      let path = fpath_to_string d in
+      Log.debug (fun l -> l "Dir.create %s" path);
+      FS.mkdir t path >|= function
+      | Ok ()   -> Ok true
+      | Error e -> err_fs_write e
 
-    let create t ?(path = true) ?mode:_ dir =
-      is_dir t dir >>= function
-      | Ok true             -> Lwt.return (Ok false)
-      | Error (`System err) ->
-        Log.err (fun l -> l "Got an error while stating %a: %s." Fpath.pp dir err);
-        Lwt.return (Error (`Stat err))
-      | Ok false ->
-        Log.debug (fun l ->
-            l ~header:"create" "Make the new directory %a." Fpath.pp dir);
-
-        match path with
-        | false -> Lwt_pool.use mkdir_pool (fun () -> mkdir t dir) >>=
-          (function Error #Mirage_fs.write_error as err -> Lwt.return err
-                  | Ok _ -> Lwt.return (Ok false))
-        | true ->
-          let rec dirs_to_create p acc =
-            is_dir t p >>= function
-            | Error (`System err) -> Lwt.return (Error (`Stat err))
-            | Ok true             -> Lwt.return (Ok acc)
-            | Ok false            -> dirs_to_create (Fpath.parent p) (p :: acc)
-          in
-          let rec create_them dirs () = match dirs with
-            | []          -> Lwt.return (Ok ())
-            | dir :: dirs ->
-              Lwt_pool.use mkdir_pool (fun () -> mkdir t dir) >>= function
-              | Error #Mirage_fs.write_error as err -> Lwt.return err
-              | Ok ()                               -> create_them dirs ()
-          in
-          (dirs_to_create dir [] >>= function
-            | Ok dirs        -> create_them dirs ()
-            | Error _ as err -> Lwt.return err)
-          >|= result_bind (fun _ -> Ok true)
-
-    let delete t ?(recurse = false) dir =
-      let rec delete_files to_rmdir dirs = match dirs with
-        | [] -> Lwt.return (Ok to_rmdir)
-        | dir :: todo ->
-          let rec delete_dir_files files dirs = match files with
-            | [] -> Lwt.return (Ok dirs)
-            | (".." | ".") :: todo -> delete_dir_files todo dirs
-            | file :: todo ->
-              let try_unlink file =
-                Lwt.try_bind
-                  (fun () -> FS.destroy t (fpath_to_string file))
-                  (function
-                    | Error `No_directory_entry
-                    | Ok () -> Lwt.return (Ok dirs)
-                    | Error `Is_a_directory ->
-                      Lwt.return (Ok (file :: dirs))
-                    | Error #Mirage_fs.write_error as err -> Lwt.return err)
-                  (fun exn -> Lwt.return (Error (`Destroy (Printexc.to_string exn))))
-              in
-
-              try_unlink Fpath.(dir / file) >>= function
-              | Ok dirs -> delete_dir_files todo dirs
-              | Error _ as err -> Lwt.return err
-          in
-
-          Lwt.try_bind
-            (fun () -> FS.listdir t (fpath_to_string dir))
-            (function
-              | Error `No_directory_entry ->
-                delete_files to_rmdir todo
-              | Error #Mirage_fs.error as err -> Lwt.return err
-              | Ok files -> delete_dir_files files [] >>= function
-                | Ok dirs -> delete_files (dir :: to_rmdir) (List.rev_append dirs todo)
-                | Error #error as err -> Lwt.return err)
-            (fun exn -> Lwt.return (Error (`Listdir (Printexc.to_string exn))))
-      in
-
-      let rec delete_dirs = function
-        | [] -> Lwt.return (Ok ())
-        | dir :: dirs ->
-          let rmdir dir =
-            Lwt.try_bind
-              (fun () -> FS.destroy t (fpath_to_string dir))
-              (function
-                | Error `No_directory_entry
-                | Ok () -> Lwt.return (Ok ())
-                | Error #Mirage_fs.write_error as err -> Lwt.return err)
-              (fun exn -> Lwt.return (Error (`Destroy (Printexc.to_string exn))))
-          in
-          rmdir dir >>= function
-          | Ok () -> delete_dirs dirs
-          | Error _ as err -> Lwt.return err
-      in
-
-      let delete recurse dir =
-        if not recurse
-        then let rmdir dir =
-               Lwt.try_bind
-                 (fun () -> FS.destroy t (fpath_to_string dir))
-                 (function
-                   | Error `No_directory_entry
-                   | Ok () -> Lwt.return (Ok ())
-                   | Error #Mirage_fs.write_error as err -> Lwt.return err)
-                 (fun exn -> Lwt.return (Error (`Destroy (Printexc.to_string exn))))
-          in
-          rmdir dir
-        else
-          delete_files [] [dir] >>= function
-          | Ok rmdirs -> delete_dirs rmdirs
-          | Error _ as err -> Lwt.return err
-      in
-
-      delete recurse dir >>= function
-      | Ok () -> Lwt.return (Ok ())
-      | Error (`Destroy msg) ->
-        Lwt.return (Error (`Destroy (Fmt.strf "delete directory %s: %s" (fpath_to_string dir) msg)))
-      | Error _ as err -> Lwt.return err
+    let delete t d =
+      let path = fpath_to_string d in
+      Log.debug (fun l -> l "Dir.delete %s" path);
+      FS.destroy t path >|= function
+      | Ok ()   -> Ok ()
+      | Error e -> err_fs_write e
 
     let contents t ?(dotfiles = false) ?(rel = false) dir =
+      let path = fpath_to_string dir in
+      Log.debug (fun l -> l "Dir.contents %s" path);
       let rec readdir files acc =
         match files with
         | [] -> Lwt.return (Ok acc)
         | (".." | ".") :: rest -> readdir rest acc
         | f :: rest when dotfiles || not (String.get f 0 = '.') ->
-          (match Fpath.of_string f with
+          (match fpath_of_string f with
            | Ok f -> readdir rest ((if rel then f else Fpath.(dir // f)) :: acc)
-           | Error (`Msg _) ->
-             Lwt.return (Error (`Path (Fmt.strf "directory conctents %s: cannot parse element to a path (%S)"
-                                         (fpath_to_string dir) f))))
+           | Error (`Msg e) -> Lwt.return (err_read dir "%s" e))
         | _ :: rest -> readdir rest acc
       in
-
       Lwt.try_bind
-        (fun () -> FS.listdir t (fpath_to_string dir))
+        (fun () -> FS.listdir t path)
         (function
           | Ok files -> readdir files []
-          | Error #Mirage_fs.error as err -> Lwt.return err)
-        (fun exn -> Lwt.return (Error (`Listdir (Printexc.to_string exn))))
+          | Error e  -> Lwt.return (err_fs_read e))
+        (fun exn -> err_listdir dir "%a" Fmt.exn exn)
 
     let current () = Lwt.return (Ok Gamma.current)
     let temp () = Lwt.return Gamma.temp
 
     let contents ?dotfiles ?rel dir = connect @@ fun t -> contents t ?dotfiles ?rel dir
     let exists path = connect @@ fun t -> exists t path
-    let create ?path ?mode dir = connect @@ fun t -> create t ?path ?mode dir
-    let delete ?recurse path = connect @@ fun t -> delete t ?recurse path
+    let create ?path:_ ?mode:_ dir = connect @@ fun t -> create t dir
+    let delete ?recurse path =
+      (* mirage-fs only supports recursive deletions *)
+      let () = match recurse with None -> () | Some x -> assert x in
+      connect @@ fun t -> delete t path
   end
 
-  module File
-    : Git.FILE
-      with type lock = Git.Mem.Lock.elt
-       and type error = [ `Stat of string
-                        | Mirage_fs.error
-                        | Mirage_fs.write_error ]
-  = struct
+  module File = struct
     type lock = Git.Mem.Lock.elt
 
     type error =
-      [ `Stat of string
-      | Mirage_fs.error
-      | Mirage_fs.write_error ]
+      [ `Stat of Fpath.t * string
+      | `FS_read of FS.error
+      | `FS_write of FS.write_error ]
 
     let pp_error ppf = function
-      | `Stat err -> Fmt.pf ppf "(`Stat %s)" err
-      | #Mirage_fs.error as err -> Fmt.pf ppf "%a" Mirage_fs.pp_error err
-      | #Mirage_fs.write_error as err -> Fmt.pf ppf "%a" Mirage_fs.pp_write_error err
+      | `Stat (f,e)   -> Fmt.pf ppf "Error while stating %a: %s" Fpath.pp f e
+      | `FS_read err  -> Fmt.pf ppf "%a" FS.pp_error err
+      | `FS_write err -> Fmt.pf ppf "%a" FS.pp_write_error err
 
     type 'a fd =
       { fd   : string
@@ -267,53 +162,60 @@ module Make (Gamma: GAMMA) (FS: S) = struct
       constraint 'a = [< `Read | `Write ]
 
     let exists t path =
+      Log.debug (fun l -> l "File.exists %s" @@ fpath_to_string path);
       is_file t path >|= function
-      | Ok _ as v -> v
-      | Error (`System err) -> Error (`Stat err)
+      | Ok _ as v        -> v
+      | Error (`Exn err) -> err_stat path "%a" Fmt.exn err
 
     let open' t ?lock path ~mode:_ =
       Git.Mem.Lock.with_lock lock  @@ fun () ->
       let fd = fpath_to_string path in
       FS.stat t fd >>= function
       | Ok { Mirage_fs.directory = false; _ } -> Lwt.return (Ok fd)
-      | Ok _ -> Lwt.return (Error `Is_a_directory)
-      | Error #Mirage_fs.error ->
-        FS.create t (fpath_to_string path) >>= function
-        | Ok () -> Lwt.return (Ok fd)
-        | Error (#Mirage_fs.write_error as err) ->
-          Lwt.return (Error (err :> error))
+      | Ok _    -> Lwt.return (err_fs_write `Is_a_directory)
+      | Error _ ->
+        FS.create t (fpath_to_string path) >|= function
+        | Ok ()   -> Ok fd
+        | Error e -> err_fs_write e
 
     (* XXX(dinosaure): we can inform the size of the file and check at any time
        if [seek <= max]. *)
 
     let open_r t ?lock path ~mode =
-      open' t ?lock path ~mode >|=
-      result_bind (fun fd -> Ok ({ fd; seek = 0 } :> [ `Read ] fd))
+      Log.debug (fun l -> l "File.open_r %s" @@ fpath_to_string path);
+      open' t ?lock path ~mode >|?= fun fd ->
+      ({ fd; seek = 0 } :> [ `Read ] fd)
 
     let open_w t ?lock path ~mode =
-      open' t ?lock path ~mode >|=
-      result_bind (fun fd -> Ok ({ fd; seek = 0 } :> [ `Write ] fd))
+      Log.debug (fun l -> l "File.open_w %s" @@ fpath_to_string path);
+      open' t ?lock path ~mode >|?= fun fd ->
+      ({ fd; seek = 0 } :> [ `Write ] fd)
 
     let write t raw ?(off = 0) ?(len = Cstruct.len raw) fd =
+      Log.debug (fun l -> l "File.write %s" fd.fd);
       FS.write t fd.fd fd.seek (Cstruct.sub raw off len) >|= function
-      | Ok () -> fd.seek <- fd.seek + len; Ok len
-      | Error (#Mirage_fs.write_error as err) -> Error (err :> error)
+      | Ok ()   -> fd.seek <- fd.seek + len; Ok len
+      | Error e -> err_fs_write e
 
     let read t dst ?(off = 0) ?(len = Cstruct.len dst) fd =
+      Log.debug (fun l -> l "File.read %s" fd.fd);
       FS.read t fd.fd fd.seek len >|= function
-      | Error (#Mirage_fs.error as err) -> Error (err :> error)
-      | Ok src ->
+      | Error e -> err_fs_read e
+      | Ok src  ->
         let (len, _) = Cstruct.fillv ~src ~dst:(Cstruct.sub dst off len) in
         fd.seek <- fd.seek + len;
         Ok len
 
-    let close _ = Lwt.return (Ok ())
+    let close fd =
+      Log.debug (fun l -> l "File.close %s" fd.fd);
+      Lwt.return (Ok ())
 
     let delete t ?lock path =
+      Log.debug (fun l -> l "File.delete %s" @@ fpath_to_string path);
       Git.Mem.Lock.with_lock lock @@ fun () ->
       FS.destroy t (fpath_to_string path) >|= function
       | Ok _ as v -> v
-      | Error (#Mirage_fs.write_error as err) -> Error (err :> error)
+      | Error e   -> err_fs_write e
 
     let atomic_read t path =
       FS.stat t (fpath_to_string path) >>= function
@@ -325,16 +227,17 @@ module Make (Gamma: GAMMA) (FS: S) = struct
           FS.read t (fpath_to_string path) 0 (Int64.to_int stat.Mirage_fs.size)
           >|= function
           | Error _ -> None
-          | Ok cs -> Some (Cstruct.of_string (Cstruct.copyv cs))
+          | Ok cs   -> Some (Cstruct.of_string (Cstruct.copyv cs))
 
     let atomic_write t ?lock path content =
       FS.mkdir t (Filename.dirname (fpath_to_string path)) >>= fun _ ->
       Git.Mem.Lock.with_lock lock @@ fun () ->
       FS.create t (fpath_to_string path) >>= function
-      | Error (#Mirage_fs.write_error as err) -> Lwt.return (Error (err :> error))
-      | Ok () -> FS.write t (fpath_to_string path) 0 content >|= function
+      | Error e -> Lwt.return (err_fs_write e)
+      | Ok ()   ->
+        FS.write t (fpath_to_string path) 0 content >|= function
         | Ok _ as v -> v
-        | Error (#Mirage_fs.write_error as err) -> Error (err :> error)
+        | Error e   -> err_fs_write e
 
     let test_and_set t ?lock ?temp:_ file ~test ~set =
       FS.mkdir t (Filename.dirname (fpath_to_string file)) >>= fun _ ->
@@ -343,8 +246,9 @@ module Make (Gamma: GAMMA) (FS: S) = struct
         (match set with
          | None   -> delete t file
          | Some v -> atomic_write t file v)
-        >|= function Ok () -> Ok true
-                   | Error _ as err -> err
+        >|= function
+        | Ok ()          -> Ok true
+        | Error _ as err -> err
       in
       atomic_read t file >>= fun old ->
       match old, test with
@@ -354,79 +258,64 @@ module Make (Gamma: GAMMA) (FS: S) = struct
 
     let move t ?lock patha pathb =
       Git.Mem.Lock.with_lock lock @@ fun () ->
-      (open' t patha ~mode:0o644 >!= fun err ->
-          Lwt.return (err :> error)) >?= fun fda ->
-      (open' t pathb ~mode:0o644 >!= fun err ->
-          Lwt.return (err :> error)) >?= fun fdb ->
-      (FS.size t fda >!= function #Mirage_fs.error as err ->
-          Lwt.return (err :> error)) >?= fun size ->
-
+      open' t patha ~mode:0o644 >>?= fun fda ->
+      open' t pathb ~mode:0o644 >>?= fun fdb ->
+      (FS.size t fda >>!= fs_read) >>?= fun size ->
       let stream, push = Lwt_stream.create () in
-
       let rec read pos rest = match rest with
-        | 0L ->
-          push None; Lwt.return (Ok ())
+        | 0L   -> push None; Lwt.return (Ok ())
         | rest ->
           let len = Int64.to_int (min (Int64.of_int max_int) rest) in
-          FS.read t fda pos len >?= fun cs ->
+          FS.read t fda pos len >>?= fun cs ->
           push (Some (Cstruct.concat cs));
           read (pos + len) Int64.(sub rest (of_int len))
       in
-
       let rec write pos () =
-        let open Lwt.Infix in
-
         Lwt_stream.get stream >>= function
-        | Some cs ->
-          let open Lwt_result in
-          FS.write t fdb pos cs >>= write (pos + (Cstruct.len cs))
-        | None ->
-          Lwt.return (Ok ())
+        | Some cs -> FS.write t fdb pos cs >>?= write (pos + (Cstruct.len cs))
+        | None    -> Lwt.return (Ok ())
       in
-
-      let open Lwt.Infix in
-      let ( >!= ) = Lwt_result.bind_lwt_err in
-
-      (read 0 size >!= function #Mirage_fs.error as err -> Lwt.return (err :> error))
-      <?> (write 0 () >!= function (#Mirage_fs.error | #Mirage_fs.write_error) as err -> Lwt.return (err :> error))
+      (read 0 size >>!= fs_read) <?> (write 0 () >>!= fs_write)
 
     let exists path = connect @@ fun t -> exists t path
     let delete ?lock path = connect @@ fun t -> delete t ?lock path
     let move ?lock patha pathb = connect @@ fun t -> move t ?lock patha pathb
 
-    let test_and_set ?lock ?temp path ~test ~set = connect @@ fun t -> test_and_set t ?lock ?temp path ~test ~set
+    let test_and_set ?lock ?temp path ~test ~set =
+      connect @@ fun t -> test_and_set t ?lock ?temp path ~test ~set
     let open_w ?lock path ~mode = connect @@ fun t -> open_w t ?lock path ~mode
     let open_r ?lock path ~mode = connect @@ fun t -> open_r t ?lock path ~mode
     let write raw ?off ?len fd = connect @@ fun t -> write t raw ?off ?len fd
     let read raw ?off ?len fd = connect @@ fun t -> read t raw ?off ?len fd
   end
 
-  module Mapper: Git.MAPPER with type error = Mirage_fs.error
-  = struct
-    type fd = { fd : string
-              ; sz : int64 }
-    type error = Mirage_fs.error
+  module Mapper = struct
 
-    let pp_error = Mirage_fs.pp_error
+    type fd = { fd : string ; sz : int64 }
+    type error = FS.error
+
+    let pp_error = FS.pp_error
 
     let openfile t path =
-      let open Lwt.Infix in
-
       let fd = fpath_to_string path in
-      FS.stat t fd >>= function
-      | Ok stat -> Lwt.return (Ok { fd; sz = stat.Mirage_fs.size })
-      | Error (#Mirage_fs.error as err) -> Lwt.return (Error (err :> error))
+      Log.debug (fun l -> l "Mapper.openfile %s" fd);
+      FS.stat t fd >|= function
+      | Ok stat      -> Ok { fd; sz = stat.Mirage_fs.size }
+      | Error _ as e -> e
 
-    let length { sz; _ } = Lwt.return (Ok sz)
+    let length { sz; fd } =
+      Log.debug (fun l -> l "Mapper.length %s" fd);
+      Lwt.return (Ok sz)
 
     let map t { fd; _ } ?(pos = 0L) ~share:_ len =
-      let open Lwt.Infix in
-
+      Log.debug (fun l -> l "Mapper.map %s" fd);
       FS.read t fd (Int64.to_int pos) len >|= function
-      | Ok cs -> Ok (Cstruct.concat cs)
-      | Error (#Mirage_fs.error as err) -> Error (err :> error)
+      | Ok cs        -> Ok (Cstruct.concat cs)
+      | Error _ as e -> e
 
-    let close _ = Lwt.return (Ok ())
+    let close { fd; _ } =
+      Log.debug (fun l -> l "Mapper.close %s" fd);
+      Lwt.return (Ok ())
 
     let openfile path = connect @@ fun t -> openfile t path
     let map fd ?pos ~share len = connect @@ fun t -> map t fd ?pos ~share len
