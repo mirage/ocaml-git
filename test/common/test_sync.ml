@@ -25,7 +25,7 @@ module type SYNC = sig
 
   val clone: Store.t -> reference:Store.Reference.t -> Uri.t ->
     (unit, error) result Lwt.t
-  val fetch_all: Store.t -> Uri.t -> (unit, error) result Lwt.t
+  val fetch_all: Store.t -> references:Store.Reference.t list Store.Reference.Map.t -> Uri.t -> (unit, error) result Lwt.t
   val update: Store.t -> reference:Store.Reference.t -> Uri.t ->
     ((Store.Reference.t, Store.Reference.t * string) result list, error)
       result Lwt.t
@@ -58,7 +58,9 @@ module Make (Sync: SYNC) = struct
         | true ->
           Alcotest.fail "non-empty repository!"
         | false ->
-          Sync.fetch_all t uri >>= function
+          Sync.fetch_all t
+            ~references:Store.Reference.(Map.singleton Path.(heads / master) [ Path.(heads / master) ])
+            uri >>= function
           | Error err -> Lwt.fail (Sync err)
           | Ok () ->
             Sync.update t ~reference:Store.Reference.master uri >>= function
