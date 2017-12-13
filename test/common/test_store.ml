@@ -40,7 +40,7 @@ module Make (Store : Git.S) = struct
 
   exception Reset of [ `Store of Store.error | `Ref of Store.Ref.error ]
 
-  let run _ test =
+  let run test =
     Lwt_main.run (test () >>= fun t -> Store.reset t >>= function
       | Ok () -> Lwt.return ()
       | Error err -> Lwt.fail (Reset err))
@@ -229,7 +229,7 @@ module Make (Store : Git.S) = struct
   exception PackDecoder of PackDecoder.error
   exception PackEncoder of PackEncoder.error
 
-  let test_blobs x () =
+  let test_blobs () =
     let open Lwt_result in
 
     let test () =
@@ -240,11 +240,11 @@ module Make (Store : Git.S) = struct
       check_keys t "blobs" `Blob [!!kv0; !!kv1; !!kv2] >>= fun () ->
       Lwt.return (Ok t)
     in
-    run x (fun () -> let open Lwt.Infix in test () >>= function
+    run (fun () -> let open Lwt.Infix in test () >>= function
       | Ok t -> Lwt.return t
       | Error err -> Lwt.fail (Store err))
 
-  let test_trees x () =
+  let test_trees () =
     let test () =
       let open Lwt_result in
 
@@ -269,7 +269,7 @@ module Make (Store : Git.S) = struct
 
       Lwt.return (Ok t)
     in
-    run x (fun () -> let open Lwt.Infix in test () >>= function
+    run (fun () -> let open Lwt.Infix in test () >>= function
       | Ok t -> Lwt.return t
       | Error err -> Lwt.fail (Store err))
 
@@ -300,7 +300,7 @@ module Make (Store : Git.S) = struct
     end in (module M : Alcotest.TESTABLE with type t = M.t)
 
 
-  let test_commits x () =
+  let test_commits () =
     let c =
       let root = Store.Hash.of_hex "3aadeb4d06f2a149e06350e4dab2c7eff117addc" in
       let thomas =
@@ -335,11 +335,11 @@ module Make (Store : Git.S) = struct
         | Error (`Decoder err) ->
           Alcotest.fail (Fmt.strf "(`Decoder %s)" err)
     in
-    run x (fun () -> let open Lwt.Infix in test () >>= function
+    run (fun () -> let open Lwt.Infix in test () >>= function
       | Ok t -> Lwt.return t
       | Error err -> Lwt.fail (Store err))
 
-  let test_tags x () =
+  let test_tags () =
     let test () =
       let open Lwt_result in
 
@@ -356,11 +356,11 @@ module Make (Store : Git.S) = struct
 
       Lwt.return (Ok t)
     in
-    run x (fun () -> let open Lwt.Infix in test () >>= function
+    run (fun () -> let open Lwt.Infix in test () >>= function
       | Ok t -> Lwt.return t
       | Error err -> Lwt.fail (Store err))
 
-  let test_refs x () =
+  let test_refs () =
     let test () =
       let open Lwt_result in
       let ( >!= ) = Lwt.bind in
@@ -385,11 +385,11 @@ module Make (Store : Git.S) = struct
             Alcotest.(check head_contents) "head" (Store.Reference.Hash commit) value;
             Lwt.return (Ok t)
     in
-    run x (fun () -> let open Lwt.Infix in test () >>= function
+    run (fun () -> let open Lwt.Infix in test () >>= function
       | Ok t -> Lwt.return t
       | Error err -> Lwt.fail (Ref err))
 
-  let test_search x () =
+  let test_search () =
     let test () =
       let open Lwt_result in
 
@@ -408,7 +408,7 @@ module Make (Store : Git.S) = struct
       check !!kc2 (`Commit (`Path ["a"])) !!kt2 >>= fun () ->
       Lwt.return (Ok t)
     in
-    run x (fun () -> let open Lwt.Infix in test () >>= function
+    run (fun () -> let open Lwt.Infix in test () >>= function
       | Ok t -> Lwt.return t
       | Error err -> Lwt.fail (Store err))
 
@@ -417,7 +417,7 @@ module Make (Store : Git.S) = struct
 
   module RefIndexPack = Test_index_pack.Value(Store.Hash)
 
-  let test_encoder_index_pack x () =
+  let test_encoder_index_pack () =
     let module Radix = Common.Radix in
 
     let read_file file =
@@ -456,11 +456,11 @@ module Make (Store : Git.S) = struct
         assert_cstruct_data_equal "raw data" buf res;
         Lwt.return (Ok t)
     in
-    run x (fun () -> let open Lwt.Infix in test () >>= function
+    run (fun () -> let open Lwt.Infix in test () >>= function
       | Ok t -> Lwt.return t
       | Error err -> Lwt.fail (IndexEncoder err))
 
-  let test_decoder_index_pack x () =
+  let test_decoder_index_pack () =
     let module Radix = Common.Radix in
 
     let test () =
@@ -487,7 +487,7 @@ module Make (Store : Git.S) = struct
           (List.fold_left (fun a (h, v) -> Radix.bind a h v) Radix.empty RefIndexPack.values);
         Lwt.return (Ok t)
     in
-    run x (fun () -> let open Lwt.Infix in test () >>= function
+    run (fun () -> let open Lwt.Infix in test () >>= function
       | Ok t -> Lwt.return t
       | Error err -> Lwt.fail (IndexDecoder err))
 
@@ -642,7 +642,7 @@ module Make (Store : Git.S) = struct
     | Error err ->
       Lwt_unix.close ic >>= fun () -> Lwt.return (Error err)
 
-  let test_decoder_pack x () =
+  let test_decoder_pack () =
     let test () =
       Store.create ~root () >>= function
       | Error err -> Lwt.fail (Store err)
@@ -654,7 +654,7 @@ module Make (Store : Git.S) = struct
           (List.fold_left (fun a (h, v) -> Radix.bind a h v) Radix.empty RefIndexPack.values);
         Lwt.return (Ok t)
     in
-    run x (fun () -> let open Lwt.Infix in test () >>= function
+    run (fun () -> let open Lwt.Infix in test () >>= function
       | Ok t -> Lwt.return t
       | Error err -> Lwt.fail (PackDecoder err))
 
@@ -664,7 +664,7 @@ module Make (Store : Git.S) = struct
     Cstruct.blit cs 0 rs 0 ln;
     rs
 
-  let test_encoder_pack x () =
+  let test_encoder_pack () =
     let test () =
       let open Lwt_result in
 
@@ -744,7 +744,7 @@ module Make (Store : Git.S) = struct
             (* XXX(dinosaure): this error should never happen
                because [Mapper.map] returns [Ok] every times. *)
     in
-    run x (fun () -> let open Lwt.Infix in test () >>= function
+    run (fun () -> let open Lwt.Infix in test () >>= function
       | Ok t -> Lwt.return t
       | Error err -> Lwt.fail (Store err))
 
@@ -754,13 +754,13 @@ let suite (speed, x) =
   let (module S) = x.store in
   let module T = Make(S) in
   x.name,
-  [ "Operations on blobs"       , speed, T.test_blobs x
-  ; "Operations on trees"       , speed, T.test_trees x
-  ; "Operations on commits"     , speed, T.test_commits x
-  ; "Operations on tags"        , speed, T.test_tags x
-  ; "Operations on references"  , speed, T.test_refs x
-  ; "Search"                    , speed, T.test_search x
-  ; "Index pack decoder"        , speed, T.test_decoder_index_pack x
-  ; "Index pack encoder"        , speed, T.test_encoder_index_pack x
-  ; "Pack decoder"              , `Slow, T.test_decoder_pack x
-  ; "Pack encoder"              , `Slow, T.test_encoder_pack x ]
+  [ "Operations on blobs"       , speed, T.test_blobs
+  ; "Operations on trees"       , speed, T.test_trees
+  ; "Operations on commits"     , speed, T.test_commits
+  ; "Operations on tags"        , speed, T.test_tags
+  ; "Operations on references"  , speed, T.test_refs
+  ; "Search"                    , speed, T.test_search
+  ; "Index pack decoder"        , speed, T.test_decoder_index_pack
+  ; "Index pack encoder"        , speed, T.test_encoder_index_pack
+  ; "Pack decoder"              , `Slow, T.test_decoder_pack
+  ; "Pack encoder"              , `Slow, T.test_encoder_pack ]

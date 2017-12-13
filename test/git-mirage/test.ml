@@ -129,8 +129,10 @@ module MirageConduit: Git_mirage.Net.CONDUIT = struct
     R.R.init ?ns ?ns_port ~stack:stack ()
 end
 
+module Store = Git.Mem.Store(Digestif.SHA1)
+
 module TCP = Test_sync.Make(struct
-    module M = Git_mirage.Sync(MirageConduit)(Git.Mem.Store(Digestif.SHA1))
+    module M = Git_mirage.Sync(MirageConduit)(Store)
     module Store = M.Store
     type error = M.error
     let clone t ~reference uri = M.clone t ~reference uri
@@ -149,5 +151,5 @@ let () =
   let () = Lwt_main.run (M.init ()) in
   Alcotest.run "git-mirage" [
     Test_store.suite (`Quick, mirage_backend);
-    TCP.suite { mirage_backend with name = "mirage-tcp-sync"};
+    TCP.suite "mirage-tcp-sync";
   ]

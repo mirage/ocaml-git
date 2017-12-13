@@ -17,8 +17,8 @@
 
 open Test_common
 
-module TCP = Test_sync.Make(struct
-    module M = Git_unix.Sync(Git_unix.FS)
+module TCP (Store: Git.S) = Test_sync.Make(struct
+    module M = Git_unix.Sync(Store)
     module Store = M.Store
     type error = M.error
     let clone t ~reference uri = M.clone t ~reference uri
@@ -30,8 +30,8 @@ module TCP = Test_sync.Make(struct
 (* XXX(dinosaure): the divergence between the TCP API and the HTTP API
    will be update for an homogenization. *)
 
-module HTTP = Test_sync.Make(struct
-    module M = Git_unix.HTTP(Git_unix.FS)
+module HTTP (Store: Git.S) = Test_sync.Make(struct
+    module M = Git_unix.HTTP(Store)
     module Store = M.Store
     type error = M.error
     let clone t ~reference uri = M.clone t ~reference:(reference, reference) uri
@@ -59,8 +59,8 @@ module HTTP = Test_sync.Make(struct
     let kind = `HTTP
   end)
 
-module HTTPS = Test_sync.Make(struct
-    module M = Git_unix.HTTP(Git_unix.FS)
+module HTTPS (Store: Git.S) = Test_sync.Make(struct
+    module M = Git_unix.HTTP(Store)
     module Store = M.Store
     type error = M.error
     let clone t ~reference uri = M.clone t ~reference:(reference, reference) uri
@@ -89,24 +89,29 @@ module HTTPS = Test_sync.Make(struct
   end)
 
 module MemStore = Git.Mem.Store(Digestif.SHA1)
-module UnixStore = Git_unix.FS
+module FsStore = Git_unix.FS
 
 let mem_backend =
   { name  = "mem"
   ; store = (module MemStore)
   ; shell = false }
 
-let unix_backend =
+let fs_backend =
   { name  = "unix"
-  ; store = (module UnixStore)
+  ; store = (module FsStore)
   ; shell = true }
+
+module TCP1  = TCP(MemStore)
+module TCP2  = TCP(FsStore)
+module HTTP1 = HTTP(MemStore)
+module HTTP2 = HTTPS(FsStore)
 
 let () =
   verbose ();
   Alcotest.run "git-unix"
     [ Test_store.suite (`Quick, mem_backend)
-    ; Test_store.suite (`Quick, unix_backend)
-    ; TCP.suite   { mem_backend  with name = "mem-tcp-sync"    }
-    ; TCP.suite   { unix_backend with name = "unix-tcp-sync"   }
-    ; HTTP.suite  { mem_backend  with name = "mem-http-sync"   }
-    ; HTTPS.suite { unix_backend with name = "unix-https-sync" } ]
+    ; Test_store.suite (`Quick, fs_backend)
+    ; TCP1.suite "mem-tcp-sync"
+    ; TCP2.suite "fs-tcp-sync"
+    ; HTTP1.suite "mem-http-sync"
+    ; HTTP2.suite "fs-https-sync" ]

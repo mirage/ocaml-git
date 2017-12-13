@@ -43,7 +43,7 @@ module Make (Sync: SYNC) = struct
 
   let root = Fpath.v "test-git-store"
 
-  let test_tcp_remote x () =
+  let test_tcp_remote () =
     let test () =
       let uri = Uri.of_string "git://localhost/" in
 
@@ -69,11 +69,11 @@ module Make (Sync: SYNC) = struct
             | Ok (_ :: _) ->
               Alcotest.fail "de-synchronization of the git repository"
     in
-    run x (fun () -> test () >>= function
+    run (fun () -> test () >>= function
       | Ok t -> Lwt.return t
       | Error err -> Lwt.fail (Store err))
 
-  let test_clone x () =
+  let test_clone () =
     let test () =
       Store.create ~root () >>?= fun t ->
 
@@ -102,14 +102,13 @@ module Make (Sync: SYNC) = struct
 
       Lwt.return (Ok t)
     in
-    run x (fun () -> test () >>= function
+    run (fun () -> test () >>= function
       | Ok t -> Lwt.return t
       | Error err -> Lwt.fail (Store err))
 
-  let suite x =
-    let (module S) = x.Test_common.store in
-    x.name,
-    [ "TCP Remote operations"          , `Slow, test_tcp_remote x
-    ; "TCP & HTTP Cloning remote repos", `Slow, test_clone x ]
+  let suite name =
+    name,
+    [ "TCP Remote operations"          , `Slow, test_tcp_remote
+    ; "TCP & HTTP Cloning remote repos", `Slow, test_clone ]
 
 end
