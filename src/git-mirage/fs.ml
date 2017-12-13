@@ -48,27 +48,22 @@ module Make (Gamma: GAMMA) (FS: S) = struct
         | exn -> Lwt.return (Error (`System (Printexc.to_string exn))))
 
   let is_dir t path =
-    Log.debug (fun l ->
-        l ~header:"is_dir" "Check if %a already exists as a directory."
-          Fpath.pp path);
-
+    Log.debug (fun l ->l "Check if %a is a directory." Fpath.pp path);
     Lwt.try_bind
       (fun () ->  FS.stat t (Fpath.to_string path))
       (function
         | Ok { Mirage_fs.directory; _ } -> Lwt.return (Ok directory)
         | Error _ ->
-          Log.debug (fun l ->
-              l ~header:"is_dir" "%a does not exists (as file or as directory)."
-                Fpath.pp path);
+          Log.debug (fun l -> l "%a does not exists" Fpath.pp path);
           Lwt.return (Ok false))
       (* FIXME: see above. *)
       (function
         | Sys_error e ->
-          Log.debug (fun l -> l ~header:"is_dir" "%a: %s" Fpath.pp path e);
+          Log.debug (fun l -> l "%s: Sys_error %a" e Fpath.pp path);
           Lwt.return (Ok false)
         | exn ->
           Log.err (fun l ->
-              l ~header:"is_dir" "Retrieve an exception: %a." Fmt.exn exn);
+              l "Got an error while stating %a: %a" Fpath.pp path Fmt.exn exn);
           Lwt.return (Error (`System (Printexc.to_string exn))))
 
   module Dir
@@ -95,27 +90,26 @@ module Make (Gamma: GAMMA) (FS: S) = struct
       | #Mirage_fs.write_error as err -> Mirage_fs.pp_write_error ppf err
 
     let exists t path =
-      is_dir t path >>= function
-      | Ok _ as v -> Lwt.return v
-      | Error (`System err) -> Lwt.return (Error (`Stat err))
+      is_dir t path >|= function
+      | Ok _ as v           -> v
+      | Error (`System err) -> Error (`Stat err)
+
+    let mkdir t d =
+      Log.debug (fun l -> l "mkdir %a." Fpath.pp d);
+      FS.mkdir t (Fpath.to_string d)
 
     let create t ?(path = true) ?mode:_ dir =
-      let mkdir d =
-        Log.debug (fun l -> l ~header:"create" "mkdir %a." Fpath.pp d);
-        FS.mkdir t (Fpath.to_string d)
-      in
       is_dir t dir >>= function
+      | Ok true             -> Lwt.return (Ok false)
       | Error (`System err) ->
-        Log.err (fun l ->
-            l ~header:"create" "Retrieve an error from [is_dir]: %s." err);
+        Log.err (fun l -> l "Got an error while stating %a: %s." Fpath.pp dir err);
         Lwt.return (Error (`Stat err))
-      | Ok true -> Lwt.return (Ok false)
       | Ok false ->
         Log.debug (fun l ->
             l ~header:"create" "Make the new directory %a." Fpath.pp dir);
 
         match path with
-        | false -> Lwt_pool.use mkdir_pool (fun () -> mkdir dir) >>=
+        | false -> Lwt_pool.use mkdir_pool (fun () -> mkdir t dir) >>=
           (function Error #Mirage_fs.write_error as err -> Lwt.return err
                   | Ok _ -> Lwt.return (Ok false))
         | true ->
@@ -125,18 +119,16 @@ module Make (Gamma: GAMMA) (FS: S) = struct
             | Ok true -> Lwt.return (Ok acc)
             | Ok false -> dirs_to_create (Fpath.parent p) (p :: acc)
           in
-
           let rec create_them dirs () = match dirs with
-            | [] -> Lwt.return (Ok ())
-            | dir :: dirs -> Lwt_pool.use mkdir_pool (fun () -> mkdir dir)
-              >>= function
+            | []          -> Lwt.return (Ok ())
+            | dir :: dirs ->
+              Lwt_pool.use mkdir_pool (fun () -> mkdir t dir) >>= function
               | Error #Mirage_fs.write_error as err -> Lwt.return err
-              | Ok () -> create_them dirs ()
+              | Ok ()                               -> create_them dirs ()
           in
-
-          dirs_to_create dir []
-          >>= (function Ok dirs -> create_them dirs ()
-                      | Error _ as err -> Lwt.return err)
+          (dirs_to_create dir [] >>= function
+            | Ok dirs        -> create_them dirs ()
+            | Error _ as err -> Lwt.return err)
           >|= result_bind (fun _ -> Ok true)
 
     let delete t ?(recurse = false) dir =
