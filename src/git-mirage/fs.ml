@@ -26,6 +26,9 @@ sig
   val connect : unit -> t Lwt.t
 end
 
+(* XXX(samoht): this should probably be fixed in mirage-fs-unix *)
+let fpath_to_string path = Fpath.(to_string @@ rem_empty_seg path)
+
 module Make (Gamma: GAMMA) (FS: S) = struct
 
   let connect fn =
@@ -37,7 +40,7 @@ module Make (Gamma: GAMMA) (FS: S) = struct
 
   let is_file t path =
     Lwt.try_bind
-      (fun () -> FS.stat t (Fpath.to_string path))
+      (fun () -> FS.stat t (fpath_to_string path))
       (function
         | Ok { Mirage_fs.directory; _ } -> Lwt.return (Ok (not directory))
         | Error _ -> Lwt.return (Ok false))
@@ -50,7 +53,7 @@ module Make (Gamma: GAMMA) (FS: S) = struct
   let is_dir t path =
     Log.debug (fun l ->l "Check if %a is a directory." Fpath.pp path);
     Lwt.try_bind
-      (fun () ->  FS.stat t (Fpath.to_string path))
+      (fun () ->  FS.stat t (fpath_to_string path))
       (function
         | Ok { Mirage_fs.directory; _ } -> Lwt.return (Ok directory)
         | Error _ ->
@@ -96,7 +99,7 @@ module Make (Gamma: GAMMA) (FS: S) = struct
 
     let mkdir t d =
       Log.debug (fun l -> l "mkdir %a." Fpath.pp d);
-      FS.mkdir t (Fpath.to_string d)
+      FS.mkdir t (fpath_to_string d)
 
     let create t ?(path = true) ?mode:_ dir =
       is_dir t dir >>= function
@@ -116,8 +119,8 @@ module Make (Gamma: GAMMA) (FS: S) = struct
           let rec dirs_to_create p acc =
             is_dir t p >>= function
             | Error (`System err) -> Lwt.return (Error (`Stat err))
-            | Ok true -> Lwt.return (Ok acc)
-            | Ok false -> dirs_to_create (Fpath.parent p) (p :: acc)
+            | Ok true             -> Lwt.return (Ok acc)
+            | Ok false            -> dirs_to_create (Fpath.parent p) (p :: acc)
           in
           let rec create_them dirs () = match dirs with
             | []          -> Lwt.return (Ok ())
@@ -141,7 +144,7 @@ module Make (Gamma: GAMMA) (FS: S) = struct
             | file :: todo ->
               let try_unlink file =
                 Lwt.try_bind
-                  (fun () -> FS.destroy t (Fpath.to_string file))
+                  (fun () -> FS.destroy t (fpath_to_string file))
                   (function
                     | Error `No_directory_entry
                     | Ok () -> Lwt.return (Ok dirs)
@@ -157,7 +160,7 @@ module Make (Gamma: GAMMA) (FS: S) = struct
           in
 
           Lwt.try_bind
-            (fun () -> FS.listdir t (Fpath.to_string dir))
+            (fun () -> FS.listdir t (fpath_to_string dir))
             (function
               | Error `No_directory_entry ->
                 delete_files to_rmdir todo
@@ -173,7 +176,7 @@ module Make (Gamma: GAMMA) (FS: S) = struct
         | dir :: dirs ->
           let rmdir dir =
             Lwt.try_bind
-              (fun () -> FS.destroy t (Fpath.to_string dir))
+              (fun () -> FS.destroy t (fpath_to_string dir))
               (function
                 | Error `No_directory_entry
                 | Ok () -> Lwt.return (Ok ())
@@ -189,7 +192,7 @@ module Make (Gamma: GAMMA) (FS: S) = struct
         if not recurse
         then let rmdir dir =
                Lwt.try_bind
-                 (fun () -> FS.destroy t (Fpath.to_string dir))
+                 (fun () -> FS.destroy t (fpath_to_string dir))
                  (function
                    | Error `No_directory_entry
                    | Ok () -> Lwt.return (Ok ())
@@ -206,7 +209,7 @@ module Make (Gamma: GAMMA) (FS: S) = struct
       delete recurse dir >>= function
       | Ok () -> Lwt.return (Ok ())
       | Error (`Destroy msg) ->
-        Lwt.return (Error (`Destroy (Fmt.strf "delete directory %s: %s" (Fpath.to_string dir) msg)))
+        Lwt.return (Error (`Destroy (Fmt.strf "delete directory %s: %s" (fpath_to_string dir) msg)))
       | Error _ as err -> Lwt.return err
 
     let contents t ?(dotfiles = false) ?(rel = false) dir =
@@ -219,12 +222,12 @@ module Make (Gamma: GAMMA) (FS: S) = struct
            | Ok f -> readdir rest ((if rel then f else Fpath.(dir // f)) :: acc)
            | Error (`Msg _) ->
              Lwt.return (Error (`Path (Fmt.strf "directory conctents %s: cannot parse element to a path (%S)"
-                                         (Fpath.to_string dir) f))))
+                                         (fpath_to_string dir) f))))
         | _ :: rest -> readdir rest acc
       in
 
       Lwt.try_bind
-        (fun () -> FS.listdir t (Fpath.to_string dir))
+        (fun () -> FS.listdir t (fpath_to_string dir))
         (function
           | Ok files -> readdir files []
           | Error #Mirage_fs.error as err -> Lwt.return err)
@@ -270,12 +273,12 @@ module Make (Gamma: GAMMA) (FS: S) = struct
 
     let open' t ?lock path ~mode:_ =
       Git.Mem.Lock.with_lock lock  @@ fun () ->
-      let fd = Fpath.to_string path in
+      let fd = fpath_to_string path in
       FS.stat t fd >>= function
       | Ok { Mirage_fs.directory = false; _ } -> Lwt.return (Ok fd)
       | Ok _ -> Lwt.return (Error `Is_a_directory)
       | Error #Mirage_fs.error ->
-        FS.create t (Fpath.to_string path) >>= function
+        FS.create t (fpath_to_string path) >>= function
         | Ok () -> Lwt.return (Ok fd)
         | Error (#Mirage_fs.write_error as err) ->
           Lwt.return (Error (err :> error))
@@ -308,33 +311,33 @@ module Make (Gamma: GAMMA) (FS: S) = struct
 
     let delete t ?lock path =
       Git.Mem.Lock.with_lock lock @@ fun () ->
-      FS.destroy t (Fpath.to_string path) >|= function
+      FS.destroy t (fpath_to_string path) >|= function
       | Ok _ as v -> v
       | Error (#Mirage_fs.write_error as err) -> Error (err :> error)
 
     let atomic_read t path =
-      FS.stat t (Fpath.to_string path) >>= function
+      FS.stat t (fpath_to_string path) >>= function
       | Error _ -> Lwt.return None
       | Ok stat ->
         if stat.Mirage_fs.directory
         then Lwt.fail (Failure (Fmt.strf "%a is a directory" Fpath.pp path))
         else
-          FS.read t (Fpath.to_string path) 0 (Int64.to_int stat.Mirage_fs.size)
+          FS.read t (fpath_to_string path) 0 (Int64.to_int stat.Mirage_fs.size)
           >|= function
           | Error _ -> None
           | Ok cs -> Some (Cstruct.of_string (Cstruct.copyv cs))
 
     let atomic_write t ?lock path content =
-      FS.mkdir t (Filename.dirname (Fpath.to_string path)) >>= fun _ ->
+      FS.mkdir t (Filename.dirname (fpath_to_string path)) >>= fun _ ->
       Git.Mem.Lock.with_lock lock @@ fun () ->
-      FS.create t (Fpath.to_string path) >>= function
+      FS.create t (fpath_to_string path) >>= function
       | Error (#Mirage_fs.write_error as err) -> Lwt.return (Error (err :> error))
-      | Ok () -> FS.write t (Fpath.to_string path) 0 content >|= function
+      | Ok () -> FS.write t (fpath_to_string path) 0 content >|= function
         | Ok _ as v -> v
         | Error (#Mirage_fs.write_error as err) -> Error (err :> error)
 
     let test_and_set t ?lock ?temp:_ file ~test ~set =
-      FS.mkdir t (Filename.dirname (Fpath.to_string file)) >>= fun _ ->
+      FS.mkdir t (Filename.dirname (fpath_to_string file)) >>= fun _ ->
       Git.Mem.Lock.with_lock lock @@ fun () ->
       let set () =
         (match set with
@@ -409,7 +412,7 @@ module Make (Gamma: GAMMA) (FS: S) = struct
     let openfile t path =
       let open Lwt.Infix in
 
-      let fd = Fpath.to_string path in
+      let fd = fpath_to_string path in
       FS.stat t fd >>= function
       | Ok stat -> Lwt.return (Ok { fd; sz = stat.Mirage_fs.size })
       | Error (#Mirage_fs.error as err) -> Lwt.return (Error (err :> error))
