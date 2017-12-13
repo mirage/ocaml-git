@@ -138,7 +138,6 @@ module TCP = Test_sync.Make(struct
     let clone t ~reference uri = M.clone t ~reference uri
     let fetch_all t uri = M.fetch_all t uri
     let update t ~reference uri = M.update t ~reference uri
-    let kind = `TCP
   end)
 
 let mirage_backend =
@@ -151,5 +150,9 @@ let () =
   let () = Lwt_main.run (M.init ()) in
   Alcotest.run "git-mirage" [
     Test_store.suite (`Quick, mirage_backend);
-    TCP.suite "mirage-tcp-sync";
+    TCP.test_fetch "tcp-sync-fetch" ["git://localhost/"];
+    TCP.test_clone "tcp-sync-clone" [
+      "git://localhost/", "master";
+      "git://github.com/mirage/ocaml-git.git", "master";
+    ]
   ]

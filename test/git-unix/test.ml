@@ -24,7 +24,6 @@ module TCP (Store: Git.S) = Test_sync.Make(struct
     let clone t ~reference uri = M.clone t ~reference uri
     let fetch_all t uri = M.fetch_all t uri
     let update t ~reference uri = M.update t ~reference uri
-    let kind = `TCP
   end)
 
 (* XXX(dinosaure): the divergence between the TCP API and the HTTP API
@@ -55,8 +54,10 @@ module HTTP (Store: Git.S) = Test_sync.Make(struct
           (function Jump err -> Lwt. return (Error (`Ref err))
                   | err -> Lwt.fail err)
 
-    let update t ~reference uri = M.update_and_create t ~references:(Store.Reference.Map.singleton reference [ reference ]) uri
-    let kind = `HTTP
+    let update t ~reference uri =
+      M.update_and_create t
+        ~references:(Store.Reference.Map.singleton reference [ reference ])
+        uri
   end)
 
 module HTTPS (Store: Git.S) = Test_sync.Make(struct
@@ -84,8 +85,10 @@ module HTTPS (Store: Git.S) = Test_sync.Make(struct
           (function Jump err -> Lwt. return (Error (`Ref err))
                   | err -> Lwt.fail err)
 
-    let update t ~reference uri = M.update_and_create t ~references:(Store.Reference.Map.singleton reference [ reference ]) uri
-    let kind = `HTTPS
+    let update t ~reference uri =
+      M.update_and_create t
+        ~references:(Store.Reference.Map.singleton reference [ reference ])
+        uri
   end)
 
 module MemStore = Git.Mem.Store(Digestif.SHA1)
@@ -111,7 +114,20 @@ let () =
   Alcotest.run "git-unix"
     [ Test_store.suite (`Quick, mem_backend)
     ; Test_store.suite (`Quick, fs_backend)
-    ; TCP1.suite "mem-tcp-sync"
-    ; TCP2.suite "fs-tcp-sync"
-    ; HTTP1.suite "mem-http-sync"
-    ; HTTP2.suite "fs-https-sync" ]
+    ; TCP1.test_fetch "mem-local-tcp-sync" ["git://localhost/"]
+    ; TCP1.test_clone "mem-remote-tcp-sync" [
+        "git://github.com/mirage/ocaml-git.git", "master";
+        "git://github.com/mirage/ocaml-git.git", "gh-pages";
+      ]
+    ; TCP2.test_fetch "fs-local-tcp-sync" ["git://localhost/"]
+    ; TCP2.test_clone "fs-remote-tcp-sync" [
+        "git://github.com/mirage/ocaml-git.git", "master";
+        "git://github.com/mirage/ocaml-git.git", "gh-pages";
+      ]
+    ; HTTP1.test_clone "mem-http-sync" [
+        "http://github.com/mirage/ocaml-git.git", "gh-pages"
+      ]
+    ; HTTP2.test_clone "fs-https-sync" [
+        "https://github.com/mirage/ocaml-git.git", "gh-pages"
+      ]
+    ]
