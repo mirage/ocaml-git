@@ -345,11 +345,11 @@ module Make_ext
     | `Delete of (Store.Hash.t * Store.Reference.t)
     | `Update of (Store.Hash.t * Store.Hash.t * Store.Reference.t) ]
 
-  module Sync_common
-    : module type of Git.Sync_common.Make(Store)
+  module Common
+    : module type of Git.Sync.Common(Store)
       with module Store = Store
-    = Git.Sync_common.Make(Store)
-  open Sync_common
+    = Git.Sync.Common(Store)
+  open Common
 
   let push git ~push
       ?headers ?(https = false) ?port ?(capabilities=Default.capabilites)
@@ -417,13 +417,13 @@ module Make_ext
             (fun _ -> Lwt.return ())
         in
 
-        Lwt_list.map_p (function
+        Lwt_list.map_s (function
             | `Create (hash, reference) -> Lwt.return (`Create (hash, Store.Reference.to_string reference))
             | `Delete (hash, reference) -> Lwt.return (`Delete (hash, Store.Reference.to_string reference))
             | `Update (a, b, reference) -> Lwt.return (`Update (a, b, Store.Reference.to_string reference)))
           commands
         >>= fun commands -> packer ~window:(`Object 10) ~depth:50 ~ofs_delta:true git refs.Decoder.refs commands >>= function
-        | Error _ -> assert false
+        | Error err -> Lwt.return (Error (`StorePack err))
         | Ok (stream, _) ->
           let stream () = stream () >>= function
             | Some buf -> Lwt.return (Some (buf, 0, Cstruct.len buf))
@@ -659,7 +659,7 @@ module Make_ext
       ~negociate:(continue, state) ~has ~want:want_handler host
       (Uri.path_and_query repository)
     >?= fun (results, _) ->
-      update_and_create git ?locks ~references results
+      (update_and_create git ?locks ~references results >!= fun err -> Lwt.return (err :> error))
 
   let fetch_all git ?locks ?capabilities ~references repository =
     let choose _ = Lwt.return true in

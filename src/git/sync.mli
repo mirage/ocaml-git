@@ -50,13 +50,13 @@ module type S = sig
 
   (** A push command to interact with the server. *)
   type command =
-    [ `Create of (Store.Hash.t * string)
+    [ `Create of (Store.Hash.t * Store.Reference.t)
     (** To create a new reference on the server. *)
-    | `Delete of (Store.Hash.t * string)
+    | `Delete of (Store.Hash.t * Store.Reference.t)
     (** To delete an existing reference on the server -
         [`Delete_refs] needs to be available in both side as
         a {!Capability.t}. *)
-    | `Update of (Store.Hash.t * Store.Hash.t * string)
+    | `Update of (Store.Hash.t * Store.Hash.t * Store.Reference.t)
     (** To update a reference from a commit hash to a new commit hash. *) ]
 
   val push:
@@ -221,6 +221,44 @@ module type S = sig
         error during the commmunication - if it's the case, we did not
         do any modification on the server and return an {!error}. *)
 end
+
+module Common (G: Minimal.S) :
+sig
+  module Store : Minimal.S
+
+  val packer:
+    ?window:[ `Object of int | `Memory of int ] ->
+    ?depth:int ->
+    Store.t ->
+    ofs_delta:bool ->
+    (Store.Hash.t * string * bool) list ->
+    [ `Create of (Store.Hash.t * string)
+    | `Update of (Store.Hash.t * Store.Hash.t * string)
+    | `Delete of (Store.Hash.t * string) ] list ->
+    (Store.Pack.stream *(Crc32.t * int64) Store.Pack.Graph.t Lwt_mvar.t, Store.Pack.error) result Lwt.t
+
+  val want_handler:
+    Store.t ->
+    (Store.Reference.t -> bool Lwt.t) ->
+    (Store.Hash.t * Store.Reference.t * bool) list ->
+    (Store.Reference.t * Store.Hash.t) list Lwt.t
+
+  val update_and_create:
+    Store.t ->
+    ?locks:Store.Lock.t ->
+    references:Store.Reference.t list Store.Reference.Map.t ->
+    (Store.Reference.t * Store.Hash.t) list ->
+    (Store.Hash.t Store.Reference.Map.t
+              * Store.Reference.t list Store.Reference.Map.t
+              * Store.Hash.t Store.Reference.Map.t, [ `Ref of Store.Ref.error ]) result Lwt.t
+
+  val push_handler:
+    Store.t ->
+    Store.Reference.t list Store.Reference.Map.t ->
+    (Store.Hash.t * Store.Reference.t * bool) list ->
+    [ `Create of (Store.Hash.t * Store.Reference.t)
+    | `Update of (Store.Hash.t * Store.Hash.t * Store.Reference.t) ] list Lwt.t
+end with module Store = G
 
 module Make (N: NET) (S: Minimal.S)
   : S with module Store = S
