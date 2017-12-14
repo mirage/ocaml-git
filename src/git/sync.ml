@@ -560,12 +560,12 @@ module Make (N: NET) (S: Minimal.S) = struct
                 | `Flush -> Ok []
                 | result -> Error (`Push (err_unexpected_result result)))
           | (shallow, commands) ->
-            Lwt_list.map_s
+            List.map
               (function
-                | `Create (hash, reference) -> Lwt.return (`Create (hash, Store.Reference.to_string reference))
-                | `Delete (hash, reference) -> Lwt.return (`Delete (hash, Store.Reference.to_string reference))
-                | `Update (a, b, reference) -> Lwt.return (`Update (a, b, Store.Reference.to_string reference)))
-              commands >>= fun commands ->
+                | `Create (hash, reference) -> `Create (hash, Store.Reference.to_string reference)
+                | `Delete (hash, reference) -> `Delete (hash, Store.Reference.to_string reference)
+                | `Update (a, b, reference) -> `Update (a, b, Store.Reference.to_string reference))
+              commands |> fun commands ->
             Log.debug (fun l ->
                 let pp_command ppf = function
                   | `Create (hash, refname) ->
@@ -584,7 +584,7 @@ module Make (N: NET) (S: Minimal.S) = struct
                   | `Create (hash, r) -> Client.Encoder.Create (hash, r)
                   | `Delete (hash, r) -> Client.Encoder.Delete (hash, r)
                   | `Update (_of, _to, r) -> Client.Encoder.Update (_of, _to, r)
-                )commands
+                ) commands
               |> fun commands -> List.hd commands, List.tl commands
             in
 
@@ -610,13 +610,13 @@ module Make (N: NET) (S: Minimal.S) = struct
            previously specified. So, the [None] value can not be catch and it's
            why we have an [assert false]. *)
 
-        Lwt_list.map_p
+        List.map
           (function
-            | Client.Encoder.Create (hash, refname) -> Lwt.return (`Create (hash, refname))
-            | Client.Encoder.Delete (hash, refname) -> Lwt.return (`Delete (hash, refname))
-            | Client.Encoder.Update (a, b, refname) -> Lwt.return (`Update (a, b, refname)))
+            | Client.Encoder.Create (hash, refname) -> `Create (hash, refname)
+            | Client.Encoder.Delete (hash, refname) -> `Delete (hash, refname)
+            | Client.Encoder.Update (a, b, refname) -> `Update (a, b, refname))
           commands
-        >>= Common.packer git ~ofs_delta refs >>= (function
+        |> Common.packer git ~ofs_delta refs >>= (function
             | Ok (stream, _) ->
               send_pack stream t result
             | Error err -> Lwt.return (Error (`Pack err)))
@@ -725,10 +725,10 @@ module Make (N: NET) (S: Minimal.S) = struct
     let continue { Client.Decoder.acks; shallow; unshallow } state =
       continue { Negociator.acks; shallow; unshallow } state in
     let want_handler refs =
-      Lwt_list.map_p
+      List.map
         (fun (hash, refname, peeled) ->
-           Lwt.return (hash, Store.Reference.of_string refname, peeled))
-        refs >>= Common.want_handler git choose in
+           (hash, Store.Reference.of_string refname, peeled))
+        refs |> Common.want_handler git choose in
     fetch_ext git ?capabilities ~notify:(fun _ -> Lwt.return ())
       ~negociate:(continue, state) ~has ~want:want_handler
       repository
@@ -815,16 +815,16 @@ module Make (N: NET) (S: Minimal.S) = struct
 
   let update_and_create git ?capabilities ~references repository =
     let push_handler remote_refs =
-      Lwt_list.map_p
-        (fun (hash, refname, peeled) -> Lwt.return (hash, Store.Reference.of_string refname, peeled))
+      List.map
+        (fun (hash, refname, peeled) -> (hash, Store.Reference.of_string refname, peeled))
         remote_refs
-      >>= Common.push_handler git references
+      |>  Common.push_handler git references
       >>= fun actions -> Lwt.return ([], actions) in
     push git ~push:push_handler ?capabilities repository
     >>?= fun lst ->
-    Lwt_result.ok (Lwt_list.map_p (function
-        | Ok refname -> Lwt.return (Ok (Store.Reference.of_string refname))
+    Lwt_result.ok (List.map (function
+        | Ok refname -> (Ok (Store.Reference.of_string refname))
         | Error (refname, err) ->
-          Lwt.return (Error (Store.Reference.of_string refname, err))
-      ) lst)
+          (Error (Store.Reference.of_string refname, err))
+      ) lst |> Lwt.return)
 end

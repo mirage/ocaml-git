@@ -405,8 +405,11 @@ module Make_ext
         else `No_multiplexe
       in
 
-      Lwt_list.map_p (fun (hash, refname, peeled) -> Lwt.return (hash, Store.Reference.of_string refname, peeled)) refs.Decoder.refs
-      >>= push >>= function
+      List.map
+        (fun (hash, refname, peeled) ->
+           (hash, Store.Reference.of_string refname, peeled))
+        refs.Decoder.refs
+      |> push >>= function
       | (_, []) -> Lwt.return (Ok [])
       | (shallow, commands) ->
         let req =
@@ -417,12 +420,12 @@ module Make_ext
             (fun _ -> Lwt.return ())
         in
 
-        Lwt_list.map_s (function
-            | `Create (hash, reference) -> Lwt.return (`Create (hash, Store.Reference.to_string reference))
-            | `Delete (hash, reference) -> Lwt.return (`Delete (hash, Store.Reference.to_string reference))
-            | `Update (a, b, reference) -> Lwt.return (`Update (a, b, Store.Reference.to_string reference)))
+        List.map (function
+            | `Create (hash, reference) -> `Create (hash, Store.Reference.to_string reference)
+            | `Delete (hash, reference) -> `Delete (hash, Store.Reference.to_string reference)
+            | `Update (a, b, reference) -> `Update (a, b, Store.Reference.to_string reference))
           commands
-        >>= fun commands -> packer ~window:(`Object 10) ~depth:50 ~ofs_delta:true git refs.Decoder.refs commands >>= function
+        |> fun commands -> packer ~window:(`Object 10) ~depth:50 ~ofs_delta:true git refs.Decoder.refs commands >>= function
         | Error err -> Lwt.return (Error (`StorePack err))
         | Ok (stream, _) ->
           let stream () = stream () >>= function
@@ -524,8 +527,11 @@ module Make_ext
         else `Ack
       in
 
-      Lwt_list.map_p (fun (hash, refname, peeled) -> Lwt.return (hash, Store.Reference.of_string refname, peeled)) refs.Decoder.refs
-      >>= want >>= function
+      List.map
+        (fun (hash, refname, peeled) ->
+           (hash, Store.Reference.of_string refname, peeled))
+        refs.Decoder.refs
+      |> want >>= function
       | [] -> Lwt.return (Ok ([], 0))
       | first :: rest ->
         let negociation_request done_or_flush has =
@@ -734,11 +740,11 @@ module Make_ext
     push git ~push:push_handler ~https ?capabilities ?port:(Uri.port repository)
       host (Uri.path_and_query repository)
     >?= fun lst ->
-      Lwt_result.ok (Lwt_list.map_p (function
-          | Ok refname -> Lwt.return (Ok (Store.Reference.of_string refname))
+      Lwt_result.ok (List.map (function
+          | Ok refname -> (Ok (Store.Reference.of_string refname))
           | Error (refname, err) ->
-            Lwt.return (Error (Store.Reference.of_string refname, err))
-        ) lst)
+            (Error (Store.Reference.of_string refname, err))
+        ) lst |> Lwt.return)
 end
 
 module Make
