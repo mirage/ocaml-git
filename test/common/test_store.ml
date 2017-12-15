@@ -41,9 +41,10 @@ module Make (Store : Git.S) = struct
   exception Reset of [ `Store of Store.error | `Ref of Store.Ref.error ]
 
   let run test =
-    Lwt_main.run (test () >>= fun t -> Store.reset t >>= function
-      | Ok () -> Lwt.return ()
-      | Error err -> Lwt.fail (Reset err))
+    Lwt_main.run (test () >>= fun t -> Store.reset t >|= function
+      | Ok ()            -> ()
+      | Error (`Store e) -> Alcotest.failf "reset failed with %a" Store.pp_error e
+      | Error (`Ref e)   -> Alcotest.failf "reset failed with %a" Store.Ref.pp_error e)
 
   let (!!) = Lazy.force
 
