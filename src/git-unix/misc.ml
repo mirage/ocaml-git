@@ -1,3 +1,5 @@
+open Lwt.Infix
+
 let src = Logs.Src.create "git-unix" ~doc:"logs unix event"
 module Log = (val Logs.src_log src : Logs.LOG)
 
@@ -54,6 +56,9 @@ let result_bind f a = match a with
   | Ok x -> f x
   | Error err -> Error err
 
+let err_stat path e = Lwt.return (Error (`Stat (e, path)))
+
+(* XXX(samoht): review *)
 let safe_mkdir ?(path = true) ?(mode = 0o755) dir =
   let mkdir d mode =
     Lwt.try_bind
@@ -74,35 +79,30 @@ let safe_mkdir ?(path = true) ?(mode = 0o755) dir =
                                             (Unix.error_message e))))
         | exn -> expected_unix_error exn)
   in
-
-  let open Lwt.Infix in
-
   is_dir dir >>= function
-  | Error (`System err) ->
-    Lwt.return (Error (`Stat err))
+  | Error (`System err) -> err_stat dir err
   | Ok true ->
     Log.debug (fun l -> l ~header:"mkdir" "The directory %a already exists" Fpath.pp dir);
     Lwt.return (Ok false)
   | Ok false ->
     Log.debug (fun l -> l ~header:"mkdir" "The directory %a does not exist" Fpath.pp dir);
-
     match path with
-    | false -> Lwt_pool.use mkdir_pool (fun () -> mkdir dir mode) >|= result_bind (fun _ -> Ok false)
+    | false ->
+      Lwt_pool.use mkdir_pool (fun () -> mkdir dir mode) >|=
+      result_bind (fun _ -> Ok false)
     | true ->
       let rec dirs_to_create p acc =
         is_dir p >>= function
-        | Error (`System err) -> Lwt.return (Error (`Stat err))
+        | Error (`System err) -> err_stat dir err
         | Ok true -> Lwt.return (Ok acc)
         | Ok false -> dirs_to_create (Fpath.parent p) (p :: acc)
       in
-
       let rec create_them dirs () = match dirs with
         | [] -> Lwt.return (Ok ())
         | dir :: dirs -> mkdir dir mode >>= function
           | Error _ as err -> Lwt.return err
           | Ok () -> create_them dirs ()
       in
-
       dirs_to_create dir []
       >>= (function Ok dirs -> create_them dirs ()
                   | Error _ as err -> Lwt.return err)
