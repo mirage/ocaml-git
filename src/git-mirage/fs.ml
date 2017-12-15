@@ -22,9 +22,9 @@ end
    separator. XXX(samoht): there is probably something to revisit
    in mirage-fs-unix here... *)
 let fpath_to_string path =
-  match Fpath.(segs @@ rem_empty_seg path) with
-  | [] -> "."
-  | x  -> String.concat "/" x
+  let segs = Fpath.segs path in
+  let segs = List.filter (function "."|"" -> false | _ -> true) segs in
+  String.concat "/" segs
 
 let fpath_of_string str =
   let segs = Astring.String.cuts ~sep:"/" str in
