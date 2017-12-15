@@ -167,28 +167,30 @@ module Make (Gamma: GAMMA) (FS: S) = struct
       | Ok _ as v        -> v
       | Error (`Exn err) -> err_stat path "%a" Fmt.exn err
 
-    let open' t ?lock path ~mode:_ =
+    let open' t ?lock ~create path ~mode:_ =
       Git.Mem.Lock.with_lock lock  @@ fun () ->
       let fd = fpath_to_string path in
       FS.stat t fd >>= function
       | Ok { Mirage_fs.directory = false; _ } -> Lwt.return (Ok fd)
       | Ok _    -> Lwt.return (err_fs_write `Is_a_directory)
-      | Error _ ->
-        FS.create t (fpath_to_string path) >|= function
-        | Ok ()   -> Ok fd
-        | Error e -> err_fs_write e
+      | Error e ->
+        if not create then Lwt.return (err_fs_read e)
+        else
+          FS.create t (fpath_to_string path) >|= function
+          | Ok ()   -> Ok fd
+          | Error e -> err_fs_write e
 
     (* XXX(dinosaure): we can inform the size of the file and check at any time
        if [seek <= max]. *)
 
     let open_r t ?lock path ~mode =
       Log.debug (fun l -> l "File.open_r %s" @@ fpath_to_string path);
-      open' t ?lock path ~mode >|?= fun fd ->
+      open' t ?lock ~create:false path ~mode >|?= fun fd ->
       ({ fd; seek = 0 } :> [ `Read ] fd)
 
     let open_w t ?lock path ~mode =
       Log.debug (fun l -> l "File.open_w %s" @@ fpath_to_string path);
-      open' t ?lock path ~mode >|?= fun fd ->
+      open' t ?lock ~create:true path ~mode >|?= fun fd ->
       ({ fd; seek = 0 } :> [ `Write ] fd)
 
     let write t raw ?(off = 0) ?(len = Cstruct.len raw) fd =
@@ -258,8 +260,8 @@ module Make (Gamma: GAMMA) (FS: S) = struct
 
     let move t ?lock patha pathb =
       Git.Mem.Lock.with_lock lock @@ fun () ->
-      open' t patha ~mode:0o644 >>?= fun fda ->
-      open' t pathb ~mode:0o644 >>?= fun fdb ->
+      open' t patha ~create:false ~mode:0o644 >>?= fun fda ->
+      open' t pathb ~create:true  ~mode:0o644 >>?= fun fdb ->
       (FS.size t fda >>!= fs_read) >>?= fun size ->
       let stream, push = Lwt_stream.create () in
       let rec read pos rest = match rest with
