@@ -15,12 +15,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-let () =
-  Printexc.record_backtrace true;
-  Lwt.async_exception_hook :=
-    (fun e -> Fmt.kstrf failwith "%a" Fmt.exn e)
-
-open Test_common
 open Lwt.Infix
 
 let protect_unix_exn = function
@@ -67,11 +61,6 @@ let rmdir dir =
 module M = struct
   let root = "test-git-mirage-store"
 
-  let ( >>| ) x f =
-    x >>= function
-    | Ok x    -> f x
-    | Error e -> Fmt.kstrf Lwt.fail_with "%a" FS_unix.pp_write_error e
-
   let init () =
     if Sys.file_exists root then rmdir root;
     mkdir root >>= fun () -> mkdir Filename.(concat root "temp")
@@ -96,7 +85,6 @@ module M = struct
 end
 
 module Gamma = struct
-  type path = Fpath.t
   let temp = Fpath.(v M.root / "temp")
   let current = Fpath.v M.root
 end
@@ -135,21 +123,17 @@ module TCP = Test_sync.Make(struct
     module M = Git_mirage.Sync(MirageConduit)(Store)
     module Store = M.Store
     type error = M.error
+    let pp_error = M.pp_error
     let clone t ~reference uri = M.clone t ~reference uri
     let fetch_all t uri = M.fetch_all t uri
     let update t ~reference uri = M.update t ~reference uri
   end)
 
-let mirage_backend =
-  { name  = "mirage"
-  ; store = (module MirageStore)
-  ; shell = true }
-
 let () =
   Test_common.verbose ();
   let () = Lwt_main.run (M.init ()) in
   Alcotest.run "git-mirage" [
-    Test_store.suite (`Quick, mirage_backend);
+    Test_store.suite "mirage" (module MirageStore);
     TCP.test_fetch "tcp-sync-fetch" ["git://localhost/"];
     TCP.test_clone "tcp-sync-clone" [
       "git://localhost/", "master";

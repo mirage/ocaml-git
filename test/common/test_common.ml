@@ -48,6 +48,10 @@ let setup_log level =
 let verbose () = setup_log (Some Logs.Debug)
 let quiet () = setup_log None
 
+let () =
+  Printexc.record_backtrace true;
+  Lwt.async_exception_hook := (fun e -> Fmt.kstrf failwith "%a" Fmt.exn e)
+
 let compare_option fn x y =
   match x, y with
   | Some x, Some y -> fn x y
