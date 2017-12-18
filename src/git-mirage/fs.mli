@@ -10,15 +10,4 @@ module type S = sig
 end
 
 module Make (Gamma: GAMMA) (FS: S): Git.FS
-  with type error = [ `System of string ]
-   and type File.lock = Git.Mem.Lock.elt
-   and type File.error = [ `Stat of string
-                         | Mirage_fs.write_error
-                         | Mirage_fs.error ]
-   and type Dir.error = [ `Destroy of string
-                        | `Listdir of string
-                        | `Stat of string
-                        | `Path of string
-                        | Mirage_fs.write_error ]
-   and type Mapper.error = Mirage_fs.error
-     (* XXX(Jean Gabin): oui, je sais. *)
+  with type File.lock = Git.Mem.Lock.elt

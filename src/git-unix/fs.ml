@@ -1,6 +1,9 @@
 open Misc
 open Lwt.Infix
 
+let (>>?) = Lwt_result.(>>=)
+let (>|?) = Lwt_result.(>|=)
+
 let src = Logs.Src.create "git-unix.fs" ~doc:"logs unix file-system's event"
 module Log = (val Logs.src_log src : Logs.LOG)
 
@@ -10,157 +13,137 @@ let pp_error ppf (`System err) = Fmt.pf ppf "(`System %s)" err
 
 module Dir = struct
 
+  (* XXX(samoht): add fpath.t parameters *)
   type error =
-    [ `Stat of string
-    | `Unlink of string
-    | `Rmdir of string
-    | `Opendir of (string * Fpath.t)
+    [ `Stat of (string * Fpath.t)
+    | `Unlink of (string * Fpath.t)
+    | `Rmdir of (string * Fpath.t)
+    | `Readdir of (string * Fpath.t)
     | `Path of string
     | `Getcwd of string
     | `Mkdir of string ]
 
-  let pp_error ppf = function
-    | `Stat err    -> Fmt.pf ppf "(`Stat %s)" err
-    | `Unlink err  -> Fmt.pf ppf "(`Unlink %s)" err
-    | `Rmdir err   -> Fmt.pf ppf "(`Rmdir %s)" err
-    | `Opendir err -> Fmt.pf ppf "(`Opendir %a)" (Fmt.Dump.pair Fmt.string Fpath.pp) err
-    | `Path err    -> Fmt.pf ppf "(`Path %s)" err
-    | `Getcwd err  -> Fmt.pf ppf "(`Getcwd %s)" err
-    | `Mkdir err   -> Fmt.pf ppf "(`Mkdir %s)" err
+  let err x = Lwt.return (Error x)
+  let err_unlink file e = err (`Unlink (Unix.error_message e, file))
+  let err_readdir dir e = err (`Readdir (Unix.error_message e, dir))
+  let err_rmdir dir e = err (`Rmdir (Unix.error_message e, dir))
+  let err_stat dir e = err (`Stat (Unix.error_message e, dir))
 
-  let exists path =
-    Lwt.try_bind
-      (fun () -> Lwt_unix.stat (Fpath.to_string path))
-      (fun stat -> Lwt.return (Ok (stat.Lwt_unix.st_kind = Lwt_unix.S_DIR)))
-      (function
-        | Unix.Unix_error (Unix.ENOENT, _, _) -> Lwt.return (Ok false)
-        | Unix.Unix_error _ as err -> Lwt.return (error_to_result ~ctor:(fun x -> `Stat x) err)
-        | exn -> expected_unix_error exn)
+  (* XXX(samoht): better error messages in plain english *)
+  let pp_pair = Fmt.(Dump.pair string Fpath.pp)
+  let pp_error ppf = function
+    | `Stat err     -> Fmt.pf ppf "(`Stat %a)" pp_pair err
+    | `Unlink err   -> Fmt.pf ppf "(`Unlink %a)" pp_pair err
+    | `Rmdir err    -> Fmt.pf ppf "(`Rmdir %a)" pp_pair err
+    | `Readdir err  -> Fmt.pf ppf "(`Readdir %a)" pp_pair err
+    | `Path err     -> Fmt.pf ppf "(`Path %s)" err
+    | `Getcwd err   -> Fmt.pf ppf "(`Getcwd %s)" err
+    | `Mkdir err    -> Fmt.pf ppf "(`Mkdir %s)" err
 
   let create = safe_mkdir
 
-  let delete ?(recurse = false) dir =
-    let open Lwt.Infix in
+  let rec protect ?(n=0) err f =
+    let sleep_t = 0.001 in
+    if n >= 10_000 then Lwt.fail_with "timeout"
+    else Lwt.catch
+        (fun () -> f () >|= fun x -> Ok x)
+        (fun e ->
+           let open Unix in
+           Log.debug (fun l -> l "error: %a" Fmt.exn e);
+           match e with
+           | Unix_error (EINTR, _, _) -> Lwt.return (Error `EAGAIN)
+           | Unix_error (EACCES, _, _)
+             when Sys.win32           ->
+             let s = sleep_t *. (1. +. Random.float (float n)**2.) in
+             Log.debug (fun l -> l "sleeping for %.2fs" s);
+             Lwt_unix.sleep s >|= fun () ->
+             Error `EAGAIN
+           | Unix_error (e, _, _)     -> err e
+           | exn                      -> expected_unix_error exn)
+      >>= function
+      | Ok _ as x         -> Lwt.return x
+      | Error `EAGAIN     -> protect ~n:(n+1) err f
+      | Error #error as e -> Lwt.return e
 
-    let rec delete_files to_rmdir dirs = match dirs with
-      | [] -> Lwt.return (Ok to_rmdir)
-      | dir :: todo ->
-        let rec delete_dir_files dh dirs =
-          Lwt.try_bind
-            (fun () -> Lwt_unix.readdir dh)
-            (fun v -> Lwt.return (Some v))
-            (fun _ -> Lwt.return None)
-          >>= function
-          | None -> Lwt.return (Ok dirs)
-          | Some (".." | ".") -> delete_dir_files dh dirs
-          | Some file ->
-            let rec try_unlink file =
-              Lwt.try_bind
-                (fun () -> Lwt_unix.unlink (Fpath.to_string file))
-                (fun () -> Lwt.return (Ok dirs))
-                (function Unix.Unix_error (Unix.ENOENT, _, _) -> Lwt.return (Ok dirs)
-                        | Unix.Unix_error ((Unix.EISDIR | Unix.EPERM), _, _) ->
-                          Lwt.return (Ok (file :: dirs))
-                        | Unix.Unix_error (Unix.EACCES, _, _) when Sys.win32 ->
-                          Lwt.return (Ok (file :: dirs))
-                        | Unix.Unix_error (Unix.EINTR, _, _) -> try_unlink file
-                        | Unix.Unix_error (e, _, _) ->
-                          Lwt.return (Error (`Unlink (Fmt.strf "%s: %s" (Fpath.to_string file) (Unix.error_message e))))
-                        | exn -> expected_unix_error exn)
-            in
-
-            try_unlink Fpath.(dir / file) >>= function
-            | Ok dirs -> delete_dir_files dh dirs
-            | Error _ as err -> Lwt.return err
-        in
-
-        Lwt.try_bind
-          (fun () -> Lwt_unix.opendir (Fpath.to_string dir))
-          (fun dh ->
-             Lwt.try_bind
-               (fun () -> delete_dir_files dh [])
-               (fun v -> Lwt_unix.closedir dh >>= fun () -> match v with
-                  | Ok dirs -> delete_files (dir :: to_rmdir) (List.rev_append dirs todo)
-                  | Error _ as err -> Lwt.return err)
-               (function exn -> Lwt_unix.closedir dh >>= fun () -> Lwt.fail exn))
-          (function Unix.Unix_error (Unix.ENOENT, _, _) -> delete_files to_rmdir todo
-                  | Unix.Unix_error (Unix.EINTR, _, _) -> delete_files to_rmdir dirs
-                  | Unix.Unix_error (e, _, _) ->
-                    Lwt.return (Error (`Unlink (Fmt.strf "%s: %s" (Fpath.to_string dir) (Unix.error_message e))))
-                  | exn -> expected_unix_error exn)
+  let kind path =
+    let open Unix in
+    let err = function
+      | ENOENT -> Lwt.return (Ok `None)
+      | e      -> err_stat path e
     in
+    protect err (fun () ->
+      Lwt_unix.stat (Fpath.to_string path) >|= fun stat ->
+      match stat.Lwt_unix.st_kind with
+      | Lwt_unix.S_DIR -> `Dir
+      | _              -> `File
+    )
 
-    let rec delete_dirs = function
-      | [] -> Lwt.return (Ok ())
-      | dir :: dirs ->
-        let rec rmdir dir =
-          Lwt.try_bind
-            (fun () -> Lwt_unix.rmdir (Fpath.to_string dir))
-            (fun () -> Lwt.return (Ok ()))
-            (function Unix.Unix_error (Unix.ENOENT, _, _) -> Lwt.return (Ok ())
-                    | Unix.Unix_error (Unix.EINTR, _, _) -> rmdir dir
-                    | Unix.Unix_error (e, _, _) -> Lwt.return (Error (`Rmdir (Unix.error_message e)))
-                    | exn -> expected_unix_error exn)
-        in
-        rmdir dir >>= function
-        | Ok () -> delete_dirs dirs
-        | Error _ as err -> Lwt.return err
+  let exists path =
+    kind path >|? function
+    | `Dir -> true
+    | _    -> false
+
+  let readdir dir =
+    protect (err_readdir dir) (fun () ->
+        Lwt_unix.files_of_directory (Fpath.to_string dir)
+        |> Lwt_stream.filter (function "." | ".." -> false | _ -> true)
+        |> Lwt_stream.map Fpath.v
+        |> Lwt_stream.to_list
+      )
+
+  let rec delete_file k file =
+    kind file >>? function
+    | `None   -> Lwt.return (Ok ())
+    | `Dir    -> delete_dir k file
+    | `File   ->
+      let open Unix in
+      let err = function
+        | ENOENT -> Lwt.return (Ok ())
+        | e      -> err_unlink file e
+      in
+      protect err (fun () ->
+          Log.debug (fun l -> l "unlink %a" Fpath.pp file);
+          Lwt_unix.unlink (Fpath.to_string file)
+        ) >>= k
+
+  and delete_files k = function
+    | []       -> k (Ok ())
+    | file:: t ->
+      delete_file (function
+          | Ok ()        -> delete_files k t
+          | Error _ as e -> Lwt.return e
+        ) file
+
+  and delete_dir k dir: (unit, error) result Lwt.t =
+    readdir dir >>? fun files ->
+    let files = List.map (fun x -> Fpath.(dir // x)) files in
+    let rmdir = function
+      | Error _ as e -> Lwt.return e
+      | Ok ()        ->
+        protect (err_rmdir dir) (fun () ->
+            Log.debug (fun l -> l "rmdir %a" Fpath.pp dir);
+            Lwt_unix.rmdir (Fpath.to_string dir)
+          ) >>= k
     in
+    delete_files rmdir files
 
-    let delete recurse dir =
-      if not recurse
-      then let rec rmdir dir =
-             Lwt.try_bind
-               (fun () -> Lwt_unix.rmdir (Fpath.to_string dir))
-               (fun () -> Lwt.return (Ok ()))
-               (function Unix.Unix_error (Unix.ENOENT, _, _) -> Lwt.return (Ok ())
-                       | Unix.Unix_error (Unix.EINTR, _, _) -> rmdir dir
-                       | Unix.Unix_error (e, _, _) ->
-                         Lwt.return (Error (`Rmdir (Unix.error_message e)))
-                       | exn -> expected_unix_error exn)
-        in
-        rmdir dir
-      else
-        delete_files [] [dir] >>= function
-        | Ok rmdirs -> delete_dirs rmdirs
-        | Error _ as err -> Lwt.return err
-    in
-
-    delete recurse dir >>= function
-    | Ok () -> Lwt.return (Ok ())
-    | Error (`Rmdir msg) ->
-      Lwt.return (Error (`Rmdir (Fmt.strf "delete directory %s: %s" (Fpath.to_string dir) msg)))
-    | Error (`Unlink msg) ->
-      Lwt.return (Error (`Unlink (Fmt.strf "delete directory %s: %s" (Fpath.to_string dir) msg)))
-
+  let delete ?(recurse=true) dir =
+    Log.debug (fun l -> l "Dir.delete %a" Fpath.pp dir);
+    assert recurse;
+    delete_dir Lwt.return dir
 
   let contents ?(dotfiles = false) ?(rel = false) dir =
-    let rec readdir dh acc =
-      Lwt.try_bind
-        (fun () -> Lwt_unix.readdir dh)
-        (fun v -> Lwt.return (Some v))
-        (fun _ -> Lwt.return None)
-      >>= function
-      | None -> Lwt.return (Ok acc)
-      | Some (".." | ".") -> readdir dh acc
-      | Some f when dotfiles || not (String.get f 0 = '.') ->
-        (match Fpath.of_string f with
-         | Ok f -> readdir dh ((if rel then f else Fpath.(dir // f)) :: acc)
-         | Error (`Msg _) ->
-           Lwt.return (Error (`Path (Fmt.strf "directory contents %s: cannot parse element to a path (%S)"
-                                       (Fpath.to_string dir) f))))
-      | Some _ -> readdir dh acc
+    Log.debug (fun l -> l "Dir.contents %a" Fpath.pp dir);
+    let rec aux acc = function
+      | []   -> acc
+      | h::t ->
+        let f = Fpath.to_string h in
+        if dotfiles || not (String.get f 0 = '.') then
+          aux ((if rel then h else Fpath.(dir // h)) :: acc) t
+        else
+          aux acc t
     in
-
-    Lwt.try_bind
-      (fun () -> Lwt_unix.opendir (Fpath.to_string dir))
-      (fun dh ->
-         Lwt.try_bind
-           (fun () -> readdir dh [])
-           (fun rs -> Lwt_unix.closedir dh >|= fun () -> rs)
-           (function exn -> Lwt_unix.closedir dh >>= fun () -> Lwt.fail exn))
-      (function Unix.Unix_error _ as err -> Lwt.return (error_to_result ~ctor:(fun x -> `Opendir (x, dir)) err)
-              | exn -> expected_unix_error exn)
+    readdir dir >|? aux []
 
   let rec current () =
     Lwt.try_bind
@@ -199,14 +182,15 @@ end
 
 module File = struct
 
+  (* XXX(samoht): add Fpath.t parameters *)
   type error =
     [ `Open of string
     | `Write of string
     | `Read of string
     | `Close of string
-    | `Stat of string
+    | `Stat of (string * Fpath.t)
     | `Rename of string
-    | `Unlink of string
+    | `Unlink of (string * Fpath.t)
     | `Mkdir of string ]
 
   type lock = Lock.t
@@ -214,14 +198,16 @@ module File = struct
   type 'a fd = Lwt_unix.file_descr
     constraint 'a = [< `Read | `Write ]
 
+  (* XXX(samoht): better error messages in plain english *)
+  let pp_pair = Fmt.(Dump.pair string Fpath.pp)
   let pp_error ppf = function
     | `Open err   -> Fmt.pf ppf "(`Open %s)" err
     | `Write err  -> Fmt.pf ppf "(`Write %s)" err
     | `Read err   -> Fmt.pf ppf "(`Read %s)" err
     | `Close err  -> Fmt.pf ppf "(`Close %s)" err
-    | `Stat err   -> Fmt.pf ppf "(`Stat %s)" err
+    | `Stat err   -> Fmt.pf ppf "(`Stat %a)" pp_pair err
     | `Rename err -> Fmt.pf ppf "(`Rename %s)" err
-    | `Unlink err -> Fmt.pf ppf "(`Unlink %s)" err
+    | `Unlink err -> Fmt.pf ppf "(`Unlink %a)" pp_pair err
     | `Mkdir err  -> Fmt.pf ppf "(`Mkdir %s)" err
 
   let open_w ?lock path ~mode =
@@ -314,11 +300,14 @@ module File = struct
           | Unix.Unix_error (Unix.EINTR, _, _) -> go ()
           | Unix.Unix_error (Unix.ENOENT, _, _) -> Lwt.return (Ok false)
           | Unix.Unix_error _ as err ->
-            Lwt.return (error_to_result ~ctor:(fun x -> `Stat x) err)
+            Lwt.return (error_to_result ~ctor:(fun x -> `Stat (x, path)) err)
           | exn -> expected_unix_error exn)
     in
     go ()
 
+  (* XXX(samoht): this needs to be protected against EACCESS as
+     windows can throw these when moving a directory which is in
+     used. *)
   let move ?lock path_a path_b =
     Lock.with_lock lock @@ fun () ->
     let rec go () =
@@ -344,7 +333,7 @@ module File = struct
           | Unix.Unix_error (Unix.ENOENT, _ ,_ ) -> Lwt.return (Ok ())
           (* XXX(dinosaure) decides to quiet this error. *)
           | Unix.Unix_error _ as err ->
-            Lwt.return (error_to_result ~ctor:(fun x -> `Unlink x) err)
+            Lwt.return (error_to_result ~ctor:(fun x -> `Unlink (x, path)) err)
           | exn -> expected_unix_error exn)
     in
     go ()
