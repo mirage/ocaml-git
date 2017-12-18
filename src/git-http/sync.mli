@@ -117,6 +117,7 @@ module type S_EXT = sig
   val fetch_some:
     Store.t -> ?locks:Store.Lock.t ->
     ?capabilities:Git.Capability.t list ->
+    ?headers:Web.HTTP.headers ->
     references:Store.Reference.t list Store.Reference.Map.t ->
     Uri.t -> (Store.Hash.t Store.Reference.Map.t
               * Store.Reference.t list Store.Reference.Map.t, error) result Lwt.t
@@ -170,6 +171,7 @@ module type S_EXT = sig
   val fetch_all:
     Store.t -> ?locks:Store.Lock.t ->
     ?capabilities:Git.Capability.t list ->
+    ?headers:Web.HTTP.headers ->
     references:Store.Reference.t list Store.Reference.Map.t ->
     Uri.t -> (Store.Hash.t Store.Reference.Map.t
               * Store.Reference.t list Store.Reference.Map.t
@@ -192,6 +194,7 @@ module type S_EXT = sig
   val fetch_one:
     Store.t -> ?locks:Store.Lock.t ->
     ?capabilities:Git.Capability.t list ->
+    ?headers:Web.HTTP.headers ->
     reference:(Store.Reference.t * Store.Reference.t list) ->
     Uri.t -> ([ `AlreadySync | `Sync of Store.Hash.t Store.Reference.Map.t ], error) result Lwt.t
   (** [fetch_one git ?locks ?capabilities ~reference repository] is a
@@ -207,11 +210,13 @@ module type S_EXT = sig
   val clone:
     Store.t -> ?locks:Store.Lock.t ->
     ?capabilities:Git.Capability.t list ->
+    ?headers:Web.HTTP.headers ->
     reference:(Store.Reference.t * Store.Reference.t) ->
     Uri.t -> (unit, error) result Lwt.t
 
   val update_and_create: Store.t ->
     ?capabilities:Git.Capability.t list ->
+    ?headers:Web.HTTP.headers ->
     references:Store.Reference.t list Store.Reference.Map.t-> Uri.t ->
     ((Store.Reference.t, Store.Reference.t * string) result list, error) result Lwt.t
     (** As {!fetch_some}, [update git ?capabilities ~references
