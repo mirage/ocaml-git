@@ -22,9 +22,16 @@ module TCP (Store: Git.S) = Test_sync.Make(struct
     module Store = M.Store
     type error = M.error
     let pp_error = M.pp_error
-    let clone t ~reference uri = M.clone t ~reference uri
-    let fetch_all t uri = M.fetch_all t uri
-    let update t ~reference uri = M.update t ~reference uri
+    let clone t ~reference uri = M.clone t ~reference:(reference, reference) uri
+
+    let fetch_all t ~references uri =
+      let open Lwt.Infix in
+
+      M.fetch_all t ~references uri >>= function
+      | Error _ as err -> Lwt.return err
+      | Ok _ -> Lwt.return (Ok ())
+
+    let update t ~reference uri = M.update_and_create t ~references:(Store.Reference.Map.singleton reference [ reference ]) uri
   end)
 
 (* XXX(dinosaure): the divergence between the TCP API and the HTTP API
@@ -37,24 +44,12 @@ module HTTP (Store: Git.S) = Test_sync.Make(struct
     let pp_error = M.pp_error
     let clone t ~reference uri = M.clone t ~reference:(reference, reference) uri
 
-    exception Jump of Store.Ref.error
-
-    let fetch_all t uri =
+    let fetch_all t ~references uri =
       let open Lwt.Infix in
 
-      M.fetch_all t ~references:Store.Reference.Map.empty uri >>= function
+      M.fetch_all t ~references uri >>= function
       | Error _ as err -> Lwt.return err
-      | Ok (_, _, downloaded) ->
-        Lwt.try_bind
-          (fun () -> Lwt_list.iter_s
-              (fun (remote_ref, new_hash) ->
-                 Store.Ref.write t remote_ref (Store.Reference.Hash new_hash) >>= function
-                 | Ok () -> Lwt.return ()
-                 | Error err -> Lwt.fail (Jump err))
-              (Store.Reference.Map.bindings downloaded))
-          (fun () -> Lwt.return (Ok ()))
-          (function Jump err -> Lwt. return (Error (`Ref err))
-                  | err -> Lwt.fail err)
+      | Ok _ -> Lwt.return (Ok ())
 
     let update t ~reference uri =
       M.update_and_create t
@@ -69,24 +64,12 @@ module HTTPS (Store: Git.S) = Test_sync.Make(struct
     let pp_error = M.pp_error
     let clone t ~reference uri = M.clone t ~reference:(reference, reference) uri
 
-    exception Jump of Store.Ref.error
-
-    let fetch_all t uri =
+    let fetch_all t ~references uri =
       let open Lwt.Infix in
 
-      M.fetch_all t ~references:Store.Reference.Map.empty uri >>= function
+      M.fetch_all t ~references uri >>= function
       | Error _ as err -> Lwt.return err
-      | Ok (_, _, downloaded) ->
-        Lwt.try_bind
-          (fun () -> Lwt_list.iter_s
-              (fun (remote_ref, new_hash) ->
-                 Store.Ref.write t remote_ref (Store.Reference.Hash new_hash) >>= function
-                 | Ok () -> Lwt.return ()
-                 | Error err -> Lwt.fail (Jump err))
-              (Store.Reference.Map.bindings downloaded))
-          (fun () -> Lwt.return (Ok ()))
-          (function Jump err -> Lwt. return (Error (`Ref err))
-                  | err -> Lwt.fail err)
+      | Ok _ -> Lwt.return (Ok ())
 
     let update t ~reference uri =
       M.update_and_create t

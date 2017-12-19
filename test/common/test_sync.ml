@@ -24,7 +24,7 @@ module type SYNC = sig
   val pp_error: error Fmt.t
   val clone: Store.t -> reference:Store.Reference.t -> Uri.t ->
     (unit, error) result Lwt.t
-  val fetch_all: Store.t -> Uri.t -> (unit, error) result Lwt.t
+  val fetch_all: Store.t -> references:Store.Reference.t list Store.Reference.Map.t -> Uri.t -> (unit, error) result Lwt.t
   val update: Store.t -> reference:Store.Reference.t -> Uri.t ->
     ((Store.Reference.t, Store.Reference.t * string) result list, error)
       result Lwt.t
@@ -52,7 +52,10 @@ module Make (Sync: SYNC) = struct
       Store.Ref.mem t Store.Reference.master >>= function
       | true  -> Alcotest.fail "non-empty repository!"
       | false ->
-        Sync.fetch_all t uri >>= function
+        let references =
+          let open Store.Reference in
+          Map.add master [ master ] Map.empty in
+        Sync.fetch_all t ~references uri >>= function
         | Error err -> Alcotest.failf "%a" Sync.pp_error err
         | Ok ()     ->
           Sync.update t ~reference:Store.Reference.master uri >|= function

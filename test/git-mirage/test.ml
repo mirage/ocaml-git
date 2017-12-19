@@ -124,9 +124,16 @@ module TCP = Test_sync.Make(struct
     module Store = M.Store
     type error = M.error
     let pp_error = M.pp_error
-    let clone t ~reference uri = M.clone t ~reference uri
-    let fetch_all t uri = M.fetch_all t uri
-    let update t ~reference uri = M.update t ~reference uri
+    let clone t ~reference uri = M.clone t ~reference:(reference, reference) uri
+
+    let fetch_all t ~references uri =
+      let open Lwt.Infix in
+
+      M.fetch_all t ~references uri >>= function
+      | Error _ as err -> Lwt.return err
+      | Ok _ -> Lwt.return (Ok ())
+
+    let update t ~reference uri = M.update_and_create t ~references:(Store.Reference.Map.singleton reference [ reference ]) uri
   end)
 
 let () =

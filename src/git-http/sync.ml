@@ -350,48 +350,11 @@ module Make_ext
     | `Delete of (Store.Hash.t * Store.Reference.t)
     | `Update of (Store.Hash.t * Store.Hash.t * Store.Reference.t) ]
 
-  module Revision = Git.Revision.Make(Store)
-
-  let packer ~window ~depth git ~ofs_delta:_ remote commands =
-    let commands' =
-      (List.map (fun (hash, refname, _) -> Encoder.Delete (hash, refname)) remote)
-      @ commands
-    in
-
-    (* XXX(dinosaure): we don't want to delete remote references but
-       we want to exclude any commit already stored remotely. Se, we «
-       delete » remote references from the result set. *)
-
-    Lwt_list.fold_left_s
-      (fun acc -> function
-         | Encoder.Create _ -> Lwt.return acc
-         | Encoder.Update (hash, _, _) ->
-           Revision.(Range.normalize git (Range.Include (from_hash hash)))
-           >|= Store.Hash.Set.union acc
-         | Encoder.Delete (hash, _) ->
-           Revision.(Range.normalize git (Range.Include (from_hash hash)))
-           >|= Store.Hash.Set.union acc)
-      Store.Hash.Set.empty commands'
-    >>= fun negative ->
-    Lwt_list.fold_left_s
-      (fun acc -> function
-         | Encoder.Create (hash, _) ->
-           Revision.(Range.normalize git (Range.Include (from_hash hash)))
-           >|= Store.Hash.Set.union acc
-         | Encoder.Update (_, hash, _) ->
-           Revision.(Range.normalize git (Range.Include (from_hash hash)))
-           >|= Store.Hash.Set.union acc
-         | Encoder.Delete _ -> Lwt.return acc)
-      Store.Hash.Set.empty commands
-    >|= (fun positive -> Revision.Range.E.diff positive negative)
-    >>= fun elements ->
-    Lwt_list.fold_left_s
-      (fun acc commit ->
-         Store.fold git
-           (fun acc ?name:_ ~length:_ _ value -> Lwt.return (value :: acc))
-           ~path:(Fpath.v "/") acc commit)
-      [] (Store.Hash.Set.elements elements)
-    >>= fun entries -> Store.Pack.make git ~window ~depth entries
+  module Common
+    : module type of Git.Sync.Common(Store)
+      with module Store = Store
+    = Git.Sync.Common(Store)
+  open Common
 
   let push git ~push
       ?headers ?(https = false) ?port ?(capabilities=Default.capabilites)
@@ -447,8 +410,11 @@ module Make_ext
         else `No_multiplexe
       in
 
-      Lwt_list.map_p (fun (hash, refname, peeled) -> Lwt.return (hash, Store.Reference.of_string refname, peeled)) refs.Decoder.refs
-      >>= push >>= function
+      List.map
+        (fun (hash, refname, peeled) ->
+           (hash, Store.Reference.of_string refname, peeled))
+        refs.Decoder.refs
+      |> push >>= function
       | (_, []) -> Lwt.return (Ok [])
       | (shallow, commands) ->
         let req =
@@ -459,21 +425,26 @@ module Make_ext
             (fun _ -> Lwt.return ())
         in
 
-        let x, r =
-          List.map (function
-              | `Create (hash, reference) -> Encoder.Create (hash, Store.Reference.to_string reference)
-              | `Delete (hash, reference) -> Encoder.Delete (hash, Store.Reference.to_string reference)
-              | `Update (_of, _to, reference) -> Encoder.Update (_of, _to, Store.Reference.to_string reference))
-            commands
-          |> fun commands -> List.hd commands, List.tl commands
-        in
-
-        packer ~window:(`Object 10) ~depth:50 ~ofs_delta:true git refs.Decoder.refs (x :: r) >>= function
-        | Error _ -> assert false
+        List.map (function
+            | `Create (hash, reference) -> `Create (hash, Store.Reference.to_string reference)
+            | `Delete (hash, reference) -> `Delete (hash, Store.Reference.to_string reference)
+            | `Update (a, b, reference) -> `Update (a, b, Store.Reference.to_string reference))
+          commands
+        |> fun commands -> packer ~window:(`Object 10) ~depth:50 ~ofs_delta:true git refs.Decoder.refs commands >>= function
+        | Error err -> Lwt.return (Error (`StorePack err))
         | Ok (stream, _) ->
           let stream () = stream () >>= function
             | Some buf -> Lwt.return (Some (buf, 0, Cstruct.len buf))
             | None -> Lwt.return None
+          in
+
+          let x, r =
+            List.map (function
+                | `Create (hash, reference) -> Encoder.Create (hash, reference)
+                | `Delete (hash, reference) -> Encoder.Delete (hash, reference)
+                | `Update (_of, _to, reference) -> Encoder.Update (_of, _to, reference))
+              commands
+            |> fun commands -> List.hd commands, List.tl commands
           in
 
           Client.call
@@ -561,8 +532,11 @@ module Make_ext
         else `Ack
       in
 
-      Lwt_list.map_p (fun (hash, refname, peeled) -> Lwt.return (hash, Store.Reference.of_string refname, peeled)) refs.Decoder.refs
-      >>= want >>= function
+      List.map
+        (fun (hash, refname, peeled) ->
+           (hash, Store.Reference.of_string refname, peeled))
+        refs.Decoder.refs
+      |> want >>= function
       | [] -> Lwt.return (Ok ([], 0))
       | first :: rest ->
         let negociation_request done_or_flush has =
@@ -638,30 +612,6 @@ module Make_ext
 
         loop ~done_or_flush:(if List.length has = 0 then `Done else `Flush) nstate resp
 
-  let want_handler git choose remote_refs =
-    (* XXX(dinosaure): in this /engine/, for each remote references,
-       we took or not only if this reference is not /peeled/. Then,
-       [choose] returns [true] or [false] if he wants to download the
-       reference or not. Finally, we check if we don't have already
-       the remote hash. and if it's the case, we don't download it. *)
-    Lwt_list.filter_map_s (function
-        | (remote_hash, remote_ref, false) ->
-          (choose remote_ref >>= function
-            | false ->
-              Log.debug (fun l -> l ~header:"want_handler" "We missed the reference %a."
-                            Store.Reference.pp remote_ref);
-              Lwt.return None
-            | true ->
-              Lwt.return (Some (remote_ref, remote_hash)))
-          >>= (function
-              | None -> Lwt.return None
-              | Some (remote_ref, remote_hash) ->
-                Store.mem git remote_hash >>= function
-                | true -> Lwt.return None
-                | false -> Lwt.return (Some (remote_ref, remote_hash)))
-        | _ -> Lwt.return None)
-      remote_refs
-
   let clone_ext git ?stdout ?stderr ?headers ?(https = false) ?port
       ?(reference = Store.Reference.master) ?capabilities
       host path =
@@ -687,8 +637,6 @@ module Make_ext
     | Error _ as err -> Lwt.return err
 
   module Negociator = Git.Negociator.Make(Store)
-
-  exception Jump of Store.Ref.error
 
   let clone git ?locks ?capabilities ?headers ~reference:(local_ref, remote_ref) repository =
     let host =
@@ -722,33 +670,7 @@ module Make_ext
       ~negociate:(continue, state) ~has ~want:want_handler host
       (Uri.path_and_query repository)
     >?= fun (results, _) ->
-      let results = List.fold_left
-          (fun results (remote_ref, hash) -> Store.Reference.Map.add remote_ref hash results)
-          Store.Reference.Map.empty results in
-      let updated, missed = Store.Reference.Map.partition
-          (fun remote_ref _ -> Store.Reference.Map.mem remote_ref results)
-          references in
-      let updated, downloaded = Store.Reference.Map.fold
-          (fun remote_ref new_hash (updated', downloaded) ->
-             try
-               let local_refs = Store.Reference.Map.find remote_ref updated in
-               List.fold_left (fun updated' local_ref -> Store.Reference.Map.add local_ref new_hash updated')
-                 updated' local_refs, downloaded
-             with Not_found -> updated', Store.Reference.Map.add remote_ref new_hash downloaded)
-          results Store.Reference.Map.(empty, empty) in
-      Lwt.try_bind
-        (fun () ->
-           Lwt_list.iter_s
-             (fun (local_ref, new_hash) ->
-                Store.Ref.write git ?locks local_ref (Store.Reference.Hash new_hash)
-                >>= function
-                | Ok _ -> Lwt.return ()
-                | Error err -> Lwt.fail (Jump err))
-             (Store.Reference.Map.bindings updated))
-        (fun () -> Lwt.return (Ok (updated, missed, downloaded)))
-        (function
-          | Jump err -> Lwt.return (Error (`Ref err))
-          | exn -> Lwt.fail exn)
+      (update_and_create git ?locks ~references results >!= fun err -> Lwt.return (err :> error))
 
   let fetch_all git ?locks ?capabilities ?headers ~references repository =
     let choose _ = Lwt.return true in
@@ -866,11 +788,11 @@ module Make_ext
     push git ~push:push_handler ~https ?capabilities ?headers ?port:(Uri.port repository)
       host (Uri.path_and_query repository)
     >?= fun lst ->
-      Lwt_result.ok (Lwt_list.map_p (function
-          | Ok refname -> Lwt.return (Ok (Store.Reference.of_string refname))
+      Lwt_result.ok (List.map (function
+          | Ok refname -> (Ok (Store.Reference.of_string refname))
           | Error (refname, err) ->
-            Lwt.return (Error (Store.Reference.of_string refname, err))
-        ) lst)
+            (Error (Store.Reference.of_string refname, err))
+        ) lst |> Lwt.return)
 end
 
 module Make
