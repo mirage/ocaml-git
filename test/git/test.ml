@@ -18,12 +18,8 @@ open Test_common
 
 module Store = Git.Mem.Store(Digestif.SHA1)
 
-let backend =
-  { name  = "mem"
-  ; store = (module Store)
-  ; shell = false }
-
 let () =
   verbose ();
-  Alcotest.run "git"
-    [ Test_store.suite (`Quick, backend) ]
+  Alcotest.run "git" [
+    Test_store.suite "mem" (module Store);
+  ]

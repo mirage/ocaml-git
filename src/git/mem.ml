@@ -432,8 +432,7 @@ module Make
           gogo () >>= fun () -> Lwt.return (Ok (hash_pack, n))
   end
 
-  module Ref =
-  struct
+  module Ref = struct
     type error = [ `Not_found ]
 
     let pp_error ppf = function
@@ -442,6 +441,7 @@ module Make
     module Graph = Reference.Map
 
     let list ?locks t =
+      Log.debug (fun l -> l "Ref.list");
       let lock = match locks with
         | Some locks -> Some (Lock.make locks Fpath.(t.root / "global"))
         | None -> None
@@ -468,20 +468,24 @@ module Make
       |> Lwt.return
 
     let mem t r =
+      Log.debug (fun l -> l "Ref.mem %a" Reference.pp r);
       try let _ = Hashtbl.find t.refs r in Lwt.return true
       with Not_found -> Lwt.return false
 
     let rec read ?locks:_ t r =
+      Log.debug (fun l -> l "Ref.read %a" Reference.pp r);
       try match Hashtbl.find t.refs r with
         | `H s -> Lwt.return (Ok (r, Reference.Hash s))
         | `R r -> read t r
       with Not_found -> Lwt.return (Error `Not_found)
 
     let remove t ?locks:_ r =
+      Log.debug (fun l -> l "Ref.remove %a" Reference.pp r);
       Hashtbl.remove t.refs r;
       Lwt.return (Ok ())
 
     let write t ?locks r value =
+      Log.debug (fun l -> l "Ref.write %a" Reference.pp r);
       let head_contents = match value with
         | Reference.Hash hash -> `H hash
         | Reference.Ref refname -> `R refname
@@ -497,6 +501,7 @@ module Make
           Hashtbl.replace t.refs r head_contents; Lwt.return (Ok ()))
 
     let test_and_set t ?locks:_ r ~test ~set =
+      Log.debug (fun l -> l "Ref.test_and_set %a" Reference.pp r);
       (* XXX(dinosaure): not sure about the semantic. *)
       let v =
         try Some (Hashtbl.find t.refs r)
@@ -512,6 +517,7 @@ module Make
       match v, test with
       | None, None -> replace (); Lwt.return (Ok true)
       | Some (Reference.Hash x), Some (Reference.Hash y) when Hash.equal x y -> replace (); Lwt.return (Ok true)
+      (* XXX(samoht): why disallowing Ref/Ref *)
       | Some (Reference.Ref _ | Reference.Hash _),
         Some (Reference.Ref _ | Reference.Hash _)
       | Some (Reference.Ref _ | Reference.Hash _), None

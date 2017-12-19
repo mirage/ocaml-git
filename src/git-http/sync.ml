@@ -145,6 +145,7 @@ module type S_EXT = sig
   val fetch_some:
     Store.t -> ?locks:Store.Lock.t ->
     ?capabilities:Git.Capability.t list ->
+    ?headers:Web.HTTP.headers ->
     references:Store.Reference.t list Store.Reference.Map.t ->
     Uri.t -> (Store.Hash.t Store.Reference.Map.t
               * Store.Reference.t list Store.Reference.Map.t, error) result Lwt.t
@@ -152,6 +153,7 @@ module type S_EXT = sig
   val fetch_all:
     Store.t -> ?locks:Store.Lock.t ->
     ?capabilities:Git.Capability.t list ->
+    ?headers:Web.HTTP.headers ->
     references:Store.Reference.t list Store.Reference.Map.t ->
     Uri.t -> (Store.Hash.t Store.Reference.Map.t
               * Store.Reference.t list Store.Reference.Map.t
@@ -160,17 +162,20 @@ module type S_EXT = sig
   val fetch_one:
     Store.t -> ?locks:Store.Lock.t ->
     ?capabilities:Git.Capability.t list ->
+    ?headers:Web.HTTP.headers ->
     reference:(Store.Reference.t * Store.Reference.t list) ->
     Uri.t -> ([ `AlreadySync | `Sync of Store.Hash.t Store.Reference.Map.t ], error) result Lwt.t
 
   val clone:
     Store.t -> ?locks:Store.Lock.t ->
     ?capabilities:Git.Capability.t list ->
+    ?headers:Web.HTTP.headers ->
     reference:(Store.Reference.t * Store.Reference.t) ->
     Uri.t -> (unit, error) result Lwt.t
 
   val update_and_create: Store.t ->
     ?capabilities:Git.Capability.t list ->
+    ?headers:Web.HTTP.headers ->
     references:Store.Reference.t list Store.Reference.Map.t ->
     Uri.t -> ((Store.Reference.t, Store.Reference.t * string) result list, error) result Lwt.t
 end
@@ -633,14 +638,14 @@ module Make_ext
 
   module Negociator = Git.Negociator.Make(Store)
 
-  let clone git ?locks ?capabilities ~reference:(local_ref, remote_ref) repository =
+  let clone git ?locks ?capabilities ?headers ~reference:(local_ref, remote_ref) repository =
     let host =
       Option.value_exn (Uri.host repository)
         ~error:(Fmt.strf "Expected an http url with host: %a."
                   Uri.pp_hum repository)
     in
     let https = Option.mem (Uri.scheme repository) "https" ~equal:String.equal in
-    clone_ext git ~https ?port:(Uri.port repository) ?capabilities
+    clone_ext git ~https ?port:(Uri.port repository) ?capabilities ?headers
       ~reference:remote_ref host (Uri.path_and_query repository)
     >?= fun hash' ->
       Store.Ref.write git ?locks local_ref (Store.Reference.Hash hash')
@@ -650,7 +655,7 @@ module Make_ext
           (Store.Reference.Ref local_ref)
         >!= (fun err -> Lwt.return (`Ref err))
 
-  let fetch_and_set_references git ?locks ?capabilities ~choose ~references repository =
+  let fetch_and_set_references git ?locks ?capabilities ?headers ~choose ~references repository =
     Negociator.find_common git >>= fun (has, state, continue) ->
     let continue { Decoder.acks; shallow; unshallow } state =
       continue { Git.Negociator.acks; shallow; unshallow } state in
@@ -661,28 +666,30 @@ module Make_ext
                   Uri.pp_hum repository) in
     let https =
       Option.mem (Uri.scheme repository) "https" ~equal:String.equal in
-    fetch git ~https ?port:(Uri.port repository) ?capabilities
+    fetch git ~https ?port:(Uri.port repository) ?capabilities ?headers
       ~negociate:(continue, state) ~has ~want:want_handler host
       (Uri.path_and_query repository)
     >?= fun (results, _) ->
       (update_and_create git ?locks ~references results >!= fun err -> Lwt.return (err :> error))
 
-  let fetch_all git ?locks ?capabilities ~references repository =
+  let fetch_all git ?locks ?capabilities ?headers ~references repository =
     let choose _ = Lwt.return true in
     fetch_and_set_references
       ~choose
       ?locks
       ?capabilities
+      ?headers
       ~references
       git repository
 
-  let fetch_some git ?locks ?capabilities ~references repository =
+  let fetch_some git ?locks ?capabilities ?headers ~references repository =
     let choose remote_ref =
       Lwt.return (Store.Reference.Map.mem remote_ref references) in
     fetch_and_set_references
       ~choose
       ?locks
       ?capabilities
+      ?headers
       ~references
       git repository
     >?= fun (updated, missed, downloaded) ->
@@ -696,7 +703,7 @@ module Make_ext
           Lwt.return (Ok (updated, missed))
         end
 
-  let fetch_one git ?locks ?capabilities ~reference:(remote_ref, local_refs) repository =
+  let fetch_one git ?locks ?capabilities ?headers ~reference:(remote_ref, local_refs) repository =
     let references = Store.Reference.Map.singleton remote_ref local_refs in
     let choose remote_ref =
       Lwt.return (Store.Reference.Map.mem remote_ref references) in
@@ -704,6 +711,7 @@ module Make_ext
       ~choose
       ?locks
       ?capabilities
+      ?headers
       ~references
       git repository
     >?= fun (updated, missed, downloaded) ->
@@ -728,7 +736,47 @@ module Make_ext
                        missed);
         Lwt.return (Ok (`Sync updated))
 
-  let update_and_create git ?capabilities ~references repository =
+  let push_handler git references remote_refs =
+    Store.Ref.list git >>= fun local_refs ->
+    let local_refs = List.fold_left
+        (fun local_refs (local_ref, local_hash) ->
+           Store.Reference.Map.add local_ref local_hash local_refs)
+        Store.Reference.Map.empty local_refs in
+
+    Lwt_list.filter_map_p (function
+        | (remote_hash, remote_ref, false) -> Lwt.return (Some (remote_ref, remote_hash))
+        | _ -> Lwt.return None)
+      remote_refs
+    >>= fun remote_refs ->
+    let actions =
+      Store.Reference.Map.fold
+        (fun local_ref local_hash actions ->
+           try let remote_refs' = Store.Reference.Map.find local_ref references in
+             List.fold_left (fun actions remote_ref ->
+                 try let remote_hash = List.assoc remote_ref remote_refs in
+                   `Update (remote_hash, local_hash, remote_ref) :: actions
+                 with Not_found -> `Create (local_hash, remote_ref) :: actions)
+               actions remote_refs'
+            with Not_found -> actions)
+        local_refs []
+    in
+
+    Lwt_list.filter_map_s
+      (fun action -> match action with
+        | `Update (remote_hash, local_hash, _) ->
+          Store.mem git remote_hash >>= fun has_remote_hash ->
+          Store.mem git local_hash >>= fun has_local_hash ->
+
+          if has_remote_hash && has_local_hash
+          then Lwt.return (Some action)
+          else Lwt.return None
+        | `Create (local_hash, _) ->
+          Store.mem git local_hash >>= function
+          | true -> Lwt.return (Some action)
+          | false -> Lwt.return None)
+      actions
+
+  let update_and_create git ?capabilities ?headers ~references repository =
     let push_handler remote_refs =
       push_handler git references remote_refs >|= fun actions -> ([], actions) in
     let host =
@@ -737,7 +785,7 @@ module Make_ext
                   Uri.pp_hum repository) in
     let https =
       Option.mem (Uri.scheme repository) "https" ~equal:String.equal in
-    push git ~push:push_handler ~https ?capabilities ?port:(Uri.port repository)
+    push git ~push:push_handler ~https ?capabilities ?headers ?port:(Uri.port repository)
       host (Uri.path_and_query repository)
     >?= fun lst ->
       Lwt_result.ok (List.map (function

@@ -64,7 +64,7 @@ let lock ?(max_age = 10. *. 60. (* 10 minutes *)) ?(sleep = 0.001) path =
       go ()
   in step 1
 
-let make root key = Fpath.(root // (add_ext "lock" key))
+let make root key = Fpath.(root / "locks" // key)
 let v x = x
 let lock path = lock path
 

@@ -303,35 +303,51 @@ module IO
     | Error err ->
       Lwt.return (Error (`SystemFile err))
 
+  let with_f open_f path f =
+    open_f path >>= function
+    | Error e ->
+      Log.err (fun l ->
+          l "Got an error while opening %a: %a"
+            Fpath.pp path FS.File.pp_error e);
+      Lwt.return (Error (`SystemFile e))
+    | Ok fd        ->
+      Lwt.finalize
+        (fun () -> f fd)
+        (fun () ->
+           FS.File.close fd >|= function
+           | Ok ()   -> ()
+           | Error e ->
+             Log.err (fun l ->
+                 l "Got an error while closing %a, ignoring."
+                   FS.File.pp_error e);
+             ())
+
+  let with_open_r = with_f (FS.File.open_r ~mode:0o400)
+  let with_open_w = with_f (FS.File.open_w ~mode:0o644)
+
   let read ~root reference ~dtmp ~raw =
     let decoder = D.default dtmp in
     let path = Fpath.(root // (to_path reference)) in
     Log.debug (fun l -> l ~header:"read" "Reading the reference: %a." Fpath.pp path);
-    FS.File.open_r ~mode:0o400 path >>= function
-    | Error sys_err ->
-      Log.err (fun l ->
-          l "Got an error while reading %a: %a."
-            pp reference FS.File.pp_error sys_err);
-      Lwt.return (Error (`SystemFile sys_err))
-    | Ok read ->
-      let rec loop decoder = match D.eval decoder with
-        | `End (_, value)               -> Lwt.return (Ok value)
-        | `Error (_, (#D.error as err)) -> Lwt.return (Error err)
-        | `Await decoder ->
-          FS.File.read raw read >>= function
-          | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
-          | Ok n -> match D.refill (Cstruct.sub raw 0 n) decoder with
-            | Ok decoder              -> loop decoder
-            | Error (#D.error as err) -> Lwt.return (Error err)
-      in
-      loop decoder >|= function
-      | Error _ as e     -> e
-      | Ok head_contents ->
-        let reference' = normalize path in
-        Log.debug (fun l ->
-            l "Normalize reference %a = %a." pp reference pp reference');
-        assert (equal reference reference');
-        Ok (normalize path, head_contents)
+    with_open_r path @@ fun read ->
+    let rec loop decoder = match D.eval decoder with
+      | `End (_, value)               -> Lwt.return (Ok value)
+      | `Error (_, (#D.error as err)) -> Lwt.return (Error err)
+      | `Await decoder ->
+        FS.File.read raw read >>= function
+        | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
+        | Ok n -> match D.refill (Cstruct.sub raw 0 n) decoder with
+          | Ok decoder              -> loop decoder
+          | Error (#D.error as err) -> Lwt.return (Error err)
+    in
+    loop decoder >|= function
+    | Error _ as e     -> e
+    | Ok head_contents ->
+      let reference' = normalize path in
+      Log.debug (fun l ->
+          l "Normalize reference %a = %a." pp reference pp reference');
+      assert (equal reference reference');
+      Ok (normalize path, head_contents)
 
   let write ~root ?locks ?(capacity = 0x100) ~raw reference value =
     let state = E.default (capacity, value) in
@@ -359,27 +375,24 @@ module IO
     >>= function
     | Error sys_err -> Lwt.return (Error (`SystemDirectory sys_err))
     | Ok (true | false) ->
-      FS.File.open_w ~mode:0o644 path
+      with_open_w path @@ fun write ->
+      Helper.safe_encoder_to_file ~limit:50 (module E)
+        FS.File.write write raw state
       >>= function
-      | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
-      | Ok write ->
-        Helper.safe_encoder_to_file ~limit:50 (module E)
-          FS.File.write write raw state
-        >>= function
-        | Ok _ ->
-          FS.File.close write >|=
-          (function
-            | Ok () -> Ok ()
-            | Error sys_err -> Error (`SystemFile sys_err))
-        | Error err ->
-          FS.File.close write >|= function
-          | Error sys_err -> Error (`SystemFile sys_err)
-          | Ok ()         -> match err with
-            | `Writer sys_err -> Error (`SystemFile sys_err)
-            | `Encoder `Never -> assert false
-            | `Stack          ->
-              Fmt.kstrf (fun x -> Error (`SystemIO x))
-                "Impossible to store the reference: %a" pp reference
+      | Ok _ ->
+        FS.File.close write >|=
+        (function
+          | Ok () -> Ok ()
+          | Error sys_err -> Error (`SystemFile sys_err))
+      | Error err ->
+        FS.File.close write >|= function
+        | Error sys_err -> Error (`SystemFile sys_err)
+        | Ok ()         -> match err with
+          | `Writer sys_err -> Error (`SystemFile sys_err)
+          | `Encoder `Never -> assert false
+          | `Stack          ->
+            Fmt.kstrf (fun x -> Error (`SystemIO x))
+              "Impossible to store the reference: %a" pp reference
 
   (* FIXME: why this doesn't use the encode??? *)
   let test_and_set ~root ?locks t ~test ~set =

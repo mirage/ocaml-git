@@ -16,8 +16,8 @@
  *)
 
 open Lwt.Infix
-let ( >!= ) = Lwt_result.bind_lwt_err
-let ( >?= ) = Lwt_result.bind
+let ( >>!= ) x f = Lwt_result.map_err f x
+let ( >>?= ) = Lwt_result.bind
 
 let src = Logs.Src.create "git.store" ~doc:"logs git's store event"
 module Log = (val Logs.src_log src : Logs.LOG)
@@ -601,6 +601,8 @@ module FS
       | `Delta of PACKEncoder.Delta.error
       | PackImpl.error ]
 
+    let lift_error (e: PackImpl.error) = (e :> error)
+
     let pp_error ppf = function
       | `SystemIO err -> Fmt.pf ppf "(`SystemIO %s)" err
       | `Delta err -> Fmt.pf ppf "(`Delta %a)" PACKEncoder.Delta.pp_error err
@@ -622,11 +624,8 @@ module FS
       mem t hash >>= function
       | false -> Lwt.return (Error `Not_found)
       | true ->
-        Log.debug (fun l -> l "Git object %a found in a PACK file."
-                      Hash.pp hash);
-
-        PackImpl.read ~root:t.dotgit ~ztmp ~window t.engine hash
-        >!= (fun err -> Lwt.return (err :> error))
+        Log.debug (fun l -> l "Git object %a found in a PACK file." Hash.pp hash);
+        PackImpl.read ~root:t.dotgit ~ztmp ~window t.engine hash >>!= lift_error
 
     let read_s t hash =
       read_p ~ztmp:t.buffer.zl ~window:t.buffer.window t hash
@@ -637,8 +636,7 @@ module FS
       mem t hash >>= function
       | false -> Lwt.return (Error `Not_found)
       | true ->
-        PackImpl.size ~root:t.dotgit ~ztmp ~window t.engine hash
-        >!= (fun err -> Lwt.return (err :> error))
+        PackImpl.size ~root:t.dotgit ~ztmp ~window t.engine hash >>!= lift_error
 
     let size_s t hash =
       size_p
@@ -896,8 +894,8 @@ module FS
       let info = Pack_info.v (Hash.of_hex (String.make (Hash.Digest.length * 2) '0')) in
 
       (Pack_info.from_stream ~ztmp ~window info (fun () -> Lwt_stream.get stream0)
-       >!= (fun sys_err -> Lwt.return (`PackInfo sys_err))) >?= fun info ->
-      to_temp_file (Fmt.strf "pack-%s.pack") stream1 >?= fun path ->
+       >>!= (fun sys_err -> `PackInfo sys_err)) >>?= fun info ->
+      to_temp_file (Fmt.strf "pack-%s.pack") stream1 >>?= fun path ->
 
       let module Graph = Pack_info.Graph in
 
@@ -1023,20 +1021,21 @@ module FS
                                     ; Pack_info.Full.hash = hash_pack } }
               in
 
-              (FS.Mapper.close fdp
-               >!= fun sys_err -> Lwt.return (`SystemMapper sys_err))
-              >?= fun () -> PackImpl.add_total ~root:git.dotgit git.engine path info
-                            >!= fun err -> Lwt.return (err :> error)
+              (FS.Mapper.close fdp >>!= fun sys_err -> `SystemMapper sys_err)
+              >>?= fun () ->
+              PackImpl.add_total ~root:git.dotgit git.engine path info
+              >>!= lift_error
             end else
               canonicalize git path decoder fdp ~htmp ~rtmp ~ztmp ~window delta info
-              >?= fun (hash, count) ->
+              >>?= fun (hash, count) ->
               (PackImpl.add_exists ~root:git.dotgit git.engine hash
-               >!= (fun err -> Lwt.return (err :> error)))
-              >?= fun () -> Lwt.return (Ok (hash, count))
-          else Lwt.return
-              (Error (`Integrity (Fmt.strf "Impossible to get all informations from the file: %a."
-                                    Hash.pp hash_pack)))
-  end
+               >>!= lift_error)
+              >>?= fun () -> Lwt.return (Ok (hash, count))
+          else
+            Fmt.kstrf (fun x ->  Lwt.return (Error (`Integrity x)))
+              "Impossible to get all informations from the file: %a."
+              Hash.pp hash_pack
+end
 
   type error = [ Loose.error | Pack.error ]
 
@@ -1240,7 +1239,7 @@ module FS
 
       let rec lookup acc dir =
         FS.Dir.contents ~rel:true Fpath.(top // dir)
-        >?= fun l ->
+        >>?= fun l ->
           Lwt_list.filter_p
             (fun x -> FS.is_dir Fpath.(top // dir // x) >|= function Ok v -> v | Error _ -> false) l
           >>= fun dirs ->
@@ -1251,7 +1250,7 @@ module FS
           Lwt_list.fold_left_s
             (function Ok acc -> fun x -> lookup acc Fpath.(dir // x)
                     | Error _ as e -> fun _ -> Lwt.return e)
-            (Ok acc) dirs >?= fun acc -> Lwt.return (Ok (acc @ files))
+            (Ok acc) dirs >>?= fun acc -> Lwt.return (Ok (acc @ files))
       in
 
       let lock = match locks with
@@ -1593,12 +1592,12 @@ module FS
 
   let sanitize_filesystem root dotgit =
     FS.Dir.create ~path:true root
-    >?= fun _ -> FS.Dir.create ~path:true dotgit
-    >?= fun _ -> FS.Dir.create ~path:true Fpath.(dotgit / "objects")[@warning "-44"]
-    >?= fun _ -> FS.Dir.create ~path:true Fpath.(dotgit / "objects" / "pack")[@warning "-44"]
-    >?= fun _ -> FS.Dir.create ~path:true Fpath.(dotgit / "objects" / "info")[@warning "-44"]
-    >?= fun _ -> FS.Dir.create ~path:true Fpath.(dotgit / "refs")[@warning "-44"]
-    >?= fun _ -> Lwt.return (Ok ())
+    >>?= fun _ -> FS.Dir.create ~path:true dotgit
+    >>?= fun _ -> FS.Dir.create ~path:true Fpath.(dotgit / "objects")[@warning "-44"]
+    >>?= fun _ -> FS.Dir.create ~path:true Fpath.(dotgit / "objects" / "pack")[@warning "-44"]
+    >>?= fun _ -> FS.Dir.create ~path:true Fpath.(dotgit / "objects" / "info")[@warning "-44"]
+    >>?= fun _ -> FS.Dir.create ~path:true Fpath.(dotgit / "refs")[@warning "-44"]
+    >>?= fun _ -> Lwt.return (Ok ())
 
   let create ?root ?dotgit ?(compression = 4) () =
     let ( >>== ) v f = v >>= function
@@ -1656,41 +1655,25 @@ module FS
 
   let reset ?locks t =
     Log.info (fun l -> l ~header:"reset" "Start to reset the Git repository");
-
-    let delete_files directory =
-      FS.Dir.contents ~dotfiles:true ~rel:false directory
-      >?= fun lst ->
-      Lwt_result.ok (Lwt_list.fold_left_s
-            (fun acc path -> Lwt.Infix.(FS.is_file path >|= function
-               | Ok true -> path :: acc
-               | _ -> acc))
-            [] lst)
-      >?= fun lst ->
-      Lwt_result.ok (Lwt_list.iter_p
-            (fun path -> Lwt.Infix.(FS.File.delete path >|= function
-               | Ok () -> ()
-               | Error _ -> ())) lst)
-    in
-
     let lock = match locks with
       | Some locks -> Some (Lock.make locks Fpath.(v "global"))[@warning "-44"]
       | None -> None
     in
-
     Lock.with_lock lock @@ fun () ->
     (FS.Dir.delete ~recurse:true Fpath.(t.dotgit / "objects")
-     >>= fun _ -> FS.Dir.create Fpath.(t.dotgit / "objects")
-     >>= fun _ -> FS.Dir.create Fpath.(t.dotgit / "objects" / "info")
-     >>= fun _ -> FS.Dir.create Fpath.(t.dotgit / "objects" / "pack")
-     >>= fun _ -> FS.Dir.delete ~recurse:true Fpath.(t.dotgit / "refs")
-     >>= fun _ -> FS.Dir.create Fpath.(t.dotgit / "refs" / "heads")
-     >>= fun _ -> FS.Dir.create Fpath.(t.dotgit / "refs" / "tags"))
-    >!= (fun err -> Lwt.return (`Store (`SystemDirectory err)))
-    >>= fun _ -> (delete_files t.root >!= (fun err -> Lwt.return (`Store (`SystemDirectory err))))
-    >>= fun _ -> Ref.write t Reference.head Reference.(Ref (of_string "refs/heads/master"))
-    >!= (fun err -> Lwt.return (`Ref err))
-  (* XXX(dinosaure): an empty git repository has HEAD which points
-     to a non-existing refs/heads/master. *)
+     >>?= fun () -> FS.Dir.create Fpath.(t.dotgit / "objects")
+     >>?= fun _ -> FS.Dir.create Fpath.(t.dotgit / "objects" / "info")
+     >>?= fun _ -> FS.Dir.create Fpath.(t.dotgit / "objects" / "pack")
+     >>?= fun _ -> FS.Dir.delete ~recurse:true Fpath.(t.dotgit / "refs")
+     >>?= fun () -> FS.Dir.create Fpath.(t.dotgit / "refs" / "heads")
+     >>?= fun _ -> FS.Dir.create Fpath.(t.dotgit / "refs" / "tags")
+     ) >>!= (fun err -> `Store (`SystemDirectory err))
+     >>?= fun _ ->
+     (Ref.write t Reference.head Reference.(Ref master)
+      (* XXX(dinosaure): an empty git repository has HEAD which points
+         to a non-existing refs/heads/master. *)
+    >>!= fun err -> `Ref err)
+    (* XXX(samoht): need to cleanup the locks as well *)
 
   let dotgit      { dotgit; _ }      = dotgit
   let root        { root; _ }        = root
