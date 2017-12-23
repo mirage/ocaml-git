@@ -15,8 +15,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-let () = Printexc.record_backtrace true
-
 let src = Logs.Src.create "git.idx" ~doc:"Git index decoder"
 module Log = (val Logs.src_log src : Logs.LOG)
 
