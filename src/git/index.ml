@@ -1407,7 +1407,7 @@ module MakeIndexEncoder (H: S.HASH) = struct
 
   let hash dst t =
     let hash = Hash.Digest.get t.hash in
-    KHash.put_hash hash (fun _ t -> ok t hash) dst t
+    KHash.put_hash (Hash.to_string hash) (fun _ t -> ok t hash) dst t
 
   let rec switch ?current dst t =
     match t.entries with
