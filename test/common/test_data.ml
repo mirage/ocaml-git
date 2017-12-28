@@ -110,10 +110,9 @@ module Make0 (Source: SOURCE) (Store: Git.S) = struct
         let acc = R.bind acc hash (crc, off) in
         go acc state
       | `Error (_, err) ->
-        Alcotest.fail
-          (Fmt.strf "Got an error when we parse the IDX file %a: %a."
-             Fpath.pp Source.idx
-             D.pp_error err)
+        Alcotest.failf "Got an error when we parse the IDX file %a: %a."
+          Fpath.pp Source.idx
+          D.pp_error err
       | `End (_, hash) -> (acc, hash)
     in
 
@@ -129,10 +128,9 @@ module Make0 (Source: SOURCE) (Store: Git.S) = struct
         Store.Hash.Digest.feed ctx (Cstruct.sub ctmp 0 (E.used_out t));
         go ctx (E.flush 0 (Cstruct.len ctmp) t)
       | `Error (_, err) ->
-        Alcotest.fail
-          (Fmt.strf "Got an error when we encode the IDX file %a: %a."
-             Fpath.pp Source.idx
-             E.pp_error err)
+        Alcotest.failf "Got an error when we encode the IDX file %a: %a."
+          Fpath.pp Source.idx
+          E.pp_error err
       | `End t ->
         if E.used_out t > 0
         then begin
@@ -145,15 +143,14 @@ module Make0 (Source: SOURCE) (Store: Git.S) = struct
 
     if String.equal (load_file Source.idx) (Git.Buffer.contents buf)
     then Lwt.return (Ok ())
-    else Alcotest.fail
-        (Fmt.strf "Produced IDX file is not the same from the IDX file: %a."
-           Fpath.pp Source.idx)
+    else Alcotest.failf "Produced IDX file is not the same from the IDX file: %a."
+           Fpath.pp Source.idx
 
   let run f =
     Lwt_main.run
       (f () >>= function
         | Ok v -> Lwt.return v
-        | Error err -> Alcotest.fail (Fmt.strf "Got an error: %a." pp_error err))
+        | Error err -> Alcotest.failf "Got an error: %a." pp_error err)
 
   let root = Fpath.(v "test-data" / Source.name)
 
