@@ -1801,7 +1801,7 @@ module Container (S: Store.S) = struct
   let entry_of_stats
       hash path
       ?(gitlink = false)
-      ({ Lwt_unix.st_dev
+      ({ Unix.st_dev
        ; st_ino
        ; st_kind
        ; st_perm
@@ -1871,7 +1871,7 @@ module Container (S: Store.S) = struct
           (function Close err -> Lwt.return (Error (`File err))
                   | exn -> Lwt.fail exn)
         >?= fun () ->
-          Lwt_unix.stat (Fpath.to_string path) >>= fun stats ->
+          Unix.stat (Fpath.to_string path) |> fun stats ->
           Lwt.return (Ok (entry_of_stats Store.Value.Blob.(digest (of_cstruct raw)) path stats :: acc))
     | #directory ->
       raise (Invalid_argument "Unable to make a new directory from a \
