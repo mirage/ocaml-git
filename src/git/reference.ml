@@ -336,6 +336,10 @@ module IO
       | `Await decoder ->
         FS.File.read raw read >>= function
         | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
+        | Ok 0 -> loop (D.finish decoder)
+        (* XXX(dinosaure): in this case, we read a file, so when we
+           retrieve 0 bytes, that means we get end of the file. We
+           can finish the deserialization. *)
         | Ok n -> match D.refill (Cstruct.sub raw 0 n) decoder with
           | Ok decoder              -> loop decoder
           | Error (#D.error as err) -> Lwt.return (Error err)
