@@ -1514,13 +1514,13 @@ module IO (H: S.HASH) (FS: S.FS) = struct
 
   type error =
     [ `IndexDecoder of IndexDecoder.error
-    | `SystemIO of string
-    | `SystemFile of FileSystem.File.error ]
+    | `IO of string
+    | `File of FileSystem.File.error ]
 
   let pp_error ppf = function
     | `IndexDecoder err -> Fmt.pf ppf "(`IndexDecoder %a)" IndexDecoder.pp_error err
-    | `SystemFile err -> Fmt.pf ppf "(`SystemFile %a)" FileSystem.File.pp_error err
-    | `SystemIO err -> Fmt.pf ppf "(`SystemIO %s)" err
+    | `File err -> Fmt.pf ppf "(`File %a)" FileSystem.File.pp_error err
+    | `IO err -> Fmt.pf ppf "(`IO %s)" err
 
   let load ~root ~dtmp =
     let open Lwt.Infix in
@@ -1529,7 +1529,7 @@ module IO (H: S.HASH) (FS: S.FS) = struct
     >>= function
     | Error sys_err ->
       Log.debug (fun l -> l "Retrieve a file-system error: %a." FileSystem.File.pp_error sys_err);
-      Lwt.return (Error (`SystemFile sys_err))
+      Lwt.return (Error (`File sys_err))
     | Ok read ->
       let decoder = IndexDecoder.default in
 
@@ -1538,7 +1538,7 @@ module IO (H: S.HASH) (FS: S.FS) = struct
         | `End (_, index, extensions) -> Lwt.return (Ok (index, extensions))
         | `Await decoder ->
           FileSystem.File.read dtmp read >>= function
-          | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
+          | Error sys_err -> Lwt.return (Error (`File sys_err))
           | Ok n ->
             Log.debug (fun l -> l "Reading %d byte(s) of the file-descriptor" n);
             loop (IndexDecoder.refill 0 n decoder)
@@ -1573,7 +1573,7 @@ module IO (H: S.HASH) (FS: S.FS) = struct
     FileSystem.File.open_w ~mode:0o644 Fpath.(root / "index")[@warning "-44"]
     >>= function
     | Error sys_err ->
-      Lwt.return (Error (`SystemFile sys_err))
+      Lwt.return (Error (`File sys_err))
     | Ok oc ->
       let state = IndexEncoder.default entries in
 
@@ -1595,8 +1595,8 @@ module IO (H: S.HASH) (FS: S.FS) = struct
           Ok ()
         | Error err ->
           match err with
-          | `Stack -> Error (`SystemIO (Fmt.strf "Impossible to store the index file."))
-          | `Writer err -> Error (`SystemFile err)
+          | `Stack -> Error (`IO (Fmt.strf "Impossible to store the index file."))
+          | `Writer err -> Error (`File err)
           | `Encoder `Never -> assert false
 end
 
@@ -1724,11 +1724,15 @@ module Container (S: Store.S) = struct
 
   type error =
     [ `File of Store.FS.File.error
+    | `IO of string
+    | `Stack
+    | `Directory of Store.FS.Dir.error
     | `Store of Store.error ]
 
   let pp_error ppf = function
     | `File err -> Fmt.pf ppf "(`File %a)" Store.FS.File.pp_error err
     | `Directory err -> Fmt.pf ppf "(`Directory %a)" Store.FS.Dir.pp_error err
+    | `IO err -> Fmt.pf ppf "(`IO %s)" err
     | `Stack -> Fmt.pf ppf "Unable to perform I/O operation."
     | `Store err -> Fmt.pf ppf "(`Store %a)" Store.pp_error err
 
@@ -1857,6 +1861,10 @@ module Container (S: Store.S) = struct
              Lwt.finalize
                (fun () -> loop ~retry:0 (raw :> Cstruct.t))
                (fun result ->
+                  Log.debug (fun l -> l "Blob %a:%a wrote."
+                                Store.Hash.pp Store.Value.Blob.(digest (of_cstruct raw))
+                                Fpath.pp path);
+
                   Store.FS.File.close fd >>= function
                   | Ok () -> Lwt.return result
                   | Error err -> Lwt.fail (Close err)))
@@ -1900,6 +1908,9 @@ module Container (S: Store.S) = struct
       (write_entry git)
       write_tree
       (of_entries entries)
+
+  let from_entries git ~dtmp:raw entries =
+    IO.store ~root:(Store.dotgit git) ~raw entries
 
   let chain_of_path path =
     let segs = Fpath.segs path in
