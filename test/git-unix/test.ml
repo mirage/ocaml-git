@@ -89,7 +89,11 @@ let () =
   verbose ();
   Alcotest.run "git-unix"
     [ Test_store.suite "mem" (module MemStore)
+    ; Test_data.suite "mem" (module Test_data.Usual) (module MemStore)
+    ; Test_data.suite "mem" (module Test_data.Bomb) (module MemStore)
     ; Test_store.suite "fs"  (module FsStore)
+    ; Test_data.suite "fs"  (module Test_data.Usual) (module FsStore)
+    ; Test_data.suite "fs"  (module Test_data.Bomb) (module FsStore)
     ; TCP1.test_fetch "mem-local-tcp-sync" ["git://localhost/"]
     ; TCP1.test_clone "mem-remote-tcp-sync" [
         "git://github.com/mirage/ocaml-git.git", "master";

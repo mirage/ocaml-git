@@ -141,6 +141,8 @@ let () =
   let () = Lwt_main.run (M.init ()) in
   Alcotest.run "git-mirage" [
     Test_store.suite "mirage" (module MirageStore);
+    Test_data.suite "mirage" (module Test_data.Usual) (module MirageStore);
+    Test_data.suite "mirage" (module Test_data.Bomb) (module MirageStore);
     TCP.test_fetch "tcp-sync-fetch" ["git://localhost/"];
     TCP.test_clone "tcp-sync-clone" [
       "git://localhost/", "master";

@@ -22,4 +22,6 @@ let () =
   verbose ();
   Alcotest.run "git" [
     Test_store.suite "mem" (module Store);
+    Test_data.suite "mem" (module Test_data.Usual) (module Store);
+    Test_data.suite "mem" (module Test_data.Bomb) (module Store);
   ]
