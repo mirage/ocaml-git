@@ -7,7 +7,6 @@ module Tag          = Tag
 module Reference    = Reference
 module User         = User
 module Value        = Value
-module Gri          = Gri
 
 module Fanout       = Fanout
 module Bucket       = Bucket
