@@ -369,7 +369,6 @@ let from_lsb32 b0 b1 b2 b3 =
   || (of_int b1 << 16) (* >> (tuareg) *)
   || (of_int b2 << 8)  (* >> (tuareg) *)
   || (of_int b3)
-[@@warning "-44"]
 
 let from_lsb16 b0 b1 =
   (b0 lsl 8) lor b1
@@ -1096,9 +1095,7 @@ module Make (H: S.HASH) (FS: S.FS) = struct
 
   let load ~root ~dtmp =
     let open Lwt.Infix in
-
-    FileSystem.File.open_r ~mode:0o400 Fpath.(root / "index")[@warning "-44"]
-    >>= function
+    FileSystem.File.open_r ~mode:0o400 Fpath.(root / "index") >>= function
     | Error sys_err ->
       Log.debug (fun l -> l "Retrieve a file-system error: %a." FileSystem.File.pp_error sys_err);
       Lwt.return (Error (`SystemFile sys_err))

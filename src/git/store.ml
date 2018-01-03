@@ -1134,7 +1134,7 @@ end
     Loose.write_inflated t ~kind value
 
   let indexes git =
-    FS.Dir.contents ~dotfiles:false ~rel:false Fpath.(git / "objects" / "pack")[@warning "-44"]
+    FS.Dir.contents ~dotfiles:false ~rel:false Fpath.(git / "objects" / "pack")
     >>= function
     | Ok lst ->
       Lwt_list.fold_left_s
@@ -1355,7 +1355,6 @@ end
               ) graph partial
           in
           Ok graph
-    [@@warning "-44"]
 
     let graph ?locks t = graph_p ~dtmp:t.buffer.de ~raw:t.buffer.io ?locks t
 
@@ -1390,7 +1389,7 @@ end
 
     let remove_p ~dtmp ~raw ?locks t reference =
       let lock = match locks with
-        | Some locks -> Some (Lock.make locks Fpath.(v "global"))[@warning "-44"]
+        | Some locks -> Some (Lock.make locks Fpath.(v "global"))
         | None -> None
       in
 
@@ -1534,7 +1533,7 @@ end
 
     let test_and_set t ?locks reference ~test ~set =
       let lock = match locks with
-        | Some locks -> Some (Lock.make locks Fpath.(v "global"))[@warning "-44"]
+        | Some locks -> Some (Lock.make locks Fpath.(v "global"))
         | None -> None
       in
 
@@ -1593,10 +1592,10 @@ end
   let sanitize_filesystem root dotgit =
     FS.Dir.create ~path:true root
     >>?= fun _ -> FS.Dir.create ~path:true dotgit
-    >>?= fun _ -> FS.Dir.create ~path:true Fpath.(dotgit / "objects")[@warning "-44"]
-    >>?= fun _ -> FS.Dir.create ~path:true Fpath.(dotgit / "objects" / "pack")[@warning "-44"]
-    >>?= fun _ -> FS.Dir.create ~path:true Fpath.(dotgit / "objects" / "info")[@warning "-44"]
-    >>?= fun _ -> FS.Dir.create ~path:true Fpath.(dotgit / "refs")[@warning "-44"]
+    >>?= fun _ -> FS.Dir.create ~path:true Fpath.(dotgit / "objects")
+    >>?= fun _ -> FS.Dir.create ~path:true Fpath.(dotgit / "objects" / "pack")
+    >>?= fun _ -> FS.Dir.create ~path:true Fpath.(dotgit / "objects" / "info")
+    >>?= fun _ -> FS.Dir.create ~path:true Fpath.(dotgit / "refs")
     >>?= fun _ -> Lwt.return (Ok ())
 
   let create ?root ?dotgit ?(compression = 4) () =
@@ -1611,7 +1610,7 @@ end
         >>= function
         | Ok current ->
           let root = Option.get ~default:current root in
-          let[@warning "-44"] dotgit  = Option.get ~default:Fpath.(root / ".git") dotgit in
+          let dotgit  = Option.get ~default:Fpath.(root / ".git") dotgit in
 
           sanitize_filesystem root dotgit
           >>== fun () -> indexes dotgit
@@ -1641,7 +1640,7 @@ end
 
   let clear_caches ?locks t =
     let lock = match locks with
-      | Some locks -> Some (Lock.make locks Fpath.(v "global"))[@warning "-44"]
+      | Some locks -> Some (Lock.make locks Fpath.(v "global"))
       | None -> None
     in
 
@@ -1656,7 +1655,7 @@ end
   let reset ?locks t =
     Log.info (fun l -> l ~header:"reset" "Start to reset the Git repository");
     let lock = match locks with
-      | Some locks -> Some (Lock.make locks Fpath.(v "global"))[@warning "-44"]
+      | Some locks -> Some (Lock.make locks Fpath.(v "global"))
       | None -> None
     in
     Lock.with_lock lock @@ fun () ->

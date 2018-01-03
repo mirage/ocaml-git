@@ -66,7 +66,8 @@ module Make
 
   let default_root = Fpath.v "root"
 
-  let[@warning "-44"] create ?(root = default_root) ?(dotgit = Fpath.(default_root / ".git")) ?(compression = 6) () =
+  let create ?(root = default_root) ?(dotgit = Fpath.(default_root / ".git"))
+      ?(compression = 6) () =
     if compression < 0 || compression > 9
     then failwith "level should be between 0 and 9";
 

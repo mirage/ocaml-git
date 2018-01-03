@@ -126,45 +126,47 @@ sig
                ; continue  : int -> 'a state }
     | Ok of 'a
 
-  [@@@warning "-30"]
-
   type upload_request =
     { want         : Hash.t * Hash.t list
     ; capabilities : Capability.t list
     ; shallow      : Hash.t list
     ; deep         : [ `Depth of int | `Timestamp of int64 | `Ref of string ] option }
+
   type request_command =
     [ `UploadPack
     | `ReceivePack
     | `UploadArchive ]
+
   type git_proto_request =
     { pathname        : string
     ; host            : (string * int option) option
     ; request_command : request_command }
-  type ('a, 'b) either =
-    | L of 'a
-    | R of 'b
-  and update_request =
-    { shallow      : Hash.t list
-    ; requests     : (command * command list, push_certificate) either
-    ; capabilities : Capability.t list }
-  and command =
+
+  type command =
     | Create of Hash.t * string
     | Delete of Hash.t * string
     | Update of Hash.t * Hash.t * string
-  and push_certificate =
+
+  type push_certificate =
     { pusher   : string
     ; pushee   : string
     ; nonce    : string
     ; options  : string list
     ; commands : command list
     ; gpg      : string list }
-  and http_upload_request =
+
+  type update_request =
+    { shallow      : Hash.t list
+    ; requests     : [`Raw of command * command list | `Cert of push_certificate]
+    ; capabilities : Capability.t list }
+
+  type http_upload_request =
     { want         : Hash.t * Hash.t list
     ; capabilities : Capability.t list
     ; shallow      : Hash.t list
     ; deep         : [ `Depth of int | `Timestamp of int64 | `Ref of string ] option
     ; has          : Hash.t list }
+
   type action =
     [ `GitProtoRequest   of git_proto_request
     | `UploadRequest     of upload_request
@@ -1369,12 +1371,9 @@ struct
 
     go l encoder
 
-  type ('a, 'b) either =
-    | L of 'a
-    | R of 'b
   type update_request =
     { shallow      : Hash.t list
-    ; requests     : (command * command list, push_certificate) either
+    ; requests     : [`Raw of command * command list | `Cert of push_certificate]
     ; capabilities : Capability.t list }
   and command =
     | Create of Hash.t * string (* XXX(dinosaure): break the dependence with [Store] and consider the reference name as a string. *)
@@ -1450,8 +1449,8 @@ struct
   let w_update_request update_request k encoder =
     (w_shallow update_request.shallow
      @@ (match update_request.requests with
-         | L commands  -> w_commands update_request.capabilities commands
-         | R push_cert -> w_push_certificates update_request.capabilities push_cert)
+         | `Raw commands   -> w_commands update_request.capabilities commands
+         | `Cert push_cert -> w_push_certificates update_request.capabilities push_cert)
      @@ k)
       encoder
 

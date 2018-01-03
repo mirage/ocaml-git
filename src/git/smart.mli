@@ -267,12 +267,9 @@ module Decoder
 (** The {i functor} to make the Decoder by a specific hash
     implementation. *)
 
-module type ENCODER =
-sig
-  [@@@warning "-30"]
+module type ENCODER = sig
 
-  module Hash
-    : S.HASH
+  module Hash: S.HASH
   (** The [Digest] module used to make the module. *)
 
   type encoder
@@ -338,10 +335,6 @@ sig
 
       This type represents this information. *)
 
-  type ('a, 'b) either =
-    | L of 'a
-    | R of 'b
-
   (** Once the client knows what the references the server is at, it
       can send a list of reference update requests. For each reference
       on the server that it wants to update, it sends a line listing
@@ -351,7 +344,7 @@ sig
       This type represents this information. *)
   and update_request =
     { shallow      : Hash.t list
-    ; requests     : (command * command list, push_certificate) either
+    ; requests     : [`Raw of command * command list | `Cert of push_certificate]
     ; capabilities : Capability.t list }
 
   and command =
@@ -475,5 +468,3 @@ module Client
   : CLIENT with module Hash = H
 (** The {i functor} to make the Client by a specific hash
     implementation. *)
-
-

@@ -712,7 +712,6 @@ module MakePACKDecoder (H: S.HASH) (I: S.INFLATE)
       || (of_int b1 << 16) (* >> (tuareg) *)
       || (of_int b2 << 8)  (* >> (tuareg) *)
       || (of_int b3)
-      [@@warning "-44"]
 
     let rec get_u32 k src t =
       if (t.i_len - t.i_pos) > 3
@@ -1224,7 +1223,7 @@ module MakePACKDecoder (H: S.HASH) (I: S.INFLATE)
     let rec loop t =
       (* XXX(dinosaure): pattern is fragile. *)
 
-      match[@warning "-4"] eval0 src t with
+      match eval0 src t with
       | Cont (({ state = Next _; _ }
               | { state = Unzip _; _ }
               | { state = Hunks { h = { H.state = H.List _; _ }; _ }; _ }) as t) ->
@@ -1243,8 +1242,7 @@ module MakePACKDecoder (H: S.HASH) (I: S.INFLATE)
   let eval_metadata src t =
     let rec loop t =
       (* XXX(dinosaure): pattern is fragile. *)
-
-      match[@warning "-4"] eval0 src t with
+      match eval0 src t with
       | Cont (({ state = Next _; _ }
               | { state = Unzip _; _ }
               | { state = Hunks _; _ }) as t) -> `Metadata t
@@ -1545,7 +1543,7 @@ struct
 
   let map_window t offset_requested =
     let open Lwt.Infix in
-    let pos = Int64.((offset_requested / 1024L) * 1024L)[@warning "-44"] in (* padding *)
+    let pos = Int64.((offset_requested / 1024L) * 1024L) in (* padding *)
     Mapper.map t.file ~pos ~share:false (1024 * 1024)
     >>= function
     | Ok map ->
@@ -1561,7 +1559,7 @@ struct
     | Some window ->
       Log.debug (fun l -> l "Reusing a window already loaded: [%Ld:%d]" window.Window.off window.Window.len);
 
-      let relative_offset = Int64.to_int Int64.(offset_requested - window.Window.off)[@warning "-44"] in
+      let relative_offset = Int64.to_int Int64.(offset_requested - window.Window.off) in
       Lwt.return (Ok (window, relative_offset))
     | None ->
       Log.debug (fun l -> l "Loading a new window for the %Ld offset requested." offset_requested);
@@ -1570,7 +1568,7 @@ struct
       map_window t offset_requested
       >>= function
       | Ok window ->
-        let relative_offset = Int64.to_int Int64.(offset_requested - window.Window.off)[@warning "-44"] in
+        let relative_offset = Int64.to_int Int64.(offset_requested - window.Window.off) in
         let () = Bucket.add t.win window in
         Lwt.return (Ok (window, relative_offset))
       | Error err -> Lwt.return (Error err)
@@ -1628,7 +1626,7 @@ struct
                   hunks git_object
                   (P.refill consumed_in_window rest_in_window state)
               else
-                (find t Int64.(window.Window.off + (of_int consumed_in_window))[@warning "-44"]
+                (find t Int64.(window.Window.off + (of_int consumed_in_window))
                  >>= function
                  | Error err -> Lwt.return (Error (Mapper_error err))
                  | Ok (window, relative_offset) ->
@@ -1769,7 +1767,6 @@ struct
           t.get hash >>= function
           | Some (kind, raw) -> Lwt.return (Ok (External (hash, kind, raw)))
           | None -> Lwt.return (Error (Invalid_hash hash))
-  [@@warning "-44"]
 
   let make ?(bucket = 10) file cache idx rev get' =
     let open Lwt.Infix in
@@ -1818,7 +1815,7 @@ struct
                 (consumed_in_window + rest_in_window)
                 (P.refill consumed_in_window rest_in_window state)
             else
-              find t Int64.(window.Window.off + (of_int consumed_in_window))[@warning "-44"]
+              find t Int64.(window.Window.off + (of_int consumed_in_window))
               >>= (function
                   | Error err -> Lwt.return (Error (Mapper_error err))
                   | Ok (window, relative_offset) ->
@@ -1868,7 +1865,7 @@ struct
                 (consumed_in_window + rest_in_window)
                 (P.refill consumed_in_window rest_in_window state)
             else
-              find t Int64.(window.Window.off + (of_int consumed_in_window))[@warning "-44"]
+              find t Int64.(window.Window.off + (of_int consumed_in_window))
               >>= (function
                   | Error err -> Lwt.return (`Error (Mapper_error err))
                   | Ok (window, relative_offset) ->
@@ -1991,7 +1988,7 @@ struct
               hunks swap git_object
               (P.refill consumed_in_window rest_in_window state)
           else
-            find t Int64.(window.Window.off + (of_int consumed_in_window))[@warning "-44"]
+            find t Int64.(window.Window.off + (of_int consumed_in_window))
             >>= (function
                 | Error err -> Lwt.return (Error (Mapper_error err))
                 | Ok (window, relative_offset) ->
