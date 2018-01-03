@@ -201,7 +201,7 @@ module IO_Sync = struct
 
   module Client = struct
     (* FIXME in cohttp *)
-    module IO = Cohttp_lwt_unix_io
+    module IO = Cohttp_lwt_unix.IO
     let close_in x = Lwt.ignore_result (Lwt_io.close x)
     let close_out x = Lwt.ignore_result (Lwt_io.close x)
   end
