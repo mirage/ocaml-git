@@ -1,3 +1,7 @@
+### 1.11.4 (2018-01-03)
+
+- support cohttp 1.0 (#249, @samoht)
+
 ### 1.11.3 (2017-11-20)
 
 - add ocplib-endian to dependencies of git (#233, @hannesm)
