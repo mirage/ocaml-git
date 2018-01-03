@@ -12,7 +12,7 @@ build-test: ["jbuilder" "runtest" "test/git-mirage"]
 
 depends: [
   "jbuilder" {build}
-  "mirage-http"
+  "cohttp-mirage"
   "mirage-flow-lwt"
   "mirage-channel-lwt"
   "mirage-fs-lwt"

@@ -322,7 +322,7 @@ end
 module Smart_HTTP = struct
 
   module Conduit_channel = Mirage_channel_lwt.Make(Conduit_mirage.Flow)
-  module HTTP_IO = Cohttp_mirage_io.Make(Conduit_channel)
+  module HTTP_IO = Cohttp_mirage.IO(Conduit_channel)
   module Net = struct
     type ctx = { resolver: Resolver_lwt.t; conduit: Conduit_mirage.t; }
     let default_ctx = {

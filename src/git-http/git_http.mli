@@ -44,7 +44,7 @@
 *)
 
 module type CLIENT = sig
-  module IO : Cohttp_lwt_s.IO
+  module IO : Cohttp_lwt.S.IO
 
   val close_out: IO.oc -> unit                 (* FIXME in cohttp *)
   val close_in: IO.ic -> unit                  (* FIXME in cohttp *)

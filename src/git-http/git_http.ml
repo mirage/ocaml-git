@@ -22,7 +22,7 @@ module Log = struct
 end
 
 module type CLIENT = sig
-  module IO : Cohttp_lwt_s.IO with type 'a t = 'a Lwt.t
+  module IO : Cohttp_lwt.S.IO with type 'a t = 'a Lwt.t
 
   val close_out: IO.oc -> unit                 (* FIXME in cohttp *)
   val close_in: IO.ic -> unit                  (* FIXME in cohttp *)
