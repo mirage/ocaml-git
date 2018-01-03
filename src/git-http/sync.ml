@@ -452,7 +452,7 @@ module Make_ext
             ~body:(producer ~final:stream
                      (Encoder.encode encoder
                         (`HttpUpdateRequest { Encoder.shallow
-                                            ; requests = Encoder.L (x, r)
+                                            ; requests = `Raw (x, r)
                                             ; capabilities })))
             (Web.Request.meth req)
             (Web.Request.uri req

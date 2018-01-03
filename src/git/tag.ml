@@ -192,7 +192,6 @@ module Make (H: S.HASH): S with module Hash = H = struct
         t.tag
         t.tagger
         t.message
-      [@@warning "-45"] (* XXX(dinosaure): shadowing [] and (::). *)
   end
 
   module M = struct

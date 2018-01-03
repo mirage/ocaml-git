@@ -589,7 +589,7 @@ module Make (N: NET) (S: Minimal.S) = struct
             in
 
             Client.run t.ctx (`UpdateRequest { Client.Encoder.shallow
-                                             ; requests = Client.Encoder.L (x, r)
+                                             ; requests = `Raw (x, r)
                                              ; capabilities })
             |> process t
             >>= aux t (Some refs.Client.Decoder.refs) (Some (x :: r)))

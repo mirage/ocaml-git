@@ -245,8 +245,6 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
      predict how much memory you need when we look your pack
      files). So, we continue to control the memory consumption. *)
 
-  [@@@warning "-37"]
-
   type loaded =
     { decoder : PACKDecoder.t
     ; idx     : IDXDecoder.t

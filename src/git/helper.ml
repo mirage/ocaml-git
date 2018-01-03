@@ -22,8 +22,6 @@ let ppe ~name ppv =
   Fmt.braces (fun ppf -> Fmt.pf ppf "%s %a" name (Fmt.hvbox ppv))
 
 module BaseBytes = struct
-  [@@@warning "-44"] (* XXX(dinosaure): shadowing of [compare] and [equal]. *)
-
   open Bytes
 
   type nonrec t = t

@@ -160,8 +160,7 @@ module Make (H: S.HASH) (FS: S.FS): S with module Hash = H and module FS = FS
 
     let open Lwt.Infix in
 
-    FS.File.open_r ~mode:0o400 Fpath.(root / "packed-refs")[@warning "-44"] (* XXX(dinosaure): shadowing ( / ). *)
-    >>= function
+    FS.File.open_r ~mode:0o400 Fpath.(root / "packed-refs") >>= function
     | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
     | Ok read ->
       let rec loop decoder = match D.eval decoder with
@@ -204,8 +203,7 @@ module Make (H: S.HASH) (FS: S.FS): S with module Hash = H and module FS = FS
       let flush = E.flush
     end in
 
-    FS.File.open_w ~mode:0o644 Fpath.(root / "packed-refs")[@warning "-44"] (* XXX(dinosaure): shadowing ( / ). *)
-    >>= function
+    FS.File.open_w ~mode:0o644 Fpath.(root / "packed-refs") >>= function
     | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
     | Ok write ->
       Helper.safe_encoder_to_file
