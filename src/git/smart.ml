@@ -1502,9 +1502,7 @@ struct
     flush_pack k encoder
 
   let w_http_update_request i k encoder =
-    (w_update_request i
-     @@ w_flush k)
-      encoder
+    w_update_request i k encoder
 
   type action =
     [ `GitProtoRequest   of git_proto_request
