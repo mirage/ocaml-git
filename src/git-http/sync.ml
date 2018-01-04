@@ -737,46 +737,6 @@ module Make_ext
                        missed);
         Lwt.return (Ok (`Sync updated))
 
-  let push_handler git references remote_refs =
-    Store.Ref.list git >>= fun local_refs ->
-    let local_refs = List.fold_left
-        (fun local_refs (local_ref, local_hash) ->
-           Store.Reference.Map.add local_ref local_hash local_refs)
-        Store.Reference.Map.empty local_refs in
-
-    Lwt_list.filter_map_p (function
-        | (remote_hash, remote_ref, false) -> Lwt.return (Some (remote_ref, remote_hash))
-        | _ -> Lwt.return None)
-      remote_refs
-    >>= fun remote_refs ->
-    let actions =
-      Store.Reference.Map.fold
-        (fun local_ref local_hash actions ->
-           try let remote_refs' = Store.Reference.Map.find local_ref references in
-             List.fold_left (fun actions remote_ref ->
-                 try let remote_hash = List.assoc remote_ref remote_refs in
-                   `Update (remote_hash, local_hash, remote_ref) :: actions
-                 with Not_found -> `Create (local_hash, remote_ref) :: actions)
-               actions remote_refs'
-            with Not_found -> actions)
-        local_refs []
-    in
-
-    Lwt_list.filter_map_s
-      (fun action -> match action with
-        | `Update (remote_hash, local_hash, _) ->
-          Store.mem git remote_hash >>= fun has_remote_hash ->
-          Store.mem git local_hash >>= fun has_local_hash ->
-
-          if has_remote_hash && has_local_hash
-          then Lwt.return (Some action)
-          else Lwt.return None
-        | `Create (local_hash, _) ->
-          Store.mem git local_hash >>= function
-          | true -> Lwt.return (Some action)
-          | false -> Lwt.return None)
-      actions
-
   let update_and_create git ?capabilities ?headers ~references repository =
     let push_handler remote_refs =
       push_handler git references remote_refs >|= fun actions -> ([], actions) in
