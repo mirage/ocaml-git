@@ -110,7 +110,7 @@ module Make
       match rest with
       | [] -> Lwt.return acc
       | hash :: rest ->
-        if E.exists ((=) hash) close
+        if E.mem hash close
         then walk git close rest to_visit fadd fcompute acc
         else begin
           fcompute hash acc >>= fun acc' ->
