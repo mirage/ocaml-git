@@ -25,6 +25,7 @@ depends: [
   "digestif"   {>= "0.5"}
   "lru"        {>= "0.2.0"}
   "decompress" {>= "0.7"}
+  "base-unix"
   "hex"
   "ocplib-endian"
   "rresult"
