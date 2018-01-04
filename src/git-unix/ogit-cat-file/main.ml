@@ -159,7 +159,7 @@ let main show hash _ =
   | Error (#error as err) -> `Error (false, Fmt.strf "%a" pp_error err)
 
 let command =
-  let doc = "Clone a Git repository by the HTTP protocol." in
+  let doc = "Provide content or type and size information for repository objects" in
   let exits = Term.default_exits in
   Term.(ret (const main $ Flag.show $ Flag.value $ setup_log)),
   Term.info "ogit-cat-file" ~version:"v0.1" ~doc ~exits
