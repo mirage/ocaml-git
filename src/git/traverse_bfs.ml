@@ -33,7 +33,7 @@ module Make (S : STORE) = struct
          | rest -> walk close [ rest ] queue acc
          | exception Queue.Empty -> Lwt.return acc)
       | hash :: rest ->
-        if Hash.Set.exists ((=) hash) close
+        if Hash.Set.mem hash close
         then walk close rest queue acc
         else
           let close' = Hash.Set.add hash close in
