@@ -461,12 +461,21 @@ module Make_ext
              |> (fun uri -> Uri.with_host uri (Some host))
              |> (fun uri -> Uri.with_port uri port))
           >>= fun resp ->
-          consume (Web.Response.body resp) (Decoder.decode decoder (Decoder.HttpReportStatus sideband)) >>= function
+          let commands_refs =
+            List.map
+              (function
+                | `Create (_, s) -> s
+                | `Delete (_, s) -> s
+                | `Update (_, _, s) -> s)
+              commands |> List.map Store.Reference.to_string in
+
+          consume (Web.Response.body resp) (Decoder.decode decoder (Decoder.HttpReportStatus (commands_refs, sideband))) >>= function
           | Ok { Decoder.unpack = Ok (); commands; } ->
             Lwt.return (Ok commands)
           | Ok { Decoder.unpack = Error err; _ } ->
             Lwt.return (Error (`ReportStatus err))
-          | Error err -> Lwt.return (Error (`SmartDecoder err))
+          | Error err ->
+            Lwt.return (Error (`SmartDecoder err))
 
   let fetch git ?(shallow = []) ?stdout ?stderr ?headers ?(https = false)
       ?(capabilities=Default.capabilites)
