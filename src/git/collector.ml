@@ -47,6 +47,12 @@ module Make (S: STORE) = struct
     include (val Logs.src_log src : Logs.LOG)
   end
 
+  let cstruct_copy cs =
+    let ln = Cstruct.len cs in
+    let rs = Cstruct.create ln in
+    Cstruct.blit cs 0 rs 0 ln;
+    rs
+
   let delta ?(window = `Object 10) ?(depth = 50) git objects =
     let names = Hashtbl.create 1024 in
     let memory, window = match window with `Memory v -> true, v | `Object v -> false, v in
@@ -102,7 +108,7 @@ module Make (S: STORE) = struct
           Log.debug (fun l -> l ~header:"delta" "Ask to try to delta-ify the object %a." S.Hash.pp hash);
 
           Store.read_inflated git hash >|= function
-          | Some (_, raw) -> Some raw
+          | Some (_, raw) -> Some (cstruct_copy raw)
           | None -> None)
       (fun _ -> false)
       window depth
