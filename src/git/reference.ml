@@ -378,21 +378,14 @@ module IO
       with_open_w path @@ fun write ->
       Helper.safe_encoder_to_file ~limit:50 (module E)
         FS.File.write write raw state
-      >>= function
-      | Ok _ ->
-        FS.File.close write >|=
-        (function
-          | Ok () -> Ok ()
-          | Error sys_err -> Error (`SystemFile sys_err))
-      | Error err ->
-        FS.File.close write >|= function
-        | Error sys_err -> Error (`SystemFile sys_err)
-        | Ok ()         -> match err with
-          | `Writer sys_err -> Error (`SystemFile sys_err)
-          | `Encoder `Never -> assert false
-          | `Stack          ->
-            Fmt.kstrf (fun x -> Error (`SystemIO x))
-              "Impossible to store the reference: %a" pp reference
+      >|= function
+      | Ok _ -> Ok ()
+      | Error err -> match err with
+        | `Writer sys_err -> Error (`SystemFile sys_err)
+        | `Encoder `Never -> assert false
+        | `Stack          ->
+          Fmt.kstrf (fun x -> Error (`SystemIO x))
+            "Impossible to store the reference: %a" pp reference
 
   (* FIXME: why this doesn't use the encode??? *)
   let test_and_set ~root ?locks t ~test ~set =
