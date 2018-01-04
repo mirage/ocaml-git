@@ -68,6 +68,8 @@ module type S = sig
     | `Delete of (Store.Hash.t * Store.Reference.t)
     | `Update of (Store.Hash.t * Store.Hash.t * Store.Reference.t) ]
 
+ val pp_command: command Fmt.t
+
   val push:
     Store.t
     -> push:((Store.Hash.t * string * bool) list -> (Store.Hash.t list * command list) Lwt.t)
@@ -144,6 +146,20 @@ module Common
     let src = Logs.Src.create "git.common.sync" ~doc:"logs git's common sync event"
     include (val Logs.src_log src: Logs.LOG)
   end
+
+  type command =
+    [ `Create of (Store.Hash.t * Store.Reference.t)
+    | `Delete of (Store.Hash.t * Store.Reference.t)
+    | `Update of (Store.Hash.t * Store.Hash.t * Store.Reference.t) ]
+
+  let pp_command ppf = function
+    | `Create (hash, r) ->
+      Fmt.pf ppf "(`Create (%a, %a))" Store.Hash.pp hash Store.Reference.pp r
+    | `Delete (hash, r) ->
+      Fmt.pf ppf "(`Delete (%a, %a))" Store.Hash.pp hash Store.Reference.pp r
+    | `Update (_of, _to, r) ->
+      Fmt.pf ppf "(`Update (of:%a, to:%a, %a))"
+        Store.Hash.pp _of Store.Hash.pp _to Store.Reference.pp r
 
   open Lwt.Infix
 
@@ -267,16 +283,23 @@ module Common
 
     Lwt_list.filter_map_s
       (fun action -> match action with
-        | `Update (remote_hash, local_hash, _) ->
+        | `Update (remote_hash, local_hash, reference) ->
           Store.mem git remote_hash >>= fun has_remote_hash ->
           Store.mem git local_hash >>= fun has_local_hash ->
 
-          if has_remote_hash && has_local_hash
-          then Lwt.return (Some action)
+          Log.debug (fun l -> l ~header:"push_handler"
+                        "Check update command on %a for %a to %a (equal = %b)."
+                        Store.Reference.pp reference
+                        Store.Hash.pp remote_hash
+                        Store.Hash.pp local_hash
+                        Store.Hash.(equal remote_hash local_hash));
+
+          if has_remote_hash && has_local_hash && not (Store.Hash.equal remote_hash local_hash)
+          then Lwt.return (Some (action :> command))
           else Lwt.return None
         | `Create (local_hash, _) ->
           Store.mem git local_hash >>= function
-          | true -> Lwt.return (Some action)
+          | true -> Lwt.return (Some (action :> command))
           | false -> Lwt.return None)
       actions
 end
@@ -292,6 +315,11 @@ module Make (N: NET) (S: Minimal.S) = struct
   module Deflate = Store.Deflate
   module Revision = Revision.Make(Store)
   module PACKEncoder = Pack.MakePACKEncoder(Hash)(Deflate)
+
+  module Common
+    : module type of Common(Store)
+      with module Store = Store
+    = Common(Store)
 
   type error =
     [ `SmartPack of string
@@ -313,10 +341,9 @@ module Make (N: NET) (S: Minimal.S) = struct
     | `Ref err        -> Helper.ppe ~name:"`Ref" S.Ref.pp_error ppf err
     | `Not_found      -> Fmt.string ppf "`Not_found"
 
-  type command =
-    [ `Create of (Store.Hash.t * Store.Reference.t)
-    | `Delete of (Store.Hash.t * Store.Reference.t)
-    | `Update of (Store.Hash.t * Store.Hash.t * Store.Reference.t) ]
+  type command = Common.command
+
+  let pp_command = Common.pp_command
 
   type t =
     { socket: Net.socket
@@ -350,11 +377,6 @@ module Make (N: NET) (S: Minimal.S) = struct
       assert false (* TODO *)
     | #Client.result as result ->
       Lwt.return result
-
-  module Common
-    : module type of Common(Store)
-      with module Store = Store
-    = Common(Store)
 
   module Pack = struct
     let default_stdout raw =
@@ -560,25 +582,17 @@ module Make (N: NET) (S: Minimal.S) = struct
                 | `Flush -> Ok []
                 | result -> Error (`Push (err_unexpected_result result)))
           | (shallow, commands) ->
+            Log.debug (fun l ->
+                l ~header:"push_handler" "Sending command(s): %a."
+                  (Fmt.hvbox (Fmt.Dump.list pp_command)) commands
+              );
+
             List.map
               (function
                 | `Create (hash, reference) -> `Create (hash, Store.Reference.to_string reference)
                 | `Delete (hash, reference) -> `Delete (hash, Store.Reference.to_string reference)
                 | `Update (a, b, reference) -> `Update (a, b, Store.Reference.to_string reference))
               commands |> fun commands ->
-            Log.debug (fun l ->
-                let pp_command ppf = function
-                  | `Create (hash, refname) ->
-                    Fmt.pf ppf "(`Create (%a, %s))" S.Hash.pp hash refname
-                  | `Delete (hash, refname) ->
-                    Fmt.pf ppf "(`Delete (%a, %s))" S.Hash.pp hash refname
-                  | `Update (_of, _to, refname) ->
-                    Fmt.pf ppf "(`Update (of:%a, to:%a, %s))"
-                      S.Hash.pp _of S.Hash.pp _to refname
-                in
-                l ~header:"push_handler" "Sending command(s): %a."
-                  (Fmt.hvbox (Fmt.Dump.list pp_command)) commands
-              );
             let x, r =
               List.map (function
                   | `Create (hash, r) -> Client.Encoder.Create (hash, r)

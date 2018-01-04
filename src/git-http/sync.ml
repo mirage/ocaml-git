@@ -425,12 +425,10 @@ module Make_ext
             (fun _ -> Lwt.return ())
         in
 
-        List.map (function
-            | `Create (hash, reference) -> `Create (hash, Store.Reference.to_string reference)
-            | `Delete (hash, reference) -> `Delete (hash, Store.Reference.to_string reference)
-            | `Update (a, b, reference) -> `Update (a, b, Store.Reference.to_string reference))
-          commands
-        |> fun commands -> packer ~window:(`Object 10) ~depth:50 ~ofs_delta:true git refs.Decoder.refs commands >>= function
+        Log.debug (fun l -> l ~header:"push" "Send the request with these operations: %a."
+                      Fmt.(hvbox (Dump.list pp_command)) commands);
+
+        packer ~window:(`Object 10) ~depth:50 ~ofs_delta:true git refs.Decoder.refs commands >>= function
         | Error err -> Lwt.return (Error (`StorePack err))
         | Ok (stream, _) ->
           let stream () = stream () >>= function
@@ -440,9 +438,12 @@ module Make_ext
 
           let x, r =
             List.map (function
-                | `Create (hash, reference) -> Encoder.Create (hash, reference)
-                | `Delete (hash, reference) -> Encoder.Delete (hash, reference)
-                | `Update (_of, _to, reference) -> Encoder.Update (_of, _to, reference))
+                | `Create (hash, reference) ->
+                  Encoder.Create (hash, Store.Reference.to_string reference)
+                | `Delete (hash, reference) ->
+                  Encoder.Delete (hash, Store.Reference.to_string reference)
+                | `Update (_of, _to, reference) ->
+                  Encoder.Update (_of, _to, Store.Reference.to_string reference))
               commands
             |> fun commands -> List.hd commands, List.tl commands
           in
