@@ -43,6 +43,7 @@ sig
   val hashes: t -> Hash.t list
   val to_list: t -> entry list
   val of_list: entry list -> t
+  val iter: (entry -> unit) -> t -> unit
 end
 
 module Make (H: S.HASH with type Digest.buffer = Cstruct.t
@@ -100,6 +101,9 @@ module Make (H: S.HASH with type Digest.buffer = Cstruct.t
     | _ -> raise (Invalid_argument "perm_of_string")
 
   external to_list: t -> entry list = "%identity"
+
+  let iter f tree =
+    List.iter f tree
 
   type value =
     | Contents: string -> value

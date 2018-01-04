@@ -82,6 +82,7 @@ module type S = sig
 
   val to_list : t -> entry list
   val of_list : entry list -> t
+  val iter: (entry -> unit) -> t -> unit
 end
 
 module Make (H : S.HASH): S with module Hash = H
