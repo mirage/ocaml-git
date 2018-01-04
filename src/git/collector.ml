@@ -47,15 +47,17 @@ module Make (S: STORE) = struct
     include (val Logs.src_log src : Logs.LOG)
   end
 
-  let delta ?(window = `Object 10) ?(depth = 50) git objects =
-    let open Lwt_result in
+  let cstruct_copy cs =
+    let ln = Cstruct.len cs in
+    let rs = Cstruct.create ln in
+    Cstruct.blit cs 0 rs 0 ln;
+    rs
 
+  let delta ?(window = `Object 10) ?(depth = 50) git objects =
     let names = Hashtbl.create 1024 in
     let memory, window = match window with `Memory v -> true, v | `Object v -> false, v in
 
-    let make value =
-      let hash = Store.Value.digest value in
-
+    let make (hash, value) =
       let name =
         try Some (Hashtbl.find names hash)
         with Not_found -> None
@@ -79,37 +81,46 @@ module Make (S: STORE) = struct
       Log.debug (fun l -> l ~header:"delta" "Add the object %a in the new PACK file."
                     S.Hash.pp hash);
 
-      Lwt.return entry
-    in
+      entry in
+
+    let canonicalize entries =
+      List.fold_left
+        (fun acc o ->
+           let hash = Store.Value.digest o in
+           Store.Hash.Map.add hash o acc)
+        Store.Hash.Map.empty entries
+      |> Store.Hash.Map.bindings in
 
     let ( >?= ) a f = Lwt_result.map_err f a in
 
-    Lwt.Infix.(Lwt_list.iter_p (function
-        | Store.Value.Tree tree ->
-          Lwt_list.iter_p
+    canonicalize objects
+    |> fun objects ->
+    List.iter
+      (function
+        | _, Store.Value.Tree tree ->
+          Store.Value.Tree.iter
             (fun entry ->
                Hashtbl.add names
                  entry.Store.Value.Tree.node
-                 entry.Store.Value.Tree.name;
-               Lwt.return ())
-            (Store.Value.Tree.to_list tree)
-        | _ -> Lwt.return ())
-        objects >|= fun () -> Ok ())
-    >>= fun () ->
-    Lwt.Infix.(Lwt_list.map_p make objects >|= fun entries -> Ok entries)
-    >>= fun entries ->
-    (S.PACKEncoder.Delta.deltas
-       ~memory
-       entries
-       Lwt.Infix.(fun hash ->
-           Log.debug (fun l -> l ~header:"delta" "Ask to try to delta-ify the object %a." S.Hash.pp hash);
+                 entry.Store.Value.Tree.name)
+            tree
+        | _ -> ())
+      objects
+    |> fun () ->
+    List.map make objects
+    |> fun entries ->
+    S.PACKEncoder.Delta.deltas
+      ~memory
+      entries
+      Lwt.Infix.(fun hash ->
+          Log.debug (fun l -> l ~header:"delta" "Ask to try to delta-ify the object %a." S.Hash.pp hash);
 
-           Store.read_inflated git hash >|= function
-           | Some (_, raw) -> Some raw
-           | None -> None)
-       (fun _ -> false)
-       window depth
-     >?= fun err -> `Delta err)
+          Store.read_inflated git hash >|= function
+          | Some (_, raw) -> Some (cstruct_copy raw)
+          | None -> None)
+      (fun _ -> false)
+      window depth
+    >?= (fun err -> `Delta err)
 
   let delta_all ?window ?depth git =
     let open Lwt.Infix in
