@@ -163,43 +163,154 @@ module Common
 
   open Lwt.Infix
 
+  module Node =
+  struct
+    type t =
+      { value: Store.Value.t
+      ; mutable color: [ `Black | `White ] }
+
+    let compare a b = match a.value, b.value with
+      | Store.Value.Commit a, Store.Value.Commit b ->
+        Store.Value.Commit.compare_by_date b a
+      | a, b -> Store.Value.compare a b
+  end
+
+  module Pq = Psq.Make(Store.Hash)(Node)
+  module Q = Minienc.Queue
+
+  exception Store of Store.error
+
+  let packer git exclude source =
+    let store = Hashtbl.create 128 in
+
+    let memoize get hash =
+      try let ret = Hashtbl.find store hash in Lwt.return ret
+      with Not_found ->
+        get hash >>= function
+        | Ok value ->
+          let node = { Node.value; color = `White } in
+          Hashtbl.add store hash node;
+          Lwt.return node
+        | Error err ->
+          Log.err (fun l -> l "Got an error when we get the object: %a."
+                      Store.Hash.pp hash);
+          Lwt.fail (Store err) in
+
+    let preds = function
+      | Store.Value.Commit commit ->
+        Store.Value.Commit.tree commit :: Store.Value.Commit.parents commit
+      | Store.Value.Tree tree ->
+        List.map (fun { Store.Value.Tree.node; _ } -> node) (Store.Value.Tree.to_list tree)
+      | Store.Value.Tag tag ->
+        [ Store.Value.Tag.obj tag ]
+      | Store.Value.Blob _ -> [] in
+
+    let get = memoize (Store.read git) in
+
+    let all_blacks pq =
+      Pq.fold (fun _ -> function
+          | { Node.color = `Black; _ } -> (&&) true
+          | _ -> (&&) false) true pq in
+
+    let propagate { Node.value; color; } =
+      let rec go q = match Q.shift q with
+        | hash, q ->
+          (try let node = Hashtbl.find store hash in
+             node.Node.color <- color;
+             go (List.fold_left Q.push q (preds node.Node.value))
+           with Not_found -> go q)
+        | exception Q.Empty -> () in
+      go (Q.of_list (preds value)) in
+
+    let propagate_snapshot { Node.value; color; } =
+      let rec go q = match Q.shift q with
+        | hash, q ->
+          (try let node = Hashtbl.find store hash in
+             Lwt.return node
+           with Not_found -> get hash) >>= fun node ->
+          node.Node.color <- color;
+          go (List.fold_left Q.push q (preds node.Node.value))
+        | exception Q.Empty -> Lwt.return () in
+      go (Q.of_list (preds value)) in
+
+    let rec garbage pq =
+      if all_blacks pq
+      then Lwt.return ()
+      else match Pq.pop pq with
+        | Some ((_, { Node.value; color = `Black }), pq) ->
+          Lwt_list.fold_left_s
+            (fun pq hash -> get hash >>= function
+               | { Node.value = Store.Value.Tree _; _ } as node ->
+                 node.Node.color <- `Black;
+                 propagate_snapshot node >>= fun () ->
+                 Lwt.return pq
+               | { Node.color = `White; _ } as node ->
+                 node.Node.color <- `Black;
+                 propagate node;
+                 Lwt.return (Pq.add hash node pq)
+               | node ->
+                 Lwt.return (Pq.add hash node pq))
+            pq (preds value) >>= garbage
+        | Some ((_, { Node.value; _ }), pq) ->
+          Lwt_list.fold_left_s
+            (fun pq hash -> get hash >>= fun node -> Lwt.return (Pq.add hash node pq))
+            pq (preds value) >>= garbage
+        | None -> Lwt.return () in
+
+    let collect () =
+      Hashtbl.fold
+        (fun hash -> function
+           | { Node.color = `White; value } -> Store.Hash.Map.add hash value
+           | _ -> fun acc -> acc)
+        store Store.Hash.Map.empty in
+
+    Lwt_list.map_s
+      (fun hash -> get hash >>= function
+         | { Node.value = Store.Value.Commit commit; _ } as node ->
+           get (Store.Value.Commit.tree commit) >>= fun node_root_tree ->
+           propagate_snapshot node_root_tree >>= fun () ->
+           Lwt.return (hash, node)
+         | node -> Lwt.return (hash, node))
+      source >>= fun source ->
+    Lwt_list.map_s
+      (fun hash -> get hash >>= function
+         | { Node.value = Store.Value.Commit commit; _ } as node ->
+           node.Node.color <- `Black;
+           get (Store.Value.Commit.tree commit) >>= fun node_root_tree ->
+           node_root_tree.Node.color <- `Black;
+           propagate_snapshot node_root_tree >>= fun () ->
+           Lwt.return (hash, node)
+         | node -> Lwt.return (hash, node))
+      exclude >|= List.append source >|= Pq.of_list >>= fun pq ->
+
+    garbage pq >|= collect
+
   let packer ?(window = `Object 10) ?(depth = 50) git ~ofs_delta:_ remote commands =
-    let commands' =
-      (List.map (fun (hash, refname, _) -> `Delete (hash, refname)) remote)
-      @ commands
-    in
+    let exclude =
+      List.fold_left
+        (fun exclude (hash, _, _) -> Store.Hash.Set.add hash exclude)
+        Store.Hash.Set.empty remote
+      |> fun exclude -> List.fold_left
+        (fun exclude -> function
+           | `Delete (hash, _) -> Store.Hash.Set.add hash exclude
+           | `Update (hash, _, _) -> Store.Hash.Set.add hash exclude
+           | `Create _ -> exclude)
+        exclude commands
+                        |> Store.Hash.Set.elements in
 
-    (* XXX(dinosaure): we don't want to delete remote references but
-       we want to exclude any commit already stored remotely. Se, we «
-       delete » remote references from the result set. *)
+    let source =
+      List.fold_left
+        (fun source -> function
+           | `Update (_, hash, _) -> Store.Hash.Set.add hash source
+           | `Create (hash, _) -> Store.Hash.Set.add hash source
+           | `Delete _ -> source)
+        Store.Hash.Set.empty commands
+      |> Store.Hash.Set.elements in
 
-    Lwt_list.fold_left_s (fun acc -> function
-        | `Create _ -> Lwt.return acc
-        | `Update (hash, _, _) ->
-          Revision.(Range.normalize git (Range.Include (from_hash hash)))
-          >|= Store.Hash.Set.union acc
-        | `Delete (hash, _) ->
-          Revision.(Range.normalize git (Range.Include (from_hash hash)))
-          >|= Store.Hash.Set.union acc
-      ) Store.Hash.Set.empty commands'
-    >>= fun negative ->
-    Lwt_list.fold_left_s (fun acc -> function
-        | `Create (hash, _) ->
-          Revision.(Range.normalize git (Range.Include (from_hash hash)))
-          >|= Store.Hash.Set.union acc
-        | `Update (_, hash, _) ->
-          Revision.(Range.normalize git (Range.Include (from_hash hash)))
-          >|= Store.Hash.Set.union acc
-        | `Delete _ -> Lwt.return acc
-      ) Store.Hash.Set.empty commands
-    >|= (fun positive -> Revision.Range.E.diff positive negative)
-    >>= fun elements ->
-    Lwt_list.fold_left_s (fun acc commit ->
-        Store.fold git
-          (fun acc ?name:_ ~length:_ _ value -> Lwt.return (value :: acc))
-          ~path:(Fpath.v "/") acc commit
-      ) [] (Store.Hash.Set.elements elements)
-    >>= fun entries -> Store.Pack.make git ~window ~depth entries
+    packer git exclude source
+    >|= Store.Hash.Map.bindings
+    >|= List.map snd
+    >>= Store.Pack.make git ~window ~depth
 
   let want_handler git choose remote_refs =
     (* XXX(dinosaure): in this /engine/, for each remote references,
