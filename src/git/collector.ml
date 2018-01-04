@@ -57,9 +57,7 @@ module Make (S: STORE) = struct
     let names = Hashtbl.create 1024 in
     let memory, window = match window with `Memory v -> true, v | `Object v -> false, v in
 
-    let make value =
-      let hash = Store.Value.digest value in
-
+    let make (hash, value) =
       let name =
         try Some (Hashtbl.find names hash)
         with Not_found -> None
@@ -83,14 +81,23 @@ module Make (S: STORE) = struct
       Log.debug (fun l -> l ~header:"delta" "Add the object %a in the new PACK file."
                     S.Hash.pp hash);
 
-      entry
-    in
+      entry in
+
+    let canonicalize entries =
+      List.fold_left
+        (fun acc o ->
+           let hash = Store.Value.digest o in
+           Store.Hash.Map.add hash o acc)
+        Store.Hash.Map.empty entries
+      |> Store.Hash.Map.bindings in
 
     let ( >?= ) a f = Lwt_result.map_err f a in
 
+    canonicalize objects
+    |> fun objects ->
     List.iter
       (function
-        | Store.Value.Tree tree ->
+        | _, Store.Value.Tree tree ->
           Store.Value.Tree.iter
             (fun entry ->
                Hashtbl.add names
@@ -99,7 +106,8 @@ module Make (S: STORE) = struct
             tree
         | _ -> ())
       objects
-    |> fun () -> List.map make objects
+    |> fun () ->
+    List.map make objects
     |> fun entries ->
     S.PACKEncoder.Delta.deltas
       ~memory
