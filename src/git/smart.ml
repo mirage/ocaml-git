@@ -874,13 +874,19 @@ struct
       | Some 'A', `Multi_ack_detailed ->
         let (hash, detail) = multi_ack_detailed decoder in
         let rest = List.filter (fun hash' -> not (Hash.equal hash hash')) rest in
-        let next = p_negociation ~mode k rest { acks with acks = (hash, detail) :: acks.acks } in
-        p_pkt_line next decoder
+        let next =
+          if List.length rest > 0
+          then p_pkt_line (p_negociation ~mode k rest { acks with acks = (hash, detail) :: acks.acks })
+          else k { acks with acks = List.rev acks.acks } ~pkt:`Empty in
+        next decoder
       | Some 'A', `Multi_ack ->
         let hash = multi_ack decoder in
         let rest = List.filter (fun hash' -> not (Hash.equal hash hash')) rest in
-        let next = p_negociation ~mode k rest { acks with acks = (hash, `Continue) :: acks.acks } in
-        p_pkt_line next decoder
+        let next =
+          if List.length rest > 0
+          then p_pkt_line (p_negociation ~mode k rest { acks with acks = (hash, `Continue) :: acks.acks })
+          else k { acks with acks = List.rev acks.acks } ~pkt:`Empty in
+        next decoder
       | Some 'A', `Ack ->
         let hash = ack decoder in
         k { acks with acks = [ (hash, `ACK) ] } ~pkt:`Empty decoder
@@ -1297,7 +1303,7 @@ struct
                                ; shallow      = http_upload_request.shallow
                                ; deep         = http_upload_request.deep }
      @@ (w_list (w_has ~lf:true) http_upload_request.has)
-     @@ (if List.length http_upload_request.has = 0 || at_the_end = `Done
+     @@ (if at_the_end = `Done
          then w_done_and_lf k
          else pkt_flush k))
       encoder

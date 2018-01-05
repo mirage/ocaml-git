@@ -572,11 +572,7 @@ module Make_ext
              |> (fun uri -> Uri.with_port uri port))
         in
 
-        negociation_request `Flush has >>= fun resp ->
-
-        Log.debug (fun l -> l ~header:"fetch" "Receiving the first negotiation response.");
-
-        let result resp =
+        let negociation_result resp =
           consume (Web.Response.body resp)
             (Decoder.decode decoder Decoder.NegociationResult) >>= function
           | Error err -> Lwt.return (Error (`SmartDecoder err))
@@ -585,32 +581,68 @@ module Make_ext
             Lwt_result.(populate ?stdout ?stderr git stream >>= fun (_, n) -> Lwt.return (Ok (first :: rest, n)))
         in
 
-        let rec loop ?(done_or_flush = `Flush) state resp = match done_or_flush with
-          | `Done -> result resp
-          | `Flush ->
-            Lwt_mvar.take keeper >>= fun has -> Lwt_mvar.put keeper has >>= fun () ->
+        match has with
+        | [] ->
+          negociation_request `Done []
+          >>= negociation_result
+        | has ->
+          negociation_request `Flush has >>= fun resp ->
 
-            Log.debug (fun l -> l ~header:"fetch" "Receiving a negotiation response.");
+          Log.debug (fun l -> l ~header:"fetch" "Receiving the first negotiation response.");
 
-            consume (Web.Response.body resp)
-              (Decoder.decode decoder (Decoder.Negociation (has, ack_mode))) >>= function
-            | Error err ->
-              Lwt.return (Error (`SmartDecoder err))
-            | Ok acks ->
-              Log.debug (fun l -> l ~header:"fetch" "ACK response received: %a." Decoder.pp_acks acks);
+          let rec loop ?(done_or_flush = `Flush) state resp = match done_or_flush with
+            | `Done ->
+              Lwt_mvar.take keeper >>= fun has -> Lwt_mvar.put keeper has >>= fun () ->
 
-              negociate acks state >>= function
-              | `Ready, _ -> result resp
-              | `Again has', state ->
-                Lwt_mvar.take keeper >>= fun has ->
-                let has = has @ has' in
-                Lwt_mvar.put keeper has >>= fun () ->
+              Log.debug (fun l -> l ~header:"fetch"
+                            "Receive the final negociation response from \
+                             the server.");
 
-                negociation_request `Flush has >>= loop state
-              | `Done, _ -> result resp
-        in
+              consume (Web.Response.body resp)
+                (Decoder.decode decoder (Decoder.Negociation (has, ack_mode)))
+              >>= (function
+                  | Error err ->
+                    Lwt.return (Error (`SmartDecoder err))
+                  | Ok acks ->
+                    Log.debug (fun l -> l ~header:"fetch"
+                                  "Final ACK response received: %a."
+                                  Decoder.pp_acks acks);
+                    negociation_result resp)
+            | `Flush ->
+              Lwt_mvar.take keeper >>= fun has -> Lwt_mvar.put keeper has >>= fun () ->
 
-        loop ~done_or_flush:(if List.length has = 0 then `Done else `Flush) nstate resp
+              Log.debug (fun l -> l ~header:"fetch" "Receiving a negotiation response.");
+
+              consume (Web.Response.body resp)
+                (Decoder.decode decoder (Decoder.Negociation (has, ack_mode))) >>= function
+              | Error err ->
+                Lwt.return (Error (`SmartDecoder err))
+              | Ok acks ->
+                Log.debug (fun l -> l ~header:"fetch" "ACK response received: %a." Decoder.pp_acks acks);
+
+                negociate acks state >>= function
+                | `Ready, _ ->
+                  Log.debug (fun l -> l ~header:"fetch" "Ready to download the PACK file.");
+                  negociation_result resp
+                | `Again has', state ->
+                  Log.debug
+                    (fun l -> l ~header:"fetch" "Try again a new common \
+                                                 trunk between the \
+                                                 client and the server.");
+                  Lwt_mvar.take keeper >>= fun has ->
+                  let has = has @ has' in
+                  Lwt_mvar.put keeper has >>= fun () ->
+
+                  negociation_request `Flush has >>= loop state
+                | `Done, _ ->
+                  Lwt_mvar.take keeper >>= fun _ ->
+                  let has = List.map (fun (hash, _) -> hash) acks.Decoder.acks in
+                  Lwt_mvar.put keeper has >>= fun () ->
+
+                  negociation_request `Done has >>= loop ~done_or_flush:`Done state
+          in
+
+          loop nstate resp
 
   let clone_ext git ?stdout ?stderr ?headers ?(https = false) ?port
       ?(reference = Store.Reference.master) ?capabilities

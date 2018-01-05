@@ -94,7 +94,7 @@ module Make (G: Minimal.S): S with module Store = G = struct
     let compare a b =
       Store.Value.Commit.compare b.commit a.commit
 
-    let _pp ppf { commit; flags; } =
+    let pp ppf { commit; flags; } =
       Fmt.pf ppf "{ @[<hov>commit = %a;@ \
                            flags = [ %a ];@] }"
         (Fmt.hvbox Store.Value.Commit.pp) commit
@@ -146,6 +146,12 @@ module Make (G: Minimal.S): S with module Store = G = struct
   type rev =
     { pq              : Pq.t
     ; non_common_revs : int }
+
+  let pp_rev ppf rev =
+    Fmt.pf ppf "{ @[<hov>pq = %a;@ \
+                  non_common_revs = %d;@] }"
+      (Fmt.hvbox (Pq.pp Fmt.Dump.(pair Store.Hash.pp V.pp))) rev.pq
+      rev.non_common_revs
 
   let push hash value mark rev =
     if (value.V.flags :> int) land mark = 0
@@ -264,6 +270,24 @@ module Make (G: Minimal.S): S with module Store = G = struct
     ; rev      : rev  (* priority queue *)
     ; in_fly   : Store.Hash.t list }
   type nonrec acks = Store.Hash.t acks
+
+  let _pp_state ppf state =
+    Fmt.pf ppf "{ @[<hov>ready = %b;@ \
+                  continue = %b;@ \
+                  finish = %b;@ \
+                  count = %d;@ \
+                  flush = %d;@ \
+                  vain = %d;@ \
+                  rev = %a;@ \
+                  in_fly = %a;@] }"
+      state.ready
+      state.continue
+      state.finish
+      state.count
+      state.flush
+      state.vain
+      (Fmt.hvbox pp_rev) state.rev
+      Fmt.Dump.(list Store.Hash.pp) state.in_fly
 
   (* XXX(dinosaure): to be clear, this implementation is very bad and we need to
      change it (TODO). For example, the [in_fly] field is used only one time (in
