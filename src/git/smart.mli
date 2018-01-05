@@ -226,7 +226,7 @@ sig
     | NegociationResult      : negociation_result transaction
     | PACK                   : side_band -> flow transaction
     | ReportStatus           : side_band -> report_status transaction
-    | HttpReportStatus       : side_band -> report_status transaction
+    | HttpReportStatus       : string list * side_band -> report_status transaction
 
   (** The ACK mode type to describe which mode is shared by the client
       and the server. *)

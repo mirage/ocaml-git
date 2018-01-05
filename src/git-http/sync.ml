@@ -425,12 +425,10 @@ module Make_ext
             (fun _ -> Lwt.return ())
         in
 
-        List.map (function
-            | `Create (hash, reference) -> `Create (hash, Store.Reference.to_string reference)
-            | `Delete (hash, reference) -> `Delete (hash, Store.Reference.to_string reference)
-            | `Update (a, b, reference) -> `Update (a, b, Store.Reference.to_string reference))
-          commands
-        |> fun commands -> packer ~window:(`Object 10) ~depth:50 ~ofs_delta:true git refs.Decoder.refs commands >>= function
+        Log.debug (fun l -> l ~header:"push" "Send the request with these operations: %a."
+                      Fmt.(hvbox (Dump.list pp_command)) commands);
+
+        packer ~window:(`Object 10) ~depth:50 ~ofs_delta:true git refs.Decoder.refs commands >>= function
         | Error err -> Lwt.return (Error (`StorePack err))
         | Ok (stream, _) ->
           let stream () = stream () >>= function
@@ -440,9 +438,12 @@ module Make_ext
 
           let x, r =
             List.map (function
-                | `Create (hash, reference) -> Encoder.Create (hash, reference)
-                | `Delete (hash, reference) -> Encoder.Delete (hash, reference)
-                | `Update (_of, _to, reference) -> Encoder.Update (_of, _to, reference))
+                | `Create (hash, reference) ->
+                  Encoder.Create (hash, Store.Reference.to_string reference)
+                | `Delete (hash, reference) ->
+                  Encoder.Delete (hash, Store.Reference.to_string reference)
+                | `Update (_of, _to, reference) ->
+                  Encoder.Update (_of, _to, Store.Reference.to_string reference))
               commands
             |> fun commands -> List.hd commands, List.tl commands
           in
@@ -460,12 +461,21 @@ module Make_ext
              |> (fun uri -> Uri.with_host uri (Some host))
              |> (fun uri -> Uri.with_port uri port))
           >>= fun resp ->
-          consume (Web.Response.body resp) (Decoder.decode decoder (Decoder.HttpReportStatus sideband)) >>= function
+          let commands_refs =
+            List.map
+              (function
+                | `Create (_, s) -> s
+                | `Delete (_, s) -> s
+                | `Update (_, _, s) -> s)
+              commands |> List.map Store.Reference.to_string in
+
+          consume (Web.Response.body resp) (Decoder.decode decoder (Decoder.HttpReportStatus (commands_refs, sideband))) >>= function
           | Ok { Decoder.unpack = Ok (); commands; } ->
             Lwt.return (Ok commands)
           | Ok { Decoder.unpack = Error err; _ } ->
             Lwt.return (Error (`ReportStatus err))
-          | Error err -> Lwt.return (Error (`SmartDecoder err))
+          | Error err ->
+            Lwt.return (Error (`SmartDecoder err))
 
   let fetch git ?(shallow = []) ?stdout ?stderr ?headers ?(https = false)
       ?(capabilities=Default.capabilites)
@@ -767,46 +777,6 @@ module Make_ext
                        Fmt.Dump.(list (pair Store.Reference.pp (list Store.Reference.pp)))
                        missed);
         Lwt.return (Ok (`Sync updated))
-
-  let push_handler git references remote_refs =
-    Store.Ref.list git >>= fun local_refs ->
-    let local_refs = List.fold_left
-        (fun local_refs (local_ref, local_hash) ->
-           Store.Reference.Map.add local_ref local_hash local_refs)
-        Store.Reference.Map.empty local_refs in
-
-    Lwt_list.filter_map_p (function
-        | (remote_hash, remote_ref, false) -> Lwt.return (Some (remote_ref, remote_hash))
-        | _ -> Lwt.return None)
-      remote_refs
-    >>= fun remote_refs ->
-    let actions =
-      Store.Reference.Map.fold
-        (fun local_ref local_hash actions ->
-           try let remote_refs' = Store.Reference.Map.find local_ref references in
-             List.fold_left (fun actions remote_ref ->
-                 try let remote_hash = List.assoc remote_ref remote_refs in
-                   `Update (remote_hash, local_hash, remote_ref) :: actions
-                 with Not_found -> `Create (local_hash, remote_ref) :: actions)
-               actions remote_refs'
-            with Not_found -> actions)
-        local_refs []
-    in
-
-    Lwt_list.filter_map_s
-      (fun action -> match action with
-        | `Update (remote_hash, local_hash, _) ->
-          Store.mem git remote_hash >>= fun has_remote_hash ->
-          Store.mem git local_hash >>= fun has_local_hash ->
-
-          if has_remote_hash && has_local_hash
-          then Lwt.return (Some action)
-          else Lwt.return None
-        | `Create (local_hash, _) ->
-          Store.mem git local_hash >>= function
-          | true -> Lwt.return (Some action)
-          | false -> Lwt.return None)
-      actions
 
   let update_and_create git ?capabilities ?headers ~references repository =
     let push_handler remote_refs =

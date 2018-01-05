@@ -59,6 +59,9 @@ module type S = sig
     | `Update of (Store.Hash.t * Store.Hash.t * Store.Reference.t)
     (** To update a reference from a commit hash to a new commit hash. *) ]
 
+  val pp_command: command Fmt.t
+  (** Pretty-printer of {!command}. *)
+
   val push:
     Store.t
     -> push:((Store.Hash.t * string * bool) list -> (Store.Hash.t list * command list) Lwt.t)
@@ -226,15 +229,20 @@ module Common (G: Minimal.S) :
 sig
   module Store : Minimal.S
 
+  type command =
+    [ `Create of (Store.Hash.t * Store.Reference.t)
+    | `Delete of (Store.Hash.t * Store.Reference.t)
+    | `Update of (Store.Hash.t * Store.Hash.t * Store.Reference.t)
+    ]
+
+  val pp_command: command Fmt.t
+
   val packer:
     ?window:[ `Object of int | `Memory of int ] ->
     ?depth:int ->
     Store.t ->
     ofs_delta:bool ->
-    (Store.Hash.t * string * bool) list ->
-    [ `Create of (Store.Hash.t * string)
-    | `Update of (Store.Hash.t * Store.Hash.t * string)
-    | `Delete of (Store.Hash.t * string) ] list ->
+    (Store.Hash.t * string * bool) list -> command list ->
     (Store.Pack.stream *(Crc32.t * int64) Store.Pack.Graph.t Lwt_mvar.t, Store.Pack.error) result Lwt.t
 
   val want_handler:
@@ -256,8 +264,7 @@ sig
     Store.t ->
     Store.Reference.t list Store.Reference.Map.t ->
     (Store.Hash.t * Store.Reference.t * bool) list ->
-    [ `Create of (Store.Hash.t * Store.Reference.t)
-    | `Update of (Store.Hash.t * Store.Hash.t * Store.Reference.t) ] list Lwt.t
+    command list Lwt.t
 end with module Store = G
 
 module Make (N: NET) (S: Minimal.S)
