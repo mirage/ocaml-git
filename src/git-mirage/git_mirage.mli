@@ -6,6 +6,4 @@ module Sync (C: Net.CONDUIT) (S: Git.S): Git.Sync.S
   with module Store = S
    and module Net = Net.Make(C)
 
-module Store (G: FS.GAMMA) (X: FS.S): Git.Store.S
-  with module Hash = SHA1
-   and module Lock = Git.Mem.Lock
+module Store (G: FS.GAMMA) (X: FS.S): Git.Store.S with module Hash = SHA1

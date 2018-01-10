@@ -32,8 +32,8 @@ module type S = sig
     with type t = t
      and type init = int * t
 
-  type error = [ `SystemFile of FS.File.error
-               | `SystemIO of string
+  type error = [ `FS of FS.error
+               | `IO of string
                | D.error ]
 
   val pp_error: error Fmt.t
@@ -146,13 +146,13 @@ module Make (H: S.HASH) (FS: S.FS): S with module Hash = H and module FS = FS
   module E = Helper.MakeEncoder(M)
 
   type error =
-    [ `SystemFile of FS.File.error
-    | `SystemIO of string
+    [ `FS of FS.error
+    | `IO of string
     | D.error ]
 
   let pp_error ppf = function
-    | `SystemFile sys_err -> Helper.ppe ~name:"`SystemFile" FS.File.pp_error ppf sys_err
-    | `SystemIO sys_err -> Helper.ppe ~name:"`SystemIO" Fmt.string ppf sys_err
+    | `FS sys_err     -> Helper.ppe ~name:"`FS" FS.pp_error ppf sys_err
+    | `IO sys_err     -> Helper.ppe ~name:"`IO" Fmt.string ppf sys_err
     | #D.error as err -> D.pp_error ppf err
 
   let read ~root ~dtmp ~raw =
@@ -161,13 +161,13 @@ module Make (H: S.HASH) (FS: S.FS): S with module Hash = H and module FS = FS
     let open Lwt.Infix in
 
     FS.File.open_r ~mode:0o400 Fpath.(root / "packed-refs") >>= function
-    | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
+    | Error sys_err -> Lwt.return (Error (`FS sys_err))
     | Ok read ->
       let rec loop decoder = match D.eval decoder with
         | `Await decoder ->
           FS.File.read raw read >>=
           (function
-            | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
+            | Error sys_err -> Lwt.return (Error (`FS sys_err))
             | Ok 0 -> loop (D.finish decoder)
             | Ok n -> match D.refill (Cstruct.sub raw 0 n) decoder with
               | Ok decoder -> loop decoder
@@ -204,7 +204,7 @@ module Make (H: S.HASH) (FS: S.FS): S with module Hash = H and module FS = FS
     end in
 
     FS.File.open_w ~mode:0o644 Fpath.(root / "packed-refs") >>= function
-    | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
+    | Error sys_err -> Lwt.return (Error (`FS sys_err))
     | Ok write ->
       Helper.safe_encoder_to_file
         ~limit:50 (module E) FS.File.write write raw state
@@ -212,12 +212,12 @@ module Make (H: S.HASH) (FS: S.FS): S with module Hash = H and module FS = FS
       | Ok _ -> FS.File.close write >>=
         (function
           | Ok () -> Lwt.return (Ok ())
-          | Error sys_err -> Lwt.return (Error (`SystemFile sys_err)))
+          | Error sys_err -> Lwt.return (Error (`FS sys_err)))
       | Error err ->
         FS.File.close write >>= function
-        | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
+        | Error sys_err -> Lwt.return (Error (`FS sys_err))
         | Ok () -> match err with
-          | `Stack -> Lwt.return (Error (`SystemIO "Impossible to store the packed-refs file"))
-          | `Writer sys_err -> Lwt.return (Error (`SystemFile sys_err))
+          | `Stack -> Lwt.return (Error (`IO "Impossible to store the packed-refs file"))
+          | `Writer sys_err -> Lwt.return (Error (`FS sys_err))
           | `Encoder `Never -> assert false
 end

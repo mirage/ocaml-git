@@ -49,9 +49,8 @@ module type LOOSE = sig
      and type t = Value.Make(Hash)(Inflate)(Deflate).t
 
   type error =
-    [ `SystemFile of FS.File.error
-    | `SystemDirectory of FS.Dir.error
-    | `SystemIO of string
+    [ `FS of FS.error
+    | `IO of string
     | Value.D.error
     | Value.E.error ]
 
@@ -142,12 +141,10 @@ module type PACK = sig
     | `PackInfo of Pack_info.error
     | `IdxDecoder of IDXDecoder.error
     | `IdxEncoder of IDXEncoder.error
-    | `SystemFile of FS.File.error
-    | `SystemMapper of FS.Mapper.error
-    | `SystemDir of FS.Dir.error
+    | `FS of FS.error
     | `Invalid_hash of Hash.t
     | `Delta of PACKEncoder.Delta.error
-    | `SystemIO of string
+    | `IO of string
     | `Integrity of string
     | `Not_found ]
 
@@ -187,9 +184,7 @@ module type S = sig
   module Hash: S.HASH
   module Inflate: S.INFLATE
   module Deflate: S.DEFLATE
-  module Lock: S.LOCK
-
-  module FS: S.FS with type File.lock = Lock.elt
+  module FS: S.FS
 
   module Value: Value.S
     with module Hash = Hash
@@ -203,7 +198,6 @@ module type S = sig
 
   module Reference: Reference.IO
     with module Hash = Hash
-     and module Lock = Lock
      and module FS = FS
 
   module PACKDecoder: Unpack.DECODER
@@ -314,43 +308,37 @@ module type S = sig
     val graph_p:
          dtmp:Cstruct.t
       -> raw:Cstruct.t
-      -> ?locks:Lock.t
       -> t -> (Hash.t Reference.Map.t, error) result Lwt.t
-    val graph: ?locks:Lock.t -> t -> (Hash.t Reference.Map.t, error) result Lwt.t
+    val graph: t -> (Hash.t Reference.Map.t, error) result Lwt.t
     val normalize: Hash.t Reference.Map.t -> Reference.head_contents -> (Hash.t, error) result Lwt.t
     val list_p:
          dtmp:Cstruct.t
       -> raw:Cstruct.t
-      -> ?locks:Lock.t
       -> t -> (Reference.t * Hash.t) list Lwt.t
-    val list_s: ?locks:Lock.t -> t -> (Reference.t * Hash.t) list Lwt.t
-    val list: ?locks:Lock.t -> t -> (Reference.t * Hash.t) list Lwt.t
+    val list_s: t -> (Reference.t * Hash.t) list Lwt.t
+    val list: t -> (Reference.t * Hash.t) list Lwt.t
     val remove_p:
          dtmp:Cstruct.t
       -> raw:Cstruct.t
-      -> ?locks:Lock.t
       -> t -> Reference.t -> (unit, error) result Lwt.t
-    val remove_s: t -> ?locks:Lock.t -> Reference.t -> (unit, error) result Lwt.t
-    val remove: t -> ?locks:Lock.t -> Reference.t -> (unit, error) result Lwt.t
+    val remove_s: t -> Reference.t -> (unit, error) result Lwt.t
+    val remove: t -> Reference.t -> (unit, error) result Lwt.t
     val read_p:
          dtmp:Cstruct.t
       -> raw:Cstruct.t
-      -> ?locks:Lock.t
       -> t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
-    val read_s: ?locks:Lock.t -> t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
-    val read: ?locks:Lock.t -> t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
+    val read_s: t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
+    val read: t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
     val write_p:
-         ?locks:Lock.t
-      -> dtmp:Cstruct.t
+      dtmp:Cstruct.t
       -> raw:Cstruct.t
       -> t -> Reference.t -> Reference.head_contents -> (unit, error) result Lwt.t
-    val write_s: t -> ?locks:Lock.t -> Reference.t -> Reference.head_contents -> (unit, error) result Lwt.t
-    val write: t -> ?locks:Lock.t -> Reference.t -> Reference.head_contents -> (unit, error) result Lwt.t
+    val write_s: t -> Reference.t -> Reference.head_contents -> (unit, error) result Lwt.t
+    val write: t -> Reference.t -> Reference.head_contents -> (unit, error) result Lwt.t
   end
 
-  val clear_caches: ?locks:Lock.t -> t -> unit Lwt.t
-  val reset: ?locks:Lock.t -> t -> (unit, [ `Store of error | `Ref of Ref.error ]) result Lwt.t
-
+  val clear_caches: t -> unit Lwt.t
+  val reset: t -> (unit, [ `Store of error | `Ref of Ref.error ]) result Lwt.t
   val has_global_watches: bool
   val has_global_checkout: bool
 end
@@ -362,12 +350,10 @@ end
 
 module FS
     (H : S.HASH)
-    (L : S.LOCK)
-    (FS: S.FS with type File.lock = L.elt)
+    (FS: S.FS)
     (I : S.INFLATE)
     (D : S.DEFLATE)
   : S with module Hash = H
-       and module Lock = L
        and module FS = FS
        and module Inflate = I
        and module Deflate = D
@@ -375,7 +361,6 @@ module FS
   module Hash = H
   module Inflate = I
   module Deflate = D
-  module Lock = L
   module FS = FS
 
   let has_global_watches = FS.has_global_watches
@@ -417,7 +402,7 @@ module FS
   module PACKEncoder = PackImpl.PACKEncoder
   module IDXDecoder = PackImpl.IDXDecoder
 
-  module Reference = Reference.IO(H)(L)(FS)
+  module Reference = Reference.IO(H)(FS)
 
   module DoubleHash =
   struct
@@ -590,14 +575,14 @@ module FS
     type state = t
 
     type error =
-      [ `SystemIO of string
+      [ `IO of string
       | `Delta of PACKEncoder.Delta.error
       | PackImpl.error ]
 
     let lift_error (e: PackImpl.error) = (e :> error)
 
     let pp_error ppf = function
-      | `SystemIO err -> Fmt.pf ppf "(`SystemIO %s)" err
+      | `IO err    -> Fmt.pf ppf "(`IO %s)" err
       | `Delta err -> Fmt.pf ppf "(`Delta %a)" PACKEncoder.Delta.pp_error err
       | #PackImpl.error as err -> PackImpl.pp_error ppf err
 
@@ -657,7 +642,7 @@ module FS
       let filename_of_pack = fmt (random_string 10) in
       FS.Dir.temp () >>= fun temp_dir ->
       FS.File.open_w ~mode:0o644 Fpath.(temp_dir / filename_of_pack) >>= function
-      | Error err -> Lwt.return (Error (`SystemFile err))
+      | Error err -> Lwt.return (Error (`FS err))
       | Ok fd ->
         Log.debug (fun l -> l ~header:"to_temp_file" "Save the pack stream to the file %a."
                       Fpath.pp Fpath.(temp_dir / filename_of_pack));
@@ -671,7 +656,7 @@ module FS
               | Ok () -> Lwt.return (Ok Fpath.(temp_dir / filename_of_pack))
               | Error err ->
                 Log.err (fun l -> l ~header:"to_temp_file" "Cannot close the file: %s." filename_of_pack);
-                Lwt.return (Error (`SystemFile err)))
+                Lwt.return (Error (`FS err)))
           | Some raw ->
             Log.debug (fun l -> l ~header:"to_temp_file" "Receive a chunk of the pack stream (length: %d)."
                           (Cstruct.len raw));
@@ -688,10 +673,10 @@ module FS
                 let err = Fmt.strf "Impossible to store the file: %s." filename_of_pack in
 
                 FS.File.close fd >>= function
-                | Ok () -> Lwt.return (Error (`SystemIO err))
+                | Ok () -> Lwt.return (Error (`IO err))
                 | Error _ ->
                   Log.err (fun l -> l ~header:"to_temp_file" "Cannot close the file: %s." filename_of_pack);
-                  Lwt.return (Error (`SystemIO err))
+                  Lwt.return (Error (`IO err))
               else go ?chunk ~call:(call + 1) ()
             | Ok n when n = len ->
               Log.debug (fun l -> l ~header:"to_temp_file" "Consume current chunk of the pack stream.");
@@ -701,10 +686,10 @@ module FS
               go ~chunk ~call:0 ()
             | Error err ->
               FS.File.close fd >>= function
-              | Ok () -> Lwt.return (Error (`SystemFile err))
+              | Ok () -> Lwt.return (Error (`FS err))
               | Error _ ->
                 Log.err (fun l -> l ~header:"to_temp_file" "Cannot close the file: %s." filename_of_pack);
-                Lwt.return (Error (`SystemFile err))
+                Lwt.return (Error (`FS err))
         in
 
         go ~call:0 ()
@@ -853,7 +838,7 @@ module FS
               let filename_pack = Fmt.strf "pack-%s.pack" (Hash.to_hex hash_pack) in
 
               (FS.File.move path Fpath.(git.dotgit / "objects" / "pack" / filename_pack) >>= function
-              | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
+              | Error sys_err -> Lwt.return (Error (`FS sys_err))
               | Ok () -> Lwt.return (Ok (hash_pack, List.length entries)))
               >>= fun ret ->
               FS.Mapper.close fdp >>= function
@@ -893,7 +878,7 @@ module FS
       let module Graph = Pack_info.Graph in
 
       FS.Mapper.openfile path >>= function
-      | Error err -> Lwt.return (Error (`SystemMapper err))
+      | Error err -> Lwt.return (Error (`FS err))
       | Ok fdp ->
         let `Partial { Pack_info.Partial.hash = hash_pack;
                        Pack_info.Partial.delta; } = info.Pack_info.state
@@ -920,7 +905,7 @@ module FS
           (fun hash -> extern git hash)
         >>= function
         | Error err ->
-          Lwt.return (Error (`SystemMapper err))
+          Lwt.return (Error (`FS err))
         | Ok decoder ->
           let hash_of_object obj =
             let ctx = Hash.Digest.init () in
@@ -1014,7 +999,7 @@ module FS
                                     ; Pack_info.Full.hash = hash_pack } }
               in
 
-              (FS.Mapper.close fdp >>!= fun sys_err -> `SystemMapper sys_err)
+              (FS.Mapper.close fdp >>!= fun sys_err -> `FS sys_err)
               >>?= fun () ->
               PackImpl.add_total ~root:git.dotgit git.engine path info
               >>!= lift_error
@@ -1228,51 +1213,39 @@ end
       | error
       | `Invalid_reference of Reference.t ]
 
-    let contents ?locks top =
-
+    let contents top =
       let rec lookup acc dir =
         FS.Dir.contents ~rel:true Fpath.(top // dir)
         >>?= fun l ->
-          Lwt_list.filter_p
-            (fun x -> FS.is_dir Fpath.(top // dir // x) >|= function Ok v -> v | Error _ -> false) l
-          >>= fun dirs ->
-          Lwt_list.filter_p
-            (fun x -> FS.is_file Fpath.(top // dir // x) >|= function Ok v -> v | Error _ -> false) l
-          >>= Lwt_list.map_p (fun file -> Lwt.return (Fpath.append dir file)) >>= fun files ->
-
-          Lwt_list.fold_left_s
-            (function Ok acc -> fun x -> lookup acc Fpath.(dir // x)
-                    | Error _ as e -> fun _ -> Lwt.return e)
-            (Ok acc) dirs >>?= fun acc -> Lwt.return (Ok (acc @ files))
+        Lwt_list.filter_p (fun x ->
+            FS.is_dir Fpath.(top // dir // x) >|= function
+            | Ok v    -> v
+            | Error _ -> false
+          ) l
+        >>= fun dirs ->
+        Lwt_list.filter_p (fun x ->
+            FS.is_file Fpath.(top // dir // x) >|= function
+            | Ok v    -> v
+            | Error _ -> false
+          ) l
+        >>= fun files ->
+        let files = List.map (fun file -> Fpath.append dir file) files in
+        Lwt_list.fold_left_s (function
+            | Ok acc      -> fun x -> lookup acc Fpath.(dir // x)
+            | Error _ as e -> fun _ -> Lwt.return e
+          ) (Ok acc) dirs >>?= fun acc -> Lwt.return (Ok (acc @ files))
       in
-
-      let lock = match locks with
-        | Some locks -> Some (Lock.make locks Fpath.(v "global"))
-        | None -> None
-      in
-
-      Lock.with_lock lock
-      (fun () -> lookup [] (Fpath.v "."))
+      lookup [] (Fpath.v ".")
 
     module Graph = Reference.Map
 
     (* XXX(dinosaure): this function does not return any {!Error} value. *)
-    let graph_p ~dtmp ~raw ?locks t =
+    let graph_p ~dtmp ~raw t =
       Log.debug (fun l -> l "graph_p");
-      let lock_gbl = match locks with
-        | None       -> None
-        | Some locks -> Some (Lock.make locks Fpath.(v "global"))
-      in
-      let lock_ref reference = match locks with
-        | None       -> None
-        | Some locks ->
-          let name = "r-" ^ Fpath.filename (Reference.to_path reference) in
-          Some (Lock.make locks Fpath.(v name))
-      in
-      contents ?locks Fpath.(t.dotgit / "refs") >>= function
+      contents Fpath.(t.dotgit / "refs") >>= function
       | Error sys_err ->
-        Log.err (fun l -> l "Got an error: %a." FS.Dir.pp_error sys_err);
-        Lwt_result.fail (`SystemDirectory sys_err)
+        Log.err (fun l -> l "Got an error: %a." FS.pp_error sys_err);
+        Lwt_result.fail (`FS sys_err)
       | Ok files ->
         Log.debug (fun l ->
             let pp_files = Fmt.hvbox (Fmt.list Fpath.pp) in
@@ -1281,16 +1254,13 @@ end
             (* XXX(dinosaure): we already normalize the reference
                (which is absolute). so we consider than the root as
                [/]. *)
-            let lock = Reference.of_path abs_ref in
-            Lock.with_lock (lock_ref lock) (fun () ->
-                Reference.read ~root:t.dotgit lock ~dtmp ~raw
-              ) >|= function
+            let r = Reference.of_path abs_ref in
+            Reference.read ~root:t.dotgit r ~dtmp ~raw >|= function
             | Ok v -> v :: acc
             | Error err ->
               Log.err (fun l ->
                   l "Error while reading %a: %a."
-                    Reference.pp lock
-                    Reference.pp_error err);
+                    Reference.pp r Reference.pp_error err);
               acc)
           [] (Reference.(to_path head) :: files)
         >>= fun lst ->
@@ -1304,18 +1274,17 @@ end
                 (r, link) :: rest, graph
             ) ([], Graph.empty) lst
         in
-        Lock.with_lock lock_gbl (fun () ->
-            Packed_refs.read ~root:t.dotgit ~dtmp ~raw >>= function
-            | Error _ as err -> Lwt.return err
-            | Ok packed_refs ->
-              Hashtbl.reset t.packed;
-              List.iter (function
-                  | `Peeled _            -> ()
-                  | `Ref (refname, hash) ->
-                    Hashtbl.add t.packed (Reference.of_string refname) hash
-                ) packed_refs;
-              Lwt.return (Ok packed_refs))
-        >|= function
+        (Packed_refs.read ~root:t.dotgit ~dtmp ~raw >>= function
+          | Error _ as err -> Lwt.return err
+          | Ok packed_refs ->
+            Hashtbl.reset t.packed;
+            List.iter (function
+                | `Peeled _            -> ()
+                | `Ref (refname, hash) ->
+                  Hashtbl.add t.packed (Reference.of_string refname) hash
+              ) packed_refs;
+            Lwt.return (Ok packed_refs)
+        ) >|= function
         | Ok packed_refs ->
           let graph =
             List.fold_left (fun graph -> function
@@ -1349,23 +1318,23 @@ end
           in
           Ok graph
 
-    let graph ?locks t = graph_p ~dtmp:t.buffer.de ~raw:t.buffer.io ?locks t
+    let graph t = graph_p ~dtmp:t.buffer.de ~raw:t.buffer.io t
 
     let normalize graph = function
-      | Reference.Hash hash -> Lwt.return (Ok hash)
+      | Reference.Hash hash   -> Lwt.return (Ok hash)
       | Reference.Ref refname ->
         try Lwt.return (Ok (Graph.find refname graph))
         with Not_found -> Lwt.return (Error (`Invalid_reference refname))
 
-    let list_p ~dtmp ~raw ?locks t =
-      graph_p ~dtmp ~raw ?locks t >>= function
+    let list_p ~dtmp ~raw t =
+      graph_p ~dtmp ~raw t >>= function
       | Ok graph ->
         Graph.fold (fun refname hash acc -> (refname, hash) :: acc) graph []
         |> List.stable_sort (fun (a, _) (b, _) -> Reference.compare a b)
         |> fun lst -> Lwt.return lst
       | Error _ -> Lwt.return []
 
-    let list_s ?locks t = list_p ?locks ~dtmp:t.buffer.de ~raw:t.buffer.io t
+    let list_s t = list_p ~dtmp:t.buffer.de ~raw:t.buffer.io t
 
     let list = list_s
 
@@ -1380,13 +1349,7 @@ end
                      Reference.pp reference Reference.pp_error err);
         let v = in_packed_refs () in Lwt.return v
 
-    let remove_p ~dtmp ~raw ?locks t reference =
-      let lock = match locks with
-        | Some locks -> Some (Lock.make locks Fpath.(v "global"))
-        | None -> None
-      in
-
-      Lock.with_lock lock @@ fun () ->
+    let remove_p ~dtmp ~raw t reference =
       (Packed_refs.read ~root:t.dotgit ~dtmp ~raw >>= function
         | Error _ -> Lwt.return None
         | Ok packed_refs ->
@@ -1420,23 +1383,17 @@ end
         | Ok () -> Lwt.return (Ok ())
         | Error (#Reference.error as err) -> Lwt.return (Error (err : error))
 
-    let remove_s t ?locks reference =
-      remove_p t ?locks ~dtmp:t.buffer.de ~raw:t.buffer.io reference
+    let remove_s t reference =
+      remove_p t ~dtmp:t.buffer.de ~raw:t.buffer.io reference
 
     let remove = remove_s
 
-    let read_p ~dtmp ~raw ?locks t reference =
-      let lock = match locks with
-        | Some locks -> Some (Lock.make locks Fpath.(v ("r-" ^ (Fpath.filename (Reference.to_path reference)))))
-        | None -> None
-      in
-
+    let read_p ~dtmp ~raw t reference =
       FS.is_file Fpath.(t.dotgit // (Reference.to_path reference)) >>= function
       | Ok true ->
-        Lock.with_lock lock
-          (fun () -> Reference.read ~root:t.dotgit ~dtmp ~raw reference >|= function
-             | Ok _ as v -> v
-             | Error (#Reference.error as err) -> Error (err : error))
+        (Reference.read ~root:t.dotgit ~dtmp ~raw reference >|= function
+          | Ok _ as v -> v
+          | Error (#Reference.error as err) -> Error (err : error))
       | Ok false | Error _ ->
         if Hashtbl.mem t.packed reference
         then
@@ -1444,24 +1401,13 @@ end
           with Not_found -> Lwt.return (Error `Not_found)
         else Lwt.return (Error `Not_found)
 
-    let read_s ?locks t reference =
-      read_p t ?locks ~dtmp:t.buffer.de ~raw:t.buffer.io reference
+    let read_s t reference =
+      read_p t ~dtmp:t.buffer.de ~raw:t.buffer.io reference
 
     let read = read_s
 
-    let write_p ?locks ~dtmp ~raw t reference value =
-      let lock_ref = match locks with
-        | Some locks -> Some (Lock.make locks Fpath.(v ("w-" ^ (Fpath.filename (Reference.to_path reference)))))
-        | None -> None
-      in
-
-      let lock_gbl = match locks with
-        | Some locks -> Some (Lock.make locks Fpath.(v "global"))
-        | None -> None
-      in
-
-      Lock.with_lock lock_ref @@ (fun () ->
-          Reference.write ~root:t.dotgit ~raw reference value) >>= function
+    let write_p ~dtmp ~raw t reference value =
+      Reference.write ~root:t.dotgit ~raw reference value >>= function
       | Error (#Reference.error as err) -> Lwt.return (Error (err : error))
       | Ok () ->
         match Hashtbl.mem t.packed reference with
@@ -1477,20 +1423,18 @@ end
                  | _ -> Lwt.return acc)
               [] packed_refs
             >>= fun packed_refs' ->
-            Lock.with_lock lock_gbl @@ fun () ->
-
             Hashtbl.reset t.packed;
-            List.iter
-              (function `Ref (refname, hash) -> Hashtbl.add t.packed (Reference.of_string refname) hash
-                      | `Peeled _ -> ())
-              packed_refs';
-
+            List.iter (function
+                |`Ref (refname, hash) ->
+                  Hashtbl.add t.packed (Reference.of_string refname) hash
+                | `Peeled _ -> ()
+              ) packed_refs';
             Packed_refs.write ~root:t.dotgit ~raw packed_refs' >>= function
             | Ok () -> Lwt.return (Ok ())
             | Error (#Packed_refs.error as err) -> Lwt.return (Error (err : error))
 
-    let write_s t ?locks reference value =
-      write_p t ?locks ~dtmp:t.buffer.de ~raw:t.buffer.io reference value
+    let write_s t reference value =
+      write_p t ~dtmp:t.buffer.de ~raw:t.buffer.io reference value
 
     let write = write_s
 
@@ -1588,15 +1532,9 @@ end
                       ; buffer = buffer () }))
     >>= function
     | Ok t -> Lwt.return (Ok t)
-    | Error sys_err -> Lwt.return (Error (`SystemDirectory sys_err))
+    | Error sys_err -> Lwt.return (Error (`FS sys_err))
 
-  let clear_caches ?locks t =
-    let lock = match locks with
-      | Some locks -> Some (Lock.make locks Fpath.(v "global"))
-      | None -> None
-    in
-
-    Lock.with_lock lock @@ fun () ->
+  let clear_caches t =
     CacheIndex.drop_lru t.cache.indexes;
     CacheRevIndex.drop_lru t.cache.revindexes;
     CachePack.drop_lru t.cache.packs;
@@ -1604,13 +1542,8 @@ end
     CacheObject.drop_lru t.cache.objects;
     Lwt.return ()
 
-  let reset ?locks t =
+  let reset t =
     Log.info (fun l -> l ~header:"reset" "Start to reset the Git repository");
-    let lock = match locks with
-      | Some locks -> Some (Lock.make locks Fpath.(v "global"))
-      | None -> None
-    in
-    Lock.with_lock lock @@ fun () ->
     (FS.Dir.delete ~recurse:true Fpath.(t.dotgit / "objects")
      >>?= fun () -> FS.Dir.create Fpath.(t.dotgit / "objects")
      >>?= fun _ -> FS.Dir.create Fpath.(t.dotgit / "objects" / "info")
@@ -1618,13 +1551,12 @@ end
      >>?= fun _ -> FS.Dir.delete ~recurse:true Fpath.(t.dotgit / "refs")
      >>?= fun () -> FS.Dir.create Fpath.(t.dotgit / "refs" / "heads")
      >>?= fun _ -> FS.Dir.create Fpath.(t.dotgit / "refs" / "tags")
-     ) >>!= (fun err -> `Store (`SystemDirectory err))
+     ) >>!= (fun err -> `Store (`FS err))
      >>?= fun _ ->
      (Ref.write t Reference.head Reference.(Ref master)
       (* XXX(dinosaure): an empty git repository has HEAD which points
          to a non-existing refs/heads/master. *)
     >>!= fun err -> `Ref err)
-    (* XXX(samoht): need to cleanup the locks as well *)
 
   let dotgit      { dotgit; _ }      = dotgit
   let root        { root; _ }        = root

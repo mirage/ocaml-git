@@ -105,7 +105,7 @@ let main directory repository =
                 Fpath.pp root Uri.pp_hum repository);
 
   (Git_unix.FS.create ~root () >!= fun err -> `Store err) >>= fun git ->
-  (Sync_http.fetch_all git ~locks:Fpath.(root / ".locks") ~references:Git_unix.FS.Reference.Map.empty repository
+  (Sync_http.fetch_all git ~references:Git_unix.FS.Reference.Map.empty repository
    >!= fun err -> `Sync err) >>= fun _ -> Lwt.return (Ok ())
 
 open Cmdliner

@@ -15,8 +15,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Lwt.Infix
-
 let src = Logs.Src.create "git.mem" ~doc:"logs git's memory back-end"
 module Log = (val Logs.src_log src : Logs.LOG)
 
@@ -27,17 +25,14 @@ let err_not_found n k =
 
 module Make
     (H: S.HASH)
-    (L: S.LOCK)
     (I: S.INFLATE)
     (D: S.DEFLATE)
   : Minimal.S
     with module Hash = H
-     and module Lock = L
      and module Inflate = I
      and module Deflate = D
 = struct
   module Hash = H
-  module Lock = L
   module Inflate = I
   module Deflate = D
   module Buffer = Cstruct_buffer
@@ -82,19 +77,13 @@ module Make
     in
     Lwt.return (Ok t : (t, error) result)
 
-  let reset ?locks t =
-    let lock = match locks with
-      | Some locks -> Some (Lock.make locks Fpath.(t.root / "global"))
-      | None -> None
-    in
-
-    Lock.with_lock lock @@ fun () ->
+  let reset t =
     Hashtbl.clear t.values;
     Hashtbl.clear t.inflated;
     Hashtbl.clear t.refs;
     Lwt.return (Ok ())
 
-  let clear_caches ?locks:_ _ = Lwt.return ()
+  let clear_caches _ = Lwt.return ()
 
   let write t value =
     let hash = Value.digest value in
@@ -155,9 +144,11 @@ module Make
       | Error `Never -> assert false
     with Not_found -> Lwt.return None
 
-  let read t h =
-    try Lwt.return (Ok (Lazy.force (Hashtbl.find t.values h)))
-    with Not_found -> Lwt.return (Error `Not_found)
+  let read_aux t h =
+    try Ok (Lazy.force (Hashtbl.find t.values h))
+    with Not_found -> Error `Not_found
+
+  let read t h = Lwt.return (read_aux t h)
 
   let keys t =
     Hashtbl.fold (fun k _ l -> k :: l) t []
@@ -168,19 +159,26 @@ module Make
   let mem t h = Lwt.return (Hashtbl.mem t.values h)
 
   let size t h =
-    read t h >|= function
-    | Ok (Value.Blob v) -> Ok (Value.Blob.F.length v)
-    | Ok (Value.Commit _ | Value.Tag _ | Value.Tree _) | Error _ -> Error `Not_found
+    let v = match read_aux t h with
+      | Ok (Value.Blob v) -> Ok (Value.Blob.F.length v)
+      | Ok (Value.Commit _ | Value.Tag _ | Value.Tree _)
+      | Error _ -> Error `Not_found
+    in
+    Lwt.return v
 
   let read_exn t h =
-    read t h >>= function
+    match read_aux t h with
     | Error _ -> err_not_found "read_exn" (Hash.to_hex h)
-    | Ok v -> Lwt.return v
+    | Ok v    -> Lwt.return v
 
   let contents t =
-    list t >>= fun hashes ->
-    Lwt_list.map_s (fun h -> read_exn t h >|= fun value -> h, value) hashes >|= fun values ->
-    (Ok values : ((Hash.t * Value.t) list, error) result)
+    let hashes = keys t.values in
+    let values = List.fold_left (fun acc h ->
+        match read_aux t h with
+        | Ok v    -> (h, v) :: acc
+        | Error _ -> acc
+      ) [] hashes in
+    Lwt.return (Ok values)
 
   module T =
     Traverse_bfs.Make(struct
@@ -196,8 +194,10 @@ module Make
 
   let fold = T.fold
 
-  module Pack =
-  struct
+  module Pack = struct
+
+    open Lwt.Infix
+
     type stream = unit -> Cstruct.t option Lwt.t
 
     module PACKDecoder = Unpack.MakePACKDecoder(Hash)(Inflate)
@@ -441,22 +441,14 @@ module Make
 
     module Graph = Reference.Map
 
-    let list ?locks t =
+    let list t =
       Log.debug (fun l -> l "Ref.list");
-      let lock = match locks with
-        | Some locks -> Some (Lock.make locks Fpath.(t.root / "global"))
-        | None -> None
-      in
-
-      Lock.with_lock lock @@ fun () ->
       let graph, rest =
-        Hashtbl.fold
-          (fun k -> function
-             | `R ptr -> fun (a, r) -> a, (k, ptr) :: r
-             | `H hash -> fun (a, r) -> Graph.add k hash a, r)
+        Hashtbl.fold (fun k -> function
+            | `R ptr  -> fun (a, r) -> a, (k, ptr) :: r
+            | `H hash -> fun (a, r) -> Graph.add k hash a, r)
           t.refs (Graph.empty, [])
       in
-
       let graph =
         List.fold_left (fun a (k, ptr) ->
             try let v = Graph.find ptr a in
@@ -464,42 +456,34 @@ module Make
             with Not_found -> a)
           graph rest
       in
-
-      Graph.fold (fun k v a -> (k, v) :: a) graph []
-      |> Lwt.return
+      let r = Graph.fold (fun k v a -> (k, v) :: a) graph [] in
+      Lwt.return r
 
     let mem t r =
       Log.debug (fun l -> l "Ref.mem %a" Reference.pp r);
       try let _ = Hashtbl.find t.refs r in Lwt.return true
       with Not_found -> Lwt.return false
 
-    let rec read ?locks:_ t r =
+    let rec read t r =
       Log.debug (fun l -> l "Ref.read %a" Reference.pp r);
       try match Hashtbl.find t.refs r with
         | `H s -> Lwt.return (Ok (r, Reference.Hash s))
         | `R r -> read t r
       with Not_found -> Lwt.return (Error `Not_found)
 
-    let remove t ?locks:_ r =
+    let remove t r =
       Log.debug (fun l -> l "Ref.remove %a" Reference.pp r);
       Hashtbl.remove t.refs r;
       Lwt.return (Ok ())
 
-    let write t ?locks r value =
+    let write t r value =
       Log.debug (fun l -> l "Ref.write %a" Reference.pp r);
       let head_contents = match value with
-        | Reference.Hash hash -> `H hash
+        | Reference.Hash hash   -> `H hash
         | Reference.Ref refname -> `R refname
       in
-
-      let lock = match locks with
-        | Some locks -> Some (Lock.make locks Fpath.(t.root / "global"))
-        | None -> None
-      in
-
-      Lock.with_lock lock
-      @@ (fun () ->
-          Hashtbl.replace t.refs r head_contents; Lwt.return (Ok ()))
+      Hashtbl.replace t.refs r head_contents;
+      Lwt.return (Ok ())
 
   end
 
@@ -507,6 +491,4 @@ module Make
   let has_global_checkout = false
 end
 
-module Lock = Lock
-
-module Store (H : Digestif_sig.S) = Make(Hash.Make(H))(Lock)(Inflate)(Deflate)
+module Store (H : Digestif_sig.S) = Make(Hash.Make(H))(Inflate)(Deflate)

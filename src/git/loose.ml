@@ -32,9 +32,8 @@ module type S = sig
   include module type of Value
 
   type error =
-    [ `SystemFile of FS.File.error
-    | `SystemDirectory of FS.Dir.error
-    | `SystemIO of string
+    [ `FS of FS.error
+    | `IO of string
     | D.error
     | E.error ]
 
@@ -120,26 +119,26 @@ module Make
 = struct
 
   let err_create path err =
-    error (`SystemDirectory err)
+    error (`FS err)
       "Got an error while creating the directory %a: %a."
-      Fpath.pp path FS.Dir.pp_error err
+      Fpath.pp path FS.pp_error err
 
   let err_open path err =
-    error (`SystemFile err)
+    error (`FS err)
       "Got an error while reading %a: %a"
-      Fpath.pp path FS.File.pp_error err
+      Fpath.pp path FS.pp_error err
 
   let err_close path err =
     Log.err (fun l ->
-      l "Got an error while closing %a: %a" Fpath.pp path FS.File.pp_error err)
+      l "Got an error while closing %a: %a" Fpath.pp path FS.pp_error err)
 
   let err_read path err =
-    error (`SystemFile err)
+    error (`FS err)
       "Got an error while reading %a: %a"
-      Fpath.pp path FS.File.pp_error err
+      Fpath.pp path FS.pp_error err
 
   let err_stack hash =
-    Fmt.kstrf (fun x -> Error (`SystemIO x))
+    Fmt.kstrf (fun x -> Error (`IO x))
       "Impossible to store the loosed Git object %a"
       (Fmt.hvbox H.pp) hash
 
@@ -149,9 +148,8 @@ module Make
   include Value
 
   type error =
-    [ `SystemFile of FS.File.error
-    | `SystemDirectory of FS.Dir.error
-    | `SystemIO of string
+    [ `FS of FS.error
+    | `IO of string
     | D.error
     | E.error ]
 
@@ -166,9 +164,8 @@ module Make
   let pp_error ppf = function
     | #D.error as err -> D.pp_error ppf err
     | #E.error as err -> E.pp_error ppf err
-    | `SystemIO err -> Helper.ppe ~name:"`SystemIO" Fmt.string ppf err
-    | `SystemFile sys_err -> Helper.ppe ~name:"`SystemFile" FS.File.pp_error ppf sys_err
-    | `SystemDirectory sys_err -> Helper.ppe ~name:"`SystemDirectory" FS.Dir.pp_error ppf sys_err
+    | `IO err     -> Helper.ppe ~name:"`IO" Fmt.string ppf err
+    | `FS sys_err -> Helper.ppe ~name:"`FS" FS.pp_error ppf sys_err
 
   let hash_get : Hash.t -> int -> int = fun h i -> Char.code @@ Hash.get h i
 
@@ -198,7 +195,7 @@ module Make
     | Error err ->
       Log.err (fun l ->
           l "Got an error while listing the contents of %a: %a"
-            Fpath.pp path FS.Dir.pp_error err);
+            Fpath.pp path FS.pp_error err);
       Lwt.return []
     | Ok firsts ->
       Lwt_list.fold_left_s (fun acc first ->
@@ -256,7 +253,7 @@ module Make
            | Error sys_err ->
              Log.err (fun l ->
                  l "Got an error while closing a file-descriptor: %a."
-                   FS.File.pp_error sys_err))
+                   FS.pp_error sys_err))
       >|= fun ret ->
       Log.debug (fun l -> l "Finish to read the object %s / %s." first rest);
       ret
@@ -357,7 +354,7 @@ module Make
         | `End (_, (_, size)) ->
           FS.File.close read >|= function
           | Ok ()     -> Ok size
-          | Error err -> err_close path err; Error (`SystemFile err)
+          | Error err -> err_close path err; Error (`FS err)
             (* XXX(dinosaure): [gen] checks if we consume all of the
                input. But for this compute, we don't need to compute
                all.  It's redundant. *)
@@ -416,14 +413,14 @@ module Make
              | Error sys_err ->
                Log.err (fun l ->
                    l "Got an error while closing %a: %a"
-                     Fpath.pp path FS.File.pp_error sys_err);
+                     Fpath.pp path FS.pp_error sys_err);
                Lwt.return ())
         >|= function
         | Ok ()     -> Ok hash
         | Error err ->
           match err with
           | `Stack       -> err_stack hash
-          | `Writer err  -> Error (`SystemFile err)
+          | `Writer err  -> Error (`FS err)
           | `Encoder err -> Error (`Deflate err)
 
   let write ~root ?(capacity = 0x100) ?(level = 4) ~ztmp ~raw value =
@@ -465,7 +462,7 @@ module Make
           Log.debug (fun l -> l "Wrote the object %s/%s." first rest);
           Ok (hash, r)
         | Error err -> match err with
-          | `Writer sys_err         -> Error (`SystemFile sys_err)
+          | `Writer sys_err         -> Error (`FS sys_err)
           | `Encoder (`Deflate err) -> Error (`Deflate err)
           | `Stack                  -> err_stack hash
 
