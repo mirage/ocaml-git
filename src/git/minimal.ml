@@ -194,26 +194,6 @@ module type S = sig
         repository [state]. The [?lock] avoids the race condition if
         it's specified. *)
 
-    val test_and_set: t ->
-         ?locks:Lock.t
-      -> Reference.t
-      -> test:Reference.head_contents option
-      -> set:Reference.head_contents option
-      -> (bool, error) result Lwt.t
-    (** [test_and_set state ?locks reference ~test ~set] is an atomic
-        update of the reference [reference] in the git repository
-        [state].
-
-        {ul
-        {- If [test = None], we set [reference] to [set] if
-        [reference] does not exist.}
-        {- If [test = Some v], we set [reference] to [set] only if
-        [reference] exists and [reference = v].}
-        {- If [set = None], we ensure than [reference] will no longer
-        exists iff [test] returns [true].}
-        {- If [set = Some v], we ensure than [reference] will be equal
-        to [v] iff [test] returns [true].}} *)
-
     val remove: t -> ?locks:Lock.t -> Reference.t ->
       (unit, error) result Lwt.t
     (** [remove state reference] removes the reference [reference]

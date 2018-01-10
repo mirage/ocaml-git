@@ -194,7 +194,6 @@ module type FILE = sig
 
   type 'a fd constraint 'a = [< `Read | `Write ]
 
-  val test_and_set : ?lock:lock -> ?temp:Fpath.t -> Fpath.t -> test:Cstruct.t option -> set:Cstruct.t option -> (bool, error) result Lwt.t
   val open_w : ?lock:lock -> Fpath.t -> mode:int -> ([ `Write ] fd, error) result Lwt.t
   val open_r : ?lock:lock -> Fpath.t -> mode:int -> ([ `Read ] fd, error) result Lwt.t
   val write : Cstruct.t -> ?off:int -> ?len:int -> [> `Write ] fd -> (int, error) result Lwt.t

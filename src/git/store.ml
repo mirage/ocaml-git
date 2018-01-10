@@ -346,13 +346,6 @@ module type S = sig
       -> t -> Reference.t -> Reference.head_contents -> (unit, error) result Lwt.t
     val write_s: t -> ?locks:Lock.t -> Reference.t -> Reference.head_contents -> (unit, error) result Lwt.t
     val write: t -> ?locks:Lock.t -> Reference.t -> Reference.head_contents -> (unit, error) result Lwt.t
-    val test_and_set:
-        t
-     -> ?locks:Lock.t
-     -> Reference.t
-     -> test:Reference.head_contents option
-     -> set:Reference.head_contents option
-     -> (bool, error) result Lwt.t
   end
 
   val clear_caches: ?locks:Lock.t -> t -> unit Lwt.t
@@ -1501,47 +1494,6 @@ end
 
     let write = write_s
 
-    let unpack_reference t ~dtmp ~raw ?locks reference =
-      let lock = match locks with
-        | Some locks -> Some (Lock.make locks Fpath.(v "global"))
-        | None -> None
-      in
-
-      Lock.with_lock lock @@ fun () ->
-      match Hashtbl.mem t.packed reference with
-      | false -> Lwt.return (Ok ())
-      | true ->
-        Packed_refs.read ~root:t.dotgit ~dtmp ~raw >>= function
-        | Error (#Packed_refs.error as err) -> Lwt.return (Error (err : error))
-        | Ok packed_refs ->
-          Lwt_list.fold_left_s (fun (pi, acc) -> function
-              | `Peeled hash -> Lwt.return (pi, `Peeled hash :: acc)
-              | `Ref (refname, hash) when not Reference.(equal reference (of_string refname)) ->
-                Lwt.return (pi, `Ref (refname, hash) :: acc)
-              | `Ref (_, hash) -> Lwt.return (Some (reference, hash), acc))
-            (None, []) packed_refs
-          >>= function
-          | None, _ -> assert false
-          (* XXX(dinosaure): we prove than reference is in packed_refs, so it's
-             a mandatory to return a [Some v]. *)
-          | (Some (_, hash), packed_refs') -> Packed_refs.write ~root:t.dotgit ~raw packed_refs'
-            >>= function
-            | Error (#Packed_refs.error as err) -> Lwt.return (Error (err : error))
-            | Ok () -> Reference.write ~root:t.dotgit ~raw reference (Reference.Hash hash) >|= function
-              | Ok () -> Ok ()
-              | Error (#Reference.error as err) -> Error (err : error)
-
-    let test_and_set t ?locks reference ~test ~set =
-      let lock = match locks with
-        | Some locks -> Some (Lock.make locks Fpath.(v "global"))
-        | None -> None
-      in
-
-      Lock.with_lock lock @@ fun () ->
-      unpack_reference t ~dtmp:t.buffer.de ~raw:t.buffer.io reference >>= fun _ ->
-      Reference.test_and_set ~root:t.dotgit reference ~test ~set >|= function
-      | Error (#Reference.error as err) -> Error (err : error)
-      | Ok _ as v -> v
   end
 
   let cache ?(indexes = 5) ?(packs = 5) ?(objects = 5) ?(values = 5) ?(revindexes = 5) () =

@@ -501,28 +501,6 @@ module Make
       @@ (fun () ->
           Hashtbl.replace t.refs r head_contents; Lwt.return (Ok ()))
 
-    let test_and_set t ?locks:_ r ~test ~set =
-      Log.debug (fun l -> l "Ref.test_and_set %a" Reference.pp r);
-      (* XXX(dinosaure): not sure about the semantic. *)
-      let v =
-        try Some (Hashtbl.find t.refs r)
-            |> function Some (`R refname) -> Some (Reference.Ref refname)
-                      | Some (`H hash) -> Some (Reference.Hash hash)
-                      | None -> None
-        with Not_found -> None in
-      let replace () = match set with
-        | None   -> Hashtbl.remove t.refs r
-        | Some (Reference.Hash hash) -> Hashtbl.replace t.refs r (`H hash)
-        | Some (Reference.Ref refname) -> Hashtbl.replace t.refs r (`R refname)
-      in
-      match v, test with
-      | None, None -> replace (); Lwt.return (Ok true)
-      | Some (Reference.Hash x), Some (Reference.Hash y) when Hash.equal x y -> replace (); Lwt.return (Ok true)
-      (* XXX(samoht): why disallowing Ref/Ref *)
-      | Some (Reference.Ref _ | Reference.Hash _),
-        Some (Reference.Ref _ | Reference.Hash _)
-      | Some (Reference.Ref _ | Reference.Hash _), None
-      | None, Some (Reference.Ref _ | Reference.Hash _) -> Lwt.return (Ok false)
   end
 
   let has_global_watches = false
