@@ -1007,16 +1007,6 @@ sig
     val write: t -> ?locks:Lock.t -> Reference.t -> Reference.head_contents -> (unit, error) result Lwt.t
     (** Alias of {!write_s}. *)
 
-    val test_and_set :
-         t
-      -> ?locks:Lock.t
-      -> Reference.t
-      -> test:Reference.head_contents option
-      -> set:Reference.head_contents option
-      -> (bool, error) result Lwt.t
-      (** [test_and_set state ?locks reference ~test ~set] is an atomic
-          update of the reference [reference] in the git repository
-          [state]. *)
   end
 
   val clear_caches: ?locks:Lock.t -> t -> unit Lwt.t

@@ -143,13 +143,6 @@ module type IO = sig
     -> raw:Cstruct.t
     -> t -> head_contents
     -> (unit, error) result Lwt.t
-  val test_and_set :
-       root:Fpath.t
-    -> ?locks:Lock.t
-    -> t
-    -> test:head_contents option
-    -> set:head_contents option
-    -> (bool, error) result Lwt.t
   val remove :
        root:Fpath.t
     -> ?locks:Lock.t
@@ -263,11 +256,6 @@ module IO
   module FS = FS
 
   include Make(H)
-
-  (* XXX(samoht): why this doesn't use the serializer? *)
-  let head_contents_to_string = function
-    | Hash hash   -> Fmt.strf "%s\n" (Hash.to_hex hash)
-    | Ref refname -> Fmt.strf "ref: %a\n" pp refname (* XXX(dinosaure): [pp] or [Fmt.string]? *)
 
   type error =
     [ `SystemFile of FS.File.error
@@ -390,26 +378,6 @@ module IO
         | `Stack          ->
           Fmt.kstrf (fun x -> Error (`SystemIO x))
             "Impossible to store the reference: %a" pp reference
-
-  (* FIXME: why this doesn't use the encode??? *)
-  let test_and_set ~root ?locks t ~test ~set =
-    let path = Fpath.(root // (to_path t)) in
-    let lock = match locks with
-      | Some locks -> Some (Lock.make locks (to_path t))
-      | None -> None
-    in
-    let raw = function
-      | None       -> None
-      | Some value -> Some (Cstruct.of_string (head_contents_to_string value)) (* XXX: why a copy? *)
-    in
-    FS.File.test_and_set
-      ?lock
-      path
-      ~test:(raw test)
-      ~set:(raw set)
-    >>= function
-    | Ok _ as v -> Lwt.return v
-    | Error err -> Lwt.return (Error (`SystemFile err))
 
   let remove ~root ?locks t =
     let path = Fpath.(root // (to_path t)) in

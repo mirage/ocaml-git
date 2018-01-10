@@ -219,45 +219,6 @@ module Make (Gamma: GAMMA) (FS: S) = struct
       | Ok _ as v -> v
       | Error e   -> err_fs_write e
 
-    let atomic_read t path =
-      FS.stat t (fpath_to_string path) >>= function
-      | Error _ -> Lwt.return None
-      | Ok stat ->
-        if stat.Mirage_fs.directory
-        then Lwt.fail (Failure (Fmt.strf "%a is a directory" Fpath.pp path))
-        else
-          FS.read t (fpath_to_string path) 0 (Int64.to_int stat.Mirage_fs.size)
-          >|= function
-          | Error _ -> None
-          | Ok cs   -> Some (Cstruct.of_string (Cstruct.copyv cs))
-
-    let atomic_write t ?lock path content =
-      FS.mkdir t (Filename.dirname (fpath_to_string path)) >>= fun _ ->
-      Git.Mem.Lock.with_lock lock @@ fun () ->
-      FS.create t (fpath_to_string path) >>= function
-      | Error e -> Lwt.return (err_fs_write e)
-      | Ok ()   ->
-        FS.write t (fpath_to_string path) 0 content >|= function
-        | Ok _ as v -> v
-        | Error e   -> err_fs_write e
-
-    let test_and_set t ?lock ?temp:_ file ~test ~set =
-      FS.mkdir t (Filename.dirname (fpath_to_string file)) >>= fun _ ->
-      Git.Mem.Lock.with_lock lock @@ fun () ->
-      let set () =
-        (match set with
-         | None   -> delete t file
-         | Some v -> atomic_write t file v)
-        >|= function
-        | Ok ()          -> Ok true
-        | Error _ as err -> err
-      in
-      atomic_read t file >>= fun old ->
-      match old, test with
-      | None, None -> set ()
-      | Some old, Some x when Cstruct.equal old x -> set ()
-      | _ -> Lwt.return (Ok false)
-
     let move t ?lock patha pathb =
       Git.Mem.Lock.with_lock lock @@ fun () ->
       open' t patha ~create:false ~mode:0o644 >>?= fun fda ->
@@ -283,8 +244,6 @@ module Make (Gamma: GAMMA) (FS: S) = struct
     let delete ?lock path = connect @@ fun t -> delete t ?lock path
     let move ?lock patha pathb = connect @@ fun t -> move t ?lock patha pathb
 
-    let test_and_set ?lock ?temp path ~test ~set =
-      connect @@ fun t -> test_and_set t ?lock ?temp path ~test ~set
     let open_w ?lock path ~mode = connect @@ fun t -> open_w t ?lock path ~mode
     let open_r ?lock path ~mode = connect @@ fun t -> open_r t ?lock path ~mode
     let write raw ?off ?len fd = connect @@ fun t -> write t raw ?off ?len fd

@@ -32,26 +32,6 @@ let is_dir path =
 let open_pool = Lwt_pool.create 200 (fun () -> Lwt.return ())
 let mkdir_pool = Lwt_pool.create 1 (fun () -> Lwt.return ())
 
-(* XXX(samoht): Files smaller than this are loaded using [read].
-
-   Use of mmap is necessary to handle PACK files efficiently. Since
-   these are stored in a weak map, we don't run out of open files if
-   we keep accessing the same one.
-
-   Using read is necessary to handle references, since these are
-   mutable and can't be cached. Using mmap here leads to hitting the
-   OS limit on the number of open files.
-
-   This threshold must be larger than the size of a reference.
-
-   XXX(dinosaure): About the PACK file, we use directly mmap by the
-   [MAPPER] abstraction to compute efficiently all. I don't know if
-   it's reliable to keep this behaviour when we ensure than we use
-   [read] only for the loose object and mmap for the PACK file.
-
-   But, I think, it stills relevant for the blob object. *)
-let mmap_threshold = 4096
-
 let result_bind f a = match a with
   | Ok x -> f x
   | Error err -> Error err

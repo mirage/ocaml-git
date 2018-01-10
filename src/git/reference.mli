@@ -216,9 +216,6 @@ sig
 
       This function can returns an {!error}. *)
 
-  val test_and_set: root:Fpath.t -> ?locks:Lock.t -> t -> test:head_contents option -> set:head_contents option -> (bool, error) result Lwt.t
-  (** Atomic updates (test and set) for references. *)
-
   val remove: root:Fpath.t -> ?locks:Lock.t -> t -> (unit, error) result Lwt.t
   (** [remove ~root ~lockdir reference] removes the reference from the
       git repository [root]. [lockdir] is to store a {!Lock.t} and
