@@ -423,7 +423,7 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
     let encoder_idx = IDXEncoder.default sequence hash_pack in
     let raw = Cstruct.create 0x8000 in
     let path = Fpath.(root / "objects" / "pack" / file) in
-    EIDX.safe_encoder_to_file path raw encoder_idx >>= function
+    EIDX.to_file path raw encoder_idx >>= function
     | Ok ()                -> Lwt.return (Ok ())
     | Error `Stack         -> err_stack_idx root file
     | Error (`FS sys_err)  -> Lwt.return (Error (`FS sys_err))
@@ -508,7 +508,7 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
     let raw = Cstruct.create 0x8000 in
     let state = { EPACK.E.get; src = None; pack = state } in
     Lwt.catch (fun () ->
-        EPACK.safe_encoder_to_file ~atomic:false path raw state >|= function
+        EPACK.to_file ~atomic:false path raw state >|= function
         | Ok { EPACK.E.tree; hash; } ->
           Ok (Fpath.(temp / filename_pack)
              , PACKEncoder.Radix.to_sequence tree
@@ -550,7 +550,7 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
          of git/ocaml-git of this PACK file even if we don't use it -
          we use the complete radix tree. *)
       let raw = Cstruct.create 0x8000 in
-      EIDX.safe_encoder_to_file path raw encoder_idx >>= function
+      EIDX.to_file path raw encoder_idx >>= function
       | Error `Stack       -> err_stack_idx root filename_idx
       | Error (`FS _) as e -> Lwt.return e
       | Error (`Encoder e) -> Lwt.return (Error (`IdxEncoder e))

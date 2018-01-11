@@ -334,7 +334,7 @@ module Make
     in
     loop decoder
 
-  module EDeflate = struct
+  module EDeflated = struct
     module E = struct
       type state  = {
         state: Deflate.t;
@@ -371,7 +371,7 @@ module Make
     in
     let value' = Cstruct.concat [ header; value ] in
     let state = {
-      EDeflate.E.v = value';
+      EDeflated.E.v = value';
       state = Deflate.no_flush 0 (Cstruct.len value') (Deflate.default level)
     } in
     let hash = digest value' in
@@ -381,13 +381,13 @@ module Make
     | Error err         -> err_create path err
     | Ok (true | false) ->
       let path = Fpath.(path / rest) in
-      EDeflate.safe_encoder_to_file path raw state >|= function
+      EDeflated.to_file path raw state >|= function
       | Ok ()                -> Ok hash
       | Error (`Stack)       -> err_stack hash
       | Error (`FS err)      -> Error (`FS err)
       | Error (`Encoder err) -> Error (`Deflate err)
 
-  module EInflate = struct
+  module EInflated = struct
     module E = struct
       type state  = E.encoder
       type result = int
@@ -412,7 +412,7 @@ module Make
     FS.Dir.create ~path:true Fpath.(root / "objects" / first) >>= function
     | Error err -> err_create path err
     | Ok (true | false) ->
-      EInflate.safe_encoder_to_file path raw encoder >|= function
+      EInflated.to_file path raw encoder >|= function
       | Error (`FS e)                 -> Error (`FS e)
       | Error (`Encoder (`Deflate e)) -> Error (`Deflate e)
       | Error `Stack                  -> err_stack hash

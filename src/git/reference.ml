@@ -331,7 +331,7 @@ module IO (H : S.HASH) (FS: S.FS) = struct
     >>= function
     | Error sys_err -> Lwt.return (Error (`FS sys_err))
     | Ok (true | false) ->
-      Encoder.safe_encoder_to_file path raw state >|= function
+      Encoder.to_file path raw state >|= function
       | Ok _                    -> Ok ()
       | Error (`FS e)           -> Error (`FS e)
       | Error (`Encoder `Never) -> assert false

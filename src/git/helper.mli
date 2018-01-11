@@ -134,15 +134,14 @@ module Encoder (E: ENCODER) (FS: S.FS): sig
     | `FS of FS.error
   ]
 
-  (** [safe_encoder_to_file f tmp state] encodes [state] in the file
-      [f] using [tmp] as an intermediary buffer.
+  (** [to_file f tmp state] encodes [state] in the file [f] using
+      [tmp] as an intermediary buffer.
 
       The result is [Error `Stack] if at least [limit] writes have
       returned 0.
 
       If [atomic] is set, the operation is guaranteed to be atomic. *)
-  val safe_encoder_to_file:
-    ?limit:int -> ?atomic:bool -> Fpath.t -> Cstruct.t -> E.state ->
+  val to_file: ?limit:int -> ?atomic:bool -> Fpath.t -> Cstruct.t -> E.state ->
     (E.result, error) result Lwt.t
 
 end

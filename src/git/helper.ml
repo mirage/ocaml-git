@@ -657,7 +657,7 @@ module Encoder (E: ENCODER) (X: S.FS) = struct
 
   module FS = FS(X)
 
-  let safe_encoder_to_file ?(limit=50) ?atomic file raw state =
+  let to_file ?(limit=50) ?atomic file raw state =
     FS.with_open_w ?atomic file @@ fun fd ->
     let rec go ~stack ?(rest = 0) state =
       if stack >= limit then Lwt.return (Error `Stack)
