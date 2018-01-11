@@ -562,7 +562,7 @@ module FS
   module Pack = struct
 
     module Hash = Hash
-    module FS = FS
+    module FS = Helper.FS(FS)
     module Inflate = Inflate
     module Deflate = Deflate
 
@@ -641,58 +641,34 @@ module FS
     let to_temp_file fmt stream =
       let filename_of_pack = fmt (random_string 10) in
       FS.Dir.temp () >>= fun temp_dir ->
-      FS.File.open_w ~mode:0o644 Fpath.(temp_dir / filename_of_pack) >>= function
-      | Error err -> Lwt.return (Error (`FS err))
-      | Ok fd ->
-        Log.debug (fun l -> l ~header:"to_temp_file" "Save the pack stream to the file %a."
-                      Fpath.pp Fpath.(temp_dir / filename_of_pack));
-
-        let rec go ?chunk ~call () = Lwt_stream.peek stream >>= function
-          | None ->
-            Log.debug (fun l -> l ~header:"to_temp_file" "Pack stream saved to the file %a."
-                          Fpath.pp Fpath.(temp_dir / filename_of_pack));
-
-            (FS.File.close fd >>= function
-              | Ok () -> Lwt.return (Ok Fpath.(temp_dir / filename_of_pack))
-              | Error err ->
-                Log.err (fun l -> l ~header:"to_temp_file" "Cannot close the file: %s." filename_of_pack);
-                Lwt.return (Error (`FS err)))
-          | Some raw ->
-            Log.debug (fun l -> l ~header:"to_temp_file" "Receive a chunk of the pack stream (length: %d)."
-                          (Cstruct.len raw));
-
-            let off, len = match chunk with
-              | Some (off, len) -> off, len
-              | None -> 0, Cstruct.len raw
-            in
-
-            FS.File.write raw ~off ~len fd >>= function
-            | Ok 0 when len <> 0 ->
-              if call = 50 (* XXX(dinosaure): as argument? *)
-              then
-                let err = Fmt.strf "Impossible to store the file: %s." filename_of_pack in
-
-                FS.File.close fd >>= function
-                | Ok () -> Lwt.return (Error (`IO err))
-                | Error _ ->
-                  Log.err (fun l -> l ~header:"to_temp_file" "Cannot close the file: %s." filename_of_pack);
-                  Lwt.return (Error (`IO err))
-              else go ?chunk ~call:(call + 1) ()
-            | Ok n when n = len ->
-              Log.debug (fun l -> l ~header:"to_temp_file" "Consume current chunk of the pack stream.");
-              Lwt_stream.junk stream >>= fun () -> go ~call:0 ()
-            | Ok n ->
-              let chunk = (off + n, len - n) in
-              go ~chunk ~call:0 ()
-            | Error err ->
-              FS.File.close fd >>= function
-              | Ok () -> Lwt.return (Error (`FS err))
-              | Error _ ->
-                Log.err (fun l -> l ~header:"to_temp_file" "Cannot close the file: %s." filename_of_pack);
-                Lwt.return (Error (`FS err))
-        in
-
-        go ~call:0 ()
+      let path = Fpath.(temp_dir / filename_of_pack) in
+      FS.with_open_w path @@ fun fd ->
+      Log.debug (fun l -> l "Saving the pack stream to %a" Fpath.pp path);
+      let rec go ?chunk ~call () =
+        Lwt_stream.peek stream >>= function
+        | None ->
+          Log.debug (fun l ->l "Pack stream saved to %a" Fpath.pp path);
+          Lwt.return (Ok path)
+        | Some raw ->
+          Log.debug (fun l -> l "Chunk received (length=%d)" (Cstruct.len raw));
+          let off, len = match chunk with
+            | Some (off, len) -> off, len
+            | None            -> 0, Cstruct.len raw
+          in
+          FS.File.write raw ~off ~len fd >>= function
+          | Error err          -> Lwt.return (Error (`FS err))
+          | Ok 0 when len <> 0 ->
+            if call <> 50 (* XXX(dinosaure): as argument? *)
+            then go ?chunk ~call:(call + 1) ()
+            else Fmt.kstrf (fun err -> Lwt.return (Error (`IO err)))
+                "Impossible to store the file: %s." filename_of_pack
+          | Ok n when n = len ->
+            Log.debug (fun l -> l "Consuming a chunk of the pack stream.");
+            Lwt_stream.junk stream >>= fun () ->
+            go ~call:0 ()
+          | Ok n -> go ~chunk:(off + n, len - n) ~call:0 ()
+      in
+      go ~call:0 ()
 
     let extern git hash =
       read_p

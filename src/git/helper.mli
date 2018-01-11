@@ -114,14 +114,10 @@ val fdigest:
 module type ENCODER =
 sig
   type state
-  type raw
   type result
   type error
 
-  val raw_length: raw -> int
-  val raw_blit: raw -> int -> raw -> int -> int -> unit
-
-  val eval: raw -> state ->
+  val eval: Cstruct.t -> state ->
     [ `Flush of state
     | `End of (state * result)
     | `Error of (state * error) ] Lwt.t
@@ -130,35 +126,46 @@ sig
   val flush: int -> int -> state -> state
 end
 
-type ('state, 'raw, 'result, 'error) encoder =
-  (module ENCODER
-    with type state = 'state
-     and type raw = 'raw
-     and type result = 'result
-     and type error = 'error)
+module Encoder (E: ENCODER) (FS: S.FS): sig
 
-type ('fd, 'raw, 'error) writer =
-  'raw -> ?off:int -> ?len:int -> 'fd -> (int, 'error) result Lwt.t
+  type error = [
+    | `Stack
+    | `Encoder of E.error
+    | `FS of FS.error
+  ]
 
-(** [safe_encoder_to_file ~limit encoder writer fd tmp state] encodes
-    a value contained in [state] to a file represented by [fd] with
-    the output operation [writer]. This function takes care about
-    shift/compress the buffer [tmp] from the value returned by
-    [writer]. Then, if [writer] returns [0], we continue to try to
-    write [limit] times - if [writer] continue to fail, we stop and
-    return an error [`Stack].
+  (** [safe_encoder_to_file ~limit encoder writer fd tmp state] encodes
+      a value contained in [state] to a file represented by [fd] with
+      the output operation [writer]. This function takes care about
+      shift/compress the buffer [tmp] from the value returned by
+      [writer]. Then, if [writer] returns [0], we continue to try to
+      write [limit] times - if [writer] continue to fail, we stop and
+      return an error [`Stack].
 
-    If we retrieve an encoder error while we serialize the value, we
-    stop and return [`Encoder]. If the writer returns an error, we
-    stop and retrun [`Writer].
+      If we retrieve an encoder error while we serialize the value, we
+      stop and return [`Encoder]. If the writer returns an error, we
+      stop and retrun [`Writer].
 
-    In any case, we {b don't close} the file-descriptor. Then, if we
-    retrieve an error, that means we wrote {b partially} the value in
-    your file-system - and you need to take care about that.
-*)
-val safe_encoder_to_file:
-  ?limit:int ->
-  ('state, 'raw, 'res, 'err_encoder) encoder ->
-  ('fd, 'raw, 'err_writer) writer ->
-  'fd -> 'raw -> 'state ->
-  ('res, [ `Stack | `Encoder of 'err_encoder | `Writer of 'err_writer ]) result Lwt.t
+      In any case, we {b don't close} the file-descriptor. Then, if we
+      retrieve an error, that means we wrote {b partially} the value in
+      your file-system - and you need to take care about that.
+  *)
+  val safe_encoder_to_file:
+    ?limit:int -> [`Write] FS.File.fd ->
+    Cstruct.t -> E.state -> (E.result, error) result Lwt.t
+
+end
+
+module FS (FS: S.FS): sig
+
+  include (module type of struct include FS end)
+
+  val with_open_r: Fpath.t ->
+    ([ `Read ] FS.File.fd -> ('a, [> `FS of FS.error] as 'e) result Lwt.t) ->
+    ('a, 'e) result Lwt.t
+
+  val with_open_w: Fpath.t ->
+    ([ `Write ] FS.File.fd -> ('a, [> `FS of FS.error] as 'e) result Lwt.t) ->
+    ('a, 'e) result Lwt.t
+
+end

@@ -241,9 +241,25 @@ module Make(H : S.HASH): S with module Hash = H = struct
 end
 
 module IO (H : S.HASH) (FS: S.FS) = struct
-  module FS = FS
+
+  module FS = Helper.FS(FS)
 
   include Make(H)
+
+  module Encoder = struct
+    module E = struct
+      type state  = E.encoder
+      type result = int
+      type error  = E.error
+      type rest = [ `Flush of state | `End of (state * result) ]
+      let used  = E.used
+      let flush = E.flush
+      let eval raw state = match E.eval raw state with
+        | `Error err    -> Lwt.return (`Error (state, err))
+        | #rest as rest -> Lwt.return rest
+    end
+    include Helper.Encoder(E)(FS)
+  end
 
   type error =
     [ `FS of FS.error
@@ -276,34 +292,11 @@ module IO (H : S.HASH) (FS: S.FS) = struct
     | Ok v      -> Ok v
     | Error err -> Error (`FS err)
 
-  let with_f open_f path f =
-    open_f path >>= function
-    | Error e ->
-      Log.err (fun l ->
-          l "Got an error while opening %a: %a"
-            Fpath.pp path FS.pp_error e);
-      Lwt.return (Error (`FS e))
-    | Ok fd        ->
-      Lwt.finalize
-        (fun () -> f fd)
-        (fun () ->
-           FS.File.close fd >|= function
-           | Ok ()   -> ()
-           | Error e ->
-             Log.err (fun l ->
-                 l "Got an error while closing %a, ignoring."
-                   FS.pp_error e);
-             ())
-
-  let with_open_r = with_f (FS.File.open_r ~mode:0o400)
-  let with_open_w = with_f (FS.File.open_w ~mode:0o644)
-
   let read ~root reference ~dtmp ~raw : (_, error) result Lwt.t =
     let decoder = D.default dtmp in
     let path = Fpath.(root // (to_path reference)) in
-    Log.debug (fun l ->
-        l ~header:"read" "Reading the reference: %a." Fpath.pp path);
-    with_open_r path @@ fun read ->
+    Log.debug (fun l -> l "Reading the reference: %a." Fpath.pp path);
+    FS.with_open_r path @@ fun read ->
     let rec loop decoder = match D.eval decoder with
       | `End (_, value)               -> Lwt.return (Ok value)
       | `Error (_, (#D.error as err)) -> Lwt.return (Error err)
@@ -327,37 +320,23 @@ module IO (H : S.HASH) (FS: S.FS) = struct
       assert (equal reference reference');
       Ok (normalize path, head_contents)
 
+  let err_stack reference =
+    Fmt.kstrf (fun x -> Error (`IO x))
+      "Impossible to store the reference: %a" pp reference
+
   let write ~root ?(capacity = 0x100) ~raw reference value =
     let state = E.default (capacity, value) in
-    let module E = struct
-      type state  = E.encoder
-      type raw    = Cstruct.t
-      type result = int
-      type error  = E.error
-      let raw_length = Cstruct.len
-      let raw_blit   = Cstruct.blit
-      type rest = [ `Flush of state | `End of (state * result) ]
-      let eval raw state = match E.eval raw state with
-        | `Error err -> Lwt.return (`Error (state, err))
-        | #rest as rest -> Lwt.return rest
-      let used  = E.used
-      let flush = E.flush
-    end in
     let path = Fpath.(root // (to_path reference)) in
     FS.Dir.create ~path:true Fpath.(root // (parent (to_path reference)))
     >>= function
     | Error sys_err -> Lwt.return (Error (`FS sys_err))
     | Ok (true | false) ->
-      with_open_w path @@ fun write ->
-      Helper.safe_encoder_to_file (module Encoder) FS.File.write write raw state
-      >|= function
-      | Ok _ -> Ok ()
-      | Error err -> match err with
-        | `Writer sys_err -> Error (`FS sys_err)
-        | `Encoder `Never -> assert false
-        | `Stack          ->
-          Fmt.kstrf (fun x -> Error (`IO x))
-            "Impossible to store the reference: %a" pp reference
+      FS.with_open_w path @@ fun write ->
+      Encoder.safe_encoder_to_file write raw state >|= function
+      | Ok _                    -> Ok ()
+      | Error (`FS e)           -> Error (`FS e)
+      | Error (`Encoder `Never) -> assert false
+      | Error `Stack            -> err_stack reference
 
   let remove ~root t =
     let path = Fpath.(root // (to_path t)) in
