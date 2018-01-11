@@ -585,7 +585,66 @@ end
 
 open Lwt.Infix
 
-module Encoder (E: ENCODER) (FS: S.FS) = struct
+module FS (FS: S.FS) = struct
+
+  include FS
+
+  let with_f open_f err path f =
+    open_f path >>= function
+    | Error e -> Lwt.return (Error (`FS e))
+    | Ok fd   ->
+      Lwt.finalize
+        (fun () -> f fd)
+        (fun ()  ->
+           FS.File.close fd >>= function
+           | Ok ()   -> Lwt.return ()
+           | Error e -> err e)
+
+  let no_err e =
+    Log.warn (fun l ->
+        l "Got an error while closing %a, ignoring." FS.pp_error e);
+    Lwt.return ()
+
+  let with_open_r path f = with_f (FS.File.open_r ~mode:0o400) no_err path f
+
+  let prng = lazy(Random.State.make_self_init ())
+
+  let temp_file_name temp_dir file =
+    let rnd = (Random.State.bits (Lazy.force prng)) land 0xFFFFFF in
+    Fpath.(temp_dir / Fmt.strf "%s.%06x" file rnd)
+
+  let temp_file file =
+    FS.Dir.temp () >>= fun temp_dir ->
+    let rec aux counter =
+      let name = temp_file_name temp_dir file in
+      FS.File.exists name >>= function
+      | Ok false -> Lwt.return name
+      | _        ->
+        if counter >= 1000 then failwith "cannot create a unique temporary file"
+        else aux (counter + 1)
+    in
+    aux 0
+
+  let with_open_w ?(atomic=true) path f =
+    if not atomic then with_f (FS.File.open_w ~mode:0o6444) no_err path f
+    else
+      temp_file Fpath.(basename path) >>= fun temp ->
+      let err e =
+        Log.debug (fun l ->
+            l "Got %a while writing in the temporary file %a"
+              FS.pp_error e Fpath.pp path);
+        FS.File.delete temp >|= fun _ -> ()
+      in
+      with_f (FS.File.open_w ~mode:0o644) err temp f >>= function
+      | Error _ as e -> Lwt.return e
+      | Ok x         ->
+        FS.File.move temp path >|= function
+        | Error e -> Error (`FS e)
+        | Ok ()   -> Ok x
+
+end
+
+module Encoder (E: ENCODER) (X: S.FS) = struct
 
   let src = Logs.Src.create "git.encoder" ~doc:"logs git's internal I/O encoder"
   module Log = (val Logs.src_log src : Logs.LOG)
@@ -593,10 +652,13 @@ module Encoder (E: ENCODER) (FS: S.FS) = struct
   type error = [
     | `Stack
     | `Encoder of E.error
-    | `FS of FS.error
+    | `FS of X.error
   ]
 
-  let safe_encoder_to_file ?(limit=50) fd raw state =
+  module FS = FS(X)
+
+  let safe_encoder_to_file ?(limit=50) ?atomic file raw state =
+    FS.with_open_w ?atomic file @@ fun fd ->
     let rec go ~stack ?(rest = 0) state =
       if stack >= limit then Lwt.return (Error `Stack)
       else
@@ -637,28 +699,5 @@ module Encoder (E: ENCODER) (FS: S.FS) = struct
             )
     in
     go ~stack:0 state
-
-end
-
-module FS (FS: S.FS) = struct
-
-  include FS
-
-  let with_f open_f path f =
-    open_f path >>= function
-    | Error e -> Lwt.return (Error (`FS e))
-    | Ok fd   ->
-      Lwt.finalize
-        (fun () -> f fd)
-        (fun ()  ->
-           FS.File.close fd >|= function
-           | Ok ()   -> ()
-           | Error e ->
-             Log.warn (fun l ->
-                 l "Got an error while closing %a, ignoring." FS.pp_error e);
-             ())
-
-  let with_open_r f path = with_f (FS.File.open_r ~mode:0o400) f path
-  let with_open_w f path = with_f (FS.File.open_w ~mode:0o644) f path
 
 end

@@ -380,8 +380,8 @@ module Make
     FS.Dir.create ~path:true path >>= function
     | Error err         -> err_create path err
     | Ok (true | false) ->
-      FS.with_open_w Fpath.(path / rest) @@ fun oc ->
-      EDeflate.safe_encoder_to_file oc raw state >|= function
+      let path = Fpath.(path / rest) in
+      EDeflate.safe_encoder_to_file path raw state >|= function
       | Ok ()                -> Ok hash
       | Error (`Stack)       -> err_stack hash
       | Error (`FS err)      -> Error (`FS err)
@@ -412,8 +412,7 @@ module Make
     FS.Dir.create ~path:true Fpath.(root / "objects" / first) >>= function
     | Error err -> err_create path err
     | Ok (true | false) ->
-      FS.with_open_w path @@ fun oc ->
-      EInflate.safe_encoder_to_file oc raw encoder >|= function
+      EInflate.safe_encoder_to_file path raw encoder >|= function
       | Error (`FS e)                 -> Error (`FS e)
       | Error (`Encoder (`Deflate e)) -> Error (`Deflate e)
       | Error `Stack                  -> err_stack hash

@@ -192,8 +192,8 @@ module Make (H: S.HASH) (FS: S.FS) = struct
 
   let write ~root ?(capacity = 0x100) ~raw value =
     let state = E.default (capacity, value) in
-    FS.with_open_w Fpath.(root / "packed-refs") @@ fun write ->
-    Encoder.safe_encoder_to_file write raw state >|= function
+    let path = Fpath.(root / "packed-refs") in
+    Encoder.safe_encoder_to_file path raw state >|= function
     | Ok _                    -> Ok ()
     | Error `Stack            -> err_stack
     | Error (`FS e)           -> Error (`FS e)
