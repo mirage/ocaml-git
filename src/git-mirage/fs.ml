@@ -203,7 +203,6 @@ module Make (Gamma: GAMMA) (FS: S) = struct
 
     let open' t ~create path ~mode:_ =
       let fd = fpath_to_string path in
-      with_lock t.locks path @@ fun () ->
       FS.stat t.fs fd >>= function
       | Ok { Mirage_fs.directory = false; _ } -> Lwt.return (Ok fd)
       | Ok _    -> Lwt.return (err_fs_write `Is_a_directory)
@@ -256,6 +255,8 @@ module Make (Gamma: GAMMA) (FS: S) = struct
       | Error e   -> err_fs_write e
 
     let move t patha pathb =
+      Log.debug (fun l ->
+          l "File.move %s %s" (fpath_to_string patha) (fpath_to_string pathb));
       let path1, path2 =
         (* we sort the order in which we lock to avoid dead-locks with
            2 concurrent move a->b and b<-a *)
