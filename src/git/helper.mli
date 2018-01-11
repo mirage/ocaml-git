@@ -136,7 +136,9 @@ type ('state, 'raw, 'result, 'error) encoder =
      and type raw = 'raw
      and type result = 'result
      and type error = 'error)
-and ('fd, 'raw, 'error) writer = 'raw -> ?off:int -> ?len:int -> 'fd -> (int, 'error) result Lwt.t
+
+type ('fd, 'raw, 'error) writer =
+  'raw -> ?off:int -> ?len:int -> 'fd -> (int, 'error) result Lwt.t
 
 (** [safe_encoder_to_file ~limit encoder writer fd tmp state] encodes
     a value contained in [state] to a file represented by [fd] with
@@ -155,7 +157,7 @@ and ('fd, 'raw, 'error) writer = 'raw -> ?off:int -> ?len:int -> 'fd -> (int, 'e
     your file-system - and you need to take care about that.
 *)
 val safe_encoder_to_file:
-  limit:int ->
+  ?limit:int ->
   ('state, 'raw, 'res, 'err_encoder) encoder ->
   ('fd, 'raw, 'err_writer) writer ->
   'fd -> 'raw -> 'state ->

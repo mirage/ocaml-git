@@ -405,9 +405,8 @@ module Make
       | Error err -> err_open path err
       | Ok oc     ->
         Lwt.finalize (fun () ->
-            Helper.safe_encoder_to_file
-               ~limit:50 (module E) FS.File.write oc raw state)
-          (fun () ->
+            Helper.safe_encoder_to_file (module E) FS.File.write oc raw state
+          ) (fun () ->
              FS.File.close oc >>= function
              | Ok () -> Lwt.return ()
              | Error sys_err ->
@@ -451,8 +450,7 @@ module Make
       | Error err -> err_open path err
       | Ok oc     ->
         Lwt.finalize (fun () ->
-            Helper.safe_encoder_to_file
-              ~limit:50 (module E) FS.File.write oc raw encoder)
+            Helper.safe_encoder_to_file (module E) FS.File.write oc raw encoder)
           (fun () ->
              FS.File.close oc >|= function
              | Ok ()     -> ()

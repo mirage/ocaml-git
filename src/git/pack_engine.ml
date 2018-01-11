@@ -419,8 +419,7 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
     FS.File.open_w ~mode:0o644 Fpath.(root / "objects" / "pack" / filename_idx) >>= function
     | Error sys_err -> Lwt.return (Error (`FS sys_err))
     | Ok fd ->
-      Helper.safe_encoder_to_file
-        ~limit:50 (module E) FS.File.write fd raw encoder_idx
+      Helper.safe_encoder_to_file (module E) FS.File.write fd raw encoder_idx
       >>= function
       | Error err ->
         ((FS.File.close fd >>= function
@@ -511,14 +510,14 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
        in
        let open Lwt_result in
        (Lwt.try_bind (fun () ->
-            Helper.safe_encoder_to_file ~limit:50 (module E)
-              FS.File.write fd raw { E.src = None; pack = state })
-           (function
+            let s = { E.src = None; pack = state } in
+            Helper.safe_encoder_to_file (module E) FS.File.write fd raw s
+          ) (function
              | Ok _ as v -> Lwt.return v
-             | (Error `Stack
-               | Error (`Writer _)
-               | Error (`Encoder _)) as err -> Lwt.return err)
-           (function
+             | Error `Stack
+             | Error (`Writer _)
+             | Error (`Encoder _) as err -> Lwt.return err
+         ) (function
              | Leave hash -> Lwt.return (Error (`Invalid_hash hash))
              | exn        -> Lwt.fail exn)) (* XXX(dinosaure): should never happen. *)
        >!= close
@@ -581,8 +580,7 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
           let used = IDXEncoder.used_out
         end in
         let raw = Cstruct.create 0x8000 in
-        Helper.safe_encoder_to_file
-          ~limit:50 (module E) FS.File.write fdi raw encoder_idx
+        Helper.safe_encoder_to_file (module E) FS.File.write fdi raw encoder_idx
         >>= function
         | Error err ->
           ((FS.File.close fdi >>= function

@@ -599,7 +599,7 @@ open Lwt.Infix
 
 let safe_encoder_to_file
     (type state) (type raw) (type res) (type err_encoder) (type err_writer)
-    ~limit
+    ?(limit=50)
     (encoder : (state, raw, res, err_encoder) encoder)
     (writer : ('fd, raw, err_writer) writer)
     (fd : 'fd)

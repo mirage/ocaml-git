@@ -349,8 +349,7 @@ module IO (H : S.HASH) (FS: S.FS) = struct
     | Error sys_err -> Lwt.return (Error (`FS sys_err))
     | Ok (true | false) ->
       with_open_w path @@ fun write ->
-      Helper.safe_encoder_to_file ~limit:50 (module E)
-        FS.File.write write raw state
+      Helper.safe_encoder_to_file (module Encoder) FS.File.write write raw state
       >|= function
       | Ok _ -> Ok ()
       | Error err -> match err with
