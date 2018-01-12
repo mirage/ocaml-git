@@ -254,6 +254,20 @@ module Make (Gamma: GAMMA) (FS: S) = struct
       | Ok _ as v -> v
       | Error e   -> err_fs_write e
 
+    (* [join_results l] is similar to {Lwt.join}: it waits for all
+       elements of [l] to be resolved. The result is either [Ok ()] if
+       all the promises are resolving to [Ok ()] or [Error e] if there
+       is at least one element resolving to [Error e]. *)
+    let join_results l =
+      let result = ref (Ok ()) in
+      let run f =
+        f >|= function
+        | Ok () -> ()
+        | e     -> result := e
+      in
+      Lwt.join (List.map run l) >|= fun () ->
+      !result
+
     let move t patha pathb =
       Log.debug (fun l ->
           l "File.move %s %s" (fpath_to_string patha) (fpath_to_string pathb));
@@ -281,7 +295,10 @@ module Make (Gamma: GAMMA) (FS: S) = struct
         | Some cs -> FS.write t.fs fdb pos cs >>?=  write (pos + Cstruct.len cs)
         | None    -> Lwt.return (Ok ())
       in
-      (read 0 size >>!= fs_read) <?> (write 0 () >>!= fs_write)
+      join_results [
+        (read 0 size >>!= fs_read);
+        (write 0 () >>!= fs_write)
+      ]
 
     let exists path = connect @@ fun t -> exists t path
     let delete path = connect @@ fun t -> delete t path
