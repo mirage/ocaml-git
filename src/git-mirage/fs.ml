@@ -268,7 +268,7 @@ module Make (Gamma: GAMMA) (FS: S) = struct
       open' t pathb ~create:true  ~mode:0o644 >>?= fun fdb ->
       (FS.size t.fs fda >>!= fs_read) >>?= fun size ->
       let stream, push = Lwt_stream.create () in
-      let rec read pos rest = match rest with
+      let rec read pos = function
         | 0L   -> push None; Lwt.return (Ok ())
         | rest ->
           let len = Int64.to_int (min (Int64.of_int max_int) rest) in
@@ -278,7 +278,7 @@ module Make (Gamma: GAMMA) (FS: S) = struct
       in
       let rec write pos () =
         Lwt_stream.get stream >>= function
-        | Some cs -> FS.write t.fs fdb pos cs >>?= write (pos + (Cstruct.len cs))
+        | Some cs -> FS.write t.fs fdb pos cs >>?=  write (pos + Cstruct.len cs)
         | None    -> Lwt.return (Ok ())
       in
       (read 0 size >>!= fs_read) <?> (write 0 () >>!= fs_write)
