@@ -273,7 +273,7 @@ module Make (Gamma: GAMMA) (FS: S) = struct
         | rest ->
           let len = Int64.to_int (min (Int64.of_int max_int) rest) in
           FS.read t.fs fda pos len >>?= fun cs ->
-          push (Some (Cstruct.concat cs));
+          List.iter (fun c -> push (Some c)) cs;
           read (pos + len) Int64.(sub rest (of_int len))
       in
       let rec write pos () =
