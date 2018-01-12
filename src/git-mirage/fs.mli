@@ -10,4 +10,3 @@ module type S = sig
 end
 
 module Make (Gamma: GAMMA) (FS: S): Git.FS
-  with type File.lock = Git.Mem.Lock.elt

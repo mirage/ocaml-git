@@ -543,24 +543,15 @@ let digest
 
 module type ENCODER = sig
   type state
-  type raw
   type result
   type error
-
-  val raw_length : raw -> int
-  val raw_blit   : raw -> int -> raw -> int -> int -> unit
-
-  val eval  : raw -> state -> [ `Flush of state | `End of (state * result) | `Error of (state * error) ] Lwt.t
-  val used  : state -> int
-  val flush : int -> int -> state -> state
+  val eval: Cstruct.t -> state ->
+    [ `Flush of state
+    | `End   of (state * result)
+    | `Error of (state * error) ] Lwt.t
+  val used: state -> int
+  val flush: int -> int -> state -> state
 end
-
-type ('state, 'raw, 'result, 'error) encoder =
-  (module ENCODER with type state  = 'state
-                   and type raw    = 'raw
-                   and type result = 'result
-                   and type error  = 'error)
-and ('fd, 'raw, 'error) writer = 'raw -> ?off:int -> ?len:int -> 'fd -> (int, 'error) result Lwt.t
 
 (* XXX(dinosaure): this function takes care about how many byte(s) we
    write to the file-descriptor and retry to write while the limit is
@@ -584,7 +575,7 @@ and ('fd, 'raw, 'error) writer = 'raw -> ?off:int -> ?len:int -> 'fd -> (int, 'e
    to write what he wants.
 
    * If the [writer] returns an error, we stop the process and return
-   [`Writer error].
+   [`FS error].
    * If the [encoder] returns an error, we stop the process and return
    [`Encoder error].
 
@@ -592,74 +583,121 @@ and ('fd, 'raw, 'error) writer = 'raw -> ?off:int -> ?len:int -> 'fd -> (int, 'e
 
    Otherwise, we return [Ok result] with the result of the encoder. *)
 
-let src = Logs.Src.create "git.encoder.io" ~doc:"logs git's internal I/O encoder"
-module ELog = (val Logs.src_log src : Logs.LOG)
-
 open Lwt.Infix
 
-let safe_encoder_to_file
-    (type state) (type raw) (type res) (type err_encoder) (type err_writer)
-    ~limit
-    (encoder : (state, raw, res, err_encoder) encoder)
-    (writer : ('fd, raw, err_writer) writer)
-    (fd : 'fd)
-    (raw : raw)
-    (state : state) : (res, [ `Stack | `Encoder of err_encoder | `Writer of err_writer ]) result Lwt.t
-  =
-  let module E =
-    (val encoder : ENCODER with type state = state
-                            and type raw = raw
-                            and type result = res
-                            and type error = err_encoder)
-  in
-  let rec go ~stack ?(rest = 0) state =
-    if stack < limit
-    then E.eval raw state >>= function
-      | `Error (_, err) ->
-        ELog.err (fun l ->
-            l ~header:"go" "Retrieving an encoder error when we serialize \
-                            the value to a file-descriptor.");
-        Lwt.return (Error (`Encoder err))
-      | `End (state, res) ->
-        if E.used state + rest > 0
-        then begin
-          ELog.debug (fun l ->
-              l ~header:"go" "Final step to write entirely the file \
-                              (rest: %d)." (E.used state + rest));
-          writer raw ~off:0 ~len:(rest + E.used state) fd >>= function
-          | Ok n ->
-            if n = E.used state + rest
-            then Lwt.return (Ok res)
-            else begin
-              ELog.warn (fun l ->
-                  l ~header:"go" "Loop back to writing the rest (%d) \
-                                  of the encoding (stack: %d)."
-                    (E.used state + rest - n) stack);
-              go ~stack:(stack + 1) (E.flush n ((E.used state + rest) - n) state)
-            end
-          | Error err -> Lwt.return (Error (`Writer err))
-        end else Lwt.return (Ok res)
-      | `Flush state ->
-        writer raw ~off:0 ~len:(rest + E.used state) fd >>= function
-        | Ok n ->
-          if n = rest + E.used state
-          then go ~stack:0 (E.flush 0 (E.raw_length raw) state)
-          else begin
-            let rest = (rest + E.used state) - n in
-            E.raw_blit raw n raw 0 rest;
-            ELog.debug (fun l ->
-                l ~header:"go" "The I/O encoder writes %d (rest: %d, loop back: %b)."
-                  n (E.raw_length raw - rest) (E.raw_length raw - rest = 0));
-            go ~stack:(if E.raw_length raw - rest = 0 then stack + 1 else 0)
-              ~rest
-              (E.flush rest (E.raw_length raw - rest) state)
-          end
-        | Error err -> Lwt.return (Error (`Writer err))
-    else (
-      ELog.err (fun l ->
-          l "Got a [`Stack] error: impossible to serialize and write the Git \
-             object.");
-      Lwt.return (Error `Stack)
-    )
-  in
-  go ~stack:0 state
+module FS (FS: S.FS) = struct
+
+  include FS
+
+  let with_f open_f err path f =
+    open_f path >>= function
+    | Error e -> Lwt.return (Error (`FS e))
+    | Ok fd   ->
+      Lwt.finalize
+        (fun () -> f fd)
+        (fun ()  ->
+           FS.File.close fd >>= function
+           | Ok ()   -> Lwt.return ()
+           | Error e -> err e)
+
+  let no_err e =
+    Log.warn (fun l ->
+        l "Got an error while closing %a, ignoring." FS.pp_error e);
+    Lwt.return ()
+
+  let with_open_r path f = with_f (FS.File.open_r ~mode:0o400) no_err path f
+
+  let prng = lazy(Random.State.make_self_init ())
+
+  let temp_file_name temp_dir file =
+    let rnd = (Random.State.bits (Lazy.force prng)) land 0xFFFFFF in
+    Fpath.(temp_dir / Fmt.strf "%s.%06x" file rnd)
+
+  let temp_file file =
+    FS.Dir.temp () >>= fun temp_dir ->
+    let rec aux counter =
+      let name = temp_file_name temp_dir file in
+      FS.File.exists name >>= function
+      | Ok false -> Lwt.return name
+      | _        ->
+        if counter >= 1000 then failwith "cannot create a unique temporary file"
+        else aux (counter + 1)
+    in
+    aux 0
+
+  let with_open_w ?(atomic=true) path f =
+    if not atomic then with_f (FS.File.open_w ~mode:0o6444) no_err path f
+    else
+      temp_file Fpath.(basename path) >>= fun temp ->
+      let err e =
+        Log.debug (fun l ->
+            l "Got %a while writing in the temporary file %a"
+              FS.pp_error e Fpath.pp path);
+        FS.File.delete temp >|= fun _ -> ()
+      in
+      with_f (FS.File.open_w ~mode:0o644) err temp f >>= function
+      | Error _ as e -> Lwt.return e
+      | Ok x         ->
+        FS.File.move temp path >|= function
+        | Error e -> Error (`FS e)
+        | Ok ()   -> Ok x
+
+end
+
+module Encoder (E: ENCODER) (X: S.FS) = struct
+
+  let src = Logs.Src.create "git.encoder" ~doc:"logs git's internal I/O encoder"
+  module Log = (val Logs.src_log src : Logs.LOG)
+
+  type error = [
+    | `Stack
+    | `Encoder of E.error
+    | `FS of X.error
+  ]
+
+  module FS = FS(X)
+
+  let to_file ?(limit=50) ?atomic file raw state =
+    FS.with_open_w ?atomic file @@ fun fd ->
+    let rec go ~stack ?(rest = 0) state =
+      if stack >= limit then Lwt.return (Error `Stack)
+      else
+        E.eval raw state >>= function
+        | `Error (_, err)   -> Lwt.return (Error (`Encoder err))
+        | `End (state, res) ->
+          if E.used state + rest <= 0 then Lwt.return (Ok res)
+          else (
+            Log.debug (fun l -> l "Final step: rest=%d" (E.used state + rest));
+            FS.File.write raw ~off:0 ~len:(rest + E.used state) fd >>= function
+            | Error err -> Lwt.return (Error (`FS err))
+            | Ok n      ->
+              if n = E.used state + rest
+              then Lwt.return (Ok res)
+              else (
+                Log.debug (fun l ->
+                    l "Writing the rest (%d) of the encoding (stack: %d)."
+                      (E.used state + rest - n) stack);
+                let state = E.flush n ((E.used state + rest) - n) state in
+                go ~stack:(stack + 1) state
+              )
+          )
+        | `Flush state ->
+          FS.File.write raw ~off:0 ~len:(rest + E.used state) fd >>= function
+          | Error err -> Lwt.return (Error (`FS err))
+          | Ok n      ->
+            if n = rest + E.used state
+            then go ~stack:0 (E.flush 0 (Cstruct.len raw) state)
+            else (
+              let rest = (rest + E.used state) - n in
+              Cstruct.blit raw n raw 0 rest;
+              Log.debug (fun l ->
+                  l "The I/O encoder writes %d (rest: %d, loop back: %b)"
+                    n (Cstruct.len raw - rest) (Cstruct.len raw - rest = 0));
+              let stack = if Cstruct.len raw - rest = 0 then stack + 1 else 0 in
+              let state = E.flush rest (Cstruct.len raw - rest) state in
+              go ~stack ~rest state
+            )
+    in
+    go ~stack:0 state
+
+end

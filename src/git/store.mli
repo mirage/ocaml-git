@@ -65,9 +65,8 @@ module type LOOSE = sig
   (** The Value module, which represents the Git object. *)
 
   type error =
-    [ `SystemFile of FS.File.error
-    | `SystemDirectory of FS.Dir.error
-    | `SystemIO of string
+    [ `FS of FS.error
+    | `IO of string
     | Value.D.error
     | Value.E.error
     ] (** The type error. *)
@@ -393,12 +392,10 @@ module type PACK = sig
     | `PackInfo of Pack_info.error
     | `IdxDecoder of IDXDecoder.error
     | `IdxEncoder of IDXEncoder.error
-    | `SystemFile of FS.File.error
-    | `SystemMapper of FS.Mapper.error
-    | `SystemDir of FS.Dir.error
+    | `FS of FS.error
     | `Invalid_hash of Hash.t
     | `Delta of PACKEncoder.Delta.error
-    | `SystemIO of string
+    | `IO of string
     | `Integrity of string
     | `Not_found ]
 
@@ -539,11 +536,7 @@ sig
    : S.DEFLATE
   (** The [Deflate] module used to make the implementation. *)
 
-  module Lock
-   : S.LOCK
-  (** The [Lock] module used to make this implementation. *)
-
-  module FS : S.FS with type File.lock = Lock.elt
+  module FS : S.FS
   (** The [FS] module used to make the implementation. *)
 
   module Value: Value.S
@@ -559,7 +552,6 @@ sig
 
   module Reference: Reference.IO
     with module Hash = Hash
-     and module Lock = Lock
      and module FS = FS
   (** The Reference module, which represents the Git reference. *)
 
@@ -864,9 +856,8 @@ sig
         otherwise returns [false]. *)
 
     val graph_p :
-         dtmp:Cstruct.t
+      dtmp:Cstruct.t
       -> raw:Cstruct.t
-      -> ?locks:Lock.t
       -> t -> (Hash.t Reference.Map.t, error) result Lwt.t
     (** [graph_p state ~dtmp ~raw] returns a graph which contains all
         reference and its pointed to final hash available in the
@@ -883,7 +874,7 @@ sig
         encountered any {!error}, we make it silent and continue the
         process. *)
 
-    val graph: ?locks:Lock.t -> t -> (Hash.t Reference.Map.t, error) result Lwt.t
+    val graph: t -> (Hash.t Reference.Map.t, error) result Lwt.t
     (** [graph state] is the same process than {!graph_p} but we use
         the state-defined buffer. That means the client can not use
         this function in a concurrency context with the same
@@ -899,9 +890,8 @@ sig
         graph is not complete or if the link is broken.}} *)
 
     val list_p :
-         dtmp:Cstruct.t
+      dtmp:Cstruct.t
       -> raw:Cstruct.t
-      -> ?locks:Lock.t
       -> t -> (Reference.t * Hash.t) list Lwt.t
     (** [list_p state ~dtmp ~raw] returns an associated list between
         reference and its bind hash. This function is the same than:
@@ -914,54 +904,47 @@ sig
         Finally, as {!graph_p}, if we encountered any {!error}, we
         make it silent and continue the process. *)
 
-    val list_s: ?locks:Lock.t -> t -> (Reference.t * Hash.t) list Lwt.t
+    val list_s: t -> (Reference.t * Hash.t) list Lwt.t
     (** [list_s state] is the same process than {!list_p} but we use
         the state-defined buffer. That means the client can not use
         this function in a concurrency context with the same
         [state]. *)
 
-    val list: ?locks:Lock.t -> t -> (Reference.t * Hash.t) list Lwt.t
+    val list: t -> (Reference.t * Hash.t) list Lwt.t
     (** Alias of {!list_s}. *)
 
     val remove_p :
-        dtmp:Cstruct.t
-     -> raw:Cstruct.t
-     -> ?locks:Lock.t
-     -> t -> Reference.t -> (unit, error) result Lwt.t
-    (** [remove_p state ~dtmp ~raw ?locks reference] removes the
-        reference [reference] from the git repository [state]. The
-        [?locks] avoids the race condition if it's specified. This
-        function needs some buffers:
+      dtmp:Cstruct.t
+      -> raw:Cstruct.t
+      -> t -> Reference.t -> (unit, error) result Lwt.t
+    (** [remove_p state ~dtmp ~raw reference] removes the reference
+        [reference] from the git repository [state]. This function
+        needs some buffers:
 
         {ul
         {- [dtmp] is a buffer used by the decoder to save the input
         flow (and keep it for an alteration)}
         {- [raw] is a buffer used to store the input flow}}
 
-        This function can {b not} used in a concurrency context. By
-        the mutable caracteristic of the reference, we need to protect
-        any modification against the data race condition with the
-        [?locks] argument.
+        This function can {b not} used in a concurrency context.
 
         However, we provide this function to allow to use a
         user-defined buffer instead the state-defined buffer (could be
         used by something else). *)
 
-    val remove_s: t -> ?locks:Lock.t -> Reference.t -> (unit, error) result Lwt.t
-    (** [remove_s state ?locks reference] is the same process than
+    val remove_s: t -> Reference.t -> (unit, error) result Lwt.t
+    (** [remove_s state reference] is the same process than
         {!remove_p} but we use the state-defined buffer. That means
         the client can not use thus function in a concurrency context
         with the same [state]. *)
 
-    val remove: t -> ?locks:Lock.t -> Reference.t -> (unit, error) result Lwt.t
+    val remove: t -> Reference.t -> (unit, error) result Lwt.t
     (** [remove state reference] removes the reference [reference]
-        from the git repository [state]. The [?lock] avoids the race
-        condition if it's specified. *)
+        from the git repository [state]. *)
 
     val read_p :
-         dtmp:Cstruct.t
+      dtmp:Cstruct.t
       -> raw:Cstruct.t
-      -> ?locks:Lock.t
       -> t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
     (** [read_p state ~dtmp ~raw reference] returns the value contains
         in the reference [reference] (available in the git repository
@@ -975,23 +958,24 @@ sig
         This function can be used in a concurrency context only if the
         specifed buffers are not used by another process. *)
 
-    val read_s: ?locks:Lock.t -> t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
+    val read_s: t -> Reference.t ->
+      ((Reference.t * Reference.head_contents), error) result Lwt.t
     (** [read_s state reference] is the same process than {!read_p}
         but we use the state-defined buffer. That means the client can
         not use this function in a concurrency context with the same
         [state]. *)
 
-    val read: ?locks:Lock.t -> t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
+    val read: t -> Reference.t ->
+      ((Reference.t * Reference.head_contents), error) result Lwt.t
     (** Alias of {!read_s}. *)
 
     val write_p :
-         ?locks:Lock.t
-      -> dtmp:Cstruct.t
-      -> raw:Cstruct.t -> t -> Reference.t -> Reference.head_contents -> (unit, error) result Lwt.t
-    (** [write_p state ?locks ~dtmp ~raw reference value] writes the
-        value [value] in the mutable representation of the [reference]
-        in the git repository [state]. The [?locks] avoids the race
-        condition if it's specified.
+      dtmp:Cstruct.t
+      -> raw:Cstruct.t -> t -> Reference.t -> Reference.head_contents ->
+      (unit, error) result Lwt.t
+    (** [write_p state ~dtmp ~raw reference value] writes the value
+        [value] in the mutable representation of the [reference] in
+        the git repository [state].
 
         As {!read_p}, this function needs some buffers. However, it
         can not use in a concurrency context by the mutable
@@ -1000,22 +984,24 @@ sig
         state-defined buffer of {!write_s} to use in a concurrency
         context an other operation. *)
 
-    val write_s: t -> ?locks:Lock.t -> Reference.t -> Reference.head_contents -> (unit, error) result Lwt.t
+    val write_s: t -> Reference.t -> Reference.head_contents ->
+      (unit, error) result Lwt.t
     (** [write_s state ?locks reference value] is the same process
         than {!read_p} but we use the state-defined buffer. *)
 
-    val write: t -> ?locks:Lock.t -> Reference.t -> Reference.head_contents -> (unit, error) result Lwt.t
+    val write: t -> Reference.t -> Reference.head_contents ->
+      (unit, error) result Lwt.t
     (** Alias of {!write_s}. *)
 
   end
 
-  val clear_caches: ?locks:Lock.t -> t -> unit Lwt.t
-  (** [clear_caches ?locks t] drops all values stored in the internal
-      caches binded with the git repository [t]. *)
+  val clear_caches: t -> unit Lwt.t
+  (** [clear_caches t] drops all values stored in the internal caches
+      binded with the git repository [t]. *)
 
-  val reset: ?locks:Lock.t -> t -> (unit, [ `Store of error | `Ref of Ref.error ]) result Lwt.t
-  (** [reset ?locks t] removes all things of the git repository [t]
-      and ensures it will be empty. *)
+  val reset: t -> (unit, [ `Store of error | `Ref of Ref.error ]) result Lwt.t
+  (** [reset t] removes all things of the git repository [t] and
+      ensures it will be empty. *)
 
   val has_global_watches: bool
   val has_global_checkout: bool
@@ -1023,12 +1009,10 @@ end
 
 module FS
     (H: S.HASH)
-    (L: S.LOCK)
-    (FS: S.FS with type File.lock = L.elt)
+    (FS: S.FS)
     (Inflate: S.INFLATE)
     (Deflate: S.DEFLATE)
   : S with module Hash = H
-       and module Lock = L
        and module Inflate = Inflate
        and module Deflate = Deflate
        and module FS = FS

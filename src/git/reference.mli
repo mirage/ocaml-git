@@ -177,18 +177,16 @@ module type S = sig
 end
 
 (** The interface which describes any I/O operations on Git reference. *)
-module type IO =
-sig
-  module Lock: S.LOCK
+module type IO = sig
+
   module FS: S.FS
 
   include S
 
   (** The type of error. *)
   type error =
-    [ `SystemFile of FS.File.error
-    | `SystemDirectory of FS.Dir.error
-    | `SystemIO of string
+    [ `FS of FS.error
+    | `IO of string
     | D.error ]
 
   val pp_error: error Fmt.t
@@ -199,7 +197,8 @@ sig
       [reference] find in the git repository [root]. Otherwise, we returns
       [false]. *)
 
-  val read: root:Fpath.t -> t -> dtmp:Cstruct.t -> raw:Cstruct.t -> ((t * head_contents), error) result Lwt.t
+  val read: root:Fpath.t -> t -> dtmp:Cstruct.t -> raw:Cstruct.t ->
+    ((t * head_contents), error) result Lwt.t
   (** [read ~root reference dtmp raw] returns the value contains in
       the reference [reference] (available in the git repository
       [root]). [dtmp] and [raw] are buffers used by the decoder
@@ -208,7 +207,8 @@ sig
 
       This function can returns an {!error}. *)
 
-  val write: root:Fpath.t -> ?locks:Lock.t -> ?capacity:int -> raw:Cstruct.t -> t -> head_contents -> (unit, error) result Lwt.t
+  val write: root:Fpath.t -> ?capacity:int -> raw:Cstruct.t ->
+    t -> head_contents -> (unit, error) result Lwt.t
   (** [write ~root ~raw reference value] writes the value [value] in
       the mutable representation of the [reference] in the git
       repository [root]. [raw] is a buffer used by the decoder to keep
@@ -216,10 +216,9 @@ sig
 
       This function can returns an {!error}. *)
 
-  val remove: root:Fpath.t -> ?locks:Lock.t -> t -> (unit, error) result Lwt.t
-  (** [remove ~root ~lockdir reference] removes the reference from the
-      git repository [root]. [lockdir] is to store a {!Lock.t} and
-      avoid race condition on the reference [reference].
+  val remove: root:Fpath.t -> t -> (unit, error) result Lwt.t
+  (** [remove ~root reference] removes the reference from the
+      git repository [root].
 
       This function can returns an {!error}. *)
 end
@@ -228,12 +227,6 @@ module Make (H: S.HASH): S with module Hash = H
 (** The {i functor} to make the OCaml representation of the Git
     Reference object by a specific hash. *)
 
-module IO
-    (H: S.HASH)
-    (L: S.LOCK)
-    (FS: S.FS with type File.lock = L.elt)
- : IO with module Hash = H
-        and module Lock = L
-        and module FS = FS
+module IO (H: S.HASH) (FS: S.FS): IO with module Hash = H and module FS = FS
 (** The {i functor} to make a module which implements I/O operations
     on references on a file-system. *)

@@ -32,9 +32,8 @@ module type S = sig
   include module type of Value
 
   type error =
-    [ `SystemFile of FS.File.error
-    | `SystemDirectory of FS.Dir.error
-    | `SystemIO of string
+    [ `FS of FS.error
+    | `IO of string
     | D.error
     | E.error ]
 
@@ -120,38 +119,28 @@ module Make
 = struct
 
   let err_create path err =
-    error (`SystemDirectory err)
+    error (`FS err)
       "Got an error while creating the directory %a: %a."
-      Fpath.pp path FS.Dir.pp_error err
-
-  let err_open path err =
-    error (`SystemFile err)
-      "Got an error while reading %a: %a"
-      Fpath.pp path FS.File.pp_error err
-
-  let err_close path err =
-    Log.err (fun l ->
-      l "Got an error while closing %a: %a" Fpath.pp path FS.File.pp_error err)
+      Fpath.pp path FS.pp_error err
 
   let err_read path err =
-    error (`SystemFile err)
+    error (`FS err)
       "Got an error while reading %a: %a"
-      Fpath.pp path FS.File.pp_error err
+      Fpath.pp path FS.pp_error err
 
   let err_stack hash =
-    Fmt.kstrf (fun x -> Error (`SystemIO x))
+    Fmt.kstrf (fun x -> Error (`IO x))
       "Impossible to store the loosed Git object %a"
       (Fmt.hvbox H.pp) hash
 
-  module FS = FS
+  module FS = Helper.FS(FS)
 
   module Value = Value.Make(H)(I)(D)
   include Value
 
   type error =
-    [ `SystemFile of FS.File.error
-    | `SystemDirectory of FS.Dir.error
-    | `SystemIO of string
+    [ `FS of FS.error
+    | `IO of string
     | D.error
     | E.error ]
 
@@ -166,9 +155,8 @@ module Make
   let pp_error ppf = function
     | #D.error as err -> D.pp_error ppf err
     | #E.error as err -> E.pp_error ppf err
-    | `SystemIO err -> Helper.ppe ~name:"`SystemIO" Fmt.string ppf err
-    | `SystemFile sys_err -> Helper.ppe ~name:"`SystemFile" FS.File.pp_error ppf sys_err
-    | `SystemDirectory sys_err -> Helper.ppe ~name:"`SystemDirectory" FS.Dir.pp_error ppf sys_err
+    | `IO err     -> Helper.ppe ~name:"`IO" Fmt.string ppf err
+    | `FS sys_err -> Helper.ppe ~name:"`FS" FS.pp_error ppf sys_err
 
   let hash_get : Hash.t -> int -> int = fun h i -> Char.code @@ Hash.get h i
 
@@ -198,7 +186,7 @@ module Make
     | Error err ->
       Log.err (fun l ->
           l "Got an error while listing the contents of %a: %a"
-            Fpath.pp path FS.Dir.pp_error err);
+            Fpath.pp path FS.pp_error err);
       Lwt.return []
     | Ok firsts ->
       Lwt_list.fold_left_s (fun acc first ->
@@ -225,41 +213,31 @@ module Make
        and type error = [ `Decoder of string
                         | `Inflate of Inflate.error ])
 
-  let gen (type t) ~root ~window ~ztmp ~dtmp ~raw (decoder : t decoder) hash : (t, error) result Lwt.t =
+  let gen (type t) ~root ~window ~ztmp ~dtmp ~raw (decoder : t decoder) hash =
     let module D = (val decoder) in
     let first, rest = explode hash in
     let decoder     = D.default (window, ztmp, dtmp) in
     let path        = Fpath.(root / "objects" / first / rest) in
     Log.debug (fun l -> l "Reading the loose object %a." Fpath.pp path);
-    FS.File.open_r ~mode:0o400 path >>= function
-    | Error err -> err_open path err
-    | Ok ic     ->
-      let rec loop decoder =
-        match D.eval decoder with
-        | `Error (_, (#D.error as err)) -> Lwt.return (Error err)
-        | `End (_, value)               -> Lwt.return (Ok value)
-        | `Await decoder                ->
-          FS.File.read raw ic >>= function
-          | Error err -> err_read path err
-          | Ok n      ->
-            Log.debug (fun l ->
-                l "Reading %d byte(s) of the file-descriptor (object: %a)."
-                  n Hash.pp hash);
-            match D.refill (Cstruct.sub raw 0 n) decoder with
-            | Ok decoder              -> loop decoder
-            | Error (#D.error as err) -> Lwt.return (Error err)
-      in
-      Lwt.finalize
-        (fun () -> loop decoder)
-        (fun () -> FS.File.close ic >|= function
-           | Ok () -> ()
-           | Error sys_err ->
-             Log.err (fun l ->
-                 l "Got an error while closing a file-descriptor: %a."
-                   FS.File.pp_error sys_err))
-      >|= fun ret ->
-      Log.debug (fun l -> l "Finish to read the object %s / %s." first rest);
-      ret
+    FS.with_open_r path @@ fun ic ->
+    let rec loop decoder =
+      match D.eval decoder with
+      | `Error (_, (#D.error as err)) -> Lwt.return (Error err)
+      | `End (_, value)               -> Lwt.return (Ok value)
+      | `Await decoder                ->
+        FS.File.read raw ic >>= function
+        | Error err -> err_read path err
+        | Ok n      ->
+          Log.debug (fun l ->
+              l "Reading %d byte(s) of the file-descriptor (object: %a)."
+                n Hash.pp hash);
+          match D.refill (Cstruct.sub raw 0 n) decoder with
+          | Ok decoder              -> loop decoder
+          | Error (#D.error as err) -> Lwt.return (Error err)
+    in
+    loop decoder >|= fun ret ->
+    Log.debug (fun l -> l "Finished to read the object %s / %s." first rest);
+    ret
 
   let read ~root ~window ~ztmp ~dtmp ~raw hash =
     gen ~root ~window ~ztmp ~dtmp ~raw (module D) hash
@@ -342,27 +320,39 @@ module Make
     let decoder     = S.default (window, ztmp, dtmp) in
     let path = Fpath.(root / "objects" / first / rest) in
     Log.debug (fun l -> l "Reading the loose object %a." Fpath.pp path);
-    FS.File.open_r ~mode:0o400 path >>= function
-    | Error err -> err_open path err
-    | Ok read   ->
-      let rec loop decoder = match S.eval decoder with
-        | `Await decoder ->
-          (FS.File.read raw read >>= function
-            | Error err -> err_read path err
-            | Ok n      ->
-              match S.refill (Cstruct.sub raw 0 n) decoder with
-              | Ok decoder              -> loop decoder
-              | Error (#S.error as err) -> Lwt.return (Error err))
-        | `Error (_, (#S.error as err)) -> Lwt.return (Error err)
-        | `End (_, (_, size)) ->
-          FS.File.close read >|= function
-          | Ok ()     -> Ok size
-          | Error err -> err_close path err; Error (`SystemFile err)
-            (* XXX(dinosaure): [gen] checks if we consume all of the
-               input. But for this compute, we don't need to compute
-               all.  It's redundant. *)
-      in
-      loop decoder
+    FS.with_open_r path @@ fun read ->
+    let rec loop decoder = match S.eval decoder with
+      | `Error (_, (#S.error as err)) -> Lwt.return (Error err)
+      | `End (_, (_, size))           -> Lwt.return (Ok size)
+      | `Await decoder                ->
+        FS.File.read raw read >>= function
+        | Error err -> err_read path err
+        | Ok n      ->
+          match S.refill (Cstruct.sub raw 0 n) decoder with
+          | Ok decoder              -> loop decoder
+          | Error (#S.error as err) -> Lwt.return (Error err)
+    in
+    loop decoder
+
+  module EDeflated = struct
+    module E = struct
+      type state  = {
+        state: Deflate.t;
+        v    : Cstruct.t;
+      }
+      type result = unit
+      type error  = Deflate.error
+      let rec eval raw { state; v } =
+        match Deflate.eval ~src:v ~dst:raw state with
+        | `Await state          -> eval raw {v; state = Deflate.finish state}
+        | `Flush state          -> Lwt.return (`Flush {v; state})
+        | `Error (state, error) -> Lwt.return (`Error ( {v; state}, error))
+        | `End state            -> Lwt.return (`End ({v; state}, ()))
+      let used t = Deflate.used_out t.state
+      let flush x y {v; state} = {v; state = Deflate.flush x y state}
+    end
+    include Helper.Encoder(E)(FS)
+  end
 
   let write_inflated ~root ?(level = 4) ~raw ~kind value =
     let header =
@@ -380,51 +370,38 @@ module Make
       Hash.Digest.get ctx
     in
     let value' = Cstruct.concat [ header; value ] in
-    let state = Deflate.no_flush 0 (Cstruct.len value') (Deflate.default level) in
+    let state = {
+      EDeflated.E.v = value';
+      state = Deflate.no_flush 0 (Cstruct.len value') (Deflate.default level)
+    } in
     let hash = digest value' in
     let first, rest = explode hash in
-    let module E = struct
-      type state  = Deflate.t
-      type raw    = Cstruct.t
-      type result = unit
-      type error  = Deflate.error
-      let raw_length = Cstruct.len
-      let raw_blit   = Cstruct.blit
-      let rec eval raw state =
-        match Deflate.eval ~src:value' ~dst:raw state with
-        | `Await state          -> eval raw (Deflate.finish state)
-        | `Flush state          -> Lwt.return (`Flush state)
-        | `Error (state, error) -> Lwt.return (`Error (state, error))
-        | `End state            -> Lwt.return (`End (state, ()))
-      let used = Deflate.used_out
-      let flush = Deflate.flush
-    end in
     let path = Fpath.(root / "objects" / first) in
     FS.Dir.create ~path:true path >>= function
     | Error err         -> err_create path err
     | Ok (true | false) ->
       let path = Fpath.(path / rest) in
-      FS.File.open_w ~mode:0o644 path >>= function
-      | Error err -> err_open path err
-      | Ok oc     ->
-        Lwt.finalize (fun () ->
-            Helper.safe_encoder_to_file
-               ~limit:50 (module E) FS.File.write oc raw state)
-          (fun () ->
-             FS.File.close oc >>= function
-             | Ok () -> Lwt.return ()
-             | Error sys_err ->
-               Log.err (fun l ->
-                   l "Got an error while closing %a: %a"
-                     Fpath.pp path FS.File.pp_error sys_err);
-               Lwt.return ())
-        >|= function
-        | Ok ()     -> Ok hash
-        | Error err ->
-          match err with
-          | `Stack       -> err_stack hash
-          | `Writer err  -> Error (`SystemFile err)
-          | `Encoder err -> Error (`Deflate err)
+      EDeflated.to_file path raw state >|= function
+      | Ok ()                -> Ok hash
+      | Error (`Stack)       -> err_stack hash
+      | Error (`FS err)      -> Error (`FS err)
+      | Error (`Encoder err) -> Error (`Deflate err)
+
+  module EInflated = struct
+    module E = struct
+      type state  = E.encoder
+      type result = int
+      type error  = E.error
+      let used = E.used
+      let flush = E.flush
+      let eval raw state =
+        match E.eval raw state with
+        | `Flush state -> Lwt.return (`Flush state)
+        | `Error error -> Lwt.return (`Error (state, error))
+        | `End state   -> Lwt.return (`End state)
+    end
+    include Helper.Encoder(E)(FS)
+  end
 
   let write ~root ?(capacity = 0x100) ?(level = 4) ~ztmp ~raw value =
     let hash        = digest value in
@@ -432,41 +409,15 @@ module Make
     let encoder     = E.default (capacity, value, level, ztmp) in
     let path        = Fpath.(root / "objects" / first / rest) in
     Log.debug (fun l -> l "Writing a new loose object %a." Fpath.pp path);
-    let module E = struct
-      type state  = E.encoder
-      type raw    = Cstruct.t
-      type result = int
-      type error  = E.error
-      let raw_length = Cstruct.len
-      let raw_blit   = Cstruct.blit
-      let eval raw state =
-        match E.eval raw state with
-        | `Flush state -> Lwt.return (`Flush state)
-        | `Error error -> Lwt.return (`Error (state, error))
-        | `End state -> Lwt.return (`End state)
-      let used = E.used
-      let flush = E.flush
-    end in
     FS.Dir.create ~path:true Fpath.(root / "objects" / first) >>= function
     | Error err -> err_create path err
     | Ok (true | false) ->
-      FS.File.open_w ~mode:0o644 path >>= function
-      | Error err -> err_open path err
-      | Ok oc     ->
-        Lwt.finalize (fun () ->
-            Helper.safe_encoder_to_file
-              ~limit:50 (module E) FS.File.write oc raw encoder)
-          (fun () ->
-             FS.File.close oc >|= function
-             | Ok ()     -> ()
-             | Error err -> err_close path err)
-        >|= function
-        | Ok r ->
-          Log.debug (fun l -> l "Wrote the object %s/%s." first rest);
-          Ok (hash, r)
-        | Error err -> match err with
-          | `Writer sys_err         -> Error (`SystemFile sys_err)
-          | `Encoder (`Deflate err) -> Error (`Deflate err)
-          | `Stack                  -> err_stack hash
+      EInflated.to_file path raw encoder >|= function
+      | Error (`FS e)                 -> Error (`FS e)
+      | Error (`Encoder (`Deflate e)) -> Error (`Deflate e)
+      | Error `Stack                  -> err_stack hash
+      | Ok r ->
+        Log.debug (fun l -> l "Wrote the object %s/%s" first rest);
+        Ok (hash, r)
 
 end

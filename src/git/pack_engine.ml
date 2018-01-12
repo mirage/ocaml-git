@@ -32,7 +32,8 @@ module type S = sig
 
   module PACKDecoder: Unpack.DECODER
     with module Hash = Hash
-     and module Mapper = FS.Mapper
+     and type Mapper.error = FS.error
+     and type Mapper.fd = FS.Mapper.fd
      and module Inflate = Inflate
 
   module PACKEncoder: Pack.ENCODER
@@ -58,11 +59,9 @@ module type S = sig
     | `PackInfo of Pack_info.error
     | `IdxDecoder of IDXDecoder.error
     | `IdxEncoder of IDXEncoder.error
-    | `SystemFile of FS.File.error
-    | `SystemMapper of FS.Mapper.error
-    | `SystemDir of FS.Dir.error
+    | `FS of FS.error
     | `Invalid_hash of Hash.t
-    | `SystemIO of string
+    | `IO of string
     | `Integrity of string
     | `Not_found ]
 
@@ -147,20 +146,13 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
   module Hash = H
   module Inflate = I
   module Deflate = D
-  module FS = FS
+  module FS = Helper.FS(FS)
 
-  module Pack_info
-    : module type of Pack_info.Make(H)(I)
-      with module Hash = Hash
-       and module Inflate = Inflate
-    = Pack_info.Make(H)(I)
-
-  module PACKDecoder
-    : Unpack.DECODER
-      with module Hash = Hash
-       and module Inflate = Inflate
-       and module Mapper = FS.Mapper
-    = Unpack.MakeDecoder(H)(FS.Mapper)(I)
+  module Pack_info = Pack_info.Make(H)(I)
+  module PACKDecoder = Unpack.MakeDecoder(H)(struct
+      type error = FS.error
+      include FS.Mapper
+    end)(I)
   module PACKEncoder = Pack.MakePACKEncoder(H)(D)
   module IDXDecoder = Index_pack.Lazy(H)
   module IDXEncoder = Index_pack.Encoder(H)
@@ -276,27 +268,23 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
     | `PackInfo of Pack_info.error
     | `IdxDecoder of IDXDecoder.error
     | `IdxEncoder of IDXEncoder.error
-    | `SystemFile of FS.File.error
-    | `SystemMapper of FS.Mapper.error
-    | `SystemDir of FS.Dir.error
+    | `FS of FS.error
     | `Invalid_hash of Hash.t
-    | `SystemIO of string
+    | `IO of string
     | `Integrity of string
     | `Not_found ]
 
   let pp_error ppf = function
-    | `PackDecoder err      -> Fmt.pf ppf "(`PackDecoder %a)" PACKDecoder.pp_error err
-    | `PackEncoder err      -> Fmt.pf ppf "(`PackEncoder %a)" PACKEncoder.pp_error err
-    | `IdxDecoder err       -> Fmt.pf ppf "(`IdxDecoder %a)" IDXDecoder.pp_error err
-    | `IdxEncoder err       -> Fmt.pf ppf "(`IdxEncoder %a)" IDXEncoder.pp_error err
-    | `SystemFile sys_err   -> Fmt.pf ppf "(`SystemFile %a)" FS.File.pp_error sys_err
-    | `SystemDir sys_err    -> Fmt.pf ppf "(`SystemDir %a)" FS.Dir.pp_error sys_err
-    | `SystemMapper sys_err -> Fmt.pf ppf "(`SystemMapper %a)" FS.Mapper.pp_error sys_err
-    | `Invalid_hash hash    -> Fmt.pf ppf "(`Invalid_hash %a)" Hash.pp hash
-    | `SystemIO err         -> Fmt.pf ppf "(`SystemIO %s)" err
-    | `Integrity err        -> Fmt.pf ppf "(`Integrity %s)" err
-    | `Not_found            -> Fmt.pf ppf "`Not_found"
-    | `PackInfo err         -> Fmt.pf ppf "(`Pack_info %a)" Pack_info.pp_error err
+    | `PackDecoder err   -> Fmt.pf ppf "(`PackDecoder %a)" PACKDecoder.pp_error err
+    | `PackEncoder err   -> Fmt.pf ppf "(`PackEncoder %a)" PACKEncoder.pp_error err
+    | `IdxDecoder err    -> Fmt.pf ppf "(`IdxDecoder %a)" IDXDecoder.pp_error err
+    | `IdxEncoder err    -> Fmt.pf ppf "(`IdxEncoder %a)" IDXEncoder.pp_error err
+    | `FS sys_err        -> Fmt.pf ppf "(`FS %a)" FS.pp_error sys_err
+    | `Invalid_hash hash -> Fmt.pf ppf "(`Invalid_hash %a)" Hash.pp hash
+    | `IO err            -> Fmt.pf ppf "(`IO %s)" err
+    | `Integrity err     -> Fmt.pf ppf "(`Integrity %s)" err
+    | `Not_found         -> Fmt.pf ppf "`Not_found"
+    | `PackInfo err      -> Fmt.pf ppf "(`Pack_info %a)" Pack_info.pp_error err
 
   (* XXX(dinosaure): to make a _unloaded_ pack object. *)
   let load_index path =
@@ -311,16 +299,16 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
     in
     let open Lwt_result in
     (* FIXME: this code is horrible *)
-    ((FS.Mapper.openfile path
-      >>!= (fun sys_err -> Lwt.return (`SystemMapper sys_err))
+    ((FS.Mapper.openfile path >>!=
+      (fun sys_err -> Lwt.return (`FS sys_err))
       >>= fun fd -> FS.Mapper.length fd
       >>!= (fun sys_err -> close fd sys_err)
-      >>!= (fun sys_err -> Lwt.return (`SystemMapper sys_err))
+      >>!= (fun sys_err -> Lwt.return (`FS sys_err))
       >|= fun length -> (fd, length))
      >>= fun (fd, length) -> (
        FS.Mapper.map ~share:false fd (Int64.to_int length)
        >>!= (fun sys_err -> close fd sys_err)
-       >>!= (fun sys_err -> Lwt.return (`SystemMapper sys_err))
+       >>!= (fun sys_err -> Lwt.return (`FS sys_err))
        >|= fun map -> (fd, map)
      ) >>= fun (fd, map) -> (
        Lwt.return (IDXDecoder.make map)
@@ -409,49 +397,37 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
                            ; hunks = hunks'
                            ; depth = depth' }
 
-  let save_idx_file ~root sequence hash_pack =
-    let filename_idx = Fmt.strf "pack-%s.idx" (Hash.to_hex hash_pack) in
-    let encoder_idx = IDXEncoder.default sequence hash_pack in
-    let module E = struct
+  module EIDX = struct
+    module E = struct
       type state  = IDXEncoder.t
-      type raw    = Cstruct.t
       type result = unit
       type error  = IDXEncoder.error
-      let raw_length = Cstruct.len
-      let raw_blit   = Cstruct.blit
       type end' = [ `End of state ]
       type rest = [ `Flush of state | `Error of state * error ]
+      let flush = IDXEncoder.flush
+      let used = IDXEncoder.used_out
       let eval raw state = match IDXEncoder.eval raw state with
         | #end' as v   -> let `End state = v in Lwt.return (`End (state, ()))
         | #rest as res -> Lwt.return res
-      let flush = IDXEncoder.flush
-      let used = IDXEncoder.used_out
-    end in
+    end
+    include Helper.Encoder(E)(FS)
+  end
+
+  let err_stack_idx root file =
+    let path = Fpath.(root / "objects" / "pack" / file) in
+    Fmt.kstrf (fun x ->  Lwt.return (Error (`IO x)))
+      "Impossible to store the IDX file: %a." Fpath.pp path
+
+  let save_idx_file ~root sequence hash_pack =
+    let file = Fmt.strf "pack-%s.idx" (Hash.to_hex hash_pack) in
+    let encoder_idx = IDXEncoder.default sequence hash_pack in
     let raw = Cstruct.create 0x8000 in
-    FS.File.open_w ~mode:0o644 Fpath.(root / "objects" / "pack" / filename_idx) >>= function
-    | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
-    | Ok fd ->
-      Helper.safe_encoder_to_file
-        ~limit:50 (module E) FS.File.write fd raw encoder_idx
-      >>= function
-      | Error err ->
-        ((FS.File.close fd >>= function
-           | Error sys_err ->
-             Log.err (fun l -> l ~header:"v_total" "Impossible to close the file %a: %a."
-                         Fpath.pp Fpath.(root / "objects" / "pack" / filename_idx)
-                         FS.File.pp_error sys_err);
-             Lwt.return ()
-           | Ok () -> Lwt.return ()) >>= fun () -> match err with
-         | `Stack ->
-           Lwt.return (Error (`SystemIO (Fmt.strf "Impossible to store the IDX file: %a."
-                                           Fpath.pp Fpath.(root / "objects" / "pack" / filename_idx))))
-         | `Writer sys_err ->
-           Lwt.return (Error (`SystemFile sys_err))
-         | `Encoder err ->
-           Lwt.return (Error (`IdxEncoder err)))
-      | Ok () ->
-        FS.File.close fd
-        >>!= (fun sys_err -> Lwt.return (`SystemFile sys_err))
+    let path = Fpath.(root / "objects" / "pack" / file) in
+    EIDX.to_file path raw encoder_idx >>= function
+    | Ok ()                -> Lwt.return (Ok ())
+    | Error `Stack         -> err_stack_idx root file
+    | Error (`FS sys_err)  -> Lwt.return (Error (`FS sys_err))
+    | Error (`Encoder err) -> Lwt.return (Error (`IdxEncoder err))
 
   exception Leave of Hash.t
 
@@ -462,29 +438,32 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
       | n -> int_of_char '0' + n - 26 - 26
     in
     let gen () = char_of_int (gen ()) in
-
     Bytes.create len |> fun raw ->
     for i = 0 to len - 1 do Bytes.set raw i (gen ()) done;
     Bytes.unsafe_to_string raw
 
-  let save_pack_file fmt entries get =
-    let ztmp = Cstruct.create 0x8000 in
-    let state = PACKEncoder.default ztmp entries in
-    let option_get ~default = function Some a -> a | None -> default in
-    let module E = struct
-      type state =
-        { pack : PACKEncoder.t
-        ; src  : Cstruct.t option }
-      type raw = Cstruct.t
-      type result =
-        { tree : (Crc32.t * int64) PACKEncoder.Radix.t
-        ; hash : Hash.t }
+  module EPACK = struct
+    module E = struct
+
+      type state = {
+        get : Graph.key -> Cstruct.t option Lwt.t;
+        pack: PACKEncoder.t;
+        src : Cstruct.t option;
+      }
+
+      type result = {
+        tree: (Crc32.t * int64) PACKEncoder.Radix.t;
+        hash: Hash.t
+      }
+
       type error = PACKEncoder.error
-      let raw_length = Cstruct.len
-      let raw_blit   = Cstruct.blit
       let empty = Cstruct.create 0
+      let option_get ~default = function Some a -> a | None -> default
+
       let rec eval dst state =
-        match PACKEncoder.eval (option_get ~default:empty state.src) dst state.pack with
+        match
+          PACKEncoder.eval (option_get ~default:empty state.src) dst state.pack
+        with
         | `End (pack, hash) ->
           Lwt.return (`End ({ state with pack; },
                             { tree = (PACKEncoder.idx pack)
@@ -493,59 +472,54 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
         | `Flush pack        -> Lwt.return (`Flush { state with pack; })
         | `Await pack ->
           match state.src with
-          | Some _ -> eval dst { pack = PACKEncoder.finish pack ; src = None }
+          | Some _ ->
+            eval dst { state with pack = PACKEncoder.finish pack ; src = None }
           | None   ->
             let hash = PACKEncoder.expect pack in
-            get hash >>= function
-            | Some raw ->
-              eval dst { pack = PACKEncoder.refill 0 (Cstruct.len raw) pack
-                       ; src = Some raw }
+            state.get hash >>= function
             | None -> Lwt.fail (Leave hash)
+            | Some raw ->
+              let state = {
+                state with pack = PACKEncoder.refill 0 (Cstruct.len raw) pack;
+                           src  = Some raw;
+              } in
+              eval dst state
+
       let flush off len ({ pack; _ } as state) =
         { state with pack = PACKEncoder.flush off len pack }
+
       let used { pack; _ } = PACKEncoder.used_out pack
-    end in
+
+    end
+    include Helper.Encoder(E)(FS)
+  end
+
+  let err_stack temp file =
+    Fmt.kstrf (fun x -> Error (`IO x))
+      "Impossible to store the PACK file: %a." Fpath.pp
+      Fpath.(temp / file)
+
+  let save_pack_file fmt entries get =
+    let ztmp = Cstruct.create 0x8000 in
     let filename_pack = fmt (random_string 10) in
-    let ( >!= ) = Lwt_result.bind_lwt_err in
+    let state = PACKEncoder.default ztmp entries in
     FS.Dir.temp () >>= fun temp ->
-    FS.File.open_w ~mode:0o644 Fpath.(temp / filename_pack) >>= function
-    | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
-    | Ok fd ->
-      let raw = Cstruct.create 0x8000 in
-      (let close value =
-         FS.File.close fd >>= function
-         | Error sys_err ->
-           Log.err (fun l -> l ~header:"save_pack_file" "Impossible to close the pack file %a: %a."
-                       Fpath.pp Fpath.(temp / filename_pack)
-                       FS.File.pp_error sys_err);
-           Lwt.return value
-         | Ok () -> Lwt.return value
-       in
-       let open Lwt_result in
-       (Lwt.try_bind (fun () ->
-            Helper.safe_encoder_to_file ~limit:50 (module E)
-              FS.File.write fd raw { E.src = None; pack = state })
-           (function
-             | Ok _ as v -> Lwt.return v
-             | (Error `Stack
-               | Error (`Writer _)
-               | Error (`Encoder _)) as err -> Lwt.return err)
-           (function
-             | Leave hash -> Lwt.return (Error (`Invalid_hash hash))
-             | exn        -> Lwt.fail exn)) (* XXX(dinosaure): should never happen. *)
-       >!= close
-       >>= (fun ret -> close (Ok ret)))
-      >|= function
-      | Error (`Invalid_hash _ ) as err -> err
-      | Error `Stack ->
-        Fmt.kstrf (fun x -> Error (`SystemIO x))
-          "Impossible to store the PACK file: %a." Fpath.pp
-          Fpath.(temp / filename_pack)
-      | Error (`Writer sys_err) -> Error (`SystemFile sys_err)
-      | Error (`Encoder err)    -> Error (`PackEncoder err)
-      | Ok { E.tree; E.hash; }  ->
-        Ok (Fpath.(temp / filename_pack)
-           , PACKEncoder.Radix.to_sequence tree, hash)
+    let path = Fpath.(temp / filename_pack) in
+    let raw = Cstruct.create 0x8000 in
+    let state = { EPACK.E.get; src = None; pack = state } in
+    Lwt.catch (fun () ->
+        EPACK.to_file ~atomic:false path raw state >|= function
+        | Ok { EPACK.E.tree; hash; } ->
+          Ok (Fpath.(temp / filename_pack)
+             , PACKEncoder.Radix.to_sequence tree
+             , hash)
+        | Error `Stack  -> err_stack temp filename_pack
+        | Error (`FS _) as e -> e
+        | Error (`Encoder e) -> Error (`PackEncoder e)
+      ) (function
+        | Leave hash -> Lwt.return (Error (`Invalid_hash hash))
+        | exn        -> Lwt.fail exn (* XXX(dinosaure): should never happen. *)
+      )
 
   let add_exists ~root t hash =
     let filename_idx = Fmt.strf "pack-%s.idx" (Hash.to_hex hash) in
@@ -562,85 +536,51 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
     let `Full { Pack_info.Full.hash = hash_pack; Pack_info.Full.thin; } =
       info.Pack_info.state
     in
-    if thin
-    then raise (Invalid_argument "Impossible to store a thin pack in your git repository.");
+    if thin then invalid_arg "Impossible to store a thin pack.";
     let filename_pack = Fmt.strf "pack-%s.pack" (Hash.to_hex hash_pack) in
     let filename_idx = Fmt.strf "pack-%s.idx" (Hash.to_hex hash_pack) in
-    FS.File.move path Fpath.(root / "objects" / "pack" / filename_pack) >>= function
-    | Error err -> Lwt.return (Error (`SystemFile err))
-    | Ok () ->
-      FS.File.open_w ~mode:0o644 Fpath.(root / "objects" / "pack" / filename_idx) >>= function
-      | Error err -> Lwt.return (Error (`SystemFile err))
-      | Ok fdi ->
-        let sequence = Pack_info.Radix.to_sequence info.Pack_info.tree in
-        let encoder_idx = IDXEncoder.default sequence hash_pack in
-        (* XXX(dinosaure): we save an IDX file for a future
-           computation of git/ocaml-git of this PACK file even if we
-           don't use it - we use the complete radix tree. *)
-        let module E = struct
-          type state  = IDXEncoder.t
-          type raw    = Cstruct.t
-          type result = unit
-          type error  = IDXEncoder.error
-          let raw_length = Cstruct.len
-          let raw_blit   = Cstruct.blit
-          type end' = [ `End of state ]
-          type rest = [ `Flush of state | `Error of state * error ]
-          let eval raw state = match IDXEncoder.eval raw state with
-            | #end' as v   -> let `End state = v in Lwt.return (`End (state, ()))
-            | #rest as res -> Lwt.return res
-          let flush = IDXEncoder.flush
-          let used = IDXEncoder.used_out
-        end in
-        let raw = Cstruct.create 0x8000 in
-        Helper.safe_encoder_to_file
-          ~limit:50 (module E) FS.File.write fdi raw encoder_idx
-        >>= function
-        | Error err ->
-          ((FS.File.close fdi >>= function
-             | Error sys_err ->
-               Log.err (fun l ->
-                   l "Got an error while trying to close the file %a: %a."
-                     Fpath.pp Fpath.(root / "objects" / "pack" / filename_idx)
-                     FS.File.pp_error sys_err);
-               Lwt.return ()
-             | Ok () -> Lwt.return ()) >>= fun () -> match err with
-           | `Stack ->
-             Lwt.return (Error (`SystemIO (Fmt.strf "Impossible to store the IDX file: %a."
-                                             Fpath.pp Fpath.(root / "objects" / "pack" / filename_idx))))
-           | `Writer sys_err ->
-             Lwt.return (Error (`SystemFile sys_err))
-           | `Encoder err ->
-             Lwt.return (Error (`IdxEncoder err)))
-        | Ok () -> FS.File.close fdi >>= function
-          | Error err -> Lwt.return (Error (`SystemFile err))
-          | Ok () ->
-            (FS.Mapper.openfile Fpath.(root / "objects" / "pack" / filename_pack)
-             >>!= fun sys_err -> Lwt.return (`SystemMapper sys_err))
-            >>?= fun fdp ->
-            let fun_cache _ = None in
-            let fun_idx hash = Pack_info.Radix.lookup info.Pack_info.tree hash in
-            let fun_revidx hash =
-              try let (_, ret) = Pack_info.Graph.find hash info.Pack_info.graph in ret
-              with Not_found -> None
-            in
-            let fun_last _ = Lwt.return None in
-            (* XXX(dinosaure): the pack file is not thin. So it does
-               not request any external ressource. *)
-            (PACKDecoder.make fdp
-               fun_cache
-               fun_idx
-               fun_revidx
-               fun_last
-             >>!= fun err -> Lwt.return (`SystemMapper err))
-            >>?= fun decoder ->
-            let pack = Total { decoder; fdp; info; } in
-            Lwt_mvar.take t.packs
-            >>= fun packs -> Lwt_mvar.put t.packs (Graph.add hash_pack pack packs)
-            >>= fun () -> merge t info
-            >>= fun () ->
-            let count = Pack_info.Graph.cardinal info.Pack_info.graph in
-            Lwt.return (Ok (hash_pack, count))
+    FS.File.move path Fpath.(root / "objects" / "pack" / filename_pack)
+    >>= function
+    | Error err -> Lwt.return (Error (`FS err))
+    | Ok ()     ->
+      let path = Fpath.(root / "objects" / "pack" / filename_idx) in
+      let sequence = Pack_info.Radix.to_sequence info.Pack_info.tree in
+      let encoder_idx = IDXEncoder.default sequence hash_pack in
+      (* XXX(dinosaure): we save an IDX file for a future computation
+         of git/ocaml-git of this PACK file even if we don't use it -
+         we use the complete radix tree. *)
+      let raw = Cstruct.create 0x8000 in
+      EIDX.to_file path raw encoder_idx >>= function
+      | Error `Stack       -> err_stack_idx root filename_idx
+      | Error (`FS _) as e -> Lwt.return e
+      | Error (`Encoder e) -> Lwt.return (Error (`IdxEncoder e))
+      | Ok ()              ->
+        (FS.Mapper.openfile Fpath.(root / "objects" / "pack" / filename_pack)
+         >>!= fun sys_err -> Lwt.return (`FS sys_err))
+        >>?= fun fdp ->
+        let fun_cache _ = None in
+        let fun_idx hash = Pack_info.Radix.lookup info.Pack_info.tree hash in
+        let fun_revidx hash =
+          try let (_, ret) = Pack_info.Graph.find hash info.Pack_info.graph in ret
+          with Not_found -> None
+        in
+        let fun_last _ = Lwt.return None in
+        (* XXX(dinosaure): the pack file is not thin. So it does
+           not request any external ressource. *)
+        (PACKDecoder.make fdp
+           fun_cache
+           fun_idx
+           fun_revidx
+           fun_last
+         >>!= fun err -> Lwt.return (`FS err))
+        >>?= fun decoder ->
+        let pack = Total { decoder; fdp; info; } in
+        Lwt_mvar.take t.packs
+        >>= fun packs -> Lwt_mvar.put t.packs (Graph.add hash_pack pack packs)
+        >>= fun () -> merge t info
+        >|= fun () ->
+        let count = Pack_info.Graph.cardinal info.Pack_info.graph in
+        Ok (hash_pack, count)
 
   (* XXX(dinosaure): this function could not be exposed. It used in
      a specific context, when a pack decoder requests an external
@@ -767,7 +707,7 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
                l "Got an error while trying to close the index fd: %a."
                  FS.Mapper.pp_error sys_err');
            sys_err)
-     >>!= (fun sys_err -> Lwt.return (`SystemMapper sys_err)))
+     >>!= (fun sys_err -> Lwt.return (`FS sys_err)))
     >>?= fun fdp ->
     (let fun_cache  = fun _ -> None in
      let fun_idx    = fun hash -> IDXDecoder.find decoder_idx hash in
@@ -775,11 +715,11 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
      let fun_last   = fun hash' -> read_and_exclude ~root t hash hash' in
 
      (PACKDecoder.make fdp fun_cache fun_idx fun_revidx fun_last
-      >>!= (fun err -> Lwt.return (`SystemMapper err)))
+      >>!= (fun err -> Lwt.return (`FS err)))
      >>!= (fun sys_err -> close_all fdi fdp sys_err))
     >>?= fun decoder_pack ->
     ((FS.File.open_r ~mode:0o644 Fpath.(root / "objects" / "pack" / filename_pack)
-      >>!= (fun sys_err -> Lwt.return (`SystemFile sys_err)))
+      >>!= (fun sys_err -> Lwt.return (`FS sys_err)))
      >>!= (fun sys_err -> close_all fdi fdp sys_err))
     >>?= fun fd ->
     (let raw = Cstruct.create 0x8000 in
@@ -790,7 +730,7 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
        | Error sys_err ->
          Log.err (fun l ->
              l "Retrieve an error when we read the PACK file %s: %a."
-               filename_pack FS.File.pp_error sys_err);
+               filename_pack FS.pp_error sys_err);
          None
      in
      let info = Pack_info.v hash in
@@ -803,7 +743,7 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
          | Error sys_err' ->
            Log.err (fun l ->
                l "Impossible to close the fd of the PACK file (to analyze it): \
-                  %a." FS.File.pp_error sys_err');
+                  %a." FS.pp_error sys_err');
            sys_err))
     >>?= fun info ->
     let pack =

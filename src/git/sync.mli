@@ -95,13 +95,13 @@ module type S = sig
     -> (Store.Hash.t, error) result Lwt.t
 
   val fetch_some:
-    Store.t -> ?locks:Store.Lock.t ->
+    Store.t ->
     ?capabilities:Capability.t list ->
     references:Store.Reference.t list Store.Reference.Map.t ->
     Uri.t -> (Store.Hash.t Store.Reference.Map.t
               * Store.Reference.t list Store.Reference.Map.t, error) result Lwt.t
-  (** [fetch_some git ?locks ?capabilities ~references repository] will
-      fetch some remote references specified by [references].
+  (** [fetch_some git ?capabilities ~references repository] will fetch
+      some remote references specified by [references].
 
       [references] is a map which:
       {ul
@@ -148,19 +148,20 @@ module type S = sig
       local references. *)
 
   val fetch_all:
-    Store.t -> ?locks:Store.Lock.t ->
+    Store.t ->
     ?capabilities:Capability.t list ->
     references:Store.Reference.t list Store.Reference.Map.t ->
     Uri.t -> (Store.Hash.t Store.Reference.Map.t
               * Store.Reference.t list Store.Reference.Map.t
               * Store.Hash.t Store.Reference.Map.t, error) result Lwt.t
-  (** [fetch_all git ?locks ?capabilities ~references repository] has
-      the same semantic than {!fetch_some} for any remote references found
+  (** [fetch_all git ?capabilities ~references repository] has the
+      same semantic than {!fetch_some} for any remote references found
       on [references]. However, [fetch all] will download all remote
-      references available on the server (and whose hash is not available
-      on the local store). If these remote references are not associated
-      with some local references, we return a third map which contains
-      these remote references binded with the new hash downloaded.
+      references available on the server (and whose hash is not
+      available on the local store). If these remote references are
+      not associated with some local references, we return a third map
+      which contains these remote references binded with the new hash
+      downloaded.
 
       We {b don't} notice any non-downloaded remote references not
       found on the [references] map and whose hash already exists on
@@ -170,11 +171,11 @@ module type S = sig
       references or just give up. *)
 
   val fetch_one:
-    Store.t -> ?locks:Store.Lock.t ->
+    Store.t ->
     ?capabilities:Capability.t list ->
     reference:(Store.Reference.t * Store.Reference.t list) ->
     Uri.t -> ([ `AlreadySync | `Sync of Store.Hash.t Store.Reference.Map.t ], error) result Lwt.t
-  (** [fetch_one git ?locks ?capabilities ~reference repository] is a
+  (** [fetch_one git ?capabilities ~reference repository] is a
       specific call of {!fetch_some} with only one reference. Then, it
       retuns:
 
@@ -185,7 +186,7 @@ module type S = sig
       set [local_ref] with this new hash.}} *)
 
   val clone:
-    Store.t -> ?locks:Store.Lock.t ->
+    Store.t ->
     ?capabilities:Capability.t list ->
     reference:(Store.Reference.t * Store.Reference.t) ->
     Uri.t -> (unit, error) result Lwt.t
@@ -253,7 +254,6 @@ sig
 
   val update_and_create:
     Store.t ->
-    ?locks:Store.Lock.t ->
     references:Store.Reference.t list Store.Reference.Map.t ->
     (Store.Reference.t * Store.Hash.t) list ->
     (Store.Hash.t Store.Reference.Map.t

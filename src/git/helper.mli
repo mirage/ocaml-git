@@ -114,14 +114,10 @@ val fdigest:
 module type ENCODER =
 sig
   type state
-  type raw
   type result
   type error
 
-  val raw_length: raw -> int
-  val raw_blit: raw -> int -> raw -> int -> int -> unit
-
-  val eval: raw -> state ->
+  val eval: Cstruct.t -> state ->
     [ `Flush of state
     | `End of (state * result)
     | `Error of (state * error) ] Lwt.t
@@ -130,33 +126,45 @@ sig
   val flush: int -> int -> state -> state
 end
 
-type ('state, 'raw, 'result, 'error) encoder =
-  (module ENCODER
-    with type state = 'state
-     and type raw = 'raw
-     and type result = 'result
-     and type error = 'error)
-and ('fd, 'raw, 'error) writer = 'raw -> ?off:int -> ?len:int -> 'fd -> (int, 'error) result Lwt.t
+module Encoder (E: ENCODER) (FS: S.FS): sig
 
-(** [safe_encoder_to_file ~limit encoder writer fd tmp state] encodes
-    a value contained in [state] to a file represented by [fd] with
-    the output operation [writer]. This function takes care about
-    shift/compress the buffer [tmp] from the value returned by
-    [writer]. Then, if [writer] returns [0], we continue to try to
-    write [limit] times - if [writer] continue to fail, we stop and
-    return an error [`Stack].
+  type error = [
+    | `Stack
+    | `Encoder of E.error
+    | `FS of FS.error
+  ]
 
-    If we retrieve an encoder error while we serialize the value, we
-    stop and return [`Encoder]. If the writer returns an error, we
-    stop and retrun [`Writer].
+  (** [to_file f tmp state] encodes [state] in the file [f] using
+      [tmp] as an intermediary buffer.
 
-    In any case, we {b don't close} the file-descriptor. Then, if we
-    retrieve an error, that means we wrote {b partially} the value in
-    your file-system - and you need to take care about that.
-*)
-val safe_encoder_to_file:
-  limit:int ->
-  ('state, 'raw, 'res, 'err_encoder) encoder ->
-  ('fd, 'raw, 'err_writer) writer ->
-  'fd -> 'raw -> 'state ->
-  ('res, [ `Stack | `Encoder of 'err_encoder | `Writer of 'err_writer ]) result Lwt.t
+      The result is [Error `Stack] if at least [limit] writes have
+      returned 0.
+
+      If [atomic] is set, the operation is guaranteed to be atomic. *)
+  val to_file: ?limit:int -> ?atomic:bool -> Fpath.t -> Cstruct.t -> E.state ->
+    (E.result, error) result Lwt.t
+
+end
+
+module FS (FS: S.FS): sig
+
+  include (module type of struct include FS end)
+
+  val with_open_r: Fpath.t ->
+    ([ `Read ] FS.File.fd -> ('a, [> `FS of FS.error] as 'e) result Lwt.t) ->
+    ('a, 'e) result Lwt.t
+  (** [with_open_r p f] opens the file [p] in read-only mode and calls
+      [f] on the resulting file-descriptor. When [f] completes, the
+      file-descriptor is closed. Failure to close that file-descriptor
+      is ignored. *)
+
+  val with_open_w: ?atomic:bool -> Fpath.t ->
+    ([ `Write ] FS.File.fd -> ('a, [> `FS of FS.error] as 'e) result Lwt.t) ->
+    ('a, 'e) result Lwt.t
+    (** Same as {!with_open_r} but the file [p] is opened in
+        read-write mode. If [atomic] is set (it is by default), the
+        application of [f] is guaranteed to be atomic. This is done by
+        creating a temporary file and renaming it when all the work is
+        done. *)
+
+end

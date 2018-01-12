@@ -4,7 +4,7 @@ module FS = Fs
 
 module Store (G: FS.GAMMA) (X: FS.S) = struct
   module F = Fs.Make(G)(X)
-  module S = Git.Store.FS(SHA1)(Git.Mem.Lock)(F)(Git.Inflate)(Git.Deflate)
+  module S = Git.Store.FS(SHA1)(F)(Git.Inflate)(Git.Deflate)
   include S
 end
 

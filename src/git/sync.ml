@@ -103,14 +103,14 @@ module type S = sig
     -> (Store.Hash.t, error) result Lwt.t
 
   val fetch_some:
-    Store.t -> ?locks:Store.Lock.t ->
+    Store.t ->
     ?capabilities:Capability.t list ->
     references:Store.Reference.t list Store.Reference.Map.t ->
     Uri.t -> (Store.Hash.t Store.Reference.Map.t
               * Store.Reference.t list Store.Reference.Map.t, error) result Lwt.t
 
   val fetch_all:
-    Store.t -> ?locks:Store.Lock.t ->
+    Store.t ->
     ?capabilities:Capability.t list ->
     references:Store.Reference.t list Store.Reference.Map.t ->
     Uri.t -> (Store.Hash.t Store.Reference.Map.t
@@ -118,13 +118,13 @@ module type S = sig
               * Store.Hash.t Store.Reference.Map.t, error) result Lwt.t
 
   val fetch_one:
-    Store.t -> ?locks:Store.Lock.t ->
+    Store.t ->
     ?capabilities:Capability.t list ->
     reference:(Store.Reference.t * Store.Reference.t list) ->
     Uri.t -> ([ `AlreadySync | `Sync of Store.Hash.t Store.Reference.Map.t ], error) result Lwt.t
 
   val clone:
-    Store.t -> ?locks:Store.Lock.t ->
+    Store.t ->
     ?capabilities:Capability.t list ->
     reference:(Store.Reference.t * Store.Reference.t) ->
     Uri.t -> (unit, error) result Lwt.t
@@ -338,7 +338,7 @@ module Common
 
   exception Jump of Store.Ref.error
 
-  let update_and_create git ?locks ~references results =
+  let update_and_create git ~references results =
     let results = List.fold_left
         (fun results (remote_ref, hash) -> Store.Reference.Map.add remote_ref hash results)
         Store.Reference.Map.empty results in
@@ -357,7 +357,7 @@ module Common
       (fun () ->
          Lwt_list.iter_s
            (fun (local_ref, new_hash) ->
-              Store.Ref.write git ?locks local_ref (Store.Reference.Hash new_hash)
+              Store.Ref.write git local_ref (Store.Reference.Hash new_hash)
               >>= function
               | Ok _ -> Lwt.return ()
               | Error err -> Lwt.fail (Jump err))
@@ -845,7 +845,7 @@ module Make (N: NET) (S: Minimal.S) = struct
     >>= fun v -> Net.close socket
     >>= fun () -> Lwt.return v
 
-  let fetch_and_set_references git ?locks ?capabilities ~choose ~references repository =
+  let fetch_and_set_references git ?capabilities ~choose ~references repository =
     N.find_common git >>= fun (has, state, continue) ->
     let continue { Client.Decoder.acks; shallow; unshallow } state =
       continue { Negociator.acks; shallow; unshallow } state in
@@ -858,23 +858,22 @@ module Make (N: NET) (S: Minimal.S) = struct
       ~negociate:(continue, state) ~has ~want:want_handler
       repository
     >>?= fun (results, _) ->
-    Common.update_and_create git ?locks ~references results
+    Common.update_and_create git ~references results
 
-  let fetch_all git ?locks ?capabilities ~references repository =
+  let fetch_all git ?capabilities ~references repository =
     let choose _ = Lwt.return true in
     fetch_and_set_references
       ~choose
-      ?locks
       ?capabilities
       ~references
       git repository
 
-  let fetch_some git ?locks ?capabilities ~references repository =
+  let fetch_some git ?capabilities ~references repository =
     let choose remote_ref =
-      Lwt.return (Store.Reference.Map.mem remote_ref references) in
+      Lwt.return (Store.Reference.Map.mem remote_ref references)
+    in
     fetch_and_set_references
       ~choose
-      ?locks
       ?capabilities
       ~references
       git repository
@@ -889,13 +888,13 @@ module Make (N: NET) (S: Minimal.S) = struct
       Lwt.return (Ok (updated, missed))
     end
 
-  let fetch_one git ?locks ?capabilities ~reference:(remote_ref, local_refs) repository =
+  let fetch_one git ?capabilities ~reference:(remote_ref, local_refs) repository =
     let references = Store.Reference.Map.singleton remote_ref local_refs in
     let choose remote_ref =
-      Lwt.return (Store.Reference.Map.mem remote_ref references) in
+      Lwt.return (Store.Reference.Map.mem remote_ref references)
+    in
     fetch_and_set_references
       ~choose
-      ?locks
       ?capabilities
       ~references
       git repository
@@ -921,7 +920,7 @@ module Make (N: NET) (S: Minimal.S) = struct
             missed);
       Lwt.return (Ok (`Sync updated))
 
-  let clone t ?locks ?capabilities ~reference:(remote_ref, local_ref) uri =
+  let clone t ?capabilities ~reference:(remote_ref, local_ref) uri =
     Log.debug (fun l -> l "clone %a:%a" Uri.pp_hum uri S.Reference.pp remote_ref);
     let _ =
       if not (Option.mem (Uri.scheme uri) "git" ~equal:String.equal)
@@ -933,9 +932,9 @@ module Make (N: NET) (S: Minimal.S) = struct
           l ~header:"easy_clone" "Update reference %a to %a."
             S.Reference.pp local_ref S.Hash.pp hash');
 
-      S.Ref.write t ?locks local_ref (S.Reference.Hash hash')
+      S.Ref.write t local_ref (S.Reference.Hash hash')
       >>!= (fun err -> Lwt.return (`Ref err))
-      >>?= fun () -> S.Ref.write t ?locks S.Reference.head (S.Reference.Ref local_ref)
+      >>?= fun () -> S.Ref.write t S.Reference.head (S.Reference.Ref local_ref)
       >>!= fun err -> Lwt.return (`Ref err)
 
   let update_and_create git ?capabilities ~references repository =

@@ -1082,36 +1082,30 @@ end
 module Make (H: S.HASH) (FS: S.FS) = struct
 
   module Hash = H
-  module FileSystem = FS
+  module FS = Helper.FS(FS)
   module IndexDecoder = MakeIndexDecoder(H)
 
   type error =
     [ `IndexDecoder of IndexDecoder.error
-    | `SystemFile of FileSystem.File.error ]
+    | `FS of FS.error ]
 
   let pp_error ppf = function
     | `IndexDecoder err -> Fmt.pf ppf "(`IndexDecoder %a)" IndexDecoder.pp_error err
-    | `SystemFile err -> Fmt.pf ppf "(`SystemFile %a)" FileSystem.File.pp_error err
+    | `FS err           -> Fmt.pf ppf "(`FS %a)" FS.pp_error err
 
   let load ~root ~dtmp =
     let open Lwt.Infix in
-    FileSystem.File.open_r ~mode:0o400 Fpath.(root / "index") >>= function
-    | Error sys_err ->
-      Log.debug (fun l -> l "Retrieve a file-system error: %a." FileSystem.File.pp_error sys_err);
-      Lwt.return (Error (`SystemFile sys_err))
-    | Ok read ->
-      let decoder = IndexDecoder.default in
-
-      let rec loop decoder = match IndexDecoder.eval dtmp decoder with
-        | `Error (_, err) -> Lwt.return (Error (`IndexDecoder err))
-        | `End (_, index, extensions) -> Lwt.return (Ok (index, extensions))
-        | `Await decoder ->
-          FileSystem.File.read dtmp read >>= function
-          | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
-          | Ok n ->
-            Log.debug (fun l -> l "Reading %d byte(s) of the file-descriptor" n);
-            loop (IndexDecoder.refill 0 n decoder)
-      in
-
-      loop decoder
+    FS.with_open_r Fpath.(root / "index") @@ fun read ->
+    let decoder = IndexDecoder.default in
+    let rec loop decoder = match IndexDecoder.eval dtmp decoder with
+      | `Error (_, err)             -> Lwt.return (Error (`IndexDecoder err))
+      | `End (_, index, extensions) -> Lwt.return (Ok (index, extensions))
+      | `Await decoder              ->
+        FS.File.read dtmp read >>= function
+        | Error sys_err -> Lwt.return (Error (`FS sys_err))
+        | Ok n           ->
+          Log.debug (fun l -> l "Reading %d byte(s) of the file-descriptor" n);
+          loop (IndexDecoder.refill 0 n decoder)
+    in
+    loop decoder
 end

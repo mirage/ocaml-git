@@ -126,20 +126,18 @@ let main ppf progress origin branch repository directory =
         (Uri.host repository))
      (Uri.path_and_query repository)
    >!= fun err -> `Sync err) >>= fun hash ->
-  (Git_unix.FS.Ref.write git ~locks:(Git_unix.FS.dotgit git)
-     branch (Git_unix.FS.Reference.Hash hash)
+  (Git_unix.FS.Ref.write git branch (Git_unix.FS.Reference.Hash hash)
    >!= fun err -> `Reference err)
   >>= fun _ ->
   let branch_name = Fpath.base (Git_unix.FS.Reference.to_path branch) in
 
-  (Git_unix.FS.Ref.write git ~locks:(Git_unix.FS.dotgit git)
+  (Git_unix.FS.Ref.write git
      (Git_unix.FS.Reference.of_path Fpath.(v "remotes" / origin // branch_name))
      (Git_unix.FS.Reference.Hash hash)
    >!= fun err -> `Reference err)
   >>= fun _ ->
-  (Git_unix.FS.Ref.write git ~locks:(Git_unix.FS.dotgit git)
-     Git_unix.FS.Reference.head
-     (Git_unix.FS.Reference.Ref branch)
+  (Git_unix.FS.Ref.write git
+     Git_unix.FS.Reference.head (Git_unix.FS.Reference.Ref branch)
    >!= fun err -> `Reference err)
   >>= fun _ -> Lwt.return (Ok ())
 

@@ -37,12 +37,10 @@
 
 module Make
     (H: S.HASH)
-    (L: S.LOCK)
     (I: S.INFLATE)
     (D: S.DEFLATE)
   : Minimal.S
     with module Hash = H
-     and module Lock = L
      and module Inflate = I
      and module Deflate = D
 (** The {i functor} needs 4 modules:
@@ -61,17 +59,9 @@ module Make
     inflate/deflate a stream (it's possible). The only {i
     non-described by type} constraint is the Inflate module needs to
     understand the Deflate module. For example, use [zlib] to inflate
-    and [brotli] to deflate does not work.
-
-    Qbout the [Lock] module and the constraint to use the [Lwt] monad,
-    we zork on it to discard this constraint - and have a store
-    back-end free-ed from monad. *)
-
-module Lock: S.LOCK with type elt = Lwt_mutex.t
+    and [brotli] to deflate does not work. *)
 
 module Store (H : Digestif_sig.S):
   Minimal.S with module Hash    = Hash.Make(H)
-             and type Lock.t    = Lock.t
-             and type Lock.elt  = Lock.elt
              and module Inflate = Inflate
              and module Deflate = Deflate
