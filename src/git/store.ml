@@ -1462,12 +1462,12 @@ end
     ; io = Cstruct.sub raw 0x8000 0x8000 }
 
   let sanitize_filesystem root dotgit =
-    FS.Dir.create ~path:true root
-    >>?= fun _ -> FS.Dir.create ~path:true dotgit
-    >>?= fun _ -> FS.Dir.create ~path:true Fpath.(dotgit / "objects")
-    >>?= fun _ -> FS.Dir.create ~path:true Fpath.(dotgit / "objects" / "pack")
-    >>?= fun _ -> FS.Dir.create ~path:true Fpath.(dotgit / "objects" / "info")
-    >>?= fun _ -> FS.Dir.create ~path:true Fpath.(dotgit / "refs")
+    FS.Dir.create root
+    >>?= fun _ -> FS.Dir.create dotgit
+    >>?= fun _ -> FS.Dir.create Fpath.(dotgit / "objects")
+    >>?= fun _ -> FS.Dir.create Fpath.(dotgit / "objects" / "pack")
+    >>?= fun _ -> FS.Dir.create Fpath.(dotgit / "objects" / "info")
+    >>?= fun _ -> FS.Dir.create Fpath.(dotgit / "refs")
     >>?= fun _ -> Lwt.return (Ok ())
 
   let create ?root ?dotgit ?(compression = 4) () =

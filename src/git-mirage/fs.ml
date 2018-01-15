@@ -174,7 +174,7 @@ module Make (Gamma: GAMMA) (FS: S) = struct
 
     let contents ?dotfiles ?rel dir = connect @@ fun t -> contents t ?dotfiles ?rel dir
     let exists path = connect @@ fun t -> exists t path
-    let create ?path:_ dir = connect @@ fun t -> create t dir
+    let create dir = connect @@ fun t -> create t dir
     let delete path = connect @@ fun t -> delete t path
   end
 

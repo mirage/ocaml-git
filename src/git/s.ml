@@ -201,7 +201,7 @@ end
 module type DIR = sig
   type error
   val exists: Fpath.t -> (bool, error) result Lwt.t
-  val create: ?path:bool -> Fpath.t -> (bool, error) result Lwt.t
+  val create: Fpath.t -> (bool, error) result Lwt.t
   val delete: Fpath.t -> (unit, error) result Lwt.t
   val contents: ?dotfiles:bool -> ?rel:bool -> Fpath.t ->
     (Fpath.t list, error) result Lwt.t

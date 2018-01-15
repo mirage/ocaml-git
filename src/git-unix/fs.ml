@@ -62,7 +62,6 @@ let expected_unix_error exn =
   Fmt.kstrf invalid_arg "Expected an unix error: %a." Fmt.exn exn
 
 let open_pool = Lwt_pool.create 200 (fun () -> Lwt.return ())
-let mkdir_pool = Lwt_pool.create 1 (fun () -> Lwt.return ())
 
 let rec protect ?(n=0) err f =
   let sleep_t = 0.001 in
@@ -112,7 +111,7 @@ let result_map f a = match a with
 
 module Dir = struct
 
-  let create ?(path = true) dir =
+  let create dir =
     let mode = 0o755 in
     let mkdir d =
       let err = function
@@ -127,28 +126,23 @@ module Dir = struct
     | Error _ as e -> Lwt.return e
     | Ok true      -> Lwt.return (Ok false)
     | Ok false     ->
-      match path with
-      | false ->
-        Lwt_pool.use mkdir_pool (fun () -> mkdir dir) >|=
-        result_map (fun _ -> Ok false)
-      | true ->
-        let rec dirs_to_create p acc =
-          is_dir p >>= function
-          | Error _ as e -> Lwt.return e
-          | Ok true      -> Lwt.return (Ok acc)
-          | Ok false     -> dirs_to_create (Fpath.parent p) (p :: acc)
-        in
-        let rec create_them dirs () = match dirs with
-          | []          -> Lwt.return (Ok ())
-          | dir :: dirs ->
-            mkdir dir >>= function
-            | Error _ as err -> Lwt.return err
-            | Ok ()          -> create_them dirs ()
-        in
-        (dirs_to_create dir [] >>= function
-          | Ok dirs        -> create_them dirs ()
-          | Error _ as err -> Lwt.return err)
-        >|= result_map (fun _ -> Ok true)
+      let rec dirs_to_create p acc =
+        is_dir p >>= function
+        | Error _ as e -> Lwt.return e
+        | Ok true      -> Lwt.return (Ok acc)
+        | Ok false     -> dirs_to_create (Fpath.parent p) (p :: acc)
+      in
+      let rec create_them dirs () = match dirs with
+        | []          -> Lwt.return (Ok ())
+        | dir :: dirs ->
+          mkdir dir >>= function
+          | Error _ as err -> Lwt.return err
+          | Ok ()          -> create_them dirs ()
+      in
+      (dirs_to_create dir [] >>= function
+        | Ok dirs        -> create_them dirs ()
+        | Error _ as err -> Lwt.return err)
+      >|= result_map (fun _ -> Ok true)
 
   let kind path =
     let open Unix in

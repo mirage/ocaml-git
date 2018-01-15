@@ -377,7 +377,7 @@ module Make
     let hash = digest value' in
     let first, rest = explode hash in
     let path = Fpath.(root / "objects" / first) in
-    FS.Dir.create ~path:true path >>= function
+    FS.Dir.create path >>= function
     | Error err         -> err_create path err
     | Ok (true | false) ->
       let path = Fpath.(path / rest) in
@@ -409,7 +409,7 @@ module Make
     let encoder     = E.default (capacity, value, level, ztmp) in
     let path        = Fpath.(root / "objects" / first / rest) in
     Log.debug (fun l -> l "Writing a new loose object %a." Fpath.pp path);
-    FS.Dir.create ~path:true Fpath.(root / "objects" / first) >>= function
+    FS.Dir.create Fpath.(root / "objects" / first) >>= function
     | Error err -> err_create path err
     | Ok (true | false) ->
       EInflated.to_file path raw encoder >|= function
