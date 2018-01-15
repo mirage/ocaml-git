@@ -15,7 +15,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** Implementation of a Git repository with a file-system back-end.
+(** Implementation of a Git stores.
 
     This implementation is more complete than the memory back-end
     because firstly, Git was think to be use on a file-system. Then,
@@ -32,7 +32,7 @@ module type LOOSE = sig
   (** The type of the {i loosed} Git object. *)
 
   type state
-  (** The type of the Git state. *)
+  (** The type for the state of a Git store. *)
 
   type kind =
     [ `Commit
@@ -74,48 +74,27 @@ module type LOOSE = sig
   val pp_error: error Fmt.t
   (** Pretty-printer of {!error}. *)
 
-  val lookup_p: state -> Hash.t -> Hash.t option Lwt.t
-  (** [lookup_p state hash] try to find the object associated by the
-      hash [hash] in the file-system. This function can be use in the
-      concurrency context. This function returns [None] if the Git
-      object does not exist or is not stored as a {i loose} object. *)
-
   val lookup: state -> Hash.t -> Hash.t option Lwt.t
-  (** An alias of {!lookup_p}. *)
+  (** [lookup state hash] is the object associated with the hash
+      [hash]. The result is [None] if the Git object does not exist or
+      is not stored as a {i loose} object. *)
 
   val mem: state -> Hash.t -> bool Lwt.t
-  (** [mem state hash] checks if one object satisfies the predicate
+  (** [mem state hash] is true iff there is an object such that
       [digest(object) = hash]. This function is the same as [lookup
       state hash <> None]. *)
 
   val list: state -> Hash.t list Lwt.t
-  (** [list state] lists all available git {i loose} objects in the
-      file-system. The list returned does not contain all git objects
-      available in your repository but only which {i loosed} one. *)
+  (** [list state] is the list of all the available git {i loose}
+      objects in [state]. The list returned does not contain all git
+      objects available in your repository but only which {i loosed}
+      one. *)
 
-  val read_p :
-       ztmp:Cstruct.t
-    -> dtmp:Cstruct.t
-    -> raw:Cstruct.t
-    -> window:Inflate.window
-    -> state -> Hash.t -> (t, error) result Lwt.t
-  (** [read_p ~ztmp ~dtmp ~raw ~window state hash] can retrieve a git
-      {i loose} object from the file-system. It de-serializes the git
-      object to an OCaml value. This function needs some buffers:
+  val read: state -> Hash.t -> (t, error) result Lwt.t
+  (** [read state hash] is the git {i loose} object in [state] such
+      that [digest(result) = hash].
 
-      {ul
-      {- [window] is a buffer used by the {!Inflate} module}
-      {- [ztmp] is a buffer used to store the inflated flow}
-      {- [dtmp] is a buffer used by the decoder to save the inflated
-      flow (and keep it for an alteration)}
-      {- [raw] is a buffer used to store the input flow}}
-
-      This function can be used in a concurrency context only if the
-      specified buffers are not used by another process. This function
-      does not allocate any buffer and uses only the specified buffers
-      to construct the OCaml value. The git object returned respects
-      the predicate [digest(result) = hash]. Otherwise, we return an
-      {!error}:
+      Can return an {!error}:
 
       {ul
       {- {!FS.File.error} when we can not access to the git
@@ -125,59 +104,23 @@ module type LOOSE = sig
       requested git {i loose} object. That means, the git {i loose}
       object does not respect the Git format.}} *)
 
-  val read_s: state -> Hash.t -> (t, error) result Lwt.t
-  (** [read_s state hash] is the same process than {!read_p} but we
-      use the state-defined buffer. That means the client can not use
-      this function in a concurrency context with the same [state]. *)
-
-  val read: state -> Hash.t -> (t, error) result Lwt.t
-  (** Alias of {!read_s}. *)
-
-  val size_p :
-       ztmp:Cstruct.t
-    -> dtmp:Cstruct.t
-    -> raw:Cstruct.t
-    -> window:Inflate.window
-    -> state -> Hash.t -> (int64, error) result Lwt.t
-  (** [size_p ~ztmp ~dtmp ~raw ~window state hash] returns the size of
-      the git {i loose} object which respects the predicate
-      [digest(object) = hash]. The size is how many byte(s) are needed
-      to store the serialized (but not inflated) git object in bytes
-      (without the header).
-
-      As {!read_p}, {!size_p} needs some buffers. The client can use
-      this function in a concurrency context when the buffers
-      specified are not used by another process.
-
-      As {!read_p}, {!size_p} can return an {!error}. *)
-
-  val size_s: state -> Hash.t -> (int64, error) result Lwt.t
-  (** [size_s state hash] is the same process than {!size_p} but we
-      use the state-defined buffer. That means the client can not use
-      this function in a concurrency context with the same [state]. *)
-
   val size: state -> Hash.t -> (int64, error) result Lwt.t
-  (** Alias of {!size_s}. *)
+  (** [size t hash] is the size of the git {i loose} object which
+      respects the predicate [digest(object) = hash]. The size is how
+      many byte(s) are needed to store the serialized (but not
+      inflated) git object in bytes (without the header).
 
-  val write_p:
-       ztmp:Cstruct.t
-    -> raw:Cstruct.t
-    -> state -> t -> (Hash.t * int, error) result Lwt.t
-  (** [write_p ~ztmp ~raw state v] writes as a {i loose} git object
-      the value [v] in the file-system. It serializes and deflates the
-      value to a new file, which respects the internal structure of a
-      git repository. This function needs some buffers:
+      As {!read}, {!size} can return an {!error}. *)
 
-      {ul
-      {- [ztmp] is a buffer used to store the deflated flow}
-      {- [raw] is a buffer used to store the input flow}}
+  val write: state -> t -> (Hash.t * int, error) result Lwt.t
+  (** [write state v] writes [v] as a {i loose} git object in the
+      file-system.
 
-      This function can be used in a concurrency context only if the
-      specified buffers are not used by another process. This function
-      does not allocate any buffer and uses only the specified buffers
-      to store the OCaml value to the file-system. Then, the OCaml
-      value will be available by [read state digest(v)]. Otherwise, we
-      return an {!error}:
+      This function does not allocate any buffer and uses only the
+      specified buffers in [state]'s buffer. Once the write is done,
+      [v] becomes available by [read state digest(v)].
+
+      Can return an {!error}:
 
       {ul
       {- {!FS.File.error} when we can not create a new file in
@@ -191,14 +134,6 @@ module type LOOSE = sig
       Depending of the object [v], the process can consume a lot of
       memory. *)
 
-  val write_s: state -> t -> (Hash.t * int, error) result Lwt.t
-  (** [write_s state v] is the same process than {!write_p} but we use
-      the state-defined buffer. That means the client can not use this
-      function in a concurrency context with the same [state]. *)
-
-  val write: state -> t -> (Hash.t * int, error) result Lwt.t
-  (** Alias of {!write_s}. *)
-
   val write_inflated: state -> kind:kind -> Cstruct.t -> Hash.t Lwt.t
   (** [write_inflated state kind raw] writes the git object in the git
       repository [state] and associates the kind to this object. This
@@ -208,35 +143,22 @@ module type LOOSE = sig
       retrieve it.
 
       If we retrieve any error error while the I/O operations, we {b
-      raise} 9by {!Lwt.fail} a [Failure] which describe in a [string]
+      raise} by {!Lwt.fail} a [Failure] which describe in a [string]
       the error encountered. *)
 
-  val raw_p:
-       ztmp:Cstruct.t
-    -> dtmp:Cstruct.t
-    -> window:Inflate.window
-    -> raw:Cstruct.t
-    -> state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
-  (** [raw_p ~window ~ztmp ~dtmp ~raw state hash] can retrieve a git
-      {i loose} object from the file-system. However, this function {b
-      does not} de-serialize the git object and returns the kind of
-      the object and the {i raw-data} inflated. Precisely, it decodes
-      only the header. This function needs some buffers:
+  val read_inflated: state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
+  (** [read_inflated state hash] can retrieve a git {i loose} object
+      from the file-system. However, this function {b does not}
+      de-serialize the git object and returns the kind of the object
+      and the {i raw-data} inflated. Precisely, it decodes only the
+      header.
 
-      {ul
-      {- [window] is a buffer used by the {!Inflate} module}
-      {- [ztmp] is a buffer used to store the inflated flow}
-      {- [dtmp] is a buffer used by the decoder to save the inflated
-      flow (and keep it for an alteration)}
-      {- [raw] is a buffer used to store the input flow}}
+      This function allocate only one buffer in the major-heap and
+      uses only the specified buffers to compute the {i raw-data} in
+      the allocated {!Cstruct.t}. The {i raw-data} respects the
+      predicate [digest(header + raw-data) = hash].
 
-      This function can be used in a concurrency context only if the
-      specified buffers are not used by another process. This function
-      allocate only one buffer in the major-heap and uses only the
-      specified buffers to compute the {i raw-data} in the allocated
-      {!Cstruct.t}. The {i raw-data} respects the predicate
-      [digest(header + raw-data) = hash]. Otherwise, we return an
-      {!error}:
+      Can return an {!error}:
 
       {ul
       {- {!FS.File.error} when we can not access to the git
@@ -246,47 +168,26 @@ module type LOOSE = sig
       requested git {i loose} object. That means, the git {i loose}
       object has a wrong header or it is corrupted.}} *)
 
-  val raw_s: state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
-  (** [raw_s state hash] is the same process than {!raw_p} but we use
-      the state-defined buffer. That means the client can not use this
-      function in a concurrency context with the same [state]. *)
-
-  val raw: state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
-  (** Alias of {!raw_s}. *)
-
-  val raw_wa:
-       ztmp:Cstruct.t
-    -> dtmp:Cstruct.t
-    -> window:Inflate.window
-    -> raw:Cstruct.t
-    -> result:Cstruct.t
-    -> state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
-  (** [raw_wa ~window ~ztmp ~dtmp ~raw ~result state hash] can
-      retrieve a git {i loose} object from the file-system. However,
-      this function {b does not} de-serialize the git object and
-      returns the kind of the object and the {i raw-data} inflated.
-      Precisely, it decodes only the header. This function needs some
-      buffers:
-
-      {ul
-      {- [window] is a buffer used by the {!Inflate} module}
-      {- [ztmp] is a buffer used to store the inflated flow}
-      {- [dtmp] is a buffer used by the decoder to save the inflated
-      flow (and keep it for an alteration)}
-      {- [raw] is a buffer used to the input flow}
-      {- [result] is a buffer to store the result of this process}}
+  val read_inflated_wa:
+    Cstruct.t -> state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
+  (** [read_inflated_wa result state h] is the Git {i loose} object
+      with the hash [h]. However, this function {b does not}
+      de-serialize the git object and returns the kind of the object
+      and the {i raw-data} inflated. Precisely, it decodes only the
+      header. This function needs some buffers, provided by [decoder]
+      as well as [result], a buffer to store the result.
 
       The suffix [wa] refers to: Without Allocation. Indeed, this
       function allocates {b only} any data in the minor-heap. All
       other needed OCaml objects must be noticed by the client.
-      However, the client needs to notice a well sized [result]
+      However, the client needs to provide a well sized [result]
       (otherwise, the client can retrieve an error). He can get this
       information by {!size}.
 
-      This function can be used in a concurrency context only if the
-      specified buffers are not used by another process. The {i
-      raw-data} respects the predicate [digest(header + raw-data) =
-      hash]. Otherwise, we return an {!error}:
+      The {i raw-data} respects the predicate [digest(header +
+      raw-data) = h].
+
+      Can return an {!error}:
 
       {ul
       {- {!FS.File.error} when we can not access to the git
@@ -298,13 +199,6 @@ module type LOOSE = sig
 
       In a server context, this function should be used to limit the
       allocation. *)
-
-  val raw_was: Cstruct.t ->
-    state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
-  (** [raw_was result state hash] is the same process than {!raw_wa}
-      but we use the state-defined buffer. That means the client can
-      not use this function in a concurrency context with the same
-      [state]. *)
 
   module D: S.DECODER
     with type t = t
@@ -325,7 +219,6 @@ module type LOOSE = sig
     with type t = t
      and type init = int * t * int * Cstruct.t
      and type error = Value.E.error
-
   (** The encoder (which uses a {!Minienc.encoder}) of the Git object.
       We constraint the output to be a {Cstruct.t}. This encoder needs
       the level of the compression, the value {!t}, the memory
@@ -349,10 +242,10 @@ module type PACK = sig
   (** The type of the {i packed} Git object. *)
 
   type state
-  (** The type of the Git state. *)
+  (** The type for the state of a Git store. *)
 
   type value
-  (** The type of the Git value. *)
+  (** The type of the Git values. *)
 
   module Hash: S.HASH
   (** The [Hash] module used to make the implementation. *)
@@ -403,46 +296,37 @@ module type PACK = sig
   (** Pretty-printer of {!error}. *)
 
   val lookup: state -> Hash.t -> (Hash.t * (Crc32.t * int64)) option Lwt.t
-  (** [lookup state hash] try to find the object associated by the
+  (** [lookup state hash] tries to find the object associated by the
       hash [hash] in all {i IDX} files available in the current git
-      repository [state]. This function can be used in a concurrency
-      context. This function returns [None] if the Git object does not
-      exist in any {i IDX} files or it does not exists in the current
-      repository. *)
+      repository [state]. This function returns [None] if the Git
+      object does not exist in any {i IDX} files or it does not exists
+      in the current repository. *)
 
   val mem: state -> Hash.t -> bool Lwt.t
-  (** [mem state hash] checks if one object satisfies the predicate
+  (** [mem state hash] is true iff there is an object such that
       [digest(object) = hash]. This function is the same as [lookup
       state hash <> None]. *)
 
   val list: state -> Hash.t list Lwt.t
-  (** [list state] lists all {i packed} git object noticed by all {i
-      IDX} files available in the current git repository [state]. If
-      we encountered any error, we make it silent and continue the
-      process. *)
+  (** [list state] is the list of all the {i packed} Git object
+      noticed by all {i IDX} files available in the current git
+      repository [state]. Errors are ignored and skipped. *)
 
-  val read_p :
-       ztmp:Cstruct.t
-    -> window:Inflate.window
-    -> state -> Hash.t -> (t, error) result Lwt.t
-  (** [read_p ~ztmp ~window state hash] can retrieve a git {i packed}
-      object from any {i PACK} files available in the current git
-      repository [state]. It just inflates the git object and informs
-      some meta-data (like kind, CRC-32 check-sum, length, etc.) about
+  val read: state -> Hash.t -> (t, error) result Lwt.t
+  (** [read state hash] can retrieve a git {i packed} object from any
+      {i PACK} files available in the current git repository
+      [state]. It just inflates the git object and informs some
+      meta-data (like kind, CRC-32 check-sum, length, etc.) about
       it. Then, the client can use the related decoder to get the
-      OCaml value. This function needs some buffers:
+      OCaml value.
 
-      {ul
-      {- [window] is a buffer used y the {!Inflate} module}
-      {- [ztmp] is a buffer used to store the inflated flow}}
+      This function allocates 2 {Cstruct.t} needed to re-construct the
+      git {i packed} object in any case (if it is delta-ified or not)
+      and a certain amount of little buffer (sized by 0x7F bytes) to
+      help the construction only when the requested object is
+      delta-ified.
 
-      This function can be used in a concurrency context only if the
-      specified buffers are not used by another process. This function
-      allocates 2 {Cstruct.t} needed to re-construct the git {i
-      packed} object in any case (if it is delta-ified or not) and a
-      certain amount of little buffer (sized by 0x7F bytes) to help
-      the construction only when the requested object is delta-ified.
-      Otherwise, we return an {!error}:
+      Can return an {!error}:
 
       {ul
       {- {!FS.File.error} or {!FS.Dir.error} or
@@ -454,37 +338,13 @@ module type PACK = sig
       decoding of an {i IDX} file}
       {- [`Not_found] when the requested object is not {i packed}}} *)
 
-  val read_s: state -> Hash.t -> (t, error) result Lwt.t
-  (** [read_s state hash] is the same process than {!read_p} but we
-      use the state-defined buffer. That means the client can not use
-      this function in a concurrency context with the same [state]. *)
-
-  val read: state -> Hash.t -> (t, error) result Lwt.t
-  (** Alias of {!read_s}. *)
-
-  val size_p :
-       ztmp:Cstruct.t
-    -> window:Inflate.window
-    -> state -> Hash.t -> (int, error) result Lwt.t
-  (** [size_p ~ztmp ~window state hash] returns the size of the git {i
-      packed} object which respects the predicate [digest(object) =
-      hash]. The size is how many byte(s) are needed to store the
-      serialized (but not inflated) git object in bytes (without the
-      header).
-
-      As {!read_p}, {!size_p} needs some buffers. The client can use
-      this function in a concurrency context when the buffers
-      specified are not used by another process.
-
-      As {!read_p}, {!size_p} can return an {!error}. *)
-
-  val size_s: state -> Hash.t -> (int, error) result Lwt.t
-  (** [size_s state hash] is the same process than {!size_p} but we
-      use the state-defined buffer. That means the client can not use
-      this function in a concurrency context with the same [state]. *)
-
   val size: state -> Hash.t -> (int, error) result Lwt.t
-  (** Alias of {size_s}. *)
+  (** [size state hash] returns the size of the git {i packed} object
+      which respects the predicate [digest(object) = hash]. The size
+      is how many byte(s) are needed to store the serialized (but not
+      inflated) git object in bytes (without the header).
+
+      As for {!read}, {!size} can return an {!error}. *)
 
   type stream = unit -> Cstruct.t option Lwt.t
   (** The stream contains the PACK flow. *)
@@ -520,8 +380,8 @@ module type PACK = sig
       then he can take the [Graph.t] associated. *)
 end
 
-module type S =
-sig
+module type S = sig
+
   type t
   (** The type of the git repository. *)
 
@@ -600,44 +460,18 @@ sig
   val pp_error: error Fmt.t
   (** Pretty-printer of {!error}. *)
 
-  val create :
-       ?root:Fpath.t
-    -> ?dotgit:Fpath.t
-    -> ?compression:int
-    -> unit -> (t, error) result Lwt.t
-  (** [create ?root ?dotgit ?compression ()] creates a new store
-      represented by the path [root] (default is ["."]), where the Git
-      objects are located in [dotgit] (default is [root / ".git"] and
-      when Git objects are compressed by the [level] (default is
-      [4]). *)
+  type buffer
+  (** The type for buffers. *)
 
-  val dotgit: t -> Fpath.t
-  (** [dotgit state] returns the current [".git"] path used. *)
+  val default_buffer: unit -> buffer
 
-  val root: t -> Fpath.t
-  (** [root state] returns the current path of the repository. *)
-
-  val compression: t -> int
-  (** [compression state] returns the current level of the compression
-      used to write a git object. *)
-
-  val mem: t -> Hash.t -> bool Lwt.t
-  (** [mem state hash] checks if one object of the current repository
-      [state] satisfies the predicate [digest(object) = hash]. *)
-
-  val list: t -> Hash.t list Lwt.t
-  (** [list state] lists all git objects available in the current
-      repository [state]. *)
-
-  val read_p :
-       ztmp:Cstruct.t
-    -> dtmp:Cstruct.t
-    -> raw:Cstruct.t
-    -> window:Inflate.window
-    -> t -> Hash.t -> (Value.t, error) result Lwt.t
-  (** [read_p ~ztmp ~dtmp ~raw ~window state hash] can retrieve a git
-      object from the current repository [state]. It de-serializes the
-      git object to an OCaml value. This function needs some buffers:
+  val buffer:
+    ?ztmp:Cstruct.t ->
+    ?dtmp:Cstruct.t ->
+    ?raw:Cstruct.t ->
+    ?window:Inflate.window ->
+    unit -> buffer
+  (** Build a buffer to read and write a Git object.
 
       {ul
       {- [window] is a buffer used by the {!Inflate} module}
@@ -646,45 +480,69 @@ sig
       flow (and keep it for an alteration)}
       {- [raw] is a buffer used to store the input flow}}
 
-      This function can be used in a concurrency context only if the
-      specified buffers are not used by another process. This function
-      follows the same scheme of allocation of {!Loose.read_p} if the
-      requested git object is a {i loose} git object or {!Pack.read_p}
-      if the requested git object is a {i packed} git object.
-      Otherwise, we return an {!error}. *)
+      If not specified the cstruct are created with a size of 4 MiB.
 
-  val read_s: t -> Hash.t -> (Value.t, error) result Lwt.t
-  (** [read_s state hash] is the same process than {!read_p} but we
-      use the state-defined buffer. That means the client can not use
-      this function in a concurrency context with the same [state]. *)
+      Store functions can be used in a concurrency context only if the
+      specified buffers are not used by another process. The
+      deserialisation functions does not allocate any buffer and uses
+      only the specified buffers to construct the OCaml value. *)
+
+  val create :
+       ?root:Fpath.t
+    -> ?dotgit:Fpath.t
+    -> ?compression:int
+    -> ?buffer:((buffer -> unit Lwt.t) -> unit Lwt.t)
+    -> unit -> (t, error) result Lwt.t
+  (** [create ?root ?dotgit ?compression ?with_buffer ()] creates a
+      new store represented by the path [root] (default is ["."]),
+      where the Git objects are located in [dotgit] (default is [root
+      / ".git"] and when Git objects are compressed by the [level]
+      (default is [4]). If [with_buffer] is not set, use a [Lwt_pool]
+      of {!default_buffer} of size 4. *)
+
+  val dotgit: t -> Fpath.t
+  (** [dotgit state] is the current [".git"] path used. *)
+
+  val root: t -> Fpath.t
+  (** [root state] is the current path of the repository. *)
+
+  val compression: t -> int
+  (** [compression state] is the current level of the compression used
+      to write a git object. *)
+
+  val mem: t -> Hash.t -> bool Lwt.t
+  (** [mem state hash] is true if one object of the current repository
+      [state] satisfies the predicate [digest(object) = hash]. *)
+
+  val list: t -> Hash.t list Lwt.t
+  (** [list state] is the list of all git objects available in the
+      current repository [state]. *)
 
   val read: t -> Hash.t -> (Value.t, error) result Lwt.t
-  (** Alias of {!read_s}. *)
+  (** [read state hash] is the Git object with hash [hash] from the
+      current repository [state]. It de-serializes the git object to
+      an OCaml value. This function needs some buffers, provided [t]'s
+      buffer function.
+
+      This function follows the same scheme of allocation of
+      {!Loose.read} if the requested git object is a {i loose} git
+      object or {!Pack.read} if the requested git object is a {i
+      packed} git object.  Otherwise, return an {!error}. *)
 
   val read_exn: t -> Hash.t -> Value.t Lwt.t
   (** [read_exn state hash] is an alias of {!read} but raise an
       exception (instead to return a {!result}) if the git object
       requested does not exist or if we catch any other errors. *)
 
-  val write_p :
-       ztmp:Cstruct.t
-    -> raw:Cstruct.t
-    -> t -> Value.t -> (Hash.t * int, error) result Lwt.t
-  (** [write_p ~ztmp ~raw state v] writes as a {b loose} git object
-      [v] in the file-system. It serializes and deflates the value to
-      a new file. which respect the internal structure of a git
-      repository. This function needs some buffers:
+  val write: t -> Value.t -> (Hash.t * int, error) result Lwt.t
+  (** [write state v] writes as a {b loose} git object [v] in the
+      file-system. It serializes and deflates the value to a new
+      file. which respect the internal structure of a git repository.
 
-      {ul
-      {- [ztmp] is a buffer used to store the deflated flow}
-      {- [raw] is a buffer used to store the input flow}}
-
-      This function can be used in a concurrency context only if the
-      specified buffers are not used by another process. This function
-      does not allocate any buffer and uses only the specified buffers
-      to store the OCaml value to the file-system. Then, the OCaml
-      value will be available by [read state digest(v)]. Otherwise, we
-      return an {!error}:
+      This function does not allocate any buffer and uses only the
+      specified buffers to store the OCaml value to the
+      file-system. Then, the OCaml value will be available by [read
+      state digest(v)]. Otherwise, return an {!error}:
 
       {ul
       {- {!FS.File.error} when we can not create a new file in
@@ -693,77 +551,25 @@ sig
       requested git {i loose} object. This kind of error should be
       never happen.}} *)
 
-  val write_s: t -> Value.t -> (Hash.t * int, error) result Lwt.t
-  (** [write_s state v] is the process than {!write_p} but we use the
-      state-defined buffer. That means the client can not use this
-      function in a concurrency context with te same [state]. *)
-
-  val write: t -> Value.t -> (Hash.t * int, error) result Lwt.t
-  (** Alias of {!write_s}. *)
-
-  val size_p :
-    ztmp:Cstruct.t
-    -> dtmp:Cstruct.t
-    -> raw:Cstruct.t
-    -> window:Inflate.window
-    -> t -> Hash.t -> (int64, error) result Lwt.t
-  (** [size_p ~ztmp ~dtmp ~raw ~window state hash] returns the size of
-      the git object which respects the predicate [digest(object) =
-      hash]. The size is how many byte(s) are needed to store the
-      serialized (but not inflated) git object in bytes (without the
-      header).
-
-      As {!read_p}, {!size_p} needs some buffers. The client can use
-      this function in a concurrency context when the buffers
-      specified are not used by another process.
-
-      As {!read_p}, {!size_p} can return an {!error}. *)
-
-  val size_s: t -> Hash.t -> (int64, error) result Lwt.t
-  (** [size_s state hash] is the same process than {!size_p} but we
-      use the state-defined buffer. That means the client can not use
-      this function in a concurrency context with the same [state]. *)
-
   val size: t -> Hash.t -> (int64, error) result Lwt.t
-  (** Alias of {!size_s}. *)
+  (** [size state hash] is the size of the git object such that
+      [digest(object) = hash]. The size is how many byte(s) are needed
+      to store the serialized (but not inflated) git object in bytes
+      (without the header).
 
-  val raw_p :
-       ztmp:Cstruct.t
-    -> dtmp:Cstruct.t
-    -> raw:Cstruct.t
-    -> window:Inflate.window
-    -> t -> Hash.t -> (kind * Cstruct.t) option Lwt.t
-  (** [raw_p ~window ~ztmp ~dtmp ~raw state hash] can retrieve a git
-      object available in the current git repository [state]. However,
-      this function {b does not} de-serialize the git object and
-      returns the kind of the object and the {i raw-data} inflated.
-      Precisely, it decodes only the header. This function needs some
-      buffers:
-
-      {ul
-      {- [window] is a buffer used by the {!Inflate} module}
-      {- [ztmp] is a buffer used to store the inflated flow}
-      {- [dtmp] is a buffer used by the decoder to save the inflated
-      flow (and keep it for an alteration)}
-      {- [raw] is a buffer used to store the input flow}}
-
-      This function can be used in a concurrency context only if the
-      specified buffers are not used by another process. This function
-      follows the same scheme of allocation of {!Loose.raw_p} if the
-      requested git object is a {i loose} git object or {!Pack.read_p}
-      if the requested git object is a {i packed} git object.
-      Otherwise, we return an {!error}. *)
-
-  val raw_s: t -> Hash.t -> (kind * Cstruct.t) option Lwt.t
-  (** [raw_s state hash] is the same process than {!raw_p} but we use
-      the state-defined buffer. That means the client can not use this
-      function in a concurrency context with the same [state]. *)
-
-  val raw: t -> Hash.t -> (kind * Cstruct.t) option Lwt.t
-  (** Alias of {!raw_s}. *)
+      As {!read}, {!size} can return an {!error}. *)
 
   val read_inflated: t -> Hash.t -> (kind * Cstruct.t) option Lwt.t
-  (** Alias of {!raw_s}. *)
+  (** [read_inflated state hash] is the non-compressed representaton
+      of a Git object in the git repository xs[state]. However, this
+      function {b does not} de-serialize the git object and returns
+      the kind of the object and the {i raw-data} inflated.
+      Precisely, it decodes only the header.
+
+      This function follows the same scheme of allocation of
+      {!Loose.read_inflated} if the requested git object is a {i
+      loose} git object or {!Pack.read} if the requested git object is
+      a {i packed} git object.  Otherwise, return an {!error}. *)
 
   val write_inflated: t -> kind:kind -> Cstruct.t -> Hash.t Lwt.t
   (** [write_inflated state kind raw] writes the git object in the git
@@ -781,21 +587,6 @@ sig
   (** [contents state] returns an associated list between the hash and
       its bind git object. This list contains all git objects
       available in the current git repository [state]. *)
-
-  val buffer_window: t -> Inflate.window
-  (** [buffer_window state] returns the state-defined [window]. *)
-
-  val buffer_zl: t -> Cstruct.t
-  (** [buffer_zl state] returns the state-defined buffer used to store
-      any inflated flow. *)
-
-  val buffer_de: t -> Cstruct.t
-  (** [buffer_de state] returns the state-defined buffer used as
-      internal buffer for any decoder. *)
-
-  val buffer_io: t -> Cstruct.t
-  (** [buffer_io state] returns the state-defined buffer used to store
-      the input flow. *)
 
   val fold:
        t
@@ -834,10 +625,10 @@ sig
       the pointed {i tag} by the hash [hash]. Then, it follows the git
       object pointed by the {i tag}.}}
 
-      Any retrieved {!error} is missed. *)
+      Any retrieved {!error} is skipped. *)
 
-  module Ref :
-  sig
+  module Ref: sig
+
     module Packed_refs: Packed_refs.S
       with module Hash = Hash
        and module FS = FS
@@ -852,36 +643,17 @@ sig
     (** Pretty-printer of {!error}. *)
 
     val mem: t -> Reference.t -> bool Lwt.t
-    (** [mem state ref] returns [true] iff [ref] exists in [state],
-        otherwise returns [false]. *)
-
-    val graph_p :
-      dtmp:Cstruct.t
-      -> raw:Cstruct.t
-      -> t -> (Hash.t Reference.Map.t, error) result Lwt.t
-    (** [graph_p state ~dtmp ~raw] returns a graph which contains all
-        reference and its pointed to final hash available in the
-        current git repository [state]. This function needs some
-        buffers:
-
-        {ul
-        {- [dtmp] is a buffer used by the decoder to save the input
-        flow (and keep it for an alteration)}
-        {- [raw] is a buffer used to store the input flow}}
-
-        This function can be used in a concurrency context only if the
-        specified buffers are not used by another process. If we
-        encountered any {!error}, we make it silent and continue the
-        process. *)
+    (** [mem state ref] is [true] iff [ref] exists in [state],
+        otherwise it is [false]. *)
 
     val graph: t -> (Hash.t Reference.Map.t, error) result Lwt.t
-    (** [graph state] is the same process than {!graph_p} but we use
-        the state-defined buffer. That means the client can not use
-        this function in a concurrency context with the same
-        [state]. *)
+    (** [graph state] is the graph containing all the references and
+        their relationship in the current git repository [state]. *)
 
-    val normalize: Hash.t Reference.Map.t -> Reference.head_contents -> (Hash.t, error) result Lwt.t
-    (** [normalize graph ref] returns the final hash pointed by the
+    val normalize:
+      Hash.t Reference.Map.t -> Reference.head_contents ->
+      (Hash.t, error) result Lwt.t
+    (** [normalize graph ref] is the final hash pointed by the
         reference [ref]. This function can return an error:
 
         {ul
@@ -889,109 +661,29 @@ sig
         don't find the final pointed hash. This case can appear if the
         graph is not complete or if the link is broken.}} *)
 
-    val list_p :
-      dtmp:Cstruct.t
-      -> raw:Cstruct.t
-      -> t -> (Reference.t * Hash.t) list Lwt.t
-    (** [list_p state ~dtmp ~raw] returns an associated list between
-        reference and its bind hash. This function is the same than:
+    val list: t -> (Reference.t * Hash.t) list Lwt.t
+    (** [list state] is the list of references and their associated
+        hash. This function is the same than:
 
         > graph state >|= Reference.Map.fold (fun x acc -> x :: acc)
 
-        As {!graph_p}, this function needs some buffers. And, as
-        {!graph_p}, this function can be used in a concurrency context
-        only f the specified buffers are not used by another process.
-        Finally, as {!graph_p}, if we encountered any {!error}, we
+        Finally, as for {!graph}, if we encountered any {!error}, we
         make it silent and continue the process. *)
 
-    val list_s: t -> (Reference.t * Hash.t) list Lwt.t
-    (** [list_s state] is the same process than {!list_p} but we use
-        the state-defined buffer. That means the client can not use
-        this function in a concurrency context with the same
-        [state]. *)
-
-    val list: t -> (Reference.t * Hash.t) list Lwt.t
-    (** Alias of {!list_s}. *)
-
-    val remove_p :
-      dtmp:Cstruct.t
-      -> raw:Cstruct.t
-      -> t -> Reference.t -> (unit, error) result Lwt.t
-    (** [remove_p state ~dtmp ~raw reference] removes the reference
-        [reference] from the git repository [state]. This function
-        needs some buffers:
-
-        {ul
-        {- [dtmp] is a buffer used by the decoder to save the input
-        flow (and keep it for an alteration)}
-        {- [raw] is a buffer used to store the input flow}}
-
-        This function can {b not} used in a concurrency context.
-
-        However, we provide this function to allow to use a
-        user-defined buffer instead the state-defined buffer (could be
-        used by something else). *)
-
-    val remove_s: t -> Reference.t -> (unit, error) result Lwt.t
-    (** [remove_s state reference] is the same process than
-        {!remove_p} but we use the state-defined buffer. That means
-        the client can not use thus function in a concurrency context
-        with the same [state]. *)
 
     val remove: t -> Reference.t -> (unit, error) result Lwt.t
     (** [remove state reference] removes the reference [reference]
         from the git repository [state]. *)
 
-    val read_p :
-      dtmp:Cstruct.t
-      -> raw:Cstruct.t
-      -> t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
-    (** [read_p state ~dtmp ~raw reference] returns the value contains
-        in the reference [reference] (available in the git repository
-        [state]). This function needs some buffers:
-
-        {ul
-        {- [dtmp] is a buffer used by the decoder to save the flow
-        (and keep it for an alteration)}
-        {- [raw] is a buffer used to store the input flow}}
-
-        This function can be used in a concurrency context only if the
-        specifed buffers are not used by another process. *)
-
-    val read_s: t -> Reference.t ->
-      ((Reference.t * Reference.head_contents), error) result Lwt.t
-    (** [read_s state reference] is the same process than {!read_p}
-        but we use the state-defined buffer. That means the client can
-        not use this function in a concurrency context with the same
-        [state]. *)
-
     val read: t -> Reference.t ->
       ((Reference.t * Reference.head_contents), error) result Lwt.t
-    (** Alias of {!read_s}. *)
-
-    val write_p :
-      dtmp:Cstruct.t
-      -> raw:Cstruct.t -> t -> Reference.t -> Reference.head_contents ->
-      (unit, error) result Lwt.t
-    (** [write_p state ~dtmp ~raw reference value] writes the value
-        [value] in the mutable representation of the [reference] in
-        the git repository [state].
-
-        As {!read_p}, this function needs some buffers. However, it
-        can not use in a concurrency context by the mutable
-        caracteristic of the reference. In other side, we let the
-        client to specify an user-defined buffer instead the
-        state-defined buffer of {!write_s} to use in a concurrency
-        context an other operation. *)
-
-    val write_s: t -> Reference.t -> Reference.head_contents ->
-      (unit, error) result Lwt.t
-    (** [write_s state ?locks reference value] is the same process
-        than {!read_p} but we use the state-defined buffer. *)
+    (** [read state reference] is the value contained in the reference
+        [reference] (available in the git repository [state]). *)
 
     val write: t -> Reference.t -> Reference.head_contents ->
       (unit, error) result Lwt.t
-    (** Alias of {!write_s}. *)
+   (** [write state reference value] writes the value [value] in
+       the the [reference] in the git repository [state]. *)
 
   end
 

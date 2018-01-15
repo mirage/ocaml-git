@@ -25,9 +25,23 @@ module type S = sig
   val pp_error: error Fmt.t
   (** Pretty-printer of {!error}. *)
 
+  type buffer
+  (** The type for buffers. *)
+
+  val default_buffer: unit -> buffer
+  (** The default buffer. *)
+
+  val buffer:
+    ?ztmp:Cstruct.t ->
+    ?dtmp:Cstruct.t ->
+    ?raw:Cstruct.t ->
+    ?window:Inflate.window ->
+    unit -> buffer
+
   val create: ?root:Fpath.t ->
     ?dotgit:Fpath.t ->
     ?compression:int ->
+    ?buffer:((buffer -> unit Lwt.t) -> unit Lwt.t) ->
     unit -> (t, error) result Lwt.t
   (** [create ?root ?dotgit ?compression ()] creates a new store
       represented by the path [root] (default is ["."]), where the Git
@@ -84,7 +98,7 @@ module type S = sig
       [state]. *)
 
   val fold :
-       t
+    t
     -> ('acc -> ?name:Fpath.t -> length:int64 -> Hash.t -> Value.t -> 'acc Lwt.t)
     -> path:Fpath.t
     -> 'acc
