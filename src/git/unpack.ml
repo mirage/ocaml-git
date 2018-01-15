@@ -1544,8 +1544,7 @@ struct
   let map_window t offset_requested =
     let open Lwt.Infix in
     let pos = Int64.((offset_requested / 1024L) * 1024L) in (* padding *)
-    Mapper.map t.file ~pos ~share:false (1024 * 1024)
-    >>= function
+    Mapper.map t.file ~pos (1024 * 1024) >>= function
     | Ok map ->
       Lwt.return (Ok { Window.raw = map
                      ; off   = pos

@@ -322,7 +322,7 @@ module Make (Gamma: GAMMA) (FS: S) = struct
       Log.debug (fun l -> l "Mapper.length %a" Fpath.pp path);
       Lwt.return (Ok sz)
 
-    let map t { path; _ } ?(pos = 0L) ~share:_ len =
+    let map t { path; _ } ?(pos = 0L) len =
       Log.debug (fun l -> l "Mapper.map %a" Fpath.pp path);
       with_lock t.locks path @@ fun () ->
       FS.read t.fs (fpath_to_string path) (Int64.to_int pos) len >|= function
@@ -334,7 +334,7 @@ module Make (Gamma: GAMMA) (FS: S) = struct
       Lwt.return (Ok ())
 
     let openfile path = connect @@ fun t -> openfile t path
-    let map fd ?pos ~share len = connect @@ fun t -> map t fd ?pos ~share len
+    let map fd ?pos len = connect @@ fun t -> map t fd ?pos len
   end
 
   let is_dir path = connect @@ fun t -> is_dir t path

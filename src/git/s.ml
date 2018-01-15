@@ -194,7 +194,7 @@ module type MAPPER = sig
   val pp_error: error Fmt.t
   val openfile: Fpath.t -> (fd, error) result Lwt.t
   val length: fd -> (int64, error) result Lwt.t
-  val map: fd -> ?pos:int64 -> share:bool -> int -> (Cstruct.t, error) result Lwt.t
+  val map: fd -> ?pos:int64 -> int -> (Cstruct.t, error) result Lwt.t
   val close : fd -> (unit, error) result Lwt.t
 end
 

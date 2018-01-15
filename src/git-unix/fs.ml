@@ -346,7 +346,7 @@ module Mapper = struct
     protect err @@ fun () ->
     Lwt_unix.close fd
 
-  let map t ?pos ~share:_ len =
+  let map t ?pos len =
     length t >>= function
     | Error err -> Lwt.return (Error err)
     | Ok max    ->
