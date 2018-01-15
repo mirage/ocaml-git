@@ -203,8 +203,7 @@ module type DIR = sig
   val exists: Fpath.t -> (bool, error) result Lwt.t
   val create: Fpath.t -> (bool, error) result Lwt.t
   val delete: Fpath.t -> (unit, error) result Lwt.t
-  val contents: ?dotfiles:bool -> ?rel:bool -> Fpath.t ->
-    (Fpath.t list, error) result Lwt.t
+  val contents: ?rel:bool -> Fpath.t -> (Fpath.t list, error) result Lwt.t
   val current: unit -> (Fpath.t, error) result Lwt.t
   val temp: unit -> Fpath.t Lwt.t
 end

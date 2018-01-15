@@ -1088,8 +1088,7 @@ end
     Loose.write_inflated t ~kind value
 
   let indexes git =
-    FS.Dir.contents ~dotfiles:false ~rel:false Fpath.(git / "objects" / "pack")
-    >>= function
+    FS.Dir.contents ~rel:false Fpath.(git / "objects" / "pack") >>= function
     | Ok lst ->
       Lwt_list.fold_left_s
         (fun acc path ->
@@ -1191,8 +1190,7 @@ end
 
     let contents top =
       let rec lookup acc dir =
-        FS.Dir.contents ~rel:true Fpath.(top // dir)
-        >>?= fun l ->
+        FS.Dir.contents ~rel:true Fpath.(top // dir) >>?= fun l ->
         Lwt_list.filter_p (fun x ->
             FS.is_dir Fpath.(top // dir // x) >|= function
             | Ok v    -> v

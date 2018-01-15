@@ -210,16 +210,11 @@ module Dir = struct
     Log.debug (fun l -> l "Dir.delete %a" Fpath.pp dir);
     delete_dir Lwt.return dir
 
-  let contents ?(dotfiles = false) ?(rel = false) dir =
+  let contents ?(rel = false) dir =
     Log.debug (fun l -> l "Dir.contents %a" Fpath.pp dir);
     let rec aux acc = function
       | []   -> acc
-      | h::t ->
-        let f = Fpath.to_string h in
-        if dotfiles || not (String.get f 0 = '.') then
-          aux ((if rel then h else Fpath.(dir // h)) :: acc) t
-        else
-          aux acc t
+      | h::t -> aux ((if rel then h else Fpath.(dir // h)) :: acc) t
     in
     readdir dir >|? aux []
 

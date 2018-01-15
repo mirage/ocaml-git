@@ -149,18 +149,17 @@ module Make (Gamma: GAMMA) (FS: S) = struct
 
        XXX(samoht): maybe the primivite operations should be
        restricted somehow? *)
-    let contents t ?(dotfiles = false) ?(rel = false) dir =
+    let contents t ?(rel = false) dir =
       let path = fpath_to_string dir in
       Log.debug (fun l -> l "Dir.contents %s" path);
       let rec readdir files acc =
         match files with
         | [] -> Lwt.return (Ok acc)
         | (".." | ".") :: rest -> readdir rest acc
-        | f :: rest when dotfiles || not (String.get f 0 = '.') ->
-          (match fpath_of_string f with
-           | Ok f -> readdir rest ((if rel then f else Fpath.(dir // f)) :: acc)
-           | Error (`Msg e) -> Lwt.return (err_read dir "%s" e))
-        | _ :: rest -> readdir rest acc
+        | f :: rest ->
+          match fpath_of_string f with
+          | Ok f -> readdir rest ((if rel then f else Fpath.(dir // f)) :: acc)
+          | Error (`Msg e) -> Lwt.return (err_read dir "%s" e)
       in
       Lwt.try_bind
         (fun () -> FS.listdir t.fs path)
@@ -172,7 +171,7 @@ module Make (Gamma: GAMMA) (FS: S) = struct
     let current () = Lwt.return (Ok Gamma.current)
     let temp () = Lwt.return Gamma.temp
 
-    let contents ?dotfiles ?rel dir = connect @@ fun t -> contents t ?dotfiles ?rel dir
+    let contents ?rel dir = connect @@ fun t -> contents t ?rel dir
     let exists path = connect @@ fun t -> exists t path
     let create dir = connect @@ fun t -> create t dir
     let delete path = connect @@ fun t -> delete t path

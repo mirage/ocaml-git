@@ -182,7 +182,7 @@ module Make
      fails), avoid the path. *)
   let list ~root =
     let path = Fpath.(root / "objects") in
-    FS.Dir.contents ~dotfiles:false ~rel:true path >>= function
+    FS.Dir.contents ~rel:true path >>= function
     | Error err ->
       Log.err (fun l ->
           l "Got an error while listing the contents of %a: %a"
@@ -190,8 +190,7 @@ module Make
       Lwt.return []
     | Ok firsts ->
       Lwt_list.fold_left_s (fun acc first ->
-          FS.Dir.contents ~dotfiles:false ~rel:true Fpath.(path //first)
-          >|= function
+          FS.Dir.contents ~rel:true Fpath.(path //first) >|= function
           | Ok paths ->
             List.fold_left (fun acc path ->
                 let hash = Fpath.(to_string first ^ to_string path) in
