@@ -38,17 +38,44 @@ module Make
   module Buffer = Cstruct_buffer
   module Value = Value.Raw(Hash)(Inflate)(Deflate)
   module Reference = Reference.Make(Hash)
+  module PACKDecoder = Unpack.MakePACKDecoder(Hash)(Inflate)
+  module PACKEncoder = Pack.MakePACKEncoder(Hash)(Deflate)
 
   type kind = [ `Commit | `Tree | `Blob | `Tag ]
+
+  type buffer = { ztmp: Cstruct.t; window: PACKDecoder.Inflate.window }
+
+  let default_buffer () =
+    let ztmp = Cstruct.create 0x800 in
+    let window = PACKDecoder.Inflate.window () in
+    { ztmp; window }
+
+  let buffer ?ztmp ?dtmp:_ ?raw:_ ?window () =
+    let ztmp = match ztmp with None -> Cstruct.create 0x800 | Some x -> x in
+    let window = match window with None -> Inflate.window () | Some x -> x in
+    { ztmp; window }
 
   type t =
     { root         : Fpath.t
     ; dotgit       : Fpath.t
+    ; buffer       : (buffer -> unit Lwt.t) -> unit Lwt.t
     ; compression  : int
     ; values       : (Hash.t, Value.t Lazy.t) Hashtbl.t
     ; inflated     : (Hash.t, (kind * Cstruct.t)) Hashtbl.t
     ; refs         : (Reference.t, [ `H of Hash.t | `R of Reference.t ]) Hashtbl.t
     ; mutable head : Reference.head_contents option }
+
+
+  let with_buffer t f =
+    let open Lwt.Infix in
+    let c = ref None in
+    t.buffer (fun buf ->
+        f buf >|= fun x ->
+        c := Some x
+      ) >|= fun () ->
+    match !c with
+    | Some x -> x
+    | None   -> assert false
 
   type error = [ `Not_found ]
 
@@ -62,14 +89,20 @@ module Make
   let default_root = Fpath.v "root"
 
   let create ?(root = default_root) ?(dotgit = Fpath.(default_root / ".git"))
-      ?(compression = 6) () =
+      ?(compression = 6) ?buffer () =
     if compression < 0 || compression > 9
     then failwith "level should be between 0 and 9";
-
+    let buffer = match buffer with
+      | Some f -> f
+      | None   ->
+        let p = Lwt_pool.create 4 (fun () -> Lwt.return (default_buffer ())) in
+        Lwt_pool.use p
+    in
     let t =
       { root
       ; compression
       ; dotgit
+      ; buffer
       ; values   = Hashtbl.create 1024
       ; inflated = Hashtbl.create 1024
       ; refs     = Hashtbl.create 8
@@ -200,8 +233,6 @@ module Make
 
     type stream = unit -> Cstruct.t option Lwt.t
 
-    module PACKDecoder = Unpack.MakePACKDecoder(Hash)(Inflate)
-    module PACKEncoder = Pack.MakePACKEncoder(Hash)(Deflate)
     module Revidx = Map.Make(Int64)
 
     type error =
@@ -407,11 +438,9 @@ module Make
             | Error err -> Lwt.fail (Failure err)
       in
 
-      let ztmp = Cstruct.create 0x800 in
-      let window = PACKDecoder.Inflate.window () in
-
-      go ~revidx:Revidx.empty (PACKDecoder.default ztmp window)
-      >>= function
+      with_buffer git (fun { ztmp; window } ->
+          go ~revidx:Revidx.empty (PACKDecoder.default ztmp window)
+        ) >>= function
       | Error _ as err -> Lwt.return err
       | Ok (hash_pack, n) ->
         let n = Int32.to_int n in
