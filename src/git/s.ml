@@ -179,8 +179,8 @@ module type FILE = sig
 
   type 'a fd constraint 'a = [< `Read | `Write ]
 
-  val open_w: Fpath.t -> mode:int -> ([ `Write ] fd, error) result Lwt.t
-  val open_r: Fpath.t -> mode:int -> ([ `Read ] fd, error) result Lwt.t
+  val open_w: Fpath.t -> ([ `Write ] fd, error) result Lwt.t
+  val open_r: Fpath.t -> ([ `Read ] fd, error) result Lwt.t
   val write: Cstruct.t -> ?off:int -> ?len:int -> [> `Write ] fd
     -> (int, error) result Lwt.t
   val read: Cstruct.t -> ?off:int -> ?len:int -> [> `Read ] fd
@@ -201,7 +201,7 @@ end
 module type DIR = sig
   type error
   val exists: Fpath.t -> (bool, error) result Lwt.t
-  val create: ?path:bool -> ?mode:int -> Fpath.t -> (bool, error) result Lwt.t
+  val create: ?path:bool -> Fpath.t -> (bool, error) result Lwt.t
   val delete: ?recurse:bool -> Fpath.t -> (unit, error) result Lwt.t
   val contents: ?dotfiles:bool -> ?rel:bool -> Fpath.t ->
     (Fpath.t list, error) result Lwt.t

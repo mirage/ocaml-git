@@ -112,9 +112,9 @@ let result_map f a = match a with
 
 module Dir = struct
 
-
-  let create ?(path = true) ?(mode = 0o755) dir =
-    let mkdir d mode =
+  let create ?(path = true) dir =
+    let mode = 0o755 in
+    let mkdir d =
       let err = function
         | Unix.EEXIST -> Lwt.return (Ok ())
         | e           -> err_mkdir d e
@@ -129,7 +129,7 @@ module Dir = struct
     | Ok false     ->
       match path with
       | false ->
-        Lwt_pool.use mkdir_pool (fun () -> mkdir dir mode) >|=
+        Lwt_pool.use mkdir_pool (fun () -> mkdir dir) >|=
         result_map (fun _ -> Ok false)
       | true ->
         let rec dirs_to_create p acc =
@@ -141,7 +141,7 @@ module Dir = struct
         let rec create_them dirs () = match dirs with
           | []          -> Lwt.return (Ok ())
           | dir :: dirs ->
-            mkdir dir mode >>= function
+            mkdir dir >>= function
             | Error _ as err -> Lwt.return err
             | Ok ()          -> create_them dirs ()
         in
@@ -272,7 +272,8 @@ module File = struct
     fd  : Lwt_unix.file_descr;
   } constraint 'a = [< `Read | `Write ]
 
-  let open_w path ~mode =
+  let open_w path =
+    let mode = 0o644 in
     let err e = err_open path e in
     Lwt_pool.use open_pool @@ fun () ->
     protect err @@ fun () ->
@@ -284,7 +285,8 @@ module File = struct
     ] mode >|= fun fd ->
     ( { fd; path } :> [ `Write ] fd)
 
-  let open_r path ~mode =
+  let open_r path =
+    let mode = 0o400 in
     let err e = err_open path e in
     Lwt_pool.use open_pool @@ fun () ->
     protect err @@ fun () ->

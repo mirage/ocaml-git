@@ -174,7 +174,7 @@ module Make (Gamma: GAMMA) (FS: S) = struct
 
     let contents ?dotfiles ?rel dir = connect @@ fun t -> contents t ?dotfiles ?rel dir
     let exists path = connect @@ fun t -> exists t path
-    let create ?path:_ ?mode:_ dir = connect @@ fun t -> create t dir
+    let create ?path:_ dir = connect @@ fun t -> create t dir
     let delete ?recurse path =
       (* mirage-fs only supports recursive deletions *)
       let () = match recurse with None -> () | Some x -> assert x in
@@ -201,7 +201,7 @@ module Make (Gamma: GAMMA) (FS: S) = struct
       | Ok _ as v        -> v
       | Error (`Exn err) -> err_stat path "%a" Fmt.exn err
 
-    let open' t ~create path ~mode:_ =
+    let open' t ~create path =
       let fd = fpath_to_string path in
       FS.stat t.fs fd >>= function
       | Ok { Mirage_fs.directory = false; _ } -> Lwt.return (Ok fd)
@@ -216,14 +216,14 @@ module Make (Gamma: GAMMA) (FS: S) = struct
     (* XXX(dinosaure): we can inform the size of the file and check at any time
        if [seek <= max]. *)
 
-    let open_r t path ~mode =
+    let open_r t path =
       Log.debug (fun l -> l "File.open_r %s" @@ fpath_to_string path);
-      open' t ~create:false path ~mode >|?= fun fd ->
+      open' t ~create:false path >|?= fun fd ->
       ({ path; fd; seek = 0 } :> [ `Read ] fd)
 
-    let open_w t path ~mode =
+    let open_w t path =
       Log.debug (fun l -> l "File.open_w %s" @@ fpath_to_string path);
-      open' t ~create:true path ~mode >|?= fun fd ->
+      open' t ~create:true path >|?= fun fd ->
       ({ path; fd; seek = 0 } :> [ `Write ] fd)
 
     let write t raw ?(off = 0) ?(len = Cstruct.len raw) fd =
@@ -278,8 +278,8 @@ module Make (Gamma: GAMMA) (FS: S) = struct
       in
       with_lock t.locks path1 @@ fun () ->
       with_lock t.locks path2 @@ fun () ->
-      open' t patha ~create:false ~mode:0o644 >>?= fun fda ->
-      open' t pathb ~create:true  ~mode:0o644 >>?= fun fdb ->
+      open' t patha ~create:false >>?= fun fda ->
+      open' t pathb ~create:true  >>?= fun fdb ->
       (FS.size t.fs fda >>!= fs_read) >>?= fun size ->
       let stream, push = Lwt_stream.create () in
       let rec read pos = function
@@ -303,8 +303,8 @@ module Make (Gamma: GAMMA) (FS: S) = struct
     let exists path = connect @@ fun t -> exists t path
     let delete path = connect @@ fun t -> delete t path
     let move patha pathb = connect @@ fun t -> move t patha pathb
-    let open_w path ~mode = connect @@ fun t -> open_w t path ~mode
-    let open_r path ~mode = connect @@ fun t -> open_r t path ~mode
+    let open_w path = connect @@ fun t -> open_w t path
+    let open_r path = connect @@ fun t -> open_r t path
     let write raw ?off ?len fd = connect @@ fun t -> write t raw ?off ?len fd
     let read raw ?off ?len fd = connect @@ fun t -> read t raw ?off ?len fd
   end
