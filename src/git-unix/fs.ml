@@ -212,9 +212,8 @@ module Dir = struct
     in
     delete_files rmdir files
 
-  let delete ?(recurse=true) dir =
+  let delete dir =
     Log.debug (fun l -> l "Dir.delete %a" Fpath.pp dir);
-    assert recurse;
     delete_dir Lwt.return dir
 
   let contents ?(dotfiles = false) ?(rel = false) dir =

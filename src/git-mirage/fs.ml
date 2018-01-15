@@ -175,10 +175,7 @@ module Make (Gamma: GAMMA) (FS: S) = struct
     let contents ?dotfiles ?rel dir = connect @@ fun t -> contents t ?dotfiles ?rel dir
     let exists path = connect @@ fun t -> exists t path
     let create ?path:_ dir = connect @@ fun t -> create t dir
-    let delete ?recurse path =
-      (* mirage-fs only supports recursive deletions *)
-      let () = match recurse with None -> () | Some x -> assert x in
-      connect @@ fun t -> delete t path
+    let delete path = connect @@ fun t -> delete t path
   end
 
   module File = struct

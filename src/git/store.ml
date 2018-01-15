@@ -1520,11 +1520,11 @@ end
 
   let reset t =
     Log.info (fun l -> l ~header:"reset" "Start to reset the Git repository");
-    (FS.Dir.delete ~recurse:true Fpath.(t.dotgit / "objects")
+    (FS.Dir.delete Fpath.(t.dotgit / "objects")
      >>?= fun () -> FS.Dir.create Fpath.(t.dotgit / "objects")
      >>?= fun _ -> FS.Dir.create Fpath.(t.dotgit / "objects" / "info")
      >>?= fun _ -> FS.Dir.create Fpath.(t.dotgit / "objects" / "pack")
-     >>?= fun _ -> FS.Dir.delete ~recurse:true Fpath.(t.dotgit / "refs")
+     >>?= fun _ -> FS.Dir.delete Fpath.(t.dotgit / "refs")
      >>?= fun () -> FS.Dir.create Fpath.(t.dotgit / "refs" / "heads")
      >>?= fun _ -> FS.Dir.create Fpath.(t.dotgit / "refs" / "tags")
      ) >>!= (fun err -> `Store (`FS err))
