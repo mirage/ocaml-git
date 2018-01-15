@@ -1088,8 +1088,7 @@ end
     Loose.write_inflated t ~kind value
 
   let indexes git =
-    FS.Dir.contents ~dotfiles:false ~rel:false Fpath.(git / "objects" / "pack")
-    >>= function
+    FS.Dir.contents ~rel:false Fpath.(git / "objects" / "pack") >>= function
     | Ok lst ->
       Lwt_list.fold_left_s
         (fun acc path ->
@@ -1191,8 +1190,7 @@ end
 
     let contents top =
       let rec lookup acc dir =
-        FS.Dir.contents ~rel:true Fpath.(top // dir)
-        >>?= fun l ->
+        FS.Dir.contents ~rel:true Fpath.(top // dir) >>?= fun l ->
         Lwt_list.filter_p (fun x ->
             FS.is_dir Fpath.(top // dir // x) >|= function
             | Ok v    -> v
@@ -1462,12 +1460,12 @@ end
     ; io = Cstruct.sub raw 0x8000 0x8000 }
 
   let sanitize_filesystem root dotgit =
-    FS.Dir.create ~path:true root
-    >>?= fun _ -> FS.Dir.create ~path:true dotgit
-    >>?= fun _ -> FS.Dir.create ~path:true Fpath.(dotgit / "objects")
-    >>?= fun _ -> FS.Dir.create ~path:true Fpath.(dotgit / "objects" / "pack")
-    >>?= fun _ -> FS.Dir.create ~path:true Fpath.(dotgit / "objects" / "info")
-    >>?= fun _ -> FS.Dir.create ~path:true Fpath.(dotgit / "refs")
+    FS.Dir.create root
+    >>?= fun _ -> FS.Dir.create dotgit
+    >>?= fun _ -> FS.Dir.create Fpath.(dotgit / "objects")
+    >>?= fun _ -> FS.Dir.create Fpath.(dotgit / "objects" / "pack")
+    >>?= fun _ -> FS.Dir.create Fpath.(dotgit / "objects" / "info")
+    >>?= fun _ -> FS.Dir.create Fpath.(dotgit / "refs")
     >>?= fun _ -> Lwt.return (Ok ())
 
   let create ?root ?dotgit ?(compression = 4) () =
@@ -1520,11 +1518,11 @@ end
 
   let reset t =
     Log.info (fun l -> l ~header:"reset" "Start to reset the Git repository");
-    (FS.Dir.delete ~recurse:true Fpath.(t.dotgit / "objects")
+    (FS.Dir.delete Fpath.(t.dotgit / "objects")
      >>?= fun () -> FS.Dir.create Fpath.(t.dotgit / "objects")
      >>?= fun _ -> FS.Dir.create Fpath.(t.dotgit / "objects" / "info")
      >>?= fun _ -> FS.Dir.create Fpath.(t.dotgit / "objects" / "pack")
-     >>?= fun _ -> FS.Dir.delete ~recurse:true Fpath.(t.dotgit / "refs")
+     >>?= fun _ -> FS.Dir.delete Fpath.(t.dotgit / "refs")
      >>?= fun () -> FS.Dir.create Fpath.(t.dotgit / "refs" / "heads")
      >>?= fun _ -> FS.Dir.create Fpath.(t.dotgit / "refs" / "tags")
      ) >>!= (fun err -> `Store (`FS err))

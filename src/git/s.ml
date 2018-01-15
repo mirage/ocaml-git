@@ -179,8 +179,8 @@ module type FILE = sig
 
   type 'a fd constraint 'a = [< `Read | `Write ]
 
-  val open_w: Fpath.t -> mode:int -> ([ `Write ] fd, error) result Lwt.t
-  val open_r: Fpath.t -> mode:int -> ([ `Read ] fd, error) result Lwt.t
+  val open_w: Fpath.t -> ([ `Write ] fd, error) result Lwt.t
+  val open_r: Fpath.t -> ([ `Read ] fd, error) result Lwt.t
   val write: Cstruct.t -> ?off:int -> ?len:int -> [> `Write ] fd
     -> (int, error) result Lwt.t
   val read: Cstruct.t -> ?off:int -> ?len:int -> [> `Read ] fd
@@ -194,17 +194,16 @@ module type MAPPER = sig
   val pp_error: error Fmt.t
   val openfile: Fpath.t -> (fd, error) result Lwt.t
   val length: fd -> (int64, error) result Lwt.t
-  val map: fd -> ?pos:int64 -> share:bool -> int -> (Cstruct.t, error) result Lwt.t
+  val map: fd -> ?pos:int64 -> int -> (Cstruct.t, error) result Lwt.t
   val close : fd -> (unit, error) result Lwt.t
 end
 
 module type DIR = sig
   type error
   val exists: Fpath.t -> (bool, error) result Lwt.t
-  val create: ?path:bool -> ?mode:int -> Fpath.t -> (bool, error) result Lwt.t
-  val delete: ?recurse:bool -> Fpath.t -> (unit, error) result Lwt.t
-  val contents: ?dotfiles:bool -> ?rel:bool -> Fpath.t ->
-    (Fpath.t list, error) result Lwt.t
+  val create: Fpath.t -> (bool, error) result Lwt.t
+  val delete: Fpath.t -> (unit, error) result Lwt.t
+  val contents: ?rel:bool -> Fpath.t -> (Fpath.t list, error) result Lwt.t
   val current: unit -> (Fpath.t, error) result Lwt.t
   val temp: unit -> Fpath.t Lwt.t
 end

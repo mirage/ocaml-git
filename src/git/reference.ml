@@ -327,8 +327,7 @@ module IO (H : S.HASH) (FS: S.FS) = struct
   let write ~root ?(capacity = 0x100) ~raw reference value =
     let state = E.default (capacity, value) in
     let path = Fpath.(root // (to_path reference)) in
-    FS.Dir.create ~path:true Fpath.(root // (parent (to_path reference)))
-    >>= function
+    FS.Dir.create Fpath.(root // parent (to_path reference)) >>= function
     | Error sys_err -> Lwt.return (Error (`FS sys_err))
     | Ok (true | false) ->
       Encoder.to_file path raw state >|= function

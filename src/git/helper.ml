@@ -605,7 +605,7 @@ module FS (FS: S.FS) = struct
         l "Got an error while closing %a, ignoring." FS.pp_error e);
     Lwt.return ()
 
-  let with_open_r path f = with_f (FS.File.open_r ~mode:0o400) no_err path f
+  let with_open_r path f = with_f FS.File.open_r no_err path f
 
   let prng = lazy(Random.State.make_self_init ())
 
@@ -626,7 +626,7 @@ module FS (FS: S.FS) = struct
     aux 0
 
   let with_open_w ?(atomic=true) path f =
-    if not atomic then with_f (FS.File.open_w ~mode:0o6444) no_err path f
+    if not atomic then with_f FS.File.open_w no_err path f
     else
       temp_file Fpath.(basename path) >>= fun temp ->
       let err e =
@@ -635,7 +635,7 @@ module FS (FS: S.FS) = struct
               FS.pp_error e Fpath.pp path);
         FS.File.delete temp >|= fun _ -> ()
       in
-      with_f (FS.File.open_w ~mode:0o644) err temp f >>= function
+      with_f FS.File.open_w err temp f >>= function
       | Error _ as e -> Lwt.return e
       | Ok x         ->
         FS.File.move temp path >|= function

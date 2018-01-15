@@ -62,7 +62,6 @@ let expected_unix_error exn =
   Fmt.kstrf invalid_arg "Expected an unix error: %a." Fmt.exn exn
 
 let open_pool = Lwt_pool.create 200 (fun () -> Lwt.return ())
-let mkdir_pool = Lwt_pool.create 1 (fun () -> Lwt.return ())
 
 let rec protect ?(n=0) err f =
   let sleep_t = 0.001 in
@@ -112,9 +111,9 @@ let result_map f a = match a with
 
 module Dir = struct
 
-
-  let create ?(path = true) ?(mode = 0o755) dir =
-    let mkdir d mode =
+  let create dir =
+    let mode = 0o755 in
+    let mkdir d =
       let err = function
         | Unix.EEXIST -> Lwt.return (Ok ())
         | e           -> err_mkdir d e
@@ -127,28 +126,23 @@ module Dir = struct
     | Error _ as e -> Lwt.return e
     | Ok true      -> Lwt.return (Ok false)
     | Ok false     ->
-      match path with
-      | false ->
-        Lwt_pool.use mkdir_pool (fun () -> mkdir dir mode) >|=
-        result_map (fun _ -> Ok false)
-      | true ->
-        let rec dirs_to_create p acc =
-          is_dir p >>= function
-          | Error _ as e -> Lwt.return e
-          | Ok true      -> Lwt.return (Ok acc)
-          | Ok false     -> dirs_to_create (Fpath.parent p) (p :: acc)
-        in
-        let rec create_them dirs () = match dirs with
-          | []          -> Lwt.return (Ok ())
-          | dir :: dirs ->
-            mkdir dir mode >>= function
-            | Error _ as err -> Lwt.return err
-            | Ok ()          -> create_them dirs ()
-        in
-        (dirs_to_create dir [] >>= function
-          | Ok dirs        -> create_them dirs ()
-          | Error _ as err -> Lwt.return err)
-        >|= result_map (fun _ -> Ok true)
+      let rec dirs_to_create p acc =
+        is_dir p >>= function
+        | Error _ as e -> Lwt.return e
+        | Ok true      -> Lwt.return (Ok acc)
+        | Ok false     -> dirs_to_create (Fpath.parent p) (p :: acc)
+      in
+      let rec create_them dirs () = match dirs with
+        | []          -> Lwt.return (Ok ())
+        | dir :: dirs ->
+          mkdir dir >>= function
+          | Error _ as err -> Lwt.return err
+          | Ok ()          -> create_them dirs ()
+      in
+      (dirs_to_create dir [] >>= function
+        | Ok dirs        -> create_them dirs ()
+        | Error _ as err -> Lwt.return err)
+      >|= result_map (fun _ -> Ok true)
 
   let kind path =
     let open Unix in
@@ -212,21 +206,15 @@ module Dir = struct
     in
     delete_files rmdir files
 
-  let delete ?(recurse=true) dir =
+  let delete dir =
     Log.debug (fun l -> l "Dir.delete %a" Fpath.pp dir);
-    assert recurse;
     delete_dir Lwt.return dir
 
-  let contents ?(dotfiles = false) ?(rel = false) dir =
+  let contents ?(rel = false) dir =
     Log.debug (fun l -> l "Dir.contents %a" Fpath.pp dir);
     let rec aux acc = function
       | []   -> acc
-      | h::t ->
-        let f = Fpath.to_string h in
-        if dotfiles || not (String.get f 0 = '.') then
-          aux ((if rel then h else Fpath.(dir // h)) :: acc) t
-        else
-          aux acc t
+      | h::t -> aux ((if rel then h else Fpath.(dir // h)) :: acc) t
     in
     readdir dir >|? aux []
 
@@ -272,7 +260,8 @@ module File = struct
     fd  : Lwt_unix.file_descr;
   } constraint 'a = [< `Read | `Write ]
 
-  let open_w path ~mode =
+  let open_w path =
+    let mode = 0o644 in
     let err e = err_open path e in
     Lwt_pool.use open_pool @@ fun () ->
     protect err @@ fun () ->
@@ -284,7 +273,8 @@ module File = struct
     ] mode >|= fun fd ->
     ( { fd; path } :> [ `Write ] fd)
 
-  let open_r path ~mode =
+  let open_r path =
+    let mode = 0o400 in
     let err e = err_open path e in
     Lwt_pool.use open_pool @@ fun () ->
     protect err @@ fun () ->
@@ -356,7 +346,7 @@ module Mapper = struct
     protect err @@ fun () ->
     Lwt_unix.close fd
 
-  let map t ?pos ~share:_ len =
+  let map t ?pos len =
     length t >>= function
     | Error err -> Lwt.return (Error err)
     | Ok max    ->

@@ -607,7 +607,7 @@ module Make (Store : Git.S) = struct
         let pp_error = Fmt.nop
         let openfile _ = Lwt.return (Ok pack_raw)
         let length raw = Lwt.return (Ok (Int64.of_int (Cstruct.len raw)))
-        let map raw ?(pos = 0L) ~share:_ len =
+        let map raw ?(pos = 0L) len =
           let pos = Int64.to_int pos in
           let len = min (Cstruct.len raw - pos) len in
           Lwt.return (Ok (Cstruct.sub raw pos len))

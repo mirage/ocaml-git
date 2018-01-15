@@ -306,7 +306,7 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
       >>!= (fun sys_err -> Lwt.return (`FS sys_err))
       >|= fun length -> (fd, length))
      >>= fun (fd, length) -> (
-       FS.Mapper.map ~share:false fd (Int64.to_int length)
+       FS.Mapper.map fd (Int64.to_int length)
        >>!= (fun sys_err -> close fd sys_err)
        >>!= (fun sys_err -> Lwt.return (`FS sys_err))
        >|= fun map -> (fd, map)
@@ -718,7 +718,7 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
       >>!= (fun err -> Lwt.return (`FS err)))
      >>!= (fun sys_err -> close_all fdi fdp sys_err))
     >>?= fun decoder_pack ->
-    ((FS.File.open_r ~mode:0o644 Fpath.(root / "objects" / "pack" / filename_pack)
+    ((FS.File.open_r Fpath.(root / "objects" / "pack" / filename_pack)
       >>!= (fun sys_err -> Lwt.return (`FS sys_err)))
      >>!= (fun sys_err -> close_all fdi fdp sys_err))
     >>?= fun fd ->
