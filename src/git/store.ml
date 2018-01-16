@@ -22,6 +22,7 @@ let ( >>?= ) = Lwt_result.bind
 let src = Logs.Src.create "git.store" ~doc:"logs git's store event"
 module Log = (val Logs.src_log src : Logs.LOG)
 
+(* XXX(samoht): duplicate of Loose.S? *)
 module type LOOSE = sig
 
   type t
@@ -77,6 +78,7 @@ module type LOOSE = sig
 
 end
 
+(* XXX(samoht): duplicate of pack?.S ? *)
 module type PACK = sig
 
   type t
@@ -219,7 +221,7 @@ module type S = sig
   val contents: t -> ((Hash.t * Value.t) list, error) result Lwt.t
 
   val fold:
-       t
+    t
     -> ('a -> ?name:Fpath.t -> length:int64 -> Hash.t -> Value.t -> 'a Lwt.t)
     -> path:Fpath.t
     -> 'a
@@ -258,55 +260,20 @@ module Option = struct
   let map f a = match a with Some a -> Some (f a) | None -> None
 end
 
-module FS
-    (H : S.HASH)
-    (FS: S.FS)
-    (I : S.INFLATE)
-    (D : S.DEFLATE)
-  : S with module Hash = H
-       and module FS = FS
-       and module Inflate = I
-       and module Deflate = D
-= struct
+module FS (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
+
   module Hash = H
   module Inflate = I
   module Deflate = D
-  module FS = FS
+  module FS = F
 
   let has_global_watches = FS.has_global_watches
   let has_global_checkout = FS.has_global_checkout
 
-  module LooseImpl: Loose.S
-    with module Hash = H
-     and module Inflate = I
-     and module Deflate = D
-     and module FS = FS
-     and module Blob = Blob.Make(Hash)
-     and module Commit = Commit.Make(Hash)
-     and module Tree = Tree.Make(Hash)
-     and module Tag = Tag.Make(Hash)
-     and type t = Value.Make(Hash)(Inflate)(Deflate).t
-    = Loose.Make(Hash)(FS)(Inflate)(Deflate)
+  module LooseImpl = Loose.Make(Hash)(FS)(Inflate)(Deflate)
 
-  module PackImpl
-    : Pack_engine.S
-      with module Hash = Hash
-       and module FS = FS
-       and module Inflate = Inflate
-       and module Deflate = Deflate
-    = Pack_engine.Make(H)(FS)(I)(D)
-
-  module Value
-    : Value.S
-      with module Hash = H
-       and module Inflate = I
-       and module Deflate = D
-       and module Blob = Blob.Make(Hash)
-       and module Commit = Commit.Make(Hash)
-       and module Tree = Tree.Make(Hash)
-       and module Tag = Tag.Make(Hash)
-       and type t = Value.Make(Hash)(Inflate)(Deflate).t
-    = Value.Make(Hash)(Inflate)(Deflate)
+  module PackImpl = Pack_engine.Make(H)(FS)(I)(D)
+  module Value = Value.Make(Hash)(Inflate)(Deflate)
 
   module PACKDecoder = PackImpl.PACKDecoder
   module PACKEncoder = PackImpl.PACKEncoder
@@ -314,35 +281,47 @@ module FS
 
   module Reference = Reference.IO(H)(FS)
 
-  module DoubleHash =
-  struct
+  module DoubleHash = struct
     type t = Hash.t * Hash.t
-
     let hash = Hashtbl.hash
-
-    let equal (a, b) (c, d) =
-      Hash.equal a c && Hash.equal b d
+    let equal (a, b) (c, d) = Hash.equal a c && Hash.equal b d
   end
 
-  module HashInt64 =
-  struct
+  module HashInt64 = struct
     type t = Hash.t * int64
-
     let hash = Hashtbl.hash
-
-    let equal (a, b) (c, d) =
-      Hash.equal a c && Int64.equal b d
+    let equal (a, b) (c, d) = Hash.equal a c && Int64.equal b d
   end
 
   (* XXX(dinosaure): need to limit the weight of [CacheObject] and
      [CacheValue] by the memory consumption of the data stored - and
      not by the number of theses data. Indeed, 5 commits is more
      cheaper than 1 blob sometimes. *)
-  module CacheObject   = Lru.M.Make(DoubleHash)(struct type t = PACKDecoder.Object.t let weight _ = 1 end)
-  module CacheValue    = Lru.M.Make(Hash)(struct type t = Value.t let weight _ = 1 end)
-  module CachePack     = Lru.M.Make(Hash)(struct type t = PACKDecoder.t let weight _ = 1 end) (* fixed size *)
-  module CacheIndex    = Lru.M.Make(Hash)(struct type t = IDXDecoder.t let weight _ = 1 end) (* not fixed size by consider than it's ok. *)
-  module CacheRevIndex = Lru.M.Make(HashInt64)(struct type t = Hash.t let weight _ = 1 end) (* fixed size *)
+  module CacheObject =
+    Lru.M.Make
+      (DoubleHash)
+      (struct type t = PACKDecoder.Object.t let weight _ = 1 end)
+
+  module CacheValue =
+    Lru.M.Make
+      (Hash)
+      (struct type t = Value.t let weight _ = 1 end)
+
+  module CachePack =
+    Lru.M.Make
+      (Hash)
+      (struct type t = PACKDecoder.t let weight _ = 1 end) (* fixed size *)
+
+  module CacheIndex =
+    Lru.M.Make
+      (Hash)
+      (* not fixed size by consider than it's ok. *)
+      (struct type t = IDXDecoder.t let weight _ = 1 end)
+
+  module CacheRevIndex =
+    Lru.M.Make
+      (HashInt64)
+      (struct type t = Hash.t let weight _ = 1 end) (* fixed size *)
 
   type buffer =
     { window: Inflate.window
@@ -439,20 +418,10 @@ module FS
         ~root:t.dotgit ~level:t.compression ~raw ~kind value
       >>= function
       | Ok hash -> Lwt.return hash
-      | Error (#LooseImpl.error as err) ->
-        Fmt.kstrf Lwt.fail_with "%a" LooseImpl.pp_error err
+      | Error e -> Fmt.kstrf Lwt.fail_with "%a" LooseImpl.pp_error e
 
-    module D: S.DECODER
-      with type t = t
-       and type init = Inflate.window * Cstruct.t * Cstruct.t
-       and type error = Value.D.error
-      = Value.D
-
-    module E: S.ENCODER
-      with type t = t
-       and type init = int * t * int * Cstruct.t
-       and type error = Value.E.error
-      = Value.E
+    module D = Value.D
+    module E = Value.E
   end
 
   module Pack = struct
@@ -572,7 +541,7 @@ module FS
         module Value = Value
         module Deflate = Deflate
         module PACKEncoder = PACKEncoder
-        type nonrec t = state
+        type t = state
         type nonrec error = error
         type kind = PACKDecoder.kind
         let pp_error = pp_error
@@ -601,45 +570,54 @@ module FS
         with_buffer git (fun { ztmp; window; _ } ->
             PACKDecoder.optimized_get'
               ~h_tmp:htmp decoder_pack offset rtmp ztmp window
-          ) >>= function
+          ) >|= function
         | Error err ->
-          Log.err (fun l -> l ~header:"from" "Retrieve an error when we try to \
-                                              resolve the object at the offset %Ld \
-                                              in the temporary pack file %a: %a."
-                      offset Fpath.pp path_pack PACKDecoder.pp_error err);
-          Lwt.return acc
+          Log.err (fun l ->
+              l ~header:"from" "Retrieve an error when we try to \
+                                resolve the object at the offset %Ld \
+                                in the temporary pack file %a: %a."
+                offset Fpath.pp path_pack PACKDecoder.pp_error err);
+          acc
         | Ok obj ->
-          let delta = match obj.PACKDecoder.Object.from with
-            | PACKDecoder.Object.External hash -> Some (PACKEncoder.Entry.From hash)
-            | PACKDecoder.Object.Direct _ -> None
-            | PACKDecoder.Object.Offset { offset; _ } ->
-              try let (_, hash) = Pack_info.Graph.find offset info.Pack_info.graph in
+          let open PACKDecoder.Object in
+          let delta = match obj.from with
+            | External hash        -> Some (PACKEncoder.Entry.From hash)
+            | Direct _             -> None
+            | Offset { offset; _ } ->
+              try
+                let (_, hash) =
+                  Pack_info.Graph.find offset info.Pack_info.graph
+                in
                 Option.map (fun hash -> PACKEncoder.Entry.From hash) hash
-              with Not_found -> None
+              with Not_found ->
+                None
           in
-
-          Lwt.return (PACKEncoder.Entry.make hash ?delta (k2k obj.PACKDecoder.Object.kind) obj.PACKDecoder.Object.length :: acc)
+          PACKEncoder.Entry.make hash ?delta
+            (k2k obj.PACKDecoder.Object.kind) obj.PACKDecoder.Object.length
+          :: acc
       in
 
       let external_ressources acc =
-        List.fold_left
-          (fun acc (_, hunks_descr) ->
-             let open Pack_info in
-
-             match hunks_descr.PACKDecoder.H.reference with
-             | PACKDecoder.H.Hash hash when not (Radix.mem info.tree hash) ->
-               (try List.find (Hash.equal hash) acc |> fun _ -> acc
-                with Not_found -> hash :: acc)
-             | _ -> acc)
-          [] delta
-        |> Lwt_list.fold_left_s
-          (fun acc hash -> extern git hash >>= function
-             | None ->
-               Lwt.return acc
-             | Some (kind, raw) ->
-               let entry = PACKEncoder.Entry.make hash (k2k kind) (Int64.of_int (Cstruct.len raw)) in
-               Lwt.return (entry :: acc))
-          acc
+        let res =
+          List.fold_left (fun acc (_, hunks_descr) ->
+              let open Pack_info.PACKDecoder.H in
+              match hunks_descr.reference with
+              | Hash hash when not (Pack_info.Radix.mem info.tree hash) ->
+                (try List.find (Hash.equal hash) acc |> fun _ -> acc
+                 with Not_found -> hash :: acc)
+              | _ -> acc
+            ) [] delta
+        in
+        Lwt_list.fold_left_s (fun acc hash ->
+            extern git hash >|= function
+            | None             -> acc
+            | Some (kind, raw) ->
+              let entry =
+                PACKEncoder.Entry.make hash (k2k kind)
+                  (Int64.of_int (Cstruct.len raw))
+              in
+              entry :: acc
+          ) acc res
       in
 
       let get hash =
@@ -653,7 +631,7 @@ module FS
         else
           extern git hash >|= function
           | Some (_, raw) -> Some (cstruct_copy raw)
-          | None -> None
+          | None          -> None
       in
 
       let tag _ = false in
@@ -692,12 +670,13 @@ module FS
               | Error sys_err -> Lwt.return (Error (`FS sys_err))
               | Ok () -> Lwt.return (Ok (hash_pack, List.length entries)))
             >>= fun ret ->
-            FS.Mapper.close fdp >>= function
-            | Error sys_err ->
-              Log.err (fun l -> l ~header:"canonicalize" "Impossible to close the pack file %a: %a."
-                          Fpath.pp path_pack FS.Mapper.pp_error sys_err);
-              Lwt.return ret
-            | Ok () -> Lwt.return ret
+            FS.Mapper.close fdp >|= function
+            | Ok ()   -> ret
+            | Error e ->
+              Log.err (fun l ->
+                  l ~header:"canonicalize" "Impossible to close the pack file %a: %a."
+                    Fpath.pp path_pack FS.Mapper.pp_error e);
+              ret
 
     let from git stream =
       let stream0, stream1 =
@@ -1199,11 +1178,14 @@ end
          | Ok _ as v -> v
          | Error e   -> Error (e :> error))
       | Ok false | Error _ ->
-        if Hashtbl.mem t.packed reference
-        then
-          try Lwt.return (Ok (reference, Reference.Hash (Hashtbl.find t.packed reference)))
-          with Not_found -> Lwt.return (Error `Not_found)
-        else Lwt.return (Error `Not_found)
+        let r =
+          if Hashtbl.mem t.packed reference
+          then
+            try Ok (reference, Reference.Hash (Hashtbl.find t.packed reference))
+            with Not_found -> Error `Not_found
+          else Error `Not_found
+        in
+        Lwt.return r
 
     let write t reference value =
       with_buffer t (fun { raw; _ } ->
