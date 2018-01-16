@@ -28,7 +28,6 @@ let finish: t -> t = Deflate.finish
 let used_in: t -> int = Deflate.used_in
 let used_out: t -> int = Deflate.used_out
 let no_flush: int -> int -> t -> t = Deflate.no_flush
-let sync_flush: int -> int -> t -> t = Deflate.sync_flush
 let flush: int -> int -> t -> t = Deflate.flush
 
 let eval ~src:src' ~dst:dst' t:

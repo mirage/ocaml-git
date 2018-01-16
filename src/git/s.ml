@@ -113,7 +113,6 @@ module type DEFLATE = sig
   val default    : int -> t
   val flush      : int -> int -> t -> t
   val no_flush   : int -> int -> t -> t
-  val sync_flush : int -> int -> t -> t
   val finish     : t -> t
   val used_in    : t -> int
   val used_out   : t -> int
