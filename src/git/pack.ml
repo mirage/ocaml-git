@@ -1244,7 +1244,7 @@ struct
     | KindRaw, { Delta.delta = Delta.Z } ->
       let abs_off = t.write in
 
-      (KWriteK.header (Kind.to_bin entry.Entry.kind) entry.Entry.length Crc32.default
+      (KWriteK.header (Kind.to_bin (Entry.kind entry)) (Entry.length entry) Crc32.default
        @@ fun crc _ t ->
        let z = Deflate.default 4 in
        let z = Deflate.flush (t.o_off + t.o_pos) (t.o_len - t.o_pos) z in
@@ -1403,7 +1403,7 @@ struct
     | [] ->
       Cont { t with state = Hash hash }
     | (entry, delta) :: r ->
-      match entry.Entry.delta, delta with
+      match Entry.delta entry, delta with
       | Entry.From src_hash, { Delta.delta = Delta.S _ } ->
         if Radix.mem t.radix src_hash
         then Cont { t with state = WriteK (writek KindOffset entry delta r) }
@@ -1411,11 +1411,11 @@ struct
       | Entry.None, { Delta.delta = Delta.Z } ->
         Cont { t with state = WriteK (writek KindRaw entry delta r) }
       | (Entry.None | Entry.From _),
-        { Delta.delta = (Delta.S _ | Delta.Z) } -> error t (Invalid_hash entry.Entry.hash_object)
+        { Delta.delta = (Delta.S _ | Delta.Z) } -> error t (Invalid_hash (Entry.id entry))
 
   let save _ t x r crc off =
     Cont { t with state = Object (iter r)
-                ; radix = Radix.bind t.radix x.Entry.hash_object (crc, off) }
+                ; radix = Radix.bind t.radix (Entry.id x) (crc, off) }
 
   let number lst dst t =
     (* XXX(dinosaure): problem in 32-bits architecture. TODO! *)
@@ -1491,8 +1491,8 @@ struct
 
   let expect t =
     match t.state with
-    | WriteH { x = ({ Entry.hash_object; _ }, _); _ } -> hash_object
-    | WriteZ { x = { Entry.hash_object; _ }; _ } -> hash_object
+    | WriteH { x = (entry, _); _ } -> Entry.id entry
+    | WriteZ { x = entry; _ } -> Entry.id entry
     | (Header _ | Object _ | WriteK _ | Save _ | Hash _ | End _ | Exception _) ->
       raise (Invalid_argument "PACKEncoder.expecti: bad state")
 
