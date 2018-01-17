@@ -739,7 +739,7 @@ struct
         | S { length; src; _ } ->
           length * (max - (depth src)) / (max - (depth trg + 1))
         | Z ->
-          (Int64.to_int trg_entry.Entry.length / 2 - 20) * (max - (depth src)) / (max - 1)
+          (Int64.to_int (Entry.length trg_entry) / 2 - 20) * (max - (depth src)) / (max - 1)
       in
 
       let choose a b = match a, b with
@@ -758,17 +758,17 @@ struct
 
       let apply src_entry (src, src_raw, rabin) best =
         let diff =
-          if src_entry.Entry.length < trg_entry.Entry.length
-          then Int64.to_int (Int64.sub trg_entry.Entry.length src_entry.Entry.length)
+          if Entry.length src_entry < Entry.length trg_entry
+          then Int64.to_int (Int64.sub (Entry.length trg_entry) (Entry.length src_entry))
           else 0
         in
 
-        if src_entry.Entry.kind <> trg_entry.Entry.kind
+        if Entry.kind src_entry <> Entry.kind trg_entry
         || (depth src) = max
         || (limit src) = 0
         || (limit src) <= diff
-        || trg_entry.Entry.length < Int64.(src_entry.Entry.length / 32L)
-        || Hash.equal src_entry.Entry.hash_object trg_entry.Entry.hash_object
+        || Entry.length trg_entry < Int64.(Entry.length src_entry / 32L)
+        || Hash.equal (Entry.id src_entry) (Entry.id trg_entry)
         then best
         else
           let hunks  = Rabin.Default.delta rabin trg_raw in
@@ -779,7 +779,7 @@ struct
 
       let module Window = (val window_pack) in
 
-      if not trg_entry.Entry.preferred
+      if not (Entry.preferred trg_entry)
       && (depth trg) < max
       then Window.fold apply None window
       else None
@@ -799,7 +799,7 @@ struct
     let edges, rest = List.partition (function (_, { delta = Z }) -> true | (_, { delta = S _ }) -> false) lst in
 
     let deps hash =
-      try List.filter (fun (e, _) -> Hash.equal e.Entry.hash_object hash) lst
+      try List.filter (fun (e, _) -> Hash.equal (Entry.id e) hash) lst
       with Not_found -> []
     in
 
@@ -813,7 +813,9 @@ struct
         loop (x :: acc) later r true
       | ((_, { delta = S { src_hash; _ } }) as x) :: r, later ->
         let deps = deps src_hash in
-        let ensure = List.for_all (fun (e, _) -> List.exists (fun (x, _) -> Hash.equal x.Entry.hash_object e.Entry.hash_object) acc) deps in
+        let ensure = List.for_all (fun (e, _) ->
+            List.exists (fun (x, _) ->
+                Hash.equal (Entry.id x) (Entry.id e)) acc) deps in
 
         if ensure
         then loop (x :: acc) later r true
@@ -828,8 +830,8 @@ struct
   module ElementCache = Lru.F.Make(Entry)(WeightByElement)
 
   let deltas ?(memory = false) entries get tag window max =
-    let to_delta e = match e.Entry.delta, e.Entry.preferred with
-      | Entry.None, false -> e.Entry.length >= 50L
+    let to_delta e = match Entry.delta e, Entry.preferred e with
+      | Entry.None, false -> Entry.length e >= 50L
       | (Entry.From _ | Entry.None), _  -> false
     in
 
@@ -863,7 +865,7 @@ struct
        the source (available in [tries] or [untries]). It's why we keep an
        hash-table and update this hash-table for each diff. *)
     let normalize lst =
-      Lwt_list.map_p (fun trg_entry -> match trg_entry.Entry.delta with
+      Lwt_list.map_p (fun trg_entry -> match Entry.delta trg_entry with
           | Entry.None ->
             Lwt.return (trg_entry, { delta = Z })
           | Entry.From hash ->
@@ -874,7 +876,7 @@ struct
                ensure than if [trg_entry] has a dependence, by the topological
                sort, we already computed all /in-PACK/ sources necessary for the
                next and update the hash-table with these sources. *)
-            get hash >>= fun a -> get trg_entry.Entry.hash_object >>= fun b ->
+            get hash >>= fun a -> get (Entry.id trg_entry) >>= fun b ->
             match a, b with
             | Some src_raw, Some trg_raw ->
               let rabin  = Rabin.Default.Index.make ~copy:false src_raw in (* we don't keep [rabin]. *)
@@ -889,11 +891,11 @@ struct
                                        ; src_hash = hash } }
               in
 
-              Hashtbl.add normal trg_entry.Entry.hash_object base;
+              Hashtbl.add normal (Entry.id trg_entry) base;
 
               Lwt.return (trg_entry, base)
             | None, Some _ -> raise (Uncaught_hash hash)
-            | Some _, None -> raise (Uncaught_hash trg_entry.Entry.hash_object)
+            | Some _, None -> raise (Uncaught_hash (Entry.id trg_entry))
             | None, None -> assert false)
         lst
     in
@@ -902,8 +904,8 @@ struct
       (fun () ->
          Lwt_list.fold_left_s
            (fun (window, acc) entry ->
-              get entry.Entry.hash_object >>= function
-              | None -> raise (Uncaught_hash entry.Entry.hash_object)
+              get (Entry.id entry) >>= function
+              | None -> raise (Uncaught_hash (Entry.id entry))
               | Some raw ->
                 let base   = { delta = Z } in
                 let rabin  = Rabin.Default.Index.make ~copy:false raw in (* we keep [rabin] with [raw] in the [window]. *)
@@ -920,11 +922,11 @@ struct
                                     ; depth
                                     ; hunks
                                     ; src
-                                    ; src_length = src_entry.Entry.length
-                                    ; src_hash = src_entry.Entry.hash_object };
-                    Hashtbl.add normal entry.Entry.hash_object base;
+                                    ; src_length = Entry.length src_entry
+                                    ; src_hash = Entry.id src_entry };
+                    Hashtbl.add normal (Entry.id entry) base;
 
-                    Lwt.return (window, ({ entry with Entry.delta = Entry.From src_entry.Entry.hash_object }, base) :: acc)
+                    Lwt.return (window, (Entry.with_delta entry Entry.(From (id src_entry)), base) :: acc)
                   | None -> Lwt.return (window, (entry, base) :: acc))
            (window, []) tries)
       (fun (_, tries) ->
