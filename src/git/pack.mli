@@ -201,6 +201,8 @@ sig
       delta-ification. *)
 end
 
+module MakeEntry (Hash: S.HASH): ENTRY with module Hash = Hash
+
 (** This module is the engine to delta-ify Git objects together. The
    current implementation is a stop the world process which can not
    compute iteratively the delta-ification for some Git objects.
