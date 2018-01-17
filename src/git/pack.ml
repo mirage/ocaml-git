@@ -161,6 +161,13 @@ struct
     ; length }
 
   let id { hash_object; _ } = hash_object
+  let kind { kind; _ } = kind
+  let preferred { preferred; _ } = preferred
+  let delta { delta; _ } = delta
+  let length { length; _ } = length
+
+  let with_delta t delta = { t with delta }
+  let with_preferred t preferred = { t with preferred }
 
   let name x name =
     { x with hash_name = hash name
