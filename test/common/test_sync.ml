@@ -74,12 +74,12 @@ module Make (Sync: SYNC) = struct
   let test_clone name uris =
     let test uri reference =
       let uri = Uri.of_string uri in
-      Store.create ~root () >>= T.check_err >>= fun t ->
+      Store.create ~root () >>= T.init_err >>= fun t ->
       Sync.clone t ~reference uri >>= fun _ ->
       Store.list t >>=
       Lwt_list.iter_s (fun hash -> Store.read_exn t hash >|= fun _ -> ())
       >>= fun () ->
-      Store.Ref.read t Store.Reference.head >>= T.check_ref_err
+      Store.Ref.read t Store.Reference.head >>= T.check_err
       >|= fun _ -> ()
     in
     let tests =
