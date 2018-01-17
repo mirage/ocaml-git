@@ -292,9 +292,9 @@ sig
   val used_out: t -> int
 end
 
-module MakeHunkEncoder (H : S.HASH) =
+module MakeHunkEncoder (Hash : S.HASH): H with module Hash = Hash =
 struct
-  module Hash = H
+  module Hash = Hash
 
   type error
 
