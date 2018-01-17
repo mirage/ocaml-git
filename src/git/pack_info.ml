@@ -33,7 +33,7 @@ sig
   type error =
     [ `Unexpected_end_of_input
     | `Unexpected_chunk of string
-    | `PackDecoder of PACKDecoder.error ]
+    | `PDec of PDec.error ]
 
   val pp_error: error Fmt.t
 
@@ -108,15 +108,17 @@ module Make
   type error =
     [ `Unexpected_end_of_input
     | `Unexpected_chunk of string
-    | `PackDecoder of PACKDecoder.error ]
+    | `PDec of PDec.error ]
 
   let pp_error ppf = function
-    | `Unexpected_end_of_input -> Fmt.pf ppf "`Unexpected_end_of_input"
+    | `Unexpected_end_of_input ->
+      Fmt.pf ppf "Unexpected end of PACK stream"
     | `Unexpected_chunk chunk ->
-      Fmt.pf ppf "(`Unexpected_chunk %a)"
+      Fmt.pf ppf "Unexpected chunk of PACK stream: %a"
         (Fmt.hvbox (Minienc.pp_scalar ~get:String.get ~length:String.length))
         chunk
-    | `PackDecoder err -> Fmt.pf ppf "(`PackDecoder %a)" PACKDecoder.pp_error err
+    | `PDec err ->
+      Fmt.pf ppf "Got an error while decoding PACK stream: %a" PDec.pp_error err
 
   module Partial =
   struct
@@ -194,7 +196,7 @@ module Make
       | `Hunk (state, _) ->
         go ~src ?ctx ?insert_hunks partial info (PACKDecoder.continue state)
       | `Error (_, err) ->
-        Lwt.return (Error (`PackDecoder err))
+        Lwt.return (Error (`PDec err))
       | `Flush state ->
         let chunk, len = PACKDecoder.output state in
 
