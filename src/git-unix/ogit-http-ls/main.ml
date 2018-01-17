@@ -78,6 +78,9 @@ type error =
   [ `Store of Git_unix.FS.error
   | `Sync of Sync_http.error ]
 
+let store_err err = `Store err
+let sync_err err = `Sync err
+
 let pp_error ppf = function
   | `Store err -> Fmt.pf ppf "(`Store %a)" Git_unix.FS.pp_error err
   | `Sync err -> Fmt.pf ppf "(`Sync %a)" Sync_http.pp_error err
@@ -85,9 +88,8 @@ let pp_error ppf = function
 let main show_tags show_heads repository =
   let root = Fpath.(v (Sys.getcwd ())) in
 
-  let open Lwt_result in
-
-  let ( >!= ) v f = map_err f v in
+  let ( >>?= ) = Lwt_result.bind in
+  let ( >>!= ) v f = Lwt_result.map_err f v in
 
   let https =
     match Uri.scheme repository with
@@ -95,13 +97,16 @@ let main show_tags show_heads repository =
     | _ -> false
   in
 
-  (Git_unix.FS.create ~root () >!= fun err -> `Store err) >>= fun git ->
-  (Sync_http.ls git ~https ?port:(Uri.port repository)
-     (option_value_exn
+  Git_unix.FS.create ~root ()
+  >>!= store_err
+  >>?= fun git ->
+  Sync_http.ls git ~https ?port:(Uri.port repository)
+     (Option.value_exn
         (fun () -> raise (Failure "Invalid repository: no host."))
         (Uri.host repository))
      (Uri.path_and_query repository)
-   >!= fun err -> `Sync err) >>= fun { Sync_http.Decoder.refs; _ } ->
+  >>!= sync_err
+  >>?= fun { Sync_http.Decoder.refs; _ } ->
   let refs =
     List.filter (fun (_, refname, _) ->
         let path = Fpath.v refname in

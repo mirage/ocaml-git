@@ -76,6 +76,9 @@ type error =
   [ `Store of Git_unix.FS.error
   | `Invalid_hash of Git_unix.FS.Hash.t ]
 
+let store_err err = `Store err
+let invalid_hash hash = `Invalid_hash hash
+
 let pp_error ppf = function
   | `Store err -> Fmt.pf ppf "(`Store %a)" Git_unix.FS.pp_error err
   | `Invalid_hash hash -> Fmt.pf ppf "(`Hash %a)" Git_unix.FS.Hash.pp hash
@@ -102,11 +105,12 @@ type rest =
 
 let main show hash =
   let root = Fpath.(v (Sys.getcwd ())) in
-  let ( >!= ) = Lwt_result.bind_lwt_err in
 
   let open Lwt_result in
 
-  (Git_unix.FS.create ~root () >!= fun err -> Lwt.return (`Store err)) >>= fun git ->
+  let ( >!= ) v f = map_err f v in
+
+  Git_unix.FS.create ~root () >!= store_err >>= fun git ->
 
   match show with
   | `Inflate ->
@@ -117,9 +121,9 @@ let main show hash =
         Fmt.(pf stdout) "%a%!" pp_inflate raw;
         Lwt.return (Ok ())
       | None ->
-        Lwt.return (Error (`Invalid_hash hash)))
+        Lwt.return (Error (invalid_hash hash)))
   | #rest as rest ->
-    (Git_unix.FS.read git hash >!= fun err -> Lwt.return (`Store err)) >>= fun value ->
+    Git_unix.FS.read git hash >!= store_err >>= fun value ->
     let fmt = match rest with
       | `Type -> pp_type
       | `Size -> pp_size

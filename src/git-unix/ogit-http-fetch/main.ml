@@ -80,22 +80,20 @@ let setup_logs style_renderer level ppf =
 
 type error =
   [ `Store of Git_unix.FS.error
-  | `Reference of Git_unix.FS.Ref.error
   | `Sync of Sync_http.error ]
+
+let store_err err = `Store err
+let sync_err err = `Sync err
 
 let pp_error ppf = function
   | `Store err -> Fmt.pf ppf "(`Store %a)" Git_unix.FS.pp_error err
-  | `Reference err -> Fmt.pf ppf "(`Reference %a)" Git_unix.FS.Ref.pp_error err
   | `Sync err -> Fmt.pf ppf "(`Sync %a)" Sync_http.pp_error err
-
-exception Write of Git_unix.FS.Ref.error
 
 let main references directory repository =
   let root = option_map_default Fpath.(v (Sys.getcwd ())) Fpath.v directory in
 
-  let open Lwt_result in
-
-  let ( >!= ) v f = map_err f v in
+  let ( >>?= ) = Lwt_result.bind in
+  let ( >>!= ) v f = Lwt_result.map_err f v in
 
   let references =
     List.fold_left
@@ -109,9 +107,12 @@ let main references directory repository =
       Git_unix.FS.Reference.Map.empty references
   in
 
-  (Git_unix.FS.create ~root () >!= fun err -> `Store err) >>= fun git ->
-  (Sync_http.fetch_some git ~references repository
-   >!= fun err -> `Sync err) >>= fun _ -> Lwt.return (Ok ())
+  Git_unix.FS.create ~root ()
+  >>!= store_err
+  >>?= fun git ->
+  Sync_http.fetch_some git ~references repository
+  >>!= sync_err
+  >>?= fun _ -> Lwt.return (Ok ())
 
 open Cmdliner
 
