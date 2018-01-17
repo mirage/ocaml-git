@@ -503,11 +503,6 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
     include Helper.Encoder(E)(FS)
   end
 
-  let err_stack temp file =
-    Fmt.kstrf (fun x -> Error (`IO x))
-      "Impossible to store the PACK file: %a." Fpath.pp
-      Fpath.(temp / file)
-
   let save_pack_file fmt entries get =
     let ztmp = Cstruct.create 0x8000 in
     let filename_pack = fmt (random_string 10) in
