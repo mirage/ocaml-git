@@ -31,8 +31,10 @@ module type S = sig
   module D: S.DECODER
     with type t = t
      and type init = Cstruct.t
-     and type error = [ `Decoder of string ]
-  module E: S.ENCODER with type t = t
+     and type error = Error.never
+  module E: S.ENCODER
+    with type t = t
+     and type error = Error.never
   module A: sig type nonrec t = t val decoder : int -> t Angstrom.t end
   module F: S.FARADAY with type t = t
   include S.DIGEST with type t := t and type hash := Hash.t
@@ -96,11 +98,7 @@ module Make (H: S.HASH): S with module Hash = H = struct
 
     type nonrec t = t
     type init = Cstruct.t
-
-    type error = [ `Decoder of string ]
-
-    let pp_error ppf (`Decoder err) =
-      Helper.ppe ~name:"`Decoder" Fmt.string ppf err
+    type error = Error.never
 
     type decoder =
       { res   : t
@@ -108,6 +106,8 @@ module Make (H: S.HASH): S with module Hash = H = struct
       ; abs   : int
       ; owner : bool
       ; final : bool }
+
+    let pp_error = Error.pp_never
 
     let default raw =
       Log.debug (fun l -> l ~header:"default" "Starting to decode a Blob.");
@@ -170,11 +170,7 @@ module Make (H: S.HASH): S with module Hash = H = struct
 
     type nonrec t = t
     type init = t
-
-    type error = [ `Encoder of string ]
-
-    let pp_error ppf (`Encoder err) =
-      Helper.ppe ~name:"`Encoder" Fmt.string ppf err
+    type error = Error.never
 
     type encoder =
       { abs  : int
@@ -182,6 +178,8 @@ module Make (H: S.HASH): S with module Hash = H = struct
       ; pos  : int
       ; len  : int
       ; blob : t }
+
+    let pp_error = Error.pp_never
 
     let default blob =
       { abs = 0

@@ -33,12 +33,14 @@ module type S = sig
   module D: S.DECODER
       with type t = t
        and type init = Cstruct.t
-       and type error = [ `Decoder of string ]
+       and type error = Error.never
   (** The decoder of the Git Blob object. We constraint the input to
       be a {Cstruct.t}. This decoder needs a {Cstruct.t} as an
       internal buffer. *)
 
-  module E: S.ENCODER with type t = t
+  module E: S.ENCODER
+    with type t = t
+     and type error = Error.never
   (** The encoder of the Git Blob object. *)
 
   module A: sig type nonrec t = t val decoder : int -> t Angstrom.t end
