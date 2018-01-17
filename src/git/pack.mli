@@ -201,6 +201,95 @@ sig
       delta-ification. *)
 end
 
+(** This module is the engine to delta-ify Git objects together. The
+   current implementation is a stop the world process which can not
+   compute iteratively the delta-ification for some Git objects.
+
+      This process is the biggest process about memory consumption.
+   Indeed, for each computation, we need to keep some Git objects to
+   get the best diff between them. As Git, this process keeps 10
+   objects while we do the delta-ification for all - these objects are
+   represented as inflated raw data in a {!Cstruct.t}.
+
+      However, if we try to delta-ify big objects (like your
+   repository has the season 1 of Narcos), we should explose your
+   memory (because we will load 10 movies in your memory). So the
+   client can restrict the delta-ification by the weigth of the window
+   (which contains your objects) instead by the number of objects
+   inside.
+
+      Then, the final result does not keep Git objects loaded - the
+   OCaml GC will delete them - but a lighter representation of the
+   diff for each entry. And it's why, for the serialization of the
+   PACK file, we re-ask (and re-load) your objects (however, in this
+   last case, we don't need the ownership - see {!expect}). *)
+module type DELTA =
+sig
+  module Hash: S.HASH
+  module Entry: ENTRY with module Hash := Hash
+
+  (** The type of the delta-ification. *)
+  type t =
+    { mutable delta: delta }
+  and delta =
+    | Z (** Means no delta-ification. *)
+    | S of { length    : int
+           (** Length of the PACK object. *)
+           ; depth     : int
+           (** Depth of the PACK object. *)
+           ; hunks     : Rabin.t list
+           (** Compression list. *)
+           ; src       : t
+           (** Source. *)
+           ; src_length: int64
+           (** Length of the source object. *)
+           ; src_hash  : Hash.t
+           (** Hash of the source object. *)
+           ; }
+    (** Delta-ification with a description of the source. *)
+
+  (** The type of error. *)
+  type error = Invalid_hash of Hash.t
+  (** Appears when we have an invalid hash. *)
+
+  val pp_error: error Fmt.t
+  (** Pretty-printer for {!error}. *)
+
+  val pp: t Fmt.t
+  val deltas:
+    ?memory:bool
+    -> Entry.t list
+    -> (Hash.t -> Cstruct.t option Lwt.t)
+    -> (Entry.t -> bool)
+    -> int
+    -> int
+    -> ((Entry.t * t) list, error) result Lwt.t
+    (** [deltas ?memory lst getter tagger window depth].
+
+        This is the main algorithm about the serialization of the git
+        object in a PACK file. The purpose is to order and delta-ify
+        entries.
+
+        [getter] is a function to access to the real inflated raw of
+        the git object requested by the hash. This function must
+        allocate the raw (or let the ownership to this function). The
+        algorithm takes the ownership anyway.
+
+        [tagger] is a function to annotate an entry as preferred to
+        serialize firstly.
+
+        [window] corresponds to the number of how many object(s) we
+        keep for the delta-ification or, if [memory] is [true], how
+        many byte(s) we keep for the delta-ification. The client can
+        control the memory consumption of this algorithm precisely if
+        he wants.
+
+        [depth] is the maximum of the delta-ification allowed.
+
+        If you want to understand the algorithm, look the source
+        code. *)
+end
+
 (** Interface which describes the encoder of the PACK file. *)
 module type ENCODER =
 sig

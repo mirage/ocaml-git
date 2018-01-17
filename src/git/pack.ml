@@ -604,6 +604,37 @@ struct
   let used_out t = t.o_pos
 end
 
+module type DELTA =
+sig
+  module Hash: S.HASH
+  module Entry: ENTRY with module Hash := Hash
+
+  type t =
+    { mutable delta: delta }
+  and delta =
+    | Z
+    | S of { length    : int
+           ; depth     : int
+           ; hunks     : Rabin.t list
+           ; src       : t
+           ; src_length: int64
+           ; src_hash  : Hash.t
+           ; }
+
+  type error = Invalid_hash of Hash.t
+
+  val pp_error: error Fmt.t
+  val pp: t Fmt.t
+  val deltas:
+    ?memory:bool
+    -> Entry.t list
+    -> (Hash.t -> Cstruct.t option Lwt.t)
+    -> (Entry.t -> bool)
+    -> int
+    -> int
+    -> ((Entry.t * t) list, error) result Lwt.t
+end
+
 module MakeDelta (H : S.HASH) =
 struct
   module Hash = H
