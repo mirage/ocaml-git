@@ -53,6 +53,43 @@ struct
     | Tag -> Fmt.pf ppf "Tag"
 end
 
+module type ENTRY =
+sig
+  module Hash: S.HASH
+
+  type t
+
+  type source =
+    | From of Hash.t
+    | None
+
+  val pp: t Fmt.t
+  val pp_source: source Fmt.t
+  val hash: string -> int
+
+  val make:
+    Hash.t
+    -> ?name:string
+    -> ?preferred:bool
+    -> ?delta:source
+    -> Kind.t
+    -> int64
+    -> t
+
+  val kind: t -> Kind.t
+  val preferred: t -> bool
+  val delta: t -> source
+  val length: t -> int64
+
+  val with_delta: t -> source -> t
+  val with_preferred: t -> bool -> t
+
+  val id: t -> Hash.t
+  val name: t -> string -> t
+  val compare: t -> t -> int
+  val topological_sort: t list -> t list
+end
+
 module Entry (H : S.HASH) =
 struct
   module Hash = H

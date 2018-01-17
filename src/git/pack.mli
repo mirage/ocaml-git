@@ -38,6 +38,90 @@ module Kind: sig
   (** Pretty-printer of {!t}. *)
 end
 
+(** The entry module. It used to able to manipulate the meta-data only
+   needed by the delta-ification of the Git object (and avoid to
+   de-serialize all of the Git object to compute the delta-ification).
+   *)
+module type ENTRY =
+sig
+  module Hash: S.HASH
+
+  type t
+  (** The type of an entry. *)
+
+  (** The type of a source. *)
+  type source =
+    | From of Hash.t
+    (** To notice than an user-defined source exists for the
+        delta-ification. *)
+    | None
+    (** To notice than no user-defined source exists. *)
+
+  val pp: t Fmt.t
+  (** Pretty-printer for {!t}. *)
+
+  val pp_source: source Fmt.t
+  (** Pretty-printer for {!source}. *)
+
+  val hash: string -> int
+  (** [hash path] produces a integer to correspond with [path]. *)
+
+  val make:
+    Hash.t
+    -> ?name:string
+    -> ?preferred:bool
+    -> ?delta:source
+    -> Kind.t
+    -> int64
+    -> t
+  (** [make hash ?name ?preferred ?delta kind length] returns a new
+      entry when:
+
+      {ul
+      {- [hash] corresponds to the unique ID of the git object.}
+      {- [name] corresponds to the optional name of the git object.
+      For a [Tree] or a [Blob], the client should notice the given
+      name (to optimize the delta-ification).}
+      {- [preferred] notices to the delta-ification algorithm to
+      prefer to use this entry as a source.}
+      {- [delta] notices an existing user specified source for the
+      entry (and the delta-ification algorithm will use it).}
+      {- [kind] corresponds to the kind of the object.}
+      {- [length] corresponds to the real inflated length of the
+      object.}} *)
+
+  val kind: t -> Kind.t
+  val preferred: t -> bool
+  val delta: t -> source
+  val length: t -> int64
+
+  val with_delta: t -> source -> t
+  val with_preferred: t -> bool -> t
+
+  val id: t -> Hash.t
+  (** [id t] returns the unique identifier of the entry [t]. *)
+
+  val name: t -> string -> t
+  (** [name t name] provides a new [t] with the specified [name]. *)
+
+  val compare: t -> t -> int
+  (** The comparison function for the entry {!t}. It returns [0]
+      when [a] equal [b]. It returns a negative integer if [a] is {i
+      less} than [b] and a positive integer when [a] is {i greater}
+      than [b]. This function is used to sort a list of entries with
+      the Git heuristic and produce an optimal delta-ification.
+
+      According to Git, it's a lexicographic sort by the {!Kind.t},
+      the optional name of the entry (hashed by {!hash}) and sorted
+      by size (larger to smaller). *)
+
+  val topological_sort: t list -> t list
+  (** [topological_sort lst] orders [lst] so that no entry precedes
+      an entry it depends upon. So you will find any entries
+      considered as a source before any entries when you apply the
+      delta-ification. *)
+end
+
 (** Interface which describes the encoder of the PACK file. *)
 module type ENCODER =
 sig
