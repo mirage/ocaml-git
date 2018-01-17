@@ -38,6 +38,85 @@ module Kind: sig
   (** Pretty-printer of {!t}. *)
 end
 
+(** This module is the serialiser of the list of hunks in the PACK
+   entry when we retrieve a delta-ified Git object. This encoder is a
+   non-blocking encoder used in the same time than the {!Deflater} -
+   that means the content produced is always deflated. *)
+module type H =
+sig
+  module Hash: S.HASH
+
+  type error
+  (** The type of error. *)
+
+  val pp_error: error Fmt.t
+  (** Pretty-printer of {!error}. *)
+
+  type t
+  (** The type of the encoder. *)
+
+  (** The type of the reference. It's a negative offset or the hash
+      of the source object. *)
+  type reference =
+    | Offset of int64
+    | Hash of Hash.t
+
+  val pp: t Fmt.t
+  (** Pretty-printer of {!t}. *)
+
+  val default: reference -> int -> int -> Rabin.t list -> t
+  (** Make a new encoder state {!t} from a {!reference}. We need to
+      notice the length of the inflated source and the length of the
+      inflated target then, the compression list. *)
+
+  val refill: int -> int -> t -> t
+  (** [refill off len t] provides a new [t] with [len] bytes to
+      read, starting at [off]. This byte range is read by calls to
+      {!eval} with [t] until [`Await] is returned. The encoder
+      expects the target raw (not the source) to write [Insert]
+      opcodes. The client must send the target raw continuously
+      because internally, we assert than a continuous stream of the
+      target raw and pick only the needed byte range. *)
+
+  val flush: int -> int -> t -> t
+  (** [flush off len t] provides [t] with [len] bytes to write,
+      starting at [off]. This byte range is written by calls to
+      {!eval} with [t] until [`Flush] is returned. *)
+
+  val finish: t -> t
+  (** [finish t] provides a new [t] which does not expect any input.
+      An {!eval} of the new [t] will never return an [`Await] value
+      then. *)
+
+  val eval: Cstruct.t -> Cstruct.t -> t ->
+    [ `Await of t
+    | `Flush of t
+    | `End of t
+    | `Error of (t * error) ]
+  (** [eval src t] is:
+
+      {ul
+      {- [`Await t] iff [t] needs more input storage. The client
+      must use {!refill} to provide a new buffer and then call
+      {!eval} with [`Await] until other value returned.}
+      {- [`Flush t] iff [t] needs more output storage. The client
+      must use {!flush} to provide a new buffer and then call
+      {!eval} with [`Flush] until [`End] is returned.}
+      {- [`End t] when [t] is done. Then, [t] sticks on this
+      situation, the client can remove it.}
+      {- [`Error (t, exn)] iff the encoder [t] meet an {!error}
+      [exn]. The encoder can't continue and sticks in this
+      situation.}} *)
+
+  val used_in: t -> int
+  (** [used_in ŧ] returns how many byte [t] consumed in the current
+      buffer noticed to the previous call of {!eval}. *)
+
+  val used_out: t -> int
+  (** [used_out ŧ] returns how many byte [t] wrote in the current
+      buffer noticed to the previous call of {!eval}. *)
+end
+
 (** The entry module. It used to able to manipulate the meta-data only
    needed by the delta-ification of the Git object (and avoid to
    de-serialize all of the Git object to compute the delta-ification).

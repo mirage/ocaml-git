@@ -257,6 +257,34 @@ struct
   let ( / ) = Int64.div
 end
 
+module type H =
+sig
+  module Hash: S.HASH
+
+  type error
+
+  val pp_error: error Fmt.t
+
+  type t
+
+  type reference =
+    | Offset of int64
+    | Hash of Hash.t
+
+  val pp: t Fmt.t
+  val default: reference -> int -> int -> Rabin.t list -> t
+  val refill: int -> int -> t -> t
+  val flush: int -> int -> t -> t
+  val finish: t -> t
+  val eval: Cstruct.t -> Cstruct.t -> t ->
+    [ `Await of t
+    | `Flush of t
+    | `End of t
+    | `Error of (t * error) ]
+  val used_in: t -> int
+  val used_out: t -> int
+end
+
 module MakeHunkEncoder (H : S.HASH) =
 struct
   module Hash = H
