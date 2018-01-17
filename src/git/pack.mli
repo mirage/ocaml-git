@@ -412,10 +412,17 @@ sig
         situation.}} *)
 end
 
-module MakePACKEncoder
-    (H: S.HASH)
-    (D: S.DEFLATE): ENCODER
-  with module Hash = H
-   and module Deflate = D
+module MakePackEncoder
+    (Hash: S.HASH)
+    (Deflate: S.DEFLATE)
+    (Entry: ENTRY with module Hash := Hash)
+    (Delta: DELTA with module Hash := Hash
+                   and module Entry := Entry)
+    (HunkEncoder: H with module Hash := Hash)
+  : P with module Hash = Hash
+       and module Deflate = Deflate
+       and module Entry := Entry
+       and module Delta := Delta
+       and module HunkEncoder := HunkEncoder
 (** The {i functor} to make the PACK encoder by a specific hash
     implementation and a specific deflate algorithm. *)

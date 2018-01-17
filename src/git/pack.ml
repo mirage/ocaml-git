@@ -978,19 +978,25 @@ sig
   val eval : Cstruct.t -> Cstruct.t -> t -> [ `Flush of t | `Await of t | `End of (t * Hash.t) | `Error of (t * error) ]
 end
 
-module MakePACKEncoder
-    (H : S.HASH with type Digest.buffer = Cstruct.t)
-    (D : S.DEFLATE)
-  : ENCODER with module Hash = H
-             and module Deflate = D =
+module MakePackEncoder
+    (Hash: S.HASH)
+    (Deflate: S.DEFLATE)
+    (Entry: ENTRY with module Hash := Hash)
+    (Delta: DELTA with module Hash := Hash
+                   and module Entry := Entry)
+    (HunkEncoder: H with module Hash := Hash)
+  : P with module Hash = Hash
+       and module Deflate = Deflate
+       and module Entry := Entry
+       and module Delta := Delta
+       and module HunkEncoder := HunkEncoder =
 struct
-  module Hash = H
-  module Deflate = D
-
-  module Entry = Entry(H)
-  module Delta = MakeDelta(H)
+  module Hash = Hash
+  module Deflate = Deflate
+  module Entry = Entry
+  module Delta = Delta
+  module HunkEncoder = HunkEncoder
   module Radix = Radix.Make(struct type t = Hash.t let get = Hash.get let length _ = Hash.Digest.length end)
-  module H     = MakeHunkEncoder(H)
 
   type error =
     | Deflate_error of Deflate.error
