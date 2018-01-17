@@ -46,7 +46,7 @@ module type S = sig
   module D: S.DECODER
     with type t = t
      and type init = Cstruct.t
-     and type error = [ `Decoder of string ]
+     and type error = Error.Decoder.t0
   (** The decoder of the Git Commit object. We constraint the input to
       be a {Cstruct.t}. This decoder needs a {Cstruct.t} as an
       internal buffer. *)
@@ -63,7 +63,7 @@ module type S = sig
   module E: S.ENCODER
     with type t = t
      and type init = int * t
-     and type error = [ `Never ]
+     and type error = Error.never
   (** The encoder (which uses a {!Minienc.encoder}) of the Git Commit
       object. We constraint the output to be a {Cstruct.t}. This
       encoder needs the Commit OCaml value and the memory consumption
