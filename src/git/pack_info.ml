@@ -287,12 +287,12 @@ module Make
       | `End (_, hash) ->
         (stream () >>= function
           | Some raw ->
-            Log.err (fun l -> l ~header:"from_stream" "Expected end of pack stream but retrieve: %a."
+            Log.err (fun l -> l "Expected end of pack stream but retrieve: %a."
                         (Fmt.hvbox (Minienc.pp_scalar ~get:Cstruct.get_char ~length:Cstruct.len))
                         raw);
             Lwt.return (Error (`Unexpected_chunk (Cstruct.to_string raw)))
           | None ->
-            Log.debug (fun l -> l ~header:"from_stream" "End of the PACK stream.");
+            Log.debug (fun l -> l "End of the PACK stream.");
 
             Lwt.return
               (Ok { info with state = `Partial { Partial.hash; delta = List.rev partial; }
@@ -302,15 +302,15 @@ module Make
                                this pack file. *)
                             ; max_depth = Graph.fold (fun _ (depth, _) acc -> max depth acc) info.graph 1 }))
       | `Await state ->
-        Log.debug (fun l -> l ~header:"from_stream" "Waiting more input.");
+        Log.debug (fun l -> l "Waiting more input.");
 
         stream () >>= function
         | Some src ->
-          Log.debug (fun l -> l ~header:"from_stream" "Receive a chunk of the PACK stream (length: %d)."
+          Log.debug (fun l -> l "Receive a chunk of the PACK stream (length: %d)."
                         (Cstruct.len src));
           go ~src ?ctx ?insert_hunks partial info (PDec.refill 0 (Cstruct.len src) state)
         | None ->
-          Log.err (fun l -> l ~header:"from_stream" "Receive end of the PACK stream.");
+          Log.err (fun l -> l "Receive end of the PACK stream.");
           Lwt.return (Error `Unexpected_end_of_input)
     in
 

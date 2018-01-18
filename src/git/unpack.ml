@@ -2000,7 +2000,7 @@ struct
       let rec loop window consumed_in_window writed_in_raw writed_in_hnk hunks swap git_object state =
         match PackDecoder.eval window.Window.raw state with
         | `Await state ->
-          Log.debug (fun l -> l ~header:"get" "PACK decoder waits.");
+          Log.debug (fun l -> l "PACK decoder waits.");
 
           let rest_in_window = min (window.Window.len - consumed_in_window) chunk in
 
@@ -2020,7 +2020,7 @@ struct
                     hunks swap git_object
                     (PackDecoder.refill 0 0 state))
         | `Flush state ->
-          Logs.debug (fun l -> l ~header:"get" "PACK decoder flushes.");
+          Logs.debug (fun l -> l "PACK decoder flushes.");
 
           let o, n = PackDecoder.output state in
           let n' = min (Cstruct.len (get_free_raw swap) - writed_in_raw) n in
