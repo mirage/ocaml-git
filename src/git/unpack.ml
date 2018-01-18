@@ -490,16 +490,16 @@ sig
 end
 
 (* Implementatioon of deserialization of a PACK file *)
-module MakePACKDecoder
-    (H: S.HASH)
-    (I: S.INFLATE)
-    (HunkDecoder: H with module Hash := H)
-  : P with module Hash = H
-       and module Inflate = I
+module MakePackDecoder
+    (Hash: S.HASH)
+    (Inflate: S.INFLATE)
+    (HunkDecoder: H with module Hash := Hash)
+  : P with module Hash = Hash
+       and module Inflate = Inflate
        and module HunkDecoder := HunkDecoder
 = struct
-  module Hash = H
-  module Inflate = I
+  module Hash = Hash
+  module Inflate = Inflate
   module HunkDecoder = HunkDecoder
 
   type error =

@@ -424,7 +424,7 @@ sig
       (like {!kind} or {!length}).}} *)
 end
 
-module MakePACKDecoder
+module MakePackDecoder
     (Hash: S.HASH)
     (Inflate: S.INFLATE)
     (HunkDecoder: H with module Hash := Hash)
