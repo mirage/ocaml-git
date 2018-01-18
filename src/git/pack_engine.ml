@@ -776,8 +776,8 @@ module Make
          | Ok ()          -> sys_err
          | Error sys_err' ->
            Log.err (fun l ->
-               l "Impossible to close the fd of the PACK file (to analyze it): \
-                  %a." FS.pp_error sys_err');
+               l "Impossible to close the fd of the PACK file (to analyze it), \
+                  ignoring: %a." FS.pp_error sys_err');
            sys_err))
     >>?= fun info ->
     let pack =
@@ -877,7 +877,7 @@ module Make
                                            ; thin = not is_not_thin } })
     else
       Fmt.kstrf (fun x -> Lwt.return (Error (`Integrity x)))
-        "Impossible to get all informations from the pack file: %a."
+        "Impossible to get all informations from the pack file: %a"
         Hash.pp hash_pack
 
   exception Found of (Hash.t * (Crc32.t * int64))
