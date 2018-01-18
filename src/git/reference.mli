@@ -154,7 +154,7 @@ module type S = sig
   module D: S.DECODER
     with type t = head_contents
      and type init = Cstruct.t
-     and type error = [ `Decoder of string ]
+     and type error = Error.Decoder.t0
   (** The decoder of the Git Reference object. We constraint the input
       to be a {!Cstruct.t}. This decoder needs a {!Cstruct.t} as an
       internal buffer. *)
@@ -165,7 +165,7 @@ module type S = sig
   module E: S.ENCODER
     with type t = head_contents
      and type init = int * head_contents
-     and type error = [ `Never ]
+     and type error = Error.never
   (** The encoder (which uses a {Minienc.encoder}) of the Git
       Reference object. We constraint the output to be a {Cstruct.t}.
       This encoder needs the Reference OCaml value and the memory
@@ -185,14 +185,23 @@ module type IO = sig
 
   (** The type of error. *)
   type error =
-    [ `FS of FS.error
-    | `IO of string
-    | D.error ]
+    [ Error.Decoder.t2
+    | Error.Angstrom.t2
+    | `Read   of Fpath.t * FS.error
+    | `Write  of Fpath.t * FS.error
+    | `Open   of Fpath.t * FS.error
+    | `Close  of Fpath.t * FS.error
+    | `Map    of Fpath.t * FS.error
+    | `Stack  of Fpath.t
+    | `Move   of Fpath.t * Fpath.t * FS.error
+    | `Create of Fpath.t * FS.error
+    | `Delete of Fpath.t * FS.error
+    | `Length of Fpath.t * FS.error ]
 
   val pp_error: error Fmt.t
   (** Pretty-printer of {!error}. *)
 
-  val mem: root:Fpath.t -> t -> (bool, error) result Lwt.t
+  val mem: root:Fpath.t -> t -> bool Lwt.t
   (** [mem ~root reference] returns [true] iff we found the
       [reference] find in the git repository [root]. Otherwise, we returns
       [false]. *)

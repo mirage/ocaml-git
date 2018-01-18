@@ -27,17 +27,21 @@ struct
   include (val Logs.src_log src : Logs.LOG)
 end
 
-let option_map f = function
-  | Some v -> Some (f v)
-  | None -> None
+module Option =
+struct
 
-let option_map_default v f = function
-  | Some v -> f v
-  | None -> v
+  let map f = function
+    | Some v -> Some (f v)
+    | None -> None
 
-let option_value_exn f = function
-  | Some v -> v
-  | None -> f ()
+  let map_default v f = function
+    | Some v -> f v
+    | None -> v
+
+  let value_exn f = function
+    | Some v -> v
+    | None -> f ()
+end
 
 let pad n x =
   if String.length x > n
@@ -57,7 +61,7 @@ let pp_header ppf (level, header) =
 
   Fmt.pf ppf "[%a][%a]"
     (Fmt.styled level_style Fmt.string) level
-    (Fmt.option Fmt.string) (option_map (pad 10) header)
+    (Fmt.option Fmt.string) (Option.map (pad 10) header)
 
 let reporter ppf =
   let report src level ~over k msgf =
@@ -84,29 +88,32 @@ let setup_logs style_renderer level ppf =
 
 type error =
   [ `Store of Git_unix.FS.error
-  | `Reference of Git_unix.FS.Ref.error
   | `Sync of Sync_http.error ]
+
+let store_err err = `Store err
+let sync_err err = `Sync err
 
 let pp_error ppf = function
   | `Store err -> Fmt.pf ppf "(`Store %a)" Git_unix.FS.pp_error err
-  | `Reference err -> Fmt.pf ppf "(`Reference %a)" Git_unix.FS.Ref.pp_error err
   | `Sync err -> Fmt.pf ppf "(`Sync %a)" Sync_http.pp_error err
 
-exception Write of Git_unix.FS.Ref.error
+exception Write of Git_unix.FS.error
 
 let main directory repository =
-  let root = option_map_default Fpath.(v (Sys.getcwd ())) Fpath.v directory in
+  let root = Option.map_default Fpath.(v (Sys.getcwd ())) Fpath.v directory in
 
-  let open Lwt_result in
-
-  let ( >!= ) v f = map_err f v in
+  let ( >>?= ) = Lwt_result.bind in
+  let ( >>!= ) v f = Lwt_result.map_err f v in
 
   Log.debug (fun l -> l ~header:"main" "root:%a, repository:%a.\n"
                 Fpath.pp root Uri.pp_hum repository);
 
-  (Git_unix.FS.create ~root () >!= fun err -> `Store err) >>= fun git ->
-  (Sync_http.fetch_all git ~references:Git_unix.FS.Reference.Map.empty repository
-   >!= fun err -> `Sync err) >>= fun _ -> Lwt.return (Ok ())
+  Git_unix.FS.create ~root ()
+  >>!= store_err
+  >>?= fun git ->
+  Sync_http.fetch_all git ~references:Git_unix.FS.Reference.Map.empty repository
+  >>!= sync_err
+  >>?= fun _ -> Lwt.return (Ok ())
 
 open Cmdliner
 

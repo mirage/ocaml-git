@@ -64,15 +64,7 @@ module type LOOSE = sig
      and type t = Value.Make(Hash)(Inflate)(Deflate).t
   (** The Value module, which represents the Git object. *)
 
-  type error =
-    [ `FS of FS.error
-    | `IO of string
-    | Value.D.error
-    | Value.E.error
-    ] (** The type error. *)
-
-  val pp_error: error Fmt.t
-  (** Pretty-printer of {!error}. *)
+  type error
 
   val lookup: state -> Hash.t -> Hash.t option Lwt.t
   (** [lookup state hash] is the object associated with the hash
@@ -203,7 +195,7 @@ module type LOOSE = sig
   module D: S.DECODER
     with type t = t
      and type init = Inflate.window * Cstruct.t * Cstruct.t
-     and type error = Value.D.error
+     and type error = [ Error.Decoder.t0 | `Inflate of Inflate.error ]
   (** The decoder of the Git object. We constraint the input to be an
       {!Inflate.window} and a {Cstruct.t} which used by the {Inflate}
       module and an other {Cstruct.t} as an internal buffer.
@@ -218,7 +210,7 @@ module type LOOSE = sig
   module E: S.ENCODER
     with type t = t
      and type init = int * t * int * Cstruct.t
-     and type error = Value.E.error
+     and type error = [ `Deflate of Deflate.error ]
   (** The encoder (which uses a {!Minienc.encoder}) of the Git object.
       We constraint the output to be a {Cstruct.t}. This encoder needs
       the level of the compression, the value {!t}, the memory
@@ -259,41 +251,36 @@ module type PACK = sig
   module Deflate: S.DEFLATE
   (** The [Deflate] module used to make the implementation. *)
 
-  module PACKDecoder: Unpack.DECODER
+  module HDec: Unpack.H with module Hash = Hash
+
+  module PDec: Unpack.P
     with module Hash = Hash
      and module Inflate = Inflate
-  (** The [PACKDecoder] module, which decodes {i PACK} file. *)
+     and module HunkDecoder := HDec
 
-  module PACKEncoder: Pack.ENCODER
+  module RPDec: Unpack.D
+    with module Hash = Hash
+     and module Inflate = Inflate
+     and module HunkDecoder := HDec
+     and module PackDecoder := PDec
+
+  module PEnc: Pack.P
     with module Hash = Hash
      and module Deflate = Deflate
 
-  module IDXDecoder: Index_pack.LAZY with module Hash = Hash
-  (** The [IDXDecoder] module, which decodes {i IDX} file. *)
-
-  module IDXEncoder: Index_pack.ENCODER
+  module IDec: Index_pack.LAZY
     with module Hash = Hash
 
-  module Pack_info: Pack_info.S
+  module IEnc: Index_pack.ENCODER
+    with module Hash = Hash
+
+  module PInfo: Pack_info.S
     with module Hash = Hash
      and module Inflate = Inflate
+     and module HDec := HDec
+     and module PDec := PDec
 
-  (** The type error. *)
-  type error =
-    [ `PackDecoder of PACKDecoder.error
-    | `PackEncoder of PACKEncoder.error
-    | `PackInfo of Pack_info.error
-    | `IdxDecoder of IDXDecoder.error
-    | `IdxEncoder of IDXEncoder.error
-    | `FS of FS.error
-    | `Invalid_hash of Hash.t
-    | `Delta of PACKEncoder.Delta.error
-    | `IO of string
-    | `Integrity of string
-    | `Not_found ]
-
-  val pp_error: error Fmt.t
-  (** Pretty-printer of {!error}. *)
+  type error
 
   val lookup: state -> Hash.t -> (Hash.t * (Crc32.t * int64)) option Lwt.t
   (** [lookup state hash] tries to find the object associated by the
@@ -388,12 +375,10 @@ module type S = sig
   module Hash: S.HASH
   (** The [Digest] module used to make the implementation. *)
 
-  module Inflate
-   : S.INFLATE
+  module Inflate: S.INFLATE
   (** The [Inflate] module used to make the implementation. *)
 
-  module Deflate
-   : S.DEFLATE
+  module Deflate: S.DEFLATE
   (** The [Deflate] module used to make the implementation. *)
 
   module FS : S.FS
@@ -415,35 +400,39 @@ module type S = sig
      and module FS = FS
   (** The Reference module, which represents the Git reference. *)
 
-  module PACKDecoder: Unpack.DECODER
+  module HDec: Unpack.H
+    with module Hash = Hash
+
+  module PDec: Unpack.P
     with module Hash = Hash
      and module Inflate = Inflate
-  (** The [PACKDecoder] module used to decode a {i PACK} file. *)
+     and module HunkDecoder := HDec
 
-  module PACKEncoder: Pack.ENCODER
+  module RPDec: Unpack.D
+    with module Hash = Hash
+     and module Inflate = Inflate
+     and module HunkDecoder := HDec
+     and module PackDecoder := PDec
+
+  module PEnc: Pack.P
     with module Hash = Hash
      and module Deflate = Deflate
-  (** The [PACKEncoder] module used to encoder a {i PACK} file. *)
 
-  module Loose: LOOSE
-    with type t = Value.t
-     and type state = t
-     and module Hash = Hash
-     and module FS = FS
-     and module Inflate = Inflate
-     and module Deflate = Deflate
-  (** The [Loose] module which represents any {i loose} git object
-      available in git repository. *)
+  module IDec: Index_pack.LAZY
+    with module Hash = Hash
 
-  module Pack: PACK
-    with type t = PACKDecoder.Object.t
-     and type value = Value.t
-     and type state = t
-     and module Hash = Hash
-     and module FS = FS
+  module IEnc: Index_pack.ENCODER
+    with module Hash = Hash
+
+  module PInfo: Pack_info.S
+    with module Hash = Hash
      and module Inflate = Inflate
-  (** The [Pack] module which represents any {i packed} git object
-      available in the git repository. *)
+     and module HDec := HDec
+     and module PDec := PDec
+
+  module Packed_refs: Packed_refs.S
+    with module Hash = Hash
+     and module FS = FS
 
   type kind =
     [ `Commit
@@ -454,11 +443,63 @@ module type S = sig
 
   (** The type error. *)
   type error =
-    [ Loose.error
-    | Pack.error ]
+    [ Error.Decoder.t2
+    | Error.Decoder.t0
+    | Error.Angstrom.t2
+    | Error.Angstrom.t0
+    | `Close             of Fpath.t * FS.error
+    | `Create            of Fpath.t * FS.error
+    | `Delete            of Fpath.t * FS.error
+    | `Length            of Fpath.t * FS.error
+    | `Map               of Fpath.t * FS.error
+    | `Move              of Fpath.t * Fpath.t * FS.error
+    | `Open              of Fpath.t * FS.error
+    | `Read              of Fpath.t * FS.error
+    | `Write             of Fpath.t * FS.error
+    | `Stack             of Fpath.t
+    | `Deflate_file      of Fpath.t * Deflate.error
+    | `Inflate_file      of Fpath.t * Inflate.error
+    | `Delta             of PEnc.Delta.error
+    | `Pack_decoder      of RPDec.error
+    | `Pack_encoder      of PEnc.error
+    | `Pack_info         of PInfo.error
+    | `Idx_decoder       of IDec.error
+    | `Idx_encoder       of IEnc.error
+    | `Integrity         of string
+    | `Invalid_hash      of Hash.t
+    | `Invalid_reference of Reference.t
+    | `Not_found
+    | `SystemDir         of FS.error
+    | `SystemFile        of FS.error
+    | `SystemMap         of FS.error ]
 
   val pp_error: error Fmt.t
   (** Pretty-printer of {!error}. *)
+
+  module Loose: LOOSE
+    with type t = Value.t
+     and type state = t
+     and type error = error
+     and module Hash = Hash
+     and module Inflate = Inflate
+     and module Deflate = Deflate
+     and module FS = FS
+  (** The [Loose] module which represents any {i loose} git object
+      available in git repository. *)
+
+  module Pack: PACK
+    with type t = RPDec.Object.t
+     and type value = Value.t
+     and type state = t
+     and type error = error
+     and module Hash = Hash
+     and module FS = FS
+     and module Inflate = Inflate
+     and module HDec := HDec
+     and module PDec := PDec
+     and module RPDec := RPDec
+  (** The [Pack] module which represents any {i packed} git object
+      available in the git repository. *)
 
   type buffer
   (** The type for buffers. *)
@@ -629,19 +670,6 @@ module type S = sig
 
   module Ref: sig
 
-    module Packed_refs: Packed_refs.S
-      with module Hash = Hash
-       and module FS = FS
-
-    type nonrec error =
-      [ Packed_refs.error
-      | error
-      | `Invalid_reference of Reference.t
-      ] (** The type error. *)
-
-    val pp_error: error Fmt.t
-    (** Pretty-printer of {!error}. *)
-
     val mem: t -> Reference.t -> bool Lwt.t
     (** [mem state ref] is [true] iff [ref] exists in [state],
         otherwise it is [false]. *)
@@ -691,7 +719,7 @@ module type S = sig
   (** [clear_caches t] drops all values stored in the internal caches
       binded with the git repository [t]. *)
 
-  val reset: t -> (unit, [ `Store of error | `Ref of Ref.error ]) result Lwt.t
+  val reset: t -> (unit, error) result Lwt.t
   (** [reset t] removes all things of the git repository [t] and
       ensures it will be empty. *)
 

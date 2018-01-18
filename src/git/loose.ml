@@ -32,10 +32,20 @@ module type S = sig
   include module type of Value
 
   type error =
-    [ `FS of FS.error
-    | `IO of string
-    | D.error
-    | E.error ]
+    [ Error.Decoder.t2
+    | Error.Angstrom.t2
+    | `Inflate_file of Fpath.t * Inflate.error
+    | `Deflate_file of Fpath.t * Deflate.error
+    | `Move   of Fpath.t * Fpath.t * FS.error
+    | `Stack  of Fpath.t
+    | `Length of Fpath.t * FS.error
+    | `Map    of Fpath.t * FS.error
+    | `Create of Fpath.t * FS.error
+    | `Delete of Fpath.t * FS.error
+    | `Close  of Fpath.t * FS.error
+    | `Open   of Fpath.t * FS.error
+    | `Read   of Fpath.t * FS.error
+    | `Write  of Fpath.t * FS.error ]
 
   type kind =
     [ `Commit
@@ -118,31 +128,21 @@ module Make
        and type t = Value.Make(H)(I)(D).t
 = struct
 
-  let err_create path err =
-    error (`FS err)
-      "Got an error while creating the directory %a: %a."
-      Fpath.pp path FS.pp_error err
-
-  let err_read path err =
-    error (`FS err)
-      "Got an error while reading %a: %a"
-      Fpath.pp path FS.pp_error err
-
-  let err_stack hash =
-    Fmt.kstrf (fun x -> Error (`IO x))
-      "Impossible to store the loosed Git object %a"
-      (Fmt.hvbox H.pp) hash
-
   module FS = Helper.FS(FS)
+  module ErrInf = Error.Inf(I)
+  module ErrDef = Error.Def(D)
+  module ErrFS  = Error.FS(FS)
 
   module Value = Value.Make(H)(I)(D)
   include Value
 
   type error =
-    [ `FS of FS.error
-    | `IO of string
-    | D.error
-    | E.error ]
+    [ ErrFS.t2
+    | ErrFS.t3
+    | Error.Angstrom.t2
+    | Error.Decoder.t2
+    | ErrInf.t1
+    | ErrDef.t1 ]
 
   type kind =
     [ `Commit
@@ -150,13 +150,12 @@ module Make
     | `Tag
     | `Blob ]
 
-  (* XXX(samoht): this should probably use the error messages defined
-     above *)
   let pp_error ppf = function
-    | #D.error as err -> D.pp_error ppf err
-    | #E.error as err -> E.pp_error ppf err
-    | `IO err     -> Helper.ppe ~name:"`IO" Fmt.string ppf err
-    | `FS sys_err -> Helper.ppe ~name:"`FS" FS.pp_error ppf sys_err
+    | #Error.Decoder.t2 as err -> Error.Decoder.t2_pp_error ppf err
+    | #ErrInf.t1 as err -> ErrInf.t1_pp_error ppf err
+    | #ErrDef.t1 as err -> ErrDef.t1_pp_error ppf err
+    | #ErrFS.t2 as err -> ErrFS.t2_pp_error ppf err
+    | #ErrFS.t3 as err -> ErrFS.t3_pp_error ppf err
 
   let hash_get : Hash.t -> int -> int = fun h i -> Char.code @@ Hash.get h i
 
@@ -209,8 +208,8 @@ module Make
     (module S.DECODER
       with type t = 't
        and type init = Inflate.window * Cstruct.t * Cstruct.t
-       and type error = [ `Decoder of string
-                        | `Inflate of Inflate.error ])
+       and type error = [ Error.Decoder.t0
+                        | ErrInf.t0 ])
 
   let gen (type t) ~root ~window ~ztmp ~dtmp ~raw (decoder : t decoder) hash =
     let module D = (val decoder) in
@@ -221,18 +220,28 @@ module Make
     FS.with_open_r path @@ fun ic ->
     let rec loop decoder =
       match D.eval decoder with
-      | `Error (_, (#D.error as err)) -> Lwt.return (Error err)
-      | `End (_, value)               -> Lwt.return (Ok value)
-      | `Await decoder                ->
+      | `Error (_, (#Error.Angstrom.t0 as err)) ->
+        Lwt.return Error.(v @@ Error.Angstrom.t2_of_t0 path err)
+      | `Error (_, (#Error.Decoder.t0 as err)) ->
+        Lwt.return Error.(v @@ Error.Decoder.t2_of_t0 path err)
+      | `Error (_, (#ErrInf.t0 as err)) ->
+        Lwt.return Error.(v @@ ErrInf.t1_of_t0 path err)
+      | `End (_, value) -> Lwt.return (Ok value)
+      | `Await decoder ->
         FS.File.read raw ic >>= function
-        | Error err -> err_read path err
-        | Ok n      ->
+        | Error err -> Lwt.return Error.(v @@ ErrFS.err_read path err)
+        | Ok n ->
           Log.debug (fun l ->
               l "Reading %d byte(s) of the file-descriptor (object: %a)."
                 n Hash.pp hash);
           match D.refill (Cstruct.sub raw 0 n) decoder with
           | Ok decoder              -> loop decoder
-          | Error (#D.error as err) -> Lwt.return (Error err)
+          | Error (#Error.Angstrom.t0 as err) ->
+            Lwt.return Error.(v @@ Angstrom.t2_of_t0 path err)
+          | Error (#Error.Decoder.t0 as err) ->
+            Lwt.return Error.(v @@ Decoder.t2_of_t0 path err)
+          | Error (#ErrInf.t0 as err) ->
+            Lwt.return Error.(v @@ ErrInf.t1_of_t0 path err)
     in
     loop decoder >|= fun ret ->
     Log.debug (fun l -> l "Finished to read the object %s / %s." first rest);
@@ -321,15 +330,25 @@ module Make
     Log.debug (fun l -> l "Reading the loose object %a." Fpath.pp path);
     FS.with_open_r path @@ fun read ->
     let rec loop decoder = match S.eval decoder with
-      | `Error (_, (#S.error as err)) -> Lwt.return (Error err)
+      | `Error (_, (#Error.Angstrom.t0 as err)) ->
+        Lwt.return Error.(v @@ Error.Angstrom.t2_of_t0 path err)
+      | `Error (_, (#Error.Decoder.t0 as err)) ->
+        Lwt.return Error.(v @@ Error.Decoder.t2_of_t0 path err)
+      | `Error (_, (#ErrInf.t0 as err)) ->
+        Lwt.return Error.(v @@ ErrInf.t1_of_t0 path err)
       | `End (_, (_, size))           -> Lwt.return (Ok size)
       | `Await decoder                ->
         FS.File.read raw read >>= function
-        | Error err -> err_read path err
+        | Error err -> Lwt.return Error.(v @@ ErrFS.err_read path err)
         | Ok n      ->
           match S.refill (Cstruct.sub raw 0 n) decoder with
           | Ok decoder              -> loop decoder
-          | Error (#S.error as err) -> Lwt.return (Error err)
+          | Error (#Error.Angstrom.t0 as err) ->
+            Lwt.return Error.(v @@ Angstrom.t2_of_t0 path err)
+          | Error (#Error.Decoder.t0 as err) ->
+            Lwt.return Error.(v @@ Decoder.t2_of_t0 path err)
+          | Error (#ErrInf.t0 as err) ->
+            Lwt.return Error.(v @@ ErrInf.t1_of_t0 path err)
     in
     loop decoder
 
@@ -377,14 +396,15 @@ module Make
     let first, rest = explode hash in
     let path = Fpath.(root / "objects" / first) in
     FS.Dir.create path >>= function
-    | Error err         -> err_create path err
+    | Error err         ->
+      Lwt.return Error.(v @@ ErrFS.err_create path err)
     | Ok (true | false) ->
       let path = Fpath.(path / rest) in
       EDeflated.to_file path raw state >|= function
       | Ok ()                -> Ok hash
-      | Error (`Stack)       -> err_stack hash
-      | Error (`FS err)      -> Error (`FS err)
-      | Error (`Encoder err) -> Error (`Deflate err)
+      | Error #ErrFS.t2 as err -> err
+      | Error #ErrFS.t3 as err -> err
+      | Error (`Encoder err)   -> Error.(v @@ ErrDef.err_deflate_file path err)
 
   module EInflated = struct
     module E = struct
@@ -409,12 +429,13 @@ module Make
     let path        = Fpath.(root / "objects" / first / rest) in
     Log.debug (fun l -> l "Writing a new loose object %a." Fpath.pp path);
     FS.Dir.create Fpath.(root / "objects" / first) >>= function
-    | Error err -> err_create path err
+    | Error err ->
+      Lwt.return Error.(v @@ ErrFS.err_create path err)
     | Ok (true | false) ->
       EInflated.to_file path raw encoder >|= function
-      | Error (`FS e)                 -> Error (`FS e)
-      | Error (`Encoder (`Deflate e)) -> Error (`Deflate e)
-      | Error `Stack                  -> err_stack hash
+      | Error #ErrFS.t2 as err               -> err
+      | Error #ErrFS.t3 as err               -> err
+      | Error (`Encoder (#ErrDef.t0 as err)) -> Error.(v @@ ErrDef.t1_of_t0 path err)
       | Ok r ->
         Log.debug (fun l -> l "Wrote the object %s/%s" first rest);
         Ok (hash, r)
