@@ -37,8 +37,8 @@ sig
      and type init = Cstruct.t
      and type error = Error.Decoder.t0
   module A: S.ANGSTROM with type t = t
-  module F: S.FARADAY  with type t = t
-  module M: S.MINIENC  with type t = t
+  module F: S.FARADAY with type t = t
+  module M: S.MINIENC with type t = t
   module E: S.ENCODER
     with type t = t
      and type init = int * t
