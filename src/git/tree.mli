@@ -44,6 +44,12 @@ module type S = sig
       {Blob.t} or sub-tree with its associated mode, type, and {i
       filename}. *)
 
+  val pp_entry: entry Fmt.t
+  (** Pretty-printer of {!entry}. *)
+
+  val perm_of_string: string -> perm
+  val string_of_perm: perm -> string
+
   module D: S.DECODER
     with type t = t
      and type init = Cstruct.t
