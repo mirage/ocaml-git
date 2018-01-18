@@ -148,8 +148,9 @@ module MakeDecoder (A: S.ANGSTROM) = struct
     if len > decoder.max
     then (
       (* XXX(dinosaure): it's to avoid to grow the internal buffer. *)
-      Log.err (fun l -> l ~header:"refill"
-                  "The client want to refill the internal buffer by a bigger input.");
+      Log.err (fun l ->
+          l "The client want to refill the internal buffer by a bigger \
+             input.");
 
       Error.(v @@ Decoder.err_too_big len decoder.max)
     ) else
@@ -166,16 +167,15 @@ module MakeDecoder (A: S.ANGSTROM) = struct
        else if writable_space >= len
        then Ok (compress input decoder)
        else (
-         Log.err (fun l -> l ~header:"refill"
-                     "trailing space:%d and writable space:%d, \
-                      the alteration is not done, the error could \
-                      be the size of the internal buffer (%d) or the input \
-                      is malicious."
-                     trailing_space
-                     writable_space
-                     (Bigarray.Array1.dim decoder.internal.Cstruct.buffer));
-         Log.err (fun l -> l ~header:"refill"
-                     "Production of the error in Helper.MakeDecoder.refill.");
+         Log.err (fun l ->
+             l "trailing space:%d and writable space:%d, the \
+                alteration is not done, the error could be the size of \
+                the internal buffer (%d) or the input is malicious."
+               trailing_space
+               writable_space
+               (Bigarray.Array1.dim decoder.internal.Cstruct.buffer));
+         Log.err (fun l ->
+             l "Production of the error in Helper.MakeDecoder.refill.");
          Error.(v @@ Decoder.err_malicious)
        ))
       |> function
@@ -610,7 +610,7 @@ module FS (FS: S.FS) = struct
 
   let with_open_r path f = with_f FS.File.open_r no_err path f
 
-  let prng = lazy(Random.State.make_self_init ())
+  let prng = lazy (Random.State.make_self_init ())
 
   let temp_file_name temp_dir file =
     let rnd = (Random.State.bits (Lazy.force prng)) land 0xFFFFFF in
