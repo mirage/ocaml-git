@@ -142,12 +142,6 @@ module type S = sig
 
     module Graph: Map.S with type key = Hash.t
 
-    (** The type error. *)
-    type nonrec error
-
-    val pp_error: error Fmt.t
-    (** Pretty-printer of {!error}. *)
-
     val from: t -> stream -> (Hash.t * int, error) result Lwt.t
     (** [from git stream] populates the Git repository [git] from the
         PACK flow [stream]. If any error is encountered, any Git
@@ -180,12 +174,6 @@ module type S = sig
 
   module Ref: sig
 
-    (** The type error. *)
-    type error = private [> `Not_found]
-
-    val pp_error: error Fmt.t
-    (** Pretty-printer of {!error}. *)
-
     val list: t -> (Reference.t * Hash.t) list Lwt.t
     (** [list state] returns an associated list between reference and
         its bind hash. *)
@@ -211,7 +199,7 @@ module type S = sig
         from the git repository [state]. *)
   end
 
-  val reset: t -> (unit, [ `Store of error | `Ref of Ref.error ]) result Lwt.t
+  val reset: t -> (unit, error) result Lwt.t
   (** [reset t] removes all things of the git repository [t] and
       ensures it will be empty. *)
 

@@ -27,15 +27,22 @@ sig
     [ `Normal | `Everybody | `Exec | `Link | `Dir | `Commit ]
   and t
 
-  module D: S.DECODER  with type t = t
-                        and type init = Cstruct.t
-                        and type error = [ `Decoder of string ]
+  val pp_entry: entry Fmt.t
+
+  val perm_of_string: string -> perm
+  val string_of_perm: perm -> string
+
+  module D: S.DECODER
+    with type t = t
+     and type init = Cstruct.t
+     and type error = Error.Decoder.t0
   module A: S.ANGSTROM with type t = t
-  module F: S.FARADAY  with type t = t
-  module M: S.MINIENC  with type t = t
-  module E: S.ENCODER  with type t = t
-                        and type init = int * t
-                        and type error = [ `Never ]
+  module F: S.FARADAY with type t = t
+  module M: S.MINIENC with type t = t
+  module E: S.ENCODER
+    with type t = t
+     and type init = int * t
+     and type error = Error.never
 
   include S.DIGEST with type t := t and type hash = Hash.t
   include S.BASE with type t := t
@@ -96,7 +103,7 @@ module Make (H: S.HASH with type Digest.buffer = Cstruct.t
     | "100664" -> `Everybody
     | "100755" -> `Exec
     | "120000" -> `Link
-    | "40000"  -> `Dir
+    | "40000" | "040000" -> `Dir
     | "160000" -> `Commit
     | _ -> raise (Invalid_argument "perm_of_string")
 

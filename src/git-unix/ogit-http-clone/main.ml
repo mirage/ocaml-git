@@ -19,17 +19,29 @@ let () = Random.self_init ()
 
 module Sync_http = Git_unix.HTTP(Git_unix.FS)
 
-let option_map f = function
-  | Some v -> Some (f v)
-  | None -> None
+module Option =
+struct
 
-let option_map_default v f = function
-  | Some v -> f v
-  | None -> v
+  let map f = function
+    | Some v -> Some (f v)
+    | None -> None
 
-let option_value_exn f = function
-  | Some v -> v
-  | None -> f ()
+  let map_default v f = function
+    | Some v -> f v
+    | None -> v
+
+  let value_exn f = function
+    | Some v -> v
+    | None -> f ()
+
+  let is_some = function
+    | Some _ -> true
+    | None -> false
+
+  let eq ?(none = false)~eq = function
+    | Some x -> eq x
+    | None -> none
+end
 
 let pad n x =
   if String.length x > n
@@ -49,7 +61,7 @@ let pp_header ppf (level, header) =
 
   Fmt.pf ppf "[%a][%a]"
     (Fmt.styled level_style Fmt.string) level
-    (Fmt.option Fmt.string) (option_map (pad 10) header)
+    (Fmt.option Fmt.string) (Option.map (pad 10) header)
 
 let reporter ppf =
   let report src level ~over k msgf =
@@ -76,12 +88,13 @@ let setup_logs style_renderer level ppf =
 
 type error =
   [ `Store of Git_unix.FS.error
-  | `Reference of Git_unix.FS.Ref.error
   | `Sync of Sync_http.error ]
+
+let store_err err = `Store err
+let sync_err err = `Sync err
 
 let pp_error ppf = function
   | `Store err -> Fmt.pf ppf "(`Store %a)" Git_unix.FS.pp_error err
-  | `Reference err -> Fmt.pf ppf "(`Reference %a)" Git_unix.FS.Ref.pp_error err
   | `Sync err -> Fmt.pf ppf "(`Sync %a)" Sync_http.pp_error err
 
 let main ppf progress origin branch repository directory =
@@ -94,11 +107,10 @@ let main ppf progress origin branch repository directory =
     |> Fpath.rem_ext ~multi:true
     |> Fpath.basename
   in
-  let root = option_map_default Fpath.(v (Sys.getcwd ()) / name) Fpath.v directory in
+  let root = Option.map_default Fpath.(v (Sys.getcwd ()) / name) Fpath.v directory in
 
-  let open Lwt_result in
-
-  let ( >!= ) v f = map_err f v in
+  let ( >>?= ) = Lwt_result.bind in
+  let ( >>!= ) v f = Lwt_result.map_err f v in
 
   let stdout =
     if progress
@@ -112,34 +124,35 @@ let main ppf progress origin branch repository directory =
     else None
   in
 
-  let https =
-    match Uri.scheme repository with
-    | Some "https" -> true
-    | _ -> false
-  in
+  let https = Option.eq ~eq:((=) "https") (Uri.scheme repository) in
 
-  (Git_unix.FS.create ~root () >!= fun err -> `Store err) >>= fun git ->
-  (Sync_http.clone_ext git ?stdout ?stderr ~https
-     ?port:(Uri.port repository) ~reference:branch
-     (option_value_exn
-        (fun () -> raise (Failure "Invalid repository: no host."))
-        (Uri.host repository))
-     (Uri.path_and_query repository)
-   >!= fun err -> `Sync err) >>= fun hash ->
-  (Git_unix.FS.Ref.write git branch (Git_unix.FS.Reference.Hash hash)
-   >!= fun err -> `Reference err)
-  >>= fun _ ->
+  Git_unix.FS.create ~root ()
+  >>!= store_err
+  >>?= fun git ->
+  Sync_http.clone_ext git ?stdout ?stderr ~https
+    ?port:(Uri.port repository) ~reference:branch
+    (Option.value_exn
+       (fun () -> raise (Failure "Invalid repository: no host."))
+       (Uri.host repository))
+    (Uri.path_and_query repository)
+  >>!= sync_err
+  >>?= fun hash ->
+  Git_unix.FS.Ref.write git
+    branch (Git_unix.FS.Reference.Hash hash)
+  >>!= store_err
+  >>?= fun _ ->
   let branch_name = Fpath.base (Git_unix.FS.Reference.to_path branch) in
 
-  (Git_unix.FS.Ref.write git
-     (Git_unix.FS.Reference.of_path Fpath.(v "remotes" / origin // branch_name))
-     (Git_unix.FS.Reference.Hash hash)
-   >!= fun err -> `Reference err)
-  >>= fun _ ->
-  (Git_unix.FS.Ref.write git
-     Git_unix.FS.Reference.head (Git_unix.FS.Reference.Ref branch)
-   >!= fun err -> `Reference err)
-  >>= fun _ -> Lwt.return (Ok ())
+  Git_unix.FS.Ref.write git
+    (Git_unix.FS.Reference.of_path Fpath.(v "remotes" / origin // branch_name))
+    (Git_unix.FS.Reference.Hash hash)
+  >>!= store_err
+  >>?= fun _ ->
+  Git_unix.FS.Ref.write git
+    Git_unix.FS.Reference.head
+    (Git_unix.FS.Reference.Ref branch)
+  >>!= store_err
+  >>?= fun _ -> Lwt.return (Ok ())
 
 open Cmdliner
 

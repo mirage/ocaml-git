@@ -53,16 +53,11 @@ module type S_EXT = sig
   module Encoder: Git.Smart.ENCODER
     with module Hash = Store.Hash
 
-  module PACKDecoder: Git.Unpack.P
-    with module Hash = Store.Hash
-     and module Inflate = Store.Inflate
-
   type error =
     [ `SmartDecoder of Decoder.error
-    | `StorePack of Store.Pack.error
+    | `Store of Store.error
     | `Clone of string
-    | `ReportStatus of string
-    | `Ref of Store.Ref.error ]
+    | `ReportStatus of string ]
 
   val pp_error: error Fmt.t
 

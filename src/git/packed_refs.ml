@@ -26,15 +26,27 @@ module type S = sig
   module D: S.DECODER
     with type t = t
      and type init = Cstruct.t
-     and type error = [ `Decoder of string ]
+     and type error = Error.Decoder.t0
   module M: S.MINIENC with type t = t
   module E: S.ENCODER
     with type t = t
      and type init = int * t
 
-  type error = [ `FS of FS.error
-               | `IO of string
-               | D.error ]
+  type error =
+    [ Error.Decoder.t2
+    | Error.Angstrom.t2
+    | `Inflate_file of Fpath.t * Inflate.error
+    | `Deflate_file of Fpath.t * Deflate.error
+    | `Move   of Fpath.t * Fpath.t * FS.error
+    | `Stack  of Fpath.t
+    | `Length of Fpath.t * FS.error
+    | `Map    of Fpath.t * FS.error
+    | `Create of Fpath.t * FS.error
+    | `Delete of Fpath.t * FS.error
+    | `Close  of Fpath.t * FS.error
+    | `Open   of Fpath.t * FS.error
+    | `Read   of Fpath.t * FS.error
+    | `Write  of Fpath.t * FS.error ]
 
   val pp_error: error Fmt.t
 
@@ -54,6 +66,7 @@ module Make (H: S.HASH) (FS: S.FS) = struct
   and hash = Hash.t
 
   module A = struct
+
     type nonrec t = t
 
     open Angstrom
@@ -99,6 +112,7 @@ module Make (H: S.HASH) (FS: S.FS) = struct
   end
 
   module M = struct
+
     type nonrec t = t
 
     open Minienc
@@ -144,32 +158,48 @@ module Make (H: S.HASH) (FS: S.FS) = struct
   module D = Helper.MakeDecoder(A)
   module E = Helper.MakeEncoder(M)
 
+  module ErrInf = Error.Inf(Inflate)
+  module ErrDef = Error.Def(Deflate)
+  module ErrFS  = Error.FS(FS)
+
   type error =
-    [ `FS of FS.error
-    | `IO of string
-    | D.error ]
+    [ ErrFS.t2
+    | ErrFS.t3
+    | Error.Angstrom.t2
+    | Error.Decoder.t2
+    | ErrInf.t1
+    | ErrDef.t1 ]
 
   let pp_error ppf = function
-    | `FS sys_err     -> Helper.ppe ~name:"`FS" FS.pp_error ppf sys_err
-    | `IO sys_err     -> Helper.ppe ~name:"`IO" Fmt.string ppf sys_err
-    | #D.error as err -> D.pp_error ppf err
+    | #Error.Decoder.t2 as err -> Error.Decoder.t2_pp_error ppf err
+    | #ErrInf.t1 as err -> ErrInf.t1_pp_error ppf err
+    | #ErrDef.t1 as err -> ErrDef.t1_pp_error ppf err
+    | #ErrFS.t2 as err -> ErrFS.t2_pp_error ppf err
+    | #ErrFS.t3 as err -> ErrFS.t3_pp_error ppf err
 
   open Lwt.Infix
 
   let read ~root ~dtmp ~raw =
     let decoder = D.default dtmp in
-    FS.with_open_r Fpath.(root / "packed-refs") @@ fun read ->
+    let path = Fpath.(root / "packed-refs") in
+    FS.with_open_r path @@ fun read ->
     let rec loop decoder = match D.eval decoder with
       | `End (_, value)               -> Lwt.return (Ok value)
-      | `Error (_, (#D.error as err)) -> Lwt.return (Error err)
+      | `Error (_, (#Error.Angstrom.t0 as err)) ->
+        Lwt.return Error.(v @@ Error.Angstrom.t2_of_t0 path err)
+      | `Error (_, (#Error.Decoder.t0 as err)) ->
+        Lwt.return Error.(v @@ Error.Decoder.t2_of_t0 path err)
       | `Await decoder ->
         FS.File.read raw read >>= function
-        | Error e -> Lwt.return (Error (`FS e))
-        | Ok 0    -> loop (D.finish decoder)
-        | Ok n    ->
+        | Error err -> Lwt.return Error.(v @@ ErrFS.err_read path err)
+        | Ok 0      -> loop (D.finish decoder)
+        | Ok n      ->
           match D.refill (Cstruct.sub raw 0 n) decoder with
           | Ok decoder              -> loop decoder
-          | Error (#D.error as err) -> Lwt.return (Error err)
+          | Error (#Error.Angstrom.t0 as err) ->
+            Lwt.return Error.(v @@ Error.Angstrom.t2_of_t0 path err)
+          | Error (#Error.Decoder.t0 as err) ->
+            Lwt.return Error.(v @@ Error.Decoder.t2_of_t0 path err)
     in
     loop decoder
 
@@ -194,8 +224,8 @@ module Make (H: S.HASH) (FS: S.FS) = struct
     let state = E.default (capacity, value) in
     let path = Fpath.(root / "packed-refs") in
     Encoder.to_file path raw state >|= function
-    | Ok _                    -> Ok ()
-    | Error `Stack            -> err_stack
-    | Error (`FS e)           -> Error (`FS e)
-    | Error (`Encoder `Never) -> assert false
+    | Ok _ -> Ok ()
+    | Error #ErrFS.t2 as err -> err
+    | Error #ErrFS.t3 as err -> err
+    | Error (`Encoder #Error.never) -> assert false
 end

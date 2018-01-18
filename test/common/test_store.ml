@@ -42,21 +42,16 @@ module Make (Store : Git.S) = struct
 
   let reset t =
     Store.reset t >|= function
-    | Ok ()            -> ()
-    | Error (`Store e) -> Alcotest.failf "reset failed: %a" Store.pp_error e
-    | Error (`Ref e)   -> Alcotest.failf "reset failed: %a" Store.Ref.pp_error e
+    | Ok ()   -> ()
+    | Error e -> Alcotest.failf "reset failed: %a" Store.pp_error e
+
+  let init_err = function
+    | Ok x    -> Lwt.return x
+    | Error e -> Alcotest.failf "error: %a" Store.pp_error e
 
   let check_err = function
     | Ok x    -> Lwt.return x
     | Error e -> Alcotest.failf "error: %a" Store.pp_error e
-
-  let check_ref_err = function
-    | Ok x    -> Lwt.return x
-    | Error e -> Alcotest.failf "ref error: %a" Store.Ref.pp_error e
-
-  let check_pack_err = function
-    | Ok x    -> Lwt.return x
-    | Error e -> Alcotest.failf "%a" Store.Pack.pp_error e
 
   let run test = Lwt_main.run (test ())
 
@@ -198,7 +193,7 @@ module Make (Store : Git.S) = struct
   let root = Fpath.v "test-git-store"
 
   let create ~root ?(index=false) () =
-    Store.create ~root () >>= check_err >>= fun t ->
+    Store.create ~root () >>= init_err >>= fun t ->
     reset t >>= fun () ->
     Lwt_list.iter_s (fun v ->
         Store.write t v >|= function
@@ -228,8 +223,8 @@ module Make (Store : Git.S) = struct
 
   module IndexDecoder = Git.Index_pack.Decoder(Store.Hash)
   module IndexEncoder = Git.Index_pack.Encoder(Store.Hash)
-  module PackDecoder  = Git.Unpack.MakePACKDecoder(Store.Hash)(Store.Inflate)
-  module PackEncoder  = Git.Pack.MakePACKEncoder(Store.Hash)(Store.Deflate)
+  module PackDecoder  = Git.Unpack.MakeStreamDecoder(Store.Hash)(Store.Inflate)
+  module PackEncoder  = Git.Pack.MakeStreamEncoder(Store.Hash)(Store.Deflate)
 
   let test_blobs () =
     let test () =
@@ -287,7 +282,7 @@ module Make (Store : Git.S) = struct
       | Error e -> Alcotest.failf "%a" ValueIO.EE.pp_error e
       | Ok raw  ->
         match ValueIO.of_raw_with_header (Cstruct.of_string raw) with
-        | Error (`Decoder err) -> Alcotest.failf "decoder: %s" err
+        | Error err -> Alcotest.failf "decoder: %a" Git.Error.Decoder.t0_pp_error err
         | Ok c' ->
           assert_value_equal "commits: convert" c c';
           create ~root ()               >>= fun t   ->
@@ -319,14 +314,14 @@ module Make (Store : Git.S) = struct
     let test () =
       create ~root () >>= fun t ->
       Store.Ref.write t r1 (Store.Reference.Hash !!kt4)
-      >>= check_ref_err >>= fun () ->
+      >>= check_err >>= fun () ->
       Store.Ref.read  t r1
-      >>= check_ref_err >>= fun (_, kt4') ->
+      >>= check_err >>= fun (_, kt4') ->
       assert_head_contents_equal "r1" (Store.Reference.Hash !!kt4) kt4';
 
       Store.Ref.write t r2 (Store.Reference.Hash !!kc2)
-      >>= check_ref_err >>= fun ()   ->
-      Store.Ref.read  t r2 >>= check_ref_err >>= fun (_, kc2') ->
+      >>= check_err >>= fun ()   ->
+      Store.Ref.read  t r2 >>= check_err >>= fun (_, kc2') ->
       assert_head_contents_equal "r2" (Store.Reference.Hash !!kc2) kc2';
 
       Store.Ref.list t >>= fun rs ->
@@ -334,9 +329,9 @@ module Make (Store : Git.S) = struct
 
       let commit = Store.Hash.of_hex "21930ccb5f7b97e80a068371cb554b1f5ce8e55a" in
       Store.Ref.write t Store.Reference.head (Store.Reference.Hash commit)
-      >>= check_ref_err >>= fun () ->
+      >>= check_err >>= fun () ->
       Store.Ref.read t Store.Reference.head
-      >>= check_ref_err >|= fun (_, value) ->
+      >>= check_err >|= fun (_, value) ->
       Alcotest.(check head_contents) "head" (Store.Reference.Hash commit) value
     in
     run test
@@ -381,7 +376,7 @@ module Make (Store : Git.S) = struct
         then Git.Buffer.add buf (Cstruct.sub tmp 0 (IndexEncoder.used_out state))
     in
     let test () =
-      Store.create ~root () >>= check_err >>= fun t ->
+      Store.create ~root () >>= init_err >>= fun t ->
       reset t >|= fun () ->
       go state;
       let buf = Git.Buffer.unsafe_contents buf in
@@ -404,7 +399,7 @@ module Make (Store : Git.S) = struct
           Lwt_bytes.read ic (Cstruct.to_bigarray src) 0 (Cstruct.len src)
           >>= fun len -> go acc (IndexDecoder.refill 0 len state)
       in
-      Store.create ~root () >>= check_err >>= fun t ->
+      Store.create ~root () >>= init_err >>= fun t ->
       reset t >>= fun () ->
       go Radix.empty (IndexDecoder.make ()) >|= fun tree ->
       let tr = List.fold_left (fun a (h, v) ->
@@ -488,15 +483,15 @@ module Make (Store : Git.S) = struct
         go ~pack ~graph ?current (PackDecoder.flush 0 (Cstruct.len o) state)
       | `Hunk (state, hunk) ->
         let current = match current, hunk with
-          | Some (`Hunks hunks), PackDecoder.H.Copy (off, len) ->
+          | Some (`Hunks hunks), PackDecoder.HunkDecoder.Copy (off, len) ->
             Some (`Hunks (`Copy (off, len) :: hunks))
-          | Some (`Hunks hunks), PackDecoder.H.Insert raw ->
+          | Some (`Hunks hunks), PackDecoder.HunkDecoder.Insert raw ->
             let off, len = Git.Buffer.has buf, Cstruct.len raw in
             Git.Buffer.add buf raw;
             Some (`Hunks (`Insert (off, len) :: hunks))
-          | None, PackDecoder.H.Copy (off, len) ->
+          | None, PackDecoder.HunkDecoder.Copy (off, len) ->
             Some (`Hunks [ `Copy (off, len) ])
-          | None, PackDecoder.H.Insert raw ->
+          | None, PackDecoder.HunkDecoder.Insert raw ->
             let off, len = Git.Buffer.has buf, Cstruct.len raw in
             Git.Buffer.add buf raw;
             Some (`Hunks [ `Insert (off, len) ])
@@ -523,7 +518,7 @@ module Make (Store : Git.S) = struct
             let hash = Store.Hash.Digest.get ctx in
             Pack.bind pack hash (PackDecoder.crc state, PackDecoder.offset state),
             (PackDecoder.offset state, kind, "")
-          | PackDecoder.Hunk { PackDecoder.H.reference = PackDecoder.H.Hash src; target_length; _ },
+          | PackDecoder.Hunk { PackDecoder.HunkDecoder.reference = PackDecoder.HunkDecoder.Hash src; target_length; _ },
             Some (`Hunks hunks) ->
             let hash, kind, raw =
               apply
@@ -533,7 +528,7 @@ module Make (Store : Git.S) = struct
                 target_length (List.rev hunks) in
             Pack.bind pack hash (PackDecoder.crc state, PackDecoder.offset state),
             (PackDecoder.offset state, kind, raw)
-          | PackDecoder.Hunk { PackDecoder.H.reference = PackDecoder.H.Offset rel; target_length; _ },
+          | PackDecoder.Hunk { PackDecoder.HunkDecoder.reference = PackDecoder.HunkDecoder.Offset rel; target_length; _ },
             Some (`Hunks hunks) ->
             let hash, kind, raw =
               apply
@@ -560,7 +555,7 @@ module Make (Store : Git.S) = struct
 
   let test_decoder_pack () =
     let test () =
-      Store.create ~root () >>= check_err >>= fun t ->
+      Store.create ~root () >>= init_err >>= fun t ->
       reset t >>= fun () ->
       decode_pack_file filename_pack >|= fun (pack, _, _) ->
       let p = List.fold_left (fun a (h, v) ->
@@ -579,7 +574,7 @@ module Make (Store : Git.S) = struct
 
   let test_encoder_pack () =
     let test () =
-      Store.create ~root () >>= check_err >>= fun t ->
+      Store.create ~root () >>= init_err >>= fun t ->
       reset t >>= fun () ->
       Lwt_unix.openfile (Fpath.to_string filename_pack) [O_RDONLY] 0o644 >>= fun ic ->
       let tmp = Cstruct.create 0x8000 in
@@ -588,9 +583,9 @@ module Make (Store : Git.S) = struct
         | 0 -> None
         | n -> Some (Cstruct.sub tmp 0 n)
       in
-      Store.Pack.from t stream >>= check_pack_err >>= fun _ ->
+      Store.Pack.from t stream >>= check_err >>= fun _ ->
       Store.contents t >>= check_err >>= fun lst ->
-      Store.Pack.make t (List.map snd lst) >>= check_pack_err
+      Store.Pack.make t (List.map snd lst) >>= check_err
       >>= fun (stream, graph) ->
       let thread, u = Lwt.wait () in
       let rec cstruct_of_stream current =
@@ -614,7 +609,7 @@ module Make (Store : Git.S) = struct
         let close _ = Lwt.return (Ok ())
       end in
 
-      let module Decoder = Unpack.MakeDecoder(Store.Hash)(Mapper)(Store.Inflate) in
+      let module Decoder = Unpack.MakeRandomAccessPACK(Store.Hash)(Mapper)(Store.Inflate) in
       let ztmp = Cstruct.create 0x8000 in
       let wtmp = Store.Inflate.window () in
 
@@ -629,7 +624,7 @@ module Make (Store : Git.S) = struct
       >>= function
       | Ok state ->
         Lwt_list.iter_s (fun (hash, _) ->
-            Decoder.get_with_allocation state hash ztmp wtmp >|= function
+            Decoder.get_with_result_allocation_from_hash state hash ztmp wtmp >|= function
             | Ok _    -> ()
             | Error e -> Alcotest.failf "%a" Decoder.pp_error e
           ) lst

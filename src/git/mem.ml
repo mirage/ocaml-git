@@ -31,16 +31,18 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE) = struct
   module Buffer = Cstruct_buffer
   module Value = Value.Raw(Hash)(Inflate)(Deflate)
   module Reference = Reference.Make(Hash)
-  module PACKDecoder = Unpack.MakePACKDecoder(Hash)(Inflate)
-  module PACKEncoder = Pack.MakePACKEncoder(Hash)(Deflate)
+
+  module PDec = Unpack.MakeStreamDecoder(Hash)(Inflate)
+  module PEnc = Pack.MakeStreamEncoder(Hash)(Deflate)
+  module Revidx = Map.Make(Int64)
 
   type kind = [ `Commit | `Tree | `Blob | `Tag ]
 
-  type buffer = { ztmp: Cstruct.t; window: PACKDecoder.Inflate.window }
+  type buffer = { ztmp: Cstruct.t; window: Inflate.window }
 
   let default_buffer () =
     let ztmp = Cstruct.create 0x800 in
-    let window = PACKDecoder.Inflate.window () in
+    let window = Inflate.window () in
     { ztmp; window }
 
   let buffer ?ztmp ?dtmp:_ ?raw:_ ?window () =
@@ -58,6 +60,12 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE) = struct
     ; refs         : (Reference.t, [ `H of Hash.t | `R of Reference.t ]) Hashtbl.t
     ; mutable head : Reference.head_contents option }
 
+  type error =
+    [ `Unresolved_object
+    | `Decoder_flow of string
+    | `Delta of PEnc.Delta.error
+    | `Pack_decoder of PDec.error
+    | Error.not_found ]
 
   let with_buffer t f =
     let open Lwt.Infix in
@@ -70,10 +78,12 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE) = struct
     | Some x -> x
     | None   -> assert false
 
-  type error = [ `Not_found ]
-
   let pp_error ppf = function
-    | `Not_found -> Fmt.pf ppf "`Not_found"
+    | #Error.not_found as err -> Error.pp_not_found ppf err
+    | `Unresolved_object -> Fmt.pf ppf "`Unresolved_object"
+    | `Decoder_flow s -> Fmt.pf ppf "(`PackFlow %s)" s
+    | `Delta e -> Fmt.pf ppf "(`Delta %a)" PEnc.Delta.pp_error e
+    | `Pack_decoder e -> Fmt.pf ppf "(`PackDecoder %a)" PDec.pp_error e
 
   let root t = t.root
   let dotgit t = t.dotgit
@@ -152,7 +162,10 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE) = struct
     else
       let value = lazy (
         match Value.of_raw ~kind inflated with
-        | Error (`Decoder err) -> raise (Failure err)
+        | Error err ->
+          let str = Fmt.strf "%a" Error.Decoder.t0_pp_error err in
+          raise (Failure str)
+
         | Ok value -> value
       ) in
       Hashtbl.add t.inflated hash (kind, inflated);
@@ -223,26 +236,13 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE) = struct
 
     type stream = unit -> Cstruct.t option Lwt.t
 
-    module Revidx = Map.Make(Int64)
-
-    type error =
-      [ `Unresolved_object
-      | `DecoderFlow of string
-      | `Delta of PACKEncoder.Delta.error
-      | `PackDecoder of PACKDecoder.error ]
-
-    let pp_error ppf = function
-      | `Unresolved_object -> Fmt.pf ppf "`Unresolved_object"
-      | `DecoderFlow s -> Fmt.pf ppf "(`PackFlow %s)" s
-      | `Delta e -> Fmt.pf ppf "(`Delta %a)" PACKEncoder.Delta.pp_error e
-      | `PackDecoder e -> Fmt.pf ppf "(`PackDecoder %a)" PACKDecoder.pp_error e
-
     module GC =
       Collector.Make(struct
         module Hash = Hash
         module Value = Value
         module Deflate = Deflate
-        module PACKEncoder = PACKEncoder
+        module PEnc = PEnc
+
         type nonrec t = t
         type nonrec error = error
         type nonrec kind = kind
@@ -278,7 +278,7 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE) = struct
       in
 
       let apply hunks_descr hunks buffer_hunks source target =
-        if Cstruct.len target < hunks_descr.PACKDecoder.H.target_length
+        if Cstruct.len target < hunks_descr.PDec.HunkDecoder.target_length
         then raise (Invalid_argument "apply");
         let target_length =
           List.fold_left (fun acc -> function
@@ -288,20 +288,21 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE) = struct
                 Cstruct.blit source off target acc len; acc + len
             ) 0 hunks
         in
-        if target_length = hunks_descr.PACKDecoder.H.target_length
+
+        if target_length = hunks_descr.PDec.HunkDecoder.target_length
         then Ok (Cstruct.sub target 0 target_length)
-        else
-          Fmt.kstrf (fun x -> Error x)
+        else Fmt.kstrf
+            (fun x -> Error x)
             "Bad undelta-ification (result: %d, expect: %d)"
-            target_length hunks_descr.PACKDecoder.H.target_length
+            target_length hunks_descr.PDec.HunkDecoder.target_length
       in
 
       let k2k = function
-        | PACKDecoder.Commit -> `Commit
-        | PACKDecoder.Tag    -> `Tag
-        | PACKDecoder.Tree   -> `Tree
-        | PACKDecoder.Blob   -> `Blob
-        | PACKDecoder.Hunk _ -> invalid_arg "k2k"
+        | PDec.Commit -> `Commit
+        | PDec.Tag -> `Tag
+        | PDec.Tree -> `Tree
+        | PDec.Blob -> `Blob
+        | PDec.Hunk _ -> raise (Invalid_argument "k2k")
       in
 
       let empty        = Cstruct.create 0 in
@@ -310,47 +311,48 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE) = struct
       let queue        = Queue.create () in
 
       let rec go ~revidx ?(src = empty) ?hunks state =
-        match PACKDecoder.eval src state with
+        match PDec.eval src state with
         | `Await state ->
           (stream () >>= function
             | Some raw ->
-              go ~revidx ~src:raw ?hunks (PACKDecoder.refill 0 (Cstruct.len raw) state)
+              go ~revidx ~src:raw ?hunks (PDec.refill 0 (Cstruct.len raw) state)
             | None ->
-              Lwt.return (Error (`DecoderFlow "Unexpected end of stream")))
+              Lwt.return (Error (`Decoder_flow "Unexpected end of stream")))
         | `End (state, hash_pack) ->
-          Lwt.return (Ok (hash_pack, PACKDecoder.many state))
+          Lwt.return (Ok (hash_pack, PDec.many state))
         | `Error (_, err) ->
           Log.err (fun l ->
-              l ~header:"populate" "The PACK decoder returns an error: %a."
-                PACKDecoder.pp_error err);
-          Lwt.return (Error (`PackDecoder err))
+              l "The PACK decoder returns an error: %a." PDec.pp_error err);
+          Lwt.return (Error (`Pack_decoder err))
         | `Flush state ->
-          let o, n = PACKDecoder.output state in
+          let o, n = PDec.output state in
+
           Buffer.add buffer (Cstruct.sub o 0 n);
-          go ~revidx ~src (PACKDecoder.flush 0 (Cstruct.len o) state)
+          go ~revidx ~src (PDec.flush 0 (Cstruct.len o) state)
         | `Hunk (state, hunk) ->
           let hunks = match hunks, hunk with
-            | Some hunks, PACKDecoder.H.Insert raw ->
+            | Some hunks, PDec.HunkDecoder.Insert raw ->
               let off = Buffer.has buffer_hunks in
               Buffer.add buffer_hunks raw;
               (Insert (off, Cstruct.len raw) :: hunks)
-            | Some hunks, PACKDecoder.H.Copy (off, len) ->
+            | Some hunks, PDec.HunkDecoder.Copy (off, len) ->
               (Copy (off, len) :: hunks)
-            | None, PACKDecoder.H.Insert raw ->
+            | None, PDec.HunkDecoder.Insert raw ->
               let off = Buffer.has buffer_hunks in
               Buffer.add buffer_hunks raw;
               [ Insert (off, Cstruct.len raw) ]
-            | None, PACKDecoder.H.Copy (off, len) ->
+            | None, PDec.HunkDecoder.Copy (off, len) ->
               [ Copy (off, len) ]
           in
 
-          go ~revidx ~src ~hunks (PACKDecoder.continue state)
+          go ~revidx ~src ~hunks (PDec.continue state)
         | `Object state ->
-          (match PACKDecoder.kind state with
-           | (PACKDecoder.Commit
-             | PACKDecoder.Tag
-             | PACKDecoder.Tree
-             | PACKDecoder.Blob) as kind ->
+          (match PDec.kind state with
+           | (PDec.Commit
+             | PDec.Tag
+             | PDec.Tree
+             | PDec.Blob) as kind ->
+
              let raw = Buffer.contents buffer |> Cstruct.of_string in
              Buffer.clear buffer;
              Log.debug (fun l ->
@@ -362,13 +364,13 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE) = struct
                                        from the PACK file."
                    Hash.pp hash);
              Some hash
-           | PACKDecoder.Hunk hunks_descr ->
+           | PDec.Hunk hunks_descr ->
              let hunks = option_map List.rev hunks |> option_default [] in
-             let inflated = Cstruct.create (hunks_descr.PACKDecoder.H.target_length) in
-             let hash_source = match hunks_descr.PACKDecoder.H.reference with
-               | PACKDecoder.H.Hash hash -> hash
-               | PACKDecoder.H.Offset off ->
-                 let off = Int64.sub (PACKDecoder.offset state) off in
+             let inflated = Cstruct.create (hunks_descr.PDec.HunkDecoder.target_length) in
+             let hash_source = match hunks_descr.PDec.HunkDecoder.reference with
+               | PDec.HunkDecoder.Hash hash -> hash
+               | PDec.HunkDecoder.Offset off ->
+                 let off = Int64.sub (PDec.offset state) off in
                  Revidx.find off revidx
 
              (* XXX(dinosaure): This is come from an assumption about
@@ -418,11 +420,10 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE) = struct
                  Lwt.fail (Failure err))
           >>= fun hash ->
           let revidx =
-            option_map_default (fun hash ->
-                Revidx.add (PACKDecoder.offset state) hash revidx
-              ) revidx hash
-          in
-          go ~revidx ~src (PACKDecoder.next_object state)
+            option_map_default
+              (fun hash -> Revidx.add (PDec.offset state) hash revidx)
+              revidx hash in
+          go ~revidx ~src (PDec.next_object state)
       in
 
       let rec gogo () = match Queue.pop queue with
@@ -439,7 +440,7 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE) = struct
       in
 
       with_buffer git (fun { ztmp; window } ->
-          go ~revidx:Revidx.empty (PACKDecoder.default ztmp window)
+          go ~revidx:Revidx.empty (PDec.default ztmp window)
         ) >>= function
       | Error _ as err -> Lwt.return err
       | Ok (hash_pack, n) ->
@@ -462,11 +463,6 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE) = struct
   end
 
   module Ref = struct
-    type error = [ `Not_found ]
-
-    let pp_error ppf = function
-      | `Not_found -> Fmt.pf ppf "`Not_found"
-
     module Graph = Reference.Map
 
     let list t =

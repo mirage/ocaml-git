@@ -81,16 +81,11 @@ module type S_EXT = sig
   module Encoder: Git.Smart.ENCODER
     with module Hash = Store.Hash
 
-  module PACKDecoder: Git.Unpack.P
-    with module Hash = Store.Hash
-     and module Inflate = Store.Inflate
-
   type error =
     [ `SmartDecoder of Decoder.error
-    | `StorePack of Store.Pack.error
+    | `Store of Store.error
     | `Clone of string
-    | `ReportStatus of string
-    | `Ref of Store.Ref.error ]
+    | `ReportStatus of string ]
 
   val pp_error: error Fmt.t
 
@@ -213,22 +208,17 @@ module Make_ext
   module Decoder = Git.Smart.Decoder(Store.Hash)
   module Encoder = Git.Smart.Encoder(Store.Hash)
 
-  module PACKDecoder
-    = Git.Unpack.MakePACKDecoder(Store.Hash)(Store.Inflate)
-
   type error =
     [ `SmartDecoder of Decoder.error
-    | `StorePack of Store.Pack.error
+    | `Store of Store.error
     | `Clone of string
-    | `ReportStatus of string
-    | `Ref of Store.Ref.error ]
+    | `ReportStatus of string ]
 
   let pp_error ppf = function
     | `SmartDecoder err  -> Fmt.pf ppf "(`SmartDecoder %a)" Decoder.pp_error err
-    | `StorePack err     -> Fmt.pf ppf "(`StorePack %a)" Store.Pack.pp_error err
+    | `Store err         -> Fmt.pf ppf "(`Store %a)" Store.pp_error err
     | `Clone err         -> Fmt.pf ppf "(`Clone %s)" err
     | `ReportStatus err  -> Fmt.pf ppf "(`ReportStatus %s)" err
-    | `Ref err           -> Fmt.pf ppf "(`Ref %a)" Store.Ref.pp_error err
 
   module Log =
   struct
@@ -275,7 +265,7 @@ module Make_ext
     in
     dispatch () >?= fun () ->
       (Store.Pack.from git (fun () -> Lwt_stream.get stream')
-       >!= fun err -> Lwt.return (`StorePack err))
+       >!= fun err -> Lwt.return (`Store err))
 
   let producer ?(final = (fun () -> Lwt.return None)) state =
     let state' = ref (fun () -> state) in
@@ -429,7 +419,7 @@ module Make_ext
                       Fmt.(hvbox (Dump.list pp_command)) commands);
 
         packer ~window:(`Object 10) ~depth:50 ~ofs_delta:true git refs.Decoder.refs commands >>= function
-        | Error err -> Lwt.return (Error (`StorePack err))
+        | Error err -> Lwt.return (Error (`Store err))
         | Ok (stream, _) ->
           let stream () = stream () >>= function
             | Some buf -> Lwt.return (Some (buf, 0, Cstruct.len buf))
@@ -693,11 +683,11 @@ module Make_ext
       ~reference:remote_ref host (Uri.path_and_query repository)
     >?= fun hash' ->
       Store.Ref.write git local_ref (Store.Reference.Hash hash')
-      >!= (fun err -> Lwt.return (`Ref err))
+      >!= (fun err -> Lwt.return (`Store err))
       >?= fun () ->
         Store.Ref.write git Store.Reference.head
           (Store.Reference.Ref local_ref)
-        >!= (fun err -> Lwt.return (`Ref err))
+        >!= (fun err -> Lwt.return (`Store err))
 
   let fetch_and_set_references git ?capabilities ?headers ~choose ~references
       repository
@@ -715,9 +705,8 @@ module Make_ext
     fetch git ~https ?port:(Uri.port repository) ?capabilities ?headers
       ~negociate:(continue, state) ~has ~want:want_handler host
       (Uri.path_and_query repository)
-    >?= fun (results, _) ->
-      (update_and_create git ~references results >!= fun err ->
-          Lwt.return (err :> error))
+    >?= fun (results, _) -> update_and_create git ~references results
+    >!= fun err -> Lwt.return (`Store err)
 
   let fetch_all git ?capabilities ?headers ~references repository =
     let choose _ = Lwt.return true in
