@@ -1261,23 +1261,23 @@ module MakePackDecoder
     loop t
 end
 
-module type DECODER =
+module type D =
 sig
   module Hash: S.HASH
   module Mapper: S.MAPPER
   module Inflate: S.INFLATE
 
-  module H: H with module Hash = Hash
-  module P: P
-    with module Hash = Hash
-     and module Inflate = Inflate
-     and module H = H
+  module HunkDecoder: H with module Hash := Hash
+  module PackDecoder: P
+    with module Hash := Hash
+     and module Inflate := Inflate
+     and module HunkDecoder := HunkDecoder
 
   type error =
     | Invalid_hash of Hash.t
     | Invalid_offset of int64
     | Invalid_target of (int * int)
-    | Unpack_error of P.t * Window.t * P.error
+    | Unpack_error of PackDecoder.t * Window.t * PackDecoder.error
     | Mapper_error of Mapper.error
 
   val pp_error: error Fmt.t
@@ -1395,13 +1395,18 @@ sig
 end
 
 module MakeDecoder
-    (H: S.HASH)
-    (M: S.MAPPER)
-    (I: S.INFLATE)
-  : DECODER
-    with module Hash = H
-     and module Mapper = M
-     and module Inflate = I =
+    (Hash: S.HASH)
+    (Mapper: S.MAPPER)
+    (Inflate: S.INFLATE)
+    (HunkDecoder: H with module Hash := Hash)
+    (PackDecoder: P with module Hash := Hash
+                     and module Inflate := Inflate
+                     and module HunkDecoder := HunkDecoder)
+  : D with module Hash = Hash
+       and module Mapper = Mapper
+       and module Inflate = Inflate
+       and module HunkDecoder := HunkDecoder
+       and module PackDecoder := PackDecoder =
 struct
   module Log =
   struct
@@ -1409,18 +1414,17 @@ struct
     include (val Logs.src_log src : Logs.LOG)
   end
 
-  module Hash = H
-  module Mapper = M
-  module Inflate = I
-
-  module P = MakePACKDecoder(Hash)(Inflate)
-  module H = MakeHunkDecoder(Hash)
+  module Hash = Hash
+  module Mapper = Mapper
+  module Inflate = Inflate
+  module PackDecoder = PackDecoder
+  module HunkDecoder = HunkDecoder
 
   type error =
     | Invalid_hash of Hash.t
     | Invalid_offset of int64
     | Invalid_target of (int * int)
-    | Unpack_error of P.t * Window.t * P.error
+    | Unpack_error of PackDecoder.t * Window.t * PackDecoder.error
     | Mapper_error of Mapper.error
 
   let pp_error ppf = function
@@ -1431,13 +1435,9 @@ struct
     | Invalid_target (has, expected) ->
       Fmt.pf ppf "(Invalid_target (%d, %d))"
         has expected
-    | Unpack_error (state, window, exn) ->
-      Fmt.pf ppf "(Unpack_error { @[<hov>state = %a;@ \
-                  window = %a;@ \
-                  exn = %a;@] })"
-        (Fmt.hvbox P.pp) state
-        (Fmt.hvbox Window.pp) window
-        (Fmt.hvbox P.pp_error) exn
+    | Unpack_error (_, _, exn) ->
+      Fmt.pf ppf "Got an error while decoding PACK: %a"
+        PackDecoder.pp_error exn
     | Mapper_error err ->
       Fmt.pf ppf "(Mapper_error %a)" (Fmt.hvbox Mapper.pp_error) err
 
@@ -1523,7 +1523,7 @@ struct
   end
 
   type pack_object =
-    | Hunks  of partial * H.hunks
+    | Hunks  of partial * HunkDecoder.hunks
     | Object of kind * partial * Cstruct.t
     | External of Hash.t * kind * Cstruct.t
 
@@ -1538,11 +1538,11 @@ struct
     ; hash  : Hash.t }
 
   let to_kind = function
-    | P.Commit -> `Commit
-    | P.Blob -> `Blob
-    | P.Tree -> `Tree
-    | P.Tag -> `Tag
-    | P.Hunk _ -> assert false
+    | PackDecoder.Commit -> `Commit
+    | PackDecoder.Blob -> `Blob
+    | PackDecoder.Tree -> `Tree
+    | PackDecoder.Tag -> `Tag
+    | PackDecoder.Hunk _ -> assert false
 
   let map_window t offset_requested =
     let open Lwt.Infix in
@@ -1576,7 +1576,7 @@ struct
       | Error err -> Lwt.return (Error err)
 
   let apply partial_hunks hunks_header hunks base raw =
-    if Cstruct.len raw < hunks_header.H.target_length
+    if Cstruct.len raw < hunks_header.HunkDecoder.target_length
     then raise (Invalid_argument "Decoder.apply");
 
     let target_length = List.fold_left
@@ -1588,16 +1588,16 @@ struct
         0 hunks
     in
 
-    if (target_length = hunks_header.H.target_length)
+    if (target_length = hunks_header.HunkDecoder.target_length)
     then Ok Object.{ kind     = base.Object.kind
                    ; raw      = Cstruct.sub raw 0 target_length
-                   ; length   = Int64.of_int hunks_header.H.target_length
+                   ; length   = Int64.of_int hunks_header.HunkDecoder.target_length
                    ; from     = Offset { length   = partial_hunks._length
                                        ; consumed = partial_hunks._consumed
                                        ; offset   = partial_hunks._offset
                                        ; crc      = partial_hunks._crc
                                        ; base     = base.from } }
-    else Error (Invalid_target (target_length, hunks_header.H.target_length))
+    else Error (Invalid_target (target_length, hunks_header.HunkDecoder.target_length))
 
   let result_bind ~err f = function Ok a -> f a | Error _ -> err
 
@@ -1614,10 +1614,10 @@ struct
         >>= function
         | Error err -> Lwt.return (Error (Mapper_error err))
         | Ok (window, relative_offset) ->
-          let state    = P.from_window window relative_offset z_tmp z_win in
+          let state = PackDecoder.from_window window relative_offset ztmp zwin in
 
           let rec loop window consumed_in_window writed_in_raw writed_in_hnk hunks git_object state =
-            match P.eval window.Window.raw state with
+            match PackDecoder.eval window.Window.raw state with
             | `Await state ->
               let rest_in_window = min (window.Window.len - consumed_in_window) chunk in
 
@@ -1626,7 +1626,7 @@ struct
                 loop window
                   (consumed_in_window + rest_in_window) writed_in_raw writed_in_hnk
                   hunks git_object
-                  (P.refill consumed_in_window rest_in_window state)
+                  (PackDecoder.refill consumed_in_window rest_in_window state)
               else
                 (find t Int64.(window.Window.off + (of_int consumed_in_window))
                  >>= function
@@ -1636,31 +1636,31 @@ struct
                    loop window
                      relative_offset writed_in_raw writed_in_hnk
                      hunks git_object
-                     (P.refill 0 0 state))
+                     (PackDecoder.refill 0 0 state))
             | `Hunk (state, hunk) ->
               (match h_tmp, hunk with
-               | Some hnk, P.H.Insert raw ->
+               | Some hnk, HunkDecoder.Insert raw ->
                  let len = Cstruct.len raw in
                  Cstruct.blit raw 0 hnk writed_in_hnk len;
                  loop window
                    consumed_in_window writed_in_raw (writed_in_hnk + len)
                    (Insert (Cstruct.sub hnk writed_in_hnk len) :: hunks) git_object
-                   (P.continue state)
-               | None, P.H.Insert raw ->
+                   (PackDecoder.continue state)
+               | None, HunkDecoder.Insert raw ->
                  let len = Cstruct.len raw in
                  let res = Cstruct.create len in
                  Cstruct.blit raw 0 res 0 len;
                  loop window
                    consumed_in_window writed_in_raw writed_in_hnk
                    (Insert res :: hunks) git_object
-                   (P.continue state)
-               | _, P.H.Copy (off, len) ->
+                   (PackDecoder.continue state)
+               | _, HunkDecoder.Copy (off, len) ->
                  loop window
                    consumed_in_window writed_in_raw writed_in_hnk
                    (Copy (off, len) :: hunks) git_object
-                   (P.continue state))
+                   (PackDecoder.continue state))
             | `Flush state ->
-              let o, n = P.output state in
+              let o, n = PackDecoder.output state in
               let n' = min n (Cstruct.len r_tmp - writed_in_raw) in
               Cstruct.blit o 0 r_tmp writed_in_raw n';
 
@@ -1669,11 +1669,11 @@ struct
                 loop window
                   consumed_in_window (writed_in_raw + n) writed_in_hnk
                   hunks git_object
-                  (P.flush 0 n state)
-              else Lwt.return (Ok (P.kind state,
-                                   { _length   = P.length state
+                  (PackDecoder.flush 0 n state)
+              else Lwt.return (Ok (PackDecoder.kind state,
+                                   { _length   = PackDecoder.length state
                                    ; _consumed = 0
-                                   ; _offset   = P.offset state
+                                   ; _offset   = PackDecoder.offset state
                                    ; _crc      = Crc32.default
                                    ; _hunks    = [] }))
             (* XXX(dinosaure): to be clear, this situation appear only
@@ -1692,13 +1692,13 @@ struct
               loop window
                 consumed_in_window writed_in_raw writed_in_hnk
                 hunks
-                (Some (P.kind state,
-                       { _length   = P.length state
-                       ; _consumed = P.consumed state
-                       ; _offset   = P.offset state
-                       ; _crc      = P.crc state
+                (Some (PackDecoder.kind state,
+                       { _length   = PackDecoder.length state
+                       ; _consumed = PackDecoder.consumed state
+                       ; _offset   = PackDecoder.offset state
+                       ; _crc      = PackDecoder.crc state
                        ; _hunks    = List.rev hunks }))
-                (P.next_object state)
+                (PackDecoder.next_object state)
             | `Error (state, exn) ->
               Lwt.return (Error (Unpack_error (state, window, exn)))
             | `End _ ->
@@ -1712,10 +1712,12 @@ struct
           in
 
           loop window relative_offset 0 0 [] None state >>= function
-          | Ok (P.Hunk hunks, partial) ->
+          | Ok (PackDecoder.Hunk hunks, partial) ->
             Lwt.return (Ok (Hunks (partial, hunks)))
-          | Ok ((P.Commit | P.Blob | P.Tag | P.Tree) as kind, partial) ->
-            let r_tmp =
+          | Ok ((PackDecoder.Commit
+                | PackDecoder.Blob
+                | PackDecoder.Tag
+                | PackDecoder.Tree) as kind, partial) ->
               if (not limit) || (partial._length < 0x10000FFFE && limit)
               then Cstruct.sub r_tmp 0 partial._length
               else r_tmp
@@ -1726,7 +1728,7 @@ struct
     in
 
     match reference with
-    | H.Offset off ->
+    | HunkDecoder.Offset off ->
       let absolute_offset =
         if off < t.max && off >= 0L
         then Ok (Int64.sub source_offset off)
@@ -1742,7 +1744,7 @@ struct
             | Some base ->
               Lwt.return (Ok (Object (base.Object.kind, Object.to_partial base, base.Object.raw)))
             | None -> aux absolute_offset)
-    | H.Hash hash ->
+    | HunkDecoder.Hash hash ->
       match t.cache hash with
       | Some base ->
         Lwt.return (Ok (Object (base.Object.kind, Object.to_partial base, base.Object.raw)))
@@ -1804,10 +1806,10 @@ struct
       >>= function
       | Error err -> Lwt.return (Error (Mapper_error err))
       | Ok (window, relative_offset) ->
-        let state = P.process_length window relative_offset z_tmp z_win in
+        let state = PackDecoder.process_length window relative_offset ztmp zwin in
 
         let rec loop window consumed_in_window state =
-          match P.eval_length window.Window.raw state with
+          match PackDecoder.eval_length window.Window.raw state with
           | `Await state ->
             let rest_in_window = min (window.Window.len - consumed_in_window) chunk in
 
@@ -1815,7 +1817,7 @@ struct
             then
               loop window
                 (consumed_in_window + rest_in_window)
-                (P.refill consumed_in_window rest_in_window state)
+                (PackDecoder.refill consumed_in_window rest_in_window state)
             else
               find t Int64.(window.Window.off + (of_int consumed_in_window))
               >>= (function
@@ -1823,18 +1825,18 @@ struct
                   | Ok (window, relative_offset) ->
                     loop window
                       relative_offset
-                      (P.refill 0 0 state))
+                      (PackDecoder.refill 0 0 state))
           | `Error (state, exn) -> Lwt.return (Error (Unpack_error (state, window, exn)))
           | `End _ -> assert false
           | `Flush state
           | `Length state ->
-            match P.kind state with
-            | P.Hunk hunks ->
-              Lwt.return (Ok hunks.H.target_length)
-            | P.Commit
-            | P.Blob
-            | P.Tree
-            | P.Tag -> Lwt.return (Ok (P.length state))
+            match PackDecoder.kind state with
+            | PackDecoder.Hunk hunks ->
+              Lwt.return (Ok hunks.HunkDecoder.target_length)
+            | PackDecoder.Commit
+            | PackDecoder.Blob
+            | PackDecoder.Tree
+            | PackDecoder.Tag -> Lwt.return (Ok (PackDecoder.length state))
         in
 
         loop window relative_offset state
@@ -1854,10 +1856,10 @@ struct
       >>= function
       | Error err -> Lwt.return (`Error (Mapper_error err))
       | Ok (window, relative_offset) ->
-        let state = P.process_length window relative_offset z_tmp z_win in
+        let state = PackDecoder.process_length window relative_offset ztmp zwin in
 
         let rec loop window consumed_in_window state =
-          match P.eval_length window.Window.raw state with
+          match PackDecoder.eval_length window.Window.raw state with
           | `Await state ->
             let rest_in_window = min (window.Window.len - consumed_in_window) chunk in
 
@@ -1865,7 +1867,7 @@ struct
             then
               loop window
                 (consumed_in_window + rest_in_window)
-                (P.refill consumed_in_window rest_in_window state)
+                (PackDecoder.refill consumed_in_window rest_in_window state)
             else
               find t Int64.(window.Window.off + (of_int consumed_in_window))
               >>= (function
@@ -1873,18 +1875,27 @@ struct
                   | Ok (window, relative_offset) ->
                     loop window
                       relative_offset
-                      (P.refill 0 0 state))
+                      (PackDecoder.refill 0 0 state))
           | `Flush state ->
-            Lwt.return (`Direct (P.length state))
+            Lwt.return (`Direct (PackDecoder.length state))
           | `Error (state, exn) -> Lwt.return (`Error (Unpack_error (state, window, exn)))
           | `End _ -> assert false
           | `Length state ->
-            match P.kind state with
-            | P.Hunk ({ H.reference = H.Offset off; _ } as hunks) ->
-              Lwt.return (`IndirectOff (Int64.sub (P.offset state) off, max (P.length state) @@ max hunks.H.target_length hunks.H.source_length))
-            | P.Hunk ({ H.reference = H.Hash hash; _ } as hunks) ->
-              Lwt.return (`IndirectHash (hash, max (P.length state) @@ max hunks.H.target_length hunks.H.source_length))
-            | P.Commit | P.Blob | P.Tree | P.Tag -> Lwt.return (`Direct (P.length state))
+            match PackDecoder.kind state with
+            | PackDecoder.Hunk ({ HunkDecoder.reference = HunkDecoder.Offset off; _ } as hunks) ->
+              Lwt.return (`IndirectOff
+                            (Int64.sub (PackDecoder.offset state) off,
+                             max (PackDecoder.length state)
+                             @@ max hunks.HunkDecoder.target_length hunks.HunkDecoder.source_length))
+            | PackDecoder.Hunk ({ HunkDecoder.reference = HunkDecoder.Hash hash; _ } as hunks) ->
+              Lwt.return (`IndirectHash
+                            (hash, max (PackDecoder.length state)
+                             @@ max hunks.HunkDecoder.target_length hunks.HunkDecoder.source_length))
+            | PackDecoder.Commit
+            | PackDecoder.Blob
+            | PackDecoder.Tree
+            | PackDecoder.Tag ->
+              Lwt.return (`Direct (PackDecoder.length state))
         in
 
         loop window relative_offset state
@@ -1974,10 +1985,10 @@ struct
     find t absolute_offset >>= function
     | Error err -> Lwt.return (Error (Mapper_error err))
     | Ok (window, relative_offset) ->
-      let state  = P.from_window window relative_offset z_tmp z_win in
+      let state  = PackDecoder.from_window window relative_offset ztmp zwin in
 
       let rec loop window consumed_in_window writed_in_raw writed_in_hnk hunks swap git_object state =
-        match P.eval window.Window.raw state with
+        match PackDecoder.eval window.Window.raw state with
         | `Await state ->
           Log.debug (fun l -> l ~header:"get" "PACK decoder waits.");
 
@@ -1988,7 +1999,7 @@ struct
             loop window
               (consumed_in_window + rest_in_window) writed_in_raw writed_in_hnk
               hunks swap git_object
-              (P.refill consumed_in_window rest_in_window state)
+              (PackDecoder.refill consumed_in_window rest_in_window state)
           else
             find t Int64.(window.Window.off + (of_int consumed_in_window))
             >>= (function
@@ -1997,11 +2008,11 @@ struct
                   loop window
                     relative_offset writed_in_raw writed_in_hnk
                     hunks swap git_object
-                    (P.refill 0 0 state))
+                    (PackDecoder.refill 0 0 state))
         | `Flush state ->
           Logs.debug (fun l -> l ~header:"get" "PACK decoder flushes.");
 
-          let o, n = P.output state in
+          let o, n = PackDecoder.output state in
           let n' = min (Cstruct.len (get_free_raw swap) - writed_in_raw) n in
 
           Cstruct.blit o 0 (get_free_raw swap) writed_in_raw n';
@@ -2011,48 +2022,48 @@ struct
             loop window
               consumed_in_window (writed_in_raw + n) writed_in_hnk
               hunks swap git_object
-              (P.flush 0 (Cstruct.len o) state)
-          else Lwt.return (Ok (Object.{ kind = to_kind (P.kind state)
+              (PackDecoder.flush 0 (Cstruct.len o) state)
+          else Lwt.return (Ok (Object.{ kind = to_kind (PackDecoder.kind state)
                                       ; raw  = get_free_raw swap
-                                      ; length = Int64.of_int (P.length state)
+                                      ; length = Int64.of_int (PackDecoder.length state)
                                       ; from   = Direct { consumed = 0
-                                                        ; offset   = P.offset state
+                                                        ; offset   = PackDecoder.offset state
                                                         ; crc      = Crc32.default }}))
         | `Hunk (state, hunk) ->
           Log.debug (fun l -> l ~header:"get" "PACK decoder return an hunk.");
 
           (match h_tmp, hunk with
-           | Some hnks, P.H.Insert raw ->
+           | Some hnks, HunkDecoder.Insert raw ->
              let len = Cstruct.len raw in
              Cstruct.blit raw 0 hnks.(0)  writed_in_hnk len;
              loop window
                consumed_in_window writed_in_raw (writed_in_hnk + len)
                (Insert (Cstruct.sub hnks.(0) writed_in_hnk len) :: hunks)
-               swap git_object (P.continue state)
-           | None, P.H.Insert raw ->
+               swap git_object (PackDecoder.continue state)
+           | None, HunkDecoder.Insert raw ->
              let len = Cstruct.len raw in
              let res = Cstruct.create len in
              Cstruct.blit raw 0 res 0 len;
              loop window
                consumed_in_window writed_in_raw writed_in_hnk
                (Insert res :: hunks) swap git_object
-               (P.continue state)
-           | _, P.H.Copy (off, len) ->
+               (PackDecoder.continue state)
+           | _, HunkDecoder.Copy (off, len) ->
              loop window consumed_in_window writed_in_raw writed_in_hnk
                (Copy (off, len) :: hunks) swap git_object
-               (P.continue state))
+               (PackDecoder.continue state))
         | `Object state ->
           Log.debug (fun l -> l ~header:"get" "PACK decoder retrieve an object.");
 
-          (match P.kind state with
-           | P.Hunk hunks_header ->
+          (match PackDecoder.kind state with
+           | PackDecoder.Hunk hunks_header ->
              Log.debug (fun l -> l ~header:"get" "The Git object requested is delta-ified.");
 
              let partial_hunks =
-               { _length   = P.length state
-               ; _consumed = P.consumed state
-               ; _offset   = P.offset state
-               ; _crc      = P.crc state
+               { _length   = PackDecoder.length state
+               ; _consumed = PackDecoder.consumed state
+               ; _offset   = PackDecoder.offset state
+               ; _crc      = PackDecoder.crc state
                ; _hunks    = List.rev hunks }
              in
 
@@ -2063,7 +2074,9 @@ struct
                  ~chunk
                  ?h_tmp:(match h_tmp with Some hnks -> Some hnks.(depth) | None -> None)
                  t
-                 hunks.H.reference hunks.H.source_length partial._offset z_tmp z_win (get_free_raw swap)
+                 hunks.HunkDecoder.reference
+                 hunks.HunkDecoder.source_length
+                 partial._offset ztmp zwin (get_free_raw swap)
                >>= function
                | Error exn -> Lwt.return (Error exn)
                | Ok (Hunks (partial_hunks, hunks)) ->
@@ -2094,30 +2107,33 @@ struct
                     loop window
                       consumed_in_window writed_in_raw writed_in_hnk
                       hunks swap (Some obj)
-                      (P.next_object state)
+                      (PackDecoder.next_object state)
                   | Error exn -> Lwt.return (Error exn))
                | Error exn -> Lwt.return (Error exn))
-           | (P.Commit | P.Tag | P.Tree | P.Blob) as kind ->
+           | (PackDecoder.Commit
+             | PackDecoder.Tag
+             | PackDecoder.Tree
+             | PackDecoder.Blob) as kind ->
              Log.debug (fun l -> l ~header:"get" "The Git object requested is not delta-ified.");
 
              let obj =
                Object.{ kind   = to_kind kind
                       ; raw    =
-                          if (not limit) || ((P.length state) < 0x10000FFFE && limit)
-                          then Cstruct.sub (get_free_raw swap) 0 (P.length state)
+                          if (not limit) || ((PackDecoder.length state) < 0x10000FFFE && limit)
+                          then Cstruct.sub (get_free_raw swap) 0 (PackDecoder.length state)
                           else (get_free_raw swap)
-                      ; length = Int64.of_int (P.length state)
-                      ; from   = Direct { consumed = P.consumed state
-                                        ; offset   = P.offset state
-                                        ; crc      = P.crc state } }
+                      ; length = Int64.of_int (PackDecoder.length state)
+                      ; from   = Direct { consumed = PackDecoder.consumed state
+                                        ; offset   = PackDecoder.offset state
+                                        ; crc      = PackDecoder.crc state } }
              in
 
              loop window
                consumed_in_window writed_in_raw writed_in_hnk
                hunks (not swap) (Some obj)
-               (P.next_object state))
+               (PackDecoder.next_object state))
         | `Error (state, exn) ->
-          Log.err (fun l -> l ~header:"get" "Retrieve an error: %a." P.pp_error exn);
+          Log.err (fun l -> l ~header:"get" "Retrieve an error: %a." PackDecoder.pp_error exn);
 
           Lwt.return (Error (Unpack_error (state, window, exn)))
         | `End _ -> match git_object with
