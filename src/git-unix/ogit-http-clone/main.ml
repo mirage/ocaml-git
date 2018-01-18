@@ -19,17 +19,29 @@ let () = Random.self_init ()
 
 module Sync_http = Git_unix.HTTP(Git_unix.FS)
 
-let option_map f = function
-  | Some v -> Some (f v)
-  | None -> None
+module Option =
+struct
 
-let option_map_default v f = function
-  | Some v -> f v
-  | None -> v
+  let map f = function
+    | Some v -> Some (f v)
+    | None -> None
 
-let option_value_exn f = function
-  | Some v -> v
-  | None -> f ()
+  let map_default v f = function
+    | Some v -> f v
+    | None -> v
+
+  let value_exn f = function
+    | Some v -> v
+    | None -> f ()
+
+  let is_some = function
+    | Some _ -> true
+    | None -> false
+
+  let eq ?(none = false)~eq = function
+    | Some x -> eq x
+    | None -> none
+end
 
 let pad n x =
   if String.length x > n
@@ -49,7 +61,7 @@ let pp_header ppf (level, header) =
 
   Fmt.pf ppf "[%a][%a]"
     (Fmt.styled level_style Fmt.string) level
-    (Fmt.option Fmt.string) (option_map (pad 10) header)
+    (Fmt.option Fmt.string) (Option.map (pad 10) header)
 
 let reporter ppf =
   let report src level ~over k msgf =
@@ -95,7 +107,7 @@ let main ppf progress origin branch repository directory =
     |> Fpath.rem_ext ~multi:true
     |> Fpath.basename
   in
-  let root = option_map_default Fpath.(v (Sys.getcwd ()) / name) Fpath.v directory in
+  let root = Option.map_default Fpath.(v (Sys.getcwd ()) / name) Fpath.v directory in
 
   let ( >>?= ) = Lwt_result.bind in
   let ( >>!= ) v f = Lwt_result.map_err f v in
@@ -112,11 +124,7 @@ let main ppf progress origin branch repository directory =
     else None
   in
 
-  let https =
-    match Uri.scheme repository with
-    | Some "https" -> true
-    | _ -> false
-  in
+  let https = Option.eq ~eq:((=) "https") (Uri.scheme repository) in
 
   Git_unix.FS.create ~root ()
   >>!= store_err
