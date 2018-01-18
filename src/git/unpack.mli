@@ -177,7 +177,7 @@ sig
       when he {!make} the new decoder. *)
 end
 
-module MakeHunkDecoder (Hash : S.HASH) : H with module Hash = Hash
+module MakeHunkDecoder (Hash : S.HASH): H with module Hash = Hash
 
 (** The non-blocking decoder of the PACK stream. *)
 module type P =

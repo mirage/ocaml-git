@@ -34,6 +34,7 @@ end
 
 module type H =
 sig
+
   module Hash: S.HASH
 
   type error =
@@ -95,9 +96,10 @@ sig
 end
 
 (* Implementation of deserialization of a list of hunks (from a PACK file) *)
-module MakeHunkDecoder (H : S.HASH) : H with module Hash = H  =
+module MakeHunkDecoder (Hash : S.HASH) : H with module Hash = Hash =
 struct
-  module Hash = H
+
+  module Hash = Hash
 
   type error =
     | Reserved_opcode of int
@@ -231,12 +233,12 @@ struct
         ; target_length = t._target_length })
 
   let rec get_byte ~ctor k src t =
-      if (t.i_len - t.i_pos) > 0
-      then let byte = Cstruct.get_uint8 src (t.i_off + t.i_pos) in
-          k byte src
-            { t with i_pos = t.i_pos + 1
-                    ; read = t.read + 1 }
-      else await { t with state = ctor (fun src t -> (get_byte[@tailcall]) ~ctor k src t) }
+    if (t.i_len - t.i_pos) > 0
+    then let byte = Cstruct.get_uint8 src (t.i_off + t.i_pos) in
+      k byte src
+        { t with i_pos = t.i_pos + 1
+               ; read = t.read + 1 }
+    else await { t with state = ctor (fun src t -> (get_byte[@tailcall]) ~ctor k src t) }
 
   module KHeader =
   struct
@@ -246,9 +248,9 @@ struct
       | true ->
         get_byte
           (fun byte src t ->
-            let msb = byte land 0x80 <> 0 in
-            (length[@tailcall]) msb (((byte land 0x7F) lsl bit) lor len, bit + 7)
-            k src t)
+             let msb = byte land 0x80 <> 0 in
+             (length[@tailcall]) msb (((byte land 0x7F) lsl bit) lor len, bit + 7)
+               k src t)
           src t
       | false -> k len src t
 
@@ -286,31 +288,31 @@ struct
      @@ fun l1 -> get_byte (opcode land 0x40 <> 0)
      @@ fun l2 _ t ->
 
-       let dst = ref 0 in
-       let len = ref 0 in
+     let dst = ref 0 in
+     let len = ref 0 in
 
-       if opcode land 0x01 <> 0 then dst := o0;
-       if opcode land 0x02 <> 0 then dst := !dst lor (o1 lsl 8);
-       if opcode land 0x04 <> 0 then dst := !dst lor (o2 lsl 16);
-       if opcode land 0x08 <> 0 then dst := !dst lor (o3 lsl 24);
+     if opcode land 0x01 <> 0 then dst := o0;
+     if opcode land 0x02 <> 0 then dst := !dst lor (o1 lsl 8);
+     if opcode land 0x04 <> 0 then dst := !dst lor (o2 lsl 16);
+     if opcode land 0x08 <> 0 then dst := !dst lor (o3 lsl 24);
 
-       if opcode land 0x10 <> 0 then len := l0;
-       if opcode land 0x20 <> 0 then len := !len lor (l1 lsl 8);
-       if opcode land 0x40 <> 0 then len := !len lor (l2 lsl 16);
+     if opcode land 0x10 <> 0 then len := l0;
+     if opcode land 0x20 <> 0 then len := !len lor (l1 lsl 8);
+     if opcode land 0x40 <> 0 then len := !len lor (l2 lsl 16);
 
-       let dst = !dst in
-       let len = !len in
+     let dst = !dst in
+     let len = !len in
 
-       let len = if len = 0 then 0x10000 else len in
+     let len = if len = 0 then 0x10000 else len in
 
-       if dst + len > t._source_length
-       then begin
-         error t (Wrong_copy_hunk (dst, len, t._source_length))
-         (* Cont { t with state = Stop } (* avoid error *) *)
-       end else
-         Cont { t with state = Stop
-                     ; _hunk = Some (Copy (dst, len)) })
-    src t
+     if dst + len > t._source_length
+     then begin
+       error t (Wrong_copy_hunk (dst, len, t._source_length))
+       (* Cont { t with state = Stop } (* avoid error *) *)
+     end else
+       Cont { t with state = Stop
+                   ; _hunk = Some (Copy (dst, len)) })
+      src t
 
   let stop _ t = Cont t
 
@@ -318,13 +320,13 @@ struct
     if t.read < t._length
     then KList.get_byte
         (fun opcode  _ t ->
-            if opcode = 0 then error t (Reserved_opcode opcode)
-            else match opcode land 0x80 with
-              | 0 ->
-                Cont { t with state = Is_insert (Cstruct.sub t._tmp 0 opcode, 0, opcode) }
-              | _ ->
-                Cont { t with state = Is_copy (copy opcode) })
-          src t
+           if opcode = 0 then error t (Reserved_opcode opcode)
+           else match opcode land 0x80 with
+             | 0 ->
+               Cont { t with state = Is_insert (Cstruct.sub t._tmp 0 opcode, 0, opcode) }
+             | _ ->
+               Cont { t with state = Is_copy (copy opcode) })
+        src t
     else begin
       ok { t with _hunk = None }
     end
@@ -337,21 +339,21 @@ struct
     if rest - n = 0
     then begin
       Cont ({ t with _hunk = Some (Insert buffer)
-                    ; i_pos = t.i_pos + n
-                    ; read = t.read + n
-                    ; state = Stop })
+                   ; i_pos = t.i_pos + n
+                   ; read = t.read + n
+                   ; state = Stop })
     end else await { t with i_pos = t.i_pos + n
-                      ; read = t.read + n
-                      ; state = Is_insert (buffer, off + n, rest - n) }
+                          ; read = t.read + n
+                          ; state = Is_insert (buffer, off + n, rest - n) }
 
   let header src t =
     (KHeader.length
-    @@ fun _source_length -> KHeader.length
-    @@ fun _target_length _ t ->
-        Cont ({ t with state = List list
-                    ; _source_length
-                    ; _target_length }))
-    src t
+     @@ fun _source_length -> KHeader.length
+     @@ fun _target_length _ t ->
+     Cont ({ t with state = List list
+                  ; _source_length
+                  ; _target_length }))
+      src t
 
   let eval src t =
     let eval0 t =
@@ -1012,13 +1014,13 @@ module MakePackDecoder
     @@ version)
     src t
 
-  let default z_tmp z_win =
+  let default ztmp zwin =
     { i_off   = 0
     ; i_pos   = 0
     ; i_len   = 0
     ; process = `All
-    ; o_z     = z_tmp
-    ; o_w     = z_win
+    ; o_z     = ztmp
+    ; o_w     = zwin
     ; read    = 0L
     ; version = 0l
     ; objects = 0l
@@ -1027,39 +1029,39 @@ module MakePackDecoder
 
   let many { objects; _ } = objects
 
-  let from_window window win_offset z_tmp z_win =
+  let from_window window win_offset ztmp zwin =
     { i_off   = 0
     ; i_pos   = 0
     ; i_len   = 0
     ; process = `One
-    ; o_z     = z_tmp
-    ; o_w     = z_win
+    ; o_z     = ztmp
+    ; o_w     = zwin
     ; read    = Int64.add window.Window.off (Int64.of_int win_offset)
     ; version = 0l
     ; objects = 1l
     ; counter = 1l
     ; state   = Object kind }
 
-  let process_length window win_offset z_tmp z_win =
+  let process_length window win_offset ztmp zwin =
     { i_off   = 0
     ; i_pos   = 0
     ; i_len   = 0
     ; process = `Length
-    ; o_z     = z_tmp
-    ; o_w     = z_win
+    ; o_z     = ztmp
+    ; o_w     = zwin
     ; read    = Int64.add window.Window.off (Int64.of_int win_offset)
     ; version = 0l
     ; objects = 1l
     ; counter = 1l
     ; state   = Object kind }
 
-  let process_metadata window win_offset z_tmp z_win =
+  let process_metadata window win_offset ztmp zwin =
     { i_off   = 0
     ; i_pos   = 0
     ; i_len   = 0
     ; process = `Metadata
-    ; o_z     = z_tmp
-    ; o_w     = z_win
+    ; o_z     = ztmp
+    ; o_w     = zwin
     ; read    = Int64.add window.Window.off (Int64.of_int win_offset)
     ; version = 0l
     ; objects = 1l
@@ -1488,7 +1490,6 @@ struct
         ; _hunks = [] }
       | { from = External _; _ } ->
         raise (Invalid_argument "Object.to_partial: this object is external of the current PACK file")
-
 
     let rec pp_from ppf = function
       | Offset { length; consumed; offset; crc; base; } ->
