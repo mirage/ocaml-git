@@ -184,7 +184,7 @@ module type P =
 sig
   module Hash: S.HASH
   module Inflate: S.INFLATE
-  module H: H with module Hash = Hash
+  module HunkDecoder: H with module Hash := Hash
 
   (** The type error. *)
   type error =
@@ -198,7 +198,7 @@ sig
     | Inflate_error of Inflate.error
     (** Appears when the {!Inflate} module returns an error when it
         tries to inflate a PACK object. *)
-    | Hunk_error of H.error
+    | Hunk_error of HunkDecoder.error
     (** Appears when the {!H} module returns an error. *)
     | Hunk_input of int * int
     (** The Hunk object is length-defined. So, when we try to decode
@@ -224,7 +224,7 @@ sig
     | Tree
     | Blob
     | Tag
-    | Hunk of H.hunks
+    | Hunk of HunkDecoder.hunks
   (** The kind of the PACK object. It can be:
 
       {ul
@@ -364,7 +364,7 @@ sig
        Cstruct.t
     -> t
     -> [ `Object of t
-       | `Hunk of t * H.hunk
+       | `Hunk of t * HunkDecoder.hunk
        | `Await of t
        | `Flush of t
        | `End of t * Hash.t
@@ -424,10 +424,13 @@ sig
       (like {!kind} or {!length}).}} *)
 end
 
-module MakePACKDecoder (H : S.HASH) (Inflate : S.INFLATE) : P
-  with module Hash = H
-   and module Inflate = Inflate
-   and module H = MakeHunkDecoder(H)
+module MakePACKDecoder
+    (Hash: S.HASH)
+    (Inflate: S.INFLATE)
+    (HunkDecoder: H with module Hash := Hash)
+  : P with module Hash = Hash
+       and module Inflate = Inflate
+       and module HunkDecoder := HunkDecoder
 
 (** The toolbox about the PACK file. *)
 module type DECODER =
