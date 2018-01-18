@@ -716,14 +716,16 @@ module Make
       Lwt_mvar.put t.packs (Graph.remove hash packs) >>= fun () ->
       (FS.Mapper.close fdi
        >>!= fun sys_err' ->
-       Log.err (fun l -> l ~header:"log" "Impossible to close the index fd: %a"
-                   FS.Mapper.pp_error sys_err');
+       Log.err (fun l ->
+           l "Impossible to close the index fd: %a"
+             FS.Mapper.pp_error sys_err');
        Lwt.return ())
       >>= fun _ ->
       (FS.Mapper.close fdp
        >>!= fun sys_err' ->
-       Log.err (fun l -> l ~header:"log" "Impossible to close the pack fd: %a"
-                   FS.Mapper.pp_error sys_err');
+       Log.err (fun l ->
+           l "Impossible to close the pack fd: %a"
+             FS.Mapper.pp_error sys_err');
        Lwt.return ())
       >>= fun _ -> Lwt.return sys_err
     in
