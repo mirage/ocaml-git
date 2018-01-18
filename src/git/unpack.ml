@@ -107,9 +107,10 @@ struct
 
   let pp_error ppf = function
     | Reserved_opcode byte ->
-      Fmt.pf ppf "(Reserved_opcode %02x)" byte
+      Fmt.pf ppf "Got an reserved op-code %02x" byte
     | Wrong_copy_hunk (off, len, source) ->
-      Fmt.pf ppf "(Wrong_copy_hunk (@[<hov>off: %d,@ len: %d,@ source: %d@]))"
+      Fmt.pf ppf "The copy hunk (off: %d, len: %d) is invalid, \
+                  it's not inner the source (source: %d)."
         off len source
 
   type t =
@@ -514,13 +515,20 @@ module MakePackDecoder
     | Invalid_length of int * int
 
   let pp_error ppf = function
-    | Invalid_byte byte              -> Fmt.pf ppf "(Invalid_byte %02x)" byte
-    | Reserved_kind byte             -> Fmt.pf ppf "(Reserved_byte %02x)" byte
-    | Invalid_kind byte              -> Fmt.pf ppf "(Invalid_kind %02x)" byte
-    | Inflate_error err              -> Fmt.pf ppf "(Inflate_error %a)" (Fmt.hvbox Inflate.pp_error) err
-    | Invalid_length (expected, has) -> Fmt.pf ppf "(Invalid_length (%d <> %d))" expected has
-    | Hunk_error err                 -> Fmt.pf ppf "(Hunk_error %a)" HunkDecoder.pp_error err
-    | Hunk_input (expected, has)     -> Fmt.pf ppf "(Hunk_input (%d <> %d))" expected has
+    | Invalid_byte byte ->
+      Fmt.pf ppf "Got an invalid byte: %02x" byte
+    | Reserved_kind byte ->
+      Fmt.pf ppf "Got an reserved byte: %02x" byte
+    | Invalid_kind byte ->
+      Fmt.pf ppf "Got an invalid kind of object: %02x" byte
+    | Inflate_error err ->
+      Fmt.pf ppf "Got an inflate error: %a" Inflate.pp_error err
+    | Invalid_length (expected, has) ->
+      Fmt.pf ppf "Unserialize a corrupted object (length mismatch, expect %d, have %d)"
+        expected has
+    | Hunk_error err ->
+      Fmt.pf ppf "Got a Hunk decoder error: %a" HunkDecoder.pp_error err
+    | Hunk_input _ -> assert false
 
   type process =
     [ `All
@@ -1431,17 +1439,17 @@ struct
 
   let pp_error ppf = function
     | Invalid_hash hash ->
-      Fmt.pf ppf "(Invalid_hash %a)" Hash.pp hash
+      Fmt.pf ppf "Invalid hash: %a" Hash.pp hash
     | Invalid_offset off ->
-      Fmt.pf ppf "(Invalid_offset %Ld)" off
+      Fmt.pf ppf "Invalid offset: %Ld" off
     | Invalid_target (has, expected) ->
-      Fmt.pf ppf "(Invalid_target (%d, %d))"
-        has expected
+      Fmt.pf ppf "Bad object re-constructed (length mismatch, expect: %d, has: %d)"
+        expected has
     | Unpack_error (_, _, exn) ->
       Fmt.pf ppf "Got an error while decoding PACK: %a"
         PackDecoder.pp_error exn
     | Mapper_error err ->
-      Fmt.pf ppf "(Mapper_error %a)" (Fmt.hvbox Mapper.pp_error) err
+      Fmt.pf ppf "Got an error while mmap: %a" Mapper.pp_error err
 
   type kind = [ `Commit | `Blob | `Tree | `Tag ]
 
