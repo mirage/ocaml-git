@@ -523,7 +523,7 @@ sig
         respect the assertion. *)
   end
 
-  val find: t -> int64 -> (Window.t * int, Mapper.error) result Lwt.t
+  val find_window: t -> int64 -> (Window.t * int, Mapper.error) result Lwt.t
   (** [find t absolute_offset] returns a couple of a {!Window.t} which
       contains the absolute offset requested and the relative offset in
       the window. We allocate a new {!Window.t} only when we don't find
@@ -593,7 +593,7 @@ sig
       [window] used by the internal decoder {!P.t} (see
       {!P.default}). *)
 
-  val needed:
+  val needed_from_hash:
        ?chunk:int
     -> ?cache:(Hash.t -> int option)
     -> t
@@ -615,10 +615,10 @@ sig
       [window] used by the internal decoder {!P.t} (see
       {!P.default}). *)
 
-  val optimized_get':
+  val get_from_offset:
        ?chunk:int
     -> ?limit:bool
-    -> ?h_tmp:Cstruct.t array
+    -> ?htmp:Cstruct.t array
     -> t
     -> int64
     -> (Cstruct.t * Cstruct.t * int)
@@ -640,10 +640,10 @@ sig
       And [?chunk] corresponds to how many byte(s) the client wants to
       fill to the internal decoder {!P.t} when it returns [`Await]. *)
 
-  val optimized_get:
+  val get_from_hash:
        ?chunk:int
     -> ?limit:bool
-    -> ?h_tmp:Cstruct.t array
+    -> ?htmp:Cstruct.t array
     -> t
     -> Hash.t
     -> (Cstruct.t * Cstruct.t * int)
@@ -656,7 +656,7 @@ sig
       the [idx] function needed by {!make} to get the absolute offset.
       Otherwise, we returns an [Invalid_hash]. *)
 
-  val get':
+  val get_with_hunks_allocation_from_offset:
        ?chunk:int
     -> t
     -> int64
@@ -669,7 +669,7 @@ sig
       to undelta-ify the requested object and to contain the requested
       object. *)
 
-  val get :
+  val get_with_hunks_allocation_from_hash:
        ?chunk:int
     -> t
     -> Hash.t
@@ -682,9 +682,9 @@ sig
       to undelta-ify the requested object and to contain the requested
       object. *)
 
-  val get_with_allocation:
+  val get_with_result_allocation_from_hash:
        ?chunk:int
-    -> ?h_tmp:Cstruct.t array
+    -> ?htmp:Cstruct.t array
     -> t
     -> Hash.t
     -> Cstruct.t
@@ -694,7 +694,14 @@ sig
       purpose than {!optimized_get} but it allocates what it needed to
       store the requested object. *)
 
-  val get_with_allocation' : ?chunk:int -> ?h_tmp:Cstruct.t array -> t -> int64 -> Cstruct.t -> Inflate.window -> (Object.t, error) result Lwt.t
+  val get_with_result_allocation_from_offset :
+       ?chunk:int
+    -> ?htmp:Cstruct.t array
+    -> t
+    -> int64
+    -> Cstruct.t
+    -> Inflate.window
+    -> (Object.t, error) result Lwt.t
 end
 
 module MakeDecoder

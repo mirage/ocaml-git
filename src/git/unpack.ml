@@ -1310,7 +1310,7 @@ sig
     val first_crc_exn: t -> Crc32.t
   end
 
-  val find: t -> int64 -> ((Window.t * int), Mapper.error) result Lwt.t
+  val find_window: t -> int64 -> ((Window.t * int), Mapper.error) result Lwt.t
   val make: ?bucket:int -> Mapper.fd
     -> (Hash.t -> Object.t option)
     -> (Hash.t -> (Crc32.t * int64) option)
@@ -1332,7 +1332,7 @@ sig
     -> Cstruct.t
     -> Inflate.window
     -> (int, error) result Lwt.t
-  val needed:
+  val needed_from_hash:
        ?chunk:int
     -> ?cache:(Hash.t -> int option)
     -> t
@@ -1340,27 +1340,27 @@ sig
     -> Cstruct.t
     -> Inflate.window
     -> (int, error) result Lwt.t
-  val optimized_get':
+  val get_from_offset:
        ?chunk:int
     -> ?limit:bool
-    -> ?h_tmp:Cstruct.t array
+    -> ?htmp:Cstruct.t array
     -> t
     -> int64
     -> (Cstruct.t * Cstruct.t * int)
     -> Cstruct.t
     -> Inflate.window
     -> (Object.t, error) result Lwt.t
-  val optimized_get:
+  val get_from_hash:
        ?chunk:int
     -> ?limit:bool
-    -> ?h_tmp:Cstruct.t array
+    -> ?htmp:Cstruct.t array
     -> t
     -> Hash.t
     -> (Cstruct.t * Cstruct.t * int)
     -> Cstruct.t
     -> Inflate.window
     -> (Object.t, error) result Lwt.t
-  val get':
+  val get_with_hunks_allocation_from_offset:
        ?chunk:int
     -> t
     -> int64
@@ -1368,7 +1368,7 @@ sig
     -> Inflate.window
     -> (Cstruct.t * Cstruct.t)
     -> (Object.t, error) result Lwt.t
-  val get:
+  val get_with_hunks_allocation_from_hash:
        ?chunk:int
     -> t
     -> Hash.t
@@ -1376,17 +1376,17 @@ sig
     -> Inflate.window
     -> (Cstruct.t * Cstruct.t)
     -> (Object.t, error) result Lwt.t
-  val get_with_allocation:
+  val get_with_result_allocation_from_hash:
        ?chunk:int
-    -> ?h_tmp:Cstruct.t array
+    -> ?htmp:Cstruct.t array
     -> t
     -> Hash.t
     -> Cstruct.t
     -> Inflate.window
     -> (Object.t, error) result Lwt.t
-  val get_with_allocation':
+  val get_with_result_allocation_from_offset:
        ?chunk:int
-    -> ?h_tmp:Cstruct.t array
+    -> ?htmp:Cstruct.t array
     -> t
     -> int64
     -> Cstruct.t
@@ -1554,7 +1554,7 @@ struct
                      ; len   = Cstruct.len map })
     | Error err -> Lwt.return (Error err)
 
-  let find t offset_requested =
+  let find_window t offset_requested =
     let predicate window = Window.inside offset_requested window in
 
     match Bucket.find t.win predicate with
@@ -1589,28 +1589,28 @@ struct
     in
 
     if (target_length = hunks_header.HunkDecoder.target_length)
-    then Ok Object.{ kind     = base.Object.kind
-                   ; raw      = Cstruct.sub raw 0 target_length
-                   ; length   = Int64.of_int hunks_header.HunkDecoder.target_length
-                   ; from     = Offset { length   = partial_hunks._length
-                                       ; consumed = partial_hunks._consumed
-                                       ; offset   = partial_hunks._offset
-                                       ; crc      = partial_hunks._crc
-                                       ; base     = base.from } }
+    then Ok Object.{ kind   = base.Object.kind
+                   ; raw    = Cstruct.sub raw 0 target_length
+                   ; length = Int64.of_int hunks_header.HunkDecoder.target_length
+                   ; from   = Offset { length   = partial_hunks._length
+                                     ; consumed = partial_hunks._consumed
+                                     ; offset   = partial_hunks._offset
+                                     ; crc      = partial_hunks._crc
+                                     ; base     = base.from } }
     else Error (Invalid_target (target_length, hunks_header.HunkDecoder.target_length))
 
   let result_bind ~err f = function Ok a -> f a | Error _ -> err
 
-  let get_pack_object ?(chunk = 0x8000) ?(limit = false) ?h_tmp t reference source_length source_offset z_tmp z_win r_tmp =
-    if Cstruct.len r_tmp < source_length && not limit
-    then raise (Invalid_argument (Fmt.strf "Decoder.delta: expect %d and have %d" source_length (Cstruct.len r_tmp)));
+  let get_pack_object ?(chunk = 0x8000) ?(limit = false) ?htmp t reference source_length source_offset ztmp zwin rtmp =
+    if Cstruct.len rtmp < source_length && not limit
+    then raise (Invalid_argument (Fmt.strf "Decoder.delta: expected length %d and have %d" source_length (Cstruct.len rtmp)));
 
     let open Lwt.Infix in
 
     let aux = function
       | Error exn -> Lwt.return (Error exn)
       | Ok absolute_offset ->
-        find t absolute_offset
+        find_window t absolute_offset
         >>= function
         | Error err -> Lwt.return (Error (Mapper_error err))
         | Ok (window, relative_offset) ->
@@ -1628,7 +1628,7 @@ struct
                   hunks git_object
                   (PackDecoder.refill consumed_in_window rest_in_window state)
               else
-                (find t Int64.(window.Window.off + (of_int consumed_in_window))
+                (find_window t Int64.(window.Window.off + (of_int consumed_in_window))
                  >>= function
                  | Error err -> Lwt.return (Error (Mapper_error err))
                  | Ok (window, relative_offset) ->
@@ -1638,7 +1638,7 @@ struct
                      hunks git_object
                      (PackDecoder.refill 0 0 state))
             | `Hunk (state, hunk) ->
-              (match h_tmp, hunk with
+              (match htmp, hunk with
                | Some hnk, HunkDecoder.Insert raw ->
                  let len = Cstruct.len raw in
                  Cstruct.blit raw 0 hnk writed_in_hnk len;
@@ -1661,8 +1661,8 @@ struct
                    (PackDecoder.continue state))
             | `Flush state ->
               let o, n = PackDecoder.output state in
-              let n' = min n (Cstruct.len r_tmp - writed_in_raw) in
-              Cstruct.blit o 0 r_tmp writed_in_raw n';
+              let n' = min n (Cstruct.len rtmp - writed_in_raw) in
+              Cstruct.blit o 0 rtmp writed_in_raw n';
 
               if n' > 0
               then
@@ -1683,7 +1683,7 @@ struct
                don't care about the meta-data) to compute the
                undelta-ification.
 
-               When [r_tmp] is full, we returns partial information
+               When [rtmp] is full, we returns partial information
                because, we only need the raw-data to construct in a top
                of this call the git object requested (necessarily
                different that this current git object). *)
@@ -1718,12 +1718,13 @@ struct
                 | PackDecoder.Blob
                 | PackDecoder.Tag
                 | PackDecoder.Tree) as kind, partial) ->
+            let rtmp =
               if (not limit) || (partial._length < 0x10000FFFE && limit)
-              then Cstruct.sub r_tmp 0 partial._length
-              else r_tmp
+              then Cstruct.sub rtmp 0 partial._length
+              else rtmp
             in
 
-            Lwt.return (Ok (Object (to_kind kind, partial, r_tmp)))
+            Lwt.return (Ok (Object (to_kind kind, partial, rtmp)))
           | Error exn -> Lwt.return (Error exn)
     in
 
@@ -1760,14 +1761,14 @@ struct
           let open Lwt.Infix in
 
           (* XXX(dinosaure): in this case, we can have an allocation.
-             A good idea is to send [r_tmp] to [t.get] and keep the
+             A good idea is to send [rtmp] to [t.get] and keep the
              control about the memory consumption. TODO!
 
              In real case, we can not determine what is needed to get
              this external object. But, if [limit = true], that means
              we don't care about the object and want only the raw
              data. In this case, and only in this case, it's probably
-             better to use [r_tmp]. *)
+             better to use [rtmp]. *)
           t.get hash >>= function
           | Some (kind, raw) -> Lwt.return (Ok (External (hash, kind, raw)))
           | None -> Lwt.return (Error (Invalid_hash hash))
@@ -1798,11 +1799,11 @@ struct
   let update_revidx rev t = { t with rev; }
   let update_extern get t = { t with get; }
 
-  let length ?(chunk = 0x8000) t hash z_tmp z_win =
+  let length ?(chunk = 0x8000) t hash ztmp zwin =
     let open Lwt.Infix in
 
     let get absolute_offset =
-      find t absolute_offset
+      find_window t absolute_offset
       >>= function
       | Error err -> Lwt.return (Error (Mapper_error err))
       | Ok (window, relative_offset) ->
@@ -1819,7 +1820,7 @@ struct
                 (consumed_in_window + rest_in_window)
                 (PackDecoder.refill consumed_in_window rest_in_window state)
             else
-              find t Int64.(window.Window.off + (of_int consumed_in_window))
+              find_window t Int64.(window.Window.off + (of_int consumed_in_window))
               >>= (function
                   | Error err -> Lwt.return (Error (Mapper_error err))
                   | Ok (window, relative_offset) ->
@@ -1848,11 +1849,11 @@ struct
 
   (* XXX(dinosaure): this function returns the max length needed to undelta-ify
      a PACK object. *)
-  let needed' ?(chunk = 0x8000) ?(cache = (fun _ -> None)) t value z_tmp z_win =
+  let needed_from ?(chunk = 0x8000) ?(cache = (fun _ -> None)) t value ztmp zwin =
     let open Lwt.Infix in
 
     let get absolute_offset =
-      find t absolute_offset
+      find_window t absolute_offset
       >>= function
       | Error err -> Lwt.return (`Error (Mapper_error err))
       | Ok (window, relative_offset) ->
@@ -1869,7 +1870,7 @@ struct
                 (consumed_in_window + rest_in_window)
                 (PackDecoder.refill consumed_in_window rest_in_window state)
             else
-              find t Int64.(window.Window.off + (of_int consumed_in_window))
+              find_window t Int64.(window.Window.off + (of_int consumed_in_window))
               >>= (function
                   | Error err -> Lwt.return (`Error (Mapper_error err))
                   | Ok (window, relative_offset) ->
@@ -1920,8 +1921,8 @@ struct
 
     loop 0 value
 
-  let needed ?(chunk = 0x8000) ?(cache = (fun _ -> None)) t hash z_tmp z_win =
-    needed' ~chunk ~cache t (`IndirectHash (hash, 0)) z_tmp z_win
+  let needed_from_hash ?(chunk = 0x8000) ?(cache = (fun _ -> None)) t hash ztmp zwin =
+    needed_from ~chunk ~cache t (`IndirectHash (hash, 0)) ztmp zwin
 
   (* XXX(dinosaure): Need an explanation. This function does not
      allocate any [Cstruct.t]. The purpose of this function is to get
@@ -1974,7 +1975,7 @@ struct
      For this call, we don't case about the meta-data of the object
      requested (where it come from, the CRC-32 checksum, etc.) and
      just want the raw data. *)
-  let optimized_get' ?(chunk = 0x8000) ?(limit = false) ?h_tmp t absolute_offset (raw0, raw1, _) z_tmp z_win =
+  let get_from_offset ?(chunk = 0x8000) ?(limit = false) ?htmp t absolute_offset (raw0, raw1, _) ztmp zwin =
     let get_free_raw = function
       | true -> raw0
       | false -> raw1
@@ -1982,7 +1983,7 @@ struct
 
     let open Lwt.Infix in
 
-    find t absolute_offset >>= function
+    find_window t absolute_offset >>= function
     | Error err -> Lwt.return (Error (Mapper_error err))
     | Ok (window, relative_offset) ->
       let state  = PackDecoder.from_window window relative_offset ztmp zwin in
@@ -2001,7 +2002,7 @@ struct
               hunks swap git_object
               (PackDecoder.refill consumed_in_window rest_in_window state)
           else
-            find t Int64.(window.Window.off + (of_int consumed_in_window))
+            find_window t Int64.(window.Window.off + (of_int consumed_in_window))
             >>= (function
                 | Error err -> Lwt.return (Error (Mapper_error err))
                 | Ok (window, relative_offset) ->
@@ -2032,7 +2033,7 @@ struct
         | `Hunk (state, hunk) ->
           Log.debug (fun l -> l ~header:"get" "PACK decoder return an hunk.");
 
-          (match h_tmp, hunk with
+          (match htmp, hunk with
            | Some hnks, HunkDecoder.Insert raw ->
              let len = Cstruct.len raw in
              Cstruct.blit raw 0 hnks.(0)  writed_in_hnk len;
@@ -2072,7 +2073,7 @@ struct
 
                get_pack_object
                  ~chunk
-                 ?h_tmp:(match h_tmp with Some hnks -> Some hnks.(depth) | None -> None)
+                 ?htmp:(match htmp with Some hnks -> Some hnks.(depth) | None -> None)
                  t
                  hunks.HunkDecoder.reference
                  hunks.HunkDecoder.source_length
@@ -2144,22 +2145,22 @@ struct
 
       loop window relative_offset 0 0 [] true None state
 
-  let optimized_get ?(chunk = 0x8000) ?(limit = false) ?h_tmp t hash v_tmp z_tmp z_win =
+  let get_from_hash ?(chunk = 0x8000) ?(limit = false) ?htmp t hash vtmp ztmp zwin =
     match t.idx hash with
     | Some (crc32, absolute_offset) ->
       Log.debug (fun l -> l ~header:"get/hash" "Information of the Git object %a: (crc32: %a, offset: %Ld)."
                     Hash.pp hash Crc32.pp crc32 absolute_offset);
 
-      optimized_get' ~chunk ~limit ?h_tmp t absolute_offset v_tmp z_tmp z_win
+      get_from_offset ~chunk ~limit ?htmp t absolute_offset vtmp ztmp zwin
     | None ->
       Log.err (fun l -> l ~header:"get/hash" "The Git object %a does not exists in the current PACK file."
                   Hash.pp hash);
 
       Lwt.return (Error (Invalid_hash hash))
 
-  let get' ?chunk t absolute_offset z_tmp z_win (raw0, raw1) =
+  let get_with_hunks_allocation_from_offset ?chunk t absolute_offset ztmp zwin (raw0, raw1) =
     let open Lwt.Infix in
-    needed' ?chunk t (`IndirectOff (absolute_offset, 0)) z_tmp z_win >>= function
+    needed_from ?chunk t (`IndirectOff (absolute_offset, 0)) ztmp zwin >>= function
     | Error exn -> Lwt.return (Error exn)
     | Ok length ->
       if Cstruct.len raw0 <> Cstruct.len raw1
@@ -2167,11 +2168,11 @@ struct
       || Cstruct.len raw1 < length
       then raise (Invalid_argument "Decoder.get': invalid raws");
 
-      optimized_get' ?chunk t absolute_offset (raw0, raw1, length) z_tmp z_win
+      get_from_offset ?chunk t absolute_offset (raw0, raw1, length) ztmp zwin
 
-  let get ?chunk t hash z_tmp z_win (raw0, raw1) =
+  let get_with_hunks_allocation_from_hash ?chunk t hash ztmp zwin (raw0, raw1) =
     let open Lwt.Infix in
-    needed t hash z_tmp z_win >>= function
+    needed_from_hash t hash ztmp zwin >>= function
     | Error exn -> Lwt.return (Error exn)
     | Ok length ->
       if Cstruct.len raw0 <> Cstruct.len raw1
@@ -2179,25 +2180,25 @@ struct
       || Cstruct.len raw1 < length
       then raise (Invalid_argument "Decoder.get': invalid raws");
 
-      optimized_get ?chunk t hash (raw0, raw1, length) z_tmp z_win
+      get_from_hash ?chunk t hash (raw0, raw1, length) ztmp zwin
 
-  let get_with_allocation ?chunk ?h_tmp t hash z_tmp z_win =
+  let get_with_result_allocation_from_hash ?chunk ?htmp t hash ztmp zwin =
     let open Lwt.Infix in
-    needed t hash z_tmp z_win >>= function
+    needed_from_hash t hash ztmp zwin >>= function
     | Error exn -> Lwt.return (Error exn)
     | Ok length ->
       Log.debug (fun l -> l ~header:"get+allocation/hash" "Git object %a need %d byte(s) (allocation)." Hash.pp hash length);
 
       let tmp = Cstruct.create length, Cstruct.create length, length in
 
-      optimized_get ?chunk ?h_tmp t hash tmp z_tmp z_win
+      get_from_hash ?chunk ?htmp t hash tmp ztmp zwin
 
-  let get_with_allocation' ?chunk ?h_tmp t absolute_offset z_tmp z_win =
+  let get_with_result_allocation_from_offset ?chunk ?htmp t absolute_offset ztmp zwin =
     let open Lwt.Infix in
-    needed' t (`IndirectOff (absolute_offset, 0)) z_tmp z_win >>= function
+    needed_from t (`IndirectOff (absolute_offset, 0)) ztmp zwin >>= function
     | Error exn -> Lwt.return (Error exn)
     | Ok length ->
       let tmp = Cstruct.create length, Cstruct.create length, length in
 
-      optimized_get' ?chunk ?h_tmp t absolute_offset tmp z_tmp z_win
+      get_from_offset ?chunk ?htmp t absolute_offset tmp ztmp zwin
 end
