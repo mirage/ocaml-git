@@ -223,8 +223,8 @@ module Make (Store : Git.S) = struct
 
   module IndexDecoder = Git.Index_pack.Decoder(Store.Hash)
   module IndexEncoder = Git.Index_pack.Encoder(Store.Hash)
-  module PackDecoder  = Git.Unpack.MakePACKDecoder(Store.Hash)(Store.Inflate)
-  module PackEncoder  = Git.Pack.MakePACKEncoder(Store.Hash)(Store.Deflate)
+  module PackDecoder  = Git.Unpack.MakeStreamDecoder(Store.Hash)(Store.Inflate)
+  module PackEncoder  = Git.Pack.MakeStreamEncoder(Store.Hash)(Store.Deflate)
 
   let test_blobs () =
     let test () =
@@ -483,15 +483,15 @@ module Make (Store : Git.S) = struct
         go ~pack ~graph ?current (PackDecoder.flush 0 (Cstruct.len o) state)
       | `Hunk (state, hunk) ->
         let current = match current, hunk with
-          | Some (`Hunks hunks), PackDecoder.H.Copy (off, len) ->
+          | Some (`Hunks hunks), PackDecoder.HunkDecoder.Copy (off, len) ->
             Some (`Hunks (`Copy (off, len) :: hunks))
-          | Some (`Hunks hunks), PackDecoder.H.Insert raw ->
+          | Some (`Hunks hunks), PackDecoder.HunkDecoder.Insert raw ->
             let off, len = Git.Buffer.has buf, Cstruct.len raw in
             Git.Buffer.add buf raw;
             Some (`Hunks (`Insert (off, len) :: hunks))
-          | None, PackDecoder.H.Copy (off, len) ->
+          | None, PackDecoder.HunkDecoder.Copy (off, len) ->
             Some (`Hunks [ `Copy (off, len) ])
-          | None, PackDecoder.H.Insert raw ->
+          | None, PackDecoder.HunkDecoder.Insert raw ->
             let off, len = Git.Buffer.has buf, Cstruct.len raw in
             Git.Buffer.add buf raw;
             Some (`Hunks [ `Insert (off, len) ])
@@ -518,7 +518,7 @@ module Make (Store : Git.S) = struct
             let hash = Store.Hash.Digest.get ctx in
             Pack.bind pack hash (PackDecoder.crc state, PackDecoder.offset state),
             (PackDecoder.offset state, kind, "")
-          | PackDecoder.Hunk { PackDecoder.H.reference = PackDecoder.H.Hash src; target_length; _ },
+          | PackDecoder.Hunk { PackDecoder.HunkDecoder.reference = PackDecoder.HunkDecoder.Hash src; target_length; _ },
             Some (`Hunks hunks) ->
             let hash, kind, raw =
               apply
@@ -528,7 +528,7 @@ module Make (Store : Git.S) = struct
                 target_length (List.rev hunks) in
             Pack.bind pack hash (PackDecoder.crc state, PackDecoder.offset state),
             (PackDecoder.offset state, kind, raw)
-          | PackDecoder.Hunk { PackDecoder.H.reference = PackDecoder.H.Offset rel; target_length; _ },
+          | PackDecoder.Hunk { PackDecoder.HunkDecoder.reference = PackDecoder.HunkDecoder.Offset rel; target_length; _ },
             Some (`Hunks hunks) ->
             let hash, kind, raw =
               apply
@@ -609,7 +609,7 @@ module Make (Store : Git.S) = struct
         let close _ = Lwt.return (Ok ())
       end in
 
-      let module Decoder = Unpack.MakeDecoder(Store.Hash)(Mapper)(Store.Inflate) in
+      let module Decoder = Unpack.MakeRandomAccessPACK(Store.Hash)(Mapper)(Store.Inflate) in
       let ztmp = Cstruct.create 0x8000 in
       let wtmp = Store.Inflate.window () in
 
@@ -624,7 +624,7 @@ module Make (Store : Git.S) = struct
       >>= function
       | Ok state ->
         Lwt_list.iter_s (fun (hash, _) ->
-            Decoder.get_with_allocation state hash ztmp wtmp >|= function
+            Decoder.get_with_result_allocation_from_hash state hash ztmp wtmp >|= function
             | Ok _    -> ()
             | Error e -> Alcotest.failf "%a" Decoder.pp_error e
           ) lst
