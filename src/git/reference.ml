@@ -28,6 +28,7 @@ let sep = "/"
 
 module Path =
 struct
+
   type partial = string
   type branch = string
 
@@ -61,6 +62,7 @@ let pp ppf x =
   Fmt.pf ppf "%s" (String.escaped x)
 
 module type S = sig
+
   module Hash: S.HASH
 
   type nonrec t = t
@@ -135,28 +137,29 @@ module type IO = sig
 
   val pp_error: error Fmt.t
 
-  val mem :
+  val mem:
        root:Fpath.t
     -> t -> bool Lwt.t
-  val read :
+  val read:
        root:Fpath.t
     -> t
     -> dtmp:Cstruct.t
     -> raw:Cstruct.t
     -> ((t * head_contents), error) result Lwt.t
-  val write :
+  val write:
        root:Fpath.t
     -> ?capacity:int
     -> raw:Cstruct.t
     -> t -> head_contents
     -> (unit, error) result Lwt.t
-  val remove :
+  val remove:
        root:Fpath.t
     -> t -> (unit, error) result Lwt.t
 end
 
-module Make(H : S.HASH): S with module Hash = H = struct
-  module Hash = H
+module Make (Hash : S.HASH): S with module Hash = Hash = struct
+
+  module Hash = Hash
 
   type nonrec t = t
 
@@ -204,6 +207,7 @@ module Make(H : S.HASH): S with module Hash = H = struct
     | Hash _, Ref _ -> -1
 
   module A = struct
+
     type nonrec t = head_contents
 
     open Angstrom
@@ -231,6 +235,7 @@ module Make(H : S.HASH): S with module Hash = H = struct
   end
 
   module M = struct
+
     type t  = head_contents
 
     open Minienc
