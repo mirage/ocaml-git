@@ -66,6 +66,7 @@ module Make (H: S.HASH) (FS: S.FS) = struct
   and hash = Hash.t
 
   module A = struct
+
     type nonrec t = t
 
     open Angstrom
@@ -111,6 +112,7 @@ module Make (H: S.HASH) (FS: S.FS) = struct
   end
 
   module M = struct
+
     type nonrec t = t
 
     open Minienc
