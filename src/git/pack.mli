@@ -312,13 +312,8 @@ sig
     with module Hash := Hash
      and module Entry := Entry
 
-  module Radix: module type of Radix.Make(struct
-      type t = Hash.t
-
-      let get = Hash.get
-      let length _ = Hash.Digest.length
-    end)
   module HunkEncoder: H with module Hash := Hash
+  module Radix: Radix.S with type key = Hash.t
   (** The Radix tree zhich zill represent the IDX file of the PACK
       stream. *)
 
