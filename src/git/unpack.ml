@@ -1103,7 +1103,7 @@ module MakePackDecoder
                 ; i_len = len
                 ; i_pos = 0 }
       (* XXX(dinosaure): at the end, we don't care if we lost something. *)
-    else raise (Invalid_argument (Fmt.strf "PACKDecoder.refill: you lost something \
+    else raise (Invalid_argument (Fmt.strf "PackDecoder.refill: you lost something \
                                             (pos: %d, len: %d)" t.i_pos t.i_len))
 
   let flush off len t = match t.state with
@@ -1116,14 +1116,14 @@ module MakePackDecoder
                              ; z = Inflate.flush off len z } }
     | End _ | Header _ | Object _ | VariableLength _
     | Hunks _ | StopHunks _ | Next _ | Checksum _ | Exception _ ->
-      raise (Invalid_argument "PACKDecoder.flush: bad state")
+      raise (Invalid_argument "PackDecoder.flush: bad state")
 
   let output t = match t.state with
     | Unzip { z; _ } ->
       t.o_z, Inflate.used_out z
     | End _ | Header _ | Object _ | VariableLength _
     | Hunks _ | StopHunks _ | Next _ | Checksum _ | Exception _ ->
-      raise (Invalid_argument "PACKDecoder.output: bad state")
+      raise (Invalid_argument "PackDecoder.output: bad state")
 
   let next_object t =
     match t.state with
@@ -1137,7 +1137,7 @@ module MakePackDecoder
       (* XXX(dinosaure): in the local case, the user don't care about the hash of the PACK file. *)
     | End _ | Header _ | Object _ | VariableLength _
     | Hunks _ | StopHunks _ | Unzip _ | Checksum _ | Exception _ ->
-      raise (Invalid_argument "PACKDecoder.next_object: bad state")
+      raise (Invalid_argument "PackDecoder.next_object: bad state")
 
   let kind t = match t.state with
     | Unzip { kind; _ } -> kind
@@ -1155,7 +1155,7 @@ module MakePackDecoder
     | Next { length; _ } -> length
     | End _ | Header _ | Object _ | VariableLength _
     | Checksum _ | Exception _ ->
-      raise (Invalid_argument "PACKDecoder.length: bad state")
+      raise (Invalid_argument "PackDecoder.length: bad state")
 
   (* XXX(dinosaure): The consumed value calculated in this deserialization is
      different from what git says (a diff of 1 or 2 bytes) - may be it come from
@@ -1165,7 +1165,7 @@ module MakePackDecoder
     | Next { consumed; _ } -> consumed
     | End _ | Header _ | Object _ | VariableLength _
     | Hunks _ | StopHunks _ | Unzip _ | Checksum _ | Exception _ ->
-      raise (Invalid_argument "PACKDecoder.consumed: bad state")
+      raise (Invalid_argument "PackDecoder.consumed: bad state")
 
   let offset t = match t.state with
     | Unzip { offset; _ } -> offset
@@ -1174,13 +1174,13 @@ module MakePackDecoder
     | Next { offset; _ } -> offset
     | End _ | Header _ | Object _ | VariableLength _
     | Checksum _ | Exception _ ->
-      raise (Invalid_argument "PACKDecoder.offset: bad state")
+      raise (Invalid_argument "PackDecoder.offset: bad state")
 
   let crc t = match t.state with
     | Next { crc; _ } -> crc
     | End _ | Header _ | Object _ | VariableLength _
     | Hunks _ | StopHunks _ | Unzip _ | Checksum _ | Exception _ ->
-      raise (Invalid_argument "PACKDecoder.crc: bad state")
+      raise (Invalid_argument "PackDecoder.crc: bad state")
 
   let continue t =
     match t.state with
@@ -1188,7 +1188,7 @@ module MakePackDecoder
       { t with state = Hunks { hs with h = HunkDecoder.continue hs.h } }
     | End _ | Header _ | Object _ | VariableLength _
     | Hunks _ | Next _ | Unzip _ | Checksum _ | Exception _ ->
-      raise (Invalid_argument "PACKDecoder.continue: bad state")
+      raise (Invalid_argument "PackDecoder.continue: bad state")
 
   let eval0 src t =
     match t.state with
