@@ -94,11 +94,9 @@ module Make
        and module HDec := HDec
        and module PDec := PDec
 = struct
-  module Log =
-  struct
-    let src = Logs.Src.create "git.pack-info" ~doc:"logs git's pack-info event"
-    include (val Logs.src_log src : Logs.LOG)
-  end
+
+  let src = Logs.Src.create "git.pack-info" ~doc:"logs git's pack-info event"
+  module Log = (val Logs.src_log src : Logs.LOG)
 
   module Hash = Hash
   module Inflate = Inflate

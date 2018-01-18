@@ -134,11 +134,8 @@ module Make (H : S.HASH) (I : S.INFLATE) (D : S.DEFLATE)
     | Tree tree     -> Fmt.pf ppf "(Tree %a)" (Fmt.hvbox Tree.pp) tree
     | Tag tag       -> Fmt.pf ppf "(Tag %a)" (Fmt.hvbox Tag.pp) tag
 
-  module Log =
-  struct
-    let src = Logs.Src.create "git.value" ~doc:"logs git's internal value computation"
-    include (val Logs.src_log src : Logs.LOG)
-  end
+  let src = Logs.Src.create "git.value" ~doc:"logs git's internal value computation"
+  module Log = (val Logs.src_log src : Logs.LOG)
 
   module A =
   struct
