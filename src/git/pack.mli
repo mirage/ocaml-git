@@ -260,6 +260,7 @@ sig
   (** Pretty-printer for {!error}. *)
 
   val pp: t Fmt.t
+
   val deltas:
     ?memory:bool
     -> Entry.t list

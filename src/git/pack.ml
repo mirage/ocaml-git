@@ -662,8 +662,7 @@ struct
            ; src_length : int64 (* XXX(dinosaure): this is the length of the
                                    inflated raw of [src]. *)
            ; src_hash   : Hash.t }
-    (* XXX(dinosaure): I try to use GADT (peano number) and ... I really crazy.
-       *)
+    (* XXX(dinosaure): I try to use GADT (peano number) and ... I really crazy. *)
 
   module WeightByMemory =
   struct
@@ -687,10 +686,10 @@ struct
     | Z -> Fmt.string ppf "Τ"
     | S { length; depth; hunks; src; src_length; _ } ->
       Fmt.pf ppf "(Δ { @[<hov>length = %d;@ \
-                              depth = %d;@ \
-                              hunks = [ %a ];@ \
-                              src = %a;@ \
-                              src_length = %Ld;@] }"
+                  depth = %d;@ \
+                  hunks = [ %a ];@ \
+                  src = %a;@ \
+                  src_length = %Ld;@] }"
         length depth
         (Fmt.hvbox (Fmt.list ~sep:(Fmt.unit ";@ ") Rabin.pp)) hunks
         (Fmt.hvbox pp) src
@@ -1099,7 +1098,7 @@ struct
          @@ put_byte a3
          @@ put_byte a4
          @@ k)
-        dst t
+          dst t
       end else flush dst { t with state = Header (put_u32 integer k) }
   end
 
@@ -1108,7 +1107,7 @@ struct
     then begin
       Cstruct.set_uint8 dst (t.o_off + t.o_pos) byte;
       k dst { t with o_pos = t.o_pos + 1
-                    ; write = Int64.add t.write 1L }
+                   ; write = Int64.add t.write 1L }
     end else flush dst { t with state = ctor (fun dst t -> put_byte ~ctor byte k dst t) }
 
   module KWriteK =
@@ -1327,28 +1326,28 @@ struct
 
     | (KindRaw | KindHash | KindOffset),
       { Delta.delta = (Delta.S _ | Delta.Z); _ } -> assert false
-      (* XXX(dinosaure): impossible case, the code below never produce this combinaison. *)
+  (* XXX(dinosaure): impossible case, the code below never produce this combinaison. *)
 
   let writez src dst t x r crc off used_in z =
     match Deflate.eval ~src ~dst z with
-      | `Await z ->
-        await { t with state = WriteZ { x; r; crc; off; ui = used_in; z; }
-                     ; i_pos = Deflate.used_in z }
-      | `Flush z ->
-        let crc = Crc32.digest ~off:(t.o_off + t.o_pos) ~len:(Deflate.used_out z) crc dst in
+    | `Await z ->
+      await { t with state = WriteZ { x; r; crc; off; ui = used_in; z; }
+                   ; i_pos = Deflate.used_in z }
+    | `Flush z ->
+      let crc = Crc32.digest ~off:(t.o_off + t.o_pos) ~len:(Deflate.used_out z) crc dst in
 
-        flush dst { t with state = WriteZ { x; r; crc; off; ui = (Deflate.used_in z); z; }
-                         ; o_pos = t.o_pos + (Deflate.used_out z)
-                         ; i_pos = Deflate.used_in z
-                         ; write = Int64.add t.write (Int64.of_int (Deflate.used_out z)) }
-      | `End z ->
-        let crc = Crc32.digest ~off:(t.o_off + t.o_pos) ~len:(Deflate.used_out z) crc dst in
+      flush dst { t with state = WriteZ { x; r; crc; off; ui = (Deflate.used_in z); z; }
+                       ; o_pos = t.o_pos + (Deflate.used_out z)
+                       ; i_pos = Deflate.used_in z
+                       ; write = Int64.add t.write (Int64.of_int (Deflate.used_out z)) }
+    | `End z ->
+      let crc = Crc32.digest ~off:(t.o_off + t.o_pos) ~len:(Deflate.used_out z) crc dst in
 
-        Cont { t with state = Save { x; r; crc; off; }
-                    ; o_pos = t.o_pos + (Deflate.used_out z)
-                    ; i_pos = Deflate.used_in z
-                    ; write = Int64.add t.write (Int64.of_int (Deflate.used_out z)) }
-      | `Error (_, exn) -> error t (Deflate_error exn)
+      Cont { t with state = Save { x; r; crc; off; }
+                  ; o_pos = t.o_pos + (Deflate.used_out z)
+                  ; i_pos = Deflate.used_in z
+                  ; write = Int64.add t.write (Int64.of_int (Deflate.used_out z)) }
+    | `Error (_, exn) -> error t (Deflate_error exn)
 
   let writeh src dst t ((entry, _) as x) r crc off used_in h z =
     match Deflate.eval ~src:t.h_tmp ~dst z with
