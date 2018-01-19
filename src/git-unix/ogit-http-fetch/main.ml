@@ -23,17 +23,21 @@ module Negociator = Git.Negociator.Make(Git_unix.FS)
 let src = Logs.Src.create "ogit-http-fetch" ~doc:"logs binary event"
 module Log = (val Logs.src_log src : Logs.LOG)
 
-let option_map f = function
-  | Some v -> Some (f v)
-  | None -> None
+module Option =
+struct
 
-let option_map_default v f = function
-  | Some v -> f v
-  | None -> v
+  let map f = function
+    | Some v -> Some (f v)
+    | None -> None
 
-let option_value_exn f = function
-  | Some v -> v
-  | None -> f ()
+  let map_default v f = function
+    | Some v -> f v
+    | None -> v
+
+  let value_exn f = function
+    | Some v -> v
+    | None -> f ()
+end
 
 let pad n x =
   if String.length x > n
@@ -53,7 +57,7 @@ let pp_header ppf (level, header) =
 
   Fmt.pf ppf "[%a][%a]"
     (Fmt.styled level_style Fmt.string) level
-    (Fmt.option Fmt.string) (option_map (pad 10) header)
+    (Fmt.option Fmt.string) (Option.map (pad 10) header)
 
 let reporter ppf =
   let report src level ~over k msgf =
@@ -91,7 +95,7 @@ let pp_error ppf = function
 exception Write of Git_unix.FS.Ref.error
 
 let main references directory repository =
-  let root = option_map_default Fpath.(v (Sys.getcwd ())) Fpath.v directory in
+  let root = Option.map_default Fpath.(v (Sys.getcwd ())) Fpath.v directory in
 
   let open Lwt_result in
 
