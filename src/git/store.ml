@@ -706,12 +706,14 @@ module FS (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
         Lwt_stream.from
           (fun () -> stream () >>= function
              | Some raw ->
-               Log.debug (fun l -> l ~header:"from" "Dispatch a chunk of the PACK stream (length: %d)."
-                             (Cstruct.len raw));
+               Log.debug (fun l ->
+                   l "Dispatch a chunk of the PACK stream (length: %d)."
+                     (Cstruct.len raw));
                push' (Some (cstruct_copy raw));
                Lwt.return (Some raw)
              | None ->
-               Log.debug (fun l -> l ~header:"from" "Dispatch end of the PACK stream.");
+               Log.debug (fun l ->
+                   l "Dispatch end of the PACK stream.");
                push' None;
                Lwt.return None),
         stream'
