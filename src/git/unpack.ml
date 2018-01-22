@@ -446,14 +446,14 @@ module type P =
 sig
   module Hash: S.HASH
   module Inflate: S.INFLATE
-  module H: H with module Hash = Hash
+  module HunkDecoder: H with module Hash := Hash
 
   type error =
     | Invalid_byte of int
     | Reserved_kind of int
     | Invalid_kind of int
     | Inflate_error of Inflate.error
-    | Hunk_error of H.error
+    | Hunk_error of HunkDecoder.error
     | Hunk_input of int * int
     | Invalid_length of int * int
 
@@ -468,7 +468,7 @@ sig
     | Tree
     | Blob
     | Tag
-    | Hunk of H.hunks
+    | Hunk of HunkDecoder.hunks
 
   val default: Cstruct.t -> Inflate.window -> t
   val many: t -> int32
@@ -485,7 +485,7 @@ sig
   val consumed: t -> int
   val crc: t -> Crc32.t
   val output: t -> Cstruct.t * int
-  val eval: Cstruct.t -> t -> [ `Object of t | `Hunk of t * H.hunk | `Await of t | `Flush of t | `End of t * Hash.t | `Error of t * error ]
+  val eval: Cstruct.t -> t -> [ `Object of t | `Hunk of t * HunkDecoder.hunk | `Await of t | `Flush of t | `End of t * Hash.t | `Error of t * error ]
   val eval_length: Cstruct.t -> t -> [ `Length of t | `Await of t | `Flush of t | `End of (t * Hash.t) | `Error of (t * error) ]
   val eval_metadata: Cstruct.t -> t -> [ `Metadata of t | `Await of t | `Flush of t | `End of (t * Hash.t) | `Error of (t * error) ]
 end
