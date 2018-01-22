@@ -49,7 +49,7 @@ module type S = sig
   module D: S.DECODER
     with type t = t
      and type init = Inflate.window * Cstruct.t * Cstruct.t
-     and type error = [ `Decoder of string
+     and type error = [ Error.Decoder.t
                       | `Inflate of Inflate.error ]
   module M: S.MINIENC with type t = t
   module E: S.ENCODER
@@ -68,22 +68,22 @@ module type RAW = sig
   module EE: S.ENCODER
     with type t = t
      and type init = int * t
-     and type error = [ `Never ]
+     and type error = Error.never
 
   module EEE: S.ENCODER
     with type t = t
      and type init = int * t
-     and type error = [ `Never ]
+     and type error = Error.never
 
   module DD: S.DECODER
     with type t = t
      and type init = Cstruct.t
-     and type error = [ `Decoder of string ]
+     and type error = Error.Decoder.t
 
   val to_deflated_raw : ?capacity:int -> ?level:int -> ztmp:Cstruct.t -> t -> (string, E.error) result
   val to_raw : ?capacity:int -> t -> (string, EE.error) result
   val to_raw_without_header : ?capacity:int -> t -> (string, EEE.error) result
-  val of_raw : kind:[ `Commit | `Tree | `Tag | `Blob ] -> Cstruct.t -> (t, [ `Decoder of string ]) result
+  val of_raw : kind:[ `Commit | `Tree | `Tag | `Blob ] -> Cstruct.t -> (t, Error.Decoder.t) result
   val of_raw_with_header : Cstruct.t -> (t, DD.error) result
 end
 
@@ -455,19 +455,19 @@ module Raw
   let of_raw_with_header inflated = DD.to_result inflated
   let of_raw ~kind inflated = match kind with
     | `Commit ->
-      (Value.Commit.D.to_result inflated |> function
-        | Ok commit            -> Ok (Commit commit)
-        | Error (`Decoder err) -> Error (`Decoder err))
+      Rresult.R.map
+        (fun commit -> Commit commit)
+        (Value.Commit.D.to_result inflated)
     | `Tree ->
-      (Value.Tree.D.to_result inflated |> function
-        | Ok tree              -> Ok (Tree tree)
-        | Error (`Decoder err) -> Error (`Decoder err))
+      Rresult.R.map
+        (fun tree -> Tree tree)
+        (Value.Tree.D.to_result inflated)
     | `Tag ->
-      (Value.Tag.D.to_result inflated |> function
-        | Ok tag               -> Ok (Tag tag)
-        | Error (`Decoder err) -> Error (`Decoder err))
+      Rresult.R.map
+        (fun tag -> Tag tag)
+        (Value.Tag.D.to_result inflated)
     | `Blob ->
-      (Value.Blob.D.to_result inflated |> function
-        | Ok blob -> Ok (Blob blob)
-        | Error (`Decoder err) -> Error (`Decoder err))
+      let blob blob = Blob blob in
+      Rresult.R.(get_ok (Value.Blob.D.to_result inflated)
+                 |> blob |> ok)
 end
