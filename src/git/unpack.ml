@@ -1270,7 +1270,7 @@ module MakePackDecoder
     loop t
 end
 
-module type DECODER =
+module type D =
 sig
   module Hash: S.HASH
   module Mapper: S.MAPPER
@@ -1411,7 +1411,7 @@ module MakeDecoder
     (PackDecoder: P with module Hash := Hash
                      and module Inflate := Inflate
                      and module HunkDecoder := HunkDecoder)
-  : DECODER with module Hash = Hash
+  : D with module Hash = Hash
        and module Mapper = Mapper
        and module Inflate = Inflate
        and module HunkDecoder := HunkDecoder
