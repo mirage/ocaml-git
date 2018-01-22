@@ -36,4 +36,4 @@ module M: S.MINIENC with type t = t
 module D: S.DECODER
   with type t = t
    and type init = Cstruct.t
-   and type error = [ `Decoder of string ]
+   and type error = Error.Decoder.t
