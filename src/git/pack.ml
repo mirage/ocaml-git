@@ -914,8 +914,6 @@ sig
 
   type error =
     | Deflate_error of Deflate.error
-    | Hunk_error of H.error
-    | Invalid_entry of Entry.t * Delta.t
     | Invalid_hash of Hash.t
 
   val pp_error : error Fmt.t
@@ -953,18 +951,11 @@ struct
 
   type error =
     | Deflate_error of Deflate.error
-    | Hunk_error of H.error
-    | Invalid_entry of Entry.t * Delta.t
     | Invalid_hash of Hash.t
 
   let pp_error ppf = function
     | Deflate_error err ->
       Fmt.pf ppf "(Deflate_error %a)" (Fmt.hvbox Deflate.pp_error) err
-    | Hunk_error err ->
-      Fmt.pf ppf "(Hunk_error %a)" (Fmt.hvbox H.pp_error) err
-    | Invalid_entry (entry, delta) ->
-      Fmt.pf ppf "(Invalid_entry %a)"
-        (Fmt.hvbox (Fmt.pair (Fmt.hvbox Entry.pp) (Fmt.hvbox Delta.pp))) (entry, delta)
     | Invalid_hash hash ->
       Fmt.pf ppf "(Invalid_hash %a)" Hash.pp hash
 
@@ -1332,7 +1323,7 @@ struct
 
          Cont { t with state = WriteH { x; r; crc; off; ui; h; z; }
                      ; i_pos = H.used_in h }
-       | `Error (_, exn) -> error t (Hunk_error exn))
+       | `Error (_, _) -> assert false)
     | `Flush z ->
       let crc = Crc32.digest ~off:(t.o_off + t.o_pos) ~len:(Deflate.used_out z) crc dst in
       let used_in' = used_in + Deflate.used_in z in
