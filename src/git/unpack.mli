@@ -438,12 +438,11 @@ sig
   module Hash: S.HASH
   module Mapper: S.MAPPER
   module Inflate: S.INFLATE
-
-  module H: H with module Hash = Hash
-  module P: P
-    with module Hash = Hash
-     and module Inflate = Inflate
-     and module H = H
+  module HunkDecoder: H with module Hash := Hash
+  module PackDecoder: P
+    with module Hash := Hash
+     and module Inflate := Inflate
+     and module HunkDecoder := HunkDecoder
 
   (** The type error. *)
   type error =
@@ -455,7 +454,7 @@ sig
     | Invalid_target of (int * int)
     (** Appears when the result of the application of a {!P.H.hunks}
         returns a bad raw. *)
-    | Unpack_error of P.t * Window.t * P.error
+    | Unpack_error of PackDecoder.t * Window.t * PackDecoder.error
     (** Appears when we have an {!P.error}. *)
     | Mapper_error of Mapper.error
 
@@ -698,9 +697,16 @@ sig
   val get_with_allocation' : ?chunk:int -> ?h_tmp:Cstruct.t array -> t -> int64 -> Cstruct.t -> Inflate.window -> (Object.t, error) result Lwt.t
 end
 
-module MakeDecoder (H: S.HASH) (Mapper: S.MAPPER) (Inflate: S.INFLATE)
-  : DECODER
-    with type Hash.t = H.t
-     and module Hash = H
-     and module Mapper = Mapper
-     and module Inflate = Inflate
+module MakeDecoder
+    (Hash: S.HASH)
+    (Mapper: S.MAPPER)
+    (Inflate: S.INFLATE)
+    (HunkDecoder: H with module Hash := Hash)
+    (PackDecoder: P with module Hash := Hash
+                     and module Inflate := Inflate
+                     and module HunkDecoder := HunkDecoder)
+  : DECODER with module Hash = Hash
+       and module Mapper = Mapper
+       and module Inflate = Inflate
+       and module HunkDecoder := HunkDecoder
+       and module PackDecoder := PackDecoder
