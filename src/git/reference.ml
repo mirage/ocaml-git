@@ -321,9 +321,6 @@ module IO (H : S.HASH) (FS: S.FS) = struct
       assert (equal reference reference');
       Ok (normalize path, head_contents)
 
-  let err_stack reference =
-    Fmt.kstrf (fun x -> Error (`IO x))
-      "Impossible to store the reference: %a" pp reference
   let write ~root ?(capacity = 0x100) ~raw reference value =
     let state = E.default (capacity, value) in
     let path = Fpath.(root // (to_path reference)) in
