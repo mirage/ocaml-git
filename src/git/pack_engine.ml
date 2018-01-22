@@ -667,6 +667,7 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
      file as an available pack file - we lost it forever! *)
   and load_partial ~root t hash decoder_idx fdi =
     let filename_pack = Fmt.strf "pack-%s.pack" (Hash.to_hex hash) in
+    let path = Fpath.(root / "objects" / "pack" / filename_pack) in
     let ztmp = Cstruct.create 0x8000 in
     let window = Inflate.window () in
     let close_all fdi fdp sys_err =
@@ -686,7 +687,8 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
        Lwt.return ())
       >>= fun _ -> Lwt.return sys_err
     in
-    (FS.Mapper.openfile Fpath.(root / "objects" / "pack" / filename_pack)
+
+    (FS.Mapper.openfile path
      >>!= (fun sys_err ->
          (* XXX(dinosaure): delete from the git repository. *)
          Lwt_mvar.take t.packs >>= fun packs ->
@@ -698,7 +700,7 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
                l "Got an error while trying to close the index fd: %a."
                  FS.Mapper.pp_error sys_err');
            sys_err)
-     >>!= (fun sys_err -> Lwt.return (`FS sys_err)))
+          >!= Error.FS.err_open path)
     >>?= fun fdp ->
     (let fun_cache  = fun _ -> None in
      let fun_idx    = fun hash -> IDXDecoder.find decoder_idx hash in
