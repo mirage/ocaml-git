@@ -127,7 +127,7 @@ module type IO = sig
 
   val mem :
        root:Fpath.t
-    -> t -> (bool, error) result Lwt.t
+    -> t -> bool Lwt.t
   val read :
        root:Fpath.t
     -> t
@@ -288,8 +288,8 @@ module IO (H : S.HASH) (FS: S.FS) = struct
   let mem ~root reference =
     let path = Fpath.(root // (to_path reference)) in
     FS.File.exists path >|= function
-    | Ok v      -> Ok v
-    | Error err -> Error (`FS err)
+    | Ok v    -> v
+    | Error _ -> false
 
   let read ~root reference ~dtmp ~raw : (_, error) result Lwt.t =
     let decoder = D.default dtmp in

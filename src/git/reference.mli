@@ -191,7 +191,7 @@ module type IO = sig
   val pp_error: error Fmt.t
   (** Pretty-printer of {!error}. *)
 
-  val mem: root:Fpath.t -> t -> (bool, error) result Lwt.t
+  val mem: root:Fpath.t -> t -> bool Lwt.t
   (** [mem ~root reference] returns [true] iff we found the
       [reference] find in the git repository [root]. Otherwise, we returns
       [false]. *)
