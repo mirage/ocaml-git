@@ -641,10 +641,14 @@ sig
     -> ((Entry.t * t) list, error) result Lwt.t
 end
 
-module MakeDelta (H : S.HASH) =
+module MakeDelta
+    (Hash : S.HASH)
+    (Entry: ENTRY with module Hash := Hash)
+  : DELTA with module Hash = Hash
+           and module Entry := Entry =
 struct
-  module Hash = H
-  module Entry = Entry(H)
+  module Hash = Hash
+  module Entry = Entry
 
   type t =
     { mutable delta : delta }

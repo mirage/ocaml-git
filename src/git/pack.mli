@@ -293,6 +293,11 @@ sig
         code. *)
 end
 
+module MakeDelta
+    (Hash: S.HASH)
+    (Entry: ENTRY with module Hash := Hash)
+  : DELTA with module Hash = Hash
+           and module Entry := Entry
 
 (** Interface which describes the encoder of the PACK file. *)
 module type P =
