@@ -1033,7 +1033,7 @@ struct
                 ; crc : Crc32.t
                 ; off : int64
                 ; ui  : int
-                ; h   : H.t
+                ; h   : HunkEncoder.t
                 ; z   : Deflate.t }
     | Save   of { x   : Entry.t
                 ; r   : (Entry.t * Delta.t) list
@@ -1234,7 +1234,7 @@ struct
     | KindRaw, { Delta.delta = Delta.Z } ->
       let abs_off = t.write in
 
-      (KWriteK.header (Kind.to_bin entry.Entry.kind) entry.Entry.length Crc32.default
+      (KWriteK.header (Kind.to_bin (Entry.kind entry)) (Entry.length entry) Crc32.default
        @@ fun crc _ t ->
        let z = Deflate.default 4 in
        let z = Deflate.flush (t.o_off + t.o_pos) (t.o_len - t.o_pos) z in
@@ -1251,15 +1251,15 @@ struct
         dst t
 
     | KindHash, { Delta.delta = Delta.S { length; hunks; src_length; src_hash; _ } } ->
-      let trg_length = entry.Entry.length in
+      let trg_length = Entry.length entry in
       let abs_off    = t.write in
 
       (* XXX(dinosaure): we can obtain the source hash by
          [entry.delta]. TODO! *)
 
       let h =
-        H.flush 0 (Cstruct.len t.h_tmp)
-        @@ H.default (H.Hash src_hash) (Int64.to_int src_length) (Int64.to_int trg_length) hunks
+        HunkEncoder.flush 0 (Cstruct.len t.h_tmp)
+        @@ HunkEncoder.default (HunkEncoder.Hash src_hash) (Int64.to_int src_length) (Int64.to_int trg_length) hunks
         (* XXX(dinosaure): FIXME: [trg_length] is an [int64] but H
            expects an [int]. *)
       in
@@ -1285,13 +1285,13 @@ struct
     | KindOffset, { Delta.delta = Delta.S { length; hunks; src_length; src_hash; _ } } ->
       (match Radix.lookup t.radix src_hash with
        | Some (_, src_off) ->
-         let trg_length = entry.Entry.length in
+         let trg_length = Entry.length entry in
          let abs_off    = t.write in
          let rel_off    = Int64.sub abs_off src_off in
 
          let h =
-           H.flush 0 (Cstruct.len t.h_tmp)
-           @@ H.default (H.Offset rel_off) (Int64.to_int src_length) (Int64.to_int trg_length) hunks
+           HunkEncoder.flush 0 (Cstruct.len t.h_tmp)
+           @@ HunkEncoder.default (HunkEncoder.Offset rel_off) (Int64.to_int src_length) (Int64.to_int trg_length) hunks
            (* XXX(dinosaure): FIXME: [trg_length] is an [int64] but H
               expects an [int]. *)
          in
@@ -1343,39 +1343,39 @@ struct
   let writeh src dst t ((entry, _) as x) r crc off used_in h z =
     match Deflate.eval ~src:t.h_tmp ~dst z with
     | `Await z ->
-      (match H.eval src t.h_tmp h with
+      (match HunkEncoder.eval src t.h_tmp h with
        | `Await h ->
          await { t with state = WriteH { x; r; crc; off; ui = 0; z; h; }
-                      ; i_pos = H.used_in h }
+                      ; i_pos = HunkEncoder.used_in h }
        | `Flush h ->
          let used_in' = used_in + Deflate.used_in z in
 
          let z, h, ui =
-           if used_in' = H.used_out h
-           then Deflate.no_flush 0 0 z, H.flush 0 (Cstruct.len t.h_tmp) h, 0
-           else Deflate.no_flush used_in' (H.used_out h - used_in') z, h, used_in'
+           if used_in' = HunkEncoder.used_out h
+           then Deflate.no_flush 0 0 z, HunkEncoder.flush 0 (Cstruct.len t.h_tmp) h, 0
+           else Deflate.no_flush used_in' (HunkEncoder.used_out h - used_in') z, h, used_in'
          in
 
          Cont { t with state = WriteH { x; r; crc; off; ui; h; z; }
-                     ; i_pos = H.used_in h }
+                     ; i_pos = HunkEncoder.used_in h }
        | `End h ->
          let used_in' = used_in + Deflate.used_in z in
 
          let z, h, ui =
-           if used_in' = H.used_out h
+           if used_in' = HunkEncoder.used_out h
            then Deflate.finish z, h, used_in'
-           else Deflate.no_flush used_in' (H.used_out h - used_in') z, h, used_in'
+           else Deflate.no_flush used_in' (HunkEncoder.used_out h - used_in') z, h, used_in'
          in
 
          Cont { t with state = WriteH { x; r; crc; off; ui; h; z; }
-                     ; i_pos = H.used_in h }
+                     ; i_pos = HunkEncoder.used_in h }
        | `Error (_, _) -> assert false)
     | `Flush z ->
       let crc = Crc32.digest ~off:(t.o_off + t.o_pos) ~len:(Deflate.used_out z) crc dst in
       let used_in' = used_in + Deflate.used_in z in
 
       flush dst { t with state = WriteH { x; r; crc; off; ui = used_in'; h; z; }
-                       ; i_pos = H.used_in h
+                       ; i_pos = HunkEncoder.used_in h
                        ; o_pos = t.o_pos + (Deflate.used_out z)
                        ; write = Int64.add t.write (Int64.of_int (Deflate.used_out z)) }
     | `End z ->
@@ -1393,7 +1393,7 @@ struct
     | [] ->
       Cont { t with state = Hash hash }
     | (entry, delta) :: r ->
-      match entry.Entry.delta, delta with
+      match Entry.delta entry, delta with
       | Entry.From src_hash, { Delta.delta = Delta.S _ } ->
         if Radix.mem t.radix src_hash
         then Cont { t with state = WriteK (writek KindOffset entry delta r) }
@@ -1401,11 +1401,11 @@ struct
       | Entry.None, { Delta.delta = Delta.Z } ->
         Cont { t with state = WriteK (writek KindRaw entry delta r) }
       | (Entry.None | Entry.From _),
-        { Delta.delta = (Delta.S _ | Delta.Z) } -> error t (Invalid_hash entry.Entry.hash_object)
+        { Delta.delta = (Delta.S _ | Delta.Z) } -> error t (Invalid_hash (Entry.id entry))
 
   let save _ t x r crc off =
     Cont { t with state = Object (iter r)
-                ; radix = Radix.bind t.radix x.Entry.hash_object (crc, off) }
+                ; radix = Radix.bind t.radix (Entry.id x) (crc, off) }
 
   let number lst dst t =
     (* XXX(dinosaure): problem in 32-bits architecture. TODO! *)
@@ -1481,8 +1481,8 @@ struct
 
   let expect t =
     match t.state with
-    | WriteH { x = ({ Entry.hash_object; _ }, _); _ } -> hash_object
-    | WriteZ { x = { Entry.hash_object; _ }; _ } -> hash_object
+    | WriteH { x = (entry, _); _ } -> Entry.id entry
+    | WriteZ { x = entry; _ } -> Entry.id entry
     | (Header _ | Object _ | WriteK _ | Save _ | Hash _ | End _ | Exception _) ->
       raise (Invalid_argument "PACKEncoder.expecti: bad state")
 
@@ -1514,7 +1514,7 @@ struct
         { t with i_off = offset
                ; i_len = len
                ; i_pos = 0
-               ; state = WriteH { x; r; crc; off; ui; z; h = H.refill offset len h } }
+               ; state = WriteH { x; r; crc; off; ui; z; h = HunkEncoder.refill offset len h } }
       | (Header _ | Object _ | WriteK _ | Save _ | Hash _ | End _ | Exception _) ->
         { t with i_off = offset
                ; i_len = len
@@ -1528,14 +1528,14 @@ struct
       | WriteZ { x; r; crc; off; ui; z; } ->
         { t with state = WriteZ { x; r; crc; off; ui; z = Deflate.finish z } }
       | WriteH { x; r; crc; off; ui; z; h; } ->
-        { t with state = WriteH { x; r; crc; off; ui; z; h = H.finish h } }
+        { t with state = WriteH { x; r; crc; off; ui; z; h = HunkEncoder.finish h } }
       | (Header _ | Object _ | WriteK _ | Save _ | Hash _ | End _ | Exception _) -> t
     else raise (Invalid_argument (Fmt.strf "PACKEncoder.finish: you lost something \
                                             (pos: %d, len: %d)" t.i_pos t.i_len))
 
   let used_in t = match t.state with
     | WriteZ { z; _ } -> Deflate.used_in z
-    | WriteH { h; _ } -> H.used_in h
+    | WriteH { h; _ } -> HunkEncoder.used_in h
     | (Header _ | Object _ | WriteK _ | Save _ | Hash _ | End _ | Exception _) ->
       raise (Invalid_argument "PACKEncoder.used_in: bad state")
 
