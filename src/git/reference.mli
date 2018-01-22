@@ -154,7 +154,7 @@ module type S = sig
   module D: S.DECODER
     with type t = head_contents
      and type init = Cstruct.t
-     and type error = [ `Decoder of string ]
+     and type error = Error.Decoder.t
   (** The decoder of the Git Reference object. We constraint the input
       to be a {!Cstruct.t}. This decoder needs a {!Cstruct.t} as an
       internal buffer. *)
@@ -165,7 +165,7 @@ module type S = sig
   module E: S.ENCODER
     with type t = head_contents
      and type init = int * head_contents
-     and type error = [ `Never ]
+     and type error = Error.never
   (** The encoder (which uses a {Minienc.encoder}) of the Git
       Reference object. We constraint the output to be a {Cstruct.t}.
       This encoder needs the Reference OCaml value and the memory
@@ -185,9 +185,8 @@ module type IO = sig
 
   (** The type of error. *)
   type error =
-    [ `FS of FS.error
-    | `IO of string
-    | D.error ]
+    [ Error.Decoder.t
+    | FS.error Error.FS.t ]
 
   val pp_error: error Fmt.t
   (** Pretty-printer of {!error}. *)
