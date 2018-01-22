@@ -491,14 +491,17 @@ sig
 end
 
 (* Implementatioon of deserialization of a PACK file *)
-module MakePACKDecoder (H: S.HASH) (I: S.INFLATE)
-  : P with module Hash = H
-       and module Inflate = I
-       and module H = MakeHunkDecoder(H)
+module MakePackDecoder
+    (Hash: S.HASH)
+    (Inflate: S.INFLATE)
+    (HunkDecoder: H with module Hash := Hash)
+  : P with module Hash = Hash
+       and module Inflate = Inflate
+       and module HunkDecoder := HunkDecoder
 = struct
-  module Hash = H
-  module Inflate = I
-  module H = MakeHunkDecoder(H)
+  module Hash = Hash
+  module Inflate = Inflate
+  module HunkDecoder = HunkDecoder
 
   type error =
     | Invalid_byte of int

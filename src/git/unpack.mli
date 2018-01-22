@@ -424,10 +424,13 @@ sig
       (like {!kind} or {!length}).}} *)
 end
 
-module MakePACKDecoder (H : S.HASH) (Inflate : S.INFLATE) : P
-  with module Hash = H
-   and module Inflate = Inflate
-   and module H = MakeHunkDecoder(H)
+module MakePackDecoder
+    (Hash: S.HASH)
+    (Inflate: S.INFLATE)
+    (HunkDecoder: H with module Hash := Hash)
+  : P with module Hash = Hash
+       and module Inflate = Inflate
+       and module HunkDecoder := HunkDecoder
 
 (** The toolbox about the PACK file. *)
 module type DECODER =
