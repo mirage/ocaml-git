@@ -415,3 +415,11 @@ module MakePackEncoder
        and module HunkEncoder := HunkEncoder
 (** The {i functor} to make the PACK encoder by a specific hash
     implementation and a specific deflate algorithm. *)
+
+module MakeStreamEncoder
+    (Hash: S.HASH)
+    (Deflate: S.DEFLATE)
+: sig
+  include P
+end with module Hash = Hash
+     and module Deflate = Deflate

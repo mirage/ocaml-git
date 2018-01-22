@@ -1552,3 +1552,15 @@ struct
     ; hash = Hash.Digest.init ()
     ; state = (Header (header objects)) }
 end
+
+module MakeStreamEncoder
+    (Hash: S.HASH)
+    (Deflate: S.DEFLATE)
+= struct
+  module Entry = MakeEntry(Hash)
+  module Delta = MakeDelta(Hash)(Entry)
+  module HunkEncoder = MakeHunkEncoder(Hash)
+  module PackEncoder = MakePackEncoder(Hash)(Deflate)(Entry)(Delta)(HunkEncoder)
+
+  include PackEncoder
+end
