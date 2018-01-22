@@ -58,6 +58,12 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE) = struct
     ; refs         : (Reference.t, [ `H of Hash.t | `R of Reference.t ]) Hashtbl.t
     ; mutable head : Reference.head_contents option }
 
+  type error =
+    [ `Unresolved_object
+    | `Decoder_flow of string
+    | `Delta of PACKEncoder.Delta.error
+    | `Pack_decoder of PACKDecoder.error
+    | Error.not_found ]
 
   let with_buffer t f =
     let open Lwt.Infix in
@@ -70,10 +76,13 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE) = struct
     | Some x -> x
     | None   -> assert false
 
-  type error = [ `Not_found ]
-
   let pp_error ppf = function
-    | `Not_found -> Fmt.pf ppf "`Not_found"
+    | #Error.not_found as err -> Error.pp_not_found ppf err
+    | `Unresolved_object ->
+      Fmt.pf ppf "We still have unresolved objects from PACK stream"
+    | `Decoder_flow s -> Fmt.pf ppf "%s" s
+    | `Delta e -> Fmt.pf ppf "%a" PACKEncoder.Delta.pp_error e
+    | `Pack_decoder e -> Fmt.pf ppf "%a" PACKDecoder.pp_error e
 
   let root t = t.root
   let dotgit t = t.dotgit
@@ -152,7 +161,10 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE) = struct
     else
       let value = lazy (
         match Value.of_raw ~kind inflated with
-        | Error (`Decoder err) -> raise (Failure err)
+        | Error err ->
+          let str = Fmt.strf "%a" Error.Decoder.pp_error err in
+          raise (Failure str)
+
         | Ok value -> value
       ) in
       Hashtbl.add t.inflated hash (kind, inflated);
@@ -224,18 +236,6 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE) = struct
     type stream = unit -> Cstruct.t option Lwt.t
 
     module Revidx = Map.Make(Int64)
-
-    type error =
-      [ `Unresolved_object
-      | `DecoderFlow of string
-      | `Delta of PACKEncoder.Delta.error
-      | `PackDecoder of PACKDecoder.error ]
-
-    let pp_error ppf = function
-      | `Unresolved_object -> Fmt.pf ppf "`Unresolved_object"
-      | `DecoderFlow s -> Fmt.pf ppf "(`PackFlow %s)" s
-      | `Delta e -> Fmt.pf ppf "(`Delta %a)" PACKEncoder.Delta.pp_error e
-      | `PackDecoder e -> Fmt.pf ppf "(`PackDecoder %a)" PACKDecoder.pp_error e
 
     module GC =
       Collector.Make(struct
@@ -316,14 +316,14 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE) = struct
             | Some raw ->
               go ~revidx ~src:raw ?hunks (PACKDecoder.refill 0 (Cstruct.len raw) state)
             | None ->
-              Lwt.return (Error (`DecoderFlow "Unexpected end of stream")))
+              Lwt.return (Error (`Decoder_flow "Unexpected end of stream")))
         | `End (state, hash_pack) ->
           Lwt.return (Ok (hash_pack, PACKDecoder.many state))
         | `Error (_, err) ->
           Log.err (fun l ->
               l ~header:"populate" "The PACK decoder returns an error: %a."
                 PACKDecoder.pp_error err);
-          Lwt.return (Error (`PackDecoder err))
+          Lwt.return (Error (`Pack_decoder err))
         | `Flush state ->
           let o, n = PACKDecoder.output state in
           Buffer.add buffer (Cstruct.sub o 0 n);
@@ -462,11 +462,6 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE) = struct
   end
 
   module Ref = struct
-    type error = [ `Not_found ]
-
-    let pp_error ppf = function
-      | `Not_found -> Fmt.pf ppf "`Not_found"
-
     module Graph = Reference.Map
 
     let list t =
