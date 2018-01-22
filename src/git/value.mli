@@ -80,7 +80,7 @@ module type S = sig
   module D: S.DECODER
     with type t = t
      and type init = Inflate.window * Cstruct.t * Cstruct.t
-     and type error = [ `Decoder of string | `Inflate of Inflate.error ]
+     and type error = [ Error.Decoder.t | `Inflate of Inflate.error ]
   (** The decoder of the Git object. We constraint the input to be an
       {!Inflate.window} and a {Cstruct.t} which used by the {Inflate}
       module and an other {Cstruct.t} as an internal buffer.
@@ -118,7 +118,7 @@ module type RAW = sig
   module EE: S.ENCODER
     with type t = t
      and type init = int * t
-     and type error = [ `Never ]
+     and type error = Error.never
   (** The encoder (which uses a {!Minienc.encoder}) of the Git object.
       We constraint the output to be a {Cstruct.t}. This encoder needs
       the value {!t} and the memory consumption of the encoder (in
@@ -133,12 +133,12 @@ module type RAW = sig
   module EEE: S.ENCODER
     with type t = t
      and type init = int * t
-     and type error = [ `Never ]
+     and type error = Error.never
 
   module DD: S.DECODER
     with type t = t
      and type init = Cstruct.t
-     and type error = [ `Decoder of string ]
+     and type error = Error.Decoder.t
 
   val to_deflated_raw: ?capacity:int -> ?level:int -> ztmp:Cstruct.t -> t ->
     (string, E.error) result
@@ -162,7 +162,7 @@ module type RAW = sig
   val to_raw_without_header: ?capacity:int -> t -> (string, EEE.error) result
 
   val of_raw: kind:[ `Commit | `Blob | `Tree | `Tag ] -> Cstruct.t ->
-    (t, [ `Decoder of string ]) result
+    (t, Error.Decoder.t) result
   (** [of_raw ~kind inflated] makes a Git object as an OCaml value
       {!t}. This decoder does not expect an {i header} to recognize
       which kind of Git object is it. That means the [inflated] raw

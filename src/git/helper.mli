@@ -40,7 +40,7 @@ end
 module MakeDecoder (A :S.ANGSTROM): S.DECODER
   with type t = A.t
    and type init = Cstruct.t
-   and type error = [ `Decoder of string ]
+   and type error = Error.Decoder.t
 
 (** [MakeInflater] makes a module which respects the interface
     {!S.DECODER} from an angstrom decoder and an inflate implementation.
@@ -52,7 +52,7 @@ module MakeDecoder (A :S.ANGSTROM): S.DECODER
 module MakeInflater (Z: S.INFLATE) (A: S.ANGSTROM): S.DECODER
   with type t = A.t
    and type init = Z.window * Cstruct.t * Cstruct.t
-   and type error = [ `Decoder of string | `Inflate of Z.error ]
+   and type error = [ Error.Decoder.t | `Inflate of Z.error ]
 
 (** [MakeEncoder] makes a module which respects the interface
     {!S.ENCODER} from a {!S.MINIENC.encoder}. This module (instead
@@ -65,7 +65,7 @@ module MakeInflater (Z: S.INFLATE) (A: S.ANGSTROM): S.DECODER
 module MakeEncoder (M: S.MINIENC): S.ENCODER
   with type t = M.t
    and type init = int * M.t
-   and type error = [ `Never ]
+   and type error = Error.never
 
 (** [MakeDeflater] makes a module which respects the interface
     {!S.ENCODER} from a {!S.MINIENC.encoder}. As {!MakeEncoder}, this
@@ -108,7 +108,7 @@ val fdigest:
   (module S.ENCODER
     with type t = 't
      and type init = int * 't
-     and type error = [ `Never ]) ->
+     and type error = Error.never) ->
   ?capacity:int -> tmp:Cstruct.t -> kind:string -> length:('t -> int64) -> 't -> 'hash
 
 module type ENCODER =
@@ -128,11 +128,9 @@ end
 
 module Encoder (E: ENCODER) (FS: S.FS): sig
 
-  type error = [
-    | `Stack
-    | `Encoder of E.error
-    | `FS of FS.error
-  ]
+  type error =
+    [ `Encoder of E.error
+    | FS.error Error.FS.t ]
 
   (** [to_file f tmp state] encodes [state] in the file [f] using
       [tmp] as an intermediary buffer.
@@ -151,7 +149,9 @@ module FS (FS: S.FS): sig
   include (module type of struct include FS end)
 
   val with_open_r: Fpath.t ->
-    ([ `Read ] FS.File.fd -> ('a, [> `FS of FS.error] as 'e) result Lwt.t) ->
+    ([ `Read ] FS.File.fd ->
+     ('a, [> `Open of Fpath.t * FS.error
+          | `Move of Fpath.t * Fpath.t * FS.error ] as 'e) result Lwt.t) ->
     ('a, 'e) result Lwt.t
   (** [with_open_r p f] opens the file [p] in read-only mode and calls
       [f] on the resulting file-descriptor. When [f] completes, the
@@ -159,7 +159,9 @@ module FS (FS: S.FS): sig
       is ignored. *)
 
   val with_open_w: ?atomic:bool -> Fpath.t ->
-    ([ `Write ] FS.File.fd -> ('a, [> `FS of FS.error] as 'e) result Lwt.t) ->
+    ([ `Write ] FS.File.fd ->
+     ('a, [> `Open of Fpath.t * FS.error
+          | `Move of Fpath.t * Fpath.t * FS.error ] as 'e) result Lwt.t) ->
     ('a, 'e) result Lwt.t
     (** Same as {!with_open_r} but the file [p] is opened in
         read-write mode. If [atomic] is set (it is by default), the

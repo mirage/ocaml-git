@@ -59,10 +59,9 @@ module type S_EXT = sig
 
   type error =
     [ `SmartDecoder of Decoder.error
-    | `StorePack of Store.Pack.error
+    | `Store of Store.error
     | `Clone of string
-    | `ReportStatus of string
-    | `Ref of Store.Ref.error ]
+    | `ReportStatus of string ]
 
   val pp_error: error Fmt.t
 

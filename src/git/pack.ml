@@ -576,7 +576,7 @@ struct
 
   module type WINDOW = Lru.F.S with type k = Entry.t and type v = t * Cstruct.t * Rabin.Default.Index.t
 
-  let rec pp_delta ppf = function
+  let rec _pp_delta ppf = function
     | Z -> Fmt.string ppf "Τ"
     | S { length; depth; hunks; src; src_length; _ } ->
       Fmt.pf ppf "(Δ { @[<hov>length = %d;@ \
@@ -586,16 +586,16 @@ struct
                               src_length = %Ld;@] }"
         length depth
         (Fmt.hvbox (Fmt.list ~sep:(Fmt.unit ";@ ") Rabin.pp)) hunks
-        (Fmt.hvbox pp) src
+        (Fmt.hvbox _pp) src
         src_length
-  and pp ppf { delta; } =
+  and _pp ppf { delta; } =
     Fmt.pf ppf "{ @[<hov>delta = @[<hov>%a@];@] }"
-      (Fmt.hvbox pp_delta) delta
+      (Fmt.hvbox _pp_delta) delta
 
   type error = Invalid_hash of Hash.t
 
   let pp_error ppf (Invalid_hash hash) =
-    Fmt.pf ppf "(Invalid_hash %a)" Hash.pp hash
+    Fmt.pf ppf "Got an invalid (non-existing) hash when we apply the delta-ification: %a" Hash.pp hash
 
   let depth = function
     | { delta = S { depth; _ } } -> depth
@@ -914,8 +914,6 @@ sig
 
   type error =
     | Deflate_error of Deflate.error
-    | Hunk_error of H.error
-    | Invalid_entry of Entry.t * Delta.t
     | Invalid_hash of Hash.t
 
   val pp_error : error Fmt.t
@@ -953,20 +951,13 @@ struct
 
   type error =
     | Deflate_error of Deflate.error
-    | Hunk_error of H.error
-    | Invalid_entry of Entry.t * Delta.t
     | Invalid_hash of Hash.t
 
   let pp_error ppf = function
     | Deflate_error err ->
-      Fmt.pf ppf "(Deflate_error %a)" (Fmt.hvbox Deflate.pp_error) err
-    | Hunk_error err ->
-      Fmt.pf ppf "(Hunk_error %a)" (Fmt.hvbox H.pp_error) err
-    | Invalid_entry (entry, delta) ->
-      Fmt.pf ppf "(Invalid_entry %a)"
-        (Fmt.hvbox (Fmt.pair (Fmt.hvbox Entry.pp) (Fmt.hvbox Delta.pp))) (entry, delta)
+      Fmt.pf ppf "Got a deflate error: %a" Deflate.pp_error err
     | Invalid_hash hash ->
-      Fmt.pf ppf "(Invalid_hash %a)" Hash.pp hash
+      Fmt.pf ppf "Invalid hash: %a" Hash.pp hash
 
   type t =
     { o_off   : int
@@ -1332,7 +1323,7 @@ struct
 
          Cont { t with state = WriteH { x; r; crc; off; ui; h; z; }
                      ; i_pos = H.used_in h }
-       | `Error (_, exn) -> error t (Hunk_error exn))
+       | `Error (_, _) -> assert false)
     | `Flush z ->
       let crc = Crc32.digest ~off:(t.o_off + t.o_pos) ~len:(Deflate.used_out z) crc dst in
       let used_in' = used_in + Deflate.used_in z in

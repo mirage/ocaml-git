@@ -2,6 +2,7 @@ include S
 module type S = Minimal.S
 
 module Crc32        = Crc32
+module Error        = Error
 
 module Blob         = Blob
 module Commit       = Commit

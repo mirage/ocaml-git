@@ -33,7 +33,7 @@ sig
   module D: S.DECODER
     with type t = t
      and type init = Cstruct.t
-     and type error = [ `Decoder of string ]
+     and type error = Error.Decoder.t
 
   module A: S.ANGSTROM with type t = t
 
@@ -44,7 +44,7 @@ sig
   module E: S.ENCODER
     with type t = t
      and type init = int * t
-     and type error = [ `Never ]
+     and type error = Error.never
 
   include S.DIGEST with type t := t and type hash = Hash.t
   include S.BASE with type t := t

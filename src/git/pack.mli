@@ -296,11 +296,6 @@ sig
   type error =
     | Deflate_error of Deflate.error
     (** Appears when the deflate algorithm raises an error. *)
-    | Hunk_error of H.error
-    (** Appears when the Hunk encoder raises an error. *)
-    | Invalid_entry of Entry.t * Delta.t
-    (** When the encoder catches an invalid entry (this case does not
-        appear). *)
     | Invalid_hash of Hash.t
     (** Appears when the hash requested does not exist. *)
 

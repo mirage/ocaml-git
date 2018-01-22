@@ -53,12 +53,11 @@ module type S = sig
 
   type error =
     [ `SmartPack of string
-    | `Pack      of Store.Pack.error
+    | `Store     of Store.error
     | `Clone     of string
     | `Fetch     of string
     | `Ls        of string
     | `Push      of string
-    | `Ref       of Store.Ref.error
     | `Not_found ]
 
   val pp_error: error Fmt.t
@@ -336,7 +335,7 @@ module Common
         | _ -> Lwt.return None)
       remote_refs
 
-  exception Jump of Store.Ref.error
+  exception Jump of Store.error
 
   let update_and_create git ~references results =
     let results = List.fold_left
@@ -364,7 +363,7 @@ module Common
            (Store.Reference.Map.bindings updated))
       (fun () -> Lwt.return (Ok (updated, missed, downloaded)))
       (function
-        | Jump err -> Lwt.return (Error (`Ref err))
+        | Jump err -> Lwt.return (Error err)
         | exn -> Lwt.fail exn)
 
   let push_handler git references remote_refs =
@@ -434,22 +433,20 @@ module Make (N: NET) (S: Minimal.S) = struct
 
   type error =
     [ `SmartPack of string
-    | `Pack      of Store.Pack.error
+    | `Store     of Store.error
     | `Clone     of string
     | `Fetch     of string
     | `Ls        of string
     | `Push      of string
-    | `Ref       of S.Ref.error
     | `Not_found ]
 
   let pp_error ppf = function
-    | `SmartPack err -> Helper.ppe ~name:"`SmartPack" Fmt.string ppf err
-    | `Pack err       -> Helper.ppe ~name:"`Pack" Store.Pack.pp_error ppf err
+    | `SmartPack err  -> Helper.ppe ~name:"`SmartPack" Fmt.string ppf err
+    | `Store err      -> Helper.ppe ~name:"`Store" Store.pp_error ppf err
     | `Clone err      -> Helper.ppe ~name:"`Clone" Fmt.string ppf err
     | `Fetch err      -> Helper.ppe ~name:"`Fetch" Fmt.string ppf err
     | `Push err       -> Helper.ppe ~name:"`Push" Fmt.string ppf err
     | `Ls err         -> Helper.ppe ~name:"`Ls" Fmt.string ppf err
-    | `Ref err        -> Helper.ppe ~name:"`Ref" S.Ref.pp_error ppf err
     | `Not_found      -> Fmt.string ppf "`Not_found"
 
   type command = Common.command
@@ -526,7 +523,7 @@ module Make (N: NET) (S: Minimal.S) = struct
 
       dispatch ctx first
       >>?= fun ()  -> Store.Pack.from git (fun () -> Lwt_stream.get stream)
-      >>!= fun err -> Lwt.return (`Pack err)
+      >>!= fun err -> Lwt.return (`Store err)
   end
 
   let rec clone_handler git reference t r =
@@ -744,7 +741,7 @@ module Make (N: NET) (S: Minimal.S) = struct
         |> Common.packer git ~ofs_delta refs >>= (function
             | Ok (stream, _) ->
               send_pack stream t result
-            | Error err -> Lwt.return (Error (`Pack err)))
+            | Error err -> Lwt.return (Error (`Store err)))
       | result -> Lwt.return (Error (`Push (err_unexpected_result result)))
     in
 
@@ -859,6 +856,7 @@ module Make (N: NET) (S: Minimal.S) = struct
       repository
     >>?= fun (results, _) ->
     Common.update_and_create git ~references results
+    >>!= fun err -> Lwt.return (`Store err)
 
   let fetch_all git ?capabilities ~references repository =
     let choose _ = Lwt.return true in
@@ -932,10 +930,9 @@ module Make (N: NET) (S: Minimal.S) = struct
           l ~header:"easy_clone" "Update reference %a to %a."
             S.Reference.pp local_ref S.Hash.pp hash');
 
-      S.Ref.write t local_ref (S.Reference.Hash hash')
-      >>!= (fun err -> Lwt.return (`Ref err))
-      >>?= fun () -> S.Ref.write t S.Reference.head (S.Reference.Ref local_ref)
-      >>!= fun err -> Lwt.return (`Ref err)
+      (S.Ref.write t local_ref (S.Reference.Hash hash')
+       >>?= fun () -> S.Ref.write t S.Reference.head (S.Reference.Ref local_ref))
+      >>!= fun err -> Lwt.return (`Store err)
 
   let update_and_create git ?capabilities ~references repository =
     let push_handler remote_refs =

@@ -105,29 +105,29 @@ module type S = sig
   module D: S.DECODER
     with type t = head_contents
      and type init = Cstruct.t
-     and type error = [ `Decoder of string ]
+     and type error = Error.Decoder.t
   module M: S.MINIENC with type t = head_contents
   module E: S.ENCODER
     with type t = head_contents
      and type init = int * head_contents
-     and type error = [ `Never ]
+     and type error = Error.never
 end
 
 module type IO = sig
+
   module FS: S.FS
 
   include S
 
   type error =
-    [ `FS of FS.error
-    | `IO of string
-    | D.error ]
+    [ Error.Decoder.t
+    | FS.error Error.FS.t ]
 
-  val pp_error  : error Fmt.t
+  val pp_error: error Fmt.t
 
   val mem :
        root:Fpath.t
-    -> t -> (bool, error) result Lwt.t
+    -> t -> bool Lwt.t
   val read :
        root:Fpath.t
     -> t
@@ -261,15 +261,14 @@ module IO (H : S.HASH) (FS: S.FS) = struct
     include Helper.Encoder(E)(FS)
   end
 
+  type fs_error = FS.error Error.FS.t
   type error =
-    [ `FS of FS.error
-    | `IO of string
-    | D.error ]
+    [ Error.Decoder.t
+    | fs_error ]
 
   let pp_error ppf = function
-    | `FS sys_err -> Helper.ppe ~name:"`FS" FS.pp_error ppf sys_err
-    | `IO sys_err -> Helper.ppe ~name:"`IO" Fmt.string ppf sys_err
-    | #D.error as err -> D.pp_error ppf err
+    | #Error.Decoder.t as err -> Error.Decoder.pp_error ppf err
+    | #fs_error as err -> Error.FS.pp_error FS.pp_error ppf err
 
   let normalize path =
     let segs = Astring.String.cuts ~sep:Fpath.dir_sep (Fpath.to_string path) in
@@ -289,8 +288,8 @@ module IO (H : S.HASH) (FS: S.FS) = struct
   let mem ~root reference =
     let path = Fpath.(root // (to_path reference)) in
     FS.File.exists path >|= function
-    | Ok v      -> Ok v
-    | Error err -> Error (`FS err)
+    | Ok v    -> v
+    | Error _ -> false
 
   let read ~root reference ~dtmp ~raw : (_, error) result Lwt.t =
     let decoder = D.default dtmp in
@@ -298,18 +297,20 @@ module IO (H : S.HASH) (FS: S.FS) = struct
     Log.debug (fun l -> l "Reading the reference: %a." Fpath.pp path);
     FS.with_open_r path @@ fun read ->
     let rec loop decoder = match D.eval decoder with
-      | `End (_, value)               -> Lwt.return (Ok value)
-      | `Error (_, (#D.error as err)) -> Lwt.return (Error err)
+      | `End (_, value) -> Lwt.return (Ok value)
+      | `Error (_, (#Error.Decoder.t as err)) ->
+        Lwt.return Error.(v @@ Decoder.with_path path err)
       | `Await decoder ->
         FS.File.read raw read >>= function
-        | Error sys_err -> Lwt.return (Error (`FS sys_err))
+        | Error err -> Lwt.return Error.(v @@ FS.err_read path err)
         | Ok 0 -> loop (D.finish decoder)
         (* XXX(dinosaure): in this case, we read a file, so when we
            retrieve 0 bytes, that means we get end of the file. We
            can finish the deserialization. *)
         | Ok n -> match D.refill (Cstruct.sub raw 0 n) decoder with
-          | Ok decoder              -> loop decoder
-          | Error (#D.error as err) -> Lwt.return (Error err)
+          | Ok decoder -> loop decoder
+          | Error (#Error.Decoder.t as err) ->
+            Lwt.return Error.(v @@ Decoder.with_path path err)
     in
     loop decoder >|= function
     | Error _ as e     -> e
@@ -320,26 +321,22 @@ module IO (H : S.HASH) (FS: S.FS) = struct
       assert (equal reference reference');
       Ok (normalize path, head_contents)
 
-  let err_stack reference =
-    Fmt.kstrf (fun x -> Error (`IO x))
-      "Impossible to store the reference: %a" pp reference
-
   let write ~root ?(capacity = 0x100) ~raw reference value =
     let state = E.default (capacity, value) in
     let path = Fpath.(root // (to_path reference)) in
-    FS.Dir.create Fpath.(root // parent (to_path reference)) >>= function
-    | Error sys_err -> Lwt.return (Error (`FS sys_err))
+    FS.Dir.create (Fpath.parent path)
+    >>= function
+    | Error err -> Lwt.return Error.(v @@ FS.err_create (Fpath.parent path) err)
     | Ok (true | false) ->
       Encoder.to_file path raw state >|= function
-      | Ok _                    -> Ok ()
-      | Error (`FS e)           -> Error (`FS e)
-      | Error (`Encoder `Never) -> assert false
-      | Error `Stack            -> err_stack reference
+      | Ok _                   -> Ok ()
+      | Error #fs_error as err -> err
+      | Error (`Encoder #Error.never) -> assert false
 
   let remove ~root t =
     let path = Fpath.(root // (to_path t)) in
     FS.File.delete path >|= function
     | Ok _ as v -> v
-    | Error err -> Error (`FS err)
+    | Error err -> Error.(v @@ FS.err_delete path err)
 
 end

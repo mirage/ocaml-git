@@ -26,15 +26,15 @@ module type S = sig
   module D: S.DECODER
     with type t = t
      and type init = Cstruct.t
-     and type error = [ `Decoder of string ]
+     and type error = Error.Decoder.t
   module M: S.MINIENC with type t = t
   module E: S.ENCODER
     with type t = t
      and type init = int * t
 
-  type error = [ `FS of FS.error
-               | `IO of string
-               | D.error ]
+  type error =
+    [ Error.Decoder.t
+    | FS.error Error.FS.t ]
 
   val pp_error: error Fmt.t
 
@@ -144,32 +144,34 @@ module Make (H: S.HASH) (FS: S.FS) = struct
   module D = Helper.MakeDecoder(A)
   module E = Helper.MakeEncoder(M)
 
+  type fs_error = FS.error Error.FS.t
   type error =
-    [ `FS of FS.error
-    | `IO of string
-    | D.error ]
+    [ fs_error
+    | Error.Decoder.t ]
 
   let pp_error ppf = function
-    | `FS sys_err     -> Helper.ppe ~name:"`FS" FS.pp_error ppf sys_err
-    | `IO sys_err     -> Helper.ppe ~name:"`IO" Fmt.string ppf sys_err
-    | #D.error as err -> D.pp_error ppf err
+    | #Error.Decoder.t as err -> Error.Decoder.pp_error ppf err
+    | #fs_error as err -> Error.FS.pp_error FS.pp_error ppf err
 
   open Lwt.Infix
 
   let read ~root ~dtmp ~raw =
     let decoder = D.default dtmp in
-    FS.with_open_r Fpath.(root / "packed-refs") @@ fun read ->
+    let path = Fpath.(root / "packed-refs") in
+    FS.with_open_r path @@ fun read ->
     let rec loop decoder = match D.eval decoder with
       | `End (_, value)               -> Lwt.return (Ok value)
-      | `Error (_, (#D.error as err)) -> Lwt.return (Error err)
+      | `Error (_, (#Error.Decoder.t as err)) ->
+        Lwt.return Error.(v @@ Error.Decoder.with_path path err)
       | `Await decoder ->
         FS.File.read raw read >>= function
-        | Error e -> Lwt.return (Error (`FS e))
-        | Ok 0    -> loop (D.finish decoder)
-        | Ok n    ->
+        | Error err -> Lwt.return Error.(v @@ Error.FS.err_read path err)
+        | Ok 0      -> loop (D.finish decoder)
+        | Ok n      ->
           match D.refill (Cstruct.sub raw 0 n) decoder with
           | Ok decoder              -> loop decoder
-          | Error (#D.error as err) -> Lwt.return (Error err)
+          | Error (#Error.Decoder.t as err) ->
+            Lwt.return Error.(v @@ Error.Decoder.with_path path err)
     in
     loop decoder
 
@@ -194,8 +196,7 @@ module Make (H: S.HASH) (FS: S.FS) = struct
     let state = E.default (capacity, value) in
     let path = Fpath.(root / "packed-refs") in
     Encoder.to_file path raw state >|= function
-    | Ok _                    -> Ok ()
-    | Error `Stack            -> err_stack
-    | Error (`FS e)           -> Error (`FS e)
-    | Error (`Encoder `Never) -> assert false
+    | Ok _ -> Ok ()
+    | Error #fs_error as err -> err
+    | Error (`Encoder #Error.never) -> assert false
 end

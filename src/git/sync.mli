@@ -37,12 +37,11 @@ module type S = sig
   (** The error type. *)
   type error =
     [ `SmartPack of string (** Appear when we retrieve a decoder's error about Smart protocol. *)
-    | `Pack      of Store.Pack.error (** Appear when we retrieve a PACK error from the {!Store.Pack}. *)
+    | `Store     of Store.error (** Appear when we retrieve a PACK error from the {!Store.Pack}. *)
     | `Clone     of string (** Appear when we don't follow operations on the clone command. *)
     | `Fetch     of string (** Appear when we don't follow operations on the fetch command. *)
     | `Ls        of string (** Appear when we don't follow operations on the ls-remote command. *)
     | `Push      of string (** Appear when we don't follow operations on the push command. *)
-    | `Ref       of Store.Ref.error (** Appear when we retrieve a reference I/O error from the {!Store.Ref}. *)
     | `Not_found (** Appear when we don't find the reference requested by the client on the server. *) ]
 
   val pp_error: error Fmt.t
@@ -244,7 +243,7 @@ sig
     Store.t ->
     ofs_delta:bool ->
     (Store.Hash.t * string * bool) list -> command list ->
-    (Store.Pack.stream *(Crc32.t * int64) Store.Pack.Graph.t Lwt_mvar.t, Store.Pack.error) result Lwt.t
+    (Store.Pack.stream *(Crc32.t * int64) Store.Pack.Graph.t Lwt_mvar.t, Store.error) result Lwt.t
 
   val want_handler:
     Store.t ->
@@ -258,7 +257,7 @@ sig
     (Store.Reference.t * Store.Hash.t) list ->
     (Store.Hash.t Store.Reference.Map.t
               * Store.Reference.t list Store.Reference.Map.t
-              * Store.Hash.t Store.Reference.Map.t, [ `Ref of Store.Ref.error ]) result Lwt.t
+              * Store.Hash.t Store.Reference.Map.t, Store.error) result Lwt.t
 
   val push_handler:
     Store.t ->

@@ -19,6 +19,7 @@ open Lwt.Infix
 let ( >>!= ) a f = Lwt_result.bind_lwt_err a f
 let ( >>?= ) = Lwt_result.bind
 let ( >>|= ) = Lwt_result.map
+let ( >!= ) a f = Lwt_result.map_err f a
 
 let src = Logs.Src.create "git.pack" ~doc:"Git pack engine"
 module Log = (val Logs.src_log src : Logs.LOG)
@@ -54,15 +55,14 @@ module type S = sig
   type loaded
 
   type error =
-    [ `PackDecoder of PACKDecoder.error
-    | `PackEncoder of PACKEncoder.error
-    | `PackInfo of Pack_info.error
-    | `IdxDecoder of IDXDecoder.error
-    | `IdxEncoder of IDXEncoder.error
-    | `FS of FS.error
+    [ `Pack_decoder of PACKDecoder.error
+    | `Pack_encoder of PACKEncoder.error
+    | `Pack_info    of Pack_info.error
+    | `Idx_decoder  of IDXDecoder.error
+    | `Idx_encoder  of IDXEncoder.error
+    | FS.error Error.FS.t
     | `Invalid_hash of Hash.t
-    | `IO of string
-    | `Integrity of string
+    | `Integrity    of string
     | `Not_found ]
 
   val pp_error: error Fmt.t
@@ -262,29 +262,31 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
     ; hunks   : Cstruct.t
     ; depth   : int }
 
+  type fs_error = FS.error Error.FS.t
   type error =
-    [ `PackDecoder of PACKDecoder.error
-    | `PackEncoder of PACKEncoder.error
-    | `PackInfo of Pack_info.error
-    | `IdxDecoder of IDXDecoder.error
-    | `IdxEncoder of IDXEncoder.error
-    | `FS of FS.error
+    [ `Pack_decoder of PACKDecoder.error
+    | `Pack_encoder of PACKEncoder.error
+    | `Pack_info of Pack_info.error
+    | `Idx_decoder of IDXDecoder.error
+    | `Idx_encoder of IDXEncoder.error
+    | fs_error
     | `Invalid_hash of Hash.t
-    | `IO of string
     | `Integrity of string
     | `Not_found ]
 
   let pp_error ppf = function
-    | `PackDecoder err   -> Fmt.pf ppf "(`PackDecoder %a)" PACKDecoder.pp_error err
-    | `PackEncoder err   -> Fmt.pf ppf "(`PackEncoder %a)" PACKEncoder.pp_error err
-    | `IdxDecoder err    -> Fmt.pf ppf "(`IdxDecoder %a)" IDXDecoder.pp_error err
-    | `IdxEncoder err    -> Fmt.pf ppf "(`IdxEncoder %a)" IDXEncoder.pp_error err
-    | `FS sys_err        -> Fmt.pf ppf "(`FS %a)" FS.pp_error sys_err
-    | `Invalid_hash hash -> Fmt.pf ppf "(`Invalid_hash %a)" Hash.pp hash
-    | `IO err            -> Fmt.pf ppf "(`IO %s)" err
-    | `Integrity err     -> Fmt.pf ppf "(`Integrity %s)" err
-    | `Not_found         -> Fmt.pf ppf "`Not_found"
-    | `PackInfo err      -> Fmt.pf ppf "(`Pack_info %a)" Pack_info.pp_error err
+    | #fs_error as err        -> Error.FS.pp_error FS.pp_error ppf err
+    | #Error.not_found as err -> Error.pp_not_found ppf err
+    | `Pack_decoder err       -> PACKDecoder.pp_error ppf err
+    | `Pack_encoder err       -> PACKEncoder.pp_error ppf err
+    | `Pack_info err          -> Pack_info.pp_error ppf err
+    | `Idx_decoder err        -> IDXDecoder.pp_error ppf err
+    | `Idx_encoder err        -> IDXEncoder.pp_error ppf err
+    | `Invalid_hash hash ->
+      Fmt.pf ppf "Unable to load %a, it does not exists in the store"
+        Hash.pp hash
+    | `Integrity err ->
+      Fmt.string ppf err
 
   (* XXX(dinosaure): to make a _unloaded_ pack object. *)
   let load_index path =
@@ -299,21 +301,21 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
     in
     let open Lwt_result in
     (* FIXME: this code is horrible *)
-    ((FS.Mapper.openfile path >>!=
-      (fun sys_err -> Lwt.return (`FS sys_err))
+    ((FS.Mapper.openfile path
+      >!= Error.FS.err_open path
       >>= fun fd -> FS.Mapper.length fd
-      >>!= (fun sys_err -> close fd sys_err)
-      >>!= (fun sys_err -> Lwt.return (`FS sys_err))
+      >>!= close fd
+           >!= Error.FS.err_length path
       >|= fun length -> (fd, length))
      >>= fun (fd, length) -> (
        FS.Mapper.map fd (Int64.to_int length)
-       >>!= (fun sys_err -> close fd sys_err)
-       >>!= (fun sys_err -> Lwt.return (`FS sys_err))
+       >>!= close fd
+       >!= Error.FS.err_map path
        >|= fun map -> (fd, map)
      ) >>= fun (fd, map) -> (
        Lwt.return (IDXDecoder.make map)
        >>!= close fd
-       >>!= (fun sys_err -> Lwt.return (`IdxDecoder sys_err))
+       >>!= (fun sys_err -> Lwt.return (`Idx_decoder sys_err))
      ) >>= fun decoder_idx -> (
        let hash_idx =
          let basename = Fpath.basename (Fpath.rem_ext path) in
@@ -413,21 +415,15 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
     include Helper.Encoder(E)(FS)
   end
 
-  let err_stack_idx root file =
-    let path = Fpath.(root / "objects" / "pack" / file) in
-    Fmt.kstrf (fun x ->  Lwt.return (Error (`IO x)))
-      "Impossible to store the IDX file: %a." Fpath.pp path
-
   let save_idx_file ~root sequence hash_pack =
     let file = Fmt.strf "pack-%s.idx" (Hash.to_hex hash_pack) in
     let encoder_idx = IDXEncoder.default sequence hash_pack in
     let raw = Cstruct.create 0x8000 in
     let path = Fpath.(root / "objects" / "pack" / file) in
     EIDX.to_file path raw encoder_idx >>= function
-    | Ok ()                -> Lwt.return (Ok ())
-    | Error `Stack         -> err_stack_idx root file
-    | Error (`FS sys_err)  -> Lwt.return (Error (`FS sys_err))
-    | Error (`Encoder err) -> Lwt.return (Error (`IdxEncoder err))
+    | Ok ()                  -> Lwt.return (Ok ())
+    | Error (`Encoder err)   -> Lwt.return (Error (`Idx_encoder err))
+    | Error #fs_error as err -> Lwt.return err
 
   exception Leave of Hash.t
 
@@ -494,11 +490,6 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
     include Helper.Encoder(E)(FS)
   end
 
-  let err_stack temp file =
-    Fmt.kstrf (fun x -> Error (`IO x))
-      "Impossible to store the PACK file: %a." Fpath.pp
-      Fpath.(temp / file)
-
   let save_pack_file fmt entries get =
     let ztmp = Cstruct.create 0x8000 in
     let filename_pack = fmt (random_string 10) in
@@ -513,9 +504,8 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
           Ok (Fpath.(temp / filename_pack)
              , PACKEncoder.Radix.to_sequence tree
              , hash)
-        | Error `Stack  -> err_stack temp filename_pack
-        | Error (`FS _) as e -> e
-        | Error (`Encoder e) -> Error (`PackEncoder e)
+        | Error #fs_error as err -> err
+        | Error (`Encoder e) -> Error (`Pack_encoder e)
       ) (function
         | Leave hash -> Lwt.return (Error (`Invalid_hash hash))
         | exn        -> Lwt.fail exn (* XXX(dinosaure): should never happen. *)
@@ -541,7 +531,8 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
     let filename_idx = Fmt.strf "pack-%s.idx" (Hash.to_hex hash_pack) in
     FS.File.move path Fpath.(root / "objects" / "pack" / filename_pack)
     >>= function
-    | Error err -> Lwt.return (Error (`FS err))
+    | Error err ->
+      Lwt.return Error.(v @@ FS.err_move path Fpath.(root / "objects" / "pack" / filename_pack) err)
     | Ok ()     ->
       let path = Fpath.(root / "objects" / "pack" / filename_idx) in
       let sequence = Pack_info.Radix.to_sequence info.Pack_info.tree in
@@ -551,12 +542,12 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
          we use the complete radix tree. *)
       let raw = Cstruct.create 0x8000 in
       EIDX.to_file path raw encoder_idx >>= function
-      | Error `Stack       -> err_stack_idx root filename_idx
-      | Error (`FS _) as e -> Lwt.return e
-      | Error (`Encoder e) -> Lwt.return (Error (`IdxEncoder e))
+      | Error #fs_error as err -> Lwt.return err
+      | Error (`Encoder e) -> Lwt.return (Error (`Idx_encoder e))
       | Ok ()              ->
-        (FS.Mapper.openfile Fpath.(root / "objects" / "pack" / filename_pack)
-         >>!= fun sys_err -> Lwt.return (`FS sys_err))
+        let path_pack = Fpath.(root / "objects" / "pack" / filename_pack) in
+        (FS.Mapper.openfile path_pack
+         >>!= fun sys_err -> Lwt.return (Error.FS.err_open path_pack sys_err))
         >>?= fun fdp ->
         let fun_cache _ = None in
         let fun_idx hash = Pack_info.Radix.lookup info.Pack_info.tree hash in
@@ -572,7 +563,7 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
            fun_idx
            fun_revidx
            fun_last
-         >>!= fun err -> Lwt.return (`FS err))
+         >>!= fun err -> Lwt.return (Error.FS.err_open path_pack err))
         >>?= fun decoder ->
         let pack = Total { decoder; fdp; info; } in
         Lwt_mvar.take t.packs
@@ -676,6 +667,7 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
      file as an available pack file - we lost it forever! *)
   and load_partial ~root t hash decoder_idx fdi =
     let filename_pack = Fmt.strf "pack-%s.pack" (Hash.to_hex hash) in
+    let path = Fpath.(root / "objects" / "pack" / filename_pack) in
     let ztmp = Cstruct.create 0x8000 in
     let window = Inflate.window () in
     let close_all fdi fdp sys_err =
@@ -695,7 +687,8 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
        Lwt.return ())
       >>= fun _ -> Lwt.return sys_err
     in
-    (FS.Mapper.openfile Fpath.(root / "objects" / "pack" / filename_pack)
+
+    (FS.Mapper.openfile path
      >>!= (fun sys_err ->
          (* XXX(dinosaure): delete from the git repository. *)
          Lwt_mvar.take t.packs >>= fun packs ->
@@ -707,20 +700,20 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
                l "Got an error while trying to close the index fd: %a."
                  FS.Mapper.pp_error sys_err');
            sys_err)
-     >>!= (fun sys_err -> Lwt.return (`FS sys_err)))
+          >!= Error.FS.err_open path)
     >>?= fun fdp ->
     (let fun_cache  = fun _ -> None in
      let fun_idx    = fun hash -> IDXDecoder.find decoder_idx hash in
      let fun_revidx = fun _ -> None in
      let fun_last   = fun hash' -> read_and_exclude ~root t hash hash' in
 
-     (PACKDecoder.make fdp fun_cache fun_idx fun_revidx fun_last
-      >>!= (fun err -> Lwt.return (`FS err)))
-     >>!= (fun sys_err -> close_all fdi fdp sys_err))
+     PACKDecoder.make fdp fun_cache fun_idx fun_revidx fun_last
+     >!= Error.FS.err_length path (* XXX(dinosaure): we know [RPDec.make] try to compute length of the PACK file. *)
+     >>!= close_all fdi fdp)
     >>?= fun decoder_pack ->
-    ((FS.File.open_r Fpath.(root / "objects" / "pack" / filename_pack)
-      >>!= (fun sys_err -> Lwt.return (`FS sys_err)))
-     >>!= (fun sys_err -> close_all fdi fdp sys_err))
+    (FS.File.open_r path
+     >!= Error.FS.err_open path
+     >>!= close_all fdi fdp)
     >>?= fun fd ->
     (let raw = Cstruct.create 0x8000 in
      let stream () =
@@ -734,9 +727,9 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
          None
      in
      let info = Pack_info.v hash in
-     (Pack_info.from_stream ~ztmp ~window info stream
-      >>!= (fun err -> Lwt.return (`PackInfo err)))
-     >>!= (fun sys_err -> close_all fdi fdp sys_err)
+     Pack_info.from_stream ~ztmp ~window info stream
+     >>!= (fun err -> Lwt.return (`Pack_info err))
+     >>!= close_all fdi fdp
      >>!= (fun sys_err ->
          FS.File.close fd >|= function
          | Ok ()          -> sys_err
@@ -888,7 +881,7 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
 
   let read ~root ~ztmp ~window t hash =
     lookup t hash >>= function
-    | None -> Lwt.return (Error `Not_found)
+    | None -> Lwt.return Error.(v err_not_found)
     | Some (pack_hash, _) ->
       Lwt_mvar.take t.packs >>= fun packs ->
       Lwt_mvar.put t.packs packs >>= fun () ->
@@ -904,7 +897,7 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
             PACKDecoder.optimized_get
               ~h_tmp:(Array.init buffers.depth (fun i -> Cstruct.sub buffers.hunks (i * length) length))
               loaded.decoder hash buffers.objects ztmp window
-            >>!= (fun err -> Lwt.return (`PackDecoder err)) >>= fun ret ->
+            >>!= (fun err -> Lwt.return (`Pack_decoder err)) >>= fun ret ->
             Lwt_mvar.put t.buffers buffers >|= fun () ->
             ret
           | Error _ as err -> Lwt.return err)
@@ -915,7 +908,7 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
           ~h_tmp:(Array.init buffers.depth (fun i ->
               Cstruct.sub buffers.hunks (i * length) length))
           loaded.decoder hash buffers.objects ztmp window
-        >>!= (fun err -> Lwt.return (`PackDecoder err))
+        >>!= (fun err -> Lwt.return (`Pack_decoder err))
         >>= fun ret -> Lwt_mvar.put t.buffers buffers
         >|= fun () -> ret
       | Total { decoder; _ } ->
@@ -925,7 +918,7 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
           ~h_tmp:(Array.init buffers.depth (fun i ->
               Cstruct.sub buffers.hunks (i * length) length))
           decoder hash buffers.objects ztmp window
-        >>!= (fun err -> Lwt.return (`PackDecoder err)) >>= fun ret ->
+        >>!= (fun err -> Lwt.return (`Pack_decoder err)) >>= fun ret ->
         Lwt_mvar.put t.buffers buffers >|= fun () ->
         ret
       | exception Not_found ->
@@ -954,20 +947,20 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
             Lwt_mvar.put t.packs (Graph.add pack_hash (Loaded loaded) packs) >>= fun () ->
             Lwt_mvar.take t.buffers >>= fun buffers ->
             PACKDecoder.length loaded.decoder hash ztmp window
-            >>!= (fun err -> Lwt.return (`PackDecoder err)) >>= fun ret ->
+            >>!= (fun err -> Lwt.return (`Pack_decoder err)) >>= fun ret ->
             Lwt_mvar.put t.buffers buffers >>= fun () ->
             Lwt.return ret
           | Error _ as err -> Lwt.return err)
       | Loaded loaded ->
         Lwt_mvar.take t.buffers >>= fun buffers ->
         PACKDecoder.length loaded.decoder hash ztmp window
-        >>!= (fun err -> Lwt.return (`PackDecoder err)) >>= fun ret ->
+        >>!= (fun err -> Lwt.return (`Pack_decoder err)) >>= fun ret ->
         Lwt_mvar.put t.buffers buffers >>= fun () ->
         Lwt.return ret
       | Total { decoder; _ } ->
         Lwt_mvar.take t.buffers >>= fun buffers ->
         PACKDecoder.length decoder hash ztmp window
-        >>!= (fun err -> Lwt.return (`PackDecoder err)) >>= fun ret ->
+        >>!= (fun err -> Lwt.return (`Pack_decoder err)) >>= fun ret ->
         Lwt_mvar.put t.buffers buffers >>= fun () ->
         Lwt.return ret
       | exception Not_found ->
