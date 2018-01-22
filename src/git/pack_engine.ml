@@ -414,10 +414,6 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
     include Helper.Encoder(E)(FS)
   end
 
-  let err_stack_idx root file =
-    let path = Fpath.(root / "objects" / "pack" / file) in
-    Fmt.kstrf (fun x ->  Lwt.return (Error (`IO x)))
-      "Impossible to store the IDX file: %a." Fpath.pp path
   let save_idx_file ~root sequence hash_pack =
     let file = Fmt.strf "pack-%s.idx" (Hash.to_hex hash_pack) in
     let encoder_idx = IDXEncoder.default sequence hash_pack in
@@ -492,11 +488,6 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE):
     end
     include Helper.Encoder(E)(FS)
   end
-
-  let err_stack temp file =
-    Fmt.kstrf (fun x -> Error (`IO x))
-      "Impossible to store the PACK file: %a." Fpath.pp
-      Fpath.(temp / file)
 
   let save_pack_file fmt entries get =
     let ztmp = Cstruct.create 0x8000 in
