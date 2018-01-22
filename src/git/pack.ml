@@ -53,6 +53,43 @@ struct
     | Tag -> Fmt.pf ppf "Tag"
 end
 
+module type ENTRY =
+sig
+  module Hash: S.HASH
+
+  type t
+
+  type source =
+    | From of Hash.t
+    | None
+
+  val pp: t Fmt.t
+  val pp_source: source Fmt.t
+  val hash: string -> int
+
+  val make:
+    Hash.t
+    -> ?name:string
+    -> ?preferred:bool
+    -> ?delta:source
+    -> Kind.t
+    -> int64
+    -> t
+
+  val kind: t -> Kind.t
+  val preferred: t -> bool
+  val delta: t -> source
+  val length: t -> int64
+
+  val with_delta: t -> source -> t
+  val with_preferred: t -> bool -> t
+
+  val id: t -> Hash.t
+  val name: t -> string -> t
+  val compare: t -> t -> int
+  val topological_sort: t list -> t list
+end
+
 module Entry (H : S.HASH) =
 struct
   module Hash = H
@@ -218,6 +255,34 @@ struct
   let ( - )  = Int64.sub
   let ( >> ) = Int64.shift_right
   let ( / ) = Int64.div
+end
+
+module type H =
+sig
+  module Hash: S.HASH
+
+  type error
+
+  val pp_error: error Fmt.t
+
+  type t
+
+  type reference =
+    | Offset of int64
+    | Hash of Hash.t
+
+  val pp: t Fmt.t
+  val default: reference -> int -> int -> Rabin.t list -> t
+  val refill: int -> int -> t -> t
+  val flush: int -> int -> t -> t
+  val finish: t -> t
+  val eval: Cstruct.t -> Cstruct.t -> t ->
+    [ `Await of t
+    | `Flush of t
+    | `End of t
+    | `Error of (t * error) ]
+  val used_in: t -> int
+  val used_out: t -> int
 end
 
 module MakeHunkEncoder (H : S.HASH) =
@@ -539,6 +604,36 @@ struct
   let used_out t = t.o_pos
 end
 
+module type DELTA =
+sig
+  module Hash: S.HASH
+  module Entry: ENTRY with module Hash := Hash
+
+  type t =
+    { mutable delta: delta }
+  and delta =
+    | Z
+    | S of { length    : int
+           ; depth     : int
+           ; hunks     : Rabin.t list
+           ; src       : t
+           ; src_length: int64
+           ; src_hash  : Hash.t
+           ; }
+
+  type error = Invalid_hash of Hash.t
+
+  val pp_error: error Fmt.t
+  val deltas:
+    ?memory:bool
+    -> Entry.t list
+    -> (Hash.t -> Cstruct.t option Lwt.t)
+    -> (Entry.t -> bool)
+    -> int
+    -> int
+    -> ((Entry.t * t) list, error) result Lwt.t
+end
+
 module MakeDelta (H : S.HASH) =
 struct
   module Hash = H
@@ -830,87 +925,19 @@ struct
               | exn -> Lwt.fail exn) (* XXX(dinosaure): same as below. *)
 end
 
-module type ENCODER =
+module type P =
 sig
-  module Hash : S.HASH
+  module Hash: S.HASH
+  module Deflate: S.DEFLATE
 
-  module Deflate : S.DEFLATE
+  module Entry: ENTRY with module Hash := Hash
 
-  module Entry :
-  sig
-    type t
+  module Delta: DELTA
+    with module Hash := Hash
+     and module Entry := Entry
 
-    type source =
-      | From of Hash.t
-      | None
-
-    val pp : t Fmt.t
-    val pp_source : source Fmt.t
-
-    val hash : string -> int
-
-    val make : Hash.t -> ?name:string -> ?preferred:bool -> ?delta:source -> Kind.t -> int64 -> t
-
-    val id : t -> Hash.t
-    val name : t -> string -> t
-
-    val compare : t -> t -> int
-
-    val topological_sort : t list -> t list
-  end
-
-  module Delta :
-  sig
-    type t =
-      { mutable delta : delta }
-    and delta =
-      | Z
-      | S of { length     : int
-             ; depth      : int
-             ; hunks      : Rabin.t list
-             ; src        : t
-             ; src_length : int64
-             ; src_hash   : Hash.t
-             ; }
-
-    type error = Invalid_hash of Hash.t
-
-    val pp_error : error Fmt.t
-
-    val deltas :
-      ?memory:bool -> Entry.t list ->
-      (Hash.t -> Cstruct.t option Lwt.t) ->
-      (Entry.t -> bool) ->
-      int -> int -> ((Entry.t * t) list, error) result Lwt.t
-  end
-
-  module Radix : module type of Radix.Make(struct type t = Hash.t let get = Hash.get let length _ = Hash.Digest.length end)
-
-  module H :
-  sig
-    type error
-
-    val pp_error : error Fmt.t
-
-    type t
-
-    type reference =
-      | Offset of int64
-      | Hash of Hash.t
-
-    val pp : t Fmt.t
-
-    val default : reference -> int -> int -> Rabin.t list -> t
-
-    val refill : int -> int -> t -> t
-    val flush : int -> int -> t -> t
-    val finish : t -> t
-
-    val eval : Cstruct.t -> Cstruct.t -> t -> [ `Await of t | `Flush of t | `End of t | `Error of (t * error) ]
-
-    val used_in : t -> int
-    val used_out : t -> int
-  end
+  module HunkEncoder: H with module Hash := Hash
+  module Radix: Radix.S with type key = Hash.t
 
   type error =
     | Deflate_error of Deflate.error
