@@ -117,6 +117,8 @@ sig
       buffer noticed to the previous call of {!eval}. *)
 end
 
+module MakeHunkEncoder (Hash: S.HASH): H with module Hash = Hash
+
 (** The entry module. It used to able to manipulate the meta-data only
    needed by the delta-ification of the Git object (and avoid to
    de-serialize all of the Git object to compute the delta-ification).
