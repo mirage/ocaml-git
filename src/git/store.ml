@@ -84,19 +84,28 @@ module type PACK = sig
   module FS: S.FS
   module Inflate: S.INFLATE
   module Deflate: S.DEFLATE
-  module PACKDecoder: Unpack.DECODER
+  module HDec: Unpack.H with module Hash = Hash
+  module PDec: Unpack.P
     with module Hash = Hash
      and module Inflate = Inflate
-  module PACKEncoder: Pack.ENCODER
+     and module HunkDecoder := HDec
+  module RPDec: Unpack.D
+    with module Hash = Hash
+     and module Inflate = Inflate
+     and module HunkDecoder := HDec
+     and module PackDecoder := PDec
+  module PEnc: Pack.P
     with module Hash = Hash
      and module Deflate = Deflate
-  module IDXDecoder: Index_pack.LAZY
+  module IDec: Index_pack.LAZY
     with module Hash = Hash
-  module IDXEncoder: Index_pack.ENCODER
+  module IEnc: Index_pack.ENCODER
     with module Hash = Hash
-  module Pack_info: Pack_info.S
+  module PInfo: Pack_info.S
     with module Hash = Hash
      and module Inflate = Inflate
+     and module HDec := HDec
+     and module PDec := PDec
 
   val lookup: state -> Hash.t -> (Hash.t * (Crc32.t * int64)) option Lwt.t
   val mem: state -> Hash.t -> bool Lwt.t
@@ -139,42 +148,54 @@ module type S = sig
     with module Hash = Hash
      and module FS = FS
 
-  module PACKDecoder: Unpack.DECODER
+  module HDec: Unpack.H
+    with module Hash = Hash
+
+  module PDec: Unpack.P
     with module Hash = Hash
      and module Inflate = Inflate
+     and module HunkDecoder := HDec
 
-  module PACKEncoder: Pack.ENCODER
+  module RPDec: Unpack.D
+    with module Hash = Hash
+     and module Inflate = Inflate
+     and module HunkDecoder := HDec
+     and module PackDecoder := PDec
+
+  module PEnc: Pack.P
     with module Hash = Hash
      and module Deflate = Deflate
 
-  module IDXDecoder: Index_pack.LAZY with module Hash = Hash
-  (** The [IDXDecoder] module, which decodes {i IDX} file. *)
-
-  module IDXEncoder: Index_pack.ENCODER
+  module IDec: Index_pack.LAZY
     with module Hash = Hash
 
-  module Pack_info: Pack_info.S
+  module IEnc: Index_pack.ENCODER
+    with module Hash = Hash
+
+  module PInfo: Pack_info.S
     with module Hash = Hash
      and module Inflate = Inflate
+     and module HDec := HDec
+     and module PDec := PDec
 
   module Packed_refs: Packed_refs.S
     with module Hash = Hash
      and module FS = FS
 
   type error =
-    [ Error.Decoder.t
-    | FS.error Error.FS.t
-    | Inflate.error Error.Inf.t
-    | Deflate.error Error.Def.t
-    | `Delta             of PACKEncoder.Delta.error
-    | `Pack_decoder      of PACKDecoder.error
-    | `Pack_encoder      of PACKEncoder.error
-    | `Pack_info         of Pack_info.error
-    | `Idx_decoder       of IDXDecoder.error
-    | `Idx_encoder       of IDXEncoder.error
+    [ `Delta             of PEnc.Delta.error
+    | `Pack_decoder      of RPDec.error
+    | `Pack_encoder      of PEnc.error
+    | `Pack_info         of PInfo.error
+    | `Idx_decoder       of IDec.error
+    | `Idx_encoder       of IEnc.error
     | `Integrity         of string
     | `Invalid_hash      of Hash.t
     | `Invalid_reference of Reference.t
+    | Error.Decoder.t
+    | FS.error Error.FS.t
+    | Inflate.error Error.Inf.t
+    | Deflate.error Error.Def.t
     | Error.not_found ]
 
   val pp_error: error Fmt.t
@@ -189,13 +210,16 @@ module type S = sig
      and module FS = FS
 
   module Pack: PACK
-    with type t = PACKDecoder.Object.t
+    with type t = RPDec.Object.t
      and type value = Value.t
      and type state = t
      and type error = error
      and module Hash = Hash
      and module FS = FS
      and module Inflate = Inflate
+     and module HDec := HDec
+     and module PDec := PDec
+     and module RPDec := RPDec
 
   type kind =
     [ `Commit
@@ -273,14 +297,38 @@ module FS (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
   let has_global_checkout = FS.has_global_checkout
 
   module LooseImpl = Loose.Make(Hash)(FS)(Inflate)(Deflate)
-  module PackImpl = Pack_engine.Make(H)(FS)(I)(D)
-  module Value = Value.Make(Hash)(Inflate)(Deflate)
 
-  module PACKDecoder = PackImpl.PACKDecoder
-  module PACKEncoder = PackImpl.PACKEncoder
-  module IDXDecoder = PackImpl.IDXDecoder
-  module IDXEncoder = PackImpl.IDXEncoder
-  module Pack_info = PackImpl.Pack_info
+  module HDec = Unpack.MakeHunkDecoder(Hash)
+  module PDec = Unpack.MakePackDecoder(Hash)(Inflate)(HDec)
+  module RPDec = Unpack.MakeDecoder(Hash)(struct type error = FS.error include FS.Mapper end)(Inflate)(HDec)(PDec)
+
+  module PackImpl
+    : Pack_engine.S
+      with module Hash = Hash
+       and module FS = FS
+       and module Inflate = Inflate
+       and module Deflate = Deflate
+       and module HDec := HDec
+       and module PDec := PDec
+       and module RPDec := RPDec
+    = Pack_engine.Make(H)(FS)(I)(D)(HDec)(PDec)(RPDec)
+
+  module Value
+    : Value.S
+      with module Hash = H
+       and module Inflate = I
+       and module Deflate = D
+       and module Blob = Blob.Make(Hash)
+       and module Commit = Commit.Make(Hash)
+       and module Tree = Tree.Make(Hash)
+       and module Tag = Tag.Make(Hash)
+       and type t = Value.Make(Hash)(Inflate)(Deflate).t
+    = Value.Make(Hash)(Inflate)(Deflate)
+
+  module PEnc = PackImpl.PEnc
+  module IDec = PackImpl.IDec
+  module IEnc = PackImpl.IEnc
+  module PInfo = PackImpl.PInfo
   module Packed_refs = Packed_refs.Make(Hash)(FS)
   module Reference = Reference.IO(H)(FS)
 
@@ -303,7 +351,7 @@ module FS (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
   module CacheObject =
     Lru.M.Make
       (DoubleHash)
-      (struct type t = PACKDecoder.Object.t let weight _ = 1 end)
+      (struct type t = RPDec.Object.t let weight _ = 1 end)
 
   module CacheValue =
     Lru.M.Make
@@ -313,13 +361,13 @@ module FS (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
   module CachePack =
     Lru.M.Make
       (Hash)
-      (struct type t = PACKDecoder.t let weight _ = 1 end) (* fixed size *)
+      (struct type t = PDec.t let weight _ = 1 end) (* fixed size *)
 
   module CacheIndex =
     Lru.M.Make
       (Hash)
       (* not fixed size by consider than it's ok. *)
-      (struct type t = IDXDecoder.t let weight _ = 1 end)
+      (struct type t = IDec.t let weight _ = 1 end)
 
   module CacheRevIndex =
     Lru.M.Make
@@ -349,18 +397,18 @@ module FS (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
     ; engine      : PackImpl.t }
 
   type error =
-    [ Error.Decoder.t
+    [ PackImpl.error
+    | `Delta of PEnc.Delta.error
+    | Error.Decoder.t
     | FS.error Error.FS.t
     | Inflate.error Error.Inf.t
     | Deflate.error Error.Def.t
-    | PackImpl.error
-    | `Delta of PACKEncoder.Delta.error
     | `Invalid_reference of Reference.t ]
 
   let pp_error ppf = function
     | #LooseImpl.error as err -> Fmt.pf ppf "%a" LooseImpl.pp_error err
     | #PackImpl.error as err -> Fmt.pf ppf "%a" PackImpl.pp_error err
-    | `Delta err -> Fmt.pf ppf "(`Delta %a)" PACKEncoder.Delta.pp_error err
+    | `Delta err -> Fmt.pf ppf "(`Delta %a)" PEnc.Delta.pp_error err
     | _ -> assert false
 
   let lift_error err = (err :> error)
@@ -455,15 +503,17 @@ module FS (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
     module Inflate = Inflate
     module Deflate = Deflate
 
-    module Pack_info = PackImpl.Pack_info
-    module IDXEncoder = PackImpl.IDXEncoder
-    module IDXDecoder = PackImpl.IDXDecoder
-    module PACKEncoder = PackImpl.PACKEncoder
-    module PACKDecoder = PackImpl.PACKDecoder
+    module HDec = HDec
+    module PDec = PDec
+    module PInfo = PackImpl.PInfo
+    module IEnc = PackImpl.IEnc
+    module IDec = PackImpl.IDec
+    module PEnc = PackImpl.PEnc
+    module RPDec = RPDec
 
     type state = t
 
-    type t = PACKDecoder.Object.t
+    type t = RPDec.Object.t
     type value = Value.t
     type nonrec error = error
 
@@ -540,7 +590,7 @@ module FS (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
     let extern git hash =
       read git hash >>= function
       | Ok o ->
-        Lwt.return (Some (o.PACKDecoder.Object.kind, o.PACKDecoder.Object.raw))
+        Lwt.return (Some (o.RPDec.Object.kind, o.RPDec.Object.raw))
       | Error _ -> Loose.lookup git hash >>= function
         | None -> Lwt.return None
         | Some _ ->
@@ -553,11 +603,11 @@ module FS (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
         module Hash = Hash
         module Value = Value
         module Deflate = Deflate
-        module PACKEncoder = PACKEncoder
+        module PEnc = PEnc
 
         type nonrec t = state
         type nonrec error = error
-        type kind = PACKDecoder.kind
+        type kind = RPDec.kind
 
         let pp_error = pp_error
         let read_inflated = extern
@@ -583,43 +633,43 @@ module FS (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
       in
       let make acc (hash, (_, offset)) =
         with_buffer git (fun { ztmp; window; _ } ->
-            PACKDecoder.optimized_get'
-              ~h_tmp:htmp decoder_pack offset rtmp ztmp window
+            RPDec.get_from_offset
+              ~htmp:htmp decoder_pack offset rtmp ztmp window
           ) >|= function
         | Error err ->
           Log.err (fun l ->
               l ~header:"from" "Retrieve an error when we try to \
                                 resolve the object at the offset %Ld \
                                 in the temporary pack file %a: %a."
-                offset Fpath.pp path_pack PACKDecoder.pp_error err);
+                offset Fpath.pp path_pack RPDec.pp_error err);
           acc
         | Ok obj ->
-          let open PACKDecoder.Object in
+          let open RPDec.Object in
           let delta = match obj.from with
-            | External hash        -> Some (PACKEncoder.Entry.From hash)
+            | External hash        -> Some (PEnc.Entry.From hash)
             | Direct _             -> None
             | Offset { offset; _ } ->
               try
                 let (_, hash) =
-                  Pack_info.Graph.find offset info.Pack_info.graph
+                  PInfo.Graph.find offset info.PInfo.graph
                 in
-                Option.map (fun hash -> PACKEncoder.Entry.From hash) hash
+                Option.map (fun hash -> PEnc.Entry.From hash) hash
               with Not_found ->
                 None
           in
 
-          PACKEncoder.Entry.make hash ?delta
-            (k2k obj.PACKDecoder.Object.kind) obj.PACKDecoder.Object.length
+          PEnc.Entry.make hash ?delta
+            (k2k obj.RPDec.Object.kind) obj.RPDec.Object.length
           :: acc
       in
 
       let external_ressources acc =
         let res = List.fold_left
           (fun acc (_, hunks_descr) ->
-             let open Pack_info.PACKDecoder.H in
+             let open PInfo in
 
-             match hunks_descr.reference with
-             | Hash hash when not (Pack_info.Radix.mem info.tree hash) ->
+             match hunks_descr.HDec.reference with
+             | HDec.Hash hash when not (Radix.mem info.tree hash) ->
                (try List.find (Hash.equal hash) acc |> fun _ -> acc
                 with Not_found -> hash :: acc)
              | _ -> acc)
@@ -629,22 +679,22 @@ module FS (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
           (fun acc hash -> extern git hash >|= function
              | None -> acc
              | Some (kind, raw) ->
-               let entry = PACKEncoder.Entry.make hash (k2k kind) (Int64.of_int (Cstruct.len raw)) in
+               let entry = PEnc.Entry.make hash (k2k kind) (Int64.of_int (Cstruct.len raw)) in
                entry :: acc)
           acc res
       in
 
       let get hash =
-        if Pack_info.Radix.mem info.Pack_info.tree hash
+        if PInfo.Radix.mem info.PInfo.tree hash
         then
           with_buffer git @@ fun { ztmp; window; _ } ->
-          PACKDecoder.get_with_allocation
-            ~h_tmp:htmp
+          RPDec.get_with_result_allocation_from_hash
+            ~htmp:htmp
             decoder_pack
             hash
             ztmp window >|= function
           | Error _ -> None
-          | Ok obj -> (Some obj.PACKDecoder.Object.raw)
+          | Ok obj -> (Some obj.RPDec.Object.raw)
         else extern git hash >|= function
           | Some (_, raw) -> Some (cstruct_copy raw)
           | None          -> None
@@ -652,10 +702,10 @@ module FS (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
 
       let tag _ = false in
 
-      Pack_info.Radix.to_list info.Pack_info.tree
+      PInfo.Radix.to_list info.PInfo.tree
       |> Lwt_list.fold_left_s make []
       >>= external_ressources
-      >>= fun entries -> PACKEncoder.Delta.deltas ~memory:false entries get tag 10 50
+      >>= fun entries -> PEnc.Delta.deltas ~memory:false entries get tag 10 50
       >>= function
       | Error err -> Lwt.return (Error (`Delta err))
       | Ok entries ->
@@ -663,17 +713,17 @@ module FS (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
           (Fmt.strf "pack-%s.pack")
           entries
           (fun hash ->
-             if Pack_info.Radix.mem info.Pack_info.tree hash
+             if PInfo.Radix.mem info.PInfo.tree hash
              then
                with_buffer git @@ fun { ztmp; window; _ } ->
-               PACKDecoder.get_with_allocation
-                 ~h_tmp:htmp
+               RPDec.get_with_result_allocation_from_hash
+                 ~htmp:htmp
                  decoder_pack
                  hash
                  ztmp window
                >|= function
                | Error _ -> None
-               | Ok obj -> (Some (obj.PACKDecoder.Object.raw))
+               | Ok obj -> (Some (obj.RPDec.Object.raw))
              else extern git hash >|= function
                | Some (_, raw) -> Some raw
                | None -> None)
@@ -719,40 +769,40 @@ module FS (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
         stream'
       in
 
-      let info = Pack_info.v (Hash.of_hex (String.make (Hash.Digest.length * 2) '0')) in
+      let info = PInfo.v (Hash.of_hex (String.make (Hash.Digest.length * 2) '0')) in
 
       (with_buffer git @@ fun { ztmp; window; _ } ->
-       Pack_info.from_stream ~ztmp ~window info (fun () -> Lwt_stream.get stream0)
+       PInfo.from_stream ~ztmp ~window info (fun () -> Lwt_stream.get stream0)
        >>!= (fun sys_err -> `Pack_info sys_err))
       >>?= fun info ->
       to_temp_file (Fmt.strf "pack-%s.pack") stream1 >>?= fun path ->
 
-      let module Graph = Pack_info.Graph in
+      let module Graph = PInfo.Graph in
 
       FS.Mapper.openfile path >>= function
       | Error err ->
         Lwt.return Error.(v @@ FS.err_open path err)
       | Ok fdp ->
-        let `Partial { Pack_info.Partial.hash = hash_pack;
-                       Pack_info.Partial.delta; } = info.Pack_info.state
+        let `Partial { PInfo.Partial.hash = hash_pack;
+                       PInfo.Partial.delta; } = info.PInfo.state
         in
 
         let htmp =
-          let raw = Cstruct.create (info.Pack_info.max_length_insert_hunks * (info.Pack_info.max_depth + 1)) in
+          let raw = Cstruct.create (info.PInfo.max_length_insert_hunks * (info.PInfo.max_depth + 1)) in
           Array.init
-            (info.Pack_info.max_depth + 1)
-            (fun i -> Cstruct.sub raw (i * info.Pack_info.max_length_insert_hunks) info.Pack_info.max_length_insert_hunks)
+            (info.PInfo.max_depth + 1)
+            (fun i -> Cstruct.sub raw (i * info.PInfo.max_length_insert_hunks) info.PInfo.max_length_insert_hunks)
         in
 
         let rtmp =
-          Cstruct.create info.Pack_info.max_length_object,
-          Cstruct.create info.Pack_info.max_length_object,
-          info.Pack_info.max_length_object
+          Cstruct.create info.PInfo.max_length_object,
+          Cstruct.create info.PInfo.max_length_object,
+          info.PInfo.max_length_object
         in
 
-        PACKDecoder.make fdp
+        RPDec.make fdp
           (fun _ -> None)
-          (fun hash -> Pack_info.Radix.lookup info.Pack_info.tree hash)
+          (fun hash -> PInfo.Radix.lookup info.PInfo.tree hash)
           (* XXX(dinosaure): this function will be updated. *)
           (fun _ -> None)
           (fun hash -> extern git hash)
@@ -763,48 +813,48 @@ module FS (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
           let hash_of_object obj =
             let ctx = Hash.Digest.init () in
             let hdr = Fmt.strf "%s %Ld\000"
-                (match obj.PACKDecoder.Object.kind with
+                (match obj.RPDec.Object.kind with
                  | `Commit -> "commit"
                  | `Blob   -> "blob"
                  | `Tree   -> "tree"
                  | `Tag    -> "tag")
-                obj.PACKDecoder.Object.length
+                obj.RPDec.Object.length
             in
 
             Hash.Digest.feed ctx (Cstruct.of_string hdr);
-            Hash.Digest.feed ctx obj.PACKDecoder.Object.raw;
+            Hash.Digest.feed ctx obj.RPDec.Object.raw;
             Hash.Digest.get ctx
           in
 
-          let crc obj = match obj.PACKDecoder.Object.from with
-            | PACKDecoder.Object.Offset { crc; _ } -> crc
-            | PACKDecoder.Object.External _ ->
+          let crc obj = match obj.RPDec.Object.from with
+            | RPDec.Object.Offset { crc; _ } -> crc
+            | RPDec.Object.External _ ->
               raise (Invalid_argument "Try to get the CRC-32 checksum from an external ressource.")
-            | PACKDecoder.Object.Direct { crc; _ } -> crc
+            | RPDec.Object.Direct { crc; _ } -> crc
           in
 
           Lwt_list.fold_left_s
             (fun ((decoder, tree, graph) as acc) (offset, hunks_descr) ->
                with_buffer git (fun { ztmp; window; _ } ->
-               PACKDecoder.optimized_get'
-                 ~h_tmp:htmp
+               RPDec.get_from_offset
+                 ~htmp:htmp
                  decoder
                  offset
                  rtmp ztmp window) >>= function
                | Ok obj ->
                  let hash = hash_of_object obj in
                  let crc = crc obj in
-                 let tree = Pack_info.Radix.bind tree hash (crc, offset) in
+                 let tree = PInfo.Radix.bind tree hash (crc, offset) in
 
                  let graph =
-                   let open Pack_info in
+                   let open PInfo in
 
-                   let depth_source, _ = match hunks_descr.PACKDecoder.H.reference with
-                     | PACKDecoder.H.Offset rel_off ->
+                   let depth_source, _ = match hunks_descr.HDec.reference with
+                     | HDec.Offset rel_off ->
                        (try Graph.find Int64.(sub offset rel_off) graph
                         with Not_found -> 0, None)
-                     | PACKDecoder.H.Hash hash_source ->
-                       try match Pack_info.Radix.lookup tree hash_source with
+                     | HDec.Hash hash_source ->
+                       try match Radix.lookup tree hash_source with
                          | Some (_, abs_off) -> Graph.find abs_off graph
                          | None -> 0, None
                        with Not_found -> 0, None
@@ -814,19 +864,19 @@ module FS (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
                  in
 
                  Lwt.return
-                   (PACKDecoder.update_idx (Pack_info.Radix.lookup tree) decoder,
+                   (RPDec.update_idx (PInfo.Radix.lookup tree) decoder,
                     tree, graph)
                | Error err ->
                  Log.err (fun l -> l ~header:"from" "Retrieve an error when we try to \
                                                      resolve the object at the offset %Ld \
                                                      in the temporary pack file %a: %a."
-                             offset Fpath.pp path PACKDecoder.pp_error err);
+                             offset Fpath.pp path RPDec.pp_error err);
                  Lwt.return acc)
-            (decoder, info.Pack_info.tree, info.Pack_info.graph) delta
+            (decoder, info.PInfo.tree, info.PInfo.graph) delta
           >>= fun (decoder, tree', graph') ->
 
           let is_total =
-            Pack_info.Graph.for_all
+            PInfo.Graph.for_all
               (fun _ -> function (_, Some _) -> true | (_, None) -> false)
               graph'
           in
@@ -835,22 +885,22 @@ module FS (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
           then
             Lwt_list.for_all_p
               (fun (_, hunks_descr) ->
-                 let open Pack_info in
+                 let open PInfo in
 
-                 match hunks_descr.PACKDecoder.H.reference with
-                 | PACKDecoder.H.Offset _ -> Lwt.return true
-                 | PACKDecoder.H.Hash hash ->
+                 match hunks_descr.HDec.reference with
+                 | HDec.Offset _ -> Lwt.return true
+                 | HDec.Hash hash ->
                    Lwt.return (Radix.mem tree' hash))
               delta
             >>= fun is_not_thin ->
             if is_not_thin
             then begin
               let info =
-                { info with Pack_info.tree = tree'
-                          ; Pack_info.graph = graph'
-                          ; Pack_info.state =
-                              `Full { Pack_info.Full.thin = not is_not_thin
-                                    ; Pack_info.Full.hash = hash_pack } }
+                { info with PInfo.tree = tree'
+                          ; PInfo.graph = graph'
+                          ; PInfo.state =
+                              `Full { PInfo.Full.thin = not is_not_thin
+                                    ; PInfo.Full.hash = hash_pack } }
               in
 
               (FS.Mapper.close fdp >>!= Error.FS.err_close path)
@@ -877,21 +927,21 @@ module FS (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
     Log.debug (fun l -> l "read %a" Hash.pp hash);
     Pack.read state hash >>= function
     | Ok o ->
-      (match o.PACKDecoder.Object.kind with
+      (match o.RPDec.Object.kind with
        | `Commit ->
-         Value.Commit.D.to_result o.PACKDecoder.Object.raw
+         Value.Commit.D.to_result o.RPDec.Object.raw
          |> Rresult.R.map (fun v -> Value.Commit v)
          |> Rresult.R.reword_error (fun err -> (err :> error))
        | `Tree ->
-         Value.Tree.D.to_result o.PACKDecoder.Object.raw
+         Value.Tree.D.to_result o.RPDec.Object.raw
          |> Rresult.R.map (fun v -> Value.Tree v)
          |> Rresult.R.reword_error (fun err -> (err :> error))
        | `Tag ->
-         Value.Tag.D.to_result o.PACKDecoder.Object.raw
+         Value.Tag.D.to_result o.RPDec.Object.raw
          |> Rresult.R.map (fun v -> Value.Tag v)
          |> Rresult.R.reword_error (fun err -> (err :> error))
        | `Blob ->
-         Value.Blob.D.to_result o.PACKDecoder.Object.raw
+         Value.Blob.D.to_result o.RPDec.Object.raw
          |> Rresult.R.map (fun v -> Value.Blob v)
          |> fun blob -> Rresult.R.(ok (get_ok blob)))
       |> Lwt.return
@@ -915,7 +965,7 @@ module FS (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
 
   let read_inflated state hash =
     Pack.read state hash >>= function
-    | Ok o -> Lwt.return (Some (o.PACKDecoder.Object.kind, o.PACKDecoder.Object.raw))
+    | Ok o -> Lwt.return (Some (o.RPDec.Object.kind, o.RPDec.Object.raw))
     | Error _ -> Loose.lookup state hash >>= function
       | None -> Lwt.return None
       | Some _ ->
