@@ -505,7 +505,7 @@ module MakePACKDecoder (H: S.HASH) (I: S.INFLATE)
     | Reserved_kind of int
     | Invalid_kind of int
     | Inflate_error of Inflate.error
-    | Hunk_error of H.error
+    | Hunk_error of HunkDecoder.error
     | Hunk_input of int * int
     | Invalid_length of int * int
 
@@ -523,7 +523,7 @@ module MakePACKDecoder (H: S.HASH) (I: S.INFLATE)
         expected has
     | Hunk_error err ->
       Fmt.pf ppf "Got a Hunk decoder error: %a"
-        H.pp_error err
+        HunkDecoder.pp_error err
     | Hunk_input _ -> assert false
 
   type process =
@@ -585,7 +585,7 @@ module MakePACKDecoder (H: S.HASH) (I: S.INFLATE)
     ; consumed : int
     ; crc      : Crc32.t
     ; z        : Inflate.t
-    ; h        : H.t }
+    ; h        : HunkDecoder.t }
   and res =
     | Wait  of t
     | Flush of t
@@ -597,14 +597,14 @@ module MakePACKDecoder (H: S.HASH) (I: S.INFLATE)
     | Tree
     | Blob
     | Tag
-    | Hunk of H.hunks
+    | Hunk of HunkDecoder.hunks
 
   let pp_kind ppf = function
     | Commit     -> Fmt.pf ppf "Commit"
     | Tree       -> Fmt.pf ppf "Tree"
     | Blob       -> Fmt.pf ppf "Blob"
     | Tag        -> Fmt.pf ppf "Tag"
-    | Hunk hunks -> Fmt.pf ppf "(Hunks %a)" (Fmt.hvbox H.pp_hunks) hunks
+    | Hunk hunks -> Fmt.pf ppf "(Hunks %a)" (Fmt.hvbox HunkDecoder.pp_hunks) hunks
 
   let pp_hunks_state ppf { offset; length; consumed; z; h; _ } =
     Fmt.pf ppf "{ @[<hov>offset = %Ld;@ \
@@ -613,7 +613,7 @@ module MakePACKDecoder (H: S.HASH) (I: S.INFLATE)
                          z = %a;@ \
                          h = %a;@] })"
       offset consumed length
-      (Fmt.hvbox Inflate.pp) z (Fmt.hvbox H.pp) h
+      (Fmt.hvbox Inflate.pp) z (Fmt.hvbox HunkDecoder.pp) h
 
   let pp_state ppf = function
     | Header _ ->
@@ -803,7 +803,7 @@ module MakePACKDecoder (H: S.HASH) (I: S.INFLATE)
      - We [Inflate] only when it's needed (so, when [H] returns
      [`Await]) *)
   let hunks src t offset length consumed crc z h =
-    match H.eval t.o_z h with
+    match HunkDecoder.eval t.o_z h with
     | `Await h ->
       (match Inflate.eval ~src ~dst:t.o_z z with
        | `Await z ->
@@ -814,7 +814,7 @@ module MakePACKDecoder (H: S.HASH) (I: S.INFLATE)
                       ; i_pos = t.i_pos + Inflate.used_in z
                       ; read  = Int64.add t.read (Int64.of_int (Inflate.used_in z)) }
        | `Flush z ->
-         let h = H.refill 0 (Inflate.used_out z) h in
+         let h = HunkDecoder.refill 0 (Inflate.used_out z) h in
          let z = Inflate.flush 0 (Cstruct.len t.o_z) z in
 
          Cont { t with state = Hunks { offset; length; consumed; crc; z; h; } }
@@ -826,7 +826,7 @@ module MakePACKDecoder (H: S.HASH) (I: S.INFLATE)
          let consumed = consumed + Inflate.used_in z in
          let crc = Crc32.digest ~off:(t.i_off + t.i_pos) ~len:(Inflate.used_in z) crc src in
 
-         let h = H.refill 0 (Inflate.used_out z) h in
+         let h = HunkDecoder.refill 0 (Inflate.used_out z) h in
 
          Cont { t with state = Hunks { offset; length; consumed; crc; z = Inflate.refill 0 0 z; h; }
                      ; i_pos = t.i_pos + Inflate.used_in z
@@ -913,7 +913,7 @@ module MakePACKDecoder (H: S.HASH) (I: S.INFLATE)
                                            ; z = Inflate.flush 0 (Cstruct.len t.o_z)
                                                @@ Inflate.refill (t.i_off + t.i_pos) (t.i_len - t.i_pos)
                                                @@ Inflate.default (Inflate.window_reset t.o_w)
-                                           ; h = H.default len (H.Offset offset) } })
+                                           ; h = HunkDecoder.default len (HunkDecoder.Offset offset) } })
             src t)
         src t
     | 0b111 ->
@@ -928,7 +928,7 @@ module MakePACKDecoder (H: S.HASH) (I: S.INFLATE)
                                       ; z = Inflate.flush 0 (Cstruct.len t.o_z)
                                             @@ Inflate.refill (t.i_off + t.i_pos) (t.i_len - t.i_pos)
                                             @@ Inflate.default (Inflate.window_reset t.o_w)
-                                      ; h = H.default len (H.Hash hash) } })
+                                      ; h = HunkDecoder.default len (HunkDecoder.Hash hash) } })
         src t
     | _  -> error t (Invalid_kind typ)
 
@@ -1148,7 +1148,7 @@ module MakePACKDecoder (H: S.HASH) (I: S.INFLATE)
   let kind t = match t.state with
     | Unzip { kind; _ } -> kind
     | StopHunks { h; _ }
-    | Hunks { h; _ } -> Hunk (H.partial_hunks h)
+    | Hunks { h; _ } -> Hunk (HunkDecoder.partial_hunks h)
     | Next { kind; _ } -> kind
     | End _ | Header _ | Object _ | VariableLength _
     | Checksum _ | Exception _ ->
@@ -1191,7 +1191,7 @@ module MakePACKDecoder (H: S.HASH) (I: S.INFLATE)
   let continue t =
     match t.state with
     | StopHunks hs ->
-      { t with state = Hunks { hs with h = H.continue hs.h } }
+      { t with state = Hunks { hs with h = HunkDecoder.continue hs.h } }
     | End _ | Header _ | Object _ | VariableLength _
     | Hunks _ | Next _ | Unzip _ | Checksum _ | Exception _ ->
       raise (Invalid_argument "PACKDecoder.continue: bad state")
@@ -1217,7 +1217,7 @@ module MakePACKDecoder (H: S.HASH) (I: S.INFLATE)
       | Cont ({ state = Next _; _ } as t) ->
         `Object t
       | Cont ({ state = StopHunks hs; _ } as t) ->
-        `Hunk (t, H.current hs.h)
+        `Hunk (t, HunkDecoder.current hs.h)
       | Cont ({ state = (Header _ | Object _ | VariableLength _
                         | Unzip _ | Hunks _ | Checksum _ | End _ | Exception _); _ } as t) -> loop t
       | Wait t -> `Await t
@@ -1235,7 +1235,7 @@ module MakePACKDecoder (H: S.HASH) (I: S.INFLATE)
       match eval0 src t with
       | Cont (({ state = Next _; _ }
               | { state = Unzip _; _ }
-              | { state = Hunks { h = { H.state = H.List _; _ }; _ }; _ }) as t) ->
+              | { state = Hunks { h = { HunkDecoder.state = HunkDecoder.List _; _ }; _ }; _ }) as t) ->
         `Length t
       | Cont ({ state = StopHunks _; _ } as t) -> loop (continue t)
       | Cont t -> loop t
