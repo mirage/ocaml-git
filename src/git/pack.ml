@@ -595,7 +595,7 @@ struct
   type error = Invalid_hash of Hash.t
 
   let pp_error ppf (Invalid_hash hash) =
-    Fmt.pf ppf "(Invalid_hash %a)" Hash.pp hash
+    Fmt.pf ppf "Got an invalid (non-existing) hash when we apply the delta-ification: %a" Hash.pp hash
 
   let depth = function
     | { delta = S { depth; _ } } -> depth
@@ -955,9 +955,9 @@ struct
 
   let pp_error ppf = function
     | Deflate_error err ->
-      Fmt.pf ppf "(Deflate_error %a)" (Fmt.hvbox Deflate.pp_error) err
+      Fmt.pf ppf "Got a deflate error: %a" Deflate.pp_error err
     | Invalid_hash hash ->
-      Fmt.pf ppf "(Invalid_hash %a)" Hash.pp hash
+      Fmt.pf ppf "Invalid hash: %a" Hash.pp hash
 
   type t =
     { o_off   : int
