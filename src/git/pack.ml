@@ -576,7 +576,7 @@ struct
 
   module type WINDOW = Lru.F.S with type k = Entry.t and type v = t * Cstruct.t * Rabin.Default.Index.t
 
-  let rec pp_delta ppf = function
+  let rec _pp_delta ppf = function
     | Z -> Fmt.string ppf "Τ"
     | S { length; depth; hunks; src; src_length; _ } ->
       Fmt.pf ppf "(Δ { @[<hov>length = %d;@ \
@@ -586,11 +586,11 @@ struct
                               src_length = %Ld;@] }"
         length depth
         (Fmt.hvbox (Fmt.list ~sep:(Fmt.unit ";@ ") Rabin.pp)) hunks
-        (Fmt.hvbox pp) src
+        (Fmt.hvbox _pp) src
         src_length
-  and pp ppf { delta; } =
+  and _pp ppf { delta; } =
     Fmt.pf ppf "{ @[<hov>delta = @[<hov>%a@];@] }"
-      (Fmt.hvbox pp_delta) delta
+      (Fmt.hvbox _pp_delta) delta
 
   type error = Invalid_hash of Hash.t
 
