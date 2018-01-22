@@ -81,9 +81,6 @@ module type S_EXT = sig
   module Encoder: Git.Smart.ENCODER
     with module Hash = Store.Hash
 
-  module PACKDecoder: Git.Unpack.P
-    with module Hash = Store.Hash
-     and module Inflate = Store.Inflate
   type error =
     [ `SmartDecoder of Decoder.error
     | `Store of Store.error
@@ -210,9 +207,6 @@ module Make_ext
 
   module Decoder = Git.Smart.Decoder(Store.Hash)
   module Encoder = Git.Smart.Encoder(Store.Hash)
-
-  module PACKDecoder
-    = Git.Unpack.MakePACKDecoder(Store.Hash)(Store.Inflate)
 
   type error =
     [ `SmartDecoder of Decoder.error
