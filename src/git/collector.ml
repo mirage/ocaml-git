@@ -16,10 +16,11 @@
  *)
 
 module type STORE = sig
+
   module Hash: S.HASH
   module Value: Value.S with module Hash = Hash
   module Deflate: S.DEFLATE
-  module PACKEncoder: Pack.ENCODER
+  module PEnc: Pack.P
     with module Hash = Hash
      and module Deflate = Deflate
 
@@ -71,7 +72,7 @@ module Make (S: STORE) = struct
       in
 
       let entry =
-        S.PACKEncoder.Entry.make
+        S.PEnc.Entry.make
           hash
           ?name
           kind
@@ -109,7 +110,7 @@ module Make (S: STORE) = struct
     |> fun () ->
     List.map make objects
     |> fun entries ->
-    S.PACKEncoder.Delta.deltas
+    S.PEnc.Delta.deltas
       ~memory
       entries
       Lwt.Infix.(fun hash ->
@@ -138,7 +139,7 @@ module Make (S: STORE) = struct
 
     delta ?window ?depth git objects >>= function
     | Ok entries ->
-      let state = S.PACKEncoder.default ztmp entries in
+      let state = S.PEnc.default ztmp entries in
 
       Lwt.return (Ok state)
     | Error _ as err -> Lwt.return err
@@ -150,12 +151,12 @@ module Make (S: STORE) = struct
 
     delta_all ?window ?depth git >>= function
     | Ok entries ->
-      let state = S.PACKEncoder.default ztmp entries in
+      let state = S.PEnc.default ztmp entries in
 
       Lwt.return (Ok state)
     | Error _ as err -> Lwt.return err
 
-  exception PackEncoder of S.PACKEncoder.error
+  exception PackEncoder of S.PEnc.error
 
   module Graph = Map.Make(S.Hash)
 
@@ -176,19 +177,19 @@ module Make (S: STORE) = struct
       let write = ref 0 in
 
       let rec stream () =
-        match S.PACKEncoder.eval (value ~default:empty !src) dtmp !state with
+        match S.PEnc.eval (value ~default:empty !src) dtmp !state with
         | `Flush state' ->
-          write := !write + (S.PACKEncoder.used_out state');
-          state := S.PACKEncoder.flush 0 (Cstruct.len dtmp) state';
-          Lwt.return (Some (Cstruct.sub dtmp 0 (S.PACKEncoder.used_out state')))
+          write := !write + (S.PEnc.used_out state');
+          state := S.PEnc.flush 0 (Cstruct.len dtmp) state';
+          Lwt.return (Some (Cstruct.sub dtmp 0 (S.PEnc.used_out state')))
         | `End (state', _) ->
-          if S.PACKEncoder.used_out state' > 0
+          if S.PEnc.used_out state' > 0
           then begin
-            state := S.PACKEncoder.flush 0 0 state';
-            Lwt.return (Some (Cstruct.sub dtmp 0 (S.PACKEncoder.used_out state')))
+            state := S.PEnc.flush 0 0 state';
+            Lwt.return (Some (Cstruct.sub dtmp 0 (S.PEnc.used_out state')))
           end else begin
             state := state';
-            let graph = S.PACKEncoder.Radix.fold (fun (key, value) acc -> Graph.add key value acc) Graph.empty (S.PACKEncoder.idx state') in
+            let graph = S.PEnc.Radix.fold (fun (key, value) acc -> Graph.add key value acc) Graph.empty (S.PEnc.idx state') in
             Lwt_mvar.put mvar graph >>= fun () -> Lwt.return None
           end
         | `Error (state', err) ->
@@ -197,16 +198,16 @@ module Make (S: STORE) = struct
         | `Await state' -> match !src with
           | Some _ ->
             src := None;
-            state := S.PACKEncoder.finish state';
+            state := S.PEnc.finish state';
             stream ()
           | None ->
-            let expect = S.PACKEncoder.expect state' in
+            let expect = S.PEnc.expect state' in
             Store.read_inflated git expect >>= (function
                 | Some (_, raw) ->
                   src := Some raw;
                   Lwt.return raw
                 | None -> assert false) >>= fun raw ->
-            state := S.PACKEncoder.refill 0 (Cstruct.len raw) state';
+            state := S.PEnc.refill 0 (Cstruct.len raw) state';
             stream ()
       in
 
