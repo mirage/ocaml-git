@@ -19,6 +19,7 @@ open Lwt.Infix
 let ( >>!= ) a f = Lwt_result.bind_lwt_err a f
 let ( >>?= ) = Lwt_result.bind
 let ( >>|= ) = Lwt_result.map
+let ( >!= ) a f = Lwt_result.map_err f a
 
 let src = Logs.Src.create "git.pack" ~doc:"Git pack engine"
 module Log = (val Logs.src_log src : Logs.LOG)
