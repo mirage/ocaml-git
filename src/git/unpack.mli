@@ -717,3 +717,21 @@ module MakeDecoder
        and module Inflate = Inflate
        and module HunkDecoder := HunkDecoder
        and module PackDecoder := PackDecoder
+
+module MakeStreamDecoder
+    (Hash: S.HASH)
+    (Inflate: S.INFLATE)
+: sig
+  include P
+end with module Hash = Hash
+     and module Inflate = Inflate
+
+module MakeRandomAccessPACK
+    (Hash: S.HASH)
+    (Mapper: S.MAPPER)
+    (Inflate: S.INFLATE)
+: sig
+  include D
+end with module Hash = Hash
+     and module Mapper = Mapper
+     and module Inflate = Inflate

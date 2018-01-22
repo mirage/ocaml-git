@@ -2212,3 +2212,25 @@ struct
 
       get_from_offset ?chunk ?htmp t absolute_offset tmp ztmp zwin
 end
+
+module MakeStreamDecoder
+    (Hash: S.HASH)
+    (Inflate: S.INFLATE)
+= struct
+  module HunkDecoder = MakeHunkDecoder(Hash)
+  module PackDecoder = MakePackDecoder(Hash)(Inflate)(HunkDecoder)
+
+  include PackDecoder
+end
+
+module MakeRandomAccessPACK
+    (Hash: S.HASH)
+    (Mapper: S.MAPPER)
+    (Inflate: S.INFLATE)
+= struct
+  module HunkDecoder = MakeHunkDecoder(Hash)
+  module PackDecoder = MakePackDecoder(Hash)(Inflate)(HunkDecoder)
+  module Decoder = MakeDecoder(Hash)(Mapper)(Inflate)(HunkDecoder)(PackDecoder)
+
+  include Decoder
+end
