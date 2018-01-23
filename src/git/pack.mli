@@ -118,7 +118,7 @@ module type H = sig
       buffer noticed to the previous call of {!eval}. *)
 end
 
-module MakeHunkEncoder (Hash: S.HASH): H with module Hash = Hash
+module Hunk_encoder (Hash: S.HASH): H with module Hash = Hash
 
 (** The entry module. It used to able to manipulate the meta-data only
    needed by the delta-ification of the Git object (and avoid to
@@ -204,7 +204,7 @@ module type ENTRY = sig
       delta-ification. *)
 end
 
-module MakeEntry (Hash: S.HASH): ENTRY with module Hash = Hash
+module Entry (Hash: S.HASH): ENTRY with module Hash = Hash
 
 (** This module is the engine to delta-ify Git objects together. The
    current implementation is a stop the world process which can not
@@ -294,7 +294,7 @@ module type DELTA = sig
         code. *)
 end
 
-module MakeDelta
+module Delta
     (Hash: S.HASH)
     (Entry: ENTRY with module Hash := Hash)
   : DELTA with module Hash = Hash
@@ -312,7 +312,7 @@ module type P = sig
     with module Hash := Hash
      and module Entry := Entry
 
-  module HunkEncoder: H with module Hash := Hash
+  module Hunk_encoder: H with module Hash := Hash
   module Radix: Radix.S with type key = Hash.t
   (** The Radix tree zhich zill represent the IDX file of the PACK
       stream. *)
@@ -402,22 +402,22 @@ module type P = sig
         situation.}} *)
 end
 
-module MakePackEncoder
+module Pack_encoder
     (Hash: S.HASH)
     (Deflate: S.DEFLATE)
     (Entry: ENTRY with module Hash := Hash)
     (Delta: DELTA with module Hash := Hash
                    and module Entry := Entry)
-    (HunkEncoder: H with module Hash := Hash)
+    (Hunk_encoder: H with module Hash := Hash)
   : P with module Hash = Hash
        and module Deflate = Deflate
        and module Entry := Entry
        and module Delta := Delta
-       and module HunkEncoder := HunkEncoder
+       and module Hunk_encoder := Hunk_encoder
 (** The {i functor} to make the PACK encoder by a specific hash
     implementation and a specific deflate algorithm. *)
 
-module MakeStreamEncoder
+module Stream
     (Hash: S.HASH)
     (Deflate: S.DEFLATE) : sig
   include P

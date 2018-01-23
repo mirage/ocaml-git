@@ -32,8 +32,8 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE) = struct
   module Value = Value.Raw(Hash)(Inflate)(Deflate)
   module Reference = Reference.Make(Hash)
 
-  module PDec = Unpack.MakeStreamDecoder(Hash)(Inflate)
-  module PEnc = Pack.MakeStreamEncoder(Hash)(Deflate)
+  module PDec = Unpack.Stream(Hash)(Inflate)
+  module PEnc = Pack.Stream(Hash)(Deflate)
   module Revidx = Map.Make(Int64)
 
   type kind = [ `Commit | `Tree | `Blob | `Tag ]
@@ -279,7 +279,7 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE) = struct
       in
 
       let apply hunks_descr hunks buffer_hunks source target =
-        if Cstruct.len target < hunks_descr.PDec.HunkDecoder.target_length
+        if Cstruct.len target < hunks_descr.PDec.Hunk_decoder.target_length
         then raise (Invalid_argument "apply");
         let target_length =
           List.fold_left (fun acc -> function
@@ -290,12 +290,12 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE) = struct
             ) 0 hunks
         in
 
-        if target_length = hunks_descr.PDec.HunkDecoder.target_length
+        if target_length = hunks_descr.PDec.Hunk_decoder.target_length
         then Ok (Cstruct.sub target 0 target_length)
         else Fmt.kstrf
             (fun x -> Error x)
             "Bad undelta-ification (result: %d, expect: %d)"
-            target_length hunks_descr.PDec.HunkDecoder.target_length
+            target_length hunks_descr.PDec.Hunk_decoder.target_length
       in
 
       let k2k = function
@@ -332,17 +332,17 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE) = struct
           go ~revidx ~src (PDec.flush 0 (Cstruct.len o) state)
         | `Hunk (state, hunk) ->
           let hunks = match hunks, hunk with
-            | Some hunks, PDec.HunkDecoder.Insert raw ->
+            | Some hunks, PDec.Hunk_decoder.Insert raw ->
               let off = Buffer.has buffer_hunks in
               Buffer.add buffer_hunks raw;
               (Insert (off, Cstruct.len raw) :: hunks)
-            | Some hunks, PDec.HunkDecoder.Copy (off, len) ->
+            | Some hunks, PDec.Hunk_decoder.Copy (off, len) ->
               (Copy (off, len) :: hunks)
-            | None, PDec.HunkDecoder.Insert raw ->
+            | None, PDec.Hunk_decoder.Insert raw ->
               let off = Buffer.has buffer_hunks in
               Buffer.add buffer_hunks raw;
               [ Insert (off, Cstruct.len raw) ]
-            | None, PDec.HunkDecoder.Copy (off, len) ->
+            | None, PDec.Hunk_decoder.Copy (off, len) ->
               [ Copy (off, len) ]
           in
 
@@ -367,10 +367,10 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE) = struct
              Some hash
            | PDec.Hunk hunks_descr ->
              let hunks = option_map List.rev hunks |> option_default [] in
-             let inflated = Cstruct.create (hunks_descr.PDec.HunkDecoder.target_length) in
-             let hash_source = match hunks_descr.PDec.HunkDecoder.reference with
-               | PDec.HunkDecoder.Hash hash -> hash
-               | PDec.HunkDecoder.Offset off ->
+             let inflated = Cstruct.create (hunks_descr.PDec.Hunk_decoder.target_length) in
+             let hash_source = match hunks_descr.PDec.Hunk_decoder.reference with
+               | PDec.Hunk_decoder.Hash hash -> hash
+               | PDec.Hunk_decoder.Offset off ->
                  let off = Int64.sub (PDec.offset state) off in
                  Revidx.find off revidx
 

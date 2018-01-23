@@ -26,7 +26,7 @@ sig
   module PDec: Unpack.P
     with module Hash := Hash
      and module Inflate := Inflate
-     and module HunkDecoder := HDec
+     and module Hunk_decoder := HDec
 
   type error =
     [ `Unexpected_end_of_input
@@ -88,7 +88,7 @@ module Make
     (HDec: Unpack.H with module Hash := Hash)
     (PDec: Unpack.P with module Hash := Hash
                      and module Inflate := Inflate
-                     and module HunkDecoder := HDec)
+                     and module Hunk_decoder := HDec)
   : S with module Hash = Hash
        and module Inflate = Inflate
        and module HDec := HDec

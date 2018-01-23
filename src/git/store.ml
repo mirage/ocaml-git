@@ -88,12 +88,12 @@ module type PACK = sig
   module PDec: Unpack.P
     with module Hash = Hash
      and module Inflate = Inflate
-     and module HunkDecoder := HDec
+     and module Hunk_decoder := HDec
   module RPDec: Unpack.D
     with module Hash = Hash
      and module Inflate = Inflate
-     and module HunkDecoder := HDec
-     and module PackDecoder := PDec
+     and module Hunk_decoder := HDec
+     and module Pack_decoder := PDec
   module PEnc: Pack.P
     with module Hash = Hash
      and module Deflate = Deflate
@@ -154,13 +154,13 @@ module type S = sig
   module PDec: Unpack.P
     with module Hash = Hash
      and module Inflate = Inflate
-     and module HunkDecoder := HDec
+     and module Hunk_decoder := HDec
 
   module RPDec: Unpack.D
     with module Hash = Hash
      and module Inflate = Inflate
-     and module HunkDecoder := HDec
-     and module PackDecoder := PDec
+     and module Hunk_decoder := HDec
+     and module Pack_decoder := PDec
 
   module PEnc: Pack.P
     with module Hash = Hash
@@ -298,9 +298,9 @@ module FS (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
 
   module LooseImpl = Loose.Make(Hash)(FS)(Inflate)(Deflate)
 
-  module HDec = Unpack.MakeHunkDecoder(Hash)
-  module PDec = Unpack.MakePackDecoder(Hash)(Inflate)(HDec)
-  module RPDec = Unpack.MakeDecoder(Hash)(struct type error = FS.error include FS.Mapper end)(Inflate)(HDec)(PDec)
+  module HDec = Unpack.Hunk_decoder(Hash)
+  module PDec = Unpack.Pack_decoder(Hash)(Inflate)(HDec)
+  module RPDec = Unpack.Decoder(Hash)(struct type error = FS.error include FS.Mapper end)(Inflate)(HDec)(PDec)
 
   module PackImpl
     : Pack_engine.S
@@ -991,7 +991,7 @@ module FS (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
 
   let lookup state hash =
     Pack.lookup state hash >>= function
-    | Some (hash_pack, (_, offset)) -> Lwt.return (`PackDecoder (hash_pack, offset))
+    | Some (hash_pack, (_, offset)) -> Lwt.return (`Pack_decoder (hash_pack, offset))
     | None ->
       Loose.lookup state hash >|= function
       | Some _ -> `Loose
