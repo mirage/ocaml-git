@@ -53,8 +53,8 @@ struct
     | Tag -> Fmt.pf ppf "Tag"
 end
 
-module type ENTRY =
-sig
+module type ENTRY = sig
+
   module Hash: S.HASH
 
   type t
@@ -264,8 +264,8 @@ struct
   let ( / ) = Int64.div
 end
 
-module type H =
-sig
+module type H = sig
+
   module Hash: S.HASH
 
   type error
@@ -611,8 +611,8 @@ struct
   let used_out t = t.o_pos
 end
 
-module type DELTA =
-sig
+module type DELTA = sig
+
   module Hash: S.HASH
   module Entry: ENTRY with module Hash := Hash
 
@@ -938,8 +938,8 @@ struct
               | exn -> Lwt.fail exn) (* XXX(dinosaure): same as below. *)
 end
 
-module type P =
-sig
+module type P = sig
+
   module Hash: S.HASH
   module Deflate: S.DEFLATE
 

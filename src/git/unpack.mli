@@ -19,8 +19,8 @@
 
 (** A Window. It consists to keep an 1 megabyte area of a PACK
     file. *)
-module Window :
-sig
+module Window : sig
+
   type t =
     { raw : Cstruct.t
     ; off : int64
@@ -36,8 +36,8 @@ sig
 end
 
 (** The non-blocking decoder of the Hunks stream. *)
-module type H =
-sig
+module type H = sig
+
   module Hash: S.HASH
 
   (** The type error. *)
@@ -180,8 +180,8 @@ end
 module MakeHunkDecoder (Hash : S.HASH) : H with module Hash = Hash
 
 (** The non-blocking decoder of the PACK stream. *)
-module type P =
-sig
+module type P = sig
+
   module Hash: S.HASH
   module Inflate: S.INFLATE
   module HunkDecoder: H with module Hash := Hash
@@ -433,8 +433,8 @@ module MakePackDecoder
        and module HunkDecoder := HunkDecoder
 
 (** The toolbox about the PACK file. *)
-module type D =
-sig
+module type D = sig
+
   module Hash: S.HASH
   module Mapper: S.MAPPER
   module Inflate: S.INFLATE
@@ -467,8 +467,8 @@ sig
   type kind = [ `Commit | `Blob | `Tree | `Tag ]
   (** The type of the kind of the git object. *)
 
-  module Object:
-  sig
+  module Object: sig
+
     type from =
       | Offset of { length   : int
                   (** Real inflated length of the object. *)
@@ -720,8 +720,7 @@ module MakeDecoder
 
 module MakeStreamDecoder
     (Hash: S.HASH)
-    (Inflate: S.INFLATE)
-: sig
+    (Inflate: S.INFLATE) : sig
   include P
 end with module Hash = Hash
      and module Inflate = Inflate
@@ -729,8 +728,7 @@ end with module Hash = Hash
 module MakeRandomAccessPACK
     (Hash: S.HASH)
     (Mapper: S.MAPPER)
-    (Inflate: S.INFLATE)
-: sig
+    (Inflate: S.INFLATE) : sig
   include D
 end with module Hash = Hash
      and module Mapper = Mapper

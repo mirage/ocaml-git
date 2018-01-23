@@ -20,6 +20,7 @@
 (** This module represents the kind of a Git object - but only the
     kind, {!Kind.t} does not have the Git value. *)
 module Kind: sig
+
   type t =
     | Commit
     | Tag
@@ -42,8 +43,8 @@ end
    entry when we retrieve a delta-ified Git object. This encoder is a
    non-blocking encoder used in the same time than the {!Deflater} -
    that means the content produced is always deflated. *)
-module type H =
-sig
+module type H = sig
+
   module Hash: S.HASH
 
   type error
@@ -123,8 +124,8 @@ module MakeHunkEncoder (Hash: S.HASH): H with module Hash = Hash
    needed by the delta-ification of the Git object (and avoid to
    de-serialize all of the Git object to compute the delta-ification).
    *)
-module type ENTRY =
-sig
+module type ENTRY = sig
+
   module Hash: S.HASH
 
   type t
@@ -227,8 +228,8 @@ module MakeEntry (Hash: S.HASH): ENTRY with module Hash = Hash
    diff for each entry. And it's why, for the serialization of the
    PACK file, we re-ask (and re-load) your objects (however, in this
    last case, we don't need the ownership - see {!expect}). *)
-module type DELTA =
-sig
+module type DELTA = sig
+
   module Hash: S.HASH
   module Entry: ENTRY with module Hash := Hash
 
@@ -300,8 +301,8 @@ module MakeDelta
            and module Entry := Entry
 
 (** Interface which describes the encoder of the PACK file. *)
-module type P =
-sig
+module type P = sig
+
   module Hash: S.HASH
   module Deflate: S.DEFLATE
 
@@ -418,8 +419,7 @@ module MakePackEncoder
 
 module MakeStreamEncoder
     (Hash: S.HASH)
-    (Deflate: S.DEFLATE)
-: sig
+    (Deflate: S.DEFLATE) : sig
   include P
 end with module Hash = Hash
      and module Deflate = Deflate

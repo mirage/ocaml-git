@@ -32,8 +32,8 @@ struct
       window.off window.len
 end
 
-module type H =
-sig
+module type H = sig
+
   module Hash: S.HASH
 
   type error =
@@ -442,8 +442,8 @@ struct
   let ( || ) = Int32.logor
 end
 
-module type P =
-sig
+module type P = sig
+
   module Hash: S.HASH
   module Inflate: S.INFLATE
   module HunkDecoder: H with module Hash := Hash
@@ -1270,8 +1270,8 @@ module MakePackDecoder
     loop t
 end
 
-module type D =
-sig
+module type D = sig
+
   module Hash: S.HASH
   module Mapper: S.MAPPER
   module Inflate: S.INFLATE
@@ -1295,8 +1295,8 @@ sig
 
   type kind = [ `Commit | `Blob | `Tree | `Tag ]
 
-  module Object:
-  sig
+  module Object: sig
+
     type from =
       | Offset of { length   : int
                   ; consumed : int
