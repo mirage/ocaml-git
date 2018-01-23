@@ -256,13 +256,13 @@ module type PACK = sig
   module PDec: Unpack.P
     with module Hash = Hash
      and module Inflate = Inflate
-     and module Hunk_decoder := HDec
+     and module Hunk := HDec
 
   module RPDec: Unpack.D
     with module Hash = Hash
      and module Inflate = Inflate
-     and module Hunk_decoder := HDec
-     and module Pack_decoder := PDec
+     and module Hunk := HDec
+     and module Pack := PDec
 
   module PEnc: Pack.P
     with module Hash = Hash
@@ -406,13 +406,13 @@ module type S = sig
   module PDec: Unpack.P
     with module Hash = Hash
      and module Inflate = Inflate
-     and module Hunk_decoder := HDec
+     and module Hunk := HDec
 
   module RPDec: Unpack.D
     with module Hash = Hash
      and module Inflate = Inflate
-     and module Hunk_decoder := HDec
-     and module Pack_decoder := PDec
+     and module Hunk := HDec
+     and module Pack := PDec
 
   module PEnc: Pack.P
     with module Hash = Hash

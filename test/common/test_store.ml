@@ -223,8 +223,8 @@ module Make (Store : Git.S) = struct
 
   module IndexDecoder = Git.Index_pack.Decoder(Store.Hash)
   module IndexEncoder = Git.Index_pack.Encoder(Store.Hash)
-  module Pack_decoder  = Git.Unpack.Stream(Store.Hash)(Store.Inflate)
-  module PackEncoder  = Git.Pack.Stream(Store.Hash)(Store.Deflate)
+  module Pack_decoder = Git.Unpack.Stream(Store.Hash)(Store.Inflate)
+  module Pack_encoder = Git.Pack.Stream(Store.Hash)(Store.Deflate)
 
   let test_blobs () =
     let test () =
@@ -483,15 +483,15 @@ module Make (Store : Git.S) = struct
         go ~pack ~graph ?current (Pack_decoder.flush 0 (Cstruct.len o) state)
       | `Hunk (state, hunk) ->
         let current = match current, hunk with
-          | Some (`Hunks hunks), Pack_decoder.Hunk_decoder.Copy (off, len) ->
+          | Some (`Hunks hunks), Pack_decoder.Hunk.Copy (off, len) ->
             Some (`Hunks (`Copy (off, len) :: hunks))
-          | Some (`Hunks hunks), Pack_decoder.Hunk_decoder.Insert raw ->
+          | Some (`Hunks hunks), Pack_decoder.Hunk.Insert raw ->
             let off, len = Git.Buffer.has buf, Cstruct.len raw in
             Git.Buffer.add buf raw;
             Some (`Hunks (`Insert (off, len) :: hunks))
-          | None, Pack_decoder.Hunk_decoder.Copy (off, len) ->
+          | None, Pack_decoder.Hunk.Copy (off, len) ->
             Some (`Hunks [ `Copy (off, len) ])
-          | None, Pack_decoder.Hunk_decoder.Insert raw ->
+          | None, Pack_decoder.Hunk.Insert raw ->
             let off, len = Git.Buffer.has buf, Cstruct.len raw in
             Git.Buffer.add buf raw;
             Some (`Hunks [ `Insert (off, len) ])
@@ -518,7 +518,7 @@ module Make (Store : Git.S) = struct
             let hash = Store.Hash.Digest.get ctx in
             Pack.bind pack hash (Pack_decoder.crc state, Pack_decoder.offset state),
             (Pack_decoder.offset state, kind, "")
-          | Pack_decoder.Hunk { Pack_decoder.Hunk_decoder.reference = Pack_decoder.Hunk_decoder.Hash src; target_length; _ },
+          | Pack_decoder.Hunk { Pack_decoder.Hunk.reference = Pack_decoder.Hunk.Hash src; target_length; _ },
             Some (`Hunks hunks) ->
             let hash, kind, raw =
               apply
@@ -528,7 +528,7 @@ module Make (Store : Git.S) = struct
                 target_length (List.rev hunks) in
             Pack.bind pack hash (Pack_decoder.crc state, Pack_decoder.offset state),
             (Pack_decoder.offset state, kind, raw)
-          | Pack_decoder.Hunk { Pack_decoder.Hunk_decoder.reference = Pack_decoder.Hunk_decoder.Offset rel; target_length; _ },
+          | Pack_decoder.Hunk { Pack_decoder.Hunk.reference = Pack_decoder.Hunk.Offset rel; target_length; _ },
             Some (`Hunks hunks) ->
             let hash, kind, raw =
               apply

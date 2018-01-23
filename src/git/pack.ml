@@ -292,7 +292,7 @@ module type H = sig
   val used_out: t -> int
 end
 
-module Hunk_encoder (Hash : S.HASH): H with module Hash = Hash =
+module Hunk (Hash : S.HASH): H with module Hash = Hash =
 struct
   module Hash = Hash
 
@@ -949,7 +949,7 @@ module type P = sig
     with module Hash := Hash
      and module Entry := Entry
 
-  module Hunk_encoder: H with module Hash := Hash
+  module Hunk: H with module Hash := Hash
   module Radix: Radix.S with type key = Hash.t
 
   type error =
@@ -975,24 +975,24 @@ module type P = sig
   val eval : Cstruct.t -> Cstruct.t -> t -> [ `Flush of t | `Await of t | `End of (t * Hash.t) | `Error of (t * error) ]
 end
 
-module Pack_encoder
+module Pack
     (Hash: S.HASH)
     (Deflate: S.DEFLATE)
     (Entry: ENTRY with module Hash := Hash)
     (Delta: DELTA with module Hash := Hash
                    and module Entry := Entry)
-    (Hunk_encoder: H with module Hash := Hash)
+    (Hunk: H with module Hash := Hash)
   : P with module Hash = Hash
        and module Deflate = Deflate
        and module Entry := Entry
        and module Delta := Delta
-       and module Hunk_encoder := Hunk_encoder =
+       and module Hunk := Hunk =
 struct
   module Hash = Hash
   module Deflate = Deflate
   module Entry = Entry
   module Delta = Delta
-  module Hunk_encoder = Hunk_encoder
+  module Hunk = Hunk
   module Radix = Radix.Make(struct type t = Hash.t let get = Hash.get let length _ = Hash.Digest.length end)
 
   type error =
@@ -1033,7 +1033,7 @@ struct
                 ; crc : Crc32.t
                 ; off : int64
                 ; ui  : int
-                ; h   : Hunk_encoder.t
+                ; h   : Hunk.t
                 ; z   : Deflate.t }
     | Save   of { x   : Entry.t
                 ; r   : (Entry.t * Delta.t) list
@@ -1258,8 +1258,8 @@ struct
          [entry.delta]. TODO! *)
 
       let h =
-        Hunk_encoder.flush 0 (Cstruct.len t.h_tmp)
-        @@ Hunk_encoder.default (Hunk_encoder.Hash src_hash) (Int64.to_int src_length) (Int64.to_int trg_length) hunks
+        Hunk.flush 0 (Cstruct.len t.h_tmp)
+        @@ Hunk.default (Hunk.Hash src_hash) (Int64.to_int src_length) (Int64.to_int trg_length) hunks
         (* XXX(dinosaure): FIXME: [trg_length] is an [int64] but H
            expects an [int]. *)
       in
@@ -1290,8 +1290,8 @@ struct
          let rel_off    = Int64.sub abs_off src_off in
 
          let h =
-           Hunk_encoder.flush 0 (Cstruct.len t.h_tmp)
-           @@ Hunk_encoder.default (Hunk_encoder.Offset rel_off) (Int64.to_int src_length) (Int64.to_int trg_length) hunks
+           Hunk.flush 0 (Cstruct.len t.h_tmp)
+           @@ Hunk.default (Hunk.Offset rel_off) (Int64.to_int src_length) (Int64.to_int trg_length) hunks
            (* XXX(dinosaure): FIXME: [trg_length] is an [int64] but H
               expects an [int]. *)
          in
@@ -1343,39 +1343,39 @@ struct
   let writeh src dst t ((entry, _) as x) r crc off used_in h z =
     match Deflate.eval ~src:t.h_tmp ~dst z with
     | `Await z ->
-      (match Hunk_encoder.eval src t.h_tmp h with
+      (match Hunk.eval src t.h_tmp h with
        | `Await h ->
          await { t with state = WriteH { x; r; crc; off; ui = 0; z; h; }
-                      ; i_pos = Hunk_encoder.used_in h }
+                      ; i_pos = Hunk.used_in h }
        | `Flush h ->
          let used_in' = used_in + Deflate.used_in z in
 
          let z, h, ui =
-           if used_in' = Hunk_encoder.used_out h
-           then Deflate.no_flush 0 0 z, Hunk_encoder.flush 0 (Cstruct.len t.h_tmp) h, 0
-           else Deflate.no_flush used_in' (Hunk_encoder.used_out h - used_in') z, h, used_in'
+           if used_in' = Hunk.used_out h
+           then Deflate.no_flush 0 0 z, Hunk.flush 0 (Cstruct.len t.h_tmp) h, 0
+           else Deflate.no_flush used_in' (Hunk.used_out h - used_in') z, h, used_in'
          in
 
          Cont { t with state = WriteH { x; r; crc; off; ui; h; z; }
-                     ; i_pos = Hunk_encoder.used_in h }
+                     ; i_pos = Hunk.used_in h }
        | `End h ->
          let used_in' = used_in + Deflate.used_in z in
 
          let z, h, ui =
-           if used_in' = Hunk_encoder.used_out h
+           if used_in' = Hunk.used_out h
            then Deflate.finish z, h, used_in'
-           else Deflate.no_flush used_in' (Hunk_encoder.used_out h - used_in') z, h, used_in'
+           else Deflate.no_flush used_in' (Hunk.used_out h - used_in') z, h, used_in'
          in
 
          Cont { t with state = WriteH { x; r; crc; off; ui; h; z; }
-                     ; i_pos = Hunk_encoder.used_in h }
+                     ; i_pos = Hunk.used_in h }
        | `Error (_, _) -> assert false)
     | `Flush z ->
       let crc = Crc32.digest ~off:(t.o_off + t.o_pos) ~len:(Deflate.used_out z) crc dst in
       let used_in' = used_in + Deflate.used_in z in
 
       flush dst { t with state = WriteH { x; r; crc; off; ui = used_in'; h; z; }
-                       ; i_pos = Hunk_encoder.used_in h
+                       ; i_pos = Hunk.used_in h
                        ; o_pos = t.o_pos + (Deflate.used_out z)
                        ; write = Int64.add t.write (Int64.of_int (Deflate.used_out z)) }
     | `End z ->
@@ -1514,7 +1514,7 @@ struct
         { t with i_off = offset
                ; i_len = len
                ; i_pos = 0
-               ; state = WriteH { x; r; crc; off; ui; z; h = Hunk_encoder.refill offset len h } }
+               ; state = WriteH { x; r; crc; off; ui; z; h = Hunk.refill offset len h } }
       | (Header _ | Object _ | WriteK _ | Save _ | Hash _ | End _ | Exception _) ->
         { t with i_off = offset
                ; i_len = len
@@ -1528,14 +1528,14 @@ struct
       | WriteZ { x; r; crc; off; ui; z; } ->
         { t with state = WriteZ { x; r; crc; off; ui; z = Deflate.finish z } }
       | WriteH { x; r; crc; off; ui; z; h; } ->
-        { t with state = WriteH { x; r; crc; off; ui; z; h = Hunk_encoder.finish h } }
+        { t with state = WriteH { x; r; crc; off; ui; z; h = Hunk.finish h } }
       | (Header _ | Object _ | WriteK _ | Save _ | Hash _ | End _ | Exception _) -> t
     else raise (Invalid_argument (Fmt.strf "PACKEncoder.finish: you lost something \
                                             (pos: %d, len: %d)" t.i_pos t.i_len))
 
   let used_in t = match t.state with
     | WriteZ { z; _ } -> Deflate.used_in z
-    | WriteH { h; _ } -> Hunk_encoder.used_in h
+    | WriteH { h; _ } -> Hunk.used_in h
     | (Header _ | Object _ | WriteK _ | Save _ | Hash _ | End _ | Exception _) ->
       raise (Invalid_argument "PACKEncoder.used_in: bad state")
 
@@ -1559,8 +1559,8 @@ module Stream
 = struct
   module Entry = Entry(Hash)
   module Delta = Delta(Hash)(Entry)
-  module Hunk_encoder = Hunk_encoder(Hash)
-  module Pack_encoder = Pack_encoder(Hash)(Deflate)(Entry)(Delta)(Hunk_encoder)
+  module Hunk = Hunk(Hash)
+  module Pack = Pack(Hash)(Deflate)(Entry)(Delta)(Hunk)
 
-  include Pack_encoder
+  include Pack
 end

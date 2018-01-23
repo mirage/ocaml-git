@@ -177,14 +177,14 @@ module type H = sig
       when he {!make} the new decoder. *)
 end
 
-module Hunk_decoder (Hash : S.HASH) : H with module Hash = Hash
+module Hunk (Hash : S.HASH) : H with module Hash = Hash
 
 (** The non-blocking decoder of the PACK stream. *)
 module type P = sig
 
   module Hash: S.HASH
   module Inflate: S.INFLATE
-  module Hunk_decoder: H with module Hash := Hash
+  module Hunk: H with module Hash := Hash
 
   (** The type error. *)
   type error =
@@ -198,7 +198,7 @@ module type P = sig
     | Inflate_error of Inflate.error
     (** Appears when the {!Inflate} module returns an error when it
         tries to inflate a PACK object. *)
-    | Hunk_error of Hunk_decoder.error
+    | Hunk_error of Hunk.error
     (** Appears when the {!H} module returns an error. *)
     | Hunk_input of int * int
     (** The Hunk object is length-defined. So, when we try to decode
@@ -224,7 +224,7 @@ module type P = sig
     | Tree
     | Blob
     | Tag
-    | Hunk of Hunk_decoder.hunks
+    | Hunk of Hunk.hunks
   (** The kind of the PACK object. It can be:
 
       {ul
@@ -364,7 +364,7 @@ module type P = sig
        Cstruct.t
     -> t
     -> [ `Object of t
-       | `Hunk of t * Hunk_decoder.hunk
+       | `Hunk of t * Hunk.hunk
        | `Await of t
        | `Flush of t
        | `End of t * Hash.t
@@ -424,13 +424,13 @@ module type P = sig
       (like {!kind} or {!length}).}} *)
 end
 
-module Pack_decoder
+module Pack
     (Hash: S.HASH)
     (Inflate: S.INFLATE)
-    (Hunk_decoder: H with module Hash := Hash)
+    (Hunk: H with module Hash := Hash)
   : P with module Hash = Hash
        and module Inflate = Inflate
-       and module Hunk_decoder := Hunk_decoder
+       and module Hunk := Hunk
 
 (** The toolbox about the PACK file. *)
 module type D = sig
@@ -438,11 +438,11 @@ module type D = sig
   module Hash: S.HASH
   module Mapper: S.MAPPER
   module Inflate: S.INFLATE
-  module Hunk_decoder: H with module Hash := Hash
-  module Pack_decoder: P
+  module Hunk: H with module Hash := Hash
+  module Pack: P
     with module Hash := Hash
      and module Inflate := Inflate
-     and module Hunk_decoder := Hunk_decoder
+     and module Hunk := Hunk
 
   (** The type error. *)
   type error =
@@ -454,7 +454,7 @@ module type D = sig
     | Invalid_target of (int * int)
     (** Appears when the result of the application of a {!P.H.hunks}
         returns a bad raw. *)
-    | Unpack_error of Pack_decoder.t * Window.t * Pack_decoder.error
+    | Unpack_error of Pack.t * Window.t * Pack.error
     (** Appears when we have an {!P.error}. *)
     | Mapper_error of Mapper.error
 
@@ -708,15 +708,15 @@ module Decoder
     (Hash: S.HASH)
     (Mapper: S.MAPPER)
     (Inflate: S.INFLATE)
-    (Hunk_decoder: H with module Hash := Hash)
-    (Pack_decoder: P with module Hash := Hash
+    (Hunk: H with module Hash := Hash)
+    (Pack: P with module Hash := Hash
                       and module Inflate := Inflate
-                      and module Hunk_decoder := Hunk_decoder)
+                      and module Hunk := Hunk)
   : D with module Hash = Hash
        and module Mapper = Mapper
        and module Inflate = Inflate
-       and module Hunk_decoder := Hunk_decoder
-       and module Pack_decoder := Pack_decoder
+       and module Hunk := Hunk
+       and module Pack := Pack
 
 module Stream
     (Hash: S.HASH)

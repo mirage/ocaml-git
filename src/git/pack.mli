@@ -118,7 +118,7 @@ module type H = sig
       buffer noticed to the previous call of {!eval}. *)
 end
 
-module Hunk_encoder (Hash: S.HASH): H with module Hash = Hash
+module Hunk (Hash: S.HASH): H with module Hash = Hash
 
 (** The entry module. It used to able to manipulate the meta-data only
    needed by the delta-ification of the Git object (and avoid to
@@ -312,7 +312,7 @@ module type P = sig
     with module Hash := Hash
      and module Entry := Entry
 
-  module Hunk_encoder: H with module Hash := Hash
+  module Hunk: H with module Hash := Hash
   module Radix: Radix.S with type key = Hash.t
   (** The Radix tree zhich zill represent the IDX file of the PACK
       stream. *)
@@ -402,18 +402,18 @@ module type P = sig
         situation.}} *)
 end
 
-module Pack_encoder
+module Pack
     (Hash: S.HASH)
     (Deflate: S.DEFLATE)
     (Entry: ENTRY with module Hash := Hash)
     (Delta: DELTA with module Hash := Hash
                    and module Entry := Entry)
-    (Hunk_encoder: H with module Hash := Hash)
+    (Hunk: H with module Hash := Hash)
   : P with module Hash = Hash
        and module Deflate = Deflate
        and module Entry := Entry
        and module Delta := Delta
-       and module Hunk_encoder := Hunk_encoder
+       and module Hunk := Hunk
 (** The {i functor} to make the PACK encoder by a specific hash
     implementation and a specific deflate algorithm. *)
 
