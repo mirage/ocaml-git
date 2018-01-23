@@ -236,12 +236,6 @@ module type S = sig
     ?raw:Cstruct.t ->
     ?window:Inflate.window ->
     unit -> buffer
-  val create:
-    ?root:Fpath.t
-    -> ?dotgit:Fpath.t
-    -> ?compression:int
-    -> ?buffer:((buffer -> unit Lwt.t) -> unit Lwt.t)
-    -> unit -> (t, error) result Lwt.t
   val dotgit: t -> Fpath.t
   val root: t -> Fpath.t
   val compression : t -> int
@@ -286,12 +280,12 @@ module Option = struct
   let map f a = match a with Some a -> Some (f a) | None -> None
 end
 
-module FS (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
+module FS (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
 
   module Hash = H
   module Inflate = I
   module Deflate = D
-  module FS = F
+  module FS = FS
 
   let has_global_watches = FS.has_global_watches
   let has_global_checkout = FS.has_global_checkout
@@ -300,7 +294,11 @@ module FS (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
 
   module HDec = Unpack.Hunk(Hash)
   module PDec = Unpack.Pack(Hash)(Inflate)(HDec)
-  module RPDec = Unpack.Decoder(Hash)(struct type error = FS.error include FS.Mapper end)(Inflate)(HDec)(PDec)
+  module RPDec = Unpack.Decoder(Hash)(struct
+      type t = FS.t
+      type error = FS.error
+      include FS.Mapper
+    end)(Inflate)(HDec)(PDec)
 
   module PackImpl
     : Pack_engine.S
@@ -388,7 +386,8 @@ module FS (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
     ; revindexes: CacheRevIndex.t }
 
   type t =
-    { dotgit      : Fpath.t
+    { fs          : FS.t
+    ; dotgit      : Fpath.t
     ; root        : Fpath.t
     ; compression : int
     ; cache       : cache
@@ -453,41 +452,42 @@ module FS (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
 
     let read t path =
       with_buffer t @@ fun { ztmp; dtmp; raw; window } ->
-      LooseImpl.read ~root:t.dotgit ~window ~ztmp ~dtmp ~raw path
+      LooseImpl.read ~fs:t.fs ~root:t.dotgit ~window ~ztmp ~dtmp ~raw path
       >>!= lift_error
 
     let size t path =
       with_buffer t @@ fun { ztmp; dtmp; raw; window } ->
-      LooseImpl.size ~root:t.dotgit ~window ~ztmp ~dtmp ~raw path
+      LooseImpl.size ~fs:t.fs ~root:t.dotgit ~window ~ztmp ~dtmp ~raw path
       >>!= lift_error
 
     let write t value =
       with_buffer t @@ fun { ztmp; raw; _ } ->
-      LooseImpl.write ~root:t.dotgit ~ztmp ~raw ~level:t.compression value
+      LooseImpl.write ~fs:t.fs ~root:t.dotgit ~ztmp ~raw ~level:t.compression value
       >>!= lift_error
 
-    let mem t = LooseImpl.mem ~root:t.dotgit
-    let list t = LooseImpl.list ~root:t.dotgit
+    let mem t = LooseImpl.mem ~fs:t.fs ~root:t.dotgit
+    let list t = LooseImpl.list ~fs:t.fs ~root:t.dotgit
 
     let lookup t hash =
-      LooseImpl.mem ~root:t.dotgit hash >|= function
+      LooseImpl.mem ~fs:t.fs ~root:t.dotgit hash >|= function
       | true  -> Some hash
       | false -> None
 
     let read_inflated t hash =
       with_buffer t @@ fun { ztmp; dtmp; raw; window } ->
-      LooseImpl.inflate ~root:t.dotgit ~window ~ztmp ~dtmp ~raw hash
+      LooseImpl.inflate ~fs:t.fs ~root:t.dotgit ~window ~ztmp ~dtmp ~raw hash
       >>!= lift_error
 
     let read_inflated_wa result t hash =
       with_buffer t @@ fun { ztmp; dtmp; raw; window } ->
-      LooseImpl.inflate_wa ~root:t.dotgit ~window ~ztmp ~dtmp ~raw ~result hash
+      LooseImpl.inflate_wa ~fs:t.fs ~root:t.dotgit ~window ~ztmp ~dtmp ~raw
+        ~result hash
       >>!= lift_error
 
     let write_inflated t ~kind value =
       with_buffer t @@ fun { raw; _ } ->
       LooseImpl.write_inflated
-        ~root:t.dotgit ~level:t.compression ~raw ~kind value
+        ~fs:t.fs ~root:t.dotgit ~level:t.compression ~raw ~kind value
       >>= function
       | Ok hash -> Lwt.return hash
       | Error e -> Fmt.kstrf Lwt.fail_with "%a" LooseImpl.pp_error e
@@ -556,11 +556,11 @@ module FS (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
       for i = 0 to len - 1 do Bytes.set raw i (gen ()) done;
       Bytes.unsafe_to_string raw
 
-    let to_temp_file fmt stream =
+    let to_temp_file fs fmt stream =
       let filename_of_pack = fmt (random_string 10) in
-      FS.Dir.temp () >>= fun temp_dir ->
+      FS.Dir.temp fs >>= fun temp_dir ->
       let path = Fpath.(temp_dir / filename_of_pack) in
-      FS.with_open_w path @@ fun fd ->
+      FS.with_open_w fs path @@ fun fd ->
       Log.debug (fun l -> l "Saving the pack stream to %a" Fpath.pp path);
       let rec go ?chunk ~call () =
         Lwt_stream.peek stream >>= function
@@ -709,7 +709,7 @@ module FS (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
       >>= function
       | Error err -> Lwt.return (Error (`Delta err))
       | Ok entries ->
-        PackImpl.save_pack_file
+        PackImpl.save_pack_file ~fs:git.fs
           (Fmt.strf "pack-%s.pack")
           entries
           (fun hash ->
@@ -731,15 +731,16 @@ module FS (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
         >>= function
         | Error _ as err -> Lwt.return err
         | Ok (path, sequence, hash_pack) ->
-          (PackImpl.save_idx_file ~root:git.dotgit sequence hash_pack >>!= lift_error) >>= function
+          (PackImpl.save_idx_file
+             ~fs:git.fs ~root:git.dotgit sequence hash_pack >>!= lift_error)
+          >>= function
           | Error _ as err -> Lwt.return err
           | Ok () ->
             let filename_pack = Fmt.strf "pack-%s.pack" (Hash.to_hex hash_pack) in
-
-            (FS.File.move path Fpath.(git.dotgit / "objects" / "pack" / filename_pack) >>= function
-              | Error err ->
-                Lwt.return Error.(v @@ FS.err_move path Fpath.(git.dotgit / "objects" / "pack" / filename_pack) err)
-              | Ok () -> Lwt.return (Ok (hash_pack, List.length entries)))
+            let dst = Fpath.(git.dotgit / "objects" / "pack" / filename_pack) in
+            (FS.File.move git.fs path dst >|= function
+              | Error err -> Error.(v @@ FS.err_move path dst err)
+              | Ok ()     -> Ok (hash_pack, List.length entries))
             >>= fun ret ->
             FS.Mapper.close fdp >|= function
             | Error sys_err ->
@@ -775,11 +776,11 @@ module FS (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
        PInfo.from_stream ~ztmp ~window info (fun () -> Lwt_stream.get stream0)
        >>!= (fun sys_err -> `Pack_info sys_err))
       >>?= fun info ->
-      to_temp_file (Fmt.strf "pack-%s.pack") stream1 >>?= fun path ->
+      to_temp_file git.fs (Fmt.strf "pack-%s.pack") stream1 >>?= fun path ->
 
       let module Graph = PInfo.Graph in
 
-      FS.Mapper.openfile path >>= function
+      FS.Mapper.openfile git.fs path >>= function
       | Error err ->
         Lwt.return Error.(v @@ FS.err_open path err)
       | Ok fdp ->
@@ -976,22 +977,22 @@ module FS (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
   let write_inflated t ~kind value =
     Loose.write_inflated t ~kind value
 
-  let indexes git =
-    FS.Dir.contents ~rel:false Fpath.(git / "objects" / "pack") >>= function
-    | Ok lst ->
-      Lwt_list.fold_left_s
-        (fun acc path ->
-           if Fpath.has_ext "idx" path
-           then Lwt.return (path :: acc)
-           else Lwt.return acc)
-        [] lst
-      >>= PackImpl.v >|= fun v -> Ok v
-    | Error err ->
-      Lwt.return Error.(v @@ FS.err_sys_dir err)
+  let indexes ~fs git =
+    FS.Dir.contents fs ~rel:false Fpath.(git / "objects" / "pack") >>= function
+    | Error err -> Lwt.return Error.(v @@ FS.err_sys_dir err)
+    | Ok lst    ->
+      let idx =
+        List.fold_left (fun acc path ->
+            if Fpath.has_ext "idx" path then path :: acc else acc
+          ) [] lst
+      in
+      PackImpl.v fs idx >|= fun v ->
+      Ok v
 
   let lookup state hash =
     Pack.lookup state hash >>= function
-    | Some (hash_pack, (_, offset)) -> Lwt.return (`Pack_decoder (hash_pack, offset))
+    | Some (hash_pack, (_, offset)) ->
+      Lwt.return (`Pack_decoder (hash_pack, offset))
     | None ->
       Loose.lookup state hash >|= function
       | Some _ -> `Loose
@@ -1055,17 +1056,17 @@ module FS (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
 
   module Ref = struct
 
-    let contents top =
+    let contents ~fs top =
       let rec lookup acc dir =
-        FS.Dir.contents ~rel:true Fpath.(top // dir) >>?= fun l ->
+        FS.Dir.contents fs ~rel:true Fpath.(top // dir) >>?= fun l ->
         Lwt_list.filter_p (fun x ->
-            FS.is_dir Fpath.(top // dir // x) >|= function
+            FS.is_dir fs Fpath.(top // dir // x) >|= function
             | Ok v    -> v
             | Error _ -> false
           ) l
         >>= fun dirs ->
         Lwt_list.filter_p (fun x ->
-            FS.is_file Fpath.(top // dir // x) >|= function
+            FS.is_file fs Fpath.(top // dir // x) >|= function
             | Ok v    -> v
             | Error _ -> false
           ) l
@@ -1083,10 +1084,9 @@ module FS (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
     (* XXX(dinosaure): this function does not return any {!Error} value. *)
     let graph t =
       Log.debug (fun l -> l "graph_p");
-      contents Fpath.(t.dotgit / "refs") >>= function
-      | Error err ->
-        Lwt.return Error.(v @@ FS.err_sys_dir err)
-      | Ok files ->
+      contents ~fs:t.fs Fpath.(t.dotgit / "refs") >>= function
+      | Error err -> Lwt.return Error.(v @@ FS.err_sys_dir err)
+      | Ok files  ->
         Log.debug (fun l ->
             let pp_files = Fmt.hvbox (Fmt.list Fpath.pp) in
             l "contents files: %a." pp_files files);
@@ -1096,7 +1096,7 @@ module FS (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
                [/]. *)
             let r = Reference.of_path abs_ref in
             with_buffer t @@ fun { dtmp; raw; _ } ->
-            Reference.read ~root:t.dotgit r ~dtmp ~raw >|= function
+            Reference.read ~fs:t.fs ~root:t.dotgit r ~dtmp ~raw >|= function
             | Ok v -> v :: acc
             | Error err ->
               Log.err (fun l ->
@@ -1116,7 +1116,7 @@ module FS (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
             ) ([], Graph.empty) lst
         in
         (with_buffer t (fun { dtmp; raw; _ } ->
-             Packed_refs.read ~root:t.dotgit ~dtmp ~raw
+             Packed_refs.read ~fs:t.fs ~root:t.dotgit ~dtmp ~raw
            ) >>= function
          | Error _ as err -> Lwt.return err
          | Ok packed_refs ->
@@ -1176,13 +1176,13 @@ module FS (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
 
     let mem t reference =
       let in_packed_refs () = Hashtbl.mem t.packed reference in
-      Reference.mem ~root:t.dotgit reference >>= function
-      | true -> Lwt.return true
-      | false -> let v = in_packed_refs () in Lwt.return v
+      Reference.mem ~fs:t.fs ~root:t.dotgit reference >|= function
+      | true  -> true
+      | false -> in_packed_refs ()
 
     let remove t reference =
       (with_buffer t (fun { dtmp; raw; _ } ->
-           Packed_refs.read ~root:t.dotgit ~dtmp ~raw
+           Packed_refs.read ~fs:t.fs ~root:t.dotgit ~dtmp ~raw
          ) >>= function
        | Error _ -> Lwt.return None
        | Ok packed_refs ->
@@ -1207,22 +1207,23 @@ module FS (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
           | None -> Lwt.return (Ok ())
           | Some packed_refs' ->
             with_buffer t (fun { raw; _ } ->
-                Packed_refs.write ~root:t.dotgit ~raw packed_refs'
+                Packed_refs.write ~fs:t.fs ~root:t.dotgit ~raw packed_refs'
               ) >|= function
             | Ok ()   -> Ok ()
             | Error e -> Error (e :> error))
       >>= function
       | Error _ as err -> Lwt.return err
       | Ok () ->
-        Reference.remove ~root:t.dotgit reference >|= function
+        Reference.remove ~fs:t.fs ~root:t.dotgit reference >|= function
         | Ok ()   -> Ok ()
         | Error e -> Error (e :> error)
 
     let read t reference =
-      FS.is_file Fpath.(t.dotgit // (Reference.to_path reference)) >>= function
+      FS.is_file t.fs Fpath.(t.dotgit // Reference.to_path reference)
+      >>= function
       | Ok true ->
         (with_buffer t @@ fun { dtmp; raw; _ } ->
-         Reference.read ~root:t.dotgit ~dtmp ~raw reference >|= function
+         Reference.read ~fs:t.fs ~root:t.dotgit ~dtmp ~raw reference >|= function
          | Ok _ as v -> v
          | Error e   -> Error (e :> error))
       | Ok false | Error _ ->
@@ -1237,7 +1238,7 @@ module FS (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
 
     let write t reference value =
       with_buffer t (fun { raw; _ } ->
-          Reference.write ~root:t.dotgit ~raw reference value
+          Reference.write ~fs:t.fs ~root:t.dotgit ~raw reference value
         ) >>= function
       | Error (#Reference.error as err) -> Lwt.return (Error (err : error))
       | Ok () ->
@@ -1245,7 +1246,7 @@ module FS (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
         | false -> Lwt.return (Ok ())
         | true ->
           with_buffer t (fun { dtmp; raw; _ } ->
-              Packed_refs.read ~root:t.dotgit ~dtmp ~raw
+              Packed_refs.read ~fs:t.fs ~root:t.dotgit ~dtmp ~raw
             ) >>= function
           | Error _ as err -> Lwt.return err
           | Ok packed_refs ->
@@ -1263,7 +1264,7 @@ module FS (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
                 | `Peeled _ -> ()
               ) packed_refs';
             with_buffer t (fun { raw; _ } ->
-                Packed_refs.write ~root:t.dotgit ~raw packed_refs'
+                Packed_refs.write ~fs:t.fs ~root:t.dotgit ~raw packed_refs'
               ) >|= function
             | Ok ()   -> Ok ()
             | Error e -> Error (e : error)
@@ -1317,58 +1318,49 @@ module FS (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
 
   let sanitize_head git =
     Ref.mem git Reference.head >>= function
-    | true -> Lwt.return (Ok ())
+    | true  -> Lwt.return (Ok ())
     | false -> Ref.write git Reference.head Reference.(Ref master)
 
-  let sanitize_filesystem root dotgit =
-    FS.Dir.create root
-    >>?= (fun _ -> FS.Dir.create dotgit)
-    >>?= (fun _ -> FS.Dir.create Fpath.(dotgit / "objects"))
-    >>?= (fun _ -> FS.Dir.create Fpath.(dotgit / "objects" / "pack"))
-    >>?= (fun _ -> FS.Dir.create Fpath.(dotgit / "objects" / "info"))
-    >>?= (fun _ -> FS.Dir.create Fpath.(dotgit / "refs"))
+  let sanitize_filesystem fs root dotgit =
+    FS.Dir.create fs root
+    >>?= (fun _ -> FS.Dir.create fs dotgit)
+    >>?= (fun _ -> FS.Dir.create fs Fpath.(dotgit / "objects"))
+    >>?= (fun _ -> FS.Dir.create fs Fpath.(dotgit / "objects" / "pack"))
+    >>?= (fun _ -> FS.Dir.create fs Fpath.(dotgit / "objects" / "info"))
+    >>?= (fun _ -> FS.Dir.create fs Fpath.(dotgit / "refs"))
     >>?= (fun _ -> Lwt.return (Ok ()))
     >>!= Error.FS.err_sys_dir
 
-  let create ?root ?dotgit ?(compression = 4) ?buffer () =
+  let create ?root ?dotgit ?(compression = 4) ?buffer fs =
     let buffer = match buffer with
       | Some f -> f
       | None   ->
         let p = Lwt_pool.create 4 (fun () -> Lwt.return (default_buffer ())) in
-        Lwt_pool.use p in
-
-    match root, dotgit with
-    | None, _ | _, None ->
-      (FS.Dir.current () >>!= Error.FS.err_sys_dir)
-      >>?= fun current ->
-      let root = Option.get ~default:current root in
-      let dotgit  = Option.get ~default:Fpath.(root / ".git") dotgit in
-
-      sanitize_filesystem root dotgit
-      >>?= (fun () -> indexes dotgit)
-      >>?= (fun engine ->
-          Lwt.return (Ok { dotgit
-                         ; root
-                         ; compression
-                         ; engine
-                         ; packed = Hashtbl.create 64
-                         ; cache = cache ()
-                         ; buffer = buffer }))
-      >>?= (fun git -> (sanitize_head git
-                        >>?= fun () -> Lwt.return (Ok git)))
-    | Some root, Some dotgit ->
-      sanitize_filesystem root dotgit
-      >>?= (fun () -> indexes dotgit)
-      >>?= (fun engine ->
-          Lwt.return (Ok { dotgit
-                         ; root
-                         ; compression
-                         ; engine
-                         ; packed = Hashtbl.create 64
-                         ; cache = cache ()
-                         ; buffer = buffer }))
-      >>?= (fun git -> (sanitize_head git
-                        >>?= fun () -> Lwt.return (Ok git)))
+        Lwt_pool.use p
+    in
+    let resolve_paths () = match root, dotgit with
+     | Some root, Some dotgit -> Lwt.return (Ok (root, dotgit))
+     | None, _ | _, None ->
+       (FS.Dir.current fs >>!= Error.FS.err_sys_dir) >>?= fun current ->
+       let root = Option.get ~default:current root in
+       let dotgit  = Option.get ~default:Fpath.(root / ".git") dotgit in
+       Lwt.return (Ok (root, dotgit))
+    in
+    resolve_paths () >>?= fun (root, dotgit) ->
+    sanitize_filesystem fs root dotgit >>?= fun () ->
+    indexes ~fs dotgit >>?= fun engine ->
+    let git =
+      { fs
+      ; dotgit
+      ; root
+      ; compression
+      ; engine
+      ; packed = Hashtbl.create 64
+      ; cache = cache ()
+      ; buffer = buffer }
+    in
+    sanitize_head git >>?= fun () ->
+    Lwt.return (Ok git)
 
   let clear_caches t =
     CacheIndex.drop_lru t.cache.indexes;
@@ -1380,13 +1372,13 @@ module FS (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
 
   let reset t =
     Log.info (fun l -> l ~header:"reset" "Start to reset the Git repository");
-    (FS.Dir.delete Fpath.(t.dotgit / "objects")
-     >>?= fun () -> FS.Dir.create Fpath.(t.dotgit / "objects")
-     >>?= fun _ -> FS.Dir.create Fpath.(t.dotgit / "objects" / "info")
-     >>?= fun _ -> FS.Dir.create Fpath.(t.dotgit / "objects" / "pack")
-     >>?= fun _ -> FS.Dir.delete Fpath.(t.dotgit / "refs")
-     >>?= fun () -> FS.Dir.create Fpath.(t.dotgit / "refs" / "heads")
-     >>?= fun _  -> FS.Dir.create Fpath.(t.dotgit / "refs" / "tags")
+    (FS.Dir.delete t.fs Fpath.(t.dotgit / "objects")
+     >>?= fun () -> FS.Dir.create t.fs Fpath.(t.dotgit / "objects")
+     >>?= fun _ -> FS.Dir.create t.fs Fpath.(t.dotgit / "objects" / "info")
+     >>?= fun _ -> FS.Dir.create t.fs Fpath.(t.dotgit / "objects" / "pack")
+     >>?= fun _ -> FS.Dir.delete t.fs Fpath.(t.dotgit / "refs")
+     >>?= fun () -> FS.Dir.create t.fs Fpath.(t.dotgit / "refs" / "heads")
+     >>?= fun _  -> FS.Dir.create t.fs Fpath.(t.dotgit / "refs" / "tags")
     ) >>!= Error.FS.err_sys_dir
     >>?= fun _ -> Ref.write t Reference.head Reference.(Ref master)
      (* XXX(dinosaure): an empty git repository has HEAD which points

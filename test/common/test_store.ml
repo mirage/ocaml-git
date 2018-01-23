@@ -33,7 +33,12 @@ let long_random_cstruct () =
 let long_random_string () =
   Cstruct.to_string (long_random_cstruct ())
 
-module Make (Store : Git.S) = struct
+module type S = sig
+  include Git.S
+  val create: Fpath.t -> (t, error) result Lwt.t
+end
+
+module Make (Store : S) = struct
 
   module Common = Make(Store)
   open Common
@@ -44,10 +49,6 @@ module Make (Store : Git.S) = struct
     Store.reset t >|= function
     | Ok ()   -> ()
     | Error e -> Alcotest.failf "reset failed: %a" Store.pp_error e
-
-  let init_err = function
-    | Ok x    -> Lwt.return x
-    | Error e -> Alcotest.failf "error: %a" Store.pp_error e
 
   let check_err = function
     | Ok x    -> Lwt.return x
@@ -193,7 +194,7 @@ module Make (Store : Git.S) = struct
   let root = Fpath.v "test-git-store"
 
   let create ~root ?(index=false) () =
-    Store.create ~root () >>= init_err >>= fun t ->
+    Store.create root >>= check_err >>= fun t ->
     reset t >>= fun () ->
     Lwt_list.iter_s (fun v ->
         Store.write t v >|= function
@@ -376,7 +377,7 @@ module Make (Store : Git.S) = struct
         then Git.Buffer.add buf (Cstruct.sub tmp 0 (IndexEncoder.used_out state))
     in
     let test () =
-      Store.create ~root () >>= init_err >>= fun t ->
+      Store.create root >>= check_err >>= fun t ->
       reset t >|= fun () ->
       go state;
       let buf = Git.Buffer.unsafe_contents buf in
@@ -399,7 +400,7 @@ module Make (Store : Git.S) = struct
           Lwt_bytes.read ic (Cstruct.to_bigarray src) 0 (Cstruct.len src)
           >>= fun len -> go acc (IndexDecoder.refill 0 len state)
       in
-      Store.create ~root () >>= init_err >>= fun t ->
+      Store.create root >>= check_err >>= fun t ->
       reset t >>= fun () ->
       go Radix.empty (IndexDecoder.make ()) >|= fun tree ->
       let tr = List.fold_left (fun a (h, v) ->
@@ -555,7 +556,7 @@ module Make (Store : Git.S) = struct
 
   let test_decoder_pack () =
     let test () =
-      Store.create ~root () >>= init_err >>= fun t ->
+      Store.create root >>= check_err >>= fun t ->
       reset t >>= fun () ->
       decode_pack_file filename_pack >|= fun (pack, _, _) ->
       let p = List.fold_left (fun a (h, v) ->
@@ -574,7 +575,7 @@ module Make (Store : Git.S) = struct
 
   let test_encoder_pack () =
     let test () =
-      Store.create ~root () >>= init_err >>= fun t ->
+      Store.create root >>= check_err >>= fun t ->
       reset t >>= fun () ->
       Lwt_unix.openfile (Fpath.to_string filename_pack) [O_RDONLY] 0o644 >>= fun ic ->
       let tmp = Cstruct.create 0x8000 in
@@ -598,9 +599,10 @@ module Make (Store : Git.S) = struct
 
       let module Mapper = struct
         type fd = Cstruct.t
+        type t = unit
         type error = unit
         let pp_error = Fmt.nop
-        let openfile _ = Lwt.return (Ok pack_raw)
+        let openfile _ _ = Lwt.return (Ok pack_raw)
         let length raw = Lwt.return (Ok (Int64.of_int (Cstruct.len raw)))
         let map raw ?(pos = 0L) len =
           let pos = Int64.to_int pos in
@@ -636,7 +638,7 @@ module Make (Store : Git.S) = struct
 
 end
 
-let suite name (module S: Git.S) =
+let suite name (module S: S) =
   let module T = Make(S) in
   name,
   [ "Operations on blobs"       , `Quick, T.test_blobs

@@ -171,15 +171,16 @@ end
 
 module type FILE = sig
   type error
-  val exists : Fpath.t -> (bool, error) result Lwt.t
-  val delete : Fpath.t -> (unit, error) result Lwt.t
-  val move : Fpath.t -> Fpath.t -> (unit, error) result Lwt.t
+  type t
+  val exists : t -> Fpath.t -> (bool, error) result Lwt.t
+  val delete : t -> Fpath.t -> (unit, error) result Lwt.t
+  val move : t -> Fpath.t -> Fpath.t -> (unit, error) result Lwt.t
   (** [move] should be be atomic *)
 
   type 'a fd constraint 'a = [< `Read | `Write ]
 
-  val open_w: Fpath.t -> ([ `Write ] fd, error) result Lwt.t
-  val open_r: Fpath.t -> ([ `Read ] fd, error) result Lwt.t
+  val open_w: t -> Fpath.t -> ([ `Write ] fd, error) result Lwt.t
+  val open_r: t -> Fpath.t -> ([ `Read ] fd, error) result Lwt.t
   val write: Cstruct.t -> ?off:int -> ?len:int -> [> `Write ] fd
     -> (int, error) result Lwt.t
   val read: Cstruct.t -> ?off:int -> ?len:int -> [> `Read ] fd
@@ -190,8 +191,9 @@ end
 module type MAPPER = sig
   type fd
   type error
+  type t
   val pp_error: error Fmt.t
-  val openfile: Fpath.t -> (fd, error) result Lwt.t
+  val openfile: t -> Fpath.t -> (fd, error) result Lwt.t
   val length: fd -> (int64, error) result Lwt.t
   val map: fd -> ?pos:int64 -> int -> (Cstruct.t, error) result Lwt.t
   val close : fd -> (unit, error) result Lwt.t
@@ -199,23 +201,25 @@ end
 
 module type DIR = sig
   type error
-  val exists: Fpath.t -> (bool, error) result Lwt.t
-  val create: Fpath.t -> (bool, error) result Lwt.t
-  val delete: Fpath.t -> (unit, error) result Lwt.t
-  val contents: ?rel:bool -> Fpath.t -> (Fpath.t list, error) result Lwt.t
-  val current: unit -> (Fpath.t, error) result Lwt.t
-  val temp: unit -> Fpath.t Lwt.t
+  type t
+  val exists: t -> Fpath.t -> (bool, error) result Lwt.t
+  val create: t -> Fpath.t -> (bool, error) result Lwt.t
+  val delete: t -> Fpath.t -> (unit, error) result Lwt.t
+  val contents: t -> ?rel:bool -> Fpath.t -> (Fpath.t list, error) result Lwt.t
+  val current: t -> (Fpath.t, error) result Lwt.t
+  val temp: t -> Fpath.t Lwt.t
 end
 
 module type FS = sig
   type error
+  type t
   val pp_error: error Fmt.t
-  val is_dir: Fpath.t -> (bool, error) result Lwt.t
-  val is_file: Fpath.t -> (bool, error) result Lwt.t
+  val is_dir: t -> Fpath.t -> (bool, error) result Lwt.t
+  val is_file: t -> Fpath.t -> (bool, error) result Lwt.t
 
-  module File  : FILE with type error := error
-  module Dir   : DIR with type error := error
-  module Mapper: MAPPER with type error := error
+  module File  : FILE with type t := t and type error := error
+  module Dir   : DIR with type t := t and type error := error
+  module Mapper: MAPPER with type t := t and type error := error
 
   val has_global_watches: bool
   val has_global_checkout: bool

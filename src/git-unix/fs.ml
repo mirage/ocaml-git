@@ -6,6 +6,30 @@ let (>|?) = Lwt_result.(>|=)
 let src = Logs.Src.create "git-unix.fs" ~doc:"logs unix file-system's event"
 module Log = (val Logs.src_log src : Logs.LOG)
 
+type t = {
+  temp_dir: Fpath.t;
+}
+
+let temp () =
+  let from_env var ~absent =
+    match try Some (Sys.getenv var) with Not_found -> None with
+    | None -> absent
+    | Some v ->
+      match Fpath.of_string v with
+      | Error _ -> absent
+      | Ok v -> v
+  in
+  (if Sys.os_type = "Win32"
+   then from_env "TEMP  " ~absent:Fpath.(v "./")
+   else from_env "TMPDIR" ~absent:Fpath.(v "/tmp/"))
+
+let v ?temp_dir () =
+  let temp_dir = match temp_dir with
+    | None   -> temp ()
+    | Some t -> t
+  in
+  { temp_dir }
+
 type error = Fpath.t * [
   | `Stat of string
   | `Unlink of string
@@ -87,7 +111,7 @@ let rec protect ?(n=0) err f =
     | Error `EAGAIN  -> protect ~n:(n+1) err f
     | Error (`E e)   -> Lwt.return (Error e)
 
-let is_file path =
+let is_file _t path =
   let err = function
     | Unix.ENOENT -> Lwt.return (Ok false)
     | e           -> err_stat path e
@@ -96,7 +120,7 @@ let is_file path =
   Lwt_unix.stat (Fpath.to_string path) >|= fun stat ->
   stat.Lwt_unix.st_kind = Lwt_unix.S_REG
 
-let is_dir path =
+let is_dir _t path =
   let err = function
     | Unix.ENOENT -> Lwt.return (Ok false)
     | e           -> err_stat path e
@@ -111,7 +135,7 @@ let result_map f a = match a with
 
 module Dir = struct
 
-  let create dir =
+  let create t dir =
     let mode = 0o755 in
     let mkdir d =
       let err = function
@@ -122,12 +146,12 @@ module Dir = struct
       Log.debug (fun l -> l "create a new directory %a." Fpath.pp d);
       Lwt_unix.mkdir (Fpath.to_string d) mode
     in
-    is_dir dir >>= function
+    is_dir t dir >>= function
     | Error _ as e -> Lwt.return e
     | Ok true      -> Lwt.return (Ok false)
     | Ok false     ->
       let rec dirs_to_create p acc =
-        is_dir p >>= function
+        is_dir t p >>= function
         | Error _ as e -> Lwt.return e
         | Ok true      -> Lwt.return (Ok acc)
         | Ok false     -> dirs_to_create (Fpath.parent p) (p :: acc)
@@ -157,7 +181,7 @@ module Dir = struct
       | _              -> `File
     )
 
-  let exists path =
+  let exists _t path =
     kind path >|? function
     | `Dir -> true
     | _    -> false
@@ -206,11 +230,11 @@ module Dir = struct
     in
     delete_files rmdir files
 
-  let delete dir =
+  let delete _t dir =
     Log.debug (fun l -> l "Dir.delete %a" Fpath.pp dir);
     delete_dir Lwt.return dir
 
-  let contents ?(rel = false) dir =
+  let contents _t ?(rel = false) dir =
     Log.debug (fun l -> l "Dir.contents %a" Fpath.pp dir);
     let rec aux acc = function
       | []   -> acc
@@ -218,7 +242,7 @@ module Dir = struct
     in
     readdir dir >|? aux []
 
-  let rec current () =
+  let rec current t =
     Lwt.try_bind
       (fun () -> Unix.getcwd () |> Lwt.return)
       (fun p ->
@@ -232,25 +256,14 @@ module Dir = struct
            err_getcwd Fpath.(v "CWD")
              "get current working directory: cannot parse it to a path (%S)" p)
       (function
-        | Unix.Unix_error (Unix.EINTR, _, _) -> current ()
+        | Unix.Unix_error (Unix.EINTR, _, _) -> current t
         | Unix.Unix_error (e, _, _) ->
           err_getcwd Fpath.(v "CWD")
             "get current working directory: %s" (Unix.error_message e)
         | exn -> expected_unix_error exn)
 
-  let temp () =
-    let from_env var ~absent =
-      match try Some (Sys.getenv var) with Not_found -> None with
-      | None -> absent
-      | Some v ->
-        match Fpath.of_string v with
-        | Error _ -> absent
-        | Ok v -> v
-    in
-    (if Sys.os_type = "Win32"
-     then from_env "TEMP  " ~absent:Fpath.(v "./")
-     else from_env "TMPDIR" ~absent:Fpath.(v "/tmp/"))
-    |> Lwt.return
+  let temp t = Lwt.return t.temp_dir
+
 end
 
 module File = struct
@@ -260,7 +273,7 @@ module File = struct
     fd  : Lwt_unix.file_descr;
   } constraint 'a = [< `Read | `Write ]
 
-  let open_w path =
+  let open_w _t path =
     let mode = 0o644 in
     let err e = err_open path e in
     Lwt_pool.use open_pool @@ fun () ->
@@ -273,7 +286,7 @@ module File = struct
     ] mode >|= fun fd ->
     ( { fd; path } :> [ `Write ] fd)
 
-  let open_r path =
+  let open_r _t path =
     let mode = 0o400 in
     let err e = err_open path e in
     Lwt_pool.use open_pool @@ fun () ->
@@ -296,7 +309,7 @@ module File = struct
     protect err @@ fun () ->
     Lwt_unix.close fd
 
-  let exists path =
+  let exists _t path =
     let err = function
       | Unix.ENOENT -> Lwt.return (Ok false)
       | e           -> err_stat path e
@@ -305,12 +318,12 @@ module File = struct
     Lwt_unix.stat (Fpath.to_string path) >|= fun stat ->
     stat.Lwt_unix.st_kind = Lwt_unix.S_REG
 
-  let move path_a path_b =
+  let move _t path_a path_b =
     let err e = err_rename path_a e in
     protect err @@ fun () ->
     Lwt_unix.rename (Fpath.to_string path_a) (Fpath.to_string path_b)
 
-  let delete path =
+  let delete _t path =
     let err = function
       | Unix.ENOENT -> Lwt.return (Ok ())
       | e           -> err_delete path e
@@ -335,7 +348,7 @@ module Mapper = struct
     Lwt_unix.LargeFile.fstat fd >|= fun fstat ->
     fstat.Unix.LargeFile.st_size
 
-  let openfile path =
+  let openfile _t path =
     let err e = err_open path e in
     protect err @@ fun () ->
     Lwt_unix.openfile (Fpath.to_string path) [ Lwt_unix.O_RDONLY ] 0o644

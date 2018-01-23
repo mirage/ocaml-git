@@ -513,19 +513,6 @@ module type S = sig
       deserialisation functions does not allocate any buffer and uses
       only the specified buffers to construct the OCaml value. *)
 
-  val create :
-       ?root:Fpath.t
-    -> ?dotgit:Fpath.t
-    -> ?compression:int
-    -> ?buffer:((buffer -> unit Lwt.t) -> unit Lwt.t)
-    -> unit -> (t, error) result Lwt.t
-  (** [create ?root ?dotgit ?compression ?with_buffer ()] creates a
-      new store represented by the path [root] (default is ["."]),
-      where the Git objects are located in [dotgit] (default is [root
-      / ".git"] and when Git objects are compressed by the [level]
-      (default is [4]). If [with_buffer] is not set, use a [Lwt_pool]
-      of {!default_buffer} of size 4. *)
-
   val dotgit: t -> Fpath.t
   (** [dotgit state] is the current [".git"] path used. *)
 
@@ -710,14 +697,27 @@ module type S = sig
 
   val has_global_watches: bool
   val has_global_checkout: bool
+
 end
 
-module FS
-    (H: S.HASH)
-    (FS: S.FS)
-    (Inflate: S.INFLATE)
-    (Deflate: S.DEFLATE)
-  : S with module Hash = H
-       and module Inflate = Inflate
-       and module Deflate = Deflate
-       and module FS = FS
+module FS (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE): sig
+
+  include S with module Hash    = H
+             and module Inflate = I
+             and module Deflate = D
+             and module FS      = F
+
+  val create :
+    ?root:Fpath.t ->
+    ?dotgit:Fpath.t ->
+    ?compression:int ->
+    ?buffer:((buffer -> unit Lwt.t) -> unit Lwt.t) ->
+    FS.t -> (t, error) result Lwt.t
+ (** [create ?root ?dotgit ?compression ?buffer fs] creates a
+      new store represented by the path [root] (default is ["."]),
+      where the Git objects are located in [dotgit] (default is [root
+      / ".git"] and when Git objects are compressed by the [level]
+      (default is [4]). If [buffer] is not set, use a [Lwt_pool] of
+      {!default_buffer} of size 4. [fs] is the storage backend state. *)
+
+end

@@ -16,7 +16,10 @@
 
 open Test_common
 
-module Store = Git.Mem.Store(Digestif.SHA1)
+module Store = struct
+  include Git.Mem.Store(Digestif.SHA1)
+  let create root = create ~root ()
+end
 
 let () =
   verbose ();

@@ -35,14 +35,8 @@
     back-end).
 *)
 
-module Make
-    (H: S.HASH)
-    (I: S.INFLATE)
-    (D: S.DEFLATE)
-  : Minimal.S
-    with module Hash = H
-     and module Inflate = I
-     and module Deflate = D
+module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE): sig
+
 (** The {i functor} needs 4 modules:
 
     {ul
@@ -61,7 +55,33 @@ module Make
     understand the Deflate module. For example, use [zlib] to inflate
     and [brotli] to deflate does not work. *)
 
-module Store (H : Digestif_sig.S):
-  Minimal.S with module Hash    = Hash.Make(H)
-             and module Inflate = Inflate
-             and module Deflate = Deflate
+  include Minimal.S with module Hash = H
+                     and module Inflate = I
+                     and module Deflate = D
+
+  val create:
+    ?root:Fpath.t ->
+    ?dotgit:Fpath.t ->
+    ?compression:int ->
+    ?buffer:((buffer -> unit Lwt.t) -> unit Lwt.t) ->
+    unit -> (t, error) result Lwt.t
+  (** [create ?root ?dotgit ?compression ()] creates a new store
+      represented by the path [root] (default is ["."]), where the Git
+      objects are located in [dotgit] (default is [root / ".git"] and
+      when Git objects are compressed by the [level] (default is
+      [4]). *)
+
+end
+
+module Store (H : Digestif_sig.S): sig
+  include Minimal.S with module Hash    = Hash.Make(H)
+                     and module Inflate = Inflate
+                     and module Deflate = Deflate
+
+  val create:
+    ?root:Fpath.t ->
+    ?dotgit:Fpath.t ->
+    ?compression:int ->
+    ?buffer:((buffer -> unit Lwt.t) -> unit Lwt.t) ->
+    unit -> (t, error) result Lwt.t
+end
