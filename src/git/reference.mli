@@ -191,33 +191,32 @@ module type IO = sig
   val pp_error: error Fmt.t
   (** Pretty-printer of {!error}. *)
 
-  val mem: root:Fpath.t -> t -> bool Lwt.t
-  (** [mem ~root reference] returns [true] iff we found the
-      [reference] find in the git repository [root]. Otherwise, we returns
-      [false]. *)
+  val mem: fs:FS.t -> root:Fpath.t -> t -> bool Lwt.t
+  (** [mem ~fs ~root reference] is [true] iff [reference] can be found
+      in the git repository [root]. Otherwise, it is [false]. *)
 
-  val read: root:Fpath.t -> t -> dtmp:Cstruct.t -> raw:Cstruct.t ->
+  val read: fs:FS.t -> root:Fpath.t -> t -> dtmp:Cstruct.t -> raw:Cstruct.t ->
     ((t * head_contents), error) result Lwt.t
-  (** [read ~root reference dtmp raw] returns the value contains in
-      the reference [reference] (available in the git repository
+  (** [read ~fs ~root reference dtmp raw] is the value of the
+      reference [reference] (available in the git repository
       [root]). [dtmp] and [raw] are buffers used by the decoder
       (respectively for the decoder as an internal buffer and the
       input buffer).
 
       This function can returns an {!error}. *)
 
-  val write: root:Fpath.t -> ?capacity:int -> raw:Cstruct.t ->
+  val write: fs:FS.t -> root:Fpath.t -> ?capacity:int -> raw:Cstruct.t ->
     t -> head_contents -> (unit, error) result Lwt.t
-  (** [write ~root ~raw reference value] writes the value [value] in
-      the mutable representation of the [reference] in the git
+  (** [write ~fs ~root ~raw reference value] writes the value [value]
+      in the mutable representation of the [reference] in the git
       repository [root]. [raw] is a buffer used by the decoder to keep
       the input.
 
       This function can returns an {!error}. *)
 
-  val remove: root:Fpath.t -> t -> (unit, error) result Lwt.t
-  (** [remove ~root reference] removes the reference from the
-      git repository [root].
+  val remove: fs:FS.t -> root:Fpath.t -> t -> (unit, error) result Lwt.t
+  (** [remove ~root reference] removes the reference from the git
+      repository [root].
 
       This function can returns an {!error}. *)
 end

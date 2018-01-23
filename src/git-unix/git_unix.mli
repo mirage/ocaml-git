@@ -19,9 +19,16 @@
 module SHA1:  Git.HASH
 module Net = Net
 
-module FS : Git.Store.S
-  with module Hash = SHA1
-   and module FS = Fs
+module FS: sig
+  include Git.Store.S with module Hash = SHA1
+  val create:
+    ?temp_dir:Fpath.t ->
+    ?root:Fpath.t ->
+    ?dotgit:Fpath.t ->
+    ?compression:int ->
+    ?buffer:((buffer -> unit Lwt.t) -> unit Lwt.t) ->
+    unit -> (t, error) result Lwt.t
+end
 
 module Sync (S: Git.S): Git.Sync.S with module Store = S and module Net = Net
 module HTTP (S: Git.S): Git_http.Sync.S with module Store = S

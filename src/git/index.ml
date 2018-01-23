@@ -1093,9 +1093,9 @@ module Make (H: S.HASH) (FS: S.FS) = struct
     | `IndexDecoder err -> Fmt.pf ppf "(`IndexDecoder %a)" IndexDecoder.pp_error err
     | `FS err           -> Fmt.pf ppf "(`FS %a)" FS.pp_error err
 
-  let load ~root ~dtmp =
+  let load fs ~root ~dtmp =
     let open Lwt.Infix in
-    FS.with_open_r Fpath.(root / "index") @@ fun read ->
+    FS.with_open_r fs Fpath.(root / "index") @@ fun read ->
     let decoder = IndexDecoder.default in
     let rec loop decoder = match IndexDecoder.eval dtmp decoder with
       | `Error (_, err)             -> Lwt.return (Error (`IndexDecoder err))

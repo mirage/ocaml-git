@@ -46,9 +46,13 @@ let head    = "HEAD"
 let is_head = String.equal head
 let master  = "refs/heads/master"
 
-let to_path x = match Fpath.of_string (String.concat Fpath.dir_sep (Astring.String.cuts ~sep x)) with
+let to_path x =
+  match
+    (* XXX(samoht): maybe Fpath.t = path was not a good idea afterall *)
+    Fpath.of_string (String.concat Fpath.dir_sep (Astring.String.cuts ~sep x))
+  with
   | Error (`Msg x) -> raise (Invalid_argument x)
-  | Ok v -> Fpath.normalize v
+  | Ok v           -> Fpath.normalize v
 
 let of_path path =
   match List.rev @@ Fpath.segs path with
@@ -126,22 +130,22 @@ module type IO = sig
   val pp_error: error Fmt.t
 
   val mem :
-       root:Fpath.t
+       fs:FS.t -> root:Fpath.t
     -> t -> bool Lwt.t
   val read :
-       root:Fpath.t
+       fs:FS.t -> root:Fpath.t
     -> t
     -> dtmp:Cstruct.t
     -> raw:Cstruct.t
     -> ((t * head_contents), error) result Lwt.t
   val write :
-       root:Fpath.t
+       fs:FS.t -> root:Fpath.t
     -> ?capacity:int
     -> raw:Cstruct.t
     -> t -> head_contents
     -> (unit, error) result Lwt.t
   val remove :
-       root:Fpath.t
+       fs:FS.t -> root:Fpath.t
     -> t -> (unit, error) result Lwt.t
 end
 
@@ -285,17 +289,17 @@ module IO (H : S.HASH) (FS: S.FS) = struct
       (false, []) segs
     |> fun (_, refs) -> List.rev refs |> String.concat "/" |> of_string
 
-  let mem ~root reference =
+  let mem ~fs ~root reference =
     let path = Fpath.(root // (to_path reference)) in
-    FS.File.exists path >|= function
+    FS.File.exists fs path >|= function
     | Ok v    -> v
     | Error _ -> false
 
-  let read ~root reference ~dtmp ~raw : (_, error) result Lwt.t =
+  let read ~fs ~root reference ~dtmp ~raw : (_, error) result Lwt.t =
     let decoder = D.default dtmp in
     let path = Fpath.(root // (to_path reference)) in
     Log.debug (fun l -> l "Reading the reference: %a." Fpath.pp path);
-    FS.with_open_r path @@ fun read ->
+    FS.with_open_r fs path @@ fun read ->
     let rec loop decoder = match D.eval decoder with
       | `End (_, value) -> Lwt.return (Ok value)
       | `Error (_, (#Error.Decoder.t as err)) ->
@@ -321,21 +325,21 @@ module IO (H : S.HASH) (FS: S.FS) = struct
       assert (equal reference reference');
       Ok (normalize path, head_contents)
 
-  let write ~root ?(capacity = 0x100) ~raw reference value =
+  let write ~fs ~root ?(capacity = 0x100) ~raw reference value =
     let state = E.default (capacity, value) in
     let path = Fpath.(root // (to_path reference)) in
-    FS.Dir.create (Fpath.parent path)
+    FS.Dir.create fs (Fpath.parent path)
     >>= function
     | Error err -> Lwt.return Error.(v @@ FS.err_create (Fpath.parent path) err)
     | Ok (true | false) ->
-      Encoder.to_file path raw state >|= function
+      Encoder.to_file fs path raw state >|= function
       | Ok _                   -> Ok ()
       | Error #fs_error as err -> err
       | Error (`Encoder #Error.never) -> assert false
 
-  let remove ~root t =
-    let path = Fpath.(root // (to_path t)) in
-    FS.File.delete path >|= function
+  let remove ~fs ~root t =
+    let path = Fpath.(root // to_path t) in
+    FS.File.delete fs path >|= function
     | Ok _ as v -> v
     | Error err -> Error.(v @@ FS.err_delete path err)
 

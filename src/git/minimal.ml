@@ -38,16 +38,6 @@ module type S = sig
     ?window:Inflate.window ->
     unit -> buffer
 
-  val create: ?root:Fpath.t ->
-    ?dotgit:Fpath.t ->
-    ?compression:int ->
-    ?buffer:((buffer -> unit Lwt.t) -> unit Lwt.t) ->
-    unit -> (t, error) result Lwt.t
-  (** [create ?root ?dotgit ?compression ()] creates a new store
-      represented by the path [root] (default is ["."]), where the Git
-      objects are located in [dotgit] (default is [root / ".git"] and when
-      Git objects are compressed by the [level] (default is [4]). *)
-
   val dotgit: t -> Fpath.t
   (** [dotgit state] returns the current [".git"] path used - eg. the
       default [?dotgit] value of {!create} if the client does not

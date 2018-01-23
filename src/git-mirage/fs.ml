@@ -27,18 +27,6 @@ let with_lock t p f =
        if Lwt_mutex.is_empty m then H.remove t p;
        Lwt.return ())
 
-(* XXX(samoht): this should be removed *)
-module type GAMMA = sig
-  val current : Fpath.t
-  val temp    : Fpath.t
-end
-
-(* XXX(samoht): this should be removed *)
-module type S = sig
-  include Mirage_fs_lwt.S
-  val connect : unit -> t Lwt.t
-end
-
 (* mirage-fs-unix paths are separated by '/' and should not end by a
    separator. XXX(samoht): there is probably something to revisit
    in mirage-fs-unix here... *)
@@ -51,7 +39,17 @@ let fpath_of_string str =
   let segs = Astring.String.cuts ~sep:"/" str in
   Fpath.of_string (String.concat Fpath.dir_sep segs)
 
-module Make (Gamma: GAMMA) (FS: S) = struct
+module Make (FS: Mirage_fs_lwt.S) = struct
+
+  type t = {
+    fs     : FS.t;
+    locks  : Lwt_mutex.t H.t;
+    current: Fpath.t;
+    temp   : Fpath.t;
+  }
+
+  let v ?(temp_dir=Fpath.v "tmp") ?(current_dir=Fpath.v ".") fs =
+    { fs; locks = H.create 13; current=current_dir; temp=temp_dir }
 
   type error =
     [ `Destroy of Fpath.t * string
@@ -80,18 +78,6 @@ module Make (Gamma: GAMMA) (FS: S) = struct
   let fs_write e = `FS_write e
   let err_listdir p fmt =
     Fmt.kstrf (fun e -> Lwt.return (Error (`Listdir (p, e)))) fmt
-
-  type t = {
-    fs   : FS.t;
-    locks: Lwt_mutex.t H.t;
-  }
-
-  let t = lazy (
-    FS.connect () >|= fun fs ->
-    { fs; locks = H.create 24 }
-  )
-
-  let connect fn = Lwt.bind (Lazy.force t) fn
 
   let is_file t path =
     let str_path = fpath_to_string path in
@@ -168,13 +154,8 @@ module Make (Gamma: GAMMA) (FS: S) = struct
           | Error e  -> Lwt.return (err_fs_read e))
         (fun exn -> err_listdir dir "%a" Fmt.exn exn)
 
-    let current () = Lwt.return (Ok Gamma.current)
-    let temp () = Lwt.return Gamma.temp
-
-    let contents ?rel dir = connect @@ fun t -> contents t ?rel dir
-    let exists path = connect @@ fun t -> exists t path
-    let create dir = connect @@ fun t -> create t dir
-    let delete path = connect @@ fun t -> delete t path
+    let current t = Lwt.return (Ok t.current)
+    let temp t = Lwt.return t.temp
   end
 
   module File = struct
@@ -185,7 +166,8 @@ module Make (Gamma: GAMMA) (FS: S) = struct
        directly. *)
 
     type 'a fd =
-      { fd   : string
+      { t    : t;
+        fd   : string
       ; path : Fpath.t
       ; mutable seek : int }
       constraint 'a = [< `Read | `Write ]
@@ -215,24 +197,24 @@ module Make (Gamma: GAMMA) (FS: S) = struct
     let open_r t path =
       Log.debug (fun l -> l "File.open_r %s" @@ fpath_to_string path);
       open' t ~create:false path >|?= fun fd ->
-      ({ path; fd; seek = 0 } :> [ `Read ] fd)
+      ({ t; path; fd; seek = 0 } :> [ `Read ] fd)
 
     let open_w t path =
       Log.debug (fun l -> l "File.open_w %s" @@ fpath_to_string path);
       open' t ~create:true path >|?= fun fd ->
-      ({ path; fd; seek = 0 } :> [ `Write ] fd)
+      ({ t; path; fd; seek = 0 } :> [ `Write ] fd)
 
-    let write t raw ?(off = 0) ?(len = Cstruct.len raw) fd =
+    let write raw ?(off = 0) ?(len = Cstruct.len raw) fd =
       Log.debug (fun l -> l "File.write %s" fd.fd);
-      with_lock t.locks fd.path @@ fun () ->
-      FS.write t.fs fd.fd fd.seek (Cstruct.sub raw off len) >|= function
+      with_lock fd.t.locks fd.path @@ fun () ->
+      FS.write fd.t.fs fd.fd fd.seek (Cstruct.sub raw off len) >|= function
       | Ok ()   -> fd.seek <- fd.seek + len; Ok len
       | Error e -> err_fs_write e
 
-    let read t dst ?(off = 0) ?(len = Cstruct.len dst) fd =
+    let read dst ?(off = 0) ?(len = Cstruct.len dst) fd =
       Log.debug (fun l -> l "File.read %s" fd.fd);
-      with_lock t.locks fd.path @@ fun () ->
-      FS.read t.fs fd.fd fd.seek len >|= function
+      with_lock fd.t.locks fd.path @@ fun () ->
+      FS.read fd.t.fs fd.fd fd.seek len >|= function
       | Error e -> err_fs_read e
       | Ok src  ->
         let (len, _) = Cstruct.fillv ~src ~dst:(Cstruct.sub dst off len) in
@@ -296,33 +278,26 @@ module Make (Gamma: GAMMA) (FS: S) = struct
         (write 0 () >>!= fs_write)
       ]
 
-    let exists path = connect @@ fun t -> exists t path
-    let delete path = connect @@ fun t -> delete t path
-    let move patha pathb = connect @@ fun t -> move t patha pathb
-    let open_w path = connect @@ fun t -> open_w t path
-    let open_r path = connect @@ fun t -> open_r t path
-    let write raw ?off ?len fd = connect @@ fun t -> write t raw ?off ?len fd
-    let read raw ?off ?len fd = connect @@ fun t -> read t raw ?off ?len fd
   end
 
   module Mapper = struct
 
     let pp_error = pp_error
 
-    type fd = { path: Fpath.t ; sz: int64 }
+    type fd = { t: t; path: Fpath.t ; sz: int64 }
 
     let openfile t path =
       with_lock t.locks path @@ fun () ->
       Log.debug (fun l -> l "Mapper.openfile %a" Fpath.pp path);
       FS.stat t.fs (fpath_to_string path) >|= function
-      | Ok stat -> Ok { path; sz = stat.Mirage_fs.size }
+      | Ok stat -> Ok { t; path; sz = stat.Mirage_fs.size }
       | Error e -> Error (`FS_read e)
 
-    let length { sz; path } =
+    let length { sz; path; _ } =
       Log.debug (fun l -> l "Mapper.length %a" Fpath.pp path);
       Lwt.return (Ok sz)
 
-    let map t { path; _ } ?(pos = 0L) len =
+    let map { t; path; _ } ?(pos = 0L) len =
       Log.debug (fun l -> l "Mapper.map %a" Fpath.pp path);
       with_lock t.locks path @@ fun () ->
       FS.read t.fs (fpath_to_string path) (Int64.to_int pos) len >|= function
@@ -333,12 +308,7 @@ module Make (Gamma: GAMMA) (FS: S) = struct
       Log.debug (fun l -> l "Mapper.close %a" Fpath.pp path);
       Lwt.return (Ok ())
 
-    let openfile path = connect @@ fun t -> openfile t path
-    let map fd ?pos len = connect @@ fun t -> map t fd ?pos len
   end
-
-  let is_dir path = connect @@ fun t -> is_dir t path
-  let is_file path = connect @@ fun t -> is_file t path
 
   let has_global_watches = false
   let has_global_checkout = false

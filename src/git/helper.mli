@@ -132,15 +132,15 @@ module Encoder (E: ENCODER) (FS: S.FS): sig
     [ `Encoder of E.error
     | FS.error Error.FS.t ]
 
-  (** [to_file f tmp state] encodes [state] in the file [f] using
+  (** [to_file t f tmp state] encodes [state] in the file [f] using
       [tmp] as an intermediary buffer.
 
       The result is [Error `Stack] if at least [limit] writes have
       returned 0.
 
       If [atomic] is set, the operation is guaranteed to be atomic. *)
-  val to_file: ?limit:int -> ?atomic:bool -> Fpath.t -> Cstruct.t -> E.state ->
-    (E.result, error) result Lwt.t
+  val to_file: ?limit:int -> ?atomic:bool -> FS.t -> Fpath.t -> Cstruct.t ->
+    E.state -> (E.result, error) result Lwt.t
 
 end
 
@@ -148,17 +148,17 @@ module FS (FS: S.FS): sig
 
   include (module type of struct include FS end)
 
-  val with_open_r: Fpath.t ->
+  val with_open_r: FS.t -> Fpath.t ->
     ([ `Read ] FS.File.fd ->
      ('a, [> `Open of Fpath.t * FS.error
           | `Move of Fpath.t * Fpath.t * FS.error ] as 'e) result Lwt.t) ->
     ('a, 'e) result Lwt.t
-  (** [with_open_r p f] opens the file [p] in read-only mode and calls
-      [f] on the resulting file-descriptor. When [f] completes, the
-      file-descriptor is closed. Failure to close that file-descriptor
-      is ignored. *)
+  (** [with_open_r t p f] opens the file [p] in the file-system
+      [t] with read-only mode and calls [f] on the resulting
+      file-descriptor. When [f] completes, the file-descriptor is
+      closed. Failure to close that file-descriptor is ignored. *)
 
-  val with_open_w: ?atomic:bool -> Fpath.t ->
+  val with_open_w: ?atomic:bool -> FS.t -> Fpath.t ->
     ([ `Write ] FS.File.fd ->
      ('a, [> `Open of Fpath.t * FS.error
           | `Move of Fpath.t * Fpath.t * FS.error ] as 'e) result Lwt.t) ->

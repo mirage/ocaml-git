@@ -76,7 +76,7 @@ module type S = sig
 
   val pp_error: error Fmt.t
 
-  val v: Fpath.t list -> t Lwt.t
+  val v: FS.t -> Fpath.t list -> t Lwt.t
 
   val add_total:
        root:Fpath.t
@@ -94,7 +94,7 @@ module type S = sig
   val merge: t -> [> PInfo.partial | PInfo.full ] PInfo.t -> unit Lwt.t
 
   val load_index:
-       Fpath.t
+       FS.t -> Fpath.t
     -> (Hash.t * IDec.t * FS.Mapper.fd, Fpath.t * error) result Lwt.t
 
   val load_partial:
@@ -133,13 +133,13 @@ module type S = sig
     -> (int, error) result Lwt.t
 
   val save_idx_file:
-       root:Fpath.t
+       fs:FS.t -> root:Fpath.t
     -> (Hash.t * (Crc32.t * int64)) Radix.sequence
     -> Hash.t
     -> (unit, error) result Lwt.t
 
   val save_pack_file:
-       (string -> string)
+       fs:FS.t -> (string -> string)
     -> (PEnc.Entry.t * PEnc.Delta.t) list
     -> (Hash.t -> Cstruct.t option Lwt.t)
     -> (Fpath.t * (Hash.t * (Crc32.t * int64)) Radix.sequence * Hash.t, error) result Lwt.t
@@ -279,15 +279,18 @@ module Make
 
   module Graph = Map.Make(Hash)
 
-  type t =
-    { packs   : pack Graph.t Lwt_mvar.t
-    ; buffers : buffers Lwt_mvar.t }
-  and buffers =
+  type buffers =
     { objects : Cstruct.t * Cstruct.t * int
     ; hunks   : Cstruct.t
     ; depth   : int }
 
   type fs_error = FS.error Error.FS.t
+
+  type t =
+    { fs      : FS.t
+    ; packs   : pack Graph.t Lwt_mvar.t
+    ; buffers : buffers Lwt_mvar.t }
+
   type error =
     [ `Pack_decoder of RPDec.error
     | `Pack_encoder of PEnc.error
@@ -314,7 +317,7 @@ module Make
       Fmt.string ppf err
 
   (* XXX(dinosaure): to make a _unloaded_ pack object. *)
-  let load_index path =
+  let load_index fs path =
     let close fd sys_err =
       FS.Mapper.close fd >>= function
       | Ok ()          -> Lwt.return sys_err
@@ -326,7 +329,7 @@ module Make
     in
     let open Lwt_result in
     (* FIXME: this code is horrible *)
-    ((FS.Mapper.openfile path
+    ((FS.Mapper.openfile fs path
       >!= Error.FS.err_open path
       >>= fun fd -> FS.Mapper.length fd
       >>!= close fd
@@ -351,8 +354,8 @@ module Make
        Lwt.return (Ok (hash_idx, decoder_idx, fd)))
     ) >>!= (fun err -> Lwt.return (path, err))
 
-  let v lst =
-    Lwt_list.map_p load_index lst >>= fun lst ->
+  let v fs lst =
+    Lwt_list.map_p (load_index fs) lst >>= fun lst ->
     Lwt_list.fold_left_s (fun acc -> function
         | Ok (hash, idx, fdi) ->
           Lwt.return (Graph.add hash (Exists { idx; fdi; }) acc)
@@ -370,7 +373,7 @@ module Make
                       ; hunks = empty
                       ; depth = 1 }
     in
-    { packs; buffers; }
+    { fs; packs; buffers; }
 
   (* XXX(dinosaure): this function update the internal buffers of [t]
      from a /fresh/ information of a pack file. It's thread-safe. *)
@@ -440,15 +443,15 @@ module Make
     include Helper.Encoder(E)(FS)
   end
 
-  let save_idx_file ~root sequence hash_pack =
+  let save_idx_file ~fs ~root sequence hash_pack =
     let file = Fmt.strf "pack-%s.idx" (Hash.to_hex hash_pack) in
     let encoder_idx = IEnc.default sequence hash_pack in
     let raw = Cstruct.create 0x8000 in
     let path = Fpath.(root / "objects" / "pack" / file) in
-    EIDX.to_file path raw encoder_idx >>= function
-    | Ok ()                  -> Lwt.return (Ok ())
-    | Error (`Encoder err)   -> Lwt.return (Error (`Idx_encoder err))
-    | Error #fs_error as err -> Lwt.return err
+    EIDX.to_file fs path raw encoder_idx >|= function
+    | Ok ()                  -> Ok ()
+    | Error (`Encoder err)   -> Error (`Idx_encoder err)
+    | Error #fs_error as err -> err
 
   exception Leave of Hash.t
 
@@ -515,16 +518,16 @@ module Make
     include Helper.Encoder(E)(FS)
   end
 
-  let save_pack_file fmt entries get =
+  let save_pack_file ~fs fmt entries get =
     let ztmp = Cstruct.create 0x8000 in
     let filename_pack = fmt (random_string 10) in
     let state = PEnc.default ztmp entries in
-    FS.Dir.temp () >>= fun temp ->
+    FS.Dir.temp fs >>= fun temp ->
     let path = Fpath.(temp / filename_pack) in
     let raw = Cstruct.create 0x8000 in
     let state = { EPACK.E.get; src = None; pack = state } in
     Lwt.catch (fun () ->
-        EPACK.to_file ~atomic:false path raw state >|= function
+        EPACK.to_file fs ~atomic:false path raw state >|= function
         | Ok { EPACK.E.tree; hash; } ->
           Ok (Fpath.(temp / filename_pack)
              , PEnc.Radix.to_sequence tree
@@ -539,7 +542,7 @@ module Make
   let add_exists ~root t hash =
     let filename_idx = Fmt.strf "pack-%s.idx" (Hash.to_hex hash) in
     let path_idx = Fpath.(root / "objects" / "pack" / filename_idx) in
-    load_index path_idx >>= function
+    load_index t.fs path_idx >>= function
     | Error (_, err)          -> Lwt.return (Error err)
     | Ok (hash_idx, idx, fdi) ->
       let pack = Exists { idx; fdi; } in
@@ -554,7 +557,7 @@ module Make
     if thin then invalid_arg "Impossible to store a thin pack.";
     let filename_pack = Fmt.strf "pack-%s.pack" (Hash.to_hex hash_pack) in
     let filename_idx = Fmt.strf "pack-%s.idx" (Hash.to_hex hash_pack) in
-    FS.File.move path Fpath.(root / "objects" / "pack" / filename_pack)
+    FS.File.move t.fs path Fpath.(root / "objects" / "pack" / filename_pack)
     >>= function
     | Error err ->
       Lwt.return Error.(v @@ FS.err_move path Fpath.(root / "objects" / "pack" / filename_pack) err)
@@ -566,12 +569,12 @@ module Make
          of git/ocaml-git of this PACK file even if we don't use it -
          we use the complete radix tree. *)
       let raw = Cstruct.create 0x8000 in
-      EIDX.to_file path_idx raw encoder_idx >>= function
+      EIDX.to_file t.fs path_idx raw encoder_idx >>= function
       | Error #fs_error as err -> Lwt.return err
       | Error (`Encoder e) -> Lwt.return (Error (`Idx_encoder e))
       | Ok ()              ->
         let path_pack = Fpath.(root / "objects" / "pack" / filename_pack) in
-        (FS.Mapper.openfile path_pack
+        (FS.Mapper.openfile t.fs path_pack
          >>!= fun sys_err -> Lwt.return (Error.FS.err_open path_pack sys_err))
         >>?= fun fdp ->
         let fun_cache _ = None in
@@ -712,7 +715,7 @@ module Make
        Lwt.return ())
       >>= fun _ -> Lwt.return sys_err
     in
-    (FS.Mapper.openfile path
+    (FS.Mapper.openfile t.fs path
      >>!= (fun sys_err ->
          (* XXX(dinosaure): delete from the git repository. *)
          Lwt_mvar.take t.packs >>= fun packs ->
@@ -735,7 +738,7 @@ module Make
      >!= Error.FS.err_length path (* XXX(dinosaure): we know [RPDec.make] try to compute length of the PACK file. *)
      >>!= close_all fdi fdp)
     >>?= fun decoder_pack ->
-    (FS.File.open_r path
+    (FS.File.open_r t.fs path
      >!= Error.FS.err_open path
      >>!= close_all fdi fdp)
     >>?= fun fd ->

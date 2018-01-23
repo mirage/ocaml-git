@@ -606,7 +606,7 @@ module FS (FS: S.FS) = struct
         l "%a, ignoring." (Error.FS.pp_error FS.pp_error) e);
     Lwt.return ()
 
-  let with_open_r path f = with_f FS.File.open_r no_err path f
+  let with_open_r t path f = with_f FS.File.(open_r t) no_err path f
 
   let prng = lazy(Random.State.make_self_init ())
 
@@ -614,11 +614,11 @@ module FS (FS: S.FS) = struct
     let rnd = (Random.State.bits (Lazy.force prng)) land 0xFFFFFF in
     Fpath.(temp_dir / Fmt.strf "%s.%06x" file rnd)
 
-  let temp_file file =
-    FS.Dir.temp () >>= fun temp_dir ->
+  let temp_file t file =
+    FS.Dir.temp t >>= fun temp_dir ->
     let rec aux counter =
       let name = temp_file_name temp_dir file in
-      FS.File.exists name >>= function
+      FS.File.exists t name >>= function
       | Ok false -> Lwt.return name
       | _        ->
         if counter >= 1000 then failwith "cannot create a unique temporary file"
@@ -626,20 +626,20 @@ module FS (FS: S.FS) = struct
     in
     aux 0
 
-  let with_open_w ?(atomic=true) path f =
-    if not atomic then with_f FS.File.open_w no_err path f
+  let with_open_w ?(atomic=true) t path f =
+    if not atomic then with_f FS.File.(open_w t) no_err path f
     else
-      temp_file Fpath.(basename path) >>= fun temp ->
+      temp_file t Fpath.(basename path) >>= fun temp ->
       let err (`Close (_, e)) =
         Log.debug (fun l ->
             l "Got %a while writing in the temporary file %a"
               FS.pp_error e Fpath.pp path);
-        FS.File.delete temp >|= fun _ -> ()
+        FS.File.delete t temp >|= fun _ -> ()
       in
-      with_f FS.File.open_w err temp f >>= function
+      with_f FS.File.(open_w t) err temp f >>= function
       | Error _ as err -> Lwt.return err
       | Ok x           ->
-        FS.File.move temp path >|= function
+        FS.File.move t temp path >|= function
         | Error err -> Error.(v @@ FS.err_move temp path err)
         | Ok ()     -> Ok x
 
@@ -656,8 +656,8 @@ module Encoder (E: ENCODER) (X: S.FS) = struct
     [ FS.error Error.FS.t
     | `Encoder of E.error ]
 
-  let to_file ?(limit=50) ?atomic file raw state =
-    FS.with_open_w ?atomic file @@ fun fd ->
+  let to_file ?(limit=50) ?atomic fs file raw state =
+    FS.with_open_w ?atomic fs file @@ fun fd ->
     let rec go ~stack ?(rest = 0) state =
       if stack >= limit then Lwt.return Error.(v @@ FS.err_stack file)
       else

@@ -38,10 +38,10 @@ module type S = sig
 
   val pp_error: error Fmt.t
 
-  val write: root:Fpath.t -> ?capacity:int -> raw:Cstruct.t -> t ->
+  val write: fs:FS.t -> root:Fpath.t -> ?capacity:int -> raw:Cstruct.t -> t ->
     (unit, error) result Lwt.t
 
-  val read: root:Fpath.t -> dtmp:Cstruct.t -> raw:Cstruct.t ->
+  val read: fs:FS.t -> root:Fpath.t -> dtmp:Cstruct.t -> raw:Cstruct.t ->
     (t, error) result Lwt.t
 end
 
@@ -155,10 +155,10 @@ module Make (H: S.HASH) (FS: S.FS) = struct
 
   open Lwt.Infix
 
-  let read ~root ~dtmp ~raw =
+  let read ~fs ~root ~dtmp ~raw =
     let decoder = D.default dtmp in
     let path = Fpath.(root / "packed-refs") in
-    FS.with_open_r path @@ fun read ->
+    FS.with_open_r fs path @@ fun read ->
     let rec loop decoder = match D.eval decoder with
       | `End (_, value)               -> Lwt.return (Ok value)
       | `Error (_, (#Error.Decoder.t as err)) ->
@@ -192,10 +192,10 @@ module Make (H: S.HASH) (FS: S.FS) = struct
 
   let err_stack = Error (`IO "Impossible to store the packed-refs file")
 
-  let write ~root ?(capacity = 0x100) ~raw value =
+  let write ~fs ~root ?(capacity = 0x100) ~raw value =
     let state = E.default (capacity, value) in
     let path = Fpath.(root / "packed-refs") in
-    Encoder.to_file path raw state >|= function
+    Encoder.to_file fs path raw state >|= function
     | Ok _ -> Ok ()
     | Error #fs_error as err -> err
     | Error (`Encoder #Error.never) -> assert false
