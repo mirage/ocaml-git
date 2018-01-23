@@ -30,12 +30,13 @@ type 'a sequence = ('a -> unit) -> unit
 
 (** A Radix tree is a optimized container to bind a [Key.t] with a
     value. *)
-module Make (K: KEY) :
+module type S =
 sig
+  type key
+  (** The key *)
+
   type 'a t
   (** The radix-tree. *)
-
-  module Key : KEY
 
   type nonrec 'a sequence = 'a sequence
   (** An abstract representation of a iterative container. *)
@@ -46,35 +47,37 @@ sig
   val is_empty: 'a t -> bool
   (** Test whether is radix-tree is empty or not. *)
 
-  val bind: 'a t -> Key.t -> 'a -> 'a t
+  val bind: 'a t -> key -> 'a -> 'a t
   (** [bind t k v] returns a radix-tree containing the same binding as
       [t], plus a binding [k] to [v]. *)
 
-  val lookup: 'a t -> Key.t -> 'a option
+  val lookup: 'a t -> key -> 'a option
   (** [lookup t k] returns the current binding of [k] in [t] or
       returns [None] if no such binding exists. *)
 
-  val mem: 'a t -> Key.t -> bool
+  val mem: 'a t -> key -> bool
   (** [mem t k] checks if at least we have one binding with the key
       [k]. *)
 
-  val fold: (Key.t * 'a -> 'b -> 'b) -> 'b -> 'a t -> 'b
+  val fold: (key * 'a -> 'b -> 'b) -> 'b -> 'a t -> 'b
   (** [fold f a t] computes [(f kN dN (f k1 d1 a))], where [k1 .. kN]
       are the keys of all bindings in [t], and [d1 .. dN] are the
       associated data. *)
 
-  val iter: (Key.t * 'a -> unit) -> 'a t -> unit
+  val iter: (key * 'a -> unit) -> 'a t -> unit
   (** [iter f t] applies [f] to all bindings in radix-tree [t]. [f]
       receives a pair which contains the key and the associated
       value. *)
 
-  val to_sequence: 'a t -> (Key.t * 'a) sequence
+  val to_sequence: 'a t -> (key * 'a) sequence
   (** [to_sequence t] makes a abstract representation of the
       radix-tree. *)
 
-  val to_list: 'a t -> (Key.t * 'a) list
+  val to_list: 'a t -> (key * 'a) list
   (** [to_list t] makes an associated list from the radix-tree. *)
 
-  val pp: (Key.t * 'a) Fmt.t -> 'a t Fmt.t
+  val pp: (key * 'a) Fmt.t -> 'a t Fmt.t
   (** A pretty-printer for the radix-tree. *)
-end with module Key = K
+end
+
+module Make (Key: KEY): S with type key = Key.t

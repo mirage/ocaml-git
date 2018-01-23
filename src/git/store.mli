@@ -251,24 +251,34 @@ module type PACK = sig
   module Deflate: S.DEFLATE
   (** The [Deflate] module used to make the implementation. *)
 
-  module PACKDecoder: Unpack.DECODER
+  module HDec: Unpack.H with module Hash = Hash
+
+  module PDec: Unpack.P
     with module Hash = Hash
      and module Inflate = Inflate
-  (** The [PACKDecoder] module, which decodes {i PACK} file. *)
+     and module Hunk := HDec
 
-  module PACKEncoder: Pack.ENCODER
+  module RPDec: Unpack.D
+    with module Hash = Hash
+     and module Inflate = Inflate
+     and module Hunk := HDec
+     and module Pack := PDec
+
+  module PEnc: Pack.P
     with module Hash = Hash
      and module Deflate = Deflate
 
-  module IDXDecoder: Index_pack.LAZY with module Hash = Hash
-  (** The [IDXDecoder] module, which decodes {i IDX} file. *)
-
-  module IDXEncoder: Index_pack.ENCODER
+  module IDec: Index_pack.LAZY
     with module Hash = Hash
 
-  module Pack_info: Pack_info.S
+  module IEnc: Index_pack.ENCODER
+    with module Hash = Hash
+
+  module PInfo: Pack_info.S
     with module Hash = Hash
      and module Inflate = Inflate
+     and module HDec := HDec
+     and module PDec := PDec
 
   type error
 
@@ -390,24 +400,35 @@ module type S = sig
      and module FS = FS
   (** The Reference module, which represents the Git reference. *)
 
-  module PACKDecoder: Unpack.DECODER
+  module HDec: Unpack.H
+    with module Hash = Hash
+
+  module PDec: Unpack.P
     with module Hash = Hash
      and module Inflate = Inflate
-  (** The [PACKDecoder] module, which decodes {i PACK} file. *)
+     and module Hunk := HDec
 
-  module PACKEncoder: Pack.ENCODER
+  module RPDec: Unpack.D
+    with module Hash = Hash
+     and module Inflate = Inflate
+     and module Hunk := HDec
+     and module Pack := PDec
+
+  module PEnc: Pack.P
     with module Hash = Hash
      and module Deflate = Deflate
 
-  module IDXDecoder: Index_pack.LAZY with module Hash = Hash
-  (** The [IDXDecoder] module, which decodes {i IDX} file. *)
-
-  module IDXEncoder: Index_pack.ENCODER
+  module IDec: Index_pack.LAZY
     with module Hash = Hash
 
-  module Pack_info: Pack_info.S
+  module IEnc: Index_pack.ENCODER
+    with module Hash = Hash
+
+  module PInfo: Pack_info.S
     with module Hash = Hash
      and module Inflate = Inflate
+     and module HDec := HDec
+     and module PDec := PDec
 
   module Packed_refs: Packed_refs.S
     with module Hash = Hash
@@ -422,20 +443,20 @@ module type S = sig
 
   (** The type error. *)
   type error =
-    [ Error.Decoder.t
+    [ `Delta             of PEnc.Delta.error
+    | `Pack_decoder      of RPDec.error
+    | `Pack_encoder      of PEnc.error
+    | `Pack_info         of PInfo.error
+    | `Idx_decoder       of IDec.error
+    | `Idx_encoder       of IEnc.error
+    | `Integrity         of string
+    | `Invalid_hash      of Hash.t
+    | `Invalid_reference of Reference.t
+    | Error.Decoder.t
     | FS.error Error.FS.t
     | Inflate.error Error.Inf.t
     | Deflate.error Error.Def.t
-    | Error.not_found
-    | `Delta             of PACKEncoder.Delta.error
-    | `Pack_decoder      of PACKDecoder.error
-    | `Pack_encoder      of PACKEncoder.error
-    | `Pack_info         of Pack_info.error
-    | `Idx_decoder       of IDXDecoder.error
-    | `Idx_encoder       of IDXEncoder.error
-    | `Integrity         of string
-    | `Invalid_hash      of Hash.t
-    | `Invalid_reference of Reference.t ]
+    | Error.not_found ]
 
   val pp_error: error Fmt.t
   (** Pretty-printer of {!error}. *)
@@ -452,13 +473,16 @@ module type S = sig
       available in git repository. *)
 
   module Pack: PACK
-    with type t = PACKDecoder.Object.t
+    with type t = RPDec.Object.t
      and type value = Value.t
      and type state = t
      and type error = error
      and module Hash = Hash
      and module FS = FS
      and module Inflate = Inflate
+     and module HDec := HDec
+     and module PDec := PDec
+     and module RPDec := RPDec
   (** The [Pack] module which represents any {i packed} git object
       available in the git repository. *)
 

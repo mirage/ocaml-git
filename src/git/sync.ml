@@ -424,7 +424,6 @@ module Make (N: NET) (S: Minimal.S) = struct
   module Inflate = Store.Inflate
   module Deflate = Store.Deflate
   module Revision = Revision.Make(Store)
-  module PACKEncoder = Pack.MakePACKEncoder(Hash)(Deflate)
 
   module Common
     : module type of Common(Store)

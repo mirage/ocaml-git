@@ -53,9 +53,46 @@ struct
     | Tag -> Fmt.pf ppf "Tag"
 end
 
-module Entry (H : S.HASH) =
+module type ENTRY = sig
+
+  module Hash: S.HASH
+
+  type t
+
+  type source =
+    | From of Hash.t
+    | None
+
+  val pp: t Fmt.t
+  val pp_source: source Fmt.t
+  val hash: string -> int
+
+  val make:
+    Hash.t
+    -> ?name:string
+    -> ?preferred:bool
+    -> ?delta:source
+    -> Kind.t
+    -> int64
+    -> t
+
+  val kind: t -> Kind.t
+  val preferred: t -> bool
+  val delta: t -> source
+  val length: t -> int64
+
+  val with_delta: t -> source -> t
+  val with_preferred: t -> bool -> t
+
+  val id: t -> Hash.t
+  val name: t -> string -> t
+  val compare: t -> t -> int
+  val topological_sort: t list -> t list
+end
+
+module Entry (Hash: S.HASH): ENTRY with module Hash = Hash =
 struct
-  module Hash = H
+  module Hash = Hash
 
   type t =
     { hash_name   : int
@@ -124,6 +161,13 @@ struct
     ; length }
 
   let id { hash_object; _ } = hash_object
+  let kind { kind; _ } = kind
+  let preferred { preferred; _ } = preferred
+  let delta { delta; _ } = delta
+  let length { length; _ } = length
+
+  let with_delta t delta = { t with delta }
+  let with_preferred t preferred = { t with preferred }
 
   let name x name =
     { x with hash_name = hash name
@@ -220,9 +264,37 @@ struct
   let ( / ) = Int64.div
 end
 
-module MakeHunkEncoder (H : S.HASH) =
+module type H = sig
+
+  module Hash: S.HASH
+
+  type error
+
+  val pp_error: error Fmt.t
+
+  type t
+
+  type reference =
+    | Offset of int64
+    | Hash of Hash.t
+
+  val pp: t Fmt.t
+  val default: reference -> int -> int -> Rabin.t list -> t
+  val refill: int -> int -> t -> t
+  val flush: int -> int -> t -> t
+  val finish: t -> t
+  val eval: Cstruct.t -> Cstruct.t -> t ->
+    [ `Await of t
+    | `Flush of t
+    | `End of t
+    | `Error of (t * error) ]
+  val used_in: t -> int
+  val used_out: t -> int
+end
+
+module Hunk (Hash : S.HASH): H with module Hash = Hash =
 struct
-  module Hash = H
+  module Hash = Hash
 
   type error
 
@@ -539,10 +611,44 @@ struct
   let used_out t = t.o_pos
 end
 
-module MakeDelta (H : S.HASH) =
+module type DELTA = sig
+
+  module Hash: S.HASH
+  module Entry: ENTRY with module Hash := Hash
+
+  type t =
+    { mutable delta: delta }
+  and delta =
+    | Z
+    | S of { length    : int
+           ; depth     : int
+           ; hunks     : Rabin.t list
+           ; src       : t
+           ; src_length: int64
+           ; src_hash  : Hash.t
+           ; }
+
+  type error = Invalid_hash of Hash.t
+
+  val pp_error: error Fmt.t
+  val deltas:
+    ?memory:bool
+    -> Entry.t list
+    -> (Hash.t -> Cstruct.t option Lwt.t)
+    -> (Entry.t -> bool)
+    -> int
+    -> int
+    -> ((Entry.t * t) list, error) result Lwt.t
+end
+
+module Delta
+    (Hash : S.HASH)
+    (Entry: ENTRY with module Hash := Hash)
+  : DELTA with module Hash = Hash
+           and module Entry := Entry =
 struct
-  module Hash = H
-  module Entry = Entry(H)
+  module Hash = Hash
+  module Entry = Entry
 
   type t =
     { mutable delta : delta }
@@ -632,7 +738,7 @@ struct
         | S { length; src; _ } ->
           length * (max - (depth src)) / (max - (depth trg + 1))
         | Z ->
-          (Int64.to_int trg_entry.Entry.length / 2 - 20) * (max - (depth src)) / (max - 1)
+          (Int64.to_int (Entry.length trg_entry) / 2 - 20) * (max - (depth src)) / (max - 1)
       in
 
       let choose a b = match a, b with
@@ -651,17 +757,17 @@ struct
 
       let apply src_entry (src, src_raw, rabin) best =
         let diff =
-          if src_entry.Entry.length < trg_entry.Entry.length
-          then Int64.to_int (Int64.sub trg_entry.Entry.length src_entry.Entry.length)
+          if Entry.length src_entry < Entry.length trg_entry
+          then Int64.to_int (Int64.sub (Entry.length trg_entry) (Entry.length src_entry))
           else 0
         in
 
-        if src_entry.Entry.kind <> trg_entry.Entry.kind
+        if Entry.kind src_entry <> Entry.kind trg_entry
         || (depth src) = max
         || (limit src) = 0
         || (limit src) <= diff
-        || trg_entry.Entry.length < Int64.(src_entry.Entry.length / 32L)
-        || Hash.equal src_entry.Entry.hash_object trg_entry.Entry.hash_object
+        || Entry.length trg_entry < Int64.(Entry.length src_entry / 32L)
+        || Hash.equal (Entry.id src_entry) (Entry.id trg_entry)
         then best
         else
           let hunks  = Rabin.Default.delta rabin trg_raw in
@@ -672,7 +778,7 @@ struct
 
       let module Window = (val window_pack) in
 
-      if not trg_entry.Entry.preferred
+      if not (Entry.preferred trg_entry)
       && (depth trg) < max
       then Window.fold apply None window
       else None
@@ -692,7 +798,7 @@ struct
     let edges, rest = List.partition (function (_, { delta = Z }) -> true | (_, { delta = S _ }) -> false) lst in
 
     let deps hash =
-      try List.filter (fun (e, _) -> Hash.equal e.Entry.hash_object hash) lst
+      try List.filter (fun (e, _) -> Hash.equal (Entry.id e) hash) lst
       with Not_found -> []
     in
 
@@ -706,7 +812,9 @@ struct
         loop (x :: acc) later r true
       | ((_, { delta = S { src_hash; _ } }) as x) :: r, later ->
         let deps = deps src_hash in
-        let ensure = List.for_all (fun (e, _) -> List.exists (fun (x, _) -> Hash.equal x.Entry.hash_object e.Entry.hash_object) acc) deps in
+        let ensure = List.for_all (fun (e, _) ->
+            List.exists (fun (x, _) ->
+                Hash.equal (Entry.id x) (Entry.id e)) acc) deps in
 
         if ensure
         then loop (x :: acc) later r true
@@ -721,8 +829,8 @@ struct
   module ElementCache = Lru.F.Make(Entry)(WeightByElement)
 
   let deltas ?(memory = false) entries get tag window max =
-    let to_delta e = match e.Entry.delta, e.Entry.preferred with
-      | Entry.None, false -> e.Entry.length >= 50L
+    let to_delta e = match Entry.delta e, Entry.preferred e with
+      | Entry.None, false -> Entry.length e >= 50L
       | (Entry.From _ | Entry.None), _  -> false
     in
 
@@ -756,7 +864,7 @@ struct
        the source (available in [tries] or [untries]). It's why we keep an
        hash-table and update this hash-table for each diff. *)
     let normalize lst =
-      Lwt_list.map_p (fun trg_entry -> match trg_entry.Entry.delta with
+      Lwt_list.map_p (fun trg_entry -> match Entry.delta trg_entry with
           | Entry.None ->
             Lwt.return (trg_entry, { delta = Z })
           | Entry.From hash ->
@@ -767,7 +875,7 @@ struct
                ensure than if [trg_entry] has a dependence, by the topological
                sort, we already computed all /in-PACK/ sources necessary for the
                next and update the hash-table with these sources. *)
-            get hash >>= fun a -> get trg_entry.Entry.hash_object >>= fun b ->
+            get hash >>= fun a -> get (Entry.id trg_entry) >>= fun b ->
             match a, b with
             | Some src_raw, Some trg_raw ->
               let rabin  = Rabin.Default.Index.make ~copy:false src_raw in (* we don't keep [rabin]. *)
@@ -782,11 +890,11 @@ struct
                                        ; src_hash = hash } }
               in
 
-              Hashtbl.add normal trg_entry.Entry.hash_object base;
+              Hashtbl.add normal (Entry.id trg_entry) base;
 
               Lwt.return (trg_entry, base)
             | None, Some _ -> raise (Uncaught_hash hash)
-            | Some _, None -> raise (Uncaught_hash trg_entry.Entry.hash_object)
+            | Some _, None -> raise (Uncaught_hash (Entry.id trg_entry))
             | None, None -> assert false)
         lst
     in
@@ -795,8 +903,8 @@ struct
       (fun () ->
          Lwt_list.fold_left_s
            (fun (window, acc) entry ->
-              get entry.Entry.hash_object >>= function
-              | None -> raise (Uncaught_hash entry.Entry.hash_object)
+              get (Entry.id entry) >>= function
+              | None -> raise (Uncaught_hash (Entry.id entry))
               | Some raw ->
                 let base   = { delta = Z } in
                 let rabin  = Rabin.Default.Index.make ~copy:false raw in (* we keep [rabin] with [raw] in the [window]. *)
@@ -813,11 +921,11 @@ struct
                                     ; depth
                                     ; hunks
                                     ; src
-                                    ; src_length = src_entry.Entry.length
-                                    ; src_hash = src_entry.Entry.hash_object };
-                    Hashtbl.add normal entry.Entry.hash_object base;
+                                    ; src_length = Entry.length src_entry
+                                    ; src_hash = Entry.id src_entry };
+                    Hashtbl.add normal (Entry.id entry) base;
 
-                    Lwt.return (window, ({ entry with Entry.delta = Entry.From src_entry.Entry.hash_object }, base) :: acc)
+                    Lwt.return (window, (Entry.with_delta entry Entry.(From (id src_entry)), base) :: acc)
                   | None -> Lwt.return (window, (entry, base) :: acc))
            (window, []) tries)
       (fun (_, tries) ->
@@ -830,87 +938,19 @@ struct
               | exn -> Lwt.fail exn) (* XXX(dinosaure): same as below. *)
 end
 
-module type ENCODER =
-sig
-  module Hash : S.HASH
+module type P = sig
 
-  module Deflate : S.DEFLATE
+  module Hash: S.HASH
+  module Deflate: S.DEFLATE
 
-  module Entry :
-  sig
-    type t
+  module Entry: ENTRY with module Hash := Hash
 
-    type source =
-      | From of Hash.t
-      | None
+  module Delta: DELTA
+    with module Hash := Hash
+     and module Entry := Entry
 
-    val pp : t Fmt.t
-    val pp_source : source Fmt.t
-
-    val hash : string -> int
-
-    val make : Hash.t -> ?name:string -> ?preferred:bool -> ?delta:source -> Kind.t -> int64 -> t
-
-    val id : t -> Hash.t
-    val name : t -> string -> t
-
-    val compare : t -> t -> int
-
-    val topological_sort : t list -> t list
-  end
-
-  module Delta :
-  sig
-    type t =
-      { mutable delta : delta }
-    and delta =
-      | Z
-      | S of { length     : int
-             ; depth      : int
-             ; hunks      : Rabin.t list
-             ; src        : t
-             ; src_length : int64
-             ; src_hash   : Hash.t
-             ; }
-
-    type error = Invalid_hash of Hash.t
-
-    val pp_error : error Fmt.t
-
-    val deltas :
-      ?memory:bool -> Entry.t list ->
-      (Hash.t -> Cstruct.t option Lwt.t) ->
-      (Entry.t -> bool) ->
-      int -> int -> ((Entry.t * t) list, error) result Lwt.t
-  end
-
-  module Radix : module type of Radix.Make(struct type t = Hash.t let get = Hash.get let length _ = Hash.Digest.length end)
-
-  module H :
-  sig
-    type error
-
-    val pp_error : error Fmt.t
-
-    type t
-
-    type reference =
-      | Offset of int64
-      | Hash of Hash.t
-
-    val pp : t Fmt.t
-
-    val default : reference -> int -> int -> Rabin.t list -> t
-
-    val refill : int -> int -> t -> t
-    val flush : int -> int -> t -> t
-    val finish : t -> t
-
-    val eval : Cstruct.t -> Cstruct.t -> t -> [ `Await of t | `Flush of t | `End of t | `Error of (t * error) ]
-
-    val used_in : t -> int
-    val used_out : t -> int
-  end
+  module Hunk: H with module Hash := Hash
+  module Radix: Radix.S with type key = Hash.t
 
   type error =
     | Deflate_error of Deflate.error
@@ -935,19 +975,25 @@ sig
   val eval : Cstruct.t -> Cstruct.t -> t -> [ `Flush of t | `Await of t | `End of (t * Hash.t) | `Error of (t * error) ]
 end
 
-module MakePACKEncoder
-    (H : S.HASH with type Digest.buffer = Cstruct.t)
-    (D : S.DEFLATE)
-  : ENCODER with module Hash = H
-             and module Deflate = D =
+module Pack
+    (Hash: S.HASH)
+    (Deflate: S.DEFLATE)
+    (Entry: ENTRY with module Hash := Hash)
+    (Delta: DELTA with module Hash := Hash
+                   and module Entry := Entry)
+    (Hunk: H with module Hash := Hash)
+  : P with module Hash = Hash
+       and module Deflate = Deflate
+       and module Entry := Entry
+       and module Delta := Delta
+       and module Hunk := Hunk =
 struct
-  module Hash = H
-  module Deflate = D
-
-  module Entry = Entry(H)
-  module Delta = MakeDelta(H)
+  module Hash = Hash
+  module Deflate = Deflate
+  module Entry = Entry
+  module Delta = Delta
+  module Hunk = Hunk
   module Radix = Radix.Make(struct type t = Hash.t let get = Hash.get let length _ = Hash.Digest.length end)
-  module H     = MakeHunkEncoder(H)
 
   type error =
     | Deflate_error of Deflate.error
@@ -987,7 +1033,7 @@ struct
                 ; crc : Crc32.t
                 ; off : int64
                 ; ui  : int
-                ; h   : H.t
+                ; h   : Hunk.t
                 ; z   : Deflate.t }
     | Save   of { x   : Entry.t
                 ; r   : (Entry.t * Delta.t) list
@@ -1188,7 +1234,7 @@ struct
     | KindRaw, { Delta.delta = Delta.Z } ->
       let abs_off = t.write in
 
-      (KWriteK.header (Kind.to_bin entry.Entry.kind) entry.Entry.length Crc32.default
+      (KWriteK.header (Kind.to_bin (Entry.kind entry)) (Entry.length entry) Crc32.default
        @@ fun crc _ t ->
        let z = Deflate.default 4 in
        let z = Deflate.flush (t.o_off + t.o_pos) (t.o_len - t.o_pos) z in
@@ -1205,15 +1251,15 @@ struct
         dst t
 
     | KindHash, { Delta.delta = Delta.S { length; hunks; src_length; src_hash; _ } } ->
-      let trg_length = entry.Entry.length in
+      let trg_length = Entry.length entry in
       let abs_off    = t.write in
 
       (* XXX(dinosaure): we can obtain the source hash by
          [entry.delta]. TODO! *)
 
       let h =
-        H.flush 0 (Cstruct.len t.h_tmp)
-        @@ H.default (H.Hash src_hash) (Int64.to_int src_length) (Int64.to_int trg_length) hunks
+        Hunk.flush 0 (Cstruct.len t.h_tmp)
+        @@ Hunk.default (Hunk.Hash src_hash) (Int64.to_int src_length) (Int64.to_int trg_length) hunks
         (* XXX(dinosaure): FIXME: [trg_length] is an [int64] but H
            expects an [int]. *)
       in
@@ -1239,13 +1285,13 @@ struct
     | KindOffset, { Delta.delta = Delta.S { length; hunks; src_length; src_hash; _ } } ->
       (match Radix.lookup t.radix src_hash with
        | Some (_, src_off) ->
-         let trg_length = entry.Entry.length in
+         let trg_length = Entry.length entry in
          let abs_off    = t.write in
          let rel_off    = Int64.sub abs_off src_off in
 
          let h =
-           H.flush 0 (Cstruct.len t.h_tmp)
-           @@ H.default (H.Offset rel_off) (Int64.to_int src_length) (Int64.to_int trg_length) hunks
+           Hunk.flush 0 (Cstruct.len t.h_tmp)
+           @@ Hunk.default (Hunk.Offset rel_off) (Int64.to_int src_length) (Int64.to_int trg_length) hunks
            (* XXX(dinosaure): FIXME: [trg_length] is an [int64] but H
               expects an [int]. *)
          in
@@ -1297,39 +1343,39 @@ struct
   let writeh src dst t ((entry, _) as x) r crc off used_in h z =
     match Deflate.eval ~src:t.h_tmp ~dst z with
     | `Await z ->
-      (match H.eval src t.h_tmp h with
+      (match Hunk.eval src t.h_tmp h with
        | `Await h ->
          await { t with state = WriteH { x; r; crc; off; ui = 0; z; h; }
-                      ; i_pos = H.used_in h }
+                      ; i_pos = Hunk.used_in h }
        | `Flush h ->
          let used_in' = used_in + Deflate.used_in z in
 
          let z, h, ui =
-           if used_in' = H.used_out h
-           then Deflate.no_flush 0 0 z, H.flush 0 (Cstruct.len t.h_tmp) h, 0
-           else Deflate.no_flush used_in' (H.used_out h - used_in') z, h, used_in'
+           if used_in' = Hunk.used_out h
+           then Deflate.no_flush 0 0 z, Hunk.flush 0 (Cstruct.len t.h_tmp) h, 0
+           else Deflate.no_flush used_in' (Hunk.used_out h - used_in') z, h, used_in'
          in
 
          Cont { t with state = WriteH { x; r; crc; off; ui; h; z; }
-                     ; i_pos = H.used_in h }
+                     ; i_pos = Hunk.used_in h }
        | `End h ->
          let used_in' = used_in + Deflate.used_in z in
 
          let z, h, ui =
-           if used_in' = H.used_out h
+           if used_in' = Hunk.used_out h
            then Deflate.finish z, h, used_in'
-           else Deflate.no_flush used_in' (H.used_out h - used_in') z, h, used_in'
+           else Deflate.no_flush used_in' (Hunk.used_out h - used_in') z, h, used_in'
          in
 
          Cont { t with state = WriteH { x; r; crc; off; ui; h; z; }
-                     ; i_pos = H.used_in h }
+                     ; i_pos = Hunk.used_in h }
        | `Error (_, _) -> assert false)
     | `Flush z ->
       let crc = Crc32.digest ~off:(t.o_off + t.o_pos) ~len:(Deflate.used_out z) crc dst in
       let used_in' = used_in + Deflate.used_in z in
 
       flush dst { t with state = WriteH { x; r; crc; off; ui = used_in'; h; z; }
-                       ; i_pos = H.used_in h
+                       ; i_pos = Hunk.used_in h
                        ; o_pos = t.o_pos + (Deflate.used_out z)
                        ; write = Int64.add t.write (Int64.of_int (Deflate.used_out z)) }
     | `End z ->
@@ -1347,7 +1393,7 @@ struct
     | [] ->
       Cont { t with state = Hash hash }
     | (entry, delta) :: r ->
-      match entry.Entry.delta, delta with
+      match Entry.delta entry, delta with
       | Entry.From src_hash, { Delta.delta = Delta.S _ } ->
         if Radix.mem t.radix src_hash
         then Cont { t with state = WriteK (writek KindOffset entry delta r) }
@@ -1355,11 +1401,11 @@ struct
       | Entry.None, { Delta.delta = Delta.Z } ->
         Cont { t with state = WriteK (writek KindRaw entry delta r) }
       | (Entry.None | Entry.From _),
-        { Delta.delta = (Delta.S _ | Delta.Z) } -> error t (Invalid_hash entry.Entry.hash_object)
+        { Delta.delta = (Delta.S _ | Delta.Z) } -> error t (Invalid_hash (Entry.id entry))
 
   let save _ t x r crc off =
     Cont { t with state = Object (iter r)
-                ; radix = Radix.bind t.radix x.Entry.hash_object (crc, off) }
+                ; radix = Radix.bind t.radix (Entry.id x) (crc, off) }
 
   let number lst dst t =
     (* XXX(dinosaure): problem in 32-bits architecture. TODO! *)
@@ -1435,8 +1481,8 @@ struct
 
   let expect t =
     match t.state with
-    | WriteH { x = ({ Entry.hash_object; _ }, _); _ } -> hash_object
-    | WriteZ { x = { Entry.hash_object; _ }; _ } -> hash_object
+    | WriteH { x = (entry, _); _ } -> Entry.id entry
+    | WriteZ { x = entry; _ } -> Entry.id entry
     | (Header _ | Object _ | WriteK _ | Save _ | Hash _ | End _ | Exception _) ->
       raise (Invalid_argument "PACKEncoder.expecti: bad state")
 
@@ -1468,7 +1514,7 @@ struct
         { t with i_off = offset
                ; i_len = len
                ; i_pos = 0
-               ; state = WriteH { x; r; crc; off; ui; z; h = H.refill offset len h } }
+               ; state = WriteH { x; r; crc; off; ui; z; h = Hunk.refill offset len h } }
       | (Header _ | Object _ | WriteK _ | Save _ | Hash _ | End _ | Exception _) ->
         { t with i_off = offset
                ; i_len = len
@@ -1482,14 +1528,14 @@ struct
       | WriteZ { x; r; crc; off; ui; z; } ->
         { t with state = WriteZ { x; r; crc; off; ui; z = Deflate.finish z } }
       | WriteH { x; r; crc; off; ui; z; h; } ->
-        { t with state = WriteH { x; r; crc; off; ui; z; h = H.finish h } }
+        { t with state = WriteH { x; r; crc; off; ui; z; h = Hunk.finish h } }
       | (Header _ | Object _ | WriteK _ | Save _ | Hash _ | End _ | Exception _) -> t
     else raise (Invalid_argument (Fmt.strf "PACKEncoder.finish: you lost something \
                                             (pos: %d, len: %d)" t.i_pos t.i_len))
 
   let used_in t = match t.state with
     | WriteZ { z; _ } -> Deflate.used_in z
-    | WriteH { h; _ } -> H.used_in h
+    | WriteH { h; _ } -> Hunk.used_in h
     | (Header _ | Object _ | WriteK _ | Save _ | Hash _ | End _ | Exception _) ->
       raise (Invalid_argument "PACKEncoder.used_in: bad state")
 
@@ -1505,4 +1551,16 @@ struct
     ; h_tmp
     ; hash = Hash.Digest.init ()
     ; state = (Header (header objects)) }
+end
+
+module Stream
+    (Hash: S.HASH)
+    (Deflate: S.DEFLATE)
+= struct
+  module Entry = Entry(Hash)
+  module Delta = Delta(Hash)(Entry)
+  module Hunk = Hunk(Hash)
+  module Pack = Pack(Hash)(Deflate)(Entry)(Delta)(Hunk)
+
+  include Pack
 end

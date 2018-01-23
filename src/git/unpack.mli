@@ -19,8 +19,8 @@
 
 (** A Window. It consists to keep an 1 megabyte area of a PACK
     file. *)
-module Window :
-sig
+module Window : sig
+
   type t =
     { raw : Cstruct.t
     ; off : int64
@@ -36,8 +36,8 @@ sig
 end
 
 (** The non-blocking decoder of the Hunks stream. *)
-module type H =
-sig
+module type H = sig
+
   module Hash: S.HASH
 
   (** The type error. *)
@@ -177,14 +177,14 @@ sig
       when he {!make} the new decoder. *)
 end
 
-module MakeHunkDecoder (Hash : S.HASH) : H with module Hash = Hash
+module Hunk (Hash : S.HASH) : H with module Hash = Hash
 
 (** The non-blocking decoder of the PACK stream. *)
-module type P =
-sig
+module type P = sig
+
   module Hash: S.HASH
   module Inflate: S.INFLATE
-  module H: H with module Hash = Hash
+  module Hunk: H with module Hash := Hash
 
   (** The type error. *)
   type error =
@@ -198,7 +198,7 @@ sig
     | Inflate_error of Inflate.error
     (** Appears when the {!Inflate} module returns an error when it
         tries to inflate a PACK object. *)
-    | Hunk_error of H.error
+    | Hunk_error of Hunk.error
     (** Appears when the {!H} module returns an error. *)
     | Hunk_input of int * int
     (** The Hunk object is length-defined. So, when we try to decode
@@ -224,7 +224,7 @@ sig
     | Tree
     | Blob
     | Tag
-    | Hunk of H.hunks
+    | Hunk of Hunk.hunks
   (** The kind of the PACK object. It can be:
 
       {ul
@@ -364,7 +364,7 @@ sig
        Cstruct.t
     -> t
     -> [ `Object of t
-       | `Hunk of t * H.hunk
+       | `Hunk of t * Hunk.hunk
        | `Await of t
        | `Flush of t
        | `End of t * Hash.t
@@ -424,23 +424,25 @@ sig
       (like {!kind} or {!length}).}} *)
 end
 
-module MakePACKDecoder (H : S.HASH) (Inflate : S.INFLATE) : P
-  with module Hash = H
-   and module Inflate = Inflate
-   and module H = MakeHunkDecoder(H)
+module Pack
+    (Hash: S.HASH)
+    (Inflate: S.INFLATE)
+    (Hunk: H with module Hash := Hash)
+  : P with module Hash = Hash
+       and module Inflate = Inflate
+       and module Hunk := Hunk
 
 (** The toolbox about the PACK file. *)
-module type DECODER =
-sig
+module type D = sig
+
   module Hash: S.HASH
   module Mapper: S.MAPPER
   module Inflate: S.INFLATE
-
-  module H: H with module Hash = Hash
-  module P: P
-    with module Hash = Hash
-     and module Inflate = Inflate
-     and module H = H
+  module Hunk: H with module Hash := Hash
+  module Pack: P
+    with module Hash := Hash
+     and module Inflate := Inflate
+     and module Hunk := Hunk
 
   (** The type error. *)
   type error =
@@ -452,7 +454,7 @@ sig
     | Invalid_target of (int * int)
     (** Appears when the result of the application of a {!P.H.hunks}
         returns a bad raw. *)
-    | Unpack_error of P.t * Window.t * P.error
+    | Unpack_error of Pack.t * Window.t * Pack.error
     (** Appears when we have an {!P.error}. *)
     | Mapper_error of Mapper.error
 
@@ -465,8 +467,8 @@ sig
   type kind = [ `Commit | `Blob | `Tree | `Tag ]
   (** The type of the kind of the git object. *)
 
-  module Object:
-  sig
+  module Object: sig
+
     type from =
       | Offset of { length   : int
                   (** Real inflated length of the object. *)
@@ -521,7 +523,7 @@ sig
         respect the assertion. *)
   end
 
-  val find: t -> int64 -> (Window.t * int, Mapper.error) result Lwt.t
+  val find_window: t -> int64 -> (Window.t * int, Mapper.error) result Lwt.t
   (** [find t absolute_offset] returns a couple of a {!Window.t} which
       contains the absolute offset requested and the relative offset in
       the window. We allocate a new {!Window.t} only when we don't find
@@ -591,7 +593,7 @@ sig
       [window] used by the internal decoder {!P.t} (see
       {!P.default}). *)
 
-  val needed:
+  val needed_from_hash:
        ?chunk:int
     -> ?cache:(Hash.t -> int option)
     -> t
@@ -613,10 +615,10 @@ sig
       [window] used by the internal decoder {!P.t} (see
       {!P.default}). *)
 
-  val optimized_get':
+  val get_from_offset:
        ?chunk:int
     -> ?limit:bool
-    -> ?h_tmp:Cstruct.t array
+    -> ?htmp:Cstruct.t array
     -> t
     -> int64
     -> (Cstruct.t * Cstruct.t * int)
@@ -638,10 +640,10 @@ sig
       And [?chunk] corresponds to how many byte(s) the client wants to
       fill to the internal decoder {!P.t} when it returns [`Await]. *)
 
-  val optimized_get:
+  val get_from_hash:
        ?chunk:int
     -> ?limit:bool
-    -> ?h_tmp:Cstruct.t array
+    -> ?htmp:Cstruct.t array
     -> t
     -> Hash.t
     -> (Cstruct.t * Cstruct.t * int)
@@ -654,7 +656,7 @@ sig
       the [idx] function needed by {!make} to get the absolute offset.
       Otherwise, we returns an [Invalid_hash]. *)
 
-  val get':
+  val get_with_hunks_allocation_from_offset:
        ?chunk:int
     -> t
     -> int64
@@ -667,7 +669,7 @@ sig
       to undelta-ify the requested object and to contain the requested
       object. *)
 
-  val get :
+  val get_with_hunks_allocation_from_hash:
        ?chunk:int
     -> t
     -> Hash.t
@@ -680,9 +682,9 @@ sig
       to undelta-ify the requested object and to contain the requested
       object. *)
 
-  val get_with_allocation:
+  val get_with_result_allocation_from_hash:
        ?chunk:int
-    -> ?h_tmp:Cstruct.t array
+    -> ?htmp:Cstruct.t array
     -> t
     -> Hash.t
     -> Cstruct.t
@@ -692,12 +694,42 @@ sig
       purpose than {!optimized_get} but it allocates what it needed to
       store the requested object. *)
 
-  val get_with_allocation' : ?chunk:int -> ?h_tmp:Cstruct.t array -> t -> int64 -> Cstruct.t -> Inflate.window -> (Object.t, error) result Lwt.t
+  val get_with_result_allocation_from_offset :
+       ?chunk:int
+    -> ?htmp:Cstruct.t array
+    -> t
+    -> int64
+    -> Cstruct.t
+    -> Inflate.window
+    -> (Object.t, error) result Lwt.t
 end
 
-module MakeDecoder (H: S.HASH) (Mapper: S.MAPPER) (Inflate: S.INFLATE)
-  : DECODER
-    with type Hash.t = H.t
-     and module Hash = H
+module Decoder
+    (Hash: S.HASH)
+    (Mapper: S.MAPPER)
+    (Inflate: S.INFLATE)
+    (Hunk: H with module Hash := Hash)
+    (Pack: P with module Hash := Hash
+                      and module Inflate := Inflate
+                      and module Hunk := Hunk)
+  : D with module Hash = Hash
+       and module Mapper = Mapper
+       and module Inflate = Inflate
+       and module Hunk := Hunk
+       and module Pack := Pack
+
+module Stream
+    (Hash: S.HASH)
+    (Inflate: S.INFLATE) : sig
+  include P
+end with module Hash = Hash
+     and module Inflate = Inflate
+
+module Random_access
+    (Hash: S.HASH)
+    (Mapper: S.MAPPER)
+    (Inflate: S.INFLATE) : sig
+  include D
+end with module Hash = Hash
      and module Mapper = Mapper
      and module Inflate = Inflate
