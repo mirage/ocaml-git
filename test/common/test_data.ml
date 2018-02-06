@@ -6,7 +6,13 @@ module type SOURCE = sig
   val name: string
 end
 
-module Make0 (Source: SOURCE) (Store: Git.S) = struct
+module type S = sig
+
+  include Git.S
+  val create: Fpath.t -> (t, error) result Lwt.t
+end
+
+module Make0 (Source: SOURCE) (Store: S) = struct
 
   open Lwt.Infix
   let ( >?= ) = Lwt_result.bind
@@ -42,12 +48,9 @@ module Make0 (Source: SOURCE) (Store: Git.S) = struct
     Buffer.contents buf
 
   let store_err err = Lwt.return (`Store err)
-  let pack_err err = Lwt.return (`Pack err)
 
   let pp_error ppf = function
     | `Store err -> Store.pp_error ppf err
-    | `Pack err -> Store.Pack.pp_error ppf err
-    | `Ref err -> Store.Ref.pp_error ppf err
 
   let hashes_of_pack idx =
     let command = Fmt.strf "git verify-pack -v %a" Fpath.pp idx in
@@ -79,10 +82,10 @@ module Make0 (Source: SOURCE) (Store: Git.S) = struct
 
   module Common = Test_common.Make(Store)
 
-  let import ?root ?dotgit () =
-    Store.create ?root ?dotgit () >!= store_err >?= fun t ->
+  let import root () =
+    Store.create root >!= store_err >?= fun t ->
     let stream = stream_of_file Source.pack in
-    Store.Pack.from t stream >!= pack_err >?= fun _ ->
+    Store.Pack.from t stream >!= store_err >?= fun _ ->
     Store.list t >>= fun hashes ->
     let hashes' = hashes_of_pack Source.idx in
     let () = Common.assert_keys_equal "import" hashes hashes' in
@@ -154,7 +157,7 @@ module Make0 (Source: SOURCE) (Store: Git.S) = struct
 
   let root = Fpath.(v "test-data" / Source.name)
 
-  let verify_unpack () = import ~root () >?= fun _ -> Lwt.return (Ok ())
+  let verify_unpack () = import root () >?= fun _ -> Lwt.return (Ok ())
 
   let test_index_file () = run verify_index_file
   let test_unpack () = run verify_unpack
@@ -176,7 +179,7 @@ module Bomb = struct
   let name = "bomb"
 end
 
-let suite name (module F: SOURCE) (module S: Git.S) =
+let suite name (module F: SOURCE) (module S: S) =
   let module T = Make0(F)(S) in
   (Fmt.strf "%s: %s" name F.name),
   [ "index-pack", `Quick, T.test_index_file

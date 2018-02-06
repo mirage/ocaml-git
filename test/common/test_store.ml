@@ -33,7 +33,12 @@ let long_random_cstruct () =
 let long_random_string () =
   Cstruct.to_string (long_random_cstruct ())
 
-module Make (Store : Git.S) = struct
+module type S = sig
+  include Git.S
+  val create: Fpath.t -> (t, error) result Lwt.t
+end
+
+module Make (Store : S) = struct
 
   module Common = Make(Store)
   open Common
@@ -42,21 +47,12 @@ module Make (Store : Git.S) = struct
 
   let reset t =
     Store.reset t >|= function
-    | Ok ()            -> ()
-    | Error (`Store e) -> Alcotest.failf "reset failed: %a" Store.pp_error e
-    | Error (`Ref e)   -> Alcotest.failf "reset failed: %a" Store.Ref.pp_error e
+    | Ok ()   -> ()
+    | Error e -> Alcotest.failf "reset failed: %a" Store.pp_error e
 
   let check_err = function
     | Ok x    -> Lwt.return x
     | Error e -> Alcotest.failf "error: %a" Store.pp_error e
-
-  let check_ref_err = function
-    | Ok x    -> Lwt.return x
-    | Error e -> Alcotest.failf "ref error: %a" Store.Ref.pp_error e
-
-  let check_pack_err = function
-    | Ok x    -> Lwt.return x
-    | Error e -> Alcotest.failf "%a" Store.Pack.pp_error e
 
   let run test = Lwt_main.run (test ())
 
@@ -198,7 +194,7 @@ module Make (Store : Git.S) = struct
   let root = Fpath.v "test-git-store"
 
   let create ~root ?(index=false) () =
-    Store.create ~root () >>= check_err >>= fun t ->
+    Store.create root >>= check_err >>= fun t ->
     reset t >>= fun () ->
     Lwt_list.iter_s (fun v ->
         Store.write t v >|= function
@@ -282,7 +278,7 @@ module Make (Store : Git.S) = struct
       | Error e -> Alcotest.failf "%a" ValueIO.EE.pp_error e
       | Ok raw  ->
         match ValueIO.of_raw_with_header (Cstruct.of_string raw) with
-        | Error (`Decoder err) -> Alcotest.failf "decoder: %s" err
+        | Error err -> Alcotest.failf "decoder: %a" Git.Error.Decoder.pp_error err
         | Ok c' ->
           assert_value_equal "commits: convert" c c';
           create ~root ()               >>= fun t   ->
@@ -314,14 +310,14 @@ module Make (Store : Git.S) = struct
     let test () =
       create ~root () >>= fun t ->
       Store.Ref.write t r1 (Store.Reference.Hash !!kt4)
-      >>= check_ref_err >>= fun () ->
+      >>= check_err >>= fun () ->
       Store.Ref.read  t r1
-      >>= check_ref_err >>= fun (_, kt4') ->
+      >>= check_err >>= fun (_, kt4') ->
       assert_head_contents_equal "r1" (Store.Reference.Hash !!kt4) kt4';
 
       Store.Ref.write t r2 (Store.Reference.Hash !!kc2)
-      >>= check_ref_err >>= fun ()   ->
-      Store.Ref.read  t r2 >>= check_ref_err >>= fun (_, kc2') ->
+      >>= check_err >>= fun ()   ->
+      Store.Ref.read  t r2 >>= check_err >>= fun (_, kc2') ->
       assert_head_contents_equal "r2" (Store.Reference.Hash !!kc2) kc2';
 
       Store.Ref.list t >>= fun rs ->
@@ -329,9 +325,9 @@ module Make (Store : Git.S) = struct
 
       let commit = Store.Hash.of_hex "21930ccb5f7b97e80a068371cb554b1f5ce8e55a" in
       Store.Ref.write t Store.Reference.head (Store.Reference.Hash commit)
-      >>= check_ref_err >>= fun () ->
+      >>= check_err >>= fun () ->
       Store.Ref.read t Store.Reference.head
-      >>= check_ref_err >|= fun (_, value) ->
+      >>= check_err >|= fun (_, value) ->
       Alcotest.(check head_contents) "head" (Store.Reference.Hash commit) value
     in
     run test
@@ -350,7 +346,7 @@ module Make (Store : Git.S) = struct
     run test
 end
 
-let suite name (module S: Git.S) =
+let suite name (module S: S) =
   let module T = Make(S) in
   name,
   [ "Operations on blobs"       , `Quick, T.test_blobs

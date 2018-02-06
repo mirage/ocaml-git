@@ -22,10 +22,12 @@ let ( >>?= ) = Lwt_result.bind
 let src = Logs.Src.create "git.store" ~doc:"logs git's store event"
 module Log = (val Logs.src_log src : Logs.LOG)
 
+(* XXX(samoht): duplicate of Loose.S? *)
 module type LOOSE = sig
 
   type t
   type state
+  type error
 
   type kind =
     [ `Commit
@@ -48,62 +50,20 @@ module type LOOSE = sig
      and module Tag = Tag.Make(Hash)
      and type t = Value.Make(Hash)(Inflate)(Deflate).t
 
-  type error =
-    [ `SystemFile of FS.File.error
-    | `SystemDirectory of FS.Dir.error
-    | `SystemIO of string
-    | Value.D.error
-    | Value.E.error ]
-
-  val pp_error: error Fmt.t
-  val lookup_p: state -> Hash.t -> Hash.t option Lwt.t
   val lookup: state -> Hash.t -> Hash.t option Lwt.t
   val mem: state -> Hash.t -> bool Lwt.t
   val list: state -> Hash.t list Lwt.t
-  val read_p:
-       ztmp:Cstruct.t
-    -> dtmp:Cstruct.t
-    -> raw:Cstruct.t
-    -> window:Inflate.window
-    -> state -> Hash.t -> (t, error) result Lwt.t
-  val read_s: state -> Hash.t -> (t, error) result Lwt.t
   val read: state -> Hash.t -> (t, error) result Lwt.t
-  val size_p:
-       ztmp:Cstruct.t
-    -> dtmp:Cstruct.t
-    -> raw:Cstruct.t
-    -> window:Inflate.window
-    -> state -> Hash.t -> (int64, error) result Lwt.t
-  val size_s: state -> Hash.t -> (int64, error) result Lwt.t
   val size: state -> Hash.t -> (int64, error) result Lwt.t
-  val write_p:
-       ztmp:Cstruct.t
-    -> raw:Cstruct.t
-    -> state -> t -> (Hash.t * int, error) result Lwt.t
-  val write_s: state -> t -> (Hash.t * int, error) result Lwt.t
   val write: state -> t -> (Hash.t * int, error) result Lwt.t
   val write_inflated: state -> kind:kind -> Cstruct.t -> Hash.t Lwt.t
-  val raw_p:
-       ztmp:Cstruct.t
-    -> dtmp:Cstruct.t
-    -> window:Inflate.window
-    -> raw:Cstruct.t
-    -> state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
-  val raw_s: state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
-  val raw: state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
-  val raw_wa:
-       ztmp:Cstruct.t
-    -> dtmp:Cstruct.t
-    -> window:Inflate.window
-    -> raw:Cstruct.t
-    -> result:Cstruct.t
-    -> state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
-  val raw_was: Cstruct.t -> state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
+  val read_inflated: state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
+  val read_inflated_wa: Cstruct.t -> state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
 
   module D: S.DECODER
     with type t = t
      and type init = Inflate.window * Cstruct.t * Cstruct.t
-     and type error = [ `Decoder of string | `Inflate of Inflate.error ]
+     and type error = [ Error.Decoder.t | `Inflate of Inflate.error ]
 
   module E: S.ENCODER
     with type t = t
@@ -112,60 +72,45 @@ module type LOOSE = sig
 
 end
 
+(* XXX(samoht): duplicate of pack?.S ? *)
 module type PACK = sig
 
   type t
   type value
   type state
+  type error
 
   module Hash: S.HASH
   module FS: S.FS
   module Inflate: S.INFLATE
   module Deflate: S.DEFLATE
-  module PACKDecoder: Unpack.DECODER
+  module HDec: Unpack.H with module Hash = Hash
+  module PDec: Unpack.P
     with module Hash = Hash
      and module Inflate = Inflate
-  module PACKEncoder: Pack.ENCODER
+     and module Hunk := HDec
+  module RPDec: Unpack.D
+    with module Hash = Hash
+     and module Inflate = Inflate
+     and module Hunk := HDec
+     and module Pack := PDec
+  module PEnc: Pack.P
     with module Hash = Hash
      and module Deflate = Deflate
-  module IDXDecoder: Index_pack.LAZY
+  module IDec: Index_pack.LAZY
     with module Hash = Hash
-  module IDXEncoder: Index_pack.ENCODER
+  module IEnc: Index_pack.ENCODER
     with module Hash = Hash
-  module Pack_info: Pack_info.S
+  module PInfo: Pack_info.S
     with module Hash = Hash
      and module Inflate = Inflate
+     and module HDec := HDec
+     and module PDec := PDec
 
-  type error =
-    [ `PackDecoder of PACKDecoder.error
-    | `PackEncoder of PACKEncoder.error
-    | `PackInfo of Pack_info.error
-    | `IdxDecoder of IDXDecoder.error
-    | `IdxEncoder of IDXEncoder.error
-    | `SystemFile of FS.File.error
-    | `SystemMapper of FS.Mapper.error
-    | `SystemDir of FS.Dir.error
-    | `Invalid_hash of Hash.t
-    | `Delta of PACKEncoder.Delta.error
-    | `SystemIO of string
-    | `Integrity of string
-    | `Not_found ]
-
-  val pp_error: error Fmt.t
   val lookup: state -> Hash.t -> (Hash.t * (Crc32.t * int64)) option Lwt.t
   val mem: state -> Hash.t -> bool Lwt.t
   val list: state -> Hash.t list Lwt.t
-  val read_p:
-       ztmp:Cstruct.t
-    -> window:Inflate.window
-    -> state -> Hash.t -> (t, error) result Lwt.t
-  val read_s: state -> Hash.t -> (t, error) result Lwt.t
   val read: state -> Hash.t -> (t, error) result Lwt.t
-  val size_p:
-       ztmp:Cstruct.t
-    -> window:Inflate.window
-    -> state -> Hash.t -> (int, error) result Lwt.t
-  val size_s: state -> Hash.t -> (int, error) result Lwt.t
   val size: state -> Hash.t -> (int, error) result Lwt.t
 
   type stream = unit -> Cstruct.t option Lwt.t
@@ -187,9 +132,7 @@ module type S = sig
   module Hash: S.HASH
   module Inflate: S.INFLATE
   module Deflate: S.DEFLATE
-  module Lock: S.LOCK
-
-  module FS: S.FS with type File.lock = Lock.elt
+  module FS: S.FS
 
   module Value: Value.S
     with module Hash = Hash
@@ -203,32 +146,80 @@ module type S = sig
 
   module Reference: Reference.IO
     with module Hash = Hash
-     and module Lock = Lock
      and module FS = FS
 
-  module PACKDecoder: Unpack.DECODER
+  module HDec: Unpack.H
+    with module Hash = Hash
+
+  module PDec: Unpack.P
     with module Hash = Hash
      and module Inflate = Inflate
+     and module Hunk := HDec
 
-  module PACKEncoder: Pack.ENCODER
+  module RPDec: Unpack.D
+    with module Hash = Hash
+     and module Inflate = Inflate
+     and module Hunk := HDec
+     and module Pack := PDec
+
+  module PEnc: Pack.P
     with module Hash = Hash
      and module Deflate = Deflate
+
+  module IDec: Index_pack.LAZY
+    with module Hash = Hash
+
+  module IEnc: Index_pack.ENCODER
+    with module Hash = Hash
+
+  module PInfo: Pack_info.S
+    with module Hash = Hash
+     and module Inflate = Inflate
+     and module HDec := HDec
+     and module PDec := PDec
+
+  module Packed_refs: Packed_refs.S
+    with module Hash = Hash
+     and module FS = FS
+
+  type error =
+    [ `Delta             of PEnc.Delta.error
+    | `Pack_decoder      of RPDec.error
+    | `Pack_encoder      of PEnc.error
+    | `Pack_info         of PInfo.error
+    | `Idx_decoder       of IDec.error
+    | `Idx_encoder       of IEnc.error
+    | `Integrity         of string
+    | `Invalid_hash      of Hash.t
+    | `Invalid_reference of Reference.t
+    | Error.Decoder.t
+    | FS.error Error.FS.t
+    | Inflate.error Error.Inf.t
+    | Deflate.error Error.Def.t
+    | Error.not_found ]
+
+  val pp_error: error Fmt.t
 
   module Loose: LOOSE
     with type t = Value.t
      and type state = t
+     and type error = error
      and module Hash = Hash
      and module Inflate = Inflate
      and module Deflate = Deflate
      and module FS = FS
 
   module Pack: PACK
-    with type t = PACKDecoder.Object.t
+    with type t = RPDec.Object.t
      and type value = Value.t
      and type state = t
+     and type error = error
      and module Hash = Hash
      and module FS = FS
      and module Inflate = Inflate
+     and module HDec := HDec
+     and module PDec := PDec
+     and module RPDec := RPDec
 
   type kind =
     [ `Commit
@@ -236,62 +227,30 @@ module type S = sig
     | `Tag
     | `Blob ]
 
-  type error =
-    [ Loose.error
-    | Pack.error ]
+  type buffer
 
-  val pp_error: error Fmt.t
-  val create:
-       ?root:Fpath.t
-    -> ?dotgit:Fpath.t
-    -> ?compression:int
-    -> unit -> (t, error) result Lwt.t
+  val default_buffer: unit -> buffer
+  val buffer:
+    ?ztmp:Cstruct.t ->
+    ?dtmp:Cstruct.t ->
+    ?raw:Cstruct.t ->
+    ?window:Inflate.window ->
+    unit -> buffer
   val dotgit: t -> Fpath.t
   val root: t -> Fpath.t
   val compression : t -> int
   val mem: t -> Hash.t -> bool Lwt.t
   val list: t -> Hash.t list Lwt.t
-  val read_p:
-       ztmp:Cstruct.t
-    -> dtmp:Cstruct.t
-    -> raw:Cstruct.t
-    -> window:Inflate.window
-    -> t -> Hash.t -> (Value.t, error) result Lwt.t
-  val read_s: t -> Hash.t -> (Value.t, error) result Lwt.t
   val read: t -> Hash.t -> (Value.t, error) result Lwt.t
   val read_exn: t -> Hash.t -> Value.t Lwt.t
-  val write_p:
-       ztmp:Cstruct.t
-    -> raw:Cstruct.t
-    -> t -> Value.t -> (Hash.t * int, error) result Lwt.t
-  val write_s: t -> Value.t -> (Hash.t * int, error) result Lwt.t
   val write: t -> Value.t -> (Hash.t * int, error) result Lwt.t
-  val size_p:
-       ztmp:Cstruct.t
-    -> dtmp:Cstruct.t
-    -> raw:Cstruct.t
-    -> window:Inflate.window
-    -> t -> Hash.t -> (int64, error) result Lwt.t
-  val size_s: t -> Hash.t -> (int64, error) result Lwt.t
   val size: t -> Hash.t -> (int64, error) result Lwt.t
-  val raw_p:
-       ztmp:Cstruct.t
-    -> dtmp:Cstruct.t
-    -> raw:Cstruct.t
-    -> window:Inflate.window
-    -> t -> Hash.t -> (kind * Cstruct.t) option Lwt.t
-  val raw_s: t -> Hash.t -> (kind * Cstruct.t) option Lwt.t
-  val raw: t -> Hash.t -> (kind * Cstruct.t) option Lwt.t
   val read_inflated: t -> Hash.t -> (kind * Cstruct.t) option Lwt.t
   val write_inflated: t -> kind:kind -> Cstruct.t -> Hash.t Lwt.t
   val contents: t -> ((Hash.t * Value.t) list, error) result Lwt.t
-  val buffer_window: t -> Inflate.window
-  val buffer_zl: t -> Cstruct.t
-  val buffer_de: t -> Cstruct.t
-  val buffer_io: t -> Cstruct.t
 
   val fold:
-       t
+    t
     -> ('a -> ?name:Fpath.t -> length:int64 -> Hash.t -> Value.t -> 'a Lwt.t)
     -> path:Fpath.t
     -> 'a
@@ -300,63 +259,17 @@ module type S = sig
 
   module Ref: sig
 
-    module Packed_refs: Packed_refs.S
-      with module Hash = Hash
-       and module FS = FS
-
-    type nonrec error =
-      [ Packed_refs.error
-      | error
-      | `Invalid_reference of Reference.t ]
-
-    val pp_error: error Fmt.t
     val mem: t -> Reference.t -> bool Lwt.t
-    val graph_p:
-         dtmp:Cstruct.t
-      -> raw:Cstruct.t
-      -> ?locks:Lock.t
-      -> t -> (Hash.t Reference.Map.t, error) result Lwt.t
-    val graph: ?locks:Lock.t -> t -> (Hash.t Reference.Map.t, error) result Lwt.t
+    val graph: t -> (Hash.t Reference.Map.t, error) result Lwt.t
     val normalize: Hash.t Reference.Map.t -> Reference.head_contents -> (Hash.t, error) result Lwt.t
-    val list_p:
-         dtmp:Cstruct.t
-      -> raw:Cstruct.t
-      -> ?locks:Lock.t
-      -> t -> (Reference.t * Hash.t) list Lwt.t
-    val list_s: ?locks:Lock.t -> t -> (Reference.t * Hash.t) list Lwt.t
-    val list: ?locks:Lock.t -> t -> (Reference.t * Hash.t) list Lwt.t
-    val remove_p:
-         dtmp:Cstruct.t
-      -> raw:Cstruct.t
-      -> ?locks:Lock.t
-      -> t -> Reference.t -> (unit, error) result Lwt.t
-    val remove_s: t -> ?locks:Lock.t -> Reference.t -> (unit, error) result Lwt.t
-    val remove: t -> ?locks:Lock.t -> Reference.t -> (unit, error) result Lwt.t
-    val read_p:
-         dtmp:Cstruct.t
-      -> raw:Cstruct.t
-      -> ?locks:Lock.t
-      -> t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
-    val read_s: ?locks:Lock.t -> t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
-    val read: ?locks:Lock.t -> t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
-    val write_p:
-         ?locks:Lock.t
-      -> dtmp:Cstruct.t
-      -> raw:Cstruct.t
-      -> t -> Reference.t -> Reference.head_contents -> (unit, error) result Lwt.t
-    val write_s: t -> ?locks:Lock.t -> Reference.t -> Reference.head_contents -> (unit, error) result Lwt.t
-    val write: t -> ?locks:Lock.t -> Reference.t -> Reference.head_contents -> (unit, error) result Lwt.t
-    val test_and_set:
-        t
-     -> ?locks:Lock.t
-     -> Reference.t
-     -> test:Reference.head_contents option
-     -> set:Reference.head_contents option
-     -> (bool, error) result Lwt.t
+    val list: t -> (Reference.t * Hash.t) list Lwt.t
+    val remove: t -> Reference.t -> (unit, error) result Lwt.t
+    val read: t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
+    val write: t -> Reference.t -> Reference.head_contents -> (unit, error) result Lwt.t
   end
 
-  val clear_caches: ?locks:Lock.t -> t -> unit Lwt.t
-  val reset: ?locks:Lock.t -> t -> (unit, [ `Store of error | `Ref of Ref.error ]) result Lwt.t
+  val clear_caches: t -> unit Lwt.t
+  val reset: t -> (unit, error) result Lwt.t
 
   val has_global_watches: bool
   val has_global_checkout: bool
@@ -367,38 +280,25 @@ module Option = struct
   let map f a = match a with Some a -> Some (f a) | None -> None
 end
 
-module FS
-    (H : S.HASH)
-    (L : S.LOCK)
-    (FS: S.FS with type File.lock = L.elt)
-    (I : S.INFLATE)
-    (D : S.DEFLATE)
-  : S with module Hash = H
-       and module Lock = L
-       and module FS = FS
-       and module Inflate = I
-       and module Deflate = D
-= struct
+module FS (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
+
   module Hash = H
   module Inflate = I
   module Deflate = D
-  module Lock = L
   module FS = FS
 
   let has_global_watches = FS.has_global_watches
   let has_global_checkout = FS.has_global_checkout
 
-  module LooseImpl: Loose.S
-    with module Hash = H
-     and module Inflate = I
-     and module Deflate = D
-     and module FS = FS
-     and module Blob = Blob.Make(Hash)
-     and module Commit = Commit.Make(Hash)
-     and module Tree = Tree.Make(Hash)
-     and module Tag = Tag.Make(Hash)
-     and type t = Value.Make(Hash)(Inflate)(Deflate).t
-    = Loose.Make(Hash)(FS)(Inflate)(Deflate)
+  module LooseImpl = Loose.Make(Hash)(FS)(Inflate)(Deflate)
+
+  module HDec = Unpack.Hunk(Hash)
+  module PDec = Unpack.Pack(Hash)(Inflate)(HDec)
+  module RPDec = Unpack.Decoder(Hash)(struct
+      type t = FS.t
+      type error = FS.error
+      include FS.Mapper
+    end)(Inflate)(HDec)(PDec)
 
   module PackImpl
     : Pack_engine.S
@@ -406,7 +306,10 @@ module FS
        and module FS = FS
        and module Inflate = Inflate
        and module Deflate = Deflate
-    = Pack_engine.Make(H)(FS)(I)(D)
+       and module HDec := HDec
+       and module PDec := PDec
+       and module RPDec := RPDec
+    = Pack_engine.Make(H)(FS)(I)(D)(HDec)(PDec)(RPDec)
 
   module Value
     : Value.S
@@ -420,63 +323,122 @@ module FS
        and type t = Value.Make(Hash)(Inflate)(Deflate).t
     = Value.Make(Hash)(Inflate)(Deflate)
 
-  module PACKDecoder = PackImpl.PACKDecoder
-  module PACKEncoder = PackImpl.PACKEncoder
-  module IDXDecoder = PackImpl.IDXDecoder
+  module PEnc = PackImpl.PEnc
+  module IDec = PackImpl.IDec
+  module IEnc = PackImpl.IEnc
+  module PInfo = PackImpl.PInfo
+  module Packed_refs = Packed_refs.Make(Hash)(FS)
+  module Reference = Reference.IO(H)(FS)
 
-  module Reference = Reference.IO(H)(L)(FS)
-
-  module DoubleHash =
-  struct
+  module DoubleHash = struct
     type t = Hash.t * Hash.t
-
     let hash = Hashtbl.hash
-
-    let equal (a, b) (c, d) =
-      Hash.equal a c && Hash.equal b d
+    let equal (a, b) (c, d) = Hash.equal a c && Hash.equal b d
   end
 
-  module HashInt64 =
-  struct
+  module HashInt64 = struct
     type t = Hash.t * int64
-
     let hash = Hashtbl.hash
-
-    let equal (a, b) (c, d) =
-      Hash.equal a c && Int64.equal b d
+    let equal (a, b) (c, d) = Hash.equal a c && Int64.equal b d
   end
 
   (* XXX(dinosaure): need to limit the weight of [CacheObject] and
      [CacheValue] by the memory consumption of the data stored - and
      not by the number of theses data. Indeed, 5 commits is more
      cheaper than 1 blob sometimes. *)
-  module CacheObject   = Lru.M.Make(DoubleHash)(struct type t = PACKDecoder.Object.t let weight _ = 1 end)
-  module CacheValue    = Lru.M.Make(Hash)(struct type t = Value.t let weight _ = 1 end)
-  module CachePack     = Lru.M.Make(Hash)(struct type t = PACKDecoder.t let weight _ = 1 end) (* fixed size *)
-  module CacheIndex    = Lru.M.Make(Hash)(struct type t = IDXDecoder.t let weight _ = 1 end) (* not fixed size by consider than it's ok. *)
-  module CacheRevIndex = Lru.M.Make(HashInt64)(struct type t = Hash.t let weight _ = 1 end) (* fixed size *)
+  module CacheObject =
+    Lru.M.Make
+      (DoubleHash)
+      (struct type t = RPDec.Object.t let weight _ = 1 end)
+
+  module CacheValue =
+    Lru.M.Make
+      (Hash)
+      (struct type t = Value.t let weight _ = 1 end)
+
+  module CachePack =
+    Lru.M.Make
+      (Hash)
+      (struct type t = PDec.t let weight _ = 1 end) (* fixed size *)
+
+  module CacheIndex =
+    Lru.M.Make
+      (Hash)
+      (* not fixed size by consider than it's ok. *)
+      (struct type t = IDec.t let weight _ = 1 end)
+
+  module CacheRevIndex =
+    Lru.M.Make
+      (HashInt64)
+      (struct type t = Hash.t let weight _ = 1 end) (* fixed size *)
+
+  type buffer =
+    { window: Inflate.window
+    ; raw   : Cstruct.t
+    ; ztmp  : Cstruct.t
+    ; dtmp  : Cstruct.t }
 
   type cache =
-    { objects     : CacheObject.t
-    ; values      : CacheValue.t
-    ; packs       : CachePack.t
-    ; indexes     : CacheIndex.t
-    ; revindexes  : CacheRevIndex.t }
-  and buffer =
-    { window      : Inflate.window
-    ; io          : Cstruct.t
-    ; zl          : Cstruct.t
-    ; de          : Cstruct.t }
-  and t =
-    { dotgit      : Fpath.t
+    { objects   : CacheObject.t
+    ; values    : CacheValue.t
+    ; packs     : CachePack.t
+    ; indexes   : CacheIndex.t
+    ; revindexes: CacheRevIndex.t }
+
+  type t =
+    { fs          : FS.t
+    ; dotgit      : Fpath.t
     ; root        : Fpath.t
     ; compression : int
     ; cache       : cache
-    ; buffer      : buffer
+    ; buffer      : (buffer -> unit Lwt.t) -> unit Lwt.t
     ; packed      : (Reference.t, Hash.t) Hashtbl.t
     ; engine      : PackImpl.t }
 
+  type error =
+    [ PackImpl.error
+    | `Delta of PEnc.Delta.error
+    | Error.Decoder.t
+    | FS.error Error.FS.t
+    | Inflate.error Error.Inf.t
+    | Deflate.error Error.Def.t
+    | `Invalid_reference of Reference.t ]
+
+  let pp_error ppf = function
+    | #LooseImpl.error as err -> Fmt.pf ppf "%a" LooseImpl.pp_error err
+    | #PackImpl.error as err -> Fmt.pf ppf "%a" PackImpl.pp_error err
+    | `Delta err -> Fmt.pf ppf "(`Delta %a)" PEnc.Delta.pp_error err
+    | _ -> assert false
+
+  let lift_error err = (err :> error)
+
+  let new_buffer = function
+    | Some b -> b
+    | None   -> Cstruct.create (4 * 1024)
+
+  let new_window = function
+    | Some w -> w
+    | None   -> Inflate.window ()
+
+  let buffer ?ztmp ?dtmp ?raw ?window () =
+    let window = new_window window in
+    let ztmp = new_buffer ztmp in
+    let dtmp = new_buffer dtmp in
+    let raw = new_buffer raw in
+    { window; ztmp; dtmp; raw }
+
+  let with_buffer t f =
+    let c = ref None in
+    t.buffer (fun buf ->
+        f buf >|= fun x ->
+        c := Some x
+      ) >|= fun () ->
+    match !c with
+    | Some x -> x
+    | None   -> assert false
+
   module Loose = struct
+
     module Hash = Hash
     module FS = FS
     module Inflate = Inflate
@@ -485,131 +447,75 @@ module FS
 
     type state = t
     type t = LooseImpl.t
-
+    type nonrec error = error
     type kind = LooseImpl.kind
 
-    type error = LooseImpl.error
+    let read t path =
+      with_buffer t @@ fun { ztmp; dtmp; raw; window } ->
+      LooseImpl.read ~fs:t.fs ~root:t.dotgit ~window ~ztmp ~dtmp ~raw path
+      >>!= lift_error
 
-    let pp_error = LooseImpl.pp_error
+    let size t path =
+      with_buffer t @@ fun { ztmp; dtmp; raw; window } ->
+      LooseImpl.size ~fs:t.fs ~root:t.dotgit ~window ~ztmp ~dtmp ~raw path
+      >>!= lift_error
 
-    let read_p ~ztmp ~dtmp ~raw ~window t =
-      LooseImpl.read ~root:t.dotgit ~window ~ztmp ~dtmp ~raw
-    let size_p ~ztmp ~dtmp ~raw ~window t =
-      LooseImpl.size ~root:t.dotgit ~window ~ztmp ~dtmp ~raw
-    let write_p ~ztmp ~raw t value =
-      LooseImpl.write ~root:t.dotgit ~ztmp ~raw ~level:t.compression value
+    let write t value =
+      with_buffer t @@ fun { ztmp; raw; _ } ->
+      LooseImpl.write ~fs:t.fs ~root:t.dotgit ~ztmp ~raw ~level:t.compression value
+      >>!= lift_error
 
-    let mem t =
-      LooseImpl.mem
-        ~root:t.dotgit
-    let read_s t =
-      LooseImpl.read
-        ~root:t.dotgit
-        ~window:t.buffer.window
-        ~ztmp:t.buffer.zl
-        ~dtmp:t.buffer.de
-        ~raw:t.buffer.io
-    let read = read_s
-    let size_s t =
-      LooseImpl.size
-        ~root:t.dotgit
-        ~window:t.buffer.window
-        ~ztmp:t.buffer.zl
-        ~dtmp:t.buffer.de
-        ~raw:t.buffer.io
-    let size = size_s
-    let list t =
-      LooseImpl.list
-        ~root:t.dotgit
-    let write_s t value =
-      write_p ~ztmp:t.buffer.zl ~raw:t.buffer.io t value
-    let write = write_s
+    let mem t = LooseImpl.mem ~fs:t.fs ~root:t.dotgit
+    let list t = LooseImpl.list ~fs:t.fs ~root:t.dotgit
 
-    let lookup_p t hash =
-      LooseImpl.mem ~root:t.dotgit hash >|= function
-      | true -> Some hash
+    let lookup t hash =
+      LooseImpl.mem ~fs:t.fs ~root:t.dotgit hash >|= function
+      | true  -> Some hash
       | false -> None
 
-    let lookup = lookup_p
+    let read_inflated t hash =
+      with_buffer t @@ fun { ztmp; dtmp; raw; window } ->
+      LooseImpl.inflate ~fs:t.fs ~root:t.dotgit ~window ~ztmp ~dtmp ~raw hash
+      >>!= lift_error
 
-    let raw_p ~ztmp ~dtmp ~window ~raw t hash =
-      LooseImpl.inflate ~root:t.dotgit ~window ~ztmp ~dtmp ~raw hash
-
-    let raw_s t hash =
-      raw_p
-        ~window:t.buffer.window
-        ~ztmp:t.buffer.zl
-        ~dtmp:t.buffer.de
-        ~raw:t.buffer.io
-        t hash
-
-    let raw = raw_s
-
-    let raw_wa ~ztmp ~dtmp ~window ~raw ~result t hash =
-      LooseImpl.inflate_wa ~root:t.dotgit ~window ~ztmp ~dtmp ~raw ~result hash
-
-    let raw_was result t hash =
-      raw_wa
-        ~window:t.buffer.window
-        ~ztmp:t.buffer.zl
-        ~dtmp:t.buffer.de
-        ~raw:t.buffer.io
-        ~result
-        t hash
+    let read_inflated_wa result t hash =
+      with_buffer t @@ fun { ztmp; dtmp; raw; window } ->
+      LooseImpl.inflate_wa ~fs:t.fs ~root:t.dotgit ~window ~ztmp ~dtmp ~raw
+        ~result hash
+      >>!= lift_error
 
     let write_inflated t ~kind value =
+      with_buffer t @@ fun { raw; _ } ->
       LooseImpl.write_inflated
-        ~root:t.dotgit
-        ~level:t.compression
-        ~raw:t.buffer.io
-        ~kind
-        value >>= function
+        ~fs:t.fs ~root:t.dotgit ~level:t.compression ~raw ~kind value
+      >>= function
       | Ok hash -> Lwt.return hash
-      | Error (#LooseImpl.error as err) ->
-        Lwt.fail (Failure (Fmt.strf "%a" LooseImpl.pp_error err))
+      | Error e -> Fmt.kstrf Lwt.fail_with "%a" LooseImpl.pp_error e
 
-    module D: S.DECODER
-        with type t = t
-         and type init = Inflate.window * Cstruct.t * Cstruct.t
-         and type error = Value.D.error
-      = Value.D
-
-    module E: S.ENCODER
-        with type t = t
-         and type init = int * t * int * Cstruct.t
-         and type error = Value.E.error
-      = Value.E
+    module D = Value.D
+    module E = Value.E
   end
 
   module Pack = struct
 
     module Hash = Hash
-    module FS = FS
+    module FS = Helper.FS(FS)
     module Inflate = Inflate
     module Deflate = Deflate
 
-    module Pack_info = PackImpl.Pack_info
-    module IDXEncoder = PackImpl.IDXEncoder
-    module IDXDecoder = PackImpl.IDXDecoder
-    module PACKEncoder = PackImpl.PACKEncoder
-    module PACKDecoder = PackImpl.PACKDecoder
+    module HDec = HDec
+    module PDec = PDec
+    module PInfo = PackImpl.PInfo
+    module IEnc = PackImpl.IEnc
+    module IDec = PackImpl.IDec
+    module PEnc = PackImpl.PEnc
+    module RPDec = RPDec
 
     type state = t
 
-    type error =
-      [ `SystemIO of string
-      | `Delta of PACKEncoder.Delta.error
-      | PackImpl.error ]
-
-    let lift_error (e: PackImpl.error) = (e :> error)
-
-    let pp_error ppf = function
-      | `SystemIO err -> Fmt.pf ppf "(`SystemIO %s)" err
-      | `Delta err -> Fmt.pf ppf "(`Delta %a)" PACKEncoder.Delta.pp_error err
-      | #PackImpl.error as err -> PackImpl.pp_error ppf err
-
-    type t = PACKDecoder.Object.t
+    type t = RPDec.Object.t
     type value = Value.t
+    type nonrec error = error
 
     let lookup t hash =
       PackImpl.lookup t.engine hash
@@ -620,31 +526,21 @@ module FS
     let list t =
       PackImpl.list t.engine
 
-    let read_p ~ztmp ~window t hash =
+    let read t hash =
       mem t hash >>= function
       | false -> Lwt.return (Error `Not_found)
       | true ->
+        with_buffer t @@ fun { ztmp; window; _ } ->
         Log.debug (fun l -> l "Git object %a found in a PACK file." Hash.pp hash);
-        PackImpl.read ~root:t.dotgit ~ztmp ~window t.engine hash >>!= lift_error
+        PackImpl.read ~root:t.dotgit ~ztmp ~window t.engine hash
+        >>!= lift_error
 
-    let read_s t hash =
-      read_p ~ztmp:t.buffer.zl ~window:t.buffer.window t hash
-
-    let read = read_s
-
-    let size_p ~ztmp ~window t hash =
+    let size t hash =
       mem t hash >>= function
       | false -> Lwt.return (Error `Not_found)
       | true ->
+        with_buffer t @@ fun { ztmp; window; _ } ->
         PackImpl.size ~root:t.dotgit ~ztmp ~window t.engine hash >>!= lift_error
-
-    let size_s t hash =
-      size_p
-        ~ztmp:t.buffer.zl
-        ~window:t.buffer.window
-        t hash
-
-    let size = size_s
 
     type stream = unit -> Cstruct.t option Lwt.t
 
@@ -660,91 +556,58 @@ module FS
       for i = 0 to len - 1 do Bytes.set raw i (gen ()) done;
       Bytes.unsafe_to_string raw
 
-    let to_temp_file fmt stream =
+    let to_temp_file fs fmt stream =
       let filename_of_pack = fmt (random_string 10) in
-      FS.Dir.temp () >>= fun temp_dir ->
-      FS.File.open_w ~mode:0o644 Fpath.(temp_dir / filename_of_pack) >>= function
-      | Error err -> Lwt.return (Error (`SystemFile err))
-      | Ok fd ->
-        Log.debug (fun l -> l ~header:"to_temp_file" "Save the pack stream to the file %a."
-                      Fpath.pp Fpath.(temp_dir / filename_of_pack));
-
-        let rec go ?chunk ~call () = Lwt_stream.peek stream >>= function
-          | None ->
-            Log.debug (fun l -> l ~header:"to_temp_file" "Pack stream saved to the file %a."
-                          Fpath.pp Fpath.(temp_dir / filename_of_pack));
-
-            (FS.File.close fd >>= function
-              | Ok () -> Lwt.return (Ok Fpath.(temp_dir / filename_of_pack))
-              | Error err ->
-                Log.err (fun l -> l ~header:"to_temp_file" "Cannot close the file: %s." filename_of_pack);
-                Lwt.return (Error (`SystemFile err)))
-          | Some raw ->
-            Log.debug (fun l -> l ~header:"to_temp_file" "Receive a chunk of the pack stream (length: %d)."
-                          (Cstruct.len raw));
-
-            let off, len = match chunk with
-              | Some (off, len) -> off, len
-              | None -> 0, Cstruct.len raw
-            in
-
-            FS.File.write raw ~off ~len fd >>= function
-            | Ok 0 when len <> 0 ->
-              if call = 50 (* XXX(dinosaure): as argument? *)
-              then
-                let err = Fmt.strf "Impossible to store the file: %s." filename_of_pack in
-
-                FS.File.close fd >>= function
-                | Ok () -> Lwt.return (Error (`SystemIO err))
-                | Error _ ->
-                  Log.err (fun l -> l ~header:"to_temp_file" "Cannot close the file: %s." filename_of_pack);
-                  Lwt.return (Error (`SystemIO err))
-              else go ?chunk ~call:(call + 1) ()
-            | Ok n when n = len ->
-              Log.debug (fun l -> l ~header:"to_temp_file" "Consume current chunk of the pack stream.");
-              Lwt_stream.junk stream >>= fun () -> go ~call:0 ()
-            | Ok n ->
-              let chunk = (off + n, len - n) in
-              go ~chunk ~call:0 ()
-            | Error err ->
-              FS.File.close fd >>= function
-              | Ok () -> Lwt.return (Error (`SystemFile err))
-              | Error _ ->
-                Log.err (fun l -> l ~header:"to_temp_file" "Cannot close the file: %s." filename_of_pack);
-                Lwt.return (Error (`SystemFile err))
-        in
-
-        go ~call:0 ()
+      FS.Dir.temp fs >>= fun temp_dir ->
+      let path = Fpath.(temp_dir / filename_of_pack) in
+      FS.with_open_w fs path @@ fun fd ->
+      Log.debug (fun l -> l "Saving the pack stream to %a" Fpath.pp path);
+      let rec go ?chunk ~call () =
+        Lwt_stream.peek stream >>= function
+        | None ->
+          Log.debug (fun l ->l "Pack stream saved to %a" Fpath.pp path);
+          Lwt.return (Ok path)
+        | Some raw ->
+          Log.debug (fun l -> l "Chunk received (length=%d)" (Cstruct.len raw));
+          let off, len = match chunk with
+            | Some (off, len) -> off, len
+            | None            -> 0, Cstruct.len raw
+          in
+          FS.File.write raw ~off ~len fd >>= function
+          | Error err -> Lwt.return Error.(v @@ FS.err_write path err)
+          | Ok 0 when len <> 0 ->
+            if call <> 50 (* XXX(dinosaure): as argument? *)
+            then go ?chunk ~call:(call + 1) ()
+            else Lwt.return Error.(v @@ FS.err_stack path)
+          | Ok n when n = len ->
+            Log.debug (fun l -> l "Consuming a chunk of the pack stream.");
+            Lwt_stream.junk stream >>= fun () ->
+            go ~call:0 ()
+          | Ok n -> go ~chunk:(off + n, len - n) ~call:0 ()
+      in
+      go ~call:0 ()
 
     let extern git hash =
-      read_p
-        ~ztmp:git.buffer.zl
-        ~window:git.buffer.window
-        git hash >>= function
+      read git hash >>= function
       | Ok o ->
-        Lwt.return (Some (o.PACKDecoder.Object.kind, o.PACKDecoder.Object.raw))
+        Lwt.return (Some (o.RPDec.Object.kind, o.RPDec.Object.raw))
       | Error _ -> Loose.lookup git hash >>= function
         | None -> Lwt.return None
         | Some _ ->
-          Loose.raw_p
-            ~window:git.buffer.window
-            ~ztmp:git.buffer.zl
-            ~dtmp:git.buffer.de
-            ~raw:git.buffer.io
-            git hash >>= function
-          | Error #Loose.error -> Lwt.return None
-          | Ok v -> Lwt.return (Some v)
+          Loose.read_inflated git hash >|= function
+          | Error #Loose.error -> None
+          | Ok v               -> Some v
 
     module GC =
       Collector.Make(struct
         module Hash = Hash
         module Value = Value
         module Deflate = Deflate
-        module PACKEncoder = PACKEncoder
+        module PEnc = PEnc
 
         type nonrec t = state
         type nonrec error = error
-        type kind = PACKDecoder.kind
+        type kind = RPDec.kind
 
         let pp_error = pp_error
         let read_inflated = extern
@@ -761,7 +624,7 @@ module FS
       Cstruct.blit cs 0 rs 0 ln;
       rs
 
-    let canonicalize git path_pack decoder_pack fdp ~htmp ~rtmp ~ztmp ~window delta info =
+    let canonicalize git path_pack decoder_pack fdp ~htmp ~rtmp delta info =
       let k2k = function
         | `Commit -> Pack.Kind.Commit
         | `Blob -> Pack.Kind.Blob
@@ -769,209 +632,229 @@ module FS
         | `Tag -> Pack.Kind.Tag
       in
       let make acc (hash, (_, offset)) =
-        PACKDecoder.optimized_get' ~h_tmp:htmp decoder_pack offset rtmp ztmp window >>= function
+        with_buffer git (fun { ztmp; window; _ } ->
+            RPDec.get_from_offset
+              ~htmp:htmp decoder_pack offset rtmp ztmp window
+          ) >|= function
         | Error err ->
-          Log.err (fun l -> l ~header:"from" "Retrieve an error when we try to \
-                                              resolve the object at the offset %Ld \
-                                              in the temporary pack file %a: %a."
-                      offset Fpath.pp path_pack PACKDecoder.pp_error err);
-          Lwt.return acc
+          Log.err (fun l ->
+              l ~header:"from" "Retrieve an error when we try to \
+                                resolve the object at the offset %Ld \
+                                in the temporary pack file %a: %a."
+                offset Fpath.pp path_pack RPDec.pp_error err);
+          acc
         | Ok obj ->
-          let delta = match obj.PACKDecoder.Object.from with
-            | PACKDecoder.Object.External hash -> Some (PACKEncoder.Entry.From hash)
-            | PACKDecoder.Object.Direct _ -> None
-            | PACKDecoder.Object.Offset { offset; _ } ->
-              try let (_, hash) = Pack_info.Graph.find offset info.Pack_info.graph in
-                Option.map (fun hash -> PACKEncoder.Entry.From hash) hash
-              with Not_found -> None
+          let open RPDec.Object in
+          let delta = match obj.from with
+            | External hash        -> Some (PEnc.Entry.From hash)
+            | Direct _             -> None
+            | Offset { offset; _ } ->
+              try
+                let (_, hash) =
+                  PInfo.Graph.find offset info.PInfo.graph
+                in
+                Option.map (fun hash -> PEnc.Entry.From hash) hash
+              with Not_found ->
+                None
           in
 
-          Lwt.return (PACKEncoder.Entry.make hash ?delta (k2k obj.PACKDecoder.Object.kind) obj.PACKDecoder.Object.length :: acc)
+          PEnc.Entry.make hash ?delta
+            (k2k obj.RPDec.Object.kind) obj.RPDec.Object.length
+          :: acc
       in
 
       let external_ressources acc =
-        List.fold_left
+        let res = List.fold_left
           (fun acc (_, hunks_descr) ->
-             let open Pack_info in
+             let open PInfo in
 
-             match hunks_descr.PACKDecoder.H.reference with
-             | PACKDecoder.H.Hash hash when not (Radix.mem info.tree hash) ->
+             match hunks_descr.HDec.reference with
+             | HDec.Hash hash when not (Radix.mem info.tree hash) ->
                (try List.find (Hash.equal hash) acc |> fun _ -> acc
                 with Not_found -> hash :: acc)
              | _ -> acc)
           [] delta
-        |> Lwt_list.fold_left_s
-          (fun acc hash -> extern git hash >>= function
-             | None ->
-               Lwt.return acc
+        in
+        Lwt_list.fold_left_s
+          (fun acc hash -> extern git hash >|= function
+             | None -> acc
              | Some (kind, raw) ->
-               let entry = PACKEncoder.Entry.make hash (k2k kind) (Int64.of_int (Cstruct.len raw)) in
-               Lwt.return (entry :: acc))
-          acc
+               let entry = PEnc.Entry.make hash (k2k kind) (Int64.of_int (Cstruct.len raw)) in
+               entry :: acc)
+          acc res
       in
 
       let get hash =
-        if Pack_info.Radix.mem info.Pack_info.tree hash
-        then PACKDecoder.get_with_allocation
-            ~h_tmp:htmp
+        if PInfo.Radix.mem info.PInfo.tree hash
+        then
+          with_buffer git @@ fun { ztmp; window; _ } ->
+          RPDec.get_with_result_allocation_from_hash
+            ~htmp:htmp
             decoder_pack
             hash
-            ztmp window >>= function
-          | Error _ ->
-            Lwt.return None
-          | Ok obj -> Lwt.return (Some obj.PACKDecoder.Object.raw)
+            ztmp window >|= function
+          | Error _ -> None
+          | Ok obj -> (Some obj.RPDec.Object.raw)
         else extern git hash >|= function
           | Some (_, raw) -> Some (cstruct_copy raw)
-          | None -> None
+          | None          -> None
       in
 
       let tag _ = false in
 
-      Pack_info.Radix.to_list info.Pack_info.tree
+      PInfo.Radix.to_list info.PInfo.tree
       |> Lwt_list.fold_left_s make []
       >>= external_ressources
-      >>= fun entries -> PACKEncoder.Delta.deltas ~memory:false entries get tag 10 50
+      >>= fun entries -> PEnc.Delta.deltas ~memory:false entries get tag 10 50
       >>= function
       | Error err -> Lwt.return (Error (`Delta err))
       | Ok entries ->
-        PackImpl.save_pack_file
+        PackImpl.save_pack_file ~fs:git.fs
           (Fmt.strf "pack-%s.pack")
           entries
           (fun hash ->
-             if Pack_info.Radix.mem info.Pack_info.tree hash
-             then PACKDecoder.get_with_allocation
-                 ~h_tmp:htmp
+             if PInfo.Radix.mem info.PInfo.tree hash
+             then
+               with_buffer git @@ fun { ztmp; window; _ } ->
+               RPDec.get_with_result_allocation_from_hash
+                 ~htmp:htmp
                  decoder_pack
                  hash
-                 ztmp window >>= function
-               | Error _ ->
-                 Lwt.return None
-               | Ok obj ->
-                 Lwt.return (Some (obj.PACKDecoder.Object.raw))
+                 ztmp window
+               >|= function
+               | Error _ -> None
+               | Ok obj -> (Some (obj.RPDec.Object.raw))
              else extern git hash >|= function
                | Some (_, raw) -> Some raw
                | None -> None)
+        >>!= lift_error
+        >>= function
+        | Error _ as err -> Lwt.return err
+        | Ok (path, sequence, hash_pack) ->
+          (PackImpl.save_idx_file
+             ~fs:git.fs ~root:git.dotgit sequence hash_pack >>!= lift_error)
           >>= function
-          | Error err -> Lwt.return (Error (err :> error))
-          | Ok (path, sequence, hash_pack) ->
-            PackImpl.save_idx_file ~root:git.dotgit sequence hash_pack >>= function
-            | Error err -> Lwt.return (Error (err :> error))
-            | Ok () ->
-              let filename_pack = Fmt.strf "pack-%s.pack" (Hash.to_hex hash_pack) in
-
-              (FS.File.move path Fpath.(git.dotgit / "objects" / "pack" / filename_pack) >>= function
-              | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
-              | Ok () -> Lwt.return (Ok (hash_pack, List.length entries)))
-              >>= fun ret ->
-              FS.Mapper.close fdp >>= function
-              | Error sys_err ->
-                Log.err (fun l -> l ~header:"canonicalize" "Impossible to close the pack file %a: %a."
-                            Fpath.pp path_pack FS.Mapper.pp_error sys_err);
-                Lwt.return ret
-              | Ok () -> Lwt.return ret
+          | Error _ as err -> Lwt.return err
+          | Ok () ->
+            let filename_pack = Fmt.strf "pack-%s.pack" (Hash.to_hex hash_pack) in
+            let dst = Fpath.(git.dotgit / "objects" / "pack" / filename_pack) in
+            (FS.File.move git.fs path dst >|= function
+              | Error err -> Error.(v @@ FS.err_move path dst err)
+              | Ok ()     -> Ok (hash_pack, List.length entries))
+            >>= fun ret ->
+            FS.Mapper.close fdp >|= function
+            | Error sys_err ->
+              Log.err (fun l ->
+                  l "Impossible to close the pack file %a, ignoring: %a."
+                          Fpath.pp path_pack FS.Mapper.pp_error sys_err);
+              ret
+            | Ok () -> ret
 
     let from git stream =
-      let ztmp = Cstruct.create 0x8000 in
-      let window = Inflate.window () in
-
       let stream0, stream1 =
         let stream', push' = Lwt_stream.create () in
 
         Lwt_stream.from
           (fun () -> stream () >>= function
              | Some raw ->
-               Log.debug (fun l -> l ~header:"from" "Dispatch a chunk of the PACK stream (length: %d)."
-                             (Cstruct.len raw));
+               Log.debug (fun l ->
+                   l "Dispatch a chunk of the PACK stream (length: %d)."
+                     (Cstruct.len raw));
                push' (Some (cstruct_copy raw));
                Lwt.return (Some raw)
              | None ->
-               Log.debug (fun l -> l ~header:"from" "Dispatch end of the PACK stream.");
+               Log.debug (fun l ->
+                   l "Dispatch end of the PACK stream.");
                push' None;
                Lwt.return None),
         stream'
       in
 
-      let info = Pack_info.v (Hash.of_hex (String.make (Hash.Digest.length * 2) '0')) in
+      let info = PInfo.v (Hash.of_hex (String.make (Hash.Digest.length * 2) '0')) in
 
-      (Pack_info.from_stream ~ztmp ~window info (fun () -> Lwt_stream.get stream0)
-       >>!= (fun sys_err -> `PackInfo sys_err)) >>?= fun info ->
-      to_temp_file (Fmt.strf "pack-%s.pack") stream1 >>?= fun path ->
+      (with_buffer git @@ fun { ztmp; window; _ } ->
+       PInfo.from_stream ~ztmp ~window info (fun () -> Lwt_stream.get stream0)
+       >>!= (fun sys_err -> `Pack_info sys_err))
+      >>?= fun info ->
+      to_temp_file git.fs (Fmt.strf "pack-%s.pack") stream1 >>?= fun path ->
 
-      let module Graph = Pack_info.Graph in
+      let module Graph = PInfo.Graph in
 
-      FS.Mapper.openfile path >>= function
-      | Error err -> Lwt.return (Error (`SystemMapper err))
+      FS.Mapper.openfile git.fs path >>= function
+      | Error err ->
+        Lwt.return Error.(v @@ FS.err_open path err)
       | Ok fdp ->
-        let `Partial { Pack_info.Partial.hash = hash_pack;
-                       Pack_info.Partial.delta; } = info.Pack_info.state
+        let `Partial { PInfo.Partial.hash = hash_pack;
+                       PInfo.Partial.delta; } = info.PInfo.state
         in
 
         let htmp =
-          let raw = Cstruct.create (info.Pack_info.max_length_insert_hunks * (info.Pack_info.max_depth + 1)) in
+          let raw = Cstruct.create (info.PInfo.max_length_insert_hunks * (info.PInfo.max_depth + 1)) in
           Array.init
-            (info.Pack_info.max_depth + 1)
-            (fun i -> Cstruct.sub raw (i * info.Pack_info.max_length_insert_hunks) info.Pack_info.max_length_insert_hunks)
+            (info.PInfo.max_depth + 1)
+            (fun i -> Cstruct.sub raw (i * info.PInfo.max_length_insert_hunks) info.PInfo.max_length_insert_hunks)
         in
 
         let rtmp =
-          Cstruct.create info.Pack_info.max_length_object,
-          Cstruct.create info.Pack_info.max_length_object,
-          info.Pack_info.max_length_object
+          Cstruct.create info.PInfo.max_length_object,
+          Cstruct.create info.PInfo.max_length_object,
+          info.PInfo.max_length_object
         in
 
-        PACKDecoder.make fdp
+        RPDec.make fdp
           (fun _ -> None)
-          (fun hash -> Pack_info.Radix.lookup info.Pack_info.tree hash)
+          (fun hash -> PInfo.Radix.lookup info.PInfo.tree hash)
           (* XXX(dinosaure): this function will be updated. *)
           (fun _ -> None)
           (fun hash -> extern git hash)
         >>= function
         | Error err ->
-          Lwt.return (Error (`SystemMapper err))
+          Lwt.return Error.(v @@ FS.err_length path err)
         | Ok decoder ->
           let hash_of_object obj =
             let ctx = Hash.Digest.init () in
             let hdr = Fmt.strf "%s %Ld\000"
-                (match obj.PACKDecoder.Object.kind with
+                (match obj.RPDec.Object.kind with
                  | `Commit -> "commit"
                  | `Blob   -> "blob"
                  | `Tree   -> "tree"
                  | `Tag    -> "tag")
-                obj.PACKDecoder.Object.length
+                obj.RPDec.Object.length
             in
 
             Hash.Digest.feed ctx (Cstruct.of_string hdr);
-            Hash.Digest.feed ctx obj.PACKDecoder.Object.raw;
+            Hash.Digest.feed ctx obj.RPDec.Object.raw;
             Hash.Digest.get ctx
           in
 
-          let crc obj = match obj.PACKDecoder.Object.from with
-            | PACKDecoder.Object.Offset { crc; _ } -> crc
-            | PACKDecoder.Object.External _ ->
+          let crc obj = match obj.RPDec.Object.from with
+            | RPDec.Object.Offset { crc; _ } -> crc
+            | RPDec.Object.External _ ->
               raise (Invalid_argument "Try to get the CRC-32 checksum from an external ressource.")
-            | PACKDecoder.Object.Direct { crc; _ } -> crc
+            | RPDec.Object.Direct { crc; _ } -> crc
           in
 
           Lwt_list.fold_left_s
             (fun ((decoder, tree, graph) as acc) (offset, hunks_descr) ->
-               PACKDecoder.optimized_get'
-                 ~h_tmp:htmp
+               with_buffer git (fun { ztmp; window; _ } ->
+               RPDec.get_from_offset
+                 ~htmp:htmp
                  decoder
                  offset
-                 rtmp ztmp window >>= function
+                 rtmp ztmp window) >>= function
                | Ok obj ->
                  let hash = hash_of_object obj in
                  let crc = crc obj in
-                 let tree = Pack_info.Radix.bind tree hash (crc, offset) in
+                 let tree = PInfo.Radix.bind tree hash (crc, offset) in
 
                  let graph =
-                   let open Pack_info in
+                   let open PInfo in
 
-                   let depth_source, _ = match hunks_descr.PACKDecoder.H.reference with
-                     | PACKDecoder.H.Offset rel_off ->
+                   let depth_source, _ = match hunks_descr.HDec.reference with
+                     | HDec.Offset rel_off ->
                        (try Graph.find Int64.(sub offset rel_off) graph
                         with Not_found -> 0, None)
-                     | PACKDecoder.H.Hash hash_source ->
+                     | HDec.Hash hash_source ->
                        try match Radix.lookup tree hash_source with
                          | Some (_, abs_off) -> Graph.find abs_off graph
                          | None -> 0, None
@@ -982,19 +865,19 @@ module FS
                  in
 
                  Lwt.return
-                   (PACKDecoder.update_idx (Pack_info.Radix.lookup tree) decoder,
+                   (RPDec.update_idx (PInfo.Radix.lookup tree) decoder,
                     tree, graph)
                | Error err ->
                  Log.err (fun l -> l ~header:"from" "Retrieve an error when we try to \
                                                      resolve the object at the offset %Ld \
                                                      in the temporary pack file %a: %a."
-                             offset Fpath.pp path PACKDecoder.pp_error err);
+                             offset Fpath.pp path RPDec.pp_error err);
                  Lwt.return acc)
-            (decoder, info.Pack_info.tree, info.Pack_info.graph) delta
+            (decoder, info.PInfo.tree, info.PInfo.graph) delta
           >>= fun (decoder, tree', graph') ->
 
           let is_total =
-            Pack_info.Graph.for_all
+            PInfo.Graph.for_all
               (fun _ -> function (_, Some _) -> true | (_, None) -> false)
               graph'
           in
@@ -1003,41 +886,37 @@ module FS
           then
             Lwt_list.for_all_p
               (fun (_, hunks_descr) ->
-                 let open Pack_info in
+                 let open PInfo in
 
-                 match hunks_descr.PACKDecoder.H.reference with
-                 | PACKDecoder.H.Offset _ -> Lwt.return true
-                 | PACKDecoder.H.Hash hash ->
+                 match hunks_descr.HDec.reference with
+                 | HDec.Offset _ -> Lwt.return true
+                 | HDec.Hash hash ->
                    Lwt.return (Radix.mem tree' hash))
               delta
             >>= fun is_not_thin ->
             if is_not_thin
             then begin
               let info =
-                { info with Pack_info.tree = tree'
-                          ; Pack_info.graph = graph'
-                          ; Pack_info.state =
-                              `Full { Pack_info.Full.thin = not is_not_thin
-                                    ; Pack_info.Full.hash = hash_pack } }
+                { info with PInfo.tree = tree'
+                          ; PInfo.graph = graph'
+                          ; PInfo.state =
+                              `Full { PInfo.Full.thin = not is_not_thin
+                                    ; PInfo.Full.hash = hash_pack } }
               in
 
-              (FS.Mapper.close fdp >>!= fun sys_err -> `SystemMapper sys_err)
+              (FS.Mapper.close fdp >>!= Error.FS.err_close path)
               >>?= fun () ->
-              PackImpl.add_total ~root:git.dotgit git.engine path info
-              >>!= lift_error
+              (PackImpl.add_total ~root:git.dotgit git.engine path info >>!= lift_error)
             end else
-              canonicalize git path decoder fdp ~htmp ~rtmp ~ztmp ~window delta info
+              canonicalize git path decoder fdp ~htmp ~rtmp delta info
               >>?= fun (hash, count) ->
-              (PackImpl.add_exists ~root:git.dotgit git.engine hash
-               >>!= lift_error)
+              (PackImpl.add_exists ~root:git.dotgit git.engine hash >>!= lift_error)
               >>?= fun () -> Lwt.return (Ok (hash, count))
           else
             Fmt.kstrf (fun x ->  Lwt.return (Error (`Integrity x)))
               "Impossible to get all informations from the file: %a."
               Hash.pp hash_pack
-end
-
-  type error = [ Loose.error | Pack.error ]
+  end
 
   type kind =
     [ `Commit
@@ -1045,116 +924,79 @@ end
     | `Tree
     | `Tag ]
 
-  let pp_error ppf = function
-    | #Loose.error as err -> Fmt.pf ppf "%a" Loose.pp_error err
-    | #Pack.error as err -> Fmt.pf ppf "%a" Pack.pp_error err
-
-  let read_p ~ztmp ~dtmp ~raw ~window state hash =
-    Log.debug (fun l -> l "read_p %a" Hash.pp hash);
-    Pack.read_p ~ztmp ~window state hash >>= function
+  let read state hash =
+    Log.debug (fun l -> l "read %a" Hash.pp hash);
+    Pack.read state hash >>= function
     | Ok o ->
-      (match o.PACKDecoder.Object.kind with
+      (match o.RPDec.Object.kind with
        | `Commit ->
-         Value.Commit.D.to_result o.PACKDecoder.Object.raw
+         Value.Commit.D.to_result o.RPDec.Object.raw
          |> Rresult.R.map (fun v -> Value.Commit v)
-       | `Blob ->
-         Value.Blob.D.to_result o.PACKDecoder.Object.raw
-         |> Rresult.R.map (fun v -> Value.Blob v)
+         |> Rresult.R.reword_error (fun err -> (err :> error))
        | `Tree ->
-         Value.Tree.D.to_result o.PACKDecoder.Object.raw
+         Value.Tree.D.to_result o.RPDec.Object.raw
          |> Rresult.R.map (fun v -> Value.Tree v)
+         |> Rresult.R.reword_error (fun err -> (err :> error))
        | `Tag ->
-         Value.Tag.D.to_result o.PACKDecoder.Object.raw
-         |> Rresult.R.map (fun v -> Value.Tag v))
-      |> (function
-          | Error (`Decoder err) -> Lwt.return (Error (`Decoder err))
-          | Ok v -> Lwt.return (Ok v))
-    | Error (#Pack.error as err) -> Loose.lookup state hash >>= function
+         Value.Tag.D.to_result o.RPDec.Object.raw
+         |> Rresult.R.map (fun v -> Value.Tag v)
+         |> Rresult.R.reword_error (fun err -> (err :> error))
+       | `Blob ->
+         Value.Blob.D.to_result o.RPDec.Object.raw
+         |> Rresult.R.map (fun v -> Value.Blob v)
+         |> fun blob -> Rresult.R.(ok (get_ok blob)))
+      |> Lwt.return
+    | Error err -> Loose.lookup state hash >>= function
       | None -> Lwt.return (Error err)
-      | Some _ -> Loose.read_p ~window ~ztmp ~dtmp ~raw state hash >>= function
-        | Error (#Loose.error as err) -> Lwt.return (Error err)
-        | Ok v -> Lwt.return (Ok v)
-
-  let read_s t hash =
-    Log.debug (fun l -> l "read_s %a" Hash.pp hash);
-    read_p
-      ~ztmp:t.buffer.zl
-      ~dtmp:t.buffer.de
-      ~raw:t.buffer.io
-      ~window:t.buffer.window
-      t hash
-
-  let read =
-    Log.debug (fun l -> l ~header:"read" "Use the alias of read_s");
-    read_s
+      | Some _ -> Loose.read state hash >|= function
+        | Error e -> Error (e :> error)
+        | Ok v    -> Ok v
 
   let read_exn t hash =
     read t hash >>= function
     | Ok v    -> Lwt.return v
     | Error _ ->
       let err = Fmt.strf "Git.Store.read_exn: %a not found" Hash.pp hash in
-      Lwt.fail (Invalid_argument err)
+      Lwt.fail_invalid_arg err
 
-  let write_p ~ztmp ~raw state hash =
-    Loose.write_p ~ztmp ~raw state hash >|= function
-    | Error (#LooseImpl.error as err) -> Error (err :> error)
-    | Ok v -> Ok v
+  let write state hash =
+    Loose.write state hash >|= function
+    | Error e -> Error (e :> error)
+    | Ok v    -> Ok v
 
-  let write_s state hash =
-    Loose.write_s state hash >|= function
-    | Error (#LooseImpl.error as err) -> Error (err :> error)
-    | Ok v -> Ok v
-
-  let write = write_s
-
-  let raw_p ~ztmp ~dtmp ~raw ~window state hash =
-    Pack.read_p ~ztmp ~window state hash >>= function
-    | Ok o ->
-      Lwt.return (Some (o.PACKDecoder.Object.kind, o.PACKDecoder.Object.raw))
+  let read_inflated state hash =
+    Pack.read state hash >>= function
+    | Ok o -> Lwt.return (Some (o.RPDec.Object.kind, o.RPDec.Object.raw))
     | Error _ -> Loose.lookup state hash >>= function
       | None -> Lwt.return None
-      | Some _ -> Loose.raw_p ~window ~ztmp ~dtmp ~raw state hash >>= function
-        | Error #Loose.error -> Lwt.return None
-        | Ok v -> Lwt.return (Some v)
-
-  let raw_s t hash =
-    raw_p
-      ~ztmp:t.buffer.zl
-      ~dtmp:t.buffer.de
-      ~raw:t.buffer.io
-      ~window:t.buffer.window
-      t hash
-
-  let raw = raw_s
-
-  let read_inflated t hash =
-    raw_s t hash
+      | Some _ ->
+        Loose.read_inflated state hash >|= function
+        | Error _ -> None
+        | Ok v    -> Some v
 
   let write_inflated t ~kind value =
     Loose.write_inflated t ~kind value
 
-  let indexes git =
-    FS.Dir.contents ~dotfiles:false ~rel:false Fpath.(git / "objects" / "pack")[@warning "-44"]
-    >>= function
-    | Ok lst ->
-      Lwt_list.fold_left_s
-        (fun acc path ->
-           if Fpath.has_ext "idx" path
-           then Lwt.return (path :: acc)
-           else Lwt.return acc)
-        [] lst
-      >>= PackImpl.v >|= fun v -> Ok v
-    | Error err -> Lwt.return (Error err)
+  let indexes ~fs git =
+    FS.Dir.contents fs ~rel:false Fpath.(git / "objects" / "pack") >>= function
+    | Error err -> Lwt.return Error.(v @@ FS.err_sys_dir err)
+    | Ok lst    ->
+      let idx =
+        List.fold_left (fun acc path ->
+            if Fpath.has_ext "idx" path then path :: acc else acc
+          ) [] lst
+      in
+      PackImpl.v fs idx >|= fun v ->
+      Ok v
 
-  let lookup_p state hash =
-    Pack.lookup state hash
-    >>= function
-    | Some (hash_pack, (_, offset)) -> Lwt.return (`PackDecoder (hash_pack, offset))
-    | None -> Loose.lookup state hash >>= function
-      | Some _ -> Lwt.return `Loose
-      | None -> Lwt.return `Not_found
-
-  let lookup = lookup_p
+  let lookup state hash =
+    Pack.lookup state hash >>= function
+    | Some (hash_pack, (_, offset)) ->
+      Lwt.return (`Pack_decoder (hash_pack, offset))
+    | None ->
+      Loose.lookup state hash >|= function
+      | Some _ -> `Loose
+      | None   -> `Not_found
 
   let mem state hash =
     lookup state hash >|= function
@@ -1166,44 +1008,37 @@ end
     >>= fun looses -> Pack.list state
     >|= fun packed -> List.append looses packed
 
-  let size_p ~ztmp ~dtmp ~raw ~window state hash =
-    Pack.size_p ~ztmp ~window state hash >>= function
+  let size state hash =
+    Pack.size state hash >>= function
     | Ok v -> Lwt.return (Ok (Int64.of_int v))
-    | Error (#Pack.error as err) ->
+    | Error err ->
       Loose.mem state hash >>= function
-      | true -> Loose.size_p ~ztmp ~dtmp ~raw ~window state hash >|= Rresult.R.reword_error (fun x -> (x :> error))
       | false -> Lwt.return (Error (err :> error))
-
-  let size_s state hash =
-    size_p
-      ~ztmp:state.buffer.zl
-      ~dtmp:state.buffer.de
-      ~raw:state.buffer.io
-      ~window:state.buffer.window
-      state hash
-
-  let size = size_s
+      | true ->
+        Loose.size state hash >|=
+        Rresult.R.reword_error (fun x -> (x :> error))
 
   exception Leave of error
 
   let contents state =
     list state
     >>= fun lst ->
-    Lwt.try_bind
-      (fun () -> Lwt_list.map_s
-          (fun hash ->
-             Log.debug (fun l -> l ~header:"contents" "Try to read the object: %a." Hash.pp hash);
-
-             read state hash
-             >>= function
-             | Ok v -> Lwt.return (hash, v)
-             | Error err ->
-               Log.err (fun l -> l ~header:"contents" "Retrieve an error: %a." pp_error err);
-               Lwt.fail (Leave err))
+    Lwt.try_bind (fun () ->
+        Lwt_list.map_s (fun hash ->
+            Log.debug (fun l ->
+                l ~header:"contents" "Try to read the object: %a." Hash.pp hash);
+            read state hash
+            >>= function
+            | Ok v -> Lwt.return (hash, v)
+            | Error err ->
+              Log.err (fun l ->
+                  l ~header:"contents" "Retrieve an error: %a." pp_error err);
+              Lwt.fail (Leave err))
           lst)
       (fun lst -> Lwt.return (Ok lst))
-      (function Leave err -> Lwt.return (Error err)
-              | exn -> Lwt.fail exn)
+      (function
+        | Leave err -> Lwt.return (Error err)
+        | exn       -> Lwt.fail exn)
 
   module T =
     Traverse_bfs.Make(struct
@@ -1221,66 +1056,37 @@ end
 
   module Ref = struct
 
-    module Packed_refs = Packed_refs.Make(Hash)(FS)
-    (* XXX(dinosaure): we need to check the packed references when we write and remove. *)
-
-    let pp_error ppf = function
-      | #Packed_refs.error as err -> Fmt.pf ppf "%a" Packed_refs.pp_error err
-      | #error as err -> Fmt.pf ppf "%a" pp_error err
-      | `Invalid_reference err ->
-        Helper.ppe ~name:"`Invalid_reference" Reference.pp ppf err
-
-    type nonrec error =
-      [ Packed_refs.error
-      | error
-      | `Invalid_reference of Reference.t ]
-
-    let contents ?locks top =
-
+    let contents ~fs top =
       let rec lookup acc dir =
-        FS.Dir.contents ~rel:true Fpath.(top // dir)
-        >>?= fun l ->
-          Lwt_list.filter_p
-            (fun x -> FS.is_dir Fpath.(top // dir // x) >|= function Ok v -> v | Error _ -> false) l
-          >>= fun dirs ->
-          Lwt_list.filter_p
-            (fun x -> FS.is_file Fpath.(top // dir // x) >|= function Ok v -> v | Error _ -> false) l
-          >>= Lwt_list.map_p (fun file -> Lwt.return (Fpath.append dir file)) >>= fun files ->
-
-          Lwt_list.fold_left_s
-            (function Ok acc -> fun x -> lookup acc Fpath.(dir // x)
-                    | Error _ as e -> fun _ -> Lwt.return e)
-            (Ok acc) dirs >>?= fun acc -> Lwt.return (Ok (acc @ files))
+        FS.Dir.contents fs ~rel:true Fpath.(top // dir) >>?= fun l ->
+        Lwt_list.filter_p (fun x ->
+            FS.is_dir fs Fpath.(top // dir // x) >|= function
+            | Ok v    -> v
+            | Error _ -> false
+          ) l
+        >>= fun dirs ->
+        Lwt_list.filter_p (fun x ->
+            FS.is_file fs Fpath.(top // dir // x) >|= function
+            | Ok v    -> v
+            | Error _ -> false
+          ) l
+        >>= fun files ->
+        let files = List.map (fun file -> Fpath.append dir file) files in
+        Lwt_list.fold_left_s (function
+            | Ok acc      -> fun x -> lookup acc Fpath.(dir // x)
+            | Error _ as e -> fun _ -> Lwt.return e
+          ) (Ok acc) dirs >>?= fun acc -> Lwt.return (Ok (acc @ files))
       in
-
-      let lock = match locks with
-        | Some locks -> Some (Lock.make locks Fpath.(v "global"))
-        | None -> None
-      in
-
-      Lock.with_lock lock
-      (fun () -> lookup [] (Fpath.v "."))
+      lookup [] (Fpath.v ".")
 
     module Graph = Reference.Map
 
     (* XXX(dinosaure): this function does not return any {!Error} value. *)
-    let graph_p ~dtmp ~raw ?locks t =
+    let graph t =
       Log.debug (fun l -> l "graph_p");
-      let lock_gbl = match locks with
-        | None       -> None
-        | Some locks -> Some (Lock.make locks Fpath.(v "global"))
-      in
-      let lock_ref reference = match locks with
-        | None       -> None
-        | Some locks ->
-          let name = "r-" ^ Fpath.filename (Reference.to_path reference) in
-          Some (Lock.make locks Fpath.(v name))
-      in
-      contents ?locks Fpath.(t.dotgit / "refs") >>= function
-      | Error sys_err ->
-        Log.err (fun l -> l "Got an error: %a." FS.Dir.pp_error sys_err);
-        Lwt_result.fail (`SystemDirectory sys_err)
-      | Ok files ->
+      contents ~fs:t.fs Fpath.(t.dotgit / "refs") >>= function
+      | Error err -> Lwt.return Error.(v @@ FS.err_sys_dir err)
+      | Ok files  ->
         Log.debug (fun l ->
             let pp_files = Fmt.hvbox (Fmt.list Fpath.pp) in
             l "contents files: %a." pp_files files);
@@ -1288,16 +1094,14 @@ end
             (* XXX(dinosaure): we already normalize the reference
                (which is absolute). so we consider than the root as
                [/]. *)
-            let lock = Reference.of_path abs_ref in
-            Lock.with_lock (lock_ref lock) (fun () ->
-                Reference.read ~root:t.dotgit lock ~dtmp ~raw
-              ) >|= function
+            let r = Reference.of_path abs_ref in
+            with_buffer t @@ fun { dtmp; raw; _ } ->
+            Reference.read ~fs:t.fs ~root:t.dotgit r ~dtmp ~raw >|= function
             | Ok v -> v :: acc
             | Error err ->
               Log.err (fun l ->
                   l "Error while reading %a: %a."
-                    Reference.pp lock
-                    Reference.pp_error err);
+                    Reference.pp r Reference.pp_error err);
               acc)
           [] (Reference.(to_path head) :: files)
         >>= fun lst ->
@@ -1311,18 +1115,19 @@ end
                 (r, link) :: rest, graph
             ) ([], Graph.empty) lst
         in
-        Lock.with_lock lock_gbl (fun () ->
-            Packed_refs.read ~root:t.dotgit ~dtmp ~raw >>= function
-            | Error _ as err -> Lwt.return err
-            | Ok packed_refs ->
-              Hashtbl.reset t.packed;
-              List.iter (function
-                  | `Peeled _            -> ()
-                  | `Ref (refname, hash) ->
-                    Hashtbl.add t.packed (Reference.of_string refname) hash
-                ) packed_refs;
-              Lwt.return (Ok packed_refs))
-        >|= function
+        (with_buffer t (fun { dtmp; raw; _ } ->
+             Packed_refs.read ~fs:t.fs ~root:t.dotgit ~dtmp ~raw
+           ) >>= function
+         | Error _ as err -> Lwt.return err
+         | Ok packed_refs ->
+           Hashtbl.reset t.packed;
+           List.iter (function
+               | `Peeled _            -> ()
+               | `Ref (refname, hash) ->
+                 Hashtbl.add t.packed (Reference.of_string refname) hash
+             ) packed_refs;
+           Lwt.return (Ok packed_refs)
+        ) >|= function
         | Ok packed_refs ->
           let graph =
             List.fold_left (fun graph -> function
@@ -1355,128 +1160,95 @@ end
               ) graph partial
           in
           Ok graph
-    [@@warning "-44"]
-
-    let graph ?locks t = graph_p ~dtmp:t.buffer.de ~raw:t.buffer.io ?locks t
 
     let normalize graph = function
-      | Reference.Hash hash -> Lwt.return (Ok hash)
+      | Reference.Hash hash   -> Lwt.return (Ok hash)
       | Reference.Ref refname ->
         try Lwt.return (Ok (Graph.find refname graph))
         with Not_found -> Lwt.return (Error (`Invalid_reference refname))
 
-    let list_p ~dtmp ~raw ?locks t =
-      graph_p ~dtmp ~raw ?locks t >>= function
+    let list t =
+      graph t >|= function
       | Ok graph ->
         Graph.fold (fun refname hash acc -> (refname, hash) :: acc) graph []
         |> List.stable_sort (fun (a, _) (b, _) -> Reference.compare a b)
-        |> fun lst -> Lwt.return lst
-      | Error _ -> Lwt.return []
-
-    let list_s ?locks t = list_p ?locks ~dtmp:t.buffer.de ~raw:t.buffer.io t
-
-    let list = list_s
+      | Error _ -> []
 
     let mem t reference =
       let in_packed_refs () = Hashtbl.mem t.packed reference in
+      Reference.mem ~fs:t.fs ~root:t.dotgit reference >|= function
+      | true  -> true
+      | false -> in_packed_refs ()
 
-      Reference.mem ~root:t.dotgit reference >>= function
-      | Ok true -> Lwt.return true
-      | Ok false -> let v = in_packed_refs () in Lwt.return v
-      | Error err ->
-        Log.warn (fun l -> l ~header:"exists" "Retrieve an error for %a: %a."
-                     Reference.pp reference Reference.pp_error err);
-        let v = in_packed_refs () in Lwt.return v
-
-    let remove_p ~dtmp ~raw ?locks t reference =
-      let lock = match locks with
-        | Some locks -> Some (Lock.make locks Fpath.(v "global"))[@warning "-44"]
-        | None -> None
-      in
-
-      Lock.with_lock lock @@ fun () ->
-      (Packed_refs.read ~root:t.dotgit ~dtmp ~raw >>= function
-        | Error _ -> Lwt.return None
-        | Ok packed_refs ->
-          Lwt_list.exists_p
-            (function
-              | `Peeled _ -> Lwt.return false
-              | `Ref (refname, _) ->
-                Lwt.return Reference.(equal (of_string refname) reference))
-            packed_refs
-          >>= function
-          | false -> Lwt.return None
-          | true ->
-            Lwt_list.fold_left_s
-              (fun acc -> function
-                 | `Peeled hash -> Lwt.return (`Peeled hash :: acc)
-                 | `Ref (refname, hash) when not Reference.(equal (of_string refname) reference) ->
-                   Lwt.return (`Ref (refname, hash) :: acc)
-                 | _ -> Lwt.return acc)
-              [] packed_refs
-            >|= fun packed_refs' -> Some packed_refs')
+    let remove t reference =
+      (with_buffer t (fun { dtmp; raw; _ } ->
+           Packed_refs.read ~fs:t.fs ~root:t.dotgit ~dtmp ~raw
+         ) >>= function
+       | Error _ -> Lwt.return None
+       | Ok packed_refs ->
+         Lwt_list.exists_p
+           (function
+             | `Peeled _ -> Lwt.return false
+             | `Ref (refname, _) ->
+               Lwt.return Reference.(equal (of_string refname) reference))
+           packed_refs
+         >>= function
+         | false -> Lwt.return None
+         | true ->
+           Lwt_list.fold_left_s
+             (fun acc -> function
+                | `Peeled hash -> Lwt.return (`Peeled hash :: acc)
+                | `Ref (refname, hash) when not Reference.(equal (of_string refname) reference) ->
+                  Lwt.return (`Ref (refname, hash) :: acc)
+                | _ -> Lwt.return acc)
+             [] packed_refs
+           >|= fun packed_refs' -> Some packed_refs')
       >>= (function
           | None -> Lwt.return (Ok ())
           | Some packed_refs' ->
-            Packed_refs.write ~root:t.dotgit ~raw packed_refs' >>= function
-            | Ok () -> Lwt.return (Ok ())
-            | Error (#Packed_refs.error as err) -> Lwt.return (Error (err : error)))
+            with_buffer t (fun { raw; _ } ->
+                Packed_refs.write ~fs:t.fs ~root:t.dotgit ~raw packed_refs'
+              ) >|= function
+            | Ok ()   -> Ok ()
+            | Error e -> Error (e :> error))
       >>= function
       | Error _ as err -> Lwt.return err
       | Ok () ->
-        Reference.remove ~root:t.dotgit reference >>= function
-        | Ok () -> Lwt.return (Ok ())
-        | Error (#Reference.error as err) -> Lwt.return (Error (err : error))
+        Reference.remove ~fs:t.fs ~root:t.dotgit reference >|= function
+        | Ok ()   -> Ok ()
+        | Error e -> Error (e :> error)
 
-    let remove_s t ?locks reference =
-      remove_p t ?locks ~dtmp:t.buffer.de ~raw:t.buffer.io reference
-
-    let remove = remove_s
-
-    let read_p ~dtmp ~raw ?locks t reference =
-      let lock = match locks with
-        | Some locks -> Some (Lock.make locks Fpath.(v ("r-" ^ (Fpath.filename (Reference.to_path reference)))))
-        | None -> None
-      in
-
-      FS.is_file Fpath.(t.dotgit // (Reference.to_path reference)) >>= function
+    let read t reference =
+      FS.is_file t.fs Fpath.(t.dotgit // Reference.to_path reference)
+      >>= function
       | Ok true ->
-        Lock.with_lock lock
-          (fun () -> Reference.read ~root:t.dotgit ~dtmp ~raw reference >|= function
-             | Ok _ as v -> v
-             | Error (#Reference.error as err) -> Error (err : error))
+        (with_buffer t @@ fun { dtmp; raw; _ } ->
+         Reference.read ~fs:t.fs ~root:t.dotgit ~dtmp ~raw reference >|= function
+         | Ok _ as v -> v
+         | Error e   -> Error (e :> error))
       | Ok false | Error _ ->
-        if Hashtbl.mem t.packed reference
-        then
-          try Lwt.return (Ok (reference, Reference.Hash (Hashtbl.find t.packed reference)))
-          with Not_found -> Lwt.return (Error `Not_found)
-        else Lwt.return (Error `Not_found)
+        let r =
+          if Hashtbl.mem t.packed reference
+          then
+            try Ok (reference, Reference.Hash (Hashtbl.find t.packed reference))
+            with Not_found -> Error `Not_found
+          else Error `Not_found
+        in
+        Lwt.return r
 
-    let read_s ?locks t reference =
-      read_p t ?locks ~dtmp:t.buffer.de ~raw:t.buffer.io reference
-
-    let read = read_s
-
-    let write_p ?locks ~dtmp ~raw t reference value =
-      let lock_ref = match locks with
-        | Some locks -> Some (Lock.make locks Fpath.(v ("w-" ^ (Fpath.filename (Reference.to_path reference)))))
-        | None -> None
-      in
-
-      let lock_gbl = match locks with
-        | Some locks -> Some (Lock.make locks Fpath.(v "global"))
-        | None -> None
-      in
-
-      Lock.with_lock lock_ref @@ (fun () ->
-          Reference.write ~root:t.dotgit ~raw reference value) >>= function
+    let write t reference value =
+      with_buffer t (fun { raw; _ } ->
+          Reference.write ~fs:t.fs ~root:t.dotgit ~raw reference value
+        ) >>= function
       | Error (#Reference.error as err) -> Lwt.return (Error (err : error))
       | Ok () ->
         match Hashtbl.mem t.packed reference with
         | false -> Lwt.return (Ok ())
         | true ->
-          Packed_refs.read ~root:t.dotgit ~dtmp ~raw >>= function
-          | Error (#Packed_refs.error as err) -> Lwt.return (Error (err : error))
+          with_buffer t (fun { dtmp; raw; _ } ->
+              Packed_refs.read ~fs:t.fs ~root:t.dotgit ~dtmp ~raw
+            ) >>= function
+          | Error _ as err -> Lwt.return err
           | Ok packed_refs ->
             Lwt_list.fold_left_s
               (fun acc -> function
@@ -1485,64 +1257,18 @@ end
                  | _ -> Lwt.return acc)
               [] packed_refs
             >>= fun packed_refs' ->
-            Lock.with_lock lock_gbl @@ fun () ->
-
             Hashtbl.reset t.packed;
-            List.iter
-              (function `Ref (refname, hash) -> Hashtbl.add t.packed (Reference.of_string refname) hash
-                      | `Peeled _ -> ())
-              packed_refs';
+            List.iter (function
+                |`Ref (refname, hash) ->
+                  Hashtbl.add t.packed (Reference.of_string refname) hash
+                | `Peeled _ -> ()
+              ) packed_refs';
+            with_buffer t (fun { raw; _ } ->
+                Packed_refs.write ~fs:t.fs ~root:t.dotgit ~raw packed_refs'
+              ) >|= function
+            | Ok ()   -> Ok ()
+            | Error e -> Error (e : error)
 
-            Packed_refs.write ~root:t.dotgit ~raw packed_refs' >>= function
-            | Ok () -> Lwt.return (Ok ())
-            | Error (#Packed_refs.error as err) -> Lwt.return (Error (err : error))
-
-    let write_s t ?locks reference value =
-      write_p t ?locks ~dtmp:t.buffer.de ~raw:t.buffer.io reference value
-
-    let write = write_s
-
-    let unpack_reference t ~dtmp ~raw ?locks reference =
-      let lock = match locks with
-        | Some locks -> Some (Lock.make locks Fpath.(v "global"))
-        | None -> None
-      in
-
-      Lock.with_lock lock @@ fun () ->
-      match Hashtbl.mem t.packed reference with
-      | false -> Lwt.return (Ok ())
-      | true ->
-        Packed_refs.read ~root:t.dotgit ~dtmp ~raw >>= function
-        | Error (#Packed_refs.error as err) -> Lwt.return (Error (err : error))
-        | Ok packed_refs ->
-          Lwt_list.fold_left_s (fun (pi, acc) -> function
-              | `Peeled hash -> Lwt.return (pi, `Peeled hash :: acc)
-              | `Ref (refname, hash) when not Reference.(equal reference (of_string refname)) ->
-                Lwt.return (pi, `Ref (refname, hash) :: acc)
-              | `Ref (_, hash) -> Lwt.return (Some (reference, hash), acc))
-            (None, []) packed_refs
-          >>= function
-          | None, _ -> assert false
-          (* XXX(dinosaure): we prove than reference is in packed_refs, so it's
-             a mandatory to return a [Some v]. *)
-          | (Some (_, hash), packed_refs') -> Packed_refs.write ~root:t.dotgit ~raw packed_refs'
-            >>= function
-            | Error (#Packed_refs.error as err) -> Lwt.return (Error (err : error))
-            | Ok () -> Reference.write ~root:t.dotgit ~raw reference (Reference.Hash hash) >|= function
-              | Ok () -> Ok ()
-              | Error (#Reference.error as err) -> Error (err : error)
-
-    let test_and_set t ?locks reference ~test ~set =
-      let lock = match locks with
-        | Some locks -> Some (Lock.make locks Fpath.(v "global"))[@warning "-44"]
-        | None -> None
-      in
-
-      Lock.with_lock lock @@ fun () ->
-      unpack_reference t ~dtmp:t.buffer.de ~raw:t.buffer.io reference >>= fun _ ->
-      Reference.test_and_set ~root:t.dotgit reference ~test ~set >|= function
-      | Error (#Reference.error as err) -> Error (err : error)
-      | Ok _ as v -> v
   end
 
   let cache ?(indexes = 5) ?(packs = 5) ?(objects = 5) ?(values = 5) ?(revindexes = 5) () =
@@ -1552,13 +1278,13 @@ end
     ; values     = CacheValue.create values
     ; revindexes = CacheRevIndex.create revindexes }
 
-  let buffer () =
+  let default_buffer () =
     let raw = Cstruct.create (0x8000 * 2) in
     let buf = Bigarray.Array1.create Bigarray.Char Bigarray.c_layout (2 * 0x8000) in
 
     { window = Inflate.window ()
-    ; zl = Cstruct.sub raw 0 0x8000
-    ; de = Cstruct.of_bigarray ~off:0 ~len:0x8000 buf
+    ; ztmp = Cstruct.sub raw 0 0x8000
+    ; dtmp = Cstruct.of_bigarray ~off:0 ~len:0x8000 buf
     (* XXX(dinosaure): bon ici, c'est une note compliqué, j'ai mis 2
        jours à fixer le bug. Donc je l'explique en français, c'est
        plus simple.
@@ -1588,64 +1314,55 @@ end
        Cependant, il faudrait continuer à introspecter car j'ai
        l'intuition que pour un fichier plus gros que [2 * 0x8000], on
        devrait avoir un problème. Donc TODO. *)
-    ; io = Cstruct.sub raw 0x8000 0x8000 }
+    ; raw = Cstruct.sub raw 0x8000 0x8000 }
 
-  let sanitize_filesystem root dotgit =
-    FS.Dir.create ~path:true root
-    >>?= fun _ -> FS.Dir.create ~path:true dotgit
-    >>?= fun _ -> FS.Dir.create ~path:true Fpath.(dotgit / "objects")[@warning "-44"]
-    >>?= fun _ -> FS.Dir.create ~path:true Fpath.(dotgit / "objects" / "pack")[@warning "-44"]
-    >>?= fun _ -> FS.Dir.create ~path:true Fpath.(dotgit / "objects" / "info")[@warning "-44"]
-    >>?= fun _ -> FS.Dir.create ~path:true Fpath.(dotgit / "refs")[@warning "-44"]
-    >>?= fun _ -> Lwt.return (Ok ())
+  let sanitize_head git =
+    Ref.mem git Reference.head >>= function
+    | true  -> Lwt.return (Ok ())
+    | false -> Ref.write git Reference.head Reference.(Ref master)
 
-  let create ?root ?dotgit ?(compression = 4) () =
-    let ( >>== ) v f = v >>= function
-      | Ok v -> f v
-      | Error _ as err -> Lwt.return err
+  let sanitize_filesystem fs root dotgit =
+    FS.Dir.create fs root
+    >>?= (fun _ -> FS.Dir.create fs dotgit)
+    >>?= (fun _ -> FS.Dir.create fs Fpath.(dotgit / "objects"))
+    >>?= (fun _ -> FS.Dir.create fs Fpath.(dotgit / "objects" / "pack"))
+    >>?= (fun _ -> FS.Dir.create fs Fpath.(dotgit / "objects" / "info"))
+    >>?= (fun _ -> FS.Dir.create fs Fpath.(dotgit / "refs"))
+    >>?= (fun _ -> Lwt.return (Ok ()))
+    >>!= Error.FS.err_sys_dir
+
+  let create ?root ?dotgit ?(compression = 4) ?buffer fs =
+    let buffer = match buffer with
+      | Some f -> f
+      | None   ->
+        let p = Lwt_pool.create 4 (fun () -> Lwt.return (default_buffer ())) in
+        Lwt_pool.use p
     in
-
-    (match root, dotgit with
+    let resolve_paths () = match root, dotgit with
+     | Some root, Some dotgit -> Lwt.return (Ok (root, dotgit))
      | None, _ | _, None ->
-       (FS.Dir.current ()
-        >>= function
-        | Ok current ->
-          let root = Option.get ~default:current root in
-          let[@warning "-44"] dotgit  = Option.get ~default:Fpath.(root / ".git") dotgit in
-
-          sanitize_filesystem root dotgit
-          >>== fun () -> indexes dotgit
-          >>== fun engine ->
-          Lwt.return (Ok { dotgit
-                         ; root
-                         ; compression
-                         ; engine
-                         ; packed = Hashtbl.create 64
-                         ; cache = cache ()
-                         ; buffer = buffer () })
-        | Error sys_err -> Lwt.return (Error sys_err))
-     | Some root, Some dotgit ->
-       sanitize_filesystem root dotgit
-       >>== fun () -> indexes dotgit
-       >>== fun engine ->
-       Lwt.return (Ok { dotgit
-                      ; root
-                      ; compression
-                      ; engine
-                      ; packed = Hashtbl.create 64
-                      ; cache = cache ()
-                      ; buffer = buffer () }))
-    >>= function
-    | Ok t -> Lwt.return (Ok t)
-    | Error sys_err -> Lwt.return (Error (`SystemDirectory sys_err))
-
-  let clear_caches ?locks t =
-    let lock = match locks with
-      | Some locks -> Some (Lock.make locks Fpath.(v "global"))[@warning "-44"]
-      | None -> None
+       (FS.Dir.current fs >>!= Error.FS.err_sys_dir) >>?= fun current ->
+       let root = Option.get ~default:current root in
+       let dotgit  = Option.get ~default:Fpath.(root / ".git") dotgit in
+       Lwt.return (Ok (root, dotgit))
     in
+    resolve_paths () >>?= fun (root, dotgit) ->
+    sanitize_filesystem fs root dotgit >>?= fun () ->
+    indexes ~fs dotgit >>?= fun engine ->
+    let git =
+      { fs
+      ; dotgit
+      ; root
+      ; compression
+      ; engine
+      ; packed = Hashtbl.create 64
+      ; cache = cache ()
+      ; buffer = buffer }
+    in
+    sanitize_head git >>?= fun () ->
+    Lwt.return (Ok git)
 
-    Lock.with_lock lock @@ fun () ->
+  let clear_caches t =
     CacheIndex.drop_lru t.cache.indexes;
     CacheRevIndex.drop_lru t.cache.revindexes;
     CachePack.drop_lru t.cache.packs;
@@ -1653,34 +1370,22 @@ end
     CacheObject.drop_lru t.cache.objects;
     Lwt.return ()
 
-  let reset ?locks t =
+  let reset t =
     Log.info (fun l -> l ~header:"reset" "Start to reset the Git repository");
-    let lock = match locks with
-      | Some locks -> Some (Lock.make locks Fpath.(v "global"))[@warning "-44"]
-      | None -> None
-    in
-    Lock.with_lock lock @@ fun () ->
-    (FS.Dir.delete ~recurse:true Fpath.(t.dotgit / "objects")
-     >>?= fun () -> FS.Dir.create Fpath.(t.dotgit / "objects")
-     >>?= fun _ -> FS.Dir.create Fpath.(t.dotgit / "objects" / "info")
-     >>?= fun _ -> FS.Dir.create Fpath.(t.dotgit / "objects" / "pack")
-     >>?= fun _ -> FS.Dir.delete ~recurse:true Fpath.(t.dotgit / "refs")
-     >>?= fun () -> FS.Dir.create Fpath.(t.dotgit / "refs" / "heads")
-     >>?= fun _ -> FS.Dir.create Fpath.(t.dotgit / "refs" / "tags")
-     ) >>!= (fun err -> `Store (`SystemDirectory err))
-     >>?= fun _ ->
-     (Ref.write t Reference.head Reference.(Ref master)
-      (* XXX(dinosaure): an empty git repository has HEAD which points
-         to a non-existing refs/heads/master. *)
-    >>!= fun err -> `Ref err)
-    (* XXX(samoht): need to cleanup the locks as well *)
+    (FS.Dir.delete t.fs Fpath.(t.dotgit / "objects")
+     >>?= fun () -> FS.Dir.create t.fs Fpath.(t.dotgit / "objects")
+     >>?= fun _ -> FS.Dir.create t.fs Fpath.(t.dotgit / "objects" / "info")
+     >>?= fun _ -> FS.Dir.create t.fs Fpath.(t.dotgit / "objects" / "pack")
+     >>?= fun _ -> FS.Dir.delete t.fs Fpath.(t.dotgit / "refs")
+     >>?= fun () -> FS.Dir.create t.fs Fpath.(t.dotgit / "refs" / "heads")
+     >>?= fun _  -> FS.Dir.create t.fs Fpath.(t.dotgit / "refs" / "tags")
+    ) >>!= Error.FS.err_sys_dir
+    >>?= fun _ -> Ref.write t Reference.head Reference.(Ref master)
+     (* XXX(dinosaure): an empty git repository has HEAD which points
+        to a non-existing refs/heads/master. *)
 
   let dotgit      { dotgit; _ }      = dotgit
   let root        { root; _ }        = root
   let compression { compression; _ } = compression
 
-  let buffer_window { buffer; _ } = buffer.window
-  let buffer_zl { buffer; _ } = buffer.zl
-  let buffer_de { buffer; _ } = buffer.de
-  let buffer_io { buffer; _ } = buffer.io
 end

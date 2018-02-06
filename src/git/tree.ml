@@ -27,15 +27,22 @@ sig
     [ `Normal | `Everybody | `Exec | `Link | `Dir | `Commit ]
   and t
 
-  module D: S.DECODER  with type t = t
-                        and type init = Cstruct.t
-                        and type error = [ `Decoder of string ]
+  val pp_entry: entry Fmt.t
+
+  val perm_of_string: string -> perm
+  val string_of_perm: perm -> string
+
+  module D: S.DECODER
+    with type t = t
+     and type init = Cstruct.t
+     and type error = Error.Decoder.t
   module A: S.ANGSTROM with type t = t
   module F: S.FARADAY  with type t = t
   module M: S.MINIENC  with type t = t
-  module E: S.ENCODER  with type t = t
-                        and type init = int * t
-                        and type error = [ `Never ]
+  module E: S.ENCODER
+    with type t = t
+     and type init = int * t
+     and type error = Error.never
 
   include S.DIGEST with type t := t and type hash = Hash.t
   include S.BASE with type t := t
@@ -43,6 +50,7 @@ sig
   val hashes: t -> Hash.t list
   val to_list: t -> entry list
   val of_list: entry list -> t
+  val iter: (entry -> unit) -> t -> unit
 end
 
 module Make (H: S.HASH with type Digest.buffer = Cstruct.t
@@ -95,11 +103,14 @@ module Make (H: S.HASH with type Digest.buffer = Cstruct.t
     | "100664" -> `Everybody
     | "100755" -> `Exec
     | "120000" -> `Link
-    | "40000"  -> `Dir
+    | "40000" | "040000" -> `Dir
     | "160000" -> `Commit
     | _ -> raise (Invalid_argument "perm_of_string")
 
   external to_list: t -> entry list = "%identity"
+
+  let iter f tree =
+    List.iter f tree
 
   type value =
     | Contents: string -> value
@@ -204,7 +215,6 @@ module Make (H: S.HASH with type Digest.buffer = Cstruct.t
         (string_of_perm t.perm)
         t.name
         (Hash.to_string t.node)
-    [@@warning "-45"] (* XXX(dinosaure): shadowing [] and (::). *)
 
     let encoder e t =
       (Farfadet.list entry) e t

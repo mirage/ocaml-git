@@ -46,9 +46,13 @@ let head    = "HEAD"
 let is_head = String.equal head
 let master  = "refs/heads/master"
 
-let to_path x = match Fpath.of_string (String.concat Fpath.dir_sep (Astring.String.cuts ~sep x)) with
+let to_path x =
+  match
+    (* XXX(samoht): maybe Fpath.t = path was not a good idea afterall *)
+    Fpath.of_string (String.concat Fpath.dir_sep (Astring.String.cuts ~sep x))
+  with
   | Error (`Msg x) -> raise (Invalid_argument x)
-  | Ok v -> Fpath.normalize v
+  | Ok v           -> Fpath.normalize v
 
 let of_path path =
   match List.rev @@ Fpath.segs path with
@@ -105,54 +109,43 @@ module type S = sig
   module D: S.DECODER
     with type t = head_contents
      and type init = Cstruct.t
-     and type error = [ `Decoder of string ]
+     and type error = Error.Decoder.t
   module M: S.MINIENC with type t = head_contents
   module E: S.ENCODER
     with type t = head_contents
      and type init = int * head_contents
-     and type error = [ `Never ]
+     and type error = Error.never
 end
 
 module type IO = sig
-  module Lock: S.LOCK
+
   module FS: S.FS
 
   include S
 
   type error =
-    [ `SystemFile of FS.File.error
-    | `SystemDirectory of FS.Dir.error
-    | `SystemIO of string
-    | D.error ]
+    [ Error.Decoder.t
+    | FS.error Error.FS.t ]
 
-  val pp_error  : error Fmt.t
+  val pp_error: error Fmt.t
 
   val mem :
-       root:Fpath.t
-    -> t -> (bool, error) result Lwt.t
+       fs:FS.t -> root:Fpath.t
+    -> t -> bool Lwt.t
   val read :
-       root:Fpath.t
+       fs:FS.t -> root:Fpath.t
     -> t
     -> dtmp:Cstruct.t
     -> raw:Cstruct.t
     -> ((t * head_contents), error) result Lwt.t
   val write :
-       root:Fpath.t
-    -> ?locks:Lock.t
+       fs:FS.t -> root:Fpath.t
     -> ?capacity:int
     -> raw:Cstruct.t
     -> t -> head_contents
     -> (unit, error) result Lwt.t
-  val test_and_set :
-       root:Fpath.t
-    -> ?locks:Lock.t
-    -> t
-    -> test:head_contents option
-    -> set:head_contents option
-    -> (bool, error) result Lwt.t
   val remove :
-       root:Fpath.t
-    -> ?locks:Lock.t
+       fs:FS.t -> root:Fpath.t
     -> t -> (unit, error) result Lwt.t
 end
 
@@ -251,35 +244,35 @@ module Make(H : S.HASH): S with module Hash = H = struct
   module E = Helper.MakeEncoder(M)
 end
 
-module IO
-    (H : S.HASH)
-    (L : S.LOCK)
-    (FS: S.FS with type File.lock = L.elt)
-  : IO with module Hash = H
-        and module Lock = L
-        and module FS = FS
-= struct
-  module Lock = L
-  module FS = FS
+module IO (H : S.HASH) (FS: S.FS) = struct
+
+  module FS = Helper.FS(FS)
 
   include Make(H)
 
-  (* XXX(samoht): why this doesn't use the serializer? *)
-  let head_contents_to_string = function
-    | Hash hash   -> Fmt.strf "%s\n" (Hash.to_hex hash)
-    | Ref refname -> Fmt.strf "ref: %a\n" pp refname (* XXX(dinosaure): [pp] or [Fmt.string]? *)
+  module Encoder = struct
+    module E = struct
+      type state  = E.encoder
+      type result = int
+      type error  = E.error
+      type rest = [ `Flush of state | `End of (state * result) ]
+      let used  = E.used
+      let flush = E.flush
+      let eval raw state = match E.eval raw state with
+        | `Error err    -> Lwt.return (`Error (state, err))
+        | #rest as rest -> Lwt.return rest
+    end
+    include Helper.Encoder(E)(FS)
+  end
 
+  type fs_error = FS.error Error.FS.t
   type error =
-    [ `SystemFile of FS.File.error
-    | `SystemDirectory of FS.Dir.error
-    | `SystemIO of string
-    | D.error ]
+    [ Error.Decoder.t
+    | fs_error ]
 
   let pp_error ppf = function
-    | `SystemFile sys_err -> Helper.ppe ~name:"`SystemFile" FS.File.pp_error ppf sys_err
-    | `SystemDirectory sys_err -> Helper.ppe ~name:"`SystemDirectory" FS.Dir.pp_error ppf sys_err
-    | `SystemIO sys_err -> Helper.ppe ~name:"`SystemIO" Fmt.string ppf sys_err
-    | #D.error as err -> D.pp_error ppf err
+    | #Error.Decoder.t as err -> Error.Decoder.pp_error ppf err
+    | #fs_error as err -> Error.FS.pp_error FS.pp_error ppf err
 
   let normalize path =
     let segs = Astring.String.cuts ~sep:Fpath.dir_sep (Fpath.to_string path) in
@@ -296,49 +289,32 @@ module IO
       (false, []) segs
     |> fun (_, refs) -> List.rev refs |> String.concat "/" |> of_string
 
-  let mem ~root reference =
+  let mem ~fs ~root reference =
     let path = Fpath.(root // (to_path reference)) in
-    FS.File.exists path >>= function
-    | Ok v -> Lwt.return (Ok v)
-    | Error err ->
-      Lwt.return (Error (`SystemFile err))
+    FS.File.exists fs path >|= function
+    | Ok v    -> v
+    | Error _ -> false
 
-  let with_f open_f path f =
-    open_f path >>= function
-    | Error e ->
-      Log.err (fun l ->
-          l "Got an error while opening %a: %a"
-            Fpath.pp path FS.File.pp_error e);
-      Lwt.return (Error (`SystemFile e))
-    | Ok fd        ->
-      Lwt.finalize
-        (fun () -> f fd)
-        (fun () ->
-           FS.File.close fd >|= function
-           | Ok ()   -> ()
-           | Error e ->
-             Log.err (fun l ->
-                 l "Got an error while closing %a, ignoring."
-                   FS.File.pp_error e);
-             ())
-
-  let with_open_r = with_f (FS.File.open_r ~mode:0o400)
-  let with_open_w = with_f (FS.File.open_w ~mode:0o644)
-
-  let read ~root reference ~dtmp ~raw =
+  let read ~fs ~root reference ~dtmp ~raw : (_, error) result Lwt.t =
     let decoder = D.default dtmp in
     let path = Fpath.(root // (to_path reference)) in
-    Log.debug (fun l -> l ~header:"read" "Reading the reference: %a." Fpath.pp path);
-    with_open_r path @@ fun read ->
+    Log.debug (fun l -> l "Reading the reference: %a." Fpath.pp path);
+    FS.with_open_r fs path @@ fun read ->
     let rec loop decoder = match D.eval decoder with
-      | `End (_, value)               -> Lwt.return (Ok value)
-      | `Error (_, (#D.error as err)) -> Lwt.return (Error err)
+      | `End (_, value) -> Lwt.return (Ok value)
+      | `Error (_, (#Error.Decoder.t as err)) ->
+        Lwt.return Error.(v @@ Decoder.with_path path err)
       | `Await decoder ->
         FS.File.read raw read >>= function
-        | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
+        | Error err -> Lwt.return Error.(v @@ FS.err_read path err)
+        | Ok 0 -> loop (D.finish decoder)
+        (* XXX(dinosaure): in this case, we read a file, so when we
+           retrieve 0 bytes, that means we get end of the file. We
+           can finish the deserialization. *)
         | Ok n -> match D.refill (Cstruct.sub raw 0 n) decoder with
-          | Ok decoder              -> loop decoder
-          | Error (#D.error as err) -> Lwt.return (Error err)
+          | Ok decoder -> loop decoder
+          | Error (#Error.Decoder.t as err) ->
+            Lwt.return Error.(v @@ Decoder.with_path path err)
     in
     loop decoder >|= function
     | Error _ as e     -> e
@@ -349,79 +325,22 @@ module IO
       assert (equal reference reference');
       Ok (normalize path, head_contents)
 
-  let write ~root ?locks ?(capacity = 0x100) ~raw reference value =
+  let write ~fs ~root ?(capacity = 0x100) ~raw reference value =
     let state = E.default (capacity, value) in
-    let module E = struct
-      type state  = E.encoder
-      type raw    = Cstruct.t
-      type result = int
-      type error  = E.error
-      let raw_length = Cstruct.len
-      let raw_blit   = Cstruct.blit
-      type rest = [ `Flush of state | `End of (state * result) ]
-      let eval raw state = match E.eval raw state with
-        | `Error err -> Lwt.return (`Error (state, err))
-        | #rest as rest -> Lwt.return rest
-      let used  = E.used
-      let flush = E.flush
-    end in
     let path = Fpath.(root // (to_path reference)) in
-    let lock = match locks with
-      | Some locks -> Some (Lock.make locks (to_path reference))
-      | None       -> None
-    in
-    Lock.with_lock lock @@ fun () ->
-    FS.Dir.create ~path:true Fpath.(root // (parent (to_path reference)))
+    FS.Dir.create fs (Fpath.parent path)
     >>= function
-    | Error sys_err -> Lwt.return (Error (`SystemDirectory sys_err))
+    | Error err -> Lwt.return Error.(v @@ FS.err_create (Fpath.parent path) err)
     | Ok (true | false) ->
-      with_open_w path @@ fun write ->
-      Helper.safe_encoder_to_file ~limit:50 (module E)
-        FS.File.write write raw state
-      >>= function
-      | Ok _ ->
-        FS.File.close write >|=
-        (function
-          | Ok () -> Ok ()
-          | Error sys_err -> Error (`SystemFile sys_err))
-      | Error err ->
-        FS.File.close write >|= function
-        | Error sys_err -> Error (`SystemFile sys_err)
-        | Ok ()         -> match err with
-          | `Writer sys_err -> Error (`SystemFile sys_err)
-          | `Encoder `Never -> assert false
-          | `Stack          ->
-            Fmt.kstrf (fun x -> Error (`SystemIO x))
-              "Impossible to store the reference: %a" pp reference
+      Encoder.to_file fs path raw state >|= function
+      | Ok _                   -> Ok ()
+      | Error #fs_error as err -> err
+      | Error (`Encoder #Error.never) -> assert false
 
-  (* FIXME: why this doesn't use the encode??? *)
-  let test_and_set ~root ?locks t ~test ~set =
-    let path = Fpath.(root // (to_path t)) in
-    let lock = match locks with
-      | Some locks -> Some (Lock.make locks (to_path t))
-      | None -> None
-    in
-    let raw = function
-      | None       -> None
-      | Some value -> Some (Cstruct.of_string (head_contents_to_string value)) (* XXX: why a copy? *)
-    in
-    FS.File.test_and_set
-      ?lock
-      path
-      ~test:(raw test)
-      ~set:(raw set)
-    >>= function
-    | Ok _ as v -> Lwt.return v
-    | Error err -> Lwt.return (Error (`SystemFile err))
-
-  let remove ~root ?locks t =
-    let path = Fpath.(root // (to_path t)) in
-    let lock = match locks with
-      | Some locks -> Some (Lock.make locks (to_path t))
-      | None       -> None
-    in
-    FS.File.delete ?lock path >|= function
+  let remove ~fs ~root t =
+    let path = Fpath.(root // to_path t) in
+    FS.File.delete fs path >|= function
     | Ok _ as v -> v
-    | Error err -> Error (`SystemFile err)
+    | Error err -> Error.(v @@ FS.err_delete path err)
 
 end

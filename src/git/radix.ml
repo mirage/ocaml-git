@@ -47,9 +47,28 @@ end
 
 type 'a sequence = ('a -> unit) -> unit
 
-module Make (K: KEY) =
+module type S =
+sig
+  type key
+  type 'a t
+
+  type nonrec 'a sequence = 'a sequence
+
+  val empty: 'a t
+  val is_empty: 'a t -> bool
+  val bind: 'a t -> key -> 'a -> 'a t
+  val lookup: 'a t -> key -> 'a option
+  val mem: 'a t -> key -> bool
+  val fold: (key * 'a -> 'b -> 'b) -> 'b -> 'a t -> 'b
+  val iter: (key * 'a -> unit) -> 'a t -> unit
+  val to_sequence: 'a t -> (key * 'a) sequence
+  val to_list: 'a t -> (key * 'a) list
+  val pp: (key * 'a) Fmt.t -> 'a t Fmt.t
+end
+
+module Make (Key: KEY): S with type key = Key.t =
 struct
-  module Key = K
+  type key = Key.t
 
   module Compare =
   struct

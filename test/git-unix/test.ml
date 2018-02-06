@@ -17,9 +17,9 @@
 
 open Test_common
 
-module TCP (Store: Git.S) = Test_sync.Make(struct
-    module M = Git_unix.Sync(Store)
-    module Store = M.Store
+module TCP (S: Test_store.S) = Test_sync.Make(struct
+    module M = Git_unix.Sync(S)
+    module Store = S
     type error = M.error
     let pp_error = M.pp_error
     let clone t ~reference uri = M.clone t ~reference:(reference, reference) uri
@@ -37,9 +37,9 @@ module TCP (Store: Git.S) = Test_sync.Make(struct
 (* XXX(dinosaure): the divergence between the TCP API and the HTTP API
    will be update for an homogenization. *)
 
-module HTTP (Store: Git.S) = Test_sync.Make(struct
+module HTTP (Store: Test_store.S) = Test_sync.Make(struct
     module M = Git_unix.HTTP(Store)
-    module Store = M.Store
+    module Store = Store
     type error = M.error
     let pp_error = M.pp_error
     let clone t ~reference uri = M.clone t ~reference:(reference, reference) uri
@@ -57,9 +57,9 @@ module HTTP (Store: Git.S) = Test_sync.Make(struct
         uri
   end)
 
-module HTTPS (Store: Git.S) = Test_sync.Make(struct
+module HTTPS (Store: Test_store.S) = Test_sync.Make(struct
     module M = Git_unix.HTTP(Store)
-    module Store = M.Store
+    module Store = Store
     type error = M.error
     let pp_error = M.pp_error
     let clone t ~reference uri = M.clone t ~reference:(reference, reference) uri
@@ -77,8 +77,15 @@ module HTTPS (Store: Git.S) = Test_sync.Make(struct
         uri
   end)
 
-module MemStore = Git.Mem.Store(Digestif.SHA1)
-module FsStore = Git_unix.FS
+module MemStore = struct
+  include Git.Mem.Store(Digestif.SHA1)
+  let create root = create ~root ()
+end
+
+module FsStore = struct
+  include Git_unix.FS
+  let create root = create ~root ()
+end
 
 module TCP1  = TCP(MemStore)
 module TCP2  = TCP(FsStore)

@@ -85,11 +85,19 @@ module M = struct
 end
 
 module Gamma = struct
-  let temp = Fpath.(v M.root / "temp")
-  let current = Fpath.v M.root
 end
 
-module MirageStore = Git_mirage.Store(Gamma)(M)
+module MirageStore = struct
+  include Git_mirage.Store(M)
+
+  let temp_dir = Fpath.(v M.root / "temp")
+  let current_dir = Fpath.v M.root
+
+  let create root =
+    M.connect () >>= fun fs ->
+    create ~temp_dir ~current_dir ~root fs
+end
+
 module MirageConduit: Git_mirage.Net.CONDUIT = struct
   include Conduit_mirage
   module C = Conduit_mirage.With_tcp(Tcpip_stack_socket)
@@ -117,11 +125,14 @@ module MirageConduit: Git_mirage.Net.CONDUIT = struct
     R.R.init ?ns ?ns_port ~stack:stack ()
 end
 
-module Store = Git.Mem.Store(Digestif.SHA1)
+module Store = struct
+  include Git.Mem.Store(Digestif.SHA1)
+  let create root = create ~root ()
+end
 
 module TCP = Test_sync.Make(struct
     module M = Git_mirage.Sync(MirageConduit)(Store)
-    module Store = M.Store
+    module Store = Store
     type error = M.error
     let pp_error = M.pp_error
     let clone t ~reference uri = M.clone t ~reference:(reference, reference) uri

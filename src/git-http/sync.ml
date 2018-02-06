@@ -81,16 +81,11 @@ module type S_EXT = sig
   module Encoder: Git.Smart.ENCODER
     with module Hash = Store.Hash
 
-  module PACKDecoder: Git.Unpack.P
-    with module Hash = Store.Hash
-     and module Inflate = Store.Inflate
-
   type error =
     [ `SmartDecoder of Decoder.error
-    | `StorePack of Store.Pack.error
+    | `Store of Store.error
     | `Clone of string
-    | `ReportStatus of string
-    | `Ref of Store.Ref.error ]
+    | `ReportStatus of string ]
 
   val pp_error: error Fmt.t
 
@@ -143,7 +138,7 @@ module type S_EXT = sig
     -> string -> string -> (Store.Hash.t, error) result Lwt.t
 
   val fetch_some:
-    Store.t -> ?locks:Store.Lock.t ->
+    Store.t ->
     ?capabilities:Git.Capability.t list ->
     ?headers:Web.HTTP.headers ->
     references:Store.Reference.t list Store.Reference.Map.t ->
@@ -151,7 +146,7 @@ module type S_EXT = sig
               * Store.Reference.t list Store.Reference.Map.t, error) result Lwt.t
 
   val fetch_all:
-    Store.t -> ?locks:Store.Lock.t ->
+    Store.t ->
     ?capabilities:Git.Capability.t list ->
     ?headers:Web.HTTP.headers ->
     references:Store.Reference.t list Store.Reference.Map.t ->
@@ -160,14 +155,14 @@ module type S_EXT = sig
               * Store.Hash.t Store.Reference.Map.t, error) result Lwt.t
 
   val fetch_one:
-    Store.t -> ?locks:Store.Lock.t ->
+    Store.t ->
     ?capabilities:Git.Capability.t list ->
     ?headers:Web.HTTP.headers ->
     reference:(Store.Reference.t * Store.Reference.t list) ->
     Uri.t -> ([ `AlreadySync | `Sync of Store.Hash.t Store.Reference.Map.t ], error) result Lwt.t
 
   val clone:
-    Store.t -> ?locks:Store.Lock.t ->
+    Store.t ->
     ?capabilities:Git.Capability.t list ->
     ?headers:Web.HTTP.headers ->
     reference:(Store.Reference.t * Store.Reference.t) ->
@@ -213,22 +208,17 @@ module Make_ext
   module Decoder = Git.Smart.Decoder(Store.Hash)
   module Encoder = Git.Smart.Encoder(Store.Hash)
 
-  module PACKDecoder
-    = Git.Unpack.MakePACKDecoder(Store.Hash)(Store.Inflate)
-
   type error =
     [ `SmartDecoder of Decoder.error
-    | `StorePack of Store.Pack.error
+    | `Store of Store.error
     | `Clone of string
-    | `ReportStatus of string
-    | `Ref of Store.Ref.error ]
+    | `ReportStatus of string ]
 
   let pp_error ppf = function
     | `SmartDecoder err  -> Fmt.pf ppf "(`SmartDecoder %a)" Decoder.pp_error err
-    | `StorePack err     -> Fmt.pf ppf "(`StorePack %a)" Store.Pack.pp_error err
+    | `Store err         -> Fmt.pf ppf "(`Store %a)" Store.pp_error err
     | `Clone err         -> Fmt.pf ppf "(`Clone %s)" err
     | `ReportStatus err  -> Fmt.pf ppf "(`ReportStatus %s)" err
-    | `Ref err           -> Fmt.pf ppf "(`Ref %a)" Store.Ref.pp_error err
 
   module Log =
   struct
@@ -275,7 +265,7 @@ module Make_ext
     in
     dispatch () >?= fun () ->
       (Store.Pack.from git (fun () -> Lwt_stream.get stream')
-       >!= fun err -> Lwt.return (`StorePack err))
+       >!= fun err -> Lwt.return (`Store err))
 
   let producer ?(final = (fun () -> Lwt.return None)) state =
     let state' = ref (fun () -> state) in
@@ -425,13 +415,11 @@ module Make_ext
             (fun _ -> Lwt.return ())
         in
 
-        List.map (function
-            | `Create (hash, reference) -> `Create (hash, Store.Reference.to_string reference)
-            | `Delete (hash, reference) -> `Delete (hash, Store.Reference.to_string reference)
-            | `Update (a, b, reference) -> `Update (a, b, Store.Reference.to_string reference))
-          commands
-        |> fun commands -> packer ~window:(`Object 10) ~depth:50 ~ofs_delta:true git refs.Decoder.refs commands >>= function
-        | Error err -> Lwt.return (Error (`StorePack err))
+        Log.debug (fun l -> l ~header:"push" "Send the request with these operations: %a."
+                      Fmt.(hvbox (Dump.list pp_command)) commands);
+
+        packer ~window:(`Object 10) ~depth:50 ~ofs_delta:true git refs.Decoder.refs commands >>= function
+        | Error err -> Lwt.return (Error (`Store err))
         | Ok (stream, _) ->
           let stream () = stream () >>= function
             | Some buf -> Lwt.return (Some (buf, 0, Cstruct.len buf))
@@ -440,9 +428,12 @@ module Make_ext
 
           let x, r =
             List.map (function
-                | `Create (hash, reference) -> Encoder.Create (hash, reference)
-                | `Delete (hash, reference) -> Encoder.Delete (hash, reference)
-                | `Update (_of, _to, reference) -> Encoder.Update (_of, _to, reference))
+                | `Create (hash, reference) ->
+                  Encoder.Create (hash, Store.Reference.to_string reference)
+                | `Delete (hash, reference) ->
+                  Encoder.Delete (hash, Store.Reference.to_string reference)
+                | `Update (_of, _to, reference) ->
+                  Encoder.Update (_of, _to, Store.Reference.to_string reference))
               commands
             |> fun commands -> List.hd commands, List.tl commands
           in
@@ -452,7 +443,7 @@ module Make_ext
             ~body:(producer ~final:stream
                      (Encoder.encode encoder
                         (`HttpUpdateRequest { Encoder.shallow
-                                            ; requests = Encoder.L (x, r)
+                                            ; requests = `Raw (x, r)
                                             ; capabilities })))
             (Web.Request.meth req)
             (Web.Request.uri req
@@ -460,12 +451,21 @@ module Make_ext
              |> (fun uri -> Uri.with_host uri (Some host))
              |> (fun uri -> Uri.with_port uri port))
           >>= fun resp ->
-          consume (Web.Response.body resp) (Decoder.decode decoder (Decoder.HttpReportStatus sideband)) >>= function
+          let commands_refs =
+            List.map
+              (function
+                | `Create (_, s) -> s
+                | `Delete (_, s) -> s
+                | `Update (_, _, s) -> s)
+              commands |> List.map Store.Reference.to_string in
+
+          consume (Web.Response.body resp) (Decoder.decode decoder (Decoder.HttpReportStatus (commands_refs, sideband))) >>= function
           | Ok { Decoder.unpack = Ok (); commands; } ->
             Lwt.return (Ok commands)
           | Ok { Decoder.unpack = Error err; _ } ->
             Lwt.return (Error (`ReportStatus err))
-          | Error err -> Lwt.return (Error (`SmartDecoder err))
+          | Error err ->
+            Lwt.return (Error (`SmartDecoder err))
 
   let fetch git ?(shallow = []) ?stdout ?stderr ?headers ?(https = false)
       ?(capabilities=Default.capabilites)
@@ -572,11 +572,7 @@ module Make_ext
              |> (fun uri -> Uri.with_port uri port))
         in
 
-        negociation_request `Flush has >>= fun resp ->
-
-        Log.debug (fun l -> l ~header:"fetch" "Receiving the first negotiation response.");
-
-        let result resp =
+        let negociation_result resp =
           consume (Web.Response.body resp)
             (Decoder.decode decoder Decoder.NegociationResult) >>= function
           | Error err -> Lwt.return (Error (`SmartDecoder err))
@@ -585,32 +581,68 @@ module Make_ext
             Lwt_result.(populate ?stdout ?stderr git stream >>= fun (_, n) -> Lwt.return (Ok (first :: rest, n)))
         in
 
-        let rec loop ?(done_or_flush = `Flush) state resp = match done_or_flush with
-          | `Done -> result resp
-          | `Flush ->
-            Lwt_mvar.take keeper >>= fun has -> Lwt_mvar.put keeper has >>= fun () ->
+        match has with
+        | [] ->
+          negociation_request `Done []
+          >>= negociation_result
+        | has ->
+          negociation_request `Flush has >>= fun resp ->
 
-            Log.debug (fun l -> l ~header:"fetch" "Receiving a negotiation response.");
+          Log.debug (fun l -> l ~header:"fetch" "Receiving the first negotiation response.");
 
-            consume (Web.Response.body resp)
-              (Decoder.decode decoder (Decoder.Negociation (has, ack_mode))) >>= function
-            | Error err ->
-              Lwt.return (Error (`SmartDecoder err))
-            | Ok acks ->
-              Log.debug (fun l -> l ~header:"fetch" "ACK response received: %a." Decoder.pp_acks acks);
+          let rec loop ?(done_or_flush = `Flush) state resp = match done_or_flush with
+            | `Done ->
+              Lwt_mvar.take keeper >>= fun has -> Lwt_mvar.put keeper has >>= fun () ->
 
-              negociate acks state >>= function
-              | `Ready, _ -> result resp
-              | `Again has', state ->
-                Lwt_mvar.take keeper >>= fun has ->
-                let has = has @ has' in
-                Lwt_mvar.put keeper has >>= fun () ->
+              Log.debug (fun l -> l ~header:"fetch"
+                            "Receive the final negociation response from \
+                             the server.");
 
-                negociation_request `Flush has >>= loop state
-              | `Done, _ -> result resp
-        in
+              consume (Web.Response.body resp)
+                (Decoder.decode decoder (Decoder.Negociation (has, ack_mode)))
+              >>= (function
+                  | Error err ->
+                    Lwt.return (Error (`SmartDecoder err))
+                  | Ok acks ->
+                    Log.debug (fun l -> l ~header:"fetch"
+                                  "Final ACK response received: %a."
+                                  Decoder.pp_acks acks);
+                    negociation_result resp)
+            | `Flush ->
+              Lwt_mvar.take keeper >>= fun has -> Lwt_mvar.put keeper has >>= fun () ->
 
-        loop ~done_or_flush:(if List.length has = 0 then `Done else `Flush) nstate resp
+              Log.debug (fun l -> l ~header:"fetch" "Receiving a negotiation response.");
+
+              consume (Web.Response.body resp)
+                (Decoder.decode decoder (Decoder.Negociation (has, ack_mode))) >>= function
+              | Error err ->
+                Lwt.return (Error (`SmartDecoder err))
+              | Ok acks ->
+                Log.debug (fun l -> l ~header:"fetch" "ACK response received: %a." Decoder.pp_acks acks);
+
+                negociate acks state >>= function
+                | `Ready, _ ->
+                  Log.debug (fun l -> l ~header:"fetch" "Ready to download the PACK file.");
+                  negociation_result resp
+                | `Again has', state ->
+                  Log.debug
+                    (fun l -> l ~header:"fetch" "Try again a new common \
+                                                 trunk between the \
+                                                 client and the server.");
+                  Lwt_mvar.take keeper >>= fun has ->
+                  let has = has @ has' in
+                  Lwt_mvar.put keeper has >>= fun () ->
+
+                  negociation_request `Flush has >>= loop state
+                | `Done, _ ->
+                  Lwt_mvar.take keeper >>= fun _ ->
+                  let has = List.map (fun (hash, _) -> hash) acks.Decoder.acks in
+                  Lwt_mvar.put keeper has >>= fun () ->
+
+                  negociation_request `Done has >>= loop ~done_or_flush:`Done state
+          in
+
+          loop nstate resp
 
   let clone_ext git ?stdout ?stderr ?headers ?(https = false) ?port
       ?(reference = Store.Reference.master) ?capabilities
@@ -638,7 +670,9 @@ module Make_ext
 
   module Negociator = Git.Negociator.Make(Store)
 
-  let clone git ?locks ?capabilities ?headers ~reference:(local_ref, remote_ref) repository =
+  let clone git ?capabilities ?headers ~reference:(local_ref, remote_ref)
+      repository
+    =
     let host =
       Option.value_exn (Uri.host repository)
         ~error:(Fmt.strf "Expected an http url with host: %a."
@@ -648,14 +682,16 @@ module Make_ext
     clone_ext git ~https ?port:(Uri.port repository) ?capabilities ?headers
       ~reference:remote_ref host (Uri.path_and_query repository)
     >?= fun hash' ->
-      Store.Ref.write git ?locks local_ref (Store.Reference.Hash hash')
-      >!= (fun err -> Lwt.return (`Ref err))
+      Store.Ref.write git local_ref (Store.Reference.Hash hash')
+      >!= (fun err -> Lwt.return (`Store err))
       >?= fun () ->
-        Store.Ref.write git ?locks Store.Reference.head
+        Store.Ref.write git Store.Reference.head
           (Store.Reference.Ref local_ref)
-        >!= (fun err -> Lwt.return (`Ref err))
+        >!= (fun err -> Lwt.return (`Store err))
 
-  let fetch_and_set_references git ?locks ?capabilities ?headers ~choose ~references repository =
+  let fetch_and_set_references git ?capabilities ?headers ~choose ~references
+      repository
+    =
     Negociator.find_common git >>= fun (has, state, continue) ->
     let continue { Decoder.acks; shallow; unshallow } state =
       continue { Git.Negociator.acks; shallow; unshallow } state in
@@ -669,25 +705,24 @@ module Make_ext
     fetch git ~https ?port:(Uri.port repository) ?capabilities ?headers
       ~negociate:(continue, state) ~has ~want:want_handler host
       (Uri.path_and_query repository)
-    >?= fun (results, _) ->
-      (update_and_create git ?locks ~references results >!= fun err -> Lwt.return (err :> error))
+    >?= fun (results, _) -> update_and_create git ~references results
+    >!= fun err -> Lwt.return (`Store err)
 
-  let fetch_all git ?locks ?capabilities ?headers ~references repository =
+  let fetch_all git ?capabilities ?headers ~references repository =
     let choose _ = Lwt.return true in
     fetch_and_set_references
       ~choose
-      ?locks
       ?capabilities
       ?headers
       ~references
       git repository
 
-  let fetch_some git ?locks ?capabilities ?headers ~references repository =
+  let fetch_some git ?capabilities ?headers ~references repository =
     let choose remote_ref =
-      Lwt.return (Store.Reference.Map.mem remote_ref references) in
+      Lwt.return (Store.Reference.Map.mem remote_ref references)
+    in
     fetch_and_set_references
       ~choose
-      ?locks
       ?capabilities
       ?headers
       ~references
@@ -703,13 +738,14 @@ module Make_ext
           Lwt.return (Ok (updated, missed))
         end
 
-  let fetch_one git ?locks ?capabilities ?headers ~reference:(remote_ref, local_refs) repository =
+  let fetch_one git ?capabilities ?headers ~reference:(remote_ref, local_refs)
+      repository
+    =
     let references = Store.Reference.Map.singleton remote_ref local_refs in
     let choose remote_ref =
       Lwt.return (Store.Reference.Map.mem remote_ref references) in
     fetch_and_set_references
       ~choose
-      ?locks
       ?capabilities
       ?headers
       ~references
@@ -735,46 +771,6 @@ module Make_ext
                        Fmt.Dump.(list (pair Store.Reference.pp (list Store.Reference.pp)))
                        missed);
         Lwt.return (Ok (`Sync updated))
-
-  let push_handler git references remote_refs =
-    Store.Ref.list git >>= fun local_refs ->
-    let local_refs = List.fold_left
-        (fun local_refs (local_ref, local_hash) ->
-           Store.Reference.Map.add local_ref local_hash local_refs)
-        Store.Reference.Map.empty local_refs in
-
-    Lwt_list.filter_map_p (function
-        | (remote_hash, remote_ref, false) -> Lwt.return (Some (remote_ref, remote_hash))
-        | _ -> Lwt.return None)
-      remote_refs
-    >>= fun remote_refs ->
-    let actions =
-      Store.Reference.Map.fold
-        (fun local_ref local_hash actions ->
-           try let remote_refs' = Store.Reference.Map.find local_ref references in
-             List.fold_left (fun actions remote_ref ->
-                 try let remote_hash = List.assoc remote_ref remote_refs in
-                   `Update (remote_hash, local_hash, remote_ref) :: actions
-                 with Not_found -> `Create (local_hash, remote_ref) :: actions)
-               actions remote_refs'
-            with Not_found -> actions)
-        local_refs []
-    in
-
-    Lwt_list.filter_map_s
-      (fun action -> match action with
-        | `Update (remote_hash, local_hash, _) ->
-          Store.mem git remote_hash >>= fun has_remote_hash ->
-          Store.mem git local_hash >>= fun has_local_hash ->
-
-          if has_remote_hash && has_local_hash
-          then Lwt.return (Some action)
-          else Lwt.return None
-        | `Create (local_hash, _) ->
-          Store.mem git local_hash >>= function
-          | true -> Lwt.return (Some action)
-          | false -> Lwt.return None)
-      actions
 
   let update_and_create git ?capabilities ?headers ~references repository =
     let push_handler remote_refs =

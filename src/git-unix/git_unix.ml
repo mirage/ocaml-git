@@ -14,9 +14,13 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 module Net = Net
-module Lock = Lock
 module SHA1 = Git.Hash.Make(Digestif.SHA1)
 module Sync = Git.Sync.Make(Net)
 module HTTP = Http.Make
 
-module FS = Git.Store.FS(SHA1)(Lock)(Fs)(Git.Inflate)(Git.Deflate)
+module FS = struct
+  include Git.Store.FS(SHA1)(Fs)(Git.Inflate)(Git.Deflate)
+  let create ?temp_dir ?root ?dotgit ?compression ?buffer () =
+    let fs = Fs.v ?temp_dir () in
+    create ?root ?dotgit ?compression ?buffer fs
+end

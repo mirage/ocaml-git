@@ -37,12 +37,11 @@ module type S = sig
   (** The error type. *)
   type error =
     [ `SmartPack of string (** Appear when we retrieve a decoder's error about Smart protocol. *)
-    | `Pack      of Store.Pack.error (** Appear when we retrieve a PACK error from the {!Store.Pack}. *)
+    | `Store     of Store.error (** Appear when we retrieve a PACK error from the {!Store.Pack}. *)
     | `Clone     of string (** Appear when we don't follow operations on the clone command. *)
     | `Fetch     of string (** Appear when we don't follow operations on the fetch command. *)
     | `Ls        of string (** Appear when we don't follow operations on the ls-remote command. *)
     | `Push      of string (** Appear when we don't follow operations on the push command. *)
-    | `Ref       of Store.Ref.error (** Appear when we retrieve a reference I/O error from the {!Store.Ref}. *)
     | `Not_found (** Appear when we don't find the reference requested by the client on the server. *) ]
 
   val pp_error: error Fmt.t
@@ -58,6 +57,9 @@ module type S = sig
         a {!Capability.t}. *)
     | `Update of (Store.Hash.t * Store.Hash.t * Store.Reference.t)
     (** To update a reference from a commit hash to a new commit hash. *) ]
+
+  val pp_command: command Fmt.t
+  (** Pretty-printer of {!command}. *)
 
   val push:
     Store.t
@@ -92,13 +94,13 @@ module type S = sig
     -> (Store.Hash.t, error) result Lwt.t
 
   val fetch_some:
-    Store.t -> ?locks:Store.Lock.t ->
+    Store.t ->
     ?capabilities:Capability.t list ->
     references:Store.Reference.t list Store.Reference.Map.t ->
     Uri.t -> (Store.Hash.t Store.Reference.Map.t
               * Store.Reference.t list Store.Reference.Map.t, error) result Lwt.t
-  (** [fetch_some git ?locks ?capabilities ~references repository] will
-      fetch some remote references specified by [references].
+  (** [fetch_some git ?capabilities ~references repository] will fetch
+      some remote references specified by [references].
 
       [references] is a map which:
       {ul
@@ -145,19 +147,20 @@ module type S = sig
       local references. *)
 
   val fetch_all:
-    Store.t -> ?locks:Store.Lock.t ->
+    Store.t ->
     ?capabilities:Capability.t list ->
     references:Store.Reference.t list Store.Reference.Map.t ->
     Uri.t -> (Store.Hash.t Store.Reference.Map.t
               * Store.Reference.t list Store.Reference.Map.t
               * Store.Hash.t Store.Reference.Map.t, error) result Lwt.t
-  (** [fetch_all git ?locks ?capabilities ~references repository] has
-      the same semantic than {!fetch_some} for any remote references found
+  (** [fetch_all git ?capabilities ~references repository] has the
+      same semantic than {!fetch_some} for any remote references found
       on [references]. However, [fetch all] will download all remote
-      references available on the server (and whose hash is not available
-      on the local store). If these remote references are not associated
-      with some local references, we return a third map which contains
-      these remote references binded with the new hash downloaded.
+      references available on the server (and whose hash is not
+      available on the local store). If these remote references are
+      not associated with some local references, we return a third map
+      which contains these remote references binded with the new hash
+      downloaded.
 
       We {b don't} notice any non-downloaded remote references not
       found on the [references] map and whose hash already exists on
@@ -167,11 +170,11 @@ module type S = sig
       references or just give up. *)
 
   val fetch_one:
-    Store.t -> ?locks:Store.Lock.t ->
+    Store.t ->
     ?capabilities:Capability.t list ->
     reference:(Store.Reference.t * Store.Reference.t list) ->
     Uri.t -> ([ `AlreadySync | `Sync of Store.Hash.t Store.Reference.Map.t ], error) result Lwt.t
-  (** [fetch_one git ?locks ?capabilities ~reference repository] is a
+  (** [fetch_one git ?capabilities ~reference repository] is a
       specific call of {!fetch_some} with only one reference. Then, it
       retuns:
 
@@ -182,7 +185,7 @@ module type S = sig
       set [local_ref] with this new hash.}} *)
 
   val clone:
-    Store.t -> ?locks:Store.Lock.t ->
+    Store.t ->
     ?capabilities:Capability.t list ->
     reference:(Store.Reference.t * Store.Reference.t) ->
     Uri.t -> (unit, error) result Lwt.t
@@ -226,16 +229,21 @@ module Common (G: Minimal.S) :
 sig
   module Store : Minimal.S
 
+  type command =
+    [ `Create of (Store.Hash.t * Store.Reference.t)
+    | `Delete of (Store.Hash.t * Store.Reference.t)
+    | `Update of (Store.Hash.t * Store.Hash.t * Store.Reference.t)
+    ]
+
+  val pp_command: command Fmt.t
+
   val packer:
     ?window:[ `Object of int | `Memory of int ] ->
     ?depth:int ->
     Store.t ->
     ofs_delta:bool ->
-    (Store.Hash.t * string * bool) list ->
-    [ `Create of (Store.Hash.t * string)
-    | `Update of (Store.Hash.t * Store.Hash.t * string)
-    | `Delete of (Store.Hash.t * string) ] list ->
-    (Store.Pack.stream *(Crc32.t * int64) Store.Pack.Graph.t Lwt_mvar.t, Store.Pack.error) result Lwt.t
+    (Store.Hash.t * string * bool) list -> command list ->
+    (Store.Pack.stream *(Crc32.t * int64) Store.Pack.Graph.t Lwt_mvar.t, Store.error) result Lwt.t
 
   val want_handler:
     Store.t ->
@@ -245,19 +253,17 @@ sig
 
   val update_and_create:
     Store.t ->
-    ?locks:Store.Lock.t ->
     references:Store.Reference.t list Store.Reference.Map.t ->
     (Store.Reference.t * Store.Hash.t) list ->
     (Store.Hash.t Store.Reference.Map.t
               * Store.Reference.t list Store.Reference.Map.t
-              * Store.Hash.t Store.Reference.Map.t, [ `Ref of Store.Ref.error ]) result Lwt.t
+              * Store.Hash.t Store.Reference.Map.t, Store.error) result Lwt.t
 
   val push_handler:
     Store.t ->
     Store.Reference.t list Store.Reference.Map.t ->
     (Store.Hash.t * Store.Reference.t * bool) list ->
-    [ `Create of (Store.Hash.t * Store.Reference.t)
-    | `Update of (Store.Hash.t * Store.Hash.t * Store.Reference.t) ] list Lwt.t
+    command list Lwt.t
 end with module Store = G
 
 module Make (N: NET) (S: Minimal.S)

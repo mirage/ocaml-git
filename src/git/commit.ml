@@ -33,7 +33,7 @@ sig
   module D: S.DECODER
     with type t = t
      and type init = Cstruct.t
-     and type error = [ `Decoder of string ]
+     and type error = Error.Decoder.t
 
   module A: S.ANGSTROM with type t = t
 
@@ -44,7 +44,7 @@ sig
   module E: S.ENCODER
     with type t = t
      and type init = int * t
-     and type error = [ `Never ]
+     and type error = Error.never
 
   include S.DIGEST with type t := t and type hash = Hash.t
   include S.BASE with type t := t
@@ -73,7 +73,24 @@ module Make (H: S.HASH): S with module Hash = H = struct
     ; parents   : Hash.t list
     ; author    : User.t
     ; committer : User.t
-    ; message   : string }
+    ; message   : [ `Empty | `Clean of string | `Bazaar of string ] option }
+  (* XXX(dinosaure): special note about that, Git adds extra headers
+     in a commit. This type is much more because we don't handle these
+     extra headers than a bug.
+
+     Indeed, we need to keep the integrity of the commit (for the hash
+     function) so we need to separate 4 cases:
+     - an empty message which does not have at the beginning '\n'
+     (None)
+     - an empty message which has at the beginning '\n' (Some `Empty)
+     - a message (Some (`Clean msg))
+     - extra-headers (so something...) plus the message (Some (`Bazaar
+     msg))
+
+     We need to concretize this differentiation to generate from any
+     commit exactly the same commit - and. by this way, we avoid a
+     corruption of the hash. Then, when we full implemented extra
+     headers, we will delete this situation. *)
   and hash = Hash.t
 
   let make ~author ~committer ?(parents = []) ~tree message =
@@ -81,7 +98,7 @@ module Make (H: S.HASH): S with module Hash = H = struct
     ; parents
     ; author
     ; committer
-    ; message }
+    ; message = Some (`Clean message) }
 
   module A = struct
 
@@ -127,6 +144,15 @@ module Make (H: S.HASH): S with module Hash = H = struct
       binding ~key:"committer" ~value:User.A.decoder
       <* commit
       >>= fun committer -> to_end 1024 <* commit
+      >>| (function
+      | "" -> None
+      | "\n" -> Some `Empty
+      | lf_message ->
+        let message =
+          if String.get lf_message 0 = '\x0a'
+          then `Clean (String.sub lf_message 1 (String.length lf_message - 1))
+          else `Bazaar lf_message in
+        Some message)
       >>= fun message ->
       return { tree = Hash.of_hex tree
              ; parents = List.map Hash.of_hex parents
@@ -157,15 +183,25 @@ module Make (H: S.HASH): S with module Hash = H = struct
       + parents
       + (string "author") + 1L + (User.F.length t.author) + 1L
       + (string "committer") + 1L + (User.F.length t.committer) + 1L
-      + (string t.message)
+      + (match t.message with
+          | None -> 0L
+          | Some `Empty -> 1L
+          | Some (`Bazaar x) -> string x
+          | Some (`Clean x) -> 1L + (string x))
 
     let sp = ' '
     let lf = '\x0a'
 
+    let message e x = let open Farfadet in match x with
+      | None -> ()
+      | Some `Empty -> char e lf
+      | Some (`Clean x) ->
+        eval e [ char $ lf; !!string ] x
+      | Some (`Bazaar x) -> string e x
+
     let parents e x =
       let open Farfadet in
       eval e [ string $ "parent"; char $ sp; !!string ] (Hash.to_hex x)
-      [@@warning "-45"] (* XXX(dinosaure): shadowing [] and (::). *)
 
     let encoder e t =
       let open Farfadet in
@@ -175,13 +211,12 @@ module Make (H: S.HASH): S with module Hash = H = struct
              ; !!(option (seq (list ~sep parents) (fun e () -> char e lf)))
              ; string $ "author"; char $ sp; !!User.F.encoder; char $ lf
              ; string $ "committer"; char $ sp; !!User.F.encoder; char $ lf
-             ; !!string ]
+             ; !!message ]
         (Hash.to_hex t.tree)
         (match t.parents with [] -> None | lst -> Some (lst, ()))
         t.author
         t.committer
         t.message
-      [@@warning "-45"] (* XXX(dinosaure): shadowing [] and (::). *)
   end
 
   module M = struct
@@ -198,6 +233,12 @@ module Make (H: S.HASH): S with module Hash = H = struct
        @@ write_char sp
        @@ write_string (Hash.to_hex x) k)
       e
+
+    let message x k e = match x with
+      | None -> k e
+      | Some `Empty -> write_char lf k e
+      | Some (`Clean x) -> write_char lf (write_string x k) e
+      | Some (`Bazaar x) -> write_string x k e
 
     let encoder x k e =
       let rec list l k e = match l with
@@ -221,8 +262,8 @@ module Make (H: S.HASH): S with module Hash = H = struct
        @@ write_char sp
        @@ User.M.encoder x.committer
        @@ write_char lf
-       @@ write_string x.message k)
-      e
+       @@ message x.message k)
+        e
   end
 
   module D = Helper.MakeDecoder(A)
@@ -236,6 +277,11 @@ module Make (H: S.HASH): S with module Hash = H = struct
         Fmt.char
     in
 
+    let pp_message ppf = function
+      | None | Some `Empty -> Fmt.string ppf "<empty>"
+      | Some (`Clean x | `Bazaar x) -> Fmt.iter ~sep:Fmt.nop String.iter chr ppf x
+    in
+
     Fmt.pf ppf
       "{ @[<hov>tree = %a;@ \
                 parents = [ %a ];@ \
@@ -246,7 +292,7 @@ module Make (H: S.HASH): S with module Hash = H = struct
       (Fmt.hvbox (Fmt.list ~sep:(Fmt.unit ";@ ") Hash.pp)) parents
       (Fmt.hvbox User.pp) author
       (Fmt.hvbox User.pp) committer
-      (Fmt.hvbox (Fmt.iter ~sep:Fmt.nop String.iter chr)) message
+      (Fmt.hvbox pp_message) message
 
   let digest value =
     let tmp = Cstruct.create 0x100 in
@@ -259,7 +305,9 @@ module Make (H: S.HASH): S with module Hash = H = struct
   let tree { tree; _ } = tree
   let committer { committer; _ } = committer
   let author { author; _ } = author
-  let message { message; _ } = message
+  let message { message; _ } = match message with
+    | None | Some `Empty -> ""
+    | Some (`Clean x | `Bazaar x) -> x
 
   let compare_by_date a b =
     Int64.compare (fst a.author.User.date) (fst b.author.User.date)

@@ -1,1 +1,3 @@
-include Git.FS with type File.lock = Lock.t
+include Git.FS
+
+val v: ?temp_dir:Fpath.t -> unit -> t

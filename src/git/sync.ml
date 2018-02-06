@@ -53,12 +53,11 @@ module type S = sig
 
   type error =
     [ `SmartPack of string
-    | `Pack      of Store.Pack.error
+    | `Store     of Store.error
     | `Clone     of string
     | `Fetch     of string
     | `Ls        of string
     | `Push      of string
-    | `Ref       of Store.Ref.error
     | `Not_found ]
 
   val pp_error: error Fmt.t
@@ -67,6 +66,8 @@ module type S = sig
     [ `Create of (Store.Hash.t * Store.Reference.t)
     | `Delete of (Store.Hash.t * Store.Reference.t)
     | `Update of (Store.Hash.t * Store.Hash.t * Store.Reference.t) ]
+
+ val pp_command: command Fmt.t
 
   val push:
     Store.t
@@ -101,14 +102,14 @@ module type S = sig
     -> (Store.Hash.t, error) result Lwt.t
 
   val fetch_some:
-    Store.t -> ?locks:Store.Lock.t ->
+    Store.t ->
     ?capabilities:Capability.t list ->
     references:Store.Reference.t list Store.Reference.Map.t ->
     Uri.t -> (Store.Hash.t Store.Reference.Map.t
               * Store.Reference.t list Store.Reference.Map.t, error) result Lwt.t
 
   val fetch_all:
-    Store.t -> ?locks:Store.Lock.t ->
+    Store.t ->
     ?capabilities:Capability.t list ->
     references:Store.Reference.t list Store.Reference.Map.t ->
     Uri.t -> (Store.Hash.t Store.Reference.Map.t
@@ -116,13 +117,13 @@ module type S = sig
               * Store.Hash.t Store.Reference.Map.t, error) result Lwt.t
 
   val fetch_one:
-    Store.t -> ?locks:Store.Lock.t ->
+    Store.t ->
     ?capabilities:Capability.t list ->
     reference:(Store.Reference.t * Store.Reference.t list) ->
     Uri.t -> ([ `AlreadySync | `Sync of Store.Hash.t Store.Reference.Map.t ], error) result Lwt.t
 
   val clone:
-    Store.t -> ?locks:Store.Lock.t ->
+    Store.t ->
     ?capabilities:Capability.t list ->
     reference:(Store.Reference.t * Store.Reference.t) ->
     Uri.t -> (unit, error) result Lwt.t
@@ -145,45 +146,170 @@ module Common
     include (val Logs.src_log src: Logs.LOG)
   end
 
+  type command =
+    [ `Create of (Store.Hash.t * Store.Reference.t)
+    | `Delete of (Store.Hash.t * Store.Reference.t)
+    | `Update of (Store.Hash.t * Store.Hash.t * Store.Reference.t) ]
+
+  let pp_command ppf = function
+    | `Create (hash, r) ->
+      Fmt.pf ppf "(`Create (%a, %a))" Store.Hash.pp hash Store.Reference.pp r
+    | `Delete (hash, r) ->
+      Fmt.pf ppf "(`Delete (%a, %a))" Store.Hash.pp hash Store.Reference.pp r
+    | `Update (_of, _to, r) ->
+      Fmt.pf ppf "(`Update (of:%a, to:%a, %a))"
+        Store.Hash.pp _of Store.Hash.pp _to Store.Reference.pp r
+
   open Lwt.Infix
 
+  module Node =
+  struct
+    type t =
+      { value: Store.Value.t
+      ; mutable color: [ `Black | `White ] }
+
+    let compare a b = match a.value, b.value with
+      | Store.Value.Commit a, Store.Value.Commit b ->
+        Store.Value.Commit.compare_by_date b a
+      | a, b -> Store.Value.compare a b
+  end
+
+  module Pq = Psq.Make(Store.Hash)(Node)
+  module Q = Minienc.Queue
+
+  exception Store of Store.error
+
+  let packer git exclude source =
+    let store = Hashtbl.create 128 in
+
+    let memoize get hash =
+      try let ret = Hashtbl.find store hash in Lwt.return ret
+      with Not_found ->
+        get hash >>= function
+        | Ok value ->
+          let node = { Node.value; color = `White } in
+          Hashtbl.add store hash node;
+          Lwt.return node
+        | Error err ->
+          Log.err (fun l -> l "Got an error when we get the object: %a."
+                      Store.Hash.pp hash);
+          Lwt.fail (Store err) in
+
+    let preds = function
+      | Store.Value.Commit commit ->
+        Store.Value.Commit.tree commit :: Store.Value.Commit.parents commit
+      | Store.Value.Tree tree ->
+        List.map (fun { Store.Value.Tree.node; _ } -> node) (Store.Value.Tree.to_list tree)
+      | Store.Value.Tag tag ->
+        [ Store.Value.Tag.obj tag ]
+      | Store.Value.Blob _ -> [] in
+
+    let get = memoize (Store.read git) in
+
+    let all_blacks pq =
+      Pq.fold (fun _ -> function
+          | { Node.color = `Black; _ } -> (&&) true
+          | _ -> (&&) false) true pq in
+
+    let propagate { Node.value; color; } =
+      let rec go q = match Q.shift q with
+        | hash, q ->
+          (try let node = Hashtbl.find store hash in
+             node.Node.color <- color;
+             go (List.fold_left Q.push q (preds node.Node.value))
+           with Not_found -> go q)
+        | exception Q.Empty -> () in
+      go (Q.of_list (preds value)) in
+
+    let propagate_snapshot { Node.value; color; } =
+      let rec go q = match Q.shift q with
+        | hash, q ->
+          (try let node = Hashtbl.find store hash in
+             Lwt.return node
+           with Not_found -> get hash) >>= fun node ->
+          node.Node.color <- color;
+          go (List.fold_left Q.push q (preds node.Node.value))
+        | exception Q.Empty -> Lwt.return () in
+      go (Q.of_list (preds value)) in
+
+    let rec garbage pq =
+      if all_blacks pq
+      then Lwt.return ()
+      else match Pq.pop pq with
+        | Some ((_, { Node.value; color = `Black }), pq) ->
+          Lwt_list.fold_left_s
+            (fun pq hash -> get hash >>= function
+               | { Node.value = Store.Value.Tree _; _ } as node ->
+                 node.Node.color <- `Black;
+                 propagate_snapshot node >>= fun () ->
+                 Lwt.return pq
+               | { Node.color = `White; _ } as node ->
+                 node.Node.color <- `Black;
+                 propagate node;
+                 Lwt.return (Pq.add hash node pq)
+               | node ->
+                 Lwt.return (Pq.add hash node pq))
+            pq (preds value) >>= garbage
+        | Some ((_, { Node.value; _ }), pq) ->
+          Lwt_list.fold_left_s
+            (fun pq hash -> get hash >>= fun node -> Lwt.return (Pq.add hash node pq))
+            pq (preds value) >>= garbage
+        | None -> Lwt.return () in
+
+    let collect () =
+      Hashtbl.fold
+        (fun hash -> function
+           | { Node.color = `White; value } -> Store.Hash.Map.add hash value
+           | _ -> fun acc -> acc)
+        store Store.Hash.Map.empty in
+
+    Lwt_list.map_s
+      (fun hash -> get hash >>= function
+         | { Node.value = Store.Value.Commit commit; _ } as node ->
+           get (Store.Value.Commit.tree commit) >>= fun node_root_tree ->
+           propagate_snapshot node_root_tree >>= fun () ->
+           Lwt.return (hash, node)
+         | node -> Lwt.return (hash, node))
+      source >>= fun source ->
+    Lwt_list.map_s
+      (fun hash -> get hash >>= function
+         | { Node.value = Store.Value.Commit commit; _ } as node ->
+           node.Node.color <- `Black;
+           get (Store.Value.Commit.tree commit) >>= fun node_root_tree ->
+           node_root_tree.Node.color <- `Black;
+           propagate_snapshot node_root_tree >>= fun () ->
+           Lwt.return (hash, node)
+         | node -> Lwt.return (hash, node))
+      exclude >|= List.append source >|= Pq.of_list >>= fun pq ->
+
+    garbage pq >|= collect
+
   let packer ?(window = `Object 10) ?(depth = 50) git ~ofs_delta:_ remote commands =
-    let commands' =
-      (List.map (fun (hash, refname, _) -> `Delete (hash, refname)) remote)
-      @ commands
-    in
+    let exclude =
+      List.fold_left
+        (fun exclude (hash, _, _) -> Store.Hash.Set.add hash exclude)
+        Store.Hash.Set.empty remote
+      |> fun exclude -> List.fold_left
+        (fun exclude -> function
+           | `Delete (hash, _) -> Store.Hash.Set.add hash exclude
+           | `Update (hash, _, _) -> Store.Hash.Set.add hash exclude
+           | `Create _ -> exclude)
+        exclude commands
+                        |> Store.Hash.Set.elements in
 
-    (* XXX(dinosaure): we don't want to delete remote references but
-       we want to exclude any commit already stored remotely. Se, we «
-       delete » remote references from the result set. *)
+    let source =
+      List.fold_left
+        (fun source -> function
+           | `Update (_, hash, _) -> Store.Hash.Set.add hash source
+           | `Create (hash, _) -> Store.Hash.Set.add hash source
+           | `Delete _ -> source)
+        Store.Hash.Set.empty commands
+      |> Store.Hash.Set.elements in
 
-    Lwt_list.fold_left_s (fun acc -> function
-        | `Create _ -> Lwt.return acc
-        | `Update (hash, _, _) ->
-          Revision.(Range.normalize git (Range.Include (from_hash hash)))
-          >|= Store.Hash.Set.union acc
-        | `Delete (hash, _) ->
-          Revision.(Range.normalize git (Range.Include (from_hash hash)))
-          >|= Store.Hash.Set.union acc
-      ) Store.Hash.Set.empty commands'
-    >>= fun negative ->
-    Lwt_list.fold_left_s (fun acc -> function
-        | `Create (hash, _) ->
-          Revision.(Range.normalize git (Range.Include (from_hash hash)))
-          >|= Store.Hash.Set.union acc
-        | `Update (_, hash, _) ->
-          Revision.(Range.normalize git (Range.Include (from_hash hash)))
-          >|= Store.Hash.Set.union acc
-        | `Delete _ -> Lwt.return acc
-      ) Store.Hash.Set.empty commands
-    >|= (fun positive -> Revision.Range.E.diff positive negative)
-    >>= fun elements ->
-    Lwt_list.fold_left_s (fun acc commit ->
-        Store.fold git
-          (fun acc ?name:_ ~length:_ _ value -> Lwt.return (value :: acc))
-          ~path:(Fpath.v "/") acc commit
-      ) [] (Store.Hash.Set.elements elements)
-    >>= fun entries -> Store.Pack.make git ~window ~depth entries
+    packer git exclude source
+    >|= Store.Hash.Map.bindings
+    >|= List.map snd
+    >>= Store.Pack.make git ~window ~depth
 
   let want_handler git choose remote_refs =
     (* XXX(dinosaure): in this /engine/, for each remote references,
@@ -209,9 +335,9 @@ module Common
         | _ -> Lwt.return None)
       remote_refs
 
-  exception Jump of Store.Ref.error
+  exception Jump of Store.error
 
-  let update_and_create git ?locks ~references results =
+  let update_and_create git ~references results =
     let results = List.fold_left
         (fun results (remote_ref, hash) -> Store.Reference.Map.add remote_ref hash results)
         Store.Reference.Map.empty results in
@@ -230,14 +356,14 @@ module Common
       (fun () ->
          Lwt_list.iter_s
            (fun (local_ref, new_hash) ->
-              Store.Ref.write git ?locks local_ref (Store.Reference.Hash new_hash)
+              Store.Ref.write git local_ref (Store.Reference.Hash new_hash)
               >>= function
               | Ok _ -> Lwt.return ()
               | Error err -> Lwt.fail (Jump err))
            (Store.Reference.Map.bindings updated))
       (fun () -> Lwt.return (Ok (updated, missed, downloaded)))
       (function
-        | Jump err -> Lwt.return (Error (`Ref err))
+        | Jump err -> Lwt.return (Error err)
         | exn -> Lwt.fail exn)
 
   let push_handler git references remote_refs =
@@ -267,16 +393,23 @@ module Common
 
     Lwt_list.filter_map_s
       (fun action -> match action with
-        | `Update (remote_hash, local_hash, _) ->
+        | `Update (remote_hash, local_hash, reference) ->
           Store.mem git remote_hash >>= fun has_remote_hash ->
           Store.mem git local_hash >>= fun has_local_hash ->
 
-          if has_remote_hash && has_local_hash
-          then Lwt.return (Some action)
+          Log.debug (fun l -> l ~header:"push_handler"
+                        "Check update command on %a for %a to %a (equal = %b)."
+                        Store.Reference.pp reference
+                        Store.Hash.pp remote_hash
+                        Store.Hash.pp local_hash
+                        Store.Hash.(equal remote_hash local_hash));
+
+          if has_remote_hash && has_local_hash && not (Store.Hash.equal remote_hash local_hash)
+          then Lwt.return (Some (action :> command))
           else Lwt.return None
         | `Create (local_hash, _) ->
           Store.mem git local_hash >>= function
-          | true -> Lwt.return (Some action)
+          | true -> Lwt.return (Some (action :> command))
           | false -> Lwt.return None)
       actions
 end
@@ -291,32 +424,33 @@ module Make (N: NET) (S: Minimal.S) = struct
   module Inflate = Store.Inflate
   module Deflate = Store.Deflate
   module Revision = Revision.Make(Store)
-  module PACKEncoder = Pack.MakePACKEncoder(Hash)(Deflate)
+
+  module Common
+    : module type of Common(Store)
+      with module Store = Store
+    = Common(Store)
 
   type error =
     [ `SmartPack of string
-    | `Pack      of Store.Pack.error
+    | `Store     of Store.error
     | `Clone     of string
     | `Fetch     of string
     | `Ls        of string
     | `Push      of string
-    | `Ref       of S.Ref.error
     | `Not_found ]
 
   let pp_error ppf = function
-    | `SmartPack err -> Helper.ppe ~name:"`SmartPack" Fmt.string ppf err
-    | `Pack err       -> Helper.ppe ~name:"`Pack" Store.Pack.pp_error ppf err
+    | `SmartPack err  -> Helper.ppe ~name:"`SmartPack" Fmt.string ppf err
+    | `Store err      -> Helper.ppe ~name:"`Store" Store.pp_error ppf err
     | `Clone err      -> Helper.ppe ~name:"`Clone" Fmt.string ppf err
     | `Fetch err      -> Helper.ppe ~name:"`Fetch" Fmt.string ppf err
     | `Push err       -> Helper.ppe ~name:"`Push" Fmt.string ppf err
     | `Ls err         -> Helper.ppe ~name:"`Ls" Fmt.string ppf err
-    | `Ref err        -> Helper.ppe ~name:"`Ref" S.Ref.pp_error ppf err
     | `Not_found      -> Fmt.string ppf "`Not_found"
 
-  type command =
-    [ `Create of (Store.Hash.t * Store.Reference.t)
-    | `Delete of (Store.Hash.t * Store.Reference.t)
-    | `Update of (Store.Hash.t * Store.Hash.t * Store.Reference.t) ]
+  type command = Common.command
+
+  let pp_command = Common.pp_command
 
   type t =
     { socket: Net.socket
@@ -350,11 +484,6 @@ module Make (N: NET) (S: Minimal.S) = struct
       assert false (* TODO *)
     | #Client.result as result ->
       Lwt.return result
-
-  module Common
-    : module type of Common(Store)
-      with module Store = Store
-    = Common(Store)
 
   module Pack = struct
     let default_stdout raw =
@@ -393,7 +522,7 @@ module Make (N: NET) (S: Minimal.S) = struct
 
       dispatch ctx first
       >>?= fun ()  -> Store.Pack.from git (fun () -> Lwt_stream.get stream)
-      >>!= fun err -> Lwt.return (`Pack err)
+      >>!= fun err -> Lwt.return (`Store err)
   end
 
   let rec clone_handler git reference t r =
@@ -560,25 +689,17 @@ module Make (N: NET) (S: Minimal.S) = struct
                 | `Flush -> Ok []
                 | result -> Error (`Push (err_unexpected_result result)))
           | (shallow, commands) ->
+            Log.debug (fun l ->
+                l ~header:"push_handler" "Sending command(s): %a."
+                  (Fmt.hvbox (Fmt.Dump.list pp_command)) commands
+              );
+
             List.map
               (function
                 | `Create (hash, reference) -> `Create (hash, Store.Reference.to_string reference)
                 | `Delete (hash, reference) -> `Delete (hash, Store.Reference.to_string reference)
                 | `Update (a, b, reference) -> `Update (a, b, Store.Reference.to_string reference))
               commands |> fun commands ->
-            Log.debug (fun l ->
-                let pp_command ppf = function
-                  | `Create (hash, refname) ->
-                    Fmt.pf ppf "(`Create (%a, %s))" S.Hash.pp hash refname
-                  | `Delete (hash, refname) ->
-                    Fmt.pf ppf "(`Delete (%a, %s))" S.Hash.pp hash refname
-                  | `Update (_of, _to, refname) ->
-                    Fmt.pf ppf "(`Update (of:%a, to:%a, %s))"
-                      S.Hash.pp _of S.Hash.pp _to refname
-                in
-                l ~header:"push_handler" "Sending command(s): %a."
-                  (Fmt.hvbox (Fmt.Dump.list pp_command)) commands
-              );
             let x, r =
               List.map (function
                   | `Create (hash, r) -> Client.Encoder.Create (hash, r)
@@ -589,7 +710,7 @@ module Make (N: NET) (S: Minimal.S) = struct
             in
 
             Client.run t.ctx (`UpdateRequest { Client.Encoder.shallow
-                                             ; requests = Client.Encoder.L (x, r)
+                                             ; requests = `Raw (x, r)
                                              ; capabilities })
             |> process t
             >>= aux t (Some refs.Client.Decoder.refs) (Some (x :: r)))
@@ -619,7 +740,7 @@ module Make (N: NET) (S: Minimal.S) = struct
         |> Common.packer git ~ofs_delta refs >>= (function
             | Ok (stream, _) ->
               send_pack stream t result
-            | Error err -> Lwt.return (Error (`Pack err)))
+            | Error err -> Lwt.return (Error (`Store err)))
       | result -> Lwt.return (Error (`Push (err_unexpected_result result)))
     in
 
@@ -720,7 +841,7 @@ module Make (N: NET) (S: Minimal.S) = struct
     >>= fun v -> Net.close socket
     >>= fun () -> Lwt.return v
 
-  let fetch_and_set_references git ?locks ?capabilities ~choose ~references repository =
+  let fetch_and_set_references git ?capabilities ~choose ~references repository =
     N.find_common git >>= fun (has, state, continue) ->
     let continue { Client.Decoder.acks; shallow; unshallow } state =
       continue { Negociator.acks; shallow; unshallow } state in
@@ -733,23 +854,23 @@ module Make (N: NET) (S: Minimal.S) = struct
       ~negociate:(continue, state) ~has ~want:want_handler
       repository
     >>?= fun (results, _) ->
-    Common.update_and_create git ?locks ~references results
+    Common.update_and_create git ~references results
+    >>!= fun err -> Lwt.return (`Store err)
 
-  let fetch_all git ?locks ?capabilities ~references repository =
+  let fetch_all git ?capabilities ~references repository =
     let choose _ = Lwt.return true in
     fetch_and_set_references
       ~choose
-      ?locks
       ?capabilities
       ~references
       git repository
 
-  let fetch_some git ?locks ?capabilities ~references repository =
+  let fetch_some git ?capabilities ~references repository =
     let choose remote_ref =
-      Lwt.return (Store.Reference.Map.mem remote_ref references) in
+      Lwt.return (Store.Reference.Map.mem remote_ref references)
+    in
     fetch_and_set_references
       ~choose
-      ?locks
       ?capabilities
       ~references
       git repository
@@ -764,13 +885,13 @@ module Make (N: NET) (S: Minimal.S) = struct
       Lwt.return (Ok (updated, missed))
     end
 
-  let fetch_one git ?locks ?capabilities ~reference:(remote_ref, local_refs) repository =
+  let fetch_one git ?capabilities ~reference:(remote_ref, local_refs) repository =
     let references = Store.Reference.Map.singleton remote_ref local_refs in
     let choose remote_ref =
-      Lwt.return (Store.Reference.Map.mem remote_ref references) in
+      Lwt.return (Store.Reference.Map.mem remote_ref references)
+    in
     fetch_and_set_references
       ~choose
-      ?locks
       ?capabilities
       ~references
       git repository
@@ -796,7 +917,7 @@ module Make (N: NET) (S: Minimal.S) = struct
             missed);
       Lwt.return (Ok (`Sync updated))
 
-  let clone t ?locks ?capabilities ~reference:(remote_ref, local_ref) uri =
+  let clone t ?capabilities ~reference:(remote_ref, local_ref) uri =
     Log.debug (fun l -> l "clone %a:%a" Uri.pp_hum uri S.Reference.pp remote_ref);
     let _ =
       if not (Option.mem (Uri.scheme uri) "git" ~equal:String.equal)
@@ -808,10 +929,9 @@ module Make (N: NET) (S: Minimal.S) = struct
           l ~header:"easy_clone" "Update reference %a to %a."
             S.Reference.pp local_ref S.Hash.pp hash');
 
-      S.Ref.write t ?locks local_ref (S.Reference.Hash hash')
-      >>!= (fun err -> Lwt.return (`Ref err))
-      >>?= fun () -> S.Ref.write t ?locks S.Reference.head (S.Reference.Ref local_ref)
-      >>!= fun err -> Lwt.return (`Ref err)
+      (S.Ref.write t local_ref (S.Reference.Hash hash')
+       >>?= fun () -> S.Ref.write t S.Reference.head (S.Reference.Ref local_ref))
+      >>!= fun err -> Lwt.return (`Store err)
 
   let update_and_create git ?capabilities ~references repository =
     let push_handler remote_refs =

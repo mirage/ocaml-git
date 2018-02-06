@@ -718,8 +718,6 @@ struct
 
   module Fanout = Fanout.Make(K)
 
-  [@@@warning "-37"]
-
   type t =
     { o_off    : int
     ; o_pos    : int
@@ -741,7 +739,6 @@ struct
     | Hash       of k
     | End
   and res =
-    | Error  of t * error (* XXX(dinosaure): unused constructor. *)
     | Flush  of t
     | Cont   of t
     | Ok     of t
@@ -801,10 +798,10 @@ struct
                    ; write = t.write + 4 }
     end else if (t.o_len - t.o_pos) > 0
     then
-      let i1 = Char.unsafe_chr @@ Int32.(! ((integer && 0xFF000000l) >> 24))[@warning "-44"] in
-      let i2 = Char.unsafe_chr @@ Int32.(! ((integer && 0x00FF0000l) >> 16))[@warning "-44"] in
-      let i3 = Char.unsafe_chr @@ Int32.(! ((integer && 0x0000FF00l) >> 8))[@warning "-44"] in
-      let i4 = Char.unsafe_chr @@ Int32.(! (integer && 0x000000FFl))[@warning "-44"] in
+      let i1 = Char.unsafe_chr @@ Int32.(! ((integer && 0xFF000000l) >> 24)) in
+      let i2 = Char.unsafe_chr @@ Int32.(! ((integer && 0x00FF0000l) >> 16)) in
+      let i3 = Char.unsafe_chr @@ Int32.(! ((integer && 0x0000FF00l) >> 8)) in
+      let i4 = Char.unsafe_chr @@ Int32.(! (integer && 0x000000FFl)) in
 
       (put_byte ~ctor i1
        @@ put_byte ~ctor i2
@@ -883,14 +880,14 @@ struct
                      ; write = t.write + 8 }
       end else if (t.o_len - t.o_pos) > 0
       then
-        let i1 = Char.unsafe_chr @@ Int64.(! ((integer && 0xFF00000000000000L) >> 56))[@warning "-44"] in
-        let i2 = Char.unsafe_chr @@ Int64.(! ((integer && 0x00FF000000000000L) >> 48))[@warning "-44"] in
-        let i3 = Char.unsafe_chr @@ Int64.(! ((integer && 0x0000FF0000000000L) >> 40))[@warning "-44"] in
-        let i4 = Char.unsafe_chr @@ Int64.(! ((integer && 0x000000FF00000000L) >> 32))[@warning "-44"] in
-        let i5 = Char.unsafe_chr @@ Int64.(! ((integer && 0x00000000FF000000L) >> 24))[@warning "-44"] in
-        let i6 = Char.unsafe_chr @@ Int64.(! ((integer && 0x0000000000FF0000L) >> 16))[@warning "-44"] in
-        let i7 = Char.unsafe_chr @@ Int64.(! ((integer && 0x000000000000FF00L) >> 8))[@warning "-44"] in
-        let i8 = Char.unsafe_chr @@ Int64.(! (integer && 0x00000000000000FFL))[@warning "-44"] in
+        let i1 = Char.unsafe_chr @@ Int64.(! ((integer && 0xFF00000000000000L) >> 56)) in
+        let i2 = Char.unsafe_chr @@ Int64.(! ((integer && 0x00FF000000000000L) >> 48)) in
+        let i3 = Char.unsafe_chr @@ Int64.(! ((integer && 0x0000FF0000000000L) >> 40)) in
+        let i4 = Char.unsafe_chr @@ Int64.(! ((integer && 0x000000FF00000000L) >> 32)) in
+        let i5 = Char.unsafe_chr @@ Int64.(! ((integer && 0x00000000FF000000L) >> 24)) in
+        let i6 = Char.unsafe_chr @@ Int64.(! ((integer && 0x0000000000FF0000L) >> 16)) in
+        let i7 = Char.unsafe_chr @@ Int64.(! ((integer && 0x000000000000FF00L) >> 8)) in
+        let i8 = Char.unsafe_chr @@ Int64.(! (integer && 0x00000000000000FFL)) in
 
         (put_byte i1
          @@ put_byte i2
@@ -962,7 +959,7 @@ struct
            | [] -> Cont { t with state = Offsets (offsets (idx + 1) idx_boffs) }
            | (_, (_, off)) :: r ->
                if is_big_offset off
-               then let integer = Int32.(0x40000000l && (Int32.of_int idx_boffs))[@warning "-44"] in
+               then let integer = Int32.(0x40000000l && (Int32.of_int idx_boffs)) in
                     KOffsets.put_int32 integer (aux r (idx_boffs + 1)) dst t
                else KOffsets.put_int32 (Int64.to_int32 off) (aux r idx_boffs) dst t
                     (* XXX(dinosaure): safe to convert the offset to an int32. *)
@@ -1035,10 +1032,9 @@ struct
 
     let rec loop t =
       match eval0 t with
-      | Cont t -> loop t
+      | Cont t  -> loop t
       | Flush t -> `Flush t
-      | Ok t -> `End t
-      | Error (t, exn) -> `Error (t, exn)
+      | Ok t    -> `End t
     in
 
     loop t
