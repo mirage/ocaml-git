@@ -77,10 +77,10 @@ module type S = sig
   type nonrec acks = Store.Hash.t acks
 
   val find_common: Store.t ->
-    (Store.Hash.t list
+    (Store.Hash.Set.t
      * state
      * (acks -> state ->
-        ([ `Again of Store.Hash.t list | `Done | `Ready ]* state) Lwt.t)
+        ([ `Again of Store.Hash.Set.t | `Done | `Ready ]* state) Lwt.t)
     ) Lwt.t
 end
 
@@ -399,7 +399,7 @@ module Make (G: Minimal.S): S with module Store = G = struct
              if state.ready
              then Lwt.return (`Ready, state)
              else if state.continue && state.vain > _VAIN
-             then Lwt.return (`Again have, { state with finish = true })
+             then Lwt.return (`Again (Store.Hash.Set.of_list have), { state with finish = true })
              else
                let rec go state have =
                  (* XXX(dinosaure): consume to the [state.flush] limit. *)
@@ -410,11 +410,13 @@ module Make (G: Minimal.S): S with module Store = G = struct
                                           ; rev } in
 
                    if state.count >= state.flush
-                   then Lwt.return (`Again (hash :: have), { state with flush = update_flush state.count })
+                   then Lwt.return (`Again (Store.Hash.Set.of_list (hash :: have)),
+                                    { state with flush = update_flush state.count })
                    else go state (hash :: have)
                  | None, rev ->
-                   Lwt.return (`Again have, { state with rev
-                                                       ; finish = true })
+                   Lwt.return (`Again (Store.Hash.Set.of_list have),
+                               { state with rev
+                                          ; finish = true })
                    (* XXX(dinosaure): in the next step, we stop. *)
                in
 
@@ -428,7 +430,7 @@ module Make (G: Minimal.S): S with module Store = G = struct
               if not state.ready
               then begin
                 Log.debug (fun l -> l ~header:"find_common" "We catch a jump exception to get out of the main loop and return `Again.");
-                Lwt.return (`Again have, { state with finish = true })
+                Lwt.return (`Again (Store.Hash.Set.of_list have), { state with finish = true })
               end else begin
                 Log.debug (fun l -> l ~header:"find_common" "We catch a jump exception to get out of the main loop and return `Ready.");
                 Lwt.return (`Ready, state)
@@ -458,7 +460,7 @@ module Make (G: Minimal.S): S with module Store = G = struct
       _INITIAL_FLUSH
     >>= function
     | have, `Not_enough state ->
-      Lwt.return (have,
+      Lwt.return (Store.Hash.Set.of_list have,
                   { state with finish = true },
                   fun _ state -> Lwt.return (`Done, { state with finish = true }))
     | have, `Continue state ->
@@ -470,9 +472,9 @@ module Make (G: Minimal.S): S with module Store = G = struct
          wait for an ACK only on the next one. *)
       consume [] state state.flush >>= function
       | _, `Not_enough state ->
-        Lwt.return (have,
+        Lwt.return (Store.Hash.Set.of_list have,
                     { state with finish = true },
                     fun _ state -> Lwt.return (`Done, { state with finish = true }))
       | in_fly, `Continue state ->
-        Lwt.return (have, { state with in_fly; }, continue)
+        Lwt.return (Store.Hash.Set.of_list have, { state with in_fly; }, continue)
 end

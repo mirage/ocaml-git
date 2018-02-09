@@ -87,8 +87,8 @@ module type S = sig
     -> ?shallow:Store.Hash.t list
     -> ?capabilities:Capability.t list
     -> notify:(Client.Decoder.shallow_update -> unit Lwt.t)
-    -> negociate:((Client.Decoder.acks -> 'state -> ([ `Ready | `Done | `Again of Store.Hash.t list ] * 'state) Lwt.t) * 'state)
-    -> has:Store.Hash.t list
+    -> negociate:((Client.Decoder.acks -> 'state -> ([ `Ready | `Done | `Again of Store.Hash.Set.t ] * 'state) Lwt.t) * 'state)
+    -> have:Store.Hash.Set.t
     -> want:((Store.Hash.t * string * bool) list -> (Store.Reference.t * Store.Hash.t) list Lwt.t)
     -> ?deepen:[ `Depth of int | `Timestamp of int64 | `Ref of string ]
     -> Uri.t
@@ -539,7 +539,7 @@ module Make (N: NET) (S: Minimal.S) = struct
           | Ok (hash, _) -> Lwt.return (Ok hash)
           | Error _ as err -> Lwt.return err)
     | `ShallowUpdate _ ->
-      Client.run t.ctx (`Has []) |> process t
+      Client.run t.ctx (`Has Hash.Set.empty) |> process t
       >>= clone_handler git reference t
     | `Refs refs ->
       (try
@@ -570,7 +570,7 @@ module Make (N: NET) (S: Minimal.S) = struct
                   | result -> Lwt.return (Error (`Ls (err_unexpected_result result))))
     | result -> Lwt.return (Error (`Ls (err_unexpected_result result)))
 
-  let fetch_handler git ?(shallow = []) ~notify ~negociate:(fn, state) ~has ~want ?deepen t r =
+  let fetch_handler git ?(shallow = []) ~notify ~negociate:(fn, state) ~have ~want ?deepen t r =
     let pack asked t =
       Client.run t.ctx `ReceivePACK
       |> process t
@@ -583,7 +583,7 @@ module Make (N: NET) (S: Minimal.S) = struct
     let rec aux t asked state = function
       | `ShallowUpdate shallow_update ->
         notify shallow_update >>= fun () ->
-        Client.run t.ctx (`Has has) |> process t >>= aux t asked state
+        Client.run t.ctx (`Has have) |> process t >>= aux t asked state
       | `Negociation acks ->
         Log.debug (fun l -> l ~header:"fetch_handler" "Retrieve the negotiation: %a."
                       (Fmt.hvbox Client.Decoder.pp_acks) acks);
@@ -596,9 +596,9 @@ module Make (N: NET) (S: Minimal.S) = struct
           | `Done, state ->
             Log.debug (fun l -> l ~header:"fetch_handler" "Retrieve `Done ACK from negotiation engine.");
             Client.run t.ctx `Done |> process t >>= aux t asked state
-          | `Again has, state ->
+          | `Again have, state ->
             Log.debug (fun l -> l ~header:"fetch_handler" "Retrieve `Again ACK from negotiation engine.");
-            Client.run t.ctx (`Has has) |> process t >>= aux t asked state)
+            Client.run t.ctx (`Has have) |> process t >>= aux t asked state)
       | `NegociationResult _ ->
         Log.debug (fun l -> l ~header:"fetch_handler" "Retrieve a negotiation result.");
         pack asked t
@@ -799,7 +799,7 @@ module Make (N: NET) (S: Minimal.S) = struct
     >>= fun () -> Lwt.return v
 
   let fetch_ext git ?(shallow = []) ?(capabilities=Default.capabilities)
-      ~notify ~negociate ~has ~want ?deepen uri =
+      ~notify ~negociate ~have ~want ?deepen uri =
     Log.debug (fun l -> l "fetch_ext %a" Uri.pp_hum uri);
     Net.socket uri >>= fun socket ->
     let ctx, state = Client.context { Client.Encoder.pathname = path uri
@@ -815,7 +815,7 @@ module Make (N: NET) (S: Minimal.S) = struct
     Log.debug (fun l -> l ~header:"fetch" "Start to process the flow.");
 
     process t state
-    >>= fetch_handler git ~shallow ~notify ~negociate ~has ~want ?deepen t
+    >>= fetch_handler git ~shallow ~notify ~negociate ~have ~want ?deepen t
     >>= fun v -> Net.close socket
     >>= fun () -> Lwt.return v
 
@@ -842,7 +842,7 @@ module Make (N: NET) (S: Minimal.S) = struct
     >>= fun () -> Lwt.return v
 
   let fetch_and_set_references git ?capabilities ~choose ~references repository =
-    N.find_common git >>= fun (has, state, continue) ->
+    N.find_common git >>= fun (have, state, continue) ->
     let continue { Client.Decoder.acks; shallow; unshallow } state =
       continue { Negociator.acks; shallow; unshallow } state in
     let want_handler refs =
@@ -851,7 +851,7 @@ module Make (N: NET) (S: Minimal.S) = struct
            (hash, Store.Reference.of_string refname, peeled))
         refs |> Common.want_handler git choose in
     fetch_ext git ?capabilities ~notify:(fun _ -> Lwt.return ())
-      ~negociate:(continue, state) ~has ~want:want_handler
+      ~negociate:(continue, state) ~have ~want:want_handler
       repository
     >>?= fun (results, _) ->
     Common.update_and_create git ~references results

@@ -91,8 +91,8 @@ module type S_EXT = sig
     -> ?headers:Web.HTTP.headers
     -> ?https:bool
     -> ?capabilities:Git.Capability.t list
-    -> negociate:((Decoder.acks -> 'state -> ([ `Ready | `Done | `Again of Store.Hash.t list ] * 'state) Lwt.t) * 'state)
-    -> has:Store.Hash.t list
+    -> negociate:((Decoder.acks -> 'state -> ([ `Ready | `Done | `Again of Store.Hash.Set.t ] * 'state) Lwt.t) * 'state)
+    -> have:Store.Hash.Set.t
     -> want:((Store.Hash.t * Store.Reference.t * bool) list -> (Store.Reference.t * Store.Hash.t) list Lwt.t)
     -> ?deepen:[ `Depth of int | `Timestamp of int64 | `Ref of string ]
     -> ?port:int

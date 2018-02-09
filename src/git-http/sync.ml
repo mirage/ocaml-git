@@ -119,8 +119,8 @@ module type S_EXT = sig
     -> ?headers:Web.HTTP.headers
     -> ?https:bool
     -> ?capabilities:Git.Capability.t list
-    -> negociate:((Decoder.acks -> 'state -> ([ `Ready | `Done | `Again of Store.Hash.t list ] * 'state) Lwt.t) * 'state)
-    -> has:Store.Hash.t list
+    -> negociate:((Decoder.acks -> 'state -> ([ `Ready | `Done | `Again of Store.Hash.Set.t ] * 'state) Lwt.t) * 'state)
+    -> have:Store.Hash.Set.t
     -> want:((Store.Hash.t * Store.Reference.t * bool) list -> (Store.Reference.t * Store.Hash.t) list Lwt.t)
     -> ?deepen:[ `Depth of int | `Timestamp of int64 | `Ref of string ]
     -> ?port:int
@@ -469,7 +469,7 @@ module Make_ext
 
   let fetch git ?(shallow = []) ?stdout ?stderr ?headers ?(https = false)
       ?(capabilities=Default.capabilites)
-      ~negociate:(negociate, nstate) ~has ~want ?deepen ?port host path =
+      ~negociate:(negociate, nstate) ~have ~want ?deepen ?port host path =
     let scheme = if https then "https" else "http" in
     let uri =
       Uri.empty
@@ -504,7 +504,7 @@ module Make_ext
 
     let decoder = Decoder.decoder () in
     let encoder = Encoder.encoder () in
-    let keeper = Lwt_mvar.create has in
+    let keeper = Lwt_mvar.create have in
 
     consume (Web.Response.body resp) (Decoder.decode decoder (Decoder.HttpReferenceDiscovery "git-upload-pack")) >>= function
     | Error err ->
@@ -539,14 +539,14 @@ module Make_ext
       |> want >>= function
       | [] -> Lwt.return (Ok ([], 0))
       | first :: rest ->
-        let negociation_request done_or_flush has =
+        let negociation_request done_or_flush have =
           let pp_done_or_flush ppf = function
             | `Done -> Fmt.pf ppf "`Done"
             | `Flush -> Fmt.pf ppf "`Flush"
           in
 
           Log.debug (fun l -> l ~header:"fetch" "Send a POST negociation request (done:%a): %a."
-                        pp_done_or_flush done_or_flush (Fmt.Dump.list Store.Hash.pp) has);
+                        pp_done_or_flush done_or_flush (Fmt.Dump.list Store.Hash.pp) (Store.Hash.Set.elements have));
 
           let req =
             Web.Request.v
@@ -564,7 +564,7 @@ module Make_ext
                                                     ; capabilities
                                                     ; shallow
                                                     ; deep = deepen
-                                                    ; has }))))
+                                                    ; has = Store.Hash.Set.elements have }))))
             (Web.Request.meth req)
             (Web.Request.uri req
              |> (fun uri -> Uri.with_scheme uri (Some scheme))
@@ -581,12 +581,12 @@ module Make_ext
             Lwt_result.(populate ?stdout ?stderr git stream >>= fun (_, n) -> Lwt.return (Ok (first :: rest, n)))
         in
 
-        match has with
-        | [] ->
-          negociation_request `Done []
+        if Store.Hash.Set.is_empty have
+        then
+          negociation_request `Done Store.Hash.Set.empty
           >>= negociation_result
-        | has ->
-          negociation_request `Flush has >>= fun resp ->
+        else
+          negociation_request `Flush have >>= fun resp ->
 
           Log.debug (fun l -> l ~header:"fetch" "Receiving the first negotiation response.");
 
@@ -599,7 +599,7 @@ module Make_ext
                              the server.");
 
               consume (Web.Response.body resp)
-                (Decoder.decode decoder (Decoder.Negociation (has, ack_mode)))
+                (Decoder.decode decoder (Decoder.Negociation (have, ack_mode)))
               >>= (function
                   | Error err ->
                     Lwt.return (Error (`SmartDecoder err))
@@ -609,12 +609,12 @@ module Make_ext
                                   Decoder.pp_acks acks);
                     negociation_result resp)
             | `Flush ->
-              Lwt_mvar.take keeper >>= fun has -> Lwt_mvar.put keeper has >>= fun () ->
+              Lwt_mvar.take keeper >>= fun have -> Lwt_mvar.put keeper have >>= fun () ->
 
               Log.debug (fun l -> l ~header:"fetch" "Receiving a negotiation response.");
 
               consume (Web.Response.body resp)
-                (Decoder.decode decoder (Decoder.Negociation (has, ack_mode))) >>= function
+                (Decoder.decode decoder (Decoder.Negociation (have, ack_mode))) >>= function
               | Error err ->
                 Lwt.return (Error (`SmartDecoder err))
               | Ok acks ->
@@ -624,22 +624,22 @@ module Make_ext
                 | `Ready, _ ->
                   Log.debug (fun l -> l ~header:"fetch" "Ready to download the PACK file.");
                   negociation_result resp
-                | `Again has', state ->
+                | `Again have', state ->
                   Log.debug
                     (fun l -> l ~header:"fetch" "Try again a new common \
                                                  trunk between the \
                                                  client and the server.");
-                  Lwt_mvar.take keeper >>= fun has ->
-                  let has = has @ has' in
-                  Lwt_mvar.put keeper has >>= fun () ->
+                  Lwt_mvar.take keeper >>= fun have ->
+                  let have = Store.Hash.Set.union have have' in
+                  Lwt_mvar.put keeper have >>= fun () ->
 
-                  negociation_request `Flush has >>= loop state
+                  negociation_request `Flush have >>= loop state
                 | `Done, _ ->
                   Lwt_mvar.take keeper >>= fun _ ->
-                  let has = List.map (fun (hash, _) -> hash) acks.Decoder.acks in
-                  Lwt_mvar.put keeper has >>= fun () ->
+                  let have = List.map (fun (hash, _) -> hash) acks.Decoder.acks |> Store.Hash.Set.of_list in
+                  Lwt_mvar.put keeper have >>= fun () ->
 
-                  negociation_request `Done has >>= loop ~done_or_flush:`Done state
+                  negociation_request `Done have >>= loop ~done_or_flush:`Done state
           in
 
           loop nstate resp
@@ -654,7 +654,7 @@ module Make_ext
 
     fetch git ?stdout ?stderr ?headers ?capabilities ~https
       ~negociate:((fun _ () -> Lwt.return (`Done, ())), ())
-      ~has:[]
+      ~have:Store.Hash.Set.empty
       ~want:want_handler
       ?port host path
     >>= function
@@ -692,7 +692,7 @@ module Make_ext
   let fetch_and_set_references git ?capabilities ?headers ~choose ~references
       repository
     =
-    Negociator.find_common git >>= fun (has, state, continue) ->
+    Negociator.find_common git >>= fun (have, state, continue) ->
     let continue { Decoder.acks; shallow; unshallow } state =
       continue { Git.Negociator.acks; shallow; unshallow } state in
     let want_handler = want_handler git choose in
@@ -703,7 +703,7 @@ module Make_ext
     let https =
       Option.mem (Uri.scheme repository) "https" ~equal:String.equal in
     fetch git ~https ?port:(Uri.port repository) ?capabilities ?headers
-      ~negociate:(continue, state) ~has ~want:want_handler host
+      ~negociate:(continue, state) ~have ~want:want_handler host
       (Uri.path_and_query repository)
     >?= fun (results, _) -> update_and_create git ~references results
     >!= fun err -> Lwt.return (`Store err)

@@ -244,6 +244,7 @@ sig
     (** Appears when we encountered a flow which does not respect the
         packet format. *)
     | `Unexpected_end_of_input
+    | `Unexpected_pkt_line
     ]
 
   val pp_error : error Fmt.t
@@ -272,7 +273,7 @@ sig
     | HttpReferenceDiscovery : string -> advertised_refs transaction
     | ReferenceDiscovery     : advertised_refs transaction
     | ShallowUpdate          : shallow_update transaction
-    | Negociation            : Hash.t list * ack_mode -> acks transaction
+    | Negociation            : Hash.Set.t * ack_mode -> acks transaction
     | NegociationResult      : negociation_result transaction
     | PACK                   : side_band -> flow transaction
     | ReportStatus           : side_band -> report_status transaction
@@ -351,7 +352,7 @@ module type ENCODER = sig
     | `HttpUploadRequest of [ `Done | `Flush ] * http_upload_request
     | `UpdateRequest     of update_request
     | `HttpUpdateRequest of update_request
-    | `Has               of Hash.t list
+    | `Has               of Hash.Set.t
     | `Done
     | `Flush
     | `Shallow           of Hash.t list
@@ -431,7 +432,7 @@ sig
     | `Shallow of Hash.t list
     | `UploadRequest of Encoder.upload_request
     | `UpdateRequest of Encoder.update_request
-    | `Has of Hash.t list
+    | `Has of Hash.Set.t
     | `Done
     | `Flush
     | `ReceivePACK

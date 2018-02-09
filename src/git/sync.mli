@@ -79,8 +79,8 @@ module type S = sig
     -> ?shallow:Store.Hash.t list
     -> ?capabilities:Capability.t list
     -> notify:(Client.Decoder.shallow_update -> unit Lwt.t)
-    -> negociate:((Client.Decoder.acks -> 'state -> ([ `Ready | `Done | `Again of Store.Hash.t list ] * 'state) Lwt.t) * 'state)
-    -> has:Store.Hash.t list
+    -> negociate:((Client.Decoder.acks -> 'state -> ([ `Ready | `Done | `Again of Store.Hash.Set.t ] * 'state) Lwt.t) * 'state)
+    -> have:Store.Hash.Set.t
     -> want:((Store.Hash.t * string * bool) list -> (Store.Reference.t * Store.Hash.t) list Lwt.t)
     -> ?deepen:[ `Depth of int | `Timestamp of int64 | `Ref of string ]
     -> Uri.t
