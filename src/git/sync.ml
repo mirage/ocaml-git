@@ -764,7 +764,7 @@ module Make (N: NET) (S: Minimal.S) = struct
     Net.socket uri >>= fun socket ->
     let ctx, state = Client.context { Client.Encoder.pathname = path uri
                                     ; host = Some (host uri, Some (port uri))
-                                    ; request_command = `ReceivePack }
+                                    ; request_command = `Receive_pack }
     in
     let t = { socket
             ; input = Bytes.create 65535
@@ -783,7 +783,7 @@ module Make (N: NET) (S: Minimal.S) = struct
     Net.socket uri >>= fun socket ->
     let ctx, state = Client.context { Client.Encoder.pathname = path uri
                                     ; host = Some (host uri, Some (port uri))
-                                    ; request_command = `UploadPack }
+                                    ; request_command = `Upload_pack }
     in
     let t = { socket
             ; input = Bytes.create 65535
@@ -804,7 +804,7 @@ module Make (N: NET) (S: Minimal.S) = struct
     Net.socket uri >>= fun socket ->
     let ctx, state = Client.context { Client.Encoder.pathname = path uri
                                     ; host = Some (host uri, Some (port uri))
-                                    ; request_command = `UploadPack }
+                                    ; request_command = `Upload_pack }
     in
     let t = { socket
             ; input = Bytes.create 65535
@@ -826,7 +826,7 @@ module Make (N: NET) (S: Minimal.S) = struct
     Net.socket uri >>= fun socket ->
     let ctx, state = Client.context { Client.Encoder.pathname = path uri
                                     ; host = Some (host uri, Some (port uri))
-                                    ; request_command = `UploadPack }
+                                    ; request_command = `Upload_pack }
     in
     let t = { socket
             ; input = Bytes.create 65535

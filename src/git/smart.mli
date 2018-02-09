@@ -15,12 +15,206 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+module Common (Hash: S.HASH):
+sig
+  type hash = Hash.t
+
+  type advertised_refs =
+    { shallow      : Hash.t list
+    ; refs         : (hash * string * bool) list
+    ; capabilities : Capability.t list }
+  (** When the client initially connects the server will immediately respond
+     with a listing of each reference it has (all branches and tags) along with
+     the object name that each reference currently points to.
+
+      This type represents the first sentence of the server. [refs] contains all
+     branches and tags. The [bool] value informs than the reference is peeled
+     ([true]) or not ([false]). [capabilities] contains all informed
+     capabilities by the server. [shallow] contains all informed shallowed
+     hashes in the server. *)
+
+  type shallow_update =
+    { shallow   : hash list
+    ; unshallow : hash list }
+  (** Only when the client sent a positive depth request, the server will
+     determine which commits will and will not be shallow and send this
+     information to the client.
+
+      The server writes ["shallow"] lines for each commit whose parents will not
+     be sent as a result. The server writes an ["unshallow"] line for each
+     commit which the client has indicated is {i shallow}, but is no longer {i
+     shallow} at the currently requested depth (that is, its parents will now be
+     sent). The server MUST NOT marks as ["unshallow"] anything which the client
+     has not indicated was ["shallow"].
+
+      This type represents this information. *)
+
+  type acks =
+    { shallow   : hash list
+    ; unshallow : hash list
+    ; acks      : (hash * [ `Common | `Ready | `Continue | `ACK ]) list }
+  (** In the negociation phase, the server will ACK obj-ids differently
+     depending on which ack mode is chosen by the client:
+
+      {ul
+      {- [`Multi_ack] mode:
+      {ul
+      {- the server will respond with [`Continue] for any common commits.}
+      {- once the server has found an acceptable common base commit and is ready
+     to make a packfile, it will blindly ACK all ["have"] obj-ids back to the
+     client.}
+      {- the server will then send a ["NAK"] and then wait for another response
+     from the client - either a ["done"] or another list of ["have"] lines.}}}
+      {- [`Multi_ack_detailed] mode:
+      {ul
+      {- the server will differentiate the ACKs where it is signaling that it is
+     ready to send data with [`Ready] lines, and signals the identified common
+     commits with [`Common] lines.}}}
+      {- [None] mode:
+      {ul {- upload-pack sends [`ACK] on the first common object it finds. After
+     that it says nothing until the client gives it a ["done"].} {- upload-pack
+     sends ["NAK"] on a [`Flush] if no common object has been found yet. If one
+     has been found, and thus an ACK was already sent, it's silent on the
+     [`Flush].}}}}
+
+      This type represents this information. *)
+
+  (** When the client wants to finish the negociation by [`Done], the server
+     will either send a final [ACK obj_id] or it will send a [NAK]. [obj_id] is
+     the object name of the last commit determined to be common. The server only
+     sends this information after [`Done] if there is at least one common base
+     and [`Multi_ack] or [`Multi_ack_detailed] is enabled. The server always
+     sends [NAK] after [`Done] if there is no common base found.
+
+      Instead [ACK _] or [NAK], the server may send an error message (for
+     example, if it does not recognize an object in a ["want"] line received
+     from the client).
+
+      This type represents this information. *)
+  type negociation_result =
+    | NAK
+    | ACK of hash
+    | ERR of string
+
+  (** If [`Side_band] or [`Side_band_64k] capabilities have been specified by
+     the client, the server will send the packfile data multiplexed.
+
+      Each packet starting with the {i packet-line} length of the amount of data
+     that follows, followed by a single byte specifying the sideband the
+     following data is comming in on.
+
+      In [`Side_band] mode, it will send up to 999 data bytes plus 1 control
+     code, for a total of up to 1000 bytes in a {i packet line}. In
+     [`Side_band_64k] mode it will send up to 65519 data bytes plus 1 control
+     code, for a total of up to 65520 bytes in a {i packed-line}.
+
+      The sideband byte will be a ["1"] ([`Raw]), ["2"] ([`Out]) or a ["3"]
+     ([`Err]). Sideband ["1"] will contain packfile data, sideband [`Out] will
+     be used for progress information that the client will generally print to
+     [stderr] and sideband [`Err] is used for error information.
+
+      In any case, th server will stream the entire packfile in [`Raw]. *)
+  type pack =
+    [ `Raw of Cstruct.t
+    | `Out of Cstruct.t
+    | `Err of Cstruct.t ]
+
+  (** Ther receiving the pack data from the sender, the receiver sends a report
+     if [`Report_status] capability is in effect. It is a short listing of what
+     happened in that update. It will first list the status of the packfile
+     unpacking as either [Ok ()] or [Error msg]. Then it will list the status
+     for each of the references that it tried to update. each line is either [Ok
+     refname] if the update was successful, or [Errorr (refname, msg)] if the
+     update was not.
+
+      This type represents this information. *)
+  type report_status =
+    { unpack   : (unit, string) result
+    ; commands : (string, string * string) result list }
+
+  (** After reference and capabilities discovery, the client can decide to enter
+     to the negociation phase, where the client and server determine what the
+     minimal packfile necessary for transport is, by telling the server what
+     objects it wants, its shallow objects (if any), and the maximum commit
+     depth it wants (if any). The client will also send a list of the
+     capabilities it wants to be in effect, out of what the server said.
+
+      This type represents this information. *)
+  type upload_request =
+    { want         : hash * hash list
+    ; capabilities : Capability.t list
+    ; shallow      : hash list
+    ; deep         : [ `Depth of int | `Timestamp of int64 | `Ref of string ] option }
+
+  type request_command =
+    [ `Upload_pack (** When the client wants to fetch/clone. *)
+    | `Receive_pack (** When the client wants to push. *)
+    | `Upload_archive (** When the client wants an archive of the remote git repository. *)
+    ] (** The Git command. *)
+
+  type git_proto_request =
+    { pathname        : string
+    ; host            : (string * int option) option
+    ; request_command : request_command }
+  (** The Git transport starts off by sending the command and the repository on
+     the wire using the {i packet-line} format, followed by a NUL byte and a
+     hostname parameter, terminated by a NUL byte.deep
+
+      This type represents this information. *)
+
+  type command =
+    | Create of Hash.t * string (** When the client wants to create a new reference. *)
+    | Delete of Hash.t * string (** When the client wants to delete an existing reference in the server side. *)
+    | Update of Hash.t * Hash.t * string (** When the client wants to update an existing reference in the server-side. *)
+
+  type push_certificate =
+    { pusher   : string
+    ; pushee   : string
+    ; nonce    : string
+    ; options  : string list
+    ; commands : command list
+    ; gpg      : string list }
+
+  type update_request =
+    { shallow      : hash list
+    ; requests     : [`Raw of command * command list | `Cert of push_certificate]
+    ; capabilities : Capability.t list }
+  (** Once the client knows what the references the server is at, it can send a
+     list of reference update requests. For each reference on the server that it
+     wants to update, it sends a line listing the obj-id currently on the
+     server, the obj-id the client would like to update it to and the name of
+     the reference.
+
+      This type represents this information. *)
+
+  type http_upload_request =
+    { want         : hash * hash list
+    ; capabilities : Capability.t list
+    ; shallow      : hash list
+    ; deep         : [ `Depth of int | `Timestamp of int64 | `Ref of string ] option
+    ; has          : hash list }
+
+  val pp_advertised_refs: advertised_refs Fmt.t
+  val pp_shallow_update: shallow_update Fmt.t
+  val pp_acks: acks Fmt.t
+  val pp_negociation_result: negociation_result Fmt.t
+  val pp_pack: pack Fmt.t
+  val pp_report_status: report_status Fmt.t
+  val pp_upload_request: upload_request Fmt.t
+  val pp_request_command: request_command Fmt.t
+  val pp_git_proto_request: git_proto_request Fmt.t
+  val pp_command: command Fmt.t
+  val pp_push_certificate: push_certificate Fmt.t
+  val pp_update_request: update_request Fmt.t
+  val pp_http_upload_request: http_upload_request Fmt.t
+end with type hash = Hash.t
+
 (** The Smart protocol including the encoder and the decoder. *)
 
 module type DECODER =
 sig
   module Hash: S.HASH
-  (** The [Digest] module used to make the implementation. *)
+  include module type of Common(Hash) with type hash := Hash.t
 
   type decoder
   (** The type decoder. *)
@@ -71,150 +265,6 @@ sig
                ; committed : int }
     (** When we retrieve an error, we return this value with how many
         byte(s) we processed and the current input. *)
-
-  type advertised_refs =
-    { shallow      : Hash.t list
-    ; refs         : (Hash.t * string * bool) list
-    ; capabilities : Capability.t list }
-  (** When the client initially connects the server will immediately
-      respond with a listing of each reference it has (all branches
-      and tags) along with the object name that each reference
-      currently points to.
-
-      This type represents the first sentence of the server. [refs]
-      contains all branches and tags. The [bool] value informs than
-      the reference is peeled ([true]) or not ([false]).
-      [capabilities] contains all informed capabilities by the server.
-      [shallow] contains all informed shallowed hashes in the
-      server. *)
-
-  val pp_advertised_refs : advertised_refs Fmt.t
-  (** Pretty-printer of {!advertised_refs}. *)
-
-  type shallow_update =
-    { shallow   : Hash.t list
-    ; unshallow : Hash.t list }
-  (** Only when the client sent a positive depth request, the server
-      will determine which commits will and will not be shallow and
-      send this information to the client.
-
-      The server writes ["shallow"] lines for each commit whose
-      parents will not be sent as a result. The server writes an
-      ["unshallow"] line for each commit which the client has
-      indicated is {i shallow}, but is no longer {i shallow} at the
-      currently requested depth (that is, its parents will now be
-      sent). The server MUST NOT marks as ["unshallow"] anything which
-      the client has not indicated was ["shallow"].
-
-      This type represents this information. *)
-
-  val pp_shallow_update : shallow_update Fmt.t
-  (** Pretty-printer of {!shallow_update}. *)
-
-  type acks =
-    { shallow   : Hash.t list
-    ; unshallow : Hash.t list
-    ; acks      : (Hash.t * [ `Common | `Ready | `Continue | `ACK ]) list }
-  (** In the negociation phase, the server will ACK obj-ids
-      differently depending on which ack mode is chosen by the client:
-
-      {ul
-
-      {- [`Multi_ack] mode:
-      {ul
-      {- the server will respond with [`Continue] for any common
-      commits.}
-      {- once the server has found an acceptable common base commit and
-      is ready to make a packfile, it will blindly ACK all ["have"]
-      obj-ids back to the client.}
-      {- the server will then send a ["NAK"] and then wait for another
-      response from the client - either a ["done"] or another list of
-      ["have"] lines.}}}
-
-      {- [`Multi_ack_detailed] mode:
-      {ul
-      {- the server will differentiate the ACKs where it is signaling
-      that it is ready to send data with [`Ready] lines, and signals
-      the identified common commits with [`Common] lines.}}}
-
-      {- [None] mode:
-      {ul
-      {- upload-pack sends [`ACK] on the first common object it finds.
-      After that it says nothing until the client gives it a
-      ["done"].}
-      {- upload-pack sends ["NAK"] on a [`Flush] if no common object
-      has been found yet. If one has been found, and thus an ACK was
-      already sent, it's silent on the [`Flush].}}}}
-
-      This type represents this information. *)
-
-  val pp_acks : acks Fmt.t
-  (** Pretty-printer of {!acks}. *)
-
-  (** When the client wants to finish the negociation by [`Done], the
-      server will either send a final [ACK obj_id] or it will send a
-      [NAK]. [obj_id] is the object name of the last commit determined
-      to be common. The server only sends this information after
-      [`Done] if there is at least one common base and [`Multi_ack] or
-      [`Multi_ack_detailed] is enabled. The server always sends [NAK]
-      after [`Done] if there is no common base found.
-
-      Instead [ACK _] or [NAK], the server may send an error message
-      (for example, if it does not recognize an object in a ["want"]
-      line received from the client).
-
-      This type represents this information. *)
-  type negociation_result =
-    | NAK
-    | ACK of Hash.t
-    | ERR of string
-
-  val pp_negociation_result : negociation_result Fmt.t
-  (** Pretty-printer of {!negociation_result}. *)
-
-  type pack =
-    [ `Raw of Cstruct.t
-    | `Out of Cstruct.t
-    | `Err of Cstruct.t ]
-  (** If [`Side_band] or [`Side_band_64k] capabilities have been
-      specified by the client, the server will send the packfile data
-      multiplexed.
-
-      Each packet starting with the {i packet-line} length of the
-      amount of data that follows, followed by a single byte
-      specifying the sideband the following data is comming in on.
-
-      In [`Side_band] mode, it will send up to 999 data bytes plus 1
-      control code, for a total of up to 1000 bytes in a {i packet
-      line}. In [`Side_band_64k] mode it will send up to 65519 data
-      bytes plus 1 control code, for a total of up to 65520 bytes in a
-      {i packed-line}.
-
-      The sideband byte will be a ["1"] ([`Raw]), ["2"] ([`Out]) or a
-      ["3"] ([`Err]). Sideband ["1"] will contain packfile data,
-      sideband [`Out] will be used for progress information that the
-      client will generally print to [stderr] and sideband [`Err] is
-      used for error information.
-
-      In any case, th server will stream the entire packfile in
-      [`Raw]. *)
-
-  type report_status =
-    { unpack   : (unit, string) result
-    ; commands : (string, string * string) result list }
-  (** Ther receiving the pack data from the sender, the receiver sends
-      a report if [`Report_status] capability is in effect. It is a
-      short listing of what happened in that update. It will first
-      list the status of the packfile unpacking as either [Ok ()] or
-      [Error msg]. Then it will list the status for each of the
-      references that it tried to update. each line is either [Ok
-      refname] if the update was successful, or [Errorr (refname,
-      msg)] if the update was not.
-
-      This type represents this information. *)
-
-  val pp_report_status : report_status Fmt.t
-  (** Pretty-printer of {!report_status}. *)
 
   (** The type transaction to describe what is expected to
       decode/receive. *)
@@ -268,9 +318,8 @@ module Decoder
     implementation. *)
 
 module type ENCODER = sig
-
   module Hash: S.HASH
-  (** The [Digest] module used to make the module. *)
+  include module type of Common(Hash) with type hash := Hash.t
 
   type encoder
   (** The type encoder. *)
@@ -295,69 +344,6 @@ module type ENCODER = sig
         many byte(s) he wrote. *)
     | Ok of 'a
     (** The end value of the encoding. *)
-
-  type upload_request =
-    { want         : Hash.t * Hash.t list
-    ; capabilities : Capability.t list
-    ; shallow      : Hash.t list
-    ; deep         : [ `Depth of int | `Timestamp of int64 | `Ref of string ] option }
-  (** After reference and capabilities discovery, the client can
-      decide to enter to the negociation phase, where the client and
-      server determine what the minimal packfile necessary for
-      transport is, by telling the server what objects it wants, its
-      shallow objects (if any), and the maximum commit depth it wants
-      (if any). The client will also send a list of the capabilities
-      it wants to be in effect, out of what the server said.
-
-      This type represents this information. *)
-
-  type http_upload_request =
-    { want         : Hash.t * Hash.t list
-    ; capabilities : Capability.t list
-    ; shallow      : Hash.t list
-    ; deep         : [ `Depth of int | `Timestamp of int64 | `Ref of string ] option
-    ; has          : Hash.t list }
-
-  type request_command =
-    [ `UploadPack (** When the client wants to fetch/clone. *)
-    | `ReceivePack (** When the client wants to push. *)
-    | `UploadArchive (** When the client wants an archive of the remote git repository. *)
-    ] (** The Git command. *)
-
-  type git_proto_request =
-    { pathname        : string
-    ; host            : (string * int option) option
-    ; request_command : request_command }
-  (** The Git transport starts off by sending the command and the
-      repository on the wire using the {i packet-line} format,
-      followed by a NUL byte and a hostname parameter, terminated by a
-      NUL byte.deep
-
-      This type represents this information. *)
-
-  (** Once the client knows what the references the server is at, it
-      can send a list of reference update requests. For each reference
-      on the server that it wants to update, it sends a line listing
-      the obj-id currently on the server, the obj-id the client would
-      like to update it to and the name of the reference.
-
-      This type represents this information. *)
-  and update_request =
-    { shallow      : Hash.t list
-    ; requests     : [`Raw of command * command list | `Cert of push_certificate]
-    ; capabilities : Capability.t list }
-
-  and command =
-    | Create of Hash.t * string (** When the client wants to create a new reference. *)
-    | Delete of Hash.t * string (** When the client wants to delete an existing reference in the server side. *)
-    | Update of Hash.t * Hash.t * string (** When the client wants to update an existing reference in the server-side. *)
-  and push_certificate =
-    { pusher   : string
-    ; pushee   : string
-    ; nonce    : string
-    ; options  : string list
-    ; commands : command list
-    ; gpg      : string list }
 
   type action =
     [ `GitProtoRequest   of git_proto_request

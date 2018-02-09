@@ -15,13 +15,276 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+module Common (Hash: S.HASH):
+sig
+  type hash = Hash.t
+
+  type advertised_refs =
+    { shallow      : Hash.t list
+    ; refs         : (hash * string * bool) list
+    ; capabilities : Capability.t list }
+
+  type shallow_update =
+    { shallow   : hash list
+    ; unshallow : hash list }
+
+  type acks =
+    { shallow   : hash list
+    ; unshallow : hash list
+    ; acks      : (hash * [ `Common | `Ready | `Continue | `ACK ]) list }
+
+  type negociation_result =
+    | NAK
+    | ACK of hash
+    | ERR of string
+
+  type pack =
+    [ `Raw of Cstruct.t
+    | `Out of Cstruct.t
+    | `Err of Cstruct.t ]
+
+  type report_status =
+    { unpack   : (unit, string) result
+    ; commands : (string, string * string) result list }
+
+  type upload_request =
+    { want         : hash * hash list
+    ; capabilities : Capability.t list
+    ; shallow      : hash list
+    ; deep         : [ `Depth of int | `Timestamp of int64 | `Ref of string ] option }
+
+  type request_command =
+    [ `Upload_pack
+    | `Receive_pack
+    | `Upload_archive ]
+
+  type git_proto_request =
+    { pathname        : string
+    ; host            : (string * int option) option
+    ; request_command : request_command }
+
+  type command =
+    | Create of hash * string
+    | Delete of hash * string
+    | Update of hash * hash * string
+
+  type push_certificate =
+    { pusher   : string
+    ; pushee   : string
+    ; nonce    : string
+    ; options  : string list
+    ; commands : command list
+    ; gpg      : string list }
+
+  type update_request =
+    { shallow      : hash list
+    ; requests     : [`Raw of command * command list | `Cert of push_certificate]
+    ; capabilities : Capability.t list }
+
+  type http_upload_request =
+    { want         : hash * hash list
+    ; capabilities : Capability.t list
+    ; shallow      : hash list
+    ; deep         : [ `Depth of int | `Timestamp of int64 | `Ref of string ] option
+    ; has          : hash list }
+
+  val pp_advertised_refs: advertised_refs Fmt.t
+  val pp_shallow_update: shallow_update Fmt.t
+  val pp_acks: acks Fmt.t
+  val pp_negociation_result: negociation_result Fmt.t
+  val pp_pack: pack Fmt.t
+  val pp_report_status: report_status Fmt.t
+  val pp_upload_request: upload_request Fmt.t
+  val pp_request_command: request_command Fmt.t
+  val pp_git_proto_request: git_proto_request Fmt.t
+  val pp_command: command Fmt.t
+  val pp_push_certificate: push_certificate Fmt.t
+  val pp_update_request: update_request Fmt.t
+  val pp_http_upload_request: http_upload_request Fmt.t
+end with type hash = Hash.t = struct
+  type hash = Hash.t
+
+  type advertised_refs =
+    { shallow      : hash list
+    ; refs         : (hash * string * bool) list
+    ; capabilities : Capability.t list }
+
+  let pp_advertised_refs ppf { shallow; refs; capabilities; } =
+    let pp_ref ppf (hash, refname, peeled) =
+      match peeled with
+      | true -> Fmt.pf ppf "%s^{}:%a" refname Hash.pp hash
+      | false -> Fmt.pf ppf "%s:%a" refname Hash.pp hash in
+    Fmt.pf ppf "{ @[<hov>shallow = %a;@ refs = %a;@ capabilities = %a;@]}"
+      Fmt.Dump.(list Hash.pp) shallow
+      Fmt.Dump.(list pp_ref) refs
+      Fmt.Dump.(list Capability.pp) capabilities
+
+  type shallow_update =
+    { shallow   : hash list
+    ; unshallow : hash list }
+
+  let pp_shallow_update ppf { shallow; unshallow; } =
+    Fmt.pf ppf "{ @[<hov>shallow = %a;@ unshallow = %a;@] }"
+      Fmt.Dump.(list Hash.pp) shallow
+      Fmt.Dump.(list Hash.pp) unshallow
+
+  type acks =
+    { shallow   : hash list
+    ; unshallow : hash list
+    ; acks      : (hash * [ `Common | `Ready | `Continue | `ACK ]) list }
+
+  let pp_acks ppf { shallow; unshallow; acks; } =
+    let pp_ack ppf (hash, ack) = match ack with
+      | `Continue -> Fmt.pf ppf "continue:%a" Hash.pp hash
+      | `Ready    -> Fmt.pf ppf "ready:%a" Hash.pp hash
+      | `Common   -> Fmt.pf ppf "common:%a" Hash.pp hash
+      | `ACK      -> Fmt.pf ppf "ACK:%a" Hash.pp hash in
+    Fmt.pf ppf "{ @[<hov>shallow = %a;@ unshallow = %a;@ acks = %a;@] }"
+      Fmt.Dump.(list Hash.pp) shallow
+      Fmt.Dump.(list Hash.pp) unshallow
+      Fmt.Dump.(list pp_ack) acks
+
+  type negociation_result =
+    | NAK
+    | ACK of hash
+    | ERR of string
+
+  let pp_negociation_result ppf = function
+    | NAK -> Fmt.string ppf "NAK"
+    | ACK hash -> Fmt.pf ppf "(ACK %a)" Hash.pp hash
+    | ERR err -> Fmt.pf ppf "(ERR %s)" err
+
+  type pack =
+    [ `Raw of Cstruct.t
+    | `Out of Cstruct.t
+    | `Err of Cstruct.t ]
+
+  let pp_pack ppf = function
+    | `Raw raw ->
+      Fmt.pf ppf "@[<5>(Raw %a)@]"
+        (Minienc.pp_scalar ~get:Cstruct.get_char ~length:Cstruct.len) raw
+    | `Out out ->
+      Fmt.pf ppf "@[<5>(Out %S)@]" (Cstruct.to_string out)
+    | `Err err ->
+      Fmt.pf ppf "@[<5>(Err %S)@]" (Cstruct.to_string err)
+
+  type report_status =
+    { unpack   : (unit, string) result
+    ; commands : (string, string * string) result list }
+
+  let pp_report_status ppf { unpack; commands; } =
+    Fmt.pf ppf "{ @[<hov>unpack = %a;@ commands = %a;@] }"
+      Fmt.(Dump.result ~ok:Fmt.nop ~error:Fmt.string) unpack
+      Fmt.(Dump.list (Dump.result ~ok:string ~error:(pair string string))) commands
+
+  type upload_request =
+    { want         : hash * hash list
+    ; capabilities : Capability.t list
+    ; shallow      : hash list
+    ; deep         : [ `Depth of int | `Timestamp of int64 | `Ref of string ] option }
+
+  let pp_upload_request ppf { want; capabilities; shallow; deep; } =
+    let pp_deep ppf = function
+      | `Depth n -> Fmt.pf ppf "(Depth %d)" n
+      | `Timestamp n -> Fmt.pf ppf "(Timestamp %Ld)" n
+      | `Ref s -> Fmt.pf ppf "(`Ref %s)" s in
+    Fmt.pf ppf "{ @[<hov>want = %a;@ capabiliteis = %a;@ shallow = %a; deep = %a;@] }"
+      Fmt.(Dump.list Hash.pp) (fst want :: snd want)
+      Fmt.(Dump.list Capability.pp) capabilities
+      Fmt.(Dump.list Hash.pp) shallow
+      Fmt.(Dump.option pp_deep) deep
+
+  type request_command =
+    [ `Upload_pack
+    | `Receive_pack
+    | `Upload_archive ]
+
+  let pp_request_command ppf = function
+    | `Upload_pack -> Fmt.string ppf "`Upload_pack"
+    | `Receive_pack -> Fmt.string ppf "`Receive_pack"
+    | `Upload_archive -> Fmt.string ppf "`Upload_archive"
+
+  type git_proto_request =
+    { pathname        : string
+    ; host            : (string * int option) option
+    ; request_command : request_command }
+
+  let pp_git_proto_request ppf { pathname; host; request_command; } =
+    let pp_host ppf (host, port) = match port with
+      | Some port -> Fmt.pf ppf "%s:%d" host port
+      | None -> Fmt.string ppf host in
+    Fmt.pf ppf "{ @[<hov>pathname = %s;@ host = %a;@ request_command = %a;@] }"
+      pathname
+      Fmt.(Dump.option pp_host) host
+      pp_request_command request_command
+
+  type command =
+    | Create of hash * string
+    | Delete of hash * string
+    | Update of hash * hash * string
+
+  let pp_command ppf = function
+    | Create (hash, refname) -> Fmt.pf ppf "(Create %s:%a)" refname Hash.pp hash
+    | Delete (hash, refname) -> Fmt.pf ppf "(Delete %s:%a)" refname Hash.pp hash
+    | Update (a, b, refname) -> Fmt.pf ppf "(Create %s:@[<0>%a -> %a@])" refname Hash.pp a Hash.pp b
+
+  type push_certificate =
+    { pusher   : string
+    ; pushee   : string
+    ; nonce    : string
+    ; options  : string list
+    ; commands : command list
+    ; gpg      : string list }
+
+  let pp_push_certificate ppf pcert =
+    Fmt.pf ppf "{ @[<hov>pusher = %s;@ pushee = %s;@ nonce = %S;@ options = %a;@ commands = %a;@ gpg = %a;@] }"
+      pcert.pusher pcert.pushee pcert.nonce
+      Fmt.(Dump.list string) pcert.options
+      Fmt.(Dump.list pp_command) pcert.commands
+      Fmt.(Dump.list (fmt "%S")) pcert.gpg
+
+  type update_request =
+    { shallow      : hash list
+    ; requests     : [`Raw of command * command list | `Cert of push_certificate]
+    ; capabilities : Capability.t list }
+
+  let pp_update_request ppf { shallow; requests; capabilities; } =
+    let pp_requests ppf = function
+      | `Raw commands -> Fmt.(Dump.list pp_command) ppf (fst commands :: snd commands)
+      | `Cert pcert -> pp_push_certificate ppf pcert in
+    Fmt.pf ppf "{ @[<hov>shallow = %a;@ requests = %a;@ capabilities = %a;@] }"
+      Fmt.(Dump.list Hash.pp) shallow
+      (Fmt.hvbox pp_requests) requests
+      Fmt.(Dump.list Capability.pp) capabilities
+
+  type http_upload_request =
+    { want         : hash * hash list
+    ; capabilities : Capability.t list
+    ; shallow      : hash list
+    ; deep         : [ `Depth of int | `Timestamp of int64 | `Ref of string ] option
+    ; has          : hash list }
+
+  let pp_http_upload_request ppf { want; capabilities; shallow; deep; has; } =
+    let pp_deep ppf = function
+      | `Depth n -> Fmt.pf ppf "(Depth %d)" n
+      | `Timestamp n -> Fmt.pf ppf "(Timestamp %Ld)" n
+      | `Ref s -> Fmt.pf ppf "(`Ref %s)" s in
+    Fmt.pf ppf "{ @{<hov>want = %a;@ capabilities = %a;@ shallow = %a;@ deep = %a;@ has = %a;@} }"
+      Fmt.(Dump.list Hash.pp) (fst want :: snd want)
+      Fmt.(Dump.list Capability.pp) capabilities
+      Fmt.(Dump.list Hash.pp) shallow
+      Fmt.(Dump.option pp_deep) deep
+      Fmt.(Dump.list Hash.pp) has
+end
+
 module type DECODER =
 sig
-  module Hash : S.HASH
+  module Hash: S.HASH
+  include module type of Common(Hash) with type hash := Hash.t
 
   type decoder
 
-  val pp_decoder : decoder Fmt.t
+  val pp_decoder: decoder Fmt.t
 
   type error =
     [ `Expected_char of char
@@ -33,7 +296,7 @@ sig
     | `Malformed_pkt_line
     | `Unexpected_end_of_input ]
 
-  val pp_error : error Fmt.t
+  val pp_error: error Fmt.t
 
   type 'a state =
     | Ok of 'a
@@ -44,44 +307,6 @@ sig
     | Error of { err       : error
                ; buf       : Cstruct.t
                ; committed : int }
-
-  type advertised_refs =
-    { shallow      : Hash.t list
-    ; refs         : (Hash.t * string * bool) list
-    ; capabilities : Capability.t list }
-
-  val pp_advertised_refs : advertised_refs Fmt.t
-
-  type shallow_update =
-    { shallow   : Hash.t list
-    ; unshallow : Hash.t list }
-
-  val pp_shallow_update : shallow_update Fmt.t
-
-  type acks =
-    { shallow   : Hash.t list
-    ; unshallow : Hash.t list
-    ; acks      : (Hash.t * [ `Common | `Ready | `Continue | `ACK ]) list }
-
-  val pp_acks : acks Fmt.t
-
-  type negociation_result =
-    | NAK
-    | ACK of Hash.t
-    | ERR of string
-
-  val pp_negociation_result : negociation_result Fmt.t
-
-  type pack =
-    [ `Raw of Cstruct.t
-    | `Out of Cstruct.t
-    | `Err of Cstruct.t ]
-
-  type report_status =
-    { unpack   : (unit, string) result
-    ; commands : (string, string * string) result list }
-
-  val pp_report_status : report_status Fmt.t
 
   type _ transaction =
     | HttpReferenceDiscovery : string -> advertised_refs transaction
@@ -106,18 +331,19 @@ sig
     | `Side_band_64k
     | `No_multiplexe ]
 
-  val decode : decoder -> 'result transaction -> 'result state
-  val decoder : unit -> decoder
+  val decode: decoder -> 'result transaction -> 'result state
+  val decoder: unit -> decoder
 end
 
 module type ENCODER =
 sig
-  module Hash : S.HASH
+  module Hash: S.HASH
+  include module type of Common(Hash) with type hash := Hash.t
 
   type encoder
 
-  val set_pos : encoder -> int -> unit
-  val free : encoder -> Cstruct.t
+  val set_pos: encoder -> int -> unit
+  val free: encoder -> Cstruct.t
 
   type 'a state =
     | Write of { buffer    : Cstruct.t
@@ -125,47 +351,6 @@ sig
                ; len       : int
                ; continue  : int -> 'a state }
     | Ok of 'a
-
-  type upload_request =
-    { want         : Hash.t * Hash.t list
-    ; capabilities : Capability.t list
-    ; shallow      : Hash.t list
-    ; deep         : [ `Depth of int | `Timestamp of int64 | `Ref of string ] option }
-
-  type request_command =
-    [ `UploadPack
-    | `ReceivePack
-    | `UploadArchive ]
-
-  type git_proto_request =
-    { pathname        : string
-    ; host            : (string * int option) option
-    ; request_command : request_command }
-
-  type command =
-    | Create of Hash.t * string
-    | Delete of Hash.t * string
-    | Update of Hash.t * Hash.t * string
-
-  type push_certificate =
-    { pusher   : string
-    ; pushee   : string
-    ; nonce    : string
-    ; options  : string list
-    ; commands : command list
-    ; gpg      : string list }
-
-  type update_request =
-    { shallow      : Hash.t list
-    ; requests     : [`Raw of command * command list | `Cert of push_certificate]
-    ; capabilities : Capability.t list }
-
-  type http_upload_request =
-    { want         : Hash.t * Hash.t list
-    ; capabilities : Capability.t list
-    ; shallow      : Hash.t list
-    ; deep         : [ `Depth of int | `Timestamp of int64 | `Ref of string ] option
-    ; has          : Hash.t list }
 
   type action =
     [ `GitProtoRequest   of git_proto_request
@@ -179,16 +364,16 @@ sig
     | `Shallow           of Hash.t list
     | `PACK              of int ]
 
-  val encode : encoder -> action -> unit state
-  val encoder : unit -> encoder
+  val encode: encoder -> action -> unit state
+  val encoder: unit -> encoder
 end
 
 module type CLIENT =
 sig
-  module Hash : S.HASH
+  module Hash: S.HASH
 
-  module Decoder : DECODER with module Hash = Hash
-  module Encoder : ENCODER with module Hash = Hash
+  module Decoder: DECODER with module Hash = Hash
+  module Encoder: ENCODER with module Hash = Hash
 
   type context
 
@@ -219,19 +404,19 @@ sig
     | `SendPACK of int
     | `FinishPACK ]
 
-  val capabilities : context -> Capability.t list
-  val set_capabilities : context -> Capability.t list -> unit
-  val encode : Encoder.action -> (context -> process) -> context -> process
-  val decode : 'a Decoder.transaction -> ('a -> context -> process) -> context -> process
-  val pp_result : result Fmt.t
-  val run : context -> action -> process
-  val context : Encoder.git_proto_request -> context * process
+  val capabilities: context -> Capability.t list
+  val set_capabilities: context -> Capability.t list -> unit
+  val encode: Encoder.action -> (context -> process) -> context -> process
+  val decode: 'a Decoder.transaction -> ('a -> context -> process) -> context -> process
+  val pp_result: result Fmt.t
+  val run: context -> action -> process
+  val context: Encoder.git_proto_request -> context * process
 end
 
-module Decoder (H : S.HASH with type hex = string)
-  : DECODER with module Hash = H =
+module Decoder (Hash: S.HASH): DECODER with module Hash = Hash =
 struct
-  module Hash = H
+  module Hash = Hash
+  include Common(Hash)
 
   (* XXX(dinosaure): Why this decoder? We can use Angstrom instead or another
      library. It's not my first library about the parsing (see Mr. MIME) and I
@@ -628,27 +813,7 @@ struct
 
     (obj_id, refname, peeled)
 
-  type advertised_refs =
-    { shallow      : Hash.t list
-    ; refs         : (Hash.t * string * bool) list
-    ; capabilities : Capability.t list }
-
-  let pp_advertised_refs ppf { shallow; refs; capabilities; } =
-    let sep = Fmt.unit ";@ " in
-    let pp_ref ppf (hash, refname, peeled) =
-      match peeled with
-      | true -> Fmt.pf ppf "%a %s^{}" Hash.pp hash refname
-      | false -> Fmt.pf ppf "%a %s" Hash.pp hash refname
-    in
-
-    Fmt.pf ppf "{ @[<hov>shallow = [ %a ];@ \
-                         refs = [ %a ];@ \
-                         capabilites = [ %a ];@] }"
-      (Fmt.hvbox (Fmt.list ~sep Hash.pp)) shallow
-      (Fmt.hvbox (Fmt.list ~sep pp_ref)) refs
-      (Fmt.hvbox (Fmt.list ~sep Capability.pp)) capabilities
-
-  let rec p_advertised_refs ~pkt ~first ~shallow_state refs decoder =
+  let rec p_advertised_refs ~pkt ~first ~shallow_state (refs:advertised_refs) decoder =
     match pkt with
     | `Flush ->
       p_return refs decoder
@@ -731,19 +896,7 @@ struct
       (p_http_advertised_refs ~service)
       decoder
 
-  type shallow_update =
-    { shallow   : Hash.t list
-    ; unshallow : Hash.t list }
-
-  let pp_shallow_update ppf { shallow; unshallow; } =
-    let sep = Fmt.unit ";@ " in
-
-    Fmt.pf ppf "{ @[<hov>shallow = [ %a ];@ \
-                         unshallow = [ %a ];@] }"
-      (Fmt.hvbox (Fmt.list ~sep Hash.pp)) shallow
-      (Fmt.hvbox (Fmt.list ~sep Hash.pp)) unshallow
-
-  let rec p_shallow_update ~pkt lst decoder = match pkt with
+  let rec p_shallow_update ~pkt (lst:shallow_update) decoder = match pkt with
     | `Flush -> p_return lst decoder
     | `Empty -> raise (Leave (err_unexpected_empty_pkt_line decoder))
     | `Malformed -> raise (Leave (err_malformed_pkt_line decoder))
@@ -801,41 +954,6 @@ struct
 
     hash
 
-  type acks =
-    { shallow   : Hash.t list
-    ; unshallow : Hash.t list
-    ; acks      : (Hash.t * [ `Common | `Ready | `Continue | `ACK ]) list }
-
-  let pp_ack ppf (hash, detail) =
-    let pp_detail ppf = function
-      | `Common -> Fmt.string ppf "`Common"
-      | `Ready -> Fmt.string ppf "`Ready"
-      | `Continue -> Fmt.string ppf "`Continue"
-      | `ACK -> Fmt.string ppf "`ACK"
-    in
-
-    (Fmt.pair Hash.pp pp_detail) ppf (hash, detail)
-
-  let pp_acks ppf { shallow; unshallow; acks; } =
-    let sep = Fmt.unit ";@ " in
-
-    Fmt.pf ppf "{ @[<hov>shallow = [ %a ];@ \
-                         unshallow = [ %a ];@ \
-                         acks = [ %a ];@] }"
-      (Fmt.hvbox (Fmt.list ~sep Hash.pp)) shallow
-      (Fmt.hvbox (Fmt.list ~sep Hash.pp)) unshallow
-      (Fmt.hvbox (Fmt.list ~sep pp_ack)) acks
-
-  type negociation_result =
-    | NAK
-    | ACK of Hash.t
-    | ERR of string
-
-  let pp_negociation_result ppf = function
-    | NAK -> Fmt.string ppf "NAK"
-    | ACK hash -> Fmt.pf ppf "(ACK %a)" Hash.pp hash
-    | ERR err -> Fmt.pf ppf "(ERR %s)" err
-
   let p_negociation_result ~pkt k decoder = match pkt with
     | `Flush -> raise (Leave (err_unexpected_flush_pkt_line decoder))
     | `Empty -> raise (Leave (err_unexpected_empty_pkt_line decoder))
@@ -858,7 +976,7 @@ struct
       | Some chr -> raise (Leave (err_unexpected_char chr decoder))
       | None -> raise (Leave (err_unexpected_end_of_input decoder))
 
-  let rec p_negociation ~pkt ~mode k rest acks decoder =
+  let rec p_negociation ~pkt ~mode k rest (acks:acks) decoder =
     match pkt with
     | `Flush -> raise (Leave (err_unexpected_flush_pkt_line decoder))
     | `Empty -> raise (Leave (err_unexpected_empty_pkt_line decoder))
@@ -908,11 +1026,6 @@ struct
                   ; acks = [] })
       decoder
 
-  type pack =
-    [ `Raw of Cstruct.t
-    | `Out of Cstruct.t
-    | `Err of Cstruct.t ]
-
   let p_pack ~pkt ~mode decoder = match pkt, mode with
     | `Malformed, _ -> raise (Leave (err_malformed_pkt_line decoder))
     | `Empty, _ -> raise (Leave (err_unexpected_empty_pkt_line decoder))
@@ -936,20 +1049,6 @@ struct
 
   let p_pack ~mode decoder =
     p_pkt_line ~strict:true (p_pack ~mode) decoder
-
-  type report_status =
-    { unpack   : (unit, string) result
-    ; commands : (string, string * string) result list }
-
-  let pp_report_status ppf { unpack; commands; } =
-    let sep = Fmt.unit ";@ " in
-
-    let pp_command = Fmt.result ~ok:Fmt.string ~error:(Fmt.pair Fmt.string Fmt.string) in
-
-    Fmt.pf ppf "{ @[<hov>unpack = %a;@ \
-                         commands = [ %a ];@] }"
-      (Fmt.result ~ok:(Fmt.unit "ok") ~error:Fmt.string) unpack
-      (Fmt.hvbox (Fmt.list ~sep pp_command)) commands
 
   let p_unpack decoder : (unit, string) result =
     ignore @@ p_string "unpack" decoder;
@@ -1132,10 +1231,10 @@ struct
     ; eop    = None }
 end
 
-module Encoder (H : S.HASH with type hex = string)
-  : ENCODER with module Hash = H =
+module Encoder (Hash: S.HASH): ENCODER with module Hash = Hash =
 struct
-  module Hash = H
+  module Hash = Hash
+  include Common(Hash)
 
   type encoder =
     { mutable payload : Cstruct.t
@@ -1280,12 +1379,6 @@ struct
   let w_done_and_lf k encoder =
     pkt_line ~lf:true (writes "done") k encoder
 
-  type upload_request =
-    { want         : Hash.t * Hash.t list
-    ; capabilities : Capability.t list
-    ; shallow      : Hash.t list
-    ; deep         : [ `Depth of int | `Timestamp of int64 | `Ref of string ] option }
-
   let w_list w l k encoder =
     let rec aux l encoder = match l with
       | [] -> k encoder
@@ -1294,7 +1387,7 @@ struct
     in
     aux l encoder
 
-  let w_upload_request ?lf upload_request k encoder =
+  let w_upload_request ?lf (upload_request:upload_request) k encoder =
     let first, rest = upload_request.want in
 
     (w_first_want ?lf first upload_request.capabilities
@@ -1307,13 +1400,6 @@ struct
          | None -> noop)
      @@ pkt_flush k)
       encoder
-
-  type http_upload_request =
-    { want         : Hash.t * Hash.t list
-    ; capabilities : Capability.t list
-    ; shallow      : Hash.t list
-    ; deep         : [ `Depth of int | `Timestamp of int64 | `Ref of string ] option
-    ; has          : Hash.t list }
 
   let w_has hash k encoder =
     (writes "have"
@@ -1337,20 +1423,10 @@ struct
   let w_flush k encoder =
     pkt_flush k encoder
 
-  type request_command =
-    [ `UploadPack
-    | `ReceivePack
-    | `UploadArchive ]
-
-  type git_proto_request =
-    { pathname        : string
-    ; host            : (string * int option) option
-    ; request_command : request_command }
-
   let w_request_command request_command k encoder = match request_command with
-    | `UploadPack    -> writes "git-upload-pack"    k encoder
-    | `ReceivePack   -> writes "git-receive-pack"   k encoder
-    | `UploadArchive -> writes "git-upload-archive" k encoder
+    | `Upload_pack    -> writes "git-upload-pack"    k encoder
+    | `Receive_pack   -> writes "git-receive-pack"   k encoder
+    | `Upload_archive -> writes "git-upload-archive" k encoder
 
   let w_git_proto_request git_proto_request k encoder =
     let w_host host k encoder = match host with
@@ -1402,22 +1478,6 @@ struct
     in
 
     go l encoder
-
-  type update_request =
-    { shallow      : Hash.t list
-    ; requests     : [`Raw of command * command list | `Cert of push_certificate]
-    ; capabilities : Capability.t list }
-  and command =
-    | Create of Hash.t * string (* XXX(dinosaure): break the dependence with [Store] and consider the reference name as a string. *)
-    | Delete of Hash.t * string
-    | Update of Hash.t * Hash.t * string
-  and push_certificate =
-    { pusher   : string
-    ; pushee   : string (* XXX(dinosaure): the repository url anonymized. *)
-    ; nonce    : string
-    ; options  : string list
-    ; commands : command list
-    ; gpg      : string list }
 
   let w_command command k encoder =
     match command with
@@ -1478,7 +1538,7 @@ struct
      @@ k)
     encoder
 
-  let w_update_request update_request k encoder =
+  let w_update_request (update_request:update_request) k encoder =
     (w_shallow update_request.shallow
      @@ (match update_request.requests with
          | `Raw commands   -> w_commands update_request.capabilities commands
