@@ -104,8 +104,8 @@ module Make (G: Minimal.S): S with module Store = G = struct
   module Pq = Psq.Make(Store.Hash)(V)
 
   module Decoder
-    : module type of Smart.Decoder(Store.Hash)
-    = Smart.Decoder(Store.Hash)
+    : module type of Smart.Decoder(Store.Hash)(Store.Reference)
+    = Smart.Decoder(Store.Hash)(Store.Reference)
   (* XXX(dinosaure): short-cut of the smart decoder module, the common way is to
      load the [Sync] module but, I don't want. And because we annotated some
      constraints about the type (and specifically about the hash), we can

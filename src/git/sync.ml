@@ -49,7 +49,9 @@ module type S = sig
 
   module Store: Minimal.S
   module Net: NET
-  module Client: Smart.CLIENT with module Hash = Store.Hash
+  module Client: Smart.CLIENT
+    with module Hash = Store.Hash
+     and module Reference = Store.Reference
 
   type error =
     [ `SmartPack of string
@@ -71,16 +73,16 @@ module type S = sig
 
   val push:
     Store.t
-    -> push:((Store.Hash.t * string * bool) list -> (Store.Hash.t list * command list) Lwt.t)
+    -> push:((Store.Hash.t * Store.Reference.t * bool) list -> (Store.Hash.t list * command list) Lwt.t)
     -> ?capabilities:Capability.t list
     -> Uri.t
-    -> ((string, string * string) result list, error) result Lwt.t
+    -> ((Store.Reference.t, Store.Reference.t * string) result list, error) result Lwt.t
 
   val ls:
     Store.t
     -> ?capabilities:Capability.t list
     -> Uri.t
-    -> ((Store.Hash.t * string * bool) list, error) result Lwt.t
+    -> ((Store.Hash.t * Store.Reference.t * bool) list, error) result Lwt.t
 
   val fetch_ext:
     Store.t
@@ -89,7 +91,7 @@ module type S = sig
     -> notify:(Client.Decoder.shallow_update -> unit Lwt.t)
     -> negociate:((Client.Decoder.acks -> 'state -> ([ `Ready | `Done | `Again of Store.Hash.Set.t ] * 'state) Lwt.t) * 'state)
     -> have:Store.Hash.Set.t
-    -> want:((Store.Hash.t * string * bool) list -> (Store.Reference.t * Store.Hash.t) list Lwt.t)
+    -> want:((Store.Hash.t * Store.Reference.t * bool) list -> (Store.Reference.t * Store.Hash.t) list Lwt.t)
     -> ?deepen:[ `Depth of int | `Timestamp of int64 | `Ref of string ]
     -> Uri.t
     -> ((Store.Reference.t * Store.Hash.t) list * int, error) result Lwt.t
@@ -419,7 +421,7 @@ module Make (N: NET) (S: Minimal.S) = struct
   module Store = S
   module Net= N
 
-  module Client = Smart.Client(Store.Hash)
+  module Client = Smart.Client(Store.Hash)(Store.Reference)
   module Hash = Store.Hash
   module Inflate = Store.Inflate
   module Deflate = Store.Deflate
@@ -545,7 +547,7 @@ module Make (N: NET) (S: Minimal.S) = struct
       (try
          let (hash_head, _, _) =
            List.find
-             (fun (_, refname, peeled) -> Store.Reference.(equal reference (of_string refname)) && not peeled)
+             (fun (_, reference', peeled) -> Store.Reference.(equal reference reference') && not peeled)
              refs.Client.Decoder.refs
          in
          Client.run t.ctx (`UploadRequest { Client.Encoder.want = hash_head, [ hash_head ]
@@ -694,12 +696,6 @@ module Make (N: NET) (S: Minimal.S) = struct
                   (Fmt.hvbox (Fmt.Dump.list pp_command)) commands
               );
 
-            List.map
-              (function
-                | `Create (hash, reference) -> `Create (hash, Store.Reference.to_string reference)
-                | `Delete (hash, reference) -> `Delete (hash, Store.Reference.to_string reference)
-                | `Update (a, b, reference) -> `Update (a, b, Store.Reference.to_string reference))
-              commands |> fun commands ->
             let x, r =
               List.map (function
                   | `Create (hash, r) -> Client.Encoder.Create (hash, r)
@@ -845,11 +841,7 @@ module Make (N: NET) (S: Minimal.S) = struct
     N.find_common git >>= fun (have, state, continue) ->
     let continue { Client.Decoder.acks; shallow; unshallow } state =
       continue { Negociator.acks; shallow; unshallow } state in
-    let want_handler refs =
-      List.map
-        (fun (hash, refname, peeled) ->
-           (hash, Store.Reference.of_string refname, peeled))
-        refs |> Common.want_handler git choose in
+    let want_handler = Common.want_handler git choose in
     fetch_ext git ?capabilities ~notify:(fun _ -> Lwt.return ())
       ~negociate:(continue, state) ~have ~want:want_handler
       repository
@@ -935,16 +927,7 @@ module Make (N: NET) (S: Minimal.S) = struct
 
   let update_and_create git ?capabilities ~references repository =
     let push_handler remote_refs =
-      List.map
-        (fun (hash, refname, peeled) -> (hash, Store.Reference.of_string refname, peeled))
-        remote_refs
-      |>  Common.push_handler git references
+      Common.push_handler git references remote_refs
       >>= fun actions -> Lwt.return ([], actions) in
     push git ~push:push_handler ?capabilities repository
-    >>?= fun lst ->
-    Lwt_result.ok (List.map (function
-        | Ok refname -> (Ok (Store.Reference.of_string refname))
-        | Error (refname, err) ->
-          (Error (Store.Reference.of_string refname, err))
-      ) lst |> Lwt.return)
 end

@@ -15,13 +15,14 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Common (Hash: S.HASH):
+module Common (Hash: S.HASH) (Reference: Reference.S):
 sig
   type hash = Hash.t
+  type reference = Reference.t
 
   type advertised_refs =
     { shallow      : Hash.t list
-    ; refs         : (hash * string * bool) list
+    ; refs         : (hash * reference * bool) list
     ; capabilities : Capability.t list }
 
   type shallow_update =
@@ -45,7 +46,7 @@ sig
 
   type report_status =
     { unpack   : (unit, string) result
-    ; commands : (string, string * string) result list }
+    ; commands : (reference, reference * string) result list }
 
   type upload_request =
     { want         : hash * hash list
@@ -64,9 +65,9 @@ sig
     ; request_command : request_command }
 
   type command =
-    | Create of hash * string
-    | Delete of hash * string
-    | Update of hash * hash * string
+    | Create of hash * reference
+    | Delete of hash * reference
+    | Update of hash * hash * reference
 
   type push_certificate =
     { pusher   : string
@@ -101,19 +102,20 @@ sig
   val pp_push_certificate: push_certificate Fmt.t
   val pp_update_request: update_request Fmt.t
   val pp_http_upload_request: http_upload_request Fmt.t
-end with type hash = Hash.t = struct
+end with type hash = Hash.t and type reference = Reference.t = struct
   type hash = Hash.t
+  type reference = Reference.t
 
   type advertised_refs =
     { shallow      : hash list
-    ; refs         : (hash * string * bool) list
+    ; refs         : (hash * reference * bool) list
     ; capabilities : Capability.t list }
 
   let pp_advertised_refs ppf { shallow; refs; capabilities; } =
-    let pp_ref ppf (hash, refname, peeled) =
+    let pp_ref ppf (hash, reference, peeled) =
       match peeled with
-      | true -> Fmt.pf ppf "%s^{}:%a" refname Hash.pp hash
-      | false -> Fmt.pf ppf "%s:%a" refname Hash.pp hash in
+      | true -> Fmt.pf ppf "%a^{}:%a" Reference.pp reference Hash.pp hash
+      | false -> Fmt.pf ppf "%a:%a" Reference.pp reference Hash.pp hash in
     Fmt.pf ppf "{ @[<hov>shallow = %a;@ refs = %a;@ capabilities = %a;@]}"
       Fmt.Dump.(list Hash.pp) shallow
       Fmt.Dump.(list pp_ref) refs
@@ -170,12 +172,12 @@ end with type hash = Hash.t = struct
 
   type report_status =
     { unpack   : (unit, string) result
-    ; commands : (string, string * string) result list }
+    ; commands : (reference, reference * string) result list }
 
   let pp_report_status ppf { unpack; commands; } =
     Fmt.pf ppf "{ @[<hov>unpack = %a;@ commands = %a;@] }"
       Fmt.(Dump.result ~ok:Fmt.nop ~error:Fmt.string) unpack
-      Fmt.(Dump.list (Dump.result ~ok:string ~error:(pair string string))) commands
+      Fmt.(Dump.list (Dump.result ~ok:Reference.pp ~error:(pair Reference.pp string))) commands
 
   type upload_request =
     { want         : hash * hash list
@@ -219,14 +221,14 @@ end with type hash = Hash.t = struct
       pp_request_command request_command
 
   type command =
-    | Create of hash * string
-    | Delete of hash * string
-    | Update of hash * hash * string
+    | Create of hash * reference
+    | Delete of hash * reference
+    | Update of hash * hash * reference
 
   let pp_command ppf = function
-    | Create (hash, refname) -> Fmt.pf ppf "(Create %s:%a)" refname Hash.pp hash
-    | Delete (hash, refname) -> Fmt.pf ppf "(Delete %s:%a)" refname Hash.pp hash
-    | Update (a, b, refname) -> Fmt.pf ppf "(Create %s:@[<0>%a -> %a@])" refname Hash.pp a Hash.pp b
+    | Create (hash, reference) -> Fmt.pf ppf "(Create %a:%a)" Reference.pp reference Hash.pp hash
+    | Delete (hash, reference) -> Fmt.pf ppf "(Delete %a:%a)" Reference.pp reference Hash.pp hash
+    | Update (a, b, reference) -> Fmt.pf ppf "(Create %a:@[<0>%a -> %a@])" Reference.pp reference Hash.pp a Hash.pp b
 
   type push_certificate =
     { pusher   : string
@@ -280,7 +282,10 @@ end
 module type DECODER =
 sig
   module Hash: S.HASH
-  include module type of Common(Hash) with type hash := Hash.t
+  module Reference: Reference.S
+  include module type of Common(Hash)(Reference)
+    with type hash := Hash.t
+     and type reference := Reference.t
 
   type decoder
 
@@ -339,7 +344,10 @@ end
 module type ENCODER =
 sig
   module Hash: S.HASH
-  include module type of Common(Hash) with type hash := Hash.t
+  module Reference: Reference.S
+  include module type of Common(Hash)(Reference)
+    with type hash := Hash.t
+     and type reference := Reference.t
 
   type encoder
 
@@ -372,9 +380,14 @@ end
 module type CLIENT =
 sig
   module Hash: S.HASH
+  module Reference: Reference.S
 
-  module Decoder: DECODER with module Hash = Hash
-  module Encoder: ENCODER with module Hash = Hash
+  module Decoder: DECODER
+    with module Hash = Hash
+     and module Reference = Reference
+  module Encoder: ENCODER
+    with module Hash = Hash
+     and module Reference = Reference
 
   type context
 
@@ -414,10 +427,14 @@ sig
   val context: Encoder.git_proto_request -> context * process
 end
 
-module Decoder (Hash: S.HASH): DECODER with module Hash = Hash =
+module Decoder (Hash: S.HASH) (Reference: Reference.S)
+  : DECODER
+    with module Hash = Hash
+     and module Reference = Reference =
 struct
   module Hash = Hash
-  include Common(Hash)
+  module Reference = Reference
+  include Common(Hash)(Reference)
 
   (* XXX(dinosaure): Why this decoder? We can use Angstrom instead or another
      library. It's not my first library about the parsing (see Mr. MIME) and I
@@ -500,7 +517,7 @@ struct
     match eop with
     | Some eop ->
       Fmt.pf ppf "{ @[<hov>current = %a;@ \
-                           next = %a;@] }"
+                  next = %a;@] }"
         (Fmt.hvbox pp) (Cstruct.sub buffer pos eop)
         (Fmt.hvbox pp) (Cstruct.sub buffer eop max)
     | None -> Fmt.pf ppf "#raw"
@@ -786,7 +803,7 @@ struct
     if Hash.equal obj_id zero_id
     && refname = "capabilities^{}"
     then `No_ref capabilities
-    else `Ref ((obj_id, refname, false), capabilities)
+    else `Ref ((obj_id, Reference.of_string refname, false), capabilities)
 
   let p_shallow decoder =
     let _ = p_string "shallow" decoder in
@@ -815,7 +832,7 @@ struct
       | None -> false
     in
 
-    (obj_id, refname, peeled)
+    (obj_id, Reference.of_string refname, peeled)
 
   let p_flush ~pkt k decoder = match pkt with
     | `Flush -> k decoder
@@ -1064,20 +1081,20 @@ struct
     | "ok" -> Ok ()
     | err  -> Error err
 
-  let p_command_status decoder : (string, string * string) result =
+  let p_command_status decoder : (reference, reference * string) result =
     let status = p_while1 (function ' ' -> false | _ -> true) decoder in
 
     match Cstruct.to_string status with
     | "ok" ->
       p_space decoder;
       let refname = p_while1 (fun _ -> true) decoder |> Cstruct.to_string in
-      Ok refname
+      Ok (Reference.of_string refname)
     | "ng" ->
       p_space decoder;
       let refname = p_while1 (function ' ' -> false | _ -> true) decoder |> Cstruct.to_string in
       p_space decoder;
       let msg = p_while1 (fun _ -> true) decoder |> Cstruct.to_string in
-      Error (refname, msg)
+      Error (Reference.of_string refname, msg)
     | _ -> raise (Leave (err_unexpected_char '\000' decoder))
 
   let rec p_http_report_status ~pkt ?unpack ?(commands = []) ~sideband ~references decoder =
@@ -1214,14 +1231,14 @@ struct
   let decode
     : type result. decoder -> result transaction -> result state
     = fun decoder -> function
-    | HttpReferenceDiscovery service -> p_safe (p_http_advertised_refs ~service) decoder
-    | ReferenceDiscovery             -> p_safe p_advertised_refs decoder
-    | ShallowUpdate                  -> p_safe p_shallow_update decoder
-    | Negociation (hashes, ackmode)  -> p_safe (p_negociation ~mode:ackmode hashes) decoder
-    | NegociationResult              -> p_safe p_negociation_result decoder
-    | PACK sideband                  -> p_safe (p_pack ~mode:sideband) decoder
-    | ReportStatus sideband          -> p_safe (p_report_status sideband) decoder
-    | HttpReportStatus (refs, sideband) -> p_safe (p_http_report_status refs sideband) decoder
+      | HttpReferenceDiscovery service -> p_safe (p_http_advertised_refs ~service) decoder
+      | ReferenceDiscovery             -> p_safe p_advertised_refs decoder
+      | ShallowUpdate                  -> p_safe p_shallow_update decoder
+      | Negociation (hashes, ackmode)  -> p_safe (p_negociation ~mode:ackmode hashes) decoder
+      | NegociationResult              -> p_safe p_negociation_result decoder
+      | PACK sideband                  -> p_safe (p_pack ~mode:sideband) decoder
+      | ReportStatus sideband          -> p_safe (p_report_status sideband) decoder
+      | HttpReportStatus (refs, sideband) -> p_safe (p_http_report_status refs sideband) decoder
 
   let decoder () =
     { buffer = Cstruct.create 65535
@@ -1230,10 +1247,14 @@ struct
     ; eop    = None }
 end
 
-module Encoder (Hash: S.HASH): ENCODER with module Hash = Hash =
+module Encoder (Hash: S.HASH) (Reference: Reference.S)
+  : ENCODER
+    with module Hash = Hash
+     and module Reference = Reference =
 struct
   module Hash = Hash
-  include Common(Hash)
+  module Reference = Reference
+  include Common(Hash)(Reference)
 
   type encoder =
     { mutable payload : Cstruct.t
@@ -1480,26 +1501,26 @@ struct
 
   let w_command command k encoder =
     match command with
-    | Create (hash, refname) ->
+    | Create (hash, reference) ->
       (w_hash zero_id
        @@ w_space
        @@ w_hash hash
        @@ w_space
-       @@ writes refname k)
+       @@ writes (Reference.to_string reference) k)
         encoder
-    | Delete (hash, refname) ->
+    | Delete (hash, reference) ->
       (w_hash hash
        @@ w_space
        @@ w_hash zero_id
        @@ w_space
-       @@ writes refname k)
+       @@ writes (Reference.to_string reference) k)
         encoder
-    | Update (old_id, new_id, refname) ->
+    | Update (old_id, new_id, reference) ->
       (w_hash old_id
        @@ w_space
        @@ w_hash new_id
        @@ w_space
-       @@ writes refname k)
+       @@ writes (Reference.to_string reference) k)
         encoder
 
   let w_first_command capabilities first k encoder =
@@ -1598,12 +1619,15 @@ struct
     ; pos     = 4 }
 end
 
-module Client (H : S.HASH with type hex = string)
-  : CLIENT with module Hash = H =
+module Client (Hash: S.HASH) (Reference: Reference.S)
+  : CLIENT
+    with module Hash = Hash
+     and module Reference = Reference =
 struct
-  module Hash = H
-  module Decoder = Decoder(H)
-  module Encoder = Encoder(H)
+  module Hash = Hash
+  module Reference = Reference
+  module Decoder = Decoder(Hash)(Reference)
+  module Encoder = Encoder(Hash)(Reference)
 
   type context =
     { decoder      : Decoder.decoder

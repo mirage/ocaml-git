@@ -15,13 +15,14 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Common (Hash: S.HASH):
+module Common (Hash: S.HASH) (Reference: Reference.S):
 sig
   type hash = Hash.t
+  type reference = Reference.t
 
   type advertised_refs =
     { shallow      : Hash.t list
-    ; refs         : (hash * string * bool) list
+    ; refs         : (hash * reference * bool) list
     ; capabilities : Capability.t list }
   (** When the client initially connects the server will immediately respond
      with a listing of each reference it has (all branches and tags) along with
@@ -130,7 +131,7 @@ sig
       This type represents this information. *)
   type report_status =
     { unpack   : (unit, string) result
-    ; commands : (string, string * string) result list }
+    ; commands : (reference, reference * string) result list }
 
   (** After reference and capabilities discovery, the client can decide to enter
      to the negociation phase, where the client and server determine what the
@@ -163,9 +164,9 @@ sig
       This type represents this information. *)
 
   type command =
-    | Create of Hash.t * string (** When the client wants to create a new reference. *)
-    | Delete of Hash.t * string (** When the client wants to delete an existing reference in the server side. *)
-    | Update of Hash.t * Hash.t * string (** When the client wants to update an existing reference in the server-side. *)
+    | Create of Hash.t * reference (** When the client wants to create a new reference. *)
+    | Delete of Hash.t * reference (** When the client wants to delete an existing reference in the server side. *)
+    | Update of Hash.t * Hash.t * reference (** When the client wants to update an existing reference in the server-side. *)
 
   type push_certificate =
     { pusher   : string
@@ -214,7 +215,10 @@ end with type hash = Hash.t
 module type DECODER =
 sig
   module Hash: S.HASH
-  include module type of Common(Hash) with type hash := Hash.t
+  module Reference: Reference.S
+  include module type of Common(Hash)(Reference)
+  with type hash := Hash.t
+   and type reference := Reference.t
 
   type decoder
   (** The type decoder. *)
@@ -313,14 +317,19 @@ sig
 end
 
 module Decoder
-    (H : S.HASH with type hex = string)
-  : DECODER with module Hash = H
+    (Hash: S.HASH)
+    (Reference: Reference.S)
+  : DECODER with module Hash = Hash
+             and module Reference = Reference
 (** The {i functor} to make the Decoder by a specific hash
     implementation. *)
 
 module type ENCODER = sig
   module Hash: S.HASH
-  include module type of Common(Hash) with type hash := Hash.t
+  module Reference: Reference.S
+  include module type of Common(Hash)(Reference)
+  with type hash := Hash.t
+   and type reference := Reference.t
 
   type encoder
   (** The type encoder. *)
@@ -369,20 +378,26 @@ module type ENCODER = sig
 end
 
 module Encoder
-    (H : S.HASH with type hex = string)
-  : ENCODER with module Hash = H
+    (Hash: S.HASH)
+    (Reference: Reference.S)
+  : ENCODER with module Hash = Hash
+             and module Reference = Reference
 (** The {i functor} to make the Encoder by a specific hash
     implementation. *)
 
 module type CLIENT =
 sig
   module Hash: S.HASH
-  (** The [Digest] module used to make the implementation. *)
+  module Reference: Reference.S
 
-  module Decoder: DECODER with module Hash = Hash
+  module Decoder: DECODER
+    with module Hash = Hash
+     and module Reference = Reference
   (** The {!Decoder} module constrained by the same [Hash] module. *)
 
-  module Encoder: ENCODER with module Hash = Hash
+  module Encoder: ENCODER
+    with module Hash = Hash
+     and module Reference = Reference
   (** The {!Encoder} module constrained by the same [Hash] module. *)
 
   type context
@@ -451,7 +466,9 @@ sig
 end
 
 module Client
-    (H : S.HASH)
-  : CLIENT with module Hash = H
+    (Hash: S.HASH)
+    (Reference: Reference.S)
+  : CLIENT with module Hash = Hash
+            and module Reference = Reference
 (** The {i functor} to make the Client by a specific hash
     implementation. *)

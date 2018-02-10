@@ -50,8 +50,10 @@ module type S_EXT = sig
 
   module Decoder: Git.Smart.DECODER
     with module Hash = Store.Hash
+     and module Reference = Store.Reference
   module Encoder: Git.Smart.ENCODER
     with module Hash = Store.Hash
+     and module Reference = Store.Reference
 
   type error =
     [ `SmartDecoder of Decoder.error
@@ -81,7 +83,7 @@ module type S_EXT = sig
     -> ?https:bool
     -> ?port:int
     -> ?capabilities:Git.Capability.t list
-    -> string -> string -> ((string, string * string) result list, error) result Lwt.t
+    -> string -> string -> ((Store.Reference.t, Store.Reference.t * string) result list, error) result Lwt.t
 
   val fetch:
     Store.t

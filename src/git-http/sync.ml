@@ -78,8 +78,10 @@ module type S_EXT = sig
 
   module Decoder: Git.Smart.DECODER
     with module Hash = Store.Hash
+     and module Reference = Store.Reference
   module Encoder: Git.Smart.ENCODER
     with module Hash = Store.Hash
+     and module Reference = Store.Reference
 
   type error =
     [ `SmartDecoder of Decoder.error
@@ -109,7 +111,7 @@ module type S_EXT = sig
     -> ?https:bool
     -> ?port:int
     -> ?capabilities:Git.Capability.t list
-    -> string -> string -> ((string, string * string) result list, error) result Lwt.t
+    -> string -> string -> ((Store.Reference.t, Store.Reference.t * string) result list, error) result Lwt.t
 
   val fetch:
        Store.t
@@ -205,8 +207,8 @@ module Make_ext
   module Client = C
   module Store = G
 
-  module Decoder = Git.Smart.Decoder(Store.Hash)
-  module Encoder = Git.Smart.Encoder(Store.Hash)
+  module Decoder = Git.Smart.Decoder(Store.Hash)(Store.Reference)
+  module Encoder = Git.Smart.Encoder(Store.Hash)(Store.Reference)
 
   type error =
     [ `SmartDecoder of Decoder.error
@@ -400,11 +402,7 @@ module Make_ext
         else `No_multiplexe
       in
 
-      List.map
-        (fun (hash, refname, peeled) ->
-           (hash, Store.Reference.of_string refname, peeled))
-        refs.Decoder.refs
-      |> push >>= function
+      push refs.Decoder.refs >>= function
       | (_, []) -> Lwt.return (Ok [])
       | (shallow, commands) ->
         let req =
@@ -429,11 +427,11 @@ module Make_ext
           let x, r =
             List.map (function
                 | `Create (hash, reference) ->
-                  Encoder.Create (hash, Store.Reference.to_string reference)
+                  Encoder.Create (hash, reference)
                 | `Delete (hash, reference) ->
-                  Encoder.Delete (hash, Store.Reference.to_string reference)
+                  Encoder.Delete (hash, reference)
                 | `Update (_of, _to, reference) ->
-                  Encoder.Update (_of, _to, Store.Reference.to_string reference))
+                  Encoder.Update (_of, _to, reference))
               commands
             |> fun commands -> List.hd commands, List.tl commands
           in
@@ -532,11 +530,7 @@ module Make_ext
         else `Ack
       in
 
-      List.map
-        (fun (hash, refname, peeled) ->
-           (hash, Store.Reference.of_string refname, peeled))
-        refs.Decoder.refs
-      |> want >>= function
+      want refs.Decoder.refs >>= function
       | [] -> Lwt.return (Ok ([], 0))
       | first :: rest ->
         let negociation_request done_or_flush have =
@@ -783,12 +777,6 @@ module Make_ext
       Option.mem (Uri.scheme repository) "https" ~equal:String.equal in
     push git ~push:push_handler ~https ?capabilities ?headers ?port:(Uri.port repository)
       host (Uri.path_and_query repository)
-    >?= fun lst ->
-      Lwt_result.ok (List.map (function
-          | Ok refname -> (Ok (Store.Reference.of_string refname))
-          | Error (refname, err) ->
-            (Error (Store.Reference.of_string refname, err))
-        ) lst |> Lwt.return)
 end
 
 module Make
