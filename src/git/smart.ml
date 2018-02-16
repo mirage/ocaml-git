@@ -1491,6 +1491,28 @@ struct
     ; pos    = 0
     ; max    = 0
     ; eop    = None }
+
+  let of_string : type v. string -> v transaction -> (v, error * Cstruct.t * int) result = fun s t ->
+    let decoder = decoder () in
+
+    let rec go consumed = function
+      | Ok v -> (Ok v: (v, error * Cstruct.t * int) result)
+      | Read { buffer
+             ; off
+             ; len
+             ; continue } ->
+        if consumed = String.length s
+        then (Error (err_unexpected_end_of_input decoder): (v, error * Cstruct.t * int) result)
+        else begin
+          let len = min (String.length s - consumed) len in
+          Cstruct.blit_from_string s consumed buffer off len;
+          go (consumed + len) @@ continue len
+        end
+      | Error { err
+              ; buf
+              ; committed } ->
+        (Error (err, buf, committed): (v, error * Cstruct.t * int) result) in
+    go 0 @@ decode decoder t
 end
 
 module Encoder
@@ -1870,6 +1892,20 @@ struct
   let encoder () =
     { payload = Cstruct.create 65535
     ; pos     = 4 }
+
+  let to_string v =
+    let encoder = encoder () in
+    let result = Buffer.create 16 in
+
+    let rec go = function
+      | Write { buffer
+              ; off
+              ; len
+              ; continue } ->
+        Buffer.add_string result (Cstruct.to_string (Cstruct.sub buffer off len));
+        go @@ continue len
+      | Ok () -> Buffer.contents result in
+    go @@ encode encoder v
 end
 
 module Client (Hash: S.HASH) (Reference: Reference.S)
