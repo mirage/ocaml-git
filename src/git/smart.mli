@@ -145,7 +145,7 @@ sig
     { want         : hash * hash list
     ; capabilities : Capability.t list
     ; shallow      : hash list
-    ; deep         : [ `Depth of int | `Timestamp of int64 | `Ref of string ] option }
+    ; deep         : [ `Depth of int | `Timestamp of int64 | `Ref of reference ] option }
 
   type request_command =
     [ `Upload_pack (** When the client wants to fetch/clone. *)
@@ -192,7 +192,7 @@ sig
     { want         : hash * hash list
     ; capabilities : Capability.t list
     ; shallow      : hash list
-    ; deep         : [ `Depth of int | `Timestamp of int64 | `Ref of string ] option
+    ; deep         : [ `Depth of int | `Timestamp of int64 | `Ref of reference ] option
     ; has          : hash list }
 
   val pp_advertised_refs: advertised_refs Fmt.t
