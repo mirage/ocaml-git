@@ -70,6 +70,10 @@ let of_string ?value = function
   | "push-options"                 -> `Push_options
   | "allow-tip-sha1-in-want"       -> `Allow_tip_sha1_in_want
   | "allow-reachable-sha1-in-want" -> `Allow_reachable_sha1_in_want
+  | "push-cert"                    ->
+    (match value with
+     | Some value -> `Push_cert value
+     | None -> raise (Capability_expect_value "push-cert"))
   | "agent"                        ->
     (match value with
      | Some value -> `Agent value
@@ -103,3 +107,34 @@ let pp ppf = function
   | `Other capability             -> Fmt.pf ppf "(other %s)" capability
   | `Parameter (key, value)       -> Fmt.pf ppf "(%s %s)" key value
 
+let compare (a:t) (b:t) = match a, b with
+  | `Multi_ack, `Multi_ack
+  | `Multi_ack_detailed, `Multi_ack_detailed
+  | `No_done, `No_done
+  | `Thin_pack, `Thin_pack
+  | `Side_band, `Side_band
+  | `Side_band_64k, `Side_band_64k
+  | `Ofs_delta, `Ofs_delta
+  | `Shallow, `Shallow
+  | `Deepen_since, `Deepen_since
+  | `Deepen_not, `Deepen_not
+  | `No_progress, `No_progress
+  | `Include_tag, `Include_tag
+  | `Report_status, `Report_status
+  | `Delete_refs, `Delete_refs
+  | `Quiet, `Quiet
+  | `Atomic, `Atomic
+  | `Push_options, `Push_options
+  | `Allow_tip_sha1_in_want, `Allow_tip_sha1_in_want
+  | `Allow_reachable_sha1_in_want, `Allow_reachable_sha1_in_want -> 0
+  | `Push_cert a, `Push_cert b
+  | `Agent a, `Agent b
+  | `Other a, `Other b -> String.compare a b
+  | `Parameter (ka, va), `Parameter (kb, vb) ->
+    let res = String.compare ka kb in
+    if res = 0 then String.compare va vb else res
+  | a, b ->
+    if a > b
+    then 1 else (-1)
+
+let equal a b = compare a b = 0

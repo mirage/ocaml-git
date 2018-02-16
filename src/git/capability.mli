@@ -216,3 +216,6 @@ val of_string : ?value:string -> string -> t
 
 val pp : t Fmt.t
 (** Pretty-printer of {!t}. *)
+
+val compare: t -> t -> int
+val equal: t -> t -> bool
