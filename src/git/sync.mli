@@ -80,11 +80,11 @@ module type S = sig
     Store.t
     -> ?shallow:Store.Hash.t list
     -> ?capabilities:Capability.t list
-    -> notify:(Client.Decoder.shallow_update -> unit Lwt.t)
-    -> negociate:((Client.Decoder.acks -> 'state -> ([ `Ready | `Done | `Again of Store.Hash.Set.t ] * 'state) Lwt.t) * 'state)
+    -> notify:(Client.Common.shallow_update -> unit Lwt.t)
+    -> negociate:((Client.Common.acks -> 'state -> ([ `Ready | `Done | `Again of Store.Hash.Set.t ] * 'state) Lwt.t) * 'state)
     -> have:Store.Hash.Set.t
     -> want:((Store.Hash.t * Store.Reference.t * bool) list -> (Store.Reference.t * Store.Hash.t) list Lwt.t)
-    -> ?deepen:[ `Depth of int | `Timestamp of int64 | `Ref of string ]
+    -> ?deepen:[ `Depth of int | `Timestamp of int64 | `Ref of Reference.t ]
     -> Uri.t
     -> ((Store.Reference.t * Store.Hash.t) list * int, error) result Lwt.t
 

@@ -48,12 +48,17 @@ module type S_EXT = sig
      and type resp = Web.resp
   module Store: Git.S
 
+  module Common: Git.Smart.COMMON
+    with type hash := Store.Hash.t
+     and type reference = Store.Reference.t
   module Decoder: Git.Smart.DECODER
     with module Hash = Store.Hash
      and module Reference = Store.Reference
+     and module Common := Common
   module Encoder: Git.Smart.ENCODER
     with module Hash = Store.Hash
      and module Reference = Store.Reference
+     and module Common := Common
 
   type error =
     [ `SmartDecoder of Decoder.error
@@ -69,7 +74,7 @@ module type S_EXT = sig
     -> ?https:bool
     -> ?port:int
     -> ?capabilities:Git.Capability.t list
-    -> string -> string -> (Decoder.advertised_refs, error) result Lwt.t
+    -> string -> string -> (Common.advertised_refs, error) result Lwt.t
 
   type command =
     [ `Create of (Store.Hash.t * Store.Reference.t)
@@ -93,10 +98,10 @@ module type S_EXT = sig
     -> ?headers:Web.HTTP.headers
     -> ?https:bool
     -> ?capabilities:Git.Capability.t list
-    -> negociate:((Decoder.acks -> 'state -> ([ `Ready | `Done | `Again of Store.Hash.Set.t ] * 'state) Lwt.t) * 'state)
+    -> negociate:((Common.acks -> 'state -> ([ `Ready | `Done | `Again of Store.Hash.Set.t ] * 'state) Lwt.t) * 'state)
     -> have:Store.Hash.Set.t
     -> want:((Store.Hash.t * Store.Reference.t * bool) list -> (Store.Reference.t * Store.Hash.t) list Lwt.t)
-    -> ?deepen:[ `Depth of int | `Timestamp of int64 | `Ref of string ]
+    -> ?deepen:[ `Depth of int | `Timestamp of int64 | `Ref of Store.Reference.t ]
     -> ?port:int
     -> string -> string -> ((Store.Reference.t * Store.Hash.t) list * int, error) result Lwt.t
 

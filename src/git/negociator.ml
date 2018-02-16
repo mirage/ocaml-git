@@ -71,7 +71,13 @@ type 'a acks =
 
 module type S = sig
   module Store: Minimal.S
-  module Decoder: Smart.DECODER with module Hash = Store.Hash
+  module Common: Smart.COMMON
+    with type hash := Store.Hash.t
+     and type reference := Store.Reference.t
+  module Decoder: Smart.DECODER
+    with module Hash = Store.Hash
+     and module Reference = Store.Reference
+     and module Common := Common
 
   type state
   type nonrec acks = Store.Hash.t acks
@@ -103,9 +109,8 @@ module Make (G: Minimal.S): S with module Store = G = struct
 
   module Pq = Psq.Make(Store.Hash)(V)
 
-  module Decoder
-    : module type of Smart.Decoder(Store.Hash)(Store.Reference)
-    = Smart.Decoder(Store.Hash)(Store.Reference)
+  module Common = Smart.Common(Store.Hash)(Store.Reference)
+  module Decoder = Smart.Decoder(Store.Hash)(Store.Reference)(Common)
   (* XXX(dinosaure): short-cut of the smart decoder module, the common way is to
      load the [Sync] module but, I don't want. And because we annotated some
      constraints about the type (and specifically about the hash), we can

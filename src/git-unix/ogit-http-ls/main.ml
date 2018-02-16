@@ -111,7 +111,7 @@ let main show_tags show_heads repository =
         (Uri.host repository))
      (Uri.path_and_query repository)
   >>!= sync_err
-  >>?= fun { Sync_http.Decoder.refs; _ } ->
+  >>?= fun { Sync_http.Common.refs; _ } ->
   let refs =
     List.filter (fun (_, reference, _) ->
         let path = Store.Reference.to_path reference in
