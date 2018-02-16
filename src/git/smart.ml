@@ -15,10 +15,10 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Common (Hash: S.HASH) (Reference: Reference.S):
+module type COMMON =
 sig
-  type hash = Hash.t
-  type reference = Reference.t
+  type hash
+  type reference
 
   type advertised_refs =
     { shallow      : Hash.t list
@@ -118,7 +118,12 @@ sig
   val equal_push_certificate: push_certificate equal
   val equal_update_request: update_request equal
   val equal_http_upload_request: http_upload_request equal
-end with type hash = Hash.t and type reference = Reference.t = struct
+end
+
+module Common (Hash: S.HASH) (Reference: Reference.S)
+  : COMMON with type hash = Hash.t
+            and type reference = Reference.t
+= struct
   type hash = Hash.t
   type reference = Reference.t
   type 'a equal = 'a -> 'a -> bool
@@ -497,9 +502,7 @@ module type DECODER =
 sig
   module Hash: S.HASH
   module Reference: Reference.S
-  include module type of Common(Hash)(Reference)
-    with type hash := Hash.t
-     and type reference := Reference.t
+  module Common: COMMON with type hash := Hash.t and type reference := Reference.t
 
   type decoder
 
@@ -529,14 +532,14 @@ sig
                ; committed : int }
 
   type _ transaction =
-    | HttpReferenceDiscovery : string -> advertised_refs transaction
-    | ReferenceDiscovery     : advertised_refs transaction
-    | ShallowUpdate          : shallow_update transaction
-    | Negociation            : Hash.Set.t * ack_mode -> acks transaction
-    | NegociationResult      : negociation_result transaction
+    | HttpReferenceDiscovery : string -> Common.advertised_refs transaction
+    | ReferenceDiscovery     : Common.advertised_refs transaction
+    | ShallowUpdate          : Common.shallow_update transaction
+    | Negociation            : Hash.Set.t * ack_mode -> Common.acks transaction
+    | NegociationResult      : Common.negociation_result transaction
     | PACK                   : side_band -> flow transaction
-    | ReportStatus           : side_band -> report_status transaction
-    | HttpReportStatus       : string list * side_band -> report_status transaction
+    | ReportStatus           : side_band -> Common.report_status transaction
+    | HttpReportStatus       : string list * side_band -> Common.report_status transaction
   and ack_mode =
     [ `Ack
     | `Multi_ack
@@ -553,15 +556,14 @@ sig
 
   val decode: decoder -> 'result transaction -> 'result state
   val decoder: unit -> decoder
+  val of_string: string -> 'v transaction -> ('v, error * Cstruct.t * int) result
 end
 
 module type ENCODER =
 sig
   module Hash: S.HASH
   module Reference: Reference.S
-  include module type of Common(Hash)(Reference)
-    with type hash := Hash.t
-     and type reference := Reference.t
+  module Common: COMMON with type hash := Hash.t and type reference := Reference.t
 
   type encoder
 
@@ -576,19 +578,20 @@ sig
     | Ok of 'a
 
   type action =
-    [ `GitProtoRequest   of git_proto_request
-    | `UploadRequest     of upload_request
-    | `HttpUploadRequest of [ `Done | `Flush ] * http_upload_request
-    | `UpdateRequest     of update_request
-    | `HttpUpdateRequest of update_request
-    | `Has               of Hash.Set.t
+    [ `GitProtoRequest    of Common.git_proto_request
+    | `UploadRequest      of Common.upload_request
+    | `HttpUploadRequest  of [ `Done | `Flush ] * Common.http_upload_request
+    | `UpdateRequest      of Common.update_request
+    | `HttpUpdateRequest  of Common.update_request
+    | `Has                of Hash.Set.t
     | `Done
     | `Flush
-    | `Shallow           of Hash.t list
-    | `PACK              of int ]
+    | `Shallow            of Hash.t list
+    | `PACK               of int ]
 
   val encode: encoder -> action -> unit state
   val encoder: unit -> encoder
+  val to_string: action -> string
 end
 
 module type CLIENT =
@@ -596,35 +599,40 @@ sig
   module Hash: S.HASH
   module Reference: Reference.S
 
+  module Common: COMMON
+    with type hash := Hash.t
+     and type reference := Reference.t
   module Decoder: DECODER
     with module Hash = Hash
      and module Reference = Reference
+     and module Common := Common
   module Encoder: ENCODER
     with module Hash = Hash
      and module Reference = Reference
+     and module Common := Common
 
   type context
 
   type result =
-    [ `Refs of Decoder.advertised_refs
-    | `ShallowUpdate of Decoder.shallow_update
-    | `Negociation of Decoder.acks
-    | `NegociationResult of Decoder.negociation_result
+    [ `Refs of Common.advertised_refs
+    | `ShallowUpdate of Common.shallow_update
+    | `Negociation of Common.acks
+    | `NegociationResult of Common.negociation_result
     | `PACK of Decoder.flow
     | `Flush
     | `Nothing
     | `ReadyPACK of Cstruct.t
-    | `ReportStatus of Decoder.report_status ]
+    | `ReportStatus of Common.report_status ]
   type process =
     [ `Read of (Cstruct.t * int * int * (int -> process))
     | `Write of (Cstruct.t * int * int * (int -> process))
     | `Error of (Decoder.error * Cstruct.t * int)
     | result ]
   type action =
-    [ `GitProtoRequest of Encoder.git_proto_request
+    [ `GitProtoRequest of Common.git_proto_request
     | `Shallow of Hash.t list
-    | `UploadRequest of Encoder.upload_request
-    | `UpdateRequest of Encoder.update_request
+    | `UploadRequest of Common.upload_request
+    | `UpdateRequest of Common.update_request
     | `Has of Hash.Set.t
     | `Done
     | `Flush
@@ -638,17 +646,21 @@ sig
   val decode: 'a Decoder.transaction -> ('a -> context -> process) -> context -> process
   val pp_result: result Fmt.t
   val run: context -> action -> process
-  val context: Encoder.git_proto_request -> context * process
+  val context: Common.git_proto_request -> context * process
 end
 
-module Decoder (Hash: S.HASH) (Reference: Reference.S)
+module Decoder
+    (Hash: S.HASH)
+    (Reference: Reference.S)
+    (Common: COMMON with type hash := Hash.t and type reference := Reference.t)
   : DECODER
     with module Hash = Hash
-     and module Reference = Reference =
+     and module Reference = Reference
+     and module Common = Common =
 struct
   module Hash = Hash
   module Reference = Reference
-  include Common(Hash)(Reference)
+  module Common = Common
 
   (* XXX(dinosaure): Why this decoder? We can use Angstrom instead or another
      library. It's not my first library about the parsing (see Mr. MIME) and I
@@ -1427,14 +1439,14 @@ struct
 
   (* XXX(dinosaure): désolé mais ce GADT, c'est quand même la classe. *)
   type _ transaction =
-    | HttpReferenceDiscovery : string -> advertised_refs transaction
-    | ReferenceDiscovery : advertised_refs transaction
-    | ShallowUpdate      : shallow_update transaction
-    | Negociation        : Hash.Set.t * ack_mode -> acks transaction
-    | NegociationResult  : negociation_result transaction
-    | PACK               : side_band -> flow transaction
-    | ReportStatus       : side_band -> report_status transaction
-    | HttpReportStatus   : string list * side_band -> report_status transaction
+    | HttpReferenceDiscovery : string -> Common.advertised_refs transaction
+    | ReferenceDiscovery     : Common.advertised_refs transaction
+    | ShallowUpdate          : Common.shallow_update transaction
+    | Negociation            : Hash.Set.t * ack_mode -> Common.acks transaction
+    | NegociationResult      : Common.negociation_result transaction
+    | PACK                   : side_band -> flow transaction
+    | ReportStatus           : side_band -> Common.report_status transaction
+    | HttpReportStatus       : string list * side_band -> Common.report_status transaction
   and ack_mode =
     [ `Ack | `Multi_ack | `Multi_ack_detailed ]
   and flow =
@@ -1445,13 +1457,13 @@ struct
   let decode
     : type result. decoder -> result transaction -> result state
     = fun decoder -> function
-      | HttpReferenceDiscovery service -> p_safe (p_http_advertised_refs ~service) decoder
-      | ReferenceDiscovery             -> p_safe p_advertised_refs decoder
-      | ShallowUpdate                  -> p_safe p_shallow_update decoder
-      | Negociation (hashes, ackmode)  -> p_safe (p_negociation ~mode:ackmode hashes) decoder
-      | NegociationResult              -> p_safe p_negociation_result decoder
-      | PACK sideband                  -> p_safe (p_pack ~mode:sideband) decoder
-      | ReportStatus sideband          -> p_safe (p_report_status sideband) decoder
+      | HttpReferenceDiscovery service    -> p_safe (p_http_advertised_refs ~service) decoder
+      | ReferenceDiscovery                -> p_safe p_advertised_refs decoder
+      | ShallowUpdate                     -> p_safe p_shallow_update decoder
+      | Negociation (hashes, ackmode)     -> p_safe (p_negociation ~mode:ackmode hashes) decoder
+      | NegociationResult                 -> p_safe p_negociation_result decoder
+      | PACK sideband                     -> p_safe (p_pack ~mode:sideband) decoder
+      | ReportStatus sideband             -> p_safe (p_report_status sideband) decoder
       | HttpReportStatus (refs, sideband) -> p_safe (p_http_report_status refs sideband) decoder
 
   let decoder () =
@@ -1461,14 +1473,18 @@ struct
     ; eop    = None }
 end
 
-module Encoder (Hash: S.HASH) (Reference: Reference.S)
+module Encoder
+    (Hash: S.HASH)
+    (Reference: Reference.S)
+    (Common: COMMON with type hash := Hash.t and type reference := Reference.t)
   : ENCODER
     with module Hash = Hash
-     and module Reference = Reference =
+     and module Reference = Reference
+     and module Common = Common =
 struct
   module Hash = Hash
   module Reference = Reference
-  include Common(Hash)(Reference)
+  module Common = Common
 
   type encoder =
     { mutable payload : Cstruct.t
@@ -1621,7 +1637,7 @@ struct
     in
     aux l encoder
 
-  let w_upload_request ?lf (upload_request:upload_request) k encoder =
+  let w_upload_request ?lf (upload_request:Common.upload_request) k encoder =
     let first, rest = upload_request.want in
 
     (w_first_want ?lf first upload_request.capabilities
@@ -1644,10 +1660,10 @@ struct
   let w_has ?lf hash k encoder = pkt_line ?lf (w_has hash) k encoder
 
   let w_http_upload_request at_the_end http_upload_request k encoder =
-    (w_upload_request ~lf:true { want         = http_upload_request.want
-                               ; capabilities = http_upload_request.capabilities
-                               ; shallow      = http_upload_request.shallow
-                               ; deep         = http_upload_request.deep }
+    (w_upload_request ~lf:true { Common.want  = http_upload_request.Common.want
+                               ; capabilities = http_upload_request.Common.capabilities
+                               ; shallow      = http_upload_request.Common.shallow
+                               ; deep         = http_upload_request.Common.deep }
      @@ (w_list (w_has ~lf:true) http_upload_request.has)
      @@ (if at_the_end = `Done
          then w_done_and_lf k
@@ -1679,7 +1695,7 @@ struct
       | None -> noop k encoder
     in
 
-    (w_request_command git_proto_request.request_command
+    (w_request_command git_proto_request.Common.request_command
      @@ w_space
      @@ writes git_proto_request.pathname
      @@ w_null
@@ -1715,21 +1731,21 @@ struct
 
   let w_command command k encoder =
     match command with
-    | Create (hash, reference) ->
+    | Common.Create (hash, reference) ->
       (w_hash zero_id
        @@ w_space
        @@ w_hash hash
        @@ w_space
        @@ writes (Reference.to_string reference) k)
         encoder
-    | Delete (hash, reference) ->
+    | Common.Delete (hash, reference) ->
       (w_hash hash
        @@ w_space
        @@ w_hash zero_id
        @@ w_space
        @@ writes (Reference.to_string reference) k)
         encoder
-    | Update (old_id, new_id, reference) ->
+    | Common.Update (old_id, new_id, reference) ->
       (w_hash old_id
        @@ w_space
        @@ w_hash new_id
@@ -1760,23 +1776,23 @@ struct
 
     ((fun k e -> pkt_line ~lf:true (fun k -> writes "push-cert" @@ w_null @@ w_capabilities capabilities k) k e)
      @@ (fun k e -> pkt_line ~lf:true (writes "certificate version 0.1") k e)
-     @@ (fun k e -> pkt_line ~lf:true (fun k -> writes "pusher" @@ w_space @@ writes push_cert.pusher k) k e)
-     @@ (fun k e -> pkt_line ~lf:true (fun k -> writes "pushee" @@ w_space @@ writes push_cert.pushee k) k e)
-     @@ (fun k e -> pkt_line ~lf:true (fun k -> writes "nonce" @@ w_space @@ writes push_cert.nonce k) k e)
-     @@ (fun k e -> w_list (fun x k e -> pkt_line ~lf:true (fun k -> writes "push-option" @@ w_space @@ writes x k) k e) push_cert.options k e)
+     @@ (fun k e -> pkt_line ~lf:true (fun k -> writes "pusher" @@ w_space @@ writes push_cert.Common.pusher k) k e)
+     @@ (fun k e -> pkt_line ~lf:true (fun k -> writes "pushee" @@ w_space @@ writes push_cert.Common.pushee k) k e)
+     @@ (fun k e -> pkt_line ~lf:true (fun k -> writes "nonce" @@ w_space @@ writes push_cert.Common.nonce k) k e)
+     @@ (fun k e -> w_list (fun x k e -> pkt_line ~lf:true (fun k -> writes "push-option" @@ w_space @@ writes x k) k e) push_cert.Common.options k e)
      @@ (fun k e -> pkt_line ~lf:true noop k e)
-     @@ (fun k e -> w_list (fun x k e -> pkt_line ~lf:true (w_command x) k e) push_cert.commands k e)
-     @@ (fun k e -> w_list (fun x k e -> pkt_line ~lf:true (writes x) k e) push_cert.gpg k e)
+     @@ (fun k e -> w_list (fun x k e -> pkt_line ~lf:true (w_command x) k e) push_cert.Common.commands k e)
+     @@ (fun k e -> w_list (fun x k e -> pkt_line ~lf:true (writes x) k e) push_cert.Common.gpg k e)
      @@ (fun k e -> pkt_line ~lf:true (writes "push-cert-end") k e)
      @@ pkt_flush
      @@ k)
     encoder
 
-  let w_update_request (update_request:update_request) k encoder =
-    (w_shallow update_request.shallow
-     @@ (match update_request.requests with
-         | `Raw commands   -> w_commands update_request.capabilities commands
-         | `Cert push_cert -> w_push_certificates update_request.capabilities push_cert)
+  let w_update_request (update_request:Common.update_request) k encoder =
+    (w_shallow update_request.Common.shallow
+     @@ (match update_request.Common.requests with
+         | `Raw commands   -> w_commands update_request.Common.capabilities commands
+         | `Cert push_cert -> w_push_certificates update_request.Common.capabilities push_cert)
      @@ k)
       encoder
 
@@ -1805,28 +1821,33 @@ struct
     w_update_request i k encoder
 
   type action =
-    [ `GitProtoRequest   of git_proto_request
-    | `UploadRequest     of upload_request
-    | `HttpUploadRequest of [ `Done | `Flush ] * http_upload_request
-    | `UpdateRequest     of update_request
-    | `HttpUpdateRequest of update_request
-    | `Has               of Hash.Set.t
+    [ `GitProtoRequest    of Common.git_proto_request
+    | `UploadRequest      of Common.upload_request
+    | `HttpUploadRequest  of [ `Done | `Flush ] * Common.http_upload_request
+    | `UpdateRequest      of Common.update_request
+    | `HttpUpdateRequest  of Common.update_request
+    | `Has                of Hash.Set.t
     | `Done
     | `Flush
-    | `PACK              of int
-    | `Shallow           of Hash.t list ]
+    | `PACK               of int
+    | `Shallow            of Hash.t list ]
 
   let encode encoder = function
-    | `GitProtoRequest c        -> w_git_proto_request c     (fun _ -> Ok ()) encoder
-    | `UploadRequest i          -> w_upload_request i        (fun _ -> Ok ()) encoder
-    | `HttpUploadRequest (v, i) -> w_http_upload_request v i (fun _ -> Ok ()) encoder
-    | `UpdateRequest i          -> w_update_request i        (fun _ -> Ok ()) encoder
-    | `HttpUpdateRequest i      -> w_http_update_request i   (fun _ -> Ok ()) encoder
-    | `Has l                    -> w_has l                   (fun _ -> Ok ()) encoder
-    | `Done                     -> w_done                    (fun _ -> Ok ()) encoder
-    | `Flush                    -> w_flush                   (fun _ -> Ok ()) encoder
-    | `Shallow l                -> w_shallow l               (fun _ -> Ok ()) encoder
-    | `PACK n                   -> w_pack n                  (fun _ -> Ok ()) encoder
+    | `GitProtoRequest c        -> w_git_proto_request c         (fun _ -> Ok ()) encoder
+    | `UploadRequest i          -> w_upload_request i            (fun _ -> Ok ()) encoder
+    | `HttpUploadRequest (v, i) -> w_http_upload_request v i     (fun _ -> Ok ()) encoder
+    | `Advertised_refs v        -> w_advertised_refs v           (fun _ -> Ok ()) encoder
+    | `Shallow_update v         -> w_shallow_update v            (fun _ -> Ok ()) encoder
+    | `Negociation v            -> w_negociation v               (fun _ -> Ok ()) encoder
+    | `Negociation_result v     -> w_negociation_result v        (fun _ -> Ok ()) encoder
+    | `Report_status (s, v)     -> w_report_status ~sideband:s v (fun _ -> Ok ()) encoder
+    | `UpdateRequest i          -> w_update_request i            (fun _ -> Ok ()) encoder
+    | `HttpUpdateRequest i      -> w_http_update_request i       (fun _ -> Ok ()) encoder
+    | `Has l                    -> w_has l                       (fun _ -> Ok ()) encoder
+    | `Done                     -> w_done                        (fun _ -> Ok ()) encoder
+    | `Flush                    -> w_flush                       (fun _ -> Ok ()) encoder
+    | `Shallow l                -> w_shallows l                  (fun _ -> Ok ()) encoder
+    | `PACK n                   -> w_pack n                      (fun _ -> Ok ()) encoder
 
   let encoder () =
     { payload = Cstruct.create 65535
@@ -1840,8 +1861,9 @@ module Client (Hash: S.HASH) (Reference: Reference.S)
 struct
   module Hash = Hash
   module Reference = Reference
-  module Decoder = Decoder(Hash)(Reference)
-  module Encoder = Encoder(Hash)(Reference)
+  module Common = Common(Hash)(Reference)
+  module Decoder = Decoder(Hash)(Reference)(Common)
+  module Encoder = Encoder(Hash)(Reference)(Common)
 
   type context =
     { decoder      : Decoder.decoder
@@ -1871,15 +1893,15 @@ struct
     loop (Decoder.decode ctx.decoder phase)
 
   type result =
-    [ `Refs of Decoder.advertised_refs
-    | `ShallowUpdate of Decoder.shallow_update
-    | `Negociation of Decoder.acks
-    | `NegociationResult of Decoder.negociation_result
+    [ `Refs of Common.advertised_refs
+    | `ShallowUpdate of Common.shallow_update
+    | `Negociation of Common.acks
+    | `NegociationResult of Common.negociation_result
     | `PACK of Decoder.flow
     | `Flush
     | `Nothing
     | `ReadyPACK of Cstruct.t
-    | `ReportStatus of Decoder.report_status ]
+    | `ReportStatus of Common.report_status ]
 
   type process =
     [ `Read  of (Cstruct.t * int * int * (int -> process ))
@@ -1889,14 +1911,14 @@ struct
 
   let pp_result ppf = function
     | `Refs refs ->
-      Fmt.pf ppf "(`Refs %a)" (Fmt.hvbox Decoder.pp_advertised_refs) refs
+      Fmt.pf ppf "(`Refs %a)" (Fmt.hvbox Common.pp_advertised_refs) refs
     | `ShallowUpdate shallow_update ->
-      Fmt.pf ppf "(`ShallowUpdate %a)" (Fmt.hvbox Decoder.pp_shallow_update) shallow_update
+      Fmt.pf ppf "(`ShallowUpdate %a)" (Fmt.hvbox Common.pp_shallow_update) shallow_update
     | `Negociation acks ->
       Fmt.pf ppf "(`Negociation %a)"
-        (Fmt.hvbox Decoder.pp_acks) acks
+        (Fmt.hvbox Common.pp_acks) acks
     | `NegociationResult result ->
-      Fmt.pf ppf "(`NegociationResult %a)" (Fmt.hvbox Decoder.pp_negociation_result) result
+      Fmt.pf ppf "(`NegociationResult %a)" (Fmt.hvbox Common.pp_negociation_result) result
     | `PACK (`Err _) ->
       Fmt.pf ppf "(`Pack stderr)"
     | `PACK (`Out _) ->
@@ -1912,13 +1934,13 @@ struct
     | `ReadyPACK _ ->
       Fmt.pf ppf "(`ReadyPACK #raw)"
     | `ReportStatus status ->
-      Fmt.pf ppf "(`ReportStatus %a)" (Fmt.hvbox Decoder.pp_report_status) status
+      Fmt.pf ppf "(`ReportStatus %a)" (Fmt.hvbox Common.pp_report_status) status
 
   type action =
-    [ `GitProtoRequest of Encoder.git_proto_request
+    [ `GitProtoRequest of Common.git_proto_request
     | `Shallow of Hash.t list
-    | `UploadRequest of Encoder.upload_request
-    | `UpdateRequest of Encoder.update_request
+    | `UploadRequest of Common.upload_request
+    | `UpdateRequest of Common.update_request
     | `Has of Hash.Set.t
     | `Done
     | `Flush
@@ -1932,28 +1954,28 @@ struct
         (`GitProtoRequest c)
         (decode Decoder.ReferenceDiscovery
            (fun refs ctx ->
-              ctx.capabilities <- refs.Decoder.capabilities;
+              ctx.capabilities <- refs.Common.capabilities;
               `Refs refs))
         context
     | `Flush ->
       encode `Flush (fun _ -> `Flush) context
-    | `UploadRequest (descr : Encoder.upload_request) ->
-      let common = List.filter (fun x -> List.exists ((=) x) context.capabilities) descr.Encoder.capabilities in
+    | `UploadRequest (descr : Common.upload_request) ->
+      let common = List.filter (fun x -> List.exists ((=) x) context.capabilities) descr.Common.capabilities in
       (* XXX(dinosaure): we update with the shared capabilities between the
          client and the server. *)
 
       context.capabilities <- common;
 
-      let next = match descr.Encoder.deep with
+      let next = match descr.Common.deep with
         | Some (`Depth n) ->
           if n > 0
           then decode Decoder.ShallowUpdate (fun shallow_update _ -> `ShallowUpdate shallow_update)
-          else (fun _ -> `ShallowUpdate { Decoder.shallow = []; unshallow = []; })
-        | _ -> (fun _ -> `ShallowUpdate { Decoder.shallow = []; unshallow = []; })
+          else (fun _ -> `ShallowUpdate { Common.shallow = []; unshallow = []; })
+        | _ -> (fun _ -> `ShallowUpdate { Common.shallow = []; unshallow = []; })
       in
       encode (`UploadRequest descr) next context
-    | `UpdateRequest (descr : Encoder.update_request) ->
-      let common = List.filter (fun x -> List.exists ((=) x) context.capabilities) descr.Encoder.capabilities in
+    | `UpdateRequest (descr:Common.update_request) ->
+      let common = List.filter (fun x -> List.exists ((=) x) context.capabilities) descr.Common.capabilities in
 
       (* XXX(dinosaure): same as below. *)
 
@@ -2020,7 +2042,7 @@ struct
     context, encode (`GitProtoRequest c)
       (decode Decoder.ReferenceDiscovery
          (fun refs ctx ->
-            ctx.capabilities <- refs.Decoder.capabilities;
+            ctx.capabilities <- refs.Common.capabilities;
             `Refs refs))
       context
 end

@@ -15,10 +15,10 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Common (Hash: S.HASH) (Reference: Reference.S):
+module type COMMON =
 sig
-  type hash = Hash.t
-  type reference = Reference.t
+  type hash
+  type reference
 
   type advertised_refs =
     { shallow      : Hash.t list
@@ -164,9 +164,9 @@ sig
       This type represents this information. *)
 
   type command =
-    | Create of Hash.t * reference (** When the client wants to create a new reference. *)
-    | Delete of Hash.t * reference (** When the client wants to delete an existing reference in the server side. *)
-    | Update of Hash.t * Hash.t * reference (** When the client wants to update an existing reference in the server-side. *)
+    | Create of hash * reference (** When the client wants to create a new reference. *)
+    | Delete of hash * reference (** When the client wants to delete an existing reference in the server side. *)
+    | Update of hash * hash * reference (** When the client wants to update an existing reference in the server-side. *)
 
   type push_certificate =
     { pusher   : string
@@ -224,7 +224,12 @@ sig
   val equal_push_certificate: push_certificate equal
   val equal_update_request: update_request equal
   val equal_http_upload_request: http_upload_request equal
-end with type hash = Hash.t
+end
+
+module Common (Hash: S.HASH) (Reference: Reference.S)
+  : COMMON
+    with type hash = Hash.t
+     and type reference = Reference.t
 
 (** The Smart protocol including the encoder and the decoder. *)
 
@@ -232,9 +237,7 @@ module type DECODER =
 sig
   module Hash: S.HASH
   module Reference: Reference.S
-  include module type of Common(Hash)(Reference)
-  with type hash := Hash.t
-   and type reference := Reference.t
+  module Common: COMMON with type hash := Hash.t and type reference := Reference.t
 
   type decoder
   (** The type decoder. *)
@@ -290,14 +293,14 @@ sig
   (** The type transaction to describe what is expected to
       decode/receive. *)
   type _ transaction =
-    | HttpReferenceDiscovery : string -> advertised_refs transaction
-    | ReferenceDiscovery     : advertised_refs transaction
-    | ShallowUpdate          : shallow_update transaction
-    | Negociation            : Hash.Set.t * ack_mode -> acks transaction
-    | NegociationResult      : negociation_result transaction
+    | HttpReferenceDiscovery : string -> Common.advertised_refs transaction
+    | ReferenceDiscovery     : Common.advertised_refs transaction
+    | ShallowUpdate          : Common.shallow_update transaction
+    | Negociation            : Hash.Set.t * ack_mode -> Common.acks transaction
+    | NegociationResult      : Common.negociation_result transaction
     | PACK                   : side_band -> flow transaction
-    | ReportStatus           : side_band -> report_status transaction
-    | HttpReportStatus       : string list * side_band -> report_status transaction
+    | ReportStatus           : side_band -> Common.report_status transaction
+    | HttpReportStatus       : string list * side_band -> Common.report_status transaction
 
   (** The ACK mode type to describe which mode is shared by the client
       and the server. *)
@@ -330,22 +333,24 @@ sig
 
   val decoder : unit -> decoder
   (** [decoder ()] makes a new decoder. *)
+
+  val of_string: string -> 'v transaction -> ('v, error * Cstruct.t * int) result
 end
 
 module Decoder
     (Hash: S.HASH)
     (Reference: Reference.S)
+    (Common: COMMON with type hash := Hash.t and type reference := Reference.t)
   : DECODER with module Hash = Hash
              and module Reference = Reference
+             and module Common = Common
 (** The {i functor} to make the Decoder by a specific hash
     implementation. *)
 
 module type ENCODER = sig
   module Hash: S.HASH
   module Reference: Reference.S
-  include module type of Common(Hash)(Reference)
-  with type hash := Hash.t
-   and type reference := Reference.t
+  module Common: COMMON with type hash := Hash.t and type reference := Reference.t
 
   type encoder
   (** The type encoder. *)
@@ -372,16 +377,16 @@ module type ENCODER = sig
     (** The end value of the encoding. *)
 
   type action =
-    [ `GitProtoRequest   of git_proto_request
-    | `UploadRequest     of upload_request
-    | `HttpUploadRequest of [ `Done | `Flush ] * http_upload_request
-    | `UpdateRequest     of update_request
-    | `HttpUpdateRequest of update_request
-    | `Has               of Hash.Set.t
+    [ `GitProtoRequest    of Common.git_proto_request
+    | `UploadRequest      of Common.upload_request
+    | `HttpUploadRequest  of [ `Done | `Flush ] * Common.http_upload_request
+    | `UpdateRequest      of Common.update_request
+    | `HttpUpdateRequest  of Common.update_request
+    | `Has                of Hash.Set.t
     | `Done
     | `Flush
-    | `Shallow           of Hash.t list
-    | `PACK              of int ]
+    | `Shallow            of Hash.t list
+    | `PACK               of int ]
   (** The type action to describe what is expected to encode/send. *)
 
   val encode : encoder -> action -> unit state
@@ -391,13 +396,17 @@ module type ENCODER = sig
 
   val encoder : unit -> encoder
   (** [encoder ()] makes a new decoder. *)
+
+  val to_string: action -> string
 end
 
 module Encoder
     (Hash: S.HASH)
     (Reference: Reference.S)
+    (Common: COMMON with type hash := Hash.t and type reference := Reference.t)
   : ENCODER with module Hash = Hash
              and module Reference = Reference
+             and module Common = Common
 (** The {i functor} to make the Encoder by a specific hash
     implementation. *)
 
@@ -406,14 +415,20 @@ sig
   module Hash: S.HASH
   module Reference: Reference.S
 
+  module Common: COMMON
+    with type hash := Hash.t
+     and type reference := Reference.t
+
   module Decoder: DECODER
     with module Hash = Hash
      and module Reference = Reference
+     and module Common := Common
   (** The {!Decoder} module constrained by the same [Hash] module. *)
 
   module Encoder: ENCODER
     with module Hash = Hash
      and module Reference = Reference
+     and module Common := Common
   (** The {!Encoder} module constrained by the same [Hash] module. *)
 
   type context
@@ -428,15 +443,15 @@ sig
       the [context]. *)
 
   type result =
-    [ `Refs of Decoder.advertised_refs
-    | `ShallowUpdate of Decoder.shallow_update
-    | `Negociation of Decoder.acks
-    | `NegociationResult of Decoder.negociation_result
+    [ `Refs of Common.advertised_refs
+    | `ShallowUpdate of Common.shallow_update
+    | `Negociation of Common.acks
+    | `NegociationResult of Common.negociation_result
     | `PACK of Decoder.flow
     | `Flush
     | `Nothing
     | `ReadyPACK of Cstruct.t
-    | `ReportStatus of Decoder.report_status
+    | `ReportStatus of Common.report_status
     ] (** The possible repsonse of the server. *)
 
   type process =
@@ -459,10 +474,10 @@ sig
   (** Pretty-print of {!result}. *)
 
   type action =
-    [ `GitProtoRequest of Encoder.git_proto_request
+    [ `GitProtoRequest of Common.git_proto_request
     | `Shallow of Hash.t list
-    | `UploadRequest of Encoder.upload_request
-    | `UpdateRequest of Encoder.update_request
+    | `UploadRequest of Common.upload_request
+    | `UpdateRequest of Common.update_request
     | `Has of Hash.Set.t
     | `Done
     | `Flush
@@ -476,7 +491,7 @@ sig
   (** [run ctx action] sends an action to the server and schedule a
       specific {!Decoder.transaction} then. *)
 
-  val context : Encoder.git_proto_request -> context * process
+  val context : Common.git_proto_request -> context * process
   (** [context request] makes a new context and the continuation of
       the transport. *)
 end
