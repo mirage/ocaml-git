@@ -208,6 +208,22 @@ sig
   val pp_push_certificate: push_certificate Fmt.t
   val pp_update_request: update_request Fmt.t
   val pp_http_upload_request: http_upload_request Fmt.t
+
+  type 'a equal = 'a -> 'a -> bool
+
+  val equal_advertised_refs: advertised_refs equal
+  val equal_shallow_update: shallow_update equal
+  val equal_acks: acks equal
+  val equal_negociation_result: negociation_result equal
+  val equal_pack: pack equal
+  val equal_report_status: report_status equal
+  val equal_upload_request: upload_request equal
+  val equal_request_command: request_command equal
+  val equal_git_proto_request: git_proto_request equal
+  val equal_command: command equal
+  val equal_push_certificate: push_certificate equal
+  val equal_update_request: update_request equal
+  val equal_http_upload_request: http_upload_request equal
 end with type hash = Hash.t
 
 (** The Smart protocol including the encoder and the decoder. *)

@@ -102,9 +102,26 @@ sig
   val pp_push_certificate: push_certificate Fmt.t
   val pp_update_request: update_request Fmt.t
   val pp_http_upload_request: http_upload_request Fmt.t
+
+  type 'a equal = 'a -> 'a -> bool
+
+  val equal_advertised_refs: advertised_refs equal
+  val equal_shallow_update: shallow_update equal
+  val equal_acks: acks equal
+  val equal_negociation_result: negociation_result equal
+  val equal_pack: pack equal
+  val equal_report_status: report_status equal
+  val equal_upload_request: upload_request equal
+  val equal_request_command: request_command equal
+  val equal_git_proto_request: git_proto_request equal
+  val equal_command: command equal
+  val equal_push_certificate: push_certificate equal
+  val equal_update_request: update_request equal
+  val equal_http_upload_request: http_upload_request equal
 end with type hash = Hash.t and type reference = Reference.t = struct
   type hash = Hash.t
   type reference = Reference.t
+  type 'a equal = 'a -> 'a -> bool
 
   type advertised_refs =
     { shallow      : hash list
@@ -121,6 +138,24 @@ end with type hash = Hash.t and type reference = Reference.t = struct
       Fmt.Dump.(list pp_ref) refs
       Fmt.Dump.(list Capability.pp) capabilities
 
+  let equal_advertised_refs a b =
+    let equal_ref (hash_a, ref_a, peeled_a) (hash_b, ref_b, peeled_b) =
+      Hash.equal hash_a hash_b
+      && Reference.equal ref_a ref_b
+      && peeled_a = peeled_b in
+    let compare_ref (_, a, _) (_, b, _) = Reference.compare a b in
+    try
+      List.for_all2 Hash.equal
+        (List.sort Hash.compare a.shallow)
+        (List.sort Hash.compare b.shallow)
+      && List.for_all2 equal_ref
+        (List.sort compare_ref a.refs)
+        (List.sort compare_ref b.refs)
+      && List.for_all2 Capability.equal
+        (List.sort Capability.compare a.capabilities)
+        (List.sort Capability.compare b.capabilities)
+    with Invalid_argument _ -> false
+
   type shallow_update =
     { shallow   : hash list
     ; unshallow : hash list }
@@ -129,6 +164,16 @@ end with type hash = Hash.t and type reference = Reference.t = struct
     Fmt.pf ppf "{ @[<hov>shallow = %a;@ unshallow = %a;@] }"
       Fmt.Dump.(list Hash.pp) shallow
       Fmt.Dump.(list Hash.pp) unshallow
+
+  let equal_shallow_update a b =
+    try
+      List.for_all2 Hash.equal
+        (List.sort Hash.compare a.shallow)
+        (List.sort Hash.compare b.shallow)
+      && List.for_all2 Hash.equal
+        (List.sort Hash.compare a.unshallow)
+        (List.sort Hash.compare b.unshallow)
+    with Invalid_argument _ -> false
 
   type acks =
     { shallow   : hash list
@@ -146,6 +191,28 @@ end with type hash = Hash.t and type reference = Reference.t = struct
       Fmt.Dump.(list Hash.pp) unshallow
       Fmt.Dump.(list pp_ack) acks
 
+  let equal_acks a b =
+    let equal_ack (hash_a, detail_a) (hash_b, detail_b) =
+      Hash.equal hash_a hash_b
+      && (match detail_a, detail_b with
+          | `Common, `Common -> true
+          | `Ready, `Ready -> true
+          | `Continue, `Continue -> true
+          | `ACK, `ACK -> true
+          | _, _ -> false) in
+    let compare_ack (a, _) (b, _) = Hash.compare a b in
+    try
+      List.for_all2 Hash.equal
+        (List.sort Hash.compare a.shallow)
+        (List.sort Hash.compare b.shallow)
+      && List.for_all2 Hash.equal
+        (List.sort Hash.compare a.unshallow)
+        (List.sort Hash.compare b.unshallow)
+      && List.for_all2 equal_ack
+        (List.sort compare_ack a.acks)
+        (List.sort compare_ack b.acks)
+    with Invalid_argument _ -> false
+
   type negociation_result =
     | NAK
     | ACK of hash
@@ -155,6 +222,12 @@ end with type hash = Hash.t and type reference = Reference.t = struct
     | NAK -> Fmt.string ppf "NAK"
     | ACK hash -> Fmt.pf ppf "(ACK %a)" Hash.pp hash
     | ERR err -> Fmt.pf ppf "(ERR %s)" err
+
+  let equal_negociation_result a b = match a, b with
+    | NAK, NAK -> true
+    | ACK a, ACK b -> Hash.equal a b
+    | ERR a, ERR b -> String.equal a b
+    | _, _ -> false
 
   type pack =
     [ `Raw of Cstruct.t
@@ -170,6 +243,12 @@ end with type hash = Hash.t and type reference = Reference.t = struct
     | `Err err ->
       Fmt.pf ppf "@[<5>(Err %S)@]" (Cstruct.to_string err)
 
+  let equal_pack a b = match a, b with
+    | `Err a, `Err b
+    | `Out a, `Out b
+    | `Raw a, `Raw b -> Cstruct.equal a b
+    | _, _ -> false
+
   type report_status =
     { unpack   : (unit, string) result
     ; commands : (reference, reference * string) result list }
@@ -179,27 +258,77 @@ end with type hash = Hash.t and type reference = Reference.t = struct
       Fmt.(Dump.result ~ok:Fmt.nop ~error:Fmt.string) unpack
       Fmt.(Dump.list (Dump.result ~ok:Reference.pp ~error:(pair Reference.pp string))) commands
 
+  let equal_report_status a b =
+    let equal_result ~ok ~error a b = match a, b with
+      | Ok a, Ok b -> ok a b
+      | Error a, Error b -> error a b
+      | _, _ -> false in
+    let compare_result ~ok ~error a b = match a, b with
+      | Ok a, Ok b -> ok a b
+      | Error a, Error b -> error a b
+      | Ok _, Error _ -> 1
+      | Error _, Ok _ -> (-1) in
+    let compare_ref_and_msg (ref_a, msg_a) (ref_b, msg_b) =
+      let res = Reference.compare ref_a ref_b in
+      if res = 0 then String.compare msg_a msg_b else res in
+    let equal_ref_and_msg a b = compare_ref_and_msg a b = 0 in
+    try
+      equal_result ~ok:(fun () () -> true) ~error:String.equal a.unpack b.unpack
+      && List.for_all2 (equal_result ~ok:Reference.equal ~error:equal_ref_and_msg)
+        (List.sort (compare_result ~ok:Reference.compare ~error:compare_ref_and_msg) a.commands)
+        (List.sort (compare_result ~ok:Reference.compare ~error:compare_ref_and_msg) b.commands)
+    with Invalid_argument _ -> false
+
   type upload_request =
     { want         : hash * hash list
     ; capabilities : Capability.t list
     ; shallow      : hash list
-    ; deep         : [ `Depth of int | `Timestamp of int64 | `Ref of string ] option }
+    ; deep         : [ `Depth of int | `Timestamp of int64 | `Ref of reference ] option }
 
   let pp_upload_request ppf { want; capabilities; shallow; deep; } =
     let pp_deep ppf = function
       | `Depth n -> Fmt.pf ppf "(Depth %d)" n
       | `Timestamp n -> Fmt.pf ppf "(Timestamp %Ld)" n
-      | `Ref s -> Fmt.pf ppf "(`Ref %s)" s in
+      | `Ref r -> Fmt.pf ppf "(`Ref %a)" Reference.pp r in
     Fmt.pf ppf "{ @[<hov>want = %a;@ capabiliteis = %a;@ shallow = %a; deep = %a;@] }"
       Fmt.(Dump.list Hash.pp) (fst want :: snd want)
       Fmt.(Dump.list Capability.pp) capabilities
       Fmt.(Dump.list Hash.pp) shallow
       Fmt.(Dump.option pp_deep) deep
 
+  let equal_upload_request a b =
+    try
+      let equal_deep a b = match a, b with
+        | `Depth a, `Depth b -> a = b
+        | `Timestamp a, `Timestamp b -> Int64.equal a b
+        | `Ref a, `Ref b -> Reference.equal a b
+        | _, _ -> false in
+
+      List.for_all2 Hash.equal
+        (List.sort Hash.compare (fst a.want :: snd a.want))
+        (List.sort Hash.compare (fst b.want :: snd b.want))
+      && List.for_all2 Capability.equal
+        (List.sort Capability.compare a.capabilities)
+        (List.sort Capability.compare b.capabilities)
+      && List.for_all2 Hash.equal
+        (List.sort Hash.compare a.shallow)
+        (List.sort Hash.compare b.shallow)
+      && (match a.deep, b.deep with
+          | Some a, Some b -> equal_deep a b
+          | None, None -> true
+          | _, _ -> false)
+    with Invalid_argument _ -> false
+
   type request_command =
     [ `Upload_pack
     | `Receive_pack
     | `Upload_archive ]
+
+  let equal_request_command a b = match a, b with
+    | `Upload_pack, `Upload_pack
+    | `Receive_pack, `Receive_pack
+    | `Upload_archive, `Upload_archive -> true
+    | _, _ -> true
 
   let pp_request_command ppf = function
     | `Upload_pack -> Fmt.string ppf "`Upload_pack"
@@ -220,6 +349,18 @@ end with type hash = Hash.t and type reference = Reference.t = struct
       Fmt.(Dump.option pp_host) host
       pp_request_command request_command
 
+  let equal_git_proto_request a b =
+    let equal_option equal a b = match a, b with
+      | Some a, Some b -> equal a b
+      | None, None -> true
+      | _, _ -> false in
+    let equal_host (host_a, port_a) (host_b, port_b) =
+      String.equal host_a host_b
+      && equal_option (=) port_a port_b in
+    String.equal a.pathname b.pathname
+    && equal_option equal_host a.host b.host
+    && equal_request_command a.request_command b.request_command
+
   type command =
     | Create of hash * reference
     | Delete of hash * reference
@@ -229,6 +370,15 @@ end with type hash = Hash.t and type reference = Reference.t = struct
     | Create (hash, reference) -> Fmt.pf ppf "(Create %a:%a)" Reference.pp reference Hash.pp hash
     | Delete (hash, reference) -> Fmt.pf ppf "(Delete %a:%a)" Reference.pp reference Hash.pp hash
     | Update (a, b, reference) -> Fmt.pf ppf "(Create %a:@[<0>%a -> %a@])" Reference.pp reference Hash.pp a Hash.pp b
+
+  let equal_command a b = match a, b with
+    | Create (hash_a, ref_a), Create (hash_b, ref_b) ->
+      Hash.equal hash_a hash_b && Reference.equal ref_a ref_b
+    | Delete (hash_a, ref_a), Delete (hash_b, ref_b) ->
+      Hash.equal hash_a hash_b && Reference.equal ref_a ref_b
+    | Update (to_a, of_a, ref_a), Update (to_b, of_b, ref_b) ->
+      Hash.equal to_a to_b && Hash.equal of_a of_b && Reference.equal ref_a ref_b
+    | _, _ -> false
 
   type push_certificate =
     { pusher   : string
@@ -245,6 +395,36 @@ end with type hash = Hash.t and type reference = Reference.t = struct
       Fmt.(Dump.list pp_command) pcert.commands
       Fmt.(Dump.list (fmt "%S")) pcert.gpg
 
+  let compare_command a b = match a, b with
+    | Create (hash_a, ref_a), Create (hash_b, ref_b)
+    | Delete (hash_a, ref_a), Delete (hash_b, ref_b) ->
+      let res = Hash.compare hash_a hash_b in
+      if res = 0 then Reference.compare ref_a ref_b else res
+    | Update (to_a, of_a, ref_a), Update (to_b, of_b, ref_b) ->
+      let res = Hash.compare to_a to_b in
+      if res = 0 then
+        let res = Hash.compare of_a of_b in
+        if res = 0 then Reference.compare ref_a ref_b else res
+      else res
+    | Create _, _ -> 1
+    | Delete _, Create _ -> (-1)
+    | Update _, Create _ -> (-1)
+    | Delete _, _ -> 1
+    | Update _, Delete _ -> (-1)
+
+  let equal_push_certificate a b =
+    try
+      String.equal a.pusher b.pusher
+      && String.equal a.pushee b.pushee
+      && String.equal a.nonce b.nonce
+      && List.for_all2 String.equal
+        (List.sort String.compare a.options)
+        (List.sort String.compare b.options)
+      && List.for_all2 equal_command
+        (List.sort compare_command a.commands)
+        (List.sort compare_command b.commands)
+    with Invalid_argument _ -> false
+
   type update_request =
     { shallow      : hash list
     ; requests     : [`Raw of command * command list | `Cert of push_certificate]
@@ -259,12 +439,46 @@ end with type hash = Hash.t and type reference = Reference.t = struct
       (Fmt.hvbox pp_requests) requests
       Fmt.(Dump.list Capability.pp) capabilities
 
+  let equal_update_request a b =
+    let equal_raw a b =
+      List.for_all2 equal_command
+        (List.sort compare_command (fst a :: snd a))
+        (List.sort compare_command (fst b :: snd b)) in
+    try
+      List.for_all2 Hash.equal
+        (List.sort Hash.compare a.shallow)
+        (List.sort Hash.compare b.shallow)
+      && (match a.requests, b.requests with
+          | `Raw a, `Raw b -> equal_raw a b
+          | `Cert a, `Cert b -> equal_push_certificate a b
+          | _, _ -> false)
+      && List.for_all2 Capability.equal
+        (List.sort Capability.compare a.capabilities)
+        (List.sort Capability.compare b.capabilities)
+    with Invalid_argument _ -> false
+
   type http_upload_request =
     { want         : hash * hash list
     ; capabilities : Capability.t list
     ; shallow      : hash list
     ; deep         : [ `Depth of int | `Timestamp of int64 | `Ref of string ] option
     ; has          : hash list }
+
+  let equal_http_upload_request a b =
+    try
+      equal_upload_request
+        { want = a.want
+        ; capabilities = a.capabilities
+        ; shallow = a.shallow
+        ; deep = a.deep }
+        { want = b.want
+        ; capabilities = b.capabilities
+        ; shallow = b.shallow
+        ; deep = b.deep }
+      && List.for_all2 Hash.equal
+        (List.sort Hash.compare a.has)
+        (List.sort Hash.compare b.has)
+    with Invalid_argument _ -> false
 
   let pp_http_upload_request ppf { want; capabilities; shallow; deep; has; } =
     let pp_deep ppf = function
