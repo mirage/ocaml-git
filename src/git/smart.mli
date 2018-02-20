@@ -301,6 +301,7 @@ sig
     | PACK                   : side_band -> flow transaction
     | ReportStatus           : side_band -> Common.report_status transaction
     | HttpReportStatus       : string list * side_band -> Common.report_status transaction
+    | Upload_request         : Common.upload_request transaction
 
   (** The ACK mode type to describe which mode is shared by the client
       and the server. *)
@@ -380,6 +381,11 @@ module type ENCODER = sig
     [ `GitProtoRequest    of Common.git_proto_request
     | `UploadRequest      of Common.upload_request
     | `HttpUploadRequest  of [ `Done | `Flush ] * Common.http_upload_request
+    | `Advertised_refs    of Common.advertised_refs
+    | `Shallow_update     of Common.shallow_update
+    | `Negociation        of Common.acks
+    | `Negociation_result of Common.negociation_result
+    | `Report_status      of [ `No_multiplexe | `Side_band | `Side_band_64k ] * Common.report_status
     | `UpdateRequest      of Common.update_request
     | `HttpUpdateRequest  of Common.update_request
     | `Has                of Hash.Set.t

@@ -540,6 +540,7 @@ sig
     | PACK                   : side_band -> flow transaction
     | ReportStatus           : side_band -> Common.report_status transaction
     | HttpReportStatus       : string list * side_band -> Common.report_status transaction
+    | Upload_request         : Common.upload_request transaction
   and ack_mode =
     [ `Ack
     | `Multi_ack
@@ -581,6 +582,11 @@ sig
     [ `GitProtoRequest    of Common.git_proto_request
     | `UploadRequest      of Common.upload_request
     | `HttpUploadRequest  of [ `Done | `Flush ] * Common.http_upload_request
+    | `Advertised_refs    of Common.advertised_refs
+    | `Shallow_update     of Common.shallow_update
+    | `Negociation        of Common.acks
+    | `Negociation_result of Common.negociation_result
+    | `Report_status      of [ `No_multiplexe | `Side_band | `Side_band_64k ] * Common.report_status
     | `UpdateRequest      of Common.update_request
     | `HttpUpdateRequest  of Common.update_request
     | `Has                of Hash.Set.t
@@ -980,8 +986,6 @@ struct
     |> Cstruct.to_string
     |> Hash.of_hex
 
-  let not_null = (<>) '\000'
-
   let p_capability decoder =
     let capability =
       p_while1
@@ -1284,6 +1288,8 @@ struct
       | `Unshallow hash ->
         let acks = { acks with unshallow = hash :: acks.unshallow } in
         p_pkt_line (p_negociation_one ~mode (go hashes acks)) decoder
+      | `Ack (hash, `ACK) (* when mode = `Ack *) ->
+        k { acks with acks = [ hash, `ACK ] } decoder
       | `Ack (hash, detail) ->
         let hashes = Hash.Set.remove hash hashes in
         let acks = { acks with acks = (hash, detail) :: acks.acks } in
@@ -1457,6 +1463,87 @@ struct
   let p_report_status sideband decoder =
     p_pkt_line (p_report_status ~unpack:None ~commands:None ~sideband) decoder
 
+  let p_first_want decoder =
+    ignore @@ p_string "want" decoder;
+    p_space decoder;
+    let obj_id = p_hash decoder in
+    p_space decoder;
+    let capabilities = p_capabilities1 decoder in
+    (obj_id, capabilities)
+
+  let p_want decoder =
+    ignore @@ p_string "want" decoder;
+    p_space decoder;
+    let obj_id = p_hash decoder in
+    obj_id
+
+  type 'a intl = Int: int intl | Int64: int64 intl
+
+  let p_int, p_int64 =
+    let go : type a. a intl -> decoder -> a
+      = fun intl decoder ->
+      let n = Cstruct.to_string @@ p_while1 (function '0' .. '9' -> true | _ -> false) decoder in
+      (match intl with Int -> int_of_string n | Int64 -> Int64.of_string n) in
+    go Int, go Int64
+
+  let p_deepen decoder =
+    ignore @@ p_string "deepen" decoder;
+    match p_peek_char decoder with
+    | Some ' ' -> p_junk_char decoder; (`Depth (p_int decoder))
+    | Some '-' ->
+       p_junk_char decoder;
+       (match p_peek_char decoder with
+        | Some 's' ->
+           ignore @@ p_string "since" decoder;
+           p_space decoder;
+           (`Timestamp (p_int64 decoder))
+        | Some 'n' ->
+           ignore @@ p_string "not" decoder;
+           p_space decoder;
+           (`Ref (p_reference decoder))
+        | Some chr -> raise (Leave (err_unexpected_char chr decoder))
+        | None -> raise (Leave (err_unexpected_end_of_input decoder)))
+    | Some chr -> raise (Leave (err_unexpected_char chr decoder))
+    | None -> raise (Leave (err_unexpected_end_of_input decoder))
+
+  let p_upload_request decoder =
+    let go_deepen ~pkt (upload_request:Common.upload_request) decoder = match pkt with
+      | #no_line_and_flush as v -> err_expected_line_or_flush decoder v
+      | `Flush -> p_return upload_request decoder
+      | `Line _ -> match p_peek_char decoder with
+                   | Some 'd' ->
+                      let deepen = p_deepen decoder in
+                      p_pkt_flush (p_return { upload_request with Common.deep = Some deepen }) decoder
+                   | Some chr -> raise (Leave (err_unexpected_char chr decoder))
+                   | None -> raise (Leave (err_unexpected_end_of_input decoder)) in
+    let rec go_shallows ~pkt (upload_request:Common.upload_request) decoder = match pkt with
+      | #no_line_and_flush as v -> err_expected_line_or_flush decoder v
+      | `Flush -> p_return upload_request decoder
+      | `Line _ -> match p_peek_char decoder with
+                   | Some 's' ->
+                      let shallow = p_shallow decoder in
+                      p_pkt_line (go_shallows { upload_request with Common.shallow = shallow :: upload_request.shallow }) decoder
+                   | Some 'd' -> go_deepen ~pkt upload_request decoder
+                   | Some chr -> raise (Leave (err_unexpected_char chr decoder))
+                   | None -> raise (Leave (err_unexpected_end_of_input decoder)) in
+    let rec go_wants ~pkt (upload_request:Common.upload_request) decoder = match pkt with
+      | #no_line_and_flush as v -> err_expected_line_or_flush decoder v
+      | `Flush -> p_return upload_request decoder
+      | `Line _ -> match p_peek_char decoder with
+                   | Some 'w' ->
+                      let want = p_want decoder in
+                      p_pkt_line (go_wants { upload_request with Common.want = fst upload_request.Common.want, want :: (snd upload_request.Common.want) }) decoder
+                   | Some 's' -> go_shallows ~pkt upload_request decoder
+                   | Some 'd' -> go_deepen ~pkt upload_request decoder
+                   | Some chr -> raise (Leave (err_unexpected_char chr decoder))
+                   | None -> raise (Leave (err_unexpected_end_of_input decoder)) in
+    let go_first_want ~pkt decoder = match pkt with
+      | #no_line as v -> err_expected_line decoder v
+      | `Line _ ->
+         let (obj_id, capabilities) = p_first_want decoder in
+         p_pkt_line (go_wants { Common.want = (obj_id, []); capabilities; shallow = []; deep = None; }) decoder in
+    p_pkt_line go_first_want decoder
+
   (* XXX(dinosaure): désolé mais ce GADT, c'est quand même la classe. *)
   type _ transaction =
     | HttpReferenceDiscovery : string -> Common.advertised_refs transaction
@@ -1467,6 +1554,7 @@ struct
     | PACK                   : side_band -> flow transaction
     | ReportStatus           : side_band -> Common.report_status transaction
     | HttpReportStatus       : string list * side_band -> Common.report_status transaction
+    | Upload_request         : Common.upload_request transaction
   and ack_mode =
     [ `Ack | `Multi_ack | `Multi_ack_detailed ]
   and flow =
@@ -1485,6 +1573,7 @@ struct
       | PACK sideband                     -> p_safe (p_pack ~mode:sideband) decoder
       | ReportStatus sideband             -> p_safe (p_report_status sideband) decoder
       | HttpReportStatus (refs, sideband) -> p_safe (p_http_report_status refs sideband) decoder
+      | Upload_request                    -> p_safe p_upload_request decoder
 
   let decoder () =
     { buffer = Cstruct.create 65535
@@ -1860,10 +1949,110 @@ struct
   let w_http_update_request i k encoder =
     w_update_request i k encoder
 
+  let w_advertised_refs (advertised_refs:Common.advertised_refs) k encoder =
+    let w_ref (hash, reference, peeled) k encoder =
+      (w_hash hash @@ w_space @@ writes (Reference.to_string reference) @@ (match peeled with
+           | true -> writes "^{}" k
+           | false -> k)) encoder in
+
+    match advertised_refs.Common.refs with
+    | [] ->
+      pkt_line
+        (fun k -> w_hash zero_id
+          @@ w_space
+          @@ writes "capabilities^{}"
+          @@ w_null
+          @@ w_capabilities advertised_refs.Common.capabilities k)
+        (w_shallows advertised_refs.Common.shallow (pkt_flush k)) encoder
+    | first :: refs ->
+      let rec go refs encoder = match refs with
+        | [] -> w_shallows advertised_refs.Common.shallow (pkt_flush k) encoder
+        | reference :: refs ->
+          pkt_line
+            (w_ref reference)
+            (go refs)
+            encoder in
+      pkt_line
+        (fun k -> w_ref first @@ w_null @@ w_capabilities advertised_refs.Common.capabilities k)
+        (go refs)
+        encoder
+
+  let w_shallow hash k encoder =
+    pkt_line (fun k -> writes "shallow" @@ w_space @@ w_hash hash k) k encoder
+
+  let w_unshallow hash k encoder =
+    pkt_line (fun k -> writes "unshallow" @@ w_space @@ w_hash hash k) k encoder
+
+  let w_shallow_update (shallow_update:Common.shallow_update) k encoder =
+    let rec go (shallow_update:Common.shallow_update) encoder =
+      match shallow_update.Common.shallow with
+      | hash :: shallow ->
+        w_shallow hash (go { shallow_update with Common.shallow }) encoder
+      | [] -> match shallow_update.Common.unshallow with
+        | hash :: unshallow ->
+          w_unshallow hash (go { shallow_update with Common.unshallow }) encoder
+        | [] -> pkt_flush k encoder in
+    go shallow_update encoder
+
+  let w_negociation_one value k encoder = match value with
+    | `Ack (hash, `Continue) ->
+      pkt_line (fun k -> writes "ACK" @@ w_space @@ w_hash hash @@ w_space @@ writes "continue" k) k encoder
+    | `Ack (hash, `Common) ->
+      pkt_line (fun k -> writes "ACK" @@ w_space @@ w_hash hash @@ w_space @@ writes "common" k) k encoder
+    | `Ack (hash, `Ready) ->
+      pkt_line (fun k -> writes "ACK" @@ w_space @@ w_hash hash @@ w_space @@ writes "ready" k) k encoder
+    | `Ack (hash, `ACK) ->
+      pkt_line (fun k -> writes "ACK" @@ w_space @@ w_hash hash k) k encoder
+    | `Nak ->
+      pkt_line (writes "NAK") k encoder
+
+  let w_negociation (acks:Common.acks) k encoder =
+    let rec go_ack acks encoder = match acks with
+      | [] -> w_negociation_one `Nak k encoder
+      | ack :: acks -> w_negociation_one (`Ack ack) (go_ack acks) encoder in
+    let rec go_unshallow unshallows encoder = match unshallows with
+      | [] -> go_ack acks.acks encoder
+      | hash :: rest -> w_unshallow hash (go_unshallow rest) encoder in
+    let rec go_shallow shallows encoder = match shallows with
+      | [] -> go_unshallow acks.unshallow encoder
+      | hash :: rest -> w_shallow hash (go_shallow rest) encoder in
+    go_shallow acks.shallow encoder
+
+  let w_negociation_result result k encoder = match result with
+    | Common.NAK -> pkt_line (writes "NAK") k encoder
+    | Common.ACK hash -> pkt_line (fun k -> writes "ACK" @@ w_space @@ w_hash hash k) k encoder
+    | Common.ERR err -> pkt_line (fun k -> writes "ERR" @@ w_space @@ writes err k) k encoder
+
+  let w_report_status ~sideband report_status k encoder =
+    let w_reference reference k encoder =
+      writes (Reference.to_string reference) k encoder in
+    let go_command (command: (Reference.t, Reference.t * string) result) k encoder = match command with
+      | Ok reference -> (writes "ok" @@ w_space @@ w_reference reference k) encoder
+      | Error (reference, err) -> (writes "ng" @@ w_space @@ w_reference reference @@ w_space @@ writes err k) encoder in
+    let rec go_commands commands encoder = match sideband, commands with
+      | _, [] -> pkt_flush k encoder
+      | `No_multiplexe, command :: commands ->
+         pkt_line (go_command command) (go_commands commands) encoder
+      | (`Side_band | `Side_band_64k), command :: commands ->
+         pkt_line (fun k -> writes "\001" @@ go_command command k) (go_commands commands) encoder in
+    let go_unpack k encoder = match report_status.Common.unpack with
+      | Ok () -> writes "unpack ok" k encoder
+      | Error err -> (writes "unpack" @@ w_space @@ writes err k) encoder in
+    match sideband with
+    | `No_multiplexe ->
+       pkt_line go_unpack (go_commands report_status.Common.commands) encoder
+    | `Side_band | `Side_band_64k ->
+       pkt_line (fun k -> writes "\001" @@ go_unpack k) (go_commands report_status.Common.commands) encoder
+
   type action =
     [ `GitProtoRequest    of Common.git_proto_request
     | `UploadRequest      of Common.upload_request
     | `HttpUploadRequest  of [ `Done | `Flush ] * Common.http_upload_request
+    | `Advertised_refs    of Common.advertised_refs
+    | `Shallow_update     of Common.shallow_update
+    | `Negociation        of Common.acks
+    | `Negociation_result of Common.negociation_result
+    | `Report_status      of ([ `No_multiplexe | `Side_band | `Side_band_64k ] * Common.report_status)
     | `UpdateRequest      of Common.update_request
     | `HttpUpdateRequest  of Common.update_request
     | `Has                of Hash.Set.t
