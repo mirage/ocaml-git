@@ -19,7 +19,7 @@ struct
     let cs = Cstruct.create 8 in
     Cstruct.BE.set_uint64 cs 0 Int64.(of_float (t *. 1000.));
     Nocrypto.Rng.reseed cs;
-    Nocrypto.Rng.generate S.Hash.Digest.length |> Cstruct.to_string
+    Nocrypto.Rng.generate S.Hash.Digest.length |> Cstruct.to_string |> S.Hash.of_string
 
   let generate_hashes n =
     let ar = Array.init n (fun _ -> generate_hash ()) in
