@@ -23,7 +23,7 @@ depends: [
   "mirage-conduit" {>= "3.0.0"}
   "git-http"
   "git"
-  "alcotest"       {test}
+  "alcotest"       {test & >= "0.8.1"}
   "mtime"          {test & >= "1.0.0"}
   "mirage-fs-unix" {test & >= "1.3.0"}
   "nocrypto"       {test & >= "0.5.4"}
