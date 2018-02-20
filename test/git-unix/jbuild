@@ -2,7 +2,7 @@
 
 (executable
  ((name      test)
-  (libraries (test_git git-unix))))
+  (libraries (test_git test_smart git-unix))))
 
 (alias
  ((name runtest)
