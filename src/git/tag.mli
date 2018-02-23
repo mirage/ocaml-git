@@ -86,6 +86,9 @@ module type S = sig
 
   val tag: t -> string
   (** [tag t] returns the tag information of [t]. *)
+
+  val message: t -> string
+  val kind: t -> kind
 end
 
 module Make (H: S.HASH): S with module Hash = H
