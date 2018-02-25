@@ -28,10 +28,11 @@ module type S = sig
       information and the commit message. *)
 
   val make:
-       author:User.t
+       tree:Hash.t
+    -> author:User.t
     -> committer:User.t
     -> ?parents:Hash.t list
-    -> tree:Hash.t
+    -> ?extra:(string * string list) list
     -> string
     -> t
   (** [make ~author ~committer ?parents ~tree msg] makes an OCaml
@@ -94,6 +95,8 @@ module type S = sig
 
   val message: t -> string
   (** [message c] returns the message of the commit [c]. *)
+
+  val extra: t -> (string * string list) list
 
   val compare_by_date: t -> t -> int
   (** [compare_by_date a b] compares the Git Commit object [a] and [b]
