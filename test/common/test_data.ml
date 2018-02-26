@@ -23,7 +23,7 @@ module Make0 (Source: SOURCE) (Store: S) = struct
     let ctmp = Cstruct.create size in
     let btmp = Bytes.create size in
 
-    let ic = open_in (Fpath.to_string path) in
+    let ic = open_in_bin (Fpath.to_string path) in
 
     (fun () ->
        let len = input ic btmp 0 size in
@@ -73,7 +73,7 @@ module Make0 (Source: SOURCE) (Store: S) = struct
       [] lines
 
   let load_file path =
-    let ic = open_in (Fpath.to_string path) in
+    let ic = open_in_bin (Fpath.to_string path) in
     let len = in_channel_length ic in
     let res = Bytes.create len in
     really_input ic res 0 len;
@@ -99,7 +99,7 @@ module Make0 (Source: SOURCE) (Store: S) = struct
         let get = Store.Hash.get
         let length _ = Store.Hash.Digest.length
       end) in
-    let ic = open_in (Fpath.to_string Source.idx) in
+    let ic = open_in_bin (Fpath.to_string Source.idx) in
     let size = 0x8000 in
     let dtmp = Bytes.create size in
     let ctmp = Cstruct.create size in
