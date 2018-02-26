@@ -7,5 +7,7 @@
 (alias
  ((name runtest)
   (package git)
-  (deps (test.exe ../data/pack.idx ../data/pack.pack))
+  (deps (test.exe
+         ../data/pack.idx ../data/pack.pack
+         ../data/bomb.idx ../data/bomb.pack))
   (action (run ${exe:test.exe} -q --color=always))))
