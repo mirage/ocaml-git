@@ -147,62 +147,99 @@ let upload_request =
       ; shallow
       ; deep })
 
+let request_command : Smart.Common.request_command Crowbar.gen =
+  map [range 3] (function
+      | 0 -> `Upload_pack
+      | 1 -> `Receive_pack
+      | 2 -> `Upload_archive
+      | _ -> bad_test ())
+
+let command =
+  map [hash; hash; reference; range 3] (fun h0 h1 reference -> function
+      | 0 -> Smart.Common.Create (h0, reference)
+      | 1 -> Smart.Common.Delete (h1, reference)
+      | 2 -> Smart.Common.Update (h0, h1, reference)
+      | _ -> bad_test ())
+
+let update_request =
+  map [list hash; list1 command; capabilities]
+    (fun shallow commands capabilities ->
+       let requests = `Raw (List.hd commands, List.tl commands) in
+       { Smart.Common.shallow
+       ; requests
+       ; capabilities })
+
 let () =
   add_test
     ~name:"upload-request"
     [ upload_request ]
   @@ fun upload_request ->
-     let s = Smart.Encoder.to_string (`UploadRequest upload_request) in
+  let s = Smart.Encoder.to_string (`UploadRequest upload_request) in
 
-     match Smart.Decoder.of_string s Smart.Decoder.Upload_request with
-     | Ok v ->
-        check_eq ~pp:Smart.Common.pp_upload_request ~eq:Smart.Common.equal_upload_request v upload_request
-     | Error (err, _, committed) ->
-        Fmt.(pf stderr) "Encoded to: %a.\n%!"
-          (Fmt.hvbox @@ Git.Minienc.pp_scalar ~get:String.get ~length:String.length) s;
-        fail (Fmt.strf "%a (committed:%d)" Smart.Decoder.pp_error err committed)
+  match Smart.Decoder.of_string s Smart.Decoder.Upload_request with
+  | Ok v ->
+    check_eq ~pp:Smart.Common.pp_upload_request ~eq:Smart.Common.equal_upload_request v upload_request
+  | Error (err, _, committed) ->
+    Fmt.(pf stderr) "Encoded to: %a.\n%!"
+      (Fmt.hvbox @@ Git.Minienc.pp_scalar ~get:String.get ~length:String.length) s;
+    fail (Fmt.strf "%a (committed:%d)" Smart.Decoder.pp_error err committed)
+
+let () =
+  add_test
+    ~name:"update-request"
+    [ update_request ]
+  @@ fun update_request ->
+  let s = Smart.Encoder.to_string (`UpdateRequest update_request) in
+
+  match Smart.Decoder.of_string s Smart.Decoder.Update_request with
+  | Ok v ->
+    check_eq ~pp:Smart.Common.pp_update_request ~eq:Smart.Common.equal_update_request v update_request
+  | Error (err, _, committed) ->
+    Fmt.(pf stderr) "Encoded to: %a.\n%!"
+      (Fmt.hvbox @@ Git.Minienc.pp_scalar ~get:String.get ~length:String.length) s;
+    fail (Fmt.strf "%a (committed:%d)" Smart.Decoder.pp_error err committed)
 
 let () =
   add_test
     ~name:"advertised_refs"
     [ advertised_refs ]
   @@ fun advertised_refs ->
-     let s = Smart.Encoder.to_string (`Advertised_refs advertised_refs) in
+  let s = Smart.Encoder.to_string (`Advertised_refs advertised_refs) in
 
-     match Smart.Decoder.of_string s Smart.Decoder.ReferenceDiscovery with
-     | Ok v ->
-        check_eq ~pp:Smart.Common.pp_advertised_refs ~eq:Smart.Common.equal_advertised_refs v advertised_refs
-     | Error (err, _, committed) ->
-        fail (Fmt.strf "%a with (committed:%d) %a" Smart.Decoder.pp_error err committed
-                (Fmt.hvbox (Git.Minienc.pp_scalar ~get:String.get ~length:String.length)) s)
+  match Smart.Decoder.of_string s Smart.Decoder.ReferenceDiscovery with
+  | Ok v ->
+    check_eq ~pp:Smart.Common.pp_advertised_refs ~eq:Smart.Common.equal_advertised_refs v advertised_refs
+  | Error (err, _, committed) ->
+    fail (Fmt.strf "%a with (committed:%d) %a" Smart.Decoder.pp_error err committed
+            (Fmt.hvbox (Git.Minienc.pp_scalar ~get:String.get ~length:String.length)) s)
 
 let () =
   add_test
     ~name:"shallow_update"
     [ shallow_update ]
   @@ fun shallow_update ->
-     let s = Smart.Encoder.to_string (`Shallow_update shallow_update) in
+  let s = Smart.Encoder.to_string (`Shallow_update shallow_update) in
 
-     match Smart.Decoder.of_string s Smart.Decoder.ShallowUpdate with
-     | Ok v ->
-        check_eq ~pp:Smart.Common.pp_shallow_update ~eq:Smart.Common.equal_shallow_update v shallow_update
-     | Error (err, _, committed) ->
-        fail (Fmt.strf "%a with (committed:%d) %a" Smart.Decoder.pp_error err committed
-                (Fmt.hvbox (Git.Minienc.pp_scalar ~get:String.get ~length:String.length)) s)
+  match Smart.Decoder.of_string s Smart.Decoder.ShallowUpdate with
+  | Ok v ->
+    check_eq ~pp:Smart.Common.pp_shallow_update ~eq:Smart.Common.equal_shallow_update v shallow_update
+  | Error (err, _, committed) ->
+    fail (Fmt.strf "%a with (committed:%d) %a" Smart.Decoder.pp_error err committed
+            (Fmt.hvbox (Git.Minienc.pp_scalar ~get:String.get ~length:String.length)) s)
 
 let () =
   add_test
     ~name:"negociation_result"
     [ negociation_result ]
   @@ fun negociation_result ->
-     let s = Smart.Encoder.to_string (`Negociation_result negociation_result) in
+  let s = Smart.Encoder.to_string (`Negociation_result negociation_result) in
 
-     match Smart.Decoder.of_string s Smart.Decoder.NegociationResult with
-     | Ok v ->
-        check_eq ~pp:Smart.Common.pp_negociation_result ~eq:Smart.Common.equal_negociation_result v negociation_result
-     | Error (err, _, committed) ->
-        fail (Fmt.strf "%a with (committed:%d) %a" Smart.Decoder.pp_error err committed
-                (Fmt.hvbox (Git.Minienc.pp_scalar ~get:String.get ~length:String.length)) s)
+  match Smart.Decoder.of_string s Smart.Decoder.NegociationResult with
+  | Ok v ->
+    check_eq ~pp:Smart.Common.pp_negociation_result ~eq:Smart.Common.equal_negociation_result v negociation_result
+  | Error (err, _, committed) ->
+    fail (Fmt.strf "%a with (committed:%d) %a" Smart.Decoder.pp_error err committed
+            (Fmt.hvbox (Git.Minienc.pp_scalar ~get:String.get ~length:String.length)) s)
 
 type ack_mode = [ `Ack | `Multi_ack | `Multi_ack_detailed ]
 
@@ -215,16 +252,16 @@ let acks (ack_mode:ack_mode) =
     ~name:(Fmt.strf "acks (mode:%s)" (ack_mode_to_string ack_mode))
     [ acks ack_mode  ]
   @@ fun acks ->
-     let s = Smart.Encoder.to_string (`Negociation acks) in
-     let h = S.Hash.Set.of_list (List.map fst acks.Smart.Common.acks) in
+  let s = Smart.Encoder.to_string (`Negociation acks) in
+  let h = S.Hash.Set.of_list (List.map fst acks.Smart.Common.acks) in
 
-     match Smart.Decoder.of_string s (Smart.Decoder.Negociation (h, ack_mode)) with
-     | Ok v -> 
-        check_eq ~pp:Smart.Common.pp_acks ~eq:Smart.Common.equal_acks v acks
-     | Error (err, _, committed) ->
-        Fmt.(pf stderr) "Encoded to: %a.\n%!"
-          (Fmt.hvbox @@ Git.Minienc.pp_scalar ~get:String.get ~length:String.length) s;
-        fail (Fmt.strf "%a (committed:%d)" Smart.Decoder.pp_error err committed)
+  match Smart.Decoder.of_string s (Smart.Decoder.Negociation (h, ack_mode)) with
+  | Ok v ->
+    check_eq ~pp:Smart.Common.pp_acks ~eq:Smart.Common.equal_acks v acks
+  | Error (err, _, committed) ->
+    Fmt.(pf stderr) "Encoded to: %a.\n%!"
+      (Fmt.hvbox @@ Git.Minienc.pp_scalar ~get:String.get ~length:String.length) s;
+    fail (Fmt.strf "%a (committed:%d)" Smart.Decoder.pp_error err committed)
 
 let () = acks `Ack
 let () = acks `Multi_ack
@@ -239,15 +276,15 @@ let report_status sideband =
     ~name:(Fmt.strf "report-status (side-band:%s)" (sideband_to_string sideband))
     [ report_status ]
   @@ fun report_status ->
-     let s = Smart.Encoder.to_string (`Report_status (sideband, report_status)) in
+  let s = Smart.Encoder.to_string (`Report_status (sideband, report_status)) in
 
-     match Smart.Decoder.of_string s (Smart.Decoder.ReportStatus sideband) with
-     | Ok v ->
-        check_eq ~pp:Smart.Common.pp_report_status ~eq:Smart.Common.equal_report_status v report_status
-     | Error (err, _, committed) ->
-        Fmt.(pf stderr) "Encoded to: %a.\n%!"
-          (Fmt.hvbox @@ Git.Minienc.pp_scalar ~get:String.get ~length:String.length) s;
-        fail (Fmt.strf "%a (committed:%d)" Smart.Decoder.pp_error err committed)
+  match Smart.Decoder.of_string s (Smart.Decoder.ReportStatus sideband) with
+  | Ok v ->
+    check_eq ~pp:Smart.Common.pp_report_status ~eq:Smart.Common.equal_report_status v report_status
+  | Error (err, _, committed) ->
+    Fmt.(pf stderr) "Encoded to: %a.\n%!"
+      (Fmt.hvbox @@ Git.Minienc.pp_scalar ~get:String.get ~length:String.length) s;
+    fail (Fmt.strf "%a (committed:%d)" Smart.Decoder.pp_error err committed)
 
 let () = report_status `No_multiplexe
 let () = report_status `Side_band

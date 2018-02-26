@@ -268,6 +268,7 @@ sig
         packet format. *)
     | `Unexpected_end_of_input
     | `Unexpected_pkt_line
+    | `Unexpected_hashes of (Hash.t * Hash.t)
     ]
 
   val pp_error : error Fmt.t
@@ -302,6 +303,8 @@ sig
     | ReportStatus           : side_band -> Common.report_status transaction
     | HttpReportStatus       : string list * side_band -> Common.report_status transaction
     | Upload_request         : Common.upload_request transaction
+    | Git_proto_request      : Common.git_proto_request transaction
+    | Update_request         : Common.update_request transaction
 
   (** The ACK mode type to describe which mode is shared by the client
       and the server. *)

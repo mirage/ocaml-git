@@ -184,6 +184,118 @@ struct
       [ negociation_result0, negociation_result_result0
       ; negociation_result1, negociation_result_result1
       ; negociation_result2, negociation_result_result2 ]
+
+    let path0 = Fpath.to_string (Fpath.v "ocaml/ocaml")
+    let path1 = Fpath.to_string (Fpath.v "dinosaure/emile")
+    let path2 = Fpath.to_string (Fpath.v "dinosaure/encore")
+    let path3 = Fpath.to_string (Fpath.v "mirage/ocaml-git")
+
+    let host0 = Some ("github.com", Some 80)
+    let host1 = Some ("din.osau.re", None)
+    let host2 = Some ("oktm.io", None)
+    let host3 = Some ("mirage.io", Some 943)
+
+    let git_proto_request0, git_proto_request_result0 =
+      { Smart.Common.pathname = path0
+      ; host = host0
+      ; request_command = `Upload_pack }, `Equal
+
+    let git_proto_request1, git_proto_request_result1 =
+      { Smart.Common.pathname = path1
+      ; host = host1
+      ; request_command = `Upload_archive }, `Equal
+
+    let git_proto_request2, git_proto_request_result2 =
+      { Smart.Common.pathname = path2
+      ; host = host2
+      ; request_command = `Receive_pack }, `Equal
+
+    let git_proto_request3, git_proto_request_result3 =
+      { Smart.Common.pathname = path3
+      ; host = host3
+      ; request_command = `Upload_pack }, `Equal
+
+    let git_proto_request_datas =
+      [ git_proto_request0, git_proto_request_result0
+      ; git_proto_request1, git_proto_request_result1
+      ; git_proto_request2, git_proto_request_result2
+      ; git_proto_request3, git_proto_request_result3 ]
+
+    let zero =
+      let s = String.make (S.Hash.Digest.length * 2) '0' in
+      S.Hash.of_hex s
+
+    let update_request0, update_request_result0 =
+      let commands0 =
+        let first = Smart.Common.Update (generate_hash (), generate_hash (), List.nth references 0) in
+        let rest =
+          [ Smart.Common.Create (zero, List.nth references 1) ] in
+        `Raw (first, rest) in
+      { Smart.Common.shallow = generate_hashes (Random.int 10)
+      ; capabilities
+      ; requests = commands0 }, `Error
+
+    let update_request1, update_request_result1 =
+      let commands1 =
+        let first = Smart.Common.Update (generate_hash (), generate_hash (), List.nth references 1) in
+        let rest =
+          [ Smart.Common.Delete (zero, List.nth references 2) ] in
+        `Raw (first, rest) in
+      { Smart.Common.shallow = generate_hashes (Random.int 10)
+      ; capabilities
+      ; requests = commands1 }, `Error
+
+    let update_request2, update_request_result2 =
+      let commands2 =
+        let first = Smart.Common.Update (zero, zero, List.nth references 2) in
+        `Raw (first, []) in
+      { Smart.Common.shallow = generate_hashes (Random.int 10)
+      ; capabilities
+      ; requests = commands2 }, `Error
+
+    let update_request3, update_request_result3 =
+      let commands3 =
+        let first = Smart.Common.Update (generate_hash (), generate_hash (), List.nth references 3) in
+        `Raw (first, []) in
+      { Smart.Common.shallow = generate_hashes (Random.int 10)
+      ; capabilities
+      ; requests = commands3 }, `Equal
+
+    let update_request4, update_request_result4 =
+      let commands4 =
+        let first = Smart.Common.Create (generate_hash (), List.nth references 4) in
+        `Raw (first, []) in
+      { Smart.Common.shallow = generate_hashes (Random.int 10)
+      ; capabilities
+      ; requests = commands4 }, `Equal
+
+    let update_request5, update_request_result5 =
+      let commands5 =
+        let first = Smart.Common.Delete (generate_hash (), List.nth references 5) in
+        `Raw (first, []) in
+      { Smart.Common.shallow = generate_hashes (Random.int 10)
+      ; capabilities
+      ; requests = commands5 }, `Equal
+
+    let update_request6, update_request_result6 =
+      let commands6 =
+        let first = Smart.Common.Update (generate_hash (), generate_hash (), List.nth references 6) in
+        let rest =
+          [ Smart.Common.Create (generate_hash (), List.nth references 7)
+          ; Smart.Common.Delete (generate_hash (), List.nth references 8) ] in
+        `Raw (first, rest) in
+      { Smart.Common.shallow = generate_hashes (Random.int 10)
+      ; capabilities
+      ; requests = commands6 }, `Equal
+
+    let update_request_datas =
+      [ update_request0, update_request_result0
+      ; update_request1, update_request_result1
+      ; update_request2, update_request_result2
+      ; update_request3, update_request_result3
+      ; update_request4, update_request_result4
+      ; update_request5, update_request_result5
+      ; update_request6, update_request_result6 ]
   end
 
   let make_test
@@ -225,12 +337,18 @@ struct
         (Smart.Common.acks * S.Hash.t list * Smart.Decoder.ack_mode * [ `Error | `Equal ]) list -> Smart.Common.acks t
     | Negociation_result :
         (Smart.Common.negociation_result * [ `Error | `Equal ]) list -> Smart.Common.negociation_result t
+    | Git_proto_request :
+        (Smart.Common.git_proto_request * [ `Error | `Equal ]) list -> Smart.Common.git_proto_request t
+    | Update_request :
+        (Smart.Common.update_request * [ `Error | `Equal ]) list -> Smart.Common.update_request t
 
   let name_of : type v. v t -> string = function
     | Advertised_refs _ -> "advertised-refs"
     | Shallow_update _ -> "shallow-update"
     | Acks _ -> "acks"
     | Negociation_result _ -> "negociation-result"
+    | Git_proto_request _ -> "git-proto-request"
+    | Update_request _ -> "update-request"
 
   let testable_of
     : type v. v t -> (module Alcotest.TESTABLE with type t = v)
@@ -262,6 +380,20 @@ struct
 
           let pp = Smart.Common.pp_negociation_result
           let equal = Smart.Common.equal_negociation_result
+        end in (module T)
+      | Git_proto_request _ ->
+        let module T = struct
+          type t = v
+
+          let pp = Smart.Common.pp_git_proto_request
+          let equal = Smart.Common.equal_git_proto_request
+        end in (module T)
+      | Update_request _ ->
+        let module T = struct
+          type t = v
+
+          let pp = Smart.Common.pp_update_request
+          let equal = Smart.Common.equal_update_request
         end in (module T)
 
   let from_t
@@ -302,6 +434,22 @@ struct
               Smart.Decoder.NegociationResult
               (fun v -> `Negociation_result v)
               e testable) l
+      | Git_proto_request l ->
+        List.mapi (fun idx (v, e) ->
+            make_test
+              ~name:(name idx)
+              v
+              Smart.Decoder.Git_proto_request
+              (fun v -> `GitProtoRequest v)
+              e testable) l
+      | Update_request l ->
+        List.mapi (fun idx (v, e) ->
+            make_test
+              ~name:(name idx)
+              v
+              Smart.Decoder.Update_request
+              (fun v -> `UpdateRequest v)
+              e testable) l
 end
 
 let suite name (module S: Git.S) =
@@ -310,4 +458,6 @@ let suite name (module S: Git.S) =
   (T.from_t (T.Advertised_refs T.Data.advertised_refs_datas)
    @ T.from_t (T.Shallow_update T.Data.shallow_update_datas)
    @ T.from_t (T.Acks T.Data.acks_datas)
-   @ T.from_t (T.Negociation_result T.Data.negociation_result_datas))
+   @ T.from_t (T.Negociation_result T.Data.negociation_result_datas)
+   @ T.from_t (T.Git_proto_request T.Data.git_proto_request_datas)
+   @ T.from_t (T.Update_request T.Data.update_request_datas))

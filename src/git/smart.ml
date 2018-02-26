@@ -517,7 +517,8 @@ sig
     | `Unexpected_empty_pkt_line
     | `Malformed_pkt_line
     | `Unexpected_end_of_input
-    | `Unexpected_pkt_line ]
+    | `Unexpected_pkt_line
+    | `Unexpected_hashes of (Hash.t * Hash.t) ]
 
   val pp_error: error Fmt.t
 
@@ -541,6 +542,8 @@ sig
     | ReportStatus           : side_band -> Common.report_status transaction
     | HttpReportStatus       : string list * side_band -> Common.report_status transaction
     | Upload_request         : Common.upload_request transaction
+    | Git_proto_request      : Common.git_proto_request transaction
+    | Update_request         : Common.update_request transaction
   and ack_mode =
     [ `Ack
     | `Multi_ack
@@ -763,7 +766,8 @@ struct
     | `Unexpected_empty_pkt_line
     | `Malformed_pkt_line
     | `Unexpected_end_of_input
-    | `Unexpected_pkt_line ]
+    | `Unexpected_pkt_line
+    | `Unexpected_hashes of Hash.t * Hash.t ]
 
   let err_unexpected_end_of_input    decoder = (`Unexpected_end_of_input, decoder.buffer, decoder.pos)
   let err_expected               chr decoder = (`Expected_char chr, decoder.buffer, decoder.pos)
@@ -774,17 +778,19 @@ struct
   let err_malformed_pkt_line         decoder = (`Malformed_pkt_line, decoder.buffer, decoder.pos)
   let err_unexpected_flush_pkt_line  decoder = (`Unexpected_flush_pkt_line, decoder.buffer, decoder.pos)
   let err_unexpected_pkt_line        decoder = (`Unexpected_pkt_line, decoder.buffer, decoder.pos)
+  let err_unexpected_hashes h0 h1    decoder = (`Unexpected_hashes (h0, h1), decoder.buffer, decoder.pos)
 
   let pp_error ppf = function
-    | `Expected_char chr         -> Fmt.pf ppf "(`Expected_char %c)" chr
-    | `Unexpected_char chr       -> Fmt.pf ppf "(`Unexpected_char %c)" chr
-    | `No_assert_predicate _     -> Fmt.pf ppf "(`No_assert_predicate #predicate)"
-    | `Expected_string s         -> Fmt.pf ppf "(`Expected_string %s)" s
-    | `Unexpected_empty_pkt_line -> Fmt.pf ppf "`Unexpected_empty_pkt_line"
-    | `Malformed_pkt_line        -> Fmt.pf ppf "`Malformed_pkt_line"
-    | `Unexpected_end_of_input   -> Fmt.pf ppf "`Unexpected_end_of_input"
-    | `Unexpected_flush_pkt_line -> Fmt.pf ppf "`Unexpected_flush_pkt_line"
-    | `Unexpected_pkt_line       -> Fmt.pf ppf "`Unexpected_pkt_line"
+    | `Expected_char chr          -> Fmt.pf ppf "(`Expected_char %c)" chr
+    | `Unexpected_char chr        -> Fmt.pf ppf "(`Unexpected_char %c)" chr
+    | `No_assert_predicate _      -> Fmt.pf ppf "(`No_assert_predicate #predicate)"
+    | `Expected_string s          -> Fmt.pf ppf "(`Expected_string %s)" s
+    | `Unexpected_empty_pkt_line  -> Fmt.pf ppf "`Unexpected_empty_pkt_line"
+    | `Malformed_pkt_line         -> Fmt.pf ppf "`Malformed_pkt_line"
+    | `Unexpected_end_of_input    -> Fmt.pf ppf "`Unexpected_end_of_input"
+    | `Unexpected_flush_pkt_line  -> Fmt.pf ppf "`Unexpected_flush_pkt_line"
+    | `Unexpected_pkt_line        -> Fmt.pf ppf "`Unexpected_pkt_line"
+    | `Unexpected_hashes (h0, h1) -> Fmt.pf ppf "(`Unexpeted_hashes (%a, %a))" Hash.pp h0 Hash.pp h1
 
   type 'a state =
     | Ok of 'a
@@ -1544,6 +1550,114 @@ struct
          p_pkt_line (go_wants { Common.want = (obj_id, []); capabilities; shallow = []; deep = None; }) decoder in
     p_pkt_line go_first_want decoder
 
+  let p_request_command decoder =
+    ignore @@ p_string "git-" decoder;
+
+    match p_peek_char decoder with
+    | Some 'r' ->
+      ignore @@ p_string "receive-pack" decoder;
+      `Receive_pack
+    | Some 'u' ->
+      ignore @@ p_string "upload-" decoder;
+
+      (match p_peek_char decoder with
+       | Some 'p' ->
+         ignore @@ p_string "pack" decoder;
+         `Upload_pack
+       | Some 'a' ->
+         ignore @@ p_string "archive" decoder;
+         `Upload_archive
+       | Some chr ->
+         raise (Leave (err_unexpected_char chr decoder))
+       | None ->
+         raise (Leave (err_unexpected_end_of_input decoder)))
+    | None ->
+      raise (Leave (err_unexpected_end_of_input decoder))
+    | Some chr ->
+      raise (Leave (err_unexpected_char chr decoder))
+
+  let p_host decoder =
+    match p_peek_char decoder with
+    | None -> None
+    | Some _ ->
+      ignore @@ p_string "host=" decoder;
+      let host = Cstruct.to_string @@ p_while1 (function ':' | '\x00' -> false | _ -> true) decoder in
+      match p_peek_char decoder with
+      | Some ':' ->
+        p_junk_char decoder;
+        let port = int_of_string @@ Cstruct.to_string @@ p_while1 (function '0' .. '9' -> true | _ -> false) decoder in
+        p_junk_char decoder;
+        Some (host, Some port)
+      | Some '\x00' ->
+        p_junk_char decoder;
+        Some (host, None)
+      | Some chr -> raise (Leave (err_unexpected_char chr decoder))
+      | None -> raise (Leave (err_unexpected_end_of_input decoder))
+
+  let p_git_proto_request decoder =
+    let request_command = p_request_command decoder in
+    p_space decoder;
+    let pathname = Cstruct.to_string @@ p_while1 (function '\x00' -> false | _ -> true) decoder in
+    p_null decoder;
+    let host = p_host decoder in
+
+    p_return { Common.request_command
+             ; pathname
+             ; host } decoder
+
+  let p_git_proto_request decoder =
+    p_pkt_line (fun ~pkt decoder -> match pkt with
+        | #no_line as v -> err_expected_line decoder v
+        | `Line _ -> p_git_proto_request decoder)
+      decoder
+
+  let p_command decoder =
+    let hash0 = p_hash decoder in
+    p_space decoder;
+    let hash1 = p_hash decoder in
+    p_space decoder;
+    let reference = p_reference decoder in
+
+    match Hash.equal zero_id hash0, Hash.equal zero_id hash1 with
+    | true, false -> Common.Create (hash1, reference)
+    | false, true -> Common.Delete (hash0, reference)
+    | false, false -> Common.Update (hash0, hash1, reference)
+    | true, true -> raise (Leave (err_unexpected_hashes hash0 hash1 decoder))
+
+  let p_first_command decoder =
+    let command = p_command decoder in
+    p_null decoder;
+    let capabilities = p_capabilities1 decoder in
+    command, capabilities
+
+  let p_update_request decoder =
+    let rec p_commands (first, commands) ~pkt decoder = match pkt with
+      | #no_line_and_flush as v -> err_expected_line_or_flush decoder v
+      | `Flush ->
+        let (shallows, first, capabilities) = first in
+        p_return { Common.shallow = shallows
+                 ; requests = (`Raw (first, commands))
+                 ; capabilities } decoder
+      | `Line _ ->
+        let command = p_command decoder in
+        p_pkt_line (p_commands (first, command :: commands)) decoder in
+
+    let p_first_command shallows decoder =
+      let command, capabilities = p_first_command decoder in
+      p_pkt_line (p_commands ((shallows, command, capabilities), [])) decoder in
+
+    let rec p_shallows shallows ~pkt decoder = match pkt with
+      | #no_line as v -> err_expected_line decoder v
+      | `Line _ -> match p_peek_char decoder with
+        | Some 's' ->
+          let shallow = p_shallow decoder in
+          p_pkt_line (p_shallows (shallow :: shallows)) decoder
+        | Some  _ ->
+          p_first_command shallows decoder
+        | None -> raise (Leave (err_unexpected_end_of_input decoder)) in
+
+    p_pkt_line (p_shallows []) decoder
+
   (* XXX(dinosaure): désolé mais ce GADT, c'est quand même la classe. *)
   type _ transaction =
     | HttpReferenceDiscovery : string -> Common.advertised_refs transaction
@@ -1555,6 +1669,8 @@ struct
     | ReportStatus           : side_band -> Common.report_status transaction
     | HttpReportStatus       : string list * side_band -> Common.report_status transaction
     | Upload_request         : Common.upload_request transaction
+    | Git_proto_request      : Common.git_proto_request transaction
+    | Update_request         : Common.update_request transaction
   and ack_mode =
     [ `Ack | `Multi_ack | `Multi_ack_detailed ]
   and flow =
@@ -1574,6 +1690,8 @@ struct
       | ReportStatus sideband             -> p_safe (p_report_status sideband) decoder
       | HttpReportStatus (refs, sideband) -> p_safe (p_http_report_status refs sideband) decoder
       | Upload_request                    -> p_safe p_upload_request decoder
+      | Git_proto_request                 -> p_safe p_git_proto_request decoder
+      | Update_request                    -> p_safe p_update_request decoder
 
   let decoder () =
     { buffer = Cstruct.create 65535
