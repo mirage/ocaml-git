@@ -20,21 +20,19 @@ module Make0 (Source: SOURCE) (Store: S) = struct
 
   let stream_of_file path =
     let size = 0x8000 in
-    let ctmp = Cstruct.create size in
     let btmp = Bytes.create size in
-
     let ic = open_in_bin (Fpath.to_string path) in
 
     (fun () ->
        let len = input ic btmp 0 size in
-
        if len = 0
        then begin
          close_in ic;
          Lwt.return None
        end else begin
+         let ctmp = Cstruct.create len in
          Cstruct.blit_from_bytes btmp 0 ctmp 0 len;
-         Lwt.return (Some (Cstruct.sub ctmp 0 len))
+         Lwt.return (Some ctmp)
        end)
 
   let output_of_command command =
@@ -184,4 +182,3 @@ let suite name (module F: SOURCE) (module S: S) =
   (Fmt.strf "%s: %s" name F.name),
   [ "index-pack", `Quick, T.test_index_file
   ; "unpack", `Quick, T.test_unpack ]
-
