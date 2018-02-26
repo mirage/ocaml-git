@@ -53,9 +53,7 @@ module Make0 (Source: SOURCE) (Store: S) = struct
   let hashes_of_pack idx =
     let command = Fmt.strf "git verify-pack -v %a" Fpath.pp idx in
     let output = output_of_command command in
-    let newline = if Sys.unix then "\n" else "\r\n" in
-
-    let lines = Astring.String.cuts ~sep:newline output in
+    let lines = Astring.String.cuts ~sep:"\n" output in
     let is_hash s =
       Astring.String.for_all
         (function
