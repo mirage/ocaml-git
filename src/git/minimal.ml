@@ -126,6 +126,8 @@ module type S = sig
 
       Any retrieved {!error} is missed. *)
 
+  val iter: t -> (Hash.t ->  Value.t -> unit Lwt.t) -> Hash.t -> unit Lwt.t
+
   module Pack:  sig
     type stream = unit -> Cstruct.t option Lwt.t
     (** The stream contains the PACK flow. *)
