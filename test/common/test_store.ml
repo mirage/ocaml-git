@@ -159,6 +159,47 @@ module Make (Store : S) = struct
                       (Commit.message c2))))
   let kc3 = lazy (Store.Value.digest !!c3)
 
+  let thomas =
+    Git.User.({ name = "Thomas Gazagnaire"
+              ; email = "thomas.@gazagnaire.com"
+              ; date = (Int64.of_float @@ Unix.gettimeofday (),
+                        Some { sign = `Plus; hours = 1; minutes = 1; }) })
+
+  let c4 =
+    lazy Store.Value.(commit
+                   (Commit.make
+                      ~author:thomas
+                      ~committer:thomas
+                      ~parents:[ !!kc3 ]
+                      ~tree:!!kt5
+                      ~extra:[ "simple-key", [ "simple value" ] ]
+                      "with extra-fields"))
+
+  let kc4 = lazy (Store.Value.digest !!c4)
+
+  let gpg =
+    [ "-----BEGIN PGP SIGNATURE-----"
+    ; "wsBcBAABCAAQBQJaV7TOCRBK7hj4Ov3rIwAAdHIIABBfj02NsDB4x2KU1uMSs8l+"
+    ; "kTF7a7onxdgoSvWzckXmM2o+uzBtBdnHzK24Sr2uJXq+WQvuVP35io32Qc72TdmX"
+    ; "0r8TUt6eXnqu1mlXnTNiCZZady8tL3SiWXsTwx6AFNk59bH59cQy/dF5K0RKaT+W"
+    ; "RPCv03yBx9vEAbTVe4kj1jS+FAcYHTyd+zqKio8kjLgL1KyjIO7GRsjRW1q+VLIX"
+    ; "ZffaDvLU6hRdHhxxsZ6tA9sLWgfHv0Z+tgpafQrAJkwZc/zRpITA4U54xxEvrKaP"
+    ; "BwpFgFK4IlgPC7h1ZxJMJyOL6R+dXpFTtY0vK7Apat886p+nbUJho/8Pn5OuVb8="
+    ; "=DCpq"
+    ; "-----END PGP SIGNATURE-----" ]
+
+  let c5 =
+    lazy Store.Value.(commit
+                   (Commit.make
+                      ~author:thomas
+                      ~committer:thomas
+                      ~parents:[ !!kc3 ]
+                      ~tree:!!kt5
+                      ~extra:[ "gpgsig", gpg ]
+                      "with extra-fields"))
+
+  let kc5 = lazy (Store.Value.digest !!c5)
+
   (* tag1: c1 *)
   let tag1 = lazy (
     Store.Value.(tag
@@ -203,7 +244,7 @@ module Make (Store : S) = struct
       ) (if not index then [
         !!v0; !!v1; !!v2;
         !!t0; !!t1; !!t2; !!t3; !!t4;
-        !!c1; !!c2; !!c3;
+        !!c1; !!c2; !!c3; !!c4; !!c5
       ] else [
          !!v1; !!v2;
          !!t1; !!t2; !!t4;
@@ -284,12 +325,14 @@ module Make (Store : S) = struct
           create ~root ()               >>= fun t   ->
           check_write t "c1" !!kc1 !!c1 >>= fun () ->
           check_write t "c2" !!kc2 !!c2 >>= fun () ->
+          check_write t "c4" !!kc4 !!c4 >>= fun () ->
+          check_write t "c5" !!kc5 !!c5 >>= fun () ->
           let p x = `Commit (`Path x) in
           check_find t "c1:b"     !!kc1 (p ["b"])          !!kt1 >>= fun () ->
           check_find t "c1:b/x"   !!kc1 (p ["b"; "x"])     !!kv1 >>= fun () ->
           check_find t "c2:a/b/x" !!kc2 (p ["a";"b"; "x"]) !!kv1 >>= fun () ->
           check_find t "c2:c"     !!kc2 (p ["c"])          !!kv2 >>= fun () ->
-          check_keys t "commits" `Commit [!!kc1; !!kc2; !!kc3]
+          check_keys t "commits" `Commit [!!kc1; !!kc2; !!kc3; !!kc4; !!kc5]
     in
     run test
 
