@@ -20,21 +20,19 @@ module Make0 (Source: SOURCE) (Store: S) = struct
 
   let stream_of_file path =
     let size = 0x8000 in
-    let ctmp = Cstruct.create size in
     let btmp = Bytes.create size in
-
-    let ic = open_in (Fpath.to_string path) in
+    let ic = open_in_bin (Fpath.to_string path) in
 
     (fun () ->
        let len = input ic btmp 0 size in
-
        if len = 0
        then begin
          close_in ic;
          Lwt.return None
        end else begin
+         let ctmp = Cstruct.create len in
          Cstruct.blit_from_bytes btmp 0 ctmp 0 len;
-         Lwt.return (Some (Cstruct.sub ctmp 0 len))
+         Lwt.return (Some ctmp)
        end)
 
   let output_of_command command =
@@ -55,9 +53,7 @@ module Make0 (Source: SOURCE) (Store: S) = struct
   let hashes_of_pack idx =
     let command = Fmt.strf "git verify-pack -v %a" Fpath.pp idx in
     let output = output_of_command command in
-    let newline = if Sys.unix then "\n" else "\r\n" in
-
-    let lines = Astring.String.cuts ~sep:newline output in
+    let lines = Astring.String.cuts ~sep:"\n" output in
     let is_hash s =
       Astring.String.for_all
         (function
@@ -73,7 +69,7 @@ module Make0 (Source: SOURCE) (Store: S) = struct
       [] lines
 
   let load_file path =
-    let ic = open_in (Fpath.to_string path) in
+    let ic = open_in_bin (Fpath.to_string path) in
     let len = in_channel_length ic in
     let res = Bytes.create len in
     really_input ic res 0 len;
@@ -99,7 +95,7 @@ module Make0 (Source: SOURCE) (Store: S) = struct
         let get = Store.Hash.get
         let length _ = Store.Hash.Digest.length
       end) in
-    let ic = open_in (Fpath.to_string Source.idx) in
+    let ic = open_in_bin (Fpath.to_string Source.idx) in
     let size = 0x8000 in
     let dtmp = Bytes.create size in
     let ctmp = Cstruct.create size in
@@ -184,4 +180,3 @@ let suite name (module F: SOURCE) (module S: S) =
   (Fmt.strf "%s: %s" name F.name),
   [ "index-pack", `Quick, T.test_index_file
   ; "unpack", `Quick, T.test_unpack ]
-
