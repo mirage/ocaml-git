@@ -70,16 +70,16 @@ module MakeDecoder (A: S.ANGSTROM) = struct
     | #Error.Decoder.t as err -> Error.Decoder.pp_error ppf err
 
   type decoder =
-    { state    : Angstrom.bigstring -> Angstrom.Unbuffered.more -> A.t Angstrom.Unbuffered.state
+    { state    : Angstrom.bigstring -> off:int -> len:int -> Angstrom.Unbuffered.more -> A.t Angstrom.Unbuffered.state
     ; final    : Angstrom.Unbuffered.more
     ; internal : Cstruct.t
     ; max      : int }
 
   let kdone (consumed, value) =
-    fun _ _ -> Angstrom.Unbuffered.Done (consumed, value)
+    fun _ba ~off:_ ~len:_ _more -> Angstrom.Unbuffered.Done (consumed, value)
 
   let kfail (consumed, path, err) =
-    fun _ _ -> Angstrom.Unbuffered.Fail (consumed, path, err)
+    fun _ba ~off:_ ~len:_ _more -> Angstrom.Unbuffered.Fail (consumed, path, err)
 
   let default raw =
     if Cstruct.len raw < 25 * 2
@@ -110,11 +110,14 @@ module MakeDecoder (A: S.ANGSTROM) = struct
     ; max      = len }
 
   let eval decoder =
+    let open Angstrom.Unbuffered in
+
     Log.debug (fun l ->
         l "Start to decode a partial chunk of the flow (%d) (final:%b)."
           (Cstruct.len decoder.internal)
           (decoder.final = Complete));
-    match decoder.state (Cstruct.to_bigarray decoder.internal) decoder.final with
+    let off, len = 0, Cstruct.len decoder.internal in
+    match decoder.state (Cstruct.to_bigarray decoder.internal) ~off ~len decoder.final with
     | Done (consumed, value) ->
       Log.debug (fun l -> l "End of the decoding.");
       `End (Cstruct.shift decoder.internal consumed, value)

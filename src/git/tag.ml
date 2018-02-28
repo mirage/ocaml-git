@@ -41,6 +41,9 @@ module type S = sig
 
   val obj: t -> Hash.t
   val tag: t -> string
+  val message: t -> string
+  val kind: t -> kind
+  val tagger: t -> User.t option
 end
 
 module Make (H: S.HASH): S with module Hash = H = struct
@@ -241,6 +244,9 @@ module Make (H: S.HASH): S with module Hash = H = struct
 
   let obj { obj; _ } = obj
   let tag { tag; _ } = tag
+  let message { message; _ } = message
+  let kind { kind; _ } = kind
+  let tagger { tagger; _ } = tagger
 
   let digest value =
     let tmp = Cstruct.create 0x100 in
