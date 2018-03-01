@@ -22,8 +22,6 @@ let ppe ~name ppv =
   Fmt.braces (fun ppf -> Fmt.pf ppf "%s %a" name (Fmt.hvbox ppv))
 
 module BaseBytes = struct
-  [@@@warning "-44"] (* XXX(dinosaure): shadowing of [compare] and [equal]. *)
-
   open Bytes
 
   type nonrec t = t
@@ -64,23 +62,24 @@ module MakeDecoder (A: S.ANGSTROM) = struct
   let src = Logs.Src.create "git.decoder" ~doc:"logs git's internal decoder"
   module Log = (val Logs.src_log src : Logs.LOG)
 
-  type error = [ `Decoder of string ]
+  type error = Error.Decoder.t
   type init = Cstruct.t
   type t = A.t
 
-  let pp_error ppf (`Decoder err) = ppe ~name:"`Decoder" Fmt.string ppf err
+  let pp_error ppf = function
+    | #Error.Decoder.t as err -> Error.Decoder.pp_error ppf err
 
   type decoder =
-    { state    : Angstrom.bigstring -> Angstrom.Unbuffered.more -> A.t Angstrom.Unbuffered.state
+    { state    : Angstrom.bigstring -> off:int -> len:int -> Angstrom.Unbuffered.more -> A.t Angstrom.Unbuffered.state
     ; final    : Angstrom.Unbuffered.more
     ; internal : Cstruct.t
     ; max      : int }
 
   let kdone (consumed, value) =
-    fun _ _ -> Angstrom.Unbuffered.Done (consumed, value)
+    fun _ba ~off:_ ~len:_ _more -> Angstrom.Unbuffered.Done (consumed, value)
 
   let kfail (consumed, path, err) =
-    fun _ _ -> Angstrom.Unbuffered.Fail (consumed, path, err)
+    fun _ba ~off:_ ~len:_ _more -> Angstrom.Unbuffered.Fail (consumed, path, err)
 
   let default raw =
     if Cstruct.len raw < 25 * 2
@@ -111,11 +110,14 @@ module MakeDecoder (A: S.ANGSTROM) = struct
     ; max      = len }
 
   let eval decoder =
+    let open Angstrom.Unbuffered in
+
     Log.debug (fun l ->
         l "Start to decode a partial chunk of the flow (%d) (final:%b)."
           (Cstruct.len decoder.internal)
           (decoder.final = Complete));
-    match decoder.state (Cstruct.to_bigarray decoder.internal) decoder.final with
+    let off, len = 0, Cstruct.len decoder.internal in
+    match decoder.state (Cstruct.to_bigarray decoder.internal) ~off ~len decoder.final with
     | Done (consumed, value) ->
       Log.debug (fun l -> l "End of the decoding.");
       `End (Cstruct.shift decoder.internal consumed, value)
@@ -123,7 +125,7 @@ module MakeDecoder (A: S.ANGSTROM) = struct
       let err_path = String.concat " > " path in
       Log.err (fun l -> l "Error while decoding: %s (%s)." err err_path);
       `Error (Cstruct.shift decoder.internal consumed,
-              `Decoder (err_path ^ ": " ^ err))
+              Error.Decoder.err_decode (consumed, path, err))
     | Partial { committed; continue } ->
       Log.debug (fun l ->
           l "Current decoding waits more input (committed: %d)." committed);
@@ -152,8 +154,7 @@ module MakeDecoder (A: S.ANGSTROM) = struct
       Log.err (fun l -> l ~header:"refill"
                   "The client want to refill the internal buffer by a bigger input.");
 
-      Error (`Decoder (Fmt.strf "Input is too huge: we authorized only an \
-                                 input lower or equal than %d" decoder.max))
+      Error.(v @@ Decoder.err_too_big len decoder.max)
     ) else
       let trailing_space =
         let { Cstruct.buffer; off; len } = decoder.internal in
@@ -178,7 +179,7 @@ module MakeDecoder (A: S.ANGSTROM) = struct
                      (Bigarray.Array1.dim decoder.internal.Cstruct.buffer));
          Log.err (fun l -> l ~header:"refill"
                      "Production of the error in Helper.MakeDecoder.refill.");
-         Error (`Decoder "Input does not respect assertion, it may be malicious");
+         Error.(v @@ Decoder.err_malicious)
        ))
       |> function
       | Error err  -> Error err
@@ -201,7 +202,7 @@ module MakeDecoder (A: S.ANGSTROM) = struct
     Angstrom.parse_bigstring A.decoder (Cstruct.to_bigarray input)
     |> function
     | Ok _ as v -> v
-    | Error err -> Error (`Decoder err)
+    | Error err -> Error.(v @@ Decoder.err_result input err)
 
   let finish decoder =
     { decoder with final = Angstrom.Unbuffered.Complete }
@@ -219,7 +220,7 @@ module MakeInflater (Z: S.INFLATE) (A: S.ANGSTROM) = struct
   type init = Z.window * Cstruct.t * Cstruct.t
 
   type error =
-    [ `Decoder of string
+    [ Error.Decoder.t
     | `Inflate of Z.error ]
 
   type decoder =
@@ -228,9 +229,10 @@ module MakeInflater (Z: S.INFLATE) (A: S.ANGSTROM) = struct
     ; inf : Z.t
     ; dec : D.decoder }
 
-  let pp_error ppf = function
-    | `Decoder err -> ppe ~name:"`Decoder" Fmt.string ppf err
-    | `Inflate err -> ppe ~name:"`Inflate" (Fmt.hvbox Z.pp_error) ppf err
+  let pp_error : error Fmt.t = fun ppf err -> match err with
+    | #Error.Decoder.t as err -> Error.Decoder.pp_error ppf err
+    | `Inflate _ as err ->
+      Error.Inf.pp_error Z.pp_error ppf err
 
   let empty = Cstruct.create 0
 
@@ -257,8 +259,8 @@ module MakeInflater (Z: S.INFLATE) (A: S.ANGSTROM) = struct
       | `Flush inf ->
         Log.debug (fun l -> l "Inflator flushes: %a." (Fmt.hvbox Z.pp) inf);
         (match D.refill (Cstruct.sub decoder.tmp 0 (Z.used_out inf)) dec with
-         | Error (`Decoder err) -> `Error (decoder.cur, `Decoder err)
-         | Ok dec               ->
+         | Error err -> `Error (decoder.cur, err)
+         | Ok dec ->
            let inf = Z.flush 0 (Cstruct.len decoder.tmp) inf in
            Log.debug (fun l ->
                l "Internal buffer of the current decoding refilled: %a."
@@ -271,7 +273,7 @@ module MakeInflater (Z: S.INFLATE) (A: S.ANGSTROM) = struct
         Log.debug (fun l ->
             l "Inflator finished with the current decoding flow.");
         match D.refill (Cstruct.sub decoder.tmp 0 (Z.used_out inf)) dec with
-        | Error (`Decoder err) -> `Error (decoder.cur, `Decoder err)
+        | Error err -> `Error (decoder.cur, err)
         | Ok dec               ->
           eval { decoder with cur = Cstruct.shift decoder.cur (Z.used_in inf)
                             ; inf = Z.flush 0 0 (Z.refill 0 0 inf)
@@ -306,7 +308,7 @@ module MakeEncoder (M: S.MINIENC) = struct
 
   type t = M.t
   type init = int * t
-  type error = [ `Never ]
+  type error = Error.never
 
   let pp_error ppf `Never = Fmt.string ppf "`Never"
 
@@ -409,8 +411,8 @@ module MakeDeflater (Z: S.DEFLATE) (M: S.MINIENC) = struct
   type init = int * t * int * Cstruct.t
   type error = [ `Deflate of Z.error ]
 
-  let pp_error ppf (`Deflate err) =
-    ppe ~name:"`Deflate" (Fmt.hvbox Z.pp_error) ppf err
+  let pp_error ppf err =
+    Error.Def.pp_error Z.pp_error ppf err
 
   module E = MakeEncoder(M)
 
@@ -490,7 +492,7 @@ let fdigest: type t hash.
   -> (module S.ENCODER
        with type t = t
         and type init = (int * t)
-        and type error = [ `Never ])
+        and type error = Error.never)
   -> ?capacity:int
   -> tmp:Cstruct.t
   -> kind:string
@@ -545,24 +547,15 @@ let digest
 
 module type ENCODER = sig
   type state
-  type raw
   type result
   type error
-
-  val raw_length : raw -> int
-  val raw_blit   : raw -> int -> raw -> int -> int -> unit
-
-  val eval  : raw -> state -> [ `Flush of state | `End of (state * result) | `Error of (state * error) ] Lwt.t
-  val used  : state -> int
-  val flush : int -> int -> state -> state
+  val eval: Cstruct.t -> state ->
+    [ `Flush of state
+    | `End   of (state * result)
+    | `Error of (state * error) ] Lwt.t
+  val used: state -> int
+  val flush: int -> int -> state -> state
 end
-
-type ('state, 'raw, 'result, 'error) encoder =
-  (module ENCODER with type state  = 'state
-                   and type raw    = 'raw
-                   and type result = 'result
-                   and type error  = 'error)
-and ('fd, 'raw, 'error) writer = 'raw -> ?off:int -> ?len:int -> 'fd -> (int, 'error) result Lwt.t
 
 (* XXX(dinosaure): this function takes care about how many byte(s) we
    write to the file-descriptor and retry to write while the limit is
@@ -586,7 +579,7 @@ and ('fd, 'raw, 'error) writer = 'raw -> ?off:int -> ?len:int -> 'fd -> (int, 'e
    to write what he wants.
 
    * If the [writer] returns an error, we stop the process and return
-   [`Writer error].
+   [`FS error].
    * If the [encoder] returns an error, we stop the process and return
    [`Encoder error].
 
@@ -594,74 +587,119 @@ and ('fd, 'raw, 'error) writer = 'raw -> ?off:int -> ?len:int -> 'fd -> (int, 'e
 
    Otherwise, we return [Ok result] with the result of the encoder. *)
 
-let src = Logs.Src.create "git.encoder.io" ~doc:"logs git's internal I/O encoder"
-module ELog = (val Logs.src_log src : Logs.LOG)
-
 open Lwt.Infix
 
-let safe_encoder_to_file
-    (type state) (type raw) (type res) (type err_encoder) (type err_writer)
-    ~limit
-    (encoder : (state, raw, res, err_encoder) encoder)
-    (writer : ('fd, raw, err_writer) writer)
-    (fd : 'fd)
-    (raw : raw)
-    (state : state) : (res, [ `Stack | `Encoder of err_encoder | `Writer of err_writer ]) result Lwt.t
-  =
-  let module E =
-    (val encoder : ENCODER with type state = state
-                            and type raw = raw
-                            and type result = res
-                            and type error = err_encoder)
-  in
-  let rec go ~stack ?(rest = 0) state =
-    if stack < limit
-    then E.eval raw state >>= function
-      | `Error (_, err) ->
-        ELog.err (fun l ->
-            l ~header:"go" "Retrieving an encoder error when we serialize \
-                            the value to a file-descriptor.");
-        Lwt.return (Error (`Encoder err))
-      | `End (state, res) ->
-        if E.used state + rest > 0
-        then begin
-          ELog.debug (fun l ->
-              l ~header:"go" "Final step to write entirely the file \
-                              (rest: %d)." (E.used state + rest));
-          writer raw ~off:0 ~len:(rest + E.used state) fd >>= function
-          | Ok n ->
-            if n = E.used state + rest
-            then Lwt.return (Ok res)
-            else begin
-              ELog.warn (fun l ->
-                  l ~header:"go" "Loop back to writing the rest (%d) \
-                                  of the encoding (stack: %d)."
-                    (E.used state + rest - n) stack);
-              go ~stack:(stack + 1) (E.flush n ((E.used state + rest) - n) state)
-            end
-          | Error err -> Lwt.return (Error (`Writer err))
-        end else Lwt.return (Ok res)
-      | `Flush state ->
-        writer raw ~off:0 ~len:(rest + E.used state) fd >>= function
-        | Ok n ->
-          if n = rest + E.used state
-          then go ~stack:0 (E.flush 0 (E.raw_length raw) state)
-          else begin
-            let rest = (rest + E.used state) - n in
-            E.raw_blit raw n raw 0 rest;
-            ELog.debug (fun l ->
-                l ~header:"go" "The I/O encoder writes %d (rest: %d, loop back: %b)."
-                  n (E.raw_length raw - rest) (E.raw_length raw - rest = 0));
-            go ~stack:(if E.raw_length raw - rest = 0 then stack + 1 else 0)
-              ~rest
-              (E.flush rest (E.raw_length raw - rest) state)
-          end
-        | Error err -> Lwt.return (Error (`Writer err))
-    else (
-      ELog.err (fun l ->
-          l "Got a [`Stack] error: impossible to serialize and write the Git \
-             object.");
-      Lwt.return (Error `Stack)
-    )
-  in
-  go ~stack:0 state
+module FS (FS: S.FS) = struct
+
+  include FS
+
+  let with_f open_f err path f =
+    open_f path >>= function
+    | Error e -> Lwt.return Error.(v @@ FS.err_open path e)
+    | Ok fd   ->
+      Lwt.finalize
+        (fun () -> f fd)
+        (fun ()  ->
+           FS.File.close fd >>= function
+           | Ok ()   -> Lwt.return ()
+           | Error e -> err (Error.FS.err_close path e))
+
+  let no_err e =
+    Log.warn (fun l ->
+        l "%a, ignoring." (Error.FS.pp_error FS.pp_error) e);
+    Lwt.return ()
+
+  let with_open_r t path f = with_f FS.File.(open_r t) no_err path f
+
+  let prng = lazy(Random.State.make_self_init ())
+
+  let temp_file_name temp_dir file =
+    let rnd = (Random.State.bits (Lazy.force prng)) land 0xFFFFFF in
+    Fpath.(temp_dir / Fmt.strf "%s.%06x" file rnd)
+
+  let temp_file t file =
+    FS.Dir.temp t >>= fun temp_dir ->
+    let rec aux counter =
+      let name = temp_file_name temp_dir file in
+      FS.File.exists t name >>= function
+      | Ok false -> Lwt.return name
+      | _        ->
+        if counter >= 1000 then failwith "cannot create a unique temporary file"
+        else aux (counter + 1)
+    in
+    aux 0
+
+  let with_open_w ?(atomic=true) t path f =
+    if not atomic then with_f FS.File.(open_w t) no_err path f
+    else
+      temp_file t Fpath.(basename path) >>= fun temp ->
+      let err (`Close (_, e)) =
+        Log.debug (fun l ->
+            l "Got %a while writing in the temporary file %a"
+              FS.pp_error e Fpath.pp path);
+        FS.File.delete t temp >|= fun _ -> ()
+      in
+      with_f FS.File.(open_w t) err temp f >>= function
+      | Error _ as err -> Lwt.return err
+      | Ok x           ->
+        FS.File.move t temp path >|= function
+        | Error err -> Error.(v @@ FS.err_move temp path err)
+        | Ok ()     -> Ok x
+
+end
+
+module Encoder (E: ENCODER) (X: S.FS) = struct
+
+  let src = Logs.Src.create "git.encoder" ~doc:"logs git's internal I/O encoder"
+  module Log = (val Logs.src_log src : Logs.LOG)
+
+  module FS = FS(X)
+
+  type error =
+    [ FS.error Error.FS.t
+    | `Encoder of E.error ]
+
+  let to_file ?(limit=50) ?atomic fs file raw state =
+    FS.with_open_w ?atomic fs file @@ fun fd ->
+    let rec go ~stack ?(rest = 0) state =
+      if stack >= limit then Lwt.return Error.(v @@ FS.err_stack file)
+      else
+        E.eval raw state >>= function
+        | `Error (_, err)   -> Lwt.return (Error (`Encoder err))
+        | `End (state, res) ->
+          if E.used state + rest <= 0 then Lwt.return (Ok res)
+          else (
+            Log.debug (fun l -> l "Final step: rest=%d" (E.used state + rest));
+            FS.File.write raw ~off:0 ~len:(rest + E.used state) fd >>= function
+            | Error err -> Lwt.return Error.(v @@ FS.err_write file err)
+            | Ok n      ->
+              if n = E.used state + rest
+              then Lwt.return (Ok res)
+              else (
+                Log.debug (fun l ->
+                    l "Writing the rest (%d) of the encoding (stack: %d)."
+                      (E.used state + rest - n) stack);
+                let state = E.flush n ((E.used state + rest) - n) state in
+                go ~stack:(stack + 1) state
+              )
+          )
+        | `Flush state ->
+          FS.File.write raw ~off:0 ~len:(rest + E.used state) fd >>= function
+          | Error err -> Lwt.return Error.(v @@ FS.err_write file err)
+          | Ok n      ->
+            if n = rest + E.used state
+            then go ~stack:0 (E.flush 0 (Cstruct.len raw) state)
+            else (
+              let rest = (rest + E.used state) - n in
+              Cstruct.blit raw n raw 0 rest;
+              Log.debug (fun l ->
+                  l "The I/O encoder writes %d (rest: %d, loop back: %b)"
+                    n (Cstruct.len raw - rest) (Cstruct.len raw - rest = 0));
+              let stack = if Cstruct.len raw - rest = 0 then stack + 1 else 0 in
+              let state = E.flush rest (Cstruct.len raw - rest) state in
+              go ~stack ~rest state
+            )
+    in
+    go ~stack:0 state
+
+end

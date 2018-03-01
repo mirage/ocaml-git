@@ -1,4 +1,5 @@
 module Crc32        = Crc32
+module Error        = Error
 
 module Blob         = Blob
 module Commit       = Commit
@@ -7,7 +8,6 @@ module Tag          = Tag
 module Reference    = Reference
 module User         = User
 module Value        = Value
-module Gri          = Gri
 
 module Fanout       = Fanout
 module Bucket       = Bucket
@@ -48,7 +48,6 @@ module type FILE = S.FILE
 module type MAPPER = S.MAPPER
 module type DIR = S.DIR
 module type FS = S.FS
-module type LOCK = S.LOCK
 module type HASH = S.HASH
 module type DIGEST = S.DIGEST
 

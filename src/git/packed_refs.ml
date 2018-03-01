@@ -26,30 +26,29 @@ module type S = sig
   module D: S.DECODER
     with type t = t
      and type init = Cstruct.t
-     and type error = [ `Decoder of string ]
+     and type error = Error.Decoder.t
   module M: S.MINIENC with type t = t
   module E: S.ENCODER
     with type t = t
      and type init = int * t
 
-  type error = [ `SystemFile of FS.File.error
-               | `SystemIO of string
-               | D.error ]
+  type error =
+    [ Error.Decoder.t
+    | FS.error Error.FS.t ]
 
   val pp_error: error Fmt.t
 
-  val write: root:Fpath.t -> ?capacity:int -> raw:Cstruct.t -> t ->
+  val write: fs:FS.t -> root:Fpath.t -> ?capacity:int -> raw:Cstruct.t -> t ->
     (unit, error) result Lwt.t
 
-  val read: root:Fpath.t -> dtmp:Cstruct.t -> raw:Cstruct.t ->
+  val read: fs:FS.t -> root:Fpath.t -> dtmp:Cstruct.t -> raw:Cstruct.t ->
     (t, error) result Lwt.t
 end
 
-module Make (H: S.HASH) (FS: S.FS): S with module Hash = H and module FS = FS
-= struct
+module Make (H: S.HASH) (FS: S.FS) = struct
 
   module Hash = H
-  module FS = FS
+  module FS = Helper.FS(FS)
 
   type t = [ `Peeled of hash | `Ref of string * hash ] list
   and hash = Hash.t
@@ -145,81 +144,59 @@ module Make (H: S.HASH) (FS: S.FS): S with module Hash = H and module FS = FS
   module D = Helper.MakeDecoder(A)
   module E = Helper.MakeEncoder(M)
 
+  type fs_error = FS.error Error.FS.t
   type error =
-    [ `SystemFile of FS.File.error
-    | `SystemIO of string
-    | D.error ]
+    [ fs_error
+    | Error.Decoder.t ]
 
   let pp_error ppf = function
-    | `SystemFile sys_err -> Helper.ppe ~name:"`SystemFile" FS.File.pp_error ppf sys_err
-    | `SystemIO sys_err -> Helper.ppe ~name:"`SystemIO" Fmt.string ppf sys_err
-    | #D.error as err -> D.pp_error ppf err
+    | #Error.Decoder.t as err -> Error.Decoder.pp_error ppf err
+    | #fs_error as err -> Error.FS.pp_error FS.pp_error ppf err
 
-  let read ~root ~dtmp ~raw =
+  open Lwt.Infix
+
+  let read ~fs ~root ~dtmp ~raw =
     let decoder = D.default dtmp in
+    let path = Fpath.(root / "packed-refs") in
+    FS.with_open_r fs path @@ fun read ->
+    let rec loop decoder = match D.eval decoder with
+      | `End (_, value)               -> Lwt.return (Ok value)
+      | `Error (_, (#Error.Decoder.t as err)) ->
+        Lwt.return Error.(v @@ Error.Decoder.with_path path err)
+      | `Await decoder ->
+        FS.File.read raw read >>= function
+        | Error err -> Lwt.return Error.(v @@ Error.FS.err_read path err)
+        | Ok 0      -> loop (D.finish decoder)
+        | Ok n      ->
+          match D.refill (Cstruct.sub raw 0 n) decoder with
+          | Ok decoder              -> loop decoder
+          | Error (#Error.Decoder.t as err) ->
+            Lwt.return Error.(v @@ Error.Decoder.with_path path err)
+    in
+    loop decoder
 
-    let open Lwt.Infix in
-
-    FS.File.open_r ~mode:0o400 Fpath.(root / "packed-refs")[@warning "-44"] (* XXX(dinosaure): shadowing ( / ). *)
-    >>= function
-    | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
-    | Ok read ->
-      let rec loop decoder = match D.eval decoder with
-        | `Await decoder ->
-          FS.File.read raw read >>=
-          (function
-            | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
-            | Ok 0 -> loop (D.finish decoder)
-            | Ok n -> match D.refill (Cstruct.sub raw 0 n) decoder with
-              | Ok decoder -> loop decoder
-              | Error (#D.error as err) -> Lwt.return (Error err))
-        | `End (_, value) -> Lwt.return (Ok value)
-        | `Error (_, (#D.error as err)) -> Lwt.return (Error err)
-      in
-
-      loop decoder
-
-  let write ~root ?(capacity = 0x100) ~raw value =
-    let open Lwt.Infix in
-
-    let state = E.default (capacity, value) in
-
-    let module E =
-    struct
+  module Encoder = struct
+    module E = struct
       type state  = E.encoder
-      type raw    = Cstruct.t
       type result = int
       type error  = E.error
-
-      let raw_length = Cstruct.len
-      let raw_blit   = Cstruct.blit
-
       type rest = [ `Flush of state | `End of (state * result) ]
-
+      let used  = E.used
+      let flush = E.flush
       let eval raw state = match E.eval raw state with
         | `Error err    -> Lwt.return (`Error (state, err))
         | #rest as rest -> Lwt.return rest
+    end
+    include Helper.Encoder(E)(FS)
+  end
 
-      let used  = E.used
-      let flush = E.flush
-    end in
+  let err_stack = Error (`IO "Impossible to store the packed-refs file")
 
-    FS.File.open_w ~mode:0o644 Fpath.(root / "packed-refs")[@warning "-44"] (* XXX(dinosaure): shadowing ( / ). *)
-    >>= function
-    | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
-    | Ok write ->
-      Helper.safe_encoder_to_file
-        ~limit:50 (module E) FS.File.write write raw state
-      >>= function
-      | Ok _ -> FS.File.close write >>=
-        (function
-          | Ok () -> Lwt.return (Ok ())
-          | Error sys_err -> Lwt.return (Error (`SystemFile sys_err)))
-      | Error err ->
-        FS.File.close write >>= function
-        | Error sys_err -> Lwt.return (Error (`SystemFile sys_err))
-        | Ok () -> match err with
-          | `Stack -> Lwt.return (Error (`SystemIO "Impossible to store the packed-refs file"))
-          | `Writer sys_err -> Lwt.return (Error (`SystemFile sys_err))
-          | `Encoder `Never -> assert false
+  let write ~fs ~root ?(capacity = 0x100) ~raw value =
+    let state = E.default (capacity, value) in
+    let path = Fpath.(root / "packed-refs") in
+    Encoder.to_file fs path raw state >|= function
+    | Ok _ -> Ok ()
+    | Error #fs_error as err -> err
+    | Error (`Encoder #Error.never) -> assert false
 end

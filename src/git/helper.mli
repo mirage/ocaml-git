@@ -40,7 +40,7 @@ end
 module MakeDecoder (A :S.ANGSTROM): S.DECODER
   with type t = A.t
    and type init = Cstruct.t
-   and type error = [ `Decoder of string ]
+   and type error = Error.Decoder.t
 
 (** [MakeInflater] makes a module which respects the interface
     {!S.DECODER} from an angstrom decoder and an inflate implementation.
@@ -52,7 +52,7 @@ module MakeDecoder (A :S.ANGSTROM): S.DECODER
 module MakeInflater (Z: S.INFLATE) (A: S.ANGSTROM): S.DECODER
   with type t = A.t
    and type init = Z.window * Cstruct.t * Cstruct.t
-   and type error = [ `Decoder of string | `Inflate of Z.error ]
+   and type error = [ Error.Decoder.t | `Inflate of Z.error ]
 
 (** [MakeEncoder] makes a module which respects the interface
     {!S.ENCODER} from a {!S.MINIENC.encoder}. This module (instead
@@ -65,7 +65,7 @@ module MakeInflater (Z: S.INFLATE) (A: S.ANGSTROM): S.DECODER
 module MakeEncoder (M: S.MINIENC): S.ENCODER
   with type t = M.t
    and type init = int * M.t
-   and type error = [ `Never ]
+   and type error = Error.never
 
 (** [MakeDeflater] makes a module which respects the interface
     {!S.ENCODER} from a {!S.MINIENC.encoder}. As {!MakeEncoder}, this
@@ -108,20 +108,16 @@ val fdigest:
   (module S.ENCODER
     with type t = 't
      and type init = int * 't
-     and type error = [ `Never ]) ->
+     and type error = Error.never) ->
   ?capacity:int -> tmp:Cstruct.t -> kind:string -> length:('t -> int64) -> 't -> 'hash
 
 module type ENCODER =
 sig
   type state
-  type raw
   type result
   type error
 
-  val raw_length: raw -> int
-  val raw_blit: raw -> int -> raw -> int -> int -> unit
-
-  val eval: raw -> state ->
+  val eval: Cstruct.t -> state ->
     [ `Flush of state
     | `End of (state * result)
     | `Error of (state * error) ] Lwt.t
@@ -130,33 +126,47 @@ sig
   val flush: int -> int -> state -> state
 end
 
-type ('state, 'raw, 'result, 'error) encoder =
-  (module ENCODER
-    with type state = 'state
-     and type raw = 'raw
-     and type result = 'result
-     and type error = 'error)
-and ('fd, 'raw, 'error) writer = 'raw -> ?off:int -> ?len:int -> 'fd -> (int, 'error) result Lwt.t
+module Encoder (E: ENCODER) (FS: S.FS): sig
 
-(** [safe_encoder_to_file ~limit encoder writer fd tmp state] encodes
-    a value contained in [state] to a file represented by [fd] with
-    the output operation [writer]. This function takes care about
-    shift/compress the buffer [tmp] from the value returned by
-    [writer]. Then, if [writer] returns [0], we continue to try to
-    write [limit] times - if [writer] continue to fail, we stop and
-    return an error [`Stack].
+  type error =
+    [ `Encoder of E.error
+    | FS.error Error.FS.t ]
 
-    If we retrieve an encoder error while we serialize the value, we
-    stop and return [`Encoder]. If the writer returns an error, we
-    stop and retrun [`Writer].
+  (** [to_file t f tmp state] encodes [state] in the file [f] using
+      [tmp] as an intermediary buffer.
 
-    In any case, we {b don't close} the file-descriptor. Then, if we
-    retrieve an error, that means we wrote {b partially} the value in
-    your file-system - and you need to take care about that.
-*)
-val safe_encoder_to_file:
-  limit:int ->
-  ('state, 'raw, 'res, 'err_encoder) encoder ->
-  ('fd, 'raw, 'err_writer) writer ->
-  'fd -> 'raw -> 'state ->
-  ('res, [ `Stack | `Encoder of 'err_encoder | `Writer of 'err_writer ]) result Lwt.t
+      The result is [Error `Stack] if at least [limit] writes have
+      returned 0.
+
+      If [atomic] is set, the operation is guaranteed to be atomic. *)
+  val to_file: ?limit:int -> ?atomic:bool -> FS.t -> Fpath.t -> Cstruct.t ->
+    E.state -> (E.result, error) result Lwt.t
+
+end
+
+module FS (FS: S.FS): sig
+
+  include (module type of struct include FS end)
+
+  val with_open_r: FS.t -> Fpath.t ->
+    ([ `Read ] FS.File.fd ->
+     ('a, [> `Open of Fpath.t * FS.error
+          | `Move of Fpath.t * Fpath.t * FS.error ] as 'e) result Lwt.t) ->
+    ('a, 'e) result Lwt.t
+  (** [with_open_r t p f] opens the file [p] in the file-system
+      [t] with read-only mode and calls [f] on the resulting
+      file-descriptor. When [f] completes, the file-descriptor is
+      closed. Failure to close that file-descriptor is ignored. *)
+
+  val with_open_w: ?atomic:bool -> FS.t -> Fpath.t ->
+    ([ `Write ] FS.File.fd ->
+     ('a, [> `Open of Fpath.t * FS.error
+          | `Move of Fpath.t * Fpath.t * FS.error ] as 'e) result Lwt.t) ->
+    ('a, 'e) result Lwt.t
+    (** Same as {!with_open_r} but the file [p] is opened in
+        read-write mode. If [atomic] is set (it is by default), the
+        application of [f] is guaranteed to be atomic. This is done by
+        creating a temporary file and renaming it when all the work is
+        done. *)
+
+end

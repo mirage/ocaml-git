@@ -154,7 +154,7 @@ module type S = sig
   module D: S.DECODER
     with type t = head_contents
      and type init = Cstruct.t
-     and type error = [ `Decoder of string ]
+     and type error = Error.Decoder.t
   (** The decoder of the Git Reference object. We constraint the input
       to be a {!Cstruct.t}. This decoder needs a {!Cstruct.t} as an
       internal buffer. *)
@@ -165,7 +165,7 @@ module type S = sig
   module E: S.ENCODER
     with type t = head_contents
      and type init = int * head_contents
-     and type error = [ `Never ]
+     and type error = Error.never
   (** The encoder (which uses a {Minienc.encoder}) of the Git
       Reference object. We constraint the output to be a {Cstruct.t}.
       This encoder needs the Reference OCaml value and the memory
@@ -177,52 +177,46 @@ module type S = sig
 end
 
 (** The interface which describes any I/O operations on Git reference. *)
-module type IO =
-sig
-  module Lock: S.LOCK
+module type IO = sig
+
   module FS: S.FS
 
   include S
 
   (** The type of error. *)
   type error =
-    [ `SystemFile of FS.File.error
-    | `SystemDirectory of FS.Dir.error
-    | `SystemIO of string
-    | D.error ]
+    [ Error.Decoder.t
+    | FS.error Error.FS.t ]
 
   val pp_error: error Fmt.t
   (** Pretty-printer of {!error}. *)
 
-  val mem: root:Fpath.t -> t -> (bool, error) result Lwt.t
-  (** [mem ~root reference] returns [true] iff we found the
-      [reference] find in the git repository [root]. Otherwise, we returns
-      [false]. *)
+  val mem: fs:FS.t -> root:Fpath.t -> t -> bool Lwt.t
+  (** [mem ~fs ~root reference] is [true] iff [reference] can be found
+      in the git repository [root]. Otherwise, it is [false]. *)
 
-  val read: root:Fpath.t -> t -> dtmp:Cstruct.t -> raw:Cstruct.t -> ((t * head_contents), error) result Lwt.t
-  (** [read ~root reference dtmp raw] returns the value contains in
-      the reference [reference] (available in the git repository
+  val read: fs:FS.t -> root:Fpath.t -> t -> dtmp:Cstruct.t -> raw:Cstruct.t ->
+    ((t * head_contents), error) result Lwt.t
+  (** [read ~fs ~root reference dtmp raw] is the value of the
+      reference [reference] (available in the git repository
       [root]). [dtmp] and [raw] are buffers used by the decoder
       (respectively for the decoder as an internal buffer and the
       input buffer).
 
       This function can returns an {!error}. *)
 
-  val write: root:Fpath.t -> ?locks:Lock.t -> ?capacity:int -> raw:Cstruct.t -> t -> head_contents -> (unit, error) result Lwt.t
-  (** [write ~root ~raw reference value] writes the value [value] in
-      the mutable representation of the [reference] in the git
+  val write: fs:FS.t -> root:Fpath.t -> ?capacity:int -> raw:Cstruct.t ->
+    t -> head_contents -> (unit, error) result Lwt.t
+  (** [write ~fs ~root ~raw reference value] writes the value [value]
+      in the mutable representation of the [reference] in the git
       repository [root]. [raw] is a buffer used by the decoder to keep
       the input.
 
       This function can returns an {!error}. *)
 
-  val test_and_set: root:Fpath.t -> ?locks:Lock.t -> t -> test:head_contents option -> set:head_contents option -> (bool, error) result Lwt.t
-  (** Atomic updates (test and set) for references. *)
-
-  val remove: root:Fpath.t -> ?locks:Lock.t -> t -> (unit, error) result Lwt.t
-  (** [remove ~root ~lockdir reference] removes the reference from the
-      git repository [root]. [lockdir] is to store a {!Lock.t} and
-      avoid race condition on the reference [reference].
+  val remove: fs:FS.t -> root:Fpath.t -> t -> (unit, error) result Lwt.t
+  (** [remove ~root reference] removes the reference from the git
+      repository [root].
 
       This function can returns an {!error}. *)
 end
@@ -231,12 +225,6 @@ module Make (H: S.HASH): S with module Hash = H
 (** The {i functor} to make the OCaml representation of the Git
     Reference object by a specific hash. *)
 
-module IO
-    (H: S.HASH)
-    (L: S.LOCK)
-    (FS: S.FS with type File.lock = L.elt)
- : IO with module Hash = H
-        and module Lock = L
-        and module FS = FS
+module IO (H: S.HASH) (FS: S.FS): IO with module Hash = H and module FS = FS
 (** The {i functor} to make a module which implements I/O operations
     on references on a file-system. *)

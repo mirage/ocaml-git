@@ -19,21 +19,19 @@ module type S =
 sig
   module Hash: S.HASH
   module Inflate: S.INFLATE
+  module Radix: Radix.S with type key = Hash.t
+  module Graph: Map.S with type key = int64
 
-  module Radix
-    : module type of Radix.Make(struct include Hash let length _ = Hash.Digest.length end)
-
-  module Graph: Map.S
-    with type key = int64
-
-  module PACKDecoder: Unpack.P
-    with module Hash = Hash
-     and module Inflate = Inflate
+  module HDec: Unpack.H with module Hash := Hash
+  module PDec: Unpack.P
+    with module Hash := Hash
+     and module Inflate := Inflate
+     and module Hunk := HDec
 
   type error =
     [ `Unexpected_end_of_input
     | `Unexpected_chunk of string
-    | `PackDecoder of PACKDecoder.error ]
+    | `PDec of PDec.error ]
 
   val pp_error: error Fmt.t
 
@@ -41,7 +39,7 @@ sig
   sig
     type t =
       { hash  : Hash.t
-      ; delta : (int64 * PACKDecoder.H.hunks) list }
+      ; delta : (int64 * HDec.hunks) list }
   end
 
   module Full:
@@ -85,10 +83,16 @@ sig
 end
 
 module Make
-    (H: S.HASH)
-    (I: S.INFLATE)
-  : S with module Hash = H
-       and module Inflate = I
+    (Hash: S.HASH)
+    (Inflate: S.INFLATE)
+    (HDec: Unpack.H with module Hash := Hash)
+    (PDec: Unpack.P with module Hash := Hash
+                     and module Inflate := Inflate
+                     and module Hunk := HDec)
+  : S with module Hash = Hash
+       and module Inflate = Inflate
+       and module HDec := HDec
+       and module PDec := PDec
 = struct
   module Log =
   struct
@@ -96,33 +100,34 @@ module Make
     include (val Logs.src_log src : Logs.LOG)
   end
 
-  module Hash = H
-  module Inflate = I
+  module Hash = Hash
+  module Inflate = Inflate
+  module HDec = HDec
+  module PDec = PDec
 
-  module PACKDecoder = Unpack.MakePACKDecoder(Hash)(Inflate)
-  module Radix
-    : module type of Radix.Make(struct include Hash let length _ = Hash.Digest.length end)
-    = Radix.Make(struct include Hash let length _ = Hash.Digest.length end)
+  module Radix = Radix.Make(struct include Hash let length _ = Hash.Digest.length end)
   module Graph = Map.Make(Int64)
 
   type error =
     [ `Unexpected_end_of_input
     | `Unexpected_chunk of string
-    | `PackDecoder of PACKDecoder.error ]
+    | `PDec of PDec.error ]
 
   let pp_error ppf = function
-    | `Unexpected_end_of_input -> Fmt.pf ppf "`Unexpected_end_of_input"
+    | `Unexpected_end_of_input ->
+      Fmt.pf ppf "Unexpected end of PACK stream"
     | `Unexpected_chunk chunk ->
-      Fmt.pf ppf "(`Unexpected_chunk %a)"
+      Fmt.pf ppf "Unexpected chunk of PACK stream: %a"
         (Fmt.hvbox (Minienc.pp_scalar ~get:String.get ~length:String.length))
         chunk
-    | `PackDecoder err -> Fmt.pf ppf "(`PackDecoder %a)" PACKDecoder.pp_error err
+    | `PDec err ->
+      Fmt.pf ppf "Got an error while decoding PACK stream: %a" PDec.pp_error err
 
   module Partial =
   struct
     type t =
       { hash : Hash.t
-      ; delta : (int64 * PACKDecoder.H.hunks) list }
+      ; delta : (int64 * HDec.hunks) list }
   end
 
   module Full =
@@ -161,19 +166,19 @@ module Make
     ; state = `Empty hash }
 
   let from_stream ~ztmp ~window info stream =
-    let state = PACKDecoder.default ztmp window in
+    let state = PDec.default ztmp window in
     let empty = Cstruct.create 0 in
 
     let ctx_with_header chunk state =
       let ctx = Hash.Digest.init () in
       let hdr = Fmt.strf "%s %d\000"
-          (match PACKDecoder.kind state with
-           | PACKDecoder.Commit -> "commit"
-           | PACKDecoder.Tag -> "tag"
-           | PACKDecoder.Tree -> "tree"
-           | PACKDecoder.Blob -> "blob"
+          (match PDec.kind state with
+           | PDec.Commit -> "commit"
+           | PDec.Tag -> "tag"
+           | PDec.Tree -> "tree"
+           | PDec.Blob -> "blob"
            | _ -> assert false)
-          (PACKDecoder.length state)
+          (PDec.length state)
       in
 
       Hash.Digest.feed ctx (Cstruct.of_string hdr);
@@ -183,37 +188,37 @@ module Make
 
     let open Lwt.Infix in
 
-    let rec go ?(src = empty) ?ctx ?insert_hunks partial info state = match PACKDecoder.eval src state with
-      | `Hunk (state, PACKDecoder.H.Insert raw) ->
+    let rec go ?(src = empty) ?ctx ?insert_hunks partial info state = match PDec.eval src state with
+      | `Hunk (state, HDec.Insert raw) ->
         let insert_hunks = match insert_hunks with
           | Some count -> count + Cstruct.len raw
           | None -> Cstruct.len raw
         in
 
-        go ~src ~insert_hunks partial info (PACKDecoder.continue state)
+        go ~src ~insert_hunks partial info (PDec.continue state)
       | `Hunk (state, _) ->
-        go ~src ?ctx ?insert_hunks partial info (PACKDecoder.continue state)
+        go ~src ?ctx ?insert_hunks partial info (PDec.continue state)
       | `Error (_, err) ->
-        Lwt.return (Error (`PackDecoder err))
+        Lwt.return (Error (`PDec err))
       | `Flush state ->
-        let chunk, len = PACKDecoder.output state in
+        let chunk, len = PDec.output state in
 
         let ctx = match ctx with
           | Some ctx -> Hash.Digest.feed ctx (Cstruct.sub chunk 0 len); ctx
           | None -> ctx_with_header (Cstruct.sub chunk 0 len) state
         in
 
-        go ~src ~ctx partial info (PACKDecoder.flush 0 (Cstruct.len chunk) state)
+        go ~src ~ctx partial info (PDec.flush 0 (Cstruct.len chunk) state)
       | `Object state ->
-        let hash = match PACKDecoder.kind state, ctx with
-          | (PACKDecoder.Commit
-            | PACKDecoder.Tree
-            | PACKDecoder.Tag
-            | PACKDecoder.Blob), Some ctx -> Some (Hash.Digest.get ctx)
-          | (PACKDecoder.Commit
-            | PACKDecoder.Tree
-            | PACKDecoder.Tag
-            | PACKDecoder.Blob), None ->
+        let hash = match PDec.kind state, ctx with
+          | (PDec.Commit
+            | PDec.Tree
+            | PDec.Tag
+            | PDec.Blob), Some ctx -> Some (Hash.Digest.get ctx)
+          | (PDec.Commit
+            | PDec.Tree
+            | PDec.Tag
+            | PDec.Blob), None ->
             let ctx = ctx_with_header empty state in
             Some (Hash.Digest.get ctx)
           | _ -> None
@@ -221,38 +226,40 @@ module Make
 
         let tree = match hash with
           | Some hash ->
-            Radix.bind info.tree hash (PACKDecoder.crc state, PACKDecoder.offset state)
+            Radix.bind info.tree hash (PDec.crc state, PDec.offset state)
           | None -> info.tree
         in
 
-        let max_length_insert_hunks = match PACKDecoder.kind state, insert_hunks with
-          | PACKDecoder.Hunk _, Some insert_hunks ->
+        let max_length_insert_hunks = match PDec.kind state, insert_hunks with
+          | PDec.Hunk _, Some insert_hunks ->
             max info.max_length_insert_hunks insert_hunks
-          | PACKDecoder.Hunk _, None ->
+          | PDec.Hunk _, None ->
             max info.max_length_insert_hunks 0
           | _ -> info.max_length_insert_hunks
         in
 
-        let max_length_object = match PACKDecoder.kind state with
-          | (PACKDecoder.Commit
-            | PACKDecoder.Tree
-            | PACKDecoder.Tag
-            | PACKDecoder.Blob) ->
-            max info.max_length_object (PACKDecoder.length state)
-          | PACKDecoder.Hunk hunks_descr ->
-            let max' = max hunks_descr.PACKDecoder.H.source_length hunks_descr.PACKDecoder.H.target_length in
+        let max_length_object = match PDec.kind state with
+          | (PDec.Commit
+            | PDec.Tree
+            | PDec.Tag
+            | PDec.Blob) ->
+            max info.max_length_object (PDec.length state)
+          | PDec.Hunk hunks_descr ->
+            let max' = max
+                hunks_descr.HDec.source_length
+                hunks_descr.HDec.target_length in
             max info.max_length_object max'
         in
 
-        let graph = match PACKDecoder.kind state with
-          | PACKDecoder.Hunk ({ PACKDecoder.H.reference = PACKDecoder.H.Offset rel_off; _ }) ->
+        let graph = match PDec.kind state with
+          | PDec.Hunk ({ HDec.reference = HDec.Offset rel_off; _ }) ->
             let depth_source, _ =
-              try Graph.find Int64.(sub (PACKDecoder.offset state) rel_off) info.graph
+              try Graph.find Int64.(sub (PDec.offset state) rel_off) info.graph
               with Not_found -> 0, None
             in
 
-            Graph.add (PACKDecoder.offset state) (depth_source + 1, hash) info.graph
-          | PACKDecoder.Hunk ({ PACKDecoder.H.reference = PACKDecoder.H.Hash hash; _ }) ->
+            Graph.add (PDec.offset state) (depth_source + 1, hash) info.graph
+          | PDec.Hunk ({ HDec.reference = HDec.Hash hash; _ }) ->
             let depth_source, _ =
               try match Radix.lookup info.tree hash with
                 | Some (_, abs_off) -> Graph.find abs_off info.graph
@@ -260,14 +267,14 @@ module Make
               with Not_found -> 0, None
             in
 
-            Graph.add (PACKDecoder.offset state) (depth_source + 1, Some hash) info.graph
+            Graph.add (PDec.offset state) (depth_source + 1, Some hash) info.graph
           | _ ->
-            Graph.add (PACKDecoder.offset state) (0, hash) info.graph
+            Graph.add (PDec.offset state) (0, hash) info.graph
         in
 
-        let partial = match PACKDecoder.kind state with
-          | PACKDecoder.Hunk hunks_descr ->
-            (PACKDecoder.offset state, hunks_descr) :: partial
+        let partial = match PDec.kind state with
+          | PDec.Hunk hunks_descr ->
+            (PDec.offset state, hunks_descr) :: partial
           | _ -> partial
         in
 
@@ -276,7 +283,7 @@ module Make
                     ; max_length_object
                     ; tree
                     ; graph }
-          (PACKDecoder.next_object state)
+          (PDec.next_object state)
       | `End (_, hash) ->
         (stream () >>= function
           | Some raw ->
@@ -301,7 +308,7 @@ module Make
         | Some src ->
           Log.debug (fun l -> l ~header:"from_stream" "Receive a chunk of the PACK stream (length: %d)."
                         (Cstruct.len src));
-          go ~src ?ctx ?insert_hunks partial info (PACKDecoder.refill 0 (Cstruct.len src) state)
+          go ~src ?ctx ?insert_hunks partial info (PDec.refill 0 (Cstruct.len src) state)
         | None ->
           Log.err (fun l -> l ~header:"from_stream" "Receive end of the PACK stream.");
           Lwt.return (Error `Unexpected_end_of_input)

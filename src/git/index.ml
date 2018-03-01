@@ -267,7 +267,6 @@ module MakeIndexDecoder (H: S.HASH) = struct
     | Cont of t
     | Ok of t * Entry.index * Ext.value list
   and 'k extension = ..
-
   (* XXX(dinosaure): we use the open type only for the main
      developper. That means, we don't let the user to put a new
      extension in the decoder. It's just /more easy/ to integrate an
@@ -1515,20 +1514,20 @@ module IO (H: S.HASH) (FS: S.FS) = struct
   type error =
     [ `IndexDecoder of IndexDecoder.error
     | `IO of string
-    | `File of FileSystem.File.error ]
+    | `File of FileSystem.error ]
 
   let pp_error ppf = function
     | `IndexDecoder err -> Fmt.pf ppf "(`IndexDecoder %a)" IndexDecoder.pp_error err
-    | `File err -> Fmt.pf ppf "(`File %a)" FileSystem.File.pp_error err
+    | `File err -> Fmt.pf ppf "(`File %a)" FileSystem.pp_error err
     | `IO err -> Fmt.pf ppf "(`IO %s)" err
 
-  let load ~root ~dtmp =
+  let load fs ~root ~dtmp =
     let open Lwt.Infix in
 
-    FileSystem.File.open_r ~mode:0o400 Fpath.(root / "index")[@warning "-44"]
+    FileSystem.File.open_r fs Fpath.(root / "index")[@warning "-44"]
     >>= function
     | Error sys_err ->
-      Log.debug (fun l -> l "Retrieve a file-system error: %a." FileSystem.File.pp_error sys_err);
+      Log.debug (fun l -> l "Retrieve a file-system error: %a." FileSystem.pp_error sys_err);
       Lwt.return (Error (`File sys_err))
     | Ok read ->
       let decoder = IndexDecoder.default in
@@ -1546,7 +1545,7 @@ module IO (H: S.HASH) (FS: S.FS) = struct
 
       loop decoder
 
-  let store ~root ~raw entries =
+  let store fs ~root ~raw entries =
     let open Lwt.Infix in
 
     let module E = struct
@@ -1570,7 +1569,7 @@ module IO (H: S.HASH) (FS: S.FS) = struct
       let used = IndexEncoder.used_out
       let flush = IndexEncoder.flush
     end in
-    FileSystem.File.open_w ~mode:0o644 Fpath.(root / "index")[@warning "-44"]
+    FileSystem.File.open_w fs Fpath.(root / "index")[@warning "-44"]
     >>= function
     | Error sys_err ->
       Lwt.return (Error (`File sys_err))
@@ -1587,7 +1586,7 @@ module IO (H: S.HASH) (FS: S.FS) = struct
              Log.err (fun l ->
                  l "Got an error while closing %a: %a."
                    Fpath.pp Fpath.(root / "index")
-                   FileSystem.File.pp_error sys_err);
+                   FileSystem.pp_error sys_err);
              Lwt.return ())
         >|= function
         | Ok hash ->
@@ -1723,20 +1722,20 @@ module Container (S: Store.S) = struct
     in go acc
 
   type error =
-    [ `File of Store.FS.File.error
+    [ `File of Store.FS.error
     | `IO of string
     | `Stack
-    | `Directory of Store.FS.Dir.error
+    | `Directory of Store.FS.error
     | `Store of Store.error ]
 
   let pp_error ppf = function
-    | `File err -> Fmt.pf ppf "(`File %a)" Store.FS.File.pp_error err
-    | `Directory err -> Fmt.pf ppf "(`Directory %a)" Store.FS.Dir.pp_error err
+    | `File err -> Fmt.pf ppf "(`File %a)" Store.FS.pp_error err
+    | `Directory err -> Fmt.pf ppf "(`Directory %a)" Store.FS.pp_error err
     | `IO err -> Fmt.pf ppf "(`IO %s)" err
     | `Stack -> Fmt.pf ppf "Unable to perform I/O operation."
     | `Store err -> Fmt.pf ppf "(`Store %a)" Store.pp_error err
 
-  exception Close of Store.FS.File.error
+  exception Close of Store.FS.error
 
   open Lwt.Infix
   let ( >?= ) = Lwt_result.bind
@@ -1840,13 +1839,13 @@ module Container (S: Store.S) = struct
       { assume = true; extend = None; stage = 0; length; } in
     { Entry.info; hash; flag; path; }
 
-  let write_blob acc path ((perm : Store.Value.Tree.perm), raw) =
+  let write_blob fs acc path ((perm : Store.Value.Tree.perm), raw) =
     let file_err err = Lwt.return (`File err) in
 
     match perm with
     | #link -> raise (Failure "Cannot create symlink/gitlink yet.")
     | #file as file ->
-      Store.FS.File.open_w ~mode:(perm_of_file file) path >!= file_err >?= fun fd ->
+      Store.FS.File.open_w fs path >!= file_err >?= fun fd ->
         let rec loop ~retry raw =
           if Cstruct.len raw = 0
           then Lwt.return (Ok ())
@@ -1877,7 +1876,7 @@ module Container (S: Store.S) = struct
       raise (Invalid_argument "Unable to make a new directory from a \
                                Git blob object.")
 
-  let write_entry git acc path (entry : Entry.entry) =
+  let write_entry git fs acc path (entry : Entry.entry) =
     let store_err err = Lwt.return (`Store err) in
 
     let to_tree_perm x : Store.Value.Tree.perm =
@@ -1891,22 +1890,22 @@ module Container (S: Store.S) = struct
 
     Store.read git entry.Entry.hash >!= store_err >?= function
       | Store.Value.Blob raw ->
-        write_blob acc path (to_tree_perm entry.Entry.info.mode, (raw :> Cstruct.t))
+        write_blob fs acc path (to_tree_perm entry.Entry.info.mode, (raw :> Cstruct.t))
       | _ ->
         Lwt.return (Error `Expected_blob)
 
-  let write_tree dir =
-    Store.FS.Dir.create ~path:true dir
+  let write_tree fs dir =
+    Store.FS.Dir.create fs dir
     >!= (fun err -> Lwt.return (`Directory err))
     >?= (fun _ -> Lwt.return (Ok ()))
 
-  let from_index git ~dtmp =
+  let from_index git fs ~dtmp =
     IO.load ~root:(Store.dotgit git) ~dtmp >?= fun (entries, _) ->
     lwt_result_traversal
       ~root:(Store.root git)
       []
-      (write_entry git)
-      write_tree
+      (write_entry git fs)
+      (write_tree fs)
       (of_entries entries)
 
   let from_entries git ~dtmp:raw entries =
@@ -1921,7 +1920,7 @@ module Container (S: Store.S) = struct
     |> function Blob _ -> assert false
               | Tree map -> map
 
-  let from_tree git hash =
+  let from_tree git fs hash =
     let b2b _ _ = raise (Invalid_argument "Try to merge 2 blobs to the same path.") in
     let e2e _ _ = raise (Invalid_argument "Try to merge 2 differents objects to the same path.") in
 
@@ -1949,18 +1948,18 @@ module Container (S: Store.S) = struct
     lwt_result_traversal
       ~root:(Store.root git)
       []
-      write_blob
-      write_tree
+      (write_blob fs)
+      (write_tree fs)
       root
 
-  let from_commit git hash =
+  let from_commit git fs hash =
     (Store.read git hash >!= fun err -> Lwt.return (`Store err)) >?= function
     | Store.Value.Commit commit ->
-      from_tree git (Store.Value.Commit.tree commit)
+      from_tree git fs (Store.Value.Commit.tree commit)
     | _ -> Lwt.fail (Invalid_argument "Expected a Git commit object.")
 
-  let from_reference git reference =
+  let from_reference git fs reference =
     Store.Ref.list git >>= fun lst ->
     let hash = List.assoc reference lst in
-    from_commit git hash
+    from_commit git fs hash
 end

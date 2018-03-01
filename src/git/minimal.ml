@@ -1,7 +1,6 @@
 module type S = sig
 
   module Hash: S.HASH
-  module Lock: S.LOCK
   module Inflate: S.INFLATE
   module Deflate: S.DEFLATE
 
@@ -26,14 +25,18 @@ module type S = sig
   val pp_error: error Fmt.t
   (** Pretty-printer of {!error}. *)
 
-  val create: ?root:Fpath.t ->
-    ?dotgit:Fpath.t ->
-    ?compression:int ->
-    unit -> (t, error) result Lwt.t
-  (** [create ?root ?dotgit ?compression ()] creates a new store
-      represented by the path [root] (default is ["."]), where the Git
-      objects are located in [dotgit] (default is [root / ".git"] and when
-      Git objects are compressed by the [level] (default is [4]). *)
+  type buffer
+  (** The type for buffers. *)
+
+  val default_buffer: unit -> buffer
+  (** The default buffer. *)
+
+  val buffer:
+    ?ztmp:Cstruct.t ->
+    ?dtmp:Cstruct.t ->
+    ?raw:Cstruct.t ->
+    ?window:Inflate.window ->
+    unit -> buffer
 
   val dotgit: t -> Fpath.t
   (** [dotgit state] returns the current [".git"] path used - eg. the
@@ -85,7 +88,7 @@ module type S = sig
       [state]. *)
 
   val fold :
-       t
+    t
     -> ('acc -> ?name:Fpath.t -> length:int64 -> Hash.t -> Value.t -> 'acc Lwt.t)
     -> path:Fpath.t
     -> 'acc
@@ -129,12 +132,6 @@ module type S = sig
 
     module Graph: Map.S with type key = Hash.t
 
-    (** The type error. *)
-    type nonrec error
-
-    val pp_error: error Fmt.t
-    (** Pretty-printer of {!error}. *)
-
     val from: t -> stream -> (Hash.t * int, error) result Lwt.t
     (** [from git stream] populates the Git repository [git] from the
         PACK flow [stream]. If any error is encountered, any Git
@@ -167,13 +164,7 @@ module type S = sig
 
   module Ref: sig
 
-    (** The type error. *)
-    type error = private [> `Not_found]
-
-    val pp_error: error Fmt.t
-    (** Pretty-printer of {!error}. *)
-
-    val list: ?locks:Lock.t -> t -> (Reference.t * Hash.t) list Lwt.t
+    val list: t -> (Reference.t * Hash.t) list Lwt.t
     (** [list state] returns an associated list between reference and
         its bind hash. *)
 
@@ -181,54 +172,30 @@ module type S = sig
     (** [mem state ref] returns [true] iff [ref] exists in [state],
         otherwise returns [false]. *)
 
-    val read: ?locks:Lock.t -> t -> Reference.t ->
+    val read: t -> Reference.t ->
       ((Reference.t * Reference.head_contents), error) result Lwt.t
     (** [read state reference] returns the value contains in the
         reference [reference] (available in the git repository
         [state]). *)
 
-    val write: t -> ?locks:Lock.t -> Reference.t -> Reference.head_contents
+    val write: t -> Reference.t -> Reference.head_contents
       -> (unit, error) result Lwt.t
-    (** [write state ?locks reference value] writes the value [value]
-        in the mutable representation of the [reference] in the git
-        repository [state]. The [?lock] avoids the race condition if
-        it's specified. *)
+    (** [write state reference value] writes the value [value] in the
+        mutable representation of the [reference] in the git
+        repository [state]. *)
 
-    val test_and_set: t ->
-         ?locks:Lock.t
-      -> Reference.t
-      -> test:Reference.head_contents option
-      -> set:Reference.head_contents option
-      -> (bool, error) result Lwt.t
-    (** [test_and_set state ?locks reference ~test ~set] is an atomic
-        update of the reference [reference] in the git repository
-        [state].
-
-        {ul
-        {- If [test = None], we set [reference] to [set] if
-        [reference] does not exist.}
-        {- If [test = Some v], we set [reference] to [set] only if
-        [reference] exists and [reference = v].}
-        {- If [set = None], we ensure than [reference] will no longer
-        exists iff [test] returns [true].}
-        {- If [set = Some v], we ensure than [reference] will be equal
-        to [v] iff [test] returns [true].}} *)
-
-    val remove: t -> ?locks:Lock.t -> Reference.t ->
-      (unit, error) result Lwt.t
+    val remove: t ->  Reference.t -> (unit, error) result Lwt.t
     (** [remove state reference] removes the reference [reference]
-        from the git repository [state]. The [?lock] avoids the race
-        condition if it's specified. *)
+        from the git repository [state]. *)
   end
 
-  val reset: ?locks:Lock.t -> t ->
-    (unit, [ `Store of error | `Ref of Ref.error ]) result Lwt.t
-  (** [reset ?locks t] removes all things of the git repository [t]
-      and ensures it will be empty. *)
+  val reset: t -> (unit, error) result Lwt.t
+  (** [reset t] removes all things of the git repository [t] and
+      ensures it will be empty. *)
 
-  val clear_caches: ?locks:Lock.t -> t -> unit Lwt.t
-  (** [clear_caches ?locks t] drops all values stored in the internal
-      caches binded with the git repository [t]. *)
+  val clear_caches: t -> unit Lwt.t
+  (** [clear_caches t] drops all values stored in the internal caches
+      binded with the git repository [t]. *)
 
   val read_inflated: t -> Hash.t ->
     ([ `Commit | `Tag | `Blob | `Tree ] * Cstruct.t) option Lwt.t

@@ -161,16 +161,17 @@ struct
     let v = ref 0l in
 
     while off + !i < len && !i < V.window
-    do v := UInt32.(((!v lsl 8) lor (of_char (B.get buf (off + !i)))) lxor t.(to_int (!v lsr V.shift)))[@warning "-44"];
+    do v := UInt32.(((!v lsl 8) lor (of_char (B.get buf (off + !i))))
+                    lxor t.(to_int (!v lsr V.shift)));
        incr i done;
 
     !v
 
   let derive v buf off =
     let r = off - V.window in
-    let v = UInt32.(v lxor u.(Char.code (B.get buf r)))[@warning "-44"] in
-    let v = UInt32.(((v lsl 8) lor (of_char (B.get buf off))) lxor t.(to_int (v lsr V.shift)))[@warning "-44"] in
-
+    let v = UInt32.(v lxor u.(Char.code (B.get buf r))) in
+    let v = UInt32.(((v lsl 8) lor (of_char (B.get buf off)))
+                    lxor t.(to_int (v lsr V.shift))) in
     v
 end
 
@@ -181,15 +182,11 @@ type unpacked_entry =
   ; hash      : UInt32.t
   ; next      : ptr }
 
-(* XXX(dinosaure): may be my prince will fix [@warning "-32"]. *)
-[@@@warning "-32"]
-
-let[@warning "-32"] pp_unpacked_entry ppf entry =
+let _pp_unpacked_entry ppf entry =
   let pp_next ppf = function
     | Entry idx -> Fmt.int ppf idx
     | Null -> Fmt.string ppf "<null>"
   in
-
   Fmt.pf ppf "{ @[<hov>offset = %d;@ \
                        hash = %lxu;@ \
                        next = %a;@] }"
@@ -244,12 +241,12 @@ struct
     let hsize, hmask =
       let res = ref 4 in
       while (1 lsl !res) < (max / 4) do incr res done;
-      1 lsl !res, UInt32.((1l lsl !res) - 1l)[@warning "-44"]
+      1 lsl !res, UInt32.((1l lsl !res) - 1l)
     in
     let htable = Array.make hsize Null in
     let hcount = Array.make hsize 0 in
 
-    let previous = ref UInt32.(lnot 0l)[@warning "-44"] in
+    let previous = ref UInt32.(lnot 0l) in
     let entries  = ref max in
 
     while !idx >= 0
@@ -268,10 +265,12 @@ struct
         unpacked.(!rev) <-
           ({ offset = !idx + V.window
            ; hash
-           ; next   = htable.(UInt32.(to_int (hash land hmask)))[@warning "-44"] } : unpacked_entry);
+           ; next   = htable.(UInt32.(to_int (hash land hmask))) }
+           : unpacked_entry);
 
-        htable.(UInt32.(to_int (hash land hmask))[@warning "-44"]) <- Entry (!rev);
-        hcount.(UInt32.(to_int (hash land hmask))[@warning "-44"]) <- hcount.(UInt32.(to_int (hash land hmask))[@warning "-44"]) + 1;
+        htable.(UInt32.(to_int (hash land hmask))) <- Entry (!rev);
+        hcount.(UInt32.(to_int (hash land hmask))) <-
+          hcount.(UInt32.(to_int (hash land hmask))) + 1;
         rev := !rev + 1;
       end;
 
@@ -488,7 +487,7 @@ struct
               then (entry.Entry.offset, same) (* this is our best match so far *)
               else (copy_off, copy_len))
             (copy_off, copy_len)
-            (Array.get index.Index.hash UInt32.(to_int (current_hash land index.Index.mask))[@warning "-44"]
+            (Array.get index.Index.hash UInt32.(to_int (current_hash land index.Index.mask))
             |> List.filter (fun entry -> UInt32.compare entry.Entry.hash current_hash = 0)),
           current_hash
         else (copy_off, copy_len), current_hash

@@ -16,14 +16,15 @@
 
 open Test_common
 
-module Store = Git.Mem.Store(Digestif.SHA1)
-
-let backend =
-  { name  = "mem"
-  ; store = (module Store)
-  ; shell = false }
+module Store = struct
+  include Git.Mem.Store(Digestif.SHA1)
+  let create root = create ~root ()
+end
 
 let () =
   verbose ();
-  Alcotest.run "git"
-    [ Test_store.suite (`Quick, backend) ]
+  Alcotest.run "git" [
+    Test_store.suite "mem" (module Store);
+    Test_data.suite "mem" (module Test_data.Usual) (module Store);
+    Test_data.suite "mem" (module Test_data.Bomb) (module Store);
+  ]

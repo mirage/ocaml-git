@@ -44,10 +44,16 @@ module type S = sig
       {Blob.t} or sub-tree with its associated mode, type, and {i
       filename}. *)
 
+  val pp_entry: entry Fmt.t
+  (** Pretty-printer of {!entry}. *)
+
+  val perm_of_string: string -> perm
+  val string_of_perm: perm -> string
+
   module D: S.DECODER
     with type t = t
      and type init = Cstruct.t
-     and type error = [ `Decoder of string ]
+     and type error = Error.Decoder.t
   (** The decoder of the Git Tree object. We constraint the input to
       be a {!Cstruct.t}. This decoder needs a {!Cstruct.t} as an
       internal buffer. *)
@@ -64,7 +70,7 @@ module type S = sig
   module E: S.ENCODER
     with type t = t
      and type init = int * t
-     and type error = [ `Never ]
+     and type error = Error.never
   (** The encoder (which uses a {!Minienc.encoder}) of the Git Tree
       object. We constraint the output to be a {!Cstruct.t}. This
       encoder needs the Tree OCaml value and the memory consumption of
@@ -82,6 +88,7 @@ module type S = sig
 
   val to_list : t -> entry list
   val of_list : entry list -> t
+  val iter: (entry -> unit) -> t -> unit
 end
 
 module Make (H : S.HASH): S with module Hash = H

@@ -87,11 +87,7 @@ end
 module Make (G: Minimal.S): S with module Store = G = struct
   module Store = G
 
-  [@@@warning "-32"]
-  [@@@warning "-34"]
-
-  module V =
-  struct
+  module V = struct
     type t = { commit : Store.Value.Commit.t
              ; mutable flags : Flag.t }
 
@@ -115,8 +111,8 @@ module Make (G: Minimal.S): S with module Store = G = struct
      constraints about the type (and specifically about the hash), we can
      compile. *)
 
-  module Bucket =
-  struct
+  module Bucket = struct
+
     type t = (Store.Hash.t, V.t) Hashtbl.t
 
     (* XXX(dinosaure): because the commit graph is a DAG, sometimes we ask to
@@ -130,7 +126,7 @@ module Make (G: Minimal.S): S with module Store = G = struct
        The flag is important to avoid to re-computed the same commit n-times
        (see the flag SEEN). *)
 
-    let get t bucket hash =
+    let get t (bucket: t) hash =
       let open Lwt.Infix in
 
       try Hashtbl.find bucket hash |> fun v -> Lwt.return (Ok v)
@@ -150,6 +146,12 @@ module Make (G: Minimal.S): S with module Store = G = struct
   type rev =
     { pq              : Pq.t
     ; non_common_revs : int }
+
+  let pp_rev ppf rev =
+    Fmt.pf ppf "{ @[<hov>pq = %a;@ \
+                  non_common_revs = %d;@] }"
+      (Fmt.hvbox (Pq.pp Fmt.Dump.(pair Store.Hash.pp V.pp))) rev.pq
+      rev.non_common_revs
 
   let push hash value mark rev =
     if (value.V.flags :> int) land mark = 0
@@ -268,6 +270,24 @@ module Make (G: Minimal.S): S with module Store = G = struct
     ; rev      : rev  (* priority queue *)
     ; in_fly   : Store.Hash.t list }
   type nonrec acks = Store.Hash.t acks
+
+  let _pp_state ppf state =
+    Fmt.pf ppf "{ @[<hov>ready = %b;@ \
+                  continue = %b;@ \
+                  finish = %b;@ \
+                  count = %d;@ \
+                  flush = %d;@ \
+                  vain = %d;@ \
+                  rev = %a;@ \
+                  in_fly = %a;@] }"
+      state.ready
+      state.continue
+      state.finish
+      state.count
+      state.flush
+      state.vain
+      (Fmt.hvbox pp_rev) state.rev
+      Fmt.Dump.(list Store.Hash.pp) state.in_fly
 
   (* XXX(dinosaure): to be clear, this implementation is very bad and we need to
      change it (TODO). For example, the [in_fly] field is used only one time (in

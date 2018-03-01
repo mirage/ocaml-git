@@ -137,6 +137,9 @@ struct
     to_seq q (fun x -> l := x :: !l);
     List.rev !l
 
+  let of_list l =
+    List.fold_left push empty l
+
   let pp ppv ppf q =
     Fmt.pf ppf "[ %a ]"
     (Fmt.hvbox (Fmt.list ~sep:(Fmt.unit ";@ ") ppv)) (to_list q)

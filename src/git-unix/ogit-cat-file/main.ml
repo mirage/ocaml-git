@@ -17,17 +17,21 @@
 
 let () = Random.self_init ()
 
-let option_map f = function
-  | Some v -> Some (f v)
-  | None -> None
+module Option =
+struct
 
-let option_map_default v f = function
-  | Some v -> f v
-  | None -> v
+  let map f = function
+    | Some v -> Some (f v)
+    | None -> None
 
-let option_value_exn f = function
-  | Some v -> v
-  | None -> f ()
+  let map_default v f = function
+    | Some v -> f v
+    | None -> v
+
+  let value_exn f = function
+    | Some v -> v
+    | None -> f ()
+end
 
 let pad n x =
   if String.length x > n
@@ -47,7 +51,7 @@ let pp_header ppf (level, header) =
 
   Fmt.pf ppf "[%a][%a]"
     (Fmt.styled level_style Fmt.string) level
-    (Fmt.option Fmt.string) (option_map (pad 10) header)
+    (Fmt.option Fmt.string) (Option.map (pad 10) header)
 
 let reporter ppf =
   let report src level ~over k msgf =
@@ -76,6 +80,9 @@ type error =
   [ `Store of Git_unix.FS.error
   | `Invalid_hash of Git_unix.FS.Hash.t ]
 
+let store_err err = `Store err
+let invalid_hash hash = `Invalid_hash hash
+
 let pp_error ppf = function
   | `Store err -> Fmt.pf ppf "(`Store %a)" Git_unix.FS.pp_error err
   | `Invalid_hash hash -> Fmt.pf ppf "(`Hash %a)" Git_unix.FS.Hash.pp hash
@@ -102,11 +109,12 @@ type rest =
 
 let main show hash =
   let root = Fpath.(v (Sys.getcwd ())) in
-  let ( >!= ) = Lwt_result.bind_lwt_err in
 
   let open Lwt_result in
 
-  (Git_unix.FS.create ~root () >!= fun err -> Lwt.return (`Store err)) >>= fun git ->
+  let ( >!= ) v f = map_err f v in
+
+  Git_unix.FS.create ~root () >!= store_err >>= fun git ->
 
   match show with
   | `Inflate ->
@@ -117,9 +125,9 @@ let main show hash =
         Fmt.(pf stdout) "%a%!" pp_inflate raw;
         Lwt.return (Ok ())
       | None ->
-        Lwt.return (Error (`Invalid_hash hash)))
+        Lwt.return (Error (invalid_hash hash)))
   | #rest as rest ->
-    (Git_unix.FS.read git hash >!= fun err -> Lwt.return (`Store err)) >>= fun value ->
+    Git_unix.FS.read git hash >!= store_err >>= fun value ->
     let fmt = match rest with
       | `Type -> pp_type
       | `Size -> pp_size
@@ -159,7 +167,7 @@ let main show hash _ =
   | Error (#error as err) -> `Error (false, Fmt.strf "%a" pp_error err)
 
 let command =
-  let doc = "Clone a Git repository by the HTTP protocol." in
+  let doc = "Provide content or type and size information for repository objects" in
   let exits = Term.default_exits in
   Term.(ret (const main $ Flag.show $ Flag.value $ setup_log)),
   Term.info "ogit-cat-file" ~version:"v0.1" ~doc ~exits
