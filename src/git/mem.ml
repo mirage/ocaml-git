@@ -230,6 +230,7 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE) = struct
     end)
 
   let fold = T.fold
+  let iter = T.iter
 
   module Pack = struct
 

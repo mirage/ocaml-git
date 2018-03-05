@@ -123,8 +123,11 @@ module type S = sig
       {- {!Value.Tag.t}: [f] is called firstly with the OCaml value of
       the pointed {i tag} by the hash [hash]. Then, it follows the git
       object pointed by the {i tag}.}}
+      B
 
       Any retrieved {!error} is missed. *)
+
+  val iter: t -> (Hash.t ->  Value.t -> unit Lwt.t) -> Hash.t -> unit Lwt.t
 
   module Pack:  sig
     type stream = unit -> Cstruct.t option Lwt.t

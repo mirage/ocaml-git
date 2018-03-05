@@ -640,6 +640,8 @@ module type S = sig
 
       Any retrieved {!error} is skipped. *)
 
+  val iter: t -> (Hash.t -> Value.t -> unit Lwt.t) -> Hash.t -> unit Lwt.t
+
   module Ref: sig
 
     val mem: t -> Reference.t -> bool Lwt.t

@@ -67,4 +67,6 @@ module Make (S : STORE) = struct
     in
 
     walk Hash.Set.empty [ hash ] (Queue.create ()) acc
+
+  let iter t f hash = fold t (fun () ?name:_ ~length:_ hash value -> f hash value) ~path:(Fpath.v "/") () hash
 end
