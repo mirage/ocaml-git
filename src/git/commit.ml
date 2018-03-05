@@ -23,10 +23,11 @@ sig
   module Hash: S.HASH
 
   val make:
-       author:User.t
+       tree:Hash.t
+    -> author:User.t
     -> committer:User.t
     -> ?parents:Hash.t list
-    -> tree:Hash.t
+    -> ?extra:(string * string list) list
     -> string
     -> t
 
@@ -54,6 +55,7 @@ sig
   val committer: t -> User.t
   val author: t -> User.t
   val message: t -> string
+  val extra: t -> (string * string list) list
   val compare_by_date: t -> t -> int
 end
 
@@ -73,32 +75,17 @@ module Make (H: S.HASH): S with module Hash = H = struct
     ; parents   : Hash.t list
     ; author    : User.t
     ; committer : User.t
-    ; message   : [ `Empty | `Clean of string | `Bazaar of string ] option }
-  (* XXX(dinosaure): special note about that, Git adds extra headers
-     in a commit. This type is much more because we don't handle these
-     extra headers than a bug.
-
-     Indeed, we need to keep the integrity of the commit (for the hash
-     function) so we need to separate 4 cases:
-     - an empty message which does not have at the beginning '\n'
-     (None)
-     - an empty message which has at the beginning '\n' (Some `Empty)
-     - a message (Some (`Clean msg))
-     - extra-headers (so something...) plus the message (Some (`Bazaar
-     msg))
-
-     We need to concretize this differentiation to generate from any
-     commit exactly the same commit - and. by this way, we avoid a
-     corruption of the hash. Then, when we full implemented extra
-     headers, we will delete this situation. *)
+    ; extra     : (string * string list) list
+    ; message   : string }
   and hash = Hash.t
 
-  let make ~author ~committer ?(parents = []) ~tree message =
+  let make ~tree ~author ~committer ?(parents = []) ?(extra = []) message =
     { tree
     ; parents
     ; author
     ; committer
-    ; message = Some (`Clean message) }
+    ; extra
+    ; message }
 
   module A = struct
 
@@ -106,6 +93,7 @@ module Make (H: S.HASH): S with module Hash = H = struct
 
     let sp = Angstrom.char ' '
     let lf = Angstrom.char '\x0a'
+    let is_not_sp chr = chr <> ' '
     let is_not_lf chr = chr <> '\x0a'
 
     let binding
@@ -130,6 +118,16 @@ module Make (H: S.HASH): S with module Hash = H = struct
               return res)
       | n -> take n >>= fun chunk -> Buffer.add_string buf chunk; m
 
+    let extra =
+      let open Angstrom in
+      take_while1 (fun chr -> is_not_sp chr && is_not_lf chr) <* sp >>= fun key ->
+      (fix @@ fun t ->
+       lift2
+         (fun x r -> x :: r)
+         (take_while is_not_lf)
+         ((string "\n " *> t) <|> (char '\n' *> return [])))
+      >>| fun value -> (key, value)
+
     let decoder =
       let open Angstrom in
 
@@ -143,21 +141,14 @@ module Make (H: S.HASH): S with module Hash = H = struct
       >>= fun author ->
       binding ~key:"committer" ~value:User.A.decoder
       <* commit
-      >>= fun committer -> to_end 1024 <* commit
-      >>| (function
-      | "" -> None
-      | "\n" -> Some `Empty
-      | lf_message ->
-        let message =
-          if String.get lf_message 0 = '\x0a'
-          then `Clean (String.sub lf_message 1 (String.length lf_message - 1))
-          else `Bazaar lf_message in
-        Some message)
+      >>= fun committer -> many extra
+      >>= fun extra -> to_end 1024 <* commit
       >>= fun message ->
       return { tree = Hash.of_hex tree
              ; parents = List.map Hash.of_hex parents
              ; author
              ; committer
+             ; extra
              ; message }
   end
 
@@ -177,31 +168,33 @@ module Make (H: S.HASH): S with module Hash = H = struct
              + (Int64.of_int (Hash.Digest.length * 2))
              + 1L
              + acc)
-          0L t.parents
-      in
+          0L t.parents in
+      let values l =
+        let rec go a = function
+          | [] -> 1L + a
+          | [ x ] -> string x + 1L + a
+          | x :: r -> go (string x + 2L + a) r in
+        go 0L l in
       (string "tree") + 1L + (Int64.of_int (Hash.Digest.length * 2)) + 1L
       + parents
       + (string "author") + 1L + (User.F.length t.author) + 1L
       + (string "committer") + 1L + (User.F.length t.committer) + 1L
-      + (match t.message with
-          | None -> 0L
-          | Some `Empty -> 1L
-          | Some (`Bazaar x) -> string x
-          | Some (`Clean x) -> 1L + (string x))
+      + (List.fold_left (fun acc (key, v) -> string key + 1L + (values v) + acc) 0L t.extra)
+      + string t.message
 
     let sp = ' '
     let lf = '\x0a'
 
-    let message e x = let open Farfadet in match x with
-      | None -> ()
-      | Some `Empty -> char e lf
-      | Some (`Clean x) ->
-        eval e [ char $ lf; !!string ] x
-      | Some (`Bazaar x) -> string e x
-
     let parents e x =
       let open Farfadet in
       eval e [ string $ "parent"; char $ sp; !!string ] (Hash.to_hex x)
+
+    let extra e (key, l) =
+      let open Farfadet in
+
+      let values e l =
+        list ~sep:(string, "\n ") string e l in
+      eval e [ !!string; char $ sp; !!values; char $ lf ] key l
 
     let encoder e t =
       let open Farfadet in
@@ -211,11 +204,13 @@ module Make (H: S.HASH): S with module Hash = H = struct
              ; !!(option (seq (list ~sep parents) (fun e () -> char e lf)))
              ; string $ "author"; char $ sp; !!User.F.encoder; char $ lf
              ; string $ "committer"; char $ sp; !!User.F.encoder; char $ lf
-             ; !!message ]
+             ; !!(list extra)
+             ; !!string ]
         (Hash.to_hex t.tree)
         (match t.parents with [] -> None | lst -> Some (lst, ()))
         t.author
         t.committer
+        t.extra
         t.message
   end
 
@@ -234,11 +229,14 @@ module Make (H: S.HASH): S with module Hash = H = struct
        @@ write_string (Hash.to_hex x) k)
       e
 
-    let message x k e = match x with
-      | None -> k e
-      | Some `Empty -> write_char lf k e
-      | Some (`Clean x) -> write_char lf (write_string x k) e
-      | Some (`Bazaar x) -> write_string x k e
+    let extra (key, v) k e =
+      let rec values l k e = match l with
+        | [] -> k e
+        | [ x ] -> (write_string x @@ write_string "\n" k) e
+        | x :: r -> (write_string x @@ write_string "\n " @@ values r k) e in
+      (write_string key
+       @@ write_char sp
+       @@ values v k) e
 
     let encoder x k e =
       let rec list l k e = match l with
@@ -246,8 +244,11 @@ module Make (H: S.HASH): S with module Hash = H = struct
         | x :: r ->
           (parents x
            @@ write_char lf
-           @@ list r k) e
-      in
+           @@ list r k) e in
+
+      let rec extras l k e = match l with
+        | [] -> k e
+        | x :: r -> (extra x @@ extras r k) e in
 
       (write_string "tree"
        @@ write_char sp
@@ -262,36 +263,36 @@ module Make (H: S.HASH): S with module Hash = H = struct
        @@ write_char sp
        @@ User.M.encoder x.committer
        @@ write_char lf
-       @@ message x.message k)
+       @@ extras x.extra
+       @@ write_string x.message k)
         e
   end
 
   module D = Helper.MakeDecoder(A)
   module E = Helper.MakeEncoder(M)
 
-  let pp ppf { tree; parents; author; committer; message; } =
+  let pp ppf { tree; parents; author; committer; extra; message; } =
     let chr =
       Fmt.using
         (function '\000' .. '\031'
                 | '\127' -> '.' | x -> x)
-        Fmt.char
-    in
+        Fmt.char in
 
-    let pp_message ppf = function
-      | None | Some `Empty -> Fmt.string ppf "<empty>"
-      | Some (`Clean x | `Bazaar x) -> Fmt.iter ~sep:Fmt.nop String.iter chr ppf x
-    in
+    let pp_message ppf x =
+      Fmt.iter ~sep:Fmt.nop String.iter chr ppf x in
 
     Fmt.pf ppf
       "{ @[<hov>tree = %a;@ \
                 parents = [ %a ];@ \
                 author = %a;@ \
                 committer = %a;@ \
+                extra = %a;@ \
                 message = %a;@] }"
       (Fmt.hvbox Hash.pp) tree
       (Fmt.hvbox (Fmt.list ~sep:(Fmt.unit ";@ ") Hash.pp)) parents
       (Fmt.hvbox User.pp) author
       (Fmt.hvbox User.pp) committer
+      (Fmt.(hvbox (Dump.list (Dump.pair string (Dump.list string))))) extra
       (Fmt.hvbox pp_message) message
 
   let digest value =
@@ -305,9 +306,8 @@ module Make (H: S.HASH): S with module Hash = H = struct
   let tree { tree; _ } = tree
   let committer { committer; _ } = committer
   let author { author; _ } = author
-  let message { message; _ } = match message with
-    | None | Some `Empty -> ""
-    | Some (`Clean x | `Bazaar x) -> x
+  let message { message; _ } = message
+  let extra { extra; _ } = extra
 
   let compare_by_date a b =
     Int64.compare (fst a.author.User.date) (fst b.author.User.date)

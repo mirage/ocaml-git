@@ -144,7 +144,7 @@ module Make (H: S.HASH): S with module Hash = H = struct
                                 (binding ~key:"tagger" ~value:User.A.decoder
                                  >>= fun user -> return (Some user)))
                         <* commit
-      >>= fun tagger -> take 1 *> commit *> to_end 1024 <* commit
+      >>= fun tagger -> commit *> to_end 1024 <* commit
       >>= fun message ->
         return { obj = Hash.of_hex obj
                ; kind
@@ -169,7 +169,7 @@ module Make (H: S.HASH): S with module Hash = H = struct
       + (string "type") + 1L + (string (string_of_kind t.kind)) + 1L
       + (string "tag") + 1L + (string t.tag) + 1L
       + user_length
-      + 1L + (string t.message)
+      + (string t.message)
 
     let sp = ' '
     let lf = '\x0a'
@@ -188,7 +188,7 @@ module Make (H: S.HASH): S with module Hash = H = struct
       eval e [ string $ "object"; char $ sp; !!string; char $ lf
              ; string $ "type"; char $ sp; !!string; char $ lf
              ; string $ "tag"; char $ sp; !!string; char $ lf
-             ; !!(option tagger); char $ lf
+             ; !!(option tagger)
              ; !!string ]
         (Hash.to_hex t.obj)
         (string_of_kind t.kind)
@@ -235,7 +235,6 @@ module Make (H: S.HASH): S with module Hash = H = struct
        @@ write_string x.tag
        @@ write_char lf
        @@ write_tagger x.tagger
-       @@ write_char lf
        @@ write_string x.message k)
       e
   end
