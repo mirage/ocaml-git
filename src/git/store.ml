@@ -257,6 +257,8 @@ module type S = sig
     -> Hash.t
     -> 'a Lwt.t
 
+  val iter: t -> (Hash.t -> Value.t -> unit Lwt.t) -> Hash.t -> unit Lwt.t
+
   module Ref: sig
 
     val mem: t -> Reference.t -> bool Lwt.t
@@ -1053,6 +1055,7 @@ module FS (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
     end)
 
   let fold = T.fold
+  let iter = T.iter
 
   module Ref = struct
 
