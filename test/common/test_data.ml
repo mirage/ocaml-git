@@ -169,6 +169,46 @@ module Usual = struct
   let name = "usual"
 end
 
+module UsualRevlist (S: Git.S) = struct
+  type hash = S.Hash.t and t = [ `Diff of hash * hash | `New of hash ]
+
+  let lst =
+    [ "bottom to top",
+      `Diff (S.Hash.of_hex "381efb0df07110ad3a1b81a33d698c98d9fa18f3",
+             S.Hash.of_hex "3ae8d4d9cdf28d0cd6b453da991fb661ce05de08")
+    ; "top to bottom",
+      `Diff (S.Hash.of_hex "3ae8d4d9cdf28d0cd6b453da991fb661ce05de08",
+             S.Hash.of_hex "381efb0df07110ad3a1b81a33d698c98d9fa18f3")
+    ; "middle diff 00",
+      `Diff (S.Hash.of_hex "4b01e27cd1fd4b9390c9a8dccb8fa415c72770f5",
+             S.Hash.of_hex "4ee53344e6faafd2e5e3b86ec762f180db4a2c3b")
+    ; "middle diff 01",
+      `Diff (S.Hash.of_hex "726e053b15133c5721795ecacf6be9ad616d1ec5",
+             S.Hash.of_hex "fe88134bf478438e4eb6e2c62c2743eab78ee4e2") ]
+end
+
+(* XXX(dinosaure): I reaaly would like to test bomb, however, git segfault with
+   this repository and we need git to compare results. *)
+
+module BombRevlist (S: Git.S) = struct
+
+  type hash = S.Hash.t and t = [ `Diff of hash * hash | `New of hash ]
+
+  let lst =
+    [ "bottom to top",
+      `Diff (S.Hash.of_hex "45546f17e5801791d4bc5968b91253a2f4b0db72",
+             S.Hash.of_hex "7af99c9e7d4768fa681f4fe4ff61259794cf719b")
+    ; "top to bottom",
+      `Diff (S.Hash.of_hex "7af99c9e7d4768fa681f4fe4ff61259794cf719b",
+             S.Hash.of_hex "45546f17e5801791d4bc5968b91253a2f4b0db72")
+    ; "middle diff 00",
+      `Diff (S.Hash.of_hex "18ed56cbc5012117e24a603e7c072cf65d36d469",
+             S.Hash.of_hex "7af99c9e7d4768fa681f4fe4ff61259794cf719b")
+    ; "middle diff 01",
+      `Diff (S.Hash.of_hex "45546f17e5801791d4bc5968b91253a2f4b0db72",
+             S.Hash.of_hex "18ed56cbc5012117e24a603e7c072cf65d36d469") ]
+end
+
 module Bomb = struct
   let pack = Fpath.(v ".." / "data" / "bomb.pack")
   let idx = Fpath.(v ".." / "data" / "bomb.idx")
