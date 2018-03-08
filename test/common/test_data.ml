@@ -12,6 +12,18 @@ module type S = sig
   val create: Fpath.t -> (t, error) result Lwt.t
 end
 
+let output_of_command ?(env = [||]) ?(input = (fun _ -> ())) command =
+  let ic, oc, ec = Unix.open_process_full command env in
+  let () = input oc in
+  close_out oc;
+  let buf = Buffer.create 512 in
+  (try
+     while true do
+       Buffer.add_channel buf ic 1 done
+   with End_of_file -> ());
+  let _ = Unix.close_process_full (ic, oc, ec) in
+  Buffer.contents buf
+
 module Make0 (Source: SOURCE) (Store: S) = struct
 
   open Lwt.Infix
@@ -34,16 +46,6 @@ module Make0 (Source: SOURCE) (Store: S) = struct
          Cstruct.blit_from_bytes btmp 0 ctmp 0 len;
          Lwt.return (Some ctmp)
        end)
-
-  let output_of_command command =
-    let ic, oc = Unix.open_process command in
-    let buf = Buffer.create 512 in
-    (try
-       while true do
-         Buffer.add_channel buf ic 1 done
-     with End_of_file -> ());
-    let _ = Unix.close_process (ic, oc) in
-    Buffer.contents buf
 
   let store_err err = Lwt.return (`Store err)
 
