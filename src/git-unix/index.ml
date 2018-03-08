@@ -33,9 +33,9 @@ struct
   let map f = function Some v -> Some (f v) | None -> None
 end
 
-module Entry (H: S.HASH) = struct
+module Entry (Hash: Git.HASH) = struct
 
-  module Hash = H
+  module Hash = Hash
 
   type kind = Normal | Exec | Symlink | Gitlink
 
@@ -122,13 +122,12 @@ module Entry (H: S.HASH) = struct
   type index = entry list
 
   let pp_index = Fmt.Dump.list pp_entry
-
 end
 
-module MakeIndexDecoder (H: S.HASH) = struct
+module MakeIndexDecoder (Hash: Git.HASH) = struct
 
-  module Hash = H
-  module Entry = Entry(H)
+  module Hash = Hash
+  module Entry = Entry(Hash)
 
   type error =
     | Invalid_byte of int
@@ -277,7 +276,7 @@ module MakeIndexDecoder (H: S.HASH) = struct
      add new constructor in the [extension] type and add the signature
      to the [extensions] hash-table.
 
-     Then, the decoder resolve alone which parser to use depending on
+     Then, the decoder resolve itself which parser to use depending on
      the signature. You should return an [Ext.value] and the decoder
      put it internally in [t.extensions].
 
@@ -322,11 +321,8 @@ module MakeIndexDecoder (H: S.HASH) = struct
       (Fmt.hvbox (Fmt.Dump.list Ext.pp_value)) t.extensions
       (Fmt.hvbox pp_state) t.state
 
-  module Log =
-  struct
-    let src = Logs.Src.create "git.index.decoder" ~doc:"logs git's index decoder event"
-    include (val Logs.src_log src : Logs.LOG)
-  end
+  let src = Logs.Src.create "git.index.decoder" ~doc:"logs git's index decoder event"
+  module Log = (val Logs.src_log src : Logs.LOG)
 
   let digest_and_await src t : res =
     let () = Hash.Digest.feed t.hash (Cstruct.sub src t.i_off t.i_len) in
@@ -367,8 +363,8 @@ module MakeIndexDecoder (H: S.HASH) = struct
      at this stage, the decoder does not care about the last refill
      and just finalize the decoding.
 
-     In reality, this is does not appear when we read __a file__.
-     [read ic == 0] means the end of the file. But can appear on a
+     In reality, this case does not appear when we read __a file__.
+     [read ic == 0] means the end of the file. But it can appear on a
      socket ([read socket == 0] means we don't have __yet__ input).
      So, this decoder can not be use on a [socket], only on a file.
 
@@ -1132,10 +1128,10 @@ module MakeIndexDecoder (H: S.HASH) = struct
   let used_in t = t.i_pos
 end
 
-module MakeIndexEncoder (H: S.HASH) = struct
+module MakeIndexEncoder (Hash: Git.HASH) = struct
 
-  module Hash = H
-  module Entry = Entry(H)
+  module Hash = Hash
+  module Entry = Entry(Hash)
 
   type error
 
@@ -1491,56 +1487,46 @@ module MakeIndexEncoder (H: S.HASH) = struct
            ; o_pos = 0 }
 end
 
-module IO (H: S.HASH) (FS: S.FS) = struct
+module IO (Hash: Git.HASH) (FS: Git.FS) = struct
 
-  module Hash = H
-  module FileSystem = FS
-  module IndexDecoder
-    : module type of MakeIndexDecoder(H)
-      with module Hash = H
-       and module Entry = Entry(H)
-    = MakeIndexDecoder(H)
-  module IndexEncoder
-    : module type of MakeIndexEncoder(H)
-      with module Hash = H
-       and module Entry = Entry(H)
-    = MakeIndexEncoder(H)
+  module Hash = Hash
+  module FS = FS
 
-  module Log = struct
-    let src = Logs.Src.create "git.index" ~doc:"logs git's index event"
-    include (val Logs.src_log src : Logs.LOG)
-  end
+  module IDec = MakeIndexDecoder(Hash)
+  module IEnc = MakeIndexEncoder(Hash)
 
+  let src = Logs.Src.create "git.index" ~doc:"logs git's index event"
+  module Log = (val Logs.src_log src : Logs.LOG)
+
+  type fs_error = FS.error Git.Error.FS.t
   type error =
-    [ `IndexDecoder of IndexDecoder.error
-    | `IO of string
-    | `File of FileSystem.error ]
+    [ `Decoder of IDec.error
+    | fs_error ]
 
   let pp_error ppf = function
-    | `IndexDecoder err -> Fmt.pf ppf "(`IndexDecoder %a)" IndexDecoder.pp_error err
-    | `File err -> Fmt.pf ppf "(`File %a)" FileSystem.pp_error err
-    | `IO err -> Fmt.pf ppf "(`IO %s)" err
+    | `Decoder err -> Fmt.pf ppf "(`Decoder %a)" IDec.pp_error err
+    | #fs_error as err -> Fmt.pf ppf "%a" (Git.Error.FS.pp_error FS.pp_error) err
 
   let load fs ~root ~dtmp =
     let open Lwt.Infix in
 
-    FileSystem.File.open_r fs Fpath.(root / "index")[@warning "-44"]
+    FS.File.open_r fs Fpath.(root / "index")[@warning "-44"]
     >>= function
     | Error sys_err ->
-      Log.debug (fun l -> l "Retrieve a file-system error: %a." FileSystem.pp_error sys_err);
-      Lwt.return (Error (`File sys_err))
+      Log.debug (fun l -> l "Retrieve a file-system error: %a." FS.pp_error sys_err);
+      Lwt.return (Error (Git.Error.FS.err_file Fpath.(root / "index") sys_err))
     | Ok read ->
-      let decoder = IndexDecoder.default in
+      let decoder = IDec.default in
 
-      let rec loop decoder = match IndexDecoder.eval dtmp decoder with
-        | `Error (_, err) -> Lwt.return (Error (`IndexDecoder err))
+      let rec loop decoder = match IDec.eval dtmp decoder with
+        | `Error (_, err) -> Lwt.return (Error (`Decoder err))
         | `End (_, index, extensions) -> Lwt.return (Ok (index, extensions))
         | `Await decoder ->
-          FileSystem.File.read dtmp read >>= function
-          | Error sys_err -> Lwt.return (Error (`File sys_err))
+          FS.File.read dtmp read >>= function
+          | Error sys_err -> Lwt.return (Error (Git.Error.FS.err_file Fpath.(root / "index") sys_err))
           | Ok n ->
             Log.debug (fun l -> l "Reading %d byte(s) of the file-descriptor" n);
-            loop (IndexDecoder.refill 0 n decoder)
+            loop (IDec.refill 0 n decoder)
       in
 
       loop decoder
@@ -1549,68 +1535,41 @@ module IO (H: S.HASH) (FS: S.FS) = struct
     let open Lwt.Infix in
 
     let module E = struct
-      type state  = IndexEncoder.t
-      type raw    = Cstruct.t
+      type state  = IEnc.t
       type result = Hash.t
       type error  = [ `Never ]
-
-      let raw_length = Cstruct.len
-      let raw_blit   = Cstruct.blit
 
       type rest =
         [ `End of (state * result)
         | `Flush of state ]
 
       let eval raw state =
-        match IndexEncoder.eval raw state with
+        match IEnc.eval raw state with
         | #rest as rest -> Lwt.return rest
         | `Error (t, _) -> Lwt.return (`Error (t, `Never))
 
-      let used = IndexEncoder.used_out
-      let flush = IndexEncoder.flush
-    end in
-    FileSystem.File.open_w fs Fpath.(root / "index")[@warning "-44"]
-    >>= function
-    | Error sys_err ->
-      Lwt.return (Error (`File sys_err))
-    | Ok oc ->
-      let state = IndexEncoder.default entries in
-
-      Lwt.finalize (fun () ->
-          Helper.safe_encoder_to_file
-            ~limit:50 (module E) FileSystem.File.write oc raw state)
-        (fun () ->
-           FileSystem.File.close oc >>= function
-           | Ok () -> Lwt.return ()
-           | Error sys_err ->
-             Log.err (fun l ->
-                 l "Got an error while closing %a: %a."
-                   Fpath.pp Fpath.(root / "index")
-                   FileSystem.pp_error sys_err);
-             Lwt.return ())
-        >|= function
-        | Ok hash ->
-          Log.debug (fun l -> l "Saved index file with the hash: %a." Hash.pp hash);
-          Ok ()
-        | Error err ->
-          match err with
-          | `Stack -> Error (`IO (Fmt.strf "Impossible to store the index file."))
-          | `Writer err -> Error (`File err)
-          | `Encoder `Never -> assert false
+      let used = IEnc.used_out
+      let flush = IEnc.flush
+      end in
+    let state = IEnc.default entries in
+    let module E = Git.Helper.Encoder(E)(FS) in
+    E.to_file fs Fpath.(root / "index") raw state
+    >|= function
+    | Ok hash ->
+       Log.debug (fun l -> l "Saved index file with the hash: %a." Hash.pp hash);
+       Ok ()
+    | Error err ->
+       match err with
+       | #fs_error as err -> Error err
+       | `Encoder `Never -> assert false
 end
 
-module Container (S: Store.S) = struct
+module Container (S: Git.S) (Hash: Git.HASH with type t = S.Hash.t) (FS: Git.FS) = struct
 
   module Store = S
   module StringMap = Map.Make(String)
-  module IO
-    : module type of IO(Store.Hash)(Store.FS)
-      with module Hash = Store.Hash
-       and module FileSystem = Store.FS
-       and module IndexDecoder = MakeIndexDecoder(Store.Hash)
-       and module IndexDecoder.Entry = Entry(Store.Hash)
-    = IO(Store.Hash)(Store.FS)
-  module Entry = IO.IndexDecoder.Entry
+  module IO = IO(Store.Hash)(FS)
+  module Entry = IO.IDec.Entry
 
   type 'entry elt =
     | Blob of 'entry
@@ -1722,20 +1681,14 @@ module Container (S: Store.S) = struct
     in go acc
 
   type error =
-    [ `File of Store.FS.error
-    | `IO of string
-    | `Stack
-    | `Directory of Store.FS.error
+    [ IO.error
     | `Store of Store.error ]
 
   let pp_error ppf = function
-    | `File err -> Fmt.pf ppf "(`File %a)" Store.FS.pp_error err
-    | `Directory err -> Fmt.pf ppf "(`Directory %a)" Store.FS.pp_error err
-    | `IO err -> Fmt.pf ppf "(`IO %s)" err
-    | `Stack -> Fmt.pf ppf "Unable to perform I/O operation."
+    | #IO.error as err -> IO.pp_error ppf err
     | `Store err -> Fmt.pf ppf "(`Store %a)" Store.pp_error err
 
-  exception Close of Store.FS.error
+  exception Close of FS.error
 
   open Lwt.Infix
   let ( >?= ) = Lwt_result.bind
@@ -1840,16 +1793,16 @@ module Container (S: Store.S) = struct
     { Entry.info; hash; flag; path; }
 
   let write_blob fs acc path ((perm : Store.Value.Tree.perm), raw) =
-    let file_err err = Lwt.return (`File err) in
+    let file_err err = Lwt.return (Git.Error.FS.err_file path err) in
 
     match perm with
     | #link -> raise (Failure "Cannot create symlink/gitlink yet.")
-    | #file as file ->
-      Store.FS.File.open_w fs path >!= file_err >?= fun fd ->
+    | #file ->
+      FS.File.open_w fs path >!= file_err >?= fun fd ->
         let rec loop ~retry raw =
           if Cstruct.len raw = 0
           then Lwt.return (Ok ())
-          else Store.FS.File.write raw fd >!= file_err >?= function
+          else FS.File.write raw fd >!= file_err >?= function
               | 0 when retry >= 50 -> Lwt.return (Error `Stack)
               | 0 -> loop ~retry:(retry + 1) raw
               | len ->
@@ -1864,10 +1817,10 @@ module Container (S: Store.S) = struct
                                 Store.Hash.pp Store.Value.Blob.(digest (of_cstruct raw))
                                 Fpath.pp path);
 
-                  Store.FS.File.close fd >>= function
+                  FS.File.close fd >>= function
                   | Ok () -> Lwt.return result
                   | Error err -> Lwt.fail (Close err)))
-          (function Close err -> Lwt.return (Error (`File err))
+          (function Close err -> Lwt.return (Error (Git.Error.FS.err_file path err))
                   | exn -> Lwt.fail exn)
         >?= fun () ->
           Unix.stat (Fpath.to_string path) |> fun stats ->
@@ -1895,12 +1848,12 @@ module Container (S: Store.S) = struct
         Lwt.return (Error `Expected_blob)
 
   let write_tree fs dir =
-    Store.FS.Dir.create fs dir
+    FS.Dir.create fs dir
     >!= (fun err -> Lwt.return (`Directory err))
     >?= (fun _ -> Lwt.return (Ok ()))
 
   let from_index git fs ~dtmp =
-    IO.load ~root:(Store.dotgit git) ~dtmp >?= fun (entries, _) ->
+    IO.load ~root:(Store.dotgit git) ~dtmp fs >?= fun (entries, _) ->
     lwt_result_traversal
       ~root:(Store.root git)
       []
