@@ -101,6 +101,7 @@ let () =
     ; Test_store.suite "fs"  (module FsStore)
     ; Test_data.suite "fs"  (module Test_data.Usual) (module FsStore)
     ; Test_data.suite "fs"  (module Test_data.Bomb) (module FsStore)
+    ; Test_rev_list.suite "fs" (module Test_data.Usual) (module FsStore) (module Test_data.UsualRevlist(FsStore))
     ; TCP1.test_fetch "mem-local-tcp-sync" ["git://localhost/"]
     ; TCP1.test_clone "mem-remote-tcp-sync" [
         "git://github.com/mirage/ocaml-git.git", "master";
