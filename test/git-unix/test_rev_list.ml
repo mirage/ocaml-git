@@ -95,7 +95,9 @@ module Make0 (Source: Test_data.SOURCE) (Store: S) = struct
       Fmt.(pf ppf) "%a\n%!" Fmt.(list ~sep:(const string "\n") pp_elt) (List.concat (List.map input_rev_list cs)) in
     let git_dir = Fpath.(root / ".git") in
     let env =
-      [| Fmt.strf "GIT_DIR=%a" Fpath.pp git_dir |] in
+      Array.append
+        (Unix.environment ())
+        [| Fmt.strf "GIT_DIR=%a" Fpath.pp git_dir |] in
 
     let output = Test_data.output_of_command ~env ~input command in
     let lines = Astring.String.cuts ~sep:"\n" output in

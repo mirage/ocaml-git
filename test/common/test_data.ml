@@ -12,7 +12,7 @@ module type S = sig
   val create: Fpath.t -> (t, error) result Lwt.t
 end
 
-let output_of_command ?(env = [||]) ?(input = (fun _ -> ())) command =
+let output_of_command ?(env = Unix.environment ()) ?(input = (fun _ -> ())) command =
   let ic, oc, ec = Unix.open_process_full command env in
   let () = input oc in
   close_out oc;
