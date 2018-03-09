@@ -151,7 +151,8 @@ module Make0 (Source: SOURCE) (Store: S) = struct
         | Ok v -> Lwt.return v
         | Error err -> Alcotest.failf "Got an error: %a." pp_error err)
 
-  let root = Fpath.(v "test-data" / Source.name)
+  let pwd = Unix.getcwd ()
+  let root = Fpath.(v pwd / "test-data" / Source.name)
 
   let verify_unpack () = import root () >?= fun _ -> Lwt.return (Ok ())
 
