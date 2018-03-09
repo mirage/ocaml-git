@@ -12,17 +12,27 @@ module type S = sig
   val create: Fpath.t -> (t, error) result Lwt.t
 end
 
+let pp_process_status ppf = function
+  | Unix.WEXITED i   -> Fmt.pf ppf "exit %d" i
+  | Unix.WSIGNALED i -> Fmt.pf ppf "signal %d" i
+  | Unix.WSTOPPED i  -> Fmt.pf ppf "stop %d" i
+
+let drain buf chan =
+  try while true do Buffer.add_channel buf chan 1 done
+  with End_of_file -> ()
+
 let output_of_command ?(env = Unix.environment ()) ?(input = (fun _ -> ())) command =
   let ic, oc, ec = Unix.open_process_full command env in
   let () = input oc in
   close_out oc;
   let buf = Buffer.create 512 in
-  (try
-     while true do
-       Buffer.add_channel buf ic 1 done
-   with End_of_file -> ());
-  let _ = Unix.close_process_full (ic, oc, ec) in
-  Buffer.contents buf
+  drain buf ic;
+  drain buf ec;
+  let s = Unix.close_process_full (ic, oc, ec) in
+  let r = Buffer.contents buf in
+  Logs.debug (fun l -> l "[run] %s (%a):@ @[%s@]" command pp_process_status s r);
+  r
+
 
 module Make0 (Source: SOURCE) (Store: S) = struct
 
