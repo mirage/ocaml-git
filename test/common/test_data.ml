@@ -33,7 +33,6 @@ let output_of_command ?(env = Unix.environment ()) ?(input = (fun _ -> ())) comm
   Logs.debug (fun l -> l "[run] %s (%a):@ @[%s@]" command pp_process_status s r);
   r
 
-
 module Make0 (Source: SOURCE) (Store: S) = struct
 
   open Lwt.Infix

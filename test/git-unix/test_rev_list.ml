@@ -86,20 +86,16 @@ module Make0 (Source: Test_data.SOURCE) (Store: S) = struct
        [ `Object hash ]
 
   let git_rev_list cs =
-    let command = Fmt.strf "git rev-list --objects --stdin" in
+    let git_dir = Fpath.(root / ".git") in
+    let command = Fmt.strf "git --git-dir=%a rev-list --objects --stdin" Fpath.pp git_dir in
     let input = fun oc ->
       let ppf = Format.formatter_of_out_channel oc in
       let pp_elt ppf = function
         | `Negative hash -> Fmt.pf ppf "^%a" Store.Hash.pp hash
         | `Object hash -> Store.Hash.pp ppf hash in
       Fmt.(pf ppf) "%a\n%!" Fmt.(list ~sep:(const string "\n") pp_elt) (List.concat (List.map input_rev_list cs)) in
-    let git_dir = Fpath.(root / ".git") in
-    let env =
-      Array.append
-        (Unix.environment ())
-        [| Fmt.strf "GIT_DIR=%a" Fpath.pp git_dir |] in
 
-    let output = Test_data.output_of_command ~env ~input command in
+    let output = Test_data.output_of_command ~input command in
     let lines = Astring.String.cuts ~sep:"\n" output in
 
     List.fold_left
