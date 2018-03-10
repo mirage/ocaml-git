@@ -95,13 +95,19 @@ module HTTP2 = HTTPS(FsStore)
 let () =
   verbose ();
   Alcotest.run "git-unix"
-    [ Test_store.suite "mem" (module MemStore)
-    ; Test_data.suite "mem" (module Test_data.Usual) (module MemStore)
-    ; Test_data.suite "mem" (module Test_data.Bomb) (module MemStore)
-    ; Test_store.suite "fs"  (module FsStore)
-    ; Test_data.suite "fs"  (module Test_data.Usual) (module FsStore)
-    ; Test_data.suite "fs"  (module Test_data.Bomb) (module FsStore)
-    ; Test_rev_list.suite "fs" (module Test_data.Usual) (module FsStore) (module Test_data.UsualRevlist(FsStore))
+    [ Test_store.suite "mem"   (module MemStore)
+    ; Test_data.suite "mem"    (module Test_data.Usual) (module MemStore)
+    ; Test_data.suite "mem"    (module Test_data.Bomb) (module MemStore)
+    ; Test_store.suite "fs"    (module FsStore)
+    ; Test_data.suite "fs"     (module Test_data.Usual) (module FsStore)
+    ; Test_data.suite "fs"     (module Test_data.Bomb) (module FsStore)
+
+    (* XXX(dinosaure): rev-list works only on an unix environment. Indeed,
+       oracle (git) needs a well-formed git repository to work. However, the
+       tested part belongs the core, so if itś work for git-unix, it should work
+       to git-mem/git-mirage. *)
+
+    ; Test_rev_list.suite "fs" (module Test_data.Usual) (module FsStore) (module Test_rev_list.Usual(FsStore))
     ; TCP1.test_fetch "mem-local-tcp-sync" ["git://localhost/"]
     ; TCP1.test_clone "mem-remote-tcp-sync" [
         "git://github.com/mirage/ocaml-git.git", "master";
