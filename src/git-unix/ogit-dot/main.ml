@@ -15,7 +15,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Store = Git_unix.FS
+module Store = Git_unix.Store
 module Graph = Git.Object_graph.Make(Store)
 
 let pp_level ppf level =

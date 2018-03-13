@@ -18,8 +18,8 @@
 let () = Random.self_init ()
 let () = Printexc.record_backtrace true
 
-module Sync_http = Git_unix.HTTP(Git_unix.FS)
-module Negociator = Git.Negociator.Make(Git_unix.FS)
+module Sync_http = Git_unix.Http(Git_unix.Store)
+module Negociator = Git.Negociator.Make(Git_unix.Store)
 
 module Log =
 struct
@@ -87,31 +87,31 @@ let setup_logs style_renderer level ppf =
   quiet, ppf
 
 type error =
-  [ `Store of Git_unix.FS.error
+  [ `Store of Git_unix.Store.error
   | `Sync of Sync_http.error ]
 
 let store_err err = `Store err
 let sync_err err = `Sync err
 
 let pp_error ppf = function
-  | `Store err -> Fmt.pf ppf "(`Store %a)" Git_unix.FS.pp_error err
+  | `Store err -> Fmt.pf ppf "(`Store %a)" Git_unix.Store.pp_error err
   | `Sync err -> Fmt.pf ppf "(`Sync %a)" Sync_http.pp_error err
 
-exception Write of Git_unix.FS.error
+exception Write of Git_unix.Store.error
 
 let main directory repository =
   let root = Option.map_default Fpath.(v (Sys.getcwd ())) Fpath.v directory in
-
+  
   let ( >>?= ) = Lwt_result.bind in
   let ( >>!= ) v f = Lwt_result.map_err f v in
 
   Log.debug (fun l -> l ~header:"main" "root:%a, repository:%a.\n"
                 Fpath.pp root Uri.pp_hum repository);
 
-  Git_unix.FS.create ~root ()
+  Git_unix.Store.create ~root ()
   >>!= store_err
   >>?= fun git ->
-  Sync_http.fetch_all git ~references:Git_unix.FS.Reference.Map.empty repository
+  Sync_http.fetch_all git ~references:Git_unix.Store.Reference.Map.empty repository
   >>!= sync_err
   >>?= fun _ -> Lwt.return (Ok ())
 
@@ -153,8 +153,8 @@ struct
     Arg.(value & flag & info ["all"] ~doc)
 
  let reference =
-    let parse str = Ok (Git_unix.FS.Reference.of_string str) in
-    let print = Git_unix.FS.Reference.pp in
+    let parse str = Ok (Git_unix.Store.Reference.of_string str) in
+    let print = Git_unix.Store.Reference.pp in
     Arg.conv ~docv:"<name>" (parse, print)
 
   let uri =
