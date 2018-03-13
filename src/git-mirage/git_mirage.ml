@@ -4,7 +4,7 @@ module FS = Fs
 
 module Store (X: Mirage_fs_lwt.S) = struct
   module F = Fs.Make(X)
-  module S = Git.Store.FS(SHA1)(F)(Git.Inflate)(Git.Deflate)
+  module S = Git.Store.Make(SHA1)(F)(Git.Inflate)(Git.Deflate)
   include S
   let create ?temp_dir ?current_dir ?root ?dotgit ?compression ?buffer fs =
     let fs = F.v ?temp_dir ?current_dir fs in
