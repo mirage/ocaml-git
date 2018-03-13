@@ -38,7 +38,7 @@ module TCP (S: Test_store.S) = Test_sync.Make(struct
    will be update for an homogenization. *)
 
 module HTTP (Store: Test_store.S) = Test_sync.Make(struct
-    module M = Git_unix.HTTP(Store)
+    module M = Git_unix.Http(Store)
     module Store = Store
     type error = M.error
     let pp_error = M.pp_error
@@ -58,7 +58,7 @@ module HTTP (Store: Test_store.S) = Test_sync.Make(struct
   end)
 
 module HTTPS (Store: Test_store.S) = Test_sync.Make(struct
-    module M = Git_unix.HTTP(Store)
+    module M = Git_unix.Http(Store)
     module Store = Store
     type error = M.error
     let pp_error = M.pp_error
@@ -83,7 +83,7 @@ module MemStore = struct
 end
 
 module FsStore = struct
-  include Git_unix.FS
+  include Git_unix.Store
   let create root = create ~root ()
 end
 
@@ -91,6 +91,7 @@ module TCP1  = TCP(MemStore)
 module TCP2  = TCP(FsStore)
 module HTTP1 = HTTP(MemStore)
 module HTTP2 = HTTPS(FsStore)
+module Index = Test_index
 
 let () =
   verbose ();
@@ -108,6 +109,7 @@ let () =
        to git-mem/git-mirage. *)
 
     ; Test_rev_list.suite "fs" (module Test_data.Usual) (module FsStore) (module Test_rev_list.Usual(FsStore))
+    ; Test_index.suite (Fpath.v "test-index")
     ; TCP1.test_fetch "mem-local-tcp-sync" ["git://localhost/"]
     ; TCP1.test_clone "mem-remote-tcp-sync" [
         "git://github.com/mirage/ocaml-git.git", "master";
