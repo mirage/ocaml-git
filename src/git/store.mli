@@ -702,7 +702,7 @@ module type S = sig
 
 end
 
-module FS (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE): sig
+module Make (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE): sig
 
   include S with module Hash    = H
              and module Inflate = I

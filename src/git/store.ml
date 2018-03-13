@@ -282,7 +282,7 @@ module Option = struct
   let map f a = match a with Some a -> Some (f a) | None -> None
 end
 
-module FS (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
+module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
 
   module Hash = H
   module Inflate = I
