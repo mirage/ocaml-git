@@ -3,6 +3,7 @@ module type S = Minimal.S
 
 module Crc32        = Crc32
 module Error        = Error
+module Helper       = Helper
 
 module Blob         = Blob
 module Commit       = Commit
@@ -30,7 +31,6 @@ module Capability   = Capability
 module Sync         = Sync
 module Smart        = Smart
 
-module Index        = Index
 module Loose        = Loose
 module Pack_info    = Pack_info
 module Pack_engine  = Pack_engine
