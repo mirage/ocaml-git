@@ -28,6 +28,7 @@ module Store: sig
            and module FS := Fs
 
   val v:
+    ?temp_dir:Fpath.t ->
     ?root:Fpath.t ->
     ?dotgit:Fpath.t ->
     ?compression:int ->
