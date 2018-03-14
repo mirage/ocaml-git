@@ -79,12 +79,12 @@ module HTTPS (Store: Test_store.S) = Test_sync.Make(struct
 
 module MemStore = struct
   include Git.Mem.Store(Digestif.SHA1)
-  let create root = create ~root ()
+  let v root = v ~root ()
 end
 
 module FsStore = struct
   include Git_unix.Store
-  let create root = create ~root ()
+  let v root = v ~root ()
 end
 
 module TCP1  = TCP(MemStore)

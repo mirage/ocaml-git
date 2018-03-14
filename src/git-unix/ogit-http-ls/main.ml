@@ -17,7 +17,8 @@
 
 let () = Random.self_init ()
 
-module Sync_http = Git_unix.Http(Git_unix.Store)
+open Git_unix
+module Sync_http = Http(Store)
 
 module Option =
 struct
@@ -83,14 +84,14 @@ let setup_logs style_renderer level =
   quiet, Fmt.stdout
 
 type error =
-  [ `Store of Git_unix.Store.error
+  [ `Store of Store.error
   | `Sync of Sync_http.error ]
 
 let store_err err = `Store err
 let sync_err err = `Sync err
 
 let pp_error ppf = function
-  | `Store err -> Fmt.pf ppf "(`Store %a)" Git_unix.Store.pp_error err
+  | `Store err -> Fmt.pf ppf "(`Store %a)" Store.pp_error err
   | `Sync err -> Fmt.pf ppf "(`Sync %a)" Sync_http.pp_error err
 
 let main show_tags show_heads repository =
@@ -101,7 +102,7 @@ let main show_tags show_heads repository =
 
   let https = Option.eq ~eq:((=) "https") (Uri.scheme repository) in
 
-  Git_unix.Store.create ~root ()
+  Store.v ~root ()
   >>!= store_err
   >>?= fun git ->
   Sync_http.ls git ~https ?port:(Uri.port repository)
@@ -120,11 +121,11 @@ let main show_tags show_heads repository =
   in
 
   List.iter (fun (hash, refname, peeled) ->
-      let reference = Git_unix.Store.Reference.of_string refname in
+      let reference = Store.Reference.of_string refname in
 
       Fmt.(pf stdout) "%a      %a%s\n%!"
-        Git_unix.Store.Hash.pp hash
-        Git_unix.Store.Reference.pp reference
+        Store.Hash.pp hash
+        Store.Reference.pp reference
         (if peeled then "^{}" else ""))
     refs;
 

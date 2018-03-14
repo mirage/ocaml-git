@@ -59,7 +59,7 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE): sig
                      and module Inflate = I
                      and module Deflate = D
 
-  val create:
+  val v:
     ?root:Fpath.t ->
     ?dotgit:Fpath.t ->
     ?compression:int ->
@@ -78,7 +78,7 @@ module Store (H : Digestif_sig.S): sig
                      and module Inflate = Inflate
                      and module Deflate = Deflate
 
-  val create:
+  val v:
     ?root:Fpath.t ->
     ?dotgit:Fpath.t ->
     ?compression:int ->

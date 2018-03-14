@@ -229,7 +229,7 @@ let update_index_remove_one_file t fs path =
 let run ~root ~pp_error f () =
   let open Lwt.Infix in
 
-  match Lwt_main.run (Store.create ~root () >>= function
+  match Lwt_main.run (Store.v ~root () >>= function
                       | Ok t -> f t >>= fun v -> Lwt.return (Ok v)
                       | Error err -> Lwt.return (Error err)) with
   | Ok (Ok _) -> ()

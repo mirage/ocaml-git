@@ -92,7 +92,7 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE) = struct
 
   let default_root = Fpath.v "root"
 
-  let create
+  let v
       ?(root = default_root) ?(dotgit = Fpath.(default_root / ".git"))
       ?(compression = 6) ?buffer () =
     if compression < 0 || compression > 9

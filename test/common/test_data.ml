@@ -9,7 +9,7 @@ end
 module type S = sig
 
   include Git.S
-  val create: Fpath.t -> (t, error) result Lwt.t
+  val v: Fpath.t -> (t, error) result Lwt.t
 end
 
 let pp_process_status ppf = function
@@ -90,7 +90,7 @@ module Make0 (Source: SOURCE) (Store: S) = struct
   module Common = Test_common.Make(Store)
 
   let import root () =
-    Store.create root >!= store_err >?= fun t ->
+    Store.v root >!= store_err >?= fun t ->
     let stream = stream_of_file Source.pack in
     Store.Pack.from t stream >!= store_err >?= fun _ ->
     Store.list t >>= fun hashes ->
@@ -162,7 +162,8 @@ module Make0 (Source: SOURCE) (Store: S) = struct
         | Ok v -> Lwt.return v
         | Error err -> Alcotest.failf "Got an error: %a." pp_error err)
 
-  let root = Fpath.(v "test-data" / Source.name)
+  let pwd = Unix.getcwd ()
+  let root = Fpath.(v pwd / "test-data" / Source.name)
 
   let verify_unpack () = import root () >?= fun _ -> Lwt.return (Ok ())
 

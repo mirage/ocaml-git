@@ -17,6 +17,8 @@
 
 let () = Random.self_init ()
 
+open Git_unix
+
 let option_map f = function
   | Some v -> Some (f v)
   | None -> None
@@ -72,11 +74,11 @@ let setup_logs style_renderer level =
   let quiet = match style_renderer with Some _ -> true | None -> false in
   quiet, Fmt.stdout
 
-module Entry = Git_unix.Index.Entry(Git_unix.SHA1)
-module Index = Git_unix.Index.Make(Git_unix.SHA1)(Git_unix.Store)(Git_unix.Fs)(Entry)
+module Entry = Index.Entry(SHA1)
+module Index = Index.Make(SHA1)(Store)(Fs)(Entry)
 
 type error =
-  [ `Store of Git_unix.Store.error
+  [ `Store of Store.error
   | `Index of Index.error
   | `App of string ]
 
@@ -85,7 +87,7 @@ let index_err err = Lwt.return (`Index err)
 let app_err err = Lwt.return (`App err)
 
 let pp_error ppf = function
-  | `Store err -> Fmt.pf ppf "%a" Git_unix.Store.pp_error err
+  | `Store err -> Fmt.pf ppf "%a" Store.pp_error err
   | `Index err -> Fmt.pf ppf "%a" Index.pp_error err
   | `App msg -> Fmt.string ppf msg
 
@@ -107,25 +109,25 @@ let rec index_entries_to_tree_entries ~bucket entries =
   List.map
     (fun (name, entry) -> match entry with
        | Index.Blob entry ->
-         { Git_unix.Store.Value.Tree.perm = perm_of_entry entry
+         { Store.Value.Tree.perm = perm_of_entry entry
          ; name
          ; node = hash_of_blob entry }
        | Index.Tree entries ->
-         { Git_unix.Store.Value.Tree.perm = `Dir
+         { Store.Value.Tree.perm = `Dir
          ; name
          ; node = hash_of_tree ~bucket entries })
     (Index.StringMap.bindings entries)
 and hash_of_tree ~bucket entries =
   let entries = index_entries_to_tree_entries ~bucket entries in
-  let tree = Git_unix.Store.Value.Tree.of_list entries in
-  let hash = Git_unix.Store.Value.Tree.digest tree in
+  let tree = Store.Value.Tree.of_list entries in
+  let hash = Store.Value.Tree.digest tree in
   let () = Hashtbl.add bucket hash tree in
   hash
 
 let hash_of_root ~bucket (Index.Root entries) =
   let entries = index_entries_to_tree_entries ~bucket entries in
-  let root_tree = Git_unix.Store.Value.Tree.of_list entries in
-  let root_hash = Git_unix.Store.Value.Tree.digest root_tree in
+  let root_tree = Store.Value.Tree.of_list entries in
+  let root_hash = Store.Value.Tree.digest root_tree in
   let () = Hashtbl.add bucket root_hash root_tree in
   root_hash
 
@@ -133,10 +135,10 @@ let main ?prefix:_ _ =
   let dtmp = Cstruct.create 0x8000 in
 
   let root = Fpath.(v (Sys.getcwd ())) in
-  let fs = Git_unix.Fs.v () in
+  let fs = Fs.v () in
 
-  Git_unix.Store.create ~root () >!= store_err >?= fun t ->
-    Index.IO.load fs ~root:(Git_unix.Store.dotgit t) ~dtmp >!= index_err >?= fun (entries, _) ->
+  Store.v ~root () >!= store_err >?= fun t ->
+    Index.IO.load fs ~root:(Store.dotgit t) ~dtmp >!= index_err >?= fun (entries, _) ->
       let root = Index.of_entries entries in
       let tree = Hashtbl.create 128 in
       let root_hash = hash_of_root ~bucket:tree root in
@@ -146,21 +148,21 @@ let main ?prefix:_ _ =
         (fun s (hash, tree) -> match s with
            | Error _ as err -> Lwt.return err
            | Ok () ->
-             Git_unix.Store.write t (Git_unix.Store.Value.tree tree) >>= function
+             Store.write t (Store.Value.tree tree) >>= function
              | Ok (hash', _) ->
-               if Git_unix.Store.Hash.equal hash hash'
+               if Store.Hash.equal hash hash'
                then Lwt.return (Ok ())
                else
                  Lwt.return
                    (Error
                      (`App
                       (Fmt.strf "Produced bad hash from the tree object: %a. We expected %a and we have %a."
-                         Git_unix.Store.Value.Tree.pp tree
-                         Git_unix.Store.Hash.pp hash
-                         Git_unix.Store.Hash.pp hash')))
+                         Store.Value.Tree.pp tree
+                         Store.Hash.pp hash
+                         Store.Hash.pp hash')))
              | Error err -> Lwt.return (Error (`Store err)))
         (Ok ()) todo >?= fun () ->
-        Fmt.(pf stdout) "%a\n" Git_unix.Store.Hash.pp root_hash;
+        Fmt.(pf stdout) "%a\n" Store.Hash.pp root_hash;
         Lwt.return (Ok ())
 
 open Cmdliner

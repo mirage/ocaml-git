@@ -15,7 +15,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Store = Git_unix.Store
+open Git_unix
 module Graph = Git.Object_graph.Make(Store)
 
 let pp_level ppf level =
@@ -56,7 +56,7 @@ let () = Logs.set_level ~all:true (Some Logs.Debug)
 
 let main ppf =
   let open Lwt_result in
-  Store.create () >>= fun t ->
+  Store.v () >>= fun t ->
   Lwt.Infix.(Graph.to_dot t ppf >>= fun () -> Lwt.return (Ok ()))
 
 let () =

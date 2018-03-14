@@ -24,10 +24,6 @@ module Index = Index
 module Store = struct
   include Git.Store.Make(SHA1)(Fs)(Git.Inflate)(Git.Deflate)
 
-  let with_fs ?root ?dotgit ?compression ?buffer fs =
-    create ?root ?dotgit ?compression ?buffer fs
-
-  let create ?temp_dir ?root ?dotgit ?compression ?buffer () =
-    let fs = Fs.v ?temp_dir () in
+  let v ?root ?dotgit ?compression ?buffer ?(fs = Fs.v ()) () =
     create ?root ?dotgit ?compression ?buffer fs
 end

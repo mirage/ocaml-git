@@ -27,20 +27,13 @@ module Store: sig
           with module Hash = SHA1
            and module FS := Fs
 
-  val create:
-    ?temp_dir:Fpath.t ->
+  val v:
     ?root:Fpath.t ->
     ?dotgit:Fpath.t ->
     ?compression:int ->
     ?buffer:((buffer -> unit Lwt.t) -> unit Lwt.t) ->
+    ?fs:Fs.t ->
     unit -> (t, error) result Lwt.t
-
-  val with_fs:
-    ?root:Fpath.t ->
-    ?dotgit:Fpath.t ->
-    ?compression:int ->
-    ?buffer:((buffer -> unit Lwt.t) -> unit Lwt.t) ->
-    Fs.t -> (t, error) result Lwt.t
 end
 
 module Sync (S: Git.S): Git.Sync.S with module Store = S and module Net = Net

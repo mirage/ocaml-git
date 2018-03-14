@@ -35,7 +35,7 @@ let long_random_string () =
 
 module type S = sig
   include Git.S
-  val create: Fpath.t -> (t, error) result Lwt.t
+  val v: Fpath.t -> (t, error) result Lwt.t
 end
 
 module Make (Store : S) = struct
@@ -235,7 +235,7 @@ module Make (Store : S) = struct
   let root = Fpath.v "test-git-store"
 
   let create ~root ?(index=false) () =
-    Store.create root >>= check_err >>= fun t ->
+    Store.v root >>= check_err >>= fun t ->
     reset t >>= fun () ->
     Lwt_list.iter_s (fun v ->
         Store.write t v >|= function

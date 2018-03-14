@@ -8,7 +8,8 @@ module Sync (C: Net.CONDUIT) (S: Git.S): Git.Sync.S
 
 module Store (X: Mirage_fs_lwt.S): sig
   include Git.Store.S with module Hash = SHA1
-  val create:
+
+  val v:
     ?temp_dir:Fpath.t ->
     ?current_dir:Fpath.t ->
     ?root:Fpath.t ->
