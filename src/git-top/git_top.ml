@@ -21,7 +21,6 @@ module Graph = Git.Object_graph.Make(Store)
 let printers =
   [ "Git.Crc32.pp"
   ; "Git.User.pp"
-  ; "Git.Minienc.pp"
   ; "Git_top.Store.Value.pp"
   ; "Git_top.Store.Value.Commit.pp"
   ; "Git_top.Store.Value.Blob.pp"
