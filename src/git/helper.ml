@@ -325,30 +325,32 @@ module MakeInflater (Z: S.INFLATE) (A: S.DESC with type 'a t = 'a Angstrom.t) = 
     go t
 end
 
-module MakeEncoder (M: S.MINIENC) = struct
+module MakeEncoder (M: S.DESC with type 'a t = 'a Encore.Encoder.t) = struct
 
   let src = Logs.Src.create "git.encoder" ~doc:"logs git's internal encoder"
   module Log = (val Logs.src_log src : Logs.LOG)
 
-  type t = M.t
+  type t = M.e
   type init = int * t
   type error = Error.never
 
   let pp_error ppf `Never = Fmt.string ppf "`Never"
+
+  open Encore
 
   type encoder =
     { o_off : int
     ; o_pos : int
     ; o_len : int
     ; w_acc : int
-    ; state : Minienc.encoder Minienc.state }
+    ; state : Lole.encoder Lole.state }
 
   let default (capacity, x) =
     Log.debug (fun l ->
         l "Starting to encode a Git object with a capacity = %d." capacity);
 
-    let encoder = Minienc.create capacity in
-    let state   = M.encoder x (fun encoder -> Minienc.End encoder) encoder in
+    let encoder = Lole.create capacity in
+    let state   = Encoder.run M.p (fun encoder -> Lole.End encoder) encoder x in
     { o_off = 0
     ; o_pos = 0
     ; o_len = 0
@@ -361,20 +363,20 @@ module MakeEncoder (M: S.MINIENC) = struct
       | None       -> len
     in
     match iovec with
-    | { Minienc.IOVec.buffer = `Bigstring x; off; len; } ->
+    | { Lole.IOVec.buffer = Lole.Buffer.Bigstring x; off; len; } ->
       Cstruct.blit (Cstruct.of_bigarray ~off ~len x) 0 cs cs_off (max len); max len
-    | { Minienc.IOVec.buffer = `Bytes x; off; len; } ->
+    | { Lole.IOVec.buffer = Lole.Buffer.Bytes x; off; len; } ->
       Cstruct.blit_from_bytes x off cs cs_off (max len); max len
-    | { Minienc.IOVec.buffer = `String x; off; len; } ->
+    | { Lole.IOVec.buffer = Lole.Buffer.String x; off; len; } ->
       Cstruct.blit_from_string x off cs cs_off (max len); max len
 
   exception Drain of int
 
   let rec eval current e =
     match e.state with
-    | Minienc.End minienc ->
-      let shift  = min (e.o_len - e.o_pos) (Minienc.has minienc) in
-      let iovecs, shifted = Minienc.shift shift minienc in
+    | Lole.End minienc ->
+      let shift  = min (e.o_len - e.o_pos) (Lole.has minienc) in
+      let iovecs, shifted = Lole.shift shift minienc in
       let shift' = List.fold_left (fun acc iovec ->
           let write = cstruct_blit_iovec iovec current acc None in
           acc + write)
@@ -383,19 +385,19 @@ module MakeEncoder (M: S.MINIENC) = struct
       Log.debug (fun l ->
           l "Ensure than we wrote exactly [shift = %d] byte(s)." shift);
       assert (e.o_off + e.o_pos + shift = shift');
-      if Minienc.has shifted > 0
+      if Lole.has shifted > 0
       then `Flush { e with o_pos = e.o_pos + shift
                          ; w_acc = e.w_acc + shift
-                         ; state = Minienc.End shifted }
+                         ; state = Lole.End shifted }
       else `End ({ e with o_pos = e.o_pos + shift
                         ; w_acc = e.w_acc + shift
-                        ; state = Minienc.End shifted }, e.w_acc + shift)
-    | Minienc.Continue { encoder; continue; } ->
+                        ; state = Lole.End shifted }, e.w_acc + shift)
+    | Lole.Continue { encoder; continue; } ->
       (* XXX(dinosaure): we can shift the minienc at this time, but
          it's very useful? *)
       eval current { e with state = continue encoder }
-    | Minienc.Flush { continue; iovecs; } ->
-      let max = min (e.o_len - e.o_pos) (Minienc.IOVec.lengthv iovecs) in
+    | Lole.Flush { continue; iovecs; } ->
+      let max = min (e.o_len - e.o_pos) (Lole.IOVec.lengthv iovecs) in
       try
         (* XXX(dinosaure): wtf?! pourquoi j'ai fait ce code (peut être
            pour ne pas utiliser [fold_left]. It's an optimization to
@@ -425,13 +427,13 @@ module MakeEncoder (M: S.MINIENC) = struct
   let used { o_pos; _ } = o_pos
 end
 
-module MakeDeflater (Z: S.DEFLATE) (M: S.MINIENC) = struct
+module MakeDeflater (Z: S.DEFLATE) (M: S.DESC with type 'a t = 'a Encore.Encoder.t) = struct
 
   let src = Logs.Src.create "git.deflater.encoder"
       ~doc:"logs git's internal deflater/encoder"
   module Log = (val Logs.src_log src : Logs.LOG)
 
-  type t = M.t
+  type t = M.e
   type init = int * t * int * Cstruct.t
   type error = [ `Deflate of Z.error ]
 

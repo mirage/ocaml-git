@@ -78,9 +78,9 @@ module MakeInflater (Z: S.INFLATE) (A: S.DESC with type 'a t = 'a Angstrom.t): S
     Then, this encoder [`Never] fails but we define a concrete error
     type to allow the client to match on it - then, he can use [asset
     false] without fear. *)
-module MakeEncoder (M: S.MINIENC): S.ENCODER
-  with type t = M.t
-   and type init = int * M.t
+module MakeEncoder (M: S.DESC with type 'a t = 'a Encore.Encoder.t): S.ENCODER
+  with type t = M.e
+   and type init = int * M.e
    and type error = Error.never
 
 (** [MakeDeflater] makes a module which respects the interface
@@ -90,9 +90,9 @@ module MakeEncoder (M: S.MINIENC): S.ENCODER
 
     This encoder encodes both the OCaml value and deflates the
     stream. *)
-module MakeDeflater (Z: S.DEFLATE) (M: S.MINIENC): S.ENCODER
-  with type t = M.t
-   and type init = int * M.t * int * Cstruct.t
+module MakeDeflater (Z: S.DEFLATE) (M: S.DESC with type 'a t = 'a Encore.Encoder.t): S.ENCODER
+  with type t = M.e
+   and type init = int * M.e * int * Cstruct.t
    and type error = [ `Deflate of Z.error ]
 
 (** [digest (module Hash) (module Faraday) ~kind value] digests
