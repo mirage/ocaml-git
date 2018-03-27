@@ -25,17 +25,9 @@ type t =
   ; email : string
   ; date  : int64 * tz_offset option }
 
-include S.BASE with type t := t
-
-module A: S.ANGSTROM with type t = t
-
-module F: S.FARADAY with type t = t
-
-module M: S.MINIENC with type t = t
-
-module D: S.DECODER
-  with type t = t
-   and type init = Cstruct.t
-   and type error = Error.Decoder.t
+module A: S.DESC    with type 'a t = 'a Angstrom.t and type e = t
+module M: S.DESC    with type 'a t = 'a Encore.Encoder.t and type e = t
+module D: S.DECODER with type t = t and type init = Cstruct.t and type error = Error.Decoder.t
+include S.BASE      with type t := t
 
 val length: t -> int64
