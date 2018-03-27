@@ -142,11 +142,22 @@ module Make (Hash: S.HASH): S with module Hash = Hash = struct
         | i -> i
       with Result i -> i
 
+  exception Break
+
+  let has predicate s =
+    let ln = String.length s in
+    try for i = 0 to ln - 1 do if predicate (String.unsafe_get s i) then raise Break done; false
+    with Break -> true
+
   let of_contents c = Contents c
   let of_node n = Node n
   let of_entry = function
-    | { name = n; perm = `Dir; _ } -> of_node n
-    | { name = n; _ } -> of_contents n
+    | { name = n; perm = `Dir; _ } ->
+       if has ((=) '\000') n then invalid_arg "of_entry";
+       of_node n
+    | { name = n; _ } ->
+       if has ((=) '\000') n then invalid_arg "of_entry";
+       of_contents n
 
   let of_list entries: t =
     List.map (fun x -> of_entry x, x) entries

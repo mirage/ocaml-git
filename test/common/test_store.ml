@@ -115,7 +115,8 @@ module Make (Store : S) = struct
   let t5 = lazy (Store.Value.tree
                    (Store.Value.Tree.of_list
                       [ { Store.Value.Tree.perm = `Normal
-                        ; name = long_random_string ()
+                        ; name = Astring.String.map (function '\000' -> '\001' | chr -> chr) (long_random_string ())
+                        (* XXX(dinosaure): impossible to store an entry with \000 *)
                         ; node = !!kv2 }
                       ; { Store.Value.Tree.perm = `Dir
                         ; name = "a"
