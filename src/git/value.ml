@@ -68,26 +68,15 @@ module type RAW = sig
   module Value : S
   include module type of Value
 
-  module EE: S.ENCODER
-    with type t = t
-     and type init = int * t
-     and type error = Error.never
+  module EncoderRaw: S.ENCODER with type t = t and type init = int * t and type error = Error.never
+  module DecoderRaw: S.DECODER with type t = t and type init = Cstruct.t and type error = Error.Decoder.t
+  module EncoderWithoutHeader: S.ENCODER with type t = t and type init = int * t and type error = Error.never
 
-  module EEE: S.ENCODER
-    with type t = t
-     and type init = int * t
-     and type error = Error.never
-
-  module DD: S.DECODER
-    with type t = t
-     and type init = Cstruct.t
-     and type error = Error.Decoder.t
-
-  val to_deflated_raw : ?capacity:int -> ?level:int -> ztmp:Cstruct.t -> t -> (string, E.error) result
-  val to_raw : ?capacity:int -> t -> (string, EE.error) result
-  val to_raw_without_header : ?capacity:int -> t -> (string, EEE.error) result
-  val of_raw : kind:[ `Commit | `Tree | `Tag | `Blob ] -> Cstruct.t -> (t, Error.Decoder.t) result
-  val of_raw_with_header : Cstruct.t -> (t, DD.error) result
+  val to_deflated_raw: ?capacity:int -> ?level:int -> ztmp:Cstruct.t -> t -> (string, E.error) result
+  val to_raw: ?capacity:int -> t -> (string, EncoderRaw.error) result
+  val to_raw_without_header: ?capacity:int -> t -> (string, EncoderWithoutHeader.error) result
+  val of_raw: kind:[ `Commit | `Blob | `Tree | `Tag ] -> Cstruct.t -> (t, Error.Decoder.t) result
+  val of_raw_with_header: Cstruct.t -> (t, DecoderRaw.error) result
 end
 
 module Make (H : S.HASH) (I : S.INFLATE) (D : S.DEFLATE)
@@ -307,30 +296,25 @@ module Raw
 
   include Value
 
-  module EE = Helper.MakeEncoder(M)
-  (* XXX(dinosaure): the [Value] module expose only an encoder to a deflated
-     value. We provide an encoder for a serialized encoder. *)
+  module DecoderRaw = Helper.MakeDecoder(A)
+  module EncoderRaw = Helper.MakeEncoder(M)
 
-  module MM =
-  struct
-    type nonrec t = t
+  module MakeWithoutHeader (Meta: Encore.Meta.S) =
+    struct
+      type e = t
 
-    open Minienc
+      type 'a t = 'a Meta.t
 
-    let encoder x k e =
-      ((match x with
-          | Tree tree ->
-            Tree.M.encoder tree
-          | Tag tag ->
-            Tag.M.encoder tag
-          | Blob blob ->
-            write_bigstring (Cstruct.to_bigarray (blob :> Cstruct.t))
-          | Commit commit ->
-            Commit.M.encoder commit) k)
-        e
-  end
+      module Meta = Encore.Meta.Make(Meta)
+      module ValueMeta = MakeMeta(Meta)
+      open Meta
+      open ValueMeta
 
-  module EEE = Helper.MakeEncoder(MM)
+      let p = tag <|> commit <|> tree <|> blob
+    end
+
+  module DecoderWithoutHeader = Helper.MakeDecoder(MakeWithoutHeader(Encore.Proxy_decoder.Impl))
+  module EncoderWithoutHeader = Helper.MakeEncoder(MakeWithoutHeader(Encore.Proxy_encoder.Impl))
 
   module type ENCODER = sig
     type state
@@ -393,70 +377,68 @@ module Raw
        is lower than [F.length value]. In most of cases, it's true but sometimes, a
        deflated Git object can be bigger than a serialized Git object. *)
     let module SpecializedEncoder = struct
-      type state = E.encoder
-      type raw = Cstruct.t
-      type result = int
-      type error = E.error
-      let raw_length = Cstruct.len
-      let raw_sub = Cstruct.sub
-      type rest = [ `Flush of state | `End of (state * result) ]
-      let eval raw state = match E.eval raw state with
-        | #rest as rest -> rest
-        | `Error err    -> `Error (state, err)
-      let used = E.used
-      let flush = E.flush
-    end in
+        type state = E.encoder
+        type raw = Cstruct.t
+        type result = int
+        type error = E.error
+        let raw_length = Cstruct.len
+        let raw_sub = Cstruct.sub
+        type rest = [ `Flush of state | `End of (state * result) ]
+        let eval raw state = match E.eval raw state with
+          | #rest as rest -> rest
+          | `Error err    -> `Error (state, err)
+        let used = E.used
+        let flush = E.flush
+      end in
     to_ (module SpecializedEncoder) buffer raw encoder
 
   let to_raw ?(capacity = 0x100) value =
-    let encoder = EE.default (capacity, value) in
+    let encoder = EncoderRaw.default (capacity, value) in
     let raw = Cstruct.create capacity in
     let buffer = Cstruct_buffer.create (Int64.to_int (length value)) in
     (* XXX(dinosaure): we are sure than the serialized object has the size
        [F.length value]. So, the [buffer] should not growth. *)
     let module SpecializedEncoder = struct
-      type state = EE.encoder
-      type raw = Cstruct.t
-      type result = int
-      type error = EE.error
-      let raw_length = Cstruct.len
-      let raw_sub = Cstruct.sub
-      type rest = [ `Flush of state | `End of (state * result) ]
-      let eval raw state = match EE.eval raw state with
-        | #rest as rest -> rest
-        | `Error err    -> `Error (state, err)
-      let used = EE.used
-      let flush = EE.flush
-    end in
+        type state = EncoderRaw.encoder
+        type raw = Cstruct.t
+        type result = int
+        type error = EncoderRaw.error
+        let raw_length = Cstruct.len
+        let raw_sub = Cstruct.sub
+        type rest = [ `Flush of state | `End of (state * result) ]
+        let eval raw state = match EncoderRaw.eval raw state with
+          | #rest as rest -> rest
+          | `Error err    -> `Error (state, err)
+        let used = EncoderRaw.used
+        let flush = EncoderRaw.flush
+      end in
     to_ (module SpecializedEncoder) buffer raw encoder
 
   let to_raw_without_header ?(capacity = 0x100) value =
-    let encoder = EEE.default (capacity, value) in
+    let encoder = EncoderWithoutHeader.default (capacity, value) in
     let raw = Cstruct.create capacity in
     let buffer = Cstruct_buffer.create (Int64.to_int (length value)) in
     (* XXX(dinosaure): we are sure than the serialized object has the size
        [F.length value]. So, the [buffer] should not growth. *)
 
     let module SpecializedEncoder = struct
-      type state = EEE.encoder
-      type raw = Cstruct.t
-      type result = int
-      type error = EEE.error
-      let raw_length = Cstruct.len
-      let raw_sub = Cstruct.sub
-      type rest = [ `Flush of state | `End of (state * result) ]
-      let eval raw state = match EEE.eval raw state with
-        | #rest as rest -> rest
-        | `Error err    -> `Error (state, err)
-      let used = EEE.used
-      let flush = EEE.flush
-    end in
+        type state = EncoderWithoutHeader.encoder
+        type raw = Cstruct.t
+        type result = int
+        type error = EncoderWithoutHeader.error
+        let raw_length = Cstruct.len
+        let raw_sub = Cstruct.sub
+        type rest = [ `Flush of state | `End of (state * result) ]
+        let eval raw state = match EncoderWithoutHeader.eval raw state with
+          | #rest as rest -> rest
+          | `Error err    -> `Error (state, err)
+        let used = EncoderWithoutHeader.used
+        let flush = EncoderWithoutHeader.flush
+      end in
 
     to_ (module SpecializedEncoder) buffer raw encoder
 
-  module DD = Helper.MakeDecoder(A)
-
-  let of_raw_with_header inflated = DD.to_result inflated
+  let of_raw_with_header inflated = DecoderRaw.to_result inflated
   let of_raw ~kind inflated = match kind with
     | `Commit ->
       Rresult.R.map

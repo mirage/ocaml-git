@@ -316,7 +316,7 @@ module Make (Store : S) = struct
     in
     let test () =
       match ValueIO.to_raw c with
-      | Error e -> Alcotest.failf "%a" ValueIO.EE.pp_error e
+      | Error e -> Alcotest.failf "%a" ValueIO.EncoderRaw.pp_error e
       | Ok raw  ->
         match ValueIO.of_raw_with_header (Cstruct.of_string raw) with
         | Error err -> Alcotest.failf "decoder: %a" Git.Error.Decoder.pp_error err

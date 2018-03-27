@@ -92,30 +92,9 @@ module type RAW = sig
   module Value: S
   include module type of Value
 
-  module EE: S.ENCODER
-    with type t = t
-     and type init = int * t
-     and type error = Error.never
-  (** The encoder (which uses a {!Minienc.encoder}) of the Git object.
-      We constraint the output to be a {Cstruct.t}. This encoder needs
-      the value {!t} and the memory consumption of the encoder (in
-      bytes). The encoder can not fail.
-
-      This encoder does not {i deflate} the content (instead {!E}).
-
-      NOTE: we can not unspecified the error type (it needs to be
-      concrete) but, because the encoder can not fail, we define the
-      error as [`Never]. *)
-
-  module EEE: S.ENCODER
-    with type t = t
-     and type init = int * t
-     and type error = Error.never
-
-  module DD: S.DECODER
-    with type t = t
-     and type init = Cstruct.t
-     and type error = Error.Decoder.t
+  module EncoderRaw: S.ENCODER with type t = t and type init = int * t and type error = Error.never
+  module DecoderRaw: S.DECODER with type t = t and type init = Cstruct.t and type error = Error.Decoder.t
+  module EncoderWithoutHeader: S.ENCODER with type t = t and type init = int * t and type error = Error.never
 
   val to_deflated_raw: ?capacity:int -> ?level:int -> ztmp:Cstruct.t -> t ->
     (string, E.error) result
@@ -129,24 +108,23 @@ module type RAW = sig
       All error from the {!Deflate} module is relayed to the
       [`Deflate] error value. *)
 
-  val to_raw: ?capacity:int -> t -> (string, EE.error) result
+  val to_raw: ?capacity:int -> t -> (string, EncoderRaw.error) result
   (** [to_raw ?capacity value] serializes the value
       [value]. [capacity] is the memory consumption of the encoder in
       bytes (default to [0x100]).
 
       This function can not returns an {!EE.error} (see {!EE}). *)
 
-  val to_raw_without_header: ?capacity:int -> t -> (string, EEE.error) result
+  val to_raw_without_header: ?capacity:int -> t -> (string, EncoderWithoutHeader.error) result
 
-  val of_raw: kind:[ `Commit | `Blob | `Tree | `Tag ] -> Cstruct.t ->
-    (t, Error.Decoder.t) result
+  val of_raw: kind:[ `Commit | `Blob | `Tree | `Tag ] -> Cstruct.t -> (t, Error.Decoder.t) result
   (** [of_raw ~kind inflated] makes a Git object as an OCaml value
       {!t}. This decoder does not expect an {i header} to recognize
       which kind of Git object is it. That means the [inflated] raw
       should not contain [kind size\000] at the beginning (in this
       case, you should use {!of_raw_with_header}. *)
 
-  val of_raw_with_header: Cstruct.t -> (t, DD.error) result
+  val of_raw_with_header: Cstruct.t -> (t, DecoderRaw.error) result
   (** [of_raw_with_header inflated] makes a Git object as an OCaml
       value {!t}. This decoder expects an {i header} to choose which
       Git object it is. *)
