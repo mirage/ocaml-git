@@ -81,6 +81,9 @@ module type S = sig
 
   include S.BASE with type t := t
 
+  val length: t -> int64
+  (** [length t] returns the length of the tag object [t]. *)
+
   val obj: t -> Hash.t
   (** [obj t] returns the pointed hash of the Tag [t]. *)
 

@@ -59,6 +59,8 @@ module type S = sig
 
   include S.DIGEST with type t := t and type hash := Hash.t
   include S.BASE with type t := t
+
+  val length: t -> int64
 end
 
 module type RAW = sig
@@ -246,6 +248,12 @@ module Make (H : S.HASH) (I : S.INFLATE) (D : S.DEFLATE)
       e
   end
 
+  let length = function
+    | Commit commit -> Commit.length commit
+    | Tag tag       -> Tag.length tag
+    | Tree tree     -> Tree.length tree
+    | Blob blob     -> Blob.length blob
+
   module D = Helper.MakeInflater(Inflate)(A)
   module E = Helper.MakeDeflater(Deflate)(M)
 
@@ -275,9 +283,9 @@ module Make (H : S.HASH) (I : S.INFLATE) (D : S.DEFLATE)
       then (-1)
       else if int_of_kind a < int_of_kind b
       then 1
-      else if F.length a > F.length b
+      else if length a > length b
       then (-1)
-      else if F.length a < F.length b
+      else if length a < length b
       then 1
       else Pervasives.compare a b
 
@@ -384,7 +392,7 @@ module Raw
   let to_deflated_raw ?(capacity = 0x100) ?(level = 4) ~ztmp value =
     let encoder = E.default (capacity, value, level, ztmp) in
     let raw = Cstruct.create capacity in
-    let buffer = Cstruct_buffer.create (Int64.to_int (F.length value)) in
+    let buffer = Cstruct_buffer.create (Int64.to_int (length value)) in
     (* XXX(dinosaure): it's an heuristic to consider than the size of the result
        is lower than [F.length value]. In most of cases, it's true but sometimes, a
        deflated Git object can be bigger than a serialized Git object. *)
@@ -407,7 +415,7 @@ module Raw
   let to_raw ?(capacity = 0x100) value =
     let encoder = EE.default (capacity, value) in
     let raw = Cstruct.create capacity in
-    let buffer = Cstruct_buffer.create (Int64.to_int (F.length value)) in
+    let buffer = Cstruct_buffer.create (Int64.to_int (length value)) in
     (* XXX(dinosaure): we are sure than the serialized object has the size
        [F.length value]. So, the [buffer] should not growth. *)
     let module SpecializedEncoder = struct
@@ -429,7 +437,7 @@ module Raw
   let to_raw_without_header ?(capacity = 0x100) value =
     let encoder = EEE.default (capacity, value) in
     let raw = Cstruct.create capacity in
-    let buffer = Cstruct_buffer.create (Int64.to_int (F.length value)) in
+    let buffer = Cstruct_buffer.create (Int64.to_int (length value)) in
     (* XXX(dinosaure): we are sure than the serialized object has the size
        [F.length value]. So, the [buffer] should not growth. *)
 

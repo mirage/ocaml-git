@@ -47,17 +47,16 @@ sig
   include S.DIGEST with type t := t and type hash = Hash.t
   include S.BASE with type t := t
 
+  val length: t -> int64
   val hashes: t -> Hash.t list
   val to_list: t -> entry list
   val of_list: entry list -> t
   val iter: (entry -> unit) -> t -> unit
 end
 
-module Make (H: S.HASH with type Digest.buffer = Cstruct.t
-                         and type hex = string)
-: S with module Hash = H
-= struct
-  module Hash = H
+module Make (Hash: S.HASH): S with module Hash = Hash = struct
+
+  module Hash = Hash
 
   type entry =
     { perm: perm
@@ -249,12 +248,26 @@ module Make (H: S.HASH with type Digest.buffer = Cstruct.t
       list x k e
   end
 
+  let length t =
+    let string x = Int64.of_int (String.length x) in
+    let ( + ) = Int64.add in
+
+    let entry acc x =
+      (string (string_of_perm x.perm))
+      + 1L
+      + (string x.name)
+      + 1L
+      + (Int64.of_int Hash.Digest.length)
+      + acc
+    in
+    List.fold_left entry 0L t
+
   module D = Helper.MakeDecoder(A)
   module E = Helper.MakeEncoder(M)
 
   let digest value =
     let tmp = Cstruct.create 0x100 in
-    Helper.fdigest (module Hash.Digest) (module E) ~tmp ~kind:"tree" ~length:F.length value
+    Helper.fdigest (module Hash.Digest) (module E) ~tmp ~kind:"tree" ~length value
 
   let equal   = (=)
   let compare = Pervasives.compare

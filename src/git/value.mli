@@ -104,8 +104,8 @@ module type S = sig
       All error from the {!Deflate} module is relayed to the
       [`Deflate] error value. *)
 
-  include S.DIGEST with type t := t and type hash := Hash.t
-  include S.BASE with type t := t
+
+  val length: t -> int64
 end
 
 (** Interface which describes raw operations. That means all

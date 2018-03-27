@@ -94,7 +94,7 @@ let pp_type ppf = function
   | Git_unix.FS.Value.Blob _   -> Fmt.string ppf "blob"
 
 let pp_size ppf value =
-  Fmt.int64 ppf (Git_unix.FS.Value.F.length value)
+  Fmt.int64 ppf (Git_unix.FS.Value.length value)
 
 let pp_exit = Fmt.nop
 

@@ -83,6 +83,9 @@ module type S = sig
   include S.DIGEST with type t := t and type hash = Hash.t
   include S.BASE with type t := t
 
+  val length: t -> int64
+  (** [length t] returns the length of the tree object [t]. *)
+
   val hashes : t -> Hash.t list
   (** [hashes t] returns all pointer of the tree [t]. *)
 

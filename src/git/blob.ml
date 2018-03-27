@@ -40,6 +40,7 @@ module type S = sig
   include S.DIGEST with type t := t and type hash := Hash.t
   include S.BASE with type t := t
 
+  val length: t -> int64
   val of_cstruct: Cstruct.t -> t
   val to_cstruct: t -> Cstruct.t
   val of_string: string -> t
@@ -212,9 +213,12 @@ module Make (H: S.HASH): S with module Hash = H = struct
                    ; pos = 0 }
   end
 
+  let length: t -> int64 = fun t ->
+    Int64.of_int (Cstruct.len t)
+
   let digest cs =
     let ctx = Hash.Digest.init () in
-    let hdr = Fmt.strf "blob %Ld\000" (F.length cs) in
+    let hdr = Fmt.strf "blob %Ld\000" (length cs) in
 
     Hash.Digest.feed ctx (Cstruct.of_string hdr);
     Hash.Digest.feed ctx cs;

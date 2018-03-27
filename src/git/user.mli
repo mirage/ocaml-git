@@ -37,3 +37,5 @@ module D: S.DECODER
   with type t = t
    and type init = Cstruct.t
    and type error = Error.Decoder.t
+
+val length: t -> int64

@@ -169,6 +169,16 @@ end
 
 module D = Helper.MakeDecoder(A)
 
+let length t =
+  let string x = Int64.of_int (String.length x) in
+  let ( + ) = Int64.add in
+
+  let tz_offset_length = 5L in
+  (string t.name)
+  + 1L + 1L + (string t.email) + 1L + 1L
+  + (string (Int64.to_string (fst t.date)))
+  + 1L + tz_offset_length
+
 let equal   = (=)
 let compare = Pervasives.compare
 let hash    = Hashtbl.hash

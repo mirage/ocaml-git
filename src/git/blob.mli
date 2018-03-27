@@ -55,6 +55,10 @@ module type S = sig
 
   include S.BASE with type t := t
 
+  val length: t -> int64
+  (** [length t] returns the length of the blob object [t]. Note that we use
+     {!Cstruct.len} and cast result to [int64]. *)
+
   val of_cstruct: Cstruct.t -> t
   (** [of_cstruct cs] returns the blob value of a [Cstruct.t]. This
       function does not take the ownership on [cs]. So, consider at

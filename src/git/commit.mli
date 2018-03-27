@@ -80,6 +80,9 @@ module type S = sig
 
   include S.BASE with type t := t
 
+  val length: t -> int64
+  (** [length t] returns the length of the commit object [t]. *)
+
   val parents: t -> Hash.t list
   (** [parents c] returns all parents of the Git Commit object [c]. *)
 

@@ -50,6 +50,7 @@ sig
   include S.DIGEST with type t := t and type hash = Hash.t
   include S.BASE with type t := t
 
+  val length: t -> int64
   val parents: t -> Hash.t list
   val tree: t -> Hash.t
   val committer: t -> User.t
@@ -271,6 +272,32 @@ module Make (H: S.HASH): S with module Hash = H = struct
   module D = Helper.MakeDecoder(A)
   module E = Helper.MakeEncoder(M)
 
+  let length t =
+    let string x = Int64.of_int (String.length x) in
+    let ( + ) = Int64.add in
+
+    let parents =
+      List.fold_left
+        (fun acc _ ->
+          (string "parent")
+          + 1L
+          + (Int64.of_int (Hash.Digest.length * 2))
+          + 1L
+          + acc)
+        0L t.parents in
+    let values l =
+      let rec go a = function
+        | [] -> 1L + a
+        | [ x ] -> string x + 1L + a
+        | x :: r -> go (string x + 2L + a) r in
+      go 0L l in
+    (string "tree") + 1L + (Int64.of_int (Hash.Digest.length * 2)) + 1L
+    + parents
+    + (string "author") + 1L + (User.length t.author) + 1L
+    + (string "committer") + 1L + (User.length t.committer) + 1L
+    + (List.fold_left (fun acc (key, v) -> string key + 1L + (values v) + acc) 0L t.extra)
+    + string t.message
+
   let pp ppf { tree; parents; author; committer; extra; message; } =
     let chr =
       Fmt.using
@@ -297,7 +324,7 @@ module Make (H: S.HASH): S with module Hash = H = struct
 
   let digest value =
     let tmp = Cstruct.create 0x100 in
-    Helper.fdigest (module Hash.Digest) (module E) ~tmp ~kind:"commit" ~length:F.length value
+    Helper.fdigest (module Hash.Digest) (module E) ~tmp ~kind:"commit" ~length:length value
 
   let equal = (=)
   let hash = Hashtbl.hash

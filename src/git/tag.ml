@@ -39,6 +39,7 @@ module type S = sig
   include S.DIGEST with type t := t and type hash = Hash.t
   include S.BASE with type t := t
 
+  val length: t -> int64
   val obj: t -> Hash.t
   val tag: t -> string
   val message: t -> string
@@ -242,6 +243,20 @@ module Make (H: S.HASH): S with module Hash = H = struct
   module D = Helper.MakeDecoder(A)
   module E = Helper.MakeEncoder(M)
 
+  let length t =
+    let string x = Int64.of_int (String.length x) in
+    let ( + ) = Int64.add in
+
+    let user_length = match t.tagger with
+      | Some user -> (string "tagger") + 1L + (User.length user) + 1L
+      | None -> 0L
+    in
+    (string "object") + 1L + (Int64.of_int (Hash.Digest.length * 2)) + 1L
+    + (string "type") + 1L + (string (string_of_kind t.kind)) + 1L
+    + (string "tag") + 1L + (string t.tag) + 1L
+    + user_length
+    + (string t.message)
+
   let obj { obj; _ } = obj
   let tag { tag; _ } = tag
   let message { message; _ } = message
@@ -252,7 +267,7 @@ module Make (H: S.HASH): S with module Hash = H = struct
     let tmp = Cstruct.create 0x100 in
     Helper.fdigest
       (module Hash.Digest) (module E)
-      ~tmp ~kind:"tag" ~length:F.length value
+      ~tmp ~kind:"tag" ~length:length value
 
   let equal   = (=)
   let compare = Pervasives.compare

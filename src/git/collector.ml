@@ -76,7 +76,7 @@ module Make (S: STORE) = struct
           hash
           ?name
           kind
-          (Store.Value.F.length value)
+          (Store.Value.length value)
       in
 
       Log.debug (fun l -> l ~header:"delta" "Add the object %a in the new PACK file."
