@@ -18,8 +18,7 @@
 (** A Git Blob object. *)
 
 type t = private Cstruct.t
-(** A Git Blob object which store entirely your files of your Git
-    repository. *)
+(** A Git Blob object which store entirely your file of your Git repository. *)
 
 module type S = sig
 

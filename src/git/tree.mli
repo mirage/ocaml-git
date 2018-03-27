@@ -36,11 +36,11 @@ module type S = sig
   and t
   (** A Git Tree object. Git stores content in a manner similar to a
       UNIX {i filesystem}, but a bit simplified. All the content is
-      stored as tree and {Blob.t} objects, with trees corresponding to
+      stored as tree and {!Blob.t} objects, with trees corresponding to
       UNIX directory entries and blobs corresponding more or less to
       {i inodes} or file contents. A single tree object contains one
       or more tree entries, each of which contains a hash pointer to a
-      {Blob.t} or sub-tree with its associated mode, type, and {i
+      {!Blob.t} or sub-tree with its associated mode, type, and {i
       filename}. *)
 
   val pp_entry: entry Fmt.t

@@ -328,8 +328,6 @@ module Raw (Hash: S.HASH) (Inflate: S.INFLATE) (Deflate: S.DEFLATE)
     val used : state -> int
     val flush : int -> int -> state -> state
   end
-  (* XXX(dinosaure): this is close to [Helper.Encoder] used to save a
-     value to a file but without Lwt. *)
 
   type ('state, 'raw, 'result, 'error) encoder =
     (module ENCODER with type state = 'state

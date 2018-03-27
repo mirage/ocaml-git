@@ -34,14 +34,13 @@ module type S = sig
     -> ?extra:(string * string list) list
     -> string
     -> t
-  (** [make ~author ~committer ?parents ~tree msg] makes an OCaml
-      value {!t}. [?parents] should be a non-empty list and corresponds to
-      a list of hashes of commits. [tree] should be a hash of a {Tree.t}
-      object.
+  (** [make ~author ~committer ?parents ~tree msg] makes an OCaml value {!t}.
+     [?parents] should be a non-empty list and corresponds to a list of hashes
+     of commits. [tree] should be a hash of a {Tree.t} object.
 
-      This function does not write a new commit on the store and does
-      not check the validity of [/parents] and [tree]. By this way,
-      this function never fails. *)
+      This function does not write a new commit on the store and does not check
+     the validity of [parents] and [tree]. By this way, this function never
+     fails. *)
 
   module MakeMeta: functor (Meta: Encore.Meta.S) -> sig val p: t Meta.t end
 

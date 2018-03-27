@@ -512,7 +512,9 @@ end
    client does not free some spaces.
 
    Then, we control the memory consumption when we compute the hash of
-   the Git object and we never grow the internal buffer. *)
+   the Git object and we never grow the internal buffer.
+
+   UPDATE: we move encoder to `encore` library. *)
 let fdigest: type t hash.
      (module S.IDIGEST with type t = hash)
   -> (module S.ENCODER
