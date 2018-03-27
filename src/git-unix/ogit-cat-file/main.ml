@@ -102,7 +102,7 @@ let pp_pretty_print ppf value =
   Git_unix.FS.Value.pp ppf value
 
 let pp_inflate ppf raw =
-  Git.Minienc.pp_scalar ~get:Cstruct.get_char ~length:Cstruct.len ppf raw
+  Encore.Lole.pp_scalar ~get:Cstruct.get_char ~length:Cstruct.len ppf raw
 
 type rest =
   [ `Type | `Size | `Exit | `PrettyPrint ]

@@ -220,7 +220,7 @@ module Make (H: S.HASH): S with module Hash = H = struct
     Hash.Digest.feed ctx cs;
     Hash.Digest.get ctx
 
-  let pp ppf blob = (Fmt.hvbox (Minienc.pp_scalar ~get:Cstruct.get_char ~length:Cstruct.len)) ppf blob
+  let pp ppf blob = Encore.Lole.pp_bigstring ppf (Cstruct.to_bigarray blob)
   let equal = Cstruct.equal
   let compare = Cstruct.compare
   let hash = Hashtbl.hash
