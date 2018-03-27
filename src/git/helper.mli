@@ -23,6 +23,29 @@
     like ["(name %a)" pp value]. *)
 val ppe : name:string -> 'a Fmt.t -> 'a Fmt.t
 
+module Pair:
+sig
+  val flip: ('a * 'b) -> ('b * 'a)
+  val fst: ('a * 'b) -> 'a
+  val snd: ('a * 'b) -> 'b
+end
+
+module Option:
+sig
+  val map: ('a -> 'b) -> 'a option -> 'b option
+  val ( >>= ): 'a option -> ('a -> 'b) -> 'b option
+end
+
+(** Helper for some convenience bijection elements. *)
+module BaseIso:
+sig
+  val flip: ('a * 'b) -> ('b * 'a)
+
+  val int64: (string, int64) Encore.Bijection.texn
+  val cstruct: (Encore.Lole.bigstring, Cstruct.t) Encore.Bijection.texn
+  val char_elt: char -> (char, unit) Encore.Bijection.texn
+  val string_elt: string -> (string, unit) Encore.Bijection.texn
+end
 
 (** [MakeDecoder] makes a module which respects the interface
     {!S.DECODER} from an angstrom decoder.

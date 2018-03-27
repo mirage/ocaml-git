@@ -21,6 +21,46 @@ module Log = (val Logs.src_log src : Logs.LOG)
 let ppe ~name ppv =
   Fmt.braces (fun ppf -> Fmt.pf ppf "%s %a" name (Fmt.hvbox ppv))
 
+module Pair =
+  struct
+    let flip (a, b) = (b, a)
+    let fst (a, _) = a
+    let snd (_, b) = b
+  end
+
+module Option =
+  struct
+    let map f v = match v with
+      | Some v -> Some (f v)
+      | None -> None
+
+    let ( >>= ) v f = map f v
+  end
+
+module BaseIso = struct
+  open Encore.Bijection
+
+  let flip (a, b) = (b, a)
+
+  let int64 =
+    let tag = ("string", "int64") in
+    make_exn
+      ~tag
+      ~fwd:(Exn.safe_exn tag Int64.of_string)
+      ~bwd:(Exn.safe_exn (flip tag) Int64.to_string)
+
+  let cstruct =
+    Encore.Bijection.make_exn
+      ~tag:("cstruct", "bigarray")
+      ~fwd:Cstruct.of_bigarray
+      ~bwd:Cstruct.to_bigarray
+
+  let char_elt chr =
+    Exn.element ~tag:(Fmt.strf "char:%02x" (Char.code chr)) ~compare:Char.equal chr
+
+  let string_elt str =
+    Exn.element ~tag:str ~compare:String.equal str
+end
 
 module MakeDecoder (A: S.ANGSTROM) = struct
   (* XXX(dinosaure): This decoder is on top of some assertion about
