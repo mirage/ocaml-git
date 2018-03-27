@@ -28,17 +28,14 @@ module type S = sig
   type nonrec t = t
 
   module Hash: S.HASH
-  module D: S.DECODER
-    with type t = t
-     and type init = Cstruct.t
-     and type error = Error.never
-  module E: S.ENCODER
-    with type t = t
-     and type error = Error.never
-  module A: sig type nonrec t = t val decoder : int -> t Angstrom.t end
-  module F: S.FARADAY with type t = t
-  include S.DIGEST with type t := t and type hash := Hash.t
-  include S.BASE with type t := t
+  module MakeMeta: functor (Meta: Encore.Meta.S) -> sig val p: t Meta.t end
+
+  module A: S.DESC    with type 'a t = 'a Angstrom.t and type e = t
+  module M: S.DESC    with type 'a t = 'a Encore.Encoder.t and type e = t
+  module D: S.DECODER with type t = t and type init = Cstruct.t and type error = Error.Decoder.t
+  module E: S.ENCODER with type t = t and type error = Error.never
+  include S.DIGEST    with type t := t and type hash := Hash.t
+  include S.BASE      with type t := t
 
   val length: t -> int64
   val of_cstruct: Cstruct.t -> t
@@ -59,162 +56,50 @@ module Make (H: S.HASH): S with module Hash = H = struct
   let of_string x: t = Cstruct.of_string x
   let to_string (x: t) = Cstruct.to_string x
 
-  module A = struct
-    type nonrec t = t
-
-    let decoder len =
-      let buf = Buffer.create len in
-      let open Angstrom in
-
-      fix @@ fun m ->
-      available >>= fun n ->
-      match n with
-      | 0 ->
-        peek_char
-        >>= (function
-            | Some _ -> commit *> m
-            | None ->
-              let cs = Cstruct.of_string (Buffer.contents buf) in
-              Buffer.clear buf;
-              return cs <* commit)
-      | n ->
-        take n >>= fun chunk ->
-        Buffer.add_string buf chunk;
-        commit *> m
-  end
-
-  module F = struct
-    type nonrec t = t
-
-    let length: t -> int64 = fun t ->
-      Int64.of_int (Cstruct.len t)
-
-    let encoder: t Farfadet.t = fun e t ->
-      Farfadet.bigstring e (Cstruct.to_bigarray t)
-  end
-
-  module D = struct
-    (* XXX(dinosaure): may be need to compare the performance between
-       this module and [Helper.MakeDecoder(A)]. *)
-
-    type nonrec t = t
-    type init = Cstruct.t
-    type error = Error.never
-
-    type decoder =
-      { res   : t
-      ; cur   : Cstruct.t
-      ; abs   : int
-      ; owner : bool
-      ; final : bool }
-
-    let pp_error = Error.pp_never
-
-    let default raw =
-      Log.debug (fun l -> l ~header:"default" "Starting to decode a Blob.");
-
-      { res   = raw
-      ; cur   = Cstruct.sub raw 0 0
-      ; abs   = 0
-      ; owner = false
-      ; final = false }
-
-    let ensure decoder =
-      let available = Cstruct.len decoder.res - decoder.abs in
-
-      if available < Cstruct.len decoder.cur
-      then begin
-        let size = ref (Cstruct.len decoder.res) in
-        while !size - decoder.abs < Cstruct.len decoder.cur
-        do size := (3 * !size) / 2 done;
-
-        Log.debug (fun l -> l ~header:"ensure" "Growing the internal buffer to decode \
-                                                the Blob object: from %d to %d."
-                      (Cstruct.len decoder.res)
-                      !size);
-
-        let res' = Cstruct.create !size in
-        Cstruct.blit decoder.res 0 res' 0 decoder.abs;
-        { decoder with res = res'; owner = true; }
-      end else decoder
-
-    let cstruct_copy cs =
-      let ln = Cstruct.len cs in
-      let rs = Cstruct.create ln in
-      Cstruct.blit cs 0 rs 0 ln;
-      rs
-
-    let eval decoder =
-      if decoder.final
-      then `End (decoder.cur, if decoder.owner then (decoder.res : t) else (cstruct_copy decoder.res : t))
-      (* XXX(dinosaure): [finish] takes care about [decoder.res] -
-         sub exactly the blob part. *)
-      else begin
-        let decoder = ensure decoder in
-        Cstruct.blit decoder.cur 0 decoder.res decoder.abs (Cstruct.len decoder.cur);
-        `Await { decoder with abs = decoder.abs + Cstruct.len decoder.cur }
-      end
-
-    let refill input decoder =
-      Ok { decoder with cur = input }
-
-    let finish decoder =
-      let res' = Cstruct.sub decoder.res 0 decoder.abs in
-      { decoder with final = true
-                   ; res = res' }
-
-    let to_result input = Ok (cstruct_copy input)
-    (* XXX(dinosaure): we need to take the ownership by default but need to improve the API (TODO). *)
-  end
-
-  module E = struct
-
-    type nonrec t = t
-    type init = t
-    type error = Error.never
-
-    type encoder =
-      { abs  : int
-      ; off  : int
-      ; pos  : int
-      ; len  : int
-      ; blob : t }
-
-    let pp_error = Error.pp_never
-
-    let default blob =
-      { abs = 0
-      ; off = 0
-      ; pos = 0
-      ; len = 0
-      ; blob }
-
-    let eval raw encoder =
-      if Cstruct.len encoder.blob = encoder.abs
-      then `End (encoder, Cstruct.len encoder.blob)
-      else begin
-        let n = min (Cstruct.len encoder.blob - encoder.abs) encoder.len in
-
-        Cstruct.blit encoder.blob encoder.abs raw encoder.off encoder.len;
-
-        if encoder.abs + n = Cstruct.len encoder.blob
-        then `End ({ encoder with abs = encoder.abs + n
-                                ; pos = encoder.pos + n },
-                   Cstruct.len encoder.blob )
-        else `Flush ({ encoder with abs = encoder.abs + n
-                                  ; pos = encoder.pos + n })
-      end
-
-    let used encoder = encoder.pos
-
-    let flush off len encoder =
-      { encoder with off = off
-                   ; len = len
-                   ; pos = 0 }
-  end
-
   let length: t -> int64 = fun t ->
     Int64.of_int (Cstruct.len t)
+
+  module MakeMeta (Meta: Encore.Meta.S) =
+    struct
+      type e = t
+
+      open Helper.BaseIso
+
+      type 'a t = 'a Meta.t
+
+      module Meta = Encore.Meta.Make(Meta)
+      open Encore.Bijection
+      open Encore.Either
+      open Meta
+
+      let blob =
+        let loop m =
+          let cons = Exn.cons ~tag:"cons" <$> (((cstruct <$> bigstring_buffer) <* commit) <*> m) in
+          let nil = pure ~compare:(fun () () -> 0) () in
+
+          make_exn
+            ~tag:("either", "list")
+            ~fwd:(function
+              | L cons -> cons
+              | R () -> [])
+            ~bwd:(function
+              | _ :: _ as lst -> L lst
+              | [] -> R ())
+          <$> peek cons nil in
+        fix loop
+
+      let p =
+        make_exn
+          ~tag:("cstruct list", "cstruct")
+          ~fwd:Cstruct.concat
+          ~bwd:(fun x -> [ x ])
+        <$> blob
+    end
+
+  module A = MakeMeta(Encore.Proxy_decoder.Impl)
+  module M = MakeMeta(Encore.Proxy_encoder.Impl)
+  module D = Helper.MakeDecoder(A)
+  module E = Helper.MakeEncoder(M)
 
   let digest cs =
     let ctx = Hash.Digest.init () in
