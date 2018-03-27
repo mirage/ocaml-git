@@ -175,7 +175,7 @@ module Common
   end
 
   module Pq = Psq.Make(Store.Hash)(Node)
-  module Q = Minienc.Queue
+  module Q = Encore.FQueue
 
   exception Store of Store.error
 
