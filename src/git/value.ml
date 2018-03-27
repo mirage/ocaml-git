@@ -79,23 +79,23 @@ module type RAW = sig
   val of_raw_with_header: Cstruct.t -> (t, DecoderRaw.error) result
 end
 
-module Make (H : S.HASH) (I : S.INFLATE) (D : S.DEFLATE)
-  : S with module Hash    = H
-       and module Inflate = I
-       and module Deflate = D
-       and module Blob    = Blob.Make(H)
-       and module Commit  = Commit.Make(H)
-       and module Tree    = Tree.Make(H)
-       and module Tag     = Tag.Make(H)
+module Make (Hash: S.HASH) (Inflate: S.INFLATE) (Deflate: S.DEFLATE)
+  : S with module Hash    = Hash
+       and module Inflate = Inflate
+       and module Deflate = Deflate
+       and module Blob    = Blob.Make(Hash)
+       and module Commit  = Commit.Make(Hash)
+       and module Tree    = Tree.Make(Hash)
+       and module Tag     = Tag.Make(Hash)
 = struct
-  module Hash = H
-  module Inflate = I
-  module Deflate = D
+  module Blob   = Blob.Make(Hash)
+  module Commit = Commit.Make(Hash)
+  module Tree   = Tree.Make(Hash)
+  module Tag    = Tag.Make(Hash)
 
-  module Blob   = Blob.Make(H)
-  module Commit = Commit.Make(H)
-  module Tree   = Tree.Make(H)
-  module Tag    = Tag.Make(H)
+  module Hash = Hash
+  module Inflate = Inflate
+  module Deflate = Deflate
 
   type t =
     | Blob   of Blob.t
@@ -278,23 +278,23 @@ module Make (H : S.HASH) (I : S.INFLATE) (D : S.DEFLATE)
   module Map = Map.Make(struct type nonrec t = t let compare = compare end)
 end
 
-module Raw
-    (H : S.HASH)
-    (I : S.INFLATE)
-    (D : S.DEFLATE)
-    : RAW with module Hash = H
-           and module Inflate = I
-           and module Deflate = D
-           and module Value = Make(H)(I)(D)
-           and module Blob = Blob.Make(H)
-           and module Commit = Commit.Make(H)
-           and module Tree = Tree.Make(H)
-           and module Tag = Tag.Make(H)
-           and type t = Make(H)(I)(D).t
+module Raw (Hash: S.HASH) (Inflate: S.INFLATE) (Deflate: S.DEFLATE)
+  : RAW with module Hash = Hash
+         and module Inflate = Inflate
+         and module Deflate = Deflate
+         and module Value = Make(Hash)(Inflate)(Deflate)
+         and module Blob = Blob.Make(Hash)
+         and module Commit = Commit.Make(Hash)
+         and module Tree = Tree.Make(Hash)
+         and module Tag = Tag.Make(Hash)
+         and type t = Make(Hash)(Inflate)(Deflate).t
 = struct
-  module Value = Make(H)(I)(D)
 
+  module Value = Make(Hash)(Inflate)(Deflate)
   include Value
+
+  let src = Logs.Src.create "git.value.raw" ~doc:"logs git's value raw computation"
+  module Log = (val Logs.src_log src: Logs.LOG)
 
   module DecoderRaw = Helper.MakeDecoder(A)
   module EncoderRaw = Helper.MakeEncoder(M)

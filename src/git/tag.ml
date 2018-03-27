@@ -41,9 +41,9 @@ module type S = sig
   val tagger: t -> User.t option
 end
 
-module Make (H: S.HASH): S with module Hash = H = struct
+module Make (Hash: S.HASH): S with module Hash = Hash = struct
 
-  module Hash = H
+  module Hash = Hash
 
   type t =
     { obj     : Hash.t

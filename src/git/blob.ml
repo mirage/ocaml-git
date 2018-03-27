@@ -44,9 +44,9 @@ module type S = sig
   val to_string: t -> string
 end
 
-module Make (H: S.HASH): S with module Hash = H = struct
+module Make (Hash: S.HASH): S with module Hash = Hash = struct
 
-  module Hash = H
+  module Hash = Hash
 
   type nonrec t = t
 

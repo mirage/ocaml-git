@@ -70,6 +70,6 @@ module type S = sig
   val tagger: t -> User.t option
 end
 
-module Make (H: S.HASH): S with module Hash = H
+module Make (Hash: S.HASH): S with module Hash = Hash
 (** The {i functor} to make the OCaml representation of the Git Tag
     object by a specific hash implementation. *)

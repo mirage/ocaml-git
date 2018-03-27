@@ -143,8 +143,9 @@ module type IO = sig
     -> t -> (unit, error) result Lwt.t
 end
 
-module Make(H : S.HASH): S with module Hash = H = struct
-  module Hash = H
+module Make (Hash: S.HASH): S with module Hash = Hash = struct
+
+  module Hash = Hash
 
   type nonrec t = t
 
@@ -250,11 +251,11 @@ module Make(H : S.HASH): S with module Hash = H = struct
   module E = Helper.MakeEncoder(M)
 end
 
-module IO (H : S.HASH) (FS: S.FS) = struct
+module IO (Hash: S.HASH) (FS: S.FS) = struct
 
   module FS = Helper.FS(FS)
 
-  include Make(H)
+  include Make(Hash)
 
   module Encoder = struct
     module E = struct

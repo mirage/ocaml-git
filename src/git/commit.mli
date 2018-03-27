@@ -20,7 +20,6 @@
 module type S = sig
 
   module Hash: S.HASH
-  (** The [Hash] module used to make the implementation. *)
 
   type t
   (** A Git Commit object. Which specifies the top-level {!Tree.t} for
@@ -80,6 +79,6 @@ module type S = sig
       behaviour. *)
 end
 
-module Make (H: S.HASH): S with module Hash = H
+module Make (Hash: S.HASH): S with module Hash = Hash
 (** The {i functor} to make the OCaml representation of the Git Commit
     object by a specific hash implementation. *)

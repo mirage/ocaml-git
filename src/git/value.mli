@@ -21,25 +21,13 @@
 module type S = sig
 
   module Hash: S.HASH
-  (** The [Hash] module used to make the implementation. *)
-
   module Inflate: S.INFLATE
-  (** The [Inflate] module used to make the implementation. *)
-
   module Deflate: S.DEFLATE
-  (** The [Deflate] module used to make the implementation. *)
 
   module Blob: Blob.S with module Hash = Hash
-  (** The {!Blob} module. *)
-
   module Commit: Commit.S with module Hash = Hash
-  (** The {!Commit} module. *)
-
   module Tree: Tree.S with module Hash = Hash
-  (** The {!Tree} module. *)
-
   module Tag: Tag.S with module Hash = Hash
-  (** The {!Tag} module. *)
 
   type t =
     | Blob   of Blob.t   (** The {!Blob.t} OCaml value. *)
@@ -130,14 +118,14 @@ module type RAW = sig
       Git object it is. *)
 end
 
-module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE): S
-  with module Hash = H
-   and module Inflate = I
-   and module Deflate = D
-   and module Blob = Blob.Make(H)
-   and module Commit = Commit.Make(H)
-   and module Tree = Tree.Make(H)
-   and module Tag = Tag.Make(H)
+module Make (Hash: S.HASH) (Inflate: S.INFLATE) (Deflate: S.DEFLATE): S
+  with module Hash = Hash
+   and module Inflate = Inflate
+   and module Deflate = Deflate
+   and module Blob = Blob.Make(Hash)
+   and module Commit = Commit.Make(Hash)
+   and module Tree = Tree.Make(Hash)
+   and module Tag = Tag.Make(Hash)
 (** The {i functor} to make the OCaml representation of the Git object
     by a specific hash implementation, an {!S.INFLATE} implementation
     for the decompression and a {!S.DEFLATE} implementation for the
@@ -155,16 +143,16 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE): S
    Types [V1.t] and [V2.t] are equal.
 *)
 
-module Raw (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE): RAW
-  with module Hash = H
-   and module Inflate = I
-   and module Deflate = D
-   and module Value = Make(H)(I)(D)
-   and module Blob = Blob.Make(H)
-   and module Commit = Commit.Make(H)
-   and module Tree = Tree.Make(H)
-   and module Tag = Tag.Make(H)
-   and type t = Make(H)(I)(D).t
+module Raw (Hash: S.HASH) (Inflate: S.INFLATE) (Deflate: S.DEFLATE): RAW
+  with module Hash = Hash
+   and module Inflate = Inflate
+   and module Deflate = Deflate
+   and module Value = Make(Hash)(Inflate)(Deflate)
+   and module Blob = Blob.Make(Hash)
+   and module Commit = Commit.Make(Hash)
+   and module Tree = Tree.Make(Hash)
+   and module Tag = Tag.Make(Hash)
+   and type t = Make(Hash)(Inflate)(Deflate).t
 (** The {i functor} to make the OCaml representation of the Git object
     by a specific hash implementation, and {!S.INFLATE} implementation
     for the decompression and a {!S.DEFLATE} implementation for the

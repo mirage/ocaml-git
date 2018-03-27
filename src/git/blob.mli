@@ -28,7 +28,6 @@ module type S = sig
       hash implementation. *)
 
   module Hash: S.HASH
-  (** The [Hash] module used to make the implementation. *)
   module MakeMeta: functor (Meta: Encore.Meta.S) -> sig val p: t Meta.t end
 
   module A: S.DESC    with type 'a t = 'a Angstrom.t and type e = t
@@ -60,6 +59,6 @@ module type S = sig
       value - in other words, the content of your file. *)
 end
 
-module Make (H: S.HASH): S with module Hash = H
+module Make (Hash: S.HASH): S with module Hash = Hash
 (** The {i functor} to make the OCaml representation of the Git Blob
     object by a specific hash implementation. *)

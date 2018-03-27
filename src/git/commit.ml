@@ -50,9 +50,9 @@ sig
   val compare_by_date: t -> t -> int
 end
 
-module Make (H: S.HASH): S with module Hash = H = struct
+module Make (Hash: S.HASH): S with module Hash = Hash = struct
 
-  module Hash = H
+  module Hash = Hash
 
   (* XXX(dinosaure): git seems to be very resilient with the commit.
      Indeed, it's not a mandatory to have an author or a committer and

@@ -20,7 +20,6 @@
 module type S = sig
 
   module Hash: S.HASH
-  (** The [Hash] module used to make the implementation. *)
 
   type entry =
     { perm : perm
@@ -70,6 +69,6 @@ module type S = sig
   val iter: (entry -> unit) -> t -> unit
 end
 
-module Make (H : S.HASH): S with module Hash = H
+module Make (Hash: S.HASH): S with module Hash = Hash
 (** The {i functor} to make the OCaml representation of the Git Tree
     object by a specific hash implementation. *)
