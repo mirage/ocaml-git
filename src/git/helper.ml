@@ -545,32 +545,6 @@ let fdigest: type t hash.
     in
     loop encoder
 
-let digest
-  : type t hash. (module S.IDIGEST with type t = hash)
-    -> (module S.FARADAY with type t = t)
-    -> kind:string
-  -> t
-  -> hash
-  = fun digest faraday ~kind value ->
-    let module Digest = (val digest) in
-    let module F      = (val faraday) in
-    let hdr = Fmt.strf "%s %Ld\000" kind (F.length value) in
-    let ctx = Digest.init () in
-    let raw = Cstruct.create (Int64.to_int (F.length value)) in (* XXX(dinosaure): to digest. *)
-    let enc = Faraday.of_bigstring (Cstruct.to_bigarray raw) in
-    Digest.feed ctx (Cstruct.of_string hdr);
-    F.encoder enc value;
-    Faraday.close enc;
-    Faraday.serialize enc (fun iovecs ->
-        let len = List.fold_left (fun acc -> function
-            | { Faraday.buffer = buf; off; len; } ->
-              Digest.feed ctx (Cstruct.of_bigarray ~off ~len buf); acc + len)
-            0 iovecs
-        in `Ok len)
-    |> function
-    | `Close -> Digest.get ctx
-    | `Yield -> assert false
-
 module type ENCODER = sig
   type state
   type result

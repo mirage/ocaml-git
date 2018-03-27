@@ -95,15 +95,6 @@ module MakeDeflater (Z: S.DEFLATE) (M: S.DESC with type 'a t = 'a Encore.Encoder
    and type init = int * M.e * int * Cstruct.t
    and type error = [ `Deflate of Z.error ]
 
-(** [digest (module Hash) (module Faraday) ~kind value] digests
-    [value] with the [Hash] implementation and use the [Faraday]
-    encoder to {i stream} on the [Hash.digest] function. [kind] is the
-    kind of the [value] (Commit, Blob, etc.) to make the Git header in
-    top of the serialized [value]. *)
-val digest:
-  (module S.IDIGEST with type t = 'hash) ->
-  (module S.FARADAY with type t = 't) -> kind:string -> 't -> 'hash
-
 (** [fdigest (module Hash) (module Encoder) ?capacity ~tmp ~kind
     ~length value] digests [value] with the [Hash] implementation and use
     the [Encoder] to stream on the [Hash.digest] function.
