@@ -62,7 +62,7 @@ module BaseIso = struct
     Exn.element ~tag:str ~compare:String.equal str
 end
 
-module MakeDecoder (A: S.ANGSTROM) = struct
+module MakeDecoder (A: S.DESC with type 'a t = 'a Angstrom.t) = struct
   (* XXX(dinosaure): This decoder is on top of some assertion about
      the decoding of a Git object. [Angstrom] can not consume all
      input (when we have an alteration specifically) and the client
@@ -88,13 +88,13 @@ module MakeDecoder (A: S.ANGSTROM) = struct
 
   type error = Error.Decoder.t
   type init = Cstruct.t
-  type t = A.t
+  type t = A.e
 
   let pp_error ppf = function
     | #Error.Decoder.t as err -> Error.Decoder.pp_error ppf err
 
   type decoder =
-    { state    : Angstrom.bigstring -> off:int -> len:int -> Angstrom.Unbuffered.more -> A.t Angstrom.Unbuffered.state
+    { state    : Angstrom.bigstring -> off:int -> len:int -> Angstrom.Unbuffered.more -> A.e Angstrom.Unbuffered.state
     ; final    : Angstrom.Unbuffered.more
     ; internal : Cstruct.t
     ; max      : int }
@@ -117,7 +117,7 @@ module MakeDecoder (A: S.ANGSTROM) = struct
     Log.debug (fun l ->
         l "Starting to decode a Git object with a internal buffer (%d)." len);
     let open Angstrom.Unbuffered in
-    { state = (match parse A.decoder with
+    { state = (match parse A.p with
           | Done (committed, value)         -> kdone (committed, value)
           | Fail (committed, path, err)     -> kfail (committed, path, err)
           | Partial { committed; continue } ->
@@ -223,7 +223,7 @@ module MakeDecoder (A: S.ANGSTROM) = struct
         Ok { decoder with internal = internal }
 
   let to_result input =
-    Angstrom.parse_bigstring A.decoder (Cstruct.to_bigarray input)
+    Angstrom.parse_bigstring A.p (Cstruct.to_bigarray input)
     |> function
     | Ok _ as v -> v
     | Error err -> Error.(v @@ Decoder.err_result input err)
@@ -232,7 +232,7 @@ module MakeDecoder (A: S.ANGSTROM) = struct
     { decoder with final = Angstrom.Unbuffered.Complete }
 end
 
-module MakeInflater (Z: S.INFLATE) (A: S.ANGSTROM) = struct
+module MakeInflater (Z: S.INFLATE) (A: S.DESC with type 'a t = 'a Angstrom.t) = struct
 
   let src = Logs.Src.create "git.inflater.decoder"
       ~doc:"logs git's internal inflater/decoder"
@@ -240,7 +240,7 @@ module MakeInflater (Z: S.INFLATE) (A: S.ANGSTROM) = struct
 
   module D = MakeDecoder(A)
 
-  type t = A.t
+  type t = A.e
   type init = Z.window * Cstruct.t * Cstruct.t
 
   type error =

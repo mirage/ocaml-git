@@ -53,8 +53,8 @@ end
     This decoder is implemented on top of some assertions (see comment
     in the [helper.ml] file for more informations), don't use it
     outside the scope of ocaml-git. *)
-module MakeDecoder (A :S.ANGSTROM): S.DECODER
-  with type t = A.t
+module MakeDecoder (A: S.DESC with type 'a t = 'a Angstrom.t): S.DECODER
+  with type t = A.e
    and type init = Cstruct.t
    and type error = Error.Decoder.t
 
@@ -65,8 +65,8 @@ module MakeDecoder (A :S.ANGSTROM): S.DECODER
     assertions - it's an extension of the previous decoder with an
     inflator. Then, this decoder decodes both the inflated flow and
     the serialized flow with fixed-size buffers. *)
-module MakeInflater (Z: S.INFLATE) (A: S.ANGSTROM): S.DECODER
-  with type t = A.t
+module MakeInflater (Z: S.INFLATE) (A: S.DESC with type 'a t = 'a Angstrom.t): S.DECODER
+  with type t = A.e
    and type init = Z.window * Cstruct.t * Cstruct.t
    and type error = [ Error.Decoder.t | `Inflate of Z.error ]
 
