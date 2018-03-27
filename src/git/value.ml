@@ -38,27 +38,28 @@ module type S = sig
 
   val pp_kind : [ `Commit | `Blob | `Tree | `Tag ] Fmt.t
 
-  module A : sig
-    include S.ANGSTROM with type t = t
+  module MakeMeta: functor (Meta: Encore.Meta.S) ->
+                   sig
+                     val commit: t Meta.t
+                     val blob: t Meta.t
+                     val tree: t Meta.t
+                     val tag: t Meta.t
 
-    val kind : [ `Commit | `Tree | `Tag | `Blob ] Angstrom.t
-    val length : int64 Angstrom.t
+                     val p: t Meta.t
+                   end
+
+  module A: sig
+    include S.DESC with type 'a t = 'a Angstrom.t and type e = t
+
+    val kind: [ `Commit | `Blob | `Tree | `Tag ] t
+    val length: int64 t
   end
 
-  module F: S.FARADAY with type t = t
-  module D: S.DECODER
-    with type t = t
-     and type init = Inflate.window * Cstruct.t * Cstruct.t
-     and type error = [ Error.Decoder.t
-                      | `Inflate of Inflate.error ]
-  module M: S.MINIENC with type t = t
-  module E: S.ENCODER
-    with type t = t
-     and type init = int * t * int * Cstruct.t
-     and type error = [ `Deflate of Deflate.error ]
-
-  include S.DIGEST with type t := t and type hash := Hash.t
-  include S.BASE with type t := t
+  module M: S.DESC    with type 'a t = 'a Encore.Encoder.t and type e = t
+  module D: S.DECODER with type t = t and type init = Inflate.window * Cstruct.t * Cstruct.t and type error = [ Error.Decoder.t | `Inflate of Inflate.error ]
+  module E: S.ENCODER with type t = t and type init = int * t * int * Cstruct.t and type error = [ `Deflate of Deflate.error ]
+  include S.DIGEST    with type t := t and type hash := Hash.t
+  include S.BASE      with type t := t
 
   val length: t -> int64
 end
@@ -142,111 +143,106 @@ module Make (H : S.HASH) (I : S.INFLATE) (D : S.DEFLATE)
     include (val Logs.src_log src : Logs.LOG)
   end
 
-  module A =
-  struct
-    type nonrec t = t
+  module MakeMeta (Meta: Encore.Meta.S) =
+    struct
+      type e = t
 
-    let kind =
-      let open Angstrom in
-      (((string "blob" *> return `Blob) <?> "blob")
-       <|> ((string "commit" *> return `Commit) <?> "commit")
-       <|> ((string "tag" *> return `Tag) <?> "tag")
-       <|> ((string "tree" *> return `Tree) <?> "tree"))
-      <?> "kind" <* commit >>= fun kind ->
-      Log.debug (fun l -> l "Kind of the current object: %s."
-                    (match kind with
-                     | `Commit -> "commit"
-                     | `Blob -> "blob"
-                     | `Tag -> "tag"
-                     | `Tree -> "tree"));
-      return kind
+      open Helper.BaseIso
 
-    let int64 =
-      let open Angstrom in
-      take_while (function '0' .. '9' -> true | _ -> false)
-      >>| Int64.of_string
-      <?> "size" <* commit >>= fun size ->
-      Log.debug (fun l -> l "Length of the current object: %Ld." size);
-      return size
+      module Iso =
+        struct
+          open Encore.Bijection
 
-    let length = int64
+          let kind =
+            let tag = ("string", "kind") in
+            make_exn
+              ~tag
+              ~fwd:(function
+                | "tree" -> `Tree
+                | "blob" -> `Blob
+                | "commit" -> `Commit
+                | "tag" -> `Tag
+                | s -> Exn.fail s "kind")
+              ~bwd:(function
+                | `Tree -> "tree"
+                | `Blob -> "blob"
+                | `Tag -> "tag"
+                | `Commit -> "commit")
 
-    let decoder =
-      let open Angstrom in
-      kind <* take 1
-      >>= fun kind -> int64 <* take 1
-      >>= fun length -> match kind with
-      | `Commit -> Commit.A.decoder >>| fun commit -> Commit commit
-      | `Blob   -> Blob.A.decoder (Int64.to_int length) >>| fun blob -> Blob blob
-          (* XXX(dinosaure): need to take care about this cast. TODO! *)
-      | `Tree   -> Tree.A.decoder   >>| fun tree -> Tree tree
-      | `Tag    -> Tag.A.decoder    >>| fun tag -> Tag tag
-  end
+          let value =
+            make_exn
+              ~tag:("kind * length * value", "value")
+              ~fwd:(fun (kind, _, value) ->
+                match kind, value with
+                | `Tree, Tree _     -> value
+                | `Commit, Commit _ -> value
+                | `Blob, Blob _     -> value
+                | `Tag, Tag _       -> value
+                | _, _              -> Exn.fail "kind" "value")
+              ~bwd:(function
+                | Tree tree     -> `Tree, Tree.length tree, Tree tree
+                | Commit commit -> `Commit, Commit.length commit, Commit commit
+                | Tag tag       -> `Tag, Tag.length tag, Tag tag
+                | Blob blob     -> `Blob, Blob.length blob, Blob blob)
+        end
 
-  module F =
-  struct
-    type nonrec t = t
+      module Commit = Commit.MakeMeta(Meta)
+      module Blob = Blob.MakeMeta(Meta)
+      module Tree = Tree.MakeMeta(Meta)
+      module Tag = Tag.MakeMeta(Meta)
 
-    let length = function
-      | Commit commit -> Commit.F.length commit
-      | Tag tag       -> Tag.F.length tag
-      | Tree tree     -> Tree.F.length tree
-      | Blob blob     -> Blob.F.length blob
+      type 'a t = 'a Meta.t
 
-    let string_of_value = function
-      | Commit _ -> "commit"
-      | Blob _   -> "blob"
-      | Tree _   -> "tree"
-      | Tag _    -> "tag"
+      module Meta = Encore.Meta.Make(Meta)
+      open Encore.Bijection
+      open Meta
 
-    let int64 e x = Farfadet.string e (Int64.to_string x)
+      let is_digit = function '0' .. '9' -> true | _ -> false
+      let length = int64 <$> while0 is_digit
+      let kind = Iso.kind <$> (const "tree" <|> const "commit" <|> const "blob" <|> const "tag")
 
-    let sp = ' '
-    let nl = '\000'
+      let commit =
+        make_exn ~tag:("commit", "value") ~fwd:(fun commit -> Commit commit)
+          ~bwd:(function
+            | Commit commit -> commit
+            | _ -> Exn.fail "value" "commit")
+        <$> Commit.p
 
-    let encoder e x =
-      let open Farfadet in
-      eval e [ !!string; char $ sp; !!int64; char $ nl ]
-        (string_of_value x) (length x);
-      match x with
-      | Commit commit -> Commit.F.encoder e commit
-      | Blob blob     -> Blob.F.encoder e blob
-      | Tag tag       -> Tag.F.encoder e tag
-      | Tree tree     -> Tree.F.encoder e tree
-  end
+      let blob =
+        make_exn ~tag:("blob", "value") ~fwd:(fun blob -> Blob blob)
+          ~bwd:(function
+            | Blob blob -> blob
+            | _ -> Exn.fail "value" "blob")
+        <$> Blob.p
 
-  module M = struct
-    type nonrec t = t
+      let tree =
+        make_exn ~tag:("tree", "value") ~fwd:(fun tree -> Tree tree)
+          ~bwd:(function
+            | Tree tree -> tree
+            | _ -> Exn.fail "value" "tree")
+        <$> Tree.p
 
-    open Minienc
+      let tag =
+        make_exn ~tag:("tag", "value") ~fwd:(fun tag -> Tag tag)
+          ~bwd:(function
+            | Tag tag -> tag
+            | _ -> Exn.fail "value" "tag")
+        <$> Tag.p
 
-    let length = function
-      | Blob blob -> Blob.F.length blob
-      | Tree tree -> Tree.F.length tree
-      | Tag tag -> Tag.F.length tag
-      | Commit commit -> Commit.F.length commit
+      let p =
+        let value kind p =
+          ((Iso.kind <$> const kind) <* (char_elt ' ' <$> any))
+          <*> (length <* (char_elt '\000' <$> any))
+          <*> p in
+        (Exn.compose obj3 Iso.value)
+        <$> ((value "commit" commit)
+             <|> (value "tree" tree)
+             <|> (value "blob" blob)
+             <|> (value "tag" tag))
+    end
 
-    let string_of_value = function
-      | Commit _ -> "commit"
-      | Blob _   -> "blob"
-      | Tree _   -> "tree"
-      | Tag _    -> "tag"
-
-    let sp = ' '
-    let nl = '\000'
-
-    let encoder x k e =
-      (write_string (string_of_value x)
-       @@ write_char sp
-       @@ write_string (Int64.to_string (length x))
-       @@ write_char nl
-       @@ (match x with
-           | Tree tree -> Tree.M.encoder tree
-           | Tag tag -> Tag.M.encoder tag
-           | Blob blob -> write_bigstring (Cstruct.to_bigarray (blob :> Cstruct.t))
-           | Commit commit -> Commit.M.encoder commit) k)
-      e
-  end
+  module A = MakeMeta(Encore.Proxy_decoder.Impl)
+  module M = MakeMeta(Encore.Proxy_encoder.Impl)
 
   let length = function
     | Commit commit -> Commit.length commit

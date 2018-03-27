@@ -59,51 +59,28 @@ module type S = sig
   val pp_kind: [ `Commit | `Blob | `Tree | `Tag ] Fmt.t
   (** [pp_kind ppf kind] is a human readable pretty-printer of {!kind}. *)
 
+  module MakeMeta: functor (Meta: Encore.Meta.S) ->
+                   sig
+                     val commit: t Meta.t
+                     val blob: t Meta.t
+                     val tree: t Meta.t
+                     val tag: t Meta.t
+
+                     val p: t Meta.t
+                   end
+
   module A: sig
-    include S.ANGSTROM with type t = t
+    include S.DESC with type 'a t = 'a Angstrom.t and type e = t
 
-    val kind: [ `Commit | `Tree | `Tag | `Blob ] Angstrom.t
-    (** A convenience parser to recognize the kind of the Git object.
-        It's used in the {i loose} implementation and it's better to
-        provide in the interface this parser. *)
-
-    val length: int64 Angstrom.t
-    (** A convenience parser to get the length of of the Git object.
-        It's used in the {i loose} implementation and it's better to
-        provide in the interface this parser. *)
+    val kind: [ `Commit | `Blob | `Tree | `Tag ] t
+    val length: int64 t
   end
-  (** The Angstrom decoder of the Git object. *)
 
-  module F: S.FARADAY  with type t = t
-  (** The Faraday encoder of the Git object. *)
-
-  module D: S.DECODER
-    with type t = t
-     and type init = Inflate.window * Cstruct.t * Cstruct.t
-     and type error = [ Error.Decoder.t | `Inflate of Inflate.error ]
-  (** The decoder of the Git object. We constraint the input to be an
-      {!Inflate.window} and a {Cstruct.t} which used by the {Inflate}
-      module and an other {Cstruct.t} as an internal buffer.
-
-      All error from the {!Inflate} module is relayed to the
-      [`Inflate] error value. *)
-
-  module M: S.MINIENC  with type t = t
-  (** The {!Minienc} encoder of the Git object. *)
-
-  module E: S.ENCODER
-    with type t = t
-     and type init = int * t * int * Cstruct.t
-     and type error = [ `Deflate of Deflate.error ]
-  (** The encoder (which uses a {!Minienc.encoder}) of the Git object.
-      We constraint the output to be a {Cstruct.t}. This encoder needs
-      the level of the compression, the value {!t}, the memory
-      consumption of the encoder (in bytes) and an internal buffer
-      between the compression and the encoder.
-
-      All error from the {!Deflate} module is relayed to the
-      [`Deflate] error value. *)
-
+  module M: S.DESC    with type 'a t = 'a Encore.Encoder.t and type e = t
+  module D: S.DECODER with type t = t and type init = Inflate.window * Cstruct.t * Cstruct.t and type error = [ Error.Decoder.t | `Inflate of Inflate.error ]
+  module E: S.ENCODER with type t = t and type init = int * t * int * Cstruct.t and type error = [ `Deflate of Deflate.error ]
+  include S.DIGEST    with type t := t and type hash := Hash.t
+  include S.BASE      with type t := t
 
   val length: t -> int64
 end
