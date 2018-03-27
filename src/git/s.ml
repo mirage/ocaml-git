@@ -55,33 +55,21 @@ module type DECODER = sig
   type error
   type decoder
 
-  val pp_error  : error Fmt.t
-
-  val to_result : Cstruct.t -> (t, error) result
-
-  val default   : init -> decoder
-  val eval      : decoder -> [ `Await of decoder | `End of (Cstruct.t * t) | `Error of (Cstruct.t * error) ]
-  val refill    : Cstruct.t -> decoder -> (decoder, error) result
-  val finish    : decoder -> decoder
+  val pp_error: error Fmt.t
+  val to_result: Cstruct.t -> (t, error) result
+  val default: init -> decoder
+  val eval: decoder -> [ `Await of decoder | `End of (Cstruct.t * t) | `Error of (Cstruct.t * error) ]
+  val refill: Cstruct.t -> decoder -> (decoder, error) result
+  val finish: decoder -> decoder
 end
 
-module type ANGSTROM = sig
-  type t
+module type META = functor (Meta: Encore.Meta.S) -> sig type e val p: e Meta.t end
 
-  val decoder : t Angstrom.t
-end
+module type DESC = sig
+  type 'a t
+  type e
 
-module type FARADAY = sig
-  type t
-
-  val encoder : t Farfadet.t
-  val length  : t -> int64
-end
-
-module type MINIENC = sig
-  type t
-
-  val encoder : t -> (Minienc.encoder -> 'a Minienc.state) -> Minienc.encoder -> 'a Minienc.state
+  val p: e t
 end
 
 module type INFLATE = sig
