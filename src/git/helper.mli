@@ -23,13 +23,6 @@
     like ["(name %a)" pp value]. *)
 val ppe : name:string -> 'a Fmt.t -> 'a Fmt.t
 
-module BaseBytes:
-sig
-  include S.BASE with type t = Bytes.t
-
-  val to_hex : t -> string
-  val of_hex : string -> t
-end
 
 (** [MakeDecoder] makes a module which respects the interface
     {!S.DECODER} from an angstrom decoder.

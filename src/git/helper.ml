@@ -21,22 +21,6 @@ module Log = (val Logs.src_log src : Logs.LOG)
 let ppe ~name ppv =
   Fmt.braces (fun ppf -> Fmt.pf ppf "%s %a" name (Fmt.hvbox ppv))
 
-module BaseBytes = struct
-  open Bytes
-
-  type nonrec t = t
-
-  let equal = equal
-  let compare = compare
-  let hash = Hashtbl.hash
-
-  module Set = Set.Make(struct type nonrec t = t let compare = compare end)
-  module Map = Map.Make(struct type nonrec t = t let compare = compare end)
-
-  let pp = Fmt.iter Bytes.iter (Fmt.using Char.code (fun ppf -> Fmt.pf ppf "%02x"))
-  let to_hex x = let `Hex v = Hex.of_string (Bytes.unsafe_to_string x) in v
-  let of_hex x = Hex.to_string (`Hex x) |> Bytes.unsafe_of_string
-end
 
 module MakeDecoder (A: S.ANGSTROM) = struct
   (* XXX(dinosaure): This decoder is on top of some assertion about
