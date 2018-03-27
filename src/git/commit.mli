@@ -44,41 +44,14 @@ module type S = sig
       not check the validity of [/parents] and [tree]. By this way,
       this function never fails. *)
 
-  module D: S.DECODER
-    with type t = t
-     and type init = Cstruct.t
-     and type error = Error.Decoder.t
-  (** The decoder of the Git Commit object. We constraint the input to
-      be a {Cstruct.t}. This decoder needs a {Cstruct.t} as an
-      internal buffer. *)
+  module MakeMeta: functor (Meta: Encore.Meta.S) -> sig val p: t Meta.t end
 
-  module A: S.ANGSTROM with type t = t
-  (** The Angstrom decoder of the Git Commit object. *)
-
-  module F: S.FARADAY with type t = t
-  (** The Faraday encoder of the Git Commit object. *)
-
-  module M: S.MINIENC with type t = t
-  (** The {!Minienc} encoder of the Git Commit object. *)
-
-  module E: S.ENCODER
-    with type t = t
-     and type init = int * t
-     and type error = Error.never
-  (** The encoder (which uses a {!Minienc.encoder}) of the Git Commit
-      object. We constraint the output to be a {Cstruct.t}. This
-      encoder needs the Commit OCaml value and the memory consumption
-      of the encoder (in bytes). The encoder can not fail.
-
-      NOTE: we can not unspecified the error type (it needs to be
-      concrete) but, because the encoder can not fail, we define the
-      error as [`Never]. *)
-
-  include S.DIGEST
-    with type t := t
-     and type hash = Hash.t
-
-  include S.BASE with type t := t
+  module A: S.DESC    with type 'a t = 'a Angstrom.t and type e = t
+  module M: S.DESC    with type 'a t = 'a Encore.Encoder.t and type e = t
+  module D: S.DECODER with type t = t and type init = Cstruct.t and type error = Error.Decoder.t
+  module E: S.ENCODER with type t = t and type init = int * t and type error = Error.never
+  include S.DIGEST    with type t := t and type hash = Hash.t
+  include S.BASE      with type t := t
 
   val length: t -> int64
   (** [length t] returns the length of the commit object [t]. *)

@@ -31,24 +31,14 @@ sig
     -> string
     -> t
 
-  module D: S.DECODER
-    with type t = t
-     and type init = Cstruct.t
-     and type error = Error.Decoder.t
+  module MakeMeta: functor (Meta: Encore.Meta.S) -> sig val p: t Meta.t end
 
-  module A: S.ANGSTROM with type t = t
-
-  module F: S.FARADAY with type t = t
-
-  module M: S.MINIENC with type t = t
-
-  module E: S.ENCODER
-    with type t = t
-     and type init = int * t
-     and type error = Error.never
-
-  include S.DIGEST with type t := t and type hash = Hash.t
-  include S.BASE with type t := t
+  module A: S.DESC    with type 'a t = 'a Angstrom.t and type e = t
+  module M: S.DESC    with type 'a t = 'a Encore.Encoder.t and type e = t
+  module D: S.DECODER with type t = t and type init = Cstruct.t and type error = Error.Decoder.t
+  module E: S.ENCODER with type t = t and type init = int * t and type error = Error.never
+  include S.DIGEST    with type t := t and type hash = Hash.t
+  include S.BASE      with type t := t
 
   val length: t -> int64
   val parents: t -> Hash.t list
@@ -88,187 +78,105 @@ module Make (H: S.HASH): S with module Hash = H = struct
     ; extra
     ; message }
 
-  module A = struct
+  module MakeMeta (Meta: Encore.Meta.S) =
+    struct
+      type e = t
 
-    type nonrec t = t
+      open Helper.BaseIso
 
-    let sp = Angstrom.char ' '
-    let lf = Angstrom.char '\x0a'
-    let is_not_sp chr = chr <> ' '
-    let is_not_lf chr = chr <> '\x0a'
+      module Iso =
+        struct
+          open Encore.Bijection
 
-    let binding
-      : type a. key:string -> value:a Angstrom.t -> a Angstrom.t
-      = fun ~key ~value ->
-      let open Angstrom in
-      string key *> sp *> value <* lf <* commit
+          let hex =
+            let tag = ("string", "hex") in
+            make_exn
+              ~tag
+              ~fwd:(Exn.safe_exn tag Hash.of_hex)
+              ~bwd:(Exn.safe_exn (Helper.Pair.flip tag) Hash.to_hex)
 
-    let to_end len =
-      let buf = Buffer.create len in
-      let open Angstrom in
+          let user =
+            make_exn
+              ~tag:("string", "user")
+              ~fwd:(fun s -> match Angstrom.parse_string User.A.p s with
+                             | Ok v -> v
+                             | Error _ -> Exn.fail "string" "user")
+              ~bwd:(Encore.Encoder.to_string User.M.p)
 
-      fix @@ fun m ->
-      available >>= function
-      | 0 ->
-        peek_char
-        >>= (function
-            | Some _ -> m
-            | None ->
-              let res = Buffer.contents buf in
-              Buffer.clear buf;
-              return res)
-      | n -> take n >>= fun chunk -> Buffer.add_string buf chunk; m
+          let commit =
+            make_exn
+              ~tag:("hash * parents * user * user * fields * string", "commit")
+              ~fwd:(fun ((_, tree), parents, (_, author), (_, committer), extra, message) ->
+                let parents = List.map snd parents in
+                { tree; parents; author; committer; extra; message })
+              ~bwd:(fun { tree; parents; author; committer; extra; message; } ->
+                let parents = List.map (fun x -> "parent", x) parents in
+                (("tree", tree), parents, ("author", author), ("committer", committer), extra, message))
+        end
 
-    let extra =
-      let open Angstrom in
-      take_while1 (fun chr -> is_not_sp chr && is_not_lf chr) <* sp >>= fun key ->
-      (fix @@ fun t ->
-       lift2
-         (fun x r -> x :: r)
-         (take_while is_not_lf)
-         ((string "\n " *> t) <|> (char '\n' *> return [])))
-      >>| fun value -> (key, value)
+      type 'a t = 'a Meta.t
 
-    let decoder =
-      let open Angstrom in
+      module Meta = Encore.Meta.Make(Meta)
+      open Encore.Bijection
+      open Encore.Either
+      open Meta
 
-      binding ~key:"tree" ~value:(take_while is_not_lf) <* commit
-      >>= fun tree ->
-      many (binding ~key:"parent" ~value:(take_while is_not_lf))
-      <* commit
-      >>= fun parents ->
-      binding ~key:"author" ~value:User.A.decoder
-      <* commit
-      >>= fun author ->
-      binding ~key:"committer" ~value:User.A.decoder
-      <* commit
-      >>= fun committer -> many extra
-      >>= fun extra -> to_end 1024 <* commit
-      >>= fun message ->
-      return { tree = Hash.of_hex tree
-             ; parents = List.map Hash.of_hex parents
-             ; author
-             ; committer
-             ; extra
-             ; message }
-  end
+      let is_not_sp chr = chr <> ' '
+      let is_not_lf chr = chr <> '\x0a'
 
-  module F = struct
+      let to_end =
+        let loop m =
+          let cons = Exn.cons ~tag:"cons" <$> ((buffer <* commit) <*> m) in
+          let nil = pure ~compare:(fun () () -> 0) () in
 
-    type nonrec t = t
+          make_exn
+            ~tag:("either", "list")
+            ~fwd:(function
+              | L cons -> cons
+              | R () -> [])
+            ~bwd:(function
+              | _ :: _ as lst -> L lst
+              | [] -> R ())
+          <$> peek cons nil in
+        fix loop
 
-    let length t =
-      let string x = Int64.of_int (String.length x) in
-      let ( + ) = Int64.add in
+      let to_end : string t =
+        make_exn
+          ~tag:("string list", "string")
+          ~fwd:(String.concat "")
+          ~bwd:(fun x -> [ x ])
+        <$> to_end
 
-      let parents =
-        List.fold_left
-          (fun acc _ ->
-             (string "parent")
-             + 1L
-             + (Int64.of_int (Hash.Digest.length * 2))
-             + 1L
-             + acc)
-          0L t.parents in
-      let values l =
-        let rec go a = function
-          | [] -> 1L + a
-          | [ x ] -> string x + 1L + a
-          | x :: r -> go (string x + 2L + a) r in
-        go 0L l in
-      (string "tree") + 1L + (Int64.of_int (Hash.Digest.length * 2)) + 1L
-      + parents
-      + (string "author") + 1L + (User.F.length t.author) + 1L
-      + (string "committer") + 1L + (User.F.length t.committer) + 1L
-      + (List.fold_left (fun acc (key, v) -> string key + 1L + (values v) + acc) 0L t.extra)
-      + string t.message
+      let value =
+        let sep = string_elt "\n " <$> const "\n " in
+        sep_by0 ~sep (while0 is_not_lf)
 
-    let sp = ' '
-    let lf = '\x0a'
+      let extra =
+        (while1 (fun chr -> (is_not_sp chr) && (is_not_lf chr)) <* (char_elt ' '<$> any))
+        <*> (value <* (char_elt '\x0a' <$> any))
 
-    let parents e x =
-      let open Farfadet in
-      eval e [ string $ "parent"; char $ sp; !!string ] (Hash.to_hex x)
+      let binding ?key value =
+        let value = (value <$> (while1 is_not_lf <* (char_elt '\x0a' <$> any))) in
 
-    let extra e (key, l) =
-      let open Farfadet in
+        match key with
+        | Some key ->
+           ((const key) <* (char_elt ' ' <$> any)) <*> value
+        | None ->
+           (while1 is_not_sp <* (char_elt ' ' <$> any)) <*> value
 
-      let values e l =
-        list ~sep:(string, "\n ") string e l in
-      eval e [ !!string; char $ sp; !!values; char $ lf ] key l
+      let commit =
+        binding ~key:"tree" Iso.hex
+        <*> (rep0 (binding ~key:"parent" Iso.hex))
+        <*> binding ~key:"author" Iso.user
+        <*> binding ~key:"committer" Iso.user
+        <*> (rep0 extra)
+        <*> to_end
 
-    let encoder e t =
-      let open Farfadet in
-      let sep = (fun e () -> char e lf), () in
+      let p = (Exn.compose obj6 Iso.commit) <$> commit
+    end
 
-      eval e [ string $ "tree"; char $ sp; !!string; char $ lf
-             ; !!(option (seq (list ~sep parents) (fun e () -> char e lf)))
-             ; string $ "author"; char $ sp; !!User.F.encoder; char $ lf
-             ; string $ "committer"; char $ sp; !!User.F.encoder; char $ lf
-             ; !!(list extra)
-             ; !!string ]
-        (Hash.to_hex t.tree)
-        (match t.parents with [] -> None | lst -> Some (lst, ()))
-        t.author
-        t.committer
-        t.extra
-        t.message
-  end
-
-  module M = struct
-
-    open Minienc
-
-    type nonrec t = t
-
-    let sp = ' '
-    let lf = '\x0a'
-
-    let parents x k e =
-      (write_string "parent"
-       @@ write_char sp
-       @@ write_string (Hash.to_hex x) k)
-      e
-
-    let extra (key, v) k e =
-      let rec values l k e = match l with
-        | [] -> k e
-        | [ x ] -> (write_string x @@ write_string "\n" k) e
-        | x :: r -> (write_string x @@ write_string "\n " @@ values r k) e in
-      (write_string key
-       @@ write_char sp
-       @@ values v k) e
-
-    let encoder x k e =
-      let rec list l k e = match l with
-        | [] -> k e
-        | x :: r ->
-          (parents x
-           @@ write_char lf
-           @@ list r k) e in
-
-      let rec extras l k e = match l with
-        | [] -> k e
-        | x :: r -> (extra x @@ extras r k) e in
-
-      (write_string "tree"
-       @@ write_char sp
-       @@ write_string (Hash.to_hex x.tree)
-       @@ write_char lf
-       @@ list x.parents
-       @@ write_string "author"
-       @@ write_char sp
-       @@ User.M.encoder x.author
-       @@ write_char lf
-       @@ write_string "committer"
-       @@ write_char sp
-       @@ User.M.encoder x.committer
-       @@ write_char lf
-       @@ extras x.extra
-       @@ write_string x.message k)
-        e
-  end
-
+  module A = MakeMeta(Encore.Proxy_decoder.Impl)
+  module M = MakeMeta(Encore.Proxy_encoder.Impl)
   module D = Helper.MakeDecoder(A)
   module E = Helper.MakeEncoder(M)
 
