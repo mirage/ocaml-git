@@ -30,13 +30,13 @@ module type S = sig
     | Tree   of Tree.t
     | Tag    of Tag.t
 
-  val blob   : Blob.t -> t
-  val commit : Commit.t -> t
-  val tree   : Tree.t -> t
-  val tag    : Tag.t -> t
-  val kind   : t -> [ `Commit | `Blob | `Tree | `Tag ]
+  val blob: Blob.t -> t
+  val commit: Commit.t -> t
+  val tree: Tree.t -> t
+  val tag: Tag.t -> t
+  val kind: t -> [ `Commit | `Blob | `Tree | `Tag ]
 
-  val pp_kind : [ `Commit | `Blob | `Tree | `Tag ] Fmt.t
+  val pp_kind: [ `Commit | `Blob | `Tree | `Tag ] Fmt.t
 
   module MakeMeta: functor (Meta: Encore.Meta.S) ->
                    sig
@@ -126,11 +126,8 @@ module Make (Hash: S.HASH) (Inflate: S.INFLATE) (Deflate: S.DEFLATE)
     | Tree tree     -> Fmt.pf ppf "(Tree %a)" (Fmt.hvbox Tree.pp) tree
     | Tag tag       -> Fmt.pf ppf "(Tag %a)" (Fmt.hvbox Tag.pp) tag
 
-  module Log =
-  struct
-    let src = Logs.Src.create "git.value" ~doc:"logs git's internal value computation"
-    include (val Logs.src_log src : Logs.LOG)
-  end
+  let src = Logs.Src.create "git.value" ~doc:"logs git's internal value computation"
+  module Log = (val Logs.src_log src : Logs.LOG)
 
   module MakeMeta (Meta: Encore.Meta.S) =
     struct
@@ -341,10 +338,10 @@ module Raw (Hash: S.HASH) (Inflate: S.INFLATE) (Deflate: S.DEFLATE)
                      and type error = 'error)
 
   let to_ (type state) (type res) (type err_encoder)
-      (encoder : (state, Cstruct.t, res, err_encoder) encoder)
-      (buffer : Cstruct_buffer.t)
-      (raw : Cstruct.t)
-      (state : state) : (string, err_encoder) result
+        (encoder : (state, Cstruct.t, res, err_encoder) encoder)
+        (buffer : Cstruct_buffer.t)
+        (raw : Cstruct.t)
+        (state : state) : (string, err_encoder) result
     =
     let module E =
       (val encoder : ENCODER with type state = state
@@ -356,15 +353,15 @@ module Raw (Hash: S.HASH) (Inflate: S.INFLATE) (Deflate: S.DEFLATE)
     let rec go state = match E.eval raw state with
       | `Error (_, err) -> Error err
       | `End (state, _) ->
-        if E.used state > 0
-        then Cstruct_buffer.add buffer (E.raw_sub raw 0 (E.used state));
+         if E.used state > 0
+         then Cstruct_buffer.add buffer (E.raw_sub raw 0 (E.used state));
 
-        Ok (Cstruct_buffer.contents buffer)
+         Ok (Cstruct_buffer.contents buffer)
       | `Flush state ->
-        if E.used state > 0
-        then Cstruct_buffer.add buffer (E.raw_sub raw 0 (E.used state));
+         if E.used state > 0
+         then Cstruct_buffer.add buffer (E.raw_sub raw 0 (E.used state));
 
-        go (E.flush 0 (E.raw_length raw) state)
+         go (E.flush 0 (E.raw_length raw) state)
     in
 
     go state
@@ -441,19 +438,19 @@ module Raw (Hash: S.HASH) (Inflate: S.INFLATE) (Deflate: S.DEFLATE)
   let of_raw_with_header inflated = DecoderRaw.to_result inflated
   let of_raw ~kind inflated = match kind with
     | `Commit ->
-      Rresult.R.map
-        (fun commit -> Commit commit)
-        (Value.Commit.D.to_result inflated)
+       Rresult.R.map
+         (fun commit -> Commit commit)
+         (Value.Commit.D.to_result inflated)
     | `Tree ->
-      Rresult.R.map
-        (fun tree -> Tree tree)
-        (Value.Tree.D.to_result inflated)
+       Rresult.R.map
+         (fun tree -> Tree tree)
+         (Value.Tree.D.to_result inflated)
     | `Tag ->
-      Rresult.R.map
-        (fun tag -> Tag tag)
-        (Value.Tag.D.to_result inflated)
+       Rresult.R.map
+         (fun tag -> Tag tag)
+         (Value.Tag.D.to_result inflated)
     | `Blob ->
-      let blob blob = Blob blob in
-      Rresult.R.(get_ok (Value.Blob.D.to_result inflated)
-                 |> blob |> ok)
+       let blob blob = Blob blob in
+       Rresult.R.(get_ok (Value.Blob.D.to_result inflated)
+                  |> blob |> ok)
 end

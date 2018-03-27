@@ -349,5 +349,4 @@ module IO (Hash: S.HASH) (FS: S.FS) = struct
     FS.File.delete fs path >|= function
     | Ok _ as v -> v
     | Error err -> Error.(v @@ FS.err_delete path err)
-
 end

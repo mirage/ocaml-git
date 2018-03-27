@@ -18,13 +18,13 @@
 module type BASE = sig
  type t
 
-  val pp      : t Fmt.t
-  val compare : t -> t -> int
-  val hash    : t -> int
-  val equal   : t -> t -> bool
+  val pp: t Fmt.t
+  val compare: t -> t -> int
+  val hash: t -> int
+  val equal: t -> t -> bool
 
-  module Set  : Set.S with type elt = t
-  module Map  : Map.S with type key = t
+  module Set: Set.S with type elt = t
+  module Map: Map.S with type key = t
 end
 
 module type CONVERTER = sig
@@ -41,12 +41,11 @@ module type ENCODER = sig
   type error
   type encoder
 
-  val pp_error  : error Fmt.t
-
-  val default   : init -> encoder
-  val eval      : Cstruct.t -> encoder -> [ `Flush of encoder | `End of (encoder * int) | `Error of error ]
-  val flush     : int -> int -> encoder -> encoder
-  val used      : encoder -> int
+  val pp_error: error Fmt.t
+  val default: init -> encoder
+  val eval: Cstruct.t -> encoder -> [ `Flush of encoder | `End of (encoder * int) | `Error of error ]
+  val flush: int -> int -> encoder -> encoder
+  val used: encoder -> int
 end
 
 module type DECODER = sig
@@ -139,7 +138,7 @@ module type DIGEST = sig
   type t
   type hash
 
-  val digest : t -> hash
+  val digest: t -> hash
 end
 
 module type FILE = sig

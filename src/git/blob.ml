@@ -15,11 +15,8 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Log =
-struct
-  let src = Logs.Src.create "git.blob" ~doc:"logs git's blob event"
-  include (val Logs.src_log src: Logs.LOG)
-end
+let src = Logs.Src.create "git.blob" ~doc:"logs git's blob event"
+module Log = (val Logs.src_log src: Logs.LOG)
 
 type t = Cstruct.t
 
