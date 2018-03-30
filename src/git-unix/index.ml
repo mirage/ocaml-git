@@ -1614,11 +1614,14 @@ module IO (Hash: Git.HASH) (FS: Git.FS) (Entry: ENTRY with type hash := Hash.t) 
       let decoder = IDec.default in
 
       let rec loop decoder = match IDec.eval dtmp decoder with
-        | `Error (_, err) -> Lwt.return (Error (`Decoder err))
-        | `End (_, index, extensions) -> Lwt.return (Ok (index, extensions))
+        | `Error (_, err) ->
+          FS.File.close read >>= fun _ -> Lwt.return (Error (`Decoder err))
+        | `End (_, index, extensions) ->
+          FS.File.close read >>= fun _ -> Lwt.return (Ok (index, extensions))
         | `Await decoder ->
           FS.File.read dtmp read >>= function
-          | Error sys_err -> Lwt.return (Error (Git.Error.FS.err_file Fpath.(root / "index") sys_err))
+          | Error sys_err ->
+            FS.File.close read >>= fun _ -> Lwt.return (Error (Git.Error.FS.err_file Fpath.(root / "index") sys_err))
           | Ok n ->
             Log.debug (fun l -> l "Reading %d byte(s) of the file-descriptor" n);
             loop (IDec.refill 0 n decoder)
@@ -2008,6 +2011,7 @@ module Make (Hash: Git.HASH) (Store: Git.S with module Hash = Hash) (FS: Git.FS)
         let ln = in_channel_length ic in
         let by = Bytes.create ln in
         let () = really_input ic by 0 ln in
+        let () = close_in ic in
         Store.Value.Blob.of_cstruct (Cstruct.of_bytes by)
 
     let write t fs =
