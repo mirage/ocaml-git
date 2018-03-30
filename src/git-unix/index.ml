@@ -1884,6 +1884,7 @@ module Make (Hash: Git.HASH) (Store: Git.S with module Hash = Hash) (FS: Git.FS)
           else (match st_kind, st_perm with
               | Unix.S_REG, 0o755 -> Exec
               | Unix.S_REG, 0o644 -> Normal
+              | Unix.S_REG, 0o666 -> Normal (* XXX(dinosaure): Windows suppport, git masks on [6xx]. *)
               | Unix.S_REG, 0o664 -> Everybody
               | Unix.S_LNK, _ -> Symlink
               | _, _ -> raise (Invalid_argument
