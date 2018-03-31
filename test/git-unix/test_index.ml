@@ -55,6 +55,34 @@ let stat path =
 let lstat path =
   Unix.lstat (Fpath.to_string path)
 
+(* dbuenzli <3 *)
+let parse_value s =
+  let open Astring in
+  match String.Sub.(head (of_string s)) with
+  | Some '"' ->
+     let is_data = function '\\' | '"' -> false | _ -> true in
+     let rec loop acc s =
+       let data, rem = String.Sub.span ~sat:is_data s in
+       match String.Sub.head rem with
+       | Some '"' ->
+          let acc = List.rev (data :: acc) in
+          String.Sub.(to_string @@ concat acc), (String.Sub.tail rem)
+       | Some '\\' ->
+          let rem = String.Sub.tail rem in
+          begin match String.Sub.head rem with
+          | Some ('"' | '\\' as c) ->
+             let acc = String.(sub (of_char c)) :: data :: acc in
+             loop acc (String.Sub.tail rem)
+          | Some _ | None -> invalid_arg "parse_value"
+          end
+       | None | Some _ -> invalid_arg "parse_value" in
+    loop [] String.Sub.(tail (of_string s))
+  | Some _ ->
+     let is_data c = not (Char.Ascii.is_white c) in
+     let data, rem = String.Sub.span ~sat:is_data (String.Sub.of_string s) in
+     String.Sub.to_string data, rem
+  | None -> "", (String.Sub.of_string s)
+
 let ( >>?= ) = Lwt_result.bind
 
 module Git_status =
@@ -77,7 +105,8 @@ module Git_status =
       List.fold_left
         (fun acc line ->
           let s, p = Astring.String.span ~sat:((<>) ' ') line in
-          match s, Fpath.of_string (Astring.String.trim ~drop:((=) ' ') p) with
+          let v, _ = parse_value (Astring.String.trim ~drop:Astring.Char.Ascii.is_white p) in
+          match s, Fpath.of_string v with
           | "A", Ok path -> `Add path :: acc
           | _, _ -> acc)
         [] (Astring.String.cuts ~sep:"\n" output)
@@ -113,7 +142,8 @@ module Git_ls_files =
                 let perm = Store.Value.Tree.perm_of_string perm in
                 let hash = Store.Hash.of_hex hash in
                 let n = int_of_string n in
-                let path = Fpath.v path in
+                let v, _ = parse_value path in
+                let path = Fpath.v v in
 
                 (perm, hash, n, path) :: acc
               with _ -> acc)
