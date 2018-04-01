@@ -2006,6 +2006,11 @@ module Make (Hash: Git.HASH) (Store: Git.S with module Hash = Hash) (FS: Git.FS)
       if stat.Unix.st_kind = Unix.S_LNK
       then
         let link = Unix.readlink Fpath.(to_string (Store.root t // path)) in
+        let link = Astring.String.map (function '\\' -> '/' | chr -> chr) link in
+        (* XXX(dinosaure): windows alerates/normalizes values (not necessary a
+           path) in symlink - and replace any '/' to '\\'. So, we revert this
+           alteration but this fix can inject an inconsistency about hash on
+           unix and windows. TODO! *)
         Store.Value.Blob.of_string link
       else
         let ic = open_in Fpath.(to_string (Store.root t // path)) in

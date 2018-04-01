@@ -17,7 +17,7 @@ let remove path =
   Unix.unlink (Fpath.to_string path)
 
 let link src dst =
-  Unix.symlink (Fpath.to_string src) (Fpath.to_string dst)
+  Unix.symlink src (Fpath.to_string dst)
 
 let echo_to_file filename content =
   let oc = open_out_bin (Fpath.to_string filename) in
@@ -45,6 +45,7 @@ let hash_of_file filename =
 
 let hash_of_symlink filename =
   let link = Unix.readlink (Fpath.to_string filename) in
+  let link = Astring.String.map (function '\\' -> '/' | chr -> chr) link in
   let ctx  = Store.Hash.Digest.init () in
   let ()   = Store.Hash.Digest.feed ctx (Cstruct.of_string (Fmt.strf "blob %d\000%s" (String.length link) link)) in
   Store.Hash.Digest.get ctx
@@ -374,10 +375,10 @@ let test008 root _ : unit Alcotest.test_case =
         echo_to_file (root / "path2" / "file2") "hello path2/file2";
         echo_to_file (root / "path3" / "file3") "hello path3/file3";
         echo_to_file (root / "path3" / "subp3" / "file3") "hello path3/subp3/file3";
-        link (v "hello path0") (root / "path0sym");
-        link (v "hello path2" / "file2") (root / "path2" / "file2sym");
-        link (v "hello path3" / "file3") (root / "path3" / "file3sym");
-        link (v "hello path3" / "subp3" / "file3") (root / "path3" / "subp3" / "file3sym")
+        link "hello path0" (root / "path0sym");
+        link "hello path2/file2" (root / "path2" / "file2sym");
+        link "hello path3/file3" (root / "path3" / "file3sym");
+        link "hello path3/subp3/file3" (root / "path3" / "subp3" / "file3sym")
       with exn -> Alcotest.failf "Retrieve an error: %s" (Printexc.to_string exn))
 
 let test009 root fs : unit Alcotest.test_case =
