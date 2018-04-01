@@ -20,7 +20,7 @@ let link src dst =
   Unix.symlink (Fpath.to_string src) (Fpath.to_string dst)
 
 let echo_to_file filename content =
-  let oc = open_out (Fpath.to_string filename) in
+  let oc = open_out_bin (Fpath.to_string filename) in
   let () = output_string oc content in
   let () = output_char oc '\n' in
   let () = close_out oc in
