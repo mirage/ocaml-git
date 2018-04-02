@@ -490,11 +490,17 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE) = struct
       try let _ = Hashtbl.find t.refs r in Lwt.return true
       with Not_found -> Lwt.return false
 
-    let rec read t r =
+    let rec resolve t r =
       Log.debug (fun l -> l "Ref.read %a" Reference.pp r);
       try match Hashtbl.find t.refs r with
-        | `H s -> Lwt.return (Ok (r, Reference.Hash s))
-        | `R r -> read t r
+        | `H s -> Lwt.return (Ok s)
+        | `R r -> resolve t r
+      with Not_found -> Lwt.return (Error `Not_found)
+
+    let read t r =
+      try match Hashtbl.find t.refs r with
+          | `H hash -> Lwt.return (Ok (Reference.Hash hash))
+          | `R refname -> Lwt.return (Ok (Reference.Ref refname))
       with Not_found -> Lwt.return (Error `Not_found)
 
     let remove t r =

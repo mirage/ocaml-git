@@ -174,11 +174,14 @@ module type S = sig
     (** [mem state ref] returns [true] iff [ref] exists in [state],
         otherwise returns [false]. *)
 
-    val read: t -> Reference.t ->
-      ((Reference.t * Reference.head_contents), error) result Lwt.t
+    val read: t -> Reference.t -> (Reference.head_contents, error) result Lwt.t
     (** [read state reference] returns the value contains in the
         reference [reference] (available in the git repository
         [state]). *)
+
+    val resolve: t -> Reference.t -> (Hash.t, error) result Lwt.t
+    (** [resolve state reference] returns endpoint of [reference] (available in
+       the git repository [state]). *)
 
     val write: t -> Reference.t -> Reference.head_contents
       -> (unit, error) result Lwt.t

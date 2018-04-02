@@ -266,7 +266,8 @@ module type S = sig
     val normalize: Hash.t Reference.Map.t -> Reference.head_contents -> (Hash.t, error) result Lwt.t
     val list: t -> (Reference.t * Hash.t) list Lwt.t
     val remove: t -> Reference.t -> (unit, error) result Lwt.t
-    val read: t -> Reference.t -> ((Reference.t * Reference.head_contents), error) result Lwt.t
+    val read: t -> Reference.t -> (Reference.head_contents, error) result Lwt.t
+    val resolve: t -> Reference.t -> (Hash.t, error) result Lwt.t
     val write: t -> Reference.t -> Reference.head_contents -> (unit, error) result Lwt.t
   end
 
@@ -1227,17 +1228,24 @@ module FS (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
       | Ok true ->
         (with_buffer t @@ fun { dtmp; raw; _ } ->
          Reference.read ~fs:t.fs ~root:t.dotgit ~dtmp ~raw reference >|= function
-         | Ok _ as v -> v
+         | Ok (_, v) -> Ok v
          | Error e   -> Error (e :> error))
       | Ok false | Error _ ->
-        let r =
+        let v =
           if Hashtbl.mem t.packed reference
           then
-            try Ok (reference, Reference.Hash (Hashtbl.find t.packed reference))
+            try Ok (Reference.Hash (Hashtbl.find t.packed reference))
             with Not_found -> Error `Not_found
           else Error `Not_found
         in
-        Lwt.return r
+        Lwt.return v
+
+    let resolve t reference =
+      graph t >>= function
+      | Error _ as err -> Lwt.return err
+      | Ok graph ->
+         try Lwt.return (Ok (Graph.find reference graph))
+         with Not_found -> Lwt.return (Error `Not_found)
 
     let write t reference value =
       with_buffer t (fun { raw; _ } ->
