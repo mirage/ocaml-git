@@ -13,14 +13,17 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
-module Net = Net
-module SHA1 = Git.Hash.Make(Digestif.SHA1)
-module Sync = Git.Sync.Make(Net)
-module HTTP = Http.Make
 
-module FS = struct
-  include Git.Store.FS(SHA1)(Fs)(Git.Inflate)(Git.Deflate)
-  let create ?temp_dir ?root ?dotgit ?compression ?buffer () =
-    let fs = Fs.v ?temp_dir () in
+module Fs    = Fs
+module Net   = Net
+module SHA1  = Git.Hash.Make(Digestif.SHA1)
+module Sync  = Git.Sync.Make(Net)
+module Http  = Http.Make
+module Index = Index
+
+module Store = struct
+  include Git.Store.Make(SHA1)(Fs)(Git.Inflate)(Git.Deflate)
+
+  let v ?temp_dir ?root ?dotgit ?compression ?buffer ?(fs = Fs.v ?temp_dir ()) () =
     create ?root ?dotgit ?compression ?buffer fs
 end

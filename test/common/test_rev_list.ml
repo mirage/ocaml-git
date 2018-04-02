@@ -1,7 +1,7 @@
 module type S = sig
 
   include Git.S
-  val create: Fpath.t -> (t, error) result Lwt.t
+  val v: Fpath.t -> (t, error) result Lwt.t
 end
 
 module Make0 (Source: Test_data.SOURCE) (Store: S) = struct
@@ -110,7 +110,7 @@ module Make0 (Source: Test_data.SOURCE) (Store: S) = struct
   let rev_list_test name cs () =
     let expect = git_rev_list cs in
 
-    match Lwt_main.run (Store.create root >>?= fun t -> rev_list t cs) with
+    match Lwt_main.run (Store.v root >>?= fun t -> rev_list t cs) with
     | Ok have -> assert_keys_equal name expect have
     | Error err -> Alcotest.failf "Retrieve an error: %a." Store.pp_error err
 end
