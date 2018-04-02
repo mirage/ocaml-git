@@ -17,8 +17,9 @@
 
 let () = Random.self_init ()
 
-module Sync_http = Git_unix.HTTP(Git_unix.FS)
-module Negociator = Git.Negociator.Make(Git_unix.FS)
+open Git_unix
+module Sync_http = Http(Store)
+module Negociator = Git.Negociator.Make(Store)
 
 let src = Logs.Src.create "ogit-http-fetch" ~doc:"logs binary event"
 module Log = (val Logs.src_log src : Logs.LOG)
@@ -83,14 +84,14 @@ let setup_logs style_renderer level ppf =
   quiet, ppf
 
 type error =
-  [ `Store of Git_unix.FS.error
+  [ `Store of Store.error
   | `Sync of Sync_http.error ]
 
 let store_err err = `Store err
 let sync_err err = `Sync err
 
 let pp_error ppf = function
-  | `Store err -> Fmt.pf ppf "(`Store %a)" Git_unix.FS.pp_error err
+  | `Store err -> Fmt.pf ppf "(`Store %a)" Store.pp_error err
   | `Sync err -> Fmt.pf ppf "(`Sync %a)" Sync_http.pp_error err
 
 let main references directory repository =
@@ -102,16 +103,16 @@ let main references directory repository =
   let references =
     List.fold_left
       (fun references (remote_ref, local_ref) ->
-         try let local_refs = Git_unix.FS.Reference.Map.find remote_ref references in
-           if List.exists (Git_unix.FS.Reference.equal local_ref) local_refs
+         try let local_refs = Store.Reference.Map.find remote_ref references in
+           if List.exists (Store.Reference.equal local_ref) local_refs
            then references
-           else Git_unix.FS.Reference.Map.add remote_ref (local_ref :: local_refs) references
+           else Store.Reference.Map.add remote_ref (local_ref :: local_refs) references
          with Not_found ->
-           Git_unix.FS.Reference.Map.add remote_ref [ local_ref ] references)
-      Git_unix.FS.Reference.Map.empty references
+           Store.Reference.Map.add remote_ref [ local_ref ] references)
+      Store.Reference.Map.empty references
   in
 
-  Git_unix.FS.create ~root ()
+  Store.v ~root ()
   >>!= store_err
   >>?= fun git ->
   Sync_http.fetch_some git ~references repository
@@ -156,8 +157,8 @@ struct
     Arg.(value & flag & info ["all"] ~doc)
 
  let reference =
-    let parse str = Ok (Git_unix.FS.Reference.of_string str) in
-    let print = Git_unix.FS.Reference.pp in
+    let parse str = Ok (Store.Reference.of_string str) in
+    let print = Store.Reference.pp in
     Arg.conv ~docv:"<name>" (parse, print)
 
   let uri =

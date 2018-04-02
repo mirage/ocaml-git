@@ -9,7 +9,7 @@ end
 module type S = sig
 
   include Git.S
-  val create: Fpath.t -> (t, error) result Lwt.t
+  val v: Fpath.t -> (t, error) result Lwt.t
 end
 
 let pp_process_status ppf = function
@@ -90,7 +90,7 @@ module Make0 (Source: SOURCE) (Store: S) = struct
   module Common = Test_common.Make(Store)
 
   let import root () =
-    Store.create root >!= store_err >?= fun t ->
+    Store.v root >!= store_err >?= fun t ->
     let stream = stream_of_file Source.pack in
     Store.Pack.from t stream >!= store_err >?= fun _ ->
     Store.list t >>= fun hashes ->

@@ -76,30 +76,32 @@ let setup_logs style_renderer level =
   let quiet = match style_renderer with Some _ -> true | None -> false in
   quiet, Fmt.stdout
 
+open Git_unix
+
 type error =
-  [ `Store of Git_unix.FS.error
-  | `Invalid_hash of Git_unix.FS.Hash.t ]
+  [ `Store of Store.error
+  | `Invalid_hash of Store.Hash.t ]
 
 let store_err err = `Store err
 let invalid_hash hash = `Invalid_hash hash
 
 let pp_error ppf = function
-  | `Store err -> Fmt.pf ppf "(`Store %a)" Git_unix.FS.pp_error err
-  | `Invalid_hash hash -> Fmt.pf ppf "(`Hash %a)" Git_unix.FS.Hash.pp hash
+  | `Store err -> Fmt.pf ppf "(`Store %a)" Store.pp_error err
+  | `Invalid_hash hash -> Fmt.pf ppf "(`Hash %a)" Store.Hash.pp hash
 
 let pp_type ppf = function
-  | Git_unix.FS.Value.Commit _ -> Fmt.string ppf "commit"
-  | Git_unix.FS.Value.Tree _   -> Fmt.string ppf "tree"
-  | Git_unix.FS.Value.Tag _    -> Fmt.string ppf "tag"
-  | Git_unix.FS.Value.Blob _   -> Fmt.string ppf "blob"
+  | Store.Value.Commit _ -> Fmt.string ppf "commit"
+  | Store.Value.Tree _   -> Fmt.string ppf "tree"
+  | Store.Value.Tag _    -> Fmt.string ppf "tag"
+  | Store.Value.Blob _   -> Fmt.string ppf "blob"
 
 let pp_size ppf value =
-  Fmt.int64 ppf (Git_unix.FS.Value.F.length value)
+  Fmt.int64 ppf (Store.Value.F.length value)
 
 let pp_exit = Fmt.nop
 
 let pp_pretty_print ppf value =
-  Git_unix.FS.Value.pp ppf value
+  Store.Value.pp ppf value
 
 let pp_inflate ppf raw =
   Git.Minienc.pp_scalar ~get:Cstruct.get_char ~length:Cstruct.len ppf raw
@@ -114,20 +116,20 @@ let main show hash =
 
   let ( >!= ) v f = map_err f v in
 
-  Git_unix.FS.create ~root () >!= store_err >>= fun git ->
+  Store.v ~root () >!= store_err >>= fun git ->
 
   match show with
   | `Inflate ->
     let open Lwt.Infix in
 
-    (Git_unix.FS.read_inflated git hash >>= function
+    (Store.read_inflated git hash >>= function
       | Some (_, raw) ->
         Fmt.(pf stdout) "%a%!" pp_inflate raw;
         Lwt.return (Ok ())
       | None ->
         Lwt.return (Error (invalid_hash hash)))
   | #rest as rest ->
-    Git_unix.FS.read git hash >!= store_err >>= fun value ->
+    Store.read git hash >!= store_err >>= fun value ->
     let fmt = match rest with
       | `Type -> pp_type
       | `Size -> pp_size
@@ -150,8 +152,8 @@ struct
         ; `PrettyPrint, info [ "p" ] ~doc:"Pretty-print the contents of <object> base on its type." ])
 
   let hash =
-    let parse x = try Ok (Git_unix.FS.Hash.of_hex x) with exn -> Error (`Msg (Printexc.to_string exn)) in
-    let print = Git_unix.FS.Hash.pp in
+    let parse x = try Ok (Store.Hash.of_hex x) with exn -> Error (`Msg (Printexc.to_string exn)) in
+    let print = Store.Hash.pp in
     Arg.conv ~docv:"<object>" (parse, print)
 
   let value =
