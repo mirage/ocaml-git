@@ -578,7 +578,9 @@ module Make
          >>!= fun sys_err -> Lwt.return (Error.FS.err_open path_pack sys_err))
         >>?= fun fdp ->
         let fun_cache _ = None in
-        let fun_idx hash = PInfo.Map.find_opt hash info.PInfo.tree in
+        let fun_idx hash =
+          try Some (PInfo.Map.find hash info.PInfo.tree)
+          with Not_found -> None in
         let fun_revidx hash =
           try let (_, ret) = PInfo.Graph.find hash info.PInfo.graph in ret
           with Not_found -> None
@@ -831,9 +833,8 @@ module Make
                 (try Graph.find Int64.(sub offset rel_off) graph
                  with Not_found -> 0, None)
               | HDec.Hash hash_source ->
-                try match Map.find_opt hash_source tree with
-                  | Some (_, abs_off) -> Graph.find abs_off graph
-                  | None -> 0, None
+                try let _, abs_off = Map.find hash_source tree in
+                    Graph.find abs_off graph
                 with Not_found -> 0, None
             in
             Graph.add offset (depth_source + 1, Some hash) graph
@@ -878,9 +879,9 @@ module Make
            | Some (crc32, offset) -> raise (Found (hash_pack, (crc32, offset)))
            | None -> ())
         | Total { info; _ } ->
-          (match PInfo.Map.find_opt hash info.PInfo.tree with
-           | Some (crc32, offset) -> raise (Found (hash_pack, (crc32, offset)))
-           | None -> ()))
+          (try let crc32, offset = PInfo.Map.find hash info.PInfo.tree in
+               raise (Found (hash_pack, (crc32, offset)))
+           with Not_found -> ()))
         packs;
       None
     with Found (hash_pack, offset) ->

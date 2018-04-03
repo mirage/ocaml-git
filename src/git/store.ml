@@ -805,7 +805,9 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
 
         RPDec.make fdp
           (fun _ -> None)
-          (fun hash -> PInfo.Map.find_opt hash info.PInfo.tree)
+          (fun hash ->
+            try Some (PInfo.Map.find hash info.PInfo.tree)
+            with Not_found -> None)
           (* XXX(dinosaure): this function will be updated. *)
           (fun _ -> None)
           (fun hash -> extern git hash)
@@ -857,9 +859,8 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
                        (try Graph.find Int64.(sub offset rel_off) graph
                         with Not_found -> 0, None)
                      | HDec.Hash hash_source ->
-                       try match Map.find_opt hash_source tree with
-                         | Some (_, abs_off) -> Graph.find abs_off graph
-                         | None -> 0, None
+                       try let _, abs_off = Map.find hash_source tree in
+                           Graph.find abs_off graph
                        with Not_found -> 0, None
                    in
 
@@ -867,7 +868,9 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
                  in
 
                  Lwt.return
-                   (RPDec.update_idx (fun key -> PInfo.Map.find_opt key tree) decoder,
+                   (RPDec.update_idx (fun key ->
+                        try Some (PInfo.Map.find key tree)
+                        with Not_found -> None) decoder,
                     tree, graph)
                | Error err ->
                  Log.err (fun l -> l ~header:"from" "Retrieve an error when we try to \

@@ -261,9 +261,8 @@ module Make
             Graph.add (PDec.offset state) (depth_source + 1, hash) info.graph
           | PDec.Hunk ({ HDec.reference = HDec.Hash hash; _ }) ->
             let depth_source, _ =
-              try match Map.find_opt hash info.tree with
-                | Some (_, abs_off) -> Graph.find abs_off info.graph
-                | None -> 0, None
+              try let _, abs_off = Map.find hash info.tree in
+                  Graph.find abs_off info.graph
               with Not_found -> 0, None
             in
 
