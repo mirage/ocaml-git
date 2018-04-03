@@ -100,12 +100,7 @@ module Make0 (Source: SOURCE) (Store: S) = struct
 
   let verify_index_file () =
     let module D = Git.Index_pack.Decoder(Store.Hash) in
-    let module R = Git.Radix.Make(struct
-        type t = Store.Hash.t
-
-        let get = Store.Hash.get
-        let length _ = Store.Hash.Digest.length
-      end) in
+    let module R = Map.Make(Store.Hash) in
     let ic = open_in_bin (Fpath.to_string Source.idx) in
     let size = 0x8000 in
     let dtmp = Bytes.create size in
@@ -117,7 +112,7 @@ module Make0 (Source: SOURCE) (Store: S) = struct
         Cstruct.blit_from_bytes dtmp 0 ctmp 0 len;
         go acc (D.refill 0 len state)
       | `Hash (state, (hash, crc, off)) ->
-        let acc = R.bind acc hash (crc, off) in
+        let acc = R.add hash (crc, off) acc in
         go acc state
       | `Error (_, err) ->
         Alcotest.failf "Got an error when we parse the IDX file %a: %a."
@@ -149,7 +144,7 @@ module Make0 (Source: SOURCE) (Store: S) = struct
         end
     in
 
-    let () = go (Store.Hash.Digest.init ()) (E.default (R.to_sequence tree) hash_pack) in
+    let () = go (Store.Hash.Digest.init ()) (E.default (fun f -> R.iter (fun k v -> f (k, v)) tree) hash_pack) in
 
     if String.equal (load_file Source.idx) (Git.Buffer.contents buf)
     then Lwt.return (Ok ())

@@ -313,8 +313,8 @@ module type P = sig
      and module Entry := Entry
 
   module Hunk: H with module Hash := Hash
-  module Radix: Radix.S with type key = Hash.t
-  (** The Radix tree zhich zill represent the IDX file of the PACK
+  module Map: Map.S with type key = Hash.t
+  (** The Map tree zhich zill represent the IDX file of the PACK
       stream. *)
 
   (** The type error. *)
@@ -363,8 +363,8 @@ module type P = sig
       inflated raw, it access on it only as a read-only flow (that
       means, the src {!Cstruct.t} could be physicaly the same. *)
 
-  val idx: t -> (Crc32.t * int64) Radix.t
-  (** [idx t] returns a {!Radix} tree which contains the CRC-32
+  val idx: t -> (Crc32.t * int64) Map.t
+  (** [idx t] returns a {!Map} tree which contains the CRC-32
       checksum and the absolute offset for each Git object serialized.
       The client is able to use it only when {!eval} returns
       [`End]. *)

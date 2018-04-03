@@ -123,13 +123,7 @@ module Make (S: Git.S) = struct
          | n -> n)
       (Fmt.Dump.pair S.Reference.pp S.Hash.pp)
 
-  module Radix =
-    Git.Radix.Make(struct
-      type t = S.Hash.t
-
-      let get = S.Hash.get
-      let length _ = S.Hash.Digest.length
-    end)
+  module Radix = Map.Make(S.Hash)
 
   let assert_index_pack_equal, assert_index_pack_opt_equal, assert_index_packs_equal =
     let equal_value (h1, (c1, o1)) (h2, (c2, o2)) = S.Hash.equal h1 h2 && Git.Crc32.eq c1 c2 && Int64.equal o1 o2 in
@@ -144,9 +138,9 @@ module Make (S: Git.S) = struct
     let pp = Fmt.Dump.list pp_value in
 
     mk
-      (fun a b -> equal (Radix.to_list a) (Radix.to_list b))
-      (fun a b -> compare (Radix.to_list a) (Radix.to_list b))
-      (fun ppf a -> pp ppf (Radix.to_list a))
+      (fun a b -> equal (Radix.bindings a) (Radix.bindings b))
+      (fun a b -> compare (Radix.bindings a) (Radix.bindings b))
+      (fun ppf a -> pp ppf (Radix.bindings a))
 end
 
 let list_files kind dir =

@@ -19,8 +19,8 @@ module type S =
 sig
   module Hash: S.HASH
   module Inflate: S.INFLATE
-  module Radix: Radix.S with type key = Hash.t
   module Graph: Map.S with type key = int64
+  module Map: Map.S with type key = Hash.t
 
   module HDec: Unpack.H with module Hash := Hash
   module PDec: Unpack.P
@@ -62,7 +62,7 @@ sig
     { max_length_object       : int
     ; max_length_insert_hunks : int
     ; max_depth               : int
-    ; tree                    : (Crc32.t * Int64.t) Radix.t
+    ; tree                    : (Crc32.t * Int64.t) Map.t
     ; graph                   : (int * Hash.t option) Graph.t
     ; state                   : 'a }
   constraint 'a = [< state ]
@@ -70,7 +70,7 @@ sig
   val v:
        ?max_length_object:int
     -> ?max_length_insert_hunks:int
-    -> ?tree:(Crc32.t * int64) Radix.t
+    -> ?tree:(Crc32.t * int64) Map.t
     -> ?graph:(int * Hash.t option) Graph.t
     -> Hash.t -> [> empty ] t
 
@@ -105,8 +105,8 @@ module Make
   module HDec = HDec
   module PDec = PDec
 
-  module Radix = Radix.Make(struct include Hash let length _ = Hash.Digest.length end)
   module Graph = Map.Make(Int64)
+  module Map = Map.Make(Hash)
 
   type error =
     [ `Unexpected_end_of_input
@@ -150,7 +150,7 @@ module Make
     { max_length_object       : int
     ; max_length_insert_hunks : int
     ; max_depth               : int
-    ; tree                    : (Crc32.t * Int64.t) Radix.t
+    ; tree                    : (Crc32.t * Int64.t) Map.t
     ; graph                   : (int * Hash.t option) Graph.t
     ; state                   : 'a }
     constraint 'a = [< state ]
@@ -161,7 +161,7 @@ module Make
     { max_length_object = option_default max_length_object 0
     ; max_length_insert_hunks = option_default max_length_insert_hunks 0
     ; max_depth = 1
-    ; tree = option_default tree Radix.empty
+    ; tree = option_default tree Map.empty
     ; graph = option_default graph Graph.empty
     ; state = `Empty hash }
 
@@ -226,7 +226,7 @@ module Make
 
         let tree = match hash with
           | Some hash ->
-            Radix.bind info.tree hash (PDec.crc state, PDec.offset state)
+            Map.add hash (PDec.crc state, PDec.offset state) info.tree
           | None -> info.tree
         in
 
@@ -261,7 +261,7 @@ module Make
             Graph.add (PDec.offset state) (depth_source + 1, hash) info.graph
           | PDec.Hunk ({ HDec.reference = HDec.Hash hash; _ }) ->
             let depth_source, _ =
-              try match Radix.lookup info.tree hash with
+              try match Map.find_opt hash info.tree with
                 | Some (_, abs_off) -> Graph.find abs_off info.graph
                 | None -> 0, None
               with Not_found -> 0, None
