@@ -559,6 +559,19 @@ module type ENCODER = sig
   val flush: int -> int -> state -> state
 end
 
+module type DECODER =
+sig
+  type state
+  type error
+  type t
+  val eval: state ->
+    [ `Await of state
+    | `End of (Cstruct.t * t)
+    | `Error of (Cstruct.t * error) ]
+  val refill: Cstruct.t -> state -> (state, error) result
+  val finish: state -> state
+end
+
 (* XXX(dinosaure): this function takes care about how many byte(s) we
    write to the file-descriptor and retry to write while the limit is
    not retrieved. In some case (but not common), the writer does not
@@ -647,6 +660,37 @@ module FS (FS: S.FS) = struct
         FS.File.move t temp path >|= function
         | Error err -> Error.(v @@ FS.err_move temp path err)
         | Ok ()     -> Ok x
+
+end
+
+module Decoder (D: DECODER) (X: S.FS) = struct
+
+  let src = Logs.Src.create "git.decoder" ~doc:"logs git's internal I/O decoder"
+  module Log = (val Logs.src_log src : Logs.LOG)
+
+  module FS = FS(X)
+
+  type error =
+    [ FS.error Error.FS.t
+    | `Decoder of D.error ]
+
+  let of_file fs file raw state =
+    FS.with_open_r fs file @@ fun fd ->
+    let rec go state =
+      match D.eval state with
+      | `Error (_, err) ->
+         Lwt.return (Error (`Decoder err))
+      | `End (_, value) ->
+         Lwt.return (Ok value)
+      | `Await state ->
+         FS.File.read raw fd >>= function
+         | Error err -> Lwt.return Error.(v @@ FS.err_read file err)
+         | Ok 0 -> go (D.finish state)
+         | Ok n ->
+            match D.refill (Cstruct.sub raw 0 n) state with
+            | Ok state -> go state
+            | Error err -> Lwt.return (Error (`Decoder err)) in
+    go state
 
 end
 
