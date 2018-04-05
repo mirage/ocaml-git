@@ -242,7 +242,9 @@ module Make
     gen ~fs ~root ~window ~ztmp ~dtmp ~raw (module D) hash
 
   module HeaderAndBody = struct
-    type t = [ `Commit | `Blob | `Tag | `Tree ] * Cstruct.t
+    type e = [ `Commit | `Blob | `Tag | `Tree ] * Cstruct.t
+    type 'a t = 'a Angstrom.t
+
     let kind = Value.A.kind
     let int64 = Value.A.length
     let to_end cs =
@@ -287,7 +289,7 @@ module Make
 
   module I = Helper.MakeInflater(Inflate)(struct
       include HeaderAndBody
-      let decoder = decoder ~result:None
+      let p = decoder ~result:None
     end)
 
   let inflate ~fs ~root ~window ~ztmp ~dtmp ~raw hash =
@@ -296,16 +298,18 @@ module Make
   let inflate_wa ~fs ~root ~window ~ztmp ~dtmp ~raw ~result hash =
     let module P = Helper.MakeInflater(Inflate)(struct
         include HeaderAndBody
-        let decoder = decoder ~result:(Some result)
+        let p = decoder ~result:(Some result)
       end)
     in
     gen ~fs ~root ~window ~ztmp ~dtmp ~raw (module P) hash
 
   module HeaderOnly = struct
-    type t = [ `Commit | `Blob | `Tag | `Tree ] * int64
+    type e = [ `Commit | `Blob | `Tag | `Tree ] * int64
+    type 'a t = 'a Angstrom.t
+
     let kind = HeaderAndBody.kind
     let int64 = HeaderAndBody.int64
-    let decoder =
+    let p =
       let open Angstrom in
       kind <* take 1
       >>= fun kind -> int64 <* advance 1

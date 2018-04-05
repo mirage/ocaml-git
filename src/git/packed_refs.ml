@@ -22,15 +22,10 @@ module type S = sig
 
   type t = [ `Peeled of Hash.t | `Ref of string * Hash.t ] list
 
-  module A: S.ANGSTROM with type t = t
-  module D: S.DECODER
-    with type t = t
-     and type init = Cstruct.t
-     and type error = Error.Decoder.t
-  module M: S.MINIENC with type t = t
-  module E: S.ENCODER
-    with type t = t
-     and type init = int * t
+  module A: S.DESC    with type 'a t = 'a Angstrom.t with type e = t
+  module M: S.DESC    with type 'a t = 'a Encore.Encoder.t with type e = t
+  module D: S.DECODER with type t = t and type init = Cstruct.t and type error = Error.Decoder.t
+  module E: S.ENCODER with type t = t and type init = int * t
 
   type error =
     [ Error.Decoder.t
@@ -54,9 +49,10 @@ module Make (H: S.HASH) (FS: S.FS) = struct
   and hash = Hash.t
 
   module A = struct
-    type nonrec t = t
+    type e = t
 
     open Angstrom
+    type 'a t = 'a Angstrom.t
 
     let hash =
       take (Hash.Digest.length * 2)
@@ -88,7 +84,7 @@ module Make (H: S.HASH) (FS: S.FS) = struct
         end_of_line >>= fun () ->
         return (`Ref (refname, hash))
 
-    let decoder =
+    let p =
       fix @@ fun m ->
       (peek_char >>= function
         | Some '#' ->
@@ -99,9 +95,10 @@ module Make (H: S.HASH) (FS: S.FS) = struct
   end
 
   module M = struct
-    type nonrec t = t
+    type e = t
 
-    open Minienc
+    open Encore.Lole
+    type 'a t = 'a Encore.Encoder.t
 
     let write_newline k e =
       if Sys.win32
@@ -139,6 +136,9 @@ module Make (H: S.HASH) (FS: S.FS) = struct
        @@ write_newline
        @@ write_list ~sep:write_newline write_info l k)
         e
+
+    let p =
+      let module M = Encore.Encoder.Make(struct type a = e let run k e l = encoder l k e end) in M.x
   end
 
   module D = Helper.MakeDecoder(A)

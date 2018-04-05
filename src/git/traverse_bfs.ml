@@ -42,7 +42,7 @@ module Make (S : STORE) = struct
           | Ok (Value.Commit commit as value) ->
             let rest' = Value.Commit.tree commit :: rest in
             List.iter (fun x -> Queue.add x queue) (Value.Commit.parents commit);
-            f acc ~length:(Value.Commit.F.length commit) hash value >>= fun acc' ->
+            f acc ~length:(Value.Commit.length commit) hash value >>= fun acc' ->
             walk close' rest' queue acc'
           | Ok (Value.Tree tree as value) ->
             let path = try Hashtbl.find names hash with Not_found -> path in
@@ -50,15 +50,15 @@ module Make (S : STORE) = struct
                 Hashtbl.add names node Fpath.(path / name);
                 Lwt.return ()) (Value.Tree.to_list tree) >>= fun () ->
             let rest' = rest @ List.map (fun { Value.Tree.node; _ } -> node) (Value.Tree.to_list tree) in
-            f acc ~name:path ~length:(Value.Tree.F.length tree) hash value >>= fun acc' ->
+            f acc ~name:path ~length:(Value.Tree.length tree) hash value >>= fun acc' ->
             walk close' rest' queue acc'
           | Ok (Value.Blob blob as value) ->
             let path = try Hashtbl.find names hash with Not_found -> path in
-            f acc ~name:path ~length:(Value.Blob.F.length blob) hash value >>= fun acc' ->
+            f acc ~name:path ~length:(Value.Blob.length blob) hash value >>= fun acc' ->
             walk close' rest queue acc'
           | Ok (Value.Tag tag as value) ->
             Queue.add (Value.Tag.obj tag) queue;
-            f acc ~length:(Value.Tag.F.length tag) hash value >>= fun acc' ->
+            f acc ~length:(Value.Tag.length tag) hash value >>= fun acc' ->
             walk close' rest queue acc'
           | Error err ->
             Log.err (fun l -> l ~header:"fold" "Retrieve an error when we try to read the Git object %a: %a."

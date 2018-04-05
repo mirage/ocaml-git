@@ -199,7 +199,7 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE) = struct
 
   let size t h =
     let v = match read_aux t h with
-      | Ok (Value.Blob v) -> Ok (Value.Blob.F.length v)
+      | Ok (Value.Blob v) -> Ok (Value.Blob.length v)
       | Ok (Value.Commit _ | Value.Tag _ | Value.Tree _)
       | Error _ -> Error `Not_found
     in

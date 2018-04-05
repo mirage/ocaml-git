@@ -18,13 +18,13 @@
 module type BASE = sig
  type t
 
-  val pp      : t Fmt.t
-  val compare : t -> t -> int
-  val hash    : t -> int
-  val equal   : t -> t -> bool
+  val pp: t Fmt.t
+  val compare: t -> t -> int
+  val hash: t -> int
+  val equal: t -> t -> bool
 
-  module Set  : Set.S with type elt = t
-  module Map  : Map.S with type key = t
+  module Set: Set.S with type elt = t
+  module Map: Map.S with type key = t
 end
 
 module type CONVERTER = sig
@@ -41,12 +41,11 @@ module type ENCODER = sig
   type error
   type encoder
 
-  val pp_error  : error Fmt.t
-
-  val default   : init -> encoder
-  val eval      : Cstruct.t -> encoder -> [ `Flush of encoder | `End of (encoder * int) | `Error of error ]
-  val flush     : int -> int -> encoder -> encoder
-  val used      : encoder -> int
+  val pp_error: error Fmt.t
+  val default: init -> encoder
+  val eval: Cstruct.t -> encoder -> [ `Flush of encoder | `End of (encoder * int) | `Error of error ]
+  val flush: int -> int -> encoder -> encoder
+  val used: encoder -> int
 end
 
 module type DECODER = sig
@@ -55,33 +54,21 @@ module type DECODER = sig
   type error
   type decoder
 
-  val pp_error  : error Fmt.t
-
-  val to_result : Cstruct.t -> (t, error) result
-
-  val default   : init -> decoder
-  val eval      : decoder -> [ `Await of decoder | `End of (Cstruct.t * t) | `Error of (Cstruct.t * error) ]
-  val refill    : Cstruct.t -> decoder -> (decoder, error) result
-  val finish    : decoder -> decoder
+  val pp_error: error Fmt.t
+  val to_result: Cstruct.t -> (t, error) result
+  val default: init -> decoder
+  val eval: decoder -> [ `Await of decoder | `End of (Cstruct.t * t) | `Error of (Cstruct.t * error) ]
+  val refill: Cstruct.t -> decoder -> (decoder, error) result
+  val finish: decoder -> decoder
 end
 
-module type ANGSTROM = sig
-  type t
+module type META = functor (Meta: Encore.Meta.S) -> sig type e val p: e Meta.t end
 
-  val decoder : t Angstrom.t
-end
+module type DESC = sig
+  type 'a t
+  type e
 
-module type FARADAY = sig
-  type t
-
-  val encoder : t Farfadet.t
-  val length  : t -> int64
-end
-
-module type MINIENC = sig
-  type t
-
-  val encoder : t -> (Minienc.encoder -> 'a Minienc.state) -> Minienc.encoder -> 'a Minienc.state
+  val p: e t
 end
 
 module type INFLATE = sig
@@ -119,21 +106,6 @@ module type DEFLATE = sig
   val eval       : src:Cstruct.t -> dst:Cstruct.t -> t -> [ `Flush of t | `Await of t | `Error of (t * error) | `End of t ]
 end
 
-module type FDIGEST = sig
-  type t
-  type buffer
-
-  type 'a digest = 'a -> t
-
-  val cstruct : Cstruct.t digest
-  val string  : string digest
-  val bytes   : Bytes.t digest
-  val digest  : buffer digest
-  val digestv : buffer list digest
-
-  val length  : int
-end
-
 module type IDIGEST = sig
   type t
   type ctx
@@ -166,7 +138,7 @@ module type DIGEST = sig
   type t
   type hash
 
-  val digest : t -> hash
+  val digest: t -> hash
 end
 
 module type FILE = sig

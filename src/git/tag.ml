@@ -24,21 +24,16 @@ module type S = sig
 
   val make: Hash.t -> kind -> ?tagger:User.t -> tag:string -> string -> t
 
-  module D: S.DECODER
-    with type t = t
-     and type init = Cstruct.t
-     and type error = Error.Decoder.t
-  module A: S.ANGSTROM with type t = t
-  module F: S.FARADAY with type t = t
-  module M: S.MINIENC with type t = t
-  module E: S.ENCODER
-    with type t = t
-     and type init = int * t
-     and type error = Error.never
+  module MakeMeta: functor (Meta: Encore.Meta.S) -> sig val p: t Meta.t end
 
-  include S.DIGEST with type t := t and type hash = Hash.t
-  include S.BASE with type t := t
+  module A: S.DESC    with type 'a t = 'a Angstrom.t and type e = t
+  module M: S.DESC    with type 'a t = 'a Encore.Encoder.t and type e = t
+  module D: S.DECODER with type t = t and type init = Cstruct.t and type error = Error.Decoder.t
+  module E: S.ENCODER with type t = t and type init = int * t and type error = Error.never
+  include S.DIGEST    with type t := t and type hash = Hash.t
+  include S.BASE      with type t := t
 
+  val length: t -> int64
   val obj: t -> Hash.t
   val tag: t -> string
   val message: t -> string
@@ -46,9 +41,9 @@ module type S = sig
   val tagger: t -> User.t option
 end
 
-module Make (H: S.HASH): S with module Hash = H = struct
+module Make (Hash: S.HASH): S with module Hash = Hash = struct
 
-  module Hash = H
+  module Hash = Hash
 
   type t =
     { obj     : Hash.t
@@ -94,153 +89,127 @@ module Make (H: S.HASH): S with module Hash = H = struct
     | Tree -> "tree"
     | Blob -> "blob"
 
-  module A = struct
-    type nonrec t = t
+  module MakeMeta (Meta: Encore.Meta.S) =
+    struct
+      type e = t
 
-    let sp = Angstrom.char ' '
-    let lf = Angstrom.char '\x0a'
-    let is_not_lf chr = chr <> '\x0a'
+      open Helper.BaseIso
 
-    let obj = Angstrom.take (Hash.Digest.length * 2)
+      module Iso =
+        struct
+          open Encore.Bijection
 
-    let kind =
-      let open Angstrom in
+          let hex =
+            let tag = ("string", "hex") in
+            make_exn
+              ~tag
+              ~fwd:(Exn.safe_exn tag Hash.of_hex)
+              ~bwd:(Exn.safe_exn (Helper.Pair.flip tag) Hash.to_hex)
 
-      (string "blob"       *> return Blob)
-      <|> (string "commit" *> return Commit)
-      <|> (string "tag"    *> return Tag)
-      <|> (string "tree"   *> return Tree)
+          let user =
+            make_exn
+              ~tag:("string", "user")
+              ~fwd:(fun s -> match Angstrom.parse_string User.A.p s with
+                             | Ok v -> v
+                             | Error _ -> Exn.fail "string" "user")
+              ~bwd:(Encore.Encoder.to_string User.M.p)
 
-    let binding
-      : type a. key:string -> value:a Angstrom.t -> a Angstrom.t
-      = fun ~key ~value ->
-      let open Angstrom in
-      string key *> sp *> value <* lf
+          let kind =
+            let tag = ("string", "kind") in
+            make_exn
+              ~tag
+              ~fwd:(function
+                | "tree" -> Tree
+                | "blob" -> Blob
+                | "commit" -> Commit
+                | "tag" -> Tag
+                | s -> Exn.fail s "kind")
+              ~bwd:(function
+                | Blob -> "blob"
+                | Tree -> "tree"
+                | Commit -> "commit"
+                | Tag -> "tag")
 
-    let to_end len =
-      let buf = Buffer.create len in
-      let open Angstrom in
+          let tag =
+            make_exn
+              ~tag:("hash * kind * string * user * string", "tag")
+              ~fwd:(fun ((_, obj), (_, kind), (_, tag), tagger, message) ->
+                { obj; kind; tag; tagger = Helper.Option.(tagger >>= Helper.Pair.snd); message; })
+              ~bwd:(fun { obj; kind; tag; tagger; message; } ->
+                let tagger = Helper.Option.(tagger >>= fun x -> ("tagger", x)) in
+                (("object", obj), ("type", kind), ("tag", tag), tagger, message))
+        end
 
-      fix @@ fun m ->
-      available >>= function
-      | 0 ->
-        peek_char
-        >>= (function
-            | Some _ -> m
-            | None ->
-              let res = Buffer.contents buf in
-              Buffer.clear buf;
-              return res)
-      | n -> take n >>= fun chunk -> Buffer.add_string buf chunk; m
+      type 'a t = 'a Meta.t
 
-    let decoder =
-      let open Angstrom in
-      binding ~key:"object" ~value:obj <* commit
-      >>= fun obj    -> binding ~key:"type" ~value:kind
-                        <* commit
-      >>= fun kind   -> binding ~key:"tag" ~value:(take_while is_not_lf)
-                        <* commit
-      >>= fun tag    -> (option None
-                                (binding ~key:"tagger" ~value:User.A.decoder
-                                 >>= fun user -> return (Some user)))
-                        <* commit
-      >>= fun tagger -> commit *> to_end 1024 <* commit
-      >>= fun message ->
-        return { obj = Hash.of_hex obj
-               ; kind
-               ; tag
-               ; tagger
-               ; message }
-      <* commit
-  end
+      module Meta = Encore.Meta.Make(Meta)
+      open Encore.Bijection
+      open Encore.Either
+      open Meta
 
-  module F = struct
-    type nonrec t = t
+      let is_not_sp chr = chr <> ' '
+      let is_not_lf chr = chr <> '\x0a'
 
-    let length t =
-      let string x = Int64.of_int (String.length x) in
-      let ( + ) = Int64.add in
+      let to_end =
+        let loop m =
+          let cons = Exn.cons ~tag:"cons" <$> ((buffer <* commit) <*> m) in
+          let nil = pure ~compare:(fun () () -> 0) () in
 
-      let user_length = match t.tagger with
-        | Some user -> (string "tagger") + 1L + (User.F.length user) + 1L
-        | None -> 0L
-      in
-      (string "object") + 1L + (Int64.of_int (Hash.Digest.length * 2)) + 1L
-      + (string "type") + 1L + (string (string_of_kind t.kind)) + 1L
-      + (string "tag") + 1L + (string t.tag) + 1L
-      + user_length
-      + (string t.message)
+          make_exn
+            ~tag:("either", "list")
+            ~fwd:(function
+              | L cons -> cons
+              | R () -> [])
+            ~bwd:(function
+              | _ :: _ as lst -> L lst
+              | [] -> R ())
+          <$> peek cons nil in
+        fix loop
 
-    let sp = ' '
-    let lf = '\x0a'
+      let to_end : string t =
+        make_exn
+          ~tag:("string list", "string")
+          ~fwd:(String.concat "")
+          ~bwd:(fun x -> [ x ])
+        <$> to_end
 
-    let string_of_kind = function
-      | Blob   -> "blob"
-      | Commit -> "commit"
-      | Tree   -> "tree"
-      | Tag    -> "tag"
+      let binding ?key value =
+        let value = (value <$> (while1 is_not_lf <* (char_elt '\x0a' <$> any))) in
 
-    let encoder e t =
-      let open Farfadet in
+        match key with
+        | Some key ->
+           ((const key) <* (char_elt ' ' <$> any)) <*> value
+        | None ->
+           (while1 is_not_sp <* (char_elt ' ' <$> any)) <*> value
 
-      let tagger e x = eval e [ string $ "tagger"; char $ sp; !!User.F.encoder; char $ lf ] x in
+      let tag =
+        binding ~key:"object" Iso.hex
+        <*> binding ~key:"type" Iso.kind
+        <*> binding ~key:"tag" Exn.identity
+        <*> (option (binding ~key:"tagger" Iso.user))
+        <*> to_end
 
-      eval e [ string $ "object"; char $ sp; !!string; char $ lf
-             ; string $ "type"; char $ sp; !!string; char $ lf
-             ; string $ "tag"; char $ sp; !!string; char $ lf
-             ; !!(option tagger)
-             ; !!string ]
-        (Hash.to_hex t.obj)
-        (string_of_kind t.kind)
-        t.tag
-        t.tagger
-        t.message
-  end
+      let p = (Exn.compose obj5 Iso.tag) <$> tag
+    end
 
-  module M = struct
-    type nonrec t = t
-
-    open Minienc
-
-    let sp = ' '
-    let lf = '\x0a'
-
-    let string_of_kind = function
-      | Blob   -> "blob"
-      | Commit -> "commit"
-      | Tree   -> "tree"
-      | Tag    -> "tag"
-
-    let encoder x k e =
-      let write_tagger x k e = match x with
-        | Some x ->
-          (write_string "tagger"
-           @@ write_char sp
-           @@ User.M.encoder x
-           @@ write_char lf k)
-            e
-        | None -> k e
-      in
-
-      (write_string "object"
-       @@ write_char sp
-       @@ write_string (Hash.to_hex x.obj)
-       @@ write_char lf
-       @@ write_string "type"
-       @@ write_char sp
-       @@ write_string (string_of_kind x.kind)
-       @@ write_char lf
-       @@ write_string "tag"
-       @@ write_char sp
-       @@ write_string x.tag
-       @@ write_char lf
-       @@ write_tagger x.tagger
-       @@ write_string x.message k)
-      e
-  end
-
+  module A = MakeMeta(Encore.Proxy_decoder.Impl)
+  module M = MakeMeta(Encore.Proxy_encoder.Impl)
   module D = Helper.MakeDecoder(A)
   module E = Helper.MakeEncoder(M)
+
+  let length t =
+    let string x = Int64.of_int (String.length x) in
+    let ( + ) = Int64.add in
+
+    let user_length = match t.tagger with
+      | Some user -> (string "tagger") + 1L + (User.length user) + 1L
+      | None -> 0L
+    in
+    (string "object") + 1L + (Int64.of_int (Hash.Digest.length * 2)) + 1L
+    + (string "type") + 1L + (string (string_of_kind t.kind)) + 1L
+    + (string "tag") + 1L + (string t.tag) + 1L
+    + user_length
+    + (string t.message)
 
   let obj { obj; _ } = obj
   let tag { tag; _ } = tag
@@ -252,7 +221,7 @@ module Make (H: S.HASH): S with module Hash = H = struct
     let tmp = Cstruct.create 0x100 in
     Helper.fdigest
       (module Hash.Digest) (module E)
-      ~tmp ~kind:"tag" ~length:F.length value
+      ~tmp ~kind:"tag" ~length:length value
 
   let equal   = (=)
   let compare = Pervasives.compare

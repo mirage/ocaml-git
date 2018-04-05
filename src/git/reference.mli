@@ -148,32 +148,10 @@ module type S = sig
 
   val compare_head_contents: head_contents -> head_contents -> int
 
-  module A: S.ANGSTROM with type t = head_contents
-  (** The Angstrom decoder of the Git Reference object. *)
-
-  module D: S.DECODER
-    with type t = head_contents
-     and type init = Cstruct.t
-     and type error = Error.Decoder.t
-  (** The decoder of the Git Reference object. We constraint the input
-      to be a {!Cstruct.t}. This decoder needs a {!Cstruct.t} as an
-      internal buffer. *)
-
-  module M: S.MINIENC with type t = head_contents
-  (** The {!Minienc} encoder of the Git Reference object. *)
-
-  module E: S.ENCODER
-    with type t = head_contents
-     and type init = int * head_contents
-     and type error = Error.never
-  (** The encoder (which uses a {Minienc.encoder}) of the Git
-      Reference object. We constraint the output to be a {Cstruct.t}.
-      This encoder needs the Reference OCaml value and the memory
-      consumption of the encoder (in bytes). The encoder can not fail.
-
-      NOTE: we can not unspecified the error type (it needs to be
-      concrete) but, because the encoder can not fail, we define the
-      error as [`Never]. *)
+  module A: S.DESC with type 'a t = 'a Angstrom.t and type e = head_contents
+  module M: S.DESC with type 'a t = 'a Encore.Encoder.t and type e = head_contents
+  module D: S.DECODER with type t = head_contents and type init = Cstruct.t and type error = Error.Decoder.t
+  module E: S.ENCODER with type t = head_contents and type init = int * head_contents and type error = Error.never
 end
 
 (** The interface which describes any I/O operations on Git reference. *)
@@ -221,10 +199,10 @@ module type IO = sig
       This function can returns an {!error}. *)
 end
 
-module Make (H: S.HASH): S with module Hash = H
+module Make (Hash: S.HASH): S with module Hash = Hash
 (** The {i functor} to make the OCaml representation of the Git
     Reference object by a specific hash. *)
 
-module IO (H: S.HASH) (FS: S.FS): IO with module Hash = H and module FS = FS
+module IO (Hash: S.HASH) (FS: S.FS): IO with module Hash = Hash and module FS = FS
 (** The {i functor} to make a module which implements I/O operations
     on references on a file-system. *)

@@ -96,7 +96,7 @@ let pp_type ppf = function
   | Store.Value.Blob _   -> Fmt.string ppf "blob"
 
 let pp_size ppf value =
-  Fmt.int64 ppf (Store.Value.F.length value)
+  Fmt.int64 ppf (Git_unix.Store.Value.length value)
 
 let pp_exit = Fmt.nop
 
@@ -104,7 +104,7 @@ let pp_pretty_print ppf value =
   Store.Value.pp ppf value
 
 let pp_inflate ppf raw =
-  Git.Minienc.pp_scalar ~get:Cstruct.get_char ~length:Cstruct.len ppf raw
+  Encore.Lole.pp_scalar ~get:Cstruct.get_char ~length:Cstruct.len ppf raw
 
 type rest =
   [ `Type | `Size | `Exit | `PrettyPrint ]

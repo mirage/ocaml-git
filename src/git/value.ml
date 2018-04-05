@@ -30,80 +30,72 @@ module type S = sig
     | Tree   of Tree.t
     | Tag    of Tag.t
 
-  val blob   : Blob.t -> t
-  val commit : Commit.t -> t
-  val tree   : Tree.t -> t
-  val tag    : Tag.t -> t
-  val kind   : t -> [ `Commit | `Blob | `Tree | `Tag ]
+  val blob: Blob.t -> t
+  val commit: Commit.t -> t
+  val tree: Tree.t -> t
+  val tag: Tag.t -> t
+  val kind: t -> [ `Commit | `Blob | `Tree | `Tag ]
 
-  val pp_kind : [ `Commit | `Blob | `Tree | `Tag ] Fmt.t
+  val pp_kind: [ `Commit | `Blob | `Tree | `Tag ] Fmt.t
 
-  module A : sig
-    include S.ANGSTROM with type t = t
+  module MakeMeta: functor (Meta: Encore.Meta.S) ->
+                   sig
+                     val commit: t Meta.t
+                     val blob: t Meta.t
+                     val tree: t Meta.t
+                     val tag: t Meta.t
 
-    val kind : [ `Commit | `Tree | `Tag | `Blob ] Angstrom.t
-    val length : int64 Angstrom.t
+                     val p: t Meta.t
+                   end
+
+  module A: sig
+    include S.DESC with type 'a t = 'a Angstrom.t and type e = t
+
+    val kind: [ `Commit | `Blob | `Tree | `Tag ] t
+    val length: int64 t
   end
 
-  module F: S.FARADAY with type t = t
-  module D: S.DECODER
-    with type t = t
-     and type init = Inflate.window * Cstruct.t * Cstruct.t
-     and type error = [ Error.Decoder.t
-                      | `Inflate of Inflate.error ]
-  module M: S.MINIENC with type t = t
-  module E: S.ENCODER
-    with type t = t
-     and type init = int * t * int * Cstruct.t
-     and type error = [ `Deflate of Deflate.error ]
+  module M: S.DESC    with type 'a t = 'a Encore.Encoder.t and type e = t
+  module D: S.DECODER with type t = t and type init = Inflate.window * Cstruct.t * Cstruct.t and type error = [ Error.Decoder.t | `Inflate of Inflate.error ]
+  module E: S.ENCODER with type t = t and type init = int * t * int * Cstruct.t and type error = [ `Deflate of Deflate.error ]
+  include S.DIGEST    with type t := t and type hash := Hash.t
+  include S.BASE      with type t := t
 
-  include S.DIGEST with type t := t and type hash := Hash.t
-  include S.BASE with type t := t
+  val length: t -> int64
 end
 
 module type RAW = sig
   module Value : S
   include module type of Value
 
-  module EE: S.ENCODER
-    with type t = t
-     and type init = int * t
-     and type error = Error.never
+  module EncoderRaw: S.ENCODER with type t = t and type init = int * t and type error = Error.never
+  module DecoderRaw: S.DECODER with type t = t and type init = Cstruct.t and type error = Error.Decoder.t
+  module EncoderWithoutHeader: S.ENCODER with type t = t and type init = int * t and type error = Error.never
 
-  module EEE: S.ENCODER
-    with type t = t
-     and type init = int * t
-     and type error = Error.never
-
-  module DD: S.DECODER
-    with type t = t
-     and type init = Cstruct.t
-     and type error = Error.Decoder.t
-
-  val to_deflated_raw : ?capacity:int -> ?level:int -> ztmp:Cstruct.t -> t -> (string, E.error) result
-  val to_raw : ?capacity:int -> t -> (string, EE.error) result
-  val to_raw_without_header : ?capacity:int -> t -> (string, EEE.error) result
-  val of_raw : kind:[ `Commit | `Tree | `Tag | `Blob ] -> Cstruct.t -> (t, Error.Decoder.t) result
-  val of_raw_with_header : Cstruct.t -> (t, DD.error) result
+  val to_deflated_raw: ?capacity:int -> ?level:int -> ztmp:Cstruct.t -> t -> (string, E.error) result
+  val to_raw: ?capacity:int -> t -> (string, EncoderRaw.error) result
+  val to_raw_without_header: ?capacity:int -> t -> (string, EncoderWithoutHeader.error) result
+  val of_raw: kind:[ `Commit | `Blob | `Tree | `Tag ] -> Cstruct.t -> (t, Error.Decoder.t) result
+  val of_raw_with_header: Cstruct.t -> (t, DecoderRaw.error) result
 end
 
-module Make (H : S.HASH) (I : S.INFLATE) (D : S.DEFLATE)
-  : S with module Hash    = H
-       and module Inflate = I
-       and module Deflate = D
-       and module Blob    = Blob.Make(H)
-       and module Commit  = Commit.Make(H)
-       and module Tree    = Tree.Make(H)
-       and module Tag     = Tag.Make(H)
+module Make (Hash: S.HASH) (Inflate: S.INFLATE) (Deflate: S.DEFLATE)
+  : S with module Hash    = Hash
+       and module Inflate = Inflate
+       and module Deflate = Deflate
+       and module Blob    = Blob.Make(Hash)
+       and module Commit  = Commit.Make(Hash)
+       and module Tree    = Tree.Make(Hash)
+       and module Tag     = Tag.Make(Hash)
 = struct
-  module Hash = H
-  module Inflate = I
-  module Deflate = D
+  module Blob   = Blob.Make(Hash)
+  module Commit = Commit.Make(Hash)
+  module Tree   = Tree.Make(Hash)
+  module Tag    = Tag.Make(Hash)
 
-  module Blob   = Blob.Make(H)
-  module Commit = Commit.Make(H)
-  module Tree   = Tree.Make(H)
-  module Tag    = Tag.Make(H)
+  module Hash = Hash
+  module Inflate = Inflate
+  module Deflate = Deflate
 
   type t =
     | Blob   of Blob.t
@@ -134,117 +126,115 @@ module Make (H : S.HASH) (I : S.INFLATE) (D : S.DEFLATE)
     | Tree tree     -> Fmt.pf ppf "(Tree %a)" (Fmt.hvbox Tree.pp) tree
     | Tag tag       -> Fmt.pf ppf "(Tag %a)" (Fmt.hvbox Tag.pp) tag
 
-  module Log =
-  struct
-    let src = Logs.Src.create "git.value" ~doc:"logs git's internal value computation"
-    include (val Logs.src_log src : Logs.LOG)
-  end
+  let src = Logs.Src.create "git.value" ~doc:"logs git's internal value computation"
+  module Log = (val Logs.src_log src : Logs.LOG)
 
-  module A =
-  struct
-    type nonrec t = t
+  module MakeMeta (Meta: Encore.Meta.S) =
+    struct
+      type e = t
 
-    let kind =
-      let open Angstrom in
-      (((string "blob" *> return `Blob) <?> "blob")
-       <|> ((string "commit" *> return `Commit) <?> "commit")
-       <|> ((string "tag" *> return `Tag) <?> "tag")
-       <|> ((string "tree" *> return `Tree) <?> "tree"))
-      <?> "kind" <* commit >>= fun kind ->
-      Log.debug (fun l -> l "Kind of the current object: %s."
-                    (match kind with
-                     | `Commit -> "commit"
-                     | `Blob -> "blob"
-                     | `Tag -> "tag"
-                     | `Tree -> "tree"));
-      return kind
+      open Helper.BaseIso
 
-    let int64 =
-      let open Angstrom in
-      take_while (function '0' .. '9' -> true | _ -> false)
-      >>| Int64.of_string
-      <?> "size" <* commit >>= fun size ->
-      Log.debug (fun l -> l "Length of the current object: %Ld." size);
-      return size
+      module Iso =
+        struct
+          open Encore.Bijection
 
-    let length = int64
+          let kind =
+            let tag = ("string", "kind") in
+            make_exn
+              ~tag
+              ~fwd:(function
+                | "tree" -> `Tree
+                | "blob" -> `Blob
+                | "commit" -> `Commit
+                | "tag" -> `Tag
+                | s -> Exn.fail s "kind")
+              ~bwd:(function
+                | `Tree -> "tree"
+                | `Blob -> "blob"
+                | `Tag -> "tag"
+                | `Commit -> "commit")
 
-    let decoder =
-      let open Angstrom in
-      kind <* take 1
-      >>= fun kind -> int64 <* take 1
-      >>= fun length -> match kind with
-      | `Commit -> Commit.A.decoder >>| fun commit -> Commit commit
-      | `Blob   -> Blob.A.decoder (Int64.to_int length) >>| fun blob -> Blob blob
-          (* XXX(dinosaure): need to take care about this cast. TODO! *)
-      | `Tree   -> Tree.A.decoder   >>| fun tree -> Tree tree
-      | `Tag    -> Tag.A.decoder    >>| fun tag -> Tag tag
-  end
+          let value =
+            make_exn
+              ~tag:("kind * length * value", "value")
+              ~fwd:(fun (kind, _, value) ->
+                match kind, value with
+                | `Tree, Tree _     -> value
+                | `Commit, Commit _ -> value
+                | `Blob, Blob _     -> value
+                | `Tag, Tag _       -> value
+                | _, _              -> Exn.fail "kind" "value")
+              ~bwd:(function
+                | Tree tree     -> `Tree, Tree.length tree, Tree tree
+                | Commit commit -> `Commit, Commit.length commit, Commit commit
+                | Tag tag       -> `Tag, Tag.length tag, Tag tag
+                | Blob blob     -> `Blob, Blob.length blob, Blob blob)
+        end
 
-  module F =
-  struct
-    type nonrec t = t
+      module Commit = Commit.MakeMeta(Meta)
+      module Blob = Blob.MakeMeta(Meta)
+      module Tree = Tree.MakeMeta(Meta)
+      module Tag = Tag.MakeMeta(Meta)
 
-    let length = function
-      | Commit commit -> Commit.F.length commit
-      | Tag tag       -> Tag.F.length tag
-      | Tree tree     -> Tree.F.length tree
-      | Blob blob     -> Blob.F.length blob
+      type 'a t = 'a Meta.t
 
-    let string_of_value = function
-      | Commit _ -> "commit"
-      | Blob _   -> "blob"
-      | Tree _   -> "tree"
-      | Tag _    -> "tag"
+      module Meta = Encore.Meta.Make(Meta)
+      open Encore.Bijection
+      open Meta
 
-    let int64 e x = Farfadet.string e (Int64.to_string x)
+      let is_digit = function '0' .. '9' -> true | _ -> false
+      let length = int64 <$> while0 is_digit
+      let kind = Iso.kind <$> (const "tree" <|> const "commit" <|> const "blob" <|> const "tag")
 
-    let sp = ' '
-    let nl = '\000'
+      let commit =
+        make_exn ~tag:("commit", "value") ~fwd:(fun commit -> Commit commit)
+          ~bwd:(function
+            | Commit commit -> commit
+            | _ -> Exn.fail "value" "commit")
+        <$> Commit.p
 
-    let encoder e x =
-      let open Farfadet in
-      eval e [ !!string; char $ sp; !!int64; char $ nl ]
-        (string_of_value x) (length x);
-      match x with
-      | Commit commit -> Commit.F.encoder e commit
-      | Blob blob     -> Blob.F.encoder e blob
-      | Tag tag       -> Tag.F.encoder e tag
-      | Tree tree     -> Tree.F.encoder e tree
-  end
+      let blob =
+        make_exn ~tag:("blob", "value") ~fwd:(fun blob -> Blob blob)
+          ~bwd:(function
+            | Blob blob -> blob
+            | _ -> Exn.fail "value" "blob")
+        <$> Blob.p
 
-  module M = struct
-    type nonrec t = t
+      let tree =
+        make_exn ~tag:("tree", "value") ~fwd:(fun tree -> Tree tree)
+          ~bwd:(function
+            | Tree tree -> tree
+            | _ -> Exn.fail "value" "tree")
+        <$> Tree.p
 
-    open Minienc
+      let tag =
+        make_exn ~tag:("tag", "value") ~fwd:(fun tag -> Tag tag)
+          ~bwd:(function
+            | Tag tag -> tag
+            | _ -> Exn.fail "value" "tag")
+        <$> Tag.p
 
-    let length = function
-      | Blob blob -> Blob.F.length blob
-      | Tree tree -> Tree.F.length tree
-      | Tag tag -> Tag.F.length tag
-      | Commit commit -> Commit.F.length commit
+      let p =
+        let value kind p =
+          ((Iso.kind <$> const kind) <* (char_elt ' ' <$> any))
+          <*> (length <* (char_elt '\000' <$> any))
+          <*> p in
+        (Exn.compose obj3 Iso.value)
+        <$> ((value "commit" commit)
+             <|> (value "tree" tree)
+             <|> (value "blob" blob)
+             <|> (value "tag" tag))
+    end
 
-    let string_of_value = function
-      | Commit _ -> "commit"
-      | Blob _   -> "blob"
-      | Tree _   -> "tree"
-      | Tag _    -> "tag"
+  module A = MakeMeta(Encore.Proxy_decoder.Impl)
+  module M = MakeMeta(Encore.Proxy_encoder.Impl)
 
-    let sp = ' '
-    let nl = '\000'
-
-    let encoder x k e =
-      (write_string (string_of_value x)
-       @@ write_char sp
-       @@ write_string (Int64.to_string (length x))
-       @@ write_char nl
-       @@ (match x with
-           | Tree tree -> Tree.M.encoder tree
-           | Tag tag -> Tag.M.encoder tag
-           | Blob blob -> write_bigstring (Cstruct.to_bigarray (blob :> Cstruct.t))
-           | Commit commit -> Commit.M.encoder commit) k)
-      e
-  end
+  let length = function
+    | Commit commit -> Commit.length commit
+    | Tag tag       -> Tag.length tag
+    | Tree tree     -> Tree.length tree
+    | Blob blob     -> Blob.length blob
 
   module D = Helper.MakeInflater(Inflate)(A)
   module E = Helper.MakeDeflater(Deflate)(M)
@@ -275,9 +265,9 @@ module Make (H : S.HASH) (I : S.INFLATE) (D : S.DEFLATE)
       then (-1)
       else if int_of_kind a < int_of_kind b
       then 1
-      else if F.length a > F.length b
+      else if length a > length b
       then (-1)
-      else if F.length a < F.length b
+      else if length a < length b
       then 1
       else Pervasives.compare a b
 
@@ -285,48 +275,43 @@ module Make (H : S.HASH) (I : S.INFLATE) (D : S.DEFLATE)
   module Map = Map.Make(struct type nonrec t = t let compare = compare end)
 end
 
-module Raw
-    (H : S.HASH)
-    (I : S.INFLATE)
-    (D : S.DEFLATE)
-    : RAW with module Hash = H
-           and module Inflate = I
-           and module Deflate = D
-           and module Value = Make(H)(I)(D)
-           and module Blob = Blob.Make(H)
-           and module Commit = Commit.Make(H)
-           and module Tree = Tree.Make(H)
-           and module Tag = Tag.Make(H)
-           and type t = Make(H)(I)(D).t
+module Raw (Hash: S.HASH) (Inflate: S.INFLATE) (Deflate: S.DEFLATE)
+  : RAW with module Hash = Hash
+         and module Inflate = Inflate
+         and module Deflate = Deflate
+         and module Value = Make(Hash)(Inflate)(Deflate)
+         and module Blob = Blob.Make(Hash)
+         and module Commit = Commit.Make(Hash)
+         and module Tree = Tree.Make(Hash)
+         and module Tag = Tag.Make(Hash)
+         and type t = Make(Hash)(Inflate)(Deflate).t
 = struct
-  module Value = Make(H)(I)(D)
 
+  module Value = Make(Hash)(Inflate)(Deflate)
   include Value
 
-  module EE = Helper.MakeEncoder(M)
-  (* XXX(dinosaure): the [Value] module expose only an encoder to a deflated
-     value. We provide an encoder for a serialized encoder. *)
+  let src = Logs.Src.create "git.value.raw" ~doc:"logs git's value raw computation"
+  module Log = (val Logs.src_log src: Logs.LOG)
 
-  module MM =
-  struct
-    type nonrec t = t
+  module DecoderRaw = Helper.MakeDecoder(A)
+  module EncoderRaw = Helper.MakeEncoder(M)
 
-    open Minienc
+  module MakeWithoutHeader (Meta: Encore.Meta.S) =
+    struct
+      type e = t
 
-    let encoder x k e =
-      ((match x with
-          | Tree tree ->
-            Tree.M.encoder tree
-          | Tag tag ->
-            Tag.M.encoder tag
-          | Blob blob ->
-            write_bigstring (Cstruct.to_bigarray (blob :> Cstruct.t))
-          | Commit commit ->
-            Commit.M.encoder commit) k)
-        e
-  end
+      type 'a t = 'a Meta.t
 
-  module EEE = Helper.MakeEncoder(MM)
+      module Meta = Encore.Meta.Make(Meta)
+      module ValueMeta = MakeMeta(Meta)
+      open Meta
+      open ValueMeta
+
+      let p = tag <|> commit <|> tree <|> blob
+    end
+
+  module DecoderWithoutHeader = Helper.MakeDecoder(MakeWithoutHeader(Encore.Proxy_decoder.Impl))
+  module EncoderWithoutHeader = Helper.MakeEncoder(MakeWithoutHeader(Encore.Proxy_encoder.Impl))
 
   module type ENCODER = sig
     type state
@@ -343,8 +328,6 @@ module Raw
     val used : state -> int
     val flush : int -> int -> state -> state
   end
-  (* XXX(dinosaure): this is close to [Helper.Encoder] used to save a
-     value to a file but without Lwt. *)
 
   type ('state, 'raw, 'result, 'error) encoder =
     (module ENCODER with type state = 'state
@@ -353,10 +336,10 @@ module Raw
                      and type error = 'error)
 
   let to_ (type state) (type res) (type err_encoder)
-      (encoder : (state, Cstruct.t, res, err_encoder) encoder)
-      (buffer : Cstruct_buffer.t)
-      (raw : Cstruct.t)
-      (state : state) : (string, err_encoder) result
+        (encoder : (state, Cstruct.t, res, err_encoder) encoder)
+        (buffer : Cstruct_buffer.t)
+        (raw : Cstruct.t)
+        (state : state) : (string, err_encoder) result
     =
     let module E =
       (val encoder : ENCODER with type state = state
@@ -368,15 +351,15 @@ module Raw
     let rec go state = match E.eval raw state with
       | `Error (_, err) -> Error err
       | `End (state, _) ->
-        if E.used state > 0
-        then Cstruct_buffer.add buffer (E.raw_sub raw 0 (E.used state));
+         if E.used state > 0
+         then Cstruct_buffer.add buffer (E.raw_sub raw 0 (E.used state));
 
-        Ok (Cstruct_buffer.contents buffer)
+         Ok (Cstruct_buffer.contents buffer)
       | `Flush state ->
-        if E.used state > 0
-        then Cstruct_buffer.add buffer (E.raw_sub raw 0 (E.used state));
+         if E.used state > 0
+         then Cstruct_buffer.add buffer (E.raw_sub raw 0 (E.used state));
 
-        go (E.flush 0 (E.raw_length raw) state)
+         go (E.flush 0 (E.raw_length raw) state)
     in
 
     go state
@@ -384,90 +367,88 @@ module Raw
   let to_deflated_raw ?(capacity = 0x100) ?(level = 4) ~ztmp value =
     let encoder = E.default (capacity, value, level, ztmp) in
     let raw = Cstruct.create capacity in
-    let buffer = Cstruct_buffer.create (Int64.to_int (F.length value)) in
+    let buffer = Cstruct_buffer.create (Int64.to_int (length value)) in
     (* XXX(dinosaure): it's an heuristic to consider than the size of the result
        is lower than [F.length value]. In most of cases, it's true but sometimes, a
        deflated Git object can be bigger than a serialized Git object. *)
     let module SpecializedEncoder = struct
-      type state = E.encoder
-      type raw = Cstruct.t
-      type result = int
-      type error = E.error
-      let raw_length = Cstruct.len
-      let raw_sub = Cstruct.sub
-      type rest = [ `Flush of state | `End of (state * result) ]
-      let eval raw state = match E.eval raw state with
-        | #rest as rest -> rest
-        | `Error err    -> `Error (state, err)
-      let used = E.used
-      let flush = E.flush
-    end in
+        type state = E.encoder
+        type raw = Cstruct.t
+        type result = int
+        type error = E.error
+        let raw_length = Cstruct.len
+        let raw_sub = Cstruct.sub
+        type rest = [ `Flush of state | `End of (state * result) ]
+        let eval raw state = match E.eval raw state with
+          | #rest as rest -> rest
+          | `Error err    -> `Error (state, err)
+        let used = E.used
+        let flush = E.flush
+      end in
     to_ (module SpecializedEncoder) buffer raw encoder
 
   let to_raw ?(capacity = 0x100) value =
-    let encoder = EE.default (capacity, value) in
+    let encoder = EncoderRaw.default (capacity, value) in
     let raw = Cstruct.create capacity in
-    let buffer = Cstruct_buffer.create (Int64.to_int (F.length value)) in
+    let buffer = Cstruct_buffer.create (Int64.to_int (length value)) in
     (* XXX(dinosaure): we are sure than the serialized object has the size
        [F.length value]. So, the [buffer] should not growth. *)
     let module SpecializedEncoder = struct
-      type state = EE.encoder
-      type raw = Cstruct.t
-      type result = int
-      type error = EE.error
-      let raw_length = Cstruct.len
-      let raw_sub = Cstruct.sub
-      type rest = [ `Flush of state | `End of (state * result) ]
-      let eval raw state = match EE.eval raw state with
-        | #rest as rest -> rest
-        | `Error err    -> `Error (state, err)
-      let used = EE.used
-      let flush = EE.flush
-    end in
+        type state = EncoderRaw.encoder
+        type raw = Cstruct.t
+        type result = int
+        type error = EncoderRaw.error
+        let raw_length = Cstruct.len
+        let raw_sub = Cstruct.sub
+        type rest = [ `Flush of state | `End of (state * result) ]
+        let eval raw state = match EncoderRaw.eval raw state with
+          | #rest as rest -> rest
+          | `Error err    -> `Error (state, err)
+        let used = EncoderRaw.used
+        let flush = EncoderRaw.flush
+      end in
     to_ (module SpecializedEncoder) buffer raw encoder
 
   let to_raw_without_header ?(capacity = 0x100) value =
-    let encoder = EEE.default (capacity, value) in
+    let encoder = EncoderWithoutHeader.default (capacity, value) in
     let raw = Cstruct.create capacity in
-    let buffer = Cstruct_buffer.create (Int64.to_int (F.length value)) in
+    let buffer = Cstruct_buffer.create (Int64.to_int (length value)) in
     (* XXX(dinosaure): we are sure than the serialized object has the size
        [F.length value]. So, the [buffer] should not growth. *)
 
     let module SpecializedEncoder = struct
-      type state = EEE.encoder
-      type raw = Cstruct.t
-      type result = int
-      type error = EEE.error
-      let raw_length = Cstruct.len
-      let raw_sub = Cstruct.sub
-      type rest = [ `Flush of state | `End of (state * result) ]
-      let eval raw state = match EEE.eval raw state with
-        | #rest as rest -> rest
-        | `Error err    -> `Error (state, err)
-      let used = EEE.used
-      let flush = EEE.flush
-    end in
+        type state = EncoderWithoutHeader.encoder
+        type raw = Cstruct.t
+        type result = int
+        type error = EncoderWithoutHeader.error
+        let raw_length = Cstruct.len
+        let raw_sub = Cstruct.sub
+        type rest = [ `Flush of state | `End of (state * result) ]
+        let eval raw state = match EncoderWithoutHeader.eval raw state with
+          | #rest as rest -> rest
+          | `Error err    -> `Error (state, err)
+        let used = EncoderWithoutHeader.used
+        let flush = EncoderWithoutHeader.flush
+      end in
 
     to_ (module SpecializedEncoder) buffer raw encoder
 
-  module DD = Helper.MakeDecoder(A)
-
-  let of_raw_with_header inflated = DD.to_result inflated
+  let of_raw_with_header inflated = DecoderRaw.to_result inflated
   let of_raw ~kind inflated = match kind with
     | `Commit ->
-      Rresult.R.map
-        (fun commit -> Commit commit)
-        (Value.Commit.D.to_result inflated)
+       Rresult.R.map
+         (fun commit -> Commit commit)
+         (Value.Commit.D.to_result inflated)
     | `Tree ->
-      Rresult.R.map
-        (fun tree -> Tree tree)
-        (Value.Tree.D.to_result inflated)
+       Rresult.R.map
+         (fun tree -> Tree tree)
+         (Value.Tree.D.to_result inflated)
     | `Tag ->
-      Rresult.R.map
-        (fun tag -> Tag tag)
-        (Value.Tag.D.to_result inflated)
+       Rresult.R.map
+         (fun tag -> Tag tag)
+         (Value.Tag.D.to_result inflated)
     | `Blob ->
-      let blob blob = Blob blob in
-      Rresult.R.(get_ok (Value.Blob.D.to_result inflated)
-                 |> blob |> ok)
+       let blob blob = Blob blob in
+       Rresult.R.(get_ok (Value.Blob.D.to_result inflated)
+                  |> blob |> ok)
 end

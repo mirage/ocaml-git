@@ -1,3 +1,5 @@
+let () = Printexc.record_backtrace true
+
 include S
 module type S = Minimal.S
 
@@ -17,8 +19,6 @@ module Fanout       = Fanout
 module Bucket       = Bucket
 module Radix        = Radix
 module Rabin        = Rabin
-
-module Minienc      = Minienc
 
 module Traverse_bfs = Traverse_bfs
 module Gc           = Collector

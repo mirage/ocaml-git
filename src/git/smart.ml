@@ -309,7 +309,7 @@ struct
     ; mutable max    : int }
 
   let pp_decoder ppf { buffer; pos; eop; max; } =
-    let pp = Minienc.pp_scalar ~get:Cstruct.get_char ~length:Cstruct.len in
+    let pp = Encore.Lole.pp_scalar ~get:Cstruct.get_char ~length:Cstruct.len in
 
     match eop with
     | Some eop ->

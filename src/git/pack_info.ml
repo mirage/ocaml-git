@@ -118,7 +118,7 @@ module Make
       Fmt.pf ppf "Unexpected end of PACK stream"
     | `Unexpected_chunk chunk ->
       Fmt.pf ppf "Unexpected chunk of PACK stream: %a"
-        (Fmt.hvbox (Minienc.pp_scalar ~get:String.get ~length:String.length))
+        (Fmt.hvbox (Encore.Lole.pp_scalar ~get:String.get ~length:String.length))
         chunk
     | `PDec err ->
       Fmt.pf ppf "Got an error while decoding PACK stream: %a" PDec.pp_error err
@@ -288,7 +288,7 @@ module Make
         (stream () >>= function
           | Some raw ->
             Log.err (fun l -> l ~header:"from_stream" "Expected end of pack stream but retrieve: %a."
-                        (Fmt.hvbox (Minienc.pp_scalar ~get:Cstruct.get_char ~length:Cstruct.len))
+                        (Fmt.hvbox (Encore.Lole.pp_scalar ~get:Cstruct.get_char ~length:Cstruct.len))
                         raw);
             Lwt.return (Error (`Unexpected_chunk (Cstruct.to_string raw)))
           | None ->

@@ -295,7 +295,7 @@ module Make_ext
         Cstruct.blit raw off' buffer off len'';
 
         Log.debug (fun l -> l ~header:"consume" "%a"
-                      (Fmt.hvbox (Git.Minienc.pp_scalar ~get:Cstruct.get_char ~length:Cstruct.len))
+                      (Fmt.hvbox (Encore.Lole.pp_scalar ~get:Cstruct.get_char ~length:Cstruct.len))
                       (Cstruct.sub raw off' len''));
 
         if len' - len'' = 0

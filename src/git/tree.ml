@@ -32,32 +32,25 @@ sig
   val perm_of_string: string -> perm
   val string_of_perm: perm -> string
 
-  module D: S.DECODER
-    with type t = t
-     and type init = Cstruct.t
-     and type error = Error.Decoder.t
-  module A: S.ANGSTROM with type t = t
-  module F: S.FARADAY  with type t = t
-  module M: S.MINIENC  with type t = t
-  module E: S.ENCODER
-    with type t = t
-     and type init = int * t
-     and type error = Error.never
+  module MakeMeta: functor (Meta: Encore.Meta.S) -> sig val p: t Meta.t end
 
-  include S.DIGEST with type t := t and type hash = Hash.t
-  include S.BASE with type t := t
+  module A: S.DESC    with type 'a t = 'a Angstrom.t and type e = t
+  module M: S.DESC    with type 'a t = 'a Encore.Encoder.t and type e = t
+  module D: S.DECODER with type t = t and type init = Cstruct.t and type error = Error.Decoder.t
+  module E: S.ENCODER with type t = t and type init = int * t and type error = Error.never
+  include S.DIGEST    with type t := t and type hash = Hash.t
+  include S.BASE      with type t := t
 
+  val length: t -> int64
   val hashes: t -> Hash.t list
   val to_list: t -> entry list
   val of_list: entry list -> t
   val iter: (entry -> unit) -> t -> unit
 end
 
-module Make (H: S.HASH with type Digest.buffer = Cstruct.t
-                         and type hex = string)
-: S with module Hash = H
-= struct
-  module Hash = H
+module Make (Hash: S.HASH): S with module Hash = Hash = struct
+
+  module Hash = Hash
 
   type entry =
     { perm: perm
@@ -149,112 +142,98 @@ module Make (H: S.HASH with type Digest.buffer = Cstruct.t
         | i -> i
       with Result i -> i
 
+  exception Break
+
+  let has predicate s =
+    let ln = String.length s in
+    try for i = 0 to ln - 1 do if predicate (String.unsafe_get s i) then raise Break done; false
+    with Break -> true
+
   let of_contents c = Contents c
   let of_node n = Node n
   let of_entry = function
-    | { name = n; perm = `Dir; _ } -> of_node n
-    | { name = n; _ } -> of_contents n
+    | { name = n; perm = `Dir; _ } ->
+       if has ((=) '\000') n then invalid_arg "of_entry";
+       of_node n
+    | { name = n; _ } ->
+       if has ((=) '\000') n then invalid_arg "of_entry";
+       of_contents n
 
   let of_list entries: t =
     List.map (fun x -> of_entry x, x) entries
     |> List.sort (fun (a, _) (b, _) -> compare a b)
     |> List.map snd
 
-  module A =
-  struct
-    type nonrec t = t
+  let length t =
+    let string x = Int64.of_int (String.length x) in
+    let ( + ) = Int64.add in
 
-    let is_not_sp chr = chr <> ' '
-    let is_not_nl chr = chr <> '\x00'
+    let entry acc x =
+      (string (string_of_perm x.perm))
+      + 1L
+      + (string x.name)
+      + 1L
+      + (Int64.of_int Hash.Digest.length)
+      + acc
+    in
+    List.fold_left entry 0L t
 
-    let hash = Angstrom.take Hash.Digest.length
+  module MakeMeta (Meta: Encore.Meta.S) =
+    struct
+      type e = t
 
-    let entry =
-      let open Angstrom in
+      open Helper.BaseIso
 
-      take_while is_not_sp >>= fun perm ->
-      (try return (perm_of_string perm)
-       with _ -> fail (Fmt.strf "Invalid permission %s" perm))
-      <* commit
-      >>= fun perm -> take 1 *> take_while is_not_nl <* commit
-      >>= fun name -> take 1 *> hash <* commit
-      >>= fun hash ->
-      return { perm
-             ; name
-             ; node = Hash.of_string hash }
-      <* commit
+      module Iso =
+        struct
+          open Encore.Bijection
 
-    let decoder = Angstrom.many entry
-  end
+          let perm =
+            let tag = ("string", "perm") in
+            make_exn
+              ~tag
+              ~fwd:(Exn.safe_exn tag perm_of_string)
+              ~bwd:(Exn.safe_exn (Helper.Pair.flip tag) string_of_perm)
 
-  module F =
-  struct
-    type nonrec t = t
+          let hash =
+            let tag = ("string", "hash") in
+            make_exn
+              ~tag
+              ~fwd:(Exn.safe_exn tag Hash.of_string)
+              ~bwd:(Exn.safe_exn (Helper.Pair.flip tag) Hash.to_string)
 
-    let length t =
-      let string x = Int64.of_int (String.length x) in
-      let ( + ) = Int64.add in
+          let entry =
+            make_exn
+              ~tag:("perm * string * hash", "entry")
+              ~fwd:(fun ((perm, name), node) -> { perm; name; node; })
+              ~bwd:(fun { perm; name; node; } -> ((perm, name), node))
+        end
 
-      let entry acc x =
-        (string (string_of_perm x.perm))
-        + 1L
-        + (string x.name)
-        + 1L
-        + (Int64.of_int Hash.Digest.length)
-        + acc
-      in
-      List.fold_left entry 0L t
+      type 'a t = 'a Meta.t
 
-    let sp = ' '
-    let nl = '\x00'
+      module Meta = Encore.Meta.Make(Meta)
+      open Meta
 
-    let entry e t =
-      let open Farfadet in
+      let is_not_sp = (<>) ' '
+      let is_not_nl = (<>) '\x00'
 
-      eval e [ !!string; char $ sp; !!string; char $ nl; !!string ]
-        (string_of_perm t.perm)
-        t.name
-        (Hash.to_string t.node)
+      let entry =
+        let perm = Iso.perm <$> (while1 is_not_sp) in
+        let hash = Iso.hash <$> (take Hash.Digest.length) in
+        let name = while1 is_not_nl in
+        Iso.entry <$> ((perm <* (char_elt ' ' <$> any)) <*> (name <* (char_elt '\x00'<$> any)) <*> hash)
 
-    let encoder e t =
-      (Farfadet.list entry) e t
-  end
+      let p = rep0 entry
+    end
 
-  module M =
-  struct
-    open Minienc
-
-    type nonrec t = t
-
-    let sp = ' '
-    let nl = '\x00'
-
-    let entry x k e =
-      (write_string (string_of_perm x.perm)
-       @@ write_char sp
-       @@ write_string x.name
-       @@ write_char nl
-       @@ write_string (Hash.to_string x.node) k)
-        e
-
-    let encoder x k e =
-      let rec list l k e = match l with
-        | x :: r ->
-          (entry x
-           @@ list r k)
-            e
-        | [] -> k e
-      in
-
-      list x k e
-  end
-
+  module A = MakeMeta(Encore.Proxy_decoder.Impl)
+  module M = MakeMeta(Encore.Proxy_encoder.Impl)
   module D = Helper.MakeDecoder(A)
   module E = Helper.MakeEncoder(M)
 
   let digest value =
     let tmp = Cstruct.create 0x100 in
-    Helper.fdigest (module Hash.Digest) (module E) ~tmp ~kind:"tree" ~length:F.length value
+    Helper.fdigest (module Hash.Digest) (module E) ~tmp ~kind:"tree" ~length value
 
   let equal   = (=)
   let compare = Pervasives.compare

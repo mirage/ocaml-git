@@ -18,8 +18,7 @@
 (** A Git Blob object. *)
 
 type t = private Cstruct.t
-(** A Git Blob object which store entirely your files of your Git
-    repository. *)
+(** A Git Blob object which store entirely your file of your Git repository. *)
 
 module type S = sig
 
@@ -28,32 +27,18 @@ module type S = sig
       hash implementation. *)
 
   module Hash: S.HASH
-  (** The [Hash] module used to make the implementation. *)
+  module MakeMeta: functor (Meta: Encore.Meta.S) -> sig val p: t Meta.t end
 
-  module D: S.DECODER
-      with type t = t
-       and type init = Cstruct.t
-       and type error = Error.never
-  (** The decoder of the Git Blob object. We constraint the input to
-      be a {Cstruct.t}. This decoder needs a {Cstruct.t} as an
-      internal buffer. *)
+  module A: S.DESC    with type 'a t = 'a Angstrom.t and type e = t
+  module M: S.DESC    with type 'a t = 'a Encore.Encoder.t and type e = t
+  module D: S.DECODER with type t = t and type init = Cstruct.t and type error = Error.Decoder.t
+  module E: S.ENCODER with type t = t and type error = Error.never
+  include S.DIGEST    with type t := t and type hash := Hash.t
+  include S.BASE      with type t := t
 
-  module E: S.ENCODER
-    with type t = t
-     and type error = Error.never
-  (** The encoder of the Git Blob object. *)
-
-  module A: sig type nonrec t = t val decoder : int -> t Angstrom.t end
-  (** The Angstrom decoder of the Git Blob object. *)
-
-  module F: S.FARADAY with type t = t
-  (** The Faraday encoder of the Git Blob object. *)
-
-  include S.DIGEST
-    with type t := t
-     and type hash := Hash.t
-
-  include S.BASE with type t := t
+  val length: t -> int64
+  (** [length t] returns the length of the blob object [t]. Note that we use
+     {!Cstruct.len} and cast result to [int64]. *)
 
   val of_cstruct: Cstruct.t -> t
   (** [of_cstruct cs] returns the blob value of a [Cstruct.t]. This
@@ -73,6 +58,6 @@ module type S = sig
       value - in other words, the content of your file. *)
 end
 
-module Make (H: S.HASH): S with module Hash = H
+module Make (Hash: S.HASH): S with module Hash = Hash
 (** The {i functor} to make the OCaml representation of the Git Blob
     object by a specific hash implementation. *)

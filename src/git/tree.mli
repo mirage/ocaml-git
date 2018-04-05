@@ -20,7 +20,6 @@
 module type S = sig
 
   module Hash: S.HASH
-  (** The [Hash] module used to make the implementation. *)
 
   type entry =
     { perm : perm
@@ -37,11 +36,11 @@ module type S = sig
   and t
   (** A Git Tree object. Git stores content in a manner similar to a
       UNIX {i filesystem}, but a bit simplified. All the content is
-      stored as tree and {Blob.t} objects, with trees corresponding to
+      stored as tree and {!Blob.t} objects, with trees corresponding to
       UNIX directory entries and blobs corresponding more or less to
       {i inodes} or file contents. A single tree object contains one
       or more tree entries, each of which contains a hash pointer to a
-      {Blob.t} or sub-tree with its associated mode, type, and {i
+      {!Blob.t} or sub-tree with its associated mode, type, and {i
       filename}. *)
 
   val pp_entry: entry Fmt.t
@@ -50,38 +49,17 @@ module type S = sig
   val perm_of_string: string -> perm
   val string_of_perm: perm -> string
 
-  module D: S.DECODER
-    with type t = t
-     and type init = Cstruct.t
-     and type error = Error.Decoder.t
-  (** The decoder of the Git Tree object. We constraint the input to
-      be a {!Cstruct.t}. This decoder needs a {!Cstruct.t} as an
-      internal buffer. *)
+  module MakeMeta: functor (Meta: Encore.Meta.S) -> sig val p: t Meta.t end
 
-  module A: S.ANGSTROM with type t = t
-  (** The Angstrom decoder of the Git Tree object. *)
+  module A: S.DESC    with type 'a t = 'a Angstrom.t and type e = t
+  module M: S.DESC    with type 'a t = 'a Encore.Encoder.t and type e = t
+  module D: S.DECODER with type t = t and type init = Cstruct.t and type error = Error.Decoder.t
+  module E: S.ENCODER with type t = t and type init = int * t and type error = Error.never
+  include S.DIGEST    with type t := t and type hash = Hash.t
+  include S.BASE      with type t := t
 
-  module F: S.FARADAY with type t = t
-  (** The Faraday encoder of the Git Tree object. *)
-
-  module M: S.MINIENC with type t = t
-  (** The {!Minienc} encoder of the Git Tree object. *)
-
-  module E: S.ENCODER
-    with type t = t
-     and type init = int * t
-     and type error = Error.never
-  (** The encoder (which uses a {!Minienc.encoder}) of the Git Tree
-      object. We constraint the output to be a {!Cstruct.t}. This
-      encoder needs the Tree OCaml value and the memory consumption of
-      the encoder (in bytes). The encoder can not fail.
-
-      NOTE: we can not unspecified the error type (it needs to be
-      concrete) but, because the encoder can not fail, we define the
-      error as [`Never]. *)
-
-  include S.DIGEST with type t := t and type hash = Hash.t
-  include S.BASE with type t := t
+  val length: t -> int64
+  (** [length t] returns the length of the tree object [t]. *)
 
   val hashes : t -> Hash.t list
   (** [hashes t] returns all pointer of the tree [t]. *)
@@ -91,6 +69,6 @@ module type S = sig
   val iter: (entry -> unit) -> t -> unit
 end
 
-module Make (H : S.HASH): S with module Hash = H
+module Make (Hash: S.HASH): S with module Hash = Hash
 (** The {i functor} to make the OCaml representation of the Git Tree
     object by a specific hash implementation. *)

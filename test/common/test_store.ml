@@ -115,7 +115,8 @@ module Make (Store : S) = struct
   let t5 = lazy (Store.Value.tree
                    (Store.Value.Tree.of_list
                       [ { Store.Value.Tree.perm = `Normal
-                        ; name = long_random_string ()
+                        ; name = Astring.String.map (function '\000' -> '\001' | chr -> chr) (long_random_string ())
+                        (* XXX(dinosaure): impossible to store an entry with \000 *)
                         ; node = !!kv2 }
                       ; { Store.Value.Tree.perm = `Dir
                         ; name = "a"
@@ -316,7 +317,7 @@ module Make (Store : S) = struct
     in
     let test () =
       match ValueIO.to_raw c with
-      | Error e -> Alcotest.failf "%a" ValueIO.EE.pp_error e
+      | Error e -> Alcotest.failf "%a" ValueIO.EncoderRaw.pp_error e
       | Ok raw  ->
         match ValueIO.of_raw_with_header (Cstruct.of_string raw) with
         | Error err -> Alcotest.failf "decoder: %a" Git.Error.Decoder.pp_error err

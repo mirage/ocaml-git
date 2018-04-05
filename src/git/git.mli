@@ -15,8 +15,6 @@ module Bucket       = Bucket
 module Radix        = Radix
 module Rabin        = Rabin
 
-module Minienc      = Minienc
-
 module Traverse_bfs = Traverse_bfs
 module Gc           = Collector
 module Object_graph = Object_graph

@@ -176,13 +176,13 @@ struct
     | `Result (buf, err) ->
       Fmt.pf ppf "%s\n" err;
       Fmt.pf ppf "%a\n"
-        (Minienc.pp_scalar ~get:Cstruct.get_char ~length:Cstruct.len) buf
+        (Encore.Lole.pp_scalar ~get:Cstruct.get_char ~length:Cstruct.len) buf
     | `Decoder_stream (buf, info) ->
       Fmt.pf ppf "Got an error while decoding chunk (%a): %s\n"
         Fmt.(Dump.list string) info.path
         info.error;
       Fmt.pf ppf "%a\n"
-        (Minienc.pp_scalar ~get:Cstruct.get_char ~length:Cstruct.len)
+        (Encore.Lole.pp_scalar ~get:Cstruct.get_char ~length:Cstruct.len)
         (Cstruct.shift buf info.committed)
     | `Decoder_file (path, info) ->
       Fmt.pf ppf "Got an error while decoding file %a at the byte %d: %s"

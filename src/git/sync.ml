@@ -175,7 +175,7 @@ module Common
   end
 
   module Pq = Psq.Make(Store.Hash)(Node)
-  module Q = Minienc.Queue
+  module Q = Encore.FQueue
 
   exception Store of Store.error
 
@@ -480,7 +480,7 @@ module Make (N: NET) (S: Minimal.S) = struct
       let raw = Cstruct.sub buf committed (Cstruct.len buf - committed) in
       Log.err (fun l -> l ~header:"process" "Retrieve an error (%a) on: %a."
                   Client.Decoder.pp_error err
-                  (Fmt.hvbox (Minienc.pp_scalar ~get:Cstruct.get_char ~length:Cstruct.len)) raw);
+                  (Fmt.hvbox (Encore.Lole.pp_scalar ~get:Cstruct.get_char ~length:Cstruct.len)) raw);
       assert false (* TODO *)
     | #Client.result as result ->
       Lwt.return result

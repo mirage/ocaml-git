@@ -21,24 +21,48 @@ module Log = (val Logs.src_log src : Logs.LOG)
 let ppe ~name ppv =
   Fmt.braces (fun ppf -> Fmt.pf ppf "%s %a" name (Fmt.hvbox ppv))
 
-module BaseBytes = struct
-  open Bytes
+module Pair =
+  struct
+    let flip (a, b) = (b, a)
+    let fst (a, _) = a
+    let snd (_, b) = b
+  end
 
-  type nonrec t = t
+module Option =
+  struct
+    let map f v = match v with
+      | Some v -> Some (f v)
+      | None -> None
 
-  let equal = equal
-  let compare = compare
-  let hash = Hashtbl.hash
+    let ( >>= ) v f = map f v
+  end
 
-  module Set = Set.Make(struct type nonrec t = t let compare = compare end)
-  module Map = Map.Make(struct type nonrec t = t let compare = compare end)
+module BaseIso = struct
+  open Encore.Bijection
 
-  let pp = Fmt.iter Bytes.iter (Fmt.using Char.code (fun ppf -> Fmt.pf ppf "%02x"))
-  let to_hex x = let `Hex v = Hex.of_string (Bytes.unsafe_to_string x) in v
-  let of_hex x = Hex.to_string (`Hex x) |> Bytes.unsafe_of_string
+  let flip (a, b) = (b, a)
+
+  let int64 =
+    let tag = ("string", "int64") in
+    make_exn
+      ~tag
+      ~fwd:(Exn.safe_exn tag Int64.of_string)
+      ~bwd:(Exn.safe_exn (flip tag) Int64.to_string)
+
+  let cstruct =
+    Encore.Bijection.make_exn
+      ~tag:("cstruct", "bigarray")
+      ~fwd:Cstruct.of_bigarray
+      ~bwd:Cstruct.to_bigarray
+
+  let char_elt chr =
+    Exn.element ~tag:(Fmt.strf "char:%02x" (Char.code chr)) ~compare:Char.equal chr
+
+  let string_elt str =
+    Exn.element ~tag:str ~compare:String.equal str
 end
 
-module MakeDecoder (A: S.ANGSTROM) = struct
+module MakeDecoder (A: S.DESC with type 'a t = 'a Angstrom.t) = struct
   (* XXX(dinosaure): This decoder is on top of some assertion about
      the decoding of a Git object. [Angstrom] can not consume all
      input (when we have an alteration specifically) and the client
@@ -64,13 +88,13 @@ module MakeDecoder (A: S.ANGSTROM) = struct
 
   type error = Error.Decoder.t
   type init = Cstruct.t
-  type t = A.t
+  type t = A.e
 
   let pp_error ppf = function
     | #Error.Decoder.t as err -> Error.Decoder.pp_error ppf err
 
   type decoder =
-    { state    : Angstrom.bigstring -> off:int -> len:int -> Angstrom.Unbuffered.more -> A.t Angstrom.Unbuffered.state
+    { state    : Angstrom.bigstring -> off:int -> len:int -> Angstrom.Unbuffered.more -> A.e Angstrom.Unbuffered.state
     ; final    : Angstrom.Unbuffered.more
     ; internal : Cstruct.t
     ; max      : int }
@@ -93,7 +117,7 @@ module MakeDecoder (A: S.ANGSTROM) = struct
     Log.debug (fun l ->
         l "Starting to decode a Git object with a internal buffer (%d)." len);
     let open Angstrom.Unbuffered in
-    { state = (match parse A.decoder with
+    { state = (match parse A.p with
           | Done (committed, value)         -> kdone (committed, value)
           | Fail (committed, path, err)     -> kfail (committed, path, err)
           | Partial { committed; continue } ->
@@ -199,7 +223,7 @@ module MakeDecoder (A: S.ANGSTROM) = struct
         Ok { decoder with internal = internal }
 
   let to_result input =
-    Angstrom.parse_bigstring A.decoder (Cstruct.to_bigarray input)
+    Angstrom.parse_bigstring A.p (Cstruct.to_bigarray input)
     |> function
     | Ok _ as v -> v
     | Error err -> Error.(v @@ Decoder.err_result input err)
@@ -208,7 +232,7 @@ module MakeDecoder (A: S.ANGSTROM) = struct
     { decoder with final = Angstrom.Unbuffered.Complete }
 end
 
-module MakeInflater (Z: S.INFLATE) (A: S.ANGSTROM) = struct
+module MakeInflater (Z: S.INFLATE) (A: S.DESC with type 'a t = 'a Angstrom.t) = struct
 
   let src = Logs.Src.create "git.inflater.decoder"
       ~doc:"logs git's internal inflater/decoder"
@@ -216,7 +240,7 @@ module MakeInflater (Z: S.INFLATE) (A: S.ANGSTROM) = struct
 
   module D = MakeDecoder(A)
 
-  type t = A.t
+  type t = A.e
   type init = Z.window * Cstruct.t * Cstruct.t
 
   type error =
@@ -301,30 +325,32 @@ module MakeInflater (Z: S.INFLATE) (A: S.ANGSTROM) = struct
     go t
 end
 
-module MakeEncoder (M: S.MINIENC) = struct
+module MakeEncoder (M: S.DESC with type 'a t = 'a Encore.Encoder.t) = struct
 
   let src = Logs.Src.create "git.encoder" ~doc:"logs git's internal encoder"
   module Log = (val Logs.src_log src : Logs.LOG)
 
-  type t = M.t
+  type t = M.e
   type init = int * t
   type error = Error.never
 
   let pp_error ppf `Never = Fmt.string ppf "`Never"
+
+  open Encore
 
   type encoder =
     { o_off : int
     ; o_pos : int
     ; o_len : int
     ; w_acc : int
-    ; state : Minienc.encoder Minienc.state }
+    ; state : Lole.encoder Lole.state }
 
   let default (capacity, x) =
     Log.debug (fun l ->
         l "Starting to encode a Git object with a capacity = %d." capacity);
 
-    let encoder = Minienc.create capacity in
-    let state   = M.encoder x (fun encoder -> Minienc.End encoder) encoder in
+    let encoder = Lole.create capacity in
+    let state   = Encoder.run M.p (fun encoder -> Lole.End encoder) encoder x in
     { o_off = 0
     ; o_pos = 0
     ; o_len = 0
@@ -337,20 +363,20 @@ module MakeEncoder (M: S.MINIENC) = struct
       | None       -> len
     in
     match iovec with
-    | { Minienc.IOVec.buffer = `Bigstring x; off; len; } ->
+    | { Lole.IOVec.buffer = Lole.Buffer.Bigstring x; off; len; } ->
       Cstruct.blit (Cstruct.of_bigarray ~off ~len x) 0 cs cs_off (max len); max len
-    | { Minienc.IOVec.buffer = `Bytes x; off; len; } ->
+    | { Lole.IOVec.buffer = Lole.Buffer.Bytes x; off; len; } ->
       Cstruct.blit_from_bytes x off cs cs_off (max len); max len
-    | { Minienc.IOVec.buffer = `String x; off; len; } ->
+    | { Lole.IOVec.buffer = Lole.Buffer.String x; off; len; } ->
       Cstruct.blit_from_string x off cs cs_off (max len); max len
 
   exception Drain of int
 
   let rec eval current e =
     match e.state with
-    | Minienc.End minienc ->
-      let shift  = min (e.o_len - e.o_pos) (Minienc.has minienc) in
-      let iovecs, shifted = Minienc.shift shift minienc in
+    | Lole.End minienc ->
+      let shift  = min (e.o_len - e.o_pos) (Lole.has minienc) in
+      let iovecs, shifted = Lole.shift shift minienc in
       let shift' = List.fold_left (fun acc iovec ->
           let write = cstruct_blit_iovec iovec current acc None in
           acc + write)
@@ -359,19 +385,19 @@ module MakeEncoder (M: S.MINIENC) = struct
       Log.debug (fun l ->
           l "Ensure than we wrote exactly [shift = %d] byte(s)." shift);
       assert (e.o_off + e.o_pos + shift = shift');
-      if Minienc.has shifted > 0
+      if Lole.has shifted > 0
       then `Flush { e with o_pos = e.o_pos + shift
                          ; w_acc = e.w_acc + shift
-                         ; state = Minienc.End shifted }
+                         ; state = Lole.End shifted }
       else `End ({ e with o_pos = e.o_pos + shift
                         ; w_acc = e.w_acc + shift
-                        ; state = Minienc.End shifted }, e.w_acc + shift)
-    | Minienc.Continue { encoder; continue; } ->
+                        ; state = Lole.End shifted }, e.w_acc + shift)
+    | Lole.Continue { encoder; continue; } ->
       (* XXX(dinosaure): we can shift the minienc at this time, but
          it's very useful? *)
       eval current { e with state = continue encoder }
-    | Minienc.Flush { continue; iovecs; } ->
-      let max = min (e.o_len - e.o_pos) (Minienc.IOVec.lengthv iovecs) in
+    | Lole.Flush { continue; iovecs; } ->
+      let max = min (e.o_len - e.o_pos) (Lole.IOVec.lengthv iovecs) in
       try
         (* XXX(dinosaure): wtf?! pourquoi j'ai fait ce code (peut être
            pour ne pas utiliser [fold_left]. It's an optimization to
@@ -401,13 +427,13 @@ module MakeEncoder (M: S.MINIENC) = struct
   let used { o_pos; _ } = o_pos
 end
 
-module MakeDeflater (Z: S.DEFLATE) (M: S.MINIENC) = struct
+module MakeDeflater (Z: S.DEFLATE) (M: S.DESC with type 'a t = 'a Encore.Encoder.t) = struct
 
   let src = Logs.Src.create "git.deflater.encoder"
       ~doc:"logs git's internal deflater/encoder"
   module Log = (val Logs.src_log src : Logs.LOG)
 
-  type t = M.t
+  type t = M.e
   type init = int * t * int * Cstruct.t
   type error = [ `Deflate of Z.error ]
 
@@ -486,7 +512,9 @@ end
    client does not free some spaces.
 
    Then, we control the memory consumption when we compute the hash of
-   the Git object and we never grow the internal buffer. *)
+   the Git object and we never grow the internal buffer.
+
+   UPDATE: we move encoder to `encore` library. *)
 let fdigest: type t hash.
      (module S.IDIGEST with type t = hash)
   -> (module S.ENCODER
@@ -518,32 +546,6 @@ let fdigest: type t hash.
       | `Error `Never -> assert false
     in
     loop encoder
-
-let digest
-  : type t hash. (module S.IDIGEST with type t = hash)
-    -> (module S.FARADAY with type t = t)
-    -> kind:string
-  -> t
-  -> hash
-  = fun digest faraday ~kind value ->
-    let module Digest = (val digest) in
-    let module F      = (val faraday) in
-    let hdr = Fmt.strf "%s %Ld\000" kind (F.length value) in
-    let ctx = Digest.init () in
-    let raw = Cstruct.create (Int64.to_int (F.length value)) in (* XXX(dinosaure): to digest. *)
-    let enc = Faraday.of_bigstring (Cstruct.to_bigarray raw) in
-    Digest.feed ctx (Cstruct.of_string hdr);
-    F.encoder enc value;
-    Faraday.close enc;
-    Faraday.serialize enc (fun iovecs ->
-        let len = List.fold_left (fun acc -> function
-            | { Faraday.buffer = buf; off; len; } ->
-              Digest.feed ctx (Cstruct.of_bigarray ~off ~len buf); acc + len)
-            0 iovecs
-        in `Ok len)
-    |> function
-    | `Close -> Digest.get ctx
-    | `Yield -> assert false
 
 module type ENCODER = sig
   type state

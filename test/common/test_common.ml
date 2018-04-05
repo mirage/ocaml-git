@@ -113,7 +113,7 @@ module Make (S: Git.S) = struct
   let assert_cstruct_data_equal, assert_cstruct_data_opt_equal, assert_cstructs_data_equal =
     mk (fun a b -> String.equal (Cstruct.to_string a) (Cstruct.to_string b))
       (fun a b -> String.compare (Cstruct.to_string a) (Cstruct.to_string b))
-      (Fmt.hvbox (Git.Minienc.pp_scalar ~get:Cstruct.get_char ~length:Cstruct.len))
+      (Fmt.hvbox (Encore.Lole.pp_scalar ~get:Cstruct.get_char ~length:Cstruct.len))
 
   let assert_ref_and_hash_equal, assert_ref_and_hash_opt_equal, assert_refs_and_hashes_equal =
     mk

@@ -23,12 +23,28 @@
     like ["(name %a)" pp value]. *)
 val ppe : name:string -> 'a Fmt.t -> 'a Fmt.t
 
-module BaseBytes:
+module Pair:
 sig
-  include S.BASE with type t = Bytes.t
+  val flip: ('a * 'b) -> ('b * 'a)
+  val fst: ('a * 'b) -> 'a
+  val snd: ('a * 'b) -> 'b
+end
 
-  val to_hex : t -> string
-  val of_hex : string -> t
+module Option:
+sig
+  val map: ('a -> 'b) -> 'a option -> 'b option
+  val ( >>= ): 'a option -> ('a -> 'b) -> 'b option
+end
+
+(** Helper for some convenience bijection elements. *)
+module BaseIso:
+sig
+  val flip: ('a * 'b) -> ('b * 'a)
+
+  val int64: (string, int64) Encore.Bijection.texn
+  val cstruct: (Encore.Lole.bigstring, Cstruct.t) Encore.Bijection.texn
+  val char_elt: char -> (char, unit) Encore.Bijection.texn
+  val string_elt: string -> (string, unit) Encore.Bijection.texn
 end
 
 (** [MakeDecoder] makes a module which respects the interface
@@ -37,8 +53,8 @@ end
     This decoder is implemented on top of some assertions (see comment
     in the [helper.ml] file for more informations), don't use it
     outside the scope of ocaml-git. *)
-module MakeDecoder (A :S.ANGSTROM): S.DECODER
-  with type t = A.t
+module MakeDecoder (A: S.DESC with type 'a t = 'a Angstrom.t): S.DECODER
+  with type t = A.e
    and type init = Cstruct.t
    and type error = Error.Decoder.t
 
@@ -49,8 +65,8 @@ module MakeDecoder (A :S.ANGSTROM): S.DECODER
     assertions - it's an extension of the previous decoder with an
     inflator. Then, this decoder decodes both the inflated flow and
     the serialized flow with fixed-size buffers. *)
-module MakeInflater (Z: S.INFLATE) (A: S.ANGSTROM): S.DECODER
-  with type t = A.t
+module MakeInflater (Z: S.INFLATE) (A: S.DESC with type 'a t = 'a Angstrom.t): S.DECODER
+  with type t = A.e
    and type init = Z.window * Cstruct.t * Cstruct.t
    and type error = [ Error.Decoder.t | `Inflate of Z.error ]
 
@@ -62,9 +78,9 @@ module MakeInflater (Z: S.INFLATE) (A: S.ANGSTROM): S.DECODER
     Then, this encoder [`Never] fails but we define a concrete error
     type to allow the client to match on it - then, he can use [asset
     false] without fear. *)
-module MakeEncoder (M: S.MINIENC): S.ENCODER
-  with type t = M.t
-   and type init = int * M.t
+module MakeEncoder (M: S.DESC with type 'a t = 'a Encore.Encoder.t): S.ENCODER
+  with type t = M.e
+   and type init = int * M.e
    and type error = Error.never
 
 (** [MakeDeflater] makes a module which respects the interface
@@ -74,19 +90,10 @@ module MakeEncoder (M: S.MINIENC): S.ENCODER
 
     This encoder encodes both the OCaml value and deflates the
     stream. *)
-module MakeDeflater (Z: S.DEFLATE) (M: S.MINIENC): S.ENCODER
-  with type t = M.t
-   and type init = int * M.t * int * Cstruct.t
+module MakeDeflater (Z: S.DEFLATE) (M: S.DESC with type 'a t = 'a Encore.Encoder.t): S.ENCODER
+  with type t = M.e
+   and type init = int * M.e * int * Cstruct.t
    and type error = [ `Deflate of Z.error ]
-
-(** [digest (module Hash) (module Faraday) ~kind value] digests
-    [value] with the [Hash] implementation and use the [Faraday]
-    encoder to {i stream} on the [Hash.digest] function. [kind] is the
-    kind of the [value] (Commit, Blob, etc.) to make the Git header in
-    top of the serialized [value]. *)
-val digest:
-  (module S.IDIGEST with type t = 'hash) ->
-  (module S.FARADAY with type t = 't) -> kind:string -> 't -> 'hash
 
 (** [fdigest (module Hash) (module Encoder) ?capacity ~tmp ~kind
     ~length value] digests [value] with the [Hash] implementation and use
