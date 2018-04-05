@@ -355,12 +355,12 @@ module Make (Store : S) = struct
       Store.Ref.write t r1 (Store.Reference.Hash !!kt4)
       >>= check_err >>= fun () ->
       Store.Ref.read  t r1
-      >>= check_err >>= fun (_, kt4') ->
+      >>= check_err >>= fun kt4' ->
       assert_head_contents_equal "r1" (Store.Reference.Hash !!kt4) kt4';
 
       Store.Ref.write t r2 (Store.Reference.Hash !!kc2)
       >>= check_err >>= fun ()   ->
-      Store.Ref.read  t r2 >>= check_err >>= fun (_, kc2') ->
+      Store.Ref.read  t r2 >>= check_err >>= fun kc2' ->
       assert_head_contents_equal "r2" (Store.Reference.Hash !!kc2) kc2';
 
       Store.Ref.list t >>= fun rs ->
@@ -370,7 +370,7 @@ module Make (Store : S) = struct
       Store.Ref.write t Store.Reference.head (Store.Reference.Hash commit)
       >>= check_err >>= fun () ->
       Store.Ref.read t Store.Reference.head
-      >>= check_err >|= fun (_, value) ->
+      >>= check_err >|= fun value ->
       Alcotest.(check head_contents) "head" (Store.Reference.Hash commit) value
     in
     run test

@@ -678,14 +678,16 @@ module type S = sig
         from the git repository [state]. *)
 
     val read: t -> Reference.t ->
-      ((Reference.t * Reference.head_contents), error) result Lwt.t
+      (Reference.head_contents, error) result Lwt.t
     (** [read state reference] is the value contained in the reference
         [reference] (available in the git repository [state]). *)
 
+    val resolve: t -> Reference.t -> (Hash.t, error) result Lwt.t
+
     val write: t -> Reference.t -> Reference.head_contents ->
       (unit, error) result Lwt.t
-   (** [write state reference value] writes the value [value] in
-       the the [reference] in the git repository [state]. *)
+    (** [write state reference value] writes the value [value] in
+        the the [reference] in the git repository [state]. *)
 
   end
 
