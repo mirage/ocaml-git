@@ -272,18 +272,7 @@ module IO (Hash: S.HASH) (FS: S.FS) = struct
     include Helper.Encoder(E)(FS)
   end
 
-  module Decoder = struct
-    module D = struct
-      type state = D.decoder
-      type error = D.error
-      type t = D.t
-
-      let eval = D.eval
-      let refill = D.refill
-      let finish = D.finish
-    end
-    include Helper.Decoder(D)(FS)
-  end
+  module Decoder = Helper.Decoder(D)(FS)
 
   type fs_error = FS.error Error.FS.t
   type error =

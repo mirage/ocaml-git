@@ -155,20 +155,7 @@ module Make (H: S.HASH) (FS: S.FS) = struct
 
   open Lwt.Infix
 
-  module Decoder =
-    struct
-      module D =
-        struct
-          type state = D.decoder
-          type error = D.error
-          type t = D.t
-
-          let eval = D.eval
-          let refill = D.refill
-          let finish = D.finish
-        end
-      include Helper.Decoder(D)(FS)
-    end
+  module Decoder = Helper.Decoder(D)(FS)
 
   let read ~fs ~root ~dtmp ~raw =
     let state = D.default dtmp in

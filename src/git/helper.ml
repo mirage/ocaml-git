@@ -559,17 +559,16 @@ module type ENCODER = sig
   val flush: int -> int -> state -> state
 end
 
-module type DECODER =
-sig
-  type state
+module type DECODER = sig
+  type decoder
   type error
   type t
-  val eval: state ->
-    [ `Await of state
+  val eval: decoder ->
+    [ `Await of decoder
     | `End of (Cstruct.t * t)
     | `Error of (Cstruct.t * error) ]
-  val refill: Cstruct.t -> state -> (state, error) result
-  val finish: state -> state
+  val refill: Cstruct.t -> decoder -> (decoder, error) result
+  val finish: decoder -> decoder
 end
 
 (* XXX(dinosaure): this function takes care about how many byte(s) we

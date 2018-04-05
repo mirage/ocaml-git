@@ -199,11 +199,11 @@ module Make
           | Error _ -> acc)
         [] firsts
 
-  type ('result, 'state) decoder =
-    (module Helper.DECODER with type t = 'result
-                            and type state = 'state
-                            and type error = [ Error.Decoder.t
-                                             | `Inflate of Inflate.error ] )
+  type ('result, 'decoder) decoder =
+    (module Helper.DECODER
+            with type t = 'result
+             and type decoder = 'decoder
+             and type error = [ Error.Decoder.t | `Inflate of Inflate.error ] )
 
   let gen (type state) (type result) ~fs ~root (state:state) ~raw (decoder : (result, state) decoder) hash =
     let module D = (val decoder) in
@@ -221,15 +221,6 @@ module Make
 
   let read ~fs ~root ~window ~ztmp ~dtmp ~raw hash =
     let state = D.default (window, ztmp, dtmp) in
-    let module D = struct
-        type state = D.decoder
-        type error = D.error
-        type t = D.t
-
-        let eval = D.eval
-        let refill = D.refill
-        let finish = D.finish
-      end in
     gen ~fs ~root state ~raw (module D) hash
 
   module HeaderAndBody = struct
@@ -285,15 +276,6 @@ module Make
 
   let inflate ~fs ~root ~window ~ztmp ~dtmp ~raw hash =
     let state = I.default (window, ztmp, dtmp) in
-    let module I = struct
-        type state = I.decoder
-        type error = I.error
-        type t = I.t
-
-        let eval = I.eval
-        let refill = I.refill
-        let finish = I.finish
-      end in
     gen ~fs ~root state ~raw (module I) hash
 
   let inflate_wa ~fs ~root ~window ~ztmp ~dtmp ~raw ~result hash =
@@ -302,15 +284,6 @@ module Make
         let p = decoder ~result:(Some result)
       end) in
     let state = P.default (window, ztmp, dtmp) in
-    let module P = struct
-        type state = P.decoder
-        type error = P.error
-        type t = P.t
-
-        let eval = P.eval
-        let refill = P.refill
-        let finish = P.finish
-      end in
     gen ~fs ~root state ~raw (module P) hash
 
   module HeaderOnly = struct
@@ -330,15 +303,6 @@ module Make
 
   let size ~fs ~root ~window ~ztmp ~dtmp ~raw hash =
     let state = S.default (window, ztmp, dtmp) in
-    let module S = struct
-        type state = S.decoder
-        type error = S.error
-        type t = S.t
-
-        let eval = S.eval
-        let refill = S.refill
-        let finish = S.finish
-      end in
     gen ~fs ~root state ~raw (module S) hash >|= function
     | Ok (_, v) -> Ok v
     | Error _ as err -> err
