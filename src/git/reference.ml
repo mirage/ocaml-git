@@ -307,11 +307,10 @@ module IO (Hash: S.HASH) (FS: S.FS) = struct
   let read ~fs ~root reference ~dtmp ~raw : (_, error) result Lwt.t =
     let state = D.default dtmp in
     let file  = Fpath.(root // (to_path reference)) in
-    Decoder.of_file fs file raw state >>= function
-    | Ok v -> Lwt.return (Ok (normalize file, v))
-    | Error (`Decoder (#Error.Decoder.t as err)) ->
-       Lwt.return Error.(v @@ Error.Decoder.with_path file err)
-    | Error #fs_error as err -> Lwt.return err
+    Decoder.of_file fs file raw state >|= function
+    | Ok v -> (Ok (normalize file, v))
+    | Error (`Decoder err) -> Error.(v @@ Error.Decoder.with_path file err)
+    | Error #fs_error as err -> err
 
   let write ~fs ~root ?(capacity = 0x100) ~raw reference value =
     let state = E.default (capacity, value) in

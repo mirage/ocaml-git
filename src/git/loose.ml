@@ -211,13 +211,11 @@ module Make
     let first, rest = explode hash in
     let file        = Fpath.(root / "objects" / first / rest) in
     Log.debug (fun l -> l "Reading the loose object %a." Fpath.pp file);
-    Decoder.of_file fs file raw state >>= function
-    | Ok v -> Lwt.return (Ok v)
-    | Error (`Decoder (#Error.Decoder.t as err)) ->
-       Lwt.return Error.(v @@ Error.Decoder.with_path file err)
-    | Error (`Decoder (`Inflate _ as err)) ->
-       Lwt.return Error.(v @@ Inf.with_path file err)
-    | Error #fs_error as err -> Lwt.return err
+    Decoder.of_file fs file raw state >|= function
+    | Ok _ as v -> v
+    | Error (`Decoder (#Error.Decoder.t as err)) -> Error.(v @@ Error.Decoder.with_path file err)
+    | Error (`Decoder (`Inflate _ as err)) -> Error.(v @@ Inf.with_path file err)
+    | Error #fs_error as err -> err
 
   let read ~fs ~root ~window ~ztmp ~dtmp ~raw hash =
     let state = D.default (window, ztmp, dtmp) in
