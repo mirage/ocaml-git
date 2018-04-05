@@ -272,6 +272,19 @@ module IO (Hash: S.HASH) (FS: S.FS) = struct
     include Helper.Encoder(E)(FS)
   end
 
+  module Decoder = struct
+    module D = struct
+      type state = D.decoder
+      type error = D.error
+      type t = D.t
+
+      let eval = D.eval
+      let refill = D.refill
+      let finish = D.finish
+    end
+    include Helper.Decoder(D)(FS)
+  end
+
   type fs_error = FS.error Error.FS.t
   type error =
     [ Error.Decoder.t
@@ -303,34 +316,13 @@ module IO (Hash: S.HASH) (FS: S.FS) = struct
     | Error _ -> false
 
   let read ~fs ~root reference ~dtmp ~raw : (_, error) result Lwt.t =
-    let decoder = D.default dtmp in
-    let path = Fpath.(root // (to_path reference)) in
-    Log.debug (fun l -> l "Reading the reference: %a." Fpath.pp path);
-    FS.with_open_r fs path @@ fun read ->
-    let rec loop decoder = match D.eval decoder with
-      | `End (_, value) -> Lwt.return (Ok value)
-      | `Error (_, (#Error.Decoder.t as err)) ->
-        Lwt.return Error.(v @@ Decoder.with_path path err)
-      | `Await decoder ->
-        FS.File.read raw read >>= function
-        | Error err -> Lwt.return Error.(v @@ FS.err_read path err)
-        | Ok 0 -> loop (D.finish decoder)
-        (* XXX(dinosaure): in this case, we read a file, so when we
-           retrieve 0 bytes, that means we get end of the file. We
-           can finish the deserialization. *)
-        | Ok n -> match D.refill (Cstruct.sub raw 0 n) decoder with
-          | Ok decoder -> loop decoder
-          | Error (#Error.Decoder.t as err) ->
-            Lwt.return Error.(v @@ Decoder.with_path path err)
-    in
-    loop decoder >|= function
-    | Error _ as e     -> e
-    | Ok head_contents ->
-      let reference' = normalize path in
-      Log.debug (fun l ->
-          l "Normalize reference %a = %a." pp reference pp reference');
-      assert (equal reference reference');
-      Ok (normalize path, head_contents)
+    let state = D.default dtmp in
+    let file  = Fpath.(root // (to_path reference)) in
+    Decoder.of_file fs file raw state >>= function
+    | Ok v -> Lwt.return (Ok (normalize file, v))
+    | Error (`Decoder (#Error.Decoder.t as err)) ->
+       Lwt.return Error.(v @@ Error.Decoder.with_path file err)
+    | Error #fs_error as err -> Lwt.return err
 
   let write ~fs ~root ?(capacity = 0x100) ~raw reference value =
     let state = E.default (capacity, value) in
