@@ -950,7 +950,7 @@ module type P = sig
      and module Entry := Entry
 
   module Hunk: H with module Hash := Hash
-  module Radix: Radix.S with type key = Hash.t
+  module Map: Map.S with type key = Hash.t
 
   type error =
     | Deflate_error of Deflate.error
@@ -968,7 +968,7 @@ module type P = sig
   val finish : t -> t
 
   val expect : t -> Hash.t
-  val idx : t -> (Crc32.t * int64) Radix.t
+  val idx : t -> (Crc32.t * int64) Map.t
 
   val default : Cstruct.t -> (Entry.t * Delta.t) list -> t
 
@@ -993,7 +993,7 @@ struct
   module Entry = Entry
   module Delta = Delta
   module Hunk = Hunk
-  module Radix = Radix.Make(struct type t = Hash.t let get = Hash.get let length _ = Hash.Digest.length end)
+  module Map = Map.Make(Hash)
 
   type error =
     | Deflate_error of Deflate.error
@@ -1013,7 +1013,7 @@ struct
     ; i_pos   : int
     ; i_len   : int
     ; write   : int64
-    ; radix   : (Crc32.t * int64) Radix.t
+    ; map     : (Crc32.t * int64) Map.t
     ; hash    : Hash.Digest.ctx
     ; h_tmp   : Cstruct.t
     ; state   : state }
@@ -1283,18 +1283,18 @@ struct
         dst t
 
     | KindOffset, { Delta.delta = Delta.S { length; hunks; src_length; src_hash; _ } } ->
-      (match Radix.lookup t.radix src_hash with
-       | Some (_, src_off) ->
-         let trg_length = Entry.length entry in
-         let abs_off    = t.write in
-         let rel_off    = Int64.sub abs_off src_off in
+      ((* XXX(dinosaure): should not possible to fail. *)
+       let _, src_off = Map.find src_hash t.map in
+       let trg_length = Entry.length entry in
+       let abs_off    = t.write in
+       let rel_off    = Int64.sub abs_off src_off in
 
-         let h =
-           Hunk.flush 0 (Cstruct.len t.h_tmp)
-           @@ Hunk.default (Hunk.Offset rel_off) (Int64.to_int src_length) (Int64.to_int trg_length) hunks
-           (* XXX(dinosaure): FIXME: [trg_length] is an [int64] but H
-              expects an [int]. *)
-         in
+       let h =
+         Hunk.flush 0 (Cstruct.len t.h_tmp)
+         @@ Hunk.default (Hunk.Offset rel_off) (Int64.to_int src_length) (Int64.to_int trg_length) hunks
+       (* XXX(dinosaure): FIXME: [trg_length] is an [int64] but H
+             expects an [int]. *)
+       in
 
          (KWriteK.header 0b110 (Int64.of_int length) Crc32.default
           @@ fun crc -> KWriteK.offset rel_off crc
@@ -1312,8 +1312,7 @@ struct
                       ; i_off = 0
                       ; i_len = 0
                       ; i_pos = 0 })
-           dst t
-       | None -> assert false)
+           dst t)
 
     | (KindRaw | KindHash | KindOffset),
       { Delta.delta = (Delta.S _ | Delta.Z); _ } -> assert false
@@ -1395,7 +1394,7 @@ struct
     | (entry, delta) :: r ->
       match Entry.delta entry, delta with
       | Entry.From src_hash, { Delta.delta = Delta.S _ } ->
-        if Radix.mem t.radix src_hash
+        if Map.mem src_hash t.map
         then Cont { t with state = WriteK (writek KindOffset entry delta r) }
         else Cont { t with state = WriteK (writek KindHash entry delta r) }
       | Entry.None, { Delta.delta = Delta.Z } ->
@@ -1405,7 +1404,7 @@ struct
 
   let save _ t x r crc off =
     Cont { t with state = Object (iter r)
-                ; radix = Radix.bind t.radix (Entry.id x) (crc, off) }
+                ; map = Map.add (Entry.id x) (crc, off) t.map }
 
   let number lst dst t =
     (* XXX(dinosaure): problem in 32-bits architecture. TODO! *)
@@ -1426,7 +1425,7 @@ struct
 
   let used_out t = t.o_pos
 
-  let idx t = t.radix
+  let idx t = t.map
 
   let eval src dst t =
     let eval0 t = match t.state with
@@ -1547,7 +1546,7 @@ struct
     ; i_pos = 0
     ; i_len = 0
     ; write = 0L
-    ; radix = Radix.empty
+    ; map = Map.empty
     ; h_tmp
     ; hash = Hash.Digest.init ()
     ; state = (Header (header objects)) }

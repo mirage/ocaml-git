@@ -189,7 +189,8 @@ module Make (S: STORE) = struct
             Lwt.return (Some (Cstruct.sub dtmp 0 (S.PEnc.used_out state')))
           end else begin
             state := state';
-            let graph = S.PEnc.Radix.fold (fun (key, value) acc -> Graph.add key value acc) Graph.empty (S.PEnc.idx state') in
+            let graph = S.PEnc.Map.fold (fun key value acc -> Graph.add key value acc) (S.PEnc.idx state') Graph.empty in
+            (* XXX(dinosaure): can be optimized because structurally the same. *)
             Lwt_mvar.put mvar graph >>= fun () -> Lwt.return None
           end
         | `Error (state', err) ->

@@ -134,7 +134,7 @@ module type S = sig
 
   val save_idx_file:
        fs:FS.t -> root:Fpath.t
-    -> (Hash.t * (Crc32.t * int64)) Radix.sequence
+    -> (Hash.t * (Crc32.t * int64)) IEnc.sequence
     -> Hash.t
     -> (unit, error) result Lwt.t
 
@@ -142,7 +142,7 @@ module type S = sig
        fs:FS.t -> (string -> string)
     -> (PEnc.Entry.t * PEnc.Delta.t) list
     -> (Hash.t -> Cstruct.t option Lwt.t)
-    -> (Fpath.t * (Hash.t * (Crc32.t * int64)) Radix.sequence * Hash.t, error) result Lwt.t
+    -> (Fpath.t * (Hash.t * (Crc32.t * int64)) IEnc.sequence * Hash.t, error) result Lwt.t
 end
 
 module Make
@@ -476,7 +476,7 @@ module Make
       }
 
       type result = {
-        tree: (Crc32.t * int64) PEnc.Radix.t;
+        tree: (Crc32.t * int64) PEnc.Map.t;
         hash: Hash.t
       }
 
@@ -530,7 +530,7 @@ module Make
         EPACK.to_file fs ~atomic:false path raw state >|= function
         | Ok { EPACK.E.tree; hash; } ->
           Ok (Fpath.(temp / filename_pack)
-             , PEnc.Radix.to_sequence tree
+             , (fun f -> PEnc.Map.iter (fun k v -> f (k, v)) tree)
              , hash)
         | Error #fs_error as err -> err
         | Error (`Encoder e) -> Error (`Pack_encoder e)
@@ -563,7 +563,7 @@ module Make
       Lwt.return Error.(v @@ FS.err_move path Fpath.(root / "objects" / "pack" / filename_pack) err)
     | Ok ()     ->
       let path_idx = Fpath.(root / "objects" / "pack" / filename_idx) in
-      let sequence = PInfo.Radix.to_sequence info.PInfo.tree in
+      let sequence = (fun f -> PInfo.Map.iter (fun k v -> f (k, v)) info.PInfo.tree) in
       let encoder_idx = IEnc.default sequence hash_pack in
       (* XXX(dinosaure): we save an IDX file for a future computation
          of git/ocaml-git of this PACK file even if we don't use it -
@@ -578,7 +578,9 @@ module Make
          >>!= fun sys_err -> Lwt.return (Error.FS.err_open path_pack sys_err))
         >>?= fun fdp ->
         let fun_cache _ = None in
-        let fun_idx hash = PInfo.Radix.lookup info.PInfo.tree hash in
+        let fun_idx hash =
+          try Some (PInfo.Map.find hash info.PInfo.tree)
+          with Not_found -> None in
         let fun_revidx hash =
           try let (_, ret) = PInfo.Graph.find hash info.PInfo.graph in ret
           with Not_found -> None
@@ -661,7 +663,7 @@ module Make
                 | Error _ -> Lwt.return None)
             | Loaded { idx; decoder; info; _ } when IDec.mem idx request ->
               strong_weight_read decoder info request hash
-            | Total { decoder; info; _ } when PInfo.Radix.mem info.PInfo.tree request ->
+            | Total { decoder; info; _ } when PInfo.Map.mem request info.PInfo.tree ->
               strong_weight_read decoder info request hash
             | _ -> Lwt.return None)
       None
@@ -823,7 +825,7 @@ module Make
     >>= fun lst -> Lwt_mvar.put t.buffers buffers >>= fun () -> Lwt.return lst
     >>= Lwt_list.fold_left_s (fun ((tree, graph) as acc) -> function
         | Ok (hunks_descr, hash, ((_, offset) as value)) ->
-          let tree = PInfo.Radix.bind tree hash value in
+          let tree = PInfo.Map.add hash value tree in
           let graph =
             let open PInfo in
             let depth_source, _ = match hunks_descr.HDec.reference with
@@ -831,9 +833,8 @@ module Make
                 (try Graph.find Int64.(sub offset rel_off) graph
                  with Not_found -> 0, None)
               | HDec.Hash hash_source ->
-                try match Radix.lookup tree hash_source with
-                  | Some (_, abs_off) -> Graph.find abs_off graph
-                  | None -> 0, None
+                try let _, abs_off = Map.find hash_source tree in
+                    Graph.find abs_off graph
                 with Not_found -> 0, None
             in
             Graph.add offset (depth_source + 1, Some hash) graph
@@ -852,7 +853,7 @@ module Make
           let open PInfo in
           match hunks_descr.HDec.reference with
           | HDec.Offset _  -> Lwt.return true
-          | HDec.Hash hash -> Lwt.return (Radix.mem tree' hash))
+          | HDec.Hash hash -> Lwt.return (Map.mem hash tree'))
         delta
       >|= fun is_not_thin ->
       Ok (loaded.decoder,
@@ -878,9 +879,9 @@ module Make
            | Some (crc32, offset) -> raise (Found (hash_pack, (crc32, offset)))
            | None -> ())
         | Total { info; _ } ->
-          (match PInfo.Radix.lookup info.PInfo.tree hash with
-           | Some (crc32, offset) -> raise (Found (hash_pack, (crc32, offset)))
-           | None -> ()))
+          (try let crc32, offset = PInfo.Map.find hash info.PInfo.tree in
+               raise (Found (hash_pack, (crc32, offset)))
+           with Not_found -> ()))
         packs;
       None
     with Found (hash_pack, offset) ->
@@ -901,9 +902,9 @@ module Make
           IDec.fold idx (fun hash _ acc -> hash :: acc)
         | Total { info; _ } ->
           fun acc ->
-            PInfo.Radix.fold (fun (hash, _) acc ->
+            PInfo.Map.fold (fun hash _ acc ->
                 hash :: acc
-              ) acc info.PInfo.tree
+              ) info.PInfo.tree acc
       ) packs []
 
   let read ~root ~ztmp ~window t hash =

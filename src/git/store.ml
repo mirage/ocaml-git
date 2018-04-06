@@ -672,7 +672,7 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
              let open PInfo in
 
              match hunks_descr.HDec.reference with
-             | HDec.Hash hash when not (Radix.mem info.tree hash) ->
+             | HDec.Hash hash when not (Map.mem hash info.tree) ->
                (try List.find (Hash.equal hash) acc |> fun _ -> acc
                 with Not_found -> hash :: acc)
              | _ -> acc)
@@ -688,7 +688,7 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
       in
 
       let get hash =
-        if PInfo.Radix.mem info.PInfo.tree hash
+        if PInfo.Map.mem hash info.PInfo.tree
         then
           with_buffer git @@ fun { ztmp; window; _ } ->
           RPDec.get_with_result_allocation_from_hash
@@ -705,7 +705,7 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
 
       let tag _ = false in
 
-      PInfo.Radix.to_list info.PInfo.tree
+      PInfo.Map.bindings info.PInfo.tree
       |> Lwt_list.fold_left_s make []
       >>= external_ressources
       >>= fun entries -> PEnc.Delta.deltas ~memory:false entries get tag 10 50
@@ -716,7 +716,7 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
           (Fmt.strf "pack-%s.pack")
           entries
           (fun hash ->
-             if PInfo.Radix.mem info.PInfo.tree hash
+             if PInfo.Map.mem hash info.PInfo.tree
              then
                with_buffer git @@ fun { ztmp; window; _ } ->
                RPDec.get_with_result_allocation_from_hash
@@ -806,7 +806,9 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
 
         RPDec.make fdp
           (fun _ -> None)
-          (fun hash -> PInfo.Radix.lookup info.PInfo.tree hash)
+          (fun hash ->
+            try Some (PInfo.Map.find hash info.PInfo.tree)
+            with Not_found -> None)
           (* XXX(dinosaure): this function will be updated. *)
           (fun _ -> None)
           (fun hash -> extern git hash)
@@ -848,7 +850,7 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
                | Ok obj ->
                  let hash = hash_of_object obj in
                  let crc = crc obj in
-                 let tree = PInfo.Radix.bind tree hash (crc, offset) in
+                 let tree = PInfo.Map.add hash (crc, offset) tree in
 
                  let graph =
                    let open PInfo in
@@ -858,9 +860,8 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
                        (try Graph.find Int64.(sub offset rel_off) graph
                         with Not_found -> 0, None)
                      | HDec.Hash hash_source ->
-                       try match Radix.lookup tree hash_source with
-                         | Some (_, abs_off) -> Graph.find abs_off graph
-                         | None -> 0, None
+                       try let _, abs_off = Map.find hash_source tree in
+                           Graph.find abs_off graph
                        with Not_found -> 0, None
                    in
 
@@ -868,7 +869,9 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
                  in
 
                  Lwt.return
-                   (RPDec.update_idx (PInfo.Radix.lookup tree) decoder,
+                   (RPDec.update_idx (fun key ->
+                        try Some (PInfo.Map.find key tree)
+                        with Not_found -> None) decoder,
                     tree, graph)
                | Error err ->
                  Log.err (fun l -> l ~header:"from" "Retrieve an error when we try to \
@@ -894,7 +897,7 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
                  match hunks_descr.HDec.reference with
                  | HDec.Offset _ -> Lwt.return true
                  | HDec.Hash hash ->
-                   Lwt.return (Radix.mem tree' hash))
+                   Lwt.return (Map.mem hash tree'))
               delta
             >>= fun is_not_thin ->
             if is_not_thin
