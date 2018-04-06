@@ -155,25 +155,15 @@ module Make (H: S.HASH) (FS: S.FS) = struct
 
   open Lwt.Infix
 
+  module Decoder = Helper.Decoder(D)(FS)
+
   let read ~fs ~root ~dtmp ~raw =
-    let decoder = D.default dtmp in
-    let path = Fpath.(root / "packed-refs") in
-    FS.with_open_r fs path @@ fun read ->
-    let rec loop decoder = match D.eval decoder with
-      | `End (_, value)               -> Lwt.return (Ok value)
-      | `Error (_, (#Error.Decoder.t as err)) ->
-        Lwt.return Error.(v @@ Error.Decoder.with_path path err)
-      | `Await decoder ->
-        FS.File.read raw read >>= function
-        | Error err -> Lwt.return Error.(v @@ Error.FS.err_read path err)
-        | Ok 0      -> loop (D.finish decoder)
-        | Ok n      ->
-          match D.refill (Cstruct.sub raw 0 n) decoder with
-          | Ok decoder              -> loop decoder
-          | Error (#Error.Decoder.t as err) ->
-            Lwt.return Error.(v @@ Error.Decoder.with_path path err)
-    in
-    loop decoder
+    let state = D.default dtmp in
+    let file  = Fpath.(root / "packed-refs") in
+    Decoder.of_file fs file raw state >|= function
+    | Ok _ as v -> v
+    | Error (`Decoder err) -> Error.(v @@ Error.Decoder.with_path file err)
+    | Error #fs_error as err -> err
 
   module Encoder = struct
     module E = struct

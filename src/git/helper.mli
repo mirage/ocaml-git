@@ -133,6 +133,31 @@ sig
   val flush: int -> int -> state -> state
 end
 
+module type DECODER = sig
+  type decoder
+  type error
+  type t
+
+  val eval: decoder ->
+    [ `Await of decoder
+    | `End of (Cstruct.t * t)
+    | `Error of (Cstruct.t * error) ]
+  val refill: Cstruct.t -> decoder -> (decoder, error) result
+  val finish: decoder -> decoder
+end
+
+module Decoder (D: DECODER) (FS: S.FS): sig
+
+  type error =
+    [ `Decoder of D.error
+    | FS.error Error.FS.t ]
+
+
+  (** [of_file t f tmp state] decodes from the file [f] a value using [state]
+     and [tmp] as intermediary buffer. *)
+  val of_file: FS.t -> Fpath.t -> Cstruct.t -> D.decoder -> (D.t, error) result Lwt.t
+end
+
 module Encoder (E: ENCODER) (FS: S.FS): sig
 
   type error =
