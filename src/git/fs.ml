@@ -22,8 +22,6 @@ open Astring
 module PackedLog = (val Misc.src_log "fs-packed" : Logs.LOG)
 module LooseLog = (val Misc.src_log "fs-loose" : Logs.LOG)
 
-module ReferenceSet = Misc.Set(Reference)
-
 let failf fmt = Fmt.kstrf failwith ("Git.FS." ^^ fmt)
 
 let err_not_found n k = failf "%s: %s not found" n k
@@ -135,7 +133,18 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
 
   end
 
-  type t = { root: string; dot_git: string; level: int; }
+  type t = {
+    root: string; dot_git: string; level: int;
+    (* [packed_refs] contains a cache of packed references that we
+       read and that have not been alredy written. This is a safe
+       over-approximation, e.g. having more elements will just make
+       the convergence of [test_and_set_reference] slower. Being
+       extra-carefull on test-and-set is needed because of
+       [https://github.com/mirage/irmin/issues/489].
+
+       Note: [test_and_set_reference] is not in ocaml-git 2.0 anymore
+       so we won't really care in the future. *)
+    mutable packed_refs: Hash.t Reference.Map.t }
 
   let root t = t.root
   let dot_git t = t.dot_git
@@ -153,7 +162,7 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
     in
     IO.mkdir root    >>= fun () ->
     IO.mkdir dot_git >|= fun () ->
-    { root; level; dot_git }
+    { root; level; dot_git; packed_refs = Reference.Map.empty }
 
   let rec_files dir =
     let rec aux accu dir =
@@ -529,7 +538,16 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
       ) contents;
     Lwt.return_unit
 
-  let packed_refs t = t.dot_git / "packed-refs"
+  let packed_refs t =
+    let file = t.dot_git / "packed-refs" in
+    (* We use `IO.read_file` here as the contents of the file
+       might change. *)
+    IO.read_file file >|= function
+    | None     -> []
+    | Some buf -> Packed_refs_IO.input (Mstruct.of_cstruct buf)
+
+  let diff x y =
+    Reference.Set.fold (fun k acc -> Reference.Map.remove k acc) y x
 
   let references t =
     let refs = t.dot_git / "refs" in
@@ -543,19 +561,11 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
           |> String.concat ~sep:"/"
           |> Reference.of_raw
       ) files in
-    let packed_refs = packed_refs t in
-    let packed_refs =
-      IO.read_file packed_refs >|= function
-      | None     -> []
-      | Some buf ->
-        let pr = Packed_refs_IO.input (Mstruct.of_cstruct buf) in
-        Packed_refs.references pr
-    in
-    packed_refs >|= fun packed_refs ->
-    ReferenceSet.(
-      union (of_list refs) (of_list packed_refs)
-      |> elements
-    )
+    packed_refs t >|= fun prefs ->
+    let loose_refs = Reference.Set.of_list refs in
+    let packed_refs = Reference.Set.of_list (Packed_refs.references prefs) in
+    t.packed_refs <- diff (Packed_refs.bindings prefs) loose_refs;
+    Reference.Set.(elements @@ union loose_refs packed_refs)
 
   let raw_ref r =
     let raw = Reference.to_raw r in
@@ -581,20 +591,19 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
        change. *)
     IO.read_file file >>= function
     | Some buf ->
+      t.packed_refs <- Reference.Map.remove r t.packed_refs;
       let str = Cstruct.to_string buf in
       let r = Reference.head_contents_of_string ~of_hex:Hash_IO.of_hex str in
       (match r with
        | Reference.Hash x -> Lwt.return (Some (Hash.of_commit x))
        | Reference.Ref r -> read_reference t r)
     | None ->
-      let packed_refs = packed_refs t in
-      (* We use `IO.read_file` here as the contents of the file
-         might change. *)
-      IO.read_file packed_refs >|= function
-      | None -> None
-      | Some buf ->
-        let refs = Packed_refs_IO.input (Mstruct.of_cstruct buf) in
-        Packed_refs.find refs r
+      packed_refs t >|= fun refs ->
+      match Packed_refs.find refs r with
+      | None        -> None
+      | Some h as x ->
+        t.packed_refs <- Reference.Map.add r h t.packed_refs;
+        x
 
   let read_head t =
     let file = file_of_ref t Reference.head in
@@ -625,6 +634,7 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
     let contents = Hash.to_hex hash in
     let temp_dir = temp_dir t in
     let lock = lock_file t r in
+    t.packed_refs <- Reference.Map.remove r t.packed_refs;
     IO.write_file file ~temp_dir ~lock (Cstruct.of_string contents)
 
   let test_and_set_reference t r ~test ~set =
@@ -635,7 +645,24 @@ module Make (IO: IO) (D: Hash.DIGEST) (I: Inflate.S) = struct
       | Some v -> Some (Cstruct.of_string (Hash.to_hex v))
     in
     let lock = lock_file t r in
-    IO.test_and_set_file file ~temp_dir ~lock ~test:(raw test) ~set:(raw set)
+    let update test =
+      IO.test_and_set_file file ~temp_dir ~lock ~test ~set:(raw set)
+    in
+    let packed_ref =
+      try Some (Reference.Map.find r t.packed_refs)
+      with Not_found -> None
+    in
+    match packed_ref, test with
+    | None  , _      -> update (raw test)
+    | Some _, None   -> Lwt.return false
+    | Some o, Some n ->
+      if not (Hash.equal o n) then Lwt.return false
+      else (
+        update None >|= fun b ->
+        (* the write succeed, we can remove [r] from [read_packed_refs]. *)
+        t.packed_refs <- Reference.Map.remove r t.packed_refs;
+        b
+      )
 
   let write_head t = function
     | Reference.Hash h ->

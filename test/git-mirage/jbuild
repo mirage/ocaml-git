@@ -2,9 +2,10 @@
 
 (executable
  ((name      test)
-  (libraries (test git-mirage mirage-fs-unix io-page.unix))))
+  (libraries (test git-mirage mirage-fs-unix io-page-unix))))
 
 (alias
  ((name runtest)
   (deps (test.exe))
+  (package git-mirage)
   (action (run ${exe:test.exe} -q --color=always))))

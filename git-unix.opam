@@ -11,7 +11,7 @@ build: [
   ["jbuilder" "subst" "-n" name] {pinned}
   ["jbuilder" "build" "-p" name "-j" jobs]
 ]
-build-test: ["jbuilder" "runtest" "test/git-unix"]
+build-test: ["jbuilder" "runtest" "-p" name]
 
 depends: [
   "jbuilder" {build}
