@@ -7,4 +7,5 @@
 (alias
  ((name runtest)
   (deps (test.exe))
+  (package git-unix)
   (action (chdir ${ROOT} (run ${exe:test.exe} -q --color=always)))))
