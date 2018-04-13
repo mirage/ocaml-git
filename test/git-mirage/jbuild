@@ -2,7 +2,7 @@
 
 (executable
  ((name      test)
-  (libraries (test git-mirage mirage-fs-unix io-page.unix))))
+  (libraries (test git-mirage mirage-fs-unix io-page-unix))))
 
 (alias
  ((name runtest)
