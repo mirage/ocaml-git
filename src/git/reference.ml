@@ -31,6 +31,7 @@ let pretty x = String.Ascii.escape x
 let pp ppf x = Format.fprintf ppf "%s" (pretty x)
 
 module Map = Misc.Map(Misc.S)
+module Set = Misc.Set(Misc.S)
 
 let compare x y =
   match x, y with

@@ -24,5 +24,6 @@ include S.S with type t = entry list
 
 val find: t -> Reference.t -> Hash.t option
 val references: t -> Reference.t list
+val bindings: t -> Hash.t Reference.Map.t
 
 module IO (D: Hash.DIGEST): S.IO with type t = t

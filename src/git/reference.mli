@@ -20,6 +20,7 @@ val to_raw: t -> string
 val of_raw: string -> t
 
 module Map: S.Map with type key = t
+module Set: S.Set with type elt = t
 
 val head: t
 

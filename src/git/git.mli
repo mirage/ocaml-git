@@ -1123,11 +1123,16 @@ module Store: sig
     (** Write a reference. *)
 
     val remove_reference: t -> Reference.t -> unit Lwt.t
-    (** Remove a refernce. *)
+    (** Remove a reference. Note: packed references cannot be removed
+       (and no error will be raised) so assume that [remove_reference
+       r] is unsafe as it could either delete [r], do nothing, or
+       revert [r] to a previous (packed) value. *)
 
     val test_and_set_reference: t -> Reference.t ->
       test:Hash.t option -> set:Hash.t option -> bool Lwt.t
-    (** Atomic updates (Test and set) for references. *)
+    (** Atomic updates (Test and set) for references. Note: when [set]
+       is [None], [test_and_set_reference] should be considered
+       unsafe. See {!remove_reference} for details. *)
 
     (** {1 Git index files} *)
 

@@ -55,6 +55,14 @@ let references (t:t) =
   in
   aux Set.empty t
 
+let bindings (t:t) =
+  let rec aux acc = function
+    | [] -> acc
+    | (`Newline | `Comment _) :: t -> aux acc t
+    | `Entry (h, r) :: t -> aux (Reference.Map.add r h acc) t
+  in
+  aux Reference.Map.empty t
+
 module IO (D: Hash.DIGEST) = struct
 
   module Hash_IO = Hash.IO(D)
