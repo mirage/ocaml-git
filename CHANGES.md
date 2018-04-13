@@ -1,3 +1,11 @@
+### 1.11.5 (2018-04-13)
+
+- git: make `Git.FS.test_and_set_references` work better with packed
+  references (#291, @samoht. Fixes moby/datakit#633)
+- git-unix: ignore trailing newlines when doing 'test and set' on
+  reference files (backport of moby/datakit#611, @samoht. Fixes moby/datakit#610)
+- git-mirage: fix linking of tests (@samoht)
+
 ### 1.11.4 (2018-01-03)
 
 - support cohttp 1.0 (#249, @samoht)
