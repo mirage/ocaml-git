@@ -493,6 +493,9 @@ module type D = sig
         function can't raise an exception for any object created from
         this API. However, an object created by the hand could not
         respect the assertion. *)
+
+    val first_offset_exn: t -> int64
+    val length: t -> int
   end
 
   val find_window: t -> int64 -> (Window.t * int, Mapper.error) result Lwt.t

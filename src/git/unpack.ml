@@ -1318,6 +1318,8 @@ module type D = sig
 
     val pp: t Fmt.t
     val first_crc_exn: t -> Crc32.t
+    val first_offset_exn: t -> int64
+    val length: t -> int
   end
 
   val find_window: t -> int64 -> ((Window.t * int), Mapper.error) result Lwt.t
@@ -1537,6 +1539,17 @@ struct
       | Internal { crc; _ } -> crc
       | Delta { crc; _ } -> crc
       | External _ -> invalid_arg "Object.first_crc"
+
+    let first_offset_exn t =
+      match t.from with
+      | Internal { offset; _ } -> offset
+      | Delta { offset; _ } -> offset
+      | External _ -> invalid_arg "Object.first_offset"
+
+    let length t = match t.from with
+      | Internal { length; _ } -> length
+      | Delta { descr = { Hunk.target_length; _ }; _ } -> target_length
+      | External { length; _ } -> length
   end
 
   type pack_object =
