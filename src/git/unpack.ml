@@ -1300,17 +1300,17 @@ module type D = sig
   module Object: sig
 
     type from =
-      | Offset of { length   : int
-                  ; consumed : int
-                  ; offset   : int64
-                  ; crc      : Crc32.t
-                  ; base     : from
-                  ; }
-      | External of Hash.t
-      | Direct of { consumed : int
-                  ; offset   : int64
-                  ; crc      : Crc32.t
-                  ; }
+      | Delta of { descr    : Hunk.hunks
+                 ; consumed : int
+                 ; inserts  : int
+                 ; offset   : int64
+                 ; crc      : Crc32.t
+                 ; base     : from }
+      | External of { hash: Hash.t; length: int; }
+      | Internal of { length   : int
+                    ; consumed : int
+                    ; offset   : int64
+                    ; crc      : Crc32.t }
     and t =
       { kind   : kind
       ; raw    : Cstruct.t
@@ -1474,15 +1474,17 @@ struct
   module Object =
   struct
     type from =
-      | Offset of { length   : int
-                  ; consumed : int
-                  ; offset   : int64 (* absolute offset *)
-                  ; crc      : Crc32.t
-                  ; base     : from }
-      | External of Hash.t
-      | Direct of { consumed : int
-                  ; offset   : int64
-                  ; crc      : Crc32.t }
+      | Delta of { descr    : Hunk.hunks
+                 ; consumed : int
+                 ; inserts  : int
+                 ; offset   : int64
+                 ; crc      : Crc32.t
+                 ; base     : from }
+      | External of { hash: Hash.t; length: int; }
+      | Internal of { length   : int
+                    ; consumed : int
+                    ; offset   : int64
+                    ; crc      : Crc32.t }
 
     and t =
       { kind     : kind
@@ -1491,34 +1493,40 @@ struct
       ; from     : from }
 
     let to_partial = function
-      | { length; from = Offset { consumed; crc; offset; _ }; _ }
-      | { length; from = Direct { consumed; crc; offset; _ }; _ } ->
-        { _length = Int64.to_int length
+      | { from = Delta { descr; consumed; crc; offset; _ }; _ } ->
+        { _length   = descr.Hunk.target_length
         ; _consumed = consumed
-        ; _offset = offset
-        ; _crc = crc
-        ; _hunks = [] }
+        ; _offset   = offset
+        ; _crc      = crc
+        ; _hunks    = [] }
+      | { from = Internal { length; consumed; crc; offset; _ }; _ } ->
+        { _length   = length
+        ; _consumed = consumed
+        ; _offset   = offset
+        ; _crc      = crc
+        ; _hunks    = [] }
       | { from = External _; _ } ->
-        raise (Invalid_argument "Object.to_partial: this object is external of the current PACK file")
-
+        invalid_arg "Object.to_partial: this object is external of the current PACK file"
 
     let rec pp_from ppf = function
-      | Offset { length; consumed; offset; crc; base; } ->
-        Fmt.pf ppf "(Hunk { @[<hov>length = %d;@ \
+      | Delta { descr; consumed; offset; crc; base; } ->
+        Fmt.pf ppf "(Delta { @[<hov>descr = %a;@ \
                     consumed = %d;@ \
                     offset = %Lx;@ \
                     crc = %a;@ \
                     base = %a;@] })"
-          length consumed offset
+          (Fmt.hvbox Hunk.pp_hunks) descr
+          consumed offset
           Crc32.pp crc
           (Fmt.hvbox pp_from) base
-      | External hash ->
-        Fmt.pf ppf "(External %a)" Hash.pp hash
-      | Direct { consumed; offset; crc; } ->
-        Fmt.pf ppf "(Direct { @[<hov>consumed = %d;@ \
+      | External { hash; length; } ->
+        Fmt.pf ppf "(External { @[<hov>hash = %a;@ length = %d;@] })" Hash.pp hash length
+      | Internal { length; consumed; offset; crc; } ->
+        Fmt.pf ppf "(Internal { @[<hov>length = %d;@ \
+                    consumed = %d;@ \
                     offset = %Lx;@ \
                     crc = %a;@] })"
-          consumed offset Crc32.pp crc
+          length consumed offset Crc32.pp crc
 
     let pp ppf t =
       Fmt.pf ppf "{ @[<hov>kind = %a;@ \
@@ -1529,9 +1537,9 @@ struct
 
     let first_crc_exn t =
       match t.from with
-      | Direct { crc; _ } -> crc
-      | Offset { crc; _ } -> crc
-      | External _ -> raise (Invalid_argument "Object.first_crc")
+      | Internal { crc; _ } -> crc
+      | Delta { crc; _ } -> crc
+      | External _ -> invalid_arg "Object.first_crc"
   end
 
   type pack_object =
@@ -1605,12 +1613,12 @@ struct
     if (target_length = hunks_header.Hunk.target_length)
     then Ok Object.{ kind   = base.Object.kind
                    ; raw    = Cstruct.sub raw 0 target_length
-                   ; length = Int64.of_int hunks_header.Hunk.target_length
-                   ; from   = Offset { length   = partial_hunks._length
-                                     ; consumed = partial_hunks._consumed
-                                     ; offset   = partial_hunks._offset
-                                     ; crc      = partial_hunks._crc
-                                     ; base     = base.from } }
+                   ; from   = Delta { descr    = hunks_header
+                                    ; inserts
+                                    ; consumed = partial_hunks._consumed
+                                    ; offset   = partial_hunks._offset
+                                    ; crc      = partial_hunks._crc
+                                    ; base     = base.from } }
     else Error (Invalid_target (target_length, hunks_header.Hunk.target_length))
 
   let result_bind ~err f = function Ok a -> f a | Error _ -> err
@@ -2026,9 +2034,10 @@ struct
           else Lwt.return (Ok (Object.{ kind = to_kind (Pack.kind state)
                                       ; raw  = get_free_raw swap
                                       ; length = Int64.of_int (Pack.length state)
-                                      ; from   = Direct { consumed = 0
-                                                        ; offset   = Pack.offset state
-                                                        ; crc      = Crc32.default }}))
+                                      ; from   = Internal { length   = Pack.length state
+                                                          ; consumed = 0
+                                                          ; offset   = Pack.offset state
+                                                          ; crc      = Crc32.default }}))
         | `Hunk (state, hunk) ->
           Log.debug (fun l -> l ~header:"get" "PACK decoder return an hunk.");
 
@@ -2090,14 +2099,15 @@ struct
                  Lwt.return (Ok Object.{ kind
                                        ; raw
                                        ; length = Int64.of_int partial._length
-                                       ; from   = Direct { consumed = partial._consumed
-                                                         ; offset   = partial._offset
-                                                         ; crc      = partial._crc } })
+                                       ; from   = Internal { length   = partial._length
+                                                           ; consumed = partial._consumed
+                                                           ; offset   = partial._offset
+                                                           ; crc      = partial._crc } })
                | Ok (External (hash, kind, raw)) ->
                  Lwt.return (Ok Object.{ kind
                                        ; raw
                                        ; length = Int64.of_int (Cstruct.len raw)
-                                       ; from   = Object.External hash })
+                                       ; from   = Object.External { hash; length = hunks.Hunk.source_length } })
              in
 
              (undelta 1 partial_hunks hunks_header swap >>= function
@@ -2123,9 +2133,10 @@ struct
                           then Cstruct.sub (get_free_raw swap) 0 (Pack.length state)
                           else (get_free_raw swap)
                       ; length = Int64.of_int (Pack.length state)
-                      ; from   = Direct { consumed = Pack.consumed state
-                                        ; offset   = Pack.offset state
-                                        ; crc      = Pack.crc state } }
+                      ; from   = Internal { length   = Pack.length state
+                                          ; consumed = Pack.consumed state
+                                          ; offset   = Pack.offset state
+                                          ; crc      = Pack.crc state } }
              in
 
              loop window

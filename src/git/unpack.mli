@@ -468,50 +468,23 @@ module type D = sig
   (** The type of the kind of the git object. *)
 
   module Object: sig
-
     type from =
-      | Offset of { length   : int
-                  (** Real inflated length of the object. *)
-                  ; consumed : int
-                  (** How many byte(s) consumed to de-serialize the
-                      object. *)
-                  ; offset   : int64
-                  (** The absolute offset in the PACK file of the
-                      object. *)
-                  ; crc      : Crc32.t
-                  (** The CRC-32 checksum of the object. *)
-                  ; base : from
-                  (** The source object. *)
-                  ; }
-      (** When the source is external of the PACK file. *)
-      | External of Hash.t
-      (** When the object is not come from a source but directly
-          serialized (no delta-ification) in the PACK file. *)
-      | Direct of { consumed : int
-                  (** How many byte(s) consumed to de-serialize the
-                      current object. *)
-                  ; offset   : int64
-                  (** The absolute offset in the PACK file of the
-                      current object. *)
-                  ; crc      : Crc32.t
-                  (** The CRC-32 checksum of the source object. *)
-                  ; }
-      (** The type to describe where the object come from (directly
-          from the PACK file or from a delta-ification with an
-          [External _] object or a {i in-PACK} object. *)
+      | Delta of { descr    : Hunk.hunks
+                 ; consumed : int
+                 ; inserts  : int
+                 ; offset   : int64
+                 ; crc      : Crc32.t
+                 ; base     : from }
+      | External of { hash: Hash.t; length: int; }
+      | Internal of { length   : int
+                    ; consumed : int
+                    ; offset   : int64
+                    ; crc      : Crc32.t }
     and t =
       { kind   : kind
-      (** The kind of the object. *)
       ; raw    : Cstruct.t
-      (** The de-serialized raw of the object. *)
       ; length : int64
-      (** The real inflated/undelta-ified length of the object. *)
-      ; from   : from
-      (** If the object is come from a delta-ification or it stored directly in
-         the PACK file. *)
-      ; }
-    (** The type of the git object (after we processed all necessary
-        undelta-ification). *)
+      ; from   : from }
 
     val pp: t Fmt.t
     (** Pretty-printer for {!t}. *)
