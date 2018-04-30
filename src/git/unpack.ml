@@ -2101,7 +2101,7 @@ struct
 
                get_pack_object
                  ~chunk
-                 ?htmp:(match htmp with Some hnks -> Some hnks.(depth) | None -> None)
+                 ?htmp:(match htmp with Some hnks -> if depth < Array.length hnks then Some hnks.(depth) else None | None -> None)
                  t
                  hunks.Hunk.reference
                  hunks.Hunk.source_length
