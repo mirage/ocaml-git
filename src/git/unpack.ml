@@ -1470,15 +1470,15 @@ struct
     | `Tree -> Fmt.pf ppf "Tree"
     | `Tag -> Fmt.pf ppf "Tag"
 
+  type insert_hunk = S of string | C of Cstruct.t
+  type opt_hunk = Insert of insert_hunk | Copy of (int * int)
+
   type partial =
     { _length : int
     ; _consumed : int
     ; _offset : int64
     ; _crc : Crc32.t
-    ; _hunks : hunk list }
-  and hunk =
-    | Copy of (int * int)
-    | Insert of Cstruct.t
+    ; _hunks : opt_hunk list }
 
   module Object =
   struct
@@ -1615,6 +1615,12 @@ struct
         let () = Bucket.add t.win window in
         Ok (window, relative_offset)
 
+  let blit_to_cstruct src off0 dst off1 len = match src with
+    | S s -> Cstruct.blit_from_string s off0 dst off1 len
+    | C c -> Cstruct.blit c off0 dst off1 len
+
+  let len = function S s -> String.length s | C c -> Cstruct.len c
+
   let apply partial_hunks hunks_header hunks base raw =
     if Cstruct.len raw < hunks_header.Hunk.target_length
     then raise (Invalid_argument "Decoder.apply");
@@ -1622,11 +1628,11 @@ struct
     let target_length = List.fold_left
         (fun acc -> function
            | Insert insert ->
-             Cstruct.blit insert 0 raw acc (Cstruct.len insert); acc + Cstruct.len insert
+             blit_to_cstruct insert 0 raw acc (len insert); acc + len insert
            | Copy (off, len) ->
              Cstruct.blit base.Object.raw off raw acc len; acc + len)
-        0 hunks
-    in
+        0 hunks in
+    let inserts = List.fold_left (fun acc -> function Insert cs -> acc + len cs | Copy _ -> acc) 0 hunks in
 
     if (target_length = hunks_header.Hunk.target_length)
     then Ok Object.{ kind   = base.Object.kind
@@ -1681,15 +1687,12 @@ struct
                  Cstruct.blit raw 0 hnk writed_in_hnk len;
                  loop window
                    consumed_in_window writed_in_raw (writed_in_hnk + len)
-                   (Insert (Cstruct.sub hnk writed_in_hnk len) :: hunks) git_object
+                   (Insert (C (Cstruct.sub hnk writed_in_hnk len)) :: hunks) git_object
                    (Pack.continue state)
                | None, Hunk.Insert raw ->
-                 let len = Cstruct.len raw in
-                 let res = Cstruct.create len in
-                 Cstruct.blit raw 0 res 0 len;
                  loop window
                    consumed_in_window writed_in_raw writed_in_hnk
-                   (Insert res :: hunks) git_object
+                   (Insert (S (Cstruct.to_string raw)) :: hunks) git_object
                    (Pack.continue state)
                | _, Hunk.Copy (off, len) ->
                  loop window
@@ -2006,6 +2009,11 @@ struct
      For this call, we don't case about the meta-data of the object
      requested (where it come from, the CRC-32 checksum, etc.) and
      just want the raw data. *)
+
+  let blit_from_cstruct src offs dst offd len = match dst with
+    | S s -> Cstruct.blit_to_string src offs s offd len
+    | C c -> Cstruct.blit src offs c offd len
+
   let get_from_offset ?(chunk = 0x8000) ?(limit = false) ?htmp t absolute_offset (raw0, raw1, _) ztmp zwin =
     let get_free_raw = function
       | true -> raw0
@@ -2064,18 +2072,15 @@ struct
           (match htmp, hunk with
            | Some hnks, Hunk.Insert raw ->
              let len = Cstruct.len raw in
-             Cstruct.blit raw 0 hnks.(0)  writed_in_hnk len;
+             Cstruct.blit raw 0 hnks.(0) writed_in_hnk len;
              loop window
                consumed_in_window writed_in_raw (writed_in_hnk + len)
-               (Insert (Cstruct.sub hnks.(0) writed_in_hnk len) :: hunks)
+               (Insert (C (Cstruct.sub hnks.(0) writed_in_hnk len)) :: hunks)
                swap git_object (Pack.continue state)
            | None, Hunk.Insert raw ->
-             let len = Cstruct.len raw in
-             let res = Cstruct.create len in
-             Cstruct.blit raw 0 res 0 len;
              loop window
                consumed_in_window writed_in_raw writed_in_hnk
-               (Insert res :: hunks) swap git_object
+               (Insert (S (Cstruct.to_string raw)) :: hunks) swap git_object
                (Pack.continue state)
            | _, Hunk.Copy (off, len) ->
              loop window consumed_in_window writed_in_raw writed_in_hnk
