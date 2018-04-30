@@ -483,7 +483,6 @@ module type D = sig
     and t =
       { kind   : kind
       ; raw    : Cstruct.t
-      ; length : int64
       ; from   : from }
 
     val pp: t Fmt.t

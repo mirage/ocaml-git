@@ -1314,7 +1314,6 @@ module type D = sig
     and t =
       { kind   : kind
       ; raw    : Cstruct.t
-      ; length : int64
       ; from   : from }
 
     val pp: t Fmt.t
@@ -1489,7 +1488,6 @@ struct
     and t =
       { kind     : kind
       ; raw      : Cstruct.t
-      ; length   : int64
       ; from     : from }
 
     let to_partial = function
@@ -1531,9 +1529,8 @@ struct
     let pp ppf t =
       Fmt.pf ppf "{ @[<hov>kind = %a;@ \
                   raw = #raw;@ \
-                  length = %Ld;@ \
                   from = %a;@] }"
-        pp_kind t.kind t.length (Fmt.hvbox pp_from) t.from
+        pp_kind t.kind (Fmt.hvbox pp_from) t.from
 
     let first_crc_exn t =
       match t.from with
@@ -2033,7 +2030,6 @@ struct
               (Pack.flush 0 (Cstruct.len o) state)
           else Lwt.return (Ok (Object.{ kind = to_kind (Pack.kind state)
                                       ; raw  = get_free_raw swap
-                                      ; length = Int64.of_int (Pack.length state)
                                       ; from   = Internal { length   = Pack.length state
                                                           ; consumed = 0
                                                           ; offset   = Pack.offset state
@@ -2098,7 +2094,6 @@ struct
                | Ok (Object (kind, partial, raw)) ->
                  Lwt.return (Ok Object.{ kind
                                        ; raw
-                                       ; length = Int64.of_int partial._length
                                        ; from   = Internal { length   = partial._length
                                                            ; consumed = partial._consumed
                                                            ; offset   = partial._offset
@@ -2106,7 +2101,6 @@ struct
                | Ok (External (hash, kind, raw)) ->
                  Lwt.return (Ok Object.{ kind
                                        ; raw
-                                       ; length = Int64.of_int (Cstruct.len raw)
                                        ; from   = Object.External { hash; length = hunks.Hunk.source_length } })
              in
 
@@ -2132,7 +2126,6 @@ struct
                           if (not limit) || ((Pack.length state) < 0x10000FFFE && limit)
                           then Cstruct.sub (get_free_raw swap) 0 (Pack.length state)
                           else (get_free_raw swap)
-                      ; length = Int64.of_int (Pack.length state)
                       ; from   = Internal { length   = Pack.length state
                                           ; consumed = Pack.consumed state
                                           ; offset   = Pack.offset state
