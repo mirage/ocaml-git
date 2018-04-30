@@ -1298,7 +1298,6 @@ module type D = sig
   type kind = [ `Commit | `Blob | `Tree | `Tag ]
 
   module Object: sig
-
     type from =
       | Delta of { descr    : Hunk.hunks
                  ; consumed : int
@@ -1500,6 +1499,7 @@ struct
       ; raw      : Cstruct.t
       ; from     : from }
 
+    (* XXX(dinosaure): attention, it's a folding function. *)
     let to_partial = function
       | { from = Delta { descr; consumed; crc; offset; _ }; _ } ->
         { _length   = descr.Hunk.target_length
