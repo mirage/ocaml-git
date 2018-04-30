@@ -568,6 +568,15 @@ module type D = sig
       [window] used by the internal decoder {!P.t} (see
       {!P.default}). *)
 
+  val needed_from_offset:
+       ?chunk:int
+    -> ?cache:(Hash.t -> int option)
+    -> t
+    -> int64
+    -> Cstruct.t
+    -> Inflate.window
+    -> (int, error) result Lwt.t
+
   val needed_from_hash:
        ?chunk:int
     -> ?cache:(Hash.t -> int option)

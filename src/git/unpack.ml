@@ -1344,6 +1344,14 @@ module type D = sig
     -> Cstruct.t
     -> Inflate.window
     -> (int, error) result Lwt.t
+  val needed_from_offset:
+       ?chunk:int
+    -> ?cache:(Hash.t -> int option)
+    -> t
+    -> int64
+    -> Cstruct.t
+    -> Inflate.window
+    -> (int, error) result Lwt.t
   val needed_from_hash:
        ?chunk:int
     -> ?cache:(Hash.t -> int option)
@@ -1940,6 +1948,9 @@ struct
     in
 
     loop 0 value
+
+  let needed_from_offset ?(chunk = 0x8000) ?(cache = (fun _ -> None)) t offset ztmp zwin =
+    needed_from ~chunk ~cache t (`IndirectOff (offset, 0)) ztmp zwin
 
   let needed_from_hash ?(chunk = 0x8000) ?(cache = (fun _ -> None)) t hash ztmp zwin =
     needed_from ~chunk ~cache t (`IndirectHash (hash, 0)) ztmp zwin
