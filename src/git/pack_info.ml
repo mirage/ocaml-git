@@ -96,8 +96,6 @@ module Make
     | `PDec err ->
       Fmt.pf ppf "Got an error while decoding PACK stream: %a" PDec.pp_error err
 
-  let option_default a v = match a with Some v -> v | None -> v
-
   type path = Load of int | Patch of { hunks: int; target: int; src: path; }
 
   type delta =
