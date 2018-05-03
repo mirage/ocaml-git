@@ -1517,7 +1517,7 @@ struct
         invalid_arg "Object.to_partial: this object is external of the current PACK file"
 
     let rec pp_from ppf = function
-      | Delta { descr; consumed; offset; crc; base; } ->
+      | Delta { descr; consumed; offset; crc; base; _ } ->
         Fmt.pf ppf "(Delta { @[<hov>descr = %a;@ \
                     consumed = %d;@ \
                     offset = %Lx;@ \
