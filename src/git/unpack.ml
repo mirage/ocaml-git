@@ -2010,10 +2010,6 @@ struct
      requested (where it come from, the CRC-32 checksum, etc.) and
      just want the raw data. *)
 
-  let blit_from_cstruct src offs dst offd len = match dst with
-    | S s -> Cstruct.blit_to_string src offs s offd len
-    | C c -> Cstruct.blit src offs c offd len
-
   let get_from_offset ?(chunk = 0x8000) ?(limit = false) ?htmp t absolute_offset (raw0, raw1, _) ztmp zwin =
     let get_free_raw = function
       | true -> raw0
