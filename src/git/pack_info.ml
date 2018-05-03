@@ -231,10 +231,18 @@ module Make
             Hashtbl.add delta (PDec.offset state) (Delta { hunks_descr; inserts; depth = depth_source + 1; from; })
           | _ -> match ctx with
             | Some ctx ->
-              Hashtbl.add index (Hash.Digest.get ctx) (PDec.crc state, PDec.offset state, PDec.length state);
+              let hash = Hash.Digest.get ctx in
+
+              Log.info (fun l -> l ~header:"first_pass" "Save object %a." Hash.pp hash);
+
+              Hashtbl.add index hash (PDec.crc state, PDec.offset state, PDec.length state);
               Hashtbl.add delta (PDec.offset state) (Internal { abs_off = PDec.offset state; length = PDec.length state; })
             | None ->
               let ctx = ctx_with_header empty state in
+              let hash = Hash.Digest.get ctx in
+
+              Log.info (fun l -> l ~header:"first_pass" "Save object %a." Hash.pp hash);
+
               Hashtbl.add index (Hash.Digest.get ctx) (PDec.crc state, PDec.offset state, PDec.length state);
               Hashtbl.add delta (PDec.offset state) (Internal { abs_off = PDec.offset state; length = PDec.length state; }) in
 
@@ -242,26 +250,25 @@ module Make
       | `End (_, hash_pack) ->
         (stream () >>= function
           | Some raw ->
-            Log.err (fun l -> l ~header:"from_stream" "Expected end of pack stream but retrieve: %a."
+            Log.err (fun l -> l ~header:"first_pass" "Expected end of pack stream but retrieve: %a."
                         (Fmt.hvbox (Encore.Lole.pp_scalar ~get:Cstruct.get_char ~length:Cstruct.len))
                         raw);
             Lwt.return (Error (`Unexpected_chunk (Cstruct.to_string raw)))
           | None ->
-            Log.debug (fun l -> l ~header:"from_stream" "End of the PACK stream.");
+            Log.debug (fun l -> l ~header:"first_pass" "End of the PACK stream.");
 
             Lwt.return (Ok { index; delta; hash_pack; state = `Normalized (normalize delta) }))
       | `Await state ->
-        Log.debug (fun l -> l ~header:"from_stream" "Waiting more input.");
+        Log.debug (fun l -> l ~header:"first_pass" "Waiting more input.");
 
         stream () >>= function
         | Some src ->
-          Log.debug (fun l -> l ~header:"from_stream" "Receive a chunk of the PACK stream (length: %d)."
+          Log.debug (fun l -> l ~header:"first_pass" "Receive a chunk of the PACK stream (length: %d)."
                         (Cstruct.len src));
           go ~src ?ctx ?insert_hunks (PDec.refill 0 (Cstruct.len src) state)
         | None ->
-          Log.err (fun l -> l ~header:"from_stream" "Receive end of the PACK stream.");
-          Lwt.return (Error `Unexpected_end_of_input)
-    in
+          Log.err (fun l -> l ~header:"first_pass" "Receive end of the PACK stream.");
+          Lwt.return (Error `Unexpected_end_of_input) in
 
     go state
 
