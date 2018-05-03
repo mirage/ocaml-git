@@ -1909,54 +1909,59 @@ struct
                       relative_offset
                       (Pack.refill 0 0 state))
           | `Flush state ->
-            Lwt.return (`Direct (Pack.length state))
+            Lwt.return (`Raw (Pack.length state))
           | `Error (state, exn) -> Lwt.return (`Error (Unpack_error (state, window, exn)))
           | `End _ -> assert false
           | `Length state ->
             match Pack.kind state with
             | Pack.Hunk ({ Hunk.reference = Hunk.Offset off; _ } as hunks) ->
-              Lwt.return (`IndirectOff
-                            (Int64.sub (Pack.offset state) off,
-                             max (Pack.length state)
-                             @@ max hunks.Hunk.target_length hunks.Hunk.source_length))
+              Lwt.return (`Offset (Int64.sub (Pack.offset state) off, max (Pack.length state) (max hunks.Hunk.source_length hunks.Hunk.target_length)))
             | Pack.Hunk ({ Hunk.reference = Hunk.Hash hash; _ } as hunks) ->
-              Lwt.return (`IndirectHash
-                            (hash, max (Pack.length state)
-                             @@ max hunks.Hunk.target_length hunks.Hunk.source_length))
+              Lwt.return (`Hash (hash, max (Pack.length state) (max hunks.Hunk.source_length hunks.Hunk.target_length)))
             | Pack.Commit
             | Pack.Blob
             | Pack.Tree
             | Pack.Tag ->
-              Lwt.return (`Direct (Pack.length state))
-        in
+              Lwt.return (`Raw (Pack.length state)) in
 
-        loop window relative_offset state
-    in
+        loop window relative_offset state in
 
     let rec loop length = function
-      | `IndirectHash (hash, length') ->
-        (match cache hash with
-         | Some length'' -> Lwt.return (Ok (max length (max length' length'')))
-         | None -> match t.idx hash with
-           | Some (_, off) -> (get off >>= loop (max length length'))
-           | None -> t.get hash >>= function
-             | Some (_, raw) -> Lwt.return (Ok (Cstruct.len raw))
-             | None -> Lwt.return (Error (Invalid_hash hash)))
-      | `IndirectOff (absolute_offset, length') ->
-        (get absolute_offset
-         >>= loop (max length length'))
-      | `Direct length' ->
-        Lwt.return (Ok (max length length'))
-      | `Error exn -> Lwt.return (Error exn)
-    in
+      | `Error err -> Lwt.return_error err
+      | `Offset (abs_off, length') ->
+        Log.debug (fun l -> l ~header:"needed" "Length of delta-ified object (source at: %Ld) is: %d." abs_off length');
+        get abs_off >>= loop (max length length')
+      | `Raw length' ->
+        Log.debug (fun l -> l ~header:"needed" "Length of object is: %d." length');
+        Lwt.return_ok (max length length')
+      | `Hash (hash, length') ->
+        match t.idx hash with
+        | Some (_, abs_off) ->
+          Log.debug (fun l -> l ~header:"needed" "Length of delta-ified object (source at: %Ld) is: %d." abs_off length');
+          get abs_off >>= loop (max length length')
+        | None -> t.get hash >>= function
+          | Some (_, raw) -> Lwt.return_ok (max length (Cstruct.len raw))
+          | None -> Lwt.return_error (Invalid_hash hash) in
 
-    loop 0 value
+    match value with
+    | `Offset absolut_offset ->
+      get absolut_offset >>= loop 0
+    | `Hash hash ->
+      match t.idx hash with
+      | Some (_, absolute_offset) ->
+        get absolute_offset >>= loop 0
+      | None ->
+        Log.debug (fun l -> l ~header:"needed" "Ask external object to know how many byte(s) is needed.");
+
+        t.get hash >>= function
+        | Some (_, raw) -> Lwt.return_ok (Cstruct.len raw)
+        | None -> Lwt.return_error (Invalid_hash hash)
 
   let needed_from_offset ?(chunk = 0x8000) ?(cache = (fun _ -> None)) t offset ztmp zwin =
-    needed_from ~chunk ~cache t (`IndirectOff (offset, 0)) ztmp zwin
+    needed_from ~chunk ~cache t (`Offset offset) ztmp zwin
 
   let needed_from_hash ?(chunk = 0x8000) ?(cache = (fun _ -> None)) t hash ztmp zwin =
-    needed_from ~chunk ~cache t (`IndirectHash (hash, 0)) ztmp zwin
+    needed_from ~chunk ~cache t (`Hash hash) ztmp zwin
 
   (* XXX(dinosaure): Need an explanation. This function does not
      allocate any [Cstruct.t]. The purpose of this function is to get
@@ -2193,7 +2198,7 @@ struct
   let get_with_hunks_allocation_from_offset
       ?chunk t absolute_offset ztmp zwin (raw0, raw1)
     =
-    needed_from ?chunk t (`IndirectOff (absolute_offset, 0)) ztmp zwin
+    needed_from ?chunk t (`Offset absolute_offset) ztmp zwin
     >>= function
     | Error exn -> Lwt.return (Error exn)
     | Ok length ->
@@ -2226,7 +2231,7 @@ struct
   let get_with_result_allocation_from_offset
       ?chunk ?htmp t absolute_offset ztmp zwin
     =
-    needed_from t (`IndirectOff (absolute_offset, 0)) ztmp zwin >>= function
+    needed_from t (`Offset absolute_offset) ztmp zwin >>= function
     | Error exn -> Lwt.return (Error exn)
     | Ok length ->
       let tmp = Cstruct.create length, Cstruct.create length, length in
