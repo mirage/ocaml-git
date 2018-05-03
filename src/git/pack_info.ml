@@ -145,20 +145,18 @@ module Make
       Load x ->
       Patch { hunks = inserts; target = max x target_length; src = Load source_length }
     | Delta { hunks_descr = { HDec.reference = HDec.Offset rel_off
-                            ; source_length
                             ; target_length
                             ; _ }
-            ; inserts; _ },
+            ; inserts; from; _ },
       Patch { hunks; target; src; } ->
       let abs_off = Int64.sub abs_off rel_off in
-      let src = merge abs_off (Internal { abs_off; length = source_length; }) src in
+      let src = merge abs_off from src in
       Patch { hunks = max hunks inserts; target = max target target_length; src; }
-    | Delta { hunks_descr = { HDec.reference = HDec.Hash hash
-                            ; source_length
+    | Delta { hunks_descr = { HDec.reference = HDec.Hash _
                             ; target_length; _ }
-            ; inserts; _ },
+            ; inserts; from; _ },
       Patch { hunks; target; src; } ->
-      let src = merge 0L (Unresolved { hash; length = source_length; }) src in
+      let src = merge 0L from src in
       (* XXX(dinosaure): because source is unresolved, we cannot know [abs_off]
          but it does not matter for merging. *)
       Patch { hunks = max hunks inserts; target = max target target_length; src; }
