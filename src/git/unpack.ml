@@ -1623,7 +1623,7 @@ struct
 
   let apply partial_hunks hunks_header hunks base raw =
     if Cstruct.len raw < hunks_header.Hunk.target_length
-    then raise (Invalid_argument "Decoder.apply");
+    then invalid_arg (Fmt.strf "Decoder.apply, has %d, expect %d." (Cstruct.len raw) hunks_header.Hunk.target_length);
 
     let target_length = List.fold_left
         (fun acc -> function
@@ -1649,7 +1649,7 @@ struct
 
   let get_pack_object ?(chunk = 0x8000) ?(limit = false) ?htmp t reference source_length source_offset ztmp zwin rtmp =
     if Cstruct.len rtmp < source_length && not limit
-    then raise (Invalid_argument (Fmt.strf "Decoder.delta: expected length %d and have %d" source_length (Cstruct.len rtmp)));
+    then invalid_arg (Fmt.strf "Decoder.delta: expected length %d and have %d" source_length (Cstruct.len rtmp));
 
     let aux = function
       | Error exn -> Lwt.return (Error exn)
