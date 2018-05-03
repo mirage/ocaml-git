@@ -1240,7 +1240,7 @@ module Pack
       match eval0 src t with
       | Cont (({ state = Next _; _ }
               | { state = Unzip _; _ }
-              | { state = Hunks _; _ }) as t) ->
+              | { state = Hunks { h = { Hunk.state = Hunk.List _; _ }; _ }; _ }) as t) ->
         `Length t
       | Cont ({ state = StopHunks _; _ } as t) -> loop (continue t)
       | Cont t -> loop t
