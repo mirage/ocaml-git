@@ -38,6 +38,8 @@ sig
     | Internal of { abs_off: int64; length: int; }
     | Delta of { hunks_descr: HDec.hunks; inserts: int; depth: int; from: delta; }
 
+  val pp_delta: delta Fmt.t
+
   type path = Load of int | Patch of { hunks: int; target: int; src: path; }
 
   type 'a t =
@@ -102,6 +104,23 @@ module Make
     | Unresolved of { hash: Hash.t; length: int; }
     | Internal   of { abs_off: int64; length: int; }
     | Delta      of { hunks_descr: HDec.hunks; inserts: int; depth: int; from: delta; }
+
+  let rec pp_delta ppf = function
+    | Unresolved { hash; length; } ->
+      Fmt.pf ppf "(Unresolved@ { @[<hov>hash = %a;@ \
+                  length = %d;@] })"
+        Hash.pp hash length
+    | Internal { abs_off; length; } ->
+      Fmt.pf ppf "(Internal { @[<hov>abs_off = %Ld;@ \
+                  length = %d;@] })"
+        abs_off length
+    | Delta { hunks_descr; inserts; depth; from; } ->
+      Fmt.pf ppf "(Delta { @[<hov>hunks_descr = %a;@ \
+                  inserts = %d;@ \
+                  depth = %d;@ \
+                  delta = %a;@] })"
+        HDec.pp_hunks hunks_descr
+        inserts depth pp_delta from
 
   type 'a t =
     { index : (Hash.t, Crc32.t * int64 * int) Hashtbl.t
