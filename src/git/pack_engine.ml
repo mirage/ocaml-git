@@ -794,10 +794,17 @@ module Make
       let arr = Array.make depth empty_cstruct in
       let rec fill idx off = function
         | PInfo.Load _ -> ()
-        | PInfo. Patch { hunks; src; _ } ->
+        | PInfo.Patch { hunks; src; _ } ->
           Array.unsafe_set arr idx (Cstruct.sub cs off hunks);
           fill (idx + 1) (off + hunks) src in
       fill 0 0 path; arr
+
+    let list_of_path path =
+      let rec go acc = function
+        | PInfo.Load _ -> List.rev acc
+        | PInfo.Patch { hunks; src; _ } ->
+          go (hunks :: acc) src in
+      go [] path
 
     module EIDX = struct
       module E = struct
