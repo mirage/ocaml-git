@@ -278,7 +278,6 @@ end
 
 module Option = struct
   let get ~default = function Some x -> x | None -> default
-  let map f a = match a with Some a -> Some (f a) | None -> None
 end
 
 module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
