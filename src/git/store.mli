@@ -66,11 +66,6 @@ module type LOOSE = sig
 
   type error
 
-  val lookup: state -> Hash.t -> Hash.t option Lwt.t
-  (** [lookup state hash] is the object associated with the hash
-      [hash]. The result is [None] if the Git object does not exist or
-      is not stored as a {i loose} object. *)
-
   val mem: state -> Hash.t -> bool Lwt.t
   (** [mem state hash] is true iff there is an object such that
       [digest(object) = hash]. This function is the same as [lookup

@@ -50,7 +50,6 @@ module type LOOSE = sig
      and module Tag = Tag.Make(Hash)
      and type t = Value.Make(Hash)(Inflate)(Deflate).t
 
-  val lookup: state -> Hash.t -> Hash.t option Lwt.t
   val mem: state -> Hash.t -> bool Lwt.t
   val list: state -> Hash.t list Lwt.t
   val read: state -> Hash.t -> (t, error) result Lwt.t
@@ -468,12 +467,8 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
       >>!= lift_error
 
     let mem t = LooseImpl.mem ~fs:t.fs ~root:t.dotgit
-    let list t = LooseImpl.list ~fs:t.fs ~root:t.dotgit
 
-    let lookup t hash =
-      LooseImpl.mem ~fs:t.fs ~root:t.dotgit hash >|= function
-      | true  -> Some hash
-      | false -> None
+    let list t = LooseImpl.list ~fs:t.fs ~root:t.dotgit
 
     let read_inflated t hash =
       with_buffer t @@ fun { ztmp; dtmp; raw; window } ->
@@ -970,11 +965,11 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
     | Ok v    -> Ok v
 
   let read_inflated state hash =
-    Pack.read state hash >>= function
-    | Ok o -> Lwt.return (Some (o.RPDec.Object.kind, o.RPDec.Object.raw))
-    | Error _ -> Loose.lookup state hash >>= function
-      | None -> Lwt.return None
-      | Some _ ->
+    Pack.read_inflated state hash >>= function
+    | Ok v -> Lwt.return_some v
+    | Error _ -> Loose.mem state hash >>= function
+      | false -> Lwt.return_none
+      | true ->
         Loose.read_inflated state hash >|= function
         | Error _ -> None
         | Ok v    -> Some v
@@ -999,9 +994,9 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
     | Some (hash_pack, (_, offset)) ->
       Lwt.return (`Pack_decoder (hash_pack, offset))
     | None ->
-      Loose.lookup state hash >|= function
-      | Some _ -> `Loose
-      | None   -> `Not_found
+      Loose.mem state hash >|= function
+      | true -> `Loose
+      | false -> `Not_found
 
   let mem state hash =
     lookup state hash >|= function
