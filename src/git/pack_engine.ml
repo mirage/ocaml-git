@@ -893,11 +893,12 @@ module Make
       | Error _ as err -> Lwt.return err
       | Ok () ->
         let info = PInfo.resolve ~length:(Hashtbl.length normalized.info.PInfo.delta) normalized.info in
-        let path = Fpath.(root / "objects" / "pack" / Fmt.strf "pack-%s.idx" (Hash.to_hex info.PInfo.hash_pack)) in
+        let path = Fpath.(root / "objects" / "pack" / Fmt.strf "pack-%s.pack" (Hash.to_hex info.PInfo.hash_pack)) in
         let `Resolved path_delta = info.PInfo.state in
 
         if normalized.Normalized.thin
-        then Loaded.make_pack_decoder ~read_and_exclude ~idx:Option.(fun hash -> Hashtbl.find_opt info.PInfo.index hash >|= fun (crc, abs_off, _) -> (crc, abs_off)) fs path
+        then
+          Loaded.make_pack_decoder ~read_and_exclude ~idx:Option.(fun hash -> Hashtbl.find_opt info.PInfo.index hash >|= fun (crc, abs_off, _) -> (crc, abs_off)) fs path
           >>?= fun (fd, pack) ->
 
           let length_hunks = Normalized.length_of_path path_delta in
@@ -1509,7 +1510,7 @@ module Make
        fonction plus optimisé (à propos de l'allocation). *)
 
     let promote_loaded r (hash_pack, loaded) obj =
-      Resolved.make_from_loaded ~read_and_exclude:(read_and_exclude hash_pack) ~ztmp ~window fs r loaded >>= function
+      Resolved.make_from_loaded r loaded >>= function
       | Ok resolved ->
         Log.debug (fun l -> l ~header:"promotion" "Promotion of %a from loaded to resolved." Hash.pp loaded.Loaded.info.PInfo.hash_pack);
         Hashtbl.replace t.packs hash_pack (Resolved resolved);
