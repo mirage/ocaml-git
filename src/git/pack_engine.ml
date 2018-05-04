@@ -89,6 +89,174 @@ module type S = sig
     | `Delta of PEnc.Delta.error
     | `Not_found ]
 
+  module Exists:
+  sig
+    type t
+
+    val lookup: t -> Hash.t -> (Crc32.t * int64) option
+    val mem: t -> Hash.t -> bool
+    val fold: (Hash.t -> (Crc32.t * int64) -> 'acc -> 'acc) -> t -> 'acc -> 'acc
+    val make: FS.t -> Fpath.t -> (t, error) result Lwt.t
+  end
+
+  module Loaded:
+  sig
+    type t
+
+    val lookup: t -> Hash.t -> (Crc32.t * int64) option
+    val mem: t -> Hash.t -> bool
+    val fold: (Hash.t -> (Crc32.t * int64) -> 'acc -> 'acc) -> t -> 'acc -> 'acc
+
+    val read:
+         to_result:(RPDec.Object.t -> ('value, error) result Lwt.t)
+      -> ztmp:Cstruct.t
+      -> window:Inflate.window
+      -> ('mmu, 'location) r
+      -> t
+      -> Hash.t
+      -> [ `Return of 'value | `Promote of 'value | `Error of error ] Lwt.t
+
+    val make_pack_decoder:
+         read_and_exclude:(Hash.t -> (RPDec.kind * Cstruct.t) option Lwt.t)
+      -> idx:(Hash.t -> (Crc32.t * int64) option)
+      -> FS.t
+      -> Fpath.t
+      -> (FS.Mapper.fd * RPDec.t, error) result Lwt.t
+
+    val make:
+         root:Fpath.t
+      -> read_and_exclude:(Hash.t -> (RPDec.kind * Cstruct.t) option Lwt.t)
+      -> FS.t
+      -> Exists.t
+      -> (t, error) result Lwt.t
+  end
+
+  module Normalized:
+  sig
+    type t
+
+    val make_from_info:
+         read_and_exclude:(Hash.t -> (RPDec.kind * Cstruct.t) option Lwt.t)
+      -> FS.t
+      -> Fpath.t
+      -> [ `Normalized of PInfo.path ] PInfo.t
+      -> (t, error) result Lwt.t
+
+    val second_pass:
+         ztmp:Cstruct.t
+      -> window:Inflate.window
+      -> ('mmu, 'location) r
+      -> t
+      -> (unit, error) result Lwt.t
+  end
+
+  module Resolved:
+  sig
+    type t
+    type buffer =
+      { hunks   : Cstruct.t array
+      ; buffer  : Cstruct.t * Cstruct.t * int
+      ; depth   : int
+      ; deliver : unit -> unit Lwt.t }
+
+    val lookup: t -> Hash.t -> (Crc32.t * int64) option
+    val mem: t -> Hash.t -> bool
+    val fold: (Hash.t -> (Crc32.t * int64) -> 'acc -> 'acc) -> t -> 'acc -> 'acc
+
+    val read:
+         ztmp:Cstruct.t
+      -> window:Inflate.window
+      -> to_result:(RPDec.Object.t -> ('value, error) result Lwt.t)
+      -> t
+      -> Hash.t
+      -> [ `Return of 'value | `Promote of 'value | `Error of error ] Lwt.t
+
+    val size:
+         ztmp:Cstruct.t
+      -> window:Inflate.window
+      -> t
+      -> Hash.t
+      -> (int, error) result Lwt.t
+
+    val store_idx_file:
+         root:Fpath.t
+      -> FS.t
+      -> (Hash.t * (Crc32.t * int64)) IEnc.sequence
+      -> Hash.t
+      -> (unit, error) result Lwt.t
+
+    val make_buffer:
+         ('mmu, 'location) r
+      -> Hash.t
+      -> int -> int -> PInfo.path
+      -> ((buffer -> unit Lwt.t) -> unit Lwt.t)
+
+    val make_from_normalized:
+         root:Fpath.t
+      -> read_and_exclude:(Hash.t -> (RPDec.kind * Cstruct.t) option Lwt.t)
+      -> ztmp:Cstruct.t
+      -> window:Inflate.window
+      -> FS.t
+      -> ('mmu, 'location) r
+      -> Normalized.t
+      -> (t, error) result Lwt.t
+
+    val make_from_loaded: ('mmu, 'location) r -> Loaded.t -> (t, error) result Lwt.t
+
+    val force:
+         root:Fpath.t
+      -> read_and_exclude:(Hash.t -> (RPDec.kind * Cstruct.t) option Lwt.t)
+      -> ztmp:Cstruct.t
+      -> window:Inflate.window
+      -> FS.t
+      -> ('mmu, 'location) r
+      -> Exists.t
+      -> (t, error) result Lwt.t
+  end
+
+  module Total:
+  sig
+    type t
+
+    val lookup: t -> Hash.t -> (Crc32.t * int64 * int) option
+    val mem: t -> Hash.t -> bool
+    val fold: (Hash.t -> (Crc32.t * int64) -> 'acc -> 'acc) -> t -> 'acc -> 'acc
+
+    val read:
+         ztmp:Cstruct.t
+      -> window:Inflate.window
+      -> to_result:(RPDec.Object.t -> ('value, error) result Lwt.t)
+      -> t
+      -> Hash.t
+      -> [ `Return of 'value | `Error of error ] Lwt.t
+
+    val size:
+         ztmp:Cstruct.t
+      -> window:Inflate.window
+      -> t
+      -> Hash.t
+      -> (int, error) result Lwt.t
+
+    val third_pass:
+      root:Fpath.t
+      -> ztmp:Cstruct.t
+      -> window:Inflate.window
+      -> read_inflated:(Hash.t -> (RPDec.kind * Cstruct.t) option Lwt.t)
+      -> FS.t
+      -> Resolved.t
+      -> ((Fpath.t * Hash.t * (Hash.t, Crc32.t * int64 * int) Hashtbl.t * PInfo.path), error) result Lwt.t
+
+    val make:
+      root:Fpath.t
+      -> ztmp:Cstruct.t
+      -> window:Inflate.window
+      -> read_inflated:(Hash.t -> (RPDec.kind * Cstruct.t) option Lwt.t)
+      -> FS.t
+      -> ('mmu, 'location) r
+      -> Resolved.t
+      -> (t, error) result Lwt.t
+  end
+
   val pp_error: error Fmt.t
 
   val v: FS.t -> Fpath.t list -> t Lwt.t
