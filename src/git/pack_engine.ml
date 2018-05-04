@@ -624,9 +624,18 @@ module Make
         | PInfo.Patch { hunks; src; _ } -> go (acc + hunks) src in
       go 0 path
 
-    let digest cs =
+    let digest obj =
+      let hdr = Fmt.strf "%s %d\000"
+          (match obj.RPDec.Object.kind with
+               | `Commit -> "commit"
+               | `Tree -> "tree"
+               | `Tag -> "tag"
+               | `Blob -> "blob")
+          (Cstruct.len obj.RPDec.Object.raw) in
+
       let ctx = Hash.Digest.init () in
-      Hash.Digest.feed ctx cs;
+      Hash.Digest.feed ctx (Cstruct.of_string hdr);
+      Hash.Digest.feed ctx obj.RPDec.Object.raw;
       Hash.Digest.get ctx
 
     let make_from_info ~read_and_exclude fs path_tmp info =
@@ -680,7 +689,7 @@ module Make
           RPDec.get_from_offset ?htmp normalized.pack abs_off raw ztmp window >>= function
           | Error err -> Lwt.fail (Fail err)
           | Ok obj ->
-            let hash = digest obj.RPDec.Object.raw in
+            let hash = digest obj in
             let crc, abs_off =
               RPDec.Object.first_crc_exn obj,
               RPDec.Object.first_offset_exn obj in
