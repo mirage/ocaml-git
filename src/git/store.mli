@@ -234,6 +234,13 @@ module type PACK = sig
   type value
   (** The type of the Git values. *)
 
+  type ('mmu, 'location) r =
+    { mmu              : 'mmu
+    ; with_cstruct     : 'mmu -> pack -> int -> (('location * Cstruct.t) -> unit Lwt.t) -> unit Lwt.t
+    ; with_cstruct_opt : 'mmu -> int option -> (('location * Cstruct.t) option -> unit Lwt.t) -> unit Lwt.t
+    ; free             : 'mmu -> 'location -> unit Lwt.t }
+  and pack = Pack of Hash.t | Unrecorded
+
   module Hash: S.HASH
   (** The [Hash] module used to make the implementation. *)
 
@@ -294,7 +301,7 @@ module type PACK = sig
       noticed by all {i IDX} files available in the current git
       repository [state]. Errors are ignored and skipped. *)
 
-  val read: state -> Hash.t -> (t, error) result Lwt.t
+  val read: state -> Hash.t -> (value, error) result Lwt.t
   (** [read state hash] can retrieve a git {i packed} object from any
       {i PACK} files available in the current git repository
       [state]. It just inflates the git object and informs some
@@ -331,7 +338,7 @@ module type PACK = sig
   type stream = unit -> Cstruct.t option Lwt.t
   (** The stream contains the PACK flow. *)
 
-  module Graph: Map.S with type key = Hash.t
+  module Map: Map.S with type key = Hash.t
 
   val from: state -> stream -> (Hash.t * int, error) result Lwt.t
   (** [from git stream] populates the Git repository [git] from the
@@ -342,7 +349,7 @@ module type PACK = sig
     -> ?window:[ `Object of int | `Memory of int ]
     -> ?depth:int
     -> value list
-    -> (stream * (Crc32.t * int64) Graph.t Lwt_mvar.t, error) result Lwt.t
+    -> (stream * (Crc32.t * int64) Map.t Lwt_mvar.t, error) result Lwt.t
   (** [make ?window ?depth values] makes a PACK stream from a list of
       {!Value.t}.
 
