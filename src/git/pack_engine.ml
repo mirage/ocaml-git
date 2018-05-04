@@ -509,8 +509,8 @@ module Make
                 RPDec.Object.first_crc_exn obj,
                 RPDec.Object.first_offset_exn obj,
                 RPDec.Object.length obj in
-              Hashtbl.add info.PInfo.index hash (crc, abs_off, length);
-              Hashtbl.add info.PInfo.delta abs_off (object_to_delta obj.RPDec.Object.from);
+              Hashtbl.replace info.PInfo.index hash (crc, abs_off, length);
+              Hashtbl.replace info.PInfo.delta abs_off (object_to_delta obj.RPDec.Object.from);
 
               let () = match obj.RPDec.Object.from with
                 | RPDec.Object.External _ -> t.thin <- true
@@ -672,7 +672,7 @@ module Make
               RPDec.Object.first_crc_exn obj,
               RPDec.Object.first_offset_exn obj in
             Hashtbl.add normalized.info.PInfo.index hash (crc, abs_off, needed);
-            Hashtbl.add normalized.info.PInfo.delta abs_off (Loaded.object_to_delta obj.RPDec.Object.from);
+            Hashtbl.replace normalized.info.PInfo.delta abs_off (Loaded.object_to_delta obj.RPDec.Object.from);
 
             let () = match obj.RPDec.Object.from with
               | RPDec.Object.External _ -> normalized.thin <- true
@@ -1110,8 +1110,8 @@ module Make
                          go ~src_length (fun src -> PInfo.Patch { hunks; target = length; src }) (max acc length) delta
                        | PEnc.Delta.Z -> k (PInfo.Load (Int64.to_int length)), acc in
                      go ~src_length (fun x -> x) 0 delta in
-                 Hashtbl.add index hash (crc, abs_off, needed);
-                 Hashtbl.add paths abs_off path) entries;
+                 Hashtbl.replace index hash (crc, abs_off, needed);
+                 Hashtbl.replace paths abs_off path) entries;
 
              let rec merge abs_off path acc = match path, acc with
                | PInfo.Load a, PInfo.Load b -> PInfo.Load (max a b)
@@ -1402,7 +1402,7 @@ module Make
   let v fs indexes =
     Lwt_list.map_p (Exists.make fs) indexes >|= fun exists ->
     let packs = Hashtbl.create 32 in
-    List.iter (function Ok ({ Exists.hash_pack; _ } as exists) -> Hashtbl.add packs hash_pack (Exists exists)
+    List.iter (function Ok ({ Exists.hash_pack; _ } as exists) -> Hashtbl.replace packs hash_pack (Exists exists)
                       | Error err ->
                         Log.err (fun l -> l "Retrieve an error when we load IDX file: %a." pp_error err))
       exists;
