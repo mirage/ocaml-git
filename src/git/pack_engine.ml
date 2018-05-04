@@ -69,11 +69,12 @@ module type S = sig
 
   type t
 
-  type ('location, 'mmu) r =
+  type ('mmu, 'location) r =
     { mmu              : 'mmu
-    ; with_cstruct     : 'mmu -> int -> (('location * Cstruct.t) -> unit Lwt.t) -> unit Lwt.t
+    ; with_cstruct     : 'mmu -> pack -> int -> (('location * Cstruct.t) -> unit Lwt.t) -> unit Lwt.t
     ; with_cstruct_opt : 'mmu -> int option -> (('location * Cstruct.t) option -> unit Lwt.t) -> unit Lwt.t
     ; free             : 'mmu -> 'location -> unit Lwt.t }
+  and pack = Pack of Hash.t | Unrecorded
 
   type error =
     [ `Pack_decoder of RPDec.error
@@ -263,11 +264,12 @@ module Make
     | `Delta of PEnc.Delta.error
     | `Not_found ]
 
-  type ('location, 'mmu) r =
+  type ('mmu, 'location) r =
     { mmu              : 'mmu
-    ; with_cstruct     : 'mmu -> int -> (('location * Cstruct.t) -> unit Lwt.t) -> unit Lwt.t
+    ; with_cstruct     : 'mmu -> pack -> int -> (('location * Cstruct.t) -> unit Lwt.t) -> unit Lwt.t
     ; with_cstruct_opt : 'mmu -> int option -> (('location * Cstruct.t) option -> unit Lwt.t) -> unit Lwt.t
     ; free             : 'mmu -> 'location -> unit Lwt.t }
+  and pack = Pack of Hash.t | Unrecorded
 
   let empty_cstruct = Cstruct.create 0
 
@@ -481,7 +483,7 @@ module Make
           let res = ref None in
           let delta = Hashtbl.find_opt info.PInfo.delta abs_off in
 
-          (r.with_cstruct r.mmu (length * 2) @@ fun (loc_raw, raw) ->
+          (r.with_cstruct r.mmu Unrecorded (length * 2) @@ fun (loc_raw, raw) ->
            let raw = Cstruct.sub raw 0 length, Cstruct.sub raw length length, length in
 
            r.with_cstruct_opt r.mmu Option.(delta >|= length_of_delta) @@ fun hraw ->
@@ -657,7 +659,7 @@ module Make
         RPDec.needed_from_offset normalized.pack abs_off ztmp window >>= function
         | Error err -> Lwt.fail (Fail err)
         | Ok needed ->
-          r.with_cstruct r.mmu (needed * 2) @@ fun (loc_raw, raw) ->
+          r.with_cstruct r.mmu Unrecorded (needed * 2) @@ fun (loc_raw, raw) ->
           let raw = Cstruct.sub raw 0 needed, Cstruct.sub raw needed needed, needed in
 
           r.with_cstruct_opt r.mmu (Some (length_of_delta delta)) @@ fun hraw ->
@@ -794,19 +796,23 @@ module Make
       | Error #fs_error as err -> err
 
     let make_buffer
-        (type mmu) (type location) (type a)
+        (type mmu) (type location)
         (r:(mmu, location) r)
-        length_hunks length_buffer path_delta : (buffer -> unit Lwt.t) -> unit Lwt.t =
+        hash_pack length_hunks length_buffer path_delta : (buffer -> unit Lwt.t) -> unit Lwt.t =
       let ret = ref None in
 
       let make () =
-        r.with_cstruct r.mmu length_hunks @@ fun (loc_hunks, hunks) ->
-        r.with_cstruct r.mmu (length_buffer * 2) @@ fun (loc_objrw, objrw) ->
+        r.with_cstruct r.mmu (Pack hash_pack) (length_hunks + (length_buffer * 2)) @@ fun (loc, buffer) ->
 
+        let hunks = Cstruct.sub buffer 0 length_hunks in
         let hunks = split_of_path hunks path_delta in
+
         let depth = depth_of_path path_delta in
-        let buffer = Cstruct.sub objrw 0 length_buffer, Cstruct.sub objrw length_buffer length_buffer, length_buffer in
-        let deliver () = r.free r.mmu loc_hunks >>= fun () -> r.free r.mmu loc_objrw in
+
+        let buffer = Cstruct.sub buffer length_hunks (length_buffer * 2) in
+        let buffer = Cstruct.sub buffer 0 length_buffer, Cstruct.sub buffer length_buffer length_buffer, length_buffer in
+
+        let deliver () = r.free r.mmu loc in
 
         ret := Some { hunks; buffer; deliver; depth; };
         Lwt.return_unit in
