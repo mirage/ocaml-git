@@ -420,8 +420,7 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
   let pp_error ppf = function
     | #LooseImpl.error as err -> Fmt.pf ppf "%a" LooseImpl.pp_error err
     | #PackImpl.error as err -> Fmt.pf ppf "%a" PackImpl.pp_error err
-    | `Delta err -> Fmt.pf ppf "(`Delta %a)" PEnc.Delta.pp_error err
-    | _ -> assert false
+    | `Invalid_reference reference -> Fmt.pf ppf "Invalid reference: %a" Reference.pp reference
 
   let lift_error err = (err :> error)
 
