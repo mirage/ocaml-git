@@ -1883,6 +1883,8 @@ struct
   (* XXX(dinosaure): this function returns the max length needed to undelta-ify
      a PACK object. *)
   let needed_from ?(chunk = 0x8000) ?(cache = (fun _ -> None)) t value ztmp zwin =
+    ignore @@ cache;
+
     let get absolute_offset =
       find_window t absolute_offset
       >>= function
