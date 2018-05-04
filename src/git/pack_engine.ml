@@ -320,6 +320,9 @@ module Make
   module Loaded =
   struct
 
+    let src = Logs.Src.create "git.pack_engine.loaded" ~doc:"logs git's loaded pack event"
+    module Log = (val Logs.src_log src: Logs.LOG)
+
     (* XXX(dinosaure): Voici l'état [loaded], il ne peut dériver que de l'état
        [exists]. Cet état est le pire sous le plan de l'allocation et de la
        recherche des objets. On y est associé au fichier IDX et au fichier PACK.
@@ -473,6 +476,10 @@ module Make
         (r:(mmu, location) r)
         ({ pack; info; index; _ } as t) hash
       : [ `Error of error | `Promote of value | `Return of value ] Lwt.t =
+      Log.debug (fun l ->
+          l ~header:"read" "Try to extract object %a from PACK %a."
+            Hash.pp hash Hash.pp t.info.PInfo.hash_pack);
+
       lookup t hash |> function
       | None -> Lwt.return (`Error (`Pack_decoder (RPDec.Invalid_hash hash)))
       | Some (_, abs_off) ->
@@ -566,6 +573,9 @@ module Make
   module Normalized =
   struct
 
+    let src = Logs.Src.create "git.pack_engine.normalized" ~doc:"logs git's pack normalization event"
+    module Log = (val Logs.src_log src: Logs.LOG)
+
     (* XXX(dinosaure): Voici l'état [normalized] qui est l'/entry-point/ pour
        les fichiers PACK venant du réseau (clone, pull, fetch). Cet état est
        surtout un état pour le dissocié de [resolved] et enclenché la seconde
@@ -658,7 +668,10 @@ module Make
         RPDec.needed_from_offset normalized.pack abs_off ztmp window >>= function
         | Error err -> Lwt.fail (Fail err)
         | Ok needed ->
+          Log.debug (fun l -> l "Allocate %d byte(s) to extract %a:%Ld." (needed * 2) Hash.pp normalized.info.PInfo.hash_pack abs_off);
+
           r.with_cstruct r.mmu Unrecorded (needed * 2) @@ fun (loc_raw, raw) ->
+          Log.debug (fun l -> l "Has %d byte(s)." (Cstruct.len raw));
           let raw = Cstruct.sub raw 0 needed, Cstruct.sub raw needed needed, needed in
 
           r.with_cstruct_opt r.mmu (Some (length_of_delta delta)) @@ fun hraw ->
@@ -671,6 +684,11 @@ module Make
             let crc, abs_off =
               RPDec.Object.first_crc_exn obj,
               RPDec.Object.first_offset_exn obj in
+
+            Log.info (fun l ->
+                l ~header:"second_pass" "Add object %a (length: %d, offset: %Ld)."
+                  Hash.pp hash (Hashtbl.length normalized.info.PInfo.index) abs_off);
+
             Hashtbl.add normalized.info.PInfo.index hash (crc, abs_off, needed);
             Hashtbl.replace normalized.info.PInfo.delta abs_off (Loaded.object_to_delta obj.RPDec.Object.from);
 
@@ -697,6 +715,11 @@ module Make
                   | PInfo.Delta _ | PInfo.Unresolved _ -> (k, v) :: a
                   | _ -> a) normalized.info.PInfo.delta []
               |> List.sort (fun (ka, _) (kb, _) -> Int64.compare ka kb))
+           >>= fun () ->
+           Log.debug (fun l ->
+               l ~header:"second_pass" "Paths of delta-ification: %a."
+                 Fmt.(Dump.hashtbl int64 PInfo.pp_delta) normalized.info.PInfo.delta);
+           Lwt.return_ok ())
         (function Fail err -> Lwt.return_error (`Pack_decoder err)
                 | exn -> Lwt.fail exn)
   end
@@ -713,6 +736,9 @@ module Make
 
   module Resolved =
   struct
+
+    let src = Logs.Src.create "git.pack_engine.resolved" ~doc:"logs git's resolved pack event"
+    module Log = (val Logs.src_log src: Logs.LOG)
 
     (* XXX(dinosaure): voici l'état [resolved], on y est presque. Dans cette
        état, on a résolu tout les objets delta-ifiés et, sauf pour les objets
@@ -803,6 +829,9 @@ module Make
 
       let make () =
         r.with_cstruct r.mmu (Pack hash_pack) (length_hunks + (length_buffer * 2)) @@ fun (loc, buffer) ->
+
+        Log.debug (fun l ->
+          l ~header:"make_buffer" "Split hunks to: %a." Fmt.(Dump.list int) (list_of_path path_delta));
 
         let hunks = Cstruct.sub buffer 0 length_hunks in
         let hunks = split_of_path hunks path_delta in
@@ -900,9 +929,17 @@ module Make
         (type mmu) (type location)
         (r:(mmu, location) r)
         loaded =
+      Log.debug (fun l ->
+          l ~header:"make_from_loaded" "Delta-ification path is complete: %a."
+            Fmt.(Dump.hashtbl int64 PInfo.pp_delta) loaded.Loaded.info.PInfo.delta);
+
       let info = PInfo.normalize ~length:(Hashtbl.length loaded.Loaded.info.PInfo.delta) loaded.Loaded.info in
       let info = PInfo.resolve ~length:(Hashtbl.length loaded.Loaded.info.PInfo.delta) info in
       let `Resolved path_delta = info.PInfo.state in
+
+      Log.debug (fun l ->
+          l ~header:"make_from_loaded" "Approximation of delta-ification path is: %a."
+            Fmt.(Dump.list int) (list_of_path path_delta));
 
       let length_hunks = Normalized.length_of_path path_delta in
       let length_objrw = Hashtbl.fold (fun _ (_, _, v) -> max v) info.PInfo.index 0 in
@@ -1000,6 +1037,10 @@ module Make
 
   module Total =
   struct
+
+    let src = Logs.Src.create "git.pack_engine.total" ~doc:"logs git's total pack event"
+    module Log = (val Logs.src_log src: Logs.LOG)
+
     type t =
       { index      : (Hash.t, Crc32.t * int64 * int) Hashtbl.t
       ; path_delta : PInfo.path
@@ -1017,6 +1058,10 @@ module Make
 
     let read (type value) ~ztmp ~window ~(to_result:RPDec.Object.t -> (value, error) result Lwt.t) ({ pack; _ } as t) hash
       : [ `Error of error | `Return of value ] Lwt.t =
+      Log.debug (fun l ->
+          l ~header:"read" "Try to extract object %a in PACK %a."
+            Hash.pp hash Hash.pp t.hash_pack);
+
       with_buffer t.buff @@ fun { hunks; buffer; deliver; _ } ->
       RPDec.get_from_hash ~htmp:hunks pack hash buffer ztmp window >|= Rresult.R.reword_error (fun err -> `Pack_decoder err)
       >>?= to_result >>= fun res -> deliver () >|= fun () -> match res with
@@ -1457,6 +1502,7 @@ module Make
     let promote_loaded r (hash_pack, loaded) obj =
       Resolved.make_from_loaded ~read_and_exclude:(read_and_exclude hash_pack) ~ztmp ~window fs r loaded >>= function
       | Ok resolved ->
+        Log.debug (fun l -> l ~header:"promotion" "Promotion of %a from loaded to resolved." Hash.pp loaded.Loaded.info.PInfo.hash_pack);
         Hashtbl.replace t.packs hash_pack (Resolved resolved);
         Lwt.return_ok obj
       | Error _ as err -> Lwt.return err in
@@ -1469,6 +1515,7 @@ module Make
     let promote_resolved fs r (hash_pack, resolved) obj =
       Total.make ~root ~ztmp ~window ~read_inflated:(read_inflated hash_pack) fs r resolved >>= function
       | Ok total ->
+        Log.debug (fun l -> l ~header:"promotion" "Promotion of %a from resolved to total." Hash.pp resolved.Resolved.hash_pack);
         Hashtbl.replace t.packs hash_pack (Total total);
         Lwt.return_ok obj
       | Error _ as err -> Lwt.return err in
