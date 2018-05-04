@@ -449,7 +449,6 @@ module type S = sig
     | `Pack_info         of PInfo.error
     | `Idx_decoder       of IDec.error
     | `Idx_encoder       of IEnc.error
-    | `Integrity         of string
     | `Invalid_hash      of Hash.t
     | `Invalid_reference of Reference.t
     | Error.Decoder.t

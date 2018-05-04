@@ -82,8 +82,9 @@ module type S = sig
     | `Idx_decoder of IDec.error
     | `Idx_encoder of IEnc.error
     | FS.error Error.FS.t
+    | Inflate.error Error.Inf.t
+    | Error.Decoder.t
     | `Invalid_hash of Hash.t
-    | `Integrity of string
     | `Delta of PEnc.Delta.error
     | `Not_found ]
 
@@ -247,6 +248,7 @@ module Make
      files). So, we continue to control the memory consumption. *)
 
   type fs_error = FS.error Error.FS.t
+  type inf_error = Inflate.error Error.Inf.t
 
   type error =
     [ `Pack_decoder of RPDec.error
@@ -254,9 +256,10 @@ module Make
     | `Pack_info of PInfo.error
     | `Idx_decoder of IDec.error
     | `Idx_encoder of IEnc.error
+    | inf_error
     | fs_error
+    | Error.Decoder.t (* XXX(dinosaure): trick about [to_result] function. *)
     | `Invalid_hash of Hash.t
-    | `Integrity of string
     | `Delta of PEnc.Delta.error
     | `Not_found ]
 
@@ -1274,14 +1277,14 @@ module Make
     | `Pack_info err          -> PInfo.pp_error ppf err
     | `Idx_decoder err        -> IDec.pp_error ppf err
     | `Idx_encoder err        -> IEnc.pp_error ppf err
+    | #inf_error as err       -> Error.Inf.pp_error Inflate.pp_error ppf err
     | #fs_error as err        -> Error.FS.pp_error FS.pp_error ppf err
+    | #Error.Decoder.t as err -> Error.Decoder.pp_error ppf err
     | #Error.not_found as err -> Error.pp_not_found ppf err
     | `Delta err              -> PEnc.Delta.pp_error ppf err
     | `Invalid_hash hash ->
       Fmt.pf ppf "Unable to load %a, it does not exists in the store"
         Hash.pp hash
-    | `Integrity err ->
-      Fmt.string ppf err
 
   (* XXX(dinosaure): this function could not be exposed. It used in a specific
      context, when a pack decoder requests an external object. This case appear
