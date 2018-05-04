@@ -517,9 +517,9 @@ module Make
       ; mutable thin : bool }
 
     let lookup { index; info; _ } hash =
-      match Hashtbl.find_opt info.PInfo.index hash with
-      | Some (crc, abs_off, _) -> Some (crc, abs_off)
-      | None -> IDec.find index hash
+      match Hashtbl.find info.PInfo.index hash with
+      | (crc, abs_off, _) -> Some (crc, abs_off)
+      | exception Not_found -> IDec.find index hash
 
     let mem { index; info; _ } hash =
       Hashtbl.mem info.PInfo.index hash || IDec.mem index hash
@@ -655,7 +655,7 @@ module Make
         | Error err -> Lwt.return (`Error (`Pack_decoder err))
         | Ok length ->
           let res = ref None in
-          let delta = Hashtbl.find_opt info.PInfo.delta abs_off in
+          let delta = try Some (Hashtbl.find info.PInfo.delta abs_off) with Not_found -> None in
 
           (r.with_cstruct r.mmu Unrecorded (length * 2) @@ fun (loc_raw, raw) ->
            let raw = Cstruct.sub raw 0 length, Cstruct.sub raw length length, length in
@@ -807,9 +807,9 @@ module Make
       Hash.Digest.get ctx
 
     let make_from_info ~read_and_exclude fs path_tmp info =
-      let idx hash = match Hashtbl.find_opt info.PInfo.index hash with
-        | Some (crc, abs_off, _) -> Some (crc, abs_off)
-        | None -> None in
+      let idx hash = match Hashtbl.find info.PInfo.index hash with
+        | (crc, abs_off, _) -> Some (crc, abs_off)
+        | exception Not_found -> None in
 
       Loaded.make_pack_decoder ~read_and_exclude ~idx fs path_tmp >>= function
       | Ok (fd, pack) ->
@@ -1073,7 +1073,11 @@ module Make
 
         if normalized.Normalized.thin
         then
-          Loaded.make_pack_decoder ~read_and_exclude ~idx:Option.(fun hash -> Hashtbl.find_opt info.PInfo.index hash >|= fun (crc, abs_off, _) -> (crc, abs_off)) fs path
+          let idx hash = match Hashtbl.find info.PInfo.index hash with
+            | (crc, abs_off, _) -> Some (crc, abs_off)
+            | exception Not_found -> None in
+
+          Loaded.make_pack_decoder ~read_and_exclude ~idx fs path
           >>?= fun (fd, pack) ->
 
           let length_hunks = Normalized.length_of_path path_delta in
@@ -1090,11 +1094,14 @@ module Make
                         ; thin = normalized.Normalized.thin }
         else
           let sequence f = Hashtbl.iter (fun k (crc, abs_off, _) -> f (k, (crc, abs_off))) info.PInfo.index in
+          let idx hash = match Hashtbl.find info.PInfo.index hash with
+            | (crc, abs_off, _) -> Some (crc, abs_off)
+            | exception Not_found -> None in
 
           store_idx_file ~root fs sequence info.PInfo.hash_pack
           >>?= fun () -> FS.File.move fs normalized.Normalized.path path >|= Rresult.R.reword_error (Error.FS.err_move normalized.Normalized.path path)
           >>?= fun () -> FS.Mapper.close normalized.Normalized.fd >|= Rresult.R.reword_error (Error.FS.err_close normalized.Normalized.path)
-          >>?= fun () -> Loaded.make_pack_decoder ~read_and_exclude ~idx:Option.(fun hash -> Hashtbl.find_opt info.PInfo.index hash >|= fun (crc, abs_off, _) -> (crc, abs_off)) fs path
+          >>?= fun () -> Loaded.make_pack_decoder ~read_and_exclude ~idx fs path
           >>?= fun (fd, pack) ->
 
           let length_hunks = Normalized.length_of_path path_delta in
@@ -1186,10 +1193,13 @@ module Make
         let length_hunks = Normalized.length_of_path path_delta in
         let length_objrw = Hashtbl.fold (fun _ (_, _, v) -> max v) info.PInfo.index 0 in
         let buff = make_buffer r info.PInfo.hash_pack length_hunks length_objrw path_delta in
+        let idx hash = match Hashtbl.find info.PInfo.index hash with
+          | (crc, abs_off, _) -> Some (crc, abs_off)
+          | exception Not_found -> None in
 
         let ( >>!= ) v f = v >>= function Ok _ as v -> Lwt.return v | Error err -> f err in
 
-        Loaded.make_pack_decoder ~read_and_exclude ~idx:Option.(fun hash -> Hashtbl.find_opt info.PInfo.index hash >>= fun (crc, abs_off, _) -> Some (crc, abs_off)) fs path
+        Loaded.make_pack_decoder ~read_and_exclude ~idx fs path
         >>?= fun (fd, pack) -> FS.Mapper.close exists.Exists.fd >|= Rresult.R.reword_error Error.FS.err_sys_map
         >>?= fun () -> Lwt.return_ok { pack
                                      ; index = info.PInfo.index
@@ -1203,9 +1213,9 @@ module Make
         >>?= fun () -> Lwt.return_error er
       | Error err -> Lwt.return (Error (`Pack_info err))
 
-    let lookup { index; _ } hash = match Hashtbl.find_opt index hash with
-      | Some (crc, abs_off, _) -> Some (crc, abs_off)
-      | None -> None
+    let lookup { index; _ } hash = match Hashtbl.find index hash with
+      | (crc, abs_off, _) -> Some (crc, abs_off)
+      | exception Not_found -> None
 
     let size ~ztmp ~window { pack; _ } hash =
       RPDec.length pack hash ztmp window >|= Rresult.R.reword_error (fun err -> `Pack_decoder err)
@@ -1234,7 +1244,7 @@ module Make
       ; buff       : (Resolved.buffer -> unit Lwt.t) -> unit Lwt.t
       ; fd         : FS.Mapper.fd }
 
-    let lookup { index; _ } hash = Hashtbl.find_opt index hash
+    let lookup { index; _ } hash = try Some (Hashtbl.find index hash) with Not_found -> None
     let mem { index; _ } hash = Hashtbl.mem index hash
     let fold f { index; _ } a = Hashtbl.fold (fun hash (crc, abs_off, _) a -> f hash (crc, abs_off) a) index a
 
@@ -1474,7 +1484,9 @@ module Make
         | Error _ -> assert false
         | Ok (path, hash_pack, index, path_delta) ->
 
-          let idx hash = let open Option in Hashtbl.find_opt index hash >|= fun (crc, abs_off, _) -> (crc, abs_off) in
+          let idx hash = match Hashtbl.find index hash with
+            | (crc, abs_off, _) -> Some (crc, abs_off)
+            | exception Not_found -> None in
           Loaded.make_pack_decoder ~read_and_exclude:(fun _ -> Lwt.return_none) ~idx fs path
           >>?= fun (fd, pack) ->
 

@@ -551,12 +551,12 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
           Lwt_mutex.lock mutex >>= fun () ->
           exec (Lock mutex, fit length)
         | Pack hash_pack ->
-          match Hashtbl.find_opt heap hash_pack with
-          | Some (pool, length') ->
+          match Hashtbl.find heap hash_pack with
+          | (pool, length') ->
             assert (length = length');
 
             Lwt_pool.use pool (fun buffer -> exec (No_lock, buffer))
-          | None ->
+          | exception Not_found ->
             let pool = Lwt_pool.create n (fun () -> Lwt.return (Cstruct.create length)) in
             Hashtbl.add heap hash_pack (pool, length);
             Lwt_pool.use pool (fun buffer -> exec (No_lock, buffer)) in
