@@ -106,7 +106,7 @@ module type S = sig
     -> t
     -> Fpath.t
     -> [ `Normalized of PInfo.path ] PInfo.t
-    -> (unit, error) result Lwt.t
+    -> (Hash.t * int, error) result Lwt.t
 
   val read:
        root:Fpath.t
@@ -1417,8 +1417,8 @@ module Make
     >>?= Total.make ~root ~ztmp ~window ~read_inflated fs r
     >>= function
     | Ok total ->
-      Hashtbl.add t.packs total.Total.hash_pack (Total total);
-      Lwt.return_ok ()
+      Hashtbl.replace t.packs total.Total.hash_pack (Total total);
+      Lwt.return_ok (total.Total.hash_pack, Hashtbl.length total.Total.index)
     | Error _ as err -> Lwt.return err
 
   exception Found of (Hash.t * (Crc32.t * int64))
