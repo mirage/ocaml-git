@@ -468,7 +468,6 @@ module Make
        soit /thin/ - mais on sait jamais. *)
     let read
         (type mmu) (type location) (type value)
-        ~root
         ~(to_result:RPDec.Object.t -> (value, error) result Lwt.t)
         ~ztmp ~window
         (r:(mmu, location) r)
@@ -518,7 +517,7 @@ module Make
                 | RPDec.Object.Internal _ -> ()
                 | RPDec.Object.Delta { base; _ } ->
                   let rec go = function
-                    | RPDec.Object.Delta { base; } -> go base
+                    | RPDec.Object.Delta { base; _ } -> go base
                     | RPDec.Object.External _ -> t.thin <- true
                     | RPDec.Object.Internal _ -> () in
                   go base in
@@ -694,9 +693,10 @@ module Make
         (fun () ->
            Lwt_list.iter_s
              resolve
-             (Hashtbl.fold (fun k v a -> (k, v) :: a) normalized.info.PInfo.delta []
+             (Hashtbl.fold (fun k v a -> match v with
+                  | PInfo.Delta _ | PInfo.Unresolved _ -> (k, v) :: a
+                  | _ -> a) normalized.info.PInfo.delta []
               |> List.sort (fun (ka, _) (kb, _) -> Int64.compare ka kb))
-           >>= fun () -> Lwt.return_ok ())
         (function Fail err -> Lwt.return_error (`Pack_decoder err)
                 | exn -> Lwt.fail exn)
   end
@@ -863,8 +863,8 @@ module Make
           >>?= fun (fd, pack) ->
 
           let length_hunks = Normalized.length_of_path path_delta in
-          let length_objrw = Hashtbl.fold (fun k (_, _, v) -> max v) info.PInfo.index 0 in
-          let buff = make_buffer r length_hunks length_objrw path_delta in
+          let length_objrw = Hashtbl.fold (fun _ (_, _, v) -> max v) info.PInfo.index 0 in
+          let buff = make_buffer r info.PInfo.hash_pack length_hunks length_objrw path_delta in
 
           Lwt.return_ok { pack
                         ; index = info.PInfo.index
@@ -884,8 +884,8 @@ module Make
           >>?= fun (fd, pack) ->
 
           let length_hunks = Normalized.length_of_path path_delta in
-          let length_objrw = Hashtbl.fold (fun k (_, _, v) -> max v) info.PInfo.index 0 in
-          let buff = make_buffer r length_hunks length_objrw path_delta in
+          let length_objrw = Hashtbl.fold (fun _ (_, _, v) -> max v) info.PInfo.index 0 in
+          let buff = make_buffer r info.PInfo.hash_pack length_hunks length_objrw path_delta in
 
           Lwt.return_ok { pack
                         ; index = info.PInfo.index
@@ -898,10 +898,6 @@ module Make
 
     let make_from_loaded
         (type mmu) (type location)
-        ~read_and_exclude
-        ~ztmp
-        ~window
-        fs
         (r:(mmu, location) r)
         loaded =
       let info = PInfo.normalize ~length:(Hashtbl.length loaded.Loaded.info.PInfo.delta) loaded.Loaded.info in
@@ -909,8 +905,8 @@ module Make
       let `Resolved path_delta = info.PInfo.state in
 
       let length_hunks = Normalized.length_of_path path_delta in
-      let length_objrw = Hashtbl.fold (fun k (_, _, v) -> max v) info.PInfo.index 0 in
-      let buff = make_buffer r length_hunks length_objrw path_delta in
+      let length_objrw = Hashtbl.fold (fun _ (_, _, v) -> max v) info.PInfo.index 0 in
+      let buff = make_buffer r info.PInfo.hash_pack length_hunks length_objrw path_delta in
 
       FS.Mapper.close loaded.Loaded.fdi >|= Rresult.R.reword_error Error.FS.err_sys_map >>?= fun () ->
       Lwt.return_ok { pack = loaded.Loaded.pack
@@ -966,8 +962,8 @@ module Make
         let `Resolved path_delta = info.PInfo.state in
 
         let length_hunks = Normalized.length_of_path path_delta in
-        let length_objrw = Hashtbl.fold (fun k (_, _, v) -> max v) info.PInfo.index 0 in
-        let buff = make_buffer r length_hunks length_objrw path_delta in
+        let length_objrw = Hashtbl.fold (fun _ (_, _, v) -> max v) info.PInfo.index 0 in
+        let buff = make_buffer r info.PInfo.hash_pack length_hunks length_objrw path_delta in
 
         let ( >>!= ) v f = v >>= function Ok _ as v -> Lwt.return v | Error err -> f err in
 
@@ -989,7 +985,7 @@ module Make
       | Some (crc, abs_off, _) -> Some (crc, abs_off)
       | None -> None
 
-    let size { pack; _ } ~ztmp ~window hash =
+    let size ~ztmp ~window { pack; _ } hash =
       RPDec.length pack hash ztmp window >|= Rresult.R.reword_error (fun err -> `Pack_decoder err)
 
     let read (type value) ~ztmp ~window ~(to_result:RPDec.Object.t -> (value, error) result Lwt.t) ({ pack; thin; _ } as t) hash
@@ -1016,7 +1012,7 @@ module Make
     let mem { index; _ } hash = Hashtbl.mem index hash
     let fold f { index; _ } a = Hashtbl.fold (fun hash (crc, abs_off, _) a -> f hash (crc, abs_off) a) index a
 
-    let size { pack; _ } ~ztmp ~window hash =
+    let size ~ztmp ~window { pack; _ } hash =
       RPDec.length pack hash ztmp window >|= Rresult.R.reword_error (fun err -> `Pack_decoder err)
 
     let read (type value) ~ztmp ~window ~(to_result:RPDec.Object.t -> (value, error) result Lwt.t) ({ pack; _ } as t) hash
@@ -1149,7 +1145,7 @@ module Make
       let deltas = filter_map (function PInfo.Delta { hunks_descr; _ } -> Some hunks_descr | _ -> None)
           (Hashtbl.fold (fun _ v a -> v :: a) resolved.Resolved.delta []) in
       let revidx = Hashtbl.create (Hashtbl.length resolved.Resolved.index) in
-      Hashtbl.iter (fun hash (crc, abs_off, length)-> Hashtbl.add revidx abs_off hash) resolved.Resolved.index;
+      Hashtbl.iter (fun hash (_, abs_off, _)-> Hashtbl.replace revidx abs_off hash) resolved.Resolved.index;
 
       let k2k = function
         | `Commit -> Pack.Kind.Commit
@@ -1253,8 +1249,8 @@ module Make
           >>?= fun (fd, pack) ->
 
             let length_hunks = Normalized.length_of_path path_delta in
-            let length_buffer = Hashtbl.fold (fun k (_, _, v) -> max v) index 0 in
-            let buff = Resolved.make_buffer r length_hunks length_buffer path_delta in
+            let length_buffer = Hashtbl.fold (fun _ (_, _, v) -> max v) index 0 in
+            let buff = Resolved.make_buffer r hash_pack length_hunks length_buffer path_delta in
 
             Lwt.return_ok { index; path_delta; hash_pack; pack; buff; fd; }
       else
@@ -1445,14 +1441,6 @@ module Make
     with Found v -> Some v
 
   let mem t hash =
-      Hashtbl.fold (fun hash_pack -> function
-          | Exists exists -> (||) (Exists.mem exists hash)
-          | Loaded loaded -> (||) (Loaded.mem loaded hash)
-          | Resolved resolved -> (||) (Resolved.mem resolved hash)
-          | Total total -> (||) (Total.mem total hash))
-        t.packs false
-
-  let mem t hash =
     lookup t hash |> function
     | Some _ -> true
     | None   -> false
@@ -1466,17 +1454,17 @@ module Make
        l'utilisation explicite de [read_and_exclude] en lieu et place d'une
        fonction plus optimisé (à propos de l'allocation). *)
 
-    let promote_loaded fs r (hash_pack, loaded) obj =
+    let promote_loaded r (hash_pack, loaded) obj =
       Resolved.make_from_loaded ~read_and_exclude:(read_and_exclude hash_pack) ~ztmp ~window fs r loaded >>= function
       | Ok resolved ->
         Hashtbl.replace t.packs hash_pack (Resolved resolved);
         Lwt.return_ok obj
       | Error _ as err -> Lwt.return err in
 
-    let return_loaded fs r loaded = function
+    let return_loaded r loaded = function
       | `Return ret -> Lwt.return_ok ret
       | `Error err -> Lwt.return_error err
-      | `Promote obj -> promote_loaded fs r loaded obj in
+      | `Promote obj -> promote_loaded r loaded obj in
 
     let promote_resolved fs r (hash_pack, resolved) obj =
       Total.make ~root ~ztmp ~window ~read_inflated:(read_inflated hash_pack) fs r resolved >>= function
@@ -1495,15 +1483,15 @@ module Make
     | Some (hash_pack, _) ->
       match Hashtbl.find t.packs hash_pack with
       | Loaded loaded ->
-        Loaded.read ~root r ~to_result ~ztmp ~window loaded hash
-        >>= return_loaded fs r (hash_pack, loaded)
+        Loaded.read ~to_result ~ztmp ~window r loaded hash
+        >>= return_loaded r (hash_pack, loaded)
       | Exists exists ->
         (Loaded.make ~root ~read_and_exclude:(read_and_exclude exists.Exists.hash_pack) fs exists >>= function
           | Error _ as err -> Lwt.return err
           | Ok loaded ->
             Hashtbl.replace t.packs hash_pack (Loaded loaded);
-            Loaded.read ~root r ~to_result ~ztmp ~window loaded hash
-            >>= return_loaded fs r (hash_pack, loaded))
+            Loaded.read ~to_result ~ztmp ~window r loaded hash
+            >>= return_loaded r (hash_pack, loaded))
       | Resolved resolved ->
         Resolved.read ~ztmp ~window ~to_result resolved hash >>= return_resolved fs r (hash_pack, resolved)
       | Total total ->
@@ -1529,7 +1517,7 @@ module Make
       | Total total -> Total.size total ~ztmp ~window hash
 
   let fold f t a =
-    Hashtbl.fold (fun hash_pack pack acc -> match pack with
+    Hashtbl.fold (fun _ pack acc -> match pack with
         | Exists exists -> Exists.fold f exists acc
         | Loaded loaded -> Loaded.fold f loaded acc
         | Resolved resolved -> Resolved.fold f resolved acc
