@@ -1979,18 +1979,14 @@ module Make (Hash: Git.HASH) (Store: Git.S with module Hash = Hash) (FS: Git.FS)
     let hash_of_entry entry = entry.Entry.hash
 
     let rec entries_to_tree ~bucket entries =
-      List.map
-        (fun (name, entry) ->
-          match entry with
+      List.map (fun (name, entry) -> match entry with
           | Blob entry ->
-             { Store.Value.Tree.perm = Entry.perm_of_kind entry.Entry.info.Entry.mode
-             ; name
-             ; node = hash_of_entry entry }
+            let perm = Entry.perm_of_kind entry.Entry.info.Entry.mode in
+            Store.Value.Tree.entry name perm (hash_of_entry entry)
           | Tree entries ->
-             { Store.Value.Tree.perm = `Dir
-             ; name
-             ; node = hash_of_tree ~bucket entries })
-        (StringMap.bindings entries)
+            Store.Value.Tree.entry name `Dir (hash_of_tree ~bucket entries)
+        ) (StringMap.bindings entries)
+
     and hash_of_tree ~bucket entries =
       let entries = entries_to_tree ~bucket entries in
       let tree = Store.Value.Tree.of_list entries in
