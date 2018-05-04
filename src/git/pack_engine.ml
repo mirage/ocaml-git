@@ -1319,14 +1319,13 @@ module Make
                       ; buff       = resolved.Resolved.buff }
   end
 
-  type pack =
+  type state =
     | Exists     of Exists.t
     | Loaded     of Loaded.t
     | Resolved   of Resolved.t
     | Total      of Total.t
 
-  type t =
-    { packs : (Hash.t, pack) Hashtbl.t }
+  type t = { packs : (Hash.t, state) Hashtbl.t }
 
   let pp_error ppf = function
     | `Pack_decoder err       -> RPDec.pp_error ppf err
