@@ -1913,7 +1913,7 @@ module Make (Hash: Git.HASH) (Store: Git.S with module Hash = Hash) (FS: Git.FS)
           if Cstruct.len raw = 0
           then Lwt.return (Ok ())
           else FS.File.write raw fd >!= file_err >?= function
-              | 0 when retry >= 50 -> Lwt.return (Error `Stack)
+              | 0 when retry >= 50 -> Lwt.return Git.Error.(v @@ FS.err_stack path)
               | 0 -> loop ~retry:(retry + 1) raw
               | len ->
                 loop ~retry:0 (Cstruct.shift raw len)
@@ -1950,7 +1950,7 @@ module Make (Hash: Git.HASH) (Store: Git.S with module Hash = Hash) (FS: Git.FS)
 
   let write_tree fs dir =
     FS.Dir.create fs dir
-    >!= (fun err -> Lwt.return (`Directory err))
+    >|= Rresult.R.reword_error (Git.Error.FS.err_create dir)
     >?= (fun _ -> Lwt.return (Ok ()))
 
   let index_to_store git fs ~dtmp =
