@@ -19,16 +19,23 @@ module type S =
 sig
   module Hash: S.HASH
 
-  type entry =
+  type perm =
+    [ `Normal | `Everybody | `Exec | `Link | `Dir | `Commit ]
+
+  type entry = private
     { perm: perm
     ; name: string
     ; node: Hash.t }
-  and perm =
-    [ `Normal | `Everybody | `Exec | `Link | `Dir | `Commit ]
-  and t
 
   val pp_entry: entry Fmt.t
+  val entry: string -> perm -> Hash.t -> entry
 
+  type t
+
+  val remove: name:string -> t -> t
+  val add: t -> entry -> t
+
+  val is_empty: t -> bool
   val perm_of_string: string -> perm
   val string_of_perm: perm -> string
 
@@ -102,8 +109,8 @@ module Make (Hash: S.HASH): S with module Hash = Hash = struct
 
   external to_list: t -> entry list = "%identity"
 
-  let iter f tree =
-    List.iter f tree
+  let iter f tree = List.iter f tree
+  let is_empty t = t = []
 
   type value =
     | Contents: string -> value
@@ -119,16 +126,15 @@ module Make (Hash: S.HASH): S with module Hash = Hash = struct
       let xs = str x and ys = str y in
       let lenx = String.length xs in
       let leny = String.length ys in
-
       let i = ref 0 in
-
       try
         while !i < lenx && !i < leny
-        do match Char.compare (String.unsafe_get xs !i) (String.unsafe_get ys !i) with
+        do match
+            Char.compare (String.unsafe_get xs !i) (String.unsafe_get ys !i)
+          with
           | 0 -> incr i
           | i -> raise (Result i)
         done;
-
         let get len s i =
           if i < len then String.unsafe_get (str s) i
           else if i = len then match s with
@@ -136,7 +142,6 @@ module Make (Hash: S.HASH): S with module Hash = Hash = struct
             | Contents _ -> '\000'
           else '\000'
         in
-
         match Char.compare (get lenx x !i) (get leny y !i) with
         | 0 -> Char.compare (get lenx x (!i + 1)) (get leny y (!i + 1))
         | i -> i
@@ -146,23 +151,66 @@ module Make (Hash: S.HASH): S with module Hash = Hash = struct
 
   let has predicate s =
     let ln = String.length s in
-    try for i = 0 to ln - 1 do if predicate (String.unsafe_get s i) then raise Break done; false
-    with Break -> true
+    try
+      for i = 0 to ln - 1 do
+        if predicate (String.unsafe_get s i) then raise Break
+      done;
+      false
+    with Break ->
+      true
 
-  let of_contents c = Contents c
-  let of_node n = Node n
-  let of_entry = function
-    | { name = n; perm = `Dir; _ } ->
-       if has ((=) '\000') n then invalid_arg "of_entry";
-       of_node n
-    | { name = n; _ } ->
-       if has ((=) '\000') n then invalid_arg "of_entry";
-       of_contents n
+  let value_of_contents c = Contents c
+  let value_of_node n = Node n
+
+  let entry name perm node =
+    if has ((=) '\000') name then invalid_arg "of_entry";
+    { name; perm; node }
+
+  let value_of_entry = function
+    | { name; perm = `Dir; _ } -> value_of_node name
+    | { name; _ } -> value_of_contents name
 
   let of_list entries: t =
-    List.map (fun x -> of_entry x, x) entries
+    List.map (fun x -> value_of_entry x, x) entries
     |> List.sort (fun (a, _) (b, _) -> compare a b)
     |> List.map snd
+
+  let remove ~name t =
+    let node_key = value_of_node name in
+    let contents_key = value_of_contents name in
+    let return ~acc rest = List.rev_append acc rest in
+    let rec aux acc = function
+      | []     -> t
+      | h :: l ->
+        let entry_key = value_of_entry h in
+        if compare contents_key entry_key = 0 then
+              return ~acc l
+        else match compare node_key entry_key with
+          | i when i > 0 -> aux (h :: acc) l
+          | 0 -> return ~acc l
+          | _ -> t
+    in
+    aux [] t
+
+  let add t e =
+    let node_key = value_of_node e.name in
+    let contents_key = value_of_contents e.name in
+    let return ~acc rest = List.rev_append acc (e :: rest) in
+    let rec aux acc = function
+      | [] -> return ~acc []
+      | { node; _ } as h :: l ->
+        let entry_key = value_of_entry h in
+        (* Remove any contents entry with the same name. This will
+           always come before the new succ entry. *)
+        if compare contents_key entry_key = 0 then
+          aux acc l
+        else match compare node_key entry_key with
+          | i when i > 0 -> aux (h :: acc) l
+          | i when i < 0 -> return ~acc (h::l)
+          | 0 when Hash.equal e.node node -> t
+          | _ -> return ~acc l
+    in
+    aux [] t
 
   let length t =
     let string x = Int64.of_int (String.length x) in

@@ -70,57 +70,41 @@ module Make (Store : S) = struct
 
   (* Create a node containing t1 -w-> v1 *)
   let w = "a\042bbb\047"
-  let t0 = lazy (Store.Value.tree
-                   (Store.Value.Tree.of_list
-                      [ { Store.Value.Tree.perm = `Normal
-                        ; name = w
-                        ; node = !!kv1 } ]))
+
+  let tree l =
+    Store.Value.tree @@
+    Store.Value.Tree.of_list @@
+    List.map (fun (name, perm, node) ->
+        Store.Value.Tree.entry name perm node
+      ) l
+
+  let t0 = lazy (tree [w, `Normal, !!kv1])
   let kt0 = lazy (Store.Value.digest !!t0)
 
-  let t1 = lazy (Store.Value.tree
-                   (Store.Value.Tree.of_list
-                      [ { Store.Value.Tree.perm = `Normal
-                        ; name = "x"
-                        ; node = !!kv1 } ]))
+  let t1 = lazy (tree ["x", `Normal, !!kv1])
   let kt1 = lazy (Store.Value.digest !!t1)
 
   (* Create the tree t2 -b-> t1 -x-> v1 *)
-  let t2 = lazy (Store.Value.tree
-                   (Store.Value.Tree.of_list
-                      [ { Store.Value.Tree.perm = `Dir
-                        ; name = "b"
-                        ; node = !!kt1 } ]))
+  let t2 = lazy (tree ["b", `Dir, !!kt1])
   let kt2 = lazy (Store.Value.digest !!t2)
 
   (* Create the tree t3 -a-> t2 -b-> t1 -x-> v1 *)
-  let t3 = lazy (Store.Value.tree
-                   (Store.Value.Tree.of_list
-                      [ { Store.Value.Tree.perm = `Dir
-                        ; name = "a"
-                        ; node = !!kt2 } ]))
+  let t3 = lazy (tree ["a", `Dir, !!kt2])
   let kt3 = lazy (Store.Value.digest !!t3)
 
   (* Create the tree t4 -a-> t2 -b-> t1 -x-> v1
                        \-c-> v2 *)
-  let t4 = lazy (Store.Value.tree
-                   (Store.Value.Tree.of_list
-                      [ { Store.Value.Tree.perm = `Exec
-                        ; name = "c"
-                        ; node = !!kv2 }
-                      ; { Store.Value.Tree.perm = `Dir
-                        ; name = "a"
-                        ; node = !!kt2 } ]))
+  let t4 = lazy (tree ["c", `Exec, !!kv2;
+                       "a", `Dir , !!kt2])
   let kt4 = lazy (Store.Value.digest !!t4)
 
-  let t5 = lazy (Store.Value.tree
-                   (Store.Value.Tree.of_list
-                      [ { Store.Value.Tree.perm = `Normal
-                        ; name = Astring.String.map (function '\000' -> '\001' | chr -> chr) (long_random_string ())
-                        (* XXX(dinosaure): impossible to store an entry with \000 *)
-                        ; node = !!kv2 }
-                      ; { Store.Value.Tree.perm = `Dir
-                        ; name = "a"
-                        ; node = !!kt2 } ]))
+  let t5 = lazy (tree [
+      Astring.String.map
+        (function '\000' -> '\001' | chr -> chr)
+        (long_random_string ()),
+      (* XXX(dinosaure): impossible to store an entry with \000 *)
+      `Normal, !!kv2;
+      "a", `Dir, !!kt2])
   let kt5 = lazy (Store.Value.digest !!t5)
 
   let john_doe =

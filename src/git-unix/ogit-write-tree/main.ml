@@ -106,17 +106,13 @@ let perm_of_entry { Index.Entry.info = { mode; _ }; _ } =
 let hash_of_blob entry = entry.Index.Entry.hash
 
 let rec index_entries_to_tree_entries ~bucket entries =
-  List.map
-    (fun (name, entry) -> match entry with
-       | Index.Blob entry ->
-         { Store.Value.Tree.perm = perm_of_entry entry
-         ; name
-         ; node = hash_of_blob entry }
-       | Index.Tree entries ->
-         { Store.Value.Tree.perm = `Dir
-         ; name
-         ; node = hash_of_tree ~bucket entries })
-    (Index.StringMap.bindings entries)
+  List.map (fun (name, entry) -> match entry with
+      | Index.Blob entry ->
+        Store.Value.Tree.entry name (perm_of_entry entry) (hash_of_blob entry)
+      | Index.Tree entries ->
+        Store.Value.Tree.entry name `Dir (hash_of_tree ~bucket entries)
+    ) (Index.StringMap.bindings entries)
+
 and hash_of_tree ~bucket entries =
   let entries = index_entries_to_tree_entries ~bucket entries in
   let tree = Store.Value.Tree.of_list entries in

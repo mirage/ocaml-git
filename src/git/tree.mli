@@ -21,11 +21,7 @@ module type S = sig
 
   module Hash: S.HASH
 
-  type entry =
-    { perm : perm
-    ; name : string
-    ; node : Hash.t }
-  and perm =
+  type perm =
     [ `Normal (** A {!Blob.t}. *)
     | `Everybody
     | `Exec   (** An executable. *)
@@ -33,7 +29,20 @@ module type S = sig
     | `Dir    (** A sub-{!Tree.t}. *)
     | `Commit (** A sub-module ({!Commit.t}). *)
     ]
-  and t
+
+  type entry = private
+    { perm : perm
+    ; name : string
+    ; node : Hash.t }
+
+  val pp_entry: entry Fmt.t
+  (** Pretty-printer of {!entry}. *)
+
+  val entry: string -> perm -> Hash.t -> entry
+  (** [entry name perm node] is a new entry. Raise [Invalid_argument]
+      if [name] contains ['\000']. *)
+
+  type t
   (** A Git Tree object. Git stores content in a manner similar to a
       UNIX {i filesystem}, but a bit simplified. All the content is
       stored as tree and {!Blob.t} objects, with trees corresponding to
@@ -43,9 +52,13 @@ module type S = sig
       {!Blob.t} or sub-tree with its associated mode, type, and {i
       filename}. *)
 
-  val pp_entry: entry Fmt.t
-  (** Pretty-printer of {!entry}. *)
+  val remove: name:string -> t -> t
+  (** [remove ~name t] is [t] without the entry [name]. *)
 
+  val add: t -> entry -> t
+  (** [add t e] is [t] with the addition of the enty [e]. *)
+
+  val is_empty: t -> bool
   val perm_of_string: string -> perm
   val string_of_perm: perm -> string
 
