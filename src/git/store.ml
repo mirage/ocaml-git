@@ -79,13 +79,6 @@ module type PACK = sig
   type state
   type error
 
-  type ('mmu, 'location) r =
-    { mmu              : 'mmu
-    ; with_cstruct     : 'mmu -> pack -> int -> (('location * Cstruct.t) -> unit Lwt.t) -> unit Lwt.t
-    ; with_cstruct_opt : 'mmu -> int option -> (('location * Cstruct.t) option -> unit Lwt.t) -> unit Lwt.t
-    ; free             : 'mmu -> 'location -> unit Lwt.t }
-  and pack = Pack of Hash.t | Unrecorded
-
   module Hash: S.HASH
   module FS: S.FS
   module Inflate: S.INFLATE
@@ -525,13 +518,6 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
     type value = Value.t
     type nonrec error = error
 
-    type ('mmu, 'location) r = ('mmu, 'location) PackImpl.r =
-      { mmu              : 'mmu
-      ; with_cstruct     : 'mmu -> pack -> int -> (('location * Cstruct.t) -> unit Lwt.t) -> unit Lwt.t
-      ; with_cstruct_opt : 'mmu -> int option -> (('location * Cstruct.t) option -> unit Lwt.t) -> unit Lwt.t
-      ; free             : 'mmu -> 'location -> unit Lwt.t }
-    and pack = PackImpl.pack = Pack of Hash.t | Unrecorded
-
     let default n =
       let heap = Hashtbl.create 32 in
       let mutex = Lwt_mutex.create () in
@@ -547,7 +533,7 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
         else Cstruct.sub !buffer 0 length in
 
       let with_cstruct heap pack length (exec:(lock * Cstruct.t) -> unit Lwt.t) = match pack with
-        | Unrecorded ->
+        | PackImpl.Unrecorded ->
           Lwt_mutex.lock mutex >>= fun () ->
           exec (Lock mutex, fit length)
         | Pack hash_pack ->
@@ -561,13 +547,6 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
             Hashtbl.add heap hash_pack (pool, length);
             Lwt_pool.use pool (fun buffer -> exec (No_lock, buffer)) in
 
-      let with_cstruct_opt _ length_opt exec = match length_opt with
-        | Some length ->
-          if Lwt_mutex.is_locked mutex
-          then exec None
-          else Lwt_mutex.lock mutex >>= fun () -> exec (Some (Lock mutex, fit length))
-        | None -> exec None in
-
       let free _ = function
         | Lock mutex' ->
           assert (mutex == mutex');
@@ -575,9 +554,8 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
           Lwt.return_unit
         | No_lock -> Lwt.return_unit in
 
-      { mmu = heap
+      { PackImpl.mmu = heap
       ; with_cstruct
-      ; with_cstruct_opt
       ; free }
 
     let to_result { RPDec.Object.kind; raw; _ } =

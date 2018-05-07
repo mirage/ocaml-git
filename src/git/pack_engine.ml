@@ -70,10 +70,9 @@ module type S = sig
   type t
 
   type ('mmu, 'location) r =
-    { mmu              : 'mmu
-    ; with_cstruct     : 'mmu -> pack -> int -> (('location * Cstruct.t) -> unit Lwt.t) -> unit Lwt.t
-    ; with_cstruct_opt : 'mmu -> int option -> (('location * Cstruct.t) option -> unit Lwt.t) -> unit Lwt.t
-    ; free             : 'mmu -> 'location -> unit Lwt.t }
+    { mmu         : 'mmu
+    ; with_cstruct: 'mmu -> pack -> int -> (('location * Cstruct.t) -> unit Lwt.t) -> unit Lwt.t
+    ; free        : 'mmu -> 'location -> unit Lwt.t }
   and pack = Pack of Hash.t | Unrecorded
 
   type error =
@@ -92,11 +91,10 @@ module type S = sig
   module Exists:
   sig
     type t
-
     val lookup: t -> Hash.t -> (Crc32.t * int64) option
     val mem: t -> Hash.t -> bool
     val fold: (Hash.t -> (Crc32.t * int64) -> 'acc -> 'acc) -> t -> 'acc -> 'acc
-    val make: FS.t -> Fpath.t -> (t, error) result Lwt.t
+    val v: FS.t -> Fpath.t -> (t, error) result Lwt.t
   end
 
   module Loaded:
@@ -116,14 +114,14 @@ module type S = sig
       -> Hash.t
       -> [ `Return of 'value | `Promote of 'value | `Error of error ] Lwt.t
 
-    val make_pack_decoder:
+    val pack_decoder:
          read_and_exclude:(Hash.t -> (RPDec.kind * Cstruct.t) option Lwt.t)
       -> idx:(Hash.t -> (Crc32.t * int64) option)
       -> FS.t
       -> Fpath.t
       -> (FS.Mapper.fd * RPDec.t, error) result Lwt.t
 
-    val make:
+    val of_exists:
          root:Fpath.t
       -> read_and_exclude:(Hash.t -> (RPDec.kind * Cstruct.t) option Lwt.t)
       -> FS.t
@@ -135,7 +133,7 @@ module type S = sig
   sig
     type t
 
-    val make_from_info:
+    val of_info:
          read_and_exclude:(Hash.t -> (RPDec.kind * Cstruct.t) option Lwt.t)
       -> FS.t
       -> Fpath.t
@@ -185,13 +183,13 @@ module type S = sig
       -> Hash.t
       -> (unit, error) result Lwt.t
 
-    val make_buffer:
+    val buffer:
          ('mmu, 'location) r
       -> Hash.t
       -> int -> int -> PInfo.path
       -> ((buffer -> unit Lwt.t) -> unit Lwt.t)
 
-    val make_from_normalized:
+    val of_normalized:
          root:Fpath.t
       -> read_and_exclude:(Hash.t -> (RPDec.kind * Cstruct.t) option Lwt.t)
       -> ztmp:Cstruct.t
@@ -201,9 +199,9 @@ module type S = sig
       -> Normalized.t
       -> (t, error) result Lwt.t
 
-    val make_from_loaded: ('mmu, 'location) r -> Loaded.t -> (t, error) result Lwt.t
+    val of_loaded: ('mmu, 'location) r -> Loaded.t -> (t, error) result Lwt.t
 
-    val force:
+    val of_exists:
          root:Fpath.t
       -> read_and_exclude:(Hash.t -> (RPDec.kind * Cstruct.t) option Lwt.t)
       -> ztmp:Cstruct.t
@@ -214,8 +212,7 @@ module type S = sig
       -> (t, error) result Lwt.t
   end
 
-  module Total:
-  sig
+  module Total:  sig
     type t
 
     val lookup: t -> Hash.t -> (Crc32.t * int64 * int) option
@@ -246,7 +243,7 @@ module type S = sig
       -> Resolved.t
       -> ((Fpath.t * Hash.t * (Hash.t, Crc32.t * int64 * int) Hashtbl.t * PInfo.path), error) result Lwt.t
 
-    val make:
+    val of_resolved:
       root:Fpath.t
       -> ztmp:Cstruct.t
       -> window:Inflate.window
@@ -336,85 +333,28 @@ module Make
   module IDec = Index_pack.Lazy(Hash)
   module IEnc = Index_pack.Encoder(Hash)
 
-  (* XXX(dinosaure): I need to explain what is the purpose of this
-     module. As the Loose internal module, this module implements the
-     logic of pack files. It's little bit more complex than the loose
-     file.
+  (* The [Pack_engine] module implements operations on Git pack file
+     and focus on keeping control on memory allocation as much as
+     possible. The goal is to be able to read a pack file without
+     having to load it fully in memory, and to keep control of memory
+     allocation at runtime.
 
-     In fact, we have some ways to get an object from a pack file:
+     In order to do this, a pack file can be in one of these five
+     states:
 
-     - The first way, the more simple way is to load the IDX file of
-       the PACK file, make a PACK decoder, inform the PACK decoder
-       than external source is a function which allocates the
-       requested object.
+     - exists: the PACK file already exists on the git repository
 
-       In this way, the decoder wants 2 fixed-size buffers (one to
-       inflate and the zlib's window). However, the decoder will
-       traverse the path to construct the requested object to
-       calculate the biggest needed object. Then, it allocates 2
-       buffers of this calculated size and finally reconstruct your
-       object - but, it need to save the diff for each application
-       which could explose your memory.
+     - loaded: the PACK file is loaded: we promote exists to loaded
+     when the user wants to read an object from this PACK file - but
+     lookup, list and mem operations don't do this promotion.
 
-       So, this way is the fastest way about initialization (nothing
-       to initialize) but the memory allocation is not predictable and
-       could be a problem for a large pack file.
+     - normalized: when the PACK file comes from a stream (when you
+     pull/fetch/clone)
 
-     - The second way is to get some informations before to make the
-       decoder. To get these informations, we need to read entirely
-       one time (one pass) the pack file. Then, we can know the
-       biggest object of this pack file and how many buffers we need
-       to undelta-ify any objects of this pack file.
+     - resolved: when we resolved all delta-ified objects in the PACK
+     file
 
-       Again, the decoder wants 2 fixed-size buffer (one to inflate
-       and the zlib's window) but with the previous computation, we
-       can allocate exactly what is needed in the worst case (worst
-       case when we want to undelta-ify an object) and reconstruct any
-       git object of this pack file.
-
-       However, if the pack file is a /thin/-pack, we will allocate
-       again what is needed to get the external object.
-
-       So, at this stage, the memory is semi-predictable. However, we
-       can consider this way as the best way because Git is not
-       allowed to store in your file-system any /thin/-pack. So, a
-       pack decoder should never want an external object.
-
-       From this first pass, we can generate a partial tree of the
-       pack file which is equivalent of the idx decoder (but
-       partially). From benchmark, obviously, the radix tree is more
-       fast than the idx decoder. However, it not contains all objects
-       (only non-delta-ified objects), so you should use both.
-
-     - The third way come from the second way with a second pass of
-       the pack file to determine if the pack file is a /thin/-pack or
-       not. With this information, we can know which objects the pack
-       file need and allocate, again, exactly what is needed to get
-       any object of this specific pack file.
-
-       Finally, in same time, we can generate a complexe radix tree of
-       the pack file and use it instead the decoder.
-
-     So, after this explanation, I decided to implement the second way
-     and the third way when we collect all informations needed as long
-     as the client use the git repository - I mean, we pass from the
-     partial to the total information only when the user asks enough
-     to get all object of the pack file.
-
-     The first way is only used to know if the requested object exists
-     in the pack file or not - but when the client want to get the Git
-     object, we start the first pass of the pack file and make a
-     decoder.
-
-     Then, from this information, we update a safe-thread value which
-     contains buffers for all loaded pack files. That means, for any
-     requested object located on any pack file, we can use safely
-     these buffers (instead to allocate all time).
-
-     So, in the git repository, this is the only value which can grow
-     automatically (but it's depends on your pack files - so we can
-     predict how much memory you need when we look your pack
-     files). So, we continue to control the memory consumption. *)
+     - total: when we ensure than the PACK file is thin or not *)
 
   type fs_error = FS.error Error.FS.t
   type inf_error = Inflate.error Error.Inf.t
@@ -433,26 +373,18 @@ module Make
     | `Not_found ]
 
   type ('mmu, 'location) r =
-    { mmu              : 'mmu
-    ; with_cstruct     : 'mmu -> pack -> int -> (('location * Cstruct.t) -> unit Lwt.t) -> unit Lwt.t
-    ; with_cstruct_opt : 'mmu -> int option -> (('location * Cstruct.t) option -> unit Lwt.t) -> unit Lwt.t
-    ; free             : 'mmu -> 'location -> unit Lwt.t }
+    { mmu         : 'mmu
+    ; with_cstruct: 'mmu -> pack -> int -> (('location * Cstruct.t) -> unit Lwt.t) -> unit Lwt.t
+    ; free        : 'mmu -> 'location -> unit Lwt.t }
   and pack = Pack of Hash.t | Unrecorded
 
   let empty_cstruct = Cstruct.create 0
 
-  module Exists =
-  struct
+  module Exists =  struct
 
-    (* XXX(dinosaure): Voici l'état [exists]. C'est le premier /entry-point/
-       pour un fichier PACK déjà existant. La seule opération, sans promotion,
-       disponible dans cet état est [lookup]. On y charge uniquement le fichier
-       IDX associé - et ainsi savoir tout les objets qui compose le fichier
-       PACK. Ainsi, si l'utilisateur demande un objet depuis ce fichier PACK, il
-       devrait y avoir une promotion vers l'état [loaded].
-
-       Il n'y a que très peu d'allocation dans cet état, juste un [mmap] total
-       du fichier IDX. *)
+    (* Entry-point state for pack-files; Very few allocations are done
+       in this state as only the IDX file is mmaped. Hence, only
+       operations on the IDX file are allowed ([lookup], [mem]). *)
 
     type t =
       { index     : IDec.t
@@ -463,7 +395,7 @@ module Make
     let mem { index; _ } hash = IDec.mem index hash
     let fold f { index; _ } a = IDec.fold index f a
 
-    let make fs path =
+    let v fs path =
       let err_idx_decoder err = `Idx_decoder err in
 
       let ( <.> ) f g = fun x -> f (g x) in
@@ -491,22 +423,18 @@ module Make
     let src = Logs.Src.create "git.pack_engine.loaded" ~doc:"logs git's loaded pack event"
     module Log = (val Logs.src_log src: Logs.LOG)
 
-    (* XXX(dinosaure): Voici l'état [loaded], il ne peut dériver que de l'état
-       [exists]. Cet état est le pire sous le plan de l'allocation et de la
-       recherche des objets. On y est associé au fichier IDX et au fichier PACK.
-       L'opération [lookup] est disponible et est mémoizé avec une ~Hashtbl~
-       interne (disponible dans ~info.PInfo.index).
+    (* Pack files in the [loaded] state can only have been promoted
+       from the [exist] state. That's the worst state regarding memory
+       allocation.
 
-       Seule l'opération [read] peut compléter cet ~Hashtbl~ - puisqu'on a
-       besoin de savoir la position absolue de l'objet, son /checksum/ et sa
-       taille qui ne sont disponible qu'en ayant lu entièrement l'objet (le
-       fichier IDX ne nous renseigne pas sur la taille par exemple).
+       As for the [exist] state, [lookup] and [mem] are available. A
+       new operation, [read] becomes available. Once an object is
+       read, metadata regarding its size and checksum are memoized.
 
-       Ensuite, l'opération [read] complète petit à petit les opérations. Il
-       peut y avoir une promotion vers l'état [Normalized] seulement quand
-       ~info.PInfo.paths~ contient tout les objets référencés par le fichier IDX
-       (à vrai dire, on peut même passé à l'état [resolved] puisque si
-       ~info.PInfo.paths~ est complet, ~info.PInfo.index~ l'est aussi). *)
+       Once the metadata for all objects is known, the pack can be
+       promoted to the [normalized] state (note: the pack will be then
+       immediately promoted to the [resolved] state as the pack is not
+       thin). *)
 
     type t =
       { index : IDec.t
@@ -526,117 +454,59 @@ module Make
 
     let fold f { index; _ } a = IDec.fold index f a
 
-    (* XXX(dinosaure): avec l'extraction d'un objet, on connait son /path/ de
-       delta-ification. Il s'agit de le transformer en /apth/ selon les termes
-       de ~PInfo~ ensuite. *)
     let rec object_to_delta ?(depth = 1) = function
       | RPDec.Object.External { hash; length; } -> PInfo.Unresolved { hash; length; }
       | RPDec.Object.Internal { offset; length; _ } -> PInfo.Internal { abs_off = offset; length; }
       | RPDec.Object.Delta { descr; base; inserts; _ } -> PInfo.Delta { hunks_descr = descr; inserts; depth; from = object_to_delta ~depth:(depth + 1) base; }
 
-    (* XXX(dinosaure): depuis un /path/, on fait un tableau pouvant contenir
-       TOUT les /insert hunks/ pour reconstruire le dit objet. Cependant,
-       [delta] n'est pas forcément résolu ! Cela veut dire que le /path/ donné
-       est peut être incomplet et on va donc pouvoir stocker dans ce tableau
-       seulement quelques niveaux nécessaires à la delta-ification.
-
-       L'algorithme derrière l'extraction d'un objet peut s'en sortir même si le
-       /path/ n'est pas complet - il va juste se mettre à allouer des [string]
-       en lieu et place d'utiliser ce [Cstruct.t]. *)
-    let split_of_delta cs delta =
-      let depth =
-        let rec go acc = function
-          | PInfo.Unresolved _ | PInfo.Internal _ -> acc
-          | PInfo.Delta { from; _ } -> go (acc + 1) from in
-        go 1 delta in
-      let arr = Array.make depth empty_cstruct in
-      let rec fill idx off = function
-        | PInfo.Unresolved _ | PInfo.Internal _ -> ()
-        | PInfo.Delta { inserts; from; _ } ->
-          Array.unsafe_set arr idx (Cstruct.sub cs off inserts);
-          fill (idx + 1) (off + inserts) from in
-      fill 0 0 delta; arr
-
-    (* XXX(dinosaure): calculer la taille nécessaire pour stocker tout les
-       /insert hunks/ selon le /path/ [delta]. *)
-    let length_of_delta delta =
-      let rec go acc = function
-        | PInfo.Unresolved _ -> acc
-        | PInfo.Internal _ -> acc
-        | PInfo.Delta { inserts; from; _ } -> go (acc + inserts) from in
-      go 0 delta
-
     let size { pack; _ } ~ztmp ~window hash =
       RPDec.length pack hash ztmp window >|= Rresult.R.reword_error (fun err -> `Pack_decoder err)
 
-    (* XXX(dinosaure): voici la fonction [read] disponible à l'état [loaded].
+    (* [read] is the main function available in the [loaded] state.
 
        ## Arguments
 
-       [root]: [.git]
-
-       [mmu]: unité de management de la mémoire - c'est l'acronyme le plus
-       significatif sur l'objectif de cette variable. C'est l'état
-       /mutable/global/ qu'on renseignera à chaque allocation.
+       [mmu]: memory management unit. Used every time a memory
+       allocation is needed.
 
        [with_cstruct]: malloc
 
-       [with_optional_malloc]: optional malloc
-
        [free]: free
 
-       [to_result]: Cette fonction doit avoir un seul objectif, prendre
-       l'/ownership/ sur le [Cstruct.t] donné. Cela veut dire que le [Cstruct.t]
-       donné est celui que nous a donné [with_cstruct]. Il s'agit de le libérer
-       (voir [free]) et cette fonction doit tout simplement reprendre
-       l'ownership. Cela peut être un simple [cstruct_copy] mais, dans ce
-       contexte, on peut donner le [Value.to_result] qui s'assure de bien
-       prendre l'/ownership/ (pour les objets Git et spécifiquement pour l'objet
-       Blob qui équivaut en tout point à un [cstruct_copy]) et de retourner la
-       représentation OCaml de l'objet Git. Cette fonction peut échouer.
+       [to_result]: The only goal of this function is to take
+       ownership on the given [Cstruct.t]. Usually, that buffer is
+       allocated via [with_cstruct] and [to_result] is called before
+       that function free it. Hence, usually [to_result] is simply a
+       [cstruct_copy], but could also be [Value.to_result] which
+       optimize copies in some cases.
 
        [ztmp]: zlib buffer
 
        [window]: zlib window
 
-       [loaded]: l'état [loaded]
+       [loaded]: the [loaded] state
 
-       [hash]: le hash de l'objet
+       [hash]: object's hash
 
        ## Allocation
 
-       Comme on peut le constater, [to_result] semble être la fonction la plus
-       critique dans tout ces arguments et c'est le cas. L'idée de ces
-       abstraction et de laisser le client choisir la politique d'allocation.
-       Ces allocations sont nécessaires pour extraire l'objet et l'on peut
-       imaginer un cache LRU derrière pour quelques [Cstruct.t].
+       [to_result] is the critical function regarding memory
+       allocation management. The policy is let to the user. For
+       instance, a LRU cache for managing pre-allocated buffers can be
+       used, or a new buffer could be created on every invocation of
+       that function.
 
-       Ensuite, on s'assure de libérer ces [Cstruct.t] associés à une /location/
-       le plus rapidement possible avec [free]. Bien entendu, cela n'arrive
-       seulement qu'après l'application de [to_result]. Si [to_result] est juste
-       la fonction identité (ce qui peut être le cas), vous devriez avoir un
-       problème sur le contenu qui risque d'être changeant si les [Cstruct.t]
-       reçus par [with_cstruct] sont réutilisés.
-
-       [to_result] donc doit __allouer__ la même ou une nouvelle forme de la
-       valeur pour en garantir l'/ownership/.
-
-       Enfin, on assure pas que les allocations demandées sont suffisantes pour
-       extraire l'objet. C'est parce que les /paths/ ne sont pas résolus que ce
-       que l'on peut demander avec [with_optional_cstruct] soit partiel pour
-       l'extraction - cela peut alors entraîner l'allocation de [string]
-       incontrôlé.
+       [free] will be called on the used buffer, just after
+       [to_result].
 
        ## Mémoization
 
-       Bien entendu, pour chaque lecture, on résoud le /path/ de l'objet
-       demandé. On mets 2 informations à jour, la première est la ~Hashtbl~
-       ~info.PInfo.paths~ et la deuxième est savoir si le fichier PACK est
-       /thin/ ou pas.
-
-       Pour la deuxième information, vu que le fichier PACK ne peut venir que de
-       l'état [exists], ce n'est normalement pas possible que le fichier PACK
-       soit /thin/ - mais on sait jamais. *)
+       Every reads updates a table keepking metadata information about
+       objects.  One of the important metadata which are being tracked
+       is to know if their are external references, e.g. if the pack
+       file if thin or not (note: if the file was stored on disk,
+       normally it shouldn't -- but ocaml-git supports it just fine. )
+       *)
     let read
         (type mmu) (type location) (type value)
         ~(to_result:RPDec.Object.t -> (value, error) result Lwt.t)
@@ -655,19 +525,10 @@ module Make
         | Error err -> Lwt.return (`Error (`Pack_decoder err))
         | Ok length ->
           let res = ref None in
-          let delta = try Some (Hashtbl.find info.PInfo.delta abs_off) with Not_found -> None in
-
           (r.with_cstruct r.mmu Unrecorded (length * 2) @@ fun (loc_raw, raw) ->
            let raw = Cstruct.sub raw 0 length, Cstruct.sub raw length length, length in
-
-           r.with_cstruct_opt r.mmu Option.(delta >|= length_of_delta) @@ fun hraw ->
-           let htmp = Option.(delta >>= fun delta -> hraw >|= fun (_, cs) -> split_of_delta cs delta) in
-
-           let deliver () = r.free r.mmu loc_raw >>= fun () -> match Option.(hraw >|= fst) with
-             | Some loc -> r.free r.mmu loc
-             | None -> Lwt.return_unit in
-
-           RPDec.get_from_hash ?htmp pack hash raw ztmp window
+           let deliver () = r.free r.mmu loc_raw in
+           RPDec.get_from_hash pack hash raw ztmp window
            >>= fun x -> res := Some (deliver, x); Lwt.return_unit)
 
           >>= (fun () -> match !res with
@@ -702,7 +563,7 @@ module Make
               else `Return value
             | Error err -> `Error err
 
-    let make_pack_decoder ~read_and_exclude ~idx fs path =
+    let pack_decoder ~read_and_exclude ~idx fs path =
       let ( >>!= ) v f = v >>= function Ok _ as v -> Lwt.return v | Error err -> f err in
 
       FS.Mapper.openfile fs path
@@ -719,42 +580,31 @@ module Make
       >>!= fun er -> FS.Mapper.close fd >|= Rresult.R.reword_error (Error.FS.err_close path)
       >>?= fun () -> Lwt.return_error er
 
-    (* XXX(dinosaure): voici la fonction de promotion de l'état [exists] à
-       l'état [loaded]. La fonction [read_and_exclude] est expliqué plus bas -
-       elle dépends de tout les états de chaque fichiers PACK.
-
-       Ici enfin, on utilise le fichier IDX - et pas la ~Hashtbl~ qui n'est pas
-       complète - en vrai, on pourrait utiliser la ~Hashtbl~. *)
-    let make ~root ~read_and_exclude fs exists =
+    (* [of_exists] promotes a pack file from [exist] to [loaded]. Only
+       the IDX file. [read_and_exclude] reads objects in other pack
+       files (excluding any references to the current one, to avoid
+       infinite loops). *)
+    let of_exists ~root ~read_and_exclude fs exists =
       let path = Fpath.(root / "objects" / "pack" / Fmt.strf "pack-%s.pack" (Hash.to_hex exists.Exists.hash_pack)) in
       let index = exists.Exists.index in
       let info = PInfo.v exists.Exists.hash_pack in
 
       let ( >>!= ) v f = v >>= function Ok _ as v -> Lwt.return v | Error err -> f err in
 
-      make_pack_decoder ~read_and_exclude ~idx:(IDec.find exists.Exists.index) fs path
+      pack_decoder ~read_and_exclude ~idx:(IDec.find exists.Exists.index) fs path
       >>?= fun (fd, pack) ->  Lwt.return_ok { index; pack; info; fdi = exists.Exists.fd; fdp = fd; thin = false }
       >>!= fun er -> FS.Mapper.close exists.Exists.fd >|= Rresult.R.reword_error Error.FS.err_sys_map
       >>?= fun () -> Lwt.return_error er
   end
 
-  module Normalized =
-  struct
+  module Normalized = struct
 
     let src = Logs.Src.create "git.pack_engine.normalized" ~doc:"logs git's pack normalization event"
     module Log = (val Logs.src_log src: Logs.LOG)
 
-    (* XXX(dinosaure): Voici l'état [normalized] qui est l'/entry-point/ pour
-       les fichiers PACK venant du réseau (clone, pull, fetch). Cet état est
-       surtout un état pour le dissocié de [resolved] et enclenché la seconde
-       /pass/. La deuxième /pass/ va résoudre les paths des objets delta-ifiés
-       and demandant des allocations explicites à l'utilisateur.
-
-       Avec cette résolution, on va résoudre les paths pour ensuite les merger
-       entre eux et avoir l'approximation nécessaire à l'extraction de tout les
-       objets du dit fichier PACK. Cette résolution va nous permettre aussi de
-       savoir si un des objets nécessaire à la delta-ification est externe au
-       fichier PACK ou non (ce qui devrait être le cas). *)
+    (* [Normalized] pack files come from the network (clone, pull,
+       fetch). In that state, some object references might come from a
+       different pack file (e.g. if it is thin). *)
 
     type t =
       { pack  : RPDec.t
@@ -762,29 +612,6 @@ module Make
       ; info  : [ `Normalized of PInfo.path ] PInfo.t
       ; fd    : FS.Mapper.fd
       ; mutable thin : bool }
-
-    (* XXX(dinosaure): cette fonction permet de créer un tableau de [Cstruct.t]
-       à partir du /path/ - qui peut être partiel. *)
-    let split_of_delta cs delta =
-      let depth =
-        let rec go acc = function
-          | PInfo.Unresolved _ | PInfo.Internal _ -> acc
-          | PInfo.Delta { from; _ } -> go (acc + 1) from in
-        go 0 delta in
-      let arr = Array.make depth empty_cstruct in
-      let rec fill idx off = function
-        | PInfo.Unresolved _ | PInfo.Internal _ -> ()
-        | PInfo.Delta { inserts; from; _ } ->
-          Array.unsafe_set arr idx (Cstruct.sub cs off inserts);
-          fill (idx + 1) (off + inserts) from in
-      fill 0 0 delta; arr
-
-    let length_of_delta delta =
-      let rec go acc = function
-        | PInfo.Unresolved _ -> acc
-        | PInfo.Internal _ -> acc
-        | PInfo.Delta { inserts; from; _ } -> go (acc + inserts) from in
-      go 0 delta
 
     let length_of_path path =
       let rec go acc = function
@@ -806,42 +633,29 @@ module Make
       Hash.Digest.feed ctx obj.RPDec.Object.raw;
       Hash.Digest.get ctx
 
-    let make_from_info ~read_and_exclude fs path_tmp info =
+    let of_info ~read_and_exclude fs path_tmp info =
       let idx hash = match Hashtbl.find info.PInfo.index hash with
         | (crc, abs_off, _) -> Some (crc, abs_off)
         | exception Not_found -> None in
 
-      Loaded.make_pack_decoder ~read_and_exclude ~idx fs path_tmp >>= function
+      Loaded.pack_decoder ~read_and_exclude ~idx fs path_tmp >>= function
       | Ok (fd, pack) ->
         Lwt.return_ok { pack; path = path_tmp; info; fd; thin = false }
       | Error _ as err -> Lwt.return err
 
     exception Fail of RPDec.error
 
-    (* XXX(dinosaure): la seconde /pass/ permet de résoudre les objets
-       delta-ifiés et ainsi, par la même occasion, savoir si le fichier PACK est
-       /thin/ ou pas. Avec cette résolution, on peut passer de l'état
-       [normalized] à l'état [resolved].
+    (* [second_pass] allows to analyse all compressed chains of
+       objects and to discover if the pack file is thin or not.
 
-       On pourrait déplacer ce code dans le module [Resolved] (TODO).
-
-       Puisque les résolutions sont faites séquentiellement, au niveau de
-       l'allocation, un seul buffer qui peut grandir est nécessaire - il n'y
-       aura pas de /data-race condition/ dans ce contexte de résolution.info
-
-       NOTE: on pourrait faire une résolution en concurrence mais cela
-       compliquerait la gestion des allocations au niveau utilisateur (pour
-       justement éviter la /data-race condition/) bien que cette gestion soit
-       possible puisque on demande à l'utilisation une fonction [free]
-       permettant de notifier l'utilisateur que la ressource demandé associé à
-       une [location] (qui peut sémantiquement être une /mutex/) est libéré. *)
+       TODO: this code could me moved in [Resolved]. *)
     let second_pass
       (type mmu) (type location)
       ~ztmp
       ~window
       (r:(mmu, location) r)
       normalized =
-      let resolve (abs_off, delta) =
+      let resolve abs_off =
         RPDec.needed_from_offset normalized.pack abs_off ztmp window >>= function
         | Error err -> Lwt.fail (Fail err)
         | Ok needed ->
@@ -850,11 +664,7 @@ module Make
           r.with_cstruct r.mmu Unrecorded (needed * 2) @@ fun (loc_raw, raw) ->
           Log.debug (fun l -> l "Has %d byte(s)." (Cstruct.len raw));
           let raw = Cstruct.sub raw 0 needed, Cstruct.sub raw needed needed, needed in
-
-          r.with_cstruct_opt r.mmu (Some (length_of_delta delta)) @@ fun hraw ->
-          let htmp = Option.(hraw >|= fun (_, cs) -> split_of_delta cs delta) in
-
-          RPDec.get_from_offset ?htmp normalized.pack abs_off raw ztmp window >>= function
+          RPDec.get_from_offset normalized.pack abs_off raw ztmp window >>= function
           | Error err -> Lwt.fail (Fail err)
           | Ok obj ->
             let hash = digest obj in
@@ -876,22 +686,20 @@ module Make
                 let rec go = function
                   | RPDec.Object.Delta { base; _ } -> go base
                   | RPDec.Object.External _ -> normalized.thin <- true
-                  | RPDec.Object.Internal _ -> () in
-                go base in
-
+                  | RPDec.Object.Internal _ -> ()
+                in
+                go base
+            in
             r.free r.mmu loc_raw
-            >>= fun () -> match hraw with
-            | Some (loc, _) -> r.free r.mmu loc
-            | None -> Lwt.return_unit in
-
+      in
       Lwt.catch
         (fun () ->
            Lwt_list.iter_s
              resolve
              (Hashtbl.fold (fun k v a -> match v with
-                  | PInfo.Delta _ | PInfo.Unresolved _ -> (k, v) :: a
+                  | PInfo.Delta _ | PInfo.Unresolved _ -> k :: a
                   | _ -> a) normalized.info.PInfo.delta []
-              |> List.sort (fun (ka, _) (kb, _) -> Int64.compare ka kb))
+              |> List.sort (fun ka kb -> Int64.compare ka kb))
            >>= fun () ->
            Log.debug (fun l ->
                l ~header:"second_pass" "Paths of delta-ification: %a."
@@ -911,24 +719,16 @@ module Make
     | Some x -> x
     | None   -> assert false
 
-  module Resolved =
-  struct
+  module Resolved = struct
 
     let src = Logs.Src.create "git.pack_engine.resolved" ~doc:"logs git's resolved pack event"
     module Log = (val Logs.src_log src: Logs.LOG)
 
-    (* XXX(dinosaure): voici l'état [resolved], on y est presque. Dans cette
-       état, on a résolu tout les objets delta-ifiés et, sauf pour les objets
-       extérieurs au fichier PACK, on est sur un modèle où l'allocation est
-       déterminé - c'est à dire que on vous ne demandera jamais plus que ce
-       qu'on vous a déjà demandé. En effet, à ce stade, puisque tout les objets
-       sont résolus, on est capable de savoir le plus gros objet du fichier PACK
-       et on est capable de savoir strictement les buffers nécessaires pour
-       sauvegarder pendant la récursion les /insert hunks/ (et, en cela,
-       appliquer successivement les patchs).
-
-       On pourrait même aller jusqu'à faire une fonction /tail-rec/ puisqu'on a
-       déterminé les sources nécessaires à la delta-fication. *)
+    (* In the [resolved] state, internal compressed objects are all
+       known and the memory allocation needed to resolve external
+       objects is bounded. All the delta chains are known, as well as
+       the largest buffers needed to uncompress any object in the
+       repository. *)
 
     type t =
       { pack       : RPDec.t
@@ -990,11 +790,7 @@ module Make
       include Helper.Encoder(E)(FS)
     end
 
-    (* XXX(dinosaure): à ce stade, on peut sauvegarder le fichier IDX si le
-       fichier PACK est pas /thin/. C'est une fonction abstraite pour, depuis
-       une sequence (version itérable d'une structure), sauvegarde un fichier
-       IDX selon le hash du fichier PACK - un fichier IDX est forcément associé
-       à un fichier PACK. *)
+    (* Save the IDX file is the pack file is not thin. *)
     let store_idx_file ~root fs sequence hash_pack =
       let file = Fmt.strf "pack-%s.idx" (Hash.to_hex hash_pack) in
       let encoder_idx = IEnc.default sequence hash_pack in
@@ -1005,7 +801,7 @@ module Make
       | Error (`Encoder err)   -> Error (`Idx_encoder err)
       | Error #fs_error as err -> err
 
-    let make_buffer
+    let buffer
         (type mmu) (type location)
         (r:(mmu, location) r)
         hash_pack length_hunks length_buffer path_delta : (buffer -> unit Lwt.t) -> unit Lwt.t =
@@ -1015,7 +811,7 @@ module Make
         r.with_cstruct r.mmu (Pack hash_pack) (length_hunks + (length_buffer * 2)) @@ fun (loc, buffer) ->
 
         Log.debug (fun l ->
-          l ~header:"make_buffer" "Split hunks to: %a." Fmt.(Dump.list int) (list_of_path path_delta));
+          l ~header:"buffer" "Split hunks to: %a." Fmt.(Dump.list int) (list_of_path path_delta));
 
         let hunks = Cstruct.sub buffer 0 length_hunks in
         let hunks = split_of_path hunks path_delta in
@@ -1038,24 +834,13 @@ module Make
       let pool = Lwt_pool.create 4 make in
       Lwt_pool.use pool
 
-    (* XXX(dinosaure): Cette fonction permet de passer de l'état [normalized] à
-       l'état [resolved]. On applique ainsi la /second_pass/. Ensuite, si le
-       fichier PACK est /thin/, on retourne un état qui continue d'utiliser le
-       fichier PACK qui devrait se retrouver dans le dossier ~tmp~. Sinon, on
-       sauvegarde le fichier IDX dans le dépôt git et cette fonction va
-       __déplacer__ le fichier PACK temporaire dans le dépôt git - on
-       s'appliquera bien à fermer le /file-descriptor/ du fichier PACK
-       temporaire.
-
-       Il s'agira ensuite de passer à l'état [total]. Ce dernier s'appliquera à
-       faire la troisième phase ou non. Il faut donc bien saisir que l'état
-       [resolved] n'est qu'un état de passage comme l'état [noramlized] - à la
-       différence de l'état [loaded] qui peut être utilisé à défaut de devoir
-       allouer de la mémoire.
-
-       La politique d'allocation est bien entendu déterminé mais concurrente !
-       *)
-    let make_from_normalized
+    (* [of_normalized p] creates a [resolved] pack file from the
+       normalized pack file [p]. This is done by applying
+       {!Normalizedsecond_pass}. If the pack file is thin, we keep
+       using the pack file in a temporary location; otherwise both the
+       pack file and its associated IDX file are created in the
+       repository and made available to other users. *)
+    let of_normalized
         (type mmu) (type location)
         ~root
         ~read_and_exclude
@@ -1077,12 +862,12 @@ module Make
             | (crc, abs_off, _) -> Some (crc, abs_off)
             | exception Not_found -> None in
 
-          Loaded.make_pack_decoder ~read_and_exclude ~idx fs path
+          Loaded.pack_decoder ~read_and_exclude ~idx fs path
           >>?= fun (fd, pack) ->
 
           let length_hunks = Normalized.length_of_path path_delta in
           let length_objrw = Hashtbl.fold (fun _ (_, _, v) -> max v) info.PInfo.index 0 in
-          let buff = make_buffer r info.PInfo.hash_pack length_hunks length_objrw path_delta in
+          let buff = buffer r info.PInfo.hash_pack length_hunks length_objrw path_delta in
 
           Lwt.return_ok { pack
                         ; index = info.PInfo.index
@@ -1101,12 +886,12 @@ module Make
           store_idx_file ~root fs sequence info.PInfo.hash_pack
           >>?= fun () -> FS.File.move fs normalized.Normalized.path path >|= Rresult.R.reword_error (Error.FS.err_move normalized.Normalized.path path)
           >>?= fun () -> FS.Mapper.close normalized.Normalized.fd >|= Rresult.R.reword_error (Error.FS.err_close normalized.Normalized.path)
-          >>?= fun () -> Loaded.make_pack_decoder ~read_and_exclude ~idx fs path
+          >>?= fun () -> Loaded.pack_decoder ~read_and_exclude ~idx fs path
           >>?= fun (fd, pack) ->
 
           let length_hunks = Normalized.length_of_path path_delta in
           let length_objrw = Hashtbl.fold (fun _ (_, _, v) -> max v) info.PInfo.index 0 in
-          let buff = make_buffer r info.PInfo.hash_pack length_hunks length_objrw path_delta in
+          let buff = buffer r info.PInfo.hash_pack length_hunks length_objrw path_delta in
 
           Lwt.return_ok { pack
                         ; index = info.PInfo.index
@@ -1117,12 +902,12 @@ module Make
                         ; buff
                         ; thin = normalized.Normalized.thin }
 
-    let make_from_loaded
+    let of_loaded
         (type mmu) (type location)
         (r:(mmu, location) r)
         loaded =
       Log.debug (fun l ->
-          l ~header:"make_from_loaded" "Delta-ification path is complete: %a."
+          l ~header:"of_loaded" "Delta-ification path is complete: %a."
             Fmt.(Dump.hashtbl int64 PInfo.pp_delta) loaded.Loaded.info.PInfo.delta);
 
       let info = PInfo.normalize ~length:(Hashtbl.length loaded.Loaded.info.PInfo.delta) loaded.Loaded.info in
@@ -1130,12 +915,12 @@ module Make
       let `Resolved path_delta = info.PInfo.state in
 
       Log.debug (fun l ->
-          l ~header:"make_from_loaded" "Approximation of delta-ification path is: %a."
+          l ~header:"of_loaded" "Approximation of delta-ification path is: %a."
             Fmt.(Dump.list int) (list_of_path path_delta));
 
       let length_hunks = Normalized.length_of_path path_delta in
       let length_objrw = Hashtbl.fold (fun _ (_, _, v) -> max v) info.PInfo.index 0 in
-      let buff = make_buffer r info.PInfo.hash_pack length_hunks length_objrw path_delta in
+      let buff = buffer r info.PInfo.hash_pack length_hunks length_objrw path_delta in
 
       FS.Mapper.close loaded.Loaded.fdi >|= Rresult.R.reword_error Error.FS.err_sys_map >>?= fun () ->
       Lwt.return_ok { pack = loaded.Loaded.pack
@@ -1147,37 +932,18 @@ module Make
                     ; buff
                     ; thin = loaded.Loaded.thin }
 
-    (* XXX(dinosaure): cette fonction permet de passer de l'etat [exists]
-       directement à l'état [resolved]. Cette fonction se base sur une
-       /assumption/ importante, un fichier PACK dans un dépôt git qui est
-       forcément à la base dans l'état [exists] est non-/thin/. Dans ce cas, la
-       résolution des objets delta-ifiés peut se faire uniquement à l'aide du
-       fichier IDX et du fichier PACK - en effet, les objets ayant une référence
-       OBJ_REF_DELTA ont une résolution possible à l'aide du fichier IDX et si
-       le fichier PACK est non-/thin/, ces références sont forcément dans le
-       fichier PACK.
-
-       Di côté de Git, c'est nécessairement le cas que les fichiers PACK dans le
-       dépôt sont non-/thin/ (et c'est pour cette raison qu'on s'applique à
-       faire la troisième phase d'ailleurs). Cependant, dans des situations non
-       communes à git, il peut arriver que les fichiers PACK soient /thin/. Il
-       faut donc utiliser cette fonction en état de cause.
-
-       TODO: on pourrait faire la vérification si le fichier PACK est /thin/ ou
-       pas en regardant si, après la première /pass/ on a bien tout les objets
-       dans nos ~Hashtbl~.
-
-       Comme pour [make], la politique d'allocation est déterminé mais elle est
-       concurrente ! *)
-    let force
-      (type mmu) (type location)
-      ~root
-      ~read_and_exclude
-      ~ztmp
-      ~window
-      fs
-      (r:(mmu, location) r)
-      exists =
+    (* [of_exists] allows to pass directlry from the [exists] to the
+       [resolved] state. The function is only valid on non-thin pack
+       files. *)
+    let of_exists
+        (type mmu) (type location)
+        ~root
+        ~read_and_exclude
+        ~ztmp
+        ~window
+        fs
+        (r:(mmu, location) r)
+        exists =
       let path = Fpath.(root / "objects" / "pack" / Fmt.strf "pack-%s.pack" (Hash.to_hex exists.Exists.hash_pack)) in
       let stream = stream_of_path path in
       let thin = ref false in
@@ -1192,14 +958,14 @@ module Make
 
         let length_hunks = Normalized.length_of_path path_delta in
         let length_objrw = Hashtbl.fold (fun _ (_, _, v) -> max v) info.PInfo.index 0 in
-        let buff = make_buffer r info.PInfo.hash_pack length_hunks length_objrw path_delta in
+        let buff = buffer r info.PInfo.hash_pack length_hunks length_objrw path_delta in
         let idx hash = match Hashtbl.find info.PInfo.index hash with
           | (crc, abs_off, _) -> Some (crc, abs_off)
           | exception Not_found -> None in
 
         let ( >>!= ) v f = v >>= function Ok _ as v -> Lwt.return v | Error err -> f err in
 
-        Loaded.make_pack_decoder ~read_and_exclude ~idx fs path
+        Loaded.pack_decoder ~read_and_exclude ~idx fs path
         >>?= fun (fd, pack) -> FS.Mapper.close exists.Exists.fd >|= Rresult.R.reword_error Error.FS.err_sys_map
         >>?= fun () -> Lwt.return_ok { pack
                                      ; index = info.PInfo.index
@@ -1230,8 +996,7 @@ module Make
       | Error err -> ` Error err
   end
 
-  module Total =
-  struct
+  module Total =struct
 
     let src = Logs.Src.create "git.pack_engine.total" ~doc:"logs git's total pack event"
     module Log = (val Logs.src_log src: Logs.LOG)
@@ -1466,11 +1231,11 @@ module Make
             let dst  = Fpath.(root / "objects" / "pack" / file) in
             FS.File.move fs path dst >|= Rresult.R.reword_error (Error.FS.err_move path dst)
             >>?= fun () -> FS.Mapper.close resolved.Resolved.fd >|= Rresult.R.reword_error Error.FS.err_sys_map
-            (* XXX(dinosaure): le fichier PACK temporaire de l'état [resolved]
-               est fermé ici ! *)
+            (* XXX(dinosaure): the temporary pack file from the
+               [resolved] state is closed here. *)
             >>?= fun () -> Lwt.return_ok (path, hash_pack, index, delta_path)
 
-    let make
+    let of_resolved
       (type mmu) (type location)
       ~root
       ~ztmp
@@ -1487,12 +1252,12 @@ module Make
           let idx hash = match Hashtbl.find index hash with
             | (crc, abs_off, _) -> Some (crc, abs_off)
             | exception Not_found -> None in
-          Loaded.make_pack_decoder ~read_and_exclude:(fun _ -> Lwt.return_none) ~idx fs path
+          Loaded.pack_decoder ~read_and_exclude:(fun _ -> Lwt.return_none) ~idx fs path
           >>?= fun (fd, pack) ->
 
             let length_hunks = Normalized.length_of_path path_delta in
             let length_buffer = Hashtbl.fold (fun _ (_, _, v) -> max v) index 0 in
-            let buff = Resolved.make_buffer r hash_pack length_hunks length_buffer path_delta in
+            let buff = Resolved.buffer r hash_pack length_hunks length_buffer path_delta in
 
             Lwt.return_ok { index; path_delta; hash_pack; pack; buff; fd; }
       else
@@ -1545,6 +1310,8 @@ module Make
                     RPDec.pp_error err);
         Lwt.return None)
 
+  exception Catch of (RPDec.kind * Cstruct.t)
+
   (* XXX(dinosaure): [read_and_exclude] is called when a pack decoder wants to
      reconstruct an internal object and the source is external - by this way, we
      can consider the pack file as a /thin/ pack.
@@ -1577,9 +1344,6 @@ module Make
      file. That means, object O can appear in an other PACK file. The goal is to
      get O from a different PACK file than A (may be a PACK file C) and this the
      purpose of [exclude]. My brain is fuck up. *)
-
-  exception Catch of (RPDec.kind * Cstruct.t)
-
   let rec read_and_exclude ~root ~read_loose fs t exclude request =
     Lwt.catch
       (fun () -> Lwt_list.fold_left_s (fun acc (hash, pack) -> match acc with
@@ -1588,7 +1352,7 @@ module Make
              | Exists exists ->
                if Exists.mem exists request
                then
-                 Loaded.make ~root ~read_and_exclude:(read_and_exclude ~root ~read_loose fs t [ hash ]) fs exists >>= function
+                 Loaded.of_exists ~root ~read_and_exclude:(read_and_exclude ~root ~read_loose fs t [ hash ]) fs exists >>= function
                  | Error err ->
                    Log.err (fun l -> l "Retrieve an error when we promote PACK %a to loaded state: %a."
                                Hash.pp exists.Exists.hash_pack pp_error err);
@@ -1641,7 +1405,7 @@ module Make
     | Some x -> Lwt.return_some x
 
   let v fs indexes =
-    Lwt_list.map_p (Exists.make fs) indexes >|= fun exists ->
+    Lwt_list.map_p (Exists.v fs) indexes >|= fun exists ->
     let packs = Hashtbl.create 32 in
     List.iter (function Ok ({ Exists.hash_pack; _ } as exists) -> Hashtbl.replace packs hash_pack (Exists exists)
                       | Error err ->
@@ -1653,9 +1417,9 @@ module Make
     let read_and_exclude = read_and_exclude ~root ~read_loose fs t [ info.PInfo.hash_pack ] in
     let read_inflated = read_and_exclude in
 
-    Normalized.make_from_info ~read_and_exclude fs path_tmp info
-    >>?= Resolved.make_from_normalized ~root ~read_and_exclude ~ztmp ~window fs r
-    >>?= Total.make ~root ~ztmp ~window ~read_inflated fs r
+    Normalized.of_info ~read_and_exclude fs path_tmp info
+    >>?= Resolved.of_normalized ~root ~read_and_exclude ~ztmp ~window fs r
+    >>?= Total.of_resolved ~root ~ztmp ~window ~read_inflated fs r
     >>= function
     | Ok total ->
       Hashtbl.replace t.packs total.Total.hash_pack (Total total);
@@ -1690,13 +1454,8 @@ module Make
     let read_and_exclude hash_pack = read_and_exclude ~root ~read_loose fs t [ hash_pack ] in
     let read_inflated hash_pack = read_and_exclude hash_pack in
 
-    (* XXX(dinosaure): [read_inflated] pourrait être optimiser. Son contexte
-       d'utilisation concerne la troisième /pass/ où un commentaire signale
-       l'utilisation explicite de [read_and_exclude] en lieu et place d'une
-       fonction plus optimisé (à propos de l'allocation). *)
-
     let promote_loaded r (hash_pack, loaded) obj =
-      Resolved.make_from_loaded r loaded >>= function
+      Resolved.of_loaded r loaded >>= function
       | Ok resolved ->
         Log.debug (fun l -> l ~header:"promotion" "Promotion of %a from loaded to resolved." Hash.pp loaded.Loaded.info.PInfo.hash_pack);
         Hashtbl.replace t.packs hash_pack (Resolved resolved);
@@ -1709,7 +1468,7 @@ module Make
       | `Promote obj -> promote_loaded r loaded obj in
 
     let promote_resolved fs r (hash_pack, resolved) obj =
-      Total.make ~root ~ztmp ~window ~read_inflated:(read_inflated hash_pack) fs r resolved >>= function
+      Total.of_resolved ~root ~ztmp ~window ~read_inflated:(read_inflated hash_pack) fs r resolved >>= function
       | Ok total ->
         Log.debug (fun l -> l ~header:"promotion" "Promotion of %a from resolved to total." Hash.pp resolved.Resolved.hash_pack);
         Hashtbl.replace t.packs hash_pack (Total total);
@@ -1729,7 +1488,7 @@ module Make
         Loaded.read ~to_result ~ztmp ~window r loaded hash
         >>= return_loaded r (hash_pack, loaded)
       | Exists exists ->
-        (Loaded.make ~root ~read_and_exclude:(read_and_exclude exists.Exists.hash_pack) fs exists >>= function
+        (Loaded.of_exists ~root ~read_and_exclude:(read_and_exclude exists.Exists.hash_pack) fs exists >>= function
           | Error _ as err -> Lwt.return err
           | Ok loaded ->
             Hashtbl.replace t.packs hash_pack (Loaded loaded);
@@ -1750,7 +1509,7 @@ module Make
     | Some (hash_pack, _) ->
       match Hashtbl.find t.packs hash_pack with
       | Exists exists ->
-        (Loaded.make ~root ~read_and_exclude:(read_and_exclude exists.Exists.hash_pack) fs exists >>= function
+        (Loaded.of_exists ~root ~read_and_exclude:(read_and_exclude exists.Exists.hash_pack) fs exists >>= function
           | Error _ as err -> Lwt.return err
           | Ok loaded ->
             Hashtbl.replace t.packs hash_pack (Loaded loaded);

@@ -234,13 +234,6 @@ module type PACK = sig
   type value
   (** The type of the Git values. *)
 
-  type ('mmu, 'location) r =
-    { mmu              : 'mmu
-    ; with_cstruct     : 'mmu -> pack -> int -> (('location * Cstruct.t) -> unit Lwt.t) -> unit Lwt.t
-    ; with_cstruct_opt : 'mmu -> int option -> (('location * Cstruct.t) option -> unit Lwt.t) -> unit Lwt.t
-    ; free             : 'mmu -> 'location -> unit Lwt.t }
-  and pack = Pack of Hash.t | Unrecorded
-
   module Hash: S.HASH
   (** The [Hash] module used to make the implementation. *)
 
