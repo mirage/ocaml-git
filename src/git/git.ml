@@ -17,7 +17,6 @@ module Value        = Value
 
 module Fanout       = Fanout
 module Bucket       = Bucket
-module Rabin        = Rabin
 
 module Traverse_bfs = Traverse_bfs
 module Gc           = Collector
