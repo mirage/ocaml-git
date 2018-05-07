@@ -2096,7 +2096,7 @@ module Make (Hash: Git.HASH) (Store: Git.S with module Hash = Hash) (FS: Git.FS)
   module Snapshot =
   struct
     let from_tree git fs hash =
-      make_from_tree ~path:(Store.root git) git hash >>= fun root ->
+      make_from_tree ~path:(Fpath.v ".") git hash >>= fun root ->
       lwt_result_traversal
         ~root:(Store.root git)
         []
