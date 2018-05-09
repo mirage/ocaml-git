@@ -66,11 +66,6 @@ module type LOOSE = sig
 
   type error
 
-  val lookup: state -> Hash.t -> Hash.t option Lwt.t
-  (** [lookup state hash] is the object associated with the hash
-      [hash]. The result is [None] if the Git object does not exist or
-      is not stored as a {i loose} object. *)
-
   val mem: state -> Hash.t -> bool Lwt.t
   (** [mem state hash] is true iff there is an object such that
       [digest(object) = hash]. This function is the same as [lookup
@@ -299,7 +294,7 @@ module type PACK = sig
       noticed by all {i IDX} files available in the current git
       repository [state]. Errors are ignored and skipped. *)
 
-  val read: state -> Hash.t -> (t, error) result Lwt.t
+  val read: state -> Hash.t -> (value, error) result Lwt.t
   (** [read state hash] can retrieve a git {i packed} object from any
       {i PACK} files available in the current git repository
       [state]. It just inflates the git object and informs some
@@ -336,7 +331,7 @@ module type PACK = sig
   type stream = unit -> Cstruct.t option Lwt.t
   (** The stream contains the PACK flow. *)
 
-  module Graph: Map.S with type key = Hash.t
+  module Map: Map.S with type key = Hash.t
 
   val from: state -> stream -> (Hash.t * int, error) result Lwt.t
   (** [from git stream] populates the Git repository [git] from the
@@ -347,7 +342,7 @@ module type PACK = sig
     -> ?window:[ `Object of int | `Memory of int ]
     -> ?depth:int
     -> value list
-    -> (stream * (Crc32.t * int64) Graph.t Lwt_mvar.t, error) result Lwt.t
+    -> (stream * (Crc32.t * int64) Map.t Lwt_mvar.t, error) result Lwt.t
   (** [make ?window ?depth values] makes a PACK stream from a list of
       {!Value.t}.
 
@@ -449,7 +444,6 @@ module type S = sig
     | `Pack_info         of PInfo.error
     | `Idx_decoder       of IDec.error
     | `Idx_encoder       of IEnc.error
-    | `Integrity         of string
     | `Invalid_hash      of Hash.t
     | `Invalid_reference of Reference.t
     | Error.Decoder.t

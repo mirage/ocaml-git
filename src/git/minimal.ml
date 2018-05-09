@@ -132,7 +132,7 @@ module type S = sig
     type stream = unit -> Cstruct.t option Lwt.t
     (** The stream contains the PACK flow. *)
 
-    module Graph: Map.S with type key = Hash.t
+    module Map: Map.S with type key = Hash.t
 
     val from: t -> stream -> (Hash.t * int, error) result Lwt.t
     (** [from git stream] populates the Git repository [git] from the
@@ -144,7 +144,7 @@ module type S = sig
       -> ?window:[ `Object of int | `Memory of int ]
       -> ?depth:int
       -> Value.t list
-      -> (stream * (Crc32.t * int64) Graph.t Lwt_mvar.t, error) result Lwt.t
+      -> (stream * (Crc32.t * int64) Map.t Lwt_mvar.t, error) result Lwt.t
     (** [make ?window ?depth values] makes a PACK stream from a list
         of {!Value.t}.
 

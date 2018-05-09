@@ -254,7 +254,7 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE) = struct
         let contents _ = assert false
       end)
 
-    module Graph = GC.Graph
+    module Map = GC.Graph
 
     let make = GC.make_stream
 

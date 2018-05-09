@@ -38,6 +38,7 @@ module type LAZY = sig
   val mem: t -> Hash.t -> bool
   val iter: t -> (Hash.t -> (Crc32.t * int64) -> unit) -> unit
   val fold: t -> (Hash.t -> (Crc32.t * int64) -> 'a -> 'a) -> 'a -> 'a
+  val cardinal: t -> int
 end
 
 module Lazy (H: S.HASH): LAZY with module Hash = H = struct
@@ -129,6 +130,8 @@ module Lazy (H: S.HASH): LAZY with module Hash = H = struct
        ; values_offset
        ; v64_offset
        ; cache = Cache.create ~random:true cache }
+
+  let cardinal { number_of_hashes; _ } = number_of_hashes
 
   exception Break
 

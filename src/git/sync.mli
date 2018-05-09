@@ -243,7 +243,7 @@ sig
     Store.t ->
     ofs_delta:bool ->
     (Store.Hash.t * string * bool) list -> command list ->
-    (Store.Pack.stream *(Crc32.t * int64) Store.Pack.Graph.t Lwt_mvar.t, Store.error) result Lwt.t
+    (Store.Pack.stream * (Crc32.t * int64) Store.Pack.Map.t Lwt_mvar.t, Store.error) result Lwt.t
 
   val want_handler:
     Store.t ->

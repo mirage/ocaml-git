@@ -16,10 +16,17 @@
  *)
 
 open Lwt.Infix
+
 let ( >>!= ) a f = Lwt_result.bind_lwt_err a f
 let ( >>?= ) = Lwt_result.bind
 let ( >>|= ) = Lwt_result.map
 let ( >!= ) a f = Lwt_result.map_err f a
+
+module Option =
+struct
+  let ( >>= ) v f = match v with Some v -> f v | None -> None
+  let ( >|= ) v f = match v with Some v -> Some (f v) | None -> None
+end
 
 let src = Logs.Src.create "git.pack" ~doc:"Git pack engine"
 module Log = (val Logs.src_log src : Logs.LOG)
@@ -61,88 +68,232 @@ module type S = sig
      and module PDec := PDec
 
   type t
-  type loaded
+
+  type ('mmu, 'location) r =
+    { mmu         : 'mmu
+    ; with_cstruct: 'mmu -> pack -> int -> (('location * Cstruct.t) -> unit Lwt.t) -> unit Lwt.t
+    ; free        : 'mmu -> 'location -> unit Lwt.t }
+  and pack = Pack of Hash.t | Unrecorded
 
   type error =
     [ `Pack_decoder of RPDec.error
     | `Pack_encoder of PEnc.error
-    | `Pack_info    of PInfo.error
-    | `Idx_decoder  of IDec.error
-    | `Idx_encoder  of IEnc.error
+    | `Pack_info of PInfo.error
+    | `Idx_decoder of IDec.error
+    | `Idx_encoder of IEnc.error
     | FS.error Error.FS.t
+    | Inflate.error Error.Inf.t
+    | Error.Decoder.t
     | `Invalid_hash of Hash.t
-    | `Integrity    of string
+    | `Delta of PEnc.Delta.error
     | `Not_found ]
+
+  module Exists:
+  sig
+    type t
+    val lookup: t -> Hash.t -> (Crc32.t * int64) option
+    val mem: t -> Hash.t -> bool
+    val fold: (Hash.t -> (Crc32.t * int64) -> 'acc -> 'acc) -> t -> 'acc -> 'acc
+    val v: FS.t -> Fpath.t -> (t, error) result Lwt.t
+  end
+
+  module Loaded:
+  sig
+    type t
+
+    val lookup: t -> Hash.t -> (Crc32.t * int64) option
+    val mem: t -> Hash.t -> bool
+    val fold: (Hash.t -> (Crc32.t * int64) -> 'acc -> 'acc) -> t -> 'acc -> 'acc
+
+    val read:
+         to_result:(RPDec.Object.t -> ('value, error) result Lwt.t)
+      -> ztmp:Cstruct.t
+      -> window:Inflate.window
+      -> ('mmu, 'location) r
+      -> t
+      -> Hash.t
+      -> [ `Return of 'value | `Promote of 'value | `Error of error ] Lwt.t
+
+    val pack_decoder:
+         read_and_exclude:(Hash.t -> (RPDec.kind * Cstruct.t) option Lwt.t)
+      -> idx:(Hash.t -> (Crc32.t * int64) option)
+      -> FS.t
+      -> Fpath.t
+      -> (FS.Mapper.fd * RPDec.t, error) result Lwt.t
+
+    val of_exists:
+         root:Fpath.t
+      -> read_and_exclude:(Hash.t -> (RPDec.kind * Cstruct.t) option Lwt.t)
+      -> FS.t
+      -> Exists.t
+      -> (t, error) result Lwt.t
+  end
+
+  module Normalized:
+  sig
+    type t
+
+    val of_info:
+         read_and_exclude:(Hash.t -> (RPDec.kind * Cstruct.t) option Lwt.t)
+      -> FS.t
+      -> Fpath.t
+      -> [ `Normalized of PInfo.path ] PInfo.t
+      -> (t, error) result Lwt.t
+
+    val second_pass:
+         ztmp:Cstruct.t
+      -> window:Inflate.window
+      -> ('mmu, 'location) r
+      -> t
+      -> (unit, error) result Lwt.t
+  end
+
+  module Resolved:
+  sig
+    type t
+    type buffer =
+      { hunks   : Cstruct.t array
+      ; buffer  : Cstruct.t * Cstruct.t * int
+      ; depth   : int
+      ; deliver : unit -> unit Lwt.t }
+
+    val lookup: t -> Hash.t -> (Crc32.t * int64) option
+    val mem: t -> Hash.t -> bool
+    val fold: (Hash.t -> (Crc32.t * int64) -> 'acc -> 'acc) -> t -> 'acc -> 'acc
+
+    val read:
+         ztmp:Cstruct.t
+      -> window:Inflate.window
+      -> to_result:(RPDec.Object.t -> ('value, error) result Lwt.t)
+      -> t
+      -> Hash.t
+      -> [ `Return of 'value | `Promote of 'value | `Error of error ] Lwt.t
+
+    val size:
+         ztmp:Cstruct.t
+      -> window:Inflate.window
+      -> t
+      -> Hash.t
+      -> (int, error) result Lwt.t
+
+    val store_idx_file:
+         root:Fpath.t
+      -> FS.t
+      -> (Hash.t * (Crc32.t * int64)) IEnc.sequence
+      -> Hash.t
+      -> (unit, error) result Lwt.t
+
+    val buffer:
+         ('mmu, 'location) r
+      -> Hash.t
+      -> int -> int -> PInfo.path
+      -> ((buffer -> unit Lwt.t) -> unit Lwt.t)
+
+    val of_normalized:
+         root:Fpath.t
+      -> read_and_exclude:(Hash.t -> (RPDec.kind * Cstruct.t) option Lwt.t)
+      -> ztmp:Cstruct.t
+      -> window:Inflate.window
+      -> FS.t
+      -> ('mmu, 'location) r
+      -> Normalized.t
+      -> (t, error) result Lwt.t
+
+    val of_loaded: ('mmu, 'location) r -> Loaded.t -> (t, error) result Lwt.t
+
+    val of_exists:
+         root:Fpath.t
+      -> read_and_exclude:(Hash.t -> (RPDec.kind * Cstruct.t) option Lwt.t)
+      -> ztmp:Cstruct.t
+      -> window:Inflate.window
+      -> FS.t
+      -> ('mmu, 'location) r
+      -> Exists.t
+      -> (t, error) result Lwt.t
+  end
+
+  module Total:  sig
+    type t
+
+    val lookup: t -> Hash.t -> (Crc32.t * int64 * int) option
+    val mem: t -> Hash.t -> bool
+    val fold: (Hash.t -> (Crc32.t * int64) -> 'acc -> 'acc) -> t -> 'acc -> 'acc
+
+    val read:
+         ztmp:Cstruct.t
+      -> window:Inflate.window
+      -> to_result:(RPDec.Object.t -> ('value, error) result Lwt.t)
+      -> t
+      -> Hash.t
+      -> [ `Return of 'value | `Error of error ] Lwt.t
+
+    val size:
+         ztmp:Cstruct.t
+      -> window:Inflate.window
+      -> t
+      -> Hash.t
+      -> (int, error) result Lwt.t
+
+    val third_pass:
+      root:Fpath.t
+      -> ztmp:Cstruct.t
+      -> window:Inflate.window
+      -> read_inflated:(Hash.t -> (RPDec.kind * Cstruct.t) option Lwt.t)
+      -> FS.t
+      -> Resolved.t
+      -> ((Fpath.t * Hash.t * (Hash.t, Crc32.t * int64 * int) Hashtbl.t * PInfo.path), error) result Lwt.t
+
+    val of_resolved:
+      root:Fpath.t
+      -> ztmp:Cstruct.t
+      -> window:Inflate.window
+      -> read_inflated:(Hash.t -> (RPDec.kind * Cstruct.t) option Lwt.t)
+      -> FS.t
+      -> ('mmu, 'location) r
+      -> Resolved.t
+      -> (t, error) result Lwt.t
+  end
 
   val pp_error: error Fmt.t
 
   val v: FS.t -> Fpath.t list -> t Lwt.t
+  val lookup: t -> Hash.t -> (Hash.t * (Crc32.t * int64)) option
+  val list: t -> Hash.t list
+  val mem: t -> Hash.t -> bool
 
-  val add_total:
+  val add:
        root:Fpath.t
+    -> read_loose:(Hash.t -> (RPDec.kind * Cstruct.t) option Lwt.t)
+    -> ztmp:Cstruct.t
+    -> window:Inflate.window
+    -> FS.t
+    -> ('mmu, 'location) r
     -> t
     -> Fpath.t
-    -> PInfo.full PInfo.t
+    -> [ `Normalized of PInfo.path ] PInfo.t
     -> (Hash.t * int, error) result Lwt.t
-
-  val add_exists:
-       root:Fpath.t
-    -> t
-    -> Hash.t
-    -> (unit, error) result Lwt.t
-
-  val merge: t -> [> PInfo.partial | PInfo.full ] PInfo.t -> unit Lwt.t
-
-  val load_index:
-       FS.t -> Fpath.t
-    -> (Hash.t * IDec.t * FS.Mapper.fd, Fpath.t * error) result Lwt.t
-
-  val load_partial:
-       root:Fpath.t
-    -> t
-    -> Hash.t
-    -> IDec.t
-    -> FS.Mapper.fd
-    -> (loaded, error) result Lwt.t
-
-  val force_total:
-       t
-    -> loaded
-    -> ((RPDec.t * FS.Mapper.fd * PInfo.full PInfo.t), error) result Lwt.t
-
-  val lookup: t -> Hash.t -> (Hash.t * (Crc32.t * int64)) option Lwt.t
-
-  val mem: t -> Hash.t -> bool Lwt.t
-
-  val list: t -> Hash.t list Lwt.t
 
   val read:
        root:Fpath.t
+    -> read_loose:(Hash.t -> (RPDec.kind * Cstruct.t) option Lwt.t)
+    -> to_result:(RPDec.Object.t -> ('value, error) result Lwt.t)
     -> ztmp:Cstruct.t
     -> window:Inflate.window
+    -> FS.t
+    -> ('mmu, 'location) r
     -> t
     -> Hash.t
-    -> (RPDec.Object.t, error) result Lwt.t
+    -> ('value, error) result Lwt.t
 
   val size:
        root:Fpath.t
+    -> read_loose:(Hash.t -> (RPDec.kind * Cstruct.t) option Lwt.t)
     -> ztmp:Cstruct.t
     -> window:Inflate.window
+    -> FS.t
     -> t
     -> Hash.t
     -> (int, error) result Lwt.t
-
-  val save_idx_file:
-       fs:FS.t -> root:Fpath.t
-    -> (Hash.t * (Crc32.t * int64)) IEnc.sequence
-    -> Hash.t
-    -> (unit, error) result Lwt.t
-
-  val save_pack_file:
-       fs:FS.t -> (string -> string)
-    -> (PEnc.Entry.t * PEnc.Delta.t) list
-    -> (Hash.t -> Cstruct.t option Lwt.t)
-    -> (Fpath.t * (Hash.t * (Crc32.t * int64)) IEnc.sequence * Hash.t, error) result Lwt.t
 end
 
 module Make
@@ -182,114 +333,31 @@ module Make
   module IDec = Index_pack.Lazy(Hash)
   module IEnc = Index_pack.Encoder(Hash)
 
-  (* XXX(dinosaure): I need to explain what is the purpose of this
-     module. As the Loose internal module, this module implements the
-     logic of pack files. It's little bit more complex than the loose
-     file.
+  (* The [Pack_engine] module implements operations on Git pack file
+     and focus on keeping control on memory allocation as much as
+     possible. The goal is to be able to read a pack file without
+     having to load it fully in memory, and to keep control of memory
+     allocation at runtime.
 
-     In fact, we have some ways to get an object from a pack file:
+     In order to do this, a pack file can be in one of these five
+     states:
 
-     - The first way, the more simple way is to load the IDX file of
-       the PACK file, make a PACK decoder, inform the PACK decoder
-       than external source is a function which allocates the
-       requested object.
+     - exists: the PACK file already exists on the git repository
 
-       In this way, the decoder wants 2 fixed-size buffers (one to
-       inflate and the zlib's window). However, the decoder will
-       traverse the path to construct the requested object to
-       calculate the biggest needed object. Then, it allocates 2
-       buffers of this calculated size and finally reconstruct your
-       object - but, it need to save the diff for each application
-       which could explose your memory.
+     - loaded: the PACK file is loaded: we promote exists to loaded
+     when the user wants to read an object from this PACK file - but
+     lookup, list and mem operations don't do this promotion.
 
-       So, this way is the fastest way about initialization (nothing
-       to initialize) but the memory allocation is not predictable and
-       could be a problem for a large pack file.
+     - normalized: when the PACK file comes from a stream (when you
+     pull/fetch/clone)
 
-     - The second way is to get some informations before to make the
-       decoder. To get these informations, we need to read entirely
-       one time (one pass) the pack file. Then, we can know the
-       biggest object of this pack file and how many buffers we need
-       to undelta-ify any objects of this pack file.
+     - resolved: when we resolved all delta-ified objects in the PACK
+     file
 
-       Again, the decoder wants 2 fixed-size buffer (one to inflate
-       and the zlib's window) but with the previous computation, we
-       can allocate exactly what is needed in the worst case (worst
-       case when we want to undelta-ify an object) and reconstruct any
-       git object of this pack file.
-
-       However, if the pack file is a /thin/-pack, we will allocate
-       again what is needed to get the external object.
-
-       So, at this stage, the memory is semi-predictable. However, we
-       can consider this way as the best way because Git is not
-       allowed to store in your file-system any /thin/-pack. So, a
-       pack decoder should never want an external object.
-
-       From this first pass, we can generate a partial tree of the
-       pack file which is equivalent of the idx decoder (but
-       partially). From benchmark, obviously, the radix tree is more
-       fast than the idx decoder. However, it not contains all objects
-       (only non-delta-ified objects), so you should use both.
-
-     - The third way come from the second way with a second pass of
-       the pack file to determine if the pack file is a /thin/-pack or
-       not. With this information, we can know which objects the pack
-       file need and allocate, again, exactly what is needed to get
-       any object of this specific pack file.
-
-       Finally, in same time, we can generate a complexe radix tree of
-       the pack file and use it instead the decoder.
-
-     So, after this explanation, I decided to implement the second way
-     and the third way when we collect all informations needed as long
-     as the client use the git repository - I mean, we pass from the
-     partial to the total information only when the user asks enough
-     to get all object of the pack file.
-
-     The first way is only used to know if the requested object exists
-     in the pack file or not - but when the client want to get the Git
-     object, we start the first pass of the pack file and make a
-     decoder.
-
-     Then, from this information, we update a safe-thread value which
-     contains buffers for all loaded pack files. That means, for any
-     requested object located on any pack file, we can use safely
-     these buffers (instead to allocate all time).
-
-     So, in the git repository, this is the only value which can grow
-     automatically (but it's depends on your pack files - so we can
-     predict how much memory you need when we look your pack
-     files). So, we continue to control the memory consumption. *)
-
-  type loaded =
-    { decoder : RPDec.t
-    ; idx     : IDec.t
-    ; fdp     : FS.Mapper.fd
-    ; fdi     : FS.Mapper.fd
-    ; info    : PInfo.partial PInfo.t }
-
-  type pack =
-    | Exists of { idx : IDec.t
-                ; fdi : FS.Mapper.fd }
-    | Loaded of loaded
-    | Total of  { decoder : RPDec.t
-                ; fdp     : FS.Mapper.fd
-                ; info    : PInfo.full PInfo.t }
-
-  module Graph = Map.Make(Hash)
-
-  type buffers =
-    { objects : Cstruct.t * Cstruct.t * int
-    ; hunks   : Cstruct.t
-    ; depth   : int }
+     - total: when we ensure than the PACK file is thin or not *)
 
   type fs_error = FS.error Error.FS.t
-
-  type t =
-    { fs      : FS.t
-    ; packs   : pack Graph.t Lwt_mvar.t
-    ; buffers : buffers Lwt_mvar.t }
+  type inf_error = Inflate.error Error.Inf.t
 
   type error =
     [ `Pack_decoder of RPDec.error
@@ -297,10 +365,919 @@ module Make
     | `Pack_info of PInfo.error
     | `Idx_decoder of IDec.error
     | `Idx_encoder of IEnc.error
+    | inf_error
     | fs_error
+    | Error.Decoder.t (* XXX(dinosaure): trick about [to_result] function. *)
     | `Invalid_hash of Hash.t
-    | `Integrity of string
+    | `Delta of PEnc.Delta.error
     | `Not_found ]
+
+  type ('mmu, 'location) r =
+    { mmu         : 'mmu
+    ; with_cstruct: 'mmu -> pack -> int -> (('location * Cstruct.t) -> unit Lwt.t) -> unit Lwt.t
+    ; free        : 'mmu -> 'location -> unit Lwt.t }
+  and pack = Pack of Hash.t | Unrecorded
+
+  let empty_cstruct = Cstruct.create 0
+
+  module Exists =  struct
+
+    (* Entry-point state for pack-files; Very few allocations are done
+       in this state as only the IDX file is mmaped. Hence, only
+       operations on the IDX file are allowed ([lookup], [mem]). *)
+
+    type t =
+      { index     : IDec.t
+      ; hash_pack : Hash.t
+      ; fd        : FS.Mapper.fd }
+
+    let lookup { index; _ } hash = IDec.find index hash
+    let mem { index; _ } hash = IDec.mem index hash
+    let fold f { index; _ } a = IDec.fold index f a
+
+    let v fs path =
+      let err_idx_decoder err = `Idx_decoder err in
+
+      let ( <.> ) f g = fun x -> f (g x) in
+      let ( >>?= ) = Lwt_result.bind in
+      let ( >>|= ) = Lwt_result.bind_result in
+      (* ('a, 'e) result Lwt.t -> ('e -> (unit, 'e) result Lwt.t) -> ('a, 'e) result Lwt.t *)
+      let ( >>!= ) v f = v >>= function Ok _ as v -> Lwt.return v | Error err -> f err in
+
+      FS.Mapper.openfile fs path                        >|= Rresult.R.reword_error (Error.FS.err_open path)
+      >>?= fun fd -> FS.Mapper.length fd                >|= Rresult.R.reword_error (Error.FS.err_length path)
+      >>?= fun ln -> FS.Mapper.map fd (Int64.to_int ln) >|= Rresult.R.reword_error (Error.FS.err_map path)
+      >>|= (Rresult.R.reword_error err_idx_decoder <.> IDec.make)
+      >>?= fun id ->
+       let hash_pack =
+         let basename = Fpath.basename (Fpath.rem_ext path) in
+         Scanf.sscanf basename "pack-%s" (fun x -> Hash.of_hex x) in
+       Lwt.return_ok { index = id; hash_pack; fd; }
+      >>!= fun er -> FS.Mapper.close fd                 >|= Rresult.R.reword_error (Error.FS.err_close path)
+      >>?= fun () -> Lwt.return_error er
+  end
+
+  module Loaded =
+  struct
+
+    let src = Logs.Src.create "git.pack_engine.loaded" ~doc:"logs git's loaded pack event"
+    module Log = (val Logs.src_log src: Logs.LOG)
+
+    (* Pack files in the [loaded] state can only have been promoted
+       from the [exist] state. That's the worst state regarding memory
+       allocation.
+
+       As for the [exist] state, [lookup] and [mem] are available. A
+       new operation, [read] becomes available. Once an object is
+       read, metadata regarding its size and checksum are memoized.
+
+       Once the metadata for all objects is known, the pack can be
+       promoted to the [normalized] state (note: the pack will be then
+       immediately promoted to the [resolved] state as the pack is not
+       thin). *)
+
+    type t =
+      { index : IDec.t
+      ; pack  : RPDec.t
+      ; info  : [ `Pass ] PInfo.t
+      ; fdi   : FS.Mapper.fd
+      ; fdp   : FS.Mapper.fd
+      ; mutable thin : bool }
+
+    let lookup { index; info; _ } hash =
+      match Hashtbl.find info.PInfo.index hash with
+      | (crc, abs_off, _) -> Some (crc, abs_off)
+      | exception Not_found -> IDec.find index hash
+
+    let mem { index; info; _ } hash =
+      Hashtbl.mem info.PInfo.index hash || IDec.mem index hash
+
+    let fold f { index; _ } a = IDec.fold index f a
+
+    let rec object_to_delta ?(depth = 1) = function
+      | RPDec.Object.External { hash; length; } -> PInfo.Unresolved { hash; length; }
+      | RPDec.Object.Internal { offset; length; _ } -> PInfo.Internal { abs_off = offset; length; }
+      | RPDec.Object.Delta { descr; base; inserts; _ } -> PInfo.Delta { hunks_descr = descr; inserts; depth; from = object_to_delta ~depth:(depth + 1) base; }
+
+    let size { pack; _ } ~ztmp ~window hash =
+      RPDec.length pack hash ztmp window >|= Rresult.R.reword_error (fun err -> `Pack_decoder err)
+
+    (* [read] is the main function available in the [loaded] state.
+
+       ## Arguments
+
+       [mmu]: memory management unit. Used every time a memory
+       allocation is needed.
+
+       [with_cstruct]: malloc
+
+       [free]: free
+
+       [to_result]: The only goal of this function is to take
+       ownership on the given [Cstruct.t]. Usually, that buffer is
+       allocated via [with_cstruct] and [to_result] is called before
+       that function free it. Hence, usually [to_result] is simply a
+       [cstruct_copy], but could also be [Value.to_result] which
+       optimize copies in some cases.
+
+       [ztmp]: zlib buffer
+
+       [window]: zlib window
+
+       [loaded]: the [loaded] state
+
+       [hash]: object's hash
+
+       ## Allocation
+
+       [to_result] is the critical function regarding memory
+       allocation management. The policy is let to the user. For
+       instance, a LRU cache for managing pre-allocated buffers can be
+       used, or a new buffer could be created on every invocation of
+       that function.
+
+       [free] will be called on the used buffer, just after
+       [to_result].
+
+       ## Mémoization
+
+       Every reads updates a table keepking metadata information about
+       objects.  One of the important metadata which are being tracked
+       is to know if their are external references, e.g. if the pack
+       file if thin or not (note: if the file was stored on disk,
+       normally it shouldn't -- but ocaml-git supports it just fine. )
+       *)
+    let read
+        (type mmu) (type location) (type value)
+        ~(to_result:RPDec.Object.t -> (value, error) result Lwt.t)
+        ~ztmp ~window
+        (r:(mmu, location) r)
+        ({ pack; info; index; _ } as t) hash
+      : [ `Error of error | `Promote of value | `Return of value ] Lwt.t =
+      Log.debug (fun l ->
+          l ~header:"read" "Try to extract object %a from PACK %a."
+            Hash.pp hash Hash.pp t.info.PInfo.hash_pack);
+
+      lookup t hash |> function
+      | None -> Lwt.return (`Error (`Pack_decoder (RPDec.Invalid_hash hash)))
+      | Some (_, abs_off) ->
+        RPDec.needed_from_offset t.pack abs_off ztmp window >>= function
+        | Error err -> Lwt.return (`Error (`Pack_decoder err))
+        | Ok length ->
+          let res = ref None in
+          (r.with_cstruct r.mmu Unrecorded (length * 2) @@ fun (loc_raw, raw) ->
+           let raw = Cstruct.sub raw 0 length, Cstruct.sub raw length length, length in
+           let deliver () = r.free r.mmu loc_raw in
+           RPDec.get_from_hash pack hash raw ztmp window
+           >>= fun x -> res := Some (deliver, x); Lwt.return_unit)
+
+          >>= (fun () -> match !res with
+              | None -> assert false
+              | Some (deliver, res) ->
+                Rresult.R.reword_error (fun err -> `Pack_decoder err) res
+                |> Lwt.return
+                >>?= fun obj -> to_result obj
+                >>?= fun res -> Lwt.return_ok (obj, res)
+                >>= fun res -> deliver () >|= fun () -> res)
+          >|= function
+            | Ok (obj, value) ->
+              let crc, abs_off, length =
+                RPDec.Object.first_crc_exn obj,
+                RPDec.Object.first_offset_exn obj,
+                RPDec.Object.length obj in
+              Hashtbl.replace info.PInfo.index hash (crc, abs_off, length);
+              Hashtbl.replace info.PInfo.delta abs_off (object_to_delta obj.RPDec.Object.from);
+
+              let () = match obj.RPDec.Object.from with
+                | RPDec.Object.External _ -> t.thin <- true
+                | RPDec.Object.Internal _ -> ()
+                | RPDec.Object.Delta { base; _ } ->
+                  let rec go = function
+                    | RPDec.Object.Delta { base; _ } -> go base
+                    | RPDec.Object.External _ -> t.thin <- true
+                    | RPDec.Object.Internal _ -> () in
+                  go base in
+
+              if Hashtbl.length info.PInfo.delta = IDec.cardinal index
+              then `Promote value
+              else `Return value
+            | Error err -> `Error err
+
+    let pack_decoder ~read_and_exclude ~idx fs path =
+      let ( >>!= ) v f = v >>= function Ok _ as v -> Lwt.return v | Error err -> f err in
+
+      FS.Mapper.openfile fs path
+      >|= Rresult.R.reword_error (Error.FS.err_open path)
+      >>?= fun fd ->
+      let fun_cache  = fun _ -> None in
+      let fun_idx    = idx in
+      let fun_revidx = fun _ -> None in
+      let fun_last   = read_and_exclude in
+
+      RPDec.make fd fun_cache fun_idx fun_revidx fun_last
+      >|= Rresult.R.reword_error (Error.FS.err_length path)
+      >>?= fun pack -> Lwt.return_ok (fd, pack)
+      >>!= fun er -> FS.Mapper.close fd >|= Rresult.R.reword_error (Error.FS.err_close path)
+      >>?= fun () -> Lwt.return_error er
+
+    (* [of_exists] promotes a pack file from [exist] to [loaded]. Only
+       the IDX file. [read_and_exclude] reads objects in other pack
+       files (excluding any references to the current one, to avoid
+       infinite loops). *)
+    let of_exists ~root ~read_and_exclude fs exists =
+      let path = Fpath.(root / "objects" / "pack" / Fmt.strf "pack-%s.pack" (Hash.to_hex exists.Exists.hash_pack)) in
+      let index = exists.Exists.index in
+      let info = PInfo.v exists.Exists.hash_pack in
+
+      let ( >>!= ) v f = v >>= function Ok _ as v -> Lwt.return v | Error err -> f err in
+
+      pack_decoder ~read_and_exclude ~idx:(IDec.find exists.Exists.index) fs path
+      >>?= fun (fd, pack) ->  Lwt.return_ok { index; pack; info; fdi = exists.Exists.fd; fdp = fd; thin = false }
+      >>!= fun er -> FS.Mapper.close exists.Exists.fd >|= Rresult.R.reword_error Error.FS.err_sys_map
+      >>?= fun () -> Lwt.return_error er
+  end
+
+  module Normalized = struct
+
+    let src = Logs.Src.create "git.pack_engine.normalized" ~doc:"logs git's pack normalization event"
+    module Log = (val Logs.src_log src: Logs.LOG)
+
+    (* [Normalized] pack files come from the network (clone, pull,
+       fetch). In that state, some object references might come from a
+       different pack file (e.g. if it is thin). *)
+
+    type t =
+      { pack  : RPDec.t
+      ; path  : Fpath.t
+      ; info  : [ `Normalized of PInfo.path ] PInfo.t
+      ; fd    : FS.Mapper.fd
+      ; mutable thin : bool }
+
+    let length_of_path path =
+      let rec go acc = function
+        | PInfo.Load _ -> acc
+        | PInfo.Patch { hunks; src; _ } -> go (acc + hunks) src in
+      go 0 path
+
+    let digest obj =
+      let hdr = Fmt.strf "%s %d\000"
+          (match obj.RPDec.Object.kind with
+               | `Commit -> "commit"
+               | `Tree -> "tree"
+               | `Tag -> "tag"
+               | `Blob -> "blob")
+          (Cstruct.len obj.RPDec.Object.raw) in
+
+      let ctx = Hash.Digest.init () in
+      Hash.Digest.feed ctx (Cstruct.of_string hdr);
+      Hash.Digest.feed ctx obj.RPDec.Object.raw;
+      Hash.Digest.get ctx
+
+    let of_info ~read_and_exclude fs path_tmp info =
+      let idx hash = match Hashtbl.find info.PInfo.index hash with
+        | (crc, abs_off, _) -> Some (crc, abs_off)
+        | exception Not_found -> None in
+
+      Loaded.pack_decoder ~read_and_exclude ~idx fs path_tmp >>= function
+      | Ok (fd, pack) ->
+        Lwt.return_ok { pack; path = path_tmp; info; fd; thin = false }
+      | Error _ as err -> Lwt.return err
+
+    exception Fail of RPDec.error
+
+    (* [second_pass] allows to analyse all compressed chains of
+       objects and to discover if the pack file is thin or not.
+
+       TODO: this code could me moved in [Resolved]. *)
+    let second_pass
+      (type mmu) (type location)
+      ~ztmp
+      ~window
+      (r:(mmu, location) r)
+      normalized =
+      let resolve abs_off =
+        RPDec.needed_from_offset normalized.pack abs_off ztmp window >>= function
+        | Error err -> Lwt.fail (Fail err)
+        | Ok needed ->
+          Log.debug (fun l -> l "Allocate %d byte(s) to extract %a:%Ld." (needed * 2) Hash.pp normalized.info.PInfo.hash_pack abs_off);
+
+          r.with_cstruct r.mmu Unrecorded (needed * 2) @@ fun (loc_raw, raw) ->
+          Log.debug (fun l -> l "Has %d byte(s)." (Cstruct.len raw));
+          let raw = Cstruct.sub raw 0 needed, Cstruct.sub raw needed needed, needed in
+          RPDec.get_from_offset normalized.pack abs_off raw ztmp window >>= function
+          | Error err -> Lwt.fail (Fail err)
+          | Ok obj ->
+            let hash = digest obj in
+            let crc, abs_off =
+              RPDec.Object.first_crc_exn obj,
+              RPDec.Object.first_offset_exn obj in
+
+            Log.info (fun l ->
+                l ~header:"second_pass" "Add object %a (length: %d, offset: %Ld)."
+                  Hash.pp hash (Hashtbl.length normalized.info.PInfo.index) abs_off);
+
+            Hashtbl.add normalized.info.PInfo.index hash (crc, abs_off, needed);
+            Hashtbl.replace normalized.info.PInfo.delta abs_off (Loaded.object_to_delta obj.RPDec.Object.from);
+
+            let () = match obj.RPDec.Object.from with
+              | RPDec.Object.External _ -> normalized.thin <- true
+              | RPDec.Object.Internal _ -> ()
+              | RPDec.Object.Delta { base; _ } ->
+                let rec go = function
+                  | RPDec.Object.Delta { base; _ } -> go base
+                  | RPDec.Object.External _ -> normalized.thin <- true
+                  | RPDec.Object.Internal _ -> ()
+                in
+                go base
+            in
+            r.free r.mmu loc_raw
+      in
+      Lwt.catch
+        (fun () ->
+           Lwt_list.iter_s
+             resolve
+             (Hashtbl.fold (fun k v a -> match v with
+                  | PInfo.Delta _ | PInfo.Unresolved _ -> k :: a
+                  | _ -> a) normalized.info.PInfo.delta []
+              |> List.sort (fun ka kb -> Int64.compare ka kb))
+           >>= fun () ->
+           Log.debug (fun l ->
+               l ~header:"second_pass" "Paths of delta-ification: %a."
+                 Fmt.(Dump.hashtbl int64 PInfo.pp_delta) normalized.info.PInfo.delta);
+           Lwt.return_ok ())
+        (function Fail err -> Lwt.return_error (`Pack_decoder err)
+                | exn -> Lwt.fail exn)
+  end
+
+  let with_buffer buff f =
+    let c = ref None in
+    buff (fun buf ->
+        f buf >|= fun x ->
+        c := Some x
+      ) >|= fun () ->
+    match !c with
+    | Some x -> x
+    | None   -> assert false
+
+  module Resolved = struct
+
+    let src = Logs.Src.create "git.pack_engine.resolved" ~doc:"logs git's resolved pack event"
+    module Log = (val Logs.src_log src: Logs.LOG)
+
+    (* In the [resolved] state, internal compressed objects are all
+       known and the memory allocation needed to resolve external
+       objects is bounded. All the delta chains are known, as well as
+       the largest buffers needed to uncompress any object in the
+       repository. *)
+
+    type t =
+      { pack       : RPDec.t
+      ; index      : (Hash.t, Crc32.t * int64 * int) Hashtbl.t
+      ; delta      : (int64, PInfo.delta) Hashtbl.t
+      ; hash_pack  : Hash.t
+      ; path_delta : PInfo.path
+      ; fd         : FS.Mapper.fd
+      ; buff       : (buffer -> unit Lwt.t) -> unit Lwt.t
+      ; thin       : bool }
+    and buffer =
+      { hunks : Cstruct.t array
+      ; buffer : Cstruct.t * Cstruct.t * int
+      ; depth : int
+      ; deliver : unit -> unit Lwt.t }
+
+    let stream_of_path _ = assert false
+
+    let mem { index; _ } hash = Hashtbl.mem index hash
+
+    let fold f { index; _ } a = Hashtbl.fold (fun hash (crc, abs_off, _) a -> f hash (crc, abs_off) a) index a
+
+    let depth_of_path path =
+      let rec go acc = function
+        | PInfo.Load _ -> acc
+        | PInfo.Patch { src; _ } -> go (acc + 1) src in
+      go 1 path
+
+    let split_of_path cs path =
+      let depth = depth_of_path path in
+      let arr = Array.make depth empty_cstruct in
+      let rec fill idx off = function
+        | PInfo.Load _ -> ()
+        | PInfo.Patch { hunks; src; _ } ->
+          Array.unsafe_set arr idx (Cstruct.sub cs off hunks);
+          fill (idx + 1) (off + hunks) src in
+      fill 0 0 path; arr
+
+    let list_of_path path =
+      let rec go acc = function
+        | PInfo.Load _ -> List.rev acc
+        | PInfo.Patch { hunks; src; _ } ->
+          go (hunks :: acc) src in
+      go [] path
+
+    module EIDX = struct
+      module E = struct
+        type state  = IEnc.t
+        type result = unit
+        type error  = IEnc.error
+        type end' = [ `End of state ]
+        type rest = [ `Flush of state | `Error of state * error ]
+        let flush = IEnc.flush
+        let used = IEnc.used_out
+        let eval raw state = match IEnc.eval raw state with
+          | #end' as v   -> let `End state = v in Lwt.return (`End (state, ()))
+          | #rest as res -> Lwt.return res
+      end
+      include Helper.Encoder(E)(FS)
+    end
+
+    (* Save the IDX file is the pack file is not thin. *)
+    let store_idx_file ~root fs sequence hash_pack =
+      let file = Fmt.strf "pack-%s.idx" (Hash.to_hex hash_pack) in
+      let encoder_idx = IEnc.default sequence hash_pack in
+      let raw = Cstruct.create 0x8000 in (* XXX(dinosaure): as argument? *)
+      let path = Fpath.(root / "objects" / "pack" / file) in
+      EIDX.to_file fs path raw encoder_idx >|= function
+      | Ok ()                  -> Ok ()
+      | Error (`Encoder err)   -> Error (`Idx_encoder err)
+      | Error #fs_error as err -> err
+
+    let buffer
+        (type mmu) (type location)
+        (r:(mmu, location) r)
+        hash_pack length_hunks length_buffer path_delta : (buffer -> unit Lwt.t) -> unit Lwt.t =
+      let ret = ref None in
+
+      let make () =
+        r.with_cstruct r.mmu (Pack hash_pack) (length_hunks + (length_buffer * 2)) @@ fun (loc, buffer) ->
+
+        Log.debug (fun l ->
+          l ~header:"buffer" "Split hunks to: %a." Fmt.(Dump.list int) (list_of_path path_delta));
+
+        let hunks = Cstruct.sub buffer 0 length_hunks in
+        let hunks = split_of_path hunks path_delta in
+
+        let depth = depth_of_path path_delta in
+
+        let buffer = Cstruct.sub buffer length_hunks (length_buffer * 2) in
+        let buffer = Cstruct.sub buffer 0 length_buffer, Cstruct.sub buffer length_buffer length_buffer, length_buffer in
+
+        let deliver () = r.free r.mmu loc in
+
+        ret := Some { hunks; buffer; deliver; depth; };
+        Lwt.return_unit in
+
+      (* XXX(dinosaure): bypass value restriction. *)
+      let make () = make () >>= fun () -> match !ret with
+        | Some ret -> Lwt.return ret
+        | None -> assert false in
+
+      let pool = Lwt_pool.create 4 make in
+      Lwt_pool.use pool
+
+    (* [of_normalized p] creates a [resolved] pack file from the
+       normalized pack file [p]. This is done by applying
+       {!Normalizedsecond_pass}. If the pack file is thin, we keep
+       using the pack file in a temporary location; otherwise both the
+       pack file and its associated IDX file are created in the
+       repository and made available to other users. *)
+    let of_normalized
+        (type mmu) (type location)
+        ~root
+        ~read_and_exclude
+        ~ztmp
+        ~window
+        fs
+        (r:(mmu, location) r)
+        normalized =
+      Normalized.second_pass ~ztmp ~window r normalized >>= function
+      | Error _ as err -> Lwt.return err
+      | Ok () ->
+        let info = PInfo.resolve ~length:(Hashtbl.length normalized.info.PInfo.delta) normalized.info in
+        let path = Fpath.(root / "objects" / "pack" / Fmt.strf "pack-%s.pack" (Hash.to_hex info.PInfo.hash_pack)) in
+        let `Resolved path_delta = info.PInfo.state in
+
+        if normalized.Normalized.thin
+        then
+          let idx hash = match Hashtbl.find info.PInfo.index hash with
+            | (crc, abs_off, _) -> Some (crc, abs_off)
+            | exception Not_found -> None in
+
+          Loaded.pack_decoder ~read_and_exclude ~idx fs path
+          >>?= fun (fd, pack) ->
+
+          let length_hunks = Normalized.length_of_path path_delta in
+          let length_objrw = Hashtbl.fold (fun _ (_, _, v) -> max v) info.PInfo.index 0 in
+          let buff = buffer r info.PInfo.hash_pack length_hunks length_objrw path_delta in
+
+          Lwt.return_ok { pack
+                        ; index = info.PInfo.index
+                        ; delta = info.PInfo.delta
+                        ; hash_pack = info.PInfo.hash_pack
+                        ; path_delta
+                        ; fd
+                        ; buff
+                        ; thin = normalized.Normalized.thin }
+        else
+          let sequence f = Hashtbl.iter (fun k (crc, abs_off, _) -> f (k, (crc, abs_off))) info.PInfo.index in
+          let idx hash = match Hashtbl.find info.PInfo.index hash with
+            | (crc, abs_off, _) -> Some (crc, abs_off)
+            | exception Not_found -> None in
+
+          store_idx_file ~root fs sequence info.PInfo.hash_pack
+          >>?= fun () -> FS.File.move fs normalized.Normalized.path path >|= Rresult.R.reword_error (Error.FS.err_move normalized.Normalized.path path)
+          >>?= fun () -> FS.Mapper.close normalized.Normalized.fd >|= Rresult.R.reword_error (Error.FS.err_close normalized.Normalized.path)
+          >>?= fun () -> Loaded.pack_decoder ~read_and_exclude ~idx fs path
+          >>?= fun (fd, pack) ->
+
+          let length_hunks = Normalized.length_of_path path_delta in
+          let length_objrw = Hashtbl.fold (fun _ (_, _, v) -> max v) info.PInfo.index 0 in
+          let buff = buffer r info.PInfo.hash_pack length_hunks length_objrw path_delta in
+
+          Lwt.return_ok { pack
+                        ; index = info.PInfo.index
+                        ; delta = info.PInfo.delta
+                        ; hash_pack = info.PInfo.hash_pack
+                        ; path_delta
+                        ; fd
+                        ; buff
+                        ; thin = normalized.Normalized.thin }
+
+    let of_loaded
+        (type mmu) (type location)
+        (r:(mmu, location) r)
+        loaded =
+      Log.debug (fun l ->
+          l ~header:"of_loaded" "Delta-ification path is complete: %a."
+            Fmt.(Dump.hashtbl int64 PInfo.pp_delta) loaded.Loaded.info.PInfo.delta);
+
+      let info = PInfo.normalize ~length:(Hashtbl.length loaded.Loaded.info.PInfo.delta) loaded.Loaded.info in
+      let info = PInfo.resolve ~length:(Hashtbl.length loaded.Loaded.info.PInfo.delta) info in
+      let `Resolved path_delta = info.PInfo.state in
+
+      Log.debug (fun l ->
+          l ~header:"of_loaded" "Approximation of delta-ification path is: %a."
+            Fmt.(Dump.list int) (list_of_path path_delta));
+
+      let length_hunks = Normalized.length_of_path path_delta in
+      let length_objrw = Hashtbl.fold (fun _ (_, _, v) -> max v) info.PInfo.index 0 in
+      let buff = buffer r info.PInfo.hash_pack length_hunks length_objrw path_delta in
+
+      FS.Mapper.close loaded.Loaded.fdi >|= Rresult.R.reword_error Error.FS.err_sys_map >>?= fun () ->
+      Lwt.return_ok { pack = loaded.Loaded.pack
+                    ; index = info.PInfo.index
+                    ; delta = info.PInfo.delta
+                    ; hash_pack = info.PInfo.hash_pack
+                    ; path_delta
+                    ; fd = loaded.Loaded.fdp
+                    ; buff
+                    ; thin = loaded.Loaded.thin }
+
+    (* [of_exists] allows to pass directlry from the [exists] to the
+       [resolved] state. The function is only valid on non-thin pack
+       files. *)
+    let of_exists
+        (type mmu) (type location)
+        ~root
+        ~read_and_exclude
+        ~ztmp
+        ~window
+        fs
+        (r:(mmu, location) r)
+        exists =
+      let path = Fpath.(root / "objects" / "pack" / Fmt.strf "pack-%s.pack" (Hash.to_hex exists.Exists.hash_pack)) in
+      let stream = stream_of_path path in
+      let thin = ref false in
+      let idx hash = match IDec.find exists.Exists.index hash with
+        | Some _ as v -> v
+        | none -> thin := true; none in
+
+      PInfo.first_pass ~ztmp ~window ~idx stream >>= function
+      | Ok info ->
+        let info = PInfo.resolve ~length:(IDec.cardinal exists.Exists.index) info in
+        let `Resolved path_delta = info.PInfo.state in
+
+        let length_hunks = Normalized.length_of_path path_delta in
+        let length_objrw = Hashtbl.fold (fun _ (_, _, v) -> max v) info.PInfo.index 0 in
+        let buff = buffer r info.PInfo.hash_pack length_hunks length_objrw path_delta in
+        let idx hash = match Hashtbl.find info.PInfo.index hash with
+          | (crc, abs_off, _) -> Some (crc, abs_off)
+          | exception Not_found -> None in
+
+        let ( >>!= ) v f = v >>= function Ok _ as v -> Lwt.return v | Error err -> f err in
+
+        Loaded.pack_decoder ~read_and_exclude ~idx fs path
+        >>?= fun (fd, pack) -> FS.Mapper.close exists.Exists.fd >|= Rresult.R.reword_error Error.FS.err_sys_map
+        >>?= fun () -> Lwt.return_ok { pack
+                                     ; index = info.PInfo.index
+                                     ; delta = info.PInfo.delta
+                                     ; hash_pack = exists.Exists.hash_pack
+                                     ; path_delta
+                                     ; fd
+                                     ; buff
+                                     ; thin = !thin }
+        >>!= fun er -> FS.Mapper.close exists.Exists.fd >|= Rresult.R.reword_error Error.FS.err_sys_map
+        >>?= fun () -> Lwt.return_error er
+      | Error err -> Lwt.return (Error (`Pack_info err))
+
+    let lookup { index; _ } hash = match Hashtbl.find index hash with
+      | (crc, abs_off, _) -> Some (crc, abs_off)
+      | exception Not_found -> None
+
+    let size ~ztmp ~window { pack; _ } hash =
+      RPDec.length pack hash ztmp window >|= Rresult.R.reword_error (fun err -> `Pack_decoder err)
+
+    let read (type value) ~ztmp ~window ~(to_result:RPDec.Object.t -> (value, error) result Lwt.t) ({ pack; thin; _ } as t) hash
+      : [ `Error of error | `Promote of value | `Return of value ] Lwt.t =
+      with_buffer t.buff @@ fun { hunks; buffer; deliver; _ } ->
+      RPDec.get_from_hash ~htmp:hunks pack hash buffer ztmp window >|= Rresult.R.reword_error (fun err -> `Pack_decoder err)
+      >>?= to_result >>= fun res -> deliver () >|= fun () -> match res with
+      | Ok value ->
+        if not thin then `Promote value else `Return value
+      | Error err -> ` Error err
+  end
+
+  module Total =struct
+
+    let src = Logs.Src.create "git.pack_engine.total" ~doc:"logs git's total pack event"
+    module Log = (val Logs.src_log src: Logs.LOG)
+
+    type t =
+      { index      : (Hash.t, Crc32.t * int64 * int) Hashtbl.t
+      ; path_delta : PInfo.path
+      ; hash_pack  : Hash.t
+      ; pack       : RPDec.t
+      ; buff       : (Resolved.buffer -> unit Lwt.t) -> unit Lwt.t
+      ; fd         : FS.Mapper.fd }
+
+    let lookup { index; _ } hash = try Some (Hashtbl.find index hash) with Not_found -> None
+    let mem { index; _ } hash = Hashtbl.mem index hash
+    let fold f { index; _ } a = Hashtbl.fold (fun hash (crc, abs_off, _) a -> f hash (crc, abs_off) a) index a
+
+    let size ~ztmp ~window { pack; _ } hash =
+      RPDec.length pack hash ztmp window >|= Rresult.R.reword_error (fun err -> `Pack_decoder err)
+
+    let read (type value) ~ztmp ~window ~(to_result:RPDec.Object.t -> (value, error) result Lwt.t) ({ pack; _ } as t) hash
+      : [ `Error of error | `Return of value ] Lwt.t =
+      Log.debug (fun l ->
+          l ~header:"read" "Try to extract object %a in PACK %a."
+            Hash.pp hash Hash.pp t.hash_pack);
+
+      with_buffer t.buff @@ fun { hunks; buffer; deliver; _ } ->
+      RPDec.get_from_hash ~htmp:hunks pack hash buffer ztmp window >|= Rresult.R.reword_error (fun err -> `Pack_decoder err)
+      >>?= to_result >>= fun res -> deliver () >|= fun () -> match res with
+      | Ok value -> `Return value
+      | Error err -> ` Error err
+
+    exception Leave of Hash.t
+
+    module EPACK = struct
+      module E = struct
+        type state =
+          { get : Hash.t -> Cstruct.t option Lwt.t
+          ; pack: PEnc.t
+          ; src : Cstruct.t option }
+        type result =
+          { tree: (Crc32.t * int64) PEnc.Map.t
+          ; hash: Hash.t }
+        type error = PEnc.error
+
+        let option_get ~default = function Some a -> a | None -> default
+
+        let rec eval dst state =
+          match
+            PEnc.eval (option_get ~default:empty_cstruct state.src) dst state.pack
+          with
+          | `End (pack, hash) ->
+            Lwt.return (`End ({ state with pack; },
+                              { tree = (PEnc.idx pack)
+                              ; hash }))
+          | `Error (pack, err) -> Lwt.return (`Error ({ state with pack; }, err))
+          | `Flush pack        -> Lwt.return (`Flush { state with pack; })
+          | `Await pack ->
+            match state.src with
+            | Some _ ->
+              eval dst { state with pack = PEnc.finish pack ; src = None }
+            | None   ->
+              let hash = PEnc.expect pack in
+              state.get hash >>= function
+              | None -> Lwt.fail (Leave hash)
+              | Some raw ->
+                let state = {
+                  state with pack = PEnc.refill 0 (Cstruct.len raw) pack;
+                             src  = Some raw;
+                } in
+                eval dst state
+
+        let flush off len ({ pack; _ } as state) =
+          { state with pack = PEnc.flush off len pack }
+
+        let used { pack; _ } = PEnc.used_out pack
+      end
+      include Helper.Encoder(E)(FS)
+    end
+
+    let random_string len =
+      let gen () = match Random.int (26 + 26 + 10) with
+        | n when n < 26 -> int_of_char 'a' + n
+        | n when n < 26 + 26 -> int_of_char 'A' + n - 26
+        | n -> int_of_char '0' + n - 26 - 26
+      in
+      let gen () = char_of_int (gen ()) in
+      Bytes.create len |> fun raw ->
+      for i = 0 to len - 1 do Bytes.set raw i (gen ()) done;
+      Bytes.unsafe_to_string raw
+
+    let store_pack_file ~fs fmt entries get =
+      let ztmp = Cstruct.create 0x8000 in
+      let file = fmt (random_string 10) in
+      let state = PEnc.default ztmp entries in
+      FS.Dir.temp fs >>= fun temp ->
+      let path = Fpath.(temp / file) in
+      let rawo = Cstruct.create 0x8000 in
+      let state = { EPACK.E.get; src = None; pack = state } in
+      Lwt.catch
+        (fun () ->
+           (* XXX(dinosaure): why is not atomic? *)
+           EPACK.to_file fs ~atomic:false path rawo state >|= function
+           | Ok { EPACK.E.tree; hash; } ->
+             let index = Hashtbl.create (PEnc.Map.cardinal tree) in
+             let paths = Hashtbl.create (PEnc.Map.cardinal tree) in
+             List.iter (fun (entry, delta) ->
+                 let (crc, abs_off) = PEnc.Map.find (PEnc.Entry.id entry) tree in
+                 let path, needed = match delta.PEnc.Delta.delta with
+                   | PEnc.Delta.Z ->
+                     let length = Int64.to_int (PEnc.Entry.length entry) in
+                     PInfo.Load length, length
+                   | PEnc.Delta.S { src_length; _ } as delta ->
+                     let rec go ~src_length:length k acc = function
+                       | PEnc.Delta.S { length; src = { PEnc.Delta.delta }; hunks; src_length; _ } ->
+                         let hunks = List.fold_left (fun a -> function Rabin.Insert (_, l) -> a + l | _ -> a) 0 hunks in
+                         go ~src_length (fun src -> PInfo.Patch { hunks; target = length; src }) (max acc length) delta
+                       | PEnc.Delta.Z -> k (PInfo.Load (Int64.to_int length)), acc in
+                     go ~src_length (fun x -> x) 0 delta in
+                 Hashtbl.replace index hash (crc, abs_off, needed);
+                 Hashtbl.replace paths abs_off path) entries;
+
+             let rec merge abs_off path acc = match path, acc with
+               | PInfo.Load a, PInfo.Load b -> PInfo.Load (max a b)
+               | PInfo.Load x, PInfo.Patch { hunks; target; src; }
+               | PInfo.Patch { hunks; target; src; }, Load x -> PInfo.Patch { hunks; target = max x target; src; }
+               | PInfo.Patch { hunks = hunks_a
+                       ; target = target_a
+                       ; src = src_a },
+                 Patch { hunks = hunks_b
+                       ; target = target_b
+                       ; src = src_b } ->
+                 Patch { hunks = max hunks_a hunks_b; target = max target_a target_b; src = merge abs_off src_a src_b } in
+             let path = Hashtbl.fold merge paths (Load 0) in
+
+             Ok (Fpath.(temp / file)
+                , (index, path)
+                , hash)
+           | Error #fs_error as err -> err
+           | Error (`Encoder e) -> Error (`Pack_encoder e))
+        (function
+          | Leave hash -> Lwt.return (Error (`Invalid_hash hash))
+          | exn        -> Lwt.fail exn (* XXX(dinosaure): should never happen. *))
+
+    let filter_map f lst =
+      List.fold_left (fun a v -> match f v with
+          | Some v -> v :: a
+          | None -> a) [] lst
+      |> List.rev
+
+    let third_pass ~root ~ztmp ~window ~read_inflated fs resolved =
+      let deltas = filter_map (function PInfo.Delta { hunks_descr; _ } -> Some hunks_descr | _ -> None)
+          (Hashtbl.fold (fun _ v a -> v :: a) resolved.Resolved.delta []) in
+      let revidx = Hashtbl.create (Hashtbl.length resolved.Resolved.index) in
+      Hashtbl.iter (fun hash (_, abs_off, _)-> Hashtbl.replace revidx abs_off hash) resolved.Resolved.index;
+
+      let k2k = function
+        | `Commit -> Pack.Kind.Commit
+        | `Tree   -> Pack.Kind.Tree
+        | `Blob   -> Pack.Kind.Blob
+        | `Tag    -> Pack.Kind.Tag in
+      let make acc (hash, (_, abs_off, _)) =
+        with_buffer resolved.Resolved.buff @@ fun { hunks; buffer; deliver; _ } ->
+
+        RPDec.get_from_offset ~htmp:hunks resolved.Resolved.pack abs_off buffer ztmp window
+        >>= fun obj -> deliver () >|= fun () -> match obj with
+        | Error _ -> acc
+        | Ok obj ->
+          let delta = match obj.RPDec.Object.from with
+            | RPDec.Object.External { hash; _ } -> Some (PEnc.Entry.From hash)
+            | RPDec.Object.Internal _ -> None
+            | RPDec.Object.Delta { offset; _ } ->
+              try let hash = Hashtbl.find revidx offset in
+                Some (PEnc.Entry.From hash)
+              with Not_found -> None (* XXX(dinosaure): should not appear. *) in
+          PEnc.Entry.make hash ?delta (k2k obj.RPDec.Object.kind) (Int64.of_int (Cstruct.len obj.RPDec.Object.raw)) :: acc in
+      let external_objects acc =
+        let res = List.fold_left
+            (fun acc hunks_descr ->
+               match hunks_descr.HDec.reference with
+               | HDec.Offset _ -> acc
+               | HDec.Hash hash ->
+                 if Hashtbl.mem resolved.Resolved.index hash
+                 then acc
+                 else
+                   try ignore @@ List.find (Hash.equal hash) acc; acc
+                   with Not_found -> hash :: acc)
+            [] deltas in
+        Lwt_list.fold_left_s
+          (fun acc hash -> read_inflated hash >|= function
+             | None -> acc
+             | Some (kind, raw) -> PEnc.Entry.make hash (k2k kind) (Int64.of_int (Cstruct.len raw)) :: acc)
+          acc res in
+      let read_inflated hash =
+        if Hashtbl.mem resolved.Resolved.index hash
+        then
+          with_buffer resolved.Resolved.buff @@ fun { hunks; buffer = (_, _, length); deliver; _ } ->
+          let buffer = Cstruct.create (length * 2) in
+          let buffer = Cstruct.sub buffer 0 length, Cstruct.sub buffer length length, length in
+
+          RPDec.get_from_hash ~htmp:hunks resolved.Resolved.pack hash buffer ztmp window
+          >>= fun obj -> deliver () >|= fun () -> match obj with
+          | Error _ -> None
+          | Ok obj -> (Some obj.RPDec.Object.raw)
+        else read_inflated hash >|= function
+          | Some (_, raw) -> Some raw
+          (* XXX(dinosaure): normalement, il devrait y avoir un [cstruct_copy]
+             ici puisque [read_inflated] est externe à cette fonction - on y
+             contrôle donc pas son allocation. Cependant, plus bas (dans [read])
+             cette fonction est le [read_and_exclude] qui alloue bien les
+             [Cstruct.t]. Donc dans ce cas, ce serait une allocation d'une
+             allocation - ce qui est pas le plus top.
+
+             Bref, attention si on change ce code. *)
+          | None -> None in
+
+      Hashtbl.fold (fun hash value acc -> (hash, value) :: acc) resolved.Resolved.index []
+      |> Lwt_list.fold_left_s make []
+      >>= external_objects
+      >>= fun entries -> PEnc.Delta.deltas ~memory:false entries read_inflated (fun _ -> false) 10 50
+      >>= function
+      | Error err -> Lwt.return_error (`Delta err)
+      | Ok entries ->
+        store_pack_file ~fs (Fmt.strf "pack-%s.pack") entries read_inflated
+        >>= function
+        | Error _ as err -> Lwt.return err
+        | Ok (path, (index, delta_path), hash_pack) ->
+          let sequence f = Hashtbl.iter (fun hash (crc, abs_off, _) -> f (hash, (crc, abs_off))) index in
+          Resolved.store_idx_file ~root fs sequence hash_pack >>= function
+          | Error _ as err -> Lwt.return err
+          | Ok () ->
+            let file = Fmt.strf "pack-%s.pack" (Hash.to_hex hash_pack) in
+            let dst  = Fpath.(root / "objects" / "pack" / file) in
+            FS.File.move fs path dst >|= Rresult.R.reword_error (Error.FS.err_move path dst)
+            >>?= fun () -> FS.Mapper.close resolved.Resolved.fd >|= Rresult.R.reword_error Error.FS.err_sys_map
+            (* XXX(dinosaure): the temporary pack file from the
+               [resolved] state is closed here. *)
+            >>?= fun () -> Lwt.return_ok (path, hash_pack, index, delta_path)
+
+    let of_resolved
+      (type mmu) (type location)
+      ~root
+      ~ztmp
+      ~window
+      ~read_inflated
+      fs
+      (r:(mmu, location) r)
+      resolved =
+      if resolved.Resolved.thin
+      then third_pass ~root ~ztmp ~window ~read_inflated fs resolved >>= function
+        | Error _ -> assert false
+        | Ok (path, hash_pack, index, path_delta) ->
+
+          let idx hash = match Hashtbl.find index hash with
+            | (crc, abs_off, _) -> Some (crc, abs_off)
+            | exception Not_found -> None in
+          Loaded.pack_decoder ~read_and_exclude:(fun _ -> Lwt.return_none) ~idx fs path
+          >>?= fun (fd, pack) ->
+
+            let length_hunks = Normalized.length_of_path path_delta in
+            let length_buffer = Hashtbl.fold (fun _ (_, _, v) -> max v) index 0 in
+            let buff = Resolved.buffer r hash_pack length_hunks length_buffer path_delta in
+
+            Lwt.return_ok { index; path_delta; hash_pack; pack; buff; fd; }
+      else
+        let extern _ = Lwt.return_none in
+
+        Lwt.return_ok { pack       = RPDec.update_extern extern resolved.Resolved.pack
+                      ; index      = resolved.Resolved.index
+                      ; hash_pack  = resolved.Resolved.hash_pack
+                      ; path_delta = resolved.Resolved.path_delta
+                      ; fd         = resolved.Resolved.fd
+                      ; buff       = resolved.Resolved.buff }
+  end
+
+  type state =
+    | Exists     of Exists.t
+    | Loaded     of Loaded.t
+    | Resolved   of Resolved.t
+    | Total      of Total.t
+
+  type t = { packs : (Hash.t, state) Hashtbl.t }
 
   let pp_error ppf = function
     | `Pack_decoder err       -> RPDec.pp_error ppf err
@@ -308,322 +1285,24 @@ module Make
     | `Pack_info err          -> PInfo.pp_error ppf err
     | `Idx_decoder err        -> IDec.pp_error ppf err
     | `Idx_encoder err        -> IEnc.pp_error ppf err
+    | #inf_error as err       -> Error.Inf.pp_error Inflate.pp_error ppf err
     | #fs_error as err        -> Error.FS.pp_error FS.pp_error ppf err
+    | #Error.Decoder.t as err -> Error.Decoder.pp_error ppf err
     | #Error.not_found as err -> Error.pp_not_found ppf err
+    | `Delta err              -> PEnc.Delta.pp_error ppf err
     | `Invalid_hash hash ->
       Fmt.pf ppf "Unable to load %a, it does not exists in the store"
         Hash.pp hash
-    | `Integrity err ->
-      Fmt.string ppf err
 
-  (* XXX(dinosaure): to make a _unloaded_ pack object. *)
-  let load_index fs path =
-    let close fd sys_err =
-      FS.Mapper.close fd >>= function
-      | Ok ()          -> Lwt.return sys_err
-      | Error sys_err' ->
-        Log.err (fun l ->
-            l "Error while closing the index fd: %a: %a."
-              Fpath.pp path FS.Mapper.pp_error sys_err');
-        Lwt.return sys_err
-    in
-    let open Lwt_result in
-    (* FIXME: this code is horrible *)
-    ((FS.Mapper.openfile fs path
-      >!= Error.FS.err_open path
-      >>= fun fd -> FS.Mapper.length fd
-      >>!= close fd
-           >!= Error.FS.err_length path
-      >|= fun length -> (fd, length))
-     >>= fun (fd, length) -> (
-       FS.Mapper.map fd (Int64.to_int length)
-       >>!= close fd
-       >!= Error.FS.err_map path
-       >|= fun map -> (fd, map)
-     ) >>= fun (fd, map) -> (
-       Lwt.return (IDec.make map)
-       >>!= close fd
-       >>!= (fun sys_err -> Lwt.return (`Idx_decoder sys_err))
-     ) >>= fun decoder_idx -> (
-       let hash_idx =
-         let basename = Fpath.basename (Fpath.rem_ext path) in
-         Scanf.sscanf basename "pack-%s" (fun x -> Hash.of_hex x)
-         (* XXX(dinosaure): check if [sscanf] raises an exception. *)
-       in
-       Log.debug (fun l -> l "IDX file %a is loaded." Hash.pp hash_idx);
-       Lwt.return (Ok (hash_idx, decoder_idx, fd)))
-    ) >>!= (fun err -> Lwt.return (path, err))
-
-  let v fs lst =
-    Lwt_list.map_p (load_index fs) lst >>= fun lst ->
-    Lwt_list.fold_left_s (fun acc -> function
-        | Ok (hash, idx, fdi) ->
-          Lwt.return (Graph.add hash (Exists { idx; fdi; }) acc)
-        | Error (path, err) ->
-          Log.err (fun l ->
-              l "Error while computing the IDX file %a: %a."
-                Fpath.pp path pp_error err);
-          Lwt.return acc
-      ) Graph.empty lst
-    >|= fun graph ->
-    let packs = Lwt_mvar.create graph in
-    let buffers =
-      let empty = Cstruct.create 0 in
-      Lwt_mvar.create { objects = empty, empty, 0
-                      ; hunks = empty
-                      ; depth = 1 }
-    in
-    { fs; packs; buffers; }
-
-  (* XXX(dinosaure): this function update the internal buffers of [t]
-     from a /fresh/ information of a pack file. It's thread-safe. *)
-  let merge t info =
-    Lwt_mvar.take t.buffers >>= fun buffers ->
-    let (raw0, raw1, len) = buffers.objects in
-    let (raw0', raw1', len') =
-      if len < info.PInfo.max_length_object
-      then
-        let plus0, plus1 =
-          Cstruct.create (info.PInfo.max_length_object - len),
-          Cstruct.create (info.PInfo.max_length_object - len) in
-        (Cstruct.concat [ raw0; plus0 ],
-         Cstruct.concat [ raw1; plus1 ],
-         info.PInfo.max_length_object)
-      else
-        (raw0, raw1, len)
-    in
-    let hunks_length = Cstruct.len buffers.hunks / buffers.depth in
-    let depth = info.PInfo.max_depth + 1 in
-    let hunks', depth' =
-      match buffers.depth < depth,
-            hunks_length < info.PInfo.max_length_insert_hunks
-      with
-      | false, true ->
-        Log.debug (fun l -> l ~header:"merge" "The hunks buffer needs to grow from %d to %d."
-                      hunks_length info.PInfo.max_length_insert_hunks);
-        let plus = Cstruct.create (buffers.depth * (info.PInfo.max_length_insert_hunks - hunks_length)) in
-        Cstruct.concat [ buffers.hunks; plus ], buffers.depth
-      | true, false ->
-        Log.debug (fun l -> l ~header:"merge" "The depth needs to be updated from %d to %d."
-                      buffers.depth depth);
-        let plus = Cstruct.create ((depth - buffers.depth) * hunks_length) in
-        Cstruct.concat [ buffers.hunks; plus ], depth
-      | true, true ->
-        Log.debug (fun l -> l ~header:"merge" "The depth and the hunks buffer need to be updated, \
-                                               %d to %d for the depth and %d to %d for the hunks buffer."
-                      buffers.depth depth
-                      hunks_length info.PInfo.max_length_insert_hunks);
-        let plus =
-          Cstruct.create
-            ((buffers.depth * (info.PInfo.max_length_insert_hunks - hunks_length))
-             + ((depth - buffers.depth) * info.PInfo.max_length_insert_hunks))
-        in
-        Cstruct.concat [ buffers.hunks; plus ], depth
-      | false, false ->
-        buffers.hunks, buffers.depth
-    in
-
-    Lwt_mvar.put t.buffers { objects = (raw0', raw1', len')
-                           ; hunks = hunks'
-                           ; depth = depth' }
-
-  module EIDX = struct
-    module E = struct
-      type state  = IEnc.t
-      type result = unit
-      type error  = IEnc.error
-      type end' = [ `End of state ]
-      type rest = [ `Flush of state | `Error of state * error ]
-      let flush = IEnc.flush
-      let used = IEnc.used_out
-      let eval raw state = match IEnc.eval raw state with
-        | #end' as v   -> let `End state = v in Lwt.return (`End (state, ()))
-        | #rest as res -> Lwt.return res
-    end
-    include Helper.Encoder(E)(FS)
-  end
-
-  let save_idx_file ~fs ~root sequence hash_pack =
-    let file = Fmt.strf "pack-%s.idx" (Hash.to_hex hash_pack) in
-    let encoder_idx = IEnc.default sequence hash_pack in
-    let raw = Cstruct.create 0x8000 in
-    let path = Fpath.(root / "objects" / "pack" / file) in
-    EIDX.to_file fs path raw encoder_idx >|= function
-    | Ok ()                  -> Ok ()
-    | Error (`Encoder err)   -> Error (`Idx_encoder err)
-    | Error #fs_error as err -> err
-
-  exception Leave of Hash.t
-
-  let random_string len =
-    let gen () = match Random.int (26 + 26 + 10) with
-      | n when n < 26 -> int_of_char 'a' + n
-      | n when n < 26 + 26 -> int_of_char 'A' + n - 26
-      | n -> int_of_char '0' + n - 26 - 26
-    in
-    let gen () = char_of_int (gen ()) in
-    Bytes.create len |> fun raw ->
-    for i = 0 to len - 1 do Bytes.set raw i (gen ()) done;
-    Bytes.unsafe_to_string raw
-
-  module EPACK = struct
-    module E = struct
-
-      type state = {
-        get : Graph.key -> Cstruct.t option Lwt.t;
-        pack: PEnc.t;
-        src : Cstruct.t option;
-      }
-
-      type result = {
-        tree: (Crc32.t * int64) PEnc.Map.t;
-        hash: Hash.t
-      }
-
-      type error = PEnc.error
-      let empty = Cstruct.create 0
-      let option_get ~default = function Some a -> a | None -> default
-
-      let rec eval dst state =
-        match
-          PEnc.eval (option_get ~default:empty state.src) dst state.pack
-        with
-        | `End (pack, hash) ->
-          Lwt.return (`End ({ state with pack; },
-                            { tree = (PEnc.idx pack)
-                            ; hash }))
-        | `Error (pack, err) -> Lwt.return (`Error ({ state with pack; }, err))
-        | `Flush pack        -> Lwt.return (`Flush { state with pack; })
-        | `Await pack ->
-          match state.src with
-          | Some _ ->
-            eval dst { state with pack = PEnc.finish pack ; src = None }
-          | None   ->
-            let hash = PEnc.expect pack in
-            state.get hash >>= function
-            | None -> Lwt.fail (Leave hash)
-            | Some raw ->
-              let state = {
-                state with pack = PEnc.refill 0 (Cstruct.len raw) pack;
-                           src  = Some raw;
-              } in
-              eval dst state
-
-      let flush off len ({ pack; _ } as state) =
-        { state with pack = PEnc.flush off len pack }
-
-      let used { pack; _ } = PEnc.used_out pack
-
-    end
-    include Helper.Encoder(E)(FS)
-  end
-
-  let save_pack_file ~fs fmt entries get =
-    let ztmp = Cstruct.create 0x8000 in
-    let filename_pack = fmt (random_string 10) in
-    let state = PEnc.default ztmp entries in
-    FS.Dir.temp fs >>= fun temp ->
-    let path = Fpath.(temp / filename_pack) in
-    let raw = Cstruct.create 0x8000 in
-    let state = { EPACK.E.get; src = None; pack = state } in
-    Lwt.catch (fun () ->
-        EPACK.to_file fs ~atomic:false path raw state >|= function
-        | Ok { EPACK.E.tree; hash; } ->
-          Ok (Fpath.(temp / filename_pack)
-             , (fun f -> PEnc.Map.iter (fun k v -> f (k, v)) tree)
-             , hash)
-        | Error #fs_error as err -> err
-        | Error (`Encoder e) -> Error (`Pack_encoder e)
-      ) (function
-        | Leave hash -> Lwt.return (Error (`Invalid_hash hash))
-        | exn        -> Lwt.fail exn (* XXX(dinosaure): should never happen. *)
-      )
-
-  let add_exists ~root t hash =
-    let filename_idx = Fmt.strf "pack-%s.idx" (Hash.to_hex hash) in
-    let path_idx = Fpath.(root / "objects" / "pack" / filename_idx) in
-    load_index t.fs path_idx >>= function
-    | Error (_, err)          -> Lwt.return (Error err)
-    | Ok (hash_idx, idx, fdi) ->
-      let pack = Exists { idx; fdi; } in
-      Lwt_mvar.take t.packs
-      >>= fun packs -> Lwt_mvar.put t.packs (Graph.add hash_idx pack packs)
-      >|= fun () -> Ok ()
-
-  let add_total ~root t path info =
-    let `Full { PInfo.Full.hash = hash_pack; PInfo.Full.thin; } =
-      info.PInfo.state
-    in
-    if thin then invalid_arg "Impossible to store a thin pack.";
-    let filename_pack = Fmt.strf "pack-%s.pack" (Hash.to_hex hash_pack) in
-    let filename_idx = Fmt.strf "pack-%s.idx" (Hash.to_hex hash_pack) in
-    FS.File.move t.fs path Fpath.(root / "objects" / "pack" / filename_pack)
-    >>= function
-    | Error err ->
-      Lwt.return Error.(v @@ FS.err_move path Fpath.(root / "objects" / "pack" / filename_pack) err)
-    | Ok ()     ->
-      let path_idx = Fpath.(root / "objects" / "pack" / filename_idx) in
-      let sequence = (fun f -> PInfo.Map.iter (fun k v -> f (k, v)) info.PInfo.tree) in
-      let encoder_idx = IEnc.default sequence hash_pack in
-      (* XXX(dinosaure): we save an IDX file for a future computation
-         of git/ocaml-git of this PACK file even if we don't use it -
-         we use the complete radix tree. *)
-      let raw = Cstruct.create 0x8000 in
-      EIDX.to_file t.fs path_idx raw encoder_idx >>= function
-      | Error #fs_error as err -> Lwt.return err
-      | Error (`Encoder e) -> Lwt.return (Error (`Idx_encoder e))
-      | Ok ()              ->
-        let path_pack = Fpath.(root / "objects" / "pack" / filename_pack) in
-        (FS.Mapper.openfile t.fs path_pack
-         >>!= fun sys_err -> Lwt.return (Error.FS.err_open path_pack sys_err))
-        >>?= fun fdp ->
-        let fun_cache _ = None in
-        let fun_idx hash =
-          try Some (PInfo.Map.find hash info.PInfo.tree)
-          with Not_found -> None in
-        let fun_revidx hash =
-          try let (_, ret) = PInfo.Graph.find hash info.PInfo.graph in ret
-          with Not_found -> None
-        in
-        let fun_last _ = Lwt.return None in
-        (* XXX(dinosaure): the pack file is not thin. So it does
-           not request any external ressource. *)
-        (RPDec.make fdp
-           fun_cache
-           fun_idx
-           fun_revidx
-           fun_last
-         >>!= fun err -> Lwt.return (Error.FS.err_open path_pack err))
-        >>?= fun decoder ->
-        let pack = Total { decoder; fdp; info; } in
-        Lwt_mvar.take t.packs
-        >>= fun packs -> Lwt_mvar.put t.packs (Graph.add hash_pack pack packs)
-        >>= fun () -> merge t info
-        >|= fun () ->
-        let count = PInfo.Graph.cardinal info.PInfo.graph in
-        Ok (hash_pack, count)
-
-  (* XXX(dinosaure): this function could not be exposed. It used in
-     a specific context, when a pack decoder requests an external
-     object. This case appear only when the pack file is a
-     /thin/-pack. So, we need to allocate some buffers to avoid a
-     memory-explosion (if the object is delta-ified) and return a
-     /fresh/ raw of the requested object. *)
-  let strong_weight_read decoder info hash request =
-    let (raw0, raw1, len) =
-      Cstruct.create info.PInfo.max_length_object,
-      Cstruct.create info.PInfo.max_length_object,
-      info.PInfo.max_length_object
-    in
-    let htmp = Cstruct.create ((info.PInfo.max_depth + 1) * info.PInfo.max_length_insert_hunks) in
-    let htmp = Array.init (info.PInfo.max_depth + 1)
-        (fun i -> Cstruct.sub htmp (i * info.PInfo.max_length_insert_hunks)
-            info.PInfo.max_length_insert_hunks)
-    in
-
+  (* XXX(dinosaure): this function could not be exposed. It used in a specific
+     context, when a pack decoder requests an external object. This case appear
+     only when the pack file is a /thin/-pack. So, we need to allocate some
+     buffers to avoid a memory-explosion (if the object is delta-ified) and
+     return a /fresh/ raw of the requested object. *)
+  let strong_weight_read decoder hash request =
     let ztmp = Cstruct.create 0x8000 in
     let window = Inflate.window () in
-    (RPDec.get_from_hash ~htmp decoder request (raw0, raw1, len) ztmp window >>= function
+    (RPDec.get_with_result_allocation_from_hash decoder request ztmp window >>= function
       | Ok obj -> Lwt.return (Some (obj.RPDec.Object.kind, obj.RPDec.Object.raw))
       | Error err ->
         Log.err (fun l -> l ~header:"read_and_exclude" "Error when we try to get the object %a from the pack %a: %a."
@@ -631,366 +1310,224 @@ module Make
                     RPDec.pp_error err);
         Lwt.return None)
 
-  (* XXX(dinosaure): [read_and_exclude] is called when a pack decoder
-     wants to reconstruct an internal object and the source is
-     external - by this way, we can consider the pack file as a /thin/
-     pack.
+  exception Catch of (RPDec.kind * Cstruct.t)
 
-     So this is the biggest function which could allocate a lot.
-     Obviously, in a real world, this function could not happen (Git
-     takes care about pack file and stores only /non-thin/ pack
-     files).
+  (* XXX(dinosaure): [read_and_exclude] is called when a pack decoder wants to
+     reconstruct an internal object and the source is external - by this way, we
+     can consider the pack file as a /thin/ pack.
 
-     However, from a [ `Partial ] information, we can not ensure than
-     the pack file is not a /thin/-pack. So this function exists for
-     the pack decoder when we want to retrieve an external object.
+     So this is the biggest function which could allocate a lot. Obviously, in a
+     real world, this function could not happen (Git takes care about pack file
+     and stores only /non-thin/ pack files).
 
-     Then, we exclude the pack itself to avoid a infinite recursion
-     when the length of the redirection is 1. If it's upper, firstly,
-     what?  then, you could have a infinite loop. About this bug, we
-     could change the API of the pack decoder and allow to inform a
-     /close/ list to the function. *)
-  let rec read_and_exclude ~root t exclude request =
-    Lwt_mvar.take t.packs >>= fun packs ->
-    Lwt_mvar.put t.packs packs >>= fun () ->
-    Lwt_list.fold_left_s (function
-        | Some _ as x -> fun _ -> Lwt.return x
-        | None ->
-          fun (hash, pack) -> match pack with
-            | Exists { idx; fdi; } when IDec.mem idx request ->
-              (load_partial ~root t hash idx fdi >>= function
-                | Ok loaded -> strong_weight_read loaded.decoder loaded.info request hash
-                | Error _ -> Lwt.return None)
-            | Loaded { idx; decoder; info; _ } when IDec.mem idx request ->
-              strong_weight_read decoder info request hash
-            | Total { decoder; info; _ } when PInfo.Map.mem request info.PInfo.tree ->
-              strong_weight_read decoder info request hash
-            | _ -> Lwt.return None)
-      None
-      (Graph.fold (fun key value acc ->
-           if Hash.equal key exclude
-           then acc
-           else (key, value) :: acc)
-          packs [])
+     However, from a [resolved]/[normalized]/[loaded]/[exists] information, we
+     can not ensure than the pack file is not a /thin/-pack. So this function
+     exists for the pack decoder when we want to retrieve an external object.
+
+     Then, we exclude the pack itself to avoid a infinite recursion when the
+     length of the redirection is 1. If it's upper, firstly, what? then, you
+     could have a infinite loop. About this bug, we could change the API of the
+     pack decoder and allow to inform a /close/ list to the function.
+
+     NOTE: [exclude] is added for each call (we put the current hash of the PACK
+     file), it's like a close list of already visited PACK files. This is to
+     avoid an infinite recursion. It's common to have 2 times (or more) the same
+     objet on multiple PACK file.
+
+     So, a /thin/ PACK file A can expect an external object O which appear on a
+     PACK file B which need an object M which could be appear inner A (and need
+     O to be reconstructed). In other words, O needs itself to be reconstructed.
+     This situation appear only if we did not exclude PACK file which we already
+     try to get the O object.
+
+     As I said, the object O can be appear 2 times (or more) in multiple PACK
+     file. That means, object O can appear in an other PACK file. The goal is to
+     get O from a different PACK file than A (may be a PACK file C) and this the
+     purpose of [exclude]. My brain is fuck up. *)
+  let rec read_and_exclude ~root ~read_loose fs t exclude request =
+    Lwt.catch
+      (fun () -> Lwt_list.fold_left_s (fun acc (hash, pack) -> match acc with
+           | Some _ -> assert false
+           | None -> match pack with
+             | Exists exists ->
+               if Exists.mem exists request
+               then
+                 Loaded.of_exists ~root ~read_and_exclude:(read_and_exclude ~root ~read_loose fs t [ hash ]) fs exists >>= function
+                 | Error err ->
+                   Log.err (fun l -> l "Retrieve an error when we promote PACK %a to loaded state: %a."
+                               Hash.pp exists.Exists.hash_pack pp_error err);
+                   Lwt.return_none
+                 | Ok loaded ->
+                   Hashtbl.replace t.packs hash (Loaded loaded);
+                   let exclude = hash :: exclude in
+                   let read_and_exclude = read_and_exclude ~root ~read_loose fs t exclude in
+                   strong_weight_read (RPDec.update_extern read_and_exclude loaded.Loaded.pack) hash request >>= function
+                   | Some value -> Lwt.fail (Catch value)
+                   | None -> Lwt.return_none
+               else Lwt.return_none
+             | Loaded loaded ->
+               if Loaded.mem loaded request
+               then
+                 let exclude = hash :: exclude in
+                 let read_and_exclude = read_and_exclude ~root ~read_loose fs t exclude in
+                 strong_weight_read (RPDec.update_extern read_and_exclude loaded.Loaded.pack) hash request >>= function
+                 | Some value -> Lwt.fail (Catch value)
+                 | None -> Lwt.return_none
+               else Lwt.return_none
+             | Resolved resolved ->
+               if Resolved.mem resolved request
+               then
+                 let exclude = hash :: exclude in
+                 let read_and_exclude = read_and_exclude ~root ~read_loose fs t exclude in
+                 strong_weight_read (RPDec.update_extern read_and_exclude resolved.Resolved.pack) hash request >>= function
+                 | Some value -> Lwt.fail (Catch value)
+                 | None -> Lwt.return_none
+               else Lwt.return_none
+             | Total total ->
+               if Total.mem total request
+               then
+                 let exclude = hash :: exclude in
+                 let read_and_exclude = read_and_exclude ~root ~read_loose fs t exclude in
+                 strong_weight_read (RPDec.update_extern read_and_exclude total.Total.pack) hash request >>= function
+                 | Some value -> Lwt.fail (Catch value)
+                 | None -> Lwt.return_none
+               else Lwt.return_none)
+           None
+           (Hashtbl.fold (fun hash pack acc ->
+                if List.exists (Hash.equal hash) exclude
+                then acc
+                else (hash, pack) :: acc) t.packs []))
+      (function
+        | Catch (kind, raw) -> Lwt.return_some (kind, raw)
+        | exn -> Lwt.fail exn)
     >>= function
-    | Some _ as v -> Lwt.return v
-    | None ->
-      (* XXX(dinosaure): ok, the last chance to retrieve the
-         requested object. We lookup in the loose object. *)
-      assert false
+    | None -> read_loose request
+    | Some x -> Lwt.return_some x
 
-  (* XXX(dinosaure): this function loads _partially_ a pack file.
-     That means we calculate some useful informations from a _not
-     loaded_ pack representation (which has only the index decoder)
-     and make a new /fresh/ pack decoder.
+  let v fs indexes =
+    Lwt_list.map_p (Exists.v fs) indexes >|= fun exists ->
+    let packs = Hashtbl.create 32 in
+    List.iter (function Ok ({ Exists.hash_pack; _ } as exists) -> Hashtbl.replace packs hash_pack (Exists exists)
+                      | Error err ->
+                        Log.err (fun l -> l "Retrieve an error when we load IDX file: %a." pp_error err))
+      exists;
+    { packs }
 
-     It consists to read one time entirely the pack file, calculate
-     some informations and store it to use it after - like how much
-     we need to decode a git object from this specific pack file.
+  let add ~root ~read_loose ~ztmp ~window fs r t path_tmp info =
+    let read_and_exclude = read_and_exclude ~root ~read_loose fs t [ info.PInfo.hash_pack ] in
+    let read_inflated = read_and_exclude in
 
-     This computation can not know how much we need if any
-     delta-ified objects of this specific pack file need an external
-     git object - at this point, we can consider this pack file as a
-     /thin/-pack.
-
-     If we catch any error for any computation, we delete this pack
-     file as an available pack file - we lost it forever! *)
-  and load_partial ~root t hash decoder_idx fdi =
-    let filename_pack = Fmt.strf "pack-%s.pack" (Hash.to_hex hash) in
-    let path = Fpath.(root / "objects" / "pack" / filename_pack) in
-    let ztmp = Cstruct.create 0x8000 in
-    let window = Inflate.window () in
-    let close_all fdi fdp sys_err =
-      (* XXX(dinosaure): delete from the git repository. *)
-      Lwt_mvar.take t.packs >>= fun packs ->
-      Lwt_mvar.put t.packs (Graph.remove hash packs) >>= fun () ->
-      (FS.Mapper.close fdi
-       >>!= fun sys_err' ->
-       Log.err (fun l -> l ~header:"log" "Impossible to close the index fd: %a"
-                   FS.Mapper.pp_error sys_err');
-       Lwt.return ())
-      >>= fun _ ->
-      (FS.Mapper.close fdp
-       >>!= fun sys_err' ->
-       Log.err (fun l -> l ~header:"log" "Impossible to close the pack fd: %a"
-                   FS.Mapper.pp_error sys_err');
-       Lwt.return ())
-      >>= fun _ -> Lwt.return sys_err
-    in
-    (FS.Mapper.openfile t.fs path
-     >>!= (fun sys_err ->
-         (* XXX(dinosaure): delete from the git repository. *)
-         Lwt_mvar.take t.packs >>= fun packs ->
-         Lwt_mvar.put t.packs (Graph.remove hash packs) >>= fun () ->
-         FS.Mapper.close fdi >|= function
-         | Ok () -> sys_err
-         | Error sys_err' ->
-           Log.err (fun l ->
-               l "Got an error while trying to close the index file-descriptor, ignoring: %a."
-                 FS.Mapper.pp_error sys_err');
-           sys_err)
-          >!= Error.FS.err_open path)
-    >>?= fun fdp ->
-    (let fun_cache  = fun _ -> None in
-     let fun_idx    = fun hash -> IDec.find decoder_idx hash in
-     let fun_revidx = fun _ -> None in
-     let fun_last   = fun hash' -> read_and_exclude ~root t hash hash' in
-
-     RPDec.make fdp fun_cache fun_idx fun_revidx fun_last
-     >!= Error.FS.err_length path (* XXX(dinosaure): we know [RPDec.make] try to compute length of the PACK file. *)
-     >>!= close_all fdi fdp)
-    >>?= fun decoder_pack ->
-    (FS.File.open_r t.fs path
-     >!= Error.FS.err_open path
-     >>!= close_all fdi fdp)
-    >>?= fun fd ->
-    (let raw = Cstruct.create 0x8000 in
-     let stream () =
-       FS.File.read raw fd >|= function
-       | Ok 0          -> None
-       | Ok len        -> Some (Cstruct.sub raw 0 len)
-       | Error sys_err ->
-         Log.err (fun l ->
-             l "Retrieve an error when we read the PACK file %s: %a."
-               filename_pack FS.pp_error sys_err);
-         None
-     in
-     let info = PInfo.v hash in
-     PInfo.from_stream ~ztmp ~window info stream
-     >>!= (fun err -> Lwt.return (`Pack_info err))
-     >>!= close_all fdi fdp
-     >>!= (fun sys_err ->
-         FS.File.close fd >|= function
-         | Ok ()          -> sys_err
-         | Error sys_err' ->
-           Log.err (fun l ->
-               l "Impossible to close the fd of the PACK file (to analyze it): \
-                  %a." FS.pp_error sys_err');
-           sys_err))
-    >>?= fun info ->
-    let pack =
-      { decoder = decoder_pack
-      ; fdp
-      ; fdi
-      ; info
-      ; idx = decoder_idx }
-    in
-
-    Lwt.return (Ok pack)
-
-  let force_total t loaded =
-    let `Partial { PInfo.Partial.hash = hash_pack; delta } =
-      loaded.info.PInfo.state
-    in
-    let hash_of_object obj =
-      let ctx = Hash.Digest.init () in
-      let hdr = Fmt.strf "%s %Ld\000%!"
-          (match obj.RPDec.Object.kind with
-           | `Commit -> "commit"
-           | `Tree -> "tree"
-           | `Tag -> "tag"
-           | `Blob -> "blob")
-          obj.RPDec.Object.length
-      in
-      Hash.Digest.feed ctx (Cstruct.of_string hdr);
-      Hash.Digest.feed ctx obj.RPDec.Object.raw;
-      Hash.Digest.get ctx
-    in
-    let crc32 obj = match obj.RPDec.Object.from with
-      | RPDec.Object.Offset { crc; _ } -> crc
-      | RPDec.Object.External _ -> raise (Invalid_argument "Try to get the CRC-32 from an external ressource")
-      | RPDec.Object.Direct { crc; _ } -> crc
-    in
-    let ztmp = Cstruct.create 0x8000 in
-    let window = Inflate.window () in
-    Lwt_mvar.take t.buffers >>= fun buffers ->
-    Lwt_list.map_s
-      (fun (offset, hunks_descr) ->
-         let length = Cstruct.len buffers.hunks / buffers.depth in
-         RPDec.get_from_offset ~htmp:
-           (Array.init buffers.depth
-              (fun i -> Cstruct.sub buffers.hunks (i * length) length))
-           loaded.decoder offset buffers.objects ztmp window >>= function
-         | Ok obj ->
-           let hash = hash_of_object obj in
-           let crc32 = crc32 obj in
-           Lwt.return (Ok (hunks_descr, hash, (crc32, offset)))
-         | Error err ->
-           Log.err (fun l ->
-               l "Retrieve an error when we try to reconstruct \
-                  the object at the offset %Lx from the PACK file %a: %a."
-                 offset Hash.pp hash_pack RPDec.pp_error err);
-           Lwt.return (Error ()))
-      delta
-    >>= fun lst -> Lwt_mvar.put t.buffers buffers >>= fun () -> Lwt.return lst
-    >>= Lwt_list.fold_left_s (fun ((tree, graph) as acc) -> function
-        | Ok (hunks_descr, hash, ((_, offset) as value)) ->
-          let tree = PInfo.Map.add hash value tree in
-          let graph =
-            let open PInfo in
-            let depth_source, _ = match hunks_descr.HDec.reference with
-              | HDec.Offset rel_off ->
-                (try Graph.find Int64.(sub offset rel_off) graph
-                 with Not_found -> 0, None)
-              | HDec.Hash hash_source ->
-                try let _, abs_off = Map.find hash_source tree in
-                    Graph.find abs_off graph
-                with Not_found -> 0, None
-            in
-            Graph.add offset (depth_source + 1, Some hash) graph
-          in
-          Lwt.return (tree, graph)
-        | Error _ -> Lwt.return acc
-      ) (loaded.info.PInfo.tree, loaded.info.PInfo.graph)
-    >>= fun (tree', graph') ->
-    let is_total =
-      PInfo.Graph.for_all
-        (fun _ -> function (_, Some _) -> true | (_, None) -> false) graph'
-    in
-    if is_total then
-      (* XXX(samoht): for_all_p is uselesse here *)
-      Lwt_list.for_all_p (fun (_, hunks_descr) ->
-          let open PInfo in
-          match hunks_descr.HDec.reference with
-          | HDec.Offset _  -> Lwt.return true
-          | HDec.Hash hash -> Lwt.return (Map.mem hash tree'))
-        delta
-      >|= fun is_not_thin ->
-      Ok (loaded.decoder,
-          loaded.fdp,
-          { loaded.info with PInfo.tree = tree'
-                           ; graph = graph'
-                           ; state = `Full { PInfo.Full.hash = hash_pack
-                                           ; thin = not is_not_thin } })
-    else
-      Fmt.kstrf (fun x -> Lwt.return (Error (`Integrity x)))
-        "Impossible to get all informations from the pack file: %a."
-        Hash.pp hash_pack
+    Normalized.of_info ~read_and_exclude fs path_tmp info
+    >>?= Resolved.of_normalized ~root ~read_and_exclude ~ztmp ~window fs r
+    >>?= Total.of_resolved ~root ~ztmp ~window ~read_inflated fs r
+    >>= function
+    | Ok total ->
+      Hashtbl.replace t.packs total.Total.hash_pack (Total total);
+      Lwt.return_ok (total.Total.hash_pack, Hashtbl.length total.Total.index)
+    | Error _ as err -> Lwt.return err
 
   exception Found of (Hash.t * (Crc32.t * int64))
 
   let lookup t hash =
-    Lwt_mvar.take t.packs >>= fun packs ->
-    Lwt_mvar.put t.packs packs >|= fun () ->
-    try Graph.iter (fun hash_pack -> function
-        | Loaded { idx; _ }
-        | Exists { idx; _ } ->
-          (match IDec.find idx hash with
-           | Some (crc32, offset) -> raise (Found (hash_pack, (crc32, offset)))
-           | None -> ())
-        | Total { info; _ } ->
-          (try let crc32, offset = PInfo.Map.find hash info.PInfo.tree in
-               raise (Found (hash_pack, (crc32, offset)))
-           with Not_found -> ()))
-        packs;
-      None
-    with Found (hash_pack, offset) ->
-      Some (hash_pack, offset)
+    let jump0 hash = function
+      | Some (crc, abs_off) -> raise (Found (hash, (crc, abs_off)))
+      | None -> () in
+    let jump1 hash = function
+      | Some (crc, abs_off, _) -> raise (Found (hash, (crc, abs_off)))
+      | None -> () in
+    try
+      Hashtbl.iter
+        (fun hash_pack -> function
+           | Exists exists -> Exists.lookup exists hash |> jump0 hash_pack
+           | Loaded loaded -> Loaded.lookup loaded hash |> jump0 hash_pack
+           | Resolved resolved -> Resolved.lookup resolved hash |> jump0 hash_pack
+           | Total total -> Total.lookup total hash |> jump1 hash_pack)
+        t.packs; None
+    with Found v -> Some v
 
   let mem t hash =
-    lookup t hash >|= function
+    lookup t hash |> function
     | Some _ -> true
     | None   -> false
 
-  let list t =
-    Lwt_mvar.take t.packs >>= fun packs ->
-    Lwt_mvar.put t.packs packs >|= fun () ->
-    Graph.fold (fun _ -> function
-        | Loaded { idx; _ } ->
-          IDec.fold idx (fun hash _ acc -> hash :: acc)
-        | Exists { idx; _ } ->
-          IDec.fold idx (fun hash _ acc -> hash :: acc)
-        | Total { info; _ } ->
-          fun acc ->
-            PInfo.Map.fold (fun hash _ acc ->
-                hash :: acc
-              ) info.PInfo.tree acc
-      ) packs []
+  let read ~root ~read_loose ~to_result ~ztmp ~window fs r t hash =
+    let read_and_exclude hash_pack = read_and_exclude ~root ~read_loose fs t [ hash_pack ] in
+    let read_inflated hash_pack = read_and_exclude hash_pack in
 
-  let read ~root ~ztmp ~window t hash =
-    lookup t hash >>= function
-    | None -> Lwt.return Error.(v err_not_found)
-    | Some (pack_hash, _) ->
-      Lwt_mvar.take t.packs >>= fun packs ->
-      Lwt_mvar.put t.packs packs >>= fun () ->
-      match Graph.find pack_hash packs with
-      | Exists { idx; fdi; }  ->
-        (load_partial ~root t pack_hash idx fdi >>= function
-          | Ok loaded ->
-            merge t loaded.info >>= fun () ->
-            Lwt_mvar.take t.packs >>= fun packs ->
-            Lwt_mvar.put t.packs (Graph.add pack_hash (Loaded loaded) packs) >>= fun () ->
-            Lwt_mvar.take t.buffers >>= fun buffers ->
-            let length = Cstruct.len buffers.hunks / buffers.depth in
-            RPDec.get_from_hash
-              ~htmp:(Array.init buffers.depth (fun i -> Cstruct.sub buffers.hunks (i * length) length))
-              loaded.decoder hash buffers.objects ztmp window
-            >>!= (fun err -> Lwt.return (`Pack_decoder err)) >>= fun ret ->
-            Lwt_mvar.put t.buffers buffers >|= fun () ->
-            ret
-          | Error _ as err -> Lwt.return err)
+    let promote_loaded r (hash_pack, loaded) obj =
+      Resolved.of_loaded r loaded >>= function
+      | Ok resolved ->
+        Log.debug (fun l -> l ~header:"promotion" "Promotion of %a from loaded to resolved." Hash.pp loaded.Loaded.info.PInfo.hash_pack);
+        Hashtbl.replace t.packs hash_pack (Resolved resolved);
+        Lwt.return_ok obj
+      | Error _ as err -> Lwt.return err in
+
+    let return_loaded r loaded = function
+      | `Return ret -> Lwt.return_ok ret
+      | `Error err -> Lwt.return_error err
+      | `Promote obj -> promote_loaded r loaded obj in
+
+    let promote_resolved fs r (hash_pack, resolved) obj =
+      Total.of_resolved ~root ~ztmp ~window ~read_inflated:(read_inflated hash_pack) fs r resolved >>= function
+      | Ok total ->
+        Log.debug (fun l -> l ~header:"promotion" "Promotion of %a from resolved to total." Hash.pp resolved.Resolved.hash_pack);
+        Hashtbl.replace t.packs hash_pack (Total total);
+        Lwt.return_ok obj
+      | Error _ as err -> Lwt.return err in
+
+    let return_resolved fs r resolved = function
+      | `Return ret -> Lwt.return_ok ret
+      | `Error err -> Lwt.return_error err
+      | `Promote obj -> promote_resolved fs r resolved obj in
+
+    lookup t hash |> function
+    | None -> Lwt.return_error `Not_found
+    | Some (hash_pack, _) ->
+      match Hashtbl.find t.packs hash_pack with
       | Loaded loaded ->
-        Lwt_mvar.take t.buffers >>= fun buffers ->
-        let length = Cstruct.len buffers.hunks / buffers.depth in
-        RPDec.get_from_hash
-          ~htmp:(Array.init buffers.depth (fun i ->
-              Cstruct.sub buffers.hunks (i * length) length))
-          loaded.decoder hash buffers.objects ztmp window
-        >>!= (fun err -> Lwt.return (`Pack_decoder err))
-        >>= fun ret -> Lwt_mvar.put t.buffers buffers
-        >|= fun () -> ret
-      | Total { decoder; _ } ->
-        Lwt_mvar.take t.buffers >>= fun buffers ->
-        let length = Cstruct.len buffers.hunks / buffers.depth in
-        RPDec.get_from_hash
-          ~htmp:(Array.init buffers.depth (fun i ->
-              Cstruct.sub buffers.hunks (i * length) length))
-          decoder hash buffers.objects ztmp window
-        >>!= (fun err -> Lwt.return (`Pack_decoder err)) >>= fun ret ->
-        Lwt_mvar.put t.buffers buffers >|= fun () ->
-        ret
-      | exception Not_found ->
-        (* XXX(dinosaure): could appear in only one case: if the
-           version of the [t.packs] in [lookup_p] has the pack but
-           something (like an error) appeared with this pack and
-           deleted it in the current version of [t.packs] took by this
-           function.
-
-           So, if this case appears, that means the pack file expected
-           is malformed (and inner objects are losted with it). *)
-        Lwt.return (Error `Not_found)
-
-  let size ~root ~ztmp ~window t hash =
-    lookup t hash >>= function
-    | None -> Lwt.return (Error `Not_found)
-    | Some (pack_hash, _) ->
-      Lwt_mvar.take t.packs >>= fun packs ->
-      Lwt_mvar.put t.packs packs >>= fun () ->
-      match Graph.find pack_hash packs with
-      | Exists { idx; fdi; }  ->
-        (load_partial ~root t pack_hash idx fdi >>= function
+        Loaded.read ~to_result ~ztmp ~window r loaded hash
+        >>= return_loaded r (hash_pack, loaded)
+      | Exists exists ->
+        (Loaded.of_exists ~root ~read_and_exclude:(read_and_exclude exists.Exists.hash_pack) fs exists >>= function
+          | Error _ as err -> Lwt.return err
           | Ok loaded ->
-            merge t loaded.info >>= fun () ->
-            Lwt_mvar.take t.packs >>= fun packs ->
-            Lwt_mvar.put t.packs (Graph.add pack_hash (Loaded loaded) packs) >>= fun () ->
-            Lwt_mvar.take t.buffers >>= fun buffers ->
-            RPDec.length loaded.decoder hash ztmp window
-            >>!= (fun err -> Lwt.return (`Pack_decoder err)) >>= fun ret ->
-            Lwt_mvar.put t.buffers buffers >>= fun () ->
-            Lwt.return ret
-          | Error _ as err -> Lwt.return err)
-      | Loaded loaded ->
-        Lwt_mvar.take t.buffers >>= fun buffers ->
-        RPDec.length loaded.decoder hash ztmp window
-        >>!= (fun err -> Lwt.return (`Pack_decoder err)) >>= fun ret ->
-        Lwt_mvar.put t.buffers buffers >>= fun () ->
-        Lwt.return ret
-      | Total { decoder; _ } ->
-        Lwt_mvar.take t.buffers >>= fun buffers ->
-        RPDec.length decoder hash ztmp window
-        >>!= (fun err -> Lwt.return (`Pack_decoder err)) >>= fun ret ->
-        Lwt_mvar.put t.buffers buffers >>= fun () ->
-        Lwt.return ret
-      | exception Not_found ->
-        Lwt.return (Error `Not_found)
+            Hashtbl.replace t.packs hash_pack (Loaded loaded);
+            Loaded.read ~to_result ~ztmp ~window r loaded hash
+            >>= return_loaded r (hash_pack, loaded))
+      | Resolved resolved ->
+        Resolved.read ~ztmp ~window ~to_result resolved hash >>= return_resolved fs r (hash_pack, resolved)
+      | Total total ->
+        Total.read ~ztmp ~window ~to_result total hash >>= function
+        | `Error err -> Lwt.return_error err
+        | `Return obj -> Lwt.return_ok obj
+
+  let size ~root ~read_loose ~ztmp ~window fs t hash =
+    let read_and_exclude hash_pack = read_and_exclude ~root ~read_loose fs t [ hash_pack ] in
+
+    lookup t hash |> function
+    | None -> Lwt.return_error `Not_found
+    | Some (hash_pack, _) ->
+      match Hashtbl.find t.packs hash_pack with
+      | Exists exists ->
+        (Loaded.of_exists ~root ~read_and_exclude:(read_and_exclude exists.Exists.hash_pack) fs exists >>= function
+          | Error _ as err -> Lwt.return err
+          | Ok loaded ->
+            Hashtbl.replace t.packs hash_pack (Loaded loaded);
+            Loaded.size loaded ~ztmp ~window hash)
+      | Loaded loaded -> Loaded.size loaded ~ztmp ~window hash
+      | Resolved resolved -> Resolved.size resolved ~ztmp ~window hash
+      | Total total -> Total.size total ~ztmp ~window hash
+
+  let fold f t a =
+    Hashtbl.fold (fun _ pack acc -> match pack with
+        | Exists exists -> Exists.fold f exists acc
+        | Loaded loaded -> Loaded.fold f loaded acc
+        | Resolved resolved -> Resolved.fold f resolved acc
+        | Total total -> Total.fold f total acc)
+      t.packs a
+
+  let list t = fold (fun hash _ acc ->
+      if List.exists (Hash.equal hash) acc
+      then acc else hash :: acc)
+      t []
 end

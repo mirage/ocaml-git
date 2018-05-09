@@ -1298,27 +1298,27 @@ module type D = sig
   type kind = [ `Commit | `Blob | `Tree | `Tag ]
 
   module Object: sig
-
     type from =
-      | Offset of { length   : int
-                  ; consumed : int
-                  ; offset   : int64
-                  ; crc      : Crc32.t
-                  ; base     : from
-                  ; }
-      | External of Hash.t
-      | Direct of { consumed : int
-                  ; offset   : int64
-                  ; crc      : Crc32.t
-                  ; }
+      | Delta of { descr    : Hunk.hunks
+                 ; consumed : int
+                 ; inserts  : int
+                 ; offset   : int64
+                 ; crc      : Crc32.t
+                 ; base     : from }
+      | External of { hash: Hash.t; length: int; }
+      | Internal of { length   : int
+                    ; consumed : int
+                    ; offset   : int64
+                    ; crc      : Crc32.t }
     and t =
       { kind   : kind
       ; raw    : Cstruct.t
-      ; length : int64
       ; from   : from }
 
     val pp: t Fmt.t
     val first_crc_exn: t -> Crc32.t
+    val first_offset_exn: t -> int64
+    val length: t -> int
   end
 
   val find_window: t -> int64 -> ((Window.t * int), Mapper.error) result Lwt.t
@@ -1340,6 +1340,14 @@ module type D = sig
        ?chunk:int
     -> t
     -> Hash.t
+    -> Cstruct.t
+    -> Inflate.window
+    -> (int, error) result Lwt.t
+  val needed_from_offset:
+       ?chunk:int
+    -> ?cache:(Hash.t -> int option)
+    -> t
+    -> int64
     -> Cstruct.t
     -> Inflate.window
     -> (int, error) result Lwt.t
@@ -1461,77 +1469,95 @@ struct
     | `Tree -> Fmt.pf ppf "Tree"
     | `Tag -> Fmt.pf ppf "Tag"
 
+  type insert_hunk = S of string | C of Cstruct.t
+  type opt_hunk = Insert of insert_hunk | Copy of (int * int)
+
   type partial =
     { _length : int
     ; _consumed : int
     ; _offset : int64
     ; _crc : Crc32.t
-    ; _hunks : hunk list }
-  and hunk =
-    | Copy of (int * int)
-    | Insert of Cstruct.t
+    ; _hunks : opt_hunk list }
 
   module Object =
   struct
     type from =
-      | Offset of { length   : int
-                  ; consumed : int
-                  ; offset   : int64 (* absolute offset *)
-                  ; crc      : Crc32.t
-                  ; base     : from }
-      | External of Hash.t
-      | Direct of { consumed : int
-                  ; offset   : int64
-                  ; crc      : Crc32.t }
+      | Delta of { descr    : Hunk.hunks
+                 ; consumed : int
+                 ; inserts  : int
+                 ; offset   : int64
+                 ; crc      : Crc32.t
+                 ; base     : from }
+      | External of { hash: Hash.t; length: int; }
+      | Internal of { length   : int
+                    ; consumed : int
+                    ; offset   : int64
+                    ; crc      : Crc32.t }
 
     and t =
       { kind     : kind
       ; raw      : Cstruct.t
-      ; length   : int64
       ; from     : from }
 
+    (* XXX(dinosaure): attention, it's a folding function. *)
     let to_partial = function
-      | { length; from = Offset { consumed; crc; offset; _ }; _ }
-      | { length; from = Direct { consumed; crc; offset; _ }; _ } ->
-        { _length = Int64.to_int length
+      | { from = Delta { descr; consumed; crc; offset; _ }; _ } ->
+        { _length   = descr.Hunk.target_length
         ; _consumed = consumed
-        ; _offset = offset
-        ; _crc = crc
-        ; _hunks = [] }
+        ; _offset   = offset
+        ; _crc      = crc
+        ; _hunks    = [] }
+      | { from = Internal { length; consumed; crc; offset; _ }; _ } ->
+        { _length   = length
+        ; _consumed = consumed
+        ; _offset   = offset
+        ; _crc      = crc
+        ; _hunks    = [] }
       | { from = External _; _ } ->
-        raise (Invalid_argument "Object.to_partial: this object is external of the current PACK file")
-
+        invalid_arg "Object.to_partial: this object is external of the current PACK file"
 
     let rec pp_from ppf = function
-      | Offset { length; consumed; offset; crc; base; } ->
-        Fmt.pf ppf "(Hunk { @[<hov>length = %d;@ \
+      | Delta { descr; consumed; offset; crc; base; _ } ->
+        Fmt.pf ppf "(Delta { @[<hov>descr = %a;@ \
                     consumed = %d;@ \
                     offset = %Lx;@ \
                     crc = %a;@ \
                     base = %a;@] })"
-          length consumed offset
+          (Fmt.hvbox Hunk.pp_hunks) descr
+          consumed offset
           Crc32.pp crc
           (Fmt.hvbox pp_from) base
-      | External hash ->
-        Fmt.pf ppf "(External %a)" Hash.pp hash
-      | Direct { consumed; offset; crc; } ->
-        Fmt.pf ppf "(Direct { @[<hov>consumed = %d;@ \
+      | External { hash; length; } ->
+        Fmt.pf ppf "(External { @[<hov>hash = %a;@ length = %d;@] })" Hash.pp hash length
+      | Internal { length; consumed; offset; crc; } ->
+        Fmt.pf ppf "(Internal { @[<hov>length = %d;@ \
+                    consumed = %d;@ \
                     offset = %Lx;@ \
                     crc = %a;@] })"
-          consumed offset Crc32.pp crc
+          length consumed offset Crc32.pp crc
 
     let pp ppf t =
       Fmt.pf ppf "{ @[<hov>kind = %a;@ \
                   raw = #raw;@ \
-                  length = %Ld;@ \
                   from = %a;@] }"
-        pp_kind t.kind t.length (Fmt.hvbox pp_from) t.from
+        pp_kind t.kind (Fmt.hvbox pp_from) t.from
 
     let first_crc_exn t =
       match t.from with
-      | Direct { crc; _ } -> crc
-      | Offset { crc; _ } -> crc
-      | External _ -> raise (Invalid_argument "Object.first_crc")
+      | Internal { crc; _ } -> crc
+      | Delta { crc; _ } -> crc
+      | External _ -> invalid_arg "Object.first_crc"
+
+    let first_offset_exn t =
+      match t.from with
+      | Internal { offset; _ } -> offset
+      | Delta { offset; _ } -> offset
+      | External _ -> invalid_arg "Object.first_offset"
+
+    let length t = match t.from with
+      | Internal { length; _ } -> length
+      | Delta { descr = { Hunk.target_length; _ }; _ } -> target_length
+      | External { length; _ } -> length
   end
 
   type pack_object =
@@ -1589,35 +1615,41 @@ struct
         let () = Bucket.add t.win window in
         Ok (window, relative_offset)
 
+  let blit_to_cstruct src off0 dst off1 len = match src with
+    | S s -> Cstruct.blit_from_string s off0 dst off1 len
+    | C c -> Cstruct.blit c off0 dst off1 len
+
+  let len = function S s -> String.length s | C c -> Cstruct.len c
+
   let apply partial_hunks hunks_header hunks base raw =
     if Cstruct.len raw < hunks_header.Hunk.target_length
-    then raise (Invalid_argument "Decoder.apply");
+    then invalid_arg (Fmt.strf "Decoder.apply, has %d, expect %d." (Cstruct.len raw) hunks_header.Hunk.target_length);
 
     let target_length = List.fold_left
         (fun acc -> function
            | Insert insert ->
-             Cstruct.blit insert 0 raw acc (Cstruct.len insert); acc + Cstruct.len insert
+             blit_to_cstruct insert 0 raw acc (len insert); acc + len insert
            | Copy (off, len) ->
              Cstruct.blit base.Object.raw off raw acc len; acc + len)
-        0 hunks
-    in
+        0 hunks in
+    let inserts = List.fold_left (fun acc -> function Insert cs -> acc + len cs | Copy _ -> acc) 0 hunks in
 
     if (target_length = hunks_header.Hunk.target_length)
     then Ok Object.{ kind   = base.Object.kind
                    ; raw    = Cstruct.sub raw 0 target_length
-                   ; length = Int64.of_int hunks_header.Hunk.target_length
-                   ; from   = Offset { length   = partial_hunks._length
-                                     ; consumed = partial_hunks._consumed
-                                     ; offset   = partial_hunks._offset
-                                     ; crc      = partial_hunks._crc
-                                     ; base     = base.from } }
+                   ; from   = Delta { descr    = hunks_header
+                                    ; inserts
+                                    ; consumed = partial_hunks._consumed
+                                    ; offset   = partial_hunks._offset
+                                    ; crc      = partial_hunks._crc
+                                    ; base     = base.from } }
     else Error (Invalid_target (target_length, hunks_header.Hunk.target_length))
 
   let result_bind ~err f = function Ok a -> f a | Error _ -> err
 
   let get_pack_object ?(chunk = 0x8000) ?(limit = false) ?htmp t reference source_length source_offset ztmp zwin rtmp =
     if Cstruct.len rtmp < source_length && not limit
-    then raise (Invalid_argument (Fmt.strf "Decoder.delta: expected length %d and have %d" source_length (Cstruct.len rtmp)));
+    then invalid_arg (Fmt.strf "Decoder.delta: expected length %d and have %d" source_length (Cstruct.len rtmp));
 
     let aux = function
       | Error exn -> Lwt.return (Error exn)
@@ -1655,15 +1687,12 @@ struct
                  Cstruct.blit raw 0 hnk writed_in_hnk len;
                  loop window
                    consumed_in_window writed_in_raw (writed_in_hnk + len)
-                   (Insert (Cstruct.sub hnk writed_in_hnk len) :: hunks) git_object
+                   (Insert (C (Cstruct.sub hnk writed_in_hnk len)) :: hunks) git_object
                    (Pack.continue state)
                | None, Hunk.Insert raw ->
-                 let len = Cstruct.len raw in
-                 let res = Cstruct.create len in
-                 Cstruct.blit raw 0 res 0 len;
                  loop window
                    consumed_in_window writed_in_raw writed_in_hnk
-                   (Insert res :: hunks) git_object
+                   (Insert (S (Cstruct.to_string raw)) :: hunks) git_object
                    (Pack.continue state)
                | _, Hunk.Copy (off, len) ->
                  loop window
@@ -1854,6 +1883,8 @@ struct
   (* XXX(dinosaure): this function returns the max length needed to undelta-ify
      a PACK object. *)
   let needed_from ?(chunk = 0x8000) ?(cache = (fun _ -> None)) t value ztmp zwin =
+    ignore @@ cache;
+
     let get absolute_offset =
       find_window t absolute_offset
       >>= function
@@ -1880,51 +1911,59 @@ struct
                       relative_offset
                       (Pack.refill 0 0 state))
           | `Flush state ->
-            Lwt.return (`Direct (Pack.length state))
+            Lwt.return (`Raw (Pack.length state))
           | `Error (state, exn) -> Lwt.return (`Error (Unpack_error (state, window, exn)))
           | `End _ -> assert false
           | `Length state ->
             match Pack.kind state with
             | Pack.Hunk ({ Hunk.reference = Hunk.Offset off; _ } as hunks) ->
-              Lwt.return (`IndirectOff
-                            (Int64.sub (Pack.offset state) off,
-                             max (Pack.length state)
-                             @@ max hunks.Hunk.target_length hunks.Hunk.source_length))
+              Lwt.return (`Offset (Int64.sub (Pack.offset state) off, max (Pack.length state) (max hunks.Hunk.source_length hunks.Hunk.target_length)))
             | Pack.Hunk ({ Hunk.reference = Hunk.Hash hash; _ } as hunks) ->
-              Lwt.return (`IndirectHash
-                            (hash, max (Pack.length state)
-                             @@ max hunks.Hunk.target_length hunks.Hunk.source_length))
+              Lwt.return (`Hash (hash, max (Pack.length state) (max hunks.Hunk.source_length hunks.Hunk.target_length)))
             | Pack.Commit
             | Pack.Blob
             | Pack.Tree
             | Pack.Tag ->
-              Lwt.return (`Direct (Pack.length state))
-        in
+              Lwt.return (`Raw (Pack.length state)) in
 
-        loop window relative_offset state
-    in
+        loop window relative_offset state in
 
     let rec loop length = function
-      | `IndirectHash (hash, length') ->
-        (match cache hash with
-         | Some length'' -> Lwt.return (Ok (max length (max length' length'')))
-         | None -> match t.idx hash with
-           | Some (_, off) -> (get off >>= loop (max length length'))
-           | None -> t.get hash >>= function
-             | Some (_, raw) -> Lwt.return (Ok (Cstruct.len raw))
-             | None -> Lwt.return (Error (Invalid_hash hash)))
-      | `IndirectOff (absolute_offset, length') ->
-        (get absolute_offset
-         >>= loop (max length length'))
-      | `Direct length' ->
-        Lwt.return (Ok (max length length'))
-      | `Error exn -> Lwt.return (Error exn)
-    in
+      | `Error err -> Lwt.return_error err
+      | `Offset (abs_off, length') ->
+        Log.debug (fun l -> l ~header:"needed" "Length of delta-ified object (source at: %Ld) is: %d." abs_off length');
+        get abs_off >>= loop (max length length')
+      | `Raw length' ->
+        Log.debug (fun l -> l ~header:"needed" "Length of object is: %d." length');
+        Lwt.return_ok (max length length')
+      | `Hash (hash, length') ->
+        match t.idx hash with
+        | Some (_, abs_off) ->
+          Log.debug (fun l -> l ~header:"needed" "Length of delta-ified object (source at: %Ld) is: %d." abs_off length');
+          get abs_off >>= loop (max length length')
+        | None -> t.get hash >>= function
+          | Some (_, raw) -> Lwt.return_ok (max length (Cstruct.len raw))
+          | None -> Lwt.return_error (Invalid_hash hash) in
 
-    loop 0 value
+    match value with
+    | `Offset absolut_offset ->
+      get absolut_offset >>= loop 0
+    | `Hash hash ->
+      match t.idx hash with
+      | Some (_, absolute_offset) ->
+        get absolute_offset >>= loop 0
+      | None ->
+        Log.debug (fun l -> l ~header:"needed" "Ask external object to know how many byte(s) is needed.");
+
+        t.get hash >>= function
+        | Some (_, raw) -> Lwt.return_ok (Cstruct.len raw)
+        | None -> Lwt.return_error (Invalid_hash hash)
+
+  let needed_from_offset ?(chunk = 0x8000) ?(cache = (fun _ -> None)) t offset ztmp zwin =
+    needed_from ~chunk ~cache t (`Offset offset) ztmp zwin
 
   let needed_from_hash ?(chunk = 0x8000) ?(cache = (fun _ -> None)) t hash ztmp zwin =
-    needed_from ~chunk ~cache t (`IndirectHash (hash, 0)) ztmp zwin
+    needed_from ~chunk ~cache t (`Hash hash) ztmp zwin
 
   (* XXX(dinosaure): Need an explanation. This function does not
      allocate any [Cstruct.t]. The purpose of this function is to get
@@ -1977,6 +2016,7 @@ struct
      For this call, we don't case about the meta-data of the object
      requested (where it come from, the CRC-32 checksum, etc.) and
      just want the raw data. *)
+
   let get_from_offset ?(chunk = 0x8000) ?(limit = false) ?htmp t absolute_offset (raw0, raw1, _) ztmp zwin =
     let get_free_raw = function
       | true -> raw0
@@ -2025,28 +2065,25 @@ struct
               (Pack.flush 0 (Cstruct.len o) state)
           else Lwt.return (Ok (Object.{ kind = to_kind (Pack.kind state)
                                       ; raw  = get_free_raw swap
-                                      ; length = Int64.of_int (Pack.length state)
-                                      ; from   = Direct { consumed = 0
-                                                        ; offset   = Pack.offset state
-                                                        ; crc      = Crc32.default }}))
+                                      ; from   = Internal { length   = Pack.length state
+                                                          ; consumed = 0
+                                                          ; offset   = Pack.offset state
+                                                          ; crc      = Crc32.default }}))
         | `Hunk (state, hunk) ->
           Log.debug (fun l -> l ~header:"get" "PACK decoder return an hunk.");
 
           (match htmp, hunk with
            | Some hnks, Hunk.Insert raw ->
              let len = Cstruct.len raw in
-             Cstruct.blit raw 0 hnks.(0)  writed_in_hnk len;
+             Cstruct.blit raw 0 hnks.(0) writed_in_hnk len;
              loop window
                consumed_in_window writed_in_raw (writed_in_hnk + len)
-               (Insert (Cstruct.sub hnks.(0) writed_in_hnk len) :: hunks)
+               (Insert (C (Cstruct.sub hnks.(0) writed_in_hnk len)) :: hunks)
                swap git_object (Pack.continue state)
            | None, Hunk.Insert raw ->
-             let len = Cstruct.len raw in
-             let res = Cstruct.create len in
-             Cstruct.blit raw 0 res 0 len;
              loop window
                consumed_in_window writed_in_raw writed_in_hnk
-               (Insert res :: hunks) swap git_object
+               (Insert (S (Cstruct.to_string raw)) :: hunks) swap git_object
                (Pack.continue state)
            | _, Hunk.Copy (off, len) ->
              loop window consumed_in_window writed_in_raw writed_in_hnk
@@ -2072,7 +2109,7 @@ struct
 
                get_pack_object
                  ~chunk
-                 ?htmp:(match htmp with Some hnks -> Some hnks.(depth) | None -> None)
+                 ?htmp:(match htmp with Some hnks -> if depth < Array.length hnks then Some hnks.(depth) else None | None -> None)
                  t
                  hunks.Hunk.reference
                  hunks.Hunk.source_length
@@ -2089,15 +2126,14 @@ struct
                | Ok (Object (kind, partial, raw)) ->
                  Lwt.return (Ok Object.{ kind
                                        ; raw
-                                       ; length = Int64.of_int partial._length
-                                       ; from   = Direct { consumed = partial._consumed
-                                                         ; offset   = partial._offset
-                                                         ; crc      = partial._crc } })
+                                       ; from   = Internal { length   = partial._length
+                                                           ; consumed = partial._consumed
+                                                           ; offset   = partial._offset
+                                                           ; crc      = partial._crc } })
                | Ok (External (hash, kind, raw)) ->
                  Lwt.return (Ok Object.{ kind
                                        ; raw
-                                       ; length = Int64.of_int (Cstruct.len raw)
-                                       ; from   = Object.External hash })
+                                       ; from   = Object.External { hash; length = hunks.Hunk.source_length } })
              in
 
              (undelta 1 partial_hunks hunks_header swap >>= function
@@ -2122,10 +2158,10 @@ struct
                           if (not limit) || ((Pack.length state) < 0x10000FFFE && limit)
                           then Cstruct.sub (get_free_raw swap) 0 (Pack.length state)
                           else (get_free_raw swap)
-                      ; length = Int64.of_int (Pack.length state)
-                      ; from   = Direct { consumed = Pack.consumed state
-                                        ; offset   = Pack.offset state
-                                        ; crc      = Pack.crc state } }
+                      ; from   = Internal { length   = Pack.length state
+                                          ; consumed = Pack.consumed state
+                                          ; offset   = Pack.offset state
+                                          ; crc      = Pack.crc state } }
              in
 
              loop window
@@ -2164,7 +2200,7 @@ struct
   let get_with_hunks_allocation_from_offset
       ?chunk t absolute_offset ztmp zwin (raw0, raw1)
     =
-    needed_from ?chunk t (`IndirectOff (absolute_offset, 0)) ztmp zwin
+    needed_from ?chunk t (`Offset absolute_offset) ztmp zwin
     >>= function
     | Error exn -> Lwt.return (Error exn)
     | Ok length ->
@@ -2197,7 +2233,7 @@ struct
   let get_with_result_allocation_from_offset
       ?chunk ?htmp t absolute_offset ztmp zwin
     =
-    needed_from t (`IndirectOff (absolute_offset, 0)) ztmp zwin >>= function
+    needed_from t (`Offset absolute_offset) ztmp zwin >>= function
     | Error exn -> Lwt.return (Error exn)
     | Ok length ->
       let tmp = Cstruct.create length, Cstruct.create length, length in

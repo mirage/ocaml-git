@@ -68,6 +68,8 @@ module type LAZY = sig
 
   val fold: t -> (Hash.t -> (Crc32.t * int64) -> 'a -> 'a) -> 'a -> 'a
   (** Fold in the IDX file. *)
+
+  val cardinal: t -> int
 end
 
 module Lazy (H: S.HASH): LAZY with module Hash = H

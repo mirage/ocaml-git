@@ -49,7 +49,7 @@ module Make0 (Source: Test_data.SOURCE) (Store: S) = struct
     >>?= (fun (stream, idx) ->
       consume stream
       >>= fun () -> Lwt_mvar.take idx
-      >|= fun graph -> Store.Pack.Graph.fold (fun hash _ acc -> hash :: acc) graph []
+      >|= fun graph -> Store.Pack.Map.fold (fun hash _ acc -> hash :: acc) graph []
         |> fun v -> Ok v)
 
   let rev_list t cs =
