@@ -18,7 +18,10 @@
 let () = Random.self_init ()
 
 open Git_unix
+
 module Sync_http = Http(Store)
+module Entry = Index.Entry(SHA1)
+module Index = Index.Make(SHA1)(Store)(Fs)(Entry)
 
 module Option =
 struct
@@ -89,14 +92,17 @@ let setup_logs style_renderer level ppf =
 
 type error =
   [ `Store of Store.error
-  | `Sync of Sync_http.error ]
+  | `Sync of Sync_http.error
+  | `Index of Index.error ]
 
 let store_err err = `Store err
 let sync_err err = `Sync err
+let index_err err = `Index err
 
 let pp_error ppf = function
   | `Store err -> Fmt.pf ppf "(`Store %a)" Store.pp_error err
   | `Sync err -> Fmt.pf ppf "(`Sync %a)" Sync_http.pp_error err
+  | `Index err -> Fmt.pf ppf "(`Index %a)" Index.pp_error err
 
 let main ppf progress origin branch repository directory =
   let name =
@@ -106,8 +112,8 @@ let main ppf progress origin branch repository directory =
     |> List.hd
     |> Fpath.v
     |> Fpath.rem_ext ~multi:true
-    |> Fpath.basename
-  in
+    |> Fpath.basename in
+
   let root = Option.map_default Fpath.(v (Sys.getcwd ()) / name) Fpath.v directory in
 
   let ( >>?= ) = Lwt_result.bind in
@@ -116,18 +122,21 @@ let main ppf progress origin branch repository directory =
   let stdout =
     if progress
     then Some (fun raw -> Fmt.pf ppf "%s%!" (Cstruct.to_string raw); Lwt.return ())
-    else None
-  in
+    else None in
 
   let stderr =
     if progress
     then Some (fun raw -> Fmt.(pf stderr) "%s%!" (Cstruct.to_string raw); Lwt.return ())
-    else None
-  in
+    else None in
 
   let https = Option.eq ~eq:((=) "https") (Uri.scheme repository) in
+  let temp_dir = Fpath.(root / ".git" / "temp") in
+  let fs = Fs.v ~temp_dir () in
 
-  Store.v ~root ()
+  Fs.Dir.create fs temp_dir
+  >>!= (fun err -> `Store (Git.Error.FS.err_create temp_dir err))
+  >>?= fun _ ->
+  Store.v ~root ~fs ()
   >>!= store_err
   >>?= fun git ->
   Sync_http.clone_ext git ?stdout ?stderr ~https
@@ -153,6 +162,8 @@ let main ppf progress origin branch repository directory =
     Store.Reference.head
     (Store.Reference.Ref branch)
   >>!= store_err
+  >>?= fun _ -> Index.Snapshot.from_reference git fs Store.Reference.head
+  >>!= index_err
   >>?= fun _ -> Lwt.return (Ok ())
 
 open Cmdliner
