@@ -24,6 +24,7 @@ depends: [
   "lru"        {>= "0.2.0"}
   "decompress" {>= "0.7"}
   "encore"
+  "duff"
   "hex"
   "ocplib-endian"
   "rresult"

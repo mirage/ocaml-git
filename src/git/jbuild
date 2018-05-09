@@ -4,5 +4,5 @@
  ((name        git)
   (public_name git)
   (libraries   (fpath cstruct fmt lwt uri logs astring hex lru rresult
-                angstrom encore ocamlgraph ocplib-endian
+                angstrom encore duff ocamlgraph ocplib-endian
                 ocplib-endian.bigstring decompress digestif))))

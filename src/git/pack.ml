@@ -279,7 +279,7 @@ module type H = sig
     | Hash of Hash.t
 
   val pp: t Fmt.t
-  val default: reference -> int -> int -> Rabin.t list -> t
+  val default: reference -> int -> int -> Duff.t list -> t
   val refill: int -> int -> t -> t
   val flush: int -> int -> t -> t
   val finish: t -> t
@@ -314,7 +314,7 @@ struct
     ; reference     : reference
     ; source_length : int
     ; target_length : int
-    ; hunks         : Rabin.t list
+    ; hunks         : Duff.t list
     ; state         : state }
   and reference =
     | Offset of int64
@@ -367,7 +367,7 @@ struct
       t.o_off t.o_pos t.o_len
       t.i_off t.i_pos t.i_len t.i_abs
       t.write pp_reference t.reference t.source_length t.target_length
-      (Fmt.hvbox (Fmt.list ~sep:(Fmt.unit ";@ ") Rabin.pp)) t.hunks
+      (Fmt.hvbox (Fmt.list ~sep:(Fmt.unit ";@ ") Duff.pp)) t.hunks
       (Fmt.hvbox pp_state) t.state
 
   let ok t        : res = Ok { t with state = End }
@@ -511,16 +511,16 @@ struct
     | [] -> Cont { t with state = Consume }
     | hunk :: r ->
       match hunk with
-      | Rabin.Insert (off, len) ->
+      | Duff.Insert (off, len) ->
         assert (len > 0 && len <= 0x7F);
-        (* XXX(dinosaure): the [xdiff] algorithm ensures than an [Rabin.I] can't
+        (* XXX(dinosaure): the [xdiff] algorithm ensures than an [Duff.I] can't
            be upper than [0x7F]. *)
 
         let byte = len land 0x7F in
 
         KHunk.put_byte byte (fun _ t -> Cont { t with state = Insert (insert len off len)
                                                     ; hunks = r }) dst t
-      | Rabin.Copy (off, len) ->
+      | Duff.Copy (off, len) ->
         let n_offset = how_many_bytes off in
         let n_length = if len = 0x10000 then 1 else how_many_bytes len in
 
@@ -622,7 +622,7 @@ module type DELTA = sig
     | Z
     | S of { length    : int
            ; depth     : int
-           ; hunks     : Rabin.t list
+           ; hunks     : Duff.t list
            ; src       : t
            ; src_length: int64
            ; src_hash  : Hash.t
@@ -656,7 +656,7 @@ struct
     | Z
     | S of { length     : int
            ; depth      : int
-           ; hunks      : Rabin.t list
+           ; hunks      : Duff.t list
            ; src        : t
            ; src_length : int64 (* XXX(dinosaure): this is the length of the
                                    inflated raw of [src]. *)
@@ -666,7 +666,7 @@ struct
 
   module WeightByMemory =
   struct
-    type nonrec t = t * Cstruct.t * Rabin.Default.Index.t
+    type nonrec t = t * Cstruct.t * Duff.Default.Index.t
 
     let weight (_, raw, rabin) =
       (* XXX(dinosaure):
@@ -675,12 +675,12 @@ struct
          - 1 for ... I don't know
          - memory size of the rabin's fingerprint
       *)
-      1 + Cstruct.len raw + 1 + (Rabin.Default.Index.memory_size rabin)
+      1 + Cstruct.len raw + 1 + (Duff.Default.Index.memory_size rabin)
   end
 
-  module WeightByElement = struct type nonrec t = t * Cstruct.t * Rabin.Default.Index.t let weight _ = 1 end
+  module WeightByElement = struct type nonrec t = t * Cstruct.t * Duff.Default.Index.t let weight _ = 1 end
 
-  module type WINDOW = Lru.F.S with type k = Entry.t and type v = t * Cstruct.t * Rabin.Default.Index.t
+  module type WINDOW = Lru.F.S with type k = Entry.t and type v = t * Cstruct.t * Duff.Default.Index.t
 
   let rec _pp_delta ppf = function
     | Z -> Fmt.string ppf "Τ"
@@ -691,7 +691,7 @@ struct
                               src = %a;@ \
                               src_length = %Ld;@] }"
         length depth
-        (Fmt.hvbox (Fmt.list ~sep:(Fmt.unit ";@ ") Rabin.pp)) hunks
+        (Fmt.hvbox (Fmt.list ~sep:(Fmt.unit ";@ ") Duff.pp)) hunks
         (Fmt.hvbox _pp) src
         src_length
   and _pp ppf { delta; } =
@@ -724,15 +724,15 @@ struct
     + size_of_variable_length trg_len
     + List.fold_left
       (fun acc -> function
-         | Rabin.Insert (_, len) -> 1 + len + acc
-         | Rabin.Copy (off, len) ->
+         | Duff.Insert (_, len) -> 1 + len + acc
+         | Duff.Copy (off, len) ->
            1 + (how_many_bytes off) + (if len = 0x10000 then 1 else how_many_bytes len) + acc)
       0 hunks
 
-  let only_insert = List.for_all (function Rabin.Insert _ -> true | Rabin.Copy _ -> false)
+  let only_insert = List.for_all (function Duff.Insert _ -> true | Duff.Copy _ -> false)
 
   let delta
-    : type window. window -> (module WINDOW with type t = window) -> int -> Entry.t -> Cstruct.t -> t -> (Entry.t * Rabin.t list * int) option
+    : type window. window -> (module WINDOW with type t = window) -> int -> Entry.t -> Cstruct.t -> t -> (Entry.t * Duff.t list * int) option
     = fun window window_pack max trg_entry trg_raw trg ->
       let limit src = match trg.delta with
         | S { length; src; _ } ->
@@ -770,7 +770,7 @@ struct
         || Hash.equal (Entry.id src_entry) (Entry.id trg_entry)
         then best
         else
-          let hunks  = Rabin.Default.delta rabin trg_raw in
+          let hunks  = Duff.Default.delta rabin trg_raw in
           let length = length (Cstruct.len src_raw) (Cstruct.len trg_raw) hunks in
 
           choose best (Some (src_entry, hunks, length))
@@ -878,8 +878,8 @@ struct
             get hash >>= fun a -> get (Entry.id trg_entry) >>= fun b ->
             match a, b with
             | Some src_raw, Some trg_raw ->
-              let rabin  = Rabin.Default.Index.make ~copy:false src_raw in (* we don't keep [rabin]. *)
-              let hunks  = Rabin.Default.delta rabin trg_raw in
+              let rabin  = Duff.Default.Index.make ~copy:false src_raw in (* we don't keep [rabin]. *)
+              let hunks  = Duff.Default.delta rabin trg_raw in
               let length = length (Cstruct.len src_raw) (Cstruct.len trg_raw) hunks in
               let depth  = depth src + 1 in
               let base   = { delta = S { length
@@ -907,7 +907,7 @@ struct
               | None -> raise (Uncaught_hash (Entry.id entry))
               | Some raw ->
                 let base   = { delta = Z } in
-                let rabin  = Rabin.Default.Index.make ~copy:false raw in (* we keep [rabin] with [raw] in the [window]. *)
+                let rabin  = Duff.Default.Index.make ~copy:false raw in (* we keep [rabin] with [raw] in the [window]. *)
                 let window = Window.add entry (base, raw, rabin) window in
 
                 match delta window window_pack max entry raw base with
