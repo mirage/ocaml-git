@@ -1111,7 +1111,7 @@ module Make
                    | PEnc.Delta.S { src_length; _ } as delta ->
                      let rec go ~src_length:length k acc = function
                        | PEnc.Delta.S { length; src = { PEnc.Delta.delta }; hunks; src_length; _ } ->
-                         let hunks = List.fold_left (fun a -> function Rabin.Insert (_, l) -> a + l | _ -> a) 0 hunks in
+                         let hunks = List.fold_left (fun a -> function Duff.Insert (_, l) -> a + l | _ -> a) 0 hunks in
                          go ~src_length (fun src -> PInfo.Patch { hunks; target = length; src }) (max acc length) delta
                        | PEnc.Delta.Z -> k (PInfo.Load (Int64.to_int length)), acc in
                      go ~src_length (fun x -> x) 0 delta in
