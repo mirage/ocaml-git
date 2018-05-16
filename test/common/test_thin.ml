@@ -23,7 +23,7 @@ module Make (Sync: Test_sync.SYNC) = struct
 
   let root = Fpath.v "test-decompress"
   let thin = Fpath.(v ".." / "data" / "thin.pack")
-  let uri = Uri.of_string "https://github.com/mirage/decompress.git"
+  let uri = Uri.of_string "http://github.com/mirage/decompress.git"
 
   let run name tests: unit Alcotest.test =
     name, List.map (fun (msg, f) -> msg, `Quick, fun () -> Test_store.run f) tests
