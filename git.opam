@@ -35,6 +35,7 @@ depends: [
   "ocamlgraph"
   "alcotest" {test}
   "nocrypto" {test & >= "0.5.4"}
+  "tls"      {test}
   "mtime"    {test & >= "1.0.0"}
 ]
 available: [ocaml-version >= "4.03.0"]
