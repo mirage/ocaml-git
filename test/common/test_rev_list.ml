@@ -20,13 +20,13 @@ module Make0 (Source: Test_data.SOURCE) (Store: S) = struct
   type difference =
     { reference              : Store.Reference.t
     ; delta                  : delta
-    ; fake_remote_references : (Store.Hash.t * string * bool) list
+    ; fake_remote_references : (Store.Hash.t * Store.Reference.t * bool) list
     ; fake_commands          : Sync.command list }
 
   let diff ~reference from_ to_ =
     { reference
     ; delta = `Diff (from_, to_)
-    ; fake_remote_references = [ from_, Store.Reference.to_string reference, false ]
+    ; fake_remote_references = [ from_, reference, false ]
     ; fake_commands          = [ `Update (from_, to_, reference) ] }
 
   let make ~reference hash =
@@ -57,10 +57,10 @@ module Make0 (Source: Test_data.SOURCE) (Store: S) = struct
       List.fold_left
         (fun acc -> function
           | { fake_remote_references
-            ; _ } -> List.fold_left (fun acc (hash, reference, peeled) -> Store.Reference.Map.add (Store.Reference.of_string reference) (hash, peeled) acc) acc fake_remote_references)
+            ; _ } -> List.fold_left (fun acc (hash, reference, peeled) -> Store.Reference.Map.add reference (hash, peeled) acc) acc fake_remote_references)
         Store.Reference.Map.empty cs
       |> Store.Reference.Map.bindings
-      |> List.map (fun (reference, (hash, peeled)) -> (hash, Store.Reference.to_string reference, peeled)) in
+      |> List.map (fun (reference, (hash, peeled)) -> (hash, reference, peeled)) in
     let module OrderedCommand = struct type t = Sync.command let compare a b = match a, b with
                                          | `Create (a, _), `Create (b, _) -> Store.Hash.compare a b
                                          | `Delete (a, _), `Delete (b, _) -> Store.Hash.compare a b
