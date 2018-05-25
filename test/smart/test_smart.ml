@@ -325,7 +325,7 @@ struct
           Fmt.(pf stderr)
             "Input (committed: %02x): %a.\n"
             committed
-            (Fmt.hvbox (Git.Minienc.pp_scalar ~get:String.get ~length:String.length)) s;
+            (Fmt.hvbox Encore.Lole.pp_string) s;
           Alcotest.failf "Got an error from the decoder: %a" Smart.Decoder.pp_error err
 
   type _ t =

@@ -242,7 +242,7 @@ module Common (Hash: S.HASH) (Reference: Reference.S)
   let pp_pack ppf = function
     | `Raw raw ->
       Fmt.pf ppf "@[<5>(Raw %a)@]"
-        (Minienc.pp_scalar ~get:Cstruct.get_char ~length:Cstruct.len) raw
+        (Encore.Lole.pp_scalar ~get:Cstruct.get_char ~length:Cstruct.len) raw
     | `Out out ->
       Fmt.pf ppf "@[<5>(Out %S)@]" (Cstruct.to_string out)
     | `Err err ->
