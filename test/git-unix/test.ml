@@ -17,11 +17,14 @@
 
 open Test_common
 
-module TCP (S: Test_store.S) = Test_sync.Make(struct
+module Tcp (S: Test_store.S) = Test_sync.Make(struct
     module M = Git_unix.Sync(S)
     module Store = S
+
     type error = M.error
+
     let pp_error = M.pp_error
+
     let clone t ~reference uri = M.clone t ~reference:(reference, reference) uri
 
     let fetch_all t ~references uri =
@@ -34,14 +37,14 @@ module TCP (S: Test_store.S) = Test_sync.Make(struct
     let update t ~reference uri = M.update_and_create t ~references:(Store.Reference.Map.singleton reference [ reference ]) uri
   end)
 
-(* XXX(dinosaure): the divergence between the TCP API and the HTTP API
-   will be update for an homogenization. *)
-
-module HTTP (Store: Test_store.S) = Test_sync.Make(struct
+module Http (Store: Test_store.S) = Test_sync.Make(struct
     module M = Git_unix.Http(Store)
     module Store = Store
+
     type error = M.error
+
     let pp_error = M.pp_error
+
     let clone t ~reference uri = M.clone t ~reference:(reference, reference) uri
 
     let fetch_all t ~references uri =
@@ -57,11 +60,14 @@ module HTTP (Store: Test_store.S) = Test_sync.Make(struct
         uri
   end)
 
-module HTTPS (Store: Test_store.S) = Test_sync.Make(struct
+module Https (Store: Test_store.S) = Test_sync.Make(struct
     module M = Git_unix.Http(Store)
     module Store = Store
+
     type error = M.error
+
     let pp_error = M.pp_error
+
     let clone t ~reference uri = M.clone t ~reference:(reference, reference) uri
 
     let fetch_all t ~references uri =
@@ -77,53 +83,70 @@ module HTTPS (Store: Test_store.S) = Test_sync.Make(struct
         uri
   end)
 
-module MemStore = struct
+module Mem_store = struct
   include Git.Mem.Store(Digestif.SHA1)
   let v root = v ~root ()
 end
 
-module FsStore = struct
+module Fs_store = struct
   include Git_unix.Store
   let v root = v ~root ()
 end
 
-module TCP1  = TCP(MemStore)
-module TCP2  = TCP(FsStore)
-module HTTP1 = HTTP(MemStore)
-module HTTP2 = HTTPS(FsStore)
+module Thin = Test_thin.Make(struct
+    module M = Git_unix.Http(Fs_store)
+    module Store = Fs_store
+
+    type error = M.error
+
+    let pp_error = M.pp_error
+
+    let clone t ~reference uri = M.clone t ~reference:(reference, reference) uri
+
+    let fetch_all t ~references uri =
+      let open Lwt.Infix in
+
+      M.fetch_all t ~references uri >>= function
+      | Error _ as err -> Lwt.return err
+      | Ok _ -> Lwt.return (Ok ())
+
+    let update t ~reference uri =
+      M.update_and_create t
+        ~references:(Store.Reference.Map.singleton reference [ reference ])
+        uri
+  end)
+
+module Tcp1  = Tcp(Mem_store)
+module Tcp2  = Tcp(Fs_store)
+module Http1 = Http(Mem_store)
+module Http2 = Https(Fs_store)
 module Index = Test_index
 
 let () =
   verbose ();
   Alcotest.run "git-unix"
-    [ Test_store.suite "mem"   (module MemStore)
-    ; Test_data.suite "mem"    (module Test_data.Usual) (module MemStore)
-    ; Test_data.suite "mem"    (module Test_data.Bomb) (module MemStore)
-    ; Test_store.suite "fs"    (module FsStore)
-    ; Test_data.suite "fs"     (module Test_data.Usual) (module FsStore)
-    ; Test_data.suite "fs"     (module Test_data.Bomb) (module FsStore)
+    [ Test_store.suite "mem"    (module Mem_store)
+    ; Test_data.suite  "mem"    (module Test_data.Usual) (module Mem_store)
+    ; Test_data.suite  "mem"    (module Test_data.Bomb) (module Mem_store)
+    ; Test_store.suite "fs"     (module Fs_store)
+    ; Test_data.suite  "fs"     (module Test_data.Usual) (module Fs_store)
+    ; Test_data.suite "fs"      (module Test_data.Bomb) (module Fs_store)
 
     (* XXX(dinosaure): rev-list works only on an unix environment. Indeed,
        oracle (git) needs a well-formed git repository to work. However, the
-       tested part belongs the core, so if itś work for git-unix, it should work
-       to git-mem/git-mirage. *)
+       tested part belongs the core, so if it's work for git-unix, it should
+       work to git-mem/git-mirage. *)
 
-    ; Test_rev_list.suite "fs" (module Test_data.Usual) (module FsStore) (module Test_rev_list.Usual(FsStore))
+    ; Test_rev_list.suite "fs" (module Test_data.Usual) (module Fs_store) (module Test_rev_list.Usual(Fs_store))
     ; Test_index.suite (Fpath.v "test-index")
-    ; TCP1.test_fetch "mem-local-tcp-sync" ["git://localhost/"]
-    ; TCP1.test_clone "mem-remote-tcp-sync" [
-        "git://github.com/mirage/ocaml-git.git", "master";
-        "git://github.com/mirage/ocaml-git.git", "gh-pages";
-      ]
-    ; TCP2.test_fetch "fs-local-tcp-sync" ["git://localhost/"]
-    ; TCP2.test_clone "fs-remote-tcp-sync" [
-        "git://github.com/mirage/ocaml-git.git", "master";
-        "git://github.com/mirage/ocaml-git.git", "gh-pages";
-      ]
-    ; HTTP1.test_clone "mem-http-sync" [
-        "http://github.com/mirage/ocaml-git.git", "gh-pages"
-      ]
-    ; HTTP2.test_clone "fs-https-sync" [
-        "https://github.com/mirage/ocaml-git.git", "gh-pages"
-      ]
-    ]
+    ; Tcp1.test_clone "mem-remote-tcp-sync"
+        [ "git://github.com/mirage/ocaml-git.git", "master"
+        ; "git://github.com/mirage/ocaml-git.git", "gh-pages" ]
+    ; Tcp2.test_clone "fs-remote-tcp-sync"
+        [ "git://github.com/mirage/ocaml-git.git", "master"
+        ; "git://github.com/mirage/ocaml-git.git", "gh-pages" ]
+    ; Http1.test_clone "mem-http-sync"
+        [ "http://github.com/mirage/ocaml-git.git", "gh-pages" ]
+    ; Http2.test_clone "fs-https-sync"
+        [ "https://github.com/mirage/ocaml-git.git", "gh-pages" ]
+    ; Thin.test_thin ]

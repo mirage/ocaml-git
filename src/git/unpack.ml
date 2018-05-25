@@ -1942,7 +1942,7 @@ struct
           Log.debug (fun l -> l ~header:"needed" "Length of delta-ified object (source at: %Ld) is: %d." abs_off length');
           get abs_off >>= loop (max length length')
         | None -> t.get hash >>= function
-          | Some (_, raw) -> Lwt.return_ok (max length (Cstruct.len raw))
+          | Some (_, raw) -> Lwt.return_ok (max length' (max length (Cstruct.len raw)))
           | None -> Lwt.return_error (Invalid_hash hash) in
 
     match value with

@@ -862,7 +862,7 @@ module Make
             | (crc, abs_off, _) -> Some (crc, abs_off)
             | exception Not_found -> None in
 
-          Loaded.pack_decoder ~read_and_exclude ~idx fs path
+          Loaded.pack_decoder ~read_and_exclude ~idx fs normalized.Normalized.path
           >>?= fun (fd, pack) ->
 
           let length_hunks = Normalized.length_of_path path_delta in
@@ -1233,7 +1233,7 @@ module Make
             >>?= fun () -> FS.Mapper.close resolved.Resolved.fd >|= Rresult.R.reword_error Error.FS.err_sys_map
             (* XXX(dinosaure): the temporary pack file from the
                [resolved] state is closed here. *)
-            >>?= fun () -> Lwt.return_ok (path, hash_pack, index, delta_path)
+            >>?= fun () -> Lwt.return_ok (dst, hash_pack, index, delta_path)
 
     let of_resolved
       (type mmu) (type location)
