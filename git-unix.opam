@@ -24,7 +24,7 @@ depends: [
   "base-unix"
   "alcotest"        {test & >= "0.8.1"}
   "nocrypto"        {test & >= "0.5.4"}
-  "tls"             {test}
+  ("ssl" | "tls")   {test}
   "io-page"         {test & >= "1.6.1"}
 ]
 
