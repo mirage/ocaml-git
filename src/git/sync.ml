@@ -525,40 +525,44 @@ module Make (N: NET) (S: Minimal.S) = struct
       >>!= fun err -> Lwt.return (`Store err)
   end
 
-  let rec clone_handler git reference t r =
+  let rec clone_handler git reference ?hash t r =
     match r with
     | `Negociation _ ->
       Client.run t.ctx `Done
       |> process t
-      >>= clone_handler git reference t
+      >>= clone_handler git reference ?hash t
     | `NegociationResult _ ->
       Client.run t.ctx `ReceivePACK
       |> process t
       >>= Pack.populate git t
-      >>= (function
-          | Ok (hash, _) -> Lwt.return (Ok hash)
-          | Error _ as err -> Lwt.return err)
+      >>= (fun res -> match res, hash with
+          | Ok (_, _), Some hash -> Lwt.return (Ok hash)
+          | Ok (_, _), None ->
+            assert false (* XXX(dinosaure): impossible to retrieve this state on `NegociationResult. *)
+          | Error _ as err, _ -> Lwt.return err)
     | `ShallowUpdate _ ->
       Client.run t.ctx (`Has []) |> process t
-      >>= clone_handler git reference t
+      >>= clone_handler git reference ?hash t
     | `Refs refs ->
       (try
          let (hash_head, _, _) =
            List.find
              (fun (_, refname, peeled) -> Store.Reference.(equal reference (of_string refname)) && not peeled)
-             refs.Client.Decoder.refs
-         in
-         Client.run t.ctx (`UploadRequest { Client.Encoder.want = hash_head, [ hash_head ]
-                                          ; capabilities = t.capabilities
-                                          ; shallow = []
-                                          ; deep = None })
+             refs.Client.Decoder.refs in
+         Client.run t.ctx
+           (`UploadRequest
+              { Client.Encoder.want = hash_head, [ hash_head ]
+              ; capabilities = t.capabilities
+              ; shallow = []
+              ; deep = None })
          |> process t
-         >>= clone_handler git reference t
+         >>= clone_handler git reference ~hash:hash_head t
        with Not_found ->
          Client.run t.ctx `Flush
          |> process t
-         >>= function `Flush -> Lwt.return (Error `Not_found)
-                    | result -> Lwt.return (Error (`Clone (err_unexpected_result result))))
+         >>= function
+         | `Flush -> Lwt.return (Error `Not_found)
+         | result -> Lwt.return (Error (`Clone (err_unexpected_result result))))
     | result -> Lwt.return (Error (`Clone (err_unexpected_result result)))
 
   let ls_handler _ t r =
