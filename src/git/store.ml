@@ -558,7 +558,7 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
       ; with_cstruct
       ; free }
 
-    let to_result { RPDec.Object.kind; raw; _ } =
+    let to_result (kind, raw, _, _) =
       let open Rresult in
 
       (match kind with
@@ -597,7 +597,7 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
         PackImpl.read ~root:t.dotgit ~read_loose:(read_loose t) ~to_result ~ztmp ~window t.fs t.allocation t.engine hash
         >>!= lift_error
 
-    let to_result { RPDec.Object.kind; raw; _ } =
+    let to_result (kind, raw, _, _) =
       let cstruct_copy cs =
         let ln = Cstruct.len cs in
         let rs = Cstruct.create ln in
