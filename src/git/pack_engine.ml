@@ -147,13 +147,13 @@ module Make
                       and module Inflate := Inflate
                       and module Hunk := HDec
                       and module Pack := PDec)
-  (* : S with module Hash = Hash
+  : S with module Hash = Hash
        and module Inflate = Inflate
        and module Deflate = Deflate
        and module FS = FS
        and module HDec := HDec
        and module PDec := PDec
-       and module RPDec := RPDec *)
+       and module RPDec := RPDec
 = struct
 
   module Hash = Hash
