@@ -461,231 +461,234 @@ module type D = sig
   val pp_error : error Fmt.t
   (** Pretty-printer for {!error}. *)
 
-  type t
-  (** The type of the decoder. *)
-
   type kind = [ `Commit | `Blob | `Tree | `Tag ]
   (** The type of the kind of the git object. *)
 
-  module Object: sig
-    type from =
-      | Delta of { descr    : Hunk.hunks
-                 ; consumed : int
-                 ; inserts  : int
-                 ; offset   : int64
-                 ; crc      : Crc32.t
-                 ; base     : from }
-      | External of { hash: Hash.t; length: int; }
-      | Internal of { length   : int
-                    ; consumed : int
-                    ; offset   : int64
-                    ; crc      : Crc32.t }
-    and t =
-      { kind   : kind
-      ; raw    : Cstruct.t
-      ; from   : from }
+  type pack
+  (** The type of the decoder. *)
 
-    val pp: t Fmt.t
-    (** Pretty-printer for {!t}. *)
+  val idx: pack -> (Hash.t -> (Crc32.t * int64) option)
+  val extern: pack -> (Hash.t -> (kind * Cstruct.t) option Lwt.t)
 
-    val first_crc_exn: t -> Crc32.t
-    (** [first_crc_exn t] gets the CRC-32 checksum of [obj] {!t}. This
-        function can't raise an exception for any object created from
-        this API. However, an object created by the hand could not
-        respect the assertion. *)
+  val update_idx: (Hash.t -> (Crc32.t * int64) option) -> pack -> pack
+  val update_extern: (Hash.t -> (kind * Cstruct.t) option Lwt.t) -> pack -> pack
 
-    val first_offset_exn: t -> int64
-    val length: t -> int
+  val make: ?bucket:int -> Mapper.fd ->
+    (Hash.t -> (Crc32.t * int64) option) ->
+    (Hash.t -> (kind * Cstruct.t) option Lwt.t) ->
+    (pack, Mapper.error) result Lwt.t
+
+  module Diff: sig
+    type insert = S of string | C of Cstruct.t
+    type t = Insert of insert | Copy of (int * int)
+
+    val len: insert -> int
   end
 
-  val find_window: t -> int64 -> (Window.t * int, Mapper.error) result Lwt.t
-  (** [find t absolute_offset] returns a couple of a {!Window.t} which
-      contains the absolute offset requested and the relative offset in
-      the window. We allocate a new {!Window.t} only when we don't find
-      a previous valid {Window.t}. If the absolute offset is bad, we
-      defer the exception from [Mapper.map]. *)
+  module Patch: sig
+    type t =
+      { length : int
+      ; consumed : int
+      ; offset : int64
+      ; crc : Crc32.t
+      ; hunks : Diff.t list
+      ; descr : Hunk.hunks }
 
-  val make: ?bucket:int -> Mapper.fd
-    -> (Hash.t -> Object.t option)
-    -> (Hash.t -> (Crc32.t * int64) option)
-    -> (int64 -> Hash.t option)
-    -> (Hash.t -> (kind * Cstruct.t) option Lwt.t)
-    -> (t, Mapper.error) result Lwt.t
-  (** [make ?bucket fd cache idx revidx extern] makes a new decoder
-      when:
+    val get_from_absolute_offset:
+      ztmp:Cstruct.t -> zwin:Inflate.window ->
+      ?chunk:int ->
+      ?htmp:Cstruct.t ->
+      pack -> int64 -> (t, error) result Lwt.t
 
-      {ul
-      {- [cache] is a function to return if it is available an object
-      expected by the decoder.}
-      {- [idx] is a function to return the absolute offset of the
-      requested object if it is available in the PACK file.}
-      {- [revidx] is a function to return if it is available the hash
-      associated to the absolute offset.}
-      {- [extern] is a function to must return the git object
-      expected. Otherwise, we return an {!error} {!Invalid_hash}.}}
+    type s =
+      { kind : kind
+      ; length : int
+      ; consumed : int
+      ; offset : int64
+      ; crc : Crc32.t
+      ; hash : Hash.t
+      ; raw : Cstruct.t
+      ; descr : Hunk.hunks }
 
-      Then, the client must to provide a valid file descriptor of the
-      PACK file and can specify how many window(s) the decoder can
-      make (must be upper than 1). *)
+    val apply_from_absolute_offset:
+      ztmp:Cstruct.t -> zwin:Inflate.window ->
+      ?chunk:int ->
+      (kind * Cstruct.t) -> Cstruct.t ->
+      pack -> int64 -> (s, error) result Lwt.t
+  end
 
-  val idx: t -> (Hash.t -> (Crc32.t * int64) option)
-  (** [idx t] provides the [idx] function noticed by the client when
-      he {!make} [t]. *)
+  module Base: sig
+    type t =
+      { kind : kind
+      ; length : int
+      ; consumed : int
+      ; offset : int64
+      ; crc : Crc32.t
+      ; hash : Hash.t
+      ; raw : Cstruct.t }
 
-  val cache: t -> (Hash.t -> Object.t option)
-  (** [cache t] provides the [cache] function noticed by the client
-      when he {!make} [t]. *)
+    val get_from_absolute_offset:
+      ztmp:Cstruct.t -> zwin:Inflate.window ->
+      ?chunk:int ->
+      Cstruct.t ->
+      pack -> int64 -> (t, error) result Lwt.t
+  end
 
-  val revidx: t -> (int64 -> Hash.t option)
-  (** [revidx t] provides the [revidx] function noticed by the client
-      when he {!make} [t]. *)
+  module Object: sig
+    type t =
+      | Patch of Patch.t
+      | Root of Base.t
 
-  val extern: t -> (Hash.t -> (kind * Cstruct.t) option Lwt.t)
-  (** [extern t] provides the [extern] function noticed by the client
-      when he {!make} [t]. *)
+    val get_from_absolute_offset:
+      ztmp:Cstruct.t -> zwin:Inflate.window ->
+      ?chunk:int ->
+      ?htmp:Cstruct.t -> Cstruct.t ->
+      pack -> int64 -> (t, error) result Lwt.t
+  end
 
-  val update_idx: (Hash.t -> (Crc32.t * int64) option) -> t -> t
-  val update_cache: (Hash.t -> Object.t option) -> t -> t
-  val update_revidx: (int64 -> Hash.t option) -> t -> t
-  val update_extern: (Hash.t -> (kind * Cstruct.t) option Lwt.t) -> t -> t
+  module Cache: sig
+    type ('key, 'value) t =
+      { promote : 'key -> 'value -> unit
+      ; find : 'key -> 'value option }
 
-  val length:
-       ?chunk:int
-    -> t
-    -> Hash.t
-    -> Cstruct.t
-    -> Inflate.window
-    -> (int, error) result Lwt.t
-  (** [length ?chunk t hash tmp window] returns the length of the git
-      object. To be care, it's not the length needed to get the git
-      object - sometimes the length needed is more than the length of
-      the object requested (for this request, see {!needed}).
+    val lru: int ->
+      (module Hashtbl.HashedType with type t = 'key) ->
+      (module Lru.Weighted with type t = 'value) ->
+      ('key, 'value) t
+  end
 
-      [?chunk] is how many byte(s) the client wants to fill to the
-      internal decoder {!P.t} when it returns [`Await].
+  module Ascendant: sig
+    type t =
+      | External of { hash : Hash.t; kind : kind; raw : Cstruct.t }
+      | Root of Base.t
+      | Node of { patch : Patch.t; source : t }
 
-      Then, the client need to specify the [tmp] buffer and the
-      [window] used by the internal decoder {!P.t} (see
-      {!P.default}). *)
+    type metadata =
+      { length : int
+      ; crc : Crc32.t
+      ; offset : int64
+      ; consumed : int }
 
-  val needed_from_offset:
-       ?chunk:int
-    -> ?cache:(Hash.t -> int option)
-    -> t
-    -> int64
-    -> Cstruct.t
-    -> Inflate.window
-    -> (int, error) result Lwt.t
+    type s =
+      [ `Patch of metadata
+      | `Base of metadata
+      | `Extern ]
 
-  val needed_from_hash:
-       ?chunk:int
-    -> ?cache:(Hash.t -> int option)
-    -> t
-    -> Hash.t
-    -> Cstruct.t
-    -> Inflate.window
-    -> (int, error) result Lwt.t
-  (** [needed ?chunk ?cache t hash tmp window] returns the maximum
-      size needed to store the object identified by [hash].
+    val needed_cache: int -> (int64, int) Cache.t
+    val get_cache: int -> (int64, t) Cache.t
+    val apply_cache: int -> (int64, kind * Cstruct.t * int * s) Cache.t
 
-      [?chunk] is how many byte(s) the client wants to fill to the
-      internal decoder {!P.t} when it returns [`Await].
+    val get_from_absolute_offset:
+      ztmp:Cstruct.t -> zwin:Inflate.window ->
+      cache:(int64, t) Cache.t ->
+      ?chunk:int ->
+      ?htmp:Cstruct.t array -> Cstruct.t ->
+      pack -> int64 -> (t, error) result Lwt.t
 
-      [?cache] is used to get directly (without de-serialization) the
-      maximum size needed for the requested object (consider than is
-      not the same as [hash]).
+    val get_from_hash:
+      ztmp:Cstruct.t -> zwin:Inflate.window ->
+      cache:(int64, t) Cache.t ->
+      ?chunk:int ->
+      ?htmp:Cstruct.t array -> Cstruct.t ->
+      pack -> Hash.t -> (t, error) result Lwt.t
 
-      Then, the client need to specify the [tmp] buffer and the
-      [window] used by the internal decoder {!P.t} (see
-      {!P.default}). *)
+    val get:
+      ztmp:Cstruct.t -> zwin:Inflate.window ->
+      cache:(int64, t) Cache.t ->
+      ?chunk:int ->
+      ?htmp:Cstruct.t array -> Cstruct.t ->
+      pack -> [ `Hash of Hash.t | `Offset of int64 ] -> (t, error) result Lwt.t
 
-  val get_from_offset:
-       ?chunk:int
-    -> ?limit:bool
-    -> ?htmp:Cstruct.t array
-    -> t
-    -> int64
-    -> (Cstruct.t * Cstruct.t * int)
-    -> Cstruct.t
-    -> Inflate.window
-    -> (Object.t, error) result Lwt.t
-  (** [optimized_get' ?chunk t absolute_offset (raw0, raw1, length)
-      tmp window] returns the object located to the [absolute_offset]
-      in the PACK file. This function does not allocate any buffer. It
-      uses [raw0] and [raw1] to undelta-ify the git object requested -
-      so [raw0] and [raw1] must need to be well-sized to store all PACK
-      object needed to de-serialize the requested object. Then, we
-      returns an {!Object.t} which contains a [Cstruct.sub] in the
-      field [Object.raw] physically equal to [raw0] or [raw1].
+    val reconstruct: (Cstruct.t * Cstruct.t) -> t -> (kind * Cstruct.t * int * s)
 
-      The client need to notice the [tmp] and the [window] needed by
-      the internal decoder {!P.t}.
+    val apply_from_absolute_offset:
+      ztmp:Cstruct.t -> zwin:Inflate.window ->
+      cache:(int64, kind * Cstruct.t * int * s) Cache.t ->
+      ?chunk:int ->
+      ?htmp:Cstruct.t array -> (Cstruct.t * Cstruct.t) ->
+      pack -> int64 -> (kind * Cstruct.t * int * s, error) result Lwt.t
 
-      And [?chunk] corresponds to how many byte(s) the client wants to
-      fill to the internal decoder {!P.t} when it returns [`Await]. *)
+    val apply_from_hash:
+      ztmp:Cstruct.t -> zwin:Inflate.window ->
+      cache:(int64, kind * Cstruct.t * int * s) Cache.t ->
+      ?chunk:int ->
+      ?htmp:Cstruct.t array -> (Cstruct.t * Cstruct.t) ->
+      pack -> Hash.t -> (kind * Cstruct.t * int * s, error) result Lwt.t
 
-  val get_from_hash:
-       ?chunk:int
-    -> ?limit:bool
-    -> ?htmp:Cstruct.t array
-    -> t
-    -> Hash.t
-    -> (Cstruct.t * Cstruct.t * int)
-    -> Cstruct.t
-    -> Inflate.window
-    -> (Object.t, error) result Lwt.t
-  (** [optimized_get] has the same purpose than {!optimized_get'} but
-      instead to notice the absolute offset of the requested object,
-      the client notify the unique hash identifier. Internally, we use
-      the [idx] function needed by {!make} to get the absolute offset.
-      Otherwise, we returns an [Invalid_hash]. *)
+    val apply:
+      ztmp:Cstruct.t -> zwin:Inflate.window ->
+      cache:(int64, kind * Cstruct.t * int * s) Cache.t ->
+      ?chunk:int ->
+      ?htmp:Cstruct.t array -> (Cstruct.t * Cstruct.t) ->
+      pack -> [ `Hash of Hash.t | `Offset of int64 ] -> (kind * Cstruct.t * int * s, error) result Lwt.t
 
-  val get_with_hunks_allocation_from_offset:
-       ?chunk:int
-    -> t
-    -> int64
-    -> Cstruct.t
-    -> Inflate.window
-    -> (Cstruct.t * Cstruct.t)
-    -> (Object.t, error) result Lwt.t
-  (** [get'] has the same purpose than {!optimized_get'} but it checks
-      if [raw0] and [raw1] are well-sized to contain all object needed
-      to undelta-ify the requested object and to contain the requested
-      object. *)
+    val needed_from_absolute_offset:
+      ztmp:Cstruct.t -> zwin:Inflate.window ->
+      cache:(int64, int) Cache.t ->
+      ?chunk:int ->
+      pack -> int64 -> (int, error) result Lwt.t
 
-  val get_with_hunks_allocation_from_hash:
-       ?chunk:int
-    -> t
-    -> Hash.t
-    -> Cstruct.t
-    -> Inflate.window
-    -> (Cstruct.t * Cstruct.t)
-    -> (Object.t, error) result Lwt.t
-  (** [get] has the same purpose than {!optimized_get} but it checks
-      if [raw0] and [raw1] are well-sized to contain all object needed
-      to undelta-ify the requested object and to contain the requested
-      object. *)
+    val needed_from_hash:
+      ztmp:Cstruct.t -> zwin:Inflate.window ->
+      cache:(int64, int) Cache.t ->
+      ?chunk:int ->
+      pack -> Hash.t -> (int, error) result Lwt.t
 
-  val get_with_result_allocation_from_hash:
-       ?chunk:int
-    -> ?htmp:Cstruct.t array
-    -> t
-    -> Hash.t
-    -> Cstruct.t
-    -> Inflate.window
-    -> (Object.t, error) result Lwt.t
-  (** [get_with_allocation ?chunk t hash tmp window] has the same
-      purpose than {!optimized_get} but it allocates what it needed to
-      store the requested object. *)
+    val needed:
+      ztmp:Cstruct.t -> zwin:Inflate.window ->
+      cache:(int64, int) Cache.t ->
+      ?chunk:int ->
+      pack -> [ `Hash of Hash.t | `Offset of int64 ] -> (int, error) result Lwt.t
 
-  val get_with_result_allocation_from_offset :
-       ?chunk:int
-    -> ?htmp:Cstruct.t array
-    -> t
-    -> int64
-    -> Cstruct.t
-    -> Inflate.window
-    -> (Object.t, error) result Lwt.t
+    val length_from_absolute_offset:
+      ztmp:Cstruct.t -> zwin:Inflate.window ->
+      ?chunk:int ->
+      pack -> int64 -> (int, error) result Lwt.t
+
+    val length_from_hash:
+      ztmp:Cstruct.t -> zwin:Inflate.window ->
+      ?chunk:int ->
+      pack -> Hash.t -> (int, error) result Lwt.t
+
+    val length:
+      ztmp:Cstruct.t -> zwin:Inflate.window ->
+      ?chunk:int ->
+      pack -> [ `Hash of Hash.t | `Offset of int64 ] -> (int, error) result Lwt.t
+  end
+
+  module Descendant: sig
+    type base =
+      { kind : kind
+      ; length : int
+      ; consumed : int
+      ; offset : int64
+      ; hash : Hash.t
+      ; crc : Crc32.t }
+
+    type patch =
+      { length : int
+      ; consumed : int
+      ; offset : int64
+      ; crc : Crc32.t
+      ; hash : Hash.t
+      ; descr : Hunk.hunks }
+
+    type t =
+      | Root of { base : base; children : node list }
+    and node =
+      | Node of { patch : patch
+                ; children : node list }
+      | Leaf of patch
+
+    val get_from_absolute_offset:
+      ztmp:Cstruct.t ->
+      zwin:Inflate.window ->
+      cache:((int64, int) Cache.t * (int64, kind * Cstruct.t * int * Ascendant.s) Cache.t) ->
+      ?chunk:int ->
+      children:(int64 * Hash.t -> int64 list) ->
+      Cstruct.t ->
+      pack -> int64 -> (t, error) result Lwt.t
+  end
 end
 
 module Decoder
