@@ -15,6 +15,8 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+[@@@warning "-32"]
+
 open Lwt.Infix
 
 let ( >>!= ) a f = Lwt_result.bind_lwt_err a f
@@ -88,172 +90,6 @@ module type S = sig
     | `Delta of PEnc.Delta.error
     | `Not_found ]
 
-  module Exists:
-  sig
-    type t
-    val lookup: t -> Hash.t -> (Crc32.t * int64) option
-    val mem: t -> Hash.t -> bool
-    val fold: (Hash.t -> (Crc32.t * int64) -> 'acc -> 'acc) -> t -> 'acc -> 'acc
-    val v: FS.t -> Fpath.t -> (t, error) result Lwt.t
-  end
-
-  module Loaded:
-  sig
-    type t
-
-    val lookup: t -> Hash.t -> (Crc32.t * int64) option
-    val mem: t -> Hash.t -> bool
-    val fold: (Hash.t -> (Crc32.t * int64) -> 'acc -> 'acc) -> t -> 'acc -> 'acc
-
-    val read:
-         to_result:(RPDec.Object.t -> ('value, error) result Lwt.t)
-      -> ztmp:Cstruct.t
-      -> window:Inflate.window
-      -> ('mmu, 'location) r
-      -> t
-      -> Hash.t
-      -> [ `Return of 'value | `Promote of 'value | `Error of error ] Lwt.t
-
-    val pack_decoder:
-         read_and_exclude:(Hash.t -> (RPDec.kind * Cstruct.t) option Lwt.t)
-      -> idx:(Hash.t -> (Crc32.t * int64) option)
-      -> FS.t
-      -> Fpath.t
-      -> (FS.Mapper.fd * RPDec.t, error) result Lwt.t
-
-    val of_exists:
-         root:Fpath.t
-      -> read_and_exclude:(Hash.t -> (RPDec.kind * Cstruct.t) option Lwt.t)
-      -> FS.t
-      -> Exists.t
-      -> (t, error) result Lwt.t
-  end
-
-  module Normalized:
-  sig
-    type t
-
-    val of_info:
-         read_and_exclude:(Hash.t -> (RPDec.kind * Cstruct.t) option Lwt.t)
-      -> FS.t
-      -> Fpath.t
-      -> [ `Normalized of PInfo.path ] PInfo.t
-      -> (t, error) result Lwt.t
-
-    val second_pass:
-         ztmp:Cstruct.t
-      -> window:Inflate.window
-      -> ('mmu, 'location) r
-      -> t
-      -> (unit, error) result Lwt.t
-  end
-
-  module Resolved:
-  sig
-    type t
-    type buffer =
-      { hunks   : Cstruct.t array
-      ; buffer  : Cstruct.t * Cstruct.t * int
-      ; depth   : int
-      ; deliver : unit -> unit Lwt.t }
-
-    val lookup: t -> Hash.t -> (Crc32.t * int64) option
-    val mem: t -> Hash.t -> bool
-    val fold: (Hash.t -> (Crc32.t * int64) -> 'acc -> 'acc) -> t -> 'acc -> 'acc
-
-    val read:
-         ztmp:Cstruct.t
-      -> window:Inflate.window
-      -> to_result:(RPDec.Object.t -> ('value, error) result Lwt.t)
-      -> t
-      -> Hash.t
-      -> [ `Return of 'value | `Promote of 'value | `Error of error ] Lwt.t
-
-    val size:
-         ztmp:Cstruct.t
-      -> window:Inflate.window
-      -> t
-      -> Hash.t
-      -> (int, error) result Lwt.t
-
-    val store_idx_file:
-         root:Fpath.t
-      -> FS.t
-      -> (Hash.t * (Crc32.t * int64)) IEnc.sequence
-      -> Hash.t
-      -> (unit, error) result Lwt.t
-
-    val buffer:
-         ('mmu, 'location) r
-      -> Hash.t
-      -> int -> int -> PInfo.path
-      -> ((buffer -> unit Lwt.t) -> unit Lwt.t)
-
-    val of_normalized:
-         root:Fpath.t
-      -> read_and_exclude:(Hash.t -> (RPDec.kind * Cstruct.t) option Lwt.t)
-      -> ztmp:Cstruct.t
-      -> window:Inflate.window
-      -> FS.t
-      -> ('mmu, 'location) r
-      -> Normalized.t
-      -> (t, error) result Lwt.t
-
-    val of_loaded: ('mmu, 'location) r -> Loaded.t -> (t, error) result Lwt.t
-
-    val of_exists:
-         root:Fpath.t
-      -> read_and_exclude:(Hash.t -> (RPDec.kind * Cstruct.t) option Lwt.t)
-      -> ztmp:Cstruct.t
-      -> window:Inflate.window
-      -> FS.t
-      -> ('mmu, 'location) r
-      -> Exists.t
-      -> (t, error) result Lwt.t
-  end
-
-  module Total:  sig
-    type t
-
-    val lookup: t -> Hash.t -> (Crc32.t * int64 * int) option
-    val mem: t -> Hash.t -> bool
-    val fold: (Hash.t -> (Crc32.t * int64) -> 'acc -> 'acc) -> t -> 'acc -> 'acc
-
-    val read:
-         ztmp:Cstruct.t
-      -> window:Inflate.window
-      -> to_result:(RPDec.Object.t -> ('value, error) result Lwt.t)
-      -> t
-      -> Hash.t
-      -> [ `Return of 'value | `Error of error ] Lwt.t
-
-    val size:
-         ztmp:Cstruct.t
-      -> window:Inflate.window
-      -> t
-      -> Hash.t
-      -> (int, error) result Lwt.t
-
-    val third_pass:
-      root:Fpath.t
-      -> ztmp:Cstruct.t
-      -> window:Inflate.window
-      -> read_inflated:(Hash.t -> (RPDec.kind * Cstruct.t) option Lwt.t)
-      -> FS.t
-      -> Resolved.t
-      -> ((Fpath.t * Hash.t * (Hash.t, Crc32.t * int64 * int) Hashtbl.t * PInfo.path), error) result Lwt.t
-
-    val of_resolved:
-      root:Fpath.t
-      -> ztmp:Cstruct.t
-      -> window:Inflate.window
-      -> read_inflated:(Hash.t -> (RPDec.kind * Cstruct.t) option Lwt.t)
-      -> FS.t
-      -> ('mmu, 'location) r
-      -> Resolved.t
-      -> (t, error) result Lwt.t
-  end
-
   val pp_error: error Fmt.t
 
   val v: FS.t -> Fpath.t list -> t Lwt.t
@@ -276,7 +112,7 @@ module type S = sig
   val read:
        root:Fpath.t
     -> read_loose:(Hash.t -> (RPDec.kind * Cstruct.t) option Lwt.t)
-    -> to_result:(RPDec.Object.t -> ('value, error) result Lwt.t)
+    -> to_result:((RPDec.kind * Cstruct.t * int * RPDec.Ascendant.s) -> ('value, error) result Lwt.t)
     -> ztmp:Cstruct.t
     -> window:Inflate.window
     -> FS.t
@@ -311,13 +147,13 @@ module Make
                       and module Inflate := Inflate
                       and module Hunk := HDec
                       and module Pack := PDec)
-  : S with module Hash = Hash
+  (* : S with module Hash = Hash
        and module Inflate = Inflate
        and module Deflate = Deflate
        and module FS = FS
        and module HDec := HDec
        and module PDec := PDec
-       and module RPDec := RPDec
+       and module RPDec := RPDec *)
 = struct
 
   module Hash = Hash
@@ -438,10 +274,11 @@ module Make
 
     type t =
       { index : IDec.t
-      ; pack  : RPDec.t
+      ; pack  : RPDec.pack
       ; info  : [ `Pass ] PInfo.t
       ; fdi   : FS.Mapper.fd
       ; fdp   : FS.Mapper.fd
+      ; cache_len : (int64, int) RPDec.Cache.t
       ; mutable thin : bool }
 
     let lookup { index; info; _ } hash =
@@ -455,12 +292,18 @@ module Make
     let fold f { index; _ } a = IDec.fold index f a
 
     let rec object_to_delta ?(depth = 1) = function
-      | RPDec.Object.External { hash; length; } -> PInfo.Unresolved { hash; length; }
-      | RPDec.Object.Internal { offset; length; _ } -> PInfo.Internal { abs_off = offset; length; }
-      | RPDec.Object.Delta { descr; base; inserts; _ } -> PInfo.Delta { hunks_descr = descr; inserts; depth; from = object_to_delta ~depth:(depth + 1) base; }
+      | RPDec.Ascendant.External { hash; raw; _ } ->
+        PInfo.Unresolved { hash; length = Cstruct.len raw; }
+      | RPDec.Ascendant.Root { RPDec.Base.offset; length; hash; _ } ->
+        PInfo.Internal { abs_off = offset; length; hash; }
+      | RPDec.Ascendant.Node { patch; source; } ->
+        let inserts = List.fold_left (fun acc -> function
+            | RPDec.Diff.Insert i -> RPDec.Diff.len i + acc
+            | _ -> acc) 0 patch.RPDec.Patch.hunks in
+        PInfo.Delta { hunks_descr = patch.RPDec.Patch.descr; inserts; depth; from = object_to_delta ~depth:(depth + 1) source; }
 
-    let size { pack; _ } ~ztmp ~window hash =
-      RPDec.length pack hash ztmp window >|= Rresult.R.reword_error (fun err -> `Pack_decoder err)
+    let size { pack; _ } ~ztmp ~window:zwin hash =
+      RPDec.Ascendant.length ~ztmp ~zwin pack (`Hash hash) >|= Rresult.R.reword_error (fun err -> `Pack_decoder err)
 
     (* [read] is the main function available in the [loaded] state.
 
@@ -509,8 +352,8 @@ module Make
        *)
     let read
         (type mmu) (type location) (type value)
-        ~(to_result:RPDec.Object.t -> (value, error) result Lwt.t)
-        ~ztmp ~window
+        ~(to_result:(RPDec.kind * Cstruct.t * int * RPDec.Ascendant.s) -> (value, error) result Lwt.t)
+        ~ztmp ~window:zwin
         (r:(mmu, location) r)
         ({ pack; info; index; _ } as t) hash
       : [ `Error of error | `Promote of value | `Return of value ] Lwt.t =
@@ -521,42 +364,59 @@ module Make
       lookup t hash |> function
       | None -> Lwt.return (`Error (`Pack_decoder (RPDec.Invalid_hash hash)))
       | Some (_, abs_off) ->
-        RPDec.needed_from_offset t.pack abs_off ztmp window >>= function
+
+        let cache = { RPDec.Cache.find = (fun _ -> None)
+                    ; promote = (fun _ _ -> ()) } in
+
+        RPDec.Ascendant.needed_from_absolute_offset ~ztmp ~zwin ~cache pack abs_off >>= function
         | Error err -> Lwt.return (`Error (`Pack_decoder err))
-        | Ok length ->
+        | Ok needed ->
           let res = ref None in
-          (r.with_cstruct r.mmu Unrecorded (length * 2) @@ fun (loc_raw, raw) ->
-           let raw = Cstruct.sub raw 0 length, Cstruct.sub raw length length, length in
+          (r.with_cstruct r.mmu Unrecorded (needed * 3) @@ fun (loc_raw, raw) ->
+           let base, rtmp = Cstruct.sub raw 0 needed, (Cstruct.sub raw needed needed, Cstruct.sub raw (needed * 2) needed) in
            let deliver () = r.free r.mmu loc_raw in
-           RPDec.get_from_hash pack hash raw ztmp window
-           >>= fun x -> res := Some (deliver, x); Lwt.return_unit)
+           let cache = { RPDec.Cache.find = (fun _ -> None)
+                       ; promote = (fun _ _ -> ()) } in
+           RPDec.Ascendant.get_from_absolute_offset ~ztmp ~zwin ~cache base pack abs_off
+           >>= fun x -> res := Some (deliver, x, rtmp); Lwt.return_unit)
 
           >>= (fun () -> match !res with
               | None -> assert false
-              | Some (deliver, res) ->
+              | Some (deliver, res, rtmp) ->
                 Rresult.R.reword_error (fun err -> `Pack_decoder err) res
                 |> Lwt.return
-                >>?= fun obj -> to_result obj
+                >>?= fun obj -> to_result (RPDec.Ascendant.reconstruct rtmp obj)
                 >>?= fun res -> Lwt.return_ok (obj, res)
                 >>= fun res -> deliver () >|= fun () -> res)
+
+          (* XXX(dinosaure): at this moment, the user takes the ownership of
+             [obj]. [rtmp] will be free-ed (with [deliver]) - and [base] too. *)
+
           >|= function
             | Ok (obj, value) ->
-              let crc, abs_off, length =
-                RPDec.Object.first_crc_exn obj,
-                RPDec.Object.first_offset_exn obj,
-                RPDec.Object.length obj in
-              Hashtbl.replace info.PInfo.index hash (crc, abs_off, length);
-              Hashtbl.replace info.PInfo.delta abs_off (object_to_delta obj.RPDec.Object.from);
+              let crc, abs_off, length = match obj with
+                | RPDec.Ascendant.External _ -> assert false
+                | RPDec.Ascendant.Root base ->
+                  base.RPDec.Base.crc,
+                  base.RPDec.Base.offset,
+                  base.RPDec.Base.length
+                | RPDec.Ascendant.Node { patch; _ } ->
+                  patch.RPDec.Patch.crc,
+                  patch.RPDec.Patch.offset,
+                  patch.RPDec.Patch.descr.HDec.target_length in
 
-              let () = match obj.RPDec.Object.from with
-                | RPDec.Object.External _ -> t.thin <- true
-                | RPDec.Object.Internal _ -> ()
-                | RPDec.Object.Delta { base; _ } ->
+              Hashtbl.replace info.PInfo.index hash (crc, abs_off, length);
+              Hashtbl.replace info.PInfo.delta abs_off (object_to_delta obj);
+
+              let () = match obj with
+                | RPDec.Ascendant.External _ -> t.thin <- true
+                | RPDec.Ascendant.Root _ -> ()
+                | RPDec.Ascendant.Node { source; _ } ->
                   let rec go = function
-                    | RPDec.Object.Delta { base; _ } -> go base
-                    | RPDec.Object.External _ -> t.thin <- true
-                    | RPDec.Object.Internal _ -> () in
-                  go base in
+                    | RPDec.Ascendant.Node { source; _ } -> go source
+                    | RPDec.Ascendant.External _ -> t.thin <- true
+                    | RPDec.Ascendant.Root _ -> () in
+                  go source in
 
               if Hashtbl.length info.PInfo.delta = IDec.cardinal index
               then `Promote value
@@ -569,12 +429,10 @@ module Make
       FS.Mapper.openfile fs path
       >|= Rresult.R.reword_error (Error.FS.err_open path)
       >>?= fun fd ->
-      let fun_cache  = fun _ -> None in
       let fun_idx    = idx in
-      let fun_revidx = fun _ -> None in
       let fun_last   = read_and_exclude in
 
-      RPDec.make fd fun_cache fun_idx fun_revidx fun_last
+      RPDec.make fd fun_idx fun_last
       >|= Rresult.R.reword_error (Error.FS.err_length path)
       >>?= fun pack -> Lwt.return_ok (fd, pack)
       >>!= fun er -> FS.Mapper.close fd >|= Rresult.R.reword_error (Error.FS.err_close path)
@@ -592,7 +450,14 @@ module Make
       let ( >>!= ) v f = v >>= function Ok _ as v -> Lwt.return v | Error err -> f err in
 
       pack_decoder ~read_and_exclude ~idx:(IDec.find exists.Exists.index) fs path
-      >>?= fun (fd, pack) ->  Lwt.return_ok { index; pack; info; fdi = exists.Exists.fd; fdp = fd; thin = false }
+      >>?= fun (fd, pack) ->
+      Lwt.return_ok { index
+                    ; pack
+                    ; info
+                    ; fdi = exists.Exists.fd
+                    ; fdp = fd
+                    ; cache_len = RPDec.Ascendant.needed_cache 256
+                    ; thin = false }
       >>!= fun er -> FS.Mapper.close exists.Exists.fd >|= Rresult.R.reword_error Error.FS.err_sys_map
       >>?= fun () -> Lwt.return_error er
   end
@@ -607,7 +472,7 @@ module Make
        different pack file (e.g. if it is thin). *)
 
     type t =
-      { pack  : RPDec.t
+      { pack  : RPDec.pack
       ; path  : Fpath.t
       ; info  : [ `Normalized of PInfo.path ] PInfo.t
       ; fd    : FS.Mapper.fd
@@ -619,18 +484,18 @@ module Make
         | PInfo.Patch { hunks; src; _ } -> go (acc + hunks) src in
       go 0 path
 
-    let digest obj =
+    let digest (kind, raw) =
       let hdr = Fmt.strf "%s %d\000"
-          (match obj.RPDec.Object.kind with
+          (match kind with
                | `Commit -> "commit"
                | `Tree -> "tree"
                | `Tag -> "tag"
                | `Blob -> "blob")
-          (Cstruct.len obj.RPDec.Object.raw) in
+          (Cstruct.len raw) in
 
       let ctx = Hash.Digest.init () in
       Hash.Digest.feed ctx (Cstruct.of_string hdr);
-      Hash.Digest.feed ctx obj.RPDec.Object.raw;
+      Hash.Digest.feed ctx raw;
       Hash.Digest.get ctx
 
     let of_info ~read_and_exclude fs path_tmp info =
@@ -652,46 +517,61 @@ module Make
     let second_pass
       (type mmu) (type location)
       ~ztmp
-      ~window
+      ~window:zwin
       (r:(mmu, location) r)
       normalized =
+
+      let cache_needed = { RPDec.Cache.find = (fun _ -> None)
+                         ; promote = (fun _ _ -> ()) } in
+      let cache_object = { RPDec.Cache.find = (fun _ -> None)
+                         ; promote = (fun _ _ -> ()) } in
+
       let resolve abs_off =
-        RPDec.needed_from_offset normalized.pack abs_off ztmp window >>= function
+        RPDec.Ascendant.needed_from_absolute_offset ~ztmp ~zwin ~cache:cache_needed normalized.pack abs_off >>= function
         | Error err -> Lwt.fail (Fail err)
         | Ok needed ->
-          Log.debug (fun l -> l "Allocate %d byte(s) to extract %a:%Ld." (needed * 2) Hash.pp normalized.info.PInfo.hash_pack abs_off);
+          Log.debug (fun l -> l "Allocate %d byte(s) to extract %a:%Ld." (needed * 3) Hash.pp normalized.info.PInfo.hash_pack abs_off);
 
-          r.with_cstruct r.mmu Unrecorded (needed * 2) @@ fun (loc_raw, raw) ->
+          r.with_cstruct r.mmu Unrecorded (needed * 3) @@ fun (loc_raw, raw) ->
           Log.debug (fun l -> l "Has %d byte(s)." (Cstruct.len raw));
-          let raw = Cstruct.sub raw 0 needed, Cstruct.sub raw needed needed, needed in
-          RPDec.get_from_offset normalized.pack abs_off raw ztmp window >>= function
+
+          let rtmp = Cstruct.sub raw 0 needed, Cstruct.sub raw needed needed in
+          let base = Cstruct.sub raw (needed * 2) needed in
+
+          RPDec.Ascendant.get_from_absolute_offset ~ztmp ~zwin ~cache:cache_object base normalized.pack abs_off >>= function
           | Error err -> Lwt.fail (Fail err)
           | Ok obj ->
-            let hash = digest obj in
-            let crc, abs_off =
-              RPDec.Object.first_crc_exn obj,
-              RPDec.Object.first_offset_exn obj in
+
+            Log.debug (fun l -> l "Patch of object: %a.\n" PInfo.pp_delta (Loaded.object_to_delta obj));
+
+            let (kind, raw, _, metadata) = RPDec.Ascendant.reconstruct rtmp obj in
+            let hash = digest (kind, raw) in
+            let crc, abs_off = match metadata with
+              | `Extern -> assert false
+              (* XXX(dinosaure): impossible. An object is a patch or a base,
+                 however, source of it can be extern. *)
+              | `Patch metadata | `Base metadata ->
+                metadata.RPDec.Ascendant.crc, metadata.RPDec.Ascendant.offset in
 
             Log.info (fun l ->
                 l ~header:"second_pass" "Add object %a (length: %d, offset: %Ld)."
                   Hash.pp hash (Hashtbl.length normalized.info.PInfo.index) abs_off);
 
             Hashtbl.add normalized.info.PInfo.index hash (crc, abs_off, needed);
-            Hashtbl.replace normalized.info.PInfo.delta abs_off (Loaded.object_to_delta obj.RPDec.Object.from);
+            Hashtbl.replace normalized.info.PInfo.delta abs_off (Loaded.object_to_delta obj);
 
-            let () = match obj.RPDec.Object.from with
-              | RPDec.Object.External _ -> normalized.thin <- true
-              | RPDec.Object.Internal _ -> ()
-              | RPDec.Object.Delta { base; _ } ->
+            let () = match obj with
+              | RPDec.Ascendant.External _ -> normalized.thin <- true
+              | RPDec.Ascendant.Root _ -> ()
+              | RPDec.Ascendant.Node { source; _ } ->
                 let rec go = function
-                  | RPDec.Object.Delta { base; _ } -> go base
-                  | RPDec.Object.External _ -> normalized.thin <- true
-                  | RPDec.Object.Internal _ -> ()
-                in
-                go base
-            in
-            r.free r.mmu loc_raw
-      in
+                  | RPDec.Ascendant.Node { source; _ } -> go source
+                  | RPDec.Ascendant.External _ -> normalized.thin <- true
+                  | RPDec.Ascendant.Root _ -> () in
+                go source in
+
+            r.free r.mmu loc_raw in
+
       Lwt.catch
         (fun () ->
            Lwt_list.iter_s
@@ -731,7 +611,7 @@ module Make
        repository. *)
 
     type t =
-      { pack       : RPDec.t
+      { pack       : RPDec.pack
       ; index      : (Hash.t, Crc32.t * int64 * int) Hashtbl.t
       ; delta      : (int64, PInfo.delta) Hashtbl.t
       ; hash_pack  : Hash.t
@@ -740,8 +620,9 @@ module Make
       ; buff       : (buffer -> unit Lwt.t) -> unit Lwt.t
       ; thin       : bool }
     and buffer =
-      { hunks : Cstruct.t array
-      ; buffer : Cstruct.t * Cstruct.t * int
+      { htmp : Cstruct.t array
+      ; rtmp : Cstruct.t * Cstruct.t
+      ; base : Cstruct.t
       ; depth : int
       ; deliver : unit -> unit Lwt.t }
 
@@ -804,26 +685,28 @@ module Make
     let buffer
         (type mmu) (type location)
         (r:(mmu, location) r)
-        hash_pack length_hunks length_buffer path_delta : (buffer -> unit Lwt.t) -> unit Lwt.t =
+        hash_pack length_htmp length_raw path_delta : (buffer -> unit Lwt.t) -> unit Lwt.t =
       let ret = ref None in
 
       let make () =
-        r.with_cstruct r.mmu (Pack hash_pack) (length_hunks + (length_buffer * 2)) @@ fun (loc, buffer) ->
+        r.with_cstruct r.mmu (Pack hash_pack) (length_htmp + (length_raw * 3)) @@ fun (loc, buffer) ->
 
         Log.debug (fun l ->
           l ~header:"buffer" "Split hunks to: %a." Fmt.(Dump.list int) (list_of_path path_delta));
 
-        let hunks = Cstruct.sub buffer 0 length_hunks in
-        let hunks = split_of_path hunks path_delta in
+        let htmp = Cstruct.sub buffer 0 length_htmp in
+        let htmp = split_of_path htmp path_delta in
 
         let depth = depth_of_path path_delta in
 
-        let buffer = Cstruct.sub buffer length_hunks (length_buffer * 2) in
-        let buffer = Cstruct.sub buffer 0 length_buffer, Cstruct.sub buffer length_buffer length_buffer, length_buffer in
+        let buffer = Cstruct.sub buffer length_htmp (length_raw * 3) in
+
+        let rtmp = Cstruct.sub buffer 0 length_raw, Cstruct.sub buffer length_raw length_raw in
+        let base = Cstruct.sub buffer (length_raw * 2) length_raw in
 
         let deliver () = r.free r.mmu loc in
 
-        ret := Some { hunks; buffer; deliver; depth; };
+        ret := Some { htmp; rtmp; base; deliver; depth; };
         Lwt.return_unit in
 
       (* XXX(dinosaure): bypass value restriction. *)
@@ -836,7 +719,7 @@ module Make
 
     (* [of_normalized p] creates a [resolved] pack file from the
        normalized pack file [p]. This is done by applying
-       {!Normalizedsecond_pass}. If the pack file is thin, we keep
+       {!Normalized.second_pass}. If the pack file is thin, we keep
        using the pack file in a temporary location; otherwise both the
        pack file and its associated IDX file are created in the
        repository and made available to other users. *)
@@ -852,7 +735,7 @@ module Make
       Normalized.second_pass ~ztmp ~window r normalized >>= function
       | Error _ as err -> Lwt.return err
       | Ok () ->
-        let info = PInfo.resolve ~length:(Hashtbl.length normalized.info.PInfo.delta) normalized.info in
+        let info = PInfo.resolve ~length:(Hashtbl.length normalized.Normalized.info.PInfo.delta) normalized.Normalized.info in
         let path = Fpath.(root / "objects" / "pack" / Fmt.strf "pack-%s.pack" (Hash.to_hex info.PInfo.hash_pack)) in
         let `Resolved path_delta = info.PInfo.state in
 
@@ -932,9 +815,8 @@ module Make
                     ; buff
                     ; thin = loaded.Loaded.thin }
 
-    (* [of_exists] allows to pass directlry from the [exists] to the
-       [resolved] state. The function is only valid on non-thin pack
-       files. *)
+    (* [of_exists] allows to pass directly from the [exists] to the [resolved]
+       state. The function is only valid on non-thin pack files. *)
     let of_exists
         (type mmu) (type location)
         ~root
@@ -983,14 +865,16 @@ module Make
       | (crc, abs_off, _) -> Some (crc, abs_off)
       | exception Not_found -> None
 
-    let size ~ztmp ~window { pack; _ } hash =
-      RPDec.length pack hash ztmp window >|= Rresult.R.reword_error (fun err -> `Pack_decoder err)
+    let size ~ztmp ~window:zwin { pack; _ } hash =
+      RPDec.Ascendant.length_from_hash ~ztmp ~zwin pack hash >|= Rresult.R.reword_error (fun err -> `Pack_decoder err)
 
-    let read (type value) ~ztmp ~window ~(to_result:RPDec.Object.t -> (value, error) result Lwt.t) ({ pack; thin; _ } as t) hash
+    let read (type value) ~ztmp ~window:zwin ~(to_result:(RPDec.kind * Cstruct.t * int * RPDec.Ascendant.s) -> (value, error) result Lwt.t) ({ pack; thin; _ } as t) hash
       : [ `Error of error | `Promote of value | `Return of value ] Lwt.t =
-      with_buffer t.buff @@ fun { hunks; buffer; deliver; _ } ->
-      RPDec.get_from_hash ~htmp:hunks pack hash buffer ztmp window >|= Rresult.R.reword_error (fun err -> `Pack_decoder err)
-      >>?= to_result >>= fun res -> deliver () >|= fun () -> match res with
+      with_buffer t.buff @@ fun { htmp; base; rtmp; deliver; _ } ->
+      let cache = { RPDec.Cache.find = (fun _ -> None)
+                  ; promote = (fun _ _ -> ()) } in
+      RPDec.Ascendant.get_from_hash ~ztmp ~zwin ~cache ~htmp base pack hash >|= Rresult.R.reword_error (fun err -> `Pack_decoder err)
+      >>?= (fun x -> to_result (RPDec.Ascendant.reconstruct rtmp x)) >>= fun res -> deliver () >|= fun () -> match res with
       | Ok value ->
         if not thin then `Promote value else `Return value
       | Error err -> ` Error err
@@ -1005,7 +889,7 @@ module Make
       { index      : (Hash.t, Crc32.t * int64 * int) Hashtbl.t
       ; path_delta : PInfo.path
       ; hash_pack  : Hash.t
-      ; pack       : RPDec.t
+      ; pack       : RPDec.pack
       ; buff       : (Resolved.buffer -> unit Lwt.t) -> unit Lwt.t
       ; fd         : FS.Mapper.fd }
 
@@ -1013,17 +897,20 @@ module Make
     let mem { index; _ } hash = Hashtbl.mem index hash
     let fold f { index; _ } a = Hashtbl.fold (fun hash (crc, abs_off, _) a -> f hash (crc, abs_off) a) index a
 
-    let size ~ztmp ~window { pack; _ } hash =
-      RPDec.length pack hash ztmp window >|= Rresult.R.reword_error (fun err -> `Pack_decoder err)
+    let size ~ztmp ~window:zwin { pack; _ } hash =
+      RPDec.Ascendant.length_from_hash ~ztmp ~zwin pack hash >|= Rresult.R.reword_error (fun err -> `Pack_decoder err)
 
-    let read (type value) ~ztmp ~window ~(to_result:RPDec.Object.t -> (value, error) result Lwt.t) ({ pack; _ } as t) hash
+    let read (type value) ~ztmp ~window:zwin ~(to_result:(RPDec.kind * Cstruct.t * int * RPDec.Ascendant.s) -> (value, error) result Lwt.t) ({ pack; _ } as t) hash
       : [ `Error of error | `Return of value ] Lwt.t =
       Log.debug (fun l ->
           l ~header:"read" "Try to extract object %a in PACK %a."
             Hash.pp hash Hash.pp t.hash_pack);
 
-      with_buffer t.buff @@ fun { hunks; buffer; deliver; _ } ->
-      RPDec.get_from_hash ~htmp:hunks pack hash buffer ztmp window >|= Rresult.R.reword_error (fun err -> `Pack_decoder err)
+      let cache = { RPDec.Cache.find = (fun _ -> None)
+                  ; promote = (fun _ _ -> ()) } in
+
+      with_buffer t.buff @@ fun { htmp; rtmp; deliver; _ } ->
+      RPDec.Ascendant.apply_from_hash ~ztmp ~zwin ~htmp ~cache rtmp pack hash >|= Rresult.R.reword_error (fun err -> `Pack_decoder err)
       >>?= to_result >>= fun res -> deliver () >|= fun () -> match res with
       | Ok value -> `Return value
       | Error err -> ` Error err
@@ -1146,7 +1033,7 @@ module Make
           | None -> a) [] lst
       |> List.rev
 
-    let third_pass ~root ~ztmp ~window ~read_inflated fs resolved =
+    let third_pass ~root ~ztmp ~window:zwin ~read_inflated fs resolved =
       let deltas = filter_map (function PInfo.Delta { hunks_descr; _ } -> Some hunks_descr | _ -> None)
           (Hashtbl.fold (fun _ v a -> v :: a) resolved.Resolved.delta []) in
       let revidx = Hashtbl.create (Hashtbl.length resolved.Resolved.index) in
@@ -1154,24 +1041,42 @@ module Make
 
       let k2k = function
         | `Commit -> Pack.Kind.Commit
-        | `Tree   -> Pack.Kind.Tree
-        | `Blob   -> Pack.Kind.Blob
-        | `Tag    -> Pack.Kind.Tag in
-      let make acc (hash, (_, abs_off, _)) =
-        with_buffer resolved.Resolved.buff @@ fun { hunks; buffer; deliver; _ } ->
+        | `Blob -> Pack.Kind.Blob
+        | `Tree -> Pack.Kind.Tree
+        | `Tag -> Pack.Kind.Tag in
 
-        RPDec.get_from_offset ~htmp:hunks resolved.Resolved.pack abs_off buffer ztmp window
-        >>= fun obj -> deliver () >|= fun () -> match obj with
-        | Error _ -> acc
+      let make acc (_hash, (_, abs_off, _)) =
+        with_buffer resolved.Resolved.buff @@ fun { htmp; base; rtmp; deliver; _ } ->
+
+        let cache = { RPDec.Cache.find = (fun _ -> None)
+                    ; promote = (fun _ _ -> ()) } in
+
+        RPDec.Ascendant.get_from_absolute_offset ~ztmp ~zwin ~cache ~htmp base resolved.Resolved.pack abs_off >>= function
+        | Error _ -> deliver () >|= fun () -> acc
         | Ok obj ->
-          let delta = match obj.RPDec.Object.from with
-            | RPDec.Object.External { hash; _ } -> Some (PEnc.Entry.From hash)
-            | RPDec.Object.Internal _ -> None
-            | RPDec.Object.Delta { offset; _ } ->
-              try let hash = Hashtbl.find revidx offset in
+          let delta = match obj with
+            | RPDec.Ascendant.Root _ | RPDec.Ascendant.External _-> None
+            | RPDec.Ascendant.Node { patch = { RPDec.Patch.descr = { HDec.reference = HDec.Hash hash; _  }; _ }; _ } ->
+              Some (PEnc.Entry.From hash)
+            | RPDec.Ascendant.Node { patch = { RPDec.Patch.descr = { HDec.reference = HDec.Offset abs_off; _  }; _ }; _ } ->
+              try let hash = Hashtbl.find revidx abs_off in
                 Some (PEnc.Entry.From hash)
               with Not_found -> None (* XXX(dinosaure): should not appear. *) in
-          PEnc.Entry.make hash ?delta (k2k obj.RPDec.Object.kind) (Int64.of_int (Cstruct.len obj.RPDec.Object.raw)) :: acc in
+          let (kind, raw, _depth, _metadata) = RPDec.Ascendant.reconstruct rtmp obj in
+          let hash = Normalized.digest (kind, raw) in
+          let kind = k2k kind in
+          let length = Int64.of_int (Cstruct.len raw) in
+
+          (* XXX(dinosaure): [hash] is already available. So we don't need to
+             use [reconstruct]. However, we need to see if
+             [get_from_absolute_offset] is faster than
+             [get_from_absolute_offset] + [reconstruct] - specifically if this
+             function is tail-rec or not.
+
+             When we find a response about that, we can only use
+             [get_from_absolute_offset]. *)
+
+          deliver () >|= fun () -> PEnc.Entry.make hash ?delta kind length :: acc in
       let external_objects acc =
         let res = List.fold_left
             (fun acc hunks_descr ->
@@ -1192,14 +1097,19 @@ module Make
       let read_inflated hash =
         if Hashtbl.mem resolved.Resolved.index hash
         then
-          with_buffer resolved.Resolved.buff @@ fun { hunks; buffer = (_, _, length); deliver; _ } ->
-          let buffer = Cstruct.create (length * 2) in
-          let buffer = Cstruct.sub buffer 0 length, Cstruct.sub buffer length length, length in
+          with_buffer resolved.Resolved.buff @@ fun { htmp; base; deliver; _ } ->
+          let length = Cstruct.len base in
 
-          RPDec.get_from_hash ~htmp:hunks resolved.Resolved.pack hash buffer ztmp window
+          let rtmp = Cstruct.create (length * 2) in
+          let rtmp = Cstruct.sub rtmp 0 length, Cstruct.sub rtmp length length in
+
+          let cache = { RPDec.Cache.find = (fun _ -> None)
+                      ; promote = (fun _ _ -> ()) } in
+
+          RPDec.Ascendant.apply_from_hash ~ztmp ~zwin ~cache ~htmp rtmp resolved.Resolved.pack hash
           >>= fun obj -> deliver () >|= fun () -> match obj with
           | Error _ -> None
-          | Ok obj -> (Some obj.RPDec.Object.raw)
+          | Ok (_, raw, _, _) -> (Some raw)
         else read_inflated hash >|= function
           | Some (_, raw) -> Some raw
           (* XXX(dinosaure): normalement, il devrait y avoir un [cstruct_copy]
@@ -1299,16 +1209,25 @@ module Make
      only when the pack file is a /thin/-pack. So, we need to allocate some
      buffers to avoid a memory-explosion (if the object is delta-ified) and
      return a /fresh/ raw of the requested object. *)
-  let strong_weight_read decoder hash request =
+  let strong_weight_read decoder _hash_pack hash =
     let ztmp = Cstruct.create 0x8000 in
-    let window = Inflate.window () in
-    (RPDec.get_with_result_allocation_from_hash decoder request ztmp window >>= function
-      | Ok obj -> Lwt.return (Some (obj.RPDec.Object.kind, obj.RPDec.Object.raw))
-      | Error err ->
-        Log.err (fun l -> l ~header:"read_and_exclude" "Error when we try to get the object %a from the pack %a: %a."
-                    Hash.pp request Hash.pp hash
-                    RPDec.pp_error err);
-        Lwt.return None)
+    let zwin = Inflate.window () in
+
+    let cache = { RPDec.Cache.find = (fun _ -> None)
+                ; promote = (fun _ _ -> ()) } in
+
+    (RPDec.Ascendant.needed_from_hash ~ztmp ~zwin ~cache decoder hash >>= function
+      | Error _ -> Lwt.return_none
+      | Ok needed ->
+        let rtmp = Cstruct.create (needed * 2) in
+        let rtmp = Cstruct.sub rtmp 0 needed, Cstruct.sub rtmp needed needed in
+
+        let cache = { RPDec.Cache.find = (fun _ -> None)
+                    ; promote = (fun _ _ -> ()) } in
+
+        RPDec.Ascendant.apply_from_hash ~ztmp ~zwin ~cache rtmp decoder hash >>= function
+        | Ok (kind, raw, _, _) -> Lwt.return_some (kind, raw)
+        | Error _ -> Lwt.return_none)
 
   exception Catch of (RPDec.kind * Cstruct.t)
 
@@ -1326,13 +1245,13 @@ module Make
 
      Then, we exclude the pack itself to avoid a infinite recursion when the
      length of the redirection is 1. If it's upper, firstly, what? then, you
-     could have a infinite loop. About this bug, we could change the API of the
+     could have an infinite loop. About this bug, we could change the API of the
      pack decoder and allow to inform a /close/ list to the function.
 
      NOTE: [exclude] is added for each call (we put the current hash of the PACK
      file), it's like a close list of already visited PACK files. This is to
      avoid an infinite recursion. It's common to have 2 times (or more) the same
-     objet on multiple PACK file.
+     objet on multiple PACK files.
 
      So, a /thin/ PACK file A can expect an external object O which appear on a
      PACK file B which need an object M which could be appear inner A (and need
@@ -1342,8 +1261,8 @@ module Make
 
      As I said, the object O can be appear 2 times (or more) in multiple PACK
      file. That means, object O can appear in an other PACK file. The goal is to
-     get O from a different PACK file than A (may be a PACK file C) and this the
-     purpose of [exclude]. My brain is fuck up. *)
+     get O from a different PACK file than A (may be a PACK file C) and this is
+     the purpose of [exclude]. My brain is fuck up. *)
   let rec read_and_exclude ~root ~read_loose fs t exclude request =
     Lwt.catch
       (fun () -> Lwt_list.fold_left_s (fun acc (hash, pack) -> match acc with
