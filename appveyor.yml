@@ -6,7 +6,7 @@ environment:
     FORK_USER: ocaml
     FORK_BRANCH: master
     CYG_ROOT: C:\cygwin64
-    PINS: "git.dev:. git-http.dev:. git-unix.dev:. git-mirage.dev:. encore.dev:https://github.com/dinosaure/encore.git digestif.dev:https://github.com/digestif/digestif.git decompress.dev:https://github.com/mirage/decompress.git"
+    PINS: "git.dev:. git-http.dev:. git-unix.dev:. git-mirage.dev:. conduit-lwt-unix.dev:--dev digestif.dev:https://github.com/digestif/digestif.git decompress.dev:https://github.com/mirage/decompress.git"
     ALCOTEST_SHOW_ERRORS: true
   matrix:
   - PACKAGE: "git-mirage.dev"
