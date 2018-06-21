@@ -35,7 +35,7 @@ sig
 
   type delta =
     | Unresolved of { hash: Hash.t; length: int; }
-    | Internal of { abs_off: int64; length: int; }
+    | Internal of { hash: Hash.t; abs_off: int64; length: int; }
     | Delta of { hunks_descr: HDec.hunks; inserts: int; depth: int; from: delta; }
 
   val pp_delta: delta Fmt.t
@@ -100,7 +100,7 @@ module Make
 
   type delta =
     | Unresolved of { hash: Hash.t; length: int; }
-    | Internal   of { abs_off: int64; length: int; }
+    | Internal   of { hash: Hash.t; abs_off: int64; length: int; }
     | Delta      of { hunks_descr: HDec.hunks; inserts: int; depth: int; from: delta; }
 
   let rec pp_delta ppf = function
@@ -108,10 +108,11 @@ module Make
       Fmt.pf ppf "(Unresolved@ { @[<hov>hash = %a;@ \
                   length = %d;@] })"
         Hash.pp hash length
-    | Internal { abs_off; length; } ->
-      Fmt.pf ppf "(Internal { @[<hov>abs_off = %Ld;@ \
+    | Internal { hash; abs_off; length; } ->
+      Fmt.pf ppf "(Internal { @[<hov>hash = %al@ \
+                  abs_off = %Ld;@ \
                   length = %d;@] })"
-        abs_off length
+        Hash.pp hash abs_off length
     | Delta { hunks_descr; inserts; depth; from; } ->
       Fmt.pf ppf "(Delta { @[<hov>hunks_descr = %a;@ \
                   inserts = %d;@ \
@@ -236,7 +237,7 @@ module Make
               Log.info (fun l -> l ~header:"first_pass" "Save object %a." Hash.pp hash);
 
               Hashtbl.add index hash (PDec.crc state, PDec.offset state, PDec.length state);
-              Hashtbl.add delta (PDec.offset state) (Internal { abs_off = PDec.offset state; length = PDec.length state; })
+              Hashtbl.add delta (PDec.offset state) (Internal { hash; abs_off = PDec.offset state; length = PDec.length state; })
             | None ->
               let ctx = ctx_with_header empty state in
               let hash = Hash.Digest.get ctx in
@@ -244,7 +245,7 @@ module Make
               Log.info (fun l -> l ~header:"first_pass" "Save object %a." Hash.pp hash);
 
               Hashtbl.add index (Hash.Digest.get ctx) (PDec.crc state, PDec.offset state, PDec.length state);
-              Hashtbl.add delta (PDec.offset state) (Internal { abs_off = PDec.offset state; length = PDec.length state; }) in
+              Hashtbl.add delta (PDec.offset state) (Internal { hash; abs_off = PDec.offset state; length = PDec.length state; }) in
 
         go ~src (PDec.next_object state)
       | `End (_, hash_pack) ->
