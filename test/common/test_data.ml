@@ -181,6 +181,14 @@ module Bomb = struct
   let name = "bomb"
 end
 
+module Udns = struct
+  let pack = Fpath.(v ".." / "data" / "udns.pack")
+  let idx = Fpath.(v ".." / "data" / "udns.idx")
+  let refs = Fpath.(v ".." / "data" / "udns.refs")
+
+  let name = "udns"
+end
+
 let suite name (module F: SOURCE) (module S: S) =
   let module T = Make0(F)(S) in
   (Fmt.strf "%s: %s" name F.name),
