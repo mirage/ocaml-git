@@ -504,6 +504,7 @@ module type D = sig
       { kind : kind
       ; length : int
       ; consumed : int
+      ; inserts : int
       ; offset : int64
       ; crc : Crc32.t
       ; hash : Hash.t
@@ -668,6 +669,7 @@ module type D = sig
     type patch =
       { length : int
       ; consumed : int
+      ; inserts : int
       ; offset : int64
       ; crc : Crc32.t
       ; hash : Hash.t
