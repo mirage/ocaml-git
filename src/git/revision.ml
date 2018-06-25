@@ -16,7 +16,7 @@
  *)
 
 module Make
-    (Store : Minimal.S with type Hash.Digest.buffer = Cstruct.t)
+    (Store : Minimal.S)
 = struct
   type t =
     | Reference of Store.Reference.t (* <refname> *)

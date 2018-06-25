@@ -313,7 +313,7 @@ sig
        | `Error of t * error ]
 end
 
-module Decoder (H: S.HASH with type Digest.buffer = Cstruct.t): DECODER with module Hash = H =
+module Decoder (H: S.HASH): DECODER with module Hash = H =
 struct
   module Hash = H
 
@@ -386,8 +386,8 @@ struct
       t.i_off t.i_pos t.i_len (Fmt.hvbox pp_state) t.state
 
   let await src t =
-    let () = Hash.Digest.feed t.hash (Cstruct.sub src t.i_off t.i_pos) in
-    Wait t
+    let hash = Hash.Digest.feed t.hash (Cstruct.sub src t.i_off t.i_pos) in
+    Wait { t with hash }
   let error t exn: res = Error ({ t with state = Exception exn }, exn)
   let ok t hash: res = Ok ({ t with state = End hash }, hash)
 
@@ -547,8 +547,8 @@ struct
 
   let hash ?boffsets src t =
     let aux k src t =
-      let () = Hash.Digest.feed t.hash (Cstruct.sub src t.i_off t.i_pos) in
-      KHash.get_hash k src t
+      let hash = Hash.Digest.feed t.hash (Cstruct.sub src t.i_off t.i_pos) in
+      KHash.get_hash k src { t with hash }
     in
 
     (KHash.get_hash
@@ -703,7 +703,7 @@ sig
        | `Error of t * error ]
 end
 
-module Encoder (H: S.HASH with type Digest.buffer = Cstruct.t): ENCODER with module Hash = H =
+module Encoder (H: S.HASH): ENCODER with module Hash = H =
 struct
   module Hash = H
 
@@ -773,8 +773,8 @@ struct
       o_off o_pos o_len write Hash.pp pack (Fmt.hvbox pp_state) state
 
   let flush dst t =
-    Hash.Digest.feed t.hash (Cstruct.sub dst t.o_off t.o_pos);
-    Flush t
+    let hash = Hash.Digest.feed t.hash (Cstruct.sub dst t.o_off t.o_pos) in
+    Flush { t with hash }
 
   module Int32 =
   struct
@@ -943,10 +943,10 @@ struct
   let hash dst t =
     (KHash.put_hash (Hash.to_string t.pack)
      @@ fun dst t ->
-     Hash.Digest.feed t.hash (Cstruct.sub dst t.o_off t.o_pos);
-     let hash = Hash.Digest.get t.hash in
+     let ctx = Hash.Digest.feed t.hash (Cstruct.sub dst t.o_off t.o_pos) in
+     let hash = Hash.Digest.get ctx in
 
-     KHash.put_hash ~digest:false (Hash.to_string hash) (fun _ t -> ok t) dst t)
+     KHash.put_hash ~digest:false (Hash.to_string hash) (fun _ t -> ok t) dst { t with hash = ctx })
     dst t
 
   let rec boffsets idx dst t =

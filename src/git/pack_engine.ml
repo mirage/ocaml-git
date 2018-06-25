@@ -494,8 +494,8 @@ module Make
           (Cstruct.len raw) in
 
       let ctx = Hash.Digest.init () in
-      Hash.Digest.feed ctx (Cstruct.of_string hdr);
-      Hash.Digest.feed ctx raw;
+      let ctx = Hash.Digest.feed ctx (Cstruct.of_string hdr) in
+      let ctx = Hash.Digest.feed ctx raw in
       Hash.Digest.get ctx
 
     let of_info ~read_and_exclude fs path_tmp info =

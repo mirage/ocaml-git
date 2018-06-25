@@ -109,17 +109,16 @@ end
 module type IDIGEST = sig
   type t
   type ctx
-  type buffer = Cstruct.t
 
   val init   : unit -> ctx
-  val feed   : ctx -> buffer -> unit
+  val feed   : ctx -> Cstruct.t -> ctx
   val get    : ctx -> t
 
   val length : int
 end
 
 module type HASH = sig
-  include BASE with type t = Hash.t
+  include BASE with type t = private string
 
   module Digest : IDIGEST with type t = t
 

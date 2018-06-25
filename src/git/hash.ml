@@ -15,38 +15,40 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-type t = Bytes.t
+type t = private string
 type hex = string
 
-module Make (D: Digestif_sig.S) = struct
-  type nonrec t = t
+module Make (D: Digestif_sig.S): S.HASH = struct
+  type t = D.t
   type nonrec hex = hex
-  module Digest = struct
-    type t = Bytes.t
-    type ctx = D.Bytes.ctx
-    type buffer = Cstruct.t
 
-    let init () = D.Bytes.init ()
-    let feed ctx cs = D.Bytes.feed_bigstring ctx (Cstruct.to_bigarray cs)
-    let get ctx = D.Bytes.get ctx
+  module Digest = struct
+    type nonrec t = t
+    type ctx = D.ctx
+
+    let init () = D.init ()
+    let feed ctx cs = D.feed_bigstring ctx (Cstruct.to_bigarray cs)
+    let get ctx = D.get ctx
 
     let length = D.digest_size
   end
 
-  let of_string = Bytes.of_string
-  let to_string = Bytes.to_string
-  let get = Bytes.get
+  external unsafe_of_string : string -> t = "%identity"
+  external unsafe_to_string : t -> string = "%identity"
+  let of_string = unsafe_of_string
+  let to_string = unsafe_to_string
+  let get : t -> int -> char = fun t i -> String.get (t:>string) i
 
-  let of_hex buf = D.Bytes.of_hex (Bytes.unsafe_of_string buf)
-  let to_hex x = D.Bytes.to_hex x |> Bytes.to_string
+  let of_hex : hex -> t = fun buf -> D.of_hex buf
+  let to_hex : t -> hex = fun x -> D.to_hex x
 
-  module Map = Map.Make(Bytes)
-  module Set = Set.Make(Bytes)
+  let compare : t -> t -> int = fun a b -> String.compare (a:>string) (b:>string)
+  let equal : t -> t -> bool = fun a b -> String.equal (a:>string) (b:>string)
+  let hash : t -> int = fun t -> Hashtbl.hash (t:>string)
+  let pp : t Fmt.t = fun ppf hash -> Fmt.string ppf (to_hex hash)
 
-  let compare = Bytes.compare
-  let equal = Bytes.equal
-  let hash : Bytes.t -> int = Hashtbl.hash
-  let pp ppf hash = Fmt.string ppf (to_hex hash)
+  module Map = Map.Make(struct type nonrec t = t let compare = compare end)
+  module Set = Set.Make(struct type nonrec t = t let compare = compare end)
 end
 
 (* XXX: this breaks as jbuilder doesn't the linking trick yet *)
