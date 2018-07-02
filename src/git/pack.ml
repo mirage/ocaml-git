@@ -1054,8 +1054,8 @@ struct
     | KindRaw
 
   let flush dst t =
-    Hash.Digest.feed t.hash (Cstruct.sub dst t.o_off t.o_pos);
-    Flush t
+    let hash = Hash.Digest.feed t.hash (Cstruct.sub dst t.o_off t.o_pos) in
+    Flush { t with hash }
 
   let await t     : res = Wait t
   let error t exn : res = Error ({ t with state = Exception exn }, exn)
@@ -1224,10 +1224,10 @@ struct
   end
 
   let hash dst t =
-    Hash.Digest.feed t.hash (Cstruct.sub dst t.o_off t.o_pos);
-    let hash = Hash.Digest.get t.hash in
+    let ctx = Hash.Digest.feed t.hash (Cstruct.sub dst t.o_off t.o_pos) in
+    let hash = Hash.Digest.get ctx in
 
-    KHash.put_hash (Hash.to_string hash) (fun _ t -> ok t hash) dst t
+    KHash.put_hash (Hash.to_string hash) (fun _ t -> ok t hash) dst { t with hash = ctx }
 
   let writek kind entry entry_delta rest dst t =
     match kind, entry_delta with

@@ -409,8 +409,8 @@ module MakeIndexDecoder (Hash: Git.HASH) (Entry: ENTRY with type hash := Hash.t)
   module Log = (val Logs.src_log src : Logs.LOG)
 
   let digest_and_await src t : res =
-    let () = Hash.Digest.feed t.hash (Cstruct.sub src t.i_off t.i_len) in
-    Wait t
+    let hash = Hash.Digest.feed t.hash (Cstruct.sub src t.i_off t.i_len) in
+    Wait { t with hash }
 
   let await _ t : res =
     Wait t
@@ -921,7 +921,7 @@ module MakeIndexDecoder (Hash: Git.HASH) (Entry: ENTRY with type hash := Hash.t)
        @@ fun byte0 -> KSignature.get_byte ~digest:false
        @@ fun byte1 -> KSignature.get_byte ~digest:false
        @@ fun byte2 -> KSignature.get_byte ~digest:false
-       @@ fun byte3 ->
+       @@ fun byte3 src t ->
 
        Log.debug (fun l -> l ~header:"signature" "Get the signature: %c%c%c%c."
                      (Char.unsafe_chr byte0)
@@ -930,10 +930,10 @@ module MakeIndexDecoder (Hash: Git.HASH) (Entry: ENTRY with type hash := Hash.t)
                      (Char.unsafe_chr byte3));
 
        try match Hashtbl.find extensions (byte0, byte1, byte2, byte3) with
-         | Tree k -> KSignature.get_lsb32 ~digest:true (fun length -> k (Int32.to_int length))
-         | Reuc k -> KSignature.get_lsb32 ~digest:true (fun length -> k (Int32.to_int length))
-         | Link k -> KSignature.get_lsb32 ~digest:true (fun length -> k (Int32.to_int length))
-         | Untr k -> KSignature.get_lsb32 ~digest:true (fun length -> k (Int32.to_int length))
+         | Tree k -> KSignature.get_lsb32 ~digest:true (fun length -> k (Int32.to_int length)) src t
+         | Reuc k -> KSignature.get_lsb32 ~digest:true (fun length -> k (Int32.to_int length)) src t
+         | Link k -> KSignature.get_lsb32 ~digest:true (fun length -> k (Int32.to_int length)) src t
+         | Untr k -> KSignature.get_lsb32 ~digest:true (fun length -> k (Int32.to_int length)) src t
          | _ ->
            let consumed = Bytes.create 4 in
            Bytes.set consumed 0 (Char.unsafe_chr byte0);
@@ -941,13 +941,13 @@ module MakeIndexDecoder (Hash: Git.HASH) (Entry: ENTRY with type hash := Hash.t)
            Bytes.set consumed 2 (Char.unsafe_chr byte2);
            Bytes.set consumed 3 (Char.unsafe_chr byte3);
 
-           Hash.Digest.feed t.hash (Cstruct.of_bytes consumed);
+           let hash = Hash.Digest.feed t.hash (Cstruct.of_bytes consumed) in
 
            (* XXX(dinosaure): you need to read the comment below to
               understand why we did not digest bytes and we digest
               now. *)
 
-           KSignature.get_lsb32 ~digest:true (fun x -> move (Int32.to_int x))
+           KSignature.get_lsb32 ~digest:true (fun x -> move (Int32.to_int x)) src { t with hash }
        with Not_found ->
          Log.debug (fun l -> l ~header:"signature" "Signature %c%c%c%c not found."
                        (Char.unsafe_chr byte0)
@@ -1001,7 +1001,7 @@ module MakeIndexDecoder (Hash: Git.HASH) (Entry: ENTRY with type hash := Hash.t)
               if length = 0 then [] else p :: list (length - 1) p
          *)
 
-         KSignature.get_lsb32 ~digest:false (move_or_die (Bytes.unsafe_to_string consumed)))
+         KSignature.get_lsb32 ~digest:false (move_or_die (Bytes.unsafe_to_string consumed)) src t)
         src t
     in
 
@@ -1030,8 +1030,8 @@ module MakeIndexDecoder (Hash: Git.HASH) (Entry: ENTRY with type hash := Hash.t)
       if t.i_len - t.i_pos = 0
       then Cont { t with state = Hash (Hash.of_string (Cstruct.to_string consumed)) }
       else
-        let () = Hash.Digest.feed t.hash consumed in
-        move Int32.(to_int (sub b (of_int (Cstruct.len consumed - 8)))) src t
+        let hash = Hash.Digest.feed t.hash consumed in
+        move Int32.(to_int (sub b (of_int (Cstruct.len consumed - 8)))) src { t with hash }
     in
 
     let rec consume_to_hash consumed src t =
@@ -1076,8 +1076,8 @@ module MakeIndexDecoder (Hash: Git.HASH) (Entry: ENTRY with type hash := Hash.t)
                          ; read = t.read + (t.i_len - t.i_pos)
                          ; state = Signature (final consumed) }
       else (* has > expect_if_hash *)
-        let () = Hash.Digest.feed t.hash consumed in
-        move (Int32.to_int expect_if_extension) src t
+        let hash = Hash.Digest.feed t.hash consumed in
+        move (Int32.to_int expect_if_extension) src { t with hash }
     in
 
     await src { t with i_pos = t.i_pos + (t.i_len - t.i_pos)
@@ -1136,10 +1136,11 @@ module MakeIndexDecoder (Hash: Git.HASH) (Entry: ENTRY with type hash := Hash.t)
         peek_byte
           (function
             | Some 0 -> fun src t ->
-              let () = Hash.Digest.feed t.hash nul in
+              let hash = Hash.Digest.feed t.hash nul in
 
               go (n + 1) src { t with i_pos = t.i_pos + 1
-                                    ; read = t.read + 1 }
+                                    ; read = t.read + 1
+                                    ; hash }
             | _ -> fun _ t -> Cont { t with state = Entry switch })
           src t
     in
@@ -1254,8 +1255,8 @@ module MakeIndexEncoder (Hash: Git.HASH) (Entry: ENTRY with type hash := Hash.t)
 
   let ok t hash : res = Ok ({ t with state = End hash }, hash)
   let flush dst t : res =
-    Hash.Digest.feed t.hash (Cstruct.sub dst t.o_off t.o_pos);
-    Flush t
+    let hash = Hash.Digest.feed t.hash (Cstruct.sub dst t.o_off t.o_pos) in
+    Flush { t with hash }
   let error t exn : res = Error ({ t with state = Exception exn }, exn)
 
   let pp ppf t =

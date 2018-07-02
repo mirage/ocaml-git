@@ -125,12 +125,13 @@ module Index = Test_index
 let () =
   verbose ();
   Alcotest.run "git-unix"
-    [ Test_store.suite "mem"         (module Mem_store)
-    ; Test_data.suite  "mem"         (module Test_data.Usual) (module Mem_store)
-    ; Test_data.suite  "mem"         (module Test_data.Bomb)  (module Mem_store)
-    ; Test_store.suite "fs"          (module Fs_store)
-    ; Test_data.suite  "fs"          (module Test_data.Usual) (module Fs_store)
-    ; Test_data.suite  "fs"          (module Test_data.Bomb)  (module Fs_store)
+    [ Test_store.suite "mem"    (module Mem_store)
+    ; Test_data.suite  "mem"    (module Test_data.Usual) (module Mem_store)
+    ; Test_data.suite  "mem"    (module Test_data.Bomb) (module Mem_store)
+    ; Test_store.suite "fs"     (module Fs_store)
+    ; Test_data.suite  "fs"     (module Test_data.Usual) (module Fs_store)
+    ; Test_data.suite "fs"      (module Test_data.Bomb) (module Fs_store)
+    ; Test_data.suite "fs"      (module Test_data.Udns) (module Fs_store)
     ; Test_smart.suite "smart (mem)" (module Mem_store)
     ; Test_smart.suite "smart (fs)"  (module Fs_store)
 

@@ -78,7 +78,7 @@ module type S_EXT = sig
 
   module Common: Git.Smart.COMMON
     with type hash := Store.Hash.t
-     and type reference = Store.Reference.t
+     and type reference := Store.Reference.t
   module Decoder: Git.Smart.DECODER
     with module Hash = Store.Hash
      and module Reference = Store.Reference

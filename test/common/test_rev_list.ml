@@ -116,8 +116,7 @@ module Make0 (Source: Test_data.SOURCE) (Store: S) = struct
 end
 
 module type R = sig
-
-  type hash
+  type hash = string
   type t = [ `Diff of hash * hash
            | `New of hash ]
 
@@ -125,21 +124,21 @@ module type R = sig
 end
 
 module Usual (S: Git.S) = struct
-  type hash = S.Hash.t and t = [ `Diff of hash * hash | `New of hash ]
+  type hash = string and t = [ `Diff of hash * hash | `New of hash ]
 
   let lst =
     [ "bottom to top",
-      `Diff (S.Hash.of_hex "381efb0df07110ad3a1b81a33d698c98d9fa18f3",
-             S.Hash.of_hex "3ae8d4d9cdf28d0cd6b453da991fb661ce05de08")
+      `Diff (((S.Hash.of_hex "381efb0df07110ad3a1b81a33d698c98d9fa18f3"):>string),
+             ((S.Hash.of_hex "3ae8d4d9cdf28d0cd6b453da991fb661ce05de08"):>string))
     ; "top to bottom",
-      `Diff (S.Hash.of_hex "3ae8d4d9cdf28d0cd6b453da991fb661ce05de08",
-             S.Hash.of_hex "381efb0df07110ad3a1b81a33d698c98d9fa18f3")
+      `Diff (((S.Hash.of_hex "3ae8d4d9cdf28d0cd6b453da991fb661ce05de08"):>string),
+             ((S.Hash.of_hex "381efb0df07110ad3a1b81a33d698c98d9fa18f3"):>string))
     ; "middle diff 00",
-      `Diff (S.Hash.of_hex "4b01e27cd1fd4b9390c9a8dccb8fa415c72770f5",
-             S.Hash.of_hex "4ee53344e6faafd2e5e3b86ec762f180db4a2c3b")
+      `Diff (((S.Hash.of_hex "4b01e27cd1fd4b9390c9a8dccb8fa415c72770f5"):>string),
+             ((S.Hash.of_hex "4ee53344e6faafd2e5e3b86ec762f180db4a2c3b"):>string))
     ; "middle diff 01",
-      `Diff (S.Hash.of_hex "726e053b15133c5721795ecacf6be9ad616d1ec5",
-             S.Hash.of_hex "fe88134bf478438e4eb6e2c62c2743eab78ee4e2") ]
+      `Diff (((S.Hash.of_hex "726e053b15133c5721795ecacf6be9ad616d1ec5"):>string),
+             ((S.Hash.of_hex "fe88134bf478438e4eb6e2c62c2743eab78ee4e2"):>string)) ]
 end
 
 (* XXX(dinosaure): I reaaly would like to test bomb, however, git segfault with
@@ -163,7 +162,7 @@ module Bomb (S: Git.S) = struct
              S.Hash.of_hex "18ed56cbc5012117e24a603e7c072cf65d36d469") ]
 end
 
-let suite _name (module F: Test_data.SOURCE) (module S: S) (module R: R with type hash = S.Hash.t) =
+let suite _name (module F: Test_data.SOURCE) (module S: S) (module R: R) =
   let module T = Make0(F)(S) in
   (Fmt.strf "rev-list: %s" F.name),
   List.map (function
@@ -173,4 +172,8 @@ let suite _name (module F: Test_data.SOURCE) (module S: S) (module R: R with typ
       | (name, `New hash) ->
          let c = T.make ~reference:S.Reference.master hash in
          name, `Quick, T.rev_list_test name [ c ])
-    R.lst
+    (List.map
+       (function
+         | (name, `Diff (from_, to_)) -> name, `Diff (S.Hash.of_string from_, S.Hash.of_string to_)
+         | (name, `New hash) -> name, `New (S.Hash.of_string hash))
+        R.lst)

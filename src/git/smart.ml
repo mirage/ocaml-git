@@ -21,7 +21,7 @@ sig
   type reference
 
   type advertised_refs =
-    { shallow      : Hash.t list
+    { shallow      : hash list
     ; refs         : (hash * reference * bool) list
     ; capabilities : Capability.t list }
 
@@ -121,8 +121,8 @@ sig
 end
 
 module Common (Hash: S.HASH) (Reference: Reference.S)
-  : COMMON with type hash = Hash.t
-            and type reference = Reference.t
+  : COMMON with type hash := Hash.t
+            and type reference := Reference.t
 = struct
   type hash = Hash.t
   type reference = Reference.t

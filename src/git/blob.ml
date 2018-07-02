@@ -102,8 +102,8 @@ module Make (Hash: S.HASH): S with module Hash = Hash = struct
     let ctx = Hash.Digest.init () in
     let hdr = Fmt.strf "blob %Ld\000" (length cs) in
 
-    Hash.Digest.feed ctx (Cstruct.of_string hdr);
-    Hash.Digest.feed ctx cs;
+    let ctx = Hash.Digest.feed ctx (Cstruct.of_string hdr) in
+    let ctx = Hash.Digest.feed ctx cs in
     Hash.Digest.get ctx
 
   let pp ppf blob = Encore.Lole.pp_bigstring ppf (Cstruct.to_bigarray blob)

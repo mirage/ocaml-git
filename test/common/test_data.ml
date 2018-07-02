@@ -130,7 +130,7 @@ module Make0 (Source: SOURCE) (Store: S) = struct
     let rec go ctx state = match E.eval ctmp state with
       | `Flush t ->
         Git.Buffer.add buf (Cstruct.sub ctmp 0 (E.used_out t));
-        Store.Hash.Digest.feed ctx (Cstruct.sub ctmp 0 (E.used_out t));
+        let ctx = Store.Hash.Digest.feed ctx (Cstruct.sub ctmp 0 (E.used_out t)) in
         go ctx (E.flush 0 (Cstruct.len ctmp) t)
       | `Error (_, err) ->
         Alcotest.failf "Got an error when we encode the IDX file %a: %a."
@@ -141,10 +141,10 @@ module Make0 (Source: SOURCE) (Store: S) = struct
         then begin
           Git.Buffer.add buf (Cstruct.sub ctmp 0 (E.used_out t));
           Store.Hash.Digest.feed ctx (Cstruct.sub ctmp 0 (E.used_out t));
-        end
+        end else ctx
     in
 
-    let () = go (Store.Hash.Digest.init ()) (E.default (fun f -> R.iter (fun k v -> f (k, v)) tree) hash_pack) in
+    let _ = go (Store.Hash.Digest.init ()) (E.default (fun f -> R.iter (fun k v -> f (k, v)) tree) hash_pack) in
 
     if String.equal (load_file Source.idx) (Git.Buffer.contents buf)
     then Lwt.return (Ok ())
@@ -179,6 +179,14 @@ module Bomb = struct
   let refs = Fpath.(v ".." / "data" / "bomb.refs")
 
   let name = "bomb"
+end
+
+module Udns = struct
+  let pack = Fpath.(v ".." / "data" / "udns.pack")
+  let idx = Fpath.(v ".." / "data" / "udns.idx")
+  let refs = Fpath.(v ".." / "data" / "udns.refs")
+
+  let name = "udns"
 end
 
 let suite name (module F: SOURCE) (module S: S) =

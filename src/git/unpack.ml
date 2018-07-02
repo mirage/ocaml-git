@@ -1293,124 +1293,234 @@ module type D = sig
 
   val pp_error: error Fmt.t
 
-  type t
-
   type kind = [ `Commit | `Blob | `Tree | `Tag ]
 
-  module Object: sig
-    type from =
-      | Delta of { descr    : Hunk.hunks
-                 ; consumed : int
-                 ; inserts  : int
-                 ; offset   : int64
-                 ; crc      : Crc32.t
-                 ; base     : from }
-      | External of { hash: Hash.t; length: int; }
-      | Internal of { length   : int
-                    ; consumed : int
-                    ; offset   : int64
-                    ; crc      : Crc32.t }
-    and t =
-      { kind   : kind
-      ; raw    : Cstruct.t
-      ; from   : from }
+  type pack
 
-    val pp: t Fmt.t
-    val first_crc_exn: t -> Crc32.t
-    val first_offset_exn: t -> int64
-    val length: t -> int
+  val idx: pack -> (Hash.t -> (Crc32.t * int64) option)
+  val extern: pack -> (Hash.t -> (kind * Cstruct.t) option Lwt.t)
+
+  val update_idx: (Hash.t -> (Crc32.t * int64) option) -> pack -> pack
+  val update_extern: (Hash.t -> (kind * Cstruct.t) option Lwt.t) -> pack -> pack
+
+  val make: ?bucket:int -> Mapper.fd ->
+    (Hash.t -> (Crc32.t * int64) option) ->
+    (Hash.t -> (kind * Cstruct.t) option Lwt.t) ->
+    (pack, Mapper.error) result Lwt.t
+
+  module Diff: sig
+    type insert = S of string | C of Cstruct.t
+    type t = Insert of insert | Copy of (int * int)
+
+    val len: insert -> int
   end
 
-  val find_window: t -> int64 -> ((Window.t * int), Mapper.error) result Lwt.t
-  val make: ?bucket:int -> Mapper.fd
-    -> (Hash.t -> Object.t option)
-    -> (Hash.t -> (Crc32.t * int64) option)
-    -> (int64 -> Hash.t option)
-    -> (Hash.t -> (kind * Cstruct.t) option Lwt.t)
-    -> (t, Mapper.error) result Lwt.t
-  val idx: t -> (Hash.t -> (Crc32.t * int64) option)
-  val cache: t -> (Hash.t -> Object.t option)
-  val revidx: t -> (int64 -> Hash.t option)
-  val extern: t -> (Hash.t -> (kind * Cstruct.t) option Lwt.t)
-  val update_idx: (Hash.t -> (Crc32.t * int64) option) -> t -> t
-  val update_cache: (Hash.t -> Object.t option) -> t -> t
-  val update_revidx: (int64 -> Hash.t option) -> t -> t
-  val update_extern: (Hash.t -> (kind * Cstruct.t) option Lwt.t) -> t -> t
-  val length:
-       ?chunk:int
-    -> t
-    -> Hash.t
-    -> Cstruct.t
-    -> Inflate.window
-    -> (int, error) result Lwt.t
-  val needed_from_offset:
-       ?chunk:int
-    -> ?cache:(Hash.t -> int option)
-    -> t
-    -> int64
-    -> Cstruct.t
-    -> Inflate.window
-    -> (int, error) result Lwt.t
-  val needed_from_hash:
-       ?chunk:int
-    -> ?cache:(Hash.t -> int option)
-    -> t
-    -> Hash.t
-    -> Cstruct.t
-    -> Inflate.window
-    -> (int, error) result Lwt.t
-  val get_from_offset:
-       ?chunk:int
-    -> ?limit:bool
-    -> ?htmp:Cstruct.t array
-    -> t
-    -> int64
-    -> (Cstruct.t * Cstruct.t * int)
-    -> Cstruct.t
-    -> Inflate.window
-    -> (Object.t, error) result Lwt.t
-  val get_from_hash:
-       ?chunk:int
-    -> ?limit:bool
-    -> ?htmp:Cstruct.t array
-    -> t
-    -> Hash.t
-    -> (Cstruct.t * Cstruct.t * int)
-    -> Cstruct.t
-    -> Inflate.window
-    -> (Object.t, error) result Lwt.t
-  val get_with_hunks_allocation_from_offset:
-       ?chunk:int
-    -> t
-    -> int64
-    -> Cstruct.t
-    -> Inflate.window
-    -> (Cstruct.t * Cstruct.t)
-    -> (Object.t, error) result Lwt.t
-  val get_with_hunks_allocation_from_hash:
-       ?chunk:int
-    -> t
-    -> Hash.t
-    -> Cstruct.t
-    -> Inflate.window
-    -> (Cstruct.t * Cstruct.t)
-    -> (Object.t, error) result Lwt.t
-  val get_with_result_allocation_from_hash:
-       ?chunk:int
-    -> ?htmp:Cstruct.t array
-    -> t
-    -> Hash.t
-    -> Cstruct.t
-    -> Inflate.window
-    -> (Object.t, error) result Lwt.t
-  val get_with_result_allocation_from_offset:
-       ?chunk:int
-    -> ?htmp:Cstruct.t array
-    -> t
-    -> int64
-    -> Cstruct.t
-    -> Inflate.window
-    -> (Object.t, error) result Lwt.t
+  module Patch: sig
+    type t =
+      { length : int
+      ; consumed : int
+      ; offset : int64
+      ; crc : Crc32.t
+      ; hunks : Diff.t list
+      ; descr : Hunk.hunks }
+
+    val get_from_absolute_offset:
+      ztmp:Cstruct.t -> zwin:Inflate.window ->
+      ?chunk:int ->
+      ?htmp:Cstruct.t ->
+      pack -> int64 -> (t, error) result Lwt.t
+
+    type s =
+      { kind : kind
+      ; length : int
+      ; consumed : int
+      ; inserts : int
+      ; offset : int64
+      ; crc : Crc32.t
+      ; hash : Hash.t
+      ; raw : Cstruct.t
+      ; descr : Hunk.hunks }
+
+    val apply_from_absolute_offset:
+      ztmp:Cstruct.t -> zwin:Inflate.window ->
+      ?chunk:int ->
+      (kind * Cstruct.t) -> Cstruct.t ->
+      pack -> int64 -> (s, error) result Lwt.t
+  end
+
+  module Base: sig
+    type t =
+      { kind : kind
+      ; length : int
+      ; consumed : int
+      ; offset : int64
+      ; crc : Crc32.t
+      ; hash : Hash.t
+      ; raw : Cstruct.t }
+
+    val get_from_absolute_offset:
+      ztmp:Cstruct.t -> zwin:Inflate.window ->
+      ?chunk:int ->
+      Cstruct.t ->
+      pack -> int64 -> (t, error) result Lwt.t
+  end
+
+  module Object: sig
+    type t =
+      | Patch of Patch.t
+      | Root of Base.t
+
+    val get_from_absolute_offset:
+      ztmp:Cstruct.t -> zwin:Inflate.window ->
+      ?chunk:int ->
+      ?htmp:Cstruct.t -> Cstruct.t ->
+      pack -> int64 -> (t, error) result Lwt.t
+  end
+
+  module Cache: sig
+    type ('key, 'value) t =
+      { promote : 'key -> 'value -> unit
+      ; find : 'key -> 'value option }
+
+    val lru: int ->
+      (module Hashtbl.HashedType with type t = 'key) ->
+      (module Lru.Weighted with type t = 'value) ->
+      ('key, 'value) t
+  end
+
+  module Ascendant: sig
+    type t =
+      | External of { hash : Hash.t; kind : kind; raw : Cstruct.t }
+      | Root of Base.t
+      | Node of { patch : Patch.t; source : t }
+
+    type metadata =
+      { length : int
+      ; crc : Crc32.t
+      ; offset : int64
+      ; consumed : int }
+
+    type s =
+      [ `Patch of metadata
+      | `Base of metadata
+      | `Extern ]
+
+    val needed_cache: int -> (int64, int) Cache.t
+    val get_cache: int -> (int64, t) Cache.t
+    val apply_cache: int -> (int64, kind * Cstruct.t * int * s) Cache.t
+
+    val get_from_absolute_offset:
+      ztmp:Cstruct.t -> zwin:Inflate.window ->
+      cache:(int64, t) Cache.t ->
+      ?chunk:int ->
+      ?htmp:Cstruct.t array -> Cstruct.t ->
+      pack -> int64 -> (t, error) result Lwt.t
+
+    val get_from_hash:
+      ztmp:Cstruct.t -> zwin:Inflate.window ->
+      cache:(int64, t) Cache.t ->
+      ?chunk:int ->
+      ?htmp:Cstruct.t array -> Cstruct.t ->
+      pack -> Hash.t -> (t, error) result Lwt.t
+
+    val get:
+      ztmp:Cstruct.t -> zwin:Inflate.window ->
+      cache:(int64, t) Cache.t ->
+      ?chunk:int ->
+      ?htmp:Cstruct.t array -> Cstruct.t ->
+      pack -> [ `Hash of Hash.t | `Offset of int64 ] -> (t, error) result Lwt.t
+
+    val reconstruct: (Cstruct.t * Cstruct.t) -> t -> (kind * Cstruct.t * int * s)
+
+    val apply_from_absolute_offset:
+      ztmp:Cstruct.t -> zwin:Inflate.window ->
+      cache:(int64, kind * Cstruct.t * int * s) Cache.t ->
+      ?chunk:int ->
+      ?htmp:Cstruct.t array -> (Cstruct.t * Cstruct.t) ->
+      pack -> int64 -> (kind * Cstruct.t * int * s, error) result Lwt.t
+
+    val apply_from_hash:
+      ztmp:Cstruct.t -> zwin:Inflate.window ->
+      cache:(int64, kind * Cstruct.t * int * [ `Patch of metadata | `Base of metadata | `Extern ]) Cache.t ->
+      ?chunk:int ->
+      ?htmp:Cstruct.t array -> (Cstruct.t * Cstruct.t) ->
+      pack -> Hash.t -> (kind * Cstruct.t * int * s, error) result Lwt.t
+
+    val apply:
+      ztmp:Cstruct.t -> zwin:Inflate.window ->
+      cache:(int64, kind * Cstruct.t * int * s) Cache.t ->
+      ?chunk:int ->
+      ?htmp:Cstruct.t array -> (Cstruct.t * Cstruct.t) ->
+      pack -> [ `Hash of Hash.t | `Offset of int64 ] -> (kind * Cstruct.t * int * s, error) result Lwt.t
+
+    val needed_from_absolute_offset:
+      ztmp:Cstruct.t -> zwin:Inflate.window ->
+      cache:(int64, int) Cache.t ->
+      ?chunk:int ->
+      pack -> int64 -> (int, error) result Lwt.t
+
+    val needed_from_hash:
+      ztmp:Cstruct.t -> zwin:Inflate.window ->
+      cache:(int64, int) Cache.t ->
+      ?chunk:int ->
+      pack -> Hash.t -> (int, error) result Lwt.t
+
+    val needed:
+      ztmp:Cstruct.t -> zwin:Inflate.window ->
+      cache:(int64, int) Cache.t ->
+      ?chunk:int ->
+      pack -> [ `Hash of Hash.t | `Offset of int64 ] -> (int, error) result Lwt.t
+
+    val length_from_absolute_offset:
+      ztmp:Cstruct.t -> zwin:Inflate.window ->
+      ?chunk:int ->
+      pack -> int64 -> (int, error) result Lwt.t
+
+    val length_from_hash:
+      ztmp:Cstruct.t -> zwin:Inflate.window ->
+      ?chunk:int ->
+      pack -> Hash.t -> (int, error) result Lwt.t
+
+    val length:
+      ztmp:Cstruct.t -> zwin:Inflate.window ->
+      ?chunk:int ->
+      pack -> [ `Hash of Hash.t | `Offset of int64 ] -> (int, error) result Lwt.t
+  end
+
+  module Descendant: sig
+    type base =
+      { kind : kind
+      ; length : int
+      ; consumed : int
+      ; offset : int64
+      ; hash : Hash.t
+      ; crc : Crc32.t }
+
+    type patch =
+      { length : int
+      ; consumed : int
+      ; inserts : int
+      ; offset : int64
+      ; crc : Crc32.t
+      ; hash : Hash.t
+      ; descr : Hunk.hunks }
+
+    type t =
+      | Root of { base : base; children : node list }
+    and node =
+      | Node of { patch : patch
+                ; children : node list }
+      | Leaf of patch
+
+    val get_from_absolute_offset:
+      ztmp:Cstruct.t ->
+      zwin:Inflate.window ->
+      cache:((int64, int) Cache.t * (int64, kind * Cstruct.t * int * Ascendant.s) Cache.t) ->
+      ?chunk:int ->
+      children:(int64 * Hash.t -> int64 list) ->
+      Cstruct.t ->
+      pack -> int64 -> (t, error) result Lwt.t
+  end
 end
 
 module Decoder
@@ -1463,124 +1573,30 @@ struct
 
   type kind = [ `Commit | `Blob | `Tree | `Tag ]
 
-  let pp_kind ppf = function
-    | `Commit -> Fmt.pf ppf "Commit"
-    | `Blob -> Fmt.pf ppf "Blob"
-    | `Tree -> Fmt.pf ppf "Tree"
-    | `Tag -> Fmt.pf ppf "Tag"
-
-  type insert_hunk = S of string | C of Cstruct.t
-  type opt_hunk = Insert of insert_hunk | Copy of (int * int)
-
-  type partial =
-    { _length : int
-    ; _consumed : int
-    ; _offset : int64
-    ; _crc : Crc32.t
-    ; _hunks : opt_hunk list }
-
-  module Object =
-  struct
-    type from =
-      | Delta of { descr    : Hunk.hunks
-                 ; consumed : int
-                 ; inserts  : int
-                 ; offset   : int64
-                 ; crc      : Crc32.t
-                 ; base     : from }
-      | External of { hash: Hash.t; length: int; }
-      | Internal of { length   : int
-                    ; consumed : int
-                    ; offset   : int64
-                    ; crc      : Crc32.t }
-
-    and t =
-      { kind     : kind
-      ; raw      : Cstruct.t
-      ; from     : from }
-
-    (* XXX(dinosaure): attention, it's a folding function. *)
-    let to_partial = function
-      | { from = Delta { descr; consumed; crc; offset; _ }; _ } ->
-        { _length   = descr.Hunk.target_length
-        ; _consumed = consumed
-        ; _offset   = offset
-        ; _crc      = crc
-        ; _hunks    = [] }
-      | { from = Internal { length; consumed; crc; offset; _ }; _ } ->
-        { _length   = length
-        ; _consumed = consumed
-        ; _offset   = offset
-        ; _crc      = crc
-        ; _hunks    = [] }
-      | { from = External _; _ } ->
-        invalid_arg "Object.to_partial: this object is external of the current PACK file"
-
-    let rec pp_from ppf = function
-      | Delta { descr; consumed; offset; crc; base; _ } ->
-        Fmt.pf ppf "(Delta { @[<hov>descr = %a;@ \
-                    consumed = %d;@ \
-                    offset = %Lx;@ \
-                    crc = %a;@ \
-                    base = %a;@] })"
-          (Fmt.hvbox Hunk.pp_hunks) descr
-          consumed offset
-          Crc32.pp crc
-          (Fmt.hvbox pp_from) base
-      | External { hash; length; } ->
-        Fmt.pf ppf "(External { @[<hov>hash = %a;@ length = %d;@] })" Hash.pp hash length
-      | Internal { length; consumed; offset; crc; } ->
-        Fmt.pf ppf "(Internal { @[<hov>length = %d;@ \
-                    consumed = %d;@ \
-                    offset = %Lx;@ \
-                    crc = %a;@] })"
-          length consumed offset Crc32.pp crc
-
-    let pp ppf t =
-      Fmt.pf ppf "{ @[<hov>kind = %a;@ \
-                  raw = #raw;@ \
-                  from = %a;@] }"
-        pp_kind t.kind (Fmt.hvbox pp_from) t.from
-
-    let first_crc_exn t =
-      match t.from with
-      | Internal { crc; _ } -> crc
-      | Delta { crc; _ } -> crc
-      | External _ -> invalid_arg "Object.first_crc"
-
-    let first_offset_exn t =
-      match t.from with
-      | Internal { offset; _ } -> offset
-      | Delta { offset; _ } -> offset
-      | External _ -> invalid_arg "Object.first_offset"
-
-    let length t = match t.from with
-      | Internal { length; _ } -> length
-      | Delta { descr = { Hunk.target_length; _ }; _ } -> target_length
-      | External { length; _ } -> length
-  end
-
-  type pack_object =
-    | Hunks  of partial * Hunk.hunks
-    | Object of kind * partial * Cstruct.t
-    | External of Hash.t * kind * Cstruct.t
-
-  type t =
+  type pack =
     { file  : Mapper.fd
     ; max   : int64
     ; win   : Window.t Bucket.t
-    ; cache : Hash.t -> Object.t option
     ; idx   : Hash.t -> (Crc32.t * int64) option
-    ; rev   : int64 -> Hash.t option
-    ; get   : Hash.t -> (kind * Cstruct.t) option Lwt.t
-    ; hash  : Hash.t }
+    ; get   : Hash.t -> (kind * Cstruct.t) option Lwt.t }
 
-  let to_kind = function
-    | Pack.Commit -> `Commit
-    | Pack.Blob -> `Blob
-    | Pack.Tree -> `Tree
-    | Pack.Tag -> `Tag
-    | Pack.Hunk _ -> assert false
+  let make ?(bucket = 10) file idx get =
+    Mapper.length file >|= function
+    | Error _ as err -> err
+    | Ok max ->
+      Ok { file; max; win = Bucket.make bucket; idx; get; }
+
+  module Diff =
+  struct
+    type insert = S of string | C of Cstruct.t
+    type t = Insert of insert | Copy of (int * int)
+
+    let blit_to_cstruct src off0 dst off1 len = match src with
+      | S s -> Cstruct.blit_from_string s off0 dst off1 len
+      | C c -> Cstruct.blit c off0 dst off1 len
+
+    let len = function S s -> String.length s | C c -> Cstruct.len c
+  end
 
   let map_window t offset_requested =
     let pos = Int64.((offset_requested / 1024L) * 1024L) in (* padding *)
@@ -1615,629 +1631,835 @@ struct
         let () = Bucket.add t.win window in
         Ok (window, relative_offset)
 
-  let blit_to_cstruct src off0 dst off1 len = match src with
-    | S s -> Cstruct.blit_from_string s off0 dst off1 len
-    | C c -> Cstruct.blit c off0 dst off1 len
+  module Patch =
+  struct
+    type t =
+      { length : int
+      ; consumed : int
+      ; offset : int64
+      ; crc : Crc32.t
+      ; hunks : Diff.t list
+      ; descr : Hunk.hunks }
 
-  let len = function S s -> String.length s | C c -> Cstruct.len c
+    let get_from_absolute_offset ~ztmp ~zwin ?(chunk = 0x8000) ?htmp t absolute_offset =
+      find_window t absolute_offset >>= function
+      | Error err -> Lwt.return_error (Mapper_error err)
+      | Ok (window, relative_offset) ->
+        let state = Pack.from_window window relative_offset ztmp zwin in
 
-  let apply partial_hunks hunks_header hunks base raw =
-    if Cstruct.len raw < hunks_header.Hunk.target_length
-    then invalid_arg (Fmt.strf "Decoder.apply, has %d, expect %d." (Cstruct.len raw) hunks_header.Hunk.target_length);
+        let rec go window consumed_in_window writed_in_htmp hunks result state =
+          match Pack.eval window.Window.raw state with
+          | `Await state ->
+            let rest_in_window = min (window.Window.len - consumed_in_window) chunk in
 
-    let target_length = List.fold_left
-        (fun acc -> function
-           | Insert insert ->
-             blit_to_cstruct insert 0 raw acc (len insert); acc + len insert
-           | Copy (off, len) ->
-             Cstruct.blit base.Object.raw off raw acc len; acc + len)
-        0 hunks in
-    let inserts = List.fold_left (fun acc -> function Insert cs -> acc + len cs | Copy _ -> acc) 0 hunks in
+            if rest_in_window > 0
+            then go window
+                (consumed_in_window + rest_in_window)
+                writed_in_htmp hunks result
+                (Pack.refill consumed_in_window rest_in_window state)
+            else begin
+              find_window t Int64.(window.Window.off + (of_int consumed_in_window)) >>= function
+              | Error err -> Lwt.return_error (Mapper_error err)
+              | Ok (window, relative_offset) ->
+                go window relative_offset writed_in_htmp hunks result (Pack.refill 0 0 state)
+            end
+          | `Hunk (state, Hunk.Insert raw) ->
+            let len = Cstruct.len raw in
 
-    if (target_length = hunks_header.Hunk.target_length)
-    then Ok Object.{ kind   = base.Object.kind
-                   ; raw    = Cstruct.sub raw 0 target_length
-                   ; from   = Delta { descr    = hunks_header
-                                    ; inserts
-                                    ; consumed = partial_hunks._consumed
-                                    ; offset   = partial_hunks._offset
-                                    ; crc      = partial_hunks._crc
-                                    ; base     = base.from } }
-    else Error (Invalid_target (target_length, hunks_header.Hunk.target_length))
+            let insert = match htmp with
+             | Some htmp ->
+               Cstruct.blit raw 0 htmp writed_in_htmp len;
+               Diff.C (Cstruct.sub htmp writed_in_htmp len)
+             | None ->
+               Diff.S (Cstruct.to_string raw) in
 
-  let result_bind ~err f = function Ok a -> f a | Error _ -> err
+            go window consumed_in_window
+              (writed_in_htmp + len)
+              (Diff.Insert insert :: hunks)
+              result (Pack.continue state)
+          | `Hunk (state, Hunk.Copy (off, len)) ->
+            go window consumed_in_window
+              writed_in_htmp
+              (Diff.Copy (off, len) :: hunks)
+              result (Pack.continue state)
+          | `Flush _ -> invalid_arg "Object is not a patch"
+          | `Object state ->
+            let descr = match Pack.kind state with
+              | Pack.Hunk descr -> descr
+              | _ -> invalid_arg "Object is not a patch" in
 
-  let get_pack_object ?(chunk = 0x8000) ?(limit = false) ?htmp t reference source_length source_offset ztmp zwin rtmp =
-    if Cstruct.len rtmp < source_length && not limit
-    then invalid_arg (Fmt.strf "Decoder.delta: expected length %d and have %d" source_length (Cstruct.len rtmp));
+            let patch =
+              { length = Pack.length state
+              ; consumed = Pack.consumed state
+              ; offset = Pack.offset state
+              ; crc = Pack.crc state
+              ; hunks = List.rev hunks
+              ; descr } in
 
-    let aux = function
-      | Error exn -> Lwt.return (Error exn)
-      | Ok absolute_offset ->
-        find_window t absolute_offset >>= function
-        | Error err -> Lwt.return (Error (Mapper_error err))
-        | Ok (window, relative_offset) ->
-          let state = Pack.from_window window relative_offset ztmp zwin in
+            go window consumed_in_window writed_in_htmp hunks
+              (Some patch) (Pack.next_object state)
+          | `Error (state, exn) ->
+            Lwt.return_error (Unpack_error (state, window, exn))
+          | `End _ -> match result with
+            | Some result -> Lwt.return_ok result
+            | None -> assert false in
 
-          let rec loop window consumed_in_window writed_in_raw writed_in_hnk hunks git_object state =
-            match Pack.eval window.Window.raw state with
-            | `Await state ->
-              let rest_in_window = min (window.Window.len - consumed_in_window) chunk in
+        go window relative_offset 0 [] None state
 
-              if rest_in_window > 0
-              then
-                loop window
-                  (consumed_in_window + rest_in_window) writed_in_raw writed_in_hnk
-                  hunks git_object
-                  (Pack.refill consumed_in_window rest_in_window state)
-              else
-                (find_window t Int64.(window.Window.off + (of_int consumed_in_window))
-                 >>= function
-                 | Error err -> Lwt.return (Error (Mapper_error err))
-                 | Ok (window, relative_offset) ->
-                   (* XXX(dinosaure): we try to find a new window to compute the rest of the current object. *)
-                   loop window
-                     relative_offset writed_in_raw writed_in_hnk
-                     hunks git_object
-                     (Pack.refill 0 0 state))
-            | `Hunk (state, hunk) ->
-              (match htmp, hunk with
-               | Some hnk, Hunk.Insert raw ->
-                 let len = Cstruct.len raw in
-                 Cstruct.blit raw 0 hnk writed_in_hnk len;
-                 loop window
-                   consumed_in_window writed_in_raw (writed_in_hnk + len)
-                   (Insert (C (Cstruct.sub hnk writed_in_hnk len)) :: hunks) git_object
-                   (Pack.continue state)
-               | None, Hunk.Insert raw ->
-                 loop window
-                   consumed_in_window writed_in_raw writed_in_hnk
-                   (Insert (S (Cstruct.to_string raw)) :: hunks) git_object
-                   (Pack.continue state)
-               | _, Hunk.Copy (off, len) ->
-                 loop window
-                   consumed_in_window writed_in_raw writed_in_hnk
-                   (Copy (off, len) :: hunks) git_object
-                   (Pack.continue state))
-            | `Flush state ->
-              let o, n = Pack.output state in
-              let n' = min n (Cstruct.len rtmp - writed_in_raw) in
-              Cstruct.blit o 0 rtmp writed_in_raw n';
+    type s =
+      { kind : kind
+      ; length : int
+      ; consumed : int
+      ; inserts : int
+      ; offset : int64
+      ; crc : Crc32.t
+      ; hash : Hash.t
+      ; raw : Cstruct.t
+      ; descr : Hunk.hunks }
 
-              if n' > 0
-              then
-                loop window
-                  consumed_in_window (writed_in_raw + n) writed_in_hnk
-                  hunks git_object
-                  (Pack.flush 0 n state)
-              else Lwt.return (Ok (Pack.kind state,
-                                   { _length   = Pack.length state
-                                   ; _consumed = 0
-                                   ; _offset   = Pack.offset state
-                                   ; _crc      = Crc32.default
-                                   ; _hunks    = [] }))
-            (* XXX(dinosaure): to be clear, this situation appear only
-               when we have a [limit = true] and the git object is
-               bigger than 0x10000FFFE bytes - so, not a common case. In
-               this case, we are interested only by the raw data (and we
-               don't care about the meta-data) to compute the
-               undelta-ification.
+    let apply_from_absolute_offset ~ztmp ~zwin ?(chunk = 0x8000) (kind, source) rtmp t absolute_offset =
+      find_window t absolute_offset >>= function
+      | Error err -> Lwt.return_error (Mapper_error err)
+      | Ok (window, relative_offset) ->
+        let state = Pack.from_window window relative_offset ztmp zwin in
 
-               When [rtmp] is full, we returns partial information
-               because, we only need the raw-data to construct in a top
-               of this call the git object requested (necessarily
-               different that this current git object). *)
+        let rec go window consumed_in_window writed_in_rtmp writed_in_htmp ctx result state =
+          match Pack.eval window.Window.raw state with
+          | `Await state ->
+            let rest_in_window = min (window.Window.len - consumed_in_window) chunk in
 
-            | `Object state ->
-              loop window
-                consumed_in_window writed_in_raw writed_in_hnk
-                hunks
-                (Some (Pack.kind state,
-                       { _length   = Pack.length state
-                       ; _consumed = Pack.consumed state
-                       ; _offset   = Pack.offset state
-                       ; _crc      = Pack.crc state
-                       ; _hunks    = List.rev hunks }))
-                (Pack.next_object state)
-            | `Error (state, exn) ->
-              Lwt.return (Error (Unpack_error (state, window, exn)))
-            | `End _ ->
-              match git_object with
-              | Some (kind, partial) ->
-                Lwt.return (Ok (kind, partial))
-              | None -> assert false
-              (* XXX: This is not possible, the [`End] state comes only
-                 after the [`Object] state and this state changes [kind]
-                 to [Some x]. *)
-          in
+            if rest_in_window > 0
+            then go window
+                (consumed_in_window + rest_in_window)
+                writed_in_rtmp writed_in_htmp ctx result
+                (Pack.refill consumed_in_window rest_in_window state)
+            else begin
+              find_window t Int64.(window.Window.off + (of_int consumed_in_window)) >>= function
+              | Error err -> Lwt.return_error (Mapper_error err)
+              | Ok (window, relative_offset) ->
+                go window relative_offset writed_in_rtmp writed_in_htmp ctx result (Pack.refill 0 0 state)
+            end
+          | `Hunk (state, Hunk.Insert raw) ->
+            let len = Cstruct.len raw in
+            let ctx = match ctx with
+              | Some ctx ->
+                let ctx = Hash.Digest.feed ctx raw in
+                Some ctx
+              | None ->
+                let len = match Pack.kind state with
+                  | Pack.Hunk { Hunk.target_length; _ } -> target_length
+                  | _ -> invalid_arg "Object is not a patch" in
+                let ctx = Hash.Digest.init () in
+                let hdr = Fmt.strf "%s %d\000"
+                    (match kind with
+                     | `Commit -> "commit"
+                     | `Tree -> "tree"
+                     | `Tag -> "tag"
+                     | `Blob -> "blob")
+                    len in
+                let ctx = Hash.Digest.feed ctx (Cstruct.of_string hdr) in
+                let ctx = Hash.Digest.feed ctx raw in
+                Some ctx in
 
-          loop window relative_offset 0 0 [] None state >>= function
-          | Ok (Pack.Hunk hunks, partial) ->
-            Lwt.return (Ok (Hunks (partial, hunks)))
-          | Ok ((Pack.Commit
-                | Pack.Blob
-                | Pack.Tag
-                | Pack.Tree) as kind, partial) ->
-            let rtmp =
-              if (not limit) || (partial._length < 0x10000FFFE && limit)
-              then Cstruct.sub rtmp 0 partial._length
-              else rtmp
-            in
+            Cstruct.blit raw 0 rtmp writed_in_rtmp len;
+            go window consumed_in_window
+              (writed_in_rtmp + len) (writed_in_htmp + len) ctx result
+              (Pack.continue state)
+          | `Hunk (state, Hunk.Copy (off, len)) ->
+            let ctx = match ctx with
+              | Some ctx ->
+                let ctx = Hash.Digest.feed ctx (Cstruct.sub source off len) in
+                Some ctx
+              | None ->
+                let len' = match Pack.kind state with
+                  | Pack.Hunk { Hunk.target_length; _ } -> target_length
+                  | _ -> invalid_arg "Object is not a patch" in
+                let ctx = Hash.Digest.init () in
+                let hdr = Fmt.strf "%s %d\000"
+                    (match kind with
+                     | `Commit -> "commit"
+                     | `Tree -> "tree"
+                     | `Tag -> "tag"
+                     | `Blob -> "blob")
+                    len' in
+                let ctx = Hash.Digest.feed ctx (Cstruct.of_string hdr) in
+                let ctx = Hash.Digest.feed ctx (Cstruct.sub source off len) in
+                Some ctx in
 
-            Lwt.return (Ok (Object (to_kind kind, partial, rtmp)))
-          | Error exn -> Lwt.return (Error exn)
-    in
+            Cstruct.blit source off rtmp writed_in_rtmp len;
+            go window consumed_in_window
+              (writed_in_rtmp + len) writed_in_htmp ctx result
+              (Pack.continue state)
+          | `Flush _ -> invalid_arg "Object is not a patch"
+          | `Object state ->
+            let descr = match Pack.kind state with
+              | Pack.Hunk descr -> descr
+              | _ -> invalid_arg "Object is not a patch" in
+            let ctx = match ctx with
+              | Some ctx -> ctx
+              | None ->
+                let len = match Pack.kind state with
+                  | Pack.Hunk { Hunk.target_length; _ } -> target_length
+                  | _ -> invalid_arg "Object is not a patch" in
+                let ctx = Hash.Digest.init () in
+                let hdr = Fmt.strf "%s %d\000"
+                    (match kind with
+                     | `Commit -> "commit"
+                     | `Tree -> "tree"
+                     | `Tag -> "tag"
+                     | `Blob -> "blob")
+                    len in
+                let ctx = Hash.Digest.feed ctx (Cstruct.of_string hdr) in
+                ctx in
 
-    match reference with
-    | Hunk.Offset off ->
-      let absolute_offset =
-        if off < t.max && off >= 0L
-        then Ok (Int64.sub source_offset off)
-        (* XXX(dinosaure): git has an invariant, [source_offset >
-           off]. That means, the source referenced is only in the past
-           from the current object. git did a topological sort to
-           produce a PACK file to ensure all sources are before all
-           targets. *)
-        else Error (Invalid_offset off)
-      in (match result_bind ~err:None t.rev absolute_offset with
-          | None -> aux absolute_offset
-          | Some hash -> match t.cache hash with
-            | Some base ->
-              Lwt.return (Ok (Object (base.Object.kind, Object.to_partial base, base.Object.raw)))
-            | None -> aux absolute_offset)
-    | Hunk.Hash hash ->
-      match t.cache hash with
-      | Some base ->
-        Lwt.return (Ok (Object (base.Object.kind, Object.to_partial base, base.Object.raw)))
-      | None -> match t.idx hash with
-        | Some (_, absolute_offset) ->
-          let absolute_offset =
-            if absolute_offset < t.max && absolute_offset >= 0L
-            then Ok absolute_offset
-            else Error (Invalid_hash hash)
-          in
-          aux absolute_offset
-        | None ->
-          (* XXX(dinosaure): in this case, we can have an allocation.
-             A good idea is to send [rtmp] to [t.get] and keep the
-             control about the memory consumption. TODO!
+            let patch =
+              { kind
+              ; length = Pack.length state
+              ; consumed = Pack.consumed state
+              ; inserts = writed_in_htmp
+              ; offset = Pack.offset state
+              ; crc = Pack.crc state
+              ; hash = Hash.Digest.get ctx
+              ; raw = Cstruct.sub rtmp 0 writed_in_rtmp
+              ; descr } in
 
-             In real case, we can not determine what is needed to get
-             this external object. But, if [limit = true], that means
-             we don't care about the object and want only the raw
-             data. In this case, and only in this case, it's probably
-             better to use [rtmp]. *)
-          t.get hash >>= function
-          | Some (kind, raw) -> Lwt.return (Ok (External (hash, kind, raw)))
-          | None -> Lwt.return (Error (Invalid_hash hash))
+            go window consumed_in_window writed_in_rtmp writed_in_htmp None (Some patch) (Pack.next_object state)
+          | `Error (state, exn) ->
+            Lwt.return_error (Unpack_error (state, window, exn))
+          | `End _ -> match result with
+            | Some patch -> Lwt.return_ok patch
+            | None -> assert false in
 
-  let make ?(bucket = 10) file cache idx rev get' =
-    Mapper.length file >|= function
-    | Error err -> Error err
-    | Ok max    ->
-      Ok { file
-         ; max
-         ; win  = Bucket.make bucket
-         ; cache
-         ; idx
-         ; rev
-         ; get = get' (* XXX(dinosaure): clash of name with [Lwt.geŧ]. *)
-         ; hash = (Hash.of_string (String.make Hash.Digest.length '\000')) (* TODO *) }
+        go window relative_offset 0 0 None None state
+  end
+
+  module Base =
+  struct
+    type t =
+      { kind : kind
+      ; length : int
+      ; consumed : int
+      ; offset : int64
+      ; crc : Crc32.t
+      ; hash : Hash.t
+      ; raw : Cstruct.t }
+
+    let get_from_absolute_offset ~ztmp ~zwin ?(chunk = 0x8000) rtmp t absolute_offset =
+      find_window t absolute_offset >>= function
+      | Error err -> Lwt.return_error (Mapper_error err)
+      | Ok (window, relative_offset) ->
+        let state = Pack.from_window window relative_offset ztmp zwin in
+
+        let rec go window consumed_in_window writed_in_rtmp ctx result state =
+          match Pack.eval window.Window.raw state with
+          | `Await state ->
+            let rest_in_window = min (window.Window.len - consumed_in_window) chunk in
+
+            if rest_in_window > 0
+            then go window
+                (consumed_in_window + rest_in_window)
+                writed_in_rtmp ctx result
+                (Pack.refill consumed_in_window rest_in_window state)
+            else begin
+              find_window t Int64.(window.Window.off + (of_int consumed_in_window)) >>= function
+              | Error err -> Lwt.return_error (Mapper_error err)
+              | Ok (window, relative_offset) ->
+                go window relative_offset writed_in_rtmp ctx result (Pack.refill 0 0 state)
+            end
+          | `Hunk _ -> invalid_arg "Object is not a base"
+          | `Flush state ->
+            let buf, len = Pack.output state in
+
+            let ctx = match ctx with
+              | Some ctx ->
+                let ctx = Hash.Digest.feed ctx (Cstruct.sub buf 0 len) in
+                Some ctx
+              | None ->
+                let ctx = Hash.Digest.init () in
+                let hdr = Fmt.strf "%s %d\000"
+                    (match Pack.kind state with
+                     | Pack.Commit -> "commit"
+                     | Pack.Tag -> "tag"
+                     | Pack.Tree -> "tree"
+                     | Pack.Blob -> "blob"
+                     | _ -> invalid_arg "Object is not a base")
+                    (Pack.length state) in
+                let ctx = Hash.Digest.feed ctx (Cstruct.of_string hdr) in
+                let ctx = Hash.Digest.feed ctx (Cstruct.sub buf 0 len) in
+                Some ctx in
+
+            Cstruct.blit buf 0 rtmp writed_in_rtmp len;
+            go window consumed_in_window (writed_in_rtmp + len) ctx result (Pack.flush 0 (Cstruct.len buf) state)
+          | `Object state ->
+            let base =
+              { kind = (match Pack.kind state with
+                    | Pack.Commit -> `Commit
+                    | Pack.Tree -> `Tree
+                    | Pack.Tag -> `Tag
+                    | Pack.Blob -> `Blob
+                    | _ -> invalid_arg "Object is not a base")
+              ; length = Pack.length state
+              ; consumed = Pack.consumed state
+              ; offset = Pack.offset state
+              ; crc = Pack.crc state
+              ; hash = (match ctx with
+                    | Some ctx -> Hash.Digest.get ctx
+                    | None ->
+                      let ctx = Hash.Digest.init () in
+                      let hdr = Fmt.strf "%s %d\000"
+                          (match Pack.kind state with
+                           | Pack.Commit -> "commit"
+                           | Pack.Tag -> "tag"
+                           | Pack.Tree -> "tree"
+                           | Pack.Blob -> "blob"
+                           | _ -> invalid_arg "Object is not a base")
+                          (Pack.length state) in
+                      let ctx = Hash.Digest.feed ctx (Cstruct.of_string hdr) in
+                      Hash.Digest.get ctx)
+              ; raw = Cstruct.sub rtmp 0 (Pack.length state) } in
+            go window consumed_in_window writed_in_rtmp None (Some base) (Pack.next_object state)
+          | `Error (state, exn) ->
+            Lwt.return_error (Unpack_error (state, window, exn))
+          | `End _ -> match result with
+            | Some base -> Lwt.return_ok base
+            | None -> assert false in
+
+        go window relative_offset 0 None None state
+  end
+
+  module Object =
+  struct
+    type t =
+      | Patch of Patch.t
+      | Root of Base.t
+
+    let k2k = function
+      | Pack.Commit -> `Commit
+      | Pack.Tree -> `Tree
+      | Pack.Tag -> `Tag
+      | Pack.Blob -> `Blob
+      | _ -> invalid_arg "k2k"
+
+    let get_from_absolute_offset ~ztmp ~zwin ?(chunk = 0x8000) ?htmp rtmp t absolute_offset =
+      find_window t absolute_offset >>= function
+      | Error err -> Lwt.return_error (Mapper_error err)
+      | Ok (window, relative_offset) ->
+        let state = Pack.from_window window relative_offset ztmp zwin in
+
+        let rec go window consumed_in_window writed_in_rtmp writed_in_htmp ctx hunks result state =
+          match Pack.eval window.Window.raw state with
+          | `Await state ->
+            let rest_in_window = min (window.Window.len - consumed_in_window) chunk in
+
+            if rest_in_window > 0
+            then go window
+                (consumed_in_window + rest_in_window)
+                writed_in_rtmp writed_in_htmp ctx hunks result
+                (Pack.refill consumed_in_window rest_in_window state)
+            else begin
+              find_window t Int64.(window.Window.off + (of_int consumed_in_window)) >>= function
+              | Error err -> Lwt.return_error (Mapper_error err)
+              | Ok (window, relative_offset) ->
+                go window relative_offset writed_in_rtmp writed_in_htmp ctx hunks result (Pack.refill 0 0 state)
+            end
+          | `Hunk (state, Hunk.Insert raw) ->
+            let len = Cstruct.len raw in
+
+            let insert = match htmp with
+              | Some htmp ->
+                Cstruct.blit raw 0 htmp writed_in_htmp len;
+                Diff.C (Cstruct.sub htmp writed_in_htmp len)
+              | None ->
+                Diff.S (Cstruct.to_string raw) in
+
+            go window consumed_in_window
+              writed_in_rtmp
+              (writed_in_htmp + len)
+              ctx (Diff.Insert insert :: hunks) result
+              (Pack.continue state)
+          | `Hunk (state, Hunk.Copy (off, len)) ->
+            go window consumed_in_window
+              writed_in_rtmp writed_in_htmp
+              ctx (Diff.Copy (off, len) :: hunks) result
+              (Pack.continue state)
+          | `Flush state ->
+            let buf, len = Pack.output state in
+
+            let ctx = match ctx with
+              | Some ctx ->
+                let ctx = Hash.Digest.feed ctx (Cstruct.sub buf 0 len) in
+                Some ctx
+              | None ->
+                let ctx = Hash.Digest.init () in
+                let hdr = Fmt.strf "%s %d\000"
+                    (match Pack.kind state with
+                     | Pack.Commit -> "commit"
+                     | Pack.Tag -> "tag"
+                     | Pack.Tree -> "tree"
+                     | Pack.Blob -> "blob"
+                     | _ -> assert false)
+                    (Pack.length state) in
+                let ctx = Hash.Digest.feed ctx (Cstruct.of_string hdr) in
+                let ctx = Hash.Digest.feed ctx (Cstruct.sub buf 0 len) in
+                Some ctx in
+
+            Cstruct.blit buf 0 rtmp writed_in_rtmp len;
+            go window consumed_in_window
+              (writed_in_rtmp + len) writed_in_htmp
+              ctx hunks result
+              (Pack.flush 0 (Cstruct.len buf) state)
+          | `Object state ->
+            let obj = match Pack.kind state with
+              | (Pack.Commit | Pack.Tag | Pack.Tree | Pack.Blob) as kind ->
+                Root { Base.kind = k2k kind
+                     ; length = Pack.length state
+                     ; consumed = Pack.consumed state
+                     ; offset = Pack.offset state
+                     ; crc = Pack.crc state
+                     ; hash = (match ctx with
+                           | Some ctx -> Hash.Digest.get ctx
+                           | None ->
+                             let ctx = Hash.Digest.init () in
+                             let hdr = Fmt.strf "%s %d\000"
+                                 (match Pack.kind state with
+                                  | Pack.Commit -> "commit"
+                                  | Pack.Tag -> "tag"
+                                  | Pack.Tree -> "tree"
+                                  | Pack.Blob -> "blob"
+                                  | _ -> assert false)
+                                 (Pack.length state) in
+                             let ctx = Hash.Digest.feed ctx (Cstruct.of_string hdr) in
+                             Hash.Digest.get ctx)
+                     ; raw = Cstruct.sub rtmp 0 (Pack.length state) }
+              | Pack.Hunk descr ->
+                Patch { Patch.length = Pack.length state
+                      ; consumed = Pack.consumed state
+                      ; offset = Pack.offset state
+                      ; crc = Pack.crc state
+                      ; hunks = List.rev hunks
+                      ; descr } in
+
+            go window consumed_in_window
+              writed_in_rtmp  writed_in_htmp
+              None [] (Some obj)
+              (Pack.next_object state)
+          | `Error (state, exn) ->
+            Lwt.return_error (Unpack_error (state, window, exn))
+          | `End _ -> match result with
+            | Some obj -> Lwt.return_ok obj
+            | None -> assert false in
+
+        go window relative_offset 0 0 None [] None state
+  end
+
+  module Cache =
+  struct
+    type ('key, 'value) t =
+      { promote : 'key -> 'value -> unit
+      ; find : 'key -> 'value option }
+
+    let lru
+      : type key value.
+        int ->
+        (module Hashtbl.HashedType with type t = key) ->
+        (module Lru.Weighted with type t = value) ->
+        (key, value) t
+      = fun weight (module H) (module W) ->
+      let module Lru = Lru.M.Make(H)(W) in
+      let cache = Lru.create weight in
+
+      { promote = (fun key value -> Lru.add  key value cache)
+      ; find = (fun key -> Lru.find key cache) }
+  end
+
+  let memoize promote find process =
+    let memoized x = match find x with
+      | Some v -> Lwt.return v
+      | None -> process x >>= fun y -> promote x y; Lwt.return y in
+    memoized
+
+  let memoize_rec ~promote ~find process_no_rec =
+    let process = ref (fun _ -> assert false) in
+    let process_rec = memoize promote find (fun x -> process_no_rec !process x) in
+    process := process_rec; process_rec
+
+  module Ascendant =
+  struct
+    type t =
+      | External of { hash : Hash.t; kind : kind; raw : Cstruct.t; }
+      | Root of Base.t
+      | Node of { patch : Patch.t; source : t }
+
+    type metadata =
+      { length : int
+      ; crc : Crc32.t
+      ; offset : int64
+      ; consumed : int }
+
+    type s =
+      [ `Patch of metadata
+      | `Base of metadata
+      | `Extern ]
+
+    let metadata_of_base base =
+      { length = base.Base.length
+      ; crc = base.Base.crc
+      ; offset = base.Base.offset
+      ; consumed = base.Base.consumed }
+
+    let metadata_of_patch : Patch.t -> metadata = fun patch ->
+      { length = patch.Patch.length
+      ; crc = patch.Patch.crc
+      ; offset = patch.Patch.offset
+      ; consumed = patch.Patch.consumed }
+
+    let needed_cache weight =
+      let module Int64 = struct include Int64 let hash n = Hashtbl.hash n end in
+      let module Int = struct type t = int let weight _ = 1 end in
+      Cache.lru weight (module Int64) (module Int)
+
+    let get_cache weight =
+      let module Int64 = struct include Int64 let hash n = Hashtbl.hash n end in
+      let module Path = struct type nonrec t = t let weight _ = 1 end in
+      Cache.lru weight (module Int64) (module Path)
+
+    let apply_cache weight =
+      let module Int64 = struct include Int64 let hash n = Hashtbl.hash n end in
+      let module Object = struct type t = kind * Cstruct.t * int * s let weight (_, raw, _, _) = Cstruct.len raw end in
+      Cache.lru weight (module Int64) (module Object)
+
+    let get_from_absolute_offset ~ztmp ~zwin ~cache ?(chunk = 0x8000) ?htmp rtmp t absolute_offset =
+      let get_free_htmp htmp depth = match htmp with
+        | Some htmp ->
+          if depth < Array.length htmp
+          then Some (Array.get htmp depth)
+          else None
+        | None -> None in
+
+      let go mu (absolute_offset, depth) =
+        Object.get_from_absolute_offset ~ztmp ~zwin ~chunk ?htmp:(get_free_htmp htmp depth) rtmp t absolute_offset >>= function
+        | Error err -> Lwt.return_error err
+        | Ok (Object.Root base) -> Lwt.return_ok (Root base)
+        | Ok (Object.Patch ({ Patch.descr = { Hunk.reference = Hunk.Offset rel_off; _ }; _ } as patch)) ->
+          (mu (Int64.(sub absolute_offset rel_off), succ depth) >>= function
+            | Ok source -> Lwt.return_ok (Node { patch; source; })
+            | Error err -> Lwt.return_error err)
+        | Ok (Object.Patch ({ Patch.descr = { Hunk.reference = Hunk.Hash hash; _ }; _ } as patch)) ->
+          match t.idx hash with
+          | Some (_, abs_off) ->
+            (mu (abs_off, succ depth) >>= function
+              | Ok source -> Lwt.return_ok (Node { patch; source; })
+              | Error err -> Lwt.return_error err)
+          | None -> t.get hash >>= function
+            | Some (kind, raw) -> Lwt.return_ok (Node { patch; source = External { hash; kind; raw; }; })
+            | None -> Lwt.return_error (Invalid_hash hash) in
+
+      let promote (abs_off, _) = function
+        | Ok node -> cache.Cache.promote abs_off node
+        | Error _ -> () in
+
+      let find (abs_off, _) = match cache.Cache.find abs_off with
+        | Some node -> Some (Ok node)
+        | None -> None in
+
+      let memoized_go = memoize_rec ~promote ~find go in
+      memoized_go (absolute_offset, 0)
+
+    let get_from_hash ~ztmp ~zwin ~cache ?(chunk = 0x8000) ?htmp rtmp t hash =
+      match t.idx hash with
+      | Some (_, abs_off) -> get_from_absolute_offset ~ztmp ~zwin ~cache ~chunk ?htmp rtmp t abs_off
+      | None -> Lwt.return_error (Invalid_hash hash)
+
+    let get ~ztmp ~zwin ~cache ?(chunk = 0x8000) ?htmp rtmp t = function
+      | `Hash hash -> get_from_hash ~ztmp ~zwin ~cache ~chunk ?htmp rtmp t hash
+      | `Offset absolute_offset -> get_from_absolute_offset ~ztmp ~zwin ~cache ~chunk ?htmp rtmp t absolute_offset
+
+    let reconstruct rtmp =
+      let get_free_rtmp (rtmp0, rtmp1) = function true -> rtmp0 | false -> rtmp1 in
+
+      let apply source patch target =
+        let target_length =
+          List.fold_left (fun target_off -> function
+              | Diff.Copy (off, len) ->
+                Cstruct.blit source off target target_off len; target_off + len
+              | Diff.Insert insert ->
+                Diff.blit_to_cstruct insert 0 target target_off (Diff.len insert);
+                target_off + (Diff.len insert))
+            0 patch.Patch.hunks in
+
+        if target_length <> patch.Patch.descr.Hunk.target_length
+        then invalid_arg "apply";
+
+        Cstruct.sub target 0 patch.Patch.descr.Hunk.target_length in
+
+      let rec go swap depth = function
+        | External { kind; raw; _ } -> (kind, raw, depth, `Extern)
+        | Root ({ Base.kind; Base.raw; _ } as base) -> (kind, raw, depth, `Base (metadata_of_base base))
+        | Node { patch; source; } ->
+          let (kind, raw, deepen, _) = go (not swap) (succ depth) source in
+          (kind, apply raw patch (get_free_rtmp rtmp swap), deepen, `Patch (metadata_of_patch patch)) in
+
+      go true 0
+
+    let apply_from_absolute_offset ~ztmp ~zwin ~cache ?(chunk = 0x8000) ?htmp rtmp t absolute_offset =
+      let get_free_rtmp (rtmp0, rtmp1) = function true -> rtmp0 | false -> rtmp1 in
+      let get_free_htmp htmp depth = match htmp with
+        | Some htmp ->
+          if depth < Array.length htmp
+          then Some (Array.get htmp depth)
+          else None
+        | None -> None in
+
+      let apply source patch target =
+        let target_length =
+          List.fold_left (fun target_off -> function
+              | Diff.Copy (off, len) ->
+                Cstruct.blit source off target target_off len;
+                target_off + len
+              | Diff.Insert insert ->
+                Diff.blit_to_cstruct insert 0 target target_off (Diff.len insert);
+                target_off + (Diff.len insert))
+            0 patch.Patch.hunks in
+
+        if target_length <> patch.Patch.descr.Hunk.target_length
+        then invalid_arg "apply";
+
+        Cstruct.sub target 0 patch.Patch.descr.Hunk.target_length in
+
+      let go mu (absolute_offset, switch, depth) =
+        Object.get_from_absolute_offset ~ztmp ~zwin ~chunk ?htmp:(get_free_htmp htmp depth) (get_free_rtmp rtmp switch) t absolute_offset >>= function
+        | Error err -> Lwt.return_error err
+        | Ok (Object.Root base) ->
+          Lwt.return_ok (base.Base.kind, base.Base.raw,
+                         depth, `Base (metadata_of_base base))
+        | Ok (Object.Patch ({ Patch.descr = { Hunk.reference = Hunk.Offset rel_off; _ }; _ } as patch)) ->
+          (mu (Int64.(sub absolute_offset rel_off), (not switch), (succ depth)) >>= function
+            | Ok (kind, source, deepen, _) ->
+              Lwt.return_ok (kind, apply source patch (get_free_rtmp rtmp switch),
+                             deepen, `Patch (metadata_of_patch patch))
+            | Error err -> Lwt.return_error err)
+        | Ok (Object.Patch ({ Patch.descr = { Hunk.reference = Hunk.Hash hash; _ }; _ } as patch)) ->
+          match t.idx hash with
+          | Some (_, abs_off) ->
+            (mu (abs_off, (not switch), (succ depth)) >>= function
+              | Ok (kind, source, deepen, _) ->
+                Lwt.return_ok (kind, apply source patch (get_free_rtmp rtmp switch),
+                               deepen, `Patch (metadata_of_patch patch))
+              | Error err -> Lwt.return_error err)
+          | None -> t.get hash >>= function
+            | Some (kind, raw) -> Lwt.return_ok (kind, apply raw patch (get_free_rtmp rtmp switch), depth, `Patch (metadata_of_patch patch))
+            | None -> Lwt.return_error (Invalid_hash hash) in
+
+      let find (abs_off, _, _) = match cache.Cache.find abs_off with
+        | Some (kind, raw, depth, metadata) -> Some (Ok (kind, raw, depth, metadata))
+        | None -> None in
+
+      let promote (abs_off, _, _) = function
+        | Ok (kind, raw, depth, metadata) -> cache.Cache.promote abs_off (kind, raw, depth, metadata)
+        | Error _ -> () in
+
+      let memoized_go = memoize_rec ~promote ~find go in
+      memoized_go (absolute_offset, true, 0)
+
+    let apply_from_hash ~ztmp ~zwin ~cache ?(chunk = 0x8000) ?htmp rtmp t hash =
+      match t.idx hash with
+      | Some (_, abs_off) -> apply_from_absolute_offset ~ztmp ~zwin ~cache ~chunk ?htmp rtmp t abs_off
+      | None -> Lwt.return_error (Invalid_hash hash)
+
+    let apply ~ztmp ~zwin ~cache ?(chunk = 0x8000) ?htmp rtmp t = function
+      | `Hash hash -> apply_from_hash ~ztmp ~zwin ~cache ~chunk ?htmp rtmp t hash
+      | `Offset absolute_offset -> apply_from_absolute_offset ~ztmp ~zwin ~cache ~chunk ?htmp rtmp t absolute_offset
+
+    let length_from_absolute_offset ~ztmp ~zwin ?(chunk = 0x8000) t absolute_offset =
+      find_window t absolute_offset >>= function
+      | Error err -> Lwt.return_error (Mapper_error err)
+      | Ok (window, relative_offset) ->
+        let state = Pack.process_length window relative_offset ztmp zwin in
+
+        let rec go window consumed_in_window state =
+          match Pack.eval_length window.Window.raw state with
+          | `Await state ->
+            let rest_in_window = min (window.Window.len - consumed_in_window) chunk in
+
+            if rest_in_window > 0
+            then go window (consumed_in_window + rest_in_window) (Pack.refill consumed_in_window rest_in_window state)
+            else begin
+              find_window t Int64.(window.Window.off + (of_int consumed_in_window)) >>= function
+              | Error err -> Lwt.return_error (Mapper_error err)
+              | Ok (window, relative_offset) ->
+                go window relative_offset (Pack.refill 0 0 state)
+            end
+          | `Flush state -> Lwt.return_ok (`Base (Pack.length state))
+          | `Error (state, exn) -> Lwt.return_error (Unpack_error (state, window, exn))
+          | `End _ -> assert false
+          | `Length state -> match Pack.kind state with
+            | Pack.Hunk ({ Hunk.target_length; source_length; _ } as descr) -> Lwt.return_ok (`Patch (descr, target_length, source_length))
+            | _ -> Lwt.return_ok (`Base (Pack.length state)) in
+
+        go window relative_offset state
+
+    let needed_from_absolute_offset ~ztmp ~zwin ~cache ?(chunk = 0x8000) t absolute_offset =
+      let go mu (needed, absolute_offset) =
+        length_from_absolute_offset ~ztmp ~zwin ~chunk t absolute_offset >>= function
+        | Error err -> Lwt.return_error err
+        | Ok (`Patch ({ Hunk.reference = Offset rel_off; _ }, target_length, source_length)) ->
+          mu (max (max target_length source_length) needed, Int64.(sub absolute_offset rel_off))
+        | Ok (`Base length) -> Lwt.return_ok (max length needed)
+        | Ok (`Patch ({ Hunk.reference = Hash hash; _ }, target_length, source_length)) ->
+          match t.idx hash with
+          | Some (_, abs_off) -> mu (max (max target_length source_length) needed, abs_off)
+          | None ->
+            t.get hash >>= function
+            | Some (_, raw) -> Lwt.return_ok (max (Cstruct.len raw) (max (max target_length source_length) needed))
+            | None -> Lwt.return_error (Invalid_hash hash) in
+
+      let find (_, abs_off) = match cache.Cache.find abs_off with
+        | Some needed -> (Some (Ok needed))
+        | None -> None in
+
+      let promote (_, abs_off) = function
+        | Ok needed -> cache.Cache.promote abs_off needed
+        | Error _ -> () in
+
+      let memoized_go = memoize_rec ~find ~promote go in
+      memoized_go (0, absolute_offset)
+
+    let needed_from_hash ~ztmp ~zwin ~cache ?(chunk = 0x8000) t hash =
+      match t.idx hash with
+      | Some (_, abs_off) -> needed_from_absolute_offset ~ztmp ~zwin ~cache ~chunk t abs_off
+      | None -> Lwt.return_error (Invalid_hash hash)
+
+    let needed ~ztmp ~zwin ~cache ?(chunk = 0x8000) t = function
+      | `Hash hash -> needed_from_hash ~ztmp ~zwin ~cache ~chunk t hash
+      | `Offset abs_off -> needed_from_absolute_offset ~ztmp ~zwin ~cache ~chunk t abs_off
+
+    let length_from_absolute_offset ~ztmp ~zwin ?(chunk = 0x8000) t absolute_offset =
+      length_from_absolute_offset ~ztmp ~zwin ~chunk t absolute_offset >>= function
+      | Ok (`Patch (_, target_length, _)) -> Lwt.return_ok target_length
+      | Ok (`Base length) -> Lwt.return_ok length
+      | Error err -> Lwt.return_error err
+
+    let length_from_hash ~ztmp ~zwin ?(chunk = 0x8000) t hash =
+      match t.idx hash with
+      | Some (_, abs_off) -> length_from_absolute_offset ~ztmp ~zwin ~chunk t abs_off
+      | None -> Lwt.return_error (Invalid_hash hash)
+
+    let length ~ztmp ~zwin ?(chunk = 0x8000) t = function
+      | `Hash hash -> length_from_hash ~ztmp ~zwin ~chunk t hash
+      | `Offset abs_off -> length_from_absolute_offset ~ztmp ~zwin ~chunk t abs_off
+  end
+
+  module Descendant =
+  struct
+    type base =
+      { kind : kind
+      ; length : int
+      ; consumed : int
+      ; offset : int64
+      ; hash : Hash.t
+      ; crc : Crc32.t }
+
+    let of_base base =
+      { kind = base.Base.kind
+      ; length = base.Base.length
+      ; consumed = base.Base.consumed
+      ; offset = base.Base.offset
+      ; hash = base.Base.hash
+      ; crc = base.Base.crc }
+
+    type patch =
+      { length : int
+      ; consumed : int
+      ; inserts : int
+      ; offset : int64
+      ; crc : Crc32.t
+      ; hash : Hash.t
+      ; descr : Hunk.hunks }
+
+    let of_patch patch =
+      { length = patch.Patch.length
+      ; consumed = patch.Patch.consumed
+      ; inserts = patch.Patch.inserts
+      ; offset = patch.Patch.offset
+      ; crc = patch.Patch.crc
+      ; hash = patch.Patch.hash
+      ; descr = patch.Patch.descr }
+
+    type t =
+      | Root of { base : base
+                ; children : node list }
+    and node =
+      | Node of { patch : patch
+                ; children : node list }
+      | Leaf of patch
+
+    let get_from_absolute_offset ~ztmp ~zwin ~cache:(cache_needed, cache_object) ?(chunk = 0x8000) ~children rtmp t absolute_offset =
+      Base.get_from_absolute_offset ~ztmp ~zwin ~chunk rtmp t absolute_offset >>= function
+      | Error err -> Lwt.return_error err
+      | Ok base ->
+        let load_base absolute_offset =
+          match cache_object.Cache.find absolute_offset with
+          | Some (kind, raw, _, _) -> Lwt.return_ok (kind, raw)
+          | None ->
+            Ascendant.needed_from_absolute_offset ~ztmp ~zwin ~cache:cache_needed ~chunk t absolute_offset >>= function
+            | Error err -> Lwt.return_error err
+            | Ok needed ->
+              let rtmp = Cstruct.create (needed * 2) in
+              let rtmp = Cstruct.sub rtmp 0 needed, Cstruct.sub rtmp needed needed in
+
+              Ascendant.apply_from_absolute_offset ~ztmp ~zwin ~cache:cache_object ~chunk rtmp t absolute_offset >>= function
+              | Ok (kind, raw, _, _) -> Lwt.return_ok (kind, raw)
+              | Error err -> Lwt.return_error err in
+
+        let load (parent_absolute_offset, absolute_offset) =
+          load_base parent_absolute_offset >>= function
+          | Error err -> Lwt.return_error err
+          | Ok (parent_kind, parent_raw) ->
+            Ascendant.length_from_absolute_offset ~ztmp ~zwin ~chunk t absolute_offset >>= function
+            | Error err -> Lwt.return_error err
+            | Ok length ->
+              let target = Cstruct.create length in
+              Patch.apply_from_absolute_offset ~ztmp ~zwin ~chunk (parent_kind, parent_raw) target t absolute_offset >>= function
+              | Error err -> Lwt.return_error err
+              | Ok s ->
+                let metadata =
+                  { Ascendant.length = s.Patch.length
+                  ; crc = s.Patch.crc
+                  ; consumed = s.Patch.consumed
+                  ; offset = s.Patch.offset } in
+                cache_object.Cache.promote absolute_offset (s.Patch.kind, s.Patch.raw, 0, `Patch metadata);
+                Lwt.return_ok s in
+
+        let rec go acc = function
+          | [] -> Lwt.return_ok acc
+          | x :: r ->
+            load x >>= function
+            | Error err -> Lwt.return_error err
+            | Ok patch ->
+              let children' = children (patch.Patch.offset, patch.Patch.hash)
+                              |> List.map (fun abs_off -> patch.Patch.offset, abs_off) in
+
+              go [] children' >>= function
+              | Error err -> Lwt.return_error err
+              | Ok [] -> go (Leaf (of_patch patch) :: acc) r
+              | Ok children' ->
+                go (Node { patch = of_patch patch
+                         ; children = children' } :: acc) r in
+
+        go [] (children (base.Base.offset, base.Base.hash)
+               |> List.map (fun abs_off -> base.Base.offset, abs_off))
+        >>= function
+        | Ok children ->
+          Lwt.return_ok (Root { base = of_base base
+                              ; children })
+        | Error err -> Lwt.return_error err
+  end
 
   let idx { idx; _ } = idx
-  let cache { cache; _ } = cache
-  let revidx { rev; _ } = rev
   let extern { get; _ } = get
 
   let update_idx idx t = { t with idx; }
-  let update_cache cache t = { t with cache; }
-  let update_revidx rev t = { t with rev; }
   let update_extern get t = { t with get; }
-
-  let length ?(chunk = 0x8000) t hash ztmp zwin =
-    let get absolute_offset =
-      find_window t absolute_offset
-      >>= function
-      | Error err -> Lwt.return (Error (Mapper_error err))
-      | Ok (window, relative_offset) ->
-        let state = Pack.process_length window relative_offset ztmp zwin in
-
-        let rec loop window consumed_in_window state =
-          match Pack.eval_length window.Window.raw state with
-          | `Await state ->
-            let rest_in_window = min (window.Window.len - consumed_in_window) chunk in
-
-            if rest_in_window > 0
-            then
-              loop window
-                (consumed_in_window + rest_in_window)
-                (Pack.refill consumed_in_window rest_in_window state)
-            else
-              find_window t Int64.(window.Window.off + (of_int consumed_in_window))
-              >>= (function
-                  | Error err -> Lwt.return (Error (Mapper_error err))
-                  | Ok (window, relative_offset) ->
-                    loop window
-                      relative_offset
-                      (Pack.refill 0 0 state))
-          | `Error (state, exn) -> Lwt.return (Error (Unpack_error (state, window, exn)))
-          | `End _ -> assert false
-          | `Flush state
-          | `Length state ->
-            match Pack.kind state with
-            | Pack.Hunk hunks ->
-              Lwt.return (Ok hunks.Hunk.target_length)
-            | Pack.Commit
-            | Pack.Blob
-            | Pack.Tree
-            | Pack.Tag -> Lwt.return (Ok (Pack.length state))
-        in
-
-        loop window relative_offset state
-    in
-
-    match t.idx hash with
-    | Some (_, off) -> get off
-    | None -> Lwt.return (Error (Invalid_hash hash))
-
-  (* XXX(dinosaure): this function returns the max length needed to undelta-ify
-     a PACK object. *)
-  let needed_from ?(chunk = 0x8000) ?(cache = (fun _ -> None)) t value ztmp zwin =
-    ignore @@ cache;
-
-    let get absolute_offset =
-      find_window t absolute_offset
-      >>= function
-      | Error err -> Lwt.return (`Error (Mapper_error err))
-      | Ok (window, relative_offset) ->
-        let state = Pack.process_length window relative_offset ztmp zwin in
-
-        let rec loop window consumed_in_window state =
-          match Pack.eval_length window.Window.raw state with
-          | `Await state ->
-            let rest_in_window = min (window.Window.len - consumed_in_window) chunk in
-
-            if rest_in_window > 0
-            then
-              loop window
-                (consumed_in_window + rest_in_window)
-                (Pack.refill consumed_in_window rest_in_window state)
-            else
-              find_window t Int64.(window.Window.off + (of_int consumed_in_window))
-              >>= (function
-                  | Error err -> Lwt.return (`Error (Mapper_error err))
-                  | Ok (window, relative_offset) ->
-                    loop window
-                      relative_offset
-                      (Pack.refill 0 0 state))
-          | `Flush state ->
-            Lwt.return (`Raw (Pack.length state))
-          | `Error (state, exn) -> Lwt.return (`Error (Unpack_error (state, window, exn)))
-          | `End _ -> assert false
-          | `Length state ->
-            match Pack.kind state with
-            | Pack.Hunk ({ Hunk.reference = Hunk.Offset off; _ } as hunks) ->
-              Lwt.return (`Offset (Int64.sub (Pack.offset state) off, max (Pack.length state) (max hunks.Hunk.source_length hunks.Hunk.target_length)))
-            | Pack.Hunk ({ Hunk.reference = Hunk.Hash hash; _ } as hunks) ->
-              Lwt.return (`Hash (hash, max (Pack.length state) (max hunks.Hunk.source_length hunks.Hunk.target_length)))
-            | Pack.Commit
-            | Pack.Blob
-            | Pack.Tree
-            | Pack.Tag ->
-              Lwt.return (`Raw (Pack.length state)) in
-
-        loop window relative_offset state in
-
-    let rec loop length = function
-      | `Error err -> Lwt.return_error err
-      | `Offset (abs_off, length') ->
-        Log.debug (fun l -> l ~header:"needed" "Length of delta-ified object (source at: %Ld) is: %d." abs_off length');
-        get abs_off >>= loop (max length length')
-      | `Raw length' ->
-        Log.debug (fun l -> l ~header:"needed" "Length of object is: %d." length');
-        Lwt.return_ok (max length length')
-      | `Hash (hash, length') ->
-        match t.idx hash with
-        | Some (_, abs_off) ->
-          Log.debug (fun l -> l ~header:"needed" "Length of delta-ified object (source at: %Ld) is: %d." abs_off length');
-          get abs_off >>= loop (max length length')
-        | None -> t.get hash >>= function
-          | Some (_, raw) -> Lwt.return_ok (max length' (max length (Cstruct.len raw)))
-          | None -> Lwt.return_error (Invalid_hash hash) in
-
-    match value with
-    | `Offset absolut_offset ->
-      get absolut_offset >>= loop 0
-    | `Hash hash ->
-      match t.idx hash with
-      | Some (_, absolute_offset) ->
-        get absolute_offset >>= loop 0
-      | None ->
-        Log.debug (fun l -> l ~header:"needed" "Ask external object to know how many byte(s) is needed.");
-
-        t.get hash >>= function
-        | Some (_, raw) -> Lwt.return_ok (Cstruct.len raw)
-        | None -> Lwt.return_error (Invalid_hash hash)
-
-  let needed_from_offset ?(chunk = 0x8000) ?(cache = (fun _ -> None)) t offset ztmp zwin =
-    needed_from ~chunk ~cache t (`Offset offset) ztmp zwin
-
-  let needed_from_hash ?(chunk = 0x8000) ?(cache = (fun _ -> None)) t hash ztmp zwin =
-    needed_from ~chunk ~cache t (`Hash hash) ztmp zwin
-
-  (* XXX(dinosaure): Need an explanation. This function does not
-     allocate any [Cstruct.t]. The purpose of this function is to get
-     a git object from a PACK file (represented by [t]). The user
-     requests the git object by the [hash].
-
-     Then, to get the git object, we need 4 buffers.
-
-     - One to store the inflated PACK object
-     - The Window used to inflate the PACK object
-     - Two buffer to undelta-ified the PACK object
-
-     We can have 2 two cases in this function:
-
-     - We get directly the git object (so, we just need to inflate the
-     PACK object)
-
-     - We get a {!H.hunks} object. In this case, we need to
-     undelta-ify the object
-
-     So, we use 2 [Cstruct.t] and swap themselves for each
-     undelta-ification. Then, we return a {!Object.t} git object and
-     return the true [Cstruct.t].
-
-     However, to be clear, this function allocates some buffers but in
-     same way as [git]. To read a PACK file, we need to allocate a
-     buffer which contains the data of the PACK file. It's the purpose
-     of the {!MAPPER} module.
-
-     So, we [mmap] a part of the PACK file (a part of [1024 * 1024]
-     bytes) which contains the offset of the PACK object requested -
-     it's a {!Window.t}. Then, we compute the deserialization of the
-     PACK object (note: sometimes, the {!Window.t} is not sufficient
-     to deserialize the PACK object requested, so we allocate a new
-     {!Window.t} which contains the rest of the PACK object).
-
-     Finally, we limit the number of {!Window.t} available by 10
-     (value by default) and limit the allocation. Hopefully, we
-     amortized the allocation because, for one {!Window.t}, we can
-     compute some PACK objects.
-
-     Another point is about the [limit] argument. Sometimes we want an
-     object only to construction by the undelta-ification an other git
-     object. In this case, we need only 0x10000FFFE bytes of this
-     object (according to the limit of the offset described by the
-     PACK format). So, we notice to this function than we want to
-     store the git object in a limited (fixed) size buffer and if the
-     object if upper than 0x10000FFFE bytes, we discard the rest.
-
-     For this call, we don't case about the meta-data of the object
-     requested (where it come from, the CRC-32 checksum, etc.) and
-     just want the raw data. *)
-
-  let get_from_offset ?(chunk = 0x8000) ?(limit = false) ?htmp t absolute_offset (raw0, raw1, _) ztmp zwin =
-    let get_free_raw = function
-      | true -> raw0
-      | false -> raw1
-    in
-    find_window t absolute_offset >>= function
-    | Error err -> Lwt.return (Error (Mapper_error err))
-    | Ok (window, relative_offset) ->
-      let state  = Pack.from_window window relative_offset ztmp zwin in
-
-      let rec loop window consumed_in_window writed_in_raw writed_in_hnk hunks swap git_object state =
-        match Pack.eval window.Window.raw state with
-        | `Await state ->
-          Log.debug (fun l -> l ~header:"get" "PACK decoder waits.");
-
-          let rest_in_window = min (window.Window.len - consumed_in_window) chunk in
-
-          if rest_in_window > 0
-          then
-            loop window
-              (consumed_in_window + rest_in_window) writed_in_raw writed_in_hnk
-              hunks swap git_object
-              (Pack.refill consumed_in_window rest_in_window state)
-          else
-            find_window t Int64.(window.Window.off + (of_int consumed_in_window))
-            >>= (function
-                | Error err -> Lwt.return (Error (Mapper_error err))
-                | Ok (window, relative_offset) ->
-                  loop window
-                    relative_offset writed_in_raw writed_in_hnk
-                    hunks swap git_object
-                    (Pack.refill 0 0 state))
-        | `Flush state ->
-          Logs.debug (fun l -> l ~header:"get" "PACK decoder flushes.");
-
-          let o, n = Pack.output state in
-          let n' = min (Cstruct.len (get_free_raw swap) - writed_in_raw) n in
-
-          Cstruct.blit o 0 (get_free_raw swap) writed_in_raw n';
-
-          if n' > 0
-          then
-            loop window
-              consumed_in_window (writed_in_raw + n) writed_in_hnk
-              hunks swap git_object
-              (Pack.flush 0 (Cstruct.len o) state)
-          else Lwt.return (Ok (Object.{ kind = to_kind (Pack.kind state)
-                                      ; raw  = get_free_raw swap
-                                      ; from   = Internal { length   = Pack.length state
-                                                          ; consumed = 0
-                                                          ; offset   = Pack.offset state
-                                                          ; crc      = Crc32.default }}))
-        | `Hunk (state, hunk) ->
-          Log.debug (fun l -> l ~header:"get" "PACK decoder return an hunk.");
-
-          (match htmp, hunk with
-           | Some hnks, Hunk.Insert raw ->
-             let len = Cstruct.len raw in
-             Cstruct.blit raw 0 hnks.(0) writed_in_hnk len;
-             loop window
-               consumed_in_window writed_in_raw (writed_in_hnk + len)
-               (Insert (C (Cstruct.sub hnks.(0) writed_in_hnk len)) :: hunks)
-               swap git_object (Pack.continue state)
-           | None, Hunk.Insert raw ->
-             loop window
-               consumed_in_window writed_in_raw writed_in_hnk
-               (Insert (S (Cstruct.to_string raw)) :: hunks) swap git_object
-               (Pack.continue state)
-           | _, Hunk.Copy (off, len) ->
-             loop window consumed_in_window writed_in_raw writed_in_hnk
-               (Copy (off, len) :: hunks) swap git_object
-               (Pack.continue state))
-        | `Object state ->
-          Log.debug (fun l -> l ~header:"get" "PACK decoder retrieve an object.");
-
-          (match Pack.kind state with
-           | Pack.Hunk hunks_header ->
-             Log.debug (fun l -> l ~header:"get" "The Git object requested is delta-ified.");
-
-             let partial_hunks =
-               { _length   = Pack.length state
-               ; _consumed = Pack.consumed state
-               ; _offset   = Pack.offset state
-               ; _crc      = Pack.crc state
-               ; _hunks    = List.rev hunks }
-             in
-
-             let rec undelta depth partial hunks swap =
-               Log.debug (fun l -> l ~header:"get" "Undelta the object at the depth: %d." depth);
-
-               get_pack_object
-                 ~chunk
-                 ?htmp:(match htmp with Some hnks -> if depth < Array.length hnks then Some hnks.(depth) else None | None -> None)
-                 t
-                 hunks.Hunk.reference
-                 hunks.Hunk.source_length
-                 partial._offset ztmp zwin (get_free_raw swap)
-               >>= function
-               | Error exn -> Lwt.return (Error exn)
-               | Ok (Hunks (partial_hunks, hunks)) ->
-                 (undelta (depth + 1) partial_hunks hunks (not swap) >|= function
-                   | Ok base ->
-                     Log.debug (fun l -> l ~header:"get" "Applying hunks (depth: %d)." depth);
-
-                     apply partial_hunks hunks partial_hunks._hunks base (get_free_raw swap)
-                   | Error exn -> Error exn)
-               | Ok (Object (kind, partial, raw)) ->
-                 Lwt.return (Ok Object.{ kind
-                                       ; raw
-                                       ; from   = Internal { length   = partial._length
-                                                           ; consumed = partial._consumed
-                                                           ; offset   = partial._offset
-                                                           ; crc      = partial._crc } })
-               | Ok (External (hash, kind, raw)) ->
-                 Lwt.return (Ok Object.{ kind
-                                       ; raw
-                                       ; from   = Object.External { hash; length = hunks.Hunk.source_length } })
-             in
-
-             (undelta 1 partial_hunks hunks_header swap >>= function
-               | Ok base ->
-                 (match apply partial_hunks hunks_header partial_hunks._hunks base (get_free_raw (not swap)) with
-                  | Ok obj ->
-                    loop window
-                      consumed_in_window writed_in_raw writed_in_hnk
-                      hunks swap (Some obj)
-                      (Pack.next_object state)
-                  | Error exn -> Lwt.return (Error exn))
-               | Error exn -> Lwt.return (Error exn))
-           | (Pack.Commit
-             | Pack.Tag
-             | Pack.Tree
-             | Pack.Blob) as kind ->
-             Log.debug (fun l -> l ~header:"get" "The Git object requested is not delta-ified.");
-
-             let obj =
-               Object.{ kind   = to_kind kind
-                      ; raw    =
-                          if (not limit) || ((Pack.length state) < 0x10000FFFE && limit)
-                          then Cstruct.sub (get_free_raw swap) 0 (Pack.length state)
-                          else (get_free_raw swap)
-                      ; from   = Internal { length   = Pack.length state
-                                          ; consumed = Pack.consumed state
-                                          ; offset   = Pack.offset state
-                                          ; crc      = Pack.crc state } }
-             in
-
-             loop window
-               consumed_in_window writed_in_raw writed_in_hnk
-               hunks (not swap) (Some obj)
-               (Pack.next_object state))
-        | `Error (state, exn) ->
-          Log.err (fun l -> l ~header:"get" "Retrieve an error: %a." Pack.pp_error exn);
-
-          Lwt.return (Error (Unpack_error (state, window, exn)))
-        | `End _ -> match git_object with
-          | Some obj ->
-            Lwt.return (Ok obj)
-          | None -> assert false
-      in
-
-      loop window relative_offset 0 0 [] true None state
-
-  let get_from_hash
-      ?(chunk = 0x8000) ?(limit = false) ?htmp t hash vtmp ztmp zwin
-    =
-    match t.idx hash with
-    | Some (crc32, absolute_offset) ->
-      Log.debug (fun l ->
-          l ~header:"get/hash"
-            "Information of the Git object %a: (crc32: %a, offset: %Ld)."
-            Hash.pp hash Crc32.pp crc32 absolute_offset);
-      get_from_offset ~chunk ~limit ?htmp t absolute_offset vtmp ztmp zwin
-    | None ->
-      Log.err (fun l ->
-          l ~header:"get/hash"
-            "The Git object %a does not exists in the current PACK file."
-            Hash.pp hash);
-      Lwt.return (Error (Invalid_hash hash))
-
-  let get_with_hunks_allocation_from_offset
-      ?chunk t absolute_offset ztmp zwin (raw0, raw1)
-    =
-    needed_from ?chunk t (`Offset absolute_offset) ztmp zwin
-    >>= function
-    | Error exn -> Lwt.return (Error exn)
-    | Ok length ->
-      if Cstruct.len raw0 <> Cstruct.len raw1
-      || Cstruct.len raw0 < length
-      || Cstruct.len raw1 < length
-      then raise (Invalid_argument "Decoder.get': invalid raws");
-      get_from_offset ?chunk t absolute_offset (raw0, raw1, length) ztmp zwin
-
-  let get_with_hunks_allocation_from_hash ?chunk t hash ztmp zwin (raw0, raw1) =
-    needed_from_hash t hash ztmp zwin >>= function
-    | Error exn -> Lwt.return (Error exn)
-    | Ok length ->
-      if Cstruct.len raw0 <> Cstruct.len raw1
-      || Cstruct.len raw0 < length
-      || Cstruct.len raw1 < length
-      then raise (Invalid_argument "Decoder.get': invalid raws");
-      get_from_hash ?chunk t hash (raw0, raw1, length) ztmp zwin
-
-  let get_with_result_allocation_from_hash ?chunk ?htmp t hash ztmp zwin =
-    needed_from_hash t hash ztmp zwin >>= function
-    | Error exn -> Lwt.return (Error exn)
-    | Ok length ->
-      Log.debug (fun l ->
-          l ~header:"get+allocation/hash"
-            "Git object %a need %d byte(s) (allocation)." Hash.pp hash length);
-      let tmp = Cstruct.create length, Cstruct.create length, length in
-      get_from_hash ?chunk ?htmp t hash tmp ztmp zwin
-
-  let get_with_result_allocation_from_offset
-      ?chunk ?htmp t absolute_offset ztmp zwin
-    =
-    needed_from t (`Offset absolute_offset) ztmp zwin >>= function
-    | Error exn -> Lwt.return (Error exn)
-    | Ok length ->
-      let tmp = Cstruct.create length, Cstruct.create length, length in
-      get_from_offset ?chunk ?htmp t absolute_offset tmp ztmp zwin
 end
 
 module Stream
