@@ -38,6 +38,8 @@ sig
     | Internal of { hash: Hash.t; abs_off: int64; length: int; }
     | Delta of { hunks_descr: HDec.hunks; inserts: int; depth: int; from: delta; }
 
+  val needed: delta -> int
+
   val pp_delta: delta Fmt.t
 
   type path = Load of int | Patch of { hunks: int; target: int; src: path; }
@@ -102,6 +104,14 @@ module Make
     | Unresolved of { hash: Hash.t; length: int; }
     | Internal   of { hash: Hash.t; abs_off: int64; length: int; }
     | Delta      of { hunks_descr: HDec.hunks; inserts: int; depth: int; from: delta; }
+
+  let needed t =
+    let rec go acc = function
+      | Unresolved { length; _ } -> max length acc
+      | Internal { length; _ } -> max length acc
+      | Delta { hunks_descr; from; _ } ->
+        go (max hunks_descr.HDec.target_length acc) from in
+    go 0 t
 
   let rec pp_delta ppf = function
     | Unresolved { hash; length; } ->
@@ -181,8 +191,8 @@ module Make
            | _ -> assert false)
           (PDec.length state) in
 
-      Hash.Digest.feed ctx (Cstruct.of_string hdr);
-      Hash.Digest.feed ctx chunk;
+      let ctx = Hash.Digest.feed ctx (Cstruct.of_string hdr) in
+      let ctx = Hash.Digest.feed ctx chunk in
       ctx in
 
     let open Lwt.Infix in
@@ -202,7 +212,7 @@ module Make
         let chunk, len = PDec.output state in
 
         let ctx = match ctx with
-          | Some ctx -> Hash.Digest.feed ctx (Cstruct.sub chunk 0 len); ctx
+          | Some ctx -> Hash.Digest.feed ctx (Cstruct.sub chunk 0 len)
           | None -> ctx_with_header (Cstruct.sub chunk 0 len) state in
 
         go ~src ~ctx (PDec.flush 0 (Cstruct.len chunk) state)

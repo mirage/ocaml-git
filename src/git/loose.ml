@@ -337,7 +337,7 @@ module Make
     in
     let digest value' =
       let ctx = Hash.Digest.init () in
-      Hash.Digest.feed ctx value';
+      let ctx = Hash.Digest.feed ctx value' in
       Hash.Digest.get ctx
     in
     let value' = Cstruct.concat [ header; value ] in

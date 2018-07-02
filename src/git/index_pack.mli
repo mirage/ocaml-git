@@ -148,7 +148,7 @@ sig
       decoder can't continue and sticks in this situation.}} *)
 end
 
-module Decoder (H: S.HASH with type Digest.buffer = Cstruct.t)
+module Decoder (H: S.HASH)
  : DECODER with module Hash = H
 (** The {i functor} to make the decoder module by a specific hash
     implementation. We constraint the {!Hash.S} module to compute a

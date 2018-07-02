@@ -405,6 +405,8 @@ module Make
                   patch.RPDec.Patch.offset,
                   patch.RPDec.Patch.descr.HDec.target_length in
 
+              Log.debug (fun l -> l "Replace %a with %Ld." Hash.pp hash abs_off);
+
               Hashtbl.replace info.PInfo.index hash (crc, abs_off, length);
               Hashtbl.replace info.PInfo.delta abs_off (object_to_delta obj);
 
@@ -494,8 +496,8 @@ module Make
           (Cstruct.len raw) in
 
       let ctx = Hash.Digest.init () in
-      Hash.Digest.feed ctx (Cstruct.of_string hdr);
-      Hash.Digest.feed ctx raw;
+      let ctx = Hash.Digest.feed ctx (Cstruct.of_string hdr) in
+      let ctx = Hash.Digest.feed ctx raw in
       Hash.Digest.get ctx
 
     let of_info ~read_and_exclude fs path_tmp info =
@@ -509,6 +511,8 @@ module Make
       | Error _ as err -> Lwt.return err
 
     exception Fail of RPDec.error
+
+    module Second_pass = Second_pass.Make(Hash)(FS)(Inflate)(Deflate)(HDec)(PDec)(PInfo)(RPDec)
 
     (* [second_pass] allows to analyse all compressed chains of
        objects and to discover if the pack file is thin or not.
@@ -526,65 +530,61 @@ module Make
       let cache_object = { RPDec.Cache.find = (fun _ -> None)
                          ; promote = (fun _ _ -> ()) } in
 
-      let resolve abs_off =
-        RPDec.Ascendant.needed_from_absolute_offset ~ztmp ~zwin ~cache:cache_needed normalized.pack abs_off >>= function
-        | Error err -> Lwt.fail (Fail err)
-        | Ok needed ->
-          Log.debug (fun l -> l "Allocate %d byte(s) to extract %a:%Ld." (needed * 3) Hash.pp normalized.info.PInfo.hash_pack abs_off);
+      Second_pass.second_pass normalized.pack normalized.info >>= fun queue ->
 
-          r.with_cstruct r.mmu Unrecorded (needed * 3) @@ fun (loc_raw, raw) ->
-          Log.debug (fun l -> l "Has %d byte(s)." (Cstruct.len raw));
+      let rec go idx =
+        if idx = Array.length queue
+        then Lwt.return_unit
+        else match Array.get queue idx with
+          | abs_off, (delta, Resolved (crc, hash)) ->
+            let needed = PInfo.needed delta in
 
-          let rtmp = Cstruct.sub raw 0 needed, Cstruct.sub raw needed needed in
-          let base = Cstruct.sub raw (needed * 2) needed in
-
-          RPDec.Ascendant.get_from_absolute_offset ~ztmp ~zwin ~cache:cache_object base normalized.pack abs_off >>= function
-          | Error err -> Lwt.fail (Fail err)
-          | Ok obj ->
-
-            Log.debug (fun l -> l "Patch of object: %a.\n" PInfo.pp_delta (Loaded.object_to_delta obj));
-
-            let (kind, raw, _, metadata) = RPDec.Ascendant.reconstruct rtmp obj in
-            let hash = digest (kind, raw) in
-            let crc, abs_off = match metadata with
-              | `Extern -> assert false
-              (* XXX(dinosaure): impossible. An object is a patch or a base,
-                 however, source of it can be extern. *)
-              | `Patch metadata | `Base metadata ->
-                metadata.RPDec.Ascendant.crc, metadata.RPDec.Ascendant.offset in
-
-            Log.info (fun l ->
-                l ~header:"second_pass" "Add object %a (length: %d, offset: %Ld)."
-                  Hash.pp hash (Hashtbl.length normalized.info.PInfo.index) abs_off);
+            Log.debug (fun l -> l ~header:"second_pass" "Save (already constructed) object %a:%Ld." Hash.pp hash abs_off);
 
             Hashtbl.add normalized.info.PInfo.index hash (crc, abs_off, needed);
-            Hashtbl.replace normalized.info.PInfo.delta abs_off (Loaded.object_to_delta obj);
+            Hashtbl.replace normalized.info.PInfo.delta abs_off delta;
+            go (succ idx)
+          | _, (_, Root) -> go (succ idx)
+          | abs_off, (_, Unresolved) ->
+            RPDec.Ascendant.needed_from_absolute_offset ~ztmp ~zwin ~cache:cache_needed normalized.pack abs_off >>= function
+            | Error err -> Lwt.fail (Fail err)
+            | Ok needed ->
+              Log.debug (fun l -> l "Allocate %d byte(s) to extract %a:%Ld." (needed * 3) Hash.pp normalized.info.PInfo.hash_pack abs_off);
 
-            let () = match obj with
-              | RPDec.Ascendant.External _ -> normalized.thin <- true
-              | RPDec.Ascendant.Root _ -> ()
-              | RPDec.Ascendant.Node { source; _ } ->
-                let rec go = function
-                  | RPDec.Ascendant.Node { source; _ } -> go source
-                  | RPDec.Ascendant.External _ -> normalized.thin <- true
-                  | RPDec.Ascendant.Root _ -> () in
-                go source in
+              (r.with_cstruct r.mmu Unrecorded (needed * 3) @@ fun (loc_raw, raw) ->
+               Log.debug (fun l -> l "Has %d byte(s)." (Cstruct.len raw));
 
-            r.free r.mmu loc_raw in
+               let rtmp = Cstruct.sub raw 0 needed, Cstruct.sub raw needed needed in
+               let base = Cstruct.sub raw (needed * 2) needed in
 
-      Lwt.catch
-        (fun () ->
-           Lwt_list.iter_s
-             resolve
-             (Hashtbl.fold (fun k v a -> match v with
-                  | PInfo.Delta _ | PInfo.Unresolved _ -> k :: a
-                  | _ -> a) normalized.info.PInfo.delta []
-              |> List.sort (fun ka kb -> Int64.compare ka kb))
-           >>= fun () ->
-           Log.debug (fun l ->
-               l ~header:"second_pass" "Paths of delta-ification: %a."
-                 Fmt.(Dump.hashtbl int64 PInfo.pp_delta) normalized.info.PInfo.delta);
-           Lwt.return_ok ())
+               RPDec.Ascendant.get_from_absolute_offset ~ztmp ~zwin ~cache:cache_object base normalized.pack abs_off >>= function
+               | Error err -> Lwt.fail (Fail err)
+               | Ok obj ->
+
+                 Log.debug (fun l -> l "Patch of object: %a.\n" PInfo.pp_delta (Loaded.object_to_delta obj));
+
+                 let (kind, raw, _, metadata) = RPDec.Ascendant.reconstruct rtmp obj in
+                 let hash = digest (kind, raw) in
+                 let crc, abs_off = match metadata with
+                   | `Extern -> assert false
+                   (* XXX(dinosaure): impossible. An object is a patch or a base,
+                      however, source of it can be extern. *)
+                   | `Patch metadata | `Base metadata ->
+                     metadata.RPDec.Ascendant.crc, metadata.RPDec.Ascendant.offset in
+
+                 Log.info (fun l ->
+                     l ~header:"second_pass" "Add (thin) object %a (offset: %Ld)."
+                       Hash.pp hash abs_off);
+
+                 Hashtbl.add normalized.info.PInfo.index hash (crc, abs_off, needed);
+                 Hashtbl.replace normalized.info.PInfo.delta abs_off (Loaded.object_to_delta obj);
+                 normalized.thin <- true;
+
+                 r.free r.mmu loc_raw)
+              >>= fun () -> go (succ idx) in
+      Lwt.try_bind
+        (fun () -> go 0)
+        (fun () -> Lwt.return_ok ())
         (function Fail err -> Lwt.return_error (`Pack_decoder err)
                 | exn -> Lwt.fail exn)
   end

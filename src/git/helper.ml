@@ -532,20 +532,24 @@ let fdigest: type t hash.
     let module M      = (val encoder) in
     let hdr = Fmt.strf "%s %Ld\000" kind (length value) in
     let ctx = Digest.init () in
-    Digest.feed ctx (Cstruct.of_string hdr);
+    let ctx = Digest.feed ctx (Cstruct.of_string hdr) in
     let encoder = M.default (capacity, value) in
-    let rec loop encoder = match M.eval tmp encoder with
+    let rec loop ctx encoder = match M.eval tmp encoder with
       | `Flush encoder ->
-        if M.used encoder > 0 then
-          Digest.feed ctx (Cstruct.sub tmp 0 (M.used encoder));
-        loop (M.flush 0 (Cstruct.len tmp) encoder)
+        let ctx =
+          if M.used encoder > 0
+          then Digest.feed ctx (Cstruct.sub tmp 0 (M.used encoder))
+          else ctx in
+        loop ctx (M.flush 0 (Cstruct.len tmp) encoder)
       | `End (encoder, _) ->
-        if M.used encoder > 0 then
-          Digest.feed ctx (Cstruct.sub tmp 0 (M.used encoder));
+        let ctx =
+          if M.used encoder > 0
+          then Digest.feed ctx (Cstruct.sub tmp 0 (M.used encoder))
+          else ctx in
         Digest.get ctx
       | `Error `Never -> assert false
     in
-    loop encoder
+    loop ctx encoder
 
 module type ENCODER = sig
   type state

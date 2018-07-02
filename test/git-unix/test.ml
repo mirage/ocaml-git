@@ -131,6 +131,7 @@ let () =
     ; Test_store.suite "fs"     (module Fs_store)
     ; Test_data.suite  "fs"     (module Test_data.Usual) (module Fs_store)
     ; Test_data.suite "fs"      (module Test_data.Bomb) (module Fs_store)
+    ; Test_data.suite "fs"      (module Test_data.Udns) (module Fs_store)
 
     (* XXX(dinosaure): rev-list works only on an unix environment. Indeed,
        oracle (git) needs a well-formed git repository to work. However, the

@@ -1334,6 +1334,7 @@ module type D = sig
       { kind : kind
       ; length : int
       ; consumed : int
+      ; inserts : int
       ; offset : int64
       ; crc : Crc32.t
       ; hash : Hash.t
@@ -1498,6 +1499,7 @@ module type D = sig
     type patch =
       { length : int
       ; consumed : int
+      ; inserts : int
       ; offset : int64
       ; crc : Crc32.t
       ; hash : Hash.t
@@ -1708,6 +1710,7 @@ struct
       { kind : kind
       ; length : int
       ; consumed : int
+      ; inserts : int
       ; offset : int64
       ; crc : Crc32.t
       ; hash : Hash.t
@@ -1720,7 +1723,7 @@ struct
       | Ok (window, relative_offset) ->
         let state = Pack.from_window window relative_offset ztmp zwin in
 
-        let rec go window consumed_in_window writed_in_rtmp ctx result state =
+        let rec go window consumed_in_window writed_in_rtmp writed_in_htmp ctx result state =
           match Pack.eval window.Window.raw state with
           | `Await state ->
             let rest_in_window = min (window.Window.len - consumed_in_window) chunk in
@@ -1728,19 +1731,19 @@ struct
             if rest_in_window > 0
             then go window
                 (consumed_in_window + rest_in_window)
-                writed_in_rtmp ctx result
+                writed_in_rtmp writed_in_htmp ctx result
                 (Pack.refill consumed_in_window rest_in_window state)
             else begin
               find_window t Int64.(window.Window.off + (of_int consumed_in_window)) >>= function
               | Error err -> Lwt.return_error (Mapper_error err)
               | Ok (window, relative_offset) ->
-                go window relative_offset writed_in_rtmp ctx result (Pack.refill 0 0 state)
+                go window relative_offset writed_in_rtmp writed_in_htmp ctx result (Pack.refill 0 0 state)
             end
           | `Hunk (state, Hunk.Insert raw) ->
             let len = Cstruct.len raw in
             let ctx = match ctx with
               | Some ctx ->
-                Hash.Digest.feed ctx raw;
+                let ctx = Hash.Digest.feed ctx raw in
                 Some ctx
               | None ->
                 let len = match Pack.kind state with
@@ -1754,21 +1757,21 @@ struct
                      | `Tag -> "tag"
                      | `Blob -> "blob")
                     len in
-                Hash.Digest.feed ctx (Cstruct.of_string hdr);
-                Hash.Digest.feed ctx raw;
+                let ctx = Hash.Digest.feed ctx (Cstruct.of_string hdr) in
+                let ctx = Hash.Digest.feed ctx raw in
                 Some ctx in
 
             Cstruct.blit raw 0 rtmp writed_in_rtmp len;
             go window consumed_in_window
-              (writed_in_rtmp + len) ctx result
+              (writed_in_rtmp + len) (writed_in_htmp + len) ctx result
               (Pack.continue state)
           | `Hunk (state, Hunk.Copy (off, len)) ->
             let ctx = match ctx with
               | Some ctx ->
-                Hash.Digest.feed ctx (Cstruct.sub source off len);
+                let ctx = Hash.Digest.feed ctx (Cstruct.sub source off len) in
                 Some ctx
               | None ->
-                let len = match Pack.kind state with
+                let len' = match Pack.kind state with
                   | Pack.Hunk { Hunk.target_length; _ } -> target_length
                   | _ -> invalid_arg "Object is not a patch" in
                 let ctx = Hash.Digest.init () in
@@ -1778,14 +1781,14 @@ struct
                      | `Tree -> "tree"
                      | `Tag -> "tag"
                      | `Blob -> "blob")
-                    len in
-                Hash.Digest.feed ctx (Cstruct.of_string hdr);
-                Hash.Digest.feed ctx (Cstruct.sub source off len);
+                    len' in
+                let ctx = Hash.Digest.feed ctx (Cstruct.of_string hdr) in
+                let ctx = Hash.Digest.feed ctx (Cstruct.sub source off len) in
                 Some ctx in
 
             Cstruct.blit source off rtmp writed_in_rtmp len;
             go window consumed_in_window
-              (writed_in_rtmp + len) ctx result
+              (writed_in_rtmp + len) writed_in_htmp ctx result
               (Pack.continue state)
           | `Flush _ -> invalid_arg "Object is not a patch"
           | `Object state ->
@@ -1806,27 +1809,28 @@ struct
                      | `Tag -> "tag"
                      | `Blob -> "blob")
                     len in
-                Hash.Digest.feed ctx (Cstruct.of_string hdr);
+                let ctx = Hash.Digest.feed ctx (Cstruct.of_string hdr) in
                 ctx in
 
             let patch =
               { kind
               ; length = Pack.length state
               ; consumed = Pack.consumed state
+              ; inserts = writed_in_htmp
               ; offset = Pack.offset state
               ; crc = Pack.crc state
               ; hash = Hash.Digest.get ctx
               ; raw = Cstruct.sub rtmp 0 writed_in_rtmp
               ; descr } in
 
-            go window consumed_in_window writed_in_rtmp None (Some patch) (Pack.next_object state)
+            go window consumed_in_window writed_in_rtmp writed_in_htmp None (Some patch) (Pack.next_object state)
           | `Error (state, exn) ->
             Lwt.return_error (Unpack_error (state, window, exn))
           | `End _ -> match result with
             | Some patch -> Lwt.return_ok patch
             | None -> assert false in
 
-        go window relative_offset 0 None None state
+        go window relative_offset 0 0 None None state
   end
 
   module Base =
@@ -1868,7 +1872,7 @@ struct
 
             let ctx = match ctx with
               | Some ctx ->
-                Hash.Digest.feed ctx (Cstruct.sub buf 0 len);
+                let ctx = Hash.Digest.feed ctx (Cstruct.sub buf 0 len) in
                 Some ctx
               | None ->
                 let ctx = Hash.Digest.init () in
@@ -1880,8 +1884,8 @@ struct
                      | Pack.Blob -> "blob"
                      | _ -> invalid_arg "Object is not a base")
                     (Pack.length state) in
-                Hash.Digest.feed ctx (Cstruct.of_string hdr);
-                Hash.Digest.feed ctx (Cstruct.sub buf 0 len);
+                let ctx = Hash.Digest.feed ctx (Cstruct.of_string hdr) in
+                let ctx = Hash.Digest.feed ctx (Cstruct.sub buf 0 len) in
                 Some ctx in
 
             Cstruct.blit buf 0 rtmp writed_in_rtmp len;
@@ -1910,7 +1914,7 @@ struct
                            | Pack.Blob -> "blob"
                            | _ -> invalid_arg "Object is not a base")
                           (Pack.length state) in
-                      Hash.Digest.feed ctx (Cstruct.of_string hdr);
+                      let ctx = Hash.Digest.feed ctx (Cstruct.of_string hdr) in
                       Hash.Digest.get ctx)
               ; raw = Cstruct.sub rtmp 0 (Pack.length state) } in
             go window consumed_in_window writed_in_rtmp None (Some base) (Pack.next_object state)
@@ -1983,7 +1987,7 @@ struct
 
             let ctx = match ctx with
               | Some ctx ->
-                Hash.Digest.feed ctx (Cstruct.sub buf 0 len);
+                let ctx = Hash.Digest.feed ctx (Cstruct.sub buf 0 len) in
                 Some ctx
               | None ->
                 let ctx = Hash.Digest.init () in
@@ -1995,8 +1999,8 @@ struct
                      | Pack.Blob -> "blob"
                      | _ -> assert false)
                     (Pack.length state) in
-                Hash.Digest.feed ctx (Cstruct.of_string hdr);
-                Hash.Digest.feed ctx (Cstruct.sub buf 0 len);
+                let ctx = Hash.Digest.feed ctx (Cstruct.of_string hdr) in
+                let ctx = Hash.Digest.feed ctx (Cstruct.sub buf 0 len) in
                 Some ctx in
 
             Cstruct.blit buf 0 rtmp writed_in_rtmp len;
@@ -2024,7 +2028,7 @@ struct
                                   | Pack.Blob -> "blob"
                                   | _ -> assert false)
                                  (Pack.length state) in
-                             Hash.Digest.feed ctx (Cstruct.of_string hdr);
+                             let ctx = Hash.Digest.feed ctx (Cstruct.of_string hdr) in
                              Hash.Digest.get ctx)
                      ; raw = Cstruct.sub rtmp 0 (Pack.length state) }
               | Pack.Hunk descr ->
@@ -2366,6 +2370,7 @@ struct
     type patch =
       { length : int
       ; consumed : int
+      ; inserts : int
       ; offset : int64
       ; crc : Crc32.t
       ; hash : Hash.t
@@ -2374,6 +2379,7 @@ struct
     let of_patch patch =
       { length = patch.Patch.length
       ; consumed = patch.Patch.consumed
+      ; inserts = patch.Patch.inserts
       ; offset = patch.Patch.offset
       ; crc = patch.Patch.crc
       ; hash = patch.Patch.hash
