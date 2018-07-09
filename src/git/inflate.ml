@@ -16,6 +16,7 @@
  *)
 
 open Decompress
+module Inflate = Zlib_inflate
 
 type t = (B.bs, B.bs) Inflate.t
 type error = [ `Inflate of Inflate.error ]

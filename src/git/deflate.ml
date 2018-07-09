@@ -16,6 +16,7 @@
  *)
 
 open Decompress
+module Deflate = Zlib_deflate
 
 type t = (B.bs, B.bs) Deflate.t
 and error = Deflate.error

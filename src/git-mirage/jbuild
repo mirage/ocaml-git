@@ -3,6 +3,5 @@
 (library
  ((name        git_mirage)
   (public_name git-mirage)
-  (libraries   (git mirage-flow-lwt mirage-fs-lwt mirage-channel-lwt
-                mirage-conduit cohttp-mirage git-http decompress
-                digestif.ocaml))))
+  (libraries   (checkseum.ocaml digestif.ocaml git mirage-flow-lwt mirage-fs-lwt mirage-channel-lwt
+                mirage-conduit cohttp-mirage git-http))))
