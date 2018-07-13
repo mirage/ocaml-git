@@ -1,5 +1,5 @@
 module Net = Net
-module SHA1 = Git.Hash.Make(Digestif.SHA1)
+module SHA1 = Git.Hash.SHA1
 module FS = Fs
 
 module Store (X: Mirage_fs_lwt.S) = struct

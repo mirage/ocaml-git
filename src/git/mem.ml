@@ -524,4 +524,4 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE) = struct
   let has_global_checkout = false
 end
 
-module Store (H : Digestif_sig.S) = Make(Hash.Make(H))(Inflate)(Deflate)
+module Store (H : Digestif.S) = Make(Hash.Make(H))(Inflate)(Deflate)

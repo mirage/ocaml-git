@@ -18,7 +18,7 @@
 type t = private string
 type hex = string
 
-module Make (D: Digestif_sig.S): S.HASH = struct
+module Make (D: Digestif.S): S.HASH = struct
   type t = D.t
   type nonrec hex = hex
 
@@ -35,21 +35,25 @@ module Make (D: Digestif_sig.S): S.HASH = struct
 
   external unsafe_of_string : string -> t = "%identity"
   external unsafe_to_string : t -> string = "%identity"
+
   let of_string = unsafe_of_string
   let to_string = unsafe_to_string
+
   let get : t -> int -> char = fun t i -> String.get (t:>string) i
 
   let of_hex : hex -> t = fun buf -> D.of_hex buf
   let to_hex : t -> hex = fun x -> D.to_hex x
 
+  (* XXX(dinosaure): Git need a lexicographical comparison function. *)
   let compare : t -> t -> int = fun a b -> String.compare (a:>string) (b:>string)
-  let equal : t -> t -> bool = fun a b -> String.equal (a:>string) (b:>string)
   let hash : t -> int = fun t -> Hashtbl.hash (t:>string)
-  let pp : t Fmt.t = fun ppf hash -> Fmt.string ppf (to_hex hash)
+
+  (* XXX(dinosaure): we use safe equal function provided by digestif. *)
+  let equal = D.eq
+  let pp = D.pp
 
   module Map = Map.Make(struct type nonrec t = t let compare = compare end)
   module Set = Set.Make(struct type nonrec t = t let compare = compare end)
 end
 
-(* XXX: this breaks as jbuilder doesn't the linking trick yet *)
-(* module SHA1 =  Make(Digestif.SHA1) *)
+module SHA1 =  Make(Digestif.SHA1)
