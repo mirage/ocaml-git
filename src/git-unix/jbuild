@@ -4,5 +4,5 @@
  ((name        git_unix)
   (public_name git-unix)
   (wrapped     false)
-  (libraries   (git logs.fmt lwt.unix git-http cohttp-lwt-unix
+  (libraries   (checkseum.c git logs.fmt lwt.unix git-http cohttp-lwt-unix
                 digestif.c))))

@@ -2,7 +2,7 @@
 
 (executable
  ((name      test)
-  (libraries (test_git git-unix))))
+  (libraries (checkseum.c test_git git-unix))))
 
 (alias
  ((name runtest)
