@@ -73,7 +73,7 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE): sig
 
 end
 
-module Store (H : Digestif_sig.S): sig
+module Store (H : Digestif.S): sig
   include Minimal.S with module Hash    = Hash.Make(H)
                      and module Inflate = Inflate
                      and module Deflate = Deflate

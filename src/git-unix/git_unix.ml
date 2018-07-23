@@ -16,7 +16,7 @@
 
 module Fs    = Fs
 module Net   = Net
-module SHA1  = Git.Hash.Make(Digestif.SHA1)
+module SHA1  = Git.Hash.SHA1
 module Sync  = Git.Sync.Make(Net)
 module Http  = Http.Make
 module Index = Index
