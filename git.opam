@@ -22,7 +22,7 @@ depends: [
   "fpath"      {>= "0.7.0"}
   "digestif"   {>= "0.5"}
   "lru"        {>= "0.2.0"}
-  "decompress" {>= "0.7"}
+  "decompress" {>= "0.8"}
   "encore"
   "duff"
   "hex"
