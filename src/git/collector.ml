@@ -25,7 +25,7 @@ module type STORE = sig
      and module Deflate = Deflate
 
   type t
-  type error
+  type error = private [> `Delta of PEnc.Delta.error]
 
   type kind =
     [ `Commit
@@ -121,16 +121,7 @@ module Make (S: STORE) = struct
           | None -> None)
       (fun _ -> false)
       window depth
-    >?= (fun err -> `Delta err)
-
-  let delta_all ?window ?depth git =
-    let open Lwt.Infix in
-
-    let snd (_, x) = Lwt.return x in
-
-    Lwt_result.(Store.contents git >>= fun x -> ok (Lwt_list.map_p snd x)) >>= function
-    | Ok objects -> delta ?window ?depth git objects
-    | Error err -> Lwt.return (Error (`Store err))
+    >?= (fun err -> (`Delta err :> S.error))
 
   let make ?window ?depth git objects =
     let open Lwt.Infix in
@@ -144,21 +135,11 @@ module Make (S: STORE) = struct
       Lwt.return (Ok state)
     | Error _ as err -> Lwt.return err
 
-  let make_all ?window ?depth git =
-    let open Lwt.Infix in
-
-    let ztmp = Cstruct.create 0x8000 in
-
-    delta_all ?window ?depth git >>= function
-    | Ok entries ->
-      let state = S.PEnc.default ztmp entries in
-
-      Lwt.return (Ok state)
-    | Error _ as err -> Lwt.return err
-
   exception PackEncoder of S.PEnc.error
 
   module Graph = Map.Make(S.Hash)
+
+  type stream = unit -> Cstruct.t option Lwt.t
 
   let make_stream git ?(window = `Object 10) ?(depth = 50) objects =
     let open Lwt.Infix in
