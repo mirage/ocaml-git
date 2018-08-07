@@ -23,14 +23,6 @@ let option_map f = function
   | Some v -> Some (f v)
   | None -> None
 
-let option_map_default v f = function
-  | Some v -> f v
-  | None -> v
-
-let option_value_exn f = function
-  | Some v -> v
-  | None -> f ()
-
 let pad n x =
   if String.length x > n
   then x
@@ -77,14 +69,8 @@ let setup_logs style_renderer level =
 module Entry = Index.Entry(SHA1)
 module Index = Index.Make(SHA1)(Store)(Fs)(Entry)
 
-type error =
-  [ `Store of Store.error
-  | `Index of Index.error
-  | `App of string ]
-
 let store_err err = Lwt.return (`Store err)
 let index_err err = Lwt.return (`Index err)
-let app_err err = Lwt.return (`App err)
 
 let pp_error ppf = function
   | `Store err -> Fmt.pf ppf "%a" Store.pp_error err

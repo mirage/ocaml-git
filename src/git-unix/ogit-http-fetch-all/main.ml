@@ -39,9 +39,6 @@ struct
     | Some v -> f v
     | None -> v
 
-  let value_exn f = function
-    | Some v -> v
-    | None -> f ()
 end
 
 let pad n x =
@@ -98,8 +95,6 @@ let pp_error ppf = function
   | `Store err -> Fmt.pf ppf "(`Store %a)" Store.pp_error err
   | `Sync err -> Fmt.pf ppf "(`Sync %a)" Sync_http.pp_error err
 
-exception Write of Store.error
-
 let main directory repository =
   let root = Option.map_default Fpath.(v (Sys.getcwd ())) Fpath.v directory in
 
@@ -149,15 +144,6 @@ struct
     in
     Arg.(value & flag & info ["progress"] ~doc)
 
-  let all =
-    let doc = "Fetch all remotes" in
-    Arg.(value & flag & info ["all"] ~doc)
-
- let reference =
-    let parse str = Ok (Store.Reference.of_string str) in
-    let print = Store.Reference.pp in
-    Arg.conv ~docv:"<name>" (parse, print)
-
   let uri =
     let parse str = Ok (Uri.of_string str) in
     let print = Uri.pp_hum in
@@ -171,9 +157,6 @@ struct
     let doc = "" in
     Arg.(value & pos ~rev:true 1 (some string) None & info [] ~doc ~docv:"<directory>")
 
-  let references =
-    let doc = "" in
-    Arg.(non_empty & pos_all (pair ~sep:':' reference reference) [] & info [] ~doc ~docv:"<ref>")
 end
 
 let setup_log =
