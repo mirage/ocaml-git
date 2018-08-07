@@ -26,7 +26,7 @@ module Make (Sync: Test_sync.SYNC) = struct
   let uri = Uri.of_string "http://github.com/mirage/decompress.git"
 
   let run name tests: unit Alcotest.test =
-    name, List.map (fun (msg, f) -> msg, `Quick, fun () -> Test_store.run f) tests
+    name, List.map (fun (msg, f) -> msg, `Slow, fun () -> Test_store.run f) tests
 
   let test_clone () =
     Test_store.create ~root () >>= fun t ->
