@@ -20,11 +20,6 @@ open Lwt.Infix
 let src = Logs.Src.create "git.loose" ~doc:"logs git's loose event"
 module Log = (val Logs.src_log src : Logs.LOG)
 
-let error e fmt = Fmt.kstrf (fun x ->
-    Log.err (fun l -> l "%s" x);
-    Lwt.return (Error e)
-  ) fmt
-
 module type S = sig
 
   module FS: S.FS

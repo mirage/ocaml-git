@@ -28,19 +28,19 @@ struct
   let alternate  = 1 lsl 5
 
   let is value x      = (x land value) <> 0
-  let is_complete x   = is x complete
+  let _is_complete x   = is x complete
   let is_common x     = is x common
   let is_common_ref x = is x common_ref
   let is_seen  x      = is x seen
   let is_popped x     = is x popped
-  let is_alternate x  = is x alternate
+  let _is_alternate x  = is x alternate
 
-  let to_complete x   = x lor complete
+  let _to_complete x   = x lor complete
   let to_common x     = x lor common
-  let to_common_ref x = x lor common_ref
+  let _to_common_ref x = x lor common_ref
   let to_seen x       = x lor seen
   let to_popped x     = x lor popped
-  let to_alternate x  = x lor alternate
+  let _to_alternate x  = x lor alternate
 
   let pp ppf x =
     let flags =
