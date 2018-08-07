@@ -1652,7 +1652,7 @@ module IO (Hash: Git.HASH) (FS: Git.FS) (Entry: ENTRY with type hash := Hash.t) 
       end in
     let state = IEnc.default entries in
     let module E = Git.Helper.Encoder(E)(FS) in
-    E.to_file fs Fpath.(root / "index") raw state
+    E.to_file fs ~temp_dir:Fpath.(root / "tmp") Fpath.(root / "index") raw state
     >|= function
     | Ok hash ->
        Log.debug (fun l -> l "Saved index file with the hash: %a." Hash.pp hash);

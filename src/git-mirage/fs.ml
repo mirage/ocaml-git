@@ -45,11 +45,10 @@ module Make (FS: Mirage_fs_lwt.S) = struct
     fs     : FS.t;
     locks  : Lwt_mutex.t H.t;
     current: Fpath.t;
-    temp   : Fpath.t;
   }
 
-  let v ?(temp_dir=Fpath.v "tmp") ?(current_dir=Fpath.v ".") fs =
-    { fs; locks = H.create 13; current=current_dir; temp=temp_dir }
+  let v ?(current_dir=Fpath.v ".") fs =
+    { fs; locks = H.create 13; current=current_dir }
 
   type error =
     [ `Destroy of Fpath.t * string
@@ -155,7 +154,6 @@ module Make (FS: Mirage_fs_lwt.S) = struct
         (fun exn -> err_listdir dir "%a" Fmt.exn exn)
 
     let current t = Lwt.return (Ok t.current)
-    let temp t = Lwt.return t.temp
   end
 
   module File = struct

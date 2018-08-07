@@ -635,8 +635,7 @@ module FS (FS: S.FS) = struct
     let rnd = (Random.State.bits (Lazy.force prng)) land 0xFFFFFF in
     Fpath.(temp_dir / Fmt.strf "%s.%06x" file rnd)
 
-  let temp_file t file =
-    FS.Dir.temp t >>= fun temp_dir ->
+  let temp_file t temp_dir file =
     let rec aux counter =
       let name = temp_file_name temp_dir file in
       FS.File.exists t name >>= function
@@ -647,10 +646,10 @@ module FS (FS: S.FS) = struct
     in
     aux 0
 
-  let with_open_w ?(atomic=true) t path f =
+  let with_open_w ?(atomic=true) t ~temp_dir path f =
     if not atomic then with_f FS.File.(open_w t) no_err path f
     else
-      temp_file t Fpath.(basename path) >>= fun temp ->
+      temp_file t temp_dir Fpath.(basename path) >>= fun temp ->
       let err (`Close (_, e)) =
         Log.debug (fun l ->
             l "Got %a while writing in the temporary file %a"
@@ -708,8 +707,8 @@ module Encoder (E: ENCODER) (X: S.FS) = struct
     [ FS.error Error.FS.t
     | `Encoder of E.error ]
 
-  let to_file ?(limit=50) ?atomic fs file raw state =
-    FS.with_open_w ?atomic fs file @@ fun fd ->
+  let to_file ?(limit=50) ?atomic fs ~temp_dir file raw state =
+    FS.with_open_w ?atomic fs ~temp_dir file @@ fun fd ->
     let rec go ~stack ?(rest = 0) state =
       if stack >= limit then Lwt.return Error.(v @@ FS.err_stack file)
       else

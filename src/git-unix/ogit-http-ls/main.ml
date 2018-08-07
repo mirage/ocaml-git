@@ -102,7 +102,7 @@ let main show_tags show_heads repository =
 
   let https = Option.eq ~eq:((=) "https") (Uri.scheme repository) in
 
-  Store.v ~root ()
+  Store.v root
   >>!= store_err
   >>?= fun git ->
   Sync_http.ls git ~https ?port:(Uri.port repository)

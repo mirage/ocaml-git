@@ -315,11 +315,12 @@ module IO (Hash: S.HASH) (FS: S.FS) = struct
   let write ~fs ~root ?(capacity = 0x100) ~raw reference value =
     let state = E.default (capacity, value) in
     let path = Fpath.(root // (to_path reference)) in
+    let temp_dir = Fpath.(root / "tmp") in
     FS.Dir.create fs (Fpath.parent path)
     >>= function
     | Error err -> Lwt.return Error.(v @@ FS.err_create (Fpath.parent path) err)
     | Ok (true | false) ->
-      Encoder.to_file fs path raw state >|= function
+      Encoder.to_file fs ~temp_dir path raw state >|= function
       | Ok _                   -> Ok ()
       | Error #fs_error as err -> err
       | Error (`Encoder #Error.never) -> assert false

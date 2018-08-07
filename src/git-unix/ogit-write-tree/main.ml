@@ -129,12 +129,10 @@ let hash_of_root ~bucket (Index.Root entries) =
 
 let main ?prefix:_ _ =
   let dtmp = Cstruct.create 0x8000 in
-
   let root = Fpath.(v (Sys.getcwd ())) in
-  let fs = Fs.v () in
 
-  Store.v ~root () >!= store_err >?= fun t ->
-    Index.IO.load fs ~root:(Store.dotgit t) ~dtmp >!= index_err >?= fun (entries, _) ->
+  Store.v root >!= store_err >?= fun t ->
+    Index.IO.load () ~root:(Store.dotgit t) ~dtmp >!= index_err >?= fun (entries, _) ->
       let root = Index.of_entries entries in
       let tree = Hashtbl.create 128 in
       let root_hash = hash_of_root ~bucket:tree root in

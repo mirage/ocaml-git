@@ -7,9 +7,9 @@ module Store (X: Mirage_fs_lwt.S) = struct
   module S = Git.Store.Make(SHA1)(F)(Git.Inflate)(Git.Deflate)
   include S
 
-  let v ?temp_dir ?current_dir ?root ?dotgit ?compression ?buffer fs =
-    let fs = F.v ?temp_dir ?current_dir fs in
-    create ?root ?dotgit ?compression ?buffer fs
+  let v ?current_dir ?dotgit ?compression ?buffer fs root =
+    let fs = F.v ?current_dir fs in
+    v ?dotgit ?compression ?buffer fs root
 end
 
 module Sync (C: Net.CONDUIT) = Git.Sync.Make(Net.Make(C))

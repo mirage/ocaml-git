@@ -130,13 +130,8 @@ let main ppf progress origin branch repository directory =
     else None in
 
   let https = Option.eq ~eq:((=) "https") (Uri.scheme repository) in
-  let temp_dir = Fpath.(root / ".git" / "temp") in
-  let fs = Fs.v ~temp_dir () in
 
-  Fs.Dir.create fs temp_dir
-  >>!= (fun err -> `Store (Git.Error.FS.err_create temp_dir err))
-  >>?= fun _ ->
-  Store.v ~root ~fs ()
+  Store.v root
   >>!= store_err
   >>?= fun git ->
   Sync_http.clone_ext git ?stdout ?stderr ~https
@@ -162,7 +157,7 @@ let main ppf progress origin branch repository directory =
     Store.Reference.head
     (Store.Reference.Ref branch)
   >>!= store_err
-  >>?= fun _ -> Index.Snapshot.from_reference git fs Store.Reference.head
+  >>?= fun _ -> Index.Snapshot.from_reference git () Store.Reference.head
   >>!= index_err
   >>?= fun _ -> Lwt.return (Ok ())
 

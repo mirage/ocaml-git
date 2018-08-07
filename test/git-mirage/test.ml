@@ -90,12 +90,11 @@ end
 module MirageStore = struct
   include Git_mirage.Store(M)
 
-  let temp_dir = Fpath.(v M.root / "temp")
   let current_dir = Fpath.v M.root
 
   let v root =
     M.connect () >>= fun fs ->
-    v ~temp_dir ~current_dir ~root fs
+    v ~current_dir fs root
 end
 
 module MirageConduit: Git_mirage.Net.CONDUIT = struct
@@ -127,7 +126,7 @@ end
 
 module Store = struct
   include Git.Mem.Store(Digestif.SHA1)
-  let v root = v ~root ()
+  let v root = v root
 end
 
 module TCP = Test_sync.Make(struct

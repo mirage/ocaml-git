@@ -112,7 +112,7 @@ let main references directory repository =
       Store.Reference.Map.empty references
   in
 
-  Store.v ~root ()
+  Store.v root
   >>!= store_err
   >>?= fun git ->
   Sync_http.fetch_some git ~references repository

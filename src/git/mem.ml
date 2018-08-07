@@ -90,11 +90,11 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE) = struct
   let dotgit t = t.dotgit
   let compression t = t.compression
 
-  let default_root = Fpath.v "root"
-
-  let v
-      ?(root = default_root) ?(dotgit = Fpath.(default_root / ".git"))
-      ?(compression = 6) ?buffer () =
+  let v ?dotgit ?(compression = 6) ?buffer root =
+    let dotgit = match dotgit with
+      | Some d -> d
+      | None   -> Fpath.(root / ".git")
+    in
     if compression < 0 || compression > 9
     then failwith "level should be between 0 and 9";
     let buffer = match buffer with

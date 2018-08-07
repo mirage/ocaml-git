@@ -260,7 +260,7 @@ let update_index_remove_one_file t fs path =
 let run ~root ~pp_error f () =
   let open Lwt.Infix in
 
-  match Lwt_main.run (Store.v ~root () >>= function
+  match Lwt_main.run (Store.v root >>= function
                       | Ok t -> f t >>= fun v -> Lwt.return (Ok v)
                       | Error err -> Lwt.return (Error err)) with
   | Ok (Ok _) -> ()
@@ -568,8 +568,7 @@ let test015 root fs : unit Alcotest.test_case =
         Lwt.return (Ok ()))
 
 let suite root =
-  let fs = Git_unix.Fs.v () in
-  "index", List.map (fun f -> f root fs)
+  "index", List.map (fun f -> f root ())
              [ test000
              ; test001
              ; test002

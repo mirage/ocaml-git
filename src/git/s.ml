@@ -178,7 +178,6 @@ module type DIR = sig
   val delete: t -> Fpath.t -> (unit, error) result Lwt.t
   val contents: t -> ?rel:bool -> Fpath.t -> (Fpath.t list, error) result Lwt.t
   val current: t -> (Fpath.t, error) result Lwt.t
-  val temp: t -> Fpath.t Lwt.t
 end
 
 module type FS = sig
