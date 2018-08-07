@@ -9,7 +9,7 @@ dev-repo:     "https://github.com/mirage/ocaml-git.git"
 doc:          "https://mirage.github.io/ocaml-git/"
 
 build: [
-  ["jbuilder" "subst"] {pinned}
+  ["jbuilder" "subst" "-p" name] {pinned}
   ["jbuilder" "build" "-p" name "-j" jobs]
 ]
 build-test: ["jbuilder" "runtest" "-p" name]
@@ -22,9 +22,9 @@ depends: [
   "cohttp-lwt-unix" {>= "1.0.0"}
   "mtime"           {>= "1.0.0"}
   "base-unix"
+  ("tls" | "ssl")
   "alcotest"        {test}
   "nocrypto"        {test & >= "0.5.4"}
-  "tls"             {test}
   "io-page"         {test & >= "1.6.1"}
 ]
 
