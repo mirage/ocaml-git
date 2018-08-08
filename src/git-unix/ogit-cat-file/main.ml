@@ -116,7 +116,7 @@ let main show hash =
 
   let ( >!= ) v f = map_err f v in
 
-  Store.v ~root () >!= store_err >>= fun git ->
+  Store.v root  >!= store_err >>= fun git ->
 
   match show with
   | `Inflate ->

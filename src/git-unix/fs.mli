@@ -1,3 +1,1 @@
-include Git.FS
-
-val v: ?temp_dir:Fpath.t -> unit -> t
+include Git.FS with type t = unit

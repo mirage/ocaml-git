@@ -109,7 +109,7 @@ let main directory repository =
   Log.debug (fun l -> l ~header:"main" "root:%a, repository:%a.\n"
                 Fpath.pp root Uri.pp_hum repository);
 
-  Store.v ~root ()
+  Store.v root
   >>!= store_err
   >>?= fun git ->
   Sync_http.fetch_all git ~references:Store.Reference.Map.empty repository

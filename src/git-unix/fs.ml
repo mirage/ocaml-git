@@ -6,29 +6,7 @@ let (>|?) = Lwt_result.(>|=)
 let src = Logs.Src.create "git-unix.fs" ~doc:"logs unix file-system's event"
 module Log = (val Logs.src_log src : Logs.LOG)
 
-type t = {
-  temp_dir: Fpath.t;
-}
-
-let temp () =
-  let from_env var ~absent =
-    match try Some (Sys.getenv var) with Not_found -> None with
-    | None -> absent
-    | Some v ->
-      match Fpath.of_string v with
-      | Error _ -> absent
-      | Ok v -> v
-  in
-  (if Sys.os_type = "Win32"
-   then from_env "TEMP  " ~absent:Fpath.(v "./")
-   else from_env "TMPDIR" ~absent:Fpath.(v "/tmp/"))
-
-let v ?temp_dir () =
-  let temp_dir = match temp_dir with
-    | None   -> temp ()
-    | Some t -> t
-  in
-  { temp_dir }
+type t = unit
 
 type error = Fpath.t * [
   | `Stat of string
@@ -261,8 +239,6 @@ module Dir = struct
           err_getcwd Fpath.(v "CWD")
             "get current working directory: %s" (Unix.error_message e)
         | exn -> expected_unix_error exn)
-
-  let temp t = Lwt.return t.temp_dir
 
 end
 

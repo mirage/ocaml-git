@@ -60,11 +60,10 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE): sig
                      and module Deflate = D
 
   val v:
-    ?root:Fpath.t ->
     ?dotgit:Fpath.t ->
     ?compression:int ->
     ?buffer:((buffer -> unit Lwt.t) -> unit Lwt.t) ->
-    unit -> (t, error) result Lwt.t
+    Fpath.t -> (t, error) result Lwt.t
   (** [create ?root ?dotgit ?compression ()] creates a new store
       represented by the path [root] (default is ["."]), where the Git
       objects are located in [dotgit] (default is [root / ".git"] and
@@ -79,9 +78,8 @@ module Store (H : Digestif.S): sig
                      and module Deflate = Deflate
 
   val v:
-    ?root:Fpath.t ->
     ?dotgit:Fpath.t ->
     ?compression:int ->
     ?buffer:((buffer -> unit Lwt.t) -> unit Lwt.t) ->
-    unit -> (t, error) result Lwt.t
+    Fpath.t -> (t, error) result Lwt.t
 end
