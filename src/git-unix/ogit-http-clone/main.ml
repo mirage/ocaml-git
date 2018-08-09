@@ -38,10 +38,6 @@ struct
     | Some v -> v
     | None -> f ()
 
-  let is_some = function
-    | Some _ -> true
-    | None -> false
-
   let eq ?(none = false)~eq = function
     | Some x -> eq x
     | None -> none

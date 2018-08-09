@@ -15,7 +15,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-type t = private string
 type hex = string
 
 module Make (D: Digestif.S): S.HASH = struct
