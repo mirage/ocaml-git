@@ -26,7 +26,9 @@ module Make (D: Digestif.S): S.HASH = struct
     type ctx = D.ctx
 
     let init () = D.init ()
-    let feed ctx cs = D.feed_bigstring ctx (Cstruct.to_bigarray cs)
+    let feed_c ctx cs = D.feed_bigstring ctx (Cstruct.to_bigarray cs)
+    let feed_s ctx s  = D.feed_string ctx s
+    let feed_b ctx b  = D.feed_bytes ctx b
     let get ctx = D.get ctx
 
     let length = D.digest_size

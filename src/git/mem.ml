@@ -153,8 +153,8 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE) = struct
          | `Tag -> "tag")
         len
     in
-    let ctx = Hash.Digest.feed ctx (Cstruct.of_string hdr) in
-    let ctx = Hash.Digest.feed ctx raw in
+    let ctx = Hash.Digest.feed_s ctx hdr in
+    let ctx = Hash.Digest.feed_c ctx raw in
     Hash.Digest.get ctx
 
   let write_inflated t ~kind inflated =
