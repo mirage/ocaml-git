@@ -191,8 +191,8 @@ module Make
            | _ -> assert false)
           (PDec.length state) in
 
-      let ctx = Hash.Digest.feed ctx (Cstruct.of_string hdr) in
-      let ctx = Hash.Digest.feed ctx chunk in
+      let ctx = Hash.Digest.feed_s ctx hdr in
+      let ctx = Hash.Digest.feed_c ctx chunk in
       ctx in
 
     let open Lwt.Infix in
@@ -212,7 +212,7 @@ module Make
         let chunk, len = PDec.output state in
 
         let ctx = match ctx with
-          | Some ctx -> Hash.Digest.feed ctx (Cstruct.sub chunk 0 len)
+          | Some ctx -> Hash.Digest.feed_c ctx (Cstruct.sub chunk 0 len)
           | None -> ctx_with_header (Cstruct.sub chunk 0 len) state in
 
         go ~src ~ctx (PDec.flush 0 (Cstruct.len chunk) state)

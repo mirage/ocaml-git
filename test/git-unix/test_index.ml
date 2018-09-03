@@ -36,9 +36,9 @@ let hash_of_file filename =
   let rec go ctx = match input ic by 0 0x800 with
     | 0 -> Store.Hash.Digest.get ctx
     | len ->
-       let ctx = Store.Hash.Digest.feed ctx (Cstruct.of_bytes (Bytes.sub by 0 len)) in
+       let ctx = Store.Hash.Digest.feed_b ctx (Bytes.sub by 0 len) in
        go ctx in
-  let ctx = Store.Hash.Digest.feed ctx (Cstruct.of_string (Fmt.strf "blob %d\000" ln)) in
+  let ctx = Store.Hash.Digest.feed_s ctx (Fmt.strf "blob %d\000" ln) in
   let hash = go ctx in
   let () = close_in ic in
   hash
@@ -47,7 +47,9 @@ let hash_of_symlink filename =
   let link = Unix.readlink (Fpath.to_string filename) in
   let link = Astring.String.map (function '\\' -> '/' | chr -> chr) link in
   let ctx  = Store.Hash.Digest.init () in
-  let ctx  = Store.Hash.Digest.feed ctx (Cstruct.of_string (Fmt.strf "blob %d\000%s" (String.length link) link)) in
+  let ctx  = Store.Hash.Digest.feed_s ctx
+      (Fmt.strf "blob %d\000%s" (String.length link) link)
+  in
   Store.Hash.Digest.get ctx
 
 let stat path =
@@ -260,7 +262,7 @@ let update_index_remove_one_file t fs path =
 let run ~root ~pp_error f () =
   let open Lwt.Infix in
 
-  match Lwt_main.run (Store.v ~root () >>= function
+  match Lwt_main.run (Store.v root >>= function
                       | Ok t -> f t >>= fun v -> Lwt.return (Ok v)
                       | Error err -> Lwt.return (Error err)) with
   | Ok (Ok _) -> ()
@@ -568,8 +570,7 @@ let test015 root fs : unit Alcotest.test_case =
         Lwt.return (Ok ()))
 
 let suite root =
-  let fs = Git_unix.Fs.v () in
-  "index", List.map (fun f -> f root fs)
+  "index", List.map (fun f -> f root ())
              [ test000
              ; test001
              ; test002

@@ -35,9 +35,6 @@ struct
     | Some v -> f v
     | None -> v
 
-  let value_exn f = function
-    | Some v -> v
-    | None -> f ()
 end
 
 let pad n x =
@@ -112,7 +109,7 @@ let main references directory repository =
       Store.Reference.Map.empty references
   in
 
-  Store.v ~root ()
+  Store.v root
   >>!= store_err
   >>?= fun git ->
   Sync_http.fetch_some git ~references repository
@@ -151,10 +148,6 @@ struct
        even if the standard error stream is not directed to a terminal."
     in
     Arg.(value & flag & info ["progress"] ~doc)
-
-  let all =
-    let doc = "Fetch all remotes" in
-    Arg.(value & flag & info ["all"] ~doc)
 
  let reference =
     let parse str = Ok (Store.Reference.of_string str) in

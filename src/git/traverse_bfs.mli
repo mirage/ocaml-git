@@ -15,29 +15,23 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Decompress
-module Deflate = Zlib_deflate
+module type STORE = sig
+  module Hash: S.HASH
+  module Value: Value.S with module Hash = Hash
 
-type t = (B.bs, B.bs) Deflate.t
-and error = Deflate.error
+  type t
+  type error
 
-let pp_error: error Fmt.t = Deflate.pp_error
+  val pp_error : error Fmt.t
+  val read : t -> Hash.t -> (Value.t, error) result Lwt.t
+end
 
-let default level: t = Deflate.default ~proof:B.proof_bigstring level
+module Make (S : STORE): sig
 
-let finish: t -> t = Deflate.finish
-let used_in: t -> int = Deflate.used_in
-let used_out: t -> int = Deflate.used_out
-let no_flush: int -> int -> t -> t = Deflate.no_flush
-let flush: int -> int -> t -> t = Deflate.flush
+  val fold:
+    S.t -> ('a -> ?name:Fpath.t -> length:int64 -> S.Hash.t -> S.Value.t -> 'a Lwt.t) ->
+    path:Fpath.t -> 'a -> S.Hash.t -> 'a Lwt.t
 
-let eval ~src:src' ~dst:dst' t:
-  [ `Await of t
-  | `Flush of t
-  | `Error of t * error
-  | `End of t ]
-  =
-  let src = B.from_bigstring @@ Cstruct.to_bigarray src' in
-  let dst = B.from_bigstring @@ Cstruct.to_bigarray dst' in
+  val iter: S.t -> (S.Hash.t -> S.Value.t -> unit Lwt.t) -> S.Hash.t -> unit Lwt.t
 
-  Deflate.eval src dst t
+end

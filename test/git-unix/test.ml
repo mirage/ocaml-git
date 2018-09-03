@@ -85,12 +85,12 @@ module Https (Store: Test_store.S) = Test_sync.Make(struct
 
 module Mem_store = struct
   include Git.Mem.Store(Digestif.SHA1)
-  let v root = v ~root ()
+  let v root = v root
 end
 
 module Fs_store = struct
   include Git_unix.Store
-  let v root = v ~root ()
+  let v root = v root
 end
 
 module Thin = Test_thin.Make(struct

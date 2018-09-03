@@ -16,7 +16,7 @@
 
 module Fs    = Fs
 module Net   = Net
-module SHA1  = Git.Hash.Make(Digestif.SHA1)
+module SHA1  = Git.Hash.SHA1
 module Sync  = Git.Sync.Make(Net)
 module Http  = Http.Make
 module Index = Index
@@ -24,6 +24,6 @@ module Index = Index
 module Store = struct
   include Git.Store.Make(SHA1)(Fs)(Git.Inflate)(Git.Deflate)
 
-  let v ?temp_dir ?root ?dotgit ?compression ?buffer ?(fs = Fs.v ?temp_dir ()) () =
-    create ?root ?dotgit ?compression ?buffer fs
+  let v ?dotgit ?compression ?buffer root =
+    v ?dotgit ?compression ?buffer () root
 end

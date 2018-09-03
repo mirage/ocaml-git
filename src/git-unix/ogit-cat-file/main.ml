@@ -17,20 +17,10 @@
 
 let () = Random.self_init ()
 
-module Option =
-struct
-
+module Option = struct
   let map f = function
     | Some v -> Some (f v)
     | None -> None
-
-  let map_default v f = function
-    | Some v -> f v
-    | None -> v
-
-  let value_exn f = function
-    | Some v -> v
-    | None -> f ()
 end
 
 let pad n x =
@@ -116,7 +106,7 @@ let main show hash =
 
   let ( >!= ) v f = map_err f v in
 
-  Store.v ~root () >!= store_err >>= fun git ->
+  Store.v root  >!= store_err >>= fun git ->
 
   match show with
   | `Inflate ->

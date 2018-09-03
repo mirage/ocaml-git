@@ -27,10 +27,6 @@ struct
     | Some v -> Some (f v)
     | None -> None
 
-  let map_default v f = function
-    | Some v -> f v
-    | None -> v
-
   let value_exn f = function
     | Some v -> v
     | None -> f ()
@@ -102,7 +98,7 @@ let main show_tags show_heads repository =
 
   let https = Option.eq ~eq:((=) "https") (Uri.scheme repository) in
 
-  Store.v ~root ()
+  Store.v root
   >>!= store_err
   >>?= fun git ->
   Sync_http.ls git ~https ?port:(Uri.port repository)

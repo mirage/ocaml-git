@@ -43,7 +43,13 @@ module Make
     | Ok (Store.Value.Blob _ | Store.Value.Tree _) -> Lwt.return (Error (`Expected_commit hash))
     | Error err -> Lwt.return (Error (`Store err))
 
-  let rec normalize git rev =
+  type error =
+    [ `Expected_commit of Store.Hash.t
+    | `Invalid_parent of Store.Hash.t * int
+    | `Not_found
+    | `Store of Store.error ]
+
+let rec normalize git rev =
     let open Lwt.Infix in
 
     match rev with

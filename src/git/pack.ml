@@ -1054,7 +1054,7 @@ struct
     | KindRaw
 
   let flush dst t =
-    let hash = Hash.Digest.feed t.hash (Cstruct.sub dst t.o_off t.o_pos) in
+    let hash = Hash.Digest.feed_c t.hash (Cstruct.sub dst t.o_off t.o_pos) in
     Flush { t with hash }
 
   let await t     : res = Wait t
@@ -1224,7 +1224,7 @@ struct
   end
 
   let hash dst t =
-    let ctx = Hash.Digest.feed t.hash (Cstruct.sub dst t.o_off t.o_pos) in
+    let ctx = Hash.Digest.feed_c t.hash (Cstruct.sub dst t.o_off t.o_pos) in
     let hash = Hash.Digest.get ctx in
 
     KHash.put_hash (Hash.to_string hash) (fun _ t -> ok t hash) dst { t with hash = ctx }

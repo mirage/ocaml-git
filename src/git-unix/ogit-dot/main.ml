@@ -54,9 +54,11 @@ let () = Fmt.set_style_renderer Fmt.stderr `Ansi_tty
 let () = Logs.set_reporter (reporter Fmt.stderr)
 let () = Logs.set_level ~all:true (Some Logs.Debug)
 
+let root = Fpath.(v (Sys.getcwd ()))
+
 let main ppf =
   let open Lwt_result in
-  Store.v () >>= fun t ->
+  Store.v root >>= fun t ->
   Lwt.Infix.(Graph.to_dot t ppf >>= fun () -> Lwt.return (Ok ()))
 
 let () =

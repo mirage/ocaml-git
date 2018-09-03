@@ -705,13 +705,12 @@ module Make (H: S.HASH) (F: S.FS) (I: S.INFLATE) (D: S.DEFLATE): sig
              and module Deflate = D
              and module FS      = F
 
-  val create :
-    ?root:Fpath.t ->
+  val v:
     ?dotgit:Fpath.t ->
     ?compression:int ->
     ?buffer:((buffer -> unit Lwt.t) -> unit Lwt.t) ->
-    FS.t -> (t, error) result Lwt.t
- (** [create ?root ?dotgit ?compression ?buffer fs] creates a
+    FS.t -> Fpath.t -> (t, error) result Lwt.t
+ (** [create ?dotgit ?compression ?buffer fs root] creates a
       new store represented by the path [root] (default is ["."]),
       where the Git objects are located in [dotgit] (default is [root
       / ".git"] and when Git objects are compressed by the [level]

@@ -147,13 +147,6 @@ module Make
                       and module Inflate := Inflate
                       and module Hunk := HDec
                       and module Pack := PDec)
-  : S with module Hash = Hash
-       and module Inflate = Inflate
-       and module Deflate = Deflate
-       and module FS = FS
-       and module HDec := HDec
-       and module PDec := PDec
-       and module RPDec := RPDec
 = struct
 
   module Hash = Hash
@@ -496,8 +489,8 @@ module Make
           (Cstruct.len raw) in
 
       let ctx = Hash.Digest.init () in
-      let ctx = Hash.Digest.feed ctx (Cstruct.of_string hdr) in
-      let ctx = Hash.Digest.feed ctx raw in
+      let ctx = Hash.Digest.feed_s ctx hdr in
+      let ctx = Hash.Digest.feed_c ctx raw in
       Hash.Digest.get ctx
 
     let of_info ~read_and_exclude fs path_tmp info =
@@ -677,7 +670,8 @@ module Make
       let encoder_idx = IEnc.default sequence hash_pack in
       let raw = Cstruct.create 0x8000 in (* XXX(dinosaure): as argument? *)
       let path = Fpath.(root / "objects" / "pack" / file) in
-      EIDX.to_file fs path raw encoder_idx >|= function
+      let temp_dir = Fpath.(root / "tmp") in
+      EIDX.to_file fs ~temp_dir path raw encoder_idx >|= function
       | Ok ()                  -> Ok ()
       | Error (`Encoder err)   -> Error (`Idx_encoder err)
       | Error #fs_error as err -> err
@@ -974,18 +968,18 @@ module Make
       for i = 0 to len - 1 do Bytes.set raw i (gen ()) done;
       Bytes.unsafe_to_string raw
 
-    let store_pack_file ~fs fmt entries get =
+    let store_pack_file ~fs ~root fmt entries get =
       let ztmp = Cstruct.create 0x8000 in
       let file = fmt (random_string 10) in
       let state = PEnc.default ztmp entries in
-      FS.Dir.temp fs >>= fun temp ->
-      let path = Fpath.(temp / file) in
+      let temp_dir = Fpath.(root / "tmp") in
+      let path = Fpath.(temp_dir / file) in
       let rawo = Cstruct.create 0x8000 in
       let state = { EPACK.E.get; src = None; pack = state } in
       Lwt.catch
         (fun () ->
            (* XXX(dinosaure): why is not atomic? *)
-           EPACK.to_file fs ~atomic:false path rawo state >|= function
+           EPACK.to_file fs ~atomic:false ~temp_dir path rawo state >|= function
            | Ok { EPACK.E.tree; hash; } ->
              let index = Hashtbl.create (PEnc.Map.cardinal tree) in
              let paths = Hashtbl.create (PEnc.Map.cardinal tree) in
@@ -1018,7 +1012,7 @@ module Make
                  Patch { hunks = max hunks_a hunks_b; target = max target_a target_b; src = merge abs_off src_a src_b } in
              let path = Hashtbl.fold merge paths (Load 0) in
 
-             Ok (Fpath.(temp / file)
+             Ok (Fpath.(temp_dir / file)
                 , (index, path)
                 , hash)
            | Error #fs_error as err -> err
@@ -1129,7 +1123,7 @@ module Make
       >>= function
       | Error err -> Lwt.return_error (`Delta err)
       | Ok entries ->
-        store_pack_file ~fs (Fmt.strf "pack-%s.pack") entries read_inflated
+        store_pack_file ~fs (Fmt.strf "pack-%s.pack") ~root entries read_inflated
         >>= function
         | Error _ as err -> Lwt.return err
         | Ok (path, (index, delta_path), hash_pack) ->

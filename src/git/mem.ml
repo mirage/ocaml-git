@@ -90,11 +90,11 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE) = struct
   let dotgit t = t.dotgit
   let compression t = t.compression
 
-  let default_root = Fpath.v "root"
-
-  let v
-      ?(root = default_root) ?(dotgit = Fpath.(default_root / ".git"))
-      ?(compression = 6) ?buffer () =
+  let v ?dotgit ?(compression = 6) ?buffer root =
+    let dotgit = match dotgit with
+      | Some d -> d
+      | None   -> Fpath.(root / ".git")
+    in
     if compression < 0 || compression > 9
     then failwith "level should be between 0 and 9";
     let buffer = match buffer with
@@ -153,8 +153,8 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE) = struct
          | `Tag -> "tag")
         len
     in
-    let ctx = Hash.Digest.feed ctx (Cstruct.of_string hdr) in
-    let ctx = Hash.Digest.feed ctx raw in
+    let ctx = Hash.Digest.feed_s ctx hdr in
+    let ctx = Hash.Digest.feed_c ctx raw in
     Hash.Digest.get ctx
 
   let write_inflated t ~kind inflated =
@@ -524,4 +524,4 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE) = struct
   let has_global_checkout = false
 end
 
-module Store (H : Digestif_sig.S) = Make(Hash.Make(H))(Inflate)(Deflate)
+module Store (H : Digestif.S) = Make(Hash.Make(H))(Inflate)(Deflate)

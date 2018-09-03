@@ -15,29 +15,40 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Decompress
-module Deflate = Zlib_deflate
+module type STORE = sig
 
-type t = (B.bs, B.bs) Deflate.t
-and error = Deflate.error
+  module Hash: S.HASH
+  module Value: Value.S with module Hash = Hash
+  module Deflate: S.DEFLATE
+  module PEnc: Pack.P
+    with module Hash = Hash
+     and module Deflate = Deflate
 
-let pp_error: error Fmt.t = Deflate.pp_error
+  type t
+  type error = private [> `Delta of PEnc.Delta.error]
 
-let default level: t = Deflate.default ~proof:B.proof_bigstring level
+  type kind =
+    [ `Commit
+    | `Tree
+    | `Tag
+    | `Blob ]
 
-let finish: t -> t = Deflate.finish
-let used_in: t -> int = Deflate.used_in
-let used_out: t -> int = Deflate.used_out
-let no_flush: int -> int -> t -> t = Deflate.no_flush
-let flush: int -> int -> t -> t = Deflate.flush
+  val pp_error: error Fmt.t
+  val read_inflated: t -> Hash.t -> (kind * Cstruct.t) option Lwt.t
+  val contents: t -> ((Hash.t * Value.t) list, error) result Lwt.t
+end
 
-let eval ~src:src' ~dst:dst' t:
-  [ `Await of t
-  | `Flush of t
-  | `Error of t * error
-  | `End of t ]
-  =
-  let src = B.from_bigstring @@ Cstruct.to_bigarray src' in
-  let dst = B.from_bigstring @@ Cstruct.to_bigarray dst' in
+module Make (S: STORE): sig
 
-  Deflate.eval src dst t
+  module Graph: Map.S with type key = S.Hash.t
+
+  type stream = unit -> Cstruct.t option Lwt.t
+
+  val make_stream:
+    S.t ->
+    ?window:[`Memory of int | `Object of int ] ->
+    ?depth:int ->
+    S.Value.t list ->
+    (stream * (Crc32.t * int64) Graph.t Lwt_mvar.t, S.error) result Lwt.t
+
+end

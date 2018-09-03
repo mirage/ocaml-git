@@ -20,11 +20,6 @@ open Lwt.Infix
 let src = Logs.Src.create "git.loose" ~doc:"logs git's loose event"
 module Log = (val Logs.src_log src : Logs.LOG)
 
-let error e fmt = Fmt.kstrf (fun x ->
-    Log.err (fun l -> l "%s" x);
-    Lwt.return (Error e)
-  ) fmt
-
 module type S = sig
 
   module FS: S.FS
@@ -337,7 +332,7 @@ module Make
     in
     let digest value' =
       let ctx = Hash.Digest.init () in
-      let ctx = Hash.Digest.feed ctx value' in
+      let ctx = Hash.Digest.feed_c ctx value' in
       Hash.Digest.get ctx
     in
     let value' = Cstruct.concat [ header; value ] in
@@ -348,12 +343,13 @@ module Make
     let hash = digest value' in
     let first, rest = explode hash in
     let path = Fpath.(root / "objects" / first) in
+    let temp_dir = Fpath.(root / "tmp") in
     FS.Dir.create fs path >>= function
     | Error err         ->
       Lwt.return Error.(v @@ FS.err_create path err)
     | Ok (true | false) ->
       let path = Fpath.(path / rest) in
-      EDeflated.to_file fs path raw state >|= function
+      EDeflated.to_file fs ~temp_dir path raw state >|= function
       | Ok ()                  -> Ok hash
       | Error #fs_error as err -> err
       | Error (`Encoder err)   -> Error.(v @@ Def.err_deflate_file path err)
@@ -379,12 +375,13 @@ module Make
     let first, rest = explode hash in
     let encoder     = E.default (capacity, value, level, ztmp) in
     let path        = Fpath.(root / "objects" / first / rest) in
+    let temp_dir    = Fpath.(root / "tmp") in
     Log.debug (fun l -> l "Writing a new loose object %a." Fpath.pp path);
     FS.Dir.create fs Fpath.(root / "objects" / first) >>= function
     | Error err ->
       Lwt.return Error.(v @@ FS.err_create path err)
     | Ok (true | false) ->
-      EInflated.to_file fs path raw encoder >|= function
+      EInflated.to_file fs ~temp_dir path raw encoder >|= function
       | Error #fs_error as err -> err
       | Error (`Encoder err)   -> Error.(v @@ Def.with_path path err)
       | Ok r ->

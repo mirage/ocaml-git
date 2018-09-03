@@ -15,29 +15,24 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Decompress
-module Deflate = Zlib_deflate
+type 'a acks =
+  { shallow   : 'a list
+  ; unshallow : 'a list
+  ; acks      : ('a * [ `Common | `Ready | `Continue | `ACK ]) list }
 
-type t = (B.bs, B.bs) Deflate.t
-and error = Deflate.error
+module type S = sig
+  module Store: Minimal.S
+  module Decoder: Smart.DECODER with module Hash = Store.Hash
 
-let pp_error: error Fmt.t = Deflate.pp_error
+  type state
+  type nonrec acks = Store.Hash.t acks
 
-let default level: t = Deflate.default ~proof:B.proof_bigstring level
+  val find_common: Store.t ->
+    (Store.Hash.t list
+     * state
+     * (acks -> state ->
+        ([ `Again of Store.Hash.t list | `Done | `Ready ]* state) Lwt.t)
+    ) Lwt.t
+end
 
-let finish: t -> t = Deflate.finish
-let used_in: t -> int = Deflate.used_in
-let used_out: t -> int = Deflate.used_out
-let no_flush: int -> int -> t -> t = Deflate.no_flush
-let flush: int -> int -> t -> t = Deflate.flush
-
-let eval ~src:src' ~dst:dst' t:
-  [ `Await of t
-  | `Flush of t
-  | `Error of t * error
-  | `End of t ]
-  =
-  let src = B.from_bigstring @@ Cstruct.to_bigarray src' in
-  let dst = B.from_bigstring @@ Cstruct.to_bigarray dst' in
-
-  Deflate.eval src dst t
+module Make (G: Minimal.S): S with module Store = G

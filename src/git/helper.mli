@@ -171,7 +171,8 @@ module Encoder (E: ENCODER) (FS: S.FS): sig
       returned 0.
 
       If [atomic] is set, the operation is guaranteed to be atomic. *)
-  val to_file: ?limit:int -> ?atomic:bool -> FS.t -> Fpath.t -> Cstruct.t ->
+  val to_file: ?limit:int -> ?atomic:bool -> FS.t ->
+    temp_dir:Fpath.t -> Fpath.t -> Cstruct.t ->
     E.state -> (E.result, error) result Lwt.t
 
 end
@@ -190,7 +191,7 @@ module FS (FS: S.FS): sig
       file-descriptor. When [f] completes, the file-descriptor is
       closed. Failure to close that file-descriptor is ignored. *)
 
-  val with_open_w: ?atomic:bool -> FS.t -> Fpath.t ->
+  val with_open_w: ?atomic:bool -> FS.t -> temp_dir:Fpath.t -> Fpath.t ->
     ([ `Write ] FS.File.fd ->
      ('a, [> `Open of Fpath.t * FS.error
           | `Move of Fpath.t * Fpath.t * FS.error ] as 'e) result Lwt.t) ->

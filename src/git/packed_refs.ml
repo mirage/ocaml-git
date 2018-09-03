@@ -33,7 +33,8 @@ module type S = sig
 
   val pp_error: error Fmt.t
 
-  val write: fs:FS.t -> root:Fpath.t -> ?capacity:int -> raw:Cstruct.t -> t ->
+  val write: fs:FS.t -> root:Fpath.t -> temp_dir:Fpath.t ->
+    ?capacity:int -> raw:Cstruct.t -> t ->
     (unit, error) result Lwt.t
 
   val read: fs:FS.t -> root:Fpath.t -> dtmp:Cstruct.t -> raw:Cstruct.t ->
@@ -180,12 +181,10 @@ module Make (H: S.HASH) (FS: S.FS) = struct
     include Helper.Encoder(E)(FS)
   end
 
-  let err_stack = Error (`IO "Impossible to store the packed-refs file")
-
-  let write ~fs ~root ?(capacity = 0x100) ~raw value =
+  let write ~fs ~root ~temp_dir ?(capacity = 0x100) ~raw value =
     let state = E.default (capacity, value) in
     let path = Fpath.(root / "packed-refs") in
-    Encoder.to_file fs path raw state >|= function
+    Encoder.to_file fs ~temp_dir path raw state >|= function
     | Ok _ -> Ok ()
     | Error #fs_error as err -> err
     | Error (`Encoder #Error.never) -> assert false

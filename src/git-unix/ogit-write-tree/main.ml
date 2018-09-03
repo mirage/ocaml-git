@@ -23,14 +23,6 @@ let option_map f = function
   | Some v -> Some (f v)
   | None -> None
 
-let option_map_default v f = function
-  | Some v -> f v
-  | None -> v
-
-let option_value_exn f = function
-  | Some v -> v
-  | None -> f ()
-
 let pad n x =
   if String.length x > n
   then x
@@ -77,14 +69,8 @@ let setup_logs style_renderer level =
 module Entry = Index.Entry(SHA1)
 module Index = Index.Make(SHA1)(Store)(Fs)(Entry)
 
-type error =
-  [ `Store of Store.error
-  | `Index of Index.error
-  | `App of string ]
-
 let store_err err = Lwt.return (`Store err)
 let index_err err = Lwt.return (`Index err)
-let app_err err = Lwt.return (`App err)
 
 let pp_error ppf = function
   | `Store err -> Fmt.pf ppf "%a" Store.pp_error err
@@ -129,12 +115,10 @@ let hash_of_root ~bucket (Index.Root entries) =
 
 let main ?prefix:_ _ =
   let dtmp = Cstruct.create 0x8000 in
-
   let root = Fpath.(v (Sys.getcwd ())) in
-  let fs = Fs.v () in
 
-  Store.v ~root () >!= store_err >?= fun t ->
-    Index.IO.load fs ~root:(Store.dotgit t) ~dtmp >!= index_err >?= fun (entries, _) ->
+  Store.v root >!= store_err >?= fun t ->
+    Index.IO.load () ~root:(Store.dotgit t) ~dtmp >!= index_err >?= fun (entries, _) ->
       let root = Index.of_entries entries in
       let tree = Hashtbl.create 128 in
       let root_hash = hash_of_root ~bucket:tree root in
