@@ -111,7 +111,9 @@ module type IDIGEST = sig
   type ctx
 
   val init   : unit -> ctx
-  val feed   : ctx -> Cstruct.t -> ctx
+  val feed_c : ctx -> Cstruct.t -> ctx
+  val feed_s : ctx -> string -> ctx
+  val feed_b : ctx -> bytes -> ctx
   val get    : ctx -> t
 
   val length : int

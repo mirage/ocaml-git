@@ -130,7 +130,7 @@ module Make0 (Source: SOURCE) (Store: S) = struct
     let rec go ctx state = match E.eval ctmp state with
       | `Flush t ->
         Git.Buffer.add buf (Cstruct.sub ctmp 0 (E.used_out t));
-        let ctx = Store.Hash.Digest.feed ctx (Cstruct.sub ctmp 0 (E.used_out t)) in
+        let ctx = Store.Hash.Digest.feed_c ctx (Cstruct.sub ctmp 0 (E.used_out t)) in
         go ctx (E.flush 0 (Cstruct.len ctmp) t)
       | `Error (_, err) ->
         Alcotest.failf "Got an error when we encode the IDX file %a: %a."
@@ -140,7 +140,7 @@ module Make0 (Source: SOURCE) (Store: S) = struct
         if E.used_out t > 0
         then begin
           Git.Buffer.add buf (Cstruct.sub ctmp 0 (E.used_out t));
-          Store.Hash.Digest.feed ctx (Cstruct.sub ctmp 0 (E.used_out t));
+          Store.Hash.Digest.feed_c ctx (Cstruct.sub ctmp 0 (E.used_out t));
         end else ctx
     in
 

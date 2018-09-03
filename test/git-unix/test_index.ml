@@ -36,9 +36,9 @@ let hash_of_file filename =
   let rec go ctx = match input ic by 0 0x800 with
     | 0 -> Store.Hash.Digest.get ctx
     | len ->
-       let ctx = Store.Hash.Digest.feed ctx (Cstruct.of_bytes (Bytes.sub by 0 len)) in
+       let ctx = Store.Hash.Digest.feed_b ctx (Bytes.sub by 0 len) in
        go ctx in
-  let ctx = Store.Hash.Digest.feed ctx (Cstruct.of_string (Fmt.strf "blob %d\000" ln)) in
+  let ctx = Store.Hash.Digest.feed_s ctx (Fmt.strf "blob %d\000" ln) in
   let hash = go ctx in
   let () = close_in ic in
   hash
@@ -47,7 +47,9 @@ let hash_of_symlink filename =
   let link = Unix.readlink (Fpath.to_string filename) in
   let link = Astring.String.map (function '\\' -> '/' | chr -> chr) link in
   let ctx  = Store.Hash.Digest.init () in
-  let ctx  = Store.Hash.Digest.feed ctx (Cstruct.of_string (Fmt.strf "blob %d\000%s" (String.length link) link)) in
+  let ctx  = Store.Hash.Digest.feed_s ctx
+      (Fmt.strf "blob %d\000%s" (String.length link) link)
+  in
   Store.Hash.Digest.get ctx
 
 let stat path =
