@@ -63,7 +63,7 @@ module Make0 (Source : SOURCE) (Store : S) = struct
   let pp_error ppf = function `Store err -> Store.pp_error ppf err
 
   let hashes_of_pack idx =
-    let command = Fmt.strf "git verify-pack -v %a" Fpath.pp idx in
+    let command = Fmt.strf "git verify-pack -v \"%a\"" Fpath.pp idx in
     let output = output_of_command command in
     let lines = Astring.String.cuts ~sep:"\n" output in
     let is_hash s =
