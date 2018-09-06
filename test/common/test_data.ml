@@ -63,7 +63,14 @@ module Make0 (Source : SOURCE) (Store : S) = struct
   let pp_error ppf = function `Store err -> Store.pp_error ppf err
 
   let hashes_of_pack idx =
-    let command = Fmt.strf "git verify-pack -v \"%a\"" Fpath.pp idx in
+    let unsafe_pp ppf path = Fmt.(list ~sep:(const string Filename.dir_sep) string) ppf (Fpath.segs path) in
+    (* XXX(dinosaure): ok this is really bad between the windows support and
+       linux but currently, tests fails just because we try to execute
+       ..\..\file.idx instead ../../file.idx. It should not be a problem on
+       windows but it is.
+
+       If someone has a better way to fix it... *)
+    let command = Fmt.strf "git verify-pack -v \"%a\"" unsafe_pp idx in
     let output = output_of_command command in
     let lines = Astring.String.cuts ~sep:"\n" output in
     let is_hash s =
