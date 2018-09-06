@@ -1,20 +1,20 @@
 module type S = sig
 
-  module Hash: S.HASH
+  module Hash   : S.HASH
   module Inflate: S.INFLATE
   module Deflate: S.DEFLATE
 
   module Value: Value.S
-    with module Hash = Hash
-     and module Inflate = Inflate
-     and module Deflate = Deflate
-     and module Blob = Blob.Make(Hash)
+    with module Hash    := Hash
+     and module Inflate := Inflate
+     and module Deflate := Deflate
+     and module Blob   = Blob.Make(Hash)
      and module Commit = Commit.Make(Hash)
-     and module Tree = Tree.Make(Hash)
-     and module Tag = Tag.Make(Hash)
+     and module Tree   = Tree.Make(Hash)
+     and module Tag    = Tag.Make(Hash)
      and type t = Value.Make(Hash)(Inflate)(Deflate).t
 
-  module Reference: Reference.S with module Hash = Hash
+  module Reference: Reference.S with module Hash := Hash
 
   (** The type of the git repository. *)
   type t
@@ -132,8 +132,6 @@ module type S = sig
     type stream = unit -> Cstruct.t option Lwt.t
     (** The stream contains the PACK flow. *)
 
-    module Map: Map.S with type key = Hash.t
-
     val from: t -> stream -> (Hash.t * int, error) result Lwt.t
     (** [from git stream] populates the Git repository [git] from the
         PACK flow [stream]. If any error is encountered, any Git
@@ -144,7 +142,7 @@ module type S = sig
       -> ?window:[ `Object of int | `Memory of int ]
       -> ?depth:int
       -> Value.t list
-      -> (stream * (Crc32.t * int64) Map.t Lwt_mvar.t, error) result Lwt.t
+      -> (stream * (Crc32.t * int64) Hash.Map.t Lwt_mvar.t, error) result Lwt.t
     (** [make ?window ?depth values] makes a PACK stream from a list
         of {!Value.t}.
 

@@ -26,8 +26,8 @@ module type S = sig
     with type hash := Store.Hash.t
      and type reference := Store.Reference.t
   module Decoder: Smart.DECODER
-    with module Hash = Store.Hash
-     and module Reference = Store.Reference
+    with module Hash := Store.Hash
+     and module Reference := Store.Reference
      and module Common := Common
 
   type state

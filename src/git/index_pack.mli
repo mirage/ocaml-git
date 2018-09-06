@@ -72,7 +72,7 @@ module type LAZY = sig
   val cardinal: t -> int
 end
 
-module Lazy (H: S.HASH): LAZY with module Hash = H
+module Lazy (Hash: S.HASH): LAZY with module Hash := Hash
 (** The {i functor} to make the {i lazy} decoder of the IDX file.
     Internally, we use a [Cstruct.t] representation of the IDX file
     notified to the [make] function. This [Cstruct.t] should never
@@ -148,8 +148,7 @@ sig
       decoder can't continue and sticks in this situation.}} *)
 end
 
-module Decoder (H: S.HASH)
- : DECODER with module Hash = H
+module Decoder (Hash: S.HASH) : DECODER with module Hash := Hash
 (** The {i functor} to make the decoder module by a specific hash
     implementation. We constraint the {!Hash.S} module to compute a
     {Cstruct.t} flow. This module is a {i non-blocking} decoder with a
@@ -220,6 +219,6 @@ sig
       encoder can't continue and sticks in this situation.}} *)
 end
 
-module Encoder (H: S.HASH): ENCODER with module Hash = H
+module Encoder (Hash: S.HASH): ENCODER with module Hash := Hash
 (** The {i functor} to make the encoder module by a specific hash
     implementation. *)

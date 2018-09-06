@@ -515,8 +515,9 @@ end
    the Git object and we never grow the internal buffer.
 
    UPDATE: we move encoder to `encore` library. *)
+
 let fdigest: type t hash.
-     (module S.IDIGEST with type t = hash)
+     (module S.HASH with type t = hash)
   -> (module S.ENCODER
        with type t = t
         and type init = (int * t)
@@ -532,19 +533,22 @@ let fdigest: type t hash.
     let module M      = (val encoder) in
     let hdr = Fmt.strf "%s %Ld\000" kind (length value) in
     let ctx = Digest.init () in
-    let ctx = Digest.feed_s ctx hdr in
+    let ctx = Digest.feed_string ctx hdr in
     let encoder = M.default (capacity, value) in
     let rec loop ctx encoder = match M.eval tmp encoder with
       | `Flush encoder ->
         let ctx =
           if M.used encoder > 0
-          then Digest.feed_c ctx (Cstruct.sub tmp 0 (M.used encoder))
+          then
+            Digest.feed_bigstring ctx
+              Cstruct.(to_bigarray @@ sub tmp 0 (M.used encoder))
           else ctx in
         loop ctx (M.flush 0 (Cstruct.len tmp) encoder)
       | `End (encoder, _) ->
         let ctx =
           if M.used encoder > 0
-          then Digest.feed_c ctx (Cstruct.sub tmp 0 (M.used encoder))
+          then Digest.feed_bigstring ctx
+              Cstruct.(to_bigarray @@ sub tmp 0 (M.used encoder))
           else ctx in
         Digest.get ctx
       | `Error `Never -> assert false

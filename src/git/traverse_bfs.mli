@@ -17,7 +17,13 @@
 
 module type STORE = sig
   module Hash: S.HASH
-  module Value: Value.S with module Hash = Hash
+  module Inflate: S.INFLATE
+  module Deflate: S.DEFLATE
+
+  module Value: Value.S
+    with module Hash    := Hash
+     and module Inflate := Inflate
+     and module Deflate := Deflate
 
   type t
   type error
@@ -26,7 +32,7 @@ module type STORE = sig
   val read : t -> Hash.t -> (Value.t, error) result Lwt.t
 end
 
-module Make (S : STORE): sig
+module Make (S: STORE): sig
 
   val fold:
     S.t -> ('a -> ?name:Fpath.t -> length:int64 -> S.Hash.t -> S.Value.t -> 'a Lwt.t) ->

@@ -1,6 +1,6 @@
 module Store = Git_unix.Store
 module Entry = Git_unix.Index.Entry(Store.Hash)
-module Index = Git_unix.Index.Make(Store.Hash)(Store)(Git_unix.Fs)(Entry)
+module Index = Git_unix.Index.Make(Store)(Git_unix.Fs)(Entry)
 
 module Common = Test_common.Make(Store)
 open Common
@@ -29,16 +29,16 @@ let echo_to_file filename content =
 let hash_of_file filename =
   let ic = open_in (Fpath.to_string filename) in
   let by = Bytes.create 0x800 in
-  let ctx = Store.Hash.Digest.init () in
+  let ctx = Store.Hash.init () in
   let ln = in_channel_length ic in
 
 
   let rec go ctx = match input ic by 0 0x800 with
-    | 0 -> Store.Hash.Digest.get ctx
+    | 0 -> Store.Hash.get ctx
     | len ->
-       let ctx = Store.Hash.Digest.feed_b ctx (Bytes.sub by 0 len) in
+       let ctx = Store.Hash.feed_bytes ctx (Bytes.sub by 0 len) in
        go ctx in
-  let ctx = Store.Hash.Digest.feed_s ctx (Fmt.strf "blob %d\000" ln) in
+  let ctx = Store.Hash.feed_string ctx (Fmt.strf "blob %d\000" ln) in
   let hash = go ctx in
   let () = close_in ic in
   hash
@@ -46,11 +46,11 @@ let hash_of_file filename =
 let hash_of_symlink filename =
   let link = Unix.readlink (Fpath.to_string filename) in
   let link = Astring.String.map (function '\\' -> '/' | chr -> chr) link in
-  let ctx  = Store.Hash.Digest.init () in
-  let ctx  = Store.Hash.Digest.feed_s ctx
+  let ctx  = Store.Hash.init () in
+  let ctx  = Store.Hash.feed_string ctx
       (Fmt.strf "blob %d\000%s" (String.length link) link)
   in
-  Store.Hash.Digest.get ctx
+  Store.Hash.get ctx
 
 let stat path =
   Unix.stat (Fpath.to_string path)

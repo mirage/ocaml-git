@@ -15,6 +15,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Make (D: Digestif.S): S.HASH
-
-module SHA1: S.HASH
+module Make (H: Digestif.S):
+  S.HASH with type t = H.t
+          and type ctx = H.ctx
+          and type kind = H.kind

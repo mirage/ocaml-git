@@ -105,6 +105,9 @@ module Make (FS: Mirage_fs_lwt.S) = struct
 
   module Dir = struct
 
+    type nonrec t = t
+    type nonrec error = error
+
     let exists t path =
       Log.debug (fun l -> l "Dir.exists %s" @@ fpath_to_string path);
       is_dir t path >|= function
@@ -157,6 +160,9 @@ module Make (FS: Mirage_fs_lwt.S) = struct
   end
 
   module File = struct
+
+    type nonrec t = t
+    type nonrec error = error
 
     (* Note: all the operations (including reads) need to be locked
        because of the lack of atomic moves in MirageOS's FS
@@ -280,6 +286,8 @@ module Make (FS: Mirage_fs_lwt.S) = struct
 
   module Mapper = struct
 
+    type nonrec t = t
+    type nonrec error = error
     let pp_error = pp_error
 
     type fd = { t: t; path: Fpath.t ; sz: int64 }

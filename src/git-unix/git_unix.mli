@@ -16,15 +16,13 @@
 
 (** Unix backend. *)
 
-module SHA1:  Git.HASH
-
 module Fs = Fs
 module Net = Net
 module Index = Index
 
 module Store: sig
   include Git.Store.S
-          with module Hash = SHA1
+          with module Hash = Git.Hash.Make(Digestif.SHA1)
            and module FS := Fs
 
   val v:

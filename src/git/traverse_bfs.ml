@@ -15,9 +15,18 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+let src = Logs.Src.create "git.traverse" ~doc:"logs git's traverse event"
+module Log = (val Logs.src_log src : Logs.LOG)
+
 module type STORE = sig
   module Hash: S.HASH
-  module Value: Value.S with module Hash = Hash
+  module Inflate: S.INFLATE
+  module Deflate: S.DEFLATE
+
+  module Value: Value.S
+    with module Hash    := Hash
+     and module Inflate := Inflate
+     and module Deflate := Deflate
 
   type t
   type error
@@ -26,14 +35,8 @@ module type STORE = sig
   val read : t -> Hash.t -> (Value.t, error) result Lwt.t
 end
 
-module Make (S : STORE) = struct
+module Make (S: STORE) = struct
   open S
-
-  module Log =
-  struct
-    let src = Logs.Src.create "git.traverse" ~doc:"logs git's traverse event"
-    include (val Logs.src_log src : Logs.LOG)
-  end
 
   (* XXX(dinosaure): convenience and common part between the
      file-system and the mem back-end - to avoid redundant code. *)

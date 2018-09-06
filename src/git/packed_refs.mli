@@ -43,6 +43,4 @@ module type S = sig
     (t, error) result Lwt.t
 end
 
-module Make (H: S.HASH) (FS: S.FS):
-  S with module FS = FS
-     and module Hash = H
+module Make (H: S.HASH) (FS: S.FS): S with module FS := FS and module Hash := H

@@ -1,10 +1,12 @@
 module Net = Net
-module SHA1 = Git.Hash.SHA1
 module FS = Fs
 
 module Store (X: Mirage_fs_lwt.S) = struct
   module F = Fs.Make(X)
-  module S = Git.Store.Make(SHA1)(F)(Git.Inflate)(Git.Deflate)
+  module I = Git.Inflate
+  module D = Git.Deflate
+  module S = Git.Store.Make(Digestif.SHA1)(F)(I)(D)
+
   include S
 
   let v ?current_dir ?dotgit ?compression ?buffer fs root =

@@ -177,14 +177,14 @@ module type H = sig
       when he {!make} the new decoder. *)
 end
 
-module Hunk (Hash : S.HASH) : H with module Hash = Hash
+module Hunk (Hash: S.HASH): H with module Hash := Hash
 
 (** The non-blocking decoder of the PACK stream. *)
 module type P = sig
 
-  module Hash: S.HASH
+  module Hash   : S.HASH
   module Inflate: S.INFLATE
-  module Hunk: H with module Hash := Hash
+  module Hunk   : H with module Hash := Hash
 
   (** The type error. *)
   type error =
@@ -425,24 +425,24 @@ module type P = sig
 end
 
 module Pack
-    (Hash: S.HASH)
+    (Hash   : S.HASH)
     (Inflate: S.INFLATE)
-    (Hunk: H with module Hash := Hash)
-  : P with module Hash = Hash
-       and module Inflate = Inflate
-       and module Hunk := Hunk
+    (Hunk   : H with module Hash := Hash)
+  : P with module Hash    := Hash
+       and module Inflate := Inflate
+       and module Hunk    := Hunk
 
 (** The toolbox about the PACK file. *)
 module type D = sig
 
-  module Hash: S.HASH
-  module Mapper: S.MAPPER
+  module Hash   : S.HASH
+  module Mapper : S.MAPPER
   module Inflate: S.INFLATE
   module Hunk: H with module Hash := Hash
   module Pack: P
-    with module Hash := Hash
+    with module Hash    := Hash
      and module Inflate := Inflate
-     and module Hunk := Hunk
+     and module Hunk    := Hunk
 
   (** The type error. *)
   type error =
@@ -694,31 +694,31 @@ module type D = sig
 end
 
 module Decoder
-    (Hash: S.HASH)
-    (Mapper: S.MAPPER)
+    (Hash   : S.HASH)
+    (Mapper : S.MAPPER)
     (Inflate: S.INFLATE)
     (Hunk: H with module Hash := Hash)
     (Pack: P with module Hash := Hash
-                      and module Inflate := Inflate
-                      and module Hunk := Hunk)
-  : D with module Hash = Hash
-       and module Mapper = Mapper
-       and module Inflate = Inflate
-       and module Hunk := Hunk
-       and module Pack := Pack
+              and module Inflate := Inflate
+              and module Hunk    := Hunk)
+  : D with module Hash    := Hash
+       and module Mapper  := Mapper
+       and module Inflate := Inflate
+       and module Hunk    := Hunk
+       and module Pack    := Pack
 
 module Stream
-    (Hash: S.HASH)
+    (Hash   : S.HASH)
     (Inflate: S.INFLATE) : sig
   include P
-end with module Hash = Hash
-     and module Inflate = Inflate
+end with module Hash    := Hash
+     and module Inflate := Inflate
 
 module Random_access
-    (Hash: S.HASH)
-    (Mapper: S.MAPPER)
+    (Hash   : S.HASH)
+    (Mapper : S.MAPPER)
     (Inflate: S.INFLATE) : sig
   include D
-end with module Hash = Hash
-     and module Mapper = Mapper
-     and module Inflate = Inflate
+end with module Hash    := Hash
+     and module Mapper  := Mapper
+     and module Inflate := Inflate

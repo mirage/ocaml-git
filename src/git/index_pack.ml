@@ -41,9 +41,7 @@ module type LAZY = sig
   val cardinal: t -> int
 end
 
-module Lazy (H: S.HASH): LAZY with module Hash = H = struct
-
-  module Hash = H
+module Lazy (Hash: S.HASH) = struct
 
   type error =
     | Invalid_header of string
@@ -59,7 +57,10 @@ module Lazy (H: S.HASH): LAZY with module Hash = H = struct
     | Expected_bigoffset_table      -> Fmt.pf ppf "Expected_bigoffset_table"
     | Invalid_bigoffset_index index -> Fmt.pf ppf "(Invalid_bigoffset_index %d)" index
 
-  module Cache = Lru.M.Make(Hash)(struct type t = Crc32.t * int64 let weight _ = 1 end)
+  module Cache = Lru.M.Make(Hash) (struct
+      type t = Crc32.t * int64
+      let weight _ = 1
+    end)
 
   type t =
     { map              : Cstruct.t
@@ -120,7 +121,7 @@ module Lazy (H: S.HASH): LAZY with module Hash = H = struct
     let values_offset = 8 + (256 * 4) + (number_of_hashes * 20) + (number_of_hashes * 4) in
     let v64_offset    = 8 + (256 * 4) + (number_of_hashes * 20) + (number_of_hashes * 4) + (number_of_hashes * 4) in
 
-    let v64_offset = if v64_offset + (Hash.Digest.length * 2) = Cstruct.len map then None else Some v64_offset in
+    let v64_offset = if v64_offset + (Hash.digest_size * 2) = Cstruct.len map then None else Some v64_offset in
 
     Ok { map
        ; number_of_hashes
@@ -136,7 +137,7 @@ module Lazy (H: S.HASH): LAZY with module Hash = H = struct
   exception Break
 
   let compare buf off hash =
-    try for i = 0 to Hash.Digest.length - 1
+    try for i = 0 to Hash.digest_size - 1
       do if Cstruct.get_char buf (off + i) <> Cstruct.get_char hash i
         then raise Break
       done; true
@@ -146,7 +147,7 @@ module Lazy (H: S.HASH): LAZY with module Hash = H = struct
   exception ReturnF
 
   let lt buf off hash =
-    try for i = 0 to Hash.Digest.length - 1
+    try for i = 0 to Hash.digest_size - 1
       do let a = Cstruct.get_uint8 buf (off + i) in
         let b = Cstruct.get_uint8 hash i in
 
@@ -159,14 +160,14 @@ module Lazy (H: S.HASH): LAZY with module Hash = H = struct
 
   let binary_search buf hash =
     let rec aux off len buf =
-      if len = Hash.Digest.length
-      then (off / Hash.Digest.length)
+      if len = Hash.digest_size
+      then (off / Hash.digest_size)
       else
-        let len' = ((len / (Hash.Digest.length * 2)) * Hash.Digest.length) in
+        let len' = ((len / (Hash.digest_size * 2)) * Hash.digest_size) in
         let off' = off + len' in
 
         if compare buf off' hash
-        then (off' / Hash.Digest.length)
+        then (off' / Hash.digest_size)
         else if lt buf off' hash
         then (aux[@tailcall]) off len' buf
         else (aux[@tailcall]) off' (len - len') buf
@@ -181,7 +182,7 @@ module Lazy (H: S.HASH): LAZY with module Hash = H = struct
 
        if n = 0l
        then Error Invalid_index
-       else Ok (binary_search (Cstruct.sub t.map t.hashes_offset (Int32.to_int n * Hash.Digest.length)) hash)
+       else Ok (binary_search (Cstruct.sub t.map t.hashes_offset (Int32.to_int n * Hash.digest_size)) hash)
      | idx ->
        if has t.map (t.fanout_offset + (4 * idx)) 4
        && has t.map (t.fanout_offset + (4 * (idx - 1))) 4
@@ -189,21 +190,21 @@ module Lazy (H: S.HASH): LAZY with module Hash = H = struct
          let off0 = Int32.to_int @@ Cstruct.BE.get_uint32 t.map (t.fanout_offset + (4 * (idx - 1))) in
 
          if has t.map
-             (t.hashes_offset + (off0 * Hash.Digest.length))
-             ((off1 - off0) * Hash.Digest.length)
+             (t.hashes_offset + (off0 * Hash.digest_size))
+             ((off1 - off0) * Hash.digest_size)
          && (off1 - off0) > 0
          then
            Ok (off0
                + binary_search
                  (Cstruct.sub t.map
-                    (t.hashes_offset + (off0 * Hash.Digest.length))
-                    ((off1 - off0) * Hash.Digest.length))
+                    (t.hashes_offset + (off0 * Hash.digest_size))
+                    ((off1 - off0) * Hash.digest_size))
                  hash)
          else Error Invalid_index
        else Error Invalid_index)
     |> function
     | Ok off ->
-      let hash' = Cstruct.sub t.map (t.hashes_offset + (off * Hash.Digest.length)) Hash.Digest.length in
+      let hash' = Cstruct.sub t.map (t.hashes_offset + (off * Hash.digest_size)) Hash.digest_size in
 
       if Cstruct.equal hash hash'
       then Ok off
@@ -214,7 +215,7 @@ module Lazy (H: S.HASH): LAZY with module Hash = H = struct
     match Cache.find hash t.cache with
     | Some _ -> true
     | None ->
-      match fanout_idx t (Cstruct.of_string (Hash.to_string hash)) with
+      match fanout_idx t (Cstruct.of_string (Hash.to_raw_string hash)) with
       | Ok _ -> true
       | Error _ -> false
 
@@ -224,7 +225,7 @@ module Lazy (H: S.HASH): LAZY with module Hash = H = struct
       Log.debug (fun l -> l "Retrieving the information of %a from the cache." Hash.pp hash);
       Some (crc, offset)
     | None ->
-      match fanout_idx t (Cstruct.of_string (Hash.to_string hash)) with
+      match fanout_idx t (Cstruct.of_string (Hash.to_raw_string hash)) with
       | Ok idx ->
         let crc = Cstruct.BE.get_uint32 t.map (t.crcs_offset + (idx * 4)) in
         let off = Cstruct.BE.get_uint32 t.map (t.values_offset + (idx * 4)) in
@@ -254,7 +255,7 @@ module Lazy (H: S.HASH): LAZY with module Hash = H = struct
   let iter t f =
     for i = 0 to t.number_of_hashes - 1
     do
-      let hash = Cstruct.sub t.map (t.hashes_offset + (i * Hash.Digest.length)) Hash.Digest.length in
+      let hash = Cstruct.sub t.map (t.hashes_offset + (i * Hash.digest_size)) Hash.digest_size in
       let crc = Crc32.of_int32 (Cstruct.BE.get_uint32 t.map (t.crcs_offset + (i * 4))) in
       let off = Cstruct.BE.get_uint32 t.map (t.values_offset + (i * 4)) in
 
@@ -271,7 +272,7 @@ module Lazy (H: S.HASH): LAZY with module Hash = H = struct
 
       (* XXX(dinosaure): it's the biggest allocation place when we decode all
          git object. *)
-      f (Hash.of_string (Cstruct.to_string hash)) (crc, off)
+      f (Hash.of_raw_string (Cstruct.to_string hash)) (crc, off)
     done
 
   let fold t f a =
@@ -313,9 +314,7 @@ sig
        | `Error of t * error ]
 end
 
-module Decoder (H: S.HASH): DECODER with module Hash = H =
-struct
-  module Hash = H
+module Decoder (Hash: S.HASH) = struct
 
   type error =
     | Invalid_byte of int
@@ -339,7 +338,7 @@ struct
     ; hashes    : Hash.t Queue.t
     ; crcs      : Crc32.t Queue.t
     ; offsets   : (Int32.t * bool) Queue.t
-    ; hash      : Hash.Digest.ctx
+    ; hash      : Hash.ctx
     ; state     : state }
   and k = Cstruct.t -> t -> res
   and state =
@@ -385,9 +384,12 @@ struct
                          state = %a;@] }"
       t.i_off t.i_pos t.i_len (Fmt.hvbox pp_state) t.state
 
+  let feed_cstruct h c = Hash.feed_bigstring h (Cstruct.to_bigarray c)
+
   let await src t =
-    let hash = Hash.Digest.feed_c t.hash (Cstruct.sub src t.i_off t.i_pos) in
+    let hash = feed_cstruct t.hash (Cstruct.sub src t.i_off t.i_pos) in
     Wait { t with hash }
+
   let error t exn: res = Error ({ t with state = Exception exn }, exn)
   let ok t hash: res = Ok ({ t with state = End hash }, hash)
 
@@ -475,12 +477,12 @@ struct
     let get_byte = get_byte ~ctor:(fun k -> Hashes k)
 
     let get_hash k src t =
-      let res = Cstruct.create Hash.Digest.length in
+      let res = Cstruct.create Hash.digest_size in
       (* XXX(dinosaure): we can replace it by an internal buffer allocated in
          {!default}. *)
 
       let rec loop i src t =
-        if i = Hash.Digest.length
+        if i = Hash.digest_size
         then k res src t
         else
           get_byte (fun byte src t ->
@@ -518,10 +520,10 @@ struct
            (* don't use [await] function. *)
 
     let get_hash k src t =
-      let res = Cstruct.create Hash.Digest.length in
+      let res = Cstruct.create Hash.digest_size in
 
       let rec loop i src t =
-        if i = Hash.Digest.length
+        if i = Hash.digest_size
         then k res src t
         else
           get_byte (fun byte src t ->
@@ -547,25 +549,25 @@ struct
 
   let hash ?boffsets src t =
     let aux k src t =
-      let hash = Hash.Digest.feed_c t.hash (Cstruct.sub src t.i_off t.i_pos) in
+      let hash = feed_cstruct t.hash (Cstruct.sub src t.i_off t.i_pos) in
       KHash.get_hash k src { t with hash }
     in
 
     (KHash.get_hash
      @@ fun hash_pack -> aux
      @@ fun hash_idx src t ->
-     let produce = Hash.Digest.get t.hash in
+     let produce = Hash.get t.hash in
      let hash_idx =
        Cstruct.to_string hash_idx
-       |> Hash.of_string
+       |> Hash.of_raw_string
      in
      let hash_pack =
        Cstruct.to_string hash_pack
-       |> Hash.of_string
+       |> Hash.of_raw_string
      in
 
      if hash_idx <> produce
-     then error t (Invalid_hash (Hash.Digest.get t.hash, hash_idx))
+     then error t (Invalid_hash (Hash.get t.hash, hash_idx))
      else rest ?boffsets (hash_idx, hash_pack) src t)
     src t
 
@@ -605,7 +607,7 @@ struct
     then Cont { t with state = Crcs (crcs 0l max) }
     else KHashes.get_hash
         (fun hash src t ->
-           let hash = Cstruct.to_string hash |> Hash.of_string in
+           let hash = Cstruct.to_string hash |> Hash.of_raw_string in
               Queue.add hash t.hashes;
               (hashes[@tailcall]) (Int32.succ idx) max src t)
            src t
@@ -642,7 +644,7 @@ struct
     ; hashes  = Queue.create ()
     ; crcs    = Queue.create ()
     ; offsets = Queue.create ()
-    ; hash    = Hash.Digest.init ()
+    ; hash    = Hash.init ()
     ; state   = Header header }
 
   let refill off len t =
@@ -703,9 +705,7 @@ sig
        | `Error of t * error ]
 end
 
-module Encoder (H: S.HASH): ENCODER with module Hash = H =
-struct
-  module Hash = H
+module Encoder (Hash: S.HASH) = struct
 
   type error
 
@@ -715,8 +715,8 @@ struct
   struct
     type t = Hash.t
 
-    let get = Hash.get
-    let compare = Hash.compare
+    let get x i = String.get (Hash.to_raw_string x) i
+    let compare = Hash.unsafe_compare
   end
 
   module Fanout = Fanout.Make(K)
@@ -728,7 +728,7 @@ struct
     ; write    : int
     ; table    : (Crc32.t * int64) Fanout.t
     ; boffsets : int64 array
-    ; hash     : Hash.Digest.ctx
+    ; hash     : Hash.ctx
     ; pack     : Hash.t
     ; state    : state }
   and k = Cstruct.t -> t -> res
@@ -772,8 +772,10 @@ struct
                          state = %a;@] }"
       o_off o_pos o_len write Hash.pp pack (Fmt.hvbox pp_state) state
 
+  let feed_cstruct h c = Hash.feed_bigstring h (Cstruct.to_bigarray c)
+
   let flush dst t =
-    let hash = Hash.Digest.feed_c t.hash (Cstruct.sub dst t.o_off t.o_pos) in
+    let hash = feed_cstruct t.hash (Cstruct.sub dst t.o_off t.o_pos) in
     Flush { t with hash }
 
   module Int32 =
@@ -836,11 +838,11 @@ struct
   module KHashes =
   struct
     let put_hash hash k dst t =
-      if t.o_len - t.o_pos >= Hash.Digest.length
+      if t.o_len - t.o_pos >= Hash.digest_size
       then begin
-        Cstruct.blit hash 0 dst (t.o_off + t.o_pos) Hash.Digest.length;
-        k dst { t with o_pos = t.o_pos + Hash.Digest.length
-                     ; write = t.write + Hash.Digest.length }
+        Cstruct.blit hash 0 dst (t.o_off + t.o_pos) Hash.digest_size;
+        k dst { t with o_pos = t.o_pos + Hash.digest_size
+                     ; write = t.write + Hash.digest_size }
       end else
         let rec loop rest dst t =
           if rest = 0
@@ -851,14 +853,14 @@ struct
             if n = 0
             then flush dst { t with state = Hashes (loop rest) }
             else begin
-              Cstruct.blit hash (Hash.Digest.length - rest) dst (t.o_off + t.o_pos) n;
+              Cstruct.blit hash (Hash.digest_size - rest) dst (t.o_off + t.o_pos) n;
               flush dst { t with state = Hashes (loop (rest - n))
                                ; o_pos = t.o_pos + n
                                ; write = t.write + n }
             end
         in
 
-        loop Hash.Digest.length dst t
+        loop Hash.digest_size dst t
   end
 
   module KCrcs =
@@ -907,11 +909,11 @@ struct
   module KHash =
   struct
     let put_hash ?(digest = true) hash k dst t =
-      if t.o_len - t.o_pos >= Hash.Digest.length
+      if t.o_len - t.o_pos >= Hash.digest_size
       then begin
-        Cstruct.blit_from_string hash 0 dst (t.o_off + t.o_pos) Hash.Digest.length;
-        k dst { t with o_pos = t.o_pos + Hash.Digest.length
-                     ; write = t.write + Hash.Digest.length }
+        Cstruct.blit_from_string hash 0 dst (t.o_off + t.o_pos) Hash.digest_size;
+        k dst { t with o_pos = t.o_pos + Hash.digest_size
+                     ; write = t.write + Hash.digest_size }
       end else
         let rec loop rest dst t =
           if rest = 0
@@ -923,7 +925,7 @@ struct
             then let t = { t with state = Hash (loop rest) } in
                  if digest then flush dst t else Flush t
             else begin
-              Cstruct.blit_from_string hash (Hash.Digest.length - rest) dst (t.o_off + t.o_pos) n;
+              Cstruct.blit_from_string hash (Hash.digest_size - rest) dst (t.o_off + t.o_pos) n;
               let t = { t with state = Hash (loop (rest - n))
                              ; o_pos = t.o_pos + n
                              ; write = t.write + n }
@@ -932,7 +934,7 @@ struct
             end
         in
 
-        loop Hash.Digest.length dst t
+        loop Hash.digest_size dst t
   end
 
   let ok t: res = Ok { t with state = End }
@@ -941,12 +943,12 @@ struct
     Int64.(integer >> 31) <> 0L
 
   let hash dst t =
-    (KHash.put_hash (Hash.to_string t.pack)
+    (KHash.put_hash (Hash.to_raw_string t.pack)
      @@ fun dst t ->
-     let ctx = Hash.Digest.feed_c t.hash (Cstruct.sub dst t.o_off t.o_pos) in
-     let hash = Hash.Digest.get ctx in
+     let ctx = feed_cstruct t.hash (Cstruct.sub dst t.o_off t.o_pos) in
+     let hash = Hash.get ctx in
 
-     KHash.put_hash ~digest:false (Hash.to_string hash) (fun _ t -> ok t) dst { t with hash = ctx })
+     KHash.put_hash ~digest:false (Hash.to_raw_string hash) (fun _ t -> ok t) dst { t with hash = ctx })
     dst t
 
   let rec boffsets idx dst t =
@@ -988,7 +990,7 @@ struct
       in
       let lst =
         Fanout.get idx t.table
-        |> List.map (fun (hash, crc32) -> Cstruct.of_string (Hash.to_string hash), crc32)
+        |> List.map (fun (hash, crc32) -> Cstruct.of_string (Hash.to_raw_string hash), crc32)
         (* XXX(dinosaure): may be we can optimize this and allocate a
            big [Cstruct.t] instead to use the case. *)
       in
@@ -1070,7 +1072,7 @@ struct
     ; write = 0
     ; table
     ; boffsets = Array.of_list (List.rev !boffsets)
-    ; hash = Hash.Digest.init ()
+    ; hash = Hash.init ()
     ; pack = hash
     ; state = Header header }
 end

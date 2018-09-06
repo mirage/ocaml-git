@@ -143,9 +143,7 @@ module type IO = sig
     -> t -> (unit, error) result Lwt.t
 end
 
-module Make (Hash: S.HASH): S with module Hash = Hash = struct
-
-  module Hash = Hash
+module Make (Hash: S.HASH) = struct
 
   type nonrec t = t
 
@@ -183,12 +181,12 @@ module Make (Hash: S.HASH): S with module Hash = Hash = struct
 
   let equal_head_contents a b = match a, b with
     | Ref a', Ref b' -> equal a' b'
-    | Hash a', Hash b' -> Hash.equal a' b'
+    | Hash a', Hash b' -> Hash.eq a' b'
     | _, _ -> false
 
   let compare_head_contents a b = match a, b with
     | Ref a', Ref b' -> compare a' b'
-    | Hash a', Hash b' -> Hash.compare a' b'
+    | Hash a', Hash b' -> Hash.unsafe_compare a' b'
     | Ref _, Hash _ -> 1
     | Hash _, Ref _ -> -1
 
@@ -239,7 +237,7 @@ module Make (Hash: S.HASH): S with module Hash = Hash = struct
 
       let is_not_lf = (<>) '\n'
 
-      let hash = Iso.hex <$> (take (Hash.Digest.length * 2)) <* (char_elt '\n' <$> any)
+      let hash = Iso.hex <$> (take (Hash.digest_size * 2)) <* (char_elt '\n' <$> any)
       let reference = (string_elt "ref: " <$> const "ref: ") *> (Iso.refname <$> (while1 is_not_lf)) <* (char_elt '\n' <$> any)
 
       let p = (Iso.reference <$> reference) <|> (Iso.hash <$> hash)
@@ -251,11 +249,11 @@ module Make (Hash: S.HASH): S with module Hash = Hash = struct
   module E = Helper.MakeEncoder(M)
 end
 
-module IO (Hash: S.HASH) (FS: S.FS) = struct
+module IO (H: S.HASH) (FS: S.FS) = struct
 
   module FS = Helper.FS(FS)
 
-  include Make(Hash)
+  include Make(H)
 
   module Encoder = struct
     module E = struct

@@ -1,5 +1,3 @@
-let () = Printexc.record_backtrace true
-
 include S
 module type S = Minimal.S
 

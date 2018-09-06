@@ -66,8 +66,8 @@ let setup_logs style_renderer level =
   let quiet = match style_renderer with Some _ -> true | None -> false in
   quiet, Fmt.stdout
 
-module Entry = Index.Entry(SHA1)
-module Index = Index.Make(SHA1)(Store)(Fs)(Entry)
+module Entry = Index.Entry(Digestif.SHA1)
+module Index = Index.Make(Store)(Fs)(Entry)
 
 let store_err err = Lwt.return (`Store err)
 let index_err err = Lwt.return (`Index err)

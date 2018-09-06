@@ -44,7 +44,7 @@ module type FILE = S.FILE
 module type MAPPER = S.MAPPER
 module type DIR = S.DIR
 module type FS = S.FS
-module type HASH = S.HASH
 module type DIGEST = S.DIGEST
+module type HASH = S.HASH
 
 module type S = Minimal.S

@@ -15,6 +15,9 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+let src = Logs.Src.create "negociator" ~doc:"logs negociator's event"
+module Log = (val Logs.src_log src : Logs.LOG)
+
 module Flag =
 struct
   type t = int
@@ -75,8 +78,8 @@ module type S = sig
     with type hash := Store.Hash.t
      and type reference := Store.Reference.t
   module Decoder: Smart.DECODER
-    with module Hash = Store.Hash
-     and module Reference = Store.Reference
+    with module Hash := Store.Hash
+     and module Reference := Store.Reference
      and module Common := Common
 
   type state
@@ -90,7 +93,8 @@ module type S = sig
     ) Lwt.t
 end
 
-module Make (G: Minimal.S): S with module Store = G = struct
+module Make (G: Minimal.S) = struct
+
   module Store = G
 
   module V = struct
@@ -107,7 +111,7 @@ module Make (G: Minimal.S): S with module Store = G = struct
         (Fmt.hvbox Flag.pp) flags
   end
 
-  module Pq = Psq.Make(Store.Hash)(V)
+  module Pq = Psq.Make (Store.Hash) (V)
 
   module Common = Smart.Common(Store.Hash)(Store.Reference)
   module Decoder = Smart.Decoder(Store.Hash)(Store.Reference)(Common)
@@ -310,12 +314,6 @@ module Make (G: Minimal.S): S with module Store = G = struct
      will skip ahead and send the next 32 immediately, so that there always a
      block of 32 "in-flight on the wire" at a time. *)
   let _VAIN = 128
-
-  module Log =
-  struct
-    let src = Logs.Src.create "negociator" ~doc:"logs negociator's event"
-    include (val Logs.src_log src : Logs.LOG)
-  end
 
   let update_flush count =
     if count < _PIPESAFE_FLUSH

@@ -90,9 +90,7 @@ module type ENTRY = sig
   val topological_sort: t list -> t list
 end
 
-module Entry (Hash: S.HASH): ENTRY with module Hash = Hash =
-struct
-  module Hash = Hash
+module Entry (Hash: S.HASH) = struct
 
   type t =
     { hash_name   : int
@@ -292,9 +290,7 @@ module type H = sig
   val used_out: t -> int
 end
 
-module Hunk (Hash : S.HASH): H with module Hash = Hash =
-struct
-  module Hash = Hash
+module Hunk (Hash: S.HASH) = struct
 
   type error
 
@@ -641,14 +637,7 @@ module type DELTA = sig
     -> ((Entry.t * t) list, error) result Lwt.t
 end
 
-module Delta
-    (Hash : S.HASH)
-    (Entry: ENTRY with module Hash := Hash)
-  : DELTA with module Hash = Hash
-           and module Entry := Entry =
-struct
-  module Hash = Hash
-  module Entry = Entry
+module Delta (Hash : S.HASH) (Entry: ENTRY with module Hash := Hash) = struct
 
   type t =
     { mutable delta : delta }
@@ -813,9 +802,8 @@ struct
       | ((_, { delta = S { src_hash; _ } }) as x) :: r, later ->
         let deps = deps src_hash in
         let ensure = List.for_all (fun (e, _) ->
-            List.exists (fun (x, _) ->
-                Hash.equal (Entry.id x) (Entry.id e)) acc) deps in
-
+            List.exists (fun (x, _) -> Hash.equal (Entry.id x) (Entry.id e)) acc
+          ) deps in
         if ensure
         then loop (x :: acc) later r true
         else loop acc (x :: later) r progress
@@ -950,7 +938,6 @@ module type P = sig
      and module Entry := Entry
 
   module Hunk: H with module Hash := Hash
-  module Map: Map.S with type key = Hash.t
 
   type error =
     | Deflate_error of Deflate.error
@@ -968,7 +955,7 @@ module type P = sig
   val finish : t -> t
 
   val expect : t -> Hash.t
-  val idx : t -> (Crc32.t * int64) Map.t
+  val idx : t -> (Crc32.t * int64) Hash.Map.t
 
   val default : Cstruct.t -> (Entry.t * Delta.t) list -> t
 
@@ -976,24 +963,13 @@ module type P = sig
 end
 
 module Pack
-    (Hash: S.HASH)
+    (Hash   : S.HASH)
     (Deflate: S.DEFLATE)
-    (Entry: ENTRY with module Hash := Hash)
-    (Delta: DELTA with module Hash := Hash
+    (Entry  : ENTRY with module Hash := Hash)
+    (Delta  : DELTA with module Hash := Hash
                    and module Entry := Entry)
-    (Hunk: H with module Hash := Hash)
-  : P with module Hash = Hash
-       and module Deflate = Deflate
-       and module Entry := Entry
-       and module Delta := Delta
-       and module Hunk := Hunk =
-struct
-  module Hash = Hash
-  module Deflate = Deflate
-  module Entry = Entry
-  module Delta = Delta
-  module Hunk = Hunk
-  module Map = Map.Make(Hash)
+    (Hunk   : H with module Hash := Hash)
+= struct
 
   type error =
     | Deflate_error of Deflate.error
@@ -1013,8 +989,8 @@ struct
     ; i_pos   : int
     ; i_len   : int
     ; write   : int64
-    ; map     : (Crc32.t * int64) Map.t
-    ; hash    : Hash.Digest.ctx
+    ; map     : (Crc32.t * int64) Hash.Map.t
+    ; hash    : Hash.ctx
     ; h_tmp   : Cstruct.t
     ; state   : state }
   and k = Cstruct.t -> t -> res
@@ -1054,7 +1030,7 @@ struct
     | KindRaw
 
   let flush dst t =
-    let hash = Hash.Digest.feed_c t.hash (Cstruct.sub dst t.o_off t.o_pos) in
+    let hash = Hash.feed_cstruct t.hash (Cstruct.sub dst t.o_off t.o_pos) in
     Flush { t with hash }
 
   let await t     : res = Wait t
@@ -1165,14 +1141,14 @@ struct
       loop !pos crc dst t
 
     let hash hash crc k dst t =
-      if t.o_len - t.o_pos >= Hash.Digest.length
+      if t.o_len - t.o_pos >= Hash.digest_size
       then begin
         let crc = Crc32.digests crc hash in
 
-        Cstruct.blit_from_bytes hash 0 dst (t.o_off + t.o_pos) Hash.Digest.length;
+        Cstruct.blit_from_bytes hash 0 dst (t.o_off + t.o_pos) Hash.digest_size;
 
-        k crc dst { t with o_pos = t.o_pos + Hash.Digest.length
-                         ; write = Int64.add t.write (Int64.of_int Hash.Digest.length) }
+        k crc dst { t with o_pos = t.o_pos + Hash.digest_size
+                         ; write = Int64.add t.write (Int64.of_int Hash.digest_size) }
       end else
         let rec loop rest crc dst t =
           if rest = 0
@@ -1183,26 +1159,26 @@ struct
             if n = 0
             then flush dst { t with state = Hash (loop rest crc) }
             else begin
-              let crc = Crc32.digests crc ~off:(Hash.Digest.length - rest) ~len:n hash in
+              let crc = Crc32.digests crc ~off:(Hash.digest_size - rest) ~len:n hash in
 
-              Cstruct.blit_from_bytes hash (Hash.Digest.length - rest) dst (t.o_off + t.o_pos) n;
+              Cstruct.blit_from_bytes hash (Hash.digest_size - rest) dst (t.o_off + t.o_pos) n;
 
               loop (rest - n) crc dst { t with o_pos = t.o_pos + n
                                              ; write = Int64.add t.write (Int64.of_int n) }
             end
         in
 
-        loop Hash.Digest.length crc dst t
+        loop Hash.digest_size crc dst t
   end
 
   module KHash =
   struct
     let put_hash hash k dst t =
-      if t.o_len - t.o_pos >= Hash.Digest.length
+      if t.o_len - t.o_pos >= Hash.digest_size
       then begin
-        Cstruct.blit_from_string hash 0 dst (t.o_off + t.o_pos) Hash.Digest.length;
-        k dst { t with o_pos = t.o_pos + Hash.Digest.length
-                     ; write = Int64.add t.write (Int64.of_int Hash.Digest.length) }
+        Cstruct.blit_from_string hash 0 dst (t.o_off + t.o_pos) Hash.digest_size;
+        k dst { t with o_pos = t.o_pos + Hash.digest_size
+                     ; write = Int64.add t.write (Int64.of_int Hash.digest_size) }
       end else
         let rec loop rest dst t =
           if rest = 0
@@ -1213,21 +1189,22 @@ struct
             if n = 0
             then Flush { t with state = Hash (loop rest) }
             else begin
-              Cstruct.blit_from_string hash (Hash.Digest.length - rest) dst (t.o_off + t.o_pos) n;
+              Cstruct.blit_from_string hash (Hash.digest_size - rest) dst (t.o_off + t.o_pos) n;
               Flush { t with state = Hash (loop (rest - n))
                            ; o_pos = t.o_pos + n
                            ; write = Int64.add t.write (Int64.of_int n) }
             end
         in
 
-        loop Hash.Digest.length dst t
+        loop Hash.digest_size dst t
   end
 
   let hash dst t =
-    let ctx = Hash.Digest.feed_c t.hash (Cstruct.sub dst t.o_off t.o_pos) in
-    let hash = Hash.Digest.get ctx in
+    let ctx = Hash.feed_cstruct t.hash (Cstruct.sub dst t.o_off t.o_pos) in
+    let hash = Hash.get ctx in
 
-    KHash.put_hash (Hash.to_string hash) (fun _ t -> ok t hash) dst { t with hash = ctx }
+    KHash.put_hash (Hash.to_raw_string hash)
+      (fun _ t -> ok t hash) dst { t with hash = ctx }
 
   let writek kind entry entry_delta rest dst t =
     match kind, entry_delta with
@@ -1265,7 +1242,8 @@ struct
       in
 
       (KWriteK.header 0b111 (Int64.of_int length) Crc32.default
-       @@ fun crc -> KWriteK.hash (Hash.to_string src_hash |> Bytes.unsafe_of_string) crc
+       @@ fun crc ->
+       KWriteK.hash (Hash.to_raw_string src_hash |> Bytes.unsafe_of_string) crc
        @@ fun crc _ t ->
        let z = Deflate.default 4 in
        let z = Deflate.flush (t.o_off + t.o_pos) (t.o_len - t.o_pos) z in
@@ -1284,7 +1262,7 @@ struct
 
     | KindOffset, { Delta.delta = Delta.S { length; hunks; src_length; src_hash; _ } } ->
       ((* XXX(dinosaure): should not possible to fail. *)
-       let _, src_off = Map.find src_hash t.map in
+       let _, src_off = Hash.Map.find src_hash t.map in
        let trg_length = Entry.length entry in
        let abs_off    = t.write in
        let rel_off    = Int64.sub abs_off src_off in
@@ -1394,7 +1372,7 @@ struct
     | (entry, delta) :: r ->
       match Entry.delta entry, delta with
       | Entry.From src_hash, { Delta.delta = Delta.S _ } ->
-        if Map.mem src_hash t.map
+        if Hash.Map.mem src_hash t.map
         then Cont { t with state = WriteK (writek KindOffset entry delta r) }
         else Cont { t with state = WriteK (writek KindHash entry delta r) }
       | Entry.None, { Delta.delta = Delta.Z } ->
@@ -1404,7 +1382,7 @@ struct
 
   let save _ t x r crc off =
     Cont { t with state = Object (iter r)
-                ; map = Map.add (Entry.id x) (crc, off) t.map }
+                ; map = Hash.Map.add (Entry.id x) (crc, off) t.map }
 
   let number lst dst t =
     (* XXX(dinosaure): problem in 32-bits architecture. TODO! *)
@@ -1546,16 +1524,13 @@ struct
     ; i_pos = 0
     ; i_len = 0
     ; write = 0L
-    ; map = Map.empty
+    ; map = Hash.Map.empty
     ; h_tmp
-    ; hash = Hash.Digest.init ()
+    ; hash = Hash.init ()
     ; state = (Header (header objects)) }
 end
 
-module Stream
-    (Hash: S.HASH)
-    (Deflate: S.DEFLATE)
-= struct
+module Stream (Hash: S.HASH) (Deflate: S.DEFLATE) = struct
   module Entry = Entry(Hash)
   module Delta = Delta(Hash)(Entry)
   module Hunk = Hunk(Hash)

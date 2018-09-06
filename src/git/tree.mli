@@ -68,7 +68,8 @@ module type S = sig
   module M: S.DESC    with type 'a t = 'a Encore.Encoder.t and type e = t
   module D: S.DECODER with type t = t and type init = Cstruct.t and type error = Error.Decoder.t
   module E: S.ENCODER with type t = t and type init = int * t and type error = Error.never
-  include S.DIGEST    with type t := t and type hash = Hash.t
+  include S.DIGEST    with type t := t and type hash := Hash.t
+
   include S.BASE      with type t := t
 
   val length: t -> int64
@@ -82,6 +83,6 @@ module type S = sig
   val iter: (entry -> unit) -> t -> unit
 end
 
-module Make (Hash: S.HASH): S with module Hash = Hash
+module Make (Hash: S.HASH): S with module Hash := Hash
 (** The {i functor} to make the OCaml representation of the Git Tree
     object by a specific hash implementation. *)

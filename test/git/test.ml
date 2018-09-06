@@ -17,7 +17,7 @@
 open Test_common
 
 module Store = struct
-  include Git.Mem.Store(Digestif.SHA1)
+  include Git.Mem.Store
   let v root = v root
 end
 

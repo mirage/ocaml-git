@@ -15,16 +15,16 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module type S =
-sig
-  module Hash: S.HASH
+module type S = sig
+
+  module Hash   : S.HASH
   module Inflate: S.INFLATE
 
   module HDec: Unpack.H with module Hash := Hash
   module PDec: Unpack.P
-    with module Hash := Hash
+    with module Hash    := Hash
      and module Inflate := Inflate
-     and module Hunk := HDec
+     and module Hunk    := HDec
 
   type error =
     [ `Unexpected_end_of_input
@@ -64,13 +64,13 @@ sig
 end
 
 module Make
-    (Hash: S.HASH)
+    (Hash   : S.HASH)
     (Inflate: S.INFLATE)
-    (HDec: Unpack.H with module Hash := Hash)
-    (PDec: Unpack.P with module Hash := Hash
-                     and module Inflate := Inflate
-                     and module Hunk := HDec)
-  : S with module Hash = Hash
-       and module Inflate = Inflate
-       and module HDec := HDec
-       and module PDec := PDec
+    (HDec   : Unpack.H with module Hash    := Hash)
+    (PDec   : Unpack.P with module Hash    := Hash
+                        and module Inflate := Inflate
+                        and module Hunk    := HDec)
+  : S with module Hash    := Hash
+       and module Inflate := Inflate
+       and module HDec    := HDec
+       and module PDec    := PDec

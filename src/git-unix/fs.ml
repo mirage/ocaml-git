@@ -113,6 +113,9 @@ let result_map f a = match a with
 
 module Dir = struct
 
+  type nonrec t = t
+  type nonrec error = error
+
   let create t dir =
     let mode = 0o755 in
     let mkdir d =
@@ -244,6 +247,9 @@ end
 
 module File = struct
 
+  type nonrec t = t
+    type nonrec error = error
+
   type 'a fd = {
     path: Fpath.t;
     fd  : Lwt_unix.file_descr;
@@ -311,6 +317,8 @@ end
 
 module Mapper = struct
 
+  type nonrec t = t
+  type nonrec error = error
   let pp_error = pp_error
 
   type fd = {

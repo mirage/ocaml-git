@@ -16,28 +16,31 @@
  *)
 
 module type S = sig
-  module Hash: S.HASH
+  module FS     : S.FS
+
+  module Hash   : S.HASH
   module Inflate: S.INFLATE
   module Deflate: S.DEFLATE
-  module FS: S.FS
 
   module HDec: Unpack.H with module Hash := Hash
+
   module PDec: Unpack.P
-    with module Hash := Hash
+    with module Hash    := Hash
      and module Inflate := Inflate
-     and module Hunk := HDec
+     and module Hunk    := HDec
+
   module PInfo: Pack_info.S
-    with module Hash := Hash
+    with module Hash    := Hash
      and module Inflate := Inflate
-     and module HDec := HDec
-     and module PDec := PDec
+     and module HDec    := HDec
+     and module PDec    := PDec
+
   module RPDec: Unpack.D
-    with module Hash := Hash
-     and type Mapper.fd = FS.Mapper.fd
-     and type Mapper.error = FS.error
+    with module Hash    := Hash
      and module Inflate := Inflate
-     and module Hunk := HDec
-     and module Pack := PDec
+     and module Hunk    := HDec
+     and module Pack    := PDec
+     and module Mapper  := FS.Mapper
 
   type status =
     | Resolved of Crc32.t * Hash.t
@@ -52,29 +55,28 @@ module type S = sig
 end
 
 module Make
-    (Hash: S.HASH)
-    (FS: S.FS)
+    (Hash   : S.HASH)
+    (FS     : S.FS)
     (Inflate: S.INFLATE)
     (Deflate: S.DEFLATE)
-    (HDec: Unpack.H with module Hash := Hash)
-    (PDec: Unpack.P with module Hash := Hash
-                     and module Inflate := Inflate
-                     and module Hunk := HDec)
-    (PInfo: Pack_info.S with module Hash := Hash
+    (HDec: Unpack.H with module Hash        := Hash)
+    (PDec: Unpack.P with module Hash        := Hash
+                     and module Inflate     := Inflate
+                     and module Hunk        := HDec)
+    (PInfo: Pack_info.S with module Hash    := Hash
                          and module Inflate := Inflate
-                         and module HDec := HDec
-                         and module PDec := PDec)
-    (RPDec: Unpack.D with module Hash := Hash
-                      and type Mapper.fd = FS.Mapper.fd
-                      and type Mapper.error = FS.error
-                      and module Inflate := Inflate
-                      and module Hunk := HDec
-                      and module Pack := PDec)
-  : S with module Hash = Hash
-       and module Inflate = Inflate
-       and module Deflate = Deflate
-       and module FS = FS
-       and module HDec := HDec
-       and module PDec := PDec
-       and module PInfo := PInfo
-       and module RPDec := RPDec
+                         and module HDec    := HDec
+                         and module PDec    := PDec)
+    (RPDec: Unpack.D with module Hash       := Hash
+                      and module Inflate    := Inflate
+                      and module Hunk       := HDec
+                      and module Pack       := PDec
+                      and module Mapper     := FS.Mapper)
+  : S with module Hash    := Hash
+       and module Inflate := Inflate
+       and module Deflate := Deflate
+       and module FS      := FS
+       and module HDec    := HDec
+       and module PDec    := PDec
+       and module PInfo   := PInfo
+       and module RPDec   := RPDec

@@ -84,7 +84,7 @@ module Https (Store: Test_store.S) = Test_sync.Make(struct
   end)
 
 module Mem_store = struct
-  include Git.Mem.Store(Digestif.SHA1)
+  include Git.Mem.Store
   let v root = v root
 end
 

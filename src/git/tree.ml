@@ -45,7 +45,7 @@ sig
   module M: S.DESC    with type 'a t = 'a Encore.Encoder.t and type e = t
   module D: S.DECODER with type t = t and type init = Cstruct.t and type error = Error.Decoder.t
   module E: S.ENCODER with type t = t and type init = int * t and type error = Error.never
-  include S.DIGEST    with type t := t and type hash = Hash.t
+  include S.DIGEST    with type t := t and type hash := Hash.t
   include S.BASE      with type t := t
 
   val length: t -> int64
@@ -55,9 +55,7 @@ sig
   val iter: (entry -> unit) -> t -> unit
 end
 
-module Make (Hash: S.HASH): S with module Hash = Hash = struct
-
-  module Hash = Hash
+module Make (Hash: S.HASH) = struct
 
   type entry =
     { perm: perm
@@ -66,7 +64,6 @@ module Make (Hash: S.HASH): S with module Hash = Hash = struct
   and perm =
     [ `Normal | `Everybody | `Exec | `Link | `Dir | `Commit ]
   and t = entry list
-  and hash = Hash.t
 
   let hashes tree = List.map (fun { node; _ } -> node) tree
 
@@ -221,7 +218,7 @@ module Make (Hash: S.HASH): S with module Hash = Hash = struct
       + 1L
       + (string x.name)
       + 1L
-      + (Int64.of_int Hash.Digest.length)
+      + (Int64.of_int Hash.digest_size)
       + acc
     in
     List.fold_left entry 0L t
@@ -247,8 +244,8 @@ module Make (Hash: S.HASH): S with module Hash = Hash = struct
             let tag = ("string", "hash") in
             make_exn
               ~tag
-              ~fwd:(Exn.safe_exn tag Hash.of_string)
-              ~bwd:(Exn.safe_exn (Helper.Pair.flip tag) Hash.to_string)
+              ~fwd:(Exn.safe_exn tag Hash.of_raw_string)
+              ~bwd:(Exn.safe_exn (Helper.Pair.flip tag) Hash.to_raw_string)
 
           let entry =
             make_exn
@@ -267,7 +264,7 @@ module Make (Hash: S.HASH): S with module Hash = Hash = struct
 
       let entry =
         let perm = Iso.perm <$> (while1 is_not_sp) in
-        let hash = Iso.hash <$> (take Hash.Digest.length) in
+        let hash = Iso.hash <$> (take Hash.digest_size) in
         let name = while1 is_not_nl in
         Iso.entry <$> ((perm <* (char_elt ' ' <$> any)) <*> (name <* (char_elt '\x00'<$> any)) <*> hash)
 
@@ -281,7 +278,7 @@ module Make (Hash: S.HASH): S with module Hash = Hash = struct
 
   let digest value =
     let tmp = Cstruct.create 0x100 in
-    Helper.fdigest (module Hash.Digest) (module E) ~tmp ~kind:"tree" ~length value
+    Helper.fdigest (module Hash) (module E) ~tmp ~kind:"tree" ~length value
 
   let equal   = (=)
   let compare = Pervasives.compare

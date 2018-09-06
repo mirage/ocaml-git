@@ -15,9 +15,8 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Make
-    (Store : Minimal.S)
-= struct
+module Make (Store : Minimal.S) = struct
+
   type t =
     | Reference of Store.Reference.t (* <refname> *)
     | Commit of id                   (* <id> *)
@@ -49,7 +48,7 @@ module Make
     | `Not_found
     | `Store of Store.error ]
 
-let rec normalize git rev =
+  let rec normalize git rev =
     let open Lwt.Infix in
 
     match rev with
@@ -86,8 +85,8 @@ let rec normalize git rev =
       try let hash = List.assoc reference lst in Lwt.return (Ok hash)
       with Not_found -> Lwt.return (Error `Not_found)
 
-  module Range =
-  struct
+  module Range = struct
+
     type nonrec t =
       | Include     of t (* <rev> *)
       | Exclude     of t (* ^<rev> *)
@@ -96,8 +95,6 @@ let rec normalize git rev =
       | Delta       of t * t (* <rev1>...<rev2> différence symétrique *)
       | Parents     of t (* <rev>^@ *)
       | PParents    of t (* <rev>^! *)
-
-    module E = Store.Hash.Set
 
     let to_visit git hash =
       let open Lwt.Infix in
@@ -110,18 +107,20 @@ let rec normalize git rev =
       | Error _ -> []
         (* XXX(dinosaure): we silent the error. *)
 
+    module Set = Store.Hash.Set
+
     let rec walk git close rest to_visit fadd fcompute acc =
       let open Lwt.Infix in
 
       match rest with
       | [] -> Lwt.return acc
       | hash :: rest ->
-        if E.mem hash close
+        if Set.mem hash close
         then walk git close rest to_visit fadd fcompute acc
         else begin
           fcompute hash acc >>= fun acc' ->
           to_visit git hash >|= fadd rest >>= fun rest' ->
-          let close' = E.add hash close in
+          let close' = Set.add hash close in
 
           walk git close' rest' to_visit fadd fcompute acc'
         end
@@ -130,52 +129,52 @@ let rec normalize git rev =
       let open Lwt.Infix in
 
       let fadd = fun a b -> a @ b in
-      let fcompute = fun hash e -> Lwt.return (E.add hash e) in
+      let fcompute = fun hash e -> Lwt.return (Store.Hash.Set.add hash e) in
 
       match range with
       | Include rev ->
         (normalize git rev >>= function
-          | Ok hash -> walk git E.empty [ hash ] to_visit fadd fcompute E.empty
-          | Error _ -> Lwt.return E.empty)
+          | Ok hash -> walk git Set.empty [ hash ] to_visit fadd fcompute Set.empty
+          | Error _ -> Lwt.return Set.empty)
       | Exclude rev ->
         (normalize git rev >>= function
-          | Error _ -> Lwt.return E.empty
+          | Error _ -> Lwt.return Set.empty
           | Ok hash -> commit git hash >>= function
-            | Error _ -> Lwt.return E.empty
+            | Error _ -> Lwt.return Set.empty
             | Ok commit ->
-              let exclude = E.of_list (Store.Value.Commit.parents commit) in
-              walk git exclude [ hash ] to_visit fadd fcompute E.empty)
+              let exclude = Set.of_list (Store.Value.Commit.parents commit) in
+              walk git exclude [ hash ] to_visit fadd fcompute Set.empty)
       | Diff (rev1, rev2) ->
         (normalize git rev1 >>= function
-          | Error _ -> Lwt.return E.empty
-          | Ok hash -> walk git E.empty [ hash ] to_visit fadd fcompute E.empty)
+          | Error _ -> Lwt.return Set.empty
+          | Ok hash -> walk git Set.empty [ hash ] to_visit fadd fcompute Set.empty)
         >>= fun set1 ->
         normalize git rev2 >>= (function
-            | Error _ -> Lwt.return E.empty
-            | Ok hash -> walk git E.empty [ hash ] to_visit fadd fcompute E.empty)
-        >|= fun set2 -> E.diff set2 set1
+            | Error _ -> Lwt.return Set.empty
+            | Ok hash -> walk git Set.empty [ hash ] to_visit fadd fcompute Set.empty)
+        >|= fun set2 -> Set.diff set2 set1
       | Delta (rev1, rev2) ->
         (normalize git rev1 >>= function
-          | Error _ -> Lwt.return E.empty
-          | Ok hash -> walk git E.empty [ hash ] to_visit fadd fcompute E.empty)
+          | Error _ -> Lwt.return Set.empty
+          | Ok hash -> walk git Set.empty [ hash ] to_visit fadd fcompute Set.empty)
         >>= fun set ->
         (normalize git rev2 >>= function
-          | Error _ -> Lwt.return E.empty
-          | Ok hash -> walk git set [ hash ] to_visit fadd fcompute E.empty)
-        >|= E.inter set
+          | Error _ -> Lwt.return Set.empty
+          | Ok hash -> walk git set [ hash ] to_visit fadd fcompute Set.empty)
+        >|= Set.inter set
       | Parents rev ->
         (normalize git rev >>= function
-          | Error _ -> Lwt.return E.empty
+          | Error _ -> Lwt.return Set.empty
           | Ok hash -> commit git hash >>= function
-            | Error _ -> Lwt.return E.empty
-            | Ok commit -> walk git (E.singleton hash) (Store.Value.Commit.parents commit) to_visit fadd fcompute E.empty)
+            | Error _ -> Lwt.return Set.empty
+            | Ok commit -> walk git (Set.singleton hash) (Store.Value.Commit.parents commit) to_visit fadd fcompute Set.empty)
       | PParents rev ->
         (normalize git rev >>= function
-          | Error _ -> Lwt.return E.empty
+          | Error _ -> Lwt.return Set.empty
           | Ok hash -> commit git hash >>= function
-            | Error _ -> Lwt.return E.empty
+            | Error _ -> Lwt.return Set.empty
             | Ok commit ->
-              let exclude = E.of_list (Store.Value.Commit.parents commit) in
-              walk git exclude [ hash ] to_visit fadd fcompute E.empty)
+              let exclude = Set.of_list (Store.Value.Commit.parents commit) in
+              walk git exclude [ hash ] to_visit fadd fcompute Set.empty)
   end
 end

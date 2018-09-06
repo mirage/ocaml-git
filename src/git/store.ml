@@ -35,19 +35,20 @@ module type LOOSE = sig
     | `Tag
     | `Blob ]
 
-  module Hash: S.HASH
   module FS : S.FS
+
+  module Hash   : S.HASH
   module Inflate: S.INFLATE
   module Deflate: S.DEFLATE
 
   module Value: Value.S
-    with module Hash = Hash
-     and module Inflate = Inflate
-     and module Deflate = Deflate
-     and module Blob = Blob.Make(Hash)
+    with module Hash    := Hash
+     and module Inflate := Inflate
+     and module Deflate := Deflate
+     and module Blob   = Blob.Make(Hash)
      and module Commit = Commit.Make(Hash)
-     and module Tree = Tree.Make(Hash)
-     and module Tag = Tag.Make(Hash)
+     and module Tree   = Tree.Make(Hash)
+     and module Tag    = Tag.Make(Hash)
      and type t = Value.Make(Hash)(Inflate)(Deflate).t
 
   val mem: state -> Hash.t -> bool Lwt.t
@@ -79,32 +80,40 @@ module type PACK = sig
   type state
   type error
 
-  module Hash: S.HASH
   module FS: S.FS
+
+  module Hash   : S.HASH
   module Inflate: S.INFLATE
   module Deflate: S.DEFLATE
 
   module HDec: Unpack.H
-    with module Hash = Hash
+    with module Hash := Hash
+
   module PDec: Unpack.P
-    with module Hash = Hash
-     and module Inflate = Inflate
+    with module Hash := Hash
+     and module Inflate := Inflate
      and module Hunk := HDec
+
   module RPDec: Unpack.D
-    with module Hash = Hash
-     and module Inflate = Inflate
+    with module Hash := Hash
+     and module Inflate := Inflate
      and module Hunk := HDec
      and module Pack := PDec
+     and module Mapper := FS.Mapper
+
   module PEnc: Pack.P
-    with module Hash = Hash
-     and module Deflate = Deflate
+    with module Hash := Hash
+     and module Deflate := Deflate
+
   module IDec: Index_pack.LAZY
-    with module Hash = Hash
+    with module Hash := Hash
+
   module IEnc: Index_pack.ENCODER
-    with module Hash = Hash
+    with module Hash := Hash
+
   module PInfo: Pack_info.S
-    with module Hash = Hash
-     and module Inflate = Inflate
+    with module Hash := Hash
+     and module Inflate := Inflate
      and module HDec := HDec
      and module PDec := PDec
 
@@ -115,72 +124,73 @@ module type PACK = sig
   val size: state -> Hash.t -> (int, error) result Lwt.t
 
   type stream = unit -> Cstruct.t option Lwt.t
-  module Map: Map.S with type key = Hash.t
 
   val from: state -> stream -> (Hash.t * int, error) result Lwt.t
   val make: state
     -> ?window:[ `Object of int | `Memory of int ]
     -> ?depth:int
     -> value list
-    -> (stream * (Crc32.t * int64) Map.t Lwt_mvar.t, error) result Lwt.t
+    -> (stream * (Crc32.t * int64) Hash.Map.t Lwt_mvar.t, error) result Lwt.t
 end
 
 module type S = sig
 
   type t
 
-  module Hash: S.HASH
-  module Inflate: S.INFLATE
-  module Deflate: S.DEFLATE
   module FS: S.FS
 
+  module Hash   : S.HASH
+  module Inflate: S.INFLATE
+  module Deflate: S.DEFLATE
+
   module Value: Value.S
-    with module Hash = Hash
-     and module Inflate = Inflate
-     and module Deflate = Deflate
-     and module Blob = Blob.Make(Hash)
-     and module Commit = Commit.Make(Hash)
-     and module Tree = Tree.Make(Hash)
-     and module Tag = Tag.Make(Hash)
+    with module Hash    := Hash
+     and module Inflate := Inflate
+     and module Deflate := Deflate
+     and module Blob     = Blob.Make(Hash)
+     and module Commit   = Commit.Make(Hash)
+     and module Tree     = Tree.Make(Hash)
+     and module Tag      = Tag.Make(Hash)
      and type t = Value.Make(Hash)(Inflate)(Deflate).t
 
   module Reference: Reference.IO
-    with module Hash = Hash
-     and module FS = FS
+    with module Hash := Hash
+     and module FS   := FS
 
   module HDec: Unpack.H
-    with module Hash = Hash
+    with module Hash := Hash
 
   module PDec: Unpack.P
-    with module Hash = Hash
-     and module Inflate = Inflate
-     and module Hunk := HDec
+    with module Hash    := Hash
+     and module Inflate := Inflate
+     and module Hunk    := HDec
 
   module RPDec: Unpack.D
-    with module Hash = Hash
-     and module Inflate = Inflate
-     and module Hunk := HDec
-     and module Pack := PDec
+    with module Hash    := Hash
+     and module Inflate := Inflate
+     and module Hunk    := HDec
+     and module Pack    := PDec
+     and module Mapper  := FS.Mapper
 
   module PEnc: Pack.P
-    with module Hash = Hash
-     and module Deflate = Deflate
+    with module Hash    := Hash
+     and module Deflate := Deflate
 
   module IDec: Index_pack.LAZY
-    with module Hash = Hash
+    with module Hash := Hash
 
   module IEnc: Index_pack.ENCODER
-    with module Hash = Hash
+    with module Hash := Hash
 
   module PInfo: Pack_info.S
-    with module Hash = Hash
-     and module Inflate = Inflate
-     and module HDec := HDec
-     and module PDec := PDec
+    with module Hash    := Hash
+     and module Inflate := Inflate
+     and module HDec    := HDec
+     and module PDec    := PDec
 
   module Packed_refs: Packed_refs.S
-    with module Hash = Hash
-     and module FS = FS
+    with module Hash := Hash
+     and module FS   := FS
 
   type error =
     [ `Delta             of PEnc.Delta.error
@@ -203,22 +213,22 @@ module type S = sig
     with type t = Value.t
      and type state = t
      and type error = error
-     and module Hash = Hash
-     and module Inflate = Inflate
-     and module Deflate = Deflate
-     and module FS = FS
+     and module Hash    := Hash
+     and module Inflate := Inflate
+     and module Deflate := Deflate
+     and module FS      := FS
 
   module Pack: PACK
     with type t = RPDec.Object.t
      and type value = Value.t
      and type state = t
      and type error = error
-     and module Hash = Hash
-     and module FS = FS
-     and module Inflate = Inflate
-     and module HDec := HDec
-     and module PDec := PDec
-     and module RPDec := RPDec
+     and module Hash    := Hash
+     and module FS      := FS
+     and module Inflate := Inflate
+     and module HDec    := HDec
+     and module PDec    := PDec
+     and module RPDec   := RPDec
 
   type kind =
     [ `Commit
@@ -277,9 +287,9 @@ module type S = sig
   val has_global_checkout: bool
 end
 
-module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
+module Make (H: Digestif.S) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
 
-  module Hash = H
+  module Hash = Hash.Make(H)
   module Inflate = I
   module Deflate = D
   module FS = FS
@@ -291,41 +301,18 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
 
   module HDec = Unpack.Hunk(Hash)
   module PDec = Unpack.Pack(Hash)(Inflate)(HDec)
-  module RPDec = Unpack.Decoder(Hash)(struct
-      type t = FS.t
-      type error = FS.error
-      include FS.Mapper
-    end)(Inflate)(HDec)(PDec)
+  module RPDec = Unpack.Decoder(Hash)(FS.Mapper)(Inflate)(HDec)(PDec)
 
-  module PackImpl
-    : Pack_engine.S
-      with module Hash = Hash
-       and module FS = FS
-       and module Inflate = Inflate
-       and module Deflate = Deflate
-       and module HDec := HDec
-       and module PDec := PDec
-       and module RPDec := RPDec
-    = Pack_engine.Make(H)(FS)(I)(D)(HDec)(PDec)(RPDec)
+  module PackImpl = Pack_engine.Make(Hash)(FS)(I)(D)(HDec)(PDec)(RPDec)
 
-  module Value
-    : Value.S
-      with module Hash = H
-       and module Inflate = I
-       and module Deflate = D
-       and module Blob = Blob.Make(Hash)
-       and module Commit = Commit.Make(Hash)
-       and module Tree = Tree.Make(Hash)
-       and module Tag = Tag.Make(Hash)
-       and type t = Value.Make(Hash)(Inflate)(Deflate).t
-    = Value.Make(Hash)(Inflate)(Deflate)
+  module Value = Value.Make(Hash)(Inflate)(Deflate)
 
   module PEnc = PackImpl.PEnc
   module IDec = PackImpl.IDec
   module IEnc = PackImpl.IEnc
   module PInfo = PackImpl.PInfo
   module Packed_refs = Packed_refs.Make(Hash)(FS)
-  module Reference = Reference.IO(H)(FS)
+  module Reference = Reference.IO(Hash)(FS)
 
   module DoubleHash = struct
     type t = Hash.t * Hash.t
@@ -348,19 +335,24 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
       (DoubleHash)
       (struct type t = RPDec.Object.t let weight _ = 1 end)
 
+  module H = struct
+    type t = Hash.t
+    let hash = Hashtbl.hash
+    let equal x y = Hash.unsafe_compare x y = 0
+  end
   module CacheValue =
     Lru.M.Make
-      (Hash)
+      (H)
       (struct type t = Value.t let weight _ = 1 end)
 
   module CachePack =
     Lru.M.Make
-      (Hash)
+      (H)
       (struct type t = PDec.t let weight _ = 1 end) (* fixed size *)
 
   module CacheIndex =
     Lru.M.Make
-      (Hash)
+      (H)
       (* not fixed size by consider than it's ok. *)
       (struct type t = IDec.t let weight _ = 1 end)
 
@@ -680,8 +672,9 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
     module GC =
       Collector.Make(struct
         module Hash = Hash
-        module Value = Value
+        module Inflate = Inflate
         module Deflate = Deflate
+        module Value = Value
         module PEnc = PEnc
 
         type nonrec t = state
@@ -692,8 +685,6 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
         let read_inflated = extern
         let contents _ = assert false
       end)
-
-    module Map = GC.Graph
 
     let make = GC.make_stream
 
@@ -819,6 +810,8 @@ module Make (H: S.HASH) (FS: S.FS) (I: S.INFLATE) (D: S.DEFLATE) = struct
   module T =
     Traverse_bfs.Make(struct
       module Hash = Hash
+      module Inflate = Inflate
+      module Deflate = Deflate
       module Value = Value
 
       type nonrec t = t

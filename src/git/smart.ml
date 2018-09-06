@@ -120,10 +120,9 @@ sig
   val equal_http_upload_request: http_upload_request equal
 end
 
-module Common (Hash: S.HASH) (Reference: Reference.S)
-  : COMMON with type hash := Hash.t
-            and type reference := Reference.t
-= struct
+module Common (Hash: S.HASH) (Reference: Reference.S with module Hash := Hash) =
+struct
+
   type hash = Hash.t
   type reference = Reference.t
   type 'a equal = 'a -> 'a -> bool
@@ -500,9 +499,10 @@ end
 
 module type DECODER =
 sig
-  module Hash: S.HASH
-  module Reference: Reference.S
-  module Common: COMMON with type hash := Hash.t and type reference := Reference.t
+  module Hash     : S.HASH
+  module Reference: Reference.S with module Hash := Hash
+  module Common   : COMMON with type hash := Hash.t
+                            and type reference := Reference.t
 
   type decoder
 
@@ -565,9 +565,10 @@ end
 
 module type ENCODER =
 sig
-  module Hash: S.HASH
-  module Reference: Reference.S
-  module Common: COMMON with type hash := Hash.t and type reference := Reference.t
+  module Hash     : S.HASH
+  module Reference: Reference.S with module Hash := Hash
+  module Common   : COMMON with type hash := Hash.t
+                            and type reference := Reference.t
 
   type encoder
 
@@ -605,20 +606,22 @@ end
 
 module type CLIENT =
 sig
-  module Hash: S.HASH
-  module Reference: Reference.S
+  module Hash     : S.HASH
+  module Reference: Reference.S with module Hash := Hash
 
   module Common: COMMON
-    with type hash := Hash.t
+    with type hash      := Hash.t
      and type reference := Reference.t
+
   module Decoder: DECODER
-    with module Hash = Hash
-     and module Reference = Reference
-     and module Common := Common
+    with module Hash      := Hash
+     and module Reference := Reference
+     and module Common    := Common
+
   module Encoder: ENCODER
-    with module Hash = Hash
-     and module Reference = Reference
-     and module Common := Common
+    with module Hash      := Hash
+     and module Reference := Reference
+     and module Common    := Common
 
   type context
 
@@ -659,17 +662,10 @@ sig
 end
 
 module Decoder
-    (Hash: S.HASH)
-    (Reference: Reference.S)
-    (Common: COMMON with type hash := Hash.t and type reference := Reference.t)
-  : DECODER
-    with module Hash = Hash
-     and module Reference = Reference
-     and module Common = Common =
-struct
-  module Hash = Hash
-  module Reference = Reference
-  module Common = Common
+    (Hash     : S.HASH)
+    (Reference: Reference.S with module Hash := Hash)
+    (Common   : COMMON with type hash := Hash.t and type reference := Reference.t)
+= struct
 
   (* XXX(dinosaure): Why this decoder? We can use Angstrom instead or another
      library. It's not my first library about the parsing (see Mr. MIME) and I
@@ -985,7 +981,7 @@ struct
       loop decoder.max
     end
 
-  let zero_id = String.make Hash.Digest.length '\000' |> Hash.of_string
+  let zero_id = String.make Hash.digest_size '\000' |> Hash.of_raw_string
 
   let p_hash decoder =
     p_while1 (function '0' .. '9' | 'a' .. 'f' -> true | _ -> false) decoder
@@ -1723,17 +1719,10 @@ struct
 end
 
 module Encoder
-    (Hash: S.HASH)
-    (Reference: Reference.S)
-    (Common: COMMON with type hash := Hash.t and type reference := Reference.t)
-  : ENCODER
-    with module Hash = Hash
-     and module Reference = Reference
-     and module Common = Common =
-struct
-  module Hash = Hash
-  module Reference = Reference
-  module Common = Common
+    (Hash     : S.HASH)
+    (Reference: Reference.S with module Hash := Hash)
+    (Common   : COMMON with type hash := Hash.t and type reference := Reference.t)
+= struct
 
   type encoder =
     { mutable payload : Cstruct.t
@@ -1801,7 +1790,7 @@ struct
     Cstruct.blit_from_string "0000" 0 encoder.payload 0 4;
     flush k encoder
 
-  let zero_id = String.make Hash.Digest.length '\000' |> Hash.of_string
+  let zero_id = String.make Hash.digest_size '\000' |> Hash.of_raw_string
 
   let w_space k encoder =
     writes " " k encoder
@@ -2215,13 +2204,9 @@ struct
     go @@ encode encoder v
 end
 
-module Client (Hash: S.HASH) (Reference: Reference.S)
-  : CLIENT
-    with module Hash = Hash
-     and module Reference = Reference =
+module Client (Hash: S.HASH) (Reference: Reference.S with module Hash := Hash) =
 struct
-  module Hash = Hash
-  module Reference = Reference
+
   module Common = Common(Hash)(Reference)
   module Decoder = Decoder(Hash)(Reference)(Common)
   module Encoder = Encoder(Hash)(Reference)(Common)

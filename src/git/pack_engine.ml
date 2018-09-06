@@ -35,39 +35,40 @@ module Log = (val Logs.src_log src : Logs.LOG)
 
 module type S = sig
 
-  module Hash: S.HASH
+  module Hash   : S.HASH
   module Inflate: S.INFLATE
   module Deflate: S.DEFLATE
-  module FS: S.FS
+  module FS     : S.FS
 
   module HDec: Unpack.H with module Hash := Hash
+
   module PDec: Unpack.P
     with module Hash := Hash
      and module Inflate := Inflate
      and module Hunk := HDec
+
   module RPDec: Unpack.D
-    with module Hash := Hash
-     and type Mapper.fd = FS.Mapper.fd
-     and type Mapper.error = FS.error
+    with module Hash    := Hash
      and module Inflate := Inflate
-     and module Hunk := HDec
-     and module Pack := PDec
+     and module Hunk    := HDec
+     and module Pack    := PDec
+     and module Mapper  := FS.Mapper
 
   module PEnc: Pack.P
-    with module Hash = Hash
-     and module Deflate = Deflate
+    with module Hash    := Hash
+     and module Deflate := Deflate
 
   module IDec: Index_pack.LAZY
-    with module Hash = Hash
+    with module Hash := Hash
 
   module IEnc: Index_pack.ENCODER
-    with module Hash = Hash
+    with module Hash := Hash
 
   module PInfo: Pack_info.S
-    with module Hash = Hash
-     and module Inflate = Inflate
-     and module HDec := HDec
-     and module PDec := PDec
+    with module Hash    := Hash
+     and module Inflate := Inflate
+     and module HDec    := HDec
+     and module PDec    := PDec
 
   type t
 
@@ -137,21 +138,17 @@ module Make
     (FS: S.FS)
     (Inflate: S.INFLATE)
     (Deflate: S.DEFLATE)
-    (HDec: Unpack.H with module Hash := Hash)
-    (PDec: Unpack.P with module Hash := Hash
-                     and module Inflate := Inflate
-                     and module Hunk := HDec)
-    (RPDec: Unpack.D with module Hash := Hash
-                      and type Mapper.fd = FS.Mapper.fd
-                      and type Mapper.error = FS.error
+    (HDec: Unpack.H with module Hash     := Hash)
+    (PDec: Unpack.P with module Hash     := Hash
+                     and module Inflate  := Inflate
+                     and module Hunk     := HDec)
+    (RPDec: Unpack.D with module Hash    := Hash
                       and module Inflate := Inflate
-                      and module Hunk := HDec
-                      and module Pack := PDec)
+                      and module Hunk    := HDec
+                      and module Pack    := PDec
+                      and module Mapper  := FS.Mapper)
 = struct
 
-  module Hash = Hash
-  module Inflate = Inflate
-  module Deflate = Deflate
   module FS = Helper.FS(FS)
 
   module HDec = HDec
@@ -488,10 +485,10 @@ module Make
                | `Blob -> "blob")
           (Cstruct.len raw) in
 
-      let ctx = Hash.Digest.init () in
-      let ctx = Hash.Digest.feed_s ctx hdr in
-      let ctx = Hash.Digest.feed_c ctx raw in
-      Hash.Digest.get ctx
+      let ctx = Hash.init () in
+      let ctx = Hash.feed_string ctx hdr in
+      let ctx = Hash.feed_bigstring ctx (Cstruct.to_bigarray raw) in
+      Hash.get ctx
 
     let of_info ~read_and_exclude fs path_tmp info =
       let idx hash = match Hashtbl.find info.PInfo.index hash with
@@ -918,7 +915,7 @@ module Make
           ; pack: PEnc.t
           ; src : Cstruct.t option }
         type result =
-          { tree: (Crc32.t * int64) PEnc.Map.t
+          { tree: (Crc32.t * int64) Hash.Map.t
           ; hash: Hash.t }
         type error = PEnc.error
 
@@ -981,10 +978,10 @@ module Make
            (* XXX(dinosaure): why is not atomic? *)
            EPACK.to_file fs ~atomic:false ~temp_dir path rawo state >|= function
            | Ok { EPACK.E.tree; hash; } ->
-             let index = Hashtbl.create (PEnc.Map.cardinal tree) in
-             let paths = Hashtbl.create (PEnc.Map.cardinal tree) in
+             let index = Hashtbl.create (Hash.Map.cardinal tree) in
+             let paths = Hashtbl.create (Hash.Map.cardinal tree) in
              List.iter (fun (entry, delta) ->
-                 let (crc, abs_off) = PEnc.Map.find (PEnc.Entry.id entry) tree in
+                 let (crc, abs_off) = Hash.Map.find (PEnc.Entry.id entry) tree in
                  let path, needed = match delta.PEnc.Delta.delta with
                    | PEnc.Delta.Z ->
                      let length = Int64.to_int (PEnc.Entry.length entry) in

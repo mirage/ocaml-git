@@ -49,7 +49,7 @@ module Make0 (Source: Test_data.SOURCE) (Store: S) = struct
     >>?= (fun (stream, idx) ->
       consume stream
       >>= fun () -> Lwt_mvar.take idx
-      >|= fun graph -> Store.Pack.Map.fold (fun hash _ acc -> hash :: acc) graph []
+      >|= fun graph -> Store.Hash.Map.fold (fun hash _ acc -> hash :: acc) graph []
         |> fun v -> Ok v)
 
   let rev_list t cs =
@@ -100,7 +100,7 @@ module Make0 (Source: Test_data.SOURCE) (Store: S) = struct
 
     List.fold_left
       (fun acc line ->
-        try let hex = String.sub line 0 (Store.Hash.Digest.length * 2) in Store.Hash.of_hex hex :: acc
+        try let hex = String.sub line 0 (Store.Hash.digest_size * 2) in Store.Hash.of_hex hex :: acc
         with _ -> acc)
       [] lines
 
@@ -126,19 +126,21 @@ end
 module Usual (S: Git.S) = struct
   type hash = string and t = [ `Diff of hash * hash | `New of hash ]
 
+  let str = S.Hash.to_raw_string
+
   let lst =
     [ "bottom to top",
-      `Diff (((S.Hash.of_hex "381efb0df07110ad3a1b81a33d698c98d9fa18f3"):>string),
-             ((S.Hash.of_hex "3ae8d4d9cdf28d0cd6b453da991fb661ce05de08"):>string))
+      `Diff (S.Hash.of_hex "381efb0df07110ad3a1b81a33d698c98d9fa18f3" |> str,
+             S.Hash.of_hex "3ae8d4d9cdf28d0cd6b453da991fb661ce05de08" |> str)
     ; "top to bottom",
-      `Diff (((S.Hash.of_hex "3ae8d4d9cdf28d0cd6b453da991fb661ce05de08"):>string),
-             ((S.Hash.of_hex "381efb0df07110ad3a1b81a33d698c98d9fa18f3"):>string))
+      `Diff (S.Hash.of_hex "3ae8d4d9cdf28d0cd6b453da991fb661ce05de08" |> str,
+             S.Hash.of_hex "381efb0df07110ad3a1b81a33d698c98d9fa18f3" |> str)
     ; "middle diff 00",
-      `Diff (((S.Hash.of_hex "4b01e27cd1fd4b9390c9a8dccb8fa415c72770f5"):>string),
-             ((S.Hash.of_hex "4ee53344e6faafd2e5e3b86ec762f180db4a2c3b"):>string))
+      `Diff (S.Hash.of_hex "4b01e27cd1fd4b9390c9a8dccb8fa415c72770f5" |> str,
+             S.Hash.of_hex "4ee53344e6faafd2e5e3b86ec762f180db4a2c3b" |> str)
     ; "middle diff 01",
-      `Diff (((S.Hash.of_hex "726e053b15133c5721795ecacf6be9ad616d1ec5"):>string),
-             ((S.Hash.of_hex "fe88134bf478438e4eb6e2c62c2743eab78ee4e2"):>string)) ]
+      `Diff (S.Hash.of_hex "726e053b15133c5721795ecacf6be9ad616d1ec5" |> str,
+             S.Hash.of_hex "fe88134bf478438e4eb6e2c62c2743eab78ee4e2" |> str) ]
 end
 
 (* XXX(dinosaure): I reaaly would like to test bomb, however, git segfault with
@@ -174,6 +176,7 @@ let suite _name (module F: Test_data.SOURCE) (module S: S) (module R: R) =
          name, `Quick, T.rev_list_test name [ c ])
     (List.map
        (function
-         | (name, `Diff (from_, to_)) -> name, `Diff (S.Hash.of_string from_, S.Hash.of_string to_)
-         | (name, `New hash) -> name, `New (S.Hash.of_string hash))
+         | (name, `Diff (from_, to_)) -> name, `Diff (S.Hash.of_raw_string from_,
+                                                      S.Hash.of_raw_string to_)
+         | (name, `New hash) -> name, `New (S.Hash.of_raw_string hash))
         R.lst)

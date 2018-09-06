@@ -30,7 +30,7 @@ module type S = sig
   module M: S.DESC    with type 'a t = 'a Encore.Encoder.t and type e = t
   module D: S.DECODER with type t = t and type init = Cstruct.t and type error = Error.Decoder.t
   module E: S.ENCODER with type t = t and type init = int * t and type error = Error.never
-  include S.DIGEST    with type t := t and type hash = Hash.t
+  include S.DIGEST    with type t := t and type hash := Hash.t
   include S.BASE      with type t := t
 
   val length: t -> int64
@@ -41,9 +41,7 @@ module type S = sig
   val tagger: t -> User.t option
 end
 
-module Make (Hash: S.HASH): S with module Hash = Hash = struct
-
-  module Hash = Hash
+module Make (Hash: S.HASH) = struct
 
   type t =
     { obj     : Hash.t
@@ -52,7 +50,6 @@ module Make (Hash: S.HASH): S with module Hash = Hash = struct
     ; tagger  : User.t option
     ; message : string }
   and kind = Blob | Commit | Tag | Tree
-  and hash = Hash.t
 
   let make target kind ?tagger ~tag message =
     { obj = target
@@ -205,7 +202,7 @@ module Make (Hash: S.HASH): S with module Hash = Hash = struct
       | Some user -> (string "tagger") + 1L + (User.length user) + 1L
       | None -> 0L
     in
-    (string "object") + 1L + (Int64.of_int (Hash.Digest.length * 2)) + 1L
+    (string "object") + 1L + (Int64.of_int (Hash.digest_size * 2)) + 1L
     + (string "type") + 1L + (string (string_of_kind t.kind)) + 1L
     + (string "tag") + 1L + (string t.tag) + 1L
     + user_length
@@ -219,8 +216,7 @@ module Make (Hash: S.HASH): S with module Hash = Hash = struct
 
   let digest value =
     let tmp = Cstruct.create 0x100 in
-    Helper.fdigest
-      (module Hash.Digest) (module E)
+    Helper.fdigest (module Hash) (module E)
       ~tmp ~kind:"tag" ~length:length value
 
   let equal   = (=)

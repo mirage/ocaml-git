@@ -97,9 +97,9 @@ sig
   val pp_index: index Fmt.t
 end
 
-module Entry (Hash: Git.HASH): ENTRY with type hash = Hash.t = struct
+module Entry (H: Digestif.S) = struct
 
-  module Hash = Hash
+  module Hash = Git.Hash.Make(H)
   type hash = Hash.t
 
   type kind = Normal | Everybody | Exec | Symlink | Gitlink
@@ -331,7 +331,7 @@ module MakeIndexDecoder (Hash: Git.HASH) (Entry: ENTRY with type hash := Hash.t)
     ; many       : int32
     ; rest       : int32
     ; entries    : Entry.entry list
-    ; hash       : Hash.Digest.ctx
+    ; hash       : Hash.ctx
     ; extensions : Ext.value list (* XXX(dinosaure): should be a set. *)
     ; state      : state }
   and k = Cstruct.t -> t -> res
@@ -409,7 +409,7 @@ module MakeIndexDecoder (Hash: Git.HASH) (Entry: ENTRY with type hash := Hash.t)
   module Log = (val Logs.src_log src : Logs.LOG)
 
   let digest_and_await src t : res =
-    let hash = Hash.Digest.feed_c t.hash (Cstruct.sub src t.i_off t.i_len) in
+    let hash = Hash.feed_cstruct t.hash (Cstruct.sub src t.i_off t.i_len) in
     Wait { t with hash }
 
   let await _ t : res =
@@ -515,12 +515,12 @@ module MakeIndexDecoder (Hash: Git.HASH) (Entry: ENTRY with type hash := Hash.t)
       if digest then digest_and_await src t' else await src t'
 
   let get_hash ?digest ~ctor k src t =
-    let buf = Buffer.create Hash.Digest.length in
+    let buf = Buffer.create Hash.digest_size in
     let get_byte = get_byte ?digest ~ctor in
 
     let rec go pos src t =
-      if pos = Hash.Digest.length
-      then k (Hash.of_string (Buffer.contents buf)) src t
+      if pos = Hash.digest_size
+      then k (Hash.of_raw_string (Buffer.contents buf)) src t
       else
         get_byte
           (fun byte src t -> Buffer.add_char buf (Char.chr byte); (go[@tailcall]) (pos + 1) src t)
@@ -744,12 +744,12 @@ module MakeIndexDecoder (Hash: Git.HASH) (Entry: ENTRY with type hash := Hash.t)
       go rest src t
 
     let get_hash ~ext k rest src t =
-      let buf = Buffer.create Hash.Digest.length in
+      let buf = Buffer.create Hash.digest_size in
       let get_byte = get_byte ~ext in
 
       let rec go pos rest src t =
-        if pos = Hash.Digest.length
-        then k (Hash.of_string (Buffer.contents buf)) rest src t
+        if pos = Hash.digest_size
+        then k (Hash.of_raw_string (Buffer.contents buf)) rest src t
         else
           get_byte
             (fun byte rest src t -> Buffer.add_char buf (Char.chr byte); (go[@tailcall]) (pos + 1) rest src t)
@@ -941,7 +941,7 @@ module MakeIndexDecoder (Hash: Git.HASH) (Entry: ENTRY with type hash := Hash.t)
            Bytes.set consumed 2 (Char.unsafe_chr byte2);
            Bytes.set consumed 3 (Char.unsafe_chr byte3);
 
-           let hash = Hash.Digest.feed_b t.hash consumed in
+           let hash = Hash.feed_bytes t.hash consumed in
 
            (* XXX(dinosaure): you need to read the comment below to
               understand why we did not digest bytes and we digest
@@ -972,8 +972,8 @@ module MakeIndexDecoder (Hash: Git.HASH) (Entry: ENTRY with type hash := Hash.t)
 
             Then, we have an 32-bits integer (if it's an extension)
             which informs the length of the extension. Finally, we ask
-            to the user more than [Hash.Digest.length - 8] bytes. If we
-            have more than [Hash.Digest.length - 8] bytes, it's not the
+            to the user more than [Hash.digest_size - 8] bytes. If we
+            have more than [Hash.digest_size - 8] bytes, it's not the
             end of the index file and we are, indeed in an extension
             data (and we will just give up the input to the next stage).
 
@@ -1028,16 +1028,16 @@ module MakeIndexDecoder (Hash: Git.HASH) (Entry: ENTRY with type hash := Hash.t)
 
     let final consumed src t =
       if t.i_len - t.i_pos = 0
-      then Cont { t with state = Hash (Hash.of_string (Cstruct.to_string consumed)) }
+      then Cont { t with state = Hash (Hash.of_raw_string (Cstruct.to_string consumed)) }
       else
-        let hash = Hash.Digest.feed_c t.hash consumed in
+        let hash = Hash.feed_cstruct t.hash consumed in
         move Int32.(to_int (sub b (of_int (Cstruct.len consumed - 8)))) src { t with hash }
     in
 
     let rec consume_to_hash consumed src t =
       let has = t.i_len - t.i_pos in
       let expect_if_hash =
-        let x = (Hash.Digest.length - (Cstruct.len consumed)) in
+        let x = (Hash.digest_size - (Cstruct.len consumed)) in
         if x >= 0 then x else 0
       in
       let expect_if_extension =
@@ -1076,7 +1076,7 @@ module MakeIndexDecoder (Hash: Git.HASH) (Entry: ENTRY with type hash := Hash.t)
                          ; read = t.read + (t.i_len - t.i_pos)
                          ; state = Signature (final consumed) }
       else (* has > expect_if_hash *)
-        let hash = Hash.Digest.feed_c t.hash consumed in
+        let hash = Hash.feed_cstruct t.hash consumed in
         move (Int32.to_int expect_if_extension) src { t with hash }
     in
 
@@ -1085,7 +1085,7 @@ module MakeIndexDecoder (Hash: Git.HASH) (Entry: ENTRY with type hash := Hash.t)
                      ; state = Signature (consume_to_hash consumed) }
 
   let hash hash_expected _ t =
-    let hash_resulting = Hash.Digest.get t.hash in
+    let hash_resulting = Hash.get t.hash in
     if Hash.equal hash_expected hash_resulting
     then error (Invalid_hash (hash_expected, hash_resulting)) t
     else Cont { t with state = End }
@@ -1136,7 +1136,7 @@ module MakeIndexDecoder (Hash: Git.HASH) (Entry: ENTRY with type hash := Hash.t)
         peek_byte
           (function
             | Some 0 -> fun src t ->
-              let hash = Hash.Digest.feed_s t.hash nul in
+              let hash = Hash.feed_string t.hash nul in
 
               go (n + 1) src { t with i_pos = t.i_pos + 1
                                     ; read = t.read + 1
@@ -1176,7 +1176,7 @@ module MakeIndexDecoder (Hash: Git.HASH) (Entry: ENTRY with type hash := Hash.t)
     ; many       = 0l
     ; rest       = 0l
     ; entries    = []
-    ; hash       = Hash.Digest.init ()
+    ; hash       = Hash.init ()
     ; extensions = []
     ; state      = Header header }
 
@@ -1231,7 +1231,7 @@ module MakeIndexEncoder (Hash: Git.HASH) (Entry: ENTRY with type hash := Hash.t)
     ; version : int32
     ; prev  : Fpath.t option
     ; entries : Entry.index
-    ; hash : Hash.Digest.ctx
+    ; hash : Hash.ctx
     ; state : state }
   and state =
     | Header of k
@@ -1255,7 +1255,7 @@ module MakeIndexEncoder (Hash: Git.HASH) (Entry: ENTRY with type hash := Hash.t)
 
   let ok t hash : res = Ok ({ t with state = End hash }, hash)
   let flush dst t : res =
-    let hash = Hash.Digest.feed_c t.hash (Cstruct.sub dst t.o_off t.o_pos) in
+    let hash = Hash.feed_cstruct t.hash (Cstruct.sub dst t.o_off t.o_pos) in
     Flush { t with hash }
   let error t exn : res = Error ({ t with state = Exception exn }, exn)
 
@@ -1328,11 +1328,11 @@ module MakeIndexEncoder (Hash: Git.HASH) (Entry: ENTRY with type hash := Hash.t)
   let flush_without_digest _ t = Flush t
 
   let put_hash ?(flush = flush) ~ctor hash (k : k) dst t =
-    if t.o_len - t.o_pos >= Hash.Digest.length
+    if t.o_len - t.o_pos >= Hash.digest_size
     then begin
-      Cstruct.blit_from_string hash 0 dst (t.o_off + t.o_pos) Hash.Digest.length;
-      k dst { t with o_pos = t.o_pos + Hash.Digest.length
-                   ; write = t.write + Hash.Digest.length }
+      Cstruct.blit_from_string hash 0 dst (t.o_off + t.o_pos) Hash.digest_size;
+      k dst { t with o_pos = t.o_pos + Hash.digest_size
+                   ; write = t.write + Hash.digest_size }
     end else
       let rec loop rest dst t =
         if rest = 0
@@ -1343,14 +1343,14 @@ module MakeIndexEncoder (Hash: Git.HASH) (Entry: ENTRY with type hash := Hash.t)
           if n = 0
           then flush dst { t with state = ctor (loop rest) }
           else begin
-            Cstruct.blit_from_string hash (Hash.Digest.length - rest) dst (t.o_off + t.o_pos) n;
+            Cstruct.blit_from_string hash (Hash.digest_size - rest) dst (t.o_off + t.o_pos) n;
             flush dst { t with state = ctor (loop (rest - n))
                              ; o_pos = t.o_pos + n
                              ; write = t.write + n }
           end
       in
 
-      loop Hash.Digest.length dst t
+      loop Hash.digest_size dst t
 
   module KHash =
   struct
@@ -1496,8 +1496,8 @@ module MakeIndexEncoder (Hash: Git.HASH) (Entry: ENTRY with type hash := Hash.t)
       KEntry.put_string (Fpath.to_string x.Entry.path) (padding k) dst t
 
   let hash dst t =
-    let hash = Hash.Digest.get t.hash in
-    KHash.put_hash (Hash.to_string hash) (fun _ t -> ok t hash) dst t
+    let hash = Hash.get t.hash in
+    KHash.put_hash (Hash.to_raw_string hash) (fun _ t -> ok t hash) dst t
 
   let rec switch ?current dst t =
     match t.entries with
@@ -1519,7 +1519,7 @@ module MakeIndexEncoder (Hash: Git.HASH) (Entry: ENTRY with type hash := Hash.t)
      @@ KEntry.put_lsb32 x.info.uid
      @@ KEntry.put_lsb32 x.info.gid
      @@ KEntry.put_lsb32 x.info.size
-     @@ KEntry.put_hash  (Hash.to_string x.hash)
+     @@ KEntry.put_hash  (Hash.to_raw_string x.hash)
      @@ KEntry.put_flag  x.flag
      @@ (match x.flag.extend with
          | Some extend ->
@@ -1553,7 +1553,7 @@ module MakeIndexEncoder (Hash: Git.HASH) (Entry: ENTRY with type hash := Hash.t)
     ; version = 2l
     ; prev  = None
     ; entries = List.sort (fun a b -> Fpath.compare a.Entry.path b.Entry.path) entries
-    ; hash  = Hash.Digest.init ()
+    ; hash  = Hash.init ()
     ; state = Header header }
 
   let eval dst t =
@@ -1663,10 +1663,14 @@ module IO (Hash: Git.HASH) (FS: Git.FS) (Entry: ENTRY with type hash := Hash.t) 
        | `Encoder `Never -> assert false
 end
 
-module Make (Hash: Git.HASH) (Store: Git.S with module Hash = Hash) (FS: Git.FS) (Entry: ENTRY with type hash := Hash.t) = struct
+module Make
+    (Store: Git.S)
+    (FS   : Git.FS)
+    (Entry: ENTRY with type hash = Store.Hash.t)
+= struct
 
   module Entry = Entry
-  module Hash = Hash
+  module Hash = Store.Hash
   module Store = Store
   module FS = FS
 
@@ -1945,7 +1949,8 @@ module Make (Hash: Git.HASH) (Store: Git.S with module Hash = Hash) (FS: Git.FS)
 
     Store.read git entry.Entry.hash >!= store_err >?= function
       | Store.Value.Blob raw ->
-        write_blob fs acc path (Entry.perm_of_kind entry.Entry.info.mode, (raw :> Cstruct.t))
+        write_blob fs acc path (Entry.perm_of_kind entry.Entry.info.mode,
+                                (Store.Value.Blob.to_cstruct raw))
       | _ ->
         Lwt.return (Error `Expected_blob)
 
@@ -2070,7 +2075,9 @@ module Make (Hash: Git.HASH) (Store: Git.S with module Hash = Hash) (FS: Git.FS)
         | Some path, Store.Value.Blob blob ->
            (try
               let perm = Hashtbl.find hashtbl path in
-              let chain = chain_of_entry path (perm, (blob :> Cstruct.t)) in
+              let chain =
+                chain_of_entry path (perm, (Store.Value.Blob.to_cstruct blob))
+              in
               Lwt.return (Root (StringMap.merge (merge ~b2b ~e2e) t chain))
             with Not_found -> Lwt.return (Root t))
         | Some path, Store.Value.Tree tree ->

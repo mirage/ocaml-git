@@ -18,8 +18,15 @@
 
 module type S = sig
 
-  module FS: S.FS
-  module Value: Value.S
+  module FS     : S.FS
+  module Hash   : S.HASH
+  module Deflate: S.DEFLATE
+  module Inflate: S.INFLATE
+
+  module Value: Value.S with module Hash    := Hash
+                         and module Deflate := Deflate
+                         and module Inflate := Inflate
+
   include module type of Value
 
   type error =
@@ -106,9 +113,9 @@ module Make
     (FS: S.FS)
     (I: S.INFLATE)
     (D: S.DEFLATE)
-  : S with module Hash = H
-       and module Inflate = I
-       and module Deflate = D
+  : S with module Hash    := H
+       and module Inflate := I
+       and module Deflate := D
        and module FS = FS
        and module Blob = Blob.Make(H)
        and module Commit = Commit.Make(H)

@@ -18,30 +18,33 @@
 let src = Logs.Src.create "git.second-pass" ~doc:"logs git's second pass event"
 module Log = (val Logs.src_log src: Logs.LOG)
 
-module type S =
-sig
-  module Hash: S.HASH
-  module Inflate: S.INFLATE
-  module Deflate: S.DEFLATE
+module type S = sig
+
   module FS: S.FS
 
+  module Hash   : S.HASH
+  module Inflate: S.INFLATE
+  module Deflate: S.DEFLATE
+
   module HDec: Unpack.H with module Hash := Hash
+
   module PDec: Unpack.P
-    with module Hash := Hash
+    with module Hash    := Hash
      and module Inflate := Inflate
-     and module Hunk := HDec
+     and module Hunk    := HDec
+
   module PInfo: Pack_info.S
-    with module Hash := Hash
+    with module Hash    := Hash
      and module Inflate := Inflate
-     and module HDec := HDec
-     and module PDec := PDec
+     and module HDec    := HDec
+     and module PDec    := PDec
+
   module RPDec: Unpack.D
-    with module Hash := Hash
-     and type Mapper.fd = FS.Mapper.fd
-     and type Mapper.error = FS.error
+    with module Hash    := Hash
      and module Inflate := Inflate
-     and module Hunk := HDec
-     and module Pack := PDec
+     and module Hunk    := HDec
+     and module Pack    := PDec
+     and module Mapper  := FS.Mapper
 
   type status =
     | Resolved of Crc32.t * Hash.t
@@ -59,24 +62,20 @@ module Make
     (Inflate: S.INFLATE)
     (Deflate: S.DEFLATE)
     (HDec: Unpack.H with module Hash := Hash)
-    (PDec: Unpack.P with module Hash := Hash
+    (PDec: Unpack.P with module Hash    := Hash
                      and module Inflate := Inflate
-                     and module Hunk := HDec)
-    (PInfo: Pack_info.S with module Hash := Hash
+                     and module Hunk    := HDec)
+    (PInfo: Pack_info.S with module Hash    := Hash
                          and module Inflate := Inflate
-                         and module HDec := HDec
-                         and module PDec := PDec)
-    (RPDec: Unpack.D with module Hash := Hash
-                      and type Mapper.fd = FS.Mapper.fd
-                      and type Mapper.error = FS.error
+                         and module HDec    := HDec
+                         and module PDec    := PDec)
+    (RPDec: Unpack.D with module Hash    := Hash
                       and module Inflate := Inflate
-                      and module Hunk := HDec
-                      and module Pack := PDec)
+                      and module Hunk    := HDec
+                      and module Pack    := PDec
+                      and module Mapper  := FS.Mapper)
 = struct
 
-  module Hash = Hash
-  module Inflate = Inflate
-  module Deflate = Deflate
   module FS = Helper.FS(FS)
 
   module HDec = HDec
@@ -107,7 +106,11 @@ module Make
     | Root -> false
     | _ -> true
 
-  module RefMap = Map.Make(Hash)
+  module RefMap = Map.Make(struct
+      type t = Hash.t
+      let compare = Hash.unsafe_compare
+    end)
+
   module OfsMap = Map.Make(Int64)
 
   type context =
