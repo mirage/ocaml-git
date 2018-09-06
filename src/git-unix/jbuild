@@ -1,8 +1,0 @@
-(jbuild_version 1)
-
-(library
- ((name        git_unix)
-  (public_name git-unix)
-  (wrapped     false)
-  (libraries   (checkseum.c digestif.c
-                git logs.fmt lwt.unix git-http cohttp-lwt-unix))))

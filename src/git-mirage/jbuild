@@ -1,8 +1,0 @@
-(jbuild_version 1)
-
-(library
- ((name        git_mirage)
-  (public_name git-mirage)
-  (libraries   (digestif.ocaml checkseum.ocaml
-                git mirage-flow-lwt mirage-fs-lwt mirage-channel-lwt
-                mirage-conduit cohttp-mirage git-http decompress))))

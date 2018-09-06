@@ -1,0 +1,5 @@
+(executable
+ (name        main)
+ (package     git-unix)
+ (public_name ogit-dot)
+ (libraries   git-unix))

@@ -1,0 +1,13 @@
+(executable
+ (name      test)
+ (libraries checkseum.c digestif.c test_git test_smart git-unix))
+
+(alias
+ (name runtest)
+ (package git-unix)
+ (deps test.exe
+       ../data/pack.idx ../data/pack.pack
+       ../data/bomb.idx ../data/bomb.pack
+       ../data/udns.idx ../data/udns.pack
+       ../data/thin.pack)
+  (action (run ./test.exe -q --color=always)))

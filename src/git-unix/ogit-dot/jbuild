@@ -1,7 +1,0 @@
-(jbuild_version 1)
-
-(executables
- ((names       (main))
-  (package     git-unix)
-  (public_names (ogit-dot))
-  (libraries   (git-unix))))
