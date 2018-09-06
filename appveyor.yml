@@ -6,7 +6,7 @@ environment:
     FORK_USER: ocaml
     FORK_BRANCH: master
     CYG_ROOT: C:\cygwin64
-    PINS: "git.dev:. git-http.dev:. git-unix.dev:. git-mirage.dev:."
+    PINS: "git.dev:. git-http.dev:. git-unix.dev:. git-mirage.dev:. digestif.dev:--dev"
   matrix:
   - PACKAGE: "git-mirage.dev"
   - PACKAGE: "git-unix.dev"
