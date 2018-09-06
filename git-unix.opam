@@ -22,7 +22,7 @@ depends: [
   "cohttp-lwt-unix" {>= "1.0.0"}
   "mtime"           {>= "1.0.0"}
   "base-unix"
-  "alcotest"        {test}
+  "alcotest"        {test & >= "0.8.1"}
   "nocrypto"        {test & >= "0.5.4"}
   "tls"             {test}
   "io-page"         {test & >= "1.6.1"}

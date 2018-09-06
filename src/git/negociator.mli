@@ -22,16 +22,22 @@ type 'a acks =
 
 module type S = sig
   module Store: Minimal.S
-  module Decoder: Smart.DECODER with module Hash = Store.Hash
+  module Common: Smart.COMMON
+    with type hash := Store.Hash.t
+     and type reference := Store.Reference.t
+  module Decoder: Smart.DECODER
+    with module Hash = Store.Hash
+     and module Reference = Store.Reference
+     and module Common := Common
 
   type state
   type nonrec acks = Store.Hash.t acks
 
   val find_common: Store.t ->
-    (Store.Hash.t list
+    (Store.Hash.Set.t
      * state
      * (acks -> state ->
-        ([ `Again of Store.Hash.t list | `Done | `Ready ]* state) Lwt.t)
+        ([ `Again of Store.Hash.Set.t | `Done | `Ready ] * state) Lwt.t)
     ) Lwt.t
 end
 

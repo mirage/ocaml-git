@@ -32,7 +32,9 @@ module type S = sig
 
   module Store: Minimal.S
   module Net: NET
-  module Client: Smart.CLIENT with module Hash = Store.Hash
+  module Client: Smart.CLIENT
+    with module Hash = Store.Hash
+     and module Reference = Store.Reference
 
   (** The error type. *)
   type error =
@@ -63,26 +65,26 @@ module type S = sig
 
   val push:
     Store.t
-    -> push:((Store.Hash.t * string * bool) list -> (Store.Hash.t list * command list) Lwt.t)
+    -> push:((Store.Hash.t * Store.Reference.t * bool) list -> (Store.Hash.t list * command list) Lwt.t)
     -> ?capabilities:Capability.t list
     -> Uri.t
-    -> ((string, string * string) result list, error) result Lwt.t
+    -> ((Store.Reference.t, Store.Reference.t * string) result list, error) result Lwt.t
 
   val ls:
     Store.t
     -> ?capabilities:Capability.t list
     -> Uri.t
-    -> ((Store.Hash.t * string * bool) list, error) result Lwt.t
+    -> ((Store.Hash.t * Store.Reference.t * bool) list, error) result Lwt.t
 
   val fetch_ext:
     Store.t
     -> ?shallow:Store.Hash.t list
     -> ?capabilities:Capability.t list
-    -> notify:(Client.Decoder.shallow_update -> unit Lwt.t)
-    -> negociate:((Client.Decoder.acks -> 'state -> ([ `Ready | `Done | `Again of Store.Hash.t list ] * 'state) Lwt.t) * 'state)
-    -> has:Store.Hash.t list
-    -> want:((Store.Hash.t * string * bool) list -> (Store.Reference.t * Store.Hash.t) list Lwt.t)
-    -> ?deepen:[ `Depth of int | `Timestamp of int64 | `Ref of string ]
+    -> notify:(Client.Common.shallow_update -> unit Lwt.t)
+    -> negociate:((Client.Common.acks -> 'state -> ([ `Ready | `Done | `Again of Store.Hash.Set.t ] * 'state) Lwt.t) * 'state)
+    -> have:Store.Hash.Set.t
+    -> want:((Store.Hash.t * Store.Reference.t * bool) list -> (Store.Reference.t * Store.Hash.t) list Lwt.t)
+    -> ?deepen:[ `Depth of int | `Timestamp of int64 | `Ref of Reference.t ]
     -> Uri.t
     -> ((Store.Reference.t * Store.Hash.t) list * int, error) result Lwt.t
 
@@ -242,7 +244,7 @@ sig
     ?depth:int ->
     Store.t ->
     ofs_delta:bool ->
-    (Store.Hash.t * string * bool) list -> command list ->
+    (Store.Hash.t * Store.Reference.t * bool) list -> command list ->
     (Store.Pack.stream * (Crc32.t * int64) Store.Pack.Map.t Lwt_mvar.t, Store.error) result Lwt.t
 
   val want_handler:

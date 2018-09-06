@@ -107,18 +107,16 @@ let main show_tags show_heads repository =
         (Uri.host repository))
      (Uri.path_and_query repository)
   >>!= sync_err
-  >>?= fun { Sync_http.Decoder.refs; _ } ->
+  >>?= fun { Sync_http.Common.refs; _ } ->
   let refs =
-    List.filter (fun (_, refname, _) ->
-        let path = Fpath.v refname in
+    List.filter (fun (_, reference, _) ->
+        let path = Store.Reference.to_path reference in
         (List.exists ((=) "tags") (Fpath.segs path) && show_tags)
         || (List.exists ((=) "heads") (Fpath.segs path) && show_heads))
       refs
   in
 
-  List.iter (fun (hash, refname, peeled) ->
-      let reference = Store.Reference.of_string refname in
-
+  List.iter (fun (hash, reference, peeled) ->
       Fmt.(pf stdout) "%a      %a%s\n%!"
         Store.Hash.pp hash
         Store.Reference.pp reference

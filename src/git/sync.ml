@@ -49,7 +49,9 @@ module type S = sig
 
   module Store: Minimal.S
   module Net: NET
-  module Client: Smart.CLIENT with module Hash = Store.Hash
+  module Client: Smart.CLIENT
+    with module Hash = Store.Hash
+     and module Reference = Store.Reference
 
   type error =
     [ `SmartPack of string
@@ -71,26 +73,26 @@ module type S = sig
 
   val push:
     Store.t
-    -> push:((Store.Hash.t * string * bool) list -> (Store.Hash.t list * command list) Lwt.t)
+    -> push:((Store.Hash.t * Store.Reference.t * bool) list -> (Store.Hash.t list * command list) Lwt.t)
     -> ?capabilities:Capability.t list
     -> Uri.t
-    -> ((string, string * string) result list, error) result Lwt.t
+    -> ((Store.Reference.t, Store.Reference.t * string) result list, error) result Lwt.t
 
   val ls:
     Store.t
     -> ?capabilities:Capability.t list
     -> Uri.t
-    -> ((Store.Hash.t * string * bool) list, error) result Lwt.t
+    -> ((Store.Hash.t * Store.Reference.t * bool) list, error) result Lwt.t
 
   val fetch_ext:
     Store.t
     -> ?shallow:Store.Hash.t list
     -> ?capabilities:Capability.t list
-    -> notify:(Client.Decoder.shallow_update -> unit Lwt.t)
-    -> negociate:((Client.Decoder.acks -> 'state -> ([ `Ready | `Done | `Again of Store.Hash.t list ] * 'state) Lwt.t) * 'state)
-    -> has:Store.Hash.t list
-    -> want:((Store.Hash.t * string * bool) list -> (Store.Reference.t * Store.Hash.t) list Lwt.t)
-    -> ?deepen:[ `Depth of int | `Timestamp of int64 | `Ref of string ]
+    -> notify:(Client.Common.shallow_update -> unit Lwt.t)
+    -> negociate:((Client.Common.acks -> 'state -> ([ `Ready | `Done | `Again of Store.Hash.Set.t ] * 'state) Lwt.t) * 'state)
+    -> have:Store.Hash.Set.t
+    -> want:((Store.Hash.t * Store.Reference.t * bool) list -> (Store.Reference.t * Store.Hash.t) list Lwt.t)
+    -> ?deepen:[ `Depth of int | `Timestamp of int64 | `Ref of Reference.t ]
     -> Uri.t
     -> ((Store.Reference.t * Store.Hash.t) list * int, error) result Lwt.t
 
@@ -419,7 +421,7 @@ module Make (N: NET) (S: Minimal.S) = struct
   module Store = S
   module Net= N
 
-  module Client = Smart.Client(Store.Hash)
+  module Client = Smart.Client(Store.Hash)(Store.Reference)
   module Hash = Store.Hash
   module Inflate = Store.Inflate
   module Deflate = Store.Deflate
@@ -541,20 +543,19 @@ module Make (N: NET) (S: Minimal.S) = struct
             assert false (* XXX(dinosaure): impossible to retrieve this state on `NegociationResult. *)
           | Error _ as err, _ -> Lwt.return err)
     | `ShallowUpdate _ ->
-      Client.run t.ctx (`Has []) |> process t
-      >>= clone_handler git reference ?hash t
+      Client.run t.ctx (`Has Hash.Set.empty) |> process t
+      >>= clone_handler git reference t
     | `Refs refs ->
       (try
          let (hash_head, _, _) =
            List.find
-             (fun (_, refname, peeled) -> Store.Reference.(equal reference (of_string refname)) && not peeled)
-             refs.Client.Decoder.refs in
-         Client.run t.ctx
-           (`UploadRequest
-              { Client.Encoder.want = hash_head, [ hash_head ]
-              ; capabilities = t.capabilities
-              ; shallow = []
-              ; deep = None })
+             (fun (_, reference', peeled) -> Store.Reference.(equal reference reference') && not peeled)
+             refs.Client.Common.refs
+         in
+         Client.run t.ctx (`UploadRequest { Client.Common.want = hash_head, [ hash_head ]
+                                          ; capabilities = t.capabilities
+                                          ; shallow = []
+                                          ; deep = None })
          |> process t
          >>= clone_handler git reference ~hash:hash_head t
        with Not_found ->
@@ -570,11 +571,11 @@ module Make (N: NET) (S: Minimal.S) = struct
     | `Refs refs ->
       Client.run t.ctx `Flush
       |> process t
-      >>= (function `Flush -> Lwt.return (Ok refs.Client.Decoder.refs)
+      >>= (function `Flush -> Lwt.return (Ok refs.Client.Common.refs)
                   | result -> Lwt.return (Error (`Ls (err_unexpected_result result))))
     | result -> Lwt.return (Error (`Ls (err_unexpected_result result)))
 
-  let fetch_handler git ?(shallow = []) ~notify ~negociate:(fn, state) ~has ~want ?deepen t r =
+  let fetch_handler git ?(shallow = []) ~notify ~negociate:(fn, state) ~have ~want ?deepen t r =
     let pack asked t =
       Client.run t.ctx `ReceivePACK
       |> process t
@@ -587,10 +588,10 @@ module Make (N: NET) (S: Minimal.S) = struct
     let rec aux t asked state = function
       | `ShallowUpdate shallow_update ->
         notify shallow_update >>= fun () ->
-        Client.run t.ctx (`Has has) |> process t >>= aux t asked state
+        Client.run t.ctx (`Has have) |> process t >>= aux t asked state
       | `Negociation acks ->
         Log.debug (fun l -> l ~header:"fetch_handler" "Retrieve the negotiation: %a."
-                      (Fmt.hvbox Client.Decoder.pp_acks) acks);
+                      (Fmt.hvbox Client.Common.pp_acks) acks);
 
         fn acks state >>=
         (function
@@ -600,18 +601,18 @@ module Make (N: NET) (S: Minimal.S) = struct
           | `Done, state ->
             Log.debug (fun l -> l ~header:"fetch_handler" "Retrieve `Done ACK from negotiation engine.");
             Client.run t.ctx `Done |> process t >>= aux t asked state
-          | `Again has, state ->
+          | `Again have, state ->
             Log.debug (fun l -> l ~header:"fetch_handler" "Retrieve `Again ACK from negotiation engine.");
-            Client.run t.ctx (`Has has) |> process t >>= aux t asked state)
+            Client.run t.ctx (`Has have) |> process t >>= aux t asked state)
       | `NegociationResult _ ->
         Log.debug (fun l -> l ~header:"fetch_handler" "Retrieve a negotiation result.");
         pack asked t
       | `Refs refs ->
-        want refs.Client.Decoder.refs >>=
+        want refs.Client.Common.refs >>=
         (function
           | first :: rest ->
             Client.run t.ctx
-              (`UploadRequest { Client.Encoder.want = snd first, List.map snd rest
+              (`UploadRequest { Client.Common.want = snd first, List.map snd rest
                               ; capabilities = t.capabilities
                               ; shallow
                               ; deep = deepen })
@@ -663,9 +664,9 @@ module Make (N: NET) (S: Minimal.S) = struct
               |> process t
               >>= go t)
         | `Nothing -> Lwt.return (Ok [])
-        | `ReportStatus { Client.Decoder.unpack = Ok (); commands; } ->
+        | `ReportStatus { Client.Common.unpack = Ok (); commands; } ->
           Lwt.return (Ok commands)
-        | `ReportStatus { Client.Decoder.unpack = Error err; _ } ->
+        | `ReportStatus { Client.Common.unpack = Error err; _ } ->
           Lwt.return (Error (`Push err))
         | result -> Lwt.return (Error (`Push (err_unexpected_result result)))
       in
@@ -676,7 +677,7 @@ module Make (N: NET) (S: Minimal.S) = struct
     let rec aux t refs commands = function
       | `Refs refs ->
         Log.debug (fun l -> l ~header:"push_handler" "Receiving reference: %a."
-                      (Fmt.hvbox Client.Decoder.pp_advertised_refs) refs);
+                      (Fmt.hvbox Client.Common.pp_advertised_refs) refs);
         let capabilities =
           List.filter (function
               | `Report_status | `Delete_refs | `Ofs_delta | `Push_options
@@ -685,7 +686,7 @@ module Make (N: NET) (S: Minimal.S) = struct
             ) t.capabilities
         in
 
-        (push refs.Client.Decoder.refs >>= function
+        (push refs.Client.Common.refs >>= function
           | (_,  []) ->
             Client.run t.ctx `Flush
             |> process t
@@ -698,26 +699,20 @@ module Make (N: NET) (S: Minimal.S) = struct
                   (Fmt.hvbox (Fmt.Dump.list pp_command)) commands
               );
 
-            List.map
-              (function
-                | `Create (hash, reference) -> `Create (hash, Store.Reference.to_string reference)
-                | `Delete (hash, reference) -> `Delete (hash, Store.Reference.to_string reference)
-                | `Update (a, b, reference) -> `Update (a, b, Store.Reference.to_string reference))
-              commands |> fun commands ->
             let x, r =
               List.map (function
-                  | `Create (hash, r) -> Client.Encoder.Create (hash, r)
-                  | `Delete (hash, r) -> Client.Encoder.Delete (hash, r)
-                  | `Update (_of, _to, r) -> Client.Encoder.Update (_of, _to, r)
+                  | `Create (hash, r) -> Client.Common.Create (hash, r)
+                  | `Delete (hash, r) -> Client.Common.Delete (hash, r)
+                  | `Update (_of, _to, r) -> Client.Common.Update (_of, _to, r)
                 ) commands
               |> fun commands -> List.hd commands, List.tl commands
             in
 
-            Client.run t.ctx (`UpdateRequest { Client.Encoder.shallow
+            Client.run t.ctx (`UpdateRequest { Client.Common.shallow
                                              ; requests = `Raw (x, r)
                                              ; capabilities })
             |> process t
-            >>= aux t (Some refs.Client.Decoder.refs) (Some (x :: r)))
+            >>= aux t (Some refs.Client.Common.refs) (Some (x :: r)))
       | `ReadyPACK _ as result ->
         Log.debug (fun l ->
             l ~header:"push_handler" "The server is ready to receive the PACK \
@@ -737,9 +732,9 @@ module Make (N: NET) (S: Minimal.S) = struct
 
         List.map
           (function
-            | Client.Encoder.Create (hash, refname) -> `Create (hash, refname)
-            | Client.Encoder.Delete (hash, refname) -> `Delete (hash, refname)
-            | Client.Encoder.Update (a, b, refname) -> `Update (a, b, refname))
+            | Client.Common.Create (hash, refname) -> `Create (hash, refname)
+            | Client.Common.Delete (hash, refname) -> `Delete (hash, refname)
+            | Client.Common.Update (a, b, refname) -> `Update (a, b, refname))
           commands
         |> Common.packer git ~ofs_delta refs >>= (function
             | Ok (stream, _) ->
@@ -766,9 +761,9 @@ module Make (N: NET) (S: Minimal.S) = struct
   let push git ~push ?(capabilities=Default.capabilities) uri =
     Log.debug (fun l -> l "push %a" Uri.pp_hum uri);
     Net.socket uri >>= fun socket ->
-    let ctx, state = Client.context { Client.Encoder.pathname = path uri
+    let ctx, state = Client.context { Client.Common.pathname = path uri
                                     ; host = Some (host uri, Some (port uri))
-                                    ; request_command = `ReceivePack }
+                                    ; request_command = `Receive_pack }
     in
     let t = { socket
             ; input = Bytes.create 65535
@@ -785,9 +780,9 @@ module Make (N: NET) (S: Minimal.S) = struct
   let ls git ?(capabilities=Default.capabilities) uri =
     Log.debug (fun l -> l "ls %a" Uri.pp_hum uri);
     Net.socket uri >>= fun socket ->
-    let ctx, state = Client.context { Client.Encoder.pathname = path uri
+    let ctx, state = Client.context { Client.Common.pathname = path uri
                                     ; host = Some (host uri, Some (port uri))
-                                    ; request_command = `UploadPack }
+                                    ; request_command = `Upload_pack }
     in
     let t = { socket
             ; input = Bytes.create 65535
@@ -803,12 +798,12 @@ module Make (N: NET) (S: Minimal.S) = struct
     >>= fun () -> Lwt.return v
 
   let fetch_ext git ?(shallow = []) ?(capabilities=Default.capabilities)
-      ~notify ~negociate ~has ~want ?deepen uri =
+      ~notify ~negociate ~have ~want ?deepen uri =
     Log.debug (fun l -> l "fetch_ext %a" Uri.pp_hum uri);
     Net.socket uri >>= fun socket ->
-    let ctx, state = Client.context { Client.Encoder.pathname = path uri
+    let ctx, state = Client.context { Client.Common.pathname = path uri
                                     ; host = Some (host uri, Some (port uri))
-                                    ; request_command = `UploadPack }
+                                    ; request_command = `Upload_pack }
     in
     let t = { socket
             ; input = Bytes.create 65535
@@ -819,7 +814,7 @@ module Make (N: NET) (S: Minimal.S) = struct
     Log.debug (fun l -> l ~header:"fetch" "Start to process the flow.");
 
     process t state
-    >>= fetch_handler git ~shallow ~notify ~negociate ~has ~want ?deepen t
+    >>= fetch_handler git ~shallow ~notify ~negociate ~have ~want ?deepen t
     >>= fun v -> Net.close socket
     >>= fun () -> Lwt.return v
 
@@ -828,9 +823,9 @@ module Make (N: NET) (S: Minimal.S) = struct
       ?(capabilities=Default.capabilities) uri =
     Log.debug (fun l -> l "clone_ext %a" Uri.pp_hum uri);
     Net.socket uri >>= fun socket ->
-    let ctx, state = Client.context { Client.Encoder.pathname = path uri
+    let ctx, state = Client.context { Client.Common.pathname = path uri
                                     ; host = Some (host uri, Some (port uri))
-                                    ; request_command = `UploadPack }
+                                    ; request_command = `Upload_pack }
     in
     let t = { socket
             ; input = Bytes.create 65535
@@ -846,16 +841,12 @@ module Make (N: NET) (S: Minimal.S) = struct
     >>= fun () -> Lwt.return v
 
   let fetch_and_set_references git ?capabilities ~choose ~references repository =
-    N.find_common git >>= fun (has, state, continue) ->
-    let continue { Client.Decoder.acks; shallow; unshallow } state =
+    N.find_common git >>= fun (have, state, continue) ->
+    let continue { Client.Common.acks; shallow; unshallow } state =
       continue { Negociator.acks; shallow; unshallow } state in
-    let want_handler refs =
-      List.map
-        (fun (hash, refname, peeled) ->
-           (hash, Store.Reference.of_string refname, peeled))
-        refs |> Common.want_handler git choose in
+    let want_handler = Common.want_handler git choose in
     fetch_ext git ?capabilities ~notify:(fun _ -> Lwt.return ())
-      ~negociate:(continue, state) ~has ~want:want_handler
+      ~negociate:(continue, state) ~have ~want:want_handler
       repository
     >>?= fun (results, _) ->
     Common.update_and_create git ~references results
@@ -939,16 +930,7 @@ module Make (N: NET) (S: Minimal.S) = struct
 
   let update_and_create git ?capabilities ~references repository =
     let push_handler remote_refs =
-      List.map
-        (fun (hash, refname, peeled) -> (hash, Store.Reference.of_string refname, peeled))
-        remote_refs
-      |>  Common.push_handler git references
+      Common.push_handler git references remote_refs
       >>= fun actions -> Lwt.return ([], actions) in
     push git ~push:push_handler ?capabilities repository
-    >>?= fun lst ->
-    Lwt_result.ok (List.map (function
-        | Ok refname -> (Ok (Store.Reference.of_string refname))
-        | Error (refname, err) ->
-          (Error (Store.Reference.of_string refname, err))
-      ) lst |> Lwt.return)
 end

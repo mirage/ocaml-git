@@ -33,7 +33,7 @@ depends: [
   "astring"
   "cstruct"
   "ocamlgraph"
-  "alcotest" {test}
+  "alcotest" {test & >= "0.8.1"}
   "nocrypto" {test & >= "0.5.4"}
   "tls"      {test}
   "mtime"    {test & >= "1.0.0"}

@@ -132,22 +132,27 @@ let () =
     ; Test_data.suite  "fs"     (module Test_data.Usual) (module Fs_store)
     ; Test_data.suite "fs"      (module Test_data.Bomb) (module Fs_store)
     ; Test_data.suite "fs"      (module Test_data.Udns) (module Fs_store)
+    ; Test_smart.suite "smart (mem)" (module Mem_store)
+    ; Test_smart.suite "smart (fs)"  (module Fs_store)
 
     (* XXX(dinosaure): rev-list works only on an unix environment. Indeed,
        oracle (git) needs a well-formed git repository to work. However, the
        tested part belongs the core, so if it's work for git-unix, it should
        work to git-mem/git-mirage. *)
 
-    ; Test_rev_list.suite "fs" (module Test_data.Usual) (module Fs_store) (module Test_rev_list.Usual(Fs_store))
-    ; Test_index.suite (Fpath.v "test-index")
+    ; Test_rev_list.suite "fs"       (module Test_data.Usual) (module Fs_store) (module Test_rev_list.Usual(Fs_store))
+    ; Tcp1.test_fetch "mem-local-tcp-sync"
+        [ "git://localhost/" ]
     ; Tcp1.test_clone "mem-remote-tcp-sync"
-        [ "git://github.com/mirage/ocaml-git.git", "master"
-        ; "git://github.com/mirage/ocaml-git.git", "gh-pages" ]
+        [ "git://github.com/mirage/ocaml-git.git",   "master"
+        ; "git://github.com/mirage/ocaml-git.git",   "gh-pages" ]
+    ; Tcp2.test_fetch "fs-local-tcp-sync"
+        [ "git://localhost/" ]
     ; Tcp2.test_clone "fs-remote-tcp-sync"
-        [ "git://github.com/mirage/ocaml-git.git", "master"
-        ; "git://github.com/mirage/ocaml-git.git", "gh-pages" ]
+        [ "git://github.com/mirage/ocaml-git.git",   "master"
+        ; "git://github.com/mirage/ocaml-git.git",   "gh-pages" ]
     ; Http1.test_clone "mem-http-sync"
-        [ "http://github.com/mirage/ocaml-git.git", "gh-pages" ]
+        [ "http://github.com/mirage/ocaml-git.git",  "gh-pages" ]
     ; Http2.test_clone "fs-https-sync"
         [ "https://github.com/mirage/ocaml-git.git", "gh-pages" ]
     ; Thin.test_thin ]

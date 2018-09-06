@@ -15,13 +15,498 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+module type COMMON =
+sig
+  type hash
+  type reference
+
+  type advertised_refs =
+    { shallow      : hash list
+    ; refs         : (hash * reference * bool) list
+    ; capabilities : Capability.t list }
+
+  type shallow_update =
+    { shallow   : hash list
+    ; unshallow : hash list }
+
+  type acks =
+    { shallow   : hash list
+    ; unshallow : hash list
+    ; acks      : (hash * [ `Common | `Ready | `Continue | `ACK ]) list }
+
+  type negociation_result =
+    | NAK
+    | ACK of hash
+    | ERR of string
+
+  type pack =
+    [ `Raw of Cstruct.t
+    | `Out of Cstruct.t
+    | `Err of Cstruct.t ]
+
+  type report_status =
+    { unpack   : (unit, string) result
+    ; commands : (reference, reference * string) result list }
+
+  type upload_request =
+    { want         : hash * hash list
+    ; capabilities : Capability.t list
+    ; shallow      : hash list
+    ; deep         : [ `Depth of int | `Timestamp of int64 | `Ref of reference ] option }
+
+  type request_command =
+    [ `Upload_pack
+    | `Receive_pack
+    | `Upload_archive ]
+
+  type git_proto_request =
+    { pathname        : string
+    ; host            : (string * int option) option
+    ; request_command : request_command }
+
+  type command =
+    | Create of hash * reference
+    | Delete of hash * reference
+    | Update of hash * hash * reference
+
+  type push_certificate =
+    { pusher   : string
+    ; pushee   : string
+    ; nonce    : string
+    ; options  : string list
+    ; commands : command list
+    ; gpg      : string list }
+
+  type update_request =
+    { shallow      : hash list
+    ; requests     : [`Raw of command * command list | `Cert of push_certificate]
+    ; capabilities : Capability.t list }
+
+  type http_upload_request =
+    { want         : hash * hash list
+    ; capabilities : Capability.t list
+    ; shallow      : hash list
+    ; deep         : [ `Depth of int | `Timestamp of int64 | `Ref of reference ] option
+    ; has          : hash list }
+
+  val pp_advertised_refs: advertised_refs Fmt.t
+  val pp_shallow_update: shallow_update Fmt.t
+  val pp_acks: acks Fmt.t
+  val pp_negociation_result: negociation_result Fmt.t
+  val pp_pack: pack Fmt.t
+  val pp_report_status: report_status Fmt.t
+  val pp_upload_request: upload_request Fmt.t
+  val pp_request_command: request_command Fmt.t
+  val pp_git_proto_request: git_proto_request Fmt.t
+  val pp_command: command Fmt.t
+  val pp_push_certificate: push_certificate Fmt.t
+  val pp_update_request: update_request Fmt.t
+  val pp_http_upload_request: http_upload_request Fmt.t
+
+  type 'a equal = 'a -> 'a -> bool
+
+  val equal_advertised_refs: advertised_refs equal
+  val equal_shallow_update: shallow_update equal
+  val equal_acks: acks equal
+  val equal_negociation_result: negociation_result equal
+  val equal_pack: pack equal
+  val equal_report_status: report_status equal
+  val equal_upload_request: upload_request equal
+  val equal_request_command: request_command equal
+  val equal_git_proto_request: git_proto_request equal
+  val equal_command: command equal
+  val equal_push_certificate: push_certificate equal
+  val equal_update_request: update_request equal
+  val equal_http_upload_request: http_upload_request equal
+end
+
+module Common (Hash: S.HASH) (Reference: Reference.S)
+  : COMMON with type hash := Hash.t
+            and type reference := Reference.t
+= struct
+  type hash = Hash.t
+  type reference = Reference.t
+  type 'a equal = 'a -> 'a -> bool
+
+  type advertised_refs =
+    { shallow      : hash list
+    ; refs         : (hash * reference * bool) list
+    ; capabilities : Capability.t list }
+
+  let pp_advertised_refs ppf { shallow; refs; capabilities; } =
+    let pp_ref ppf (hash, reference, peeled) =
+      match peeled with
+      | true -> Fmt.pf ppf "%a^{}:%a" Reference.pp reference Hash.pp hash
+      | false -> Fmt.pf ppf "%a:%a" Reference.pp reference Hash.pp hash in
+    Fmt.pf ppf "{ @[<hov>shallow = %a;@ refs = %a;@ capabilities = %a;@]}"
+      Fmt.Dump.(list Hash.pp) shallow
+      Fmt.Dump.(list pp_ref) refs
+      Fmt.Dump.(list Capability.pp) capabilities
+
+  let equal_advertised_refs a b =
+    let equal_ref (hash_a, ref_a, peeled_a) (hash_b, ref_b, peeled_b) =
+      Hash.equal hash_a hash_b
+      && Reference.equal ref_a ref_b
+      && peeled_a = peeled_b in
+    let compare_ref (_, a, _) (_, b, _) = Reference.compare a b in
+    try
+      List.for_all2 Hash.equal
+        (List.sort Hash.compare a.shallow)
+        (List.sort Hash.compare b.shallow)
+      && List.for_all2 equal_ref
+        (List.sort compare_ref a.refs)
+        (List.sort compare_ref b.refs)
+      && List.for_all2 Capability.equal
+        (List.sort Capability.compare a.capabilities)
+        (List.sort Capability.compare b.capabilities)
+    with Invalid_argument _ -> false
+
+  type shallow_update =
+    { shallow   : hash list
+    ; unshallow : hash list }
+
+  let pp_shallow_update ppf { shallow; unshallow; } =
+    Fmt.pf ppf "{ @[<hov>shallow = %a;@ unshallow = %a;@] }"
+      Fmt.Dump.(list Hash.pp) shallow
+      Fmt.Dump.(list Hash.pp) unshallow
+
+  let equal_shallow_update a b =
+    try
+      List.for_all2 Hash.equal
+        (List.sort Hash.compare a.shallow)
+        (List.sort Hash.compare b.shallow)
+      && List.for_all2 Hash.equal
+        (List.sort Hash.compare a.unshallow)
+        (List.sort Hash.compare b.unshallow)
+    with Invalid_argument _ -> false
+
+  type acks =
+    { shallow   : hash list
+    ; unshallow : hash list
+    ; acks      : (hash * [ `Common | `Ready | `Continue | `ACK ]) list }
+
+  let pp_acks ppf { shallow; unshallow; acks; } =
+    let pp_ack ppf (hash, ack) = match ack with
+      | `Continue -> Fmt.pf ppf "continue:%a" Hash.pp hash
+      | `Ready    -> Fmt.pf ppf "ready:%a" Hash.pp hash
+      | `Common   -> Fmt.pf ppf "common:%a" Hash.pp hash
+      | `ACK      -> Fmt.pf ppf "ACK:%a" Hash.pp hash in
+    Fmt.pf ppf "{ @[<hov>shallow = %a;@ unshallow = %a;@ acks = %a;@] }"
+      Fmt.Dump.(list Hash.pp) shallow
+      Fmt.Dump.(list Hash.pp) unshallow
+      Fmt.Dump.(list pp_ack) acks
+
+  let equal_acks a b =
+    let equal_ack (hash_a, detail_a) (hash_b, detail_b) =
+      Hash.equal hash_a hash_b
+      && (match detail_a, detail_b with
+          | `Common, `Common -> true
+          | `Ready, `Ready -> true
+          | `Continue, `Continue -> true
+          | `ACK, `ACK -> true
+          | _, _ -> false) in
+    let compare_ack (a, _) (b, _) = Hash.compare a b in
+    try
+      List.for_all2 Hash.equal
+        (List.sort Hash.compare a.shallow)
+        (List.sort Hash.compare b.shallow)
+      && List.for_all2 Hash.equal
+        (List.sort Hash.compare a.unshallow)
+        (List.sort Hash.compare b.unshallow)
+      && List.for_all2 equal_ack
+        (List.sort compare_ack a.acks)
+        (List.sort compare_ack b.acks)
+    with Invalid_argument _ -> false
+
+  type negociation_result =
+    | NAK
+    | ACK of hash
+    | ERR of string
+
+  let pp_negociation_result ppf = function
+    | NAK -> Fmt.string ppf "NAK"
+    | ACK hash -> Fmt.pf ppf "(ACK %a)" Hash.pp hash
+    | ERR err -> Fmt.pf ppf "(ERR %s)" err
+
+  let equal_negociation_result a b = match a, b with
+    | NAK, NAK -> true
+    | ACK a, ACK b -> Hash.equal a b
+    | ERR a, ERR b -> String.equal a b
+    | _, _ -> false
+
+  type pack =
+    [ `Raw of Cstruct.t
+    | `Out of Cstruct.t
+    | `Err of Cstruct.t ]
+
+  let pp_pack ppf = function
+    | `Raw raw ->
+      Fmt.pf ppf "@[<5>(Raw %a)@]"
+        (Encore.Lole.pp_scalar ~get:Cstruct.get_char ~length:Cstruct.len) raw
+    | `Out out ->
+      Fmt.pf ppf "@[<5>(Out %S)@]" (Cstruct.to_string out)
+    | `Err err ->
+      Fmt.pf ppf "@[<5>(Err %S)@]" (Cstruct.to_string err)
+
+  let equal_pack a b = match a, b with
+    | `Err a, `Err b
+    | `Out a, `Out b
+    | `Raw a, `Raw b -> Cstruct.equal a b
+    | _, _ -> false
+
+  type report_status =
+    { unpack   : (unit, string) result
+    ; commands : (reference, reference * string) result list }
+
+  let pp_report_status ppf { unpack; commands; } =
+    Fmt.pf ppf "{ @[<hov>unpack = %a;@ commands = %a;@] }"
+      Fmt.(Dump.result ~ok:Fmt.nop ~error:Fmt.string) unpack
+      Fmt.(Dump.list (Dump.result ~ok:Reference.pp ~error:(pair Reference.pp string))) commands
+
+  let equal_report_status a b =
+    let equal_result ~ok ~error a b = match a, b with
+      | Ok a, Ok b -> ok a b
+      | Error a, Error b -> error a b
+      | _, _ -> false in
+    let compare_result ~ok ~error a b = match a, b with
+      | Ok a, Ok b -> ok a b
+      | Error a, Error b -> error a b
+      | Ok _, Error _ -> 1
+      | Error _, Ok _ -> (-1) in
+    let compare_ref_and_msg (ref_a, msg_a) (ref_b, msg_b) =
+      let res = Reference.compare ref_a ref_b in
+      if res = 0 then String.compare msg_a msg_b else res in
+    let equal_ref_and_msg a b = compare_ref_and_msg a b = 0 in
+    try
+      equal_result ~ok:(fun () () -> true) ~error:String.equal a.unpack b.unpack
+      && List.for_all2 (equal_result ~ok:Reference.equal ~error:equal_ref_and_msg)
+        (List.sort (compare_result ~ok:Reference.compare ~error:compare_ref_and_msg) a.commands)
+        (List.sort (compare_result ~ok:Reference.compare ~error:compare_ref_and_msg) b.commands)
+    with Invalid_argument _ -> false
+
+  type upload_request =
+    { want         : hash * hash list
+    ; capabilities : Capability.t list
+    ; shallow      : hash list
+    ; deep         : [ `Depth of int | `Timestamp of int64 | `Ref of reference ] option }
+
+  let pp_upload_request ppf { want; capabilities; shallow; deep; } =
+    let pp_deep ppf = function
+      | `Depth n -> Fmt.pf ppf "(Depth %d)" n
+      | `Timestamp n -> Fmt.pf ppf "(Timestamp %Ld)" n
+      | `Ref r -> Fmt.pf ppf "(`Ref %a)" Reference.pp r in
+    Fmt.pf ppf "{ @[<hov>want = %a;@ capabiliteis = %a;@ shallow = %a; deep = %a;@] }"
+      Fmt.(Dump.list Hash.pp) (fst want :: snd want)
+      Fmt.(Dump.list Capability.pp) capabilities
+      Fmt.(Dump.list Hash.pp) shallow
+      Fmt.(Dump.option pp_deep) deep
+
+  let equal_upload_request a b =
+    try
+      let equal_deep a b = match a, b with
+        | `Depth a, `Depth b -> a = b
+        | `Timestamp a, `Timestamp b -> Int64.equal a b
+        | `Ref a, `Ref b -> Reference.equal a b
+        | _, _ -> false in
+
+      List.for_all2 Hash.equal
+        (List.sort Hash.compare (fst a.want :: snd a.want))
+        (List.sort Hash.compare (fst b.want :: snd b.want))
+      && List.for_all2 Capability.equal
+        (List.sort Capability.compare a.capabilities)
+        (List.sort Capability.compare b.capabilities)
+      && List.for_all2 Hash.equal
+        (List.sort Hash.compare a.shallow)
+        (List.sort Hash.compare b.shallow)
+      && (match a.deep, b.deep with
+          | Some a, Some b -> equal_deep a b
+          | None, None -> true
+          | _, _ -> false)
+    with Invalid_argument _ -> false
+
+  type request_command =
+    [ `Upload_pack
+    | `Receive_pack
+    | `Upload_archive ]
+
+  let equal_request_command a b = match a, b with
+    | `Upload_pack, `Upload_pack
+    | `Receive_pack, `Receive_pack
+    | `Upload_archive, `Upload_archive -> true
+    | _, _ -> true
+
+  let pp_request_command ppf = function
+    | `Upload_pack -> Fmt.string ppf "`Upload_pack"
+    | `Receive_pack -> Fmt.string ppf "`Receive_pack"
+    | `Upload_archive -> Fmt.string ppf "`Upload_archive"
+
+  type git_proto_request =
+    { pathname        : string
+    ; host            : (string * int option) option
+    ; request_command : request_command }
+
+  let pp_git_proto_request ppf { pathname; host; request_command; } =
+    let pp_host ppf (host, port) = match port with
+      | Some port -> Fmt.pf ppf "%s:%d" host port
+      | None -> Fmt.string ppf host in
+    Fmt.pf ppf "{ @[<hov>pathname = %s;@ host = %a;@ request_command = %a;@] }"
+      pathname
+      Fmt.(Dump.option pp_host) host
+      pp_request_command request_command
+
+  let equal_git_proto_request a b =
+    let equal_option equal a b = match a, b with
+      | Some a, Some b -> equal a b
+      | None, None -> true
+      | _, _ -> false in
+    let equal_host (host_a, port_a) (host_b, port_b) =
+      String.equal host_a host_b
+      && equal_option (=) port_a port_b in
+    String.equal a.pathname b.pathname
+    && equal_option equal_host a.host b.host
+    && equal_request_command a.request_command b.request_command
+
+  type command =
+    | Create of hash * reference
+    | Delete of hash * reference
+    | Update of hash * hash * reference
+
+  let pp_command ppf = function
+    | Create (hash, reference) -> Fmt.pf ppf "(Create %a:%a)" Reference.pp reference Hash.pp hash
+    | Delete (hash, reference) -> Fmt.pf ppf "(Delete %a:%a)" Reference.pp reference Hash.pp hash
+    | Update (a, b, reference) -> Fmt.pf ppf "(Create %a:@[<0>%a -> %a@])" Reference.pp reference Hash.pp a Hash.pp b
+
+  let equal_command a b = match a, b with
+    | Create (hash_a, ref_a), Create (hash_b, ref_b) ->
+      Hash.equal hash_a hash_b && Reference.equal ref_a ref_b
+    | Delete (hash_a, ref_a), Delete (hash_b, ref_b) ->
+      Hash.equal hash_a hash_b && Reference.equal ref_a ref_b
+    | Update (to_a, of_a, ref_a), Update (to_b, of_b, ref_b) ->
+      Hash.equal to_a to_b && Hash.equal of_a of_b && Reference.equal ref_a ref_b
+    | _, _ -> false
+
+  type push_certificate =
+    { pusher   : string
+    ; pushee   : string
+    ; nonce    : string
+    ; options  : string list
+    ; commands : command list
+    ; gpg      : string list }
+
+  let pp_push_certificate ppf pcert =
+    Fmt.pf ppf "{ @[<hov>pusher = %s;@ pushee = %s;@ nonce = %S;@ options = %a;@ commands = %a;@ gpg = %a;@] }"
+      pcert.pusher pcert.pushee pcert.nonce
+      Fmt.(Dump.list string) pcert.options
+      Fmt.(Dump.list pp_command) pcert.commands
+      Fmt.(Dump.list (fmt "%S")) pcert.gpg
+
+  let compare_command a b = match a, b with
+    | Create (hash_a, ref_a), Create (hash_b, ref_b)
+    | Delete (hash_a, ref_a), Delete (hash_b, ref_b) ->
+      let res = Hash.compare hash_a hash_b in
+      if res = 0 then Reference.compare ref_a ref_b else res
+    | Update (to_a, of_a, ref_a), Update (to_b, of_b, ref_b) ->
+      let res = Hash.compare to_a to_b in
+      if res = 0 then
+        let res = Hash.compare of_a of_b in
+        if res = 0 then Reference.compare ref_a ref_b else res
+      else res
+    | Create _, _ -> 1
+    | Delete _, Create _ -> (-1)
+    | Update _, Create _ -> (-1)
+    | Delete _, _ -> 1
+    | Update _, Delete _ -> (-1)
+
+  let equal_push_certificate a b =
+    try
+      String.equal a.pusher b.pusher
+      && String.equal a.pushee b.pushee
+      && String.equal a.nonce b.nonce
+      && List.for_all2 String.equal
+        (List.sort String.compare a.options)
+        (List.sort String.compare b.options)
+      && List.for_all2 equal_command
+        (List.sort compare_command a.commands)
+        (List.sort compare_command b.commands)
+    with Invalid_argument _ -> false
+
+  type update_request =
+    { shallow      : hash list
+    ; requests     : [`Raw of command * command list | `Cert of push_certificate]
+    ; capabilities : Capability.t list }
+
+  let pp_update_request ppf { shallow; requests; capabilities; } =
+    let pp_requests ppf = function
+      | `Raw commands -> Fmt.(Dump.list pp_command) ppf (fst commands :: snd commands)
+      | `Cert pcert -> pp_push_certificate ppf pcert in
+    Fmt.pf ppf "{ @[<hov>shallow = %a;@ requests = %a;@ capabilities = %a;@] }"
+      Fmt.(Dump.list Hash.pp) shallow
+      (Fmt.hvbox pp_requests) requests
+      Fmt.(Dump.list Capability.pp) capabilities
+
+  let equal_update_request a b =
+    let equal_raw a b =
+      List.for_all2 equal_command
+        (List.sort compare_command (fst a :: snd a))
+        (List.sort compare_command (fst b :: snd b)) in
+    try
+      List.for_all2 Hash.equal
+        (List.sort Hash.compare a.shallow)
+        (List.sort Hash.compare b.shallow)
+      && (match a.requests, b.requests with
+          | `Raw a, `Raw b -> equal_raw a b
+          | `Cert a, `Cert b -> equal_push_certificate a b
+          | _, _ -> false)
+      && List.for_all2 Capability.equal
+        (List.sort Capability.compare a.capabilities)
+        (List.sort Capability.compare b.capabilities)
+    with Invalid_argument _ -> false
+
+  type http_upload_request =
+    { want         : hash * hash list
+    ; capabilities : Capability.t list
+    ; shallow      : hash list
+    ; deep         : [ `Depth of int | `Timestamp of int64 | `Ref of reference ] option
+    ; has          : hash list }
+
+  let equal_http_upload_request a b =
+    try
+      equal_upload_request
+        { want = a.want
+        ; capabilities = a.capabilities
+        ; shallow = a.shallow
+        ; deep = a.deep }
+        { want = b.want
+        ; capabilities = b.capabilities
+        ; shallow = b.shallow
+        ; deep = b.deep }
+      && List.for_all2 Hash.equal
+        (List.sort Hash.compare a.has)
+        (List.sort Hash.compare b.has)
+    with Invalid_argument _ -> false
+
+  let pp_http_upload_request ppf { want; capabilities; shallow; deep; has; } =
+    let pp_deep ppf = function
+      | `Depth n -> Fmt.pf ppf "(Depth %d)" n
+      | `Timestamp n -> Fmt.pf ppf "(Timestamp %Ld)" n
+      | `Ref r -> Fmt.pf ppf "(`Ref %a)" Reference.pp r in
+    Fmt.pf ppf "{ @{<hov>want = %a;@ capabilities = %a;@ shallow = %a;@ deep = %a;@ has = %a;@} }"
+      Fmt.(Dump.list Hash.pp) (fst want :: snd want)
+      Fmt.(Dump.list Capability.pp) capabilities
+      Fmt.(Dump.list Hash.pp) shallow
+      Fmt.(Dump.option pp_deep) deep
+      Fmt.(Dump.list Hash.pp) has
+end
+
 module type DECODER =
 sig
-  module Hash : S.HASH
+  module Hash: S.HASH
+  module Reference: Reference.S
+  module Common: COMMON with type hash := Hash.t and type reference := Reference.t
 
   type decoder
 
-  val pp_decoder : decoder Fmt.t
+  val pp_decoder: decoder Fmt.t
 
   type error =
     [ `Expected_char of char
@@ -31,9 +516,11 @@ sig
     | `Expected_string of string
     | `Unexpected_empty_pkt_line
     | `Malformed_pkt_line
-    | `Unexpected_end_of_input ]
+    | `Unexpected_end_of_input
+    | `Unexpected_pkt_line
+    | `Unexpected_hashes of (Hash.t * Hash.t) ]
 
-  val pp_error : error Fmt.t
+  val pp_error: error Fmt.t
 
   type 'a state =
     | Ok of 'a
@@ -45,53 +532,18 @@ sig
                ; buf       : Cstruct.t
                ; committed : int }
 
-  type advertised_refs =
-    { shallow      : Hash.t list
-    ; refs         : (Hash.t * string * bool) list
-    ; capabilities : Capability.t list }
-
-  val pp_advertised_refs : advertised_refs Fmt.t
-
-  type shallow_update =
-    { shallow   : Hash.t list
-    ; unshallow : Hash.t list }
-
-  val pp_shallow_update : shallow_update Fmt.t
-
-  type acks =
-    { shallow   : Hash.t list
-    ; unshallow : Hash.t list
-    ; acks      : (Hash.t * [ `Common | `Ready | `Continue | `ACK ]) list }
-
-  val pp_acks : acks Fmt.t
-
-  type negociation_result =
-    | NAK
-    | ACK of Hash.t
-    | ERR of string
-
-  val pp_negociation_result : negociation_result Fmt.t
-
-  type pack =
-    [ `Raw of Cstruct.t
-    | `Out of Cstruct.t
-    | `Err of Cstruct.t ]
-
-  type report_status =
-    { unpack   : (unit, string) result
-    ; commands : (string, string * string) result list }
-
-  val pp_report_status : report_status Fmt.t
-
   type _ transaction =
-    | HttpReferenceDiscovery : string -> advertised_refs transaction
-    | ReferenceDiscovery     : advertised_refs transaction
-    | ShallowUpdate          : shallow_update transaction
-    | Negociation            : Hash.t list * ack_mode -> acks transaction
-    | NegociationResult      : negociation_result transaction
+    | HttpReferenceDiscovery : string -> Common.advertised_refs transaction
+    | ReferenceDiscovery     : Common.advertised_refs transaction
+    | ShallowUpdate          : Common.shallow_update transaction
+    | Negociation            : Hash.Set.t * ack_mode -> Common.acks transaction
+    | NegociationResult      : Common.negociation_result transaction
     | PACK                   : side_band -> flow transaction
-    | ReportStatus           : side_band -> report_status transaction
-    | HttpReportStatus       : string list * side_band -> report_status transaction
+    | ReportStatus           : side_band -> Common.report_status transaction
+    | HttpReportStatus       : string list * side_band -> Common.report_status transaction
+    | Upload_request         : Common.upload_request transaction
+    | Git_proto_request      : Common.git_proto_request transaction
+    | Update_request         : Common.update_request transaction
   and ack_mode =
     [ `Ack
     | `Multi_ack
@@ -106,18 +558,21 @@ sig
     | `Side_band_64k
     | `No_multiplexe ]
 
-  val decode : decoder -> 'result transaction -> 'result state
-  val decoder : unit -> decoder
+  val decode: decoder -> 'result transaction -> 'result state
+  val decoder: unit -> decoder
+  val of_string: string -> 'v transaction -> ('v, error * Cstruct.t * int) result
 end
 
 module type ENCODER =
 sig
-  module Hash : S.HASH
+  module Hash: S.HASH
+  module Reference: Reference.S
+  module Common: COMMON with type hash := Hash.t and type reference := Reference.t
 
   type encoder
 
-  val set_pos : encoder -> int -> unit
-  val free : encoder -> Cstruct.t
+  val set_pos: encoder -> int -> unit
+  val free: encoder -> Cstruct.t
 
   type 'a state =
     | Write of { buffer    : Cstruct.t
@@ -126,112 +581,95 @@ sig
                ; continue  : int -> 'a state }
     | Ok of 'a
 
-  type upload_request =
-    { want         : Hash.t * Hash.t list
-    ; capabilities : Capability.t list
-    ; shallow      : Hash.t list
-    ; deep         : [ `Depth of int | `Timestamp of int64 | `Ref of string ] option }
-
-  type request_command =
-    [ `UploadPack
-    | `ReceivePack
-    | `UploadArchive ]
-
-  type git_proto_request =
-    { pathname        : string
-    ; host            : (string * int option) option
-    ; request_command : request_command }
-
-  type command =
-    | Create of Hash.t * string
-    | Delete of Hash.t * string
-    | Update of Hash.t * Hash.t * string
-
-  type push_certificate =
-    { pusher   : string
-    ; pushee   : string
-    ; nonce    : string
-    ; options  : string list
-    ; commands : command list
-    ; gpg      : string list }
-
-  type update_request =
-    { shallow      : Hash.t list
-    ; requests     : [`Raw of command * command list | `Cert of push_certificate]
-    ; capabilities : Capability.t list }
-
-  type http_upload_request =
-    { want         : Hash.t * Hash.t list
-    ; capabilities : Capability.t list
-    ; shallow      : Hash.t list
-    ; deep         : [ `Depth of int | `Timestamp of int64 | `Ref of string ] option
-    ; has          : Hash.t list }
-
   type action =
-    [ `GitProtoRequest   of git_proto_request
-    | `UploadRequest     of upload_request
-    | `HttpUploadRequest of [ `Done | `Flush ] * http_upload_request
-    | `UpdateRequest     of update_request
-    | `HttpUpdateRequest of update_request
-    | `Has               of Hash.t list
+    [ `GitProtoRequest    of Common.git_proto_request
+    | `UploadRequest      of Common.upload_request
+    | `HttpUploadRequest  of [ `Done | `Flush ] * Common.http_upload_request
+    | `Advertised_refs    of Common.advertised_refs
+    | `Shallow_update     of Common.shallow_update
+    | `Negociation        of Common.acks
+    | `Negociation_result of Common.negociation_result
+    | `Report_status      of [ `No_multiplexe | `Side_band | `Side_band_64k ] * Common.report_status
+    | `UpdateRequest      of Common.update_request
+    | `HttpUpdateRequest  of Common.update_request
+    | `Has                of Hash.Set.t
     | `Done
     | `Flush
-    | `Shallow           of Hash.t list
-    | `PACK              of int ]
+    | `Shallow            of Hash.t list
+    | `PACK               of int ]
 
-  val encode : encoder -> action -> unit state
-  val encoder : unit -> encoder
+  val encode: encoder -> action -> unit state
+  val encoder: unit -> encoder
+  val to_string: action -> string
 end
 
 module type CLIENT =
 sig
-  module Hash : S.HASH
+  module Hash: S.HASH
+  module Reference: Reference.S
 
-  module Decoder : DECODER with module Hash = Hash
-  module Encoder : ENCODER with module Hash = Hash
+  module Common: COMMON
+    with type hash := Hash.t
+     and type reference := Reference.t
+  module Decoder: DECODER
+    with module Hash = Hash
+     and module Reference = Reference
+     and module Common := Common
+  module Encoder: ENCODER
+    with module Hash = Hash
+     and module Reference = Reference
+     and module Common := Common
 
   type context
 
   type result =
-    [ `Refs of Decoder.advertised_refs
-    | `ShallowUpdate of Decoder.shallow_update
-    | `Negociation of Decoder.acks
-    | `NegociationResult of Decoder.negociation_result
+    [ `Refs of Common.advertised_refs
+    | `ShallowUpdate of Common.shallow_update
+    | `Negociation of Common.acks
+    | `NegociationResult of Common.negociation_result
     | `PACK of Decoder.flow
     | `Flush
     | `Nothing
     | `ReadyPACK of Cstruct.t
-    | `ReportStatus of Decoder.report_status ]
+    | `ReportStatus of Common.report_status ]
   type process =
     [ `Read of (Cstruct.t * int * int * (int -> process))
     | `Write of (Cstruct.t * int * int * (int -> process))
     | `Error of (Decoder.error * Cstruct.t * int)
     | result ]
   type action =
-    [ `GitProtoRequest of Encoder.git_proto_request
+    [ `GitProtoRequest of Common.git_proto_request
     | `Shallow of Hash.t list
-    | `UploadRequest of Encoder.upload_request
-    | `UpdateRequest of Encoder.update_request
-    | `Has of Hash.t list
+    | `UploadRequest of Common.upload_request
+    | `UpdateRequest of Common.update_request
+    | `Has of Hash.Set.t
     | `Done
     | `Flush
     | `ReceivePACK
     | `SendPACK of int
     | `FinishPACK ]
 
-  val capabilities : context -> Capability.t list
-  val set_capabilities : context -> Capability.t list -> unit
-  val encode : Encoder.action -> (context -> process) -> context -> process
-  val decode : 'a Decoder.transaction -> ('a -> context -> process) -> context -> process
-  val pp_result : result Fmt.t
-  val run : context -> action -> process
-  val context : Encoder.git_proto_request -> context * process
+  val capabilities: context -> Capability.t list
+  val set_capabilities: context -> Capability.t list -> unit
+  val encode: Encoder.action -> (context -> process) -> context -> process
+  val decode: 'a Decoder.transaction -> ('a -> context -> process) -> context -> process
+  val pp_result: result Fmt.t
+  val run: context -> action -> process
+  val context: Common.git_proto_request -> context * process
 end
 
-module Decoder (H : S.HASH with type hex = string)
-  : DECODER with module Hash = H =
+module Decoder
+    (Hash: S.HASH)
+    (Reference: Reference.S)
+    (Common: COMMON with type hash := Hash.t and type reference := Reference.t)
+  : DECODER
+    with module Hash = Hash
+     and module Reference = Reference
+     and module Common = Common =
 struct
-  module Hash = H
+  module Hash = Hash
+  module Reference = Reference
+  module Common = Common
 
   (* XXX(dinosaure): Why this decoder? We can use Angstrom instead or another
      library. It's not my first library about the parsing (see Mr. MIME) and I
@@ -314,7 +752,7 @@ struct
     match eop with
     | Some eop ->
       Fmt.pf ppf "{ @[<hov>current = %a;@ \
-                           next = %a;@] }"
+                  next = %a;@] }"
         (Fmt.hvbox pp) (Cstruct.sub buffer pos eop)
         (Fmt.hvbox pp) (Cstruct.sub buffer eop max)
     | None -> Fmt.pf ppf "#raw"
@@ -327,7 +765,9 @@ struct
     | `Expected_string of string
     | `Unexpected_empty_pkt_line
     | `Malformed_pkt_line
-    | `Unexpected_end_of_input ]
+    | `Unexpected_end_of_input
+    | `Unexpected_pkt_line
+    | `Unexpected_hashes of Hash.t * Hash.t ]
 
   let err_unexpected_end_of_input    decoder = (`Unexpected_end_of_input, decoder.buffer, decoder.pos)
   let err_expected               chr decoder = (`Expected_char chr, decoder.buffer, decoder.pos)
@@ -337,16 +777,20 @@ struct
   let err_unexpected_empty_pkt_line  decoder = (`Unexpected_empty_pkt_line, decoder.buffer, decoder.pos)
   let err_malformed_pkt_line         decoder = (`Malformed_pkt_line, decoder.buffer, decoder.pos)
   let err_unexpected_flush_pkt_line  decoder = (`Unexpected_flush_pkt_line, decoder.buffer, decoder.pos)
+  let err_unexpected_pkt_line        decoder = (`Unexpected_pkt_line, decoder.buffer, decoder.pos)
+  let err_unexpected_hashes h0 h1    decoder = (`Unexpected_hashes (h0, h1), decoder.buffer, decoder.pos)
 
   let pp_error ppf = function
-    | `Expected_char chr         -> Fmt.pf ppf "(`Expected_char %c)" chr
-    | `Unexpected_char chr       -> Fmt.pf ppf "(`Unexpected_char %c)" chr
-    | `No_assert_predicate _     -> Fmt.pf ppf "(`No_assert_predicate #predicate)"
-    | `Expected_string s         -> Fmt.pf ppf "(`Expected_string %s)" s
-    | `Unexpected_empty_pkt_line -> Fmt.pf ppf "`Unexpected_empty_pkt_line"
-    | `Malformed_pkt_line        -> Fmt.pf ppf "`Malformed_pkt_line"
-    | `Unexpected_end_of_input   -> Fmt.pf ppf "`Unexpected_end_of_input"
-    | `Unexpected_flush_pkt_line -> Fmt.pf ppf "`Unexpected_flush_pkt_line"
+    | `Expected_char chr          -> Fmt.pf ppf "(`Expected_char %c)" chr
+    | `Unexpected_char chr        -> Fmt.pf ppf "(`Unexpected_char %c)" chr
+    | `No_assert_predicate _      -> Fmt.pf ppf "(`No_assert_predicate #predicate)"
+    | `Expected_string s          -> Fmt.pf ppf "(`Expected_string %s)" s
+    | `Unexpected_empty_pkt_line  -> Fmt.pf ppf "`Unexpected_empty_pkt_line"
+    | `Malformed_pkt_line         -> Fmt.pf ppf "`Malformed_pkt_line"
+    | `Unexpected_end_of_input    -> Fmt.pf ppf "`Unexpected_end_of_input"
+    | `Unexpected_flush_pkt_line  -> Fmt.pf ppf "`Unexpected_flush_pkt_line"
+    | `Unexpected_pkt_line        -> Fmt.pf ppf "`Unexpected_pkt_line"
+    | `Unexpected_hashes (h0, h1) -> Fmt.pf ppf "(`Unexpeted_hashes (%a, %a))" Hash.pp h0 Hash.pp h1
 
   type 'a state =
     | Ok of 'a
@@ -548,8 +992,6 @@ struct
     |> Cstruct.to_string
     |> Hash.of_hex
 
-  let not_null = (<>) '\000'
-
   let p_capability decoder =
     let capability =
       p_while1
@@ -580,10 +1022,30 @@ struct
 
     loop acc
 
+  let p_reference decoder =
+    let refname =
+      p_while1
+        (function ' ' | '~' | '^' | ':' | '?' | '*' -> false
+                  | chr ->
+                     let code = Char.code chr in
+                     if code  < 31 || code > 126
+                     then false
+                     else true)
+        decoder in
+    Reference.of_string (Cstruct.to_string refname)
+
   let p_first_ref decoder =
     let obj_id = p_hash decoder in
     p_space decoder;
-    let refname = Cstruct.to_string (p_while0 not_null decoder) in
+    let reference = p_reference decoder in
+    let peeled = match p_peek_char decoder with
+      | Some '^' ->
+        p_char '^' decoder;
+        p_char '{' decoder;
+        p_char '}' decoder;
+        true
+      | Some _ -> false
+      | None -> raise (Leave (err_unexpected_end_of_input decoder)) in
     p_null decoder;
     let capabilities =match p_peek_char decoder with
       | Some ' ' ->
@@ -595,26 +1057,27 @@ struct
     in
 
     if Hash.equal obj_id zero_id
-    && refname = "capabilities^{}"
-    then `NoRef capabilities
-    else `Ref ((obj_id, refname, false), capabilities)
+    && Reference.to_string reference = "capabilities"
+    && peeled
+    then `No_ref capabilities
+    else `Ref ((obj_id, reference, peeled), capabilities)
 
-  let shallow decoder =
+  let p_shallow decoder =
     let _ = p_string "shallow" decoder in
     p_space decoder;
     let obj_id = p_hash decoder in
     obj_id
 
-  let unshallow decoder =
+  let p_unshallow decoder =
     let _ = p_string "unshallow" decoder in
     p_space decoder;
     let obj_id = p_hash decoder in
     obj_id
 
-  let other_ref decoder =
+  let p_other_ref decoder =
     let obj_id = p_hash decoder in
     p_space decoder;
-    let refname = Cstruct.to_string (p_while0 (function '^' -> false | _ -> true) decoder) in
+    let reference = p_reference decoder in
 
     let peeled = match p_peek_char decoder with
       | Some '^' ->
@@ -623,104 +1086,93 @@ struct
         p_char '}' decoder;
         true
       | Some chr -> raise (Leave (err_unexpected_char chr decoder))
-      | None -> false
-    in
+      | None -> false in
 
-    (obj_id, refname, peeled)
+    (obj_id, reference, peeled)
 
-  type advertised_refs =
-    { shallow      : Hash.t list
-    ; refs         : (Hash.t * string * bool) list
-    ; capabilities : Capability.t list }
+  type no_line =
+    [ `Empty | `Malformed | `Flush ]
 
-  let pp_advertised_refs ppf { shallow; refs; capabilities; } =
-    let sep = Fmt.unit ";@ " in
-    let pp_ref ppf (hash, refname, peeled) =
-      match peeled with
-      | true -> Fmt.pf ppf "%a %s^{}" Hash.pp hash refname
-      | false -> Fmt.pf ppf "%a %s" Hash.pp hash refname
-    in
-
-    Fmt.pf ppf "{ @[<hov>shallow = [ %a ];@ \
-                         refs = [ %a ];@ \
-                         capabilites = [ %a ];@] }"
-      (Fmt.hvbox (Fmt.list ~sep Hash.pp)) shallow
-      (Fmt.hvbox (Fmt.list ~sep pp_ref)) refs
-      (Fmt.hvbox (Fmt.list ~sep Capability.pp)) capabilities
-
-  let rec p_advertised_refs ~pkt ~first ~shallow_state refs decoder =
-    match pkt with
-    | `Flush ->
-      p_return refs decoder
+  let err_expected_line decoder = function
     | `Empty -> raise (Leave (err_unexpected_empty_pkt_line decoder))
     | `Malformed -> raise (Leave (err_malformed_pkt_line decoder))
-    | `Line _ ->
-      match p_peek_char decoder with
-      | Some 's' ->
-        let rest = shallow decoder in
-        p_pkt_line (p_advertised_refs
-                      ~first:true
-                      ~shallow_state:true
-                      { refs with shallow = rest :: refs.shallow })
-          decoder
-      | Some _ when shallow_state = false ->
-        if first = false
-        then match p_first_ref decoder with
-          | `NoRef capabilities ->
-            p_pkt_line (p_advertised_refs
-                          ~first:true
-                          ~shallow_state:false
-                          { refs with capabilities })
-              decoder
-          | `Ref (first, capabilities) ->
-            p_pkt_line (p_advertised_refs
-                          ~first:true
-                          ~shallow_state:false
-                          { refs with capabilities
-                                    ; refs = [ first ] })
-              decoder
-        else
-          let rest = other_ref decoder in
-          p_pkt_line (p_advertised_refs
-                        ~first:true
-                        ~shallow_state:false
-                        { refs with refs = rest :: refs.refs })
-            decoder
-      | Some chr -> raise (Leave (err_unexpected_char chr decoder))
-      | None -> raise (Leave (err_unexpected_end_of_input decoder))
+    | `Flush -> raise (Leave (err_unexpected_flush_pkt_line decoder))
+
+  type no_line_and_flush =
+    [ `Empty | `Malformed ]
+
+  let err_expected_line_or_flush decoder = function
+    | #no_line as v -> err_expected_line decoder v
+
+  let p_pkt_flush k decoder =
+    p_pkt_line (fun ~pkt decoder -> match pkt with
+                                    | #no_line_and_flush as v -> err_expected_line_or_flush decoder v
+                                    | `Flush -> k decoder
+                                    | `Line _ -> raise (Leave (err_unexpected_pkt_line decoder)))
+               decoder
+
+  let p_advertised_refs ~pkt (advertised_refs:Common.advertised_refs) decoder =
+    let rec go_shallows ~pkt (advertised_refs:Common.advertised_refs) decoder = match pkt with
+      | #no_line_and_flush as v -> err_expected_line_or_flush decoder v
+      | `Flush -> p_return advertised_refs decoder
+      | `Line _ ->
+        match p_peek_char decoder with
+        | Some 's' ->
+          let hash = p_shallow decoder in
+          p_pkt_line (go_shallows { advertised_refs with shallow = hash :: advertised_refs.shallow }) decoder
+        | Some chr -> raise (Leave (err_unexpected_char chr decoder))
+        | None -> raise (Leave (err_unexpected_end_of_input decoder)) in
+
+    let rec go_other_refs ~pkt (advertised_refs:Common.advertised_refs) decoder = match pkt with
+      | #no_line_and_flush as v -> err_expected_line_or_flush decoder v
+      | `Flush -> p_return advertised_refs decoder
+      | `Line _ ->
+        match p_peek_char decoder with
+        | Some 's' ->
+          go_shallows ~pkt advertised_refs decoder
+        | Some _ ->
+          let x = p_other_ref decoder in
+          p_pkt_line (go_other_refs { advertised_refs with refs = x :: advertised_refs.refs }) decoder
+        | None -> raise (Leave (err_unexpected_end_of_input decoder)) in
+
+    let go_first_ref ~pkt (advertised_refs:Common.advertised_refs) decoder = match pkt with
+      | #no_line as v -> err_expected_line decoder v
+      | `Line _ ->
+        match p_first_ref decoder with
+        | `No_ref capabilities ->
+          p_pkt_line (go_shallows { advertised_refs with capabilities }) decoder
+        | `Ref (first, capabilities) ->
+          p_pkt_line (go_other_refs { advertised_refs with capabilities
+                                                         ; refs = [ first ] }) decoder in
+
+    go_first_ref ~pkt advertised_refs decoder
 
   let p_http_advertised_refs ~service ~pkt decoder =
     match pkt with
-    | `Flush -> raise (Leave (err_unexpected_flush_pkt_line decoder))
-    | `Empty -> raise (Leave (err_unexpected_empty_pkt_line decoder))
-    | `Malformed -> raise (Leave (err_malformed_pkt_line decoder))
+    | #no_line as v -> err_expected_line decoder v
     | `Line _ ->
       ignore @@ p_string "# service=" decoder;
       ignore @@ p_string service decoder;
       p_pkt_line (fun ~pkt decoder -> match pkt with
+          | #no_line_and_flush as v -> err_expected_line_or_flush decoder v
           | `Flush ->
             p_pkt_line
               (p_advertised_refs
-                 ~first:false
-                 ~shallow_state:false
                  { shallow = []
                  ; refs = []
                  ; capabilities = [] })
               decoder
-          | `Empty -> raise (Leave (err_unexpected_empty_pkt_line decoder))
-          | `Malformed -> raise (Leave (err_malformed_pkt_line decoder))
-          | `Line _ as pkt -> p_advertised_refs ~pkt ~first:false ~shallow_state:false
-                                { shallow = []
-                                ; refs = []
-                                ; capabilities = [] }
-                                decoder)
+          | `Line _ as pkt ->
+            p_advertised_refs ~pkt
+              { shallow = []
+              ; refs = []
+              ; capabilities = [] }
+              decoder)
         decoder
 
   let p_advertised_refs decoder =
     p_pkt_line
       (p_advertised_refs
-         ~first:false
-         ~shallow_state:false
          { shallow = []
          ; refs = []
          ; capabilities = [] })
@@ -731,29 +1183,16 @@ struct
       (p_http_advertised_refs ~service)
       decoder
 
-  type shallow_update =
-    { shallow   : Hash.t list
-    ; unshallow : Hash.t list }
-
-  let pp_shallow_update ppf { shallow; unshallow; } =
-    let sep = Fmt.unit ";@ " in
-
-    Fmt.pf ppf "{ @[<hov>shallow = [ %a ];@ \
-                         unshallow = [ %a ];@] }"
-      (Fmt.hvbox (Fmt.list ~sep Hash.pp)) shallow
-      (Fmt.hvbox (Fmt.list ~sep Hash.pp)) unshallow
-
-  let rec p_shallow_update ~pkt lst decoder = match pkt with
-    | `Flush -> p_return lst decoder
-    | `Empty -> raise (Leave (err_unexpected_empty_pkt_line decoder))
-    | `Malformed -> raise (Leave (err_malformed_pkt_line decoder))
+  let rec p_shallow_update ~pkt (shallow_update:Common.shallow_update) decoder = match pkt with
+    | #no_line_and_flush as v -> err_expected_line_or_flush decoder v
+    | `Flush -> p_return shallow_update decoder
     | `Line _ -> match p_peek_char decoder with
       | Some 's' ->
-        let x = shallow decoder in
-        p_pkt_line (p_shallow_update { lst with shallow = x :: lst.shallow }) decoder
+        let x = p_shallow decoder in
+        p_pkt_line (p_shallow_update { shallow_update with Common.shallow = x :: shallow_update.shallow }) decoder
       | Some 'u' ->
-        let x = unshallow decoder in
-        p_pkt_line (p_shallow_update { lst with unshallow = x :: lst.unshallow }) decoder
+        let x = p_unshallow decoder in
+        p_pkt_line (p_shallow_update { shallow_update with Common.unshallow = x :: shallow_update.unshallow }) decoder
       | Some chr -> raise (Leave (err_unexpected_char chr decoder))
       | None -> raise (Leave (err_unexpected_end_of_input decoder))
 
@@ -762,7 +1201,7 @@ struct
                                  ; unshallow = [] })
       decoder
 
-  let multi_ack_detailed decoder =
+  let p_multi_ack_detailed decoder =
     ignore @@ p_string "ACK" decoder;
     p_space decoder;
     let hash = p_hash decoder in
@@ -785,7 +1224,7 @@ struct
 
     hash, detail
 
-  let multi_ack decoder =
+  let p_multi_ack decoder =
     ignore @@ p_string "ACK" decoder;
     p_space decoder;
     let hash = p_hash decoder in
@@ -794,128 +1233,88 @@ struct
 
     hash
 
-  let ack decoder =
+  let p_ack decoder =
     ignore @@ p_string "ACK" decoder;
     p_space decoder;
     let hash = p_hash decoder in
 
     hash
 
-  type acks =
-    { shallow   : Hash.t list
-    ; unshallow : Hash.t list
-    ; acks      : (Hash.t * [ `Common | `Ready | `Continue | `ACK ]) list }
-
-  let pp_ack ppf (hash, detail) =
-    let pp_detail ppf = function
-      | `Common -> Fmt.string ppf "`Common"
-      | `Ready -> Fmt.string ppf "`Ready"
-      | `Continue -> Fmt.string ppf "`Continue"
-      | `ACK -> Fmt.string ppf "`ACK"
-    in
-
-    (Fmt.pair Hash.pp pp_detail) ppf (hash, detail)
-
-  let pp_acks ppf { shallow; unshallow; acks; } =
-    let sep = Fmt.unit ";@ " in
-
-    Fmt.pf ppf "{ @[<hov>shallow = [ %a ];@ \
-                         unshallow = [ %a ];@ \
-                         acks = [ %a ];@] }"
-      (Fmt.hvbox (Fmt.list ~sep Hash.pp)) shallow
-      (Fmt.hvbox (Fmt.list ~sep Hash.pp)) unshallow
-      (Fmt.hvbox (Fmt.list ~sep pp_ack)) acks
-
-  type negociation_result =
-    | NAK
-    | ACK of Hash.t
-    | ERR of string
-
-  let pp_negociation_result ppf = function
-    | NAK -> Fmt.string ppf "NAK"
-    | ACK hash -> Fmt.pf ppf "(ACK %a)" Hash.pp hash
-    | ERR err -> Fmt.pf ppf "(ERR %s)" err
-
   let p_negociation_result ~pkt k decoder = match pkt with
-    | `Flush -> raise (Leave (err_unexpected_flush_pkt_line decoder))
-    | `Empty -> raise (Leave (err_unexpected_empty_pkt_line decoder))
-    | `Malformed -> raise (Leave (err_malformed_pkt_line decoder))
+    | #no_line as v -> err_expected_line decoder v
     | `Line _ ->
       match p_peek_char decoder with
       | Some 'N' ->
         ignore @@ p_string "NAK" decoder;
-        k NAK decoder
+        k Common.NAK decoder
       | Some 'A' ->
         ignore @@ p_string "ACK" decoder;
         p_space decoder;
         let hash = p_hash decoder in
-        k (ACK hash) decoder
+        k (Common.ACK hash) decoder
       | Some 'E' ->
         ignore @@ p_string "ERR" decoder;
         p_space decoder;
         let msg = Cstruct.to_string @@ p_while1 (fun _ -> true) decoder in
-        k (ERR msg) decoder
+        k (Common.ERR msg) decoder
       | Some chr -> raise (Leave (err_unexpected_char chr decoder))
       | None -> raise (Leave (err_unexpected_end_of_input decoder))
 
-  let rec p_negociation ~pkt ~mode k rest acks decoder =
+  let p_negociation_one ~pkt ~mode k decoder =
     match pkt with
-    | `Flush -> raise (Leave (err_unexpected_flush_pkt_line decoder))
-    | `Empty -> raise (Leave (err_unexpected_empty_pkt_line decoder))
-    | `Malformed -> raise (Leave (err_malformed_pkt_line decoder))
+    | #no_line as v -> err_expected_line decoder v
     | `Line _ ->
       match p_peek_char decoder, mode with
       | Some 's', _ ->
-        let x = shallow decoder in
-        p_pkt_line (p_negociation ~mode k rest { acks with shallow = x :: acks.shallow }) decoder
+        let x = p_shallow decoder in
+        k (`Shallow x) decoder
       | Some 'u', _ ->
-        let x = unshallow decoder in
-        p_pkt_line (p_negociation ~mode k rest { acks with unshallow = x :: acks.unshallow }) decoder
+        let x = p_unshallow decoder in
+        k (`Unshallow x) decoder
       | Some 'A', `Multi_ack_detailed ->
-        let (hash, detail) = multi_ack_detailed decoder in
-        let rest = List.filter (fun hash' -> not (Hash.equal hash hash')) rest in
-        let next =
-          if List.length rest > 0
-          then p_pkt_line (p_negociation ~mode k rest { acks with acks = (hash, detail) :: acks.acks })
-          else k { acks with acks = List.rev acks.acks } ~pkt:`Empty in
-        next decoder
+        let (hash, detail) = p_multi_ack_detailed decoder in
+        k (`Ack (hash, detail)) decoder
       | Some 'A', `Multi_ack ->
-        let hash = multi_ack decoder in
-        let rest = List.filter (fun hash' -> not (Hash.equal hash hash')) rest in
-        let next =
-          if List.length rest > 0
-          then p_pkt_line (p_negociation ~mode k rest { acks with acks = (hash, `Continue) :: acks.acks })
-          else k { acks with acks = List.rev acks.acks } ~pkt:`Empty in
-        next decoder
+        let hash = p_multi_ack decoder in
+        k (`Ack (hash, `Continue)) decoder
       | Some 'A', `Ack ->
-        let hash = ack decoder in
-        k { acks with acks = [ (hash, `ACK) ] } ~pkt:`Empty decoder
-      | Some 'N', (`Multi_ack | `Multi_ack_detailed) ->
+        let hash = p_ack decoder in
+        k (`Ack (hash, `ACK)) decoder
+      | Some 'N', _ ->
         ignore @@ p_string "NAK" decoder;
-        k { acks with acks = List.rev acks.acks } ~pkt:`Empty decoder
-      | Some 'N', `Ack ->
-        ignore @@ p_string "NAK" decoder;
-        k { acks with acks = List.rev acks.acks } ~pkt:`Empty decoder
+        k `Nak decoder
       | Some chr, _ -> raise (Leave (err_unexpected_char chr decoder))
       | None, _ -> raise (Leave (err_unexpected_end_of_input decoder))
 
-  let p_negociation ~mode has decoder =
-    p_pkt_line (p_negociation ~mode
-                  (fun value ~pkt:_ decoder -> p_return value decoder)
-                  has
-                  { shallow = []
-                  ; unshallow = []
-                  ; acks = [] })
+  let p_negociation ~mode k hashes (acks:Common.acks) decoder =
+    let rec go hashes (acks:Common.acks) v decoder = match v with
+      | `Shallow hash ->
+        let acks = { acks with shallow = hash :: acks.shallow } in
+        p_pkt_line (p_negociation_one ~mode (go hashes acks)) decoder
+      | `Unshallow hash ->
+        let acks = { acks with unshallow = hash :: acks.unshallow } in
+        p_pkt_line (p_negociation_one ~mode (go hashes acks)) decoder
+      | `Ack (hash, `ACK) (* when mode = `Ack *) ->
+        k { acks with acks = [ hash, `ACK ] } decoder
+      | `Ack (hash, detail) ->
+        let hashes = Hash.Set.remove hash hashes in
+        let acks = { acks with acks = (hash, detail) :: acks.acks } in
+
+        if Hash.Set.is_empty hashes
+        then k { acks with acks = List.rev acks.acks } decoder
+        else p_pkt_line (p_negociation_one ~mode (go hashes acks)) decoder
+      | `Nak -> k acks decoder in
+    p_pkt_line (p_negociation_one ~mode (go hashes acks)) decoder
+
+  let p_negociation ~mode hashes decoder =
+    p_negociation ~mode p_return hashes
+      { shallow = []
+      ; unshallow = []
+      ; acks = [] }
       decoder
 
-  type pack =
-    [ `Raw of Cstruct.t
-    | `Out of Cstruct.t
-    | `Err of Cstruct.t ]
-
   let p_pack ~pkt ~mode decoder = match pkt, mode with
-    | `Malformed, _ -> raise (Leave (err_malformed_pkt_line decoder))
-    | `Empty, _ -> raise (Leave (err_unexpected_empty_pkt_line decoder))
+    | #no_line_and_flush as v, _ -> err_expected_line_or_flush decoder v
     | `Line n, `No_multiplexe ->
       let raw = Cstruct.sub decoder.buffer decoder.pos n in
       decoder.pos <- decoder.pos + n;
@@ -937,20 +1336,6 @@ struct
   let p_pack ~mode decoder =
     p_pkt_line ~strict:true (p_pack ~mode) decoder
 
-  type report_status =
-    { unpack   : (unit, string) result
-    ; commands : (string, string * string) result list }
-
-  let pp_report_status ppf { unpack; commands; } =
-    let sep = Fmt.unit ";@ " in
-
-    let pp_command = Fmt.result ~ok:Fmt.string ~error:(Fmt.pair Fmt.string Fmt.string) in
-
-    Fmt.pf ppf "{ @[<hov>unpack = %a;@ \
-                         commands = [ %a ];@] }"
-      (Fmt.result ~ok:(Fmt.unit "ok") ~error:Fmt.string) unpack
-      (Fmt.hvbox (Fmt.list ~sep pp_command)) commands
-
   let p_unpack decoder : (unit, string) result =
     ignore @@ p_string "unpack" decoder;
     p_space decoder;
@@ -960,59 +1345,48 @@ struct
     | "ok" -> Ok ()
     | err  -> Error err
 
-  let p_command_status decoder : (string, string * string) result =
+  let p_command_status decoder : (Reference.t, Reference.t * string) result =
     let status = p_while1 (function ' ' -> false | _ -> true) decoder in
 
     match Cstruct.to_string status with
     | "ok" ->
       p_space decoder;
-      let refname = p_while1 (fun _ -> true) decoder |> Cstruct.to_string in
-      Ok refname
+      let reference = p_reference decoder in
+      Ok reference
     | "ng" ->
       p_space decoder;
-      let refname = p_while1 (function ' ' -> false | _ -> true) decoder |> Cstruct.to_string in
+      let reference = p_reference decoder in
       p_space decoder;
       let msg = p_while1 (fun _ -> true) decoder |> Cstruct.to_string in
-      Error (refname, msg)
+      Error (reference, msg)
     | _ -> raise (Leave (err_unexpected_char '\000' decoder))
 
-  (* XXX(dinosaure): The Smart protocol is a shit. Le fin mot de
-     l'histoire c'est que comme ils ont eu la flemme de faire un vrai
-     truc, ils ont decide de mettre un PKT dans un PKT pour le fun si on
-     a une sideband. C'est super drole. *)
   let rec p_http_report_status ~pkt ?unpack ?(commands = []) ~sideband ~references decoder =
     let go_unpack ~pkt k decoder =
       match pkt with
-      | `Malformed -> raise (Leave (err_malformed_pkt_line decoder))
-      | `Flush -> raise (Leave (err_unexpected_flush_pkt_line decoder))
-      | `Empty -> raise (Leave (err_unexpected_empty_pkt_line decoder))
+      | #no_line as v -> err_expected_line decoder v
       | `Line _ ->
         match p_peek_char decoder with
         | Some 'u' ->
           let unpack = p_unpack decoder in
           k unpack decoder
         | Some chr -> raise (Leave (err_unexpected_char chr decoder))
-        | None -> raise (Leave (err_unexpected_end_of_input decoder))
-    in
+        | None -> raise (Leave (err_unexpected_end_of_input decoder)) in
 
     let go_command ~pkt kcons kfinal decoder =
       match pkt with
-      | `Malformed -> raise (Leave (err_malformed_pkt_line decoder))
+      | #no_line_and_flush as v -> err_expected_line_or_flush decoder v
       | `Flush -> kfinal decoder
-      | `Empty -> raise (Leave (err_unexpected_empty_pkt_line decoder))
       | `Line _ ->
         match p_peek_char decoder with
         | Some ('o' | 'n') ->
           let command = p_command_status decoder in
           kcons command decoder
         | Some chr -> raise (Leave (err_unexpected_char chr decoder))
-        | None -> raise (Leave (err_unexpected_end_of_input decoder))
-    in
+        | None -> raise (Leave (err_unexpected_end_of_input decoder)) in
 
     match pkt, sideband, unpack with
-    | `Malformed, _, _ -> raise (Leave (err_malformed_pkt_line decoder))
-    | `Flush, _, _ -> raise (Leave (err_unexpected_flush_pkt_line decoder))
-    | `Empty, _, _ -> raise (Leave (err_unexpected_empty_pkt_line decoder))
+    | #no_line as v, _, _ -> err_expected_line decoder v
     | `Line _, (`Side_band | `Side_band_64k), unpack ->
       (match p_peek_char decoder with
        | Some '\001' ->
@@ -1029,7 +1403,7 @@ struct
               p_pkt_line ~strict:true
                 (p_http_report_status ~unpack ~sideband ~commands:(command :: commands) ~references)
                 decoder in
-            let kfinal decoder = p_return { unpack; commands; } decoder in
+            let kfinal decoder = p_return { Common.unpack; commands; } decoder in
             p_pkt_line (go_command kcons kfinal) decoder)
        | Some '\002' ->
          ignore @@ p_while0 (fun _ -> true) decoder;
@@ -1048,7 +1422,7 @@ struct
     | `Line _ as pkt, _, Some unpack ->
       let kcons command decoder =
         p_pkt_line ~strict:true (p_http_report_status ~unpack ~sideband ~commands:(command :: commands) ~references) decoder in
-      let kfinal decoder = p_return { unpack; commands; } decoder in
+      let kfinal decoder = p_return { Common.unpack; commands; } decoder in
       go_command ~pkt kcons kfinal decoder
 
   let p_http_report_status references sideband decoder =
@@ -1073,10 +1447,9 @@ struct
     in
 
     match pkt, sideband, unpack, commands with
-    | `Malformed, _, _, _ -> raise (Leave (err_malformed_pkt_line decoder))
-    | `Flush, _, Some unpack, Some (_ :: _ as commands) -> p_return { unpack; commands; } decoder
+    | #no_line_and_flush as v, _, _, _  -> err_expected_line_or_flush decoder v
+    | `Flush, _, Some unpack, Some (_ :: _ as commands) -> p_return { Common.unpack; commands; } decoder
     | `Flush, _, _, _ -> raise (Leave (err_unexpected_flush_pkt_line decoder))
-    | `Empty, _, _, _ -> raise (Leave (err_unexpected_empty_pkt_line decoder))
     | `Line _, (`Side_band | `Side_band_64k), _, _ ->
       (match p_peek_char decoder with
        | Some '\001' ->
@@ -1096,16 +1469,208 @@ struct
   let p_report_status sideband decoder =
     p_pkt_line (p_report_status ~unpack:None ~commands:None ~sideband) decoder
 
+  let p_first_want decoder =
+    ignore @@ p_string "want" decoder;
+    p_space decoder;
+    let obj_id = p_hash decoder in
+    p_space decoder;
+    let capabilities = p_capabilities1 decoder in
+    (obj_id, capabilities)
+
+  let p_want decoder =
+    ignore @@ p_string "want" decoder;
+    p_space decoder;
+    let obj_id = p_hash decoder in
+    obj_id
+
+  type 'a intl = Int: int intl | Int64: int64 intl
+
+  let p_int, p_int64 =
+    let go : type a. a intl -> decoder -> a
+      = fun intl decoder ->
+      let n = Cstruct.to_string @@ p_while1 (function '0' .. '9' -> true | _ -> false) decoder in
+      (match intl with Int -> int_of_string n | Int64 -> Int64.of_string n) in
+    go Int, go Int64
+
+  let p_deepen decoder =
+    ignore @@ p_string "deepen" decoder;
+    match p_peek_char decoder with
+    | Some ' ' -> p_junk_char decoder; (`Depth (p_int decoder))
+    | Some '-' ->
+       p_junk_char decoder;
+       (match p_peek_char decoder with
+        | Some 's' ->
+           ignore @@ p_string "since" decoder;
+           p_space decoder;
+           (`Timestamp (p_int64 decoder))
+        | Some 'n' ->
+           ignore @@ p_string "not" decoder;
+           p_space decoder;
+           (`Ref (p_reference decoder))
+        | Some chr -> raise (Leave (err_unexpected_char chr decoder))
+        | None -> raise (Leave (err_unexpected_end_of_input decoder)))
+    | Some chr -> raise (Leave (err_unexpected_char chr decoder))
+    | None -> raise (Leave (err_unexpected_end_of_input decoder))
+
+  let p_upload_request decoder =
+    let go_deepen ~pkt (upload_request:Common.upload_request) decoder = match pkt with
+      | #no_line_and_flush as v -> err_expected_line_or_flush decoder v
+      | `Flush -> p_return upload_request decoder
+      | `Line _ -> match p_peek_char decoder with
+                   | Some 'd' ->
+                      let deepen = p_deepen decoder in
+                      p_pkt_flush (p_return { upload_request with Common.deep = Some deepen }) decoder
+                   | Some chr -> raise (Leave (err_unexpected_char chr decoder))
+                   | None -> raise (Leave (err_unexpected_end_of_input decoder)) in
+    let rec go_shallows ~pkt (upload_request:Common.upload_request) decoder = match pkt with
+      | #no_line_and_flush as v -> err_expected_line_or_flush decoder v
+      | `Flush -> p_return upload_request decoder
+      | `Line _ -> match p_peek_char decoder with
+                   | Some 's' ->
+                      let shallow = p_shallow decoder in
+                      p_pkt_line (go_shallows { upload_request with Common.shallow = shallow :: upload_request.shallow }) decoder
+                   | Some 'd' -> go_deepen ~pkt upload_request decoder
+                   | Some chr -> raise (Leave (err_unexpected_char chr decoder))
+                   | None -> raise (Leave (err_unexpected_end_of_input decoder)) in
+    let rec go_wants ~pkt (upload_request:Common.upload_request) decoder = match pkt with
+      | #no_line_and_flush as v -> err_expected_line_or_flush decoder v
+      | `Flush -> p_return upload_request decoder
+      | `Line _ -> match p_peek_char decoder with
+                   | Some 'w' ->
+                      let want = p_want decoder in
+                      p_pkt_line (go_wants { upload_request with Common.want = fst upload_request.Common.want, want :: (snd upload_request.Common.want) }) decoder
+                   | Some 's' -> go_shallows ~pkt upload_request decoder
+                   | Some 'd' -> go_deepen ~pkt upload_request decoder
+                   | Some chr -> raise (Leave (err_unexpected_char chr decoder))
+                   | None -> raise (Leave (err_unexpected_end_of_input decoder)) in
+    let go_first_want ~pkt decoder = match pkt with
+      | #no_line as v -> err_expected_line decoder v
+      | `Line _ ->
+         let (obj_id, capabilities) = p_first_want decoder in
+         p_pkt_line (go_wants { Common.want = (obj_id, []); capabilities; shallow = []; deep = None; }) decoder in
+    p_pkt_line go_first_want decoder
+
+  let p_request_command decoder =
+    ignore @@ p_string "git-" decoder;
+
+    match p_peek_char decoder with
+    | Some 'r' ->
+      ignore @@ p_string "receive-pack" decoder;
+      `Receive_pack
+    | Some 'u' ->
+      ignore @@ p_string "upload-" decoder;
+
+      (match p_peek_char decoder with
+       | Some 'p' ->
+         ignore @@ p_string "pack" decoder;
+         `Upload_pack
+       | Some 'a' ->
+         ignore @@ p_string "archive" decoder;
+         `Upload_archive
+       | Some chr ->
+         raise (Leave (err_unexpected_char chr decoder))
+       | None ->
+         raise (Leave (err_unexpected_end_of_input decoder)))
+    | None ->
+      raise (Leave (err_unexpected_end_of_input decoder))
+    | Some chr ->
+      raise (Leave (err_unexpected_char chr decoder))
+
+  let p_host decoder =
+    match p_peek_char decoder with
+    | None -> None
+    | Some _ ->
+      ignore @@ p_string "host=" decoder;
+      let host = Cstruct.to_string @@ p_while1 (function ':' | '\x00' -> false | _ -> true) decoder in
+      match p_peek_char decoder with
+      | Some ':' ->
+        p_junk_char decoder;
+        let port = int_of_string @@ Cstruct.to_string @@ p_while1 (function '0' .. '9' -> true | _ -> false) decoder in
+        p_junk_char decoder;
+        Some (host, Some port)
+      | Some '\x00' ->
+        p_junk_char decoder;
+        Some (host, None)
+      | Some chr -> raise (Leave (err_unexpected_char chr decoder))
+      | None -> raise (Leave (err_unexpected_end_of_input decoder))
+
+  let p_git_proto_request decoder =
+    let request_command = p_request_command decoder in
+    p_space decoder;
+    let pathname = Cstruct.to_string @@ p_while1 (function '\x00' -> false | _ -> true) decoder in
+    p_null decoder;
+    let host = p_host decoder in
+
+    p_return { Common.request_command
+             ; pathname
+             ; host } decoder
+
+  let p_git_proto_request decoder =
+    p_pkt_line (fun ~pkt decoder -> match pkt with
+        | #no_line as v -> err_expected_line decoder v
+        | `Line _ -> p_git_proto_request decoder)
+      decoder
+
+  let p_command decoder =
+    let hash0 = p_hash decoder in
+    p_space decoder;
+    let hash1 = p_hash decoder in
+    p_space decoder;
+    let reference = p_reference decoder in
+
+    match Hash.equal zero_id hash0, Hash.equal zero_id hash1 with
+    | true, false -> Common.Create (hash1, reference)
+    | false, true -> Common.Delete (hash0, reference)
+    | false, false -> Common.Update (hash0, hash1, reference)
+    | true, true -> raise (Leave (err_unexpected_hashes hash0 hash1 decoder))
+
+  let p_first_command decoder =
+    let command = p_command decoder in
+    p_null decoder;
+    let capabilities = p_capabilities1 decoder in
+    command, capabilities
+
+  let p_update_request decoder =
+    let rec p_commands (first, commands) ~pkt decoder = match pkt with
+      | #no_line_and_flush as v -> err_expected_line_or_flush decoder v
+      | `Flush ->
+        let (shallows, first, capabilities) = first in
+        p_return { Common.shallow = shallows
+                 ; requests = (`Raw (first, commands))
+                 ; capabilities } decoder
+      | `Line _ ->
+        let command = p_command decoder in
+        p_pkt_line (p_commands (first, command :: commands)) decoder in
+
+    let p_first_command shallows decoder =
+      let command, capabilities = p_first_command decoder in
+      p_pkt_line (p_commands ((shallows, command, capabilities), [])) decoder in
+
+    let rec p_shallows shallows ~pkt decoder = match pkt with
+      | #no_line as v -> err_expected_line decoder v
+      | `Line _ -> match p_peek_char decoder with
+        | Some 's' ->
+          let shallow = p_shallow decoder in
+          p_pkt_line (p_shallows (shallow :: shallows)) decoder
+        | Some  _ ->
+          p_first_command shallows decoder
+        | None -> raise (Leave (err_unexpected_end_of_input decoder)) in
+
+    p_pkt_line (p_shallows []) decoder
+
   (* XXX(dinosaure): désolé mais ce GADT, c'est quand même la classe. *)
   type _ transaction =
-    | HttpReferenceDiscovery : string -> advertised_refs transaction
-    | ReferenceDiscovery : advertised_refs transaction
-    | ShallowUpdate      : shallow_update transaction
-    | Negociation        : Hash.t list * ack_mode -> acks transaction
-    | NegociationResult  : negociation_result transaction
-    | PACK               : side_band -> flow transaction
-    | ReportStatus       : side_band -> report_status transaction
-    | HttpReportStatus   : string list * side_band -> report_status transaction
+    | HttpReferenceDiscovery : string -> Common.advertised_refs transaction
+    | ReferenceDiscovery     : Common.advertised_refs transaction
+    | ShallowUpdate          : Common.shallow_update transaction
+    | Negociation            : Hash.Set.t * ack_mode -> Common.acks transaction
+    | NegociationResult      : Common.negociation_result transaction
+    | PACK                   : side_band -> flow transaction
+    | ReportStatus           : side_band -> Common.report_status transaction
+    | HttpReportStatus       : string list * side_band -> Common.report_status transaction
+    | Upload_request         : Common.upload_request transaction
+    | Git_proto_request      : Common.git_proto_request transaction
+    | Update_request         : Common.update_request transaction
   and ack_mode =
     [ `Ack | `Multi_ack | `Multi_ack_detailed ]
   and flow =
@@ -1116,26 +1681,59 @@ struct
   let decode
     : type result. decoder -> result transaction -> result state
     = fun decoder -> function
-    | HttpReferenceDiscovery service -> p_safe (p_http_advertised_refs ~service) decoder
-    | ReferenceDiscovery             -> p_safe p_advertised_refs decoder
-    | ShallowUpdate                  -> p_safe p_shallow_update decoder
-    | Negociation (has, ackmode)     -> p_safe (p_negociation ~mode:ackmode has) decoder
-    | NegociationResult              -> p_safe p_negociation_result decoder
-    | PACK sideband                  -> p_safe (p_pack ~mode:sideband) decoder
-    | ReportStatus sideband          -> p_safe (p_report_status sideband) decoder
-    | HttpReportStatus (refs, sideband) -> p_safe (p_http_report_status refs sideband) decoder
+      | HttpReferenceDiscovery service    -> p_safe (p_http_advertised_refs ~service) decoder
+      | ReferenceDiscovery                -> p_safe p_advertised_refs decoder
+      | ShallowUpdate                     -> p_safe p_shallow_update decoder
+      | Negociation (hashes, ackmode)     -> p_safe (p_negociation ~mode:ackmode hashes) decoder
+      | NegociationResult                 -> p_safe p_negociation_result decoder
+      | PACK sideband                     -> p_safe (p_pack ~mode:sideband) decoder
+      | ReportStatus sideband             -> p_safe (p_report_status sideband) decoder
+      | HttpReportStatus (refs, sideband) -> p_safe (p_http_report_status refs sideband) decoder
+      | Upload_request                    -> p_safe p_upload_request decoder
+      | Git_proto_request                 -> p_safe p_git_proto_request decoder
+      | Update_request                    -> p_safe p_update_request decoder
 
   let decoder () =
     { buffer = Cstruct.create 65535
     ; pos    = 0
     ; max    = 0
     ; eop    = None }
+
+  let of_string : type v. string -> v transaction -> (v, error * Cstruct.t * int) result = fun s t ->
+    let decoder = decoder () in
+
+    let rec go consumed = function
+      | Ok v -> (Ok v: (v, error * Cstruct.t * int) result)
+      | Read { buffer
+             ; off
+             ; len
+             ; continue } ->
+        if consumed = String.length s
+        then (Error (err_unexpected_end_of_input decoder): (v, error * Cstruct.t * int) result)
+        else begin
+          let len = min (String.length s - consumed) len in
+          Cstruct.blit_from_string s consumed buffer off len;
+          go (consumed + len) @@ continue len
+        end
+      | Error { err
+              ; buf
+              ; committed } ->
+        (Error (err, buf, committed): (v, error * Cstruct.t * int) result) in
+    go 0 @@ decode decoder t
 end
 
-module Encoder (H : S.HASH with type hex = string)
-  : ENCODER with module Hash = H =
+module Encoder
+    (Hash: S.HASH)
+    (Reference: Reference.S)
+    (Common: COMMON with type hash := Hash.t and type reference := Reference.t)
+  : ENCODER
+    with module Hash = Hash
+     and module Reference = Reference
+     and module Common = Common =
 struct
-  module Hash = H
+  module Hash = Hash
+  module Reference = Reference
+  module Common = Common
 
   type encoder =
     { mutable payload : Cstruct.t
@@ -1259,10 +1857,10 @@ struct
      @@ writes (Fmt.strf "%Ld" timestamp) k)
       encoder
 
-  let w_deepen_not refname k encoder =
+  let w_deepen_not reference k encoder =
     (writes "deepen-not"
      @@ w_space
-     @@ writes refname k)
+     @@ writes (Reference.to_string reference) k)
       encoder
 
   let w_first_want ?lf obj_id capabilities k encoder =
@@ -1275,16 +1873,10 @@ struct
     pkt_line ?lf (w_deepen depth) k encoder
   let w_deepen_since ?lf timestamp k encoder =
     pkt_line ?lf (w_deepen_since timestamp) k encoder
-  let w_deepen_not ?lf refname k encoder =
-    pkt_line ?lf (w_deepen_not refname) k encoder
+  let w_deepen_not ?lf reference k encoder =
+    pkt_line ?lf (w_deepen_not reference) k encoder
   let w_done_and_lf k encoder =
     pkt_line ~lf:true (writes "done") k encoder
-
-  type upload_request =
-    { want         : Hash.t * Hash.t list
-    ; capabilities : Capability.t list
-    ; shallow      : Hash.t list
-    ; deep         : [ `Depth of int | `Timestamp of int64 | `Ref of string ] option }
 
   let w_list w l k encoder =
     let rec aux l encoder = match l with
@@ -1294,7 +1886,7 @@ struct
     in
     aux l encoder
 
-  let w_upload_request ?lf upload_request k encoder =
+  let w_upload_request ?lf (upload_request:Common.upload_request) k encoder =
     let first, rest = upload_request.want in
 
     (w_first_want ?lf first upload_request.capabilities
@@ -1303,17 +1895,10 @@ struct
      @@ (match upload_request.deep with
          | Some (`Depth depth)  -> w_deepen ?lf depth
          | Some (`Timestamp t) -> w_deepen_since ?lf t
-         | Some (`Ref refname)  -> w_deepen_not ?lf refname
+         | Some (`Ref reference)  -> w_deepen_not ?lf reference
          | None -> noop)
      @@ pkt_flush k)
       encoder
-
-  type http_upload_request =
-    { want         : Hash.t * Hash.t list
-    ; capabilities : Capability.t list
-    ; shallow      : Hash.t list
-    ; deep         : [ `Depth of int | `Timestamp of int64 | `Ref of string ] option
-    ; has          : Hash.t list }
 
   let w_has hash k encoder =
     (writes "have"
@@ -1324,10 +1909,10 @@ struct
   let w_has ?lf hash k encoder = pkt_line ?lf (w_has hash) k encoder
 
   let w_http_upload_request at_the_end http_upload_request k encoder =
-    (w_upload_request ~lf:true { want         = http_upload_request.want
-                               ; capabilities = http_upload_request.capabilities
-                               ; shallow      = http_upload_request.shallow
-                               ; deep         = http_upload_request.deep }
+    (w_upload_request ~lf:true { Common.want  = http_upload_request.Common.want
+                               ; capabilities = http_upload_request.Common.capabilities
+                               ; shallow      = http_upload_request.Common.shallow
+                               ; deep         = http_upload_request.Common.deep }
      @@ (w_list (w_has ~lf:true) http_upload_request.has)
      @@ (if at_the_end = `Done
          then w_done_and_lf k
@@ -1337,20 +1922,10 @@ struct
   let w_flush k encoder =
     pkt_flush k encoder
 
-  type request_command =
-    [ `UploadPack
-    | `ReceivePack
-    | `UploadArchive ]
-
-  type git_proto_request =
-    { pathname        : string
-    ; host            : (string * int option) option
-    ; request_command : request_command }
-
   let w_request_command request_command k encoder = match request_command with
-    | `UploadPack    -> writes "git-upload-pack"    k encoder
-    | `ReceivePack   -> writes "git-receive-pack"   k encoder
-    | `UploadArchive -> writes "git-upload-archive" k encoder
+    | `Upload_pack    -> writes "git-upload-pack"    k encoder
+    | `Receive_pack   -> writes "git-receive-pack"   k encoder
+    | `Upload_archive -> writes "git-upload-archive" k encoder
 
   let w_git_proto_request git_proto_request k encoder =
     let w_host host k encoder = match host with
@@ -1369,7 +1944,7 @@ struct
       | None -> noop k encoder
     in
 
-    (w_request_command git_proto_request.request_command
+    (w_request_command git_proto_request.Common.request_command
      @@ w_space
      @@ writes git_proto_request.pathname
      @@ w_null
@@ -1378,18 +1953,18 @@ struct
 
   let w_done k encoder = pkt_line (writes "done") k encoder
 
-  let w_has l k encoder =
+  let w_has hashes k encoder =
     let rec go l encoder = match l with
       | [] -> w_flush k encoder
       | x :: r ->
         (w_has x @@ go r) encoder
     in
-    go l encoder
+    go (Hash.Set.elements hashes) encoder
 
   let w_git_proto_request git_proto_request k encoder =
     pkt_line (w_git_proto_request git_proto_request) k encoder
 
-  let w_shallow l k encoder =
+  let w_shallows l k encoder =
     let rec go l encoder = match l with
       | [] -> k encoder
       | x :: r ->
@@ -1398,49 +1973,31 @@ struct
             @@ w_space
             @@ w_hash x k)
           (go r)
-          encoder
-    in
-
+          encoder in
     go l encoder
-
-  type update_request =
-    { shallow      : Hash.t list
-    ; requests     : [`Raw of command * command list | `Cert of push_certificate]
-    ; capabilities : Capability.t list }
-  and command =
-    | Create of Hash.t * string (* XXX(dinosaure): break the dependence with [Store] and consider the reference name as a string. *)
-    | Delete of Hash.t * string
-    | Update of Hash.t * Hash.t * string
-  and push_certificate =
-    { pusher   : string
-    ; pushee   : string (* XXX(dinosaure): the repository url anonymized. *)
-    ; nonce    : string
-    ; options  : string list
-    ; commands : command list
-    ; gpg      : string list }
 
   let w_command command k encoder =
     match command with
-    | Create (hash, refname) ->
+    | Common.Create (hash, reference) ->
       (w_hash zero_id
        @@ w_space
        @@ w_hash hash
        @@ w_space
-       @@ writes refname k)
+       @@ writes (Reference.to_string reference) k)
         encoder
-    | Delete (hash, refname) ->
+    | Common.Delete (hash, reference) ->
       (w_hash hash
        @@ w_space
        @@ w_hash zero_id
        @@ w_space
-       @@ writes refname k)
+       @@ writes (Reference.to_string reference) k)
         encoder
-    | Update (old_id, new_id, refname) ->
+    | Common.Update (old_id, new_id, reference) ->
       (w_hash old_id
        @@ w_space
        @@ w_hash new_id
        @@ w_space
-       @@ writes refname k)
+       @@ writes (Reference.to_string reference) k)
         encoder
 
   let w_first_command capabilities first k encoder =
@@ -1466,23 +2023,23 @@ struct
 
     ((fun k e -> pkt_line ~lf:true (fun k -> writes "push-cert" @@ w_null @@ w_capabilities capabilities k) k e)
      @@ (fun k e -> pkt_line ~lf:true (writes "certificate version 0.1") k e)
-     @@ (fun k e -> pkt_line ~lf:true (fun k -> writes "pusher" @@ w_space @@ writes push_cert.pusher k) k e)
-     @@ (fun k e -> pkt_line ~lf:true (fun k -> writes "pushee" @@ w_space @@ writes push_cert.pushee k) k e)
-     @@ (fun k e -> pkt_line ~lf:true (fun k -> writes "nonce" @@ w_space @@ writes push_cert.nonce k) k e)
-     @@ (fun k e -> w_list (fun x k e -> pkt_line ~lf:true (fun k -> writes "push-option" @@ w_space @@ writes x k) k e) push_cert.options k e)
+     @@ (fun k e -> pkt_line ~lf:true (fun k -> writes "pusher" @@ w_space @@ writes push_cert.Common.pusher k) k e)
+     @@ (fun k e -> pkt_line ~lf:true (fun k -> writes "pushee" @@ w_space @@ writes push_cert.Common.pushee k) k e)
+     @@ (fun k e -> pkt_line ~lf:true (fun k -> writes "nonce" @@ w_space @@ writes push_cert.Common.nonce k) k e)
+     @@ (fun k e -> w_list (fun x k e -> pkt_line ~lf:true (fun k -> writes "push-option" @@ w_space @@ writes x k) k e) push_cert.Common.options k e)
      @@ (fun k e -> pkt_line ~lf:true noop k e)
-     @@ (fun k e -> w_list (fun x k e -> pkt_line ~lf:true (w_command x) k e) push_cert.commands k e)
-     @@ (fun k e -> w_list (fun x k e -> pkt_line ~lf:true (writes x) k e) push_cert.gpg k e)
+     @@ (fun k e -> w_list (fun x k e -> pkt_line ~lf:true (w_command x) k e) push_cert.Common.commands k e)
+     @@ (fun k e -> w_list (fun x k e -> pkt_line ~lf:true (writes x) k e) push_cert.Common.gpg k e)
      @@ (fun k e -> pkt_line ~lf:true (writes "push-cert-end") k e)
      @@ pkt_flush
      @@ k)
     encoder
 
-  let w_update_request update_request k encoder =
-    (w_shallow update_request.shallow
-     @@ (match update_request.requests with
-         | `Raw commands   -> w_commands update_request.capabilities commands
-         | `Cert push_cert -> w_push_certificates update_request.capabilities push_cert)
+  let w_update_request (update_request:Common.update_request) k encoder =
+    (w_shallows update_request.Common.shallow
+     @@ (match update_request.Common.requests with
+         | `Raw commands   -> w_commands update_request.Common.capabilities commands
+         | `Cert push_cert -> w_push_certificates update_request.Common.capabilities push_cert)
      @@ k)
       encoder
 
@@ -1510,41 +2067,164 @@ struct
   let w_http_update_request i k encoder =
     w_update_request i k encoder
 
+  let w_advertised_refs (advertised_refs:Common.advertised_refs) k encoder =
+    let w_ref (hash, reference, peeled) k encoder =
+      (w_hash hash @@ w_space @@ writes (Reference.to_string reference) @@ (match peeled with
+           | true -> writes "^{}" k
+           | false -> k)) encoder in
+
+    match advertised_refs.Common.refs with
+    | [] ->
+      pkt_line
+        (fun k -> w_hash zero_id
+          @@ w_space
+          @@ writes "capabilities^{}"
+          @@ w_null
+          @@ w_capabilities advertised_refs.Common.capabilities k)
+        (w_shallows advertised_refs.Common.shallow (pkt_flush k)) encoder
+    | first :: refs ->
+      let rec go refs encoder = match refs with
+        | [] -> w_shallows advertised_refs.Common.shallow (pkt_flush k) encoder
+        | reference :: refs ->
+          pkt_line
+            (w_ref reference)
+            (go refs)
+            encoder in
+      pkt_line
+        (fun k -> w_ref first @@ w_null @@ w_capabilities advertised_refs.Common.capabilities k)
+        (go refs)
+        encoder
+
+  let w_shallow hash k encoder =
+    pkt_line (fun k -> writes "shallow" @@ w_space @@ w_hash hash k) k encoder
+
+  let w_unshallow hash k encoder =
+    pkt_line (fun k -> writes "unshallow" @@ w_space @@ w_hash hash k) k encoder
+
+  let w_shallow_update (shallow_update:Common.shallow_update) k encoder =
+    let rec go (shallow_update:Common.shallow_update) encoder =
+      match shallow_update.Common.shallow with
+      | hash :: shallow ->
+        w_shallow hash (go { shallow_update with Common.shallow }) encoder
+      | [] -> match shallow_update.Common.unshallow with
+        | hash :: unshallow ->
+          w_unshallow hash (go { shallow_update with Common.unshallow }) encoder
+        | [] -> pkt_flush k encoder in
+    go shallow_update encoder
+
+  let w_negociation_one value k encoder = match value with
+    | `Ack (hash, `Continue) ->
+      pkt_line (fun k -> writes "ACK" @@ w_space @@ w_hash hash @@ w_space @@ writes "continue" k) k encoder
+    | `Ack (hash, `Common) ->
+      pkt_line (fun k -> writes "ACK" @@ w_space @@ w_hash hash @@ w_space @@ writes "common" k) k encoder
+    | `Ack (hash, `Ready) ->
+      pkt_line (fun k -> writes "ACK" @@ w_space @@ w_hash hash @@ w_space @@ writes "ready" k) k encoder
+    | `Ack (hash, `ACK) ->
+      pkt_line (fun k -> writes "ACK" @@ w_space @@ w_hash hash k) k encoder
+    | `Nak ->
+      pkt_line (writes "NAK") k encoder
+
+  let w_negociation (acks:Common.acks) k encoder =
+    let rec go_ack acks encoder = match acks with
+      | [] -> w_negociation_one `Nak k encoder
+      | ack :: acks -> w_negociation_one (`Ack ack) (go_ack acks) encoder in
+    let rec go_unshallow unshallows encoder = match unshallows with
+      | [] -> go_ack acks.acks encoder
+      | hash :: rest -> w_unshallow hash (go_unshallow rest) encoder in
+    let rec go_shallow shallows encoder = match shallows with
+      | [] -> go_unshallow acks.unshallow encoder
+      | hash :: rest -> w_shallow hash (go_shallow rest) encoder in
+    go_shallow acks.shallow encoder
+
+  let w_negociation_result result k encoder = match result with
+    | Common.NAK -> pkt_line (writes "NAK") k encoder
+    | Common.ACK hash -> pkt_line (fun k -> writes "ACK" @@ w_space @@ w_hash hash k) k encoder
+    | Common.ERR err -> pkt_line (fun k -> writes "ERR" @@ w_space @@ writes err k) k encoder
+
+  let w_report_status ~sideband report_status k encoder =
+    let w_reference reference k encoder =
+      writes (Reference.to_string reference) k encoder in
+    let go_command (command: (Reference.t, Reference.t * string) result) k encoder = match command with
+      | Ok reference -> (writes "ok" @@ w_space @@ w_reference reference k) encoder
+      | Error (reference, err) -> (writes "ng" @@ w_space @@ w_reference reference @@ w_space @@ writes err k) encoder in
+    let rec go_commands commands encoder = match sideband, commands with
+      | _, [] -> pkt_flush k encoder
+      | `No_multiplexe, command :: commands ->
+         pkt_line (go_command command) (go_commands commands) encoder
+      | (`Side_band | `Side_band_64k), command :: commands ->
+         pkt_line (fun k -> writes "\001" @@ go_command command k) (go_commands commands) encoder in
+    let go_unpack k encoder = match report_status.Common.unpack with
+      | Ok () -> writes "unpack ok" k encoder
+      | Error err -> (writes "unpack" @@ w_space @@ writes err k) encoder in
+    match sideband with
+    | `No_multiplexe ->
+       pkt_line go_unpack (go_commands report_status.Common.commands) encoder
+    | `Side_band | `Side_band_64k ->
+       pkt_line (fun k -> writes "\001" @@ go_unpack k) (go_commands report_status.Common.commands) encoder
+
   type action =
-    [ `GitProtoRequest   of git_proto_request
-    | `UploadRequest     of upload_request
-    | `HttpUploadRequest of [ `Done | `Flush ] * http_upload_request
-    | `UpdateRequest     of update_request
-    | `HttpUpdateRequest of update_request
-    | `Has               of Hash.t list
+    [ `GitProtoRequest    of Common.git_proto_request
+    | `UploadRequest      of Common.upload_request
+    | `HttpUploadRequest  of [ `Done | `Flush ] * Common.http_upload_request
+    | `Advertised_refs    of Common.advertised_refs
+    | `Shallow_update     of Common.shallow_update
+    | `Negociation        of Common.acks
+    | `Negociation_result of Common.negociation_result
+    | `Report_status      of ([ `No_multiplexe | `Side_band | `Side_band_64k ] * Common.report_status)
+    | `UpdateRequest      of Common.update_request
+    | `HttpUpdateRequest  of Common.update_request
+    | `Has                of Hash.Set.t
     | `Done
     | `Flush
-    | `PACK              of int
-    | `Shallow           of Hash.t list ]
+    | `PACK               of int
+    | `Shallow            of Hash.t list ]
 
   let encode encoder = function
-    | `GitProtoRequest c        -> w_git_proto_request c     (fun _ -> Ok ()) encoder
-    | `UploadRequest i          -> w_upload_request i        (fun _ -> Ok ()) encoder
-    | `HttpUploadRequest (v, i) -> w_http_upload_request v i (fun _ -> Ok ()) encoder
-    | `UpdateRequest i          -> w_update_request i        (fun _ -> Ok ()) encoder
-    | `HttpUpdateRequest i      -> w_http_update_request i   (fun _ -> Ok ()) encoder
-    | `Has l                    -> w_has l                   (fun _ -> Ok ()) encoder
-    | `Done                     -> w_done                    (fun _ -> Ok ()) encoder
-    | `Flush                    -> w_flush                   (fun _ -> Ok ()) encoder
-    | `Shallow l                -> w_shallow l               (fun _ -> Ok ()) encoder
-    | `PACK n                   -> w_pack n                  (fun _ -> Ok ()) encoder
+    | `GitProtoRequest c        -> w_git_proto_request c         (fun _ -> Ok ()) encoder
+    | `UploadRequest i          -> w_upload_request i            (fun _ -> Ok ()) encoder
+    | `HttpUploadRequest (v, i) -> w_http_upload_request v i     (fun _ -> Ok ()) encoder
+    | `Advertised_refs v        -> w_advertised_refs v           (fun _ -> Ok ()) encoder
+    | `Shallow_update v         -> w_shallow_update v            (fun _ -> Ok ()) encoder
+    | `Negociation v            -> w_negociation v               (fun _ -> Ok ()) encoder
+    | `Negociation_result v     -> w_negociation_result v        (fun _ -> Ok ()) encoder
+    | `Report_status (s, v)     -> w_report_status ~sideband:s v (fun _ -> Ok ()) encoder
+    | `UpdateRequest i          -> w_update_request i            (fun _ -> Ok ()) encoder
+    | `HttpUpdateRequest i      -> w_http_update_request i       (fun _ -> Ok ()) encoder
+    | `Has l                    -> w_has l                       (fun _ -> Ok ()) encoder
+    | `Done                     -> w_done                        (fun _ -> Ok ()) encoder
+    | `Flush                    -> w_flush                       (fun _ -> Ok ()) encoder
+    | `Shallow l                -> w_shallows l                  (fun _ -> Ok ()) encoder
+    | `PACK n                   -> w_pack n                      (fun _ -> Ok ()) encoder
 
   let encoder () =
     { payload = Cstruct.create 65535
     ; pos     = 4 }
+
+  let to_string v =
+    let encoder = encoder () in
+    let result = Buffer.create 16 in
+
+    let rec go = function
+      | Write { buffer
+              ; off
+              ; len
+              ; continue } ->
+        Buffer.add_string result (Cstruct.to_string (Cstruct.sub buffer off len));
+        go @@ continue len
+      | Ok () -> Buffer.contents result in
+    go @@ encode encoder v
 end
 
-module Client (H : S.HASH with type hex = string)
-  : CLIENT with module Hash = H =
+module Client (Hash: S.HASH) (Reference: Reference.S)
+  : CLIENT
+    with module Hash = Hash
+     and module Reference = Reference =
 struct
-  module Hash = H
-  module Decoder = Decoder(H)
-  module Encoder = Encoder(H)
+  module Hash = Hash
+  module Reference = Reference
+  module Common = Common(Hash)(Reference)
+  module Decoder = Decoder(Hash)(Reference)(Common)
+  module Encoder = Encoder(Hash)(Reference)(Common)
 
   type context =
     { decoder      : Decoder.decoder
@@ -1574,15 +2254,15 @@ struct
     loop (Decoder.decode ctx.decoder phase)
 
   type result =
-    [ `Refs of Decoder.advertised_refs
-    | `ShallowUpdate of Decoder.shallow_update
-    | `Negociation of Decoder.acks
-    | `NegociationResult of Decoder.negociation_result
+    [ `Refs of Common.advertised_refs
+    | `ShallowUpdate of Common.shallow_update
+    | `Negociation of Common.acks
+    | `NegociationResult of Common.negociation_result
     | `PACK of Decoder.flow
     | `Flush
     | `Nothing
     | `ReadyPACK of Cstruct.t
-    | `ReportStatus of Decoder.report_status ]
+    | `ReportStatus of Common.report_status ]
 
   type process =
     [ `Read  of (Cstruct.t * int * int * (int -> process ))
@@ -1592,14 +2272,14 @@ struct
 
   let pp_result ppf = function
     | `Refs refs ->
-      Fmt.pf ppf "(`Refs %a)" (Fmt.hvbox Decoder.pp_advertised_refs) refs
+      Fmt.pf ppf "(`Refs %a)" (Fmt.hvbox Common.pp_advertised_refs) refs
     | `ShallowUpdate shallow_update ->
-      Fmt.pf ppf "(`ShallowUpdate %a)" (Fmt.hvbox Decoder.pp_shallow_update) shallow_update
+      Fmt.pf ppf "(`ShallowUpdate %a)" (Fmt.hvbox Common.pp_shallow_update) shallow_update
     | `Negociation acks ->
       Fmt.pf ppf "(`Negociation %a)"
-        (Fmt.hvbox Decoder.pp_acks) acks
+        (Fmt.hvbox Common.pp_acks) acks
     | `NegociationResult result ->
-      Fmt.pf ppf "(`NegociationResult %a)" (Fmt.hvbox Decoder.pp_negociation_result) result
+      Fmt.pf ppf "(`NegociationResult %a)" (Fmt.hvbox Common.pp_negociation_result) result
     | `PACK (`Err _) ->
       Fmt.pf ppf "(`Pack stderr)"
     | `PACK (`Out _) ->
@@ -1615,14 +2295,14 @@ struct
     | `ReadyPACK _ ->
       Fmt.pf ppf "(`ReadyPACK #raw)"
     | `ReportStatus status ->
-      Fmt.pf ppf "(`ReportStatus %a)" (Fmt.hvbox Decoder.pp_report_status) status
+      Fmt.pf ppf "(`ReportStatus %a)" (Fmt.hvbox Common.pp_report_status) status
 
   type action =
-    [ `GitProtoRequest of Encoder.git_proto_request
+    [ `GitProtoRequest of Common.git_proto_request
     | `Shallow of Hash.t list
-    | `UploadRequest of Encoder.upload_request
-    | `UpdateRequest of Encoder.update_request
-    | `Has of Hash.t list
+    | `UploadRequest of Common.upload_request
+    | `UpdateRequest of Common.update_request
+    | `Has of Hash.Set.t
     | `Done
     | `Flush
     | `ReceivePACK
@@ -1635,28 +2315,28 @@ struct
         (`GitProtoRequest c)
         (decode Decoder.ReferenceDiscovery
            (fun refs ctx ->
-              ctx.capabilities <- refs.Decoder.capabilities;
+              ctx.capabilities <- refs.Common.capabilities;
               `Refs refs))
         context
     | `Flush ->
       encode `Flush (fun _ -> `Flush) context
-    | `UploadRequest (descr : Encoder.upload_request) ->
-      let common = List.filter (fun x -> List.exists ((=) x) context.capabilities) descr.Encoder.capabilities in
+    | `UploadRequest (descr : Common.upload_request) ->
+      let common = List.filter (fun x -> List.exists ((=) x) context.capabilities) descr.Common.capabilities in
       (* XXX(dinosaure): we update with the shared capabilities between the
          client and the server. *)
 
       context.capabilities <- common;
 
-      let next = match descr.Encoder.deep with
+      let next = match descr.Common.deep with
         | Some (`Depth n) ->
           if n > 0
           then decode Decoder.ShallowUpdate (fun shallow_update _ -> `ShallowUpdate shallow_update)
-          else (fun _ -> `ShallowUpdate { Decoder.shallow = []; unshallow = []; })
-        | _ -> (fun _ -> `ShallowUpdate { Decoder.shallow = []; unshallow = []; })
+          else (fun _ -> `ShallowUpdate { Common.shallow = []; unshallow = []; })
+        | _ -> (fun _ -> `ShallowUpdate { Common.shallow = []; unshallow = []; })
       in
       encode (`UploadRequest descr) next context
-    | `UpdateRequest (descr : Encoder.update_request) ->
-      let common = List.filter (fun x -> List.exists ((=) x) context.capabilities) descr.Encoder.capabilities in
+    | `UpdateRequest (descr:Common.update_request) ->
+      let common = List.filter (fun x -> List.exists ((=) x) context.capabilities) descr.Common.capabilities in
 
       (* XXX(dinosaure): same as below. *)
 
@@ -1723,7 +2403,7 @@ struct
     context, encode (`GitProtoRequest c)
       (decode Decoder.ReferenceDiscovery
          (fun refs ctx ->
-            ctx.capabilities <- refs.Decoder.capabilities;
+            ctx.capabilities <- refs.Common.capabilities;
             `Refs refs))
       context
 end
