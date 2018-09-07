@@ -3,15 +3,14 @@ type raw = Cstruct.t
 type uri = Uri.t
 
 type req =
-  { req : Cohttp.Request.t
-  ; query : (string * string list) list
-  ; body : (raw * int * int) option -> unit Lwt.t }
+  { req: Cohttp.Request.t
+  ; query: (string * string list) list
+  ; body: (raw * int * int) option -> unit Lwt.t }
 
-type resp =
-  { resp : Cohttp.Response.t
-  ; body : Cohttp_lwt.Body.t }
+type resp = {resp: Cohttp.Response.t; body: Cohttp_lwt.Body.t}
 
-include Web.S
+include
+  Web.S
   with type req := req
    and type resp := resp
    and type 'a io := 'a io

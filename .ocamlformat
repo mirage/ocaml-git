@@ -1,0 +1,6 @@
+module-item-spacing=compact
+break-struct=natural
+break-infix=fit-or-vertical
+parens-tuple=multi-line-only
+wrap-comments=true
+break-collection-expressions=wrap

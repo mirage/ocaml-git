@@ -16,16 +16,20 @@
  *)
 
 type 'a acks =
-  { shallow   : 'a list
-  ; unshallow : 'a list
-  ; acks      : ('a * [ `Common | `Ready | `Continue | `ACK ]) list }
+  { shallow: 'a list
+  ; unshallow: 'a list
+  ; acks: ('a * [`Common | `Ready | `Continue | `ACK]) list }
 
 module type S = sig
-  module Store: Minimal.S
-  module Common: Smart.COMMON
+  module Store : Minimal.S
+
+  module Common :
+    Smart.COMMON
     with type hash := Store.Hash.t
      and type reference := Store.Reference.t
-  module Decoder: Smart.DECODER
+
+  module Decoder :
+    Smart.DECODER
     with module Hash := Store.Hash
      and module Reference := Store.Reference
      and module Common := Common
@@ -33,12 +37,14 @@ module type S = sig
   type state
   type nonrec acks = Store.Hash.t acks
 
-  val find_common: Store.t ->
-    (Store.Hash.Set.t
-     * state
-     * (acks -> state ->
-        ([ `Again of Store.Hash.Set.t | `Done | `Ready ] * state) Lwt.t)
-    ) Lwt.t
+  val find_common :
+       Store.t
+    -> ( Store.Hash.Set.t
+       * state
+       * (   acks
+          -> state
+          -> ([`Again of Store.Hash.Set.t | `Done | `Ready] * state) Lwt.t) )
+       Lwt.t
 end
 
-module Make (G: Minimal.S): S with module Store = G
+module Make (G : Minimal.S) : S with module Store = G

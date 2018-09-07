@@ -19,14 +19,10 @@ let () = Random.self_init ()
 
 open Git_unix
 
-let option_map f = function
-  | Some v -> Some (f v)
-  | None -> None
+let option_map f = function Some v -> Some (f v) | None -> None
 
 let pad n x =
-  if String.length x > n
-  then x
-  else x ^ String.make (n - String.length x) ' '
+  if String.length x > n then x else x ^ String.make (n - String.length x) ' '
 
 let pp_header ppf (level, header) =
   let level_style =
@@ -38,36 +34,36 @@ let pp_header ppf (level, header) =
     | Logs.Info -> Logs_fmt.info_style
   in
   let level = Logs.level_to_string (Some level) in
-
   Fmt.pf ppf "[%a][%a]"
-    (Fmt.styled level_style Fmt.string) level
-    (Fmt.option Fmt.string) (option_map (pad 10) header)
+    (Fmt.styled level_style Fmt.string)
+    level (Fmt.option Fmt.string)
+    (option_map (pad 10) header)
 
 let reporter ppf =
   let report src level ~over k msgf =
-    let k _ = over (); k () in
+    let k _ = over () ; k () in
     let with_src_and_stamp h _ k fmt =
       let dt = Mtime.Span.to_us (Mtime_clock.elapsed ()) in
-      Fmt.kpf k ppf ("%s %a %a: @[" ^^ fmt ^^ "@]@.")
+      Fmt.kpf k ppf
+        ("%s %a %a: @[" ^^ fmt ^^ "@]@.")
         (pad 10 (Fmt.strf "%+04.0fus" dt))
         pp_header (level, h)
         Fmt.(styled `Magenta string)
         (pad 10 @@ Logs.Src.name src)
     in
-    msgf @@ fun ?header ?tags fmt ->
-    with_src_and_stamp header tags k fmt
+    msgf @@ fun ?header ?tags fmt -> with_src_and_stamp header tags k fmt
   in
-  { Logs.report = report }
+  {Logs.report}
 
 let setup_logs style_renderer level =
-  Fmt_tty.setup_std_outputs ?style_renderer ();
-  Logs.set_level level;
-  Logs.set_reporter (reporter Fmt.stdout);
+  Fmt_tty.setup_std_outputs ?style_renderer () ;
+  Logs.set_level level ;
+  Logs.set_reporter (reporter Fmt.stdout) ;
   let quiet = match style_renderer with Some _ -> true | None -> false in
   quiet, Fmt.stdout
 
-module Entry = Index.Entry(Digestif.SHA1)
-module Index = Index.Make(Store)(Fs)(Entry)
+module Entry = Index.Entry (Digestif.SHA1)
+module Index = Index.Make (Store) (Fs) (Entry)
 
 let store_err err = Lwt.return (`Store err)
 let index_err err = Lwt.return (`Index err)
@@ -78,10 +74,11 @@ let pp_error ppf = function
   | `App msg -> Fmt.string ppf msg
 
 open Lwt.Infix
+
 let ( >!= ) = Lwt_result.bind_lwt_err
 let ( >?= ) = Lwt_result.bind
 
-let perm_of_entry { Index.Entry.info = { mode; _ }; _ } =
+let perm_of_entry {Index.Entry.info= {mode; _}; _} =
   match mode with
   | Entry.Exec -> `Exec
   | Entry.Normal -> `Normal
@@ -92,12 +89,15 @@ let perm_of_entry { Index.Entry.info = { mode; _ }; _ } =
 let hash_of_blob entry = entry.Index.Entry.hash
 
 let rec index_entries_to_tree_entries ~bucket entries =
-  List.map (fun (name, entry) -> match entry with
+  List.map
+    (fun (name, entry) ->
+      match entry with
       | Index.Blob entry ->
-        Store.Value.Tree.entry name (perm_of_entry entry) (hash_of_blob entry)
+          Store.Value.Tree.entry name (perm_of_entry entry)
+            (hash_of_blob entry)
       | Index.Tree entries ->
-        Store.Value.Tree.entry name `Dir (hash_of_tree ~bucket entries)
-    ) (Index.StringMap.bindings entries)
+          Store.Value.Tree.entry name `Dir (hash_of_tree ~bucket entries) )
+    (Index.StringMap.bindings entries)
 
 and hash_of_tree ~bucket entries =
   let entries = index_entries_to_tree_entries ~bucket entries in
@@ -116,53 +116,58 @@ let hash_of_root ~bucket (Index.Root entries) =
 let main ?prefix:_ _ =
   let dtmp = Cstruct.create 0x8000 in
   let root = Fpath.(v (Sys.getcwd ())) in
-
-  Store.v root >!= store_err >?= fun t ->
-    Index.IO.load () ~root:(Store.dotgit t) ~dtmp >!= index_err >?= fun (entries, _) ->
-      let root = Index.of_entries entries in
-      let tree = Hashtbl.create 128 in
-      let root_hash = hash_of_root ~bucket:tree root in
-      let todo = Hashtbl.fold (fun hash tree acc -> (hash, tree) :: acc) tree [] in
-
-      Lwt_list.fold_left_s
-        (fun s (hash, tree) -> match s with
-           | Error _ as err -> Lwt.return err
-           | Ok () ->
-             Store.write t (Store.Value.tree tree) >>= function
-             | Ok (hash', _) ->
-               if Store.Hash.equal hash hash'
-               then Lwt.return (Ok ())
-               else
-                 Lwt.return
-                   (Error
+  Store.v root
+  >!= store_err
+  >?= fun t ->
+  Index.IO.load () ~root:(Store.dotgit t) ~dtmp
+  >!= index_err
+  >?= fun (entries, _) ->
+  let root = Index.of_entries entries in
+  let tree = Hashtbl.create 128 in
+  let root_hash = hash_of_root ~bucket:tree root in
+  let todo = Hashtbl.fold (fun hash tree acc -> (hash, tree) :: acc) tree [] in
+  Lwt_list.fold_left_s
+    (fun s (hash, tree) ->
+      match s with
+      | Error _ as err -> Lwt.return err
+      | Ok () -> (
+          Store.write t (Store.Value.tree tree)
+          >>= function
+          | Ok (hash', _) ->
+              if Store.Hash.equal hash hash' then Lwt.return (Ok ())
+              else
+                Lwt.return
+                  (Error
                      (`App
-                      (Fmt.strf "Produced bad hash from the tree object: %a. We expected %a and we have %a."
-                         Store.Value.Tree.pp tree
-                         Store.Hash.pp hash
-                         Store.Hash.pp hash')))
-             | Error err -> Lwt.return (Error (`Store err)))
-        (Ok ()) todo >?= fun () ->
-        Fmt.(pf stdout) "%a\n" Store.Hash.pp root_hash;
-        Lwt.return (Ok ())
+                       (Fmt.strf
+                          "Produced bad hash from the tree object: %a. We \
+                           expected %a and we have %a."
+                          Store.Value.Tree.pp tree Store.Hash.pp hash
+                          Store.Hash.pp hash')))
+          | Error err -> Lwt.return (Error (`Store err)) ) )
+    (Ok ()) todo
+  >?= fun () ->
+  Fmt.(pf stdout) "%a\n" Store.Hash.pp root_hash ;
+  Lwt.return (Ok ())
 
 open Cmdliner
 
-module Flag =
-struct
+module Flag = struct
   let prefix =
-    let doc = "Writes a tree object that represents a subdirectory <prefix>. \
-               This can be used to write the tree object for a subproject \
-               that is in the named subdirectory." in
-    Arg.(value
-         & opt (some dir) None
-         & info [ "prefix" ] ~doc ~docv:"<prefix>")
+    let doc =
+      "Writes a tree object that represents a subdirectory <prefix>. This can \
+       be used to write the tree object for a subproject that is in the named \
+       subdirectory."
+    in
+    Arg.(value & opt (some dir) None & info ["prefix"] ~doc ~docv:"<prefix>")
 
   let missing_ok =
-    let doc = "Normally git write-tree ensures that the objects referenced by \
-               the directory exist in the object database. This option disables this check." in
-    Arg.(value
-         & flag
-         & info [ "missing-ok" ] ~doc)
+    let doc =
+      "Normally git write-tree ensures that the objects referenced by the \
+       directory exist in the object database. This option disables this \
+       check."
+    in
+    Arg.(value & flag & info ["missing-ok"] ~doc)
 end
 
 let setup_log =
@@ -176,7 +181,7 @@ let main prefix missing_ok _ =
 let command =
   let doc = "Create a tree object from the current index" in
   let exits = Term.default_exits in
-  Term.(ret (const main $ Flag.prefix $ Flag.missing_ok $ setup_log)),
-  Term.info "ogit-write-tree" ~version:"v0.1" ~doc ~exits
+  ( Term.(ret (const main $ Flag.prefix $ Flag.missing_ok $ setup_log))
+  , Term.info "ogit-write-tree" ~version:"v0.1" ~doc ~exits )
 
 let () = Term.(exit @@ eval command)

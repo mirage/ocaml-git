@@ -14,40 +14,45 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
-
-module Make (Store : Minimal.S): sig
-
+module Make (Store : Minimal.S) : sig
   type t =
-    | Reference of Store.Reference.t (* <refname> *)
-    | Commit of id                   (* <id> *)
-    | Parent of t * int              (* <rev>^<n> *)
-    | Ancestor of t * int            (* <rev>~<n> *)
+    | Reference of Store.Reference.t
+    (* <refname> *)
+    | Commit of id
+    (* <id> *)
+    | Parent of t * int
+    (* <rev>^<n> *)
+    | Ancestor of t * int
 
-  and id =
-    | Incomplete of string
-    | Complete of Store.Hash.t
+  (* <rev>~<n> *)
+  and id = Incomplete of string | Complete of Store.Hash.t
 
-  val head: t
-  val parent: t -> int -> t
-  val ancestor: t -> int -> t
-  val from_hash: Store.Hash.t -> t
+  val head : t
+  val parent : t -> int -> t
+  val ancestor : t -> int -> t
+  val from_hash : Store.Hash.t -> t
 
   type error
 
-  val normalize: Store.t -> t -> (Store.Hash.t, error) result Lwt.t
+  val normalize : Store.t -> t -> (Store.Hash.t, error) result Lwt.t
 
-  module Range: sig
-
+  module Range : sig
     type nonrec t =
-      | Include     of t (* <rev> *)
-      | Exclude     of t (* ^<rev> *)
-      | Diff        of t * t (* <rev1>..<rev2> différence
-                                semantically, it's the same than [^<rev1> <rev2>] *)
-      | Delta       of t * t (* <rev1>...<rev2> différence symétrique *)
-      | Parents     of t (* <rev>^@ *)
-      | PParents    of t (* <rev>^! *)
+      | Include of t
+      (* <rev> *)
+      | Exclude of t
+      (* ^<rev> *)
+      | Diff of t * t
+      (* <rev1>..<rev2> différence semantically, it's the same than [^<rev1>
+         <rev2>] *)
+      | Delta of t * t
+      (* <rev1>...<rev2> différence symétrique *)
+      | Parents of t
+      (* <rev>^@ *)
+      | PParents of t
 
-    val normalize: Store.t -> t -> Store.Hash.Set.t Lwt.t
+    (* <rev>^! *)
 
+    val normalize : Store.t -> t -> Store.Hash.Set.t Lwt.t
   end
 end

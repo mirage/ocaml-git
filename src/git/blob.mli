@@ -18,44 +18,51 @@
 (** A Git Blob object. *)
 
 module type S = sig
-
+  (** The Git Blob is structurally a {!Cstruct.t} independantly of the hash
+      implementation. *)
   type t
-  (** The Git Blob is structurally a {!Cstruct.t} independantly of the
-      hash implementation. *)
 
-  module Hash: S.HASH
-  module MakeMeta: functor (Meta: Encore.Meta.S) -> sig val p: t Meta.t end
+  module Hash : S.HASH
 
-  module A: S.DESC    with type 'a t = 'a Angstrom.t and type e = t
-  module M: S.DESC    with type 'a t = 'a Encore.Encoder.t and type e = t
-  module D: S.DECODER with type t = t and type init = Cstruct.t and type error = Error.Decoder.t
-  module E: S.ENCODER with type t = t and type error = Error.never
-  include S.DIGEST    with type t := t and type hash := Hash.t
+  module MakeMeta (Meta : Encore.Meta.S) : sig
+    val p : t Meta.t
+  end
 
-  include S.BASE      with type t := t
+  module A : S.DESC with type 'a t = 'a Angstrom.t and type e = t
+  module M : S.DESC with type 'a t = 'a Encore.Encoder.t and type e = t
 
-  val length: t -> int64
+  module D :
+    S.DECODER
+    with type t = t
+     and type init = Cstruct.t
+     and type error = Error.Decoder.t
+
+  module E : S.ENCODER with type t = t and type error = Error.never
+  include S.DIGEST with type t := t and type hash := Hash.t
+  include S.BASE with type t := t
+
+  val length : t -> int64
   (** [length t] returns the length of the blob object [t]. Note that we use
-     {!Cstruct.len} and cast result to [int64]. *)
+      {!Cstruct.len} and cast result to [int64]. *)
 
-  val of_cstruct: Cstruct.t -> t
-  (** [of_cstruct cs] returns the blob value of a [Cstruct.t]. This
-      function does not take the ownership on [cs]. So, consider at
-      this time to not change [cs] and consider it as a constant. *)
+  val of_cstruct : Cstruct.t -> t
+  (** [of_cstruct cs] returns the blob value of a [Cstruct.t]. This function
+      does not take the ownership on [cs]. So, consider at this time to not
+      change [cs] and consider it as a constant. *)
 
-  val to_cstruct: t -> Cstruct.t
-  (** [to_cstruct blob] returns the [Cstruct.t] of the Blob [blob].
-      This function does not create a fresh [Cstruct.t], so consider
-      it as a constant [Cstruct.t] ([set] functions not allowed). *)
+  val to_cstruct : t -> Cstruct.t
+  (** [to_cstruct blob] returns the [Cstruct.t] of the Blob [blob]. This
+      function does not create a fresh [Cstruct.t], so consider it as a
+      constant [Cstruct.t] ([set] functions not allowed). *)
 
-  val of_string: string -> t
+  val of_string : string -> t
   (** [of_string s] returns the blob value of a [string]. *)
 
-  val to_string: t -> string
-  (** [to_string blob] returns a [string] which contains the [blob]
-      value - in other words, the content of your file. *)
+  val to_string : t -> string
+  (** [to_string blob] returns a [string] which contains the [blob] value - in
+      other words, the content of your file. *)
 end
 
-module Make (Hash: S.HASH): S with module Hash := Hash
-(** The {i functor} to make the OCaml representation of the Git Blob
-    object by a specific hash implementation. *)
+(** The {i functor} to make the OCaml representation of the Git Blob object by
+    a specific hash implementation. *)
+module Make (Hash : S.HASH) : S with module Hash := Hash

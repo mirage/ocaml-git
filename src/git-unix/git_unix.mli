@@ -20,17 +20,19 @@ module Fs = Fs
 module Net = Net
 module Index = Index
 
-module Store: sig
-  include Git.Store.S
-          with module Hash = Git.Hash.Make(Digestif.SHA1)
-           and module FS := Fs
+module Store : sig
+  include
+    Git.Store.S
+    with module Hash = Git.Hash.Make(Digestif.SHA1)
+     and module FS := Fs
 
-  val v:
-    ?dotgit:Fpath.t ->
-    ?compression:int ->
-    ?buffer:((buffer -> unit Lwt.t) -> unit Lwt.t) ->
-    Fpath.t -> (t, error) result Lwt.t
+  val v :
+       ?dotgit:Fpath.t
+    -> ?compression:int
+    -> ?buffer:((buffer -> unit Lwt.t) -> unit Lwt.t)
+    -> Fpath.t
+    -> (t, error) result Lwt.t
 end
 
-module Sync (S: Git.S): Git.Sync.S with module Store = S and module Net = Net
-module Http (S: Git.S): Git_http.Sync.S with module Store = S
+module Sync (S : Git.S) : Git.Sync.S with module Store = S and module Net = Net
+module Http (S : Git.S) : Git_http.Sync.S with module Store = S

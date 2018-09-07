@@ -14,8 +14,5 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
-
-module Make (H: Digestif.S):
-  S.HASH with type t = H.t
-          and type ctx = H.ctx
-          and type kind = H.kind
+module Make (H : Digestif.S) :
+  S.HASH with type t = H.t and type ctx = H.ctx and type kind = H.kind

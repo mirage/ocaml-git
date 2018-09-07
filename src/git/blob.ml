@@ -16,83 +16,84 @@
  *)
 
 let src = Logs.Src.create "git.blob" ~doc:"logs git's blob event"
-module Log = (val Logs.src_log src: Logs.LOG)
+
+module Log = (val Logs.src_log src : Logs.LOG)
 
 module type S = sig
-
   type t
 
-  module Hash: S.HASH
-  module MakeMeta: functor (Meta: Encore.Meta.S) -> sig val p: t Meta.t end
+  module Hash : S.HASH
 
-  module A: S.DESC    with type 'a t = 'a Angstrom.t and type e = t
-  module M: S.DESC    with type 'a t = 'a Encore.Encoder.t and type e = t
-  module D: S.DECODER with type t = t and type init = Cstruct.t and type error = Error.Decoder.t
-  module E: S.ENCODER with type t = t and type error = Error.never
-  include S.DIGEST    with type t := t and type hash := Hash.t
-  include S.BASE      with type t := t
+  module MakeMeta (Meta : Encore.Meta.S) : sig
+    val p : t Meta.t
+  end
 
-  val length: t -> int64
-  val of_cstruct: Cstruct.t -> t
-  val to_cstruct: t -> Cstruct.t
-  val of_string: string -> t
-  val to_string: t -> string
+  module A : S.DESC with type 'a t = 'a Angstrom.t and type e = t
+  module M : S.DESC with type 'a t = 'a Encore.Encoder.t and type e = t
+
+  module D :
+    S.DECODER
+    with type t = t
+     and type init = Cstruct.t
+     and type error = Error.Decoder.t
+
+  module E : S.ENCODER with type t = t and type error = Error.never
+  include S.DIGEST with type t := t and type hash := Hash.t
+  include S.BASE with type t := t
+
+  val length : t -> int64
+  val of_cstruct : Cstruct.t -> t
+  val to_cstruct : t -> Cstruct.t
+  val of_string : string -> t
+  val to_string : t -> string
 end
 
-module Make (Hash: S.HASH) = struct
-
+module Make (Hash : S.HASH) = struct
   type t = Cstruct.t
 
-  external of_cstruct: Cstruct.t -> t = "%identity"
-  external to_cstruct: t -> Cstruct.t = "%identity"
+  external of_cstruct : Cstruct.t -> t = "%identity"
+  external to_cstruct : t -> Cstruct.t = "%identity"
 
-  let of_string x: t = Cstruct.of_string x
-  let to_string (x: t) = Cstruct.to_string x
+  let of_string x : t = Cstruct.of_string x
+  let to_string (x : t) = Cstruct.to_string x
+  let length : t -> int64 = fun t -> Int64.of_int (Cstruct.len t)
 
-  let length: t -> int64 = fun t ->
-    Int64.of_int (Cstruct.len t)
+  module MakeMeta (Meta : Encore.Meta.S) = struct
+    type e = t
 
-  module MakeMeta (Meta: Encore.Meta.S) =
-    struct
-      type e = t
+    open Helper.BaseIso
 
-      open Helper.BaseIso
+    type 'a t = 'a Meta.t
 
-      type 'a t = 'a Meta.t
+    module Meta = Encore.Meta.Make (Meta)
+    open Encore.Bijection
+    open Encore.Either
+    open Meta
 
-      module Meta = Encore.Meta.Make(Meta)
-      open Encore.Bijection
-      open Encore.Either
-      open Meta
+    let blob =
+      let loop m =
+        let cons =
+          Exn.cons ~tag:"cons"
+          <$> (cstruct <$> bigstring_buffer <* commit <*> m)
+        in
+        let nil = pure ~compare:(fun () () -> 0) () in
+        make_exn ~tag:("either", "list")
+          ~fwd:(function L cons -> cons | R () -> [])
+          ~bwd:(function _ :: _ as lst -> L lst | [] -> R ())
+        <$> peek cons nil
+      in
+      fix loop
 
-      let blob =
-        let loop m =
-          let cons = Exn.cons ~tag:"cons" <$> (((cstruct <$> bigstring_buffer) <* commit) <*> m) in
-          let nil = pure ~compare:(fun () () -> 0) () in
+    let p =
+      make_exn ~tag:("cstruct list", "cstruct") ~fwd:Cstruct.concat
+        ~bwd:(fun x -> [x] )
+      <$> blob
+  end
 
-          make_exn
-            ~tag:("either", "list")
-            ~fwd:(function
-              | L cons -> cons
-              | R () -> [])
-            ~bwd:(function
-              | _ :: _ as lst -> L lst
-              | [] -> R ())
-          <$> peek cons nil in
-        fix loop
-
-      let p =
-        make_exn
-          ~tag:("cstruct list", "cstruct")
-          ~fwd:Cstruct.concat
-          ~bwd:(fun x -> [ x ])
-        <$> blob
-    end
-
-  module A = MakeMeta(Encore.Proxy_decoder.Impl)
-  module M = MakeMeta(Encore.Proxy_encoder.Impl)
-  module D = Helper.MakeDecoder(A)
-  module E = Helper.MakeEncoder(M)
+  module A = MakeMeta (Encore.Proxy_decoder.Impl)
+  module M = MakeMeta (Encore.Proxy_encoder.Impl)
+  module D = Helper.MakeDecoder (A)
+  module E = Helper.MakeEncoder (M)
 
   let digest cs =
     let ctx = Hash.init () in
@@ -106,6 +107,11 @@ module Make (Hash: S.HASH) = struct
   let compare = Cstruct.compare
   let hash = Hashtbl.hash
 
-  module Set = Set.Make(struct type nonrec t = t let compare = compare end)
-  module Map = Map.Make(struct type nonrec t = t let compare = compare end)
+  module Set = Set.Make (struct type nonrec t = t
+
+                                let compare = compare end)
+
+  module Map = Map.Make (struct type nonrec t = t
+
+                                let compare = compare end)
 end

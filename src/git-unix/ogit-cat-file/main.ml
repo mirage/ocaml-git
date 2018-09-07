@@ -18,15 +18,11 @@
 let () = Random.self_init ()
 
 module Option = struct
-  let map f = function
-    | Some v -> Some (f v)
-    | None -> None
+  let map f = function Some v -> Some (f v) | None -> None
 end
 
 let pad n x =
-  if String.length x > n
-  then x
-  else x ^ String.make (n - String.length x) ' '
+  if String.length x > n then x else x ^ String.make (n - String.length x) ' '
 
 let pp_header ppf (level, header) =
   let level_style =
@@ -38,39 +34,37 @@ let pp_header ppf (level, header) =
     | Logs.Info -> Logs_fmt.info_style
   in
   let level = Logs.level_to_string (Some level) in
-
   Fmt.pf ppf "[%a][%a]"
-    (Fmt.styled level_style Fmt.string) level
-    (Fmt.option Fmt.string) (Option.map (pad 10) header)
+    (Fmt.styled level_style Fmt.string)
+    level (Fmt.option Fmt.string)
+    (Option.map (pad 10) header)
 
 let reporter ppf =
   let report src level ~over k msgf =
-    let k _ = over (); k () in
+    let k _ = over () ; k () in
     let with_src_and_stamp h _ k fmt =
       let dt = Mtime.Span.to_us (Mtime_clock.elapsed ()) in
-      Fmt.kpf k ppf ("%s %a %a: @[" ^^ fmt ^^ "@]@.")
+      Fmt.kpf k ppf
+        ("%s %a %a: @[" ^^ fmt ^^ "@]@.")
         (pad 10 (Fmt.strf "%+04.0fus" dt))
         pp_header (level, h)
         Fmt.(styled `Magenta string)
         (pad 10 @@ Logs.Src.name src)
     in
-    msgf @@ fun ?header ?tags fmt ->
-    with_src_and_stamp header tags k fmt
+    msgf @@ fun ?header ?tags fmt -> with_src_and_stamp header tags k fmt
   in
-  { Logs.report = report }
+  {Logs.report}
 
 let setup_logs style_renderer level =
-  Fmt_tty.setup_std_outputs ?style_renderer ();
-  Logs.set_level level;
-  Logs.set_reporter (reporter Fmt.stdout);
+  Fmt_tty.setup_std_outputs ?style_renderer () ;
+  Logs.set_level level ;
+  Logs.set_reporter (reporter Fmt.stdout) ;
   let quiet = match style_renderer with Some _ -> true | None -> false in
   quiet, Fmt.stdout
 
 open Git_unix
 
-type error =
-  [ `Store of Store.error
-  | `Invalid_hash of Store.Hash.t ]
+type error = [`Store of Store.error | `Invalid_hash of Store.Hash.t]
 
 let store_err err = `Store err
 let invalid_hash hash = `Invalid_hash hash
@@ -81,73 +75,87 @@ let pp_error ppf = function
 
 let pp_type ppf = function
   | Store.Value.Commit _ -> Fmt.string ppf "commit"
-  | Store.Value.Tree _   -> Fmt.string ppf "tree"
-  | Store.Value.Tag _    -> Fmt.string ppf "tag"
-  | Store.Value.Blob _   -> Fmt.string ppf "blob"
+  | Store.Value.Tree _ -> Fmt.string ppf "tree"
+  | Store.Value.Tag _ -> Fmt.string ppf "tag"
+  | Store.Value.Blob _ -> Fmt.string ppf "blob"
 
-let pp_size ppf value =
-  Fmt.int64 ppf (Git_unix.Store.Value.length value)
-
+let pp_size ppf value = Fmt.int64 ppf (Git_unix.Store.Value.length value)
 let pp_exit = Fmt.nop
-
-let pp_pretty_print ppf value =
-  Store.Value.pp ppf value
+let pp_pretty_print ppf value = Store.Value.pp ppf value
 
 let pp_inflate ppf raw =
   Encore.Lole.pp_scalar ~get:Cstruct.get_char ~length:Cstruct.len ppf raw
 
-type rest =
-  [ `Type | `Size | `Exit | `PrettyPrint ]
+type rest = [`Type | `Size | `Exit | `PrettyPrint]
 
 let main show hash =
   let root = Fpath.(v (Sys.getcwd ())) in
-
   let open Lwt_result in
-
   let ( >!= ) v f = map_err f v in
-
-  Store.v root  >!= store_err >>= fun git ->
-
+  Store.v root
+  >!= store_err
+  >>= fun git ->
   match show with
-  | `Inflate ->
-    let open Lwt.Infix in
-
-    (Store.read_inflated git hash >>= function
+  | `Inflate -> (
+      let open Lwt.Infix in
+      Store.read_inflated git hash
+      >>= function
       | Some (_, raw) ->
-        Fmt.(pf stdout) "%a%!" pp_inflate raw;
-        Lwt.return (Ok ())
-      | None ->
-        Lwt.return (Error (invalid_hash hash)))
+          Fmt.(pf stdout) "%a%!" pp_inflate raw ;
+          Lwt.return (Ok ())
+      | None -> Lwt.return (Error (invalid_hash hash)) )
   | #rest as rest ->
-    Store.read git hash >!= store_err >>= fun value ->
-    let fmt = match rest with
-      | `Type -> pp_type
-      | `Size -> pp_size
-      | `Exit -> pp_exit
-      | `PrettyPrint -> pp_pretty_print
-    in
-
-    Fmt.(pf stdout) "%a\n%!" fmt value;
-    Lwt.return (Ok ())
+      Store.read git hash
+      >!= store_err
+      >>= fun value ->
+      let fmt =
+        match rest with
+        | `Type -> pp_type
+        | `Size -> pp_size
+        | `Exit -> pp_exit
+        | `PrettyPrint -> pp_pretty_print
+      in
+      Fmt.(pf stdout) "%a\n%!" fmt value ;
+      Lwt.return (Ok ())
 
 open Cmdliner
 
-module Flag =
-struct
+module Flag = struct
   let show =
-    Arg.(value & vflag `Inflate
-        [ `Type, info [ "t" ] ~doc:"Instead of the content, show the object type identified by <object>."
-        ; `Size, info [ "s" ] ~doc:"Instead of the content, show the object size identified by <object>."
-        ; `Exit, info [ "e" ] ~doc:"Suppress all output; instead exit with zero status if <object> exists and is a valid object."
-        ; `PrettyPrint, info [ "p" ] ~doc:"Pretty-print the contents of <object> base on its type." ])
+    Arg.(
+      value
+      & vflag `Inflate
+          [ ( `Type
+            , info ["t"]
+                ~doc:
+                  "Instead of the content, show the object type identified by \
+                   <object>." )
+          ; ( `Size
+            , info ["s"]
+                ~doc:
+                  "Instead of the content, show the object size identified by \
+                   <object>." )
+          ; ( `Exit
+            , info ["e"]
+                ~doc:
+                  "Suppress all output; instead exit with zero status if \
+                   <object> exists and is a valid object." )
+          ; ( `PrettyPrint
+            , info ["p"]
+                ~doc:"Pretty-print the contents of <object> base on its type."
+            ) ])
 
   let hash =
-    let parse x = try Ok (Store.Hash.of_hex x) with exn -> Error (`Msg (Printexc.to_string exn)) in
+    let parse x =
+      try Ok (Store.Hash.of_hex x) with exn ->
+        Error (`Msg (Printexc.to_string exn))
+    in
     let print = Store.Hash.pp in
     Arg.conv ~docv:"<object>" (parse, print)
 
   let value =
-    Arg.(required & pos ~rev:true 0 (some hash) None & info [] ~docv:"<object>")
+    Arg.(
+      required & pos ~rev:true 0 (some hash) None & info [] ~docv:"<object>")
 end
 
 let setup_log =
@@ -159,9 +167,11 @@ let main show hash _ =
   | Error (#error as err) -> `Error (false, Fmt.strf "%a" pp_error err)
 
 let command =
-  let doc = "Provide content or type and size information for repository objects" in
+  let doc =
+    "Provide content or type and size information for repository objects"
+  in
   let exits = Term.default_exits in
-  Term.(ret (const main $ Flag.show $ Flag.value $ setup_log)),
-  Term.info "ogit-cat-file" ~version:"v0.1" ~doc ~exits
+  ( Term.(ret (const main $ Flag.show $ Flag.value $ setup_log))
+  , Term.info "ogit-cat-file" ~version:"v0.1" ~doc ~exits )
 
 let () = Term.(exit @@ eval command)

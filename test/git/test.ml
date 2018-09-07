@@ -16,15 +16,14 @@
 
 open Test_common
 
-module Store = struct
-  include Git.Mem.Store
-  let v root = v root
-end
+module Store = struct include Git.Mem.Store
+
+                      let v root = v root end
 
 let () =
-  verbose ();
+  verbose () ;
   Alcotest.run "git"
-    [ Test_store.suite "mem"   (module Store)
+    [ Test_store.suite "mem" (module Store)
     ; Test_smart.suite "smart" (module Store)
-    ; Test_data.suite "mem"    (module Test_data.Usual) (module Store)
-    ; Test_data.suite "mem"    (module Test_data.Bomb)  (module Store) ]
+    ; Test_data.suite "mem" (module Test_data.Usual) (module Store)
+    ; Test_data.suite "mem" (module Test_data.Bomb) (module Store) ]

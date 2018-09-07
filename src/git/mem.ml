@@ -16,49 +16,48 @@
  *)
 
 let src = Logs.Src.create "git.mem" ~doc:"logs git's memory back-end"
+
 module Log = (val Logs.src_log src : Logs.LOG)
 
 let err_not_found n k =
   let str = Printf.sprintf "Git.Mem.%s: %s not found" n k in
-  Log.err (fun l -> l "Raising an invalid argument from %s" n);
+  Log.err (fun l -> l "Raising an invalid argument from %s" n) ;
   Lwt.fail (Invalid_argument str)
 
-module Make (H: Digestif.S) (Inflate: S.INFLATE) (Deflate: S.DEFLATE) = struct
-
+module Make (H : Digestif.S) (Inflate : S.INFLATE) (Deflate : S.DEFLATE) =
+struct
   module Inflate = Inflate
   module Deflate = Deflate
-  module Hash = Hash.Make(H)
+  module Hash = Hash.Make (H)
   module Buffer = Cstruct_buffer
-  module Value = Value.Raw(Hash)(Inflate)(Deflate)
-  module Reference = Reference.Make(Hash)
+  module Value = Value.Raw (Hash) (Inflate) (Deflate)
+  module Reference = Reference.Make (Hash)
+  module PDec = Unpack.Stream (Hash) (Inflate)
+  module PEnc = Pack.Stream (Hash) (Deflate)
+  module Revidx = Map.Make (Int64)
 
-  module PDec = Unpack.Stream(Hash)(Inflate)
-  module PEnc = Pack.Stream(Hash)(Deflate)
-  module Revidx = Map.Make(Int64)
-
-  type kind = [ `Commit | `Tree | `Blob | `Tag ]
-
-  type buffer = { ztmp: Cstruct.t; window: Inflate.window }
+  type kind = [`Commit | `Tree | `Blob | `Tag]
+  type buffer = {ztmp: Cstruct.t; window: Inflate.window}
 
   let default_buffer () =
     let ztmp = Cstruct.create 0x800 in
     let window = Inflate.window () in
-    { ztmp; window }
+    {ztmp; window}
 
   let buffer ?ztmp ?dtmp:_ ?raw:_ ?window () =
     let ztmp = match ztmp with None -> Cstruct.create 0x800 | Some x -> x in
     let window = match window with None -> Inflate.window () | Some x -> x in
-    { ztmp; window }
+    {ztmp; window}
 
   type t =
-    { root         : Fpath.t
-    ; dotgit       : Fpath.t
-    ; buffer       : (buffer -> unit Lwt.t) -> unit Lwt.t
-    ; compression  : int
-    ; values       : (Hash.t, Value.t Lazy.t) Hashtbl.t
-    ; inflated     : (Hash.t, (kind * Cstruct.t)) Hashtbl.t
-    ; refs         : (Reference.t, [ `H of Hash.t | `R of Reference.t ]) Hashtbl.t
-    ; mutable head : Reference.head_contents option }
+    { root: Fpath.t
+    ; dotgit: Fpath.t
+    ; buffer: (buffer -> unit Lwt.t) -> unit Lwt.t
+    ; compression: int
+    ; values: (Hash.t, Value.t Lazy.t) Hashtbl.t
+    ; inflated: (Hash.t, kind * Cstruct.t) Hashtbl.t
+    ; refs: (Reference.t, [`H of Hash.t | `R of Reference.t]) Hashtbl.t
+    ; mutable head: Reference.head_contents option }
 
   type error =
     [ `Unresolved_object
@@ -70,18 +69,13 @@ module Make (H: Digestif.S) (Inflate: S.INFLATE) (Deflate: S.DEFLATE) = struct
   let with_buffer t f =
     let open Lwt.Infix in
     let c = ref None in
-    t.buffer (fun buf ->
-        f buf >|= fun x ->
-        c := Some x
-      ) >|= fun () ->
-    match !c with
-    | Some x -> x
-    | None   -> assert false
+    t.buffer (fun buf -> f buf >|= fun x -> c := Some x)
+    >|= fun () -> match !c with Some x -> x | None -> assert false
 
   let pp_error ppf = function
     | #Error.not_found as err -> Error.pp_not_found ppf err
     | `Unresolved_object ->
-      Fmt.pf ppf "We still have unresolved objects from PACK stream"
+        Fmt.pf ppf "We still have unresolved objects from PACK stream"
     | `Decoder_flow s -> Fmt.pf ppf "%s" s
     | `Delta e -> Fmt.pf ppf "%a" PEnc.Delta.pp_error e
     | `Pack e -> Fmt.pf ppf "%a" PDec.pp_error e
@@ -91,66 +85,70 @@ module Make (H: Digestif.S) (Inflate: S.INFLATE) (Deflate: S.DEFLATE) = struct
   let compression t = t.compression
 
   let v ?dotgit ?(compression = 6) ?buffer root =
-    let dotgit = match dotgit with
-      | Some d -> d
-      | None   -> Fpath.(root / ".git")
+    let dotgit =
+      match dotgit with Some d -> d | None -> Fpath.(root / ".git")
     in
-    if compression < 0 || compression > 9
-    then failwith "level should be between 0 and 9";
-    let buffer = match buffer with
+    if compression < 0 || compression > 9 then
+      failwith "level should be between 0 and 9" ;
+    let buffer =
+      match buffer with
       | Some f -> f
-      | None   ->
-        let p = Lwt_pool.create 4 (fun () -> Lwt.return (default_buffer ())) in
-        Lwt_pool.use p
+      | None ->
+          let p =
+            Lwt_pool.create 4 (fun () -> Lwt.return (default_buffer ()))
+          in
+          Lwt_pool.use p
     in
     let t =
       { root
       ; compression
       ; dotgit
       ; buffer
-      ; values   = Hashtbl.create 1024
-      ; inflated = Hashtbl.create 1024
-      ; refs     = Hashtbl.create 8
-      ; head     = None }
+      ; values= Hashtbl.create 1024
+      ; inflated= Hashtbl.create 1024
+      ; refs= Hashtbl.create 8
+      ; head= None }
     in
     Lwt.return (Ok t : (t, error) result)
 
   let reset t =
-    Log.info (fun l -> l "info");
-    Hashtbl.clear t.values;
-    Hashtbl.clear t.inflated;
-    Hashtbl.clear t.refs;
+    Log.info (fun l -> l "info") ;
+    Hashtbl.clear t.values ;
+    Hashtbl.clear t.inflated ;
+    Hashtbl.clear t.refs ;
     Lwt.return (Ok ())
 
   let clear_caches _ = Lwt.return ()
 
   let write t value =
     let hash = Value.digest value in
-    let kind = match value with
+    let kind =
+      match value with
       | Value.Commit _ -> `Commit
       | Value.Blob _ -> `Blob
       | Value.Tree _ -> `Tree
       | Value.Tag _ -> `Tag
     in
-
-    if Hashtbl.mem t.values hash
-    then Lwt.return (Ok (hash, 0))
-    else match Value.to_raw value with
+    if Hashtbl.mem t.values hash then Lwt.return (Ok (hash, 0))
+    else
+      match Value.to_raw value with
       | Error `Never -> assert false
       | Ok inflated ->
-        Hashtbl.add t.values hash (lazy value);
-        Hashtbl.add t.inflated hash (kind, (Cstruct.of_string inflated));
-        Lwt.return (Ok (hash, String.length inflated) : ((Hash.t * int, error) result))
+          Hashtbl.add t.values hash (lazy value) ;
+          Hashtbl.add t.inflated hash (kind, Cstruct.of_string inflated) ;
+          Lwt.return
+            (Ok (hash, String.length inflated) : (Hash.t * int, error) result)
 
   let digest kind raw =
     let len = Cstruct.len raw in
     let ctx = Hash.init () in
-    let hdr = Fmt.strf "%s %d\000%!"
-        (match kind with
-         | `Commit -> "commit"
-         | `Blob -> "blob"
-         | `Tree -> "tree"
-         | `Tag -> "tag")
+    let hdr =
+      Fmt.strf "%s %d\000%!"
+        ( match kind with
+        | `Commit -> "commit"
+        | `Blob -> "blob"
+        | `Tree -> "tree"
+        | `Tag -> "tag" )
         len
     in
     let ctx = Hash.feed_string ctx hdr in
@@ -159,25 +157,25 @@ module Make (H: Digestif.S) (Inflate: S.INFLATE) (Deflate: S.DEFLATE) = struct
 
   let write_inflated t ~kind inflated =
     let hash = digest kind inflated in
-    if Hashtbl.mem t.values hash
-    then Lwt.return hash
+    if Hashtbl.mem t.values hash then Lwt.return hash
     else
-      let value = lazy (
-        match Value.of_raw ~kind inflated with
-        | Error err ->
-          let str = Fmt.strf "%a" Error.Decoder.pp_error err in
-          raise (Failure str)
-
-        | Ok value -> value
-      ) in
-      Hashtbl.add t.inflated hash (kind, inflated);
-      Hashtbl.add t.values hash value;
+      let value =
+        lazy
+          ( match Value.of_raw ~kind inflated with
+          | Error err ->
+              let str = Fmt.strf "%a" Error.Decoder.pp_error err in
+              raise (Failure str)
+          | Ok value -> value )
+      in
+      Hashtbl.add t.inflated hash (kind, inflated) ;
+      Hashtbl.add t.values hash value ;
       Lwt.return hash
 
   let read_inflated t h =
     try
       let value = Lazy.force (Hashtbl.find t.values h) in
-      let kind = match value with
+      let kind =
+        match value with
         | Value.Commit _ -> `Commit
         | Value.Blob _ -> `Blob
         | Value.Tree _ -> `Tree
@@ -186,12 +184,11 @@ module Make (H: Digestif.S) (Inflate: S.INFLATE) (Deflate: S.DEFLATE) = struct
       match Value.to_raw_without_header value with
       | Ok raw -> Lwt.return (Some (kind, Cstruct.of_string raw))
       | Error `Never -> assert false
-    with Not_found ->
-      Lwt.return None
+    with Not_found -> Lwt.return None
 
   let read_aux t h =
-    try Ok (Lazy.force (Hashtbl.find t.values h))
-    with Not_found -> Error `Not_found
+    try Ok (Lazy.force (Hashtbl.find t.values h)) with Not_found ->
+      Error `Not_found
 
   let read t h = Lwt.return (read_aux t h)
   let keys t = Hashtbl.fold (fun k _ l -> k :: l) t []
@@ -199,108 +196,107 @@ module Make (H: Digestif.S) (Inflate: S.INFLATE) (Deflate: S.DEFLATE) = struct
   let mem t h = Lwt.return (Hashtbl.mem t.values h)
 
   let size t h =
-    let v = match read_aux t h with
+    let v =
+      match read_aux t h with
       | Ok (Value.Blob v) -> Ok (Value.Blob.length v)
-      | Ok (Value.Commit _ | Value.Tag _ | Value.Tree _)
-      | Error _ -> Error `Not_found
+      | Ok (Value.Commit _ | Value.Tag _ | Value.Tree _) | Error _ ->
+          Error `Not_found
     in
     Lwt.return v
 
   let read_exn t h =
     match read_aux t h with
     | Error _ -> err_not_found "read_exn" (Hash.to_hex h)
-    | Ok v    -> Lwt.return v
+    | Ok v -> Lwt.return v
 
   let contents t =
     let hashes = keys t.values in
-    let values = List.fold_left (fun acc h ->
-        match read_aux t h with
-        | Ok v    -> (h, v) :: acc
-        | Error _ -> acc
-      ) [] hashes in
+    let values =
+      List.fold_left
+        (fun acc h ->
+          match read_aux t h with Ok v -> (h, v) :: acc | Error _ -> acc )
+        [] hashes
+    in
     Lwt.return (Ok values)
 
-  module T =
-    Traverse_bfs.Make(struct
-      module Hash = Hash
-      module Inflate = Inflate
-      module Deflate = Deflate
-      module Value = Value
-      type nonrec t = t
-      type nonrec error = error
-      let pp_error = pp_error
-      let read = read
-    end)
+  module T = Traverse_bfs.Make (struct
+    module Hash = Hash
+    module Inflate = Inflate
+    module Deflate = Deflate
+    module Value = Value
+
+    type nonrec t = t
+    type nonrec error = error
+
+    let pp_error = pp_error
+    let read = read
+  end)
 
   let fold = T.fold
   let iter = T.iter
 
   module Pack = struct
-
     open Lwt.Infix
 
     type stream = unit -> Cstruct.t option Lwt.t
 
-    module GC =
-      Collector.Make(struct
-        module Hash = Hash
-        module Inflate = Inflate
-        module Value = Value
-        module Deflate = Deflate
-        module PEnc = PEnc
+    module GC = Collector.Make (struct
+      module Hash = Hash
+      module Inflate = Inflate
+      module Value = Value
+      module Deflate = Deflate
+      module PEnc = PEnc
 
-        type nonrec t = t
-        type nonrec error = error
-        type nonrec kind = kind
-        let pp_error = pp_error
-        let read_inflated = read_inflated
-        let contents _ = assert false
-      end)
+      type nonrec t = t
+      type nonrec error = error
+      type nonrec kind = kind
+
+      let pp_error = pp_error
+      let read_inflated = read_inflated
+      let contents _ = assert false
+    end)
 
     let make = GC.make_stream
-
     let option_map f v = match v with Some v -> Some (f v) | None -> None
     let option_map_default f d v = match v with Some v -> f v | None -> d
     let option_default v = function Some v -> v | None -> v
 
-    type optimized_hunk =
-      | Insert of (int * int)
-      | Copy of (int * int)
+    type optimized_hunk = Insert of (int * int) | Copy of (int * int)
 
     let pp_optimized_hunk ppf = function
       | Insert (off, len) ->
-        Fmt.pf ppf "(Insert { @[<hov>length = %d;@ offset = %d;@] })" len off
+          Fmt.pf ppf "(Insert { @[<hov>length = %d;@ offset = %d;@] })" len off
       | Copy (off, len) ->
-        Fmt.pf ppf "(Copy { @[<hov>length = %d;@ offset = %d;@] })" len off
+          Fmt.pf ppf "(Copy { @[<hov>length = %d;@ offset = %d;@] })" len off
 
     let from git stream =
       let cstruct_copy cs =
         let ln = Cstruct.len cs in
         let rs = Cstruct.create ln in
-        Cstruct.blit cs 0 rs 0 ln;
-        rs
+        Cstruct.blit cs 0 rs 0 ln ; rs
       in
-
       let apply hunks_descr hunks buffer_hunks source target =
-        if Cstruct.len target < hunks_descr.PDec.Hunk.target_length
-        then raise (Invalid_argument "apply");
+        if Cstruct.len target < hunks_descr.PDec.Hunk.target_length then
+          raise (Invalid_argument "apply") ;
         let target_length =
-          List.fold_left (fun acc -> function
+          List.fold_left
+            (fun acc -> function
               | Insert (off, len) ->
-                Cstruct.blit buffer_hunks off target acc len; acc + len
+                  Cstruct.blit buffer_hunks off target acc len ;
+                  acc + len
               | Copy (off, len) ->
-                Cstruct.blit source off target acc len; acc + len
-            ) 0 hunks
+                  Cstruct.blit source off target acc len ;
+                  acc + len )
+            0 hunks
         in
-
-        if target_length = hunks_descr.PDec.Hunk.target_length
-        then Ok (Cstruct.sub target 0 target_length)
-        else Fmt.kstrf
+        if target_length = hunks_descr.PDec.Hunk.target_length then
+          Ok (Cstruct.sub target 0 target_length)
+        else
+          Fmt.kstrf
             (fun x -> Error x)
-            "Bad undelta-ification (result: %d, expect: %d)"
-            target_length hunks_descr.PDec.Hunk.target_length
+            "Bad undelta-ification (result: %d, expect: %d)" target_length
+            hunks_descr.PDec.Hunk.target_length
       in
-
       let k2k = function
         | PDec.Commit -> `Commit
         | PDec.Tag -> `Tag
@@ -308,221 +304,244 @@ module Make (H: Digestif.S) (Inflate: S.INFLATE) (Deflate: S.DEFLATE) = struct
         | PDec.Blob -> `Blob
         | PDec.Hunk _ -> raise (Invalid_argument "k2k")
       in
-
-      let empty        = Cstruct.create 0 in
-      let buffer       = Buffer.create 0x800 in
+      let empty = Cstruct.create 0 in
+      let buffer = Buffer.create 0x800 in
       let buffer_hunks = Buffer.create 0x800 in
-      let queue        = Queue.create () in
-
+      let queue = Queue.create () in
       let rec go ~revidx ?(src = empty) ?hunks state =
         match PDec.eval src state with
-        | `Await state ->
-          (stream () >>= function
+        | `Await state -> (
+            stream ()
+            >>= function
             | Some raw ->
-              go ~revidx ~src:raw ?hunks (PDec.refill 0 (Cstruct.len raw) state)
+                go ~revidx ~src:raw ?hunks
+                  (PDec.refill 0 (Cstruct.len raw) state)
             | None ->
-              Lwt.return (Error (`Decoder_flow "Unexpected end of stream")))
+                Lwt.return (Error (`Decoder_flow "Unexpected end of stream")) )
         | `End (state, hash_pack) ->
-          Lwt.return (Ok (hash_pack, PDec.many state))
+            Lwt.return (Ok (hash_pack, PDec.many state))
         | `Error (_, err) ->
-          Log.err (fun l ->
-              l "The PACK decoder returns an error: %a." PDec.pp_error err);
-          Lwt.return (Error (`Pack err))
+            Log.err (fun l ->
+                l "The PACK decoder returns an error: %a." PDec.pp_error err ) ;
+            Lwt.return (Error (`Pack err))
         | `Flush state ->
-          let o, n = PDec.output state in
-
-          Buffer.add buffer (Cstruct.sub o 0 n);
-          go ~revidx ~src (PDec.flush 0 (Cstruct.len o) state)
+            let o, n = PDec.output state in
+            Buffer.add buffer (Cstruct.sub o 0 n) ;
+            go ~revidx ~src (PDec.flush 0 (Cstruct.len o) state)
         | `Hunk (state, hunk) ->
-          let hunks = match hunks, hunk with
-            | Some hunks, PDec.Hunk.Insert raw ->
-              let off = Buffer.has buffer_hunks in
-              Buffer.add buffer_hunks raw;
-              (Insert (off, Cstruct.len raw) :: hunks)
-            | Some hunks, PDec.Hunk.Copy (off, len) ->
-              (Copy (off, len) :: hunks)
-            | None, PDec.Hunk.Insert raw ->
-              let off = Buffer.has buffer_hunks in
-              Buffer.add buffer_hunks raw;
-              [ Insert (off, Cstruct.len raw) ]
-            | None, PDec.Hunk.Copy (off, len) ->
-              [ Copy (off, len) ]
-          in
-
-          go ~revidx ~src ~hunks (PDec.continue state)
+            let hunks =
+              match hunks, hunk with
+              | Some hunks, PDec.Hunk.Insert raw ->
+                  let off = Buffer.has buffer_hunks in
+                  Buffer.add buffer_hunks raw ;
+                  Insert (off, Cstruct.len raw) :: hunks
+              | Some hunks, PDec.Hunk.Copy (off, len) ->
+                  Copy (off, len) :: hunks
+              | None, PDec.Hunk.Insert raw ->
+                  let off = Buffer.has buffer_hunks in
+                  Buffer.add buffer_hunks raw ;
+                  [Insert (off, Cstruct.len raw)]
+              | None, PDec.Hunk.Copy (off, len) -> [Copy (off, len)]
+            in
+            go ~revidx ~src ~hunks (PDec.continue state)
         | `Object state ->
-          (match PDec.kind state with
-           | (PDec.Commit
-             | PDec.Tag
-             | PDec.Tree
-             | PDec.Blob) as kind ->
+            ( match PDec.kind state with
+            | (PDec.Commit | PDec.Tag | PDec.Tree | PDec.Blob) as kind ->
+                let raw = Buffer.contents buffer |> Cstruct.of_string in
+                Buffer.clear buffer ;
+                Log.debug (fun l ->
+                    l ~header:"populate"
+                      "Retrieve a new Git object (length: %d)."
+                      (Cstruct.len raw) ) ;
+                write_inflated git ~kind:(k2k kind) raw
+                >|= fun hash ->
+                Log.debug (fun l ->
+                    l ~header:"populate"
+                      "Add the object %a to the Git repository from the PACK \
+                       file."
+                      Hash.pp hash ) ;
+                Some hash
+            | PDec.Hunk hunks_descr -> (
+                let hunks = option_map List.rev hunks |> option_default [] in
+                let inflated =
+                  Cstruct.create hunks_descr.PDec.Hunk.target_length
+                in
+                let hash_source =
+                  match hunks_descr.PDec.Hunk.reference with
+                  | PDec.Hunk.Hash hash -> hash
+                  | PDec.Hunk.Offset off ->
+                      let off = Int64.sub (PDec.offset state) off in
+                      Revidx.find off revidx
+                  (* XXX(dinosaure): This is come from an assumption about the
+                     PACK file. Any hunk object has source as an external Git
+                     object of the PACK file or a previous Git object.
 
-             let raw = Buffer.contents buffer |> Cstruct.of_string in
-             Buffer.clear buffer;
-             Log.debug (fun l ->
-                 l ~header:"populate" "Retrieve a new Git object (length: %d)."
-                   (Cstruct.len raw));
-             write_inflated git ~kind:(k2k kind) raw >|= fun hash ->
-             Log.debug (fun l ->
-                 l ~header:"populate" "Add the object %a to the Git repository \
-                                       from the PACK file."
-                   Hash.pp hash);
-             Some hash
-           | PDec.Hunk hunks_descr ->
-             let hunks = option_map List.rev hunks |> option_default [] in
-             let inflated = Cstruct.create (hunks_descr.PDec.Hunk.target_length) in
-             let hash_source = match hunks_descr.PDec.Hunk.reference with
-               | PDec.Hunk.Hash hash -> hash
-               | PDec.Hunk.Offset off ->
-                 let off = Int64.sub (PDec.offset state) off in
-                 Revidx.find off revidx
-
-             (* XXX(dinosaure): This is come from an assumption about
-                the PACK file. Any hunk object has source as an external
-                Git object of the PACK file or a previous Git object.
-
-                So [Revidx.find] should never fail. *)
-             in
-             Log.debug (fun l ->
-                 l ~header:"populate" "Catch a Hunk object which has as source \
-                                       the Git object: %a."
-                   Hash.pp hash_source);
-             read_inflated git hash_source >>= function
-             | None ->
-               Log.warn (fun l ->
-                   l ~header:"populate" "The source Git object %a does not \
-                                         exist yet." Hash.pp hash_source);
-               Queue.push (hunks_descr
-                          , hunks
-                          , cstruct_copy (Buffer.unsafe_contents buffer_hunks)
-                          , inflated, hash_source) queue;
-               Buffer.clear buffer_hunks;
-               Lwt.return None
-             | Some (kind, raw) ->
-               Log.debug (fun l ->
-                   l ~header:"populate" "Retrieving the source Git object %a."
-                     Hash.pp hash_source);
-               match
-                 apply hunks_descr hunks (Buffer.unsafe_contents buffer_hunks)
-                   raw inflated
-               with
-               | Ok result ->
-                 Buffer.clear buffer_hunks;
-                 write_inflated git ~kind result >|= fun hash ->
-                 Log.debug (fun l ->
-                     l ~header:"populate" "Add the object %a to the Git \
-                                           repository from the PACK file."
-                       Hash.pp hash);
-                 Some hash
-               | Error err ->
-                 Log.err (fun l ->
-                     l ~header:"populate" "Error when we apply the source Git \
-                                           object %a with the Hunk object: %a."
-                       Hash.pp hash_source
-                       (Fmt.hvbox (Fmt.list ~sep:(Fmt.const Fmt.string ";@ ")
-                                     pp_optimized_hunk)) hunks);
-                 Lwt.fail (Failure err))
-          >>= fun hash ->
-          let revidx =
-            option_map_default
-              (fun hash -> Revidx.add (PDec.offset state) hash revidx)
-              revidx hash in
-          go ~revidx ~src (PDec.next_object state)
+                     So [Revidx.find] should never fail. *)
+                in
+                Log.debug (fun l ->
+                    l ~header:"populate"
+                      "Catch a Hunk object which has as source the Git \
+                       object: %a."
+                      Hash.pp hash_source ) ;
+                read_inflated git hash_source
+                >>= function
+                | None ->
+                    Log.warn (fun l ->
+                        l ~header:"populate"
+                          "The source Git object %a does not exist yet."
+                          Hash.pp hash_source ) ;
+                    Queue.push
+                      ( hunks_descr
+                      , hunks
+                      , cstruct_copy (Buffer.unsafe_contents buffer_hunks)
+                      , inflated
+                      , hash_source )
+                      queue ;
+                    Buffer.clear buffer_hunks ;
+                    Lwt.return None
+                | Some (kind, raw) -> (
+                    Log.debug (fun l ->
+                        l ~header:"populate"
+                          "Retrieving the source Git object %a." Hash.pp
+                          hash_source ) ;
+                    match
+                      apply hunks_descr hunks
+                        (Buffer.unsafe_contents buffer_hunks)
+                        raw inflated
+                    with
+                    | Ok result ->
+                        Buffer.clear buffer_hunks ;
+                        write_inflated git ~kind result
+                        >|= fun hash ->
+                        Log.debug (fun l ->
+                            l ~header:"populate"
+                              "Add the object %a to the Git repository from \
+                               the PACK file."
+                              Hash.pp hash ) ;
+                        Some hash
+                    | Error err ->
+                        Log.err (fun l ->
+                            l ~header:"populate"
+                              "Error when we apply the source Git object %a \
+                               with the Hunk object: %a."
+                              Hash.pp hash_source
+                              (Fmt.hvbox
+                                 (Fmt.list
+                                    ~sep:(Fmt.const Fmt.string ";@ ")
+                                    pp_optimized_hunk))
+                              hunks ) ;
+                        Lwt.fail (Failure err) ) ) )
+            >>= fun hash ->
+            let revidx =
+              option_map_default
+                (fun hash -> Revidx.add (PDec.offset state) hash revidx)
+                revidx hash
+            in
+            go ~revidx ~src (PDec.next_object state)
       in
-
-      let rec gogo () = match Queue.pop queue with
+      let rec gogo () =
+        match Queue.pop queue with
         | exception Queue.Empty -> Lwt.return (Ok ())
-        | (hunks_descr, hunks, buffer_hunks, inflated, hash_source) ->
-          read_inflated git hash_source >>= function
-          | None ->
-            Queue.push (hunks_descr, hunks, buffer_hunks, inflated, hash_source) queue;
-            gogo ()
-          | Some (kind, raw) ->
-            match apply hunks_descr hunks buffer_hunks raw inflated with
-            | Ok result -> write_inflated git ~kind result >>= fun _ -> gogo ()
-            | Error err -> Lwt.fail (Failure err)
+        | hunks_descr, hunks, buffer_hunks, inflated, hash_source -> (
+            read_inflated git hash_source
+            >>= function
+            | None ->
+                Queue.push
+                  (hunks_descr, hunks, buffer_hunks, inflated, hash_source)
+                  queue ;
+                gogo ()
+            | Some (kind, raw) -> (
+              match apply hunks_descr hunks buffer_hunks raw inflated with
+              | Ok result ->
+                  write_inflated git ~kind result >>= fun _ -> gogo ()
+              | Error err -> Lwt.fail (Failure err) ) )
       in
-
-      with_buffer git (fun { ztmp; window } ->
-          go ~revidx:Revidx.empty (PDec.default ztmp window)
-        ) >>= function
+      with_buffer git (fun {ztmp; window} ->
+          go ~revidx:Revidx.empty (PDec.default ztmp window) )
+      >>= function
       | Error _ as err -> Lwt.return err
-      | Ok (hash_pack, n) ->
-        let n = Int32.to_int n in
-        Queue.fold (fun acc x -> x :: acc) [] queue
-        |> Lwt_list.fold_left_s (fun acc (_, _, _, _, hash) ->
-            mem git hash >|= function
-            | true -> acc + 1
-            | false -> acc) 0
-        >>= function
-        | 0 ->
-          if Queue.is_empty queue
-          then Lwt.return (Ok (hash_pack, n))
-          else Lwt.return (Error `Unresolved_object)
-        | _ ->
-          let open Lwt_result in
-          Log.debug (fun l ->
-              l ~header:"populate" "Resolving the rest of the PACK file.");
-          gogo () >>= fun () -> Lwt.return (Ok (hash_pack, n))
+      | Ok (hash_pack, n) -> (
+          let n = Int32.to_int n in
+          Queue.fold (fun acc x -> x :: acc) [] queue
+          |> Lwt_list.fold_left_s
+               (fun acc (_, _, _, _, hash) ->
+                 mem git hash >|= function true -> acc + 1 | false -> acc )
+               0
+          >>= function
+          | 0 ->
+              if Queue.is_empty queue then Lwt.return (Ok (hash_pack, n))
+              else Lwt.return (Error `Unresolved_object)
+          | _ ->
+              let open Lwt_result in
+              Log.debug (fun l ->
+                  l ~header:"populate" "Resolving the rest of the PACK file."
+              ) ;
+              gogo () >>= fun () -> Lwt.return (Ok (hash_pack, n)) )
   end
 
   module Ref = struct
     module Graph = Reference.Map
 
     let list t =
-      Log.debug (fun l -> l "Ref.list");
+      Log.debug (fun l -> l "Ref.list") ;
       let graph, rest =
-        Hashtbl.fold (fun k -> function
-            | `R ptr  -> fun (a, r) -> a, (k, ptr) :: r
-            | `H hash -> fun (a, r) -> Graph.add k hash a, r)
+        Hashtbl.fold
+          (fun k -> function `R ptr -> fun (a, r) -> a, (k, ptr) :: r
+            | `H hash -> fun (a, r) -> Graph.add k hash a, r )
           t.refs (Graph.empty, [])
       in
       let graph =
-        List.fold_left (fun a (k, ptr) ->
-            try let v = Graph.find ptr a in
+        List.fold_left
+          (fun a (k, ptr) ->
+            try
+              let v = Graph.find ptr a in
               Graph.add k v a
-            with Not_found -> a)
+            with Not_found -> a )
           graph rest
       in
       let r = Graph.fold (fun k v a -> (k, v) :: a) graph [] in
       Lwt.return r
 
     let mem t r =
-      Log.debug (fun l -> l "Ref.mem %a" Reference.pp r);
-      try let _ = Hashtbl.find t.refs r in Lwt.return true
+      Log.debug (fun l -> l "Ref.mem %a" Reference.pp r) ;
+      try
+        let _ = Hashtbl.find t.refs r in
+        Lwt.return true
       with Not_found -> Lwt.return false
 
     let rec resolve t r =
-      Log.debug (fun l -> l "Ref.read %a" Reference.pp r);
-      try match Hashtbl.find t.refs r with
+      Log.debug (fun l -> l "Ref.read %a" Reference.pp r) ;
+      try
+        match Hashtbl.find t.refs r with
         | `H s -> Lwt.return (Ok s)
         | `R r -> resolve t r
       with Not_found -> Lwt.return (Error `Not_found)
 
     let read t r =
-      try match Hashtbl.find t.refs r with
-          | `H hash -> Lwt.return (Ok (Reference.Hash hash))
-          | `R refname -> Lwt.return (Ok (Reference.Ref refname))
+      try
+        match Hashtbl.find t.refs r with
+        | `H hash -> Lwt.return (Ok (Reference.Hash hash))
+        | `R refname -> Lwt.return (Ok (Reference.Ref refname))
       with Not_found -> Lwt.return (Error `Not_found)
 
     let remove t r =
-      Log.debug (fun l -> l "Ref.remove %a" Reference.pp r);
-      Hashtbl.remove t.refs r;
+      Log.debug (fun l -> l "Ref.remove %a" Reference.pp r) ;
+      Hashtbl.remove t.refs r ;
       Lwt.return (Ok ())
 
     let write t r value =
-      Log.debug (fun l -> l "Ref.write %a" Reference.pp r);
-      let head_contents = match value with
-        | Reference.Hash hash   -> `H hash
+      Log.debug (fun l -> l "Ref.write %a" Reference.pp r) ;
+      let head_contents =
+        match value with
+        | Reference.Hash hash -> `H hash
         | Reference.Ref refname -> `R refname
       in
-      Hashtbl.replace t.refs r head_contents;
+      Hashtbl.replace t.refs r head_contents ;
       Lwt.return (Ok ())
-
   end
 
   let has_global_watches = false
   let has_global_checkout = false
 end
 
-module Store = Make(Digestif.SHA1)(Inflate)(Deflate)
+module Store = Make (Digestif.SHA1) (Inflate) (Deflate)
