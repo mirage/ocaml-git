@@ -9,13 +9,13 @@ dev-repo:     "https://github.com/mirage/ocaml-git.git"
 doc:          "https://mirage.github.io/ocaml-git/"
 
 build: [
-  ["jbuilder" "subst" "-p" name] {pinned}
-  ["jbuilder" "build" "-p" name "-j" jobs]
+  ["dune" "subst"] {pinned}
+  ["dune" "build" "-p" name "-j" jobs]
 ]
-build-test: ["jbuilder" "runtest" "-p" name "--no-buffer"]
+build-test: ["dune" "runtest" "-p" name]
 
 depends: [
-  "jbuilder"       {build & >= "1.0+beta10"}
+  "dune"           {build}
   "cohttp-mirage"  {>= "1.0.0"}
   "mirage-flow-lwt"
   "mirage-channel-lwt"
@@ -29,7 +29,7 @@ depends: [
   "nocrypto"       {test & >= "0.5.4"}
   "tls"            {test}
   "io-page"        {test & >= "1.6.1"}
-  "tcpip"          {test & >= "3.3.0" & <= "3.3.1" }
+  "tcpip"          {test & >= "3.3.0"}
   "mirage-time-unix"
 ]
 

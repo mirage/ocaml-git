@@ -9,13 +9,13 @@ dev-repo:     "https://github.com/mirage/ocaml-git.git"
 doc:          "https://mirage.github.io/ocaml-git/"
 
 build: [
-  ["jbuilder" "subst" "-p" name] {pinned}
-  ["jbuilder" "build" "-p" name "-j" jobs]
+  ["dune" "subst"] {pinned}
+  ["dune" "build" "-p" name "-j" jobs]
 ]
-build-test: ["jbuilder" "runtest" "-p" name]
+build-test: ["dune" "runtest" "-p" name]
 
 depends: [
-  "jbuilder"   {build & >= "1.0+beta10"}
+  "dune"       {build}
   "uri"        {>= "1.9.0"}
   "lwt"        {>= "2.4.7"}
   "angstrom"   {>= "0.9.0"}

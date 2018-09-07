@@ -1,6 +1,0 @@
-(jbuild_version 1)
-
-(library
-  ((name      test_smart)
-   (wrapped   false)
-   (libraries (git mtime mtime.clock.os alcotest nocrypto lwt.unix logs.fmt))))

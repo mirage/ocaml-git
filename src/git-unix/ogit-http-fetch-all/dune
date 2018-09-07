@@ -1,0 +1,10 @@
+(executable
+  (name        main)
+  (package     git-unix)
+  (public_name ogit-http-fetch-all)
+  (libraries   git-unix
+               cohttp-lwt-unix
+               cmdliner
+               mtime mtime.clock.os
+               fmt.cli fmt.tty
+               logs.cli logs.fmt))
