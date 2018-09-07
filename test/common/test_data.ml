@@ -77,7 +77,7 @@ module Make0 (Source : SOURCE) (Store : S) = struct
       Astring.String.for_all
         (function 'a' .. 'f' | 'A' .. 'F' | '0' .. '9' -> true | _ -> false)
         s
-      && String.length s = Store.Hash.Digest.length * 2
+      && String.length s = Store.Hash.digest_size * 2
     in
     List.fold_left
       (fun acc line ->
@@ -136,7 +136,7 @@ module Make0 (Source : SOURCE) (Store : S) = struct
       | `Flush t ->
           Git.Buffer.add buf (Cstruct.sub ctmp 0 (E.used_out t)) ;
           let ctx =
-            Store.Hash.Digest.feed_c ctx (Cstruct.sub ctmp 0 (E.used_out t))
+            Store.Hash.feed_cstruct ctx (Cstruct.sub ctmp 0 (E.used_out t))
           in
           go ctx (E.flush 0 (Cstruct.len ctmp) t)
       | `Error (_, err) ->
@@ -145,12 +145,12 @@ module Make0 (Source : SOURCE) (Store : S) = struct
       | `End t ->
           if E.used_out t > 0 then (
             Git.Buffer.add buf (Cstruct.sub ctmp 0 (E.used_out t)) ;
-            Store.Hash.Digest.feed_c ctx (Cstruct.sub ctmp 0 (E.used_out t)) )
+            Store.Hash.feed_cstruct ctx (Cstruct.sub ctmp 0 (E.used_out t)) )
           else ctx
     in
     let _ =
       go
-        (Store.Hash.Digest.init ())
+        (Store.Hash.init ())
         (E.default (fun f -> R.iter (fun k v -> f (k, v)) tree) hash_pack)
     in
     if String.equal (load_file Source.idx) (Git.Buffer.contents buf) then

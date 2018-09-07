@@ -17,12 +17,18 @@
 
 module type STORE = sig
 
-  module Hash: S.HASH
-  module Value: Value.S with module Hash = Hash
+  module Hash   : S.HASH
+  module Inflate: S.INFLATE
   module Deflate: S.DEFLATE
+
+  module Value: Value.S
+    with module Hash    := Hash
+     and module Inflate := Inflate
+     and module Deflate := Deflate
+
   module PEnc: Pack.P
-    with module Hash = Hash
-     and module Deflate = Deflate
+    with module Hash    := Hash
+     and module Deflate := Deflate
 
   type t
   type error = private [> `Delta of PEnc.Delta.error]
@@ -40,8 +46,6 @@ end
 
 module Make (S: STORE): sig
 
-  module Graph: Map.S with type key = S.Hash.t
-
   type stream = unit -> Cstruct.t option Lwt.t
 
   val make_stream:
@@ -49,6 +53,6 @@ module Make (S: STORE): sig
     ?window:[`Memory of int | `Object of int ] ->
     ?depth:int ->
     S.Value.t list ->
-    (stream * (Crc32.t * int64) Graph.t Lwt_mvar.t, S.error) result Lwt.t
+    (stream * (Crc32.t * int64) S.Hash.Map.t Lwt_mvar.t, S.error) result Lwt.t
 
 end

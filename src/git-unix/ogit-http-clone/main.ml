@@ -20,8 +20,8 @@ let () = Random.self_init ()
 open Git_unix
 
 module Sync_http = Http(Store)
-module Entry = Index.Entry(SHA1)
-module Index = Index.Make(SHA1)(Store)(Fs)(Entry)
+module Entry = Index.Entry(Digestif.SHA1)
+module Index = Index.Make(Store)(Fs)(Entry)
 
 module Option =
 struct

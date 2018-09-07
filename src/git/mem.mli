@@ -35,7 +35,7 @@
     back-end).
 *)
 
-module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE): sig
+module Make (H: Digestif.S) (Inflate: S.INFLATE) (Deflate: S.DEFLATE): sig
 
 (** The {i functor} needs 4 modules:
 
@@ -55,9 +55,9 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE): sig
     understand the Deflate module. For example, use [zlib] to inflate
     and [brotli] to deflate does not work. *)
 
-  include Minimal.S with module Hash = H
-                     and module Inflate = I
-                     and module Deflate = D
+  include Minimal.S with module Hash    = Hash.Make(H)
+                     and module Inflate = Inflate
+                     and module Deflate = Deflate
 
   val v:
     ?dotgit:Fpath.t ->
@@ -72,8 +72,8 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE): sig
 
 end
 
-module Store (H : Digestif.S): sig
-  include Minimal.S with module Hash    = Hash.Make(H)
+module Store: sig
+  include Minimal.S with module Hash    = Hash.Make(Digestif.SHA1)
                      and module Inflate = Inflate
                      and module Deflate = Deflate
 

@@ -23,11 +23,11 @@ let err_not_found n k =
   Log.err (fun l -> l "Raising an invalid argument from %s" n);
   Lwt.fail (Invalid_argument str)
 
-module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE) = struct
+module Make (H: Digestif.S) (Inflate: S.INFLATE) (Deflate: S.DEFLATE) = struct
 
-  module Hash = H
-  module Inflate = I
-  module Deflate = D
+  module Inflate = Inflate
+  module Deflate = Deflate
+  module Hash = Hash.Make(H)
   module Buffer = Cstruct_buffer
   module Value = Value.Raw(Hash)(Inflate)(Deflate)
   module Reference = Reference.Make(Hash)
@@ -144,7 +144,7 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE) = struct
 
   let digest kind raw =
     let len = Cstruct.len raw in
-    let ctx = Hash.Digest.init () in
+    let ctx = Hash.init () in
     let hdr = Fmt.strf "%s %d\000%!"
         (match kind with
          | `Commit -> "commit"
@@ -153,9 +153,9 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE) = struct
          | `Tag -> "tag")
         len
     in
-    let ctx = Hash.Digest.feed_s ctx hdr in
-    let ctx = Hash.Digest.feed_c ctx raw in
-    Hash.Digest.get ctx
+    let ctx = Hash.feed_string ctx hdr in
+    let ctx = Hash.feed_bigstring ctx (Cstruct.to_bigarray raw) in
+    Hash.get ctx
 
   let write_inflated t ~kind inflated =
     let hash = digest kind inflated in
@@ -223,6 +223,8 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE) = struct
   module T =
     Traverse_bfs.Make(struct
       module Hash = Hash
+      module Inflate = Inflate
+      module Deflate = Deflate
       module Value = Value
       type nonrec t = t
       type nonrec error = error
@@ -242,6 +244,7 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE) = struct
     module GC =
       Collector.Make(struct
         module Hash = Hash
+        module Inflate = Inflate
         module Value = Value
         module Deflate = Deflate
         module PEnc = PEnc
@@ -253,8 +256,6 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE) = struct
         let read_inflated = read_inflated
         let contents _ = assert false
       end)
-
-    module Map = GC.Graph
 
     let make = GC.make_stream
 
@@ -524,4 +525,4 @@ module Make (H: S.HASH) (I: S.INFLATE) (D: S.DEFLATE) = struct
   let has_global_checkout = false
 end
 
-module Store (H : Digestif.S) = Make(Hash.Make(H))(Inflate)(Deflate)
+module Store = Make(Digestif.SHA1)(Inflate)(Deflate)

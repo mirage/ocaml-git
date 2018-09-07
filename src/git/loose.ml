@@ -22,8 +22,15 @@ module Log = (val Logs.src_log src : Logs.LOG)
 
 module type S = sig
 
-  module FS: S.FS
-  module Value: Value.S
+  module FS     : S.FS
+  module Hash   : S.HASH
+  module Deflate: S.DEFLATE
+  module Inflate: S.INFLATE
+
+  module Value: Value.S with module Hash    := Hash
+                         and module Deflate := Deflate
+                         and module Inflate := Inflate
+
   include module type of Value
 
   type error =
@@ -105,25 +112,11 @@ module type S = sig
     Cstruct.t -> (Hash.t, error) result Lwt.t
 end
 
-module Make
-    (H: S.HASH)
-    (FS: S.FS)
-    (I: S.INFLATE)
-    (D: S.DEFLATE)
-  : S with module Hash = H
-       and module Inflate = I
-       and module Deflate = D
-       and module FS = FS
-       and module Blob = Blob.Make(H)
-       and module Commit = Commit.Make(H)
-       and module Tree = Tree.Make(H)
-       and module Tag = Tag.Make(H)
-       and type t = Value.Make(H)(I)(D).t
-= struct
+module Make (Hash: S.HASH) (FS: S.FS) (Inflate: S.INFLATE) (Deflate: S.DEFLATE) = struct
 
   module FS = Helper.FS(FS)
 
-  module Value = Value.Make(H)(I)(D)
+  module Value = Value.Make(Hash)(Inflate)(Deflate)
   include Value
 
   type inf_error = Inflate.error Error.Inf.t
@@ -147,14 +140,12 @@ module Make
     | #def_error as err -> Error.Def.pp_error Deflate.pp_error ppf err
     | #fs_error as err -> Error.FS.pp_error FS.pp_error ppf err
 
-  let hash_get : Hash.t -> int -> int = fun h i -> Char.code @@ Hash.get h i
-
   let explode hash =
-    Fmt.strf "%02x" (hash_get hash 0),
-    let buf = Buffer.create ((Hash.Digest.length - 1) * 2) in
+    Fmt.strf "%02x" (Hash.read hash 0),
+    let buf = Buffer.create ((Hash.digest_size - 1) * 2) in
     let ppf = Fmt.with_buffer buf in
-    for i = 1 to Hash.Digest.length - 1
-    do Fmt.pf ppf "%02x%!" (hash_get hash i) done;
+    for i = 1 to Hash.digest_size - 1
+    do Fmt.pf ppf "%02x%!" (Hash.read hash i) done;
     Buffer.contents buf
 
   let mem ~fs ~root hash =
@@ -331,9 +322,9 @@ module Make
         (Cstruct.len value)
     in
     let digest value' =
-      let ctx = Hash.Digest.init () in
-      let ctx = Hash.Digest.feed_c ctx value' in
-      Hash.Digest.get ctx
+      let ctx = Hash.init () in
+      let ctx = Hash.feed_bigstring ctx (Cstruct.to_bigarray value') in
+      Hash.get ctx
     in
     let value' = Cstruct.concat [ header; value ] in
     let state = {

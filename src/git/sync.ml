@@ -50,8 +50,8 @@ module type S = sig
   module Store: Minimal.S
   module Net: NET
   module Client: Smart.CLIENT
-    with module Hash = Store.Hash
-     and module Reference = Store.Reference
+    with module Hash      := Store.Hash
+     and module Reference := Store.Reference
 
   type error =
     [ `SmartPack of string

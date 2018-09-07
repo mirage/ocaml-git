@@ -17,12 +17,18 @@
 
 module type STORE = sig
 
-  module Hash: S.HASH
-  module Value: Value.S with module Hash = Hash
+  module Hash   : S.HASH
+  module Inflate: S.INFLATE
   module Deflate: S.DEFLATE
+
+  module Value: Value.S
+    with module Hash    := Hash
+     and module Inflate := Inflate
+     and module Deflate := Deflate
+
   module PEnc: Pack.P
-    with module Hash = Hash
-     and module Deflate = Deflate
+    with module Hash    := Hash
+     and module Deflate := Deflate
 
   type t
   type error = private [> `Delta of PEnc.Delta.error]
@@ -88,9 +94,9 @@ module Make (S: STORE) = struct
       List.fold_left
         (fun acc o ->
            let hash = Store.Value.digest o in
-           Store.Hash.Map.add hash o acc)
-        Store.Hash.Map.empty entries
-      |> Store.Hash.Map.bindings in
+           S.Hash.Map.add hash o acc)
+        S.Hash.Map.empty entries
+      |> S.Hash.Map.bindings in
 
     let ( >?= ) a f = Lwt_result.map_err f a in
 
@@ -137,8 +143,6 @@ module Make (S: STORE) = struct
 
   exception PackEncoder of S.PEnc.error
 
-  module Graph = Map.Make(S.Hash)
-
   type stream = unit -> Cstruct.t option Lwt.t
 
   let make_stream git ?(window = `Object 10) ?(depth = 50) objects =
@@ -170,7 +174,9 @@ module Make (S: STORE) = struct
             Lwt.return (Some (Cstruct.sub dtmp 0 (S.PEnc.used_out state')))
           end else begin
             state := state';
-            let graph = S.PEnc.Map.fold (fun key value acc -> Graph.add key value acc) (S.PEnc.idx state') Graph.empty in
+            let graph = S.Hash.Map.fold (fun key value acc ->
+                S.Hash.Map.add key value acc
+              ) (S.PEnc.idx state') S.Hash.Map.empty in
             (* XXX(dinosaure): can be optimized because structurally the same. *)
             Lwt_mvar.put mvar graph >>= fun () -> Lwt.return None
           end

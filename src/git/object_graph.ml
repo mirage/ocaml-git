@@ -15,6 +15,9 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+let src = Logs.Src.create "git.object_graph" ~doc:"logs git's internal graph computation"
+module Log = (val Logs.src_log src : Logs.LOG)
+
 open Lwt.Infix
 
 module type S = sig
@@ -40,9 +43,9 @@ module Make (S: Minimal.S) = struct
     Graph.Imperative.Digraph.ConcreteBidirectionalLabeled
       (struct
         type t = (Store.Hash.t * Store.Value.t)
-        let compare (x,_) (y,_) = Store.Hash.compare x y
-        let hash (x,_) = Store.Hash.hash x
-        let equal (x,_) (y,_) = Store.Hash.equal x y
+        let compare (x,_) (y,_) = Store.Hash.unsafe_compare x y
+        let hash (x,_) = Hashtbl.hash x
+        let equal (x,_) (y,_) = Store.Hash.unsafe_compare x y = 0
       end)
       (struct
         type t = string
@@ -74,14 +77,13 @@ module Make (S: Minimal.S) = struct
         | _  ->[`Label (String.escaped l)]
     end)
 
-  module K = Graph.Imperative.Digraph.ConcreteBidirectional(Store.Hash)
+  module K = Graph.Imperative.Digraph.ConcreteBidirectional(struct
+      type t = Store.Hash.t
+      let equal x y = Store.Hash.unsafe_compare x y = 0
+      let hash = Hashtbl.hash
+      let compare x y = Store.Hash.unsafe_compare x y
+    end)
   module T = Graph.Topological.Make(K)
-
-  module Log =
-  struct
-    let src = Logs.Src.create "git.object_graph" ~doc:"logs git's internal graph computation"
-    include (val Logs.src_log src : Logs.LOG)
-  end
 
   module Search = struct
     include Search.Make(Store)

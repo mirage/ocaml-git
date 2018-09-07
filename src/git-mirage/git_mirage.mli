@@ -1,5 +1,4 @@
 module Net = Net
-module SHA1: Git.HASH
 module FS = Fs
 
 module Sync (C: Net.CONDUIT) (S: Git.S): Git.Sync.S
@@ -7,7 +6,7 @@ module Sync (C: Net.CONDUIT) (S: Git.S): Git.Sync.S
    and module Net = Net.Make(C)
 
 module Store (X: Mirage_fs_lwt.S): sig
-  include Git.Store.S with module Hash = SHA1
+  include Git.Store.S with module Hash = Git.Hash.Make(Digestif.SHA1)
 
   val v:
     ?current_dir:Fpath.t ->

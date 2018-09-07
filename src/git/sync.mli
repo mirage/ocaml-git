@@ -33,8 +33,8 @@ module type S = sig
   module Store: Minimal.S
   module Net: NET
   module Client: Smart.CLIENT
-    with module Hash = Store.Hash
-     and module Reference = Store.Reference
+    with module Hash      := Store.Hash
+     and module Reference := Store.Reference
 
   (** The error type. *)
   type error =
@@ -245,7 +245,7 @@ sig
     Store.t ->
     ofs_delta:bool ->
     (Store.Hash.t * Store.Reference.t * bool) list -> command list ->
-    (Store.Pack.stream * (Crc32.t * int64) Store.Pack.Map.t Lwt_mvar.t, Store.error) result Lwt.t
+    (Store.Pack.stream * (Crc32.t * int64) Store.Hash.Map.t Lwt_mvar.t, Store.error) result Lwt.t
 
   val want_handler:
     Store.t ->

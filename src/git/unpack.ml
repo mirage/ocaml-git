@@ -15,10 +15,12 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+let src = Logs.Src.create "git.unpack" ~doc:"logs git's unpack event"
+module Log = (val Logs.src_log src : Logs.LOG)
+
 open Lwt.Infix
 
-module Window =
-struct
+module Window = struct
   type t =
     { raw : Cstruct.t
     ; off : int64
@@ -97,9 +99,7 @@ module type H = sig
 end
 
 (* Implementation of deserialization of a list of hunks (from a PACK file) *)
-module Hunk (H : S.HASH) : H with module Hash = H  =
-struct
-  module Hash = H
+module Hunk (Hash : S.HASH) = struct
 
   type error =
     | Reserved_opcode of int
@@ -494,16 +494,10 @@ end
 
 (* Implementatioon of deserialization of a PACK file *)
 module Pack
-    (Hash: S.HASH)
+    (Hash   : S.HASH)
     (Inflate: S.INFLATE)
-    (Hunk: H with module Hash := Hash)
-  : P with module Hash = Hash
-       and module Inflate = Inflate
-       and module Hunk := Hunk
+    (Hunk   : H with module Hash := Hash)
 = struct
-  module Hash = Hash
-  module Inflate = Inflate
-  module Hunk = Hunk
 
   type error =
     | Invalid_byte of int
@@ -691,11 +685,11 @@ module Pack
     else await { t with state = ctor (fun src t -> (get_byte[@tailcall]) ~ctor k src t) }
 
   let get_hash ~ctor k src t =
-    let buf = Buffer.create Hash.Digest.length in
+    let buf = Buffer.create Hash.digest_size in
 
     let rec loop i src t =
-      if i = Hash.Digest.length
-      then k (Hash.of_string (Buffer.contents buf)) src t
+      if i = Hash.digest_size
+      then k (Hash.of_raw_string (Buffer.contents buf)) src t
       else
         get_byte ~ctor
           (fun byte src t ->
@@ -924,11 +918,11 @@ module Pack
     | 0b111 ->
       KObject.get_hash
         (fun hash _ t ->
-          let crc = Crc32.digests crc (Hash.to_string hash |> Bytes.unsafe_of_string) in
+          let crc = Crc32.digests crc (Hash.to_raw_string hash |> Bytes.unsafe_of_string) in
 
           Cont { t with state = Hunks { offset   = off
                                       ; length   = len
-                                      ; consumed = Hash.Digest.length + size_of_variable_length len
+                                      ; consumed = Hash.digest_size + size_of_variable_length len
                                       ; crc
                                       ; z = Inflate.flush 0 (Cstruct.len t.o_z)
                                             @@ Inflate.refill (t.i_off + t.i_pos) (t.i_len - t.i_pos)
@@ -1144,7 +1138,7 @@ module Pack
                   ; counter = Int32.pred t.counter }
       else { t with state = Object kind
                   ; counter = Int32.pred t.counter }
-    | Next _ -> { t with state = End (Hash.of_string (String.make Hash.Digest.length '\000')) }
+    | Next _ -> { t with state = End (Hash.of_raw_string (String.make Hash.digest_size '\000')) }
       (* XXX(dinosaure): in the local case, the user don't care about the hash of the PACK file. *)
     | End _ | Header _ | Object _ | VariableLength _
     | Hunks _ | StopHunks _ | Unzip _ | Checksum _ | Exception _ ->
@@ -1524,30 +1518,14 @@ module type D = sig
 end
 
 module Decoder
-    (Hash: S.HASH)
-    (Mapper: S.MAPPER)
+    (Hash   : S.HASH)
+    (Mapper : S.MAPPER)
     (Inflate: S.INFLATE)
     (Hunk: H with module Hash := Hash)
-    (Pack: P with module Hash := Hash
-                     and module Inflate := Inflate
-                     and module Hunk := Hunk)
-  : D with module Hash = Hash
-       and module Mapper = Mapper
-       and module Inflate = Inflate
-       and module Hunk := Hunk
-       and module Pack := Pack =
-struct
-  module Log =
-  struct
-    let src = Logs.Src.create "git.unpack" ~doc:"logs git's unpack event"
-    include (val Logs.src_log src : Logs.LOG)
-  end
-
-  module Hash = Hash
-  module Mapper = Mapper
-  module Inflate = Inflate
-  module Pack = Pack
-  module Hunk = Hunk
+    (Pack: P with module Hash    := Hash
+              and module Inflate := Inflate
+              and module Hunk    := Hunk)
+= struct
 
   type error =
     | Invalid_hash of Hash.t
@@ -1743,13 +1721,13 @@ struct
             let len = Cstruct.len raw in
             let ctx = match ctx with
               | Some ctx ->
-                let ctx = Hash.Digest.feed_c ctx raw in
+                let ctx = Hash.feed_cstruct ctx raw in
                 Some ctx
               | None ->
                 let len = match Pack.kind state with
                   | Pack.Hunk { Hunk.target_length; _ } -> target_length
                   | _ -> invalid_arg "Object is not a patch" in
-                let ctx = Hash.Digest.init () in
+                let ctx = Hash.init () in
                 let hdr = Fmt.strf "%s %d\000"
                     (match kind with
                      | `Commit -> "commit"
@@ -1757,8 +1735,8 @@ struct
                      | `Tag -> "tag"
                      | `Blob -> "blob")
                     len in
-                let ctx = Hash.Digest.feed_s ctx hdr in
-                let ctx = Hash.Digest.feed_c ctx raw in
+                let ctx = Hash.feed_string ctx hdr in
+                let ctx = Hash.feed_cstruct ctx raw in
                 Some ctx in
 
             Cstruct.blit raw 0 rtmp writed_in_rtmp len;
@@ -1768,13 +1746,13 @@ struct
           | `Hunk (state, Hunk.Copy (off, len)) ->
             let ctx = match ctx with
               | Some ctx ->
-                let ctx = Hash.Digest.feed_c ctx (Cstruct.sub source off len) in
+                let ctx = Hash.feed_cstruct ctx (Cstruct.sub source off len) in
                 Some ctx
               | None ->
                 let len' = match Pack.kind state with
                   | Pack.Hunk { Hunk.target_length; _ } -> target_length
                   | _ -> invalid_arg "Object is not a patch" in
-                let ctx = Hash.Digest.init () in
+                let ctx = Hash.init () in
                 let hdr = Fmt.strf "%s %d\000"
                     (match kind with
                      | `Commit -> "commit"
@@ -1782,8 +1760,8 @@ struct
                      | `Tag -> "tag"
                      | `Blob -> "blob")
                     len' in
-                let ctx = Hash.Digest.feed_s ctx hdr in
-                let ctx = Hash.Digest.feed_c ctx (Cstruct.sub source off len) in
+                let ctx = Hash.feed_string ctx hdr in
+                let ctx = Hash.feed_cstruct ctx (Cstruct.sub source off len) in
                 Some ctx in
 
             Cstruct.blit source off rtmp writed_in_rtmp len;
@@ -1801,7 +1779,7 @@ struct
                 let len = match Pack.kind state with
                   | Pack.Hunk { Hunk.target_length; _ } -> target_length
                   | _ -> invalid_arg "Object is not a patch" in
-                let ctx = Hash.Digest.init () in
+                let ctx = Hash.init () in
                 let hdr = Fmt.strf "%s %d\000"
                     (match kind with
                      | `Commit -> "commit"
@@ -1809,7 +1787,7 @@ struct
                      | `Tag -> "tag"
                      | `Blob -> "blob")
                     len in
-                let ctx = Hash.Digest.feed_s ctx hdr in
+                let ctx = Hash.feed_string ctx hdr in
                 ctx in
 
             let patch =
@@ -1819,7 +1797,7 @@ struct
               ; inserts = writed_in_htmp
               ; offset = Pack.offset state
               ; crc = Pack.crc state
-              ; hash = Hash.Digest.get ctx
+              ; hash = Hash.get ctx
               ; raw = Cstruct.sub rtmp 0 writed_in_rtmp
               ; descr } in
 
@@ -1872,10 +1850,10 @@ struct
 
             let ctx = match ctx with
               | Some ctx ->
-                let ctx = Hash.Digest.feed_c ctx (Cstruct.sub buf 0 len) in
+                let ctx = Hash.feed_cstruct ctx (Cstruct.sub buf 0 len) in
                 Some ctx
               | None ->
-                let ctx = Hash.Digest.init () in
+                let ctx = Hash.init () in
                 let hdr = Fmt.strf "%s %d\000"
                     (match Pack.kind state with
                      | Pack.Commit -> "commit"
@@ -1884,8 +1862,8 @@ struct
                      | Pack.Blob -> "blob"
                      | _ -> invalid_arg "Object is not a base")
                     (Pack.length state) in
-                let ctx = Hash.Digest.feed_s ctx hdr in
-                let ctx = Hash.Digest.feed_c ctx (Cstruct.sub buf 0 len) in
+                let ctx = Hash.feed_string ctx hdr in
+                let ctx = Hash.feed_cstruct ctx (Cstruct.sub buf 0 len) in
                 Some ctx in
 
             Cstruct.blit buf 0 rtmp writed_in_rtmp len;
@@ -1903,9 +1881,9 @@ struct
               ; offset = Pack.offset state
               ; crc = Pack.crc state
               ; hash = (match ctx with
-                    | Some ctx -> Hash.Digest.get ctx
+                    | Some ctx -> Hash.get ctx
                     | None ->
-                      let ctx = Hash.Digest.init () in
+                      let ctx = Hash.init () in
                       let hdr = Fmt.strf "%s %d\000"
                           (match Pack.kind state with
                            | Pack.Commit -> "commit"
@@ -1914,8 +1892,8 @@ struct
                            | Pack.Blob -> "blob"
                            | _ -> invalid_arg "Object is not a base")
                           (Pack.length state) in
-                      let ctx = Hash.Digest.feed_s ctx hdr in
-                      Hash.Digest.get ctx)
+                      let ctx = Hash.feed_string ctx hdr in
+                      Hash.get ctx)
               ; raw = Cstruct.sub rtmp 0 (Pack.length state) } in
             go window consumed_in_window writed_in_rtmp None (Some base) (Pack.next_object state)
           | `Error (state, exn) ->
@@ -1987,10 +1965,10 @@ struct
 
             let ctx = match ctx with
               | Some ctx ->
-                let ctx = Hash.Digest.feed_c ctx (Cstruct.sub buf 0 len) in
+                let ctx = Hash.feed_cstruct ctx (Cstruct.sub buf 0 len) in
                 Some ctx
               | None ->
-                let ctx = Hash.Digest.init () in
+                let ctx = Hash.init () in
                 let hdr = Fmt.strf "%s %d\000"
                     (match Pack.kind state with
                      | Pack.Commit -> "commit"
@@ -1999,8 +1977,8 @@ struct
                      | Pack.Blob -> "blob"
                      | _ -> assert false)
                     (Pack.length state) in
-                let ctx = Hash.Digest.feed_s ctx hdr in
-                let ctx = Hash.Digest.feed_c ctx (Cstruct.sub buf 0 len) in
+                let ctx = Hash.feed_string ctx hdr in
+                let ctx = Hash.feed_cstruct ctx (Cstruct.sub buf 0 len) in
                 Some ctx in
 
             Cstruct.blit buf 0 rtmp writed_in_rtmp len;
@@ -2017,9 +1995,9 @@ struct
                      ; offset = Pack.offset state
                      ; crc = Pack.crc state
                      ; hash = (match ctx with
-                           | Some ctx -> Hash.Digest.get ctx
+                           | Some ctx -> Hash.get ctx
                            | None ->
-                             let ctx = Hash.Digest.init () in
+                             let ctx = Hash.init () in
                              let hdr = Fmt.strf "%s %d\000"
                                  (match Pack.kind state with
                                   | Pack.Commit -> "commit"
@@ -2028,8 +2006,8 @@ struct
                                   | Pack.Blob -> "blob"
                                   | _ -> assert false)
                                  (Pack.length state) in
-                             let ctx = Hash.Digest.feed_s ctx hdr in
-                             Hash.Digest.get ctx)
+                             let ctx = Hash.feed_string ctx hdr in
+                             Hash.get ctx)
                      ; raw = Cstruct.sub rtmp 0 (Pack.length state) }
               | Pack.Hunk descr ->
                 Patch { Patch.length = Pack.length state

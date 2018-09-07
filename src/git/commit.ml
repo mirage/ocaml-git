@@ -37,7 +37,8 @@ sig
   module M: S.DESC    with type 'a t = 'a Encore.Encoder.t and type e = t
   module D: S.DECODER with type t = t and type init = Cstruct.t and type error = Error.Decoder.t
   module E: S.ENCODER with type t = t and type init = int * t and type error = Error.never
-  include S.DIGEST    with type t := t and type hash = Hash.t
+  include S.DIGEST    with type t := t and type hash := Hash.t
+
   include S.BASE      with type t := t
 
   val length: t -> int64
@@ -50,9 +51,7 @@ sig
   val compare_by_date: t -> t -> int
 end
 
-module Make (Hash: S.HASH): S with module Hash = Hash = struct
-
-  module Hash = Hash
+module Make (Hash: S.HASH) = struct
 
   (* XXX(dinosaure): git seems to be very resilient with the commit.
      Indeed, it's not a mandatory to have an author or a committer and
@@ -68,7 +67,6 @@ module Make (Hash: S.HASH): S with module Hash = Hash = struct
     ; committer : User.t
     ; extra     : (string * string list) list
     ; message   : string }
-  and hash = Hash.t
 
   let make ~tree ~author ~committer ?(parents = []) ?(extra = []) message =
     { tree
@@ -189,7 +187,7 @@ module Make (Hash: S.HASH): S with module Hash = Hash = struct
         (fun acc _ ->
           (string "parent")
           + 1L
-          + (Int64.of_int (Hash.Digest.length * 2))
+          + (Int64.of_int (Hash.digest_size * 2))
           + 1L
           + acc)
         0L t.parents in
@@ -199,7 +197,7 @@ module Make (Hash: S.HASH): S with module Hash = Hash = struct
         | [ x ] -> string x + 1L + a
         | x :: r -> go (string x + 2L + a) r in
       go 0L l in
-    (string "tree") + 1L + (Int64.of_int (Hash.Digest.length * 2)) + 1L
+    (string "tree") + 1L + (Int64.of_int (Hash.digest_size * 2)) + 1L
     + parents
     + (string "author") + 1L + (User.length t.author) + 1L
     + (string "committer") + 1L + (User.length t.committer) + 1L
@@ -232,7 +230,7 @@ module Make (Hash: S.HASH): S with module Hash = Hash = struct
 
   let digest value =
     let tmp = Cstruct.create 0x100 in
-    Helper.fdigest (module Hash.Digest) (module E) ~tmp ~kind:"commit" ~length:length value
+    Helper.fdigest (module Hash) (module E) ~tmp ~kind:"commit" ~length:length value
 
   let equal = (=)
   let hash = Hashtbl.hash

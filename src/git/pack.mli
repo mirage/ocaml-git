@@ -118,7 +118,7 @@ module type H = sig
       buffer noticed to the previous call of {!eval}. *)
 end
 
-module Hunk (Hash: S.HASH): H with module Hash = Hash
+module Hunk (Hash: S.HASH): H with module Hash := Hash
 
 (** The entry module. It used to able to manipulate the meta-data only
    needed by the delta-ification of the Git object (and avoid to
@@ -204,7 +204,7 @@ module type ENTRY = sig
       delta-ification. *)
 end
 
-module Entry (Hash: S.HASH): ENTRY with module Hash = Hash
+module Entry (Hash: S.HASH): ENTRY with module Hash := Hash
 
 (** This module is the engine to delta-ify Git objects together. The
    current implementation is a stop the world process which can not
@@ -294,10 +294,8 @@ module type DELTA = sig
         code. *)
 end
 
-module Delta
-    (Hash: S.HASH)
-    (Entry: ENTRY with module Hash := Hash)
-  : DELTA with module Hash = Hash
+module Delta (Hash: S.HASH) (Entry: ENTRY with module Hash := Hash)
+  : DELTA with module Hash  := Hash
            and module Entry := Entry
 
 (** Interface which describes the encoder of the PACK file. *)
@@ -313,7 +311,6 @@ module type P = sig
      and module Entry := Entry
 
   module Hunk: H with module Hash := Hash
-  module Map: Map.S with type key = Hash.t
   (** The Map tree zhich zill represent the IDX file of the PACK
       stream. *)
 
@@ -363,7 +360,7 @@ module type P = sig
       inflated raw, it access on it only as a read-only flow (that
       means, the src {!Cstruct.t} could be physicaly the same. *)
 
-  val idx: t -> (Crc32.t * int64) Map.t
+  val idx: t -> (Crc32.t * int64) Hash.Map.t
   (** [idx t] returns a {!Map} tree which contains the CRC-32
       checksum and the absolute offset for each Git object serialized.
       The client is able to use it only when {!eval} returns
@@ -403,23 +400,23 @@ module type P = sig
 end
 
 module Pack
-    (Hash: S.HASH)
+    (Hash   : S.HASH)
     (Deflate: S.DEFLATE)
     (Entry: ENTRY with module Hash := Hash)
     (Delta: DELTA with module Hash := Hash
                    and module Entry := Entry)
     (Hunk: H with module Hash := Hash)
-  : P with module Hash = Hash
-       and module Deflate = Deflate
-       and module Entry := Entry
-       and module Delta := Delta
-       and module Hunk := Hunk
+  : P with module Hash    := Hash
+       and module Deflate := Deflate
+       and module Entry   := Entry
+       and module Delta   := Delta
+       and module Hunk    := Hunk
 (** The {i functor} to make the PACK encoder by a specific hash
     implementation and a specific deflate algorithm. *)
 
 module Stream
-    (Hash: S.HASH)
+    (Hash   : S.HASH)
     (Deflate: S.DEFLATE) : sig
   include P
-end with module Hash = Hash
-     and module Deflate = Deflate
+end with module Hash    := Hash
+     and module Deflate := Deflate

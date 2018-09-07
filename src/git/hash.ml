@@ -15,46 +15,25 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-type hex = string
+module Make (H: Digestif.S) = struct
 
-module Make (D: Digestif.S): S.HASH = struct
-  type t = D.t
-  type nonrec hex = hex
+  include H
 
-  module Digest = struct
-    type nonrec t = t
-    type ctx = D.ctx
-
-    let init () = D.init ()
-    let feed_c ctx cs = D.feed_bigstring ctx (Cstruct.to_bigarray cs)
-    let feed_s ctx s  = D.feed_string ctx s
-    let feed_b ctx b  = D.feed_bytes ctx b
-    let get ctx = D.get ctx
-
-    let length = D.digest_size
+  module X = struct
+    type t = H.t
+    let equal = eq
+    let hash = Hashtbl.hash
+    let compare = H.unsafe_compare
   end
 
-  external unsafe_of_string : string -> t = "%identity"
-  external unsafe_to_string : t -> string = "%identity"
+  let equal = X.equal
+  let hash = X.hash
+  let compare = X.compare
 
-  let of_string = unsafe_of_string
-  let to_string = unsafe_to_string
+  let read h i = Char.code @@ String.get (H.to_raw_string h) i
 
-  let get : t -> int -> char = fun t i -> String.get (t:>string) i
+  module Set = Set.Make(X)
+  module Map = Map.Make(X)
 
-  let of_hex : hex -> t = fun buf -> D.of_hex buf
-  let to_hex : t -> hex = fun x -> D.to_hex x
-
-  (* XXX(dinosaure): Git need a lexicographical comparison function. *)
-  let compare : t -> t -> int = fun a b -> String.compare (a:>string) (b:>string)
-  let hash : t -> int = fun t -> Hashtbl.hash (t:>string)
-
-  (* XXX(dinosaure): we use safe equal function provided by digestif. *)
-  let equal = D.eq
-  let pp = D.pp
-
-  module Map = Map.Make(struct type nonrec t = t let compare = compare end)
-  module Set = Set.Make(struct type nonrec t = t let compare = compare end)
+  let feed_cstruct t s = H.feed_bigstring t (Cstruct.to_bigarray s)
 end
-
-module SHA1 =  Make(Digestif.SHA1)

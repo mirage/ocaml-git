@@ -226,18 +226,19 @@ sig
   val equal_http_upload_request: http_upload_request equal
 end
 
-module Common (Hash: S.HASH) (Reference: Reference.S)
+module Common (Hash: S.HASH) (Reference: Reference.S with module Hash := Hash)
   : COMMON
     with type hash := Hash.t
      and type reference := Reference.t
 
 (** The Smart protocol including the encoder and the decoder. *)
 
-module type DECODER =
-sig
-  module Hash: S.HASH
-  module Reference: Reference.S
-  module Common: COMMON with type hash := Hash.t and type reference := Reference.t
+module type DECODER = sig
+
+  module Hash     : S.HASH
+  module Reference: Reference.S with module Hash := Hash
+  module Common   : COMMON with type hash := Hash.t
+                            and type reference := Reference.t
 
   type decoder
   (** The type decoder. *)
@@ -342,19 +343,22 @@ sig
 end
 
 module Decoder
-    (Hash: S.HASH)
-    (Reference: Reference.S)
-    (Common: COMMON with type hash := Hash.t and type reference := Reference.t)
-  : DECODER with module Hash = Hash
-             and module Reference = Reference
-             and module Common = Common
+    (Hash     : S.HASH)
+    (Reference: Reference.S with module Hash := Hash)
+    (Common   : COMMON with type hash := Hash.t
+                        and type reference := Reference.t)
+  : DECODER with module Hash      := Hash
+             and module Reference := Reference
+             and module Common    := Common
 (** The {i functor} to make the Decoder by a specific hash
     implementation. *)
 
 module type ENCODER = sig
+
   module Hash: S.HASH
-  module Reference: Reference.S
-  module Common: COMMON with type hash := Hash.t and type reference := Reference.t
+  module Reference: Reference.S with module Hash := Hash
+  module Common: COMMON with type hash := Hash.t
+                         and type reference := Reference.t
 
   type encoder
   (** The type encoder. *)
@@ -410,33 +414,33 @@ module type ENCODER = sig
 end
 
 module Encoder
-    (Hash: S.HASH)
-    (Reference: Reference.S)
-    (Common: COMMON with type hash := Hash.t and type reference := Reference.t)
-  : ENCODER with module Hash = Hash
-             and module Reference = Reference
-             and module Common = Common
+    (Hash     : S.HASH)
+    (Reference: Reference.S with module Hash := Hash)
+    (Common   : COMMON with type hash := Hash.t and type reference := Reference.t)
+  : ENCODER with module Hash      := Hash
+             and module Reference := Reference
+             and module Common    := Common
 (** The {i functor} to make the Encoder by a specific hash
     implementation. *)
 
 module type CLIENT =
 sig
-  module Hash: S.HASH
-  module Reference: Reference.S
+  module Hash     : S.HASH
+  module Reference: Reference.S with module Hash := Hash
 
   module Common: COMMON
     with type hash := Hash.t
      and type reference := Reference.t
 
   module Decoder: DECODER
-    with module Hash = Hash
-     and module Reference = Reference
+    with module Hash := Hash
+     and module Reference := Reference
      and module Common := Common
   (** The {!Decoder} module constrained by the same [Hash] module. *)
 
   module Encoder: ENCODER
-    with module Hash = Hash
-     and module Reference = Reference
+    with module Hash := Hash
+     and module Reference := Reference
      and module Common := Common
   (** The {!Encoder} module constrained by the same [Hash] module. *)
 
@@ -506,9 +510,9 @@ sig
 end
 
 module Client
-    (Hash: S.HASH)
-    (Reference: Reference.S)
-  : CLIENT with module Hash = Hash
-            and module Reference = Reference
+    (Hash     : S.HASH)
+    (Reference: Reference.S with module Hash := Hash)
+  : CLIENT with module Hash      := Hash
+            and module Reference := Reference
 (** The {i functor} to make the Client by a specific hash
     implementation. *)

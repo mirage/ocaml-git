@@ -106,33 +106,17 @@ module type DEFLATE = sig
   val eval       : src:Cstruct.t -> dst:Cstruct.t -> t -> [ `Flush of t | `Await of t | `Error of (t * error) | `End of t ]
 end
 
-module type IDIGEST = sig
-  type t
-  type ctx
-
-  val init   : unit -> ctx
-  val feed_c : ctx -> Cstruct.t -> ctx
-  val feed_s : ctx -> string -> ctx
-  val feed_b : ctx -> bytes -> ctx
-  val get    : ctx -> t
-
-  val length : int
-end
-
 module type HASH = sig
-  include BASE with type t = private string
+  include Digestif.S
 
-  module Digest : IDIGEST with type t = t
+  val feed_cstruct: ctx -> Cstruct.t -> ctx
+  val compare: t -> t -> int
+  val hash: t -> int
+  val equal: t -> t -> bool
+  val read: t -> int -> int
 
-  val get : t -> int -> char
-
-  val to_string : t -> string
-  val of_string : string -> t
-
-  type hex = string
-
-  val to_hex : t -> hex
-  val of_hex : hex -> t
+  module Set: Set.S with type elt = t
+  module Map: Map.S with type key = t
 end
 
 module type DIGEST = sig
@@ -189,9 +173,9 @@ module type FS = sig
   val is_dir: t -> Fpath.t -> (bool, error) result Lwt.t
   val is_file: t -> Fpath.t -> (bool, error) result Lwt.t
 
-  module File  : FILE with type t := t and type error := error
-  module Dir   : DIR with type t := t and type error := error
-  module Mapper: MAPPER with type t := t and type error := error
+  module File  : FILE with type t = t and type error = error
+  module Dir   : DIR with type t = t and type error = error
+  module Mapper: MAPPER with type t = t and type error = error
 
   val has_global_watches: bool
   val has_global_checkout: bool

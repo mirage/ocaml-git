@@ -41,9 +41,8 @@ module type S = sig
     (t, error) result Lwt.t
 end
 
-module Make (H: S.HASH) (FS: S.FS) = struct
+module Make (Hash:S.HASH) (FS: S.FS) = struct
 
-  module Hash = H
   module FS = Helper.FS(FS)
 
   type t = [ `Peeled of hash | `Ref of string * hash ] list
@@ -56,7 +55,7 @@ module Make (H: S.HASH) (FS: S.FS) = struct
     type 'a t = 'a Angstrom.t
 
     let hash =
-      take (Hash.Digest.length * 2)
+      take (Hash.digest_size * 2)
       >>| Hash.of_hex
 
     let end_of_line =

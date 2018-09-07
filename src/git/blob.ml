@@ -18,11 +18,9 @@
 let src = Logs.Src.create "git.blob" ~doc:"logs git's blob event"
 module Log = (val Logs.src_log src: Logs.LOG)
 
-type t = Cstruct.t
-
 module type S = sig
 
-  type nonrec t = t
+  type t
 
   module Hash: S.HASH
   module MakeMeta: functor (Meta: Encore.Meta.S) -> sig val p: t Meta.t end
@@ -41,11 +39,9 @@ module type S = sig
   val to_string: t -> string
 end
 
-module Make (Hash: S.HASH): S with module Hash = Hash = struct
+module Make (Hash: S.HASH) = struct
 
-  module Hash = Hash
-
-  type nonrec t = t
+  type t = Cstruct.t
 
   external of_cstruct: Cstruct.t -> t = "%identity"
   external to_cstruct: t -> Cstruct.t = "%identity"
@@ -99,11 +95,11 @@ module Make (Hash: S.HASH): S with module Hash = Hash = struct
   module E = Helper.MakeEncoder(M)
 
   let digest cs =
-    let ctx = Hash.Digest.init () in
+    let ctx = Hash.init () in
     let hdr = Fmt.strf "blob %Ld\000" (length cs) in
-    let ctx = Hash.Digest.feed_s ctx hdr in
-    let ctx = Hash.Digest.feed_c ctx cs in
-    Hash.Digest.get ctx
+    let ctx = Hash.feed_string ctx hdr in
+    let ctx = Hash.feed_cstruct ctx cs in
+    Hash.get ctx
 
   let pp ppf blob = Encore.Lole.pp_bigstring ppf (Cstruct.to_bigarray blob)
   let equal = Cstruct.equal

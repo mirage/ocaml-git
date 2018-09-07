@@ -15,16 +15,19 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module type S =
-sig
-  module Hash: S.HASH
+let src = Logs.Src.create "git.pack-info" ~doc:"logs git's pack-info event"
+module Log = (val Logs.src_log src : Logs.LOG)
+
+module type S = sig
+
+  module Hash   : S.HASH
   module Inflate: S.INFLATE
 
   module HDec: Unpack.H with module Hash := Hash
   module PDec: Unpack.P
-    with module Hash := Hash
+    with module Hash    := Hash
      and module Inflate := Inflate
-     and module Hunk := HDec
+     and module Hunk    := HDec
 
   type error =
     [ `Unexpected_end_of_input
@@ -61,27 +64,17 @@ sig
     -> ?idx:(Hash.t -> (Crc32.t * int64) option)
     -> (unit -> Cstruct.t option Lwt.t)
     -> ([ `Normalized of path ] t, error) result Lwt.t
+
 end
 
 module Make
-    (Hash: S.HASH)
+    (Hash   : S.HASH)
     (Inflate: S.INFLATE)
-    (HDec: Unpack.H with module Hash := Hash)
-    (PDec: Unpack.P with module Hash := Hash
-                     and module Inflate := Inflate
-                     and module Hunk := HDec)
-  : S with module Hash = Hash
-       and module Inflate = Inflate
-       and module HDec := HDec
-       and module PDec := PDec
+    (HDec   : Unpack.H with module Hash    := Hash)
+    (PDec   : Unpack.P with module Hash    := Hash
+                        and module Inflate := Inflate
+                        and module Hunk    := HDec)
 = struct
-  let src = Logs.Src.create "git.pack-info" ~doc:"logs git's pack-info event"
-  module Log = (val Logs.src_log src : Logs.LOG)
-
-  module Hash = Hash
-  module Inflate = Inflate
-  module HDec = HDec
-  module PDec = PDec
 
   type error =
     [ `Unexpected_end_of_input
@@ -181,7 +174,7 @@ module Make
     let delta = Hashtbl.create 128 in
 
     let ctx_with_header chunk state =
-      let ctx = Hash.Digest.init () in
+      let ctx = Hash.init () in
       let hdr = Fmt.strf "%s %d\000"
           (match PDec.kind state with
            | PDec.Commit -> "commit"
@@ -191,8 +184,8 @@ module Make
            | _ -> assert false)
           (PDec.length state) in
 
-      let ctx = Hash.Digest.feed_s ctx hdr in
-      let ctx = Hash.Digest.feed_c ctx chunk in
+      let ctx = Hash.feed_string ctx hdr in
+      let ctx = Hash.feed_cstruct ctx chunk in
       ctx in
 
     let open Lwt.Infix in
@@ -212,7 +205,7 @@ module Make
         let chunk, len = PDec.output state in
 
         let ctx = match ctx with
-          | Some ctx -> Hash.Digest.feed_c ctx (Cstruct.sub chunk 0 len)
+          | Some ctx -> Hash.feed_cstruct ctx (Cstruct.sub chunk 0 len)
           | None -> ctx_with_header (Cstruct.sub chunk 0 len) state in
 
         go ~src ~ctx (PDec.flush 0 (Cstruct.len chunk) state)
@@ -242,7 +235,7 @@ module Make
             Hashtbl.add delta (PDec.offset state) (Delta { hunks_descr; inserts; depth = depth_source + 1; from; })
           | _ -> match ctx with
             | Some ctx ->
-              let hash = Hash.Digest.get ctx in
+              let hash = Hash.get ctx in
 
               Log.info (fun l -> l ~header:"first_pass" "Save object %a." Hash.pp hash);
 
@@ -250,11 +243,11 @@ module Make
               Hashtbl.add delta (PDec.offset state) (Internal { hash; abs_off = PDec.offset state; length = PDec.length state; })
             | None ->
               let ctx = ctx_with_header empty state in
-              let hash = Hash.Digest.get ctx in
+              let hash = Hash.get ctx in
 
               Log.info (fun l -> l ~header:"first_pass" "Save object %a." Hash.pp hash);
 
-              Hashtbl.add index (Hash.Digest.get ctx) (PDec.crc state, PDec.offset state, PDec.length state);
+              Hashtbl.add index (Hash.get ctx) (PDec.crc state, PDec.offset state, PDec.length state);
               Hashtbl.add delta (PDec.offset state) (Internal { hash; abs_off = PDec.offset state; length = PDec.length state; }) in
 
         go ~src (PDec.next_object state)

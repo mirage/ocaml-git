@@ -111,7 +111,7 @@ module MakeDeflater (Z: S.DEFLATE) (M: S.DESC with type 'a t = 'a Encore.Encoder
     [tmp] is aan internal buffer used to store the stream of the
     encoder and used by [Hash.digest]. *)
 val fdigest:
-  (module S.IDIGEST with type t = 'hash) ->
+  (module S.HASH with type t = 'hash) ->
   (module S.ENCODER
     with type t = 't
      and type init = int * 't

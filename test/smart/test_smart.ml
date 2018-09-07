@@ -19,7 +19,9 @@ struct
     let cs = Cstruct.create 8 in
     Cstruct.BE.set_uint64 cs 0 Int64.(of_float (t *. 1000.));
     Nocrypto.Rng.reseed cs;
-    Nocrypto.Rng.generate S.Hash.Digest.length |> Cstruct.to_string |> S.Hash.of_string
+    Nocrypto.Rng.generate S.Hash.digest_size
+    |> Cstruct.to_string
+    |> S.Hash.of_raw_string
 
   let generate_hashes n =
     let ar = Array.init n (fun _ -> generate_hash ()) in
@@ -39,7 +41,7 @@ struct
     ; "refs/remotes/origin/server"
     ; "refs/remotes/upstream/server"
     ; "refs/remotes/upstream/clean" ]
-    |> List.map S.Reference.of_string 
+    |> List.map S.Reference.of_string
 
   module Data =
   struct
@@ -222,7 +224,7 @@ struct
       ; git_proto_request3, git_proto_request_result3 ]
 
     let zero =
-      let s = String.make (S.Hash.Digest.length * 2) '0' in
+      let s = String.make (S.Hash.digest_size * 2) '0' in
       S.Hash.of_hex s
 
     let update_request0, update_request_result0 =
