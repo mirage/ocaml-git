@@ -14,17 +14,16 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Fs    = Fs
-module Net   = Net
-module Sync  = Git.Sync.Make(Net)
-module Http  = Http.Make
+module Fs = Fs
+module Net = Net
+module Sync = Git.Sync.Make (Net)
+module Http = Http.Make
 module Index = Index
 
 module Store = struct
   module I = Git.Inflate
   module D = Git.Deflate
-
-  include Git.Store.Make(Digestif.SHA1)(Fs)(I)(D)
+  include Git.Store.Make (Digestif.SHA1) (Fs) (I) (D)
 
   let v ?dotgit ?compression ?buffer root =
     v ?dotgit ?compression ?buffer () root

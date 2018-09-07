@@ -16,31 +16,42 @@
  *)
 
 module type S = sig
+  module Hash : S.HASH
+  module FS : S.FS
 
-  module Hash: S.HASH
-  module FS: S.FS
+  type t = [`Peeled of Hash.t | `Ref of string * Hash.t] list
 
-  type t = [ `Peeled of Hash.t | `Ref of string * Hash.t ] list
+  module A : S.DESC with type 'a t = 'a Angstrom.t with type e = t
+  module M : S.DESC with type 'a t = 'a Encore.Encoder.t with type e = t
 
-  module A: S.DESC    with type 'a t = 'a Angstrom.t with type e = t
-  module M: S.DESC    with type 'a t = 'a Encore.Encoder.t with type e = t
-  module D: S.DECODER with type t = t
-                       and type init = Cstruct.t
-                       and type error = Error.Decoder.t
-  module E: S.ENCODER with type t = t and type init = int * t
+  module D :
+    S.DECODER
+    with type t = t
+     and type init = Cstruct.t
+     and type error = Error.Decoder.t
 
-  type error =
-    [ Error.Decoder.t
-    | FS.error Error.FS.t ]
+  module E : S.ENCODER with type t = t and type init = int * t
 
-  val pp_error: error Fmt.t
+  type error = [Error.Decoder.t | FS.error Error.FS.t]
 
-  val write: fs:FS.t -> root:Fpath.t -> temp_dir:Fpath.t ->
-    ?capacity:int -> raw:Cstruct.t -> t ->
-    (unit, error) result Lwt.t
+  val pp_error : error Fmt.t
 
-  val read: fs:FS.t -> root:Fpath.t -> dtmp:Cstruct.t -> raw:Cstruct.t ->
-    (t, error) result Lwt.t
+  val write :
+       fs:FS.t
+    -> root:Fpath.t
+    -> temp_dir:Fpath.t
+    -> ?capacity:int
+    -> raw:Cstruct.t
+    -> t
+    -> (unit, error) result Lwt.t
+
+  val read :
+       fs:FS.t
+    -> root:Fpath.t
+    -> dtmp:Cstruct.t
+    -> raw:Cstruct.t
+    -> (t, error) result Lwt.t
 end
 
-module Make (H: S.HASH) (FS: S.FS): S with module FS := FS and module Hash := H
+module Make (H : S.HASH) (FS : S.FS) :
+  S with module FS := FS and module Hash := H

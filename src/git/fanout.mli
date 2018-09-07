@@ -15,35 +15,31 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** Implementation of a fanout table (which orders value like the IDX
-    file). *)
+(** Implementation of a fanout table (which orders value like the IDX file). *)
 
-module type KEY =
-sig
+module type KEY = sig
   type t
 
-  val compare: t -> t -> int
-  val get: t -> int -> char
+  val compare : t -> t -> int
+  val get : t -> int -> char
 end
 
-(** A Fanout table is a container to associate a key [Key.t] with a
-    value. Internally, we order bindings by the first byte of the
-    [Key.t]. *)
-module Make (Key : KEY) :
-sig
-  type 'a t
+(** A Fanout table is a container to associate a key [Key.t] with a value.
+    Internally, we order bindings by the first byte of the [Key.t]. *)
+module Make (Key : KEY) : sig
   (** The fanout table. *)
+  type 'a t
 
-  val make: unit -> 'a t
+  val make : unit -> 'a t
   (** Make a new fanout table. *)
 
-  val bind: Key.t -> 'a -> 'a t -> unit
+  val bind : Key.t -> 'a -> 'a t -> unit
   (** [bind k v t] adds the binding [k] and [v] to [t]. *)
 
-  val length: int -> 'a t -> int
+  val length : int -> 'a t -> int
   (** [length t] returns the length of [t]. *)
 
-  val get: int -> 'a t -> (Key.t * 'a) list
-  (** [get byte t] gets a list of bindings where the key start with
-      the byte [byte]. *)
+  val get : int -> 'a t -> (Key.t * 'a) list
+  (** [get byte t] gets a list of bindings where the key start with the byte
+      [byte]. *)
 end

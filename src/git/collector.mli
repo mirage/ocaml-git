@@ -16,43 +16,35 @@
  *)
 
 module type STORE = sig
+  module Hash : S.HASH
+  module Inflate : S.INFLATE
+  module Deflate : S.DEFLATE
 
-  module Hash   : S.HASH
-  module Inflate: S.INFLATE
-  module Deflate: S.DEFLATE
-
-  module Value: Value.S
-    with module Hash    := Hash
+  module Value :
+    Value.S
+    with module Hash := Hash
      and module Inflate := Inflate
      and module Deflate := Deflate
 
-  module PEnc: Pack.P
-    with module Hash    := Hash
-     and module Deflate := Deflate
+  module PEnc : Pack.P with module Hash := Hash and module Deflate := Deflate
 
   type t
   type error = private [> `Delta of PEnc.Delta.error]
+  type kind = [`Commit | `Tree | `Tag | `Blob]
 
-  type kind =
-    [ `Commit
-    | `Tree
-    | `Tag
-    | `Blob ]
-
-  val pp_error: error Fmt.t
-  val read_inflated: t -> Hash.t -> (kind * Cstruct.t) option Lwt.t
-  val contents: t -> ((Hash.t * Value.t) list, error) result Lwt.t
+  val pp_error : error Fmt.t
+  val read_inflated : t -> Hash.t -> (kind * Cstruct.t) option Lwt.t
+  val contents : t -> ((Hash.t * Value.t) list, error) result Lwt.t
 end
 
-module Make (S: STORE): sig
-
+module Make (S : STORE) : sig
   type stream = unit -> Cstruct.t option Lwt.t
 
-  val make_stream:
-    S.t ->
-    ?window:[`Memory of int | `Object of int ] ->
-    ?depth:int ->
-    S.Value.t list ->
-    (stream * (Crc32.t * int64) S.Hash.Map.t Lwt_mvar.t, S.error) result Lwt.t
-
+  val make_stream :
+       S.t
+    -> ?window:[`Memory of int | `Object of int]
+    -> ?depth:int
+    -> S.Value.t list
+    -> (stream * (Crc32.t * int64) S.Hash.Map.t Lwt_mvar.t, S.error) result
+       Lwt.t
 end

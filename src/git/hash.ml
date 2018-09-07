@@ -15,12 +15,12 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Make (H: Digestif.S) = struct
-
+module Make (H : Digestif.S) = struct
   include H
 
   module X = struct
     type t = H.t
+
     let equal = eq
     let hash = Hashtbl.hash
     let compare = H.unsafe_compare
@@ -29,11 +29,10 @@ module Make (H: Digestif.S) = struct
   let equal = X.equal
   let hash = X.hash
   let compare = X.compare
+  let read h i = Char.code @@ (H.to_raw_string h).[i]
 
-  let read h i = Char.code @@ String.get (H.to_raw_string h) i
-
-  module Set = Set.Make(X)
-  module Map = Map.Make(X)
+  module Set = Set.Make (X)
+  module Map = Map.Make (X)
 
   let feed_cstruct t s = H.feed_bigstring t (Cstruct.to_bigarray s)
 end

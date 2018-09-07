@@ -15,17 +15,17 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-
 module type S = sig
+  module FS : S.FS
+  module Hash : S.HASH
+  module Deflate : S.DEFLATE
+  module Inflate : S.INFLATE
 
-  module FS     : S.FS
-  module Hash   : S.HASH
-  module Deflate: S.DEFLATE
-  module Inflate: S.INFLATE
-
-  module Value: Value.S with module Hash    := Hash
-                         and module Deflate := Deflate
-                         and module Inflate := Inflate
+  module Value :
+    Value.S
+    with module Hash := Hash
+     and module Deflate := Deflate
+     and module Inflate := Inflate
 
   include module type of Value
 
@@ -35,90 +35,82 @@ module type S = sig
     | Deflate.error Error.Def.t
     | FS.error Error.FS.t ]
 
-  type kind =
-    [ `Commit
-    | `Tree
-    | `Tag
-    | `Blob ]
+  type kind = [`Commit | `Tree | `Tag | `Blob]
 
   val pp_error : error Fmt.t
+  val mem : fs:FS.t -> root:Fpath.t -> Hash.t -> bool Lwt.t
 
-  val mem:
-    fs:FS.t ->
-    root:Fpath.t ->
-    Hash.t -> bool Lwt.t
+  val read :
+       fs:FS.t
+    -> root:Fpath.t
+    -> window:Inflate.window
+    -> ztmp:Cstruct.t
+    -> dtmp:Cstruct.t
+    -> raw:Cstruct.t
+    -> Hash.t
+    -> (t, error) result Lwt.t
 
-  val read:
-    fs:FS.t ->
-    root:Fpath.t ->
-    window:Inflate.window ->
-    ztmp:Cstruct.t ->
-    dtmp:Cstruct.t ->
-    raw:Cstruct.t ->
-    Hash.t -> (t, error) result Lwt.t
+  val inflate :
+       fs:FS.t
+    -> root:Fpath.t
+    -> window:Inflate.window
+    -> ztmp:Cstruct.t
+    -> dtmp:Cstruct.t
+    -> raw:Cstruct.t
+    -> Hash.t
+    -> (kind * Cstruct.t, error) result Lwt.t
 
-  val inflate:
-    fs:FS.t ->
-    root:Fpath.t ->
-    window:Inflate.window ->
-    ztmp:Cstruct.t ->
-    dtmp:Cstruct.t ->
-    raw:Cstruct.t ->
-    Hash.t -> (kind * Cstruct.t, error) result Lwt.t
+  val inflate_wa :
+       fs:FS.t
+    -> root:Fpath.t
+    -> window:Inflate.window
+    -> ztmp:Cstruct.t
+    -> dtmp:Cstruct.t
+    -> raw:Cstruct.t
+    -> result:Cstruct.t
+    -> Hash.t
+    -> (kind * Cstruct.t, error) result Lwt.t
 
-  val inflate_wa:
-    fs:FS.t ->
-    root:Fpath.t ->
-    window:Inflate.window ->
-    ztmp:Cstruct.t ->
-    dtmp:Cstruct.t ->
-    raw:Cstruct.t ->
-    result:Cstruct.t ->
-    Hash.t -> (kind * Cstruct.t, error) result Lwt.t
+  val list : fs:FS.t -> root:Fpath.t -> Hash.t list Lwt.t
 
-  val list:
-    fs:FS.t ->
-    root:Fpath.t ->
-    Hash.t list Lwt.t
+  val size :
+       fs:FS.t
+    -> root:Fpath.t
+    -> window:Inflate.window
+    -> ztmp:Cstruct.t
+    -> dtmp:Cstruct.t
+    -> raw:Cstruct.t
+    -> Hash.t
+    -> (int64, error) result Lwt.t
 
-  val size:
-    fs:FS.t ->
-    root:Fpath.t ->
-    window:Inflate.window ->
-    ztmp:Cstruct.t ->
-    dtmp:Cstruct.t ->
-    raw:Cstruct.t ->
-    Hash.t -> (int64, error) result Lwt.t
+  val write :
+       fs:FS.t
+    -> root:Fpath.t
+    -> ?capacity:int
+    -> ?level:int
+    -> ztmp:Cstruct.t
+    -> raw:Cstruct.t
+    -> t
+    -> (Hash.t * int, error) result Lwt.t
 
-  val write:
-    fs:FS.t ->
-    root:Fpath.t ->
-    ?capacity:int ->
-    ?level:int ->
-    ztmp:Cstruct.t ->
-    raw:Cstruct.t ->
-    t -> (Hash.t * int, error) result Lwt.t
-
-  val write_inflated:
-    fs:FS.t ->
-    root:Fpath.t ->
-    ?level:int ->
-    raw:Cstruct.t ->
-    kind:kind ->
-    Cstruct.t -> (Hash.t, error) result Lwt.t
+  val write_inflated :
+       fs:FS.t
+    -> root:Fpath.t
+    -> ?level:int
+    -> raw:Cstruct.t
+    -> kind:kind
+    -> Cstruct.t
+    -> (Hash.t, error) result Lwt.t
 end
 
-module Make
-    (H: S.HASH)
-    (FS: S.FS)
-    (I: S.INFLATE)
-    (D: S.DEFLATE)
-  : S with module Hash    := H
-       and module Inflate := I
-       and module Deflate := D
-       and module FS = FS
-       and module Blob = Blob.Make(H)
-       and module Commit = Commit.Make(H)
-       and module Tree = Tree.Make(H)
-       and module Tag = Tag.Make(H)
-       and type t = Value.Make(H)(I)(D).t
+module Make (H : S.HASH) (FS : S.FS) (I : S.INFLATE) (D : S.DEFLATE) :
+  S
+  with module Hash := H
+   and module Inflate := I
+   and module Deflate := D
+   and module FS = FS
+   and module Blob = Blob.Make(H)
+   and module Commit = Commit.Make(H)
+   and module Tree = Tree.Make(H)
+   and module Tag = Tag.Make(H)
+   and type t = Value.Make(H)(I)(D).t

@@ -18,35 +18,19 @@
 let () = Random.self_init ()
 
 open Git_unix
+module Sync_http = Http (Store)
+module Entry = Index.Entry (Digestif.SHA1)
+module Index = Index.Make (Store) (Fs) (Entry)
 
-module Sync_http = Http(Store)
-module Entry = Index.Entry(Digestif.SHA1)
-module Index = Index.Make(Store)(Fs)(Entry)
-
-module Option =
-struct
-
-  let map f = function
-    | Some v -> Some (f v)
-    | None -> None
-
-  let map_default v f = function
-    | Some v -> f v
-    | None -> v
-
-  let value_exn f = function
-    | Some v -> v
-    | None -> f ()
-
-  let eq ?(none = false)~eq = function
-    | Some x -> eq x
-    | None -> none
+module Option = struct
+  let map f = function Some v -> Some (f v) | None -> None
+  let map_default v f = function Some v -> f v | None -> v
+  let value_exn f = function Some v -> v | None -> f ()
+  let eq ?(none = false) ~eq = function Some x -> eq x | None -> none
 end
 
 let pad n x =
-  if String.length x > n
-  then x
-  else x ^ String.make (n - String.length x) ' '
+  if String.length x > n then x else x ^ String.make (n - String.length x) ' '
 
 let pp_header ppf (level, header) =
   let level_style =
@@ -58,38 +42,36 @@ let pp_header ppf (level, header) =
     | Logs.Info -> Logs_fmt.info_style
   in
   let level = Logs.level_to_string (Some level) in
-
   Fmt.pf ppf "[%a][%a]"
-    (Fmt.styled level_style Fmt.string) level
-    (Fmt.option Fmt.string) (Option.map (pad 10) header)
+    (Fmt.styled level_style Fmt.string)
+    level (Fmt.option Fmt.string)
+    (Option.map (pad 10) header)
 
 let reporter ppf =
   let report src level ~over k msgf =
-    let k _ = over (); k () in
+    let k _ = over () ; k () in
     let with_src_and_stamp h _ k fmt =
       let dt = Mtime.Span.to_us (Mtime_clock.elapsed ()) in
-      Fmt.kpf k ppf ("%s %a %a: @[" ^^ fmt ^^ "@]@.")
+      Fmt.kpf k ppf
+        ("%s %a %a: @[" ^^ fmt ^^ "@]@.")
         (pad 10 (Fmt.strf "%+04.0fus" dt))
         pp_header (level, h)
         Fmt.(styled `Magenta string)
         (pad 10 @@ Logs.Src.name src)
     in
-    msgf @@ fun ?header ?tags fmt ->
-    with_src_and_stamp header tags k fmt
+    msgf @@ fun ?header ?tags fmt -> with_src_and_stamp header tags k fmt
   in
-  { Logs.report = report }
+  {Logs.report}
 
 let setup_logs style_renderer level ppf =
-  Fmt_tty.setup_std_outputs ?style_renderer ();
-  Logs.set_level level;
-  Logs.set_reporter (reporter ppf);
+  Fmt_tty.setup_std_outputs ?style_renderer () ;
+  Logs.set_level level ;
+  Logs.set_reporter (reporter ppf) ;
   let quiet = match style_renderer with Some _ -> true | None -> false in
   quiet, ppf
 
 type error =
-  [ `Store of Store.error
-  | `Sync of Sync_http.error
-  | `Index of Index.error ]
+  [`Store of Store.error | `Sync of Sync_http.error | `Index of Index.error]
 
 let store_err err = `Store err
 let sync_err err = `Sync err
@@ -108,94 +90,95 @@ let main ppf progress origin branch repository directory =
     |> List.hd
     |> Fpath.v
     |> Fpath.rem_ext ~multi:true
-    |> Fpath.basename in
-
-  let root = Option.map_default Fpath.(v (Sys.getcwd ()) / name) Fpath.v directory in
-
+    |> Fpath.basename
+  in
+  let root =
+    Option.map_default Fpath.(v (Sys.getcwd ()) / name) Fpath.v directory
+  in
   let ( >>?= ) = Lwt_result.bind in
   let ( >>!= ) v f = Lwt_result.map_err f v in
-
   let stdout =
-    if progress
-    then Some (fun raw -> Fmt.pf ppf "%s%!" (Cstruct.to_string raw); Lwt.return ())
-    else None in
-
+    if progress then
+      Some
+        (fun raw ->
+          Fmt.pf ppf "%s%!" (Cstruct.to_string raw) ;
+          Lwt.return () )
+    else None
+  in
   let stderr =
-    if progress
-    then Some (fun raw -> Fmt.(pf stderr) "%s%!" (Cstruct.to_string raw); Lwt.return ())
-    else None in
-
-  let https = Option.eq ~eq:((=) "https") (Uri.scheme repository) in
-
+    if progress then
+      Some
+        (fun raw ->
+          Fmt.(pf stderr) "%s%!" (Cstruct.to_string raw) ;
+          Lwt.return () )
+    else None
+  in
+  let https = Option.eq ~eq:(( = ) "https") (Uri.scheme repository) in
   Store.v root
   >>!= store_err
   >>?= fun git ->
-  Sync_http.clone_ext git ?stdout ?stderr ~https
-    ?port:(Uri.port repository) ~reference:branch
+  Sync_http.clone_ext git ?stdout ?stderr ~https ?port:(Uri.port repository)
+    ~reference:branch
     (Option.value_exn
        (fun () -> raise (Failure "Invalid repository: no host."))
        (Uri.host repository))
     (Uri.path_and_query repository)
   >>!= sync_err
   >>?= fun hash ->
-  Store.Ref.write git
-    branch (Store.Reference.Hash hash)
+  Store.Ref.write git branch (Store.Reference.Hash hash)
   >>!= store_err
   >>?= fun _ ->
   let branch_name = Fpath.base (Store.Reference.to_path branch) in
-
   Store.Ref.write git
     (Store.Reference.of_path Fpath.(v "remotes" / origin // branch_name))
     (Store.Reference.Hash hash)
   >>!= store_err
   >>?= fun _ ->
-  Store.Ref.write git
-    Store.Reference.head
-    (Store.Reference.Ref branch)
+  Store.Ref.write git Store.Reference.head (Store.Reference.Ref branch)
   >>!= store_err
-  >>?= fun _ -> Index.Snapshot.from_reference git () Store.Reference.head
+  >>?= fun _ ->
+  Index.Snapshot.from_reference git () Store.Reference.head
   >>!= index_err
   >>?= fun _ -> Lwt.return (Ok ())
 
 open Cmdliner
 
-module Flag =
-struct
+module Flag = struct
   let output_value =
-    let parse str = match str with
+    let parse str =
+      match str with
       | "stdout" -> Ok Fmt.stdout
       | "stderr" -> Ok Fmt.stderr
       | s -> Error (`Msg (Fmt.strf "%s is not an output." s))
     in
-    let print ppf v = Fmt.pf ppf "%s"
-        (if v == Fmt.stdout
-         then "stdout"
-         else "stderr")
+    let print ppf v =
+      Fmt.pf ppf "%s" (if v == Fmt.stdout then "stdout" else "stderr")
     in
     Arg.conv ~docv:"<output>" (parse, print)
 
   let output =
-    let doc =
-      "Output of the progress status"
-    in
-    Arg.(value
-         & opt output_value Fmt.stdout
-         & info [ "output" ] ~doc ~docv:"<output>")
+    let doc = "Output of the progress status" in
+    Arg.(
+      value
+      & opt output_value Fmt.stdout
+      & info ["output"] ~doc ~docv:"<output>")
 
   let progress =
     let doc =
-      "Progress status is reported on the standard error stream by default when it is \
-       attached to a terminal, unless -q is specified. This flag forces progress status \
-       even if the standard error stream is not directed to a terminal."
+      "Progress status is reported on the standard error stream by default \
+       when it is attached to a terminal, unless -q is specified. This flag \
+       forces progress status even if the standard error stream is not \
+       directed to a terminal."
     in
     Arg.(value & flag & info ["progress"] ~doc)
 
   let origin =
     let doc =
-      "Instead of using the remote name origin to keep track of the upstream repository, use \
-       <name>."
+      "Instead of using the remote name origin to keep track of the upstream \
+       repository, use <name>."
     in
-    Arg.(value & opt string "origin" & info ["o"; "origin"] ~doc ~docv:"<name>")
+    Arg.(
+      value & opt string "origin" & info ["o"; "origin"] ~doc ~docv:"<name>")
 
   let reference =
     let parse str = Ok (Store.Reference.of_string str) in
@@ -204,13 +187,15 @@ struct
 
   let branch =
     let doc =
-      "Instead of pointing the newly created HEAD to the branch pointed to by the cloned \
-       repository's HEAD, point to <name> branch instead. --branch can also take tags and \
-       detaches the HEAD at that commit in the resulting repository."
+      "Instead of pointing the newly created HEAD to the branch pointed to by \
+       the cloned repository's HEAD, point to <name> branch instead. --branch \
+       can also take tags and detaches the HEAD at that commit in the \
+       resulting repository."
     in
-    Arg.(value
-         & opt reference Store.Reference.master
-         & info ["b"; "branch"] ~doc ~docv:"<name>")
+    Arg.(
+      value
+      & opt reference Store.Reference.master
+      & info ["b"; "branch"] ~doc ~docv:"<name>")
 
   let uri =
     let parse str = Ok (Uri.of_string str) in
@@ -219,25 +204,46 @@ struct
 
   let repository =
     let doc = "" in
-    Arg.(required & pos ~rev:true 0 (some uri) None & info [] ~docv:"<repository>" ~doc)
+    Arg.(
+      required
+      & pos ~rev:true 0 (some uri) None
+      & info [] ~docv:"<repository>" ~doc)
 
   let directory =
     let doc = "" in
-    Arg.(value & pos ~rev:true 1 (some string) None & info [] ~doc ~docv:"<directory>")
+    Arg.(
+      value
+      & pos ~rev:true 1 (some string) None
+      & info [] ~doc ~docv:"<directory>")
 end
 
 let setup_log =
-  Term.(const setup_logs $ Fmt_cli.style_renderer () $ Logs_cli.level () $ Flag.output)
+  Term.(
+    const setup_logs
+    $ Fmt_cli.style_renderer ()
+    $ Logs_cli.level ()
+    $ Flag.output)
 
 let main progress origin branch directory repository (quiet, ppf) =
-  match Lwt_main.run (main ppf (not quiet && progress) origin branch directory repository) with
+  match
+    Lwt_main.run
+      (main ppf ((not quiet) && progress) origin branch directory repository)
+  with
   | Ok () -> `Ok ()
   | Error (#error as err) -> `Error (false, Fmt.strf "%a" pp_error err)
 
 let command =
   let doc = "Clone a Git repository by the HTTP protocol." in
   let exits = Term.default_exits in
-  Term.(ret (const main $ Flag.progress $ Flag.origin $ Flag.branch $ Flag.repository $ Flag.directory $ setup_log)),
-  Term.info "ogit-http-clone" ~version:"v0.1" ~doc ~exits
+  ( Term.(
+      ret
+        ( const main
+        $ Flag.progress
+        $ Flag.origin
+        $ Flag.branch
+        $ Flag.repository
+        $ Flag.directory
+        $ setup_log ))
+  , Term.info "ogit-http-clone" ~version:"v0.1" ~doc ~exits )
 
 let () = Term.(exit @@ eval command)

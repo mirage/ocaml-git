@@ -33,36 +33,33 @@ let mkdir dirname =
     if Sys.file_exists dir && Sys.is_directory dir then Lwt.return_unit
     else
       let clear =
-        if Sys.file_exists dir
-        then safe Lwt_unix.unlink dir
-        else Lwt.return ()
+        if Sys.file_exists dir then safe Lwt_unix.unlink dir else Lwt.return ()
       in
-      clear >>= fun () ->
-      aux (Filename.dirname dir) >>= fun () ->
-      protect (Lwt_unix.mkdir dir) 0o755;
-    in
+      clear
+      >>= fun () ->
+      aux (Filename.dirname dir)
+      >>= fun () -> protect (Lwt_unix.mkdir dir) 0o755
+  in
   aux dirname
 
 let command fmt =
   Printf.ksprintf
     (fun str ->
-      Fmt.(pf stdout) "[exec] %s\n%!" str;
+      Fmt.(pf stdout) "[exec] %s\n%!" str ;
       let i = Sys.command str in
-      if i <> 0 then Fmt.(pf stderr) "[exec] error %d\n%!" i;
-      ())
+      if i <> 0 then Fmt.(pf stderr) "[exec] error %d\n%!" i ;
+      () )
     fmt
 
 let rmdir dir =
-  if Sys.os_type = "Win32" then
-    command "cmd /d /v:off /c rd /s /q %S" dir
-  else
-    command "rm -rf %S" dir
+  if Sys.os_type = "Win32" then command "cmd /d /v:off /c rd /s /q %S" dir
+  else command "rm -rf %S" dir
 
 module M = struct
   let root = "test-git-mirage-store"
 
   let init () =
-    if Sys.file_exists root then rmdir root;
+    if Sys.file_exists root then rmdir root ;
     mkdir root >>= fun () -> mkdir Filename.(concat root "temp")
 
   include FS_unix
@@ -84,77 +81,77 @@ module M = struct
   let connect () = FS_unix.connect root
 end
 
-module Gamma = struct
-end
+module Gamma = struct end
 
 module MirageStore = struct
-  include Git_mirage.Store(M)
+  include Git_mirage.Store (M)
 
   let current_dir = Fpath.v M.root
-
-  let v root =
-    M.connect () >>= fun fs ->
-    v ~current_dir fs root
+  let v root = M.connect () >>= fun fs -> v ~current_dir fs root
 end
 
-module MirageConduit: Git_mirage.Net.CONDUIT = struct
+module MirageConduit : Git_mirage.Net.CONDUIT = struct
   include Conduit_mirage
-  module C = Conduit_mirage.With_tcp(Tcpip_stack_socket)
-  module R = Resolver_mirage.Make_with_stack(Time)(Tcpip_stack_socket)
+  module C = Conduit_mirage.With_tcp (Tcpip_stack_socket)
+  module R = Resolver_mirage.Make_with_stack (Time) (Tcpip_stack_socket)
 
   let run f =
-    Lwt_main.run (
-      Lwt.catch f (fun e  -> Alcotest.failf "cannot connect: %a" Fmt.exn e)
-    )
+    Lwt_main.run
+      (Lwt.catch f (fun e -> Alcotest.failf "cannot connect: %a" Fmt.exn e))
 
   let stack =
-    run @@ fun () ->
-    Tcpv4_socket.connect None >>= fun tcp ->
-    Udpv4_socket.connect None >>= fun udp ->
+    run
+    @@ fun () ->
+    Tcpv4_socket.connect None
+    >>= fun tcp ->
+    Udpv4_socket.connect None
+    >>= fun udp ->
     let interface = [Ipaddr.V4.of_string_exn "0.0.0.0"] in
-    let config = { Mirage_stack_lwt.name = "stackv4_socket"; interface } in
+    let config = {Mirage_stack_lwt.name= "stackv4_socket"; interface} in
     Tcpip_stack_socket.connect config udp tcp
 
-  let context =
-    run @@ fun () ->
-    C.connect stack Conduit_mirage.empty
+  let context = run @@ fun () -> C.connect stack Conduit_mirage.empty
 
   let resolver =
-    let ns = None in let ns_port = None in
-    R.R.init ?ns ?ns_port ~stack:stack ()
+    let ns = None in
+    let ns_port = None in
+    R.R.init ?ns ?ns_port ~stack ()
 end
 
-module Store = struct
-  include Git.Mem.Store
-  let v root = v root
-end
+module Store = struct include Git.Mem.Store
 
-module TCP = Test_sync.Make(struct
-    module M = Git_mirage.Sync(MirageConduit)(Store)
-    module Store = Store
-    type error = M.error
-    let pp_error = M.pp_error
-    let clone t ~reference uri = M.clone t ~reference:(reference, reference) uri
+                      let v root = v root end
 
-    let fetch_all t ~references uri =
-      let open Lwt.Infix in
+module TCP = Test_sync.Make (struct
+  module M = Git_mirage.Sync (MirageConduit) (Store)
+  module Store = Store
 
-      M.fetch_all t ~references uri >>= function
-      | Error _ as err -> Lwt.return err
-      | Ok _ -> Lwt.return (Ok ())
+  type error = M.error
 
-    let update t ~reference uri = M.update_and_create t ~references:(Store.Reference.Map.singleton reference [ reference ]) uri
-  end)
+  let pp_error = M.pp_error
+  let clone t ~reference uri = M.clone t ~reference:(reference, reference) uri
+
+  let fetch_all t ~references uri =
+    let open Lwt.Infix in
+    M.fetch_all t ~references uri
+    >>= function
+    | Error _ as err -> Lwt.return err | Ok _ -> Lwt.return (Ok ())
+
+  let update t ~reference uri =
+    M.update_and_create t
+      ~references:(Store.Reference.Map.singleton reference [reference])
+      uri
+end)
 
 let () =
-  Test_common.verbose ();
+  Test_common.verbose () ;
   let () = Lwt_main.run (M.init ()) in
   Alcotest.run "git-mirage"
-    [ Test_store.suite "mirage"         (module MirageStore)
-    ; Test_smart.suite "smart"          (module MirageStore)
-    ; Test_data.suite  "mirage"         (module Test_data.Usual) (module MirageStore)
-    ; Test_data.suite  "mirage"         (module Test_data.Bomb)  (module MirageStore)
-    ; TCP.test_fetch   "tcp-sync-fetch" [ "git://localhost/" ]
-    ; TCP.test_clone   "tcp-sync-clone"
+    [ Test_store.suite "mirage" (module MirageStore)
+    ; Test_smart.suite "smart" (module MirageStore)
+    ; Test_data.suite "mirage" (module Test_data.Usual) (module MirageStore)
+    ; Test_data.suite "mirage" (module Test_data.Bomb) (module MirageStore)
+    ; TCP.test_fetch "tcp-sync-fetch" ["git://localhost/"]
+    ; TCP.test_clone "tcp-sync-clone"
         [ "git://localhost/", "master"
         ; "git://github.com/mirage/ocaml-git.git", "master" ] ]

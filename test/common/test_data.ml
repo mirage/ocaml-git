@@ -1,10 +1,7 @@
 module type SOURCE = sig
   val pack : Fpath.t
-
   val refs : Fpath.t
-
   val idx : Fpath.t
-
   val name : string
 end
 
@@ -43,7 +40,6 @@ module Make0 (Source : SOURCE) (Store : S) = struct
   open Lwt.Infix
 
   let ( >?= ) = Lwt_result.bind
-
   let ( >!= ) = Lwt_result.bind_lwt_err
 
   let stream_of_file path =
@@ -59,11 +55,13 @@ module Make0 (Source : SOURCE) (Store : S) = struct
         Lwt.return (Some ctmp)
 
   let store_err err = Lwt.return (`Store err)
-
   let pp_error ppf = function `Store err -> Store.pp_error ppf err
 
   let hashes_of_pack idx =
-    let unsafe_pp ppf path = Fmt.(list ~sep:(const string Filename.dir_sep) string) ppf (Fpath.segs path) in
+    let unsafe_pp ppf path =
+      Fmt.(list ~sep:(const string Filename.dir_sep) string)
+        ppf (Fpath.segs path)
+    in
     (* XXX(dinosaure): ok this is really bad between the windows support and
        linux but currently, tests fails just because we try to execute
        ..\..\file.idx instead ../../file.idx. It should not be a problem on
@@ -95,10 +93,12 @@ module Make0 (Source : SOURCE) (Store : S) = struct
   module Common = Test_common.Make (Store)
 
   let import root () =
-    Store.v root >!= store_err
+    Store.v root
+    >!= store_err
     >?= fun t ->
     let stream = stream_of_file Source.pack in
-    Store.Pack.from t stream >!= store_err
+    Store.Pack.from t stream
+    >!= store_err
     >?= fun _ ->
     Store.list t
     >>= fun hashes ->
@@ -125,7 +125,7 @@ module Make0 (Source : SOURCE) (Store : S) = struct
       | `Error (_, err) ->
           Alcotest.failf "Got an error when we parse the IDX file %a: %a."
             Fpath.pp Source.idx D.pp_error err
-      | `End (_, hash) -> (acc, hash)
+      | `End (_, hash) -> acc, hash
     in
     let tree, hash_pack = go R.empty (D.make ()) in
     let () = close_in ic in
@@ -149,8 +149,7 @@ module Make0 (Source : SOURCE) (Store : S) = struct
           else ctx
     in
     let _ =
-      go
-        (Store.Hash.init ())
+      go (Store.Hash.init ())
         (E.default (fun f -> R.iter (fun k v -> f (k, v)) tree) hash_pack)
     in
     if String.equal (load_file Source.idx) (Git.Buffer.contents buf) then
@@ -167,46 +166,34 @@ module Make0 (Source : SOURCE) (Store : S) = struct
       | Error err -> Alcotest.failf "Got an error: %a." pp_error err )
 
   let root = Fpath.(v "test-data" / Source.name)
-
   let verify_unpack () = import root () >?= fun _ -> Lwt.return (Ok ())
-
   let test_index_file () = run verify_index_file
-
   let test_unpack () = run verify_unpack
 end
 
 module Usual = struct
   let pack = Fpath.(v ".." / "data" / "pack.pack")
-
   let idx = Fpath.(v ".." / "data" / "pack.idx")
-
   let refs = Fpath.(v ".." / "data" / "pack.refs")
-
   let name = "usual"
 end
 
 module Bomb = struct
   let pack = Fpath.(v ".." / "data" / "bomb.pack")
-
   let idx = Fpath.(v ".." / "data" / "bomb.idx")
-
   let refs = Fpath.(v ".." / "data" / "bomb.refs")
-
   let name = "bomb"
 end
 
 module Udns = struct
   let pack = Fpath.(v ".." / "data" / "udns.pack")
-
   let idx = Fpath.(v ".." / "data" / "udns.idx")
-
   let refs = Fpath.(v ".." / "data" / "udns.refs")
-
   let name = "udns"
 end
 
 let suite name (module F : SOURCE) (module S : S) =
   let module T = Make0 (F) (S) in
   ( Fmt.strf "%s-%s" name F.name
-  , [ ("index-pack", `Quick, T.test_index_file)
-    ; ("unpack", `Quick, T.test_unpack) ] )
+  , ["index-pack", `Quick, T.test_index_file; "unpack", `Quick, T.test_unpack]
+  )
