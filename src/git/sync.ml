@@ -35,9 +35,11 @@ end
 
 module type NET = sig
   type socket
+  type error
 
-  val read : socket -> Bytes.t -> int -> int -> int Lwt.t
-  val write : socket -> Bytes.t -> int -> int -> int Lwt.t
+  val pp_error : Format.formatter -> error -> unit
+  val read : socket -> Bytes.t -> int -> int -> (int, error) result Lwt.t
+  val write : socket -> Bytes.t -> int -> int -> (int, error) result Lwt.t
   val socket : Uri.t -> socket Lwt.t
   val close : socket -> unit Lwt.t
 end
@@ -58,6 +60,8 @@ module type S = sig
     | `Fetch of string
     | `Ls of string
     | `Push of string
+    | `Net of Net.error
+    | `Smart of Client.Decoder.error
     | `Not_found ]
 
   val pp_error : error Fmt.t
@@ -506,6 +510,8 @@ module Make (N : NET) (S : Minimal.S) = struct
     | `Fetch of string
     | `Ls of string
     | `Push of string
+    | `Net of Net.error
+    | `Smart of Client.Decoder.error
     | `Not_found ]
 
   let pp_error ppf = function
@@ -515,6 +521,8 @@ module Make (N : NET) (S : Minimal.S) = struct
     | `Fetch err -> Helper.ppe ~name:"`Fetch" Fmt.string ppf err
     | `Push err -> Helper.ppe ~name:"`Push" Fmt.string ppf err
     | `Ls err -> Helper.ppe ~name:"`Ls" Fmt.string ppf err
+    | `Net err -> Helper.ppe ~name:"`Net" Net.pp_error ppf err
+    | `Smart err -> Helper.ppe ~name:"`Smart" Client.Decoder.pp_error ppf err
     | `Not_found -> Fmt.string ppf "`Not_found"
 
   type command = Common.command
@@ -536,14 +544,19 @@ module Make (N : NET) (S : Minimal.S) = struct
 
   let rec process t result =
     match result with
-    | `Read (buffer, off, len, continue) ->
+    | `Read (buffer, off, len, continue) -> (
         Net.read t.socket t.input 0 len
-        >>= fun len ->
-        Cstruct.blit_from_bytes t.input 0 buffer off len ;
-        process t (continue len)
-    | `Write (buffer, off, len, continue) ->
+        >>= function
+        | Ok len ->
+            Cstruct.blit_from_bytes t.input 0 buffer off len ;
+            process t (continue len)
+        | Error err -> Lwt.return_error (`Net err) )
+    | `Write (buffer, off, len, continue) -> (
         Cstruct.blit_to_bytes buffer off t.output 0 len ;
-        Net.write t.socket t.output 0 len >>= fun n -> process t (continue n)
+        Net.write t.socket t.output 0 len
+        >>= function
+        | Ok n -> process t (continue n)
+        | Error err -> Lwt.return_error (`Net err) )
     | `Error (err, buf, committed) ->
         let raw = Cstruct.sub buf committed (Cstruct.len buf - committed) in
         Log.err (fun l ->
@@ -553,9 +566,9 @@ module Make (N : NET) (S : Minimal.S) = struct
                  (Encore.Lole.pp_scalar ~get:Cstruct.get_char
                     ~length:Cstruct.len))
               raw ) ;
-        assert false
+        Lwt.return_error (`Smart err)
         (* TODO *)
-    | #Client.result as result -> Lwt.return result
+    | #Client.result as result -> Lwt.return_ok result
 
   module Pack = struct
     let default_stdout raw =
@@ -580,14 +593,14 @@ module Make (N : NET) (S : Minimal.S) = struct
         | `PACK (`Out raw) ->
             stdout raw
             >>= fun () ->
-            Client.run ctx.ctx `ReceivePACK |> process ctx >>= dispatch ctx
+            Client.run ctx.ctx `ReceivePACK |> process ctx >>?= dispatch ctx
         | `PACK (`Err raw) ->
             stderr raw
             >>= fun () ->
-            Client.run ctx.ctx `ReceivePACK |> process ctx >>= dispatch ctx
+            Client.run ctx.ctx `ReceivePACK |> process ctx >>?= dispatch ctx
         | `PACK (`Raw raw) ->
             push (Some (cstruct_copy raw)) ;
-            Client.run ctx.ctx `ReceivePACK |> process ctx >>= dispatch ctx
+            Client.run ctx.ctx `ReceivePACK |> process ctx >>?= dispatch ctx
         | `PACK `End -> push None ; Lwt.return (Ok ())
         | result ->
             Lwt.return (Error (`SmartPack (err_unexpected_result result)))
@@ -603,11 +616,11 @@ module Make (N : NET) (S : Minimal.S) = struct
     | `Negociation _ ->
         Client.run t.ctx `Done
         |> process t
-        >>= clone_handler git reference ?hash t
+        >>?= clone_handler git reference ?hash t
     | `NegociationResult _ -> (
         Client.run t.ctx `ReceivePACK
         |> process t
-        >>= Pack.populate git t
+        >>?= Pack.populate git t
         >>= fun res ->
         match res, hash with
         | Ok (_, _), Some hash -> Lwt.return (Ok hash)
@@ -619,7 +632,7 @@ module Make (N : NET) (S : Minimal.S) = struct
     | `ShallowUpdate _ ->
         Client.run t.ctx (`Has Hash.Set.empty)
         |> process t
-        >>= clone_handler git reference t
+        >>?= clone_handler git reference ?hash t
     | `Refs refs -> (
       try
         let hash_head, _, _ =
@@ -635,11 +648,11 @@ module Make (N : NET) (S : Minimal.S) = struct
             ; shallow= []
             ; deep= None })
         |> process t
-        >>= clone_handler git reference ~hash:hash_head t
+        >>?= clone_handler git reference ~hash:hash_head t
       with Not_found -> (
         Client.run t.ctx `Flush
         |> process t
-        >>= function
+        >>?= function
         | `Flush -> Lwt.return (Error `Not_found)
         | result -> Lwt.return (Error (`Clone (err_unexpected_result result))) )
       )
@@ -650,7 +663,7 @@ module Make (N : NET) (S : Minimal.S) = struct
     | `Refs refs -> (
         Client.run t.ctx `Flush
         |> process t
-        >>= function
+        >>?= function
         | `Flush -> Lwt.return (Ok refs.Client.Common.refs)
         | result -> Lwt.return (Error (`Ls (err_unexpected_result result))) )
     | result -> Lwt.return (Error (`Ls (err_unexpected_result result)))
@@ -660,7 +673,7 @@ module Make (N : NET) (S : Minimal.S) = struct
     let pack asked t =
       Client.run t.ctx `ReceivePACK
       |> process t
-      >>= Pack.populate git t
+      >>?= Pack.populate git t
       >>= function
       | Ok (_, n) -> Lwt.return (Ok (asked, n))
       | Error err -> Lwt.return (Error err)
@@ -669,7 +682,7 @@ module Make (N : NET) (S : Minimal.S) = struct
       | `ShallowUpdate shallow_update ->
           notify shallow_update
           >>= fun () ->
-          Client.run t.ctx (`Has have) |> process t >>= aux t asked state
+          Client.run t.ctx (`Has have) |> process t >>?= aux t asked state
       | `Negociation acks -> (
           Log.debug (fun l ->
               l ~header:"fetch_handler" "Retrieve the negotiation: %a."
@@ -681,17 +694,18 @@ module Make (N : NET) (S : Minimal.S) = struct
               Log.debug (fun l ->
                   l ~header:"fetch_handler"
                     "Retrieve `Ready ACK from negotiation engine." ) ;
-              Client.run t.ctx `Done |> process t >>= aux t asked state
+              Client.run t.ctx `Done |> process t >>?= aux t asked state
           | `Done, state ->
               Log.debug (fun l ->
                   l ~header:"fetch_handler"
                     "Retrieve `Done ACK from negotiation engine." ) ;
-              Client.run t.ctx `Done |> process t >>= aux t asked state
+              Client.run t.ctx `Done |> process t >>?= aux t asked state
           | `Again have, state ->
               Log.debug (fun l ->
                   l ~header:"fetch_handler"
                     "Retrieve `Again ACK from negotiation engine." ) ;
-              Client.run t.ctx (`Has have) |> process t >>= aux t asked state )
+              Client.run t.ctx (`Has have) |> process t >>?= aux t asked state
+          )
       | `NegociationResult _ ->
           Log.debug (fun l ->
               l ~header:"fetch_handler" "Retrieve a negotiation result." ) ;
@@ -707,11 +721,11 @@ module Make (N : NET) (S : Minimal.S) = struct
                   ; shallow
                   ; deep= deepen })
               |> process t
-              >>= aux t (first :: rest) state
+              >>?= aux t (first :: rest) state
           | [] -> (
               Client.run t.ctx `Flush
               |> process t
-              >>= function
+              >>?= function
               | `Flush -> Lwt.return (Ok ([], 0))
               (* XXX(dinosaure): better return? *)
               | result ->
@@ -750,8 +764,8 @@ module Make (N : NET) (S : Minimal.S) = struct
             consume ?keep dst
             >>= function
             | `Continue (keep, n) ->
-                Client.run t.ctx (`SendPACK n) |> process t >>= go ?keep t
-            | `Finish -> Client.run t.ctx `FinishPACK |> process t >>= go t )
+                Client.run t.ctx (`SendPACK n) |> process t >>?= go ?keep t
+            | `Finish -> Client.run t.ctx `FinishPACK |> process t >>?= go t )
         | `Nothing -> Lwt.return (Ok [])
         | `ReportStatus {Client.Common.unpack= Ok (); commands} ->
             Lwt.return (Ok commands)
@@ -781,9 +795,10 @@ module Make (N : NET) (S : Minimal.S) = struct
           | _, [] -> (
               Client.run t.ctx `Flush
               |> process t
-              >|= function
-              | `Flush -> Ok []
-              | result -> Error (`Push (err_unexpected_result result)) )
+              >>?= function
+              | `Flush -> Lwt.return_ok []
+              | result ->
+                  Lwt.return_error (`Push (err_unexpected_result result)) )
           | shallow, commands ->
               Log.debug (fun l ->
                   l ~header:"push_handler" "Sending command(s): %a."
@@ -803,7 +818,7 @@ module Make (N : NET) (S : Minimal.S) = struct
                 (`UpdateRequest
                   {Client.Common.shallow; requests= `Raw (x, r); capabilities})
               |> process t
-              >>= aux t (Some refs.Client.Common.refs) (Some (x :: r)) )
+              >>?= aux t (Some refs.Client.Common.refs) (Some (x :: r)) )
       | `ReadyPACK _ as result -> (
           Log.debug (fun l ->
               l ~header:"push_handler"
@@ -872,7 +887,7 @@ module Make (N : NET) (S : Minimal.S) = struct
     in
     Log.debug (fun l -> l ~header:"push" "Start to process the flow") ;
     process t state
-    >>= push_handler git ~push t
+    >>?= push_handler git ~push t
     >>= fun v -> Net.close socket >>= fun () -> Lwt.return v
 
   let ls git ?(capabilities = Default.capabilities) uri =
@@ -894,7 +909,7 @@ module Make (N : NET) (S : Minimal.S) = struct
     in
     Log.debug (fun l -> l ~header:"ls" "Start to process the flow.") ;
     process t state
-    >>= ls_handler git t
+    >>?= ls_handler git t
     >>= fun v -> Net.close socket >>= fun () -> Lwt.return v
 
   let fetch_ext git ?(shallow = []) ?(capabilities = Default.capabilities)
@@ -917,7 +932,7 @@ module Make (N : NET) (S : Minimal.S) = struct
     in
     Log.debug (fun l -> l ~header:"fetch" "Start to process the flow.") ;
     process t state
-    >>= fetch_handler git ~shallow ~notify ~negociate ~have ~want ?deepen t
+    >>?= fetch_handler git ~shallow ~notify ~negociate ~have ~want ?deepen t
     >>= fun v -> Net.close socket >>= fun () -> Lwt.return v
 
   let clone_ext git ?(reference = Store.Reference.master)
@@ -940,7 +955,7 @@ module Make (N : NET) (S : Minimal.S) = struct
     in
     Log.debug (fun l -> l ~header:"clone" "Start to process the flow.") ;
     process t state
-    >>= clone_handler git reference t
+    >>?= clone_handler git reference t
     >>= fun v -> Net.close socket >>= fun () -> Lwt.return v
 
   let fetch_and_set_references git ?capabilities ~choose ~references repository

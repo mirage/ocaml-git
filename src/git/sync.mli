@@ -20,9 +20,11 @@
 (** This interface describes the minimal I/O operations to a git repository. *)
 module type NET = sig
   type socket
+  type error
 
-  val read : socket -> Bytes.t -> int -> int -> int Lwt.t
-  val write : socket -> Bytes.t -> int -> int -> int Lwt.t
+  val pp_error : Format.formatter -> error -> unit
+  val read : socket -> Bytes.t -> int -> int -> (int, error) result Lwt.t
+  val write : socket -> Bytes.t -> int -> int -> (int, error) result Lwt.t
   val socket : Uri.t -> socket Lwt.t
   val close : socket -> unit Lwt.t
 end
@@ -50,6 +52,9 @@ module type S = sig
       (** Appear when we don't follow operations on the ls-remote command. *)
     | `Push of string
       (** Appear when we don't follow operations on the push command. *)
+    | `Net of Net.error  (** Appear when we retrieve an I/O error. *)
+    | `Smart of Client.Decoder.error
+      (** Appear when internal parser got an error. *)
     | `Not_found
       (** Appear when we don't find the reference requested by the client on
           the server. *) ]
