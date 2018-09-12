@@ -50,12 +50,8 @@ module type S = sig
      and module Reference := Store.Reference
 
   type error =
-    [ `SmartPack of string
+    [ `Sync of string
     | `Store of Store.error
-    | `Clone of string
-    | `Fetch of string
-    | `Ls of string
-    | `Push of string
     | `Net of Net.error
     | `Smart of Client.Decoder.error
     | `Not_found ]
@@ -500,23 +496,15 @@ module Make (N : NET) (S : Minimal.S) = struct
     Common (Store)
 
   type error =
-    [ `SmartPack of string
+    [ `Sync of string
     | `Store of Store.error
-    | `Clone of string
-    | `Fetch of string
-    | `Ls of string
-    | `Push of string
     | `Net of Net.error
     | `Smart of Client.Decoder.error
     | `Not_found ]
 
   let pp_error ppf = function
-    | `SmartPack err -> Helper.ppe ~name:"`SmartPack" Fmt.string ppf err
+    | `Sync err -> Helper.ppe ~name:"`Sync" Fmt.string ppf err
     | `Store err -> Helper.ppe ~name:"`Store" Store.pp_error ppf err
-    | `Clone err -> Helper.ppe ~name:"`Clone" Fmt.string ppf err
-    | `Fetch err -> Helper.ppe ~name:"`Fetch" Fmt.string ppf err
-    | `Push err -> Helper.ppe ~name:"`Push" Fmt.string ppf err
-    | `Ls err -> Helper.ppe ~name:"`Ls" Fmt.string ppf err
     | `Net err -> Helper.ppe ~name:"`Net" Net.pp_error ppf err
     | `Smart err -> Helper.ppe ~name:"`Smart" Client.Decoder.pp_error ppf err
     | `Not_found -> Fmt.string ppf "`Not_found"
@@ -598,8 +586,7 @@ module Make (N : NET) (S : Minimal.S) = struct
             push (Some (cstruct_copy raw)) ;
             Client.run ctx.ctx `ReceivePACK |> process ctx >>?= dispatch ctx
         | `PACK `End -> push None ; Lwt.return (Ok ())
-        | result ->
-            Lwt.return (Error (`SmartPack (err_unexpected_result result)))
+        | result -> Lwt.return (Error (`Sync (err_unexpected_result result)))
       in
       dispatch ctx first
       >>?= fun () ->
@@ -650,9 +637,9 @@ module Make (N : NET) (S : Minimal.S) = struct
         |> process t
         >>?= function
         | `Flush -> Lwt.return (Error `Not_found)
-        | result -> Lwt.return (Error (`Clone (err_unexpected_result result))) )
+        | result -> Lwt.return (Error (`Sync (err_unexpected_result result))) )
       )
-    | result -> Lwt.return (Error (`Clone (err_unexpected_result result)))
+    | result -> Lwt.return (Error (`Sync (err_unexpected_result result)))
 
   let ls_handler _ t r =
     match r with
@@ -661,8 +648,8 @@ module Make (N : NET) (S : Minimal.S) = struct
         |> process t
         >>?= function
         | `Flush -> Lwt.return (Ok refs.Client.Common.refs)
-        | result -> Lwt.return (Error (`Ls (err_unexpected_result result))) )
-    | result -> Lwt.return (Error (`Ls (err_unexpected_result result)))
+        | result -> Lwt.return (Error (`Sync (err_unexpected_result result))) )
+    | result -> Lwt.return (Error (`Sync (err_unexpected_result result)))
 
   let fetch_handler git ?(shallow = []) ~notify ~negociate:(fn, state) ~have
       ~want ?deepen t r =
@@ -725,9 +712,8 @@ module Make (N : NET) (S : Minimal.S) = struct
               | `Flush -> Lwt.return (Ok ([], 0))
               (* XXX(dinosaure): better return? *)
               | result ->
-                  Lwt.return (Error (`Fetch (err_unexpected_result result))) )
-          )
-      | result -> Lwt.return (Error (`Ls (err_unexpected_result result)))
+                  Lwt.return (Error (`Sync (err_unexpected_result result))) ) )
+      | result -> Lwt.return (Error (`Sync (err_unexpected_result result)))
     in
     aux t [] state r
 
@@ -766,8 +752,8 @@ module Make (N : NET) (S : Minimal.S) = struct
         | `ReportStatus {Client.Common.unpack= Ok (); commands} ->
             Lwt.return (Ok commands)
         | `ReportStatus {Client.Common.unpack= Error err; _} ->
-            Lwt.return (Error (`Push err))
-        | result -> Lwt.return (Error (`Push (err_unexpected_result result)))
+            Lwt.return (Error (`Sync err))
+        | result -> Lwt.return (Error (`Sync (err_unexpected_result result)))
       in
       go t r
     in
@@ -794,7 +780,7 @@ module Make (N : NET) (S : Minimal.S) = struct
               >>?= function
               | `Flush -> Lwt.return_ok []
               | result ->
-                  Lwt.return_error (`Push (err_unexpected_result result)) )
+                  Lwt.return_error (`Sync (err_unexpected_result result)) )
           | shallow, commands ->
               Log.debug (fun l ->
                   l ~header:"push_handler" "Sending command(s): %a."
@@ -848,7 +834,7 @@ module Make (N : NET) (S : Minimal.S) = struct
           >>= function
           | Ok (stream, _) -> send_pack stream t result
           | Error err -> Lwt.return (Error (`Store err)) )
-      | result -> Lwt.return (Error (`Push (err_unexpected_result result)))
+      | result -> Lwt.return (Error (`Sync (err_unexpected_result result)))
     in
     aux t None None r
 

@@ -66,10 +66,7 @@ module type S_EXT = sig
      and module Common := Common
 
   type error =
-    [ `SmartDecoder of Decoder.error
-    | `Store of Store.error
-    | `Clone of string
-    | `ReportStatus of string ]
+    [`Smart of Decoder.error | `Store of Store.error | `Sync of string]
 
   val pp_error : error Fmt.t
 

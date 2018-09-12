@@ -88,10 +88,7 @@ module type S_EXT = sig
      and module Common := Common
 
   type error =
-    [ `SmartDecoder of Decoder.error
-    | `Store of Store.error
-    | `Clone of string
-    | `ReportStatus of string ]
+    [`Smart of Decoder.error | `Store of Store.error | `Sync of string]
 
   val pp_error : error Fmt.t
 
@@ -251,16 +248,12 @@ struct
   module Encoder = Git.Smart.Encoder (Store.Hash) (Store.Reference) (Common)
 
   type error =
-    [ `SmartDecoder of Decoder.error
-    | `Store of Store.error
-    | `Clone of string
-    | `ReportStatus of string ]
+    [`Smart of Decoder.error | `Store of Store.error | `Sync of string]
 
   let pp_error ppf = function
-    | `SmartDecoder err -> Fmt.pf ppf "(`SmartDecoder %a)" Decoder.pp_error err
+    | `Smart err -> Fmt.pf ppf "(`Smart %a)" Decoder.pp_error err
     | `Store err -> Fmt.pf ppf "(`Store %a)" Store.pp_error err
-    | `Clone err -> Fmt.pf ppf "(`Clone %s)" err
-    | `ReportStatus err -> Fmt.pf ppf "(`ReportStatus %s)" err
+    | `Sync err -> Fmt.pf ppf "(`Sync %s)" err
 
   module Log = struct
     let src = Logs.Src.create "git.sync.http" ~doc:"logs git's sync http event"
@@ -303,7 +296,7 @@ struct
               l ~header:"dispatch" "Retrieve end of the PACK stream." ) ;
           push None ;
           Lwt.return (Ok ())
-      | Error err -> Lwt.return (Error (`SmartDecoder err))
+      | Error err -> Lwt.return (Error (`Smart err))
     in
     dispatch ()
     >?= fun () ->
@@ -384,7 +377,7 @@ struct
     consume (Web.Response.body resp)
       (Decoder.decode decoder
          (Decoder.HttpReferenceDiscovery "git-upload-pack"))
-    >!= fun err -> Lwt.return (`SmartDecoder err)
+    >!= fun err -> Lwt.return (`Smart err)
 
   type command =
     [ `Create of Store.Hash.t * Store.Reference.t
@@ -438,7 +431,7 @@ struct
         Log.err (fun l ->
             l ~header:"push" "The HTTP decoder returns an error: %a."
               Decoder.pp_error err ) ;
-        Lwt.return (Error (`SmartDecoder err))
+        Lwt.return (Error (`Smart err))
     | Ok refs -> (
         let common =
           List.filter
@@ -520,8 +513,8 @@ struct
                 | Ok {Common.unpack= Ok (); commands} ->
                     Lwt.return (Ok commands)
                 | Ok {Common.unpack= Error err; _} ->
-                    Lwt.return (Error (`ReportStatus err))
-                | Error err -> Lwt.return (Error (`SmartDecoder err)) ) ) )
+                    Lwt.return (Error (`Sync err))
+                | Error err -> Lwt.return (Error (`Smart err)) ) ) )
 
   let fetch git ?(shallow = []) ?stdout ?stderr ?headers ?(https = false)
       ?(capabilities = Default.capabilites) ~negociate:(negociate, nstate)
@@ -568,7 +561,7 @@ struct
         Log.err (fun l ->
             l ~header:"fetch" "The HTTP decoder returns an error: %a."
               Decoder.pp_error err ) ;
-        Lwt.return (Error (`SmartDecoder err))
+        Lwt.return (Error (`Smart err))
     | Ok refs -> (
         let common =
           List.filter
@@ -631,7 +624,7 @@ struct
               consume (Web.Response.body resp)
                 (Decoder.decode decoder Decoder.NegociationResult)
               >>= function
-              | Error err -> Lwt.return (Error (`SmartDecoder err))
+              | Error err -> Lwt.return (Error (`Smart err))
               | Ok _ ->
                   (* TODO: check negociation result. *)
                   let stream () =
@@ -666,7 +659,7 @@ struct
                       (Decoder.decode decoder
                          (Decoder.Negociation (have, ack_mode)))
                     >>= function
-                    | Error err -> Lwt.return (Error (`SmartDecoder err))
+                    | Error err -> Lwt.return (Error (`Smart err))
                     | Ok acks ->
                         Log.debug (fun l ->
                             l ~header:"fetch"
@@ -685,7 +678,7 @@ struct
                       (Decoder.decode decoder
                          (Decoder.Negociation (have, ack_mode)))
                     >>= function
-                    | Error err -> Lwt.return (Error (`SmartDecoder err))
+                    | Error err -> Lwt.return (Error (`Smart err))
                     | Ok acks -> (
                         Log.debug (fun l ->
                             l ~header:"fetch" "ACK response received: %a."
@@ -736,7 +729,7 @@ struct
     | Ok (expect, _) ->
         Lwt.return
           (Error
-             (`Clone
+             (`Sync
                (Fmt.strf "Unexpected result: %a."
                   (Fmt.hvbox
                      (Fmt.Dump.list

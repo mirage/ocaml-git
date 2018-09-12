@@ -40,18 +40,10 @@ module type S = sig
 
   (** The error type. *)
   type error =
-    [ `SmartPack of string
-      (** Appear when we retrieve a decoder's error about Smart protocol. *)
+    [ `Sync of string
+      (** Appear when we retrieve an unexpected response from server. *)
     | `Store of Store.error
       (** Appear when we retrieve a PACK error from the {!Store.Pack}. *)
-    | `Clone of string
-      (** Appear when we don't follow operations on the clone command. *)
-    | `Fetch of string
-      (** Appear when we don't follow operations on the fetch command. *)
-    | `Ls of string
-      (** Appear when we don't follow operations on the ls-remote command. *)
-    | `Push of string
-      (** Appear when we don't follow operations on the push command. *)
     | `Net of Net.error  (** Appear when we retrieve an I/O error. *)
     | `Smart of Client.Decoder.error
       (** Appear when internal parser got an error. *)
