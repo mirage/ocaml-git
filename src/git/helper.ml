@@ -29,6 +29,8 @@ end
 
 module Option = struct
   let map f v = match v with Some v -> Some (f v) | None -> None
+  let mem v x ~equal = match v with Some x' -> equal x x' | None -> false
+  let value ~default = function Some a -> a | None -> default
   let ( >>= ) v f = map f v
 end
 

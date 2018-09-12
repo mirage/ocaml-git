@@ -15,11 +15,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Option = struct
-  let value ~default = function Some a -> a | None -> default
-  let ( >>| ) a f = match a with Some a -> Some (f a) | None -> None
-end
-
 module Kind = struct
   type t = Commit | Tag | Tree | Blob
 
@@ -115,7 +110,7 @@ module Entry (Hash : S.HASH) = struct
       -> int64
       -> t =
    fun hash_object ?name ?(preferred = false) ?(delta = None) kind length ->
-    let hash_name = Option.(value ~default:0 (name >>| hash)) in
+    let hash_name = Helper.Option.(value ~default:0 (name >>= hash)) in
     {hash_name; hash_object; name; kind; preferred; delta; length}
 
   let id {hash_object; _} = hash_object

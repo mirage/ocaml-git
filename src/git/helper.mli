@@ -31,6 +31,8 @@ end
 
 module Option : sig
   val map : ('a -> 'b) -> 'a option -> 'b option
+  val mem : 'a option -> 'a -> equal:('a -> 'a -> bool) -> bool
+  val value : default:'a -> 'a option -> 'a
   val ( >>= ) : 'a option -> ('a -> 'b) -> 'b option
 end
 
