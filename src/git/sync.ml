@@ -23,10 +23,6 @@ let src = Logs.Src.create "git.sync" ~doc:"logs git's sync event"
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-module Option = struct
-  let mem v x ~equal = match v with Some x' -> equal x x' | None -> false
-end
-
 module Default = struct
   let capabilities =
     [ `Multi_ack_detailed; `Thin_pack; `Side_band_64k; `Ofs_delta
@@ -1031,8 +1027,8 @@ module Make (N : NET) (S : Minimal.S) = struct
     Log.debug (fun l ->
         l "clone %a:%a" Uri.pp_hum uri S.Reference.pp remote_ref ) ;
     let _ =
-      if not (Option.mem (Uri.scheme uri) "git" ~equal:String.equal) then
-        raise (Invalid_argument "Expected a git url")
+      if not (Helper.Option.mem (Uri.scheme uri) "git" ~equal:String.equal)
+      then raise (Invalid_argument "Expected a git url")
     in
     clone_ext t ?capabilities ~reference:remote_ref uri
     >>?= function

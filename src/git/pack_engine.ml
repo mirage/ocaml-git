@@ -23,12 +23,6 @@ let ( >>!= ) a f = Lwt_result.bind_lwt_err a f
 let ( >>?= ) = Lwt_result.bind
 let ( >>|= ) = Lwt_result.map
 let ( >!= ) a f = Lwt_result.map_err f a
-
-module Option = struct
-  let ( >>= ) v f = match v with Some v -> f v | None -> None
-  let ( >|= ) v f = match v with Some v -> Some (f v) | None -> None
-end
-
 let src = Logs.Src.create "git.pack" ~doc:"Git pack engine"
 
 module Log = (val Logs.src_log src : Logs.LOG)

@@ -302,11 +302,6 @@ module Lazy (Hash : S.HASH) = struct
     !a
 end
 
-module Option = struct
-  let bind f = function Some x -> Some (f x) | None -> None
-  let value ~default = function Some x -> x | None -> default
-end
-
 module type DECODER = sig
   module Hash : S.HASH
 
@@ -393,7 +388,8 @@ module Decoder (Hash : S.HASH) = struct
     | Exception exn -> Fmt.pf ppf "(Exception %a)" pp_error exn
     | Ret (boffs, hash_idx, hash_pack) ->
         Fmt.pf ppf "(Ret (big offsets:%d, idx:%a, pack:%a))"
-          (Option.value ~default:0 (Option.bind Array.length boffs))
+          (Helper.Option.value ~default:0
+             (Helper.Option.map Array.length boffs))
           Hash.pp hash_idx Hash.pp hash_pack
 
   let pp ppf t =
