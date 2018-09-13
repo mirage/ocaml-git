@@ -148,7 +148,6 @@ end
 
 module Common (G : Minimal.S) = struct
   module Store = G
-  module Revision = Revision.Make (Store)
 
   let src =
     Logs.Src.create "git.common.sync" ~doc:"logs git's common sync event"
