@@ -74,6 +74,9 @@ module type S = sig
       (** [get n hs] is like {!find} but @raise Invalid_argument if [n] is
           undefined in [hs]. *)
 
+      val pp : headers Fmt.t
+      (** Pretty-printer of headers. *)
+
       (** {1:hcst Header name values} *)
 
       val user_agent : name
