@@ -18,25 +18,25 @@
 open Lwt.Infix
 
 module Make (Sync : Test_sync.SYNC) = struct
+  module Sync = Sync
   module Store = Sync.Store
   module Test_store = Test_store.Make (Store)
 
   let root = Fpath.v "test-decompress"
   let thin = Fpath.(v ".." / "data" / "thin.pack")
-  let uri = Uri.of_string "http://github.com/mirage/decompress.git"
 
   let run name tests : unit Alcotest.test =
     ( name
     , List.map (fun (msg, f) -> msg, `Slow, fun () -> Test_store.run f) tests )
 
-  let test_clone () =
+  let test_clone endpoint () =
     Test_store.create ~root ()
     >>= fun t ->
     Store.Ref.mem t Store.Reference.master
     >>= function
     | true -> Alcotest.fail "non-empty repository"
     | false -> (
-        Sync.clone t ~reference:Store.Reference.master uri
+        Sync.clone t ~reference:Store.Reference.master endpoint
         >|= function
         | Error err -> Alcotest.failf "%a" Sync.pp_error err | Ok () -> () )
 
@@ -73,5 +73,7 @@ module Make (Sync : Test_sync.SYNC) = struct
         | Ok (_hash, _n) -> Lwt.return ()
         | Error err -> Alcotest.failf "%a" Store.pp_error err )
 
-  let test_thin = run "thin" ["clone", test_clone; "thin", test_thin]
+  let test_thin endpoint =
+    run "thin"
+      ["clone", test_clone (Sync.endpoint_of_uri endpoint); "thin", test_thin]
 end

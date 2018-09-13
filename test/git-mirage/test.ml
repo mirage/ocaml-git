@@ -126,10 +126,12 @@ module TCP = Test_sync.Make (struct
   module M = Git_mirage.Sync (MirageConduit) (Store)
   module Store = Store
 
+  type endpoint = Git.Gri.t
   type error = M.error
 
   let pp_error = M.pp_error
   let clone t ~reference uri = M.clone t ~reference:(reference, reference) uri
+  let endpoint_of_uri = Git.Gri.make
 
   let fetch_all t ~references uri =
     let open Lwt.Infix in
@@ -151,7 +153,7 @@ let () =
     ; Test_smart.suite "smart" (module MirageStore)
     ; Test_data.suite "mirage" (module Test_data.Usual) (module MirageStore)
     ; Test_data.suite "mirage" (module Test_data.Bomb) (module MirageStore)
-    ; TCP.test_fetch "tcp-sync-fetch" ["git://localhost/"]
+    ; TCP.test_fetch "tcp-sync-fetch" [Uri.of_string "git://localhost/"]
     ; TCP.test_clone "tcp-sync-clone"
-        [ "git://localhost/", "master"
-        ; "git://github.com/mirage/ocaml-git.git", "master" ] ]
+        [ Uri.of_string "git://localhost/", "master"
+        ; Uri.of_string "git://github.com/mirage/ocaml-git.git", "master" ] ]
