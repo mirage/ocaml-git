@@ -16,7 +16,7 @@
 
 module Fs = Fs
 module Net = Net
-module Sync = Git.Sync.Make (Net)
+module Sync = Git.Tcp.Make (Net)
 module Http = Http.Make
 module Index = Index
 
