@@ -9,6 +9,7 @@ module Make (C : CONDUIT) = struct
   module Flow = Conduit_mirage.Flow
   module Channel = Mirage_channel_lwt.Make (Flow)
 
+  type endpoint = Git.Gri.t
   type socket = {ic: Channel.t; oc: Channel.t}
   type error = Channel.write_error
 
@@ -54,8 +55,9 @@ module Make (C : CONDUIT) = struct
         (* XXX(dinosaure): Channel.error is not a variant. *)
         Lwt.return_ok 0
 
-  let socket uri =
+  let socket (uri : Git.Gri.t) =
     let open Lwt.Infix in
+    let uri = (uri :> Uri.t) in
     Resolver_lwt.resolve_uri ~uri C.resolver
     >>= fun endp ->
     Conduit_mirage.client endp
