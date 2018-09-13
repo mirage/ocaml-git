@@ -1,4 +1,4 @@
 (library
   (name      test_git)
   (wrapped   false)
-  (libraries git mtime mtime.clock.os alcotest nocrypto lwt.unix logs.fmt))
+  (libraries git git-http mtime mtime.clock.os alcotest nocrypto lwt.unix logs.fmt))
