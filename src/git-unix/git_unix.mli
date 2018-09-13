@@ -37,4 +37,4 @@ end
 module Sync (G : Git.S) :
   Git.Sync.S with module Store = G and module Endpoint = Git.Gri
 
-module Http (S : Git.S) : Git_http.Sync.S with module Store = S
+module Http (G : Git.S) : Git_http.Sync.S with module Store = G

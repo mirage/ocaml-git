@@ -54,4 +54,4 @@ module Client = struct
     else Lwt.return {resp; body= snd v}
 end
 
-module Make (S : Git.S) = Git_http.Sync.Make (Client) (S)
+module Make (S : Git.S) = Git_http.Sync.CohttpMake (Client) (S)
