@@ -101,7 +101,8 @@ let main references directory repository =
   Store.v root
   >>!= store_err
   >>?= fun git ->
-  Sync_http.fetch_some git ~references repository
+  Sync_http.fetch_some git ~references
+    Sync_http.{uri= repository; headers= Web.HTTP.Headers.empty}
   >>!= sync_err
   >>?= fun _ -> Lwt.return (Ok ())
 

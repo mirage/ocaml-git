@@ -93,7 +93,8 @@ let main directory repository =
   Store.v root
   >>!= store_err
   >>?= fun git ->
-  Sync_http.fetch_all git ~references:Store.Reference.Map.empty repository
+  Sync_http.fetch_all git ~references:Store.Reference.Map.empty
+    Sync_http.{uri= repository; headers= Web.HTTP.Headers.empty}
   >>!= sync_err
   >>?= fun _ -> Lwt.return (Ok ())
 
