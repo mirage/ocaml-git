@@ -30,7 +30,9 @@ module Option = struct
   let mem v x ~equal = match v with Some x' -> equal x x' | None -> false
 
   let value_exn v ~error =
-    match v with Some v -> v | None -> raise (Invalid_argument error)
+    match v with Some v -> v | None -> Fmt.invalid_arg error
+
+  let map_default f default = function Some v -> f v | None -> default
 end
 
 module type CLIENT = sig
@@ -142,7 +144,6 @@ struct
     ; unshallow: Store.Hash.t list
     ; acks: (Store.Hash.t * [`Common | `Ready | `Continue | `ACK]) list }
 
-  let option_map_default f v = function Some v -> f v | None -> v
   let src = Logs.Src.create "git.sync.http" ~doc:"logs git's sync http event"
 
   module Log = (val Logs.src_log src : Logs.LOG)
@@ -245,11 +246,10 @@ struct
         None capabilities
       |> function
       | Some git_agent -> git_agent
-      | None ->
-          raise (Invalid_argument "Expected an user agent in capabilities.")
+      | None -> Fmt.invalid_arg "Expected an user agent in capabilities."
     in
     let headers =
-      option_map_default
+      Option.map_default
         Web.HTTP.Headers.(def user_agent git_agent)
         Web.HTTP.Headers.(def user_agent git_agent empty)
         (Some endpoint.Endpoint.headers)
@@ -296,7 +296,7 @@ struct
           raise (Invalid_argument "Expected an user agent in capabilities.")
     in
     let headers =
-      option_map_default
+      Option.map_default
         Web.HTTP.Headers.(def user_agent git_agent)
         Web.HTTP.Headers.(def user_agent git_agent empty)
         (Some endpoint.Endpoint.headers)
