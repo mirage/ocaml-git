@@ -58,7 +58,7 @@ module Lwt_cstruct_flow = struct
   type o = unit -> (raw * int * int) option io
 end
 
-module type S_EXT = sig
+module type S = sig
   module Web : Web.S
 
   module Client :
@@ -68,153 +68,17 @@ module type S_EXT = sig
      and type uri = Web.uri
      and type resp = Web.resp
 
-  module Store : Git.S
+  module Endpoint : sig
+    type t = {uri: Uri.t; headers: Web.HTTP.headers}
 
-  module Common :
-    Git.Smart.COMMON
-    with type hash := Store.Hash.t
-     and type reference := Store.Reference.t
+    include Git.Sync.ENDPOINT with type t := t
+  end
 
-  module Decoder :
-    Git.Smart.DECODER
-    with module Hash := Store.Hash
-     and module Reference := Store.Reference
-     and module Common := Common
-
-  module Encoder :
-    Git.Smart.ENCODER
-    with module Hash := Store.Hash
-     and module Reference := Store.Reference
-     and module Common := Common
-
-  type error =
-    [`Smart of Decoder.error | `Store of Store.error | `Sync of string]
-
-  val pp_error : error Fmt.t
-
-  val ls :
-       Store.t
-    -> ?headers:Web.HTTP.headers
-    -> ?https:bool
-    -> ?port:int
-    -> ?capabilities:Git.Capability.t list
-    -> string
-    -> string
-    -> (Common.advertised_refs, error) result Lwt.t
-
-  type command =
-    [ `Create of Store.Hash.t * Store.Reference.t
-    | `Delete of Store.Hash.t * Store.Reference.t
-    | `Update of Store.Hash.t * Store.Hash.t * Store.Reference.t ]
-
-  val push :
-       Store.t
-    -> push:(   (Store.Hash.t * Store.Reference.t * bool) list
-             -> (Store.Hash.t list * command list) Lwt.t)
-    -> ?headers:Web.HTTP.headers
-    -> ?https:bool
-    -> ?port:int
-    -> ?capabilities:Git.Capability.t list
-    -> string
-    -> string
-    -> ( (Store.Reference.t, Store.Reference.t * string) result list
-       , error )
-       result
-       Lwt.t
-
-  val fetch :
-       Store.t
-    -> ?shallow:Store.Hash.t list
-    -> ?stdout:(Cstruct.t -> unit Lwt.t)
-    -> ?stderr:(Cstruct.t -> unit Lwt.t)
-    -> ?headers:Web.HTTP.headers
-    -> ?https:bool
-    -> ?capabilities:Git.Capability.t list
-    -> negociate:(   Common.acks
-                  -> 'state
-                  -> ([`Ready | `Done | `Again of Store.Hash.Set.t] * 'state)
-                     Lwt.t)
-                 * 'state
-    -> have:Store.Hash.Set.t
-    -> want:(   (Store.Hash.t * Store.Reference.t * bool) list
-             -> (Store.Reference.t * Store.Hash.t) list Lwt.t)
-    -> ?deepen:[`Depth of int | `Timestamp of int64 | `Ref of Store.Reference.t]
-    -> ?port:int
-    -> string
-    -> string
-    -> ((Store.Reference.t * Store.Hash.t) list * int, error) result Lwt.t
-
-  val clone_ext :
-       Store.t
-    -> ?stdout:(Cstruct.t -> unit Lwt.t)
-    -> ?stderr:(Cstruct.t -> unit Lwt.t)
-    -> ?headers:Web.HTTP.headers
-    -> ?https:bool
-    -> ?port:int
-    -> ?reference:Store.Reference.t
-    -> ?capabilities:Git.Capability.t list
-    -> string
-    -> string
-    -> (Store.Hash.t, error) result Lwt.t
-
-  val fetch_some :
-       Store.t
-    -> ?capabilities:Git.Capability.t list
-    -> ?headers:Web.HTTP.headers
-    -> references:Store.Reference.t list Store.Reference.Map.t
-    -> Uri.t
-    -> ( Store.Hash.t Store.Reference.Map.t
-         * Store.Reference.t list Store.Reference.Map.t
-       , error )
-       result
-       Lwt.t
-
-  val fetch_all :
-       Store.t
-    -> ?capabilities:Git.Capability.t list
-    -> ?headers:Web.HTTP.headers
-    -> references:Store.Reference.t list Store.Reference.Map.t
-    -> Uri.t
-    -> ( Store.Hash.t Store.Reference.Map.t
-         * Store.Reference.t list Store.Reference.Map.t
-         * Store.Hash.t Store.Reference.Map.t
-       , error )
-       result
-       Lwt.t
-
-  val fetch_one :
-       Store.t
-    -> ?capabilities:Git.Capability.t list
-    -> ?headers:Web.HTTP.headers
-    -> reference:Store.Reference.t * Store.Reference.t list
-    -> Uri.t
-    -> ( [`AlreadySync | `Sync of Store.Hash.t Store.Reference.Map.t]
-       , error )
-       result
-       Lwt.t
-
-  val clone :
-       Store.t
-    -> ?capabilities:Git.Capability.t list
-    -> ?headers:Web.HTTP.headers
-    -> reference:Store.Reference.t * Store.Reference.t
-    -> Uri.t
-    -> (unit, error) result Lwt.t
-
-  val update_and_create :
-       Store.t
-    -> ?capabilities:Git.Capability.t list
-    -> ?headers:Web.HTTP.headers
-    -> references:Store.Reference.t list Store.Reference.Map.t
-    -> Uri.t
-    -> ( (Store.Reference.t, Store.Reference.t * string) result list
-       , error )
-       result
-       Lwt.t
+  include Git.Sync.S with module Endpoint := Endpoint
 end
 
-module type S =
-  S_EXT
+module type COHTTP_S =
+  S
   with type Web.req = Web_cohttp_lwt.req
    and type Web.resp = Web_cohttp_lwt.resp
    and type 'a Web.io = 'a Web_cohttp_lwt.io
@@ -224,7 +88,7 @@ module type S =
    and type Web.Response.body = Web_cohttp_lwt.Response.body
    and type Web.HTTP.headers = Web_cohttp_lwt.HTTP.headers
 
-module Make_ext
+module Make
     (W : Web.S
          with type +'a io = 'a Lwt.t
           and type raw = Cstruct.t
@@ -247,6 +111,21 @@ struct
   module Decoder = Git.Smart.Decoder (Store.Hash) (Store.Reference) (Common)
   module Encoder = Git.Smart.Encoder (Store.Hash) (Store.Reference) (Common)
 
+  module Endpoint = struct
+    type t = {uri: Uri.t; headers: Web.HTTP.headers}
+
+    let host {uri; _} =
+      match Uri.host uri with
+      | Some host -> host
+      | None -> Fmt.invalid_arg "Invalid http(s) uri: not host"
+
+    let path {uri; _} = Uri.path_and_query uri
+
+    let pp ppf {uri; headers} =
+      Fmt.pf ppf "{ @[<hov>uri = %s;@ headers = @[%a@];@] }"
+        (Uri.to_string uri) Web.HTTP.Headers.pp headers
+  end
+
   type error =
     [`Smart of Decoder.error | `Store of Store.error | `Sync of string]
 
@@ -260,6 +139,14 @@ struct
 
     include (val Logs.src_log src : Logs.LOG)
   end
+
+  type shallow_update = Common.shallow_update =
+    {shallow: Store.Hash.t list; unshallow: Store.Hash.t list}
+ 
+  type acks = Common.acks =
+    { shallow: Store.Hash.t list
+    ; unshallow: Store.Hash.t list
+    ; acks: (Store.Hash.t * [`Common | `Ready | `Continue | `ACK]) list }
 
   let option_map_default f v = function Some v -> f v | None -> v
 
@@ -342,9 +229,17 @@ struct
                 (continue len'')
         | None -> consume stream (continue 0) )
 
-  let ls _ ?headers ?(https = false) ?port
-      ?(capabilities = Default.capabilites) host path =
+  let extract endpoint =
+    ( Option.mem (Uri.scheme endpoint.Endpoint.uri) "https" ~equal:String.equal
+    , Option.value_exn ~error:"Invalid http(s) uri: no host"
+        (Uri.host endpoint.Endpoint.uri)
+    , Uri.path_and_query endpoint.Endpoint.uri
+    , Uri.port endpoint.Endpoint.uri )
+
+  let ls _ ?(capabilities = Default.capabilites) endpoint =
+    let https, host, path, port = extract endpoint in
     let scheme = if https then "https" else "http" in
+    (* XXX(dinosaure): not sure if it's the best to rewrite [uri]. TODO! *)
     let uri =
       Uri.empty
       |> (fun uri -> Uri.with_scheme uri (Some scheme))
@@ -369,7 +264,7 @@ struct
       option_map_default
         Web.HTTP.Headers.(def user_agent git_agent)
         Web.HTTP.Headers.(def user_agent git_agent empty)
-        headers
+        (Some endpoint.Endpoint.headers)
     in
     Client.call ~headers `GET uri
     >>= fun resp ->
@@ -377,21 +272,21 @@ struct
     consume (Web.Response.body resp)
       (Decoder.decode decoder
          (Decoder.HttpReferenceDiscovery "git-upload-pack"))
+    >?= (fun refs -> Lwt.return_ok refs.Common.refs)
     >!= fun err -> Lwt.return (`Smart err)
-
-  type command =
-    [ `Create of Store.Hash.t * Store.Reference.t
-    | `Delete of Store.Hash.t * Store.Reference.t
-    | `Update of Store.Hash.t * Store.Hash.t * Store.Reference.t ]
 
   module SyncCommon :
     module type of Git.Sync.Common (Store) with module Store = Store =
     Git.Sync.Common (Store)
 
+  type command = SyncCommon.command
+
+  let pp_command = SyncCommon.pp_command
+
   open SyncCommon
 
-  let push git ~push ?headers ?(https = false) ?port
-      ?(capabilities = Default.capabilites) host path =
+  let push git ~push ?(capabilities = Default.capabilites) endpoint =
+    let https, host, path, port = extract endpoint in
     let scheme = if https then "https" else "http" in
     let uri =
       Uri.empty
@@ -417,7 +312,7 @@ struct
       option_map_default
         Web.HTTP.Headers.(def user_agent git_agent)
         Web.HTTP.Headers.(def user_agent git_agent empty)
-        headers
+        (Some endpoint.Endpoint.headers)
     in
     Client.call ~headers `GET uri
     >>= fun resp ->
@@ -516,10 +411,12 @@ struct
                     Lwt.return (Error (`Sync err))
                 | Error err -> Lwt.return (Error (`Smart err)) ) ) )
 
-  let fetch git ?(shallow = []) ?stdout ?stderr ?headers ?(https = false)
-      ?(capabilities = Default.capabilites) ~negociate:(negociate, nstate)
-      ~have ~want ?deepen ?port host path =
+  let fetch git ?(shallow = []) ?(capabilities = Default.capabilites) ~notify:_
+      ~negociate:(negociate, nstate) ~have ~want ?deepen endpoint =
+    let https, host, path, port = extract endpoint in
     let scheme = if https then "https" else "http" in
+    let stdout = default_stdout in
+    let stderr = default_stderr in
     let uri =
       Uri.empty
       |> (fun uri -> Uri.with_scheme uri (Some scheme))
@@ -544,7 +441,7 @@ struct
       option_map_default
         Web.HTTP.Headers.(def user_agent git_agent)
         Web.HTTP.Headers.(def user_agent git_agent empty)
-        headers
+        (Some endpoint.Endpoint.headers)
     in
     Log.debug (fun l ->
         l ~header:"fetch" "Send the GET (reference discovery) request." ) ;
@@ -632,7 +529,7 @@ struct
                       (Decoder.decode decoder (Decoder.PACK sideband))
                   in
                   Lwt_result.(
-                    populate ?stdout ?stderr git stream
+                    populate ~stdout ~stderr git stream
                     >>= fun (_, n) -> Lwt.return (Ok (first :: rest, n)))
             in
             if Store.Hash.Set.is_empty have then
@@ -715,15 +612,15 @@ struct
               in
               loop nstate resp )
 
-  let clone_ext git ?stdout ?stderr ?headers ?(https = false) ?port
-      ?(reference = Store.Reference.master) ?capabilities host path =
+  let clone git ?(reference = Store.Reference.master) ?capabilities endpoint =
     let want_handler =
       want_handler git (fun reference' ->
           Lwt.return Store.Reference.(equal reference reference') )
     in
-    fetch git ?stdout ?stderr ?headers ?capabilities ~https
+    let notify _ = Lwt.return_unit in
+    fetch git ?capabilities
       ~negociate:((fun _ () -> Lwt.return (`Done, ())), ())
-      ~have:Store.Hash.Set.empty ~want:want_handler ?port host path
+      ~notify ~have:Store.Hash.Set.empty ~want:want_handler endpoint
     >>= function
     | Ok ([(_, hash)], _) -> Lwt.return (Ok hash)
     | Ok (expect, _) ->
@@ -739,19 +636,8 @@ struct
 
   module Negociator = Git.Negociator.Make (Store)
 
-  let clone git ?capabilities ?headers ~reference:(local_ref, remote_ref)
-      repository =
-    let host =
-      Option.value_exn (Uri.host repository)
-        ~error:
-          (Fmt.strf "Expected an http url with host: %a." Uri.pp_hum repository)
-    in
-    let https =
-      Option.mem (Uri.scheme repository) "https" ~equal:String.equal
-    in
-    clone_ext git ~https ?port:(Uri.port repository) ?capabilities ?headers
-      ~reference:remote_ref host
-      (Uri.path_and_query repository)
+  let clone git ?capabilities ~reference:(local_ref, remote_ref) endpoint =
+    clone git ?capabilities ~reference:remote_ref endpoint
     >?= fun hash' ->
     Store.Ref.write git local_ref (Store.Reference.Hash hash')
     >!= (fun err -> Lwt.return (`Store err))
@@ -759,40 +645,29 @@ struct
     Store.Ref.write git Store.Reference.head (Store.Reference.Ref local_ref)
     >!= fun err -> Lwt.return (`Store err)
 
-  let fetch_and_set_references git ?capabilities ?headers ~choose ~references
-      repository =
+  let fetch_and_set_references git ?capabilities ~choose ~references endpoint =
     Negociator.find_common git
     >>= fun (have, state, continue) ->
     let continue {Common.acks; shallow; unshallow} state =
       continue {Git.Negociator.acks; shallow; unshallow} state
     in
     let want_handler = want_handler git choose in
-    let host =
-      Option.value_exn (Uri.host repository)
-        ~error:
-          (Fmt.strf "Expected an http url with host: %a." Uri.pp_hum repository)
-    in
-    let https =
-      Option.mem (Uri.scheme repository) "https" ~equal:String.equal
-    in
-    fetch git ~https ?port:(Uri.port repository) ?capabilities ?headers
-      ~negociate:(continue, state) ~have ~want:want_handler host
-      (Uri.path_and_query repository)
+    let notify _ = Lwt.return_unit in
+    fetch git ?capabilities ~notify ~negociate:(continue, state) ~have
+      ~want:want_handler endpoint
     >?= fun (results, _) ->
     update_and_create git ~references results
     >!= fun err -> Lwt.return (`Store err)
 
-  let fetch_all git ?capabilities ?headers ~references repository =
+  let fetch_all git ?capabilities ~references endpoint =
     let choose _ = Lwt.return true in
-    fetch_and_set_references ~choose ?capabilities ?headers ~references git
-      repository
+    fetch_and_set_references ~choose ?capabilities ~references git endpoint
 
-  let fetch_some git ?capabilities ?headers ~references repository =
+  let fetch_some git ?capabilities ~references endpoint =
     let choose remote_ref =
       Lwt.return (Store.Reference.Map.mem remote_ref references)
     in
-    fetch_and_set_references ~choose ?capabilities ?headers ~references git
-      repository
+    fetch_and_set_references ~choose ?capabilities ~references git endpoint
     >?= fun (updated, missed, downloaded) ->
     if Store.Reference.Map.is_empty downloaded then
       Lwt.return (Ok (updated, missed))
@@ -804,14 +679,13 @@ struct
             (Store.Reference.Map.bindings downloaded) ) ;
       Lwt.return (Ok (updated, missed)) )
 
-  let fetch_one git ?capabilities ?headers ~reference:(remote_ref, local_refs)
-      repository =
+  let fetch_one git ?capabilities ~reference:(remote_ref, local_refs) endpoint
+      =
     let references = Store.Reference.Map.singleton remote_ref local_refs in
     let choose remote_ref =
       Lwt.return (Store.Reference.Map.mem remote_ref references)
     in
-    fetch_and_set_references ~choose ?capabilities ?headers ~references git
-      repository
+    fetch_and_set_references ~choose ?capabilities ~references git endpoint
     >?= fun (updated, missed, downloaded) ->
     if not (Store.Reference.Map.is_empty downloaded) then
       Log.err (fun l ->
@@ -839,24 +713,14 @@ struct
               missed ) ;
         Lwt.return (Ok (`Sync updated))
 
-  let update_and_create git ?capabilities ?headers ~references repository =
+  let update_and_create git ?capabilities ~references endpoint =
     let push_handler remote_refs =
       push_handler git references remote_refs >|= fun actions -> [], actions
     in
-    let host =
-      Option.value_exn (Uri.host repository)
-        ~error:
-          (Fmt.strf "Expected an http url with host: %a." Uri.pp_hum repository)
-    in
-    let https =
-      Option.mem (Uri.scheme repository) "https" ~equal:String.equal
-    in
-    push git ~push:push_handler ~https ?capabilities ?headers
-      ?port:(Uri.port repository) host
-      (Uri.path_and_query repository)
+    push git ~push:push_handler ?capabilities endpoint
 end
 
-module Make
+module CohttpMake
     (C : CLIENT
          with type +'a io = 'a Lwt.t
           and type headers = Web_cohttp_lwt.HTTP.headers
@@ -865,4 +729,4 @@ module Make
           and type uri = Web_cohttp_lwt.uri
           and type resp = Web_cohttp_lwt.resp)
     (S : Git.S) =
-  Make_ext (Web_cohttp_lwt) (C) (S)
+  Make (Web_cohttp_lwt) (C) (S)
