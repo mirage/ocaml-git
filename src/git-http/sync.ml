@@ -134,28 +134,25 @@ struct
     | `Store err -> Fmt.pf ppf "(`Store %a)" Store.pp_error err
     | `Sync err -> Fmt.pf ppf "(`Sync %s)" err
 
-  module Log = struct
-    let src = Logs.Src.create "git.sync.http" ~doc:"logs git's sync http event"
-
-    include (val Logs.src_log src : Logs.LOG)
-  end
-
   type shallow_update = Common.shallow_update =
     {shallow: Store.Hash.t list; unshallow: Store.Hash.t list}
- 
+
   type acks = Common.acks =
     { shallow: Store.Hash.t list
     ; unshallow: Store.Hash.t list
     ; acks: (Store.Hash.t * [`Common | `Ready | `Continue | `ACK]) list }
 
   let option_map_default f v = function Some v -> f v | None -> v
+  let src = Logs.Src.create "git.sync.http" ~doc:"logs git's sync http event"
+
+  module Log = (val Logs.src_log src : Logs.LOG)
 
   let default_stdout raw =
-    Log.info (fun l -> l ~header:"populate:stdout" "%S" (Cstruct.to_string raw)) ;
+    Log.info (fun l -> l "%S" (Cstruct.to_string raw)) ;
     Lwt.return ()
 
   let default_stderr raw =
-    Log.err (fun l -> l ~header:"populate:stderr" "%S" (Cstruct.to_string raw)) ;
+    Log.err (fun l -> l "%S" (Cstruct.to_string raw)) ;
     Lwt.return ()
 
   let populate git ?(stdout = default_stdout) ?(stderr = default_stderr) stream
@@ -172,15 +169,13 @@ struct
       | Ok (`Out raw) -> stdout raw >>= dispatch
       | Ok (`Raw raw) ->
           Log.debug (fun l ->
-              l ~header:"dispatch"
-                "Retrieve a chunk of the PACK stream (length: %d)."
+              l "Retrieve a chunk of the PACK stream (length: %d)."
                 (Cstruct.len raw) ) ;
           push (Some (cstruct_copy raw)) ;
           dispatch ()
       | Ok (`Err raw) -> stderr raw >>= dispatch
       | Ok `End ->
-          Log.debug (fun l ->
-              l ~header:"dispatch" "Retrieve end of the PACK stream." ) ;
+          Log.debug (fun l -> l "Retrieve end of the PACK stream.") ;
           push None ;
           Lwt.return (Ok ())
       | Error err -> Lwt.return (Error (`Smart err))
@@ -216,12 +211,6 @@ struct
         | Some (raw, off', len') ->
             let len'' = min len len' in
             Cstruct.blit raw off' buffer off len'' ;
-            Log.debug (fun l ->
-                l ~header:"consume" "%a"
-                  (Fmt.hvbox
-                     (Encore.Lole.pp_scalar ~get:Cstruct.get_char
-                        ~length:Cstruct.len))
-                  (Cstruct.sub raw off' len'') ) ;
             if len' - len'' = 0 then consume stream (continue len'')
             else
               consume stream
@@ -249,8 +238,7 @@ struct
       |> (fun uri -> Uri.with_port uri port)
       |> fun uri -> Uri.add_query_param uri ("service", ["git-upload-pack"])
     in
-    Log.debug (fun l ->
-        l ~header:"ls" "Launch the GET request to %a." Uri.pp_hum uri ) ;
+    Log.debug (fun l -> l "Launch the GET request to %a." Uri.pp_hum uri) ;
     let git_agent =
       List.fold_left
         (fun acc -> function `Agent s -> Some s | _ -> acc)
@@ -297,8 +285,7 @@ struct
       |> (fun uri -> Uri.with_port uri port)
       |> fun uri -> Uri.add_query_param uri ("service", ["git-receive-pack"])
     in
-    Log.debug (fun l ->
-        l ~header:"push" "Launch the GET request to %a." Uri.pp_hum uri ) ;
+    Log.debug (fun l -> l "Launch the GET request to %a." Uri.pp_hum uri) ;
     let git_agent =
       List.fold_left
         (fun acc -> function `Agent s -> Some s | _ -> acc)
@@ -324,8 +311,7 @@ struct
     >>= function
     | Error err ->
         Log.err (fun l ->
-            l ~header:"push" "The HTTP decoder returns an error: %a."
-              Decoder.pp_error err ) ;
+            l "The HTTP decoder returns an error: %a." Decoder.pp_error err ) ;
         Lwt.return (Error (`Smart err))
     | Ok refs -> (
         let common =
@@ -350,7 +336,7 @@ struct
                 (fun _ -> Lwt.return ())
             in
             Log.debug (fun l ->
-                l ~header:"push" "Send the request with these operations: %a."
+                l "Send the request with these operations: %a."
                   Fmt.(hvbox (Dump.list pp_command))
                   commands ) ;
             packer ~window:(`Object 10) ~depth:50 ~ofs_delta:true git
@@ -426,25 +412,22 @@ struct
       |> (fun uri -> Uri.with_port uri port)
       |> fun uri -> Uri.add_query_param uri ("service", ["git-upload-pack"])
     in
-    Log.debug (fun l ->
-        l ~header:"fetch" "Launch the GET request to %a." Uri.pp_hum uri ) ;
+    Log.debug (fun l -> l "Launch the GET request to %a." Uri.pp_hum uri) ;
     let git_agent =
       List.fold_left
         (fun acc -> function `Agent s -> Some s | _ -> acc)
         None capabilities
       |> function
       | Some git_agent -> git_agent
-      | None ->
-          raise (Invalid_argument "Expected an user agent in capabilities.")
+      | None -> Fmt.invalid_arg "Expected an user agent in capabilities."
     in
     let headers =
-      option_map_default
+      Option.map_default
         Web.HTTP.Headers.(def user_agent git_agent)
         Web.HTTP.Headers.(def user_agent git_agent empty)
         (Some endpoint.Endpoint.headers)
     in
-    Log.debug (fun l ->
-        l ~header:"fetch" "Send the GET (reference discovery) request." ) ;
+    Log.debug (fun l -> l "Send the GET (reference discovery) request.") ;
     Client.call ~headers `GET uri
     >>= fun resp ->
     let decoder = Decoder.decoder () in
@@ -456,8 +439,7 @@ struct
     >>= function
     | Error err ->
         Log.err (fun l ->
-            l ~header:"fetch" "The HTTP decoder returns an error: %a."
-              Decoder.pp_error err ) ;
+            l "The HTTP decoder returns an error: %a." Decoder.pp_error err ) ;
         Lwt.return (Error (`Smart err))
     | Ok refs -> (
         let common =
@@ -486,8 +468,7 @@ struct
                 | `Flush -> Fmt.pf ppf "`Flush"
               in
               Log.debug (fun l ->
-                  l ~header:"fetch"
-                    "Send a POST negociation request (done:%a): %a."
+                  l "Send a POST negociation request (done:%a): %a."
                     pp_done_or_flush done_or_flush
                     (Fmt.Dump.list Store.Hash.pp)
                     (Store.Hash.Set.elements have) ) ;
@@ -538,9 +519,7 @@ struct
             else
               negociation_request `Flush have
               >>= fun resp ->
-              Log.debug (fun l ->
-                  l ~header:"fetch" "Receiving the first negotiation response."
-              ) ;
+              Log.debug (fun l -> l "Receiving the first negotiation response.") ;
               let rec loop ?(done_or_flush = `Flush) state resp =
                 match done_or_flush with
                 | `Done -> (
@@ -549,7 +528,7 @@ struct
                     Lwt_mvar.put keeper has
                     >>= fun () ->
                     Log.debug (fun l ->
-                        l ~header:"fetch"
+                        l
                           "Receive the final negociation response from the \
                            server." ) ;
                     consume (Web.Response.body resp)
@@ -559,8 +538,7 @@ struct
                     | Error err -> Lwt.return (Error (`Smart err))
                     | Ok acks ->
                         Log.debug (fun l ->
-                            l ~header:"fetch"
-                              "Final ACK response received: %a." Common.pp_acks
+                            l "Final ACK response received: %a." Common.pp_acks
                               acks ) ;
                         negociation_result resp )
                 | `Flush -> (
@@ -568,9 +546,7 @@ struct
                     >>= fun have ->
                     Lwt_mvar.put keeper have
                     >>= fun () ->
-                    Log.debug (fun l ->
-                        l ~header:"fetch" "Receiving a negotiation response."
-                    ) ;
+                    Log.debug (fun l -> l "Receiving a negotiation response.") ;
                     consume (Web.Response.body resp)
                       (Decoder.decode decoder
                          (Decoder.Negociation (have, ack_mode)))
@@ -578,18 +554,17 @@ struct
                     | Error err -> Lwt.return (Error (`Smart err))
                     | Ok acks -> (
                         Log.debug (fun l ->
-                            l ~header:"fetch" "ACK response received: %a."
-                              Common.pp_acks acks ) ;
+                            l "ACK response received: %a." Common.pp_acks acks
+                        ) ;
                         negociate acks state
                         >>= function
                         | `Ready, _ ->
                             Log.debug (fun l ->
-                                l ~header:"fetch"
-                                  "Ready to download the PACK file." ) ;
+                                l "Ready to download the PACK file." ) ;
                             negociation_result resp
                         | `Again have', state ->
                             Log.debug (fun l ->
-                                l ~header:"fetch"
+                                l
                                   "Try again a new common trunk between the \
                                    client and the server." ) ;
                             Lwt_mvar.take keeper
@@ -673,8 +648,7 @@ struct
       Lwt.return (Ok (updated, missed))
     else (
       Log.err (fun l ->
-          l ~header:"fetch_some"
-            "This case should not appear, we download: %a."
+          l "This case should not appear, we download: %a."
             Fmt.Dump.(list (pair Store.Reference.pp Store.Hash.pp))
             (Store.Reference.Map.bindings downloaded) ) ;
       Lwt.return (Ok (updated, missed)) )
@@ -689,8 +663,7 @@ struct
     >?= fun (updated, missed, downloaded) ->
     if not (Store.Reference.Map.is_empty downloaded) then
       Log.err (fun l ->
-          l ~header:"fetch_some"
-            "This case should not appear, we downloaded: %a."
+          l "This case should not appear, we downloaded: %a."
             Fmt.Dump.(list (pair Store.Reference.pp Store.Hash.pp))
             (Store.Reference.Map.bindings downloaded) ) ;
     match Store.Reference.Map.(bindings updated, bindings missed) with
@@ -698,16 +671,14 @@ struct
     | _ :: _, [] -> Lwt.return (Ok (`Sync updated))
     | [], missed ->
         Log.err (fun l ->
-            l ~header:"fetch_one"
-              "This case should not appear, we missed too many references: %a."
+            l "This case should not appear, we missed too many references: %a."
               Fmt.Dump.(
                 list (pair Store.Reference.pp (list Store.Reference.pp)))
               missed ) ;
         Lwt.return (Ok `AlreadySync)
     | _ :: _, missed ->
         Log.err (fun l ->
-            l ~header:"fetch_one"
-              "This case should not appear, we missed too many references: %a."
+            l "This case should not appear, we missed too many references: %a."
               Fmt.Dump.(
                 list (pair Store.Reference.pp (list Store.Reference.pp)))
               missed ) ;

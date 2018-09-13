@@ -145,12 +145,10 @@ module Common (G : Minimal.S) = struct
   module Store = G
   module Revision = Revision.Make (Store)
 
-  module Log = struct
-    let src =
-      Logs.Src.create "git.common.sync" ~doc:"logs git's common sync event"
+  let src =
+    Logs.Src.create "git.common.sync" ~doc:"logs git's common sync event"
 
-    include (val Logs.src_log src : Logs.LOG)
-  end
+  module Log = (val Logs.src_log src : Logs.LOG)
 
   type command =
     [ `Create of Store.Hash.t * Store.Reference.t
@@ -352,8 +350,7 @@ module Common (G : Minimal.S) = struct
             >>= (function
                   | false ->
                       Log.debug (fun l ->
-                          l ~header:"want_handler"
-                            "We missed the reference %a." Store.Reference.pp
+                          l "We missed the reference %a." Store.Reference.pp
                             remote_ref ) ;
                       Lwt.return None
                   | true -> Lwt.return (Some (remote_ref, remote_hash)))
@@ -448,8 +445,7 @@ module Common (G : Minimal.S) = struct
             Store.mem git local_hash
             >>= fun has_local_hash ->
             Log.debug (fun l ->
-                l ~header:"push_handler"
-                  "Check update command on %a for %a to %a (equal = %b)."
+                l "Check update command on %a for %a to %a (equal = %b)."
                   Store.Reference.pp reference Store.Hash.pp remote_hash
                   Store.Hash.pp local_hash
                   Store.Hash.(equal remote_hash local_hash) ) ;
