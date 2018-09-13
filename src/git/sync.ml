@@ -141,6 +141,11 @@ module type S = sig
        Lwt.t
 end
 
+(* XXX(dinosaure): common module is a module (used by the tcp layer, http layer
+   and ssh layer) about what we need to do locally when we push or fetch. This
+   module needs only an implementation of the store and do some operations on
+   it (update references, walk on branches, etc.). *)
+
 module Common (G : Minimal.S) = struct
   module Store = G
   module Revision = Revision.Make (Store)
