@@ -8,4 +8,4 @@ module Client :
    and type resp = Git_http.Web_cohttp_lwt.resp
 
 module Make (S : Git.S) :
-  Git_http.Sync.S with module Client = Client and module Store = S
+  Git_http.Sync.COHTTP_S with module Client = Client and module Store = S

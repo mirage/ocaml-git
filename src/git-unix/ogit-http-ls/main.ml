@@ -22,8 +22,6 @@ module Sync_http = Http (Store)
 
 module Option = struct
   let map f = function Some v -> Some (f v) | None -> None
-  let value_exn f = function Some v -> v | None -> f ()
-  let eq ?(none = false) ~eq = function Some x -> eq x | None -> none
 end
 
 let pad n x =
@@ -80,17 +78,12 @@ let main show_tags show_heads repository =
   let root = Fpath.(v (Sys.getcwd ())) in
   let ( >>?= ) = Lwt_result.bind in
   let ( >>!= ) v f = Lwt_result.map_err f v in
-  let https = Option.eq ~eq:(( = ) "https") (Uri.scheme repository) in
   Store.v root
   >>!= store_err
   >>?= fun git ->
-  Sync_http.ls git ~https ?port:(Uri.port repository)
-    (Option.value_exn
-       (fun () -> raise (Failure "Invalid repository: no host."))
-       (Uri.host repository))
-    (Uri.path_and_query repository)
+  Sync_http.ls git Sync_http.{uri= repository; headers= Web.HTTP.Headers.empty}
   >>!= sync_err
-  >>?= fun {Sync_http.Common.refs; _} ->
+  >>?= fun refs ->
   let refs =
     List.filter
       (fun (_, reference, _) ->

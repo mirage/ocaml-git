@@ -40,6 +40,7 @@ module HTTP = struct
       | Some v -> v
       | None -> raise (Invalid_argument "HTTP.Headers.get: invalid name")
 
+    let pp = Cohttp.Header.pp_hum
     let user_agent = "User-Agent"
     let content_type = "Content-Type"
     let access_control_allow_origin = "Access-Control-Allow-Origin"

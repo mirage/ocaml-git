@@ -22,9 +22,11 @@ module Tcp (S : Test_store.S) = Test_sync.Make (struct
   module Store = S
 
   type error = M.error
+  type endpoint = Git.Gri.t
 
   let pp_error = M.pp_error
   let clone t ~reference uri = M.clone t ~reference:(reference, reference) uri
+  let endpoint_of_uri = Git.Gri.make
 
   let fetch_all t ~references uri =
     let open Lwt.Infix in
@@ -43,9 +45,11 @@ module Http (Store : Test_store.S) = Test_sync.Make (struct
   module Store = Store
 
   type error = M.error
+  type endpoint = M.Endpoint.t
 
   let pp_error = M.pp_error
   let clone t ~reference uri = M.clone t ~reference:(reference, reference) uri
+  let endpoint_of_uri uri = M.Endpoint.{uri; headers= M.Web.HTTP.Headers.empty}
 
   let fetch_all t ~references uri =
     let open Lwt.Infix in
@@ -64,9 +68,11 @@ module Https (Store : Test_store.S) = Test_sync.Make (struct
   module Store = Store
 
   type error = M.error
+  type endpoint = M.Endpoint.t
 
   let pp_error = M.pp_error
   let clone t ~reference uri = M.clone t ~reference:(reference, reference) uri
+  let endpoint_of_uri uri = M.Endpoint.{uri; headers= M.Web.HTTP.Headers.empty}
 
   let fetch_all t ~references uri =
     let open Lwt.Infix in
@@ -93,9 +99,11 @@ module Thin = Test_thin.Make (struct
   module Store = Fs_store
 
   type error = M.error
+  type endpoint = M.Endpoint.t
 
   let pp_error = M.pp_error
   let clone t ~reference uri = M.clone t ~reference:(reference, reference) uri
+  let endpoint_of_uri uri = M.Endpoint.{uri; headers= M.Web.HTTP.Headers.empty}
 
   let fetch_all t ~references uri =
     let open Lwt.Infix in
@@ -135,16 +143,17 @@ let () =
         (module Test_data.Usual)
         (module Fs_store)
         (module Test_rev_list.Usual (Fs_store))
-    ; Tcp1.test_fetch "mem-local-tcp-sync" ["git://localhost/"]
+    ; Tcp1.test_fetch "mem-local-tcp-sync" [Uri.of_string "git://localhost/"]
     ; Tcp1.test_clone "mem-remote-tcp-sync"
-        [ "git://github.com/mirage/ocaml-git.git", "master"
-        ; "git://github.com/mirage/ocaml-git.git", "gh-pages" ]
-    ; Tcp2.test_fetch "fs-local-tcp-sync" ["git://localhost/"]
+        [ Uri.of_string "git://github.com/mirage/ocaml-git.git", "master"
+        ; Uri.of_string "git://github.com/mirage/ocaml-git.git", "gh-pages" ]
+    ; Tcp2.test_fetch "fs-local-tcp-sync" [Uri.of_string "git://localhost/"]
     ; Tcp2.test_clone "fs-remote-tcp-sync"
-        [ "git://github.com/mirage/ocaml-git.git", "master"
-        ; "git://github.com/mirage/ocaml-git.git", "gh-pages" ]
+        [ Uri.of_string "git://github.com/mirage/ocaml-git.git", "master"
+        ; Uri.of_string "git://github.com/mirage/ocaml-git.git", "gh-pages" ]
     ; Http1.test_clone "mem-http-sync"
-        ["http://github.com/mirage/ocaml-git.git", "gh-pages"]
+        [Uri.of_string "http://github.com/mirage/ocaml-git.git", "gh-pages"]
     ; Http2.test_clone "fs-https-sync"
-        ["https://github.com/mirage/ocaml-git.git", "gh-pages"]
-    ; Thin.test_thin ]
+        [Uri.of_string "https://github.com/mirage/ocaml-git.git", "gh-pages"]
+    ; Thin.test_thin (Uri.of_string "https://github.com/mirage/decompress.git")
+    ]

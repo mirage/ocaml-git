@@ -22,25 +22,27 @@ module type SYNC = sig
   module Store : Test_store.S
 
   type error
+  type endpoint
 
   val pp_error : error Fmt.t
+  val endpoint_of_uri : Uri.t -> endpoint
 
   val clone :
        Store.t
     -> reference:Store.Reference.t
-    -> Uri.t
+    -> endpoint
     -> (unit, error) result Lwt.t
 
   val fetch_all :
        Store.t
     -> references:Store.Reference.t list Store.Reference.Map.t
-    -> Uri.t
+    -> endpoint
     -> (unit, error) result Lwt.t
 
   val update :
        Store.t
     -> reference:Store.Reference.t
-    -> Uri.t
+    -> endpoint
     -> ( (Store.Reference.t, Store.Reference.t * string) result list
        , error )
        result
@@ -57,8 +59,7 @@ module Make (Sync : SYNC) = struct
     name, List.map (fun (msg, f) -> msg, `Slow, fun () -> T.run f) tests
 
   let test_fetch name uris =
-    let test uri =
-      let uri = Uri.of_string uri in
+    let test endpoint =
       T.create ~root ()
       >>= fun t ->
       (* XXX(dinosaure): an empty repository has the HEAD reference points to
@@ -72,11 +73,11 @@ module Make (Sync : SYNC) = struct
             let open Store.Reference in
             Map.add master [master] Map.empty
           in
-          Sync.fetch_all t ~references uri
+          Sync.fetch_all t ~references endpoint
           >>= function
           | Error err -> Alcotest.failf "%a" Sync.pp_error err
           | Ok () -> (
-              Sync.update t ~reference:Store.Reference.master uri
+              Sync.update t ~reference:Store.Reference.master endpoint
               >|= function
               | Error err -> Alcotest.failf "%a" Sync.pp_error err
               | Ok [] -> ()
@@ -86,19 +87,18 @@ module Make (Sync : SYNC) = struct
     let tests =
       List.map
         (fun uri ->
-          let msg = Fmt.strf "fetching %s" uri in
-          msg, fun () -> test uri )
+          let msg = Fmt.strf "fetching" in
+          msg, fun () -> test (Sync.endpoint_of_uri uri) )
         uris
     in
     run name tests
 
   let test_clone name uris =
-    let test uri reference =
-      let uri = Uri.of_string uri in
+    let test endpoint reference =
       Store.v root
       >>= T.check_err
       >>= fun t ->
-      Sync.clone t ~reference uri
+      Sync.clone t ~reference endpoint
       >>= fun _ ->
       Store.list t
       >>= Lwt_list.iter_s (fun hash -> Store.read_exn t hash >|= fun _ -> ())
@@ -110,9 +110,9 @@ module Make (Sync : SYNC) = struct
         (fun (uri, reference) ->
           let reference = Store.Reference.Path.(heads / reference) in
           let msg =
-            Fmt.strf "cloning %s (branch=%a)" uri Store.Reference.pp reference
+            Fmt.strf "cloning (branch=%a)" Store.Reference.pp reference
           in
-          msg, fun () -> test uri reference )
+          msg, fun () -> test (Sync.endpoint_of_uri uri) reference )
         uris
     in
     run name tests

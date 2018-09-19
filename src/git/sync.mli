@@ -17,47 +17,19 @@
 
 (** The synchronization commands to a git repository. *)
 
-(** This interface describes the minimal I/O operations to a git repository. *)
-module type NET = sig
-  type socket
-  type error
+module type ENDPOINT = sig
+  type t
 
-  val pp_error : Format.formatter -> error -> unit
-  val read : socket -> Bytes.t -> int -> int -> (int, error) result Lwt.t
-  val write : socket -> Bytes.t -> int -> int -> (int, error) result Lwt.t
-  val socket : Uri.t -> socket Lwt.t
-  val close : socket -> unit Lwt.t
+  val host : t -> string
+  val path : t -> string
+  val pp : t Fmt.t
 end
 
 module type S = sig
   module Store : Minimal.S
-  module Net : NET
+  module Endpoint : ENDPOINT
 
-  module Client :
-    Smart.CLIENT
-    with module Hash := Store.Hash
-     and module Reference := Store.Reference
-
-  (** The error type. *)
-  type error =
-    [ `SmartPack of string
-      (** Appear when we retrieve a decoder's error about Smart protocol. *)
-    | `Store of Store.error
-      (** Appear when we retrieve a PACK error from the {!Store.Pack}. *)
-    | `Clone of string
-      (** Appear when we don't follow operations on the clone command. *)
-    | `Fetch of string
-      (** Appear when we don't follow operations on the fetch command. *)
-    | `Ls of string
-      (** Appear when we don't follow operations on the ls-remote command. *)
-    | `Push of string
-      (** Appear when we don't follow operations on the push command. *)
-    | `Net of Net.error  (** Appear when we retrieve an I/O error. *)
-    | `Smart of Client.Decoder.error
-      (** Appear when internal parser got an error. *)
-    | `Not_found
-      (** Appear when we don't find the reference requested by the client on
-          the server. *) ]
+  type error
 
   val pp_error : error Fmt.t
   (** Pretty-printer of {!error}. *)
@@ -75,12 +47,20 @@ module type S = sig
   val pp_command : command Fmt.t
   (** Pretty-printer of {!command}. *)
 
+  type shallow_update =
+    {shallow: Store.Hash.t list; unshallow: Store.Hash.t list}
+
+  type acks =
+    { shallow: Store.Hash.t list
+    ; unshallow: Store.Hash.t list
+    ; acks: (Store.Hash.t * [`Common | `Ready | `Continue | `ACK]) list }
+
   val push :
        Store.t
     -> push:(   (Store.Hash.t * Store.Reference.t * bool) list
              -> (Store.Hash.t list * command list) Lwt.t)
     -> ?capabilities:Capability.t list
-    -> Uri.t
+    -> Endpoint.t
     -> ( (Store.Reference.t, Store.Reference.t * string) result list
        , error )
        result
@@ -89,15 +69,15 @@ module type S = sig
   val ls :
        Store.t
     -> ?capabilities:Capability.t list
-    -> Uri.t
+    -> Endpoint.t
     -> ((Store.Hash.t * Store.Reference.t * bool) list, error) result Lwt.t
 
-  val fetch_ext :
+  val fetch :
        Store.t
     -> ?shallow:Store.Hash.t list
     -> ?capabilities:Capability.t list
-    -> notify:(Client.Common.shallow_update -> unit Lwt.t)
-    -> negociate:(   Client.Common.acks
+    -> notify:(shallow_update -> unit Lwt.t)
+    -> negociate:(   acks
                   -> 'state
                   -> ([`Ready | `Done | `Again of Store.Hash.Set.t] * 'state)
                      Lwt.t)
@@ -106,21 +86,14 @@ module type S = sig
     -> want:(   (Store.Hash.t * Store.Reference.t * bool) list
              -> (Store.Reference.t * Store.Hash.t) list Lwt.t)
     -> ?deepen:[`Depth of int | `Timestamp of int64 | `Ref of Reference.t]
-    -> Uri.t
+    -> Endpoint.t
     -> ((Store.Reference.t * Store.Hash.t) list * int, error) result Lwt.t
-
-  val clone_ext :
-       Store.t
-    -> ?reference:Store.Reference.t
-    -> ?capabilities:Capability.t list
-    -> Uri.t
-    -> (Store.Hash.t, error) result Lwt.t
 
   val fetch_some :
        Store.t
     -> ?capabilities:Capability.t list
     -> references:Store.Reference.t list Store.Reference.Map.t
-    -> Uri.t
+    -> Endpoint.t
     -> ( Store.Hash.t Store.Reference.Map.t
          * Store.Reference.t list Store.Reference.Map.t
        , error )
@@ -169,7 +142,7 @@ module type S = sig
        Store.t
     -> ?capabilities:Capability.t list
     -> references:Store.Reference.t list Store.Reference.Map.t
-    -> Uri.t
+    -> Endpoint.t
     -> ( Store.Hash.t Store.Reference.Map.t
          * Store.Reference.t list Store.Reference.Map.t
          * Store.Hash.t Store.Reference.Map.t
@@ -194,7 +167,7 @@ module type S = sig
        Store.t
     -> ?capabilities:Capability.t list
     -> reference:Store.Reference.t * Store.Reference.t list
-    -> Uri.t
+    -> Endpoint.t
     -> ( [`AlreadySync | `Sync of Store.Hash.t Store.Reference.Map.t]
        , error )
        result
@@ -210,14 +183,14 @@ module type S = sig
        Store.t
     -> ?capabilities:Capability.t list
     -> reference:Store.Reference.t * Store.Reference.t
-    -> Uri.t
+    -> Endpoint.t
     -> (unit, error) result Lwt.t
 
   val update_and_create :
        Store.t
     -> ?capabilities:Capability.t list
     -> references:Store.Reference.t list Store.Reference.Map.t
-    -> Uri.t
+    -> Endpoint.t
     -> ( (Store.Reference.t, Store.Reference.t * string) result list
        , error )
        result
@@ -248,6 +221,10 @@ module type S = sig
       At this final stage, the function does not encountered any error during
       the commmunication - if it's the case, we did not do any modification on
       the server and return an {!error}. *)
+end
+
+module Default : sig
+  val capabilities : Capability.t list
 end
 
 module Common (G : Minimal.S) :
@@ -297,6 +274,3 @@ module Common (G : Minimal.S) :
       -> command list Lwt.t
   end
   with module Store = G
-
-module Make (N : NET) (S : Minimal.S) :
-  S with module Store = S and module Net = N

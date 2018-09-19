@@ -5,4 +5,4 @@ module type CONDUIT = sig
   val resolver : Resolver_lwt.t
 end
 
-module Make (C : CONDUIT) : Git.Sync.NET
+module Make (C : CONDUIT) : Git.Tcp.NET with type endpoint = Git.Gri.t

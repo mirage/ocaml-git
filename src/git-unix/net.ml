@@ -2,6 +2,7 @@ let src = Logs.Src.create "git-tcp.net" ~doc:"logs git's net I/O event"
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
+type endpoint = Git.Gri.t
 type socket = Lwt_unix.file_descr
 type error = [`Unix of exn]
 
@@ -32,8 +33,9 @@ let host uri =
   | None ->
       Fmt.kstrf failwith "Expected a git url with host: %a." Uri.pp_hum uri
 
-let socket uri =
+let socket (uri : Git.Gri.t) =
   let open Lwt.Infix in
+  let uri = (uri :> Uri.t) in
   Log.debug (fun l ->
       l ~header:"socket" "Start to open connection on %a." Uri.pp_hum uri ) ;
   let socket = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_STREAM 0 in

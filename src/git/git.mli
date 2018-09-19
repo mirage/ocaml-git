@@ -32,6 +32,8 @@ module Inflate = Inflate
 module Deflate = Deflate
 module Buffer = Cstruct_buffer
 module Hash = Hash
+module Gri = Gri
+module Tcp = Tcp
 
 module type FILE = S.FILE
 module type MAPPER = S.MAPPER

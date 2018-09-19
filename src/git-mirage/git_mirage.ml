@@ -13,6 +13,6 @@ module Store (X : Mirage_fs_lwt.S) = struct
     v ?dotgit ?compression ?buffer fs root
 end
 
-module Sync (C : Net.CONDUIT) = Git.Sync.Make (Net.Make (C))
+module Sync (C : Net.CONDUIT) = Git.Tcp.Make (Net.Make (C))
 
 (* module HTTP = Git_http.Sync.Make(Client) *)

@@ -25,8 +25,6 @@ module Index = Index.Make (Store) (Fs) (Entry)
 module Option = struct
   let map f = function Some v -> Some (f v) | None -> None
   let map_default v f = function Some v -> f v | None -> v
-  let value_exn f = function Some v -> v | None -> f ()
-  let eq ?(none = false) ~eq = function Some x -> eq x | None -> none
 end
 
 let pad n x =
@@ -82,7 +80,7 @@ let pp_error ppf = function
   | `Sync err -> Fmt.pf ppf "(`Sync %a)" Sync_http.pp_error err
   | `Index err -> Fmt.pf ppf "(`Index %a)" Index.pp_error err
 
-let main ppf progress origin branch repository directory =
+let main _ppf _progress _origin branch repository directory =
   let name =
     Uri.path repository
     |> Astring.String.cuts ~empty:false ~sep:Fpath.dir_sep
@@ -97,42 +95,12 @@ let main ppf progress origin branch repository directory =
   in
   let ( >>?= ) = Lwt_result.bind in
   let ( >>!= ) v f = Lwt_result.map_err f v in
-  let stdout =
-    if progress then
-      Some
-        (fun raw ->
-          Fmt.pf ppf "%s%!" (Cstruct.to_string raw) ;
-          Lwt.return () )
-    else None
-  in
-  let stderr =
-    if progress then
-      Some
-        (fun raw ->
-          Fmt.(pf stderr) "%s%!" (Cstruct.to_string raw) ;
-          Lwt.return () )
-    else None
-  in
-  let https = Option.eq ~eq:(( = ) "https") (Uri.scheme repository) in
   Store.v root
   >>!= store_err
   >>?= fun git ->
-  Sync_http.clone_ext git ?stdout ?stderr ~https ?port:(Uri.port repository)
-    ~reference:branch
-    (Option.value_exn
-       (fun () -> raise (Failure "Invalid repository: no host."))
-       (Uri.host repository))
-    (Uri.path_and_query repository)
+  Sync_http.clone git ~reference:(branch, branch)
+    Sync_http.{uri= repository; headers= Web.HTTP.Headers.empty}
   >>!= sync_err
-  >>?= fun hash ->
-  Store.Ref.write git branch (Store.Reference.Hash hash)
-  >>!= store_err
-  >>?= fun _ ->
-  let branch_name = Fpath.base (Store.Reference.to_path branch) in
-  Store.Ref.write git
-    (Store.Reference.of_path Fpath.(v "remotes" / origin // branch_name))
-    (Store.Reference.Hash hash)
-  >>!= store_err
   >>?= fun _ ->
   Store.Ref.write git Store.Reference.head (Store.Reference.Ref branch)
   >>!= store_err
