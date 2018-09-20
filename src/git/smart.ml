@@ -24,12 +24,9 @@ module type COMMON = sig
     ; refs: (hash * reference * bool) list
     ; capabilities: Capability.t list }
 
-  type shallow_update = {shallow: hash list; unshallow: hash list}
+  type shallow_update = hash Sync.shallow_update
 
-  type acks =
-    { shallow: hash list
-    ; unshallow: hash list
-    ; acks: (hash * [`Common | `Ready | `Continue | `ACK]) list }
+  type acks = hash Sync.acks
 
   type negociation_result = NAK | ACK of hash | ERR of string
   type pack = [`Raw of Cstruct.t | `Out of Cstruct.t | `Err of Cstruct.t]
@@ -153,16 +150,16 @@ struct
            (List.sort Capability.compare b.capabilities)
     with Invalid_argument _ -> false
 
-  type shallow_update = {shallow: hash list; unshallow: hash list}
+  type shallow_update = hash Sync.shallow_update
 
-  let pp_shallow_update ppf {shallow; unshallow} =
+  let pp_shallow_update ppf ({shallow; unshallow}: shallow_update) =
     Fmt.pf ppf "{ @[<hov>shallow = %a;@ unshallow = %a;@] }"
       Fmt.Dump.(list Hash.pp)
       shallow
       Fmt.Dump.(list Hash.pp)
       unshallow
 
-  let equal_shallow_update a b =
+  let equal_shallow_update (a:shallow_update) (b:shallow_update) =
     try
       List.for_all2 Hash.equal
         (List.sort Hash.compare a.shallow)
@@ -172,12 +169,9 @@ struct
            (List.sort Hash.compare b.unshallow)
     with Invalid_argument _ -> false
 
-  type acks =
-    { shallow: hash list
-    ; unshallow: hash list
-    ; acks: (hash * [`Common | `Ready | `Continue | `ACK]) list }
+  type acks = hash Sync.acks
 
-  let pp_acks ppf {shallow; unshallow; acks} =
+  let pp_acks ppf ({shallow; unshallow; acks}: acks) =
     let pp_ack ppf (hash, ack) =
       match ack with
       | `Continue -> Fmt.pf ppf "continue:%a" Hash.pp hash
@@ -193,7 +187,7 @@ struct
       Fmt.Dump.(list pp_ack)
       acks
 
-  let equal_acks a b =
+  let equal_acks (a:acks) (b:acks) =
     let equal_ack (hash_a, detail_a) (hash_b, detail_b) =
       Hash.equal hash_a hash_b
       &&
@@ -1229,14 +1223,14 @@ struct
           let x = p_shallow decoder in
           p_pkt_line
             (p_shallow_update
-               {shallow_update with Common.shallow= x :: shallow_update.shallow})
+               {shallow_update with shallow= x :: shallow_update.shallow})
             decoder
       | Some 'u' ->
           let x = p_unshallow decoder in
           p_pkt_line
             (p_shallow_update
                { shallow_update with
-                 Common.unshallow= x :: shallow_update.unshallow })
+                 unshallow= x :: shallow_update.unshallow })
             decoder
       | Some chr -> raise (Leave (err_unexpected_char chr decoder))
       | None -> raise (Leave (err_unexpected_end_of_input decoder)) )
@@ -2182,14 +2176,14 @@ struct
 
   let w_shallow_update (shallow_update : Common.shallow_update) k encoder =
     let rec go (shallow_update : Common.shallow_update) encoder =
-      match shallow_update.Common.shallow with
+      match shallow_update.shallow with
       | hash :: shallow ->
-          w_shallow hash (go {shallow_update with Common.shallow}) encoder
+          w_shallow hash (go {shallow_update with shallow}) encoder
       | [] -> (
-        match shallow_update.Common.unshallow with
+        match shallow_update.unshallow with
         | hash :: unshallow ->
             w_unshallow hash
-              (go {shallow_update with Common.unshallow})
+              (go {shallow_update with unshallow})
               encoder
         | [] -> pkt_flush k encoder )
     in
@@ -2459,8 +2453,10 @@ struct
               if n > 0 then
                 decode Decoder.ShallowUpdate (fun shallow_update _ ->
                     `ShallowUpdate shallow_update )
-              else fun _ -> `ShallowUpdate {Common.shallow= []; unshallow= []}
-          | _ -> fun _ -> `ShallowUpdate {Common.shallow= []; unshallow= []}
+              else fun _ ->
+                `ShallowUpdate ({shallow= []; unshallow= []} : Common.shallow_update)
+          | _ -> fun _ ->
+            `ShallowUpdate ({shallow= []; unshallow= []} : Common.shallow_update)
         in
         encode (`UploadRequest descr) next context
     | `UpdateRequest (descr : Common.update_request) ->

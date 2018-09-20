@@ -1,16 +1,11 @@
 open Lwt.Infix
 
-type endpoint = {
-  uri    : Uri.t;
-  headers: Cohttp.Header.t;
-}
-
 module E = struct
   type headers = Cohttp.Header.t
-  type t = endpoint
-  let uri t = t.uri
-  let headers t = t.headers
-  let with_uri uri t = { t with uri }
+  type t = Net.endpoint
+  let uri t = t.Net.uri
+  let headers t = t.Net.headers
+  let with_uri uri t = { t with Net.uri }
 end
 
 module Client = struct
@@ -44,7 +39,7 @@ module Client = struct
     in
     (* XXX(dinosaure): [~chunked:false] is mandatory, I don't want to explain
        why (I lost one day to find this bug) but believe me. *)
-    let uri = e.uri in
+    let uri = e.Net.uri in
     let headers = match headers with
       | None   -> e.headers
       | Some h -> Cohttp.Header.add_list e.headers (Cohttp.Header.to_list h)

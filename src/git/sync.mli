@@ -22,6 +22,13 @@ module type ENDPOINT = sig
   val uri  : t -> Uri.t
 end
 
+type 'a shallow_update = {shallow: 'a list; unshallow: 'a list}
+
+type 'a acks =
+    { shallow: 'a list
+    ; unshallow: 'a list
+    ; acks: ('a * [`Common | `Ready | `Continue | `ACK]) list }
+
 module type S = sig
   module Store : Minimal.S
   module Endpoint : ENDPOINT
@@ -44,14 +51,6 @@ module type S = sig
   val pp_command : command Fmt.t
   (** Pretty-printer of {!command}. *)
 
-  type shallow_update =
-    {shallow: Store.Hash.t list; unshallow: Store.Hash.t list}
-
-  type acks =
-    { shallow: Store.Hash.t list
-    ; unshallow: Store.Hash.t list
-    ; acks: (Store.Hash.t * [`Common | `Ready | `Continue | `ACK]) list }
-
   val push :
        Store.t
     -> push:(   (Store.Hash.t * Store.Reference.t * bool) list
@@ -73,8 +72,8 @@ module type S = sig
        Store.t
     -> ?shallow:Store.Hash.t list
     -> ?capabilities:Capability.t list
-    -> notify:(shallow_update -> unit Lwt.t)
-    -> negociate:(   acks
+    -> notify:(Store.Hash.t shallow_update -> unit Lwt.t)
+    -> negociate:(   Store.Hash.t acks
                   -> 'state
                   -> ([`Ready | `Done | `Again of Store.Hash.Set.t] * 'state)
                      Lwt.t)

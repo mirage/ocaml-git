@@ -34,15 +34,20 @@ module Store : sig
     -> (t, error) result Lwt.t
 end
 
-module Sync (G : Git.S): sig
+type endpoint = Net.endpoint = { uri: Uri.t; headers: Cohttp.Header.t }
 
-  module Tcp: Git.Sync.S
-    with module Store = G and
-    type Endpoint.t = Git.Gri.t
+val endpoint: ?headers:Cohttp.Header.t -> Uri.t -> endpoint
 
-  module Http: sig
-    include Git_http.Sync.S with module Store = G
-    val endpoint: ?headers:Cohttp.Header.t -> Uri.t -> Client.endpoint
-  end
+module Sync (G: Git.S): sig
 
+  module Tcp:
+    Git.Sync.S with module Store := G
+                and type Endpoint.t = endpoint
+
+  module Http:
+    Git_http.Sync.S with module Store := G
+                     and type Client.endpoint = endpoint
+
+  include Git.Sync.S with module Store := G
+                      and type Endpoint.t = endpoint
 end

@@ -65,14 +65,14 @@ let setup_logs style_renderer level =
   let quiet = match style_renderer with Some _ -> true | None -> false in
   quiet, Fmt.stdout
 
-type error = [`Store of Store.error | `Sync of Sync.Http.error]
+type error = [`Store of Store.error | `Sync of Sync.error]
 
 let store_err err = `Store err
 let sync_err err = `Sync err
 
 let pp_error ppf = function
   | `Store err -> Fmt.pf ppf "(`Store %a)" Store.pp_error err
-  | `Sync err -> Fmt.pf ppf "(`Sync %a)" Sync.Http.pp_error err
+  | `Sync err -> Fmt.pf ppf "(`Sync %a)" Sync.pp_error err
 
 let main show_tags show_heads repository =
   let root = Fpath.(v (Sys.getcwd ())) in
@@ -81,7 +81,7 @@ let main show_tags show_heads repository =
   Store.v root
   >>!= store_err
   >>?= fun git ->
-  Sync.Http.ls git (Sync.Http.endpoint repository)
+  Sync.ls git (endpoint repository)
   >>!= sync_err
   >>?= fun refs ->
   let refs =

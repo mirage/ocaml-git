@@ -23,11 +23,11 @@ module Tcp (S : Test_store.S) = Test_sync.Make (struct
   module Store = S
 
   type error = M.error
-  type endpoint = Git.Gri.t
+  type endpoint = Git_unix.endpoint
 
   let pp_error = M.pp_error
   let clone t ~reference uri = M.clone t ~reference:(reference, reference) uri
-  let endpoint_of_uri = Git.Gri.make
+  let endpoint_of_uri uri = Git_unix.endpoint uri
 
   let fetch_all t ~references uri =
     let open Lwt.Infix in
@@ -51,7 +51,7 @@ module Http (Store : Test_store.S) = Test_sync.Make (struct
 
   let pp_error = M.pp_error
   let clone t ~reference uri = M.clone t ~reference:(reference, reference) uri
-  let endpoint_of_uri uri = M.endpoint uri
+  let endpoint_of_uri uri = Git_unix.endpoint uri
 
   let fetch_all t ~references uri =
     let open Lwt.Infix in
@@ -75,7 +75,7 @@ module Https (Store : Test_store.S) = Test_sync.Make (struct
 
   let pp_error = M.pp_error
   let clone t ~reference uri = M.clone t ~reference:(reference, reference) uri
-  let endpoint_of_uri uri = M.endpoint uri
+  let endpoint_of_uri uri = Git_unix.endpoint uri
 
   let fetch_all t ~references uri =
     let open Lwt.Infix in
@@ -98,8 +98,7 @@ module Fs_store = struct include Git_unix.Store
                          let v root = v root end
 
 module Thin = Test_thin.Make (struct
-  module Sync = Git_unix.Sync (Fs_store)
-  module M = Sync.Http
+  module M = Git_unix.Sync (Fs_store)
   module Store = Fs_store
 
   type error = M.error
@@ -107,7 +106,7 @@ module Thin = Test_thin.Make (struct
 
   let pp_error = M.pp_error
   let clone t ~reference uri = M.clone t ~reference:(reference, reference) uri
-  let endpoint_of_uri uri = M.endpoint uri
+  let endpoint_of_uri uri = Git_unix.endpoint uri
 
   let fetch_all t ~references uri =
     let open Lwt.Infix in

@@ -52,14 +52,6 @@ module Make (N : NET) (E: Sync.ENDPOINT with type t = N.endpoint) (G : Minimal.S
      protocol to export a low level API (which let the end-user to choose
      negotiation engine). *)
 
-  type shallow_update = Client.Common.shallow_update =
-    {shallow: Store.Hash.t list; unshallow: Store.Hash.t list}
-
-  type acks = Client.Common.acks =
-    { shallow: Store.Hash.t list
-    ; unshallow: Store.Hash.t list
-    ; acks: (Store.Hash.t * [`Common | `Ready | `Continue | `ACK]) list }
-
   type command = Common.command
 
   let pp_command = Common.pp_command
@@ -464,8 +456,8 @@ module Make (N : NET) (E: Sync.ENDPOINT with type t = N.endpoint) (G : Minimal.S
       =
     N.find_common git
     >>= fun (have, state, continue) ->
-    let continue {Client.Common.acks; shallow; unshallow} state =
-      continue {Negociator.acks; shallow; unshallow} state
+    let continue {Sync.acks; shallow; unshallow} state =
+      continue {Sync.acks; shallow; unshallow} state
     in
     let want_handler = Common.want_handler git choose in
     fetch git ?capabilities

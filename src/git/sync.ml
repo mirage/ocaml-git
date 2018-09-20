@@ -25,6 +25,13 @@ module Default = struct
     ; `Agent "git/2.0.0"; `Report_status; `No_done ]
 end
 
+type 'a shallow_update = {shallow: 'a list; unshallow: 'a list}
+
+type 'a acks =
+    { shallow: 'a list
+    ; unshallow: 'a list
+    ; acks: ('a * [`Common | `Ready | `Continue | `ACK]) list }
+
 module type ENDPOINT = sig
   type t
   val uri : t -> Uri.t
@@ -62,20 +69,12 @@ module type S = sig
     -> Endpoint.t
     -> ((Store.Hash.t * Store.Reference.t * bool) list, error) result Lwt.t
 
-  type shallow_update =
-    {shallow: Store.Hash.t list; unshallow: Store.Hash.t list}
-
-  type acks =
-    { shallow: Store.Hash.t list
-    ; unshallow: Store.Hash.t list
-    ; acks: (Store.Hash.t * [`Common | `Ready | `Continue | `ACK]) list }
-
   val fetch :
        Store.t
     -> ?shallow:Store.Hash.t list
     -> ?capabilities:Capability.t list
-    -> notify:(shallow_update -> unit Lwt.t)
-    -> negociate:(   acks
+    -> notify:(Store.Hash.t shallow_update -> unit Lwt.t)
+    -> negociate:(   Store.Hash.t acks
                   -> 'state
                   -> ([`Ready | `Done | `Again of Store.Hash.Set.t] * 'state)
                      Lwt.t)

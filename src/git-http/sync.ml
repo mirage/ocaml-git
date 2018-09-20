@@ -128,14 +128,6 @@ struct
     | `Store err -> Fmt.pf ppf "(`Store %a)" Store.pp_error err
     | `Sync err -> Fmt.pf ppf "(`Sync %s)" err
 
-  type shallow_update = Common.shallow_update =
-    {shallow: Store.Hash.t list; unshallow: Store.Hash.t list}
-
-  type acks = Common.acks =
-    { shallow: Store.Hash.t list
-    ; unshallow: Store.Hash.t list
-    ; acks: (Store.Hash.t * [`Common | `Ready | `Continue | `ACK]) list }
-
   let src = Logs.Src.create "git.sync.http" ~doc:"logs git's sync http event"
 
   module Log = (val Logs.src_log src : Logs.LOG)
@@ -574,7 +566,7 @@ struct
                             Lwt_mvar.take keeper
                             >>= fun _ ->
                             let have =
-                              List.map (fun (hash, _) -> hash) acks.Common.acks
+                              List.map (fun (hash, _) -> hash) acks.acks
                               |> Store.Hash.Set.of_list
                             in
                             Lwt_mvar.put keeper have
@@ -620,8 +612,8 @@ struct
   let fetch_and_set_references git ?capabilities ~choose ~references endpoint =
     Negociator.find_common git
     >>= fun (have, state, continue) ->
-    let continue {Common.acks; shallow; unshallow} state =
-      continue {Git.Negociator.acks; shallow; unshallow} state
+    let continue ({acks; shallow; unshallow}: Negociator.acks) state =
+      continue ({acks; shallow; unshallow}: Negociator.acks) state
     in
     let want_handler = want_handler git choose in
     let notify _ = Lwt.return_unit in
