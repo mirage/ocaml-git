@@ -31,17 +31,17 @@ let endpoint ?(conduit=Conduit_mirage.empty) ?resolver ?headers uri =
   in
   { Net.conduit; resolver; headers; uri }
 
-module E = struct
-  type t = endpoint
-  let uri e = e.uri
-  let with_uri uri e = { e with uri }
-  type headers = Cohttp.Header.t
-  let headers e = e.headers
-end
-
 module Sync (G: Git.S) = struct
 
-  module Tcp = Git.Tcp.Make(Net)(E)(G)
+  module Endpoint = struct
+    type t = endpoint
+    let uri e = e.uri
+    let with_uri uri e = { e with uri }
+    type headers = Cohttp.Header.t
+    let headers e = e.headers
+  end
+
+  module Tcp = Git.Tcp.Make(Net)(Endpoint)(G)
 
   module Client = struct
 
@@ -107,6 +107,86 @@ module Sync (G: Git.S) = struct
 
   end
 
-  module Http = Git_http.Sync.CohttpMake(Client)(E)(G)
+  module Http = Git_http.Sync.CohttpMake(Client)(Endpoint)(G)
+
+  type error =
+    | Tcp of Tcp.error
+    | Http of Http.error
+
+  let pp_error ppf = function
+    | Tcp x  -> Tcp.pp_error ppf x
+    | Http x -> Http.pp_error ppf x
+
+
+  let dispatch e f = match Uri.scheme e.uri with
+    | Some "git" -> f `Tcp
+    | Some ("http" | "https") -> f `Http
+    | Some s -> Fmt.invalid_arg "%a: invalid scheme (%s)" Uri.pp_hum e.uri s
+    | None   -> Fmt.invalid_arg "%a: missing scheme" Uri.pp_hum e.uri
+
+  type command =
+    [ `Create of G.Hash.t * Git.Reference.t
+    | `Delete of G.Hash.t * Git.Reference.t
+    | `Update of G.Hash.t * G.Hash.t * Git.Reference.t ]
+
+  let pp_command = Tcp.pp_command
+
+  let tcp_error x =
+    Lwt.map (function
+        | Ok _ as x -> x
+        | Error e -> Error (Tcp e)
+      ) x
+
+  let http_error x =
+    Lwt.map (function
+        | Ok _ as x -> x
+        | Error e -> Error (Http e)
+      ) x
+
+  let push t ~push ?capabilities e =
+    dispatch e (function
+        | `Tcp  -> Tcp.push t ~push ?capabilities e |> tcp_error
+        | `Http -> Http.push t ~push ?capabilities e |> http_error)
+
+  let ls t ?capabilities e =
+    dispatch e (function
+        | `Tcp  -> Tcp.ls t ?capabilities e |> tcp_error
+        | `Http -> Http.ls t ?capabilities e |> http_error)
+
+  let fetch t ?shallow ?capabilities ~notify ~negociate ~have ~want ?deepen e =
+    dispatch e (function
+        | `Tcp ->
+          Tcp.fetch t ?shallow ?capabilities ~notify ~negociate ~have ~want
+            ?deepen e |> tcp_error
+        | `Http ->
+          Http.fetch t ?shallow ?capabilities ~notify ~negociate ~have ~want
+            ?deepen e |> http_error)
+
+  let clone t ?capabilities ~reference e =
+    dispatch e (function
+        | `Tcp  -> Tcp.clone t ?capabilities ~reference e |> tcp_error
+        | `Http -> Http.clone t ?capabilities ~reference e |> http_error)
+
+  let fetch_some t ?capabilities ~references e =
+    dispatch e (function
+        | `Tcp  -> Tcp.fetch_some t ?capabilities ~references e |> tcp_error
+        | `Http -> Http.fetch_some t ?capabilities ~references e |> http_error)
+
+  let fetch_all t ?capabilities ~references e =
+    dispatch e (function
+        | `Tcp  -> Tcp.fetch_all t ?capabilities ~references e |> tcp_error
+        | `Http -> Http.fetch_all t ?capabilities ~references e |> http_error)
+
+  let fetch_one t ?capabilities ~reference e =
+    dispatch e (function
+        | `Tcp  -> Tcp.fetch_one t ?capabilities ~reference e |> tcp_error
+        | `Http -> Http.fetch_one t ?capabilities ~reference e |> http_error)
+
+  let update_and_create t ?capabilities ~references e =
+    dispatch e (function
+        | `Tcp  ->
+          Tcp.update_and_create t ?capabilities ~references e |> tcp_error
+        | `Http ->
+          Http.update_and_create t ?capabilities ~references e |> http_error)
 
 end
