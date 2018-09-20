@@ -19,10 +19,7 @@
 
 module type ENDPOINT = sig
   type t
-
-  val host : t -> string
-  val path : t -> string
-  val pp : t Fmt.t
+  val uri  : t -> Uri.t
 end
 
 module type S = sig

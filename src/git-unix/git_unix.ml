@@ -16,8 +16,22 @@
 
 module Fs = Fs
 module Net = Net
-module Sync = Git.Tcp.Make (Net)
-module Http = Http.Make
+
+module Sync (G: Git.S) = struct
+  module Tcp  = Git.Tcp.Make (Net)(Git.Gri)(G)
+  module Http = struct
+    include Http.Make(G)
+
+    let endpoint ?headers uri =
+      let headers = match headers with
+        | None   -> Cohttp.Header.of_list []
+        | Some h -> h
+      in
+      { Http.uri; headers }
+
+  end
+end
+
 module Index = Index
 
 module Store = struct

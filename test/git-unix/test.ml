@@ -18,7 +18,8 @@
 open Test_common
 
 module Tcp (S : Test_store.S) = Test_sync.Make (struct
-  module M = Git_unix.Sync (S)
+  module Sync = Git_unix.Sync (S)
+  module M = Sync.Tcp
   module Store = S
 
   type error = M.error
@@ -41,7 +42,8 @@ module Tcp (S : Test_store.S) = Test_sync.Make (struct
 end)
 
 module Http (Store : Test_store.S) = Test_sync.Make (struct
-  module M = Git_unix.Http (Store)
+  module Sync = Git_unix.Sync (Store)
+  module M = Sync.Http
   module Store = Store
 
   type error = M.error
@@ -49,7 +51,7 @@ module Http (Store : Test_store.S) = Test_sync.Make (struct
 
   let pp_error = M.pp_error
   let clone t ~reference uri = M.clone t ~reference:(reference, reference) uri
-  let endpoint_of_uri uri = M.Endpoint.{uri; headers= M.Web.HTTP.Headers.empty}
+  let endpoint_of_uri uri = M.endpoint uri
 
   let fetch_all t ~references uri =
     let open Lwt.Infix in
@@ -64,7 +66,8 @@ module Http (Store : Test_store.S) = Test_sync.Make (struct
 end)
 
 module Https (Store : Test_store.S) = Test_sync.Make (struct
-  module M = Git_unix.Http (Store)
+  module Sync = Git_unix.Sync (Store)
+  module M = Sync.Http
   module Store = Store
 
   type error = M.error
@@ -72,7 +75,7 @@ module Https (Store : Test_store.S) = Test_sync.Make (struct
 
   let pp_error = M.pp_error
   let clone t ~reference uri = M.clone t ~reference:(reference, reference) uri
-  let endpoint_of_uri uri = M.Endpoint.{uri; headers= M.Web.HTTP.Headers.empty}
+  let endpoint_of_uri uri = M.endpoint uri
 
   let fetch_all t ~references uri =
     let open Lwt.Infix in
@@ -95,7 +98,8 @@ module Fs_store = struct include Git_unix.Store
                          let v root = v root end
 
 module Thin = Test_thin.Make (struct
-  module M = Git_unix.Http (Fs_store)
+  module Sync = Git_unix.Sync (Fs_store)
+  module M = Sync.Http
   module Store = Fs_store
 
   type error = M.error
@@ -103,7 +107,7 @@ module Thin = Test_thin.Make (struct
 
   let pp_error = M.pp_error
   let clone t ~reference uri = M.clone t ~reference:(reference, reference) uri
-  let endpoint_of_uri uri = M.Endpoint.{uri; headers= M.Web.HTTP.Headers.empty}
+  let endpoint_of_uri uri = M.endpoint uri
 
   let fetch_all t ~references uri =
     let open Lwt.Infix in

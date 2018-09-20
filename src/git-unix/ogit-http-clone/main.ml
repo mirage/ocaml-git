@@ -18,7 +18,7 @@
 let () = Random.self_init ()
 
 open Git_unix
-module Sync_http = Http (Store)
+module Sync = Git_unix.Sync(Store)
 module Entry = Index.Entry (Digestif.SHA1)
 module Index = Index.Make (Store) (Fs) (Entry)
 
@@ -69,7 +69,7 @@ let setup_logs style_renderer level ppf =
   quiet, ppf
 
 type error =
-  [`Store of Store.error | `Sync of Sync_http.error | `Index of Index.error]
+  [`Store of Store.error | `Sync of Sync.Http.error | `Index of Index.error]
 
 let store_err err = `Store err
 let sync_err err = `Sync err
@@ -77,7 +77,7 @@ let index_err err = `Index err
 
 let pp_error ppf = function
   | `Store err -> Fmt.pf ppf "(`Store %a)" Store.pp_error err
-  | `Sync err -> Fmt.pf ppf "(`Sync %a)" Sync_http.pp_error err
+  | `Sync err -> Fmt.pf ppf "(`Sync %a)" Sync.Http.pp_error err
   | `Index err -> Fmt.pf ppf "(`Index %a)" Index.pp_error err
 
 let main _ppf _progress _origin branch repository directory =
@@ -98,8 +98,8 @@ let main _ppf _progress _origin branch repository directory =
   Store.v root
   >>!= store_err
   >>?= fun git ->
-  Sync_http.clone git ~reference:(branch, branch)
-    Sync_http.{uri= repository; headers= Web.HTTP.Headers.empty}
+  Sync.Http.clone git ~reference:(branch, branch)
+    (Sync.Http.endpoint repository)
   >>!= sync_err
   >>?= fun _ ->
   Store.Ref.write git Store.Reference.head (Store.Reference.Ref branch)

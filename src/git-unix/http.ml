@@ -1,5 +1,18 @@
 open Lwt.Infix
 
+type endpoint = {
+  uri    : Uri.t;
+  headers: Cohttp.Header.t;
+}
+
+module E = struct
+  type headers = Cohttp.Header.t
+  type t = endpoint
+  let uri t = t.uri
+  let headers t = t.headers
+  let with_uri uri t = { t with uri }
+end
+
 module Client = struct
   type headers = Cohttp.Header.t
 
@@ -8,7 +21,7 @@ module Client = struct
 
   type body = unit -> (Cstruct.t * int * int) option Lwt.t
   type meth = Cohttp.Code.meth
-  type uri = Uri.t
+  type endpoint = E.t
   type +'a io = 'a Lwt.t
 
   module Log = struct
@@ -17,7 +30,7 @@ module Client = struct
     include (val Logs.src_log src : Logs.LOG)
   end
 
-  let call ?headers ?body meth uri =
+  let call ?headers ?body meth e =
     let body_if_redirection, push = Lwt_stream.create () in
     let body =
       match body with
@@ -31,8 +44,13 @@ module Client = struct
     in
     (* XXX(dinosaure): [~chunked:false] is mandatory, I don't want to explain
        why (I lost one day to find this bug) but believe me. *)
+    let uri = e.uri in
+    let headers = match headers with
+      | None   -> e.headers
+      | Some h -> Cohttp.Header.add_list e.headers (Cohttp.Header.to_list h)
+    in
     Log.debug (fun l -> l ~header:"call" "Send a request to %a." Uri.pp_hum uri) ;
-    Cohttp_lwt_unix.Client.call ?headers ?body ~chunked:false meth uri
+    Cohttp_lwt_unix.Client.call ~headers ?body ~chunked:false meth uri
     >>= fun ((resp, _) as v) ->
     if
       Cohttp.Code.is_redirection
@@ -48,10 +66,10 @@ module Client = struct
       Log.debug (fun l ->
           l ~header:"call" "Redirection from %a to %a." Uri.pp_hum uri
             Uri.pp_hum uri' ) ;
-      Cohttp_lwt_unix.Client.call ?headers ~body:(`Stream body_if_redirection)
+      Cohttp_lwt_unix.Client.call ~headers ~body:(`Stream body_if_redirection)
         ~chunked:false meth uri'
       >|= fun (resp, body) -> {resp; body} )
     else Lwt.return {resp; body= snd v}
 end
 
-module Make (S : Git.S) = Git_http.Sync.CohttpMake (Client) (S)
+module Make (S : Git.S) = Git_http.Sync.CohttpMake (Client) (E) (S)

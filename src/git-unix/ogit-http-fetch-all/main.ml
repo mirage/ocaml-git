@@ -19,7 +19,7 @@ let () = Random.self_init ()
 let () = Printexc.record_backtrace true
 
 open Git_unix
-module Sync_http = Http (Store)
+module Sync = Git_unix.Sync (Store)
 module Negociator = Git.Negociator.Make (Store)
 
 module Log = struct
@@ -74,14 +74,14 @@ let setup_logs style_renderer level ppf =
   let quiet = match style_renderer with Some _ -> true | None -> false in
   quiet, ppf
 
-type error = [`Store of Store.error | `Sync of Sync_http.error]
+type error = [`Store of Store.error | `Sync of Sync.Http.error]
 
 let store_err err = `Store err
 let sync_err err = `Sync err
 
 let pp_error ppf = function
   | `Store err -> Fmt.pf ppf "(`Store %a)" Store.pp_error err
-  | `Sync err -> Fmt.pf ppf "(`Sync %a)" Sync_http.pp_error err
+  | `Sync err -> Fmt.pf ppf "(`Sync %a)" Sync.Http.pp_error err
 
 let main directory repository =
   let root = Option.map_default Fpath.(v (Sys.getcwd ())) Fpath.v directory in
@@ -93,8 +93,8 @@ let main directory repository =
   Store.v root
   >>!= store_err
   >>?= fun git ->
-  Sync_http.fetch_all git ~references:Store.Reference.Map.empty
-    Sync_http.{uri= repository; headers= Web.HTTP.Headers.empty}
+  Sync.Http.fetch_all git ~references:Store.Reference.Map.empty
+    (Sync.Http.endpoint repository)
   >>!= sync_err
   >>?= fun _ -> Lwt.return (Ok ())
 
