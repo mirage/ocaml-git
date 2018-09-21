@@ -93,9 +93,56 @@ module Mem_store = struct include Git.Mem.Store
 
                           let v root = v root end
 
-module Fs_store = struct include Git_unix.Store
+(* XXX(dinosaure): we replace [move] to be a /forced move/: on [move a b], if
+   [b] already exists, we delete it properly (Windows raises an error if [b]
+   already exists). This case appear only on tests where we use
+   [Store.Pack.from] on already existing PACK files. In this situation,
+   [Store.Pack.from] wants to make a fresh new IDX file on [.git/objects/pack/]
+   but it already exists because the PACK file comes from [.git/objects/pack/]
+   too (and any PACK files on [.git/objects/pack/] have an IDX file - it's
+   mandatory for Git).
 
-                         let v root = v root end
+   To avoid error on Windows, we tun [Git_unix.Fs] so. *)
+
+module Fs = struct
+  type error = Git_unix.Fs.error
+  type t = Git_unix.Fs.t
+
+  let pp_error = Git_unix.Fs.pp_error
+  let is_dir = Git_unix.Fs.is_dir
+  let is_file = Git_unix.Fs.is_file
+
+  module File = struct
+    include Git_unix.Fs.File
+
+    let move t path_a path_b =
+      let open Lwt.Infix in
+      Lwt.try_bind
+        (fun () -> Lwt_unix.stat (Fpath.to_string path_b))
+        (fun _stat ->
+          delete t path_b
+          >>= function
+          | Ok () -> move t path_a path_b | Error _ as err -> Lwt.return err )
+        (fun _exn -> move t path_a path_b)
+  end
+
+  module Dir = Git_unix.Fs.Dir
+  module Mapper = Git_unix.Fs.Mapper
+
+  let has_global_watches = Git_unix.Fs.has_global_watches
+  let has_global_checkout = Git_unix.Fs.has_global_checkout
+end
+
+module Fs_store = struct
+  module I = Git.Inflate
+  module D = Git.Deflate
+  include Git.Store.Make (Digestif.SHA1) (Fs) (I) (D)
+
+  let v ?dotgit ?compression ?buffer root =
+    v ?dotgit ?compression ?buffer () root
+
+  let v root = v root
+end
 
 module Thin = Test_thin.Make (struct
   module M = Git_unix.Sync (Fs_store)
