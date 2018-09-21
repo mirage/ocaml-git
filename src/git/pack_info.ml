@@ -98,6 +98,26 @@ struct
     | Internal of {hash: Hash.t; abs_off: int64; length: int}
     | Delta of {hunks_descr: HDec.hunks; inserts: int; depth: int; from: delta}
 
+  let rec delta_to_path = function
+    | Unresolved {length; _} -> Load length
+    | Internal {length; _} -> Load length
+    | Delta {hunks_descr; inserts; from; _} ->
+        let src = delta_to_path from in
+        Patch {hunks= inserts; target= hunks_descr.HDec.target_length; src}
+
+  let rec merge_path a b =
+    match a, b with
+    | Load a, Load b -> Load (max a b)
+    | Load a, Patch {hunks; target; src} | Patch {hunks; target; src}, Load a
+      ->
+        Patch {hunks; target= max target a; src}
+    | ( Patch {hunks= hunks_a; target= target_a; src= src_a}
+      , Patch {hunks= hunks_b; target= target_b; src= src_b} ) ->
+        Patch
+          { hunks= max hunks_a hunks_b
+          ; target= max target_a target_b
+          ; src= merge_path src_a src_b }
+
   let needed t =
     let rec go acc = function
       | Unresolved {length; _} -> max length acc
@@ -141,10 +161,13 @@ struct
     | Unresolved {length; _}, Patch {hunks; target; src}
      |Internal {length; _}, Patch {hunks; target; src} ->
         Patch {hunks; target= max target length; src}
-    | ( Delta {hunks_descr= {HDec.source_length; target_length; _}; inserts; _}
+    | ( Delta
+          { hunks_descr= {HDec.source_length; target_length; _}
+          ; inserts
+          ; from; _ }
       , Load x ) ->
-        Patch
-          {hunks= inserts; target= max x target_length; src= Load source_length}
+        let src = merge_path (delta_to_path from) (Load source_length) in
+        Patch {hunks= inserts; target= max x target_length; src}
     | ( Delta
           { hunks_descr= {HDec.reference= HDec.Offset rel_off; target_length; _}
           ; inserts
