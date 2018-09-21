@@ -35,15 +35,22 @@ module Option = struct
   let map_default f default = function Some v -> f v | None -> default
 end
 
+module type ENDPOINT = sig
+  include Git.Sync.ENDPOINT
+  type headers
+  val headers: t -> headers
+  val with_uri: Uri.t -> t -> t
+end
+
 module type CLIENT = sig
   type headers
   type body
   type resp
   type meth
-  type uri
+  type endpoint
   type +'a io
 
-  val call : ?headers:headers -> ?body:body -> meth -> uri -> resp io
+  val call : ?headers:headers -> ?body:body -> meth -> endpoint -> resp io
 end
 
 module type FLOW = sig
@@ -67,14 +74,11 @@ module type S = sig
     CLIENT
     with type headers = Web.HTTP.headers
      and type meth = Web.HTTP.meth
-     and type uri = Web.uri
      and type resp = Web.resp
 
-  module Endpoint : sig
-    type t = {uri: Uri.t; headers: Web.HTTP.headers}
-
-    include Git.Sync.ENDPOINT with type t := t
-  end
+  module Endpoint: ENDPOINT
+    with type t = Client.endpoint
+     and type headers = Client.headers
 
   include Git.Sync.S with module Endpoint := Endpoint
 end
@@ -102,31 +106,19 @@ module Make
           and type headers = W.HTTP.headers
           and type body = Lwt_cstruct_flow.o
           and type meth = W.HTTP.meth
-          and type uri = W.uri
           and type resp = W.resp)
+    (E : ENDPOINT
+          with type t = C.endpoint
+           and type headers = C.headers)
     (G : Git.S) =
 struct
   module Web = W
   module Client = C
   module Store = G
+  module Endpoint = E
   module Common = Git.Smart.Common (Store.Hash) (Store.Reference)
   module Decoder = Git.Smart.Decoder (Store.Hash) (Store.Reference) (Common)
   module Encoder = Git.Smart.Encoder (Store.Hash) (Store.Reference) (Common)
-
-  module Endpoint = struct
-    type t = {uri: Uri.t; headers: Web.HTTP.headers}
-
-    let host {uri; _} =
-      match Uri.host uri with
-      | Some host -> host
-      | None -> Fmt.invalid_arg "Invalid http(s) uri: not host"
-
-    let path {uri; _} = Uri.path_and_query uri
-
-    let pp ppf {uri; headers} =
-      Fmt.pf ppf "{ @[<hov>uri = %s;@ headers = @[%a@];@] }"
-        (Uri.to_string uri) Web.HTTP.Headers.pp headers
-  end
 
   type error =
     [`Smart of Decoder.error | `Store of Store.error | `Sync of string]
@@ -135,14 +127,6 @@ struct
     | `Smart err -> Fmt.pf ppf "(`Smart %a)" Decoder.pp_error err
     | `Store err -> Fmt.pf ppf "(`Store %a)" Store.pp_error err
     | `Sync err -> Fmt.pf ppf "(`Sync %s)" err
-
-  type shallow_update = Common.shallow_update =
-    {shallow: Store.Hash.t list; unshallow: Store.Hash.t list}
-
-  type acks = Common.acks =
-    { shallow: Store.Hash.t list
-    ; unshallow: Store.Hash.t list
-    ; acks: (Store.Hash.t * [`Common | `Ready | `Continue | `ACK]) list }
 
   let src = Logs.Src.create "git.sync.http" ~doc:"logs git's sync http event"
 
@@ -220,11 +204,12 @@ struct
         | None -> consume stream (continue 0) )
 
   let extract endpoint =
-    ( Option.mem (Uri.scheme endpoint.Endpoint.uri) "https" ~equal:String.equal
+    let uri = E.uri endpoint in
+    ( Option.mem (Uri.scheme uri) "https" ~equal:String.equal
     , Option.value_exn ~error:"Invalid http(s) uri: no host"
-        (Uri.host endpoint.Endpoint.uri)
-    , Uri.path_and_query endpoint.Endpoint.uri
-    , Uri.port endpoint.Endpoint.uri )
+        (Uri.host uri)
+    , Uri.path_and_query uri
+    , Uri.port uri )
 
   let ls _ ?(capabilities = Default.capabilites) endpoint =
     let https, host, path, port = extract endpoint in
@@ -252,9 +237,9 @@ struct
       Option.map_default
         Web.HTTP.Headers.(def user_agent git_agent)
         Web.HTTP.Headers.(def user_agent git_agent empty)
-        (Some endpoint.Endpoint.headers)
+        (Some (E.headers endpoint))
     in
-    Client.call ~headers `GET uri
+    Client.call ~headers `GET (E.with_uri uri endpoint)
     >>= fun resp ->
     let decoder = Decoder.decoder () in
     consume (Web.Response.body resp)
@@ -299,9 +284,9 @@ struct
       Option.map_default
         Web.HTTP.Headers.(def user_agent git_agent)
         Web.HTTP.Headers.(def user_agent git_agent empty)
-        (Some endpoint.Endpoint.headers)
+        (Some (E.headers endpoint))
     in
-    Client.call ~headers `GET uri
+    Client.call ~headers `GET (E.with_uri uri endpoint)
     >>= fun resp ->
     let decoder = Decoder.decoder () in
     let encoder = Encoder.encoder () in
@@ -373,10 +358,12 @@ struct
                             ; requests= `Raw (x, r)
                             ; capabilities })))
                   (Web.Request.meth req)
-                  ( Web.Request.uri req
-                  |> (fun uri -> Uri.with_scheme uri (Some scheme))
-                  |> (fun uri -> Uri.with_host uri (Some host))
-                  |> fun uri -> Uri.with_port uri port )
+                  ( E.with_uri
+                      (Web.Request.uri req
+                       |> (fun uri -> Uri.with_scheme uri (Some scheme))
+                       |> (fun uri -> Uri.with_host uri (Some host))
+                       |> fun uri -> Uri.with_port uri port )
+                      endpoint)
                 >>= fun resp ->
                 let commands_refs =
                   List.map
@@ -425,10 +412,10 @@ struct
       Option.map_default
         Web.HTTP.Headers.(def user_agent git_agent)
         Web.HTTP.Headers.(def user_agent git_agent empty)
-        (Some endpoint.Endpoint.headers)
+        (Some (E.headers endpoint))
     in
     Log.debug (fun l -> l "Send the GET (reference discovery) request.") ;
-    Client.call ~headers `GET uri
+    Client.call ~headers `GET (E.with_uri uri endpoint)
     >>= fun resp ->
     let decoder = Decoder.decoder () in
     let encoder = Encoder.encoder () in
@@ -493,10 +480,12 @@ struct
                             ; deep= deepen
                             ; has= Store.Hash.Set.elements have } ))))
                 (Web.Request.meth req)
-                ( Web.Request.uri req
-                |> (fun uri -> Uri.with_scheme uri (Some scheme))
-                |> (fun uri -> Uri.with_host uri (Some host))
-                |> fun uri -> Uri.with_port uri port )
+                ( E.with_uri
+                    (Web.Request.uri req
+                     |> (fun uri -> Uri.with_scheme uri (Some scheme))
+                     |> (fun uri -> Uri.with_host uri (Some host))
+                     |> fun uri -> Uri.with_port uri port )
+                    endpoint )
             in
             let negociation_result resp =
               consume (Web.Response.body resp)
@@ -577,7 +566,7 @@ struct
                             Lwt_mvar.take keeper
                             >>= fun _ ->
                             let have =
-                              List.map (fun (hash, _) -> hash) acks.Common.acks
+                              List.map (fun (hash, _) -> hash) acks.acks
                               |> Store.Hash.Set.of_list
                             in
                             Lwt_mvar.put keeper have
@@ -623,8 +612,8 @@ struct
   let fetch_and_set_references git ?capabilities ~choose ~references endpoint =
     Negociator.find_common git
     >>= fun (have, state, continue) ->
-    let continue {Common.acks; shallow; unshallow} state =
-      continue {Git.Negociator.acks; shallow; unshallow} state
+    let continue ({acks; shallow; unshallow}: Negociator.acks) state =
+      continue ({acks; shallow; unshallow}: Negociator.acks) state
     in
     let want_handler = want_handler git choose in
     let notify _ = Lwt.return_unit in
@@ -697,7 +686,9 @@ module CohttpMake
           and type headers = Web_cohttp_lwt.HTTP.headers
           and type body = Lwt_cstruct_flow.o
           and type meth = Web_cohttp_lwt.HTTP.meth
-          and type uri = Web_cohttp_lwt.uri
           and type resp = Web_cohttp_lwt.resp)
+    (E : ENDPOINT
+         with type t = C.endpoint
+          and type headers = C.headers)
     (S : Git.S) =
-  Make (Web_cohttp_lwt) (C) (S)
+  Make (Web_cohttp_lwt) (C) (E) (S)

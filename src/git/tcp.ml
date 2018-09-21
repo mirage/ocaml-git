@@ -18,8 +18,8 @@ let src = Logs.Src.create "git.tcp" ~doc:"logs git's tcp event"
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-module Make (N : NET with type endpoint = Gri.t) (G : Minimal.S) :
-  Sync.S with module Store = G with module Endpoint = Gri = struct
+module Make (N : NET) (E: Sync.ENDPOINT with type t = N.endpoint) (G : Minimal.S) :
+  Sync.S with module Store = G with module Endpoint = E = struct
   module Store = G
   module Net = N
   module Client = Smart.Client (Store.Hash) (Store.Reference)
@@ -28,7 +28,7 @@ module Make (N : NET with type endpoint = Gri.t) (G : Minimal.S) :
   module Hash = Store.Hash
   module Inflate = Store.Inflate
   module Deflate = Store.Deflate
-  module Endpoint = Gri
+  module Endpoint = E
 
   module Common :
     module type of Sync.Common (Store) with module Store = Store =
@@ -51,14 +51,6 @@ module Make (N : NET with type endpoint = Gri.t) (G : Minimal.S) :
   (* XXX(dinosaure): we need to export some definitions about the Smart
      protocol to export a low level API (which let the end-user to choose
      negotiation engine). *)
-
-  type shallow_update = Client.Common.shallow_update =
-    {shallow: Store.Hash.t list; unshallow: Store.Hash.t list}
-
-  type acks = Client.Common.acks =
-    { shallow: Store.Hash.t list
-    ; unshallow: Store.Hash.t list
-    ; acks: (Store.Hash.t * [`Common | `Ready | `Continue | `ACK]) list }
 
   type command = Common.command
 
@@ -390,9 +382,13 @@ module Make (N : NET with type endpoint = Gri.t) (G : Minimal.S) :
     in
     aux t None None r
 
-  let port uri = match Uri.port uri with None -> 9418 | Some p -> p
-  let host uri = Endpoint.host uri
-  let path uri = Endpoint.path uri
+  let uri x = Endpoint.uri x
+  let path e = Uri.path (uri e)
+  let port e = match Uri.port (uri e) with None -> 9418 | Some p -> p
+
+  let host e = match Uri.host (uri e) with
+    | Some h -> h
+    | None   -> Fmt.invalid_arg "missing host: %a" Uri.pp_hum (uri e)
 
   module N = Negociator.Make (G)
 
@@ -402,7 +398,7 @@ module Make (N : NET with type endpoint = Gri.t) (G : Minimal.S) :
     let ctx, state =
       Client.context
         { Client.Common.pathname= path endpoint
-        ; host= Some (host endpoint, Some (port (endpoint :> Uri.t)))
+        ; host= Some (host endpoint, Some (port endpoint))
         ; request_command= `Receive_pack }
     in
     let t = make ~socket ~ctx ~capabilities in
@@ -416,7 +412,7 @@ module Make (N : NET with type endpoint = Gri.t) (G : Minimal.S) :
     let ctx, state =
       Client.context
         { Client.Common.pathname= path endpoint
-        ; host= Some (host endpoint, Some (port (endpoint :> Uri.t)))
+        ; host= Some (host endpoint, Some (port endpoint))
         ; request_command= `Upload_pack }
     in
     let t = make ~socket ~ctx ~capabilities in
@@ -431,7 +427,7 @@ module Make (N : NET with type endpoint = Gri.t) (G : Minimal.S) :
     let ctx, state =
       Client.context
         { Client.Common.pathname= path endpoint
-        ; host= Some (host endpoint, Some (port (endpoint :> Uri.t)))
+        ; host= Some (host endpoint, Some (port endpoint))
         ; request_command= `Upload_pack }
     in
     let t = make ~socket ~ctx ~capabilities in
@@ -448,7 +444,7 @@ module Make (N : NET with type endpoint = Gri.t) (G : Minimal.S) :
     let ctx, state =
       Client.context
         { Client.Common.pathname= path endpoint
-        ; host= Some (host endpoint, Some (port (endpoint :> Uri.t)))
+        ; host= Some (host endpoint, Some (port (endpoint)))
         ; request_command= `Upload_pack }
     in
     let t = make ~socket ~ctx ~capabilities in
@@ -460,8 +456,8 @@ module Make (N : NET with type endpoint = Gri.t) (G : Minimal.S) :
       =
     N.find_common git
     >>= fun (have, state, continue) ->
-    let continue {Client.Common.acks; shallow; unshallow} state =
-      continue {Negociator.acks; shallow; unshallow} state
+    let continue {Sync.acks; shallow; unshallow} state =
+      continue {Sync.acks; shallow; unshallow} state
     in
     let want_handler = Common.want_handler git choose in
     fetch git ?capabilities

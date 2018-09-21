@@ -59,11 +59,6 @@ end
 (* XXX(dinosaure): see this paper
    https://github.com/ocamllabs/papers/blob/master/irmin/2014.08.matthieu/rapport.pdf *)
 
-type 'a acks =
-  { shallow: 'a list
-  ; unshallow: 'a list
-  ; acks: ('a * [`Common | `Ready | `Continue | `ACK]) list }
-
 module type S = sig
   module Store : Minimal.S
 
@@ -79,7 +74,7 @@ module type S = sig
      and module Common := Common
 
   type state
-  type nonrec acks = Store.Hash.t acks
+  type acks = Store.Hash.t Sync.acks
 
   val find_common :
        Store.t
@@ -251,7 +246,7 @@ module Make (G : Minimal.S) = struct
     ; rev: rev (* priority queue *)
     ; in_fly: Store.Hash.t list }
 
-  type nonrec acks = Store.Hash.t acks
+  type acks = Store.Hash.t Sync.acks
 
   let _pp_state ppf state =
     Fmt.pf ppf
@@ -315,7 +310,7 @@ module Make (G : Minimal.S) = struct
                 {state with rev; count= state.count + 1; vain= state.vain + 1}
                 (n - 1) )
     in
-    let continue {acks; _} state =
+    let continue {Sync.acks; _} state =
       let rec go state have = function
         | [] -> Lwt.return (state, have)
         | (_, `ACK) :: _ ->

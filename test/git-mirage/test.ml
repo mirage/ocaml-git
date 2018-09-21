@@ -90,48 +90,48 @@ module MirageStore = struct
   let v root = M.connect () >>= fun fs -> v ~current_dir fs root
 end
 
-module MirageConduit : Git_mirage.Net.CONDUIT = struct
-  include Conduit_mirage
-  module C = Conduit_mirage.With_tcp (Tcpip_stack_socket)
-  module R = Resolver_mirage.Make_with_stack (Time) (Tcpip_stack_socket)
+module C = Conduit_mirage.With_tcp (Tcpip_stack_socket)
+module R = Resolver_mirage.Make_with_stack (Time) (Tcpip_stack_socket)
 
-  let run f =
-    Lwt_main.run
-      (Lwt.catch f (fun e -> Alcotest.failf "cannot connect: %a" Fmt.exn e))
+let run f =
+  Lwt_main.run
+    (Lwt.catch f (fun e -> Alcotest.failf "cannot connect: %a" Fmt.exn e))
 
-  let stack =
-    run
-    @@ fun () ->
-    Tcpv4_socket.connect None
-    >>= fun tcp ->
-    Udpv4_socket.connect None
-    >>= fun udp ->
-    let interface = [Ipaddr.V4.of_string_exn "0.0.0.0"] in
-    let config = {Mirage_stack_lwt.name= "stackv4_socket"; interface} in
-    Tcpip_stack_socket.connect config udp tcp
+let stack =
+  run
+  @@ fun () ->
+  Tcpv4_socket.connect None
+  >>= fun tcp ->
+  Udpv4_socket.connect None
+  >>= fun udp ->
+  let interface = [Ipaddr.V4.of_string_exn "0.0.0.0"] in
+  let config = {Mirage_stack_lwt.name= "stackv4_socket"; interface} in
+  Tcpip_stack_socket.connect config udp tcp
 
-  let context = run @@ fun () -> C.connect stack Conduit_mirage.empty
+let conduit = run @@ fun () -> C.connect stack Conduit_mirage.empty
 
-  let resolver =
-    let ns = None in
-    let ns_port = None in
-    R.R.init ?ns ?ns_port ~stack ()
+let resolver =
+  let ns = None in
+  let ns_port = None in
+  R.R.init ?ns ?ns_port ~stack ()
+
+module Store = struct
+  include Git.Mem.Store
+
+  let v root = v root
 end
 
-module Store = struct include Git.Mem.Store
-
-                      let v root = v root end
-
 module TCP = Test_sync.Make (struct
-  module M = Git_mirage.Sync (MirageConduit) (Store)
+  module Sync = Git_mirage.Sync (Store)
+  module M = Sync.Tcp
   module Store = Store
 
-  type endpoint = Git.Gri.t
+  type endpoint = Git_mirage.endpoint
   type error = M.error
 
   let pp_error = M.pp_error
   let clone t ~reference uri = M.clone t ~reference:(reference, reference) uri
-  let endpoint_of_uri = Git.Gri.make
+  let endpoint_of_uri uri = Git_mirage.endpoint ~conduit ~resolver uri
 
   let fetch_all t ~references uri =
     let open Lwt.Infix in

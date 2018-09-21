@@ -45,7 +45,7 @@ module type COMMON = sig
       client has not indicated was ["shallow"].
 
       This type represents this information. *)
-  type shallow_update = {shallow: hash list; unshallow: hash list}
+  type shallow_update = hash Sync.shallow_update
 
   (** In the negociation phase, the server will ACK obj-ids differently
       depending on which ack mode is chosen by the client:
@@ -66,10 +66,7 @@ module type COMMON = sig
       [`Flush].}}}}
 
       This type represents this information. *)
-  type acks =
-    { shallow: hash list
-    ; unshallow: hash list
-    ; acks: (hash * [`Common | `Ready | `Continue | `ACK]) list }
+  type acks = hash Sync.acks
 
   (** When the client wants to finish the negociation by [`Done], the server
       will either send a final [ACK obj_id] or it will send a [NAK]. [obj_id]

@@ -15,11 +15,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-type 'a acks =
-  { shallow: 'a list
-  ; unshallow: 'a list
-  ; acks: ('a * [`Common | `Ready | `Continue | `ACK]) list }
-
 module type S = sig
   module Store : Minimal.S
 
@@ -35,7 +30,7 @@ module type S = sig
      and module Common := Common
 
   type state
-  type nonrec acks = Store.Hash.t acks
+  type acks = Store.Hash.t Sync.acks
 
   val find_common :
        Store.t

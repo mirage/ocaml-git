@@ -71,18 +71,18 @@ module Make (S : Git.S) = struct
       ; advertised_refs3, advertised_refs3_result ]
 
     let shallow_update0, shallow_update0_result =
-      {Smart.Common.shallow= []; unshallow= []}, `Equal
+      {Git.Sync.shallow= []; unshallow= []}, `Equal
 
     let shallow_update1, shallow_update1_result =
-      ( {Smart.Common.shallow= generate_hashes (Random.int 10); unshallow= []}
+      ( {Git.Sync.shallow= generate_hashes (Random.int 10); unshallow= []}
       , `Equal )
 
     let shallow_update2, shallow_update2_result =
-      ( {Smart.Common.shallow= []; unshallow= generate_hashes (Random.int 10)}
+      ( {Git.Sync.shallow= []; unshallow= generate_hashes (Random.int 10)}
       , `Equal )
 
     let shallow_update3, shallow_update3_result =
-      ( { Smart.Common.shallow= generate_hashes (Random.int 10)
+      ( { Git.Sync.shallow= generate_hashes (Random.int 10)
         ; unshallow= generate_hashes (Random.int 10) }
       , `Equal )
 
@@ -92,7 +92,7 @@ module Make (S : Git.S) = struct
       ; shallow_update2, shallow_update2_result ]
 
     let acks0, acks0_hashes, acks0_kind, acks0_result =
-      ( { Smart.Common.shallow= generate_hashes (Random.int 10)
+      ( { Git.Sync.shallow= generate_hashes (Random.int 10)
         ; unshallow= generate_hashes (Random.int 10)
         ; acks= [] }
       , []
@@ -102,7 +102,7 @@ module Make (S : Git.S) = struct
     let acks1, acks1_hashes, acks1_kind, acks1_result =
       let hashes = generate_hashes 1 in
       let details = [`Ready] in
-      ( { Smart.Common.shallow= generate_hashes (Random.int 10)
+      ( { Git.Sync.shallow= generate_hashes (Random.int 10)
         ; unshallow= generate_hashes (Random.int 10)
         ; acks= zip hashes details }
       , hashes
@@ -112,7 +112,7 @@ module Make (S : Git.S) = struct
     let acks2, acks2_hashes, acks2_kind, acks2_result =
       let hashes = generate_hashes 2 in
       let details = [`Common; `Ready] in
-      ( { Smart.Common.shallow= generate_hashes (Random.int 10)
+      ( { Git.Sync.shallow= generate_hashes (Random.int 10)
         ; unshallow= generate_hashes (Random.int 10)
         ; acks= zip hashes details }
       , hashes
@@ -122,7 +122,7 @@ module Make (S : Git.S) = struct
     let acks3, acks3_hashes, acks3_kind, acks3_result =
       let hashes = generate_hashes 5 in
       let details = [`Common; `Common; `Common; `Common; `Ready] in
-      ( { Smart.Common.shallow= generate_hashes (Random.int 10)
+      ( { Git.Sync.shallow= generate_hashes (Random.int 10)
         ; unshallow= generate_hashes (Random.int 10)
         ; acks= zip hashes details }
       , hashes
@@ -132,7 +132,7 @@ module Make (S : Git.S) = struct
     let acks4, acks4_hashes, acks4_kind, acks4_result =
       let hashes = generate_hashes 5 in
       let details = [`Continue; `Continue; `Continue; `Continue; `Continue] in
-      ( { Smart.Common.shallow= generate_hashes (Random.int 10)
+      ( { Git.Sync.shallow= generate_hashes (Random.int 10)
         ; unshallow= generate_hashes (Random.int 10)
         ; acks= zip hashes details }
       , hashes
@@ -148,7 +148,7 @@ module Make (S : Git.S) = struct
     let acks7, acks7_hashes, acks7_kind, acks7_result =
       let hashes = [generate_hash ()] in
       let details = [`ACK] in
-      ( { Smart.Common.shallow= generate_hashes (Random.int 10)
+      ( { Git.Sync.shallow= generate_hashes (Random.int 10)
         ; unshallow= generate_hashes (Random.int 10)
         ; acks= zip hashes details }
       , hashes
@@ -158,7 +158,7 @@ module Make (S : Git.S) = struct
     let acks8, acks8_hashes, acks8_kind, acks8_result =
       let hashes = generate_hashes 2 in
       let details = [`ACK; `ACK] in
-      ( { Smart.Common.shallow= generate_hashes (Random.int 10)
+      ( { Git.Sync.shallow= generate_hashes (Random.int 10)
         ; unshallow= generate_hashes (Random.int 10)
         ; acks= zip hashes details }
       , hashes

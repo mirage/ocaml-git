@@ -20,10 +20,17 @@ module type CLIENT = sig
   type body
   type resp
   type meth
-  type uri
+  type endpoint
   type +'a io
 
-  val call : ?headers:headers -> ?body:body -> meth -> uri -> resp io
+  val call : ?headers:headers -> ?body:body -> meth -> endpoint -> resp io
+end
+
+module type ENDPOINT = sig
+  include Git.Sync.ENDPOINT
+  type headers
+  val headers: t -> headers
+  val with_uri: Uri.t -> t -> t
 end
 
 module type FLOW = sig
@@ -43,14 +50,11 @@ module type S = sig
     CLIENT
     with type headers = Web.HTTP.headers
      and type meth = Web.HTTP.meth
-     and type uri = Web.uri
      and type resp = Web.resp
 
-  module Endpoint : sig
-    type t = {uri: Uri.t; headers: Web.HTTP.headers}
-
-    include Git.Sync.ENDPOINT with type t := t
-  end
+  module Endpoint: ENDPOINT
+    with type t = Client.endpoint
+     and type headers = Client.headers
 
   include Git.Sync.S with module Endpoint := Endpoint
 end
@@ -67,8 +71,10 @@ module Make
           and type headers = W.HTTP.headers
           and type body = Lwt_cstruct_flow.o
           and type meth = W.HTTP.meth
-          and type uri = W.uri
           and type resp = W.resp)
+    (E : ENDPOINT
+         with type t = C.endpoint
+         and type headers = C.headers)
     (G : Git.S) :
   S with module Web = W and module Client = C and module Store = G
 
@@ -89,6 +95,8 @@ module CohttpMake
           and type headers = Web_cohttp_lwt.HTTP.headers
           and type body = Lwt_cstruct_flow.o
           and type meth = Web_cohttp_lwt.HTTP.meth
-          and type uri = Web_cohttp_lwt.uri
           and type resp = Web_cohttp_lwt.resp)
+    (E : ENDPOINT
+         with type t = C.endpoint
+         and type headers = C.headers)
     (S : Git.S) : COHTTP_S with module Client = C and module Store = S

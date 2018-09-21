@@ -1,8 +1,8 @@
-module type CONDUIT = sig
-  include Conduit_mirage.S
+type endpoint = {
+  uri     : Uri.t;
+  conduit : Conduit_mirage.t;
+  resolver: Resolver_lwt.t;
+  headers : Cohttp.Header.t;
+}
 
-  val context : t
-  val resolver : Resolver_lwt.t
-end
-
-module Make (C : CONDUIT) : Git.Tcp.NET with type endpoint = Git.Gri.t
+include Git.Tcp.NET with type endpoint := endpoint

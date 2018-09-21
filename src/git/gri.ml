@@ -1,5 +1,7 @@
 type t = Uri.t
 
+let uri x = x
+
 let host uri =
   match Uri.host uri with
   | Some host -> host
