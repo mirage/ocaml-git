@@ -7,7 +7,7 @@ environment:
     FORK_BRANCH: master
     CYG_ROOT: C:\cygwin64
     OPAM_SWITCH: 4.06.1+mingw64c
-    PINS: "git.dev:. git-http.dev:. git-unix.dev:. git-mirage.dev:. digestif.dev:--dev dune.dev:https://github.com/ocaml/dune.git#207d7918b73e9baaee8cea9844483c3d15a605a6"
+    PINS: "git.dev:. git-http.dev:. git-unix.dev:. git-mirage.dev:. digestif.dev:--dev"
   matrix:
   - PACKAGE: "git-mirage.dev"
   - PACKAGE: "git-unix.dev"
