@@ -831,13 +831,13 @@ struct
             in
             store_idx_file ~root fs sequence info.PInfo.hash_pack
             >>?= fun () ->
-            FS.File.move fs normalized.Normalized.path path
-            >|= Rresult.R.reword_error
-                  (Error.FS.err_move normalized.Normalized.path path)
-            >>?= fun () ->
             FS.Mapper.close normalized.Normalized.fd
             >|= Rresult.R.reword_error
                   (Error.FS.err_close normalized.Normalized.path)
+            >>?= fun () ->
+            FS.File.move fs normalized.Normalized.path path
+            >|= Rresult.R.reword_error
+                  (Error.FS.err_move normalized.Normalized.path path)
             >>?= fun () ->
             Loaded.pack_decoder ~read_and_exclude ~idx fs path
             >>?= fun (fd, pack) ->
