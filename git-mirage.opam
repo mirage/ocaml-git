@@ -30,6 +30,7 @@ depends: [
   "tls"            {test}
   "io-page"        {test & >= "1.6.1"}
   "tcpip"          {test & >= "3.3.0"}
+  "mirage-stack-lwt" {test & >= "1.3.0"}
   "mirage-time-unix"
 ]
 
