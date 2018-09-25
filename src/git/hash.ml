@@ -21,7 +21,7 @@ module Make (H : Digestif.S) = struct
   module X = struct
     type t = H.t
 
-    let equal = eq
+    let equal = H.equal
     let hash = Hashtbl.hash
     let compare = H.unsafe_compare
   end

@@ -184,7 +184,7 @@ module Make (Hash : S.HASH) = struct
   let equal_head_contents a b =
     match a, b with
     | Ref a', Ref b' -> equal a' b'
-    | Hash a', Hash b' -> Hash.eq a' b'
+    | Hash a', Hash b' -> Hash.equal a' b'
     | _, _ -> false
 
   let compare_head_contents a b =
