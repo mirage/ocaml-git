@@ -105,8 +105,7 @@ let stack =
   Udpv4_socket.connect None
   >>= fun udp ->
   let interface = [Ipaddr.V4.of_string_exn "0.0.0.0"] in
-  let config = {Mirage_stack_lwt.name= "stackv4_socket"; interface} in
-  Tcpip_stack_socket.connect config udp tcp
+  Tcpip_stack_socket.connect interface udp tcp
 
 let conduit = run @@ fun () -> C.connect stack Conduit_mirage.empty
 
