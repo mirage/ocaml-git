@@ -63,7 +63,7 @@ let expected_unix_error exn =
 
 let open_pool = Lwt_pool.create 200 (fun () -> Lwt.return ())
 
-let rec protect ?(n = 0) err f =
+let rec protect ?(n = 0) name err f =
   let sleep_t = 0.001 in
   if n >= 10_000 then Lwt.fail_with "timeout"
   else
@@ -71,7 +71,9 @@ let rec protect ?(n = 0) err f =
       (fun () -> f () >|= fun x -> Ok x)
       (fun e ->
         let open Unix in
-        Log.debug (fun l -> l "error: %a" Fmt.exn e) ;
+        let log_err () =
+          Log.debug (fun l -> l "[%s] error: %a" name Fmt.exn e)
+        in
         match e with
         | Unix_error (EINTR, _, _) -> Lwt.return (Error `EAGAIN)
         | Unix_error (EACCES, _, _) when Sys.win32 ->
@@ -79,11 +81,15 @@ let rec protect ?(n = 0) err f =
             Log.debug (fun l -> l "sleeping for %.2fs" s) ;
             Lwt_unix.sleep s >|= fun () -> Error `EAGAIN
         | Unix_error (e, _, _) -> (
-            err e >|= function Ok _ as x -> x | Error e -> Error (`E e) )
-        | exn -> expected_unix_error exn )
+            err e >|= function
+            | Ok _ as x -> x
+            | Error e   -> log_err (); Error (`E e) )
+        | exn ->
+          log_err ();
+          expected_unix_error exn )
     >>= function
     | Ok _ as x -> Lwt.return x
-    | Error `EAGAIN -> protect ~n:(n + 1) err f
+    | Error `EAGAIN -> protect ~n:(n + 1) name err f
     | Error (`E e) -> Lwt.return (Error e)
 
 let is_file _t path =
@@ -91,7 +97,7 @@ let is_file _t path =
     | Unix.ENOENT -> Lwt.return (Ok false)
     | e -> err_stat path e
   in
-  protect err
+  protect "is_file" err
   @@ fun () ->
   Lwt_unix.stat (Fpath.to_string path)
   >|= fun stat -> stat.Lwt_unix.st_kind = Lwt_unix.S_REG
@@ -101,7 +107,7 @@ let is_dir _t path =
     | Unix.ENOENT -> Lwt.return (Ok false)
     | e -> err_stat path e
   in
-  protect err
+  protect "is_dir" err
   @@ fun () ->
   Lwt_unix.stat (Fpath.to_string path)
   >|= fun stat -> stat.Lwt_unix.st_kind = Lwt_unix.S_DIR
@@ -119,7 +125,7 @@ module Dir = struct
         | Unix.EEXIST -> Lwt.return (Ok ())
         | e -> err_mkdir d e
       in
-      protect err
+      protect "Dir.create" err
       @@ fun () ->
       Log.debug (fun l -> l "create a new directory %a." Fpath.pp d) ;
       Lwt_unix.mkdir (Fpath.to_string d) mode
@@ -157,7 +163,7 @@ module Dir = struct
       | ENOENT -> Lwt.return (Ok `None)
       | e -> err_stat path e
     in
-    protect err (fun () ->
+    protect "Dir.kind" err (fun () ->
         Lwt_unix.stat (Fpath.to_string path)
         >|= fun stat ->
         match stat.Lwt_unix.st_kind with Lwt_unix.S_DIR -> `Dir | _ -> `File )
@@ -165,7 +171,7 @@ module Dir = struct
   let exists _t path = kind path >|? function `Dir -> true | _ -> false
 
   let readdir dir =
-    protect (err_readdir dir) (fun () ->
+    protect "Dir.readdir" (err_readdir dir) (fun () ->
         Lwt_unix.files_of_directory (Fpath.to_string dir)
         |> Lwt_stream.filter (function "." | ".." -> false | _ -> true)
         |> Lwt_stream.map Fpath.v
@@ -182,7 +188,7 @@ module Dir = struct
           | ENOENT -> Lwt.return (Ok ())
           | e -> err_unlink file e
         in
-        protect err (fun () ->
+        protect "Dir.delete_file" err (fun () ->
             Log.debug (fun l -> l "unlink %a" Fpath.pp file) ;
             Lwt_unix.unlink (Fpath.to_string file) )
         >>= k
@@ -201,7 +207,7 @@ module Dir = struct
     let rmdir = function
       | Error _ as e -> Lwt.return e
       | Ok () ->
-          protect (err_rmdir dir) (fun () ->
+          protect "Dir.delete_dir" (err_rmdir dir) (fun () ->
               Log.debug (fun l -> l "rmdir %a" Fpath.pp dir) ;
               Lwt_unix.rmdir (Fpath.to_string dir) )
           >>= k
@@ -257,7 +263,7 @@ module File = struct
     let err e = err_open path e in
     Lwt_pool.use open_pool
     @@ fun () ->
-    protect err
+    protect "File.open_w" err
     @@ fun () ->
     Lwt_unix.openfile (Fpath.to_string path)
       [ Lwt_unix.O_CREAT; Lwt_unix.O_WRONLY; Lwt_unix.O_TRUNC
@@ -270,38 +276,38 @@ module File = struct
     let err e = err_open path e in
     Lwt_pool.use open_pool
     @@ fun () ->
-    protect err
+    protect "File.open_r" err
     @@ fun () ->
     Lwt_unix.openfile (Fpath.to_string path) [Lwt_unix.O_RDONLY] mode
     >|= fun fd -> ({fd; path} :> [`Read] fd)
 
   let write raw ?(off = 0) ?(len = Cstruct.len raw) {fd; path} =
     let err e = err_write path e in
-    protect err
+    protect "File.write" err
     @@ fun () -> Lwt_bytes.write fd (Cstruct.to_bigarray raw) off len
 
   let read raw ?(off = 0) ?(len = Cstruct.len raw) {fd; path} =
     let err e = err_read path e in
-    protect err
+    protect "File.read" err
     @@ fun () -> Lwt_bytes.read fd (Cstruct.to_bigarray raw) off len
 
   let close {fd; path} =
     let err e = err_close path e in
-    protect err @@ fun () -> Lwt_unix.close fd
+    protect "File.close" err @@ fun () -> Lwt_unix.close fd
 
   let exists _t path =
     let err = function
       | Unix.ENOENT -> Lwt.return (Ok false)
       | e -> err_stat path e
     in
-    protect err
+    protect "File.exists" err
     @@ fun () ->
     Lwt_unix.stat (Fpath.to_string path)
     >|= fun stat -> stat.Lwt_unix.st_kind = Lwt_unix.S_REG
 
   let move _t path_a path_b =
     let err e = err_rename path_a e in
-    protect err
+    protect "File.move" err
     @@ fun () ->
     Lwt_unix.rename (Fpath.to_string path_a) (Fpath.to_string path_b)
 
@@ -310,7 +316,7 @@ module File = struct
       | Unix.ENOENT -> Lwt.return (Ok ())
       | e -> err_delete path e
     in
-    protect err @@ fun () -> Lwt_unix.unlink (Fpath.to_string path)
+    protect "File.delete" err @@ fun () -> Lwt_unix.unlink (Fpath.to_string path)
 end
 
 module Mapper = struct
@@ -323,20 +329,20 @@ module Mapper = struct
 
   let length {fd; path} =
     let err e = err_stat path e in
-    protect err
+    protect "Mapper.length" err
     @@ fun () ->
     Lwt_unix.LargeFile.fstat fd >|= fun fstat -> fstat.Unix.LargeFile.st_size
 
   let openfile _t path =
     let err e = err_open path e in
-    protect err
+    protect "Mapper.openfile" err
     @@ fun () ->
     Lwt_unix.openfile (Fpath.to_string path) [Lwt_unix.O_RDONLY] 0o644
     >|= fun fd -> {fd; path}
 
   let close {fd; path} =
     let err e = err_close path e in
-    protect err @@ fun () -> Lwt_unix.close fd
+    protect "Mapper.close" err @@ fun () -> Lwt_unix.close fd
 
   let map t ?pos len =
     length t
@@ -349,7 +355,7 @@ module Mapper = struct
         let err e = err_mmap t.path e in
         let fd = Lwt_unix.unix_file_descr t.fd in
         let size = Int64.to_int (min (Int64.of_int len) max) in
-        protect err
+        protect "Mapper.map" err
         @@ fun () ->
         try
           let rs = Lwt_bytes.map_file ~fd ?pos ~shared:false ~size () in
