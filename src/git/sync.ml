@@ -186,14 +186,15 @@ module Common (G : Minimal.S) = struct
     let memoize get hash =
       try
         let ret = Hashtbl.find store hash in
-        Lwt.return ret
+        Lwt.return (Some ret)
       with Not_found -> (
         get hash
         >>= function
         | Ok value ->
             let node = {Node.value; color= `White} in
             Hashtbl.add store hash node ;
-            Lwt.return node
+            Lwt.return (Some node)
+        | Error `Not_found -> Lwt.return None
         | Error err ->
             Log.err (fun l ->
                 l "Got an error when we get the object: %a." Store.Hash.pp hash
@@ -234,13 +235,17 @@ module Common (G : Minimal.S) = struct
       let rec go q =
         match Q.shift q with
         | hash, q ->
-            ( try
-                let node = Hashtbl.find store hash in
-                Lwt.return node
-              with Not_found -> get hash )
-            >>= fun node ->
+          let k node =
             node.Node.color <- color ;
             go (List.fold_left Q.push q (preds node.Node.value))
+          in
+          ( try
+              let node = Hashtbl.find store hash in
+              k node
+            with Not_found ->
+              get hash >>= function
+              | None      -> Lwt.return ()
+              | Some node -> k node )
         | exception Q.Empty -> Lwt.return ()
       in
       go (Q.of_list (preds value))
@@ -254,20 +259,23 @@ module Common (G : Minimal.S) = struct
               (fun pq hash ->
                 get hash
                 >>= function
-                | {Node.value= Store.Value.Tree _; _} as node ->
+                | Some ({Node.value= Store.Value.Tree _; _} as node) ->
                     node.Node.color <- `Black ;
                     propagate_snapshot node >>= fun () -> Lwt.return pq
-                | {Node.color= `White; _} as node ->
+                | Some ({Node.color= `White; _} as node) ->
                     node.Node.color <- `Black ;
                     propagate node ;
                     Lwt.return (Pq.add hash node pq)
-                | node -> Lwt.return (Pq.add hash node pq) )
+                | Some node -> Lwt.return (Pq.add hash node pq)
+                | None      -> Lwt.return pq)
               pq (preds value)
             >>= garbage
         | Some ((_, {Node.value; _}), pq) ->
             Lwt_list.fold_left_s
               (fun pq hash ->
-                get hash >>= fun node -> Lwt.return (Pq.add hash node pq) )
+                get hash >>= function
+                | None      -> Lwt.return pq
+                | Some node -> Lwt.return (Pq.add hash node pq) )
               pq (preds value)
             >>= garbage
         | None -> Lwt.return ()
@@ -275,36 +283,42 @@ module Common (G : Minimal.S) = struct
     let collect () =
       Hashtbl.fold
         (fun hash -> function
-          | {Node.color= `White; value} -> Store.Hash.Map.add hash value
-          | _ -> fun acc -> acc )
+           | {Node.color= `White; value} -> Store.Hash.Map.add hash value
+           | _ -> fun acc -> acc )
         store Store.Hash.Map.empty
     in
     Lwt_list.map_s
       (fun hash ->
         get hash
         >>= function
-        | {Node.value= Store.Value.Commit commit; _} as node ->
-            get (Store.Value.Commit.tree commit)
-            >>= fun node_root_tree ->
-            propagate_snapshot node_root_tree
-            >>= fun () -> Lwt.return (hash, node)
-        | node -> Lwt.return (hash, node) )
+        | Some ({Node.value= Store.Value.Commit commit; _} as node) ->
+            (get (Store.Value.Commit.tree commit)
+             >>= function
+             | None                -> Lwt.return ()
+             | Some node_root_tree -> propagate_snapshot node_root_tree)
+            >>= fun () -> Lwt.return (Some (hash, node))
+        | Some node -> Lwt.return (Some (hash, node))
+        | None      -> Lwt.return None )
       source
     >>= fun source ->
     Lwt_list.map_s
       (fun hash ->
         get hash
         >>= function
-        | {Node.value= Store.Value.Commit commit; _} as node ->
+        | Some ({Node.value= Store.Value.Commit commit; _} as node) ->
             node.Node.color <- `Black ;
-            get (Store.Value.Commit.tree commit)
-            >>= fun node_root_tree ->
-            node_root_tree.Node.color <- `Black ;
-            propagate_snapshot node_root_tree
-            >>= fun () -> Lwt.return (hash, node)
-        | node -> Lwt.return (hash, node) )
+            (get (Store.Value.Commit.tree commit)
+             >>= function
+             | None -> Lwt.return ()
+             | Some node_root_tree ->
+               node_root_tree.Node.color <- `Black ;
+               propagate_snapshot node_root_tree)
+            >>= fun () -> Lwt.return (Some (hash, node))
+        | Some node -> Lwt.return (Some (hash, node))
+        | None      -> Lwt.return None )
       exclude
     >|= List.append source
+    >|= List.fold_left (fun acc -> function None -> acc | Some x -> x :: acc) []
     >|= Pq.of_list
     >>= fun pq -> garbage pq >|= collect
 
