@@ -28,12 +28,13 @@ end
 type 'a shallow_update = {shallow: 'a list; unshallow: 'a list}
 
 type 'a acks =
-    { shallow: 'a list
-    ; unshallow: 'a list
-    ; acks: ('a * [`Common | `Ready | `Continue | `ACK]) list }
+  { shallow: 'a list
+  ; unshallow: 'a list
+  ; acks: ('a * [`Common | `Ready | `Continue | `ACK]) list }
 
 module type ENDPOINT = sig
   type t
+
   val uri : t -> Uri.t
 end
 
@@ -195,6 +196,10 @@ module Common (G : Minimal.S) = struct
             Hashtbl.add store hash node ;
             Lwt.return (Some node)
         | Error `Not_found -> Lwt.return None
+        (* [get] tries to get hash from [exclude] firstly. However, we said
+           below than [exclude] can contain unavailable hash on client side
+           (but available on server side). So we return [None] only if we get
+           [`Not_found]. *)
         | Error err ->
             Log.err (fun l ->
                 l "Got an error when we get the object: %a." Store.Hash.pp hash
@@ -234,18 +239,17 @@ module Common (G : Minimal.S) = struct
     let propagate_snapshot {Node.value; color} =
       let rec go q =
         match Q.shift q with
-        | hash, q ->
-          let k node =
-            node.Node.color <- color ;
-            go (List.fold_left Q.push q (preds node.Node.value))
-          in
-          ( try
+        | hash, q -> (
+            let k node =
+              node.Node.color <- color ;
+              go (List.fold_left Q.push q (preds node.Node.value))
+            in
+            try
               let node = Hashtbl.find store hash in
               k node
-            with Not_found ->
-              get hash >>= function
-              | None      -> Lwt.return ()
-              | Some node -> k node )
+            with Not_found -> (
+              get hash
+              >>= function None -> Lwt.return () | Some node -> k node ) )
         | exception Q.Empty -> Lwt.return ()
       in
       go (Q.of_list (preds value))
@@ -267,14 +271,15 @@ module Common (G : Minimal.S) = struct
                     propagate node ;
                     Lwt.return (Pq.add hash node pq)
                 | Some node -> Lwt.return (Pq.add hash node pq)
-                | None      -> Lwt.return pq)
+                | None -> Lwt.return pq )
               pq (preds value)
             >>= garbage
         | Some ((_, {Node.value; _}), pq) ->
             Lwt_list.fold_left_s
               (fun pq hash ->
-                get hash >>= function
-                | None      -> Lwt.return pq
+                get hash
+                >>= function
+                | None -> Lwt.return pq
                 | Some node -> Lwt.return (Pq.add hash node pq) )
               pq (preds value)
             >>= garbage
@@ -283,8 +288,8 @@ module Common (G : Minimal.S) = struct
     let collect () =
       Hashtbl.fold
         (fun hash -> function
-           | {Node.color= `White; value} -> Store.Hash.Map.add hash value
-           | _ -> fun acc -> acc )
+          | {Node.color= `White; value} -> Store.Hash.Map.add hash value
+          | _ -> fun acc -> acc )
         store Store.Hash.Map.empty
     in
     Lwt_list.map_s
@@ -292,13 +297,13 @@ module Common (G : Minimal.S) = struct
         get hash
         >>= function
         | Some ({Node.value= Store.Value.Commit commit; _} as node) ->
-            (get (Store.Value.Commit.tree commit)
-             >>= function
-             | None                -> Lwt.return ()
-             | Some node_root_tree -> propagate_snapshot node_root_tree)
+            get (Store.Value.Commit.tree commit)
+            >>= (function
+                  | None -> Lwt.return ()
+                  | Some node_root_tree -> propagate_snapshot node_root_tree)
             >>= fun () -> Lwt.return (Some (hash, node))
         | Some node -> Lwt.return (Some (hash, node))
-        | None      -> Lwt.return None )
+        | None -> Lwt.return None )
       source
     >>= fun source ->
     Lwt_list.map_s
@@ -307,18 +312,20 @@ module Common (G : Minimal.S) = struct
         >>= function
         | Some ({Node.value= Store.Value.Commit commit; _} as node) ->
             node.Node.color <- `Black ;
-            (get (Store.Value.Commit.tree commit)
-             >>= function
-             | None -> Lwt.return ()
-             | Some node_root_tree ->
-               node_root_tree.Node.color <- `Black ;
-               propagate_snapshot node_root_tree)
+            get (Store.Value.Commit.tree commit)
+            >>= (function
+                  | None -> Lwt.return ()
+                  | Some node_root_tree ->
+                      node_root_tree.Node.color <- `Black ;
+                      propagate_snapshot node_root_tree)
             >>= fun () -> Lwt.return (Some (hash, node))
         | Some node -> Lwt.return (Some (hash, node))
-        | None      -> Lwt.return None )
+        | None -> Lwt.return None )
       exclude
     >|= List.append source
-    >|= List.fold_left (fun acc -> function None -> acc | Some x -> x :: acc) []
+    >|= List.fold_left
+          (fun acc -> function None -> acc | Some x -> x :: acc)
+          []
     >|= Pq.of_list
     >>= fun pq -> garbage pq >|= collect
 
@@ -328,6 +335,8 @@ module Common (G : Minimal.S) = struct
       List.fold_left
         (fun exclude (hash, _, _) -> Store.Hash.Set.add hash exclude)
         Store.Hash.Set.empty remote
+      (* XXX(dinosaure): hash available on server side may not exist on client
+         side. [exclude] can have unavailable hash on client side. *)
       |> fun exclude ->
       List.fold_left
         (fun exclude -> function
