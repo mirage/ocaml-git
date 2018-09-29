@@ -11,6 +11,12 @@ let touch filename =
   let () = close_out oc in
   ()
 
+let output_of_command ~root ?env ?input command =
+  let old_path = Unix.getcwd () in
+  Unix.chdir (Fpath.to_string root) ;
+  let res = Test_data.output_of_command ?env ?input command in
+  Unix.chdir old_path ; res
+
 let remove path = Unix.unlink (Fpath.to_string path)
 let link src dst = Unix.symlink src (Fpath.to_string dst)
 
@@ -99,9 +105,10 @@ module Git_status = struct
         let v, _ =
           parse_value (Astring.String.trim ~drop:Astring.Char.Ascii.is_white p)
         in
-        match s, Fpath.of_string v with
+        match String.sub s 0 1, Fpath.of_string v with
         | "A", Ok path -> `Add path :: acc
-        | _, _ -> acc )
+        | _, _ -> acc
+        | exception Invalid_argument _ -> acc )
       []
       (Astring.String.cuts ~sep:"\n" output)
 
@@ -223,49 +230,62 @@ let git_ls_files = Alcotest.(testable Git_ls_files.pp Git_ls_files.equal)
 let git_ls_tree = Alcotest.(testable Git_ls_tree.pp Git_ls_tree.equal)
 
 let make_empty_index t fs =
-  let raw = Cstruct.create 0x800 in
-  Index.IO.store ~root:(Store.dotgit t) fs ~raw []
+  let dtmp = Cstruct.create 0x800 in
+  Index.store_entries t fs ~dtmp []
   >>?= fun () ->
-  let command =
-    Fmt.strf "git --git-dir=%a status --porcelain" Fpath.pp (Store.dotgit t)
-  in
-  let output = Test_data.output_of_command command in
+  let command = Fmt.strf "git status --porcelain" in
+  let output = output_of_command ~root:(Store.root t) command in
   let status = Git_status.of_output output in
   Alcotest.(check git_status) "empty repository" [] status ;
   Lwt.return (Ok ())
 
 let update_index_add_one_file t fs path =
   let dtmp = Cstruct.create 0x800 in
-  let raw = Cstruct.create 0x800 in
-  Index.IO.load ~root:(Store.dotgit t) ~dtmp fs
-  >>?= fun (entries, _) ->
+  Index.load_entries t ~dtmp fs
+  >>?= fun entries ->
   let hash = hash_of_file Fpath.(Store.root t // path) in
   let entry =
-    Index.entry_of_stats hash path (stat Fpath.(Store.root t // path))
+    Index.entry_of_stats hash
+      Fpath.(Store.root t // path)
+      (stat Fpath.(Store.root t // path))
   in
-  Index.IO.store ~root:(Store.dotgit t) fs ~raw (entry :: entries)
+  Fmt.epr "> @[%a@].\n%!" Fmt.(Dump.list Entry.pp_entry) entries ;
+  Fmt.epr "> @[%a@].\n%!" Entry.pp_entry entry ;
+  Index.store_entries t fs ~dtmp
+    ( entry
+    :: List.map
+         (fun entry ->
+           Entry.with_path entry
+             (Some Fpath.(Store.root t // entry.Entry.path)) )
+         entries )
 
 let update_index_add_one_symlink t fs path =
   let dtmp = Cstruct.create 0x800 in
-  let raw = Cstruct.create 0x800 in
-  Index.IO.load ~root:(Store.dotgit t) ~dtmp fs
-  >>?= fun (entries, _) ->
+  Index.load_entries t ~dtmp fs
+  >>?= fun entries ->
   let hash = hash_of_symlink Fpath.(Store.root t // path) in
   Fmt.(pf stderr) "> hash of %a: %a.\n%!" Fpath.pp path Store.Hash.pp hash ;
   let entry =
-    Index.entry_of_stats hash path (lstat Fpath.(Store.root t // path))
+    Index.entry_of_stats hash
+      Fpath.(Store.root t // path)
+      (lstat Fpath.(Store.root t // path))
   in
-  Index.IO.store ~root:(Store.dotgit t) fs ~raw (entry :: entries)
+  Index.store_entries t fs ~dtmp
+    ( entry
+    :: List.map
+         (fun entry ->
+           Entry.with_path entry
+             (Some Fpath.(Store.root t // entry.Entry.path)) )
+         entries )
 
 let update_index_remove_one_file t fs path =
   let dtmp = Cstruct.create 0x800 in
-  let raw = Cstruct.create 0x800 in
-  Index.IO.load ~root:(Store.dotgit t) ~dtmp fs
-  >>?= fun (entries, _) ->
+  Index.load_entries t ~dtmp fs
+  >>?= fun entries ->
   let entries =
     List.filter (fun entry -> not (Fpath.equal path entry.Entry.path)) entries
   in
-  Index.IO.store ~root:(Store.dotgit t) fs ~raw entries
+  Index.store_entries t fs ~dtmp entries
 
 let run ~root ~pp_error f () =
   let open Lwt.Infix in
@@ -305,11 +325,10 @@ let test003 root fs : unit Alcotest.test_case =
     @@ fun t ->
     update_index_add_one_file t fs (Fpath.v "should-be-empty")
     >>?= fun () ->
-    let command =
-      Fmt.strf "git --git-dir=%a status --porcelain" Fpath.pp (Store.dotgit t)
-    in
-    let output = Test_data.output_of_command command in
+    let command = Fmt.strf "git status --porcelain" in
+    let output = output_of_command ~root:(Store.root t) command in
     let status = Git_status.of_output output in
+    Fmt.epr "RECEIVE: @[%a@]." Fmt.(Dump.list Git_status.pp) status ;
     Alcotest.(check git_status)
       "should-be-empty"
       [`Add Fpath.(v "should-be-empty")]
@@ -318,11 +337,9 @@ let test003 root fs : unit Alcotest.test_case =
 
 let test004 root fs : unit Alcotest.test_case =
   Alcotest.test_case "write-tree should-be-empty" `Quick
-    ( run ~root ~pp_error:(fun ppf -> function
-        | #Index.error as err -> Index.pp_error ppf err
-        | `Index msg -> Fmt.string ppf msg )
+    ( run ~root ~pp_error:Index.pp_error
     @@ fun t ->
-    Index.Write.write t fs
+    Index.Write.update_on_store t fs
     >>?= fun hash ->
     assert_key_equal "write-tree" hash
       (Store.Hash.of_hex "7bb943559a305bdd6bdee2cef6e5df2413c3d30a") ;
@@ -344,21 +361,17 @@ let test006 root fs : unit Alcotest.test_case =
     @@ fun t ->
     update_index_remove_one_file t fs (Fpath.v "should-be-empty")
     >>?= fun () ->
-    let command =
-      Fmt.strf "git --git-dir=%a status --porcelain" Fpath.pp (Store.dotgit t)
-    in
-    let output = Test_data.output_of_command command in
+    let command = Fmt.strf "git status --porcelain" in
+    let output = output_of_command ~root:(Store.root t) command in
     let status = Git_status.of_output output in
     Alcotest.(check git_status) "empty" [] status ;
     Lwt.return (Ok ()) )
 
 let test007 root fs : unit Alcotest.test_case =
   Alcotest.test_case "write-tree empty" `Quick
-    ( run ~root ~pp_error:(fun ppf -> function
-        | #Index.error as err -> Index.pp_error ppf err
-        | `Index msg -> Fmt.string ppf msg )
+    ( run ~root ~pp_error:Index.pp_error
     @@ fun t ->
-    Index.Write.write t fs
+    Index.Write.update_on_store t fs
     >>?= fun hash ->
     assert_key_equal "write-tree" hash
       (Store.Hash.of_hex "4b825dc642cb6eb9a060e54bf8d69288fbee4904") ;
@@ -405,10 +418,8 @@ let test009 root fs : unit Alcotest.test_case =
     >>?= fun () ->
     update_index_add_one_symlink t fs (v "path3" / "subp3" / "file3sym")
     >>?= fun () ->
-    let command =
-      Fmt.strf "git --git-dir=%a status --porcelain" Fpath.pp (Store.dotgit t)
-    in
-    let output = Test_data.output_of_command command in
+    let command = Fmt.strf "git status --porcelain" in
+    let output = output_of_command ~root:(Store.root t) command in
     let status = Git_status.of_output output in
     Alcotest.(check git_status)
       "various kind of objects"
@@ -428,10 +439,8 @@ let test010 root _ : unit Alcotest.test_case =
     ( run ~root ~pp_error:(fun _ppf _ -> assert false)
     @@ fun t ->
     let open Fpath in
-    let command =
-      Fmt.strf "git --git-dir=%a ls-files --stage" Fpath.pp (Store.dotgit t)
-    in
-    let output = Test_data.output_of_command command in
+    let command = Fmt.strf "git ls-files --stage" in
+    let output = output_of_command ~root:(Store.root t) command in
     let ls_files = Git_ls_files.of_output output in
     Alcotest.(check git_ls_files)
       "git ls-files --stage"
@@ -472,11 +481,9 @@ let test010 root _ : unit Alcotest.test_case =
 
 let test011 root fs : unit Alcotest.test_case =
   Alcotest.test_case "git write-tree" `Quick
-    ( run ~root ~pp_error:(fun ppf -> function
-        | #Index.error as err -> Index.pp_error ppf err
-        | `Index msg -> Fmt.string ppf msg )
+    ( run ~root ~pp_error:Index.pp_error
     @@ fun t ->
-    Index.Write.write t fs
+    Index.Write.update_on_store t fs
     >>?= fun hash ->
     assert_key_equal "write-tree" hash
       (Store.Hash.of_hex "087704a96baf1c2d1c869a8b084481e121c88b5b") ;
@@ -489,11 +496,8 @@ let test012 root _ : unit Alcotest.test_case =
     let root_tree =
       Store.Hash.of_hex "087704a96baf1c2d1c869a8b084481e121c88b5b"
     in
-    let command =
-      Fmt.strf "git --git-dir=%a ls-tree %a" Fpath.pp (Store.dotgit t)
-        Store.Hash.pp root_tree
-    in
-    let output = Test_data.output_of_command command in
+    let command = Fmt.strf "git ls-tree %a" Store.Hash.pp root_tree in
+    let output = output_of_command ~root:(Store.root t) command in
     let ls_tree = Git_ls_tree.of_output output in
     Store.read t root_tree
     >>?= function
@@ -521,11 +525,8 @@ let test013 root _ : unit Alcotest.test_case =
     let root_tree =
       Store.Hash.of_hex "087704a96baf1c2d1c869a8b084481e121c88b5b"
     in
-    let command =
-      Fmt.strf "git --git-dir=%a ls-tree -r %a" Fpath.pp (Store.dotgit t)
-        Store.Hash.pp root_tree
-    in
-    let output = Test_data.output_of_command command in
+    let command = Fmt.strf "git ls-tree -r %a" Store.Hash.pp root_tree in
+    let output = output_of_command ~root:(Store.root t) command in
     let ls_tree = Git_ls_tree.of_output output in
     let perms = Hashtbl.create 128 in
     Store.fold t
@@ -560,11 +561,8 @@ let test014 root _ : unit Alcotest.test_case =
     let root_tree =
       Store.Hash.of_hex "087704a96baf1c2d1c869a8b084481e121c88b5b"
     in
-    let command =
-      Fmt.strf "git --git-dir=%a ls-tree -r -t %a" Fpath.pp (Store.dotgit t)
-        Store.Hash.pp root_tree
-    in
-    let output = Test_data.output_of_command command in
+    let command = Fmt.strf "git ls-tree -r -t %a" Store.Hash.pp root_tree in
+    let output = output_of_command ~root:(Store.root t) command in
     let ls_tree = Git_ls_tree.of_output output in
     let perms = Hashtbl.create 128 in
     Store.fold t
@@ -595,21 +593,19 @@ let test014 root _ : unit Alcotest.test_case =
 
 let test015 root fs : unit Alcotest.test_case =
   Alcotest.test_case "git read-tree" `Quick
-    ( run ~root ~pp_error:(fun ppf -> function
-        | #Index.error as err -> Index.pp_error ppf err
-        | `Index msg -> Fmt.string ppf msg )
+    ( run ~root ~pp_error:Index.pp_error
     @@ fun t ->
     let open Lwt.Infix in
     let ( >>?= ) = Lwt_result.bind in
     let () = Unix.unlink Fpath.(to_string (Store.dotgit t / "index")) in
-    let raw = Cstruct.create 0x800 in
+    let dtmp = Cstruct.create 0x800 in
     let root = Store.Hash.of_hex "087704a96baf1c2d1c869a8b084481e121c88b5b" in
-    Index.Read.from_tree t root
+    Index.Read.of_tree t root
     >>= fun entries ->
     Fmt.(pf stderr) "We will write: %a.\n" Entry.pp_index entries ;
-    Index.IO.store ~root:(Store.dotgit t) fs ~raw entries
+    Index.store_entries t fs ~dtmp entries
     >>?= fun () ->
-    Index.Write.write t fs
+    Index.Write.update_on_store t fs
     >>?= fun hash ->
     assert_key_equal "write-tree" hash root ;
     Lwt.return (Ok ()) )
