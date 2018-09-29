@@ -93,6 +93,7 @@ let main _ppf _progress _origin branch repository directory =
   let root =
     Option.map_default Fpath.(v (Sys.getcwd ()) / name) Fpath.v directory
   in
+  let fs, dtmp = (), Cstruct.create 0x800 in
   let ( >>?= ) = Lwt_result.bind in
   let ( >>!= ) v f = Lwt_result.map_err f v in
   Store.v root
@@ -104,7 +105,10 @@ let main _ppf _progress _origin branch repository directory =
   Store.Ref.write git Store.Reference.head (Store.Reference.Ref branch)
   >>!= store_err
   >>?= fun _ ->
-  Index.Snapshot.from_reference git () Store.Reference.head
+  Index.Snapshot.of_reference git () Store.Reference.head
+  >>!= index_err
+  >>?= fun entries ->
+  Index.store_entries git fs ~dtmp entries
   >>!= index_err
   >>?= fun _ -> Lwt.return (Ok ())
 

@@ -78,7 +78,7 @@ open Lwt.Infix
 let ( >!= ) = Lwt_result.bind_lwt_err
 let ( >?= ) = Lwt_result.bind
 
-let perm_of_entry {Index.Entry.info= {mode; _}; _} =
+let perm_of_entry {Entry.info= {mode; _}; _} =
   match mode with
   | Entry.Exec -> `Exec
   | Entry.Normal -> `Normal
@@ -86,7 +86,7 @@ let perm_of_entry {Index.Entry.info= {mode; _}; _} =
   | Entry.Symlink -> `Link
   | Entry.Gitlink -> `Commit
 
-let hash_of_blob entry = entry.Index.Entry.hash
+let hash_of_blob entry = entry.Entry.hash
 
 let rec index_entries_to_tree_entries ~bucket entries =
   List.map
@@ -119,9 +119,9 @@ let main ?prefix:_ _ =
   Store.v root
   >!= store_err
   >?= fun t ->
-  Index.IO.load () ~root:(Store.dotgit t) ~dtmp
+  Index.load_entries t () ~dtmp
   >!= index_err
-  >?= fun (entries, _) ->
+  >?= fun entries ->
   let root = Index.of_entries entries in
   let tree = Hashtbl.create 128 in
   let root_hash = hash_of_root ~bucket:tree root in
