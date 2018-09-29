@@ -18,7 +18,7 @@
 let () = Random.self_init ()
 
 open Git_unix
-module Sync = Git_unix.Sync(Store)
+module Sync = Git_unix.Sync (Store)
 module Entry = Index.Entry (Digestif.SHA1)
 module Index = Index.Make (Store) (Fs) (Entry)
 

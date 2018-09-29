@@ -904,9 +904,9 @@ struct
       KSignature.get_byte ~digest:false
       @@ fun byte3 src t ->
       Log.debug (fun l ->
-          l ~header:"signature" "Get the signature: %c%c%c%c."
-            (Char.unsafe_chr byte0) (Char.unsafe_chr byte1)
-            (Char.unsafe_chr byte2) (Char.unsafe_chr byte3) ) ;
+          l "Get the signature: %c%c%c%c." (Char.unsafe_chr byte0)
+            (Char.unsafe_chr byte1) (Char.unsafe_chr byte2)
+            (Char.unsafe_chr byte3) ) ;
       try
         match Hashtbl.find extensions (byte0, byte1, byte2, byte3) with
         | Tree k ->
@@ -939,9 +939,9 @@ struct
               src {t with hash}
       with Not_found ->
         Log.debug (fun l ->
-            l ~header:"signature" "Signature %c%c%c%c not found."
-              (Char.unsafe_chr byte0) (Char.unsafe_chr byte1)
-              (Char.unsafe_chr byte2) (Char.unsafe_chr byte3) ) ;
+            l "Signature %c%c%c%c not found." (Char.unsafe_chr byte0)
+              (Char.unsafe_chr byte1) (Char.unsafe_chr byte2)
+              (Char.unsafe_chr byte3) ) ;
         let consumed = Bytes.create 4 in
         Bytes.set consumed 0 (Char.unsafe_chr byte0) ;
         Bytes.set consumed 1 (Char.unsafe_chr byte1) ;
@@ -1029,7 +1029,7 @@ struct
         if x >= 0l then x else 0l
       in
       Log.debug (fun l ->
-          l ~header:"consume_to_hash"
+          l
             "We has %d byte(s), we expect %d byte(s) to hash, we expect %d \
              byte(s) to extension."
             has expect_if_hash
@@ -1713,7 +1713,7 @@ struct
     List.fold_right
       (fun seg t -> Tree (StringMap.singleton seg t))
       segs (Blob entry)
-    | Blob _ -> raise (Invalid_argument "Path is empty") | Tree map -> map
+    |> function Blob _ -> Fmt.invalid_arg "Path is empty" | Tree map -> map
 
   let rec merge ~b2b ~e2e _ a b =
     match a, b with
@@ -2079,15 +2079,18 @@ struct
                   | Error err -> Lwt.return (Error (`Store err)) ) ))
         (Ok ()) todo
       >>?= fun () -> Lwt.return (Ok root_hash)
+
+    let update_on_store t fs =
+      let ( >>?= ) = Lwt_result.bind in
+      let dtmp = Cstruct.create 0x800 in
+      IO.load ~root:(Store.dotgit t) ~dtmp fs
+      >>?= fun (entries, _) -> write_on_store t entries
   end
 
   let make_from_tree ~path git hash =
-    let b2b _ _ =
-      raise (Invalid_argument "Try to merge 2 blobs to the same path.")
-    in
+    let b2b _ _ = Fmt.invalid_arg "Try to merge 2 blobs to the same path." in
     let e2e _ _ =
-      raise
-        (Invalid_argument "Try to merge 2 differents objects to the same path.")
+      Fmt.invalid_arg "Try to merge 2 differents objects to the same path."
     in
     let hashtbl = Hashtbl.create 128 in
     Store.fold git
