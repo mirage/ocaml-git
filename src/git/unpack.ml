@@ -15,6 +15,8 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+[@@@warning "-27"]
+
 let src = Logs.Src.create "git.unpack" ~doc:"logs git's unpack event"
 
 module Log = (val Logs.src_log src : Logs.LOG)
@@ -2431,8 +2433,10 @@ struct
         | None -> None
       in
       let promote (abs_off, _, _) = function
-        | Ok (kind, raw, depth, metadata) ->
-            cache.Cache.promote abs_off (kind, raw, depth, metadata)
+        | Ok (kind, raw, depth, metadata) -> ()
+        (* XXX(dinosaure): TODO, ownership, bad hash, bad [Cstruct.t] and so
+           on. *)
+        (* cache.Cache.promote abs_off (kind, raw, depth, metadata) *)
         | Error _ -> ()
       in
       let memoized_go = memoize_rec ~promote ~find go in
