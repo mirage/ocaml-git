@@ -1454,6 +1454,10 @@ struct
     if (t.write - 4) mod 8 = 0 then k dst t
     else KEntry.put_byte 0 (padding k) dst t
 
+  let fpath_to_unix_path_string path =
+    let segs = Fpath.segs path in
+    String.concat "/" segs
+
   let path x k dst t =
     if t.version = 4l then
       match t.prev with
@@ -1461,8 +1465,8 @@ struct
           Log.debug (fun l ->
               l "Encode path %a with the previous path %a." Fpath.pp
                 x.Entry.path Fpath.pp prev ) ;
-          let prev = Fpath.to_string prev in
-          let path = Fpath.to_string x.Entry.path in
+          let prev = fpath_to_unix_path_string prev in
+          let path = fpath_to_unix_path_string x.Entry.path in
           let common, value = trunk path prev in
           let cut = String.length prev - String.length common in
           ( KEntry.put_varint cut
