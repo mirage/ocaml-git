@@ -2,7 +2,7 @@
  (name      test)
  (libraries checkseum.ocaml digestif.ocaml
             test_git test_smart
-            git-mirage mirage-fs-unix io-page.unix mirage-conduit
+            git-mirage io-page.unix mirage-conduit
             tcpip.udpv4-socket tcpip.tcpv4-socket tcpip.unix
             tcpip.stack-socket mirage-time-unix))
 
