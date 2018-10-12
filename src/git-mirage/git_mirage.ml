@@ -80,8 +80,7 @@ module Sync (G : Git.S) = struct
       in
       (* XXX(dinosaure): [~chunked:false] is mandatory, I don't want to explain
          why (I lost one day to find this bug) but believe me. *)
-      Log.debug (fun l ->
-          l ~header:"call" "Send a request to %a." Uri.pp_hum (uri e) ) ;
+      Log.debug (fun l -> l "Send a request to %a." Uri.pp_hum (uri e)) ;
       Cohttp_mirage.Client.call ~ctx:(ctx e) ?headers ?body ~chunked:false meth
         (uri e)
       >>= fun ((resp, _) as v) ->
@@ -97,8 +96,8 @@ module Sync (G : Git.S) = struct
         in
         push None ;
         Log.debug (fun l ->
-            l ~header:"call" "Redirection from %a to %a." Uri.pp_hum (uri e)
-              Uri.pp_hum uri' ) ;
+            l "Redirection from %a to %a." Uri.pp_hum (uri e) Uri.pp_hum uri'
+        ) ;
         Cohttp_mirage.Client.call ~ctx:(ctx e) ?headers
           ~body:(`Stream body_if_redirection) ~chunked:false meth uri'
         >|= fun (resp, body) -> {resp; body} )

@@ -22,11 +22,9 @@ type t = (B.Bigstring.t, B.Bigstring.t) Inflate.t
 type error = [`Inflate of Inflate.error]
 type window = B.Bigstring.t Window.t
 
-module Log = struct
-  let src = Logs.Src.create "decompress.inflate" ~doc:"logs inflate event"
+let src = Logs.Src.create "decompress.inflate" ~doc:"logs inflate event"
 
-  include (val Logs.src_log src : Logs.LOG)
-end
+module Log = (val Logs.src_log src : Logs.LOG)
 
 let pp_error : error Fmt.t =
  fun ppf -> function
@@ -39,7 +37,6 @@ let default : window -> t = fun w -> Inflate.default ~witness:B.bigstring w
 
 let eval ~src ~dst t :
     [`Await of t | `End of t | `Error of t * error | `Flush of t] =
-  Log.debug (fun l -> l "evaluation of %a." (Fmt.hvbox Inflate.pp) t) ;
   let src' = Cstruct.to_bigarray src in
   let dst' = Cstruct.to_bigarray dst in
   Inflate.eval src' dst' t

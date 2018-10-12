@@ -112,7 +112,7 @@ struct
     Lwt.return (Ok t : (t, error) result)
 
   let reset t =
-    Log.info (fun l -> l "info") ;
+    Log.info (fun l -> l "Reset memory store") ;
     Hashtbl.clear t.values ;
     Hashtbl.clear t.inflated ;
     Hashtbl.clear t.refs ;
@@ -302,7 +302,7 @@ struct
         | PDec.Tag -> `Tag
         | PDec.Tree -> `Tree
         | PDec.Blob -> `Blob
-        | PDec.Hunk _ -> raise (Invalid_argument "k2k")
+        | PDec.Hunk _ -> invalid_arg "k2k"
       in
       let empty = Cstruct.create 0 in
       let buffer = Buffer.create 0x800 in
@@ -350,13 +350,12 @@ struct
                 let raw = Buffer.contents buffer |> Cstruct.of_string in
                 Buffer.clear buffer ;
                 Log.debug (fun l ->
-                    l ~header:"populate"
-                      "Retrieve a new Git object (length: %d)."
+                    l "Retrieve a new Git object (length: %d)."
                       (Cstruct.len raw) ) ;
                 write_inflated git ~kind:(k2k kind) raw
                 >|= fun hash ->
                 Log.debug (fun l ->
-                    l ~header:"populate"
+                    l
                       "Add the object %a to the Git repository from the PACK \
                        file."
                       Hash.pp hash ) ;
@@ -379,7 +378,7 @@ struct
                      So [Revidx.find] should never fail. *)
                 in
                 Log.debug (fun l ->
-                    l ~header:"populate"
+                    l
                       "Catch a Hunk object which has as source the Git \
                        object: %a."
                       Hash.pp hash_source ) ;
@@ -387,8 +386,7 @@ struct
                 >>= function
                 | None ->
                     Log.warn (fun l ->
-                        l ~header:"populate"
-                          "The source Git object %a does not exist yet."
+                        l "The source Git object %a does not exist yet."
                           Hash.pp hash_source ) ;
                     Queue.push
                       ( hunks_descr
@@ -401,8 +399,7 @@ struct
                     Lwt.return None
                 | Some (kind, raw) -> (
                     Log.debug (fun l ->
-                        l ~header:"populate"
-                          "Retrieving the source Git object %a." Hash.pp
+                        l "Retrieving the source Git object %a." Hash.pp
                           hash_source ) ;
                     match
                       apply hunks_descr hunks
@@ -414,14 +411,14 @@ struct
                         write_inflated git ~kind result
                         >|= fun hash ->
                         Log.debug (fun l ->
-                            l ~header:"populate"
+                            l
                               "Add the object %a to the Git repository from \
                                the PACK file."
                               Hash.pp hash ) ;
                         Some hash
                     | Error err ->
                         Log.err (fun l ->
-                            l ~header:"populate"
+                            l
                               "Error when we apply the source Git object %a \
                                with the Hunk object: %a."
                               Hash.pp hash_source
@@ -473,9 +470,6 @@ struct
               else Lwt.return (Error `Unresolved_object)
           | _ ->
               let open Lwt_result in
-              Log.debug (fun l ->
-                  l ~header:"populate" "Resolving the rest of the PACK file."
-              ) ;
               gogo () >>= fun () -> Lwt.return (Ok (hash_pack, n)) )
   end
 

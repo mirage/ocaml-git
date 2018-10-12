@@ -355,8 +355,8 @@ struct
         (r : (mmu, location) r) ({pack; info; index; _} as t) hash :
         [`Error of error | `Promote of value | `Return of value] Lwt.t =
       Log.debug (fun l ->
-          l ~header:"read" "Try to extract object %a from PACK %a." Hash.pp
-            hash Hash.pp t.info.PInfo.hash_pack ) ;
+          l "Try to extract object %a from PACK %a." Hash.pp hash Hash.pp
+            t.info.PInfo.hash_pack ) ;
       lookup t hash
       |> function
       | None -> Lwt.return (`Error (`Pack_decoder (RPDec.Invalid_hash hash)))
