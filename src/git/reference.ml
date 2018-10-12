@@ -45,21 +45,17 @@ end
 let head = "HEAD"
 let is_head = String.equal head
 let master = "refs/heads/master"
-
-let to_path x =
-  (* XXX(samoht): maybe Fpath.t = path was not a good idea afterall *)
-  match
-    Fpath.of_string (String.concat Fpath.dir_sep (Astring.String.cuts ~sep x))
-  with
-  | Error (`Msg x) -> raise (Invalid_argument x)
-  | Ok v -> Fpath.normalize v
+let to_path = function "HEAD" -> Gpath.v "HEAD" | refs -> Gpath.v refs
 
 let of_path path =
-  match List.rev @@ Fpath.segs path with
-  | "HEAD" :: _ -> head
-  | _ ->
-      let segs = Fpath.(segs (normalize (v "refs" // path))) in
-      String.concat sep segs
+  match Gpath.segs path with
+  | [] -> Fmt.invalid_arg "Reference.of_path: empty path"
+  | ["HEAD"] -> head
+  | "HEAD" :: _ ->
+      Fmt.invalid_arg "Reference.of_path: HEAD can not be followed by values"
+  | "refs" :: _ as refs -> String.concat sep refs
+  | _ :: _ ->
+      invalid_arg "Reference.of_path: bad path (need to be prefixed by refs)"
 
 let pp ppf x = Fmt.pf ppf "%s" (String.escaped x)
 
@@ -86,8 +82,8 @@ module type S = sig
   val is_head : t -> bool
   val of_string : string -> t
   val to_string : t -> string
-  val of_path : Fpath.t -> t
-  val to_path : t -> Fpath.t
+  val of_path : Gpath.t -> t
+  val to_path : t -> Gpath.t
 
   include S.BASE with type t := t
 
@@ -130,6 +126,7 @@ module type IO = sig
     -> t
     -> dtmp:Cstruct.t
     -> raw:Cstruct.t
+    -> (head_contents, error) result Lwt.t
 
   val write :
        fs:FS.t
@@ -154,8 +151,15 @@ module Make (Hash : S.HASH) = struct
   let is_head = is_head
   let of_string = of_string
   let to_string = to_string
-  let to_path = to_path
-  let of_path = of_path
+  let to_path = Gpath.v
+
+  let of_path path =
+    let segs = Gpath.segs path in
+    String.concat sep segs
+
+  (* XXX(dinosaure): doublon with [Gpath.to_string] but this function uses
+     [Fmt.to_to_string] and I don't trust this function. *)
+
   let pp = pp
   let equal = String.equal
   let hash = Hashtbl.hash
@@ -284,8 +288,8 @@ module IO (H : S.HASH) (FS : S.FS) = struct
     | #Error.Decoder.t as err -> Error.Decoder.pp_error ppf err
     | #fs_error as err -> Error.FS.pp_error FS.pp_error ppf err
 
-  let normalize path =
-    let segs = Astring.String.cuts ~sep:Fpath.dir_sep (Fpath.to_string path) in
+  let[@warning "-32"] normalize path =
+    let segs = Gpath.segs path in
     List.fold_left
       (fun (stop, acc) ->
         if stop then fun x -> true, x :: acc
@@ -298,23 +302,23 @@ module IO (H : S.HASH) (FS : S.FS) = struct
       (false, []) segs
     |> fun (_, refs) -> List.rev refs |> String.concat "/" |> of_string
 
-  let mem ~fs ~root reference =
-    let path = Fpath.(root // to_path reference) in
+  let mem ~fs ~root:dotgit reference =
+    let path = Gpath.(dotgit + to_path reference) in
     FS.File.exists fs path >|= function Ok v -> v | Error _ -> false
 
-  let read ~fs ~root reference ~dtmp ~raw : (_, error) result Lwt.t =
+  let read ~fs ~root:dotgit reference ~dtmp ~raw : (_, error) result Lwt.t =
     let state = D.default dtmp in
-    let file = Fpath.(root // to_path reference) in
-    Decoder.of_file fs file raw state
+    let path = Gpath.(dotgit + to_path reference) in
+    Decoder.of_file fs path raw state
     >|= function
-    | Ok v -> Ok (normalize file, v)
-    | Error (`Decoder err) -> Error.(v @@ Error.Decoder.with_path file err)
+    | Ok v -> Ok v
+    | Error (`Decoder err) -> Error.(v @@ Error.Decoder.with_path path err)
     | Error #fs_error as err -> err
 
-  let write ~fs ~root ~temp_dir ?(capacity = 0x100) ~raw reference value
+  let write ~fs ~root:dotgit ~temp_dir ?(capacity = 0x100) ~raw reference value
       =
     let state = E.default (capacity, value) in
-    let path = Fpath.(root // to_path reference) in
+    let path = Gpath.(dotgit + to_path reference) in
     FS.Dir.create fs (Fpath.parent path)
     >>= function
     | Error err ->
@@ -326,8 +330,8 @@ module IO (H : S.HASH) (FS : S.FS) = struct
         | Error #fs_error as err -> err
         | Error (`Encoder #Error.never) -> assert false )
 
-  let remove ~fs ~root t =
-    let path = Fpath.(root // to_path t) in
+  let remove ~fs ~root:dotgit reference =
+    let path = Gpath.(dotgit + to_path reference) in
     FS.File.delete fs path
     >|= function
     | Ok _ as v -> v | Error err -> Error.(v @@ FS.err_delete path err)

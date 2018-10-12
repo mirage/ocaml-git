@@ -82,10 +82,10 @@ val of_string : string -> t
 val to_string : t -> string
 (** [to_string t] returns the string value of the reference [t]. *)
 
-val of_path : Fpath.t -> t
+val of_path : Gpath.t -> t
 (** [of_path path] casts a path to a reference. *)
 
-val to_path : t -> Fpath.t
+val to_path : t -> Gpath.t
 (** [to_path ref] casts a reference [ref] to a path (as a Window path or Unix
     path). *)
 
@@ -114,8 +114,8 @@ module type S = sig
   val is_head : t -> bool
   val of_string : string -> t
   val to_string : t -> string
-  val of_path : Fpath.t -> t
-  val to_path : t -> Fpath.t
+  val of_path : Gpath.t -> t
+  val to_path : t -> Gpath.t
 
   include S.BASE with type t := t
 
@@ -178,7 +178,7 @@ module type IO = sig
     -> t
     -> dtmp:Cstruct.t
     -> raw:Cstruct.t
-    -> (t * head_contents, error) result Lwt.t
+    -> (head_contents, error) result Lwt.t
   (** [read ~fs ~root reference dtmp raw] is the value of the reference
       [reference] (available in the git repository [root]). [dtmp] and [raw]
       are buffers used by the decoder (respectively for the decoder as an

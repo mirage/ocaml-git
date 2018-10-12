@@ -912,7 +912,7 @@ struct
               @@ fun {dtmp; raw; _} ->
               Reference.read ~fs:t.fs ~root:t.dotgit r ~dtmp ~raw
               >|= function
-              | Ok v -> v :: acc
+              | Ok v -> (r, v) :: acc
               | Error err ->
                   Log.err (fun l ->
                       l "Error while reading %a: %a." Reference.pp r
@@ -1051,7 +1051,7 @@ struct
           with_buffer t
           @@ fun {dtmp; raw; _} ->
           Reference.read ~fs:t.fs ~root:t.dotgit ~dtmp ~raw reference
-          >|= function Ok (_, v) -> Ok v | Error e -> Error (e :> error) )
+          >|= function Ok _ as ok -> ok | Error e -> Error (e :> error) )
       | Ok false | Error _ ->
           let v =
             if Hashtbl.mem t.packed reference then
