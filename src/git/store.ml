@@ -244,8 +244,8 @@ module type S = sig
 
   val fold :
        t
-    -> ('a -> ?name:Fpath.t -> length:int64 -> Hash.t -> Value.t -> 'a Lwt.t)
-    -> path:Fpath.t
+    -> ('a -> ?name:Gpath.t -> length:int64 -> Hash.t -> Value.t -> 'a Lwt.t)
+    -> path:Gpath.t
     -> 'a
     -> Hash.t
     -> 'a Lwt.t
@@ -853,19 +853,19 @@ struct
   let iter = T.iter
 
   module Ref = struct
-    let contents ~fs top =
+    let contents ~fs dotgit =
       let rec lookup acc dir =
-        FS.Dir.contents fs ~rel:true Fpath.(top // dir)
+        FS.Dir.contents fs ~rel:true dir
         >>?= fun l ->
         Lwt_list.filter_p
           (fun x ->
-            FS.is_dir fs Fpath.(top // dir // x)
+            FS.is_dir fs Fpath.(dir // x)
             >|= function Ok v -> v | Error _ -> false )
           l
         >>= fun dirs ->
         Lwt_list.filter_p
           (fun x ->
-            FS.is_file fs Fpath.(top // dir // x)
+            FS.is_file fs Fpath.(dir // x)
             >|= function Ok v -> v | Error _ -> false )
           l
         >>= fun files ->
@@ -877,19 +877,31 @@ struct
           (Ok acc) dirs
         >>?= fun acc -> Lwt.return (Ok (acc @ files))
       in
-      lookup [] (Fpath.v ".")
+      lookup [] Fpath.(dotgit / "refs")
+      >>= function
+      | Ok refs ->
+          List.fold_left
+            (fun acc fpath ->
+              match Fpath.relativize ~root:dotgit fpath with
+              | Some segs ->
+                  Log.debug (fun l -> l "Relativize %a." Fpath.pp fpath) ;
+                  Gpath.of_segs (Fpath.segs segs) :: acc
+              | None -> acc )
+            [] refs
+          |> Lwt.return_ok
+      | Error _ as err -> Lwt.return err
 
     module Graph = Reference.Map
 
     (* XXX(dinosaure): this function does not return any {!Error} value. *)
     let graph t =
       Log.debug (fun l -> l "graph_p") ;
-      contents ~fs:t.fs Fpath.(t.dotgit / "refs")
+      contents ~fs:t.fs t.dotgit
       >>= function
       | Error err -> Lwt.return Error.(v @@ FS.err_sys_dir err)
       | Ok files -> (
           Log.debug (fun l ->
-              let pp_files = Fmt.hvbox (Fmt.list Fpath.pp) in
+              let pp_files = Fmt.hvbox (Fmt.Dump.list Gpath.pp) in
               l "contents files: %a." pp_files files ) ;
           Lwt_list.fold_left_s
             (fun acc abs_ref ->
@@ -1033,7 +1045,7 @@ struct
           >|= function Ok () -> Ok () | Error e -> Error (e :> error) )
 
     let read t reference =
-      FS.is_file t.fs Fpath.(t.dotgit // Reference.to_path reference)
+      FS.is_file t.fs Gpath.(t.dotgit + Reference.to_path reference)
       >>= function
       | Ok true -> (
           with_buffer t

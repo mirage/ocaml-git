@@ -46,7 +46,7 @@ module Make (S : STORE) = struct
   let fold t
       (f :
            'acc
-        -> ?name:Fpath.t
+        -> ?name:Gpath.t
         -> length:int64
         -> Hash.t
         -> Value.t
@@ -78,7 +78,7 @@ module Make (S : STORE) = struct
                 in
                 Lwt_list.iter_s
                   (fun {Value.Tree.name; node; _} ->
-                    Hashtbl.add names node Fpath.(path / name) ;
+                    Hashtbl.add names node Gpath.(path / name) ;
                     Lwt.return () )
                   (Value.Tree.to_list tree)
                 >>= fun () ->
@@ -113,5 +113,5 @@ module Make (S : STORE) = struct
   let iter t f hash =
     fold t
       (fun () ?name:_ ~length:_ hash value -> f hash value)
-      ~path:(Fpath.v "/") () hash
+      ~path:Gpath.empty () hash
 end
