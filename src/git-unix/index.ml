@@ -73,10 +73,9 @@ module type ENTRY = sig
 
   val pp_info : info Fmt.t
 
-  type entry = {info: info; hash: hash; flag: extend flag; path: Fpath.t}
+  type entry = {info: info; hash: hash; flag: extend flag; path: Git.Gpath.t}
 
   val pp_entry : entry Fmt.t
-  val with_path : entry -> Fpath.t option -> entry
 
   type index = entry list
 
@@ -152,19 +151,13 @@ module Entry (H : Digestif.S) = struct
       (Fmt.hvbox pp_time) ctime (Fmt.hvbox pp_time) mtime dev ino pp_kind mode
       uid gid size
 
-  type entry = {info: info; hash: hash; flag: extend flag; path: Fpath.t}
-
-  let with_path entry = function
-    | Some path ->
-        let len = min (String.length (Fpath.to_string path)) 0xFFF in
-        {entry with path; flag= {entry.flag with length= len}}
-    | None -> entry
+  type entry = {info: info; hash: hash; flag: extend flag; path: Git.Gpath.t}
 
   let pp_entry ppf {info; hash; flag; path} =
     Fmt.pf ppf "{ @[<hov>info = %a;@ hash = %a;@ flag = %a;@ path = %a;@] }"
       (Fmt.hvbox pp_info) info (Fmt.hvbox Hash.pp) hash
       (Fmt.hvbox (pp_flag pp_extend))
-      flag (Fmt.hvbox Fpath.pp) path
+      flag (Fmt.hvbox Git.Gpath.pp) path
 
   type index = entry list
 
@@ -819,7 +812,7 @@ struct
       else
         match t.entries with
         | [] -> None
-        | {path; _} :: _ -> Some (Fpath.to_string path)
+        | {path; _} :: _ -> Some (Git.Gpath.to_string path)
       (* XXX(dinosaure): we are not sure the current entry want to split on
          [Fpath.dir_sep], so it's better to use [String.concat] instead
          [Fpath.append]. *)
@@ -833,7 +826,9 @@ struct
         in
         KEntry.to_nul
         @@ fun rest _ t ->
-        let entry = {Entry.info; hash; flag; path= Fpath.v (lead ^ rest)} in
+        let entry =
+          {Entry.info; hash; flag; path= Git.Gpath.v (lead ^ rest)}
+        in
         Cont {t with entries= entry :: t.entries; state= Padding 1} )
           src t
     | None ->
@@ -844,14 +839,14 @@ struct
             { Entry.info
             ; hash
             ; flag= {flag with Entry.length= String.length name}
-            ; path= Fpath.v name }
+            ; path= Git.Gpath.v name }
           in
           Cont {t with entries= entry :: t.entries; state= Padding 1} )
             src t
         else
           ( KEntry.take flag.length
           @@ fun name _ t ->
-          let entry = {Entry.info; hash; flag; path= Fpath.v name} in
+          let entry = {Entry.info; hash; flag; path= Git.Gpath.v name} in
           Cont {t with entries= entry :: t.entries; state= Padding 1} )
             src t
 
@@ -1228,7 +1223,7 @@ struct
     ; o_len: int
     ; write: int
     ; version: int32
-    ; prev: Fpath.t option
+    ; prev: Git.Gpath.t option
     ; entries: Entry.index
     ; hash: Hash.ctx
     ; state: state }
@@ -1454,19 +1449,15 @@ struct
     if (t.write - 4) mod 8 = 0 then k dst t
     else KEntry.put_byte 0 (padding k) dst t
 
-  let fpath_to_unix_path_string path =
-    let segs = Fpath.segs path in
-    String.concat "/" segs
-
   let path x k dst t =
     if t.version = 4l then
       match t.prev with
       | Some prev ->
           Log.debug (fun l ->
-              l "Encode path %a with the previous path %a." Fpath.pp
-                x.Entry.path Fpath.pp prev ) ;
-          let prev = fpath_to_unix_path_string prev in
-          let path = fpath_to_unix_path_string x.Entry.path in
+              l "Encode path %a with the previous path %a." Git.Gpath.pp
+                x.Entry.path Git.Gpath.pp prev ) ;
+          let prev = Git.Gpath.to_string prev in
+          let path = Git.Gpath.to_string x.Entry.path in
           let common, value = trunk path prev in
           let cut = String.length prev - String.length common in
           ( KEntry.put_varint cut
@@ -1475,9 +1466,9 @@ struct
             dst t
       | None ->
           ( KEntry.put_varint 0
-          @@ KEntry.put_string (Fpath.to_string x.Entry.path) k )
+          @@ KEntry.put_string (Git.Gpath.to_string x.Entry.path) k )
             dst t
-    else KEntry.put_string (Fpath.to_string x.Entry.path) (padding k) dst t
+    else KEntry.put_string (Git.Gpath.to_string x.Entry.path) (padding k) dst t
 
   let hash dst t =
     let hash = Hash.get t.hash in
@@ -1536,7 +1527,9 @@ struct
     ; version= 2l
     ; prev= None
     ; entries=
-        List.sort (fun a b -> Fpath.compare a.Entry.path b.Entry.path) entries
+        List.sort
+          (fun a b -> Git.Gpath.compare a.Entry.path b.Entry.path)
+          entries
     ; hash= Hash.init ()
     ; state= Header header }
 
@@ -1673,7 +1666,7 @@ struct
     | Tree _, Blob _ -> -1
     | Blob _, Tree _ -> 1
     | Tree _, Tree _ -> 0
-    | Blob a, Blob b -> Fpath.compare a.Entry.path b.Entry.path
+    | Blob a, Blob b -> Git.Gpath.compare a.Entry.path b.Entry.path
 
   let pp_blob ?(last = false) ppf (name, entry) =
     Fmt.pf ppf "%s %a"
@@ -1713,7 +1706,7 @@ struct
     |> List.rev
 
   let chain_of_entry path entry =
-    let segs = trim (Fpath.segs path) in
+    let segs = Git.Gpath.segs path in
     List.fold_right
       (fun seg t -> Tree (StringMap.singleton seg t))
       segs (Blob entry)
@@ -1758,10 +1751,10 @@ struct
   let to_entries ~to_entry (Root t) =
     let rec aux path name e acc =
       match e with
-      | Blob blob -> to_entry Fpath.(path / name) blob :: acc
-      | Tree tree -> StringMap.fold (aux Fpath.(path / name)) tree acc
+      | Blob blob -> to_entry Git.Gpath.(path / name) blob :: acc
+      | Tree tree -> StringMap.fold (aux Git.Gpath.(path / name)) tree acc
     in
-    StringMap.fold (aux Fpath.(v "/")) t []
+    StringMap.fold (aux Git.Gpath.root) t []
 
   let lwt_result_traversal acc fblob ftree (Root map) =
     let queue = Queue.create () in
@@ -1769,7 +1762,7 @@ struct
     let ( >?= ) = Lwt_result.bind in
     Lwt_list.iter_s
       (fun (name, value) ->
-        Lwt.return (Queue.add (Fpath.(v "/" / name), value) queue) )
+        Lwt.return (Queue.add (Git.Gpath.(v name), value) queue) )
       (StringMap.bindings map)
     >>= fun () ->
     let rec go acc =
@@ -1780,7 +1773,7 @@ struct
           >?= fun () ->
           Lwt_list.iter_s
             (fun (name, v) ->
-              Lwt.return (Queue.add (Fpath.(path / name), v) queue) )
+              Lwt.return (Queue.add (Git.Gpath.(path / name), v) queue) )
             (StringMap.bindings sub)
           >>= fun () -> go acc
       | exception Queue.Empty -> Lwt.return (Ok acc)
@@ -1889,19 +1882,21 @@ struct
     let flag =
       let open Entry in
       let length =
-        let n = String.length (Fpath.to_string path) in
+        let n = String.length (Git.Gpath.to_string path) in
         min 0xFFF n
       in
       {assume= false; extend= None; stage= 0; length}
     in
     {Entry.info; hash; flag; path}
 
-  let write_blob fs path ((perm : Store.Value.Tree.perm), raw) =
-    let file_err err = Lwt.return (Git.Error.FS.err_file path err) in
+  let write_blob ~root fs path ((perm : Store.Value.Tree.perm), raw) =
+    let abs_path = Git.Gpath.( + ) root path in
+    (* XXX(dinosaure): scope problem between [root] and [Git.Gpath.root]. *)
+    let file_err err = Lwt.return (Git.Error.FS.err_file abs_path err) in
     match perm with
     | #link -> raise (Failure "Cannot create symlink/gitlink yet.")
     | #file as perm ->
-        FS.File.open_w fs path
+        FS.File.open_w fs abs_path
         >!= file_err
         >?= fun fd ->
         let rec loop ~retry raw =
@@ -1911,7 +1906,7 @@ struct
             >!= file_err
             >?= function
             | 0 when retry >= 50 ->
-                Lwt.return Git.Error.(v @@ FS.err_stack path)
+                Lwt.return Git.Error.(v @@ FS.err_stack abs_path)
             | 0 -> loop ~retry:(retry + 1) raw
             | len -> loop ~retry:0 (Cstruct.shift raw len)
         in
@@ -1923,17 +1918,18 @@ struct
                 Log.debug (fun l ->
                     l "Blob %a:%a wrote." Hash.pp
                       Store.Value.Blob.(digest (of_cstruct raw))
-                      Fpath.pp path ) ;
-                Unix.chmod Fpath.(to_string path) (int_of_perm perm) ;
+                      Fpath.pp abs_path ) ;
+                Unix.chmod Fpath.(to_string abs_path) (int_of_perm perm) ;
                 FS.File.close fd
                 >>= function
                 | Ok () -> Lwt.return result
                 | Error err -> Lwt.fail (Close err) ) )
           (function
-            | Close err -> Lwt.return (Error (Git.Error.FS.err_file path err))
+            | Close err ->
+                Lwt.return (Error (Git.Error.FS.err_file abs_path err))
             | exn -> Lwt.fail exn)
         >?= fun () ->
-        Unix.stat Fpath.(to_string path)
+        Unix.stat Fpath.(to_string abs_path)
         |> fun stats ->
         Lwt.return_ok
           (entry_of_stats Store.Value.Blob.(digest (of_cstruct raw)) path stats)
@@ -1941,8 +1937,8 @@ struct
         Fmt.invalid_arg
           "Unable to make a new directory from a Git blob object."
 
-  let write_blob_with_acc fs acc path tree_entry =
-    write_blob fs path tree_entry
+  let write_blob_with_acc ~root fs acc path tree_entry =
+    write_blob ~root fs path tree_entry
     >|= function Ok entry -> Ok (entry :: acc) | Error _ as err -> err
 
   let write_blob_entry git fs path (entry : Entry.entry) =
@@ -1951,7 +1947,7 @@ struct
     >!= store_err
     >?= function
     | Store.Value.Blob raw ->
-        write_blob fs path
+        write_blob ~root:(Store.root git) fs path
           ( Entry.perm_of_kind entry.Entry.info.mode
           , Store.Value.Blob.to_cstruct raw )
     | _ -> Lwt.return (Error `Expected_blob)
@@ -1960,9 +1956,10 @@ struct
     write_blob_entry git fs path entry
     >|= function Ok entry -> Ok (entry :: acc) | Error _ as err -> err
 
-  let write_tree fs dir =
-    FS.Dir.create fs dir
-    >|= Rresult.R.reword_error (Git.Error.FS.err_create dir)
+  let write_tree ~root fs dir =
+    FS.Dir.create fs (Git.Gpath.( + ) root dir)
+    >|= Rresult.R.reword_error
+          (Git.Error.FS.err_create (Git.Gpath.( + ) root dir))
     >?= fun _ -> Lwt.return (Ok ())
 
   let load_entries git fs ~dtmp =
@@ -1974,18 +1971,21 @@ struct
     >?= fun (entries, _) ->
     lwt_result_traversal []
       (write_blob_entry_with_acc git fs)
-      (write_tree fs) (of_entries entries)
+      (write_tree ~root:(Store.root git) fs)
+      (of_entries entries)
+
+  let relativize ~root path =
+    let res = Fpath.relativize ~root path in
+    Log.debug (fun l ->
+        l "Relative %a with %a = %a." Fpath.pp path Fpath.pp root
+          (Fmt.Dump.option Fpath.pp) res ) ;
+    res
 
   let store_entries git fs ~dtmp:raw entries =
-    IO.store ~root:(Store.dotgit git) ~raw fs
-      (List.map
-         (fun entry ->
-           Entry.with_path entry
-             (Fpath.relativize ~root:(Store.root git) entry.Entry.path) )
-         entries)
+    IO.store ~root:(Store.dotgit git) ~raw fs entries
 
   let chain_of_path path =
-    let segs = trim (Fpath.segs path) in
+    let segs = Git.Gpath.segs path in
     List.fold_right
       (fun seg t -> Tree (StringMap.singleton seg t))
       segs (Tree StringMap.empty)
@@ -2016,9 +2016,10 @@ struct
     let hash_of_root ~bucket (Root entries) = hash_of_tree ~bucket entries
 
     let blob_of_path t path =
-      let stat = Unix.lstat Fpath.(to_string (Store.root t // path)) in
+      let abs_path = Git.Gpath.(Store.root t + path) in
+      let stat = Unix.lstat Fpath.(to_string abs_path) in
       if stat.Unix.st_kind = Unix.S_LNK then
-        let link = Unix.readlink Fpath.(to_string (Store.root t // path)) in
+        let link = Unix.readlink Fpath.(to_string abs_path) in
         let link =
           Astring.String.map (function '\\' -> '/' | chr -> chr) link
         in
@@ -2028,7 +2029,7 @@ struct
            unix and windows. TODO! *)
         Store.Value.Blob.of_string link
       else
-        let ic = open_in Fpath.(to_string (Store.root t // path)) in
+        let ic = open_in Fpath.(to_string abs_path) in
         let ln = in_channel_length ic in
         let by = Bytes.create ln in
         let () = really_input ic by 0 ln in
@@ -2078,7 +2079,7 @@ struct
                                (Fmt.strf
                                   "Produced bad hash from blob object: %a. We \
                                    expected %a and we have %a."
-                                  Fpath.pp path Store.Hash.pp hash
+                                  Git.Gpath.pp path Store.Hash.pp hash
                                   Store.Hash.pp hash')))
                   | Error err -> Lwt.return (Error (`Store err)) ) ))
         (Ok ()) todo
@@ -2111,7 +2112,7 @@ struct
         | Some path, Store.Value.Tree tree ->
             List.iter
               (fun {Store.Value.Tree.perm; name; _} ->
-                Hashtbl.add hashtbl Fpath.(path / name) perm )
+                Hashtbl.add hashtbl Git.Gpath.(path / name) perm )
               (Store.Value.Tree.to_list tree) ;
             let chain = chain_of_path path in
             Lwt.return (Root (StringMap.merge (merge ~b2b ~e2e) t chain))
@@ -2121,11 +2122,12 @@ struct
   module Read = struct
     (* XXX(dinosaure): TODO [lstat] can fail. We need to return an error. *)
     let of_tree git hash =
-      make_from_tree ~path:(Store.root git) git hash
+      make_from_tree ~path:Git.Gpath.root git hash
       >>= fun (Root t) ->
       let to_entry path (_, blob) =
         let hash = Store.Value.Blob.(digest (of_cstruct blob)) in
-        let stat = Unix.lstat Fpath.(to_string path) in
+        let abs_path = Git.Gpath.(Store.root git + path) in
+        let stat = Unix.lstat Fpath.(to_string abs_path) in
         entry_of_stats hash path stat
       in
       let entries = to_entries ~to_entry (Root t) in
@@ -2134,9 +2136,12 @@ struct
 
   module Snapshot = struct
     let of_tree git fs hash =
-      make_from_tree ~path:(Store.root git) git hash
+      make_from_tree ~path:Git.Gpath.root git hash
       >>= fun root ->
-      lwt_result_traversal [] (write_blob_with_acc fs) (write_tree fs) root
+      lwt_result_traversal []
+        (write_blob_with_acc ~root:(Store.root git) fs)
+        (write_tree ~root:(Store.root git) fs)
+        root
 
     let of_commit git fs hash =
       Store.read git hash
