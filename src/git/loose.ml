@@ -46,6 +46,8 @@ module type S = sig
   val pp_error : error Fmt.t
   val mem : fs:FS.t -> root:Fpath.t -> Hash.t -> bool Lwt.t
 
+  (* Read -> Inflate -> Decode *)
+
   val read :
        fs:FS.t
     -> root:Fpath.t
@@ -56,6 +58,8 @@ module type S = sig
     -> Hash.t
     -> (t, error) result Lwt.t
 
+  (* Read -> Inflate *)
+
   val read_inflated :
        fs:FS.t
     -> root:Fpath.t
@@ -65,6 +69,8 @@ module type S = sig
     -> raw:Cstruct.t
     -> Hash.t
     -> (kind * Cstruct.t, error) result Lwt.t
+
+  (* Read -> Inflate *)
 
   val read_inflated_without_allocation :
        fs:FS.t
@@ -89,6 +95,8 @@ module type S = sig
     -> Hash.t
     -> (int64, error) result Lwt.t
 
+  (* Encode -> Deflate -> Write *)
+
   val write :
        fs:FS.t
     -> root:Fpath.t
@@ -99,6 +107,8 @@ module type S = sig
     -> raw:Cstruct.t
     -> t
     -> (Hash.t * int, error) result Lwt.t
+
+  (* Deflate -> Write *)
 
   val write_deflated :
        fs:FS.t
@@ -170,6 +180,10 @@ struct
                 List.fold_left
                   (fun acc path ->
                     let hash = Fpath.(to_string first ^ to_string path) in
+                    (* XXX(dinosaure): we should not use [fpath] here but
+                       something else. Indeed, [Fpath.to_string] is platform
+                       dependent. But in this case, it should be fine when
+                       [first] is one segment. *)
                     try Hash.of_hex hash :: acc with _e ->
                       (* XXX(samoht): avoid catch-all *)
                       Log.warn (fun l ->

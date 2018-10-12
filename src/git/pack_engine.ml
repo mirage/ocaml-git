@@ -388,7 +388,9 @@ struct
               Lwt.return_unit )
               >>= (fun () ->
                     match !res with
-                    | None -> assert false
+                    | None ->
+                        assert false
+                        (* XXX(dinosaure): avoid value restriction. *)
                     | Some (deliver, res, rtmp) ->
                         Rresult.R.reword_error
                           (fun err -> `Pack_decoder err)
@@ -407,6 +409,12 @@ struct
                   let crc, abs_off, length =
                     match obj with
                     | RPDec.Ascendant.External _ -> assert false
+                    (* XXX(dinosaure): When we ask an object in a PACK, it
+                       cannot be directly an external object (parent of it
+                       should be). Indeed, we ask if object exists in PACK file
+                       and should exist as a root or a node of the PACK file,
+                       but never directly as an external (otherwise, it is
+                       located in an other place). *)
                     | RPDec.Ascendant.Root base ->
                         ( base.RPDec.Base.crc
                         , base.RPDec.Base.offset

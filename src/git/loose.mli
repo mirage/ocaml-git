@@ -49,6 +49,11 @@ module type S = sig
     -> raw:Cstruct.t
     -> Hash.t
     -> (t, error) result Lwt.t
+  (** [read ~fs ~root ~window ~ztmp ~dtmp ~raw hash] tries to extract from a
+      loose file localized in [root / objects] a Git object. This function
+      reads (uses [raw] buffer to read) the file, inflates (uses [ztmp] and
+      [window] to inflate) and decodes (uses [dtmp] to decode) Git object and
+      make a [Value.t]. *)
 
   val read_inflated :
        fs:FS.t
@@ -59,6 +64,15 @@ module type S = sig
     -> raw:Cstruct.t
     -> Hash.t
     -> (kind * Cstruct.t, error) result Lwt.t
+  (** [read_inflated ~fs ~root ~window ~ztmp ~dtmp ~raw hash] tries to extract
+      from a loose file localized in [root / objects] a Git object. This
+      function reads (uses [raw] buffer to read) the file, inflates (uses
+      [ztmp] and [window] to inflate) and decodes only Git header and body
+      (uses [dtmp] to decode) Git object and make a fresh buffer.
+
+      Body is the serialization of the Git object, and, from [kind] (kind of
+      Git object), client can call decoder associated to the kind returned
+      (like [Tree.Decoder] for example). *)
 
   val read_inflated_without_allocation :
        fs:FS.t
@@ -70,6 +84,10 @@ module type S = sig
     -> result:Cstruct.t
     -> Hash.t
     -> (kind * Cstruct.t, error) result Lwt.t
+  (** [read_inflated_without_allocation ~fs ~root ~window ~ztmp ~dtmp ~raw
+      ~result hash] is the same as {!read_inflated}. However, instead to make a
+      fresh buffer which will contain the Git object serialized, it uses
+      [result] to store it. This function does not allocate any buffer. *)
 
   val list : fs:FS.t -> root:Fpath.t -> Hash.t list Lwt.t
 
