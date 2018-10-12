@@ -81,12 +81,13 @@ let rec protect ?(n = 0) name err f =
             Log.debug (fun l -> l "sleeping for %.2fs" s) ;
             Lwt_unix.sleep s >|= fun () -> Error `EAGAIN
         | Unix_error (e, _, _) -> (
-            err e >|= function
+            err e
+            >|= function
             | Ok _ as x -> x
-            | Error e   -> log_err (); Error (`E e) )
-        | exn ->
-          log_err ();
-          expected_unix_error exn )
+            | Error e ->
+                log_err () ;
+                Error (`E e) )
+        | exn -> log_err () ; expected_unix_error exn )
     >>= function
     | Ok _ as x -> Lwt.return x
     | Error `EAGAIN -> protect ~n:(n + 1) name err f
@@ -316,7 +317,8 @@ module File = struct
       | Unix.ENOENT -> Lwt.return (Ok ())
       | e -> err_delete path e
     in
-    protect "File.delete" err @@ fun () -> Lwt_unix.unlink (Fpath.to_string path)
+    protect "File.delete" err
+    @@ fun () -> Lwt_unix.unlink (Fpath.to_string path)
 end
 
 module Mapper = struct

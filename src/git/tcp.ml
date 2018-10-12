@@ -18,8 +18,11 @@ let src = Logs.Src.create "git.tcp" ~doc:"logs git's tcp event"
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-module Make (N : NET) (E: Sync.ENDPOINT with type t = N.endpoint) (G : Minimal.S) :
-  Sync.S with module Store = G with module Endpoint = E = struct
+module Make
+    (N : NET)
+    (E : Sync.ENDPOINT with type t = N.endpoint)
+    (G : Minimal.S) : Sync.S with module Store = G with module Endpoint = E =
+struct
   module Store = G
   module Net = N
   module Client = Smart.Client (Store.Hash) (Store.Reference)
@@ -386,9 +389,10 @@ module Make (N : NET) (E: Sync.ENDPOINT with type t = N.endpoint) (G : Minimal.S
   let path e = Uri.path (uri e)
   let port e = match Uri.port (uri e) with None -> 9418 | Some p -> p
 
-  let host e = match Uri.host (uri e) with
+  let host e =
+    match Uri.host (uri e) with
     | Some h -> h
-    | None   -> Fmt.invalid_arg "missing host: %a" Uri.pp_hum (uri e)
+    | None -> Fmt.invalid_arg "missing host: %a" Uri.pp_hum (uri e)
 
   module N = Negociator.Make (G)
 
@@ -444,7 +448,7 @@ module Make (N : NET) (E: Sync.ENDPOINT with type t = N.endpoint) (G : Minimal.S
     let ctx, state =
       Client.context
         { Client.Common.pathname= path endpoint
-        ; host= Some (host endpoint, Some (port (endpoint)))
+        ; host= Some (host endpoint, Some (port endpoint))
         ; request_command= `Upload_pack }
     in
     let t = make ~socket ~ctx ~capabilities in

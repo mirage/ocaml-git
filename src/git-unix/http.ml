@@ -3,9 +3,10 @@ open Lwt.Infix
 module E = struct
   type headers = Cohttp.Header.t
   type t = Net.endpoint
+
   let uri t = t.Net.uri
   let headers t = t.Net.headers
-  let with_uri uri t = { t with Net.uri }
+  let with_uri uri t = {t with Net.uri}
 end
 
 module Client = struct
@@ -40,8 +41,9 @@ module Client = struct
     (* XXX(dinosaure): [~chunked:false] is mandatory, I don't want to explain
        why (I lost one day to find this bug) but believe me. *)
     let uri = e.Net.uri in
-    let headers = match headers with
-      | None   -> e.headers
+    let headers =
+      match headers with
+      | None -> e.headers
       | Some h -> Cohttp.Header.add_list e.headers (Cohttp.Header.to_list h)
     in
     Log.debug (fun l -> l ~header:"call" "Send a request to %a." Uri.pp_hum uri) ;

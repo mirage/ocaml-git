@@ -114,11 +114,9 @@ let resolver =
   let ns_port = None in
   R.R.init ?ns ?ns_port ~stack ()
 
-module Store = struct
-  include Git.Mem.Store
+module Store = struct include Git.Mem.Store
 
-  let v root = v root
-end
+                      let v root = v root end
 
 module TCP = Test_sync.Make (struct
   module Sync = Git_mirage.Sync (Store)
