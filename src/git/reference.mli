@@ -189,6 +189,7 @@ module type IO = sig
   val write :
        fs:FS.t
     -> root:Fpath.t
+    -> temp_dir:Fpath.t
     -> ?capacity:int
     -> raw:Cstruct.t
     -> t

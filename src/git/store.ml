@@ -446,8 +446,9 @@ struct
     let write t value =
       with_buffer t
       @@ fun {ztmp; raw; _} ->
-      LooseImpl.write ~fs:t.fs ~root:t.dotgit ~ztmp ~raw ~level:t.compression
-        value
+      let temp_dir = Fpath.(t.dotgit / "tmp") in
+      LooseImpl.write ~fs:t.fs ~root:t.dotgit ~temp_dir ~ztmp ~raw
+        ~level:t.compression value
       >>!= lift_error
 
     let mem t = LooseImpl.mem ~fs:t.fs ~root:t.dotgit
@@ -456,21 +457,23 @@ struct
     let read_inflated t hash =
       with_buffer t
       @@ fun {ztmp; dtmp; raw; window} ->
-      LooseImpl.inflate ~fs:t.fs ~root:t.dotgit ~window ~ztmp ~dtmp ~raw hash
+      LooseImpl.read_inflated ~fs:t.fs ~root:t.dotgit ~window ~ztmp ~dtmp ~raw
+        hash
       >>!= lift_error
 
     let read_inflated_wa result t hash =
       with_buffer t
       @@ fun {ztmp; dtmp; raw; window} ->
-      LooseImpl.inflate_wa ~fs:t.fs ~root:t.dotgit ~window ~ztmp ~dtmp ~raw
-        ~result hash
+      LooseImpl.read_inflated_without_allocation ~fs:t.fs ~root:t.dotgit
+        ~window ~ztmp ~dtmp ~raw ~result hash
       >>!= lift_error
 
     let write_inflated t ~kind value =
       with_buffer t
       @@ fun {raw; _} ->
-      LooseImpl.write_inflated ~fs:t.fs ~root:t.dotgit ~level:t.compression
-        ~raw ~kind value
+      let temp_dir = Fpath.(t.dotgit / "tmp") in
+      LooseImpl.write_deflated ~fs:t.fs ~root:t.dotgit ~temp_dir
+        ~level:t.compression ~raw ~kind value
       >>= function
       | Ok hash -> Lwt.return hash
       | Error e -> Fmt.kstrf Lwt.fail_with "%a" LooseImpl.pp_error e
@@ -576,10 +579,11 @@ struct
       | true ->
           with_buffer t
           @@ fun {ztmp; window; _} ->
+          let temp_dir = Fpath.(t.dotgit / "tmp") in
           Log.debug (fun l ->
               l "Git object %a found in a PACK file." Hash.pp hash ) ;
-          PackImpl.read ~root:t.dotgit ~read_loose:(read_loose t) ~to_result
-            ~ztmp ~window t.fs t.allocation t.engine hash
+          PackImpl.read ~root:t.dotgit ~temp_dir ~read_loose:(read_loose t)
+            ~to_result ~ztmp ~window t.fs t.allocation t.engine hash
           >>!= lift_error
 
     let to_result (kind, raw, _, _) =
@@ -599,8 +603,9 @@ struct
           @@ fun {ztmp; window; _} ->
           Log.debug (fun l ->
               l "Git object %a found in a PACK file." Hash.pp hash ) ;
-          PackImpl.read ~root:t.dotgit ~read_loose:(read_loose t) ~to_result
-            ~ztmp ~window t.fs t.allocation t.engine hash
+          let temp_dir = Fpath.(t.dotgit / "tmp") in
+          PackImpl.read ~root:t.dotgit ~temp_dir ~read_loose:(read_loose t)
+            ~to_result ~ztmp ~window t.fs t.allocation t.engine hash
           >>!= lift_error
 
     let size t hash =
@@ -717,8 +722,9 @@ struct
           PInfo.first_pass ~ztmp ~window stream
           >>!= (fun err -> `Pack_info err)
           >>?= fun info ->
-          PackImpl.add ~root:t.dotgit ~read_loose:(read_loose t) ~ztmp ~window
-            t.fs t.allocation t.engine path_tmp info
+          let temp_dir = Fpath.(t.dotgit / "tmp") in
+          PackImpl.add ~root:t.dotgit ~temp_dir ~read_loose:(read_loose t)
+            ~ztmp ~window t.fs t.allocation t.engine path_tmp info
           >>!= lift_error )
         (function Save err -> Lwt.return_error err | exn -> Lwt.fail exn)
   end
@@ -1052,8 +1058,10 @@ struct
           Lwt.return (Error `Not_found) )
 
     let write t reference value =
+      let temp_dir = Fpath.(t.dotgit / "tmp") in
       with_buffer t (fun {raw; _} ->
-          Reference.write ~fs:t.fs ~root:t.dotgit ~raw reference value )
+          Reference.write ~fs:t.fs ~root:t.dotgit ~temp_dir ~raw reference
+            value )
       >>= function
       | Error (#Reference.error as err) -> Lwt.return (Error (err : error))
       | Ok () -> (
@@ -1082,7 +1090,6 @@ struct
                         Hashtbl.add t.packed (Reference.of_string refname) hash
                     | `Peeled _ -> ())
                   packed_refs' ;
-                let temp_dir = Fpath.(t.dotgit / "tmp") in
                 with_buffer t (fun {raw; _} ->
                     Packed_refs.write ~fs:t.fs ~root:t.dotgit ~temp_dir ~raw
                       packed_refs' )

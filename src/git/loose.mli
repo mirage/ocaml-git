@@ -50,7 +50,7 @@ module type S = sig
     -> Hash.t
     -> (t, error) result Lwt.t
 
-  val inflate :
+  val read_inflated :
        fs:FS.t
     -> root:Fpath.t
     -> window:Inflate.window
@@ -60,7 +60,7 @@ module type S = sig
     -> Hash.t
     -> (kind * Cstruct.t, error) result Lwt.t
 
-  val inflate_wa :
+  val read_inflated_without_allocation :
        fs:FS.t
     -> root:Fpath.t
     -> window:Inflate.window
@@ -86,6 +86,7 @@ module type S = sig
   val write :
        fs:FS.t
     -> root:Fpath.t
+    -> temp_dir:Fpath.t
     -> ?capacity:int
     -> ?level:int
     -> ztmp:Cstruct.t
@@ -93,9 +94,10 @@ module type S = sig
     -> t
     -> (Hash.t * int, error) result Lwt.t
 
-  val write_inflated :
+  val write_deflated :
        fs:FS.t
     -> root:Fpath.t
+    -> temp_dir:Fpath.t
     -> ?level:int
     -> raw:Cstruct.t
     -> kind:kind

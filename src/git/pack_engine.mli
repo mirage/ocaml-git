@@ -82,6 +82,7 @@ module type S = sig
 
   val add :
        root:Fpath.t
+    -> temp_dir:Fpath.t
     -> read_loose:(Hash.t -> (RPDec.kind * Cstruct.t) option Lwt.t)
     -> ztmp:Cstruct.t
     -> window:Inflate.window
@@ -94,6 +95,7 @@ module type S = sig
 
   val read :
        root:Fpath.t
+    -> temp_dir:Fpath.t
     -> read_loose:(Hash.t -> (RPDec.kind * Cstruct.t) option Lwt.t)
     -> to_result:(   RPDec.kind * Cstruct.t * int * RPDec.Ascendant.s
                   -> ('value, error) result Lwt.t)

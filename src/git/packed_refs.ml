@@ -159,9 +159,9 @@ module Make (Hash : S.HASH) (FS : S.FS) = struct
   open Lwt.Infix
   module Decoder = Helper.Decoder (D) (FS)
 
-  let read ~fs ~root ~dtmp ~raw =
+  let read ~fs ~root:dotgit ~dtmp ~raw =
     let state = D.default dtmp in
-    let file = Fpath.(root / "packed-refs") in
+    let file = Fpath.(dotgit / "packed-refs") in
     Decoder.of_file fs file raw state
     >|= function
     | Ok _ as v -> v
@@ -187,9 +187,9 @@ module Make (Hash : S.HASH) (FS : S.FS) = struct
     include Helper.Encoder (E) (FS)
   end
 
-  let write ~fs ~root ~temp_dir ?(capacity = 0x100) ~raw value =
+  let write ~fs ~root:dotgit ~temp_dir ?(capacity = 0x100) ~raw value =
     let state = E.default (capacity, value) in
-    let path = Fpath.(root / "packed-refs") in
+    let path = Fpath.(dotgit / "packed-refs") in
     Encoder.to_file fs ~temp_dir path raw state
     >|= function
     | Ok _ -> Ok ()

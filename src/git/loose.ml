@@ -56,7 +56,7 @@ module type S = sig
     -> Hash.t
     -> (t, error) result Lwt.t
 
-  val inflate :
+  val read_inflated :
        fs:FS.t
     -> root:Fpath.t
     -> window:Inflate.window
@@ -66,7 +66,7 @@ module type S = sig
     -> Hash.t
     -> (kind * Cstruct.t, error) result Lwt.t
 
-  val inflate_wa :
+  val read_inflated_without_allocation :
        fs:FS.t
     -> root:Fpath.t
     -> window:Inflate.window
@@ -92,6 +92,7 @@ module type S = sig
   val write :
        fs:FS.t
     -> root:Fpath.t
+    -> temp_dir:Fpath.t
     -> ?capacity:int
     -> ?level:int
     -> ztmp:Cstruct.t
@@ -99,9 +100,10 @@ module type S = sig
     -> t
     -> (Hash.t * int, error) result Lwt.t
 
-  val write_inflated :
+  val write_deflated :
        fs:FS.t
     -> root:Fpath.t
+    -> temp_dir:Fpath.t
     -> ?level:int
     -> raw:Cstruct.t
     -> kind:kind
@@ -140,9 +142,9 @@ struct
       done ;
       Buffer.contents buf )
 
-  let mem ~fs ~root hash =
+  let mem ~fs ~root:dotgit hash =
     let first, rest = explode hash in
-    let path = Fpath.(root / "objects" / first / rest) in
+    let path = Fpath.(dotgit / "objects" / first / rest) in
     Log.debug (fun l ->
         l "Checking if the object %a is a loose file (%a)." Hash.pp hash
           Fpath.pp path ) ;
@@ -150,8 +152,8 @@ struct
 
   (* XXX(dinosaure): make this function more resilient: if [of_hex] fails),
      avoid the path. *)
-  let list ~fs ~root =
-    let path = Fpath.(root / "objects") in
+  let list ~fs ~root:dotgit =
+    let path = Fpath.(dotgit / "objects") in
     FS.Dir.contents fs ~rel:true path
     >>= function
     | Error err ->
@@ -185,12 +187,12 @@ struct
         and type decoder = 'decoder
         and type error = [Error.Decoder.t | `Inflate of Inflate.error])
 
-  let gen (type state result) ~fs ~root (state : state) ~raw
+  let gen (type state result) ~fs ~root:dotgit (state : state) ~raw
       (decoder : (result, state) decoder) hash =
     let module D = (val decoder) in
     let module Decoder = Helper.Decoder (D) (FS) in
     let first, rest = explode hash in
-    let file = Fpath.(root / "objects" / first / rest) in
+    let file = Fpath.(dotgit / "objects" / first / rest) in
     Log.debug (fun l -> l "Reading the loose object %a." Fpath.pp file) ;
     Decoder.of_file fs file raw state
     >|= function
@@ -268,11 +270,12 @@ struct
         let p = decoder ~result:None
       end)
 
-  let inflate ~fs ~root ~window ~ztmp ~dtmp ~raw hash =
+  let read_inflated ~fs ~root ~window ~ztmp ~dtmp ~raw hash =
     let state = I.default (window, ztmp, dtmp) in
     gen ~fs ~root state ~raw (module I) hash
 
-  let inflate_wa ~fs ~root ~window ~ztmp ~dtmp ~raw ~result hash =
+  let read_inflated_without_allocation ~fs ~root ~window ~ztmp ~dtmp ~raw
+      ~result hash =
     let module P =
       Helper.MakeInflater
         (Inflate)
@@ -326,7 +329,7 @@ struct
     include Helper.Encoder (E) (FS)
   end
 
-  let write_inflated ~fs ~root ?(level = 4) ~raw ~kind value =
+  let write_deflated ~fs ~root:dotgit ~temp_dir ?(level = 4) ~raw ~kind value =
     let header =
       Fmt.kstrf Cstruct.of_string "%s %d\000%!"
         ( match kind with
@@ -349,8 +352,7 @@ struct
     in
     let hash = digest value' in
     let first, rest = explode hash in
-    let path = Fpath.(root / "objects" / first) in
-    let temp_dir = Fpath.(root / "tmp") in
+    let path = Fpath.(dotgit / "objects" / first) in
     FS.Dir.create fs path
     >>= function
     | Error err -> Lwt.return Error.(v @@ FS.err_create path err)
@@ -381,14 +383,14 @@ struct
     include Helper.Encoder (E) (FS)
   end
 
-  let write ~fs ~root ?(capacity = 0x100) ?(level = 4) ~ztmp ~raw value =
+  let write ~fs ~root:dotgit ~temp_dir ?(capacity = 0x100) ?(level = 4) ~ztmp
+      ~raw value =
     let hash = digest value in
     let first, rest = explode hash in
     let encoder = E.default (capacity, value, level, ztmp) in
-    let path = Fpath.(root / "objects" / first / rest) in
-    let temp_dir = Fpath.(root / "tmp") in
+    let path = Fpath.(dotgit / "objects" / first / rest) in
     Log.debug (fun l -> l "Writing a new loose object %a." Fpath.pp path) ;
-    FS.Dir.create fs Fpath.(root / "objects" / first)
+    FS.Dir.create fs Fpath.(dotgit / "objects" / first)
     >>= function
     | Error err -> Lwt.return Error.(v @@ FS.err_create path err)
     | Ok (true | false) -> (

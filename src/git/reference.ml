@@ -130,11 +130,11 @@ module type IO = sig
     -> t
     -> dtmp:Cstruct.t
     -> raw:Cstruct.t
-    -> (t * head_contents, error) result Lwt.t
 
   val write :
        fs:FS.t
     -> root:Fpath.t
+    -> temp_dir:Fpath.t
     -> ?capacity:int
     -> raw:Cstruct.t
     -> t
@@ -311,10 +311,10 @@ module IO (H : S.HASH) (FS : S.FS) = struct
     | Error (`Decoder err) -> Error.(v @@ Error.Decoder.with_path file err)
     | Error #fs_error as err -> err
 
-  let write ~fs ~root ?(capacity = 0x100) ~raw reference value =
+  let write ~fs ~root ~temp_dir ?(capacity = 0x100) ~raw reference value
+      =
     let state = E.default (capacity, value) in
     let path = Fpath.(root // to_path reference) in
-    let temp_dir = Fpath.(root / "tmp") in
     FS.Dir.create fs (Fpath.parent path)
     >>= function
     | Error err ->
