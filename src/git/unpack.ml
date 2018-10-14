@@ -2270,7 +2270,7 @@ struct
         | Ok
             (Object.Patch
               ({Patch.descr= {Hunk.reference= Hunk.Hash hash; _}; _} as patch))
-      -> (
+        -> (
           match t.idx hash with
           | Some (_, abs_off) -> (
               mu (abs_off, succ depth)
@@ -2403,7 +2403,7 @@ struct
         | Ok
             (Object.Patch
               ({Patch.descr= {Hunk.reference= Hunk.Hash hash; _}; _} as patch))
-      -> (
+        -> (
           match t.idx hash with
           | Some (_, abs_off) -> (
               mu (abs_off, not switch, succ depth)
@@ -2511,7 +2511,7 @@ struct
         | Ok
             (`Patch
               ({Hunk.reference= Hash hash; _}, target_length, source_length))
-      -> (
+        -> (
           match t.idx hash with
           | Some (_, abs_off) ->
               mu (max (max target_length source_length) needed, abs_off)

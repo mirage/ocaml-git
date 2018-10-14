@@ -92,7 +92,8 @@ let main directory repository =
   Store.v root
   >>!= store_err
   >>?= fun git ->
-  Sync.fetch_all git ~references:Store.Reference.Map.empty (endpoint repository)
+  Sync.fetch_all git ~references:Store.Reference.Map.empty
+    (endpoint repository)
   >>!= sync_err
   >>?= fun _ -> Lwt.return (Ok ())
 

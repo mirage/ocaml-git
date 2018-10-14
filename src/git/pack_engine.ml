@@ -1223,8 +1223,7 @@ struct
               | RPDec.Ascendant.Node
                   { patch=
                       { RPDec.Patch.descr=
-                          {HDec.reference= HDec.Offset abs_off; _}; _ }; _ }
-            -> (
+                          {HDec.reference= HDec.Offset abs_off; _}; _ }; _ } -> (
                 try
                   let hash = Hashtbl.find revidx abs_off in
                   Some (PEnc.Entry.From hash)

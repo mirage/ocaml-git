@@ -11,5 +11,7 @@ module type NET = sig
   val close : socket -> unit Lwt.t
 end
 
-module Make (N : NET) (E: Sync.ENDPOINT with type t = N.endpoint) (G : Minimal.S) :
-  Sync.S with module Store = G and module Endpoint = E
+module Make
+    (N : NET)
+    (E : Sync.ENDPOINT with type t = N.endpoint)
+    (G : Minimal.S) : Sync.S with module Store = G and module Endpoint = E

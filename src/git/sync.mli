@@ -19,15 +19,16 @@
 
 module type ENDPOINT = sig
   type t
-  val uri  : t -> Uri.t
+
+  val uri : t -> Uri.t
 end
 
 type 'a shallow_update = {shallow: 'a list; unshallow: 'a list}
 
 type 'a acks =
-    { shallow: 'a list
-    ; unshallow: 'a list
-    ; acks: ('a * [`Common | `Ready | `Continue | `ACK]) list }
+  { shallow: 'a list
+  ; unshallow: 'a list
+  ; acks: ('a * [`Common | `Ready | `Continue | `ACK]) list }
 
 module type S = sig
   module Store : Minimal.S

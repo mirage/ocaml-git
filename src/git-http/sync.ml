@@ -37,9 +37,11 @@ end
 
 module type ENDPOINT = sig
   include Git.Sync.ENDPOINT
+
   type headers
-  val headers: t -> headers
-  val with_uri: Uri.t -> t -> t
+
+  val headers : t -> headers
+  val with_uri : Uri.t -> t -> t
 end
 
 module type CLIENT = sig
@@ -76,9 +78,8 @@ module type S = sig
      and type meth = Web.HTTP.meth
      and type resp = Web.resp
 
-  module Endpoint: ENDPOINT
-    with type t = Client.endpoint
-     and type headers = Client.headers
+  module Endpoint :
+    ENDPOINT with type t = Client.endpoint and type headers = Client.headers
 
   include Git.Sync.S with module Endpoint := Endpoint
 end
@@ -107,9 +108,7 @@ module Make
           and type body = Lwt_cstruct_flow.o
           and type meth = W.HTTP.meth
           and type resp = W.resp)
-    (E : ENDPOINT
-          with type t = C.endpoint
-           and type headers = C.headers)
+    (E : ENDPOINT with type t = C.endpoint and type headers = C.headers)
     (G : Git.S) =
 struct
   module Web = W
@@ -206,8 +205,7 @@ struct
   let extract endpoint =
     let uri = E.uri endpoint in
     ( Option.mem (Uri.scheme uri) "https" ~equal:String.equal
-    , Option.value_exn ~error:"Invalid http(s) uri: no host"
-        (Uri.host uri)
+    , Option.value_exn ~error:"Invalid http(s) uri: no host" (Uri.host uri)
     , Uri.path_and_query uri
     , Uri.port uri )
 
@@ -358,12 +356,12 @@ struct
                             ; requests= `Raw (x, r)
                             ; capabilities })))
                   (Web.Request.meth req)
-                  ( E.with_uri
-                      (Web.Request.uri req
-                       |> (fun uri -> Uri.with_scheme uri (Some scheme))
-                       |> (fun uri -> Uri.with_host uri (Some host))
-                       |> fun uri -> Uri.with_port uri port )
-                      endpoint)
+                  (E.with_uri
+                     ( Web.Request.uri req
+                     |> (fun uri -> Uri.with_scheme uri (Some scheme))
+                     |> (fun uri -> Uri.with_host uri (Some host))
+                     |> fun uri -> Uri.with_port uri port )
+                     endpoint)
                 >>= fun resp ->
                 let commands_refs =
                   List.map
@@ -480,12 +478,12 @@ struct
                             ; deep= deepen
                             ; has= Store.Hash.Set.elements have } ))))
                 (Web.Request.meth req)
-                ( E.with_uri
-                    (Web.Request.uri req
-                     |> (fun uri -> Uri.with_scheme uri (Some scheme))
-                     |> (fun uri -> Uri.with_host uri (Some host))
-                     |> fun uri -> Uri.with_port uri port )
-                    endpoint )
+                (E.with_uri
+                   ( Web.Request.uri req
+                   |> (fun uri -> Uri.with_scheme uri (Some scheme))
+                   |> (fun uri -> Uri.with_host uri (Some host))
+                   |> fun uri -> Uri.with_port uri port )
+                   endpoint)
             in
             let negociation_result resp =
               consume (Web.Response.body resp)
@@ -612,8 +610,8 @@ struct
   let fetch_and_set_references git ?capabilities ~choose ~references endpoint =
     Negociator.find_common git
     >>= fun (have, state, continue) ->
-    let continue ({acks; shallow; unshallow}: Negociator.acks) state =
-      continue ({acks; shallow; unshallow}: Negociator.acks) state
+    let continue ({acks; shallow; unshallow} : Negociator.acks) state =
+      continue ({acks; shallow; unshallow} : Negociator.acks) state
     in
     let want_handler = want_handler git choose in
     let notify _ = Lwt.return_unit in
@@ -687,8 +685,6 @@ module CohttpMake
           and type body = Lwt_cstruct_flow.o
           and type meth = Web_cohttp_lwt.HTTP.meth
           and type resp = Web_cohttp_lwt.resp)
-    (E : ENDPOINT
-         with type t = C.endpoint
-          and type headers = C.headers)
+    (E : ENDPOINT with type t = C.endpoint and type headers = C.headers)
     (S : Git.S) =
   Make (Web_cohttp_lwt) (C) (E) (S)

@@ -2,11 +2,7 @@ let src = Logs.Src.create "git-tcp.net" ~doc:"logs git's net I/O event"
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-type endpoint = {
-  uri    : Uri.t;
-  headers: Cohttp.Header.t;
-}
-
+type endpoint = {uri: Uri.t; headers: Cohttp.Header.t}
 type socket = Lwt_unix.file_descr
 type error = [`Unix of exn]
 
