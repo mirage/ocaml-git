@@ -88,8 +88,8 @@ let main show_tags show_heads repository =
     List.filter
       (fun (_, reference, _) ->
         let path = Store.Reference.to_path reference in
-        (List.exists (( = ) "tags") (Git.Gpath.segs path) && show_tags)
-        || (List.exists (( = ) "heads") (Git.Gpath.segs path) && show_heads) )
+        (List.exists (( = ) "tags") (Git.Path.segs path) && show_tags)
+        || (List.exists (( = ) "heads") (Git.Path.segs path) && show_heads) )
       refs
   in
   List.iter

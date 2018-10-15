@@ -36,7 +36,7 @@ module type ENTRY = sig
 
   val pp_info : info Fmt.t
 
-  type entry = {info: info; hash: hash; flag: extend flag; path: Git.Gpath.t}
+  type entry = {info: info; hash: hash; flag: extend flag; path: Git.Path.t}
 
   val pp_entry : entry Fmt.t
 
@@ -63,7 +63,7 @@ module Make
 
     val pp : Entry.entry t Fmt.t
     val of_entries : Entry.entry list -> Entry.entry t
-    val to_entries : to_entry:(Git.Gpath.t -> 'a -> 'b) -> 'a t -> 'b list
+    val to_entries : to_entry:(Git.Path.t -> 'a -> 'b) -> 'a t -> 'b list
 
     type error
 
@@ -76,24 +76,24 @@ module Make
     val int_of_perm : file -> int
 
     val entry_of_stats :
-      Store.Hash.t -> Git.Gpath.t -> ?gitlink:bool -> Unix.stats -> Entry.entry
+      Store.Hash.t -> Git.Path.t -> ?gitlink:bool -> Unix.stats -> Entry.entry
 
     val write_blob :
          root:Fpath.t
       -> FS.t
-      -> Git.Gpath.t
+      -> Git.Path.t
       -> Store.Value.Tree.perm * Cstruct.t
       -> (Entry.entry, error) result Lwt.t
 
     val write_blob_entry :
          Store.t
       -> FS.t
-      -> Git.Gpath.t
+      -> Git.Path.t
       -> Entry.entry
       -> (Entry.entry, error) result Lwt.t
 
     val write_tree :
-      root:Fpath.t -> FS.t -> Git.Gpath.t -> (unit, error) result Lwt.t
+      root:Fpath.t -> FS.t -> Git.Path.t -> (unit, error) result Lwt.t
 
     val load_entries :
          Store.t

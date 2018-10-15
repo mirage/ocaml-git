@@ -87,13 +87,8 @@ module type S = sig
 
   val fold :
        t
-    -> (   'acc
-        -> ?name:Gpath.t
-        -> length:int64
-        -> Hash.t
-        -> Value.t
-        -> 'acc Lwt.t)
-    -> path:Gpath.t
+    -> ('acc -> ?name:Path.t -> length:int64 -> Hash.t -> Value.t -> 'acc Lwt.t)
+    -> path:Path.t
     -> 'acc
     -> Hash.t
     -> 'acc Lwt.t

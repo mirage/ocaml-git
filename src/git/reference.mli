@@ -20,7 +20,7 @@
 (** A Git Reference object. Which contains a hash to point to an other object. *)
 type t = private string
 
-module Path : sig
+module P : sig
   (** Type of the left part of a reference. *)
   type partial
 
@@ -82,10 +82,10 @@ val of_string : string -> t
 val to_string : t -> string
 (** [to_string t] returns the string value of the reference [t]. *)
 
-val of_path : Gpath.t -> t
+val of_path : Path.t -> t
 (** [of_path path] casts a path to a reference. *)
 
-val to_path : t -> Gpath.t
+val to_path : t -> Path.t
 (** [to_path ref] casts a reference [ref] to a path (as a Window path or Unix
     path). *)
 
@@ -96,7 +96,7 @@ module type S = sig
 
   type nonrec t = t
 
-  module Path : sig
+  module P : sig
     type partial
     type branch = string
 
@@ -114,8 +114,8 @@ module type S = sig
   val is_head : t -> bool
   val of_string : string -> t
   val to_string : t -> string
-  val of_path : Gpath.t -> t
-  val to_path : t -> Gpath.t
+  val of_path : Path.t -> t
+  val to_path : t -> Path.t
 
   include S.BASE with type t := t
 

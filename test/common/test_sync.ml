@@ -108,7 +108,7 @@ module Make (Sync : SYNC) = struct
     let tests =
       List.map
         (fun (uri, reference) ->
-          let reference = Store.Reference.Path.(heads / reference) in
+          let reference = Store.Reference.P.(heads / reference) in
           let msg =
             Fmt.strf "cloning (branch=%a)" Store.Reference.pp reference
           in

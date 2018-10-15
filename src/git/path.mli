@@ -19,17 +19,17 @@
     previous version of ocaml-git, we used [Fpath] to have a good abstraction
     of path in UNIX and Windows systems. However, Git keeps in some ways (INDEX
     file specially) the UNIX path semantic (tree and reference use it too). So,
-    [Gpath] is an abstraction (Git-path) to keep UNIX path semantic (and the
+    [Path] is an abstraction (Git-path) to keep UNIX path semantic (and the
     separator "/"). However, we used it in few cases.
 
-    Indeed, any interation with a FS use an [Fpath] and [Gpath] is used only
+    Indeed, any interation with a FS use an [Fpath] and [Path] is used only
     when we talk with the Git kernel (for example, the [S.fold] function). The
-    biggest differences between [Fpath] and [Gpath] is:
+    biggest differences between [Fpath] and [Path] is:
 
-    - The empty element, that means, any [Gpath] __is__ (must be) relative with
+    - The empty element, that means, any [Path] __is__ (must be) relative with
     a [Fpath].
 
-    - The UNIX separator in any platform, so we need to cast a [Gpath] to an
+    - The UNIX separator in any platform, so we need to cast a [Path] to an
     [Fpath] then when we want to talk with the FS.
 
     It's really annoying to handle it like this but Windows is a shit. *)
