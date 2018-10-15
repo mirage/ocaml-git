@@ -88,15 +88,15 @@ let parse_value s =
 let ( >>?= ) = Lwt_result.bind
 
 module Git_status = struct
-  type t = [`Add of Fpath.t]
+  type t = [`Add of Git.Gpath.t]
 
-  let pp ppf = function `Add path -> Fmt.pf ppf "A %a" Fpath.pp path
+  let pp ppf = function `Add path -> Fmt.pf ppf "A %a" Git.Gpath.pp path
 
   let equal a b =
-    match a, b with `Add a, `Add b -> Fpath.equal a b | _, _ -> false
+    match a, b with `Add a, `Add b -> Git.Gpath.equal a b | _, _ -> false
 
   let compare a b =
-    match a, b with `Add a, `Add b -> Fpath.compare a b | _, _ -> -1
+    match a, b with `Add a, `Add b -> Git.Gpath.compare a b | _, _ -> -1
 
   let of_output output =
     List.fold_left
@@ -105,8 +105,8 @@ module Git_status = struct
         let v, _ =
           parse_value (Astring.String.trim ~drop:Astring.Char.Ascii.is_white p)
         in
-        match String.sub s 0 1, Fpath.of_string v with
-        | "A", Ok path -> `Add path :: acc
+        match String.sub s 0 1, Git.Gpath.v v with
+        | "A", path -> `Add path :: acc
         | _, _ -> acc
         | exception Invalid_argument _ -> acc )
       []
@@ -116,7 +116,8 @@ module Git_status = struct
     let pp ppf lst = Fmt.Dump.list pp ppf lst
 
     let equal a b =
-      List.for_all2 equal (List.sort compare a) (List.sort compare b)
+      try List.for_all2 equal (List.sort compare a) (List.sort compare b)
+      with _ -> false
   end
 end
 
@@ -167,7 +168,7 @@ end
 
 module Git_ls_tree = struct
   type kind = [`Blob | `Tree | `Commit | `Tag]
-  type elt = Store.Value.Tree.perm * kind * Store.Hash.t * Fpath.t
+  type elt = Store.Value.Tree.perm * kind * Store.Hash.t * Git.Gpath.t
   type t = elt list
 
   let compare_elt (_, _, a, _) (_, _, b, _) = Store.Hash.compare a b
@@ -190,7 +191,7 @@ module Git_ls_tree = struct
     let pp_elt ppf (perm, kind, hash, path) =
       Fmt.pf ppf "%s %a %a %a"
         (Store.Value.Tree.string_of_perm perm)
-        pp_kind kind Store.Hash.pp hash Fpath.pp path
+        pp_kind kind Store.Hash.pp hash Git.Gpath.pp path
     in
     Fmt.Dump.list pp_elt ppf lst
 
@@ -217,7 +218,7 @@ module Git_ls_tree = struct
             let perm = Store.Value.Tree.perm_of_string perm in
             let kind = kind_of_string kind in
             let hash = Store.Hash.of_hex hash in
-            let path = Fpath.v path in
+            let path = Git.Gpath.v path in
             (perm, kind, hash, path) :: acc
           with _ -> acc )
         | _ -> acc )
@@ -243,47 +244,33 @@ let update_index_add_one_file t fs path =
   let dtmp = Cstruct.create 0x800 in
   Index.load_entries t ~dtmp fs
   >>?= fun entries ->
-  let hash = hash_of_file Fpath.(Store.root t // path) in
+  let hash = hash_of_file Git.Gpath.(Store.root t + path) in
   let entry =
-    Index.entry_of_stats hash
-      Fpath.(Store.root t // path)
-      (stat Fpath.(Store.root t // path))
+    Index.entry_of_stats hash path (stat Git.Gpath.(Store.root t + path))
   in
   Fmt.epr "> @[%a@].\n%!" Fmt.(Dump.list Entry.pp_entry) entries ;
   Fmt.epr "> @[%a@].\n%!" Entry.pp_entry entry ;
-  Index.store_entries t fs ~dtmp
-    ( entry
-    :: List.map
-         (fun entry ->
-           Entry.with_path entry
-             (Some Fpath.(Store.root t // entry.Entry.path)) )
-         entries )
+  Index.store_entries t fs ~dtmp (entry :: entries)
 
 let update_index_add_one_symlink t fs path =
   let dtmp = Cstruct.create 0x800 in
   Index.load_entries t ~dtmp fs
   >>?= fun entries ->
-  let hash = hash_of_symlink Fpath.(Store.root t // path) in
-  Fmt.(pf stderr) "> hash of %a: %a.\n%!" Fpath.pp path Store.Hash.pp hash ;
+  let hash = hash_of_symlink Git.Gpath.(Store.root t + path) in
+  Fmt.(pf stderr) "> hash of %a: %a.\n%!" Git.Gpath.pp path Store.Hash.pp hash ;
   let entry =
-    Index.entry_of_stats hash
-      Fpath.(Store.root t // path)
-      (lstat Fpath.(Store.root t // path))
+    Index.entry_of_stats hash path (lstat Git.Gpath.(Store.root t + path))
   in
-  Index.store_entries t fs ~dtmp
-    ( entry
-    :: List.map
-         (fun entry ->
-           Entry.with_path entry
-             (Some Fpath.(Store.root t // entry.Entry.path)) )
-         entries )
+  Index.store_entries t fs ~dtmp (entry :: entries)
 
 let update_index_remove_one_file t fs path =
   let dtmp = Cstruct.create 0x800 in
   Index.load_entries t ~dtmp fs
   >>?= fun entries ->
   let entries =
-    List.filter (fun entry -> not (Fpath.equal path entry.Entry.path)) entries
+    List.filter
+      (fun entry -> not (Git.Gpath.equal path entry.Entry.path))
+      entries
   in
   Index.store_entries t fs ~dtmp entries
 
@@ -323,7 +310,7 @@ let test003 root fs : unit Alcotest.test_case =
   Alcotest.test_case "git update-index with --add" `Quick
     ( run ~root ~pp_error:Index.pp_error
     @@ fun t ->
-    update_index_add_one_file t fs (Fpath.v "should-be-empty")
+    update_index_add_one_file t fs (Git.Gpath.v "should-be-empty")
     >>?= fun () ->
     let command = Fmt.strf "git status --porcelain" in
     let output = output_of_command ~root:(Store.root t) command in
@@ -331,7 +318,7 @@ let test003 root fs : unit Alcotest.test_case =
     Fmt.epr "RECEIVE: @[%a@]." Fmt.(Dump.list Git_status.pp) status ;
     Alcotest.(check git_status)
       "should-be-empty"
-      [`Add Fpath.(v "should-be-empty")]
+      [`Add Git.Gpath.(v "should-be-empty")]
       status ;
     Lwt.return (Ok ()) )
 
@@ -359,7 +346,7 @@ let test006 root fs : unit Alcotest.test_case =
   Alcotest.test_case "git update-index with --remove" `Quick
     ( run ~root ~pp_error:Index.pp_error
     @@ fun t ->
-    update_index_remove_one_file t fs (Fpath.v "should-be-empty")
+    update_index_remove_one_file t fs (Git.Gpath.v "should-be-empty")
     >>?= fun () ->
     let command = Fmt.strf "git status --porcelain" in
     let output = output_of_command ~root:(Store.root t) command in
@@ -401,7 +388,7 @@ let test009 root fs : unit Alcotest.test_case =
   Alcotest.test_case "git update-index --add various types of objects" `Quick
     ( run ~root ~pp_error:Index.pp_error
     @@ fun t ->
-    let open Fpath in
+    let open Git.Gpath in
     update_index_add_one_file t fs (v "path0")
     >>?= fun () ->
     update_index_add_one_symlink t fs (v "path0sym")
@@ -506,9 +493,9 @@ let test012 root _ : unit Alcotest.test_case =
           List.map
             (function
               | {Store.Value.Tree.perm= `Dir; node; name} ->
-                  `Dir, `Tree, node, Fpath.v name
+                  `Dir, `Tree, node, Git.Gpath.v name
               | {Store.Value.Tree.perm; node; name} ->
-                  perm, `Blob, node, Fpath.v name)
+                  perm, `Blob, node, Git.Gpath.v name)
             (Store.Value.Tree.to_list tree)
         in
         Alcotest.(check git_ls_tree) "git ls-tree" lst ls_tree ;
@@ -536,7 +523,7 @@ let test013 root _ : unit Alcotest.test_case =
             let () =
               List.iter
                 (fun {Store.Value.Tree.perm; name; _} ->
-                  Hashtbl.add perms Fpath.(path / name) perm )
+                  Hashtbl.add perms Git.Gpath.(path / name) perm )
                 (Store.Value.Tree.to_list tree)
             in
             Lwt.return acc
@@ -547,8 +534,7 @@ let test013 root _ : unit Alcotest.test_case =
         | Some path, Store.Value.Tag _ ->
             Lwt.return ((Hashtbl.find perms path, `Tag, hash, path) :: acc)
         | None, _ -> Alcotest.failf "Expected only named git object" )
-      ~path:Fpath.(v ".")
-      [] root_tree
+      ~path:Git.Gpath.empty [] root_tree
     >>= fun lst ->
     Alcotest.(check git_ls_tree) "git ls-tree -r" lst ls_tree ;
     Lwt.return (Ok ()) )
@@ -572,7 +558,7 @@ let test014 root _ : unit Alcotest.test_case =
             let () =
               List.iter
                 (fun {Store.Value.Tree.perm; name; _} ->
-                  Hashtbl.add perms Fpath.(path / name) perm )
+                  Hashtbl.add perms Git.Gpath.(path / name) perm )
                 (Store.Value.Tree.to_list tree)
             in
             Lwt.return ((`Dir, `Tree, hash, path) :: acc)
@@ -583,12 +569,11 @@ let test014 root _ : unit Alcotest.test_case =
         | Some path, Store.Value.Tag _ ->
             Lwt.return ((Hashtbl.find perms path, `Tag, hash, path) :: acc)
         | None, _ -> Alcotest.failf "Expected only named git object" )
-      ~path:Fpath.(v ".")
-      [] root_tree
+      ~path:Git.Gpath.empty [] root_tree
     >>= fun lst ->
     Alcotest.(check git_ls_tree)
       "git ls-tree -r" lst
-      ((`Dir, `Tree, root_tree, Fpath.v ".") :: ls_tree) ;
+      ((`Dir, `Tree, root_tree, Git.Gpath.root) :: ls_tree) ;
     Lwt.return (Ok ()) )
 
 let test015 root fs : unit Alcotest.test_case =

@@ -133,8 +133,10 @@ struct
   let resolver ~thread:_ ~ztmp ~zwin context (_, (value, _)) =
     match value with
     | PInfo.Unresolved _ | PInfo.Delta _ -> assert false
-    | PInfo.Internal {length; abs_off; _} -> (
+    | PInfo.Internal {length; abs_off; hash} -> (
+        Log.debug (fun l -> l "Start to resolve children of %a." Hash.pp hash) ;
         let base = Cstruct.create length in
+        let base_hash = hash in
         let children (abs_off, hash) =
           List.map
             (fun idx ->
@@ -158,6 +160,9 @@ struct
                       ; depth
                       ; from= parent }
                   in
+                  Log.debug (fun l ->
+                      l "Resolve children %a from base:%a." Hash.pp
+                        patch.RPDec.Descendant.hash Hash.pp base_hash ) ;
                   context.queue.(idx)
                   <- ( patch.RPDec.Descendant.offset
                      , ( value
@@ -175,6 +180,9 @@ struct
                       ; depth
                       ; from= parent }
                   in
+                  Log.debug (fun l ->
+                      l "Resolve children (leaf) %a from base:%a." Hash.pp
+                        patch.RPDec.Descendant.hash Hash.pp base_hash ) ;
                   context.queue.(idx)
                   <- ( patch.RPDec.Descendant.offset
                      , ( value

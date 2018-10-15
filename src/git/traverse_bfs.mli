@@ -37,12 +37,12 @@ module Make (S : STORE) : sig
   val fold :
        S.t
     -> (   'a
-        -> ?name:Fpath.t
+        -> ?name:Gpath.t
         -> length:int64
         -> S.Hash.t
         -> S.Value.t
         -> 'a Lwt.t)
-    -> path:Fpath.t
+    -> path:Gpath.t
     -> 'a
     -> S.Hash.t
     -> 'a Lwt.t

@@ -244,8 +244,8 @@ module type S = sig
 
   val fold :
        t
-    -> ('a -> ?name:Fpath.t -> length:int64 -> Hash.t -> Value.t -> 'a Lwt.t)
-    -> path:Fpath.t
+    -> ('a -> ?name:Gpath.t -> length:int64 -> Hash.t -> Value.t -> 'a Lwt.t)
+    -> path:Gpath.t
     -> 'a
     -> Hash.t
     -> 'a Lwt.t
@@ -446,8 +446,9 @@ struct
     let write t value =
       with_buffer t
       @@ fun {ztmp; raw; _} ->
-      LooseImpl.write ~fs:t.fs ~root:t.dotgit ~ztmp ~raw ~level:t.compression
-        value
+      let temp_dir = Fpath.(t.dotgit / "tmp") in
+      LooseImpl.write ~fs:t.fs ~root:t.dotgit ~temp_dir ~ztmp ~raw
+        ~level:t.compression value
       >>!= lift_error
 
     let mem t = LooseImpl.mem ~fs:t.fs ~root:t.dotgit
@@ -456,21 +457,23 @@ struct
     let read_inflated t hash =
       with_buffer t
       @@ fun {ztmp; dtmp; raw; window} ->
-      LooseImpl.inflate ~fs:t.fs ~root:t.dotgit ~window ~ztmp ~dtmp ~raw hash
+      LooseImpl.read_inflated ~fs:t.fs ~root:t.dotgit ~window ~ztmp ~dtmp ~raw
+        hash
       >>!= lift_error
 
     let read_inflated_wa result t hash =
       with_buffer t
       @@ fun {ztmp; dtmp; raw; window} ->
-      LooseImpl.inflate_wa ~fs:t.fs ~root:t.dotgit ~window ~ztmp ~dtmp ~raw
-        ~result hash
+      LooseImpl.read_inflated_without_allocation ~fs:t.fs ~root:t.dotgit
+        ~window ~ztmp ~dtmp ~raw ~result hash
       >>!= lift_error
 
     let write_inflated t ~kind value =
       with_buffer t
       @@ fun {raw; _} ->
-      LooseImpl.write_inflated ~fs:t.fs ~root:t.dotgit ~level:t.compression
-        ~raw ~kind value
+      let temp_dir = Fpath.(t.dotgit / "tmp") in
+      LooseImpl.write_deflated ~fs:t.fs ~root:t.dotgit ~temp_dir
+        ~level:t.compression ~raw ~kind value
       >>= function
       | Ok hash -> Lwt.return hash
       | Error e -> Fmt.kstrf Lwt.fail_with "%a" LooseImpl.pp_error e
@@ -576,10 +579,11 @@ struct
       | true ->
           with_buffer t
           @@ fun {ztmp; window; _} ->
+          let temp_dir = Fpath.(t.dotgit / "tmp") in
           Log.debug (fun l ->
               l "Git object %a found in a PACK file." Hash.pp hash ) ;
-          PackImpl.read ~root:t.dotgit ~read_loose:(read_loose t) ~to_result
-            ~ztmp ~window t.fs t.allocation t.engine hash
+          PackImpl.read ~root:t.dotgit ~temp_dir ~read_loose:(read_loose t)
+            ~to_result ~ztmp ~window t.fs t.allocation t.engine hash
           >>!= lift_error
 
     let to_result (kind, raw, _, _) =
@@ -599,8 +603,9 @@ struct
           @@ fun {ztmp; window; _} ->
           Log.debug (fun l ->
               l "Git object %a found in a PACK file." Hash.pp hash ) ;
-          PackImpl.read ~root:t.dotgit ~read_loose:(read_loose t) ~to_result
-            ~ztmp ~window t.fs t.allocation t.engine hash
+          let temp_dir = Fpath.(t.dotgit / "tmp") in
+          PackImpl.read ~root:t.dotgit ~temp_dir ~read_loose:(read_loose t)
+            ~to_result ~ztmp ~window t.fs t.allocation t.engine hash
           >>!= lift_error
 
     let size t hash =
@@ -717,8 +722,9 @@ struct
           PInfo.first_pass ~ztmp ~window stream
           >>!= (fun err -> `Pack_info err)
           >>?= fun info ->
-          PackImpl.add ~root:t.dotgit ~read_loose:(read_loose t) ~ztmp ~window
-            t.fs t.allocation t.engine path_tmp info
+          let temp_dir = Fpath.(t.dotgit / "tmp") in
+          PackImpl.add ~root:t.dotgit ~temp_dir ~read_loose:(read_loose t)
+            ~ztmp ~window t.fs t.allocation t.engine path_tmp info
           >>!= lift_error )
         (function Save err -> Lwt.return_error err | exn -> Lwt.fail exn)
   end
@@ -847,19 +853,19 @@ struct
   let iter = T.iter
 
   module Ref = struct
-    let contents ~fs top =
+    let contents ~fs dotgit =
       let rec lookup acc dir =
-        FS.Dir.contents fs ~rel:true Fpath.(top // dir)
+        FS.Dir.contents fs ~rel:true dir
         >>?= fun l ->
         Lwt_list.filter_p
           (fun x ->
-            FS.is_dir fs Fpath.(top // dir // x)
+            FS.is_dir fs Fpath.(dir // x)
             >|= function Ok v -> v | Error _ -> false )
           l
         >>= fun dirs ->
         Lwt_list.filter_p
           (fun x ->
-            FS.is_file fs Fpath.(top // dir // x)
+            FS.is_file fs Fpath.(dir // x)
             >|= function Ok v -> v | Error _ -> false )
           l
         >>= fun files ->
@@ -871,19 +877,31 @@ struct
           (Ok acc) dirs
         >>?= fun acc -> Lwt.return (Ok (acc @ files))
       in
-      lookup [] (Fpath.v ".")
+      lookup [] Fpath.(dotgit / "refs")
+      >>= function
+      | Ok refs ->
+          List.fold_left
+            (fun acc fpath ->
+              match Fpath.relativize ~root:dotgit fpath with
+              | Some segs ->
+                  Log.debug (fun l -> l "Relativize %a." Fpath.pp fpath) ;
+                  Gpath.of_segs (Fpath.segs segs) :: acc
+              | None -> acc )
+            [] refs
+          |> Lwt.return_ok
+      | Error _ as err -> Lwt.return err
 
     module Graph = Reference.Map
 
     (* XXX(dinosaure): this function does not return any {!Error} value. *)
     let graph t =
       Log.debug (fun l -> l "graph_p") ;
-      contents ~fs:t.fs Fpath.(t.dotgit / "refs")
+      contents ~fs:t.fs t.dotgit
       >>= function
       | Error err -> Lwt.return Error.(v @@ FS.err_sys_dir err)
       | Ok files -> (
           Log.debug (fun l ->
-              let pp_files = Fmt.hvbox (Fmt.list Fpath.pp) in
+              let pp_files = Fmt.hvbox (Fmt.Dump.list Gpath.pp) in
               l "contents files: %a." pp_files files ) ;
           Lwt_list.fold_left_s
             (fun acc abs_ref ->
@@ -894,7 +912,7 @@ struct
               @@ fun {dtmp; raw; _} ->
               Reference.read ~fs:t.fs ~root:t.dotgit r ~dtmp ~raw
               >|= function
-              | Ok v -> v :: acc
+              | Ok v -> (r, v) :: acc
               | Error err ->
                   Log.err (fun l ->
                       l "Error while reading %a: %a." Reference.pp r
@@ -1027,13 +1045,13 @@ struct
           >|= function Ok () -> Ok () | Error e -> Error (e :> error) )
 
     let read t reference =
-      FS.is_file t.fs Fpath.(t.dotgit // Reference.to_path reference)
+      FS.is_file t.fs Gpath.(t.dotgit + Reference.to_path reference)
       >>= function
       | Ok true -> (
           with_buffer t
           @@ fun {dtmp; raw; _} ->
           Reference.read ~fs:t.fs ~root:t.dotgit ~dtmp ~raw reference
-          >|= function Ok (_, v) -> Ok v | Error e -> Error (e :> error) )
+          >|= function Ok _ as ok -> ok | Error e -> Error (e :> error) )
       | Ok false | Error _ ->
           let v =
             if Hashtbl.mem t.packed reference then
@@ -1052,8 +1070,10 @@ struct
           Lwt.return (Error `Not_found) )
 
     let write t reference value =
+      let temp_dir = Fpath.(t.dotgit / "tmp") in
       with_buffer t (fun {raw; _} ->
-          Reference.write ~fs:t.fs ~root:t.dotgit ~raw reference value )
+          Reference.write ~fs:t.fs ~root:t.dotgit ~temp_dir ~raw reference
+            value )
       >>= function
       | Error (#Reference.error as err) -> Lwt.return (Error (err : error))
       | Ok () -> (
@@ -1082,7 +1102,6 @@ struct
                         Hashtbl.add t.packed (Reference.of_string refname) hash
                     | `Peeled _ -> ())
                   packed_refs' ;
-                let temp_dir = Fpath.(t.dotgit / "tmp") in
                 with_buffer t (fun {raw; _} ->
                     Packed_refs.write ~fs:t.fs ~root:t.dotgit ~temp_dir ~raw
                       packed_refs' )

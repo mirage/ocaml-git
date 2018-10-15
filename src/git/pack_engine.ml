@@ -94,6 +94,7 @@ module type S = sig
 
   val add :
        root:Fpath.t
+    -> temp_dir:Fpath.t
     -> read_loose:(Hash.t -> (RPDec.kind * Cstruct.t) option Lwt.t)
     -> ztmp:Cstruct.t
     -> window:Inflate.window
@@ -106,6 +107,7 @@ module type S = sig
 
   val read :
        root:Fpath.t
+    -> temp_dir:Fpath.t
     -> read_loose:(Hash.t -> (RPDec.kind * Cstruct.t) option Lwt.t)
     -> to_result:(   RPDec.kind * Cstruct.t * int * RPDec.Ascendant.s
                   -> ('value, error) result Lwt.t)
@@ -353,8 +355,8 @@ struct
         (r : (mmu, location) r) ({pack; info; index; _} as t) hash :
         [`Error of error | `Promote of value | `Return of value] Lwt.t =
       Log.debug (fun l ->
-          l ~header:"read" "Try to extract object %a from PACK %a." Hash.pp
-            hash Hash.pp t.info.PInfo.hash_pack ) ;
+          l "Try to extract object %a from PACK %a." Hash.pp hash Hash.pp
+            t.info.PInfo.hash_pack ) ;
       lookup t hash
       |> function
       | None -> Lwt.return (`Error (`Pack_decoder (RPDec.Invalid_hash hash)))
@@ -386,7 +388,9 @@ struct
               Lwt.return_unit )
               >>= (fun () ->
                     match !res with
-                    | None -> assert false
+                    | None ->
+                        assert false
+                        (* XXX(dinosaure): avoid value restriction. *)
                     | Some (deliver, res, rtmp) ->
                         Rresult.R.reword_error
                           (fun err -> `Pack_decoder err)
@@ -405,6 +409,12 @@ struct
                   let crc, abs_off, length =
                     match obj with
                     | RPDec.Ascendant.External _ -> assert false
+                    (* XXX(dinosaure): When we ask an object in a PACK, it
+                       cannot be directly an external object (parent of it
+                       should be). Indeed, we ask if object exists in PACK file
+                       and should exist as a root or a node of the PACK file,
+                       but never directly as an external (otherwise, it is
+                       located in an other place). *)
                     | RPDec.Ascendant.Root base ->
                         ( base.RPDec.Base.crc
                         , base.RPDec.Base.offset
@@ -457,10 +467,10 @@ struct
     (* [of_exists] promotes a pack file from [exist] to [loaded]. Only the IDX
        file. [read_and_exclude] reads objects in other pack files (excluding
        any references to the current one, to avoid infinite loops). *)
-    let of_exists ~root ~read_and_exclude fs exists =
+    let of_exists ~root:dotgit ~read_and_exclude fs exists =
       let path =
         Fpath.(
-          root
+          dotgit
           / "objects"
           / "pack"
           / Fmt.strf "pack-%s.pack" (Hash.to_hex exists.Exists.hash_pack))
@@ -722,13 +732,12 @@ struct
     end
 
     (* Save the IDX file is the pack file is not thin. *)
-    let store_idx_file ~root fs sequence hash_pack =
+    let store_idx_file ~root:dotgit ~temp_dir fs sequence hash_pack =
       let file = Fmt.strf "pack-%s.idx" (Hash.to_hex hash_pack) in
       let encoder_idx = IEnc.default sequence hash_pack in
       let raw = Cstruct.create 0x8000 in
       (* XXX(dinosaure): as argument? *)
-      let path = Fpath.(root / "objects" / "pack" / file) in
-      let temp_dir = Fpath.(root / "tmp") in
+      let path = Fpath.(dotgit / "objects" / "pack" / file) in
       EIDX.to_file fs ~temp_dir path raw encoder_idx
       >|= function
       | Ok () -> Ok ()
@@ -773,8 +782,8 @@ struct
        the pack file is thin, we keep using the pack file in a temporary
        location; otherwise both the pack file and its associated IDX file are
        created in the repository and made available to other users. *)
-    let of_normalized (type mmu location) ~root ~read_and_exclude ~ztmp ~window
-        fs (r : (mmu, location) r) normalized =
+    let of_normalized (type mmu location) ~root:dotgit ~temp_dir
+        ~read_and_exclude ~ztmp ~window fs (r : (mmu, location) r) normalized =
       Normalized.second_pass ~ztmp ~window r normalized
       >>= function
       | Error _ as err -> Lwt.return err
@@ -786,7 +795,7 @@ struct
           in
           let path =
             Fpath.(
-              root
+              dotgit
               / "objects"
               / "pack"
               / Fmt.strf "pack-%s.pack" (Hash.to_hex info.PInfo.hash_pack))
@@ -829,7 +838,8 @@ struct
               | crc, abs_off, _ -> Some (crc, abs_off)
               | exception Not_found -> None
             in
-            store_idx_file ~root fs sequence info.PInfo.hash_pack
+            store_idx_file ~root:dotgit ~temp_dir fs sequence
+              info.PInfo.hash_pack
             >>?= fun () ->
             FS.Mapper.close normalized.Normalized.fd
             >|= Rresult.R.reword_error
@@ -901,11 +911,11 @@ struct
 
     (* [of_exists] allows to pass directly from the [exists] to the [resolved]
        state. The function is only valid on non-thin pack files. *)
-    let of_exists (type mmu location) ~root ~read_and_exclude ~ztmp ~window fs
-        (r : (mmu, location) r) exists =
+    let of_exists (type mmu location) ~root:dotgit ~read_and_exclude ~ztmp
+        ~window fs (r : (mmu, location) r) exists =
       let path =
         Fpath.(
-          root
+          dotgit
           / "objects"
           / "pack"
           / Fmt.strf "pack-%s.pack" (Hash.to_hex exists.Exists.hash_pack))
@@ -1106,11 +1116,10 @@ struct
       done ;
       Bytes.unsafe_to_string raw
 
-    let store_pack_file ~fs ~root fmt entries get =
+    let store_pack_file ~fs ~root:_ ~temp_dir fmt entries get =
       let ztmp = Cstruct.create 0x8000 in
       let file = fmt (random_string 10) in
       let state = PEnc.default ztmp entries in
-      let temp_dir = Fpath.(root / "tmp") in
       let path = Fpath.(temp_dir / file) in
       let rawo = Cstruct.create 0x8000 in
       let state = {EPACK.E.get; src= None; pack= state} in
@@ -1184,7 +1193,8 @@ struct
         [] lst
       |> List.rev
 
-    let third_pass ~root ~ztmp ~window:zwin ~read_inflated fs resolved =
+    let third_pass ~root:dotgit ~temp_dir ~ztmp ~window:zwin ~read_inflated fs
+        resolved =
       let deltas =
         filter_map
           (function
@@ -1317,8 +1327,8 @@ struct
       >>= function
       | Error err -> Lwt.return_error (`Delta err)
       | Ok entries -> (
-          store_pack_file ~fs (Fmt.strf "pack-%s.pack") ~root entries
-            read_inflated
+          store_pack_file ~fs (Fmt.strf "pack-%s.pack") ~root:dotgit ~temp_dir
+            entries read_inflated
           >>= function
           | Error _ as err -> Lwt.return err
           | Ok (path, (index, delta_path), hash_pack) -> (
@@ -1327,12 +1337,13 @@ struct
                   (fun hash (crc, abs_off, _) -> f (hash, (crc, abs_off)))
                   index
               in
-              Resolved.store_idx_file ~root fs sequence hash_pack
+              Resolved.store_idx_file ~root:dotgit ~temp_dir fs sequence
+                hash_pack
               >>= function
               | Error _ as err -> Lwt.return err
               | Ok () ->
                   let file = Fmt.strf "pack-%s.pack" (Hash.to_hex hash_pack) in
-                  let dst = Fpath.(root / "objects" / "pack" / file) in
+                  let dst = Fpath.(dotgit / "objects" / "pack" / file) in
                   FS.File.move fs path dst
                   >|= Rresult.R.reword_error (Error.FS.err_move path dst)
                   >>?= fun () ->
@@ -1343,10 +1354,11 @@ struct
                   >>?= fun () ->
                   Lwt.return_ok (dst, hash_pack, index, delta_path) ) )
 
-    let of_resolved (type mmu location) ~root ~ztmp ~window ~read_inflated fs
-        (r : (mmu, location) r) resolved =
+    let of_resolved (type mmu location) ~root:dotgit ~temp_dir ~ztmp ~window
+        ~read_inflated fs (r : (mmu, location) r) resolved =
       if resolved.Resolved.thin then
-        third_pass ~root ~ztmp ~window ~read_inflated fs resolved
+        third_pass ~root:dotgit ~temp_dir ~ztmp ~window ~read_inflated fs
+          resolved
         >>= function
         | Error _ -> assert false
         | Ok (path, hash_pack, index, path_delta) ->
@@ -1563,14 +1575,15 @@ struct
       exists ;
     {packs}
 
-  let add ~root ~read_loose ~ztmp ~window fs r t path_tmp info =
+  let add ~root ~temp_dir ~read_loose ~ztmp ~window fs r t path_tmp info =
     let read_and_exclude =
       read_and_exclude ~root ~read_loose fs t [info.PInfo.hash_pack]
     in
     let read_inflated = read_and_exclude in
     Normalized.of_info ~read_and_exclude fs path_tmp info
-    >>?= Resolved.of_normalized ~root ~read_and_exclude ~ztmp ~window fs r
-    >>?= Total.of_resolved ~root ~ztmp ~window ~read_inflated fs r
+    >>?= Resolved.of_normalized ~root ~temp_dir ~read_and_exclude ~ztmp ~window
+           fs r
+    >>?= Total.of_resolved ~root ~temp_dir ~ztmp ~window ~read_inflated fs r
     >>= function
     | Ok total ->
         Hashtbl.replace t.packs total.Total.hash_pack (Total total) ;
@@ -1602,7 +1615,7 @@ struct
 
   let mem t hash = lookup t hash |> function Some _ -> true | None -> false
 
-  let read ~root ~read_loose ~to_result ~ztmp ~window fs r t hash =
+  let read ~root ~temp_dir ~read_loose ~to_result ~ztmp ~window fs r t hash =
     let read_and_exclude hash_pack =
       read_and_exclude ~root ~read_loose fs t [hash_pack]
     in
@@ -1624,7 +1637,7 @@ struct
       | `Promote obj -> promote_loaded r loaded obj
     in
     let promote_resolved fs r (hash_pack, resolved) obj =
-      Total.of_resolved ~root ~ztmp ~window
+      Total.of_resolved ~root ~temp_dir ~ztmp ~window
         ~read_inflated:(read_inflated hash_pack) fs r resolved
       >>= function
       | Ok total ->
