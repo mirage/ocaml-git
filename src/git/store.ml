@@ -244,8 +244,8 @@ module type S = sig
 
   val fold :
        t
-    -> ('a -> ?name:Gpath.t -> length:int64 -> Hash.t -> Value.t -> 'a Lwt.t)
-    -> path:Gpath.t
+    -> ('a -> ?name:Path.t -> length:int64 -> Hash.t -> Value.t -> 'a Lwt.t)
+    -> path:Path.t
     -> 'a
     -> Hash.t
     -> 'a Lwt.t
@@ -885,7 +885,7 @@ struct
               match Fpath.relativize ~root:dotgit fpath with
               | Some segs ->
                   Log.debug (fun l -> l "Relativize %a." Fpath.pp fpath) ;
-                  Gpath.of_segs (Fpath.segs segs) :: acc
+                  Path.of_segs (Fpath.segs segs) :: acc
               | None -> acc )
             [] refs
           |> Lwt.return_ok
@@ -901,7 +901,7 @@ struct
       | Error err -> Lwt.return Error.(v @@ FS.err_sys_dir err)
       | Ok files -> (
           Log.debug (fun l ->
-              let pp_files = Fmt.hvbox (Fmt.Dump.list Gpath.pp) in
+              let pp_files = Fmt.hvbox (Fmt.Dump.list Path.pp) in
               l "contents files: %a." pp_files files ) ;
           Lwt_list.fold_left_s
             (fun acc abs_ref ->
@@ -1045,7 +1045,7 @@ struct
           >|= function Ok () -> Ok () | Error e -> Error (e :> error) )
 
     let read t reference =
-      FS.is_file t.fs Gpath.(t.dotgit + Reference.to_path reference)
+      FS.is_file t.fs Path.(t.dotgit + Reference.to_path reference)
       >>= function
       | Ok true -> (
           with_buffer t

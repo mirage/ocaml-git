@@ -27,7 +27,7 @@ let of_string x = x
 let to_string x = x
 let sep = "/"
 
-module Path = struct
+module P = struct
   type partial = string
   type branch = string
 
@@ -45,10 +45,10 @@ end
 let head = "HEAD"
 let is_head = String.equal head
 let master = "refs/heads/master"
-let to_path = function "HEAD" -> Gpath.v "HEAD" | refs -> Gpath.v refs
+let to_path = function "HEAD" -> Path.v "HEAD" | refs -> Path.v refs
 
 let of_path path =
-  match Gpath.segs path with
+  match Path.segs path with
   | [] -> Fmt.invalid_arg "Reference.of_path: empty path"
   | ["HEAD"] -> head
   | "HEAD" :: _ ->
@@ -64,7 +64,7 @@ module type S = sig
 
   type nonrec t = t
 
-  module Path : sig
+  module P : sig
     type partial
     type branch = string
 
@@ -82,8 +82,8 @@ module type S = sig
   val is_head : t -> bool
   val of_string : string -> t
   val to_string : t -> string
-  val of_path : Gpath.t -> t
-  val to_path : t -> Gpath.t
+  val of_path : Path.t -> t
+  val to_path : t -> Path.t
 
   include S.BASE with type t := t
 
@@ -144,20 +144,20 @@ end
 module Make (Hash : S.HASH) = struct
   type nonrec t = t
 
-  module Path = Path
+  module P = P
 
   let master = master
   let head = head
   let is_head = is_head
   let of_string = of_string
   let to_string = to_string
-  let to_path = Gpath.v
+  let to_path = Path.v
 
   let of_path path =
-    let segs = Gpath.segs path in
+    let segs = Path.segs path in
     String.concat sep segs
 
-  (* XXX(dinosaure): doublon with [Gpath.to_string] but this function uses
+  (* XXX(dinosaure): doublon with [Path.to_string] but this function uses
      [Fmt.to_to_string] and I don't trust this function. *)
 
   let pp = pp
@@ -289,7 +289,7 @@ module IO (H : S.HASH) (FS : S.FS) = struct
     | #fs_error as err -> Error.FS.pp_error FS.pp_error ppf err
 
   let[@warning "-32"] normalize path =
-    let segs = Gpath.segs path in
+    let segs = Path.segs path in
     List.fold_left
       (fun (stop, acc) ->
         if stop then fun x -> true, x :: acc
@@ -303,12 +303,12 @@ module IO (H : S.HASH) (FS : S.FS) = struct
     |> fun (_, refs) -> List.rev refs |> String.concat "/" |> of_string
 
   let mem ~fs ~root:dotgit reference =
-    let path = Gpath.(dotgit + to_path reference) in
+    let path = Path.(dotgit + to_path reference) in
     FS.File.exists fs path >|= function Ok v -> v | Error _ -> false
 
   let read ~fs ~root:dotgit reference ~dtmp ~raw : (_, error) result Lwt.t =
     let state = D.default dtmp in
-    let path = Gpath.(dotgit + to_path reference) in
+    let path = Path.(dotgit + to_path reference) in
     Decoder.of_file fs path raw state
     >|= function
     | Ok v -> Ok v
@@ -318,7 +318,7 @@ module IO (H : S.HASH) (FS : S.FS) = struct
   let write ~fs ~root:dotgit ~temp_dir ?(capacity = 0x100) ~raw reference value
       =
     let state = E.default (capacity, value) in
-    let path = Gpath.(dotgit + to_path reference) in
+    let path = Path.(dotgit + to_path reference) in
     FS.Dir.create fs (Fpath.parent path)
     >>= function
     | Error err ->
@@ -331,7 +331,7 @@ module IO (H : S.HASH) (FS : S.FS) = struct
         | Error (`Encoder #Error.never) -> assert false )
 
   let remove ~fs ~root:dotgit reference =
-    let path = Gpath.(dotgit + to_path reference) in
+    let path = Path.(dotgit + to_path reference) in
     FS.File.delete fs path
     >|= function
     | Ok _ as v -> v | Error err -> Error.(v @@ FS.err_delete path err)
