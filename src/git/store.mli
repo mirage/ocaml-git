@@ -253,7 +253,8 @@ module type PACK = sig
 
   type error
 
-  val lookup : state -> Hash.t -> (Hash.t * (Crc32.t * int64)) option Lwt.t
+  val lookup :
+    state -> Hash.t -> (Hash.t * (Checkseum.Crc32.t * int64)) option Lwt.t
   (** [lookup state hash] tries to find the object associated by the hash
       [hash] in all {i IDX} files available in the current git repository
       [state]. This function returns [None] if the Git object does not exist in
@@ -310,7 +311,10 @@ module type PACK = sig
     -> ?window:[`Object of int | `Memory of int]
     -> ?depth:int
     -> value list
-    -> (stream * (Crc32.t * int64) Hash.Map.t Lwt_mvar.t, error) result Lwt.t
+    -> ( stream * (Checkseum.Crc32.t * int64) Hash.Map.t Lwt_mvar.t
+       , error )
+       result
+       Lwt.t
   (** [make ?window ?depth values] makes a PACK stream from a list of
       {!Value.t}.
 

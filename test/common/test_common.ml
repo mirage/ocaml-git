@@ -133,13 +133,13 @@ module Make (S : Git.S) = struct
       , assert_index_pack_opt_equal
       , assert_index_packs_equal ) =
     let equal_value (h1, (c1, o1)) (h2, (c2, o2)) =
-      S.Hash.equal h1 h2 && Git.Crc32.eq c1 c2 && Int64.equal o1 o2
+      S.Hash.equal h1 h2 && Optint.equal c1 c2 && Int64.equal o1 o2
     in
-    let pp_value : (S.Hash.t * (Git.Crc32.t * int64)) Fmt.t =
+    let pp_value : (S.Hash.t * (Checkseum.Crc32.t * int64)) Fmt.t =
       Fmt.pair
         ~sep:(Fmt.const Fmt.string " -> ")
         S.Hash.pp
-        Fmt.(Dump.pair Git.Crc32.pp int64)
+        Fmt.(Dump.pair Optint.pp int64)
     in
     let compare a b =
       if compare_list equal_value (fun (a, _) (b, _) -> S.Hash.compare a b) a b

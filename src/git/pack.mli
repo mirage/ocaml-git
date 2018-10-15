@@ -316,7 +316,7 @@ module type P = sig
       a read-only flow (that means, the src {!Cstruct.t} could be physicaly the
       same. *)
 
-  val idx : t -> (Crc32.t * int64) Hash.Map.t
+  val idx : t -> (Checkseum.Crc32.t * int64) Hash.Map.t
   (** [idx t] returns a {!Map} tree which contains the CRC-32 checksum and the
       absolute offset for each Git object serialized. The client is able to use
       it only when {!eval} returns [`End]. *)

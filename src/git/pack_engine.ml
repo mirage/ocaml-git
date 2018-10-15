@@ -88,7 +88,7 @@ module type S = sig
 
   val pp_error : error Fmt.t
   val v : FS.t -> Fpath.t list -> t Lwt.t
-  val lookup : t -> Hash.t -> (Hash.t * (Crc32.t * int64)) option
+  val lookup : t -> Hash.t -> (Hash.t * (Checkseum.Crc32.t * int64)) option
   val list : t -> Hash.t list
   val mem : t -> Hash.t -> bool
 
@@ -661,7 +661,7 @@ struct
 
     type t =
       { pack: RPDec.pack
-      ; index: (Hash.t, Crc32.t * int64 * int) Hashtbl.t
+      ; index: (Hash.t, Checkseum.Crc32.t * int64 * int) Hashtbl.t
       ; delta: (int64, PInfo.delta) Hashtbl.t
       ; hash_pack: Hash.t
       ; path_delta: PInfo.path
@@ -1009,7 +1009,7 @@ struct
     module Log = (val Logs.src_log src : Logs.LOG)
 
     type t =
-      { index: (Hash.t, Crc32.t * int64 * int) Hashtbl.t
+      { index: (Hash.t, Checkseum.Crc32.t * int64 * int) Hashtbl.t
       ; path_delta: PInfo.path
       ; hash_pack: Hash.t
       ; pack: RPDec.pack
@@ -1060,7 +1060,9 @@ struct
           ; pack: PEnc.t
           ; src: Cstruct.t option }
 
-        type result = {tree: (Crc32.t * int64) Hash.Map.t; hash: Hash.t}
+        type result =
+          {tree: (Checkseum.Crc32.t * int64) Hash.Map.t; hash: Hash.t}
+
         type error = PEnc.error
 
         let option_get ~default = function Some a -> a | None -> default
@@ -1590,7 +1592,7 @@ struct
         Lwt.return_ok (total.Total.hash_pack, Hashtbl.length total.Total.index)
     | Error _ as err -> Lwt.return err
 
-  exception Found of (Hash.t * (Crc32.t * int64))
+  exception Found of (Hash.t * (Checkseum.Crc32.t * int64))
 
   let lookup t hash =
     let jump0 hash = function
