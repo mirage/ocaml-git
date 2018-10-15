@@ -3,8 +3,8 @@ platform:
 
 environment:
   global:
-    FORK_USER: dinosaure
-    FORK_BRANCH: appveyor-and-opam2
+    FORK_USER: ocaml
+    FORK_BRANCH: master
     CYG_ROOT: C:\cygwin64
     OPAM_SWITCH: 4.06.1+mingw64c
     PINS: "git.dev:. git-http.dev:. git-unix.dev:. git-mirage.dev:. digestif.dev:--dev decompress.dev:--dev"
@@ -13,7 +13,7 @@ environment:
   - PACKAGE: "git-unix.dev"
 
 install:
-  - ps: iex ((new-object net.webclient).DownloadString("https://raw.githubusercontent.com/$env:FORK_USER/ocaml-travisci-skeleton/$env:FORK_BRANCH/appveyor-install.ps1"))
+  - ps: iex ((new-object net.webclient).DownloadString("https://raw.githubusercontent.com/$env:FORK_USER/ocaml-ci-scripts/$env:FORK_BRANCH/appveyor-install.ps1"))
 
 build_script:
   - call %CYG_ROOT%\bin\bash.exe -l %APPVEYOR_BUILD_FOLDER%\appveyor-opam.sh
