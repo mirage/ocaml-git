@@ -19,7 +19,6 @@ depends: [
   "cohttp-mirage"  {>= "1.0.0"}
   "mirage-flow-lwt"
   "mirage-channel-lwt"
-  "mirage-fs-lwt"
   "mirage-conduit" {>= "3.0.0"}
   "git-http"
   "git"
