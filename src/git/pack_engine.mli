@@ -76,7 +76,7 @@ module type S = sig
 
   val pp_error : error Fmt.t
   val v : FS.t -> Fpath.t list -> t Lwt.t
-  val lookup : t -> Hash.t -> (Hash.t * (Crc32.t * int64)) option
+  val lookup : t -> Hash.t -> (Hash.t * (Checkseum.Crc32.t * int64)) option
   val list : t -> Hash.t list
   val mem : t -> Hash.t -> bool
 

@@ -314,7 +314,7 @@ module type P = sig
       is able to use it only when {!eval} returns [`Object]. Otherwise, we
       raise an [Invalid_argument]. *)
 
-  val crc : t -> Crc32.t
+  val crc : t -> Checkseum.Crc32.t
   (** [crc t] returns the CRC-32 checksum computed when the decoder consumed
       all byte(s) needed to de-serialize the current/expected object. The
       client is able to use this function only when {!eval} returns [`Object].
@@ -431,9 +431,11 @@ module type D = sig
   (** The type of the decoder. *)
   type pack
 
-  val idx : pack -> Hash.t -> (Crc32.t * int64) option
+  val idx : pack -> Hash.t -> (Checkseum.Crc32.t * int64) option
   val extern : pack -> Hash.t -> (kind * Cstruct.t) option Lwt.t
-  val update_idx : (Hash.t -> (Crc32.t * int64) option) -> pack -> pack
+
+  val update_idx :
+    (Hash.t -> (Checkseum.Crc32.t * int64) option) -> pack -> pack
 
   val update_extern :
     (Hash.t -> (kind * Cstruct.t) option Lwt.t) -> pack -> pack
@@ -441,7 +443,7 @@ module type D = sig
   val make :
        ?bucket:int
     -> Mapper.fd
-    -> (Hash.t -> (Crc32.t * int64) option)
+    -> (Hash.t -> (Checkseum.Crc32.t * int64) option)
     -> (Hash.t -> (kind * Cstruct.t) option Lwt.t)
     -> (pack, Mapper.error) result Lwt.t
 
@@ -457,7 +459,7 @@ module type D = sig
       { length: int
       ; consumed: int
       ; offset: int64
-      ; crc: Crc32.t
+      ; crc: Checkseum.Crc32.t
       ; hunks: Diff.t list
       ; descr: Hunk.hunks }
 
@@ -476,7 +478,7 @@ module type D = sig
       ; consumed: int
       ; inserts: int
       ; offset: int64
-      ; crc: Crc32.t
+      ; crc: Checkseum.Crc32.t
       ; hash: Hash.t
       ; raw: Cstruct.t
       ; descr: Hunk.hunks }
@@ -498,7 +500,7 @@ module type D = sig
       ; length: int
       ; consumed: int
       ; offset: int64
-      ; crc: Crc32.t
+      ; crc: Checkseum.Crc32.t
       ; hash: Hash.t
       ; raw: Cstruct.t }
 
@@ -543,7 +545,9 @@ module type D = sig
       | Root of Base.t
       | Node of {patch: Patch.t; source: t}
 
-    type metadata = {length: int; crc: Crc32.t; offset: int64; consumed: int}
+    type metadata =
+      {length: int; crc: Checkseum.Crc32.t; offset: int64; consumed: int}
+
     type s = [`Patch of metadata | `Base of metadata | `Extern]
 
     val needed_cache : int -> (int64, int) Cache.t
@@ -677,14 +681,14 @@ module type D = sig
       ; consumed: int
       ; offset: int64
       ; hash: Hash.t
-      ; crc: Crc32.t }
+      ; crc: Checkseum.Crc32.t }
 
     type patch =
       { length: int
       ; consumed: int
       ; inserts: int
       ; offset: int64
-      ; crc: Crc32.t
+      ; crc: Checkseum.Crc32.t
       ; hash: Hash.t
       ; descr: Hunk.hunks }
 

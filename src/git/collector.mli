@@ -45,6 +45,8 @@ module Make (S : STORE) : sig
     -> ?window:[`Memory of int | `Object of int]
     -> ?depth:int
     -> S.Value.t list
-    -> (stream * (Crc32.t * int64) S.Hash.Map.t Lwt_mvar.t, S.error) result
+    -> ( stream * (Checkseum.Crc32.t * int64) S.Hash.Map.t Lwt_mvar.t
+       , S.error )
+       result
        Lwt.t
 end

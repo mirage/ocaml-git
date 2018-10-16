@@ -48,7 +48,7 @@ module type S = sig
   type path = Load of int | Patch of {hunks: int; target: int; src: path}
 
   type 'a t =
-    { index: (Hash.t, Crc32.t * int64 * int) Hashtbl.t
+    { index: (Hash.t, Checkseum.Crc32.t * int64 * int) Hashtbl.t
     ; delta: (int64, delta) Hashtbl.t
     ; hash_pack: Hash.t
     ; state: 'a }
@@ -61,7 +61,7 @@ module type S = sig
   val first_pass :
        ztmp:Cstruct.t
     -> window:Inflate.window
-    -> ?idx:(Hash.t -> (Crc32.t * int64) option)
+    -> ?idx:(Hash.t -> (Checkseum.Crc32.t * int64) option)
     -> (unit -> Cstruct.t option Lwt.t)
     -> ([`Normalized of path] t, error) result Lwt.t
 end
@@ -142,7 +142,7 @@ struct
           HDec.pp_hunks hunks_descr inserts depth pp_delta from
 
   type 'a t =
-    { index: (Hash.t, Crc32.t * int64 * int) Hashtbl.t
+    { index: (Hash.t, Checkseum.Crc32.t * int64 * int) Hashtbl.t
     ; delta: (int64, delta) Hashtbl.t
     ; hash_pack: Hash.t
     ; state: 'a }

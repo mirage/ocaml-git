@@ -446,7 +446,7 @@ module type P = sig
   val length : t -> int
   val offset : t -> int64
   val consumed : t -> int
-  val crc : t -> Crc32.t
+  val crc : t -> Checkseum.Crc32.t
   val output : t -> Cstruct.t * int
 
   val eval :
@@ -534,7 +534,7 @@ struct
         ; consumed: int
         ; length: int
         ; kind: kind
-        ; crc: Crc32.t
+        ; crc: Checkseum.Crc32.t
         ; z: Inflate.t }
     | Hunks of hunks_state
     | StopHunks of hunks_state
@@ -554,7 +554,7 @@ struct
                values to [int64]. However, the [Inflate] algorithm provide only
                a [native_int]. We can bypass this limit and count the length of
                the object by ourselves with an [int64]. TODO! *)
-        ; crc: Crc32.t
+        ; crc: Checkseum.Crc32.t
         ; kind: kind }
     | Checksum of k
     | End of Hash.t
@@ -564,7 +564,7 @@ struct
     { offset: int64
     ; length: int
     ; consumed: int
-    ; crc: Crc32.t
+    ; crc: Checkseum.Crc32.t
     ; z: Inflate.t
     ; h: Hunk.t }
 
@@ -912,10 +912,7 @@ struct
     | 0b111 ->
         KObject.get_hash
           (fun hash _ t ->
-            let crc =
-              Crc32.digests crc
-                (Hash.to_raw_string hash |> Bytes.unsafe_of_string)
-            in
+            let crc = Crc32.digests crc (Hash.to_raw_string hash) in
             Cont
               { t with
                 state=
@@ -1312,9 +1309,11 @@ module type D = sig
   type kind = [`Commit | `Blob | `Tree | `Tag]
   type pack
 
-  val idx : pack -> Hash.t -> (Crc32.t * int64) option
+  val idx : pack -> Hash.t -> (Checkseum.Crc32.t * int64) option
   val extern : pack -> Hash.t -> (kind * Cstruct.t) option Lwt.t
-  val update_idx : (Hash.t -> (Crc32.t * int64) option) -> pack -> pack
+
+  val update_idx :
+    (Hash.t -> (Checkseum.Crc32.t * int64) option) -> pack -> pack
 
   val update_extern :
     (Hash.t -> (kind * Cstruct.t) option Lwt.t) -> pack -> pack
@@ -1322,7 +1321,7 @@ module type D = sig
   val make :
        ?bucket:int
     -> Mapper.fd
-    -> (Hash.t -> (Crc32.t * int64) option)
+    -> (Hash.t -> (Checkseum.Crc32.t * int64) option)
     -> (Hash.t -> (kind * Cstruct.t) option Lwt.t)
     -> (pack, Mapper.error) result Lwt.t
 
@@ -1338,7 +1337,7 @@ module type D = sig
       { length: int
       ; consumed: int
       ; offset: int64
-      ; crc: Crc32.t
+      ; crc: Checkseum.Crc32.t
       ; hunks: Diff.t list
       ; descr: Hunk.hunks }
 
@@ -1357,7 +1356,7 @@ module type D = sig
       ; consumed: int
       ; inserts: int
       ; offset: int64
-      ; crc: Crc32.t
+      ; crc: Checkseum.Crc32.t
       ; hash: Hash.t
       ; raw: Cstruct.t
       ; descr: Hunk.hunks }
@@ -1379,7 +1378,7 @@ module type D = sig
       ; length: int
       ; consumed: int
       ; offset: int64
-      ; crc: Crc32.t
+      ; crc: Checkseum.Crc32.t
       ; hash: Hash.t
       ; raw: Cstruct.t }
 
@@ -1424,7 +1423,9 @@ module type D = sig
       | Root of Base.t
       | Node of {patch: Patch.t; source: t}
 
-    type metadata = {length: int; crc: Crc32.t; offset: int64; consumed: int}
+    type metadata =
+      {length: int; crc: Checkseum.Crc32.t; offset: int64; consumed: int}
+
     type s = [`Patch of metadata | `Base of metadata | `Extern]
 
     val needed_cache : int -> (int64, int) Cache.t
@@ -1563,14 +1564,14 @@ module type D = sig
       ; consumed: int
       ; offset: int64
       ; hash: Hash.t
-      ; crc: Crc32.t }
+      ; crc: Checkseum.Crc32.t }
 
     type patch =
       { length: int
       ; consumed: int
       ; inserts: int
       ; offset: int64
-      ; crc: Crc32.t
+      ; crc: Checkseum.Crc32.t
       ; hash: Hash.t
       ; descr: Hunk.hunks }
 
@@ -1627,7 +1628,7 @@ struct
     { file: Mapper.fd
     ; max: int64
     ; win: Window.t Bucket.t
-    ; idx: Hash.t -> (Crc32.t * int64) option
+    ; idx: Hash.t -> (Checkseum.Crc32.t * int64) option
     ; get: Hash.t -> (kind * Cstruct.t) option Lwt.t }
 
   let make ?(bucket = 10) file idx get =
@@ -1687,7 +1688,7 @@ struct
       { length: int
       ; consumed: int
       ; offset: int64
-      ; crc: Crc32.t
+      ; crc: Checkseum.Crc32.t
       ; hunks: Diff.t list
       ; descr: Hunk.hunks }
 
@@ -1766,7 +1767,7 @@ struct
       ; consumed: int
       ; inserts: int
       ; offset: int64
-      ; crc: Crc32.t
+      ; crc: Checkseum.Crc32.t
       ; hash: Hash.t
       ; raw: Cstruct.t
       ; descr: Hunk.hunks }
@@ -1919,7 +1920,7 @@ struct
       ; length: int
       ; consumed: int
       ; offset: int64
-      ; crc: Crc32.t
+      ; crc: Checkseum.Crc32.t
       ; hash: Hash.t
       ; raw: Cstruct.t }
 
@@ -2197,7 +2198,9 @@ struct
       | Root of Base.t
       | Node of {patch: Patch.t; source: t}
 
-    type metadata = {length: int; crc: Crc32.t; offset: int64; consumed: int}
+    type metadata =
+      {length: int; crc: Checkseum.Crc32.t; offset: int64; consumed: int}
+
     type s = [`Patch of metadata | `Base of metadata | `Extern]
 
     let metadata_of_base base =
@@ -2574,7 +2577,7 @@ struct
       ; consumed: int
       ; offset: int64
       ; hash: Hash.t
-      ; crc: Crc32.t }
+      ; crc: Checkseum.Crc32.t }
 
     let of_base base =
       { kind= base.Base.kind
@@ -2589,7 +2592,7 @@ struct
       ; consumed: int
       ; inserts: int
       ; offset: int64
-      ; crc: Crc32.t
+      ; crc: Checkseum.Crc32.t
       ; hash: Hash.t
       ; descr: Hunk.hunks }
 

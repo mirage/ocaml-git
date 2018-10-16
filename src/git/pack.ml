@@ -863,7 +863,7 @@ module type P = sig
   val refill : int -> int -> t -> t
   val finish : t -> t
   val expect : t -> Hash.t
-  val idx : t -> (Crc32.t * int64) Hash.Map.t
+  val idx : t -> (Checkseum.Crc32.t * int64) Hash.Map.t
   val default : Cstruct.t -> (Entry.t * Delta.t) list -> t
 
   val eval :
@@ -895,7 +895,7 @@ struct
     ; i_pos: int
     ; i_len: int
     ; write: int64
-    ; map: (Crc32.t * int64) Hash.Map.t
+    ; map: (Checkseum.Crc32.t * int64) Hash.Map.t
     ; hash: Hash.ctx
     ; h_tmp: Cstruct.t
     ; state: state }
@@ -909,14 +909,14 @@ struct
     | WriteZ of
         { x: Entry.t
         ; r: (Entry.t * Delta.t) list
-        ; crc: Crc32.t
+        ; crc: Checkseum.Crc32.t
         ; off: int64
         ; ui: int
         ; z: Deflate.t }
     | WriteH of
         { x: Entry.t * Delta.t
         ; r: (Entry.t * Delta.t) list
-        ; crc: Crc32.t
+        ; crc: Checkseum.Crc32.t
         ; off: int64
         ; ui: int
         ; h: Hunk.t
@@ -924,7 +924,7 @@ struct
     | Save of
         { x: Entry.t
         ; r: (Entry.t * Delta.t) list
-        ; crc: Crc32.t
+        ; crc: Checkseum.Crc32.t
         ; off: int64 }
     | Hash of k
     | End of Hash.t
@@ -1024,7 +1024,8 @@ struct
     let hash hash crc k dst t =
       if t.o_len - t.o_pos >= Hash.digest_size then (
         let crc = Crc32.digests crc hash in
-        Cstruct.blit_from_bytes hash 0 dst (t.o_off + t.o_pos) Hash.digest_size ;
+        Cstruct.blit_from_string hash 0 dst (t.o_off + t.o_pos)
+          Hash.digest_size ;
         k crc dst
           { t with
             o_pos= t.o_pos + Hash.digest_size
@@ -1039,7 +1040,7 @@ struct
               let crc =
                 Crc32.digests crc ~off:(Hash.digest_size - rest) ~len:n hash
               in
-              Cstruct.blit_from_bytes hash (Hash.digest_size - rest) dst
+              Cstruct.blit_from_string hash (Hash.digest_size - rest) dst
                 (t.o_off + t.o_pos) n ;
               loop (rest - n) crc dst
                 { t with
@@ -1115,9 +1116,7 @@ struct
         in
         ( KWriteK.header 0b111 (Int64.of_int length) Crc32.default
         @@ fun crc ->
-        KWriteK.hash
-          (Hash.to_raw_string src_hash |> Bytes.unsafe_of_string)
-          crc
+        KWriteK.hash (Hash.to_raw_string src_hash) crc
         @@ fun crc _ t ->
         let z = Deflate.default 4 in
         let z = Deflate.flush (t.o_off + t.o_pos) (t.o_len - t.o_pos) z in

@@ -23,6 +23,7 @@ depends: [
   "digestif"   {>= "0.7.0"}
   "lru"        {>= "0.2.0"}
   "decompress" {>= "0.8"}
+  "checkseum"  {>= "0.0.3"}
   "encore"
   "duff"
   "hex"

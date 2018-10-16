@@ -108,7 +108,9 @@ module type PACK = sig
      and module HDec := HDec
      and module PDec := PDec
 
-  val lookup : state -> Hash.t -> (Hash.t * (Crc32.t * int64)) option Lwt.t
+  val lookup :
+    state -> Hash.t -> (Hash.t * (Checkseum.Crc32.t * int64)) option Lwt.t
+
   val mem : state -> Hash.t -> bool Lwt.t
   val list : state -> Hash.t list Lwt.t
   val read : state -> Hash.t -> (value, error) result Lwt.t
@@ -123,7 +125,10 @@ module type PACK = sig
     -> ?window:[`Object of int | `Memory of int]
     -> ?depth:int
     -> value list
-    -> (stream * (Crc32.t * int64) Hash.Map.t Lwt_mvar.t, error) result Lwt.t
+    -> ( stream * (Checkseum.Crc32.t * int64) Hash.Map.t Lwt_mvar.t
+       , error )
+       result
+       Lwt.t
 end
 
 module type S = sig

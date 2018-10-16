@@ -35,10 +35,10 @@ module type LAZY = sig
   type t
 
   val make : ?cache:int -> Cstruct.t -> (t, error) result
-  val find : t -> Hash.t -> (Crc32.t * int64) option
+  val find : t -> Hash.t -> (Checkseum.Crc32.t * int64) option
   val mem : t -> Hash.t -> bool
-  val iter : t -> (Hash.t -> Crc32.t * int64 -> unit) -> unit
-  val fold : t -> (Hash.t -> Crc32.t * int64 -> 'a -> 'a) -> 'a -> 'a
+  val iter : t -> (Hash.t -> Checkseum.Crc32.t * int64 -> unit) -> unit
+  val fold : t -> (Hash.t -> Checkseum.Crc32.t * int64 -> 'a -> 'a) -> 'a -> 'a
   val cardinal : t -> int
 end
 
@@ -59,9 +59,13 @@ module Lazy (Hash : S.HASH) = struct
         Fmt.pf ppf "(Invalid_bigoffset_index %d)" index
 
   module Cache =
-    Lru.M.Make (Hash) (struct type t = Crc32.t * int64
+    Lru.M.Make
+      (Hash)
+      (struct
+        type t = Checkseum.Crc32.t * int64
 
-                              let weight _ = 1 end)
+        let weight _ = 1
+      end)
 
   type t =
     { map: Cstruct.t
@@ -325,7 +329,7 @@ module type DECODER = sig
     -> t
     -> [ `Await of t
        | `End of t * Hash.t
-       | `Hash of t * (Hash.t * Crc32.t * int64)
+       | `Hash of t * (Hash.t * Checkseum.Crc32.t * int64)
        | `Error of t * error ]
 end
 
@@ -352,7 +356,7 @@ module Decoder (Hash : S.HASH) = struct
     ; i_len: int
     ; fanout: Int32.t array
     ; hashes: Hash.t Queue.t
-    ; crcs: Crc32.t Queue.t
+    ; crcs: Checkseum.Crc32.t Queue.t
     ; offsets: (Int32.t * bool) Queue.t
     ; hash: Hash.ctx
     ; state: state }
@@ -374,7 +378,7 @@ module Decoder (Hash : S.HASH) = struct
     | Wait of t
     | Error of t * error
     | Cont of t
-    | Result of t * (Hash.t * Crc32.t * Int64.t)
+    | Result of t * (Hash.t * Checkseum.Crc32.t * Int64.t)
     | Ok of t * Hash.t
 
   let pp_state ppf = function
@@ -729,7 +733,7 @@ module type ENCODER = sig
 
   type 'a sequence = ('a -> unit) -> unit
 
-  val default : (Hash.t * (Crc32.t * int64)) sequence -> Hash.t -> t
+  val default : (Hash.t * (Checkseum.Crc32.t * int64)) sequence -> Hash.t -> t
   val flush : int -> int -> t -> t
   val used_out : t -> int
   val eval : Cstruct.t -> t -> [`Flush of t | `End of t | `Error of t * error]
@@ -756,7 +760,7 @@ module Encoder (Hash : S.HASH) = struct
     ; o_pos: int
     ; o_len: int
     ; write: int
-    ; table: (Crc32.t * int64) Fanout.t
+    ; table: (Checkseum.Crc32.t * int64) Fanout.t
     ; boffsets: int64 array
     ; hash: Hash.ctx
     ; pack: Hash.t
@@ -1071,7 +1075,8 @@ module Encoder (Hash : S.HASH) = struct
      data structure. The order of the iteration is not important, the Fanout
      module takes care about that. So, we let the user to use any data
      structure to store the CRC and the Offset for each hash. *)
-  let default : (Hash.t * (Crc32.t * int64)) sequence -> Hash.t -> t =
+  let default : (Hash.t * (Checkseum.Crc32.t * int64)) sequence -> Hash.t -> t
+      =
    fun seq hash ->
     let boffsets = ref [] in
     let table = Fanout.make () in

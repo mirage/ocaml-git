@@ -43,7 +43,7 @@ module type S = sig
      and module Pack := PDec
      and module Mapper := FS.Mapper
 
-  type status = Resolved of Crc32.t * Hash.t | Root | Unresolved
+  type status = Resolved of Checkseum.Crc32.t * Hash.t | Root | Unresolved
 
   val pp_status : status Fmt.t
 

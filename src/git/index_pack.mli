@@ -52,7 +52,7 @@ module type LAZY = sig
       Indeed, in this function we check if the IDX file stored entirely on the
       {!Cstruct.t} is well-formed. Otherwise, we return an explicit error. *)
 
-  val find : t -> Hash.t -> (Crc32.t * int64) option
+  val find : t -> Hash.t -> (Checkseum.Crc32.t * int64) option
   (** [find t hash] get the CRC-32 checksum and the absolute offset binded on
       [hash] in the IDX file represented by [t] only if [hash] exists.
       Otherwise, it returns [None]. *)
@@ -61,10 +61,10 @@ module type LAZY = sig
   (** [mem t hash] returns [true] if [hash] exists in the IDX file represented
       by [t]. Otherwise, it returns [false]. *)
 
-  val iter : t -> (Hash.t -> Crc32.t * int64 -> unit) -> unit
+  val iter : t -> (Hash.t -> Checkseum.Crc32.t * int64 -> unit) -> unit
   (** Iteration in the IDX file. *)
 
-  val fold : t -> (Hash.t -> Crc32.t * int64 -> 'a -> 'a) -> 'a -> 'a
+  val fold : t -> (Hash.t -> Checkseum.Crc32.t * int64 -> 'a -> 'a) -> 'a -> 'a
   (** Fold in the IDX file. *)
 
   val cardinal : t -> int
@@ -125,7 +125,7 @@ module type DECODER = sig
     -> t
     -> [ `Await of t
        | `End of t * Hash.t
-       | `Hash of t * (Hash.t * Crc32.t * int64)
+       | `Hash of t * (Hash.t * Checkseum.Crc32.t * int64)
        | `Error of t * error ]
   (** [eval src t] is:
 
@@ -175,7 +175,7 @@ module type ENCODER = sig
   (** An abstract representation of an iterative container. *)
   type 'a sequence = ('a -> unit) -> unit
 
-  val default : (Hash.t * (Crc32.t * int64)) sequence -> Hash.t -> t
+  val default : (Hash.t * (Checkseum.Crc32.t * int64)) sequence -> Hash.t -> t
   (** [default seq pack_hash] makes a new {!encoder} to serialize [seq] and
       associates the IDX stream produced with the [pack_hash] PACK file. This
       function takes care about the order of [seq], so the client does not need

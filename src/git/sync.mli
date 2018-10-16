@@ -242,7 +242,8 @@ module Common (G : Minimal.S) :
       -> ofs_delta:bool
       -> (Store.Hash.t * Store.Reference.t * bool) list
       -> command list
-      -> ( Store.Pack.stream * (Crc32.t * int64) Store.Hash.Map.t Lwt_mvar.t
+      -> ( Store.Pack.stream
+           * (Checkseum.Crc32.t * int64) Store.Hash.Map.t Lwt_mvar.t
          , Store.error )
          result
          Lwt.t

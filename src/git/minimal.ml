@@ -134,7 +134,10 @@ module type S = sig
       -> ?window:[`Object of int | `Memory of int]
       -> ?depth:int
       -> Value.t list
-      -> (stream * (Crc32.t * int64) Hash.Map.t Lwt_mvar.t, error) result Lwt.t
+      -> ( stream * (Checkseum.Crc32.t * int64) Hash.Map.t Lwt_mvar.t
+         , error )
+         result
+         Lwt.t
     (** [make ?window ?depth values] makes a PACK stream from a list of
         {!Value.t}.
 
