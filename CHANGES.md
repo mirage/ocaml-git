@@ -1,3 +1,7 @@
+### 2.0.0 (2018-10-17)
+
+- New world, new version
+
 ### 1.11.3 (2017-11-20)
 
 - add ocplib-endian to dependencies of git (#233, @hannesm)
