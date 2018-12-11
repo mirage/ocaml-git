@@ -261,7 +261,7 @@ module Make (Hash : S.HASH) = struct
       <$> ( perm
           <* (char_elt ' ' <$> any)
           <*> (name <* (char_elt '\x00' <$> any))
-          <*> hash )
+          <*> hash <* commit)
 
     let p = rep0 entry
   end
