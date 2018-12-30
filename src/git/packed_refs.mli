@@ -30,7 +30,7 @@ module type S = sig
      and type init = Cstruct.t
      and type error = Error.Decoder.t
 
-  module E : S.ENCODER with type t = t and type init = int * t
+  module E : S.ENCODER with type t = t and type init = Cstruct.t * t
 
   type error = [Error.Decoder.t | FS.error Error.FS.t]
 
@@ -40,7 +40,7 @@ module type S = sig
        fs:FS.t
     -> root:Fpath.t
     -> temp_dir:Fpath.t
-    -> ?capacity:int
+    -> etmp:Cstruct.t
     -> raw:Cstruct.t
     -> t
     -> (unit, error) result Lwt.t

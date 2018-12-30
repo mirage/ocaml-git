@@ -64,20 +64,29 @@ val of_string : string -> t
 (** [of_string s] returns a valid reference value. A valid value means:
 
     A [refname] is a hierarchical octet string beginning with ["refs/"] and not
-    violating the [git-check-ref-format] command's validation rules. More
-    specifically, they:
+   violating the [git-check-ref-format] command's validation rules. More
+   specifically, they:
 
-    {ul {- They can include slash ['/'] for hierarchical (directory) grouping,
-    but no slash-separated component can begin with a dot ['.'].} {- They must
-    contain at least one ['/']. This enforces the presence of a category like
-    ["heads/"], ["tags/"] etc. but the actual names are not restricted.} {-
-    They cannot have two consecutive dots [".."] anywhere.} {- They cannot have
-    ASCII control characters (i.e. bytes whose values are lower than [\040] or
-    [\177] DEL), space, tilde ['~'], caret ['^'], colon [':'], question-mark
-    ['?'], asterisk ['*'], or open bracket ['\['] anywhere.} {- They cannot end
-    with a slash ['/'] or a dot ['.'].} {- They cannot end with the sequence
-    [".lock"].} {- They cannot contain a sequence ["@{"].} {- They cannot
-    contain a ['\\'].}} *)
+    {ul
+
+    {- They can include slash ['/'] for hierarchical (directory) grouping, but
+   no slash-separated component can begin with a dot ['.'].} {- They must
+   contain at least one ['/']. This enforces the presence of a category like
+   ["heads/"], ["tags/"] etc. but the actual names are not restricted.}
+
+    {- They cannot have two consecutive dots [".."] anywhere.}
+
+    {- They cannot have ASCII control characters (i.e. bytes whose values are
+   lower than [\040] or [\177] DEL), space, tilde ['~'], caret ['^'], colon
+   [':'], question-mark ['?'], asterisk ['*'], or open bracket ['\['] anywhere.}
+
+    {- They cannot end with a slash ['/'] or a dot ['.'].}
+
+    {- They cannot end with the sequence [".lock"].}
+
+    {- They cannot contain a sequence ["@{"].}
+
+    {- They cannot contain a ['\\'].}} *)
 
 val to_string : t -> string
 (** [to_string t] returns the string value of the reference [t]. *)
@@ -153,7 +162,7 @@ module type S = sig
   module E :
     S.ENCODER
     with type t = head_contents
-     and type init = int * head_contents
+     and type init = Cstruct.t * head_contents
      and type error = Error.never
 end
 
@@ -190,7 +199,7 @@ module type IO = sig
        fs:FS.t
     -> root:Fpath.t
     -> temp_dir:Fpath.t
-    -> ?capacity:int
+    -> etmp:Cstruct.t
     -> raw:Cstruct.t
     -> t
     -> head_contents

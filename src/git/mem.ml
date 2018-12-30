@@ -44,7 +44,7 @@ struct
     let window = Inflate.window () in
     {ztmp; window}
 
-  let buffer ?ztmp ?dtmp:_ ?raw:_ ?window () =
+  let buffer ?ztmp ?etmp:_ ?dtmp:_ ?raw:_ ?window () =
     let ztmp = match ztmp with None -> Cstruct.create 0x800 | Some x -> x in
     let window = match window with None -> Inflate.window () | Some x -> x in
     {ztmp; window}
@@ -129,9 +129,11 @@ struct
       | Value.Tree _ -> `Tree
       | Value.Tag _ -> `Tag
     in
+    let raw = Cstruct.create 0x100 in
+    let etmp = Cstruct.create 0x100 in
     if Hashtbl.mem t.values hash then Lwt.return (Ok (hash, 0))
     else
-      match Value.to_raw value with
+      match Value.to_raw ~raw ~etmp value with
       | Error `Never -> assert false
       | Ok inflated ->
           Hashtbl.add t.values hash (lazy value) ;
@@ -181,7 +183,9 @@ struct
         | Value.Tree _ -> `Tree
         | Value.Tag _ -> `Tag
       in
-      match Value.to_raw_without_header value with
+      let raw = Cstruct.create 0x100 in
+      let etmp = Cstruct.create 0x100 in
+      match Value.to_raw_without_header ~raw ~etmp value with
       | Ok raw -> Lwt.return (Some (kind, Cstruct.of_string raw))
       | Error `Never -> assert false
     with Not_found -> Lwt.return None

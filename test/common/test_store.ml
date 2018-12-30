@@ -313,7 +313,9 @@ module Make (Store : S) = struct
       |> Store.Value.commit
     in
     let test () =
-      match ValueIO.to_raw c with
+      let raw = Cstruct.create 0x100 in
+      let etmp = Cstruct.create 0x100 in
+      match ValueIO.to_raw ~raw ~etmp c with
       | Error e -> Alcotest.failf "%a" ValueIO.EncoderRaw.pp_error e
       | Ok raw -> (
         match ValueIO.of_raw_with_header (Cstruct.of_string raw) with

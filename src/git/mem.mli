@@ -35,18 +35,24 @@
 module Make (H : Digestif.S) (Inflate : S.INFLATE) (Deflate : S.DEFLATE) : sig
   (** The {i functor} needs 4 modules:
 
-      {ul {- The hash algorithm like [SHA1].} {- A lock implementation to
-      protect references against data-race condition - this module expects a
-      [Lwt] monad.} {- An inflate algorithm implementation - usually [zlib].}
+      {ul
+
+      {- The hash algorithm like [SHA1].}
+
+      {- A lock implementation to protect references against data-race condition
+     - this module expects a [Lwt] monad.}
+
+      {- An inflate algorithm implementation - usually [zlib].}
+
       {- A deflate algorithm implementation - usually [zlib].}}
 
       From the Inflate and the Deflate module, usually, we use a [zlib]
-      implementation provided by [camlzip] or [decompress]. However, you can
-      use an other (better) implementation which needs to respect these
-      interfaces - or provide an implementation which does not inflate/deflate
-      a stream (it's possible). The only {i non-described by type} constraint
-      is the Inflate module needs to understand the Deflate module. For
-      example, use [zlib] to inflate and [brotli] to deflate does not work. *)
+     implementation provided by [camlzip] or [decompress]. However, you can use
+     an other (better) implementation which needs to respect these interfaces -
+     or provide an implementation which does not inflate/deflate a stream (it's
+     possible). The only {i non-described by type} constraint is the Inflate
+     module needs to understand the Deflate module. For example, use [zlib] to
+     inflate and [brotli] to deflate does not work. *)
 
   include
     Minimal.S

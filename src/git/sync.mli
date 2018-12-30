@@ -97,43 +97,52 @@ module type S = sig
        result
        Lwt.t
   (** [fetch_some git ?capabilities ~references repository] will fetch some
-      remote references specified by [references].
+     remote references specified by [references].
 
-      [references] is a map which: {ul {- the key is the {b remote} reference.}
+      [references] is a map which:
+
+      {ul
+
+      {- the key is the {b remote} reference.}
+
       {- the value is a list of {b local} references - which may not exist
-      yet.}}
+     yet.}}
 
-      Then, the function will try to download all of these remote references
-      and returns 2 maps:
+      Then, the function will try to download all of these remote references and
+     returns 2 maps:
 
-      {ul {- the first map contains all local references updated by the new
-      hash. This new hash is come from the server as the downloaded remote
-      reference asked by the client by [references]. Then, from associated
-      local references with remote references, we updated them with the
-      associated hash.
+      {ul
+
+      {- the first map contains all local references updated by the new hash.
+     This new hash is come from the server as the downloaded remote reference
+     asked by the client by [references]. Then, from associated local references
+     with remote references, we updated them with the associated hash.
 
       For example, if [references] is: {[ { "refs/heads/master": [
-      "refs/remotes/origin/master" ; "refs/heads/master" ] } ]}
+     "refs/remotes/origin/master" ; "refs/heads/master" ] } ]}
 
       We will update (or create) "refs/remotes/origin/master" and
-      "refs/heads/master" with the new hash downloaded from the remote
-      reference "refs/heads/master" only if it's necessary (only if we did not
-      find the hash referenced by "refs/heads/master" in the local store).}
+     "refs/heads/master" with the new hash downloaded from the remote reference
+     "refs/heads/master" only if it's necessary (only if we did not find the
+     hash referenced by "refs/heads/master" in the local store).}
 
       {- the second map is a {b subset} of [references] which contains all
-      binder of:
+     binder of:
 
-      {ul {- remote references which does not exist on the server side.} {-
-      remote references which references to an already existing in the local
-      store hash.}}}}
+      {ul
+
+      {- remote references which does not exist on the server side.}
+
+      {- remote references which references to an already existing in the local
+     store hash.}}}}
 
       The client should not put the same local reference as a value of some
-      remote references. The client can define non-existing remote references
-      (then, they appear on the second map). The client can want to set
-      non-existing local references - we will create them.
+     remote references. The client can define non-existing remote references
+     (then, they appear on the second map). The client can want to set
+     non-existing local references - we will create them.
 
       If the processus encountered an error when it updates references, it
-      leaves but, it did partially some update on some local references. *)
+     leaves but, it did partially some update on some local references. *)
 
   val fetch_all :
        Store.t
@@ -170,11 +179,15 @@ module type S = sig
        result
        Lwt.t
   (** [fetch_one git ?capabilities ~reference repository] is a specific call of
-      {!fetch_some} with only one reference. Then, it retuns:
+     {!fetch_some} with only one reference. Then, it retuns:
 
-      {ul {- [`AlreadySync] if the hash of the requested reference already
-      exists on the local store} {- [`Sync updated] if we downloaded [new_hash]
-      and set [local_ref] with this new hash.}} *)
+      {ul
+
+      {- [`AlreadySync] if the hash of the requested reference already exists on
+     the local store}
+
+      {- [`Sync updated] if we downloaded [new_hash] and set [local_ref] with
+     this new hash.}} *)
 
   val clone :
        Store.t
@@ -192,32 +205,37 @@ module type S = sig
        , error )
        result
        Lwt.t
-  (** As {!fetch_some}, [update git ?capabilities ~references repository] is
-      the other side of the communication with a Git server and update and
-      create remote references when it uploads local hashes.
+       (** As {!fetch_some}, [update git ?capabilities ~references repository]
+          is the other side of the communication with a Git server and update
+          and create remote references when it uploads local hashes.
 
-      [reference] is a map which: {ul {- the key is the {b local} reference.}
-      {- the value is a list of {b remote} references - which may not exist
-      yet.}}
+           [reference] is a map which:
 
-      Then, the function will try to upload all of these local references to
-      the binded remote references. If binded remote reference does not exist
-      on the server, we ask to the server to create and set it to the local
-      hash.
+           {ul
+
+           {- the key is the {b local} reference.}
+
+           {- the value is a list of {b remote} references - which may not exist
+          yet.}}
+
+      Then, the function will try to upload all of these local references to the
+          binded remote references. If binded remote reference does not exist on
+          the server, we ask to the server to create and set it to the local
+          hash.
 
       For each update action, we check if the local store has the remote hash.
-      In other case, we miss this action - that means, the local store is not
-      synchronized with the server (and the client probably needs to
-      {!fetch_some} before).
+          In other case, we miss this action - that means, the local store is
+          not synchronized with the server (and the client probably needs to
+          {!fetch_some} before).
 
       Then, it returns a list of results. The [Ok] case with the remote
-      reference which the server updated correctly and the [Error] case with
-      the remote reference which the server encountered an error with a
-      description of this error.
+          reference which the server updated correctly and the [Error] case with
+          the remote reference which the server encountered an error with a
+          description of this error.
 
       At this final stage, the function does not encountered any error during
-      the commmunication - if it's the case, we did not do any modification on
-      the server and return an {!error}. *)
+          the commmunication - if it's the case, we did not do any modification
+          on the server and return an {!error}. *)
 end
 
 module Default : sig

@@ -68,7 +68,7 @@ module type S = sig
   module E :
     S.ENCODER
     with type t = t
-     and type init = int * t * int * Cstruct.t
+     and type init = Cstruct.t * t * int * Cstruct.t
      and type error = [`Deflate of Deflate.error]
 
   include S.DIGEST with type t := t and type hash := Hash.t
@@ -93,7 +93,7 @@ module type RAW = sig
   module EncoderRaw :
     S.ENCODER
     with type t = t
-     and type init = int * t
+     and type init = Cstruct.t * t
      and type error = Error.never
 
   module DecoderRaw :
@@ -105,20 +105,21 @@ module type RAW = sig
   module EncoderWithoutHeader :
     S.ENCODER
     with type t = t
-     and type init = int * t
+     and type init = Cstruct.t * t
      and type error = Error.never
 
   val to_deflated_raw :
-       ?capacity:int
+       raw:Cstruct.t
+    -> etmp:Cstruct.t
     -> ?level:int
     -> ztmp:Cstruct.t
     -> t
     -> (string, E.error) result
 
-  val to_raw : ?capacity:int -> t -> (string, EncoderRaw.error) result
+  val to_raw : raw:Cstruct.t -> etmp:Cstruct.t -> t -> (string, EncoderRaw.error) result
 
   val to_raw_without_header :
-    ?capacity:int -> t -> (string, EncoderWithoutHeader.error) result
+    raw:Cstruct.t -> etmp:Cstruct.t -> t -> (string, EncoderWithoutHeader.error) result
 
   val of_raw :
        kind:[`Commit | `Blob | `Tree | `Tag]
@@ -396,9 +397,8 @@ module Raw (Hash : S.HASH) (Inflate : S.INFLATE) (Deflate : S.DEFLATE) = struct
     in
     go state
 
-  let to_deflated_raw ?(capacity = 0x100) ?(level = 4) ~ztmp value =
-    let encoder = E.default (capacity, value, level, ztmp) in
-    let raw = Cstruct.create capacity in
+  let to_deflated_raw ~raw ~etmp ?(level = 4) ~ztmp value =
+    let encoder = E.default (etmp, value, level, ztmp) in
     let buffer = Cstruct_buffer.create (Int64.to_int (length value)) in
     (* XXX(dinosaure): it's an heuristic to consider than the size of the
        result is lower than [F.length value]. In most of cases, it's true but
@@ -425,9 +425,8 @@ module Raw (Hash : S.HASH) (Inflate : S.INFLATE) (Deflate : S.DEFLATE) = struct
     end in
     to_ (module SpecializedEncoder) buffer raw encoder
 
-  let to_raw ?(capacity = 0x100) value =
-    let encoder = EncoderRaw.default (capacity, value) in
-    let raw = Cstruct.create capacity in
+  let to_raw ~raw ~etmp value =
+    let encoder = EncoderRaw.default (etmp, value) in
     let buffer = Cstruct_buffer.create (Int64.to_int (length value)) in
     (* XXX(dinosaure): we are sure than the serialized object has the size
        [F.length value]. So, the [buffer] should not growth. *)
@@ -452,9 +451,8 @@ module Raw (Hash : S.HASH) (Inflate : S.INFLATE) (Deflate : S.DEFLATE) = struct
     end in
     to_ (module SpecializedEncoder) buffer raw encoder
 
-  let to_raw_without_header ?(capacity = 0x100) value =
-    let encoder = EncoderWithoutHeader.default (capacity, value) in
-    let raw = Cstruct.create capacity in
+  let to_raw_without_header ~raw ~etmp value =
+    let encoder = EncoderWithoutHeader.default (etmp, value) in
     let buffer = Cstruct_buffer.create (Int64.to_int (length value)) in
     (* XXX(dinosaure): we are sure than the serialized object has the size
        [F.length value]. So, the [buffer] should not growth. *)

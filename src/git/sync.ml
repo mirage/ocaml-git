@@ -178,7 +178,7 @@ module Common (G : Minimal.S) = struct
   end
 
   module Pq = Psq.Make (Store.Hash) (Node)
-  module Q = Encore.FQueue
+  module Q : Ke.Sigs.F = Ke.Fke
 
   exception Store of Store.error
 
@@ -225,7 +225,7 @@ module Common (G : Minimal.S) = struct
     in
     let propagate {Node.value; color} =
       let rec go q =
-        match Q.shift q with
+        match Q.pop_exn q with
         | hash, q -> (
           try
             let node = Hashtbl.find store hash in
@@ -234,11 +234,11 @@ module Common (G : Minimal.S) = struct
           with Not_found -> go q )
         | exception Q.Empty -> ()
       in
-      go (Q.of_list (preds value))
+      go (List.fold_left Q.push Q.empty (preds value))
     in
     let propagate_snapshot {Node.value; color} =
       let rec go q =
-        match Q.shift q with
+        match Q.pop_exn q with
         | hash, q -> (
             let k node =
               node.Node.color <- color ;
@@ -252,7 +252,7 @@ module Common (G : Minimal.S) = struct
               >>= function None -> Lwt.return () | Some node -> k node ) )
         | exception Q.Empty -> Lwt.return ()
       in
-      go (Q.of_list (preds value))
+      go (List.fold_left Q.push Q.empty (preds value))
     in
     let rec garbage pq =
       if all_blacks pq then Lwt.return ()

@@ -72,15 +72,19 @@ module type LOOSE = sig
 
   val read : state -> Hash.t -> (t, error) result Lwt.t
   (** [read state hash] is the git {i loose} object in [state] such that
-      [digest(result) = hash].
+     [digest(result) = hash].
 
       Can return an {!error}:
 
-      {ul {- {!FS.File.error} when we can not access to the git object in the
-      file-system (because it does not exist or the structure of the git
-      repository is wrong).} {- {!Value.D.error} when we can not de-serialize
-      xor inflate the requested git {i loose} object. That means, the git {i
-      loose} object does not respect the Git format.}} *)
+      {ul
+
+      {- {!FS.File.error} when we can not access to the git object in the
+     file-system (because it does not exist or the structure of the git
+     repository is wrong).}
+
+      {- {!Value.D.error} when we can not de-serialize xor inflate the requested
+     git {i loose} object. That means, the git {i loose} object does not respect
+     the Git format.}} *)
 
   val size : state -> Hash.t -> (int64, error) result Lwt.t
   (** [size t hash] is the size of the git {i loose} object which respects the
@@ -94,19 +98,21 @@ module type LOOSE = sig
   (** [write state v] writes [v] as a {i loose} git object in the file-system.
 
       This function does not allocate any buffer and uses only the specified
-      buffers in [state]'s buffer. Once the write is done, [v] becomes
-      available by [read state digest(v)].
+     buffers in [state]'s buffer. Once the write is done, [v] becomes available
+     by [read state digest(v)].
 
       Can return an {!error}:
 
-      {ul {- {!FS.File.error} when we can not create a new file in the
-      file-system.} {- {!Value.E.error} when we can not serialize xor deflate
-      the requested git {i loose} object. This kind of error should be never
-      happen.}}
+      {ul
+
+      {- {!FS.File.error} when we can not create a new file in the file-system.}
+
+      {- {!Value.E.error} when we can not serialize xor deflate the requested
+     git {i loose} object. This kind of error should be never happen.}}
 
       The current implementation does not limit the memory consumption of the
-      deflate computation (i.e. {i zlib} and the flush method). Depending of
-      the object [v], the process can consume a lot of memory. *)
+     deflate computation (i.e. {i zlib} and the flush method). Depending of the
+     object [v], the process can consume a lot of memory. *)
 
   val write_inflated : state -> kind:kind -> Cstruct.t -> Hash.t Lwt.t
   (** [write_inflated state kind raw] writes the git object in the git
@@ -121,49 +127,57 @@ module type LOOSE = sig
 
   val read_inflated : state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
   (** [read_inflated state hash] can retrieve a git {i loose} object from the
-      file-system. However, this function {b does not} de-serialize the git
-      object and returns the kind of the object and the {i raw-data} inflated.
-      Precisely, it decodes only the header.
+     file-system. However, this function {b does not} de-serialize the git
+     object and returns the kind of the object and the {i raw-data} inflated.
+     Precisely, it decodes only the header.
 
-      This function allocate only one buffer in the major-heap and uses only
-      the specified buffers to compute the {i raw-data} in the allocated
-      {!Cstruct.t}. The {i raw-data} respects the predicate [digest(header +
-      raw-data) = hash].
+      This function allocate only one buffer in the major-heap and uses only the
+     specified buffers to compute the {i raw-data} in the allocated
+     {!Cstruct.t}. The {i raw-data} respects the predicate [digest(header +
+     raw-data) = hash].
 
       Can return an {!error}:
 
-      {ul {- {!FS.File.error} when we can not access to the git object in the
-      file-system (because it does not exist or the structure of the git
-      repository is wrong).} {- {!Value.D.error} when we can not de-serialize
-      xor inflate the requested git {i loose} object. That means, the git {i
-      loose} object has a wrong header or it is corrupted.}} *)
+      {ul
+
+      {- {!FS.File.error} when we can not access to the git object in the
+     file-system (because it does not exist or the structure of the git
+     repository is wrong).}
+
+      {- {!Value.D.error} when we can not de-serialize xor inflate the requested
+     git {i loose} object. That means, the git {i loose} object has a wrong
+     header or it is corrupted.}} *)
 
   val read_inflated_wa :
     Cstruct.t -> state -> Hash.t -> (kind * Cstruct.t, error) result Lwt.t
   (** [read_inflated_wa result state h] is the Git {i loose} object with the
-      hash [h]. However, this function {b does not} de-serialize the git object
-      and returns the kind of the object and the {i raw-data} inflated.
-      Precisely, it decodes only the header. This function needs some buffers,
-      provided by [decoder] as well as [result], a buffer to store the result.
+     hash [h]. However, this function {b does not} de-serialize the git object
+     and returns the kind of the object and the {i raw-data} inflated.
+     Precisely, it decodes only the header. This function needs some buffers,
+     provided by [decoder] as well as [result], a buffer to store the result.
 
       The suffix [wa] refers to: Without Allocation. Indeed, this function
-      allocates {b only} any data in the minor-heap. All other needed OCaml
-      objects must be noticed by the client. However, the client needs to
-      provide a well sized [result] (otherwise, the client can retrieve an
-      error). He can get this information by {!size}.
+     allocates {b only} any data in the minor-heap. All other needed OCaml
+     objects must be noticed by the client. However, the client needs to provide
+     a well sized [result] (otherwise, the client can retrieve an error). He can
+     get this information by {!size}.
 
       The {i raw-data} respects the predicate [digest(header + raw-data) = h].
 
       Can return an {!error}:
 
-      {ul {- {!FS.File.error} when we can not access to the git object in the
-      file-system (because it does not exist or the structure of the git
-      repository is wrong).} {- {!Value.D.error} when we can not de-serialize
-      xor inflate the requested git {i loose} object. That means, the git {i
-      loose} object has a wrong header or it is corrupted.}}
+      {ul
 
-      In a server context, this function should be used to limit the
-      allocation. *)
+      {- {!FS.File.error} when we can not access to the git object in the
+     file-system (because it does not exist or the structure of the git
+     repository is wrong).}
+
+      {- {!Value.D.error} when we can not de-serialize xor inflate the requested
+     git {i loose} object. That means, the git {i loose} object has a wrong
+     header or it is corrupted.}}
+
+      In a server context, this function should be used to limit the allocation.
+     *)
 
   (** The decoder of the Git object. We constraint the input to be an
       {!Inflate.window} and a {Cstruct.t} which used by the {Inflate} module
@@ -198,7 +212,7 @@ module type LOOSE = sig
   module E :
     S.ENCODER
     with type t = t
-     and type init = int * t * int * Cstruct.t
+     and type init = Cstruct.t * t * int * Cstruct.t
      and type error = [`Deflate of Deflate.error]
 end
 
@@ -271,24 +285,30 @@ module type PACK = sig
 
   val read : state -> Hash.t -> (value, error) result Lwt.t
   (** [read state hash] can retrieve a git {i packed} object from any {i PACK}
-      files available in the current git repository [state]. It just inflates
-      the git object and informs some meta-data (like kind, CRC-32 check-sum,
-      length, etc.) about it. Then, the client can use the related decoder to
-      get the OCaml value.
+     files available in the current git repository [state]. It just inflates the
+     git object and informs some meta-data (like kind, CRC-32 check-sum, length,
+     etc.) about it. Then, the client can use the related decoder to get the
+     OCaml value.
 
       This function allocates 2 {Cstruct.t} needed to re-construct the git {i
-      packed} object in any case (if it is delta-ified or not) and a certain
-      amount of little buffer (sized by 0x7F bytes) to help the construction
-      only when the requested object is delta-ified.
+     packed} object in any case (if it is delta-ified or not) and a certain
+     amount of little buffer (sized by 0x7F bytes) to help the construction only
+     when the requested object is delta-ified.
 
       Can return an {!error}:
 
-      {ul {- {!FS.File.error} or {!FS.Dir.error} or {!FS.Mapper.error} when we
-      retrieve a file-system error} {- {!PACKDecoder.error} when we retrieve an
-      error about the decoding of the {i packed} git object in the founded {i
-      PACK}i file} {- {!IDXDecoder.error} when we retrieve an error about the
-      decoding of an {i IDX} file} {- [`Not_found] when the requested object is
-      not {i packed}}} *)
+      {ul
+
+      {- {!FS.File.error} or {!FS.Dir.error} or {!FS.Mapper.error} when we
+     retrieve a file-system error}
+
+      {- {!PACKDecoder.error} when we retrieve an error about the decoding of
+     the {i packed} git object in the founded {i PACK}i file}
+
+      {- {!IDXDecoder.error} when we retrieve an error about the decoding of an
+     {i IDX} file}
+
+      {- [`Not_found] when the requested object is not {i packed}}} *)
 
   val size : state -> Hash.t -> (int, error) result Lwt.t
   (** [size state hash] returns the size of the git {i packed} object which
@@ -449,6 +469,7 @@ module type S = sig
 
   val buffer :
        ?ztmp:Cstruct.t
+    -> ?etmp:Cstruct.t
     -> ?dtmp:Cstruct.t
     -> ?raw:Cstruct.t
     -> ?window:Inflate.window
@@ -456,17 +477,23 @@ module type S = sig
     -> buffer
   (** Build a buffer to read and write a Git object.
 
-      {ul {- [window] is a buffer used by the {!Inflate} module} {- [ztmp] is a
-      buffer used to store the inflated flow} {- [dtmp] is a buffer used by the
-      decoder to save the inflated flow (and keep it for an alteration)} {-
-      [raw] is a buffer used to store the input flow}}
+      {ul
+
+      {- [window] is a buffer used by the {!Inflate} module}
+
+      {- [ztmp] is a buffer used to store the inflated flow}
+
+      {- [dtmp] is a buffer used by the decoder to save the inflated flow (and
+     keep it for an alteration)}
+
+      {- [raw] is a buffer used to store the input flow}}
 
       If not specified the cstruct are created with a size of 4 MiB.
 
-      Store functions can be used in a concurrency context only if the
-      specified buffers are not used by another process. The deserialisation
-      functions does not allocate any buffer and uses only the specified
-      buffers to construct the OCaml value. *)
+      Store functions can be used in a concurrency context only if the specified
+     buffers are not used by another process. The deserialisation functions does
+     not allocate any buffer and uses only the specified buffers to construct
+     the OCaml value. *)
 
   val dotgit : t -> Fpath.t
   (** [dotgit state] is the current [".git"] path used. *)
@@ -503,18 +530,19 @@ module type S = sig
 
   val write : t -> Value.t -> (Hash.t * int, error) result Lwt.t
   (** [write state v] writes as a {b loose} git object [v] in the file-system.
-      It serializes and deflates the value to a new file. which respect the
-      internal structure of a git repository.
+     It serializes and deflates the value to a new file. which respect the
+     internal structure of a git repository.
 
       This function does not allocate any buffer and uses only the specified
-      buffers to store the OCaml value to the file-system. Then, the OCaml
-      value will be available by [read state digest(v)]. Otherwise, return an
-      {!error}:
+     buffers to store the OCaml value to the file-system. Then, the OCaml value
+     will be available by [read state digest(v)]. Otherwise, return an {!error}:
 
-      {ul {- {!FS.File.error} when we can not create a new file in the
-      file-system.} {- {!Value.E.error} when we can not serialize xor deflate
-      the requested git {i loose} object. This kind of error should be never
-      happen.}} *)
+      {ul
+
+      {- {!FS.File.error} when we can not create a new file in the file-system.}
+
+      {- {!Value.E.error} when we can not serialize xor deflate the requested
+     git {i loose} object. This kind of error should be never happen.}} *)
 
   val size : t -> Hash.t -> (int64, error) result Lwt.t
   (** [size state hash] is the size of the git object such that [digest(object)
@@ -558,28 +586,35 @@ module type S = sig
     -> Hash.t
     -> 'a Lwt.t
   (** [fold state f ~path acc hash] iters on any git objects reachable by the
-      git object [hash] which located in [path] (for example, if you iter on a
-      commit, [path] should be ["."] - however, if you iter on a tree, [path]
-      should be the directory path represented by your tree). For each git
-      objects, we notice the path [name] (derived from [path]) if the object is
-      a Blob or a Tree, the [length] or the git object (see {!size}), the
-      [hash] and the [value].
+     git object [hash] which located in [path] (for example, if you iter on a
+     commit, [path] should be ["."] - however, if you iter on a tree, [path]
+     should be the directory path represented by your tree). For each git
+     objects, we notice the path [name] (derived from [path]) if the object is a
+     Blob or a Tree, the [length] or the git object (see {!size}), the [hash]
+     and the [value].
 
       If the [hash] points to:
 
-      {ul {- {!Value.Blob.t}: [f] is called only one time with the OCaml value
-      of the {i blob}.} {- {!Value.Tree.t}: [f] is called firstly with the
-      Ocaml value of the pointed {i tree} by the hash [hash]. Then, we {i iter}
-      (and call [f] for each iteration) in the list of entries of the {i tree}.
-      Finally, we retrieve recursively all sub-tree objects and do an ascending
-      walk. [f] is never called more than one time for each hash.} {-
-      {!Value.Commit.t}: [f] is called firstly with the OCaml value of the
-      pointed {i commit} by the hash [hash]. Then, it follozs recursively all
-      parents of the current commit, Finallym it starts a [fold] inside the
-      pointed root {i tree} git object of each {i commit} previously retrieved.
-      [f] never called more than one time for each hash.} {- {!Value.Tag.t}:
-      [f] is called firstly with the OCaml value of the pointed {i tag} by the
-      hash [hash]. Then, it follows the git object pointed by the {i tag}.}}
+      {ul
+
+      {- {!Value.Blob.t}: [f] is called only one time with the OCaml value of
+     the {i blob}.}
+
+      {- {!Value.Tree.t}: [f] is called firstly with the Ocaml value of the
+     pointed {i tree} by the hash [hash]. Then, we {i iter} (and call [f] for
+     each iteration) in the list of entries of the {i tree}. Finally, we
+     retrieve recursively all sub-tree objects and do an ascending walk. [f] is
+     never called more than one time for each hash.}
+
+      {- {!Value.Commit.t}: [f] is called firstly with the OCaml value of the
+     pointed {i commit} by the hash [hash]. Then, it follozs recursively all
+     parents of the current commit, Finallym it starts a [fold] inside the
+     pointed root {i tree} git object of each {i commit} previously retrieved.
+     [f] never called more than one time for each hash.}
+
+      {- {!Value.Tag.t}: [f] is called firstly with the OCaml value of the
+     pointed {i tag} by the hash [hash]. Then, it follows the git object pointed
+     by the {i tag}.}}
 
       Any retrieved {!error} is skipped. *)
 
@@ -599,11 +634,13 @@ module type S = sig
       -> Reference.head_contents
       -> (Hash.t, error) result Lwt.t
     (** [normalize graph ref] is the final hash pointed by the reference [ref].
-        This function can return an error:
+       This function can return an error:
 
-        {ul {- [`Invalid_reference ref] if, from the graph [graph], we don't
-        find the final pointed hash. This case can appear if the graph is not
-        complete or if the link is broken.}} *)
+        {ul
+
+        {- [`Invalid_reference ref] if, from the graph [graph], we don't find
+       the final pointed hash. This case can appear if the graph is not complete
+       or if the link is broken.}} *)
 
     val list : t -> (Reference.t * Hash.t) list Lwt.t
     (** [list state] is the list of references and their associated hash. This
