@@ -113,17 +113,23 @@ module type H = sig
        | `Ok of t * hunks ]
   (** [eval src t] is:
 
-      {ul {- [`Await t] iff [t] needs more input storage. The client must use
-      {!refill} to provide a new buffer and then call {!eval} with [`Await]
-      until other value returned.} {- [`Hunk t] when [t] can return a new
-      {!hunk}. The client can call {!continue} to move to the next step of the
-      process, otherwise the decode sticks on this situation. The value will be
-      consumed then. If the {!hunk} is [Insert], the internal [Cstruct.t] need
-      to be copied because {!eval} will erase the content then.} {- [`Ok (t,
-      hunks)] when [t] is done. We returns the complete value {!hunks}. Then,
-      [t] sticks on this situation, the client can remove it.} {- [`Error (t,
-      exn)] iff the decoder [t] meet an {!error} [exn]. The decoder can't
-      continue and sticks in this situation.}} *)
+      {ul
+
+      {- [`Await t] iff [t] needs more input storage. The client must use
+     {!refill} to provide a new buffer and then call {!eval} with [`Await] until
+     other value returned.}
+
+      {- [`Hunk t] when [t] can return a new {!hunk}. The client can call
+     {!continue} to move to the next step of the process, otherwise the decode
+     sticks on this situation. The value will be consumed then. If the {!hunk}
+     is [Insert], the internal [Cstruct.t] need to be copied because {!eval}
+     will erase the content then.}
+
+      {- [`Ok (t, hunks)] when [t] is done. We returns the complete value
+     {!hunks}. Then, [t] sticks on this situation, the client can remove it.}
+
+      {- [`Error (t, exn)] iff the decoder [t] meet an {!error} [exn]. The
+     decoder can't continue and sticks in this situation.}} *)
 
   val default : int -> reference -> t
   (** Make a new decoder state {!t} from a {!reference}. We need to notice the
@@ -207,13 +213,21 @@ module type P = sig
     | Blob
     | Tag
     | Hunk of Hunk.hunks
-        (** The kind of the PACK object. It can be:
+    (** The kind of the PACK object. It can be:
 
-            {ul {- A [Commit]} {- A [Tree]} {- A [Blob]} {- A [Tag]} {- A
-            [Hunk]: this is not a git object but a specific PCK object. The
-            {!H.hunks} refers to another PACK object by {!H.reference} and it's
-            just a result of a diff between the reference and the current
-            object.} } *)
+            {ul
+
+            {- A [Commit]}
+
+            {- A [Tree]}
+
+            {- A [Blob]}
+
+            {- A [Tag]}
+
+            {- A [Hunk]: this is not a git object but a specific PCK object. The
+       {!H.hunks} refers to another PACK object by {!H.reference} and it's just
+       a result of a diff between the reference and the current object.} } *)
 
   val default : Cstruct.t -> Inflate.window -> t
   (** [default tmp window] makes a new decoder of a PACK file.
@@ -339,24 +353,33 @@ module type P = sig
        | `Error of t * error ]
   (** [eval src t] is:
 
-      {ul {- [`Await t] iff [t] more input storage. The client muse use
-      {!refill} to provide a new buffer and then call {!eval} with [`Await]
-      until other value returned.} {- [`Object t] iff [t] finishes to compute
-      one object. The client is able to use the meta-data functions (like
-      {!kind} or {!crc}) and should use {!next_object} to move the decoder to
-      the next step. Otherwise, the decoder [t] sticks in this situation.} {-
-      [Hunk (t, hunk)] defers the value returned by the internal {!H.t}
-      decoder. The client should use {!continue} to move the decoder to the
-      next step. In this situation, we ensure than the future {!kind} of the
-      current/expected object is {!Hunk _}.} {- [`Flush t] iff [t] needs more
-      output storage. The client must use {!flush} to provide a new buffer and
-      then call {!eval} with [`Flush] until [`Object] is returned. In this
-      situation, we ensure than the future {!kind} of the current/expected
-      object is different than the {!Hunk _}.} {- [`End (t, hash)] when the
-      decoder is done. [t] sticks to this situation. The client can remove it.
-      We return the hash produced by the PACK stream.} {- [`Error (t, exn)] iff
-      the decoder meet an {!error} [exn]. The decoder can't continue and sticks
-      in this situation.}} *)
+      {ul
+
+      {- [`Await t] iff [t] more input storage. The client muse use {!refill} to
+     provide a new buffer and then call {!eval} with [`Await] until other value
+     returned.}
+
+      {- [`Object t] iff [t] finishes to compute one object. The client is able
+     to use the meta-data functions (like {!kind} or {!crc}) and should use
+     {!next_object} to move the decoder to the next step. Otherwise, the decoder
+     [t] sticks in this situation.}
+
+      {- [Hunk (t, hunk)] defers the value returned by the internal {!H.t}
+     decoder. The client should use {!continue} to move the decoder to the next
+     step. In this situation, we ensure than the future {!kind} of the
+     current/expected object is {!Hunk _}.}
+
+      {- [`Flush t] iff [t] needs more output storage. The client must use
+     {!flush} to provide a new buffer and then call {!eval} with [`Flush] until
+     [`Object] is returned. In this situation, we ensure than the future {!kind}
+     of the current/expected object is different than the {!Hunk _}.}
+
+      {- [`End (t, hash)] when the decoder is done. [t] sticks to this
+     situation. The client can remove it. We return the hash produced by the
+     PACK stream.}
+
+      {- [`Error (t, exn)] iff the decoder meet an {!error} [exn]. The decoder
+     can't continue and sticks in this situation.}} *)
 
   val eval_length :
        Cstruct.t
@@ -368,9 +391,11 @@ module type P = sig
        | `Error of t * error ]
   (** [eval_length src t] has the same purpose than {!eval} plus:
 
-      {ul {- [`Length t] iff [t] can return the real inflated length of the
-      current/expected object. The client should use {!length} to get this
-      information.}} *)
+      {ul
+
+      {- [`Length t] iff [t] can return the real inflated length of the
+     current/expected object. The client should use {!length} to get this
+     information.}} *)
 
   val eval_metadata :
        Cstruct.t
@@ -380,10 +405,12 @@ module type P = sig
        | `Flush of t
        | `End of t * Hash.t
        | `Error of t * error ]
-  (** [eval_length src t] has the same purpose than {!eval} plus:
+    (** [eval_length src t] has the same purpose than {!eval} plus:
 
-      {ul {- [`Metadata t] iff [t] can be used with meta-data functions (like
-      {!kind} or {!length}).}} *)
+      {ul
+
+      {- [`Metadata t] iff [t] can be used with meta-data functions (like
+       {!kind} or {!length}).}} *)
 end
 
 module Pack

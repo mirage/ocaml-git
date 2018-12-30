@@ -127,18 +127,23 @@ module type DECODER = sig
        | `End of t * Hash.t
        | `Hash of t * (Hash.t * Checkseum.Crc32.t * int64)
        | `Error of t * error ]
-  (** [eval src t] is:
+    (** [eval src t] is:
 
       {ul
 
       {- [`Await t] iff [t] needs more input storage. The client must use
-      {!refill} to provide a new buffer and then call {!eval} with [`Await]
-      until other value returned.} {- [`End (t, hash)] when [t] is done. We
-      returns the hash of the IDX file.} {- [`Hash (t, (hash, crc, offset))]
-      when [t] can returns a new value [(hash, crc, offset)]. The client can
-      call {!eval} to continue the process. The value will be consumed then.}
+       {!refill} to provide a new buffer and then call {!eval} with [`Await]
+       until other value returned.}
+
+      {- [`End (t, hash)] when [t] is done. We returns the hash of the IDX
+       file.}
+
+      {- [`Hash (t, (hash, crc, offset))] when [t] can returns a new value
+       [(hash, crc, offset)]. The client can call {!eval} to continue the
+       process. The value will be consumed then.}
+
       {- [`Error (t, exn)] iff the decoder meet an {!error} [exn]. The decoder
-      can't continue and sticks in this situation.}} *)
+       can't continue and sticks in this situation.}} *)
 end
 
 (** The {i functor} to make the decoder module by a specific hash

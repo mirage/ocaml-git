@@ -105,7 +105,7 @@ module type S = sig
        fs:FS.t
     -> root:Fpath.t
     -> temp_dir:Fpath.t
-    -> ?capacity:int
+    -> etmp:Cstruct.t
     -> ?level:int
     -> ztmp:Cstruct.t
     -> raw:Cstruct.t

@@ -33,6 +33,7 @@ module type S = sig
 
   val buffer :
        ?ztmp:Cstruct.t
+       -> ?etmp:Cstruct.t
     -> ?dtmp:Cstruct.t
     -> ?raw:Cstruct.t
     -> ?window:Inflate.window
@@ -93,28 +94,35 @@ module type S = sig
     -> Hash.t
     -> 'acc Lwt.t
   (** [fold state f ~path acc hash] iters on any git objects reachable by the
-      git object [hash] which located in [path] (for example, if you iter on a
-      commit, [path] should be ["."] - however, if you iter on a tree, [path]
-      should be the directory path represented by your tree). For each git
-      objects, we notice the path [name] (derived from [path]) if the object is
-      a Blob or a Tree, the [length] or the git object (see {!size}), the
-      [hash] and the [value].
+     git object [hash] which located in [path] (for example, if you iter on a
+     commit, [path] should be ["."] - however, if you iter on a tree, [path]
+     should be the directory path represented by your tree). For each git
+     objects, we notice the path [name] (derived from [path]) if the object is a
+     Blob or a Tree, the [length] or the git object (see {!size}), the [hash]
+     and the [value].
 
       If the [hash] points to:
 
-      {ul {- {!Value.Blob.t}: [f] is called only one time with the OCaml value
-      of the {i blob}.} {- {!Value.Tree.t}: [f] is called firstly with the
-      Ocaml value of the pointed {i tree} by the hash [hash]. Then, we {i iter}
-      (and call [f] for each iteration) in the list of entries of the {i tree}.
-      Finally, we retrieve recursively all sub-tree objects and do an ascending
-      walk. [f] is never called more than one time for each hash.} {-
-      {!Value.Commit.t}: [f] is called firstly with the OCaml value of the
-      pointed {i commit} by the hash [hash]. Then, it follozs recursively all
-      parents of the current commit, Finallym it starts a [fold] inside the
-      pointed root {i tree} git object of each {i commit} previously retrieved.
-      [f] never called more than one time for each hash.} {- {!Value.Tag.t}:
-      [f] is called firstly with the OCaml value of the pointed {i tag} by the
-      hash [hash]. Then, it follows the git object pointed by the {i tag}.}}
+      {ul
+
+      {- {!Value.Blob.t}: [f] is called only one time with the OCaml value of
+     the {i blob}.}
+
+      {- {!Value.Tree.t}: [f] is called firstly with the Ocaml value of the
+     pointed {i tree} by the hash [hash]. Then, we {i iter} (and call [f] for
+     each iteration) in the list of entries of the {i tree}. Finally, we
+     retrieve recursively all sub-tree objects and do an ascending walk. [f] is
+     never called more than one time for each hash.}
+
+      {- {!Value.Commit.t}: [f] is called firstly with the OCaml value of the
+     pointed {i commit} by the hash [hash]. Then, it follozs recursively all
+     parents of the current commit, Finallym it starts a [fold] inside the
+     pointed root {i tree} git object of each {i commit} previously retrieved.
+     [f] never called more than one time for each hash.}
+
+      {- {!Value.Tag.t}: [f] is called firstly with the OCaml value of the
+     pointed {i tag} by the hash [hash]. Then, it follows the git object pointed
+     by the {i tag}.}}
 
       Any retrieved {!error} is missed. *)
 

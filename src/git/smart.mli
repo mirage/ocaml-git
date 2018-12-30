@@ -48,22 +48,41 @@ module type COMMON = sig
   type shallow_update = hash Sync.shallow_update
 
   (** In the negociation phase, the server will ACK obj-ids differently
-      depending on which ack mode is chosen by the client:
+     depending on which ack mode is chosen by the client:
 
-      {ul {- [`Multi_ack] mode: {ul {- the server will respond with [`Continue]
-      for any common commits.} {- once the server has found an acceptable
-      common base commit and is ready to make a packfile, it will blindly ACK
-      all ["have"] obj-ids back to the client.} {- the server will then send a
-      ["NAK"] and then wait for another response from the client - either a
-      ["done"] or another list of ["have"] lines.}}} {- [`Multi_ack_detailed]
-      mode: {ul {- the server will differentiate the ACKs where it is signaling
-      that it is ready to send data with [`Ready] lines, and signals the
-      identified common commits with [`Common] lines.}}} {- [None] mode: {ul {-
-      upload-pack sends [`ACK] on the first common object it finds. After that
-      it says nothing until the client gives it a ["done"].} {- upload-pack
-      sends ["NAK"] on a [`Flush] if no common object has been found yet. If
-      one has been found, and thus an ACK was already sent, it's silent on the
-      [`Flush].}}}}
+      {ul
+
+      {- [`Multi_ack] mode:
+
+      {ul
+
+      {- the server will respond with [`Continue] for any common commits.}
+
+      {- once the server has found an acceptable common base commit and is ready
+     to make a packfile, it will blindly ACK all ["have"] obj-ids back to the
+     client.}
+
+      {- the server will then send a ["NAK"] and then wait for another response
+     from the client - either a ["done"] or another list of ["have"] lines.}}}
+
+      {- [`Multi_ack_detailed] mode:
+
+      {ul
+
+      {- the server will differentiate the ACKs where it is signaling that it is
+     ready to send data with [`Ready] lines, and signals the identified common
+     commits with [`Common] lines.}}}
+
+      {- [None] mode:
+
+      {ul
+
+      {- upload-pack sends [`ACK] on the first common object it finds. After
+     that it says nothing until the client gives it a ["done"].}
+
+      {- upload-pack sends ["NAK"] on a [`Flush] if no common object has been
+     found yet. If one has been found, and thus an ACK was already sent, it's
+     silent on the [`Flush].}}}}
 
       This type represents this information. *)
   type acks = hash Sync.acks

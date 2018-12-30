@@ -85,14 +85,21 @@ module type H = sig
     -> [`Await of t | `Flush of t | `End of t | `Error of t * error]
   (** [eval src t] is:
 
-      {ul {- [`Await t] iff [t] needs more input storage. The client must use
-      {!refill} to provide a new buffer and then call {!eval} with [`Await]
-      until other value returned.} {- [`Flush t] iff [t] needs more output
-      storage. The client must use {!flush} to provide a new buffer and then
-      call {!eval} with [`Flush] until [`End] is returned.} {- [`End t] when
-      [t] is done. Then, [t] sticks on this situation, the client can remove
-      it.} {- [`Error (t, exn)] iff the encoder [t] meet an {!error} [exn]. The
-      encoder can't continue and sticks in this situation.}} *)
+      {ul
+
+      {- [`Await t] iff [t] needs more input storage. The client must use
+     {!refill} to provide a new buffer and then call {!eval} with [`Await] until
+     other value returned.}
+
+      {- [`Flush t] iff [t] needs more output storage. The client must use
+     {!flush} to provide a new buffer and then call {!eval} with [`Flush] until
+     [`End] is returned.}
+
+      {- [`End t] when [t] is done. Then, [t] sticks on this situation, the
+     client can remove it.}
+
+      {- [`Error (t, exn)] iff the encoder [t] meet an {!error} [exn]. The
+     encoder can't continue and sticks in this situation.}} *)
 
   val used_in : t -> int
   (** [used_in ŧ] returns how many byte [t] consumed in the current buffer
@@ -140,15 +147,23 @@ module type ENTRY = sig
     -> t
   (** [make hash ?name ?preferred ?delta kind length] returns a new entry when:
 
-      {ul {- [hash] corresponds to the unique ID of the git object.} {- [name]
-      corresponds to the optional name of the git object. For a [Tree] or a
-      [Blob], the client should notice the given name (to optimize the
-      delta-ification).} {- [preferred] notices to the delta-ification
-      algorithm to prefer to use this entry as a source.} {- [delta] notices an
-      existing user specified source for the entry (and the delta-ification
-      algorithm will use it).} {- [kind] corresponds to the kind of the
-      object.} {- [length] corresponds to the real inflated length of the
-      object.}} *)
+      {ul
+
+      {- [hash] corresponds to the unique ID of the git object.}
+
+      {- [name] corresponds to the optional name of the git object. For a [Tree]
+     or a [Blob], the client should notice the given name (to optimize the
+     delta-ification).}
+
+      {- [preferred] notices to the delta-ification algorithm to prefer to use
+     this entry as a source.}
+
+      {- [delta] notices an existing user specified source for the entry (and
+     the delta-ification algorithm will use it).}
+
+      {- [kind] corresponds to the kind of the object.}
+
+      {- [length] corresponds to the real inflated length of the object.}} *)
 
   val kind : t -> Kind.t
   val preferred : t -> bool
@@ -337,17 +352,24 @@ module type P = sig
     -> Cstruct.t
     -> t
     -> [`Flush of t | `Await of t | `End of t * Hash.t | `Error of t * error]
-  (** [eval src t] is:
+    (** [eval src t] is:
 
-      {ul {- [`Await t] iff [t] needs more input storage. The client must use
-      {!refill} to provide a new buffer and then call {!eval} with [`Await]
-      until other value returned.} {- [`Flush t] iff [t] needs more output
-      storage. The client must use {!flush} to provide a new buffer and then
-      call {!eval} with [`Flush] until other value returned.} {- [`End (t,
-      hash)] when [t] is done. Then, [t] sticks on this situation, the client
-      can remove it. [hash] is the hash calculated of the PACK stream.} {-
-      [`Error (t, exn)] iff the encoder [t] meet an {!error} [exn]. The encoder
-      can't continue and sticks in this situation.}} *)
+      {ul
+
+      {- [`Await t] iff [t] needs more input storage. The client must use
+       {!refill} to provide a new buffer and then call {!eval} with [`Await]
+       until other value returned.}
+
+      {- [`Flush t] iff [t] needs more output storage. The client must use
+       {!flush} to provide a new buffer and then call {!eval} with [`Flush]
+       until other value returned.}
+
+      {- [`End (t, hash)] when [t] is done. Then, [t] sticks on this situation,
+       the client can remove it. [hash] is the hash calculated of the PACK
+       stream.}
+
+      {- [`Error (t, exn)] iff the encoder [t] meet an {!error} [exn]. The
+       encoder can't continue and sticks in this situation.}} *)
 end
 
 (** The {i functor} to make the PACK encoder by a specific hash implementation
