@@ -334,7 +334,7 @@ module MakeEncoder (M : S.DESC with type 'a t = 'a Encore.Encoder.t) = struct
   module Log = (val Logs.src_log src : Logs.LOG)
 
   type t = M.e
-  type init = int * t
+  type init = Cstruct.t * t
   type error = Error.never
 
   let pp_error ppf `Never = Fmt.string ppf "`Never"
@@ -348,10 +348,10 @@ module MakeEncoder (M : S.DESC with type 'a t = 'a Encore.Encoder.t) = struct
     ; w_acc: int
     ; state: Lole.encoder Lole.state }
 
-  let default (capacity, x) =
+  let default (etmp, x) =
     Log.debug (fun l ->
-        l "Starting to encode a Git object with a capacity = %d." capacity ) ;
-    let encoder = Lole.create capacity in
+        l "Starting to encode a Git object with a buffer.") ;
+    let encoder = Lole.from (Cstruct.len etmp) (Cstruct.to_bigarray etmp) in
     let state = Encoder.run M.p (fun encoder -> Lole.End encoder) encoder x in
     {o_off= 0; o_pos= 0; o_len= 0; w_acc= 0; state}
 
@@ -444,7 +444,7 @@ struct
   module Log = (val Logs.src_log src : Logs.LOG)
 
   type t = M.e
-  type init = int * t * int * Cstruct.t
+  type init = Cstruct.t * t * int * Cstruct.t
   type error = [`Deflate of Z.error]
 
   let pp_error ppf err = Error.Def.pp_error Z.pp_error ppf err
@@ -453,13 +453,13 @@ struct
 
   type encoder = {e: E.encoder; z: Z.t; internal: Cstruct.t; used_in: int}
 
-  let default (capacity, value, level, internal) =
+  let default (etmp, value, level, internal) =
     Log.debug (fun l ->
         l
           "Starting to deflate and encode a Git object (level of compression: \
            %d, internal buffer: %d)."
           level (Cstruct.len internal) ) ;
-    {e= E.default (capacity, value); z= Z.default level; internal; used_in= 0}
+    {e= E.default (etmp, value); z= Z.default level; internal; used_in= 0}
 
   let rec eval dst encoder =
     match Z.eval ~src:encoder.internal ~dst encoder.z with
@@ -493,44 +493,25 @@ struct
   let used {z; _} = Z.used_out z
 end
 
-(* XXX(dinosaure): The purpose between [fdigest] and [digest] is why we create
-   the module {!Minienc}. In fact, if we take care about the memory consumption
-   of this library, we need to control how much we exactly need to compute the
-   hash of an object.
 
-   In fact, with Faraday, the common way to serialize a data is to have 2
-   threads, one to fill and one other to flush the shared state of Faraday.
-   This case oes not appear when we want to compute the hash of the Git object
-   - it could be appear but we don't want to constraint the client on this
-   pattern.
-
-   So, we decide to create a new encoder which limit the memory consumption.
-   When we fill entirely the internal buffer, we ask to the client to flush it
-   and we don't continue to fill it until the client does not free some spaces.
-
-   Then, we control the memory consumption when we compute the hash of the Git
-   object and we never grow the internal buffer.
-
-   UPDATE: we move encoder to `encore` library. *)
-
-let fdigest : type t hash.
+let digest : type t hash.
        (module S.HASH with type t = hash)
     -> (module
         S.ENCODER
-          with type t = t and type init = int * t and type error = Error.never)
-    -> ?capacity:int
+          with type t = t and type init = Cstruct.t * t and type error = Error.never)
+    -> etmp:Cstruct.t
     -> tmp:Cstruct.t
     -> kind:string
     -> length:(t -> int64)
     -> t
     -> hash =
- fun digest encoder ?(capacity = 0x100) ~tmp ~kind ~length value ->
+ fun digest encoder ~etmp ~tmp ~kind ~length value ->
   let module Digest = (val digest) in
   let module M = (val encoder) in
   let hdr = Fmt.strf "%s %Ld\000" kind (length value) in
   let ctx = Digest.init () in
   let ctx = Digest.feed_string ctx hdr in
-  let encoder = M.default (capacity, value) in
+  let encoder = M.default (etmp, value) in
   let rec loop ctx encoder =
     match M.eval tmp encoder with
     | `Flush encoder ->

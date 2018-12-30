@@ -101,7 +101,7 @@ module type S = sig
        fs:FS.t
     -> root:Fpath.t
     -> temp_dir:Fpath.t
-    -> ?capacity:int
+    -> etmp:Cstruct.t
     -> ?level:int
     -> ztmp:Cstruct.t
     -> raw:Cstruct.t
@@ -397,11 +397,11 @@ struct
     include Helper.Encoder (E) (FS)
   end
 
-  let write ~fs ~root:dotgit ~temp_dir ?(capacity = 0x100) ?(level = 4) ~ztmp
+  let write ~fs ~root:dotgit ~temp_dir ~etmp ?(level = 4) ~ztmp
       ~raw value =
     let hash = digest value in
     let first, rest = explode hash in
-    let encoder = E.default (capacity, value, level, ztmp) in
+    let encoder = E.default (etmp, value, level, ztmp) in
     let path = Fpath.(dotgit / "objects" / first / rest) in
     Log.debug (fun l -> l "Writing a new loose object %a." Fpath.pp path) ;
     FS.Dir.create fs Fpath.(dotgit / "objects" / first)

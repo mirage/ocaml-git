@@ -153,7 +153,7 @@ module type S = sig
   module E :
     S.ENCODER
     with type t = head_contents
-     and type init = int * head_contents
+     and type init = Cstruct.t * head_contents
      and type error = Error.never
 end
 
@@ -190,7 +190,7 @@ module type IO = sig
        fs:FS.t
     -> root:Fpath.t
     -> temp_dir:Fpath.t
-    -> ?capacity:int
+    -> etmp:Cstruct.t
     -> raw:Cstruct.t
     -> t
     -> head_contents

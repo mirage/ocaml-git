@@ -198,7 +198,7 @@ module type LOOSE = sig
   module E :
     S.ENCODER
     with type t = t
-     and type init = int * t * int * Cstruct.t
+     and type init = Cstruct.t * t * int * Cstruct.t
      and type error = [`Deflate of Deflate.error]
 end
 
@@ -449,6 +449,7 @@ module type S = sig
 
   val buffer :
        ?ztmp:Cstruct.t
+    -> ?etmp:Cstruct.t
     -> ?dtmp:Cstruct.t
     -> ?raw:Cstruct.t
     -> ?window:Inflate.window

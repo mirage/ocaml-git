@@ -107,7 +107,7 @@ module type S = sig
   module E :
     S.ENCODER
     with type t = head_contents
-     and type init = int * head_contents
+     and type init = Cstruct.t * head_contents
      and type error = Error.never
 end
 
@@ -132,7 +132,7 @@ module type IO = sig
        fs:FS.t
     -> root:Fpath.t
     -> temp_dir:Fpath.t
-    -> ?capacity:int
+    -> etmp:Cstruct.t
     -> raw:Cstruct.t
     -> t
     -> head_contents
@@ -315,9 +315,9 @@ module IO (H : S.HASH) (FS : S.FS) = struct
     | Error (`Decoder err) -> Error.(v @@ Error.Decoder.with_path path err)
     | Error #fs_error as err -> err
 
-  let write ~fs ~root:dotgit ~temp_dir ?(capacity = 0x100) ~raw reference value
+  let write ~fs ~root:dotgit ~temp_dir ~etmp ~raw reference value
       =
-    let state = E.default (capacity, value) in
+    let state = E.default (etmp, value) in
     let path = Path.(dotgit + to_path reference) in
     FS.Dir.create fs (Fpath.parent path)
     >>= function

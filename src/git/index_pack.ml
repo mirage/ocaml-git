@@ -524,15 +524,15 @@ module Decoder (Hash : S.HASH) = struct
     let get_byte = get_byte ~ctor:(fun k -> Hashes k)
 
     let get_hash k src t =
-      let res = Cstruct.create Hash.digest_size in
+      let res = Bytes.create Hash.digest_size in
       (* XXX(dinosaure): we can replace it by an internal buffer allocated in
          {!default}. *)
       let rec loop i src t =
-        if i = Hash.digest_size then k res src t
+        if i = Hash.digest_size then k (Bytes.unsafe_to_string res) src t
         else
           get_byte
             (fun byte src t ->
-              Cstruct.set_uint8 res i byte ;
+              Bytes.set res i (Char.unsafe_chr byte) ;
               (loop [@tailcall]) (i + 1) src t )
             src t
       in
@@ -563,13 +563,13 @@ module Decoder (Hash : S.HASH) = struct
     (* don't use [await] function. *)
 
     let get_hash k src t =
-      let res = Cstruct.create Hash.digest_size in
+      let res = Bytes.create Hash.digest_size in
       let rec loop i src t =
-        if i = Hash.digest_size then k res src t
+        if i = Hash.digest_size then k (Bytes.unsafe_to_string res) src t
         else
           get_byte
             (fun byte src t ->
-              Cstruct.set_uint8 res i byte ;
+              Bytes.set res i (Char.unsafe_chr byte) ;
               (loop [@tailcall]) (i + 1) src t )
             src t
       in
@@ -604,8 +604,8 @@ module Decoder (Hash : S.HASH) = struct
     aux
     @@ fun hash_idx src t ->
     let produce = Hash.get t.hash in
-    let hash_idx = Cstruct.to_string hash_idx |> Hash.of_raw_string in
-    let hash_pack = Cstruct.to_string hash_pack |> Hash.of_raw_string in
+    let hash_idx = Hash.of_raw_string hash_idx in
+    let hash_pack = Hash.of_raw_string hash_pack in
     if hash_idx <> produce then
       error t (Invalid_hash (Hash.get t.hash, hash_idx))
     else rest ?boffsets (hash_idx, hash_pack) src t )
@@ -647,7 +647,7 @@ module Decoder (Hash : S.HASH) = struct
     else
       KHashes.get_hash
         (fun hash src t ->
-          let hash = Cstruct.to_string hash |> Hash.of_raw_string in
+          let hash = Hash.of_raw_string hash in
           Queue.add hash t.hashes ;
           (hashes [@tailcall]) (Int32.succ idx) max src t )
         src t

@@ -54,7 +54,7 @@ module type S = sig
   module E :
     S.ENCODER
     with type t = t
-     and type init = int * t
+     and type init = Cstruct.t * t
      and type error = Error.never
 
   include S.DIGEST with type t := t and type hash := Hash.t

@@ -39,7 +39,7 @@ module type S = sig
   module E :
     S.ENCODER
     with type t = t
-     and type init = int * t
+     and type init = Cstruct.t * t
      and type error = Error.never
 
   include S.DIGEST with type t := t and type hash := Hash.t
@@ -215,7 +215,8 @@ module Make (Hash : S.HASH) = struct
 
   let digest value =
     let tmp = Cstruct.create 0x100 in
-    Helper.fdigest (module Hash) (module E) ~tmp ~kind:"tag" ~length value
+    let etmp = Cstruct.create 0x100 in
+    Helper.digest (module Hash) (module E) ~tmp ~etmp ~kind:"tag" ~length value
 
   let equal = ( = )
   let compare = Pervasives.compare

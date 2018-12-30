@@ -66,7 +66,7 @@ module type LOOSE = sig
   module E :
     S.ENCODER
     with type t = t
-     and type init = int * t * int * Cstruct.t
+     and type init = Cstruct.t * t * int * Cstruct.t
      and type error = [`Deflate of Deflate.error]
 end
 
@@ -228,6 +228,7 @@ module type S = sig
 
   val buffer :
        ?ztmp:Cstruct.t
+    -> ?etmp:Cstruct.t
     -> ?dtmp:Cstruct.t
     -> ?raw:Cstruct.t
     -> ?window:Inflate.window
@@ -370,7 +371,7 @@ struct
   (* fixed size *)
 
   type buffer =
-    {window: Inflate.window; raw: Cstruct.t; ztmp: Cstruct.t; dtmp: Cstruct.t}
+    {window: Inflate.window; raw: Cstruct.t; ztmp: Cstruct.t; etmp: Cstruct.t; dtmp: Cstruct.t}
 
   type cache =
     { objects: CacheObject.t
@@ -408,16 +409,22 @@ struct
     | `Invalid_reference reference ->
         Fmt.pf ppf "Invalid reference: %a" Reference.pp reference
 
+  let is_aligned v =
+    let v = Cstruct.len v in
+    (v <> 0) && ((v land (lnot v + 1)) = v)
+
   let lift_error err = (err :> error)
   let new_buffer = function Some b -> b | None -> Cstruct.create (4 * 1024)
+  let new_aligned_buffer = function Some b when is_aligned b -> b | _ -> Cstruct.create (4 * 1024)
   let new_window = function Some w -> w | None -> Inflate.window ()
 
-  let buffer ?ztmp ?dtmp ?raw ?window () =
+  let buffer ?ztmp ?etmp  ?dtmp ?raw ?window () =
     let window = new_window window in
     let ztmp = new_buffer ztmp in
     let dtmp = new_buffer dtmp in
+    let etmp = new_aligned_buffer etmp in
     let raw = new_buffer raw in
-    {window; ztmp; dtmp; raw}
+    {window; ztmp; dtmp; etmp; raw}
 
   let with_buffer t f =
     let c = ref None in
@@ -438,21 +445,21 @@ struct
 
     let read t path =
       with_buffer t
-      @@ fun {ztmp; dtmp; raw; window} ->
+      @@ fun {ztmp; dtmp; raw; window; _} ->
       LooseImpl.read ~fs:t.fs ~root:t.dotgit ~window ~ztmp ~dtmp ~raw path
       >>!= lift_error
 
     let size t path =
       with_buffer t
-      @@ fun {ztmp; dtmp; raw; window} ->
+      @@ fun {ztmp; dtmp; raw; window; _} ->
       LooseImpl.size ~fs:t.fs ~root:t.dotgit ~window ~ztmp ~dtmp ~raw path
       >>!= lift_error
 
     let write t value =
       with_buffer t
-      @@ fun {ztmp; raw; _} ->
+      @@ fun {ztmp; raw; etmp; _} ->
       let temp_dir = Fpath.(t.dotgit / "tmp") in
-      LooseImpl.write ~fs:t.fs ~root:t.dotgit ~temp_dir ~ztmp ~raw
+      LooseImpl.write ~fs:t.fs ~root:t.dotgit ~temp_dir ~ztmp ~etmp ~raw
         ~level:t.compression value
       >>!= lift_error
 
@@ -461,14 +468,14 @@ struct
 
     let read_inflated t hash =
       with_buffer t
-      @@ fun {ztmp; dtmp; raw; window} ->
+      @@ fun {ztmp; dtmp; raw; window; _} ->
       LooseImpl.read_inflated ~fs:t.fs ~root:t.dotgit ~window ~ztmp ~dtmp ~raw
         hash
       >>!= lift_error
 
     let read_inflated_wa result t hash =
       with_buffer t
-      @@ fun {ztmp; dtmp; raw; window} ->
+      @@ fun {ztmp; dtmp; raw; window; _} ->
       LooseImpl.read_inflated_without_allocation ~fs:t.fs ~root:t.dotgit
         ~window ~ztmp ~dtmp ~raw ~result hash
       >>!= lift_error
@@ -1039,8 +1046,8 @@ struct
             | None -> Lwt.return (Ok ())
             | Some packed_refs' -> (
                 let temp_dir = Fpath.(t.dotgit / "tmp") in
-                with_buffer t (fun {raw; _} ->
-                    Packed_refs.write ~fs:t.fs ~root:t.dotgit ~temp_dir ~raw
+                with_buffer t (fun {raw; etmp; _} ->
+                    Packed_refs.write ~fs:t.fs ~root:t.dotgit ~temp_dir ~raw ~etmp
                       packed_refs' )
                 >|= function Ok () -> Ok () | Error e -> Error (e :> error) ))
       >>= function
@@ -1076,8 +1083,8 @@ struct
 
     let write t reference value =
       let temp_dir = Fpath.(t.dotgit / "tmp") in
-      with_buffer t (fun {raw; _} ->
-          Reference.write ~fs:t.fs ~root:t.dotgit ~temp_dir ~raw reference
+      with_buffer t (fun {raw; etmp; _} ->
+          Reference.write ~fs:t.fs ~root:t.dotgit ~temp_dir ~raw ~etmp reference
             value )
       >>= function
       | Error (#Reference.error as err) -> Lwt.return (Error (err : error))
@@ -1107,8 +1114,8 @@ struct
                         Hashtbl.add t.packed (Reference.of_string refname) hash
                     | `Peeled _ -> ())
                   packed_refs' ;
-                with_buffer t (fun {raw; _} ->
-                    Packed_refs.write ~fs:t.fs ~root:t.dotgit ~temp_dir ~raw
+                with_buffer t (fun {raw; etmp; _} ->
+                    Packed_refs.write ~fs:t.fs ~root:t.dotgit ~temp_dir ~raw ~etmp
                       packed_refs' )
                 >|= function Ok () -> Ok () | Error e -> Error (e :> error) ) )
         )
@@ -1129,6 +1136,7 @@ struct
     in
     { window= Inflate.window ()
     ; ztmp= Cstruct.sub raw 0 0x8000
+    ; etmp= Cstruct.create (4 * 1024)
     ; dtmp=
         Cstruct.of_bigarray ~off:0 ~len:0x8000 buf
         (* XXX(dinosaure): bon ici, c'est une note compliqué, j'ai mis 2 jours

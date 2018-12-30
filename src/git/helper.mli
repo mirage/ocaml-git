@@ -81,7 +81,7 @@ module MakeInflater (Z : S.INFLATE) (A : S.DESC with type 'a t = 'a Angstrom.t) 
 module MakeEncoder (M : S.DESC with type 'a t = 'a Encore.Encoder.t) :
   S.ENCODER
   with type t = M.e
-   and type init = int * M.e
+   and type init = Cstruct.t * M.e
    and type error = Error.never
 
 (** [MakeDeflater] makes a module which respects the interface {!S.ENCODER}
@@ -95,15 +95,15 @@ module MakeDeflater
     (M : S.DESC with type 'a t = 'a Encore.Encoder.t) :
   S.ENCODER
   with type t = M.e
-   and type init = int * M.e * int * Cstruct.t
+   and type init = Cstruct.t * M.e * int * Cstruct.t
    and type error = [`Deflate of Z.error]
 
-val fdigest :
+val digest :
      (module S.HASH with type t = 'hash)
   -> (module
       S.ENCODER
-        with type t = 't and type init = int * 't and type error = Error.never)
-  -> ?capacity:int
+        with type t = 't and type init = Cstruct.t * 't and type error = Error.never)
+  -> etmp:Cstruct.t
   -> tmp:Cstruct.t
   -> kind:string
   -> length:('t -> int64)
