@@ -1,0 +1,5 @@
+(executable
+ (name        main)
+ (package     git-unix)
+ (public_name ogit-log)
+ (libraries   git-unix))
