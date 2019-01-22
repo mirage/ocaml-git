@@ -1332,9 +1332,7 @@ struct
       | `Ack (hash, detail) ->
           let hashes = Hash.Set.remove hash hashes in
           let acks = {acks with acks= (hash, detail) :: acks.acks} in
-          if Hash.Set.is_empty hashes then
-            k {acks with acks= List.rev acks.acks} decoder
-          else p_pkt_line (p_negociation_one ~mode (go hashes acks)) decoder
+          p_pkt_line (p_negociation_one ~mode (go hashes acks)) decoder
       | `Nak -> k acks decoder
     in
     p_pkt_line (p_negociation_one ~mode (go hashes acks)) decoder
