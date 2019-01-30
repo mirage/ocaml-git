@@ -1,5 +1,4 @@
 (library
  (name        git_unix)
  (public_name git-unix)
- (libraries   checkseum.c digestif.c
-              git logs.fmt lwt.unix git-http cohttp-lwt-unix))
+ (libraries   git logs.fmt lwt.unix git-http cohttp-lwt-unix))

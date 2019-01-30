@@ -2,7 +2,8 @@
   (name        main)
   (public_name ogit-cat-file)
   (package     git-unix)
-  (libraries   git-unix
+  (libraries   digestif.c checkseum.c
+               git-unix
                cmdliner
                mtime mtime.clock.os
                fmt.cli fmt.tty

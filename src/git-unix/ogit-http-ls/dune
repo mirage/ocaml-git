@@ -2,7 +2,8 @@
   (name        main)
   (package     git-unix)
   (public_name ogit-http-ls)
-  (libraries   git-unix
+  (libraries   digestif.c checkseum.c
+               git-unix
                cohttp-lwt-unix
                cmdliner
                mtime mtime.clock.os
