@@ -24,6 +24,7 @@ depends: [
   "cohttp-lwt-unix" {>= "1.0.0"}
   "mtime"           {>= "1.0.0"}
   "base-unix"
+  "ptime"
   "alcotest"        {with-test & >= "0.8.1"}
   "nocrypto"        {with-test & >= "0.5.4"}
   "tls"             {with-test}
