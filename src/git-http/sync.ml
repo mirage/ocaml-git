@@ -207,10 +207,11 @@ struct
     ( Option.mem (Uri.scheme uri) "https" ~equal:String.equal
     , Option.value_exn ~error:"Invalid http(s) uri: no host" (Uri.host uri)
     , Uri.path_and_query uri
-    , Uri.port uri )
+    , Uri.port uri
+    , Uri.userinfo uri )
 
   let ls _ ?(capabilities = Default.capabilites) endpoint =
-    let https, host, path, port = extract endpoint in
+    let https, host, path, port, userinfo = extract endpoint in
     let scheme = if https then "https" else "http" in
     (* XXX(dinosaure): not sure if it's the best to rewrite [uri]. TODO! *)
     let uri =
@@ -220,6 +221,7 @@ struct
       |> (fun uri ->
            Uri.with_path uri (String.concat "/" [path; "info"; "refs"]) )
       |> (fun uri -> Uri.with_port uri port)
+      |> (fun uri -> Uri.with_userinfo uri userinfo)
       |> fun uri -> Uri.add_query_param uri ("service", ["git-upload-pack"])
     in
     Log.debug (fun l -> l "Launch the GET request to %a." Uri.pp_hum uri) ;
@@ -257,7 +259,7 @@ struct
   open SyncCommon
 
   let push git ~push ?(capabilities = Default.capabilites) endpoint =
-    let https, host, path, port = extract endpoint in
+    let https, host, path, port, userinfo = extract endpoint in
     let scheme = if https then "https" else "http" in
     let uri =
       Uri.empty
@@ -266,6 +268,7 @@ struct
       |> (fun uri ->
            Uri.with_path uri (String.concat "/" [path; "info"; "refs"]) )
       |> (fun uri -> Uri.with_port uri port)
+      |> (fun uri -> Uri.with_userinfo uri userinfo)
       |> fun uri -> Uri.add_query_param uri ("service", ["git-receive-pack"])
     in
     Log.debug (fun l -> l "Launch the GET request to %a." Uri.pp_hum uri) ;
@@ -360,7 +363,8 @@ struct
                      ( Web.Request.uri req
                      |> (fun uri -> Uri.with_scheme uri (Some scheme))
                      |> (fun uri -> Uri.with_host uri (Some host))
-                     |> fun uri -> Uri.with_port uri port )
+                     |> (fun uri -> Uri.with_port uri port)
+                     |> (fun uri -> Uri.with_userinfo uri userinfo) )
                      endpoint)
                 >>= fun resp ->
                 let commands_refs =
@@ -384,7 +388,7 @@ struct
 
   let fetch git ?(shallow = []) ?(capabilities = Default.capabilites) ~notify:_
       ~negociate:(negociate, nstate) ~have ~want ?deepen endpoint =
-    let https, host, path, port = extract endpoint in
+    let https, host, path, port, userinfo = extract endpoint in
     let scheme = if https then "https" else "http" in
     let stdout = default_stdout in
     let stderr = default_stderr in
@@ -395,6 +399,7 @@ struct
       |> (fun uri ->
            Uri.with_path uri (String.concat "/" [path; "info"; "refs"]) )
       |> (fun uri -> Uri.with_port uri port)
+      |> (fun uri -> Uri.with_userinfo uri userinfo)
       |> fun uri -> Uri.add_query_param uri ("service", ["git-upload-pack"])
     in
     Log.debug (fun l -> l "Launch the GET request to %a." Uri.pp_hum uri) ;
@@ -482,7 +487,8 @@ struct
                    ( Web.Request.uri req
                    |> (fun uri -> Uri.with_scheme uri (Some scheme))
                    |> (fun uri -> Uri.with_host uri (Some host))
-                   |> fun uri -> Uri.with_port uri port )
+                   |> (fun uri -> Uri.with_port uri port)
+                   |> (fun uri -> Uri.with_userinfo uri userinfo) )
                    endpoint)
             in
             let negociation_result resp =
