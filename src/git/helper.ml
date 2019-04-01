@@ -80,6 +80,7 @@ module MakeDecoder (A : S.DESC with type 'a t = 'a Angstrom.t) = struct
   let src = Logs.Src.create "git.decoder" ~doc:"logs git's internal decoder"
 
   module Log = (val Logs.src_log src : Logs.LOG)
+  module Q = Ke.Rke.Weighted
 
   type error = Error.Decoder.t
   type init = Cstruct.t
@@ -96,7 +97,7 @@ module MakeDecoder (A : S.DESC with type 'a t = 'a Angstrom.t) = struct
         -> Angstrom.Unbuffered.more
         -> A.e Angstrom.Unbuffered.state
     ; final: Angstrom.Unbuffered.more
-    ; internal: Cstruct.t
+    ; queue: (char, Bigarray.int8_unsigned_elt) Q.t
     ; max: int }
 
   let kdone (consumed, value) _ba ~off:_ ~len:_ _more =
@@ -129,52 +130,38 @@ module MakeDecoder (A : S.DESC with type 'a t = 'a Angstrom.t) = struct
             assert (committed = 0) ;
             continue )
     ; final= Incomplete
-    ; internal=
-        Cstruct.sub raw 0 0
-        (* XXX(dinosaure): first, we consider than the internal buffer is
-           empty. But keep calm, the physical buffer will not be free-ed. *)
+    ; queue= Q.from (Cstruct.to_bigarray raw)
     ; max= len }
+
+  let empty = Cstruct.create 0
 
   let eval decoder =
     let open Angstrom.Unbuffered in
+    let raw = match Q.N.peek decoder.queue with
+      | [ x ] -> Cstruct.of_bigarray x | [] -> empty
+      | _ :: _ -> assert false in
     Log.debug (fun l ->
         l "Start to decode a partial chunk of the flow (%d) (final:%b)."
-          (Cstruct.len decoder.internal)
+          (Cstruct.len raw)
           (decoder.final = Complete) ) ;
-    let off, len = 0, Cstruct.len decoder.internal in
-    match
-      decoder.state
-        (Cstruct.to_bigarray decoder.internal)
-        ~off ~len decoder.final
-    with
+    let off, len = 0, Cstruct.len raw in
+    match decoder.state (Cstruct.to_bigarray raw) ~off ~len decoder.final with
     | Done (consumed, value) ->
         Log.debug (fun l -> l "End of the decoding.") ;
-        `End (Cstruct.shift decoder.internal consumed, value)
+        Q.N.shift_exn decoder.queue consumed ;
+        `End (empty (* TODO *), value)
     | Fail (consumed, path, err) ->
         let err_path = String.concat " > " path in
         Log.err (fun l -> l "Error while decoding: %s (%s)." err err_path) ;
+        Q.N.shift_exn decoder.queue consumed ;
         `Error
-          ( Cstruct.shift decoder.internal consumed
+          ( empty (* TODO *)
           , Error.Decoder.err_decode (consumed, path, err) )
     | Partial {committed; continue} ->
+        Q.N.shift_exn decoder.queue committed ;
         Log.debug (fun l ->
             l "Current decoding waits more input (committed: %d)." committed ) ;
-        let decoder =
-          { decoder with
-            internal= Cstruct.shift decoder.internal committed; state= continue
-          }
-        in
-        `Await decoder
-
-  let compress _ decoder =
-    let off, len = 0, Cstruct.len decoder.internal in
-    let buffer =
-      Cstruct.of_bigarray ~off ~len decoder.internal.Cstruct.buffer
-    in
-    Log.debug (fun l ->
-        l "Compressing the internal buffer of the current decoding." ) ;
-    Cstruct.blit decoder.internal 0 buffer 0 len ;
-    {decoder with internal= buffer}
+        `Await { decoder with state= continue }
 
   let refill input decoder =
     let len = Cstruct.len input in
@@ -183,49 +170,18 @@ module MakeDecoder (A : S.DESC with type 'a t = 'a Angstrom.t) = struct
           "Starting to refill the internal buffer of the current decoding \
            (len: %d)."
           (Cstruct.len input) ) ;
-    if len > decoder.max then (
-      (* XXX(dinosaure): it's to avoid to grow the internal buffer. *)
-      Log.err (fun l ->
-          l ~header:"refill"
-            "The client want to refill the internal buffer by a bigger input."
-      ) ;
-      Error.(v @@ Decoder.err_too_big len decoder.max) )
-    else
-      let trailing_space =
-        let {Cstruct.buffer; off; len} = decoder.internal in
-        Bigarray.Array1.dim buffer - (off + len)
-      in
-      let writable_space =
-        let {Cstruct.buffer; len; _} = decoder.internal in
-        Bigarray.Array1.dim buffer - len
-      in
-      ( if trailing_space >= len then Ok decoder
-      else if writable_space >= len then Ok (compress input decoder)
-      else (
-        Log.err (fun l ->
-            l ~header:"refill"
-              "trailing space:%d and writable space:%d, the alteration is not \
-               done, the error could be the size of the internal buffer (%d) \
-               or the input is malicious."
-              trailing_space writable_space
-              (Bigarray.Array1.dim decoder.internal.Cstruct.buffer) ) ;
-        Log.err (fun l ->
-            l ~header:"refill"
-              "Production of the error in Helper.MakeDecoder.refill." ) ;
-        Error.(v @@ Decoder.err_malicious) ) )
-      |> function
-      | Error err -> Error err
-      | Ok decoder ->
-          let internal = Cstruct.add_len decoder.internal len in
-          (* XXX(dinosaure): see the function store.ml:buffer (). C'est à
-             cette endroit où si on considère [decoder.internal] comme un
-             [Cstruct.t] appartennant à un [Bigarray] plus grand, il peut
-             arriver que celui ci empiète sur le buffer [io]. *)
-          let off = Cstruct.len internal - len in
-          let () = Cstruct.blit input 0 internal off len in
-          Log.debug (fun l ->
-              l "Refill the internal buffer in the current decoding." ) ;
-          Ok {decoder with internal}
+    Q.compress decoder.queue ;
+    let raw = Cstruct.to_bigarray input in
+    let blit src src_off dst dst_off len = Bigstringaf.blit src ~src_off dst ~dst_off ~len in
+    match Q.N.push decoder.queue ~blit:blit ~length:Bigstringaf.length ~off:0 ~len raw with
+    | Some [ _ ] ->
+      Log.debug (fun l ->
+          l "Refill the internal buffer in the current decoding." ) ;
+      Ok decoder
+    | Some _ -> assert false (* XXX(dinosaure): see [ke] assumptions. *)
+    | None ->
+      Log.err (fun l -> l "The client wants to refill the internal buffer by a bigger input." ) ;
+      Error.(v @@ Decoder.err_too_big len decoder.max)
 
   let to_result input =
     Angstrom.parse_bigstring A.p (Cstruct.to_bigarray input)
