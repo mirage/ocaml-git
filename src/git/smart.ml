@@ -1168,6 +1168,10 @@ struct
     in
     let go_first_ref ~pkt (advertised_refs : Common.advertised_refs) decoder =
       match pkt with
+      | `Flush -> p_return advertised_refs decoder
+      (* XXX(dinosaure): this is not explained by documentation but a server can
+         just send [0000] and leave up. In this case, we return a an empty
+         [advertised_refs] and close socket properly. *)
       | #no_line as v -> err_expected_line decoder v
       | `Line _ -> (
         match p_first_ref decoder with
