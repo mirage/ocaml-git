@@ -135,6 +135,11 @@ module MakeDecoder (A : S.DESC with type 'a t = 'a Angstrom.t) = struct
 
   let empty = Cstruct.create 0
 
+  let rest q = match Q.N.peek q with
+    | [ x ] -> Cstruct.of_bigarray x
+    | [] -> empty
+    | _ :: _ -> assert false
+
   let eval decoder =
     let open Angstrom.Unbuffered in
     let raw = match Q.N.peek decoder.queue with
@@ -149,13 +154,13 @@ module MakeDecoder (A : S.DESC with type 'a t = 'a Angstrom.t) = struct
     | Done (consumed, value) ->
         Log.debug (fun l -> l "End of the decoding.") ;
         Q.N.shift_exn decoder.queue consumed ;
-        `End (empty (* TODO *), value)
+        `End (rest decoder.queue, value)
     | Fail (consumed, path, err) ->
         let err_path = String.concat " > " path in
         Log.err (fun l -> l "Error while decoding: %s (%s)." err err_path) ;
         Q.N.shift_exn decoder.queue consumed ;
         `Error
-          ( empty (* TODO *)
+          ( rest decoder.queue
           , Error.Decoder.err_decode (consumed, path, err) )
     | Partial {committed; continue} ->
         Q.N.shift_exn decoder.queue committed ;
