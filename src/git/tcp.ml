@@ -266,8 +266,15 @@ struct
     in
     aux t [] state r
 
+  let references_of_commands =
+    List.fold_left (fun a -> function
+        | `Create (_, r) -> Store.Reference.Set.add r a
+        | `Delete (_, r) -> Store.Reference.Set.add r a
+        | `Update (_, _, r) -> Store.Reference.Set.add r a)
+      Store.Reference.Set.empty
+
   let push_handler git ~push t r =
-    let send_pack stream t r =
+    let send_pack refs stream t r =
       let rec go ?keep t r =
         let consume ?keep dst =
           match keep with
@@ -296,7 +303,7 @@ struct
             >>= function
             | `Continue (keep, n) ->
                 Client.run t.ctx (`SendPACK n) |> process t >>?= go ?keep t
-            | `Finish -> Client.run t.ctx `FinishPACK |> process t >>?= go t )
+            | `Finish -> Client.run t.ctx (`FinishPACK refs) |> process t >>?= go t )
         | `Nothing -> Lwt.return (Ok [])
         | `ReportStatus {Client.Common.unpack= Ok (); commands} ->
             Lwt.return (Ok commands)
@@ -377,9 +384,9 @@ struct
               | Client.Common.Delete (hash, refname) -> `Delete (hash, refname)
               | Client.Common.Update (a, b, refname) -> `Update (a, b, refname))
             commands
-          |> Common.packer git ~ofs_delta refs
+          |> fun commands -> Common.packer git ~ofs_delta refs commands
           >>= function
-          | Ok (stream, _) -> send_pack stream t result
+          | Ok (stream, _) -> send_pack (references_of_commands commands) stream t result
           | Error err -> Lwt.return (Error (`Store err)) )
       | result -> Lwt.return (Error (`Sync (err_unexpected_result result)))
     in
