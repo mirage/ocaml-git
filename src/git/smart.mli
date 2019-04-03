@@ -299,7 +299,9 @@ module type DECODER = sig
     | Negociation : Hash.Set.t * ack_mode -> Common.acks transaction
     | NegociationResult : Common.negociation_result transaction
     | PACK : side_band -> flow transaction
-    | ReportStatus : side_band -> Common.report_status transaction
+    | ReportStatus :
+        string list * side_band
+        -> Common.report_status transaction
     | HttpReportStatus :
         string list * side_band
         -> Common.report_status transaction
@@ -483,7 +485,7 @@ module type CLIENT = sig
     | `Flush
     | `ReceivePACK
     | `SendPACK of int
-    | `FinishPACK ]
+    | `FinishPACK of Reference.Set.t ]
 
   val run : context -> action -> process
   (** [run ctx action] sends an action to the server and schedule a specific
