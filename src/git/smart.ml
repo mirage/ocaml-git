@@ -544,6 +544,7 @@ module type DECODER = sig
   type decoder
 
   val pp_decoder : decoder Fmt.t
+  val extract_payload : decoder -> Cstruct.t
 
   type error =
     [ `Expected_char of char
@@ -779,6 +780,9 @@ struct
     ; mutable pos: int
     ; mutable eop: int option (* end of packet *)
     ; mutable max: int }
+
+  let extract_payload decoder =
+    Cstruct.sub decoder.buffer decoder.pos (decoder.max - decoder.pos)
 
   let pp_decoder ppf {buffer; pos; eop; max} =
     let pp = Encore.Lole.pp_scalar ~get:Cstruct.get_char ~length:Cstruct.len in
