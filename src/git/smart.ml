@@ -1196,6 +1196,9 @@ struct
     match pkt with
     | #no_line as v -> err_expected_line decoder v
     | `Line _ ->
+      match p_peek_char decoder with
+      | None -> raise (Leave (err_unexpected_end_of_input decoder))
+      | Some '#' ->
         ignore @@ p_string "# service=" decoder ;
         ignore @@ p_string service decoder ;
         p_pkt_line
@@ -1211,6 +1214,9 @@ struct
                   {shallow= []; refs= []; capabilities= []}
                   decoder )
           decoder
+      | Some _ ->
+        let err = p_while0 (fun _ -> true) decoder in
+        p_return (Rresult.R.error_msg (Cstruct.to_string err)) decoder
 
   let p_advertised_refs decoder =
     p_pkt_line
