@@ -565,8 +565,8 @@ module type DECODER = sig
     | Error of {err: error; buf: Cstruct.t; committed: int}
 
   type _ transaction =
-    | HttpReferenceDiscovery : string -> Common.advertised_refs transaction
-    | ReferenceDiscovery : Common.advertised_refs transaction
+    | HttpReferenceDiscovery : string -> (Common.advertised_refs, [ `Msg of string ]) result transaction
+    | ReferenceDiscovery : (Common.advertised_refs, [ `Msg of string ]) result transaction
     | ShallowUpdate : Common.shallow_update transaction
     | Negociation : Hash.Set.t * ack_mode -> Common.acks transaction
     | NegociationResult : Common.negociation_result transaction
@@ -667,7 +667,8 @@ module type CLIENT = sig
     | `Flush
     | `Nothing
     | `ReadyPACK of Cstruct.t
-    | `ReportStatus of Common.report_status ]
+    | `ReportStatus of Common.report_status
+    | `SmartError of string ]
 
   type process =
     [ `Read of Cstruct.t * int * int * (int -> process)
@@ -1140,7 +1141,7 @@ struct
         =
       match pkt with
       | #no_line_and_flush as v -> err_expected_line_or_flush decoder v
-      | `Flush -> p_return advertised_refs decoder
+      | `Flush -> p_return (Rresult.R.ok advertised_refs) decoder
       | `Line _ -> (
         match p_peek_char decoder with
         | Some 's' ->
@@ -1156,7 +1157,7 @@ struct
         decoder =
       match pkt with
       | #no_line_and_flush as v -> err_expected_line_or_flush decoder v
-      | `Flush -> p_return advertised_refs decoder
+      | `Flush -> p_return (Rresult.R.ok advertised_refs) decoder
       | `Line _ -> (
         match p_peek_char decoder with
         | Some 's' -> go_shallows ~pkt advertised_refs decoder
@@ -1170,22 +1171,25 @@ struct
     in
     let go_first_ref ~pkt (advertised_refs : Common.advertised_refs) decoder =
       match pkt with
-      | `Flush -> p_return advertised_refs decoder
+      | `Flush -> p_return (Rresult.R.ok advertised_refs) decoder
       (* XXX(dinosaure): this is not explained by documentation but a server can
          just send [0000] and leave up. In this case, we return a an empty
          [advertised_refs] and close socket properly. *)
       | #no_line as v -> err_expected_line decoder v
-      | `Line _ -> (
-        match p_first_ref decoder with
-        | `No_ref capabilities ->
+      | `Line _ -> match p_peek_char decoder with
+        | None -> raise (Leave (err_unexpected_end_of_input decoder))
+        | Some 'E' ->
+          let err = p_while0 (fun _ -> true) decoder in
+          p_return (Rresult.R.error_msg (Cstruct.to_string err)) decoder
+        | Some _ -> match p_first_ref decoder with
+          | `No_ref capabilities ->
             p_pkt_line
               (go_shallows {advertised_refs with capabilities})
               decoder
-        | `Ref (first, capabilities) ->
+          | `Ref (first, capabilities) ->
             p_pkt_line
               (go_other_refs {advertised_refs with capabilities; refs= [first]})
-              decoder )
-    in
+              decoder in
     go_first_ref ~pkt advertised_refs decoder
 
   let p_http_advertised_refs ~service ~pkt decoder =
@@ -1750,8 +1754,8 @@ struct
 
   (* XXX(dinosaure): désolé mais ce GADT, c'est quand même la classe. *)
   type _ transaction =
-    | HttpReferenceDiscovery : string -> Common.advertised_refs transaction
-    | ReferenceDiscovery : Common.advertised_refs transaction
+    | HttpReferenceDiscovery : string -> (Common.advertised_refs, [ `Msg of string ]) result transaction
+    | ReferenceDiscovery : (Common.advertised_refs, [ `Msg of string ]) result transaction
     | ShallowUpdate : Common.shallow_update transaction
     | Negociation : Hash.Set.t * ack_mode -> Common.acks transaction
     | NegociationResult : Common.negociation_result transaction
@@ -2380,7 +2384,8 @@ struct
     | `Flush
     | `Nothing
     | `ReadyPACK of Cstruct.t
-    | `ReportStatus of Common.report_status ]
+    | `ReportStatus of Common.report_status
+    | `SmartError of string ]
 
   type process =
     [ `Read of Cstruct.t * int * int * (int -> process)
@@ -2412,6 +2417,7 @@ struct
         Fmt.pf ppf "(`ReportStatus %a)"
           (Fmt.hvbox Common.pp_report_status)
           status
+    | `SmartError err -> Fmt.pf ppf "(`SmartError %S)" err
 
   type action =
     [ `GitProtoRequest of Common.git_proto_request
@@ -2428,9 +2434,9 @@ struct
   let run context = function
     | `GitProtoRequest c ->
         encode (`GitProtoRequest c)
-          (decode Decoder.ReferenceDiscovery (fun refs ctx ->
-               ctx.capabilities <- refs.Common.capabilities ;
-               `Refs refs ))
+          (decode Decoder.ReferenceDiscovery (fun refs ctx -> match refs with
+               | Ok refs -> ctx.capabilities <- refs.Common.capabilities ; `Refs refs
+               | Error (`Msg err) -> `SmartError err))
           context
     | `Flush -> encode `Flush (fun _ -> `Flush) context
     | `UploadRequest (descr : Common.upload_request) ->
@@ -2530,8 +2536,8 @@ struct
     in
     ( context
     , encode (`GitProtoRequest c)
-        (decode Decoder.ReferenceDiscovery (fun refs ctx ->
-             ctx.capabilities <- refs.Common.capabilities ;
-             `Refs refs ))
+        (decode Decoder.ReferenceDiscovery (fun refs ctx -> match refs with
+             | Ok refs -> ctx.capabilities <- refs.Common.capabilities ; `Refs refs
+             | Error (`Msg err) -> `SmartError err))
         context )
 end

@@ -293,8 +293,8 @@ module type DECODER = sig
 
   (** The type transaction to describe what is expected to decode/receive. *)
   type _ transaction =
-    | HttpReferenceDiscovery : string -> Common.advertised_refs transaction
-    | ReferenceDiscovery : Common.advertised_refs transaction
+    | HttpReferenceDiscovery : string -> (Common.advertised_refs, [ `Msg of string ]) result transaction
+    | ReferenceDiscovery : (Common.advertised_refs, [ `Msg of string ]) result transaction
     | ShallowUpdate : Common.shallow_update transaction
     | Negociation : Hash.Set.t * ack_mode -> Common.acks transaction
     | NegociationResult : Common.negociation_result transaction
@@ -453,7 +453,8 @@ module type CLIENT = sig
     | `Flush
     | `Nothing
     | `ReadyPACK of Cstruct.t
-    | `ReportStatus of Common.report_status ]
+    | `ReportStatus of Common.report_status
+    | `SmartError of string ]
 
   (** The expected actions by the context. *)
   type process =

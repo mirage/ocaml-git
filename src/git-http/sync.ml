@@ -245,8 +245,10 @@ struct
     consume (Web.Response.body resp)
       (Decoder.decode decoder
          (Decoder.HttpReferenceDiscovery "git-upload-pack"))
-    >?= (fun refs -> Lwt.return_ok refs.Common.refs)
-    >!= fun err -> Lwt.return (`Smart err)
+    >>= (function
+        | Ok (Ok refs) -> Lwt.return_ok refs.Common.refs
+        | Ok (Error (`Msg err)) -> Lwt.return_error (`Sync err)
+        | Error err -> Lwt.return_error (`Smart err))
 
   module SyncCommon :
     module type of Git.Sync.Common (Store) with module Store = Store =
@@ -299,7 +301,8 @@ struct
         Log.err (fun l ->
             l "The HTTP decoder returns an error: %a." Decoder.pp_error err ) ;
         Lwt.return (Error (`Smart err))
-    | Ok refs -> (
+    | Ok (Error (`Msg err)) -> Lwt.return_error (`Sync err)
+    | Ok (Ok refs) -> (
         let common =
           List.filter
             (fun x -> List.exists (( = ) x) capabilities)
@@ -431,7 +434,8 @@ struct
         Log.err (fun l ->
             l "The HTTP decoder returns an error: %a." Decoder.pp_error err ) ;
         Lwt.return (Error (`Smart err))
-    | Ok refs -> (
+    | Ok (Error (`Msg err)) -> Lwt.return_error (`Sync err)
+    | Ok (Ok refs) -> (
         let common =
           List.filter
             (fun x -> List.exists (( = ) x) capabilities)
