@@ -200,7 +200,7 @@ struct
               consume stream
                 ~keep:(raw, off' + len'', len' - len'')
                 (continue len'')
-        | None -> consume stream (continue 0) )
+        | None -> Lwt.return (Error `Unexpected_end_of_input) )
 
   let extract endpoint =
     let uri = E.uri endpoint in
