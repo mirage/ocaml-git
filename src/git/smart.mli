@@ -254,6 +254,8 @@ module type DECODER = sig
   val pp_decoder : decoder Fmt.t
   (** Pretty-printer of {!decoder}. *)
 
+  val extract_payload : decoder -> Cstruct.t
+
   (** The type error. *)
   type error =
     [ `Expected_char of char
