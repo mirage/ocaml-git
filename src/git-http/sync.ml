@@ -248,7 +248,9 @@ struct
     >>= (function
         | Ok (Ok refs) -> Lwt.return_ok refs.Common.refs
         | Ok (Error (`Msg err)) -> Lwt.return_error (`Sync err)
-        | Error err -> Lwt.return_error (`Smart err))
+        | Error _ ->
+          let err = Cstruct.to_string (Decoder.extract_payload decoder) in
+          Lwt.return (Error (`Sync err)))
 
   module SyncCommon :
     module type of Git.Sync.Common (Store) with module Store = Store =
@@ -300,7 +302,8 @@ struct
     | Error err ->
         Log.err (fun l ->
             l "The HTTP decoder returns an error: %a." Decoder.pp_error err ) ;
-        Lwt.return (Error (`Smart err))
+        let err = Cstruct.to_string (Decoder.extract_payload decoder) in
+        Lwt.return (Error (`Sync err))
     | Ok (Error (`Msg err)) -> Lwt.return_error (`Sync err)
     | Ok (Ok refs) -> (
         let common =
