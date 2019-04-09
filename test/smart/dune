@@ -1,4 +1,11 @@
 (library
   (name      test_smart)
+  (modules   test_smart)
+  (wrapped   false)
+  (libraries git mtime mtime.clock.os alcotest nocrypto lwt.unix logs.fmt))
+
+(library
+  (name      test_smart_regression)
+  (modules   test_smart_regression)
   (wrapped   false)
   (libraries git mtime mtime.clock.os alcotest nocrypto lwt.unix logs.fmt))
