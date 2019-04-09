@@ -221,6 +221,27 @@ module Make (S : S) = struct
       | Ok _ -> Lwt.return_ok ()
       | Error _ -> Lwt.return_error (Rresult.R.msg "Unexpected bad response from test_remote_repository")
 
+  let test_push_access_denied store =
+    let payloads =
+      [ "003cgit-receive-pack /mirage/ocaml-git\000host=github.com:9418\000" ],
+      [ "\x00\x00\x00\x00\x00\x00"
+      ; "0070ERR \n  You can't push to git://github.com/mirage/ocaml-git.git\n\
+         Use https://github.com/mirage/ocaml-git.git"
+      ; "\x00\x00\x00\x00\x00\x00"
+      ; "\x00\x00\x00\x00\x00\x00" ] in
+    let a, b = payloads in
+    let payloads = b, a in
+    let remote = Uri.of_string "git://github.com/mirage/ocaml-git" in
+    Hashtbl.add servers remote (to_flow payloads) ;
+    let null = S.Hash.of_raw_string (String.make S.Hash.digest_size '\x00') in
+    let push _ = Lwt.return ([], [ `Update (null, null, S.Reference.master) ]) in
+    let open Lwt.Infix in
+    Sync.push store ~push remote >>= function
+    | Ok _ -> Lwt.return_error (Rresult.R.msg "Unexpected good response from test test_push_access_denied")
+    | Error _ -> Lwt.return_ok ()
+
+
+
   let tests () =
     let test ~name test =
       Alcotest.test_case name `Quick @@ fun () ->
@@ -230,5 +251,6 @@ module Make (S : S) = struct
     "smart-regression",
     [ test ~name:"non-existing-repository" test_clone_non_existing_repository
     ; test ~name:"clone-repository" test_clone_with_one_commit
-    ; test ~name:"push-non-bare-repository" test_push_non_bare_repository ]
+    ; test ~name:"push-non-bare-repository" test_push_non_bare_repository
+    ; test ~name:"push-access-denied" test_push_access_denied ]
 end
