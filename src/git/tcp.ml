@@ -178,10 +178,12 @@ struct
         in
         Client.run t.ctx
           (`UploadRequest
-            { Client.Common.want= hash_head, [hash_head]
-            ; capabilities= t.capabilities
-            ; shallow= []
-            ; deep= None })
+             { Client.Common.want= hash_head, []
+             (* XXX(dinosaure): why we need to put two times [hash_head]?
+                [git] does not do that and we differ from [fetch] behavior. *)
+             ; capabilities= t.capabilities
+             ; shallow= []
+             ; deep= None })
         |> process t
         >>?= clone_handler git reference ~hash:hash_head t
       with Not_found -> (
