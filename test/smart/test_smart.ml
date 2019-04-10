@@ -41,28 +41,28 @@ module Make (S : Git.S) = struct
       ; `Agent "git/2.0.0"; `Report_status; `No_done ]
 
     let advertised_refs0, advertised_refs0_result =
-      ( { Smart.Common.shallow= generate_hashes (Random.int 10)
-        ; refs=
-            List.map
-              (fun reference -> generate_hash (), reference, Random.bool ())
-              references
-        ; capabilities }
+      ( Ok { Smart.Common.shallow= generate_hashes (Random.int 10)
+           ; refs=
+               List.map
+                 (fun reference -> generate_hash (), reference, Random.bool ())
+                 references
+           ; capabilities }
       , `Equal )
 
     let advertised_refs1, advertised_refs1_result =
-      {Smart.Common.shallow= []; refs= []; capabilities}, `Equal
+      Ok {Smart.Common.shallow= []; refs= []; capabilities}, `Equal
 
     let advertised_refs2, advertised_refs2_result =
-      ( { Smart.Common.shallow= []
-        ; refs=
-            List.map
-              (fun reference -> generate_hash (), reference, Random.bool ())
-              references
-        ; capabilities= [] }
+      ( Ok { Smart.Common.shallow= []
+           ; refs=
+               List.map
+                 (fun reference -> generate_hash (), reference, Random.bool ())
+                 references
+           ; capabilities= [] }
       , `Error )
 
     let advertised_refs3, advertised_refs3_result =
-      {Smart.Common.shallow= []; refs= []; capabilities= []}, `Error
+      Ok {Smart.Common.shallow= []; refs= []; capabilities= []}, `Error
 
     let advertised_refs_datas =
       [ advertised_refs0, advertised_refs0_result
@@ -367,8 +367,8 @@ module Make (S : Git.S) = struct
 
   type _ t =
     | Advertised_refs :
-        (Smart.Common.advertised_refs * [`Error | `Equal]) list
-        -> Smart.Common.advertised_refs t
+        ((Smart.Common.advertised_refs, [ `Msg of string ]) result * [`Error | `Equal]) list
+        -> (Smart.Common.advertised_refs, [ `Msg of string ]) result t
     | Shallow_update :
         (Smart.Common.shallow_update * [`Error | `Equal]) list
         -> Smart.Common.shallow_update t
@@ -403,8 +403,11 @@ module Make (S : Git.S) = struct
         let module T = struct
           type t = v
 
-          let pp = Smart.Common.pp_advertised_refs
-          let equal = Smart.Common.equal_advertised_refs
+          let pp = Fmt.Dump.result ~ok:Smart.Common.pp_advertised_refs ~error:Rresult.R.pp_msg
+          let equal a b = match a, b with
+            | Ok a, Ok b -> Smart.Common.equal_advertised_refs a b
+            | Error (`Msg a), Error (`Msg b) -> String.equal a b
+            | _, _ -> false
         end in
         (module T)
     | Shallow_update _ ->
@@ -457,7 +460,8 @@ module Make (S : Git.S) = struct
         List.mapi
           (fun idx (v, e) ->
             make_test ~name:(name idx) v Smart.Decoder.ReferenceDiscovery
-              (fun v -> `Advertised_refs v)
+              (function Ok v -> `Advertised_refs v
+                      | Error (`Msg err) -> Alcotest.fail err)
               e testable )
           l
     | Shallow_update l ->

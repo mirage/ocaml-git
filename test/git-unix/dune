@@ -1,6 +1,6 @@
 (executable
  (name      test)
- (libraries checkseum.c digestif.c test_git test_smart git-unix))
+ (libraries checkseum.c digestif.c test_git test_smart test_smart_regression git-unix))
 
 (alias
  (name runtest)

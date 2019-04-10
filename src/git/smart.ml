@@ -544,6 +544,7 @@ module type DECODER = sig
   type decoder
 
   val pp_decoder : decoder Fmt.t
+  val extract_payload : decoder -> Cstruct.t
 
   type error =
     [ `Expected_char of char
@@ -565,13 +566,15 @@ module type DECODER = sig
     | Error of {err: error; buf: Cstruct.t; committed: int}
 
   type _ transaction =
-    | HttpReferenceDiscovery : string -> Common.advertised_refs transaction
-    | ReferenceDiscovery : Common.advertised_refs transaction
+    | HttpReferenceDiscovery : string -> (Common.advertised_refs, [ `Msg of string ]) result transaction
+    | ReferenceDiscovery : (Common.advertised_refs, [ `Msg of string ]) result transaction
     | ShallowUpdate : Common.shallow_update transaction
     | Negociation : Hash.Set.t * ack_mode -> Common.acks transaction
     | NegociationResult : Common.negociation_result transaction
     | PACK : side_band -> flow transaction
-    | ReportStatus : side_band -> Common.report_status transaction
+    | ReportStatus :
+        string list * side_band
+        -> Common.report_status transaction
     | HttpReportStatus :
         string list * side_band
         -> Common.report_status transaction
@@ -665,7 +668,8 @@ module type CLIENT = sig
     | `Flush
     | `Nothing
     | `ReadyPACK of Cstruct.t
-    | `ReportStatus of Common.report_status ]
+    | `ReportStatus of Common.report_status
+    | `SmartError of string ]
 
   type process =
     [ `Read of Cstruct.t * int * int * (int -> process)
@@ -683,7 +687,7 @@ module type CLIENT = sig
     | `Flush
     | `ReceivePACK
     | `SendPACK of int
-    | `FinishPACK ]
+    | `FinishPACK of Reference.Set.t ]
 
   val capabilities : context -> Capability.t list
   val set_capabilities : context -> Capability.t list -> unit
@@ -776,6 +780,9 @@ struct
     ; mutable pos: int
     ; mutable eop: int option (* end of packet *)
     ; mutable max: int }
+
+  let extract_payload decoder =
+    Cstruct.sub decoder.buffer decoder.pos (decoder.max - decoder.pos)
 
   let pp_decoder ppf {buffer; pos; eop; max} =
     let pp = Encore.Lole.pp_scalar ~get:Cstruct.get_char ~length:Cstruct.len in
@@ -1138,7 +1145,7 @@ struct
         =
       match pkt with
       | #no_line_and_flush as v -> err_expected_line_or_flush decoder v
-      | `Flush -> p_return advertised_refs decoder
+      | `Flush -> p_return (Rresult.R.ok advertised_refs) decoder
       | `Line _ -> (
         match p_peek_char decoder with
         | Some 's' ->
@@ -1154,7 +1161,7 @@ struct
         decoder =
       match pkt with
       | #no_line_and_flush as v -> err_expected_line_or_flush decoder v
-      | `Flush -> p_return advertised_refs decoder
+      | `Flush -> p_return (Rresult.R.ok advertised_refs) decoder
       | `Line _ -> (
         match p_peek_char decoder with
         | Some 's' -> go_shallows ~pkt advertised_refs decoder
@@ -1168,28 +1175,34 @@ struct
     in
     let go_first_ref ~pkt (advertised_refs : Common.advertised_refs) decoder =
       match pkt with
-      | `Flush -> p_return advertised_refs decoder
+      | `Flush -> p_return (Rresult.R.ok advertised_refs) decoder
       (* XXX(dinosaure): this is not explained by documentation but a server can
          just send [0000] and leave up. In this case, we return a an empty
          [advertised_refs] and close socket properly. *)
       | #no_line as v -> err_expected_line decoder v
-      | `Line _ -> (
-        match p_first_ref decoder with
-        | `No_ref capabilities ->
+      | `Line _ -> match p_peek_char decoder with
+        | None -> raise (Leave (err_unexpected_end_of_input decoder))
+        | Some 'E' ->
+          let err = p_while0 (fun _ -> true) decoder in
+          p_return (Rresult.R.error_msg (Cstruct.to_string err)) decoder
+        | Some _ -> match p_first_ref decoder with
+          | `No_ref capabilities ->
             p_pkt_line
               (go_shallows {advertised_refs with capabilities})
               decoder
-        | `Ref (first, capabilities) ->
+          | `Ref (first, capabilities) ->
             p_pkt_line
               (go_other_refs {advertised_refs with capabilities; refs= [first]})
-              decoder )
-    in
+              decoder in
     go_first_ref ~pkt advertised_refs decoder
 
   let p_http_advertised_refs ~service ~pkt decoder =
     match pkt with
     | #no_line as v -> err_expected_line decoder v
     | `Line _ ->
+      match p_peek_char decoder with
+      | None -> raise (Leave (err_unexpected_end_of_input decoder))
+      | Some '#' ->
         ignore @@ p_string "# service=" decoder ;
         ignore @@ p_string service decoder ;
         p_pkt_line
@@ -1205,6 +1218,9 @@ struct
                   {shallow= []; refs= []; capabilities= []}
                   decoder )
           decoder
+      | Some _ ->
+        let err = p_while0 (fun _ -> true) decoder in
+        p_return (Rresult.R.error_msg (Cstruct.to_string err)) decoder
 
   let p_advertised_refs decoder =
     p_pkt_line
@@ -1336,9 +1352,7 @@ struct
       | `Ack (hash, detail) ->
           let hashes = Hash.Set.remove hash hashes in
           let acks = {acks with acks= (hash, detail) :: acks.acks} in
-          if Hash.Set.is_empty hashes then
-            k {acks with acks= List.rev acks.acks} decoder
-          else p_pkt_line (p_negociation_one ~mode (go hashes acks)) decoder
+          p_pkt_line (p_negociation_one ~mode (go hashes acks)) decoder
       | `Nak -> k acks decoder
     in
     p_pkt_line (p_negociation_one ~mode (go hashes acks)) decoder
@@ -1397,6 +1411,47 @@ struct
         Error (reference, msg)
     | _ -> raise (Leave (err_unexpected_char '\000' decoder))
 
+  let rec p_report_status ~pkt ~unpack ~commands ~sideband decoder =
+    let go unpack commands sideband decoder =
+      match p_peek_char decoder with
+      | Some 'u' ->
+          let unpack = p_unpack decoder in
+          p_pkt_line
+            (p_report_status ~unpack:(Some unpack) ~commands ~sideband)
+            decoder
+      | Some ('o' | 'n') ->
+          let command = p_command_status decoder in
+          let commands =
+            match commands with
+            | Some lst -> Some (command :: lst)
+            | None -> Some [command]
+          in
+          p_pkt_line (p_report_status ~unpack ~commands ~sideband) decoder
+      | Some chr -> raise (Leave (err_unexpected_char chr decoder))
+      | None -> raise (Leave (err_unexpected_end_of_input decoder))
+    in
+    match pkt, sideband, unpack, commands with
+    | (#no_line_and_flush as v), _, _, _ ->
+        err_expected_line_or_flush decoder v
+    | `Flush, _, Some unpack, Some (_ :: _ as commands) ->
+        p_return {Common.unpack; commands} decoder
+    | `Flush, _, _, _ -> raise (Leave (err_unexpected_flush_pkt_line decoder))
+    | `Line _, (`Side_band | `Side_band_64k), _, _ -> (
+      match p_peek_char decoder with
+      | Some '\001' ->
+          p_junk_char decoder ;
+          (* XXX(dinosaure): [git] wraps it inside a PKT-line. *)
+          go unpack commands sideband decoder
+      | Some '\002' ->
+          ignore @@ p_while0 (fun _ -> true) decoder ;
+          p_pkt_line (p_report_status ~unpack ~commands ~sideband) decoder
+      | Some '\003' ->
+          ignore @@ p_while0 (fun _ -> true) decoder ;
+          p_pkt_line (p_report_status ~unpack ~commands ~sideband) decoder
+      | Some chr -> raise (Leave (err_unexpected_char chr decoder))
+      | None -> raise (Leave (err_unexpected_empty_pkt_line decoder)) )
+    | `Line _, `No_multiplexe, _, _ -> go unpack commands sideband decoder
+
   let rec p_http_report_status ~pkt ?unpack ?(commands = []) ~sideband
       ~references decoder =
     let go_unpack ~pkt k decoder =
@@ -1430,13 +1485,11 @@ struct
           p_junk_char decoder ;
           match unpack with
           | None ->
-              let k unpack decoder =
-                p_pkt_line ~strict:true
-                  (p_http_report_status ~unpack ~commands:[] ~sideband
-                     ~references)
-                  decoder
-              in
-              p_pkt_line (go_unpack k) decoder
+            let k unpack decoder =
+              p_pkt_line
+                (p_report_status ~sideband:`No_multiplexe ~unpack:(Some unpack) ~commands:None)
+                decoder in
+            p_pkt_line (go_unpack k) decoder
           | Some unpack ->
               let kcons command decoder =
                 p_pkt_line ~strict:true
@@ -1464,16 +1517,14 @@ struct
         let k unpack decoder =
           p_pkt_line ~strict:true
             (p_http_report_status ~unpack ~sideband ~commands:[] ~references)
-            decoder
-        in
+            decoder in
         go_unpack ~pkt k decoder
     | (`Line _ as pkt), _, Some unpack ->
         let kcons command decoder =
           p_pkt_line ~strict:true
             (p_http_report_status ~unpack ~sideband
                ~commands:(command :: commands) ~references)
-            decoder
-        in
+            decoder in
         let kfinal decoder = p_return {Common.unpack; commands} decoder in
         go_command ~pkt kcons kfinal decoder
 
@@ -1481,49 +1532,6 @@ struct
     p_pkt_line ~strict:true
       (p_http_report_status ~references ?unpack:None ~commands:[] ~sideband)
       decoder
-
-  let rec p_report_status ~pkt ~unpack ~commands ~sideband decoder =
-    let go unpack commands sideband decoder =
-      match p_peek_char decoder with
-      | Some 'u' ->
-          let unpack = p_unpack decoder in
-          p_pkt_line
-            (p_report_status ~unpack:(Some unpack) ~commands ~sideband)
-            decoder
-      | Some ('o' | 'n') ->
-          let command = p_command_status decoder in
-          let commands =
-            match commands with
-            | Some lst -> Some (command :: lst)
-            | None -> Some [command]
-          in
-          p_pkt_line (p_report_status ~unpack ~commands ~sideband) decoder
-      | Some chr -> raise (Leave (err_unexpected_char chr decoder))
-      | None -> raise (Leave (err_unexpected_end_of_input decoder))
-    in
-    match pkt, sideband, unpack, commands with
-    | (#no_line_and_flush as v), _, _, _ ->
-        err_expected_line_or_flush decoder v
-    | `Flush, _, Some unpack, Some (_ :: _ as commands) ->
-        p_return {Common.unpack; commands} decoder
-    | `Flush, _, _, _ -> raise (Leave (err_unexpected_flush_pkt_line decoder))
-    | `Line _, (`Side_band | `Side_band_64k), _, _ -> (
-      match p_peek_char decoder with
-      | Some '\001' ->
-          p_junk_char decoder ;
-          go unpack commands sideband decoder
-      | Some '\002' ->
-          ignore @@ p_while0 (fun _ -> true) decoder ;
-          p_pkt_line (p_report_status ~unpack ~commands ~sideband) decoder
-      | Some '\003' ->
-          ignore @@ p_while0 (fun _ -> true) decoder ;
-          p_pkt_line (p_report_status ~unpack ~commands ~sideband) decoder
-      | Some chr -> raise (Leave (err_unexpected_char chr decoder))
-      | None -> raise (Leave (err_unexpected_empty_pkt_line decoder)) )
-    | `Line _, `No_multiplexe, _, _ -> go unpack commands sideband decoder
-
-  let p_report_status sideband decoder =
-    p_pkt_line (p_report_status ~unpack:None ~commands:None ~sideband) decoder
 
   let p_first_want decoder =
     ignore @@ p_string "want" decoder ;
@@ -1754,13 +1762,13 @@ struct
 
   (* XXX(dinosaure): désolé mais ce GADT, c'est quand même la classe. *)
   type _ transaction =
-    | HttpReferenceDiscovery : string -> Common.advertised_refs transaction
-    | ReferenceDiscovery : Common.advertised_refs transaction
+    | HttpReferenceDiscovery : string -> (Common.advertised_refs, [ `Msg of string ]) result transaction
+    | ReferenceDiscovery : (Common.advertised_refs, [ `Msg of string ]) result transaction
     | ShallowUpdate : Common.shallow_update transaction
     | Negociation : Hash.Set.t * ack_mode -> Common.acks transaction
     | NegociationResult : Common.negociation_result transaction
     | PACK : side_band -> flow transaction
-    | ReportStatus : side_band -> Common.report_status transaction
+    | ReportStatus : string list * side_band -> Common.report_status transaction
     | HttpReportStatus :
         string list * side_band
         -> Common.report_status transaction
@@ -1784,7 +1792,7 @@ struct
         p_safe (p_negociation ~mode:ackmode hashes) decoder
     | NegociationResult -> p_safe p_negociation_result decoder
     | PACK sideband -> p_safe (p_pack ~mode:sideband) decoder
-    | ReportStatus sideband -> p_safe (p_report_status sideband) decoder
+    | ReportStatus (refs, sideband) -> p_safe (p_http_report_status refs sideband) decoder
     | HttpReportStatus (refs, sideband) ->
         p_safe (p_http_report_status refs sideband) decoder
     | Upload_request -> p_safe p_upload_request decoder
@@ -2384,7 +2392,8 @@ struct
     | `Flush
     | `Nothing
     | `ReadyPACK of Cstruct.t
-    | `ReportStatus of Common.report_status ]
+    | `ReportStatus of Common.report_status
+    | `SmartError of string ]
 
   type process =
     [ `Read of Cstruct.t * int * int * (int -> process)
@@ -2416,6 +2425,7 @@ struct
         Fmt.pf ppf "(`ReportStatus %a)"
           (Fmt.hvbox Common.pp_report_status)
           status
+    | `SmartError err -> Fmt.pf ppf "(`SmartError %S)" err
 
   type action =
     [ `GitProtoRequest of Common.git_proto_request
@@ -2427,14 +2437,14 @@ struct
     | `Flush
     | `ReceivePACK
     | `SendPACK of int
-    | `FinishPACK ]
+    | `FinishPACK of Reference.Set.t ]
 
   let run context = function
     | `GitProtoRequest c ->
         encode (`GitProtoRequest c)
-          (decode Decoder.ReferenceDiscovery (fun refs ctx ->
-               ctx.capabilities <- refs.Common.capabilities ;
-               `Refs refs ))
+          (decode Decoder.ReferenceDiscovery (fun refs ctx -> match refs with
+               | Ok refs -> ctx.capabilities <- refs.Common.capabilities ; `Refs refs
+               | Error (`Msg err) -> `SmartError err))
           context
     | `Flush -> encode `Flush (fun _ -> `Flush) context
     | `UploadRequest (descr : Common.upload_request) ->
@@ -2509,7 +2519,7 @@ struct
             let raw = Encoder.free encoder in
             `ReadyPACK raw )
           context
-    | `FinishPACK ->
+    | `FinishPACK refs ->
         let sideband =
           if List.exists (( = ) `Side_band_64k) context.capabilities then
             `Side_band_64k
@@ -2518,7 +2528,7 @@ struct
           else `No_multiplexe
         in
         if List.exists (( = ) `Report_status) context.capabilities then
-          decode (Decoder.ReportStatus sideband)
+          decode (Decoder.ReportStatus (List.map Reference.to_string (Reference.Set.elements refs), sideband))
             (fun result _ -> `ReportStatus result)
             context
         else `Nothing
@@ -2534,8 +2544,8 @@ struct
     in
     ( context
     , encode (`GitProtoRequest c)
-        (decode Decoder.ReferenceDiscovery (fun refs ctx ->
-             ctx.capabilities <- refs.Common.capabilities ;
-             `Refs refs ))
+        (decode Decoder.ReferenceDiscovery (fun refs ctx -> match refs with
+             | Ok refs -> ctx.capabilities <- refs.Common.capabilities ; `Refs refs
+             | Error (`Msg err) -> `SmartError err))
         context )
 end

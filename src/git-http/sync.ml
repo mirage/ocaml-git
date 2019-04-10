@@ -200,7 +200,7 @@ struct
               consume stream
                 ~keep:(raw, off' + len'', len' - len'')
                 (continue len'')
-        | None -> consume stream (continue 0) )
+        | None -> Lwt.return (Error `Unexpected_end_of_input) )
 
   let extract endpoint =
     let uri = E.uri endpoint in
@@ -245,8 +245,12 @@ struct
     consume (Web.Response.body resp)
       (Decoder.decode decoder
          (Decoder.HttpReferenceDiscovery "git-upload-pack"))
-    >?= (fun refs -> Lwt.return_ok refs.Common.refs)
-    >!= fun err -> Lwt.return (`Smart err)
+    >>= (function
+        | Ok (Ok refs) -> Lwt.return_ok refs.Common.refs
+        | Ok (Error (`Msg err)) -> Lwt.return_error (`Sync err)
+        | Error _ ->
+          let err = Cstruct.to_string (Decoder.extract_payload decoder) in
+          Lwt.return (Error (`Sync err)))
 
   module SyncCommon :
     module type of Git.Sync.Common (Store) with module Store = Store =
@@ -298,8 +302,10 @@ struct
     | Error err ->
         Log.err (fun l ->
             l "The HTTP decoder returns an error: %a." Decoder.pp_error err ) ;
-        Lwt.return (Error (`Smart err))
-    | Ok refs -> (
+        let err = Cstruct.to_string (Decoder.extract_payload decoder) in
+        Lwt.return (Error (`Sync err))
+    | Ok (Error (`Msg err)) -> Lwt.return_error (`Sync err)
+    | Ok (Ok refs) -> (
         let common =
           List.filter
             (fun x -> List.exists (( = ) x) capabilities)
@@ -430,8 +436,15 @@ struct
     | Error err ->
         Log.err (fun l ->
             l "The HTTP decoder returns an error: %a." Decoder.pp_error err ) ;
-        Lwt.return (Error (`Smart err))
-    | Ok refs -> (
+        let err = Cstruct.to_string (Decoder.extract_payload decoder) in
+        (* XXX(dinosaure): this is clearly an example of why Smart over HTTP is
+           so bad. In this stage, HTTP response can be just a text without the
+           PKT-line format. So, Smart decoder will fail BUT payload can inform
+           user about what is going on. So it's an a random invalid input, it's
+           a yet another well formed input which need to be /computed/. *)
+        Lwt.return (Error (`Sync err))
+    | Ok (Error (`Msg err)) -> Lwt.return_error (`Sync err)
+    | Ok (Ok refs) -> (
         let common =
           List.filter
             (fun x -> List.exists (( = ) x) capabilities)

@@ -254,6 +254,8 @@ module type DECODER = sig
   val pp_decoder : decoder Fmt.t
   (** Pretty-printer of {!decoder}. *)
 
+  val extract_payload : decoder -> Cstruct.t
+
   (** The type error. *)
   type error =
     [ `Expected_char of char
@@ -293,13 +295,15 @@ module type DECODER = sig
 
   (** The type transaction to describe what is expected to decode/receive. *)
   type _ transaction =
-    | HttpReferenceDiscovery : string -> Common.advertised_refs transaction
-    | ReferenceDiscovery : Common.advertised_refs transaction
+    | HttpReferenceDiscovery : string -> (Common.advertised_refs, [ `Msg of string ]) result transaction
+    | ReferenceDiscovery : (Common.advertised_refs, [ `Msg of string ]) result transaction
     | ShallowUpdate : Common.shallow_update transaction
     | Negociation : Hash.Set.t * ack_mode -> Common.acks transaction
     | NegociationResult : Common.negociation_result transaction
     | PACK : side_band -> flow transaction
-    | ReportStatus : side_band -> Common.report_status transaction
+    | ReportStatus :
+        string list * side_band
+        -> Common.report_status transaction
     | HttpReportStatus :
         string list * side_band
         -> Common.report_status transaction
@@ -451,7 +455,8 @@ module type CLIENT = sig
     | `Flush
     | `Nothing
     | `ReadyPACK of Cstruct.t
-    | `ReportStatus of Common.report_status ]
+    | `ReportStatus of Common.report_status
+    | `SmartError of string ]
 
   (** The expected actions by the context. *)
   type process =
@@ -483,7 +488,7 @@ module type CLIENT = sig
     | `Flush
     | `ReceivePACK
     | `SendPACK of int
-    | `FinishPACK ]
+    | `FinishPACK of Reference.Set.t ]
 
   val run : context -> action -> process
   (** [run ctx action] sends an action to the server and schedule a specific

@@ -89,9 +89,16 @@ module Https (Store : Test_store.S) = Test_sync.Make (struct
       uri
 end)
 
-module Mem_store = struct include Git.Mem.Store
+module Mem_store = struct
+  include Git.Mem.Store
 
-                          let v root = v root end
+  let v root = v root
+  let u () =
+    let open Lwt.Infix in
+    v (Fpath.v ".") >>= function
+    | Ok v -> Lwt.return v
+    | Error _ -> assert false
+end
 
 (* XXX(dinosaure): we replace [move] to be a /forced move/: on [move a b], if
    [b] already exists, we delete it properly (Windows raises an error if [b]
@@ -169,6 +176,7 @@ end)
 
 module Tcp1 = Tcp (Mem_store)
 module Tcp2 = Tcp (Fs_store)
+module Tcp3 = Test_smart_regression.Make(Mem_store)
 module Http1 = Http (Mem_store)
 module Http2 = Https (Fs_store)
 module Index = Test_index
@@ -207,4 +215,5 @@ let () =
     ; Http2.test_clone "fs-https-sync"
         [Uri.of_string "https://github.com/mirage/ocaml-git.git", "gh-pages"]
     ; Thin.test_thin (Uri.of_string "https://github.com/mirage/decompress.git")
+    ; Tcp3.tests ()
     ]
