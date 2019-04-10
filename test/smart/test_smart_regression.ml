@@ -74,7 +74,7 @@ let to_flow (inputs, outputs) =
 module Net : Git.Tcp.NET with type endpoint = Uri.t = struct
   type endpoint = Uri.t
   type socket = flow
-  type error = |
+  type error = int v and _ v = V : unit v
 
   let pp_error : error Fmt.t = fun _ -> function _ -> .
 
@@ -239,8 +239,6 @@ module Make (S : S) = struct
     Sync.push store ~push remote >>= function
     | Ok _ -> Lwt.return_error (Rresult.R.msg "Unexpected good response from test test_push_access_denied")
     | Error _ -> Lwt.return_ok ()
-
-
 
   let tests () =
     let test ~name test =
