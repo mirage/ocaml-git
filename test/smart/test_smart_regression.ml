@@ -241,6 +241,8 @@ module Make (S : S) = struct
     | Ok _ -> Lwt.return_error (Rresult.R.msg "Unexpected good response from test test_push_access_denied")
     | Error _ -> Lwt.return_ok ()
 
+  (* XXX(dinosaure): see explanation available on ocaml-git#338 to contextualize this test. *)
+
   let test_fetch_twice store =
     let payloads_0 =
       [ "0040git-upload-pack /test_remote_repository\000host=127.0.0.1:9418\000"
