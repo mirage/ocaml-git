@@ -809,8 +809,9 @@ module Delta (Hash : S.HASH) (Entry : ENTRY with module Hash := Hash) = struct
                 match delta window window_pack max entry raw base with
                 | None -> Lwt.return (window, (entry, base) :: acc)
                 | Some (src_entry, hunks, length) -> (
-                  match Window.find ~promote:true src_entry window with
-                  | Some ((src, _, _), window) ->
+                  match Window.find src_entry window with
+                  | Some (src, _, _) ->
+                      let window = Window.promote src_entry window in
                       let depth = depth src + 1 in
                       base.delta
                       <- S
