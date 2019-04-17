@@ -40,21 +40,19 @@ module BaseIso = struct
   let flip (a, b) = b, a
 
   let int64 =
-    let tag = "string", "int64" in
-    make_exn ~tag
-      ~fwd:(Exn.safe_exn tag Int64.of_string)
-      ~bwd:(Exn.safe_exn (flip tag) Int64.to_string)
+    make_exn
+      ~fwd:(Exn.safe_exn Int64.of_string)
+      ~bwd:(Exn.safe_exn Int64.to_string)
 
   let cstruct =
-    Encore.Bijection.make_exn ~tag:("cstruct", "bigarray")
+    Encore.Bijection.make_exn
       ~fwd:Cstruct.of_bigarray ~bwd:Cstruct.to_bigarray
 
   let char_elt chr =
     Exn.element
-      ~tag:(Fmt.strf "char:%02x" (Char.code chr))
       ~compare:Char.equal chr
 
-  let string_elt str = Exn.element ~tag:str ~compare:String.equal str
+  let string_elt str = Exn.element ~compare:String.equal str
 end
 
 module MakeDecoder (A : S.DESC with type 'a t = 'a Angstrom.t) = struct

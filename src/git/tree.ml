@@ -227,20 +227,17 @@ module Make (Hash : S.HASH) = struct
       open Encore.Bijection
 
       let perm =
-        let tag = "string", "perm" in
-        make_exn ~tag
-          ~fwd:(Exn.safe_exn tag perm_of_string)
-          ~bwd:(Exn.safe_exn (Helper.Pair.flip tag) string_of_perm)
+        make_exn
+          ~fwd:(Exn.safe_exn perm_of_string)
+          ~bwd:(Exn.safe_exn string_of_perm)
 
       let hash =
-        let tag = "string", "hash" in
-        make_exn ~tag
-          ~fwd:(Exn.safe_exn tag Hash.of_raw_string)
-          ~bwd:(Exn.safe_exn (Helper.Pair.flip tag) Hash.to_raw_string)
+        make_exn
+          ~fwd:(Exn.safe_exn Hash.of_raw_string)
+          ~bwd:(Exn.safe_exn Hash.to_raw_string)
 
       let entry =
         make_exn
-          ~tag:("perm * string * hash", "entry")
           ~fwd:(fun ((perm, name), node) -> {perm; name; node})
           ~bwd:(fun {perm; name; node} -> (perm, name), node)
     end

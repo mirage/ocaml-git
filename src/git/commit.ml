@@ -88,22 +88,20 @@ module Make (Hash : S.HASH) = struct
       open Encore.Bijection
 
       let hex =
-        let tag = "string", "hex" in
-        make_exn ~tag
-          ~fwd:(Exn.safe_exn tag Hash.of_hex)
-          ~bwd:(Exn.safe_exn (Helper.Pair.flip tag) Hash.to_hex)
+        make_exn
+          ~fwd:(Exn.safe_exn Hash.of_hex)
+          ~bwd:(Exn.safe_exn Hash.to_hex)
 
       let user =
-        make_exn ~tag:("string", "user")
+        make_exn
           ~fwd:(fun s ->
             match Angstrom.parse_string User.A.p s with
             | Ok v -> v
-            | Error _ -> Exn.fail "string" "user" )
+            | Error _ -> Exn.fail () )
           ~bwd:(Encore.Encoder.to_string User.M.p)
 
       let commit =
         make_exn
-          ~tag:("hash * parents * user * user * fields * string", "commit")
           ~fwd:
             (fun ( (_, tree)
                  , parents
@@ -135,9 +133,9 @@ module Make (Hash : S.HASH) = struct
 
     let to_end =
       let loop m =
-        let cons = Exn.cons ~tag:"cons" <$> (buffer <* commit <*> m) in
+        let cons = Exn.cons <$> (buffer <* commit <*> m) in
         let nil = pure ~compare:(fun () () -> 0) () in
-        make_exn ~tag:("either", "list")
+        make_exn
           ~fwd:(function L cons -> cons | R () -> [])
           ~bwd:(function _ :: _ as lst -> L lst | [] -> R ())
         <$> peek cons nil
@@ -145,7 +143,7 @@ module Make (Hash : S.HASH) = struct
       fix loop
 
     let to_end : string t =
-      make_exn ~tag:("string list", "string") ~fwd:(String.concat "")
+      make_exn ~fwd:(String.concat "")
         ~bwd:(fun x -> [x] )
       <$> to_end
 

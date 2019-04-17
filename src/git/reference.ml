@@ -207,29 +207,26 @@ module Make (Hash : S.HASH) = struct
       open Encore.Bijection
 
       let hex =
-        let tag = "string", "hex" in
-        make_exn ~tag
-          ~fwd:(Exn.safe_exn tag Hash.of_hex)
-          ~bwd:(Exn.safe_exn (Helper.Pair.flip tag) Hash.to_hex)
+        make_exn
+          ~fwd:(Exn.safe_exn Hash.of_hex)
+          ~bwd:(Exn.safe_exn Hash.to_hex)
 
       let refname =
-        let tag = "string", "reference" in
-        make_exn ~tag
-          ~fwd:(Exn.safe_exn tag of_string)
-          ~bwd:(Exn.safe_exn (Helper.Pair.flip tag) to_string)
+        make_exn
+          ~fwd:(Exn.safe_exn of_string)
+          ~bwd:(Exn.safe_exn to_string)
 
       let hash =
-        make_exn ~tag:("hash", "head_contents")
+        make_exn
           ~fwd:(fun hash -> Hash hash)
           ~bwd:(function
-            | Hash hash -> hash | _ -> Exn.fail "head_contents" "hash")
+            | Hash hash -> hash | _ -> Exn.fail ())
 
       let reference =
         make_exn
-          ~tag:("reference", "head_contents")
           ~fwd:(fun reference -> Ref reference)
           ~bwd:(function
-            | Ref r -> r | _ -> Exn.fail "head_contents" "reference")
+            | Ref r -> r | _ -> Exn.fail ())
     end
 
     type 'a t = 'a Meta.t
