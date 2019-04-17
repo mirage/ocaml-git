@@ -41,7 +41,6 @@ module Make (Meta : Encore.Meta.S) = struct
 
     let tz_offset =
       make_exn
-        ~tag:("sign * int * int", "tz_offset")
         ~fwd:(fun (sign, hours, minutes) ->
           if hours = 0 && minutes = 0 then None else Some {sign; hours; minutes}
           )
@@ -51,7 +50,6 @@ module Make (Meta : Encore.Meta.S) = struct
 
     let user =
       make_exn
-        ~tag:("string * string * int64 * tz_offset", "user")
         ~fwd:(fun (name, email, time, date) -> {name; email; date= time, date})
         ~bwd:(fun {name; email; date= time, date} -> name, email, time, date)
   end
@@ -69,23 +67,19 @@ module Make (Meta : Encore.Meta.S) = struct
   let date =
     let sign =
       make_exn
-        ~tag:("unit", "[ `Plus | `Minus ]")
         ~fwd:(function
           | '+' -> `Plus
           | '-' -> `Minus
-          | chr ->
-              Exn.fail
-                (Fmt.strf "char:%02x" (Char.code chr))
-                "[ `Plus | `Minus ]")
+          | _ -> Exn.fail ())
         ~bwd:(function `Plus -> '+' | `Minus -> '-')
       <$> any
     in
     let digit2 =
-      make_exn ~tag:("char * char", "int")
+      make_exn
         ~fwd:(function
           | ('0' .. '9' as a), ('0' .. '9' as b) ->
               Char.(((code a - 48) * 10) + (code b - 48))
-          | _, _ -> Exn.fail "char * char" "int")
+          | _, _ -> Exn.fail ())
         ~bwd:(fun n ->
           let a, b = n / 10, n mod 10 in
           Char.chr (a + 48), Char.chr (b + 48) )
@@ -94,7 +88,7 @@ module Make (Meta : Encore.Meta.S) = struct
     Exn.compose obj3 Iso.tz_offset <$> (sign <*> digit2 <*> digit2)
 
   let chop =
-    make_exn ~tag:("string", "chop string")
+    make_exn
       ~fwd:(fun s -> String.sub s 0 (String.length s - 1))
       ~bwd:(fun s -> s ^ " ")
 

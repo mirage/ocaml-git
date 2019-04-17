@@ -73,11 +73,11 @@ module Make (Hash : S.HASH) = struct
     let blob =
       let loop m =
         let cons =
-          Exn.cons ~tag:"cons"
+          Exn.cons
           <$> (cstruct <$> bigstring_buffer <* commit <*> m)
         in
         let nil = pure ~compare:(fun () () -> 0) () in
-        make_exn ~tag:("either", "list")
+        make_exn
           ~fwd:(function L cons -> cons | R () -> [])
           ~bwd:(function _ :: _ as lst -> L lst | [] -> R ())
         <$> peek cons nil
@@ -85,7 +85,7 @@ module Make (Hash : S.HASH) = struct
       fix loop
 
     let p =
-      make_exn ~tag:("cstruct list", "cstruct") ~fwd:Cstruct.concat
+      make_exn ~fwd:Cstruct.concat
         ~bwd:(fun x -> [x] )
       <$> blob
   end

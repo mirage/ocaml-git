@@ -183,14 +183,13 @@ module Make (Hash : S.HASH) (Inflate : S.INFLATE) (Deflate : S.DEFLATE) :
       open Encore.Bijection
 
       let kind =
-        let tag = "string", "kind" in
-        make_exn ~tag
+        make_exn
           ~fwd:(function
             | "tree" -> `Tree
             | "blob" -> `Blob
             | "commit" -> `Commit
             | "tag" -> `Tag
-            | s -> Exn.fail s "kind")
+            | _ -> Exn.fail ())
           ~bwd:(function
             | `Tree -> "tree"
             | `Blob -> "blob"
@@ -199,14 +198,13 @@ module Make (Hash : S.HASH) (Inflate : S.INFLATE) (Deflate : S.DEFLATE) :
 
       let value =
         make_exn
-          ~tag:("kind * length * value", "value")
           ~fwd:(fun (kind, _, value) ->
             match kind, value with
             | `Tree, Tree _ -> value
             | `Commit, Commit _ -> value
             | `Blob, Blob _ -> value
             | `Tag, Tag _ -> value
-            | _, _ -> Exn.fail "kind" "value" )
+            | _, _ -> Exn.fail ())
           ~bwd:(function
             | Tree tree -> `Tree, Tree.length tree, Tree tree
             | Commit commit -> `Commit, Commit.length commit, Commit commit
@@ -233,28 +231,28 @@ module Make (Hash : S.HASH) (Inflate : S.INFLATE) (Deflate : S.DEFLATE) :
       <$> (const "tree" <|> const "commit" <|> const "blob" <|> const "tag")
 
     let commit =
-      make_exn ~tag:("commit", "value")
+      make_exn
         ~fwd:(fun commit -> Commit commit)
         ~bwd:(function
-          | Commit commit -> commit | _ -> Exn.fail "value" "commit")
+          | Commit commit -> commit | _ -> Exn.fail ())
       <$> Commit.p
 
     let blob =
-      make_exn ~tag:("blob", "value")
+      make_exn
         ~fwd:(fun blob -> Blob blob)
-        ~bwd:(function Blob blob -> blob | _ -> Exn.fail "value" "blob")
+        ~bwd:(function Blob blob -> blob | _ -> Exn.fail ())
       <$> Blob.p
 
     let tree =
-      make_exn ~tag:("tree", "value")
+      make_exn
         ~fwd:(fun tree -> Tree tree)
-        ~bwd:(function Tree tree -> tree | _ -> Exn.fail "value" "tree")
+        ~bwd:(function Tree tree -> tree | _ -> Exn.fail ())
       <$> Tree.p
 
     let tag =
-      make_exn ~tag:("tag", "value")
+      make_exn
         ~fwd:(fun tag -> Tag tag)
-        ~bwd:(function Tag tag -> tag | _ -> Exn.fail "value" "tag")
+        ~bwd:(function Tag tag -> tag | _ -> Exn.fail ())
       <$> Tag.p
 
     let p =
