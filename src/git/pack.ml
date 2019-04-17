@@ -806,6 +806,7 @@ module Delta (Hash : S.HASH) (Entry : ENTRY with module Hash := Hash) = struct
                 let rabin = Duff.Default.Index.make ~copy:false raw in
                 (* we keep [rabin] with [raw] in the [window]. *)
                 let window = Window.add entry (base, raw, rabin) window in
+                let window = Window.trim window in
                 match delta window window_pack max entry raw base with
                 | None -> Lwt.return (window, (entry, base) :: acc)
                 | Some (src_entry, hunks, length) -> (
