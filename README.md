@@ -12,9 +12,10 @@ compression might change the relative offsets between the packed
 objects), to generate pack indexes from pack files, or to expand
 the filesystem of a given commit.
 
-The library comes with a command-line tool called `ogit` which shares
-a similar interface with `git`, but where all operations are mapped to
-the API exposed `ocaml-git` (and hence using only OCaml code).
+The library comes with a command-line tool called `ogit` as a Proof-of-concept
+of the core library which shares a similar interface with `git`, but where all
+operations are mapped to the API exposed `ocaml-git` (and hence using only OCaml
+code).
 
 The API documentation is available
 [online](http://mirage.github.io/ocaml-git/).
@@ -43,7 +44,7 @@ $ opam install git
   (indexes of pack files) can be read and
   written). The binary diff hunks are exposed using a high-level
   position-independent representation so that they can be manipulated
-  more easily. Pack file can be created but will not be compressed yet.
+  more easily. Pack file can be created and is compressed.
 
 * The [index file](http://mirage.github.io/ocaml-git/git/Git/Index/index.html)
   (used as for managing the staging area)
@@ -58,12 +59,12 @@ $ opam install git
 
 * Pushing is still experimental and needs more testing.
 
-* An abstraction for Git [Store](http://mirage.github.io/ocaml-git/git/Git/Store/module-type-S/index.html)
+* An abstraction for Git [Store](http://mirage.github.io/ocaml-git/git/Git/module-type-S/index.html)
   Is available. Various store implementations are available:
-  - An [in-memory](http://mirage.github.io/ocaml-git/git/Git/Mem/index.html) implementation;
-  - A [unix filesystem](http://mirage.github.io/ocaml-git/git-unix/Git_unix/FS/index.html)
+  - An [in-memory](http://mirage.github.io/ocaml-git/git/Git/Mem/Store/index.html) implementation;
+  - A [unix filesystem](http://mirage.github.io/ocaml-git/git-unix/Git_unix/Store/index.html)
     implementation;
-  - A [mirageOS](http://mirage.github.io/ocaml-git/git-mirage/Git_mirage/index.html) implementation,
+  - A [mirageOS](http://mirage.github.io/ocaml-git/git-mirage/Git_mirage/Store/index.html) implementation,
     requiring a `Mirage_fs_lwt` implementation.
 
 ### What is *not* supported
@@ -81,22 +82,28 @@ Performance is comparable to the Git tool.
 
 ```ocaml
 # #require "git.unix";;
-# open Lwt.Infix;;
 # open Git_unix;;
 # module Search = Git.Search.Make(FS);;
 
-# let read file =
-    FS.create ~root:"." () >>= fun t ->
-    FS.read_reference_exn t Git.Reference.master >>= fun head ->
-    Search.find t head (`Commit (`Path file)) >>= function
-    | None     -> failwith "file not found"
-    | Some sha -> FS.read_exn t sha >>= function
-      | Git.Value.Blob b -> Lwt.return (Git.Blob.to_raw b)
-      | _ -> failwith "not a valid path"
- ;;
- val read : string list -> string Lwt.t = <fun>
+# let read filename =
+    let open Lwt_result.Infix in
+    Store.v (Fpath.v ".") >>= fun t ->
+    Store.Ref.resolve Store.Reference.master >>= fun head ->
+    let open Lwt.Infix in
+    Search.find t head (`Commit (`Path filename)) >|= function
+    | None -> Lwt.return (Error `Not_found)
+    | Some hash -> Store.read t hash
+val read : string list -> (Store.Value.t, Store.error) Lwt_result.t
+    
+# let pp =
+    let ok ppf = function
+      | Store.Value.Blob blob ->
+        Fmt.string ppf (Store.Value.Blob.to_string blob)
+      | _ -> Fmt.string ppf "#git-object" in
+    Fmt.pp_result ~ok ~error:Store.pp_error
+val pp : (Store.Value.t, Store.error) Fmt.t
 
-# Lwt_main.run (read ["README.md"] >|= print_string)
+# Lwt_main.run Lwt.Infix.(read [ "README.md" ] >|= pp Fmt.stdout)
 
 ocaml-git -- Git format and protocol in pure OCaml
 
