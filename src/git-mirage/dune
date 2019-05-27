@@ -1,5 +1,4 @@
 (library
  (name        git_mirage)
  (public_name git-mirage)
- (libraries   checkseum.c digestif.c
-              git mirage-flow-lwt mirage-channel-lwt mirage-conduit cohttp-mirage git-http decompress))
+ (libraries   git mirage-flow-lwt mirage-channel-lwt mirage-conduit cohttp-mirage git-http decompress))

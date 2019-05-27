@@ -30,10 +30,10 @@ depends: [
   "lwt"        {>= "2.4.7"}
   "angstrom"   {>= "0.9.0"}
   "fpath"      {>= "0.7.0"}
-  "digestif"   {>= "0.7.0"}
+  "digestif"   {>= "0.7.2"}
   "lru"        {>= "0.3.0"}
   "decompress" {>= "0.8.1"}
-  "checkseum"  {>= "0.0.3"}
+  "checkseum"  {>= "0.1.0"}
   "ke"
   "encore"
   "duff"
