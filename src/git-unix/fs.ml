@@ -360,7 +360,8 @@ module Mapper = struct
         protect "Mapper.map" err
         @@ fun () ->
         try
-          let rs = Lwt_bytes.map_file ~fd ?pos ~shared:false ~size () in
+          let rs = Mmap.V1.map_file fd ?pos Bigarray.Char Bigarray.C_layout false [|size|] in
+          let rs = Bigarray.array1_of_genarray rs in
           Lwt.return (Cstruct.of_bigarray rs)
         with e -> Lwt.fail e )
 end
