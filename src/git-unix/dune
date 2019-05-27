@@ -1,4 +1,4 @@
 (library
  (name        git_unix)
  (public_name git-unix)
- (libraries   git logs.fmt lwt.unix git-http cohttp-lwt-unix))
+ (libraries   mmap git logs.fmt lwt.unix git-http cohttp-lwt-unix))
