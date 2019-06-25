@@ -29,6 +29,8 @@ module Sync (G : Git.S) = struct
 
   module Tcp = Git.Tcp.Make (Net) (Endpoint) (G)
 
+  module Ssh = Git.Ssh.Make (Net) (Endpoint) (G)
+
   module Client = struct
     (* XXX(samoht): too much copy/paste from git-unix ... *)
 
@@ -93,15 +95,17 @@ module Sync (G : Git.S) = struct
 
   module Http = Git_http.Sync.CohttpMake (Client) (Endpoint) (G)
 
-  type error = Tcp of Tcp.error | Http of Http.error
+  type error = Tcp of Tcp.error | Http of Http.error | Ssh of Ssh.error
 
   let pp_error ppf = function
     | Tcp x -> Tcp.pp_error ppf x
     | Http x -> Http.pp_error ppf x
+    | Ssh x -> Ssh.pp_error ppf x
 
   let dispatch e f =
     match Uri.scheme e.uri with
     | Some "git" -> f `Tcp
+    | Some "ssh" -> f `Ssh
     | Some ("http" | "https") -> f `Http
     | Some s -> Fmt.invalid_arg "%a: invalid scheme (%s)" Uri.pp_hum e.uri s
     | None -> Fmt.invalid_arg "%a: missing scheme" Uri.pp_hum e.uri
@@ -118,17 +122,22 @@ module Sync (G : Git.S) = struct
   let tcp_error x =
     Lwt.map (function Ok _ as x -> x | Error e -> Error (Tcp e)) x
 
+  let ssh_error x =
+    Lwt.map (function Ok _ as x -> x | Error e -> Error (Ssh e)) x
+
   let http_error x =
     Lwt.map (function Ok _ as x -> x | Error e -> Error (Http e)) x
 
   let push t ~push ?capabilities e =
     dispatch e (function
-      | `Tcp -> Tcp.push t ~push ?capabilities e |> tcp_error
-      | `Http -> Http.push t ~push ?capabilities e |> http_error )
+        | `Tcp -> Tcp.push t ~push ?capabilities e |> tcp_error
+        | `Ssh -> Ssh.push t ~push ?capabilities e |> ssh_error
+        | `Http -> Http.push t ~push ?capabilities e |> http_error )
 
   let ls t ?capabilities e =
     dispatch e (function
       | `Tcp -> Tcp.ls t ?capabilities e |> tcp_error
+      | `Ssh -> Ssh.ls t ?capabilities e |> ssh_error
       | `Http -> Http.ls t ?capabilities e |> http_error )
 
   let fetch t ?shallow ?capabilities ~notify ~negociate ~have ~want ?deepen e =
@@ -137,6 +146,10 @@ module Sync (G : Git.S) = struct
           Tcp.fetch t ?shallow ?capabilities ~notify ~negociate ~have ~want
             ?deepen e
           |> tcp_error
+      | `Ssh ->
+          Ssh.fetch t ?shallow ?capabilities ~notify ~negociate ~have ~want
+            ?deepen e
+          |> ssh_error
       | `Http ->
           Http.fetch t ?shallow ?capabilities ~notify ~negociate ~have ~want
             ?deepen e
@@ -145,27 +158,33 @@ module Sync (G : Git.S) = struct
   let clone t ?capabilities ~reference e =
     dispatch e (function
       | `Tcp -> Tcp.clone t ?capabilities ~reference e |> tcp_error
+      | `Ssh -> Ssh.clone t ?capabilities ~reference e |> ssh_error
       | `Http -> Http.clone t ?capabilities ~reference e |> http_error )
 
   let fetch_some t ?capabilities ~references e =
     dispatch e (function
       | `Tcp -> Tcp.fetch_some t ?capabilities ~references e |> tcp_error
+      | `Ssh -> Ssh.fetch_some t ?capabilities ~references e |> ssh_error
       | `Http -> Http.fetch_some t ?capabilities ~references e |> http_error )
 
   let fetch_all t ?capabilities ~references e =
     dispatch e (function
       | `Tcp -> Tcp.fetch_all t ?capabilities ~references e |> tcp_error
+      | `Ssh -> Ssh.fetch_all t ?capabilities ~references e |> ssh_error
       | `Http -> Http.fetch_all t ?capabilities ~references e |> http_error )
 
   let fetch_one t ?capabilities ~reference e =
     dispatch e (function
       | `Tcp -> Tcp.fetch_one t ?capabilities ~reference e |> tcp_error
+      | `Ssh -> Ssh.fetch_one t ?capabilities ~reference e |> ssh_error
       | `Http -> Http.fetch_one t ?capabilities ~reference e |> http_error )
 
   let update_and_create t ?capabilities ~references e =
     dispatch e (function
       | `Tcp ->
           Tcp.update_and_create t ?capabilities ~references e |> tcp_error
+      | `Ssh ->
+          Ssh.update_and_create t ?capabilities ~references e |> ssh_error
       | `Http ->
           Http.update_and_create t ?capabilities ~references e |> http_error )
 end

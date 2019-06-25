@@ -33,7 +33,7 @@ let host uri =
   | None ->
       Fmt.kstrf failwith "Expected a git url with host: %a." Uri.pp_hum uri
 
-let socket (e : endpoint) =
+let socket ?cmd:_ (e : endpoint) =
   let open Lwt.Infix in
   let uri = e.uri in
   Log.debug (fun l ->

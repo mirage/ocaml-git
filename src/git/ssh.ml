@@ -1,25 +1,13 @@
-module type NET = sig
-  type endpoint
-  type socket
-  type error
-
-  val pp_error : Format.formatter -> error -> unit
-  val read : socket -> Bytes.t -> int -> int -> (int, error) result Lwt.t
-  val write : socket -> Bytes.t -> int -> int -> (int, error) result Lwt.t
-  val socket : ?cmd:string -> endpoint -> socket Lwt.t
-  val close : socket -> unit Lwt.t
-end
-
 open Lwt.Infix
 
 let ( >>!= ) = Lwt_result.bind_lwt_err
 let ( >>?= ) = Lwt_result.bind
-let src = Logs.Src.create "git.tcp" ~doc:"logs git's tcp event"
+let src = Logs.Src.create "git.ssh" ~doc:"logs git's ssh event"
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
 module Make
-    (N : NET)
+    (N : Tcp.NET)
     (E : Sync.ENDPOINT with type t = N.endpoint)
     (G : Minimal.S) : Sync.S with module Store = G with module Endpoint = E =
 struct
@@ -58,8 +46,6 @@ struct
   type command = Common.command
 
   let pp_command = Common.pp_command
-  let pp_fetch_one = Common.pp_fetch_one
-  let pp_update_and_create = Common.pp_update_and_create
 
   type t =
     { socket: Net.socket
@@ -398,38 +384,29 @@ struct
 
   let uri x = Endpoint.uri x
   let path e = Uri.path (uri e)
-  let port e = match Uri.port (uri e) with None -> 9418 | Some p -> p
-
-  let host e =
-    match Uri.host (uri e) with
-    | Some h -> h
-    | None -> Fmt.invalid_arg "missing host: %a" Uri.pp_hum (uri e)
+  let cmd e c =
+    let p = path e in
+    let c = match c with
+      | `Receive_pack -> "git-receive-pack"
+      | `Upload_pack -> "git-upload-pack"
+    in
+    Printf.sprintf "%s '%s'" c p
 
   module N = Negociator.Make (G)
 
   let push git ~push ?(capabilities = Sync.Default.capabilities) endpoint =
-    Net.socket endpoint
+    Net.socket ~cmd:(cmd endpoint `Receive_pack) endpoint
     >>= fun socket ->
-    let ctx, state =
-      Client.context
-        (Some ({ Client.Common.pathname= path endpoint
-               ; host= Some (host endpoint, Some (port endpoint))
-               ; request_command= `Receive_pack }))
-    in
+    let ctx, state = Client.context None in
     let t = make ~socket ~ctx ~capabilities in
     process t state
     >>?= push_handler git ~push t
     >>= fun v -> Net.close socket >>= fun () -> Lwt.return v
 
   let ls git ?(capabilities = Sync.Default.capabilities) endpoint =
-    Net.socket endpoint
+    Net.socket ~cmd:(cmd endpoint `Upload_pack) endpoint
     >>= fun socket ->
-    let ctx, state =
-      Client.context
-        (Some ({ Client.Common.pathname= path endpoint
-               ; host= Some (host endpoint, Some (port endpoint))
-               ; request_command= `Upload_pack }))
-    in
+    let ctx, state = Client.context None in
     let t = make ~socket ~ctx ~capabilities in
     process t state
     >>?= ls_handler git t
@@ -437,14 +414,9 @@ struct
 
   let fetch git ?(shallow = []) ?(capabilities = Sync.Default.capabilities)
       ~notify ~negociate ~have ~want ?deepen endpoint =
-    Net.socket endpoint
+    Net.socket ~cmd:(cmd endpoint `Upload_pack) endpoint
     >>= fun socket ->
-    let ctx, state =
-      Client.context
-        (Some ({ Client.Common.pathname= path endpoint
-               ; host= Some (host endpoint, Some (port endpoint))
-               ; request_command= `Upload_pack }))
-    in
+    let ctx, state = Client.context None in
     let t = make ~socket ~ctx ~capabilities in
     process t state
     >>?= fetch_handler git ~shallow ~notify ~negociate ~have ~want ?deepen t
@@ -454,14 +426,9 @@ struct
      Smart protocol, the next version set [reference] to the new hash. *)
   let clone git ?(reference = Store.Reference.master)
       ?(capabilities = Sync.Default.capabilities) endpoint =
-    Net.socket endpoint
+    Net.socket ~cmd:(cmd endpoint `Upload_pack) endpoint
     >>= fun socket ->
-    let ctx, state =
-      Client.context
-        (Some ({ Client.Common.pathname= path endpoint
-               ; host= Some (host endpoint, Some (port endpoint))
-               ; request_command= `Upload_pack }))
-    in
+    let ctx, state = Client.context None in
     let t = make ~socket ~ctx ~capabilities in
     process t state
     >>?= clone_handler git reference t

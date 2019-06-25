@@ -698,7 +698,7 @@ module type CLIENT = sig
 
   val pp_result : result Fmt.t
   val run : context -> action -> process
-  val context : Common.git_proto_request -> context * process
+  val context : Common.git_proto_request option -> context * process
 end
 
 module Decoder
@@ -2542,10 +2542,13 @@ struct
       ; encoder= Encoder.encoder ()
       ; capabilities= [] }
     in
-    ( context
-    , encode (`GitProtoRequest c)
-        (decode Decoder.ReferenceDiscovery (fun refs ctx -> match refs with
-             | Ok refs -> ctx.capabilities <- refs.Common.capabilities ; `Refs refs
-             | Error (`Msg err) -> `SmartError err))
-        context )
+    let decoder =
+      decode Decoder.ReferenceDiscovery (fun refs ctx -> match refs with
+          | Ok refs -> ctx.capabilities <- refs.Common.capabilities ; `Refs refs
+          | Error (`Msg err) -> `SmartError err)
+    in
+    ( context ,
+      match c with
+      | None -> decoder context
+      | Some c -> encode (`GitProtoRequest c) decoder context)
 end

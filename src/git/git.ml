@@ -37,4 +37,5 @@ module Buffer = Cstruct_buffer
 module Hash = Hash
 module Gri = Gri
 module Tcp = Tcp
+module Ssh = Ssh
 module Path = Path

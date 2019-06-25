@@ -49,12 +49,18 @@ let read {ic; _} raw off len =
       (* XXX(dinosaure): Channel.error is not a variant. *)
       Lwt.return_ok 0
 
-let socket (t : endpoint) =
+let socket ?cmd (t : endpoint) =
   let open Lwt.Infix in
   let uri = (t.uri :> Uri.t) in
   Resolver_lwt.resolve_uri ~uri t.resolver
   >>= fun endp ->
-  Conduit_mirage.client endp
+  let config =
+    match Cohttp.Header.get t.headers "config", cmd with
+    | None, None -> None
+    | Some cfg, Some e -> Some (e ^ ":" ^ cfg)
+    | _ -> None
+  in
+  Conduit_mirage.client ?config endp
   >>= fun client ->
   Conduit_mirage.connect t.conduit client
   >>= fun flow ->

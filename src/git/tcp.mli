@@ -7,7 +7,7 @@ module type NET = sig
   val pp_error : Format.formatter -> error -> unit
   val read : socket -> Bytes.t -> int -> int -> (int, error) result Lwt.t
   val write : socket -> Bytes.t -> int -> int -> (int, error) result Lwt.t
-  val socket : endpoint -> socket Lwt.t
+  val socket : ?cmd:string -> endpoint -> socket Lwt.t
   val close : socket -> unit Lwt.t
 end
 

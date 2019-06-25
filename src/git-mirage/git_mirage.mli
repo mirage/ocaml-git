@@ -16,6 +16,8 @@ val endpoint :
 module Sync (G : Git.S) : sig
   module Tcp : Git.Sync.S with module Store := G and type Endpoint.t = endpoint
 
+  module Ssh : Git.Sync.S with module Store := G and type Endpoint.t = endpoint
+
   module Http :
     Git_http.Sync.S with module Store := G and type Client.endpoint = endpoint
 

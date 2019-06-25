@@ -494,7 +494,7 @@ module type CLIENT = sig
   (** [run ctx action] sends an action to the server and schedule a specific
       {!Decoder.transaction} then. *)
 
-  val context : Common.git_proto_request -> context * process
+  val context : Common.git_proto_request option -> context * process
   (** [context request] makes a new context and the continuation of the
       transport. *)
 end
