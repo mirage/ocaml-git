@@ -409,9 +409,9 @@ module Make (Store : S) = struct
   let test_order_trees () =
     let lst =
       (* lexicographic order *)
-      [ Store.Value.Tree.entry "bar" `Normal (random_hash ())
-      ; Store.Value.Tree.entry "baz" `Exec (random_hash ())
-      ; Store.Value.Tree.entry "foo" `Dir (random_hash ()) ] in
+      [ Store.Value.Tree.entry "foo.c" `Normal (random_hash ())
+      ; Store.Value.Tree.entry "foo" `Dir (random_hash ())
+      ; Store.Value.Tree.entry "foo1" `Exec (random_hash ()) ] in
     let equal_entry a b = a = b in (* XXX(dinosaure): lazy. *)
     let test () =
       let tree = Alcotest.testable Store.Value.Tree.pp Store.Value.Tree.equal in
@@ -421,12 +421,12 @@ module Make (Store : S) = struct
       Alcotest.(check (list entry)) "of_list -> to_list" r1 lst ;
       let r2 = Store.Value.Tree.of_list [] (* empty *) in
       let r2 = Store.Value.Tree.add r2 (List.nth lst 2) in
-      let r2 = Store.Value.Tree.add r2 (List.nth lst 1) in
       let r2 = Store.Value.Tree.add r2 (List.nth lst 0) in
+      let r2 = Store.Value.Tree.add r2 (List.nth lst 1) in
       Alcotest.(check tree) "add" r2 r0 ;
       let r2 = Store.Value.Tree.of_list [] (* empty *) in
       let r2 = Store.Value.Tree.add r2 (List.nth lst 2) in
-      let r2 = Store.Value.Tree.add r2 (List.nth lst 0) in
+      let r2 = Store.Value.Tree.add r2 (List.nth lst 1) in
       let r2 = Store.Value.Tree.add r2 (List.nth lst 1) in
       let r2 = Store.Value.Tree.add r2 (List.nth lst 0) in
       Alcotest.(check tree) "add (doublon)" r2 r0 ;
