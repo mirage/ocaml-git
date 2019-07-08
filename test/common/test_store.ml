@@ -399,6 +399,45 @@ module Make (Store : S) = struct
     in
     run test
 
+  let random_hash () =
+    let ln = Store.Hash.digest_size in
+    let ic = open_in "/dev/urandom" in
+    let rs = Bytes.create ln in
+    really_input ic rs 0 ln ; close_in ic ;
+    Store.Hash.of_raw_string (Bytes.unsafe_to_string rs)
+
+  let test_order_trees () =
+    let lst =
+      (* lexicographic order *)
+      [ Store.Value.Tree.entry "bar" `Normal (random_hash ())
+      ; Store.Value.Tree.entry "baz" `Exec (random_hash ())
+      ; Store.Value.Tree.entry "foo" `Dir (random_hash ()) ] in
+    let equal_entry a b = a = b in (* XXX(dinosaure): lazy. *)
+    let test () =
+      let tree = Alcotest.testable Store.Value.Tree.pp Store.Value.Tree.equal in
+      let entry = Alcotest.testable Store.Value.Tree.pp_entry equal_entry in
+      let r0 = Store.Value.Tree.of_list lst in
+      let r1 = Store.Value.Tree.to_list r0 in
+      Alcotest.(check (list entry)) "of_list -> to_list" r1 lst ;
+      let r2 = Store.Value.Tree.of_list [] (* empty *) in
+      let r2 = Store.Value.Tree.add r2 (List.nth lst 2) in
+      let r2 = Store.Value.Tree.add r2 (List.nth lst 1) in
+      let r2 = Store.Value.Tree.add r2 (List.nth lst 0) in
+      Alcotest.(check tree) "add" r2 r0 ;
+      let r2 = Store.Value.Tree.of_list [] (* empty *) in
+      let r2 = Store.Value.Tree.add r2 (List.nth lst 2) in
+      let r2 = Store.Value.Tree.add r2 (List.nth lst 0) in
+      let r2 = Store.Value.Tree.add r2 (List.nth lst 1) in
+      let r2 = Store.Value.Tree.add r2 (List.nth lst 0) in
+      Alcotest.(check tree) "add (doublon)" r2 r0 ;
+      let empty = Store.Value.Tree.of_list [] in
+      let r3 = List.fold_left Store.Value.Tree.add empty lst in
+      let r4 = List.fold_left Store.Value.Tree.add empty (Store.Value.Tree.to_list r0) in
+      Alcotest.(check tree) "add (fold)" r3 r0 ;
+      Alcotest.(check tree) "add (fold)" r4 r0 ;
+      Lwt.return () in
+    run test
+
   let test_search () =
     let test () =
       create ~root ()
@@ -420,6 +459,7 @@ let suite name (module S : S) =
   ( name
   , [ "Operations on blobs", `Quick, T.test_blobs
     ; "Operations on trees", `Quick, T.test_trees
+    ; "Operations on trees (order)", `Quick, T.test_order_trees
     ; "Operations on commits", `Quick, T.test_commits
     ; "Operations on tags", `Quick, T.test_tags
     ; "Operations on references", `Quick, T.test_refs
