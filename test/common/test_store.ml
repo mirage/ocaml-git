@@ -22,12 +22,15 @@ open Test_common
 open Lwt.Infix
 open Git
 
-let long_random_cstruct () =
+let random_cstruct len =
   let t = Unix.gettimeofday () in
   let cs = Cstruct.create 8 in
   Cstruct.BE.set_uint64 cs 0 Int64.(of_float (t *. 1000.)) ;
   Nocrypto.Rng.reseed cs ;
-  Nocrypto.Rng.generate 1024
+  Nocrypto.Rng.generate len
+
+let long_random_cstruct () =
+  random_cstruct 1024
 
 let long_random_string () = Cstruct.to_string (long_random_cstruct ())
 
@@ -400,11 +403,7 @@ module Make (Store : S) = struct
     run test
 
   let random_hash () =
-    let ln = Store.Hash.digest_size in
-    let ic = open_in "/dev/urandom" in
-    let rs = Bytes.create ln in
-    really_input ic rs 0 ln ; close_in ic ;
-    Store.Hash.of_raw_string (Bytes.unsafe_to_string rs)
+    Store.Hash.of_raw_string (Cstruct.to_string (random_cstruct Store.Hash.digest_size))
 
   let test_order_trees () =
     let lst =
