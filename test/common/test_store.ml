@@ -419,15 +419,15 @@ module Make (Store : S) = struct
       let r1 = Store.Value.Tree.to_list r0 in
       Alcotest.(check (list entry)) "of_list -> to_list" r1 lst ;
       let r2 = Store.Value.Tree.of_list [] (* empty *) in
-      let r2 = Store.Value.Tree.add r2 (List.nth lst 2) in
       let r2 = Store.Value.Tree.add r2 (List.nth lst 0) in
+      let r2 = Store.Value.Tree.add r2 (List.nth lst 2) in
       let r2 = Store.Value.Tree.add r2 (List.nth lst 1) in
       Alcotest.(check tree) "add" r2 r0 ;
       let r2 = Store.Value.Tree.of_list [] (* empty *) in
       let r2 = Store.Value.Tree.add r2 (List.nth lst 2) in
-      let r2 = Store.Value.Tree.add r2 (List.nth lst 1) in
-      let r2 = Store.Value.Tree.add r2 (List.nth lst 1) in
       let r2 = Store.Value.Tree.add r2 (List.nth lst 0) in
+      let r2 = Store.Value.Tree.add r2 (List.nth lst 1) in
+      let r2 = Store.Value.Tree.add r2 (List.nth lst 1) in
       Alcotest.(check tree) "add (doublon)" r2 r0 ;
       let empty = Store.Value.Tree.of_list [] in
       let r3 = List.fold_left Store.Value.Tree.add empty lst in
