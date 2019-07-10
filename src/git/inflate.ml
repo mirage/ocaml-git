@@ -18,9 +18,9 @@
 open Decompress
 module Inflate = Zlib_inflate
 
-type t = (B.Bigstring.t, B.Bigstring.t) Inflate.t
+type t = (Buffer.Bigstring.t, Buffer.Bigstring.t) Inflate.t
 type error = [`Inflate of Inflate.error]
-type window = B.Bigstring.t Window.t
+type window = (Buffer.Bigstring.t, Window.adler32) Window.t
 
 let src = Logs.Src.create "decompress.inflate" ~doc:"logs inflate event"
 
@@ -32,8 +32,8 @@ let pp_error : error Fmt.t =
 
 let pp : t Fmt.t = Inflate.pp
 let window_reset : window -> window = Window.reset
-let window () = Window.create ~witness:B.bigstring
-let default : window -> t = fun w -> Inflate.default ~witness:B.bigstring w
+let window () = Window.create ~crc:Window.adler32 ~witness:Buffer.bigstring
+let default : window -> t = fun w -> Inflate.default ~witness:Buffer.bigstring w
 
 let eval ~src ~dst t :
     [`Await of t | `End of t | `Error of t * error | `Flush of t] =
