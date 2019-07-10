@@ -18,12 +18,12 @@
 open Decompress
 module Deflate = Zlib_deflate
 
-type t = (B.Bigstring.t, B.Bigstring.t) Deflate.t
+type t = (Buffer.Bigstring.t, Buffer.Bigstring.t) Deflate.t
 
 and error = Deflate.error
 
 let pp_error : error Fmt.t = Deflate.pp_error
-let default level : t = Deflate.default ~witness:B.bigstring level
+let default level : t = Deflate.default ~witness:Buffer.bigstring level
 let finish : t -> t = Deflate.finish
 let used_in : t -> int = Deflate.used_in
 let used_out : t -> int = Deflate.used_out
