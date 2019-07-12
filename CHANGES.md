@@ -12,7 +12,7 @@
  
    + regression tests was added (@dinosaure)
    + semantics about negociation was explained (@clecat)
-   + end-to-end tests was done (@hannesm)
+   + end-to-end tests partially done (@hannesm)
  
 - Remove `sexplib` dependency (@samoht, #349)
 - Fix smart protocol to accept empty response from `ls-remote` (bug found by @hannesm, fixed by @dinosaure, #348)
