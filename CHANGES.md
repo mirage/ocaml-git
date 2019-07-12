@@ -1,3 +1,33 @@
+### 2.1.0 (2019-07-10)
+
+- Move to the last version of `decompress` (@dinosaure, #366)
+- Check order of entries in a tree object (bug found by @samoht, fixed by @dinosaure, #365)
+- Use `mmap` package (@dinosaure, #347, #360)
+- Update README.md (@tcoopman, @dinosaure, #337, #359)
+- `trim` the window used to pack (@pqwy, @dinosaure, #357, #358)
+- Use lastest version of `lru.0.3.0` (@pqwy, @dinosaure, #352, #356)
+- Fix smart protocol (fixed by @clecat and @dinosaure, feedbacks from @hannesm)
+ * Pull-request #351, #350, #338
+ * Issues #335, #342, #346
+ 
+   + regression tests was added (@dinosaure)
+   + semantics about negociation was explained (@clecat)
+   + end-to-end tests partially done (@hannesm)
+ 
+- Remove `sexplib` dependency (@samoht, #349)
+- Fix smart protocol to accept empty response from `ls-remote` (bug found by @hannesm, fixed by @dinosaure, #348)
+- Add `io-page-unix` as dependency to tests `git-mirage` (@dinosaure, #345)
+- Remove deprecated `Cstruct.add_len` (replaced by `ke`) (@dinosaure, #345)
+- Use `Uri.user_info` to be able to be authentified by a service like GitHub (@linse, review by @dinosaure, #341, #343)
+- avoid clash between `digestif.c` and `digestif.ocaml` implementation (same for `checkseum`)
+ * remove implementation dependencies on `git-unix` and `git-mirage` (bug found by @hannesm and @linse, fixed by @dinosaure, #339)
+ 
+   This update should be fixed by `dune`'s variants and `>= digestif.0.7.2` and `>= checkseum.0.1.0`
+ 
+- **breaking-change** add `etmp` as already-allocated buffer to encode Git object (@dinosaure, #336)
+ * add `ke.0.3` as new dependency
+- consumed inputs for every entries in a tree (bug found by @zspicko, fixed by @dinosaure, #334)
+
 ### 2.0.0 (2018-10-17)
 
 - New world, new version
