@@ -1,5 +1,6 @@
 ### 2.1.0 (2019-07-10)
 
+- Move to the last version of `decompress` (@dinosaure, #366)
 - Check order of entries in a tree object (bug found by @samoht, fixed by @dinosaure, #365)
 - Use `mmap` package (@dinosaure, #347, #360)
 - Update README.md (@tcoopman, @dinosaure, #337, #359)
