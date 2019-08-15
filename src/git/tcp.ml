@@ -238,10 +238,10 @@ struct
               Log.debug (fun l ->
                   l "Retrieve `Done ACK from negotiation engine." ) ;
               Client.run t.ctx `Done |> process t >>?= aux t asked state
-          | `Again have, state ->
+          | `Again _have, state ->
               Log.debug (fun l ->
                   l "Retrieve `Again ACK from negotiation engine." ) ;
-              Client.run t.ctx (`Has have) |> process t >>?= aux t asked state
+              Client.run t.ctx `Done |> process t >>?= aux t asked state
           )
       | `NegociationResult _ ->
           Log.debug (fun l -> l "Retrieve a negotiation result.") ;
