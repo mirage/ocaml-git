@@ -12,10 +12,10 @@ compression might change the relative offsets between the packed
 objects), to generate pack indexes from pack files, or to expand
 the filesystem of a given commit.
 
-The library comes with a command-line tool called `ogit` as a Proof-of-concept
+The library comes with some command-line tools called `ogit-*` as a Proof-of-concept
 of the core library which shares a similar interface with `git`, but where all
 operations are mapped to the API exposed `ocaml-git` (and hence using only OCaml
-code).
+code). However, these tools are not done to be use. They are just examples of how to use `ocaml-git`.
 
 The API documentation is available
 [online](http://mirage.github.io/ocaml-git/).
