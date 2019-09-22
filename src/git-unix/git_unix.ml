@@ -53,6 +53,7 @@ module Sync (G : Git.S) = struct
     | `Update of G.Hash.t * G.Hash.t * Git.Reference.t ]
 
   let pp_command = Tcp.pp_command
+  let pp_fetch_one = Tcp.pp_fetch_one
 
   let tcp_error x =
     Lwt.map (function Ok _ as x -> x | Error e -> Error (Tcp e)) x

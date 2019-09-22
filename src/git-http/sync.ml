@@ -259,6 +259,7 @@ struct
   type command = SyncCommon.command
 
   let pp_command = SyncCommon.pp_command
+  let pp_fetch_one = SyncCommon.pp_fetch_one
 
   open SyncCommon
 

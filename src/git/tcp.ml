@@ -58,6 +58,7 @@ struct
   type command = Common.command
 
   let pp_command = Common.pp_command
+  let pp_fetch_one = Common.pp_fetch_one
 
   type t =
     { socket: Net.socket

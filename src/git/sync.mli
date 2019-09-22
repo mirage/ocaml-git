@@ -189,6 +189,8 @@ module type S = sig
       {- [`Sync updated] if we downloaded [new_hash] and set [local_ref] with
      this new hash.}} *)
 
+  val pp_fetch_one : [ `AlreadySync | `Sync of Store.Hash.t Store.Reference.Map.t ] Fmt.t
+
   val clone :
        Store.t
     -> ?capabilities:Capability.t list
@@ -252,6 +254,7 @@ module Common (G : Minimal.S) :
       | `Update of Store.Hash.t * Store.Hash.t * Store.Reference.t ]
 
     val pp_command : command Fmt.t
+    val pp_fetch_one : [ `AlreadySync | `Sync of Store.Hash.t Store.Reference.Map.t ] Fmt.t
 
     val packer :
          ?window:[`Object of int | `Memory of int]
