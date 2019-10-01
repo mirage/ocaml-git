@@ -238,6 +238,8 @@ module type S = sig
       At this final stage, the function does not encountered any error during
           the commmunication - if it's the case, we did not do any modification
           on the server and return an {!error}. *)
+
+  val pp_update_and_create : (Store.Reference.t, Store.Reference.t * string) result list Fmt.t
 end
 
 module Default : sig
@@ -255,6 +257,7 @@ module Common (G : Minimal.S) :
 
     val pp_command : command Fmt.t
     val pp_fetch_one : [ `AlreadySync | `Sync of Store.Hash.t Store.Reference.Map.t ] Fmt.t
+    val pp_update_and_create : (Store.Reference.t, Store.Reference.t * string) result list Fmt.t
 
     val packer :
          ?window:[`Object of int | `Memory of int]

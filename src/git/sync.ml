@@ -138,6 +138,8 @@ module type S = sig
        , error )
        result
        Lwt.t
+
+  val pp_update_and_create : (Store.Reference.t, Store.Reference.t * string) result list Fmt.t
 end
 
 (* XXX(dinosaure): common module is a module (used by the tcp layer, http layer
@@ -172,6 +174,12 @@ module Common (G : Minimal.S) = struct
     | `Sync map ->
        Fmt.pf ppf "Updated @[<hov>%a@]"
          (Fmt.iter_bindings Store.Reference.Map.iter Fmt.(pair ~sep:(always " -> ") Store.Reference.pp Store.Hash.pp)) map
+
+  let pp_update_and_create ppf lst =
+    let pp_elt ppf = function
+      | Ok reference -> Fmt.pf ppf "(Reference <%a> updated)" Store.Reference.pp reference
+      | Error (reference, err) -> Fmt.pf ppf "(Conflict on <%a>: %s)" Store.Reference.pp reference err in
+    Fmt.(Dump.list pp_elt) ppf lst
 
   open Lwt.Infix
 
