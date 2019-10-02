@@ -1,4 +1,4 @@
 (library
  (name        git_mirage)
  (public_name git-mirage)
- (libraries   git mirage-flow-lwt mirage-channel-lwt mirage-conduit cohttp-mirage git-http decompress))
+ (libraries   git mirage-flow-lwt mirage-channel-lwt conduit-mirage cohttp-mirage git-http decompress))
