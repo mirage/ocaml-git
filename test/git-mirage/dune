@@ -3,6 +3,7 @@
  (libraries checkseum.ocaml digestif.ocaml
             test_git test_smart
             git-mirage io-page.unix conduit-mirage
+	    mirage-random-test
             tcpip.udpv4-socket tcpip.tcpv4-socket tcpip.unix
             tcpip.stack-socket mirage-time-unix))
 
