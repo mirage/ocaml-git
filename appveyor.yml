@@ -7,7 +7,7 @@ environment:
     FORK_BRANCH: master
     CYG_ROOT: C:\cygwin64
     OPAM_SWITCH: 4.07.0+mingw64c
-    PINS: "git.dev:. git-http.dev:. git-unix.dev:. git-mirage.dev:. decompress.dev:--dev"
+    PINS: "git.dev:. git-http.dev:. git-unix.dev:. git-mirage.dev:."
   matrix:
   - PACKAGE: "git-mirage.dev"
   - PACKAGE: "git-unix.dev"
