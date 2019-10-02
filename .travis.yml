@@ -5,8 +5,8 @@ env:
   global:
     - PINS="git.dev:. git-http.dev:. git-unix.dev:. git-mirage.dev:. decompress.dev:--dev"
   matrix:
-    - OCAML_VERSION=4.06 PACKAGE="git.dev"
-    - OCAML_VERSION=4.04 PACKAGE="git-unix.dev"
-    - OCAML_VERSION=4.03 PACKAGE="git-unix.dev"
-    - OCAML_VERSION=4.04 PACKAGE="git-mirage.dev"
-    - OCAML_VERSION=4.05 PACKAGE="git.dev" REVDEPS=*
+    - OCAML_VERSION=4.07 PACKAGE="git.dev"
+    - OCAML_VERSION=4.07 PACKAGE="git-unix.dev"
+    - OCAML_VERSION=4.07 PACKAGE="git-unix.dev"
+    - OCAML_VERSION=4.07 PACKAGE="git-mirage.dev"
+    - OCAML_VERSION=4.07 PACKAGE="git.dev" REVDEPS=*
