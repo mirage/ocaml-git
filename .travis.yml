@@ -6,7 +6,8 @@ env:
     - PINS="git.dev:. git-http.dev:. git-unix.dev:. git-mirage.dev:."
   matrix:
     - OCAML_VERSION=4.07 PACKAGE="git.dev"
-    - OCAML_VERSION=4.08.1 PACKAGE="git.dev"
+    - OCAML_VERSION=4.08 PACKAGE="git.dev"
+    - OCAML_VERSION=4.09 PACKAGE="git.dev"
     - OCAML_VERSION=4.07 PACKAGE="git-unix.dev"
     - OCAML_VERSION=4.07 PACKAGE="git-unix.dev"
     - OCAML_VERSION=4.07 PACKAGE="git-mirage.dev"
