@@ -22,8 +22,8 @@ depends: [
   "mirage-flow-lwt"
   "mirage-channel-lwt"
   "conduit-mirage"
-  "git-http"         {>= "2.0.0"}
-  "git"              {>= "2.0.0"}
+  "git-http"         {= version}
+  "git"              {= version}
   "alcotest"         {with-test & >= "0.8.1"}
   "mtime"            {with-test & >= "1.0.0"}
   "nocrypto"         {with-test & >= "0.5.4"}
