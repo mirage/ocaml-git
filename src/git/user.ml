@@ -121,7 +121,7 @@ let length t =
   + tz_offset_length
 
 let equal = ( = )
-let compare = Pervasives.compare
+let compare = Stdlib.compare
 let hash = Hashtbl.hash
 
 module Set = Set.Make (struct type nonrec t = t

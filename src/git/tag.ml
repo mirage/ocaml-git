@@ -216,7 +216,7 @@ module Make (Hash : S.HASH) = struct
     Helper.digest (module Hash) (module E) ~tmp ~etmp ~kind:"tag" ~length value
 
   let equal = ( = )
-  let compare = Pervasives.compare
+  let compare = Stdlib.compare
   let hash = Hashtbl.hash
 
   module Set = Set.Make (struct type nonrec t = t

@@ -138,7 +138,7 @@ module Entry (Hash : S.HASH) = struct
     else if int_of_bool a.preferred < int_of_bool b.preferred then 1
     else if a.length > b.length then -1
     else if a.length < b.length then 1
-    else Pervasives.compare a b
+    else Stdlib.compare a b
 
   (* XXX(dinosaure): git compare the memory position then but it's irrelevant
      in OCaml. *)
