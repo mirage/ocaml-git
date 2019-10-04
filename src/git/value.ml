@@ -309,7 +309,7 @@ module Make (Hash : S.HASH) (Inflate : S.INFLATE) (Deflate : S.DEFLATE) :
         else if int_of_kind a < int_of_kind b then 1
         else if length a > length b then -1
         else if length a < length b then 1
-        else Pervasives.compare a b
+        else Stdlib.compare a b
 
   module Set = Set.Make (struct type nonrec t = t
 

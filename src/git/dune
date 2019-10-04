@@ -3,4 +3,4 @@
  (public_name git)
  (libraries   fpath cstruct fmt lwt uri logs astring hex lru rresult
               ke angstrom encore duff ocamlgraph ocplib-endian
-              ocplib-endian.bigstring decompress digestif))
+              stdlib-shims ocplib-endian.bigstring decompress digestif))
