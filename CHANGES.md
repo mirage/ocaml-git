@@ -1,3 +1,12 @@
+### 2.1.1 (2019-10-04) Somone - Sénégal
+
+- Replace Pervasives by Stdlib and depends on `stdlib-shims` virtual package (@dinosaure, #372)
+- Add `pp_fetch_one` and `pp_update_and_create` (@dinosaure, @pascutto, @samoht, #370)
+- `git-mirage` depends on `conduit-mirage` instead `mirage-conduit` (@dinosaure, #371)
+- Drop support of OCaml < 4.07.0
+- Delete `mirage-fs-unix` useless dependency
+- Constraint to use only `decompress.0.9.0`
+
 ### 2.1.0 (2019-07-10)
 
 - Move to the last version of `decompress` (@dinosaure, #366)
