@@ -19,8 +19,8 @@ depends: [
   "ocaml"            {>= "4.03.0"}
   "dune"
   "cohttp-mirage"    {>= "1.0.0"}
-  "mirage-flow-lwt"
-  "mirage-channel-lwt"
+  "mirage-flow"      {>= "2.0.0"}
+  "mirage-channel"   {>= "4.0.0"}
   "conduit-mirage"
   "git-http"         {= version}
   "git"              {= version}
@@ -31,7 +31,7 @@ depends: [
   "io-page"          {with-test & >= "1.6.1"}
   "tcpip"            {with-test & >= "3.3.0"}
   "io-page-unix"     {with-test}
-  "mirage-stack-lwt" {with-test & >= "1.3.0"}
+  "mirage-stack" {with-test & >= "2.0.0"}
   "mirage-random-test" {with-test}
-  "mirage-time-unix"
+  "mirage-clock-unix" {with-test & >= "3.0.0"}
 ]

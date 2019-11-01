@@ -4,7 +4,7 @@ let src = Logs.Src.create "git.mirage.net" ~doc:"logs git's mirage net event"
 
 module Log = (val Logs.src_log src : Logs.LOG)
 module Flow = Conduit_mirage.Flow
-module Channel = Mirage_channel_lwt.Make (Flow)
+module Channel = Mirage_channel.Make (Flow)
 
 type endpoint =
   { uri: Uri.t
