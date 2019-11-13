@@ -18,7 +18,7 @@
 open Lwt.Infix
 
 module C = Conduit_mirage.With_tcp (Tcpip_stack_socket)
-module R = Resolver_mirage.Make_with_stack (Mirage_random_test) (Time) (Tcpip_stack_socket)
+module R = Resolver_mirage.Make_with_stack (Mirage_random_test) (Mclock) (Tcpip_stack_socket)
 
 let run f =
   Lwt_main.run
