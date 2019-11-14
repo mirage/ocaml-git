@@ -1,3 +1,10 @@
+### 2.1.2 (2019-14-11) Paris - France
+
+- unlock `git` to use, at least, `checkseum.0.0.9` (#373, @dinosaure)
+- remove build directive on dune dependency (#374, @CraigFe)
+- adapt to MirageOS 3.7.0 (#376, @hannesm)
+- fix infinite loop with index file (version 2) (#378, @kit-ty-kate, @dinosaure)
+
 ### 2.1.1 (2019-10-04) Somone - Sénégal
 
 - Replace Pervasives by Stdlib and depends on `stdlib-shims` virtual package (@dinosaure, #372)
