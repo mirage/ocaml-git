@@ -827,7 +827,8 @@ struct
         KEntry.to_nul
         @@ fun rest _ t ->
         let entry = {Entry.info; hash; flag; path= Git.Path.v (lead ^ rest)} in
-        Cont {t with entries= entry :: t.entries; state= Padding 1} )
+        let padding = if t.read mod 4 = 0 then 0 else 4 - (t.read mod 4) in
+        Cont {t with entries= entry :: t.entries; state= Padding padding} )
           src t
     | None ->
         if flag.length = 0xFFF then
@@ -839,13 +840,15 @@ struct
             ; flag= {flag with Entry.length= String.length name}
             ; path= Git.Path.v name }
           in
-          Cont {t with entries= entry :: t.entries; state= Padding 1} )
+          let padding = if t.read mod 4 = 0 then 0 else 4 - (t.read mod 4) in
+          Cont {t with entries= entry :: t.entries; state= Padding padding} )
             src t
         else
           ( KEntry.take flag.length
           @@ fun name _ t ->
           let entry = {Entry.info; hash; flag; path= Git.Path.v name} in
-          Cont {t with entries= entry :: t.entries; state= Padding 1} )
+          let padding = if t.read mod 4 = 0 then 0 else 4 - (t.read mod 4) in
+          Cont {t with entries= entry :: t.entries; state= Padding padding} )
             src t
 
   let entry src t =
