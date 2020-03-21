@@ -18,7 +18,7 @@
 open Lwt.Infix
 
 module C = Conduit_mirage.With_tcp (Tcpip_stack_socket)
-module R = Resolver_mirage.Make_with_stack (Mirage_random_test) (Mclock) (Tcpip_stack_socket)
+module R = Resolver_mirage.Make_with_stack (Mirage_crypto_rng) (Mclock) (Tcpip_stack_socket)
 
 let run f =
   Lwt_main.run
@@ -70,6 +70,7 @@ module TCP = Test_sync.Make (struct
 end)
 
 let () =
+  Mirage_crypto_rng_unix.initialize () ;
   Test_common.verbose () ;
   Alcotest.run "git-mirage"
     [ Test_store.suite "mirage" (module Store)
