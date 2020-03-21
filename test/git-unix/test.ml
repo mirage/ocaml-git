@@ -182,6 +182,7 @@ module Http2 = Https (Fs_store)
 module Index = Test_index
 
 let () =
+  Mirage_crypto_rng_unix.initialize () ;
   verbose () ;
   Alcotest.run "git-unix"
     [ Test_store.suite "mem" (module Mem_store)

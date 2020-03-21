@@ -23,11 +23,7 @@ open Lwt.Infix
 open Git
 
 let random_cstruct len =
-  let t = Unix.gettimeofday () in
-  let cs = Cstruct.create 8 in
-  Cstruct.BE.set_uint64 cs 0 Int64.(of_float (t *. 1000.)) ;
-  Nocrypto.Rng.reseed cs ;
-  Nocrypto.Rng.generate len
+  Mirage_crypto_rng.generate len
 
 let long_random_cstruct () =
   random_cstruct 1024

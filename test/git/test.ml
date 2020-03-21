@@ -21,6 +21,7 @@ module Store = struct include Git.Mem.Store
                       let v root = v root end
 
 let () =
+  Mirage_crypto_rng_unix.initialize () ;
   verbose () ;
   Alcotest.run "git"
     [ Test_store.suite "mem" (module Store)

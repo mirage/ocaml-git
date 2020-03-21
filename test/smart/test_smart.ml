@@ -12,11 +12,7 @@ module Make (S : Git.S) = struct
   end
 
   let generate_hash () =
-    let t = Unix.gettimeofday () in
-    let cs = Cstruct.create 8 in
-    Cstruct.BE.set_uint64 cs 0 Int64.(of_float (t *. 1000.)) ;
-    Nocrypto.Rng.reseed cs ;
-    Nocrypto.Rng.generate S.Hash.digest_size
+    Mirage_crypto_rng.generate S.Hash.digest_size
     |> Cstruct.to_string
     |> S.Hash.of_raw_string
 
