@@ -13,7 +13,7 @@ or to expand the filesystem of a given commit.
 
 The library comes with some command-line tools called `ogit-*` as a
 Proof-of-concept of the core library which shares a similar interface with
-`git`, but where all operations are mapped to the API exposed `ocaml-git` (and
+`git`, but where all operations are mapped to the API exposed by `ocaml-git` (and
 hence using only OCaml code). However, these tools are not meant to be used. They
 are just examples of how to use `ocaml-git`.
 
