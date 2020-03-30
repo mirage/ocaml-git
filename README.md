@@ -21,6 +21,14 @@ are just examples of how to use `ocaml-git`.
 high-level processes such as a ([patience][patience-diff]) diff, `git status`,
 etc. are not implemented.
 
+As a MirageOS project, `ocaml-git` is system agnostic. However, it provides a
+`git-unix` package which uses UNIX _syscall_ and it able to introspect a Git
+repository as you usually know. However, `ocaml-git` handles only Git objects
+and it does not _populate_ your filesystem as `git` does.
+
+For example, `Git_unix.Sync.clone` does not give you files of your repository
+but synchronize your `.git` with your repository.
+
 The API documentation is available [online][documentation].
 
 [![Build Status](https://travis-ci.org/mirage/ocaml-git.svg?branch=master)](https://travis-ci.org/mirage/ocaml-git)
@@ -31,19 +39,6 @@ To build and install the project, simply run:
 ```sh
 $ opam install git
 $ opam install git-unix
-```
-
-As a MirageOS project, `ocaml-git` is system agnostic. However, it provides a
-`git-unix` package which uses UNIX _syscall_ and it able to introspect a Git
-repository as you usually know. However, `ocaml-git` handles only Git objects
-and it does not _populate_ your filesystem as `git` does.
-
-For example, `Git_unix.Sync.clone` does not give you files of your repository
-but synchronize your `.git` with your repository.
-
-A MirageOS layer is provided with `git-mirage` available with:
-
-```sh
 $ opam install git-mirage
 ```
 
