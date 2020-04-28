@@ -102,7 +102,7 @@ module Make (Hash : S.HASH) = struct
       let user =
         make_exn
           ~fwd:(fun s ->
-            match Angstrom.parse_string User.A.p s with
+            match Angstrom.parse_string ~consume:All User.A.p s with
             | Ok v -> v
             | Error _ -> Exn.fail ())
           ~bwd:(Encore.Encoder.to_string User.M.p)
