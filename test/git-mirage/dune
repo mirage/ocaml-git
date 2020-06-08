@@ -5,7 +5,7 @@
             git-mirage io-page.unix conduit-mirage
 	    mirage-crypto-rng mirage-crypto-rng.unix
             tcpip.udpv4-socket tcpip.tcpv4-socket tcpip.unix
-            tcpip.stack-socket mirage-clock-unix))
+            tcpip.stack-socket mirage-clock-unix mirage-time-unix))
 
 (alias
  (name runtest)
