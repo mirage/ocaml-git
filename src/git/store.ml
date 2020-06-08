@@ -1132,10 +1132,6 @@ struct
   let io_buffer_size = 65536
 
   let default_buffer () =
-    let raw = Cstruct.create (0x8000 * 2) in
-    let buf =
-      Bigarray.Array1.create Bigarray.Char Bigarray.c_layout (2 * 0x8000)
-    in
     { window= Inflate.window ()
     ; ztmp= Cstruct.create io_buffer_size
     ; etmp= Cstruct.create io_buffer_size
