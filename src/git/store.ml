@@ -1129,45 +1129,18 @@ struct
     ; values= CacheValue.create values
     ; revindexes= CacheRevIndex.create revindexes }
 
+  let io_buffer_size = 65536
+
   let default_buffer () =
     let raw = Cstruct.create (0x8000 * 2) in
     let buf =
       Bigarray.Array1.create Bigarray.Char Bigarray.c_layout (2 * 0x8000)
     in
     { window= Inflate.window ()
-    ; ztmp= Cstruct.sub raw 0 0x8000
-    ; etmp= Cstruct.create (4 * 1024)
-    ; dtmp=
-        Cstruct.of_bigarray ~off:0 ~len:0x8000 buf
-        (* XXX(dinosaure): bon ici, c'est une note compliqué, j'ai mis 2 jours
-           à fixer le bug. Donc je l'explique en français, c'est plus simple.
-
-           En gros, [Helper.MakeDecoder] utilise ce buffer comme buffer interne
-           pour gérer les alterations. Ce qui ce passe, c'est que dans la
-           fonction [refill], il s'agit de compléter à partir d'un [input]
-           (typiquement [zl]) le buffer interne. C'est finalement un
-           __mauvais__ jeu entre un [Cstruct.t] et un [Bigarray].
-
-           Il s'agit de connaître la véritable taille du [Bigarray] et de
-           rajouter avec [blit] le contenu de l'[input] si la taille du
-           [Bigarray] (et pas du [Cstruct]) est suffisante.
-
-           Avant, cette modification, [zl], [de] et [io] partagaient le même
-           [Bigarray] découpé (avec [Cstruct]) en 3. Donc, dans le
-           [MakeDecoder], [refill] considérait (pour des gros fichiers faisant
-           plus de 0x8000 bytes) que après [de], nous avions encore de la
-           place - et dans ce cas, nous avions [io].
-
-           Ainsi, on [blit]ait [zl] dans [de+sizeof(de) == io], et finalement,
-           on se retrouvait à essayer de décompresser ce que nous avions
-           décompressé. (YOLO).
-
-           Donc, on considère maintenant [de] comme un [Cstruct.t] et un
-           [Bigarray] physiquement différent pour éviter ce problème.
-           Cependant, il faudrait continuer à introspecter car j'ai
-           l'intuition que pour un fichier plus gros que [2 * 0x8000], on
-           devrait avoir un problème. Donc TODO. *)
-    ; raw= Cstruct.sub raw 0x8000 0x8000 }
+    ; ztmp= Cstruct.create io_buffer_size
+    ; etmp= Cstruct.create io_buffer_size
+    ; dtmp= Cstruct.create io_buffer_size
+    ; raw= Cstruct.create io_buffer_size }
 
   let sanitize_head git =
     Ref.mem git Reference.head
