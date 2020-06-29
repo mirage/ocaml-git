@@ -187,7 +187,7 @@ module MakeDecoder (A : S.DESC with type 'a t = 'a Angstrom.t) = struct
       Error.(v @@ Decoder.err_too_big len decoder.max)
 
   let to_result input =
-    Angstrom.parse_bigstring A.p (Cstruct.to_bigarray input)
+    Angstrom.parse_bigstring ~consume:All A.p (Cstruct.to_bigarray input)
     |> function
     | Ok _ as v -> v | Error err -> Error.(v @@ Decoder.err_result input err)
 
