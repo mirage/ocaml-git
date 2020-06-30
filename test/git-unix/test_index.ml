@@ -290,7 +290,7 @@ let run ~root ~pp_error f () =
 let root = Fpath.v "test-index"
 
 let test000 root _ : unit Alcotest.test_case =
-  Alcotest.test_case (Fmt.strf "make directory %a" Fpath.pp root) `Quick
+  Alcotest.test_case (Fmt.strf "make directory %a" Fpath.pp root) `Slow
     (fun () ->
       try mkdir root with exn ->
         Alcotest.failf "Retrieve an error: %s" (Printexc.to_string exn) )
@@ -298,16 +298,16 @@ let test000 root _ : unit Alcotest.test_case =
 let test001 root fs : unit Alcotest.test_case =
   Alcotest.test_case
     (Fmt.strf "empty index file")
-    `Quick
+    `Slow
     (run ~root ~pp_error:Index.pp_error (fun t -> make_empty_index t fs))
 
 let test002 root _ : unit Alcotest.test_case =
-  Alcotest.test_case "touch should-be-empty" `Quick (fun () ->
+  Alcotest.test_case "touch should-be-empty" `Slow (fun () ->
       try touch Fpath.(root / "should-be-empty") with exn ->
         Alcotest.failf "Retrieve an error: %s" (Printexc.to_string exn) )
 
 let test003 root fs : unit Alcotest.test_case =
-  Alcotest.test_case "git update-index with --add" `Quick
+  Alcotest.test_case "git update-index with --add" `Slow
     ( run ~root ~pp_error:Index.pp_error
     @@ fun t ->
     update_index_add_one_file t fs (Git.Path.v "should-be-empty")
@@ -323,7 +323,7 @@ let test003 root fs : unit Alcotest.test_case =
     Lwt.return (Ok ()) )
 
 let test004 root fs : unit Alcotest.test_case =
-  Alcotest.test_case "write-tree should-be-empty" `Quick
+  Alcotest.test_case "write-tree should-be-empty" `Slow
     ( run ~root ~pp_error:Index.pp_error
     @@ fun t ->
     Index.Write.update_on_store t fs
@@ -333,7 +333,7 @@ let test004 root fs : unit Alcotest.test_case =
     Lwt.return (Ok ()) )
 
 let test005 root _ : unit Alcotest.test_case =
-  Alcotest.test_case "delete should-be-empty" `Quick (fun () ->
+  Alcotest.test_case "delete should-be-empty" `Slow (fun () ->
       try remove Fpath.(root / "should-be-empty") with exn ->
         Alcotest.failf "Retrieve an error: %s" (Printexc.to_string exn) )
 
@@ -343,7 +343,7 @@ let test005 root _ : unit Alcotest.test_case =
    Which is a very weird state, so I don't test it too. *)
 
 let test006 root fs : unit Alcotest.test_case =
-  Alcotest.test_case "git update-index with --remove" `Quick
+  Alcotest.test_case "git update-index with --remove" `Slow
     ( run ~root ~pp_error:Index.pp_error
     @@ fun t ->
     update_index_remove_one_file t fs (Git.Path.v "should-be-empty")
@@ -355,7 +355,7 @@ let test006 root fs : unit Alcotest.test_case =
     Lwt.return (Ok ()) )
 
 let test007 root fs : unit Alcotest.test_case =
-  Alcotest.test_case "write-tree empty" `Quick
+  Alcotest.test_case "write-tree empty" `Slow
     ( run ~root ~pp_error:Index.pp_error
     @@ fun t ->
     Index.Write.update_on_store t fs
@@ -365,7 +365,7 @@ let test007 root fs : unit Alcotest.test_case =
     Lwt.return (Ok ()) )
 
 let test008 root _ : unit Alcotest.test_case =
-  Alcotest.test_case "make directories, files and links" `Quick (fun () ->
+  Alcotest.test_case "make directories, files and links" `Slow (fun () ->
       try
         let open Fpath in
         echo_to_file (root / "path0") "hello path0" ;
@@ -385,7 +385,7 @@ let test008 root _ : unit Alcotest.test_case =
         Alcotest.failf "Retrieve an error: %s" (Printexc.to_string exn) )
 
 let test009 root fs : unit Alcotest.test_case =
-  Alcotest.test_case "git update-index --add various types of objects" `Quick
+  Alcotest.test_case "git update-index --add various types of objects" `Slow
     ( run ~root ~pp_error:Index.pp_error
     @@ fun t ->
     let open Git.Path in
@@ -422,7 +422,7 @@ let test009 root fs : unit Alcotest.test_case =
     Lwt.return (Ok ()) )
 
 let test010 root _ : unit Alcotest.test_case =
-  Alcotest.test_case "git ls-files" `Quick
+  Alcotest.test_case "git ls-files" `Slow
     ( run ~root ~pp_error:(fun _ppf _ -> assert false)
     @@ fun t ->
     let open Fpath in
@@ -467,7 +467,7 @@ let test010 root _ : unit Alcotest.test_case =
     Lwt.return (Ok ()) )
 
 let test011 root fs : unit Alcotest.test_case =
-  Alcotest.test_case "git write-tree" `Quick
+  Alcotest.test_case "git write-tree" `Slow
     ( run ~root ~pp_error:Index.pp_error
     @@ fun t ->
     Index.Write.update_on_store t fs
@@ -477,7 +477,7 @@ let test011 root fs : unit Alcotest.test_case =
     Lwt.return (Ok ()) )
 
 let test012 root _ : unit Alcotest.test_case =
-  Alcotest.test_case "git ls-tree" `Quick
+  Alcotest.test_case "git ls-tree" `Slow
     ( run ~root ~pp_error:Store.pp_error
     @@ fun t ->
     let root_tree =
@@ -505,7 +505,7 @@ let test012 root _ : unit Alcotest.test_case =
           Store.Hash.pp root_tree Store.Value.pp value )
 
 let test013 root _ : unit Alcotest.test_case =
-  Alcotest.test_case "git ls-tree recursive" `Quick
+  Alcotest.test_case "git ls-tree recursive" `Slow
     ( run ~root ~pp_error:Store.pp_error
     @@ fun t ->
     let open Lwt.Infix in
@@ -540,7 +540,7 @@ let test013 root _ : unit Alcotest.test_case =
     Lwt.return (Ok ()) )
 
 let test014 root _ : unit Alcotest.test_case =
-  Alcotest.test_case "git ls-tree recursive with tree" `Quick
+  Alcotest.test_case "git ls-tree recursive with tree" `Slow
     ( run ~root ~pp_error:Store.pp_error
     @@ fun t ->
     let open Lwt.Infix in
@@ -577,7 +577,7 @@ let test014 root _ : unit Alcotest.test_case =
     Lwt.return (Ok ()) )
 
 let test015 root fs : unit Alcotest.test_case =
-  Alcotest.test_case "git read-tree" `Quick
+  Alcotest.test_case "git read-tree" `Slow
     ( run ~root ~pp_error:Index.pp_error
     @@ fun t ->
     let open Lwt.Infix in
