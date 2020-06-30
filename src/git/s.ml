@@ -19,204 +19,66 @@ module type BASE = sig
   type t
 
   val pp : t Fmt.t
+  (** Pretty-printer of {!t}. *)
+
   val compare : t -> t -> int
+  (** The comparison function for {!t}. *)
+
   val hash : t -> int
+  (** [hash blob] associates a non-negative integer to any value of {!t}. It is
+      guaranteed that if [x = y] or [compare x y = 0], then [hash x = hash y]. *)
+
   val equal : t -> t -> bool
+  (** The equal function for {!t}. *)
+
+  (** {2 Sets and Maps.} *)
 
   module Set : Set.S with type elt = t
+
   module Map : Map.S with type key = t
 end
 
 module type CONVERTER = sig
   type t
+
   type buffer
 
   val to_t : buffer -> t
+
   val of_t : t -> buffer
-end
-
-module type ENCODER = sig
-  type t
-  type init
-  type error
-  type encoder
-
-  val pp_error : error Fmt.t
-  val default : init -> encoder
-
-  val eval :
-       Cstruct.t
-    -> encoder
-    -> [`Flush of encoder | `End of encoder * int | `Error of error]
-
-  val flush : int -> int -> encoder -> encoder
-  val used : encoder -> int
-end
-
-module type DECODER = sig
-  type t
-  type init
-  type error
-  type decoder
-
-  val pp_error : error Fmt.t
-  val to_result : Cstruct.t -> (t, error) result
-  val default : init -> decoder
-
-  val eval :
-       decoder
-    -> [`Await of decoder | `End of Cstruct.t * t | `Error of Cstruct.t * error]
-
-  val refill : Cstruct.t -> decoder -> (decoder, error) result
-  val finish : decoder -> decoder
-end
-
-module type META = functor (Meta : Encore.Meta.S) -> sig
-  type e
-
-  val p : e Meta.t
-end
-
-module type DESC = sig
-  type 'a t
-  type e
-
-  val p : e t
-end
-
-module type INFLATE = sig
-  type t
-  type error
-  type window
-
-  val pp_error : error Fmt.t
-  val pp : t Fmt.t
-  val window_reset : window -> window
-  val window : unit -> window
-  val default : window -> t
-
-  val eval :
-       src:Cstruct.t
-    -> dst:Cstruct.t
-    -> t
-    -> [`Await of t | `Flush of t | `Error of t * error | `End of t]
-
-  val used_in : t -> int
-  val used_out : t -> int
-  val write : t -> int
-  val flush : int -> int -> t -> t
-  val refill : int -> int -> t -> t
-end
-
-module type DEFLATE = sig
-  type t
-  type error
-
-  val pp_error : error Fmt.t
-  val default : int -> t
-  val flush : int -> int -> t -> t
-  val no_flush : int -> int -> t -> t
-  val finish : t -> t
-  val used_in : t -> int
-  val used_out : t -> int
-
-  val eval :
-       src:Cstruct.t
-    -> dst:Cstruct.t
-    -> t
-    -> [`Flush of t | `Await of t | `Error of t * error | `End of t]
 end
 
 module type HASH = sig
   include Digestif.S
 
   val feed_cstruct : ctx -> Cstruct.t -> ctx
+
   val compare : t -> t -> int
+
   val hash : t -> int
+
   val equal : t -> t -> bool
+
   val read : t -> int -> int
 
+  val null : t
+
+  val length : int
+
+  val feed : ctx -> ?off:int -> ?len:int -> Bigstringaf.t -> ctx
+
   module Set : Set.S with type elt = t
+
   module Map : Map.S with type key = t
 end
 
 module type DIGEST = sig
   type t
+
   type hash
+  (** Type of digests. *)
 
   val digest : t -> hash
-end
-
-module type FILE = sig
-  type error
-  type t
-
-  val exists : t -> Fpath.t -> (bool, error) result Lwt.t
-  val delete : t -> Fpath.t -> (unit, error) result Lwt.t
-
-  val move : t -> Fpath.t -> Fpath.t -> (unit, error) result Lwt.t
-  (** [move] should be be atomic *)
-
-  type 'a fd constraint 'a = [< `Read | `Write]
-
-  val open_w : t -> Fpath.t -> ([`Write] fd, error) result Lwt.t
-  val open_r : t -> Fpath.t -> ([`Read] fd, error) result Lwt.t
-
-  val write :
-       Cstruct.t
-    -> ?off:int
-    -> ?len:int
-    -> [> `Write] fd
-    -> (int, error) result Lwt.t
-
-  val read :
-       Cstruct.t
-    -> ?off:int
-    -> ?len:int
-    -> [> `Read] fd
-    -> (int, error) result Lwt.t
-
-  val close : 'a fd -> (unit, error) result Lwt.t
-end
-
-module type MAPPER = sig
-  type fd
-  type error
-  type t
-
-  val pp_error : error Fmt.t
-  val openfile : t -> Fpath.t -> (fd, error) result Lwt.t
-  val length : fd -> (int64, error) result Lwt.t
-  val map : fd -> ?pos:int64 -> int -> (Cstruct.t, error) result Lwt.t
-  val close : fd -> (unit, error) result Lwt.t
-end
-
-module type DIR = sig
-  type error
-  type t
-
-  val exists : t -> Fpath.t -> (bool, error) result Lwt.t
-  val create : t -> Fpath.t -> (bool, error) result Lwt.t
-  val delete : t -> Fpath.t -> (unit, error) result Lwt.t
-
-  val contents :
-    t -> ?rel:bool -> Fpath.t -> (Fpath.t list, error) result Lwt.t
-
-  val current : t -> (Fpath.t, error) result Lwt.t
-end
-
-module type FS = sig
-  type error
-  type t
-
-  val pp_error : error Fmt.t
-  val is_dir : t -> Fpath.t -> (bool, error) result Lwt.t
-  val is_file : t -> Fpath.t -> (bool, error) result Lwt.t
-
-  module File : FILE with type t = t and type error = error
-  module Dir : DIR with type t = t and type error = error
-  module Mapper : MAPPER with type t = t and type error = error
-
-  val has_global_watches : bool
-  val has_global_checkout : bool
+  (** [digest t] associates a [hash] to any value of {!t}. It is guaranteed that
+      if [x = y] or [compare x y = 0], then [digest x = digest y]. *)
 end

@@ -21,93 +21,82 @@ module Log = (val Logs.src_log src : Logs.LOG)
 
 module type STORE = sig
   module Hash : S.HASH
-  module Inflate : S.INFLATE
-  module Deflate : S.DEFLATE
 
-  module Value :
-    Value.S
-    with module Hash := Hash
-     and module Inflate := Inflate
-     and module Deflate := Deflate
+  module Value : Value.S with type hash = Hash.t
 
   type t
-  type error
 
-  val pp_error : error Fmt.t
-  val read : t -> Hash.t -> (Value.t, error) result Lwt.t
+  val root : t -> Fpath.t
+
+  val read_exn : t -> Hash.t -> Value.t Lwt.t
 end
 
-module Make (S : STORE) = struct
-  open S
-
+module Make (Store : STORE) = struct
   (* XXX(dinosaure): convenience and common part between the file-system and
      the mem back-end - to avoid redundant code. *)
 
   let fold t
       (f :
-        'acc -> ?name:Path.t -> length:int64 -> Hash.t -> Value.t -> 'acc Lwt.t)
-      ~path acc hash =
+        'acc ->
+        ?name:Fpath.t ->
+        length:int64 ->
+        Store.Hash.t ->
+        Store.Value.t ->
+        'acc Lwt.t) ~path acc hash =
     let names = Hashtbl.create 0x100 in
     let open Lwt.Infix in
     let rec walk close rest queue acc =
       match rest with
       | [] -> (
-        match Queue.pop queue with
-        | rest -> walk close [rest] queue acc
-        | exception Queue.Empty -> Lwt.return acc )
+          match Queue.pop queue with
+          | rest -> walk close [ rest ] queue acc
+          | exception Queue.Empty -> Lwt.return acc)
       | hash :: rest -> (
-          if Hash.Set.mem hash close then walk close rest queue acc
+          if Store.Hash.Set.mem hash close
+          then walk close rest queue acc
           else
-            let close' = Hash.Set.add hash close in
-            read t hash
-            >>= function
-            | Ok (Value.Commit commit as value) ->
-                let rest' = Value.Commit.tree commit :: rest in
+            let close' = Store.Hash.Set.add hash close in
+            Store.read_exn t hash >>= function
+            | Value.Commit commit as value ->
+                let rest' = Store.Value.Commit.tree commit :: rest in
                 List.iter
                   (fun x -> Queue.add x queue)
-                  (Value.Commit.parents commit) ;
-                f acc ~length:(Value.Commit.length commit) hash value
+                  (Store.Value.Commit.parents commit) ;
+                f acc ~length:(Store.Value.Commit.length commit) hash value
                 >>= fun acc' -> walk close' rest' queue acc'
-            | Ok (Value.Tree tree as value) ->
+            | Value.Tree tree as value ->
                 let path =
-                  try Hashtbl.find names hash with Not_found -> path
-                in
+                  try Hashtbl.find names hash with Not_found -> path in
                 Lwt_list.iter_s
-                  (fun {Value.Tree.name; node; _} ->
-                    Hashtbl.add names node Path.(path / name) ;
-                    Lwt.return () )
-                  (Value.Tree.to_list tree)
+                  (fun { Tree.name; node; _ } ->
+                    Hashtbl.add names node Fpath.(path / name) ;
+                    Lwt.return ())
+                  (Store.Value.Tree.to_list tree)
                 >>= fun () ->
                 let rest' =
                   rest
                   @ List.map
-                      (fun {Value.Tree.node; _} -> node)
-                      (Value.Tree.to_list tree)
-                in
-                f acc ~name:path ~length:(Value.Tree.length tree) hash value
+                      (fun { Tree.node; _ } -> node)
+                      (Store.Value.Tree.to_list tree) in
+                f acc ~name:path
+                  ~length:(Store.Value.Tree.length tree)
+                  hash value
                 >>= fun acc' -> walk close' rest' queue acc'
-            | Ok (Value.Blob blob as value) ->
+            | Value.Blob blob as value ->
                 let path =
-                  try Hashtbl.find names hash with Not_found -> path
-                in
-                f acc ~name:path ~length:(Value.Blob.length blob) hash value
+                  try Hashtbl.find names hash with Not_found -> path in
+                f acc ~name:path
+                  ~length:(Store.Value.Blob.length blob)
+                  hash value
                 >>= fun acc' -> walk close' rest queue acc'
-            | Ok (Value.Tag tag as value) ->
-                Queue.add (Value.Tag.obj tag) queue ;
-                f acc ~length:(Value.Tag.length tag) hash value
-                >>= fun acc' -> walk close' rest queue acc'
-            | Error err ->
-                Log.err (fun l ->
-                    l ~header:"fold"
-                      "Retrieve an error when we try to read the Git object \
-                       %a: %a."
-                      Hash.pp hash pp_error err ) ;
-                walk close' rest queue acc )
-    in
-    walk Hash.Set.empty [hash] (Queue.create ()) acc
+            | Value.Tag tag as value ->
+                Queue.add (Store.Value.Tag.obj tag) queue ;
+                f acc ~length:(Store.Value.Tag.length tag) hash value
+                >>= fun acc' -> walk close' rest queue acc') in
+    walk Store.Hash.Set.empty [ hash ] (Queue.create ()) acc
 
   let iter t f hash =
     fold t
       (fun () ?name:_ ~length:_ hash value -> f hash value)
-      ~path:Path.empty () hash
+      ~path:(Store.root t) () hash
 end

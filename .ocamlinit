@@ -1,32 +1,28 @@
 #use "topfind";;
 
-#require "fpath";;
-#require "cstruct";;
+#require "bigarray-compat";;
+#require "bigstringaf";;
 #require "fmt";;
-#require "uri";;
-#require "lwt";;
-#require "logs";;
-#require "astring";;
-#require "hex";;
-#require "lru";;
+#require "result";;
 #require "rresult";;
-#require "angstrom";;
-#require "farfadet";;
-#require "faraday";;
-#require "ocamlgraph";;
-
+#require "conduit";;
+#require "conduit-lwt";;
+#require "fpath";;
 #require "digestif.c";;
-#require "camlzip";;
+#require "mmap";;
+#require "logs.fmt";;
+#require "lwt";;
 #require "lwt.unix";;
 #require "compiler-libs.toplevel";;
-#require "logs.fmt";;
 
 #directory "_build/default/src/git/";;
 #directory "_build/default/src/git-unix/";;
+#directory "_build/default/src/git-index/";;
 #directory "_build/default/src/git-top/";;
 
 #load "git.cma";;
 #load "git_unix.cma";;
+#load "git_index.cma";;
 #load "git_top.cma";;
 
 let _ = Git_top.install_printers Git_top.printers;;

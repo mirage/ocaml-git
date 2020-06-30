@@ -1,7 +1,8 @@
-module-item-spacing=compact
-break-struct=natural
-break-infix=fit-or-vertical
-parens-tuple=multi-line-only
-wrap-comments=false
-break-collection-expressions=wrap
-version=0.14.2
+version = 0.14.2
+break-infix = fit-or-vertical
+parse-docstrings = true
+indicate-multiline-delimiters=no
+nested-match=align
+sequence-style=separator
+break-before-in=auto
+if-then-else=keyword-first

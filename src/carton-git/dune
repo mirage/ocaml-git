@@ -1,0 +1,12 @@
+(library
+ (name carton_git)
+ (public_name carton-git)
+ (modules carton_git)
+ (libraries decompress.zl lwt decompress.de bigstringaf fmt carton))
+
+(library
+ (name carton_git_unix)
+ (public_name carton-git.unix)
+ (modules carton_git_unix)
+ (libraries result bigarray-compat mmap bigstringaf fmt lwt fpath carton
+   carton-lwt carton-git lwt.unix))

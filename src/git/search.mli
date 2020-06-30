@@ -14,21 +14,22 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
-module Make (S : Minimal.S) :
-  sig
-    module Store : Minimal.S
+module Make (Hash : Digestif.S) (Store : Minimal.S with type hash = Hash.t) : sig
+  type hash = Hash.t
 
-    type pred =
-      [ `Commit of Store.Hash.t
-      | `Tag of string * Store.Hash.t
-      | `Tree of string * Store.Hash.t
-      | `Tree_root of Store.Hash.t ]
+  type store = Store.t
 
-    val pred : Store.t -> ?full:bool -> Store.Hash.t -> pred list Lwt.t
+  type pred =
+    [ `Commit of hash
+    | `Tag of string * hash
+    | `Tree of string * hash
+    | `Tree_root of hash ]
 
-    type path = [`Tag of string * path | `Commit of path | `Path of string list]
+  val pred : store -> ?full:bool -> hash -> pred list Lwt.t
 
-    val mem : Store.t -> Store.Hash.t -> path -> bool Lwt.t
-    val find : Store.t -> Store.Hash.t -> path -> Store.Hash.t option Lwt.t
-  end
-  with module Store = S
+  type path = [ `Tag of string * path | `Commit of path | `Path of string list ]
+
+  val mem : store -> hash -> path -> bool Lwt.t
+
+  val find : store -> hash -> path -> hash option Lwt.t
+end

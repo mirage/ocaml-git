@@ -1,335 +1,263 @@
-(*
- * Copyright (c) 2013-2017 Thomas Gazagnaire <thomas@gazagnaire.org>
- * and Romain Calascibetta <romain.calascibetta@gmail.com>
+(* (c) 2015 Daniel C. Bünzli
+ * (c) 2020 Romain Calascibetta
  *
- * Permission to use, copy, modify, and distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
- *
- * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
- * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
- * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
- * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
- * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
- * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- *)
+ * This implementation differs a bit from [fpath]
+ * where absolute path is not valid and we manipulate
+ * only POSIX path - the backend takes care about Windows
+ * and POSIX paths then. *)
 
-open Lwt.Infix
+type t = string (* non empty *)
 
-let src = Logs.Src.create "git.refs" ~doc:"Git references"
+let dir_sep = "/"
 
-module Log = (val Logs.src_log src : Logs.LOG)
+let dir_sep_char = '/'
 
-type t = string
+let error_msgf fmt = Fmt.kstrf (fun err -> Error (`Msg err)) fmt
 
-let of_string x = x
+let validate_and_collapse_seps p =
+  let max_idx = String.length p - 1 in
+  let rec with_buf b last_sep k i =
+    if i > max_idx
+    then Ok (Bytes.sub_string b 0 k)
+    else
+      let c = p.[i] in
+      if c = '\x00'
+      then error_msgf "Malformed reference: %S" p
+      else if c <> dir_sep_char
+      then (
+        Bytes.set b k c ;
+        with_buf b false (k + 1) (i + 1))
+      else if not last_sep
+      then (
+        Bytes.set b k c ;
+        with_buf b true (k + 1) (i + 1))
+      else with_buf b true k (i + 1) in
+  let rec try_no_alloc last_sep i =
+    if i > max_idx
+    then Ok p
+    else
+      let c = p.[i] in
+      if c = '\x00'
+      then error_msgf "Malformed reference: %S" p
+      else if c <> dir_sep_char
+      then try_no_alloc false (i + 1)
+      else if not last_sep
+      then try_no_alloc true (i + 1)
+      else
+        let b = Bytes.of_string p in
+        with_buf b true i (i + 1) in
+  let start = if max_idx > 0 then if p.[0] = dir_sep_char then 1 else 0 else 0 in
+  try_no_alloc false start
+
+let of_string p =
+  if p = ""
+  then error_msgf "Empty path"
+  else
+    match validate_and_collapse_seps p with
+    | Ok p ->
+        if p.[0] = dir_sep_char then error_msgf "Absolute reference" else Ok p
+    | Error _ as err -> err
+
+let v p =
+  match of_string p with Ok v -> v | Error (`Msg err) -> invalid_arg err
+
+let is_seg s =
+  let zero = String.contains s '\x00' in
+  let sep = String.contains s dir_sep_char in
+  (not zero) && not sep
+
+let add_seg p seg =
+  if not (is_seg seg) then Fmt.invalid_arg "Invalid segment: %S" seg ;
+  let sep = if p.[String.length p - 1] = dir_sep_char then "" else dir_sep in
+  String.concat sep [ p; sep ]
+
+let append p0 p1 =
+  if p1.[0] = dir_sep_char
+  then p1
+  else
+    let sep = if p0.[String.length p0 - 1] = dir_sep_char then "" else dir_sep in
+    String.concat sep [ p0; p1 ]
+
+let ( / ) p seg = add_seg p seg
+
+let ( // ) p0 p1 = append p0 p1
+
+let segs p = Astring.String.cuts ~sep:dir_sep p
+
+let pp ppf p = Fmt.string ppf p
+
 let to_string x = x
-let sep = "/"
 
-module P = struct
-  type partial = string
-  type branch = string
+let equal p0 p1 = String.equal p0 p1
 
-  let ( // ) partial0 partial1 : partial =
-    String.concat sep [partial0; partial1]
-
-  let ( / ) partial branch : t = String.concat sep [partial; branch]
-  let refs : partial = "refs"
-  let heads : partial = "refs/heads"
-  let remotes : partial = "refs/remotes"
-  let origin : partial = "refs/remotes/origin"
-  let master : branch = "master"
-end
+let compare p0 p1 = String.compare p0 p1
 
 let head = "HEAD"
-let is_head = String.equal head
-let master = "refs/heads/master"
-let to_path = function "HEAD" -> Path.v "HEAD" | refs -> Path.v refs
 
-let of_path path =
-  match Path.segs path with
-  | [] -> Fmt.invalid_arg "Reference.of_path: empty path"
-  | ["HEAD"] -> head
-  | "HEAD" :: _ ->
-      Fmt.invalid_arg "Reference.of_path: HEAD can not be followed by values"
-  | "refs" :: _ as refs -> String.concat sep refs
-  | _ :: _ ->
-      invalid_arg "Reference.of_path: bad path (need to be prefixed by refs)"
+module Ordered = struct
+  type nonrec t = t
 
-let pp ppf x = Fmt.pf ppf "%s" (String.escaped x)
+  let compare a b = compare a b
+end
+
+module Map = Map.Make (Ordered)
+module Set = Set.Make (Ordered)
+
+type 'uid contents = Uid of 'uid | Ref of t
+
+let equal_contents ~equal:equal_uid a b =
+  match (a, b) with
+  | Uid a, Uid b -> equal_uid a b
+  | Ref a, Ref b -> equal a b
+  | _ -> false
+
+let pp_contents ~pp:pp_uid ppf = function
+  | Ref v -> pp ppf v
+  | Uid v -> pp_uid ppf v
+
+let compare_contents ~compare:compare_uid a b =
+  let inf = -1 and sup = 1 in
+  match (a, b) with
+  | Ref a, Ref b -> compare a b
+  | Uid a, Uid b -> compare_uid a b
+  | Ref _, _ -> sup
+  | Uid _, _ -> inf
+
+open Carton
+
+module Packed = struct
+  type 'uid elt = Ref of t * 'uid | Peeled of 'uid
+
+  type 'uid packed = 'uid elt list
+
+  type ('fd, 's) input_line = 'fd -> (string option, 's) io
+
+  (* XXX(dinosaure): [Digestif.of_hex] is able to ignore '\n' character.
+   * This code relies on this behavior. *)
+
+  let load { Carton.bind; Carton.return } ~input_line ~of_hex fd =
+    let ( >>= ) = bind in
+    let rec go acc =
+      input_line fd >>= function
+      | Some line -> (
+          match Astring.String.head line with
+          | None -> go acc
+          | Some '#' -> go acc
+          | Some '^' ->
+              let uid = String.sub line 1 (String.length line - 1) in
+              let uid = of_hex uid in
+              go (Peeled uid :: acc)
+          | Some _ ->
+          match Astring.String.cut ~sep:" " line with
+          | Some (reference, uid) ->
+              let reference = v reference in
+              let uid = of_hex uid in
+              go (Ref (reference, uid) :: acc)
+          | None -> go acc)
+      | None -> return (List.rev acc) in
+    go []
+
+  exception Found
+
+  let exists reference packed =
+    let res = ref false in
+    let f = function
+      | Ref (reference', _) ->
+          if equal reference reference'
+          then (
+            res := true ;
+            raise Found)
+      | _ -> () in
+    (try List.iter f packed with Found -> ()) ;
+    !res
+
+  let get reference packed =
+    let res = ref None in
+    let f = function
+      | Ref (reference', uid) ->
+          if equal reference reference'
+          then (
+            res := Some uid ;
+            raise Found)
+      | _ -> () in
+    (try List.iter f packed with Found -> ()) ;
+    !res
+
+  let remove reference packed =
+    let fold acc = function
+      | Ref (reference', uid) ->
+          if equal reference reference'
+          then acc
+          else Ref (reference', uid) :: acc
+      | v -> v :: acc in
+    List.rev (List.fold_left fold [] packed)
+end
+
+type ('t, 'uid, 'error, 's) store = {
+  atomic_wr : 't -> t -> string -> ((unit, 'error) result, 's) io;
+  atomic_rd : 't -> t -> ((string, 'error) result, 's) io;
+  uid_of_hex : string -> 'uid option;
+  uid_to_hex : 'uid -> string;
+  packed : 'uid Packed.packed;
+}
+
+let reword_error f = function Ok v -> Ok v | Error err -> Error (f err)
+
+let contents store str =
+  match store.uid_of_hex (String.trim str) with
+  | Some uid -> Uid uid
+  | None -> (
+      let is_sep chr = Astring.Char.Ascii.is_white chr || chr = ':' in
+      match Astring.String.fields ~empty:false ~is_sep str with
+      | [ _ref; value ] -> Ref (v value)
+      | _ -> Fmt.invalid_arg "Invalid reference contents: %S" str)
+
+let resolve { Carton.bind; Carton.return } t store reference =
+  let ( >>= ) = bind in
+
+  let rec go visited reference =
+    store.atomic_rd t reference >>= function
+    | Error _ -> (
+        match Packed.get reference store.packed with
+        | Some uid -> return (Ok uid)
+        | None -> return (Error (`Not_found reference)))
+    | Ok str ->
+    match contents store str with
+    | Uid uid -> return (Ok uid)
+    | Ref reference ->
+        if List.exists (equal reference) visited
+        then return (Error `Cycle)
+        else go (reference :: visited) reference in
+  go [ reference ] reference
+
+let read { Carton.bind; Carton.return } t store reference =
+  let ( >>= ) = bind in
+
+  store.atomic_rd t reference >>= function
+  | Error _ -> (
+      match Packed.get reference store.packed with
+      | Some uid -> return (Ok (Uid uid))
+      | None -> return (Error (`Not_found reference)))
+  | Ok str -> return (Ok (contents store str))
+
+let write { Carton.bind; Carton.return } t store reference contents =
+  let ( >>= ) = bind in
+  let ( >>| ) x f = x >>= fun x -> return (f x) in
+
+  let str =
+    match contents with
+    | Uid uid -> Fmt.strf "%s\n" (store.uid_to_hex uid)
+    | Ref t -> Fmt.strf "ref: %s" t in
+  store.atomic_wr t reference str >>| reword_error (fun err -> `Store err)
 
 module type S = sig
-  module Hash : S.HASH
+  type hash
 
   type nonrec t = t
 
-  module P : sig
-    type partial
-    type branch = string
-
-    val ( // ) : partial -> partial -> partial
-    val ( / ) : partial -> branch -> t
-    val refs : partial
-    val heads : partial
-    val remotes : partial
-    val origin : partial
-    val master : branch
-  end
-
-  val head : t
-  val master : t
-  val is_head : t -> bool
-  val of_string : string -> t
-  val to_string : t -> string
-  val of_path : Path.t -> t
-  val to_path : t -> Path.t
-
-  include S.BASE with type t := t
-
-  type head_contents = Hash of Hash.t | Ref of t
-
-  val pp_head_contents : head_contents Fmt.t
-  val equal_head_contents : head_contents -> head_contents -> bool
-  val compare_head_contents : head_contents -> head_contents -> int
-
-  module A : S.DESC with type 'a t = 'a Angstrom.t and type e = head_contents
-
-  module M :
-    S.DESC with type 'a t = 'a Encore.Encoder.t and type e = head_contents
-
-  module D :
-    S.DECODER
-    with type t = head_contents
-     and type init = Cstruct.t
-     and type error = Error.Decoder.t
-
-  module E :
-    S.ENCODER
-    with type t = head_contents
-     and type init = Cstruct.t * head_contents
-     and type error = Error.never
+  type nonrec contents = hash contents
 end
 
-module type IO = sig
-  module FS : S.FS
-  include S
+let uid uid = Uid uid
 
-  type error = [Error.Decoder.t | FS.error Error.FS.t]
-
-  val pp_error : error Fmt.t
-  val mem : fs:FS.t -> root:Fpath.t -> t -> bool Lwt.t
-
-  val read :
-       fs:FS.t
-    -> root:Fpath.t
-    -> t
-    -> dtmp:Cstruct.t
-    -> raw:Cstruct.t
-    -> (head_contents, error) result Lwt.t
-
-  val write :
-       fs:FS.t
-    -> root:Fpath.t
-    -> temp_dir:Fpath.t
-    -> etmp:Cstruct.t
-    -> raw:Cstruct.t
-    -> t
-    -> head_contents
-    -> (unit, error) result Lwt.t
-
-  val remove : fs:FS.t -> root:Fpath.t -> t -> (unit, error) result Lwt.t
-end
-
-module Make (Hash : S.HASH) = struct
-  type nonrec t = t
-
-  module P = P
-
-  let master = master
-  let head = head
-  let is_head = is_head
-  let of_string = of_string
-  let to_string = to_string
-  let to_path = Path.v
-
-  let of_path path =
-    let segs = Path.segs path in
-    String.concat sep segs
-
-  (* XXX(dinosaure): doublon with [Path.to_string] but this function uses
-     [Fmt.to_to_string] and I don't trust this function. *)
-
-  let pp = pp
-  let equal = String.equal
-  let hash = Hashtbl.hash
-
-  let compare x y =
-    match x, y with
-    | "HEAD", "HEAD" -> 0
-    | "HEAD", _ -> -1
-    | _, "HEAD" -> 1
-    | _, _ -> compare x y
-
-  module Set = Set.Make (struct type nonrec t = t
-
-                                let compare = compare end)
-
-  module Map = Map.Make (struct type nonrec t = t
-
-                                let compare = compare end)
-
-  type head_contents = Hash of Hash.t | Ref of t
-
-  let pp_head_contents ppf = function
-    | Hash hash -> Fmt.pf ppf "(Hash %a)" Hash.pp hash
-    | Ref t -> Fmt.pf ppf "(Ref %a)" pp t
-
-  let equal_head_contents a b =
-    match a, b with
-    | Ref a', Ref b' -> equal a' b'
-    | Hash a', Hash b' -> Hash.equal a' b'
-    | _, _ -> false
-
-  let compare_head_contents a b =
-    match a, b with
-    | Ref a', Ref b' -> compare a' b'
-    | Hash a', Hash b' -> Hash.unsafe_compare a' b'
-    | Ref _, Hash _ -> 1
-    | Hash _, Ref _ -> -1
-
-  module MakeMeta (Meta : Encore.Meta.S) = struct
-    type e = head_contents
-
-    open Helper.BaseIso
-
-    module Iso = struct
-      open Encore.Bijection
-
-      let hex =
-        make_exn
-          ~fwd:(Exn.safe_exn Hash.of_hex)
-          ~bwd:(Exn.safe_exn Hash.to_hex)
-
-      let refname =
-        make_exn
-          ~fwd:(Exn.safe_exn of_string)
-          ~bwd:(Exn.safe_exn to_string)
-
-      let hash =
-        make_exn
-          ~fwd:(fun hash -> Hash hash)
-          ~bwd:(function
-            | Hash hash -> hash | _ -> Exn.fail ())
-
-      let reference =
-        make_exn
-          ~fwd:(fun reference -> Ref reference)
-          ~bwd:(function
-            | Ref r -> r | _ -> Exn.fail ())
-    end
-
-    type 'a t = 'a Meta.t
-
-    module Meta = Encore.Meta.Make (Meta)
-    open Meta
-
-    let is_not_lf = ( <> ) '\n'
-
-    let hash =
-      Iso.hex <$> take (Hash.digest_size * 2) <* (char_elt '\n' <$> any)
-
-    let reference =
-      (string_elt "ref: " <$> const "ref: ")
-      *> (Iso.refname <$> while1 is_not_lf)
-      <* (char_elt '\n' <$> any)
-
-    let p = Iso.reference <$> reference <|> (Iso.hash <$> hash)
-  end
-
-  module A = MakeMeta (Encore.Proxy_decoder.Impl)
-  module M = MakeMeta (Encore.Proxy_encoder.Impl)
-  module D = Helper.MakeDecoder (A)
-  module E = Helper.MakeEncoder (M)
-end
-
-module IO (H : S.HASH) (FS : S.FS) = struct
-  module FS = Helper.FS (FS)
-  include Make (H)
-
-  module Encoder = struct
-    module E = struct
-      type state = E.encoder
-      type result = int
-      type error = E.error
-      type rest = [`Flush of state | `End of state * result]
-
-      let used = E.used
-      let flush = E.flush
-
-      let eval raw state =
-        match E.eval raw state with
-        | `Error err -> Lwt.return (`Error (state, err))
-        | #rest as rest -> Lwt.return rest
-    end
-
-    include Helper.Encoder (E) (FS)
-  end
-
-  module Decoder = Helper.Decoder (D) (FS)
-
-  type fs_error = FS.error Error.FS.t
-  type error = [Error.Decoder.t | fs_error]
-
-  let pp_error ppf = function
-    | #Error.Decoder.t as err -> Error.Decoder.pp_error ppf err
-    | #fs_error as err -> Error.FS.pp_error FS.pp_error ppf err
-
-  let[@warning "-32"] normalize path =
-    let segs = Path.segs path in
-    List.fold_left
-      (fun (stop, acc) ->
-        if stop then fun x -> true, x :: acc
-        else function
-          | "HEAD" as x -> true, x :: acc
-          (* XXX(dinosaure): special case, HEAD can be stored in a refs
-             sub-directory or can be in root of dotgit (so, without refs). *)
-          | "refs" as x -> true, [x]
-          | _ -> false, [] )
-      (false, []) segs
-    |> fun (_, refs) -> List.rev refs |> String.concat "/" |> of_string
-
-  let mem ~fs ~root:dotgit reference =
-    let path = Path.(dotgit + to_path reference) in
-    FS.File.exists fs path >|= function Ok v -> v | Error _ -> false
-
-  let read ~fs ~root:dotgit reference ~dtmp ~raw : (_, error) result Lwt.t =
-    let state = D.default dtmp in
-    let path = Path.(dotgit + to_path reference) in
-    Decoder.of_file fs path raw state
-    >|= function
-    | Ok v -> Ok v
-    | Error (`Decoder err) -> Error.(v @@ Error.Decoder.with_path path err)
-    | Error #fs_error as err -> err
-
-  let write ~fs ~root:dotgit ~temp_dir ~etmp ~raw reference value
-      =
-    let state = E.default (etmp, value) in
-    let path = Path.(dotgit + to_path reference) in
-    FS.Dir.create fs (Fpath.parent path)
-    >>= function
-    | Error err ->
-        Lwt.return Error.(v @@ FS.err_create (Fpath.parent path) err)
-    | Ok (true | false) -> (
-        Encoder.to_file fs ~temp_dir path raw state
-        >|= function
-        | Ok _ -> Ok ()
-        | Error #fs_error as err -> err
-        | Error (`Encoder #Error.never) -> assert false )
-
-  let remove ~fs ~root:dotgit reference =
-    let path = Path.(dotgit + to_path reference) in
-    FS.File.delete fs path
-    >|= function
-    | Ok _ as v -> v | Error err -> Error.(v @@ FS.err_delete path err)
-end
+let ref t = Ref t

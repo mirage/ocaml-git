@@ -1,0 +1,51 @@
+opam-version: "2.0"
+name:         "nss"
+maintainer:   "Romain Calascibetta <romain.calascibetta@gmail.com>"
+authors:      "Romain Calascibetta <romain.calascibetta@gmail.com>"
+homepage:     "https://github.com/mirage/decompress"
+bug-reports:  "https://github.com/mirage/decompress/issues"
+dev-repo:     "git+https://github.com/mirage/decompress.git"
+doc:          "https://mirage.github.io/decompress/"
+license:      "MIT"
+synopsis:     "Not So Smart - Implementation of Smart protocol"
+
+build: [
+  [ "dune" "build" "-p" name "-j" jobs ]
+  [ "dune" "runtest" "-p" name "-j" jobs ] {with-test}
+]
+
+depends: [
+  "ocaml"             {>= "4.07.0"}
+  "dune"              {>= "2.6.0"}
+  "emile"             {>= "0.9"}
+  "rresult"
+  "result"
+  "fmt"
+  "cstruct"           {>= "5.0.0"}
+  "domain-name"
+  "astring"
+  "fmt"
+  "logs"
+  "psq"               {>= "0.2.0"}
+  "carton"
+  "carton-lwt"
+  "conduit"
+  "uri"
+  "digestif"          {>= "0.8.1"}
+  "decompress"        {>= "1.2.0"}
+  "bigstringaf"
+  "ocurl"             {with-test}
+  "mirage-crypto-rng" {with-test & >= "0.8.0"}
+  "bos"               {with-test}
+  "fpath"             {with-test}
+  "conduit-lwt"       {with-test}
+  "base-unix"         {with-test}
+  "mmap"              {with-test}
+  "alcotest-lwt"      {with-test}
+  "crowbar"           {with-test & >= "0.2"}
+]
+
+pin-depends: [
+  [ "conduit.dev" "git+https://github.com/dinosaure/ocaml-conduit.git#9779d777cd03f85e770ecc1c1174dd382979bc58" ]
+  [ "conduit-lwt.dev" "git+https://github.com/dinosaure/ocaml-conduit.git#9779d777cd03f85e770ecc1c1174dd382979bc58" ]
+]

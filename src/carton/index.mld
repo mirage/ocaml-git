@@ -1,0 +1,15 @@
+{1 Carton, a small library to handle and generate PACK files.}
+
+A PACK file is a specific format used by Git internally to efficiently store Git
+objects. They can be found into [.git/objects/pack]. Such format is used to
+transmit from a peer to one other Git objects and be synchronized each others
+(eg. [git pull]/[git push]).
+
+[Carton] wants to provide an not-so-easy way to produce and handle such format
+and be able to implement a Git back-end for Irmin, a Git push command and a Git
+fetch/pull command.
+
+This document describes the API and how to use it - and it describes how to take
+the advantage of this format for another purpose. In fact, [Carton] was made to
+not be specific to Git and to be free from any {i syscalls} as usual for a
+MirageOS project.

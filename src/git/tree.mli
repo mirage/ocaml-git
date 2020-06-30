@@ -15,80 +15,142 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** A Git Tree object. *)
+(** A Git Tree object.
+
+    A Tree object ties on or more {!Blob.t} objects into a directory structure.
+    In addition, a tree object can refer to other tree objects, thus creating a
+    directory hierarchy. *)
+
+type perm =
+  [ `Normal  (** A {!Blob.t}. *)
+  | `Everybody
+  | `Exec  (** An executable. *)
+  | `Link  (** A {!Blob.t} that specifies the path of a {i symlink}. *)
+  | `Dir  (** A sub-{!Tree.t}. *)
+  | `Commit  (** A sub-module ({!Commit.t}). *) ]
+(** Type of type node. *)
+
+val equal_perm : perm -> perm -> bool
+(** The equal function for {!perm}. *)
+
+type 'hash entry = { perm : perm; name : string; node : 'hash }
+(** Type of entry. It describes the name [name], the type [perm] and the
+    reference to the node [node]. *)
+
+val entry : name:string -> perm -> 'hash -> 'hash entry
+(** [entry ~name perm node] is the entry to [node] with the name [name] and the
+    {i mode} [perm]. *)
+
+val pp_entry : pp:'hash Fmt.t -> 'hash entry Fmt.t
+(** Pretty-printer of {!entry}. *)
+
+val equal_entry :
+  equal:('hash -> 'hash -> bool) -> 'hash entry -> 'hash entry -> bool
+(** The equal function for {!entry}. *)
+
+type 'hash t = private 'hash entry list
+(** Type of tree is a list of file names and modes along with refs to the
+    associated blob and/or tree objects. *)
+
+val v : 'hash entry list -> 'hash t
+(** [v entries] ties all [entries] into one tree object. It does not remove
+    duplicate but re-order the given list such as:
+
+    {[
+      Tree.digest (Tree.v [ { name= a; _ }; { name= b; _ }] ) ;;
+      - : hash = 8d14531846b95bfa3564b58ccfb7913a034323b8
+      Tree.digest (Tree.v [ { name= b; _ }; { name= a; _ }] ) ;;
+      - : hash = 8d14531846b95bfa3564b58ccfb7913a034323b8
+    ]} *)
+
+val pp : pp:'hash Fmt.t -> 'hash t Fmt.t
+(** Pretty-printer of {!t}. *)
+
+val equal : equal:('hash -> 'hash -> bool) -> 'hash t -> 'hash t -> bool
+(** The equal function for {!t}. *)
+
+val add : 'hash entry -> 'hash t -> 'hash t
+(** [add entry tree] returns a tree containing all elements of [tree], plus
+    [entry]. If [entry] was already in [tree], [tree] is unchanged. *)
+
+val remove : name:string -> 'hash t -> 'hash t
+(** [remove ~name tree] returns a [tree] containing all elements of [tree],
+    except one with the name [name]. If any entries of the given [tree] don't
+    have the name [name], [tree] is returned unchanged. *)
+
+val is_empty : 'hash t -> bool
+(** [is_empty tree] tests whether the given [tree] is empty or not. *)
+
+val hashes : 'hash t -> 'hash list
+(** [hashes tree] returns the list of all node references of the given [tree]. *)
+
+val to_list : 'hash t -> 'hash entry list
+(** [to_list tree] returns the list of all entries of the given [tree]. *)
+
+val of_list : 'hash entry list -> 'hash t
+(** Same as {!v}. *)
+
+val iter : ('hash entry -> unit) -> 'hash t -> unit
+(** [iter f tree] applies [f] in turn to all elements of [s]. *)
 
 module type S = sig
-  module Hash : S.HASH
+  type hash
 
-  type perm =
-    [ `Normal  (** A {!Blob.t}. *)
-    | `Everybody
-    | `Exec  (** An executable. *)
-    | `Link  (** A {!Blob.t} that specifies the path of a {i symlink}. *)
-    | `Dir  (** A sub-{!Tree.t}. *)
-    | `Commit  (** A sub-module ({!Commit.t}). *) ]
+  type nonrec entry = hash entry
 
-  type entry = private {perm: perm; name: string; node: Hash.t}
+  type nonrec t = hash t
 
-  val pp_entry : entry Fmt.t
-  (** Pretty-printer of {!entry}. *)
+  val entry : name:string -> perm -> hash -> entry
+  (** [entry ~name perm node] is the entry to [node] with the name [name] and
+      the {i mode} [perm]. *)
 
-  val entry : string -> perm -> Hash.t -> entry
-  (** [entry name perm node] is a new entry. Raise [Invalid_argument] if [name]
-      contains ['\000']. *)
+  val v : entry list -> t
+  (** [v entries] ties all [entries] into one tree object. It does not remove
+      duplicate but re-order the given list such as:
 
-  (** A Git Tree object. Git stores content in a manner similar to a UNIX {i
-      filesystem}, but a bit simplified. All the content is stored as tree and
-      {!Blob.t} objects, with trees corresponding to UNIX directory entries and
-      blobs corresponding more or less to {i inodes} or file contents. A single
-      tree object contains one or more tree entries, each of which contains a
-      hash pointer to a {!Blob.t} or sub-tree with its associated mode, type,
-      and {i filename}. *)
-  type t
+      {[
+        Tree.digest (Tree.v [ { name= a; _ }; { name= b; _ }] ) ;;
+        - : hash = 8d14531846b95bfa3564b58ccfb7913a034323b8
+        Tree.digest (Tree.v [ { name= b; _ }; { name= a; _ }] ) ;;
+        - : hash = 8d14531846b95bfa3564b58ccfb7913a034323b8
+      ]} *)
+
+  val add : entry -> t -> t
+  (** [add entry tree] returns a tree containing all elements of [tree], plus
+      [entry]. If [entry] was already in [tree], [tree] is unchanged. *)
 
   val remove : name:string -> t -> t
-  (** [remove ~name t] is [t] without the entry [name]. *)
-
-  val add : t -> entry -> t
-  (** [add t e] is [t] with the addition of the enty [e]. *)
+  (** [remove ~name tree] returns a [tree] containing all elements of [tree],
+      except one with the name [name]. If any entries of the given [tree] don't
+      have the name [name], [tree] is returned unchanged. *)
 
   val is_empty : t -> bool
-  val perm_of_string : string -> perm
-  val string_of_perm : perm -> string
+  (** [is_empty tree] tests whether the given [tree] is empty or not. *)
 
-  module MakeMeta (Meta : Encore.Meta.S) : sig
-    val p : t Meta.t
-  end
+  val format : t Encore.t
+  (** [format] is a description of how to encode/decode a {!t} object. *)
 
-  module A : S.DESC with type 'a t = 'a Angstrom.t and type e = t
-  module M : S.DESC with type 'a t = 'a Encore.Encoder.t and type e = t
+  include S.DIGEST with type t := t and type hash := hash
 
-  module D :
-    S.DECODER
-    with type t = t
-     and type init = Cstruct.t
-     and type error = Error.Decoder.t
-
-  module E :
-    S.ENCODER
-    with type t = t
-     and type init = Cstruct.t * t
-     and type error = Error.never
-
-  include S.DIGEST with type t := t and type hash := Hash.t
   include S.BASE with type t := t
 
   val length : t -> int64
-  (** [length t] returns the length of the tree object [t]. *)
+  (** [length tree] is the length of the given tree object. *)
 
-  val hashes : t -> Hash.t list
-  (** [hashes t] returns all pointer of the tree [t]. *)
+  val hashes : t -> hash list
+  (** [hashes tree] returns the list of all node references of the given [tree]. *)
 
   val to_list : t -> entry list
+  (** [to_list tree] returns the list of all entries of the given [tree]. *)
+
   val of_list : entry list -> t
+  (** Same as {!v}. *)
+
   val iter : (entry -> unit) -> t -> unit
+  (** [iter f tree] applies [f] in turn to all elements of [s]. *)
 end
 
-(** The {i functor} to make the OCaml representation of the Git Tree object by
-    a specific hash implementation. *)
-module Make (Hash : S.HASH) : S with module Hash := Hash
+(** {i Functor} building an implementation of the tree structure. The {i
+    functor} returns a structure containing a type [hash] of digests and a type
+    [t] of trees (structurally equal to {!t}). *)
+module Make (Hash : S.HASH) : S with type hash = Hash.t

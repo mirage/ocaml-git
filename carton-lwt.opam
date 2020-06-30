@@ -1,0 +1,29 @@
+opam-version: "2.0"
+name:         "carton"
+maintainer:   "Romain Calascibetta <romain.calascibetta@gmail.com>"
+authors:      "Romain Calascibetta <romain.calascibetta@gmail.com>"
+homepage:     "https://github.com/dinosaure/carton"
+bug-reports:  "https://github.com/dinosaure/carton/issues"
+dev-repo:     "git+https://github.com/dinosaure/carton.git"
+doc:          "https://dinosaure.github.io/carton/"
+license:      "MIT"
+synopsis:     "Implementation of PACK file in OCaml"
+description: """Carton is an implementation of the PACK file
+in OCaml. PACK file is used by Git to store Git objects. Carton is more
+abstracted when it can store any objects.
+"""
+
+build: [
+  [ "dune" "build" "-p" name "-j" jobs ]
+  [ "dune" "runtest" "-p" name "-j" jobs ] {with-test}
+]
+
+depends: [
+  "ocaml"      {>= "4.07.0"}
+  "dune"       {>= "2.6.0"}
+  "carton"
+  "lwt"
+  "decompress" {>= "1.2.0"}
+  "optint"     {>= "0.0.4"}
+  "bigstringaf"
+]

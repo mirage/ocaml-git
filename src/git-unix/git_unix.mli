@@ -16,33 +16,38 @@
 
 (** Unix backend. *)
 
-module Fs = Fs
-module Net = Net
-module Index = Index
+module Make (Digestif : Digestif.S) : sig
+  include Git.S with type hash = Digestif.t
 
-module Store : sig
-  include
-    Git.Store.S
-    with module Hash = Git.Hash.Make(Digestif.SHA1)
-     and module FS := Fs
-
-  val v :
-       ?dotgit:Fpath.t
-    -> ?compression:int
-    -> ?buffer:((buffer -> unit Lwt.t) -> unit Lwt.t)
-    -> Fpath.t
-    -> (t, error) result Lwt.t
+  val v : Fpath.t -> t Lwt.t
 end
 
-type endpoint = Net.endpoint = {uri: Uri.t; headers: Cohttp.Header.t}
+module Sync
+    (Digestif : Digestif.S)
+    (Store : Git.S
+               with type hash = Digestif.t
+                and type pack = Fpath.t
+                and type index = Fpath.t)
+    (HTTP : Smart_git.HTTP) : sig
+  type hash = Digestif.t
 
-val endpoint : ?headers:Cohttp.Header.t -> Uri.t -> endpoint
+  type store = Store.t
 
-module Sync (G : Git.S) : sig
-  module Tcp : Git.Sync.S with module Store := G and type Endpoint.t = endpoint
+  val fetch :
+    resolvers:Conduit.resolvers ->
+    Smart_git.endpoint ->
+    store ->
+    ?version:[> `V1 ] ->
+    ?capabilities:Smart.Capability.t list ->
+    [ `All | `Some of Git.Reference.t list | `None ] ->
+    ( (hash * (Git.Reference.t * hash) list) option,
+      [> `Msg of string | `Exn of exn | `Not_found | `Store of Store.error ] )
+    result
+    Lwt.t
+end
 
-  module Http :
-    Git_http.Sync.S with module Store := G and type Client.endpoint = endpoint
+module Store : sig
+  include Git.S with type hash = Digestif.SHA1.t
 
-  include Git.Sync.S with module Store := G and type Endpoint.t = endpoint
+  val v : Fpath.t -> t Lwt.t
 end

@@ -1,7 +1,0 @@
-(executable
- (name      smartiso)
- (libraries git-unix crowbar))
-
-(alias
- (name   runfuzz)
- (action (run ./smartiso.exe)))

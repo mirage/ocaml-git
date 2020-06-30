@@ -15,65 +15,57 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** A Git Tag object. *)
+(** A Git Tag object.
+
+    A tag containing a reference pointing to another object, which can contain a
+    message just like a {!Commit}. It can also contain a (PGP) signature, in
+    which case it is called a "signed tag object". *)
+
+type kind = Blob | Commit | Tag | Tree
+
+type 'hash t
+(** A Git Tag object. The tag object is very much like a {!Commit.t} object - it
+    contains a {i tagger}, a date, a message, and a pointer. Generally, the tag
+    points to a commit rather than a tree. It's like a branch reference, but it
+    never moves - it always points to the same commit but gives it a friendlier
+    name. *)
 
 module type S = sig
-  (** The [Hash] module used to make the implementation. *)
-  module Hash : S.HASH
+  type hash
 
-  (** A Git Tag object. The tag object is very much like a {!Commit.t} object -
-      it contains a {i tagger}, a date, a message, and a pointer. Generally,
-      the tag points to a commit rather than a tree. It's like a branch
-      reference, but it never moves - it always points to the same commit but
-      gives it a friendlier name. *)
-  type t
+  type nonrec t = hash t
 
-  type kind = Blob | Commit | Tag | Tree
+  val make : hash -> kind -> ?tagger:User.t -> tag:string -> string -> t
+  (** [make hash kind ?tagger ~tag descr] makes a new tag with the kind [kind]
+      by the [tagger] with the name [tag] and the description [descr].
 
-  val make : Hash.t -> kind -> ?tagger:User.t -> tag:string -> string -> t
-  (** [make hash kind ?tagger ~tag descr] makes a new tag to a Git object with
-      the kind [kind] by the [tagger] with the name [tag] and the description
-      [descr].
+      This function does not check if the reference [hash] points to an existing
+      [kind] Git object. *)
 
-      This function does not check if the Git object pointed by the hash has
-      really the kind [kind] - and obviously if the [hash] is valid. *)
+  val format : t Encore.t
+  (** [format] is a description of how to encode/decode of {!t} object. *)
 
-  module MakeMeta (Meta : Encore.Meta.S) : sig
-    val p : t Meta.t
-  end
+  include S.DIGEST with type t := t and type hash := hash
 
-  module A : S.DESC with type 'a t = 'a Angstrom.t and type e = t
-  module M : S.DESC with type 'a t = 'a Encore.Encoder.t and type e = t
-
-  module D :
-    S.DECODER
-    with type t = t
-     and type init = Cstruct.t
-     and type error = Error.Decoder.t
-
-  module E :
-    S.ENCODER
-    with type t = t
-     and type init = Cstruct.t * t
-     and type error = Error.never
-
-  include S.DIGEST with type t := t and type hash := Hash.t
   include S.BASE with type t := t
 
   val length : t -> int64
-  (** [length t] returns the length of the tag object [t]. *)
+  (** [length t] is the length of the given tag object. *)
 
-  val obj : t -> Hash.t
-  (** [obj t] returns the pointed hash of the Tag [t]. *)
+  val obj : t -> hash
+  (** [obj t] returns the reference of the given tag. *)
 
   val tag : t -> string
-  (** [tag t] returns the tag information of [t]. *)
+  (** [tag t] returns the information of the given tag. *)
 
   val message : t -> string
+
   val kind : t -> kind
+
   val tagger : t -> User.t option
 end
 
-(** The {i functor} to make the OCaml representation of the Git Tag object by a
-    specific hash implementation. *)
-module Make (Hash : S.HASH) : S with module Hash := Hash
+(** {i Functor} building an implementation of the tag structure. The {i functor}
+    returns a structure containing a type [hash] of digests and a type [t] of
+    tags (structurally equal to {!t}). *)
+module Make (Hash : S.HASH) : S with type hash = Hash.t

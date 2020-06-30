@@ -1,0 +1,32 @@
+(executable
+ (name pack_headers)
+ (modules pack_headers)
+ (libraries decompress.de decompress.zl fmt crowbar bigstringaf carton))
+
+(executable
+ (name binary_search)
+ (modules binary_search)
+ (libraries crowbar bigstringaf carton))
+
+(executable
+ (name smart)
+ (modules smart)
+ (libraries fmt crowbar digestif.c nss.smart))
+
+(rule
+ (alias runtest)
+ (package carton)
+ (action
+  (run ./pack_headers.exe)))
+
+(rule
+ (alias runtest)
+ (package carton)
+ (action
+  (run ./binary_search.exe)))
+
+(rule
+ (alias runtest)
+ (package nss)
+ (action
+  (run ./smart.exe)))

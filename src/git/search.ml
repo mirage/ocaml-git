@@ -17,48 +17,44 @@
 
 open Lwt.Infix
 
-module Make (S : Minimal.S) = struct
-  module Store = S
+module Make (Hash : Digestif.S) (Store : Minimal.S with type hash = Hash.t) =
+struct
+  type hash = Hash.t
+
+  type store = Store.t
 
   module Log = struct
     let src =
-      Logs.Src.create "git.search"
-        ~doc:"logs git's internal search computation"
+      Logs.Src.create "git.search" ~doc:"logs git's internal search computation"
 
     include (val Logs.src_log src : Logs.LOG)
   end
 
   type pred =
-    [ `Commit of Store.Hash.t
-    | `Tag of string * Store.Hash.t
-    | `Tree of string * Store.Hash.t
-    | `Tree_root of Store.Hash.t ]
+    [ `Commit of hash
+    | `Tag of string * hash
+    | `Tree of string * hash
+    | `Tree_root of hash ]
 
   let pred t ?(full = true) h =
     let tag t = `Tag (Store.Value.Tag.tag t, Store.Value.Tag.obj t) in
     Log.debug (fun l ->
-        l ~header:"predecessor" "Read the object: %a." Store.Hash.pp h ) ;
-    Store.read t h
-    >|= function
-    | Error err ->
-        Log.err (fun l ->
-            l ~header:"predecessor"
-              "Retrieve an error when the search engine try to read %a: %a."
-              Store.Hash.pp h Store.pp_error err ) ;
-        []
-    | Ok (Store.Value.Blob _) -> []
-    | Ok (Store.Value.Commit c) ->
-        (if full then [`Tree_root (Store.Value.Commit.tree c)] else [])
+        l ~header:"predecessor" "Read the object: %a." Hash.pp h) ;
+    Store.read_exn t h >|= function
+    | Value.Blob _ -> []
+    | Value.Commit c ->
+        (if full then [ `Tree_root (Store.Value.Commit.tree c) ] else [])
         @ List.map (fun x -> `Commit x) (Store.Value.Commit.parents c)
-    | Ok (Store.Value.Tag t) -> if full then [tag t] else []
-    | Ok (Store.Value.Tree t) ->
-        if full then
+    | Value.Tag t -> if full then [ tag t ] else []
+    | Value.Tree t ->
+        if full
+        then
           List.map
-            (fun {Store.Value.Tree.name; node; _} -> `Tree (name, node))
+            (fun { Tree.name; node; _ } -> `Tree (name, node))
             (Store.Value.Tree.to_list t)
         else []
 
-  type path = [`Tag of string * path | `Commit of path | `Path of string list]
+  type path = [ `Tag of string * path | `Commit of path | `Path of string list ]
 
   let find_list f l =
     List.fold_left
@@ -66,43 +62,41 @@ module Make (S : Minimal.S) = struct
       None l
 
   let _find_commit = find_list (function `Commit x -> Some x | _ -> None)
+
   let find_tree_root = find_list (function `Tree_root x -> Some x | _ -> None)
 
   let find_tag l =
     find_list (function
       | `Tag (s, x) -> if l = s then Some x else None
-      | _ -> None )
+      | _ -> None)
 
   let find_tree l =
     find_list (function
       | `Tree (s, x) -> if s = l then Some x else None
-      | _ -> None )
+      | _ -> None)
 
-  (* XXX: not tail-rec *)
   let rec find t hash path =
     match path with
     | `Path [] -> Lwt.return (Some hash)
     | `Tag (l, p) -> (
-        pred t hash
-        >>= fun preds ->
+        pred t hash >>= fun preds ->
         match find_tag l preds with
         | None -> Lwt.return_none
-        | Some s -> find t s p )
+        | Some s -> (find [@tailcall]) t s p)
     | `Commit p -> (
-        pred t hash
-        >>= fun preds ->
+        pred t hash >>= fun preds ->
         match find_tree_root preds with
         | None -> Lwt.return_none
-        | Some s -> find t s p )
+        | Some s -> (find [@tailcall]) t s p)
     | `Path (h :: p) -> (
-        pred t hash
-        >>= fun preds ->
+        pred t hash >>= fun preds ->
         match find_tree h preds with
         | None -> Lwt.return_none
-        | Some s -> find t s (`Path p) )
+        | Some s -> (find [@tailcall]) t s (`Path p))
 
   (* XXX: can do one less look-up *)
   let mem t h path =
-    find t h path
-    >>= function None -> Lwt.return false | Some _ -> Lwt.return true
+    find t h path >>= function
+    | None -> Lwt.return false
+    | Some _ -> Lwt.return true
 end

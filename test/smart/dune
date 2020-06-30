@@ -1,11 +1,18 @@
-(library
-  (name      test_smart)
-  (modules   test_smart)
-  (wrapped   false)
-  (libraries git mtime mtime.clock.os alcotest mirage-crypto-rng lwt.unix logs.fmt))
+(executable
+ (name test)
+ (libraries result curl.lwt mirage-crypto-rng.unix digestif digestif.c
+   nss.git bos fpath bigarray-compat carton-lwt bigstringaf nss.sigs fmt
+   nss.pck carton rresult conduit alcotest conduit-lwt nss.smart lwt.unix
+   mmap astring lwt cstruct uri fmt.tty logs.fmt alcotest-lwt))
 
-(library
-  (name      test_smart_regression)
-  (modules   test_smart_regression)
-  (wrapped   false)
-  (libraries git mtime mtime.clock.os alcotest mirage-crypto-rng lwt.unix logs.fmt))
+(rule
+ (alias runtest)
+ (package nss)
+ (deps
+  (:test test.exe)
+  pack-testzone-0.pack
+  pack-testzone-0.idx
+  pack-testzone-1.pack
+  pack-testzone-1.idx)
+ (action
+  (run %{test} --color=always)))

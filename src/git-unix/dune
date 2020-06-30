@@ -1,4 +1,6 @@
 (library
- (name        git_unix)
+ (name git_unix)
  (public_name git-unix)
- (libraries   mmap git logs.fmt lwt.unix git-http cohttp-lwt-unix))
+ (modules git_unix)
+ (libraries conduit-lwt conduit nss.smart rresult result bigarray-compat
+   bigstringaf fmt nss.git fpath digestif mmap git logs.fmt lwt lwt.unix))

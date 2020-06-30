@@ -17,16 +17,31 @@ build: [
 
 depends: [
   "ocaml"             {>= "4.07.0"}
-  "dune"
+  "dune"              {>= "2.6.0"}
   "mmap"              {>= "1.1.0"}
-  "cmdliner"
-  "git-http"          {= version}
-  "cohttp"            {>= "1.0.0"}
-  "cohttp-lwt-unix"   {>= "1.0.0"}
-  "mtime"             {>= "1.0.0"}
+  "git"
+  "conduit"
+  "conduit-lwt"
+  "rresult"
+  "result"
+  "bigarray-compat"
+  "bigstringaf"
+  "fmt"
+  "nss"
+  "fpath"
+  "uri"
+  "ocurl"             {>= "0.9.1"}
+  "digestif"          {>= "0.8.1"}
+  "logs"
+  "lwt"
   "base-unix"
-  "alcotest"          {with-test & >= "0.8.1"}
-  "mirage-crypto-rng" {with-test}
-  "tls"               {with-test}
-  "io-page"           {with-test & >= "1.6.1"}
+  "alcotest"          {with-test & >= "1.1.0"}
+  "alcotest-lwt"      {with-test & >= "1.1.0"}
+  "base64"            {with-test & >= "3.0.0"}
+  "bos"               {with-test}
+]
+
+pin-depends: [
+  [ "conduit.dev" "git+https://github.com/dinosaure/ocaml-conduit.git#9779d777cd03f85e770ecc1c1174dd382979bc58" ]
+  [ "conduit-lwt.dev" "git+https://github.com/dinosaure/ocaml-conduit.git#9779d777cd03f85e770ecc1c1174dd382979bc58" ]
 ]
