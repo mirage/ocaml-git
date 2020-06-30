@@ -1,3 +1,14 @@
+### 2.1.3 (2020-30-06) Paris - France
+
+- Move to `encoder.0.5` (#393, @dinosaure)
+- Move to `angstrom.0.14.0` (#384, @sternenseemann)
+- Add missing Time argument to `Resolver_mirage.Make_with_stack` (#389, @talex5)
+- Fix .ocamlformat file (#389, @talex5)
+- Enlarge internal buffer used to parse Git object (#389, @dinosaure)
+- Update README.md (#383, @dinosaure)
+- Use `mirage-crypto` instead `nocrypto` (#382, @hannesm)
+- Add constraint on `dune` package (@kit-ty-kate)
+
 ### 2.1.2 (2019-14-11) Paris - France
 
 - unlock `git` to use, at least, `checkseum.0.0.9` (#373, @dinosaure)
