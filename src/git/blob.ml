@@ -19,12 +19,25 @@ let src = Logs.Src.create "git.blob" ~doc:"logs git's blob event"
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
+type t = Cstruct.t
 
+external of_cstruct : Cstruct.t -> t = "%identity"
 
+external to_cstruct : t -> Cstruct.t = "%identity"
 
+let of_string x : t = Cstruct.of_string x
 
+let to_string (x : t) = Cstruct.to_string x
 
+let length : t -> int64 = fun t -> Int64.of_int (Cstruct.len t)
 
+let pp ppf blob = Fmt.string ppf (Cstruct.to_string blob)
+
+let equal = Cstruct.equal
+
+let compare = Cstruct.compare
+
+let hash = Hashtbl.hash
 
 module type S = sig
   type hash

@@ -18,11 +18,55 @@
 (** A Git Blob object. *)
 
 
+type t
+(** Type of blob is contents of file. *)
 
+val of_cstruct : Cstruct.t -> t
+(** [of_cstruct cs] is the blob from the given {!Cstruct.t} [cs]. This function
+    does not take the ownership on [cs].
 
+    {b Note.} If the user set the given [cs], it updates the blob too. This
+    function does not copy the given {!Cstruct.t}.
 
+    {[
+      let cs = Cstruct.of_string "Hello" in
+      let blob = Blob.of_cstruct cs in
+      Blob.digest blob ;;
+      - : hash = 5ab2f8a4323abafb10abb68657d9d39f1a775057
+      Cstruct.set_char cs 0 'V' ;;
+      - : unit = ()
+      Blob.digest blob ;;
+      - : hash = 4081c40614b490bea69ea2ed8fdfdb86f04b5579
+    ]} *)
 
+val to_cstruct : t -> Cstruct.t
+(** [to_cstruct blob] is the {!Cstruct.t} from the given blob. This function
+    does not create a fresh {!Cstruct.t}, *)
 
+val of_string : string -> t
+(** [of_string str] is the blob from the given [string] [str].
+
+    {b Note.} Despite {!of_cstruct}, [of_string] does a copy of the given
+    [string]. *)
+
+val to_string : t -> string
+(** [to_string blob] is the [string] from the given blob. *)
+
+val length : t -> int64
+(** [length blob] is the length of the given blob object. *)
+
+val pp : t Fmt.t
+(** Pretty-printer for {!t}. *)
+
+val equal : t -> t -> bool
+(** The equal function for blobs. *)
+
+val compare : t -> t -> int
+(** The comparison function for [blobs]. *)
+
+val hash : t -> int
+(** [hash blob] associates a non-negative integer to any value of {!t}. It is
+    guaranteed that if [x = y] or [compare x y = 0], then [hash x = hash y]. *)
 
 module type S = sig
   type hash
