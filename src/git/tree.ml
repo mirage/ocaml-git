@@ -192,151 +192,32 @@ module type S = sig
   val iter : (entry -> unit) -> t -> unit
 end
 
-module Make (Hash : S.HASH) = struct
-  type entry = { perm : perm; name : string; node : Hash.t }
+module Make (Hash : S.HASH) : S with type hash = Hash.t = struct
+  type hash = Hash.t
 
-  and perm = [ `Normal | `Everybody | `Exec | `Link | `Dir | `Commit ]
+  type nonrec entry = hash entry
 
-  and t = entry list
+  and t = hash t
 
-  let hashes tree = List.map (fun { node; _ } -> node) tree
+  let pp ppf t = pp ~pp:Hash.pp ppf t
 
-  let pp_entry ppf { perm; name; node } =
-    Fmt.pf ppf "{ @[<hov>perm = %s;@ name = %s;@ node = %a;@] }"
-      (match perm with
-      | `Normal -> "normal"
-      | `Everybody -> "everybody"
-      | `Exec -> "exec"
-      | `Link -> "link"
-      | `Dir -> "dir"
-      | `Commit -> "commit")
-      name (Fmt.hvbox Hash.pp) node
+  let entry ~name perm node = entry ~name perm node
 
-  let pp ppf tree =
-    Fmt.pf ppf "[ %a ]"
-      (Fmt.hvbox (Fmt.list ~sep:(Fmt.unit ";@ ") pp_entry))
-      tree
+  let v entries = v entries
 
-  let string_of_perm = function
-    | `Normal -> "100644"
-    | `Everybody -> "100664"
-    | `Exec -> "100755"
-    | `Link -> "120000"
-    | `Dir -> "40000"
-    | `Commit -> "160000"
+  let remove ~name t = remove ~name t
 
-  let perm_of_string = function
-    | "44" | "100644" -> `Normal
-    | "100664" -> `Everybody
-    | "100755" -> `Exec
-    | "120000" -> `Link
-    | "40000" | "040000" -> `Dir
-    | "160000" -> `Commit
-    | _ -> raise (Invalid_argument "perm_of_string")
+  let add entry t = add entry t
 
-  external to_list : t -> entry list = "%identity"
+  let is_empty t = is_empty t
 
-  let iter f tree = List.iter f tree
+  let to_list t = t
 
-  let is_empty t = t = []
+  let of_list entries = v entries
 
-  type value = Contents : string -> value | Node : string -> value
+  let iter t = iter t
 
-  let str = function Contents s -> s | Node s -> s
-
-  exception Result of int
-
-  let compare x y =
-    match (x, y) with
-    | Contents x, Contents y -> String.compare x y
-    | _ -> (
-        let xs = str x and ys = str y in
-        let lenx = String.length xs in
-        let leny = String.length ys in
-        let i = ref 0 in
-        try
-          while !i < lenx && !i < leny do
-            match
-              Char.compare (String.unsafe_get xs !i) (String.unsafe_get ys !i)
-            with
-            | 0 -> incr i
-            | i -> raise (Result i)
-          done ;
-          let get len s i =
-            if i < len
-            then String.unsafe_get (str s) i
-            else if i = len
-            then match s with Node _ -> '/' | Contents _ -> '\000'
-            else '\000' in
-          match Char.compare (get lenx x !i) (get leny y !i) with
-          | 0 -> Char.compare (get lenx x (!i + 1)) (get leny y (!i + 1))
-          | i -> i
-        with Result i -> i)
-
-  exception Break
-
-  let has predicate s =
-    let ln = String.length s in
-    try
-      for i = 0 to ln - 1 do
-        if predicate (String.unsafe_get s i) then raise Break
-      done ;
-      false
-    with Break -> true
-
-  let value_of_contents c = Contents c
-
-  let value_of_node n = Node n
-
-  let entry name perm node =
-    if has (( = ) '\000') name then invalid_arg "of_entry" ;
-    { name; perm; node }
-
-  let value_of_entry = function
-    | { name; perm = `Dir; _ } -> value_of_node name
-    | { name; _ } -> value_of_contents name
-
-  let of_list entries : t =
-    List.map (fun x -> (value_of_entry x, x)) entries
-    |> List.sort (fun (a, _) (b, _) -> compare a b)
-    |> List.map snd
-
-  let remove ~name t =
-    let node_key = value_of_node name in
-    let contents_key = value_of_contents name in
-    let return ~acc rest = List.rev_append acc rest in
-    let rec aux acc = function
-      | [] -> t
-      | h :: l -> (
-          let entry_key = value_of_entry h in
-          if compare contents_key entry_key = 0
-          then return ~acc l
-          else
-            match compare node_key entry_key with
-            | i when i > 0 -> aux (h :: acc) l
-            | 0 -> return ~acc l
-            | _ -> t) in
-    aux [] t
-
-  let add t e =
-    let node_key = value_of_node e.name in
-    let contents_key = value_of_contents e.name in
-    let return ~acc rest = List.rev_append acc (e :: rest) in
-    let rec aux acc = function
-      | [] -> return ~acc []
-      | ({ node; _ } as h) :: l -> (
-          let entry_key = value_of_entry h in
-          (* Remove any contents entry with the same name. This will always
-             come before the new succ entry. *)
-          if compare contents_key entry_key = 0
-          then aux acc l
-          else
-            match compare node_key entry_key with
-            | i when i > 0 -> aux (h :: acc) l
-            | i when i < 0 -> return ~acc (h :: l)
-            | 0 when Hash.equal e.node node -> t
-            | _ -> return ~acc l) in
-    aux [] t
+  let hashes t = hashes t
 
   let length t =
     let string x = Int64.of_int (String.length x) in
