@@ -18,15 +18,39 @@
 (** A Git Tree object. *)
 
 
+type perm =
+  [ `Normal  (** A {!Blob.t}. *)
+  | `Everybody
+  | `Exec  (** An executable. *)
+  | `Link  (** A {!Blob.t} that specifies the path of a {i symlink}. *)
+  | `Dir  (** A sub-{!Tree.t}. *)
+  | `Commit  (** A sub-module ({!Commit.t}). *) ]
+
+val equal_perm : perm -> perm -> bool
+
+type 'hash entry = { perm : perm; name : string; node : 'hash }
+
+val entry : name:string -> perm -> 'hash -> 'hash entry
+
+val pp_entry : pp:'hash Fmt.t -> 'hash entry Fmt.t
+
+val equal_entry :
+  equal:('hash -> 'hash -> bool) -> 'hash entry -> 'hash entry -> bool
+
+type 'hash t = private 'hash entry list
+
+val v : 'hash entry list -> 'hash t
 
 
-
-
-
-
-
-
-
+val pp : pp:'hash Fmt.t -> 'hash t Fmt.t
+val equal : equal:('hash -> 'hash -> bool) -> 'hash t -> 'hash t -> bool
+val add : 'hash entry -> 'hash t -> 'hash t
+val remove : name:string -> 'hash t -> 'hash t
+val is_empty : 'hash t -> bool
+val hashes : 'hash t -> 'hash list
+val to_list : 'hash t -> 'hash entry list
+val of_list : 'hash entry list -> 'hash t
+val iter : ('hash entry -> unit) -> 'hash t -> unit
 
 module type S = sig
   type hash
