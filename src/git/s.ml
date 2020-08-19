@@ -54,6 +54,12 @@ module type HASH = sig
 
   val read : t -> int -> int
 
+  val null : t
+
+  val length : int
+
+  val feed : ctx -> ?off:int -> ?len:int -> Bigstringaf.t -> ctx
+
   module Set : Set.S with type elt = t
 
   module Map : Map.S with type key = t
