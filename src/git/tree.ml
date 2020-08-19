@@ -18,18 +18,24 @@
 module type S = sig
   module Hash : S.HASH
 
-  type perm = [`Normal | `Everybody | `Exec | `Link | `Dir | `Commit]
-  type entry = private {perm: perm; name: string; node: Hash.t}
+  type perm = [ `Normal | `Everybody | `Exec | `Link | `Dir | `Commit ]
+
+  type entry = private { perm : perm; name : string; node : Hash.t }
 
   val pp_entry : entry Fmt.t
+
   val entry : string -> perm -> Hash.t -> entry
 
   type t
 
   val remove : name:string -> t -> t
+
   val add : t -> entry -> t
+
   val is_empty : t -> bool
+
   val perm_of_string : string -> perm
+
   val string_of_perm : perm -> string
 
   module MakeMeta (Meta : Encore.Meta.S) : sig
@@ -37,48 +43,54 @@ module type S = sig
   end
 
   module A : S.DESC with type 'a t = 'a Angstrom.t and type e = t
+
   module M : S.DESC with type 'a t = 'a Encore.Encoder.t and type e = t
 
   module D :
     S.DECODER
-    with type t = t
-     and type init = Cstruct.t
-     and type error = Error.Decoder.t
+      with type t = t
+       and type init = Cstruct.t
+       and type error = Error.Decoder.t
 
   module E :
     S.ENCODER
-    with type t = t
-     and type init = Cstruct.t * t
-     and type error = Error.never
+      with type t = t
+       and type init = Cstruct.t * t
+       and type error = Error.never
 
   include S.DIGEST with type t := t and type hash := Hash.t
+
   include S.BASE with type t := t
 
   val length : t -> int64
+
   val hashes : t -> Hash.t list
+
   val to_list : t -> entry list
+
   val of_list : entry list -> t
+
   val iter : (entry -> unit) -> t -> unit
 end
 
 module Make (Hash : S.HASH) = struct
-  type entry = {perm: perm; name: string; node: Hash.t}
+  type entry = { perm : perm; name : string; node : Hash.t }
 
-  and perm = [`Normal | `Everybody | `Exec | `Link | `Dir | `Commit]
+  and perm = [ `Normal | `Everybody | `Exec | `Link | `Dir | `Commit ]
 
   and t = entry list
 
-  let hashes tree = List.map (fun {node; _} -> node) tree
+  let hashes tree = List.map (fun { node; _ } -> node) tree
 
-  let pp_entry ppf {perm; name; node} =
+  let pp_entry ppf { perm; name; node } =
     Fmt.pf ppf "{ @[<hov>perm = %s;@ name = %s;@ node = %a;@] }"
-      ( match perm with
+      (match perm with
       | `Normal -> "normal"
       | `Everybody -> "everybody"
       | `Exec -> "exec"
       | `Link -> "link"
       | `Dir -> "dir"
-      | `Commit -> "commit" )
+      | `Commit -> "commit")
       name (Fmt.hvbox Hash.pp) node
 
   let pp ppf tree =
@@ -106,6 +118,7 @@ module Make (Hash : S.HASH) = struct
   external to_list : t -> entry list = "%identity"
 
   let iter f tree = List.iter f tree
+
   let is_empty t = t = []
 
   type value = Contents : string -> value | Node : string -> value
@@ -115,7 +128,7 @@ module Make (Hash : S.HASH) = struct
   exception Result of int
 
   let compare x y =
-    match x, y with
+    match (x, y) with
     | Contents x, Contents y -> String.compare x y
     | _ -> (
         let xs = str x and ys = str y in
@@ -131,15 +144,15 @@ module Make (Hash : S.HASH) = struct
             | i -> raise (Result i)
           done ;
           let get len s i =
-            if i < len then String.unsafe_get (str s) i
-            else if i = len then
-              match s with Node _ -> '/' | Contents _ -> '\000'
-            else '\000'
-          in
+            if i < len
+            then String.unsafe_get (str s) i
+            else if i = len
+            then match s with Node _ -> '/' | Contents _ -> '\000'
+            else '\000' in
           match Char.compare (get lenx x !i) (get leny y !i) with
           | 0 -> Char.compare (get lenx x (!i + 1)) (get leny y (!i + 1))
           | i -> i
-        with Result i -> i )
+        with Result i -> i)
 
   exception Break
 
@@ -153,18 +166,19 @@ module Make (Hash : S.HASH) = struct
     with Break -> true
 
   let value_of_contents c = Contents c
+
   let value_of_node n = Node n
 
   let entry name perm node =
     if has (( = ) '\000') name then invalid_arg "of_entry" ;
-    {name; perm; node}
+    { name; perm; node }
 
   let value_of_entry = function
-    | {name; perm= `Dir; _} -> value_of_node name
-    | {name; _} -> value_of_contents name
+    | { name; perm = `Dir; _ } -> value_of_node name
+    | { name; _ } -> value_of_contents name
 
   let of_list entries : t =
-    List.map (fun x -> value_of_entry x, x) entries
+    List.map (fun x -> (value_of_entry x, x)) entries
     |> List.sort (fun (a, _) (b, _) -> compare a b)
     |> List.map snd
 
@@ -176,13 +190,13 @@ module Make (Hash : S.HASH) = struct
       | [] -> t
       | h :: l -> (
           let entry_key = value_of_entry h in
-          if compare contents_key entry_key = 0 then return ~acc l
+          if compare contents_key entry_key = 0
+          then return ~acc l
           else
             match compare node_key entry_key with
             | i when i > 0 -> aux (h :: acc) l
             | 0 -> return ~acc l
-            | _ -> t )
-    in
+            | _ -> t) in
     aux [] t
 
   let add t e =
@@ -191,18 +205,18 @@ module Make (Hash : S.HASH) = struct
     let return ~acc rest = List.rev_append acc (e :: rest) in
     let rec aux acc = function
       | [] -> return ~acc []
-      | ({node; _} as h) :: l -> (
+      | ({ node; _ } as h) :: l -> (
           let entry_key = value_of_entry h in
           (* Remove any contents entry with the same name. This will always
              come before the new succ entry. *)
-          if compare contents_key entry_key = 0 then aux acc l
+          if compare contents_key entry_key = 0
+          then aux acc l
           else
             match compare node_key entry_key with
             | i when i > 0 -> aux (h :: acc) l
             | i when i < 0 -> return ~acc (h :: l)
             | 0 when Hash.equal e.node node -> t
-            | _ -> return ~acc l )
-    in
+            | _ -> return ~acc l) in
     aux [] t
 
   let length t =
@@ -214,8 +228,7 @@ module Make (Hash : S.HASH) = struct
       + string x.name
       + 1L
       + Int64.of_int Hash.digest_size
-      + acc
-    in
+      + acc in
     List.fold_left entry 0L t
 
   module MakeMeta (Meta : Encore.Meta.S) = struct
@@ -238,8 +251,8 @@ module Make (Hash : S.HASH) = struct
 
       let entry =
         make_exn
-          ~fwd:(fun ((perm, name), node) -> {perm; name; node})
-          ~bwd:(fun {perm; name; node} -> (perm, name), node)
+          ~fwd:(fun ((perm, name), node) -> { perm; name; node })
+          ~bwd:(fun { perm; name; node } -> ((perm, name), node))
     end
 
     type 'a t = 'a Meta.t
@@ -248,6 +261,7 @@ module Make (Hash : S.HASH) = struct
     open Meta
 
     let is_not_sp = ( <> ) ' '
+
     let is_not_nl = ( <> ) '\x00'
 
     let entry =
@@ -255,10 +269,11 @@ module Make (Hash : S.HASH) = struct
       let hash = Iso.hash <$> take Hash.digest_size in
       let name = while1 is_not_nl in
       Iso.entry
-      <$> ( perm
+      <$> (perm
           <* (char_elt ' ' <$> any)
           <*> (name <* (char_elt '\x00' <$> any))
-          <*> hash <* commit)
+          <*> hash
+          <* commit)
 
     let p = rep0 entry
   end
@@ -274,14 +289,20 @@ module Make (Hash : S.HASH) = struct
     Helper.digest (module Hash) (module E) ~etmp ~tmp ~kind:"tree" ~length value
 
   let equal = ( = )
+
   let compare = Stdlib.compare
+
   let hash = Hashtbl.hash
 
-  module Set = Set.Make (struct type nonrec t = t
+  module Set = Set.Make (struct
+    type nonrec t = t
 
-                                let compare = compare end)
+    let compare = compare
+  end)
 
-  module Map = Map.Make (struct type nonrec t = t
+  module Map = Map.Make (struct
+    type nonrec t = t
 
-                                let compare = compare end)
+    let compare = compare
+  end)
 end
