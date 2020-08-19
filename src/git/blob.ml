@@ -60,7 +60,9 @@ module type S = sig
 end
 
 module Make (Hash : S.HASH) = struct
-  type t = Cstruct.t
+  type hash = Hash.t
+
+  type nonrec t = t
 
   external of_cstruct : Cstruct.t -> t = "%identity"
 

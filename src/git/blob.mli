@@ -101,4 +101,4 @@ end
 
 (** The {i functor} to make the OCaml representation of the Git Blob object by a
     specific hash implementation. *)
-module Make (Hash : S.HASH) : S with module Hash := Hash
+module Make (Hash : S.HASH) : S with type hash = Hash.t
