@@ -18,9 +18,9 @@
 (** A Git Blob object. *)
 
 module type S = sig
+  type t
   (** The Git Blob is structurally a {!Cstruct.t} independantly of the hash
       implementation. *)
-  type t
 
   module Hash : S.HASH
 
@@ -29,16 +29,19 @@ module type S = sig
   end
 
   module A : S.DESC with type 'a t = 'a Angstrom.t and type e = t
+
   module M : S.DESC with type 'a t = 'a Encore.Encoder.t and type e = t
 
   module D :
     S.DECODER
-    with type t = t
-     and type init = Cstruct.t
-     and type error = Error.Decoder.t
+      with type t = t
+       and type init = Cstruct.t
+       and type error = Error.Decoder.t
 
   module E : S.ENCODER with type t = t and type error = Error.never
+
   include S.DIGEST with type t := t and type hash := Hash.t
+
   include S.BASE with type t := t
 
   val length : t -> int64
@@ -52,8 +55,8 @@ module type S = sig
 
   val to_cstruct : t -> Cstruct.t
   (** [to_cstruct blob] returns the [Cstruct.t] of the Blob [blob]. This
-      function does not create a fresh [Cstruct.t], so consider it as a
-      constant [Cstruct.t] ([set] functions not allowed). *)
+      function does not create a fresh [Cstruct.t], so consider it as a constant
+      [Cstruct.t] ([set] functions not allowed). *)
 
   val of_string : string -> t
   (** [of_string s] returns the blob value of a [string]. *)
@@ -63,6 +66,6 @@ module type S = sig
       other words, the content of your file. *)
 end
 
-(** The {i functor} to make the OCaml representation of the Git Blob object by
-    a specific hash implementation. *)
+(** The {i functor} to make the OCaml representation of the Git Blob object by a
+    specific hash implementation. *)
 module Make (Hash : S.HASH) : S with module Hash := Hash
