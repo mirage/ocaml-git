@@ -74,36 +74,6 @@ module Make (Hash : S.HASH) = struct
 
   let length : t -> int64 = fun t -> Int64.of_int (Cstruct.len t)
 
-  module MakeMeta (Meta : Encore.Meta.S) = struct
-    type e = t
-
-    open Helper.BaseIso
-
-    type 'a t = 'a Meta.t
-
-    module Meta = Encore.Meta.Make (Meta)
-    open Encore.Bijection
-    open Encore.Either
-    open Meta
-
-    let blob =
-      let loop m =
-        let cons = Exn.cons <$> (cstruct <$> bigstring_buffer <* commit <*> m) in
-        let nil = pure ~compare:(fun () () -> 0) () in
-        make_exn
-          ~fwd:(function L cons -> cons | R () -> [])
-          ~bwd:(function _ :: _ as lst -> L lst | [] -> R ())
-        <$> peek cons nil in
-      fix loop
-
-    let p = make_exn ~fwd:Cstruct.concat ~bwd:(fun x -> [ x ]) <$> blob
-  end
-
-  module A = MakeMeta (Encore.Proxy_decoder.Impl)
-  module M = MakeMeta (Encore.Proxy_encoder.Impl)
-  module D = Helper.MakeDecoder (A)
-  module E = Helper.MakeEncoder (M)
-
   let digest cs =
     let ctx = Hash.init () in
     let hdr = Fmt.strf "blob %Ld\000" (length cs) in
