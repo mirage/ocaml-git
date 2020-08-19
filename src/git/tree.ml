@@ -16,22 +16,31 @@
  *)
 
 module type S = sig
+  type hash
 
+  type nonrec entry = hash entry
 
+  type nonrec t = hash t
 
+  val entry : name:string -> perm -> hash -> entry
 
+  val v : entry list -> t
 
+  val add : entry -> t -> t
 
   val remove : name:string -> t -> t
 
   val is_empty : t -> bool
 
+  val format : t Encore.t
 
+  include S.DIGEST with type t := t and type hash := hash
 
   include S.BASE with type t := t
 
   val length : t -> int64
 
+  val hashes : t -> hash list
 
   val to_list : t -> entry list
 
