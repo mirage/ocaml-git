@@ -15,8 +15,9 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** A Git Blob object. *)
+(** A Git Blob object.
 
+    A Blob object is used to store file data. *)
 
 type t
 (** Type of blob is contents of file. *)
@@ -78,27 +79,40 @@ module type S = sig
   include S.BASE with type t := t
 
   val length : t -> int64
-  (** [length t] returns the length of the blob object [t]. Note that we use
-      {!Cstruct.len} and cast result to [int64]. *)
 
   val of_cstruct : Cstruct.t -> t
-  (** [of_cstruct cs] returns the blob value of a [Cstruct.t]. This function
-      does not take the ownership on [cs]. So, consider at this time to not
-      change [cs] and consider it as a constant. *)
+  (** [of_cstruct cs] is the blob from the given {!Cstruct.t} [cs]. This
+      function does not take the ownership on [cs].
+
+      {b Note.} If the user set the given [cs], it updates the blob too. This
+      function does not copy the given {!Cstruct.t}.
+
+      {[
+        let cs = Cstruct.of_string "Hello" in
+        let blob = Blob.of_cstruct cs in
+        Blob.digest blob ;;
+        - : hash = 5ab2f8a4323abafb10abb68657d9d39f1a775057
+        Cstruct.set_char cs 0 'V' ;;
+        - : unit = ()
+        Blob.digest blob ;;
+        - : hash = 4081c40614b490bea69ea2ed8fdfdb86f04b5579
+      ]} *)
 
   val to_cstruct : t -> Cstruct.t
-  (** [to_cstruct blob] returns the [Cstruct.t] of the Blob [blob]. This
-      function does not create a fresh [Cstruct.t], so consider it as a constant
-      [Cstruct.t] ([set] functions not allowed). *)
+  (** [to_cstruct blob] is the {!Cstruct.t} from the given blob. This function
+      does not create a fresh {!Cstruct.t}, *)
 
   val of_string : string -> t
-  (** [of_string s] returns the blob value of a [string]. *)
+  (** [of_string str] is the blob from the given [string] [str].
+
+      {b Note.} Despite {!of_cstruct}, [of_string] does a copy of the given
+      [string]. *)
 
   val to_string : t -> string
-  (** [to_string blob] returns a [string] which contains the [blob] value - in
-      other words, the content of your file. *)
+  (** [to_string blob] is the [string] from the given blob. *)
 end
 
-(** The {i functor} to make the OCaml representation of the Git Blob object by a
-    specific hash implementation. *)
+(** {i Functor} building an implementation of the blob structure. The
+    {i functor} returns a structure containing a type [hash] of digests and a
+    type [t] of blobs (structurally equal to {!t}). *)
 module Make (Hash : S.HASH) : S with type hash = Hash.t
