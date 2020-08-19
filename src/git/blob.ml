@@ -26,6 +26,12 @@ module Log = (val Logs.src_log src : Logs.LOG)
 
 
 
+module type S = sig
+  type hash
+
+  type nonrec t = t
+
+  include S.DIGEST with type t := t and type hash := hash
 
   include S.BASE with type t := t
 
