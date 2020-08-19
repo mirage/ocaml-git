@@ -16,55 +16,22 @@
  *)
 
 module type S = sig
-  module Hash : S.HASH
 
-  type perm = [ `Normal | `Everybody | `Exec | `Link | `Dir | `Commit ]
 
-  type entry = private { perm : perm; name : string; node : Hash.t }
 
-  val pp_entry : entry Fmt.t
 
-  val entry : string -> perm -> Hash.t -> entry
 
-  type t
 
   val remove : name:string -> t -> t
 
-  val add : t -> entry -> t
-
   val is_empty : t -> bool
 
-  val perm_of_string : string -> perm
 
-  val string_of_perm : perm -> string
-
-  module MakeMeta (Meta : Encore.Meta.S) : sig
-    val p : t Meta.t
-  end
-
-  module A : S.DESC with type 'a t = 'a Angstrom.t and type e = t
-
-  module M : S.DESC with type 'a t = 'a Encore.Encoder.t and type e = t
-
-  module D :
-    S.DECODER
-      with type t = t
-       and type init = Cstruct.t
-       and type error = Error.Decoder.t
-
-  module E :
-    S.ENCODER
-      with type t = t
-       and type init = Cstruct.t * t
-       and type error = Error.never
-
-  include S.DIGEST with type t := t and type hash := Hash.t
 
   include S.BASE with type t := t
 
   val length : t -> int64
 
-  val hashes : t -> Hash.t list
 
   val to_list : t -> entry list
 

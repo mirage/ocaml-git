@@ -17,76 +17,23 @@
 
 (** A Git Tree object. *)
 
-module type S = sig
-  module Hash : S.HASH
 
-  type perm =
-    [ `Normal  (** A {!Blob.t}. *)
-    | `Everybody
-    | `Exec  (** An executable. *)
-    | `Link  (** A {!Blob.t} that specifies the path of a {i symlink}. *)
-    | `Dir  (** A sub-{!Tree.t}. *)
-    | `Commit  (** A sub-module ({!Commit.t}). *) ]
 
-  type entry = private { perm : perm; name : string; node : Hash.t }
 
-  val pp_entry : entry Fmt.t
-  (** Pretty-printer of {!entry}. *)
 
-  val entry : string -> perm -> Hash.t -> entry
-  (** [entry name perm node] is a new entry. Raise [Invalid_argument] if [name]
-      contains ['\000']. *)
 
-  type t
-  (** A Git Tree object. Git stores content in a manner similar to a UNIX
-      {i filesystem}, but a bit simplified. All the content is stored as tree
-      and {!Blob.t} objects, with trees corresponding to UNIX directory entries
-      and blobs corresponding more or less to {i inodes} or file contents. A
-      single tree object contains one or more tree entries, each of which
-      contains a hash pointer to a {!Blob.t} or sub-tree with its associated
-      mode, type, and {i filename}. *)
 
-  val remove : name:string -> t -> t
-  (** [remove ~name t] is [t] without the entry [name]. *)
 
-  val add : t -> entry -> t
-  (** [add t e] is [t] with the addition of the enty [e]. *)
 
-  val is_empty : t -> bool
 
-  val perm_of_string : string -> perm
 
-  val string_of_perm : perm -> string
 
-  module MakeMeta (Meta : Encore.Meta.S) : sig
-    val p : t Meta.t
-  end
-
-  module A : S.DESC with type 'a t = 'a Angstrom.t and type e = t
-
-  module M : S.DESC with type 'a t = 'a Encore.Encoder.t and type e = t
-
-  module D :
-    S.DECODER
-      with type t = t
-       and type init = Cstruct.t
-       and type error = Error.Decoder.t
-
-  module E :
-    S.ENCODER
-      with type t = t
-       and type init = Cstruct.t * t
-       and type error = Error.never
-
-  include S.DIGEST with type t := t and type hash := Hash.t
 
   include S.BASE with type t := t
 
   val length : t -> int64
   (** [length t] returns the length of the tree object [t]. *)
 
-  val hashes : t -> Hash.t list
-  (** [hashes t] returns all pointer of the tree [t]. *)
 
   val to_list : t -> entry list
 
