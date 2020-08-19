@@ -81,7 +81,7 @@ module Make (Hash : S.HASH) = struct
     let ctx = Hash.feed_cstruct ctx cs in
     Hash.get ctx
 
-  let pp ppf blob = Encore.Lole.pp_bigstring ppf (Cstruct.to_bigarray blob)
+  let pp ppf blob = Fmt.string ppf (Cstruct.to_string blob)
 
   let equal = Cstruct.equal
 
