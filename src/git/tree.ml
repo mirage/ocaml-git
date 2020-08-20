@@ -15,6 +15,10 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+let src = Logs.Src.create "git.tree" ~doc:"logs git's tree event"
+
+module Log = (val Logs.src_log src : Logs.LOG)
+
 (* permission *)
 
 type perm = [ `Normal | `Everybody | `Exec | `Link | `Dir | `Commit ]
