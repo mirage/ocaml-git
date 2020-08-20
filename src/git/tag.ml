@@ -15,42 +15,17 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module type S = sig
-  module Hash : S.HASH
 
-  type t
 
-  type kind = Blob | Commit | Tag | Tree
 
-  val make : Hash.t -> kind -> ?tagger:User.t -> tag:string -> string -> t
 
-  module MakeMeta (Meta : Encore.Meta.S) : sig
-    val p : t Meta.t
-  end
 
-  module A : S.DESC with type 'a t = 'a Angstrom.t and type e = t
 
-  module M : S.DESC with type 'a t = 'a Encore.Encoder.t and type e = t
-
-  module D :
-    S.DECODER
-      with type t = t
-       and type init = Cstruct.t
-       and type error = Error.Decoder.t
-
-  module E :
-    S.ENCODER
-      with type t = t
-       and type init = Cstruct.t * t
-       and type error = Error.never
-
-  include S.DIGEST with type t := t and type hash := Hash.t
 
   include S.BASE with type t := t
 
   val length : t -> int64
 
-  val obj : t -> Hash.t
 
   val tag : t -> string
 
