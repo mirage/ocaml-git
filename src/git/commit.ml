@@ -75,100 +75,93 @@ module Make (Hash : S.HASH) = struct
   let make ~tree ~author ~committer ?(parents = []) ?(extra = []) message =
     { tree; parents; author; committer; extra; message }
 
-  module MakeMeta (Meta : Encore.Meta.S) = struct
-    type e = t
+  module Syntax = struct
+    let safe_exn f x = try f x with _ -> raise Encore.Bij.Bijection
 
-    open Helper.BaseIso
+    let hex =
+      Encore.Bij.v ~fwd:(safe_exn Hash.of_hex) ~bwd:(safe_exn Hash.to_hex)
 
-    module Iso = struct
-      open Encore.Bijection
+    let user =
+      Encore.Bij.v
+        ~fwd:(fun str ->
+          match
+            Angstrom.parse_string ~consume:Angstrom.Consume.All
+              (Encore.to_angstrom User.format)
+              str
+          with
+          | Ok v -> v
+          | Error _ -> raise Encore.Bij.Bijection)
+        ~bwd:(fun v ->
+          Encore.Lavoisier.emit_string v (Encore.to_lavoisier User.format))
 
-      let hex =
-        make_exn ~fwd:(Exn.safe_exn Hash.of_hex) ~bwd:(Exn.safe_exn Hash.to_hex)
-
-      let user =
-        make_exn
-          ~fwd:(fun s ->
-            match Angstrom.parse_string ~consume:All User.A.p s with
-            | Ok v -> v
-            | Error _ -> Exn.fail ())
-          ~bwd:(Encore.Encoder.to_string User.M.p)
-
-      let commit =
-        make_exn
-          ~fwd:
-            (fun ( (_, tree),
-                   parents,
-                   (_, author),
-                   (_, committer),
-                   extra,
-                   message ) ->
-            let parents = List.map snd parents in
-            { tree; parents; author; committer; extra; message })
-          ~bwd:(fun { tree; parents; author; committer; extra; message } ->
-            let parents = List.map (fun x -> ("parent", x)) parents in
-            ( ("tree", tree),
-              parents,
-              ("author", author),
-              ("committer", committer),
-              extra,
-              message ))
-    end
-
-    type 'a t = 'a Meta.t
-
-    module Meta = Encore.Meta.Make (Meta)
-    open Encore.Bijection
-    open Encore.Either
-    open Meta
+    let commit =
+      Encore.Bij.v
+        ~fwd:
+          (fun ((_, tree), parents, (_, author), (_, committer), extra, message) ->
+          let parents = List.map snd parents in
+          { tree; parents; author; committer; extra; message })
+        ~bwd:(fun { tree; parents; author; committer; extra; message } ->
+          let parents = List.map (fun x -> ("parent", x)) parents in
+          ( ("tree", tree),
+            parents,
+            ("author", author),
+            ("committer", committer),
+            extra,
+            message ))
 
     let is_not_sp chr = chr <> ' '
 
     let is_not_lf chr = chr <> '\x0a'
 
-    let to_end =
-      let loop m =
-        let cons = Exn.cons <$> (buffer <* commit <*> m) in
-        let nil = pure ~compare:(fun () () -> 0) () in
-        make_exn
-          ~fwd:(function L cons -> cons | R () -> [])
-          ~bwd:(function _ :: _ as lst -> L lst | [] -> R ())
-        <$> peek cons nil in
-      fix loop
+    let always x _ = x
 
-    let to_end : string t =
-      make_exn ~fwd:(String.concat "") ~bwd:(fun x -> [ x ]) <$> to_end
+    let rest =
+      let open Encore.Syntax in
+      let open Encore.Either in
+      fix @@ fun m ->
+      let cons = Encore.Bij.cons <$> (while0 (always true) <* commit <*> m) in
+      let nil = pure ~compare:(fun () () -> true) () in
+      Encore.Bij.v
+        ~fwd:(function L cons -> cons | R () -> [])
+        ~bwd:(function _ :: _ as lst -> L lst | [] -> R ())
+      <$> peek cons nil
+
+    let rest : string Encore.t =
+      let open Encore.Syntax in
+      Encore.Bij.v ~fwd:(String.concat "") ~bwd:(fun x -> [ x ]) <$> rest
 
     let value =
-      let sep = string_elt "\n " <$> const "\n " in
+      let open Encore.Syntax in
+      let sep = Encore.Bij.string "\n " <$> const "\n " in
       sep_by0 ~sep (while0 is_not_lf)
 
     let extra =
+      let open Encore.Syntax in
       while1 (fun chr -> is_not_sp chr && is_not_lf chr)
-      <* (char_elt ' ' <$> any)
-      <*> (value <* (char_elt '\x0a' <$> any))
+      <* (Encore.Bij.char ' ' <$> any)
+      <*> (value <* (Encore.Bij.char '\x0a' <$> any))
 
     let binding ?key value =
-      let value = value <$> (while1 is_not_lf <* (char_elt '\x0a' <$> any)) in
+      let open Encore.Syntax in
+      let value =
+        value <$> (while1 is_not_lf <* (Encore.Bij.char '\x0a' <$> any)) in
       match key with
-      | Some key -> const key <* (char_elt ' ' <$> any) <*> value
-      | None -> while1 is_not_sp <* (char_elt ' ' <$> any) <*> value
+      | Some key -> const key <* (Encore.Bij.char ' ' <$> any) <*> value
+      | None -> while1 is_not_sp <* (Encore.Bij.char ' ' <$> any) <*> value
 
-    let commit =
-      binding ~key:"tree" Iso.hex
-      <*> rep0 (binding ~key:"parent" Iso.hex)
-      <*> binding ~key:"author" Iso.user
-      <*> binding ~key:"committer" Iso.user
+    let t =
+      let open Encore.Syntax in
+      binding ~key:"tree" hex
+      <*> rep0 (binding ~key:"parent" hex)
+      <*> binding ~key:"author" user
+      <*> binding ~key:"committer" user
       <*> rep0 extra
-      <*> to_end
+      <*> rest
 
-    let p = Exn.compose obj6 Iso.commit <$> commit
+    let format = Encore.Syntax.map Encore.Bij.(compose obj6 commit) t
   end
 
-  module A = MakeMeta (Encore.Proxy_decoder.Impl)
-  module M = MakeMeta (Encore.Proxy_encoder.Impl)
-  module D = Helper.MakeDecoder (A)
-  module E = Helper.MakeEncoder (M)
+  let format = Syntax.format
 
   let length t =
     let string x = Int64.of_int (String.length x) in
