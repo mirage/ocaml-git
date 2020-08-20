@@ -15,12 +15,20 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** A Git Tag object. *)
+(** A Git Tag object.
 
+    A tag containing a reference pointing to another object, which can contain a
+    message just like a {!Commit}. It can also contain a (PGP) signature, in
+    which case it is called a "signed tag object". *)
 
 type kind = Blob | Commit | Tag | Tree
 
 type 'hash t
+(** A Git Tag object. The tag object is very much like a {!Commit.t} object - it
+    contains a {i tagger}, a date, a message, and a pointer. Generally, the tag
+    points to a commit rather than a tree. It's like a branch reference, but it
+    never moves - it always points to the same commit but gives it a friendlier
+    name. *)
 
 module type S = sig
   type hash
@@ -28,21 +36,27 @@ module type S = sig
   type nonrec t = hash t
 
   val make : hash -> kind -> ?tagger:User.t -> tag:string -> string -> t
+  (** [make hash kind ?tagger ~tag descr] makes a new tag with the kind [kind]
+      by the [tagger] with the name [tag] and the description [descr].
 
+      This function does not check if the reference [hash] points to an existing
+      [kind] Git object. *)
 
   val format : t Encore.t
+  (** [format] is a description of how to encode/decode of {!t} object. *)
 
   include S.DIGEST with type t := t and type hash := hash
 
   include S.BASE with type t := t
 
   val length : t -> int64
-  (** [length t] returns the length of the tag object [t]. *)
+  (** [length t] is the length of the given tag object. *)
 
   val obj : t -> hash
+  (** [obj t] returns the reference of the given tag. *)
 
   val tag : t -> string
-  (** [tag t] returns the tag information of [t]. *)
+  (** [tag t] returns the information of the given tag. *)
 
   val message : t -> string
 
@@ -51,6 +65,7 @@ module type S = sig
   val tagger : t -> User.t option
 end
 
-(** The {i functor} to make the OCaml representation of the Git Tag object by a
-    specific hash implementation. *)
+(** {i Functor} building an implementation of the tag structure. The {i functor}
+    returns a structure containing a type [hash] of digests and a type [t] of
+    tags (structurally equal to {!t}). *)
 module Make (Hash : S.HASH) : S with type hash = Hash.t
