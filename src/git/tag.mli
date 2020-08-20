@@ -18,7 +18,9 @@
 (** A Git Tag object. *)
 
 
+type kind = Blob | Commit | Tag | Tree
 
+type 'hash t
 
 module type S = sig
   type hash

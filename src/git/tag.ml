@@ -15,7 +15,15 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+type kind = Blob | Commit | Tag | Tree
 
+type 'hash t = {
+  obj : 'hash;
+  kind : kind;
+  tag : string;
+  tagger : User.t option;
+  message : string;
+}
 
 module type S = sig
   type hash
