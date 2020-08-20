@@ -18,13 +18,15 @@
 (** A Git Commit object. *)
 
 module type S = sig
+  type hash
 
+  type nonrec t = hash t
 
   val make :
-    tree:Hash.t ->
+    tree:hash ->
     author:User.t ->
     committer:User.t ->
-    ?parents:Hash.t list ->
+    ?parents:hash list ->
     ?extra:(string * string list) list ->
     string ->
     t
@@ -37,7 +39,9 @@ module type S = sig
       fails. *)
 
 
+  val format : t Encore.t
 
+  include S.DIGEST with type t := t and type hash := hash
 
   include S.BASE with type t := t
 
@@ -45,9 +49,11 @@ module type S = sig
   (** [length t] returns the length of the commit object [t]. *)
 
   (** [parents c] returns all parents of the Git Commit object [c]. *)
+  val parents : t -> hash list
 
   (** [tree c] returns the hash of top-level {!Tree.t} of the Git Commit object
       [c]. *)
+  val tree : t -> hash
 
   val committer : t -> User.t
   (** [committer c] returns the committer of the commit [c]. *)
