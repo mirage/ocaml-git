@@ -62,20 +62,15 @@ module type S = sig
 end
 
 module Make (Hash : S.HASH) = struct
+  type hash = Hash.t
+
   (* XXX(dinosaure): git seems to be very resilient with the commit. Indeed,
      it's not a mandatory to have an author or a committer and for these
      information, it's not mandatory to have a date.
 
      Follow this issue if we have any problem with the commit format. *)
 
-  type t = {
-    tree : Hash.t;
-    parents : Hash.t list;
-    author : User.t;
-    committer : User.t;
-    extra : (string * string list) list;
-    message : string;
-  }
+  type nonrec t = hash t
 
   let make ~tree ~author ~committer ?(parents = []) ?(extra = []) message =
     { tree; parents; author; committer; extra; message }
