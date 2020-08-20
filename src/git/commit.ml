@@ -15,6 +15,15 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+type 'hash t = {
+  tree : 'hash;
+  parents : 'hash list;
+  author : User.t;
+  committer : User.t;
+  extra : (string * string list) list;
+  message : string;
+}
+
 module type S = sig
   type hash
 

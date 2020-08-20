@@ -16,6 +16,7 @@
  *)
 
 (** A Git Commit object. *)
+type 'hash t
 
 module type S = sig
   type hash
