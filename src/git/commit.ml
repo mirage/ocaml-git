@@ -210,12 +210,16 @@ module Make (Hash : S.HASH) = struct
       extra (Fmt.hvbox pp_message) message
 
   let digest value =
-    let tmp = Cstruct.create 0x100 in
-    let etmp = Cstruct.create 0x100 in
-    Helper.digest
-      (module Hash)
-      (module E)
-      ~etmp ~tmp ~kind:"commit" ~length value
+    Stream.digest
+      {
+        Stream.empty = Hash.empty;
+        Stream.feed_string = (fun str ctx -> Hash.feed_string ctx str);
+        Stream.feed_bigstring = (fun bstr ctx -> Hash.feed_bigstring ctx bstr);
+        Stream.get = Hash.get;
+      }
+      `Commit length
+      (Encore.to_lavoisier format)
+      value
 
   let equal = ( = )
 
