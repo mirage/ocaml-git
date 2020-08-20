@@ -20,19 +20,19 @@
 module type S = sig
   module Hash : S.HASH
 
+  type t
   (** A Git Commit object. Which specifies the top-level {!Tree.t} for the
       snapshot of the project at a point; the author/{i committer} information
       and the commit message. *)
-  type t
 
   val make :
-       tree:Hash.t
-    -> author:User.t
-    -> committer:User.t
-    -> ?parents:Hash.t list
-    -> ?extra:(string * string list) list
-    -> string
-    -> t
+    tree:Hash.t ->
+    author:User.t ->
+    committer:User.t ->
+    ?parents:Hash.t list ->
+    ?extra:(string * string list) list ->
+    string ->
+    t
   (** [make ~author ~committer ?parents ~tree msg] makes an OCaml value {!t}.
       [?parents] should be a non-empty list and corresponds to a list of hashes
       of commits. [tree] should be a hash of a {Tree.t} object.
@@ -46,21 +46,23 @@ module type S = sig
   end
 
   module A : S.DESC with type 'a t = 'a Angstrom.t and type e = t
+
   module M : S.DESC with type 'a t = 'a Encore.Encoder.t and type e = t
 
   module D :
     S.DECODER
-    with type t = t
-     and type init = Cstruct.t
-     and type error = Error.Decoder.t
+      with type t = t
+       and type init = Cstruct.t
+       and type error = Error.Decoder.t
 
   module E :
     S.ENCODER
-    with type t = t
-     and type init = Cstruct.t * t
-     and type error = Error.never
+      with type t = t
+       and type init = Cstruct.t * t
+       and type error = Error.never
 
   include S.DIGEST with type t := t and type hash := Hash.t
+
   include S.BASE with type t := t
 
   val length : t -> int64
@@ -89,6 +91,6 @@ module type S = sig
       date of the author. The {!compare} function as the same behaviour. *)
 end
 
-(** The {i functor} to make the OCaml representation of the Git Commit object
-    by a specific hash implementation. *)
+(** The {i functor} to make the OCaml representation of the Git Commit object by
+    a specific hash implementation. *)
 module Make (Hash : S.HASH) : S with module Hash := Hash
