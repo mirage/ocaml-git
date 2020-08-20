@@ -270,9 +270,16 @@ module Make (Hash : S.HASH) : S with type hash = Hash.t = struct
   let format = Syntax.format
 
   let digest value =
-    let tmp = Cstruct.create 0x100 in
-    let etmp = Cstruct.create 0x100 in
-    Helper.digest (module Hash) (module E) ~etmp ~tmp ~kind:"tree" ~length value
+    Stream.digest
+      {
+        Stream.empty = Hash.empty;
+        Stream.feed_string = (fun str ctx -> Hash.feed_string ctx str);
+        Stream.feed_bigstring = (fun bstr ctx -> Hash.feed_bigstring ctx bstr);
+        Stream.get = Hash.get;
+      }
+      `Tree length
+      (Encore.to_lavoisier format)
+      value
 
   let equal = ( = )
 
