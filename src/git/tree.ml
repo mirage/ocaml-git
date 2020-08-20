@@ -231,57 +231,43 @@ module Make (Hash : S.HASH) : S with type hash = Hash.t = struct
       + acc in
     List.fold_left entry 0L t
 
-  module MakeMeta (Meta : Encore.Meta.S) = struct
-    type e = t
+  module Syntax = struct
+    let safe_exn f x = try f x with _ -> raise Encore.Bij.Bijection
 
-    open Helper.BaseIso
+    let perm =
+      Encore.Bij.v ~fwd:(safe_exn perm_of_string) ~bwd:(safe_exn string_of_perm)
 
-    module Iso = struct
-      open Encore.Bijection
+    let hash =
+      Encore.Bij.v
+        ~fwd:(safe_exn Hash.of_raw_string)
+        ~bwd:(safe_exn Hash.to_raw_string)
 
-      let perm =
-        make_exn
-          ~fwd:(Exn.safe_exn perm_of_string)
-          ~bwd:(Exn.safe_exn string_of_perm)
-
-      let hash =
-        make_exn
-          ~fwd:(Exn.safe_exn Hash.of_raw_string)
-          ~bwd:(Exn.safe_exn Hash.to_raw_string)
-
-      let entry =
-        make_exn
-          ~fwd:(fun ((perm, name), node) -> { perm; name; node })
-          ~bwd:(fun { perm; name; node } -> ((perm, name), node))
-    end
-
-    type 'a t = 'a Meta.t
-
-    module Meta = Encore.Meta.Make (Meta)
-    open Meta
+    let entry =
+      Encore.Bij.v
+        ~fwd:(fun ((perm, name), node) -> { perm; name; node })
+        ~bwd:(fun { perm; name; node } -> ((perm, name), node))
 
     let is_not_sp = ( <> ) ' '
 
     let is_not_nl = ( <> ) '\x00'
 
     let entry =
-      let perm = Iso.perm <$> while1 is_not_sp in
-      let hash = Iso.hash <$> take Hash.digest_size in
+      let open Encore.Syntax in
+      let perm = perm <$> while1 is_not_sp in
+      let hash = hash <$> fixed Hash.digest_size in
       let name = while1 is_not_nl in
-      Iso.entry
+      entry
       <$> (perm
-          <* (char_elt ' ' <$> any)
-          <*> (name <* (char_elt '\x00' <$> any))
-          <*> hash
+          <* (Encore.Bij.char ' ' <$> any)
+          <* commit
+          <*> (name <* (Encore.Bij.char '\x00' <$> any) <* commit)
+          <*> (hash <* commit)
           <* commit)
 
-    let p = rep0 entry
+    let format = Encore.Syntax.rep0 entry
   end
 
-  module A = MakeMeta (Encore.Proxy_decoder.Impl)
-  module M = MakeMeta (Encore.Proxy_encoder.Impl)
-  module D = Helper.MakeDecoder (A)
-  module E = Helper.MakeEncoder (M)
+  let format = Syntax.format
 
   let digest value =
     let tmp = Cstruct.create 0x100 in
