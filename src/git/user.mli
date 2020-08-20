@@ -15,17 +15,19 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-type tz_offset = {sign: [`Plus | `Minus]; hours: int; minutes: int}
-type t = {name: string; email: string; date: int64 * tz_offset option}
+type tz_offset = { sign : [ `Plus | `Minus ]; hours : int; minutes : int }
+
+type t = { name : string; email : string; date : int64 * tz_offset option }
 
 module A : S.DESC with type 'a t = 'a Angstrom.t and type e = t
+
 module M : S.DESC with type 'a t = 'a Encore.Encoder.t and type e = t
 
 module D :
   S.DECODER
-  with type t = t
-   and type init = Cstruct.t
-   and type error = Error.Decoder.t
+    with type t = t
+     and type init = Cstruct.t
+     and type error = Error.Decoder.t
 
 include S.BASE with type t := t
 
