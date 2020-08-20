@@ -18,12 +18,7 @@
 (** A Git Commit object. *)
 
 module type S = sig
-  module Hash : S.HASH
 
-  type t
-  (** A Git Commit object. Which specifies the top-level {!Tree.t} for the
-      snapshot of the project at a point; the author/{i committer} information
-      and the commit message. *)
 
   val make :
     tree:Hash.t ->
@@ -41,37 +36,16 @@ module type S = sig
       the validity of [parents] and [tree]. By this way, this function never
       fails. *)
 
-  module MakeMeta (Meta : Encore.Meta.S) : sig
-    val p : t Meta.t
-  end
 
-  module A : S.DESC with type 'a t = 'a Angstrom.t and type e = t
 
-  module M : S.DESC with type 'a t = 'a Encore.Encoder.t and type e = t
-
-  module D :
-    S.DECODER
-      with type t = t
-       and type init = Cstruct.t
-       and type error = Error.Decoder.t
-
-  module E :
-    S.ENCODER
-      with type t = t
-       and type init = Cstruct.t * t
-       and type error = Error.never
-
-  include S.DIGEST with type t := t and type hash := Hash.t
 
   include S.BASE with type t := t
 
   val length : t -> int64
   (** [length t] returns the length of the commit object [t]. *)
 
-  val parents : t -> Hash.t list
   (** [parents c] returns all parents of the Git Commit object [c]. *)
 
-  val tree : t -> Hash.t
   (** [tree c] returns the hash of top-level {!Tree.t} of the Git Commit object
       [c]. *)
 

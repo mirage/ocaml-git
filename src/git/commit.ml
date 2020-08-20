@@ -16,9 +16,7 @@
  *)
 
 module type S = sig
-  type t
 
-  module Hash : S.HASH
 
   val make :
     tree:Hash.t ->
@@ -29,35 +27,13 @@ module type S = sig
     string ->
     t
 
-  module MakeMeta (Meta : Encore.Meta.S) : sig
-    val p : t Meta.t
-  end
 
-  module A : S.DESC with type 'a t = 'a Angstrom.t and type e = t
-
-  module M : S.DESC with type 'a t = 'a Encore.Encoder.t and type e = t
-
-  module D :
-    S.DECODER
-      with type t = t
-       and type init = Cstruct.t
-       and type error = Error.Decoder.t
-
-  module E :
-    S.ENCODER
-      with type t = t
-       and type init = Cstruct.t * t
-       and type error = Error.never
-
-  include S.DIGEST with type t := t and type hash := Hash.t
 
   include S.BASE with type t := t
 
   val length : t -> int64
 
-  val parents : t -> Hash.t list
 
-  val tree : t -> Hash.t
 
   val committer : t -> User.t
 
