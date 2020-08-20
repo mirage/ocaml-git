@@ -19,6 +19,7 @@ module type S = sig
   module Hash : S.HASH
 
   type t
+
   type kind = Blob | Commit | Tag | Tree
 
   val make : Hash.t -> kind -> ?tagger:User.t -> tag:string -> string -> t
@@ -28,43 +29,51 @@ module type S = sig
   end
 
   module A : S.DESC with type 'a t = 'a Angstrom.t and type e = t
+
   module M : S.DESC with type 'a t = 'a Encore.Encoder.t and type e = t
 
   module D :
     S.DECODER
-    with type t = t
-     and type init = Cstruct.t
-     and type error = Error.Decoder.t
+      with type t = t
+       and type init = Cstruct.t
+       and type error = Error.Decoder.t
 
   module E :
     S.ENCODER
-    with type t = t
-     and type init = Cstruct.t * t
-     and type error = Error.never
+      with type t = t
+       and type init = Cstruct.t * t
+       and type error = Error.never
 
   include S.DIGEST with type t := t and type hash := Hash.t
+
   include S.BASE with type t := t
 
   val length : t -> int64
+
   val obj : t -> Hash.t
+
   val tag : t -> string
+
   val message : t -> string
+
   val kind : t -> kind
+
   val tagger : t -> User.t option
 end
 
 module Make (Hash : S.HASH) = struct
-  type t =
-    { obj: Hash.t
-    ; kind: kind
-    ; tag: string
-    ; tagger: User.t option
-    ; message: string }
+  type t = {
+    obj : Hash.t;
+    kind : kind;
+    tag : string;
+    tagger : User.t option;
+    message : string;
+  }
 
   and kind = Blob | Commit | Tag | Tree
 
   let make target kind ?tagger ~tag message =
-    {obj= target; kind; tag; tagger; message}
+    { obj = target; kind; tag; tagger; message }
 
   let pp_kind ppf = function
     | Blob -> Fmt.string ppf "Blob"
@@ -72,10 +81,10 @@ module Make (Hash : S.HASH) = struct
     | Tag -> Fmt.string ppf "Tag"
     | Tree -> Fmt.string ppf "Tree"
 
-  let pp ppf {obj; kind; tag; tagger; message} =
+  let pp ppf { obj; kind; tag; tagger; message } =
     Fmt.pf ppf
-      "{ @[<hov>obj = %a;@ kind = %a;@ tag = %s;@ tagger = %a;@ message = \
-       %a@] }"
+      "{ @[<hov>obj = %a;@ kind = %a;@ tag = %s;@ tagger = %a;@ message = %a@] \
+       }"
       Hash.pp obj pp_kind kind tag
       (Fmt.hvbox (Fmt.option User.pp))
       tagger (Fmt.hvbox Fmt.text) message
@@ -95,9 +104,7 @@ module Make (Hash : S.HASH) = struct
       open Encore.Bijection
 
       let hex =
-        make_exn
-          ~fwd:(Exn.safe_exn Hash.of_hex)
-          ~bwd:(Exn.safe_exn Hash.to_hex)
+        make_exn ~fwd:(Exn.safe_exn Hash.of_hex) ~bwd:(Exn.safe_exn Hash.to_hex)
 
       let user =
         make_exn
@@ -124,14 +131,16 @@ module Make (Hash : S.HASH) = struct
       let tag =
         make_exn
           ~fwd:(fun ((_, obj), (_, kind), (_, tag), tagger, message) ->
-            { obj
-            ; kind
-            ; tag
-            ; tagger= Helper.Option.(tagger >>= Helper.Pair.snd)
-            ; message } )
-          ~bwd:(fun {obj; kind; tag; tagger; message} ->
-            let tagger = Helper.Option.(tagger >>= fun x -> "tagger", x) in
-            ("object", obj), ("type", kind), ("tag", tag), tagger, message )
+            {
+              obj;
+              kind;
+              tag;
+              tagger = Helper.Option.(tagger >>= Helper.Pair.snd);
+              message;
+            })
+          ~bwd:(fun { obj; kind; tag; tagger; message } ->
+            let tagger = Helper.Option.(tagger >>= fun x -> ("tagger", x)) in
+            (("object", obj), ("type", kind), ("tag", tag), tagger, message))
     end
 
     type 'a t = 'a Meta.t
@@ -142,6 +151,7 @@ module Make (Hash : S.HASH) = struct
     open Meta
 
     let is_not_sp chr = chr <> ' '
+
     let is_not_lf chr = chr <> '\x0a'
 
     let to_end =
@@ -151,14 +161,11 @@ module Make (Hash : S.HASH) = struct
         make_exn
           ~fwd:(function L cons -> cons | R () -> [])
           ~bwd:(function _ :: _ as lst -> L lst | [] -> R ())
-        <$> peek cons nil
-      in
+        <$> peek cons nil in
       fix loop
 
     let to_end : string t =
-      make_exn ~fwd:(String.concat "")
-        ~bwd:(fun x -> [x] )
-      <$> to_end
+      make_exn ~fwd:(String.concat "") ~bwd:(fun x -> [ x ]) <$> to_end
 
     let binding ?key value =
       let value = value <$> (while1 is_not_lf <* (char_elt '\x0a' <$> any)) in
@@ -187,8 +194,7 @@ module Make (Hash : S.HASH) = struct
     let user_length =
       match t.tagger with
       | Some user -> string "tagger" + 1L + User.length user + 1L
-      | None -> 0L
-    in
+      | None -> 0L in
     string "object"
     + 1L
     + Int64.of_int (Hash.digest_size * 2)
@@ -204,11 +210,15 @@ module Make (Hash : S.HASH) = struct
     + user_length
     + string t.message
 
-  let obj {obj; _} = obj
-  let tag {tag; _} = tag
-  let message {message; _} = message
-  let kind {kind; _} = kind
-  let tagger {tagger; _} = tagger
+  let obj { obj; _ } = obj
+
+  let tag { tag; _ } = tag
+
+  let message { message; _ } = message
+
+  let kind { kind; _ } = kind
+
+  let tagger { tagger; _ } = tagger
 
   let digest value =
     let tmp = Cstruct.create 0x100 in
@@ -216,14 +226,20 @@ module Make (Hash : S.HASH) = struct
     Helper.digest (module Hash) (module E) ~tmp ~etmp ~kind:"tag" ~length value
 
   let equal = ( = )
+
   let compare = Stdlib.compare
+
   let hash = Hashtbl.hash
 
-  module Set = Set.Make (struct type nonrec t = t
+  module Set = Set.Make (struct
+    type nonrec t = t
 
-                                let compare = compare end)
+    let compare = compare
+  end)
 
-  module Map = Map.Make (struct type nonrec t = t
+  module Map = Map.Make (struct
+    type nonrec t = t
 
-                                let compare = compare end)
+    let compare = compare
+  end)
 end

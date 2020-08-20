@@ -18,15 +18,15 @@
 (** A Git Tag object. *)
 
 module type S = sig
-  (** The [Hash] module used to make the implementation. *)
   module Hash : S.HASH
+  (** The [Hash] module used to make the implementation. *)
 
-  (** A Git Tag object. The tag object is very much like a {!Commit.t} object -
-      it contains a {i tagger}, a date, a message, and a pointer. Generally,
-      the tag points to a commit rather than a tree. It's like a branch
-      reference, but it never moves - it always points to the same commit but
-      gives it a friendlier name. *)
   type t
+  (** A Git Tag object. The tag object is very much like a {!Commit.t} object -
+      it contains a {i tagger}, a date, a message, and a pointer. Generally, the
+      tag points to a commit rather than a tree. It's like a branch reference,
+      but it never moves - it always points to the same commit but gives it a
+      friendlier name. *)
 
   type kind = Blob | Commit | Tag | Tree
 
@@ -43,21 +43,23 @@ module type S = sig
   end
 
   module A : S.DESC with type 'a t = 'a Angstrom.t and type e = t
+
   module M : S.DESC with type 'a t = 'a Encore.Encoder.t and type e = t
 
   module D :
     S.DECODER
-    with type t = t
-     and type init = Cstruct.t
-     and type error = Error.Decoder.t
+      with type t = t
+       and type init = Cstruct.t
+       and type error = Error.Decoder.t
 
   module E :
     S.ENCODER
-    with type t = t
-     and type init = Cstruct.t * t
-     and type error = Error.never
+      with type t = t
+       and type init = Cstruct.t * t
+       and type error = Error.never
 
   include S.DIGEST with type t := t and type hash := Hash.t
+
   include S.BASE with type t := t
 
   val length : t -> int64
@@ -70,7 +72,9 @@ module type S = sig
   (** [tag t] returns the tag information of [t]. *)
 
   val message : t -> string
+
   val kind : t -> kind
+
   val tagger : t -> User.t option
 end
 
