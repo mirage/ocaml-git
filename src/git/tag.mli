@@ -20,17 +20,24 @@
 
 
 
+module type S = sig
+  type hash
+
+  type nonrec t = hash t
+
+  val make : hash -> kind -> ?tagger:User.t -> tag:string -> string -> t
 
 
+  val format : t Encore.t
 
-
-
+  include S.DIGEST with type t := t and type hash := hash
 
   include S.BASE with type t := t
 
   val length : t -> int64
   (** [length t] returns the length of the tag object [t]. *)
 
+  val obj : t -> hash
 
   val tag : t -> string
   (** [tag t] returns the tag information of [t]. *)
