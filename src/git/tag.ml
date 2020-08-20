@@ -52,15 +52,9 @@ module type S = sig
 end
 
 module Make (Hash : S.HASH) = struct
-  type t = {
-    obj : Hash.t;
-    kind : kind;
-    tag : string;
-    tagger : User.t option;
-    message : string;
-  }
+  type hash = Hash.t
 
-  and kind = Blob | Commit | Tag | Tree
+  type nonrec t = hash t
 
   let make target kind ?tagger ~tag message =
     { obj = target; kind; tag; tagger; message }
