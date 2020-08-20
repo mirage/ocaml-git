@@ -22,13 +22,18 @@ module Make (H : Digestif.S) = struct
     type t = H.t
 
     let equal = H.equal
+
     let hash = Hashtbl.hash
+
     let compare = H.unsafe_compare
   end
 
   let equal = X.equal
+
   let hash = X.hash
+
   let compare = X.compare
+
   let read h i = Char.code @@ (H.to_raw_string h).[i]
 
   module Set = Set.Make (X)
