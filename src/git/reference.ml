@@ -29,26 +29,6 @@ let to_string x = x
 
 let sep = "/"
 
-module P = struct
-  type partial = string
-
-  type branch = string
-
-  let ( // ) partial0 partial1 : partial =
-    String.concat sep [ partial0; partial1 ]
-
-  let ( / ) partial branch : t = String.concat sep [ partial; branch ]
-
-  let refs : partial = "refs"
-
-  let heads : partial = "refs/heads"
-
-  let remotes : partial = "refs/remotes"
-
-  let origin : partial = "refs/remotes/origin"
-
-  let master : branch = "master"
-end
 
 let head = "HEAD"
 
@@ -75,25 +55,6 @@ module type S = sig
 
   type nonrec t = t
 
-  module P : sig
-    type partial
-
-    type branch = string
-
-    val ( // ) : partial -> partial -> partial
-
-    val ( / ) : partial -> branch -> t
-
-    val refs : partial
-
-    val heads : partial
-
-    val remotes : partial
-
-    val origin : partial
-
-    val master : branch
-  end
 
   val head : t
 

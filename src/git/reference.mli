@@ -20,35 +20,6 @@
 type t = private string
 (** A Git Reference object. Which contains a hash to point to an other object. *)
 
-module P : sig
-  type partial
-  (** Type of the left part of a reference. *)
-
-  type branch = string
-  (** Tyoe of the right part of a reference. *)
-
-  val ( // ) : partial -> string -> partial
-  (** Infix operator to compose [string] value with a {!partial} reference. *)
-
-  val ( / ) : partial -> branch -> t
-  (** Infix operator to compose {!partial} with {!branch} and return a
-      full-defined reference {!t}. *)
-
-  val refs : partial
-  (** [refs/] *)
-
-  val heads : partial
-  (** [refs/heads/] *)
-
-  val remotes : partial
-  (** [refs/remotes/] *)
-
-  val origin : partial
-  (** [refs/remotes/origin] *)
-
-  val master : branch
-  (** [*/master] *)
-end
 
 val head : t
 (** [head] is the {i user-friendly} value of HEAD Git reference. *)
@@ -99,25 +70,14 @@ module type S = sig
 
   type nonrec t = t
 
-  module P : sig
-    type partial
 
-    type branch = string
 
-    val ( // ) : partial -> partial -> partial
 
-    val ( / ) : partial -> branch -> t
 
-    val refs : partial
 
-    val heads : partial
 
-    val remotes : partial
 
-    val origin : partial
 
-    val master : branch
-  end
 
   val head : t
 
