@@ -32,7 +32,7 @@ module type S = sig
       {!create} if the client does not notice a specific value. *)
   *)
 
-  val contents : t -> ((Hash.t * Value.t) list, error) result Lwt.t
+  val contents : t -> (hash * Value.t) list Lwt.t
   (** [contents state] returns an associated list between the hash and its bind
       git object. This list contains all git objects available in the current
       git repository [state]. *)
