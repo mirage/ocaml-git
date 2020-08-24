@@ -103,39 +103,6 @@ module type S = sig
 
       Any retrieved {!error} is missed. *)
 
-
-  module Pack : sig
-    type stream = unit -> Cstruct.t option Lwt.t
-    (** The stream contains the PACK flow. *)
-
-    val from : t -> stream -> (Hash.t * int, error) result Lwt.t
-    (** [from git stream] populates the Git repository [git] from the PACK flow
-        [stream]. If any error is encountered, any Git objects of the PACK flow
-        are not added in the Git repository. *)
-
-    val make :
-      t ->
-      ?window:[ `Object of int | `Memory of int ] ->
-      ?depth:int ->
-      Value.t list ->
-      (stream * (Checkseum.Crc32.t * int64) Hash.Map.t Lwt_mvar.t, error) result
-      Lwt.t
-    (** [make ?window ?depth values] makes a PACK stream from a list of
-        {!Value.t}.
-
-        [?window] specifies the weight of the window while the delta-ification.
-        The client can limit the weight by the number of objects in the windoz
-        (by default, is 10) or by the weight in byte of the window in your
-        memory.
-
-        [depth] (default is [50]) limits the depth of the delta-ification.
-
-        Then, the function returns a stream and a protected variable which
-        contains a representation of the associated IDX file of the PACK
-        stream. This protected variable is available ([Lwt_mvar.take]) only {b
-        at the end} of the PACK stream. That means, the client needs to consume
-        all of the stream and only then he can take the [Graph.t] associated. *)
-  end
   val iter : t -> (hash -> Value.t -> unit Lwt.t) -> hash -> unit Lwt.t
 
   module Ref : sig
