@@ -7,9 +7,7 @@
  * and POSIX paths then. *)
 
 
-let src = Logs.Src.create "git.refs" ~doc:"Git references"
 
-module Log = (val Logs.src_log src : Logs.LOG)
 
 type t = string
 
