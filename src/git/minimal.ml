@@ -1,15 +1,4 @@
 module type S = sig
-  module Value :
-    Value.S
-      with module Hash := Hash
-       and module Inflate := Inflate
-       and module Deflate := Deflate
-       and module Blob = Blob.Make(Hash)
-       and module Commit = Commit.Make(Hash)
-       and module Tree = Tree.Make(Hash)
-       and module Tag = Tag.Make(Hash)
-       and type t = Value.Make(Hash)(Inflate)(Deflate).t
-
   module Reference : Reference.S with module Hash := Hash
 
   type t
@@ -28,6 +17,7 @@ module type S = sig
 
   val default_buffer : unit -> buffer
   (** The default buffer. *)
+  module Value : Value.S with type hash = hash
 
   val buffer :
     ?ztmp:Cstruct.t ->
