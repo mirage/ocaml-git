@@ -6,7 +6,6 @@
  * only POSIX path - the backend takes care about Windows
  * and POSIX paths then. *)
 
-open Lwt.Infix
 
 let src = Logs.Src.create "git.refs" ~doc:"Git references"
 
