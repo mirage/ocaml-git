@@ -63,6 +63,13 @@ module type S = sig
   val write : t -> Value.t -> (hash * int, error) result Lwt.t
   (** [write state v] writes the value [v] in the git repository [state]. *)
 
+  val batch_write :
+    t ->
+    hash ->
+    pck:(unit -> string option Lwt.t) ->
+    idx:(unit -> string option Lwt.t) ->
+    (unit, error) result Lwt.t
+
   val fold :
     t ->
     ('acc -> ?name:Fpath.t -> length:int64 -> hash -> Value.t -> 'acc Lwt.t) ->
