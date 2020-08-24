@@ -96,8 +96,10 @@ let head = "HEAD"
 
 let master = "refs/heads/master"
 
+module Ordered = struct
   type nonrec t = t
 
+  let compare a b = compare a b
 end
 
 let compare_contents ~compare:compare_uid a b =
@@ -177,6 +179,9 @@ module Packed = struct
       | v -> v :: acc in
     List.rev (List.fold_left fold [] packed)
 end
+
+module Map = Map.Make (Ordered)
+module Set = Set.Make (Ordered)
 
 type ('t, 'uid, 'error, 's) store = {
   atomic_wr : 't -> t -> string -> ((unit, 'error) result, 's) io;
