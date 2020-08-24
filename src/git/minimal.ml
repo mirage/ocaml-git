@@ -2,9 +2,14 @@ module type S = sig
   type t
   (** The type of the git repository. *)
 
-  type error = private [> `Not_found ]
   (** The type error. *)
   type hash
+
+  type error =
+    private
+    [> `Not_found of hash
+    | `Reference_not_found of Reference.t
+    | `Msg of string ]
 
   val pp_error : error Fmt.t
   (** Pretty-printer of {!error}. *)
