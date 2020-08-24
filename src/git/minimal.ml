@@ -50,10 +50,12 @@ module type S = sig
       value [?root] value of {!create} if the client does not notice a specific
       value. *)
 
+  (*
   val compression : t -> int
   (** [compression state] returns the current level of the compression used to
       write a Git object - eg. the default value [?compression] value of
       {!create} if the client does not notice a specific value. *)
+  *)
 
   val contents : t -> ((Hash.t * Value.t) list, error) result Lwt.t
   (** [contents state] returns an associated list between the hash and its bind
