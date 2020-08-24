@@ -1,8 +1,6 @@
 module type S = sig
   type t
-  (** The type of the git repository. *)
 
-  (** The type error. *)
   type hash
 
   type error =
@@ -12,7 +10,6 @@ module type S = sig
     | `Msg of string ]
 
   val pp_error : error Fmt.t
-  (** Pretty-printer of {!error}. *)
 
   module Hash : S.HASH with type t = hash
 
@@ -44,9 +41,9 @@ module type S = sig
 
   val size : t -> hash -> (int64, error) result Lwt.t
   (** [size state hash] returns the size of the git object which respects the
-      predicate [digest(object) = hash]. The size is how many byte(s) are
-      needed to store the serialized (but not deflated) git object in bytes
-      (without the header). *)
+      predicate [digest(object) = hash]. The size is how many byte(s) are needed
+      to store the serialized (but not deflated) git object in bytes (without
+      the header). *)
 
   val read : t -> hash -> (Value.t, error) result Lwt.t
   (** [read state hash] can retrieve a git object from the current repository
@@ -54,16 +51,16 @@ module type S = sig
 
   val read_exn : t -> hash -> Value.t Lwt.t
   (** [read_exn state hash] is an alias of {!read} but raise an exception
-      (instead to return a {!result}) if the git object requested does not
-      exist or when we catch any others errors. *)
+      (instead to return a {!result}) if the git object requested does not exist
+      or when we catch any others errors. *)
 
   val mem : t -> hash -> bool Lwt.t
   (** [mem state hash] checks if one object satisfies the predicate
       [digest(object) = hash]. *)
 
-  (** [list state] lists all git objects available in the current git
-      repository [state]. *)
   val list : t -> hash list Lwt.t
+  (** [list state] lists all git objects available in the current git repository
+      [state]. *)
 
   val write : t -> Value.t -> (hash * int, error) result Lwt.t
   (** [write state v] writes the value [v] in the git repository [state]. *)
@@ -74,6 +71,8 @@ module type S = sig
     pck:(unit -> string option Lwt.t) ->
     idx:(unit -> string option Lwt.t) ->
     (unit, error) result Lwt.t
+  (** [batch_write state map pack index] writes all objects {i indexed} into
+      [index] and available into [pack] in the git repository [state]. *)
 
   val fold :
     t ->
@@ -83,35 +82,30 @@ module type S = sig
     hash ->
     'acc Lwt.t
   (** [fold state f ~path acc hash] iters on any git objects reachable by the
-     git object [hash] which located in [path] (for example, if you iter on a
-     commit, [path] should be ["."] - however, if you iter on a tree, [path]
-     should be the directory path represented by your tree). For each git
-     objects, we notice the path [name] (derived from [path]) if the object is a
-     Blob or a Tree, the [length] or the git object (see {!size}), the [hash]
-     and the [value].
+      git object [hash] which located in [path] (for example, if you iter on a
+      commit, [path] should be ["."] - however, if you iter on a tree, [path]
+      should be the directory path represented by your tree). For each git
+      objects, we notice the path [name] (derived from [path]) if the object is
+      a Blob or a Tree, the [length] or the git object (see {!size}), the [hash]
+      and the [value].
 
       If the [hash] points to:
 
-      {ul
-
-      {- {!Value.Blob.t}: [f] is called only one time with the OCaml value of
-     the {i blob}.}
-
-      {- {!Value.Tree.t}: [f] is called firstly with the Ocaml value of the
-     pointed {i tree} by the hash [hash]. Then, we {i iter} (and call [f] for
-     each iteration) in the list of entries of the {i tree}. Finally, we
-     retrieve recursively all sub-tree objects and do an ascending walk. [f] is
-     never called more than one time for each hash.}
-
-      {- {!Value.Commit.t}: [f] is called firstly with the OCaml value of the
-     pointed {i commit} by the hash [hash]. Then, it follozs recursively all
-     parents of the current commit, Finallym it starts a [fold] inside the
-     pointed root {i tree} git object of each {i commit} previously retrieved.
-     [f] never called more than one time for each hash.}
-
-      {- {!Value.Tag.t}: [f] is called firstly with the OCaml value of the
-     pointed {i tag} by the hash [hash]. Then, it follows the git object pointed
-     by the {i tag}.}}
+      - {!Value.Blob.t}: [f] is called only one time with the OCaml value of the
+        {i blob}.
+      - {!Value.Tree.t}: [f] is called firstly with the Ocaml value of the
+        pointed {i tree} by the hash [hash]. Then, we {i iter} (and call [f] for
+        each iteration) in the list of entries of the {i tree}. Finally, we
+        retrieve recursively all sub-tree objects and do an ascending walk. [f]
+        is never called more than one time for each hash.
+      - {!Value.Commit.t}: [f] is called firstly with the OCaml value of the
+        pointed {i commit} by the hash [hash]. Then, it follozs recursively all
+        parents of the current commit, Finallym it starts a [fold] inside the
+        pointed root {i tree} git object of each {i commit} previously
+        retrieved. [f] never called more than one time for each hash.
+      - {!Value.Tag.t}: [f] is called firstly with the OCaml value of the
+        pointed {i tag} by the hash [hash]. Then, it follows the git object
+        pointed by the {i tag}.
 
       Any retrieved {!error} is missed. *)
 
@@ -145,15 +139,14 @@ module type S = sig
   end
 
   val reset : t -> (unit, error) result Lwt.t
-  (** [reset t] removes all things of the git repository [t] and ensures it
-      will be empty. *)
-
+  (** [reset t] removes all things of the git repository [t] and ensures it will
+      be empty. *)
 
   val read_inflated :
     t -> hash -> ([ `Commit | `Tag | `Blob | `Tree ] * Cstruct.t) option Lwt.t
   (** [read_inflated state hash] returns the inflated git object which respect
-      the predicate [digest(value) = hash]. We return the kind of the object
-      and the inflated value as a {!Cstruct.t} (which the client can take the
+      the predicate [digest(value) = hash]. We return the kind of the object and
+      the inflated value as a {!Cstruct.t} (which the client can take the
       ownership). *)
 
   val write_inflated :
