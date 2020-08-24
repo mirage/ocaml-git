@@ -9,22 +9,10 @@ module type S = sig
   val pp_error : error Fmt.t
   (** Pretty-printer of {!error}. *)
 
-  type buffer
-  (** The type for buffers. *)
   module Hash : S.HASH with type t = hash
 
-  val default_buffer : unit -> buffer
-  (** The default buffer. *)
   module Value : Value.S with type hash = hash
 
-  val buffer :
-    ?ztmp:Cstruct.t ->
-    ?etmp:Cstruct.t ->
-    ?dtmp:Cstruct.t ->
-    ?raw:Cstruct.t ->
-    ?window:Inflate.window ->
-    unit ->
-    buffer
   module Reference : Reference.S with type hash = hash
 
   val dotgit : t -> Fpath.t
@@ -181,9 +169,6 @@ module type S = sig
   (** [reset t] removes all things of the git repository [t] and ensures it
       will be empty. *)
 
-  val clear_caches : t -> unit Lwt.t
-  (** [clear_caches t] drops all values stored in the internal caches binded
-      with the git repository [t]. *)
 
   val read_inflated :
     t -> Hash.t -> ([ `Commit | `Tag | `Blob | `Tree ] * Cstruct.t) option Lwt.t
