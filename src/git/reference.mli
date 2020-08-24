@@ -14,29 +14,54 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
+open Carton
 
 (** The Git Reference module. *)
+type t
 
+val of_string : string -> (t, [> `Msg of string ]) result
 
+val v : string -> t
 
+val add_seg : t -> string -> t
 
+val append : t -> t -> t
 
+val segs : t -> string list
 
+val pp : t Fmt.t
 
+val head : t
 
+val master : t
 
+val ( / ) : t -> string -> t
 
+val ( // ) : t -> t -> t
 
+val to_string : t -> string
 
+val equal : t -> t -> bool
 
+val compare : t -> t -> int
 
+module Map : Map.S with type key = t
 
+module Set : Set.S with type elt = t
 
+type 'uid contents = Uid of 'uid | Ref of t
 
+val equal_contents :
+  equal:('uid -> 'uid -> bool) -> 'uid contents -> 'uid contents -> bool
 
+val compare_contents :
+  compare:('uid -> 'uid -> int) -> 'uid contents -> 'uid contents -> int
 
+val pp_contents : pp:'uid Fmt.t -> 'uid contents Fmt.t
 
+val uid : 'uid -> 'uid contents
 
+val ref : t -> 'uid contents
 
 
 
