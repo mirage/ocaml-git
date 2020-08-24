@@ -6,37 +6,95 @@
  * only POSIX path - the backend takes care about Windows
  * and POSIX paths then. *)
 
+type t = string (* non empty *)
 
+let dir_sep = "/"
 
+let dir_sep_char = '/'
 
-type t = string
+let error_msgf fmt = Fmt.kstrf (fun err -> Error (`Msg err)) fmt
 
-let of_string x = x
+let validate_and_collapse_seps p =
+  let max_idx = String.length p - 1 in
+  let rec with_buf b last_sep k i =
+    if i > max_idx
+    then Ok (Bytes.sub_string b 0 k)
+    else
+      let c = p.[i] in
+      if c = '\x00'
+      then error_msgf "Malformed reference: %S" p
+      else if c <> dir_sep_char
+      then (
+        Bytes.set b k c ;
+        with_buf b false (k + 1) (i + 1))
+      else if not last_sep
+      then (
+        Bytes.set b k c ;
+        with_buf b true (k + 1) (i + 1))
+      else with_buf b true k (i + 1) in
+  let rec try_no_alloc last_sep i =
+    if i > max_idx
+    then Ok p
+    else
+      let c = p.[i] in
+      if c = '\x00'
+      then error_msgf "Malformed reference: %S" p
+      else if c <> dir_sep_char
+      then try_no_alloc false (i + 1)
+      else if not last_sep
+      then try_no_alloc true (i + 1)
+      else
+        let b = Bytes.of_string p in
+        with_buf b true i (i + 1) in
+  let start = if max_idx > 0 then if p.[0] = dir_sep_char then 1 else 0 else 0 in
+  try_no_alloc false start
+
+let of_string p =
+  if p = ""
+  then error_msgf "Empty path"
+  else
+    match validate_and_collapse_seps p with
+    | Ok p ->
+        if p.[0] = dir_sep_char then error_msgf "Absolute reference" else Ok p
+    | Error _ as err -> err
+
+let v p =
+  match of_string p with Ok v -> v | Error (`Msg err) -> invalid_arg err
+
+let is_seg s =
+  let zero = String.contains s '\x00' in
+  let sep = String.contains s dir_sep_char in
+  (not zero) && not sep
+
+let add_seg p seg =
+  if not (is_seg seg) then Fmt.invalid_arg "Invalid segment: %S" seg ;
+  let sep = if p.[String.length p - 1] = dir_sep_char then "" else dir_sep in
+  String.concat sep [ p; sep ]
+
+let append p0 p1 =
+  if p1.[0] = dir_sep_char
+  then p1
+  else
+    let sep = if p0.[String.length p0 - 1] = dir_sep_char then "" else dir_sep in
+    String.concat sep [ p0; p1 ]
+
+let ( / ) p seg = add_seg p seg
+
+let ( // ) p0 p1 = append p0 p1
+
+let segs p = Astring.String.cuts ~sep:dir_sep p
+
+let pp ppf p = Fmt.string ppf p
 
 let to_string x = x
 
-let sep = "/"
+let equal p0 p1 = String.equal p0 p1
 
+let compare p0 p1 = String.compare p0 p1
 
 let head = "HEAD"
 
-let is_head = String.equal head
-
 let master = "refs/heads/master"
-
-let to_path = function "HEAD" -> Path.v "HEAD" | refs -> Path.v refs
-
-let of_path path =
-  match Path.segs path with
-  | [] -> Fmt.invalid_arg "Reference.of_path: empty path"
-  | [ "HEAD" ] -> head
-  | "HEAD" :: _ ->
-      Fmt.invalid_arg "Reference.of_path: HEAD can not be followed by values"
-  | "refs" :: _ as refs -> String.concat sep refs
-  | _ :: _ ->
-      invalid_arg "Reference.of_path: bad path (need to be prefixed by refs)"
-
-let pp ppf x = Fmt.pf ppf "%s" (String.escaped x)
 
   type nonrec t = t
 
