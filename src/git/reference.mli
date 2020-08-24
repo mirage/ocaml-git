@@ -71,4 +71,34 @@ val ref : t -> 'uid contents
 
 end
 
+type ('t, 'uid, 'error, 's) store = {
+  atomic_wr : 't -> t -> string -> ((unit, 'error) result, 's) io;
+  atomic_rd : 't -> t -> ((string, 'error) result, 's) io;
+  uid_of_hex : string -> 'uid option;
+  uid_to_hex : 'uid -> string;
+  packed : 'uid Packed.packed;
+}
+
+val resolve :
+  's Carton.scheduler ->
+  't ->
+  ('t, 'uid, 'error, 's) store ->
+  t ->
+  (('uid, [> `Not_found of t | `Cycle ]) result, 's) io
+
+val write :
+  's Carton.scheduler ->
+  't ->
+  ('t, 'uid, 'error, 's) store ->
+  t ->
+  'uid contents ->
+  ((unit, [> `Store of 'error ]) result, 's) io
+
+val read :
+  's Carton.scheduler ->
+  't ->
+  ('t, 'uid, 'error, 's) store ->
+  t ->
+  (('uid contents, [> `Not_found of t ]) result, 's) io
+
 end

@@ -56,6 +56,62 @@ end
 
 end
 
+type ('t, 'uid, 'error, 's) store = {
+  atomic_wr : 't -> t -> string -> ((unit, 'error) result, 's) io;
+  atomic_rd : 't -> t -> ((string, 'error) result, 's) io;
+  uid_of_hex : string -> 'uid option;
+  uid_to_hex : 'uid -> string;
+  packed : 'uid Packed.packed;
+}
+
+let reword_error f = function Ok v -> Ok v | Error err -> Error (f err)
+
+let contents store str =
+  match store.uid_of_hex (String.trim str) with
+  | Some uid -> Uid uid
+  | None -> (
+      let is_sep chr = Astring.Char.Ascii.is_white chr || chr = ':' in
+      match Astring.String.fields ~empty:false ~is_sep str with
+      | [ _ref; value ] -> Ref (v value)
+      | _ -> Fmt.invalid_arg "Invalid reference contents: %S" str)
+
+let resolve { Carton.bind; Carton.return } t store reference =
+  let ( >>= ) = bind in
+
+  let rec go visited reference =
+    store.atomic_rd t reference >>= function
+    | Error _ -> (
+        match Packed.get reference store.packed with
+        | Some uid -> return (Ok uid)
+        | None -> return (Error (`Not_found reference)))
+    | Ok str ->
+    match contents store str with
+    | Uid uid -> return (Ok uid)
+    | Ref reference ->
+        if List.exists (equal reference) visited
+        then return (Error `Cycle)
+        else go (reference :: visited) reference in
+  go [ reference ] reference
+
+let read { Carton.bind; Carton.return } t store reference =
+  let ( >>= ) = bind in
+
+  store.atomic_rd t reference >>= function
+  | Error _ -> (
+      match Packed.get reference store.packed with
+      | Some uid -> return (Ok (Uid uid))
+      | None -> return (Error (`Not_found reference)))
+  | Ok str -> return (Ok (contents store str))
+
+let write { Carton.bind; Carton.return } t store reference contents =
+  let ( >>= ) = bind in
+  let ( >>| ) x f = x >>= fun x -> return (f x) in
+
+  let str =
+    match contents with
+    | Uid uid -> Fmt.strf "%s\n" (store.uid_to_hex uid)
+    | Ref t -> Fmt.strf "ref: %s\n" t in
+  store.atomic_wr t reference str >>| reword_error (fun err -> `Store err)
 
 
 end
