@@ -183,6 +183,27 @@ end
 module Map = Map.Make (Ordered)
 module Set = Set.Make (Ordered)
 
+type 'uid contents = Uid of 'uid | Ref of t
+
+let equal_contents ~equal:equal_uid a b =
+  match (a, b) with
+  | Uid a, Uid b -> equal_uid a b
+  | Ref a, Ref b -> equal a b
+  | _ -> false
+
+let pp_contents ~pp:pp_uid ppf = function
+  | Ref v -> pp ppf v
+  | Uid v -> pp_uid ppf v
+
+let compare_contents ~compare:compare_uid a b =
+  let inf = -1 and sup = 1 in
+  match (a, b) with
+  | Ref a, Ref b -> compare a b
+  | Uid a, Uid b -> compare_uid a b
+  | Ref _, _ -> sup
+  | Uid _, _ -> inf
+end
+
 type ('t, 'uid, 'error, 's) store = {
   atomic_wr : 't -> t -> string -> ((unit, 'error) result, 's) io;
   atomic_rd : 't -> t -> ((string, 'error) result, 's) io;
@@ -243,3 +264,6 @@ let write { Carton.bind; Carton.return } t store reference contents =
 
 end
 
+let uid uid = Uid uid
+
+let ref t = Ref t
