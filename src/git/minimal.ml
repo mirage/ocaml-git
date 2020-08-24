@@ -37,38 +37,38 @@ module type S = sig
       git object. This list contains all git objects available in the current
       git repository [state]. *)
 
-  val size : t -> Hash.t -> (int64, error) result Lwt.t
+  val size : t -> hash -> (int64, error) result Lwt.t
   (** [size state hash] returns the size of the git object which respects the
       predicate [digest(object) = hash]. The size is how many byte(s) are
       needed to store the serialized (but not deflated) git object in bytes
       (without the header). *)
 
-  val read : t -> Hash.t -> (Value.t, error) result Lwt.t
+  val read : t -> hash -> (Value.t, error) result Lwt.t
   (** [read state hash] can retrieve a git object from the current repository
       [state]. It de-serializes the git object to an OCaml value. *)
 
-  val read_exn : t -> Hash.t -> Value.t Lwt.t
+  val read_exn : t -> hash -> Value.t Lwt.t
   (** [read_exn state hash] is an alias of {!read} but raise an exception
       (instead to return a {!result}) if the git object requested does not
       exist or when we catch any others errors. *)
 
-  val mem : t -> Hash.t -> bool Lwt.t
+  val mem : t -> hash -> bool Lwt.t
   (** [mem state hash] checks if one object satisfies the predicate
       [digest(object) = hash]. *)
 
-  val list : t -> Hash.t list Lwt.t
   (** [list state] lists all git objects available in the current git
       repository [state]. *)
+  val list : t -> hash list Lwt.t
 
-  val write : t -> Value.t -> (Hash.t * int, error) result Lwt.t
+  val write : t -> Value.t -> (hash * int, error) result Lwt.t
   (** [write state v] writes the value [v] in the git repository [state]. *)
 
   val fold :
     t ->
-    ('acc -> ?name:Path.t -> length:int64 -> Hash.t -> Value.t -> 'acc Lwt.t) ->
-    path:Path.t ->
+    ('acc -> ?name:Fpath.t -> length:int64 -> hash -> Value.t -> 'acc Lwt.t) ->
+    path:Fpath.t ->
     'acc ->
-    Hash.t ->
+    hash ->
     'acc Lwt.t
   (** [fold state f ~path acc hash] iters on any git objects reachable by the
      git object [hash] which located in [path] (for example, if you iter on a
@@ -103,7 +103,6 @@ module type S = sig
 
       Any retrieved {!error} is missed. *)
 
-  val iter : t -> (Hash.t -> Value.t -> unit Lwt.t) -> Hash.t -> unit Lwt.t
 
   module Pack : sig
     type stream = unit -> Cstruct.t option Lwt.t
@@ -137,9 +136,10 @@ module type S = sig
         at the end} of the PACK stream. That means, the client needs to consume
         all of the stream and only then he can take the [Graph.t] associated. *)
   end
+  val iter : t -> (hash -> Value.t -> unit Lwt.t) -> hash -> unit Lwt.t
 
   module Ref : sig
-    val list : t -> (Reference.t * Hash.t) list Lwt.t
+    val list : t -> (Reference.t * hash) list Lwt.t
     (** [list state] returns an associated list between reference and its bind
         hash. *)
 
@@ -147,16 +147,16 @@ module type S = sig
     (** [mem state ref] returns [true] iff [ref] exists in [state], otherwise
         returns [false]. *)
 
-    val read : t -> Reference.t -> (Reference.head_contents, error) result Lwt.t
+    val read : t -> Reference.t -> (Reference.contents, error) result Lwt.t
     (** [read state reference] returns the value contains in the reference
         [reference] (available in the git repository [state]). *)
 
-    val resolve : t -> Reference.t -> (Hash.t, error) result Lwt.t
+    val resolve : t -> Reference.t -> (hash, error) result Lwt.t
     (** [resolve state reference] returns endpoint of [reference] (available in
         the git repository [state]). *)
 
     val write :
-      t -> Reference.t -> Reference.head_contents -> (unit, error) result Lwt.t
+      t -> Reference.t -> Reference.contents -> (unit, error) result Lwt.t
     (** [write state reference value] writes the value [value] in the mutable
         representation of the [reference] in the git repository [state]. *)
 
@@ -171,14 +171,14 @@ module type S = sig
 
 
   val read_inflated :
-    t -> Hash.t -> ([ `Commit | `Tag | `Blob | `Tree ] * Cstruct.t) option Lwt.t
+    t -> hash -> ([ `Commit | `Tag | `Blob | `Tree ] * Cstruct.t) option Lwt.t
   (** [read_inflated state hash] returns the inflated git object which respect
       the predicate [digest(value) = hash]. We return the kind of the object
       and the inflated value as a {!Cstruct.t} (which the client can take the
       ownership). *)
 
   val write_inflated :
-    t -> kind:[ `Commit | `Tree | `Blob | `Tag ] -> Cstruct.t -> Hash.t Lwt.t
+    t -> kind:[ `Commit | `Tree | `Blob | `Tag ] -> Cstruct.t -> hash Lwt.t
   (** [write_inflated state kind raw] writes the git object in the git
       repository [state] and associates the kind to this object. This function
       does not verify if the raw data is well-defined (and respects the Git
