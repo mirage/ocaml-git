@@ -54,6 +54,82 @@ let pp ppf x = Fmt.pf ppf "%s" (String.escaped x)
 
 end
 
+let compare_contents ~compare:compare_uid a b =
+  let inf = -1 and sup = 1 in
+  match (a, b) with
+  | Ref a, Ref b -> compare a b
+  | Uid a, Uid b -> compare_uid a b
+  | Ref _, _ -> sup
+  | Uid _, _ -> inf
+
+open Carton
+
+module Packed = struct
+  type 'uid elt = Ref of t * 'uid | Peeled of 'uid
+
+  type 'uid packed = 'uid elt list
+
+  type ('fd, 's) input_line = 'fd -> (string option, 's) io
+
+  (* XXX(dinosaure): [Digestif.of_hex] is able to ignore '\n' character.
+   * This code relies on this behavior. *)
+
+  let load { Carton.bind; Carton.return } ~input_line ~of_hex fd =
+    let ( >>= ) = bind in
+    let rec go acc =
+      input_line fd >>= function
+      | Some line -> (
+          match Astring.String.head line with
+          | None -> go acc
+          | Some '#' -> go acc
+          | Some '^' ->
+              let uid = String.sub line 1 (String.length line - 1) in
+              let uid = of_hex uid in
+              go (Peeled uid :: acc)
+          | Some _ ->
+          match Astring.String.cut ~sep:" " line with
+          | Some (uid, reference) ->
+              let reference = v reference in
+              let uid = of_hex uid in
+              go (Ref (reference, uid) :: acc)
+          | None -> go acc)
+      | None -> return (List.rev acc) in
+    go []
+
+  exception Found
+
+  let exists reference packed =
+    let res = ref false in
+    let f = function
+      | Ref (reference', _) ->
+          if equal reference reference'
+          then (
+            res := true ;
+            raise Found)
+      | _ -> () in
+    (try List.iter f packed with Found -> ()) ;
+    !res
+
+  let get reference packed =
+    let res = ref None in
+    let f = function
+      | Ref (reference', uid) ->
+          if equal reference reference'
+          then (
+            res := Some uid ;
+            raise Found)
+      | _ -> () in
+    (try List.iter f packed with Found -> ()) ;
+    !res
+
+  let remove reference packed =
+    let fold acc = function
+      | Ref (reference', uid) ->
+          if equal reference reference'
+          then acc
+          else Ref (reference', uid) :: acc
+      | v -> v :: acc in
+    List.rev (List.fold_left fold [] packed)
 end
 
 type ('t, 'uid, 'error, 's) store = {

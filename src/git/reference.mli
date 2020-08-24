@@ -63,12 +63,25 @@ val uid : 'uid -> 'uid contents
 
 val ref : t -> 'uid contents
 
+module Packed : sig
+  type 'uid elt = Ref of t * 'uid | Peeled of 'uid
 
+  type 'uid packed = 'uid elt list
 
+  type ('fd, 's) input_line = 'fd -> (string option, 's) io
 
+  val load :
+    's Carton.scheduler ->
+    input_line:('fd, 's) input_line ->
+    of_hex:(string -> 'uid) ->
+    'fd ->
+    ('uid packed, 's) io
 
+  val get : t -> 'uid packed -> 'uid option
 
+  val exists : t -> 'uid packed -> bool
 
+  val remove : t -> 'uid packed -> 'uid packed
 end
 
 type ('t, 'uid, 'error, 's) store = {
