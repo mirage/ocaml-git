@@ -18,12 +18,6 @@
 (** The Git Reference module. *)
 
 
-(** Interface to describe the Git reference value [head_contents]. *)
-module type S = sig
-  module Hash : S.HASH
-  (** The [Digest] module used to make the module. *)
-
-  type nonrec t = t
 
 
 
@@ -34,58 +28,22 @@ module type S = sig
 
 
 
-  val head : t
 
-  val master : t
 
-  val is_head : t -> bool
 
-  val of_string : string -> t
 
-  val to_string : t -> string
 
-  val of_path : Path.t -> t
 
-  val to_path : t -> Path.t
 
-  include S.BASE with type t := t
 
-  (** The type of the value of a Git reference. *)
-  type head_contents =
-    | Hash of Hash.t  (** A pointer to an hash. *)
-    | Ref of t
-        (** A reference which one can point to an other reference or an hash. *)
 
-  val pp_head_contents : head_contents Fmt.t
-  (** Pretty-printer of {!head_contents}. *)
 
-  val equal_head_contents : head_contents -> head_contents -> bool
-  (** [equal_head_contents a b] implies [a = Ref a'] and [b = Ref b'] and
-      [Reference.equal a' b' = true] or [a = Hash a'] and [b = Hash b'] and
-      [Hash.equal a' b'].
 
-      However, semantically [Ref a'] could be equal to [Hash b'] iff [Hash b']
-      is come from the reference [a']. That means this function does not handle
-      any indirection when it tests your values. *)
 
-  val compare_head_contents : head_contents -> head_contents -> int
 
-  module A : S.DESC with type 'a t = 'a Angstrom.t and type e = head_contents
 
-  module M :
-    S.DESC with type 'a t = 'a Encore.Encoder.t and type e = head_contents
 
-  module D :
-    S.DECODER
-      with type t = head_contents
-       and type init = Cstruct.t
-       and type error = Error.Decoder.t
 
-  module E :
-    S.ENCODER
-      with type t = head_contents
-       and type init = Cstruct.t * head_contents
-       and type error = Error.never
 end
 
 (** The interface which describes any I/O operations on Git reference. *)

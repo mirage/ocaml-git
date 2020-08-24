@@ -50,52 +50,8 @@ let of_path path =
 
 let pp ppf x = Fmt.pf ppf "%s" (String.escaped x)
 
-module type S = sig
-  module Hash : S.HASH
-
   type nonrec t = t
 
-
-  val head : t
-
-  val master : t
-
-  val is_head : t -> bool
-
-  val of_string : string -> t
-
-  val to_string : t -> string
-
-  val of_path : Path.t -> t
-
-  val to_path : t -> Path.t
-
-  include S.BASE with type t := t
-
-  type head_contents = Hash of Hash.t | Ref of t
-
-  val pp_head_contents : head_contents Fmt.t
-
-  val equal_head_contents : head_contents -> head_contents -> bool
-
-  val compare_head_contents : head_contents -> head_contents -> int
-
-  module A : S.DESC with type 'a t = 'a Angstrom.t and type e = head_contents
-
-  module M :
-    S.DESC with type 'a t = 'a Encore.Encoder.t and type e = head_contents
-
-  module D :
-    S.DECODER
-      with type t = head_contents
-       and type init = Cstruct.t
-       and type error = Error.Decoder.t
-
-  module E :
-    S.ENCODER
-      with type t = head_contents
-       and type init = Cstruct.t * head_contents
-       and type error = Error.never
 end
 
 module type IO = sig
