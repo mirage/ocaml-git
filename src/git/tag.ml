@@ -181,6 +181,18 @@ module Make (Hash : S.HASH) = struct
     + user_length
     + string t.message
 
+  let digest value =
+    Stream.digest
+      {
+        Stream.empty = Hash.empty;
+        Stream.feed_string = (fun str ctx -> Hash.feed_string ctx str);
+        Stream.feed_bigstring = (fun bstr ctx -> Hash.feed_bigstring ctx bstr);
+        Stream.get = Hash.get;
+      }
+      `Tag length
+      (Encore.to_lavoisier format)
+      value
+
   let obj { obj; _ } = obj
 
   let tag { tag; _ } = tag
@@ -190,11 +202,6 @@ module Make (Hash : S.HASH) = struct
   let kind { kind; _ } = kind
 
   let tagger { tagger; _ } = tagger
-
-  let digest value =
-    let tmp = Cstruct.create 0x100 in
-    let etmp = Cstruct.create 0x100 in
-    Helper.digest (module Hash) (module E) ~tmp ~etmp ~kind:"tag" ~length value
 
   let equal = ( = )
 
