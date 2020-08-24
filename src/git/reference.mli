@@ -17,15 +17,15 @@
 
 (** The Git Reference module. *)
 
-(** A Git Reference object. Which contains a hash to point to an other object. *)
 type t = private string
+(** A Git Reference object. Which contains a hash to point to an other object. *)
 
 module P : sig
-  (** Type of the left part of a reference. *)
   type partial
+  (** Type of the left part of a reference. *)
 
-  (** Tyoe of the right part of a reference. *)
   type branch = string
+  (** Tyoe of the right part of a reference. *)
 
   val ( // ) : partial -> string -> partial
   (** Infix operator to compose [string] value with a {!partial} reference. *)
@@ -64,29 +64,23 @@ val of_string : string -> t
 (** [of_string s] returns a valid reference value. A valid value means:
 
     A [refname] is a hierarchical octet string beginning with ["refs/"] and not
-   violating the [git-check-ref-format] command's validation rules. More
-   specifically, they:
+    violating the [git-check-ref-format] command's validation rules. More
+    specifically, they:
 
-    {ul
-
-    {- They can include slash ['/'] for hierarchical (directory) grouping, but
-   no slash-separated component can begin with a dot ['.'].} {- They must
-   contain at least one ['/']. This enforces the presence of a category like
-   ["heads/"], ["tags/"] etc. but the actual names are not restricted.}
-
-    {- They cannot have two consecutive dots [".."] anywhere.}
-
-    {- They cannot have ASCII control characters (i.e. bytes whose values are
-   lower than [\040] or [\177] DEL), space, tilde ['~'], caret ['^'], colon
-   [':'], question-mark ['?'], asterisk ['*'], or open bracket ['\['] anywhere.}
-
-    {- They cannot end with a slash ['/'] or a dot ['.'].}
-
-    {- They cannot end with the sequence [".lock"].}
-
-    {- They cannot contain a sequence ["@{"].}
-
-    {- They cannot contain a ['\\'].}} *)
+    - They can include slash ['/'] for hierarchical (directory) grouping, but no
+      slash-separated component can begin with a dot ['.'].
+    - They must contain at least one ['/']. This enforces the presence of a
+      category like ["heads/"], ["tags/"] etc. but the actual names are not
+      restricted.
+    - They cannot have two consecutive dots [".."] anywhere.
+    - They cannot have ASCII control characters (i.e. bytes whose values are
+      lower than [\040] or [\177] DEL), space, tilde ['~'], caret ['^'], colon
+      [':'], question-mark ['?'], asterisk ['*'], or open bracket ['\[']
+      anywhere.
+    - They cannot end with a slash ['/'] or a dot ['.'].
+    - They cannot end with the sequence [".lock"].
+    - They cannot contain a sequence ["@{"].
+    - They cannot contain a ['\\']. *)
 
 val to_string : t -> string
 (** [to_string t] returns the string value of the reference [t]. *)
@@ -100,30 +94,43 @@ val to_path : t -> Path.t
 
 (** Interface to describe the Git reference value [head_contents]. *)
 module type S = sig
-  (** The [Digest] module used to make the module. *)
   module Hash : S.HASH
+  (** The [Digest] module used to make the module. *)
 
   type nonrec t = t
 
   module P : sig
     type partial
+
     type branch = string
 
     val ( // ) : partial -> partial -> partial
+
     val ( / ) : partial -> branch -> t
+
     val refs : partial
+
     val heads : partial
+
     val remotes : partial
+
     val origin : partial
+
     val master : branch
   end
 
   val head : t
+
   val master : t
+
   val is_head : t -> bool
+
   val of_string : string -> t
+
   val to_string : t -> string
+
   val of_path : Path.t -> t
+
   val to_path : t -> Path.t
 
   include S.BASE with type t := t
@@ -155,24 +162,25 @@ module type S = sig
 
   module D :
     S.DECODER
-    with type t = head_contents
-     and type init = Cstruct.t
-     and type error = Error.Decoder.t
+      with type t = head_contents
+       and type init = Cstruct.t
+       and type error = Error.Decoder.t
 
   module E :
     S.ENCODER
-    with type t = head_contents
-     and type init = Cstruct.t * head_contents
-     and type error = Error.never
+      with type t = head_contents
+       and type init = Cstruct.t * head_contents
+       and type error = Error.never
 end
 
 (** The interface which describes any I/O operations on Git reference. *)
 module type IO = sig
   module FS : S.FS
+
   include S
 
+  type error = [ Error.Decoder.t | FS.error Error.FS.t ]
   (** The type of error. *)
-  type error = [Error.Decoder.t | FS.error Error.FS.t]
 
   val pp_error : error Fmt.t
   (** Pretty-printer of {!error}. *)
@@ -182,28 +190,28 @@ module type IO = sig
       git repository [root]. Otherwise, it is [false]. *)
 
   val read :
-       fs:FS.t
-    -> root:Fpath.t
-    -> t
-    -> dtmp:Cstruct.t
-    -> raw:Cstruct.t
-    -> (head_contents, error) result Lwt.t
+    fs:FS.t ->
+    root:Fpath.t ->
+    t ->
+    dtmp:Cstruct.t ->
+    raw:Cstruct.t ->
+    (head_contents, error) result Lwt.t
   (** [read ~fs ~root reference dtmp raw] is the value of the reference
-      [reference] (available in the git repository [root]). [dtmp] and [raw]
-      are buffers used by the decoder (respectively for the decoder as an
-      internal buffer and the input buffer).
+      [reference] (available in the git repository [root]). [dtmp] and [raw] are
+      buffers used by the decoder (respectively for the decoder as an internal
+      buffer and the input buffer).
 
       This function can returns an {!error}. *)
 
   val write :
-       fs:FS.t
-    -> root:Fpath.t
-    -> temp_dir:Fpath.t
-    -> etmp:Cstruct.t
-    -> raw:Cstruct.t
-    -> t
-    -> head_contents
-    -> (unit, error) result Lwt.t
+    fs:FS.t ->
+    root:Fpath.t ->
+    temp_dir:Fpath.t ->
+    etmp:Cstruct.t ->
+    raw:Cstruct.t ->
+    t ->
+    head_contents ->
+    (unit, error) result Lwt.t
   (** [write ~fs ~root ~raw reference value] writes the value [value] in the
       mutable representation of the [reference] in the git repository [root].
       [raw] is a buffer used by the decoder to keep the input.
@@ -217,8 +225,8 @@ module type IO = sig
       This function can returns an {!error}. *)
 end
 
-(** The {i functor} to make the OCaml representation of the Git Reference
-    object by a specific hash. *)
+(** The {i functor} to make the OCaml representation of the Git Reference object
+    by a specific hash. *)
 module Make (Hash : S.HASH) : S with module Hash := Hash
 
 (** The {i functor} to make a module which implements I/O operations on
