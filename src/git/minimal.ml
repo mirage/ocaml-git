@@ -1,5 +1,4 @@
 module type S = sig
-  module Hash : S.HASH
   module Inflate : S.INFLATE
   module Deflate : S.DEFLATE
 
@@ -21,12 +20,14 @@ module type S = sig
 
   type error = private [> `Not_found ]
   (** The type error. *)
+  type hash
 
   val pp_error : error Fmt.t
   (** Pretty-printer of {!error}. *)
 
   type buffer
   (** The type for buffers. *)
+  module Hash : S.HASH with type t = hash
 
   val default_buffer : unit -> buffer
   (** The default buffer. *)
