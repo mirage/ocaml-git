@@ -29,18 +29,14 @@ module type S = sig
   module Tree : Tree.S with module Hash := Hash
   module Tag : Tag.S with module Hash := Hash
 
-  type t =
-    | Blob of Blob.t
-    | Commit of Commit.t
-    | Tree of Tree.t
-    | Tag of Tag.t
+  type t = Blob of Blob.t | Commit of Commit.t | Tree of Tree.t | Tag of Tag.t
 
   val blob : Blob.t -> t
   val commit : Commit.t -> t
   val tree : Tree.t -> t
   val tag : Tag.t -> t
-  val kind : t -> [`Commit | `Blob | `Tree | `Tag]
-  val pp_kind : [`Commit | `Blob | `Tree | `Tag] Fmt.t
+  val kind : t -> [ `Commit | `Blob | `Tree | `Tag ]
+  val pp_kind : [ `Commit | `Blob | `Tree | `Tag ] Fmt.t
 
   module MakeMeta (Meta : Encore.Meta.S) : sig
     val commit : t Meta.t
@@ -53,7 +49,7 @@ module type S = sig
   module A : sig
     include S.DESC with type 'a t = 'a Angstrom.t and type e = t
 
-    val kind : [`Commit | `Blob | `Tree | `Tag] t
+    val kind : [ `Commit | `Blob | `Tree | `Tag ] t
     val length : int64 t
   end
 
@@ -61,15 +57,15 @@ module type S = sig
 
   module D :
     S.DECODER
-    with type t = t
-     and type init = Inflate.window * Cstruct.t * Cstruct.t
-     and type error = [Error.Decoder.t | `Inflate of Inflate.error]
+      with type t = t
+       and type init = Inflate.window * Cstruct.t * Cstruct.t
+       and type error = [ Error.Decoder.t | `Inflate of Inflate.error ]
 
   module E :
     S.ENCODER
-    with type t = t
-     and type init = Cstruct.t * t * int * Cstruct.t
-     and type error = [`Deflate of Deflate.error]
+      with type t = t
+       and type init = Cstruct.t * t * int * Cstruct.t
+       and type error = [ `Deflate of Deflate.error ]
 
   include S.DIGEST with type t := t and type hash := Hash.t
   include S.BASE with type t := t
@@ -84,70 +80,70 @@ module type RAW = sig
 
   module Value :
     S
-    with module Hash := Hash
-     and module Inflate := Inflate
-     and module Deflate := Deflate
+      with module Hash := Hash
+       and module Inflate := Inflate
+       and module Deflate := Deflate
 
   include module type of Value
 
   module EncoderRaw :
     S.ENCODER
-    with type t = t
-     and type init = Cstruct.t * t
-     and type error = Error.never
+      with type t = t
+       and type init = Cstruct.t * t
+       and type error = Error.never
 
   module DecoderRaw :
     S.DECODER
-    with type t = t
-     and type init = Cstruct.t
-     and type error = Error.Decoder.t
+      with type t = t
+       and type init = Cstruct.t
+       and type error = Error.Decoder.t
 
   module EncoderWithoutHeader :
     S.ENCODER
-    with type t = t
-     and type init = Cstruct.t * t
-     and type error = Error.never
+      with type t = t
+       and type init = Cstruct.t * t
+       and type error = Error.never
 
   val to_deflated_raw :
-       raw:Cstruct.t
-    -> etmp:Cstruct.t
-    -> ?level:int
-    -> ztmp:Cstruct.t
-    -> t
-    -> (string, E.error) result
+    raw:Cstruct.t ->
+    etmp:Cstruct.t ->
+    ?level:int ->
+    ztmp:Cstruct.t ->
+    t ->
+    (string, E.error) result
 
-  val to_raw : raw:Cstruct.t -> etmp:Cstruct.t -> t -> (string, EncoderRaw.error) result
+  val to_raw :
+    raw:Cstruct.t -> etmp:Cstruct.t -> t -> (string, EncoderRaw.error) result
 
   val to_raw_without_header :
-    raw:Cstruct.t -> etmp:Cstruct.t -> t -> (string, EncoderWithoutHeader.error) result
+    raw:Cstruct.t ->
+    etmp:Cstruct.t ->
+    t ->
+    (string, EncoderWithoutHeader.error) result
 
   val of_raw :
-       kind:[`Commit | `Blob | `Tree | `Tag]
-    -> Cstruct.t
-    -> (t, Error.Decoder.t) result
+    kind:[ `Commit | `Blob | `Tree | `Tag ] ->
+    Cstruct.t ->
+    (t, Error.Decoder.t) result
 
   val of_raw_with_header : Cstruct.t -> (t, DecoderRaw.error) result
 end
 
 module Make (Hash : S.HASH) (Inflate : S.INFLATE) (Deflate : S.DEFLATE) :
   S
-  with module Hash := Hash
-   and module Inflate := Inflate
-   and module Deflate := Deflate
-   and module Blob = Blob.Make(Hash)
-   and module Commit = Commit.Make(Hash)
-   and module Tree = Tree.Make(Hash)
-   and module Tag = Tag.Make(Hash) = struct
+    with module Hash := Hash
+     and module Inflate := Inflate
+     and module Deflate := Deflate
+     and module Blob = Blob.Make(Hash)
+     and module Commit = Commit.Make(Hash)
+     and module Tree = Tree.Make(Hash)
+     and module Tag = Tag.Make(Hash) = struct
   module Blob = Blob.Make (Hash)
   module Commit = Commit.Make (Hash)
   module Tree = Tree.Make (Hash)
   module Tag = Tag.Make (Hash)
 
-  type t =
-    | Blob of Blob.t
-    | Commit of Commit.t
-    | Tree of Tree.t
-    | Tag of Tag.t
+  type t = Blob of Blob.t | Commit of Commit.t | Tree of Tree.t | Tag of Tag.t
 
   let blob blob = Blob blob
 
@@ -233,8 +229,7 @@ module Make (Hash : S.HASH) (Inflate : S.INFLATE) (Deflate : S.DEFLATE) :
     let commit =
       make_exn
         ~fwd:(fun commit -> Commit commit)
-        ~bwd:(function
-          | Commit commit -> commit | _ -> Exn.fail ())
+        ~bwd:(function Commit commit -> commit | _ -> Exn.fail ())
       <$> Commit.p
 
     let blob =
@@ -303,21 +298,25 @@ module Make (Hash : S.HASH) (Inflate : S.INFLATE) (Deflate : S.DEFLATE) :
     | Blob a, Blob b -> Blob.compare a b
     | Tree a, Tree b -> Tree.compare a b
     | Tag a, Tag b -> Tag.compare a b
-    | ( ((Commit _ | Blob _ | Tree _ | Tag _) as a)
-      , ((Commit _ | Blob _ | Tree _ | Tag _) as b) ) ->
+    | ( ((Commit _ | Blob _ | Tree _ | Tag _) as a),
+        ((Commit _ | Blob _ | Tree _ | Tag _) as b) ) ->
         if int_of_kind a > int_of_kind b then -1
         else if int_of_kind a < int_of_kind b then 1
         else if length a > length b then -1
         else if length a < length b then 1
         else Stdlib.compare a b
 
-  module Set = Set.Make (struct type nonrec t = t
+  module Set = Set.Make (struct
+    type nonrec t = t
 
-                                let compare = compare end)
+    let compare = compare
+  end)
 
-  module Map = Map.Make (struct type nonrec t = t
+  module Map = Map.Make (struct
+    type nonrec t = t
 
-                                let compare = compare end)
+    let compare = compare
+  end)
 end
 
 module Raw (Hash : S.HASH) (Inflate : S.INFLATE) (Deflate : S.DEFLATE) = struct
@@ -354,17 +353,16 @@ module Raw (Hash : S.HASH) (Inflate : S.INFLATE) (Deflate : S.DEFLATE) = struct
     val raw_sub : raw -> int -> int -> raw
 
     val eval :
-         raw
-      -> state
-      -> [`Flush of state | `End of state * result | `Error of state * error]
+      raw ->
+      state ->
+      [ `Flush of state | `End of state * result | `Error of state * error ]
 
     val used : state -> int
     val flush : int -> int -> state -> state
   end
 
   type ('state, 'raw, 'result, 'error) encoder =
-    (module
-     ENCODER
+    (module ENCODER
        with type state = 'state
         and type raw = 'raw
         and type result = 'result
@@ -374,8 +372,7 @@ module Raw (Hash : S.HASH) (Inflate : S.INFLATE) (Deflate : S.DEFLATE) = struct
       (encoder : (state, Cstruct.t, res, err_encoder) encoder)
       (buffer : Cstruct_buffer.t) (raw : Cstruct.t) (state : state) :
       (string, err_encoder) result =
-    let module E = ( val encoder
-                       : ENCODER
+    let module E = ( val encoder : ENCODER
                        with type state = state
                         and type raw = Cstruct.t
                         and type result = res
@@ -386,11 +383,11 @@ module Raw (Hash : S.HASH) (Inflate : S.INFLATE) (Deflate : S.DEFLATE) = struct
       | `Error (_, err) -> Error err
       | `End (state, _) ->
           if E.used state > 0 then
-            Cstruct_buffer.add buffer (E.raw_sub raw 0 (E.used state)) ;
+            Cstruct_buffer.add buffer (E.raw_sub raw 0 (E.used state));
           Ok (Cstruct_buffer.contents buffer)
       | `Flush state ->
           if E.used state > 0 then
-            Cstruct_buffer.add buffer (E.raw_sub raw 0 (E.used state)) ;
+            Cstruct_buffer.add buffer (E.raw_sub raw 0 (E.used state));
           go (E.flush 0 (E.raw_length raw) state)
     in
     go state
@@ -411,7 +408,7 @@ module Raw (Hash : S.HASH) (Inflate : S.INFLATE) (Deflate : S.DEFLATE) = struct
       let raw_length = Cstruct.len
       let raw_sub = Cstruct.sub
 
-      type rest = [`Flush of state | `End of state * result]
+      type rest = [ `Flush of state | `End of state * result ]
 
       let eval raw state =
         match E.eval raw state with
@@ -437,7 +434,7 @@ module Raw (Hash : S.HASH) (Inflate : S.INFLATE) (Deflate : S.DEFLATE) = struct
       let raw_length = Cstruct.len
       let raw_sub = Cstruct.sub
 
-      type rest = [`Flush of state | `End of state * result]
+      type rest = [ `Flush of state | `End of state * result ]
 
       let eval raw state =
         match EncoderRaw.eval raw state with
@@ -463,7 +460,7 @@ module Raw (Hash : S.HASH) (Inflate : S.INFLATE) (Deflate : S.DEFLATE) = struct
       let raw_length = Cstruct.len
       let raw_sub = Cstruct.sub
 
-      type rest = [`Flush of state | `End of state * result]
+      type rest = [ `Flush of state | `End of state * result ]
 
       let eval raw state =
         match EncoderWithoutHeader.eval raw state with
