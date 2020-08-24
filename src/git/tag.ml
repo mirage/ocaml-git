@@ -79,98 +79,85 @@ module Make (Hash : S.HASH) = struct
     | Tree -> "tree"
     | Blob -> "blob"
 
-  module MakeMeta (Meta : Encore.Meta.S) = struct
-    type e = t
+  module Syntax = struct
+    let safe_exn f x = try f x with _ -> raise Encore.Bij.Bijection
 
-    open Helper.BaseIso
+    let hex =
+      Encore.Bij.v ~fwd:(safe_exn Hash.of_hex) ~bwd:(safe_exn Hash.to_hex)
 
-    module Iso = struct
-      open Encore.Bijection
+    let user =
+      Encore.Bij.v
+        ~fwd:(fun str ->
+          match
+            Angstrom.parse_string ~consume:Angstrom.Consume.All
+              (Encore.to_angstrom User.format)
+              str
+          with
+          | Ok v -> v
+          | Error _ -> raise Encore.Bij.Bijection)
+        ~bwd:(fun v ->
+          Encore.Lavoisier.emit_string v (Encore.to_lavoisier User.format))
 
-      let hex =
-        make_exn ~fwd:(Exn.safe_exn Hash.of_hex) ~bwd:(Exn.safe_exn Hash.to_hex)
+    let kind =
+      Encore.Bij.v
+        ~fwd:(function
+          | "tree" -> Tree
+          | "blob" -> Blob
+          | "commit" -> Commit
+          | "tag" -> Tag
+          | _ -> raise Encore.Bij.Bijection)
+        ~bwd:(function
+          | Blob -> "blob" | Tree -> "tree" | Commit -> "commit" | Tag -> "tag")
 
-      let user =
-        make_exn
-          ~fwd:(fun s ->
-            match Angstrom.parse_string ~consume:All User.A.p s with
-            | Ok v -> v
-            | Error _ -> Exn.fail ())
-          ~bwd:(Encore.Encoder.to_string User.M.p)
-
-      let kind =
-        make_exn
-          ~fwd:(function
-            | "tree" -> Tree
-            | "blob" -> Blob
-            | "commit" -> Commit
-            | "tag" -> Tag
-            | _ -> Exn.fail ())
-          ~bwd:(function
-            | Blob -> "blob"
-            | Tree -> "tree"
-            | Commit -> "commit"
-            | Tag -> "tag")
-
-      let tag =
-        make_exn
-          ~fwd:(fun ((_, obj), (_, kind), (_, tag), tagger, message) ->
-            {
-              obj;
-              kind;
-              tag;
-              tagger = Helper.Option.(tagger >>= Helper.Pair.snd);
-              message;
-            })
-          ~bwd:(fun { obj; kind; tag; tagger; message } ->
-            let tagger = Helper.Option.(tagger >>= fun x -> ("tagger", x)) in
-            (("object", obj), ("type", kind), ("tag", tag), tagger, message))
-    end
-
-    type 'a t = 'a Meta.t
-
-    module Meta = Encore.Meta.Make (Meta)
-    open Encore.Bijection
-    open Encore.Either
-    open Meta
+    let tag =
+      Encore.Bij.v
+        ~fwd:(fun ((_, obj), (_, kind), (_, tag), tagger, message) ->
+          { obj; kind; tag; tagger = Option.map snd tagger; message })
+        ~bwd:(fun { obj; kind; tag; tagger; message } ->
+          let tagger = Option.map (fun x -> ("tagger", x)) tagger in
+          (("object", obj), ("type", kind), ("tag", tag), tagger, message))
 
     let is_not_sp chr = chr <> ' '
 
     let is_not_lf chr = chr <> '\x0a'
 
-    let to_end =
-      let loop m =
-        let cons = Exn.cons <$> (buffer <* commit <*> m) in
-        let nil = pure ~compare:(fun () () -> 0) () in
-        make_exn
-          ~fwd:(function L cons -> cons | R () -> [])
-          ~bwd:(function _ :: _ as lst -> L lst | [] -> R ())
-        <$> peek cons nil in
-      fix loop
+    let always x _ = x
 
-    let to_end : string t =
-      make_exn ~fwd:(String.concat "") ~bwd:(fun x -> [ x ]) <$> to_end
+    let rest =
+      let open Encore.Syntax in
+      let open Encore.Either in
+      fix @@ fun m ->
+      let cons = Encore.Bij.cons <$> (while0 (always true) <* commit <*> m) in
+      let nil = pure ~compare:(fun () () -> true) () in
+      Encore.Bij.v
+        ~fwd:(function L cons -> cons | R () -> [])
+        ~bwd:(function _ :: _ as lst -> L lst | [] -> R ())
+      <$> peek cons nil
+
+    let rest : string Encore.t =
+      let open Encore.Syntax in
+      Encore.Bij.v ~fwd:(String.concat "") ~bwd:(fun x -> [ x ]) <$> rest
 
     let binding ?key value =
-      let value = value <$> (while1 is_not_lf <* (char_elt '\x0a' <$> any)) in
+      let open Encore.Syntax in
+      let value =
+        value <$> (while1 is_not_lf <* (Encore.Bij.char '\x0a' <$> any)) in
       match key with
-      | Some key -> const key <* (char_elt ' ' <$> any) <*> value
-      | None -> while1 is_not_sp <* (char_elt ' ' <$> any) <*> value
+      | Some key -> const key <* (Encore.Bij.char ' ' <$> any) <*> value
+      | None -> while1 is_not_sp <* (Encore.Bij.char ' ' <$> any) <*> value
 
-    let tag =
-      binding ~key:"object" Iso.hex
-      <*> binding ~key:"type" Iso.kind
-      <*> binding ~key:"tag" Exn.identity
-      <*> option (binding ~key:"tagger" Iso.user)
-      <*> to_end
+    let t =
+      let open Encore.Syntax in
+      binding ~key:"object" hex
+      <*> binding ~key:"type" kind
+      <*> binding ~key:"tag" Encore.Bij.identity
+      <*> option (binding ~key:"tagger" user)
+      <*> rest
 
-    let p = Exn.compose obj5 Iso.tag <$> tag
+    let format = Encore.Syntax.map Encore.Bij.(compose obj5 tag) t
   end
 
-  module A = MakeMeta (Encore.Proxy_decoder.Impl)
-  module M = MakeMeta (Encore.Proxy_encoder.Impl)
-  module D = Helper.MakeDecoder (A)
-  module E = Helper.MakeEncoder (M)
+  let format = Syntax.format
 
   let length t =
     let string x = Int64.of_int (String.length x) in
