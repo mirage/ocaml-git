@@ -47,12 +47,3 @@
 end
 
 end
-
-(** The {i functor} to make the OCaml representation of the Git Reference object
-    by a specific hash. *)
-module Make (Hash : S.HASH) : S with module Hash := Hash
-
-(** The {i functor} to make a module which implements I/O operations on
-    references on a file-system. *)
-module IO (H : S.HASH) (FS : S.FS) :
-  IO with module Hash := H and module FS := FS
