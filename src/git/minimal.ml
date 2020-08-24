@@ -5,40 +5,40 @@ module type S = sig
 
   module Value :
     Value.S
-    with module Hash := Hash
-     and module Inflate := Inflate
-     and module Deflate := Deflate
-     and module Blob = Blob.Make(Hash)
-     and module Commit = Commit.Make(Hash)
-     and module Tree = Tree.Make(Hash)
-     and module Tag = Tag.Make(Hash)
-     and type t = Value.Make(Hash)(Inflate)(Deflate).t
+      with module Hash := Hash
+       and module Inflate := Inflate
+       and module Deflate := Deflate
+       and module Blob = Blob.Make(Hash)
+       and module Commit = Commit.Make(Hash)
+       and module Tree = Tree.Make(Hash)
+       and module Tag = Tag.Make(Hash)
+       and type t = Value.Make(Hash)(Inflate)(Deflate).t
 
   module Reference : Reference.S with module Hash := Hash
 
-  (** The type of the git repository. *)
   type t
+  (** The type of the git repository. *)
 
+  type error = private [> `Not_found ]
   (** The type error. *)
-  type error = private [> `Not_found]
 
   val pp_error : error Fmt.t
   (** Pretty-printer of {!error}. *)
 
-  (** The type for buffers. *)
   type buffer
+  (** The type for buffers. *)
 
   val default_buffer : unit -> buffer
   (** The default buffer. *)
 
   val buffer :
-       ?ztmp:Cstruct.t
-       -> ?etmp:Cstruct.t
-    -> ?dtmp:Cstruct.t
-    -> ?raw:Cstruct.t
-    -> ?window:Inflate.window
-    -> unit
-    -> buffer
+    ?ztmp:Cstruct.t ->
+    ?etmp:Cstruct.t ->
+    ?dtmp:Cstruct.t ->
+    ?raw:Cstruct.t ->
+    ?window:Inflate.window ->
+    unit ->
+    buffer
 
   val dotgit : t -> Fpath.t
   (** [dotgit state] returns the current [".git"] path used - eg. the default
@@ -87,12 +87,12 @@ module type S = sig
   (** [write state v] writes the value [v] in the git repository [state]. *)
 
   val fold :
-       t
-    -> ('acc -> ?name:Path.t -> length:int64 -> Hash.t -> Value.t -> 'acc Lwt.t)
-    -> path:Path.t
-    -> 'acc
-    -> Hash.t
-    -> 'acc Lwt.t
+    t ->
+    ('acc -> ?name:Path.t -> length:int64 -> Hash.t -> Value.t -> 'acc Lwt.t) ->
+    path:Path.t ->
+    'acc ->
+    Hash.t ->
+    'acc Lwt.t
   (** [fold state f ~path acc hash] iters on any git objects reachable by the
      git object [hash] which located in [path] (for example, if you iter on a
      commit, [path] should be ["."] - however, if you iter on a tree, [path]
@@ -129,8 +129,8 @@ module type S = sig
   val iter : t -> (Hash.t -> Value.t -> unit Lwt.t) -> Hash.t -> unit Lwt.t
 
   module Pack : sig
-    (** The stream contains the PACK flow. *)
     type stream = unit -> Cstruct.t option Lwt.t
+    (** The stream contains the PACK flow. *)
 
     val from : t -> stream -> (Hash.t * int, error) result Lwt.t
     (** [from git stream] populates the Git repository [git] from the PACK flow
@@ -138,14 +138,12 @@ module type S = sig
         are not added in the Git repository. *)
 
     val make :
-         t
-      -> ?window:[`Object of int | `Memory of int]
-      -> ?depth:int
-      -> Value.t list
-      -> ( stream * (Checkseum.Crc32.t * int64) Hash.Map.t Lwt_mvar.t
-         , error )
-         result
-         Lwt.t
+      t ->
+      ?window:[ `Object of int | `Memory of int ] ->
+      ?depth:int ->
+      Value.t list ->
+      (stream * (Checkseum.Crc32.t * int64) Hash.Map.t Lwt_mvar.t, error) result
+      Lwt.t
     (** [make ?window ?depth values] makes a PACK stream from a list of
         {!Value.t}.
 
@@ -172,8 +170,7 @@ module type S = sig
     (** [mem state ref] returns [true] iff [ref] exists in [state], otherwise
         returns [false]. *)
 
-    val read :
-      t -> Reference.t -> (Reference.head_contents, error) result Lwt.t
+    val read : t -> Reference.t -> (Reference.head_contents, error) result Lwt.t
     (** [read state reference] returns the value contains in the reference
         [reference] (available in the git repository [state]). *)
 
@@ -200,14 +197,14 @@ module type S = sig
       with the git repository [t]. *)
 
   val read_inflated :
-    t -> Hash.t -> ([`Commit | `Tag | `Blob | `Tree] * Cstruct.t) option Lwt.t
+    t -> Hash.t -> ([ `Commit | `Tag | `Blob | `Tree ] * Cstruct.t) option Lwt.t
   (** [read_inflated state hash] returns the inflated git object which respect
       the predicate [digest(value) = hash]. We return the kind of the object
       and the inflated value as a {!Cstruct.t} (which the client can take the
       ownership). *)
 
   val write_inflated :
-    t -> kind:[`Commit | `Tree | `Blob | `Tag] -> Cstruct.t -> Hash.t Lwt.t
+    t -> kind:[ `Commit | `Tree | `Blob | `Tag ] -> Cstruct.t -> Hash.t Lwt.t
   (** [write_inflated state kind raw] writes the git object in the git
       repository [state] and associates the kind to this object. This function
       does not verify if the raw data is well-defined (and respects the Git
@@ -217,5 +214,6 @@ module type S = sig
   (** {1 Backend Features} *)
 
   val has_global_watches : bool
+
   val has_global_checkout : bool
 end
