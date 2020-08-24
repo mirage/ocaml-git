@@ -1,6 +1,4 @@
 module type S = sig
-  module Reference : Reference.S with module Hash := Hash
-
   type t
   (** The type of the git repository. *)
 
@@ -27,6 +25,7 @@ module type S = sig
     ?window:Inflate.window ->
     unit ->
     buffer
+  module Reference : Reference.S with type hash = hash
 
   val dotgit : t -> Fpath.t
   (** [dotgit state] returns the current [".git"] path used - eg. the default
