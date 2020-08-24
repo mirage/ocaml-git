@@ -54,36 +54,6 @@ let pp ppf x = Fmt.pf ppf "%s" (String.escaped x)
 
 end
 
-module type IO = sig
-  module FS : S.FS
-
-  include S
-
-  type error = [ Error.Decoder.t | FS.error Error.FS.t ]
-
-  val pp_error : error Fmt.t
-
-  val mem : fs:FS.t -> root:Fpath.t -> t -> bool Lwt.t
-
-  val read :
-    fs:FS.t ->
-    root:Fpath.t ->
-    t ->
-    dtmp:Cstruct.t ->
-    raw:Cstruct.t ->
-    (head_contents, error) result Lwt.t
-
-  val write :
-    fs:FS.t ->
-    root:Fpath.t ->
-    temp_dir:Fpath.t ->
-    etmp:Cstruct.t ->
-    raw:Cstruct.t ->
-    t ->
-    head_contents ->
-    (unit, error) result Lwt.t
-
-  val remove : fs:FS.t -> root:Fpath.t -> t -> (unit, error) result Lwt.t
 end
 
 module Make (Hash : S.HASH) = struct

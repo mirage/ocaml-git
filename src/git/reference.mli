@@ -46,56 +46,6 @@
 
 end
 
-(** The interface which describes any I/O operations on Git reference. *)
-module type IO = sig
-  module FS : S.FS
-
-  include S
-
-  type error = [ Error.Decoder.t | FS.error Error.FS.t ]
-  (** The type of error. *)
-
-  val pp_error : error Fmt.t
-  (** Pretty-printer of {!error}. *)
-
-  val mem : fs:FS.t -> root:Fpath.t -> t -> bool Lwt.t
-  (** [mem ~fs ~root reference] is [true] iff [reference] can be found in the
-      git repository [root]. Otherwise, it is [false]. *)
-
-  val read :
-    fs:FS.t ->
-    root:Fpath.t ->
-    t ->
-    dtmp:Cstruct.t ->
-    raw:Cstruct.t ->
-    (head_contents, error) result Lwt.t
-  (** [read ~fs ~root reference dtmp raw] is the value of the reference
-      [reference] (available in the git repository [root]). [dtmp] and [raw] are
-      buffers used by the decoder (respectively for the decoder as an internal
-      buffer and the input buffer).
-
-      This function can returns an {!error}. *)
-
-  val write :
-    fs:FS.t ->
-    root:Fpath.t ->
-    temp_dir:Fpath.t ->
-    etmp:Cstruct.t ->
-    raw:Cstruct.t ->
-    t ->
-    head_contents ->
-    (unit, error) result Lwt.t
-  (** [write ~fs ~root ~raw reference value] writes the value [value] in the
-      mutable representation of the [reference] in the git repository [root].
-      [raw] is a buffer used by the decoder to keep the input.
-
-      This function can returns an {!error}. *)
-
-  val remove : fs:FS.t -> root:Fpath.t -> t -> (unit, error) result Lwt.t
-  (** [remove ~root reference] removes the reference from the git repository
-      [root].
-
-      This function can returns an {!error}. *)
 end
 
 (** The {i functor} to make the OCaml representation of the Git Reference object
