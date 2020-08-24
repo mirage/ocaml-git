@@ -1,7 +1,4 @@
 module type S = sig
-  module Inflate : S.INFLATE
-  module Deflate : S.DEFLATE
-
   module Value :
     Value.S
       with module Hash := Hash
