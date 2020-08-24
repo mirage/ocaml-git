@@ -114,4 +114,10 @@ val read :
   t ->
   (('uid contents, [> `Not_found of t ]) result, 's) io
 
+module type S = sig
+  type hash
+
+  type nonrec t = t
+
+  type nonrec contents = hash contents
 end

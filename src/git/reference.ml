@@ -261,7 +261,12 @@ let write { Carton.bind; Carton.return } t store reference contents =
     | Ref t -> Fmt.strf "ref: %s\n" t in
   store.atomic_wr t reference str >>| reword_error (fun err -> `Store err)
 
+module type S = sig
+  type hash
 
+  type nonrec t = t
+
+  type nonrec contents = hash contents
 end
 
 let uid uid = Uid uid
