@@ -21,24 +21,17 @@ module Log = (val Logs.src_log src : Logs.LOG)
 
 module type STORE = sig
   module Hash : S.HASH
-  module Inflate : S.INFLATE
-  module Deflate : S.DEFLATE
 
-  module Value :
-    Value.S
-    with module Hash := Hash
-     and module Inflate := Inflate
-     and module Deflate := Deflate
+  module Value : Value.S with type hash = Hash.t
 
   type t
-  type error
 
-  val pp_error : error Fmt.t
-  val read : t -> Hash.t -> (Value.t, error) result Lwt.t
-end
+  val root : t -> Fpath.t
 
 module Make (S : STORE) = struct
   open S
+  val read_exn : t -> Hash.t -> Value.t Lwt.t
+end
 
   (* XXX(dinosaure): convenience and common part between the file-system and
      the mem back-end - to avoid redundant code. *)
