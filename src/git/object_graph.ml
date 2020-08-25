@@ -31,17 +31,17 @@ module type S = sig
   val of_commits : Store.t -> K.t Lwt.t
 
   val closure :
-       ?full:bool
-    -> Store.t
-    -> min:Store.Hash.Set.t
-    -> max:Store.Hash.Set.t
-    -> K.t Lwt.t
+    ?full:bool ->
+    Store.t ->
+    min:Store.Hash.Set.t ->
+    max:Store.Hash.Set.t ->
+    K.t Lwt.t
 
   val pack :
-       Store.t
-    -> min:Store.Hash.Set.t
-    -> max:Store.Hash.Set.t
-    -> (Store.Hash.t * Store.Value.t) list Lwt.t
+    Store.t ->
+    min:Store.Hash.Set.t ->
+    max:Store.Hash.Set.t ->
+    (Store.Hash.t * Store.Value.t) list Lwt.t
 
   val to_dot : Store.t -> Format.formatter -> unit Lwt.t
 end
@@ -87,14 +87,14 @@ module Make (S : Minimal.S) = struct
 
     let vertex_attributes (_, o) =
       match o with
-      | Store.Value.Commit _ -> [`Shape `Doublecircle]
+      | Store.Value.Commit _ -> [ `Shape `Doublecircle ]
       | Store.Value.Blob _ | Store.Value.Tree _ | Store.Value.Tag _ -> []
 
     let get_subgraph _ = None
     let default_edge_attributes _ = []
 
     let edge_attributes (_, l, _) =
-      match l with "" -> [] | _ -> [`Label (String.escaped l)]
+      match l with "" -> [] | _ -> [ `Label (String.escaped l) ]
   end)
 
   module K = Graph.Imperative.Digraph.ConcreteBidirectional (struct
@@ -106,9 +106,7 @@ module Make (S : Minimal.S) = struct
   end)
 
   module T = Graph.Topological.Make (K)
-
-  module Search = struct include Search.Make (Store)
-                         include Search end
+  module Search = struct include Search.Make (Store) include Search end
 
   let label = function
     | `Commit s -> "commit", s
@@ -119,68 +117,62 @@ module Make (S : Minimal.S) = struct
   let of_store t =
     let header = "of_store" in
     let g = C.create () in
-    Log.debug (fun l -> l ~header "Loading the current Git repository.") ;
-    Store.contents t
-    >>= function
+    Log.debug (fun l -> l ~header "Loading the current Git repository.");
+    Store.contents t >>= function
     | Error err ->
         Log.err (fun l ->
             l ~header "Retrieve an error when we list the git repository: %a."
-              Store.pp_error err ) ;
+              Store.pp_error err);
         Lwt.return g
     | Ok nodes ->
-        Log.debug (fun l -> l ~header "Loading vertex in the graph.") ;
-        List.iter (C.add_vertex g) nodes ;
+        Log.debug (fun l -> l ~header "Loading vertex in the graph.");
+        List.iter (C.add_vertex g) nodes;
         Lwt_list.iter_s
           (fun ((id, _) as src) ->
             Log.debug (fun l ->
-                l ~header "Search predecessors of %a." Store.Hash.pp id ) ;
-            Search.pred t id
-            >>= fun preds ->
+                l ~header "Search predecessors of %a." Store.Hash.pp id);
+            Search.pred t id >>= fun preds ->
             Lwt_list.iter_s
               (fun s ->
                 let l, h = label s in
                 Log.debug (fun l ->
-                    l ~header "Read the object: %a." Store.Hash.pp h ) ;
-                Store.read t h
-                >>= function
+                    l ~header "Read the object: %a." Store.Hash.pp h);
+                Store.read t h >>= function
                 | Ok v ->
-                    C.add_edge_e g (src, l, (h, v)) ;
+                    C.add_edge_e g (src, l, (h, v));
                     Lwt.return ()
                 | Error err ->
                     Log.err (fun l ->
                         l ~header
                           "Retrieve an error when we try to read %a: %a."
-                          Store.Hash.pp h Store.pp_error err ) ;
+                          Store.Hash.pp h Store.pp_error err);
                     Lwt.return ()
-                (* XXX(dinosaure): quiet this error? *) )
-              preds )
+                (* XXX(dinosaure): quiet this error? *))
+              preds)
           nodes
         >>= fun () -> Lwt.return g
 
   let of_keys t =
     let g = K.create () in
-    Store.contents t
-    >>= function
+    Store.contents t >>= function
     | Error _ -> Lwt.return g
     | Ok nodes ->
-        List.iter (fun (k, _) -> K.add_vertex g k) nodes ;
+        List.iter (fun (k, _) -> K.add_vertex g k) nodes;
         Lwt_list.iter_p
           (fun (src, _) ->
-            Search.pred t src
-            >>= fun succs ->
+            Search.pred t src >>= fun succs ->
             Lwt_list.iter_p
               (fun s ->
                 let _, h = label s in
-                if K.mem_vertex g h then K.add_edge g src h ;
-                Lwt.return_unit )
-              succs )
+                if K.mem_vertex g h then K.add_edge g src h;
+                Lwt.return_unit)
+              succs)
           nodes
         >>= fun () -> Lwt.return g
 
   let of_commits t =
     let g = K.create () in
-    Store.contents t
-    >>= function
+    Store.contents t >>= function
     | Error _ -> Lwt.return g
     | Ok nodes ->
         List.iter
@@ -189,22 +181,23 @@ module Make (S : Minimal.S) = struct
             | _, (Store.Value.Tree _ | Store.Value.Tag _ | Store.Value.Blob _)
               ->
                 ())
-          nodes ;
+          nodes;
         Lwt_list.iter_p
           (fun (src, _) ->
-            Search.pred ~full:false t src
-            >>= fun succs ->
+            Search.pred ~full:false t src >>= fun succs ->
             Lwt_list.iter_p
               (fun s ->
                 let _, h = label s in
-                if K.mem_vertex g h then K.add_edge g src h ;
-                Lwt.return () )
-              succs )
+                if K.mem_vertex g h then K.add_edge g src h;
+                Lwt.return ())
+              succs)
           nodes
         >>= fun () -> Lwt.return g
 
   let to_dot t ppf =
-    of_store t >>= fun g -> Dot.fprint_graph ppf g ; Lwt.return_unit
+    of_store t >>= fun g ->
+    Dot.fprint_graph ppf g;
+    Lwt.return_unit
 
   let closure ?(full = true) t ~min ~max =
     let g = K.create ~size:1024 () in
@@ -214,25 +207,25 @@ module Make (S : Minimal.S) = struct
     let min = Store.Hash.Set.fold (fun x a -> x :: a) min [] in
     Lwt_list.iter_p
       (fun k ->
-        Store.mem t k
-        >>= function
+        Store.mem t k >>= function
         | false -> Lwt.return_unit
-        | true -> mark k ; K.add_vertex g k ; Lwt.return_unit )
+        | true ->
+            mark k;
+            K.add_vertex g k;
+            Lwt.return_unit)
       min
     >>= fun () ->
     let rec add key =
       if has_mark key then Lwt.return ()
       else (
-        mark key ;
-        Store.mem t key
-        >>= function
+        mark key;
+        Store.mem t key >>= function
         | false -> Lwt.return_unit
         | true ->
-            if not (K.mem_vertex g key) then K.add_vertex g key ;
-            Search.pred ~full t key
-            >>= fun preds ->
+            if not (K.mem_vertex g key) then K.add_vertex g key;
+            Search.pred ~full t key >>= fun preds ->
             let keys = List.map (fun x -> snd (label x)) preds in
-            List.iter (fun k -> K.add_edge g k key) keys ;
+            List.iter (fun k -> K.add_edge g k key) keys;
             Lwt_list.iter_p add keys )
     in
     let max = Store.Hash.Set.fold (fun x a -> x :: a) max [] in
@@ -241,12 +234,11 @@ module Make (S : Minimal.S) = struct
   let keys g = T.fold (fun k l -> k :: l) g [] |> List.rev
 
   let pack t ~min ~max =
-    closure t ~min ~max
-    >>= fun g ->
+    closure t ~min ~max >>= fun g ->
     let keys = keys g in
     Lwt_list.fold_left_s
       (fun a k ->
-        Store.read t k >|= function Ok v -> (k, v) :: a | Error _ -> a )
+        Store.read t k >|= function Ok v -> (k, v) :: a | Error _ -> a)
       [] keys
 
   (* XXX(dinosaure): needed to use [map_p]. *)
