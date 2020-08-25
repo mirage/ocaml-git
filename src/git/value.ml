@@ -21,15 +21,31 @@ let src =
 module Log = (val Logs.src_log src : Logs.LOG)
 
 module type S = sig
+  type hash
 
+  type nonrec t = hash t
+
+  module Blob : Blob.S with type hash = hash
+
+  module Commit : Commit.S with type hash = hash
+
+  module Tree : Tree.S with type hash = hash
+
+  module Tag : Tag.S with type hash = hash
 
   val blob : Blob.t -> t
+
   val commit : Commit.t -> t
 
+  val tree : Tree.t -> t
 
+  val tag : Tag.t -> t
 
+  val kind : t -> [ `Commit | `Blob | `Tree | `Tag ]
 
+  val format : t Encore.t
 
+  include S.DIGEST with type t := t and type hash := hash
 
   include S.BASE with type t := t
 
