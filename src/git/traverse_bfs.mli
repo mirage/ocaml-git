@@ -27,15 +27,23 @@ module type STORE = sig
   val read_exn : t -> Hash.t -> Value.t Lwt.t
 end
 
-module Make (S : STORE) : sig
+module Make (Store : STORE) : sig
   val fold :
-       S.t
-    -> ('a -> ?name:Path.t -> length:int64 -> S.Hash.t -> S.Value.t -> 'a Lwt.t)
-    -> path:Path.t
-    -> 'a
-    -> S.Hash.t
-    -> 'a Lwt.t
+    Store.t ->
+    ('a ->
+    ?name:Fpath.t ->
+    length:int64 ->
+    Store.Hash.t ->
+    Store.Value.t ->
+    'a Lwt.t) ->
+    path:Fpath.t ->
+    'a ->
+    Store.Hash.t ->
+    'a Lwt.t
 
   val iter :
-    S.t -> (S.Hash.t -> S.Value.t -> unit Lwt.t) -> S.Hash.t -> unit Lwt.t
+    Store.t ->
+    (Store.Hash.t -> Store.Value.t -> unit Lwt.t) ->
+    Store.Hash.t ->
+    unit Lwt.t
 end
