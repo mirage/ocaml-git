@@ -32,15 +32,12 @@
     ext. modules like {!Index} could not be used with this store (because thay
     interact with a file-system back-end). *)
 
-module Make (H : Digestif.S) (Inflate : S.INFLATE) (Deflate : S.DEFLATE) : sig
+type 'hash t
 
+module Make (Digestif : Digestif.S) : sig
+  type nonrec t = Digestif.t t
 
-
-  include
-    Minimal.S
-      with module Hash = Hash.Make(H)
-       and module Inflate = Inflate
-       and module Deflate = Deflate
+  include Minimal.S with type hash = Digestif.t and type t := t
 
   val v :
     ?dotgit:Fpath.t ->
@@ -56,10 +53,7 @@ end
 
 module Store : sig
   include
-    Minimal.S
-      with module Hash = Hash.Make(Digestif.SHA1)
-       and module Inflate = Inflate
-       and module Deflate = Deflate
+    Minimal.S with type t = Digestif.SHA1.t t and type hash = Digestif.SHA1.t
 
   val v :
     ?dotgit:Fpath.t ->
