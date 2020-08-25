@@ -96,124 +96,109 @@ module Make (Hash : S.HASH) : S with type hash = Hash.t = struct
     | Tree _ -> `Tree
     | Tag _ -> `Tag
 
-  let pp_kind ppf = function
-    | `Commit -> Fmt.pf ppf "commit"
-    | `Tree -> Fmt.pf ppf "tree"
-    | `Tag -> Fmt.pf ppf "tag"
-    | `Blob -> Fmt.pf ppf "blob"
-
   let pp ppf = function
     | Blob blob -> Fmt.pf ppf "(Blob %a)" (Fmt.hvbox Blob.pp) blob
     | Commit commit -> Fmt.pf ppf "(Commit %a)" (Fmt.hvbox Commit.pp) commit
     | Tree tree -> Fmt.pf ppf "(Tree %a)" (Fmt.hvbox Tree.pp) tree
     | Tag tag -> Fmt.pf ppf "(Tag %a)" (Fmt.hvbox Tag.pp) tag
 
-  module MakeMeta (Meta : Encore.Meta.S) = struct
-    type e = t
-
-    open Helper.BaseIso
-
-    module Iso = struct
-      open Encore.Bijection
-
-      let kind =
-        make_exn
-          ~fwd:(function
-            | "tree" -> `Tree
-            | "blob" -> `Blob
-            | "commit" -> `Commit
-            | "tag" -> `Tag
-            | _ -> Exn.fail ())
-          ~bwd:(function
-            | `Tree -> "tree"
-            | `Blob -> "blob"
-            | `Tag -> "tag"
-            | `Commit -> "commit")
-
-      let value =
-        make_exn
-          ~fwd:(fun (kind, _, value) ->
-            match kind, value with
-            | `Tree, Tree _ -> value
-            | `Commit, Commit _ -> value
-            | `Blob, Blob _ -> value
-            | `Tag, Tag _ -> value
-            | _, _ -> Exn.fail ())
-          ~bwd:(function
-            | Tree tree -> `Tree, Tree.length tree, Tree tree
-            | Commit commit -> `Commit, Commit.length commit, Commit commit
-            | Tag tag -> `Tag, Tag.length tag, Tag tag
-            | Blob blob -> `Blob, Blob.length blob, Blob blob)
-    end
-
-    module Commit = Commit.MakeMeta (Meta)
-    module Blob = Blob.MakeMeta (Meta)
-    module Tree = Tree.MakeMeta (Meta)
-    module Tag = Tag.MakeMeta (Meta)
-
-    type 'a t = 'a Meta.t
-
-    module Meta = Encore.Meta.Make (Meta)
-    open Encore.Bijection
-    open Meta
-
-    let is_digit = function '0' .. '9' -> true | _ -> false
-    let length = int64 <$> while0 is_digit
+  module Syntax = struct
+    let safe_exn f x = try f x with _ -> raise Encore.Bij.Bijection
 
     let kind =
-      Iso.kind
-      <$> (const "tree" <|> const "commit" <|> const "blob" <|> const "tag")
+      Encore.Bij.v
+        ~fwd:(function
+          | "tree" -> `Tree
+          | "blob" -> `Blob
+          | "commit" -> `Commit
+          | "tag" -> `Tag
+          | _ -> raise Encore.Bij.Bijection)
+        ~bwd:(function
+          | `Tree -> "tree"
+          | `Blob -> "blob"
+          | `Tag -> "tag"
+          | `Commit -> "commit")
 
-    let commit =
-      make_exn
+    let iso =
+      Encore.Bij.v
+        ~fwd:(fun (kind, _, value) ->
+          match (kind, value) with
+          | `Tree, Tree _ -> value
+          | `Commit, Commit _ -> value
+          | `Blob, Blob _ -> value
+          | `Tag, Tag _ -> value
+          | _, _ -> raise Encore.Bij.Bijection)
+        ~bwd:(function
+          | Tree tree -> (`Tree, Tree.length tree, Tree tree)
+          | Commit commit -> (`Commit, Commit.length commit, Commit commit)
+          | Tag tag -> (`Tag, Tag.length tag, Tag tag)
+          | Blob blob -> (`Blob, Blob.length blob, Blob blob))
+
+    let is_digit = function '0' .. '9' -> true | _ -> false
+
+    let int64 =
+      Encore.Bij.v ~fwd:(safe_exn Int64.of_string)
+        ~bwd:(safe_exn Int64.to_string)
+
+    let length =
+      let open Encore.Syntax in
+      int64 <$> while0 is_digit
+
+    let always x _ = x
+
+    let commit' =
+      let open Encore.Syntax in
+      Encore.Bij.v
         ~fwd:(fun commit -> Commit commit)
-        ~bwd:(function Commit commit -> commit | _ -> Exn.fail ())
-      <$> Commit.p
+        ~bwd:(function
+          | Commit commit -> commit | _ -> raise Encore.Bij.Bijection)
+      <$> Commit.format
 
     let blob =
-      make_exn
-        ~fwd:(fun blob -> Blob blob)
-        ~bwd:(function Blob blob -> blob | _ -> Exn.fail ())
-      <$> Blob.p
+      let open Encore.Syntax in
+      Encore.Bij.v
+        ~fwd:(fun blob -> Blob (Blob.of_cstruct (Cstruct.of_string blob)))
+        ~bwd:(function
+          | Blob blob -> Cstruct.to_string (Blob.to_cstruct blob)
+          | _ -> raise Encore.Bij.Bijection)
+      <$> while0 (always true)
 
     let tree =
-      make_exn
+      let open Encore.Syntax in
+      Encore.Bij.v
         ~fwd:(fun tree -> Tree tree)
-        ~bwd:(function Tree tree -> tree | _ -> Exn.fail ())
-      <$> Tree.p
+        ~bwd:(function Tree tree -> tree | _ -> raise Encore.Bij.Bijection)
+      <$> Tree.format
 
     let tag =
-      make_exn
+      let open Encore.Syntax in
+      Encore.Bij.v
         ~fwd:(fun tag -> Tag tag)
-        ~bwd:(function Tag tag -> tag | _ -> Exn.fail ())
-      <$> Tag.p
+        ~bwd:(function Tag tag -> tag | _ -> raise Encore.Bij.Bijection)
+      <$> Tag.format
 
-    let p =
-      let value kind p =
-        Iso.kind
-        <$> const kind
-        <* (char_elt ' ' <$> any)
-        <*> (length <* (char_elt '\000' <$> any))
-        <*> p
-      in
-      Exn.compose obj3 Iso.value
-      <$> ( value "commit" commit
+    let format =
+      let open Encore.Syntax in
+      let value k t =
+        kind
+        <$> const k
+        <* (Encore.Bij.char ' ' <$> any)
+        <*> (length <* (Encore.Bij.char '\000' <$> any))
+        <*> t in
+      Encore.Bij.(compose obj3) iso
+      <$> (value "commit" commit'
           <|> value "tree" tree
           <|> value "blob" blob
-          <|> value "tag" tag )
+          <|> value "tag" tag)
   end
 
-  module A = MakeMeta (Encore.Proxy_decoder.Impl)
-  module M = MakeMeta (Encore.Proxy_encoder.Impl)
+  let format = Syntax.format
 
   let length = function
     | Commit commit -> Commit.length commit
     | Tag tag -> Tag.length tag
     | Tree tree -> Tree.length tree
     | Blob blob -> Blob.length blob
-
-  module D = Helper.MakeInflater (Inflate) (A)
-  module E = Helper.MakeDeflater (Deflate) (M)
 
   let digest = function
     | Blob blob -> Blob.digest blob
