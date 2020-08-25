@@ -72,27 +72,22 @@ module type S = sig
   val stream : t -> unit -> string option Lwt.t
 end
 
-module Make (Hash : S.HASH) (Inflate : S.INFLATE) (Deflate : S.DEFLATE) :
-  S
-    with module Hash := Hash
-     and module Inflate := Inflate
-     and module Deflate := Deflate
-     and module Blob = Blob.Make(Hash)
-     and module Commit = Commit.Make(Hash)
-     and module Tree = Tree.Make(Hash)
-     and module Tag = Tag.Make(Hash) = struct
+module Make (Hash : S.HASH) : S with type hash = Hash.t = struct
+  type hash = Hash.t
+
+  type nonrec t = Hash.t t
+
   module Blob = Blob.Make (Hash)
   module Commit = Commit.Make (Hash)
   module Tree = Tree.Make (Hash)
   module Tag = Tag.Make (Hash)
 
-  type t = Blob of Blob.t | Commit of Commit.t | Tree of Tree.t | Tag of Tag.t
-
   let blob blob = Blob blob
 
-  (* blob *)
   let commit commit = Commit commit
+
   let tree tree = Tree tree
+
   let tag tag = Tag tag
 
   let kind = function
@@ -227,6 +222,7 @@ module Make (Hash : S.HASH) (Inflate : S.INFLATE) (Deflate : S.DEFLATE) :
     | Tag tag -> Tag.digest tag
 
   let equal = ( = )
+
   let hash = Hashtbl.hash
 
   let int_of_kind = function
@@ -236,17 +232,21 @@ module Make (Hash : S.HASH) (Inflate : S.INFLATE) (Deflate : S.DEFLATE) :
     | Tag _ -> 3
 
   let compare a b =
-    match a, b with
+    match (a, b) with
     | Commit a, Commit b -> Commit.compare a b
     | Blob a, Blob b -> Blob.compare a b
     | Tree a, Tree b -> Tree.compare a b
     | Tag a, Tag b -> Tag.compare a b
     | ( ((Commit _ | Blob _ | Tree _ | Tag _) as a),
         ((Commit _ | Blob _ | Tree _ | Tag _) as b) ) ->
-        if int_of_kind a > int_of_kind b then -1
-        else if int_of_kind a < int_of_kind b then 1
-        else if length a > length b then -1
-        else if length a < length b then 1
+        if int_of_kind a > int_of_kind b
+        then -1
+        else if int_of_kind a < int_of_kind b
+        then 1
+        else if length a > length b
+        then -1
+        else if length a < length b
+        then 1
         else Stdlib.compare a b
 
   let to_raw v =

@@ -83,13 +83,4 @@ end
     Value.Make(SHA1)(OCaml_inflate)(OCaml_deflate) ```
 
     Types [V1.t] and [V2.t] are equal. *)
-module Make (Hash : S.HASH) (Inflate : S.INFLATE) (Deflate : S.DEFLATE) :
-  S
-    with module Hash := Hash
-     and module Inflate := Inflate
-     and module Deflate := Deflate
-     and module Blob = Blob.Make(Hash)
-     and module Commit = Commit.Make(Hash)
-     and module Tree = Tree.Make(Hash)
-     and module Tag = Tag.Make(Hash)
-
+module Make (Hash : S.HASH) : S with type hash = Hash.t
