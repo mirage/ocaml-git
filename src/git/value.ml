@@ -21,53 +21,16 @@ let src =
 module Log = (val Logs.src_log src : Logs.LOG)
 
 module type S = sig
-  module Hash : S.HASH
-  module Inflate : S.INFLATE
-  module Deflate : S.DEFLATE
-  module Blob : Blob.S with module Hash := Hash
-  module Commit : Commit.S with module Hash := Hash
-  module Tree : Tree.S with module Hash := Hash
-  module Tag : Tag.S with module Hash := Hash
 
-  type t = Blob of Blob.t | Commit of Commit.t | Tree of Tree.t | Tag of Tag.t
 
   val blob : Blob.t -> t
   val commit : Commit.t -> t
-  val tree : Tree.t -> t
-  val tag : Tag.t -> t
-  val kind : t -> [ `Commit | `Blob | `Tree | `Tag ]
-  val pp_kind : [ `Commit | `Blob | `Tree | `Tag ] Fmt.t
 
-  module MakeMeta (Meta : Encore.Meta.S) : sig
-    val commit : t Meta.t
-    val blob : t Meta.t
-    val tree : t Meta.t
-    val tag : t Meta.t
-    val p : t Meta.t
-  end
 
-  module A : sig
-    include S.DESC with type 'a t = 'a Angstrom.t and type e = t
 
-    val kind : [ `Commit | `Blob | `Tree | `Tag ] t
-    val length : int64 t
-  end
 
-  module M : S.DESC with type 'a t = 'a Encore.Encoder.t and type e = t
 
-  module D :
-    S.DECODER
-      with type t = t
-       and type init = Inflate.window * Cstruct.t * Cstruct.t
-       and type error = [ Error.Decoder.t | `Inflate of Inflate.error ]
 
-  module E :
-    S.ENCODER
-      with type t = t
-       and type init = Cstruct.t * t * int * Cstruct.t
-       and type error = [ `Deflate of Deflate.error ]
-
-  include S.DIGEST with type t := t and type hash := Hash.t
   include S.BASE with type t := t
 
   val length : t -> int64
