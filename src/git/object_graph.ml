@@ -23,6 +23,25 @@ module Log = (val Logs.src_log src : Logs.LOG)
 open Lwt.Infix
 
 module type S = sig
+  type hash
+
+  type store
+
+  module S : Set.S with type elt = hash
+
+  module K : Graph.Sig.I with type V.t = hash
+
+  val keys : K.t -> hash list
+
+  val of_keys : store -> K.t Lwt.t
+
+  val of_commits : store -> K.t Lwt.t
+
+  val closure : ?full:bool -> store -> min:S.t -> max:S.t -> K.t Lwt.t
+
+  val pack : store -> min:S.t -> max:S.t -> (hash * hash Value.t) list Lwt.t
+
+  val to_dot : store -> Format.formatter -> unit Lwt.t
 end
 
 module Make (S : Minimal.S) = struct
