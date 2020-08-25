@@ -56,10 +56,19 @@ module type S = sig
 
   val length : t -> int64
 
+  val to_raw : t -> string
+
+  val to_raw_without_header : t -> string
+
+  val of_raw_with_header :
+    ?off:int -> ?len:int -> string -> (t, [> `Msg of string ]) result
 
   val of_raw :
     kind:[ `Commit | `Blob | `Tree | `Tag ] ->
     Cstruct.t ->
+    (t, [> `Msg of string ]) result
+
+  val stream : t -> unit -> string option Lwt.t
 end
 
 (** The {i functor} to make the OCaml representation of the Git object by a

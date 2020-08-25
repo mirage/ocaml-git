@@ -57,11 +57,19 @@ module type S = sig
 
   val length : t -> int64
 
+  val to_raw : t -> string
+
+  val to_raw_without_header : t -> string
+
+  val of_raw_with_header :
+    ?off:int -> ?len:int -> string -> (t, [> `Msg of string ]) result
 
   val of_raw :
     kind:[ `Commit | `Blob | `Tree | `Tag ] ->
     Cstruct.t ->
+    (t, [> `Msg of string ]) result
 
+  val stream : t -> unit -> string option Lwt.t
 end
 
 module Make (Hash : S.HASH) (Inflate : S.INFLATE) (Deflate : S.DEFLATE) :
@@ -240,6 +248,116 @@ module Make (Hash : S.HASH) (Inflate : S.INFLATE) (Deflate : S.DEFLATE) :
         else if length a > length b then -1
         else if length a < length b then 1
         else Stdlib.compare a b
+
+  let to_raw v =
+    let chunk = Int64.to_int (length v) in
+    Encore.Lavoisier.emit_string ~chunk v (Encore.to_lavoisier format)
+
+  type with_parser = [ `Commit | `Tree | `Tag ]
+
+  let of_raw ~kind raw =
+    match kind with
+    | `Blob -> Ok (Blob (Blob.of_cstruct raw))
+    | #with_parser as kind -> (
+        let parser =
+          let open Angstrom in
+          match kind with
+          | `Commit -> Encore.to_angstrom Commit.format >>| fun v -> Commit v
+          | `Tag -> Encore.to_angstrom Tag.format >>| fun v -> Tag v
+          | `Tree -> Encore.to_angstrom Tree.format >>| fun v -> Tree v in
+        match
+          Angstrom.parse_bigstring ~consume:Angstrom.Consume.All parser
+            (Cstruct.to_bigarray raw)
+        with
+        | Ok v -> Ok v
+        | Error _ ->
+            Log.err (fun m ->
+                m "Object %s is bad: @[<hov>%S@]"
+                  (match kind with
+                  | `Tree -> "tree"
+                  | `Commit -> "commit"
+                  | `Tag -> "tag")
+                  (Cstruct.to_string raw)) ;
+            Error (`Msg "Invalid Git object"))
+
+  let to_raw_without_header = function
+    | Blob v -> Cstruct.to_string (Blob.to_cstruct v)
+    | Commit v ->
+        let chunk = Int64.to_int (Commit.length v) in
+        Encore.Lavoisier.emit_string ~chunk v
+          (Encore.to_lavoisier Commit.format)
+    | Tag v ->
+        let chunk = Int64.to_int (Tag.length v) in
+        Encore.Lavoisier.emit_string ~chunk v (Encore.to_lavoisier Tag.format)
+    | Tree v ->
+        let chunk = Int64.to_int (Tree.length v) in
+        Encore.Lavoisier.emit_string ~chunk v (Encore.to_lavoisier Tree.format)
+
+  let of_raw_with_header ?(off = 0) ?len raw =
+    let len =
+      match len with Some len -> len | None -> String.length raw - off in
+    let open Astring.String.Sub in
+    let sub = with_range ~first:off ~len (v raw) in
+
+    let ( >>= ) = Option.bind in
+    let ( >>| ) x f = Option.map f x in
+
+    let fiber =
+      cut ~sep:(v " ") sub >>= fun (kind, rest) ->
+      cut ~sep:(v "\000") rest >>= fun (_length, rest) ->
+      match to_string kind with
+      | "commit" ->
+          let decoder = Encore.to_angstrom Commit.format in
+          Stdlib.Result.to_option
+            (Angstrom.parse_string ~consume:All decoder (to_string rest))
+          >>| commit
+      | "tree" ->
+          let decoder = Encore.to_angstrom Tree.format in
+          Stdlib.Result.to_option
+            (Angstrom.parse_string ~consume:All decoder (to_string rest))
+          >>| tree
+      | "blob" -> Some (Blob (Blob.of_string (to_string rest)))
+      | "tag" ->
+          let decoder = Encore.to_angstrom Tag.format in
+          Stdlib.Result.to_option
+            (Angstrom.parse_string ~consume:All decoder (to_string rest))
+          >>| tag
+      | _ -> None in
+    match fiber with
+    | Some value -> Ok value
+    | None -> Rresult.R.error_msgf "Invalid Git value"
+
+  let stream = function
+    | Blob v ->
+        let consumed = ref false in
+        let stream () =
+          if !consumed
+          then Lwt.return_none
+          else (
+            consumed := true ;
+            Lwt.return_some (Cstruct.to_string (Blob.to_cstruct v))) in
+        stream
+    | v ->
+        let hash = digest v in
+        Log.debug (fun m -> m "stream of %a." Hash.pp hash) ;
+        let state =
+          match v with
+          | Commit v ->
+              Encore.Lavoisier.emit v (Encore.to_lavoisier Commit.format)
+          | Tree v -> Encore.Lavoisier.emit v (Encore.to_lavoisier Tree.format)
+          | Tag v -> Encore.Lavoisier.emit v (Encore.to_lavoisier Tag.format)
+          | Blob _ -> assert false in
+        let state = ref state in
+        let stream () =
+          match !state with
+          | Encore.Lavoisier.Partial { buffer = str; off; len; continue } ->
+              let str = String.sub str off len in
+              state := continue ~committed:len ;
+              Lwt.return_some str
+              (* XXX(dinosaure): replace by [(string * int * int)]. *)
+          | Encore.Lavoisier.Done -> Lwt.return_none
+          | Encore.Lavoisier.Fail -> Lwt.fail (Failure "Value.stream") in
+        stream
 
   module Set = Set.Make (struct
     type nonrec t = t
