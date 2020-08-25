@@ -22,10 +22,10 @@
     specific purposes, it's useful. However, keep in your mind, when your
     program stops, you lost your repository obviously.
 
-    Because we don't need to handle any I/O operations, this store could be
-    more fast than the Unix/Mirage store and relevant for testing. However, we
-    still use the [Lwt] monad to protect mutable reference value against
-    data-race condition.
+    Because we don't need to handle any I/O operations, this store could be more
+    fast than the Unix/Mirage store and relevant for testing. However, we still
+    use the [Lwt] monad to protect mutable reference value against data-race
+    condition.
 
     Finally, this module respects the same API {!Minimal.S} and can handle PACK
     file - and, by this way, can be used on the Smart protocol. Obviously, some
