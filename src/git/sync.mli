@@ -23,12 +23,13 @@ module type ENDPOINT = sig
   val uri : t -> Uri.t
 end
 
-type 'a shallow_update = {shallow: 'a list; unshallow: 'a list}
+type 'a shallow_update = { shallow : 'a list; unshallow : 'a list }
 
-type 'a acks =
-  { shallow: 'a list
-  ; unshallow: 'a list
-  ; acks: ('a * [`Common | `Ready | `Continue | `ACK]) list }
+type 'a acks = {
+  shallow : 'a list;
+  unshallow : 'a list;
+  acks : ('a * [ `Common | `Ready | `Continue | `ACK ]) list;
+}
 
 module type S = sig
   module Store : Minimal.S
@@ -39,7 +40,6 @@ module type S = sig
   val pp_error : error Fmt.t
   (** Pretty-printer of {!error}. *)
 
-  (** A push command to interact with the server. *)
   type command =
     [ `Create of Store.Hash.t * Store.Reference.t
       (** To create a new reference on the server. *)
@@ -48,54 +48,55 @@ module type S = sig
           to be available in both side as a {!Capability.t}. *)
     | `Update of Store.Hash.t * Store.Hash.t * Store.Reference.t
       (** To update a reference from a commit hash to a new commit hash. *) ]
+  (** A push command to interact with the server. *)
 
   val pp_command : command Fmt.t
   (** Pretty-printer of {!command}. *)
 
   val push :
-       Store.t
-    -> push:(   (Store.Hash.t * Store.Reference.t * bool) list
-             -> (Store.Hash.t list * command list) Lwt.t)
-    -> ?capabilities:Capability.t list
-    -> Endpoint.t
-    -> ( (Store.Reference.t, Store.Reference.t * string) result list
-       , error )
-       result
-       Lwt.t
+    Store.t ->
+    push:
+      ((Store.Hash.t * Store.Reference.t * bool) list ->
+      (Store.Hash.t list * command list) Lwt.t) ->
+    ?capabilities:Capability.t list ->
+    Endpoint.t ->
+    ((Store.Reference.t, Store.Reference.t * string) result list, error) result
+    Lwt.t
 
   val ls :
-       Store.t
-    -> ?capabilities:Capability.t list
-    -> Endpoint.t
-    -> ((Store.Hash.t * Store.Reference.t * bool) list, error) result Lwt.t
+    Store.t ->
+    ?capabilities:Capability.t list ->
+    Endpoint.t ->
+    ((Store.Hash.t * Store.Reference.t * bool) list, error) result Lwt.t
 
   val fetch :
-       Store.t
-    -> ?shallow:Store.Hash.t list
-    -> ?capabilities:Capability.t list
-    -> notify:(Store.Hash.t shallow_update -> unit Lwt.t)
-    -> negociate:(   Store.Hash.t acks
-                  -> 'state
-                  -> ([`Ready | `Done | `Again of Store.Hash.Set.t] * 'state)
-                     Lwt.t)
-                 * 'state
-    -> have:Store.Hash.Set.t
-    -> want:(   (Store.Hash.t * Store.Reference.t * bool) list
-             -> (Store.Reference.t * Store.Hash.t) list Lwt.t)
-    -> ?deepen:[`Depth of int | `Timestamp of int64 | `Ref of Reference.t]
-    -> Endpoint.t
-    -> ((Store.Reference.t * Store.Hash.t) list * int, error) result Lwt.t
+    Store.t ->
+    ?shallow:Store.Hash.t list ->
+    ?capabilities:Capability.t list ->
+    notify:(Store.Hash.t shallow_update -> unit Lwt.t) ->
+    negociate:
+      (Store.Hash.t acks ->
+      'state ->
+      ([ `Ready | `Done | `Again of Store.Hash.Set.t ] * 'state) Lwt.t)
+      * 'state ->
+    have:Store.Hash.Set.t ->
+    want:
+      ((Store.Hash.t * Store.Reference.t * bool) list ->
+      (Store.Reference.t * Store.Hash.t) list Lwt.t) ->
+    ?deepen:[ `Depth of int | `Timestamp of int64 | `Ref of Reference.t ] ->
+    Endpoint.t ->
+    ((Store.Reference.t * Store.Hash.t) list * int, error) result Lwt.t
 
   val fetch_some :
-       Store.t
-    -> ?capabilities:Capability.t list
-    -> references:Store.Reference.t list Store.Reference.Map.t
-    -> Endpoint.t
-    -> ( Store.Hash.t Store.Reference.Map.t
-         * Store.Reference.t list Store.Reference.Map.t
-       , error )
-       result
-       Lwt.t
+    Store.t ->
+    ?capabilities:Capability.t list ->
+    references:Store.Reference.t list Store.Reference.Map.t ->
+    Endpoint.t ->
+    ( Store.Hash.t Store.Reference.Map.t
+      * Store.Reference.t list Store.Reference.Map.t,
+      error )
+    result
+    Lwt.t
   (** [fetch_some git ?capabilities ~references repository] will fetch some
      remote references specified by [references].
 
@@ -145,16 +146,16 @@ module type S = sig
      leaves but, it did partially some update on some local references. *)
 
   val fetch_all :
-       Store.t
-    -> ?capabilities:Capability.t list
-    -> references:Store.Reference.t list Store.Reference.Map.t
-    -> Endpoint.t
-    -> ( Store.Hash.t Store.Reference.Map.t
-         * Store.Reference.t list Store.Reference.Map.t
-         * Store.Hash.t Store.Reference.Map.t
-       , error )
-       result
-       Lwt.t
+    Store.t ->
+    ?capabilities:Capability.t list ->
+    references:Store.Reference.t list Store.Reference.Map.t ->
+    Endpoint.t ->
+    ( Store.Hash.t Store.Reference.Map.t
+      * Store.Reference.t list Store.Reference.Map.t
+      * Store.Hash.t Store.Reference.Map.t,
+      error )
+    result
+    Lwt.t
   (** [fetch_all git ?capabilities ~references repository] has the same
       semantic than {!fetch_some} for any remote references found on
       [references]. However, [fetch all] will download all remote references
@@ -170,14 +171,14 @@ module type S = sig
       or just give up. *)
 
   val fetch_one :
-       Store.t
-    -> ?capabilities:Capability.t list
-    -> reference:Store.Reference.t * Store.Reference.t list
-    -> Endpoint.t
-    -> ( [`AlreadySync | `Sync of Store.Hash.t Store.Reference.Map.t]
-       , error )
-       result
-       Lwt.t
+    Store.t ->
+    ?capabilities:Capability.t list ->
+    reference:Store.Reference.t * Store.Reference.t list ->
+    Endpoint.t ->
+    ( [ `AlreadySync | `Sync of Store.Hash.t Store.Reference.Map.t ],
+      error )
+    result
+    Lwt.t
   (** [fetch_one git ?capabilities ~reference repository] is a specific call of
      {!fetch_some} with only one reference. Then, it retuns:
 
@@ -189,25 +190,24 @@ module type S = sig
       {- [`Sync updated] if we downloaded [new_hash] and set [local_ref] with
      this new hash.}} *)
 
-  val pp_fetch_one : [ `AlreadySync | `Sync of Store.Hash.t Store.Reference.Map.t ] Fmt.t
+  val pp_fetch_one :
+    [ `AlreadySync | `Sync of Store.Hash.t Store.Reference.Map.t ] Fmt.t
 
   val clone :
-       Store.t
-    -> ?capabilities:Capability.t list
-    -> reference:Store.Reference.t * Store.Reference.t
-    -> Endpoint.t
-    -> (unit, error) result Lwt.t
+    Store.t ->
+    ?capabilities:Capability.t list ->
+    reference:Store.Reference.t * Store.Reference.t ->
+    Endpoint.t ->
+    (unit, error) result Lwt.t
 
   val update_and_create :
-       Store.t
-    -> ?capabilities:Capability.t list
-    -> references:Store.Reference.t list Store.Reference.Map.t
-    -> Endpoint.t
-    -> ( (Store.Reference.t, Store.Reference.t * string) result list
-       , error )
-       result
-       Lwt.t
-       (** As {!fetch_some}, [update git ?capabilities ~references repository]
+    Store.t ->
+    ?capabilities:Capability.t list ->
+    references:Store.Reference.t list Store.Reference.Map.t ->
+    Endpoint.t ->
+    ((Store.Reference.t, Store.Reference.t * string) result list, error) result
+    Lwt.t
+  (** As {!fetch_some}, [update git ?capabilities ~references repository]
           is the other side of the communication with a Git server and update
           and create remote references when it uploads local hashes.
 
@@ -239,60 +239,63 @@ module type S = sig
           the commmunication - if it's the case, we did not do any modification
           on the server and return an {!error}. *)
 
-  val pp_update_and_create : (Store.Reference.t, Store.Reference.t * string) result list Fmt.t
+  val pp_update_and_create :
+    (Store.Reference.t, Store.Reference.t * string) result list Fmt.t
 end
 
 module Default : sig
   val capabilities : Capability.t list
 end
 
-module Common (G : Minimal.S) :
-  sig
-    module Store : Minimal.S
+module Common (G : Minimal.S) : sig
+  module Store : Minimal.S
 
-    type command =
-      [ `Create of Store.Hash.t * Store.Reference.t
-      | `Delete of Store.Hash.t * Store.Reference.t
-      | `Update of Store.Hash.t * Store.Hash.t * Store.Reference.t ]
+  type command =
+    [ `Create of Store.Hash.t * Store.Reference.t
+    | `Delete of Store.Hash.t * Store.Reference.t
+    | `Update of Store.Hash.t * Store.Hash.t * Store.Reference.t ]
 
-    val pp_command : command Fmt.t
-    val pp_fetch_one : [ `AlreadySync | `Sync of Store.Hash.t Store.Reference.Map.t ] Fmt.t
-    val pp_update_and_create : (Store.Reference.t, Store.Reference.t * string) result list Fmt.t
+  val pp_command : command Fmt.t
 
-    val packer :
-         ?window:[`Object of int | `Memory of int]
-      -> ?depth:int
-      -> Store.t
-      -> ofs_delta:bool
-      -> (Store.Hash.t * Store.Reference.t * bool) list
-      -> command list
-      -> ( Store.Pack.stream
-           * (Checkseum.Crc32.t * int64) Store.Hash.Map.t Lwt_mvar.t
-         , Store.error )
-         result
-         Lwt.t
+  val pp_fetch_one :
+    [ `AlreadySync | `Sync of Store.Hash.t Store.Reference.Map.t ] Fmt.t
 
-    val want_handler :
-         Store.t
-      -> (Store.Reference.t -> bool Lwt.t)
-      -> (Store.Hash.t * Store.Reference.t * bool) list
-      -> (Store.Reference.t * Store.Hash.t) list Lwt.t
+  val pp_update_and_create :
+    (Store.Reference.t, Store.Reference.t * string) result list Fmt.t
 
-    val update_and_create :
-         Store.t
-      -> references:Store.Reference.t list Store.Reference.Map.t
-      -> (Store.Reference.t * Store.Hash.t) list
-      -> ( Store.Hash.t Store.Reference.Map.t
-           * Store.Reference.t list Store.Reference.Map.t
-           * Store.Hash.t Store.Reference.Map.t
-         , Store.error )
-         result
-         Lwt.t
+  val packer :
+    ?window:[ `Object of int | `Memory of int ] ->
+    ?depth:int ->
+    Store.t ->
+    ofs_delta:bool ->
+    (Store.Hash.t * Store.Reference.t * bool) list ->
+    command list ->
+    ( Store.Pack.stream * (Checkseum.Crc32.t * int64) Store.Hash.Map.t Lwt_mvar.t,
+      Store.error )
+    result
+    Lwt.t
 
-    val push_handler :
-         Store.t
-      -> Store.Reference.t list Store.Reference.Map.t
-      -> (Store.Hash.t * Store.Reference.t * bool) list
-      -> command list Lwt.t
-  end
-  with module Store = G
+  val want_handler :
+    Store.t ->
+    (Store.Reference.t -> bool Lwt.t) ->
+    (Store.Hash.t * Store.Reference.t * bool) list ->
+    (Store.Reference.t * Store.Hash.t) list Lwt.t
+
+  val update_and_create :
+    Store.t ->
+    references:Store.Reference.t list Store.Reference.Map.t ->
+    (Store.Reference.t * Store.Hash.t) list ->
+    ( Store.Hash.t Store.Reference.Map.t
+      * Store.Reference.t list Store.Reference.Map.t
+      * Store.Hash.t Store.Reference.Map.t,
+      Store.error )
+    result
+    Lwt.t
+
+  val push_handler :
+    Store.t ->
+    Store.Reference.t list Store.Reference.Map.t ->
+    (Store.Hash.t * Store.Reference.t * bool) list ->
+    command list Lwt.t
+end
+with module Store = G

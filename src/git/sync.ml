@@ -21,16 +21,19 @@ module Log = (val Logs.src_log src : Logs.LOG)
 
 module Default = struct
   let capabilities =
-    [ `Multi_ack_detailed; `Thin_pack; `Side_band_64k; `Ofs_delta
-    ; `Agent "git/2.0.0"; `Report_status; `No_done ]
+    [
+      `Multi_ack_detailed; `Thin_pack; `Side_band_64k; `Ofs_delta;
+      `Agent "git/2.0.0"; `Report_status; `No_done;
+    ]
 end
 
-type 'a shallow_update = {shallow: 'a list; unshallow: 'a list}
+type 'a shallow_update = { shallow : 'a list; unshallow : 'a list }
 
-type 'a acks =
-  { shallow: 'a list
-  ; unshallow: 'a list
-  ; acks: ('a * [`Common | `Ready | `Continue | `ACK]) list }
+type 'a acks = {
+  shallow : 'a list;
+  unshallow : 'a list;
+  acks : ('a * [ `Common | `Ready | `Continue | `ACK ]) list;
+}
 
 module type ENDPOINT = sig
   type t
@@ -54,92 +57,92 @@ module type S = sig
   val pp_command : command Fmt.t
 
   val push :
-       Store.t
-    -> push:(   (Store.Hash.t * Store.Reference.t * bool) list
-             -> (Store.Hash.t list * command list) Lwt.t)
-    -> ?capabilities:Capability.t list
-    -> Endpoint.t
-    -> ( (Store.Reference.t, Store.Reference.t * string) result list
-       , error )
-       result
-       Lwt.t
+    Store.t ->
+    push:
+      ((Store.Hash.t * Store.Reference.t * bool) list ->
+      (Store.Hash.t list * command list) Lwt.t) ->
+    ?capabilities:Capability.t list ->
+    Endpoint.t ->
+    ((Store.Reference.t, Store.Reference.t * string) result list, error) result
+    Lwt.t
 
   val ls :
-       Store.t
-    -> ?capabilities:Capability.t list
-    -> Endpoint.t
-    -> ((Store.Hash.t * Store.Reference.t * bool) list, error) result Lwt.t
+    Store.t ->
+    ?capabilities:Capability.t list ->
+    Endpoint.t ->
+    ((Store.Hash.t * Store.Reference.t * bool) list, error) result Lwt.t
 
   val fetch :
-       Store.t
-    -> ?shallow:Store.Hash.t list
-    -> ?capabilities:Capability.t list
-    -> notify:(Store.Hash.t shallow_update -> unit Lwt.t)
-    -> negociate:(   Store.Hash.t acks
-                  -> 'state
-                  -> ([`Ready | `Done | `Again of Store.Hash.Set.t] * 'state)
-                     Lwt.t)
-                 * 'state
-    -> have:Store.Hash.Set.t
-    -> want:(   (Store.Hash.t * Store.Reference.t * bool) list
-             -> (Store.Reference.t * Store.Hash.t) list Lwt.t)
-    -> ?deepen:[`Depth of int | `Timestamp of int64 | `Ref of Reference.t]
-    -> Endpoint.t
-    -> ((Store.Reference.t * Store.Hash.t) list * int, error) result Lwt.t
+    Store.t ->
+    ?shallow:Store.Hash.t list ->
+    ?capabilities:Capability.t list ->
+    notify:(Store.Hash.t shallow_update -> unit Lwt.t) ->
+    negociate:
+      (Store.Hash.t acks ->
+      'state ->
+      ([ `Ready | `Done | `Again of Store.Hash.Set.t ] * 'state) Lwt.t)
+      * 'state ->
+    have:Store.Hash.Set.t ->
+    want:
+      ((Store.Hash.t * Store.Reference.t * bool) list ->
+      (Store.Reference.t * Store.Hash.t) list Lwt.t) ->
+    ?deepen:[ `Depth of int | `Timestamp of int64 | `Ref of Reference.t ] ->
+    Endpoint.t ->
+    ((Store.Reference.t * Store.Hash.t) list * int, error) result Lwt.t
 
   val fetch_some :
-       Store.t
-    -> ?capabilities:Capability.t list
-    -> references:Store.Reference.t list Store.Reference.Map.t
-    -> Endpoint.t
-    -> ( Store.Hash.t Store.Reference.Map.t
-         * Store.Reference.t list Store.Reference.Map.t
-       , error )
-       result
-       Lwt.t
+    Store.t ->
+    ?capabilities:Capability.t list ->
+    references:Store.Reference.t list Store.Reference.Map.t ->
+    Endpoint.t ->
+    ( Store.Hash.t Store.Reference.Map.t
+      * Store.Reference.t list Store.Reference.Map.t,
+      error )
+    result
+    Lwt.t
 
   val fetch_all :
-       Store.t
-    -> ?capabilities:Capability.t list
-    -> references:Store.Reference.t list Store.Reference.Map.t
-    -> Endpoint.t
-    -> ( Store.Hash.t Store.Reference.Map.t
-         * Store.Reference.t list Store.Reference.Map.t
-         * Store.Hash.t Store.Reference.Map.t
-       , error )
-       result
-       Lwt.t
+    Store.t ->
+    ?capabilities:Capability.t list ->
+    references:Store.Reference.t list Store.Reference.Map.t ->
+    Endpoint.t ->
+    ( Store.Hash.t Store.Reference.Map.t
+      * Store.Reference.t list Store.Reference.Map.t
+      * Store.Hash.t Store.Reference.Map.t,
+      error )
+    result
+    Lwt.t
 
   val fetch_one :
-       Store.t
-    -> ?capabilities:Capability.t list
-    -> reference:Store.Reference.t * Store.Reference.t list
-    -> Endpoint.t
-    -> ( [`AlreadySync | `Sync of Store.Hash.t Store.Reference.Map.t]
-       , error )
-       result
-       Lwt.t
+    Store.t ->
+    ?capabilities:Capability.t list ->
+    reference:Store.Reference.t * Store.Reference.t list ->
+    Endpoint.t ->
+    ( [ `AlreadySync | `Sync of Store.Hash.t Store.Reference.Map.t ],
+      error )
+    result
+    Lwt.t
 
-  val pp_fetch_one : [ `AlreadySync | `Sync of Store.Hash.t Store.Reference.Map.t ] Fmt.t
+  val pp_fetch_one :
+    [ `AlreadySync | `Sync of Store.Hash.t Store.Reference.Map.t ] Fmt.t
 
   val clone :
-       Store.t
-    -> ?capabilities:Capability.t list
-    -> reference:Store.Reference.t * Store.Reference.t
-    -> Endpoint.t
-    -> (unit, error) result Lwt.t
+    Store.t ->
+    ?capabilities:Capability.t list ->
+    reference:Store.Reference.t * Store.Reference.t ->
+    Endpoint.t ->
+    (unit, error) result Lwt.t
 
   val update_and_create :
-       Store.t
-    -> ?capabilities:Capability.t list
-    -> references:Store.Reference.t list Store.Reference.Map.t
-    -> Endpoint.t
-    -> ( (Store.Reference.t, Store.Reference.t * string) result list
-       , error )
-       result
-       Lwt.t
+    Store.t ->
+    ?capabilities:Capability.t list ->
+    references:Store.Reference.t list Store.Reference.Map.t ->
+    Endpoint.t ->
+    ((Store.Reference.t, Store.Reference.t * string) result list, error) result
+    Lwt.t
 
-  val pp_update_and_create : (Store.Reference.t, Store.Reference.t * string) result list Fmt.t
+  val pp_update_and_create :
+    (Store.Reference.t, Store.Reference.t * string) result list Fmt.t
 end
 
 (* XXX(dinosaure): common module is a module (used by the tcp layer, http layer
@@ -172,19 +175,24 @@ module Common (G : Minimal.S) = struct
   let pp_fetch_one ppf = function
     | `AlreadySync -> Fmt.pf ppf "Reference is synchronized"
     | `Sync map ->
-       Fmt.pf ppf "Updated @[<hov>%a@]"
-         (Fmt.iter_bindings Store.Reference.Map.iter Fmt.(pair ~sep:(always " -> ") Store.Reference.pp Store.Hash.pp)) map
+        Fmt.pf ppf "Updated @[<hov>%a@]"
+          (Fmt.iter_bindings Store.Reference.Map.iter
+             Fmt.(pair ~sep:(always " -> ") Store.Reference.pp Store.Hash.pp))
+          map
 
   let pp_update_and_create ppf lst =
     let pp_elt ppf = function
-      | Ok reference -> Fmt.pf ppf "(Reference <%a> updated)" Store.Reference.pp reference
-      | Error (reference, err) -> Fmt.pf ppf "(Conflict on <%a>: %s)" Store.Reference.pp reference err in
+      | Ok reference ->
+          Fmt.pf ppf "(Reference <%a> updated)" Store.Reference.pp reference
+      | Error (reference, err) ->
+          Fmt.pf ppf "(Conflict on <%a>: %s)" Store.Reference.pp reference err
+    in
     Fmt.(Dump.list pp_elt) ppf lst
 
   open Lwt.Infix
 
   module Node = struct
-    type t = {value: Store.Value.t; mutable color: [`Black | `White]}
+    type t = { value : Store.Value.t; mutable color : [ `Black | `White ] }
 
     let compare a b =
       match a.value, b.value with
@@ -205,11 +213,10 @@ module Common (G : Minimal.S) = struct
         let ret = Hashtbl.find store hash in
         Lwt.return (Some ret)
       with Not_found -> (
-        get hash
-        >>= function
+        get hash >>= function
         | Ok value ->
-            let node = {Node.value; color= `White} in
-            Hashtbl.add store hash node ;
+            let node = { Node.value; color = `White } in
+            Hashtbl.add store hash node;
             Lwt.return (Some node)
         | Error `Not_found -> Lwt.return None
         (* [get] tries to get hash from [exclude] firstly. However, we said
@@ -218,8 +225,7 @@ module Common (G : Minimal.S) = struct
            [`Not_found]. *)
         | Error err ->
             Log.err (fun l ->
-                l "Got an error when we get the object: %a." Store.Hash.pp hash
-            ) ;
+                l "Got an error when we get the object: %a." Store.Hash.pp hash);
             Lwt.fail (Store err) )
     in
     let preds = function
@@ -227,45 +233,46 @@ module Common (G : Minimal.S) = struct
           Store.Value.Commit.tree commit :: Store.Value.Commit.parents commit
       | Store.Value.Tree tree ->
           List.map
-            (fun {Store.Value.Tree.node; _} -> node)
+            (fun { Store.Value.Tree.node; _ } -> node)
             (Store.Value.Tree.to_list tree)
-      | Store.Value.Tag tag -> [Store.Value.Tag.obj tag]
+      | Store.Value.Tag tag -> [ Store.Value.Tag.obj tag ]
       | Store.Value.Blob _ -> []
     in
     let get = memoize (Store.read git) in
     let all_blacks pq =
       Pq.fold
-        (fun _ -> function {Node.color= `Black; _} -> ( && ) true
-          | _ -> ( && ) false )
+        (fun _ -> function { Node.color = `Black; _ } -> ( && ) true
+          | _ -> ( && ) false)
         true pq
     in
-    let propagate {Node.value; color} =
+    let propagate { Node.value; color } =
       let rec go q =
         match Q.pop_exn q with
         | hash, q -> (
-          try
-            let node = Hashtbl.find store hash in
-            node.Node.color <- color ;
-            go (List.fold_left Q.push q (preds node.Node.value))
-          with Not_found -> go q )
+            try
+              let node = Hashtbl.find store hash in
+              node.Node.color <- color;
+              go (List.fold_left Q.push q (preds node.Node.value))
+            with Not_found -> go q )
         | exception Q.Empty -> ()
       in
       go (List.fold_left Q.push Q.empty (preds value))
     in
-    let propagate_snapshot {Node.value; color} =
+    let propagate_snapshot { Node.value; color } =
       let rec go q =
         match Q.pop_exn q with
         | hash, q -> (
             let k node =
-              node.Node.color <- color ;
+              node.Node.color <- color;
               go (List.fold_left Q.push q (preds node.Node.value))
             in
             try
               let node = Hashtbl.find store hash in
               k node
             with Not_found -> (
-              get hash
-              >>= function None -> Lwt.return () | Some node -> k node ) )
+              get hash >>= function
+              | None -> Lwt.return ()
+              | Some node -> k node ) )
         | exception Q.Empty -> Lwt.return ()
       in
       go (List.fold_left Q.push Q.empty (preds value))
@@ -274,29 +281,27 @@ module Common (G : Minimal.S) = struct
       if all_blacks pq then Lwt.return ()
       else
         match Pq.pop pq with
-        | Some ((_, {Node.value; color= `Black}), pq) ->
+        | Some ((_, { Node.value; color = `Black }), pq) ->
             Lwt_list.fold_left_s
               (fun pq hash ->
-                get hash
-                >>= function
-                | Some ({Node.value= Store.Value.Tree _; _} as node) ->
-                    node.Node.color <- `Black ;
+                get hash >>= function
+                | Some ({ Node.value = Store.Value.Tree _; _ } as node) ->
+                    node.Node.color <- `Black;
                     propagate_snapshot node >>= fun () -> Lwt.return pq
-                | Some ({Node.color= `White; _} as node) ->
-                    node.Node.color <- `Black ;
-                    propagate node ;
+                | Some ({ Node.color = `White; _ } as node) ->
+                    node.Node.color <- `Black;
+                    propagate node;
                     Lwt.return (Pq.add hash node pq)
                 | Some node -> Lwt.return (Pq.add hash node pq)
-                | None -> Lwt.return pq )
+                | None -> Lwt.return pq)
               pq (preds value)
             >>= garbage
-        | Some ((_, {Node.value; _}), pq) ->
+        | Some ((_, { Node.value; _ }), pq) ->
             Lwt_list.fold_left_s
               (fun pq hash ->
-                get hash
-                >>= function
+                get hash >>= function
                 | None -> Lwt.return pq
-                | Some node -> Lwt.return (Pq.add hash node pq) )
+                | Some node -> Lwt.return (Pq.add hash node pq))
               pq (preds value)
             >>= garbage
         | None -> Lwt.return ()
@@ -304,39 +309,35 @@ module Common (G : Minimal.S) = struct
     let collect () =
       Hashtbl.fold
         (fun hash -> function
-          | {Node.color= `White; value} -> Store.Hash.Map.add hash value
-          | _ -> fun acc -> acc )
+          | { Node.color = `White; value } -> Store.Hash.Map.add hash value
+          | _ -> fun acc -> acc)
         store Store.Hash.Map.empty
     in
     Lwt_list.map_s
       (fun hash ->
-        get hash
-        >>= function
-        | Some ({Node.value= Store.Value.Commit commit; _} as node) ->
-            get (Store.Value.Commit.tree commit)
-            >>= (function
-                  | None -> Lwt.return ()
-                  | Some node_root_tree -> propagate_snapshot node_root_tree)
+        get hash >>= function
+        | Some ({ Node.value = Store.Value.Commit commit; _ } as node) ->
+            (get (Store.Value.Commit.tree commit) >>= function
+             | None -> Lwt.return ()
+             | Some node_root_tree -> propagate_snapshot node_root_tree)
             >>= fun () -> Lwt.return (Some (hash, node))
         | Some node -> Lwt.return (Some (hash, node))
-        | None -> Lwt.return None )
+        | None -> Lwt.return None)
       source
     >>= fun source ->
     Lwt_list.map_s
       (fun hash ->
-        get hash
-        >>= function
-        | Some ({Node.value= Store.Value.Commit commit; _} as node) ->
-            node.Node.color <- `Black ;
-            get (Store.Value.Commit.tree commit)
-            >>= (function
-                  | None -> Lwt.return ()
-                  | Some node_root_tree ->
-                      node_root_tree.Node.color <- `Black ;
-                      propagate_snapshot node_root_tree)
+        get hash >>= function
+        | Some ({ Node.value = Store.Value.Commit commit; _ } as node) ->
+            node.Node.color <- `Black;
+            (get (Store.Value.Commit.tree commit) >>= function
+             | None -> Lwt.return ()
+             | Some node_root_tree ->
+                 node_root_tree.Node.color <- `Black;
+                 propagate_snapshot node_root_tree)
             >>= fun () -> Lwt.return (Some (hash, node))
         | Some node -> Lwt.return (Some (hash, node))
-        | None -> Lwt.return None )
+        | None -> Lwt.return None)
       exclude
     >|= List.append source
     >|= List.fold_left
@@ -353,12 +354,13 @@ module Common (G : Minimal.S) = struct
         Store.Hash.Set.empty remote
       (* XXX(dinosaure): hash available on server side may not exist on client
          side. [exclude] can have unavailable hash on client side. *)
-      |> fun exclude ->
+      |>
+      fun exclude ->
       List.fold_left
         (fun exclude -> function
           | `Delete (hash, _) -> Store.Hash.Set.add hash exclude
           | `Update (hash, _, _) -> Store.Hash.Set.add hash exclude
-          | `Create _ -> exclude )
+          | `Create _ -> exclude)
         exclude commands
       |> Store.Hash.Set.elements
     in
@@ -367,7 +369,7 @@ module Common (G : Minimal.S) = struct
         (fun source -> function
           | `Update (_, hash, _) -> Store.Hash.Set.add hash source
           | `Create (hash, _) -> Store.Hash.Set.add hash source
-          | `Delete _ -> source )
+          | `Delete _ -> source)
         Store.Hash.Set.empty commands
       |> Store.Hash.Set.elements
     in
@@ -385,19 +387,17 @@ module Common (G : Minimal.S) = struct
     Lwt_list.filter_map_s
       (function
         | remote_hash, remote_ref, false -> (
-            choose remote_ref
-            >>= (function
-                  | false ->
-                      Log.debug (fun l ->
-                          l "We missed the reference %a." Store.Reference.pp
-                            remote_ref ) ;
-                      Lwt.return None
-                  | true -> Lwt.return (Some (remote_ref, remote_hash)))
+            (choose remote_ref >>= function
+             | false ->
+                 Log.debug (fun l ->
+                     l "We missed the reference %a." Store.Reference.pp
+                       remote_ref);
+                 Lwt.return None
+             | true -> Lwt.return (Some (remote_ref, remote_hash)))
             >>= function
             | None -> Lwt.return None
             | Some (remote_ref, remote_hash) -> (
-                Store.mem git remote_hash
-                >>= function
+                Store.mem git remote_hash >>= function
                 | true -> Lwt.return None
                 | false -> Lwt.return (Some (remote_ref, remote_hash)) ) )
         | _ -> Lwt.return None)
@@ -409,7 +409,7 @@ module Common (G : Minimal.S) = struct
     let results =
       List.fold_left
         (fun results (remote_ref, hash) ->
-          Store.Reference.Map.add remote_ref hash results )
+          Store.Reference.Map.add remote_ref hash results)
         Store.Reference.Map.empty results
     in
     let updated, missed =
@@ -424,11 +424,11 @@ module Common (G : Minimal.S) = struct
             let local_refs = Store.Reference.Map.find remote_ref updated in
             ( List.fold_left
                 (fun updated' local_ref ->
-                  Store.Reference.Map.add local_ref new_hash updated' )
-                updated' local_refs
-            , downloaded )
+                  Store.Reference.Map.add local_ref new_hash updated')
+                updated' local_refs,
+              downloaded )
           with Not_found ->
-            updated', Store.Reference.Map.add remote_ref new_hash downloaded )
+            updated', Store.Reference.Map.add remote_ref new_hash downloaded)
         results
         Store.Reference.Map.(empty, empty)
     in
@@ -438,18 +438,18 @@ module Common (G : Minimal.S) = struct
           (fun (local_ref, new_hash) ->
             Store.Ref.write git local_ref (Store.Reference.Hash new_hash)
             >>= function
-            | Ok _ -> Lwt.return () | Error err -> Lwt.fail (Jump err) )
-          (Store.Reference.Map.bindings updated) )
+            | Ok _ -> Lwt.return ()
+            | Error err -> Lwt.fail (Jump err))
+          (Store.Reference.Map.bindings updated))
       (fun () -> Lwt.return (Ok (updated, missed, downloaded)))
       (function Jump err -> Lwt.return (Error err) | exn -> Lwt.fail exn)
 
   let push_handler git references remote_refs =
-    Store.Ref.list git
-    >>= fun local_refs ->
+    Store.Ref.list git >>= fun local_refs ->
     let local_refs =
       List.fold_left
         (fun local_refs (local_ref, local_hash) ->
-          Store.Reference.Map.add local_ref local_hash local_refs )
+          Store.Reference.Map.add local_ref local_hash local_refs)
         Store.Reference.Map.empty local_refs
     in
     Lwt_list.filter_map_p
@@ -469,25 +469,22 @@ module Common (G : Minimal.S) = struct
                 try
                   let remote_hash = List.assoc remote_ref remote_refs in
                   `Update (remote_hash, local_hash, remote_ref) :: actions
-                with Not_found -> `Create (local_hash, remote_ref) :: actions
-                )
+                with Not_found -> `Create (local_hash, remote_ref) :: actions)
               actions remote_refs'
-          with Not_found -> actions )
+          with Not_found -> actions)
         local_refs []
     in
     Lwt_list.filter_map_s
       (fun action ->
         match action with
         | `Update (remote_hash, local_hash, reference) ->
-            Store.mem git remote_hash
-            >>= fun has_remote_hash ->
-            Store.mem git local_hash
-            >>= fun has_local_hash ->
+            Store.mem git remote_hash >>= fun has_remote_hash ->
+            Store.mem git local_hash >>= fun has_local_hash ->
             Log.debug (fun l ->
                 l "Check update command on %a for %a to %a (equal = %b)."
                   Store.Reference.pp reference Store.Hash.pp remote_hash
                   Store.Hash.pp local_hash
-                  Store.Hash.(equal remote_hash local_hash) ) ;
+                  Store.Hash.(equal remote_hash local_hash));
             if
               has_remote_hash
               && has_local_hash
@@ -495,9 +492,8 @@ module Common (G : Minimal.S) = struct
             then Lwt.return (Some (action :> command))
             else Lwt.return None
         | `Create (local_hash, _) -> (
-            Store.mem git local_hash
-            >>= function
+            Store.mem git local_hash >>= function
             | true -> Lwt.return (Some (action :> command))
-            | false -> Lwt.return None ) )
+            | false -> Lwt.return None ))
       actions
 end
