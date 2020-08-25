@@ -41,4 +41,5 @@ module type S = sig
   val to_dot : store -> Format.formatter -> unit Lwt.t
 end
 
-module Make (S : Minimal.S) : S with module Store = S
+module Make (Hash : Digestif.S) (Store : Minimal.S with type hash = Hash.t) :
+  S with type hash = Hash.t and type store = Store.t
