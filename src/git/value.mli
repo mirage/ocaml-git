@@ -16,6 +16,11 @@
  *)
 
 (** The Value module which represents the Git object. *)
+type 'hash t =
+  | Blob of Blob.t
+  | Commit of 'hash Commit.t
+  | Tree of 'hash Tree.t
+  | Tag of 'hash Tag.t
 
 (** Interface which describes the Git object. *)
 module type S = sig

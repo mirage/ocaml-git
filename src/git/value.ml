@@ -15,6 +15,12 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+type 'hash t =
+  | Blob of Blob.t
+  | Commit of 'hash Commit.t
+  | Tree of 'hash Tree.t
+  | Tag of 'hash Tag.t
+
 let src =
   Logs.Src.create "git.value" ~doc:"logs git's internal value computation"
 
