@@ -55,83 +55,11 @@ module type S = sig
   include S.BASE with type t := t
 
   val length : t -> int64
-end
 
-(** Interface which describes raw operations. That means all
-    serialization/unserialization to a {!Cstruct.t}. *)
-module type RAW = sig
-  module Hash : S.HASH
-  module Inflate : S.INFLATE
-  module Deflate : S.DEFLATE
-
-  module Value :
-    S
-      with module Hash := Hash
-       and module Inflate := Inflate
-       and module Deflate := Deflate
-
-  include module type of Value
-
-  module EncoderRaw :
-    S.ENCODER
-      with type t = t
-       and type init = Cstruct.t * t
-       and type error = Error.never
-
-  module DecoderRaw :
-    S.DECODER
-      with type t = t
-       and type init = Cstruct.t
-       and type error = Error.Decoder.t
-
-  module EncoderWithoutHeader :
-    S.ENCODER
-      with type t = t
-       and type init = Cstruct.t * t
-       and type error = Error.never
-
-  val to_deflated_raw :
-    raw:Cstruct.t ->
-    etmp:Cstruct.t ->
-    ?level:int ->
-    ztmp:Cstruct.t ->
-    t ->
-    (string, E.error) result
-  (** [to_deflated_raw ?capacity ?level ~ztmp value] serializes and deflates
-      the value [value]. [capacity] is the memory consumption of the encoder in
-      bytes (default to [0x100]), [level] is the level of the compression
-      (default to [4]) and [ztmp] is an internal buffer used to store the
-      serialized value before the {i deflation}.
-
-      All error from the {!Deflate} module is relayed to the [`Deflate] error
-      value. *)
-
-  val to_raw :
-    raw:Cstruct.t -> etmp:Cstruct.t -> t -> (string, EncoderRaw.error) result
-  (** [to_raw ?capacity value] serializes the value [value]. [capacity] is the
-      memory consumption of the encoder in bytes (default to [0x100]).
-
-      This function can not returns an {!EE.error} (see {!EE}). *)
-
-  val to_raw_without_header :
-    raw:Cstruct.t ->
-    etmp:Cstruct.t ->
-    t ->
-    (string, EncoderWithoutHeader.error) result
 
   val of_raw :
     kind:[ `Commit | `Blob | `Tree | `Tag ] ->
     Cstruct.t ->
-    (t, Error.Decoder.t) result
-  (** [of_raw ~kind inflated] makes a Git object as an OCaml value {!t}. This
-      decoder does not expect an {i header} to recognize which kind of Git
-      object is it. That means the [inflated] raw should not contain [kind
-      size\000] at the beginning (in this case, you should use
-      {!of_raw_with_header}. *)
-
-  val of_raw_with_header : Cstruct.t -> (t, DecoderRaw.error) result
-  (** [of_raw_with_header inflated] makes a Git object as an OCaml value {!t}.
-      This decoder expects an {i header} to choose which Git object it is. *)
 end
 
 (** The {i functor} to make the OCaml representation of the Git object by a
@@ -156,17 +84,3 @@ module Make (Hash : S.HASH) (Inflate : S.INFLATE) (Deflate : S.DEFLATE) :
      and module Tree = Tree.Make(Hash)
      and module Tag = Tag.Make(Hash)
 
-(** The {i functor} to make the OCaml representation of the Git object by a
-    specific hash implementation, and {!S.INFLATE} implementation for the
-    decompression and a {!S.DEFLATE} implementation for the compression. *)
-module Raw (Hash : S.HASH) (Inflate : S.INFLATE) (Deflate : S.DEFLATE) :
-  RAW
-    with module Hash := Hash
-     and module Inflate := Inflate
-     and module Deflate := Deflate
-     and module Blob = Blob.Make(Hash)
-     and module Commit = Commit.Make(Hash)
-     and module Tree = Tree.Make(Hash)
-     and module Tag = Tag.Make(Hash)
-     and module Value = Make(Hash)(Inflate)(Deflate)
-     and type t = Make(Hash)(Inflate)(Deflate).t
