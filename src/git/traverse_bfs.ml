@@ -21,13 +21,11 @@ module Log = (val Logs.src_log src : Logs.LOG)
 
 module type STORE = sig
   module Hash : S.HASH
-
   module Value : Value.S with type hash = Hash.t
 
   type t
 
   val root : t -> Fpath.t
-
   val read_exn : t -> Hash.t -> Value.t Lwt.t
 end
 
@@ -50,10 +48,9 @@ module Make (Store : STORE) = struct
       | [] -> (
           match Queue.pop queue with
           | rest -> walk close [ rest ] queue acc
-          | exception Queue.Empty -> Lwt.return acc)
+          | exception Queue.Empty -> Lwt.return acc )
       | hash :: rest -> (
-          if Store.Hash.Set.mem hash close
-          then walk close rest queue acc
+          if Store.Hash.Set.mem hash close then walk close rest queue acc
           else
             let close' = Store.Hash.Set.add hash close in
             Store.read_exn t hash >>= function
@@ -61,15 +58,16 @@ module Make (Store : STORE) = struct
                 let rest' = Store.Value.Commit.tree commit :: rest in
                 List.iter
                   (fun x -> Queue.add x queue)
-                  (Store.Value.Commit.parents commit) ;
+                  (Store.Value.Commit.parents commit);
                 f acc ~length:(Store.Value.Commit.length commit) hash value
                 >>= fun acc' -> walk close' rest' queue acc'
             | Value.Tree tree as value ->
                 let path =
-                  try Hashtbl.find names hash with Not_found -> path in
+                  try Hashtbl.find names hash with Not_found -> path
+                in
                 Lwt_list.iter_s
                   (fun { Tree.name; node; _ } ->
-                    Hashtbl.add names node Fpath.(path / name) ;
+                    Hashtbl.add names node Fpath.(path / name);
                     Lwt.return ())
                   (Store.Value.Tree.to_list tree)
                 >>= fun () ->
@@ -77,22 +75,25 @@ module Make (Store : STORE) = struct
                   rest
                   @ List.map
                       (fun { Tree.node; _ } -> node)
-                      (Store.Value.Tree.to_list tree) in
+                      (Store.Value.Tree.to_list tree)
+                in
                 f acc ~name:path
                   ~length:(Store.Value.Tree.length tree)
                   hash value
                 >>= fun acc' -> walk close' rest' queue acc'
             | Value.Blob blob as value ->
                 let path =
-                  try Hashtbl.find names hash with Not_found -> path in
+                  try Hashtbl.find names hash with Not_found -> path
+                in
                 f acc ~name:path
                   ~length:(Store.Value.Blob.length blob)
                   hash value
                 >>= fun acc' -> walk close' rest queue acc'
             | Value.Tag tag as value ->
-                Queue.add (Store.Value.Tag.obj tag) queue ;
+                Queue.add (Store.Value.Tag.obj tag) queue;
                 f acc ~length:(Store.Value.Tag.length tag) hash value
-                >>= fun acc' -> walk close' rest queue acc') in
+                >>= fun acc' -> walk close' rest queue acc' )
+    in
     walk Store.Hash.Set.empty [ hash ] (Queue.create ()) acc
 
   let iter t f hash =
