@@ -43,6 +43,6 @@ depends: [
 ]
 
 pin-depends: [
-  [ "conduit.dev" "git+https://github.com/dinosaure/ocaml-conduit.git#9779d777cd03f85e770ecc1c1174dd382979bc58" ]
-  [ "conduit-lwt.dev" "git+https://github.com/dinosaure/ocaml-conduit.git#9779d777cd03f85e770ecc1c1174dd382979bc58" ]
+  [ "conduit.dev" "git+https://github.com/dinosaure/ocaml-conduit.git#9815aa091e9c285e236e1deffb0dc48723ac72a0" ]
+  [ "conduit-lwt.dev" "git+https://github.com/dinosaure/ocaml-conduit.git#9815aa091e9c285e236e1deffb0dc48723ac72a0" ]
 ]
