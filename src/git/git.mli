@@ -1,44 +1,22 @@
-module Error = Error
-module Helper = Helper
+module type HASH = S.HASH
+
+module type BASE = S.BASE
+
+module type DIGEST = S.DIGEST
+
 module Blob = Blob
 module Commit = Commit
 module Tree = Tree
 module Tag = Tag
-module Reference = Reference
 module User = User
+module Reference = Reference
 module Value = Value
-module Fanout = Fanout
-module Bucket = Bucket
 module Traverse_bfs = Traverse_bfs
-module Gc = Collector
 module Object_graph = Object_graph
 module Search = Search
-module Negociator = Negociator
-module Revision = Revision
-module Capability = Capability
-module Sync = Sync
-module Smart = Smart
-module Loose = Loose
-module Pack_info = Pack_info
-module Pack_engine = Pack_engine
-module Packed_refs = Packed_refs
-module Pack = Pack
-module Unpack = Unpack
-module Index_pack = Index_pack
 module Mem = Mem
 module Store = Store
-module Inflate = Inflate
-module Deflate = Deflate
-module Buffer = Cstruct_buffer
 module Hash = Hash
-module Gri = Gri
-module Tcp = Tcp
-module Path = Path
+module Sync = Sync
 
-module type FILE = S.FILE
-module type MAPPER = S.MAPPER
-module type DIR = S.DIR
-module type FS = S.FS
-module type DIGEST = S.DIGEST
-module type HASH = S.HASH
 module type S = Minimal.S
