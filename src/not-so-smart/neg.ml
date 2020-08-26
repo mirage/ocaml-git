@@ -17,9 +17,6 @@ type nonrec 'uid hex = 'uid hex = {
 type 'uid negotiator = 'uid Default.t
 
 let negotiator ~compare = Default.make ~compare
-
 let run = run
-
 let find_common = find_common
-
 let tips = tips

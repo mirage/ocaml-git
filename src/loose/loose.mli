@@ -32,7 +32,6 @@ type buffers = {
 
 module Make (Uid : UID) : sig
   val list : 't -> ('t, Uid.t, _, 's) store -> (Uid.t list, 's) io
-
   val exists : 't -> ('t, Uid.t, _, 's) store -> Uid.t -> (bool, 's) io
 
   val atomic_add :

@@ -1,6 +1,5 @@
 module type APPEND = sig
   type 'a rd = < rd : unit ; .. > as 'a
-
   type 'a wr = < wr : unit ; .. > as 'a
 
   type 'a mode =
@@ -9,31 +8,21 @@ module type APPEND = sig
     | RdWr : < rd : unit ; wr : unit > mode
 
   type t
-
   type uid
-
   type 'a fd
-
   type error
-
   type +'a fiber
 
   val pp_error : error Fmt.t
-
   val create : mode:'a mode -> t -> uid -> ('a fd, error) result fiber
-
   val map : t -> 'm rd fd -> pos:int64 -> int -> Bigstringaf.t fiber
-
   val append : t -> 'm wr fd -> string -> unit fiber
-
   val move : t -> src:uid -> dst:uid -> (unit, error) result fiber
-
   val close : t -> 'm fd -> (unit, error) result fiber
 end
 
 module type UID = sig
   include Carton.UID
-
   include Sigs.UID with type t := t
 
   val hash : t -> int
@@ -69,9 +58,7 @@ type endpoint = private {
 }
 
 val pp_endpoint : endpoint Fmt.t
-
 val endpoint_of_string : string -> (endpoint, [> `Msg of string ]) result
-
 val endpoint_with_headers : (string * string) list -> endpoint -> endpoint
 
 module Make

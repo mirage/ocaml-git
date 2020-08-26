@@ -4,7 +4,6 @@ module Make (Uid : Loose.UID) = struct
   include Loose.Make (Uid)
 
   let prj = Carton_lwt.prj
-
   let exists t store uid = prj (exists t store uid)
 
   let atomic_add t buffers store ~hdr v =

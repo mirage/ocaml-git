@@ -1,17 +1,12 @@
 open Sigs
 
 type 'uid commit = { root : 'uid; preds : 'uid list }
-
 type none = Leaf
-
 type ('uid, 'preds) kind
 
 val commit : ('uid, 'uid commit) kind
-
 val tree : ('uid, 'uid list) kind
-
 val blob : ('uid, none) kind
-
 val tag : ('uid, 'uid) kind
 
 type 'uid t

@@ -1,6 +1,5 @@
 module type STORE = sig
   type 'a rd = < rd : unit ; .. > as 'a
-
   type 'a wr = < wr : unit ; .. > as 'a
 
   type 'a mode =
@@ -9,25 +8,16 @@ module type STORE = sig
     | RdWr : < rd : unit ; wr : unit > mode
 
   type t
-
   type uid
-
   type 'a fd
-
   type error
-
   type +'a fiber
 
   val pp_error : error Fmt.t
-
   val create : mode:'a mode -> t -> uid -> ('a fd, error) result fiber
-
   val map : t -> 'm rd fd -> pos:int64 -> int -> Bigstringaf.t fiber
-
   val close : t -> 'm fd -> (unit, error) result fiber
-
   val list : t -> uid list fiber
-
   val length : 'm fd -> int64 fiber
 end
 
@@ -35,7 +25,6 @@ module type IO = sig
   type +'a t
 
   val bind : 'a t -> ('a -> 'b t) -> 'b t
-
   val return : 'a -> 'a t
 end
 
@@ -76,8 +65,6 @@ module Make
     (Carton.Dec.v, [> `Msg of string | `Not_found of Uid.t ]) result IO.t
 
   val exists : Store.t -> (Store.uid, 'm Store.fd, Uid.t) t -> Uid.t -> bool
-
   val list : Store.t -> (Store.uid, 'm Store.fd, Uid.t) t -> Uid.t list
-
   val fds : (Store.uid, 'm Store.fd, Uid.t) t -> ('m Store.fd * int64) list
 end

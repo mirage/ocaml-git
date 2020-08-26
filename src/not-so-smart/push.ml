@@ -15,13 +15,10 @@ struct
   let src = Logs.Src.create "push"
 
   module Log = (val Logs.src_log src : Logs.LOG)
-
   open Scheduler
 
   let ( >>= ) x f = IO.bind x f
-
   let return x = IO.return x
-
   let ( >>| ) x f = x >>= fun x -> return (f x)
 
   let sched =
@@ -44,15 +41,15 @@ struct
     let fiber ctx =
       let open Smart in
       let* () =
-        if prelude
-        then
+        if prelude then
           send ctx proto_request
             (Proto_request.receive_pack ~host ~version:1 path)
         else return ()
       in
       let* v = recv ctx advertised_refs in
-      update ctx (Smart.Advertised_refs.capabilities v) ;
-      return (Smart.Advertised_refs.map ~fuid:Uid.of_hex ~fref:Ref.v v) in
+      update ctx (Smart.Advertised_refs.capabilities v);
+      return (Smart.Advertised_refs.map ~fuid:Uid.of_hex ~fref:Ref.v v)
+    in
     let ctx = Smart.make caps in
     Neg.run sched fail io flow (fiber ctx) |> prj >>= fun advertised_refs ->
     Pck.commands sched
@@ -74,25 +71,26 @@ struct
         let exclude, sources =
           Pck.get_limits ~compare:Uid.compare
             (Smart.Advertised_refs.refs advertised_refs)
-            (Smart.Commands.commands cmds) in
+            (Smart.Commands.commands cmds)
+        in
         Pck.get_uncommon_objects sched ~compare:Uid.compare access store
           ~exclude ~sources
         |> prj
         >>= fun uids ->
         Log.debug (fun m ->
-            m "Prepare a pack of %d object(s)." (List.length uids)) ;
+            m "Prepare a pack of %d object(s)." (List.length uids));
         let stream = pack uids in
         let side_band =
-          Smart.shared `Side_band ctx || Smart.shared `Side_band_64k ctx in
+          Smart.shared `Side_band ctx || Smart.shared `Side_band_64k ctx
+        in
         let pack = Smart.send_pack ~stateless:push_cfg.stateless side_band in
         let rec go () =
           stream () >>= function
           | None ->
               let report_status = Smart.shared `Report_status ctx in
               Log.debug (fun m ->
-                  m "report-status capability: %b." report_status) ;
-              if report_status
-              then
+                  m "report-status capability: %b." report_status);
+              if report_status then
                 Neg.run sched fail io flow Smart.(recv ctx status)
                 |> prj
                 >>| Smart.Status.map ~f:Ref.v
@@ -101,16 +99,17 @@ struct
                 return (Smart.Status.v cmds)
           | Some payload ->
               Neg.run sched fail io flow Smart.(send ctx pack payload) |> prj
-              >>= fun () -> go () in
+              >>= fun () -> go ()
+        in
         go () >>= fun status ->
         match Smart.Status.to_result status with
         | Ok () ->
-            Log.debug (fun m -> m "Push is done!") ;
+            Log.debug (fun m -> m "Push is done!");
             Log.info (fun m ->
                 m "%a" Smart.Status.pp
-                  (Smart.Status.map ~f:Ref.to_string status)) ;
+                  (Smart.Status.map ~f:Ref.to_string status));
             return ()
         | Error err ->
-            Log.err (fun m -> m "Push got an error: %s" err) ;
-            return ())
+            Log.err (fun m -> m "Push got an error: %s" err);
+            return () )
 end

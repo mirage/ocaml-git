@@ -1,5 +1,4 @@
 type ('a, 's) io
-
 type ('k, 'v, 's) store
 
 type 's scheduler = {
@@ -25,21 +24,17 @@ type ('uid, 'ref, 'v, 'g, 's) access = {
 
 module type SCHED = sig
   type +'a s
-
   type t
 
   external inj : 'a s -> ('a, t) io = "%identity"
-
   external prj : ('a, t) io -> 'a s = "%identity"
 end
 
 module type STORE = sig
   type ('a, 'b) s
-
   type t
 
   external inj : ('a, 'b) s -> ('a, 'b, t) store = "%identity"
-
   external prj : ('a, 'b, t) store -> ('a, 'b) s = "%identity"
 end
 
@@ -55,11 +50,8 @@ module type IO = sig
   type +'a t
 
   val bind : 'a t -> ('a -> 'b t) -> 'b t
-
   val return : 'a -> 'a t
-
   val fail : exn -> 'a t
-
   val async : (unit -> unit t) -> unit
 end
 
@@ -67,9 +59,7 @@ module type UID = sig
   type t
 
   val of_hex : string -> t
-
   val to_hex : t -> string
-
   val compare : t -> t -> int
 end
 
@@ -77,23 +67,18 @@ module type REF = sig
   type t
 
   val v : string -> t
-
   val equal : t -> t -> bool
-
   val to_string : t -> string
 end
 
 module type FLOW = sig
   type +'a fiber
-
   type t
-
   type error
 
   val recv :
     t -> Cstruct.t -> ([ `End_of_flow | `Input of int ], error) result fiber
 
   val send : t -> Cstruct.t -> (int, error) result fiber
-
   val pp_error : error Fmt.t
 end

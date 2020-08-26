@@ -16,16 +16,13 @@
  *)
 
 let ( <.> ) f g x = f (g x)
-
 let src = Logs.Src.create "git.sync"
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
 module type S = sig
   type hash
-
   type store
-
   type error = private [> `Msg of string | `Exn of exn | `Not_found ]
 
   val pp_error : error Fmt.t
@@ -64,7 +61,6 @@ module Make
     (HTTP : Smart_git.HTTP) =
 struct
   type hash = Digestif.t
-
   type store = Store.t
 
   type error =
@@ -88,7 +84,7 @@ struct
   open Lwt.Infix
 
   let get_commit_for_negotiation (t, hashtbl) hash =
-    Log.debug (fun m -> m "Load commit %a." Hash.pp hash) ;
+    Log.debug (fun m -> m "Load commit %a." Hash.pp hash);
     match Hashtbl.find hashtbl hash with
     | v -> Lwt.return_some v
     | exception Not_found -> (
@@ -98,14 +94,16 @@ struct
         Store.read t hash
         >>= function
         | Ok (Value.Commit commit) ->
-            let { User.date = ts, _; _ } = Store.Value.Commit.committer commit in
-            let v = (hash, ref 0, ts) in
-            Hashtbl.add hashtbl hash v ;
+            let { User.date = ts, _; _ } =
+              Store.Value.Commit.committer commit
+            in
+            let v = hash, ref 0, ts in
+            Hashtbl.add hashtbl hash v;
             Lwt.return_some v
-        | Ok _ | Error _ -> Lwt.return_none)
+        | Ok _ | Error _ -> Lwt.return_none )
 
   let parents_of_commit t hash =
-    Log.debug (fun m -> m "Get parents of %a." Hash.pp hash) ;
+    Log.debug (fun m -> m "Get parents of %a." Hash.pp hash);
     Store.read_exn t hash >>= function
     | Value.Commit commit -> Lwt.return (Store.Value.Commit.parents commit)
     | _ -> Lwt.return []
@@ -115,17 +113,18 @@ struct
     let fold acc hash =
       get_commit_for_negotiation store hash >>= function
       | Some v -> Lwt.return (v :: acc)
-      | None -> Lwt.return acc in
+      | None -> Lwt.return acc
+    in
     Lwt_list.fold_left_s fold [] parents
 
   let deref (t, _) refname =
-    Log.debug (fun m -> m "Dereference %a." Reference.pp refname) ;
+    Log.debug (fun m -> m "Dereference %a." Reference.pp refname);
     Store.Ref.resolve t refname >>= function
     | Ok hash -> Lwt.return_some hash
     | Error _ -> Lwt.return_none
 
   let locals (t, _) =
-    Log.debug (fun m -> m "Load locals references.") ;
+    Log.debug (fun m -> m "Load locals references.");
     Store.Ref.list t >>= Lwt_list.map_p (Lwt.return <.> fst)
 
   let access =
@@ -147,7 +146,8 @@ struct
       | Value.Commit _ -> `A
       | Value.Tree _ -> `B
       | Value.Blob _ -> `C
-      | Value.Tag _ -> `D in
+      | Value.Tag _ -> `D
+    in
     let length = Int64.to_int (Store.Value.length v) in
     Lwt.return (kind, length)
 
@@ -159,7 +159,8 @@ struct
           | `Commit -> `A
           | `Tree -> `B
           | `Blob -> `C
-          | `Tag -> `D in
+          | `Tag -> `D
+        in
         let raw = Bigstringaf.sub buffer ~off ~len in
         Lwt.return (Carton.Dec.v ~kind raw)
     | None -> Lwt.fail Not_found
@@ -198,9 +199,9 @@ struct
     | exception Not_found -> (
         get_object_for_packer t hash >>= function
         | Some o as v ->
-            Hashtbl.replace hashtbl hash o ;
+            Hashtbl.replace hashtbl hash o;
             Lwt.return v
-        | None -> Lwt.return_none)
+        | None -> Lwt.return_none )
 
   let access =
     {

@@ -38,7 +38,6 @@ end
 
 module Value = struct
   type encoder = Encoder.encoder
-
   type decoder = Decoder.decoder
 
   include Witness
@@ -62,7 +61,8 @@ module Value = struct
       | Encoder.Done -> State.Return ()
       | Encoder.Write { continue; buffer; off; len } ->
           State.Write { k = go <.> continue; buffer; off; len }
-      | Encoder.Error err -> State.Error (err :> error) in
+      | Encoder.Error err -> State.Error (err :> error)
+    in
     (go <.> fiber) w
 
   let decode : type a. decoder -> a recv -> (a, [> Decoder.error ]) State.t =
@@ -71,7 +71,8 @@ module Value = struct
       | Decoder.Done v -> State.Return v
       | Decoder.Read { buffer; off; len; continue; eof } ->
           State.Read { k = go <.> continue; buffer; off; len; eof = go <.> eof }
-      | Decoder.Error { error; _ } -> State.Error error in
+      | Decoder.Error { error; _ } -> State.Error error
+    in
     match w with
     | Advertised_refs -> go (Protocol.Decoder.decode_advertised_refs decoder)
     | Result -> go (Protocol.Decoder.decode_result decoder)
@@ -100,25 +101,17 @@ type ('a, 'err) t = ('a, 'err) State.t =
 type context = State.Context.t
 
 let make capabilities = State.Context.make capabilities
-
 let update ctx capabilities = State.Context.update ctx capabilities
-
 let shared ctx capability = State.Context.shared ctx capability
-
 let capabilities ctx = State.Context.capabilities ctx
 
 include Witness
 
 let proto_request = Proto_request
-
 let advertised_refs = Advertised_refs
-
 let want = Want
-
 let negotiation_done = Done
-
 let negotiation_result = Result
-
 let commands = Commands
 
 let recv_pack ?(side_band = false) ?(push_stdout = ignore)
@@ -126,18 +119,14 @@ let recv_pack ?(side_band = false) ?(push_stdout = ignore)
   Recv_pack { side_band; push_pack; push_stdout; push_stderr }
 
 let status = Status
-
 let flush = Flush
-
 let ack = Ack
-
 let shallows = Shallows
 
 let send_pack ?(stateless = false) side_band =
   Send_pack { side_band; stateless }
 
 let packet ~trim = Packet trim
-
 let send_advertised_refs : _ send = Advertised_refs
 
 include State.Scheduler (State.Context) (Value)

@@ -49,8 +49,9 @@ module Fold = struct
       | Some f when dotfiles || not (f.[0] = '.') -> (
           match Fpath.of_string f with
           | Ok f -> readdir dh ((if rel then f else Fpath.(dir // f)) :: acc)
-          | Error (`Msg _) -> (* ignore *) readdir dh acc)
-      | Some _ -> readdir dh acc in
+          | Error (`Msg _) -> (* ignore *) readdir dh acc )
+      | Some _ -> readdir dh acc
+    in
     Lwt.catch
       (fun () ->
         Lwt_unix.opendir (Fpath.to_string dir) >>= fun dh ->
@@ -61,8 +62,9 @@ module Fold = struct
         | Unix.Unix_error (err, _, _) ->
             let err =
               Fmt.strf "directory contents %a: %s" Fpath.pp dir
-                (Unix.error_message err) in
-            Log.err (fun m -> m "%s" err) ;
+                (Unix.error_message err)
+            in
+            Log.err (fun m -> m "%s" err);
             Lwt.return []
         | exn -> Lwt.fail exn)
 
@@ -120,11 +122,12 @@ module Fold = struct
         | true, true when do_traverse p ->
             Lwt.both (f p acc) (Lwt.return (p :: to_traverse))
         | true, _ -> Lwt.both (f p acc) (Lwt.return to_traverse)
-        | _ -> Lwt.return (acc, to_traverse) in
+        | _ -> Lwt.return (acc, to_traverse)
+      in
       let dir_child d acc bname =
-        if (not dotfiles) && bname.[0] = '.'
-        then Lwt.return acc
-        else process_path Fpath.(d / bname) acc in
+        if (not dotfiles) && bname.[0] = '.' then Lwt.return acc
+        else process_path Fpath.(d / bname) acc
+      in
       let rec loop acc = function
         | (d :: ds) :: up ->
             readdir d >>= fun childs ->
@@ -132,14 +135,16 @@ module Fold = struct
             >>= fun (acc, to_traverse) -> loop acc (to_traverse :: ds :: up)
         | [ [] ] -> Lwt.return acc
         | [] :: up -> loop acc up
-        | _ -> assert false in
+        | _ -> assert false
+      in
       let init acc p =
         let base = Fpath.(basename @@ normalize p) in
-        if (not dotfiles) && base.[0] = '.'
-        then Lwt.return acc
-        else process_path p acc in
+        if (not dotfiles) && base.[0] = '.' then Lwt.return acc
+        else process_path p acc
+      in
       Lwt_list.fold_left_s init (acc, []) paths >>= fun (acc, to_traverse) ->
-      loop acc [ to_traverse ] in
+      loop acc [ to_traverse ]
+    in
     process ()
 
   let fold ?dotfiles ?elements ?traverse f acc d =
@@ -155,7 +160,6 @@ module Minor_heap (Digestif : Digestif.S) = struct
   type t = Fpath.t (* [.git/objects] *)
 
   type uid = Digestif.t
-
   type error = [ `Not_found of Digestif.t | `Msg of string ]
 
   let pp_error ppf = function
@@ -166,18 +170,20 @@ module Minor_heap (Digestif : Digestif.S) = struct
 
   let split uid =
     let hex = Digestif.to_hex uid in
-    (String.sub hex 0 2, String.sub hex 2 ((Digestif.digest_size * 2) - 2))
+    String.sub hex 0 2, String.sub hex 2 ((Digestif.digest_size * 2) - 2)
 
   let rec exists root uid =
     let hd, tl = split uid in
     let path = Fpath.(root / hd / tl) in
     let process () =
-      Lwt_unix.stat (Fpath.to_string path) >>= fun _ -> Lwt.return true in
+      Lwt_unix.stat (Fpath.to_string path) >>= fun _ -> Lwt.return true
+    in
     let error = function
       | Unix.Unix_error (Unix.EACCES, _, _) -> Lwt.return false
       | Unix.Unix_error (Unix.ENOENT, _, _) -> Lwt.return false
       | Unix.Unix_error (Unix.EINTR, _, _) -> exists root uid
-      | exn -> Lwt.fail exn in
+      | exn -> Lwt.fail exn
+    in
     Lwt.catch process error
 
   let rec length root uid =
@@ -185,16 +191,18 @@ module Minor_heap (Digestif : Digestif.S) = struct
     let path = Fpath.(root / hd / tl) in
     let process () =
       Lwt_unix.LargeFile.stat (Fpath.to_string path) >>= fun stat ->
-      Lwt.return_ok stat.Unix.LargeFile.st_size in
+      Lwt.return_ok stat.Unix.LargeFile.st_size
+    in
     let error = function
       | Unix.Unix_error (Unix.EACCES, _, _) -> Lwt.return_error (`Not_found uid)
       | Unix.Unix_error (Unix.ENOENT, _, _) -> Lwt.return_error (`Not_found uid)
       | Unix.Unix_error (Unix.EINTR, _, _) -> length root uid
-      | exn -> Lwt.fail exn in
+      | exn -> Lwt.fail exn
+    in
     Lwt.catch process error
 
   let rec map root uid ~pos len =
-    if pos < 0L || len < 0 then invalid_arg "Minor_heap.map: invalid bounds" ;
+    if pos < 0L || len < 0 then invalid_arg "Minor_heap.map: invalid bounds";
     let hd, tl = split uid in
     let path = Fpath.(root / hd / tl) in
     let rec process () =
@@ -203,23 +211,27 @@ module Minor_heap (Digestif : Digestif.S) = struct
         let len =
           if Int64.add pos (Int64.of_int len) > stat.Lwt_unix.LargeFile.st_size
           then Int64.to_int (Int64.sub stat.Lwt_unix.LargeFile.st_size pos)
-          else len in
+          else len
+        in
         let fd = Unix.openfile (Fpath.to_string path) Unix.[ O_RDONLY ] 0o400 in
         let rs =
           Mmap.V1.map_file fd ~pos Bigarray.char Bigarray.c_layout false
-            [| len |] in
-        Unix.close fd ;
+            [| len |]
+        in
+        Unix.close fd;
         Lwt.return (Bigarray.array1_of_genarray rs)
       with
       | Unix.Unix_error (Unix.EACCES, _, _) | Unix.Unix_error (Unix.ENOENT, _, _)
         ->
           Lwt.return Bigstringaf.empty
-      | Unix.Unix_error (Unix.EINTR, _, _) -> process () in
+      | Unix.Unix_error (Unix.EINTR, _, _) -> process ()
+    in
     let error = function
       | Unix.Unix_error (Unix.EACCES, _, _) -> Lwt.return Bigstringaf.empty
       | Unix.Unix_error (Unix.ENOENT, _, _) -> Lwt.return Bigstringaf.empty
       | Unix.Unix_error (Unix.EINTR, _, _) -> map root uid ~pos len
-      | exn -> Lwt.fail exn in
+      | exn -> Lwt.fail exn
+    in
     Lwt.catch process error
 
   let append root uid payload =
@@ -241,31 +253,32 @@ module Minor_heap (Digestif : Digestif.S) = struct
      * Finally, we assert the requirement of the atomicity about [append{v}]. However, the
      * bug discovered is really strange (replication of the bug can be done with [irmin-unix],
      * test [GIT.021]) *)
-    Log.debug (fun m -> m "Minor.append %a" Digestif.pp uid) ;
+    Log.debug (fun m -> m "Minor.append %a" Digestif.pp uid);
     let hd, tl = split uid in
     let path = Fpath.(root / hd / tl) in
     let fiber () =
       let open Rresult in
       Bos.OS.Dir.create Fpath.(root / hd) >>= fun _ ->
-      Bos.OS.File.write path (Bigstringaf.to_string payload) in
+      Bos.OS.File.write path (Bigstringaf.to_string payload)
+    in
     Lwt.return (fiber ())
 
   let f emitter (tmp, payloads) =
     let rec go pos = function
       | [] ->
-          emitter None ;
+          emitter None;
           Rresult.R.ok ()
       | src :: rest as payloads ->
           let len = min (Bytes.length tmp) (Bigstringaf.length src - pos) in
-          Bigstringaf.blit_to_bytes src ~src_off:pos tmp ~dst_off:0 ~len ;
-          emitter (Some (tmp, 0, len)) ;
+          Bigstringaf.blit_to_bytes src ~src_off:pos tmp ~dst_off:0 ~len;
+          emitter (Some (tmp, 0, len));
           let pos = pos + len in
           if pos = Bigstringaf.length src then go 0 rest else go pos payloads
     in
     go 0 payloads
 
   let appendv root uid payloads =
-    Log.debug (fun m -> m "Minor.appendv %a" Digestif.pp uid) ;
+    Log.debug (fun m -> m "Minor.appendv %a" Digestif.pp uid);
     let hd, tl = split uid in
     let path = Fpath.(root / hd / tl) in
     let fiber () =
@@ -281,14 +294,16 @@ module Minor_heap (Digestif : Digestif.S) = struct
       | tl :: hd :: _ ->
           let uid = Digestif.of_hex (hd ^ tl) in
           Lwt.return (uid :: r)
-      | _ -> Lwt.return r in
+      | _ -> Lwt.return r
+    in
     let elements path =
       match List.rev (Fpath.segs path) with
       | tl :: hd :: _ -> (
           match Digestif.of_hex (hd ^ tl) with
           | _ -> Fold.file_exists path
-          | exception _ -> Lwt.return false)
-      | _ -> Lwt.return false in
+          | exception _ -> Lwt.return false )
+      | _ -> Lwt.return false
+    in
     Fold.fold ~dotfiles:false ~elements:(`Sat elements) f [] root
 
   let reset root =
@@ -301,7 +316,8 @@ module Minor_heap (Digestif : Digestif.S) = struct
         (function
           | Unix.Unix_error (Unix.EINTR, _, _) -> f uid
           | Unix.Unix_error (Unix.ENOENT, _, _) -> Lwt.return_unit
-          | exn -> Lwt.fail exn) in
+          | exn -> Lwt.fail exn)
+    in
     Lwt_list.iter_p f lst >>= Lwt.return_ok
 end
 
@@ -314,9 +330,7 @@ module Major_heap = struct
   type t = Fpath.t (* [.git/objects/pack] *)
 
   type uid = Fpath.t
-
   type 'a rd = < rd : unit ; .. > as 'a
-
   type 'a wr = < wr : unit ; .. > as 'a
 
   type 'a mode =
@@ -325,9 +339,7 @@ module Major_heap = struct
     | RdWr : < rd : unit ; wr : unit > mode
 
   type 'a fd = Lwt_unix.file_descr
-
   type error = [ `Not_found of uid ]
-
   type +'a fiber = 'a Lwt.t
 
   let pp_error : error Fmt.t =
@@ -347,19 +359,21 @@ module Major_heap = struct
     let path = Fpath.(root // path) in
     let flags, perm =
       match mode with
-      | Rd -> (Unix.[ O_RDONLY ], 0o400)
-      | Wr -> (Unix.[ O_WRONLY; O_CREAT; O_APPEND ], 0o600)
-      | RdWr -> (Unix.[ O_RDWR; O_CREAT; O_APPEND ], 0o600) in
+      | Rd -> Unix.[ O_RDONLY ], 0o400
+      | Wr -> Unix.[ O_WRONLY; O_CREAT; O_APPEND ], 0o600
+      | RdWr -> Unix.[ O_RDWR; O_CREAT; O_APPEND ], 0o600
+    in
     let rec process () =
       Lwt_unix.openfile (Fpath.to_string path) flags perm >>= fun fd ->
       Lwt.return_ok fd
     and error = function
       | Unix.Unix_error (Unix.ENOENT, _, _) | Unix.Unix_error (Unix.EACCES, _, _)
         ->
-          Log.err (fun m -> m "%a does not exists." Fpath.pp path) ;
+          Log.err (fun m -> m "%a does not exists." Fpath.pp path);
           Lwt.return_error (`Not_found path)
       | Unix.Unix_error (Unix.EINTR, _, _) -> Lwt.catch process error
-      | exn -> Lwt.fail exn in
+      | exn -> Lwt.fail exn
+    in
     Lwt.catch process error
 
   let map : t -> [> `Rd ] fd -> pos:int64 -> int -> Bigstringaf.t fiber =
@@ -374,7 +388,8 @@ module Major_heap = struct
     let rec process () = Lwt_unix.close fd >>= fun () -> Lwt.return_ok ()
     and error = function
       | Unix.Unix_error (Unix.EINTR, _, _) -> Lwt.catch process error
-      | exn -> Lwt.fail exn in
+      | exn -> Lwt.fail exn
+    in
     Lwt.catch process error
 
   let length fd =
@@ -383,18 +398,20 @@ module Major_heap = struct
       Lwt.return st.Unix.LargeFile.st_size
     and error = function
       | Unix.Unix_error (Unix.EINTR, _, _) -> Lwt.catch process error
-      | exn -> Lwt.fail exn in
+      | exn -> Lwt.fail exn
+    in
     Lwt.catch process error
 
   let list root =
     let res =
       let open Rresult in
       Bos.OS.Dir.contents ~dotfiles:false ~rel:true root
-      >>| List.filter (Fpath.has_ext "pack") in
+      >>| List.filter (Fpath.has_ext "pack")
+    in
     match res with
     | Ok lst -> Lwt.return lst
     | Error (`Msg err) ->
-        Log.warn (fun m -> m "Major.list: %s" err) ;
+        Log.warn (fun m -> m "Major.list: %s" err);
         Lwt.return []
 
   let reset root =
@@ -406,7 +423,8 @@ module Major_heap = struct
           Lwt_unix.unlink (Fpath.to_string (Fpath.set_ext "idx" path)))
         (function
           | Unix.Unix_error (Unix.EINTR, _, _) -> f path
-          | _exn -> Lwt.return_unit) in
+          | _exn -> Lwt.return_unit)
+    in
     Lwt_list.iter_p f lst >>= Lwt.return_ok
 
   let move root ~src ~dst =
@@ -419,7 +437,8 @@ module Major_heap = struct
    fun _ fd str ->
     let rec go (off, len) =
       Lwt_unix.write_string fd str off len >>= fun len' ->
-      if len = len' then Lwt.return () else go (off + len', len - len') in
+      if len = len' then Lwt.return () else go (off + len', len - len')
+    in
     go (0, String.length str)
 end
 
@@ -435,7 +454,8 @@ module Unix = struct
         (function
           | Unix.Unix_error (Unix.ENOENT, _, _) -> Lwt.return_ok false
           | Unix.Unix_error (Unix.EINTR, _, _) -> exists dir
-          | exn -> Lwt.fail exn) in
+          | exn -> Lwt.fail exn)
+    in
     let rec mkdir d mode =
       Lwt.catch
         (fun () -> Lwt_unix.mkdir (Fpath.to_string d) mode >>= Lwt.return_ok)
@@ -443,8 +463,7 @@ module Unix = struct
           | Unix.Unix_error (Unix.EEXIST, _, _) -> Lwt.return_ok ()
           | Unix.Unix_error (Unix.EINTR, _, _) -> mkdir d mode
           | Unix.Unix_error (e, _, _) ->
-              if d = dir
-              then
+              if d = dir then
                 Lwt.return_error
                 @@ Rresult.R.msgf "create directory %a: %s" Fpath.pp d
                      (Unix.error_message e)
@@ -452,23 +471,26 @@ module Unix = struct
                 Lwt.return_error
                 @@ Rresult.R.msgf "create directory %a: %a: %s" Fpath.pp dir
                      Fpath.pp d (Unix.error_message e)
-          | exn -> Lwt.fail exn) in
+          | exn -> Lwt.fail exn)
+    in
     exists dir >>? function
     | true -> Lwt.return_ok false
-    | false ->
-    match path with
-    | false -> mkdir dir mode >>? fun () -> Lwt.return_ok false
-    | true ->
-        let rec dirs_to_create p acc =
-          exists p >>? function
-          | true -> Lwt.return_ok acc
-          | false -> dirs_to_create (Fpath.parent p) (p :: acc) in
-        let rec create_them dirs () =
-          match dirs with
-          | dir :: dirs -> mkdir dir mode >>? create_them dirs
-          | [] -> Lwt.return_ok () in
-        dirs_to_create dir [] >>? fun dirs ->
-        create_them dirs () >>? fun () -> Lwt.return_ok true
+    | false -> (
+        match path with
+        | false -> mkdir dir mode >>? fun () -> Lwt.return_ok false
+        | true ->
+            let rec dirs_to_create p acc =
+              exists p >>? function
+              | true -> Lwt.return_ok acc
+              | false -> dirs_to_create (Fpath.parent p) (p :: acc)
+            in
+            let rec create_them dirs () =
+              match dirs with
+              | dir :: dirs -> mkdir dir mode >>? create_them dirs
+              | [] -> Lwt.return_ok ()
+            in
+            dirs_to_create dir [] >>? fun dirs ->
+            create_them dirs () >>? fun () -> Lwt.return_ok true )
 end
 
 module Reference_heap = struct
@@ -491,25 +513,24 @@ module Reference_heap = struct
     | `Msg err -> Fmt.string ppf err
 
   let atomic_wr root refname str =
-    Log.debug (fun m -> m "Writing %a: %S." Git.Reference.pp refname str) ;
+    Log.debug (fun m -> m "Writing %a: %S." Git.Reference.pp refname str);
     let path = List.fold_left Fpath.add_seg root (Git.Reference.segs refname) in
     let base, _ = Fpath.split_base path in
     let open Rresult in
     Bos.OS.Dir.create ~path:true base >>= fun _ ->
     Bos.OS.Dir.exists path >>= fun res ->
-    (if res
-    then Bos.OS.Dir.delete ~must_exist:false ~recurse:true path
-    else R.ok ())
+    ( if res then Bos.OS.Dir.delete ~must_exist:false ~recurse:true path
+    else R.ok () )
     >>= fun () ->
     Bos.OS.File.tmp "git-reference-%s" >>= fun src ->
     Bos.OS.File.write src str >>= fun () ->
     let fd = Unix.openfile (Fpath.to_string src) Unix.[ O_WRONLY ] 0o644 in
-    Unix.close fd ;
-    Unix.rename (Fpath.to_string src) (Fpath.to_string path) ;
+    Unix.close fd;
+    Unix.rename (Fpath.to_string src) (Fpath.to_string path);
     R.ok ()
 
   let atomic_rd root refname =
-    Log.debug (fun m -> m "Reading %a." Git.Reference.pp refname) ;
+    Log.debug (fun m -> m "Reading %a." Git.Reference.pp refname);
     let path = List.fold_left Fpath.add_seg root (Git.Reference.segs refname) in
     let open Rresult in
     Bos.OS.File.exists path >>= function
@@ -518,13 +539,13 @@ module Reference_heap = struct
         let { Unix.st_size; _ } = Unix.fstat fd in
         let rs = Bytes.create st_size in
         let ln = Unix.read fd rs 0 st_size in
-        assert (ln = st_size) ;
-        Unix.close fd ;
+        assert (ln = st_size);
+        Unix.close fd;
         R.ok (Bytes.unsafe_to_string rs)
     | false -> R.error (`Not_found refname)
 
   let atomic_rm root refname =
-    Log.debug (fun m -> m "Deleting %a." Git.Reference.pp refname) ;
+    Log.debug (fun m -> m "Deleting %a." Git.Reference.pp refname);
     let path = List.fold_left Fpath.add_seg root (Git.Reference.segs refname) in
     Bos.OS.File.delete path
 
@@ -532,26 +553,28 @@ module Reference_heap = struct
     let f x r =
       match Fpath.rem_prefix root x with
       | Some x -> (
-          Log.debug (fun l -> l "%a exists into the store." Fpath.pp x) ;
+          Log.debug (fun l -> l "%a exists into the store." Fpath.pp x);
           match Git.Reference.of_string (Fpath.to_string x) with
           | Ok x -> x :: r
-          | Error _ -> r)
+          | Error _ -> r )
       | None -> assert false
-      (* XXX(dinosaure): see [elements]. *) in
+      (* XXX(dinosaure): see [elements]. *)
+    in
     let elements path =
       match Option.map Fpath.segs (Fpath.rem_prefix root path) with
       | Some ("objects" :: _) -> Ok false
       | Some [ "HEAD" ] -> Bos.OS.File.exists path
       | Some ("refs" :: _) -> Bos.OS.File.exists path
-      | _ -> Ok false in
-    Log.debug (fun l -> l "Listing references into %a." Fpath.pp root) ;
+      | _ -> Ok false
+    in
+    Log.debug (fun l -> l "Listing references into %a." Fpath.pp root);
     match
       Bos.OS.Dir.fold_contents ~dotfiles:false ~elements:(`Sat elements) f []
         root
     with
     | Ok lst -> lst
     | Error (`Msg err) ->
-        Log.warn (fun m -> m "error when we listing references: %s" err) ;
+        Log.warn (fun m -> m "error when we listing references: %s" err);
         []
 
   let reset root =
@@ -559,13 +582,15 @@ module Reference_heap = struct
     let lst = list root in
     let f refname =
       let path =
-        List.fold_left Fpath.add_seg root (Git.Reference.segs refname) in
+        List.fold_left Fpath.add_seg root (Git.Reference.segs refname)
+      in
       match Bos.OS.Path.delete path with
       | Ok () -> ()
       | Error (`Msg err) ->
           Log.warn (fun m ->
-              m "error when we deleting %a: %s" Fpath.pp path err) in
-    List.iter f lst ;
+              m "error when we deleting %a: %s" Fpath.pp path err)
+    in
+    List.iter f lst;
     R.ok ()
 end
 
@@ -591,13 +616,14 @@ module Make (Digestif : Digestif.S) = struct
 
   let v ?dotgit root =
     let dotgit =
-      match dotgit with Some v -> v | None -> Fpath.(root / ".git") in
+      match dotgit with Some v -> v | None -> Fpath.(root / ".git")
+    in
     let packed = Packed_refs.load ~of_hex:Hash.of_hex dotgit in
     let minor = Fpath.(dotgit / "objects") in
     let major = Fpath.(dotgit / "objects" / "pack") in
     let temp = Fpath.(dotgit / "tmp") in
     let refs = dotgit in
-    Bos.OS.Dir.set_default_tmp temp ;
+    Bos.OS.Dir.set_default_tmp temp;
     Unix.mkdir ~path:true temp >>? fun _ ->
     Unix.mkdir ~path:true refs >>? fun _ ->
     Unix.mkdir ~path:true minor >>? fun _ ->
@@ -629,8 +655,7 @@ module Sync (Git_store : Git.S) (HTTP : Smart_git.HTTP) = struct
 
   let create_tmp_path mode dir pat =
     let rec loop count =
-      if count < 0
-      then
+      if count < 0 then
         failwithf "Create a temporary file %s in %a: too many failing attempts"
           (Fmt.strf pat "XXXXXX") Fpath.pp dir
       else
@@ -639,12 +664,15 @@ module Sync (Git_store : Git.S) (HTTP : Smart_git.HTTP) = struct
         let open_flags = Unix.[ O_WRONLY; O_CREAT; O_EXCL; O_SHARE_DELETE ] in
         let process () =
           Lwt_unix.openfile sfile open_flags mode >>= fun fd ->
-          Lwt.return (file, fd) in
+          Lwt.return (file, fd)
+        in
         let error = function
           | Unix.Unix_error (Unix.EEXIST, _, _) -> loop (pred count)
           | Unix.Unix_error (Unix.EINTR, _, _) -> loop count
-          | exn -> Lwt.fail exn in
-        Lwt.catch process error in
+          | exn -> Lwt.fail exn
+        in
+        Lwt.catch process error
+    in
     loop 10000
 
   let tmp ?(mode = 0o600) dir pat =
@@ -662,16 +690,18 @@ module Sync (Git_store : Git.S) (HTTP : Smart_git.HTTP) = struct
           (fun () ->
             Lwt_unix.read fd tmp 0 chunk >>= function
             | 0 ->
-                emitter None ;
+                emitter None;
                 Lwt_unix.close fd
             | len ->
-                emitter (Some (Bytes.sub_string tmp 0 len)) ;
+                emitter (Some (Bytes.sub_string tmp 0 len));
                 go ())
           (fun _exn ->
-            emitter None ;
-            Lwt_unix.close fd) in
-      go () in
-    Lwt.async fill ;
+            emitter None;
+            Lwt_unix.close fd)
+      in
+      go ()
+    in
+    Lwt.async fill;
     fun () -> Lwt_stream.get stream
 
   let fetch ~resolvers edn store ?version ?capabilities want =
@@ -697,8 +727,9 @@ module Sync (Git_store : Git.S) (HTTP : Smart_git.HTTP) = struct
           | Error err ->
               Log.warn (fun m ->
                   m "Impossible to update %a to %a: %a." Git.Reference.pp
-                    refname Git_store.Hash.pp hash Git_store.pp_error err) ;
-              Lwt.return_unit in
+                    refname Git_store.Hash.pp hash Git_store.pp_error err);
+              Lwt.return_unit
+        in
         Lwt_list.iter_p update refs >>= fun () ->
         Lwt.return_ok (Some (hash, refs))
 end

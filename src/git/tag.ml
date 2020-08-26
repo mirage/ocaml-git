@@ -27,33 +27,24 @@ type 'hash t = {
 
 module type S = sig
   type hash
-
   type nonrec t = hash t
 
   val make : hash -> kind -> ?tagger:User.t -> tag:string -> string -> t
-
   val format : t Encore.t
 
   include S.DIGEST with type t := t and type hash := hash
-
   include S.BASE with type t := t
 
   val length : t -> int64
-
   val obj : t -> hash
-
   val tag : t -> string
-
   val message : t -> string
-
   val kind : t -> kind
-
   val tagger : t -> User.t option
 end
 
 module Make (Hash : S.HASH) = struct
   type hash = Hash.t
-
   type nonrec t = hash t
 
   let make target kind ?tagger ~tag message =
@@ -114,13 +105,11 @@ module Make (Hash : S.HASH) = struct
         ~fwd:(fun ((_, obj), (_, kind), (_, tag), tagger, message) ->
           { obj; kind; tag; tagger = Option.map snd tagger; message })
         ~bwd:(fun { obj; kind; tag; tagger; message } ->
-          let tagger = Option.map (fun x -> ("tagger", x)) tagger in
-          (("object", obj), ("type", kind), ("tag", tag), tagger, message))
+          let tagger = Option.map (fun x -> "tagger", x) tagger in
+          ("object", obj), ("type", kind), ("tag", tag), tagger, message)
 
     let is_not_sp chr = chr <> ' '
-
     let is_not_lf chr = chr <> '\x0a'
-
     let always x _ = x
 
     let rest =
@@ -141,7 +130,8 @@ module Make (Hash : S.HASH) = struct
     let binding ?key value =
       let open Encore.Syntax in
       let value =
-        value <$> (while1 is_not_lf <* (Encore.Bij.char '\x0a' <$> any)) in
+        value <$> (while1 is_not_lf <* (Encore.Bij.char '\x0a' <$> any))
+      in
       match key with
       | Some key -> const key <* (Encore.Bij.char ' ' <$> any) <*> value
       | None -> while1 is_not_sp <* (Encore.Bij.char ' ' <$> any) <*> value
@@ -165,7 +155,8 @@ module Make (Hash : S.HASH) = struct
     let user_length =
       match t.tagger with
       | Some user -> string "tagger" + 1L + User.length user + 1L
-      | None -> 0L in
+      | None -> 0L
+    in
     string "object"
     + 1L
     + Int64.of_int (Hash.digest_size * 2)
@@ -194,19 +185,12 @@ module Make (Hash : S.HASH) = struct
       value
 
   let obj { obj; _ } = obj
-
   let tag { tag; _ } = tag
-
   let message { message; _ } = message
-
   let kind { kind; _ } = kind
-
   let tagger { tagger; _ } = tagger
-
   let equal = ( = )
-
   let compare = Stdlib.compare
-
   let hash = Hashtbl.hash
 
   module Set = Set.Make (struct

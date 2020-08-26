@@ -1,7 +1,6 @@
 open Sigs
 
 type 'uid entry
-
 type 'uid delta = From of 'uid | Zero
 
 val make_entry :
@@ -21,13 +20,10 @@ and 'uid p
 and 'uid patch
 
 type ('uid, 's) load = 'uid -> (Dec.v, 's) io
-
 type ('uid, 's) find = 'uid -> (int option, 's) io
-
 type 'uid uid = { uid_ln : int; uid_rw : 'uid -> string }
 
 val target_to_source : 'uid q -> 'uid p
-
 val target_uid : 'uid q -> 'uid
 
 val entry_to_target :
@@ -45,7 +41,6 @@ module type VERBOSE = sig
   type 'a fiber
 
   val succ : unit -> unit fiber
-
   val print : unit -> unit fiber
 end
 
@@ -53,7 +48,6 @@ module type UID = sig
   type t
 
   val hash : t -> int
-
   val equal : t -> t -> bool
 end
 
@@ -74,21 +68,18 @@ end
 
 module N : sig
   type encoder
-
   type b = { i : Bigstringaf.t; q : De.Queue.t; w : De.window }
 
   val encoder :
     's scheduler -> b:b -> load:('uid, 's) load -> 'uid q -> (encoder, 's) io
 
   val encode : o:Bigstringaf.t -> encoder -> [ `Flush of encoder * int | `End ]
-
   val dst : encoder -> Bigstringaf.t -> int -> int -> encoder
 end
 
 type b = { i : Bigstringaf.t; q : De.Queue.t; w : De.window; o : Bigstringaf.t }
 
 val encode_header : o:Bigstringaf.t -> int -> int -> int
-
 val header_of_pack : length:int -> Bigstringaf.t -> int -> int -> unit
 
 val encode_target :

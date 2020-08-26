@@ -1,5 +1,4 @@
 type 'a rd = < rd : unit ; .. > as 'a
-
 type 'a wr = < wr : unit ; .. > as 'a
 
 type 'a mode =
@@ -8,13 +7,9 @@ type 'a mode =
   | RdWr : < rd : unit ; wr : unit > mode
 
 type t = Fpath.t
-
 type 'a fd = Lwt_unix.file_descr
-
 type uid = Fpath.t
-
 type error = [ `Msg of string ]
-
 type +'a fiber = 'a Lwt.t
 
 open Lwt.Infix
@@ -30,7 +25,8 @@ let map _ fd ~pos len =
   let res =
     Mmap.V1.map_file
       (Lwt_unix.unix_file_descr fd)
-      ~pos Bigarray.char Bigarray.c_layout false [| len |] in
+      ~pos Bigarray.char Bigarray.c_layout false [| len |]
+  in
   Lwt.return (Bigarray.array1_of_genarray res)
 
 let append _ fd str =

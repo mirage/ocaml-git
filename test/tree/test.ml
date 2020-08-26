@@ -1,26 +1,25 @@
 external random_seed : unit -> int array = "caml_sys_random_seed"
 
 let seed = "4EygbdYh+v35vvrmD9YYP4byT5E3H7lTeXJiIj+dQnc="
-
 let seed = Base64.decode_exn seed
 
 let seed =
   let res = Array.make (String.length seed / 2) 0 in
   for i = 0 to (String.length seed / 2) - 1 do
     res.(i) <- (Char.code seed.[i * 2] lsl 8) lor Char.code seed.[(i * 2) + 1]
-  done ;
+  done;
   res
 
 let () =
   let random_seed = seed in
-  Fmt.pr "Random: %a.\n%!" Fmt.(Dump.array int) random_seed ;
+  Fmt.pr "Random: %a.\n%!" Fmt.(Dump.array int) random_seed;
   Random.full_init random_seed
 
 let random_string len =
   let res = Bytes.create len in
   for i = 0 to len - 1 do
     Bytes.set res i (Char.chr (Random.int 256))
-  done ;
+  done;
   Bytes.unsafe_to_string res
 
 let random_name len =
@@ -28,13 +27,12 @@ let random_name len =
   for i = 0 to len - 1 do
     let v = Random.int (26 + 26 + 10) in
     let c =
-      if v < 10
-      then Char.chr (Char.code '0' + v)
-      else if v < 10 + 26
-      then Char.chr (Char.code 'a' + (v - 10))
-      else Char.chr (Char.code 'A' + (v - 26 - 10)) in
+      if v < 10 then Char.chr (Char.code '0' + v)
+      else if v < 10 + 26 then Char.chr (Char.code 'a' + (v - 10))
+      else Char.chr (Char.code 'A' + (v - 26 - 10))
+    in
     Bytes.set res i c
-  done ;
+  done;
   Bytes.unsafe_to_string res
 
 let random_perm () =
@@ -64,27 +62,27 @@ let order =
   let lst =
     [
       Git.Tree.entry ~name:"foo.c" `Normal ();
-      Git.Tree.entry ~name:"foo" `Dir ();
-      Git.Tree.entry ~name:"foo1" `Exec ();
-    ] in
+      Git.Tree.entry ~name:"foo" `Dir (); Git.Tree.entry ~name:"foo1" `Exec ();
+    ]
+  in
   let r0 = Git.Tree.of_list lst in
   let r1 = Git.Tree.to_list r0 in
-  Alcotest.(check (list entry)) "list" r1 lst ;
+  Alcotest.(check (list entry)) "list" r1 lst;
   let r2 = Git.Tree.of_list [] in
   let r2 = Git.Tree.add (List.nth lst 0) r2 in
   let r2 = Git.Tree.add (List.nth lst 1) r2 in
   let r2 = Git.Tree.add (List.nth lst 2) r2 in
-  Alcotest.(check tree) "add" r2 r0 ;
+  Alcotest.(check tree) "add" r2 r0;
   let r2 = Git.Tree.of_list [] in
   let r2 = Git.Tree.add (List.nth lst 2) r2 in
   let r2 = Git.Tree.add (List.nth lst 0) r2 in
   let r2 = Git.Tree.add (List.nth lst 1) r2 in
   let r2 = Git.Tree.add (List.nth lst 1) r2 in
-  Alcotest.(check tree) "add" r2 r0 ;
+  Alcotest.(check tree) "add" r2 r0;
   let empty = Git.Tree.of_list [] in
   let r3 = List.fold_right Git.Tree.add lst empty in
   let r4 = List.fold_right Git.Tree.add (Git.Tree.to_list r0) empty in
-  Alcotest.(check tree) "fold" r3 r0 ;
+  Alcotest.(check tree) "fold" r3 r0;
   Alcotest.(check tree) "fold" r4 r0
 
 module Tree = Git.Tree.Make (Git.Hash.Make (Digestif.SHA1))
@@ -105,22 +103,21 @@ let parse_string p str =
   let queue = Ke.Rke.Weighted.from buffer in
   let state = Angstrom.Unbuffered.parse p in
   let blit src src_off dst dst_off len =
-    Bigstringaf.blit_from_string src ~src_off dst ~dst_off ~len in
+    Bigstringaf.blit_from_string src ~src_off dst ~dst_off ~len
+  in
   let rec go pos = function
     | Angstrom.Unbuffered.Done (committed, v) ->
-        Ke.Rke.Weighted.N.shift_exn queue committed ;
-        if pos = String.length str && Ke.Rke.Weighted.length queue = 0
-        then Ok v
+        Ke.Rke.Weighted.N.shift_exn queue committed;
+        if pos = String.length str && Ke.Rke.Weighted.length queue = 0 then Ok v
         else
           Rresult.R.error_msgf "%d byte(s) remaining"
             (Ke.Rke.Weighted.length queue + (String.length str - pos))
     | Fail (_, _, err) -> Error (`Msg err)
     | Partial { committed; continue } ->
-        Ke.Rke.Weighted.N.shift_exn queue committed ;
-        Ke.Rke.Weighted.compress queue ;
+        Ke.Rke.Weighted.N.shift_exn queue committed;
+        Ke.Rke.Weighted.compress queue;
 
-        if pos = String.length str
-        then
+        if pos = String.length str then
           go pos
             (continue ~off:0
                ~len:(Ke.Rke.Weighted.length queue)
@@ -131,11 +128,13 @@ let parse_string p str =
           in
           let _ =
             Ke.Rke.Weighted.N.push_exn queue ~blit ~length:String.length
-              ~off:pos ~len str in
+              ~off:pos ~len str
+          in
           go (pos + len)
             (continue ~off:0
                ~len:(Ke.Rke.Weighted.length queue)
-               buffer Incomplete) in
+               buffer Incomplete)
+  in
   go 0 state
 
 let large =
@@ -146,7 +145,8 @@ let large =
         let name = random_name len in
         let perm = random_perm () in
         let sha1 = random_sha1 () in
-        Git.Tree.entry ~name perm sha1) in
+        Git.Tree.entry ~name perm sha1)
+  in
   let v0 = Git.Tree.v (Array.to_list entries) in
   let p = Encore.to_angstrom Tree.format in
   let d = Encore.to_lavoisier Tree.format in
@@ -155,4 +155,4 @@ let large =
   | Ok v1 -> Alcotest.(check tree) "large tree" v0 v1
   | Error _ -> Alcotest.fail "Error to parse large tree"
 
-let () = Alcotest.run "git-tree" [ ("tree", [ order; large ]) ]
+let () = Alcotest.run "git-tree" [ "tree", [ order; large ] ]

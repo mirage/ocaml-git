@@ -16,37 +16,24 @@
  *)
 open Carton
 
-(** The Git Reference module. *)
 type t
+(** The Git Reference module. *)
 
 val of_string : string -> (t, [> `Msg of string ]) result
-
 val v : string -> t
-
 val add_seg : t -> string -> t
-
 val append : t -> t -> t
-
 val segs : t -> string list
-
 val pp : t Fmt.t
-
 val head : t
-
 val master : t
-
 val ( / ) : t -> string -> t
-
 val ( // ) : t -> t -> t
-
 val to_string : t -> string
-
 val equal : t -> t -> bool
-
 val compare : t -> t -> int
 
 module Map : Map.S with type key = t
-
 module Set : Set.S with type elt = t
 
 type 'uid contents = Uid of 'uid | Ref of t
@@ -58,16 +45,12 @@ val compare_contents :
   compare:('uid -> 'uid -> int) -> 'uid contents -> 'uid contents -> int
 
 val pp_contents : pp:'uid Fmt.t -> 'uid contents Fmt.t
-
 val uid : 'uid -> 'uid contents
-
 val ref : t -> 'uid contents
 
 module Packed : sig
   type 'uid elt = Ref of t * 'uid | Peeled of 'uid
-
   type 'uid packed = 'uid elt list
-
   type ('fd, 's) input_line = 'fd -> (string option, 's) io
 
   val load :
@@ -78,9 +61,7 @@ module Packed : sig
     ('uid packed, 's) io
 
   val get : t -> 'uid packed -> 'uid option
-
   val exists : t -> 'uid packed -> bool
-
   val remove : t -> 'uid packed -> 'uid packed
 end
 
@@ -116,8 +97,6 @@ val read :
 
 module type S = sig
   type hash
-
   type nonrec t = t
-
   type nonrec contents = hash contents
 end

@@ -4,21 +4,14 @@ module None = struct
   and output = Cstruct.t
 
   type +'a io = 'a Lwt.t
-
   type endpoint = string Queue.t
-
   type flow = string Queue.t
-
   type error = |
 
   let pp_error : error Fmt.t = fun _ppf -> function _ -> .
-
   let connect x = Lwt.return_ok x
-
   let recv _ _ = assert false
-
   let send _ _ = assert false
-
   let close _ = assert false
 end
 
@@ -26,12 +19,9 @@ end
  * inherits the totality axiom of [conduit]. *)
 
 let localhost = Domain_name.(host_exn (of_string_exn "localhost"))
-
 let protocol = Conduit_lwt.register ~protocol:(module None)
 
-module Protocol = struct
-  include (val Conduit_lwt.repr protocol)
-end
+module Protocol = struct include (val Conduit_lwt.repr protocol) end
 
 type error = Conduit_lwt.error
 

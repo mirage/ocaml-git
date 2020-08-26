@@ -1,11 +1,8 @@
 include S
 
 module type S = Minimal.S
-
 module type HASH = HASH
-
 module type BASE = BASE
-
 module type DIGEST = DIGEST
 
 module Blob = Blob

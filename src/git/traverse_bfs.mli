@@ -17,13 +17,11 @@
 
 module type STORE = sig
   module Hash : S.HASH
-
   module Value : Value.S with type hash = Hash.t
 
   type t
 
   val root : t -> Fpath.t
-
   val read_exn : t -> Hash.t -> Value.t Lwt.t
 end
 

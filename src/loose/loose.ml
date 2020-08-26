@@ -1,5 +1,4 @@
 let () = Printexc.record_backtrace true
-
 let src = Logs.Src.create "git.loose" ~doc:"logs git's loose event"
 
 module Log = (val Logs.src_log src : Logs.LOG)
@@ -36,23 +35,23 @@ let reword_error f x = match x with Ok x -> Ok x | Error err -> Error (f err)
 
 module Make (Uid : UID) = struct
   let list t store = store.list t
-
   let exists t store uid = store.mem t uid
 
   let atomic_add { Carton.return; bind } t buffers store ~hdr v =
     let ( >>= ) = bind in
     let ( >>| ) x f = x >>= fun x -> return (f x) in
     let ( >>? ) x f =
-      x >>= function Ok x -> f x | Error _ as err -> return err in
+      x >>= function Ok x -> f x | Error _ as err -> return err
+    in
 
     let hdr = hdr ~buffer:buffers.hdr v in
-    De.Queue.reset buffers.queue ;
+    De.Queue.reset buffers.queue;
     let encoder =
       Zl.Def.encoder `Manual `Manual ~q:buffers.queue ~w:buffers.window ~level:2
     in
     (* TODO(dinosaure): delete [rec], we should have only one [`Flush] and [`End]. *)
     let rec go encoder srcs dst =
-      match (srcs, Zl.Def.encode encoder) with
+      match srcs, Zl.Def.encode encoder with
       | src :: srcs, `Await encoder ->
           let encoder =
             Zl.Def.src encoder (Cstruct.to_bigarray src) 0 (Cstruct.len src)
@@ -63,8 +62,7 @@ module Make (Uid : UID) = struct
           go encoder [] dst
       | _, `Flush encoder ->
           let len = Cstruct.len dst - Zl.Def.dst_rem encoder in
-          if len = Cstruct.len dst
-          then Error `Non_atomic
+          if len = Cstruct.len dst then Error `Non_atomic
           else
             let dst = Cstruct.shift dst len in
             go
@@ -72,20 +70,23 @@ module Make (Uid : UID) = struct
               srcs dst
       | _, `End encoder ->
           let len = Cstruct.len dst - Zl.Def.dst_rem encoder in
-          Rresult.R.ok (Cstruct.len (Cstruct.shift dst len)) in
+          Rresult.R.ok (Cstruct.len (Cstruct.shift dst len))
+    in
     let encoder =
-      Zl.Def.dst encoder buffers.o 0 (Bigstringaf.length buffers.o) in
+      Zl.Def.dst encoder buffers.o 0 (Bigstringaf.length buffers.o)
+    in
     let contents =
       Cstruct.of_bigarray (Carton.Dec.raw v) ~off:0 ~len:(Carton.Dec.len v)
     in
     let uid =
       let fold ctx payload = Uid.feed ctx (Cstruct.to_bigarray payload) in
       let ctx = List.fold_left fold Uid.empty [ hdr; contents ] in
-      Uid.get ctx in
+      Uid.get ctx
+    in
     match go encoder [ hdr; contents ] (Cstruct.of_bigarray buffers.o) with
     | Ok rest ->
         let len = Bigstringaf.length buffers.o - rest in
-        Log.debug (fun m -> m "Atomic write of %a." Uid.pp uid) ;
+        Log.debug (fun m -> m "Atomic write of %a." Uid.pp uid);
         store.append t uid (Bigstringaf.sub buffers.o ~off:0 ~len)
         >>| reword_error (fun err -> `Store err)
         >>? fun () -> return (Ok (uid, len))
@@ -95,46 +96,49 @@ module Make (Uid : UID) = struct
     let ( >>= ) = bind in
     let ( >>| ) x f = x >>= fun x -> return (f x) in
     let ( >>? ) x f =
-      x >>= function Ok x -> f x | Error _ as err -> return err in
+      x >>= function Ok x -> f x | Error _ as err -> return err
+    in
 
-    De.Queue.reset buffers.queue ;
+    De.Queue.reset buffers.queue;
     let encoder =
       Zl.Def.encoder `Manual `Manual ~q:buffers.queue ~w:buffers.window ~level:2
     in
     let rec go ctx ((src, off, len) as payload) dsts encoder =
       match Zl.Def.encode encoder with
       | `Await encoder -> (
-          if len > 0
-          then (
+          if len > 0 then (
             let max = min len (Bigstringaf.length buffers.i) in
             Bigstringaf.blit_from_string src ~src_off:off buffers.i ~dst_off:0
-              ~len:max ;
+              ~len:max;
             let ctx = Uid.feed ctx buffers.i ~off:0 ~len:max in
             let encoder = Zl.Def.src encoder buffers.i 0 max in
-            go ctx (src, off + max, len - max) dsts encoder)
+            go ctx (src, off + max, len - max) dsts encoder )
           else
             stream () >>= function
             | Some src -> go ctx (src, 0, String.length src) dsts encoder
             | None ->
                 let encoder = Zl.Def.src encoder Bigstringaf.empty 0 0 in
-                go ctx payload dsts encoder)
+                go ctx payload dsts encoder )
       | `Flush encoder ->
           let len = Bigstringaf.length buffers.o - Zl.Def.dst_rem encoder in
           let raw = Bigstringaf.copy buffers.o ~off:0 ~len in
           let encoder =
-            Zl.Def.dst encoder buffers.o 0 (Bigstringaf.length buffers.o) in
+            Zl.Def.dst encoder buffers.o 0 (Bigstringaf.length buffers.o)
+          in
           go ctx payload (raw :: dsts) encoder
       | `End encoder ->
           let len = Bigstringaf.length buffers.o - Zl.Def.dst_rem encoder in
           let raw = Bigstringaf.copy buffers.o ~off:0 ~len in
-          return (Uid.get ctx, List.rev (raw :: dsts)) in
+          return (Uid.get ctx, List.rev (raw :: dsts))
+    in
     let encoder =
-      Zl.Def.dst encoder buffers.o 0 (Bigstringaf.length buffers.o) in
+      Zl.Def.dst encoder buffers.o 0 (Bigstringaf.length buffers.o)
+    in
     go Uid.empty (Cstruct.to_string hdr, 0, Cstruct.len hdr) [] encoder
     >>= fun (uid, vs) ->
     let len = List.fold_right (( + ) <.> Bigstringaf.length) vs 0 in
     (* XXX(dinosaure): shame! *)
-    Log.debug (fun m -> m "Append(v) %a into the minor heap." Uid.pp uid) ;
+    Log.debug (fun m -> m "Append(v) %a into the minor heap." Uid.pp uid);
     store.appendv t uid vs >>| reword_error (fun err -> `Store err)
     >>? fun () -> return (Ok (uid, len))
 
@@ -153,14 +157,15 @@ module Make (Uid : UID) = struct
       | `Flush decoder ->
           let len = Bigstringaf.length buffers.o - Zl.Inf.dst_rem decoder in
           Ok (Zl.Inf.flush decoder, len)
-      | `End _ -> Ok (Zl.Inf.flush decoder, 0) in
+      | `End _ -> Ok (Zl.Inf.flush decoder, 0)
+    in
     let open Rresult in
     match res with
     | Ok (_, len) ->
         let raw = Cstruct.of_bigarray buffers.o ~off:0 ~len in
         let contents, kind, length = hdr raw in
-        if Int64.of_int (Cstruct.len contents) <> length
-        then return (Error `Non_atomic)
+        if Int64.of_int (Cstruct.len contents) <> length then
+          return (Error `Non_atomic)
         else return (Ok (Carton.Dec.v ~kind (Cstruct.to_bigarray contents)))
     | Error _ as err -> return err
 
@@ -181,7 +186,8 @@ module Make (Uid : UID) = struct
       | `Flush decoder ->
           let len = Bigstringaf.length buffers.o - Zl.Inf.dst_rem decoder in
           Ok len
-      | `End _ -> Error `Malformed in
+      | `End _ -> Error `Malformed
+    in
     let open Rresult in
     match res with
     | Ok len ->
@@ -193,7 +199,8 @@ module Make (Uid : UID) = struct
   let get { Carton.return; bind } t buffers store ~hdr uid =
     let ( >>= ) = bind in
     let ( >>? ) x f =
-      x >>= function Ok x -> f x | Error _ as err -> return err in
+      x >>= function Ok x -> f x | Error _ as err -> return err
+    in
 
     let decoder =
       Zl.Inf.decoder `Manual ~allocate:(fun _ -> buffers.window) ~o:buffers.o

@@ -95,9 +95,7 @@ val iter : ('hash entry -> unit) -> 'hash t -> unit
 
 module type S = sig
   type hash
-
   type nonrec entry = hash entry
-
   type nonrec t = hash t
 
   val entry : name:string -> perm -> hash -> entry
@@ -131,7 +129,6 @@ module type S = sig
   (** [format] is a description of how to encode/decode a {!t} object. *)
 
   include S.DIGEST with type t := t and type hash := hash
-
   include S.BASE with type t := t
 
   val length : t -> int64

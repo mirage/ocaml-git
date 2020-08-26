@@ -46,9 +46,7 @@ module W : sig
   and ('fd, 's) map = 'fd -> pos:int64 -> int -> (Bigstringaf.t, 's) io
 
   val length : int64
-
   val reset : 'fd t -> unit
-
   val make : 'fd -> 'fd t
 
   val load :
@@ -125,17 +123,11 @@ module Fp (Uid : UID) : sig
   type header = Consumed of Bigstringaf.t | None
 
   val decoder : o:Bigstringaf.t -> allocate:(int -> De.window) -> src -> decoder
-
   val decode : decoder -> decode
-
   val number : decoder -> int
-
   val version : decoder -> int
-
   val count : decoder -> int
-
   val src_rem : decoder -> int
-
   val src : decoder -> Bigstringaf.t -> int -> int -> decoder
 end
 
@@ -447,7 +439,6 @@ val uid_of_offset_with_source :
   ('uid, 's) io
 
 type 'uid children = cursor:int64 -> uid:'uid -> int64 list
-
 type where = cursor:int64 -> int
 
 type 'uid oracle = {
@@ -475,21 +466,13 @@ module Verify
   type status
 
   val pp : Format.formatter -> status -> unit
-
   val is_resolved : status -> bool
-
   val uid_of_status : status -> Uid.t
-
   val kind_of_status : status -> kind
-
   val depth_of_status : status -> int
-
   val source_of_status : status -> Uid.t option
-
   val offset_of_status : status -> int64
-
   val unresolved_base : cursor:int64 -> status
-
   val unresolved_node : status
 
   val verify :

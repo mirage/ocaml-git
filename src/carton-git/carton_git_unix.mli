@@ -12,7 +12,6 @@ module Make (Uid : sig
   include Carton.UID
 
   val of_hex : string -> t
-
   val to_hex : t -> string
 end) : sig
   val make : Store.t -> (Fpath.t, Lwt_unix.file_descr, Uid.t) t Lwt.t

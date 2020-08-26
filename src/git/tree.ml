@@ -41,7 +41,7 @@ let perm_of_string = function
   | v -> Fmt.invalid_arg "perm_of_string: %s" v
 
 let equal_perm a b =
-  match (a, b) with
+  match a, b with
   | `Normal, `Normal -> true
   | `Everybody, `Everybody -> true
   | `Exec, `Exec -> true
@@ -56,13 +56,13 @@ type 'hash entry = { perm : perm; name : string; node : 'hash }
 
 let pp_entry ~pp ppf { perm; name; node } =
   Fmt.pf ppf "{ @[<hov>perm = %s;@ name = %S;@ node = %a;@] }"
-    (match perm with
+    ( match perm with
     | `Normal -> "normal"
     | `Everybody -> "everybody"
     | `Exec -> "exec"
     | `Link -> "link"
     | `Dir -> "dir"
-    | `Commit -> "commit")
+    | `Commit -> "commit" )
     name (Fmt.hvbox pp) node
 
 let equal_entry ~equal a b =
@@ -83,9 +83,7 @@ let equal ~equal a b =
   try List.for_all2 (equal_entry ~equal) a b with _ -> false
 
 let hashes tree = List.map (fun { node; _ } -> node) tree
-
 let iter f tree = List.iter f tree
-
 let is_empty t = t = []
 
 external to_list : 'hash t -> 'hash entry list = "%identity"
@@ -100,7 +98,7 @@ let ( .![] ) v i =
   | Node v -> if i >= String.length v then '/' else v.[i]
 
 let compare x y =
-  match (x, y) with
+  match x, y with
   | Contents a, Contents b -> String.compare a b
   | (Contents a | Node a), (Contents b | Node b) ->
       let len_a = String.length a in
@@ -111,14 +109,13 @@ let compare x y =
         !p < len_a
         && !p < len_b
         &&
-        (c := Char.compare a.[!p] b.[!p] ;
-         !c = 0)
+        ( c := Char.compare a.[!p] b.[!p];
+          !c = 0 )
       do
         incr p
-      done ;
+      done;
 
-      if !p = len_a || !p = len_b
-      then
+      if !p = len_a || !p = len_b then
         let res = Char.compare x.![!p] y.![!p] in
         if res = 0 then Char.compare x.![!p + 1] y.![!p + 1] else res
       else !c
@@ -128,7 +125,7 @@ let value_of_entry = function
   | { name; _ } -> Contents name
 
 let v entries =
-  List.map (fun entry -> (value_of_entry entry, entry)) entries
+  List.map (fun entry -> value_of_entry entry, entry) entries
   |> List.sort (fun (a, _) (b, _) -> compare a b)
   |> List.map snd
 
@@ -137,11 +134,11 @@ let remove ~name t =
   let rec go acc = function
     | [] -> t
     | entry :: rest ->
-        if compare (value_of_entry entry) c = 0
-        then List.rev_append acc rest
-        else if compare (value_of_entry entry) n = 0
-        then List.rev_append acc rest
-        else go (entry :: acc) rest in
+        if compare (value_of_entry entry) c = 0 then List.rev_append acc rest
+        else if compare (value_of_entry entry) n = 0 then
+          List.rev_append acc rest
+        else go (entry :: acc) rest
+  in
   go [] t
 
 let add entry t =
@@ -149,50 +146,36 @@ let add entry t =
   let rec go acc = function
     | [] -> List.rev_append acc [ entry ]
     | x :: r ->
-        if compare c (value_of_entry x) = 0
-        then go acc r
+        if compare c (value_of_entry x) = 0 then go acc r
         else
           let res = compare n (value_of_entry x) in
-          if res = 0
-          then List.rev_append acc (entry :: r)
-          else if res > 0
-          then go (x :: acc) r
-          else (* res < 0 *) List.rev_append acc (entry :: x :: r) in
+          if res = 0 then List.rev_append acc (entry :: r)
+          else if res > 0 then go (x :: acc) r
+          else (* res < 0 *) List.rev_append acc (entry :: x :: r)
+  in
   go [] t
 
 let of_list entries = v entries
 
 module type S = sig
   type hash
-
   type nonrec entry = hash entry
-
   type nonrec t = hash t
 
   val entry : name:string -> perm -> hash -> entry
-
   val v : entry list -> t
-
   val add : entry -> t -> t
-
   val remove : name:string -> t -> t
-
   val is_empty : t -> bool
-
   val format : t Encore.t
 
   include S.DIGEST with type t := t and type hash := hash
-
   include S.BASE with type t := t
 
   val length : t -> int64
-
   val hashes : t -> hash list
-
   val to_list : t -> entry list
-
   val of_list : entry list -> t
-
   val iter : (entry -> unit) -> t -> unit
 end
 
@@ -204,23 +187,14 @@ module Make (Hash : S.HASH) : S with type hash = Hash.t = struct
   and t = hash t
 
   let pp ppf t = pp ~pp:Hash.pp ppf t
-
   let entry ~name perm node = entry ~name perm node
-
   let v entries = v entries
-
   let remove ~name t = remove ~name t
-
   let add entry t = add entry t
-
   let is_empty t = is_empty t
-
   let to_list t = t
-
   let of_list entries = v entries
-
   let iter t = iter t
-
   let hashes t = hashes t
 
   let length t =
@@ -232,7 +206,8 @@ module Make (Hash : S.HASH) : S with type hash = Hash.t = struct
       + string x.name
       + 1L
       + Int64.of_int Hash.digest_size
-      + acc in
+      + acc
+    in
     List.fold_left entry 0L t
 
   module Syntax = struct
@@ -249,10 +224,9 @@ module Make (Hash : S.HASH) : S with type hash = Hash.t = struct
     let entry =
       Encore.Bij.v
         ~fwd:(fun ((perm, name), node) -> { perm; name; node })
-        ~bwd:(fun { perm; name; node } -> ((perm, name), node))
+        ~bwd:(fun { perm; name; node } -> (perm, name), node)
 
     let is_not_sp = ( <> ) ' '
-
     let is_not_nl = ( <> ) '\x00'
 
     let entry =
@@ -261,12 +235,12 @@ module Make (Hash : S.HASH) : S with type hash = Hash.t = struct
       let hash = hash <$> fixed Hash.digest_size in
       let name = while1 is_not_nl in
       entry
-      <$> (perm
+      <$> ( perm
           <* (Encore.Bij.char ' ' <$> any)
           <* commit
           <*> (name <* (Encore.Bij.char '\x00' <$> any) <* commit)
           <*> (hash <* commit)
-          <* commit)
+          <* commit )
 
     let format = Encore.Syntax.rep0 entry
   end
@@ -286,9 +260,7 @@ module Make (Hash : S.HASH) : S with type hash = Hash.t = struct
       value
 
   let equal = ( = )
-
   let compare = Stdlib.compare
-
   let hash = Hashtbl.hash
 
   module Set = Set.Make (struct

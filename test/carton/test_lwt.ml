@@ -23,25 +23,30 @@ let create root path =
         Lwt.return_error
           (`Msg (Fmt.strf "Impossible to open %a." Fpath.pp path))
     | Unix.Unix_error (Unix.EINTR, _, _) -> Lwt.catch process error
-    | exn -> Lwt.fail exn in
+    | exn -> Lwt.fail exn
+  in
   Lwt.catch process error
 
 let append _ fd str =
   let rec go off len =
     let process () =
       Lwt_unix.write_string fd str off len >>= fun len' ->
-      if len = len' then Lwt.return () else go (off + len') (len - len') in
+      if len = len' then Lwt.return () else go (off + len') (len - len')
+    in
     let error = function
       | Unix.Unix_error (Unix.EINTR, _, _) -> go off len
-      | exn -> Lwt.fail exn in
-    Lwt.catch process error in
+      | exn -> Lwt.fail exn
+    in
+    Lwt.catch process error
+  in
   go 0 (String.length str)
 
 let close _ fd =
   let rec process () = Lwt_unix.close fd >>= fun () -> Lwt.return_ok ()
   and error = function
     | Unix.Unix_error (Unix.EINTR, _, _) -> Lwt.catch process error
-    | exn -> Lwt.fail exn in
+    | exn -> Lwt.fail exn
+  in
   Lwt.catch process error
 
 module Thin = Carton_lwt.Thin.Make (Uid)
@@ -53,21 +58,24 @@ let safely_open path =
     Lwt_unix.openfile (Fpath.to_string path) Unix.[ O_RDONLY ] 0o400
   and error = function
     | Unix.Unix_error (Unix.EINTR, _, _) -> Lwt.catch process error
-    | exn -> Lwt.fail exn in
+    | exn -> Lwt.fail exn
+  in
   Lwt.catch process error
 
 let safely_close fd =
   let rec process () = Lwt_unix.close fd
   and error = function
     | Unix.Unix_error (Unix.EINTR, _, _) -> Lwt.catch process error
-    | exn -> Lwt.fail exn in
+    | exn -> Lwt.fail exn
+  in
   Lwt.catch process error
 
 let safely_read fd tmp off len =
   let rec process () = Lwt_unix.read fd tmp off len
   and error = function
     | Unix.Unix_error (Unix.EINTR, _, _) -> Lwt.catch process error
-    | exn -> Lwt.fail exn in
+    | exn -> Lwt.fail exn
+  in
   Lwt.catch process error
 
 let stream_of_file path =
@@ -77,12 +85,14 @@ let stream_of_file path =
     | 0 -> safely_close fd >>= fun () -> Lwt.return_none
     | len ->
         let res = Bytes.sub_string tmp 0 len in
-        Lwt.return_some (res, 0, len) in
+        Lwt.return_some (res, 0, len)
+  in
   safely_open path >|= stream
 
 let digest ~kind ?(off = 0) ?len buf =
   let len =
-    match len with Some len -> len | None -> Bigstringaf.length buf - off in
+    match len with Some len -> len | None -> Bigstringaf.length buf - off
+  in
   let ctx = Digestif.SHA1.empty in
 
   let ctx =
@@ -90,7 +100,8 @@ let digest ~kind ?(off = 0) ?len buf =
     | `A -> Digestif.SHA1.feed_string ctx (Fmt.strf "commit %d\000" len)
     | `B -> Digestif.SHA1.feed_string ctx (Fmt.strf "tree %d\000" len)
     | `C -> Digestif.SHA1.feed_string ctx (Fmt.strf "blob %d\000" len)
-    | `D -> Digestif.SHA1.feed_string ctx (Fmt.strf "tag %d\000" len) in
+    | `D -> Digestif.SHA1.feed_string ctx (Fmt.strf "tag %d\000" len)
+  in
   let ctx = Digestif.SHA1.feed_bigstring ctx ~off ~len buf in
   Digestif.SHA1.get ctx
 

@@ -34,17 +34,14 @@ module type BASE = sig
   (** {2 Sets and Maps.} *)
 
   module Set : Set.S with type elt = t
-
   module Map : Map.S with type key = t
 end
 
 module type CONVERTER = sig
   type t
-
   type buffer
 
   val to_t : buffer -> t
-
   val of_t : t -> buffer
 end
 
@@ -52,23 +49,15 @@ module type HASH = sig
   include Digestif.S
 
   val feed_cstruct : ctx -> Cstruct.t -> ctx
-
   val compare : t -> t -> int
-
   val hash : t -> int
-
   val equal : t -> t -> bool
-
   val read : t -> int -> int
-
   val null : t
-
   val length : int
-
   val feed : ctx -> ?off:int -> ?len:int -> Bigstringaf.t -> ctx
 
   module Set : Set.S with type elt = t
-
   module Map : Map.S with type key = t
 end
 

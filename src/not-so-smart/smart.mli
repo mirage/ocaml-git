@@ -10,11 +10,8 @@ module Advertised_refs : sig
   type ('uid, 'reference) t
 
   val pp : (string, string) t Fmt.t
-
   val head : ('a, string) t -> 'a option
-
   val capabilities : ('uid, 'reference) t -> Capability.t list
-
   val refs : ('uid, 'reference) t -> ('uid * 'reference * bool) list
 
   val reference :
@@ -91,13 +88,9 @@ module Negotiation : sig
     | NAK
 
   val is_common : 'uid t -> bool
-
   val is_ready : 'uid t -> bool
-
   val is_nak : 'uid t -> bool
-
   val pp : string t Fmt.t
-
   val map : f:('a -> 'b) -> 'a t -> 'b t
 end
 
@@ -110,9 +103,7 @@ module Commands : sig
   type ('uid, 'ref) t
 
   val create : 'uid -> 'ref -> ('uid, 'ref) command
-
   val delete : 'uid -> 'ref -> ('uid, 'ref) command
-
   val update : 'uid -> 'uid -> 'ref -> ('uid, 'ref) command
 
   val v :
@@ -137,9 +128,7 @@ module Status : sig
   }
 
   val map : f:('a -> 'b) -> 'a t -> 'b t
-
   val pp : string t Fmt.t
-
   val to_result : 'ref t -> (unit, string) result
 
   val v :
@@ -193,31 +182,22 @@ val pp_error : error Fmt.t
 type context
 
 val make : Capability.t list -> context
-
 val update : context -> Capability.t list -> unit
-
 val shared : Capability.t -> context -> bool
-
 val capabilities : context -> Capability.t list * Capability.t list
 
 type 'a send
 
 val proto_request : Proto_request.t send
-
 val want : (string, string) Want.t send
-
 val negotiation_done : unit send
-
 val flush : unit send
-
 val commands : (string, string) Commands.t send
-
 val send_pack : ?stateless:bool -> bool -> string send
 
 type 'a recv
 
 val advertised_refs : (string, string) Advertised_refs.t recv
-
 val negotiation_result : string Result.t recv
 
 val recv_pack :
@@ -228,19 +208,12 @@ val recv_pack :
   bool recv
 
 val ack : string Negotiation.t recv
-
 val shallows : string Shallow.t list recv
-
 val status : string Status.t recv
-
 val packet : trim:bool -> string recv
-
 val send_advertised_refs : (string, string) Advertised_refs.t send
-
 val bind : ('a, 'err) t -> f:('a -> ('b, 'err) t) -> ('b, 'err) t
-
 val ( let* ) : ('a, 'err) t -> ('a -> ('b, 'err) t) -> ('b, 'err) t
-
 val ( >>= ) : ('a, 'err) t -> ('a -> ('b, 'err) t) -> ('b, 'err) t
 
 val encode :
@@ -257,13 +230,9 @@ val decode :
   ('b, 'err) t
 
 val send : context -> 'a send -> 'a -> (unit, [> `Protocol of error ]) t
-
 val recv : context -> 'a recv -> ('a, [> `Protocol of error ]) t
-
 val return : 'v -> ('v, 'err) t
-
 val fail : 'err -> ('v, 'err) t
-
 val reword_error : ('err0 -> 'err1) -> ('v, 'err0) t -> ('v, 'err1) t
 
 val error_msgf :

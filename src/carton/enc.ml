@@ -23,14 +23,14 @@ module Utils = struct
   let cmd off len =
     let cmd = ref 0 in
 
-    if off land 0x000000ff <> 0 then cmd := !cmd lor 0x01 ;
-    if off land 0x0000ff00 <> 0 then cmd := !cmd lor 0x02 ;
-    if off land 0x00ff0000 <> 0 then cmd := !cmd lor 0x04 ;
-    if off land 0x7f000000 <> 0 then cmd := !cmd lor 0x08 ;
+    if off land 0x000000ff <> 0 then cmd := !cmd lor 0x01;
+    if off land 0x0000ff00 <> 0 then cmd := !cmd lor 0x02;
+    if off land 0x00ff0000 <> 0 then cmd := !cmd lor 0x04;
+    if off land 0x7f000000 <> 0 then cmd := !cmd lor 0x08;
 
-    if len land 0x0000ff <> 0 then cmd := !cmd lor 0x10 ;
-    if len land 0x00ff00 <> 0 then cmd := !cmd lor 0x20 ;
-    if len land 0xff0000 <> 0 then cmd := !cmd lor 0x40 ;
+    if len land 0x0000ff <> 0 then cmd := !cmd lor 0x10;
+    if len land 0x00ff00 <> 0 then cmd := !cmd lor 0x20;
+    if len land 0xff0000 <> 0 then cmd := !cmd lor 0x40;
 
     !cmd
     [@@inline]
@@ -38,7 +38,8 @@ module Utils = struct
   let length_of_copy_code ~off ~len =
     let required =
       let a = [| 0; 1; 1; 2; 1; 2; 2; 3; 1; 2; 2; 3; 2; 3; 3; 4 |] in
-      fun x -> a.(x land 0xf) + a.(x lsr 4) in
+      fun x -> a.(x land 0xf) + a.(x lsr 4)
+    in
     let cmd = cmd off len in
     required cmd
 
@@ -58,11 +59,10 @@ module W = struct
 
   let create_with v =
     let t = Weak.create 1 in
-    Weak.set t 0 (Some v) ;
+    Weak.set t 0 (Some v);
     t
 
   let set t v = Weak.set t 0 (Some v)
-
   let get t = Weak.get t 0
 end
 
@@ -143,13 +143,14 @@ let entry_to_target :
   let ( >>= ) = bind in
 
   load entry.uid >>= fun v ->
-  (match entry.delta with
+  ( match entry.delta with
   | From uid ->
       load uid >>= fun s ->
       let source = Bigstringaf.sub ~off:0 ~len:(Dec.len s) (Dec.raw s) in
       let target = Bigstringaf.sub ~off:0 ~len:(Dec.len v) (Dec.raw v) in
       let index =
-        Duff.make (Bigstringaf.sub ~off:0 ~len:(Dec.len s) (Dec.raw s)) in
+        Duff.make (Bigstringaf.sub ~off:0 ~len:(Dec.len s) (Dec.raw s))
+      in
       let hunks = Duff.delta index ~source ~target in
       return
         (Some
@@ -159,13 +160,12 @@ let entry_to_target :
              source = uid;
              source_length = Dec.len s;
            })
-  | Zero -> return None)
+  | Zero -> return None )
   >>= fun patch -> return { patch; entry; v = W.create_with v }
 
 let length_of_delta ~source ~target hunks = Utils.length ~source ~target hunks
 
 exception Break
-
 exception Next
 
 (* XXX(dinosaure): [apply] tries to generate a patch between [source] and [target].
@@ -189,10 +189,10 @@ let apply :
   let ( >>= ) = bind in
 
   (* Don't bother doing diffs between different types. *)
-  if source.entry.kind <> target.entry.kind then raise_notrace Break ;
+  if source.entry.kind <> target.entry.kind then raise_notrace Break;
 
   (* Let's not bust the allowed depth. *)
-  if depth_of_source source >= _max_depth then raise_notrace Next ;
+  if depth_of_source source >= _max_depth then raise_notrace Next;
 
   (* Now some size filtering heuristics. *)
   let max_length, ref_depth =
@@ -200,22 +200,25 @@ let apply :
     | Some { hunks; source_length; depth; _ } ->
         ( length_of_delta ~source:source_length ~target:target.entry.length hunks,
           depth )
-    | None -> ((target.entry.length / 2) - uid_ln, 1) in
+    | None -> (target.entry.length / 2) - uid_ln, 1
+  in
 
   let max_length =
     max_length
     * (_max_depth - depth_of_source source)
-    / (_max_depth - ref_depth + 1) in
+    / (_max_depth - ref_depth + 1)
+  in
 
-  if max_length == 0 then raise_notrace Next ;
+  if max_length == 0 then raise_notrace Next;
 
   let diff =
-    if source.entry.length < target.entry.length
-    then target.entry.length - source.entry.length
-    else 0 in
+    if source.entry.length < target.entry.length then
+      target.entry.length - source.entry.length
+    else 0
+  in
 
-  if diff >= max_length then raise_notrace Next ;
-  if target.entry.length < source.entry.length / 32 then raise_notrace Next ;
+  if diff >= max_length then raise_notrace Next;
+  if target.entry.length < source.entry.length / 32 then raise_notrace Next;
 
   (* Load data if not already done. *)
   let load_if weak uid =
@@ -223,25 +226,30 @@ let apply :
     | Some v -> return v
     | None ->
         load uid >>= fun v ->
-        W.set weak v ;
-        return v in
+        W.set weak v;
+        return v
+  in
   (* Load index if not already done (TODO: check it!). *)
   let index_if weak v =
     match W.get weak with
     | Some index -> index
     | None ->
         let index =
-          Duff.make (Bigstringaf.sub ~off:0 ~len:(Dec.len v) (Dec.raw v)) in
-        W.set weak index ;
-        index in
+          Duff.make (Bigstringaf.sub ~off:0 ~len:(Dec.len v) (Dec.raw v))
+        in
+        W.set weak index;
+        index
+  in
 
   load_if source.v source.entry.uid >>= fun source_v ->
   load_if target.v target.entry.uid >>= fun target_v ->
   index_if source.index source_v |> fun source_index ->
   let target_r =
-    Bigstringaf.sub ~off:0 ~len:(Dec.len target_v) (Dec.raw target_v) in
+    Bigstringaf.sub ~off:0 ~len:(Dec.len target_v) (Dec.raw target_v)
+  in
   let source_r =
-    Bigstringaf.sub ~off:0 ~len:(Dec.len source_v) (Dec.raw source_v) in
+    Bigstringaf.sub ~off:0 ~len:(Dec.len source_v) (Dec.raw source_v)
+  in
   let hunks = Duff.delta source_index ~source:source_r ~target:target_r in
 
   target.patch <-
@@ -251,14 +259,13 @@ let apply :
         source = source.entry.uid;
         source_length = source.entry.length;
         depth = source.depth + 1;
-      } ;
+      };
   return ()
 
 module type VERBOSE = sig
   type 'a fiber
 
   val succ : unit -> unit fiber
-
   val print : unit -> unit fiber
 end
 
@@ -266,7 +273,6 @@ module type UID = sig
   type t
 
   val hash : t -> int
-
   val equal : t -> t -> bool
 end
 
@@ -277,7 +283,6 @@ module Delta
     (Verbose : VERBOSE with type 'a fiber = 'a IO.t) =
 struct
   let ( >>= ) = IO.bind
-
   let return = IO.return
 
   let s =
@@ -301,41 +306,44 @@ struct
       let try_delta j source =
         let other_idx = idx + j in
         let other_idx =
-          if other_idx >= weight then other_idx - weight else other_idx in
+          if other_idx >= weight then other_idx - weight else other_idx
+        in
         try
           apply s ~load ~uid_ln ~source ~target |> Scheduler.prj >>= fun () ->
-          best := other_idx ;
+          best := other_idx;
           return ()
         with
         | Next -> return ()
-        | Break as exn -> raise_notrace exn in
+        | Break as exn -> raise_notrace exn
+      in
       let rec go j =
-        if j < 0
-        then return ()
+        if j < 0 then return ()
         else
           match window.(j) with
           | Some m -> (
               try try_delta j m >>= fun () -> (go [@tailcall]) (pred j)
-              with Break -> return ())
+              with Break -> return () )
           | None -> return ()
-        (* TODO: check it! *) in
+        (* TODO: check it! *)
+      in
       go (Array.length window - 1) >>= fun () ->
       (if !best >= 0 then Verbose.succ () else return ()) >>= fun () ->
-      return !best in
+      return !best
+    in
     (* XXX(dinosaure): [git] does something a bit complex between the iteration
        over [targets] and the [window]. [n] is the current [target] where we will try
        to apply a patch and [idx] seems a lower-bound of the LRU-cache [window]. *)
     let rec iter n idx =
-      if n < Array.length targets
-      then (
+      if n < Array.length targets then (
         find_delta idx targets.(n) >>= fun best ->
         (* [git] does this update __before__ to try to find a patch. However, it seems fine
            to do that after when an object can not be patched with itself. *)
-        window.(idx) <- Some (target_to_source targets.(n)) ;
+        window.(idx) <- Some (target_to_source targets.(n));
         Verbose.print () >>= fun () ->
         (* [git] wants to deflate and cache the delta data. Should we do the same? TODO *)
-        if depth_of_target targets.(n) > 1
-           && depth_of_target targets.(n) < _max_depth
+        if
+          depth_of_target targets.(n) > 1
+          && depth_of_target targets.(n) < _max_depth
         then (
           (* XXX(dinosaure): a slightly assumption, if [target] has a patch,
              [!best] (into [go]) was properly set to a valid source. Of course, that
@@ -346,17 +354,17 @@ struct
              keep it longer. It will be the first base object to be attempted next. *)
           let v = ref best in
           for _ = (weight + idx - best) mod weight to 0 do
-            window.(!v) <- window.((!v + 1) mod weight) ;
+            window.(!v) <- window.((!v + 1) mod weight);
             v := (!v + 1) mod weight
-          done ;
+          done;
 
-          window.(!v) <- swap) ;
+          window.(!v) <- swap );
 
-        if depth_of_target targets.(n) < _max_depth
-        then
+        if depth_of_target targets.(n) < _max_depth then
           (iter [@tailcall]) (succ n) (if idx + 1 >= weight then 0 else idx + 1)
-        else (iter [@tailcall]) (succ n) idx)
-      else return () in
+        else (iter [@tailcall]) (succ n) idx )
+      else return ()
+    in
     iter 0 0
 
   type m = { mutable v : int; m : IO.Mutex.t }
@@ -371,16 +379,16 @@ struct
     let rec go () =
       IO.Mutex.lock mutex.m >>= fun () ->
       let v = mutex.v in
-      mutex.v <- mutex.v + 1 ;
-      if v >= Array.length entries
-      then (
-        IO.Mutex.unlock mutex.m ;
-        IO.return ())
+      mutex.v <- mutex.v + 1;
+      if v >= Array.length entries then (
+        IO.Mutex.unlock mutex.m;
+        IO.return () )
       else (
-        IO.Mutex.unlock mutex.m ;
+        IO.Mutex.unlock mutex.m;
         entry_to_target s ~load entries.(v) |> Scheduler.prj >>= fun target ->
-        targets.(v) <- Some target ;
-        go ()) in
+        targets.(v) <- Some target;
+        go () )
+    in
     go ()
 
   let get = function Some x -> x | None -> assert false
@@ -400,18 +408,15 @@ end
 
 module N : sig
   type encoder
-
   type b = { i : Bigstringaf.t; q : De.Queue.t; w : De.window }
 
   val encoder :
     's scheduler -> b:b -> load:('uid, 's) load -> 'uid q -> (encoder, 's) io
 
   val encode : o:Bigstringaf.t -> encoder -> [ `Flush of encoder * int | `End ]
-
   val dst : encoder -> Bigstringaf.t -> int -> int -> encoder
 end = struct
   type b = { i : Bigstringaf.t; q : De.Queue.t; w : De.window }
-
   type encoder = H of Zh.N.encoder | Z of Zl.Def.encoder
 
   let rec encode_zlib ~o encoder =
@@ -436,11 +441,11 @@ end = struct
     | Z encoder -> (
         match encode_zlib ~o encoder with
         | `Flush (encoder, len) -> `Flush (Z encoder, len)
-        | `End -> `End)
-    | H encoder ->
-    match encode_hunk ~o encoder with
-    | `Flush (encoder, len) -> `Flush (H encoder, len)
-    | `End -> `End
+        | `End -> `End )
+    | H encoder -> (
+        match encode_hunk ~o encoder with
+        | `Flush (encoder, len) -> `Flush (H encoder, len)
+        | `End -> `End )
 
   let dst encoder s j l =
     match encoder with
@@ -462,8 +467,9 @@ end = struct
       | Some v -> return v
       | None ->
           load uid >>= fun v ->
-          W.set weak v ;
-          return v in
+          W.set weak v;
+          return v
+    in
 
     match target.patch with
     | Some { hunks; source_length; _ } ->
@@ -471,7 +477,8 @@ end = struct
         let raw = Bigstringaf.sub ~off:0 ~len:(Dec.len v) (Dec.raw v) in
         let encoder =
           Zh.N.encoder ~i:b.i ~q:b.q ~w:b.w ~source:source_length raw `Manual
-            hunks in
+            hunks
+        in
         return (H encoder)
     | None ->
         load_if target.v target.entry.uid >>= fun v ->
@@ -482,25 +489,24 @@ end = struct
 end
 
 type ('uid, 's) find = 'uid -> (int option, 's) io
-
 type b = { i : Bigstringaf.t; q : De.Queue.t; w : De.window; o : Bigstringaf.t }
 
 let encode_header ~o kind length =
-  if length < 0 then invalid_arg "encode_header: length must be positive" ;
+  if length < 0 then invalid_arg "encode_header: length must be positive";
   let c = ref ((kind lsl 4) lor (length land 15)) in
   let l = ref (length asr 4) in
   let p = ref 0 in
   let n = ref 1 in
 
   while !l != 0 do
-    Bigstringaf.set o !p (Char.chr (!c lor 0x80 land 0xff)) ;
-    incr p ;
-    c := !l land 0x7f ;
-    l := !l asr 7 ;
+    Bigstringaf.set o !p (Char.chr (!c lor 0x80 land 0xff));
+    incr p;
+    c := !l land 0x7f;
+    l := !l asr 7;
     incr n
-  done ;
+  done;
 
-  Bigstringaf.set o !p (Char.unsafe_chr !c) ;
+  Bigstringaf.set o !p (Char.unsafe_chr !c);
   !n
 
 type 'uid uid = { uid_ln : int; uid_rw : 'uid -> string }
@@ -513,9 +519,9 @@ let kind_to_int = function
 
 let header_of_pack ~length buf off len =
   if off < 0 || len < 0 || off + len > Bigstringaf.length buf || len < 4 + 4 + 4
-  then Fmt.invalid_arg "header_of_pack" ;
-  Bigstringaf.set_int32_be buf (off + 0) 0x5041434bl ;
-  Bigstringaf.set_int32_be buf (off + 4) 0x2l ;
+  then Fmt.invalid_arg "header_of_pack";
+  Bigstringaf.set_int32_be buf (off + 0) 0x5041434bl;
+  Bigstringaf.set_int32_be buf (off + 4) 0x2l;
   Bigstringaf.set_int32_be buf (off + 8) (Int32.of_int length)
 
 let encode_target :
@@ -545,22 +551,23 @@ let encode_target :
           let off =
             encode_header ~o:b.o 0b110
               (Utils.length ~source:source_length ~target:target.entry.length
-                 hunks) in
+                 hunks)
+          in
           let buf = Bytes.create 10 in
 
           let p = ref (10 - 1) in
           let n = ref (cursor - offset) in
 
-          Bytes.set buf !p (Char.unsafe_chr (!n land 127)) ;
+          Bytes.set buf !p (Char.unsafe_chr (!n land 127));
           while !n asr 7 <> 0 do
-            n := !n asr 7 ;
-            decr p ;
-            Bytes.set buf !p (Char.unsafe_chr (128 lor ((!n - 1) land 127))) ;
+            n := !n asr 7;
+            decr p;
+            Bytes.set buf !p (Char.unsafe_chr (128 lor ((!n - 1) land 127)));
             decr n
-          done ;
+          done;
 
           Bigstringaf.blit_from_bytes buf ~src_off:!p b.o ~dst_off:off
-            ~len:(10 - !p) ;
+            ~len:(10 - !p);
           N.encoder s ~b:{ i = b.i; q = b.q; w = b.w } ~load target
           >>= fun encoder ->
           let off = off + (10 - !p) in
@@ -570,12 +577,13 @@ let encode_target :
           let off =
             encode_header ~o:b.o 0b111
               (Utils.length ~source:source_length ~target:target.entry.length
-                 hunks) in
+                 hunks)
+          in
           let raw = uid.uid_rw source in
           Bigstringaf.blit_from_string raw ~src_off:0 b.o ~dst_off:off
-            ~len:uid.uid_ln ;
+            ~len:uid.uid_ln;
           N.encoder s ~b:{ i = b.i; q = b.q; w = b.w } ~load target
           >>= fun encoder ->
           let off = off + uid.uid_ln in
           let len = Bigstringaf.length b.o - off in
-          return (off, N.dst encoder b.o off len))
+          return (off, N.dst encoder b.o off len) )

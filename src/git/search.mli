@@ -16,7 +16,6 @@
  *)
 module Make (Hash : Digestif.S) (Store : Minimal.S with type hash = Hash.t) : sig
   type hash = Hash.t
-
   type store = Store.t
 
   type pred =
@@ -30,6 +29,5 @@ module Make (Hash : Digestif.S) (Store : Minimal.S with type hash = Hash.t) : si
   type path = [ `Tag of string * path | `Commit of path | `Path of string list ]
 
   val mem : store -> hash -> path -> bool Lwt.t
-
   val find : store -> hash -> path -> hash option Lwt.t
 end

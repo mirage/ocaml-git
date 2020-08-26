@@ -25,5 +25,6 @@ let digest digest kind length serializer v =
         let ctx = digest.feed_string str ctx in
         go ctx (continue ~committed:len)
     | Fail -> Fmt.failwith "Invalid Git object"
-    | Done -> digest.get ctx in
+    | Done -> digest.get ctx
+  in
   go (digest.feed_string hdr digest.empty) state

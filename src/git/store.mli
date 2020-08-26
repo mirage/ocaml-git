@@ -27,13 +27,10 @@
 
 module type Rs = sig
   type +'a fiber
-
   type t
-
   type error
 
   val pp_error : error Fmt.t
-
   val atomic_wr : t -> Reference.t -> string -> (unit, error) result fiber
 
   (* open / single_write / close *)

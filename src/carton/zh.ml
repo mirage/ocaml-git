@@ -1,7 +1,7 @@
 let input_bigstring ic buf off len =
   let tmp = Bytes.create len in
   let res = input ic tmp 0 len in
-  Bigstringaf.blit_from_bytes tmp ~src_off:0 buf ~dst_off:off ~len:res ;
+  Bigstringaf.blit_from_bytes tmp ~src_off:0 buf ~dst_off:off ~len:res;
   res
 
 let output_bigstring oc buf off len =
@@ -10,15 +10,11 @@ let output_bigstring oc buf off len =
 
 module N : sig
   type encoder
-
   type dst = [ `Channel of out_channel | `Buffer of Buffer.t | `Manual ]
-
   type ret = [ `Flush of encoder | `End ]
 
   val dst_rem : encoder -> int
-
   val dst : encoder -> Zl.bigstring -> int -> int -> encoder
-
   val encode : encoder -> ret
 
   val encoder :
@@ -51,12 +47,12 @@ end = struct
     match e.dst with
     | `Manual -> `Flush e
     | `Channel oc ->
-        output_bigstring oc e.o 0 e.o_pos ;
+        output_bigstring oc e.o 0 e.o_pos;
         k { e with o_pos = 0 }
     | `Buffer b ->
         for i = 0 to e.o_pos - 1 do
           Buffer.add_char b (Bigstringaf.get e.o i)
-        done ;
+        done;
         k { e with o_pos = 0 }
 
   let rec encode_z e =
@@ -69,18 +65,18 @@ end = struct
     | `Flush z ->
         let len = Bigstringaf.length e.o - Zl.Def.dst_rem z in
         flush encode_z { e with z; o_pos = len }
-    | `Await z ->
-    match e.d with
-    | [] ->
-        let z = Zl.Def.src z De.bigstring_empty 0 0 in
-        encode_z { e with z }
-    | d ->
-        H.N.dst e.h e.t 0 (De.bigstring_length e.t) ;
-        encode_h e d
+    | `Await z -> (
+        match e.d with
+        | [] ->
+            let z = Zl.Def.src z De.bigstring_empty 0 0 in
+            encode_z { e with z }
+        | d ->
+            H.N.dst e.h e.t 0 (De.bigstring_length e.t);
+            encode_h e d )
 
   and encode_h e d =
-    let v, d = match d with v :: d -> (v, d) | [] -> (`End, []) in
-    match (H.N.encode e.h v, d) with
+    let v, d = match d with v :: d -> v, d | [] -> `End, [] in
+    match H.N.encode e.h v, d with
     | `Ok, [] ->
         let len = Bigstringaf.length e.t - H.N.dst_rem e.h in
         let z = Zl.Def.src e.z e.t 0 len in
@@ -98,9 +94,10 @@ end = struct
   let encoder ~i ~q ~w ~source src dst hunks =
     let o, o_pos, o_max =
       match dst with
-      | `Manual -> (De.bigstring_empty, 1, 0)
+      | `Manual -> De.bigstring_empty, 1, 0
       | `Buffer _ | `Channel _ ->
-          (De.bigstring_create H.io_buffer_size, 0, H.io_buffer_size - 1) in
+          De.bigstring_create H.io_buffer_size, 0, H.io_buffer_size - 1
+    in
     let z = Zl.Def.encoder `Manual `Manual ~q ~w ~level:0 in
     let z = Zl.Def.dst z De.bigstring_empty 0 0 in
     {
@@ -130,7 +127,6 @@ end
 
 module M : sig
   type decoder
-
   type src = [ `Channel of in_channel | `String of string | `Manual ]
 
   type decode =
@@ -140,19 +136,12 @@ module M : sig
     | `Malformed of string ]
 
   val src_len : decoder -> int
-
   val dst_len : decoder -> int
-
   val src_rem : decoder -> int
-
   val dst_rem : decoder -> int
-
   val src : decoder -> Zl.bigstring -> int -> int -> decoder
-
   val dst : decoder -> H.bigstring -> int -> int -> decoder
-
   val source : decoder -> H.bigstring -> decoder
-
   val decode : decoder -> decode
 
   val decoder :
@@ -207,15 +196,15 @@ end = struct
     match Zl.Inf.decode d.z with
     | `Await z ->
         let dst_len = De.bigstring_length d.o - Zl.Inf.dst_rem z in
-        H.M.src d.h d.o 0 dst_len ;
+        H.M.src d.h d.o 0 dst_len;
         refill inflate { d with z }
     | `End z ->
         let dst_len = De.bigstring_length d.o - Zl.Inf.dst_rem z in
-        H.M.src d.h d.o 0 dst_len ;
+        H.M.src d.h d.o 0 dst_len;
         decode { d with z }
     | `Flush z ->
         let dst_len = De.bigstring_length d.o - Zl.Inf.dst_rem z in
-        H.M.src d.h d.o 0 dst_len ;
+        H.M.src d.h d.o 0 dst_len;
         decode { d with z }
     | `Malformed err -> `Malformed err
 
@@ -224,25 +213,24 @@ end = struct
     { d with z }
 
   let dst d s j l =
-    H.M.dst d.h s j l ;
+    H.M.dst d.h s j l;
     d
 
   let source d src =
-    H.M.source d.h src ;
+    H.M.source d.h src;
     d
 
   let dst_len d =
     let dst_len = H.M.dst_len d.h in
-    assert (d.dst_len = dst_len) ;
+    assert (d.dst_len = dst_len);
     dst_len
 
   let src_len d =
     let src_len = H.M.src_len d.h in
-    assert (d.src_len = src_len) ;
+    assert (d.src_len = src_len);
     src_len
 
   let dst_rem d = H.M.dst_rem d.h
-
   let src_rem d = Zl.Inf.src_rem d.z
 
   let decoder ?source ~o ~allocate src =
@@ -251,12 +239,13 @@ end = struct
 
     let i, i_pos, i_len =
       match src with
-      | `Manual -> (De.bigstring_empty, 1, 0)
+      | `Manual -> De.bigstring_empty, 1, 0
       | `String x ->
           ( Bigstringaf.of_string x ~off:0 ~len:(String.length x),
             0,
             String.length x - 1 )
-      | `Channel _ -> (Bigstringaf.create De.io_buffer_size, 1, 0) in
+      | `Channel _ -> Bigstringaf.create De.io_buffer_size, 1, 0
+    in
 
     {
       src;

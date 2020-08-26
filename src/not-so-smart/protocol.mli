@@ -2,11 +2,8 @@ module Advertised_refs : sig
   type ('uid, 'reference) t
 
   val pp : (string, string) t Fmt.t
-
   val head : ('a, string) t -> 'a option
-
   val capabilities : ('uid, 'reference) t -> Capability.t list
-
   val refs : ('uid, 'reference) t -> ('uid * 'reference * bool) list
 
   val reference :
@@ -83,13 +80,9 @@ module Negotiation : sig
     | NAK
 
   val is_common : 'uid t -> bool
-
   val is_ready : 'uid t -> bool
-
   val is_nak : 'uid t -> bool
-
   val pp : string t Fmt.t
-
   val map : f:('a -> 'b) -> 'a t -> 'b t
 end
 
@@ -102,9 +95,7 @@ module Commands : sig
   type ('uid, 'ref) t
 
   val create : 'uid -> 'ref -> ('uid, 'ref) command
-
   val delete : 'uid -> 'ref -> ('uid, 'ref) command
-
   val update : 'uid -> 'uid -> 'ref -> ('uid, 'ref) command
 
   val v :
@@ -133,9 +124,7 @@ module Status : sig
   }
 
   val map : f:('a -> 'b) -> 'a t -> 'b t
-
   val pp : string t Fmt.t
-
   val to_result : 'string t -> (unit, string) result
 
   val v :
@@ -178,11 +167,8 @@ module Decoder : sig
     (bool, [> error ]) state
 
   val decode_negotiation : decoder -> (string Negotiation.t, [> error ]) state
-
   val decode_shallows : decoder -> (string Shallow.t list, [> error ]) state
-
   val decode_status : decoder -> (string Status.t, [> error ]) state
-
   val decode_packet : trim:bool -> decoder -> (string, [> error ]) state
 end
 
@@ -192,15 +178,10 @@ module Encoder : sig
   type error = Encoder.error
 
   val pp_error : error Fmt.t
-
   val encode_proto_request : encoder -> Proto_request.t -> error state
-
   val encode_want : encoder -> (string, string) Want.t -> error state
-
   val encode_done : encoder -> error state
-
   val encode_flush : encoder -> error state
-
   val encode_commands : encoder -> (string, string) Commands.t -> error state
 
   val encode_advertised_refs :

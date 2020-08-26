@@ -1,7 +1,5 @@
 module type HASH = S.HASH
-
 module type BASE = S.BASE
-
 module type DIGEST = S.DIGEST
 
 module Blob = Blob

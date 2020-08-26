@@ -1,6 +1,5 @@
 module type S = sig
   type t
-
   type hash
 
   type error =
@@ -12,9 +11,7 @@ module type S = sig
   val pp_error : error Fmt.t
 
   module Hash : S.HASH with type t = hash
-
   module Value : Value.S with type hash = hash
-
   module Reference : Reference.S with type hash = hash
 
   val dotgit : t -> Fpath.t
@@ -160,6 +157,5 @@ module type S = sig
   (** {1 Backend Features} *)
 
   val has_global_watches : bool
-
   val has_global_checkout : bool
 end

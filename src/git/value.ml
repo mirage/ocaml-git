@@ -28,37 +28,25 @@ module Log = (val Logs.src_log src : Logs.LOG)
 
 module type S = sig
   type hash
-
   type nonrec t = hash t
 
   module Blob : Blob.S with type hash = hash
-
   module Commit : Commit.S with type hash = hash
-
   module Tree : Tree.S with type hash = hash
-
   module Tag : Tag.S with type hash = hash
 
   val blob : Blob.t -> t
-
   val commit : Commit.t -> t
-
   val tree : Tree.t -> t
-
   val tag : Tag.t -> t
-
   val kind : t -> [ `Commit | `Blob | `Tree | `Tag ]
-
   val format : t Encore.t
 
   include S.DIGEST with type t := t and type hash := hash
-
   include S.BASE with type t := t
 
   val length : t -> int64
-
   val to_raw : t -> string
-
   val to_raw_without_header : t -> string
 
   val of_raw_with_header :
@@ -74,7 +62,6 @@ end
 
 module Make (Hash : S.HASH) : S with type hash = Hash.t = struct
   type hash = Hash.t
-
   type nonrec t = Hash.t t
 
   module Blob = Blob.Make (Hash)
@@ -83,11 +70,8 @@ module Make (Hash : S.HASH) : S with type hash = Hash.t = struct
   module Tag = Tag.Make (Hash)
 
   let blob blob = Blob blob
-
   let commit commit = Commit commit
-
   let tree tree = Tree tree
-
   let tag tag = Tag tag
 
   let kind = function
@@ -122,17 +106,17 @@ module Make (Hash : S.HASH) : S with type hash = Hash.t = struct
     let iso =
       Encore.Bij.v
         ~fwd:(fun (kind, _, value) ->
-          match (kind, value) with
+          match kind, value with
           | `Tree, Tree _ -> value
           | `Commit, Commit _ -> value
           | `Blob, Blob _ -> value
           | `Tag, Tag _ -> value
           | _, _ -> raise Encore.Bij.Bijection)
         ~bwd:(function
-          | Tree tree -> (`Tree, Tree.length tree, Tree tree)
-          | Commit commit -> (`Commit, Commit.length commit, Commit commit)
-          | Tag tag -> (`Tag, Tag.length tag, Tag tag)
-          | Blob blob -> (`Blob, Blob.length blob, Blob blob))
+          | Tree tree -> `Tree, Tree.length tree, Tree tree
+          | Commit commit -> `Commit, Commit.length commit, Commit commit
+          | Tag tag -> `Tag, Tag.length tag, Tag tag
+          | Blob blob -> `Blob, Blob.length blob, Blob blob)
 
     let is_digit = function '0' .. '9' -> true | _ -> false
 
@@ -184,12 +168,13 @@ module Make (Hash : S.HASH) : S with type hash = Hash.t = struct
         <$> const k
         <* (Encore.Bij.char ' ' <$> any)
         <*> (length <* (Encore.Bij.char '\000' <$> any))
-        <*> t in
+        <*> t
+      in
       Encore.Bij.(compose obj3) iso
-      <$> (value "commit" commit'
+      <$> ( value "commit" commit'
           <|> value "tree" tree
           <|> value "blob" blob
-          <|> value "tag" tag)
+          <|> value "tag" tag )
   end
 
   let format = Syntax.format
@@ -207,7 +192,6 @@ module Make (Hash : S.HASH) : S with type hash = Hash.t = struct
     | Tag tag -> Tag.digest tag
 
   let equal = ( = )
-
   let hash = Hashtbl.hash
 
   let int_of_kind = function
@@ -217,21 +201,17 @@ module Make (Hash : S.HASH) : S with type hash = Hash.t = struct
     | Tag _ -> 3
 
   let compare a b =
-    match (a, b) with
+    match a, b with
     | Commit a, Commit b -> Commit.compare a b
     | Blob a, Blob b -> Blob.compare a b
     | Tree a, Tree b -> Tree.compare a b
     | Tag a, Tag b -> Tag.compare a b
     | ( ((Commit _ | Blob _ | Tree _ | Tag _) as a),
         ((Commit _ | Blob _ | Tree _ | Tag _) as b) ) ->
-        if int_of_kind a > int_of_kind b
-        then -1
-        else if int_of_kind a < int_of_kind b
-        then 1
-        else if length a > length b
-        then -1
-        else if length a < length b
-        then 1
+        if int_of_kind a > int_of_kind b then -1
+        else if int_of_kind a < int_of_kind b then 1
+        else if length a > length b then -1
+        else if length a < length b then 1
         else Stdlib.compare a b
 
   let to_raw v =
@@ -249,7 +229,8 @@ module Make (Hash : S.HASH) : S with type hash = Hash.t = struct
           match kind with
           | `Commit -> Encore.to_angstrom Commit.format >>| fun v -> Commit v
           | `Tag -> Encore.to_angstrom Tag.format >>| fun v -> Tag v
-          | `Tree -> Encore.to_angstrom Tree.format >>| fun v -> Tree v in
+          | `Tree -> Encore.to_angstrom Tree.format >>| fun v -> Tree v
+        in
         match
           Angstrom.parse_bigstring ~consume:Angstrom.Consume.All parser
             (Cstruct.to_bigarray raw)
@@ -258,12 +239,12 @@ module Make (Hash : S.HASH) : S with type hash = Hash.t = struct
         | Error _ ->
             Log.err (fun m ->
                 m "Object %s is bad: @[<hov>%S@]"
-                  (match kind with
+                  ( match kind with
                   | `Tree -> "tree"
                   | `Commit -> "commit"
-                  | `Tag -> "tag")
-                  (Cstruct.to_string raw)) ;
-            Error (`Msg "Invalid Git object"))
+                  | `Tag -> "tag" )
+                  (Cstruct.to_string raw));
+            Error (`Msg "Invalid Git object") )
 
   let to_raw_without_header = function
     | Blob v -> Cstruct.to_string (Blob.to_cstruct v)
@@ -280,7 +261,8 @@ module Make (Hash : S.HASH) : S with type hash = Hash.t = struct
 
   let of_raw_with_header ?(off = 0) ?len raw =
     let len =
-      match len with Some len -> len | None -> String.length raw - off in
+      match len with Some len -> len | None -> String.length raw - off
+    in
     let open Astring.String.Sub in
     let sub = with_range ~first:off ~len (v raw) in
 
@@ -307,7 +289,8 @@ module Make (Hash : S.HASH) : S with type hash = Hash.t = struct
           Stdlib.Result.to_option
             (Angstrom.parse_string ~consume:All decoder (to_string rest))
           >>| tag
-      | _ -> None in
+      | _ -> None
+    in
     match fiber with
     | Some value -> Ok value
     | None -> Rresult.R.error_msgf "Invalid Git value"
@@ -316,32 +299,34 @@ module Make (Hash : S.HASH) : S with type hash = Hash.t = struct
     | Blob v ->
         let consumed = ref false in
         let stream () =
-          if !consumed
-          then Lwt.return_none
+          if !consumed then Lwt.return_none
           else (
-            consumed := true ;
-            Lwt.return_some (Cstruct.to_string (Blob.to_cstruct v))) in
+            consumed := true;
+            Lwt.return_some (Cstruct.to_string (Blob.to_cstruct v)) )
+        in
         stream
     | v ->
         let hash = digest v in
-        Log.debug (fun m -> m "stream of %a." Hash.pp hash) ;
+        Log.debug (fun m -> m "stream of %a." Hash.pp hash);
         let state =
           match v with
           | Commit v ->
               Encore.Lavoisier.emit v (Encore.to_lavoisier Commit.format)
           | Tree v -> Encore.Lavoisier.emit v (Encore.to_lavoisier Tree.format)
           | Tag v -> Encore.Lavoisier.emit v (Encore.to_lavoisier Tag.format)
-          | Blob _ -> assert false in
+          | Blob _ -> assert false
+        in
         let state = ref state in
         let stream () =
           match !state with
           | Encore.Lavoisier.Partial { buffer = str; off; len; continue } ->
               let str = String.sub str off len in
-              state := continue ~committed:len ;
+              state := continue ~committed:len;
               Lwt.return_some str
               (* XXX(dinosaure): replace by [(string * int * int)]. *)
           | Encore.Lavoisier.Done -> Lwt.return_none
-          | Encore.Lavoisier.Fail -> Lwt.fail (Failure "Value.stream") in
+          | Encore.Lavoisier.Fail -> Lwt.fail (Failure "Value.stream")
+        in
         stream
 
   module Set = Set.Make (struct

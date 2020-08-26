@@ -30,19 +30,13 @@ module type S = sig
   (** OCaml value which represents a Git object. *)
 
   module Blob : Blob.S with type hash = hash
-
   module Commit : Commit.S with type hash = hash
-
   module Tree : Tree.S with type hash = hash
-
   module Tag : Tag.S with type hash = hash
 
   val blob : Blob.t -> t
-
   val commit : Commit.t -> t
-
   val tree : Tree.t -> t
-
   val tag : Tag.t -> t
 
   val kind : t -> [ `Commit | `Blob | `Tree | `Tag ]
@@ -51,13 +45,10 @@ module type S = sig
   val format : t Encore.t
 
   include S.DIGEST with type t := t and type hash := hash
-
   include S.BASE with type t := t
 
   val length : t -> int64
-
   val to_raw : t -> string
-
   val to_raw_without_header : t -> string
 
   val of_raw_with_header :

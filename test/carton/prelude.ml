@@ -2,23 +2,19 @@ module Bigarray = Bigarray_compat
 
 module Mutex = struct
   type 'a fiber = 'a
-
   type t = Mutex.t
 
   let create () = Mutex.create ()
-
   let lock t = Mutex.lock t
-
   let unlock t = Mutex.unlock t
 end
 
 module Future = struct
   type 'a fiber = 'a
-
   type 'a t = { th : Thread.t; v : 'a option ref }
 
   let wait { th; v } =
-    Thread.join th ;
+    Thread.join th;
     match !v with Some v -> v | None -> assert false
 
   let peek { v; _ } = !v
@@ -26,23 +22,16 @@ end
 
 module Condition = struct
   type 'a fiber = 'a
-
   type mutex = Mutex.t
-
   type t = Condition.t
 
   let create () = Condition.create ()
-
   let wait mutex t = Condition.wait mutex t
-
   let signal t = Condition.signal t
-
   let broadcast t = Condition.broadcast t
 end
 
-module Us = Carton.Make (struct
-  type 'a t = 'a
-end)
+module Us = Carton.Make (struct type 'a t = 'a end)
 
 let unix =
   {
@@ -73,7 +62,6 @@ module IO = struct
   module Condition = Condition
 
   let bind x f = f x
-
   let return x = x
 
   let nfork_map l ~f =
@@ -87,7 +75,8 @@ module IO = struct
         let f x =
           let v = ref None in
           let th = Thread.create (fun () -> v := Some (f x)) () in
-          { Future.th; Future.v } in
+          { Future.th; Future.v }
+        in
         List.map f vs
 
   let all_unit l = List.iter Sys.opaque_identity l

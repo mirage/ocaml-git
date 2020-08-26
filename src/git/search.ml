@@ -20,7 +20,6 @@ open Lwt.Infix
 module Make (Hash : Digestif.S) (Store : Minimal.S with type hash = Hash.t) =
 struct
   type hash = Hash.t
-
   type store = Store.t
 
   module Log = struct
@@ -39,7 +38,7 @@ struct
   let pred t ?(full = true) h =
     let tag t = `Tag (Store.Value.Tag.tag t, Store.Value.Tag.obj t) in
     Log.debug (fun l ->
-        l ~header:"predecessor" "Read the object: %a." Hash.pp h) ;
+        l ~header:"predecessor" "Read the object: %a." Hash.pp h);
     Store.read_exn t h >|= function
     | Value.Blob _ -> []
     | Value.Commit c ->
@@ -47,8 +46,7 @@ struct
         @ List.map (fun x -> `Commit x) (Store.Value.Commit.parents c)
     | Value.Tag t -> if full then [ tag t ] else []
     | Value.Tree t ->
-        if full
-        then
+        if full then
           List.map
             (fun { Tree.name; node; _ } -> `Tree (name, node))
             (Store.Value.Tree.to_list t)
@@ -62,7 +60,6 @@ struct
       None l
 
   let _find_commit = find_list (function `Commit x -> Some x | _ -> None)
-
   let find_tree_root = find_list (function `Tree_root x -> Some x | _ -> None)
 
   let find_tag l =
@@ -82,17 +79,17 @@ struct
         pred t hash >>= fun preds ->
         match find_tag l preds with
         | None -> Lwt.return_none
-        | Some s -> (find [@tailcall]) t s p)
+        | Some s -> (find [@tailcall]) t s p )
     | `Commit p -> (
         pred t hash >>= fun preds ->
         match find_tree_root preds with
         | None -> Lwt.return_none
-        | Some s -> (find [@tailcall]) t s p)
+        | Some s -> (find [@tailcall]) t s p )
     | `Path (h :: p) -> (
         pred t hash >>= fun preds ->
         match find_tree h preds with
         | None -> Lwt.return_none
-        | Some s -> (find [@tailcall]) t s (`Path p))
+        | Some s -> (find [@tailcall]) t s (`Path p) )
 
   (* XXX: can do one less look-up *)
   let mem t h path =

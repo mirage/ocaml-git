@@ -26,7 +26,6 @@ type 'hash t = {
 
 module type S = sig
   type hash
-
   type nonrec t = hash t
 
   val make :
@@ -41,23 +40,15 @@ module type S = sig
   val format : t Encore.t
 
   include S.DIGEST with type t := t and type hash := hash
-
   include S.BASE with type t := t
 
   val length : t -> int64
-
   val parents : t -> hash list
-
   val tree : t -> hash
-
   val committer : t -> User.t
-
   val author : t -> User.t
-
   val message : t -> string
-
   val extra : t -> (string * string list) list
-
   val compare_by_date : t -> t -> int
 end
 
@@ -101,7 +92,7 @@ module Make (Hash : S.HASH) = struct
           let parents = List.map snd parents in
           { tree; parents; author; committer; extra; message })
         ~bwd:(fun { tree; parents; author; committer; extra; message } ->
-          let parents = List.map (fun x -> ("parent", x)) parents in
+          let parents = List.map (fun x -> "parent", x) parents in
           ( ("tree", tree),
             parents,
             ("author", author),
@@ -110,9 +101,7 @@ module Make (Hash : S.HASH) = struct
             message ))
 
     let is_not_sp chr = chr <> ' '
-
     let is_not_lf chr = chr <> '\x0a'
-
     let always x _ = x
 
     let rest =
@@ -144,7 +133,8 @@ module Make (Hash : S.HASH) = struct
     let binding ?key value =
       let open Encore.Syntax in
       let value =
-        value <$> (while1 is_not_lf <* (Encore.Bij.char '\x0a' <$> any)) in
+        value <$> (while1 is_not_lf <* (Encore.Bij.char '\x0a' <$> any))
+      in
       match key with
       | Some key -> const key <* (Encore.Bij.char ' ' <$> any) <*> value
       | None -> while1 is_not_sp <* (Encore.Bij.char ' ' <$> any) <*> value
@@ -170,13 +160,16 @@ module Make (Hash : S.HASH) = struct
       List.fold_left
         (fun acc _ ->
           string "parent" + 1L + Int64.of_int (Hash.digest_size * 2) + 1L + acc)
-        0L t.parents in
+        0L t.parents
+    in
     let values l =
       let rec go a = function
         | [] -> 1L + a
         | [ x ] -> string x + 1L + a
-        | x :: r -> go (string x + 2L + a) r in
-      go 0L l in
+        | x :: r -> go (string x + 2L + a) r
+      in
+      go 0L l
+    in
     string "tree"
     + 1L
     + Int64.of_int (Hash.digest_size * 2)
@@ -222,19 +215,12 @@ module Make (Hash : S.HASH) = struct
       value
 
   let equal = ( = )
-
   let hash = Hashtbl.hash
-
   let parents { parents; _ } = parents
-
   let tree { tree; _ } = tree
-
   let committer { committer; _ } = committer
-
   let author { author; _ } = author
-
   let message { message; _ } = message
-
   let extra { extra; _ } = extra
 
   let compare_by_date a b =

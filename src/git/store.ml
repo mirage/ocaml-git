@@ -23,13 +23,10 @@ module Log = (val Logs.src_log src : Logs.LOG)
 
 module type Rs = sig
   type +'a fiber
-
   type t
-
   type error
 
   val pp_error : error Fmt.t
-
   val atomic_wr : t -> Reference.t -> string -> (unit, error) result fiber
 
   (* open / single_write / close *)
@@ -40,7 +37,6 @@ module type Rs = sig
 
   (* unlink *)
   val list : t -> Reference.t list fiber
-
   val reset : t -> (unit, error) result fiber
 
   (* readdir / closedir *)
@@ -80,10 +76,7 @@ module Make
 struct
   module Hash = Hash.Make (Digestif)
   module Value = Value.Make (Hash)
-
-  module Caml_scheduler = Carton.Make (struct
-    type 'a t = 'a
-  end)
+  module Caml_scheduler = Carton.Make (struct type 'a t = 'a end)
 
   module Reference = struct
     type hash = Hash.t
@@ -91,7 +84,7 @@ struct
     include (
       Reference :
         module type of Reference
-          with type 'uid contents := 'uid Reference.contents)
+          with type 'uid contents := 'uid Reference.contents )
 
     type contents = hash Reference.contents
   end
@@ -102,7 +95,6 @@ struct
   module Pack = Carton_git.Make (Carton_lwt.Scheduler) (Lwt) (Mj) (Hash)
 
   let has_global_watches = true
-
   let has_global_checkout = true
 
   type t = {
@@ -111,8 +103,8 @@ struct
     major_uid : (hash, Mj.uid, Mj.t) major;
     packs : (Mj.uid, < rd : unit > Mj.fd, Hash.t) Carton_git.t;
     pools :
-      ((< rd : unit > Mj.fd * int64)
-      * (< rd : unit > Mj.fd * int64) Carton_git.buffers Lwt_pool.t)
+      ( (< rd : unit > Mj.fd * int64)
+      * (< rd : unit > Mj.fd * int64) Carton_git.buffers Lwt_pool.t )
       list;
     buffs : buffers Lwt_pool.t;
     rs : Rs.t;
@@ -122,7 +114,6 @@ struct
   }
 
   let root { root; _ } = root
-
   let dotgit { dotgit; _ } = dotgit
 
   let v ~dotgit ~minor ~major ~major_uid ?(packed = []) ~refs root =
@@ -138,8 +129,10 @@ struct
           let w = De.make_window ~bits:15 in
           let allocate _ = w in
           let w = Carton.Dec.W.make fd in
-          Lwt.return { Carton_git.z; allocate; w } ) in
-      List.map fold fds in
+          Lwt.return { Carton_git.z; allocate; w } )
+      in
+      List.map fold fds
+    in
     let buffs =
       Lwt_pool.create 12 @@ fun () ->
       let buffers =
@@ -149,10 +142,12 @@ struct
           i = Bigstringaf.create De.io_buffer_size;
           o = Bigstringaf.create De.io_buffer_size;
           hdr = Cstruct.create 30;
-        } in
-      Lwt.return buffers in
+        }
+      in
+      Lwt.return buffers
+    in
     let rs = refs in
-    Log.debug (fun m -> m "%d packed-refs added.\n%!" (List.length packed)) ;
+    Log.debug (fun m -> m "%d packed-refs added.\n%!" (List.length packed));
     let refs =
       {
         atomic_wr =
@@ -163,7 +158,8 @@ struct
         uid_of_hex = Hash.of_hex_opt;
         uid_to_hex = Hash.to_hex;
         packed;
-      } in
+      }
+    in
     Lwt.return
       { minor; major; major_uid; packs; pools; buffs; rs; refs; root; dotgit }
 
@@ -193,7 +189,7 @@ struct
   let resources { pools; _ } fd = Lwt_pool.use (List.assoc fd pools)
 
   let read_inflated t hash =
-    Log.debug (fun l -> l "Git.read %a" Hash.pp hash) ;
+    Log.debug (fun l -> l "Git.read %a" Hash.pp hash);
     Pack.get t.major ~resources:(resources t) t.packs hash >>= function
     | Ok v -> Lwt.return_some v
     | Error (`Msg _) -> Lwt.return_none
@@ -204,12 +200,12 @@ struct
         | Error `Non_atomic -> (
             Loose.get t.minor buffers hash >>= function
             | Ok v -> Lwt.return_some v
-            | Error _ -> Lwt.return_none))
+            | Error _ -> Lwt.return_none ) )
 
   let read t hash =
     read_inflated t hash >>= function
     | None ->
-        Log.err (fun m -> m "Object %a not found." Hash.pp hash) ;
+        Log.err (fun m -> m "Object %a not found." Hash.pp hash);
         Lwt.return_error (`Not_found hash)
     | Some v ->
         let kind =
@@ -217,7 +213,8 @@ struct
           | `A -> `Commit
           | `B -> `Tree
           | `C -> `Blob
-          | `D -> `Tag in
+          | `D -> `Tag
+        in
         let raw =
           Cstruct.of_bigarray (Carton.Dec.raw v) ~off:0 ~len:(Carton.Dec.len v)
         in
@@ -236,13 +233,13 @@ struct
     let raw = Bigstringaf.sub raw ~off:0 ~len in
     let pos = { contents = 0 } in
     let stream () =
-      if !pos = len
-      then Lwt.return_none
+      if !pos = len then Lwt.return_none
       else
         let len = min (len - !pos) chunk in
         let str = Bigstringaf.substring raw ~off:!pos ~len in
-        pos := !pos + len ;
-        Lwt.return_some str in
+        pos := !pos + len;
+        Lwt.return_some str
+    in
     stream
 
   let write t v =
@@ -263,12 +260,13 @@ struct
           | Commit _ -> `Commit
           | Tree _ -> `Tree
           | Blob _ -> `Blob
-          | Tag _ -> `Tag in
+          | Tag _ -> `Tag
+        in
         let length = Int64.of_int (Carton.Dec.len raw) in
         let stream = stream_of_raw raw in
         Loose.add t.minor buffers (kind, length) stream >>= function
         | Ok _ as v -> Lwt.return v
-        | Error (`Store err) -> Lwt.return_error (`Minor err))
+        | Error (`Store err) -> Lwt.return_error (`Minor err) )
 
   let read_inflated t hash =
     read_inflated t hash >>= function
@@ -278,7 +276,8 @@ struct
           | `A -> `Commit
           | `B -> `Tree
           | `C -> `Blob
-          | `D -> `Tag in
+          | `D -> `Tag
+        in
         let raw =
           Cstruct.of_bigarray (Carton.Dec.raw v) ~off:0 ~len:(Carton.Dec.len v)
         in
@@ -300,19 +299,18 @@ struct
     | Error `Non_atomic -> (
         let consumed = Stdlib.ref false in
         let stream () =
-          if !consumed
-          then Lwt.return_none
+          if !consumed then Lwt.return_none
           else (
-            consumed := true ;
-            Lwt.return_some (Bigstringaf.to_string raw)) in
+            consumed := true;
+            Lwt.return_some (Bigstringaf.to_string raw) )
+        in
         Loose.add t.minor buffers (kind, Int64.of_int len) stream >>= function
         | Ok (hash, _) -> Lwt.return hash
         | Error (`Store err) ->
-            Lwt.fail (Failure (Fmt.strf "%a" pp_error (`Minor err))))
+            Lwt.fail (Failure (Fmt.strf "%a" pp_error (`Minor err))) )
 
   let mem t hash =
-    if not (Pack.exists t.major t.packs hash)
-    then Loose.exists t.minor hash
+    if not (Pack.exists t.major t.packs hash) then Loose.exists t.minor hash
     else Lwt.return true
 
   let list t =
@@ -320,8 +318,7 @@ struct
     Loose.list t.minor >|= List.rev_append l0
 
   let size t hash =
-    if Pack.exists t.major t.packs hash
-    then
+    if Pack.exists t.major t.packs hash then
       Pack.get t.major ~resources:(resources t) t.packs hash >>= function
       | Ok v -> Lwt.return_ok (Int64.of_int (Carton.Dec.len v))
       | Error _ as err -> Lwt.return err
@@ -333,7 +330,7 @@ struct
 
   let contents t =
     list t >>= fun hashes ->
-    Lwt_list.map_p (fun hash -> read_exn t hash >|= fun v -> (hash, v)) hashes
+    Lwt_list.map_p (fun hash -> read_exn t hash >|= fun v -> hash, v) hashes
 
   module Traverse = Traverse_bfs.Make (struct
     module Hash = Hash
@@ -342,12 +339,10 @@ struct
     type nonrec t = t
 
     let root { root; _ } = root
-
     let read_exn = read_exn
   end)
 
   let fold = Traverse.fold
-
   let iter = Traverse.iter
 
   let ( >>? ) x f =
@@ -360,7 +355,8 @@ struct
     let rec save stream fd =
       stream () >>= function
       | Some str -> Mj.append t.major fd str >>= fun () -> save stream fd
-      | None -> Mj.close t.major fd in
+      | None -> Mj.close t.major fd
+    in
     Mj.create ~mode:Mj.Wr t.major mj_pck_uid
     >>? save pck
     >>? (fun () ->
@@ -382,41 +378,42 @@ struct
     let list t =
       let lst = Rs.list t.rs in
       let fold acc refname =
-        Log.debug (fun m -> m "Resolve %a." Reference.pp refname) ;
+        Log.debug (fun m -> m "Resolve %a." Reference.pp refname);
         let res = prj (Reference.resolve caml_scheduler t.rs t.refs refname) in
         match res with
         | Ok uid -> (refname, uid) :: acc
         | Error (`Not_found refname) ->
-            Log.warn (fun m -> m "Reference %a not found." Reference.pp refname) ;
+            Log.warn (fun m -> m "Reference %a not found." Reference.pp refname);
             acc
         | Error `Cycle ->
-            Log.warn (fun m -> m "Got a cycle with %a." Reference.pp refname) ;
-            acc in
+            Log.warn (fun m -> m "Got a cycle with %a." Reference.pp refname);
+            acc
+      in
       let res = List.fold_left fold [] lst in
       Lwt.return res
 
     let mem t refname =
-      Log.debug (fun m -> m "Check reference %a." Reference.pp refname) ;
+      Log.debug (fun m -> m "Check reference %a." Reference.pp refname);
       let res = Rs.atomic_rd t.rs refname in
       match res with
       | Ok _ -> Lwt.return true
       | _ ->
           let res = Packed.exists refname t.refs.packed in
           Log.debug (fun m ->
-              m "%a exists as packed-ref: %b" Reference.pp refname res) ;
+              m "%a exists as packed-ref: %b" Reference.pp refname res);
           Lwt.return res
 
     let read t refname =
-      Log.debug (fun m -> m "Read reference %a." Reference.pp refname) ;
+      Log.debug (fun m -> m "Read reference %a." Reference.pp refname);
       let res = prj (Reference.read caml_scheduler t.rs t.refs refname) in
       match res with
       | Ok _ as v -> Lwt.return v
       | Error (`Not_found refname) ->
-          Log.err (fun m -> m "Reference %a not found." Reference.pp refname) ;
+          Log.err (fun m -> m "Reference %a not found." Reference.pp refname);
           Lwt.return_error (`Reference_not_found refname)
 
     let resolve t refname =
-      Log.debug (fun m -> m "Resolve reference %a." Reference.pp refname) ;
+      Log.debug (fun m -> m "Resolve reference %a." Reference.pp refname);
       let res = prj (Reference.resolve caml_scheduler t.rs t.refs refname) in
       match res with
       | Ok _ as v -> Lwt.return v
@@ -426,7 +423,8 @@ struct
 
     let write t refname contents =
       let res =
-        prj (Reference.write caml_scheduler t.rs t.refs refname contents) in
+        prj (Reference.write caml_scheduler t.rs t.refs refname contents)
+      in
       match res with
       | Ok _ as v -> Lwt.return v
       | Error (`Store err) -> Lwt.return_error (`Ref err)
@@ -434,15 +432,14 @@ struct
     let remove t refname =
       let res = Rs.atomic_rm t.rs refname in
       let res = Rresult.R.reword_error (fun err -> `Ref err) res in
-      if Packed.exists refname t.refs.packed
-      then (
-        t.refs <- { t.refs with packed = Packed.remove refname t.refs.packed } ;
-        Lwt.return res)
+      if Packed.exists refname t.refs.packed then (
+        t.refs <- { t.refs with packed = Packed.remove refname t.refs.packed };
+        Lwt.return res )
       else Lwt.return res
   end
 
   let reset t =
-    Log.info (fun m -> m "Reset store %a." Fpath.pp t.root) ;
+    Log.info (fun m -> m "Reset store %a." Fpath.pp t.root);
     Mn.reset t.minor >|= Rresult.R.reword_error (fun err -> `Minor err)
     >>? fun () ->
     Mj.reset t.major >|= Rresult.R.reword_error (fun err -> `Major err)

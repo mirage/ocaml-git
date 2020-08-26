@@ -1,7 +1,6 @@
 type decoder = { buffer : Bytes.t; mutable pos : int; mutable max : int }
 
 let io_buffer_size = 65536
-
 let decoder () = { buffer = Bytes.create io_buffer_size; pos = 0; max = 0 }
 
 let decoder_from x =
@@ -61,8 +60,8 @@ let safe :
 let end_of_input decoder = decoder.max
 
 let peek_char decoder =
-  if decoder.pos < end_of_input decoder
-  then Some (Bytes.unsafe_get decoder.buffer decoder.pos)
+  if decoder.pos < end_of_input decoder then
+    Some (Bytes.unsafe_get decoder.buffer decoder.pos)
   else None
 
 (* XXX(dinosaure): in [angstrom] world, [peek_char] should try to read input
@@ -87,14 +86,12 @@ let string str decoder =
          (String.unsafe_get str !idx)
   do
     incr idx
-  done ;
-  if !idx = len
-  then decoder.pos <- decoder.pos + len
+  done;
+  if !idx = len then decoder.pos <- decoder.pos + len
   else leave_with decoder (`Expected_string str)
 
 let junk_char decoder =
-  if decoder.pos < end_of_input decoder
-  then decoder.pos <- decoder.pos + 1
+  if decoder.pos < end_of_input decoder then decoder.pos <- decoder.pos + 1
   else leave_with decoder `End_of_input
 
 let while1 predicate decoder =
@@ -104,12 +101,12 @@ let while1 predicate decoder =
     && predicate (Bytes.unsafe_get decoder.buffer !idx)
   do
     incr idx
-  done ;
-  if !idx - decoder.pos = 0
-  then leave_with decoder (`Assert_predicate predicate) ;
-  let sub = (decoder.buffer, decoder.pos, !idx - decoder.pos) in
+  done;
+  if !idx - decoder.pos = 0 then
+    leave_with decoder (`Assert_predicate predicate);
+  let sub = decoder.buffer, decoder.pos, !idx - decoder.pos in
   (* XXX(dinosaure): avoid sub-string operation. *)
-  decoder.pos <- !idx ;
+  decoder.pos <- !idx;
   sub
 
 let at_least_one_line decoder =
@@ -119,12 +116,12 @@ let at_least_one_line decoder =
   while
     !pos < decoder.max
     &&
-    (chr := Bytes.unsafe_get decoder.buffer !pos ;
-     not (!chr = '\n' && !has_cr))
+    ( chr := Bytes.unsafe_get decoder.buffer !pos;
+      not (!chr = '\n' && !has_cr) )
   do
-    has_cr := !chr = '\r' ;
+    has_cr := !chr = '\r';
     incr pos
-  done ;
+  done;
   !pos < decoder.max && !chr = '\n' && !has_cr
 
 let digit = function
@@ -137,15 +134,14 @@ let to_int ~base ~off ~len buf =
   let code = ref 0 in
   for i = 0 to len - 1 do
     let v = digit (Bytes.get buf (off + i)) in
-    assert (v < base) ;
+    assert (v < base);
     code := (base * !code) + v
-  done ;
+  done;
   !code
 
 let at_least_one_pkt decoder =
   let len = decoder.max - decoder.pos in
-  if len >= 4
-  then
+  if len >= 4 then
     let pkt_len = to_int ~base:16 ~off:decoder.pos ~len:4 decoder.buffer in
     len - pkt_len >= 0
   else false
@@ -154,8 +150,7 @@ let at_least_one_pkt decoder =
 
 let get_pkt_len decoder =
   let len = decoder.max - decoder.pos in
-  if len >= 4
-  then
+  if len >= 4 then
     let pkt_len = to_int ~base:16 ~off:decoder.pos ~len:4 decoder.buffer in
     Some pkt_len
   else None
@@ -198,12 +193,12 @@ let reliable_pkt k decoder () =
   match get_pkt_len decoder with
   | Some _len ->
       let hdr = Fmt.strf "%04X" (decoder.max - decoder.pos) in
-      Bytes.blit_string hdr 0 decoder.buffer decoder.pos 4 ;
+      Bytes.blit_string hdr 0 decoder.buffer decoder.pos 4;
       (* unsafe! *)
       k decoder
   | None ->
-      Bytes.blit_string "0000" 0 decoder.buffer decoder.pos 4 ;
-      decoder.max <- decoder.pos + 4 ;
+      Bytes.blit_string "0000" 0 decoder.buffer decoder.pos 4;
+      decoder.max <- decoder.pos + 4;
       k decoder
 
 let prompt :
@@ -212,18 +207,18 @@ let prompt :
     decoder ->
     ('v, 'err) state =
  fun ?(strict = true) k decoder ->
-  if decoder.pos > 0
-  then (
+  if decoder.pos > 0 then (
     (* XXX(dinosaure): compress *)
     let rest = decoder.max - decoder.pos in
-    Bytes.unsafe_blit decoder.buffer decoder.pos decoder.buffer 0 rest ;
-    decoder.max <- rest ;
-    decoder.pos <- 0) ;
+    Bytes.unsafe_blit decoder.buffer decoder.pos decoder.buffer 0 rest;
+    decoder.max <- rest;
+    decoder.pos <- 0 );
   let rec go off =
     try
-      if off = Bytes.length decoder.buffer
-         && decoder.pos > 0
-         && not (at_least_one_pkt { decoder with max = off })
+      if
+        off = Bytes.length decoder.buffer
+        && decoder.pos > 0
+        && not (at_least_one_pkt { decoder with max = off })
       then
         Error
           {
@@ -231,9 +226,10 @@ let prompt :
             buffer = decoder.buffer;
             committed = decoder.pos;
           }
-      else if not (at_least_one_pkt { decoder with max = off })
-              (* XXX(dinosaure): we make a new decoder here and we did __not__ set
-                 [decoder.max] owned by end-user, and this is exactly what we want. *)
+      else if
+        not (at_least_one_pkt { decoder with max = off })
+        (* XXX(dinosaure): we make a new decoder here and we did __not__ set
+           [decoder.max] owned by end-user, and this is exactly what we want. *)
       then
         Read
           {
@@ -242,15 +238,14 @@ let prompt :
             len = Bytes.length decoder.buffer - off;
             continue = (fun len -> go (off + len));
             eof =
-              (if strict
-              then error_end_of_input decoder (* fail *)
+              ( if strict then error_end_of_input decoder (* fail *)
               else (
-                decoder.max <- off ;
-                reliable_pkt k decoder));
+                decoder.max <- off;
+                reliable_pkt k decoder ) );
           }
       else (
-        decoder.max <- off ;
-        safe k decoder)
+        decoder.max <- off;
+        safe k decoder )
     with
     | _exn (* XXX(dinosaure): [at_least_one_pkt] can raise an exception. *) ->
       Error
@@ -258,19 +253,18 @@ let prompt :
           error = `Invalid_pkt_line;
           buffer = decoder.buffer;
           committed = decoder.pos;
-        } in
+        }
+  in
   go decoder.max
 
 let peek_pkt decoder =
   let len = to_int ~base:16 ~off:decoder.pos ~len:4 decoder.buffer in
-  if len >= 4
-  then (decoder.buffer, decoder.pos + 4, len - 4)
-  else (decoder.buffer, decoder.pos + 4, 0)
+  if len >= 4 then decoder.buffer, decoder.pos + 4, len - 4
+  else decoder.buffer, decoder.pos + 4, 0
 
 let junk_pkt decoder =
   let len = to_int ~base:16 ~off:decoder.pos ~len:4 decoder.buffer in
-  if len < 4
-  then decoder.pos <- decoder.pos + 4
+  if len < 4 then decoder.pos <- decoder.pos + 4
   else decoder.pos <- decoder.pos + len
 
 let peek_while_eol decoder =
@@ -281,17 +275,16 @@ let peek_while_eol decoder =
   while
     !idx < end_of_input decoder
     &&
-    (chr := Bytes.unsafe_get decoder.buffer !idx ;
-     not (!chr == '\n' && !has_cr))
+    ( chr := Bytes.unsafe_get decoder.buffer !idx;
+      not (!chr == '\n' && !has_cr) )
   do
-    has_cr := !chr == '\r' ;
+    has_cr := !chr == '\r';
     incr idx
-  done ;
+  done;
 
-  if !idx < end_of_input decoder && !chr == '\n' && !has_cr
-  then (
-    assert (!idx + 1 - decoder.pos > 1) ;
-    (decoder.buffer, decoder.pos, !idx + 1 - decoder.pos))
+  if !idx < end_of_input decoder && !chr == '\n' && !has_cr then (
+    assert (!idx + 1 - decoder.pos > 1);
+    decoder.buffer, decoder.pos, !idx + 1 - decoder.pos )
   else leave_with decoder `Expected_eol
 
 let peek_while_eol_or_space decoder =
@@ -302,13 +295,13 @@ let peek_while_eol_or_space decoder =
   while
     !idx < end_of_input decoder
     &&
-    (chr := Bytes.unsafe_get decoder.buffer !idx ;
-     (not (!chr = '\n' && !has_cr)) && !chr <> ' ')
+    ( chr := Bytes.unsafe_get decoder.buffer !idx;
+      (not (!chr = '\n' && !has_cr)) && !chr <> ' ' )
   do
-    has_cr := !chr = '\r' ;
+    has_cr := !chr = '\r';
     incr idx
-  done ;
+  done;
 
   if !idx < end_of_input decoder && ((!chr = '\n' && !has_cr) || !chr = ' ')
-  then (decoder.buffer, decoder.pos, !idx + 1 - decoder.pos)
+  then decoder.buffer, decoder.pos, !idx + 1 - decoder.pos
   else leave_with decoder `Expected_eol_or_space

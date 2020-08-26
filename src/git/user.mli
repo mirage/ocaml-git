@@ -16,11 +16,9 @@
  *)
 
 type tz_offset = { sign : [ `Plus | `Minus ]; hours : int; minutes : int }
-
 type t = { name : string; email : string; date : int64 * tz_offset option }
 
 include S.BASE with type t := t
 
 val format : t Encore.t
-
 val length : t -> int64

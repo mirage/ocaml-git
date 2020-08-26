@@ -1,6 +1,4 @@
-module Us = Carton.Make (struct
-  type 'a t = 'a
-end)
+module Us = Carton.Make (struct type 'a t = 'a end)
 
 let unix =
   {
@@ -9,16 +7,13 @@ let unix =
   }
 
 let z = Bigstringaf.create De.io_buffer_size
-
 let allocate bits = De.make_window ~bits
-
 let o = Bigstringaf.create De.io_buffer_size
 
 let map payload ~pos len =
-  if pos < 0L
-  then Us.inj Bigstringaf.empty
-  else if pos >= Int64.of_int (Bigstringaf.length payload)
-  then Us.inj Bigstringaf.empty
+  if pos < 0L then Us.inj Bigstringaf.empty
+  else if pos >= Int64.of_int (Bigstringaf.length payload) then
+    Us.inj Bigstringaf.empty
   else
     let max = Int64.sub (Int64.of_int (Bigstringaf.length payload)) pos in
     let len = min (Int64.of_int len) max in
@@ -32,7 +27,8 @@ let () =
   let t =
     Carton.Dec.make payload ~z ~allocate ~uid_ln:20
       ~uid_rw:(fun x -> x)
-      (fun _ -> assert false) in
+      (fun _ -> assert false)
+  in
   let kind, length, _pos, _slice =
     Us.prj
       (Carton.Dec.header_of_entry unix ~map t pos
@@ -40,7 +36,8 @@ let () =
            Carton.Dec.W.payload;
            offset = pos;
            length = Bigstringaf.length payload;
-         }) in
+         })
+  in
   ignore @@ (kind, length)
 
 let () =
@@ -54,7 +51,8 @@ let () =
   let t =
     Carton.Dec.make payload ~z ~allocate ~uid_ln:20
       ~uid_rw:(fun x -> x)
-      (fun _ -> assert false) in
+      (fun _ -> assert false)
+  in
   let kind', length', _pos, _slice =
     Us.prj
       (Carton.Dec.header_of_entry unix ~map t 0L
@@ -62,6 +60,7 @@ let () =
            Carton.Dec.W.payload;
            offset = 0L;
            length = Bigstringaf.length payload;
-         }) in
-  Crowbar.check_eq ~pp:Fmt.int kind kind' ;
+         })
+  in
+  Crowbar.check_eq ~pp:Fmt.int kind kind';
   Crowbar.check_eq ~pp:Fmt.int length length'

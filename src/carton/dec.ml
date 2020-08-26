@@ -5,7 +5,7 @@ open Sigs
 let input_bigstring ic buf off len =
   let tmp = Bytes.create len in
   let len = input ic tmp 0 len in
-  Bigstringaf.blit_from_bytes tmp ~src_off:0 buf ~dst_off:off ~len ;
+  Bigstringaf.blit_from_bytes tmp ~src_off:0 buf ~dst_off:off ~len;
   len
 
 module Idx = Idx
@@ -14,7 +14,6 @@ type ('fd, 's) read = 'fd -> bytes -> off:int -> len:int -> (int, 's) io
 
 module Fp (Uid : UID) = struct
   type src = [ `Channel of in_channel | `String of string | `Manual ]
-
   type optint = Optint.t
 
   type nonrec kind =
@@ -90,26 +89,18 @@ module Fp (Uid : UID) = struct
     | _ -> entry
 
   let i_rem d = d.i_len - d.i_pos + 1
-
   let number { n; _ } = n
-
   let version { v; _ } = v
-
   let count { c; _ } = c
-
   let is_inflate = function Inflate _ -> true | _ -> false
-
   let src_rem = i_rem
-
   let eoi d = { d with i = Bigstringaf.empty; i_pos = 0; i_len = min_int }
-
   let malformedf fmt = Fmt.kstrf (fun err -> `Malformed err) fmt
 
   let src d s j l =
-    if j < 0 || l < 0 || j + l > Bigstringaf.length s
-    then Fmt.invalid_arg "Source out of bounds" ;
-    if l == 0
-    then eoi d
+    if j < 0 || l < 0 || j + l > Bigstringaf.length s then
+      Fmt.invalid_arg "Source out of bounds";
+    if l == 0 then eoi d
     else
       let z = if is_inflate d.s then Zl.Inf.src d.z s j l else d.z in
       { d with i = s; i_pos = j; i_len = j + l - 1; z }
@@ -128,49 +119,44 @@ module Fp (Uid : UID) = struct
     | `Channel ic ->
         let rem = i_rem d in
 
-        if rem < d.t_peek
-        then (
-          Bigstringaf.blit d.i ~src_off:d.i_pos d.i ~dst_off:0 ~len:rem ;
+        if rem < d.t_peek then (
+          Bigstringaf.blit d.i ~src_off:d.i_pos d.i ~dst_off:0 ~len:rem;
           (* compress *)
           let res = input_bigstring ic d.i rem (Bigstringaf.length d.i - rem) in
-          peek k (src d d.i 0 (rem + res)))
+          peek k (src d d.i 0 (rem + res)) )
         else k d
     | `Manual ->
         let rem = i_rem d in
 
-        if rem < d.t_peek
-        then (
-          Bigstringaf.blit d.i ~src_off:d.i_pos d.i ~dst_off:0 ~len:rem ;
+        if rem < d.t_peek then (
+          Bigstringaf.blit d.i ~src_off:d.i_pos d.i ~dst_off:0 ~len:rem;
           (* compress *)
-          `Peek { d with k = peek k; i_pos = 0; i_len = rem - 1 })
+          `Peek { d with k = peek k; i_pos = 0; i_len = rem - 1 } )
         else k d
 
   let t_need d n = { d with t_need = n }
-
   let t_peek d n = { d with t_peek = n }
 
   let rec t_fill k d =
     let blit d len =
-      Bigstringaf.blit d.i ~src_off:d.i_pos d.t_tmp ~dst_off:d.t_len ~len ;
+      Bigstringaf.blit d.i ~src_off:d.i_pos d.t_tmp ~dst_off:d.t_len ~len;
       {
         d with
         i_pos = d.i_pos + len;
         r = Int64.add d.r (Int64.of_int len);
         t_len = d.t_len + len;
-      } in
+      }
+    in
     let rem = i_rem d in
-    if rem < 0
-    then malformedf "Unexpected end of input"
+    if rem < 0 then malformedf "Unexpected end of input"
     else
       let need = d.t_need - d.t_len in
 
       (* XXX(dinosaure): in the [`Manual] case, [i_pos = 1] and [blit] will fail where
          offset with an empty buffer raises an exception. We protect it by [rem = 0] and
          directly ask to refill inputs. *)
-      if rem = 0
-      then refill (t_fill k) d
-      else if rem < need
-      then
+      if rem = 0 then refill (t_fill k) d
+      else if rem < need then
         let d = blit d rem in
         refill (t_fill k) d
       else
@@ -184,22 +170,20 @@ module Fp (Uid : UID) = struct
 
     while
       let cmd = Char.code (Bigstringaf.get buf !p) in
-      incr p ;
-      len := !len lor ((cmd land 0x7f) lsl !i) ;
-      i := !i + 7 ;
+      incr p;
+      len := !len lor ((cmd land 0x7f) lsl !i);
+      i := !i + 7;
       cmd land 0x80 != 0 && !p <= top
     do
       ()
-    done ;
-    (!p - off, !len)
+    done;
+    !p - off, !len
 
   external get_int32 : bytes -> int -> int32 = "%caml_bytes_get32"
-
   external swap32 : int32 -> int32 = "%bswap_int32"
 
   let get_int32_be =
-    if Sys.big_endian
-    then fun buf off -> get_int32 buf off
+    if Sys.big_endian then fun buf off -> get_int32 buf off
     else fun buf off -> swap32 (get_int32 buf off)
 
   let check_header :
@@ -209,30 +193,29 @@ module Fp (Uid : UID) = struct
     let ( >>= ) = bind in
     let tmp = Bytes.create 12 in
     read fd tmp ~off:0 ~len:12 >>= fun len ->
-    if len < 12 then Fmt.invalid_arg "Invalid PACK file" ;
+    if len < 12 then Fmt.invalid_arg "Invalid PACK file";
     let h = get_int32_be tmp 0 in
     let v = get_int32_be tmp 4 in
     let n = get_int32_be tmp 8 in
-    if h <> 0x5041434bl
-    then Fmt.invalid_arg "Invalid PACK file (header: %lx <> %lx)" h 0x5041434bl ;
-    if v <> 0x2l then Fmt.invalid_arg "Invalid version of PACK file" ;
+    if h <> 0x5041434bl then
+      Fmt.invalid_arg "Invalid PACK file (header: %lx <> %lx)" h 0x5041434bl;
+    if v <> 0x2l then Fmt.invalid_arg "Invalid version of PACK file";
     return (Int32.to_int n, Bytes.unsafe_to_string tmp, len)
 
   let rec decode d =
     match d.s with
     | Header ->
         let refill_12 k d =
-          if i_rem d >= 12
-          then
+          if i_rem d >= 12 then
             k d.i d.i_pos { d with i_pos = d.i_pos + 12; r = Int64.add d.r 12L }
-          else t_fill (k d.t_tmp 0) (t_need d 12) in
+          else t_fill (k d.t_tmp 0) (t_need d 12)
+        in
         let k buf off d =
           let _ = Bigstringaf.get_int32_be buf off in
           let v = Bigstringaf.get_int32_be buf (off + 4) |> Int32.to_int in
           let n = Bigstringaf.get_int32_be buf (off + 8) |> Int32.to_int in
-          if v <> 2 then Fmt.invalid_arg "Carton handles only PACKv2" ;
-          if d.c == n
-          then
+          if v <> 2 then Fmt.invalid_arg "Carton handles only PACKv2";
+          if d.c == n then
             decode
               {
                 d with
@@ -251,7 +234,8 @@ module Fp (Uid : UID) = struct
                 s = Entry;
                 k = decode;
                 ctx = Uid.feed d.ctx buf ~off ~len:12;
-              } in
+              }
+        in
         refill_12 k d
     | Entry ->
         (* TODO(dinosaure): we need something more robust than [15] where when it's not
@@ -279,7 +263,8 @@ module Fp (Uid : UID) = struct
               size;
               consumed = 0;
               crc;
-            } in
+            }
+          in
 
           decode
             {
@@ -290,20 +275,21 @@ module Fp (Uid : UID) = struct
               s = Inflate e;
               k = decode;
               ctx = Uid.feed d.ctx d.i ~off:anchor ~len:(d.i_pos - anchor);
-            } in
+            }
+        in
 
         let k_ofs_header crc offset size d =
           let p = ref d.i_pos in
           let c = ref (Char.code (Bigstringaf.get d.i !p)) in
-          incr p ;
+          incr p;
           let base_offset = ref (!c land 127) in
 
           while !c land 128 != 0 do
-            incr base_offset ;
-            c := Char.code (Bigstringaf.get d.i !p) ;
-            incr p ;
+            incr base_offset;
+            c := Char.code (Bigstringaf.get d.i !p);
+            incr p;
             base_offset := (!base_offset lsl 7) + (!c land 127)
-          done ;
+          done;
 
           let z = Zl.Inf.reset d.z in
           let z = Zl.Inf.src z d.i !p (i_rem { d with i_pos = !p }) in
@@ -317,7 +303,8 @@ module Fp (Uid : UID) = struct
               size;
               consumed = 0;
               crc;
-            } in
+            }
+          in
 
           decode
             {
@@ -329,22 +316,23 @@ module Fp (Uid : UID) = struct
               s = Inflate e;
               k = decode;
               ctx = Uid.feed d.ctx d.i ~off:d.i_pos ~len:(!p - d.i_pos);
-            } in
+            }
+        in
 
         let k_header d =
           let p = ref d.i_pos in
           let c = ref (Char.code (Bigstringaf.get d.i !p)) in
-          incr p ;
+          incr p;
           let kind = (!c asr 4) land 7 in
           let size = ref (!c land 15) in
           let shft = ref 4 in
 
           while !c land 0x80 != 0 do
-            c := Char.code (Bigstringaf.get d.i !p) ;
-            incr p ;
-            size := !size + ((!c land 0x7f) lsl !shft) ;
+            c := Char.code (Bigstringaf.get d.i !p);
+            incr p;
+            size := !size + ((!c land 0x7f) lsl !shft);
             shft := !shft + 7
-          done ;
+          done;
 
           match kind with
           | 0b000 | 0b101 -> malformedf "Invalid type"
@@ -357,10 +345,12 @@ module Fp (Uid : UID) = struct
                 | 0b010 -> `B
                 | 0b011 -> `C
                 | 0b100 -> `D
-                | _ -> assert false in
+                | _ -> assert false
+              in
               let crc =
                 Checkseum.Crc32.digest_bigstring d.i d.i_pos (!p - d.i_pos)
-                  Checkseum.Crc32.default in
+                  Checkseum.Crc32.default
+              in
               let e =
                 { offset = d.r; kind = Base k; size = !size; consumed = 0; crc }
               in
@@ -380,7 +370,8 @@ module Fp (Uid : UID) = struct
               let offset = d.r in
               let crc =
                 Checkseum.Crc32.digest_bigstring d.i d.i_pos (!p - d.i_pos)
-                  Checkseum.Crc32.default in
+                  Checkseum.Crc32.default
+              in
 
               peek_15
                 (k_ofs_header crc offset !size)
@@ -394,7 +385,8 @@ module Fp (Uid : UID) = struct
               let offset = d.r in
               let crc =
                 Checkseum.Crc32.digest_bigstring d.i d.i_pos (!p - d.i_pos)
-                  Checkseum.Crc32.default in
+                  Checkseum.Crc32.default
+              in
 
               peek_uid
                 (k_ref_header crc offset !size)
@@ -404,7 +396,8 @@ module Fp (Uid : UID) = struct
                   r = Int64.add d.r (Int64.of_int (!p - d.i_pos));
                   ctx = Uid.feed d.ctx d.i ~off:d.i_pos ~len:(!p - d.i_pos);
                 }
-          | _ -> assert false in
+          | _ -> assert false
+        in
         peek_15 k_header d
     | Inflate ({ kind = Base _; crc; _ } as entry) ->
         let rec go z =
@@ -436,14 +429,17 @@ module Fp (Uid : UID) = struct
                   s = (if d.c == d.n then Hash else Entry);
                   k = decode;
                   ctx = Uid.feed d.ctx d.i ~off:d.i_pos ~len;
-                } in
+                }
+              in
               let entry =
                 {
                   entry with
                   consumed = Int64.to_int (Int64.sub decoder.r entry.offset);
                   crc;
-                } in
-              `Entry (entry, decoder) in
+                }
+              in
+              `Entry (entry, decoder)
+        in
         go d.z
     | Inflate ({ kind = Ofs _ | Ref _; crc; _ } as entry) ->
         let source = ref (source entry) in
@@ -467,26 +463,24 @@ module Fp (Uid : UID) = struct
                   ctx = Uid.feed d.ctx d.i ~off:d.i_pos ~len;
                 }
           | `Flush z ->
-              if !first
-              then (
+              if !first then (
                 let len = Bigstringaf.length d.o - Zl.Inf.dst_rem z in
                 let x, src_len = variable_length d.o 0 len in
                 let _, dst_len = variable_length d.o x len in
-                source := src_len ;
-                target := dst_len ;
-                first := false) ;
+                source := src_len;
+                target := dst_len;
+                first := false );
 
               go (Zl.Inf.flush z)
           | `Malformed err -> `Malformed (Fmt.strf "inflate: %s" err)
           | `End z ->
-              if !first
-              then (
+              if !first then (
                 let len = Bigstringaf.length d.o - Zl.Inf.dst_rem z in
                 let x, src_len = variable_length d.o 0 len in
                 let _, dst_len = variable_length d.o x len in
-                source := src_len ;
-                target := dst_len ;
-                first := false) ;
+                source := src_len;
+                target := dst_len;
+                first := false );
 
               let len = i_rem d - Zl.Inf.src_rem z in
               let crc = Checkseum.Crc32.digest_bigstring d.i d.i_pos len crc in
@@ -500,36 +494,38 @@ module Fp (Uid : UID) = struct
                   s = (if d.c == d.n then Hash else Entry);
                   k = decode;
                   ctx = Uid.feed d.ctx d.i ~off:d.i_pos ~len;
-                } in
+                }
+              in
               let entry =
                 {
                   entry with
                   crc;
                   consumed = Int64.to_int (Int64.sub decoder.r entry.offset);
-                } in
+                }
+              in
               let entry = with_source !source entry in
               let entry = with_target !target entry in
-              `Entry (entry, decoder) in
+              `Entry (entry, decoder)
+        in
         go d.z
     | Hash ->
         let refill_uid k d =
-          if i_rem d >= Uid.length
-          then
+          if i_rem d >= Uid.length then
             k d.i d.i_pos
               {
                 d with
                 i_pos = d.i_pos + Uid.length;
                 r = Int64.add d.r (Int64.of_int Uid.length);
               }
-          else t_fill (k d.t_tmp 0) (t_need d Uid.length) in
+          else t_fill (k d.t_tmp 0) (t_need d Uid.length)
+        in
         let k buf off d =
           let expect =
             Uid.of_raw_string (Bigstringaf.substring buf ~off ~len:Uid.length)
           in
           let have = Uid.get d.ctx in
 
-          if Uid.equal expect have
-          then `End have
+          if Uid.equal expect have then `End have
           else malformedf "Unexpected hash: %a <> %a" Uid.pp expect Uid.pp have
         in
         refill_uid k d
@@ -539,12 +535,13 @@ module Fp (Uid : UID) = struct
   let decoder ~o ~allocate src =
     let i, i_pos, i_len =
       match src with
-      | `Manual -> (Bigstringaf.empty, 1, 0)
+      | `Manual -> Bigstringaf.empty, 1, 0
       | `String x ->
           ( Bigstringaf.of_string x ~off:0 ~len:(String.length x),
             0,
             String.length x - 1 )
-      | `Channel _ -> (Bigstringaf.create Zl.io_buffer_size, 1, 0) in
+      | `Channel _ -> Bigstringaf.create Zl.io_buffer_size, 1, 0
+    in
     {
       src;
       i;
@@ -576,13 +573,11 @@ module W = struct
   and ('fd, 's) map = 'fd -> pos:int64 -> int -> (Bigstringaf.t, 's) io
 
   let make fd = { cur = 0; w = Weak.create (0xffff + 1); m = 0xffff; fd }
-
   let reset { w; _ } = Weak.fill w 0 (Weak.length w) None
 
   (* XXX(dinosaure): memoization. *)
 
   let window_length = Int64.mul 1024L 1024L
-
   let length = window_length
 
   let heavy_load :
@@ -596,9 +591,10 @@ module W = struct
 
     map t.fd ~pos (1024 * 1024) >>= fun payload ->
     let slice =
-      Some { offset = pos; length = Bigstringaf.length payload; payload } in
-    Weak.set t.w (t.cur land 0xffff) slice ;
-    t.cur <- t.cur + 1 ;
+      Some { offset = pos; length = Bigstringaf.length payload; payload }
+    in
+    Weak.set t.w (t.cur land 0xffff) slice;
+    t.cur <- t.cur + 1;
     return slice
 
   let load :
@@ -611,18 +607,19 @@ module W = struct
       for i = 0 to Weak.length t.w - 1 do
         match Weak.get t.w i with
         | Some ({ offset; length; _ } as s) ->
-            if w >= offset
-               && (w < Int64.(add offset (of_int length)))
-               && (length - Int64.(to_int (sub w offset))) >= 20
-               (* XXX(dinosaure): when we want to load a new window, we need to see
-                  if we have, at least, 20 bytes between the given offset and the
-                  end of the window. Otherwise, we can return a window with 0 bytes
-                  available according the given offset. *)
+            if
+              w >= offset
+              && (w < Int64.(add offset (of_int length)))
+              && (length - Int64.(to_int (sub w offset))) >= 20
+              (* XXX(dinosaure): when we want to load a new window, we need to see
+                 if we have, at least, 20 bytes between the given offset and the
+                 end of the window. Otherwise, we can return a window with 0 bytes
+                 available according the given offset. *)
             then (
-              slice := Some s ;
-              raise_notrace Found)
+              slice := Some s;
+              raise_notrace Found )
         | None -> ()
-      done ;
+      done;
       heavy_load s ~map t w
     with Found -> return !slice
 end
@@ -637,11 +634,8 @@ type ('fd, 'uid) t = {
 }
 
 let with_z tmp t = { t with tmp }
-
 let with_w ws t = { t with ws }
-
 let with_allocate ~allocate t = { t with allocate }
-
 let fd { ws = { W.fd; _ }; _ } = fd
 
 let make :
@@ -694,7 +688,8 @@ let weight_of_delta :
             let decoder = Zh.M.src decoder slice.W.payload off len in
             (go [@tailcall])
               Int64.(add slice.W.offset (of_int slice.W.length))
-              decoder) in
+              decoder )
+  in
   let off = Int64.(to_int (sub cursor slice.W.offset)) in
   let len = slice.W.length - off in
   let decoder = Zh.M.src decoder slice.W.payload off len in
@@ -707,44 +702,45 @@ let header_of_ref_delta ({ bind; return } as s) ~map t cursor slice =
   let i_rem = !slice.W.length - !i_pos in
 
   let fiber =
-    if i_rem >= t.uid_ln
-    then return (fun () -> incr i_pos)
+    if i_rem >= t.uid_ln then return (fun () -> incr i_pos)
     else
       W.load s ~map t.ws Int64.(add !slice.W.offset (of_int !slice.W.length))
       >>= function
       | None -> assert false
       | Some next_slice ->
           let consume () =
-            incr i_pos ;
-            if !i_pos == !slice.W.length
-            then (
-              assert (!slice != next_slice) ;
+            incr i_pos;
+            if !i_pos == !slice.W.length then (
+              assert (!slice != next_slice);
               (i_pos :=
                  Int64.(
                    to_int
                      (sub
                         (add !slice.W.offset (of_int !slice.W.length))
-                        next_slice.W.offset))) ;
-              slice := next_slice) in
-          return consume in
+                        next_slice.W.offset)));
+              slice := next_slice )
+          in
+          return consume
+  in
   fiber >>= fun consume ->
   let uid =
-    if i_rem >= t.uid_ln
-    then (
+    if i_rem >= t.uid_ln then (
       let uid =
-        Bigstringaf.substring !slice.W.payload ~off:!i_pos ~len:t.uid_ln in
+        Bigstringaf.substring !slice.W.payload ~off:!i_pos ~len:t.uid_ln
+      in
       let uid = t.uid_rw uid in
       for _ = 0 to t.uid_ln - 1 do
         consume ()
-      done ;
-      uid)
+      done;
+      uid )
     else
       let uid = Bytes.create t.uid_ln in
       for i = 0 to t.uid_ln - 1 do
-        Bytes.unsafe_set uid i (Bigstringaf.get !slice.W.payload !i_pos) ;
+        Bytes.unsafe_set uid i (Bigstringaf.get !slice.W.payload !i_pos);
         consume ()
-      done ;
-      t.uid_rw (Bytes.unsafe_to_string uid) in
+      done;
+      t.uid_rw (Bytes.unsafe_to_string uid)
+  in
 
   return (uid, !i_pos, !slice)
 
@@ -755,37 +751,37 @@ let header_of_ofs_delta ({ bind; return } as s) ~map t cursor slice =
   let i_rem = !slice.W.length - !i_pos in
 
   let fiber =
-    if i_rem >= 10
-    then return (fun () -> incr i_pos)
+    if i_rem >= 10 then return (fun () -> incr i_pos)
     else
       W.load s ~map t.ws Int64.(add !slice.W.offset (of_int !slice.W.length))
       >>= function
       | None -> assert false
       | Some next_slice ->
           let consume () =
-            incr i_pos ;
-            if !i_pos == !slice.W.length
-            then (
-              assert (!slice != next_slice) ;
+            incr i_pos;
+            if !i_pos == !slice.W.length then (
+              assert (!slice != next_slice);
               (i_pos :=
                  Int64.(
                    to_int
                      (sub
                         (add !slice.W.offset (of_int !slice.W.length))
-                        next_slice.W.offset))) ;
-              slice := next_slice) in
-          return consume in
+                        next_slice.W.offset)));
+              slice := next_slice )
+          in
+          return consume
+  in
   fiber >>= fun consume ->
   let c = ref (Char.code (Bigstringaf.get !slice.W.payload !i_pos)) in
-  consume () ;
+  consume ();
   let base_offset = ref (!c land 127) in
 
   while !c land 128 != 0 do
-    incr base_offset ;
-    c := Char.code (Bigstringaf.get !slice.W.payload !i_pos) ;
-    consume () ;
+    incr base_offset;
+    c := Char.code (Bigstringaf.get !slice.W.payload !i_pos);
+    consume ();
     base_offset := (!base_offset lsl 7) + (!c land 127)
-  done ;
+  done;
 
   return (!base_offset, !i_pos, !slice)
 
@@ -796,40 +792,40 @@ let header_of_entry ({ bind; return } as s) ~map t cursor slice0 =
   let i_rem = !slice.W.length - !i_pos in
 
   let fiber =
-    if i_rem >= 10
-    then return (fun () -> incr i_pos)
+    if i_rem >= 10 then return (fun () -> incr i_pos)
     else
       W.load s ~map t.ws Int64.(add !slice.W.offset (of_int !slice.W.length))
       >>= function
       | None -> assert false
       | Some next_slice ->
           let consume () =
-            incr i_pos ;
-            if !i_pos == !slice.W.length
-            then (
-              assert (!slice != next_slice) ;
+            incr i_pos;
+            if !i_pos == !slice.W.length then (
+              assert (!slice != next_slice);
               (i_pos :=
                  Int64.(
                    to_int
                      (sub
                         (add !slice.W.offset (of_int !slice.W.length))
-                        next_slice.W.offset))) ;
-              slice := next_slice) in
-          return consume in
+                        next_slice.W.offset)));
+              slice := next_slice )
+          in
+          return consume
+  in
   fiber >>= fun consume ->
   try
     let c = ref (Char.code (Bigstringaf.get !slice.W.payload !i_pos)) in
-    consume () ;
+    consume ();
     let kind = (!c asr 4) land 7 in
     let size = ref (!c land 15) in
     let shft = ref 4 in
 
     while !c land 0x80 != 0 do
-      c := Char.code (Bigstringaf.get !slice.W.payload !i_pos) ;
-      consume () ;
-      size := !size + ((!c land 0x7f) lsl !shft) ;
+      c := Char.code (Bigstringaf.get !slice.W.payload !i_pos);
+      consume ();
+      size := !size + ((!c land 0x7f) lsl !shft);
       shft := !shft + 7
-    done ;
+    done;
 
     return (kind, !size, !i_pos, !slice)
   with Invalid_argument _index_out_of_bounds ->
@@ -905,7 +901,7 @@ and weight_of_offset :
     (weight, s) io =
  fun ({ bind; return } as s) ~map t ~weight ?(visited = []) cursor ->
   let ( >>= ) = bind in
-  if List.exists (Int64.equal cursor) visited then raise Cycle ;
+  if List.exists (Int64.equal cursor) visited then raise Cycle;
   let visited = cursor :: visited in
 
   W.load s ~map t.ws cursor >>= function
@@ -926,10 +922,9 @@ and weight_of_offset :
             ~visited
             ~cursor:Int64.(add slice.W.offset (of_int pos))
             slice
-      | _ -> assert false)
+      | _ -> assert false )
 
 type raw = { raw0 : Bigstringaf.t; raw1 : Bigstringaf.t; flip : bool }
-
 type v = { kind : kind; raw : raw; len : int; depth : int }
 
 let v ~kind ?(depth = 1) raw =
@@ -952,17 +947,11 @@ let make_raw ~weight =
   }
 
 let weight_of_raw { raw0; _ } = Bigstringaf.length raw0
-
 let get_payload { raw0; raw1; flip } = if flip then raw0 else raw1
-
 let get_source { raw0; raw1; flip } = if flip then raw1 else raw0
-
 let flip t = { t with flip = not t.flip }
-
 let raw { raw; _ } = get_payload raw
-
 let len { len; _ } = len
-
 let depth { depth; _ } = depth
 
 let uncompress :
@@ -987,7 +976,7 @@ let uncompress :
     | `Malformed err -> Fmt.failwith "object <%08Lx>: %s" anchor err
     | `End decoder ->
         let len = Bigstringaf.length o - Zl.Inf.dst_rem decoder in
-        assert (p || ((not p) && len = 0)) ;
+        assert (p || ((not p) && len = 0));
         (* XXX(dinosaure): we gave a [o] buffer which is enough to store
            inflated data. At the end, [decoder] should not return more than one
            [`Flush]. A special case is when we inflate nothing: [`Flush] never
@@ -995,7 +984,7 @@ let uncompress :
         return { kind; raw; len = l; depth = 1 }
     | `Flush decoder ->
         let l = Bigstringaf.length o - Zl.Inf.dst_rem decoder in
-        assert (not p) ;
+        assert (not p);
         let p = true in
         let decoder = Zl.Inf.flush decoder in
         (go [@tailcall]) l p cursor decoder
@@ -1010,7 +999,8 @@ let uncompress :
               decoder
         | None ->
             let decoder = Zl.Inf.src decoder Bigstringaf.empty 0 0 in
-            (go [@tailcall]) l p cursor decoder) in
+            (go [@tailcall]) l p cursor decoder )
+  in
   let off = Int64.(to_int (sub cursor slice.W.offset)) in
   let len = slice.W.length - off in
   let decoder = Zl.Inf.src decoder slice.W.payload off len in
@@ -1056,7 +1046,8 @@ let of_delta :
             let decoder = Zh.M.src decoder slice.W.payload off len in
             (go [@tailcall])
               Int64.(add slice.W.offset (of_int slice.W.length))
-              raw decoder) in
+              raw decoder )
+  in
   let off = Int64.(to_int (sub cursor slice.W.offset)) in
   let len = slice.W.length - off in
   let decoder = Zh.M.src decoder slice.W.payload off len in
@@ -1148,7 +1139,7 @@ and of_offset :
           of_ref_delta s ~map t raw
             ~cursor:Int64.(add slice.W.offset (of_int pos))
             slice
-      | _ -> assert false)
+      | _ -> assert false )
 
 type path = { path : int64 array; depth : int; kind : [ `A | `B | `C | `D ] }
 
@@ -1206,7 +1197,7 @@ and fill_path_from_uid :
     (int * [ `A | `B | `C | `D ], s) io =
  fun s ~map t ~depth path uid ->
   let cursor = t.fd uid in
-  path.(depth - 1) <- cursor ;
+  path.(depth - 1) <- cursor;
   (fill_path_from_offset [@tailcall]) s ~map t ~depth:(succ depth) path ~cursor
 
 and fill_path_from_offset :
@@ -1224,7 +1215,7 @@ and fill_path_from_offset :
   | None ->
       Fmt.failwith "Reach end of pack (ask: %Ld, [weight_of_offset])" cursor
   | Some slice -> (
-      path.(depth - 1) <- cursor ;
+      path.(depth - 1) <- cursor;
       header_of_entry s ~map t cursor slice >>= fun (kind, _, pos, slice) ->
       match kind with
       | 0b000 | 0b101 -> failwith "bad type"
@@ -1238,7 +1229,7 @@ and fill_path_from_offset :
           (fill_path_from_ref_delta [@tailcall]) s ~map t ~depth path
             ~cursor:Int64.(add slice.W.offset (of_int pos))
             slice
-      | _ -> assert false)
+      | _ -> assert false )
 
 let path_of_offset :
     type fd uid s.
@@ -1280,22 +1271,22 @@ let of_offset_with_source :
       match hdr with
       | 0b000 | 0b101 -> failwith "bad type"
       | 0b001 ->
-          assert (kind = `A) ;
+          assert (kind = `A);
           uncompress s ~map t `A raw
             ~cursor:Int64.(add slice.W.offset (of_int pos))
             slice
       | 0b010 ->
-          assert (kind = `B) ;
+          assert (kind = `B);
           uncompress s ~map t `B raw
             ~cursor:Int64.(add slice.W.offset (of_int pos))
             slice
       | 0b011 ->
-          assert (kind = `C) ;
+          assert (kind = `C);
           uncompress s ~map t `C raw
             ~cursor:Int64.(add slice.W.offset (of_int pos))
             slice
       | 0b100 ->
-          assert (kind = `D) ;
+          assert (kind = `D);
           uncompress s ~map t `D raw
             ~cursor:Int64.(add slice.W.offset (of_int pos))
             slice
@@ -1311,7 +1302,7 @@ let of_offset_with_source :
           of_delta s ~map t kind raw ~depth
             ~cursor:Int64.(add slice.W.offset (of_int pos))
             slice
-      | _ -> assert false)
+      | _ -> assert false )
 
 let base_of_offset :
     type fd uid s.
@@ -1334,13 +1325,13 @@ let base_of_offset :
         | 0b010 -> `B
         | 0b011 -> `C
         | 0b100 -> `D
-        | _ -> failwith "Invalid object" in
+        | _ -> failwith "Invalid object"
+      in
       uncompress s ~map t kind raw
         ~cursor:Int64.(add slice.W.offset (of_int pos))
         slice
 
 let base_of_path { depth; path; _ } = path.(depth - 1)
-
 let kind_of_path { kind; _ } = kind
 
 let of_offset_with_path :
@@ -1353,7 +1344,7 @@ let of_offset_with_path :
     cursor:int64 ->
     (v, s) io =
  fun ({ bind; return } as s) ~map t ~path raw ~cursor ->
-  assert (cursor = path.path.(0)) ;
+  assert (cursor = path.path.(0));
   let ( >>= ) = bind in
 
   base_of_offset s ~map t raw ~cursor:(base_of_path path) >>= fun base ->
@@ -1389,7 +1380,8 @@ let uid_of_offset :
         | 0b010 -> `B
         | 0b011 -> `C
         | 0b100 -> `D
-        | _ -> failwith "Invalid object" in
+        | _ -> failwith "Invalid object"
+      in
       uncompress s ~map t kind raw
         ~cursor:Int64.(add slice.W.offset (of_int pos))
         slice
@@ -1416,29 +1408,29 @@ let uid_of_offset_with_source :
       match hdr with
       | 0b000 | 0b101 -> failwith "bad type"
       | 0b001 ->
-          assert (kind = `A) ;
-          assert (depth = 1) ;
+          assert (kind = `A);
+          assert (depth = 1);
           uncompress s ~map t `A raw
             ~cursor:Int64.(add slice.W.offset (of_int pos))
             slice
           >>= fun v -> return (digest ~kind ~len:v.len (get_payload raw))
       | 0b010 ->
-          assert (kind = `B) ;
-          assert (depth = 1) ;
+          assert (kind = `B);
+          assert (depth = 1);
           uncompress s ~map t `B raw
             ~cursor:Int64.(add slice.W.offset (of_int pos))
             slice
           >>= fun v -> return (digest ~kind ~len:v.len (get_payload raw))
       | 0b011 ->
-          assert (kind = `C) ;
-          assert (depth = 1) ;
+          assert (kind = `C);
+          assert (depth = 1);
           uncompress s ~map t `C raw
             ~cursor:Int64.(add slice.W.offset (of_int pos))
             slice
           >>= fun v -> return (digest ~kind ~len:v.len (get_payload raw))
       | 0b100 ->
-          assert (kind = `D) ;
-          assert (depth = 1) ;
+          assert (kind = `D);
+          assert (depth = 1);
           uncompress s ~map t `D raw
             ~cursor:Int64.(add slice.W.offset (of_int pos))
             slice
@@ -1462,14 +1454,13 @@ let uid_of_offset_with_source :
             slice
           >>= fun ({ raw; _ } as v) ->
           return (digest ~kind ~len:v.len (get_payload raw))
-      | _ -> assert false)
+      | _ -> assert false )
 
 type 'uid node = Node of int64 * 'uid * 'uid node list | Leaf of int64 * 'uid
 
 and 'uid tree = Base of kind * int64 * 'uid * 'uid node list
 
 type 'uid children = cursor:int64 -> uid:'uid -> int64 list
-
 type where = cursor:int64 -> int
 
 type 'uid oracle = {
@@ -1539,7 +1530,8 @@ struct
   let rev_mapi f l =
     let rec rmap_f i accu = function
       | [] -> accu
-      | a :: l -> rmap_f (succ i) (f i a :: accu) l in
+      | a :: l -> rmap_f (succ i) (f i a :: accu) l
+    in
     rmap_f 0 [] l
 
   let mapi f l = List.rev (rev_mapi f l)
@@ -1567,11 +1559,12 @@ struct
         | cursors ->
             nodes_of_offsets ~map ~oracle t ~kind (flip raw) ~depth:(succ depth)
               ~cursors
-            >>= fun nodes -> IO.return [ Node (cursor, uid, nodes) ])
+            >>= fun nodes -> IO.return [ Node (cursor, uid, nodes) ] )
     | cursors ->
         let source = get_source raw in
         let source =
-          Bigstringaf.copy ~off:0 ~len:(Bigstringaf.length source) source in
+          Bigstringaf.copy ~off:0 ~len:(Bigstringaf.length source) source
+        in
         (* allocation *)
         let res = Array.make (List.length cursors) (Leaf (-1L, Uid.null)) in
 
@@ -1584,17 +1577,18 @@ struct
               >>= fun uid ->
               match oracle.children ~cursor ~uid with
               | [] ->
-                  res.(i) <- Leaf (cursor, uid) ;
+                  res.(i) <- Leaf (cursor, uid);
                   IO.return ()
               | cursors ->
                   nodes_of_offsets ~map ~oracle t ~kind (flip raw)
                     ~depth:(succ depth) ~cursors
                   >>= fun nodes ->
                   Bigstringaf.blit source ~src_off:0 (get_source raw) ~dst_off:0
-                    ~len:(Bigstringaf.length source) ;
-                  res.(i) <- Node (cursor, uid, nodes) ;
+                    ~len:(Bigstringaf.length source);
+                  res.(i) <- Node (cursor, uid, nodes);
                   IO.return ())
-            cursors in
+            cursors
+        in
         IO.all_unit fibers >>= fun () -> IO.return (Array.to_list res)
 
   let weight_of_tree : cursor:int64 -> ?uid:Uid.t -> Uid.t oracle -> int =
@@ -1606,8 +1600,9 @@ struct
       | [] -> (max : int -> int -> int) w0 w1
       | cursors ->
           let w1 = ref w1 in
-          List.iter (fun cursor -> w1 := go cursor None !w1) cursors ;
-          (max : int -> int -> int) w0 !w1 in
+          List.iter (fun cursor -> w1 := go cursor None !w1) cursors;
+          (max : int -> int -> int) w0 !w1
+    in
     go cursor uid 0
 
   (* XXX(dinosaure): we can do something which is tail-rec, TODO! *)
@@ -1630,13 +1625,13 @@ struct
     | cursors ->
         let weight' = weight_of_tree ~cursor ~uid oracle in
         let raw =
-          if weight' > weight
-          then (
+          if weight' > weight then (
             let raw' = make_raw ~weight:weight' in
             Bigstringaf.blit (get_payload raw) ~src_off:0 (get_payload raw')
-              ~dst_off:0 ~len:weight ;
-            raw')
-          else raw in
+              ~dst_off:0 ~len:weight;
+            raw' )
+          else raw
+        in
         nodes_of_offsets ~map ~oracle t ~kind (flip raw) ~depth:1 ~cursors
         >>= fun nodes -> IO.return (Base (kind, cursor, uid, nodes))
 
@@ -1651,16 +1646,17 @@ struct
    fun ~map ~oracle t ~cursor ~matrix ->
     resolver ~map ~oracle t ~cursor
     >>= fun (Base (kind, cursor, uid, children)) ->
-    matrix.(oracle.where ~cursor) <- Resolved_base (cursor, uid, kind) ;
+    matrix.(oracle.where ~cursor) <- Resolved_base (cursor, uid, kind);
     let rec go depth source = function
       | Leaf (cursor, uid) ->
           matrix.(oracle.where ~cursor) <-
             Resolved_node (cursor, uid, kind, depth, source)
       | Node (cursor, uid, children) ->
           matrix.(oracle.where ~cursor) <-
-            Resolved_node (cursor, uid, kind, depth, source) ;
-          List.iter (go (succ depth) uid) children in
-    List.iter (go 1 uid) children ;
+            Resolved_node (cursor, uid, kind, depth, source);
+          List.iter (go (succ depth) uid) children
+    in
+    List.iter (go 1 uid) children;
     IO.return ()
 
   type m = { mutable v : int; m : IO.Mutex.t }
@@ -1672,7 +1668,6 @@ struct
     | Resolved_base _ | Resolved_node _ -> true
 
   let unresolved_base ~cursor = Unresolved_base cursor
-
   let unresolved_node = Unresolved_node
 
   let dispatcher :
@@ -1691,15 +1686,14 @@ struct
         mutex.v < Array.length matrix && is_not_unresolved_base matrix.(mutex.v)
       do
         mutex.v <- mutex.v + 1
-      done ;
-      if mutex.v >= Array.length matrix
-      then (
-        IO.Mutex.unlock mutex.m ;
-        IO.return ())
+      done;
+      if mutex.v >= Array.length matrix then (
+        IO.Mutex.unlock mutex.m;
+        IO.return () )
       else
         let root = mutex.v in
-        mutex.v <- mutex.v + 1 ;
-        IO.Mutex.unlock mutex.m ;
+        mutex.v <- mutex.v + 1;
+        IO.Mutex.unlock mutex.m;
         let[@warning "-8"] (Unresolved_base cursor) = matrix.(root) in
         (* XXX(dinosaure): Oh god, save me! *)
         update ~map ~oracle t ~cursor ~matrix >>= fun () -> (go [@tailcall]) ()
@@ -1737,7 +1731,6 @@ struct
   type optint = Idx.optint
 
   let ( >>= ) = IO.bind
-
   let return = IO.return
 
   module K = struct
@@ -1758,19 +1751,21 @@ struct
     let rec go () =
       IO.Mutex.lock mutex >>= fun () ->
       let rec wait () =
-        if Q.is_empty q.contents && not !finish
-        then IO.Condition.wait signal mutex >>= wait
-        else return () in
+        if Q.is_empty q.contents && not !finish then
+          IO.Condition.wait signal mutex >>= wait
+        else return ()
+      in
       wait () >>= fun () ->
       match Q.pop q.contents with
       | Some ((uid, (offset, crc)), q') ->
-          q := q' ;
-          IO.Mutex.unlock mutex ;
+          q := q';
+          IO.Mutex.unlock mutex;
           f ~uid ~offset ~crc >>= go
       | None ->
-          assert !finish ;
-          IO.Mutex.unlock mutex ;
-          return () in
+          assert !finish;
+          IO.Mutex.unlock mutex;
+          return ()
+    in
     go ()
 
   let producer ~idx ~q ~finish ~signal ~mutex =
@@ -1780,23 +1775,23 @@ struct
       IO.Mutex.lock mutex >>= fun () ->
       let v = !p in
 
-      if v >= Idx.max idx
-      then (
-        finish := true ;
-        IO.Condition.broadcast signal ;
-        IO.Mutex.unlock mutex ;
-        return ())
+      if v >= Idx.max idx then (
+        finish := true;
+        IO.Condition.broadcast signal;
+        IO.Mutex.unlock mutex;
+        return () )
       else (
-        incr p ;
+        incr p;
         let uid = Idx.get_uid idx v
         and offset = Idx.get_offset idx v
         and crc = Idx.get_crc idx v in
 
-        q := Q.add uid (offset, crc) !q ;
+        q := Q.add uid (offset, crc) !q;
 
-        IO.Condition.signal signal ;
-        IO.Mutex.unlock mutex ;
-        go ()) in
+        IO.Condition.signal signal;
+        IO.Mutex.unlock mutex;
+        go () )
+    in
     go ()
 
   type 'a rdwr = Producer | Consumer of 'a

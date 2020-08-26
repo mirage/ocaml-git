@@ -34,7 +34,6 @@ struct
   module Log = (val Logs.src_log src : Logs.LOG)
 
   let ( >>= ) x f = IO.bind x f
-
   let return x = IO.return x
 
   let sched =
@@ -56,18 +55,19 @@ struct
 
   let references want have =
     match want with
-    | `None -> ([], [])
+    | `None -> [], []
     | `All ->
-        Fmt.epr ">>> REMOTE HAVE: %d.\n%!" (List.length have) ;
+        Fmt.epr ">>> REMOTE HAVE: %d.\n%!" (List.length have);
         List.fold_left
           (fun acc -> function uid, ref, false -> (uid, ref) :: acc | _ -> acc)
           [] have
         |> List.split
     | `Some refs ->
         let fold acc (uid, ref, peeled) =
-          if List.exists Ref.(equal ref) refs && not peeled
-          then (uid, ref) :: acc
-          else acc in
+          if List.exists Ref.(equal ref) refs && not peeled then
+            (uid, ref) :: acc
+          else acc
+        in
         List.fold_left fold [] have |> List.split
 
   let fetch_v1 ?(prelude = true) ~capabilities ?want:(refs = `None) ~host path
@@ -75,15 +75,15 @@ struct
     let capabilities =
       (* XXX(dinosaure): HTTP ([stateless]) enforces no-done capabilities. Otherwise, you never
          will receive the PACK file. *)
-      if fetch_cfg.Neg.no_done
-         && not (List.exists (( = ) `No_done) capabilities)
+      if
+        fetch_cfg.Neg.no_done && not (List.exists (( = ) `No_done) capabilities)
       then `No_done :: capabilities
-      else capabilities in
+      else capabilities
+    in
     let prelude ctx =
       let open Smart in
       let* () =
-        if prelude
-        then
+        if prelude then
           send ctx proto_request
             (Proto_request.upload_pack ~host ~version:1 path)
         else return ()
@@ -91,8 +91,9 @@ struct
       let* v = recv ctx advertised_refs in
       let v = Smart.Advertised_refs.map ~fuid:Uid.of_hex ~fref:Ref.v v in
       let uids, refs = references refs (Smart.Advertised_refs.refs v) in
-      update ctx (Smart.Advertised_refs.capabilities v) ;
-      return (uids, refs) in
+      update ctx (Smart.Advertised_refs.capabilities v);
+      return (uids, refs)
+    in
     let ctx = Smart.make capabilities in
     let negotiator = Neg.negotiator ~compare:Uid.compare in
     Neg.tips sched access store negotiator |> prj >>= fun () ->
@@ -102,8 +103,9 @@ struct
         Neg.to_hex = Uid.to_hex;
         Neg.of_hex = Uid.of_hex;
         Neg.compare = Uid.compare;
-      } in
-    Fmt.epr ">>> HOW MANY REFS: %d.\n%!" (List.length refs) ;
+      }
+    in
+    Fmt.epr ">>> HOW MANY REFS: %d.\n%!" (List.length refs);
     Neg.find_common sched io flow fetch_cfg hex access store negotiator ctx uids
     |> prj
     >>= function
@@ -112,15 +114,18 @@ struct
         let pack ctx =
           let open Smart in
           let side_band =
-            Smart.shared `Side_band ctx || Smart.shared `Side_band_64k ctx in
+            Smart.shared `Side_band ctx || Smart.shared `Side_band_64k ctx
+          in
           recv ctx
             (recv_pack ~side_band ~push_stdout:ignore ~push_stderr:ignore
-               ~push_pack:pack) in
-        if res < 0 then Log.warn (fun m -> m "No common commits") ;
+               ~push_pack:pack)
+        in
+        if res < 0 then Log.warn (fun m -> m "No common commits");
         let rec go () =
-          Log.debug (fun m -> m "Read PACK file.") ;
+          Log.debug (fun m -> m "Read PACK file.");
           Neg.run sched fail io flow (pack ctx) |> prj >>= fun continue ->
-          if continue then go () else return () in
-        Log.debug (fun m -> m "Start to download PACK file.") ;
+          if continue then go () else return ()
+        in
+        Log.debug (fun m -> m "Start to download PACK file.");
         go () >>= fun () -> return (List.combine refs uids)
 end

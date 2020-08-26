@@ -32,7 +32,6 @@ type 'hash t
 
 module type S = sig
   type hash
-
   type nonrec t = hash t
 
   val make : hash -> kind -> ?tagger:User.t -> tag:string -> string -> t
@@ -46,7 +45,6 @@ module type S = sig
   (** [format] is a description of how to encode/decode of {!t} object. *)
 
   include S.DIGEST with type t := t and type hash := hash
-
   include S.BASE with type t := t
 
   val length : t -> int64
@@ -59,9 +57,7 @@ module type S = sig
   (** [tag t] returns the information of the given tag. *)
 
   val message : t -> string
-
   val kind : t -> kind
-
   val tagger : t -> User.t option
 end
 

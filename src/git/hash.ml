@@ -26,28 +26,19 @@ module Make (Digestif : Digestif.S) :
     type t = Digestif.t
 
     let equal = Digestif.equal
-
     let hash = Hashtbl.hash
-
     let compare = Digestif.unsafe_compare
   end
 
   let equal = Ordered.equal
-
   let hash = Ordered.hash
-
   let compare = Ordered.compare
-
   let read h i = Char.code @@ (Digestif.to_raw_string h).[i]
-
   let null = Digestif.digest_string ""
-
   let length = Digestif.digest_size
-
   let feed ctx ?off ?len buf = Digestif.feed_bigstring ctx ?off ?len buf
 
   module Set : Set.S with type elt = t = Set.Make (Ordered)
-
   module Map : Map.S with type key = t = Map.Make (Ordered)
 
   let feed_cstruct t s = Digestif.feed_bigstring t (Cstruct.to_bigarray s)

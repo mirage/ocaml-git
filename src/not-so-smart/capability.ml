@@ -75,19 +75,19 @@ let of_string ?value = function
   | "push-cert" -> (
       match value with
       | Some value -> `Push_cert value
-      | None -> raise (Capability_expect_value "push-cert"))
+      | None -> raise (Capability_expect_value "push-cert") )
   | "agent" -> (
       match value with
       | Some value -> `Agent value
-      | None -> raise (Capability_expect_value "agent"))
+      | None -> raise (Capability_expect_value "agent") )
   | "symref" -> (
       match Option.bind value (Astring.String.cut ~sep:":") with
       | Some (ref0, ref1) -> `Symref (ref0, ref1)
-      | None -> raise (Capability_expect_value "symref"))
-  | capability ->
-  match value with
-  | Some value -> `Parameter (capability, value)
-  | None -> `Other capability
+      | None -> raise (Capability_expect_value "symref") )
+  | capability -> (
+      match value with
+      | Some value -> `Parameter (capability, value)
+      | None -> `Other capability )
 
 let pp ppf = function
   | `Multi_ack -> Fmt.pf ppf "Multi-ACK"
@@ -116,7 +116,7 @@ let pp ppf = function
   | `Parameter (key, value) -> Fmt.pf ppf "(%s %s)" key value
 
 let compare a b =
-  match (a, b) with
+  match a, b with
   | `Multi_ack, `Multi_ack
   | `Multi_ack_detailed, `Multi_ack_detailed
   | `No_done, `No_done

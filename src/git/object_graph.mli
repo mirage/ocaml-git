@@ -17,7 +17,6 @@
 
 module type S = sig
   type hash
-
   type store
 
   module S : Set.S with type elt = hash
@@ -35,9 +34,7 @@ module type S = sig
   (** [of_commits store] makes a new graph from all commits of a [store]. *)
 
   val closure : ?full:bool -> store -> min:S.t -> max:S.t -> K.t Lwt.t
-
   val pack : store -> min:S.t -> max:S.t -> (hash * hash Value.t) list Lwt.t
-
   val to_dot : store -> Format.formatter -> unit Lwt.t
 end
 

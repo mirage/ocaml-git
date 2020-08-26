@@ -1,6 +1,5 @@
 module type STORE = sig
   type 'a rd = < rd : unit ; .. > as 'a
-
   type 'a wr = < wr : unit ; .. > as 'a
 
   type 'a mode =
@@ -9,25 +8,16 @@ module type STORE = sig
     | RdWr : < rd : unit ; wr : unit > mode
 
   type t
-
   type uid
-
   type 'a fd
-
   type error
-
   type +'a fiber
 
   val pp_error : error Fmt.t
-
   val create : mode:'a mode -> t -> uid -> ('a fd, error) result fiber
-
   val map : t -> 'm rd fd -> pos:int64 -> int -> Bigstringaf.t fiber
-
   val close : t -> 'm fd -> (unit, error) result fiber
-
   val list : t -> uid list fiber
-
   val length : 'm fd -> int64 fiber
 end
 
@@ -35,7 +25,6 @@ module type IO = sig
   type +'a t
 
   val bind : 'a t -> ('a -> 'b t) -> 'b t
-
   val return : 'a -> 'a t
 end
 
@@ -62,11 +51,8 @@ module Make
     (Uid : Carton.UID) =
 struct
   let ( >>= ) = IO.bind
-
   let return = IO.return
-
   let ( >>? ) x f = x >>= function Ok x -> f x | Error _ as err -> return err
-
   let ( >>| ) x f = x >>= fun x -> return (f x)
 
   let io =
@@ -83,7 +69,8 @@ struct
     Store.close root fd >>? fun () ->
     let idx =
       Carton.Dec.Idx.make payload ~uid_ln:Uid.length ~uid_rw:Uid.to_raw_string
-        ~uid_wr:Uid.of_raw_string in
+        ~uid_wr:Uid.of_raw_string
+    in
     return (Ok (idx :: acc))
 
   let pack (root : Store.t) acc (index, pack) =
@@ -98,7 +85,8 @@ struct
         (fun uid ->
           match Carton.Dec.Idx.find index uid with
           | Some (_, offset) -> offset
-          | None -> Fmt.invalid_arg "Object %a does not exist" Uid.pp uid) in
+          | None -> Fmt.invalid_arg "Object %a does not exist" Uid.pp uid)
+    in
     return (Ok ({ pack; index; z; w } :: acc))
 
   let fold_left_r ?(err = fun _ -> return ()) f a l =
@@ -107,7 +95,8 @@ struct
       | x :: r -> (
           f a x >>= function
           | Ok a -> go a r
-          | Error x -> err x >>= fun () -> go a r) in
+          | Error x -> err x >>= fun () -> go a r )
+    in
     go a l
 
   let ( <.> ) f g x = f (g x)
@@ -126,7 +115,7 @@ struct
     fold_left_r (pack root) [] (List.combine idxs pcks) >>| List.rev
     >>= fun vs ->
     let tbl = Hashtbl.create 10 in
-    List.iter (fun (k, v) -> Hashtbl.add tbl k v) (List.combine pcks vs) ;
+    List.iter (fun (k, v) -> Hashtbl.add tbl k v) (List.combine pcks vs);
     return { tbl }
 
   let map root (fd, top) ~pos len =
@@ -145,7 +134,7 @@ struct
     idx root [] idx_uid >>? fun idxs ->
     let[@warning "-8"] [ idx ] = idxs in
     pack root [] (idx, pck) >>? fun vs ->
-    List.iter (fun (k, v) -> Hashtbl.add p.tbl k v) (List.combine [ pck ] vs) ;
+    List.iter (fun (k, v) -> Hashtbl.add p.tbl k v) (List.combine [ pck ] vs);
     return (Ok ())
 
   let with_resources root pack uid buffers =
@@ -171,7 +160,7 @@ struct
     Hashtbl.iter
       (fun k { index; _ } ->
         if Carton.Dec.Idx.exists index uid then res := Some k)
-      p.tbl ;
+      p.tbl;
     match !res with
     | Some k ->
         let { pack; _ } = Hashtbl.find p.tbl k in
@@ -185,8 +174,9 @@ struct
       let res = ref [] in
       Carton.Dec.Idx.iter
         ~f:(fun ~uid ~offset:_ ~crc:_ -> res := uid :: !res)
-        index ;
-      List.rev_append !res a in
+        index;
+      List.rev_append !res a
+    in
     Hashtbl.fold fold p.tbl []
 
   let exists : Store.t -> (Store.uid, 'm Store.fd, Uid.t) t -> Uid.t -> bool =
@@ -195,7 +185,7 @@ struct
     Hashtbl.iter
       (fun _ { index; _ } ->
         if Carton.Dec.Idx.exists index uid then res := true)
-      p.tbl ;
+      p.tbl;
     !res
 
   let fds : (Store.uid, 'm Store.fd, Uid.t) t -> ('m Store.fd * int64) list =

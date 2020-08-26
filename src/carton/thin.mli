@@ -1,9 +1,7 @@
 open Carton
 
 type ('uid, 's) light_load = 'uid -> (kind * int, 's) io
-
 type ('uid, 's) heavy_load = 'uid -> (Dec.v, 's) io
-
 type optint = Optint.t
 
 module Make
@@ -55,7 +53,6 @@ module Make
       file. *)
 
   type nonrec light_load = (Uid.t, Scheduler.t) light_load
-
   type nonrec heavy_load = (Uid.t, Scheduler.t) heavy_load
 
   val canonicalize :

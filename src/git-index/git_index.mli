@@ -4,29 +4,22 @@ module Entry : sig
   type 'oid t
 
   val pp : pp_oid:'oid Fmt.t -> 'oid t Fmt.t
-
   val path : 'oid t -> Fpath.t
-
   val mode : 'oid t -> int
-
   val oid : 'oid t -> 'oid
 end
 
 type 'oid t
 
 val exists : 'oid t -> Fpath.t -> bool
-
 val find : 'oid t -> Fpath.t -> 'oid Entry.t option
-
 val replace : 'oid t -> 'oid Entry.t -> unit
 
 val add :
   hash:'oid hash -> Fpath.t -> 'oid t -> (unit, [> Rresult.R.msg ]) result
 
 val rem : Fpath.t -> 'oid t -> unit
-
 val make : ?version:int -> 'oid hash -> 'oid t
-
 val load : hash:'oid hash -> Fpath.t -> ('oid t, [> Rresult.R.msg ]) result
 
 val store :

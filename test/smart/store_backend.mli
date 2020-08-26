@@ -1,11 +1,9 @@
 open Sigs
 
 type ('k, 'v) t = { tbl : ('k, 'v) Hashtbl.t; path : Fpath.t }
-
 type git
 
 val store_prj : ('uid, 'v, git) store -> ('uid, 'v) t
-
 val store_inj : ('uid, 'v) t -> ('uid, 'v, git) store
 
 val parents :

@@ -16,7 +16,6 @@
  *)
 
 type tz_offset = { sign : [ `Plus | `Minus ]; hours : int; minutes : int }
-
 type t = { name : string; email : string; date : int64 * tz_offset option }
 
 let pp_sign ppf = function
@@ -37,18 +36,16 @@ let tz_offset =
     ~fwd:(fun (sign, hours, minutes) ->
       if hours = 0 && minutes = 0 then None else Some { sign; hours; minutes })
     ~bwd:(function
-      | Some { sign; hours; minutes } -> (sign, hours, minutes)
-      | None -> (`Plus, 0, 0))
+      | Some { sign; hours; minutes } -> sign, hours, minutes
+      | None -> `Plus, 0, 0)
 
 let user =
   Encore.Bij.v
-    ~fwd:(fun (name, email, time, date) -> { name; email; date = (time, date) })
-    ~bwd:(fun { name; email; date = time, date } -> (name, email, time, date))
+    ~fwd:(fun (name, email, time, date) -> { name; email; date = time, date })
+    ~bwd:(fun { name; email; date = time, date } -> name, email, time, date)
 
 let is_not_lt chr = chr <> '<'
-
 let is_not_gt chr = chr <> '>'
-
 let is_digit = function '0' .. '9' -> true | _ -> false
 
 let date =
@@ -58,7 +55,8 @@ let date =
       ~fwd:(function
         | '+' -> `Plus | '-' -> `Minus | _ -> raise Encore.Bij.Bijection)
       ~bwd:(function `Plus -> '+' | `Minus -> '-')
-    <$> any in
+    <$> any
+  in
   let digit2 =
     Encore.Bij.v
       ~fwd:(function
@@ -66,9 +64,10 @@ let date =
             Char.(((code a - 48) * 10) + (code b - 48))
         | _, _ -> raise Encore.Bij.Bijection)
       ~bwd:(fun n ->
-        let a, b = (n / 10, n mod 10) in
-        (Char.chr (a + 48), Char.chr (b + 48)))
-    <$> (any <*> any) in
+        let a, b = n / 10, n mod 10 in
+        Char.chr (a + 48), Char.chr (b + 48))
+    <$> (any <*> any)
+  in
   Encore.Bij.(compose obj3) tz_offset <$> (sign <*> digit2 <*> digit2)
 
 let chop =
@@ -84,11 +83,11 @@ let int64 =
 let format =
   let open Encore.Syntax in
   Encore.Bij.(compose obj4) user
-  <$> (chop
+  <$> ( chop
       <$> (while1 is_not_lt <* (Encore.Bij.char '<' <$> any))
       <*> (while1 is_not_gt <* (Encore.Bij.string "> " <$> const "> "))
       <*> (int64 <$> while1 is_digit <* (Encore.Bij.char ' ' <$> any))
-      <*> date)
+      <*> date )
 
 let length t =
   let string x = Int64.of_int (String.length x) in
@@ -105,9 +104,7 @@ let length t =
   + tz_offset_length
 
 let equal = ( = )
-
 let compare = Stdlib.compare
-
 let hash = Hashtbl.hash
 
 module Set = Set.Make (struct

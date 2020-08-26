@@ -3,7 +3,6 @@ open Lwt_io
 type lwt = Lwt_io.lwt
 
 external inj : 'a Lwt.t -> ('a, lwt) Carton.io = "%identity"
-
 external prj : ('a, lwt) Carton.io -> 'a Lwt.t = "%identity"
 
 let lwt_bind x f =
@@ -12,7 +11,6 @@ let lwt_bind x f =
   [@@inline]
 
 let lwt_return x = inj (Lwt.return x) [@@inline]
-
 let lwt = { Carton.bind = lwt_bind; Carton.return = lwt_return }
 
 module Scheduler = Lwt_scheduler
@@ -33,7 +31,6 @@ module Dec = struct
   end
 
   type weight = Carton.Dec.weight
-
   type 'fd read = 'fd -> bytes -> off:int -> len:int -> int Lwt.t
 
   module Idx = Carton.Dec.Idx
@@ -49,11 +46,8 @@ module Dec = struct
   type ('fd, 'uid) t = ('fd, 'uid) Carton.Dec.t
 
   let with_z buf t = Carton.Dec.with_z buf t
-
   let with_w lru t = Carton.Dec.with_w lru t
-
   let with_allocate ~allocate t = Carton.Dec.with_allocate ~allocate t
-
   let fd t = Carton.Dec.fd t
 
   type raw = Carton.Dec.raw
@@ -63,13 +57,9 @@ module Dec = struct
   type v = Carton.Dec.v
 
   let v ~kind ?depth buf = Carton.Dec.v ~kind ?depth buf
-
   let kind v = Carton.Dec.kind v
-
   let raw v = Carton.Dec.raw v
-
   let len v = Carton.Dec.len v
-
   let depth v = Carton.Dec.depth v
 
   let make fd ~z ~allocate ~uid_ln ~uid_rw where =
@@ -97,7 +87,6 @@ module Dec = struct
   type path = Carton.Dec.path
 
   let path_to_list path = Carton.Dec.path_to_list path
-
   let kind_of_path path = Carton.Dec.kind_of_path path
 
   let path_of_offset ~map t ~cursor =
@@ -139,7 +128,6 @@ end
 
 module Enc = struct
   type 'uid entry = 'uid Carton.Enc.entry
-
   type 'uid delta = 'uid Carton.Enc.delta = From of 'uid | Zero
 
   let make_entry ~kind ~length ?preferred ?delta uid =
@@ -148,13 +136,9 @@ module Enc = struct
   let length entry = Carton.Enc.length entry
 
   type 'uid q = 'uid Carton.Enc.q
-
   type 'uid p = 'uid Carton.Enc.p
-
   type 'uid patch = 'uid Carton.Enc.patch
-
   type 'uid load = 'uid -> Dec.v Lwt.t
-
   type 'uid find = 'uid -> int option Lwt.t
 
   type 'uid uid = 'uid Carton.Enc.uid = {
@@ -163,7 +147,6 @@ module Enc = struct
   }
 
   let target_to_source target = Carton.Enc.target_to_source target
-
   let target_uid target = Carton.Enc.target_uid target
 
   let entry_to_target ~load entry =
@@ -175,7 +158,6 @@ module Enc = struct
     prj (Carton.Enc.apply lwt ~load ~uid_ln ~source ~target)
 
   module type VERBOSE = Carton.Enc.VERBOSE with type 'a fiber = 'a Lwt.t
-
   module type UID = Carton.Enc.UID
 
   module Delta (Uid : UID) (Verbose : VERBOSE) = struct
@@ -212,9 +194,7 @@ end
 
 module Thin = struct
   type 'uid light_load = 'uid -> (Carton.kind * int) Lwt.t
-
   type 'uid heavy_load = 'uid -> Carton.Dec.v Lwt.t
-
   type optint = Optint.t
 
   module Make (Uid : Carton.UID) = struct

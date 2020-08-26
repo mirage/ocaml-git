@@ -17,11 +17,8 @@ type 'uid t =
       -> 'uid t
 
 let _common = 1 lsl 2
-
 let _common_ref = 1 lsl 3
-
 let _seen = 1 lsl 4
-
 let _popped = 1 lsl 5
 
 let make : type uid. compare:(uid -> uid -> int) -> uid t =
@@ -44,8 +41,8 @@ let make : type uid. compare:(uid -> uid -> int) -> uid t =
 let rev_list_push : type uid. uid t -> uid * int ref * int64 -> int -> unit =
  fun (State ({ rev_list; psq = (module Psq); non_common_revs } as state))
      (uid, p, ts) mark ->
-  if !p land mark = 0 then p := !p lor mark ;
-  state.rev_list <- Psq.add uid (uid, p, ts) rev_list ;
+  if !p land mark = 0 then p := !p lor mark;
+  state.rev_list <- Psq.add uid (uid, p, ts) rev_list;
   if !p land _common = 0 then state.non_common_revs <- non_common_revs + 1
 
 let rec mark_common :
@@ -61,22 +58,22 @@ let rec mark_common :
      (State ({ non_common_revs; _ } as state) as t) (uid, p, ts) only_ancestors ->
   let ( >>= ) = bind in
 
-  if only_ancestors then p := !p lor _common ;
-  if !p land _seen = 0
-  then (
-    rev_list_push t (uid, p, ts) _seen ;
-    return ())
+  if only_ancestors then p := !p lor _common;
+  if !p land _seen = 0 then (
+    rev_list_push t (uid, p, ts) _seen;
+    return () )
   else (
-    if (not only_ancestors) && !p land _popped = 0
-    then state.non_common_revs <- non_common_revs - 1 ;
+    if (not only_ancestors) && !p land _popped = 0 then
+      state.non_common_revs <- non_common_revs - 1;
     parents uid store
     >>=
     let rec go = function
       | [] -> return ()
       | (uid, p, ts) :: rest ->
           mark_common scheduler ~parents store t (uid, p, ts) false
-          >>= fun () -> go rest in
-    go)
+          >>= fun () -> go rest
+    in
+    go )
 
 let known_common :
     type g s uid.
@@ -87,10 +84,9 @@ let known_common :
     uid * int ref * int64 ->
     (unit, s) io =
  fun ({ return; _ } as scheduler) ~parents store t (uid, p, ts) ->
-  if !p land _seen = 0
-  then (
-    rev_list_push t (uid, p, ts) (_common_ref lor _seen) ;
-    mark_common scheduler ~parents store t (uid, p, ts) true)
+  if !p land _seen = 0 then (
+    rev_list_push t (uid, p, ts) (_common_ref lor _seen);
+    mark_common scheduler ~parents store t (uid, p, ts) true )
   else return ()
 
 let tip t obj = rev_list_push t obj _seen
@@ -122,40 +118,39 @@ let get_rev :
   let ( >>= ) = bind in
 
   let rec go () =
-    if state.non_common_revs = 0 || Psq.is_empty state.rev_list
-    then return None
+    if state.non_common_revs = 0 || Psq.is_empty state.rev_list then return None
     else
       match Psq.pop state.rev_list with
       | None -> return None
       | Some ((uid, (_, p, _)), rev_list) ->
-          state.rev_list <- rev_list ;
+          state.rev_list <- rev_list;
           parents uid store >>= fun ps ->
-          p := !p lor _popped ;
-          if !p land _common = 0
-          then state.non_common_revs <- state.non_common_revs - 1 ;
+          p := !p lor _popped;
+          if !p land _common = 0 then
+            state.non_common_revs <- state.non_common_revs - 1;
 
           let mark = ref 0 in
           let res = ref (Some uid) in
 
-          if !p land _common <> 0
-          then (
-            mark := _common lor _seen ;
-            res := None)
-          else if !p land _common_ref <> 0
-          then mark := _common lor _seen
-          else mark := _seen ;
+          if !p land _common <> 0 then (
+            mark := _common lor _seen;
+            res := None )
+          else if !p land _common_ref <> 0 then mark := _common lor _seen
+          else mark := _seen;
 
           let rec loop = function
-            | [] -> ( match !res with None -> go () | Some _ as v -> return v)
+            | [] -> (
+                match !res with None -> go () | Some _ as v -> return v )
             | (uid, p, ts) :: rest ->
-                if !p land _seen = 0 then rev_list_push t (uid, p, ts) !mark ;
+                if !p land _seen = 0 then rev_list_push t (uid, p, ts) !mark;
 
-                if !mark land _common <> 0
-                then
+                if !mark land _common <> 0 then
                   mark_common scheduler ~parents store t (uid, p, ts) true
                   >>= fun () -> loop rest
-                else loop rest in
-          loop ps in
+                else loop rest
+          in
+          loop ps
+  in
   go ()
 
 let next :

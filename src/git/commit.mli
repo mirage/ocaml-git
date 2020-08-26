@@ -28,7 +28,6 @@ type 'hash t
 
 module type S = sig
   type hash
-
   type nonrec t = hash t
 
   val make :
@@ -51,7 +50,6 @@ module type S = sig
   (** [format] is a description of how to encode/decode of {!t} object. *)
 
   include S.DIGEST with type t := t and type hash := hash
-
   include S.BASE with type t := t
 
   val length : t -> int64

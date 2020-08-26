@@ -19,9 +19,7 @@
 
 module type S = sig
   type hash
-
   type store
-
   type error = private [> `Msg of string | `Exn of exn | `Not_found ]
 
   val pp_error : error Fmt.t
@@ -59,7 +57,6 @@ module Make
     (Store : Minimal.S with type hash = Digestif.t)
     (HTTP : Smart_git.HTTP) : sig
   type hash = Digestif.t
-
   type store = Store.t
 
   type error =
