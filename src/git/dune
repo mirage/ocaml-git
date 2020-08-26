@@ -1,6 +1,7 @@
 (library
- (name        git)
+ (name git)
  (public_name git)
- (libraries   fpath cstruct fmt lwt uri logs astring hex lru rresult
-              ke angstrom encore duff ocamlgraph ocplib-endian
-              stdlib-shims ocplib-endian.bigstring decompress digestif))
+ (libraries rresult nss.sigs nss.pck bigarray-compat optint loose
+   decompress.de decompress.zl result nss.smart conduit logs lwt cstruct
+   angstrom bigstringaf carton ke fmt checkseum nss.git ocamlgraph astring
+   fpath loose_git carton-lwt carton-git digestif encore))
