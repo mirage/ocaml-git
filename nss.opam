@@ -18,6 +18,7 @@ depends: [
   "ocaml"             {>= "4.07.0"}
   "dune"              {>= "2.6.0"}
   "emile"             {>= "0.9"}
+  "stdlib-shims"
   "rresult"
   "result"
   "fmt"

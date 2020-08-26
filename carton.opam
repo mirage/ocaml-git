@@ -27,6 +27,7 @@ depends: [
   "cstruct"      {>= "5.0.0"}
   "optint"       {>= "0.0.4"}
   "bigstringaf"
+  "stdlib-shims"
   "bigarray-compat"
   "checkseum"    {>= "0.2.1"}
   "logs"

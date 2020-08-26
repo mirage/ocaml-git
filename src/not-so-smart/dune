@@ -2,7 +2,7 @@
  (name smart)
  (public_name nss.smart)
  (modules smart filter capability state protocol encoder decoder)
- (libraries result rresult domain-name astring fmt))
+ (libraries stdlib-shims result rresult domain-name astring fmt))
 
 (library
  (name sigs)
@@ -14,7 +14,7 @@
  (name neg)
  (public_name nss.neg)
  (modules neg find_common default)
- (libraries fmt rresult cstruct sigs logs psq smart))
+ (libraries stdlib-shims fmt rresult cstruct sigs logs psq smart))
 
 (library
  (name pck)

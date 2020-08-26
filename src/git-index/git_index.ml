@@ -1,5 +1,6 @@
 [@@@warning "-32"]
 
+open Stdlib
 module Bigarray = Bigarray_compat
 
 let io_buffer_size = 65536

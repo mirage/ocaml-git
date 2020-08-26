@@ -1,5 +1,7 @@
 let ( <.> ) f g x = f (g x)
 
+open Stdlib
+
 module Advertised_refs = struct
   type ('uid, 'reference) t = {
     shallows : 'uid list;

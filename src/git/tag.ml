@@ -103,9 +103,9 @@ module Make (Hash : S.HASH) = struct
     let tag =
       Encore.Bij.v
         ~fwd:(fun ((_, obj), (_, kind), (_, tag), tagger, message) ->
-          { obj; kind; tag; tagger = Option.map snd tagger; message })
+          { obj; kind; tag; tagger = Stdlib.Option.map snd tagger; message })
         ~bwd:(fun { obj; kind; tag; tagger; message } ->
-          let tagger = Option.map (fun x -> "tagger", x) tagger in
+          let tagger = Stdlib.Option.map (fun x -> "tagger", x) tagger in
           ("object", obj), ("type", kind), ("tag", tag), tagger, message)
 
     let is_not_sp chr = chr <> ' '

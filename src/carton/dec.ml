@@ -1,5 +1,3 @@
-let () = Printexc.record_backtrace true
-
 open Sigs
 
 let input_bigstring ic buf off len =
@@ -1595,7 +1593,7 @@ struct
    fun ~cursor ?uid oracle ->
     let rec go cursor uid w0 =
       let w1 = oracle.weight ~cursor in
-      let uid = Option.value uid ~default:Uid.null in
+      let uid = Stdlib.Option.value uid ~default:Uid.null in
       match oracle.children ~cursor ~uid with
       | [] -> (max : int -> int -> int) w0 w1
       | cursors ->

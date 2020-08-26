@@ -535,7 +535,8 @@ module Device = struct
 
   let project tbl uid =
     assert (Ephemeron.K1.get_key tbl = Some uid);
-    match Option.get (Ephemeron.K1.get_data tbl) with { contents = v } -> v
+    match Stdlib.Option.get (Ephemeron.K1.get_data tbl) with
+    | { contents = v } -> v
 end
 
 module M (IO : sig

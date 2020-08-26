@@ -1,5 +1,5 @@
 (library
  (name git_index)
  (public_name git-unix.index)
- (libraries astring lwt mmap rresult result fmt digestif fpath
+ (libraries stdlib-shims astring lwt mmap rresult result fmt digestif fpath
    bigarray-compat bigstringaf git-unix))

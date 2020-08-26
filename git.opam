@@ -26,6 +26,7 @@ depends: [
   "ocaml"             {>= "4.07.0"}
   "dune"              {>= "2.6.0"}
   "digestif"          {>= "0.8.1"}
+  "stdlib-shims"
   "rresult"
   "result"
   "nss"

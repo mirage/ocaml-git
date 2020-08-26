@@ -15,6 +15,8 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+open Stdlib
+
 type 'hash t =
   | Blob of Blob.t
   | Commit of 'hash Commit.t

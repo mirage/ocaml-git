@@ -15,6 +15,7 @@
  *)
 
 module Bigarray = Bigarray_compat
+open Stdlib
 open Lwt.Infix
 
 let ( >>? ) x f =
