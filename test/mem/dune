@@ -1,0 +1,12 @@
+(executable
+ (name test)
+ (libraries cmdliner lwt lwt.unix alcotest-lwt result rresult fpath git
+   digestif base64 fmt.tty logs.fmt test_store))
+
+(rule
+ (alias runtest)
+ (package git)
+ (deps
+  (:test test.exe))
+ (action
+  (run %{test} --color=always)))
