@@ -50,9 +50,25 @@ module type Rs = sig
   val reset : t -> (unit, error) result fiber
 end
 
+module type Mj = sig
+  include Carton_git.STORE
 
+  include
+    Smart_git.APPEND
+      with type t := t
+       and type uid := uid
+       and type 'a fd := 'a fd
+       and type error := error
+       and type +'a fiber := 'a fiber
 
+  val reset : t -> (unit, error) result fiber
+end
 
+type ('uid, 'major_uid, 'major) major = {
+  pck_major_uid_of_uid : 'major -> 'uid -> 'major_uid;
+  idx_major_uid_of_uid : 'major -> 'uid -> 'major_uid;
+  uid_of_major_uid : 'major_uid -> 'uid;
+}
 
 module Make
     (H : Digestif.S)
