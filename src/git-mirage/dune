@@ -1,4 +1,0 @@
-(library
- (name        git_mirage)
- (public_name git-mirage)
- (libraries   git mirage-flow mirage-channel conduit-mirage cohttp-mirage git-http decompress))
