@@ -399,3 +399,99 @@ module Make (Digestif : Digestif.S) = struct
 end
 
 module Store = Make (Digestif.SHA1)
+
+module Sync
+    (Conduit : Conduit.S
+                 with type +'a io = 'a Lwt.t
+                  and type input = Cstruct.t
+                  and type output = Cstruct.t)
+    (Git_store : Minimal.S)
+    (HTTP : Smart_git.HTTP) =
+struct
+  let src = Logs.Src.create "git-mem.sync" ~doc:"logs git-mem's sync event"
+
+  module Log = (val Logs.src_log src : Logs.LOG)
+
+  module Idx = Carton.Dec.Idx.M (Lwt) (Git_store.Hash)
+
+  module Index = struct
+    type +'a fiber = 'a Lwt.t
+
+    include (Idx : module type of Idx with type fd := Idx.fd)
+
+    (* XXX(dinosaure): may be update [Carton.Dec.Idx.M], but it seems fine. *)
+
+    type 'a rd = < rd : unit ; .. > as 'a
+
+    type 'a wr = < wr : unit ; .. > as 'a
+
+    type 'a mode =
+      | Rd : < rd : unit > mode
+      | Wr : < wr : unit > mode
+      | RdWr : < rd : unit ; wr : unit > mode
+
+    type 'm fd = Idx.fd
+
+    let create : type a. mode:a mode -> t -> uid -> (a fd, error) result fiber =
+     fun ~mode:_ t uid -> create t uid
+
+    let move _ ~src:_ ~dst:_ = assert false
+
+    let map _ _ ~pos:_ _ = assert false
+  end
+
+  open Lwt.Infix
+  include Sync.Make (Git_store.Hash) (Cstruct_append) (Index) (Conduit)
+            (Git_store)
+            (HTTP)
+
+  let ( >>? ) x f =
+    x >>= function Ok x -> f x | Error err -> Lwt.return_error err
+
+  let stream_of_cstruct ?(chunk = 0x1000) payload =
+    let stream, emitter = Lwt_stream.create () in
+    let fill () =
+      let rec go pos =
+        if pos = Cstruct.len payload
+        then (
+          emitter None ;
+          Lwt.return_unit)
+        else
+          let len = min chunk (Cstruct.len payload - pos) in
+          let tmp = Bytes.create len in
+          Cstruct.blit_to_bytes payload pos tmp 0 len ;
+          emitter (Some (Bytes.unsafe_to_string tmp)) ;
+          go (pos + len) in
+      go 0 in
+    Lwt.async fill ;
+    fun () -> Lwt_stream.get stream
+
+  let fetch ~resolvers edn store ?version ?capabilities want =
+    let t_idx = Carton.Dec.Idx.Device.device () in
+    let t_pck = Cstruct_append.device () in
+    let index = Carton.Dec.Idx.Device.create t_idx in
+    let src = Cstruct_append.key t_pck in
+    let dst = Cstruct_append.key t_pck in
+    fetch ~resolvers edn store ?version ?capabilities want ~src ~dst ~idx:index
+      t_pck t_idx
+    >>? function
+    | `Empty -> Lwt.return_ok None
+    | `Pack (hash, refs) ->
+        let index = Carton.Dec.Idx.Device.project t_idx index in
+        let pack = Cstruct_append.project t_pck dst in
+
+        Git_store.batch_write store hash ~pck:(stream_of_cstruct pack)
+          ~idx:(stream_of_cstruct (Cstruct.of_bigarray index))
+        >|= Rresult.R.reword_error (fun err -> `Store err)
+        >>? fun () ->
+        let update (refname, hash) =
+          Git_store.Ref.write store refname (Reference.Uid hash) >>= function
+          | Ok v -> Lwt.return v
+          | Error err ->
+              Log.warn (fun m ->
+                  m "Impossible to update %a to %a: %a." Reference.pp refname
+                    Git_store.Hash.pp hash Git_store.pp_error err) ;
+              Lwt.return_unit in
+        Lwt_list.iter_p update refs >>= fun () ->
+        Lwt.return_ok (Some (hash, refs))
+end
