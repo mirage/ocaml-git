@@ -26,38 +26,38 @@
     pools. *)
 
 module type LOOSE = sig
-  (** The type of the {i loosed} Git object. *)
   type t
+  (** The type of the {i loosed} Git object. *)
 
-  (** The type for the state of a Git store. *)
   type state
+  (** The type for the state of a Git store. *)
 
+  type kind = [ `Commit | `Tree | `Tag | `Blob ]
   (** Kind of the {i loosed} Git object. *)
-  type kind = [`Commit | `Tree | `Tag | `Blob]
 
-  (** The [FS] module used to make the implementation. *)
   module FS : S.FS
+  (** The [FS] module used to make the implementation. *)
 
-  (** The [Hash] module used to make the implementation. *)
   module Hash : S.HASH
+  (** The [Hash] module used to make the implementation. *)
 
-  (** The [Inflate] module used to make the implementation. *)
   module Inflate : S.INFLATE
+  (** The [Inflate] module used to make the implementation. *)
 
-  (** The [Deflate] module used to make the implementation. *)
   module Deflate : S.DEFLATE
+  (** The [Deflate] module used to make the implementation. *)
 
   (** The Value module, which represents the Git object. *)
   module Value :
     Value.S
-    with module Hash := Hash
-     and module Inflate := Inflate
-     and module Deflate := Deflate
-     and module Blob = Blob.Make(Hash)
-     and module Commit = Commit.Make(Hash)
-     and module Tree = Tree.Make(Hash)
-     and module Tag = Tag.Make(Hash)
-     and type t = Value.Make(Hash)(Inflate)(Deflate).t
+      with module Hash := Hash
+       and module Inflate := Inflate
+       and module Deflate := Deflate
+       and module Blob = Blob.Make(Hash)
+       and module Commit = Commit.Make(Hash)
+       and module Tree = Tree.Make(Hash)
+       and module Tag = Tag.Make(Hash)
+       and type t = Value.Make(Hash)(Inflate)(Deflate).t
 
   type error
 
@@ -191,9 +191,9 @@ module type LOOSE = sig
       object. *)
   module D :
     S.DECODER
-    with type t = t
-     and type init = Inflate.window * Cstruct.t * Cstruct.t
-     and type error = [Error.Decoder.t | `Inflate of Inflate.error]
+      with type t = t
+       and type init = Inflate.window * Cstruct.t * Cstruct.t
+       and type error = [ Error.Decoder.t | `Inflate of Inflate.error ]
 
   (** The encoder (which uses a {!Minienc.encoder}) of the Git object. We
       constraint the output to be a {Cstruct.t}. This encoder needs the level
@@ -211,48 +211,48 @@ module type LOOSE = sig
       > kind length\000 ... *)
   module E :
     S.ENCODER
-    with type t = t
-     and type init = Cstruct.t * t * int * Cstruct.t
-     and type error = [`Deflate of Deflate.error]
+      with type t = t
+       and type init = Cstruct.t * t * int * Cstruct.t
+       and type error = [ `Deflate of Deflate.error ]
 end
 
 module type PACK = sig
-  (** The type of the {i packed} Git object. *)
   type t
+  (** The type of the {i packed} Git object. *)
 
-  (** The type for the state of a Git store. *)
   type state
+  (** The type for the state of a Git store. *)
 
-  (** The type of the Git values. *)
   type value
+  (** The type of the Git values. *)
 
-  (** The [FS] module used to make the implementation. *)
   module FS : S.FS
+  (** The [FS] module used to make the implementation. *)
 
-  (** The [Hash] module used to make the implementation. *)
   module Hash : S.HASH
+  (** The [Hash] module used to make the implementation. *)
 
-  (** The [Inflate] module used to make the implementation. *)
   module Inflate : S.INFLATE
+  (** The [Inflate] module used to make the implementation. *)
 
-  (** The [Deflate] module used to make the implementation. *)
   module Deflate : S.DEFLATE
+  (** The [Deflate] module used to make the implementation. *)
 
   module HDec : Unpack.H with module Hash := Hash
 
   module PDec :
     Unpack.P
-    with module Hash := Hash
-     and module Inflate := Inflate
-     and module Hunk := HDec
+      with module Hash := Hash
+       and module Inflate := Inflate
+       and module Hunk := HDec
 
   module RPDec :
     Unpack.D
-    with module Hash := Hash
-     and module Inflate := Inflate
-     and module Hunk := HDec
-     and module Pack := PDec
-     and module Mapper := FS.Mapper
+      with module Hash := Hash
+       and module Inflate := Inflate
+       and module Hunk := HDec
+       and module Pack := PDec
+       and module Mapper := FS.Mapper
 
   module PEnc : Pack.P with module Hash := Hash and module Deflate := Deflate
   module IDec : Index_pack.LAZY with module Hash := Hash
@@ -260,10 +260,10 @@ module type PACK = sig
 
   module PInfo :
     Pack_info.S
-    with module Hash := Hash
-     and module Inflate := Inflate
-     and module HDec := HDec
-     and module PDec := PDec
+      with module Hash := Hash
+       and module Inflate := Inflate
+       and module HDec := HDec
+       and module PDec := PDec
 
   type error
 
@@ -318,8 +318,8 @@ module type PACK = sig
 
       As for {!read}, {!size} can return an {!error}. *)
 
-  (** The stream contains the PACK flow. *)
   type stream = unit -> Cstruct.t option Lwt.t
+  (** The stream contains the PACK flow. *)
 
   val from : state -> stream -> (Hash.t * int, error) result Lwt.t
   (** [from git stream] populates the Git repository [git] from the PACK flow
@@ -327,14 +327,12 @@ module type PACK = sig
       are not added in the Git repository. *)
 
   val make :
-       state
-    -> ?window:[`Object of int | `Memory of int]
-    -> ?depth:int
-    -> value list
-    -> ( stream * (Checkseum.Crc32.t * int64) Hash.Map.t Lwt_mvar.t
-       , error )
-       result
-       Lwt.t
+    state ->
+    ?window:[ `Object of int | `Memory of int ] ->
+    ?depth:int ->
+    value list ->
+    (stream * (Checkseum.Crc32.t * int64) Hash.Map.t Lwt_mvar.t, error) result
+    Lwt.t
   (** [make ?window ?depth values] makes a PACK stream from a list of
       {!Value.t}.
 
@@ -353,32 +351,32 @@ module type PACK = sig
 end
 
 module type S = sig
-  (** The type of the git repository. *)
   type t
+  (** The type of the git repository. *)
 
-  (** The [FS] module used to make the implementation. *)
   module FS : S.FS
+  (** The [FS] module used to make the implementation. *)
 
-  (** The [Digest] module used to make the implementation. *)
   module Hash : S.HASH
+  (** The [Digest] module used to make the implementation. *)
 
-  (** The [Inflate] module used to make the implementation. *)
   module Inflate : S.INFLATE
+  (** The [Inflate] module used to make the implementation. *)
 
-  (** The [Deflate] module used to make the implementation. *)
   module Deflate : S.DEFLATE
+  (** The [Deflate] module used to make the implementation. *)
 
   (** The Value module, which represents the Git object. *)
   module Value :
     Value.S
-    with module Hash := Hash
-     and module Inflate := Inflate
-     and module Deflate := Deflate
-     and module Blob = Blob.Make(Hash)
-     and module Commit = Commit.Make(Hash)
-     and module Tree = Tree.Make(Hash)
-     and module Tag = Tag.Make(Hash)
-     and type t = Value.Make(Hash)(Inflate)(Deflate).t
+      with module Hash := Hash
+       and module Inflate := Inflate
+       and module Deflate := Deflate
+       and module Blob = Blob.Make(Hash)
+       and module Commit = Commit.Make(Hash)
+       and module Tree = Tree.Make(Hash)
+       and module Tag = Tag.Make(Hash)
+       and type t = Value.Make(Hash)(Inflate)(Deflate).t
 
   (** The Reference module, which represents the Git reference. *)
   module Reference : Reference.IO with module Hash := Hash and module FS := FS
@@ -387,17 +385,17 @@ module type S = sig
 
   module PDec :
     Unpack.P
-    with module Hash := Hash
-     and module Inflate := Inflate
-     and module Hunk := HDec
+      with module Hash := Hash
+       and module Inflate := Inflate
+       and module Hunk := HDec
 
   module RPDec :
     Unpack.D
-    with module Hash := Hash
-     and module Inflate := Inflate
-     and module Hunk := HDec
-     and module Pack := PDec
-     and module Mapper := FS.Mapper
+      with module Hash := Hash
+       and module Inflate := Inflate
+       and module Hunk := HDec
+       and module Pack := PDec
+       and module Mapper := FS.Mapper
 
   module PEnc : Pack.P with module Hash := Hash and module Deflate := Deflate
   module IDec : Index_pack.LAZY with module Hash := Hash
@@ -405,18 +403,17 @@ module type S = sig
 
   module PInfo :
     Pack_info.S
-    with module Hash := Hash
-     and module Inflate := Inflate
-     and module HDec := HDec
-     and module PDec := PDec
+      with module Hash := Hash
+       and module Inflate := Inflate
+       and module HDec := HDec
+       and module PDec := PDec
 
   module Packed_refs :
     Packed_refs.S with module Hash := Hash and module FS := FS
 
+  type kind = [ `Commit | `Tree | `Tag | `Blob ]
   (** Kind of the {i packed} Git object. *)
-  type kind = [`Commit | `Tree | `Tag | `Blob]
 
-  (** The type error. *)
   type error =
     [ `Delta of PEnc.Delta.error
     | `Pack_decoder of RPDec.error
@@ -431,6 +428,7 @@ module type S = sig
     | Inflate.error Error.Inf.t
     | Deflate.error Error.Def.t
     | Error.not_found ]
+  (** The type error. *)
 
   val pp_error : error Fmt.t
   (** Pretty-printer of {!error}. *)
@@ -439,42 +437,42 @@ module type S = sig
       git repository. *)
   module Loose :
     LOOSE
-    with type t = Value.t
-     and type state = t
-     and type error = error
-     and module Hash := Hash
-     and module Inflate := Inflate
-     and module Deflate := Deflate
-     and module FS := FS
+      with type t = Value.t
+       and type state = t
+       and type error = error
+       and module Hash := Hash
+       and module Inflate := Inflate
+       and module Deflate := Deflate
+       and module FS := FS
 
   (** The [Pack] module which represents any {i packed} git object available in
       the git repository. *)
   module Pack :
     PACK
-    with type t = RPDec.Object.t
-     and type value = Value.t
-     and type state = t
-     and type error = error
-     and module Hash := Hash
-     and module FS := FS
-     and module Inflate := Inflate
-     and module HDec := HDec
-     and module PDec := PDec
-     and module RPDec := RPDec
+      with type t = RPDec.Object.t
+       and type value = Value.t
+       and type state = t
+       and type error = error
+       and module Hash := Hash
+       and module FS := FS
+       and module Inflate := Inflate
+       and module HDec := HDec
+       and module PDec := PDec
+       and module RPDec := RPDec
 
-  (** The type for buffers. *)
   type buffer
+  (** The type for buffers. *)
 
   val default_buffer : unit -> buffer
 
   val buffer :
-       ?ztmp:Cstruct.t
-    -> ?etmp:Cstruct.t
-    -> ?dtmp:Cstruct.t
-    -> ?raw:Cstruct.t
-    -> ?window:Inflate.window
-    -> unit
-    -> buffer
+    ?ztmp:Cstruct.t ->
+    ?etmp:Cstruct.t ->
+    ?dtmp:Cstruct.t ->
+    ?raw:Cstruct.t ->
+    ?window:Inflate.window ->
+    unit ->
+    buffer
   (** Build a buffer to read and write a Git object.
 
       {ul
@@ -579,12 +577,12 @@ module type S = sig
       git repository [state]. *)
 
   val fold :
-       t
-    -> ('a -> ?name:Path.t -> length:int64 -> Hash.t -> Value.t -> 'a Lwt.t)
-    -> path:Path.t
-    -> 'a
-    -> Hash.t
-    -> 'a Lwt.t
+    t ->
+    ('a -> ?name:Path.t -> length:int64 -> Hash.t -> Value.t -> 'a Lwt.t) ->
+    path:Path.t ->
+    'a ->
+    Hash.t ->
+    'a Lwt.t
   (** [fold state f ~path acc hash] iters on any git objects reachable by the
      git object [hash] which located in [path] (for example, if you iter on a
      commit, [path] should be ["."] - however, if you iter on a tree, [path]
@@ -630,9 +628,9 @@ module type S = sig
         relationship in the current git repository [state]. *)
 
     val normalize :
-         Hash.t Reference.Map.t
-      -> Reference.head_contents
-      -> (Hash.t, error) result Lwt.t
+      Hash.t Reference.Map.t ->
+      Reference.head_contents ->
+      (Hash.t, error) result Lwt.t
     (** [normalize graph ref] is the final hash pointed by the reference [ref].
        This function can return an error:
 
@@ -655,8 +653,7 @@ module type S = sig
     (** [remove state reference] removes the reference [reference] from the git
         repository [state]. *)
 
-    val read :
-      t -> Reference.t -> (Reference.head_contents, error) result Lwt.t
+    val read : t -> Reference.t -> (Reference.head_contents, error) result Lwt.t
     (** [read state reference] is the value contained in the reference
         [reference] (available in the git repository [state]). *)
 
@@ -687,18 +684,18 @@ module Make
     (Deflate : S.DEFLATE) : sig
   include
     S
-    with module Hash = Hash.Make(H)
-     and module Inflate = Inflate
-     and module Deflate = Deflate
-     and module FS = FS
+      with module Hash = Hash.Make(H)
+       and module Inflate = Inflate
+       and module Deflate = Deflate
+       and module FS = FS
 
   val v :
-       ?dotgit:Fpath.t
-    -> ?compression:int
-    -> ?buffer:((buffer -> unit Lwt.t) -> unit Lwt.t)
-    -> FS.t
-    -> Fpath.t
-    -> (t, error) result Lwt.t
+    ?dotgit:Fpath.t ->
+    ?compression:int ->
+    ?buffer:((buffer -> unit Lwt.t) -> unit Lwt.t) ->
+    FS.t ->
+    Fpath.t ->
+    (t, error) result Lwt.t
   (** [create ?dotgit ?compression ?buffer fs root] creates a new store
       represented by the path [root] (default is ["."]), where the Git objects
       are located in [dotgit] (default is [root / ".git"] and when Git objects
