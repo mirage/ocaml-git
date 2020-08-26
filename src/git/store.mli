@@ -25,6 +25,8 @@
     allocated buffers outside this scope and process some I/O operations on
     pools. *)
 
+module type Rs = sig
+  type +'a fiber
 
   type t
 
@@ -32,11 +34,21 @@
 
   val pp_error : error Fmt.t
 
+  val atomic_wr : t -> Reference.t -> string -> (unit, error) result fiber
 
+  (* open / single_write / close *)
+  val atomic_rd : t -> Reference.t -> (string, error) result fiber
 
+  (* open / single_read / close *)
+  val atomic_rm : t -> Reference.t -> (unit, error) result fiber
 
+  (* unlink *)
+  val list : t -> Reference.t list fiber
 
+  (* readdir / closedir *)
 
+  val reset : t -> (unit, error) result fiber
+end
 
 
 

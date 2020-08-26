@@ -23,16 +23,29 @@ let src = Logs.Src.create "git.store" ~doc:"logs git's store event"
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
+module type Rs = sig
+  type +'a fiber
 
   type t
+
   type error
 
+  val pp_error : error Fmt.t
 
+  val atomic_wr : t -> Reference.t -> string -> (unit, error) result fiber
 
+  (* open / single_write / close *)
+  val atomic_rd : t -> Reference.t -> (string, error) result fiber
 
+  (* open / single_read / close *)
+  val atomic_rm : t -> Reference.t -> (unit, error) result fiber
 
+  (* unlink *)
+  val list : t -> Reference.t list fiber
 
+  val reset : t -> (unit, error) result fiber
 
+  (* readdir / closedir *)
 end
 
 module Make (H : Digestif.S) (FS : S.FS) (I : S.INFLATE) (D : S.DEFLATE) =
