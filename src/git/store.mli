@@ -70,29 +70,24 @@ type ('uid, 'major_uid, 'major) major = {
   uid_of_major_uid : 'major_uid -> 'uid;
 }
 
+open Reference
+
 module Make
-    (H : Digestif.S)
-    (FS : S.FS)
-    (Inflate : S.INFLATE)
-    (Deflate : S.DEFLATE) : sig
-  include
-    S
-      with module Hash = Hash.Make(H)
-       and module Inflate = Inflate
-       and module Deflate = Deflate
-       and module FS = FS
+    (Digestif : Digestif.S)
+    (Mn : Loose_git.STORE
+            with type +'a fiber = 'a Lwt.t
+             and type uid = Digestif.t)
+    (Mj : Mj with type +'a fiber = 'a Lwt.t)
+    (Rs : Rs with type +'a fiber = 'a) : sig
+  include Minimal.S with type hash = Digestif.t
 
   val v :
-    ?dotgit:Fpath.t ->
-    ?compression:int ->
-    ?buffer:((buffer -> unit Lwt.t) -> unit Lwt.t) ->
-    FS.t ->
+    dotgit:Fpath.t ->
+    minor:Mn.t ->
+    major:Mj.t ->
+    major_uid:(hash, Mj.uid, Mj.t) major ->
+    ?packed:Digestif.t Packed.packed ->
+    refs:Rs.t ->
     Fpath.t ->
-    (t, error) result Lwt.t
-  (** [create ?dotgit ?compression ?buffer fs root] creates a new store
-      represented by the path [root] (default is ["."]), where the Git objects
-      are located in [dotgit] (default is [root / ".git"] and when Git objects
-      are compressed by the [level] (default is [4]). If [buffer] is not set,
-      use a [Lwt_pool] of {!default_buffer} of size 4. [fs] is the storage
-      backend state. *)
+    t Lwt.t
 end
