@@ -1,0 +1,19 @@
+(executable
+ (name bench_pack)
+ (libraries bigstringaf mtime fmt decompress.de decompress.zl digestif.c
+   bigarray-compat carton unix)
+ (foreign_stubs
+  (language c)
+  (names rdtsc)))
+
+(rule
+ (alias runbench)
+ (package carton)
+ (deps
+  (:bench bench_pack.exe)
+  ../test/carton/bomb.idx
+  ../test/carton/bomb.pack)
+ (action
+  (progn
+   (run %{bench} 0)
+   (run %{bench} 1))))
