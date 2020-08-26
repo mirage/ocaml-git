@@ -1,0 +1,5 @@
+(library
+ (name carton_lwt)
+ (public_name carton-lwt)
+ (libraries decompress.zl decompress.de optint bigstringaf carton carton.thin
+   lwt))
