@@ -398,4 +398,4 @@ module Make (Digestif : Digestif.S) = struct
   let has_global_checkout = false
 end
 
-module Store = Make (Digestif.SHA1) (Inflate) (Deflate)
+module Store = Make (Digestif.SHA1)
