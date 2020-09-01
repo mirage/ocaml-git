@@ -168,7 +168,7 @@ open Cmdliner
 let store =
   let parser x =
     match Fpath.of_string x with
-    | Ok v when Sys.is_directory x ->
+    | Ok v when Sys.is_directory (Fpath.to_string v) ->
         Rresult.(
           R.reword_error (R.msgf "%a" Store.pp_error) (Lwt_main.run (Store.v v)))
     | Ok v -> Rresult.R.error_msgf "%a does not exist" Fpath.pp v

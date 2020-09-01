@@ -292,7 +292,7 @@ open Cmdliner
 let store =
   let parser x =
     match Fpath.of_string x with
-    | Ok v when Sys.is_directory x -> Ok v
+    | Ok v when Sys.is_directory (Fpath.to_string v) -> Ok v
     | Ok v -> Rresult.R.error_msgf "%a does not exist" Fpath.pp v
     | Error _ as err -> err
   in

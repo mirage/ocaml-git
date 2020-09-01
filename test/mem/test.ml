@@ -43,7 +43,7 @@ open Cmdliner
 let store =
   let parser x =
     match Fpath.of_string x with
-    | Ok v when Sys.is_directory x ->
+    | Ok v when Sys.is_directory (Fpath.to_string v) ->
         Lwt_main.run
           Lwt.Infix.(
             Store.v v
