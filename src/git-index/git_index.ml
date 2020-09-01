@@ -176,12 +176,12 @@ module Entry = struct
   let make ~hash path =
     try
       let stat = Unix.lstat (Fpath.to_string path) in
-      let ctime_sec, ctime_nsec = Float.modf stat.Unix.st_ctime in
+      let ctime_nsec, ctime_sec = Float.modf stat.Unix.st_ctime in
       let ctime_sec = Float.to_int ctime_sec in
-      let ctime_nsec = Float.to_int ctime_nsec in
-      let mtime_sec, mtime_nsec = Float.modf stat.Unix.st_mtime in
+      let ctime_nsec = Float.to_int (ctime_nsec *. 1_000_000_000.) in
+      let mtime_nsec, mtime_sec = Float.modf stat.Unix.st_mtime in
       let mtime_sec = Float.to_int mtime_sec in
-      let mtime_nsec = Float.to_int mtime_nsec in
+      let mtime_nsec = Float.to_int (mtime_nsec *. 1_000_000_000.) in
       let open Rresult in
       ( match stat.Unix.st_kind with
       | Unix.S_DIR -> Fmt.invalid_arg "Git sub-module are not implemented"
@@ -825,4 +825,6 @@ let store_to_path :
     Unix.close fd;
     Rresult.R.ok ()
   with Unix.Unix_error (err, _, _) ->
-    Rresult.R.error_msgf "Git_index.store_to_path: %s" (Unix.error_message err)
+    Rresult.R.error_msgf "Git_index.store_to_path %a: %s"
+      Fpath.pp path
+      (Unix.error_message err)
