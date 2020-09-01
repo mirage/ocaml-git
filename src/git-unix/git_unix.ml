@@ -513,6 +513,15 @@ module Reference_heap = struct
     | `Not_found refname -> Fmt.pf ppf "%a not found" Git.Reference.pp refname
     | `Msg err -> Fmt.string ppf err
 
+  let safely_unlink filename =
+    let rec unlink filename =
+      try Unix.unlink filename with
+      | Unix.Unix_error (Unix.ENOENT, _, _) -> ()
+      | Unix.Unix_error (Unix.EINTR, _, _) -> unlink filename
+      | Unix.Unix_error (err, _, _) ->
+        Fmt.failwith "unlink %s: %s" filename (Unix.error_message err) in
+    unlink filename
+
   let atomic_wr root refname str =
     Log.debug (fun m -> m "Writing %a: %S." Git.Reference.pp refname str);
     let path = List.fold_left Fpath.add_seg root (Git.Reference.segs refname) in
@@ -527,6 +536,9 @@ module Reference_heap = struct
     Bos.OS.File.write src str >>= fun () ->
     let fd = Unix.openfile (Fpath.to_string src) Unix.[ O_WRONLY ] 0o644 in
     Unix.close fd;
+    (* XXX(dinosaure): on Windows, [rename] requires that [path] does not
+     * exist! *)
+    if Sys.os_type = "Win32" then safely_unlink (Fpath.to_string path) ;
     Unix.rename (Fpath.to_string src) (Fpath.to_string path);
     R.ok ()
 
