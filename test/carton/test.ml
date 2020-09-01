@@ -534,7 +534,7 @@ let verify_bomb_pack () =
         { Carton.Dec.Idx.crc; offset; uid })
       matrix
   in
-  let oc = open_out "bomb-test.idx" in
+  let oc = open_out_bin "bomb-test.idx" in
   let encoder = Idx.encoder (`Channel oc) ~pack:hash_expected entries in
   let go () =
     match Idx.encode encoder `Await with `Partial -> assert false | `Ok -> ()
@@ -762,7 +762,7 @@ let pack_bomb_pack () =
     output_string oc s
   in
 
-  let oc = open_out "new.pack" in
+  let oc = open_out_bin "new.pack" in
 
   let cursor = ref 12 in
   let iter target =
@@ -864,7 +864,7 @@ let cycle () =
     output_string oc s
   in
 
-  let oc = open_out "cycle.pack" in
+  let oc = open_out_bin "cycle.pack" in
   let targets = [| ta; tb |] in
 
   let cursor = ref 12 in
