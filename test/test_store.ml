@@ -6,7 +6,7 @@ let random_string len =
   Bytes.unsafe_to_string res
 
 let is_not_refname = function
-  | ' ' | '~' | '^' | ':' | '?' | '*' -> true
+  | ' ' | '~' | '^' | ':' | '?' | '*' | '|' -> true
   | chr -> if Char.code chr < 32 || Char.code chr > 126 then true else false
 
 let random_reference () =
