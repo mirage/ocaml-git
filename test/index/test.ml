@@ -27,11 +27,11 @@ let empty =
   let run path =
     let open Rresult in
     Bos.OS.Dir.with_current path @@ fun () ->
-    store_to_path ~hash:SHA1 Fpath.(path / ".git" / "index") index >>= fun () ->
+    store_to_path ~hash:SHA1 Fpath.(v ".git" / "index") index >>= fun () ->
     let status = Bos.Cmd.(v "git" % "status" % "--porcelain") in
     let status = Bos.OS.Cmd.run_out status in
     Bos.OS.Cmd.out_lines status >>= function
-    | [], _ -> load ~hash:SHA1 Fpath.(path / ".git" / "index")
+    | [], _ -> load ~hash:SHA1 Fpath.(v ".git" / "index")
     | res, _ ->
         Alcotest.failf "git-status: @[<hov>%a@]" Fmt.(Dump.list string) res
   in
@@ -44,10 +44,10 @@ let add_should_be_empty =
   let run path =
     let open Rresult in
     Bos.OS.Dir.with_current path @@ fun () ->
-    Bos.OS.File.write Fpath.(path / "should-be-empty") "" >>= fun () ->
+    Bos.OS.File.write Fpath.(v "should-be-empty") "" >>= fun () ->
     let index = make SHA1 in
     add ~hash:SHA1 Fpath.(v "should-be-empty") index >>= fun () ->
-    store_to_path ~hash:SHA1 Fpath.(path / ".git" / "index") index >>= fun () ->
+    store_to_path ~hash:SHA1 Fpath.(v ".git" / "index") index >>= fun () ->
     let status = Bos.Cmd.(v "git" % "status" % "--porcelain") in
     let status = Bos.OS.Cmd.run_out status in
     Bos.OS.Cmd.out_lines ~trim:true status >>= function
@@ -85,6 +85,7 @@ let blob_of_path path =
     Git.Blob.of_string contents
   else
     let ic = open_in_bin (Fpath.to_string path) in
+    Fmt.epr ">>> blob_of_path: %a.\n%!" Fpath.pp path ;
     let ln = in_channel_length ic in
     let rs = Bytes.create ln in
     really_input ic rs 0 ln;
@@ -129,10 +130,10 @@ let write_tree expect =
   let run path =
     let open Rresult in
     Bos.OS.Dir.with_current path @@ fun () ->
-    load ~hash:SHA1 Fpath.(path / ".git" / "index") >>= fun t ->
+    load ~hash:SHA1 Fpath.(v ".git" / "index") >>= fun t ->
     let fiber =
       let open Lwt.Infix in
-      Git_unix.Store.v path
+      Git_unix.Store.v Fpath.(v ".")
       >|= Rresult.R.reword_error (Rresult.R.msgf "%a" Git_unix.Store.pp_error)
       >>? fun store ->
       let tbl = Hashtbl.create 0x100 in
@@ -184,12 +185,12 @@ let delete_should_be_empty =
     let open Rresult in
     Bos.OS.Dir.with_current path @@ fun () ->
     Bos.OS.Cmd.run Bos.Cmd.(v "git" % "commit" % "-m" % ".") >>= fun () ->
-    load ~hash:SHA1 Fpath.(path / ".git" / "index") >>= fun t ->
+    load ~hash:SHA1 Fpath.(v ".git" / "index") >>= fun t ->
     (* XXX(dinosaure): [git] deletes [should-be-empty] into the index file **AND**
        concretely into the file-system. *)
     rem Fpath.(v "should-be-empty") t;
-    Bos.OS.File.delete Fpath.(path / "should-be-empty") >>= fun () ->
-    store_to_path ~hash:SHA1 Fpath.(path / ".git" / "index") t >>= fun () ->
+    Bos.OS.File.delete Fpath.(v "should-be-empty") >>= fun () ->
+    store_to_path ~hash:SHA1 Fpath.(v ".git" / "index") t >>= fun () ->
     let cmd = Bos.Cmd.(v "git" % "status" % "--porcelain") in
     let cmd = Bos.OS.Cmd.run_out cmd in
     Bos.OS.Cmd.out_lines ~trim:true cmd >>= function
@@ -264,9 +265,9 @@ let populate =
     add ~hash:SHA1 Fpath.(v "path2" / "file2sym") index >>= fun () ->
     add ~hash:SHA1 Fpath.(v "path3" / "file3sym") index >>= fun () ->
     add ~hash:SHA1 Fpath.(v "path3" / "subp3" / "file3sym") index >>= fun () ->
-    Lwt_main.run (run_store path) |> R.reword_error (fun err -> `Store err)
+    Lwt_main.run (run_store (Fpath.v ".")) |> R.reword_error (fun err -> `Store err)
     >>= fun () ->
-    store_to_path ~hash:SHA1 Fpath.(path / ".git" / "index") index >>= fun () ->
+    store_to_path ~hash:SHA1 Fpath.(v ".git" / "index") index >>= fun () ->
     let status = Bos.Cmd.(v "git" % "status" % "--porcelain") in
     let status = Bos.OS.Cmd.run_out status in
     Bos.OS.Cmd.out_lines ~trim:true status >>= fun (lst, _) ->
