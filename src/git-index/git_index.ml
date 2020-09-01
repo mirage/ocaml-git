@@ -139,24 +139,24 @@ module Entry = struct
    fun ~hash path ->
     let module Hash = (val module_of hash) in
     try
-      let fd = Unix.openfile (Fpath.to_string path) Unix.[ O_RDONLY ] 0o600 in
+      let ic = open_in_bin (Fpath.to_string path) in
       let tmp = Bytes.create io_buffer_size in
       let ctx = Hash.empty in
       let rec go ctx =
-        let len = Unix.read fd tmp 0 (Bytes.length tmp) in
+        let len = input ic tmp 0 (Bytes.length tmp) in
         if len = 0 then Hash.get ctx
         else
           let ctx = Hash.feed_bytes ctx tmp ~off:0 ~len in
           go ctx
       in
-      let stat = Unix.fstat fd in
+      let len = in_channel_length ic in
       let ctx =
-        Hash.feed_string ctx (Fmt.strf "blob %d\000" stat.Unix.st_size)
+        Hash.feed_string ctx (Fmt.strf "blob %d\000" len)
       in
       let hash = go ctx in
-      Unix.close fd ; Rresult.R.ok hash
-    with Unix.Unix_error (err, _, _) ->
-      Rresult.R.error_msgf "%a: %s" Fpath.pp path (Unix.error_message err)
+      close_in ic ; Rresult.R.ok hash
+    with exn ->
+      Rresult.R.error_msgf "%a: %s" Fpath.pp path (Printexc.to_string exn)
 
   let oid_of_link :
       type oid. hash:oid hash -> Fpath.t -> (oid, [> Rresult.R.msg ]) result =
