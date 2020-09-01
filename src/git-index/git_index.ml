@@ -154,7 +154,7 @@ module Entry = struct
         Hash.feed_string ctx (Fmt.strf "blob %d\000" stat.Unix.st_size)
       in
       let hash = go ctx in
-      Rresult.R.ok hash
+      Unix.close fd ; Rresult.R.ok hash
     with Unix.Unix_error (err, _, _) ->
       Rresult.R.error_msgf "%a: %s" Fpath.pp path (Unix.error_message err)
 
