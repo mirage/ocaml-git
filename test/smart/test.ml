@@ -1278,7 +1278,7 @@ let test_push_ssh () =
       Alcotest.failf "%a" Conduit_lwt.pp_error err
 
 let load_file filename =
-  let ic = open_in filename in
+  let ic = open_in_bin filename in
   let ln = in_channel_length ic in
   let rs = Bytes.create ln in
   really_input ic rs 0 ln;

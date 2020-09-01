@@ -18,7 +18,7 @@ let input_line ic =
 
 let load ~of_hex dotgit =
   try
-    let ic = open_in Fpath.(to_string (dotgit / "packed-refs")) in
+    let ic = open_in_bin Fpath.(to_string (dotgit / "packed-refs")) in
     let rs = Git.Reference.Packed.load scheduler ~input_line ~of_hex ic in
     close_in ic;
     Unix_scheduler.prj rs

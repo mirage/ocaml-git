@@ -147,7 +147,7 @@ let empty_pack, uid_empty_pack =
     | Ok ((), (_, `Exited 0)) -> ()
     | _ -> Alcotest.fail "Error while executing 'git pack-objects'"
   in
-  let ic = open_in "pack-null" in
+  let ic = open_in_bin "pack-null" in
   let ln = in_channel_length ic in
   let rs = Bytes.create ln in
   really_input ic rs 0 ln;
@@ -289,7 +289,7 @@ let empty_index, uid_empty_index =
     | Ok () -> ()
     | Error (`Msg err) -> Alcotest.fail err
   in
-  let ic = open_in "index-null" in
+  let ic = open_in_bin "index-null" in
   let ln = in_channel_length ic in
   let rs = Bytes.create ln in
   really_input ic rs 0 ln;
@@ -371,8 +371,8 @@ let index_of_one_entry () =
 
 let file =
   let compare a b =
-    let ic_a = open_in a in
-    let ic_b = open_in b in
+    let ic_a = open_in_bin a in
+    let ic_b = open_in_bin b in
     let ln_a = in_channel_length ic_a and ln_b = in_channel_length ic_b in
     if ln_a <> ln_b then (
       close_in ic_a;
@@ -420,7 +420,7 @@ let verify_bomb_pack () =
   let tmp0 = Bytes.create 0x1000 in
   let tmp1 = Bigstringaf.create 0x1000 in
 
-  let ic = open_in "bomb.pack" in
+  let ic = open_in_bin "bomb.pack" in
   let hash_expected =
     let len = in_channel_length ic in
     seek_in ic (len - 20);
@@ -605,7 +605,7 @@ let unpack_bomb_pack () =
   in
 
   let first_pass () =
-    let ic = open_in "bomb.pack" in
+    let ic = open_in_bin "bomb.pack" in
     let max, _, _ = Us.prj (Fp.check_header unix unix_read ic) in
     seek_in ic 0;
     let decoder = Fp.decoder ~o:z ~allocate (`Channel ic) in
@@ -934,7 +934,7 @@ module Index_stream_decoder = Carton.Dec.Idx.M (IO) (Uid)
 
 let decode_index_stream () =
   Alcotest.test_case "decode index stream" `Quick @@ fun () ->
-  let ic = open_in "git-bomb.idx" in
+  let ic = open_in_bin "git-bomb.idx" in
   let device = Carton.Dec.Idx.Device.device () in
   let uid = Carton.Dec.Idx.Device.create device in
   let tp = Bytes.create 0x1000 in
