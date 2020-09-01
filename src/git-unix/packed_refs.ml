@@ -11,9 +11,7 @@ let scheduler =
 
 let input_line ic =
   match Stdlib.input_line ic with
-  | line ->
-      Fmt.epr ">>> %S.\n%!" line;
-      Unix_scheduler.inj (Some line)
+  | line -> Unix_scheduler.inj (Some line)
   | exception End_of_file -> Unix_scheduler.inj None
 
 let load ~of_hex dotgit =

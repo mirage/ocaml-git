@@ -57,7 +57,6 @@ struct
     match want with
     | `None -> [], []
     | `All ->
-        Fmt.epr ">>> REMOTE HAVE: %d.\n%!" (List.length have);
         List.fold_left
           (fun acc -> function uid, ref, false -> (uid, ref) :: acc | _ -> acc)
           [] have
@@ -105,7 +104,6 @@ struct
         Neg.compare = Uid.compare;
       }
     in
-    Fmt.epr ">>> HOW MANY REFS: %d.\n%!" (List.length refs);
     Neg.find_common sched io flow fetch_cfg hex access store negotiator ctx uids
     |> prj
     >>= function

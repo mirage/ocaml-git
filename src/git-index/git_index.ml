@@ -520,7 +520,6 @@ let add :
           pos
         else -pos - 1
       in
-      Fmt.epr ">>> ADD ENTRY %a INTO: %d.\n%!" Fpath.pp path pos;
       let init entry i =
         if i < pos then t.entries.(i)
         else if i = pos then entry
@@ -649,9 +648,7 @@ let sort :
     | `Blob { Entry.name = p; _ } -> Fmt.pf ppf "<blob:%a>" Fpath.pp p
   in
   match remaining with
-  | [] ->
-      Fmt.epr ">>> @[<hov>%a@].\n%!" Fmt.(Dump.list pp_v) sorted_ks;
-      Ok sorted_ks
+  | [] -> Ok sorted_ks
   | _ ->
       Rresult.R.error_msgf "Git_index.sort: cycle (remaining; @[<hov>%a@])"
         Fmt.(Dump.hashtbl pp_v (Dump.list pp_v))
