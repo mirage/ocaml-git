@@ -519,7 +519,8 @@ module Reference_heap = struct
       | Unix.Unix_error (Unix.ENOENT, _, _) -> ()
       | Unix.Unix_error (Unix.EINTR, _, _) -> unlink filename
       | Unix.Unix_error (err, _, _) ->
-        Fmt.failwith "unlink %s: %s" filename (Unix.error_message err) in
+          Fmt.failwith "unlink %s: %s" filename (Unix.error_message err)
+    in
     unlink filename
 
   let atomic_wr root refname str =
@@ -538,7 +539,7 @@ module Reference_heap = struct
     Unix.close fd;
     (* XXX(dinosaure): on Windows, [rename] requires that [path] does not
      * exist! *)
-    if Sys.os_type = "Win32" then safely_unlink (Fpath.to_string path) ;
+    if Sys.os_type = "Win32" then safely_unlink (Fpath.to_string path);
     Unix.rename (Fpath.to_string src) (Fpath.to_string path);
     R.ok ()
 

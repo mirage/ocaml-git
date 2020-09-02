@@ -85,7 +85,7 @@ let blob_of_path path =
     Git.Blob.of_string contents
   else
     let ic = open_in_bin (Fpath.to_string path) in
-    Fmt.epr ">>> blob_of_path: %a.\n%!" Fpath.pp path ;
+    Fmt.epr ">>> blob_of_path: %a.\n%!" Fpath.pp path;
     let ln = in_channel_length ic in
     let rs = Bytes.create ln in
     really_input ic rs 0 ln;
@@ -265,7 +265,8 @@ let populate =
     add ~hash:SHA1 Fpath.(v "path2" / "file2sym") index >>= fun () ->
     add ~hash:SHA1 Fpath.(v "path3" / "file3sym") index >>= fun () ->
     add ~hash:SHA1 Fpath.(v "path3" / "subp3" / "file3sym") index >>= fun () ->
-    Lwt_main.run (run_store (Fpath.v ".")) |> R.reword_error (fun err -> `Store err)
+    Lwt_main.run (run_store (Fpath.v "."))
+    |> R.reword_error (fun err -> `Store err)
     >>= fun () ->
     store_to_path ~hash:SHA1 Fpath.(v ".git" / "index") index >>= fun () ->
     let status = Bos.Cmd.(v "git" % "status" % "--porcelain") in
