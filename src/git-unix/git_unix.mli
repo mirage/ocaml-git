@@ -16,33 +16,17 @@
 
 (** Unix backend. *)
 
-module Fs = Fs
-module Net = Net
-module Index = Index
+module Make (Digestif : Digestif.S) : sig
+  include Git.S with type hash = Digestif.t
 
-module Store : sig
-  include
-    Git.Store.S
-    with module Hash = Git.Hash.Make(Digestif.SHA1)
-     and module FS := Fs
-
-  val v :
-       ?dotgit:Fpath.t
-    -> ?compression:int
-    -> ?buffer:((buffer -> unit Lwt.t) -> unit Lwt.t)
-    -> Fpath.t
-    -> (t, error) result Lwt.t
+  val v : ?dotgit:Fpath.t -> Fpath.t -> (t, error) result Lwt.t
 end
 
-type endpoint = Net.endpoint = {uri: Uri.t; headers: Cohttp.Header.t}
+module Sync (Store : Git.S) (HTTP : Smart_git.HTTP) :
+  Git.Sync.S with type hash = Store.hash and type store = Store.t
 
-val endpoint : ?headers:Cohttp.Header.t -> Uri.t -> endpoint
+module Store : sig
+  include Git.S with type hash = Digestif.SHA1.t
 
-module Sync (G : Git.S) : sig
-  module Tcp : Git.Sync.S with module Store := G and type Endpoint.t = endpoint
-
-  module Http :
-    Git_http.Sync.S with module Store := G and type Client.endpoint = endpoint
-
-  include Git.Sync.S with module Store := G and type Endpoint.t = endpoint
+  val v : ?dotgit:Fpath.t -> Fpath.t -> (t, error) result Lwt.t
 end

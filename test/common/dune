@@ -1,4 +1,0 @@
-(library
-  (name      test_git)
-  (wrapped   false)
-  (libraries git mtime mtime.clock.os alcotest mirage-crypto-rng lwt.unix logs.fmt))

@@ -1,0 +1,12 @@
+(executable
+ (name test)
+ (libraries cmdliner logs.fmt logs lwt lwt.unix digestif.c astring fmt fpath
+   bos rresult result git git-unix git-unix.index alcotest))
+
+(rule
+ (alias runtest)
+ (package git-unix)
+ (enabled_if
+  (= %{os_type} "Unix"))
+ (action
+  (run ./test.exe)))

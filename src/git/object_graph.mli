@@ -16,35 +16,27 @@
  *)
 
 module type S = sig
-  (** Store used as a graph. *)
-  module Store : Minimal.S
+  type hash
+  type store
 
+  module S : Set.S with type elt = hash
   (** An imperative Graph of the store. *)
-  module K : Graph.Sig.I with type V.t = Store.Hash.t
 
-  val keys : K.t -> Store.Hash.t list
+  module K : Graph.Sig.I with type V.t = hash
+
+  val keys : K.t -> hash list
   (** [keys graph] returns all hashes recheables in the graph [graph]. *)
 
-  val of_keys : Store.t -> K.t Lwt.t
+  val of_keys : store -> K.t Lwt.t
   (** [of_keys store] makes a new graph from all values of a [store]. *)
 
-  val of_commits : Store.t -> K.t Lwt.t
+  val of_commits : store -> K.t Lwt.t
   (** [of_commits store] makes a new graph from all commits of a [store]. *)
 
-  val closure :
-       ?full:bool
-    -> Store.t
-    -> min:Store.Hash.Set.t
-    -> max:Store.Hash.Set.t
-    -> K.t Lwt.t
-
-  val pack :
-       Store.t
-    -> min:Store.Hash.Set.t
-    -> max:Store.Hash.Set.t
-    -> (Store.Hash.t * Store.Value.t) list Lwt.t
-
-  val to_dot : Store.t -> Format.formatter -> unit Lwt.t
+  val closure : ?full:bool -> store -> min:S.t -> max:S.t -> K.t Lwt.t
+  val pack : store -> min:S.t -> max:S.t -> (hash * hash Value.t) list Lwt.t
+  val to_dot : store -> Format.formatter -> unit Lwt.t
 end
 
-module Make (S : Minimal.S) : S with module Store = S
+module Make (Hash : Digestif.S) (Store : Minimal.S with type hash = Hash.t) :
+  S with type hash = Hash.t and type store = Store.t

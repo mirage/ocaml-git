@@ -1,0 +1,4 @@
+(library
+ (name test_store)
+ (libraries lwt result rresult astring digestif base64 git fmt alcotest
+   alcotest-lwt))

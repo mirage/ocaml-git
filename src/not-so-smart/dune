@@ -1,0 +1,37 @@
+(library
+ (name smart)
+ (public_name nss.smart)
+ (modules smart filter capability state protocol encoder decoder)
+ (libraries stdlib-shims result rresult domain-name astring fmt))
+
+(library
+ (name sigs)
+ (public_name nss.sigs)
+ (modules sigs)
+ (libraries fmt cstruct))
+
+(library
+ (name neg)
+ (public_name nss.neg)
+ (modules neg find_common default)
+ (libraries stdlib-shims fmt rresult cstruct sigs logs psq smart))
+
+(library
+ (name pck)
+ (public_name nss.pck)
+ (modules pck)
+ (libraries sigs psq logs smart))
+
+(library
+ (name nss)
+ (public_name nss)
+ (modules nss fetch push)
+ (libraries fmt result rresult logs domain-name smart sigs neg pck))
+
+(library
+ (name smart_git)
+ (public_name nss.git)
+ (modules smart_git)
+ (libraries decompress.de decompress.zl cstruct logs astring result rresult
+   bigstringaf fmt emile conduit lwt domain-name uri sigs smart pck nss
+   digestif carton carton-lwt))

@@ -15,45 +15,36 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module type S = sig
-  type t
+type 'hash t = {
+  tree : 'hash;
+  parents : 'hash list;
+  author : User.t;
+  committer : User.t;
+  extra : (string * string list) list;
+  message : string;
+}
 
-  module Hash : S.HASH
+module type S = sig
+  type hash
+  type nonrec t = hash t
 
   val make :
-       tree:Hash.t
-    -> author:User.t
-    -> committer:User.t
-    -> ?parents:Hash.t list
-    -> ?extra:(string * string list) list
-    -> string
-    -> t
+    tree:hash ->
+    author:User.t ->
+    committer:User.t ->
+    ?parents:hash list ->
+    ?extra:(string * string list) list ->
+    string ->
+    t
 
-  module MakeMeta (Meta : Encore.Meta.S) : sig
-    val p : t Meta.t
-  end
+  val format : t Encore.t
 
-  module A : S.DESC with type 'a t = 'a Angstrom.t and type e = t
-  module M : S.DESC with type 'a t = 'a Encore.Encoder.t and type e = t
-
-  module D :
-    S.DECODER
-    with type t = t
-     and type init = Cstruct.t
-     and type error = Error.Decoder.t
-
-  module E :
-    S.ENCODER
-    with type t = t
-     and type init = Cstruct.t * t
-     and type error = Error.never
-
-  include S.DIGEST with type t := t and type hash := Hash.t
+  include S.DIGEST with type t := t and type hash := hash
   include S.BASE with type t := t
 
   val length : t -> int64
-  val parents : t -> Hash.t list
-  val tree : t -> Hash.t
+  val parents : t -> hash list
+  val tree : t -> hash
   val committer : t -> User.t
   val author : t -> User.t
   val message : t -> string
@@ -62,121 +53,105 @@ module type S = sig
 end
 
 module Make (Hash : S.HASH) = struct
+  type hash = Hash.t
+
   (* XXX(dinosaure): git seems to be very resilient with the commit. Indeed,
      it's not a mandatory to have an author or a committer and for these
      information, it's not mandatory to have a date.
 
      Follow this issue if we have any problem with the commit format. *)
 
-  type t =
-    { tree: Hash.t
-    ; parents: Hash.t list
-    ; author: User.t
-    ; committer: User.t
-    ; extra: (string * string list) list
-    ; message: string }
+  type nonrec t = hash t
 
   let make ~tree ~author ~committer ?(parents = []) ?(extra = []) message =
-    {tree; parents; author; committer; extra; message}
+    { tree; parents; author; committer; extra; message }
 
-  module MakeMeta (Meta : Encore.Meta.S) = struct
-    type e = t
+  module Syntax = struct
+    let safe_exn f x = try f x with _ -> raise Encore.Bij.Bijection
 
-    open Helper.BaseIso
+    let hex =
+      Encore.Bij.v ~fwd:(safe_exn Hash.of_hex) ~bwd:(safe_exn Hash.to_hex)
 
-    module Iso = struct
-      open Encore.Bijection
+    let user =
+      Encore.Bij.v
+        ~fwd:(fun str ->
+          match
+            Angstrom.parse_string ~consume:Angstrom.Consume.All
+              (Encore.to_angstrom User.format)
+              str
+          with
+          | Ok v -> v
+          | Error _ -> raise Encore.Bij.Bijection)
+        ~bwd:(fun v ->
+          Encore.Lavoisier.emit_string v (Encore.to_lavoisier User.format))
 
-      let hex =
-        make_exn
-          ~fwd:(Exn.safe_exn Hash.of_hex)
-          ~bwd:(Exn.safe_exn Hash.to_hex)
-
-      let user =
-        make_exn
-          ~fwd:(fun s ->
-            match Angstrom.parse_string ~consume:All User.A.p s with
-            | Ok v -> v
-            | Error _ -> Exn.fail () )
-          ~bwd:(Encore.Encoder.to_string User.M.p)
-
-      let commit =
-        make_exn
-          ~fwd:
-            (fun ( (_, tree)
-                 , parents
-                 , (_, author)
-                 , (_, committer)
-                 , extra
-                 , message ) ->
-            let parents = List.map snd parents in
-            {tree; parents; author; committer; extra; message} )
-          ~bwd:(fun {tree; parents; author; committer; extra; message} ->
-            let parents = List.map (fun x -> "parent", x) parents in
-            ( ("tree", tree)
-            , parents
-            , ("author", author)
-            , ("committer", committer)
-            , extra
-            , message ) )
-    end
-
-    type 'a t = 'a Meta.t
-
-    module Meta = Encore.Meta.Make (Meta)
-    open Encore.Bijection
-    open Encore.Either
-    open Meta
+    let commit =
+      Encore.Bij.v
+        ~fwd:
+          (fun ((_, tree), parents, (_, author), (_, committer), extra, message) ->
+          let parents = List.map snd parents in
+          { tree; parents; author; committer; extra; message })
+        ~bwd:(fun { tree; parents; author; committer; extra; message } ->
+          let parents = List.map (fun x -> "parent", x) parents in
+          ( ("tree", tree),
+            parents,
+            ("author", author),
+            ("committer", committer),
+            extra,
+            message ))
 
     let is_not_sp chr = chr <> ' '
     let is_not_lf chr = chr <> '\x0a'
+    let always x _ = x
 
-    let to_end =
-      let loop m =
-        let cons = Exn.cons <$> (buffer <* commit <*> m) in
-        let nil = pure ~compare:(fun () () -> 0) () in
-        make_exn
-          ~fwd:(function L cons -> cons | R () -> [])
-          ~bwd:(function _ :: _ as lst -> L lst | [] -> R ())
-        <$> peek cons nil
-      in
-      fix loop
+    let rest =
+      let open Encore.Syntax in
+      let open Encore.Either in
+      fix @@ fun m ->
+      let cons = Encore.Bij.cons <$> (while0 (always true) <* commit <*> m) in
+      let nil = pure ~compare:(fun () () -> true) () in
+      Encore.Bij.v
+        ~fwd:(function L cons -> cons | R () -> [])
+        ~bwd:(function _ :: _ as lst -> L lst | [] -> R ())
+      <$> peek cons nil
 
-    let to_end : string t =
-      make_exn ~fwd:(String.concat "")
-        ~bwd:(fun x -> [x] )
-      <$> to_end
+    let rest : string Encore.t =
+      let open Encore.Syntax in
+      Encore.Bij.v ~fwd:(String.concat "") ~bwd:(fun x -> [ x ]) <$> rest
 
     let value =
-      let sep = string_elt "\n " <$> const "\n " in
+      let open Encore.Syntax in
+      let sep = Encore.Bij.string "\n " <$> const "\n " in
       sep_by0 ~sep (while0 is_not_lf)
 
     let extra =
+      let open Encore.Syntax in
       while1 (fun chr -> is_not_sp chr && is_not_lf chr)
-      <* (char_elt ' ' <$> any)
-      <*> (value <* (char_elt '\x0a' <$> any))
+      <* (Encore.Bij.char ' ' <$> any)
+      <*> (value <* (Encore.Bij.char '\x0a' <$> any))
 
     let binding ?key value =
-      let value = value <$> (while1 is_not_lf <* (char_elt '\x0a' <$> any)) in
+      let open Encore.Syntax in
+      let value =
+        value <$> (while1 is_not_lf <* (Encore.Bij.char '\x0a' <$> any))
+      in
       match key with
-      | Some key -> const key <* (char_elt ' ' <$> any) <*> value
-      | None -> while1 is_not_sp <* (char_elt ' ' <$> any) <*> value
+      | Some key -> const key <* (Encore.Bij.char ' ' <$> any) <*> value
+      | None -> while1 is_not_sp <* (Encore.Bij.char ' ' <$> any) <*> value
 
-    let commit =
-      binding ~key:"tree" Iso.hex
-      <*> rep0 (binding ~key:"parent" Iso.hex)
-      <*> binding ~key:"author" Iso.user
-      <*> binding ~key:"committer" Iso.user
+    let t =
+      let open Encore.Syntax in
+      binding ~key:"tree" hex
+      <*> rep0 (binding ~key:"parent" hex)
+      <*> binding ~key:"author" user
+      <*> binding ~key:"committer" user
       <*> rep0 extra
-      <*> to_end
+      <*> rest
 
-    let p = Exn.compose obj6 Iso.commit <$> commit
+    let format = Encore.Syntax.map Encore.Bij.(compose obj6 commit) t
   end
 
-  module A = MakeMeta (Encore.Proxy_decoder.Impl)
-  module M = MakeMeta (Encore.Proxy_encoder.Impl)
-  module D = Helper.MakeDecoder (A)
-  module E = Helper.MakeEncoder (M)
+  let format = Syntax.format
 
   let length t =
     let string x = Int64.of_int (String.length x) in
@@ -184,14 +159,13 @@ module Make (Hash : S.HASH) = struct
     let parents =
       List.fold_left
         (fun acc _ ->
-          string "parent" + 1L + Int64.of_int (Hash.digest_size * 2) + 1L + acc
-          )
+          string "parent" + 1L + Int64.of_int (Hash.digest_size * 2) + 1L + acc)
         0L t.parents
     in
     let values l =
       let rec go a = function
         | [] -> 1L + a
-        | [x] -> string x + 1L + a
+        | [ x ] -> string x + 1L + a
         | x :: r -> go (string x + 2L + a) r
       in
       go 0L l
@@ -214,7 +188,7 @@ module Make (Hash : S.HASH) = struct
         0L t.extra
     + string t.message
 
-  let pp ppf {tree; parents; author; committer; extra; message} =
+  let pp ppf { tree; parents; author; committer; extra; message } =
     let chr =
       Fmt.using (function '\000' .. '\031' | '\127' -> '.' | x -> x) Fmt.char
     in
@@ -229,29 +203,40 @@ module Make (Hash : S.HASH) = struct
       extra (Fmt.hvbox pp_message) message
 
   let digest value =
-    let tmp = Cstruct.create 0x100 in
-    let etmp = Cstruct.create 0x100 in
-    Helper.digest (module Hash) (module E) ~etmp ~tmp ~kind:"commit" ~length value
+    Stream.digest
+      {
+        Stream.empty = Hash.empty;
+        Stream.feed_string = (fun str ctx -> Hash.feed_string ctx str);
+        Stream.feed_bigstring = (fun bstr ctx -> Hash.feed_bigstring ctx bstr);
+        Stream.get = Hash.get;
+      }
+      `Commit length
+      (Encore.to_lavoisier format)
+      value
 
   let equal = ( = )
   let hash = Hashtbl.hash
-  let parents {parents; _} = parents
-  let tree {tree; _} = tree
-  let committer {committer; _} = committer
-  let author {author; _} = author
-  let message {message; _} = message
-  let extra {extra; _} = extra
+  let parents { parents; _ } = parents
+  let tree { tree; _ } = tree
+  let committer { committer; _ } = committer
+  let author { author; _ } = author
+  let message { message; _ } = message
+  let extra { extra; _ } = extra
 
   let compare_by_date a b =
     Int64.compare (fst a.author.User.date) (fst b.author.User.date)
 
   let compare = compare_by_date
 
-  module Set = Set.Make (struct type nonrec t = t
+  module Set = Set.Make (struct
+    type nonrec t = t
 
-                                let compare = compare end)
+    let compare = compare
+  end)
 
-  module Map = Map.Make (struct type nonrec t = t
+  module Map = Map.Make (struct
+    type nonrec t = t
 
-                                let compare = compare end)
+    let compare = compare
+  end)
 end

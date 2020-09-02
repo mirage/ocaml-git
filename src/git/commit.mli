@@ -15,80 +15,69 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** A Git Commit object. *)
+(** A Git Commit object.
+
+    A Git object which contains the information about a particular revision,
+    such as parents, {i committed}, author, date and {!Tree.t} which corresponds
+    to the top directory of the stored revision. *)
+
+type 'hash t
+(** A Git Commit object. Which specifies the top-level {!Tree.t} for the
+    snapshot of the project at a point; the author/{i committer} information and
+    the commit message. *)
 
 module type S = sig
-  module Hash : S.HASH
-
-  (** A Git Commit object. Which specifies the top-level {!Tree.t} for the
-      snapshot of the project at a point; the author/{i committer} information
-      and the commit message. *)
-  type t
+  type hash
+  type nonrec t = hash t
 
   val make :
-       tree:Hash.t
-    -> author:User.t
-    -> committer:User.t
-    -> ?parents:Hash.t list
-    -> ?extra:(string * string list) list
-    -> string
-    -> t
+    tree:hash ->
+    author:User.t ->
+    committer:User.t ->
+    ?parents:hash list ->
+    ?extra:(string * string list) list ->
+    string ->
+    t
   (** [make ~author ~committer ?parents ~tree msg] makes an OCaml value {!t}.
       [?parents] should be a non-empty list and corresponds to a list of hashes
-      of commits. [tree] should be a hash of a {Tree.t} object.
+      of parent commits. [tree] should be a hash of a {!Tree.t} object.
 
-      This function does not write a new commit on the store and does not check
-      the validity of [parents] and [tree]. By this way, this function never
-      fails. *)
+      {b Note.} This function does not write a new commit on the store and does
+      not check the validity of [parents] and [tree]. By this way, this function
+      never fails. *)
 
-  module MakeMeta (Meta : Encore.Meta.S) : sig
-    val p : t Meta.t
-  end
+  val format : t Encore.t
+  (** [format] is a description of how to encode/decode of {!t} object. *)
 
-  module A : S.DESC with type 'a t = 'a Angstrom.t and type e = t
-  module M : S.DESC with type 'a t = 'a Encore.Encoder.t and type e = t
-
-  module D :
-    S.DECODER
-    with type t = t
-     and type init = Cstruct.t
-     and type error = Error.Decoder.t
-
-  module E :
-    S.ENCODER
-    with type t = t
-     and type init = Cstruct.t * t
-     and type error = Error.never
-
-  include S.DIGEST with type t := t and type hash := Hash.t
+  include S.DIGEST with type t := t and type hash := hash
   include S.BASE with type t := t
 
   val length : t -> int64
-  (** [length t] returns the length of the commit object [t]. *)
+  (** [length t] returns the length of the given commit object. *)
 
-  val parents : t -> Hash.t list
-  (** [parents c] returns all parents of the Git Commit object [c]. *)
+  val parents : t -> hash list
+  (** [parents t] returns all parents of the given commit object. *)
 
-  val tree : t -> Hash.t
-  (** [tree c] returns the hash of top-level {!Tree.t} of the Git Commit object
-      [c]. *)
+  val tree : t -> hash
+  (** [tree t] returns the hash of top-level {!Tree.t} of the given commit
+      object. *)
 
   val committer : t -> User.t
-  (** [committer c] returns the committer of the commit [c]. *)
+  (** [committer t] returns the committer of the given commit object. *)
 
   val author : t -> User.t
-  (** [author c] returns the author of the commit [c]. *)
+  (** [author c] returns the author of the given commit object. *)
 
   val message : t -> string
-  (** [message c] returns the message of the commit [c]. *)
+  (** [message c] returns the message of the given commit object. *)
 
   val extra : t -> (string * string list) list
 
   val compare_by_date : t -> t -> int
-  (** [compare_by_date a b] compares the Git Commit object [a] and [b] by the
-      date of the author. The {!compare} function as the same behaviour. *)
+  (** [compare_by_date a b] compares commit objects [a] and [b] by the date of
+      the author. The {!compare} function as the same behaviour. *)
 end
 
-(** The {i functor} to make the OCaml representation of the Git Commit object
-    by a specific hash implementation. *)
-module Make (Hash : S.HASH) : S with module Hash := Hash
+(** The {i functor} to make the OCaml representation of the Git Commit object by
+    a specific hash implementation. *)
+module Make (Hash : S.HASH) : S with type hash = Hash.t

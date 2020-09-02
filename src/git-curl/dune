@@ -1,0 +1,4 @@
+(library
+ (name git_curl)
+ (public_name git-unix.curl)
+ (libraries lwt rresult result nss.git bigstringaf uri fmt curl.lwt))

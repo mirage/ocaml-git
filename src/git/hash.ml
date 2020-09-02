@@ -15,24 +15,31 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Make (H : Digestif.S) = struct
-  include H
+module Make (Digestif : Digestif.S) :
+  S.HASH
+    with type t = Digestif.t
+     and type ctx = Digestif.ctx
+     and type kind = Digestif.kind = struct
+  include Digestif
 
-  module X = struct
-    type t = H.t
+  module Ordered = struct
+    type t = Digestif.t
 
-    let equal = H.equal
+    let equal = Digestif.equal
     let hash = Hashtbl.hash
-    let compare = H.unsafe_compare
+    let compare = Digestif.unsafe_compare
   end
 
-  let equal = X.equal
-  let hash = X.hash
-  let compare = X.compare
-  let read h i = Char.code @@ (H.to_raw_string h).[i]
+  let equal = Ordered.equal
+  let hash = Ordered.hash
+  let compare = Ordered.compare
+  let read h i = Char.code @@ (Digestif.to_raw_string h).[i]
+  let null = Digestif.digest_string ""
+  let length = Digestif.digest_size
+  let feed ctx ?off ?len buf = Digestif.feed_bigstring ctx ?off ?len buf
 
-  module Set = Set.Make (X)
-  module Map = Map.Make (X)
+  module Set : Set.S with type elt = t = Set.Make (Ordered)
+  module Map : Map.S with type key = t = Map.Make (Ordered)
 
-  let feed_cstruct t s = H.feed_bigstring t (Cstruct.to_bigarray s)
+  let feed_cstruct t s = Digestif.feed_bigstring t (Cstruct.to_bigarray s)
 end

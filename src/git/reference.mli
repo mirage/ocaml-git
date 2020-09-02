@@ -14,214 +14,89 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
+open Carton
 
+type t
 (** The Git Reference module. *)
 
-(** A Git Reference object. Which contains a hash to point to an other object. *)
-type t = private string
-
-module P : sig
-  (** Type of the left part of a reference. *)
-  type partial
-
-  (** Tyoe of the right part of a reference. *)
-  type branch = string
-
-  val ( // ) : partial -> string -> partial
-  (** Infix operator to compose [string] value with a {!partial} reference. *)
-
-  val ( / ) : partial -> branch -> t
-  (** Infix operator to compose {!partial} with {!branch} and return a
-      full-defined reference {!t}. *)
-
-  val refs : partial
-  (** [refs/] *)
-
-  val heads : partial
-  (** [refs/heads/] *)
-
-  val remotes : partial
-  (** [refs/remotes/] *)
-
-  val origin : partial
-  (** [refs/remotes/origin] *)
-
-  val master : branch
-  (** [*/master] *)
-end
-
+val of_string : string -> (t, [> `Msg of string ]) result
+val v : string -> t
+val add_seg : t -> string -> t
+val append : t -> t -> t
+val segs : t -> string list
+val pp : t Fmt.t
 val head : t
-(** [head] is the {i user-friendly} value of HEAD Git reference. *)
-
 val master : t
-(** [master] is the {i user-friendly} value of [refs/heads/master] Git
-    reference. *)
-
-val is_head : t -> bool
-(** [is_head t] returns [true] if [t = head]. *)
-
-val of_string : string -> t
-(** [of_string s] returns a valid reference value. A valid value means:
-
-    A [refname] is a hierarchical octet string beginning with ["refs/"] and not
-   violating the [git-check-ref-format] command's validation rules. More
-   specifically, they:
-
-    {ul
-
-    {- They can include slash ['/'] for hierarchical (directory) grouping, but
-   no slash-separated component can begin with a dot ['.'].} {- They must
-   contain at least one ['/']. This enforces the presence of a category like
-   ["heads/"], ["tags/"] etc. but the actual names are not restricted.}
-
-    {- They cannot have two consecutive dots [".."] anywhere.}
-
-    {- They cannot have ASCII control characters (i.e. bytes whose values are
-   lower than [\040] or [\177] DEL), space, tilde ['~'], caret ['^'], colon
-   [':'], question-mark ['?'], asterisk ['*'], or open bracket ['\['] anywhere.}
-
-    {- They cannot end with a slash ['/'] or a dot ['.'].}
-
-    {- They cannot end with the sequence [".lock"].}
-
-    {- They cannot contain a sequence ["@{"].}
-
-    {- They cannot contain a ['\\'].}} *)
-
+val ( / ) : t -> string -> t
+val ( // ) : t -> t -> t
 val to_string : t -> string
-(** [to_string t] returns the string value of the reference [t]. *)
+val equal : t -> t -> bool
+val compare : t -> t -> int
 
-val of_path : Path.t -> t
-(** [of_path path] casts a path to a reference. *)
+module Map : Map.S with type key = t
+module Set : Set.S with type elt = t
 
-val to_path : t -> Path.t
-(** [to_path ref] casts a reference [ref] to a path (as a Window path or Unix
-    path). *)
+type 'uid contents = Uid of 'uid | Ref of t
 
-(** Interface to describe the Git reference value [head_contents]. *)
+val equal_contents :
+  equal:('uid -> 'uid -> bool) -> 'uid contents -> 'uid contents -> bool
+
+val compare_contents :
+  compare:('uid -> 'uid -> int) -> 'uid contents -> 'uid contents -> int
+
+val pp_contents : pp:'uid Fmt.t -> 'uid contents Fmt.t
+val uid : 'uid -> 'uid contents
+val ref : t -> 'uid contents
+
+module Packed : sig
+  type 'uid elt = Ref of t * 'uid | Peeled of 'uid
+  type 'uid packed = 'uid elt list
+  type ('fd, 's) input_line = 'fd -> (string option, 's) io
+
+  val load :
+    's Carton.scheduler ->
+    input_line:('fd, 's) input_line ->
+    of_hex:(string -> 'uid) ->
+    'fd ->
+    ('uid packed, 's) io
+
+  val get : t -> 'uid packed -> 'uid option
+  val exists : t -> 'uid packed -> bool
+  val remove : t -> 'uid packed -> 'uid packed
+end
+
+type ('t, 'uid, 'error, 's) store = {
+  atomic_wr : 't -> t -> string -> ((unit, 'error) result, 's) io;
+  atomic_rd : 't -> t -> ((string, 'error) result, 's) io;
+  uid_of_hex : string -> 'uid option;
+  uid_to_hex : 'uid -> string;
+  packed : 'uid Packed.packed;
+}
+
+val resolve :
+  's Carton.scheduler ->
+  't ->
+  ('t, 'uid, 'error, 's) store ->
+  t ->
+  (('uid, [> `Not_found of t | `Cycle ]) result, 's) io
+
+val write :
+  's Carton.scheduler ->
+  't ->
+  ('t, 'uid, 'error, 's) store ->
+  t ->
+  'uid contents ->
+  ((unit, [> `Store of 'error ]) result, 's) io
+
+val read :
+  's Carton.scheduler ->
+  't ->
+  ('t, 'uid, 'error, 's) store ->
+  t ->
+  (('uid contents, [> `Not_found of t ]) result, 's) io
+
 module type S = sig
-  (** The [Digest] module used to make the module. *)
-  module Hash : S.HASH
-
+  type hash
   type nonrec t = t
-
-  module P : sig
-    type partial
-    type branch = string
-
-    val ( // ) : partial -> partial -> partial
-    val ( / ) : partial -> branch -> t
-    val refs : partial
-    val heads : partial
-    val remotes : partial
-    val origin : partial
-    val master : branch
-  end
-
-  val head : t
-  val master : t
-  val is_head : t -> bool
-  val of_string : string -> t
-  val to_string : t -> string
-  val of_path : Path.t -> t
-  val to_path : t -> Path.t
-
-  include S.BASE with type t := t
-
-  (** The type of the value of a Git reference. *)
-  type head_contents =
-    | Hash of Hash.t  (** A pointer to an hash. *)
-    | Ref of t
-        (** A reference which one can point to an other reference or an hash. *)
-
-  val pp_head_contents : head_contents Fmt.t
-  (** Pretty-printer of {!head_contents}. *)
-
-  val equal_head_contents : head_contents -> head_contents -> bool
-  (** [equal_head_contents a b] implies [a = Ref a'] and [b = Ref b'] and
-      [Reference.equal a' b' = true] or [a = Hash a'] and [b = Hash b'] and
-      [Hash.equal a' b'].
-
-      However, semantically [Ref a'] could be equal to [Hash b'] iff [Hash b']
-      is come from the reference [a']. That means this function does not handle
-      any indirection when it tests your values. *)
-
-  val compare_head_contents : head_contents -> head_contents -> int
-
-  module A : S.DESC with type 'a t = 'a Angstrom.t and type e = head_contents
-
-  module M :
-    S.DESC with type 'a t = 'a Encore.Encoder.t and type e = head_contents
-
-  module D :
-    S.DECODER
-    with type t = head_contents
-     and type init = Cstruct.t
-     and type error = Error.Decoder.t
-
-  module E :
-    S.ENCODER
-    with type t = head_contents
-     and type init = Cstruct.t * head_contents
-     and type error = Error.never
+  type nonrec contents = hash contents
 end
-
-(** The interface which describes any I/O operations on Git reference. *)
-module type IO = sig
-  module FS : S.FS
-  include S
-
-  (** The type of error. *)
-  type error = [Error.Decoder.t | FS.error Error.FS.t]
-
-  val pp_error : error Fmt.t
-  (** Pretty-printer of {!error}. *)
-
-  val mem : fs:FS.t -> root:Fpath.t -> t -> bool Lwt.t
-  (** [mem ~fs ~root reference] is [true] iff [reference] can be found in the
-      git repository [root]. Otherwise, it is [false]. *)
-
-  val read :
-       fs:FS.t
-    -> root:Fpath.t
-    -> t
-    -> dtmp:Cstruct.t
-    -> raw:Cstruct.t
-    -> (head_contents, error) result Lwt.t
-  (** [read ~fs ~root reference dtmp raw] is the value of the reference
-      [reference] (available in the git repository [root]). [dtmp] and [raw]
-      are buffers used by the decoder (respectively for the decoder as an
-      internal buffer and the input buffer).
-
-      This function can returns an {!error}. *)
-
-  val write :
-       fs:FS.t
-    -> root:Fpath.t
-    -> temp_dir:Fpath.t
-    -> etmp:Cstruct.t
-    -> raw:Cstruct.t
-    -> t
-    -> head_contents
-    -> (unit, error) result Lwt.t
-  (** [write ~fs ~root ~raw reference value] writes the value [value] in the
-      mutable representation of the [reference] in the git repository [root].
-      [raw] is a buffer used by the decoder to keep the input.
-
-      This function can returns an {!error}. *)
-
-  val remove : fs:FS.t -> root:Fpath.t -> t -> (unit, error) result Lwt.t
-  (** [remove ~root reference] removes the reference from the git repository
-      [root].
-
-      This function can returns an {!error}. *)
-end
-
-(** The {i functor} to make the OCaml representation of the Git Reference
-    object by a specific hash. *)
-module Make (Hash : S.HASH) : S with module Hash := Hash
-
-(** The {i functor} to make a module which implements I/O operations on
-    references on a file-system. *)
-module IO (H : S.HASH) (FS : S.FS) :
-  IO with module Hash := H and module FS := FS

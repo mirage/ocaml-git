@@ -6,10 +6,10 @@ environment:
     FORK_USER: ocaml
     FORK_BRANCH: master
     CYG_ROOT: C:\cygwin64
-    OPAM_SWITCH: 4.07.0+mingw64c
-    PINS: "git.dev:. git-http.dev:. git-unix.dev:. git-mirage.dev:."
+    OPAM_SWITCH: 4.08.1+mingw64c
+    PINS: "carton.dev:. carton-lwt.dev:. carton-git.dev:. nss.dev:. git.dev:. git-unix.dev:. git-mirage.dev:."
   matrix:
-  - PACKAGE: "git-mirage.dev"
+  - PACKAGE: "git.dev"
   - PACKAGE: "git-unix.dev"
 
 install:

@@ -15,489 +15,208 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-let src = Logs.Src.create "git.sync" ~doc:"logs git's sync event"
+let ( <.> ) f g x = f (g x)
+let src = Logs.Src.create "git.sync"
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-module Default = struct
-  let capabilities =
-    [ `Multi_ack_detailed; `Thin_pack; `Side_band_64k; `Ofs_delta
-    ; `Agent "git/2.0.0"; `Report_status; `No_done ]
-end
-
-type 'a shallow_update = {shallow: 'a list; unshallow: 'a list}
-
-type 'a acks =
-  { shallow: 'a list
-  ; unshallow: 'a list
-  ; acks: ('a * [`Common | `Ready | `Continue | `ACK]) list }
-
-module type ENDPOINT = sig
-  type t
-
-  val uri : t -> Uri.t
-end
-
 module type S = sig
-  module Store : Minimal.S
-  module Endpoint : ENDPOINT
-
-  type error
+  type hash
+  type store
+  type error = private [> `Msg of string | `Exn of exn | `Not_found ]
 
   val pp_error : error Fmt.t
 
-  type command =
-    [ `Create of Store.Hash.t * Store.Reference.t
-    | `Delete of Store.Hash.t * Store.Reference.t
-    | `Update of Store.Hash.t * Store.Hash.t * Store.Reference.t ]
-
-  val pp_command : command Fmt.t
+  val fetch :
+    resolvers:Conduit.resolvers ->
+    Smart_git.endpoint ->
+    store ->
+    ?version:[> `V1 ] ->
+    ?capabilities:Smart.Capability.t list ->
+    [ `All | `Some of Reference.t list | `None ] ->
+    ((hash * (Reference.t * hash) list) option, error) result Lwt.t
 
   val push :
-       Store.t
-    -> push:(   (Store.Hash.t * Store.Reference.t * bool) list
-             -> (Store.Hash.t list * command list) Lwt.t)
-    -> ?capabilities:Capability.t list
-    -> Endpoint.t
-    -> ( (Store.Reference.t, Store.Reference.t * string) result list
-       , error )
-       result
-       Lwt.t
-
-  val ls :
-       Store.t
-    -> ?capabilities:Capability.t list
-    -> Endpoint.t
-    -> ((Store.Hash.t * Store.Reference.t * bool) list, error) result Lwt.t
-
-  val fetch :
-       Store.t
-    -> ?shallow:Store.Hash.t list
-    -> ?capabilities:Capability.t list
-    -> notify:(Store.Hash.t shallow_update -> unit Lwt.t)
-    -> negociate:(   Store.Hash.t acks
-                  -> 'state
-                  -> ([`Ready | `Done | `Again of Store.Hash.Set.t] * 'state)
-                     Lwt.t)
-                 * 'state
-    -> have:Store.Hash.Set.t
-    -> want:(   (Store.Hash.t * Store.Reference.t * bool) list
-             -> (Store.Reference.t * Store.Hash.t) list Lwt.t)
-    -> ?deepen:[`Depth of int | `Timestamp of int64 | `Ref of Reference.t]
-    -> Endpoint.t
-    -> ((Store.Reference.t * Store.Hash.t) list * int, error) result Lwt.t
-
-  val fetch_some :
-       Store.t
-    -> ?capabilities:Capability.t list
-    -> references:Store.Reference.t list Store.Reference.Map.t
-    -> Endpoint.t
-    -> ( Store.Hash.t Store.Reference.Map.t
-         * Store.Reference.t list Store.Reference.Map.t
-       , error )
-       result
-       Lwt.t
-
-  val fetch_all :
-       Store.t
-    -> ?capabilities:Capability.t list
-    -> references:Store.Reference.t list Store.Reference.Map.t
-    -> Endpoint.t
-    -> ( Store.Hash.t Store.Reference.Map.t
-         * Store.Reference.t list Store.Reference.Map.t
-         * Store.Hash.t Store.Reference.Map.t
-       , error )
-       result
-       Lwt.t
-
-  val fetch_one :
-       Store.t
-    -> ?capabilities:Capability.t list
-    -> reference:Store.Reference.t * Store.Reference.t list
-    -> Endpoint.t
-    -> ( [`AlreadySync | `Sync of Store.Hash.t Store.Reference.Map.t]
-       , error )
-       result
-       Lwt.t
-
-  val pp_fetch_one : [ `AlreadySync | `Sync of Store.Hash.t Store.Reference.Map.t ] Fmt.t
-
-  val clone :
-       Store.t
-    -> ?capabilities:Capability.t list
-    -> reference:Store.Reference.t * Store.Reference.t
-    -> Endpoint.t
-    -> (unit, error) result Lwt.t
-
-  val update_and_create :
-       Store.t
-    -> ?capabilities:Capability.t list
-    -> references:Store.Reference.t list Store.Reference.Map.t
-    -> Endpoint.t
-    -> ( (Store.Reference.t, Store.Reference.t * string) result list
-       , error )
-       result
-       Lwt.t
-
-  val pp_update_and_create : (Store.Reference.t, Store.Reference.t * string) result list Fmt.t
+    resolvers:Conduit.resolvers ->
+    Smart_git.endpoint ->
+    store ->
+    ?version:[> `V1 ] ->
+    ?capabilities:Smart.Capability.t list ->
+    [ `Create of Reference.t
+    | `Delete of Reference.t
+    | `Update of Reference.t * Reference.t ]
+    list ->
+    (unit, error) result Lwt.t
 end
 
-(* XXX(dinosaure): common module is a module (used by the tcp layer, http layer
-   and ssh layer) about what we need to do locally when we push or fetch. This
-   module needs only an implementation of the store and do some operations on
-   it (update references, walk on branches, etc.). *)
+module Make
+    (Digestif : Digestif.S)
+    (Pack : Smart_git.APPEND with type +'a fiber = 'a Lwt.t)
+    (Index : Smart_git.APPEND with type +'a fiber = 'a Lwt.t)
+    (Conduit : Conduit.S
+                 with type +'a io = 'a Lwt.t
+                  and type input = Cstruct.t
+                  and type output = Cstruct.t)
+    (Store : Minimal.S with type hash = Digestif.t)
+    (HTTP : Smart_git.HTTP) =
+struct
+  type hash = Digestif.t
+  type store = Store.t
 
-module Common (G : Minimal.S) = struct
-  module Store = G
+  type error =
+    [ `Msg of string | `Exn of exn | `Not_found | `Store of Store.error ]
 
-  let src =
-    Logs.Src.create "git.common.sync" ~doc:"logs git's common sync event"
+  let pp_error ppf = function
+    | `Msg err -> Fmt.string ppf err
+    | `Exn exn -> Fmt.pf ppf "Exception: %s" (Printexc.to_string exn)
+    | `Not_found -> Fmt.string ppf "Not found"
+    | `Store err -> Fmt.pf ppf "Store error: %a" Store.pp_error err
 
-  module Log = (val Logs.src_log src : Logs.LOG)
+  module Hash = Hash.Make (Digestif)
+  module Scheduler = Sigs.Make_sched (Lwt)
 
-  type command =
-    [ `Create of Store.Hash.t * Store.Reference.t
-    | `Delete of Store.Hash.t * Store.Reference.t
-    | `Update of Store.Hash.t * Store.Hash.t * Store.Reference.t ]
+  module Ministore = Sigs.Make_store (struct
+    type ('k, 'v) t = Store.t * ('k, 'v) Hashtbl.t
 
-  let pp_command ppf = function
-    | `Create (hash, r) ->
-        Fmt.pf ppf "(`Create (%a, %a))" Store.Hash.pp hash Store.Reference.pp r
-    | `Delete (hash, r) ->
-        Fmt.pf ppf "(`Delete (%a, %a))" Store.Hash.pp hash Store.Reference.pp r
-    | `Update (_of, _to, r) ->
-        Fmt.pf ppf "(`Update (of:%a, to:%a, %a))" Store.Hash.pp _of
-          Store.Hash.pp _to Store.Reference.pp r
-
-  let pp_fetch_one ppf = function
-    | `AlreadySync -> Fmt.pf ppf "Reference is synchronized"
-    | `Sync map ->
-       Fmt.pf ppf "Updated @[<hov>%a@]"
-         (Fmt.iter_bindings Store.Reference.Map.iter Fmt.(pair ~sep:(always " -> ") Store.Reference.pp Store.Hash.pp)) map
-
-  let pp_update_and_create ppf lst =
-    let pp_elt ppf = function
-      | Ok reference -> Fmt.pf ppf "(Reference <%a> updated)" Store.Reference.pp reference
-      | Error (reference, err) -> Fmt.pf ppf "(Conflict on <%a>: %s)" Store.Reference.pp reference err in
-    Fmt.(Dump.list pp_elt) ppf lst
+    (* constraint 'k = Digestif.t *)
+  end)
 
   open Lwt.Infix
 
-  module Node = struct
-    type t = {value: Store.Value.t; mutable color: [`Black | `White]}
-
-    let compare a b =
-      match a.value, b.value with
-      | Store.Value.Commit a, Store.Value.Commit b ->
-          Store.Value.Commit.compare_by_date b a
-      | a, b -> Store.Value.compare a b
-  end
-
-  module Pq = Psq.Make (Store.Hash) (Node)
-  module Q : Ke.Sigs.F = Ke.Fke
-
-  exception Store of Store.error
-
-  let packer git exclude source =
-    let store = Hashtbl.create 128 in
-    let memoize get hash =
-      try
-        let ret = Hashtbl.find store hash in
-        Lwt.return (Some ret)
-      with Not_found -> (
-        get hash
+  let get_commit_for_negotiation (t, hashtbl) hash =
+    Log.debug (fun m -> m "Load commit %a." Hash.pp hash);
+    match Hashtbl.find hashtbl hash with
+    | v -> Lwt.return_some v
+    | exception Not_found -> (
+        (* XXX(dinosaure): given hash can not exist into [t],
+         * in this call we try to see if remote hashes are available
+         * locally. *)
+        Store.read t hash
         >>= function
-        | Ok value ->
-            let node = {Node.value; color= `White} in
-            Hashtbl.add store hash node ;
-            Lwt.return (Some node)
-        | Error `Not_found -> Lwt.return None
-        (* [get] tries to get hash from [exclude] firstly. However, we said
-           below than [exclude] can contain unavailable hash on client side
-           (but available on server side). So we return [None] only if we get
-           [`Not_found]. *)
-        | Error err ->
-            Log.err (fun l ->
-                l "Got an error when we get the object: %a." Store.Hash.pp hash
-            ) ;
-            Lwt.fail (Store err) )
-    in
-    let preds = function
-      | Store.Value.Commit commit ->
-          Store.Value.Commit.tree commit :: Store.Value.Commit.parents commit
-      | Store.Value.Tree tree ->
-          List.map
-            (fun {Store.Value.Tree.node; _} -> node)
-            (Store.Value.Tree.to_list tree)
-      | Store.Value.Tag tag -> [Store.Value.Tag.obj tag]
-      | Store.Value.Blob _ -> []
-    in
-    let get = memoize (Store.read git) in
-    let all_blacks pq =
-      Pq.fold
-        (fun _ -> function {Node.color= `Black; _} -> ( && ) true
-          | _ -> ( && ) false )
-        true pq
-    in
-    let propagate {Node.value; color} =
-      let rec go q =
-        match Q.pop_exn q with
-        | hash, q -> (
-          try
-            let node = Hashtbl.find store hash in
-            node.Node.color <- color ;
-            go (List.fold_left Q.push q (preds node.Node.value))
-          with Not_found -> go q )
-        | exception Q.Empty -> ()
-      in
-      go (List.fold_left Q.push Q.empty (preds value))
-    in
-    let propagate_snapshot {Node.value; color} =
-      let rec go q =
-        match Q.pop_exn q with
-        | hash, q -> (
-            let k node =
-              node.Node.color <- color ;
-              go (List.fold_left Q.push q (preds node.Node.value))
+        | Ok (Value.Commit commit) ->
+            let { User.date = ts, _; _ } =
+              Store.Value.Commit.committer commit
             in
-            try
-              let node = Hashtbl.find store hash in
-              k node
-            with Not_found -> (
-              get hash
-              >>= function None -> Lwt.return () | Some node -> k node ) )
-        | exception Q.Empty -> Lwt.return ()
-      in
-      go (List.fold_left Q.push Q.empty (preds value))
-    in
-    let rec garbage pq =
-      if all_blacks pq then Lwt.return ()
-      else
-        match Pq.pop pq with
-        | Some ((_, {Node.value; color= `Black}), pq) ->
-            Lwt_list.fold_left_s
-              (fun pq hash ->
-                get hash
-                >>= function
-                | Some ({Node.value= Store.Value.Tree _; _} as node) ->
-                    node.Node.color <- `Black ;
-                    propagate_snapshot node >>= fun () -> Lwt.return pq
-                | Some ({Node.color= `White; _} as node) ->
-                    node.Node.color <- `Black ;
-                    propagate node ;
-                    Lwt.return (Pq.add hash node pq)
-                | Some node -> Lwt.return (Pq.add hash node pq)
-                | None -> Lwt.return pq )
-              pq (preds value)
-            >>= garbage
-        | Some ((_, {Node.value; _}), pq) ->
-            Lwt_list.fold_left_s
-              (fun pq hash ->
-                get hash
-                >>= function
-                | None -> Lwt.return pq
-                | Some node -> Lwt.return (Pq.add hash node pq) )
-              pq (preds value)
-            >>= garbage
-        | None -> Lwt.return ()
-    in
-    let collect () =
-      Hashtbl.fold
-        (fun hash -> function
-          | {Node.color= `White; value} -> Store.Hash.Map.add hash value
-          | _ -> fun acc -> acc )
-        store Store.Hash.Map.empty
-    in
-    Lwt_list.map_s
-      (fun hash ->
-        get hash
-        >>= function
-        | Some ({Node.value= Store.Value.Commit commit; _} as node) ->
-            get (Store.Value.Commit.tree commit)
-            >>= (function
-                  | None -> Lwt.return ()
-                  | Some node_root_tree -> propagate_snapshot node_root_tree)
-            >>= fun () -> Lwt.return (Some (hash, node))
-        | Some node -> Lwt.return (Some (hash, node))
-        | None -> Lwt.return None )
-      source
-    >>= fun source ->
-    Lwt_list.map_s
-      (fun hash ->
-        get hash
-        >>= function
-        | Some ({Node.value= Store.Value.Commit commit; _} as node) ->
-            node.Node.color <- `Black ;
-            get (Store.Value.Commit.tree commit)
-            >>= (function
-                  | None -> Lwt.return ()
-                  | Some node_root_tree ->
-                      node_root_tree.Node.color <- `Black ;
-                      propagate_snapshot node_root_tree)
-            >>= fun () -> Lwt.return (Some (hash, node))
-        | Some node -> Lwt.return (Some (hash, node))
-        | None -> Lwt.return None )
-      exclude
-    >|= List.append source
-    >|= List.fold_left
-          (fun acc -> function None -> acc | Some x -> x :: acc)
-          []
-    >|= Pq.of_list
-    >>= fun pq -> garbage pq >|= collect
+            let v = hash, ref 0, ts in
+            Hashtbl.add hashtbl hash v;
+            Lwt.return_some v
+        | Ok _ | Error _ -> Lwt.return_none )
 
-  let packer ?(window = `Object 10) ?(depth = 50) git ~ofs_delta:_ remote
-      commands =
-    let exclude =
-      List.fold_left
-        (fun exclude (hash, _, _) -> Store.Hash.Set.add hash exclude)
-        Store.Hash.Set.empty remote
-      (* XXX(dinosaure): hash available on server side may not exist on client
-         side. [exclude] can have unavailable hash on client side. *)
-      |> fun exclude ->
-      List.fold_left
-        (fun exclude -> function
-          | `Delete (hash, _) -> Store.Hash.Set.add hash exclude
-          | `Update (hash, _, _) -> Store.Hash.Set.add hash exclude
-          | `Create _ -> exclude )
-        exclude commands
-      |> Store.Hash.Set.elements
-    in
-    let source =
-      List.fold_left
-        (fun source -> function
-          | `Update (_, hash, _) -> Store.Hash.Set.add hash source
-          | `Create (hash, _) -> Store.Hash.Set.add hash source
-          | `Delete _ -> source )
-        Store.Hash.Set.empty commands
-      |> Store.Hash.Set.elements
-    in
-    packer git exclude source
-    >|= Store.Hash.Map.bindings
-    >|= List.map snd
-    >>= Store.Pack.make git ~window ~depth
+  let parents_of_commit t hash =
+    Log.debug (fun m -> m "Get parents of %a." Hash.pp hash);
+    Store.read_exn t hash >>= function
+    | Value.Commit commit -> Lwt.return (Store.Value.Commit.parents commit)
+    | _ -> Lwt.return []
 
-  let want_handler git choose remote_refs =
-    (* XXX(dinosaure): in this /engine/, for each remote references, we took or
-       not only if this reference is not /peeled/. Then, [choose] returns
-       [true] or [false] if he wants to download the reference or not. Finally,
-       we check if we don't have already the remote hash. and if it's the case,
-       we don't download it. *)
-    Lwt_list.filter_map_s
-      (function
-        | remote_hash, remote_ref, false -> (
-            choose remote_ref
-            >>= (function
-                  | false ->
-                      Log.debug (fun l ->
-                          l "We missed the reference %a." Store.Reference.pp
-                            remote_ref ) ;
-                      Lwt.return None
-                  | true -> Lwt.return (Some (remote_ref, remote_hash)))
-            >>= function
-            | None -> Lwt.return None
-            | Some (remote_ref, remote_hash) -> (
-                Store.mem git remote_hash
-                >>= function
-                | true -> Lwt.return None
-                | false -> Lwt.return (Some (remote_ref, remote_hash)) ) )
-        | _ -> Lwt.return None)
-      remote_refs
+  let parents ((t, _hashtbl) as store) hash =
+    parents_of_commit t hash >>= fun parents ->
+    let fold acc hash =
+      get_commit_for_negotiation store hash >>= function
+      | Some v -> Lwt.return (v :: acc)
+      | None -> Lwt.return acc
+    in
+    Lwt_list.fold_left_s fold [] parents
 
-  exception Jump of Store.error
+  let deref (t, _) refname =
+    Log.debug (fun m -> m "Dereference %a." Reference.pp refname);
+    Store.Ref.resolve t refname >>= function
+    | Ok hash -> Lwt.return_some hash
+    | Error _ -> Lwt.return_none
 
-  let update_and_create git ~references results =
-    let results =
-      List.fold_left
-        (fun results (remote_ref, hash) ->
-          Store.Reference.Map.add remote_ref hash results )
-        Store.Reference.Map.empty results
-    in
-    let updated, missed =
-      Store.Reference.Map.partition
-        (fun remote_ref _ -> Store.Reference.Map.mem remote_ref results)
-        references
-    in
-    let updated, downloaded =
-      Store.Reference.Map.fold
-        (fun remote_ref new_hash (updated', downloaded) ->
-          try
-            let local_refs = Store.Reference.Map.find remote_ref updated in
-            ( List.fold_left
-                (fun updated' local_ref ->
-                  Store.Reference.Map.add local_ref new_hash updated' )
-                updated' local_refs
-            , downloaded )
-          with Not_found ->
-            updated', Store.Reference.Map.add remote_ref new_hash downloaded )
-        results
-        Store.Reference.Map.(empty, empty)
-    in
-    Lwt.try_bind
-      (fun () ->
-        Lwt_list.iter_s
-          (fun (local_ref, new_hash) ->
-            Store.Ref.write git local_ref (Store.Reference.Hash new_hash)
-            >>= function
-            | Ok _ -> Lwt.return () | Error err -> Lwt.fail (Jump err) )
-          (Store.Reference.Map.bindings updated) )
-      (fun () -> Lwt.return (Ok (updated, missed, downloaded)))
-      (function Jump err -> Lwt.return (Error err) | exn -> Lwt.fail exn)
+  let locals (t, _) =
+    Log.debug (fun m -> m "Load locals references.");
+    Store.Ref.list t >>= Lwt_list.map_p (Lwt.return <.> fst)
 
-  let push_handler git references remote_refs =
-    Store.Ref.list git
-    >>= fun local_refs ->
-    let local_refs =
-      List.fold_left
-        (fun local_refs (local_ref, local_hash) ->
-          Store.Reference.Map.add local_ref local_hash local_refs )
-        Store.Reference.Map.empty local_refs
+  let access =
+    {
+      Sigs.get =
+        (fun uid t ->
+          Scheduler.inj (get_commit_for_negotiation (Ministore.prj t) uid));
+      Sigs.parents =
+        (fun uid t -> Scheduler.inj (parents (Ministore.prj t) uid));
+      Sigs.deref =
+        (fun t refname -> Scheduler.inj (deref (Ministore.prj t) refname));
+      Sigs.locals = (fun t -> Scheduler.inj (locals (Ministore.prj t)));
+    }
+
+  let lightly_load t hash =
+    Store.read_exn t hash >>= fun v ->
+    let kind =
+      match v with
+      | Value.Commit _ -> `A
+      | Value.Tree _ -> `B
+      | Value.Blob _ -> `C
+      | Value.Tag _ -> `D
     in
-    Lwt_list.filter_map_p
-      (function
-        | remote_hash, remote_ref, false ->
-            Lwt.return (Some (remote_ref, remote_hash))
-        | _ -> Lwt.return None)
-      remote_refs
-    >>= fun remote_refs ->
-    let actions =
-      Store.Reference.Map.fold
-        (fun local_ref local_hash actions ->
-          try
-            let remote_refs' = Store.Reference.Map.find local_ref references in
-            List.fold_left
-              (fun actions remote_ref ->
-                try
-                  let remote_hash = List.assoc remote_ref remote_refs in
-                  `Update (remote_hash, local_hash, remote_ref) :: actions
-                with Not_found -> `Create (local_hash, remote_ref) :: actions
-                )
-              actions remote_refs'
-          with Not_found -> actions )
-        local_refs []
-    in
-    Lwt_list.filter_map_s
-      (fun action ->
-        match action with
-        | `Update (remote_hash, local_hash, reference) ->
-            Store.mem git remote_hash
-            >>= fun has_remote_hash ->
-            Store.mem git local_hash
-            >>= fun has_local_hash ->
-            Log.debug (fun l ->
-                l "Check update command on %a for %a to %a (equal = %b)."
-                  Store.Reference.pp reference Store.Hash.pp remote_hash
-                  Store.Hash.pp local_hash
-                  Store.Hash.(equal remote_hash local_hash) ) ;
-            if
-              has_remote_hash
-              && has_local_hash
-              && not (Store.Hash.equal remote_hash local_hash)
-            then Lwt.return (Some (action :> command))
-            else Lwt.return None
-        | `Create (local_hash, _) -> (
-            Store.mem git local_hash
-            >>= function
-            | true -> Lwt.return (Some (action :> command))
-            | false -> Lwt.return None ) )
-      actions
+    let length = Int64.to_int (Store.Value.length v) in
+    Lwt.return (kind, length)
+
+  let heavily_load t hash =
+    Store.read_inflated t hash >>= function
+    | Some (kind, { Cstruct.buffer; off; len }) ->
+        let kind =
+          match kind with
+          | `Commit -> `A
+          | `Tree -> `B
+          | `Blob -> `C
+          | `Tag -> `D
+        in
+        let raw = Bigstringaf.sub buffer ~off ~len in
+        Lwt.return (Carton.Dec.v ~kind raw)
+    | None -> Lwt.fail Not_found
+
+  (* TODO *)
+
+  include Smart_git.Make (Scheduler) (Pack) (Index) (Conduit) (HTTP) (Hash)
+            (Reference)
+
+  let fetch ~resolvers endpoint t ?version ?capabilities want ~src ~dst ~idx
+      t_pck t_idx =
+    let ministore = Ministore.inj (t, Hashtbl.create 0x100) in
+    fetch ~resolvers
+      (access, lightly_load t, heavily_load t)
+      ministore endpoint ?version ?capabilities want t_pck t_idx ~src ~dst ~idx
+
+  let get_object_for_packer t hash =
+    Store.read t hash >|= function
+    | Ok (Value.Blob _) -> Some (Pck.make ~kind:Pck.blob Pck.Leaf hash)
+    | Ok (Value.Tree tree) ->
+        let hashes = Tree.hashes tree in
+        Some (Pck.make ~kind:Pck.tree hashes hash)
+    | Ok (Value.Commit commit) ->
+        let preds = Store.Value.Commit.parents commit in
+        let root = Store.Value.Commit.tree commit in
+        let { User.date = ts, _; _ } = Store.Value.Commit.committer commit in
+        Some (Pck.make ~kind:Pck.commit { Pck.root; Pck.preds } ~ts hash)
+    | Ok (Value.Tag tag) ->
+        let pred = Store.Value.Tag.obj tag in
+        Some (Pck.make ~kind:Pck.tag pred hash)
+    | Error _ -> None
+
+  let get_object_for_packer (t, hashtbl) hash =
+    match Hashtbl.find hashtbl hash with
+    | v -> Lwt.return_some v
+    | exception Not_found -> (
+        get_object_for_packer t hash >>= function
+        | Some o as v ->
+            Hashtbl.replace hashtbl hash o;
+            Lwt.return v
+        | None -> Lwt.return_none )
+
+  let access =
+    {
+      Sigs.get =
+        (fun uid t ->
+          Scheduler.inj (get_object_for_packer (Ministore.prj t) uid));
+      Sigs.parents = (fun _ _ -> assert false);
+      Sigs.deref =
+        (fun t refname -> Scheduler.inj (deref (Ministore.prj t) refname));
+      Sigs.locals = (fun _ -> assert false);
+    }
+
+  let push ~resolvers endpoint t ?version ?capabilities cmds =
+    let ministore = Ministore.inj (t, Hashtbl.create 0x100) in
+    push ~resolvers
+      (access, lightly_load t, heavily_load t)
+      ministore endpoint ?version ?capabilities cmds
 end
