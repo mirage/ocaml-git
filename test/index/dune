@@ -6,5 +6,6 @@
 (rule
  (alias runtest)
  (package git-unix)
+ (enabled_if (= %{os_type} "Unix"))
  (action
   (run ./test.exe)))
