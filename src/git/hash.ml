@@ -16,10 +16,7 @@
  *)
 
 module Make (Digestif : Digestif.S) :
-  S.HASH
-    with type t = Digestif.t
-     and type ctx = Digestif.ctx
-     and type kind = Digestif.kind = struct
+  S.HASH with type t = Digestif.t and type ctx = Digestif.ctx = struct
   include Digestif
 
   module Ordered = struct
