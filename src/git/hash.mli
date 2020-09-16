@@ -16,7 +16,4 @@
  *)
 
 module Make (Digestif : Digestif.S) :
-  S.HASH
-    with type t = Digestif.t
-     and type ctx = Digestif.ctx
-     and type kind = Digestif.kind
+  S.HASH with type t = Digestif.t and type ctx = Digestif.ctx
