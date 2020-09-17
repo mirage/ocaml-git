@@ -1,0 +1,30 @@
+opam-version: "2.0"
+maintainer:   [ "thomas@gazagnaire.org"
+                "romain.calascibetta@gmail.com" ]
+authors:      "Thomas Gazagnaire"
+license:      "ISC"
+homepage:     "https://github.com/mirage/ocaml-git"
+bug-reports:  "https://github.com/mirage/ocaml-git/issues"
+dev-repo:     "git+https://github.com/mirage/ocaml-git.git"
+doc:          "https://mirage.github.io/ocaml-git/"
+synopsis:     "A package to use HTTP-based ocaml-git with Unix backend"
+
+build: [
+  ["dune" "subst"]
+  ["dune" "build" "-p" name "-j" jobs]
+  ["dune" "runtest" "-p" name "-j1" "--no-buffer"] {with-test}
+]
+
+depends: [
+  "ocaml"             {>= "4.07.0"}
+  "dune"              {>= "2.6.0"}
+  "git"
+  "cohttp-lwt-unix"
+]
+
+pin-depends: [
+  [ "conduit.dev" "git+https://github.com/dinosaure/ocaml-conduit.git#9815aa091e9c285e236e1deffb0dc48723ac72a0" ]
+  [ "cohttp.dev" "git+https://github.com/dinosaure/ocaml-cohttp.git#9f19f9b8216f2546f2917b08ff227be5630858bf" ]
+  [ "cohttp-lwt.dev" "git+https://github.com/dinosaure/ocaml-cohttp.git#9f19f9b8216f2546f2917b08ff227be5630858bf" ]
+  [ "cohttp-lwt-unix.dev" "git+https://github.com/dinosaure/ocaml-cohttp.git#9f19f9b8216f2546f2917b08ff227be5630858bf" ]
+]
