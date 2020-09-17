@@ -103,7 +103,7 @@ let create ~mode:_ { o0; o1; _ } key =
     let k1 =
       Option.fold ~none:false
         ~some:(fun key' -> key == key')
-        (Ephemeron.K1.get_key o0)
+        (Ephemeron.K1.get_key o1)
     in
     assert (not (k0 && k1));
     let value =
@@ -191,6 +191,6 @@ let project tbl uid =
   else if
     Option.fold ~none:false
       ~some:(fun k -> k == uid)
-      (Ephemeron.K1.get_key tbl.o0)
+      (Ephemeron.K1.get_key tbl.o1)
   then !(Option.get (Ephemeron.K1.get_data tbl.o1))
   else Cstruct.empty
