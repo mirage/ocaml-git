@@ -59,6 +59,6 @@ depends: [
 ]
 
 pin-depends: [
-  [ "conduit.dev" "git+https://github.com/dinosaure/ocaml-conduit.git#9779d777cd03f85e770ecc1c1174dd382979bc58" ]
+  [ "conduit.dev" "git+https://github.com/dinosaure/ocaml-conduit.git#056e94b57e6fc2a08b587e949a7c38d2f1b79e6a" ]
   [ "encore.dev" "git+https://github.com/mirage/encore.git#d376be363e0fb26c0c04d334931a4519a0c30878" ]
 ]

@@ -7,7 +7,7 @@ homepage:     "https://github.com/mirage/ocaml-git"
 bug-reports:  "https://github.com/mirage/ocaml-git/issues"
 dev-repo:     "git+https://github.com/mirage/ocaml-git.git"
 doc:          "https://mirage.github.io/ocaml-git/"
-synopsis:     "Virtual package to install and configure ocaml-git's Unix backend"
+synopsis:     "A package to use HTTP-based ocaml-git with Unix backend"
 
 build: [
   ["dune" "subst"]
@@ -19,12 +19,9 @@ depends: [
   "ocaml"             {>= "4.07.0"}
   "dune"              {>= "2.6.0"}
   "git"
-  "cohttp-mirage"
 ]
 
 pin-depends: [
-  [ "conduit-mirage.dev" "git+https://github.com/dinosaure/ocaml-conduit.git#056e94b57e6fc2a08b587e949a7c38d2f1b79e6a" ]
-  [ "cohttp.dev" "git+https://github.com/dinosaure/ocaml-cohttp.git#11dc50bf1ee6e3df831e76ebcc25a5c9f3abc280" ]
-  [ "cohttp-lwt.dev" "git+https://github.com/dinosaure/ocaml-cohttp.git#11dc50bf1ee6e3df831e76ebcc25a5c9f3abc280" ]
-  [ "cohttp-mirage.dev" "git+https://github.com/dinosaure/ocaml-cohttp.git#11dc50bf1ee6e3df831e76ebcc25a5c9f3abc280" ]
+  [ "cohttp.dev" "git+https://github.com/dinosaure/ocaml-cohttp.git#9f19f9b8216f2546f2917b08ff227be5630858bf" ]
+  [ "cohttp-lwt.dev" "git+https://github.com/dinosaure/ocaml-cohttp.git#9f19f9b8216f2546f2917b08ff227be5630858bf" ]
 ]

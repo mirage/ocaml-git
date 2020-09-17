@@ -7,7 +7,7 @@ homepage:     "https://github.com/mirage/ocaml-git"
 bug-reports:  "https://github.com/mirage/ocaml-git/issues"
 dev-repo:     "git+https://github.com/mirage/ocaml-git.git"
 doc:          "https://mirage.github.io/ocaml-git/"
-synopsis:     "Virtual package to install and configure ocaml-git's Unix backend"
+synopsis:     "A package to use HTTP-based ocaml-git with MirageOS backend"
 
 build: [
   ["dune" "subst"]

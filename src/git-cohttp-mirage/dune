@@ -1,0 +1,5 @@
+(library
+ (name git_cohttp_mirage)
+ (public_name git-cohttp-mirage)
+ (libraries git-cohttp lwt rresult result nss.git uri fmt cohttp cohttp-lwt
+   cohttp-mirage))
