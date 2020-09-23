@@ -4,7 +4,9 @@ module Advertised_refs : sig
   val pp : (string, string) t Fmt.t
   val head : ('a, string) t -> 'a option
   val capabilities : ('uid, 'reference) t -> Capability.t list
-  val refs : ('uid, 'reference) t -> ('uid * 'reference * bool) list
+
+  val refs :
+    ('uid, 'reference) t -> ('uid * 'reference * (* peeled *) bool) list
 
   val reference :
     equal:('ref -> 'ref -> bool) ->
