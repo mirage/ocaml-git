@@ -458,14 +458,9 @@ struct
     let map _ _ ~pos:_ _ = assert false
   end
 
-  open Lwt.Infix
-
   include Sync.Make (Git_store.Hash) (Cstruct_append) (Index) (Conduit)
             (Git_store)
             (HTTP)
-
-  let ( >>? ) x f =
-    x >>= function Ok x -> f x | Error err -> Lwt.return_error err
 
   let stream_of_cstruct ?(chunk = 0x1000) payload =
     let stream, emitter = Lwt_stream.create () in
@@ -493,30 +488,16 @@ struct
     let index = Carton.Dec.Idx.Device.create t_idx in
     let src = Cstruct_append.key t_pck in
     let dst = Cstruct_append.key t_pck in
+    let create_idx_stream () =
+      Carton.Dec.Idx.Device.project t_idx index
+      |> Cstruct.of_bigarray
+      |> stream_of_cstruct
+    in
+    let create_pack_stream () =
+      let pack = Cstruct_append.project t_pck dst in
+      stream_of_cstruct pack
+    in
     fetch ~push_stdout ~push_stderr ~resolvers edn store ?version ?capabilities
-      ?deepen want ~src ~dst ~idx:index t_pck t_idx
-    >>? function
-    | `Empty ->
-        Log.debug (fun m -> m "Got an empty PACK file.");
-        Lwt.return_ok None
-    | `Pack (hash, refs) ->
-        Log.debug (fun m -> m "Got a PACK file: %a." Git_store.Hash.pp hash);
-        let index = Carton.Dec.Idx.Device.project t_idx index in
-        let pack = Cstruct_append.project t_pck dst in
-
-        Git_store.batch_write store hash ~pck:(stream_of_cstruct pack)
-          ~idx:(stream_of_cstruct (Cstruct.of_bigarray index))
-        >|= Rresult.R.reword_error (fun err -> `Store err)
-        >>? fun () ->
-        let update (refname, hash) =
-          Git_store.Ref.write store refname (Reference.Uid hash) >>= function
-          | Ok v -> Lwt.return v
-          | Error err ->
-              Log.warn (fun m ->
-                  m "Impossible to update %a to %a: %a." Reference.pp refname
-                    Git_store.Hash.pp hash Git_store.pp_error err);
-              Lwt.return_unit
-        in
-        Lwt_list.iter_p update refs >>= fun () ->
-        Lwt.return_ok (Some (hash, refs))
+      ?deepen want ~src ~dst ~idx:index ~create_idx_stream ~create_pack_stream
+      t_pck t_idx
 end

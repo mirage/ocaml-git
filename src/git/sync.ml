@@ -36,7 +36,7 @@ module type S = sig
     ?version:[> `V1 ] ->
     ?capabilities:Smart.Capability.t list ->
     ?deepen:[ `Depth of int | `Timestamp of int64 ] ->
-    [ `All | `Some of Reference.t list | `None ] ->
+    [ `All | `Some of (Reference.t * Reference.t) list | `None ] ->
     ((hash * (Reference.t * hash) list) option, error) result Lwt.t
 
   val push :
@@ -191,13 +191,63 @@ struct
   include Smart_git.Make (Scheduler) (Pack) (Index) (Conduit) (HTTP) (Hash)
             (Reference)
 
+  let ( >>? ) x f =
+    x >>= function Ok x -> f x | Error err -> Lwt.return_error err
+
   let fetch ?(push_stdout = ignore) ?(push_stderr = ignore) ~resolvers endpoint
-      t ?version ?capabilities ?deepen want ~src ~dst ~idx t_pck t_idx =
+      t ?version ?capabilities ?deepen want ~src ~dst ~idx ~create_idx_stream
+      ~create_pack_stream t_pck t_idx =
+    let want, src_dst_mapping =
+      match want with
+      | (`All | `None) as x -> x, fun src -> [ src ]
+      | `Some src_dst_refs ->
+          let src_refs = List.map fst src_dst_refs in
+          let src_dst_map =
+            List.fold_left
+              (fun src_dst_map (src_ref, dst_ref) ->
+                try
+                  let dst_refs = Reference.Map.find src_ref src_dst_map in
+                  if List.exists (Reference.equal dst_ref) dst_refs then
+                    src_dst_map
+                  else
+                    Reference.Map.add src_ref (dst_ref :: dst_refs) src_dst_map
+                with Not_found ->
+                  Reference.Map.add src_ref [ dst_ref ] src_dst_map)
+              Reference.Map.empty src_dst_refs
+          in
+          let src_dst_mapping src_ref =
+            Reference.Map.find_opt src_ref src_dst_map
+            |> Option.value ~default:[ src_ref ]
+          in
+          `Some src_refs, src_dst_mapping
+    in
     let ministore = Ministore.inj (t, Hashtbl.create 0x100) in
     fetch ~push_stdout ~push_stderr ~resolvers
       (access, lightly_load t, heavily_load t)
       ministore endpoint ?version ?capabilities ?deepen want t_pck t_idx ~src
       ~dst ~idx
+    >>? function
+    | `Empty -> Lwt.return_ok None
+    | `Pack (uid, refs) ->
+        Store.batch_write t uid ~pck:(create_pack_stream ())
+          ~idx:(create_idx_stream ())
+        >|= Rresult.R.reword_error (fun err -> `Store err)
+        >>? fun () ->
+        let update (src_ref, hash) =
+          let write_dst_ref dst_ref =
+            Store.Ref.write t dst_ref (Reference.Uid hash) >>= function
+            | Ok v -> Lwt.return v
+            | Error err ->
+                Log.warn (fun m ->
+                    m "Impossible to update %a to %a: %a." Reference.pp src_ref
+                      Store.Hash.pp hash Store.pp_error err);
+                Lwt.return_unit
+          in
+          let dst_refs = src_dst_mapping src_ref in
+          Lwt_list.iter_p write_dst_ref dst_refs
+        in
+        Lwt_list.iter_p update refs >>= fun () ->
+        Lwt.return_ok (Some (uid, refs))
 
   let get_object_for_packer t hash =
     Store.read t hash >>= function

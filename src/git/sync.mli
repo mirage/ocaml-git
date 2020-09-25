@@ -33,7 +33,7 @@ module type S = sig
     ?version:[> `V1 ] ->
     ?capabilities:Smart.Capability.t list ->
     ?deepen:[ `Depth of int | `Timestamp of int64 ] ->
-    [ `All | `Some of Reference.t list | `None ] ->
+    [ `All | `Some of (Reference.t * Reference.t) list | `None ] ->
     ((hash * (Reference.t * hash) list) option, error) result Lwt.t
 
   val push :
@@ -76,14 +76,24 @@ module Make
     ?version:[> `V1 ] ->
     ?capabilities:Smart.Capability.t list ->
     ?deepen:[ `Depth of int | `Timestamp of int64 ] ->
-    [ `All | `Some of Reference.t list | `None ] ->
+    [ `All
+    | `Some of
+      (* src (remote) ref * dst (local) ref *)
+      (Reference.t * Reference.t) list
+    | `None ] ->
     src:Pack.uid ->
     dst:Pack.uid ->
     idx:Index.uid ->
+    create_idx_stream:(unit -> unit -> string option Lwt.t) ->
+    create_pack_stream:(unit -> unit -> string option Lwt.t) ->
     Pack.t ->
     Index.t ->
-    ([ `Pack of hash * (Reference.t * hash) list | `Empty ], [> error ]) result
-    Lwt.t
+    ((hash * (Reference.t * hash) list) option, [> error ]) result Lwt.t
+  (** fetches remote references and saves them.
+      Behavior of fetch when [want] is 
+      [`All] - fetches all remote references and saves them in store 
+      [`Some src_dst_pairs] - fetch [src] and save in [dst] 
+      [`None] - doesn't save anything *)
 
   val push :
     resolvers:Conduit.resolvers ->
