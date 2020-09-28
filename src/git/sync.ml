@@ -28,6 +28,8 @@ module type S = sig
   val pp_error : error Fmt.t
 
   val fetch :
+    ?push_stdout:(string -> unit) ->
+    ?push_stderr:(string -> unit) ->
     resolvers:Conduit.resolvers ->
     Smart_git.endpoint ->
     store ->
@@ -170,10 +172,10 @@ struct
   include Smart_git.Make (Scheduler) (Pack) (Index) (Conduit) (HTTP) (Hash)
             (Reference)
 
-  let fetch ~resolvers endpoint t ?version ?capabilities want ~src ~dst ~idx
-      t_pck t_idx =
+  let fetch ?(push_stdout = ignore) ?(push_stderr = ignore) ~resolvers endpoint
+      t ?version ?capabilities want ~src ~dst ~idx t_pck t_idx =
     let ministore = Ministore.inj (t, Hashtbl.create 0x100) in
-    fetch ~resolvers
+    fetch ~push_stdout ~push_stderr ~resolvers
       (access, lightly_load t, heavily_load t)
       ministore endpoint ?version ?capabilities want t_pck t_idx ~src ~dst ~idx
 

@@ -320,14 +320,15 @@ struct
   module Fetch = Nss.Fetch.Make (Scheduler) (Lwt) (Flow) (Uid) (Ref)
   module Push = Nss.Push.Make (Scheduler) (Lwt) (Flow) (Uid) (Ref)
 
-  let fetch_v1 ?prelude ~capabilities path ~resolvers ?want domain_name store
-      access fetch_cfg pack =
+  let fetch_v1 ?prelude ~push_stdout ~push_stderr ~capabilities path ~resolvers
+      ?want domain_name store access fetch_cfg pack =
     let open Lwt.Infix in
     Conduit.resolve resolvers domain_name >>? fun flow ->
     Lwt.try_bind
       (fun () ->
-        Fetch.fetch_v1 ?prelude ~capabilities ?want ~host:domain_name path flow
-          store access fetch_cfg (fun (payload, off, len) ->
+        Fetch.fetch_v1 ?prelude ~push_stdout ~push_stderr ~capabilities ?want
+          ~host:domain_name path flow store access fetch_cfg
+          (fun (payload, off, len) ->
             let v = String.sub payload off len in
             pack (Some (v, 0, len))))
       (fun refs ->
@@ -375,8 +376,8 @@ struct
 
   module Fetch_http = Nss.Fetch.Make (Scheduler) (Lwt) (Flow_http) (Uid) (Ref)
 
-  let http_fetch_v1 ~capabilities uri ?(headers = []) domain_name path
-      ~resolvers ?want store access fetch_cfg pack =
+  let http_fetch_v1 ~push_stdout ~push_stderr ~capabilities uri ?(headers = [])
+      domain_name path ~resolvers ?want store access fetch_cfg pack =
     let open Rresult in
     let open Lwt.Infix in
     let uri0 = Fmt.strf "%a/info/refs?service=git-upload-pack" Uri.pp uri in
@@ -396,8 +397,9 @@ struct
         headers;
       }
     in
-    Fetch_http.fetch_v1 ~prelude:false ~capabilities ?want ~host:domain_name
-      path flow store access fetch_cfg (fun (payload, off, len) ->
+    Fetch_http.fetch_v1 ~prelude:false ~push_stdout ~push_stderr ~capabilities
+      ?want ~host:domain_name path flow store access fetch_cfg
+      (fun (payload, off, len) ->
         let v = String.sub payload off len in
         pack (Some (v, 0, len)))
     >>= fun refs ->
@@ -410,9 +412,9 @@ struct
       `Report_status;
     ]
 
-  let fetch ~resolvers (access, light_load, heavy_load) store edn
-      ?(version = `V1) ?(capabilities = default_capabilities) want t_pck t_idx
-      ~src ~dst ~idx =
+  let fetch ?(push_stdout = ignore) ?(push_stderr = ignore) ~resolvers
+      (access, light_load, heavy_load) store edn ?(version = `V1)
+      ?(capabilities = default_capabilities) want t_pck t_idx ~src ~dst ~idx =
     let open Rresult in
     let open Lwt.Infix in
     let domain_name = edn.domain_name in
@@ -435,8 +437,8 @@ struct
           (* XXX(dinosaure): [prelude] is the only tweak needed between git:// and SSH. *)
           let run () =
             Lwt.both
-              (fetch_v1 ~prelude ~capabilities path ~resolvers ~want domain_name
-                 store access fetch_cfg pusher)
+              (fetch_v1 ~push_stdout ~push_stderr ~prelude ~capabilities path
+                 ~resolvers ~want domain_name store access fetch_cfg pusher)
               (run ~light_load ~heavy_load stream t_pck t_idx ~src ~dst ~idx)
             >>= fun (refs, idx) ->
             match refs, idx with
@@ -464,8 +466,9 @@ struct
           in
           let run () =
             Lwt.both
-              (http_fetch_v1 ~capabilities uri ~headers domain_name path
-                 ~resolvers ~want store access fetch_cfg pusher)
+              (http_fetch_v1 ~push_stdout ~push_stderr ~capabilities uri
+                 ~headers domain_name path ~resolvers ~want store access
+                 fetch_cfg pusher)
               (run ~light_load ~heavy_load stream t_pck t_idx ~src ~dst ~idx)
             >>= fun (refs, idx) ->
             match refs, idx with

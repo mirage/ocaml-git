@@ -12,6 +12,8 @@ module Make
     (Ref : REF) : sig
   val fetch_v1 :
     ?prelude:bool ->
+    ?push_stdout:(string -> unit) ->
+    ?push_stderr:(string -> unit) ->
     capabilities:Smart.Capability.t list ->
     ?want:[ `All | `Some of Ref.t list | `None ] ->
     host:[ `host ] Domain_name.t ->

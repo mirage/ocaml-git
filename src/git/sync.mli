@@ -25,6 +25,8 @@ module type S = sig
   val pp_error : error Fmt.t
 
   val fetch :
+    ?push_stdout:(string -> unit) ->
+    ?push_stderr:(string -> unit) ->
     resolvers:Conduit.resolvers ->
     Smart_git.endpoint ->
     store ->
@@ -65,6 +67,8 @@ module Make
   val pp_error : error Fmt.t
 
   val fetch :
+    ?push_stdout:(string -> unit) ->
+    ?push_stderr:(string -> unit) ->
     resolvers:Conduit.resolvers ->
     Smart_git.endpoint ->
     store ->
