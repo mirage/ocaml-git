@@ -473,14 +473,15 @@ struct
     Lwt.async fill;
     fun () -> Lwt_stream.get stream
 
-  let fetch ~resolvers edn store ?version ?capabilities want =
+  let fetch ?(push_stdout = ignore) ?(push_stderr = ignore) ~resolvers edn store
+      ?version ?capabilities want =
     let t_idx = Carton.Dec.Idx.Device.device () in
     let t_pck = Cstruct_append.device () in
     let index = Carton.Dec.Idx.Device.create t_idx in
     let src = Cstruct_append.key t_pck in
     let dst = Cstruct_append.key t_pck in
-    fetch ~resolvers edn store ?version ?capabilities want ~src ~dst ~idx:index
-      t_pck t_idx
+    fetch ~push_stdout ~push_stderr ~resolvers edn store ?version ?capabilities
+      want ~src ~dst ~idx:index t_pck t_idx
     >>? function
     | `Empty -> Lwt.return_ok None
     | `Pack (hash, refs) ->

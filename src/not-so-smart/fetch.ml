@@ -69,8 +69,9 @@ struct
         in
         List.fold_left fold [] have |> List.split
 
-  let fetch_v1 ?(prelude = true) ~capabilities ?want:(refs = `None) ~host path
-      flow store access fetch_cfg pack =
+  let fetch_v1 ?(prelude = true) ?(push_stdout = ignore) ?(push_stderr = ignore)
+      ~capabilities ?want:(refs = `None) ~host path flow store access fetch_cfg
+      pack =
     let capabilities =
       (* XXX(dinosaure): HTTP ([stateless]) enforces no-done capabilities. Otherwise, you never
          will receive the PACK file. *)
@@ -115,8 +116,7 @@ struct
             Smart.shared `Side_band ctx || Smart.shared `Side_band_64k ctx
           in
           recv ctx
-            (recv_pack ~side_band ~push_stdout:ignore ~push_stderr:ignore
-               ~push_pack:pack)
+            (recv_pack ~side_band ~push_stdout ~push_stderr ~push_pack:pack)
         in
         if res < 0 then Log.warn (fun m -> m "No common commits");
         let rec go () =
