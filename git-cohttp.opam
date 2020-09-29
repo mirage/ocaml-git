@@ -22,6 +22,6 @@ depends: [
 ]
 
 pin-depends: [
-  [ "cohttp.dev" "git+https://github.com/dinosaure/ocaml-cohttp.git#9f19f9b8216f2546f2917b08ff227be5630858bf" ]
-  [ "cohttp-lwt.dev" "git+https://github.com/dinosaure/ocaml-cohttp.git#9f19f9b8216f2546f2917b08ff227be5630858bf" ]
+  [ "cohttp.dev" "git+https://github.com/dinosaure/ocaml-cohttp.git#10ce452be074e91400c81271fd444af62c130019" ]
+  [ "cohttp-lwt.dev" "git+https://github.com/dinosaure/ocaml-cohttp.git#10ce452be074e91400c81271fd444af62c130019" ]
 ]
