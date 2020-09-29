@@ -24,6 +24,7 @@ depends: [
 ]
 
 pin-depends: [
+  [ "conduit-tls.dev" "git+https://github.com/dinosaure/ocaml-conduit.git#056e94b57e6fc2a08b587e949a7c38d2f1b79e6a" ]
   [ "conduit-mirage.dev" "git+https://github.com/dinosaure/ocaml-conduit.git#056e94b57e6fc2a08b587e949a7c38d2f1b79e6a" ]
   [ "cohttp.dev" "git+https://github.com/dinosaure/ocaml-cohttp.git#10ce452be074e91400c81271fd444af62c130019" ]
   [ "cohttp-lwt.dev" "git+https://github.com/dinosaure/ocaml-cohttp.git#10ce452be074e91400c81271fd444af62c130019" ]
