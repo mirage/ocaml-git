@@ -121,7 +121,7 @@ let create ~mode:_ { o0; o1; _ } key =
     else !value
   in
 
-  Log.debug (fun m -> m "Make a new file-descriptor (%b)." which) ;
+  Log.debug (fun m -> m "Make a new file-descriptor (%b)." which);
   let fd =
     {
       buffer = value;
@@ -138,12 +138,11 @@ let append _ fd str =
   if new_length > fd.capacity then enlarge fd len;
   Cstruct.blit_from_string str 0 fd.buffer fd.length len;
   fd.length <- new_length;
-  Log.debug (fun m -> m "Append + %d byte(s)." fd.length) ;
+  Log.debug (fun m -> m "Append + %d byte(s)." fd.length);
   Lwt.return ()
 
 let map _ fd ~pos len =
-  Log.debug (fun m -> m "map on fd(length:%d) ~pos:%Ld %d."
-                fd.length pos len) ;
+  Log.debug (fun m -> m "map on fd(length:%d) ~pos:%Ld %d." fd.length pos len);
   let pos = Int64.to_int pos in
   if pos > fd.length then Lwt.return Bigstringaf.empty
   else
@@ -153,7 +152,9 @@ let map _ fd ~pos len =
 
 let close tbl fd =
   let result = Cstruct.sub fd.buffer 0 fd.length in
-  Log.debug (fun m -> m "Close the object into the cstruct-append heap (save %d bytes)." fd.length);
+  Log.debug (fun m ->
+      m "Close the object into the cstruct-append heap (save %d bytes)."
+        fd.length);
   ( if fd.which then
     match Ephemeron.K1.get_data tbl.o0 with
     | Some value -> value := result
