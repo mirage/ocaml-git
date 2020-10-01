@@ -107,7 +107,10 @@ struct
   let parents_of_commit t hash =
     Log.debug (fun m -> m "Get parents of %a." Hash.pp hash);
     Store.read_exn t hash >>= function
-    | Value.Commit commit -> Lwt.return (Store.Value.Commit.parents commit)
+    | Value.Commit commit -> (
+        Store.is_shallowed t hash >>= function
+        | false -> Lwt.return (Store.Value.Commit.parents commit)
+        | true -> Lwt.return [] )
     | _ -> Lwt.return []
 
   let parents ((t, _hashtbl) as store) hash =
@@ -128,6 +131,18 @@ struct
   let locals (t, _) =
     Log.debug (fun m -> m "Load locals references.");
     Store.Ref.list t >>= Lwt_list.map_p (Lwt.return <.> fst)
+
+  let shallowed (t, _) =
+    Log.debug (fun m -> m "Shallowed commits of the store.");
+    Store.shallowed t
+
+  let shallow (t, _) hash =
+    Log.debug (fun m -> m "Shallow %a." Hash.pp hash);
+    Store.shallow t hash
+
+  let unshallow (t, _) hash =
+    Log.debug (fun m -> m "Unshallow %a." Hash.pp hash);
+    Store.unshallow t hash
 
   let access =
     {

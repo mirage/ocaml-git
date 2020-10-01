@@ -27,6 +27,7 @@ module type STORE = sig
 
   val root : t -> Fpath.t
   val read_exn : t -> Hash.t -> Value.t Lwt.t
+  val is_shallowed : t -> Hash.t -> bool Lwt.t
 end
 
 module Make (Store : STORE) = struct
@@ -54,13 +55,18 @@ module Make (Store : STORE) = struct
           else
             let close' = Store.Hash.Set.add hash close in
             Store.read_exn t hash >>= function
-            | Value.Commit commit as value ->
+            | Value.Commit commit as value -> (
                 let rest' = Store.Value.Commit.tree commit :: rest in
-                List.iter
-                  (fun x -> Queue.add x queue)
-                  (Store.Value.Commit.parents commit);
-                f acc ~length:(Store.Value.Commit.length commit) hash value
-                >>= fun acc' -> walk close' rest' queue acc'
+                Store.is_shallowed t hash >>= function
+                | true ->
+                    f acc ~length:(Store.Value.Commit.length commit) hash value
+                    >>= fun acc' -> walk close' rest' queue acc'
+                | false ->
+                    List.iter
+                      (fun x -> Queue.add x queue)
+                      (Store.Value.Commit.parents commit);
+                    f acc ~length:(Store.Value.Commit.length commit) hash value
+                    >>= fun acc' -> walk close' rest' queue acc' )
             | Value.Tree tree as value ->
                 let path =
                   try Hashtbl.find names hash with Not_found -> path

@@ -32,6 +32,7 @@ type 'hash t = {
   refs : (Reference.t, [ `H of 'hash | `R of Reference.t ]) Hashtbl.t;
   root : Fpath.t;
   dotgit : Fpath.t;
+  shallows : 'hash Shallow.t;
   mutable head : 'hash Reference.contents option;
 }
 
@@ -156,6 +157,7 @@ module Make (Digestif : Digestif.S) = struct
         inflated = Hashtbl.create 1024;
         refs = Hashtbl.create 8;
         head = None;
+        shallows = Shallow.make [];
         root;
         dotgit;
       }
@@ -275,7 +277,15 @@ module Make (Digestif : Digestif.S) = struct
     in
     Lwt.return res
 
-  let read t h = Lwt.return (read t h)
+  let read t h =
+    match read t h with
+    | Ok _ as v -> Lwt.return v
+    | Error _ as err -> Lwt.return err
+
+  let is_shallowed t hash = Shallow.exists t.shallows ~equal:Hash.equal hash
+  let shallowed t = Shallow.get t.shallows
+  let shallow t hash = Shallow.append t.shallows hash
+  let unshallow t hash = Shallow.remove t.shallows ~equal:Hash.equal hash
 
   module Traverse = Traverse_bfs.Make (struct
     module Hash = Hash
@@ -285,6 +295,7 @@ module Make (Digestif : Digestif.S) = struct
 
     let root { root; _ } = root
     let read_exn = read_exn
+    let is_shallowed = is_shallowed
   end)
 
   let fold = Traverse.fold

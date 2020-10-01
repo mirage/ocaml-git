@@ -110,6 +110,7 @@ struct
     rs : Rs.t;
     root : Fpath.t;
     dotgit : Fpath.t;
+    shallows : hash Shallow.t;
     mutable refs : (Rs.t, Hash.t, Rs.error, Caml_scheduler.t) Reference.store;
   }
 
@@ -161,7 +162,19 @@ struct
       }
     in
     Lwt.return
-      { minor; major; major_uid; packs; pools; buffs; rs; refs; root; dotgit }
+      {
+        minor;
+        major;
+        major_uid;
+        packs;
+        pools;
+        buffs;
+        rs;
+        refs;
+        root;
+        dotgit;
+        shallows = Shallow.make [];
+      }
 
   type error =
     [ `Not_found of Hash.t
@@ -332,6 +345,11 @@ struct
     list t >>= fun hashes ->
     Lwt_list.map_p (fun hash -> read_exn t hash >|= fun v -> hash, v) hashes
 
+  let is_shallowed t hash = Shallow.exists ~equal:Hash.equal t.shallows hash
+  let shallowed t = Shallow.get t.shallows
+  let shallow t hash = Shallow.append t.shallows hash
+  let unshallow t hash = Shallow.remove t.shallows ~equal:Hash.equal hash
+
   module Traverse = Traverse_bfs.Make (struct
     module Hash = Hash
     module Value = Value
@@ -340,6 +358,7 @@ struct
 
     let root { root; _ } = root
     let read_exn = read_exn
+    let is_shallowed = is_shallowed
   end)
 
   let fold = Traverse.fold

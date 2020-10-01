@@ -23,6 +23,7 @@ module type STORE = sig
 
   val root : t -> Fpath.t
   val read_exn : t -> Hash.t -> Value.t Lwt.t
+  val is_shallowed : t -> Hash.t -> bool Lwt.t
 end
 
 module Make (Store : STORE) : sig
