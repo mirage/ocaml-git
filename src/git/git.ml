@@ -20,3 +20,4 @@ module Store = Store
 module Hash = Hash
 module Sync = Sync
 module Cstruct_append = Cstruct_append
+module Shallow = Shallow
