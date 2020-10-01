@@ -70,8 +70,8 @@ struct
         List.fold_left fold [] have |> List.split
 
   let fetch_v1 ?(prelude = true) ?(push_stdout = ignore) ?(push_stderr = ignore)
-      ~capabilities ?want:(refs = `None) ~host path flow store access fetch_cfg
-      pack =
+      ~capabilities ?deepen ?want:(refs = `None) ~host path flow store access
+      fetch_cfg pack =
     let capabilities =
       (* XXX(dinosaure): HTTP ([stateless]) enforces no-done capabilities. Otherwise, you never
          will receive the PACK file. *)
@@ -105,7 +105,8 @@ struct
         Neg.compare = Uid.compare;
       }
     in
-    Neg.find_common sched io flow fetch_cfg hex access store negotiator ctx uids
+    Neg.find_common sched io flow fetch_cfg hex access store negotiator ctx
+      ?deepen uids
     |> prj
     >>= function
     | `Close -> return []

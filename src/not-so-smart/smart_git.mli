@@ -83,6 +83,7 @@ module Make
     endpoint ->
     ?version:[> `V1 ] ->
     ?capabilities:Smart.Capability.t list ->
+    ?deepen:[ `Depth of int | `Timestamp of int64 ] ->
     [ `All | `Some of Ref.t list | `None ] ->
     Pack.t ->
     Index.t ->
