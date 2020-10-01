@@ -1,0 +1,8 @@
+(executable
+ (name test)
+ (libraries fmt fmt.tty logs.cli logs.fmt lwt lwt.unix git alcotest-lwt bigstringaf cstruct alcotest))
+
+(rule
+ (alias runtest)
+ (deps (:test test.exe))
+ (action (run %{test} --color=always)))
