@@ -35,6 +35,7 @@ module type S = sig
     store ->
     ?version:[> `V1 ] ->
     ?capabilities:Smart.Capability.t list ->
+    ?deepen:[ `Depth of int | `Timestamp of int64 ] ->
     [ `All | `Some of Reference.t list | `None ] ->
     ((hash * (Reference.t * hash) list) option, error) result Lwt.t
 
@@ -154,6 +155,11 @@ struct
       Sigs.deref =
         (fun t refname -> Scheduler.inj (deref (Ministore.prj t) refname));
       Sigs.locals = (fun t -> Scheduler.inj (locals (Ministore.prj t)));
+      Sigs.shallowed = (fun t -> Scheduler.inj (shallowed (Ministore.prj t)));
+      Sigs.shallow =
+        (fun t uid -> Scheduler.inj (shallow (Ministore.prj t) uid));
+      Sigs.unshallow =
+        (fun t uid -> Scheduler.inj (unshallow (Ministore.prj t) uid));
     }
 
   let lightly_load t hash =
@@ -182,33 +188,37 @@ struct
         Lwt.return (Carton.Dec.v ~kind raw)
     | None -> Lwt.fail Not_found
 
-  (* TODO *)
-
   include Smart_git.Make (Scheduler) (Pack) (Index) (Conduit) (HTTP) (Hash)
             (Reference)
 
   let fetch ?(push_stdout = ignore) ?(push_stderr = ignore) ~resolvers endpoint
-      t ?version ?capabilities want ~src ~dst ~idx t_pck t_idx =
+      t ?version ?capabilities ?deepen want ~src ~dst ~idx t_pck t_idx =
     let ministore = Ministore.inj (t, Hashtbl.create 0x100) in
     fetch ~push_stdout ~push_stderr ~resolvers
       (access, lightly_load t, heavily_load t)
-      ministore endpoint ?version ?capabilities want t_pck t_idx ~src ~dst ~idx
+      ministore endpoint ?version ?capabilities ?deepen want t_pck t_idx ~src
+      ~dst ~idx
 
   let get_object_for_packer t hash =
-    Store.read t hash >|= function
-    | Ok (Value.Blob _) -> Some (Pck.make ~kind:Pck.blob Pck.Leaf hash)
+    Store.read t hash >>= function
+    | Ok (Value.Blob _) ->
+        Lwt.return_some (Pck.make ~kind:Pck.blob Pck.Leaf hash)
     | Ok (Value.Tree tree) ->
         let hashes = Tree.hashes tree in
-        Some (Pck.make ~kind:Pck.tree hashes hash)
+        Lwt.return_some (Pck.make ~kind:Pck.tree hashes hash)
     | Ok (Value.Commit commit) ->
-        let preds = Store.Value.Commit.parents commit in
+        (Store.is_shallowed t hash >|= function
+         | true -> []
+         | false -> Store.Value.Commit.parents commit)
+        >>= fun preds ->
         let root = Store.Value.Commit.tree commit in
         let { User.date = ts, _; _ } = Store.Value.Commit.committer commit in
-        Some (Pck.make ~kind:Pck.commit { Pck.root; Pck.preds } ~ts hash)
+        Lwt.return_some
+          (Pck.make ~kind:Pck.commit { Pck.root; Pck.preds } ~ts hash)
     | Ok (Value.Tag tag) ->
         let pred = Store.Value.Tag.obj tag in
-        Some (Pck.make ~kind:Pck.tag pred hash)
-    | Error _ -> None
+        Lwt.return_some (Pck.make ~kind:Pck.tag pred hash)
+    | Error _ -> Lwt.return_none
 
   let get_object_for_packer (t, hashtbl) hash =
     match Hashtbl.find hashtbl hash with
@@ -229,6 +239,9 @@ struct
       Sigs.deref =
         (fun t refname -> Scheduler.inj (deref (Ministore.prj t) refname));
       Sigs.locals = (fun _ -> assert false);
+      Sigs.shallowed = (fun _ -> assert false);
+      Sigs.shallow = (fun _ -> assert false);
+      Sigs.unshallow = (fun _ -> assert false);
     }
 
   let push ~resolvers endpoint t ?version ?capabilities cmds =

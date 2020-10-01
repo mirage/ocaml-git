@@ -257,7 +257,9 @@ module Make (Digestif : Digestif.S) = struct
     let v =
       match read t h with
       | Ok (Blob v) -> Ok (Value.Blob.length v)
-      | Ok (Commit _ | Tag _ | Tree _) | Error _ -> Error (`Not_found h)
+      | Ok (Commit _ | Tag _ | Tree _) | Error _ ->
+          (* TODO(dinosaure): shallow? *)
+          Error (`Not_found h)
     in
     Lwt.return v
 
@@ -485,14 +487,14 @@ struct
     fun () -> Lwt_stream.get stream
 
   let fetch ?(push_stdout = ignore) ?(push_stderr = ignore) ~resolvers edn store
-      ?version ?capabilities want =
+      ?version ?capabilities ?deepen want =
     let t_idx = Carton.Dec.Idx.Device.device () in
     let t_pck = Cstruct_append.device () in
     let index = Carton.Dec.Idx.Device.create t_idx in
     let src = Cstruct_append.key t_pck in
     let dst = Cstruct_append.key t_pck in
     fetch ~push_stdout ~push_stderr ~resolvers edn store ?version ?capabilities
-      want ~src ~dst ~idx:index t_pck t_idx
+      ?deepen want ~src ~dst ~idx:index t_pck t_idx
     >>? function
     | `Empty -> Lwt.return_ok None
     | `Pack (hash, refs) ->
