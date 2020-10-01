@@ -142,6 +142,8 @@ end
 
 module Shallow : sig
   type 'uid t = private Shallow of 'uid | Unshallow of 'uid
+
+  val map : f:('a -> 'b) -> 'a t -> 'b t
 end
 
 type ('a, 'err) t =
