@@ -110,7 +110,7 @@ let create ~mode:_ { o0; o1; _ } key =
       if k0 then Option.get (Ephemeron.K1.get_data o0)
       else Option.get (Ephemeron.K1.get_data o1)
     in
-    k1, value
+    k0, value
   in
 
   let value =
