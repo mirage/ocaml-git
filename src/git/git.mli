@@ -16,5 +16,6 @@ module Mem = Mem
 module Store = Store
 module Hash = Hash
 module Sync = Sync
+module Cstruct_append = Cstruct_append
 
 module type S = Minimal.S
