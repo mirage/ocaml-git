@@ -7,6 +7,7 @@ module Git =
 
 let loopback = Conduit_lwt.register ~protocol:(module Loopback)
 let fifo = Conduit_lwt.register ~protocol:(module Fifo)
+let uid = Alcotest.testable Uid.pp Uid.equal
 
 let reporter ppf =
   let report src level ~over k msgf =
@@ -276,6 +277,9 @@ let create_new_git_push_store _sw =
         Sigs.parents = (fun _uid _store -> assert false);
         Sigs.deref = deref lwt;
         Sigs.locals = (fun _store -> assert false);
+        Sigs.shallowed = (fun _store -> assert false);
+        Sigs.shallow = (fun _store _uid -> assert false);
+        Sigs.unshallow = (fun _store _uid -> assert false);
       }
     in
     let light_load uid = lightly_load lwt root uid |> Scheduler.prj in
@@ -1332,6 +1336,82 @@ let test_negotiation_http () =
   | Error (#Conduit_lwt.error as err) ->
       Alcotest.failf "%a" Conduit_lwt.pp_error err
 
+let test_partial_clone_ssh () =
+  Alcotest_lwt.test_case "partial clone over ssh" `Quick @@ fun sw () ->
+  let open Lwt.Infix in
+  let run () =
+    create_new_git_fetch_store sw >>= fun (_access, store0) ->
+    let { path; _ } = store_prj store0 in
+    let pack = Fpath.(path / ".git" / "objects" / "pack") in
+    Bos.OS.Path.link
+      ~target:(Fpath.v "pack-testzone-0.pack")
+      Fpath.(pack / "pack-4aae6e55c118eb1ab3d1e2cd5a7e4857faa23d4e.pack")
+    |> Lwt.return
+    >>? fun () ->
+    Bos.OS.Path.link
+      ~target:(Fpath.v "pack-testzone-0.idx")
+      Fpath.(pack / "pack-4aae6e55c118eb1ab3d1e2cd5a7e4857faa23d4e.idx")
+    |> Lwt.return
+    >>? fun () ->
+    update_testzone_0 store0 >>? fun () ->
+    with_fifo "git-upload-pack-ic-%s" |> Lwt.return >>? fun ic_fifo ->
+    with_fifo "git-upload-pack-oc-%s" |> Lwt.return >>? fun oc_fifo ->
+    let process = run_git_upload_pack store0 ic_fifo oc_fifo in
+    process () >>= fun () ->
+    (* XXX(dinosaure): order of temporary files is important where [process] do
+       a [fork]. [Bos] keeps a global set of all temporary files and it removes
+       them at the [exit] call.
+
+       TODO(dinosaure): move the initialisation of [store0] into the child
+       process. *)
+    create_new_git_fetch_store sw >>= fun (access, store1) ->
+    let { path; _ } = store_prj store0 in
+    let pack, index =
+      ( Fpath.(path / ".git" / "objects" / "pack"),
+        Fpath.(path / ".git" / "objects" / "pack") )
+    in
+    let capabilities = [] in
+    let resolvers = resolvers_with_fifo ic_fifo oc_fifo in
+    Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp0 ->
+    Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp1 ->
+    Bos.OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
+    Smart_git.endpoint_of_string "git@localhost:not-found.git" |> Lwt.return
+    >>? fun endpoint ->
+    Logs.app (fun m -> m "Waiting git-upload-pack.");
+    Logs.app (fun m -> m "Start to fetch repository with SSH.");
+    Git.fetch ~resolvers ~capabilities access store1 endpoint ~deepen:(`Depth 1)
+      (`Some [ Ref.v "HEAD" ])
+      pack index ~src:tmp0 ~dst:tmp1 ~idx:tmp2
+    >>? function
+    | `Empty -> Alcotest.failf "Unexpected empty fetch"
+    | `Pack _ ->
+        Store_backend.shallowed lwt store1 |> Scheduler.prj >>= fun shallowed ->
+        Alcotest.(check (list uid))
+          "shallowed" shallowed
+          [ Uid.of_hex "f08d64523257528980115942481d5ddd13d2c1ba0000" ];
+        Lwt.return_ok ()
+  in
+  run () >>= function
+  | Ok () -> Lwt.return_unit
+  | Error (#Conduit_lwt.error as err) ->
+      Alcotest.failf "%a" Conduit_lwt.pp_error err
+  | Error (`Exn exn) -> Alcotest.failf "%s" (Printexc.to_string exn)
+
+let update_testzone_1 store =
+  let { path; _ } = store_prj store in
+  let update =
+    Bos.OS.Dir.with_current path @@ fun () ->
+    Bos.OS.Cmd.run
+      Bos.Cmd.(
+        v "git"
+        % "update-ref"
+        % "refs/heads/master"
+        % "b88599cb4217c175110f6e2a810079d954524814")
+  in
+  match Rresult.R.join (update ()) with
+  | Ok () -> Lwt.return_ok ()
+  | Error err -> Lwt.return_error err
+
 let test =
   Alcotest_lwt.run "smart"
     [
@@ -1340,7 +1420,7 @@ let test =
           test_empty_clone (); test_simple_clone (); test_simple_push ();
           test_push_error (); test_fetch_empty (); test_negotiation ();
           test_ssh (); test_negotiation_ssh (); test_push_ssh ();
-          test_negotiation_http ();
+          test_negotiation_http (); test_partial_clone_ssh ();
         ] );
     ]
 

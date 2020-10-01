@@ -381,6 +381,59 @@ let get_commit_for_negotiation { Sigs.return; _ } uid store =
               m "Got an error [get_commit_for_negotiation]: %a" R.pp_msg err);
           return None )
 
+let safely_rd ~f path =
+  Bos.OS.File.with_ic path @@ fun ic a ->
+  Unix.lockf (Unix.descr_of_in_channel ic) Unix.F_RLOCK 0;
+  f ic a
+
+let safely_wr ~f path =
+  Bos.OS.File.with_oc path @@ fun oc a ->
+  Unix.lockf (Unix.descr_of_out_channel oc) Unix.F_LOCK 0;
+  f oc a
+
+let parse_shallow ic () =
+  let ln = in_channel_length ic in
+  let rs = Bytes.create ln in
+  really_input ic rs 0 ln;
+  let lst = Astring.String.fields ~empty:true (Bytes.unsafe_to_string rs) in
+  List.map Uid.of_hex lst
+
+let save_shallow oc lst =
+  let ppf = Format.formatter_of_out_channel oc in
+  let str = Fmt.strf "%a" Fmt.(list ~sep:(always "\n") Uid.pp) lst in
+  Log.debug (fun m -> m "Want to save: %S." str);
+  Fmt.pf ppf "%a%!" Fmt.(list ~sep:(always "\n") Uid.pp) lst;
+  Rresult.R.ok ()
+
+let shallowed { Sigs.return; _ } store =
+  let { path; _ } = Store.prj store in
+  let shallow = Fpath.(path / ".git" / "shallow") in
+  let fiber = safely_rd ~f:parse_shallow shallow () in
+  match fiber with
+  | Ok lst -> return lst
+  | Error (`Msg err) ->
+      Log.warn (fun m ->
+          m "Got an error when we tried to get shallowed commits: %s" err);
+      return []
+
+let identity x = x
+let always x _ = x
+
+let shallow { Sigs.return; _ } store uid =
+  let { path; _ } = Store.prj store in
+  let shallow = Fpath.(path / ".git" / "shallow") in
+  let fiber =
+    let res = safely_rd ~f:parse_shallow shallow () in
+    let shallowed = Result.fold ~ok:identity ~error:(always []) res in
+    safely_wr ~f:save_shallow shallow (uid :: shallowed) |> Rresult.R.join
+  in
+  match fiber with
+  | Ok () -> return ()
+  | Error (`Msg err) ->
+      Log.warn (fun m ->
+          m "Got an error when we tried to shallow %a: %s" Uid.pp uid err);
+      return ()
+
 let access :
     type s.
     s scheduler -> (Uid.t, Ref.t, Uid.t * int ref * int64, git, s) access =
@@ -390,4 +443,8 @@ let access :
     parents = parents scheduler;
     deref = deref scheduler;
     locals = locals scheduler;
+    (* TODO(dinosaure): no [git] commands to shallow/unshallow commits. *)
+    shallowed = shallowed scheduler;
+    shallow = shallow scheduler;
+    unshallow = (fun _store _uid -> scheduler.return ());
   }

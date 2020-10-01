@@ -370,6 +370,29 @@ struct
     Alcotest.(check bool) "hash exists" res true;
     Lwt.return_unit
 
+  let always x _ = x
+
+  let test_shallows =
+    Alcotest_lwt.test_case "shallows" `Quick @@ fun _sw store ->
+    let open Lwt.Infix in
+    let hashes = random_hashes 500 in
+    let hashes = Array.to_list hashes in
+    let set = Store.Hash.Set.of_list hashes in
+    let append hash = Store.shallow store hash >>= Lwt_unix.yield in
+    let rec verify _unit =
+      Store.shallowed store >>= fun hashes' ->
+      let set' = Store.Hash.Set.of_list hashes' in
+      Alcotest.(check bool) "subset" (Store.Hash.Set.subset set' set) true;
+      if not (Store.Hash.Set.equal set' set) then Lwt_unix.yield () >>= verify
+      else Lwt.return_unit
+    in
+    Lwt.both
+      (Lwt_list.iter_p append hashes)
+      (Lwt_list.iter_p verify (List.init 500 (always ())))
+    >>= fun ((), ()) ->
+    Alcotest.(check pass) "terminate" () ();
+    Lwt.return_unit
+
   let check_search store k path v =
     let open Lwt.Infix in
     Search.find store k path >>= fun v' ->
@@ -400,6 +423,6 @@ struct
         "write", [ test_blobs; test_trees; test_commits; test_tags ];
         "find", [ test_find_trees; test_find_commits; test_find_tags ];
         "reference", [ test_references; test_cycle; test_atomic ];
-        "search", [ test_search ];
+        "search", [ test_search ]; "shallows", [ test_shallows ];
       ]
 end
