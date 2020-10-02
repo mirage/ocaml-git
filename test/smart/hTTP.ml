@@ -18,7 +18,7 @@ end
 (* XXX(dinosaure): just pass the given value and
  * inherits the totality axiom of [conduit]. *)
 
-let localhost = Domain_name.(host_exn (of_string_exn "localhost"))
+let localhost = Conduit.Endpoint.v "localhost"
 let protocol = Conduit_lwt.register ~protocol:(module None)
 
 module Protocol = struct include (val Conduit_lwt.repr protocol) end

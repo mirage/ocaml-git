@@ -54,7 +54,7 @@ type endpoint = private {
     | `HTTP of (string * string) list
     | `HTTPS of (string * string) list ];
   path : string;
-  domain_name : [ `host ] Domain_name.t;
+  endpoint : Conduit.Endpoint.t;
 }
 
 val pp_endpoint : endpoint Fmt.t
