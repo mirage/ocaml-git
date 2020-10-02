@@ -1003,7 +1003,7 @@ let with_fifo ?(mode = 0o600) ?dir pat =
 
 let ( <.> ) f g x = f (g x)
 
-let run_git_upload_pack store ic oc =
+let run_git_upload_pack ?(tmps_exit = true) store ic oc =
   let { path; _ } = store_prj store in
   let process =
     Bos.OS.Dir.with_current path @@ fun () ->
@@ -1021,6 +1021,7 @@ let run_git_upload_pack store ic oc =
     | 0 -> (
         match pipe () with
         | Ok () ->
+            local_tmps_exit := tmps_exit;
             Logs.debug (fun m -> m "git-upload-pack terminated properly.");
             exit 1
         | Error (`Msg err) -> Alcotest.failf "git-upload-pack: %s" err )
@@ -1397,6 +1398,129 @@ let test_partial_clone_ssh () =
       Alcotest.failf "%a" Conduit_lwt.pp_error err
   | Error (`Exn exn) -> Alcotest.failf "%s" (Printexc.to_string exn)
 
+let test_partial_fetch_ssh () =
+  Alcotest_lwt.test_case "partial fetch" `Quick @@ fun sw () ->
+  let open Lwt.Infix in
+  let fill0 () =
+    let open Bos in
+    create_new_git_fetch_store sw >>= fun (access, store) ->
+    let { path; _ } = store_prj store in
+    let fiber =
+      let open Rresult in
+      OS.Dir.with_current path @@ fun () ->
+      OS.Cmd.run Cmd.(v "touch" % "foo") >>= fun () ->
+      OS.Cmd.run Cmd.(v "git" % "add" % "foo") >>= fun () ->
+      OS.Cmd.run Cmd.(v "git" % "commit" % "-m" % ".")
+    in
+    (Lwt.return <.> Rresult.R.join) (fiber ()) >>? fun () ->
+    Lwt.return_ok (access, store)
+  in
+  let fill1 store =
+    let open Bos in
+    let { path; _ } = store_prj store in
+    let fiber =
+      let open Rresult in
+      OS.Dir.with_current path @@ fun () ->
+      OS.Cmd.run Cmd.(v "touch" % "bar") >>= fun () ->
+      OS.Cmd.run Cmd.(v "git" % "add" % "bar") >>= fun () ->
+      OS.Cmd.run Cmd.(v "git" % "commit" % "-m" % ".") >>= fun () ->
+      OS.Cmd.run Cmd.(v "git" % "rm" % "foo") >>= fun () ->
+      OS.Cmd.run Cmd.(v "git" % "commit" % "-m" % ".")
+    in
+    (Lwt.return <.> Rresult.R.join) (fiber ())
+  in
+  let capabilities =
+    [ `Side_band_64k; `Multi_ack_detailed; `Thin_pack; `Ofs_delta ]
+  in
+  let endpoint =
+    Rresult.R.get_ok
+      (Smart_git.endpoint_of_string "git@localhost:not-found.git")
+  in
+  let run () =
+    fill0 () >>? fun (_access, store0) ->
+    with_fifo "git-upload-pack-ic-%s" |> Lwt.return >>? fun ic_fifo ->
+    with_fifo "git-upload-pack-oc-%s" |> Lwt.return >>? fun oc_fifo ->
+    let process = run_git_upload_pack ~tmps_exit:false store0 ic_fifo oc_fifo in
+    process () >>= fun () ->
+    create_new_git_fetch_store sw >>= fun (access, store1) ->
+    let resolvers = resolvers_with_fifo ic_fifo oc_fifo in
+    Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp0 ->
+    Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp1 ->
+    Bos.OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
+    let pack, index =
+      let { path; _ } = store_prj store1 in
+      ( Fpath.(path / ".git" / "objects" / "pack"),
+        Fpath.(path / ".git" / "objects" / "pack") )
+    in
+    Logs.app (fun m -> m "Waiting git-upload-pack.");
+    Logs.app (fun m -> m "Start to fetch repository with SSH.");
+    Git.fetch ~resolvers ~capabilities access store1 endpoint ~deepen:(`Depth 1)
+      (`Some [ Ref.v "HEAD" ])
+      pack index ~src:tmp0 ~dst:tmp1 ~idx:tmp2
+    >>? function
+    | `Empty -> Alcotest.failf "Unexpected empty fetch"
+    | `Pack (uid, refs) -> (
+        let { path; _ } = store_prj store1 in
+        let dst =
+          Fpath.(
+            path
+            / ".git"
+            / "objects"
+            / "pack"
+            / Fmt.strf "pack-%a.pack" Uid.pp uid)
+        in
+        Bos.OS.Path.move tmp1 dst |> Lwt.return >>? fun () ->
+        let dst =
+          Fpath.(
+            path
+            / ".git"
+            / "objects"
+            / "pack"
+            / Fmt.strf "pack-%a.idx" Uid.pp uid)
+        in
+        Bos.OS.Path.move tmp2 dst |> Lwt.return >>? fun () ->
+        let update (refname, uid) =
+          Bos.OS.Dir.with_current path @@ fun () ->
+          Bos.OS.Cmd.run
+            Bos.Cmd.(
+              v "git" % "update-ref" % Ref.to_string refname % Uid.to_hex uid)
+        in
+        List.fold_right
+          (fun v -> function Ok a -> Rresult.R.join (update v a) | err -> err)
+          refs (Ok ())
+        |> Lwt.return
+        >>? fun () ->
+        fill1 store0 >>? fun () ->
+        with_fifo "git-upload-pack-ic-%s" |> Lwt.return >>? fun ic_fifo ->
+        with_fifo "git-upload-pack-oc-%s" |> Lwt.return >>? fun oc_fifo ->
+        let process =
+          run_git_upload_pack ~tmps_exit:false store0 ic_fifo oc_fifo
+        in
+        process () >>= fun () ->
+        let resolvers = resolvers_with_fifo ic_fifo oc_fifo in
+        Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp0 ->
+        Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp1 ->
+        Bos.OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
+        Logs.app (fun m -> m "Waiting git-upload-pack.");
+        Logs.app (fun m -> m "Start to fetch repository with SSH.");
+        Git.fetch ~resolvers ~capabilities access store1 endpoint
+          ~deepen:(`Depth 1)
+          (`Some [ Ref.v "HEAD" ])
+          pack index ~src:tmp0 ~dst:tmp1 ~idx:tmp2
+        >>? function
+        | `Empty -> Alcotest.failf "Unexpected empty fetch"
+        | `Pack _ ->
+            Store_backend.shallowed lwt store1 |> Scheduler.prj
+            >>= fun shallowed ->
+            Alcotest.(check int) "2 shallowed commits" (List.length shallowed) 2;
+            Lwt.return_ok () )
+  in
+  run () >>= function
+  | Ok v -> Lwt.return v
+  | Error (`Exn exn) -> Alcotest.failf "%s" (Printexc.to_string exn)
+  | Error (#Conduit_lwt.error as err) ->
+      Alcotest.failf "%a" Conduit_lwt.pp_error err
+
 let update_testzone_1 store =
   let { path; _ } = store_prj store in
   let update =
@@ -1421,6 +1545,7 @@ let test =
           test_push_error (); test_fetch_empty (); test_negotiation ();
           test_ssh (); test_negotiation_ssh (); test_push_ssh ();
           test_negotiation_http (); test_partial_clone_ssh ();
+          test_partial_fetch_ssh ();
         ] );
     ]
 
