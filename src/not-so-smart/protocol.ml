@@ -209,7 +209,13 @@ module Commands = struct
     { commands = command, others; capabilities }
 end
 
-module Shallow = struct type 'uid t = Shallow of 'uid | Unshallow of 'uid end
+module Shallow = struct
+  type 'uid t = Shallow of 'uid | Unshallow of 'uid
+
+  let map ~f = function
+    | Shallow v -> Shallow (f v)
+    | Unshallow v -> Unshallow (f v)
+end
 
 module Status = struct
   type 'ref t = {

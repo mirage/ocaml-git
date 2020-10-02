@@ -20,6 +20,9 @@ type ('uid, 'ref, 'v, 'g, 's) access = {
   parents : 'uid -> ('uid, 'v, 'g) store -> ('v list, 's) io;
   deref : ('uid, 'v, 'g) store -> 'ref -> ('uid option, 's) io;
   locals : ('uid, 'v, 'g) store -> ('ref list, 's) io;
+  shallowed : ('uid, 'v, 'g) store -> ('uid list, 's) io;
+  shallow : ('uid, 'v, 'g) store -> 'uid -> (unit, 's) io;
+  unshallow : ('uid, 'v, 'g) store -> 'uid -> (unit, 's) io;
 }
 
 module type SCHED = sig

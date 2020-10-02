@@ -36,5 +36,7 @@ val heavily_load : 's scheduler -> Fpath.t -> Uid.t -> (Carton.Dec.v, 's) io
 val lightly_load :
   's scheduler -> Fpath.t -> Uid.t -> (Carton.kind * int, 's) io
 
+val shallowed : 's scheduler -> (Uid.t, _, git) store -> (Uid.t list, 's) io
+
 val access :
   's scheduler -> (Uid.t, Ref.t, Uid.t * int ref * int64, git, 's) access

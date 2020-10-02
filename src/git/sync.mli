@@ -32,6 +32,7 @@ module type S = sig
     store ->
     ?version:[> `V1 ] ->
     ?capabilities:Smart.Capability.t list ->
+    ?deepen:[ `Depth of int | `Timestamp of int64 ] ->
     [ `All | `Some of Reference.t list | `None ] ->
     ((hash * (Reference.t * hash) list) option, error) result Lwt.t
 
@@ -74,6 +75,7 @@ module Make
     store ->
     ?version:[> `V1 ] ->
     ?capabilities:Smart.Capability.t list ->
+    ?deepen:[ `Depth of int | `Timestamp of int64 ] ->
     [ `All | `Some of Reference.t list | `None ] ->
     src:Pack.uid ->
     dst:Pack.uid ->

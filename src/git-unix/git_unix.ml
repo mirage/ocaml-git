@@ -719,14 +719,14 @@ module Sync (Git_store : Git.S) (HTTP : Smart_git.HTTP) = struct
     fun () -> Lwt_stream.get stream
 
   let fetch ?(push_stdout = ignore) ?(push_stderr = ignore) ~resolvers edn store
-      ?version ?capabilities want =
+      ?version ?capabilities ?deepen want =
     let dotgit = Git_store.dotgit store in
     let temp = Fpath.(dotgit / "tmp") in
     tmp temp "pack-%s.pack" >>= fun src ->
     tmp temp "pack-%s.pack" >>= fun dst ->
     tmp temp "pack-%s.idx" >>= fun idx ->
     fetch ~push_stdout ~push_stderr ~resolvers edn store ?version ?capabilities
-      want ~src ~dst ~idx temp temp
+      ?deepen want ~src ~dst ~idx temp temp
     >>? function
     | `Empty -> Lwt.return_ok None
     | `Pack (hash, refs) ->

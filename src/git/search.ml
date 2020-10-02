@@ -39,18 +39,25 @@ struct
     let tag t = `Tag (Store.Value.Tag.tag t, Store.Value.Tag.obj t) in
     Log.debug (fun l ->
         l ~header:"predecessor" "Read the object: %a." Hash.pp h);
-    Store.read_exn t h >|= function
-    | Value.Blob _ -> []
-    | Value.Commit c ->
-        (if full then [ `Tree_root (Store.Value.Commit.tree c) ] else [])
-        @ List.map (fun x -> `Commit x) (Store.Value.Commit.parents c)
-    | Value.Tag t -> if full then [ tag t ] else []
+    Store.read_exn t h >>= function
+    | Value.Blob _ -> Lwt.return []
+    | Value.Commit c -> (
+        Store.is_shallowed t h >|= function
+        | true ->
+            if full then [ `Tree_root (Store.Value.Commit.tree c) ] else []
+        | false ->
+            (if full then [ `Tree_root (Store.Value.Commit.tree c) ] else [])
+            @ List.map (fun x -> `Commit x) (Store.Value.Commit.parents c) )
+    | Value.Tag t -> if full then Lwt.return [ tag t ] else Lwt.return []
     | Value.Tree t ->
         if full then
-          List.map
-            (fun { Tree.name; node; _ } -> `Tree (name, node))
-            (Store.Value.Tree.to_list t)
-        else []
+          let lst =
+            List.map
+              (fun { Tree.name; node; _ } -> `Tree (name, node))
+              (Store.Value.Tree.to_list t)
+          in
+          Lwt.return lst
+        else Lwt.return []
 
   type path = [ `Tag of string * path | `Commit of path | `Path of string list ]
 

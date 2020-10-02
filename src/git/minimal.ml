@@ -154,6 +154,11 @@ module type S = sig
       format). Then, this function returns the hash produced from the kind and
       the inflated raw to let the user to retrieve it. *)
 
+  val is_shallowed : t -> hash -> bool Lwt.t
+  val shallowed : t -> hash list Lwt.t
+  val shallow : t -> hash -> unit Lwt.t
+  val unshallow : t -> hash -> unit Lwt.t
+
   (** {1 Backend Features} *)
 
   val has_global_watches : bool

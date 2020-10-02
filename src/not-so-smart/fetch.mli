@@ -15,6 +15,7 @@ module Make
     ?push_stdout:(string -> unit) ->
     ?push_stderr:(string -> unit) ->
     capabilities:Smart.Capability.t list ->
+    ?deepen:[ `Depth of int | `Timestamp of int64 ] ->
     ?want:[ `All | `Some of Ref.t list | `None ] ->
     host:[ `host ] Domain_name.t ->
     string ->

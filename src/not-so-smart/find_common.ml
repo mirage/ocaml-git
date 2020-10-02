@@ -102,9 +102,31 @@ let tips { bind; return } { get; deref; locals; _ } store negotiator =
   in
   locals store >>= go
 
+let consume_shallow_list ({ bind; return } as scheduler) io flow cfg deepen
+    { of_hex; _ } _access _store ctx =
+  let ( >>= ) = bind in
+  if cfg.stateless && Option.is_some deepen then
+    run scheduler raise io flow Smart.(recv ctx shallows) >>= fun shallows ->
+    let lst = List.map (Smart.Shallow.map ~f:of_hex) shallows in
+    return lst
+  else return []
+
+let handle_shallow ({ bind; return } as scheduler) io flow { of_hex; _ } access
+    store ctx =
+  let ( >>= ) = bind in
+  run scheduler raise io flow Smart.(recv ctx shallows) >>= fun shallows ->
+  let lst = List.map (Smart.Shallow.map ~f:of_hex) shallows in
+  let f = function
+    | Smart.Shallow.Shallow uid -> access.shallow store uid
+    | Smart.Shallow.Unshallow uid -> access.unshallow store uid
+  in
+  let rec go = function [] -> return () | h :: t -> f h >>= fun () -> go t in
+  go lst
+
 let find_common ({ bind; return } as scheduler) io flow
-    ({ stateless; no_done; _ } as cfg) { to_hex; of_hex; compare } access store
-    negotiator ctx refs =
+    ({ stateless; no_done; _ } as cfg) ({ to_hex; of_hex; compare } as hex)
+    access store negotiator ctx
+    ?(deepen : [ `Depth of int | `Timestamp of int64 ] option) refs =
   let ( >>= ) = bind in
   let ( >>| ) x f = x >>= fun x -> return (f x) in
   let fold_left_s ~f a l =
@@ -130,12 +152,24 @@ let find_common ({ bind; return } as scheduler) io flow
   | uid :: others ->
       Log.debug (fun m ->
           m "We want %d commit(s)." (List.length (uid :: others)));
+      access.shallowed store >>= fun shallowed ->
+      let shallowed = List.map to_hex shallowed in
       run scheduler raise io flow
         Smart.(
           let uid = (to_hex <.> fst) uid in
           let others = List.map (to_hex <.> fst) others in
           let capabilities, _ = Smart.capabilities ctx in
-          send ctx want (Want.want ~capabilities uid ~others))
+          let deepen =
+            ( deepen
+              :> [ `Depth of int | `Not of string | `Timestamp of int64 ] option
+              )
+          in
+          send ctx want
+            (Want.want ~capabilities ~shallows:shallowed ?deepen uid ~others))
+      >>= fun () ->
+      ( match deepen with
+      | None -> return ()
+      | Some _ -> handle_shallow scheduler io flow hex access store ctx )
       >>= fun () ->
       let in_vain = ref 0 in
       let count = ref 0 in
@@ -167,7 +201,8 @@ let find_common ({ bind; return } as scheduler) io flow
               flush_at := next_flush stateless !count;
               if (not stateless) && !count = _initial_flush then go negotiator
               else
-                run scheduler raise io flow Smart.(recv ctx shallows)
+                consume_shallow_list scheduler io flow cfg None hex access store
+                  ctx
                 >>= fun _shallows ->
                 let rec loop () =
                   run scheduler raise io flow Smart.(recv ctx ack)
