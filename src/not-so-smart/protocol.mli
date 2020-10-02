@@ -46,10 +46,10 @@ module Proto_request : sig
   val pp : t Fmt.t
 
   val upload_pack :
-    host:[ `host ] Domain_name.t -> ?port:int -> ?version:int -> string -> t
+    host:Conduit.Endpoint.t -> ?port:int -> ?version:int -> string -> t
 
   val receive_pack :
-    host:[ `host ] Domain_name.t -> ?port:int -> ?version:int -> string -> t
+    host:Conduit.Endpoint.t -> ?port:int -> ?version:int -> string -> t
 end
 
 module Want : sig

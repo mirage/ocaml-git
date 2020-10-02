@@ -63,19 +63,19 @@ type endpoint = {
     | `HTTP of (string * string) list
     | `HTTPS of (string * string) list ];
   path : string;
-  domain_name : [ `host ] Domain_name.t;
+  endpoint : Conduit.Endpoint.t;
 }
 
 let pp_endpoint ppf edn =
   match edn with
-  | { scheme = `SSH user; path; domain_name } ->
-      Fmt.pf ppf "%s@%a:%s" user Domain_name.pp domain_name path
-  | { scheme = `Git; path; domain_name } ->
-      Fmt.pf ppf "git://%a/%s" Domain_name.pp domain_name path
-  | { scheme = `HTTP _; path; domain_name } ->
-      Fmt.pf ppf "http://%a/%s" Domain_name.pp domain_name path
-  | { scheme = `HTTPS _; path; domain_name } ->
-      Fmt.pf ppf "https://%a/%s" Domain_name.pp domain_name path
+  | { scheme = `SSH user; path; endpoint } ->
+      Fmt.pf ppf "%s@%a:%s" user Conduit.Endpoint.pp endpoint path
+  | { scheme = `Git; path; endpoint } ->
+      Fmt.pf ppf "git://%a/%s" Conduit.Endpoint.pp endpoint path
+  | { scheme = `HTTP _; path; endpoint } ->
+      Fmt.pf ppf "http://%a/%s" Conduit.Endpoint.pp endpoint path
+  | { scheme = `HTTPS _; path; endpoint } ->
+      Fmt.pf ppf "https://%a/%s" Conduit.Endpoint.pp endpoint path
 
 let endpoint_of_string str =
   let open Rresult in
@@ -95,24 +95,33 @@ let endpoint_of_string str =
                m.Emile.local)
         in
         ( match fst m.Emile.domain with
-        | `Domain vs -> Domain_name.of_strings vs >>= Domain_name.host
-        | `Literal v -> Domain_name.of_string v >>= Domain_name.host
-        | `Addr _ -> R.error_msg "domain part must be a domain" )
-        >>= fun domain_name -> R.ok { scheme = `SSH user; path; domain_name }
+        | `Domain vs ->
+            Domain_name.of_strings vs
+            >>= Domain_name.host
+            >>| Conduit.Endpoint.domain
+        | `Literal v ->
+            Domain_name.of_string v
+            >>= Domain_name.host
+            >>| Conduit.Endpoint.domain
+        | `Addr (Emile.IPv4 ipv4) -> R.ok (Conduit.Endpoint.ip (Ipaddr.V4 ipv4))
+        | `Addr (Emile.IPv6 ipv6) -> R.ok (Conduit.Endpoint.ip (Ipaddr.V6 ipv6))
+        | `Addr (Emile.Ext (ext, _)) ->
+            R.error_msgf "Git does not handle domain extension %s." ext )
+        >>= fun endpoint -> R.ok { scheme = `SSH user; path; endpoint }
     | _ -> R.error_msg "invalid pattern"
   in
   let parse_uri x =
     let uri = Uri.of_string x in
     match Uri.scheme uri, Uri.host uri, Uri.path uri with
-    | Some "git", Some domain_name, path ->
-        Domain_name.of_string domain_name >>= Domain_name.host
-        >>= fun domain_name -> R.ok { scheme = `Git; path; domain_name }
-    | Some "http", Some domain_name, path ->
-        Domain_name.of_string domain_name >>= Domain_name.host
-        >>= fun domain_name -> R.ok { scheme = `HTTP []; path; domain_name }
-    | Some "https", Some domain_name, path ->
-        Domain_name.of_string domain_name >>= Domain_name.host
-        >>= fun domain_name -> R.ok { scheme = `HTTPS []; domain_name; path }
+    | Some "git", Some host, path ->
+        Conduit.Endpoint.of_string host >>= fun endpoint ->
+        R.ok { scheme = `Git; path; endpoint }
+    | Some "http", Some host, path ->
+        Conduit.Endpoint.of_string host >>= fun endpoint ->
+        R.ok { scheme = `HTTP []; path; endpoint }
+    | Some "https", Some host, path ->
+        Conduit.Endpoint.of_string host >>= fun endpoint ->
+        R.ok { scheme = `HTTPS []; path; endpoint }
     | _ -> R.error_msgf "invalid uri: %a" Uri.pp uri
   in
   match parse_ssh str, parse_uri str with
@@ -321,13 +330,13 @@ struct
   module Push = Nss.Push.Make (Scheduler) (Lwt) (Flow) (Uid) (Ref)
 
   let fetch_v1 ?prelude ~push_stdout ~push_stderr ~capabilities path ~resolvers
-      ?deepen ?want domain_name store access fetch_cfg pack =
+      ?deepen ?want endpoint store access fetch_cfg pack =
     let open Lwt.Infix in
-    Conduit.resolve resolvers domain_name >>? fun flow ->
+    Conduit.resolve resolvers endpoint >>? fun flow ->
     Lwt.try_bind
       (fun () ->
         Fetch.fetch_v1 ?prelude ~push_stdout ~push_stderr ~capabilities ?deepen
-          ?want ~host:domain_name path flow store access fetch_cfg
+          ?want ~host:endpoint path flow store access fetch_cfg
           (fun (payload, off, len) ->
             let v = String.sub payload off len in
             pack (Some (v, 0, len))))
@@ -377,7 +386,7 @@ struct
   module Fetch_http = Nss.Fetch.Make (Scheduler) (Lwt) (Flow_http) (Uid) (Ref)
 
   let http_fetch_v1 ~push_stdout ~push_stderr ~capabilities uri ?(headers = [])
-      domain_name path ~resolvers ?deepen ?want store access fetch_cfg pack =
+      endpoint path ~resolvers ?deepen ?want store access fetch_cfg pack =
     let open Rresult in
     let open Lwt.Infix in
     let uri0 = Fmt.strf "%a/info/refs?service=git-upload-pack" Uri.pp uri in
@@ -398,7 +407,7 @@ struct
       }
     in
     Fetch_http.fetch_v1 ~prelude:false ~push_stdout ~push_stderr ~capabilities
-      ?deepen ?want ~host:domain_name path flow store access fetch_cfg
+      ?deepen ?want ~host:endpoint path flow store access fetch_cfg
       (fun (payload, off, len) ->
         let v = String.sub payload off len in
         pack (Some (v, 0, len)))
@@ -418,7 +427,7 @@ struct
       ~idx =
     let open Rresult in
     let open Lwt.Infix in
-    let domain_name = edn.domain_name in
+    let endpoint = edn.endpoint in
     let path = edn.path in
     let stream, pusher = Lwt_stream.create () in
     let pusher = function
@@ -439,7 +448,7 @@ struct
           let run () =
             Lwt.both
               (fetch_v1 ~push_stdout ~push_stderr ~prelude ~capabilities path
-                 ~resolvers ?deepen ~want domain_name store access fetch_cfg
+                 ~resolvers ?deepen ~want endpoint store access fetch_cfg
                  pusher)
               (run ~light_load ~heavy_load stream t_pck t_idx ~src ~dst ~idx)
             >>= fun (refs, idx) ->
@@ -458,18 +467,19 @@ struct
             match scheme with
             | `HTTP headers ->
                 ( Uri.of_string
-                    (Fmt.strf "http://%a%s.git" Domain_name.pp domain_name path),
+                    (Fmt.strf "http://%a%s.git" Conduit.Endpoint.pp endpoint
+                       path),
                   headers )
             | `HTTPS headers ->
                 ( Uri.of_string
-                    (Fmt.strf "https://%a%s.git" Domain_name.pp domain_name
+                    (Fmt.strf "https://%a%s.git" Conduit.Endpoint.pp endpoint
                        path),
                   headers )
           in
           let run () =
             Lwt.both
               (http_fetch_v1 ~push_stdout ~push_stderr ~capabilities uri
-                 ~headers domain_name path ~resolvers ?deepen ~want store access
+                 ~headers endpoint path ~resolvers ?deepen ~want store access
                  fetch_cfg pusher)
               (run ~light_load ~heavy_load stream t_pck t_idx ~src ~dst ~idx)
             >>= fun (refs, idx) ->
@@ -577,12 +587,12 @@ struct
     Lwt.async fiber;
     stream
 
-  let push ?prelude ~resolvers ~capabilities path cmds domain_name store access
+  let push ?prelude ~resolvers ~capabilities path cmds endpoint store access
       push_cfg pack =
     let open Lwt.Infix in
-    Conduit.resolve resolvers domain_name >>? fun flow ->
-    Push.push ?prelude ~capabilities cmds ~host:domain_name path flow store
-      access push_cfg pack
+    Conduit.resolve resolvers endpoint >>? fun flow ->
+    Push.push ?prelude ~capabilities cmds ~host:endpoint path flow store access
+      push_cfg pack
     >>= fun () -> Conduit.close flow
 
   let push ~resolvers (access, light_load, heavy_load) store edn
@@ -591,12 +601,12 @@ struct
     match version, edn.scheme with
     | `V1, ((`Git | `SSH _) as scheme) ->
         let prelude = match scheme with `Git -> true | `SSH _ -> false in
-        let domain_name = edn.domain_name in
+        let endpoint = edn.endpoint in
         let path = edn.path in
         let push_cfg = Nss.Push.configuration () in
         let run () =
-          push ~prelude ~resolvers ~capabilities path cmds domain_name store
-            access push_cfg
+          push ~prelude ~resolvers ~capabilities path cmds endpoint store access
+            push_cfg
             (pack ~light_load ~heavy_load)
         in
         Lwt.catch run (function
