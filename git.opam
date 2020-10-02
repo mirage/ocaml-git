@@ -48,7 +48,7 @@ depends: [
   "ocamlgraph"        {>= "1.8.8"}
   "astring"
   "fpath"
-  "encore"
+  "encore"            {>= "0.7"}
   "alcotest"          {with-test & >= "1.1.0"}
   "alcotest-lwt"      {with-test & >= "1.1.0"}
   "mirage-crypto-rng" {with-test & >= "0.8.0"}
@@ -59,6 +59,5 @@ depends: [
 ]
 
 pin-depends: [
-  [ "conduit.dev" "git+https://github.com/dinosaure/ocaml-conduit.git#056e94b57e6fc2a08b587e949a7c38d2f1b79e6a" ]
-  [ "encore.dev" "git+https://github.com/mirage/encore.git#d376be363e0fb26c0c04d334931a4519a0c30878" ]
+  [ "conduit.dev" "git+https://github.com/mirage/ocaml-conduit.git#8912d458b2f3e43245e99cf3cb74e9c00712a8b0" ]
 ]
