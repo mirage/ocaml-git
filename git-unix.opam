@@ -32,7 +32,6 @@ depends: [
   "bos"
   "fpath"
   "uri"
-  "ocurl"             {>= "0.9.1"}
   "digestif"          {>= "0.8.1"}
   "logs"
   "lwt"
