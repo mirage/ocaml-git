@@ -496,8 +496,11 @@ struct
     fetch ~push_stdout ~push_stderr ~resolvers edn store ?version ?capabilities
       ?deepen want ~src ~dst ~idx:index t_pck t_idx
     >>? function
-    | `Empty -> Lwt.return_ok None
+    | `Empty ->
+        Log.debug (fun m -> m "Got an empty PACK file.");
+        Lwt.return_ok None
     | `Pack (hash, refs) ->
+        Log.debug (fun m -> m "Got a PACK file: %a." Git_store.Hash.pp hash);
         let index = Carton.Dec.Idx.Device.project t_idx index in
         let pack = Cstruct_append.project t_pck dst in
 

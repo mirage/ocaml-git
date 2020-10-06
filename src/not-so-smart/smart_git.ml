@@ -332,20 +332,25 @@ struct
   let fetch_v1 ?prelude ~push_stdout ~push_stderr ~capabilities path ~resolvers
       ?deepen ?want endpoint store access fetch_cfg pack =
     let open Lwt.Infix in
-    Conduit.resolve resolvers endpoint >>? fun flow ->
-    Lwt.try_bind
-      (fun () ->
-        Fetch.fetch_v1 ?prelude ~push_stdout ~push_stderr ~capabilities ?deepen
-          ?want ~host:endpoint path flow store access fetch_cfg
-          (fun (payload, off, len) ->
-            let v = String.sub payload off len in
-            pack (Some (v, 0, len))))
-      (fun refs ->
+    Log.debug (fun m -> m "Try to resolve %a." Conduit.Endpoint.pp endpoint);
+    Conduit.resolve resolvers endpoint >>= function
+    | Error _ as err ->
         pack None;
-        Conduit.close flow >>? fun () -> Lwt.return_ok refs)
-      (fun exn ->
-        pack None;
-        Conduit.close flow >>= fun _ -> Lwt.fail exn)
+        Lwt.return err
+    | Ok flow ->
+        Lwt.try_bind
+          (fun () ->
+            Fetch.fetch_v1 ?prelude ~push_stdout ~push_stderr ~capabilities
+              ?deepen ?want ~host:endpoint path flow store access fetch_cfg
+              (fun (payload, off, len) ->
+                let v = String.sub payload off len in
+                pack (Some (v, 0, len))))
+          (fun refs ->
+            pack None;
+            Conduit.close flow >>? fun () -> Lwt.return_ok refs)
+          (fun exn ->
+            pack None;
+            Conduit.close flow >>= fun _ -> Lwt.fail exn)
 
   module Flow_http = struct
     type +'a fiber = 'a Lwt.t
