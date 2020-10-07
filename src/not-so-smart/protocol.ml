@@ -435,6 +435,7 @@ module Decoder = struct
           else decode_first_ref ~version v decoder
       | None ->
           (* XXX(dinosaure): see [empty_clone]. *)
+          junk_pkt decoder;
           return
             {
               Advertised_refs.shallows = [];
