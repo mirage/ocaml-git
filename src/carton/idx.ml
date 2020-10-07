@@ -531,6 +531,7 @@ module Device = struct
   let create tbl =
     let key = ref Key in
     Ephemeron.K1.set_key tbl key;
+    Ephemeron.K1.set_data tbl (ref Bigstringaf.empty);
     key
 
   let project tbl uid =
@@ -593,7 +594,7 @@ struct
 
   let create tbl uid =
     assert (Ephemeron.K1.get_key tbl = Some uid);
-    Ephemeron.K1.set_data tbl (ref Bigstringaf.empty);
+    (* Ephemeron.K1.set_data tbl (ref Bigstringaf.empty); *)
     return
       (Ok { buffer = Bigstringaf.create 0x1000; capacity = 0x1000; length = 0 })
 
