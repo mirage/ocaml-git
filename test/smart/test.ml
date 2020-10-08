@@ -231,6 +231,70 @@ let empty_repository_fetch =
     "\x65\x75\x73\x65\x64\x20\x30\x0a\x30\x30\x30\x30" (* eused 0.0000 *);
   ]
 
+(** test Sync.fetch: *)
+
+type ('a, 'b, 'c) fetch_error = [ `Store of 'a | `Sync of 'b | `Bad_input of 'c ]
+
+let store_err r = R.reword_error (fun e -> `Store e) r
+let sync_err r = R.reword_error (fun e -> `Sync e) r
+let bad_input_err r = R.reword_error (fun e -> `Bad_input e) r
+
+let test_sync_fetch () =
+  Alcotest_lwt.test_case
+    "Sync.fetch fetches given remote ref and overwrites existing and \
+     non-existing local ref"
+    `Quick
+  @@ fun _switch () ->
+  let open Lwt.Infix in
+  let module Sync = Git.Mem.Sync (Conduit_lwt) (Git.Mem.Store) (Git_cohttp_unix)
+  in
+  let capabilities = [ `Side_band_64k ] in
+  let head = Git.Reference.v "HEAD" in
+  let empty_branch = Git.Reference.v "refs/heads/empty" in
+  let master_branch = Git.Reference.v "refs/heads/master" in
+  let payloads = empty_repository_fetch in
+  let resolvers = resolvers_with_payloads payloads in
+  Git.Mem.Store.v (Fpath.v "/")
+  >|= store_err
+  >>? (fun store ->
+        Git.Mem.Store.Ref.write store master_branch
+          (Git.Reference.Uid (Digestif.SHA1.of_hex "1000"))
+        >|= store_err
+        >>? fun () ->
+        Smart_git.endpoint_of_string "git://localhost/not-found.git"
+        |> Lwt.return
+        >|= bad_input_err
+        >>? fun endpoint ->
+        (* fetch HEAD and write it to refs/heads/master *)
+        Sync.fetch ~resolvers ~capabilities endpoint store
+          (`Some [ head, empty_branch; head, master_branch ])
+        >|= sync_err
+        >>? function
+        | None -> Alcotest.fail "should've fetched a ref"
+        | Some (_pack_hash, [ (fetched_ref, fetched_obj_id) ]) ->
+            Alcotest.check git_ref "request reference is fetched" fetched_ref
+              head;
+            let refs_to_overwrite = [ empty_branch; master_branch ] in
+            Lwt_list.map_s (Git.Mem.Store.Ref.read store) refs_to_overwrite
+            >>= fun pointed_obj_ids ->
+            List.combine refs_to_overwrite pointed_obj_ids
+            |> List.fold_left
+                 (fun () -> function
+                   | _, Ok pointed_obj_id ->
+                       Alcotest.check ref_contents "desired ref overwritten"
+                         pointed_obj_id (Git.Reference.Uid fetched_obj_id)
+                   | ref_, Error _ ->
+                       Alcotest.failf "desired ref %a is not overwritten"
+                         Git.Reference.pp ref_)
+                 ()
+            |> Lwt.return_ok
+        | Some _ -> Alcotest.fail "fetched more refs than requested")
+  >|= R.reword_error (function
+        | `Store err -> Alcotest.failf "%a" Git.Mem.Store.pp_error err
+        | `Sync err -> Alcotest.failf "%a" Sync.pp_error err
+        | `Bad_input err -> Alcotest.failf "%a" R.pp_msg err)
+  >|= ignore
+
 (** test Smart_git-related functionality: *)
 
 (* XXX(dinosaure): [tmp] without systemic deletion of directories. *)
