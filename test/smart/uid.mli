@@ -1,4 +1,6 @@
-include module type of Digestif.SHA1
+type t = Digestif.SHA1.t
+
+include module type of Digestif.SHA1 with type t := t
 
 val length : int
 val compare : t -> t -> int
