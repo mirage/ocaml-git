@@ -2,12 +2,9 @@ open Rresult
 open Lwt_backend
 open Store_backend
 
-module Git =
-  Smart_git.Make (Scheduler) (Append) (Append) (Conduit_lwt) (HTTP) (Uid) (Ref)
+(** logging: *)
 
-let loopback = Conduit_lwt.register ~protocol:(module Loopback)
-let fifo = Conduit_lwt.register ~protocol:(module Fifo)
-let uid = Alcotest.testable Uid.pp Uid.equal
+let () = Printexc.record_backtrace true
 
 let reporter ppf =
   let report src level ~over k msgf =
@@ -31,30 +28,67 @@ let () = Fmt_tty.setup_std_outputs ~style_renderer:`Ansi_tty ~utf_8:true ()
 let () = Logs.set_reporter (reporter Fmt.stderr)
 let () = Logs.set_level ~all:true (Some Logs.Debug)
 
+(** utils:  *)
+let ( >>? ) x f =
+  let open Lwt.Infix in
+  x >>= function Ok x -> f x | Error err -> Lwt.return_error err
+
+(** conduit-related setup for tests: *)
+
+let fifo = Conduit_lwt.register ~protocol:(module Fifo)
+
+let resolvers_with_fifo ic oc =
+  let resolve _domain_name =
+    Logs.debug (fun m -> m "Call to the local resolver to give named pipes.");
+    Lwt.return_some (ic, oc)
+  in
+  Conduit_lwt.add fifo resolve Conduit.empty
+
+let loopback = Conduit_lwt.register ~protocol:(module Loopback)
+
 let resolvers_with_payloads payloads =
   let resolve _domain_name = Lwt.return_some payloads in
   Conduit_lwt.add loopback resolve Conduit.empty
 
-(* XXX(dinosaure): [tmp] without systemic deletion of directories. *)
+(** Alcotest setup for testing: *)
+let uid = Alcotest.testable Uid.pp Uid.equal
 
-let local_delete_tmp dir = ignore (Bos.OS.Dir.delete ~recurse:true dir)
-let local_tmps = ref Fpath.Set.empty
-let local_tmps_add file = local_tmps := Fpath.Set.add file !local_tmps
-let local_delete_tmps () = Fpath.Set.iter local_delete_tmp !local_tmps
-let local_tmps_exit = ref true
+let git_ref = Alcotest.testable Git.Reference.pp Git.Reference.equal
+
+let ref_contents =
+  Alcotest.testable
+    (Git.Reference.pp_contents ~pp:Uid.pp)
+    (Git.Reference.equal_contents ~equal:Uid.equal)
+
+(** tmp dir management: *)
+
+(** to keep track of directories created by unit tests and clean them up afterwards *)
+module LocalTmps = struct
+  let rm_r dir = Bos.OS.Dir.delete ~recurse:true dir |> ignore
+  let t = ref Fpath.Set.empty
+  let add file = t := Fpath.Set.add file !t
+
+  let remove_all () =
+    Fpath.Set.iter rm_r !t;
+    t := Fpath.Set.empty
+
+  let are_valid = ref true
+end
 
 let () =
-  at_exit (fun () -> if !local_tmps_exit then local_delete_tmps () else ())
+  at_exit (fun () -> if !LocalTmps.are_valid then LocalTmps.remove_all ())
 
-let local_tmp ?(mode = 0o700) ?dir pat =
-  let dir = match dir with None -> Bos.OS.Dir.default_tmp () | Some d -> d in
-  let err () =
+let create_tmp_dir ?(mode = 0o700) ?prefix_path pat =
+  let dir =
+    match prefix_path with None -> Bos.OS.Dir.default_tmp () | Some d -> d
+  in
+  let failed_too_many_times () =
     Rresult.R.error_msgf
       "create temporary directory %s in %a: too many failing attempts"
       (Fmt.strf pat "XXXXXX") Fpath.pp dir
   in
   let rec loop count =
-    if count < 0 then err ()
+    if count < 0 then failed_too_many_times ()
     else
       let dir =
         let rand = Random.bits () land 0xffffff in
@@ -73,16 +107,16 @@ let local_tmp ?(mode = 0o700) ?dir pat =
   in
   match loop 10000 with
   | Ok dir as r ->
-      local_tmps_add dir;
+      LocalTmps.add dir;
       r
   | Error _ as e -> e
 
-let create_new_git_fetch_store _sw =
+let create_new_git_store _sw =
   let create () =
     let open Rresult in
     (* XXX(dinosaure): a hook is already added by [Bos] to delete the
        directory. *)
-    local_tmp "git-%s" >>= fun root ->
+    create_tmp_dir "git-%s" >>= fun root ->
     Bos.OS.Dir.with_current root
       (fun () -> Bos.OS.Cmd.run Bos.Cmd.(v "git" % "init"))
       ()
@@ -97,41 +131,6 @@ let create_new_git_fetch_store _sw =
   match create () with
   | Ok res -> Lwt.return res
   | Error err -> Fmt.failwith "%a" Rresult.R.pp_msg err
-
-let ( >>? ) x f =
-  let open Lwt.Infix in
-  x >>= function Ok x -> f x | Error err -> Lwt.return_error err
-
-(* TODO(dinosaure): we don't check what we sent, we should check that. *)
-
-let test_empty_clone () =
-  Alcotest_lwt.test_case "empty clone" `Quick @@ fun sw () ->
-  let open Lwt.Infix in
-  let run () =
-    let capabilities = [] in
-    let payloads = [ "\x30\x30\x30\x30" (* 0000 *) ] in
-    create_new_git_fetch_store sw >>= fun (access, store) ->
-    let { path; _ } = store_prj store in
-    let pack, index =
-      ( Fpath.(path / ".git" / "objects" / "pack"),
-        Fpath.(path / ".git" / "objects" / "pack") )
-    in
-    let resolvers = resolvers_with_payloads payloads in
-    Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp0 ->
-    Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp1 ->
-    Bos.OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
-    Smart_git.endpoint_of_string "git://localhost/not-found.git" |> Lwt.return
-    >>? fun endpoint ->
-    Git.fetch ~resolvers ~capabilities access store endpoint
-      (`Some [ Ref.v "HEAD" ])
-      pack index ~src:tmp0 ~dst:tmp1 ~idx:tmp2
-  in
-  run () >>= function
-  | Ok `Empty -> Lwt.return_unit
-  | Ok (`Pack _) -> Alcotest.failf "Unexpected PACK file"
-  | Error (`Exn exn) -> Alcotest.failf "%s" (Printexc.to_string exn)
-  | Error (#Conduit_lwt.error as err) ->
-      Alcotest.failf "%a" Conduit_lwt.pp_error err
 
 let empty_repository_fetch =
   [
@@ -232,13 +231,22 @@ let empty_repository_fetch =
     "\x65\x75\x73\x65\x64\x20\x30\x0a\x30\x30\x30\x30" (* eused 0.0000 *);
   ]
 
-let test_simple_clone () =
-  Alcotest_lwt.test_case "simple clone" `Quick @@ fun sw () ->
+(** test Smart_git-related functionality: *)
+
+(* XXX(dinosaure): [tmp] without systemic deletion of directories. *)
+
+module SGit =
+  Smart_git.Make (Scheduler) (Append) (Append) (Conduit_lwt) (HTTP) (Uid) (Ref)
+
+(* TODO(dinosaure): we don't check what we sent, we should check that. *)
+
+let test_empty_clone () =
+  Alcotest_lwt.test_case "empty clone" `Quick @@ fun sw () ->
   let open Lwt.Infix in
   let run () =
-    let capabilities = [ `Side_band_64k ] in
-    let payloads = empty_repository_fetch in
-    create_new_git_fetch_store sw >>= fun (access, store) ->
+    let capabilities = [] in
+    let payloads = [ "\x30\x30\x30\x30" (* 0000 *) ] in
+    create_new_git_store sw >>= fun (access, store) ->
     let { path; _ } = store_prj store in
     let pack, index =
       ( Fpath.(path / ".git" / "objects" / "pack"),
@@ -250,7 +258,36 @@ let test_simple_clone () =
     Bos.OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
     Smart_git.endpoint_of_string "git://localhost/not-found.git" |> Lwt.return
     >>? fun endpoint ->
-    Git.fetch ~resolvers ~capabilities access store endpoint `All pack index
+    SGit.fetch ~resolvers ~capabilities access store endpoint
+      (`Some [ Ref.v "HEAD" ])
+      pack index ~src:tmp0 ~dst:tmp1 ~idx:tmp2
+  in
+  run () >>= function
+  | Ok `Empty -> Lwt.return_unit
+  | Ok (`Pack _) -> Alcotest.failf "Unexpected PACK file"
+  | Error (`Exn exn) -> Alcotest.failf "%s" (Printexc.to_string exn)
+  | Error (#Conduit_lwt.error as err) ->
+      Alcotest.failf "%a" Conduit_lwt.pp_error err
+
+let test_simple_clone () =
+  Alcotest_lwt.test_case "simple clone" `Quick @@ fun sw () ->
+  let open Lwt.Infix in
+  let run () =
+    let capabilities = [ `Side_band_64k ] in
+    let payloads = empty_repository_fetch in
+    create_new_git_store sw >>= fun (access, store) ->
+    let { path; _ } = store_prj store in
+    let pack, index =
+      ( Fpath.(path / ".git" / "objects" / "pack"),
+        Fpath.(path / ".git" / "objects" / "pack") )
+    in
+    let resolvers = resolvers_with_payloads payloads in
+    Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp0 ->
+    Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp1 ->
+    Bos.OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
+    Smart_git.endpoint_of_string "git://localhost/not-found.git" |> Lwt.return
+    >>? fun endpoint ->
+    SGit.fetch ~resolvers ~capabilities access store endpoint `All pack index
       ~src:tmp0 ~dst:tmp1 ~idx:tmp2
   in
   run () >>= function
@@ -348,7 +385,7 @@ let test_simple_push () =
     let resolvers = resolvers_with_payloads payloads in
     Smart_git.endpoint_of_string "git://localhost/not-found.git" |> Lwt.return
     >>? fun endpoint ->
-    Git.push ~resolvers ~capabilities access store endpoint
+    SGit.push ~resolvers ~capabilities access store endpoint
       [ `Update (Ref.v "refs/head/master", Ref.v "refs/head/master") ]
   in
   run () >>= function
@@ -384,7 +421,7 @@ let test_push_error () =
     let resolvers = resolvers_with_payloads payloads in
     Smart_git.endpoint_of_string "git://localhost/not-found.git" |> Lwt.return
     >>? fun endpoint ->
-    Git.push ~resolvers ~capabilities access store endpoint
+    SGit.push ~resolvers ~capabilities access store endpoint
       [ `Update (Ref.v "refs/head/master", Ref.v "refs/head/master") ]
   in
   run () >>= function
@@ -402,7 +439,7 @@ let test_fetch_empty () =
   let run () =
     let capabilities = [ `Side_band_64k ] in
     let payloads = empty_repository_fetch in
-    create_new_git_fetch_store sw >>= fun (access, store) ->
+    create_new_git_store sw >>= fun (access, store) ->
     let { path; _ } = store_prj store in
     let pack, index =
       ( Fpath.(path / ".git" / "objects" / "pack"),
@@ -414,7 +451,7 @@ let test_fetch_empty () =
     Bos.OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
     Smart_git.endpoint_of_string "git://localhost/not-found.git" |> Lwt.return
     >>? fun endpoint ->
-    Git.fetch ~resolvers ~capabilities access store endpoint `All pack index
+    SGit.fetch ~resolvers ~capabilities access store endpoint `All pack index
       ~src:tmp0 ~dst:tmp1 ~idx:tmp2
     >>? function
     | `Empty -> Alcotest.fail "Unexpected empty fetch"
@@ -508,8 +545,8 @@ let test_fetch_empty () =
         Smart_git.endpoint_of_string "git://localhost/not-found.git"
         |> Lwt.return
         >>? fun endpoint ->
-        Git.fetch ~resolvers ~capabilities access store endpoint `All pack index
-          ~src:tmp0 ~dst:tmp1 ~idx:tmp2
+        SGit.fetch ~resolvers ~capabilities access store endpoint `All pack
+          index ~src:tmp0 ~dst:tmp1 ~idx:tmp2
   in
   run () >>= function
   | Ok `Empty -> Lwt.return_unit
@@ -927,7 +964,7 @@ let test_negotiation () =
         "\x30\x36\x01\x66\x30\x30\x30\x30" (* 06.f0000 *);
       ]
     in
-    create_new_git_fetch_store sw >>= fun (access, store) ->
+    create_new_git_store sw >>= fun (access, store) ->
     let { path; _ } = store_prj store in
     let pack, index =
       ( Fpath.(path / ".git" / "objects" / "pack"),
@@ -950,7 +987,7 @@ let test_negotiation () =
     Bos.OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
     Smart_git.endpoint_of_string "git://localhost/not-found.git" |> Lwt.return
     >>? fun endpoint ->
-    Git.fetch ~resolvers ~capabilities access store endpoint `All pack index
+    SGit.fetch ~resolvers ~capabilities access store endpoint `All pack index
       ~src:tmp0 ~dst:tmp1 ~idx:tmp2
   in
   run () >>= function
@@ -1021,7 +1058,7 @@ let run_git_upload_pack ?(tmps_exit = true) store ic oc =
     | 0 -> (
         match pipe () with
         | Ok () ->
-            local_tmps_exit := tmps_exit;
+            LocalTmps.are_valid := tmps_exit;
             Logs.debug (fun m -> m "git-upload-pack terminated properly.");
             exit 1
         | Error (`Msg err) -> Alcotest.failf "git-upload-pack: %s" err )
@@ -1031,20 +1068,13 @@ let run_git_upload_pack ?(tmps_exit = true) store ic oc =
   in
   Rresult.R.failwith_error_msg <.> process
 
-let resolvers_with_fifo ic oc =
-  let resolve _domain_name =
-    Logs.debug (fun m -> m "Call to the local resolver to give named pipes.");
-    Lwt.return_some (ic, oc)
-  in
-  Conduit_lwt.add fifo resolve Conduit.empty
-
 let test_ssh () =
   Alcotest_lwt.test_case "clone over ssh" `Quick @@ fun sw () ->
   let open Lwt.Infix in
   (* XXX(dinosaure): This test does not require SSH but the underlying process
      is a call to [git-upload-pack]. We do the same without encryption. *)
   let run () =
-    create_new_git_fetch_store sw >>= fun (_access, store0) ->
+    create_new_git_store sw >>= fun (_access, store0) ->
     let { path; _ } = store_prj store0 in
     let pack = Fpath.(path / ".git" / "objects" / "pack") in
     Bos.OS.Path.link
@@ -1068,7 +1098,7 @@ let test_ssh () =
 
        TODO(dinosaure): move the initialisation of [store0] into the child
        process. *)
-    create_new_git_fetch_store sw >>= fun (access, store1) ->
+    create_new_git_store sw >>= fun (access, store1) ->
     let { path; _ } = store_prj store0 in
     let pack, index =
       ( Fpath.(path / ".git" / "objects" / "pack"),
@@ -1083,7 +1113,7 @@ let test_ssh () =
     >>? fun endpoint ->
     Logs.app (fun m -> m "Waiting git-upload-pack.");
     Logs.app (fun m -> m "Start to fetch repository with SSH.");
-    Git.fetch ~resolvers ~capabilities access store1 endpoint
+    SGit.fetch ~resolvers ~capabilities access store1 endpoint
       (`Some [ Ref.v "HEAD" ])
       pack index ~src:tmp0 ~dst:tmp1 ~idx:tmp2
   in
@@ -1115,7 +1145,7 @@ let test_negotiation_ssh () =
   (* XXX(dinosaure): This test does not require SSH but the underlying process
      is a call to [git-upload-pack]. We do the same without encryption. *)
   let run () =
-    create_new_git_fetch_store sw >>= fun (_access, store0) ->
+    create_new_git_store sw >>= fun (_access, store0) ->
     let { path; _ } = store_prj store0 in
     let pack = Fpath.(path / ".git" / "objects" / "pack") in
     Bos.OS.Path.link
@@ -1139,7 +1169,7 @@ let test_negotiation_ssh () =
 
        TODO(dinosaure): move the initialisation of [store0] into the child
        process. *)
-    create_new_git_fetch_store sw >>= fun (access, store1) ->
+    create_new_git_store sw >>= fun (access, store1) ->
     let { path; _ } = store_prj store1 in
     let pack, index =
       ( Fpath.(path / ".git" / "objects" / "pack"),
@@ -1167,7 +1197,7 @@ let test_negotiation_ssh () =
     >>? fun endpoint ->
     Logs.app (fun m -> m "Waiting git-upload-pack.");
     Logs.app (fun m -> m "Start to fetch repository with SSH.");
-    Git.fetch ~resolvers ~capabilities access store1 endpoint
+    SGit.fetch ~resolvers ~capabilities access store1 endpoint
       (`Some [ Ref.v "HEAD" ])
       pack index ~src:tmp0 ~dst:tmp1 ~idx:tmp2
   in
@@ -1200,7 +1230,7 @@ let run_git_receive_pack store ic oc =
     | 0 -> (
         match pipe () with
         | Ok () ->
-            local_tmps_exit := false;
+            LocalTmps.are_valid := false;
             Logs.debug (fun m -> m "git-receive-pack terminated properly.");
             exit 1
         | Error (`Msg err) -> Alcotest.failf "git-upload-pack: %s" err )
@@ -1216,7 +1246,7 @@ let test_push_ssh () =
   (* XXX(dinosaure): This test does not require SSH but the underlying process
      is a call to [git-upload-pack]. We do the same without encryption. *)
   let run () =
-    create_new_git_fetch_store sw >>= fun (_access, store0) ->
+    create_new_git_store sw >>= fun (_access, store0) ->
     let { path; _ } = store_prj store0 in
     let pack = Fpath.(path / ".git" / "objects" / "pack") in
     Bos.OS.Path.link
@@ -1252,7 +1282,7 @@ let test_push_ssh () =
     let resolvers = resolvers_with_fifo ic_fifo oc_fifo in
     Smart_git.endpoint_of_string "git@localhost:not-found.git" |> Lwt.return
     >>? fun endpoint ->
-    Git.push ~resolvers ~capabilities access store1 endpoint
+    SGit.push ~resolvers ~capabilities access store1 endpoint
       [ `Update (Ref.v "refs/heads/master", Ref.v "refs/heads/master") ]
     >>? fun () ->
     let { path; _ } = store_prj store0 in
@@ -1301,7 +1331,7 @@ let test_negotiation_http () =
     let capabilities =
       [ `Side_band_64k; `Multi_ack_detailed; `Thin_pack; `Ofs_delta; `No_done ]
     in
-    create_new_git_fetch_store sw >>= fun (access, store) ->
+    create_new_git_store sw >>= fun (access, store) ->
     let { path; _ } = store_prj store in
     let pack, index =
       ( Fpath.(path / ".git" / "objects" / "pack"),
@@ -1327,7 +1357,7 @@ let test_negotiation_http () =
     Queue.push (load_file "GET") queue;
     Queue.push (load_file "POST") queue;
     let resolvers = http_resolver queue in
-    Git.fetch ~resolvers ~capabilities access store endpoint `All pack index
+    SGit.fetch ~resolvers ~capabilities access store endpoint `All pack index
       ~src:tmp0 ~dst:tmp1 ~idx:tmp2
   in
   run () >>= function
@@ -1341,7 +1371,7 @@ let test_partial_clone_ssh () =
   Alcotest_lwt.test_case "partial clone over ssh" `Quick @@ fun sw () ->
   let open Lwt.Infix in
   let run () =
-    create_new_git_fetch_store sw >>= fun (_access, store0) ->
+    create_new_git_store sw >>= fun (_access, store0) ->
     let { path; _ } = store_prj store0 in
     let pack = Fpath.(path / ".git" / "objects" / "pack") in
     Bos.OS.Path.link
@@ -1365,7 +1395,7 @@ let test_partial_clone_ssh () =
 
        TODO(dinosaure): move the initialisation of [store0] into the child
        process. *)
-    create_new_git_fetch_store sw >>= fun (access, store1) ->
+    create_new_git_store sw >>= fun (access, store1) ->
     let { path; _ } = store_prj store0 in
     let pack, index =
       ( Fpath.(path / ".git" / "objects" / "pack"),
@@ -1380,7 +1410,8 @@ let test_partial_clone_ssh () =
     >>? fun endpoint ->
     Logs.app (fun m -> m "Waiting git-upload-pack.");
     Logs.app (fun m -> m "Start to fetch repository with SSH.");
-    Git.fetch ~resolvers ~capabilities access store1 endpoint ~deepen:(`Depth 1)
+    SGit.fetch ~resolvers ~capabilities access store1 endpoint
+      ~deepen:(`Depth 1)
       (`Some [ Ref.v "HEAD" ])
       pack index ~src:tmp0 ~dst:tmp1 ~idx:tmp2
     >>? function
@@ -1403,7 +1434,7 @@ let test_partial_fetch_ssh () =
   let open Lwt.Infix in
   let fill0 () =
     let open Bos in
-    create_new_git_fetch_store sw >>= fun (access, store) ->
+    create_new_git_store sw >>= fun (access, store) ->
     let { path; _ } = store_prj store in
     let fiber =
       let open Rresult in
@@ -1442,7 +1473,7 @@ let test_partial_fetch_ssh () =
     with_fifo "git-upload-pack-oc-%s" |> Lwt.return >>? fun oc_fifo ->
     let process = run_git_upload_pack ~tmps_exit:false store0 ic_fifo oc_fifo in
     process () >>= fun () ->
-    create_new_git_fetch_store sw >>= fun (access, store1) ->
+    create_new_git_store sw >>= fun (access, store1) ->
     let resolvers = resolvers_with_fifo ic_fifo oc_fifo in
     Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp0 ->
     Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp1 ->
@@ -1454,7 +1485,8 @@ let test_partial_fetch_ssh () =
     in
     Logs.app (fun m -> m "Waiting git-upload-pack.");
     Logs.app (fun m -> m "Start to fetch repository with SSH.");
-    Git.fetch ~resolvers ~capabilities access store1 endpoint ~deepen:(`Depth 1)
+    SGit.fetch ~resolvers ~capabilities access store1 endpoint
+      ~deepen:(`Depth 1)
       (`Some [ Ref.v "HEAD" ])
       pack index ~src:tmp0 ~dst:tmp1 ~idx:tmp2
     >>? function
@@ -1503,7 +1535,7 @@ let test_partial_fetch_ssh () =
         Bos.OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
         Logs.app (fun m -> m "Waiting git-upload-pack.");
         Logs.app (fun m -> m "Start to fetch repository with SSH.");
-        Git.fetch ~resolvers ~capabilities access store1 endpoint
+        SGit.fetch ~resolvers ~capabilities access store1 endpoint
           ~deepen:(`Depth 1)
           (`Some [ Ref.v "HEAD" ])
           pack index ~src:tmp0 ~dst:tmp1 ~idx:tmp2
@@ -1545,7 +1577,7 @@ let test =
           test_push_error (); test_fetch_empty (); test_negotiation ();
           test_ssh (); test_negotiation_ssh (); test_push_ssh ();
           test_negotiation_http (); test_partial_clone_ssh ();
-          test_partial_fetch_ssh ();
+          test_partial_fetch_ssh (); test_sync_fetch ();
         ] );
     ]
 
