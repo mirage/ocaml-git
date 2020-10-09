@@ -299,7 +299,7 @@ let test_sync_fetch () =
 
 (* XXX(dinosaure): [tmp] without systemic deletion of directories. *)
 
-module SGit =
+module Git =
   Smart_git.Make (Scheduler) (Append) (Append) (Conduit_lwt) (HTTP) (Uid) (Ref)
 
 (* TODO(dinosaure): we don't check what we sent, we should check that. *)
@@ -322,7 +322,7 @@ let test_empty_clone () =
     Bos.OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
     Smart_git.endpoint_of_string "git://localhost/not-found.git" |> Lwt.return
     >>? fun endpoint ->
-    SGit.fetch ~resolvers ~capabilities access store endpoint
+    Git.fetch ~resolvers ~capabilities access store endpoint
       (`Some [ Ref.v "HEAD" ])
       pack index ~src:tmp0 ~dst:tmp1 ~idx:tmp2
   in
@@ -351,7 +351,7 @@ let test_simple_clone () =
     Bos.OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
     Smart_git.endpoint_of_string "git://localhost/not-found.git" |> Lwt.return
     >>? fun endpoint ->
-    SGit.fetch ~resolvers ~capabilities access store endpoint `All pack index
+    Git.fetch ~resolvers ~capabilities access store endpoint `All pack index
       ~src:tmp0 ~dst:tmp1 ~idx:tmp2
   in
   run () >>= function
@@ -449,7 +449,7 @@ let test_simple_push () =
     let resolvers = resolvers_with_payloads payloads in
     Smart_git.endpoint_of_string "git://localhost/not-found.git" |> Lwt.return
     >>? fun endpoint ->
-    SGit.push ~resolvers ~capabilities access store endpoint
+    Git.push ~resolvers ~capabilities access store endpoint
       [ `Update (Ref.v "refs/head/master", Ref.v "refs/head/master") ]
   in
   run () >>= function
@@ -485,7 +485,7 @@ let test_push_error () =
     let resolvers = resolvers_with_payloads payloads in
     Smart_git.endpoint_of_string "git://localhost/not-found.git" |> Lwt.return
     >>? fun endpoint ->
-    SGit.push ~resolvers ~capabilities access store endpoint
+    Git.push ~resolvers ~capabilities access store endpoint
       [ `Update (Ref.v "refs/head/master", Ref.v "refs/head/master") ]
   in
   run () >>= function
@@ -515,7 +515,7 @@ let test_fetch_empty () =
     Bos.OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
     Smart_git.endpoint_of_string "git://localhost/not-found.git" |> Lwt.return
     >>? fun endpoint ->
-    SGit.fetch ~resolvers ~capabilities access store endpoint `All pack index
+    Git.fetch ~resolvers ~capabilities access store endpoint `All pack index
       ~src:tmp0 ~dst:tmp1 ~idx:tmp2
     >>? function
     | `Empty -> Alcotest.fail "Unexpected empty fetch"
@@ -609,8 +609,8 @@ let test_fetch_empty () =
         Smart_git.endpoint_of_string "git://localhost/not-found.git"
         |> Lwt.return
         >>? fun endpoint ->
-        SGit.fetch ~resolvers ~capabilities access store endpoint `All pack
-          index ~src:tmp0 ~dst:tmp1 ~idx:tmp2
+        Git.fetch ~resolvers ~capabilities access store endpoint `All pack index
+          ~src:tmp0 ~dst:tmp1 ~idx:tmp2
   in
   run () >>= function
   | Ok `Empty -> Lwt.return_unit
@@ -1051,7 +1051,7 @@ let test_negotiation () =
     Bos.OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
     Smart_git.endpoint_of_string "git://localhost/not-found.git" |> Lwt.return
     >>? fun endpoint ->
-    SGit.fetch ~resolvers ~capabilities access store endpoint `All pack index
+    Git.fetch ~resolvers ~capabilities access store endpoint `All pack index
       ~src:tmp0 ~dst:tmp1 ~idx:tmp2
   in
   run () >>= function
@@ -1177,7 +1177,7 @@ let test_ssh () =
     >>? fun endpoint ->
     Logs.app (fun m -> m "Waiting git-upload-pack.");
     Logs.app (fun m -> m "Start to fetch repository with SSH.");
-    SGit.fetch ~resolvers ~capabilities access store1 endpoint
+    Git.fetch ~resolvers ~capabilities access store1 endpoint
       (`Some [ Ref.v "HEAD" ])
       pack index ~src:tmp0 ~dst:tmp1 ~idx:tmp2
   in
@@ -1261,7 +1261,7 @@ let test_negotiation_ssh () =
     >>? fun endpoint ->
     Logs.app (fun m -> m "Waiting git-upload-pack.");
     Logs.app (fun m -> m "Start to fetch repository with SSH.");
-    SGit.fetch ~resolvers ~capabilities access store1 endpoint
+    Git.fetch ~resolvers ~capabilities access store1 endpoint
       (`Some [ Ref.v "HEAD" ])
       pack index ~src:tmp0 ~dst:tmp1 ~idx:tmp2
   in
@@ -1346,7 +1346,7 @@ let test_push_ssh () =
     let resolvers = resolvers_with_fifo ic_fifo oc_fifo in
     Smart_git.endpoint_of_string "git@localhost:not-found.git" |> Lwt.return
     >>? fun endpoint ->
-    SGit.push ~resolvers ~capabilities access store1 endpoint
+    Git.push ~resolvers ~capabilities access store1 endpoint
       [ `Update (Ref.v "refs/heads/master", Ref.v "refs/heads/master") ]
     >>? fun () ->
     let { path; _ } = store_prj store0 in
@@ -1421,7 +1421,7 @@ let test_negotiation_http () =
     Queue.push (load_file "GET") queue;
     Queue.push (load_file "POST") queue;
     let resolvers = http_resolver queue in
-    SGit.fetch ~resolvers ~capabilities access store endpoint `All pack index
+    Git.fetch ~resolvers ~capabilities access store endpoint `All pack index
       ~src:tmp0 ~dst:tmp1 ~idx:tmp2
   in
   run () >>= function
@@ -1474,8 +1474,7 @@ let test_partial_clone_ssh () =
     >>? fun endpoint ->
     Logs.app (fun m -> m "Waiting git-upload-pack.");
     Logs.app (fun m -> m "Start to fetch repository with SSH.");
-    SGit.fetch ~resolvers ~capabilities access store1 endpoint
-      ~deepen:(`Depth 1)
+    Git.fetch ~resolvers ~capabilities access store1 endpoint ~deepen:(`Depth 1)
       (`Some [ Ref.v "HEAD" ])
       pack index ~src:tmp0 ~dst:tmp1 ~idx:tmp2
     >>? function
@@ -1549,8 +1548,7 @@ let test_partial_fetch_ssh () =
     in
     Logs.app (fun m -> m "Waiting git-upload-pack.");
     Logs.app (fun m -> m "Start to fetch repository with SSH.");
-    SGit.fetch ~resolvers ~capabilities access store1 endpoint
-      ~deepen:(`Depth 1)
+    Git.fetch ~resolvers ~capabilities access store1 endpoint ~deepen:(`Depth 1)
       (`Some [ Ref.v "HEAD" ])
       pack index ~src:tmp0 ~dst:tmp1 ~idx:tmp2
     >>? function
@@ -1599,7 +1597,7 @@ let test_partial_fetch_ssh () =
         Bos.OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
         Logs.app (fun m -> m "Waiting git-upload-pack.");
         Logs.app (fun m -> m "Start to fetch repository with SSH.");
-        SGit.fetch ~resolvers ~capabilities access store1 endpoint
+        Git.fetch ~resolvers ~capabilities access store1 endpoint
           ~deepen:(`Depth 1)
           (`Some [ Ref.v "HEAD" ])
           pack index ~src:tmp0 ~dst:tmp1 ~idx:tmp2
