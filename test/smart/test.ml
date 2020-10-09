@@ -63,7 +63,7 @@ let ref_contents =
 (** tmp dir management: *)
 
 (** to keep track of directories created by unit tests and clean them up afterwards *)
-module LocalTmps = struct
+module Tmp_dirs = struct
   let rm_r dir = Bos.OS.Dir.delete ~recurse:true dir |> ignore
   let t = ref Fpath.Set.empty
   let add file = t := Fpath.Set.add file !t
@@ -75,8 +75,7 @@ module LocalTmps = struct
   let are_valid = ref true
 end
 
-let () =
-  at_exit (fun () -> if !LocalTmps.are_valid then LocalTmps.remove_all ())
+let () = at_exit (fun () -> if !Tmp_dirs.are_valid then Tmp_dirs.remove_all ())
 
 let create_tmp_dir ?(mode = 0o700) ?prefix_path pat =
   let dir =
@@ -107,7 +106,7 @@ let create_tmp_dir ?(mode = 0o700) ?prefix_path pat =
   in
   match loop 10000 with
   | Ok dir as r ->
-      LocalTmps.add dir;
+      Tmp_dirs.add dir;
       r
   | Error _ as e -> e
 
@@ -1122,7 +1121,7 @@ let run_git_upload_pack ?(tmps_exit = true) store ic oc =
     | 0 -> (
         match pipe () with
         | Ok () ->
-            LocalTmps.are_valid := tmps_exit;
+            Tmp_dirs.are_valid := tmps_exit;
             Logs.debug (fun m -> m "git-upload-pack terminated properly.");
             exit 1
         | Error (`Msg err) -> Alcotest.failf "git-upload-pack: %s" err )
@@ -1294,7 +1293,7 @@ let run_git_receive_pack store ic oc =
     | 0 -> (
         match pipe () with
         | Ok () ->
-            LocalTmps.are_valid := false;
+            Tmp_dirs.are_valid := false;
             Logs.debug (fun m -> m "git-receive-pack terminated properly.");
             exit 1
         | Error (`Msg err) -> Alcotest.failf "git-upload-pack: %s" err )
