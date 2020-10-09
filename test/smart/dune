@@ -1,9 +1,10 @@
 (executable
  (name test)
- (libraries result curl.lwt mirage-crypto-rng.unix digestif digestif.c
-   domain-name nss.git bos fpath bigarray-compat carton-lwt bigstringaf
-   nss.sigs fmt nss.pck carton rresult conduit alcotest conduit-lwt nss.smart
-   lwt.unix mmap astring lwt cstruct uri fmt.tty logs.fmt alcotest-lwt))
+ (libraries git git-unix result curl.lwt mirage-crypto-rng.unix digestif
+   digestif.c domain-name nss.git bos fpath bigarray-compat carton-lwt
+   bigstringaf nss.sigs fmt nss.pck carton rresult conduit alcotest
+   conduit-lwt nss.smart lwt.unix mmap astring lwt cstruct uri fmt.tty
+   logs.fmt alcotest-lwt cohttp-lwt-unix git-cohttp-unix))
 
 (rule
  (alias runtest)

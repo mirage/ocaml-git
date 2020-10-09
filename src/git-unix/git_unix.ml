@@ -28,7 +28,7 @@ let ( <.> ) f g x = f (g x)
  * which can fit into required modules by [Git.Store] __and__ the usual
  * layout of a non-bare Git repository.
  *
- * Nothing was done about performances - and provided implementations 
+ * Nothing was done about performances - and provided implementations
  * are surely not the best. If someone wants a _fast_ implementation
  * of Git, this is the first entry-point. *)
 
@@ -725,26 +725,9 @@ module Sync (Git_store : Git.S) (HTTP : Smart_git.HTTP) = struct
     tmp temp "pack-%s.pack" >>= fun src ->
     tmp temp "pack-%s.pack" >>= fun dst ->
     tmp temp "pack-%s.idx" >>= fun idx ->
+    let create_idx_stream () = stream_of_file idx in
+    let create_pack_stream () = stream_of_file dst in
     fetch ~push_stdout ~push_stderr ~resolvers edn store ?version ?capabilities
-      ?deepen want ~src ~dst ~idx temp temp
-    >>? function
-    | `Empty -> Lwt.return_ok None
-    | `Pack (hash, refs) ->
-        let pck = stream_of_file dst in
-        let idx = stream_of_file idx in
-        Git_store.batch_write store hash ~pck ~idx
-        >|= Rresult.R.reword_error (fun err -> `Store err)
-        >>? fun () ->
-        let update (refname, hash) =
-          Git_store.Ref.write store refname (Git.Reference.Uid hash)
-          >>= function
-          | Ok v -> Lwt.return v
-          | Error err ->
-              Log.warn (fun m ->
-                  m "Impossible to update %a to %a: %a." Git.Reference.pp
-                    refname Git_store.Hash.pp hash Git_store.pp_error err);
-              Lwt.return_unit
-        in
-        Lwt_list.iter_p update refs >>= fun () ->
-        Lwt.return_ok (Some (hash, refs))
+      ?deepen want ~src ~dst ~idx ~create_idx_stream ~create_pack_stream temp
+      temp
 end

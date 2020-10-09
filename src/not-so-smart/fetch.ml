@@ -75,9 +75,8 @@ struct
     let capabilities =
       (* XXX(dinosaure): HTTP ([stateless]) enforces no-done capabilities. Otherwise, you never
          will receive the PACK file. *)
-      if
-        fetch_cfg.Neg.no_done && not (List.exists (( = ) `No_done) capabilities)
-      then `No_done :: capabilities
+      if fetch_cfg.Neg.no_done && not (no_done capabilities) then
+        `No_done :: capabilities
       else capabilities
     in
     let prelude ctx =
