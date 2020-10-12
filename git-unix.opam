@@ -39,9 +39,15 @@ depends: [
   "alcotest"          {with-test & >= "1.1.0"}
   "alcotest-lwt"      {with-test & >= "1.1.0"}
   "base64"            {with-test & >= "3.0.0"}
+  # for ogit-fetch :
+  "git-cohttp-unix"
+  "mirage-clock"
+  "mirage-clock-unix"
 ]
 
 pin-depends: [
   [ "conduit.dev" "git+https://github.com/mirage/ocaml-conduit.git#8912d458b2f3e43245e99cf3cb74e9c00712a8b0" ]
   [ "conduit-lwt.dev" "git+https://github.com/mirage/ocaml-conduit.git#8912d458b2f3e43245e99cf3cb74e9c00712a8b0" ]
+  [ "awa" "git+https://github.com/mirage/awa-ssh.git#e54302ecd5fe541c2fbecb277cb11bba40032b81"]
+  [ "awa-conduit" "git+https://github.com/mirage/awa-ssh.git#e54302ecd5fe541c2fbecb277cb11bba40032b81"]
 ]
