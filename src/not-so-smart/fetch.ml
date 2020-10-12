@@ -94,7 +94,7 @@ struct
       return (uids, refs)
     in
     let ctx = Smart.make capabilities in
-    let negotiator = Neg.negotiator ~compare:Uid.compare in
+    let negotiator = Neg.make ~compare:Uid.compare in
     Neg.tips sched access store negotiator |> prj >>= fun () ->
     Neg.run sched fail io flow (prelude ctx) |> prj >>= fun (uids, refs) ->
     let hex =

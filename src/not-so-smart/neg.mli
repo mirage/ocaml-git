@@ -34,7 +34,7 @@ type 'uid hex = {
 type ('a, 's) raise = exn -> ('a, 's) io
 type 'uid negotiator
 
-val negotiator : compare:('uid -> 'uid -> int) -> 'uid negotiator
+val make : compare:('uid -> 'uid -> int) -> 'uid negotiator
 
 val run :
   's scheduler ->
