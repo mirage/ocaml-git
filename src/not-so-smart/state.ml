@@ -63,8 +63,7 @@ module Context = struct
   let shared capability t =
     let client_side, server_side = t.capabilities in
     let a = List.exists (Capability.equal capability) client_side in
-    let b = List.exists (Capability.equal capability) server_side in
-    a && b
+    a && List.exists (Capability.equal capability) server_side
 end
 
 module Scheduler
