@@ -94,6 +94,19 @@ struct
 
   let ( let* ) m f = bind m ~f
   let ( >>= ) m f = bind m ~f
+  let return v = Return v
+  let fail error = Error error
+
+  let reword_error f x =
+    let rec go = function
+      | Read { k; buffer; off; len; eof } ->
+          Read { k = go <.> k; buffer; off; len; eof = go <.> eof }
+      | Write { k; buffer; off; len } ->
+          Write { k = go <.> k; buffer; off; len }
+      | Return v -> Return v
+      | Error err -> Error (f err)
+    in
+    go x
 
   let encode :
       type a.
@@ -139,18 +152,5 @@ struct
       =
    fun ctx w -> decode ctx w (fun _ctx v -> Return v)
 
-  let reword_error f x =
-    let rec go = function
-      | Read { k; buffer; off; len; eof } ->
-          Read { k = go <.> k; buffer; off; len; eof = go <.> eof }
-      | Write { k; buffer; off; len } ->
-          Write { k = go <.> k; buffer; off; len }
-      | Return v -> Return v
-      | Error err -> Error (f err)
-    in
-    go x
-
-  let return v = Return v
-  let fail error = Error error
-  let error_msgf fmt = Fmt.kstrf (fun err -> Error (`Msg err)) fmt
+  let error_msgf fmt = Fmt.kstr (fun err -> Error (`Msg err)) fmt
 end
