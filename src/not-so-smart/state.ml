@@ -74,22 +74,22 @@ module Scheduler
 struct
   type error = Value.error
 
-  let rec go ~f m =
-    match m with
-    | Return v -> f v
-    | Read { k; off; len; buffer; eof } ->
-        Read { k = go ~f <.> k; off; len; buffer; eof = go ~f <.> eof }
-    | Write { k; off; len; buffer } ->
-        Write { k = go ~f <.> k; off; len; buffer }
-    | Error err -> Error err
-
   let bind : ('a, 'err) t -> f:('a -> ('b, 'err) t) -> ('b, 'err) t =
-   fun m ~f ->
-    match m with
-    | Return v -> f v
-    | Error err -> Error err
-    | Read _ -> go ~f m
-    | Write _ -> go ~f m
+    let rec aux ~f m =
+      match m with
+      | Return v -> f v
+      | Read { k; off; len; buffer; eof } ->
+          Read { k = aux ~f <.> k; off; len; buffer; eof = aux ~f <.> eof }
+      | Write { k; off; len; buffer } ->
+          Write { k = aux ~f <.> k; off; len; buffer }
+      | Error err -> Error err
+    in
+    fun m ~f ->
+      match m with
+      | Return v -> f v
+      | Error err -> Error err
+      | Read _ -> aux ~f m
+      | Write _ -> aux ~f m
 
   let ( let* ) m f = bind m ~f
   let ( >>= ) m f = bind m ~f
