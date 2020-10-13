@@ -48,8 +48,8 @@ module Context = struct
 
   let make capabilities =
     {
-      encoder = Encoder.encoder ();
-      decoder = Decoder.decoder ();
+      encoder = Encoder.create ();
+      decoder = Decoder.create ();
       capabilities = capabilities, [];
     }
 
