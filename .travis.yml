@@ -3,7 +3,7 @@ install: wget https://raw.githubusercontent.com/ocaml/ocaml-ci-scripts/master/.t
 script: bash -ex .travis-opam.sh
 env:
   global:
-    - PINS="carton.dev:. carton-lwt.dev:. carton-git.dev:. nss.dev:. git.dev:. git-unix.dev:."
+    - PINS="carton.dev:. carton-lwt.dev:. carton-git.dev:. git-nss.dev:. git.dev:. git-unix.dev:."
   matrix:
     - OCAML_VERSION=4.08 PACKAGE="git.dev"
     - OCAML_VERSION=4.09 PACKAGE="git.dev"
