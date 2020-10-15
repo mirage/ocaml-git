@@ -29,7 +29,7 @@ depends: [
   "stdlib-shims"
   "rresult"
   "result"
-  "nss"
+  "git-nss"
   "bigarray-compat"
   "bigstringaf"
   "optint"

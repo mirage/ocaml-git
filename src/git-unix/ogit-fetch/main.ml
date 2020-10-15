@@ -90,10 +90,9 @@ let main (ssh_seed : string)
   let resolvers =
     let git_scheme_resolver = Conduit_lwt.TCP.resolve ~port:9418 in
     let ssh_cfg = ssh_cfg repository ssh_seed in
-    Cohttp_lwt_unix.Net.empty
+    Conduit.empty
     |> Conduit_lwt.add Conduit_lwt.TCP.protocol git_scheme_resolver
     |> Conduit_lwt.add ssh_protocol (ssh_resolve @@ Option.get ssh_cfg)
-    (* FIXME add support for SSH *)
   in
   Store.v repo_root >>!= store_err >>?= fun store ->
   let push_stdout = print_endline in

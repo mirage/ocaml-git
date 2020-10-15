@@ -28,7 +28,7 @@ depends: [
   "bigarray-compat"
   "bigstringaf"
   "fmt"
-  "nss"
+  "git-nss"
   "bos"
   "fpath"
   "uri"

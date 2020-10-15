@@ -3,6 +3,6 @@
  (package git-unix)
  (public_name ogit-fetch)
  (libraries git git-unix cohttp-lwt-unix conduit conduit-lwt mirage-clock
-   mirage-clock-unix awa awa-conduit nss.git fpath rresult result lwt
+   mirage-clock-unix awa awa-conduit git-nss.git fpath rresult result lwt
    lwt.unix git-cohttp-unix cmdliner mtime mtime.clock.os fmt.cli fmt.tty
    logs.cli logs.fmt))

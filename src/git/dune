@@ -1,7 +1,7 @@
 (library
  (name git)
  (public_name git)
- (libraries stdlib-shims rresult nss.sigs nss.pck bigarray-compat optint
-   loose decompress.de decompress.zl result nss.smart conduit logs lwt
-   cstruct angstrom bigstringaf carton ke fmt checkseum nss.git ocamlgraph
-   astring fpath loose_git carton-lwt carton-git digestif encore))
+ (libraries stdlib-shims rresult git-nss.sigs git-nss.pck bigarray-compat
+   optint loose decompress.de decompress.zl result git-nss.smart conduit logs
+   lwt cstruct angstrom bigstringaf carton ke fmt checkseum git-nss.git
+   ocamlgraph astring fpath loose_git carton-lwt carton-git digestif encore))

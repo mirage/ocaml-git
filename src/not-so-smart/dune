@@ -1,36 +1,36 @@
 (library
  (name smart)
- (public_name nss.smart)
+ (public_name git-nss.smart)
  (modules smart filter capability state protocol encoder decoder)
  (libraries conduit stdlib-shims result rresult domain-name astring fmt))
 
 (library
  (name sigs)
- (public_name nss.sigs)
+ (public_name git-nss.sigs)
  (modules sigs)
  (libraries fmt cstruct))
 
 (library
  (name neg)
- (public_name nss.neg)
+ (public_name git-nss.neg)
  (modules neg find_common default)
  (libraries stdlib-shims fmt rresult cstruct sigs logs psq smart))
 
 (library
  (name pck)
- (public_name nss.pck)
+ (public_name git-nss.pck)
  (modules pck)
  (libraries sigs psq logs smart))
 
 (library
  (name nss)
- (public_name nss)
+ (public_name git-nss)
  (modules nss fetch push)
  (libraries conduit fmt result rresult logs domain-name smart sigs neg pck))
 
 (library
  (name smart_git)
- (public_name nss.git)
+ (public_name git-nss.git)
  (modules smart_git)
  (libraries ipaddr decompress.de decompress.zl cstruct logs astring result
    rresult bigstringaf fmt emile conduit lwt domain-name uri sigs smart pck
