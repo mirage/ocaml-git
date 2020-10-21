@@ -1,7 +1,7 @@
 type decoder = { buffer : bytes; mutable pos : int; mutable max : int }
 
 val io_buffer_size : int
-val decoder : unit -> decoder
+val create : unit -> decoder
 val decoder_from : string -> decoder
 val end_of_input : decoder -> int
 

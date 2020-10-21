@@ -68,8 +68,6 @@ let unsafe_write_have ctx hex =
   let packet = Fmt.strf "have %s\n" hex in
   Smart.Unsafe.write ctx packet
 
-let unsafe_write_done ctx = Smart.Unsafe.write ctx "done\n"
-
 let next_flush stateless count =
   if stateless then
     if count < _large_flush then count lsl 1 else count * 11 / 10

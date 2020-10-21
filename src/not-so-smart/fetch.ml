@@ -94,15 +94,11 @@ struct
       return (uids, refs)
     in
     let ctx = Smart.make capabilities in
-    let negotiator = Neg.negotiator ~compare:Uid.compare in
+    let negotiator = Neg.make ~compare:Uid.compare in
     Neg.tips sched access store negotiator |> prj >>= fun () ->
     Neg.run sched fail io flow (prelude ctx) |> prj >>= fun (uids, refs) ->
     let hex =
-      {
-        Neg.to_hex = Uid.to_hex;
-        Neg.of_hex = Uid.of_hex;
-        Neg.compare = Uid.compare;
-      }
+      { Neg.to_hex = Uid.to_hex; of_hex = Uid.of_hex; compare = Uid.compare }
     in
     Neg.find_common sched io flow fetch_cfg hex access store negotiator ctx
       ?deepen uids

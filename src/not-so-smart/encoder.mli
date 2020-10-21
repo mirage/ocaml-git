@@ -1,7 +1,7 @@
 type encoder = { payload : Bytes.t; mutable pos : int }
 
 val io_buffer_size : int
-val encoder : unit -> encoder
+val create : unit -> encoder
 
 type error = [ `No_enough_space ]
 

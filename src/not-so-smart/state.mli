@@ -54,6 +54,9 @@ module Scheduler
   val bind : ('a, 'err) t -> f:('a -> ('b, 'err) t) -> ('b, 'err) t
   val ( let* ) : ('a, 'err) t -> ('a -> ('b, 'err) t) -> ('b, 'err) t
   val ( >>= ) : ('a, 'err) t -> ('a -> ('b, 'err) t) -> ('b, 'err) t
+  val return : 'v -> ('v, 'err) t
+  val fail : 'err -> ('v, 'err) t
+  val reword_error : ('err0 -> 'err1) -> ('v, 'err0) t -> ('v, 'err1) t
 
   val encode :
     Context.t ->
@@ -72,9 +75,6 @@ module Scheduler
     Context.t -> 'a Value.send -> 'a -> (unit, [> `Protocol of error ]) t
 
   val recv : Context.t -> 'a Value.recv -> ('a, [> `Protocol of error ]) t
-  val return : 'v -> ('v, 'err) t
-  val fail : 'err -> ('v, 'err) t
-  val reword_error : ('err0 -> 'err1) -> ('v, 'err0) t -> ('v, 'err1) t
 
   val error_msgf :
     ('a, Format.formatter, unit, ('b, [> `Msg of string ]) t) format4 -> 'a
