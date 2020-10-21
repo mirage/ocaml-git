@@ -122,7 +122,7 @@ module type S = sig
         [reference] (available in the git repository [state]). *)
 
     val resolve : t -> Reference.t -> (hash, error) result Lwt.t
-    (** [resolve state reference] returns endpoint of [reference] (available in
+    (** [resolve state reference] returns obj-id pointed at by [reference] (available in
         the git repository [state]). *)
 
     val write :
