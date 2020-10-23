@@ -1,8 +1,8 @@
 ## ocaml-git -- Git format and protocol in pure OCaml
 
 Support for on-disk and in-memory Git stores. Can read and write all the Git
-objects: the usual blobs, trees, commits and tags but also the pack files, pack
-indexes and the index file (where the staging area lives - only for `git-unix`
+objects: blobs, trees, commits and tags. It can also handle pack files, pack
+indexes and index files (where the staging area lives - only for `git-unix`
 package).
 
 All the objects share a consistent API, and convenience functions are provided
@@ -18,16 +18,15 @@ hence using only OCaml code). However, these tools are not meant to be used. The
 are just examples of how to use `ocaml-git`.
 
 `ocaml-git` wants to be a low-level library for [irmin][irmin]. By this fact,
-high-level processes such as a ([patience][patience-diff]) diff, `git status`,
+high-level commands such as a ([patience][patience-diff]) diff, `git status`,
 etc. are not implemented.
 
 As a MirageOS project, `ocaml-git` is system agnostic. However, it provides a
-`git-unix` package which uses UNIX _syscall_ and it able to introspect a Git
-repository as you usually know. However, `ocaml-git` handles only Git objects
-and it does not _populate_ your filesystem as `git` does.
-
-For example, `Git_unix.Sync.clone` does not give you files of your repository
-but synchronize your `.git` with your repository.
+`git-unix` package which uses UNIX _syscall_ and is able to introspect a usual Git
+repository in a filesystem. However, `ocaml-git` handles only Git objects
+and does not _populate_ your filesystem as `git` does. For example, `Git_unix.Sync.fetch` 
+does not give you files fetched from the repository but only synchronizes `.git` with 
+that repository.
 
 The API documentation is available [online][documentation].
 
@@ -73,7 +72,7 @@ your build-system is `dune`, you should not have any problem about that where
   more easily. Pack file can be created and is compressed.
 
 * The [INDEX file][index] (used as for managing the staging area) are fully
-  supported. Which means that `git diff` and `git status` will work as expected
+  supported, which means that `git diff` and `git status` will work as expected
   on a repository created by the library. This feature is only available for
   `git-unix` when it needs to introspect a file-system.
 
@@ -105,33 +104,60 @@ This `utop` example must run into the `ocaml-git` repository when the given path
 is `.`.
 
 ```ocaml
+# ;; load necessary modules
 # #require "checkseum.c" ;;
 # #require "digestif.c" ;;
 # #require "git-unix" ;;
-# open Git_unix ;;
-# module Search = Git.Search.Make(Store) ;;
 
+# ;; we are going to use this project's local repository
+# module Store = Git_unix.Store ;; 
+module Store = Git_unix.Store
+
+# ;; this module is useful for finding git objects in a git store
+# module Search = Git.Search.Make (Digestif.SHA1) (Store) ;;
+module Search :
+  sig
+    type hash = Store.hash
+    type store = Store.t
+    type pred =
+        [ `Commit of hash
+        | `Tag of string * hash
+        | `Tree of string * hash
+        | `Tree_root of hash ]
+    val pred : store -> ?full:bool -> hash -> pred list Lwt.t
+    type path =
+        [ `Commit of path | `Path of string list | `Tag of string * path ]
+    val mem : store -> hash -> path -> bool Lwt.t
+    val find : store -> hash -> path -> hash option Lwt.t
+  end
+
+# ;; we want to read the contents of a blob under name [filename]
 # let read filename =
-    let open Lwt_result.Infix in
-    Store.v (Fpath.v ".") >>= fun t ->
-    Store.Ref.resolve t Store.Reference.master >>= fun head ->
-    let open Lwt.Infix in
-    Search.find t head (`Commit (`Path filename)) >>= function
-    | None -> Lwt.return (Error `Not_found)
-    | Some hash -> Store.read t hash
-;;
-val read : string list -> (Store.Value.t, Store.error) Lwt_result.t
-    
-# let pp =
-    let ok ppf = function
-      | Store.Value.Blob blob ->
-        Fmt.string ppf (Store.Value.Blob.to_string blob)
-      | _ -> Fmt.string ppf "#git-object" in
-    Fmt.result ~ok ~error:Store.pp_error
-;;
-val pp : (Store.Value.t, Store.error) Fmt.t
+  let open Lwt_result.Syntax in
+  (* get store located in current root's .git folder *)
+  let* store = Store.v (Fpath.v (Sys.getcwd ())) in
+  (* find obj-id pointed at by master branch (reference) *)
+  let* commit_id = Store.Ref.resolve store Git.Reference.master in
+  let open Lwt.Syntax in
+  (* find obj-id of of [filename] as a git blob *)
+  let* blob_id = Search.find store commit_id (`Commit (`Path [ filename ])) in
+  match blob_id with
+  | None -> Lwt.return (Error (`Not_found commit_id))
+  | Some hash ->
+      (* read contents of the blob *)
+      Store.read store hash
+  ;;
+val read : string -> (Store.Value.t, Store.error) Lwt_result.t = <fun>
 
-# Lwt_main.run Lwt.Infix.(read [ "README.md" ] >|= pp Fmt.stdout) ;;
+# let pp =
+  let ok ppf = function
+    | Git.Value.Blob b -> Fmt.string ppf (Git.Blob.to_string b)
+    | _ -> Fmt.string ppf "#git-object"
+  in
+  Fmt.result ~ok ~error:Store.pp_error;;
+val pp : ('_weak1 Git.Value.t, Store.error) result Fmt.t = <fun>
+
+# Lwt_main.run Lwt.Infix.(read "README.md" >|= pp Fmt.stdout) ;;
 
 ocaml-git -- Git format and protocol in pure OCaml
 
@@ -142,6 +168,8 @@ lives).
 
 [...]
 ```
+
+()
 
 ### License
 
