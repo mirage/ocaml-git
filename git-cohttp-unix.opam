@@ -24,11 +24,7 @@ depends: [
 ]
 
 pin-depends: [
-  [ "conduit.dev" "git+https://github.com/mirage/ocaml-conduit.git#8912d458b2f3e43245e99cf3cb74e9c00712a8b0" ]
-  [ "conduit-tls.dev" "git+https://github.com/mirage/ocaml-conduit.git#8912d458b2f3e43245e99cf3cb74e9c00712a8b0" ]
-  [ "conduit-lwt.dev" "git+https://github.com/mirage/ocaml-conduit.git#8912d458b2f3e43245e99cf3cb74e9c00712a8b0" ]
-  [ "conduit-lwt-tls.dev" "git+https://github.com/mirage/ocaml-conduit.git#8912d458b2f3e43245e99cf3cb74e9c00712a8b0" ]
-  [ "cohttp.dev" "git+https://github.com/dinosaure/ocaml-cohttp.git#7f0efc6d7e0420e3abff99d29633519785c41f4b" ]
-  [ "cohttp-lwt.dev" "git+https://github.com/dinosaure/ocaml-cohttp.git#7f0efc6d7e0420e3abff99d29633519785c41f4b" ]
-  [ "cohttp-lwt-unix.dev" "git+https://github.com/dinosaure/ocaml-cohttp.git#7f0efc6d7e0420e3abff99d29633519785c41f4b" ]
+  [ "cohttp.dev" "git+https://github.com/dinosaure/ocaml-cohttp.git#c2c3f064b6873e11b9abc62302415b24ca9d5ce7" ]
+  [ "cohttp-lwt.dev" "git+https://github.com/dinosaure/ocaml-cohttp.git#c2c3f064b6873e11b9abc62302415b24ca9d5ce7" ]
+  [ "cohttp-lwt-unix.dev" "git+https://github.com/dinosaure/ocaml-cohttp.git#c2c3f064b6873e11b9abc62302415b24ca9d5ce7" ]
 ]

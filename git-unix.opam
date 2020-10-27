@@ -21,8 +21,8 @@ depends: [
   "mmap"              {>= "1.1.0"}
   "stdlib-shims"
   "git"
-  "conduit"
-  "conduit-lwt"
+  "conduit"           {>= "3.0.0"}
+  "conduit-lwt"       {>= "3.0.0"}
   "rresult"
   "result"
   "bigarray-compat"
@@ -46,8 +46,6 @@ depends: [
 ]
 
 pin-depends: [
-  [ "conduit.dev" "git+https://github.com/mirage/ocaml-conduit.git#8912d458b2f3e43245e99cf3cb74e9c00712a8b0" ]
-  [ "conduit-lwt.dev" "git+https://github.com/mirage/ocaml-conduit.git#8912d458b2f3e43245e99cf3cb74e9c00712a8b0" ]
   [ "awa.dev" "git+https://github.com/dinosaure/awa-ssh.git#e54302ecd5fe541c2fbecb277cb11bba40032b81"]
   [ "awa-conduit.dev" "git+https://github.com/dinosaure/awa-ssh.git#e54302ecd5fe541c2fbecb277cb11bba40032b81"]
 ]

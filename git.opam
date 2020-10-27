@@ -34,7 +34,7 @@ depends: [
   "bigstringaf"
   "optint"
   "decompress"
-  "conduit"
+  "conduit"           {>= "3.0.0"}
   "logs"
   "lwt"
   "cstruct"           {>= "5.0.0"}
@@ -56,8 +56,4 @@ depends: [
   "base-unix"         {with-test}
   "fpath"             {with-test}
   "base64"            {with-test & >= "3.0.0"}
-]
-
-pin-depends: [
-  [ "conduit.dev" "git+https://github.com/mirage/ocaml-conduit.git#8912d458b2f3e43245e99cf3cb74e9c00712a8b0" ]
 ]

@@ -30,7 +30,7 @@ depends: [
   "psq"               {>= "0.2.0"}
   "carton"
   "carton-lwt"
-  "conduit"
+  "conduit"           {>= "3.0.0"}
   "uri"
   "digestif"          {>= "0.8.1"}
   "decompress"        {>= "1.2.0"}
@@ -44,9 +44,4 @@ depends: [
   "mmap"              {with-test}
   "alcotest-lwt"      {with-test}
   "crowbar"           {with-test & >= "0.2"}
-]
-
-pin-depends: [
-  [ "conduit.dev" "git+https://github.com/mirage/ocaml-conduit.git#8912d458b2f3e43245e99cf3cb74e9c00712a8b0" ]
-  [ "conduit-lwt.dev" "git+https://github.com/mirage/ocaml-conduit.git#8912d458b2f3e43245e99cf3cb74e9c00712a8b0" ]
 ]
