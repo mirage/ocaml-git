@@ -182,11 +182,11 @@ module Entry = struct
       let mtime_sec = Float.to_int mtime_sec in
       let mtime_nsec = Float.to_int (mtime_nsec *. 1_000_000_000.) in
       let open Rresult in
-      ( match stat.Unix.st_kind with
+      (match stat.Unix.st_kind with
       | Unix.S_DIR -> Fmt.invalid_arg "Git sub-module are not implemented"
       | Unix.S_REG -> oid_of_blob ~hash path
       | Unix.S_LNK -> oid_of_link ~hash path
-      | _kind -> Fmt.invalid_arg "Invalid kind" )
+      | _kind -> Fmt.invalid_arg "Invalid kind")
       >>| fun oid ->
       {
         ce_stat =
@@ -392,7 +392,7 @@ module Entry = struct
         Bigstringaf.set_int16_be ce_payload
           (40 + Hash.digest_size + 2)
           (flags asr 16);
-        ce_payload )
+        ce_payload)
       else Bigstringaf.sub ce_payload ~off:0 ~len:(40 + Hash.digest_size + 2)
     in
 
@@ -543,7 +543,7 @@ let rem : Fpath.t -> 'oid t -> unit =
           (fun i -> if i < pos then t.entries.(i) else t.entries.(i + 1))
       in
       t.entries <- res;
-      go pos )
+      go pos)
   in
   go pos
 
@@ -770,8 +770,7 @@ let store :
 
       if t.entries.(i).ce_flags land Entry._ce_extended_flags <> 0 then (
         v := true;
-        t.entries.(i).ce_flags <- t.entries.(i).ce_flags lor Entry._ce_extended
-        )
+        t.entries.(i).ce_flags <- t.entries.(i).ce_flags lor Entry._ce_extended)
     done;
     !v
   in

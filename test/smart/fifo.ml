@@ -52,7 +52,7 @@ let recv { ic; linger; closed; _ } raw =
               (if filled + len = 0 then `End_of_flow else `Input (filled + len))
         else
           Lwt.return_ok
-            (if filled + len = 0 then `End_of_flow else `Input (filled + len)) )
+            (if filled + len = 0 then `End_of_flow else `Input (filled + len)))
     in
     Lwt.catch (fun () -> process 0 raw) @@ function
     | Unix.Unix_error (err, _, _) -> Lwt.return_error (`Unix_error err)
@@ -77,7 +77,7 @@ let rec send ({ oc; closed; linger; _ } as t) raw =
     in
     Lwt.catch process @@ function
     | Unix.Unix_error (err, _, _) -> Lwt.return_error (`Unix_error err)
-    | exn -> Lwt.fail exn )
+    | exn -> Lwt.fail exn)
 
 let close t =
   let process () =
@@ -86,7 +86,7 @@ let close t =
       Lwt_unix.close t.ic >>= fun () ->
       Lwt_unix.close t.oc >>= fun () ->
       t.closed <- true;
-      Lwt.return_ok () )
+      Lwt.return_ok ())
     else Lwt.return_ok ()
   in
   Lwt.catch process @@ function

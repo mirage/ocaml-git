@@ -205,7 +205,7 @@ struct
             Search.pred ~full t key >>= fun preds ->
             let keys = List.map (fun x -> snd (label x)) preds in
             List.iter (fun k -> K.add_edge g k key) keys;
-            Lwt_list.iter_p add keys )
+            Lwt_list.iter_p add keys)
     in
     let max = S.fold (fun x a -> x :: a) max [] in
     Lwt_list.iter_p add max >>= fun () -> Lwt.return g

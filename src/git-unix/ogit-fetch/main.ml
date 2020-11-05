@@ -189,13 +189,13 @@ let command =
   let exits = Term.default_exits in
   ( Term.(
       ret
-        ( const main
+        (const main
         $ Flag.progress
         $ Flag.ssh_seed
         $ Flag.references
         $ Flag.directory
         $ Flag.repository
-        $ setup_log )),
+        $ setup_log)),
     Term.info "ogit-fetch" ~version:"v0.1" ~doc ~exits )
 
 let () = Term.(exit @@ eval command)

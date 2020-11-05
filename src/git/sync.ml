@@ -103,7 +103,7 @@ struct
             let v = hash, ref 0, ts in
             Hashtbl.add hashtbl hash v;
             Lwt.return_some v
-        | Ok _ | Error _ -> Lwt.return_none )
+        | Ok _ | Error _ -> Lwt.return_none)
 
   let parents_of_commit t hash =
     Log.debug (fun m -> m "Get parents of %a." Hash.pp hash);
@@ -111,7 +111,7 @@ struct
     | Value.Commit commit -> (
         Store.is_shallowed t hash >>= function
         | false -> Lwt.return (Store.Value.Commit.parents commit)
-        | true -> Lwt.return [] )
+        | true -> Lwt.return [])
     | _ -> Lwt.return []
 
   let parents ((t, _hashtbl) as store) hash =
@@ -188,8 +188,9 @@ struct
         Lwt.return (Carton.Dec.v ~kind raw)
     | None -> Lwt.fail Not_found
 
-  include Smart_git.Make (Scheduler) (Pack) (Index) (Conduit) (HTTP) (Hash)
-            (Reference)
+  include
+    Smart_git.Make (Scheduler) (Pack) (Index) (Conduit) (HTTP) (Hash)
+      (Reference)
 
   let ( >>? ) x f =
     x >>= function Ok x -> f x | Error err -> Lwt.return_error err
@@ -278,7 +279,7 @@ struct
         | Some o as v ->
             Hashtbl.replace hashtbl hash o;
             Lwt.return v
-        | None -> Lwt.return_none )
+        | None -> Lwt.return_none)
 
   let access =
     {

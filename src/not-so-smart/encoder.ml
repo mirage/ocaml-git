@@ -37,7 +37,7 @@ let flush k0 encoder =
           }
       else (
         encoder.pos <- 0;
-        k0 encoder )
+        k0 encoder)
     in
     k1 0
   else k0 encoder

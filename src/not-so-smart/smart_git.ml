@@ -94,7 +94,7 @@ let endpoint_of_string str =
                (function `Atom x -> x | `String x -> Fmt.strf "%S" x)
                m.Emile.local)
         in
-        ( match fst m.Emile.domain with
+        (match fst m.Emile.domain with
         | `Domain vs ->
             Domain_name.of_strings vs
             >>= Domain_name.host
@@ -106,7 +106,7 @@ let endpoint_of_string str =
         | `Addr (Emile.IPv4 ipv4) -> R.ok (Conduit.Endpoint.ip (Ipaddr.V4 ipv4))
         | `Addr (Emile.IPv6 ipv6) -> R.ok (Conduit.Endpoint.ip (Ipaddr.V6 ipv6))
         | `Addr (Emile.Ext (ext, _)) ->
-            R.error_msgf "Git does not handle domain extension %s." ext )
+            R.error_msgf "Git does not handle domain extension %s." ext)
         >>= fun endpoint -> R.ok { scheme = `SSH user; path; endpoint }
     | _ -> R.error_msg "invalid pattern"
   in
@@ -376,11 +376,11 @@ struct
     let rec recv t raw =
       if t.pos = String.length t.ic then (
         let open Lwt.Infix in
-        ( HTTP.post ~resolvers:t.resolvers ~headers:t.headers t.uri t.oc
-        >|= Rresult.(R.reword_error (R.msgf "%a" HTTP.pp_error)) )
+        (HTTP.post ~resolvers:t.resolvers ~headers:t.headers t.uri t.oc
+        >|= Rresult.(R.reword_error (R.msgf "%a" HTTP.pp_error)))
         >>? fun (_resp, contents) ->
         t.ic <- t.ic ^ contents;
-        recv t raw )
+        recv t raw)
       else
         let len = min (String.length t.ic - t.pos) (Cstruct.len raw) in
         Cstruct.blit_from_string t.ic t.pos raw 0 len;
@@ -453,8 +453,7 @@ struct
           let run () =
             Lwt.both
               (fetch_v1 ~push_stdout ~push_stderr ~prelude ~capabilities path
-                 ~resolvers ?deepen ~want endpoint store access fetch_cfg
-                 pusher)
+                 ~resolvers ?deepen ~want endpoint store access fetch_cfg pusher)
               (run ~light_load ~heavy_load stream t_pck t_idx ~src ~dst ~idx)
             >>= fun (refs, idx) ->
             match refs, idx with

@@ -95,8 +95,8 @@ let create_tmp_dir ?(mode = 0o700) ?prefix_path pat =
       in
       try
         Ok
-          ( Unix.mkdir (Fpath.to_string dir) mode;
-            dir )
+          (Unix.mkdir (Fpath.to_string dir) mode;
+           dir)
       with
       | Unix.Unix_error (Unix.EEXIST, _, _) -> loop (count - 1)
       | Unix.Unix_error (Unix.EINTR, _, _) -> loop count
@@ -1124,7 +1124,7 @@ let run_git_upload_pack ?(tmps_exit = true) store ic oc =
             Tmp_dirs.are_valid := tmps_exit;
             Logs.debug (fun m -> m "git-upload-pack terminated properly.");
             exit 1
-        | Error (`Msg err) -> Alcotest.failf "git-upload-pack: %s" err )
+        | Error (`Msg err) -> Alcotest.failf "git-upload-pack: %s" err)
     | _ ->
         Logs.app (fun m -> m "git-upload-pack launched!");
         Lwt.return_unit
@@ -1296,7 +1296,7 @@ let run_git_receive_pack store ic oc =
             Tmp_dirs.are_valid := false;
             Logs.debug (fun m -> m "git-receive-pack terminated properly.");
             exit 1
-        | Error (`Msg err) -> Alcotest.failf "git-upload-pack: %s" err )
+        | Error (`Msg err) -> Alcotest.failf "git-upload-pack: %s" err)
     | _ ->
         Logs.app (fun m -> m "git-receive-pack launched!");
         Lwt.return_unit
@@ -1370,7 +1370,7 @@ let test_push_ssh () =
           Alcotest.failf "refs/heads/master has multiple hashes: %a"
             Fmt.(Dump.list string)
             hashes
-      | Error (`Msg err) -> Alcotest.failf "git-show-ref: %s" err )
+      | Error (`Msg err) -> Alcotest.failf "git-show-ref: %s" err)
   | Error (`Exn exn) -> Alcotest.failf "%s" (Printexc.to_string exn)
   | Error (#Conduit_lwt.error as err) ->
       Alcotest.failf "%a" Conduit_lwt.pp_error err
@@ -1606,7 +1606,7 @@ let test_partial_fetch_ssh () =
             Store_backend.shallowed lwt store1 |> Scheduler.prj
             >>= fun shallowed ->
             Alcotest.(check int) "2 shallowed commits" (List.length shallowed) 2;
-            Lwt.return_ok () )
+            Lwt.return_ok ())
   in
   run () >>= function
   | Ok v -> Lwt.return v

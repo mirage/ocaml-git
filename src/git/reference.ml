@@ -21,10 +21,10 @@ let validate_and_collapse_seps p =
       if c = '\x00' then error_msgf "Malformed reference: %S" p
       else if c <> dir_sep_char then (
         Bytes.set b k c;
-        with_buf b false (k + 1) (i + 1) )
+        with_buf b false (k + 1) (i + 1))
       else if not last_sep then (
         Bytes.set b k c;
-        with_buf b true (k + 1) (i + 1) )
+        with_buf b true (k + 1) (i + 1))
       else with_buf b true k (i + 1)
   in
   let rec try_no_alloc last_sep i =
@@ -139,7 +139,7 @@ module Packed = struct
                   let reference = v reference in
                   let uid = of_hex uid in
                   go (Ref (reference, uid) :: acc)
-              | None -> go acc ) )
+              | None -> go acc))
       | None -> return (List.rev acc)
     in
     go []
@@ -152,7 +152,7 @@ module Packed = struct
       | Ref (reference', _) ->
           if equal reference reference' then (
             res := true;
-            raise Found )
+            raise Found)
       | _ -> ()
     in
     (try List.iter f packed with Found -> ());
@@ -164,7 +164,7 @@ module Packed = struct
       | Ref (reference', uid) ->
           if equal reference reference' then (
             res := Some uid;
-            raise Found )
+            raise Found)
       | _ -> ()
     in
     (try List.iter f packed with Found -> ());
@@ -197,7 +197,7 @@ let contents store str =
       let is_sep chr = Astring.Char.Ascii.is_white chr || chr = ':' in
       match Astring.String.fields ~empty:false ~is_sep str with
       | [ _ref; value ] -> Ref (v value)
-      | _ -> Fmt.invalid_arg "Invalid reference contents: %S" str )
+      | _ -> Fmt.invalid_arg "Invalid reference contents: %S" str)
 
 let resolve { Carton.bind; Carton.return } t store reference =
   let ( >>= ) = bind in
@@ -207,13 +207,13 @@ let resolve { Carton.bind; Carton.return } t store reference =
     | Error _ -> (
         match Packed.get reference store.packed with
         | Some uid -> return (Ok uid)
-        | None -> return (Error (`Not_found reference)) )
+        | None -> return (Error (`Not_found reference)))
     | Ok str -> (
         match contents store str with
         | Uid uid -> return (Ok uid)
         | Ref reference ->
             if List.exists (equal reference) visited then return (Error `Cycle)
-            else go (reference :: visited) reference )
+            else go (reference :: visited) reference)
   in
   go [ reference ] reference
 
@@ -224,7 +224,7 @@ let read { Carton.bind; Carton.return } t store reference =
   | Error _ -> (
       match Packed.get reference store.packed with
       | Some uid -> return (Ok (Uid uid))
-      | None -> return (Error (`Not_found reference)) )
+      | None -> return (Error (`Not_found reference)))
   | Ok str -> return (Ok (contents store str))
 
 let write { Carton.bind; Carton.return } t store reference contents =

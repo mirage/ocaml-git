@@ -45,12 +45,12 @@ let key tbl =
     Ephemeron.K1.set_key tbl.o0 value;
     Ephemeron.K1.set_data tbl.o0 (ref empty);
     tbl.which <- not tbl.which;
-    value )
+    value)
   else (
     Ephemeron.K1.set_key tbl.o1 value;
     Ephemeron.K1.set_data tbl.o1 (ref empty);
     tbl.which <- not tbl.which;
-    value )
+    value)
   [@@inline never]
 
 type uid = key ref
@@ -117,7 +117,7 @@ let create ~mode:_ { o0; o1; _ } key =
     if Cstruct.len !value < 1 then (
       let v = Cstruct.create 1 in
       value := v;
-      v )
+      v)
     else !value
   in
 
@@ -155,14 +155,14 @@ let close tbl fd =
   Log.debug (fun m ->
       m "Close the object into the cstruct-append heap (save %d bytes)."
         fd.length);
-  ( if fd.which then
-    match Ephemeron.K1.get_data tbl.o0 with
-    | Some value -> value := result
-    | None -> assert false
+  (if fd.which then
+   match Ephemeron.K1.get_data tbl.o0 with
+   | Some value -> value := result
+   | None -> assert false
   else
     match Ephemeron.K1.get_data tbl.o1 with
     | Some value -> value := result
-    | None -> assert false );
+    | None -> assert false);
   Lwt.return_ok ()
 
 let move tbl ~src ~dst =
@@ -177,7 +177,7 @@ let move tbl ~src ~dst =
         else if src == k1 && dst == k0 then v0 := !v1
         else (
           Log.err (fun m -> m "Given keys are wrong!");
-          assert false );
+          assert false);
         Lwt.return_ok ()
     | _ ->
         Log.err (fun m -> m "One object was deleted by the garbage collector.");

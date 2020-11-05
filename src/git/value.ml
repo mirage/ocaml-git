@@ -173,10 +173,10 @@ module Make (Hash : S.HASH) : S with type hash = Hash.t = struct
         <*> t
       in
       Encore.Bij.(compose obj3) iso
-      <$> ( value "commit" commit'
+      <$> (value "commit" commit'
           <|> value "tree" tree
           <|> value "blob" blob
-          <|> value "tag" tag )
+          <|> value "tag" tag)
   end
 
   let format = Syntax.format
@@ -241,12 +241,12 @@ module Make (Hash : S.HASH) : S with type hash = Hash.t = struct
         | Error _ ->
             Log.err (fun m ->
                 m "Object %s is bad: @[<hov>%S@]"
-                  ( match kind with
+                  (match kind with
                   | `Tree -> "tree"
                   | `Commit -> "commit"
-                  | `Tag -> "tag" )
+                  | `Tag -> "tag")
                   (Cstruct.to_string raw));
-            Error (`Msg "Invalid Git object") )
+            Error (`Msg "Invalid Git object"))
 
   let to_raw_without_header = function
     | Blob v -> Cstruct.to_string (Blob.to_cstruct v)
@@ -304,7 +304,7 @@ module Make (Hash : S.HASH) : S with type hash = Hash.t = struct
           if !consumed then Lwt.return_none
           else (
             consumed := true;
-            Lwt.return_some (Cstruct.to_string (Blob.to_cstruct v)) )
+            Lwt.return_some (Cstruct.to_string (Blob.to_cstruct v)))
         in
         stream
     | v ->

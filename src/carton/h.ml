@@ -191,7 +191,7 @@ module M = struct
     else (
       d.i <- s;
       d.i_pos <- j;
-      d.i_len <- j + l - 1 )
+      d.i_len <- j + l - 1)
 
   let dst d s j l =
     match d.s with
@@ -201,7 +201,7 @@ module M = struct
         else (
           d.dst <- s;
           d.o_pos <- j;
-          if bigstring_length d.source >= d.src_len then d.s <- Cmd )
+          if bigstring_length d.source >= d.src_len then d.s <- Cmd)
     | _ -> Fmt.invalid_arg "Invalid call of dst"
 
   let pp_state ppf = function
@@ -245,10 +245,10 @@ module M = struct
       let need = d.t_need - d.t_len in
       if rem < need then (
         blit d rem;
-        refill (t_fill k) d )
+        refill (t_fill k) d)
       else (
         blit d need;
-        k d )
+        k d)
 
   let required =
     let a = [| 0; 1; 1; 2; 1; 2; 2; 3; 1; 2; 2; 3; 2; 3; 3; 4 |] in
@@ -281,31 +281,31 @@ module M = struct
     if command land 0x01 != 0 then (
       let v = unsafe_get_uint8 i !p in
       cp_off := v;
-      incr p );
+      incr p);
     if command land 0x02 != 0 then (
       let v = unsafe_get_uint8 i !p in
       cp_off := !cp_off lor (v lsl 8);
-      incr p );
+      incr p);
     if command land 0x04 != 0 then (
       let v = unsafe_get_uint8 i !p in
       cp_off := !cp_off lor (v lsl 16);
-      incr p );
+      incr p);
     if command land 0x08 != 0 then (
       let v = unsafe_get_uint8 i !p in
       cp_off := !cp_off lor (v lsl 24);
-      incr p );
+      incr p);
     if command land 0x10 != 0 then (
       let v = unsafe_get_uint8 i !p in
       cp_len := v;
-      incr p );
+      incr p);
     if command land 0x20 != 0 then (
       let v = unsafe_get_uint8 i !p in
       cp_len := !cp_len lor (v lsl 8);
-      incr p );
+      incr p);
     if command land 0x40 != 0 then (
       let v = unsafe_get_uint8 i !p in
       cp_len := !cp_len lor (v lsl 16);
-      incr p );
+      incr p);
     if !cp_len == 0 then cp_len := 0x10000;
 
     unsafe_blit d.source !cp_off d.dst d.o_pos !cp_len;
@@ -324,14 +324,14 @@ module M = struct
       d.o_pos <- d.o_pos + len;
       d.s <- Cmd;
       d.k <- decode_k;
-      decode_k d )
+      decode_k d)
     else (
       unsafe_blit d.i d.i_pos d.dst d.o_pos len;
       d.i_pos <- d.i_pos + len;
       d.o_pos <- d.o_pos + len;
       d.s <- Cmd;
       d.k <- decode_k;
-      decode_k d )
+      decode_k d)
 
   and cmd d =
     let c = unsafe_get_uint8 d.i d.i_pos in
@@ -344,7 +344,7 @@ module M = struct
       if enough d then if c land 0x80 != 0 then cp d else it d
       else (
         t_need d (need d);
-        t_fill (if c land 0x80 != 0 then cp else it) d ) )
+        t_fill (if c land 0x80 != 0 then cp else it) d))
 
   and decode_k d =
     let rem = i_rem d in
@@ -373,12 +373,12 @@ module M = struct
           if required (cmd land 0x7f) <= rem then cp d
           else (
             t_need d (need d);
-            t_fill cp d )
+            t_fill cp d)
       | It len ->
           if len <= rem then it d
           else (
             t_need d (need d);
-            t_fill it d )
+            t_fill it d)
 
   let decode d =
     match d.k d with
@@ -494,10 +494,10 @@ module N = struct
 
     if rem < len then (
       blit e rem;
-      flush (t_flush k) e )
+      flush (t_flush k) e)
     else (
       blit e len;
-      k e )
+      k e)
 
   let rec encode_contents e v =
     let k e =
@@ -514,7 +514,7 @@ module N = struct
         let s, j, k =
           if rem < required then (
             t_range e (required - 1);
-            e.t, 0, t_flush k )
+            e.t, 0, t_flush k)
           else
             let j = e.o_pos in
             e.o_pos <- e.o_pos + required;
@@ -527,14 +527,14 @@ module N = struct
         while !off <> 0 do
           if !off land 0xff != 0 then (
             unsafe_set_uint8 s !pos !off;
-            incr pos );
+            incr pos);
           off := !off asr 8
         done;
         let len = ref len in
         while !len <> 0 do
           if !len land 0xff != 0 then (
             unsafe_set_uint8 s !pos !len;
-            incr pos );
+            incr pos);
           len := !len asr 8
         done;
         k e
@@ -545,7 +545,7 @@ module N = struct
         let s, j, k =
           if rem < required then (
             t_range e (required - 1);
-            e.t, 0, t_flush k )
+            e.t, 0, t_flush k)
           else
             let j = e.o_pos in
             e.o_pos <- e.o_pos + required;
@@ -591,12 +591,12 @@ module N = struct
       store_variable_length e.o e.o_pos e.src_len;
       store_variable_length e.o (e.o_pos + needed e.src_len) e.dst_len;
       e.o_pos <- e.o_pos + ndd;
-      k e )
+      k e)
     else (
       t_range e ndd;
       store_variable_length e.t 0 e.src_len;
       store_variable_length e.t (needed e.src_len) e.dst_len;
-      t_flush k e )
+      t_flush k e)
 
   let encode e v = e.k e v
 

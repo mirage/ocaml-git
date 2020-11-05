@@ -325,7 +325,7 @@ module Decoder = struct
         let v = peek_pkt decoder in
         if String.Sub.is_empty v then (
           junk_pkt decoder;
-          return { advertised_refs with Advertised_refs.shallows } decoder )
+          return { advertised_refs with Advertised_refs.shallows } decoder)
         else
           match String.Sub.cut ~sep:v_space v with
           | Some (_, uid) ->
@@ -350,7 +350,7 @@ module Decoder = struct
               version;
               shallows = [];
             }
-            decoder )
+            decoder)
         else if String.Sub.is_prefix ~affix:v_shallow v then
           decode_shallows
             {
@@ -482,7 +482,7 @@ module Decoder = struct
       let v = peek_pkt decoder in
       if String.Sub.equal_bytes v v_nak then (
         junk_pkt decoder;
-        return Result.NAK decoder )
+        return Result.NAK decoder)
       else
         match String.Sub.cut ~sep:v_space v with
         | Some (_, common) ->
@@ -508,7 +508,7 @@ module Decoder = struct
       let rest = decoder.max - decoder.pos in
       Bytes.unsafe_blit decoder.buffer decoder.pos decoder.buffer 0 rest;
       decoder.max <- rest;
-      decoder.pos <- 0 );
+      decoder.pos <- 0);
     let rec go off =
       if off = Bytes.length decoder.buffer && decoder.pos > 0 then
         Error
@@ -519,7 +519,7 @@ module Decoder = struct
           }
       else if off - decoder.pos > 0 then (
         decoder.max <- off;
-        safe kcontinue decoder )
+        safe kcontinue decoder)
       else
         Read
           {
@@ -581,7 +581,7 @@ module Decoder = struct
       let v = peek_pkt decoder in
       if String.Sub.length v = 0 then (
         junk_pkt decoder;
-        return (List.rev acc) decoder )
+        return (List.rev acc) decoder)
       else if
         String.Sub.is_prefix ~affix:v_shallow v
         || String.Sub.is_prefix ~affix:v_unshallow v
@@ -591,10 +591,10 @@ module Decoder = struct
             let uid = String.Sub.to_string uid in
             if String.Sub.equal_bytes v v_shallow then (
               junk_pkt decoder;
-              prompt_pkt (go (Shallow.Shallow uid :: acc)) decoder )
+              prompt_pkt (go (Shallow.Shallow uid :: acc)) decoder)
             else (
               junk_pkt decoder;
-              prompt_pkt (go (Shallow.Unshallow uid :: acc)) decoder )
+              prompt_pkt (go (Shallow.Unshallow uid :: acc)) decoder)
         | _ -> return (List.rev acc) decoder
       else return (List.rev acc) decoder
     in
@@ -605,7 +605,7 @@ module Decoder = struct
       let pkt = peek_pkt decoder in
       if String.Sub.equal_bytes pkt v_nak then (
         junk_pkt decoder;
-        return Negotiation.NAK decoder )
+        return Negotiation.NAK decoder)
       else if String.Sub.is_prefix ~affix:v_ack pkt then
         match String.Sub.cuts ~sep:v_space pkt with
         | [ _; uid ] ->
@@ -622,7 +622,7 @@ module Decoder = struct
             | "continue" -> return (Negotiation.ACK_continue uid) decoder
             | "ready" -> return (Negotiation.ACK_ready uid) decoder
             | "common" -> return (Negotiation.ACK_common uid) decoder
-            | _ -> fail decoder (`Invalid_ack (String.Sub.to_string pkt)) )
+            | _ -> fail decoder (`Invalid_ack (String.Sub.to_string pkt)))
         | _ -> fail decoder (`Invalid_ack (String.Sub.to_string pkt))
       else assert false
     in
@@ -650,8 +650,7 @@ module Decoder = struct
               let reference = String.Sub.to_string reference in
               Stdlib.Ok (Stdlib.Error (reference, err))
           | _ ->
-              Stdlib.Error (`Invalid_command_result (String.Sub.to_string pkt))
-          )
+              Stdlib.Error (`Invalid_command_result (String.Sub.to_string pkt)))
       | _ -> Stdlib.Error (`Invalid_command_result (String.Sub.to_string pkt))
     in
 
@@ -684,7 +683,7 @@ module Decoder = struct
               return (Stdlib.Ok ()) decoder
           | err ->
               junk_pkt decoder;
-              return (Stdlib.Error err) decoder )
+              return (Stdlib.Error err) decoder)
     in
     prompt_pkt result decoder >>= fun result ->
     prompt_pkt commands decoder >>= fun commands ->
@@ -764,7 +763,7 @@ module Encoder = struct
       if version > 1 then (
         write_zero encoder;
         write_version encoder version;
-        write_zero encoder )
+        write_zero encoder)
     in
     delayed_write_pkt k kdone encoder
 
@@ -842,7 +841,7 @@ module Encoder = struct
       in
       if List.length capabilities > 0 then (
         write_space encoder;
-        go capabilities );
+        go capabilities);
       write_new_line encoder
     in
 

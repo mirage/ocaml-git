@@ -16,7 +16,7 @@ let connect i =
 let recv flow buf =
   if Cstruct.len flow.i = 0 then (
     flow.c <- true;
-    Lwt.return_ok `End_of_flow )
+    Lwt.return_ok `End_of_flow)
   else
     let len = min (Cstruct.len buf) (Cstruct.len flow.i) in
     Cstruct.blit flow.i 0 buf 0 len;
@@ -29,7 +29,7 @@ let send flow str =
   if flow.c then Lwt.return_error `Closed
   else (
     flow.o <- Cstruct.append flow.o str;
-    Lwt.return_ok (Cstruct.len str) )
+    Lwt.return_ok (Cstruct.len str))
 
 let close flow =
   flow.c <- true;

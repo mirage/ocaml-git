@@ -377,7 +377,7 @@ let file =
     if ln_a <> ln_b then (
       close_in ic_a;
       close_in ic_b;
-      false )
+      false)
     else
       let bf_a = Bytes.create 0x1000 and bf_b = Bytes.create 0x1000 in
       let rec go () =
@@ -477,10 +477,10 @@ let verify_bomb_pack () =
         Hashtbl.add weight offset target;
         Hashtbl.add where offset n;
 
-        ( try
-            let v = Hashtbl.find children (`Ofs base) in
-            Hashtbl.add children (`Ofs base) (offset :: v)
-          with Not_found -> Hashtbl.add children (`Ofs base) [ offset ] );
+        (try
+           let v = Hashtbl.find children (`Ofs base) in
+           Hashtbl.add children (`Ofs base) (offset :: v)
+         with Not_found -> Hashtbl.add children (`Ofs base) [ offset ]);
         go decoder
     | `Entry _ -> (* OBJ_REF *) Alcotest.fail "Unexpected OBJ_REF"
     | `Malformed err -> Alcotest.fail err
@@ -631,17 +631,17 @@ let unpack_bomb_pack () =
           Hashtbl.add weight Int64.(sub offset (Int64.of_int s)) source;
           Hashtbl.add weight offset target;
           Hashtbl.add where offset n;
-          ( try
-              let v =
-                Hashtbl.find children (`Ofs Int64.(sub offset (of_int s)))
-              in
-              Hashtbl.add children
-                (`Ofs Int64.(sub offset (of_int s)))
-                (offset :: v)
-            with _exn ->
-              Hashtbl.add children
-                (`Ofs Int64.(sub offset (of_int s)))
-                [ offset ] );
+          (try
+             let v =
+               Hashtbl.find children (`Ofs Int64.(sub offset (of_int s)))
+             in
+             Hashtbl.add children
+               (`Ofs Int64.(sub offset (of_int s)))
+               (offset :: v)
+           with _exn ->
+             Hashtbl.add children
+               (`Ofs Int64.(sub offset (of_int s)))
+               [ offset ]);
           go decoder
       | `Entry _ -> assert false
       | `End _ ->
@@ -952,10 +952,10 @@ let decode_index_stream () =
            TODO(dinosaure): we should add test to ensure that [device] did not
            keep our value if we don't keep [uid]. *);
         close_in ic;
-        Index_stream_decoder.close device fd )
+        Index_stream_decoder.close device fd)
       else (
         Index_stream_decoder.append device fd (Bytes.sub_string tp 0 len);
-        go () )
+        go ())
     in
     Gc.minor ();
     Gc.full_major ();

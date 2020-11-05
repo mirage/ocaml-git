@@ -61,7 +61,7 @@ let rec mark_common :
   if only_ancestors then p := !p lor _common;
   if !p land _seen = 0 then (
     rev_list_push t (uid, p, ts) _seen;
-    return () )
+    return ())
   else (
     if (not only_ancestors) && !p land _popped = 0 then
       state.non_common_revs <- non_common_revs - 1;
@@ -73,7 +73,7 @@ let rec mark_common :
           mark_common scheduler ~parents store t (uid, p, ts) false
           >>= fun () -> go rest
     in
-    go )
+    go)
 
 let known_common :
     type g s uid.
@@ -86,7 +86,7 @@ let known_common :
  fun ({ return; _ } as scheduler) ~parents store t (uid, p, ts) ->
   if !p land _seen = 0 then (
     rev_list_push t (uid, p, ts) (_common_ref lor _seen);
-    mark_common scheduler ~parents store t (uid, p, ts) true )
+    mark_common scheduler ~parents store t (uid, p, ts) true)
   else return ()
 
 let tip t obj = rev_list_push t obj _seen
@@ -134,13 +134,12 @@ let get_rev :
 
           if !p land _common <> 0 then (
             mark := _common lor _seen;
-            res := None )
+            res := None)
           else if !p land _common_ref <> 0 then mark := _common lor _seen
           else mark := _seen;
 
           let rec loop = function
-            | [] -> (
-                match !res with None -> go () | Some _ as v -> return v )
+            | [] -> ( match !res with None -> go () | Some _ as v -> return v)
             | (uid, p, ts) :: rest ->
                 if !p land _seen = 0 then rev_list_push t (uid, p, ts) !mark;
 

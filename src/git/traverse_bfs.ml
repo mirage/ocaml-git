@@ -49,7 +49,7 @@ module Make (Store : STORE) = struct
       | [] -> (
           match Queue.pop queue with
           | rest -> walk close [ rest ] queue acc
-          | exception Queue.Empty -> Lwt.return acc )
+          | exception Queue.Empty -> Lwt.return acc)
       | hash :: rest -> (
           if Store.Hash.Set.mem hash close then walk close rest queue acc
           else
@@ -66,7 +66,7 @@ module Make (Store : STORE) = struct
                       (fun x -> Queue.add x queue)
                       (Store.Value.Commit.parents commit);
                     f acc ~length:(Store.Value.Commit.length commit) hash value
-                    >>= fun acc' -> walk close' rest' queue acc' )
+                    >>= fun acc' -> walk close' rest' queue acc')
             | Value.Tree tree as value ->
                 let path =
                   try Hashtbl.find names hash with Not_found -> path
@@ -98,7 +98,7 @@ module Make (Store : STORE) = struct
             | Value.Tag tag as value ->
                 Queue.add (Store.Value.Tag.obj tag) queue;
                 f acc ~length:(Store.Value.Tag.length tag) hash value
-                >>= fun acc' -> walk close' rest queue acc' )
+                >>= fun acc' -> walk close' rest queue acc')
     in
     walk Store.Hash.Set.empty [ hash ] (Queue.create ()) acc
 
