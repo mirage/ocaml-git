@@ -329,8 +329,8 @@ struct
   module Fetch = Nss.Fetch.Make (Scheduler) (Lwt) (Flow) (Uid) (Ref)
   module Push = Nss.Push.Make (Scheduler) (Lwt) (Flow) (Uid) (Ref)
 
-  let fetch_v1 ?prelude ~push_stdout ~push_stderr ~capabilities path ~resolvers
-      ?deepen ?want endpoint store access fetch_cfg pack =
+  let fetch_v1 ?uses_git_transport ~push_stdout ~push_stderr ~capabilities path
+      ~resolvers ?deepen ?want endpoint store access fetch_cfg pack =
     let open Lwt.Infix in
     Log.debug (fun m -> m "Try to resolve %a." Conduit.Endpoint.pp endpoint);
     Conduit.resolve resolvers endpoint >>= function
@@ -340,9 +340,9 @@ struct
     | Ok flow ->
         Lwt.try_bind
           (fun () ->
-            Fetch.fetch_v1 ?prelude ~push_stdout ~push_stderr ~capabilities
-              ?deepen ?want ~host:endpoint path flow store access fetch_cfg
-              (fun (payload, off, len) ->
+            Fetch.fetch_v1 ?uses_git_transport ~push_stdout ~push_stderr
+              ~capabilities ?deepen ?want ~host:endpoint path flow store access
+              fetch_cfg (fun (payload, off, len) ->
                 let v = String.sub payload off len in
                 pack (Some (v, 0, len))))
           (fun refs ->
@@ -411,9 +411,9 @@ struct
         headers;
       }
     in
-    Fetch_http.fetch_v1 ~prelude:false ~push_stdout ~push_stderr ~capabilities
-      ?deepen ?want ~host:endpoint path flow store access fetch_cfg
-      (fun (payload, off, len) ->
+    Fetch_http.fetch_v1 ~uses_git_transport:false ~push_stdout ~push_stderr
+      ~capabilities ?deepen ?want ~host:endpoint path flow store access
+      fetch_cfg (fun (payload, off, len) ->
         let v = String.sub payload off len in
         pack (Some (v, 0, len)))
     >>= fun refs ->
@@ -448,13 +448,14 @@ struct
       match version, edn.scheme with
       | `V1, ((`Git | `SSH _) as scheme) ->
           let fetch_cfg = Nss.Fetch.configuration capabilities in
-          let prelude = match scheme with `Git -> true | `SSH _ -> false in
-          (* XXX(dinosaure): [prelude] is the only tweak needed between git:// and SSH. *)
+          let uses_git_transport =
+            match scheme with `Git -> true | `SSH _ -> false
+          in
           let run () =
             Lwt.both
-              (fetch_v1 ~push_stdout ~push_stderr ~prelude ~capabilities path
-                 ~resolvers ?deepen ~want endpoint store access fetch_cfg
-                 pusher)
+              (fetch_v1 ~push_stdout ~push_stderr ~uses_git_transport
+                 ~capabilities path ~resolvers ?deepen ~want endpoint store
+                 access fetch_cfg pusher)
               (run ~light_load ~heavy_load stream t_pck t_idx ~src ~dst ~idx)
             >>= fun (refs, idx) ->
             match refs, idx with

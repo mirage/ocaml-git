@@ -69,9 +69,9 @@ struct
         in
         List.fold_left fold [] have |> List.split
 
-  let fetch_v1 ?(prelude = true) ?(push_stdout = ignore) ?(push_stderr = ignore)
-      ~capabilities ?deepen ?want:(refs = `None) ~host path flow store access
-      fetch_cfg pack =
+  let fetch_v1 ?(uses_git_transport = true) ?(push_stdout = ignore)
+      ?(push_stderr = ignore) ~capabilities ?deepen ?want:(refs = `None) ~host
+      path flow store access fetch_cfg pack =
     let capabilities =
       (* XXX(dinosaure): HTTP ([stateless]) enforces no-done capabilities. Otherwise, you never
          will receive the PACK file. *)
@@ -82,7 +82,7 @@ struct
     let prelude ctx =
       let open Smart in
       let* () =
-        if prelude then
+        if uses_git_transport then
           send ctx proto_request
             (Proto_request.upload_pack ~host ~version:1 path)
         else return ()
