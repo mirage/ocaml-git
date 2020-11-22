@@ -69,7 +69,7 @@ struct
         in
         List.fold_left fold [] have |> List.split
 
-  let fetch_v1 ?(uses_git_transport = true) ?(push_stdout = ignore)
+  let fetch_v1 ?(uses_git_transport = false) ?(push_stdout = ignore)
       ?(push_stderr = ignore) ~capabilities ?deepen ?want:(refs = `None) ~host
       path flow store access fetch_cfg pack =
     let capabilities =

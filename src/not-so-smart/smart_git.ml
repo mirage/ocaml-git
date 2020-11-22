@@ -411,9 +411,9 @@ struct
         headers;
       }
     in
-    Fetch_http.fetch_v1 ~uses_git_transport:false ~push_stdout ~push_stderr
-      ~capabilities ?deepen ?want ~host:endpoint path flow store access
-      fetch_cfg (fun (payload, off, len) ->
+    Fetch_http.fetch_v1 ~push_stdout ~push_stderr ~capabilities ?deepen ?want
+      ~host:endpoint path flow store access fetch_cfg
+      (fun (payload, off, len) ->
         let v = String.sub payload off len in
         pack (Some (v, 0, len)))
     >>= fun refs ->
