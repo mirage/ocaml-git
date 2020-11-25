@@ -32,7 +32,11 @@ let pp_error ppf = function
   | `Assert_predicate _ -> Fmt.string ppf "Assert predicate"
   | `Invalid_pkt_line -> Fmt.string ppf "Invalid PKT-line"
 
-type 'err info = { error : 'err; buffer : Bytes.t; committed : int }
+type 'err info = {
+  error : 'err;
+  buffer : Bytes.t;
+  committed : int;  (** # bytes already processed *)
+}
 
 type ('v, 'err) state =
   | Done of 'v
@@ -114,7 +118,7 @@ let at_least_one_line decoder =
   let chr = ref '\000' in
   let has_cr = ref false in
   while
-    !pos < decoder.max
+    !pos < end_of_input decoder
     &&
     ( chr := Bytes.unsafe_get decoder.buffer !pos;
       not (!chr = '\n' && !has_cr) )
@@ -184,8 +188,6 @@ let get_pkt_len decoder =
    the protocol error to another layer (eg. [carton] when it received finally a
    __not-full__ PACK file). The goal is to be more resilient at this layer. *)
 
-let error_end_of_input decoder () = fail decoder `End_of_input
-
 let reliable_pkt k decoder () =
   match get_pkt_len decoder with
   | Some _len ->
@@ -204,53 +206,46 @@ let prompt :
     decoder ->
     ('v, 'err) state =
  fun ?(strict = true) k decoder ->
-  if decoder.pos > 0 then (
-    (* XXX(dinosaure): compress *)
+  let compress decoder =
     let rest = decoder.max - decoder.pos in
     Bytes.unsafe_blit decoder.buffer decoder.pos decoder.buffer 0 rest;
     decoder.max <- rest;
-    decoder.pos <- 0 );
+    decoder.pos <- 0
+  in
+  if decoder.pos > 0 then compress decoder;
   let rec go off =
     try
+      let at_least_one_pkt = at_least_one_pkt { decoder with max = off } in
       if
         off = Bytes.length decoder.buffer
         && decoder.pos > 0
-        && not (at_least_one_pkt { decoder with max = off })
-      then
-        Error
-          {
-            error = `No_enough_space;
-            buffer = decoder.buffer;
-            committed = decoder.pos;
-          }
+        && not at_least_one_pkt
+      then fail decoder `No_enough_space
       else if
-        not (at_least_one_pkt { decoder with max = off })
+        not at_least_one_pkt
         (* XXX(dinosaure): we make a new decoder here and we did __not__ set
            [decoder.max] owned by end-user, and this is exactly what we want. *)
       then
+        let eof =
+          if strict then fun () -> fail decoder `End_of_input
+          else (
+            decoder.max <- off;
+            reliable_pkt k decoder )
+        in
         Read
           {
             buffer = decoder.buffer;
             off;
             len = Bytes.length decoder.buffer - off;
             continue = (fun len -> go (off + len));
-            eof =
-              ( if strict then error_end_of_input decoder (* fail *)
-              else (
-                decoder.max <- off;
-                reliable_pkt k decoder ) );
+            eof;
           }
       else (
         decoder.max <- off;
         safe k decoder )
     with
     | _exn (* XXX(dinosaure): [at_least_one_pkt] can raise an exception. *) ->
-      Error
-        {
-          error = `Invalid_pkt_line;
-          buffer = decoder.buffer;
-          committed = decoder.pos;
-        }
+      fail decoder `Invalid_pkt_line
   in
   go decoder.max
 

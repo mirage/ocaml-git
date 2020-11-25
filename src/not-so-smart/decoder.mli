@@ -40,7 +40,7 @@ type ('v, 'err) state =
 val safe :
   (decoder -> ('v, ([> error ] as 'err)) state) -> decoder -> ('v, 'err) state
 
-val leave_with : decoder -> error -> 'a
+val leave_with : decoder -> error -> 'never
 val fail : decoder -> ([> error ] as 'err) -> ('v, 'err) state
 val return : 'v -> decoder -> ('v, 'err) state
 val peek_char : decoder -> char option
