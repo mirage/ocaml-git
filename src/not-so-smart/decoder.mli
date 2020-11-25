@@ -54,4 +54,9 @@ val prompt :
 val peek_while_eol : decoder -> bytes * int * int
 val peek_while_eol_or_space : decoder -> bytes * int * int
 val peek_pkt : decoder -> bytes * int * int
+
 val junk_pkt : decoder -> unit
+(** skip [max(4, pkt_len)], where [pkt_len] is the length of the pkt line starting at
+    [decoder.pos] encoded according to pkt line encoding (as hex in the first 4 bytes);
+
+    @raise Invalid_argument if there aren't 4 bytes representing the length *)

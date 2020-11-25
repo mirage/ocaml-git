@@ -124,26 +124,23 @@ let at_least_one_line decoder =
   done;
   !pos < decoder.max && !chr = '\n' && !has_cr
 
-let digit = function
-  | 'a' .. 'f' as chr -> 10 + Char.code chr - Char.code 'a'
-  | 'A' .. 'F' as chr -> 10 + Char.code chr - Char.code 'A'
-  | '0' .. '9' as chr -> Char.code chr - Char.code '0'
-  | _ -> invalid_arg "invalid digit"
+(** reads off 4 bytes from [decoder.buffer] starting at [decoder.pos] and interprets read
+    bytes as hex and converts to int.
+    Why unsafe:
+    @raise Invalid_argument if there are no 4 bytes to read, i.e.,
+           [decoder.max - decoder.pos < 4]  *)
+let pkt_len_unsafe (decoder : decoder) =
+  let hex = Bytes.of_string "0x0000" in
+  Bytes.blit decoder.buffer decoder.pos hex 2 4;
+  Bytes.to_string hex |> int_of_string
 
-let to_int ~base ~off ~len buf =
-  let code = ref 0 in
-  for i = 0 to len - 1 do
-    let v = digit (Bytes.get buf (off + i)) in
-    assert (v < base);
-    code := (base * !code) + v
-  done;
-  !code
+(* no header *)
 
 let at_least_one_pkt decoder =
   let len = decoder.max - decoder.pos in
   if len >= 4 then
-    let pkt_len = to_int ~base:16 ~off:decoder.pos ~len:4 decoder.buffer in
-    len - pkt_len >= 0
+    let pkt_len = pkt_len_unsafe decoder in
+    len >= pkt_len
   else false
 
 (* no header *)
@@ -151,7 +148,7 @@ let at_least_one_pkt decoder =
 let get_pkt_len decoder =
   let len = decoder.max - decoder.pos in
   if len >= 4 then
-    let pkt_len = to_int ~base:16 ~off:decoder.pos ~len:4 decoder.buffer in
+    let pkt_len = pkt_len_unsafe decoder in
     Some pkt_len
   else None
 
@@ -258,12 +255,12 @@ let prompt :
   go decoder.max
 
 let peek_pkt decoder =
-  let len = to_int ~base:16 ~off:decoder.pos ~len:4 decoder.buffer in
+  let len = pkt_len_unsafe decoder in
   if len >= 4 then decoder.buffer, decoder.pos + 4, len - 4
   else decoder.buffer, decoder.pos + 4, 0
 
 let junk_pkt decoder =
-  let len = to_int ~base:16 ~off:decoder.pos ~len:4 decoder.buffer in
+  let len = pkt_len_unsafe decoder in
   if len < 4 then decoder.pos <- decoder.pos + 4
   else decoder.pos <- decoder.pos + len
 
