@@ -35,6 +35,8 @@ module type S = sig
 end
 
 module Context = struct
+  open Pkt_line
+
   type t = {
     encoder : Encoder.encoder;
     decoder : Decoder.decoder;

@@ -141,10 +141,10 @@ module Status : sig
 end
 
 module Decoder : sig
-  open Decoder
+  open Pkt_line.Decoder
 
-  type error =
-    [ Decoder.error
+  type nonrec error =
+    [ error
     | `Invalid_advertised_ref of string
     | `Invalid_shallow of string
     | `Invalid_negotiation_result of string
@@ -177,9 +177,9 @@ module Decoder : sig
 end
 
 module Encoder : sig
-  open Encoder
+  open Pkt_line.Encoder
 
-  type error = Encoder.error
+  type nonrec error = error
 
   val pp_error : error Fmt.t
   val encode_proto_request : encoder -> Proto_request.t -> error state

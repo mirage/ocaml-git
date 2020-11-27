@@ -37,6 +37,8 @@ module Witness = struct
 end
 
 module Value = struct
+  open Pkt_line
+
   type encoder = Encoder.encoder
   type decoder = Decoder.decoder
 

@@ -33,6 +33,8 @@ module type S = sig
 end
 
 module Context : sig
+  open Pkt_line
+
   include
     CONTEXT
       with type encoder = Encoder.encoder

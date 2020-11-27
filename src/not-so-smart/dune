@@ -1,8 +1,15 @@
 (library
+ (name pkt_line)
+ (public_name git-nss.pkt-line)
+ (modules decoder encoder)
+ (libraries astring fmt))
+
+(library
  (name smart)
  (public_name git-nss.smart)
- (modules smart filter capability state protocol encoder decoder)
- (libraries conduit stdlib-shims result rresult domain-name astring fmt))
+ (modules smart filter capability state protocol)
+ (libraries git-nss.pkt-line conduit stdlib-shims result rresult domain-name
+   astring fmt))
 
 (library
  (name sigs)
