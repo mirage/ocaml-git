@@ -276,13 +276,13 @@ let peek_while_eol decoder =
     !idx < end_of_input decoder
     &&
     ( chr := Bytes.unsafe_get decoder.buffer !idx;
-      not (!chr == '\n' && !has_cr) )
+      not (!chr = '\n' && !has_cr) )
   do
-    has_cr := !chr == '\r';
+    has_cr := !chr = '\r';
     incr idx
   done;
 
-  if !idx < end_of_input decoder && !chr == '\n' && !has_cr then (
+  if !idx < end_of_input decoder && !chr = '\n' && !has_cr then (
     assert (!idx + 1 - decoder.pos > 1);
     decoder.buffer, decoder.pos, !idx + 1 - decoder.pos )
   else leave_with decoder `Expected_eol
