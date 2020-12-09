@@ -80,7 +80,7 @@ struct
   include Carton_git.Make (Carton_lwt.Scheduler) (Lwt) (Store) (Uid)
 
   let idx_major_uid_of_uid root uid =
-    Fpath.(root / Fmt.strf "pack-%s.idx" (Uid.to_hex uid))
+    Fpath.(root / Fmt.str "pack-%s.idx" (Uid.to_hex uid))
 
   let uid_of_major_uid path =
     let str = Fpath.basename (Fpath.rem_ext path) in

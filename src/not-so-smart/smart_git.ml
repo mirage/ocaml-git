@@ -91,7 +91,7 @@ let endpoint_of_string str =
         let user =
           String.concat "."
             (List.map
-               (function `Atom x -> x | `String x -> Fmt.strf "%S" x)
+               (function `Atom x -> x | `String x -> Fmt.str "%S" x)
                m.Emile.local)
         in
         ( match fst m.Emile.domain with
@@ -186,10 +186,10 @@ struct
 
     let ctx =
       match kind with
-      | `A -> feed_string ctx (Fmt.strf "commit %d\000" len)
-      | `B -> feed_string ctx (Fmt.strf "tree %d\000" len)
-      | `C -> feed_string ctx (Fmt.strf "blob %d\000" len)
-      | `D -> feed_string ctx (Fmt.strf "tag %d\000" len)
+      | `A -> feed_string ctx (Fmt.str "commit %d\000" len)
+      | `B -> feed_string ctx (Fmt.str "tree %d\000" len)
+      | `C -> feed_string ctx (Fmt.str "blob %d\000" len)
+      | `D -> feed_string ctx (Fmt.str "tag %d\000" len)
     in
     let ctx = Uid.feed ctx ~off ~len buf in
     Uid.get ctx
@@ -394,12 +394,12 @@ struct
       endpoint path ~resolvers ?deepen ?want store access fetch_cfg pack =
     let open Rresult in
     let open Lwt.Infix in
-    let uri0 = Fmt.strf "%a/info/refs?service=git-upload-pack" Uri.pp uri in
+    let uri0 = Fmt.str "%a/info/refs?service=git-upload-pack" Uri.pp uri in
     let uri0 = Uri.of_string uri0 in
     HTTP.get ~resolvers ~headers uri0
     >|= R.reword_error (R.msgf "%a" HTTP.pp_error)
     >>? fun (_resp, contents) ->
-    let uri1 = Fmt.strf "%a/git-upload-pack" Uri.pp uri in
+    let uri1 = Fmt.str "%a/git-upload-pack" Uri.pp uri in
     let uri1 = Uri.of_string uri1 in
     let flow =
       {
@@ -472,12 +472,12 @@ struct
             match scheme with
             | `HTTP headers ->
                 ( Uri.of_string
-                    (Fmt.strf "http://%a%s.git" Conduit.Endpoint.pp endpoint
+                    (Fmt.str "http://%a%s.git" Conduit.Endpoint.pp endpoint
                        path),
                   headers )
             | `HTTPS headers ->
                 ( Uri.of_string
-                    (Fmt.strf "https://%a%s.git" Conduit.Endpoint.pp endpoint
+                    (Fmt.str "https://%a%s.git" Conduit.Endpoint.pp endpoint
                        path),
                   headers )
           in

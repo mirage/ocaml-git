@@ -59,7 +59,7 @@ module Make (Hash : S.HASH) = struct
 
   let digest cs =
     let ctx = Hash.init () in
-    let hdr = Fmt.strf "blob %Ld\000" (length cs) in
+    let hdr = Fmt.str "blob %Ld\000" (length cs) in
     let ctx = Hash.feed_string ctx hdr in
     let ctx = Hash.feed_cstruct ctx cs in
     Hash.get ctx

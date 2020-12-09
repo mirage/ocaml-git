@@ -136,16 +136,16 @@ struct
     x >>= function
     | Ok x -> f x
     | Error err ->
-        Fmt.kstrf (fun err -> Lwt.fail (Failure err)) "%a" Store.pp_error err
+        Fmt.kstr (fun err -> Lwt.fail (Failure err)) "%a" Store.pp_error err
 
   let check_write store name k v =
     let open Lwt.Infix in
     Store.write store v >>? fun (k', _) ->
-    Alcotest.(check hash) (Fmt.strf "set %s" name) k k';
+    Alcotest.(check hash) (Fmt.str "set %s" name) k k';
     Store.read_exn store k' >>= fun v' ->
-    Alcotest.(check value) (Fmt.strf "get %s" name) v v';
+    Alcotest.(check value) (Fmt.str "get %s" name) v v';
     Store.write store v >>? fun (k'', _) ->
-    Alcotest.(check hash) (Fmt.strf "set %s" name) k' k'';
+    Alcotest.(check hash) (Fmt.str "set %s" name) k' k'';
     Lwt.return_unit
 
   module Search = Git.Search.Make (Digestif) (Store)
@@ -333,7 +333,7 @@ struct
     Store.Ref.resolve store refa >>= function
     | Ok _ -> Alcotest.failf "Unexpected ok value"
     | Error err ->
-        let err = Fmt.strf "%a" Store.pp_error err in
+        let err = Fmt.str "%a" Store.pp_error err in
         Alcotest.(check string) "cycle" err _err_cycle;
         Lwt.return_unit
 

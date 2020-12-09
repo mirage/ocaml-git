@@ -55,7 +55,7 @@ let store =
   Arg.conv (parser, pp)
 
 let random =
-  let v = Fpath.v (Fmt.strf "git-%06x" (Random.bits () land 0xffffff)) in
+  let v = Fpath.v (Fmt.str "git-%06x" (Random.bits () land 0xffffff)) in
   match Lwt_main.run (Store.v v) with
   | Ok v -> v
   | Error err -> Fmt.failwith "empty store: %a" Store.pp_error err

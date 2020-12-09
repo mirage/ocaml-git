@@ -20,8 +20,7 @@ let create root path =
   and error = function
     | Unix.Unix_error (Unix.ENOENT, _, _) | Unix.Unix_error (Unix.EACCES, _, _)
       ->
-        Lwt.return_error
-          (`Msg (Fmt.strf "Impossible to open %a." Fpath.pp path))
+        Lwt.return_error (`Msg (Fmt.str "Impossible to open %a." Fpath.pp path))
     | Unix.Unix_error (Unix.EINTR, _, _) -> Lwt.catch process error
     | exn -> Lwt.fail exn
   in
@@ -97,10 +96,10 @@ let digest ~kind ?(off = 0) ?len buf =
 
   let ctx =
     match kind with
-    | `A -> Digestif.SHA1.feed_string ctx (Fmt.strf "commit %d\000" len)
-    | `B -> Digestif.SHA1.feed_string ctx (Fmt.strf "tree %d\000" len)
-    | `C -> Digestif.SHA1.feed_string ctx (Fmt.strf "blob %d\000" len)
-    | `D -> Digestif.SHA1.feed_string ctx (Fmt.strf "tag %d\000" len)
+    | `A -> Digestif.SHA1.feed_string ctx (Fmt.str "commit %d\000" len)
+    | `B -> Digestif.SHA1.feed_string ctx (Fmt.str "tree %d\000" len)
+    | `C -> Digestif.SHA1.feed_string ctx (Fmt.str "blob %d\000" len)
+    | `D -> Digestif.SHA1.feed_string ctx (Fmt.str "tag %d\000" len)
   in
   let ctx = Digestif.SHA1.feed_bigstring ctx ~off ~len buf in
   Digestif.SHA1.get ctx

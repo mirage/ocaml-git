@@ -150,7 +150,7 @@ module Entry = struct
           go ctx
       in
       let len = in_channel_length ic in
-      let ctx = Hash.feed_string ctx (Fmt.strf "blob %d\000" len) in
+      let ctx = Hash.feed_string ctx (Fmt.str "blob %d\000" len) in
       let hash = go ctx in
       close_in ic;
       Rresult.R.ok hash
@@ -168,7 +168,7 @@ module Entry = struct
     let ctx = Hash.empty in
     let ctx =
       Hash.feed_string ctx
-        (Fmt.strf "blob %d\000%s" (String.length contents) contents)
+        (Fmt.str "blob %d\000%s" (String.length contents) contents)
     in
     Rresult.R.ok (Hash.get ctx)
 

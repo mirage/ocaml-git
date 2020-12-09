@@ -13,7 +13,7 @@ type git = Store.t
 
 let store_prj = Store.prj
 let store_inj = Store.inj
-let failwithf fmt = Fmt.kstrf (fun err -> raise (Failure err)) fmt
+let failwithf fmt = Fmt.kstr (fun err -> raise (Failure err)) fmt
 
 let kind_of_object path uid =
   let open Bos in
@@ -160,7 +160,7 @@ let commit_of_tag path uid =
       fun () ->
         out_string ~trim:true
           (run_out ~err:err_null
-             Cmd.(v "git" % "rev-parse" % Fmt.strf "%s^{commit}" uid)))
+             Cmd.(v "git" % "rev-parse" % Fmt.str "%s^{commit}" uid)))
     ()
   |> R.join
   |> function
@@ -304,7 +304,7 @@ let parents :
             | Ok None ->
                 assert false
                 (* XXX(dinosaure): impossible, [git] can not give to us unknown object. *)
-            | Error err -> Stdlib.raise (Failure (Fmt.strf "%a" R.pp_msg err)) )
+            | Error err -> Stdlib.raise (Failure (Fmt.str "%a" R.pp_msg err)) )
       in
       try
         let objs = List.map map uids in
@@ -400,7 +400,7 @@ let parse_shallow ic () =
 
 let save_shallow oc lst =
   let ppf = Format.formatter_of_out_channel oc in
-  let str = Fmt.strf "%a" Fmt.(list ~sep:(always "\n") Uid.pp) lst in
+  let str = Fmt.str "%a" Fmt.(list ~sep:(always "\n") Uid.pp) lst in
   Log.debug (fun m -> m "Want to save: %S." str);
   Fmt.pf ppf "%a%!" Fmt.(list ~sep:(always "\n") Uid.pp) lst;
   Rresult.R.ok ()

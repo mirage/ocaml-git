@@ -48,7 +48,7 @@ let git_object_exist path hash =
       Bos.OS.Cmd.run
         Bos.Cmd.(v "git" % "cat-file" % "-e" % Digestif.SHA1.to_hex hash)
       >>= fun () ->
-      Alcotest.(check pass) (Fmt.strf "%a" Digestif.SHA1.pp hash) () ();
+      Alcotest.(check pass) (Fmt.str "%a" Digestif.SHA1.pp hash) () ();
       R.ok ()
 
 let check_blobs_with_git =

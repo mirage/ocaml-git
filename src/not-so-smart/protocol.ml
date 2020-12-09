@@ -722,7 +722,7 @@ module Encoder = struct
     k0 encoder;
     (* XXX(dinosaure): or [encoder.pos <- encoder.pos + 4]? *)
     let len = encoder.pos - pos in
-    Bytes.blit_string (Fmt.strf "%04X" len) 0 encoder.payload pos 4;
+    Bytes.blit_string (Fmt.str "%04X" len) 0 encoder.payload pos 4;
     flush k1 encoder
 
   let kdone _encoder = Done
@@ -741,17 +741,17 @@ module Encoder = struct
       | `Upload_archive -> write encoder "git-upload-archive"
     in
     let write_version encoder version =
-      let version = Fmt.strf "version=%d" version in
+      let version = Fmt.str "version=%d" version in
       write encoder version
     in
     let write_host encoder = function
       | host, Some port ->
           let host =
-            Fmt.strf "host=%s:%d" (Conduit.Endpoint.to_string host) port
+            Fmt.str "host=%s:%d" (Conduit.Endpoint.to_string host) port
           in
           write encoder host
       | host, None ->
-          let host = Fmt.strf "host=%s" (Conduit.Endpoint.to_string host) in
+          let host = Fmt.str "host=%s" (Conduit.Endpoint.to_string host) in
           write encoder host
     in
     let k encoder =
@@ -860,7 +860,7 @@ module Encoder = struct
     encoder.pos <- encoder.pos + 4;
     Encoder.write encoder packet;
     let len = encoder.pos - pos in
-    Bytes.blit_string (Fmt.strf "%04X" len) 0 encoder.payload pos 4
+    Bytes.blit_string (Fmt.str "%04X" len) 0 encoder.payload pos 4
 
   let write_command encoder = function
     | Commands.Create (uid, r) ->

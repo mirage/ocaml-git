@@ -35,7 +35,7 @@ let reporter ppf =
       let dt = Mtime.Span.to_us (Mtime_clock.elapsed ()) in
       Fmt.kpf k ppf
         ("%s %a %a: @[" ^^ fmt ^^ "@]@.")
-        (pad 10 (Fmt.strf "%+04.0fus" dt))
+        (pad 10 (Fmt.str "%+04.0fus" dt))
         pp_header (level, h)
         Fmt.(styled `Magenta string)
         (pad 10 @@ Logs.Src.name src)
@@ -69,7 +69,7 @@ let ssh_cfg edn ssh_seed =
   let key = Awa.Keys.of_seed ssh_seed in
   match edn with
   | { Smart_git.scheme = `SSH user; path; _ } ->
-      let req = Awa.Ssh.Exec (Fmt.strf "git-upload-pack '%s'" path) in
+      let req = Awa.Ssh.Exec (Fmt.str "git-upload-pack '%s'" path) in
       Some { Awa_conduit.user; key; req; authenticator = None }
   | _ -> None
 
@@ -116,7 +116,7 @@ module Flag = struct
         match str with
         | "stdout" -> Ok Fmt.stdout
         | "stderr" -> Ok Fmt.stderr
-        | s -> Error (`Msg (Fmt.strf "%s is not an output." s))
+        | s -> Error (`Msg (Fmt.str "%s is not an output." s))
       in
       let print ppf v =
         Fmt.pf ppf "%s" (if v == Fmt.stdout then "stdout" else "stderr")
@@ -182,7 +182,7 @@ let setup_log =
 let main _ ssh_seed references directory repository _ =
   match Lwt_main.run (main ssh_seed references directory repository) with
   | Ok () -> `Ok ()
-  | Error (#error as err) -> `Error (false, Fmt.strf "%a" pp_error err)
+  | Error (#error as err) -> `Error (false, Fmt.str "%a" pp_error err)
 
 let command =
   let doc = "Fetch a Git repository by the HTTP protocol." in
