@@ -132,11 +132,11 @@ let at_least_one_line decoder =
     bytes as hex and converts to int.
     Why unsafe:
     @raise Invalid_argument if there are no 4 bytes to read, i.e.,
-           [decoder.max - decoder.pos < 4]  *)
+                            [decoder.max - decoder.pos < 4]  *)
 let pkt_len_unsafe (decoder : decoder) =
   let hex = Bytes.of_string "0x0000" in
   Bytes.blit decoder.buffer decoder.pos hex 2 4;
-  Bytes.to_string hex |> int_of_string
+  int_of_string (Bytes.unsafe_to_string hex)
 
 (* no header *)
 
