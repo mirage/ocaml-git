@@ -65,7 +65,7 @@ let run :
    translated as is [fetch-pack.c:find_common] in OCaml. *)
 
 let unsafe_write_have ctx hex =
-  let packet = Fmt.strf "have %s\n" hex in
+  let packet = Fmt.str "have %s\n" hex in
   Smart.Unsafe.write ctx packet
 
 let next_flush stateless count =

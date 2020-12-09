@@ -185,7 +185,7 @@ module Make (Digestif : Digestif.S) = struct
     let len = Cstruct.len raw in
     let ctx = Hash.init () in
     let hdr =
-      Fmt.strf "%s %d\000%!"
+      Fmt.str "%s %d\000%!"
         ( match kind with
         | `Commit -> "commit"
         | `Blob -> "blob"
@@ -206,7 +206,7 @@ module Make (Digestif : Digestif.S) = struct
         lazy
           ( match Value.of_raw ~kind inflated with
           | Error (`Msg err) ->
-              let str = Fmt.strf "Value.of_raw(%a): %s" Hash.pp hash err in
+              let str = Fmt.str "Value.of_raw(%a): %s" Hash.pp hash err in
               raise (Failure str)
           | Ok value -> value )
       in
@@ -242,7 +242,7 @@ module Make (Digestif : Digestif.S) = struct
             Hashtbl.add t.values h (lazy v);
             Ok v
         | Error (`Msg err) ->
-            let str = Fmt.strf "Value.of_raw(%a): %s" Hash.pp h err in
+            let str = Fmt.str "Value.of_raw(%a): %s" Hash.pp h err in
             raise (Failure str)
       with Not_found -> Error (`Not_found h) )
 

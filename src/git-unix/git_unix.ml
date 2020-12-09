@@ -62,7 +62,7 @@ module Fold = struct
         | Unix.Unix_error (Unix.EINTR, _, _) -> contents ~dotfiles ~rel dir
         | Unix.Unix_error (err, _, _) ->
             let err =
-              Fmt.strf "directory contents %a: %s" Fpath.pp dir
+              Fmt.str "directory contents %a: %s" Fpath.pp dir
                 (Unix.error_message err)
             in
             Log.err (fun m -> m "%s" err);
@@ -616,10 +616,10 @@ module Make (Digestif : Digestif.S) = struct
     {
       Git.Store.pck_major_uid_of_uid =
         (fun root uid ->
-          Fpath.(root / Fmt.strf "pack-%s.pack" (Digestif.to_hex uid)));
+          Fpath.(root / Fmt.str "pack-%s.pack" (Digestif.to_hex uid)));
       Git.Store.idx_major_uid_of_uid =
         (fun root uid ->
-          Fpath.(root / Fmt.strf "pack-%s.idx" (Digestif.to_hex uid)));
+          Fpath.(root / Fmt.str "pack-%s.idx" (Digestif.to_hex uid)));
       Git.Store.uid_of_major_uid =
         (fun path ->
           let str = Fpath.basename (Fpath.rem_ext path) in
@@ -663,7 +663,7 @@ module Sync (Git_store : Git.S) (HTTP : Smart_git.HTTP) = struct
 
   let random_path pat =
     let rand = Random.State.bits (Lazy.force random_gen) land 0xFFFFFF in
-    Fpath.v (Fmt.strf pat (Fmt.strf "%06x" rand))
+    Fpath.v (Fmt.str pat (Fmt.str "%06x" rand))
 
   let failwithf fmt = Fmt.kstrf (fun err -> Lwt.fail (Failure err)) fmt
 
@@ -671,7 +671,7 @@ module Sync (Git_store : Git.S) (HTTP : Smart_git.HTTP) = struct
     let rec loop count =
       if count < 0 then
         failwithf "Create a temporary file %s in %a: too many failing attempts"
-          (Fmt.strf pat "XXXXXX") Fpath.pp dir
+          (Fmt.str pat "XXXXXX") Fpath.pp dir
       else
         let file = random_path pat in
         let sfile = Fpath.to_string Fpath.(dir // file) in

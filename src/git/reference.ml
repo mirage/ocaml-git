@@ -233,8 +233,8 @@ let write { Carton.bind; Carton.return } t store reference contents =
 
   let str =
     match contents with
-    | Uid uid -> Fmt.strf "%s\n" (store.uid_to_hex uid)
-    | Ref t -> Fmt.strf "ref: %s\n" t
+    | Uid uid -> Fmt.str "%s\n" (store.uid_to_hex uid)
+    | Ref t -> Fmt.str "ref: %s\n" t
   in
   store.atomic_wr t reference str >>| reword_error (fun err -> `Store err)
 

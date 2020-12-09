@@ -192,7 +192,7 @@ let error_end_of_input decoder () = fail decoder `End_of_input
 let reliable_pkt k decoder () =
   match get_pkt_len decoder with
   | Some _len ->
-      let hdr = Fmt.strf "%04X" (decoder.max - decoder.pos) in
+      let hdr = Fmt.str "%04X" (decoder.max - decoder.pos) in
       Bytes.blit_string hdr 0 decoder.buffer decoder.pos 4;
       (* unsafe! *)
       k decoder

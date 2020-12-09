@@ -405,7 +405,7 @@ val of_offset_with_path :
           | `B -> "tree"
           | `C -> "blob"
           | `D -> "tag" in
-        let hdr = Fmt.strf "%s %d\000" kind (len v) int
+        let hdr = Fmt.str "%s %d\000" kind (len v) int
         let ctx = Digest.empty in
         feed_string ctx hdr ;
         feed_bigstring ctx (Bigstringaf.sub (raw v) 0 (len v)) ;

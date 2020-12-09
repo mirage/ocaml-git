@@ -34,7 +34,7 @@ let to_string = function
   | `Side_band -> "side-band"
   | `Side_band_64k -> "side-band-64k"
   | `Ofs_delta -> "ofs-delta"
-  | `Agent agent -> Fmt.strf "agent=%s" agent
+  | `Agent agent -> Fmt.str "agent=%s" agent
   | `Shallow -> "shallow"
   | `Deepen_since -> "deepen-since"
   | `Deepen_not -> "deepen-not"
@@ -47,10 +47,10 @@ let to_string = function
   | `Push_options -> "push-options"
   | `Allow_tip_sha1_in_want -> "allow-tip-sha1-in-want"
   | `Allow_reachable_sha1_in_want -> "allow-reachable-sha1-in-want"
-  | `Push_cert cert -> Fmt.strf "push-cert=%s" cert
-  | `Symref (ref0, ref1) -> Fmt.strf "symref=%s:%s" ref0 ref1
+  | `Push_cert cert -> Fmt.str "push-cert=%s" cert
+  | `Symref (ref0, ref1) -> Fmt.str "symref=%s:%s" ref0 ref1
   | `Other capability -> capability
-  | `Parameter (key, value) -> Fmt.strf "%s=%s" key value
+  | `Parameter (key, value) -> Fmt.str "%s=%s" key value
 
 exception Capability_expect_value of string
 

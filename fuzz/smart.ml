@@ -74,11 +74,11 @@ let () =
 
   Crowbar.add_test ~name:"pkt-line" Crowbar.[ packet >>= bytes_fixed; range 4 ]
   @@ fun payload len ->
-  let str = Fmt.strf "%04x" (String.length payload + 4) ^ payload in
+  let str = Fmt.str "%04x" (String.length payload + 4) ^ payload in
   let res = of_string str in
   Crowbar.check_eq ~pp:(Fmt.fmt "%S") ~eq:String.equal ~cmp:String.compare res
     payload;
-  let str = Fmt.strf "%04x" len in
+  let str = Fmt.str "%04x" len in
   let res = of_string str in
   Crowbar.check_eq ~pp:(Fmt.fmt "%S") ~eq:String.equal ~cmp:String.compare res
     ""

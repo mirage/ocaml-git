@@ -413,7 +413,7 @@ module Fp (Uid : UID) = struct
                   ctx = Uid.feed d.ctx d.i ~off:d.i_pos ~len;
                 }
           | `Flush z -> go (Zl.Inf.flush z)
-          | `Malformed err -> `Malformed (Fmt.strf "inflate: %s" err)
+          | `Malformed err -> `Malformed (Fmt.str "inflate: %s" err)
           | `End z ->
               let len = i_rem d - Zl.Inf.src_rem z in
               let crc = Checkseum.Crc32.digest_bigstring d.i d.i_pos len crc in
@@ -470,7 +470,7 @@ module Fp (Uid : UID) = struct
                 first := false );
 
               go (Zl.Inf.flush z)
-          | `Malformed err -> `Malformed (Fmt.strf "inflate: %s" err)
+          | `Malformed err -> `Malformed (Fmt.str "inflate: %s" err)
           | `End z ->
               if !first then (
                 let len = Bigstringaf.length d.o - Zl.Inf.dst_rem z in

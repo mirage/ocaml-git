@@ -84,14 +84,14 @@ let create_tmp_dir ?(mode = 0o700) ?prefix_path pat =
   let failed_too_many_times () =
     Rresult.R.error_msgf
       "create temporary directory %s in %a: too many failing attempts"
-      (Fmt.strf pat "XXXXXX") Fpath.pp dir
+      (Fmt.str pat "XXXXXX") Fpath.pp dir
   in
   let rec loop count =
     if count < 0 then failed_too_many_times ()
     else
       let dir =
         let rand = Random.bits () land 0xffffff in
-        Fpath.(dir / Fmt.strf pat (Fmt.strf "%06x" rand))
+        Fpath.(dir / Fmt.str pat (Fmt.str "%06x" rand))
       in
       try
         Ok
@@ -102,7 +102,7 @@ let create_tmp_dir ?(mode = 0o700) ?prefix_path pat =
       | Unix.Unix_error (Unix.EINTR, _, _) -> loop count
       | Unix.Unix_error (e, _, _) ->
           Rresult.R.error_msgf "create temporary directory %s in %a: %s"
-            (Fmt.strf pat "XXXXXX") Fpath.pp dir (Unix.error_message e)
+            (Fmt.str pat "XXXXXX") Fpath.pp dir (Unix.error_message e)
   in
   match loop 10000 with
   | Ok dir as r ->
@@ -526,7 +526,7 @@ let test_fetch_empty () =
             / ".git"
             / "objects"
             / "pack"
-            / Fmt.strf "pack-%a.pack" Uid.pp uid)
+            / Fmt.str "pack-%a.pack" Uid.pp uid)
         in
         Bos.OS.Path.move tmp1 dst |> Lwt.return >>? fun () ->
         let dst =
@@ -535,7 +535,7 @@ let test_fetch_empty () =
             / ".git"
             / "objects"
             / "pack"
-            / Fmt.strf "pack-%a.idx" Uid.pp uid)
+            / Fmt.str "pack-%a.idx" Uid.pp uid)
         in
         Bos.OS.Path.move tmp2 dst |> Lwt.return >>? fun () ->
         let update (refname, uid) =
@@ -1076,14 +1076,14 @@ let create_fifo_path mode dir pat =
   let err () =
     Rresult.R.error_msgf
       "create temporary fifo %s in %a: too many failing attempts"
-      (Fmt.strf pat "XXXXXX") Fpath.pp dir
+      (Fmt.str pat "XXXXXX") Fpath.pp dir
   in
   let rec loop count =
     if count < 0 then err ()
     else
       let file =
         let rand = Random.bits () land 0xffffff in
-        Fpath.(dir / Fmt.strf pat (Fmt.strf "%06x" rand))
+        Fpath.(dir / Fmt.str pat (Fmt.str "%06x" rand))
       in
       let sfile = Fpath.to_string file in
       try Ok (file, Unix.mkfifo sfile mode) with
@@ -1560,7 +1560,7 @@ let test_partial_fetch_ssh () =
             / ".git"
             / "objects"
             / "pack"
-            / Fmt.strf "pack-%a.pack" Uid.pp uid)
+            / Fmt.str "pack-%a.pack" Uid.pp uid)
         in
         Bos.OS.Path.move tmp1 dst |> Lwt.return >>? fun () ->
         let dst =
@@ -1569,7 +1569,7 @@ let test_partial_fetch_ssh () =
             / ".git"
             / "objects"
             / "pack"
-            / Fmt.strf "pack-%a.idx" Uid.pp uid)
+            / Fmt.str "pack-%a.idx" Uid.pp uid)
         in
         Bos.OS.Path.move tmp2 dst |> Lwt.return >>? fun () ->
         let update (refname, uid) =

@@ -4,10 +4,10 @@ let src =
 module Log = (val Logs.src_log src : Logs.LOG)
 
 let hdr = function
-  | `Blob -> Fmt.strf "blob %Ld\000"
-  | `Tree -> Fmt.strf "tree %Ld\000"
-  | `Tag -> Fmt.strf "tag %Ld\000"
-  | `Commit -> Fmt.strf "commit %Ld\000"
+  | `Blob -> Fmt.str "blob %Ld\000"
+  | `Tree -> Fmt.str "tree %Ld\000"
+  | `Tag -> Fmt.str "tag %Ld\000"
+  | `Commit -> Fmt.str "commit %Ld\000"
 
 type ('uid, 't) digest = {
   empty : 't;

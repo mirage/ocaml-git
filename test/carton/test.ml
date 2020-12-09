@@ -236,10 +236,10 @@ let digest_like_git ~kind ?(off = 0) ?len buf =
 
   let ctx =
     match kind with
-    | `A -> Digestif.SHA1.feed_string ctx (Fmt.strf "commit %d\000" len)
-    | `B -> Digestif.SHA1.feed_string ctx (Fmt.strf "tree %d\000" len)
-    | `C -> Digestif.SHA1.feed_string ctx (Fmt.strf "blob %d\000" len)
-    | `D -> Digestif.SHA1.feed_string ctx (Fmt.strf "tag %d\000" len)
+    | `A -> Digestif.SHA1.feed_string ctx (Fmt.str "commit %d\000" len)
+    | `B -> Digestif.SHA1.feed_string ctx (Fmt.str "tree %d\000" len)
+    | `C -> Digestif.SHA1.feed_string ctx (Fmt.str "blob %d\000" len)
+    | `D -> Digestif.SHA1.feed_string ctx (Fmt.str "tag %d\000" len)
   in
   let ctx = Digestif.SHA1.feed_bigstring ctx ~off ~len buf in
   Digestif.SHA1.get ctx
@@ -986,7 +986,7 @@ let decode_index_stream () =
         ~f:(fun ~uid ~offset ~crc:_ ->
           match Carton.Dec.Idx.find index0 uid with
           | Some (_, offset') ->
-              Alcotest.(check int64) (Fmt.strf "%a" Uid.pp uid) offset offset'
+              Alcotest.(check int64) (Fmt.str "%a" Uid.pp uid) offset offset'
           | None -> Alcotest.failf "%a not found" Uid.pp uid)
         index1
   | Error err ->
