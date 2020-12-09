@@ -26,6 +26,8 @@ val pp_error : error Fmt.t
 
 type 'err info = { error : 'err; buffer : bytes; committed : int }
 
+exception Leave of error info
+
 type ('v, 'err) state =
   | Done of 'v
   | Read of {
@@ -41,6 +43,10 @@ val safe :
   (decoder -> ('v, ([> error ] as 'err)) state) -> decoder -> ('v, 'err) state
 
 val leave_with : decoder -> error -> 'never
+(** [leave_with d error] raises [Leave { error; buffer = d.buffer; committed = d.pos }]
+
+    @raise Leave *)
+
 val fail : decoder -> ([> error ] as 'err) -> ('v, 'err) state
 val return : 'v -> decoder -> ('v, 'err) state
 val peek_char : decoder -> char option
