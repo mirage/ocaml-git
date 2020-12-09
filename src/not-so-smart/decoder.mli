@@ -1,3 +1,8 @@
+(** Module for decoding Git pkt lines, as specified at
+    https://github.com/git/git/blob/master/Documentation/technical/protocol-common.txt
+
+    In the docs, we define [min_pkt_len = 4] as in specs. *)
+
 type decoder = { buffer : bytes; mutable pos : int; mutable max : int }
 
 val io_buffer_size : int
@@ -41,9 +46,15 @@ val return : 'v -> decoder -> ('v, 'err) state
 val peek_char : decoder -> char option
 val string : string -> decoder -> unit
 val junk_char : decoder -> unit
+
 val while1 : (char -> bool) -> decoder -> bytes * int * int
-val at_least_one_line : decoder -> bool
+(** @return [decoder.buffer], updated [decoder.pos], # of bytes read *)
+
 val at_least_one_pkt : decoder -> bool
+(** returns true if [decoder.max - decoder.pos] is [>= min_pkt_len] and [>= pkt_len],
+    where [pkt_len] is the length of a pkt line starting at [decoder.pos]. *)
+
+val at_least_one_line : decoder -> bool
 
 val prompt :
   ?strict:bool ->
@@ -56,7 +67,8 @@ val peek_while_eol_or_space : decoder -> bytes * int * int
 val peek_pkt : decoder -> bytes * int * int
 
 val junk_pkt : decoder -> unit
-(** skip [max(4, pkt_len)], where [pkt_len] is the length of the pkt line starting at
-    [decoder.pos] encoded according to pkt line encoding (as hex in the first 4 bytes);
+(** increase [decoder.pos] by [max min_pkt_len pkt_len], where [pkt_len] is the length
+    of the pkt line starting at the current value of [decoder.pos] (before increasing) and
+    [min_pkt_len = 4].
 
     @raise Invalid_argument if there aren't 4 bytes representing the length *)
