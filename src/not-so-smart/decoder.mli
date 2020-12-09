@@ -39,13 +39,15 @@ type ('v, 'err) state =
     }
   | Error of 'err info
 
-val safe :
-  (decoder -> ('v, ([> error ] as 'err)) state) -> decoder -> ('v, 'err) state
-
 val leave_with : decoder -> error -> 'never
 (** [leave_with d error] raises [Leave { error; buffer = d.buffer; committed = d.pos }]
 
-    @raise Leave *)
+  @raise Leave *)
+
+val safe :
+  (decoder -> ('v, ([> error ] as 'err)) state) -> decoder -> ('v, 'err) state
+(** [safe k decoder] wraps a call [k decoder] in a try-with block;
+    if exception [Leave err] is raised, the function returns [Error of err] *)
 
 val fail : decoder -> ([> error ] as 'err) -> ('v, 'err) state
 val return : 'v -> decoder -> ('v, 'err) state
