@@ -1,3 +1,8 @@
+(** default[1] negotiator implementation
+
+   [1] "default" as defined in the canonical git implementation in C,
+       see https://github.com/git/git/tree/master/negotiator *)
+
 open Sigs
 
 type ('k, 'p, 't) psq =

@@ -11,7 +11,7 @@ module Make
     (Uid : UID)
     (Ref : REF) : sig
   val fetch_v1 :
-    ?prelude:bool ->
+    ?uses_git_transport:bool ->
     ?push_stdout:(string -> unit) ->
     ?push_stderr:(string -> unit) ->
     capabilities:Smart.Capability.t list ->
