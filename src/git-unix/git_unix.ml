@@ -665,7 +665,7 @@ module Sync (Git_store : Git.S) (HTTP : Smart_git.HTTP) = struct
     let rand = Random.State.bits (Lazy.force random_gen) land 0xFFFFFF in
     Fpath.v (Fmt.str pat (Fmt.str "%06x" rand))
 
-  let failwithf fmt = Fmt.kstrf (fun err -> Lwt.fail (Failure err)) fmt
+  let failwithf fmt = Fmt.kstr (fun err -> Lwt.fail (Failure err)) fmt
 
   let create_tmp_path mode dir pat =
     let rec loop count =

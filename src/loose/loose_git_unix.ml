@@ -95,7 +95,7 @@ module Make (Uid : UID) = struct
   (* fold *)
 
   let always x _ = x
-  let failwithf fmt = Fmt.kstrf Lwt.fail_with fmt
+  let failwithf fmt = Fmt.kstr Lwt.fail_with fmt
 
   let contents ?(dotfiles = false) ?(rel = false) dir =
     let rec readdir dh acc =

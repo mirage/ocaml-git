@@ -136,7 +136,7 @@ struct
     x >>= function
     | Ok x -> f x
     | Error err ->
-        Fmt.kstrf (fun err -> Lwt.fail (Failure err)) "%a" Store.pp_error err
+        Fmt.kstr (fun err -> Lwt.fail (Failure err)) "%a" Store.pp_error err
 
   let check_write store name k v =
     let open Lwt.Infix in

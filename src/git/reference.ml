@@ -10,7 +10,7 @@ type t = string (* non empty *)
 
 let dir_sep = "/"
 let dir_sep_char = '/'
-let error_msgf fmt = Fmt.kstrf (fun err -> Error (`Msg err)) fmt
+let error_msgf fmt = Fmt.kstr (fun err -> Error (`Msg err)) fmt
 
 let validate_and_collapse_seps p =
   let max_idx = String.length p - 1 in

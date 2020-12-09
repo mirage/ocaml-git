@@ -33,7 +33,7 @@ let () = Random.full_init seed
 
 open Prelude
 
-let failf fmt = Fmt.kstrf Alcotest.fail fmt
+let failf fmt = Fmt.kstr Alcotest.fail fmt
 
 let bigstringaf =
   Alcotest.testable

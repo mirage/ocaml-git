@@ -13,7 +13,7 @@ type git = Store.t
 
 let store_prj = Store.prj
 let store_inj = Store.inj
-let failwithf fmt = Fmt.kstrf (fun err -> raise (Failure err)) fmt
+let failwithf fmt = Fmt.kstr (fun err -> raise (Failure err)) fmt
 
 let kind_of_object path uid =
   let open Bos in

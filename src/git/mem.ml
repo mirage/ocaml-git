@@ -83,7 +83,7 @@ let batch_write :
   in
   iter index ~f
 
-let failuref fmt = Fmt.kstrf (fun err -> Failure err) fmt
+let failuref fmt = Fmt.kstr (fun err -> Failure err) fmt
 
 (* XXX(dinosaure): a point about modules, functors and alias.
  * The choice was made to _defunctorize_ any types to avoid to

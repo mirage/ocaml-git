@@ -93,7 +93,7 @@ module Fp (Uid : UID) = struct
   let is_inflate = function Inflate _ -> true | _ -> false
   let src_rem = i_rem
   let eoi d = { d with i = Bigstringaf.empty; i_pos = 0; i_len = min_int }
-  let malformedf fmt = Fmt.kstrf (fun err -> `Malformed err) fmt
+  let malformedf fmt = Fmt.kstr (fun err -> `Malformed err) fmt
 
   let src d s j l =
     if j < 0 || l < 0 || j + l > Bigstringaf.length s then
