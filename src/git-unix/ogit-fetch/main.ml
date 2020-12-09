@@ -119,7 +119,7 @@ module Flag = struct
         | s -> Error (`Msg (Fmt.str "%s is not an output." s))
       in
       let print ppf v =
-        Fmt.pf ppf "%s" (if v == Fmt.stdout then "stdout" else "stderr")
+        Fmt.pf ppf "%s" (if v = Fmt.stdout then "stdout" else "stderr")
       in
       Arg.conv ~docv:"<output>" (parse, print)
     in
