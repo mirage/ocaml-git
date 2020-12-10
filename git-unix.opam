@@ -27,7 +27,7 @@ depends: [
   "result"
   "bigarray-compat"
   "bigstringaf"
-  "fmt"
+  "fmt"               {>= "0.8.7"}
   "git-nss"
   "bos"
   "fpath"

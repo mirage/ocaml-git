@@ -29,7 +29,7 @@ depends: [
   "fpath"
   "result"
   "mmap"
-  "fmt"
+  "fmt"        {>= "0.8.7"}
   "base-unix"
   "decompress" {>= "1.2.0"}
 ]
