@@ -17,6 +17,8 @@
 
 (** The synchronization commands to a git repository. *)
 
+(** [Sync] interface used by backend-specific Git implementations
+    such as [Mem] and [Git_unix] *)
 module type S = sig
   type hash
   type store
@@ -49,6 +51,8 @@ module type S = sig
     (unit, error) result Lwt.t
 end
 
+(** Creates a lower-level [Sync] functions [fetch] and [push] that are then
+        overridden by backend-specific implementations such as [Mem] and [Git_unix] *)
 module Make
     (Digestif : Digestif.S)
     (Pack : Smart_git.APPEND with type +'a fiber = 'a Lwt.t)
@@ -90,10 +94,10 @@ module Make
     Index.t ->
     ((hash * (Reference.t * hash) list) option, [> error ]) result Lwt.t
   (** fetches remote references and saves them.
-      Behavior of fetch when [want] is 
-      [`All] - fetches all remote references and saves them in store 
-      [`Some src_dst_pairs] - fetch [src] and save in [dst] 
-      [`None] - doesn't save anything *)
+          Behavior of fetch when [want] is
+          [`All] - fetches all remote references and saves them in store
+          [`Some src_dst_pairs] - fetch [src] and save in [dst]
+          [`None] - doesn't save anything *)
 
   val push :
     resolvers:Conduit.resolvers ->

@@ -267,10 +267,10 @@ end
 
 module Decoder = struct
   open Astring
-  open Decoder
+  open Pkt_line.Decoder
 
-  type error =
-    [ Decoder.error
+  type nonrec error =
+    [ error
     | `Invalid_advertised_ref of string
     | `Invalid_shallow of string
     | `Invalid_negotiation_result of string
@@ -282,7 +282,7 @@ module Decoder = struct
     | `Invalid_pkt_line ]
 
   let pp_error ppf = function
-    | #Decoder.error as err -> Decoder.pp_error ppf err
+    | #Pkt_line.Decoder.error as err -> Pkt_line.Decoder.pp_error ppf err
     | `Invalid_advertised_ref raw ->
         Fmt.pf ppf "Invalid advertised refererence (%S)" raw
     | `Invalid_shallow raw -> Fmt.pf ppf "Invalid shallow (%S)" raw
@@ -630,12 +630,12 @@ module Decoder = struct
 
   let rec bind x ~f =
     match x with
-    | Decoder.Done v -> f v
-    | Decoder.Read { buffer; off; len; continue; eof } ->
+    | Done v -> f v
+    | Read { buffer; off; len; continue; eof } ->
         let continue len = bind (continue len) ~f in
         let eof () = bind (eof ()) ~f in
-        Decoder.Read { buffer; off; len; continue; eof }
-    | Decoder.Error _ as err -> err
+        Read { buffer; off; len; continue; eof }
+    | Error _ as err -> err
 
   let ( >>= ) x f = bind x ~f
 
@@ -696,7 +696,7 @@ module Decoder = struct
       match String.Sub.head pkt with
       | Some '\001' ->
           let str = String.Sub.(to_string (tail pkt)) in
-          let decoder' = Decoder.decoder_from str in
+          let decoder' = decoder_from str in
           decode_status decoder' >>= fun res ->
           junk_pkt decoder;
           prompt_pkt (return res) decoder
@@ -707,11 +707,11 @@ module Decoder = struct
 end
 
 module Encoder = struct
-  open Encoder
+  open Pkt_line.Encoder
 
-  type error = Encoder.error
+  type nonrec error = error
 
-  let pp_error = Encoder.pp_error
+  let pp_error = pp_error
   let write_space encoder = write encoder " "
   let write_zero encoder = write encoder "\000"
   let write_new_line encoder = write encoder "\n"
@@ -858,7 +858,7 @@ module Encoder = struct
   let unsafe_encode_packet encoder ~packet =
     let pos = encoder.pos in
     encoder.pos <- encoder.pos + 4;
-    Encoder.write encoder packet;
+    write encoder packet;
     let len = encoder.pos - pos in
     Bytes.blit_string (Fmt.str "%04X" len) 0 encoder.payload pos 4
 

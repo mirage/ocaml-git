@@ -32,7 +32,11 @@ let pp_error ppf = function
   | `Assert_predicate _ -> Fmt.string ppf "Assert predicate"
   | `Invalid_pkt_line -> Fmt.string ppf "Invalid PKT-line"
 
-type 'err info = { error : 'err; buffer : Bytes.t; committed : int }
+type 'err info = {
+  error : 'err;
+  buffer : Bytes.t;
+  committed : int;  (** # bytes already processed *)
+}
 
 type ('v, 'err) state =
   | Done of 'v
@@ -114,7 +118,7 @@ let at_least_one_line decoder =
   let chr = ref '\000' in
   let has_cr = ref false in
   while
-    !pos < decoder.max
+    !pos < end_of_input decoder
     &&
     ( chr := Bytes.unsafe_get decoder.buffer !pos;
       not (!chr = '\n' && !has_cr) )
@@ -124,26 +128,23 @@ let at_least_one_line decoder =
   done;
   !pos < decoder.max && !chr = '\n' && !has_cr
 
-let digit = function
-  | 'a' .. 'f' as chr -> 10 + Char.code chr - Char.code 'a'
-  | 'A' .. 'F' as chr -> 10 + Char.code chr - Char.code 'A'
-  | '0' .. '9' as chr -> Char.code chr - Char.code '0'
-  | _ -> invalid_arg "invalid digit"
+(** reads off 4 bytes from [decoder.buffer] starting at [decoder.pos] and interprets read
+    bytes as hex and converts to int.
+    Why unsafe:
+    @raise Invalid_argument if there are no 4 bytes to read, i.e.,
+                            [decoder.max - decoder.pos < 4]  *)
+let pkt_len_unsafe (decoder : decoder) =
+  let hex = Bytes.of_string "0x0000" in
+  Bytes.blit decoder.buffer decoder.pos hex 2 4;
+  int_of_string (Bytes.unsafe_to_string hex)
 
-let to_int ~base ~off ~len buf =
-  let code = ref 0 in
-  for i = 0 to len - 1 do
-    let v = digit (Bytes.get buf (off + i)) in
-    assert (v < base);
-    code := (base * !code) + v
-  done;
-  !code
+(* no header *)
 
 let at_least_one_pkt decoder =
   let len = decoder.max - decoder.pos in
   if len >= 4 then
-    let pkt_len = to_int ~base:16 ~off:decoder.pos ~len:4 decoder.buffer in
-    len - pkt_len >= 0
+    let pkt_len = pkt_len_unsafe decoder in
+    len >= pkt_len
   else false
 
 (* no header *)
@@ -151,7 +152,7 @@ let at_least_one_pkt decoder =
 let get_pkt_len decoder =
   let len = decoder.max - decoder.pos in
   if len >= 4 then
-    let pkt_len = to_int ~base:16 ~off:decoder.pos ~len:4 decoder.buffer in
+    let pkt_len = pkt_len_unsafe decoder in
     Some pkt_len
   else None
 
@@ -187,8 +188,6 @@ let get_pkt_len decoder =
    the protocol error to another layer (eg. [carton] when it received finally a
    __not-full__ PACK file). The goal is to be more resilient at this layer. *)
 
-let error_end_of_input decoder () = fail decoder `End_of_input
-
 let reliable_pkt k decoder () =
   match get_pkt_len decoder with
   | Some _len ->
@@ -207,63 +206,56 @@ let prompt :
     decoder ->
     ('v, 'err) state =
  fun ?(strict = true) k decoder ->
-  if decoder.pos > 0 then (
-    (* XXX(dinosaure): compress *)
+  let compress decoder =
     let rest = decoder.max - decoder.pos in
     Bytes.unsafe_blit decoder.buffer decoder.pos decoder.buffer 0 rest;
     decoder.max <- rest;
-    decoder.pos <- 0 );
+    decoder.pos <- 0
+  in
+  if decoder.pos > 0 then compress decoder;
   let rec go off =
     try
+      let at_least_one_pkt = at_least_one_pkt { decoder with max = off } in
       if
         off = Bytes.length decoder.buffer
         && decoder.pos > 0
-        && not (at_least_one_pkt { decoder with max = off })
-      then
-        Error
-          {
-            error = `No_enough_space;
-            buffer = decoder.buffer;
-            committed = decoder.pos;
-          }
+        && not at_least_one_pkt
+      then fail decoder `No_enough_space
       else if
-        not (at_least_one_pkt { decoder with max = off })
+        not at_least_one_pkt
         (* XXX(dinosaure): we make a new decoder here and we did __not__ set
            [decoder.max] owned by end-user, and this is exactly what we want. *)
       then
+        let eof =
+          if strict then fun () -> fail decoder `End_of_input
+          else (
+            decoder.max <- off;
+            reliable_pkt k decoder )
+        in
         Read
           {
             buffer = decoder.buffer;
             off;
             len = Bytes.length decoder.buffer - off;
             continue = (fun len -> go (off + len));
-            eof =
-              ( if strict then error_end_of_input decoder (* fail *)
-              else (
-                decoder.max <- off;
-                reliable_pkt k decoder ) );
+            eof;
           }
       else (
         decoder.max <- off;
         safe k decoder )
     with
     | _exn (* XXX(dinosaure): [at_least_one_pkt] can raise an exception. *) ->
-      Error
-        {
-          error = `Invalid_pkt_line;
-          buffer = decoder.buffer;
-          committed = decoder.pos;
-        }
+      fail decoder `Invalid_pkt_line
   in
   go decoder.max
 
 let peek_pkt decoder =
-  let len = to_int ~base:16 ~off:decoder.pos ~len:4 decoder.buffer in
+  let len = pkt_len_unsafe decoder in
   if len >= 4 then decoder.buffer, decoder.pos + 4, len - 4
   else decoder.buffer, decoder.pos + 4, 0
 
 let junk_pkt decoder =
-  let len = to_int ~base:16 ~off:decoder.pos ~len:4 decoder.buffer in
+  let len = pkt_len_unsafe decoder in
   if len < 4 then decoder.pos <- decoder.pos + 4
   else decoder.pos <- decoder.pos + len
 

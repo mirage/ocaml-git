@@ -37,21 +37,23 @@ struct
   let return x = IO.return x
 
   let sched =
-    {
-      Sigs.bind = (fun x f -> inj (prj x >>= fun x -> prj (f x)));
-      Sigs.return = (fun x -> inj (return x));
-    }
+    Sigs.
+      {
+        bind = (fun x f -> inj (prj x >>= fun x -> prj (f x)));
+        return = (fun x -> inj (return x));
+      }
 
   let fail exn =
     let fail = IO.fail exn in
     inj fail
 
   let io =
-    {
-      Sigs.recv = (fun flow raw -> inj (Flow.recv flow raw));
-      Sigs.send = (fun flow raw -> inj (Flow.send flow raw));
-      Sigs.pp_error = Flow.pp_error;
-    }
+    Sigs.
+      {
+        recv = (fun flow raw -> inj (Flow.recv flow raw));
+        send = (fun flow raw -> inj (Flow.send flow raw));
+        pp_error = Flow.pp_error;
+      }
 
   let references want have =
     match want with
