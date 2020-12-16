@@ -1,4 +1,4 @@
-.PHONY: all test clean
+.PHONY: all test clean fmt
 
 all:
 	dune build
@@ -8,3 +8,6 @@ test:
 
 clean:
 	dune clean
+
+fmt:
+	dune build @fmt --auto-promote
