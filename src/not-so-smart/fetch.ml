@@ -94,10 +94,10 @@ struct
       let* v = recv ctx advertised_refs in
       let v = Smart.Advertised_refs.map ~fuid:Uid.of_hex ~fref:Ref.v v in
       let uids, refs = references refs (Smart.Advertised_refs.refs v) in
-      update ctx (Smart.Advertised_refs.capabilities v);
+      Smart.Context.update ctx (Smart.Advertised_refs.capabilities v);
       return (uids, refs)
     in
-    let ctx = Smart.make capabilities in
+    let ctx = Smart.Context.make capabilities in
     let negotiator = Neg.make ~compare:Uid.compare in
     Neg.tips sched access store negotiator |> prj >>= fun () ->
     Neg.run sched fail io flow (prelude ctx) |> prj >>= fun (uids, refs) ->
@@ -113,7 +113,8 @@ struct
         let pack ctx =
           let open Smart in
           let side_band =
-            Smart.shared `Side_band ctx || Smart.shared `Side_band_64k ctx
+            Smart.Context.shared `Side_band ctx
+            || Smart.Context.shared `Side_band_64k ctx
           in
           recv ctx
             (recv_pack ~side_band ~push_stdout ~push_stderr ~push_pack:pack)

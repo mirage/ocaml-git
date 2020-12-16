@@ -156,7 +156,7 @@ let find_common ({ bind; return } as scheduler) io flow
         Smart.(
           let uid = (to_hex <.> fst) uid in
           let others = List.map (to_hex <.> fst) others in
-          let capabilities, _ = Smart.capabilities ctx in
+          let capabilities, _ = Smart.Context.capabilities ctx in
           let deepen =
             (deepen
               :> [ `Depth of int | `Not of string | `Timestamp of int64 ] option)

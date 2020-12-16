@@ -47,10 +47,10 @@ struct
         else return ()
       in
       let* v = recv ctx advertised_refs in
-      update ctx (Smart.Advertised_refs.capabilities v);
+      Context.update ctx (Smart.Advertised_refs.capabilities v);
       return (Smart.Advertised_refs.map ~fuid:Uid.of_hex ~fref:Ref.v v)
     in
-    let ctx = Smart.make caps in
+    let ctx = Smart.Context.make caps in
     Neg.run sched fail io flow (fiber ctx) |> prj >>= fun advertised_refs ->
     Pck.commands sched
       ~capabilities:(Smart.Advertised_refs.capabilities advertised_refs)
@@ -81,13 +81,14 @@ struct
             m "Prepare a pack of %d object(s)." (List.length uids));
         let stream = pack uids in
         let side_band =
-          Smart.shared `Side_band ctx || Smart.shared `Side_band_64k ctx
+          Smart.Context.shared `Side_band ctx
+          || Smart.Context.shared `Side_band_64k ctx
         in
         let pack = Smart.send_pack ~stateless:push_cfg.stateless side_band in
         let rec go () =
           stream () >>= function
           | None ->
-              let report_status = Smart.shared `Report_status ctx in
+              let report_status = Smart.Context.shared `Report_status ctx in
               Log.debug (fun m ->
                   m "report-status capability: %b." report_status);
               if report_status then

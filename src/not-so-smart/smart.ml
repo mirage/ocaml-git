@@ -104,12 +104,14 @@ type ('a, 'err) t = ('a, 'err) State.t =
   | Return of 'a
   | Error of 'err
 
-type context = State.Context.t
+module Context = struct
+  type t = State.Context.t
 
-let make capabilities = State.Context.make capabilities
-let update ctx capabilities = State.Context.update ctx capabilities
-let shared ctx capability = State.Context.shared ctx capability
-let capabilities ctx = State.Context.capabilities ctx
+  let make = State.Context.make
+  let update = State.Context.update
+  let shared = State.Context.shared
+  let capabilities = State.Context.capabilities
+end
 
 include Witness
 

@@ -53,7 +53,7 @@ val find_common :
   ('uid, 'ref, 'uid * int ref * int64, 'g, 's) access ->
   ('uid, 'uid * int ref * int64, 'g) store ->
   'uid negotiator ->
-  Smart.context ->
+  Smart.Context.t ->
   ?deepen:[ `Depth of int | `Timestamp of int64 ] ->
   'uid list ->
   ([ `Continue of int | `Close ], 's) io
