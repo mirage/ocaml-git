@@ -41,7 +41,7 @@ let run :
             go (k len)
         | Error err ->
             Log.err (fun m -> m "Got an error: %a." pp_error err);
-            failwithf "%a" pp_error err )
+            failwithf "%a" pp_error err)
     | Smart.Write { k; buffer; off; len } ->
         let rec loop tmp =
           if Cstruct.len tmp = 0 then go (k len)
@@ -158,16 +158,15 @@ let find_common ({ bind; return } as scheduler) io flow
           let others = List.map (to_hex <.> fst) others in
           let capabilities, _ = Smart.capabilities ctx in
           let deepen =
-            ( deepen
-              :> [ `Depth of int | `Not of string | `Timestamp of int64 ] option
-              )
+            (deepen
+              :> [ `Depth of int | `Not of string | `Timestamp of int64 ] option)
           in
           send ctx want
             (Want.want ~capabilities ~shallows:shallowed ?deepen uid ~others))
       >>= fun () ->
-      ( match deepen with
+      (match deepen with
       | None -> return ()
-      | Some _ -> handle_shallow scheduler io flow hex access store ctx )
+      | Some _ -> handle_shallow scheduler io flow hex access store ctx)
       >>= fun () ->
       let in_vain = ref 0 in
       let count = ref 0 in
@@ -239,7 +238,7 @@ let find_common ({ bind; return } as scheduler) io flow
                             in_vain := 0;
                             retval := 0;
                             got_continue := true;
-                            loop () )
+                            loop ())
                           else if
                             (not stateless)
                             || not (Smart.Negotiation.is_common ack)
@@ -249,13 +248,13 @@ let find_common ({ bind; return } as scheduler) io flow
                             got_continue := true;
                             if Smart.Negotiation.is_ready ack then
                               got_ready := true;
-                            loop () )
+                            loop ())
                           else (
                             retval := 0;
                             got_continue := true;
                             if Smart.Negotiation.is_ready ack then
                               got_ready := true;
-                            loop () ) )
+                            loop ()))
                 in
                 loop () >>= function
                 | `Done -> return ()
@@ -263,24 +262,24 @@ let find_common ({ bind; return } as scheduler) io flow
                     decr flushes;
                     if !got_continue && _max_in_vain < !in_vain then return ()
                     else if !got_ready then return ()
-                    else go negotiator )
+                    else go negotiator)
             else go negotiator
       in
       go negotiator >>= fun () ->
       Log.debug (fun m ->
           m "Negotiation (got ready: %b, no-done: %b)." !got_ready no_done);
-      ( if (not !got_ready) || not no_done then
-        run scheduler raise io flow Smart.(send ctx negotiation_done ())
-      else return () )
+      (if (not !got_ready) || not no_done then
+       run scheduler raise io flow Smart.(send ctx negotiation_done ())
+      else return ())
       >>= fun () ->
       if !retval <> 0 then (
         cfg.multi_ack <- `None;
-        incr flushes );
-      ( if (not !got_ready) || not no_done then (
-        Log.debug (fun m -> m "Negotiation is done!");
-        run scheduler raise io flow Smart.(recv ctx shallows)
-        >>= fun _shallows -> return () )
-      else return () )
+        incr flushes);
+      (if (not !got_ready) || not no_done then (
+       Log.debug (fun m -> m "Negotiation is done!");
+       run scheduler raise io flow Smart.(recv ctx shallows)
+       >>= fun _shallows -> return ())
+      else return ())
       >>= fun () ->
       let rec go () =
         if !flushes > 0 || cfg.multi_ack = `Some || cfg.multi_ack = `Detailed
@@ -296,7 +295,7 @@ let find_common ({ bind; return } as scheduler) io flow
               go ()
           | Smart.Negotiation.NAK ->
               decr flushes;
-              go () )
+              go ())
         else if !count > 0 then return (`Continue !retval)
         else return (`Continue 0)
       in

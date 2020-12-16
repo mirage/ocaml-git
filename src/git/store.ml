@@ -84,7 +84,7 @@ struct
     include (
       Reference :
         module type of Reference
-          with type 'uid contents := 'uid Reference.contents )
+          with type 'uid contents := 'uid Reference.contents)
 
     type contents = hash Reference.contents
   end
@@ -103,8 +103,8 @@ struct
     major_uid : (hash, Mj.uid, Mj.t) major;
     packs : (Mj.uid, < rd : unit > Mj.fd, Hash.t) Carton_git.t;
     pools :
-      ( (< rd : unit > Mj.fd * int64)
-      * (< rd : unit > Mj.fd * int64) Carton_git.buffers Lwt_pool.t )
+      ((< rd : unit > Mj.fd * int64)
+      * (< rd : unit > Mj.fd * int64) Carton_git.buffers Lwt_pool.t)
       list;
     buffs : buffers Lwt_pool.t;
     rs : Rs.t;
@@ -213,7 +213,7 @@ struct
         | Error `Non_atomic -> (
             Loose.get t.minor buffers hash >>= function
             | Ok v -> Lwt.return_some v
-            | Error _ -> Lwt.return_none ) )
+            | Error _ -> Lwt.return_none))
 
   let read t hash =
     read_inflated t hash >>= function
@@ -279,7 +279,7 @@ struct
         let stream = stream_of_raw raw in
         Loose.add t.minor buffers (kind, length) stream >>= function
         | Ok _ as v -> Lwt.return v
-        | Error (`Store err) -> Lwt.return_error (`Minor err) )
+        | Error (`Store err) -> Lwt.return_error (`Minor err))
 
   let read_inflated t hash =
     read_inflated t hash >>= function
@@ -315,12 +315,12 @@ struct
           if !consumed then Lwt.return_none
           else (
             consumed := true;
-            Lwt.return_some (Bigstringaf.to_string raw) )
+            Lwt.return_some (Bigstringaf.to_string raw))
         in
         Loose.add t.minor buffers (kind, Int64.of_int len) stream >>= function
         | Ok (hash, _) -> Lwt.return hash
         | Error (`Store err) ->
-            Lwt.fail (Failure (Fmt.str "%a" pp_error (`Minor err))) )
+            Lwt.fail (Failure (Fmt.str "%a" pp_error (`Minor err))))
 
   let mem t hash =
     if not (Pack.exists t.major t.packs hash) then Loose.exists t.minor hash
@@ -453,7 +453,7 @@ struct
       let res = Rresult.R.reword_error (fun err -> `Ref err) res in
       if Packed.exists refname t.refs.packed then (
         t.refs <- { t.refs with packed = Packed.remove refname t.refs.packed };
-        Lwt.return res )
+        Lwt.return res)
       else Lwt.return res
   end
 

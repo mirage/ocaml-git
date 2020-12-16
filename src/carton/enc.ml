@@ -47,7 +47,8 @@ module Utils = struct
     length_of_variable_length source
     + length_of_variable_length target
     + List.fold_left
-        (fun acc -> function Duff.Insert (_, len) -> 1 + len + acc
+        (fun acc -> function
+          | Duff.Insert (_, len) -> 1 + len + acc
           | Duff.Copy (off, len) -> 1 + length_of_copy_code ~off ~len + acc)
         0 hunks
 end
@@ -143,7 +144,7 @@ let entry_to_target :
   let ( >>= ) = bind in
 
   load entry.uid >>= fun v ->
-  ( match entry.delta with
+  (match entry.delta with
   | From uid ->
       load uid >>= fun s ->
       let source = Bigstringaf.sub ~off:0 ~len:(Dec.len s) (Dec.raw s) in
@@ -160,7 +161,7 @@ let entry_to_target :
              source = uid;
              source_length = Dec.len s;
            })
-  | Zero -> return None )
+  | Zero -> return None)
   >>= fun patch -> return { patch; entry; v = W.create_with v }
 
 let length_of_delta ~source ~target hunks = Utils.length ~source ~target hunks
@@ -322,7 +323,7 @@ struct
           match window.(j) with
           | Some m -> (
               try try_delta j m >>= fun () -> (go [@tailcall]) (pred j)
-              with Break -> return () )
+              with Break -> return ())
           | None -> return ()
         (* TODO: check it! *)
       in
@@ -358,11 +359,11 @@ struct
             v := (!v + 1) mod weight
           done;
 
-          window.(!v) <- swap );
+          window.(!v) <- swap);
 
         if depth_of_target targets.(n) < _max_depth then
           (iter [@tailcall]) (succ n) (if idx + 1 >= weight then 0 else idx + 1)
-        else (iter [@tailcall]) (succ n) idx )
+        else (iter [@tailcall]) (succ n) idx)
       else return ()
     in
     iter 0 0
@@ -382,12 +383,12 @@ struct
       mutex.v <- mutex.v + 1;
       if v >= Array.length entries then (
         IO.Mutex.unlock mutex.m;
-        IO.return () )
+        IO.return ())
       else (
         IO.Mutex.unlock mutex.m;
         entry_to_target s ~load entries.(v) |> Scheduler.prj >>= fun target ->
         targets.(v) <- Some target;
-        go () )
+        go ())
     in
     go ()
 
@@ -441,11 +442,11 @@ end = struct
     | Z encoder -> (
         match encode_zlib ~o encoder with
         | `Flush (encoder, len) -> `Flush (Z encoder, len)
-        | `End -> `End )
+        | `End -> `End)
     | H encoder -> (
         match encode_hunk ~o encoder with
         | `Flush (encoder, len) -> `Flush (H encoder, len)
-        | `End -> `End )
+        | `End -> `End)
 
   let dst encoder s j l =
     match encoder with
@@ -586,4 +587,4 @@ let encode_target :
           >>= fun encoder ->
           let off = off + uid.uid_ln in
           let len = Bigstringaf.length b.o - off in
-          return (off, N.dst encoder b.o off len) )
+          return (off, N.dst encoder b.o off len))

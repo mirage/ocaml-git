@@ -47,7 +47,7 @@ struct
             if full then [ `Tree_root (Store.Value.Commit.tree c) ] else []
         | false ->
             (if full then [ `Tree_root (Store.Value.Commit.tree c) ] else [])
-            @ List.map (fun x -> `Commit x) (Store.Value.Commit.parents c) )
+            @ List.map (fun x -> `Commit x) (Store.Value.Commit.parents c))
     | Value.Tag t -> if full then Lwt.return [ tag t ] else Lwt.return []
     | Value.Tree t ->
         if full then
@@ -86,17 +86,17 @@ struct
         pred t hash >>= fun preds ->
         match find_tag l preds with
         | None -> Lwt.return_none
-        | Some s -> (find [@tailcall]) t s p )
+        | Some s -> (find [@tailcall]) t s p)
     | `Commit p -> (
         pred t hash >>= fun preds ->
         match find_tree_root preds with
         | None -> Lwt.return_none
-        | Some s -> (find [@tailcall]) t s p )
+        | Some s -> (find [@tailcall]) t s p)
     | `Path (h :: p) -> (
         pred t hash >>= fun preds ->
         match find_tree h preds with
         | None -> Lwt.return_none
-        | Some s -> (find [@tailcall]) t s (`Path p) )
+        | Some s -> (find [@tailcall]) t s (`Path p))
 
   (* XXX: can do one less look-up *)
   let mem t h path =

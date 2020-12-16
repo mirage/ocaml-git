@@ -112,13 +112,13 @@ module Make (Uid : UID) = struct
               ~len:max;
             let ctx = Uid.feed ctx buffers.i ~off:0 ~len:max in
             let encoder = Zl.Def.src encoder buffers.i 0 max in
-            go ctx (src, off + max, len - max) dsts encoder )
+            go ctx (src, off + max, len - max) dsts encoder)
           else
             stream () >>= function
             | Some src -> go ctx (src, 0, String.length src) dsts encoder
             | None ->
                 let encoder = Zl.Def.src encoder Bigstringaf.empty 0 0 in
-                go ctx payload dsts encoder )
+                go ctx payload dsts encoder)
       | `Flush encoder ->
           let len = Bigstringaf.length buffers.o - Zl.Def.dst_rem encoder in
           let raw = Bigstringaf.copy buffers.o ~off:0 ~len in

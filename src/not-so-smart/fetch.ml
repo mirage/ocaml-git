@@ -60,7 +60,9 @@ struct
     | `None -> [], []
     | `All ->
         List.fold_left
-          (fun acc -> function uid, ref, false -> (uid, ref) :: acc | _ -> acc)
+          (fun acc -> function
+            | uid, ref, false -> (uid, ref) :: acc
+            | _ -> acc)
           [] have
         |> List.split
     | `Some refs ->

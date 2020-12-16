@@ -127,7 +127,7 @@ module Make (Digestif : Digestif.S) = struct
     include (
       Reference :
         module type of Reference
-          with type 'uid contents := 'uid Reference.contents )
+          with type 'uid contents := 'uid Reference.contents)
 
     type contents = hash Reference.contents
   end
@@ -179,18 +179,18 @@ module Make (Digestif : Digestif.S) = struct
     if Hashtbl.mem t.values hash then Lwt.return (Ok (hash, 0))
     else (
       Hashtbl.add t.values hash (lazy value);
-      Lwt.return_ok (hash, Int64.to_int (Value.length value)) )
+      Lwt.return_ok (hash, Int64.to_int (Value.length value)))
 
   let digest kind raw =
     let len = Cstruct.len raw in
     let ctx = Hash.init () in
     let hdr =
       Fmt.str "%s %d\000%!"
-        ( match kind with
+        (match kind with
         | `Commit -> "commit"
         | `Blob -> "blob"
         | `Tree -> "tree"
-        | `Tag -> "tag" )
+        | `Tag -> "tag")
         len
     in
     let ctx = Hash.feed_string ctx hdr in
@@ -204,11 +204,11 @@ module Make (Digestif : Digestif.S) = struct
     else
       let value =
         lazy
-          ( match Value.of_raw ~kind inflated with
+          (match Value.of_raw ~kind inflated with
           | Error (`Msg err) ->
               let str = Fmt.str "Value.of_raw(%a): %s" Hash.pp hash err in
               raise (Failure str)
-          | Ok value -> value )
+          | Ok value -> value)
       in
       Hashtbl.add t.inflated hash (kind, inflated);
       Hashtbl.add t.values hash value;
@@ -230,7 +230,7 @@ module Make (Digestif : Digestif.S) = struct
       try
         let kind, raw = Hashtbl.find t.inflated h in
         Lwt.return_some (kind, raw)
-      with Not_found -> Lwt.return_none )
+      with Not_found -> Lwt.return_none)
 
   let read t h =
     try Ok (Lazy.force (Hashtbl.find t.values h))
@@ -244,7 +244,7 @@ module Make (Digestif : Digestif.S) = struct
         | Error (`Msg err) ->
             let str = Fmt.str "Value.of_raw(%a): %s" Hash.pp h err in
             raise (Failure str)
-      with Not_found -> Error (`Not_found h) )
+      with Not_found -> Error (`Not_found h))
 
   let keys t = Hashtbl.fold (fun k _ l -> k :: l) t []
 
@@ -346,7 +346,8 @@ module Make (Digestif : Digestif.S) = struct
       Log.debug (fun l -> l "Ref.list.");
       let graph, rest =
         Hashtbl.fold
-          (fun k -> function `R ptr -> fun (a, r) -> a, (k, ptr) :: r
+          (fun k -> function
+            | `R ptr -> fun (a, r) -> a, (k, ptr) :: r
             | `H hash -> fun (a, r) -> Graph.add k hash a, r)
           t.refs (Graph.empty, [])
       in
@@ -458,9 +459,9 @@ struct
     let map _ _ ~pos:_ _ = assert false
   end
 
-  include Sync.Make (Git_store.Hash) (Cstruct_append) (Index) (Conduit)
-            (Git_store)
-            (HTTP)
+  include
+    Sync.Make (Git_store.Hash) (Cstruct_append) (Index) (Conduit) (Git_store)
+      (HTTP)
 
   let stream_of_cstruct ?(chunk = 0x1000) payload =
     let stream, emitter = Lwt_stream.create () in
@@ -468,7 +469,7 @@ struct
       let rec go pos =
         if pos = Cstruct.len payload then (
           emitter None;
-          Lwt.return_unit )
+          Lwt.return_unit)
         else
           let len = min chunk (Cstruct.len payload - pos) in
           let tmp = Bytes.create len in
