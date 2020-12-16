@@ -1,14 +1,18 @@
 let ( <.> ) f g x = f (g x)
 
 module Capability = Capability
-module Proto_request = Protocol.Proto_request
-module Advertised_refs = Protocol.Advertised_refs
-module Want = Protocol.Want
-module Result = Protocol.Result
-module Negotiation = Protocol.Negotiation
-module Shallow = Protocol.Shallow
-module Commands = Protocol.Commands
-module Status = Protocol.Status
+
+include struct
+  open Protocol
+  module Proto_request = Proto_request
+  module Advertised_refs = Advertised_refs
+  module Want = Want
+  module Result = Result
+  module Negotiation = Negotiation
+  module Shallow = Shallow
+  module Commands = Commands
+  module Status = Status
+end
 
 module Witness = struct
   type 'a send =
