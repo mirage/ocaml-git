@@ -95,7 +95,7 @@ struct
       | x :: r -> (
           f a x >>= function
           | Ok a -> go a r
-          | Error x -> err x >>= fun () -> go a r )
+          | Error x -> err x >>= fun () -> go a r)
     in
     go a l
 

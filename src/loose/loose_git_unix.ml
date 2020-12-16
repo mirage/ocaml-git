@@ -111,7 +111,7 @@ module Make (Uid : UID) = struct
           | Error (`Msg _) ->
               failwithf
                 "Directory contents %a: cannot parse element to a path (%S)"
-                Fpath.pp dir f )
+                Fpath.pp dir f)
       | Some _ -> readdir dh acc
     in
     Lwt.catch
@@ -212,7 +212,7 @@ module Make (Uid : UID) = struct
     | tl :: hd :: _ -> (
         match Uid.of_hex (hd ^ tl) with
         | _ -> file_exists path
-        | exception _ -> Lwt.return_false )
+        | exception _ -> Lwt.return_false)
     | _ -> Lwt.return_false
 
   (* fold *)
@@ -274,7 +274,7 @@ module Make (Uid : UID) = struct
               | v -> Fmt.failwith "Invalid type of Git object: %s" v
             in
             contents, kind, length
-        | None -> failwith "Invalid Git header" )
+        | None -> failwith "Invalid Git header")
 
   let hdr_set ~buffer (kind, length) =
     let kind =

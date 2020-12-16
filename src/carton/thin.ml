@@ -42,7 +42,7 @@ struct
               Ke.Rke.N.push ke ~blit:blit_from_string ~length:String.length ~off
                 ~len src;
               go filled inputs
-          | None -> return filled )
+          | None -> return filled)
       | src :: _ ->
           let src = Cstruct.of_bigarray src in
           let len = min (Cstruct.len inputs) (Cstruct.len src) in
@@ -68,7 +68,7 @@ struct
       let rec go rest raw =
         if rest <= 0 then (
           Cstruct.blit_to_bytes fl_buffer 0 buf off len;
-          return (abs rest + len) )
+          return (abs rest + len))
         else
           read_cstruct 0 raw >>= function
           | 0 ->
@@ -130,17 +130,17 @@ struct
           Hashtbl.add where offset n;
           Hashtbl.add checks offset crc;
 
-          ( try
-              let vs =
-                Hashtbl.find children (`Ofs Int64.(sub offset (of_int s)))
-              in
-              Hashtbl.replace children
-                (`Ofs Int64.(sub offset (of_int s)))
-                (offset :: vs)
-            with Not_found ->
-              Hashtbl.add children
-                (`Ofs Int64.(sub offset (of_int s)))
-                [ offset ] );
+          (try
+             let vs =
+               Hashtbl.find children (`Ofs Int64.(sub offset (of_int s)))
+             in
+             Hashtbl.replace children
+               (`Ofs Int64.(sub offset (of_int s)))
+               (offset :: vs)
+           with Not_found ->
+             Hashtbl.add children
+               (`Ofs Int64.(sub offset (of_int s)))
+               [ offset ]);
           go decoder
       | `Entry
           ({ Fp.kind = Ref { ptr; target; source }; offset; crc; _ }, decoder)
@@ -153,10 +153,10 @@ struct
           Hashtbl.add where offset n;
           Hashtbl.add checks offset crc;
 
-          ( try
-              let vs = Hashtbl.find children (`Ref ptr) in
-              Hashtbl.replace children (`Ref ptr) (offset :: vs)
-            with Not_found -> Hashtbl.add children (`Ref ptr) [ offset ] );
+          (try
+             let vs = Hashtbl.find children (`Ref ptr) in
+             Hashtbl.replace children (`Ref ptr) (offset :: vs)
+           with Not_found -> Hashtbl.add children (`Ref ptr) [ offset ]);
           go decoder
       | `End uid -> return (Ok uid)
       | `Malformed err ->

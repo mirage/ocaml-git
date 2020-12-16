@@ -105,7 +105,7 @@ struct
               | v -> Fmt.failwith "Invalid type of Git object: %s" v
             in
             contents, kind, length
-        | None -> failwith "Invalid Git header" )
+        | None -> failwith "Invalid Git header")
 
   let hdr_set ~buffer (kind, length) =
     let kind =

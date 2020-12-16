@@ -317,10 +317,10 @@ end = struct
     let flush = if with_ctx then flush_with_ctx else flush_without_ctx in
     if rem < len then (
       blit e rem;
-      flush (t_flush k) e )
+      flush (t_flush k) e)
     else (
       blit e len;
-      k e )
+      k e)
 
   let ok e =
     e.k <- (fun _ `Await -> `Ok);
@@ -333,7 +333,7 @@ end = struct
       let s, j, k =
         if rem < Uid.length then (
           t_range e (Uid.length - 1);
-          e.t, 0, t_flush ~with_ctx:false k2 )
+          e.t, 0, t_flush ~with_ctx:false k2)
         else
           let j = e.o_pos in
           e.o_pos <- e.o_pos + Uid.length;
@@ -349,7 +349,7 @@ end = struct
     let s, j, k =
       if rem < Uid.length then (
         t_range e (Uid.length - 1);
-        e.t, 0, t_flush k0 )
+        e.t, 0, t_flush k0)
       else
         let j = e.o_pos in
         e.o_pos <- e.o_pos + Uid.length;
@@ -363,17 +363,17 @@ end = struct
     let k e =
       if e.n + 1 == Array.length e.index then (
         e.n <- 0;
-        encode_trail e `Await )
+        encode_trail e `Await)
       else (
         e.n <- succ e.n;
-        encode_offset e `Await )
+        encode_offset e `Await)
     in
     let rem = o_rem e in
 
     let s, j, k =
       if rem < 4 then (
         t_range e 3;
-        e.t, 0, t_flush k )
+        e.t, 0, t_flush k)
       else
         let j = e.o_pos in
         e.o_pos <- e.o_pos + 4;
@@ -387,17 +387,17 @@ end = struct
     let k e =
       if e.n + 1 == Array.length e.index then (
         e.n <- 0;
-        encode_offset e `Await )
+        encode_offset e `Await)
       else (
         e.n <- succ e.n;
-        encode_crc e `Await )
+        encode_crc e `Await)
     in
     let rem = o_rem e in
 
     let s, j, k =
       if rem < 4 then (
         t_range e 3;
-        e.t, 0, t_flush k )
+        e.t, 0, t_flush k)
       else
         let j = e.o_pos in
         e.o_pos <- e.o_pos + 4;
@@ -411,17 +411,17 @@ end = struct
     let k e =
       if e.n + 1 == Array.length e.index then (
         e.n <- 0;
-        encode_crc e `Await )
+        encode_crc e `Await)
       else (
         e.n <- succ e.n;
-        encode_hash e `Await )
+        encode_hash e `Await)
     in
     let rem = o_rem e in
 
     let s, j, k =
       if rem < Uid.length then (
         t_range e (Uid.length - 1);
-        e.t, 0, t_flush k )
+        e.t, 0, t_flush k)
       else
         let j = e.o_pos in
         e.o_pos <- e.o_pos + Uid.length;
@@ -438,17 +438,17 @@ end = struct
       if e.n + 1 == 256 then (
         e.n <- 0;
         if Array.length e.index > 0 then encode_hash e `Await
-        else encode_trail e `Await )
+        else encode_trail e `Await)
       else (
         e.n <- succ e.n;
-        encode_fanout e `Await )
+        encode_fanout e `Await)
     in
     let rem = o_rem e in
 
     let s, j, k =
       if rem < 4 then (
         t_range e 3;
-        e.t, 0, t_flush k )
+        e.t, 0, t_flush k)
       else
         let j = e.o_pos in
         e.o_pos <- e.o_pos + 4;
@@ -473,7 +473,7 @@ end = struct
     let s, j, k =
       if rem < 8 then (
         t_range e 8;
-        e.t, 0, t_flush k )
+        e.t, 0, t_flush k)
       else
         let j = e.o_pos in
         e.o_pos <- e.o_pos + 8;
@@ -609,8 +609,8 @@ struct
 
   let close tbl fd =
     let result = Bigstringaf.sub fd.buffer ~off:0 ~len:fd.length in
-    ( match Ephemeron.K1.get_data tbl with
+    (match Ephemeron.K1.get_data tbl with
     | Some value -> value := result
-    | None -> assert false );
+    | None -> assert false);
     IO.return (Ok ())
 end

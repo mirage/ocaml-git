@@ -64,7 +64,7 @@ module Store = struct
           | entry -> (
               match Fpath.of_string entry with
               | Ok x -> if Fpath.has_ext "pack" x then go (x :: acc) else go acc
-              | Error (`Msg _) -> (* ignore *) go acc ))
+              | Error (`Msg _) -> (* ignore *) go acc))
         (function End_of_file -> Lwt.return acc | exn -> Lwt.fail exn)
     in
     go []

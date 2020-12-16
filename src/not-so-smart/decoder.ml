@@ -120,8 +120,8 @@ let at_least_one_line decoder =
   while
     !pos < end_of_input decoder
     &&
-    ( chr := Bytes.unsafe_get decoder.buffer !pos;
-      not (!chr = '\n' && !has_cr) )
+    (chr := Bytes.unsafe_get decoder.buffer !pos;
+     not (!chr = '\n' && !has_cr))
   do
     has_cr := !chr = '\r';
     incr pos
@@ -230,7 +230,7 @@ let prompt :
           if strict then fun () -> fail decoder `End_of_input
           else (
             decoder.max <- off;
-            reliable_pkt k decoder )
+            reliable_pkt k decoder)
         in
         Read
           {
@@ -242,7 +242,7 @@ let prompt :
           }
       else (
         decoder.max <- off;
-        safe k decoder )
+        safe k decoder)
     with
     | _exn (* XXX(dinosaure): [at_least_one_pkt] can raise an exception. *) ->
       fail decoder `Invalid_pkt_line
@@ -267,8 +267,8 @@ let peek_while_eol decoder =
   while
     !idx < end_of_input decoder
     &&
-    ( chr := Bytes.unsafe_get decoder.buffer !idx;
-      not (!chr = '\n' && !has_cr) )
+    (chr := Bytes.unsafe_get decoder.buffer !idx;
+     not (!chr = '\n' && !has_cr))
   do
     has_cr := !chr = '\r';
     incr idx
@@ -276,7 +276,7 @@ let peek_while_eol decoder =
 
   if !idx < end_of_input decoder && !chr = '\n' && !has_cr then (
     assert (!idx + 1 - decoder.pos > 1);
-    decoder.buffer, decoder.pos, !idx + 1 - decoder.pos )
+    decoder.buffer, decoder.pos, !idx + 1 - decoder.pos)
   else leave_with decoder `Expected_eol
 
 let peek_while_eol_or_space decoder =
@@ -287,8 +287,8 @@ let peek_while_eol_or_space decoder =
   while
     !idx < end_of_input decoder
     &&
-    ( chr := Bytes.unsafe_get decoder.buffer !idx;
-      (not (!chr = '\n' && !has_cr)) && !chr <> ' ' )
+    (chr := Bytes.unsafe_get decoder.buffer !idx;
+     (not (!chr = '\n' && !has_cr)) && !chr <> ' ')
   do
     has_cr := !chr = '\r';
     incr idx

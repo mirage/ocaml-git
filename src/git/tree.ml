@@ -56,13 +56,13 @@ type 'hash entry = { perm : perm; name : string; node : 'hash }
 
 let pp_entry ~pp ppf { perm; name; node } =
   Fmt.pf ppf "{ @[<hov>perm = %s;@ name = %S;@ node = %a;@] }"
-    ( match perm with
+    (match perm with
     | `Normal -> "normal"
     | `Everybody -> "everybody"
     | `Exec -> "exec"
     | `Link -> "link"
     | `Dir -> "dir"
-    | `Commit -> "commit" )
+    | `Commit -> "commit")
     name (Fmt.hvbox pp) node
 
 let equal_entry ~equal a b =
@@ -109,8 +109,8 @@ let compare x y =
         !p < len_a
         && !p < len_b
         &&
-        ( c := Char.compare a.[!p] b.[!p];
-          !c = 0 )
+        (c := Char.compare a.[!p] b.[!p];
+         !c = 0)
       do
         incr p
       done;
@@ -235,12 +235,12 @@ module Make (Hash : S.HASH) : S with type hash = Hash.t = struct
       let hash = hash <$> fixed Hash.digest_size in
       let name = while1 is_not_nl in
       entry
-      <$> ( perm
+      <$> (perm
           <* (Encore.Bij.char ' ' <$> any)
           <* commit
           <*> (name <* (Encore.Bij.char '\x00' <$> any) <* commit)
           <*> (hash <* commit)
-          <* commit )
+          <* commit)
 
     let format = Encore.Syntax.rep0 entry
   end

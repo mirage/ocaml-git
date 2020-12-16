@@ -111,5 +111,5 @@ struct
             return ()
         | Error err ->
             Log.err (fun m -> m "Push got an error: %s" err);
-            return () )
+            return ())
 end

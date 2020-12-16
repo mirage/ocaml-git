@@ -50,7 +50,7 @@ module Fold = struct
       | Some f when dotfiles || not (f.[0] = '.') -> (
           match Fpath.of_string f with
           | Ok f -> readdir dh ((if rel then f else Fpath.(dir // f)) :: acc)
-          | Error (`Msg _) -> (* ignore *) readdir dh acc )
+          | Error (`Msg _) -> (* ignore *) readdir dh acc)
       | Some _ -> readdir dh acc
     in
     Lwt.catch
@@ -302,7 +302,7 @@ module Minor_heap (Digestif : Digestif.S) = struct
       | tl :: hd :: _ -> (
           match Digestif.of_hex (hd ^ tl) with
           | _ -> Fold.file_exists path
-          | exception _ -> Lwt.return false )
+          | exception _ -> Lwt.return false)
       | _ -> Lwt.return false
     in
     Fold.fold ~dotfiles:false ~elements:(`Sat elements) f [] root
@@ -491,7 +491,7 @@ module Unix = struct
               | [] -> Lwt.return_ok ()
             in
             dirs_to_create dir [] >>? fun dirs ->
-            create_them dirs () >>? fun () -> Lwt.return_ok true )
+            create_them dirs () >>? fun () -> Lwt.return_ok true)
 end
 
 module Reference_heap = struct
@@ -530,8 +530,8 @@ module Reference_heap = struct
     let open Rresult in
     Bos.OS.Dir.create ~path:true base >>= fun _ ->
     Bos.OS.Dir.exists path >>= fun res ->
-    ( if res then Bos.OS.Dir.delete ~must_exist:false ~recurse:true path
-    else R.ok () )
+    (if res then Bos.OS.Dir.delete ~must_exist:false ~recurse:true path
+    else R.ok ())
     >>= fun () ->
     Bos.OS.File.tmp "git-reference-%s" >>= fun src ->
     Bos.OS.File.write src str >>= fun () ->
@@ -570,7 +570,7 @@ module Reference_heap = struct
           Log.debug (fun l -> l "%a exists into the store." Fpath.pp x);
           match Git.Reference.of_string (Fpath.to_string x) with
           | Ok x -> x :: r
-          | Error _ -> r )
+          | Error _ -> r)
       | None -> assert false
       (* XXX(dinosaure): see [elements]. *)
     in
@@ -655,9 +655,10 @@ module Sync (Git_store : Git.S) (HTTP : Smart_git.HTTP) = struct
 
   module Log = (val Logs.src_log src : Logs.LOG)
 
-  include Git.Sync.Make (Git_store.Hash) (Major_heap) (Major_heap) (Conduit_lwt)
-            (Git_store)
-            (HTTP)
+  include
+    Git.Sync.Make (Git_store.Hash) (Major_heap) (Major_heap) (Conduit_lwt)
+      (Git_store)
+      (HTTP)
 
   let random_gen = lazy (Random.State.make_self_init ())
 
