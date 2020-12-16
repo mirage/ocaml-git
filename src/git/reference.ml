@@ -188,7 +188,7 @@ type ('t, 'uid, 'error, 's) store = {
   packed : 'uid Packed.packed;
 }
 
-let reword_error f = function Ok v -> Ok v | Error err -> Error (f err)
+let reword_error f = function Ok _ as o -> o | Error err -> Error (f err)
 
 let contents store str =
   match store.uid_of_hex (String.trim str) with

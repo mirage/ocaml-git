@@ -84,12 +84,12 @@ struct
           Read { k = aux ~f <.> k; off; len; buffer; eof = aux ~f <.> eof }
       | Write { k; off; len; buffer } ->
           Write { k = aux ~f <.> k; off; len; buffer }
-      | Error err -> Error err
+      | Error _ as err -> err
     in
     fun m ~f ->
       match m with
       | Return v -> f v
-      | Error err -> Error err
+      | Error _ as err -> err
       | Read _ -> aux ~f m
       | Write _ -> aux ~f m
 
