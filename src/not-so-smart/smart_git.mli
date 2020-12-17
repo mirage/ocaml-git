@@ -47,19 +47,24 @@ module type HTTP = sig
     (unit * string, error) result Lwt.t
 end
 
-type endpoint = private {
-  scheme :
-    [ `SSH of string
-    | `Git
-    | `HTTP of (string * string) list
-    | `HTTPS of (string * string) list ];
-  path : string;
-  endpoint : Conduit.Endpoint.t;
-}
+module Endpoint : sig
+  type t = private {
+    scheme :
+      [ `SSH of string
+      | `Git
+      | `HTTP of (string * string) list
+      | `HTTPS of (string * string) list ];
+    path : string;
+    endpoint : Conduit.Endpoint.t;
+  }
 
-val pp_endpoint : endpoint Fmt.t
-val endpoint_of_string : string -> (endpoint, [> `Msg of string ]) result
-val endpoint_with_headers : (string * string) list -> endpoint -> endpoint
+  val pp : t Fmt.t
+  val of_string : string -> (t, [> `Msg of string ]) result
+
+  val with_headers_if_http : (string * string) list -> t -> t
+  (** [with_headers_if_http hdrs edn] if endpoint [edn] is [`HTTP]  or [`HTTPS]
+      adds [hdrs] to [edn] *)
+end
 
 module Make
     (Scheduler : Sigs.SCHED with type +'a s = 'a Lwt.t)
@@ -80,7 +85,7 @@ module Make
     * Uid.t Carton_lwt.Thin.light_load
     * Uid.t Carton_lwt.Thin.heavy_load ->
     (Uid.t, Uid.t * int ref * int64, 'g) Sigs.store ->
-    endpoint ->
+    Endpoint.t ->
     ?version:[> `V1 ] ->
     ?capabilities:Smart.Capability.t list ->
     ?deepen:[ `Depth of int | `Timestamp of int64 ] ->
@@ -101,7 +106,7 @@ module Make
     * Uid.t Carton_lwt.Thin.light_load
     * Uid.t Carton_lwt.Thin.heavy_load ->
     (Uid.t, Uid.t Pck.t, 'g) Sigs.store ->
-    endpoint ->
+    Endpoint.t ->
     ?version:[> `V1 ] ->
     ?capabilities:Smart.Capability.t list ->
     [ `Create of Ref.t | `Delete of Ref.t | `Update of Ref.t * Ref.t ] list ->
