@@ -84,14 +84,16 @@ struct
             m "Prepare a pack of %d object(s)." (List.length uids));
         let stream = pack uids in
         let side_band =
-          Smart.Context.shared `Side_band ctx
-          || Smart.Context.shared `Side_band_64k ctx
+          Smart.Context.is_cap_shared `Side_band ctx
+          || Smart.Context.is_cap_shared `Side_band_64k ctx
         in
         let pack = Smart.send_pack ~stateless:push_cfg.stateless side_band in
         let rec go () =
           stream () >>= function
           | None ->
-              let report_status = Smart.Context.shared `Report_status ctx in
+              let report_status =
+                Smart.Context.is_cap_shared `Report_status ctx
+              in
               Log.debug (fun m ->
                   m "report-status capability: %b." report_status);
               if report_status then

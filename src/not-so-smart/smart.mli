@@ -188,7 +188,7 @@ module Context : sig
 
   val make : Capability.t list -> t
   val update : t -> Capability.t list -> unit
-  val shared : Capability.t -> t -> bool
+  val is_cap_shared : Capability.t -> t -> bool
   val capabilities : t -> Capability.t list * Capability.t list
 end
 

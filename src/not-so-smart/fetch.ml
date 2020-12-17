@@ -113,8 +113,8 @@ struct
         let pack ctx =
           let open Smart in
           let side_band =
-            Smart.Context.shared `Side_band ctx
-            || Smart.Context.shared `Side_band_64k ctx
+            Smart.Context.is_cap_shared `Side_band ctx
+            || Smart.Context.is_cap_shared `Side_band_64k ctx
           in
           recv ctx
             (recv_pack ~side_band ~push_stdout ~push_stderr ~push_pack:pack)

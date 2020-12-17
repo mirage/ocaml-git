@@ -110,7 +110,7 @@ module Context = struct
 
   let make = State.Context.make
   let update = State.Context.update
-  let shared = State.Context.shared
+  let is_cap_shared = State.Context.is_cap_shared
   let capabilities = State.Context.capabilities
 end
 
