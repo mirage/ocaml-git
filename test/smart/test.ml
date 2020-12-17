@@ -372,15 +372,16 @@ let create_new_git_push_store _sw =
     |> R.join
     >>= fun () ->
     let access =
-      {
-        Sigs.get = get_object_for_packer lwt;
-        Sigs.parents = (fun _uid _store -> assert false);
-        Sigs.deref = deref lwt;
-        Sigs.locals = (fun _store -> assert false);
-        Sigs.shallowed = (fun _store -> assert false);
-        Sigs.shallow = (fun _store _uid -> assert false);
-        Sigs.unshallow = (fun _store _uid -> assert false);
-      }
+      Sigs.
+        {
+          get = get_object_for_packer lwt;
+          parents = (fun _uid _store -> assert false);
+          deref = deref lwt;
+          locals = (fun _store -> assert false);
+          shallowed = (fun _store -> assert false);
+          shallow = (fun _store _uid -> assert false);
+          unshallow = (fun _store _uid -> assert false);
+        }
     in
     let light_load uid = lightly_load lwt root uid |> Scheduler.prj in
     let heavy_load uid = heavily_load lwt root uid |> Scheduler.prj in

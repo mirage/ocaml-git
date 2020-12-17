@@ -1,16 +1,17 @@
 open Rresult
-open Sigs
 
 type configuration = { stateless : bool }
 
 let configuration ?(stateless = true) () = { stateless }
 
+module S = Sigs
+
 module Make
-    (Scheduler : SCHED)
-    (IO : IO with type 'a t = 'a Scheduler.s)
-    (Flow : FLOW with type 'a fiber = 'a Scheduler.s)
-    (Uid : UID)
-    (Ref : REF) =
+    (Scheduler : S.SCHED)
+    (IO : S.IO with type 'a t = 'a Scheduler.s)
+    (Flow : S.FLOW with type 'a fiber = 'a Scheduler.s)
+    (Uid : S.UID)
+    (Ref : S.REF) =
 struct
   let src = Logs.Src.create "push"
 
@@ -22,19 +23,21 @@ struct
   let ( >>| ) x f = x >>= fun x -> return (f x)
 
   let sched =
-    {
-      Sigs.bind = (fun x f -> inj (prj x >>= fun x -> prj (f x)));
-      Sigs.return = (fun x -> inj (return x));
-    }
+    S.
+      {
+        bind = (fun x f -> inj (prj x >>= fun x -> prj (f x)));
+        return = (fun x -> inj (return x));
+      }
 
   let fail exn = inj (IO.fail exn)
 
   let io =
-    {
-      Sigs.recv = (fun flow raw -> inj (Flow.recv flow raw));
-      Sigs.send = (fun flow raw -> inj (Flow.send flow raw));
-      Sigs.pp_error = Flow.pp_error;
-    }
+    S.
+      {
+        recv = (fun flow raw -> inj (Flow.recv flow raw));
+        send = (fun flow raw -> inj (Flow.send flow raw));
+        pp_error = Flow.pp_error;
+      }
 
   let push ?(prelude = true) ~capabilities:caps cmds ~host path flow store
       access push_cfg pack =
