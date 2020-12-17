@@ -2,9 +2,9 @@
  (name test)
  (libraries git git-unix result curl.lwt mirage-crypto-rng.unix digestif
    digestif.c domain-name git-nss.git bos fpath bigarray-compat carton-lwt
-   bigstringaf git-nss.sigs fmt git-nss.pck carton rresult conduit alcotest
-   conduit-lwt git-nss.smart lwt.unix mmap astring lwt cstruct uri fmt.tty
-   logs.fmt alcotest-lwt cohttp-lwt-unix git-cohttp-unix))
+   bigstringaf git-nss.sigs git-nss.hkt fmt git-nss.pck carton rresult
+   conduit alcotest conduit-lwt git-nss.smart lwt.unix mmap astring lwt
+   cstruct uri fmt.tty logs.fmt alcotest-lwt cohttp-lwt-unix git-cohttp-unix))
 
 (rule
  (alias runtest)

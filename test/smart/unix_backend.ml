@@ -1,4 +1,4 @@
-module Scheduler = Sigs.Make_sched (struct type +'a t = 'a end)
+module Scheduler = Hkt.Make_sched (struct type +'a t = 'a end)
 
 let unix =
   let open Scheduler in

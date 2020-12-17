@@ -76,9 +76,9 @@ struct
     | `Store err -> Fmt.pf ppf "Store error: %a" Store.pp_error err
 
   module Hash = Hash.Make (Digestif)
-  module Scheduler = Sigs.Make_sched (Lwt)
+  module Scheduler = Hkt.Make_sched (Lwt)
 
-  module Ministore = Sigs.Make_store (struct
+  module Ministore = Hkt.Make_store (struct
     type ('k, 'v) t = Store.t * ('k, 'v) Hashtbl.t
 
     (* constraint 'k = Digestif.t *)

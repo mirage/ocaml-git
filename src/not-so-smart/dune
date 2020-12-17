@@ -18,6 +18,12 @@
  (libraries fmt cstruct))
 
 (library
+ (name hkt)
+ (public_name git-nss.hkt)
+ (modules hkt)
+ (libraries git-nss.sigs))
+
+(library
  (name neg)
  (public_name git-nss.neg)
  (modules neg find_common default)

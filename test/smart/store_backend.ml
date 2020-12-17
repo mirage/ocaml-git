@@ -7,7 +7,7 @@ module Log = (val Logs.src_log src : Logs.LOG)
 
 type ('k, 'v) t = { tbl : ('k, 'v) Hashtbl.t; path : Fpath.t }
 
-module Store = Sigs.Make_store (struct type nonrec ('k, 'v) t = ('k, 'v) t end)
+module Store = Hkt.Make_store (struct type nonrec ('k, 'v) t = ('k, 'v) t end)
 
 type git = Store.t
 
