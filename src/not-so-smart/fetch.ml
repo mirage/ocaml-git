@@ -1,5 +1,3 @@
-open Sigs
-
 type configuration = Neg.configuration
 
 let multi_ack capabilities =
@@ -20,12 +18,14 @@ let configuration ?(stateless = false) capabilities =
     Neg.multi_ack = multi_ack capabilities;
   }
 
+module S = Sigs
+
 module Make
-    (Scheduler : SCHED)
-    (IO : IO with type 'a t = 'a Scheduler.s)
-    (Flow : FLOW with type 'a fiber = 'a Scheduler.s)
-    (Uid : UID)
-    (Ref : REF) =
+    (Scheduler : S.SCHED)
+    (IO : S.IO with type 'a t = 'a Scheduler.s)
+    (Flow : S.FLOW with type 'a fiber = 'a Scheduler.s)
+    (Uid : S.UID)
+    (Ref : S.REF) =
 struct
   open Scheduler
 
@@ -37,7 +37,7 @@ struct
   let return x = IO.return x
 
   let sched =
-    Sigs.
+    S.
       {
         bind = (fun x f -> inj (prj x >>= fun x -> prj (f x)));
         return = (fun x -> inj (return x));
@@ -48,7 +48,7 @@ struct
     inj fail
 
   let io =
-    Sigs.
+    S.
       {
         recv = (fun flow raw -> inj (Flow.recv flow raw));
         send = (fun flow raw -> inj (Flow.send flow raw));
