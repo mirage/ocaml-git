@@ -41,14 +41,11 @@ module type STORE = sig
   external prj : ('a, 'b, t) store -> ('a, 'b) s = "%identity"
 end
 
-module Common_sched = struct
-  type t
+(** This is a module used to share functionality needed by modules that
+    contain higher-kinded type behavior.
 
-  external inj : 'a -> 'b = "%identity"
-  external prj : 'a -> 'b = "%identity"
-end
-
-module Common_store = struct
+    HKT = Higher-Kinded Types *)
+module HKT = struct
   type t
 
   external inj : 'a -> 'b = "%identity"
@@ -61,7 +58,7 @@ end) =
 struct
   type +'a s = 'a T.t
 
-  include Common_sched
+  include HKT
 end
 
 module Make_store (T : sig
@@ -70,7 +67,7 @@ end) =
 struct
   type ('a, 'b) s = ('a, 'b) T.t
 
-  include Common_store
+  include HKT
 end
 
 module type IO = sig
