@@ -83,11 +83,11 @@ let int64 =
 let format =
   let open Encore.Syntax in
   Encore.Bij.(compose obj4) user
-  <$> ( chop
+  <$> (chop
       <$> (while1 is_not_lt <* (Encore.Bij.char '<' <$> any))
       <*> (while1 is_not_gt <* (Encore.Bij.string "> " <$> const "> "))
       <*> (int64 <$> while1 is_digit <* (Encore.Bij.char ' ' <$> any))
-      <*> date )
+      <*> date)
 
 let length t =
   let string x = Int64.of_int (String.length x) in

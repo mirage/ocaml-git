@@ -57,8 +57,7 @@ let add_should_be_empty =
             Alcotest.(check string) "add" "A" status;
             R.ok ()
         | _ ->
-            Alcotest.failf "git-status: impossible to parse %S" should_be_empty
-        )
+            Alcotest.failf "git-status: impossible to parse %S" should_be_empty)
     | res, _ ->
         Alcotest.failf "git-status: @[<hov>%a@]" Fmt.(Dump.list string) res
   in
@@ -115,7 +114,7 @@ let tree_of_children tbl children =
         | Some hash ->
             let name = Fpath.basename path in
             Lwt.return_ok (Git.Tree.entry ~name `Dir hash)
-        | None -> Alcotest.failf "%a does not exist" Fpath.pp path )
+        | None -> Alcotest.failf "%a does not exist" Fpath.pp path)
   in
   Lwt_list.map_p entry children
   >>= Lwt_list.map_s (Lwt.return <.> Rresult.R.get_ok)
@@ -147,7 +146,7 @@ let write_tree expect =
                 Alcotest.(check sha1) "blob" hash (Entry.oid entry);
                 Lwt.return_ok hash
             | Error err ->
-                Alcotest.failf "store: %a" Git_unix.Store.pp_error err )
+                Alcotest.failf "store: %a" Git_unix.Store.pp_error err)
         | `Tree path -> (
             tree_of_children tbl children >>= fun tree ->
             Git_unix.Store.write store (Git_unix.Store.Value.tree tree)
@@ -156,14 +155,14 @@ let write_tree expect =
                 Hashtbl.add tbl path hash;
                 Lwt.return_ok hash
             | Error err ->
-                Alcotest.failf "store: %a" Git_unix.Store.pp_error err )
+                Alcotest.failf "store: %a" Git_unix.Store.pp_error err)
         | `Root -> (
             tree_of_children tbl children >>= fun tree ->
             Git_unix.Store.write store (Git_unix.Store.Value.tree tree)
             >>= function
             | Ok (hash, _) -> Lwt.return_ok hash
             | Error err ->
-                Alcotest.failf "store: %a" Git_unix.Store.pp_error err )
+                Alcotest.failf "store: %a" Git_unix.Store.pp_error err)
       in
       fold ~f (Digestif.SHA1.digest_string "") t
     in
@@ -200,8 +199,7 @@ let delete_should_be_empty =
             Alcotest.(check string) "delete" status "D";
             Bos.OS.Cmd.run Bos.Cmd.(v "git" % "commit" % "-m" % ".")
         | _ ->
-            Alcotest.failf "git-status: impossible to parse %S" should_be_empty
-        )
+            Alcotest.failf "git-status: impossible to parse %S" should_be_empty)
     | res, _ ->
         Alcotest.failf "git-status: @[<hov>%a@]" Fmt.(Dump.list string) res
   in

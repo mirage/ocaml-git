@@ -56,84 +56,88 @@ end
 
 let ( <.> ) f g x = f (g x)
 
-type endpoint = {
-  scheme :
-    [ `SSH of string
-    | `Git
-    | `HTTP of (string * string) list
-    | `HTTPS of (string * string) list ];
-  path : string;
-  endpoint : Conduit.Endpoint.t;
-}
+module Endpoint = struct
+  type t = {
+    scheme :
+      [ `SSH of string
+      | `Git
+      | `HTTP of (string * string) list
+      | `HTTPS of (string * string) list ];
+    path : string;
+    endpoint : Conduit.Endpoint.t;
+  }
 
-let pp_endpoint ppf edn =
-  match edn with
-  | { scheme = `SSH user; path; endpoint } ->
-      Fmt.pf ppf "%s@%a:%s" user Conduit.Endpoint.pp endpoint path
-  | { scheme = `Git; path; endpoint } ->
-      Fmt.pf ppf "git://%a/%s" Conduit.Endpoint.pp endpoint path
-  | { scheme = `HTTP _; path; endpoint } ->
-      Fmt.pf ppf "http://%a/%s" Conduit.Endpoint.pp endpoint path
-  | { scheme = `HTTPS _; path; endpoint } ->
-      Fmt.pf ppf "https://%a/%s" Conduit.Endpoint.pp endpoint path
+  let pp ppf edn =
+    match edn with
+    | { scheme = `SSH user; path; endpoint } ->
+        Fmt.pf ppf "%s@%a:%s" user Conduit.Endpoint.pp endpoint path
+    | { scheme = `Git; path; endpoint } ->
+        Fmt.pf ppf "git://%a/%s" Conduit.Endpoint.pp endpoint path
+    | { scheme = `HTTP _; path; endpoint } ->
+        Fmt.pf ppf "http://%a/%s" Conduit.Endpoint.pp endpoint path
+    | { scheme = `HTTPS _; path; endpoint } ->
+        Fmt.pf ppf "https://%a/%s" Conduit.Endpoint.pp endpoint path
 
-let endpoint_of_string str =
-  let open Rresult in
-  let parse_ssh x =
-    let max = String.length x in
-    Emile.of_string_raw ~off:0 ~len:max x
-    |> R.reword_error (R.msgf "%a" Emile.pp_error)
-    >>= fun (consumed, m) ->
-    match
-      Astring.String.cut ~sep:":" (String.sub x consumed (max - consumed))
-    with
-    | Some ("", path) ->
-        let user =
-          String.concat "."
-            (List.map
-               (function `Atom x -> x | `String x -> Fmt.str "%S" x)
-               m.Emile.local)
-        in
-        ( match fst m.Emile.domain with
-        | `Domain vs ->
-            Domain_name.of_strings vs
-            >>= Domain_name.host
-            >>| Conduit.Endpoint.domain
-        | `Literal v ->
-            Domain_name.of_string v
-            >>= Domain_name.host
-            >>| Conduit.Endpoint.domain
-        | `Addr (Emile.IPv4 ipv4) -> R.ok (Conduit.Endpoint.ip (Ipaddr.V4 ipv4))
-        | `Addr (Emile.IPv6 ipv6) -> R.ok (Conduit.Endpoint.ip (Ipaddr.V6 ipv6))
-        | `Addr (Emile.Ext (ext, _)) ->
-            R.error_msgf "Git does not handle domain extension %s." ext )
-        >>= fun endpoint -> R.ok { scheme = `SSH user; path; endpoint }
-    | _ -> R.error_msg "invalid pattern"
-  in
-  let parse_uri x =
-    let uri = Uri.of_string x in
-    match Uri.scheme uri, Uri.host uri, Uri.path uri with
-    | Some "git", Some host, path ->
-        Conduit.Endpoint.of_string host >>= fun endpoint ->
-        R.ok { scheme = `Git; path; endpoint }
-    | Some "http", Some host, path ->
-        Conduit.Endpoint.of_string host >>= fun endpoint ->
-        R.ok { scheme = `HTTP []; path; endpoint }
-    | Some "https", Some host, path ->
-        Conduit.Endpoint.of_string host >>= fun endpoint ->
-        R.ok { scheme = `HTTPS []; path; endpoint }
-    | _ -> R.error_msgf "invalid uri: %a" Uri.pp uri
-  in
-  match parse_ssh str, parse_uri str with
-  | Ok edn, _ -> R.ok edn
-  | Error _, Ok edn -> R.ok edn
-  | Error _, Error _ -> R.error_msgf "Invalid endpoint: %s" str
+  let of_string str =
+    let open Rresult in
+    let parse_ssh x =
+      let max = String.length x in
+      Emile.of_string_raw ~off:0 ~len:max x
+      |> R.reword_error (R.msgf "%a" Emile.pp_error)
+      >>= fun (consumed, m) ->
+      match
+        Astring.String.cut ~sep:":" (String.sub x consumed (max - consumed))
+      with
+      | Some ("", path) ->
+          let user =
+            String.concat "."
+              (List.map
+                 (function `Atom x -> x | `String x -> Fmt.str "%S" x)
+                 m.Emile.local)
+          in
+          (match fst m.Emile.domain with
+          | `Domain vs ->
+              Domain_name.of_strings vs
+              >>= Domain_name.host
+              >>| Conduit.Endpoint.domain
+          | `Literal v ->
+              Domain_name.of_string v
+              >>= Domain_name.host
+              >>| Conduit.Endpoint.domain
+          | `Addr (Emile.IPv4 ipv4) ->
+              R.ok (Conduit.Endpoint.ip (Ipaddr.V4 ipv4))
+          | `Addr (Emile.IPv6 ipv6) ->
+              R.ok (Conduit.Endpoint.ip (Ipaddr.V6 ipv6))
+          | `Addr (Emile.Ext (ext, _)) ->
+              R.error_msgf "Git does not handle domain extension %s." ext)
+          >>= fun endpoint -> R.ok { scheme = `SSH user; path; endpoint }
+      | _ -> R.error_msg "invalid pattern"
+    in
+    let parse_uri x =
+      let uri = Uri.of_string x in
+      match Uri.scheme uri, Uri.host uri, Uri.path uri with
+      | Some "git", Some host, path ->
+          Conduit.Endpoint.of_string host >>= fun endpoint ->
+          R.ok { scheme = `Git; path; endpoint }
+      | Some "http", Some host, path ->
+          Conduit.Endpoint.of_string host >>= fun endpoint ->
+          R.ok { scheme = `HTTP []; path; endpoint }
+      | Some "https", Some host, path ->
+          Conduit.Endpoint.of_string host >>= fun endpoint ->
+          R.ok { scheme = `HTTPS []; path; endpoint }
+      | _ -> R.error_msgf "invalid uri: %a" Uri.pp uri
+    in
+    match parse_ssh str, parse_uri str with
+    | Ok edn, _ -> R.ok edn
+    | Error _, Ok edn -> R.ok edn
+    | Error _, Error _ -> R.error_msgf "Invalid endpoint: %s" str
 
-let endpoint_with_headers headers ({ scheme; _ } as edn) =
-  match scheme with
-  | `SSH _ | `Git -> edn
-  | `HTTP _ -> { edn with scheme = `HTTP headers }
-  | `HTTPS _ -> { edn with scheme = `HTTPS headers }
+  let with_headers_if_http headers ({ scheme; _ } as edn) =
+    match scheme with
+    | `SSH _ | `Git -> edn
+    | `HTTP _ -> { edn with scheme = `HTTP headers }
+    | `HTTPS _ -> { edn with scheme = `HTTPS headers }
+end
 
 module Make
     (Scheduler : Sigs.SCHED with type +'a s = 'a Lwt.t)
@@ -376,11 +380,11 @@ struct
     let rec recv t raw =
       if t.pos = String.length t.ic then (
         let open Lwt.Infix in
-        ( HTTP.post ~resolvers:t.resolvers ~headers:t.headers t.uri t.oc
-        >|= Rresult.(R.reword_error (R.msgf "%a" HTTP.pp_error)) )
+        (HTTP.post ~resolvers:t.resolvers ~headers:t.headers t.uri t.oc
+        >|= Rresult.(R.reword_error (R.msgf "%a" HTTP.pp_error)))
         >>? fun (_resp, contents) ->
         t.ic <- t.ic ^ contents;
-        recv t raw )
+        recv t raw)
       else
         let len = min (String.length t.ic - t.pos) (Cstruct.len raw) in
         Cstruct.blit_from_string t.ic t.pos raw 0 len;
@@ -432,7 +436,7 @@ struct
       ~idx =
     let open Rresult in
     let open Lwt.Infix in
-    let endpoint = edn.endpoint in
+    let endpoint = edn.Endpoint.endpoint in
     let path = edn.path in
     let stream, pusher = Lwt_stream.create () in
     let pusher = function
@@ -473,8 +477,7 @@ struct
             match scheme with
             | `HTTP headers ->
                 ( Uri.of_string
-                    (Fmt.str "http://%a%s.git" Conduit.Endpoint.pp endpoint
-                       path),
+                    (Fmt.str "http://%a%s.git" Conduit.Endpoint.pp endpoint path),
                   headers )
             | `HTTPS headers ->
                 ( Uri.of_string
@@ -604,7 +607,7 @@ struct
   let push ~resolvers (access, light_load, heavy_load) store edn
       ?(version = `V1) ?(capabilities = default_capabilities) cmds =
     let open Rresult in
-    match version, edn.scheme with
+    match version, edn.Endpoint.scheme with
     | `V1, ((`Git | `SSH _) as scheme) ->
         let prelude = match scheme with `Git -> true | `SSH _ -> false in
         let endpoint = edn.endpoint in

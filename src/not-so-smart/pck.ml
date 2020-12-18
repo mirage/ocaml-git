@@ -67,7 +67,7 @@ let commands { bind; return } ~capabilities ~equal:equal_reference ~deref store
     | `Create reference -> (
         deref store reference >>= function
         | Some uid -> return (Smart.Commands.create uid reference :: acc)
-        | None -> return acc )
+        | None -> return acc)
     | `Delete reference ->
         let uid, _, _ =
           List.find
@@ -86,7 +86,7 @@ let commands { bind; return } ~capabilities ~equal:equal_reference ~deref store
                   equal_reference remote reference' && peeled = false)
                 have
             in
-            return (Smart.Commands.update uid_old uid_new remote :: acc) )
+            return (Smart.Commands.update uid_old uid_new remote :: acc))
   in
   let rec go a = function
     | [] -> return a
@@ -189,7 +189,7 @@ let get_uncommon_objects :
               value.color <- color;
               List.iter (fun uid -> Queue.push uid q) (preds node);
               go ()
-          | None | (exception Not_found) -> go () )
+          | None | (exception Not_found) -> go ())
       | exception Queue.Empty -> ()
     in
     List.iter (fun uid -> Queue.push uid q) (preds node);

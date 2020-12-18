@@ -30,7 +30,7 @@ module type S = sig
     ?push_stdout:(string -> unit) ->
     ?push_stderr:(string -> unit) ->
     resolvers:Conduit.resolvers ->
-    Smart_git.endpoint ->
+    Smart_git.Endpoint.t ->
     store ->
     ?version:[> `V1 ] ->
     ?capabilities:Smart.Capability.t list ->
@@ -40,7 +40,7 @@ module type S = sig
 
   val push :
     resolvers:Conduit.resolvers ->
-    Smart_git.endpoint ->
+    Smart_git.Endpoint.t ->
     store ->
     ?version:[> `V1 ] ->
     ?capabilities:Smart.Capability.t list ->
@@ -75,7 +75,7 @@ module Make
     ?push_stdout:(string -> unit) ->
     ?push_stderr:(string -> unit) ->
     resolvers:Conduit.resolvers ->
-    Smart_git.endpoint ->
+    Smart_git.Endpoint.t ->
     store ->
     ?version:[> `V1 ] ->
     ?capabilities:Smart.Capability.t list ->
@@ -101,7 +101,7 @@ module Make
 
   val push :
     resolvers:Conduit.resolvers ->
-    Smart_git.endpoint ->
+    Smart_git.Endpoint.t ->
     store ->
     ?version:[> `V1 ] ->
     ?capabilities:Smart.Capability.t list ->

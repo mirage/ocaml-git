@@ -16,7 +16,7 @@ let random_reference () =
     let chr = Char.chr (Random.int 256) in
     if not (is_not_refname chr) then (
       Bytes.set res !idx chr;
-      incr idx )
+      incr idx)
   done;
   Git.Reference.v (Bytes.unsafe_to_string res)
 

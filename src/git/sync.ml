@@ -31,7 +31,7 @@ module type S = sig
     ?push_stdout:(string -> unit) ->
     ?push_stderr:(string -> unit) ->
     resolvers:Conduit.resolvers ->
-    Smart_git.endpoint ->
+    Smart_git.Endpoint.t ->
     store ->
     ?version:[> `V1 ] ->
     ?capabilities:Smart.Capability.t list ->
@@ -41,7 +41,7 @@ module type S = sig
 
   val push :
     resolvers:Conduit.resolvers ->
-    Smart_git.endpoint ->
+    Smart_git.Endpoint.t ->
     store ->
     ?version:[> `V1 ] ->
     ?capabilities:Smart.Capability.t list ->
@@ -76,9 +76,9 @@ struct
     | `Store err -> Fmt.pf ppf "Store error: %a" Store.pp_error err
 
   module Hash = Hash.Make (Digestif)
-  module Scheduler = Sigs.Make_sched (Lwt)
+  module Scheduler = Hkt.Make_sched (Lwt)
 
-  module Ministore = Sigs.Make_store (struct
+  module Ministore = Hkt.Make_store (struct
     type ('k, 'v) t = Store.t * ('k, 'v) Hashtbl.t
 
     (* constraint 'k = Digestif.t *)
@@ -103,7 +103,7 @@ struct
             let v = hash, ref 0, ts in
             Hashtbl.add hashtbl hash v;
             Lwt.return_some v
-        | Ok _ | Error _ -> Lwt.return_none )
+        | Ok _ | Error _ -> Lwt.return_none)
 
   let parents_of_commit t hash =
     Log.debug (fun m -> m "Get parents of %a." Hash.pp hash);
@@ -111,7 +111,7 @@ struct
     | Value.Commit commit -> (
         Store.is_shallowed t hash >>= function
         | false -> Lwt.return (Store.Value.Commit.parents commit)
-        | true -> Lwt.return [] )
+        | true -> Lwt.return [])
     | _ -> Lwt.return []
 
   let parents ((t, _hashtbl) as store) hash =
@@ -146,21 +146,20 @@ struct
     Store.unshallow t hash
 
   let access =
-    {
-      Sigs.get =
-        (fun uid t ->
-          Scheduler.inj (get_commit_for_negotiation (Ministore.prj t) uid));
-      Sigs.parents =
-        (fun uid t -> Scheduler.inj (parents (Ministore.prj t) uid));
-      Sigs.deref =
-        (fun t refname -> Scheduler.inj (deref (Ministore.prj t) refname));
-      Sigs.locals = (fun t -> Scheduler.inj (locals (Ministore.prj t)));
-      Sigs.shallowed = (fun t -> Scheduler.inj (shallowed (Ministore.prj t)));
-      Sigs.shallow =
-        (fun t uid -> Scheduler.inj (shallow (Ministore.prj t) uid));
-      Sigs.unshallow =
-        (fun t uid -> Scheduler.inj (unshallow (Ministore.prj t) uid));
-    }
+    Sigs.
+      {
+        get =
+          (fun uid t ->
+            Scheduler.inj (get_commit_for_negotiation (Ministore.prj t) uid));
+        parents = (fun uid t -> Scheduler.inj (parents (Ministore.prj t) uid));
+        deref =
+          (fun t refname -> Scheduler.inj (deref (Ministore.prj t) refname));
+        locals = (fun t -> Scheduler.inj (locals (Ministore.prj t)));
+        shallowed = (fun t -> Scheduler.inj (shallowed (Ministore.prj t)));
+        shallow = (fun t uid -> Scheduler.inj (shallow (Ministore.prj t) uid));
+        unshallow =
+          (fun t uid -> Scheduler.inj (unshallow (Ministore.prj t) uid));
+      }
 
   let lightly_load t hash =
     Store.read_exn t hash >>= fun v ->
@@ -188,8 +187,9 @@ struct
         Lwt.return (Carton.Dec.v ~kind raw)
     | None -> Lwt.fail Not_found
 
-  include Smart_git.Make (Scheduler) (Pack) (Index) (Conduit) (HTTP) (Hash)
-            (Reference)
+  include
+    Smart_git.Make (Scheduler) (Pack) (Index) (Conduit) (HTTP) (Hash)
+      (Reference)
 
   let ( >>? ) x f =
     x >>= function Ok x -> f x | Error err -> Lwt.return_error err
@@ -278,21 +278,22 @@ struct
         | Some o as v ->
             Hashtbl.replace hashtbl hash o;
             Lwt.return v
-        | None -> Lwt.return_none )
+        | None -> Lwt.return_none)
 
   let access =
-    {
-      Sigs.get =
-        (fun uid t ->
-          Scheduler.inj (get_object_for_packer (Ministore.prj t) uid));
-      Sigs.parents = (fun _ _ -> assert false);
-      Sigs.deref =
-        (fun t refname -> Scheduler.inj (deref (Ministore.prj t) refname));
-      Sigs.locals = (fun _ -> assert false);
-      Sigs.shallowed = (fun _ -> assert false);
-      Sigs.shallow = (fun _ -> assert false);
-      Sigs.unshallow = (fun _ -> assert false);
-    }
+    Sigs.
+      {
+        get =
+          (fun uid t ->
+            Scheduler.inj (get_object_for_packer (Ministore.prj t) uid));
+        parents = (fun _ _ -> assert false);
+        deref =
+          (fun t refname -> Scheduler.inj (deref (Ministore.prj t) refname));
+        locals = (fun _ -> assert false);
+        shallowed = (fun _ -> assert false);
+        shallow = (fun _ -> assert false);
+        unshallow = (fun _ -> assert false);
+      }
 
   let push ~resolvers endpoint t ?version ?capabilities cmds =
     let ministore = Ministore.inj (t, Hashtbl.create 0x100) in

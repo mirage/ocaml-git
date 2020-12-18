@@ -1,5 +1,3 @@
-open Sigs
-
 type configuration = Neg.configuration
 
 let multi_ack capabilities =
@@ -20,12 +18,14 @@ let configuration ?(stateless = false) capabilities =
     Neg.multi_ack = multi_ack capabilities;
   }
 
+module S = Sigs
+
 module Make
-    (Scheduler : SCHED)
-    (IO : IO with type 'a t = 'a Scheduler.s)
-    (Flow : FLOW with type 'a fiber = 'a Scheduler.s)
-    (Uid : UID)
-    (Ref : REF) =
+    (Scheduler : S.SCHED)
+    (IO : S.IO with type 'a t = 'a Scheduler.s)
+    (Flow : S.FLOW with type 'a fiber = 'a Scheduler.s)
+    (Uid : S.UID)
+    (Ref : S.REF) =
 struct
   open Scheduler
 
@@ -37,7 +37,7 @@ struct
   let return x = IO.return x
 
   let sched =
-    Sigs.
+    S.
       {
         bind = (fun x f -> inj (prj x >>= fun x -> prj (f x)));
         return = (fun x -> inj (return x));
@@ -48,7 +48,7 @@ struct
     inj fail
 
   let io =
-    Sigs.
+    S.
       {
         recv = (fun flow raw -> inj (Flow.recv flow raw));
         send = (fun flow raw -> inj (Flow.send flow raw));
@@ -60,7 +60,9 @@ struct
     | `None -> [], []
     | `All ->
         List.fold_left
-          (fun acc -> function uid, ref, false -> (uid, ref) :: acc | _ -> acc)
+          (fun acc -> function
+            | uid, ref, false -> (uid, ref) :: acc
+            | _ -> acc)
           [] have
         |> List.split
     | `Some refs ->
@@ -92,10 +94,10 @@ struct
       let* v = recv ctx advertised_refs in
       let v = Smart.Advertised_refs.map ~fuid:Uid.of_hex ~fref:Ref.v v in
       let uids, refs = references refs (Smart.Advertised_refs.refs v) in
-      update ctx (Smart.Advertised_refs.capabilities v);
+      Smart.Context.update ctx (Smart.Advertised_refs.capabilities v);
       return (uids, refs)
     in
-    let ctx = Smart.make capabilities in
+    let ctx = Smart.Context.make capabilities in
     let negotiator = Neg.make ~compare:Uid.compare in
     Neg.tips sched access store negotiator |> prj >>= fun () ->
     Neg.run sched fail io flow (prelude ctx) |> prj >>= fun (uids, refs) ->
@@ -111,7 +113,8 @@ struct
         let pack ctx =
           let open Smart in
           let side_band =
-            Smart.shared `Side_band ctx || Smart.shared `Side_band_64k ctx
+            Smart.Context.is_cap_shared `Side_band ctx
+            || Smart.Context.is_cap_shared `Side_band_64k ctx
           in
           recv ctx
             (recv_pack ~side_band ~push_stdout ~push_stderr ~push_pack:pack)

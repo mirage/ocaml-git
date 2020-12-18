@@ -7,7 +7,7 @@ module Log = (val Logs.src_log src : Logs.LOG)
 
 type ('k, 'v) t = { tbl : ('k, 'v) Hashtbl.t; path : Fpath.t }
 
-module Store = Sigs.Make_store (struct type nonrec ('k, 'v) t = ('k, 'v) t end)
+module Store = Hkt.Make_store (struct type nonrec ('k, 'v) t = ('k, 'v) t end)
 
 type git = Store.t
 
@@ -182,7 +182,7 @@ let preds_of_tree path uid =
         let uid_and_name = String.concat " " uid_and_name in
         match Astring.String.cut ~sep:"\t" uid_and_name with
         | Some (uid, _) -> R.ok uid
-        | None -> R.error_msgf "Invalid line: %S" line )
+        | None -> R.error_msgf "Invalid line: %S" line)
     | _ -> R.error_msgf "Invalid line: %S" line
   in
   let open Bos in
@@ -263,7 +263,7 @@ let get_object_for_packer { return; _ } uid store =
       | Error err ->
           Log.warn (fun m ->
               m "Got an error [get_object_for_packer]: %a" R.pp_msg err);
-          return None )
+          return None)
 
 let get_commit_for_negotiation path (uid : Uid.t) =
   let open Bos in
@@ -304,12 +304,12 @@ let parents :
             | Ok None ->
                 assert false
                 (* XXX(dinosaure): impossible, [git] can not give to us unknown object. *)
-            | Error err -> Stdlib.raise (Failure (Fmt.str "%a" R.pp_msg err)) )
+            | Error err -> Stdlib.raise (Failure (Fmt.str "%a" R.pp_msg err)))
       in
       try
         let objs = List.map map uids in
         return objs
-      with Failure err -> failwithf "%s" err )
+      with Failure err -> failwithf "%s" err)
   | Error err ->
       Log.err (fun m -> m "Got an error [parents]: %a" R.pp_msg err);
       failwithf "%a" R.pp_msg err
@@ -379,7 +379,7 @@ let get_commit_for_negotiation { Sigs.return; _ } uid store =
       | Error err ->
           Log.warn (fun m ->
               m "Got an error [get_commit_for_negotiation]: %a" R.pp_msg err);
-          return None )
+          return None)
 
 let safely_rd ~f path =
   Bos.OS.File.with_ic path @@ fun ic a ->

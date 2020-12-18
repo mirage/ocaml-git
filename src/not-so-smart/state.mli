@@ -18,7 +18,7 @@ module type CONTEXT = sig
   val pp : t Fmt.t
   val encoder : t -> encoder
   val decoder : t -> decoder
-  val shared : Capability.t -> t -> bool
+  val is_cap_shared : Capability.t -> t -> bool
 end
 
 module type S = sig
@@ -43,7 +43,6 @@ module Context : sig
   val make : Capability.t list -> t
   val capabilities : t -> Capability.t list * Capability.t list
   val update : t -> Capability.t list -> unit
-  val shared : Capability.t -> t -> bool
 end
 
 module Scheduler

@@ -68,7 +68,7 @@ let ssh_cfg edn ssh_seed =
   assert (String.length ssh_seed > 0);
   let key = Awa.Keys.of_seed ssh_seed in
   match edn with
-  | { Smart_git.scheme = `SSH user; path; _ } ->
+  | { Smart_git.Endpoint.scheme = `SSH user; path; _ } ->
       let req = Awa.Ssh.Exec (Fmt.str "git-upload-pack '%s'" path) in
       Some { Awa_conduit.user; key; req; authenticator = None }
   | _ -> None
@@ -81,7 +81,7 @@ let ssh_resolve (ssh_cfg : Awa_conduit.endpoint) domain_name =
 
 let main (ssh_seed : string)
     (references : (Git.Reference.t * Git.Reference.t) list) (directory : string)
-    (repository : Smart_git.endpoint) : (unit, 'error) Lwt_result.t =
+    (repository : Smart_git.Endpoint.t) : (unit, 'error) Lwt_result.t =
   let repo_root =
     (match directory with "" -> Sys.getcwd () | _ -> directory) |> Fpath.v
   in
@@ -149,8 +149,8 @@ module Flag = struct
   (** passed argument needs to be a URI of the repository *)
   let repository =
     let endpoint =
-      let parse = Smart_git.endpoint_of_string in
-      let print = Smart_git.pp_endpoint in
+      let parse = Smart_git.Endpoint.of_string in
+      let print = Smart_git.Endpoint.pp in
       Arg.conv ~docv:"<uri>" (parse, print)
     in
     let doc = "URI leading to repository" in
@@ -189,13 +189,13 @@ let command =
   let exits = Term.default_exits in
   ( Term.(
       ret
-        ( const main
+        (const main
         $ Flag.progress
         $ Flag.ssh_seed
         $ Flag.references
         $ Flag.directory
         $ Flag.repository
-        $ setup_log )),
+        $ setup_log)),
     Term.info "ogit-fetch" ~version:"v0.1" ~doc ~exits )
 
 let () = Term.(exit @@ eval command)

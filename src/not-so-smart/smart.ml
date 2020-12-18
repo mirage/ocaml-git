@@ -1,14 +1,18 @@
 let ( <.> ) f g x = f (g x)
 
 module Capability = Capability
-module Proto_request = Protocol.Proto_request
-module Advertised_refs = Protocol.Advertised_refs
-module Want = Protocol.Want
-module Result = Protocol.Result
-module Negotiation = Protocol.Negotiation
-module Shallow = Protocol.Shallow
-module Commands = Protocol.Commands
-module Status = Protocol.Status
+
+include struct
+  open Protocol
+  module Proto_request = Proto_request
+  module Advertised_refs = Advertised_refs
+  module Want = Want
+  module Result = Result
+  module Negotiation = Negotiation
+  module Shallow = Shallow
+  module Commands = Commands
+  module Status = Status
+end
 
 module Witness = struct
   type 'a send =
@@ -49,21 +53,23 @@ module Value = struct
   let encode :
       type a. encoder -> a send -> a -> (unit, [> Encoder.error ]) State.t =
    fun encoder w v ->
-    let fiber : a send -> [> Encoder.error ] Encoder.state = function
-      | Proto_request -> Protocol.Encoder.encode_proto_request encoder v
-      | Want -> Protocol.Encoder.encode_want encoder v
-      | Done -> Protocol.Encoder.encode_done encoder
-      | Commands -> Protocol.Encoder.encode_commands encoder v
+    let fiber : a send -> [> Encoder.error ] Encoder.state =
+      let open Protocol.Encoder in
+      function
+      | Proto_request -> encode_proto_request encoder v
+      | Want -> encode_want encoder v
+      | Done -> encode_done encoder
+      | Commands -> encode_commands encoder v
       | Send_pack { side_band; stateless } ->
-          Protocol.Encoder.encode_pack ~side_band ~stateless encoder v
-      | Flush -> Protocol.Encoder.encode_flush encoder
-      | Advertised_refs -> Protocol.Encoder.encode_advertised_refs encoder v
+          encode_pack ~side_band ~stateless encoder v
+      | Flush -> encode_flush encoder
+      | Advertised_refs -> encode_advertised_refs encoder v
     in
     let rec go = function
       | Encoder.Done -> State.Return ()
-      | Encoder.Write { continue; buffer; off; len } ->
+      | Write { continue; buffer; off; len } ->
           State.Write { k = go <.> continue; buffer; off; len }
-      | Encoder.Error err -> State.Error (err :> error)
+      | Error err -> State.Error (err :> error)
     in
     (go <.> fiber) w
 
@@ -71,21 +77,20 @@ module Value = struct
    fun decoder w ->
     let rec go = function
       | Decoder.Done v -> State.Return v
-      | Decoder.Read { buffer; off; len; continue; eof } ->
+      | Read { buffer; off; len; continue; eof } ->
           State.Read { k = go <.> continue; buffer; off; len; eof = go <.> eof }
-      | Decoder.Error { error; _ } -> State.Error error
+      | Error { error; _ } -> State.Error error
     in
+    let open Protocol.Decoder in
     match w with
-    | Advertised_refs -> go (Protocol.Decoder.decode_advertised_refs decoder)
-    | Result -> go (Protocol.Decoder.decode_result decoder)
+    | Advertised_refs -> go (decode_advertised_refs decoder)
+    | Result -> go (decode_result decoder)
     | Recv_pack { side_band; push_pack; push_stdout; push_stderr } ->
-        go
-          (Protocol.Decoder.decode_pack ~side_band ~push_pack ~push_stdout
-             ~push_stderr decoder)
-    | Ack -> go (Protocol.Decoder.decode_negotiation decoder)
-    | Status -> go (Protocol.Decoder.decode_status decoder)
-    | Shallows -> go (Protocol.Decoder.decode_shallows decoder)
-    | Packet trim -> go (Protocol.Decoder.decode_packet ~trim decoder)
+        go (decode_pack ~side_band ~push_pack ~push_stdout ~push_stderr decoder)
+    | Ack -> go (decode_negotiation decoder)
+    | Status -> go (decode_status decoder)
+    | Shallows -> go (decode_shallows decoder)
+    | Packet trim -> go (decode_packet ~trim decoder)
 end
 
 type ('a, 'err) t = ('a, 'err) State.t =
@@ -100,12 +105,14 @@ type ('a, 'err) t = ('a, 'err) State.t =
   | Return of 'a
   | Error of 'err
 
-type context = State.Context.t
+module Context = struct
+  type t = State.Context.t
 
-let make capabilities = State.Context.make capabilities
-let update ctx capabilities = State.Context.update ctx capabilities
-let shared ctx capability = State.Context.shared ctx capability
-let capabilities ctx = State.Context.capabilities ctx
+  let make = State.Context.make
+  let update = State.Context.update
+  let is_cap_shared = State.Context.is_cap_shared
+  let capabilities = State.Context.capabilities
+end
 
 include Witness
 

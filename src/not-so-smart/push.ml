@@ -1,16 +1,17 @@
 open Rresult
-open Sigs
 
 type configuration = { stateless : bool }
 
 let configuration ?(stateless = true) () = { stateless }
 
+module S = Sigs
+
 module Make
-    (Scheduler : SCHED)
-    (IO : IO with type 'a t = 'a Scheduler.s)
-    (Flow : FLOW with type 'a fiber = 'a Scheduler.s)
-    (Uid : UID)
-    (Ref : REF) =
+    (Scheduler : S.SCHED)
+    (IO : S.IO with type 'a t = 'a Scheduler.s)
+    (Flow : S.FLOW with type 'a fiber = 'a Scheduler.s)
+    (Uid : S.UID)
+    (Ref : S.REF) =
 struct
   let src = Logs.Src.create "push"
 
@@ -22,19 +23,21 @@ struct
   let ( >>| ) x f = x >>= fun x -> return (f x)
 
   let sched =
-    {
-      Sigs.bind = (fun x f -> inj (prj x >>= fun x -> prj (f x)));
-      Sigs.return = (fun x -> inj (return x));
-    }
+    S.
+      {
+        bind = (fun x f -> inj (prj x >>= fun x -> prj (f x)));
+        return = (fun x -> inj (return x));
+      }
 
   let fail exn = inj (IO.fail exn)
 
   let io =
-    {
-      Sigs.recv = (fun flow raw -> inj (Flow.recv flow raw));
-      Sigs.send = (fun flow raw -> inj (Flow.send flow raw));
-      Sigs.pp_error = Flow.pp_error;
-    }
+    S.
+      {
+        recv = (fun flow raw -> inj (Flow.recv flow raw));
+        send = (fun flow raw -> inj (Flow.send flow raw));
+        pp_error = Flow.pp_error;
+      }
 
   let push ?(prelude = true) ~capabilities:caps cmds ~host path flow store
       access push_cfg pack =
@@ -47,10 +50,10 @@ struct
         else return ()
       in
       let* v = recv ctx advertised_refs in
-      update ctx (Smart.Advertised_refs.capabilities v);
+      Context.update ctx (Smart.Advertised_refs.capabilities v);
       return (Smart.Advertised_refs.map ~fuid:Uid.of_hex ~fref:Ref.v v)
     in
-    let ctx = Smart.make caps in
+    let ctx = Smart.Context.make caps in
     Neg.run sched fail io flow (fiber ctx) |> prj >>= fun advertised_refs ->
     Pck.commands sched
       ~capabilities:(Smart.Advertised_refs.capabilities advertised_refs)
@@ -81,13 +84,16 @@ struct
             m "Prepare a pack of %d object(s)." (List.length uids));
         let stream = pack uids in
         let side_band =
-          Smart.shared `Side_band ctx || Smart.shared `Side_band_64k ctx
+          Smart.Context.is_cap_shared `Side_band ctx
+          || Smart.Context.is_cap_shared `Side_band_64k ctx
         in
         let pack = Smart.send_pack ~stateless:push_cfg.stateless side_band in
         let rec go () =
           stream () >>= function
           | None ->
-              let report_status = Smart.shared `Report_status ctx in
+              let report_status =
+                Smart.Context.is_cap_shared `Report_status ctx
+              in
               Log.debug (fun m ->
                   m "report-status capability: %b." report_status);
               if report_status then
@@ -111,5 +117,5 @@ struct
             return ()
         | Error err ->
             Log.err (fun m -> m "Push got an error: %s" err);
-            return () )
+            return ())
 end

@@ -95,8 +95,8 @@ let create_tmp_dir ?(mode = 0o700) ?prefix_path pat =
       in
       try
         Ok
-          ( Unix.mkdir (Fpath.to_string dir) mode;
-            dir )
+          (Unix.mkdir (Fpath.to_string dir) mode;
+           dir)
       with
       | Unix.Unix_error (Unix.EEXIST, _, _) -> loop (count - 1)
       | Unix.Unix_error (Unix.EINTR, _, _) -> loop count
@@ -260,7 +260,7 @@ let test_sync_fetch () =
           (Git.Reference.Uid (Digestif.SHA1.of_hex "1000"))
         >|= store_err
         >>? fun () ->
-        Smart_git.endpoint_of_string "git://localhost/not-found.git"
+        Smart_git.Endpoint.of_string "git://localhost/not-found.git"
         |> Lwt.return
         >|= bad_input_err
         >>? fun endpoint ->
@@ -319,7 +319,7 @@ let test_empty_clone () =
     Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp0 ->
     Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp1 ->
     Bos.OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
-    Smart_git.endpoint_of_string "git://localhost/not-found.git" |> Lwt.return
+    Smart_git.Endpoint.of_string "git://localhost/not-found.git" |> Lwt.return
     >>? fun endpoint ->
     Git.fetch ~resolvers ~capabilities access store endpoint
       (`Some [ Ref.v "HEAD" ])
@@ -348,7 +348,7 @@ let test_simple_clone () =
     Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp0 ->
     Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp1 ->
     Bos.OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
-    Smart_git.endpoint_of_string "git://localhost/not-found.git" |> Lwt.return
+    Smart_git.Endpoint.of_string "git://localhost/not-found.git" |> Lwt.return
     >>? fun endpoint ->
     Git.fetch ~resolvers ~capabilities access store endpoint `All pack index
       ~src:tmp0 ~dst:tmp1 ~idx:tmp2
@@ -372,15 +372,16 @@ let create_new_git_push_store _sw =
     |> R.join
     >>= fun () ->
     let access =
-      {
-        Sigs.get = get_object_for_packer lwt;
-        Sigs.parents = (fun _uid _store -> assert false);
-        Sigs.deref = deref lwt;
-        Sigs.locals = (fun _store -> assert false);
-        Sigs.shallowed = (fun _store -> assert false);
-        Sigs.shallow = (fun _store _uid -> assert false);
-        Sigs.unshallow = (fun _store _uid -> assert false);
-      }
+      Sigs.
+        {
+          get = get_object_for_packer lwt;
+          parents = (fun _uid _store -> assert false);
+          deref = deref lwt;
+          locals = (fun _store -> assert false);
+          shallowed = (fun _store -> assert false);
+          shallow = (fun _store _uid -> assert false);
+          unshallow = (fun _store _uid -> assert false);
+        }
     in
     let light_load uid = lightly_load lwt root uid |> Scheduler.prj in
     let heavy_load uid = heavily_load lwt root uid |> Scheduler.prj in
@@ -446,7 +447,7 @@ let test_simple_push () =
     create_new_git_push_store sw >>= fun (access, store) ->
     commit_foo store >>= fun _head ->
     let resolvers = resolvers_with_payloads payloads in
-    Smart_git.endpoint_of_string "git://localhost/not-found.git" |> Lwt.return
+    Smart_git.Endpoint.of_string "git://localhost/not-found.git" |> Lwt.return
     >>? fun endpoint ->
     Git.push ~resolvers ~capabilities access store endpoint
       [ `Update (Ref.v "refs/head/master", Ref.v "refs/head/master") ]
@@ -482,7 +483,7 @@ let test_push_error () =
     in
     create_new_git_push_store sw >>= fun (access, store) ->
     let resolvers = resolvers_with_payloads payloads in
-    Smart_git.endpoint_of_string "git://localhost/not-found.git" |> Lwt.return
+    Smart_git.Endpoint.of_string "git://localhost/not-found.git" |> Lwt.return
     >>? fun endpoint ->
     Git.push ~resolvers ~capabilities access store endpoint
       [ `Update (Ref.v "refs/head/master", Ref.v "refs/head/master") ]
@@ -512,7 +513,7 @@ let test_fetch_empty () =
     Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp0 ->
     Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp1 ->
     Bos.OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
-    Smart_git.endpoint_of_string "git://localhost/not-found.git" |> Lwt.return
+    Smart_git.Endpoint.of_string "git://localhost/not-found.git" |> Lwt.return
     >>? fun endpoint ->
     Git.fetch ~resolvers ~capabilities access store endpoint `All pack index
       ~src:tmp0 ~dst:tmp1 ~idx:tmp2
@@ -605,7 +606,7 @@ let test_fetch_empty () =
         Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp0 ->
         Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp1 ->
         Bos.OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
-        Smart_git.endpoint_of_string "git://localhost/not-found.git"
+        Smart_git.Endpoint.of_string "git://localhost/not-found.git"
         |> Lwt.return
         >>? fun endpoint ->
         Git.fetch ~resolvers ~capabilities access store endpoint `All pack index
@@ -1048,7 +1049,7 @@ let test_negotiation () =
     Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp0 ->
     Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp1 ->
     Bos.OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
-    Smart_git.endpoint_of_string "git://localhost/not-found.git" |> Lwt.return
+    Smart_git.Endpoint.of_string "git://localhost/not-found.git" |> Lwt.return
     >>? fun endpoint ->
     Git.fetch ~resolvers ~capabilities access store endpoint `All pack index
       ~src:tmp0 ~dst:tmp1 ~idx:tmp2
@@ -1124,7 +1125,7 @@ let run_git_upload_pack ?(tmps_exit = true) store ic oc =
             Tmp_dirs.are_valid := tmps_exit;
             Logs.debug (fun m -> m "git-upload-pack terminated properly.");
             exit 1
-        | Error (`Msg err) -> Alcotest.failf "git-upload-pack: %s" err )
+        | Error (`Msg err) -> Alcotest.failf "git-upload-pack: %s" err)
     | _ ->
         Logs.app (fun m -> m "git-upload-pack launched!");
         Lwt.return_unit
@@ -1172,7 +1173,7 @@ let test_ssh () =
     Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp0 ->
     Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp1 ->
     Bos.OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
-    Smart_git.endpoint_of_string "git@localhost:not-found.git" |> Lwt.return
+    Smart_git.Endpoint.of_string "git@localhost:not-found.git" |> Lwt.return
     >>? fun endpoint ->
     Logs.app (fun m -> m "Waiting git-upload-pack.");
     Logs.app (fun m -> m "Start to fetch repository with SSH.");
@@ -1256,7 +1257,7 @@ let test_negotiation_ssh () =
     Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp0 ->
     Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp1 ->
     Bos.OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
-    Smart_git.endpoint_of_string "git@localhost:not-found.git" |> Lwt.return
+    Smart_git.Endpoint.of_string "git@localhost:not-found.git" |> Lwt.return
     >>? fun endpoint ->
     Logs.app (fun m -> m "Waiting git-upload-pack.");
     Logs.app (fun m -> m "Start to fetch repository with SSH.");
@@ -1296,7 +1297,7 @@ let run_git_receive_pack store ic oc =
             Tmp_dirs.are_valid := false;
             Logs.debug (fun m -> m "git-receive-pack terminated properly.");
             exit 1
-        | Error (`Msg err) -> Alcotest.failf "git-upload-pack: %s" err )
+        | Error (`Msg err) -> Alcotest.failf "git-upload-pack: %s" err)
     | _ ->
         Logs.app (fun m -> m "git-receive-pack launched!");
         Lwt.return_unit
@@ -1343,7 +1344,7 @@ let test_push_ssh () =
     update_testzone_1 store1 >>? fun () ->
     let capabilities = [ `Report_status; `Side_band_64k ] in
     let resolvers = resolvers_with_fifo ic_fifo oc_fifo in
-    Smart_git.endpoint_of_string "git@localhost:not-found.git" |> Lwt.return
+    Smart_git.Endpoint.of_string "git@localhost:not-found.git" |> Lwt.return
     >>? fun endpoint ->
     Git.push ~resolvers ~capabilities access store1 endpoint
       [ `Update (Ref.v "refs/heads/master", Ref.v "refs/heads/master") ]
@@ -1370,7 +1371,7 @@ let test_push_ssh () =
           Alcotest.failf "refs/heads/master has multiple hashes: %a"
             Fmt.(Dump.list string)
             hashes
-      | Error (`Msg err) -> Alcotest.failf "git-show-ref: %s" err )
+      | Error (`Msg err) -> Alcotest.failf "git-show-ref: %s" err)
   | Error (`Exn exn) -> Alcotest.failf "%s" (Printexc.to_string exn)
   | Error (#Conduit_lwt.error as err) ->
       Alcotest.failf "%a" Conduit_lwt.pp_error err
@@ -1414,7 +1415,7 @@ let test_negotiation_http () =
     Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp0 ->
     Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp1 ->
     Bos.OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
-    Smart_git.endpoint_of_string "http://localhost/not-found.git" |> Lwt.return
+    Smart_git.Endpoint.of_string "http://localhost/not-found.git" |> Lwt.return
     >>? fun endpoint ->
     let queue = Queue.create () in
     Queue.push (load_file "GET") queue;
@@ -1469,7 +1470,7 @@ let test_partial_clone_ssh () =
     Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp0 ->
     Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp1 ->
     Bos.OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
-    Smart_git.endpoint_of_string "git@localhost:not-found.git" |> Lwt.return
+    Smart_git.Endpoint.of_string "git@localhost:not-found.git" |> Lwt.return
     >>? fun endpoint ->
     Logs.app (fun m -> m "Waiting git-upload-pack.");
     Logs.app (fun m -> m "Start to fetch repository with SSH.");
@@ -1527,7 +1528,7 @@ let test_partial_fetch_ssh () =
   in
   let endpoint =
     Rresult.R.get_ok
-      (Smart_git.endpoint_of_string "git@localhost:not-found.git")
+      (Smart_git.Endpoint.of_string "git@localhost:not-found.git")
   in
   let run () =
     fill0 () >>? fun (_access, store0) ->
@@ -1606,7 +1607,7 @@ let test_partial_fetch_ssh () =
             Store_backend.shallowed lwt store1 |> Scheduler.prj
             >>= fun shallowed ->
             Alcotest.(check int) "2 shallowed commits" (List.length shallowed) 2;
-            Lwt.return_ok () )
+            Lwt.return_ok ())
   in
   run () >>= function
   | Ok v -> Lwt.return v

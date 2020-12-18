@@ -41,38 +41,6 @@ module type STORE = sig
   external prj : ('a, 'b, t) store -> ('a, 'b) s = "%identity"
 end
 
-module Common_sched = struct
-  type t
-
-  external inj : 'a -> 'b = "%identity"
-  external prj : 'a -> 'b = "%identity"
-end
-
-module Common_store = struct
-  type t
-
-  external inj : 'a -> 'b = "%identity"
-  external prj : 'a -> 'b = "%identity"
-end
-
-module Make_sched (T : sig
-  type +'a t
-end) =
-struct
-  type +'a s = 'a T.t
-
-  include Common_sched
-end
-
-module Make_store (T : sig
-  type ('k, 'v) t
-end) =
-struct
-  type ('a, 'b) s = ('a, 'b) T.t
-
-  include Common_store
-end
-
 module type IO = sig
   type +'a t
 

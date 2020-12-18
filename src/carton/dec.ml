@@ -121,7 +121,7 @@ module Fp (Uid : UID) = struct
           Bigstringaf.blit d.i ~src_off:d.i_pos d.i ~dst_off:0 ~len:rem;
           (* compress *)
           let res = input_bigstring ic d.i rem (Bigstringaf.length d.i - rem) in
-          peek k (src d d.i 0 (rem + res)) )
+          peek k (src d d.i 0 (rem + res)))
         else k d
     | `Manual ->
         let rem = i_rem d in
@@ -129,7 +129,7 @@ module Fp (Uid : UID) = struct
         if rem < d.t_peek then (
           Bigstringaf.blit d.i ~src_off:d.i_pos d.i ~dst_off:0 ~len:rem;
           (* compress *)
-          `Peek { d with k = peek k; i_pos = 0; i_len = rem - 1 } )
+          `Peek { d with k = peek k; i_pos = 0; i_len = rem - 1 })
         else k d
 
   let t_need d n = { d with t_need = n }
@@ -467,7 +467,7 @@ module Fp (Uid : UID) = struct
                 let _, dst_len = variable_length d.o x len in
                 source := src_len;
                 target := dst_len;
-                first := false );
+                first := false);
 
               go (Zl.Inf.flush z)
           | `Malformed err -> `Malformed (Fmt.str "inflate: %s" err)
@@ -478,7 +478,7 @@ module Fp (Uid : UID) = struct
                 let _, dst_len = variable_length d.o x len in
                 source := src_len;
                 target := dst_len;
-                first := false );
+                first := false);
 
               let len = i_rem d - Zl.Inf.src_rem z in
               let crc = Checkseum.Crc32.digest_bigstring d.i d.i_pos len crc in
@@ -615,7 +615,7 @@ module W = struct
                  available according the given offset. *)
             then (
               slice := Some s;
-              raise_notrace Found )
+              raise_notrace Found)
         | None -> ()
       done;
       heavy_load s ~map t w
@@ -686,7 +686,7 @@ let weight_of_delta :
             let decoder = Zh.M.src decoder slice.W.payload off len in
             (go [@tailcall])
               Int64.(add slice.W.offset (of_int slice.W.length))
-              decoder )
+              decoder)
   in
   let off = Int64.(to_int (sub cursor slice.W.offset)) in
   let len = slice.W.length - off in
@@ -716,7 +716,7 @@ let header_of_ref_delta ({ bind; return } as s) ~map t cursor slice =
                      (sub
                         (add !slice.W.offset (of_int !slice.W.length))
                         next_slice.W.offset)));
-              slice := next_slice )
+              slice := next_slice)
           in
           return consume
   in
@@ -730,7 +730,7 @@ let header_of_ref_delta ({ bind; return } as s) ~map t cursor slice =
       for _ = 0 to t.uid_ln - 1 do
         consume ()
       done;
-      uid )
+      uid)
     else
       let uid = Bytes.create t.uid_ln in
       for i = 0 to t.uid_ln - 1 do
@@ -765,7 +765,7 @@ let header_of_ofs_delta ({ bind; return } as s) ~map t cursor slice =
                      (sub
                         (add !slice.W.offset (of_int !slice.W.length))
                         next_slice.W.offset)));
-              slice := next_slice )
+              slice := next_slice)
           in
           return consume
   in
@@ -806,7 +806,7 @@ let header_of_entry ({ bind; return } as s) ~map t cursor slice0 =
                      (sub
                         (add !slice.W.offset (of_int !slice.W.length))
                         next_slice.W.offset)));
-              slice := next_slice )
+              slice := next_slice)
           in
           return consume
   in
@@ -920,7 +920,7 @@ and weight_of_offset :
             ~visited
             ~cursor:Int64.(add slice.W.offset (of_int pos))
             slice
-      | _ -> assert false )
+      | _ -> assert false)
 
 type raw = { raw0 : Bigstringaf.t; raw1 : Bigstringaf.t; flip : bool }
 type v = { kind : kind; raw : raw; len : int; depth : int }
@@ -997,7 +997,7 @@ let uncompress :
               decoder
         | None ->
             let decoder = Zl.Inf.src decoder Bigstringaf.empty 0 0 in
-            (go [@tailcall]) l p cursor decoder )
+            (go [@tailcall]) l p cursor decoder)
   in
   let off = Int64.(to_int (sub cursor slice.W.offset)) in
   let len = slice.W.length - off in
@@ -1044,7 +1044,7 @@ let of_delta :
             let decoder = Zh.M.src decoder slice.W.payload off len in
             (go [@tailcall])
               Int64.(add slice.W.offset (of_int slice.W.length))
-              raw decoder )
+              raw decoder)
   in
   let off = Int64.(to_int (sub cursor slice.W.offset)) in
   let len = slice.W.length - off in
@@ -1137,7 +1137,7 @@ and of_offset :
           of_ref_delta s ~map t raw
             ~cursor:Int64.(add slice.W.offset (of_int pos))
             slice
-      | _ -> assert false )
+      | _ -> assert false)
 
 type path = { path : int64 array; depth : int; kind : [ `A | `B | `C | `D ] }
 
@@ -1227,7 +1227,7 @@ and fill_path_from_offset :
           (fill_path_from_ref_delta [@tailcall]) s ~map t ~depth path
             ~cursor:Int64.(add slice.W.offset (of_int pos))
             slice
-      | _ -> assert false )
+      | _ -> assert false)
 
 let path_of_offset :
     type fd uid s.
@@ -1300,7 +1300,7 @@ let of_offset_with_source :
           of_delta s ~map t kind raw ~depth
             ~cursor:Int64.(add slice.W.offset (of_int pos))
             slice
-      | _ -> assert false )
+      | _ -> assert false)
 
 let base_of_offset :
     type fd uid s.
@@ -1452,7 +1452,7 @@ let uid_of_offset_with_source :
             slice
           >>= fun ({ raw; _ } as v) ->
           return (digest ~kind ~len:v.len (get_payload raw))
-      | _ -> assert false )
+      | _ -> assert false)
 
 type 'uid node = Node of int64 * 'uid * 'uid node list | Leaf of int64 * 'uid
 
@@ -1557,7 +1557,7 @@ struct
         | cursors ->
             nodes_of_offsets ~map ~oracle t ~kind (flip raw) ~depth:(succ depth)
               ~cursors
-            >>= fun nodes -> IO.return [ Node (cursor, uid, nodes) ] )
+            >>= fun nodes -> IO.return [ Node (cursor, uid, nodes) ])
     | cursors ->
         let source = get_source raw in
         let source =
@@ -1627,7 +1627,7 @@ struct
             let raw' = make_raw ~weight:weight' in
             Bigstringaf.blit (get_payload raw) ~src_off:0 (get_payload raw')
               ~dst_off:0 ~len:weight;
-            raw' )
+            raw')
           else raw
         in
         nodes_of_offsets ~map ~oracle t ~kind (flip raw) ~depth:1 ~cursors
@@ -1687,7 +1687,7 @@ struct
       done;
       if mutex.v >= Array.length matrix then (
         IO.Mutex.unlock mutex.m;
-        IO.return () )
+        IO.return ())
       else
         let root = mutex.v in
         mutex.v <- mutex.v + 1;
@@ -1777,7 +1777,7 @@ struct
         finish := true;
         IO.Condition.broadcast signal;
         IO.Mutex.unlock mutex;
-        return () )
+        return ())
       else (
         incr p;
         let uid = Idx.get_uid idx v
@@ -1788,7 +1788,7 @@ struct
 
         IO.Condition.signal signal;
         IO.Mutex.unlock mutex;
-        go () )
+        go ())
     in
     go ()
 

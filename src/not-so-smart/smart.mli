@@ -183,12 +183,14 @@ type error =
 
 val pp_error : error Fmt.t
 
-type context
+module Context : sig
+  type t
 
-val make : Capability.t list -> context
-val update : context -> Capability.t list -> unit
-val shared : Capability.t -> context -> bool
-val capabilities : context -> Capability.t list * Capability.t list
+  val make : Capability.t list -> t
+  val update : t -> Capability.t list -> unit
+  val is_cap_shared : Capability.t -> t -> bool
+  val capabilities : t -> Capability.t list * Capability.t list
+end
 
 type 'a send
 
@@ -221,20 +223,20 @@ val ( let* ) : ('a, 'err) t -> ('a -> ('b, 'err) t) -> ('b, 'err) t
 val ( >>= ) : ('a, 'err) t -> ('a -> ('b, 'err) t) -> ('b, 'err) t
 
 val encode :
-  context ->
+  Context.t ->
   'a send ->
   'a ->
-  (context -> ('b, ([> `Protocol of error ] as 'err)) t) ->
+  (Context.t -> ('b, ([> `Protocol of error ] as 'err)) t) ->
   ('b, 'err) t
 
 val decode :
-  context ->
+  Context.t ->
   'a recv ->
-  (context -> 'a -> ('b, ([> `Protocol of error ] as 'err)) t) ->
+  (Context.t -> 'a -> ('b, ([> `Protocol of error ] as 'err)) t) ->
   ('b, 'err) t
 
-val send : context -> 'a send -> 'a -> (unit, [> `Protocol of error ]) t
-val recv : context -> 'a recv -> ('a, [> `Protocol of error ]) t
+val send : Context.t -> 'a send -> 'a -> (unit, [> `Protocol of error ]) t
+val recv : Context.t -> 'a recv -> ('a, [> `Protocol of error ]) t
 val return : 'v -> ('v, 'err) t
 val fail : 'err -> ('v, 'err) t
 val reword_error : ('err0 -> 'err1) -> ('v, 'err0) t -> ('v, 'err1) t
@@ -245,5 +247,5 @@ val error_msgf :
 (**/**)
 
 module Unsafe : sig
-  val write : context -> string -> unit
+  val write : Context.t -> string -> unit
 end
