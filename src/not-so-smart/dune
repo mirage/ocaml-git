@@ -52,6 +52,6 @@
  (name smart_git)
  (public_name git-nss.git)
  (modules smart_git)
- (libraries ipaddr decompress.de decompress.zl cstruct logs astring result
-   rresult bigstringaf fmt emile conduit lwt domain-name uri sigs smart pck
-   nss digestif carton carton-lwt))
+ (libraries mimic mirage-flow unixiz ipaddr decompress.de decompress.zl
+   cstruct logs astring result rresult bigstringaf fmt emile conduit lwt
+   domain-name uri sigs smart pck nss digestif carton carton-lwt))

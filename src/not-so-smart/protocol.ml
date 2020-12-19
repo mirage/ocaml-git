@@ -99,7 +99,7 @@ end
 module Proto_request = struct
   type t = {
     path : string;
-    host : Conduit.Endpoint.t * int option;
+    host : [ `host ] Domain_name.t * int option;
     version : int;
     request_command : [ `Upload_pack | `Receive_pack | `Upload_archive ];
   }
@@ -119,8 +119,8 @@ module Proto_request = struct
       | `Upload_archive -> Fmt.pf ppf "git-upload-archive"
     in
     let pp_host ppf = function
-      | host, Some port -> Fmt.pf ppf "%a:%d" Conduit.Endpoint.pp host port
-      | host, None -> Fmt.pf ppf "%a" Conduit.Endpoint.pp host
+      | host, Some port -> Fmt.pf ppf "%a:%d" Domain_name.pp host port
+      | host, None -> Fmt.pf ppf "%a" Domain_name.pp host
     in
     Fmt.pf ppf "%a %s %a %a" pp_request_command request_command path
       Fmt.(prefix (const string " host=") pp_host)
@@ -745,12 +745,10 @@ module Encoder = struct
     in
     let write_host encoder = function
       | host, Some port ->
-          let host =
-            Fmt.str "host=%s:%d" (Conduit.Endpoint.to_string host) port
-          in
+          let host = Fmt.str "host=%s:%d" (Domain_name.to_string host) port in
           write encoder host
       | host, None ->
-          let host = Fmt.str "host=%s" (Conduit.Endpoint.to_string host) in
+          let host = Fmt.str "host=%s" (Domain_name.to_string host) in
           write encoder host
     in
     let k encoder =
