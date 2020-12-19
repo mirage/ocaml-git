@@ -29,7 +29,7 @@ module type S = sig
   val fetch :
     ?push_stdout:(string -> unit) ->
     ?push_stderr:(string -> unit) ->
-    resolvers:Conduit.resolvers ->
+    ctx:Mimic.ctx ->
     Smart_git.Endpoint.t ->
     store ->
     ?version:[> `V1 ] ->
@@ -39,7 +39,7 @@ module type S = sig
     ((hash * (Reference.t * hash) list) option, error) result Lwt.t
 
   val push :
-    resolvers:Conduit.resolvers ->
+    ctx:Mimic.ctx ->
     Smart_git.Endpoint.t ->
     store ->
     ?version:[> `V1 ] ->
@@ -57,10 +57,6 @@ module Make
     (Digestif : Digestif.S)
     (Pack : Smart_git.APPEND with type +'a fiber = 'a Lwt.t)
     (Index : Smart_git.APPEND with type +'a fiber = 'a Lwt.t)
-    (Conduit : Conduit.S
-                 with type +'a io = 'a Lwt.t
-                  and type input = Cstruct.t
-                  and type output = Cstruct.t)
     (Store : Minimal.S with type hash = Digestif.t)
     (HTTP : Smart_git.HTTP) : sig
   type hash = Digestif.t
@@ -74,7 +70,7 @@ module Make
   val fetch :
     ?push_stdout:(string -> unit) ->
     ?push_stderr:(string -> unit) ->
-    resolvers:Conduit.resolvers ->
+    ctx:Mimic.ctx ->
     Smart_git.Endpoint.t ->
     store ->
     ?version:[> `V1 ] ->
@@ -100,7 +96,7 @@ module Make
           [`None] - doesn't save anything *)
 
   val push :
-    resolvers:Conduit.resolvers ->
+    ctx:Mimic.ctx ->
     Smart_git.Endpoint.t ->
     store ->
     ?version:[> `V1 ] ->

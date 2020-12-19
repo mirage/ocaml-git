@@ -53,11 +53,5 @@ module Store : sig
   val v : ?dotgit:Fpath.t -> Fpath.t -> (t, error) result Lwt.t
 end
 
-module Sync
-    (Conduit : Conduit.S
-                 with type +'a io = 'a Lwt.t
-                  and type input = Cstruct.t
-                  and type output = Cstruct.t)
-    (Store : Minimal.S)
-    (HTTP : Smart_git.HTTP) :
+module Sync (Store : Minimal.S) (HTTP : Smart_git.HTTP) :
   Sync.S with type hash = Store.hash and type store = Store.t
