@@ -2,7 +2,7 @@
  (name main)
  (package git-unix)
  (public_name ogit-fetch)
- (libraries tcpip.stack-socket ipaddr ipaddr.unix domain-name mimic git
+ (libraries awa-mirage mirage-flow tcpip.stack-socket ipaddr ipaddr.unix domain-name mimic git
    git-unix cohttp-lwt-unix conduit conduit-lwt mirage-clock
    mirage-clock-unix awa git-nss.git fpath rresult result lwt lwt.unix
    git-cohttp-unix cmdliner mtime mtime.clock.os fmt.cli fmt.tty logs.cli
