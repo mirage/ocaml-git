@@ -42,6 +42,13 @@
  (libraries conduit fmt result rresult logs domain-name smart sigs neg pck))
 
 (library
+ (name unixiz)
+ (public_name git-nss.unixiz)
+ (modules unixiz)
+ (libraries git-nss.sigs lwt result rresult fmt bigarray-compat mirage-flow
+   ke cstruct))
+
+(library
  (name smart_git)
  (public_name git-nss.git)
  (modules smart_git)
