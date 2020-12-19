@@ -9,13 +9,15 @@ let lwt =
       return = (fun x -> inj (Lwt.return x));
     }
 
+module Flow = Unixiz.Make (Mimic)
+
 let lwt_io =
   let open Scheduler in
   Sigs.
     {
-      recv = (fun flow raw -> inj (Conduit_lwt.recv flow raw));
-      send = (fun flow raw -> inj (Conduit_lwt.send flow raw));
-      pp_error = Conduit_lwt.pp_error;
+      recv = (fun flow raw -> inj (Flow.recv flow raw));
+      send = (fun flow raw -> inj (Flow.send flow raw));
+      pp_error = Flow.pp_error;
     }
 
 let lwt_fail exn = Scheduler.inj (Lwt.fail exn)
