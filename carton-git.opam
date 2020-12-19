@@ -1,26 +1,19 @@
 opam-version: "2.0"
-name:         "carton"
-maintainer:   "Romain Calascibetta <romain.calascibetta@gmail.com>"
-authors:      "Romain Calascibetta <romain.calascibetta@gmail.com>"
-homepage:     "https://github.com/dinosaure/carton"
-bug-reports:  "https://github.com/dinosaure/carton/issues"
-dev-repo:     "git+https://github.com/dinosaure/carton.git"
-doc:          "https://dinosaure.github.io/carton/"
-license:      "MIT"
-synopsis:     "Implementation of PACK file in OCaml"
-description: """Carton is an implementation of the PACK file
+name: "carton"
+synopsis: "Implementation of PACK file in OCaml"
+description: """\
+Carton is an implementation of the PACK file
 in OCaml. PACK file is used by Git to store Git objects. Carton is more
-abstracted when it can store any objects.
-"""
-
-build: [
-  [ "dune" "build" "-p" name "-j" jobs ]
-  [ "dune" "runtest" "-p" name "-j" jobs ] {with-test}
-]
-
+abstracted when it can store any objects."""
+maintainer: "Romain Calascibetta <romain.calascibetta@gmail.com>"
+authors: "Romain Calascibetta <romain.calascibetta@gmail.com>"
+license: "MIT"
+homepage: "https://github.com/dinosaure/carton"
+doc: "https://dinosaure.github.io/carton/"
+bug-reports: "https://github.com/dinosaure/carton/issues"
 depends: [
-  "ocaml"      {>= "4.07.0"}
-  "dune"       {>= "2.6.0"}
+  "ocaml" {>= "4.07.0"}
+  "dune" {>= "2.6.0"}
   "carton"
   "carton-lwt"
   "bigarray-compat"
@@ -29,7 +22,17 @@ depends: [
   "fpath"
   "result"
   "mmap"
-  "fmt"        {>= "0.8.7"}
+  "fmt" {>= "0.8.7"}
   "base-unix"
   "decompress" {>= "1.2.0"}
+  "astring" {>= "0.8.5"}
+  "alcotest" {>= "1.2.3" & with-test}
+  "alcotest-lwt" {>= "1.2.3" & with-test}
+  "cstruct" {>= "6.0.0" & with-test}
+  "logs" {>= "0.7.0" & with-test}
 ]
+build: [
+  ["dune" "build" "-p" name "-j" jobs]
+  ["dune" "runtest" "-p" name "-j" jobs] {with-test}
+]
+dev-repo: "git+https://github.com/dinosaure/carton.git"
