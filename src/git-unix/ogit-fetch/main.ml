@@ -72,32 +72,32 @@ module TCP = struct
 end
 
 module SSH = struct
-  include Awa_mirage.Make(Tcpip_stack_socket.V4V6.TCP)(Mclock)
+  include Awa_mirage.Make (Tcpip_stack_socket.V4V6.TCP) (Mclock)
 
-  type nonrec error =
-    [ `TCP of TCP.error
-    | `SSH of error ]
+  type nonrec error = [ `TCP of TCP.error | `SSH of error ]
 
   let pp_error ppf = function
     | `TCP err -> TCP.pp_error ppf err
     | `SSH err -> pp_error ppf err
 
-  type endpoint =
-    { authenticator : Awa.Keys.authenticator option
-    ; user : string
-    ; path : string
-    ; key : Awa.Hostkey.priv
-    ; endpoint: TCP.endpoint }
+  type endpoint = {
+    authenticator : Awa.Keys.authenticator option;
+    user : string;
+    path : string;
+    key : Awa.Hostkey.priv;
+    endpoint : TCP.endpoint;
+  }
 
   let ( >>? ) = Lwt_result.bind
+
   open Lwt.Infix
 
   let read flow = read flow >|= Rresult.R.reword_error (fun err -> `SSH err)
 
-  let connect { authenticator; user; path; key; endpoint; } =
+  let connect { authenticator; user; path; key; endpoint } =
     let channel_request = Awa.Ssh.Exec (Fmt.str "git-upload-pack '%s'" path) in
-    TCP.connect endpoint
-    >|= Rresult.R.reword_error (fun err -> `TCP err) >>? fun flow ->
+    TCP.connect endpoint >|= Rresult.R.reword_error (fun err -> `TCP err)
+    >>? fun flow ->
     client_of_flow ?authenticator ~user key channel_request flow
     >|= Rresult.R.reword_error (fun err -> `SSH err)
 end
@@ -105,7 +105,6 @@ end
 let tcp_value, tcp_protocol = Mimic.register ~name:"tcp" (module TCP)
 let domain_name = Mimic.make ~name:"domain-namme"
 let port = Mimic.make ~name:"port"
-
 let ssh_value, ssh_protocol = Mimic.register ~name:"ssh" (module SSH)
 let path = Mimic.make ~name:"path"
 let seed = Mimic.make ~name:"ssh-seed"
@@ -124,25 +123,33 @@ let resolv ctx =
 let resolv_ssh ctx =
   let k authenticator sockaddr path user seed =
     let key = Awa.Keys.of_seed `Rsa seed in
-    Lwt.return_some { SSH.authenticator; user; path; key; endpoint= sockaddr } in
-  Mimic.fold ssh_value Mimic.Fun.[ opt authenticator; req tcp_value; req path; req user; req seed ] ~k ctx
+    Lwt.return_some { SSH.authenticator; user; path; key; endpoint = sockaddr }
+  in
+  Mimic.fold ssh_value
+    Mimic.Fun.[ opt authenticator; req tcp_value; req path; req user; req seed ]
+    ~k ctx
 
-let of_smart_git_endpoint edn ctx = match edn with
-  | { Smart_git.Endpoint.scheme= `SSH v_user; path= v_path; host; } ->
-    ctx |> Mimic.add domain_name host |> Mimic.add path v_path |> Mimic.add user v_user
-  | { Smart_git.Endpoint.path= v_path; host; _ } ->
-    ctx |> Mimic.add domain_name host |> Mimic.add path v_path
+let of_smart_git_endpoint edn ctx =
+  match edn with
+  | { Smart_git.Endpoint.scheme = `SSH v_user; path = v_path; host } ->
+      ctx
+      |> Mimic.add domain_name host
+      |> Mimic.add path v_path
+      |> Mimic.add user v_user
+  | { Smart_git.Endpoint.path = v_path; host; _ } ->
+      ctx |> Mimic.add domain_name host |> Mimic.add path v_path
 
 let main (_ssh_seed : string)
     (references : (Git.Reference.t * Git.Reference.t) list) (directory : string)
-    (repository : Smart_git.Endpoint.t) :
-    (unit, 'error) Lwt_result.t =
+    (repository : Smart_git.Endpoint.t) : (unit, 'error) Lwt_result.t =
   let repo_root =
     (match directory with "" -> Sys.getcwd () | _ -> directory) |> Fpath.v
   in
   let ( >>?= ) = Lwt_result.bind in
   let ( >>!= ) v f = Lwt_result.map_err f v in
-  let ctx = Mimic.empty |> resolv |> resolv_ssh |> of_smart_git_endpoint repository in
+  let ctx =
+    Mimic.empty |> resolv |> resolv_ssh |> of_smart_git_endpoint repository
+  in
   Store.v repo_root >>!= store_err >>?= fun store ->
   let push_stdout = print_endline in
   let push_stderr = prerr_endline in
