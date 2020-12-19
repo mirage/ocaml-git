@@ -60,45 +60,44 @@ let pp_error ppf = function
   | `Store err -> Fmt.pf ppf "(`Store %a)" Store.pp_error err
   | `Sync err -> Fmt.pf ppf "(`Sync %a)" Sync.pp_error err
 
-module SSH = Awa_conduit.Make (Lwt) (Conduit_lwt) (Mclock)
+module TCP = struct
+  include Tcpip_stack_socket.V4V6.TCP
 
-let ssh_protocol = SSH.protocol_with_ssh Conduit_lwt.TCP.protocol
+  type endpoint = Ipaddr.t * int
 
-let ssh_cfg edn ssh_seed =
-  assert (String.length ssh_seed > 0);
-  let key = Awa.Keys.of_seed ssh_seed in
-  match edn with
-  | { Smart_git.Endpoint.scheme = `SSH user; path; _ } ->
-      let req = Awa.Ssh.Exec (Fmt.str "git-upload-pack '%s'" path) in
-      Some { Awa_conduit.user; key; req; authenticator = None }
-  | _ -> None
+  let connect (ipaddr, port) =
+    let open Lwt.Infix in
+    connect ~ipv4_only:false ~ipv6_only:false Ipaddr.V4.Prefix.global None
+    >>= fun t -> create_connection t (ipaddr, port)
+end
 
-let ssh_resolve (ssh_cfg : Awa_conduit.endpoint) domain_name =
-  let open Lwt.Infix in
-  Conduit_lwt.TCP.resolve ~port:22 domain_name >|= function
-  | Some edn -> Some (edn, ssh_cfg)
-  | None -> None
+let tcp_value, tcp_protocol = Mimic.register ~name:"tcp" (module TCP)
+let domain_name = Mimic.make ~name:"domain-namme"
+let port = Mimic.make ~name:"port"
 
-let main (ssh_seed : string)
+let resolv ctx =
+  let k domain_name port =
+    match Unix.gethostbyname (Domain_name.to_string domain_name) with
+    | { Unix.h_addr_list; _ } when Array.length h_addr_list > 0 ->
+        Lwt.return_some (Ipaddr_unix.of_inet_addr h_addr_list.(0), port)
+    | _ | (exception _) -> Lwt.return_none
+  in
+  Mimic.fold tcp_value Mimic.Fun.[ req domain_name; dft port 9418 ] ~k ctx
+
+let main (_ssh_seed : string)
     (references : (Git.Reference.t * Git.Reference.t) list) (directory : string)
-    (repository : Smart_git.Endpoint.t) : (unit, 'error) Lwt_result.t =
+    ({ Smart_git.Endpoint.host; _ } as repository : Smart_git.Endpoint.t) :
+    (unit, 'error) Lwt_result.t =
   let repo_root =
     (match directory with "" -> Sys.getcwd () | _ -> directory) |> Fpath.v
   in
   let ( >>?= ) = Lwt_result.bind in
   let ( >>!= ) v f = Lwt_result.map_err f v in
-  let resolvers =
-    let git_scheme_resolver = Conduit_lwt.TCP.resolve ~port:9418 in
-    let ssh_cfg = ssh_cfg repository ssh_seed in
-    Conduit.empty
-    |> Conduit_lwt.add Conduit_lwt.TCP.protocol git_scheme_resolver
-    |> Conduit_lwt.add ssh_protocol (ssh_resolve @@ Option.get ssh_cfg)
-  in
+  let ctx = resolv Mimic.empty |> Mimic.add domain_name host in
   Store.v repo_root >>!= store_err >>?= fun store ->
   let push_stdout = print_endline in
   let push_stderr = prerr_endline in
-  Sync.fetch ~push_stdout ~push_stderr ~resolvers repository store
-    (`Some references)
+  Sync.fetch ~push_stdout ~push_stderr ~ctx repository store (`Some references)
   >>!= sync_err
   >>?= fun _ -> Lwt.return (Ok ())
 

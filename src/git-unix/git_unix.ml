@@ -656,9 +656,7 @@ module Sync (Git_store : Git.S) (HTTP : Smart_git.HTTP) = struct
   module Log = (val Logs.src_log src : Logs.LOG)
 
   include
-    Git.Sync.Make (Git_store.Hash) (Major_heap) (Major_heap) (Conduit_lwt)
-      (Git_store)
-      (HTTP)
+    Git.Sync.Make (Git_store.Hash) (Major_heap) (Major_heap) (Git_store) (HTTP)
 
   let random_gen = lazy (Random.State.make_self_init ())
 
@@ -719,7 +717,7 @@ module Sync (Git_store : Git.S) (HTTP : Smart_git.HTTP) = struct
     Lwt.async fill;
     fun () -> Lwt_stream.get stream
 
-  let fetch ?(push_stdout = ignore) ?(push_stderr = ignore) ~resolvers edn store
+  let fetch ?(push_stdout = ignore) ?(push_stderr = ignore) ~ctx edn store
       ?version ?capabilities ?deepen want =
     let dotgit = Git_store.dotgit store in
     let temp = Fpath.(dotgit / "tmp") in
@@ -728,7 +726,7 @@ module Sync (Git_store : Git.S) (HTTP : Smart_git.HTTP) = struct
     tmp temp "pack-%s.idx" >>= fun idx ->
     let create_idx_stream () = stream_of_file idx in
     let create_pack_stream () = stream_of_file dst in
-    fetch ~push_stdout ~push_stderr ~resolvers edn store ?version ?capabilities
+    fetch ~push_stdout ~push_stderr ~ctx edn store ?version ?capabilities
       ?deepen want ~src ~dst ~idx ~create_idx_stream ~create_pack_stream temp
       temp
 end
