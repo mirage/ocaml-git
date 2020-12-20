@@ -23,6 +23,7 @@ depends: [
   "carton"
   "carton-lwt"
   "uri"
+  "mimic"
   "digestif" {>= "0.8.1"}
   "decompress" {>= "1.2.0"}
   "bigstringaf"
