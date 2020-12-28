@@ -39,6 +39,8 @@ struct
         pp_error = Flow.pp_error;
       }
 
+  module Smart_flow = State_flow.Make (Smart)
+
   let push ?(uses_git_transport = true) ~capabilities:client_caps cmds ~host
       path flow store access push_cfg pack =
     let fiber ctx =

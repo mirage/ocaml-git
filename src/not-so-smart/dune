@@ -2,13 +2,27 @@
  (name pkt_line)
  (public_name git.nss.pkt-line)
  (modules decoder encoder)
- (libraries astring fmt))
+ (libraries astring fmt logs))
+
+(library
+ (name state)
+ (public_name git.nss.state)
+ (modules state)
+ (libraries git.nss.pkt-line fmt))
 
 (library
  (name smart)
  (public_name git.nss.smart)
- (modules smart filter capability state protocol)
- (libraries git.nss.pkt-line result rresult ipaddr domain-name astring fmt))
+ (modules smart filter capability protocol)
+ (libraries git.nss.pkt-line git.nss.state result rresult ipaddr domain-name
+   astring fmt))
+
+(library
+ (name wire_proto_v2)
+ (public_name git.nss.wire-proto-v2)
+ (modules capability_v2 proto_vals_v2 wire_proto_v2)
+ (libraries astring domain-name emile fmt git.nss.pkt-line git.nss.sigs
+   git.nss.state logs mimic result rresult uri))
 
 (library
  (name sigs)
@@ -17,10 +31,10 @@
  (libraries fmt cstruct))
 
 (library
- (name smart_flow)
- (public_name git.nss.smart-flow)
- (modules smart_flow)
- (libraries cstruct fmt git.nss.sigs git.nss.smart logs))
+ (name state_flow)
+ (public_name git.nss.state-flow)
+ (modules state_flow)
+ (libraries cstruct fmt git.nss.sigs git.nss.state git.nss.smart logs))
 
 (library
  (name hkt)
@@ -32,7 +46,7 @@
  (name neg)
  (public_name git.nss.neg)
  (modules neg find_common default)
- (libraries fmt rresult cstruct sigs logs psq smart git.nss.smart-flow))
+ (libraries fmt rresult cstruct sigs logs psq smart git.nss.state-flow))
 
 (library
  (name pck)
@@ -45,7 +59,7 @@
  (public_name git.nss)
  (modules nss fetch push)
  (libraries fmt result rresult logs ipaddr domain-name smart sigs neg pck
-   git.nss.smart-flow))
+   git.nss.state-flow git.nss.state wire_proto_v2))
 
 (library
  (name unixiz)

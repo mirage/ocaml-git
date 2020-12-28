@@ -140,26 +140,22 @@ module Make
     (Uid : UID)
     (Ref : Sigs.REF) =
 struct
-  let src = Logs.Src.create "git-fetch"
+  module Log = (val let src = Logs.Src.create "git-fetch" in
+                    Logs.src_log src : Logs.LOG)
 
-  module Log = (val Logs.src_log src : Logs.LOG)
   module Thin = Carton_lwt.Thin.Make (Uid)
 
   let fs =
     let open Rresult in
     let open Lwt.Infix in
-    Thin.
-      {
-        create =
-          (fun t path ->
-            Pack.create ~mode:Pack.RdWr t path
-            >|= R.reword_error (R.msgf "%a" Pack.pp_error));
-        append = Pack.append;
-        map = Pack.map;
-        close =
-          (fun t fd ->
-            Pack.close t fd >|= R.reword_error (R.msgf "%a" Pack.pp_error));
-      }
+    let create t path =
+      Pack.create ~mode:Pack.RdWr t path
+      >|= R.reword_error (R.msgf "%a" Pack.pp_error)
+    in
+    let close t fd =
+      Pack.close t fd >|= R.reword_error (R.msgf "%a" Pack.pp_error)
+    in
+    { Thin.create; append = Pack.append; map = Pack.map; close }
 
   (* XXX(dinosaure): abstract it? *)
   let digest :
@@ -305,10 +301,18 @@ struct
 
   module Flow = Unixiz.Make (Mimic)
   module Fetch = Nss.Fetch.Make (Scheduler) (Lwt) (Flow) (Uid) (Ref)
+  module Fetch_v1 = Fetch.V1
   module Push = Nss.Push.Make (Scheduler) (Lwt) (Flow) (Uid) (Ref)
 
+  (** [push_pack_str_alone push_pack (payload, off, len)] calls [push_pack] with
+      [push_pack (Some (String.sub payload off len), 0, len)] *)
+  let push_pack_new_str push_pack (payload, off, len) =
+    let v = String.sub payload off len in
+    push_pack (Some (v, 0, len))
+
   let fetch_v1 ?(uses_git_transport = false) ~push_stdout ~push_stderr
-      ~capabilities path ~ctx ?deepen ?want host store access fetch_cfg pack =
+      ~capabilities path ~ctx ?deepen ?want host store access fetch_cfg
+      push_pack =
     let open Lwt.Infix in
     Mimic.resolve ctx >>= function
     | Error _ as err ->
@@ -317,21 +321,20 @@ struct
           | `Addr v -> Ipaddr.pp ppf v
         in
         Log.err (fun m -> m "%a not found" pp_host host);
-        pack None;
+        push_pack None;
         Lwt.return err
     | Ok flow ->
         Lwt.try_bind
           (fun () ->
-            Fetch.fetch_v1 ~uses_git_transport ~push_stdout ~push_stderr
+            Fetch_v1.fetch ~uses_git_transport ~push_stdout ~push_stderr
               ~capabilities ?deepen ?want ~host path (Flow.make flow) store
-              access fetch_cfg (fun (payload, off, len) ->
-                let v = String.sub payload off len in
-                pack (Some (v, 0, len))))
+              access fetch_cfg
+              (push_pack_new_str push_pack))
           (fun refs ->
-            pack None;
+            push_pack None;
             Mimic.close flow >>= fun () -> Lwt.return_ok refs)
           (fun exn ->
-            pack None;
+            push_pack None;
             Mimic.close flow >>= fun () -> Lwt.fail exn)
 
   module Flow_http = struct
@@ -371,9 +374,11 @@ struct
   end
 
   module Fetch_http = Nss.Fetch.Make (Scheduler) (Lwt) (Flow_http) (Uid) (Ref)
+  module Fetch_v1_http = Fetch_http.V1
 
   let http_fetch_v1 ~push_stdout ~push_stderr ~capabilities ~ctx uri
-      ?(headers = []) endpoint path ?deepen ?want store access fetch_cfg pack =
+      ?(headers = []) endpoint path ?deepen ?want store access fetch_cfg
+      push_pack =
     let open Rresult in
     let open Lwt.Infix in
     let uri0 = Fmt.str "%a/info/refs?service=git-upload-pack" Uri.pp uri in
@@ -386,13 +391,11 @@ struct
     let flow =
       { Flow_http.ic = contents; pos = 0; oc = ""; uri = uri1; headers; ctx }
     in
-    Fetch_http.fetch_v1 ~push_stdout ~push_stderr ~capabilities ?deepen ?want
+    Fetch_v1_http.fetch ~push_stdout ~push_stderr ~capabilities ?deepen ?want
       ~host:endpoint path flow store access fetch_cfg
-      (fun (payload, off, len) ->
-        let v = String.sub payload off len in
-        pack (Some (v, 0, len)))
+      (push_pack_new_str push_pack)
     >>= fun refs ->
-    pack None;
+    push_pack None;
     Lwt.return_ok refs
 
   let default_capabilities =
@@ -400,6 +403,8 @@ struct
       `Side_band_64k; `Multi_ack_detailed; `Ofs_delta; `Thin_pack;
       `Report_status;
     ]
+
+  module V2 = struct end
 
   let fetch ?(push_stdout = ignore) ?(push_stderr = ignore) ~ctx
       (access, light_load, heavy_load) store edn ?(version = `V1)
@@ -428,7 +433,7 @@ struct
     let run =
       match version, edn.scheme with
       | `V1, ((`Git | `SSH _) as scheme) ->
-          let fetch_cfg = Nss.Fetch.configuration capabilities in
+          let fetch_cfg = Nss.Fetch.V1.configuration capabilities in
           let uses_git_transport =
             match scheme with `Git -> true | `SSH _ -> false
           in
@@ -449,7 +454,7 @@ struct
       | `V1, ((`HTTP _ | `HTTPS _) as scheme) ->
           Log.debug (fun m -> m "Start an HTTP transmission.");
           let fetch_cfg =
-            Nss.Fetch.configuration ~stateless:true capabilities
+            Nss.Fetch.V1.configuration ~stateless:true capabilities
           in
           let pp_host ppf = function
             | `Domain v -> Domain_name.pp ppf v

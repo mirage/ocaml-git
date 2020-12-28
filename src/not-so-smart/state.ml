@@ -78,10 +78,13 @@ struct
     in
     bind'
 
-  let ( let* ) m f = bind m ~f
-  let ( >>= ) m f = bind m ~f
   let return v = Return v
   let fail error = Error error
+  let map m ~f = bind m ~f:(fun v -> return (f v))
+  let ( >>= ) m f = bind m ~f
+  let ( >|= ) m f = map m ~f
+  let ( let* ) m f = m >>= f
+  let ( let+ ) m f = m >|= f
 
   let reword_error f x =
     let rec map_error = function
@@ -143,4 +146,18 @@ struct
    fun ctx w -> decode ctx w (fun _ctx v -> Return v)
 
   let error_msgf fmt = Fmt.kstr (fun err -> Error (`Msg err)) fmt
+
+  module Infix = struct
+    let ( >>= ) = ( >>= )
+    let ( >|= ) = ( >|= )
+    let return = return
+    let fail = fail
+  end
+
+  module Syntax = struct
+    let ( let* ) = ( let* )
+    let ( let+ ) = ( let+ )
+    let return = return
+    let fail = fail
+  end
 end
