@@ -8,6 +8,7 @@ module Mirage_protocol = Mirage_protocol
 module Info = struct type 'a t = 'a info end
 module Hmap0 = Hmap.Make (Info)
 
+let pp_value ppf value = Fmt.pf ppf "%a" pp_info (Hmap0.Key.info value)
 let src = Logs.Src.create "mimic" ~doc:"logs mimic's event"
 
 module Log = (val Logs.src_log src : Logs.LOG)
@@ -177,7 +178,7 @@ let register :
 
 module type REPR = sig
   type t
-  type flow += T of t
+  type flow += (* XXX(dinosaure): private? *) T of t
 end
 
 let repr :
@@ -204,7 +205,10 @@ let rec apply :
     | Dft (v, value) :: tl -> (
         fun f ->
           find value ctx >>= function
-          | Some v' -> go ctx tl (f v')
+          | Some v' ->
+              Log.debug (fun m ->
+                  m "Found a value for the default argument: %a." pp_value value);
+              go ctx tl (f v')
           | None -> go ctx tl (f v))
     | Req value :: tl -> (
         fun f ->
@@ -327,8 +331,11 @@ let resolve : ctx -> (edn list, [> `Cycle ]) result Lwt.t =
   let open Lwt.Infix in
   let rec go ctx acc : Sort.t list -> _ = function
     | [] -> Lwt.return_ok (List.rev acc)
-    | Sort.Val (p, k, v) :: r -> go ctx (Edn (p, k, v) :: acc) r
+    | Sort.Val (p, k, v) :: r ->
+        Log.debug (fun m -> m "Return a value %a." pp_value k);
+        go ctx (Edn (p, k, v) :: acc) r
     | Sort.Fun (p, k, args, f) :: r -> (
+        Log.debug (fun m -> m "Apply a function %a." pp_value k);
         apply ctx args f >>= function
         | Some v -> go (add k v ctx) (Edn (p, k, v) :: acc) r
         | None -> go ctx acc r)

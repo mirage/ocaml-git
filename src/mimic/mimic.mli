@@ -47,7 +47,7 @@ val register :
 
 module type REPR = sig
   type t
-  type flow += T of t
+  type flow += (* XXX(dinosaure): private? *) T of t
 end
 
 val repr : ('edn, 'flow) protocol -> (module REPR with type t = 'flow)

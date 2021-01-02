@@ -1,4 +1,7 @@
 let () = Printexc.record_backtrace true
+let () = Fmt_tty.setup_std_outputs ~style_renderer:`Ansi_tty ~utf_8:true ()
+let () = Logs.set_level ~all:true (Some Logs.Debug)
+let () = Logs.set_reporter (Logs_fmt.reporter ~dst:Fmt.stderr ())
 
 module Memory_flow0 :
   Mimic.Mirage_protocol.S with type endpoint = string * bytes = struct
@@ -114,8 +117,129 @@ let test_output_string =
   Alcotest.(check string) "buf" (Bytes.to_string buf) "Hello World!";
   Lwt.return_unit
 
+module Fake (Edn : sig
+  type t
+end) =
+struct
+  type error = |
+  type write_error = [ `Closed ]
+
+  let pp_error : error Fmt.t = fun _ -> function _ -> .
+
+  let pp_write_error : write_error Fmt.t =
+   fun ppf `Closed -> Fmt.string ppf "Connection closed by peer"
+
+  type flow = Edn.t
+
+  and endpoint = Edn.t
+
+  let connect (edn : endpoint) = Lwt.return_ok edn
+  let read _ = Lwt.return_ok (`Data Cstruct.empty)
+  let write _ _ = Lwt.return_ok ()
+  let close _ = Lwt.return_unit
+  let writev _ _ = Lwt.return_ok ()
+end
+
+let edn_int, protocol_int =
+  Mimic.register ~name:"int" (module Fake (struct type t = int end))
+
+module Protocol_int = (val Mimic.repr protocol_int)
+
+let edn_string, protocol_string =
+  Mimic.register ~name:"string" (module Fake (struct type t = string end))
+
+module Protocol_string = (val Mimic.repr protocol_string)
+
+let edn_float, protocol_float =
+  Mimic.register ~name:"float" (module Fake (struct type t = float end))
+
+module Protocol_float = (val Mimic.repr protocol_float)
+
+let flow :
+    type edn flow. (edn, flow) Mimic.protocol -> Mimic.flow Alcotest.testable =
+ fun protocol ->
+  let module Repr = (val Mimic.repr protocol) in
+  let equal a b = match a, b with Repr.T a, Repr.T b -> a = b | _ -> false in
+  let pp ppf _ = Fmt.string ppf "flow" in
+  Alcotest.testable pp equal
+
+let mimic_error = Alcotest.testable Mimic.pp_error ( = )
+
+let test_values =
+  Alcotest_lwt.test_case "values" `Quick @@ fun _sw () ->
+  let open Lwt.Infix in
+  let ctx0 = Mimic.empty |> Mimic.add edn_int 42 in
+  Mimic.resolve ctx0 >>= fun res0 ->
+  Alcotest.(check (result (flow protocol_int) mimic_error))
+    "res0" res0 (Ok (Protocol_int.T 42));
+  let ctx1 = ctx0 |> Mimic.add edn_string "Hello World!" in
+  Mimic.resolve ctx1 >>= fun res1 ->
+  Alcotest.(check (result (flow protocol_string) mimic_error))
+    "res1" res1 (Ok (Protocol_string.T "Hello World!"));
+  let ctx2 = ctx1 |> Mimic.add edn_float 0.42 in
+  Mimic.resolve ctx2 >>= fun res2 ->
+  Alcotest.(check (result (flow protocol_float) mimic_error))
+    "res2" res2 (Ok (Protocol_float.T 0.42));
+  Lwt.return_unit
+
+let test_functions =
+  Alcotest_lwt.test_case "functions" `Quick @@ fun _sw () ->
+  let open Lwt.Infix in
+  let k a b = Lwt.return_some (a + b) in
+  let ka = Mimic.make ~name:"a" and kb = Mimic.make ~name:"b" in
+  let ctx = Mimic.(fold edn_int Fun.[ req ka; req kb ] ~k Mimic.empty) in
+  let ctx = Mimic.add ka 2 ctx in
+  let ctx = Mimic.add kb 3 ctx in
+  Mimic.resolve ctx >>= fun res0 ->
+  Alcotest.(check (result (flow protocol_int) mimic_error))
+    "res0" res0 (Ok (Protocol_int.T 5));
+  let kint = Mimic.make ~name:"int" in
+  let k v = Lwt.return_some (string_of_int v) in
+  let ctx0 = Mimic.(fold edn_string Fun.[ dft kint 42 ] ~k Mimic.empty) in
+  let ctx1 = Mimic.add kint 51 ctx0 in
+  Mimic.resolve ctx0 >>= fun res1 ->
+  Alcotest.(check (result (flow protocol_string) mimic_error))
+    "res1" res1 (Ok (Protocol_string.T "42"));
+  Mimic.resolve ctx1 >>= fun res2 ->
+  Alcotest.(check (result (flow protocol_string) mimic_error))
+    "res2" res2 (Ok (Protocol_string.T "51"));
+  Lwt.return_unit
+
+let test_topological_sort =
+  Alcotest_lwt.test_case "topologicial" `Quick @@ fun _sw () ->
+  let open Lwt.Infix in
+  let k v = Lwt.return_some (string_of_int v) in
+  let kint01 = Mimic.make ~name:"int01" in
+  let ctx = Mimic.empty in
+  let ctx = Mimic.(fold edn_string Fun.[ req kint01 ] ~k ctx) in
+  let kint02 = Mimic.make ~name:"int02" in
+  let k v = Lwt.return_some (succ v) in
+  let ctx = Mimic.(fold kint01 Fun.[ req kint02 ] ~k ctx) in
+  let ctx0 = Mimic.add kint01 5 ctx in
+  let ctx1 = Mimic.add kint02 4 ctx in
+  Mimic.resolve ctx0 >>= fun res0 ->
+  Alcotest.(check (result (flow protocol_string) mimic_error))
+    "res0" res0 (Ok (Protocol_string.T "5"));
+  Mimic.resolve ctx1 >>= fun res1 ->
+  Alcotest.(check (result (flow protocol_string) mimic_error))
+    "res1" res1 (Ok (Protocol_string.T "5"));
+  Mimic.resolve ctx >>= fun res2 ->
+  Alcotest.(check (result (flow protocol_string) mimic_error))
+    "res2" res2
+    (Error `Not_found);
+  Alcotest.(check (result (flow protocol_int) mimic_error))
+    "res2" res2
+    (Error `Not_found);
+  Lwt.return_unit
+
 let fiber =
   Alcotest_lwt.run "mimic"
-    [ "mimic", [ test_input_string; test_output_string ] ]
+    [
+      ( "mimic",
+        [
+          test_input_string; test_output_string; test_values; test_functions;
+          test_topological_sort;
+        ] );
+    ]
 
 let () = Lwt_main.run fiber
