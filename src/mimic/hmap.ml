@@ -79,6 +79,12 @@ module type S = sig
     val any_binding : t -> binding option
     val get_any_binding : t -> binding
     val bindings : t -> binding list
+
+    type merge = {
+      f : 'a. 'a key -> 'a value option -> 'a value option -> 'a value option;
+    }
+
+    val merge : merge -> t -> t -> t
   end
 end
 
@@ -152,6 +158,35 @@ struct
     let filter p m = M.filter (fun _ b -> p b) m
     let cardinal m = M.cardinal m
     let any_binding m = try Some (snd (M.choose m)) with Not_found -> None
+
+    type merge = {
+      f : 'a. 'a key -> 'a value option -> 'a value option -> 'a value option;
+    }
+
+    let merge : merge -> t -> t -> t =
+     fun { f } t0 t1 ->
+      let f (Key.V k) a b =
+        match a, b with
+        | Some (B (k0, v)), None -> (
+            match Key.proof k k0 with
+            | Some Teq -> Option.map (fun v -> B (k, v)) (f k (Some v) None)
+            | None -> Option.map (fun v -> B (k, v)) (f k None None))
+        | None, Some (B (k0, v)) -> (
+            match Key.proof k k0 with
+            | Some Teq -> Option.map (fun v -> B (k, v)) (f k None (Some v))
+            | None -> Option.map (fun v -> B (k, v)) (f k None None))
+        | Some (B (k0, v0)), Some (B (k1, v1)) -> (
+            match Key.proof k k0, Key.proof k k1 with
+            | Some Teq, Some Teq ->
+                Option.map (fun v -> B (k, v)) (f k (Some v0) (Some v1))
+            | Some Teq, None ->
+                Option.map (fun v -> B (k, v)) (f k (Some v0) None)
+            | None, Some Teq ->
+                Option.map (fun v -> B (k, v)) (f k None (Some v1))
+            | None, None -> Option.map (fun v -> B (k, v)) (f k None None))
+        | None, None -> Option.map (fun v -> B (k, v)) (f k None None)
+      in
+      M.merge f t0 t1
 
     let get_any_binding m =
       try snd (M.choose m) with Not_found -> invalid_arg "empty map"

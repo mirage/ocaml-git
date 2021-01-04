@@ -133,6 +133,12 @@ module type S = sig
         @raise Invalid_argument if [m] is empty. *)
 
     val bindings : t -> binding list
+
+    type merge = {
+      f : 'a. 'a key -> 'a value option -> 'a value option -> 'a value option;
+    }
+
+    val merge : merge -> t -> t -> t
   end
 end
 
