@@ -32,7 +32,7 @@ module Memory_flow0 :
   let write ({ o; p = off; c; _ } as flow) cs =
     if c then Lwt.return_error `Closed
     else
-      let len = min (Cstruct.length cs) (Bytes.length o - off) in
+      let len = min (Cstruct.len cs) (Bytes.length o - off) in
       Cstruct.blit_to_bytes cs 0 o off len;
       if len = 0 then flow.c <- true;
       flow.p <- flow.p + len;
