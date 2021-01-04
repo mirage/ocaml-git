@@ -46,7 +46,8 @@ module Make (Flow : Mirage_flow.S) = struct
       Lwt.return_ok (`Input len)
 
   let send flow payload =
-    Flow.write flow.flow payload
-    >|= R.reword_error (fun err -> `Write_error err)
-    >>? fun () -> Lwt.return_ok (Cstruct.length payload)
+    Flow.write flow.flow payload >|= function
+    | Error `Closed -> R.error (`Write_error `Closed)
+    | Error err -> R.error (`Write_error err)
+    | Ok () -> R.ok (Cstruct.length payload)
 end

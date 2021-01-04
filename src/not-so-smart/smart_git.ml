@@ -41,11 +41,13 @@ module type HTTP = sig
   val pp_error : error Fmt.t
 
   val get :
+    ctx:Mimic.ctx ->
     ?headers:(string * string) list ->
     Uri.t ->
     (unit * string, error) result Lwt.t
 
   val post :
+    ctx:Mimic.ctx ->
     ?headers:(string * string) list ->
     Uri.t ->
     string ->
@@ -310,8 +312,9 @@ struct
   module Fetch = Nss.Fetch.Make (Scheduler) (Lwt) (Flow) (Uid) (Ref)
   module Push = Nss.Push.Make (Scheduler) (Lwt) (Flow) (Uid) (Ref)
 
-  let fetch_v1 ?uses_git_transport ~push_stdout ~push_stderr ~capabilities path
-      ~ctx ?deepen ?want host store access fetch_cfg pack =
+  let fetch_v1 ?(uses_git_transport = false) ?(is_ssh = fun _ -> false)
+      ~push_stdout ~push_stderr ~capabilities path ~ctx ?deepen ?want host store
+      access fetch_cfg pack =
     let open Lwt.Infix in
     Log.debug (fun m -> m "Try to resolve %a." Domain_name.pp host);
     Mimic.resolve ctx >>= function
@@ -319,19 +322,26 @@ struct
         pack None;
         Lwt.return err
     | Ok flow ->
-        Lwt.try_bind
-          (fun () ->
-            Fetch.fetch_v1 ?uses_git_transport ~push_stdout ~push_stderr
-              ~capabilities ?deepen ?want ~host path (Flow.make flow) store
-              access fetch_cfg (fun (payload, off, len) ->
-                let v = String.sub payload off len in
-                pack (Some (v, 0, len))))
-          (fun refs ->
-            pack None;
-            Mimic.close flow >>= fun () -> Lwt.return_ok refs)
-          (fun exn ->
-            pack None;
-            Mimic.close flow >>= fun () -> Lwt.fail exn)
+        Log.debug (fun m -> m "We use Git transport: %b." uses_git_transport);
+        Log.debug (fun m -> m "The flow is a SSH connection: %b." (is_ssh flow));
+        if (not uses_git_transport) && not (is_ssh flow) then (
+          Mimic.close flow >>= fun () ->
+          pack None;
+          Lwt.return_error `Invalid_flow)
+        else
+          Lwt.try_bind
+            (fun () ->
+              Fetch.fetch_v1 ~uses_git_transport ~push_stdout ~push_stderr
+                ~capabilities ?deepen ?want ~host path (Flow.make flow) store
+                access fetch_cfg (fun (payload, off, len) ->
+                  let v = String.sub payload off len in
+                  pack (Some (v, 0, len))))
+            (fun refs ->
+              pack None;
+              Mimic.close flow >>= fun () -> Lwt.return_ok refs)
+            (fun exn ->
+              pack None;
+              Mimic.close flow >>= fun () -> Lwt.fail exn)
 
   module Flow_http = struct
     type +'a fiber = 'a Lwt.t
@@ -342,6 +352,7 @@ struct
       mutable pos : int;
       uri : Uri.t;
       headers : (string * string) list;
+      ctx : Mimic.ctx;
     }
 
     type error = [ `Msg of string ]
@@ -356,7 +367,7 @@ struct
     let rec recv t raw =
       if t.pos = String.length t.ic then (
         let open Lwt.Infix in
-        (HTTP.post ~headers:t.headers t.uri t.oc
+        (HTTP.post ~ctx:t.ctx ~headers:t.headers t.uri t.oc
         >|= Rresult.(R.reword_error (R.msgf "%a" HTTP.pp_error)))
         >>? fun (_resp, contents) ->
         t.ic <- t.ic ^ contents;
@@ -370,18 +381,19 @@ struct
 
   module Fetch_http = Nss.Fetch.Make (Scheduler) (Lwt) (Flow_http) (Uid) (Ref)
 
-  let http_fetch_v1 ~push_stdout ~push_stderr ~capabilities uri ?(headers = [])
-      endpoint path ?deepen ?want store access fetch_cfg pack =
+  let http_fetch_v1 ~push_stdout ~push_stderr ~capabilities ~ctx uri
+      ?(headers = []) endpoint path ?deepen ?want store access fetch_cfg pack =
     let open Rresult in
     let open Lwt.Infix in
     let uri0 = Fmt.str "%a/info/refs?service=git-upload-pack" Uri.pp uri in
     let uri0 = Uri.of_string uri0 in
-    HTTP.get ~headers uri0 >|= R.reword_error (R.msgf "%a" HTTP.pp_error)
+    Log.debug (fun m -> m "GET %a" Uri.pp uri0);
+    HTTP.get ~ctx ~headers uri0 >|= R.reword_error (R.msgf "%a" HTTP.pp_error)
     >>? fun (_resp, contents) ->
     let uri1 = Fmt.str "%a/git-upload-pack" Uri.pp uri in
     let uri1 = Uri.of_string uri1 in
     let flow =
-      { Flow_http.ic = contents; pos = 0; oc = ""; uri = uri1; headers }
+      { Flow_http.ic = contents; pos = 0; oc = ""; uri = uri1; headers; ctx }
     in
     Fetch_http.fetch_v1 ~push_stdout ~push_stderr ~capabilities ?deepen ?want
       ~host:endpoint path flow store access fetch_cfg
@@ -398,7 +410,7 @@ struct
       `Report_status;
     ]
 
-  let fetch ?(push_stdout = ignore) ?(push_stderr = ignore) ~ctx
+  let fetch ?(push_stdout = ignore) ?(push_stderr = ignore) ~ctx ?is_ssh
       (access, light_load, heavy_load) store edn ?(version = `V1)
       ?(capabilities = default_capabilities) ?deepen want t_pck t_idx ~src ~dst
       ~idx =
@@ -425,7 +437,7 @@ struct
           in
           let run () =
             Lwt.both
-              (fetch_v1 ~push_stdout ~push_stderr ~uses_git_transport
+              (fetch_v1 ~push_stdout ~push_stderr ~uses_git_transport ?is_ssh
                  ~capabilities path ~ctx ?deepen ~want host store access
                  fetch_cfg pusher)
               (run ~light_load ~heavy_load stream t_pck t_idx ~src ~dst ~idx)
@@ -438,6 +450,7 @@ struct
           in
           run
       | `V1, ((`HTTP _ | `HTTPS _) as scheme) ->
+          Log.debug (fun m -> m "Start an HTTP transmission.");
           let fetch_cfg =
             Nss.Fetch.configuration ~stateless:true capabilities
           in
@@ -454,7 +467,7 @@ struct
           in
           let run () =
             Lwt.both
-              (http_fetch_v1 ~push_stdout ~push_stderr ~capabilities uri
+              (http_fetch_v1 ~push_stdout ~push_stderr ~capabilities ~ctx uri
                  ~headers host path ?deepen ~want store access fetch_cfg pusher)
               (run ~light_load ~heavy_load stream t_pck t_idx ~src ~dst ~idx)
             >>= fun (refs, idx) ->

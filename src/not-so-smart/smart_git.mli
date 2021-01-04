@@ -34,11 +34,13 @@ module type HTTP = sig
   val pp_error : error Fmt.t
 
   val get :
+    ctx:Mimic.ctx ->
     ?headers:(string * string) list ->
     Uri.t ->
     (unit * string, error) result Lwt.t
 
   val post :
+    ctx:Mimic.ctx ->
     ?headers:(string * string) list ->
     Uri.t ->
     string ->
@@ -75,6 +77,7 @@ module Make
     ?push_stdout:(string -> unit) ->
     ?push_stderr:(string -> unit) ->
     ctx:Mimic.ctx ->
+    ?is_ssh:(Mimic.flow -> bool) ->
     (Uid.t, _, Uid.t * int ref * int64, 'g, Scheduler.t) Sigs.access
     * Uid.t Carton_lwt.Thin.light_load
     * Uid.t Carton_lwt.Thin.heavy_load ->
@@ -90,7 +93,7 @@ module Make
     dst:Pack.uid ->
     idx:Index.uid ->
     ( [ `Pack of Uid.t * (Ref.t * Uid.t) list | `Empty ],
-      [> `Msg of string | `Exn of exn | `Not_found ] )
+      [> `Exn of exn | `Invalid_flow | Mimic.error ] )
     result
     Lwt.t
 
@@ -104,5 +107,5 @@ module Make
     ?version:[> `V1 ] ->
     ?capabilities:Smart.Capability.t list ->
     [ `Create of Ref.t | `Delete of Ref.t | `Update of Ref.t * Ref.t ] list ->
-    (unit, [> `Msg of string | `Exn of exn | `Not_found ]) result Lwt.t
+    (unit, [> `Exn of exn | `Invalid_flow | Mimic.error ]) result Lwt.t
 end
