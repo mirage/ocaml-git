@@ -473,8 +473,8 @@ module Sync (Git_store : Minimal.S) (HTTP : Smart_git.HTTP) = struct
     Lwt.async fill;
     fun () -> Lwt_stream.get stream
 
-  let fetch ?(push_stdout = ignore) ?(push_stderr = ignore) ~ctx edn store
-      ?version ?capabilities ?deepen want =
+  let fetch ?(push_stdout = ignore) ?(push_stderr = ignore) ~ctx ?is_ssh edn
+      store ?version ?capabilities ?deepen want =
     let t_idx = Carton.Dec.Idx.Device.device () in
     let t_pck = Cstruct_append.device () in
     let index = Carton.Dec.Idx.Device.create t_idx in
@@ -489,7 +489,7 @@ module Sync (Git_store : Minimal.S) (HTTP : Smart_git.HTTP) = struct
       let pack = Cstruct_append.project t_pck dst in
       stream_of_cstruct pack
     in
-    fetch ~push_stdout ~push_stderr ~ctx edn store ?version ?capabilities
-      ?deepen want ~src ~dst ~idx:index ~create_idx_stream ~create_pack_stream
-      t_pck t_idx
+    fetch ~push_stdout ~push_stderr ~ctx ?is_ssh edn store ?version
+      ?capabilities ?deepen want ~src ~dst ~idx:index ~create_idx_stream
+      ~create_pack_stream t_pck t_idx
 end

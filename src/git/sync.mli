@@ -22,7 +22,7 @@
 module type S = sig
   type hash
   type store
-  type error = private [> `Msg of string | `Exn of exn | `Not_found ]
+  type error = private [> Mimic.error | `Invalid_flow | `Exn of exn ]
 
   val pp_error : error Fmt.t
 
@@ -30,6 +30,7 @@ module type S = sig
     ?push_stdout:(string -> unit) ->
     ?push_stderr:(string -> unit) ->
     ctx:Mimic.ctx ->
+    ?is_ssh:(Mimic.flow -> bool) ->
     Smart_git.Endpoint.t ->
     store ->
     ?version:[> `V1 ] ->
@@ -63,7 +64,7 @@ module Make
   type store = Store.t
 
   type error =
-    [ `Msg of string | `Exn of exn | `Not_found | `Store of Store.error ]
+    [ `Exn of exn | `Store of Store.error | `Invalid_flow | Mimic.error ]
 
   val pp_error : error Fmt.t
 
@@ -71,6 +72,7 @@ module Make
     ?push_stdout:(string -> unit) ->
     ?push_stderr:(string -> unit) ->
     ctx:Mimic.ctx ->
+    ?is_ssh:(Mimic.flow -> bool) ->
     Smart_git.Endpoint.t ->
     store ->
     ?version:[> `V1 ] ->
