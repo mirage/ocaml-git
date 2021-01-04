@@ -318,6 +318,7 @@ let test_empty_clone () =
   | Ok (`Pack _) -> Alcotest.failf "Unexpected PACK file"
   | Error (`Exn exn) -> Alcotest.failf "%s" (Printexc.to_string exn)
   | Error (#Mimic.error as err) -> Alcotest.failf "%a" Mimic.pp_error err
+  | Error `Invalid_flow -> Alcotest.fail "Invalid flow"
 
 let test_simple_clone () =
   Alcotest_lwt.test_case "simple clone" `Quick @@ fun sw () ->
@@ -345,6 +346,7 @@ let test_simple_clone () =
   | Ok `Empty -> Alcotest.failf "Unexpected empty fetch"
   | Error (`Exn exn) -> Alcotest.failf "%s" (Printexc.to_string exn)
   | Error (#Mimic.error as err) -> Alcotest.failf "%a" Mimic.pp_error err
+  | Error `Invalid_flow -> Alcotest.fail "Invalid flow"
 
 let create_new_git_push_store _sw =
   let create () =
@@ -442,6 +444,7 @@ let test_simple_push () =
   | Ok () -> Lwt.return_unit
   | Error (`Exn exn) -> Alcotest.failf "%s" (Printexc.to_string exn)
   | Error (#Mimic.error as err) -> Alcotest.failf "%a" Mimic.pp_error err
+  | Error `Invalid_flow -> Alcotest.fail "Invalid flow"
 
 let test_push_error () =
   Alcotest_lwt.test_case "push error" `Quick @@ fun sw () ->
@@ -480,6 +483,7 @@ let test_push_error () =
       Alcotest.(check pass) "error" () ();
       Lwt.return_unit
   | Error (#Mimic.error as err) -> Alcotest.failf "%a" Mimic.pp_error err
+  | Error `Invalid_flow -> Alcotest.fail "Invalid flow"
 
 let test_fetch_empty () =
   Alcotest_lwt.test_case "fetch empty" `Quick @@ fun sw () ->
@@ -601,6 +605,7 @@ let test_fetch_empty () =
   | Ok (`Pack _) -> Alcotest.failf "Unexpected PACK file"
   | Error (`Exn exn) -> Alcotest.failf "%s" (Printexc.to_string exn)
   | Error (#Mimic.error as err) -> Alcotest.failf "%a" Mimic.pp_error err
+  | Error `Invalid_flow -> Alcotest.fail "Invalid flow"
 
 let update_testzone_0 store =
   let { path; _ } = store_prj store in
@@ -1042,6 +1047,7 @@ let test_negotiation () =
   | Ok `Empty -> Alcotest.failf "Unexpected empty fetch"
   | Error (`Exn exn) -> Alcotest.failf "%s" (Printexc.to_string exn)
   | Error (#Mimic.error as err) -> Alcotest.failf "%a" Mimic.pp_error err
+  | Error `Invalid_flow -> Alcotest.fail "Invalid flow"
 
 (* XXX(dinosaure): FIFO "à la BOS".*)
 
@@ -1114,6 +1120,8 @@ let run_git_upload_pack ?(tmps_exit = true) store ic oc =
   in
   Rresult.R.failwith_error_msg <.> process
 
+let always v _ = v
+
 let test_ssh () =
   Alcotest_lwt.test_case "clone over ssh" `Quick @@ fun sw () ->
   let open Lwt.Infix in
@@ -1159,7 +1167,7 @@ let test_ssh () =
     >>? fun endpoint ->
     Logs.app (fun m -> m "Waiting git-upload-pack.");
     Logs.app (fun m -> m "Start to fetch repository with SSH.");
-    Git.fetch ~ctx ~capabilities access store1 endpoint
+    Git.fetch ~ctx ~is_ssh:(always true) ~capabilities access store1 endpoint
       (`Some [ Ref.v "HEAD" ])
       pack index ~src:tmp0 ~dst:tmp1 ~idx:tmp2
   in
@@ -1168,6 +1176,7 @@ let test_ssh () =
   | Ok (`Pack _) -> Lwt.return_unit
   | Error (#Mimic.error as err) -> Alcotest.failf "%a" Mimic.pp_error err
   | Error (`Exn exn) -> Alcotest.failf "%s" (Printexc.to_string exn)
+  | Error `Invalid_flow -> Alcotest.fail "Invalid flow"
 
 let update_testzone_1 store =
   let { path; _ } = store_prj store in
@@ -1242,7 +1251,7 @@ let test_negotiation_ssh () =
     >>? fun endpoint ->
     Logs.app (fun m -> m "Waiting git-upload-pack.");
     Logs.app (fun m -> m "Start to fetch repository with SSH.");
-    Git.fetch ~ctx ~capabilities access store1 endpoint
+    Git.fetch ~ctx ~is_ssh:(always true) ~capabilities access store1 endpoint
       (`Some [ Ref.v "HEAD" ])
       pack index ~src:tmp0 ~dst:tmp1 ~idx:tmp2
   in
@@ -1251,6 +1260,7 @@ let test_negotiation_ssh () =
   | Ok (`Pack _) -> Lwt.return_unit
   | Error (#Mimic.error as err) -> Alcotest.failf "%a" Mimic.pp_error err
   | Error (`Exn exn) -> Alcotest.failf "%s" (Printexc.to_string exn)
+  | Error `Invalid_flow -> Alcotest.fail "Invalid flow"
 
 let run_git_receive_pack store ic oc =
   let { path; _ } = store_prj store in
@@ -1354,6 +1364,7 @@ let test_push_ssh () =
       | Error (`Msg err) -> Alcotest.failf "git-show-ref: %s" err)
   | Error (`Exn exn) -> Alcotest.failf "%s" (Printexc.to_string exn)
   | Error (#Mimic.error as err) -> Alcotest.failf "%a" Mimic.pp_error err
+  | Error `Invalid_flow -> Alcotest.fail "Invalid flow"
 
 let load_file filename =
   let ic = open_in_bin filename in
@@ -1406,6 +1417,7 @@ let test_negotiation_http () =
   | Ok `Empty -> Alcotest.failf "Unexpected empty fetch"
   | Error (`Exn exn) -> Alcotest.failf "%s" (Printexc.to_string exn)
   | Error (#Mimic.error as err) -> Alcotest.failf "%a" Mimic.pp_error err
+  | Error `Invalid_flow -> Alcotest.fail "Invalid flow"
 
 let test_partial_clone_ssh () =
   Alcotest_lwt.test_case "partial clone over ssh" `Quick @@ fun sw () ->
@@ -1450,7 +1462,8 @@ let test_partial_clone_ssh () =
     >>? fun endpoint ->
     Logs.app (fun m -> m "Waiting git-upload-pack.");
     Logs.app (fun m -> m "Start to fetch repository with SSH.");
-    Git.fetch ~ctx ~capabilities access store1 endpoint ~deepen:(`Depth 1)
+    Git.fetch ~ctx ~is_ssh:(always true) ~capabilities access store1 endpoint
+      ~deepen:(`Depth 1)
       (`Some [ Ref.v "HEAD" ])
       pack index ~src:tmp0 ~dst:tmp1 ~idx:tmp2
     >>? function
@@ -1466,6 +1479,7 @@ let test_partial_clone_ssh () =
   | Ok () -> Lwt.return_unit
   | Error (#Mimic.error as err) -> Alcotest.failf "%a" Mimic.pp_error err
   | Error (`Exn exn) -> Alcotest.failf "%s" (Printexc.to_string exn)
+  | Error `Invalid_flow -> Alcotest.fail "Invalid flow"
 
 let test_partial_fetch_ssh () =
   Alcotest_lwt.test_case "partial fetch" `Quick @@ fun sw () ->
@@ -1523,7 +1537,8 @@ let test_partial_fetch_ssh () =
     in
     Logs.app (fun m -> m "Waiting git-upload-pack.");
     Logs.app (fun m -> m "Start to fetch repository with SSH.");
-    Git.fetch ~ctx ~capabilities access store1 endpoint ~deepen:(`Depth 1)
+    Git.fetch ~ctx ~is_ssh:(always true) ~capabilities access store1 endpoint
+      ~deepen:(`Depth 1)
       (`Some [ Ref.v "HEAD" ])
       pack index ~src:tmp0 ~dst:tmp1 ~idx:tmp2
     >>? function
@@ -1572,7 +1587,8 @@ let test_partial_fetch_ssh () =
         Bos.OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
         Logs.app (fun m -> m "Waiting git-upload-pack.");
         Logs.app (fun m -> m "Start to fetch repository with SSH.");
-        Git.fetch ~ctx ~capabilities access store1 endpoint ~deepen:(`Depth 1)
+        Git.fetch ~ctx ~is_ssh:(always true) ~capabilities access store1
+          endpoint ~deepen:(`Depth 1)
           (`Some [ Ref.v "HEAD" ])
           pack index ~src:tmp0 ~dst:tmp1 ~idx:tmp2
         >>? function
@@ -1587,6 +1603,7 @@ let test_partial_fetch_ssh () =
   | Ok v -> Lwt.return v
   | Error (`Exn exn) -> Alcotest.failf "%s" (Printexc.to_string exn)
   | Error (#Mimic.error as err) -> Alcotest.failf "%a" Mimic.pp_error err
+  | Error `Invalid_flow -> Alcotest.fail "Invalid flow"
 
 let update_testzone_1 store =
   let { path; _ } = store_prj store in
