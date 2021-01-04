@@ -24,6 +24,9 @@ depends: [
   "cstruct" {>= "6.0.0" & with-test}
   "fmt" {>= "0.8.9" & with-test}
   "logs" {>= "0.7.0" & with-test}
+  "mirage-flow" {>= "2.0.1" & with-test}
+  "result" {>= "1.5" & with-test}
+  "rresult" {>= "0.6.0" & with-test}
 ]
 build: [
   ["dune" "build" "-p" name "-j" jobs]

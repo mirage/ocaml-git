@@ -48,6 +48,7 @@ depends: [
   "fpath"
   "base64" {with-test & >= "3.0.0"}
   "conduit" {>= "2.1.0"}
+  "mirage-flow" {>= "2.0.1" & with-test}
 ]
 build: [
   ["dune" "build" "-p" name "-j" jobs]
