@@ -41,13 +41,13 @@ module type HTTP = sig
   val pp_error : error Fmt.t
 
   val get :
-    resolvers:Conduit.resolvers ->
+    ctx:Mimic.ctx ->
     ?headers:(string * string) list ->
     Uri.t ->
     (unit * string, error) result Lwt.t
 
   val post :
-    resolvers:Conduit.resolvers ->
+    ctx:Mimic.ctx ->
     ?headers:(string * string) list ->
     Uri.t ->
     string ->
@@ -64,19 +64,19 @@ module Endpoint = struct
       | `HTTP of (string * string) list
       | `HTTPS of (string * string) list ];
     path : string;
-    endpoint : Conduit.Endpoint.t;
+    host : [ `host ] Domain_name.t;
   }
 
   let pp ppf edn =
     match edn with
-    | { scheme = `SSH user; path; endpoint } ->
-        Fmt.pf ppf "%s@%a:%s" user Conduit.Endpoint.pp endpoint path
-    | { scheme = `Git; path; endpoint } ->
-        Fmt.pf ppf "git://%a/%s" Conduit.Endpoint.pp endpoint path
-    | { scheme = `HTTP _; path; endpoint } ->
-        Fmt.pf ppf "http://%a/%s" Conduit.Endpoint.pp endpoint path
-    | { scheme = `HTTPS _; path; endpoint } ->
-        Fmt.pf ppf "https://%a/%s" Conduit.Endpoint.pp endpoint path
+    | { scheme = `SSH user; path; host } ->
+        Fmt.pf ppf "%s@%a:%s" user Domain_name.pp host path
+    | { scheme = `Git; path; host } ->
+        Fmt.pf ppf "git://%a/%s" Domain_name.pp host path
+    | { scheme = `HTTP _; path; host } ->
+        Fmt.pf ppf "http://%a/%s" Domain_name.pp host path
+    | { scheme = `HTTPS _; path; host } ->
+        Fmt.pf ppf "https://%a/%s" Domain_name.pp host path
 
   let of_string str =
     let open Rresult in
@@ -96,35 +96,24 @@ module Endpoint = struct
                  m.Emile.local)
           in
           (match fst m.Emile.domain with
-          | `Domain vs ->
-              Domain_name.of_strings vs
-              >>= Domain_name.host
-              >>| Conduit.Endpoint.domain
-          | `Literal v ->
-              Domain_name.of_string v
-              >>= Domain_name.host
-              >>| Conduit.Endpoint.domain
-          | `Addr (Emile.IPv4 ipv4) ->
-              R.ok (Conduit.Endpoint.ip (Ipaddr.V4 ipv4))
-          | `Addr (Emile.IPv6 ipv6) ->
-              R.ok (Conduit.Endpoint.ip (Ipaddr.V6 ipv6))
-          | `Addr (Emile.Ext (ext, _)) ->
-              R.error_msgf "Git does not handle domain extension %s." ext)
-          >>= fun endpoint -> R.ok { scheme = `SSH user; path; endpoint }
+          | `Domain vs -> Domain_name.of_strings vs >>= Domain_name.host
+          | `Literal v -> Domain_name.of_string v >>= Domain_name.host
+          | v -> R.error_msgf "Invalid hostname: %a" Emile.pp_domain v)
+          >>= fun host -> R.ok { scheme = `SSH user; path; host }
       | _ -> R.error_msg "invalid pattern"
     in
     let parse_uri x =
       let uri = Uri.of_string x in
       match Uri.scheme uri, Uri.host uri, Uri.path uri with
       | Some "git", Some host, path ->
-          Conduit.Endpoint.of_string host >>= fun endpoint ->
-          R.ok { scheme = `Git; path; endpoint }
+          Domain_name.of_string host >>= Domain_name.host >>= fun host ->
+          R.ok { scheme = `Git; path; host }
       | Some "http", Some host, path ->
-          Conduit.Endpoint.of_string host >>= fun endpoint ->
-          R.ok { scheme = `HTTP []; path; endpoint }
+          Domain_name.of_string host >>= Domain_name.host >>= fun host ->
+          R.ok { scheme = `HTTP []; path; host }
       | Some "https", Some host, path ->
-          Conduit.Endpoint.of_string host >>= fun endpoint ->
-          R.ok { scheme = `HTTPS []; path; endpoint }
+          Domain_name.of_string host >>= Domain_name.host >>= fun host ->
+          R.ok { scheme = `HTTPS []; path; host }
       | _ -> R.error_msgf "invalid uri: %a" Uri.pp uri
     in
     match parse_ssh str, parse_uri str with
@@ -143,10 +132,6 @@ module Make
     (Scheduler : Sigs.SCHED with type +'a s = 'a Lwt.t)
     (Pack : APPEND with type +'a fiber = 'a Lwt.t)
     (Index : APPEND with type +'a fiber = 'a Lwt.t)
-    (Conduit : Conduit.S
-                 with type +'a io = 'a Lwt.t
-                  and type input = Cstruct.t
-                  and type output = Cstruct.t)
     (HTTP : HTTP)
     (Uid : UID)
     (Ref : Sigs.REF) =
@@ -323,38 +308,40 @@ struct
     >|= R.reword_error (R.msgf "%a" Index.pp_error)
     >>? fun () -> Lwt.return_ok pack
 
-  module Flow = struct
-    type +'a fiber = 'a Lwt.t
-    type t = Conduit.flow
-
-    include Conduit
-  end
-
+  module Flow = Unixiz.Make (Mimic)
   module Fetch = Nss.Fetch.Make (Scheduler) (Lwt) (Flow) (Uid) (Ref)
   module Push = Nss.Push.Make (Scheduler) (Lwt) (Flow) (Uid) (Ref)
 
-  let fetch_v1 ?uses_git_transport ~push_stdout ~push_stderr ~capabilities path
-      ~resolvers ?deepen ?want endpoint store access fetch_cfg pack =
+  let fetch_v1 ?(uses_git_transport = false) ?(is_ssh = fun _ -> false)
+      ~push_stdout ~push_stderr ~capabilities path ~ctx ?deepen ?want host store
+      access fetch_cfg pack =
     let open Lwt.Infix in
-    Log.debug (fun m -> m "Try to resolve %a." Conduit.Endpoint.pp endpoint);
-    Conduit.resolve resolvers endpoint >>= function
+    Log.debug (fun m -> m "Try to resolve %a." Domain_name.pp host);
+    Mimic.resolve ctx >>= function
     | Error _ as err ->
         pack None;
         Lwt.return err
     | Ok flow ->
-        Lwt.try_bind
-          (fun () ->
-            Fetch.fetch_v1 ?uses_git_transport ~push_stdout ~push_stderr
-              ~capabilities ?deepen ?want ~host:endpoint path flow store access
-              fetch_cfg (fun (payload, off, len) ->
-                let v = String.sub payload off len in
-                pack (Some (v, 0, len))))
-          (fun refs ->
-            pack None;
-            Conduit.close flow >>? fun () -> Lwt.return_ok refs)
-          (fun exn ->
-            pack None;
-            Conduit.close flow >>= fun _ -> Lwt.fail exn)
+        Log.debug (fun m -> m "We use Git transport: %b." uses_git_transport);
+        Log.debug (fun m -> m "The flow is a SSH connection: %b." (is_ssh flow));
+        if (not uses_git_transport) && not (is_ssh flow) then (
+          Mimic.close flow >>= fun () ->
+          pack None;
+          Lwt.return_error `Invalid_flow)
+        else
+          Lwt.try_bind
+            (fun () ->
+              Fetch.fetch_v1 ~uses_git_transport ~push_stdout ~push_stderr
+                ~capabilities ?deepen ?want ~host path (Flow.make flow) store
+                access fetch_cfg (fun (payload, off, len) ->
+                  let v = String.sub payload off len in
+                  pack (Some (v, 0, len))))
+            (fun refs ->
+              pack None;
+              Mimic.close flow >>= fun () -> Lwt.return_ok refs)
+            (fun exn ->
+              pack None;
+              Mimic.close flow >>= fun () -> Lwt.fail exn)
 
   module Flow_http = struct
     type +'a fiber = 'a Lwt.t
@@ -363,9 +350,9 @@ struct
       mutable ic : string;
       mutable oc : string;
       mutable pos : int;
-      resolvers : Conduit.resolvers;
       uri : Uri.t;
       headers : (string * string) list;
+      ctx : Mimic.ctx;
     }
 
     type error = [ `Msg of string ]
@@ -380,7 +367,7 @@ struct
     let rec recv t raw =
       if t.pos = String.length t.ic then (
         let open Lwt.Infix in
-        (HTTP.post ~resolvers:t.resolvers ~headers:t.headers t.uri t.oc
+        (HTTP.post ~ctx:t.ctx ~headers:t.headers t.uri t.oc
         >|= Rresult.(R.reword_error (R.msgf "%a" HTTP.pp_error)))
         >>? fun (_resp, contents) ->
         t.ic <- t.ic ^ contents;
@@ -394,26 +381,19 @@ struct
 
   module Fetch_http = Nss.Fetch.Make (Scheduler) (Lwt) (Flow_http) (Uid) (Ref)
 
-  let http_fetch_v1 ~push_stdout ~push_stderr ~capabilities uri ?(headers = [])
-      endpoint path ~resolvers ?deepen ?want store access fetch_cfg pack =
+  let http_fetch_v1 ~push_stdout ~push_stderr ~capabilities ~ctx uri
+      ?(headers = []) endpoint path ?deepen ?want store access fetch_cfg pack =
     let open Rresult in
     let open Lwt.Infix in
     let uri0 = Fmt.str "%a/info/refs?service=git-upload-pack" Uri.pp uri in
     let uri0 = Uri.of_string uri0 in
-    HTTP.get ~resolvers ~headers uri0
-    >|= R.reword_error (R.msgf "%a" HTTP.pp_error)
+    Log.debug (fun m -> m "GET %a" Uri.pp uri0);
+    HTTP.get ~ctx ~headers uri0 >|= R.reword_error (R.msgf "%a" HTTP.pp_error)
     >>? fun (_resp, contents) ->
     let uri1 = Fmt.str "%a/git-upload-pack" Uri.pp uri in
     let uri1 = Uri.of_string uri1 in
     let flow =
-      {
-        Flow_http.ic = contents;
-        pos = 0;
-        oc = "";
-        resolvers;
-        uri = uri1;
-        headers;
-      }
+      { Flow_http.ic = contents; pos = 0; oc = ""; uri = uri1; headers; ctx }
     in
     Fetch_http.fetch_v1 ~push_stdout ~push_stderr ~capabilities ?deepen ?want
       ~host:endpoint path flow store access fetch_cfg
@@ -430,13 +410,13 @@ struct
       `Report_status;
     ]
 
-  let fetch ?(push_stdout = ignore) ?(push_stderr = ignore) ~resolvers
+  let fetch ?(push_stdout = ignore) ?(push_stderr = ignore) ~ctx ?is_ssh
       (access, light_load, heavy_load) store edn ?(version = `V1)
       ?(capabilities = default_capabilities) ?deepen want t_pck t_idx ~src ~dst
       ~idx =
     let open Rresult in
     let open Lwt.Infix in
-    let endpoint = edn.Endpoint.endpoint in
+    let host = edn.Endpoint.host in
     let path = edn.path in
     let stream, pusher = Lwt_stream.create () in
     let pusher = function
@@ -457,9 +437,9 @@ struct
           in
           let run () =
             Lwt.both
-              (fetch_v1 ~push_stdout ~push_stderr ~uses_git_transport
-                 ~capabilities path ~resolvers ?deepen ~want endpoint store
-                 access fetch_cfg pusher)
+              (fetch_v1 ~push_stdout ~push_stderr ~uses_git_transport ?is_ssh
+                 ~capabilities path ~ctx ?deepen ~want host store access
+                 fetch_cfg pusher)
               (run ~light_load ~heavy_load stream t_pck t_idx ~src ~dst ~idx)
             >>= fun (refs, idx) ->
             match refs, idx with
@@ -470,6 +450,7 @@ struct
           in
           run
       | `V1, ((`HTTP _ | `HTTPS _) as scheme) ->
+          Log.debug (fun m -> m "Start an HTTP transmission.");
           let fetch_cfg =
             Nss.Fetch.configuration ~stateless:true capabilities
           in
@@ -477,19 +458,17 @@ struct
             match scheme with
             | `HTTP headers ->
                 ( Uri.of_string
-                    (Fmt.str "http://%a%s.git" Conduit.Endpoint.pp endpoint path),
+                    (Fmt.str "http://%a%s.git" Domain_name.pp host path),
                   headers )
             | `HTTPS headers ->
                 ( Uri.of_string
-                    (Fmt.str "https://%a%s.git" Conduit.Endpoint.pp endpoint
-                       path),
+                    (Fmt.str "https://%a%s.git" Domain_name.pp host path),
                   headers )
           in
           let run () =
             Lwt.both
-              (http_fetch_v1 ~push_stdout ~push_stderr ~capabilities uri
-                 ~headers endpoint path ~resolvers ?deepen ~want store access
-                 fetch_cfg pusher)
+              (http_fetch_v1 ~push_stdout ~push_stderr ~capabilities ~ctx uri
+                 ~headers host path ?deepen ~want store access fetch_cfg pusher)
               (run ~light_load ~heavy_load stream t_pck t_idx ~src ~dst ~idx)
             >>= fun (refs, idx) ->
             match refs, idx with
@@ -596,26 +575,26 @@ struct
     Lwt.async fiber;
     stream
 
-  let push ?prelude ~resolvers ~capabilities path cmds endpoint store access
-      push_cfg pack =
+  let push ?prelude ~ctx ~capabilities path cmds endpoint store access push_cfg
+      pack =
     let open Lwt.Infix in
-    Conduit.resolve resolvers endpoint >>? fun flow ->
-    Push.push ?prelude ~capabilities cmds ~host:endpoint path flow store access
-      push_cfg pack
-    >>= fun () -> Conduit.close flow
+    Mimic.resolve ctx >>? fun flow ->
+    Push.push ?prelude ~capabilities cmds ~host:endpoint path (Flow.make flow)
+      store access push_cfg pack
+    >>= fun () ->
+    Mimic.close flow >>= fun () -> Lwt.return_ok ()
 
-  let push ~resolvers (access, light_load, heavy_load) store edn
-      ?(version = `V1) ?(capabilities = default_capabilities) cmds =
+  let push ~ctx (access, light_load, heavy_load) store edn ?(version = `V1)
+      ?(capabilities = default_capabilities) cmds =
     let open Rresult in
     match version, edn.Endpoint.scheme with
     | `V1, ((`Git | `SSH _) as scheme) ->
         let prelude = match scheme with `Git -> true | `SSH _ -> false in
-        let endpoint = edn.endpoint in
+        let host = edn.host in
         let path = edn.path in
         let push_cfg = Nss.Push.configuration () in
         let run () =
-          push ~prelude ~resolvers ~capabilities path cmds endpoint store access
-            push_cfg
+          push ~prelude ~ctx ~capabilities path cmds host store access push_cfg
             (pack ~light_load ~heavy_load)
         in
         Lwt.catch run (function

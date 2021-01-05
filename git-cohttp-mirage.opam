@@ -1,33 +1,34 @@
 opam-version: "2.0"
-maintainer:   [ "thomas@gazagnaire.org"
-                "romain.calascibetta@gmail.com" ]
-authors:      "Thomas Gazagnaire"
-license:      "ISC"
-homepage:     "https://github.com/mirage/ocaml-git"
-bug-reports:  "https://github.com/mirage/ocaml-git/issues"
-dev-repo:     "git+https://github.com/mirage/ocaml-git.git"
-doc:          "https://mirage.github.io/ocaml-git/"
-synopsis:     "A package to use HTTP-based ocaml-git with MirageOS backend"
-
+synopsis: "A package to use HTTP-based ocaml-git with MirageOS backend"
+maintainer: ["thomas@gazagnaire.org" "romain.calascibetta@gmail.com"]
+authors: "Thomas Gazagnaire"
+license: "ISC"
+homepage: "https://github.com/mirage/ocaml-git"
+doc: "https://mirage.github.io/ocaml-git/"
+bug-reports: "https://github.com/mirage/ocaml-git/issues"
+depends: [
+  "ocaml" {>= "4.07.0"}
+  "dune" {>= "2.6.0"}
+  "git"
+  "mimic"
+  "cohttp-mirage"
+  "cohttp" {>= "2.5.4"}
+  "cohttp-lwt" {>= "2.5.4"}
+  "fmt" {>= "0.8.9"}
+  "lwt" {>= "5.3.0"}
+  "result" {>= "1.5"}
+  "rresult" {>= "0.6.0"}
+  "uri" {>= "4.0.0"}
+  "alcotest" {>= "1.2.3" & with-test}
+  "alcotest-lwt" {>= "1.2.3" & with-test}
+  "bigstringaf" {>= "0.7.0" & with-test}
+  "cstruct" {>= "6.0.0" & with-test}
+  "logs" {>= "0.7.0" & with-test}
+  "mirage-flow" {>= "2.0.1" & with-test}
+]
 build: [
   ["dune" "subst"]
   ["dune" "build" "-p" name "-j" jobs]
   ["dune" "runtest" "-p" name "-j1" "--no-buffer"] {with-test}
 ]
-
-depends: [
-  "ocaml"             {>= "4.07.0"}
-  "dune"              {>= "2.6.0"}
-  "git"
-  "git-cohttp"
-  "cohttp-mirage"
-]
-
-pin-depends: [
-  [ "conduit.dev" "git+https://github.com/mirage/ocaml-conduit.git#8912d458b2f3e43245e99cf3cb74e9c00712a8b0" ]
-  [ "conduit-tls.dev" "git+https://github.com/mirage/ocaml-conduit.git#8912d458b2f3e43245e99cf3cb74e9c00712a8b0" ]
-  [ "conduit-mirage.dev" "git+https://github.com/mirage/ocaml-conduit.git#8912d458b2f3e43245e99cf3cb74e9c00712a8b0" ]
-  [ "cohttp.dev" "git+https://github.com/dinosaure/ocaml-cohttp.git#7f0efc6d7e0420e3abff99d29633519785c41f4b" ]
-  [ "cohttp-lwt.dev" "git+https://github.com/dinosaure/ocaml-cohttp.git#7f0efc6d7e0420e3abff99d29633519785c41f4b" ]
-  [ "cohttp-mirage.dev" "git+https://github.com/dinosaure/ocaml-cohttp.git#7f0efc6d7e0420e3abff99d29633519785c41f4b" ]
-]
+dev-repo: "git+https://github.com/mirage/ocaml-git.git"

@@ -422,14 +422,7 @@ end
 
 module Store = Make (Digestif.SHA1)
 
-module Sync
-    (Conduit : Conduit.S
-                 with type +'a io = 'a Lwt.t
-                  and type input = Cstruct.t
-                  and type output = Cstruct.t)
-    (Git_store : Minimal.S)
-    (HTTP : Smart_git.HTTP) =
-struct
+module Sync (Git_store : Minimal.S) (HTTP : Smart_git.HTTP) = struct
   let src = Logs.Src.create "git-mem.sync" ~doc:"logs git-mem's sync event"
 
   module Log = (val Logs.src_log src : Logs.LOG)
@@ -459,9 +452,7 @@ struct
     let map _ _ ~pos:_ _ = assert false
   end
 
-  include
-    Sync.Make (Git_store.Hash) (Cstruct_append) (Index) (Conduit) (Git_store)
-      (HTTP)
+  include Sync.Make (Git_store.Hash) (Cstruct_append) (Index) (Git_store) (HTTP)
 
   let stream_of_cstruct ?(chunk = 0x1000) payload =
     let stream, emitter = Lwt_stream.create () in
@@ -482,8 +473,8 @@ struct
     Lwt.async fill;
     fun () -> Lwt_stream.get stream
 
-  let fetch ?(push_stdout = ignore) ?(push_stderr = ignore) ~resolvers edn store
-      ?version ?capabilities ?deepen want =
+  let fetch ?(push_stdout = ignore) ?(push_stderr = ignore) ~ctx ?is_ssh edn
+      store ?version ?capabilities ?deepen want =
     let t_idx = Carton.Dec.Idx.Device.device () in
     let t_pck = Cstruct_append.device () in
     let index = Carton.Dec.Idx.Device.create t_idx in
@@ -498,7 +489,7 @@ struct
       let pack = Cstruct_append.project t_pck dst in
       stream_of_cstruct pack
     in
-    fetch ~push_stdout ~push_stderr ~resolvers edn store ?version ?capabilities
-      ?deepen want ~src ~dst ~idx:index ~create_idx_stream ~create_pack_stream
-      t_pck t_idx
+    fetch ~push_stdout ~push_stderr ~ctx ?is_ssh edn store ?version
+      ?capabilities ?deepen want ~src ~dst ~idx:index ~create_idx_stream
+      ~create_pack_stream t_pck t_idx
 end

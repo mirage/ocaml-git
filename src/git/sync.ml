@@ -23,14 +23,15 @@ module Log = (val Logs.src_log src : Logs.LOG)
 module type S = sig
   type hash
   type store
-  type error = private [> `Msg of string | `Exn of exn | `Not_found ]
+  type error = private [> Mimic.error | `Invalid_flow | `Exn of exn ]
 
   val pp_error : error Fmt.t
 
   val fetch :
     ?push_stdout:(string -> unit) ->
     ?push_stderr:(string -> unit) ->
-    resolvers:Conduit.resolvers ->
+    ctx:Mimic.ctx ->
+    ?is_ssh:(Mimic.flow -> bool) ->
     Smart_git.Endpoint.t ->
     store ->
     ?version:[> `V1 ] ->
@@ -40,7 +41,7 @@ module type S = sig
     ((hash * (Reference.t * hash) list) option, error) result Lwt.t
 
   val push :
-    resolvers:Conduit.resolvers ->
+    ctx:Mimic.ctx ->
     Smart_git.Endpoint.t ->
     store ->
     ?version:[> `V1 ] ->
@@ -56,10 +57,6 @@ module Make
     (Digestif : Digestif.S)
     (Pack : Smart_git.APPEND with type +'a fiber = 'a Lwt.t)
     (Index : Smart_git.APPEND with type +'a fiber = 'a Lwt.t)
-    (Conduit : Conduit.S
-                 with type +'a io = 'a Lwt.t
-                  and type input = Cstruct.t
-                  and type output = Cstruct.t)
     (Store : Minimal.S with type hash = Digestif.t)
     (HTTP : Smart_git.HTTP) =
 struct
@@ -67,13 +64,13 @@ struct
   type store = Store.t
 
   type error =
-    [ `Msg of string | `Exn of exn | `Not_found | `Store of Store.error ]
+    [ `Exn of exn | `Store of Store.error | `Invalid_flow | Mimic.error ]
 
   let pp_error ppf = function
-    | `Msg err -> Fmt.string ppf err
+    | #Mimic.error as err -> Mimic.pp_error ppf err
     | `Exn exn -> Fmt.pf ppf "Exception: %s" (Printexc.to_string exn)
-    | `Not_found -> Fmt.string ppf "Not found"
     | `Store err -> Fmt.pf ppf "Store error: %a" Store.pp_error err
+    | `Invalid_flow -> Fmt.pf ppf "Invalid flow"
 
   module Hash = Hash.Make (Digestif)
   module Scheduler = Hkt.Make_sched (Lwt)
@@ -187,16 +184,14 @@ struct
         Lwt.return (Carton.Dec.v ~kind raw)
     | None -> Lwt.fail Not_found
 
-  include
-    Smart_git.Make (Scheduler) (Pack) (Index) (Conduit) (HTTP) (Hash)
-      (Reference)
+  include Smart_git.Make (Scheduler) (Pack) (Index) (HTTP) (Hash) (Reference)
 
   let ( >>? ) x f =
     x >>= function Ok x -> f x | Error err -> Lwt.return_error err
 
-  let fetch ?(push_stdout = ignore) ?(push_stderr = ignore) ~resolvers endpoint
-      t ?version ?capabilities ?deepen want ~src ~dst ~idx ~create_idx_stream
-      ~create_pack_stream t_pck t_idx =
+  let fetch ?(push_stdout = ignore) ?(push_stderr = ignore) ~ctx ?is_ssh
+      endpoint t ?version ?capabilities ?deepen want ~src ~dst ~idx
+      ~create_idx_stream ~create_pack_stream t_pck t_idx =
     let want, src_dst_mapping =
       match want with
       | (`All | `None) as x -> x, fun src -> [ src ]
@@ -222,7 +217,7 @@ struct
           `Some src_refs, src_dst_mapping
     in
     let ministore = Ministore.inj (t, Hashtbl.create 0x100) in
-    fetch ~push_stdout ~push_stderr ~resolvers
+    fetch ~push_stdout ~push_stderr ~ctx ?is_ssh
       (access, lightly_load t, heavily_load t)
       ministore endpoint ?version ?capabilities ?deepen want t_pck t_idx ~src
       ~dst ~idx
@@ -295,9 +290,9 @@ struct
         unshallow = (fun _ -> assert false);
       }
 
-  let push ~resolvers endpoint t ?version ?capabilities cmds =
+  let push ~ctx endpoint t ?version ?capabilities cmds =
     let ministore = Ministore.inj (t, Hashtbl.create 0x100) in
-    push ~resolvers
+    push ~ctx
       (access, lightly_load t, heavily_load t)
       ministore endpoint ?version ?capabilities cmds
 end

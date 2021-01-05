@@ -1,10 +1,8 @@
+open Lwt.Infix
+
 let src = Logs.Src.create "FIFO" ~doc:"logs FIFO event"
 
 module Log = (val Logs.src_log src : Logs.LOG)
-
-type input = Cstruct.t
-type output = Cstruct.t
-type +'a io = 'a Lwt.t
 
 type flow = {
   ic : Lwt_unix.file_descr;
@@ -14,14 +12,12 @@ type flow = {
 }
 
 type endpoint = Fpath.t * Fpath.t
-type error = [ `Closed | `Unix_error of Unix.error ]
+type error = |
+type write_error = [ `Closed ]
 
+let pp_error : error Fmt.t = fun _ppf -> function _ -> .
 let closed_by_peer = "Closed by peer"
-
-let pp_error ppf = function
-  | `Closed -> Fmt.string ppf closed_by_peer
-  | `Unix_error err -> Fmt.pf ppf "fifo: %s" (Unix.error_message err)
-
+let pp_write_error ppf = function `Closed -> Fmt.string ppf closed_by_peer
 let io_buffer_size = 65536
 
 let connect (ic, oc) =
@@ -31,64 +27,32 @@ let connect (ic, oc) =
   Lwt_unix.openfile (Fpath.to_string oc) Unix.[ O_WRONLY ] 0o600 >>= fun oc ->
   Lwt.return_ok { ic; oc; linger = Bytes.create io_buffer_size; closed = false }
 
-let recv { ic; linger; closed; _ } raw =
-  if closed then Lwt.return_ok `End_of_flow
+let read { ic; linger; closed; _ } =
+  if closed then Lwt.return_ok `Eof
   else
-    let rec process filled raw =
-      let open Lwt.Infix in
-      let max = Cstruct.len raw in
-      Log.debug (fun m -> m "Start to recv over the input named pipe.");
-      Lwt_unix.read ic linger 0 (min max (Bytes.length linger)) >>= fun len ->
-      Log.debug (fun m -> m "Get %d byte(s)." len);
-      if len = 0 then
-        Lwt.return_ok (if filled = 0 then `End_of_flow else `Input filled)
-      else (
-        Cstruct.blit_from_bytes linger 0 raw 0 len;
-        if len = Bytes.length linger && max > Bytes.length linger then
-          if Lwt_unix.readable ic then
-            process (filled + len) (Cstruct.shift raw len)
-          else
-            Lwt.return_ok
-              (if filled + len = 0 then `End_of_flow else `Input (filled + len))
-        else
-          Lwt.return_ok
-            (if filled + len = 0 then `End_of_flow else `Input (filled + len)))
-    in
-    Lwt.catch (fun () -> process 0 raw) @@ function
-    | Unix.Unix_error (err, _, _) -> Lwt.return_error (`Unix_error err)
-    | exn -> Lwt.fail exn
+    Lwt_unix.read ic linger 0 (Bytes.length linger) >>= function
+    | 0 -> Lwt.return_ok `Eof
+    | len -> Lwt.return_ok (`Data (Cstruct.of_bytes linger ~off:0 ~len))
 
-let rec send ({ oc; closed; linger; _ } as t) raw =
+let write { oc; closed; _ } cs =
   if closed then Lwt.return_error `Closed
-  else (
-    Log.debug (fun m ->
-        m "Start to send over the output named pipe (%d byte(s))."
-          (Cstruct.len raw));
-    let max = Cstruct.len raw in
-    let len0 = min (Bytes.length linger) max in
-    Cstruct.blit_to_bytes raw 0 linger 0 len0;
-    let process () =
-      let open Lwt.Infix in
-      Lwt_unix.write oc linger 0 len0 >>= fun len1 ->
-      if len1 = len0 then
-        if max > len0 then send t (Cstruct.shift raw len0)
-        else Lwt.return_ok max
-      else Lwt.return_ok len1
+  else
+    let rec go ({ Cstruct.buffer; off; len } as cs) =
+      if len = 0 then Lwt.return_ok ()
+      else
+        Lwt_bytes.write oc buffer off len >>= fun len ->
+        go (Cstruct.shift cs len)
     in
-    Lwt.catch process @@ function
-    | Unix.Unix_error (err, _, _) -> Lwt.return_error (`Unix_error err)
-    | exn -> Lwt.fail exn)
+    go cs
 
-let close t =
-  let process () =
-    let open Lwt.Infix in
-    if not t.closed then (
-      Lwt_unix.close t.ic >>= fun () ->
-      Lwt_unix.close t.oc >>= fun () ->
-      t.closed <- true;
-      Lwt.return_ok ())
-    else Lwt.return_ok ()
+let writev t css =
+  let rec go = function
+    | [] -> Lwt.return_ok ()
+    | hd :: tl -> (
+        write t hd >>= function
+        | Ok () -> go tl
+        | Error _ as err -> Lwt.return err)
   in
-  Lwt.catch process @@ function
-  | Unix.Unix_error (err, _, _) -> Lwt.return_error (`Unix_error err)
-  | exn -> Lwt.fail exn
+  go css
+
+let close t = Lwt_unix.close t.ic >>= fun () -> Lwt_unix.close t.oc

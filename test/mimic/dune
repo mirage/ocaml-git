@@ -1,0 +1,11 @@
+(executable
+ (name test)
+ (libraries mimic mirage-flow git-nss.unixiz result rresult lwt lwt.unix logs
+   logs.fmt fmt.tty cstruct fmt alcotest alcotest-lwt))
+
+(rule
+ (alias runtest)
+ (deps
+  (:test test.exe))
+ (action
+  (run %{test} --color=always)))

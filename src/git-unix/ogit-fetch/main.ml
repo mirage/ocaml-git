@@ -60,26 +60,123 @@ let pp_error ppf = function
   | `Store err -> Fmt.pf ppf "(`Store %a)" Store.pp_error err
   | `Sync err -> Fmt.pf ppf "(`Sync %a)" Sync.pp_error err
 
-module SSH = Awa_conduit.Make (Lwt) (Conduit_lwt) (Mclock)
+module TCP = struct
+  open Lwt.Infix
+  include Tcpip_stack_socket.V4V6.TCP
 
-let ssh_protocol = SSH.protocol_with_ssh Conduit_lwt.TCP.protocol
+  type endpoint = Ipaddr.t * int
 
-let ssh_cfg edn ssh_seed =
-  assert (String.length ssh_seed > 0);
-  let key = Awa.Keys.of_seed ssh_seed in
+  type nonrec write_error =
+    [ `Write of write_error | `Connect of error | `Closed ]
+
+  let pp_write_error ppf = function
+    | `Write err -> pp_write_error ppf err
+    | `Connect err -> pp_error ppf err
+    | `Closed as err -> pp_write_error ppf err
+
+  let write flow cs =
+    write flow cs >>= function
+    | Ok _ as v -> Lwt.return v
+    | Error err -> Lwt.return_error (`Write err)
+
+  let writev flow css =
+    writev flow css >>= function
+    | Ok _ as v -> Lwt.return v
+    | Error err -> Lwt.return_error (`Write err)
+
+  let connect (ipaddr, port) =
+    let open Lwt.Infix in
+    connect ~ipv4_only:false ~ipv6_only:false Ipaddr.V4.Prefix.global None
+    >>= fun t ->
+    create_connection t (ipaddr, port) >>= function
+    | Ok _ as v -> Lwt.return v
+    | Error err -> Lwt.return_error (`Connect err)
+end
+
+module SSH = struct
+  open Lwt.Infix
+  include Awa_mirage.Make (Tcpip_stack_socket.V4V6.TCP) (Mclock)
+
+  type nonrec write_error =
+    [ `Write of write_error | `Connect of error | `Closed ]
+
+  let pp_write_error ppf = function
+    | `Connect err -> pp_error ppf err
+    | `Write err -> pp_write_error ppf err
+    | `Closed as err -> pp_write_error ppf err
+
+  let write flow cs =
+    write flow cs >>= function
+    | Ok _ as v -> Lwt.return v
+    | Error err -> Lwt.return_error (`Write err)
+
+  let writev flow css =
+    writev flow css >>= function
+    | Ok _ as v -> Lwt.return v
+    | Error err -> Lwt.return_error (`Write err)
+
+  type endpoint = {
+    authenticator : Awa.Keys.authenticator option;
+    user : string;
+    path : string;
+    key : Awa.Hostkey.priv;
+    endpoint : TCP.endpoint;
+  }
+
+  let ( >>? ) = Lwt_result.bind
+
+  open Lwt.Infix
+
+  let connect { authenticator; user; path; key; endpoint = ipaddr, port } =
+    let channel_request = Awa.Ssh.Exec (Fmt.str "git-upload-pack '%s'" path) in
+    Tcpip_stack_socket.V4V6.TCP.connect ~ipv4_only:false ~ipv6_only:false
+      Ipaddr.V4.Prefix.global None
+    >>= fun t ->
+    Tcpip_stack_socket.V4V6.TCP.create_connection t (ipaddr, port)
+    >|= Rresult.R.reword_error (fun err -> `Connect (`Read err))
+    >>? fun flow ->
+    client_of_flow ?authenticator ~user key channel_request flow
+    >|= Rresult.R.reword_error (fun err -> `Connect err)
+end
+
+let tcp_value, tcp_protocol = Mimic.register ~name:"tcp" (module TCP)
+let domain_name = Mimic.make ~name:"domain-namme"
+let port = Mimic.make ~name:"port"
+let ssh_value, ssh_protocol = Mimic.register ~name:"ssh" (module SSH)
+let path = Mimic.make ~name:"path"
+let seed = Mimic.make ~name:"ssh-seed"
+let user = Mimic.make ~name:"user"
+let authenticator = Mimic.make ~name:"ssh-authenticator"
+
+let resolv ctx =
+  let k domain_name port =
+    match Unix.gethostbyname (Domain_name.to_string domain_name) with
+    | { Unix.h_addr_list; _ } when Array.length h_addr_list > 0 ->
+        Lwt.return_some (Ipaddr_unix.of_inet_addr h_addr_list.(0), port)
+    | _ | (exception _) -> Lwt.return_none
+  in
+  Mimic.fold tcp_value Mimic.Fun.[ req domain_name; dft port 9418 ] ~k ctx
+
+let resolv_ssh ctx =
+  let k authenticator sockaddr path user seed =
+    let key = Awa.Keys.of_seed `Rsa seed in
+    Lwt.return_some { SSH.authenticator; user; path; key; endpoint = sockaddr }
+  in
+  Mimic.fold ssh_value
+    Mimic.Fun.[ opt authenticator; req tcp_value; req path; req user; req seed ]
+    ~k ctx
+
+let of_smart_git_endpoint edn ctx =
   match edn with
-  | { Smart_git.Endpoint.scheme = `SSH user; path; _ } ->
-      let req = Awa.Ssh.Exec (Fmt.str "git-upload-pack '%s'" path) in
-      Some { Awa_conduit.user; key; req; authenticator = None }
-  | _ -> None
+  | { Smart_git.Endpoint.scheme = `SSH v_user; path = v_path; host } ->
+      ctx
+      |> Mimic.add domain_name host
+      |> Mimic.add path v_path
+      |> Mimic.add user v_user
+  | { Smart_git.Endpoint.path = v_path; host; _ } ->
+      ctx |> Mimic.add domain_name host |> Mimic.add path v_path
 
-let ssh_resolve (ssh_cfg : Awa_conduit.endpoint) domain_name =
-  let open Lwt.Infix in
-  Conduit_lwt.TCP.resolve ~port:22 domain_name >|= function
-  | Some edn -> Some (edn, ssh_cfg)
-  | None -> None
-
-let main (ssh_seed : string)
+let main (_ssh_seed : string)
     (references : (Git.Reference.t * Git.Reference.t) list) (directory : string)
     (repository : Smart_git.Endpoint.t) : (unit, 'error) Lwt_result.t =
   let repo_root =
@@ -87,18 +184,13 @@ let main (ssh_seed : string)
   in
   let ( >>?= ) = Lwt_result.bind in
   let ( >>!= ) v f = Lwt_result.map_err f v in
-  let resolvers =
-    let git_scheme_resolver = Conduit_lwt.TCP.resolve ~port:9418 in
-    let ssh_cfg = ssh_cfg repository ssh_seed in
-    Conduit.empty
-    |> Conduit_lwt.add Conduit_lwt.TCP.protocol git_scheme_resolver
-    |> Conduit_lwt.add ssh_protocol (ssh_resolve @@ Option.get ssh_cfg)
+  let ctx =
+    Mimic.empty |> resolv |> resolv_ssh |> of_smart_git_endpoint repository
   in
   Store.v repo_root >>!= store_err >>?= fun store ->
   let push_stdout = print_endline in
   let push_stderr = prerr_endline in
-  Sync.fetch ~push_stdout ~push_stderr ~resolvers repository store
-    (`Some references)
+  Sync.fetch ~push_stdout ~push_stderr ~ctx repository store (`Some references)
   >>!= sync_err
   >>?= fun _ -> Lwt.return (Ok ())
 

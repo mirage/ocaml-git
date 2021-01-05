@@ -1,3 +1,1 @@
-module Make
-    (Cohttp_client : Cohttp_lwt.S.Client with type ctx = Conduit.resolvers) :
-  Smart_git.HTTP
+module Make (Cohttp_client : Cohttp_lwt.S.Client) : Smart_git.HTTP

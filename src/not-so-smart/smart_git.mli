@@ -34,13 +34,13 @@ module type HTTP = sig
   val pp_error : error Fmt.t
 
   val get :
-    resolvers:Conduit.resolvers ->
+    ctx:Mimic.ctx ->
     ?headers:(string * string) list ->
     Uri.t ->
     (unit * string, error) result Lwt.t
 
   val post :
-    resolvers:Conduit.resolvers ->
+    ctx:Mimic.ctx ->
     ?headers:(string * string) list ->
     Uri.t ->
     string ->
@@ -55,7 +55,7 @@ module Endpoint : sig
       | `HTTP of (string * string) list
       | `HTTPS of (string * string) list ];
     path : string;
-    endpoint : Conduit.Endpoint.t;
+    host : [ `host ] Domain_name.t;
   }
 
   val pp : t Fmt.t
@@ -70,17 +70,14 @@ module Make
     (Scheduler : Sigs.SCHED with type +'a s = 'a Lwt.t)
     (Pack : APPEND with type +'a fiber = 'a Lwt.t)
     (Index : APPEND with type +'a fiber = 'a Lwt.t)
-    (Conduit : Conduit.S
-                 with type +'a io = 'a Lwt.t
-                  and type input = Cstruct.t
-                  and type output = Cstruct.t)
     (HTTP : HTTP)
     (Uid : UID)
     (Ref : Sigs.REF) : sig
   val fetch :
     ?push_stdout:(string -> unit) ->
     ?push_stderr:(string -> unit) ->
-    resolvers:Conduit.resolvers ->
+    ctx:Mimic.ctx ->
+    ?is_ssh:(Mimic.flow -> bool) ->
     (Uid.t, _, Uid.t * int ref * int64, 'g, Scheduler.t) Sigs.access
     * Uid.t Carton_lwt.Thin.light_load
     * Uid.t Carton_lwt.Thin.heavy_load ->
@@ -96,12 +93,12 @@ module Make
     dst:Pack.uid ->
     idx:Index.uid ->
     ( [ `Pack of Uid.t * (Ref.t * Uid.t) list | `Empty ],
-      [> `Msg of string | `Exn of exn | `Not_found ] )
+      [> `Exn of exn | `Invalid_flow | Mimic.error ] )
     result
     Lwt.t
 
   val push :
-    resolvers:Conduit.resolvers ->
+    ctx:Mimic.ctx ->
     (Uid.t, Ref.t, Uid.t Pck.t, 'g, Scheduler.t) Sigs.access
     * Uid.t Carton_lwt.Thin.light_load
     * Uid.t Carton_lwt.Thin.heavy_load ->
@@ -110,5 +107,5 @@ module Make
     ?version:[> `V1 ] ->
     ?capabilities:Smart.Capability.t list ->
     [ `Create of Ref.t | `Delete of Ref.t | `Update of Ref.t * Ref.t ] list ->
-    (unit, [> `Msg of string | `Exn of exn | `Not_found ]) result Lwt.t
+    (unit, [> `Exn of exn | `Invalid_flow | Mimic.error ]) result Lwt.t
 end

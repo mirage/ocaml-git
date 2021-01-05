@@ -14,7 +14,7 @@ module Make
     ?prelude:bool ->
     capabilities:Smart.Capability.t list ->
     [ `Create of Ref.t | `Delete of Ref.t | `Update of Ref.t * Ref.t ] list ->
-    host:Conduit.Endpoint.t ->
+    host:[ `host ] Domain_name.t ->
     string ->
     Flow.t ->
     (Uid.t, Uid.t Pck.t, 'git) store ->
