@@ -61,24 +61,59 @@ let pp_error ppf = function
   | `Sync err -> Fmt.pf ppf "(`Sync %a)" Sync.pp_error err
 
 module TCP = struct
+  open Lwt.Infix
   include Tcpip_stack_socket.V4V6.TCP
 
   type endpoint = Ipaddr.t * int
 
+  type nonrec write_error =
+    [ `Write of write_error | `Connect of error | `Closed ]
+
+  let pp_write_error ppf = function
+    | `Write err -> pp_write_error ppf err
+    | `Connect err -> pp_error ppf err
+    | `Closed as err -> pp_write_error ppf err
+
+  let write flow cs =
+    write flow cs >>= function
+    | Ok _ as v -> Lwt.return v
+    | Error err -> Lwt.return_error (`Write err)
+
+  let writev flow css =
+    writev flow css >>= function
+    | Ok _ as v -> Lwt.return v
+    | Error err -> Lwt.return_error (`Write err)
+
   let connect (ipaddr, port) =
     let open Lwt.Infix in
     connect ~ipv4_only:false ~ipv6_only:false Ipaddr.V4.Prefix.global None
-    >>= fun t -> create_connection t (ipaddr, port)
+    >>= fun t ->
+    create_connection t (ipaddr, port) >>= function
+    | Ok _ as v -> Lwt.return v
+    | Error err -> Lwt.return_error (`Connect err)
 end
 
 module SSH = struct
+  open Lwt.Infix
   include Awa_mirage.Make (Tcpip_stack_socket.V4V6.TCP) (Mclock)
 
-  type nonrec error = [ `TCP of TCP.error | `SSH of error ]
+  type nonrec write_error =
+    [ `Write of write_error | `Connect of error | `Closed ]
 
-  let pp_error ppf = function
-    | `TCP err -> TCP.pp_error ppf err
-    | `SSH err -> pp_error ppf err
+  let pp_write_error ppf = function
+    | `Connect err -> pp_error ppf err
+    | `Write err -> pp_write_error ppf err
+    | `Closed as err -> pp_write_error ppf err
+
+  let write flow cs =
+    write flow cs >>= function
+    | Ok _ as v -> Lwt.return v
+    | Error err -> Lwt.return_error (`Write err)
+
+  let writev flow css =
+    writev flow css >>= function
+    | Ok _ as v -> Lwt.return v
+    | Error err -> Lwt.return_error (`Write err)
 
   type endpoint = {
     authenticator : Awa.Keys.authenticator option;
@@ -92,14 +127,16 @@ module SSH = struct
 
   open Lwt.Infix
 
-  let read flow = read flow >|= Rresult.R.reword_error (fun err -> `SSH err)
-
-  let connect { authenticator; user; path; key; endpoint } =
+  let connect { authenticator; user; path; key; endpoint = ipaddr, port } =
     let channel_request = Awa.Ssh.Exec (Fmt.str "git-upload-pack '%s'" path) in
-    TCP.connect endpoint >|= Rresult.R.reword_error (fun err -> `TCP err)
+    Tcpip_stack_socket.V4V6.TCP.connect ~ipv4_only:false ~ipv6_only:false
+      Ipaddr.V4.Prefix.global None
+    >>= fun t ->
+    Tcpip_stack_socket.V4V6.TCP.create_connection t (ipaddr, port)
+    >|= Rresult.R.reword_error (fun err -> `Connect (`Read err))
     >>? fun flow ->
     client_of_flow ?authenticator ~user key channel_request flow
-    >|= Rresult.R.reword_error (fun err -> `SSH err)
+    >|= Rresult.R.reword_error (fun err -> `Connect err)
 end
 
 let tcp_value, tcp_protocol = Mimic.register ~name:"tcp" (module TCP)

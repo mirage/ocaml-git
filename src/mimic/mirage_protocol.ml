@@ -3,5 +3,5 @@ module type S = sig
 
   type endpoint
 
-  val connect : endpoint -> (flow, error) result Lwt.t
+  val connect : endpoint -> (flow, write_error) result Lwt.t
 end

@@ -1,3 +1,5 @@
+open Lwt.Infix
+
 type 'stack endpoint = {
   stack : 'stack;
   ipaddr : Ipaddr.V4.t;
@@ -25,15 +27,24 @@ struct
     include Awa_mirage.Make (Stack.TCPV4) (Mclock)
 
     type nonrec endpoint = Stack.t endpoint
-    type nonrec error = [ `TCP of Stack.TCPV4.error | `SSH of error ]
 
-    let pp_error ppf = function
-      | `TCP err -> Stack.TCPV4.pp_error ppf err
-      | `SSH err -> pp_error ppf err
+    type nonrec write_error =
+      [ `Write of write_error | `Connect of error | `Closed ]
 
-    let read flow =
-      let open Lwt.Infix in
-      read flow >|= function Error err -> Error (`SSH err) | Ok _ as v -> v
+    let pp_write_error ppf = function
+      | `Connect err -> pp_error ppf err
+      | `Write err -> pp_write_error ppf err
+      | `Closed as err -> pp_write_error ppf err
+
+    let write flow cs =
+      write flow cs >>= function
+      | Ok _ as v -> Lwt.return v
+      | Error err -> Lwt.return_error (`Write err)
+
+    let writev flow css =
+      writev flow css >>= function
+      | Ok _ as v -> Lwt.return v
+      | Error err -> Lwt.return_error (`Write err)
 
     let connect edn =
       let open Lwt.Infix in
@@ -44,12 +55,12 @@ struct
         | `Wr -> Awa.Ssh.Exec (Fmt.str "git-receive-pack '%s'" edn.path)
       in
       Stack.TCPV4.create_connection stack (edn.ipaddr, edn.port) >>= function
-      | Error err -> Lwt.return_error (`TCP err)
+      | Error err -> Lwt.return_error (`Connect (`Read err))
       | Ok flow -> (
           client_of_flow ?authenticator:edn.authenticator ~user:edn.user edn.key
             channel_request flow
           >>= function
-          | Error err -> Lwt.return_error (`SSH err)
+          | Error err -> Lwt.return_error (`Connect err)
           | Ok _ as v -> Lwt.return v)
   end
 
