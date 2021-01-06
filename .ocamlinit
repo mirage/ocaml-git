@@ -1,34 +1,60 @@
 #use "topfind";;
 
+#thread
 #require "fpath";;
+#require "encore";;
 #require "cstruct";;
 #require "fmt";;
 #require "uri";;
 #require "lwt";;
 #require "logs";;
 #require "astring";;
-#require "hex";;
-#require "lru";;
 #require "rresult";;
 #require "angstrom";;
-#require "farfadet";;
 #require "faraday";;
 #require "ocamlgraph";;
+#require "psq";;
+#require "duff";;
+#require "ke";;
+#require "domain-name";;
+#require "emile";;
 
 #require "digestif.c";;
-#require "camlzip";;
+#require "checkseum.c";;
+#require "decompress.zl";;
 #require "lwt.unix";;
-#require "compiler-libs.toplevel";;
+#require "bos";;
+
 #require "logs.fmt";;
 
+#directory "_build/default/src/carton/";;
+#directory "_build/default/src/carton-git/";;
+#directory "_build/default/src/carton-lwt/";;
+#directory "_build/default/src/not-so-smart/";;
+#directory "_build/default/src/mimic/";;
+#directory "_build/default/src/loose/";;
 #directory "_build/default/src/git/";;
 #directory "_build/default/src/git-unix/";;
+#directory "_build/default/src/git-index/";;
 #directory "_build/default/src/git-top/";;
 
+#load "carton.cma";;
+#load "thin.cma";;
+#load "carton_lwt.cma";;
+#load "carton_git.cma";;
+#load "mimic.cma";;
+#load "hkt.cma";;
+#load "pkt_line.cma";;
+#load "smart.cma";;
+#load "neg.cma";;
+#load "pck.cma";;
+#load "nss.cma";;
+#load "unixiz.cma";;
+#load "smart_git.cma";;
+#load "loose.cma";;
+#load "loose_lwt.cma";;
+#load "loose_git.cma";;
 #load "git.cma";;
 #load "git_unix.cma";;
+#load "git_index.cma";;
 #load "git_top.cma";;
-
-let _ = Git_top.install_printers Git_top.printers;;
-
-open Lwt.Infix;;

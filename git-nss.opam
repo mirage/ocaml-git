@@ -36,14 +36,12 @@ depends: [
   "alcotest-lwt" {with-test}
   "crowbar" {with-test & >= "0.2"}
   "bigarray-compat" {>= "1.0.0"}
-  "conduit" {>= "2.1.0"}
   "ipaddr" {>= "5.0.1"}
   "ke" {>= "0.4"}
   "lwt" {>= "5.3.0"}
   "mirage-flow" {>= "2.0.1"}
   "alcotest" {>= "1.2.3" & with-test}
   "cohttp-lwt-unix" {>= "2.5.4" & with-test}
-  "conduit-lwt" {>= "2.1.0" & with-test}
 ]
 build: [
   ["dune" "build" "-p" name "-j" jobs]
