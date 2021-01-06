@@ -1167,7 +1167,7 @@ let test_ssh () =
     >>? fun endpoint ->
     Logs.app (fun m -> m "Waiting git-upload-pack.");
     Logs.app (fun m -> m "Start to fetch repository with SSH.");
-    Git.fetch ~ctx ~is_ssh:(always true) ~capabilities access store1 endpoint
+    Git.fetch ~ctx ~capabilities access store1 endpoint
       (`Some [ Ref.v "HEAD" ])
       pack index ~src:tmp0 ~dst:tmp1 ~idx:tmp2
   in
@@ -1251,7 +1251,7 @@ let test_negotiation_ssh () =
     >>? fun endpoint ->
     Logs.app (fun m -> m "Waiting git-upload-pack.");
     Logs.app (fun m -> m "Start to fetch repository with SSH.");
-    Git.fetch ~ctx ~is_ssh:(always true) ~capabilities access store1 endpoint
+    Git.fetch ~ctx ~capabilities access store1 endpoint
       (`Some [ Ref.v "HEAD" ])
       pack index ~src:tmp0 ~dst:tmp1 ~idx:tmp2
   in
@@ -1462,8 +1462,7 @@ let test_partial_clone_ssh () =
     >>? fun endpoint ->
     Logs.app (fun m -> m "Waiting git-upload-pack.");
     Logs.app (fun m -> m "Start to fetch repository with SSH.");
-    Git.fetch ~ctx ~is_ssh:(always true) ~capabilities access store1 endpoint
-      ~deepen:(`Depth 1)
+    Git.fetch ~ctx ~capabilities access store1 endpoint ~deepen:(`Depth 1)
       (`Some [ Ref.v "HEAD" ])
       pack index ~src:tmp0 ~dst:tmp1 ~idx:tmp2
     >>? function
@@ -1537,8 +1536,7 @@ let test_partial_fetch_ssh () =
     in
     Logs.app (fun m -> m "Waiting git-upload-pack.");
     Logs.app (fun m -> m "Start to fetch repository with SSH.");
-    Git.fetch ~ctx ~is_ssh:(always true) ~capabilities access store1 endpoint
-      ~deepen:(`Depth 1)
+    Git.fetch ~ctx ~capabilities access store1 endpoint ~deepen:(`Depth 1)
       (`Some [ Ref.v "HEAD" ])
       pack index ~src:tmp0 ~dst:tmp1 ~idx:tmp2
     >>? function
@@ -1587,8 +1585,7 @@ let test_partial_fetch_ssh () =
         Bos.OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
         Logs.app (fun m -> m "Waiting git-upload-pack.");
         Logs.app (fun m -> m "Start to fetch repository with SSH.");
-        Git.fetch ~ctx ~is_ssh:(always true) ~capabilities access store1
-          endpoint ~deepen:(`Depth 1)
+        Git.fetch ~ctx ~capabilities access store1 endpoint ~deepen:(`Depth 1)
           (`Some [ Ref.v "HEAD" ])
           pack index ~src:tmp0 ~dst:tmp1 ~idx:tmp2
         >>? function

@@ -3,7 +3,7 @@ install: wget https://raw.githubusercontent.com/ocaml/ocaml-ci-scripts/master/.t
 script: bash -ex .travis-opam.sh
 env:
   global:
-    - PINS="mimic.dev:. carton.dev:. carton-lwt.dev:. carton-git.dev:. git-nss.dev:. git.dev:. git-unix.dev:. git-cohttp.dev:. git-cohttp-unix.dev:."
+    - PINS="mimic.dev:. carton.dev:. carton-lwt.dev:. carton-git.dev:. git-nss.dev:. git.dev:. git-unix.dev:. git-cohttp.dev:. git-cohttp-unix.dev:. git-mirage.dev:."
   matrix:
     - OCAML_VERSION=4.08 PACKAGE="git.dev"
     - OCAML_VERSION=4.09 PACKAGE="git.dev"
@@ -11,3 +11,4 @@ env:
     - OCAML_VERSION=4.08 PACKAGE="git-unix.dev"
     - OCAML_VERSION=4.08 PACKAGE="git-unix.dev"
     - OCAML_VERSION=4.08 PACKAGE="git.dev" REVDEPS=*
+    - OCAML_VERSION=4.08 PACKAGE="git-mirage.dev" TESTS=false POST_INSTALL_HOOK=./.test-mirage.sh

@@ -172,11 +172,11 @@ let test_values =
   Mimic.resolve ctx0 >>= fun res0 ->
   Alcotest.(check (result (flow protocol_int) mimic_error))
     "res0" res0 (Ok (Protocol_int.T 42));
-  let ctx1 = ctx0 |> Mimic.add edn_string "Hello World!" in
+  let ctx1 = Mimic.empty |> Mimic.add edn_string "Hello World!" in
   Mimic.resolve ctx1 >>= fun res1 ->
   Alcotest.(check (result (flow protocol_string) mimic_error))
     "res1" res1 (Ok (Protocol_string.T "Hello World!"));
-  let ctx2 = ctx1 |> Mimic.add edn_float 0.42 in
+  let ctx2 = Mimic.empty |> Mimic.add edn_float 0.42 in
   Mimic.resolve ctx2 >>= fun res2 ->
   Alcotest.(check (result (flow protocol_float) mimic_error))
     "res2" res2 (Ok (Protocol_float.T 0.42));
@@ -232,13 +232,67 @@ let test_topological_sort =
     (Error `Not_found);
   Lwt.return_unit
 
+let test_priority =
+  Alcotest_lwt.test_case "priority" `Quick @@ fun _sw () ->
+  let open Lwt.Infix in
+  let int_edn0, int_ptr0 =
+    Mimic.register ~priority:10 ~name:"int0"
+      (module Fake (struct type t = int end))
+  in
+  let int_edn1, int_ptr1 =
+    Mimic.register ~priority:20 ~name:"int1"
+      (module Fake (struct type t = int end))
+  in
+  let ctx0 = Mimic.empty |> Mimic.add int_edn0 1 |> Mimic.add int_edn1 2 in
+  let ctx1 = Mimic.empty |> Mimic.add int_edn1 2 |> Mimic.add int_edn0 1 in
+  Mimic.resolve ctx0 >>= fun res0 ->
+  Mimic.resolve ctx1 >>= fun res1 ->
+  let module Int0 = (val Mimic.repr int_ptr0) in
+  Alcotest.(check (result (flow int_ptr0) mimic_error))
+    "res0" res0 (Ok (Int0.T 1));
+  Alcotest.(check (result (flow int_ptr0) mimic_error))
+    "res1" res1 (Ok (Int0.T 1));
+  let int_edn2, _ =
+    Mimic.register ~name:"int2" (module Fake (struct type t = int end))
+  in
+  let ctx0 = Mimic.empty |> Mimic.add int_edn1 2 |> Mimic.add int_edn2 3 in
+  let ctx1 =
+    Mimic.empty
+    |> Mimic.add int_edn2 3
+    |> Mimic.add int_edn1 2
+    |> Mimic.add int_edn0 1
+  in
+  Mimic.resolve ctx0 >>= fun res2 ->
+  Mimic.resolve ctx1 >>= fun res3 ->
+  let module Int1 = (val Mimic.repr int_ptr1) in
+  Alcotest.(check (result (flow int_ptr1) mimic_error))
+    "res2" res2 (Ok (Int1.T 2));
+  Alcotest.(check (result (flow int_ptr0) mimic_error))
+    "res3" res3 (Ok (Int0.T 1));
+  let int_edn3, int_ptr3 =
+    Mimic.register ~priority:20 ~name:"int3"
+      (module Fake (struct type t = int end))
+  in
+  let ctx0 = Mimic.empty |> Mimic.add int_edn1 2 |> Mimic.add int_edn3 4 in
+  let ctx1 = Mimic.empty |> Mimic.add int_edn3 4 |> Mimic.add int_edn1 2 in
+  Mimic.resolve ctx0 >>= fun res4 ->
+  Mimic.resolve ctx1 >>= fun res5 ->
+  let module Int3 = (val Mimic.repr int_ptr3) in
+  Alcotest.(check (result (flow int_ptr3) mimic_error))
+    "res4" res4 (Ok (Int3.T 4));
+  (* XXX(dinosaure): if two roots exist, we take the most recently registered!
+     We should provide an other semantic like: the most recently inserted into the [ctx]. *)
+  Alcotest.(check (result (flow int_ptr3) mimic_error))
+    "res5" res5 (Ok (Int3.T 4));
+  Lwt.return_unit
+
 let fiber =
   Alcotest_lwt.run "mimic"
     [
       ( "mimic",
         [
           test_input_string; test_output_string; test_values; test_functions;
-          test_topological_sort;
+          test_topological_sort; test_priority;
         ] );
     ]
 

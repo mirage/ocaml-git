@@ -23,7 +23,7 @@ module Log = (val Logs.src_log src : Logs.LOG)
 module type S = sig
   type hash
   type store
-  type error = private [> Mimic.error | `Invalid_flow | `Exn of exn ]
+  type error = private [> Mimic.error | `Exn of exn ]
 
   val pp_error : error Fmt.t
 
@@ -31,7 +31,7 @@ module type S = sig
     ?push_stdout:(string -> unit) ->
     ?push_stderr:(string -> unit) ->
     ctx:Mimic.ctx ->
-    ?is_ssh:(Mimic.flow -> bool) ->
+    ?verify:(Smart_git.Endpoint.t -> Mimic.flow -> (unit, error) result Lwt.t) ->
     Smart_git.Endpoint.t ->
     store ->
     ?version:[> `V1 ] ->
@@ -42,6 +42,7 @@ module type S = sig
 
   val push :
     ctx:Mimic.ctx ->
+    ?verify:(Smart_git.Endpoint.t -> Mimic.flow -> (unit, error) result Lwt.t) ->
     Smart_git.Endpoint.t ->
     store ->
     ?version:[> `V1 ] ->
@@ -62,9 +63,7 @@ module Make
 struct
   type hash = Digestif.t
   type store = Store.t
-
-  type error =
-    [ `Exn of exn | `Store of Store.error | `Invalid_flow | Mimic.error ]
+  type error = [ `Exn of exn | `Store of Store.error | Mimic.error ]
 
   let pp_error ppf = function
     | #Mimic.error as err -> Mimic.pp_error ppf err
@@ -189,7 +188,7 @@ struct
   let ( >>? ) x f =
     x >>= function Ok x -> f x | Error err -> Lwt.return_error err
 
-  let fetch ?(push_stdout = ignore) ?(push_stderr = ignore) ~ctx ?is_ssh
+  let fetch ?(push_stdout = ignore) ?(push_stderr = ignore) ~ctx ?verify
       endpoint t ?version ?capabilities ?deepen want ~src ~dst ~idx
       ~create_idx_stream ~create_pack_stream t_pck t_idx =
     let want, src_dst_mapping =
@@ -217,7 +216,7 @@ struct
           `Some src_refs, src_dst_mapping
     in
     let ministore = Ministore.inj (t, Hashtbl.create 0x100) in
-    fetch ~push_stdout ~push_stderr ~ctx ?is_ssh
+    fetch ~push_stdout ~push_stderr ~ctx ?verify
       (access, lightly_load t, heavily_load t)
       ministore endpoint ?version ?capabilities ?deepen want t_pck t_idx ~src
       ~dst ~idx
@@ -290,9 +289,9 @@ struct
         unshallow = (fun _ -> assert false);
       }
 
-  let push ~ctx endpoint t ?version ?capabilities cmds =
+  let push ~ctx ?verify endpoint t ?version ?capabilities cmds =
     let ministore = Ministore.inj (t, Hashtbl.create 0x100) in
-    push ~ctx
+    push ~ctx ?verify
       (access, lightly_load t, heavily_load t)
       ministore endpoint ?version ?capabilities cmds
 end

@@ -22,7 +22,7 @@
 module type S = sig
   type hash
   type store
-  type error = private [> Mimic.error | `Invalid_flow | `Exn of exn ]
+  type error = private [> Mimic.error | `Exn of exn ]
 
   val pp_error : error Fmt.t
 
@@ -30,7 +30,7 @@ module type S = sig
     ?push_stdout:(string -> unit) ->
     ?push_stderr:(string -> unit) ->
     ctx:Mimic.ctx ->
-    ?is_ssh:(Mimic.flow -> bool) ->
+    ?verify:(Smart_git.Endpoint.t -> Mimic.flow -> (unit, error) result Lwt.t) ->
     Smart_git.Endpoint.t ->
     store ->
     ?version:[> `V1 ] ->
@@ -41,6 +41,7 @@ module type S = sig
 
   val push :
     ctx:Mimic.ctx ->
+    ?verify:(Smart_git.Endpoint.t -> Mimic.flow -> (unit, error) result Lwt.t) ->
     Smart_git.Endpoint.t ->
     store ->
     ?version:[> `V1 ] ->
@@ -62,9 +63,7 @@ module Make
     (HTTP : Smart_git.HTTP) : sig
   type hash = Digestif.t
   type store = Store.t
-
-  type error =
-    [ `Exn of exn | `Store of Store.error | `Invalid_flow | Mimic.error ]
+  type error = [ `Exn of exn | `Store of Store.error | Mimic.error ]
 
   val pp_error : error Fmt.t
 
@@ -72,7 +71,7 @@ module Make
     ?push_stdout:(string -> unit) ->
     ?push_stderr:(string -> unit) ->
     ctx:Mimic.ctx ->
-    ?is_ssh:(Mimic.flow -> bool) ->
+    ?verify:(Smart_git.Endpoint.t -> Mimic.flow -> (unit, 'err) result Lwt.t) ->
     Smart_git.Endpoint.t ->
     store ->
     ?version:[> `V1 ] ->
@@ -90,7 +89,8 @@ module Make
     create_pack_stream:(unit -> unit -> string option Lwt.t) ->
     Pack.t ->
     Index.t ->
-    ((hash * (Reference.t * hash) list) option, [> error ]) result Lwt.t
+    ((hash * (Reference.t * hash) list) option, ([> error ] as 'err)) result
+    Lwt.t
   (** fetches remote references and saves them.
           Behavior of fetch when [want] is
           [`All] - fetches all remote references and saves them in store
@@ -99,6 +99,7 @@ module Make
 
   val push :
     ctx:Mimic.ctx ->
+    ?verify:(Smart_git.Endpoint.t -> Mimic.flow -> (unit, 'err) result Lwt.t) ->
     Smart_git.Endpoint.t ->
     store ->
     ?version:[> `V1 ] ->
@@ -107,5 +108,5 @@ module Make
     | `Delete of Reference.t
     | `Update of Reference.t * Reference.t ]
     list ->
-    (unit, [> error ]) result Lwt.t
+    (unit, ([> error ] as 'err)) result Lwt.t
 end

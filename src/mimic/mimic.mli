@@ -24,23 +24,16 @@ module Fun : sig
 end
 
 val make : name:string -> 'edn value
-val add : ?priority:int -> 'edn value -> 'edn -> ctx -> ctx
+val add : 'edn value -> 'edn -> ctx -> ctx
 val get : 'edn value -> ctx -> 'edn option
-
-val fold :
-  ?priority:int ->
-  'edn value ->
-  ('k, 'edn option Lwt.t) Fun.args ->
-  k:'k ->
-  ctx ->
-  ctx
-
+val fold : 'edn value -> ('k, 'edn option Lwt.t) Fun.args -> k:'k -> ctx -> ctx
 val merge : ctx -> ctx -> ctx
 val empty : ctx
 
 type ('edn, 'flow) protocol
 
 val register :
+  ?priority:int ->
   name:string ->
   (module Mirage_protocol.S with type flow = 'flow and type endpoint = 'edn) ->
   'edn value * ('edn, 'flow) protocol
