@@ -9,6 +9,8 @@ module Make
 struct
   module Sync = Git.Mem.Sync (Store) (Git_cohttp_mirage)
 
+  exception Invalid_flow
+
   let start git time console resolver conduit ctx is_ssh =
     let ctx =
       Git_cohttp_mirage.with_conduit
@@ -18,9 +20,12 @@ struct
     let edn =
       match Smart_git.Endpoint.of_string (Key_gen.remote ()) with
       | Ok edn -> edn
-      | Error (`Msg err) -> failwith err
-    in
-    Sync.fetch ~ctx ~is_ssh edn git ~deepen:(`Depth 1) `All >>= function
+      | Error (`Msg err) -> failwith err in
+    let verify edn flow = match edn with
+      | Smart_git.Endpoint.{ scheme= `SSH _; _ } ->
+        if is_ssh flow then Lwt.return_ok () else Lwt.return_error (`Exn Invalid_flow)
+      | _ -> if not (is_ssh flow) then Lwt.return_ok () else Lwt.return_error (`Exn Invalid_flow) in
+    Sync.fetch ~ctx ~verify edn git ~deepen:(`Depth 1) `All >>= function
     | Ok (Some (hash, references)) -> Lwt.return_unit
     | Ok None -> Lwt.return_unit
     | Error err -> Fmt.failwith "%a" Sync.pp_error err
