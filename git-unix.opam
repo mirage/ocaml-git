@@ -51,8 +51,3 @@ build: [
   ["dune" "runtest" "-p" name "-j1" "--no-buffer"] {with-test}
 ]
 dev-repo: "git+https://github.com/mirage/ocaml-git.git"
-
-pin-depends: [
-  [ "awa.dev" "git+https://github.com/mirage/awa-ssh.git#c337fbac71e3699ba4bcefe9382c9842354b3bee" ]
-  [ "awa-mirage.dev" "git+https://github.com/mirage/awa-ssh.git#c337fbac71e3699ba4bcefe9382c9842354b3bee" ]
-]
