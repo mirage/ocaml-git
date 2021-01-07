@@ -30,7 +30,6 @@ module type S = sig
     ?push_stdout:(string -> unit) ->
     ?push_stderr:(string -> unit) ->
     ctx:Mimic.ctx ->
-    ?verify:(Smart_git.Endpoint.t -> Mimic.flow -> (unit, error) result Lwt.t) ->
     Smart_git.Endpoint.t ->
     store ->
     ?version:[> `V1 ] ->
@@ -41,7 +40,6 @@ module type S = sig
 
   val push :
     ctx:Mimic.ctx ->
-    ?verify:(Smart_git.Endpoint.t -> Mimic.flow -> (unit, error) result Lwt.t) ->
     Smart_git.Endpoint.t ->
     store ->
     ?version:[> `V1 ] ->
@@ -71,7 +69,6 @@ module Make
     ?push_stdout:(string -> unit) ->
     ?push_stderr:(string -> unit) ->
     ctx:Mimic.ctx ->
-    ?verify:(Smart_git.Endpoint.t -> Mimic.flow -> (unit, 'err) result Lwt.t) ->
     Smart_git.Endpoint.t ->
     store ->
     ?version:[> `V1 ] ->
@@ -99,7 +96,6 @@ module Make
 
   val push :
     ctx:Mimic.ctx ->
-    ?verify:(Smart_git.Endpoint.t -> Mimic.flow -> (unit, 'err) result Lwt.t) ->
     Smart_git.Endpoint.t ->
     store ->
     ?version:[> `V1 ] ->

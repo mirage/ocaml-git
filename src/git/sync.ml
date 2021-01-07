@@ -31,7 +31,6 @@ module type S = sig
     ?push_stdout:(string -> unit) ->
     ?push_stderr:(string -> unit) ->
     ctx:Mimic.ctx ->
-    ?verify:(Smart_git.Endpoint.t -> Mimic.flow -> (unit, error) result Lwt.t) ->
     Smart_git.Endpoint.t ->
     store ->
     ?version:[> `V1 ] ->
@@ -42,7 +41,6 @@ module type S = sig
 
   val push :
     ctx:Mimic.ctx ->
-    ?verify:(Smart_git.Endpoint.t -> Mimic.flow -> (unit, error) result Lwt.t) ->
     Smart_git.Endpoint.t ->
     store ->
     ?version:[> `V1 ] ->
@@ -188,9 +186,9 @@ struct
   let ( >>? ) x f =
     x >>= function Ok x -> f x | Error err -> Lwt.return_error err
 
-  let fetch ?(push_stdout = ignore) ?(push_stderr = ignore) ~ctx ?verify
-      endpoint t ?version ?capabilities ?deepen want ~src ~dst ~idx
-      ~create_idx_stream ~create_pack_stream t_pck t_idx =
+  let fetch ?(push_stdout = ignore) ?(push_stderr = ignore) ~ctx endpoint t
+      ?version ?capabilities ?deepen want ~src ~dst ~idx ~create_idx_stream
+      ~create_pack_stream t_pck t_idx =
     let want, src_dst_mapping =
       match want with
       | (`All | `None) as x -> x, fun src -> [ src ]
@@ -216,7 +214,7 @@ struct
           `Some src_refs, src_dst_mapping
     in
     let ministore = Ministore.inj (t, Hashtbl.create 0x100) in
-    fetch ~push_stdout ~push_stderr ~ctx ?verify
+    fetch ~push_stdout ~push_stderr ~ctx
       (access, lightly_load t, heavily_load t)
       ministore endpoint ?version ?capabilities ?deepen want t_pck t_idx ~src
       ~dst ~idx
@@ -289,9 +287,9 @@ struct
         unshallow = (fun _ -> assert false);
       }
 
-  let push ~ctx ?verify endpoint t ?version ?capabilities cmds =
+  let push ~ctx endpoint t ?version ?capabilities cmds =
     let ministore = Ministore.inj (t, Hashtbl.create 0x100) in
-    push ~ctx ?verify
+    push ~ctx
       (access, lightly_load t, heavily_load t)
       ministore endpoint ?version ?capabilities cmds
 end

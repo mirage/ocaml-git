@@ -77,7 +77,6 @@ module Make
     ?push_stdout:(string -> unit) ->
     ?push_stderr:(string -> unit) ->
     ctx:Mimic.ctx ->
-    ?verify:(Endpoint.t -> Mimic.flow -> (unit, 'err) result Lwt.t) ->
     (Uid.t, _, Uid.t * int ref * int64, 'g, Scheduler.t) Sigs.access
     * Uid.t Carton_lwt.Thin.light_load
     * Uid.t Carton_lwt.Thin.heavy_load ->
@@ -99,7 +98,6 @@ module Make
 
   val push :
     ctx:Mimic.ctx ->
-    ?verify:(Endpoint.t -> Mimic.flow -> (unit, 'err) result Lwt.t) ->
     (Uid.t, Ref.t, Uid.t Pck.t, 'g, Scheduler.t) Sigs.access
     * Uid.t Carton_lwt.Thin.light_load
     * Uid.t Carton_lwt.Thin.heavy_load ->

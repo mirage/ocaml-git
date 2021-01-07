@@ -312,8 +312,7 @@ struct
   module Fetch = Nss.Fetch.Make (Scheduler) (Lwt) (Flow) (Uid) (Ref)
   module Push = Nss.Push.Make (Scheduler) (Lwt) (Flow) (Uid) (Ref)
 
-  let fetch_v1 ?(uses_git_transport = false)
-      ?(verify = fun _ -> Lwt.return_ok ()) ~push_stdout ~push_stderr
+  let fetch_v1 ?(uses_git_transport = false) ~push_stdout ~push_stderr
       ~capabilities path ~ctx ?deepen ?want host store access fetch_cfg pack =
     let open Lwt.Infix in
     Log.debug (fun m -> m "Try to resolve %a." Domain_name.pp host);
@@ -321,26 +320,20 @@ struct
     | Error _ as err ->
         pack None;
         Lwt.return err
-    | Ok flow -> (
-        verify flow >>= function
-        | Error err ->
-            Mimic.close flow >>= fun () ->
+    | Ok flow ->
+        Lwt.try_bind
+          (fun () ->
+            Fetch.fetch_v1 ~uses_git_transport ~push_stdout ~push_stderr
+              ~capabilities ?deepen ?want ~host path (Flow.make flow) store
+              access fetch_cfg (fun (payload, off, len) ->
+                let v = String.sub payload off len in
+                pack (Some (v, 0, len))))
+          (fun refs ->
             pack None;
-            Lwt.return_error err
-        | Ok () ->
-            Lwt.try_bind
-              (fun () ->
-                Fetch.fetch_v1 ~uses_git_transport ~push_stdout ~push_stderr
-                  ~capabilities ?deepen ?want ~host path (Flow.make flow) store
-                  access fetch_cfg (fun (payload, off, len) ->
-                    let v = String.sub payload off len in
-                    pack (Some (v, 0, len))))
-              (fun refs ->
-                pack None;
-                Mimic.close flow >>= fun () -> Lwt.return_ok refs)
-              (fun exn ->
-                pack None;
-                Mimic.close flow >>= fun () -> Lwt.fail exn))
+            Mimic.close flow >>= fun () -> Lwt.return_ok refs)
+          (fun exn ->
+            pack None;
+            Mimic.close flow >>= fun () -> Lwt.fail exn)
 
   module Flow_http = struct
     type +'a fiber = 'a Lwt.t
@@ -410,9 +403,9 @@ struct
     ]
 
   let fetch ?(push_stdout = ignore) ?(push_stderr = ignore) ~ctx
-      ?(verify = fun _ _ -> Lwt.return_ok ()) (access, light_load, heavy_load)
-      store edn ?(version = `V1) ?(capabilities = default_capabilities) ?deepen
-      want t_pck t_idx ~src ~dst ~idx =
+      (access, light_load, heavy_load) store edn ?(version = `V1)
+      ?(capabilities = default_capabilities) ?deepen want t_pck t_idx ~src ~dst
+      ~idx =
     let open Rresult in
     let open Lwt.Infix in
     let host = edn.Endpoint.host in
@@ -437,8 +430,8 @@ struct
           let run () =
             Lwt.both
               (fetch_v1 ~push_stdout ~push_stderr ~uses_git_transport
-                 ~verify:(verify edn) ~capabilities path ~ctx ?deepen ~want host
-                 store access fetch_cfg pusher)
+                 ~capabilities path ~ctx ?deepen ~want host store access
+                 fetch_cfg pusher)
               (run ~light_load ~heavy_load stream t_pck t_idx ~src ~dst ~idx)
             >>= fun (refs, idx) ->
             match refs, idx with
@@ -574,20 +567,16 @@ struct
     Lwt.async fiber;
     stream
 
-  let push ?prelude ~ctx ?(verify = fun _ -> Lwt.return_ok ()) ~capabilities
-      path cmds endpoint store access push_cfg pack =
+  let push ?prelude ~ctx ~capabilities path cmds endpoint store access push_cfg
+      pack =
     let open Lwt.Infix in
     Mimic.resolve ctx >>? fun flow ->
-    verify flow >>= function
-    | Error _ as err -> Mimic.close flow >>= fun () -> Lwt.return err
-    | Ok () ->
-        Push.push ?prelude ~capabilities cmds ~host:endpoint path
-          (Flow.make flow) store access push_cfg pack
-        >>= fun () ->
-        Mimic.close flow >>= fun () -> Lwt.return_ok ()
+    Push.push ?prelude ~capabilities cmds ~host:endpoint path (Flow.make flow)
+      store access push_cfg pack
+    >>= fun () ->
+    Mimic.close flow >>= fun () -> Lwt.return_ok ()
 
-  let push ~ctx ?(verify = fun _ _ -> Lwt.return_ok ())
-      (access, light_load, heavy_load) store edn ?(version = `V1)
+  let push ~ctx (access, light_load, heavy_load) store edn ?(version = `V1)
       ?(capabilities = default_capabilities) cmds =
     let open Rresult in
     match version, edn.Endpoint.scheme with
@@ -597,8 +586,7 @@ struct
         let path = edn.path in
         let push_cfg = Nss.Push.configuration () in
         let run () =
-          push ~prelude ~ctx ~verify:(verify edn) ~capabilities path cmds host
-            store access push_cfg
+          push ~prelude ~ctx ~capabilities path cmds host store access push_cfg
             (pack ~light_load ~heavy_load)
         in
         Lwt.catch run (function

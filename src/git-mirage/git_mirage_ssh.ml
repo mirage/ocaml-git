@@ -20,6 +20,7 @@ module Make
     end) (Git : sig
       val git_path : string Mimic.value
       val git_capabilities : [ `Rd | `Wr ] Mimic.value
+      val git_scheme : [ `Git | `SSH | `HTTP | `HTTPS ] Mimic.value
     end)
     (Mclock : Mirage_clock.MCLOCK) =
 struct
@@ -89,39 +90,43 @@ struct
     Mimic.add ssh_key v ctx
 
   let with_resolv ctx =
-    let k (stack, ipaddr, port) ssh_authenticator ssh_user ssh_key git_path
-        git_capabilities =
-      Lwt.return_some
-        {
-          stack;
-          ipaddr;
-          port;
-          authenticator = ssh_authenticator;
-          user = ssh_user;
-          key = ssh_key;
-          path = git_path;
-          capabilities = git_capabilities;
-        }
+    let k scheme (stack, ipaddr, port) ssh_authenticator ssh_user ssh_key
+        git_path git_capabilities =
+      match scheme with
+      | `SSH ->
+          Lwt.return_some
+            {
+              stack;
+              ipaddr;
+              port;
+              authenticator = ssh_authenticator;
+              user = ssh_user;
+              key = ssh_key;
+              path = git_path;
+              capabilities = git_capabilities;
+            }
+      | _ -> Lwt.return_none
     in
     let ctx =
       Mimic.(
         fold ssh_endpoint
           Fun.
             [
-              req TCP.tcp_endpoint; opt ssh_authenticator; req ssh_user;
-              req ssh_key; req Git.git_path; dft Git.git_capabilities `Rd;
+              req Git.git_scheme; req TCP.tcp_endpoint; opt ssh_authenticator;
+              req ssh_user; req ssh_key; req Git.git_path;
+              dft Git.git_capabilities `Rd;
             ]
           ~k ctx)
     in
-    let k stack ipaddr port = k (stack, ipaddr, port) in
+    let k scheme stack ipaddr port = k scheme (stack, ipaddr, port) in
     let ctx =
       Mimic.(
         fold ssh_endpoint
           Fun.
             [
-              req TCP.tcp_stack; req TCP.tcp_ipaddr; dft TCP.tcp_port 22;
-              opt ssh_authenticator; req ssh_user; req ssh_key;
-              req Git.git_path; dft Git.git_capabilities `Rd;
+              req Git.git_scheme; req TCP.tcp_stack; req TCP.tcp_ipaddr;
+              dft TCP.tcp_port 22; opt ssh_authenticator; req ssh_user;
+              req ssh_key; req Git.git_path; dft Git.git_capabilities `Rd;
             ]
           ~k ctx)
     in
