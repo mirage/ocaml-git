@@ -18,6 +18,7 @@ module Make
     end) (Git : sig
       val git_path : string Mimic.value
       val git_capabilities : [ `Rd | `Wr ] Mimic.value
+      val git_scheme : [ `Git | `SSH | `HTTP | `HTTPS ] Mimic.value
     end)
     (Mclock : Mirage_clock.MCLOCK) : sig
   type nonrec endpoint = Stack.t endpoint
