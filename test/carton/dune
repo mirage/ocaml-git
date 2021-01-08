@@ -8,7 +8,7 @@
 
 (rule
  (alias runtest)
- (package carton-lwt)
+ (package carton)
  (deps
   (:test test.exe)
   bomb.pack)
