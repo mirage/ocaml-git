@@ -12,7 +12,7 @@ homepage: "https://github.com/dinosaure/carton"
 doc: "https://dinosaure.github.io/carton/"
 bug-reports: "https://github.com/dinosaure/carton/issues"
 depends: [
-  "ocaml" {>= "4.07.0"}
+  "ocaml" {>= "4.08.0"}
   "dune" {>= "2.6.0"}
   "carton"
   "lwt"
