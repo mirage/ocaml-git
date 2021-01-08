@@ -298,6 +298,9 @@ val weight_of_uid :
     {b Note.} Despite {!weight_of_offset}, this function {b look-up} the object
     from the given reference. *)
 
+val length_of_offset :
+  's scheduler -> map:('fd, 's) W.map -> ('fd, 'uid) t -> int64 -> (int, 's) io
+
 (** {3 Value of object.} *)
 
 val of_offset :

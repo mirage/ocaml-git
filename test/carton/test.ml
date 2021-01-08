@@ -724,7 +724,10 @@ let pack_bomb_pack () =
           let ( >>= ) = unix.Carton.bind in
           Carton.Dec.weight_of_offset unix ~map pack ~weight:Carton.Dec.null
             cursor
-          >>= fun weight -> return (weight :> int)
+          >>= fun weight ->
+          let raw = Carton.Dec.make_raw ~weight in
+          Carton.Dec.of_offset unix ~map pack raw ~cursor >>= fun v ->
+          return (Carton.Dec.len v)
         in
         Carton.Enc.make_entry ~kind:(Verify.kind_of_status s)
           ~length:(Us.prj length) (Verify.uid_of_status s))
@@ -1009,15 +1012,15 @@ let () =
   Alcotest.run "carton"
     [
       "weights", [ weights ]; "loads", [ loads ];
-      ( "encoder",
-        [
-          test_empty_pack (); index_of_empty_pack (); index_of_one_entry ();
-          pack_bomb_pack (); cycle ();
-        ] );
       ( "decoder",
         [
           valid_empty_pack (); verify_empty_pack (); check_empty_index ();
           verify_bomb_pack (); first_entry_of_bomb_pack (); unpack_bomb_pack ();
           decode_index_stream (); empty_stream ();
+        ] );
+      ( "encoder",
+        [
+          test_empty_pack (); index_of_empty_pack (); index_of_one_entry ();
+          pack_bomb_pack (); cycle ();
         ] ); "lwt", [ Test_lwt.test_map_yield ];
     ]
