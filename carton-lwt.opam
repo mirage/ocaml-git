@@ -27,6 +27,8 @@ depends: [
   "mirage-flow" {>= "2.0.1" & with-test}
   "result" {>= "1.5" & with-test}
   "rresult" {>= "0.6.0" & with-test}
+  "bigarray-compat" {>= "1.0.0" & with-test}
+  "ke" {>= "0.4" & with-test}
 ]
 build: [
   ["dune" "build" "-p" name "-j" jobs]
