@@ -5,6 +5,7 @@
 
 (rule
  (alias runtest)
+ (package git)
  (deps
   (:test test.exe))
  (action
