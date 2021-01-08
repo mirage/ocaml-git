@@ -123,17 +123,18 @@ struct
   let fs =
     let open Rresult in
     let open Lwt.Infix in
-    {
-      Thin.create =
-        (fun t path ->
-          Pack.create ~mode:Pack.RdWr t path
-          >|= R.reword_error (R.msgf "%a" Pack.pp_error));
-      Thin.append = Pack.append;
-      Thin.map = Pack.map;
-      Thin.close =
-        (fun t fd ->
-          Pack.close t fd >|= R.reword_error (R.msgf "%a" Pack.pp_error));
-    }
+    Thin.
+      {
+        create =
+          (fun t path ->
+            Pack.create ~mode:Pack.RdWr t path
+            >|= R.reword_error (R.msgf "%a" Pack.pp_error));
+        append = Pack.append;
+        map = Pack.map;
+        close =
+          (fun t fd ->
+            Pack.close t fd >|= R.reword_error (R.msgf "%a" Pack.pp_error));
+      }
 
   (* XXX(dinosaure): abstract it? *)
   let digest :
