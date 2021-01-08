@@ -29,6 +29,13 @@ depends: [
   "rresult" {>= "0.6.0" & with-test}
   "bigarray-compat" {>= "1.0.0" & with-test}
   "ke" {>= "0.4" & with-test}
+  "base64" {>= "3.4.0" & with-test}
+  "bos" {>= "0.2.0" & with-test}
+  "checkseum" {>= "0.3.0" & with-test}
+  "digestif" {>= "1.0.0" & with-test}
+  "fpath" {>= "0.7.3" & with-test}
+  "mmap" {>= "1.1.0" & with-test}
+  "stdlib-shims" {>= "0.1.0" & with-test}
 ]
 build: [
   ["dune" "build" "-p" name "-j" jobs]
