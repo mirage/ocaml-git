@@ -1,3 +1,33 @@
+### 3.0.0 (2021-08-01) Paris - France
+
+- Rewrite of `ocaml-git` (@dinosaure, #395)
+- Delete useless constraints on digestif's signature (@dinosaure, #399)
+- Add support of CoHTTP with UNIX and MirageOS (@ulugbekna, #400)
+- Add progress reporting on fetch command (@ulugbekna, #405)
+- Lint dependencies on packages (`git-cohttp-unix` and `git-cohttp-mirage`)
+  and update to the last version of CoHTTP (@hannesm, #407)
+- Fix internal `Cstruct_append` implementation (@dinosaure, #401)
+- Implement shallow commit (@dinosaure, #402)
+- Update to `conduit.3.0.0` (@dinosaure, #408) (deleted by the integration of `mimic`)
+- Delete use of `ocurl` (@dinosaure, #410)
+- Delete the useless **old** `git-mirage` package (@hannesm, #411)
+- Fix about unresolved endpoint with `conduit.3.0.0` (@dinosaure, #412)
+- Refactors fetch command (@ulugbekna, #404)
+- Fix ephemerons about temporary devices (@dinosaure, #413)
+- Implementation of `ogit-fetch` as an example (@ulugbekna, #406)
+- Rename `nss` to `git-nss` (@dinosaure, #415)
+- Refactors `git-nss` (@ulugbekna, #416)
+- Update README.md (@ulugbekna, #417)
+- Replace deprecated `Fmt` functions (@ulugbekna, #421)
+- Delete physical equality (@ulugbekna, #422)
+- Rename `prelude` argument by `uses_git_transport` (@ulugbekna, #423)
+- Refactors Smart decoder (@ulugbekna, #424)
+- Constraint to use `fmt.0.8.7` (@dinosaure, #425)
+- Small refactors in `git-nss` (@dinosaure, #427)
+- Delete `conduit.3.0.0` and replace it by `mimic` (@dinosaure, #428)
+- Delete the useless `verify` function on `fetch` and `push` (@dinosaure, #429)
+- Delete `pin-depends` on `awa` (@dinosaure, #431)
+
 ### 2.1.3 (2020-30-06) Paris - France
 
 - Move to `encoder.0.5` (#393, @dinosaure)
