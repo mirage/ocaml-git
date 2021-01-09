@@ -1,8 +1,8 @@
 (library
  (name git)
  (public_name git)
- (libraries mimic stdlib-shims rresult git-nss.sigs git-nss.pck
+ (libraries mimic stdlib-shims rresult git.nss.sigs git.nss.pck
    bigarray-compat optint loose decompress.de decompress.zl result
-   git-nss.smart logs lwt cstruct angstrom bigstringaf carton ke fmt
-   checkseum git-nss.git git-nss.hkt ocamlgraph astring fpath loose_git
+   git.nss.smart logs lwt cstruct angstrom bigstringaf carton ke fmt
+   checkseum git.nss.git git.nss.hkt ocamlgraph astring fpath loose_git
    carton-lwt carton-git digestif encore))

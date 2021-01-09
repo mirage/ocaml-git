@@ -2,6 +2,6 @@
  (name git_unix)
  (public_name git-unix)
  (modules git_unix packed_refs)
- (libraries stdlib-shims decompress.de bos astring carton git-nss.smart
-   rresult result bigarray-compat bigstringaf fmt git-nss.git fpath digestif
+ (libraries stdlib-shims decompress.de bos astring carton git.nss.smart
+   rresult result bigarray-compat bigstringaf fmt git.nss.git fpath digestif
    mmap git logs.fmt lwt lwt.unix))

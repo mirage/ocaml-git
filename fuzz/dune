@@ -11,7 +11,7 @@
 (executable
  (name smart)
  (modules smart)
- (libraries fmt crowbar digestif.c git-nss.smart))
+ (libraries fmt crowbar digestif.c git.nss.smart))
 
 (rule
  (alias runtest)
@@ -27,6 +27,6 @@
 
 (rule
  (alias runtest)
- (package git-nss)
+ (package git)
  (action
   (run ./smart.exe)))

@@ -1,4 +1,4 @@
 (library
  (name git_cohttp)
  (public_name git-cohttp)
- (libraries lwt rresult result git-nss.git uri fmt cohttp cohttp-lwt))
+ (libraries lwt rresult result git.nss.git uri fmt cohttp cohttp-lwt))

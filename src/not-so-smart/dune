@@ -1,56 +1,56 @@
 (library
  (name pkt_line)
- (public_name git-nss.pkt-line)
+ (public_name git.nss.pkt-line)
  (modules decoder encoder)
  (libraries astring fmt))
 
 (library
  (name smart)
- (public_name git-nss.smart)
+ (public_name git.nss.smart)
  (modules smart filter capability state protocol)
- (libraries git-nss.pkt-line stdlib-shims result rresult domain-name astring
+ (libraries git.nss.pkt-line stdlib-shims result rresult domain-name astring
    fmt))
 
 (library
  (name sigs)
- (public_name git-nss.sigs)
+ (public_name git.nss.sigs)
  (modules sigs)
  (libraries fmt cstruct))
 
 (library
  (name hkt)
- (public_name git-nss.hkt)
+ (public_name git.nss.hkt)
  (modules hkt)
- (libraries git-nss.sigs))
+ (libraries git.nss.sigs))
 
 (library
  (name neg)
- (public_name git-nss.neg)
+ (public_name git.nss.neg)
  (modules neg find_common default)
  (libraries stdlib-shims fmt rresult cstruct sigs logs psq smart))
 
 (library
  (name pck)
- (public_name git-nss.pck)
+ (public_name git.nss.pck)
  (modules pck)
  (libraries sigs psq logs smart))
 
 (library
  (name nss)
- (public_name git-nss)
+ (public_name git.nss)
  (modules nss fetch push)
  (libraries fmt result rresult logs domain-name smart sigs neg pck))
 
 (library
  (name unixiz)
- (public_name git-nss.unixiz)
+ (public_name git.nss.unixiz)
  (modules unixiz)
- (libraries git-nss.sigs lwt result rresult fmt bigarray-compat mirage-flow
+ (libraries git.nss.sigs lwt result rresult fmt bigarray-compat mirage-flow
    ke cstruct))
 
 (library
  (name smart_git)
- (public_name git-nss.git)
+ (public_name git.nss.git)
  (modules smart_git)
  (libraries mimic mirage-flow unixiz ipaddr decompress.de decompress.zl
    cstruct logs astring result rresult bigstringaf fmt emile lwt domain-name
