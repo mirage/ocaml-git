@@ -9,7 +9,7 @@
 
 (rule
  (alias runtest)
- (package git)
+ (package git-unix)
  (deps
   (:test test.exe)
   pack-testzone-0.pack
