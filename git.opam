@@ -21,7 +21,6 @@ depends: [
   "stdlib-shims"
   "rresult"
   "result"
-  "git-nss"
   "bigarray-compat"
   "bigstringaf"
   "optint"
@@ -47,7 +46,13 @@ depends: [
   "base-unix" {with-test}
   "fpath"
   "base64" {with-test & >= "3.0.0"}
-  "mirage-flow" {>= "2.0.1" & with-test}
+  "mirage-flow" {>= "2.0.1"}
+  "domain-name" {>= "0.3.0"}
+  "emile" {>= "1.1"}
+  "ipaddr" {>= "5.0.1"}
+  "psq" {>= "0.2.0"}
+  "uri" {>= "4.1.0"}
+  "crowbar" {>= "0.2" & with-test}
 ]
 build: [
   ["dune" "build" "-p" name "-j" jobs]
