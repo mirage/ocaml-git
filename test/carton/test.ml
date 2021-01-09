@@ -1,3 +1,5 @@
+let () = Printexc.record_backtrace true
+
 open Stdlib
 
 let weights =
@@ -691,6 +693,9 @@ let unpack_bomb_pack () =
         (Verify.offset_of_status s))
     matrix
 
+let fake_pack_bomb_pack () =
+  Alcotest.test_case "fake pack bomb pack" `Quick @@ fun () -> ()
+
 let pack_bomb_pack () =
   Alcotest.test_case "pack bomb pack" `Quick @@ fun () ->
   let fd = Unix.openfile "bomb.pack" Unix.[ O_RDONLY ] 0o644 in
@@ -1008,6 +1013,26 @@ let empty_stream () =
   | `Malformed _ -> Alcotest.(check pass) "no infinite loop" () ()
   | _ -> Alcotest.fail "Unexpected result of [decode]"
 
+let v1_9_0 =
+  {
+    Git_version.major = 1;
+    minor = 9;
+    patch = Some "0";
+    revision = None;
+    release_candidate = None;
+  }
+
+let git_version =
+  match
+    Bos.(
+      OS.Cmd.run_out Cmd.(v "git" % "--version") |> OS.Cmd.out_string ~trim:true)
+  with
+  | Error (`Msg err) -> failwith err
+  | Ok (str, _) -> (
+      match Git_version.parse str with
+      | Some version -> version
+      | None -> Fmt.failwith "Impossible to parse the Git version: %s" str)
+
 let () =
   Alcotest.run "carton"
     [
@@ -1021,6 +1046,9 @@ let () =
       ( "encoder",
         [
           test_empty_pack (); index_of_empty_pack (); index_of_one_entry ();
-          pack_bomb_pack (); cycle ();
+          (* XXX(dinosaure): it seems that a bug exists in Git (not ocaml-git)
+             on git-index-pack until 1.9.0. *)
+          (if Git_version.compare v1_9_0 git_version <= 0 then pack_bomb_pack ()
+          else fake_pack_bomb_pack ()); cycle ();
         ] ); "lwt", [ Test_lwt.test_map_yield ];
     ]
