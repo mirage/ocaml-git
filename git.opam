@@ -27,6 +27,7 @@ depends: [
   "decompress"
   "logs"
   "lwt"
+  "mimic"
   "cstruct" {>= "5.0.0"}
   "angstrom" {>= "0.14.0"}
   "carton"
