@@ -5,6 +5,7 @@
 
 (rule
  (alias runtest)
+ (package mimic)
  (deps
   (:test test.exe))
  (action

@@ -922,6 +922,18 @@ and weight_of_offset :
             slice
       | _ -> assert false)
 
+let length_of_offset :
+    type fd uid s.
+    s scheduler -> map:(fd, s) W.map -> (fd, uid) t -> int64 -> (int, s) io =
+ fun ({ bind; return } as s) ~map t cursor ->
+  let ( >>= ) = bind in
+  W.load s ~map t.ws cursor >>= function
+  | None ->
+      Fmt.failwith "Reach end of pack (ask: %Ld, [weight_of_offset])" cursor
+  | Some slice ->
+      header_of_entry s ~map t cursor slice >>= fun (_, size, _, _) ->
+      return size
+
 type raw = { raw0 : Bigstringaf.t; raw1 : Bigstringaf.t; flip : bool }
 type v = { kind : kind; raw : raw; len : int; depth : int }
 

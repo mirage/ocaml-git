@@ -25,6 +25,7 @@ type 'uid uid = { uid_ln : int; uid_rw : 'uid -> string }
 
 val target_to_source : 'uid q -> 'uid p
 val target_uid : 'uid q -> 'uid
+val target_length : 'uid q -> int
 
 val entry_to_target :
   's scheduler -> load:('uid, 's) load -> 'uid entry -> ('uid q, 's) io

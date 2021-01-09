@@ -1,3 +1,5 @@
+let () = Printexc.record_backtrace true
+
 open Stdlib
 
 let weights =
@@ -691,6 +693,9 @@ let unpack_bomb_pack () =
         (Verify.offset_of_status s))
     matrix
 
+let fake_pack_bomb_pack () =
+  Alcotest.test_case "fake pack bomb pack" `Quick @@ fun () -> ()
+
 let pack_bomb_pack () =
   Alcotest.test_case "pack bomb pack" `Quick @@ fun () ->
   let fd = Unix.openfile "bomb.pack" Unix.[ O_RDONLY ] 0o644 in
@@ -724,7 +729,10 @@ let pack_bomb_pack () =
           let ( >>= ) = unix.Carton.bind in
           Carton.Dec.weight_of_offset unix ~map pack ~weight:Carton.Dec.null
             cursor
-          >>= fun weight -> return (weight :> int)
+          >>= fun weight ->
+          let raw = Carton.Dec.make_raw ~weight in
+          Carton.Dec.of_offset unix ~map pack raw ~cursor >>= fun v ->
+          return (Carton.Dec.len v)
         in
         Carton.Enc.make_entry ~kind:(Verify.kind_of_status s)
           ~length:(Us.prj length) (Verify.uid_of_status s))
@@ -1005,19 +1013,42 @@ let empty_stream () =
   | `Malformed _ -> Alcotest.(check pass) "no infinite loop" () ()
   | _ -> Alcotest.fail "Unexpected result of [decode]"
 
+let v1_9_0 =
+  {
+    Git_version.major = 1;
+    minor = 9;
+    patch = Some "0";
+    revision = None;
+    release_candidate = None;
+  }
+
+let git_version =
+  match
+    Bos.(
+      OS.Cmd.run_out Cmd.(v "git" % "--version") |> OS.Cmd.out_string ~trim:true)
+  with
+  | Error (`Msg err) -> failwith err
+  | Ok (str, _) -> (
+      match Git_version.parse str with
+      | Some version -> version
+      | None -> Fmt.failwith "Impossible to parse the Git version: %s" str)
+
 let () =
   Alcotest.run "carton"
     [
       "weights", [ weights ]; "loads", [ loads ];
-      ( "encoder",
-        [
-          test_empty_pack (); index_of_empty_pack (); index_of_one_entry ();
-          pack_bomb_pack (); cycle ();
-        ] );
       ( "decoder",
         [
           valid_empty_pack (); verify_empty_pack (); check_empty_index ();
           verify_bomb_pack (); first_entry_of_bomb_pack (); unpack_bomb_pack ();
           decode_index_stream (); empty_stream ();
+        ] );
+      ( "encoder",
+        [
+          test_empty_pack (); index_of_empty_pack (); index_of_one_entry ();
+          (* XXX(dinosaure): it seems that a bug exists in Git (not ocaml-git)
+             on git-index-pack until 1.9.0. *)
+          (if Git_version.compare v1_9_0 git_version <= 0 then pack_bomb_pack ()
+          else fake_pack_bomb_pack ()); cycle ();
         ] ); "lwt", [ Test_lwt.test_map_yield ];
     ]
