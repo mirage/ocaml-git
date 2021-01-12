@@ -64,19 +64,29 @@ module Endpoint = struct
       | `HTTP of (string * string) list
       | `HTTPS of (string * string) list ];
     path : string;
-    host : [ `host ] Domain_name.t;
+    host : [ `Addr of Ipaddr.t | `Domain of [ `host ] Domain_name.t ];
   }
 
   let pp ppf edn =
+    let pp_host ppf = function
+      | `Addr v -> Ipaddr.pp ppf v
+      | `Domain v -> Domain_name.pp ppf v
+    in
     match edn with
     | { scheme = `SSH user; path; host } ->
-        Fmt.pf ppf "%s@%a:%s" user Domain_name.pp host path
+        Fmt.pf ppf "%s@%a:%s" user pp_host host path
     | { scheme = `Git; path; host } ->
-        Fmt.pf ppf "git://%a/%s" Domain_name.pp host path
+        Fmt.pf ppf "git://%a/%s" pp_host host path
     | { scheme = `HTTP _; path; host } ->
-        Fmt.pf ppf "http://%a/%s" Domain_name.pp host path
+        Fmt.pf ppf "http://%a/%s" pp_host host path
     | { scheme = `HTTPS _; path; host } ->
-        Fmt.pf ppf "https://%a/%s" Domain_name.pp host path
+        Fmt.pf ppf "https://%a/%s" pp_host host path
+
+  let ( <|> ) a b =
+    match a, b with
+    | Ok a, _ -> Ok a
+    | Error _, Ok b -> Ok b
+    | Error err, _ -> Error err
 
   let of_string str =
     let open Rresult in
@@ -96,24 +106,33 @@ module Endpoint = struct
                  m.Emile.local)
           in
           (match fst m.Emile.domain with
-          | `Domain vs -> Domain_name.of_strings vs >>= Domain_name.host
-          | `Literal v -> Domain_name.of_string v >>= Domain_name.host
+          | `Domain vs ->
+              Domain_name.of_strings vs >>= Domain_name.host >>| fun v ->
+              `Domain v
+          | `Literal v ->
+              Domain_name.of_string v >>= Domain_name.host >>| fun v ->
+              `Domain v
+          | `Addr (Emile.IPv4 v) -> R.ok (`Addr (Ipaddr.V4 v))
+          | `Addr (Emile.IPv6 v) -> R.ok (`Addr (Ipaddr.V6 v))
           | v -> R.error_msgf "Invalid hostname: %a" Emile.pp_domain v)
           >>= fun host -> R.ok { scheme = `SSH user; path; host }
       | _ -> R.error_msg "invalid pattern"
     in
     let parse_uri x =
       let uri = Uri.of_string x in
+      let host str =
+        Domain_name.of_string str
+        >>= Domain_name.host
+        >>| (fun x -> `Domain x)
+        <|> (Ipaddr.of_string str >>| fun x -> `Addr x)
+      in
       match Uri.scheme uri, Uri.host uri, Uri.path uri with
-      | Some "git", Some host, path ->
-          Domain_name.of_string host >>= Domain_name.host >>= fun host ->
-          R.ok { scheme = `Git; path; host }
-      | Some "http", Some host, path ->
-          Domain_name.of_string host >>= Domain_name.host >>= fun host ->
-          R.ok { scheme = `HTTP []; path; host }
-      | Some "https", Some host, path ->
-          Domain_name.of_string host >>= Domain_name.host >>= fun host ->
-          R.ok { scheme = `HTTPS []; path; host }
+      | Some "git", Some str, path ->
+          host str >>= fun host -> R.ok { scheme = `Git; path; host }
+      | Some "http", Some str, path ->
+          host str >>= fun host -> R.ok { scheme = `HTTP []; path; host }
+      | Some "https", Some str, path ->
+          host str >>= fun host -> R.ok { scheme = `HTTPS []; path; host }
       | _ -> R.error_msgf "invalid uri: %a" Uri.pp uri
     in
     match parse_ssh str, parse_uri str with
@@ -315,7 +334,6 @@ struct
   let fetch_v1 ?(uses_git_transport = false) ~push_stdout ~push_stderr
       ~capabilities path ~ctx ?deepen ?want host store access fetch_cfg pack =
     let open Lwt.Infix in
-    Log.debug (fun m -> m "Try to resolve %a." Domain_name.pp host);
     Mimic.resolve ctx >>= function
     | Error _ as err ->
         pack None;
@@ -446,15 +464,17 @@ struct
           let fetch_cfg =
             Nss.Fetch.configuration ~stateless:true capabilities
           in
+          let pp_host ppf = function
+            | `Domain v -> Domain_name.pp ppf v
+            | `Addr v -> Ipaddr.pp ppf v
+          in
           let uri, headers =
             match scheme with
             | `HTTP headers ->
-                ( Uri.of_string
-                    (Fmt.str "http://%a%s.git" Domain_name.pp host path),
+                ( Uri.of_string (Fmt.str "http://%a%s.git" pp_host host path),
                   headers )
             | `HTTPS headers ->
-                ( Uri.of_string
-                    (Fmt.str "https://%a%s.git" Domain_name.pp host path),
+                ( Uri.of_string (Fmt.str "https://%a%s.git" pp_host host path),
                   headers )
           in
           let run () =

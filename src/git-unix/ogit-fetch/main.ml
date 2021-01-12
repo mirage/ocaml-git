@@ -140,6 +140,7 @@ module SSH = struct
 end
 
 let tcp_value, tcp_protocol = Mimic.register ~name:"tcp" (module TCP)
+let ipaddr = Mimic.make ~name:"ipaddr"
 let domain_name = Mimic.make ~name:"domain-namme"
 let port = Mimic.make ~name:"port"
 let ssh_value, ssh_protocol = Mimic.register ~name:"ssh" (module SSH)
@@ -149,32 +150,40 @@ let user = Mimic.make ~name:"user"
 let authenticator = Mimic.make ~name:"ssh-authenticator"
 
 let resolv ctx =
-  let k domain_name port =
+  let k0 domain_name =
     match Unix.gethostbyname (Domain_name.to_string domain_name) with
     | { Unix.h_addr_list; _ } when Array.length h_addr_list > 0 ->
-        Lwt.return_some (Ipaddr_unix.of_inet_addr h_addr_list.(0), port)
+        Lwt.return_some (Ipaddr_unix.of_inet_addr h_addr_list.(0))
     | _ | (exception _) -> Lwt.return_none
   in
-  Mimic.fold tcp_value Mimic.Fun.[ req domain_name; dft port 9418 ] ~k ctx
+  let k1 ipaddr port = Lwt.return_some (ipaddr, port) in
+  Mimic.fold ipaddr Mimic.Fun.[ req domain_name ] ~k:k0 ctx
+  |> Mimic.fold tcp_value Mimic.Fun.[ req ipaddr; dft port 9418 ] ~k:k1
 
 let resolv_ssh ctx =
-  let k authenticator sockaddr path user seed =
+  let k authenticator ipaddr path user seed port =
     let key = Awa.Keys.of_seed `Rsa seed in
-    Lwt.return_some { SSH.authenticator; user; path; key; endpoint = sockaddr }
+    Lwt.return_some
+      { SSH.authenticator; user; path; key; endpoint = ipaddr, port }
   in
   Mimic.fold ssh_value
-    Mimic.Fun.[ opt authenticator; req tcp_value; req path; req user; req seed ]
+    Mimic.Fun.
+      [
+        opt authenticator; req ipaddr; req path; req user; req seed; dft port 22;
+      ]
     ~k ctx
 
 let of_smart_git_endpoint edn ctx =
+  let add_host v ctx =
+    match v with
+    | `Domain v -> Mimic.add domain_name v ctx
+    | `Addr v -> Mimic.add ipaddr v ctx
+  in
   match edn with
   | { Smart_git.Endpoint.scheme = `SSH v_user; path = v_path; host } ->
-      ctx
-      |> Mimic.add domain_name host
-      |> Mimic.add path v_path
-      |> Mimic.add user v_user
+      ctx |> add_host host |> Mimic.add path v_path |> Mimic.add user v_user
   | { Smart_git.Endpoint.path = v_path; host; _ } ->
-      ctx |> Mimic.add domain_name host |> Mimic.add path v_path
+      ctx |> add_host host |> Mimic.add path v_path
 
 let main (_ssh_seed : string)
     (references : (Git.Reference.t * Git.Reference.t) list) (directory : string)

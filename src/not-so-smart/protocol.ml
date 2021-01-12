@@ -99,7 +99,8 @@ end
 module Proto_request = struct
   type t = {
     path : string;
-    host : [ `host ] Domain_name.t * int option;
+    host :
+      [ `Addr of Ipaddr.t | `Domain of [ `host ] Domain_name.t ] * int option;
     version : int;
     request_command : [ `Upload_pack | `Receive_pack | `Upload_archive ];
   }
@@ -119,8 +120,10 @@ module Proto_request = struct
       | `Upload_archive -> Fmt.pf ppf "git-upload-archive"
     in
     let pp_host ppf = function
-      | host, Some port -> Fmt.pf ppf "%a:%d" Domain_name.pp host port
-      | host, None -> Fmt.pf ppf "%a" Domain_name.pp host
+      | `Domain host, Some port -> Fmt.pf ppf "%a:%d" Domain_name.pp host port
+      | `Domain host, None -> Fmt.pf ppf "%a" Domain_name.pp host
+      | `Addr v, Some port -> Fmt.pf ppf "%a:%d" Ipaddr.pp v port
+      | `Addr v, None -> Ipaddr.pp ppf v
     in
     Fmt.pf ppf "%a %s %a %a" pp_request_command request_command path
       Fmt.(prefix (const string " host=") pp_host)
@@ -743,12 +746,16 @@ module Encoder = struct
       let version = Fmt.str "version=%d" version in
       write encoder version
     in
+    let pp_host ppf = function
+      | `Domain v -> Domain_name.pp ppf v
+      | `Addr v -> Ipaddr.pp ppf v
+    in
     let write_host encoder = function
       | host, Some port ->
-          let host = Fmt.str "host=%s:%d" (Domain_name.to_string host) port in
+          let host = Fmt.str "host=%a:%d" pp_host host port in
           write encoder host
       | host, None ->
-          let host = Fmt.str "host=%s" (Domain_name.to_string host) in
+          let host = Fmt.str "host=%a" pp_host host in
           write encoder host
     in
     let k encoder =
