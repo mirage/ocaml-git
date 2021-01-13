@@ -395,7 +395,7 @@ struct
     let host = edn.Endpoint.host in
     let path = edn.path in
     let stream, pusher = Lwt_stream.create () in
-    let pusher = function
+    let pusher_with_logging = function
       | Some (_, _, len) as v ->
           Log.debug (fun m -> m "Download %d byte(s) of the PACK file." len);
           pusher v
@@ -415,7 +415,7 @@ struct
             Lwt.both
               (fetch_v1 ~push_stdout ~push_stderr ~uses_git_transport
                  ~capabilities path ~ctx ?deepen ~want host store access
-                 fetch_cfg pusher)
+                 fetch_cfg pusher_with_logging)
               (run ~light_load ~heavy_load stream t_pck t_idx ~src ~dst ~idx)
             >>= fun (refs, idx) ->
             match refs, idx with
@@ -446,7 +446,8 @@ struct
           let run () =
             Lwt.both
               (http_fetch_v1 ~push_stdout ~push_stderr ~capabilities ~ctx uri
-                 ~headers host path ?deepen ~want store access fetch_cfg pusher)
+                 ~headers host path ?deepen ~want store access fetch_cfg
+                 pusher_with_logging)
               (run ~light_load ~heavy_load stream t_pck t_idx ~src ~dst ~idx)
             >>= fun (refs, idx) ->
             match refs, idx with
