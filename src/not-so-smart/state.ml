@@ -20,7 +20,6 @@ module type CONTEXT = sig
   val pp : t Fmt.t
   val encoder : t -> encoder
   val decoder : t -> decoder
-  val is_cap_shared : Capability.t -> t -> bool
 end
 
 module type S = sig
@@ -62,7 +61,7 @@ module Context = struct
   let update ({ capabilities = client_side, _; _ } as t) server_side =
     t.capabilities <- client_side, server_side
 
-  let is_cap_shared capability t =
+  let is_cap_shared t capability =
     let client_side, server_side = t.capabilities in
     let a = List.exists (Capability.equal capability) client_side in
     a && List.exists (Capability.equal capability) server_side

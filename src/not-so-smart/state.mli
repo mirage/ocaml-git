@@ -10,6 +10,7 @@ type ('a, 'err) t =
   | Return of 'a
   | Error of 'err
 
+(** minimal interface that contains [encoder] and [decoder] states *)
 module type CONTEXT = sig
   type t
   type encoder
@@ -18,7 +19,6 @@ module type CONTEXT = sig
   val pp : t Fmt.t
   val encoder : t -> encoder
   val decoder : t -> decoder
-  val is_cap_shared : Capability.t -> t -> bool
 end
 
 module type S = sig
@@ -41,8 +41,11 @@ module Context : sig
        and type decoder = Decoder.decoder
 
   val make : Capability.t list -> t
+  (** [make caps] creates [Context.t] with client's capabilities [caps] *)
+
   val capabilities : t -> Capability.t list * Capability.t list
   val update : t -> Capability.t list -> unit
+  val is_cap_shared : t -> Capability.t -> bool
 end
 
 module Scheduler
