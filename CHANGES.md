@@ -1,3 +1,7 @@
+### 3.1.0 (2021-13-01) Paris - France
+
+- Handle IP address on the endpoint (@dinosaure, #436)
+
 ### 3.0.0 (2021-08-01) Paris - France
 
 - Rewrite of `ocaml-git` (@dinosaure, #395)
