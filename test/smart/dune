@@ -17,6 +17,8 @@
 (rule
  (alias runtest)
  (package git-unix)
+ (enabled_if
+  (= %{os_type} "Unix"))
  (deps
   (:test test.exe)
   pack-testzone-0.pack
