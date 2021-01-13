@@ -35,14 +35,21 @@ struct
   let ctx = with_resolv Mimic.empty
 
   let with_smart_git_endpoint edn ctx =
-    match Smart_git.Endpoint.of_string edn with
-    | Ok { Smart_git.Endpoint.path; scheme = `SSH _; _ } ->
-        ssh (with_git_path path ctx)
-    | Ok { Smart_git.Endpoint.path; scheme = `Git; _ } ->
-        gri (with_git_path path ctx)
-    | Ok { Smart_git.Endpoint.path; scheme = `HTTP _; _ } ->
-        http (with_git_path path ctx)
-    | Ok { Smart_git.Endpoint.path; scheme = `HTTPS _; _ } ->
-        https (with_git_path path ctx)
-    | _ -> ctx
+    let edn = Smart_git.Endpoint.of_string edn in
+    let ctx0 =
+      match edn with
+      | Ok { Smart_git.Endpoint.path; scheme = `SSH _; _ } ->
+          ssh (with_git_path path ctx)
+      | Ok { Smart_git.Endpoint.path; scheme = `Git; _ } ->
+          gri (with_git_path path ctx)
+      | Ok { Smart_git.Endpoint.path; scheme = `HTTP _; _ } ->
+          http (with_git_path path ctx)
+      | Ok { Smart_git.Endpoint.path; scheme = `HTTPS _; _ } ->
+          https (with_git_path path ctx)
+      | _ -> ctx
+    in
+    match edn with
+    | Ok { Smart_git.Endpoint.host = `Addr (Ipaddr.V4 v); _ } ->
+        Mimic.add TCP.tcp_ipaddr v ctx0
+    | _ -> ctx0
 end

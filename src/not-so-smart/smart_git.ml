@@ -126,14 +126,13 @@ module Endpoint = struct
     in
     let parse_uri x =
       let uri = Uri.of_string x in
+      let path = Uri.path uri in
       let host str =
         Domain_name.of_string str
         >>= Domain_name.host
         >>| (fun x -> `Domain x)
         <|> (Ipaddr.of_string str >>| fun x -> `Addr x)
       in
-      let path = Astring.String.drop ~max:1 ~sat:(( = ) '/') (Uri.path uri) in
-      (* XXX(dinosaure): [uri] prepend the path by a '/'. *)
       match Uri.scheme uri, Uri.host uri with
       | Some "git", Some str ->
           host str >>= fun host -> R.ok { scheme = `Git; path; host }
@@ -344,6 +343,11 @@ struct
     let open Lwt.Infix in
     Mimic.resolve ctx >>= function
     | Error _ as err ->
+        let pp_host ppf = function
+          | `Domain v -> Domain_name.pp ppf v
+          | `Addr v -> Ipaddr.pp ppf v
+        in
+        Log.err (fun m -> m "%a not found" pp_host host);
         pack None;
         Lwt.return err
     | Ok flow ->

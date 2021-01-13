@@ -10,6 +10,5 @@ module Make (Stack : Mirage_stack.V4) : sig
   val with_port : int -> Mimic.ctx -> Mimic.ctx
   val with_ipaddr : Ipaddr.V4.t -> Mimic.ctx -> Mimic.ctx
   val with_stack : Stack.t -> Mimic.ctx -> Mimic.ctx
-  val with_resolv : Mimic.ctx -> Mimic.ctx
   val ctx : Mimic.ctx
 end
