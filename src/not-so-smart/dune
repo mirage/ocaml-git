@@ -8,8 +8,8 @@
  (name smart)
  (public_name git.nss.smart)
  (modules smart filter capability state protocol)
- (libraries git.nss.pkt-line stdlib-shims result rresult domain-name astring
-   fmt))
+ (libraries git.nss.pkt-line stdlib-shims result rresult ipaddr domain-name
+   astring fmt))
 
 (library
  (name sigs)
@@ -39,7 +39,7 @@
  (name nss)
  (public_name git.nss)
  (modules nss fetch push)
- (libraries fmt result rresult logs domain-name smart sigs neg pck))
+ (libraries fmt result rresult logs ipaddr domain-name smart sigs neg pck))
 
 (library
  (name unixiz)

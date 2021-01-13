@@ -1630,4 +1630,15 @@ let test =
         ] );
     ]
 
-let () = Lwt_main.run test
+let tmp = "tmp"
+
+let () =
+  let open Rresult in
+  let fiber =
+    Bos.OS.Dir.current () >>= fun current ->
+    Bos.OS.Dir.create Fpath.(current / tmp) >>= fun _ ->
+    R.ok Fpath.(current / tmp)
+  in
+  let tmp = R.failwith_error_msg fiber in
+  Bos.OS.Dir.set_default_tmp tmp;
+  Lwt_main.run test

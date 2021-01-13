@@ -39,7 +39,7 @@ let mimic_tcp_conf () =
 
 let mimic_tcp_impl stackv4 = mimic_tcp_conf () $ stackv4
 
-let mimic_git_conf ~edn () =
+let mimic_git_conf ~edn ~cap () =
   let packages = [ package "git-mirage" ] in
   let edn = Key.abstract edn in
   impl @@ object
@@ -48,16 +48,24 @@ let mimic_git_conf ~edn () =
        method! keys = [ edn ]
        method module_name = "Git_mirage.Make"
        method! packages = Key.pure packages
-       method name = "git_ctx"
+       method name = match cap with
+         | `Rd -> "git_ctx_rd"
+         | `Wr -> "git_ctx_wr"
        method! connect _ modname _ =
+         let capability = match cap with
+           | `Rd -> "fetch" | `Wr -> "push" in
          Fmt.str
-           "Lwt.return (%s.with_resolv (%s.with_smart_git_endpoint (%a) \
-            %s.ctx))"
-           modname modname Key.serialize_call edn modname
+           {|let ctx_git0 = %s.%s %s.ctx in
+             let ctx_git1 = %s.with_smart_git_endpoint (%a) ctx_git0 in
+             let ctx_git2 = %s.with_resolv ctx_git1 in
+             Lwt.return ctx_git2|}
+           modname capability modname
+           modname Key.serialize_call edn
+           modname
      end
 
-let mimic_git_impl ~edn stackv4 mimic_tcp =
-  mimic_git_conf ~edn () $ stackv4 $ mimic_tcp
+let mimic_git_impl ~edn ~cap stackv4 mimic_tcp =
+  mimic_git_conf ~edn ~cap () $ stackv4 $ mimic_tcp
 
 let mimic_ssh_conf ~edn ~kind ~seed ~auth () =
   let seed = Key.abstract seed in
@@ -97,16 +105,6 @@ let mimic_ssh_impl ~edn ~kind ~seed ~auth stackv4 mimic_tcp mimic_git mclock =
   $ mimic_tcp
   $ mimic_git
   $ mclock
-
-let mimic_ssh_destruct =
-  impl @@ object
-       inherit base_configurable
-       method ty = mimic @-> mimic
-       method module_name = "Git_mirage_ssh.Destruct"
-       method! packages = Key.pure [ package "git-mirage" ~sublibs:[ "ssh" ] ]
-       method name = "is_ssh"
-       method! connect _ modname _ = Fmt.str "Lwt.return %s.is" modname
-     end
 
 (* TODO(dinosaure): user-defined nameserver and port. *)
 
@@ -209,15 +207,14 @@ let minigit =
     @-> resolver
     @-> conduit
     @-> mimic
-    @-> mimic
     @-> job)
 
-let mimic ~edn ~kind ~seed ~auth stackv4 random mclock time =
+let mimic ~edn ~cap ~kind ~seed ~auth stackv4 random mclock time =
   let mtcp = mimic_tcp_impl stackv4 in
-  let mgit = mimic_git_impl ~edn stackv4 mtcp in
+  let mgit = mimic_git_impl ~edn ~cap stackv4 mtcp in
   let mdns = mimic_dns_impl ~edn random mclock time stackv4 mtcp in
   let mssh = mimic_ssh_impl ~edn ~kind ~seed ~auth stackv4 mtcp mgit mclock in
-  merge mssh mdns, mimic_ssh_destruct $ mssh
+  merge mssh mdns
 
 let stackv4 = generic_stackv4 default_network
 let mclock = default_monotonic_clock
@@ -228,8 +225,8 @@ let mimic = mimic stackv4 random mclock time
 let console = default_console
 let resolver = resolver_dns stackv4
 let conduit = conduit_direct ~tls:true stackv4
-let mimic, is_ssh = mimic ~edn:remote ~kind:`Rsa ~seed:ssh_seed ~auth:ssh_auth
+let mimic = mimic ~edn:remote ~cap:`Rd ~kind:`Rsa ~seed:ssh_seed ~auth:ssh_auth
 
 let () =
   register "minigit" ~packages:[]
-    [ minigit $ git $ time $ console $ resolver $ conduit $ mimic $ is_ssh ]
+    [ minigit $ git $ time $ console $ resolver $ conduit $ mimic ]

@@ -1,5 +1,7 @@
 (executable
  (name test)
+ (modules append fifo hTTP loopback lwt_backend lwt_io ref store_backend test
+   uid unix_backend)
  (libraries mirage-flow mimic git.nss.unixiz git git-unix result curl.lwt
    mirage-crypto-rng.unix digestif digestif.c domain-name git.nss.git bos
    fpath bigarray-compat carton-lwt bigstringaf git.nss.sigs git.nss.hkt fmt
@@ -7,9 +9,16 @@
    lwt cstruct uri fmt.tty logs.fmt alcotest-lwt cohttp-lwt-unix
    git-cohttp-unix))
 
+(executable
+ (name test_edn)
+ (modules test_edn)
+ (libraries alcotest fmt ipaddr domain-name git.nss.git))
+
 (rule
  (alias runtest)
  (package git-unix)
+ (enabled_if
+  (= %{os_type} "Unix"))
  (deps
   (:test test.exe)
   pack-testzone-0.pack
@@ -18,5 +27,13 @@
   pack-testzone-1.idx
   GET
   POST)
+ (action
+  (run %{test} --color=always)))
+
+(rule
+ (alias runtest)
+ (package git)
+ (deps
+  (:test test_edn.exe))
  (action
   (run %{test} --color=always)))

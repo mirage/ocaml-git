@@ -55,7 +55,7 @@ module Endpoint : sig
       | `HTTP of (string * string) list
       | `HTTPS of (string * string) list ];
     path : string;
-    host : [ `host ] Domain_name.t;
+    host : [ `Addr of Ipaddr.t | `Domain of [ `host ] Domain_name.t ];
   }
 
   val pp : t Fmt.t

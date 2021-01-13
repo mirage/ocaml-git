@@ -17,7 +17,7 @@ module Make
     capabilities:Smart.Capability.t list ->
     ?deepen:[ `Depth of int | `Timestamp of int64 ] ->
     ?want:[ `All | `Some of Ref.t list | `None ] ->
-    host:[ `host ] Domain_name.t ->
+    host:[ `Addr of Ipaddr.t | `Domain of [ `host ] Domain_name.t ] ->
     string ->
     Flow.t ->
     (Uid.t, Uid.t * int ref * int64, 'g) store ->

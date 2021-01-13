@@ -27,6 +27,11 @@ struct
 
   let with_smart_git_endpoint edn ctx =
     match Smart_git.Endpoint.of_string edn with
-    | Ok { Smart_git.Endpoint.host; _ } -> with_domain_name host ctx
+    | Ok { Smart_git.Endpoint.host = `Domain host; _ } ->
+        with_domain_name host ctx
+    | Ok { Smart_git.Endpoint.host = `Addr (Ipaddr.V4 v); _ } ->
+        Mimic.add TCP.tcp_ipaddr v ctx
+    | Ok { Smart_git.Endpoint.host = `Addr (Ipaddr.V6 _); _ } ->
+        assert false (* TODO *)
     | _ -> ctx
 end
