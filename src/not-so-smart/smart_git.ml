@@ -69,7 +69,8 @@ module Endpoint = struct
 
   let pp ppf edn =
     let pp_host ppf = function
-      | `Addr v -> Ipaddr.pp ppf v
+      | `Addr (Ipaddr.V4 v) -> Ipaddr.V4.pp ppf v
+      | `Addr (Ipaddr.V6 v) -> Fmt.pf ppf "[IPv6:%a]" Ipaddr.V6.pp v
       | `Domain v -> Domain_name.pp ppf v
     in
     match edn with
@@ -106,9 +107,14 @@ module Endpoint = struct
                  m.Emile.local)
           in
           (match fst m.Emile.domain with
-          | `Domain vs ->
-              Domain_name.of_strings vs >>= Domain_name.host >>| fun v ->
-              `Domain v
+          | `Domain vs -> (
+              match
+                ( Domain_name.(of_strings vs >>= host),
+                  Ipaddr.V4.of_string (String.concat "." vs) )
+              with
+              | _, Ok ipv4 -> R.ok (`Addr (Ipaddr.V4 ipv4))
+              | Ok v, _ -> R.ok (`Domain v)
+              | (Error _ as err), _ -> err)
           | `Literal v ->
               Domain_name.of_string v >>= Domain_name.host >>| fun v ->
               `Domain v
@@ -126,12 +132,14 @@ module Endpoint = struct
         >>| (fun x -> `Domain x)
         <|> (Ipaddr.of_string str >>| fun x -> `Addr x)
       in
-      match Uri.scheme uri, Uri.host uri, Uri.path uri with
-      | Some "git", Some str, path ->
+      let path = Astring.String.drop ~max:1 ~sat:(( = ) '/') (Uri.path uri) in
+      (* XXX(dinosaure): [uri] prepend the path by a '/'. *)
+      match Uri.scheme uri, Uri.host uri with
+      | Some "git", Some str ->
           host str >>= fun host -> R.ok { scheme = `Git; path; host }
-      | Some "http", Some str, path ->
+      | Some "http", Some str ->
           host str >>= fun host -> R.ok { scheme = `HTTP []; path; host }
-      | Some "https", Some str, path ->
+      | Some "https", Some str ->
           host str >>= fun host -> R.ok { scheme = `HTTPS []; path; host }
       | _ -> R.error_msgf "invalid uri: %a" Uri.pp uri
     in
