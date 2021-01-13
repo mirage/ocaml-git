@@ -50,7 +50,7 @@ let test04 =
       {
         Smart_git.Endpoint.scheme = `Git;
         host = `Domain v;
-        path = "mirage/ocaml.git";
+        path = "/mirage/ocaml.git";
       } ->
       Alcotest.(check domain_name) "github.com" v github_com
   | Ok v -> Alcotest.failf "Unexpeted Git endpoint: %a" Smart_git.Endpoint.pp v
@@ -63,7 +63,7 @@ let test05 =
       {
         Smart_git.Endpoint.scheme = `HTTP [];
         host = `Domain v;
-        path = "mirage/ocaml.git";
+        path = "/mirage/ocaml.git";
       } ->
       Alcotest.(check domain_name) "github.com" v github_com
   | Ok v -> Alcotest.failf "Unexpeted Git endpoint: %a" Smart_git.Endpoint.pp v
@@ -76,7 +76,7 @@ let test06 =
       {
         Smart_git.Endpoint.scheme = `HTTP [];
         host = `Addr v;
-        path = "mirage/ocaml.git";
+        path = "/mirage/ocaml.git";
       } ->
       Alcotest.(check ipaddr) "10.0.0.0" v private_network
   | Ok v -> Alcotest.failf "Unexpeted Git endpoint: %a" Smart_git.Endpoint.pp v
