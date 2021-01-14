@@ -31,18 +31,9 @@ type 'uid hex = {
   compare : 'uid -> 'uid -> int;
 }
 
-type ('a, 's) raise = exn -> ('a, 's) io
 type 'uid negotiator
 
 val make : compare:('uid -> 'uid -> int) -> 'uid negotiator
-
-val run :
-  's scheduler ->
-  ('res, 's) raise ->
-  ('flow, 'error, 's) flow ->
-  'flow ->
-  ('res, [ `Protocol of Smart.error ]) Smart.t ->
-  ('res, 's) io
 
 val find_common :
   's scheduler ->

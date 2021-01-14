@@ -54,7 +54,8 @@ struct
       return (Smart.Advertised_refs.map ~fuid:Uid.of_hex ~fref:Ref.v v)
     in
     let ctx = Smart.Context.make caps in
-    Neg.run sched fail io flow (fiber ctx) |> prj >>= fun advertised_refs ->
+    Smart_flow.run sched fail io flow (fiber ctx) |> prj
+    >>= fun advertised_refs ->
     Pck.commands sched
       ~capabilities:(Smart.Advertised_refs.capabilities advertised_refs)
       ~equal:Ref.equal ~deref:access.Sigs.deref store cmds
@@ -62,10 +63,10 @@ struct
     |> prj
     >>= function
     | None ->
-        Neg.run sched fail io flow Smart.(send ctx flush ()) |> prj
+        Smart_flow.run sched fail io flow Smart.(send ctx flush ()) |> prj
         >>= fun () -> return ()
     | Some cmds -> (
-        Neg.run sched fail io flow
+        Smart_flow.run sched fail io flow
           Smart.(
             send ctx commands
               (Commands.map ~fuid:Uid.to_hex ~fref:Ref.to_string cmds))
@@ -97,14 +98,15 @@ struct
               Log.debug (fun m ->
                   m "report-status capability: %b." report_status);
               if report_status then
-                Neg.run sched fail io flow Smart.(recv ctx status)
+                Smart_flow.run sched fail io flow Smart.(recv ctx status)
                 |> prj
                 >>| Smart.Status.map ~f:Ref.v
               else
                 let cmds = List.map R.ok (Smart.Commands.commands cmds) in
                 return (Smart.Status.v cmds)
           | Some payload ->
-              Neg.run sched fail io flow Smart.(send ctx pack payload) |> prj
+              Smart_flow.run sched fail io flow Smart.(send ctx pack payload)
+              |> prj
               >>= fun () -> go ()
         in
         go () >>= fun status ->

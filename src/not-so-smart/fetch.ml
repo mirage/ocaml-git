@@ -99,7 +99,8 @@ struct
     let ctx = Smart.Context.make capabilities in
     let negotiator = Neg.make ~compare:Uid.compare in
     Neg.tips sched access store negotiator |> prj >>= fun () ->
-    Neg.run sched fail io flow (prelude ctx) |> prj >>= fun (uids, refs) ->
+    Smart_flow.run sched fail io flow (prelude ctx) |> prj
+    >>= fun (uids, refs) ->
     let hex =
       { Neg.to_hex = Uid.to_hex; of_hex = Uid.of_hex; compare = Uid.compare }
     in
@@ -121,8 +122,8 @@ struct
         if res < 0 then Log.warn (fun m -> m "No common commits");
         let rec go () =
           Log.debug (fun m -> m "Read PACK file.");
-          Neg.run sched fail io flow (pack ctx) |> prj >>= fun continue ->
-          if continue then go () else return ()
+          Smart_flow.run sched fail io flow (pack ctx) |> prj
+          >>= fun continue -> if continue then go () else return ()
         in
         Log.debug (fun m -> m "Start to download PACK file.");
         go () >>= fun () -> return (List.combine refs uids)
