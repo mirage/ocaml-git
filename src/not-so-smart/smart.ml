@@ -53,9 +53,9 @@ module Value = struct
   let encode :
       type a. encoder -> a send -> a -> (unit, [> Encoder.error ]) State.t =
    fun encoder w v ->
-    let fiber : a send -> [> Encoder.error ] Encoder.state =
+    let encoder_state =
       let open Protocol.Encoder in
-      function
+      match w with
       | Proto_request -> encode_proto_request encoder v
       | Want -> encode_want encoder v
       | Done -> encode_done encoder
@@ -65,13 +65,14 @@ module Value = struct
       | Flush -> encode_flush encoder
       | Advertised_refs -> encode_advertised_refs encoder v
     in
-    let rec go = function
+    let rec translate_to_state_t = function
       | Encoder.Done -> State.Return ()
       | Write { continue; buffer; off; len } ->
-          State.Write { k = go <.> continue; buffer; off; len }
+          State.Write
+            { k = translate_to_state_t <.> continue; buffer; off; len }
       | Error err -> State.Error (err :> error)
     in
-    (go <.> fiber) w
+    translate_to_state_t encoder_state
 
   let decode : type a. decoder -> a recv -> (a, [> Decoder.error ]) State.t =
    fun decoder w ->
