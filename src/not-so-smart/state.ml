@@ -101,6 +101,19 @@ struct
     in
     map_error x
 
+  (* Is slightly different from [m |> reword_error ~f >>= f1].
+     The places where [apply] used currently the alternative code above would be sufficient,
+     but that would end up in twice the number of function calls *)
+  let apply m ~bind_ret ~bind_err =
+    let rec apply' = function
+      | Return r -> bind_ret r
+      | Error err -> bind_err err
+      | Read ({ k; eof; _ } as rd) ->
+          Read { rd with k = apply' <.> k; eof = apply' <.> eof }
+      | Write ({ k; _ } as wr) -> Write { wr with k = apply' <.> k }
+    in
+    apply' m
+
   let encode :
       type a.
       Context.t ->
@@ -109,15 +122,11 @@ struct
       (Context.t -> ('b, [> `Protocol of error ]) t) ->
       ('b, [> `Protocol of error ]) t =
    fun ctx w v k ->
-    let rec go = function
-      | Return () -> k ctx
-      | Write { k; buffer; off; len } ->
-          Write { k = go <.> k; buffer; off; len }
-      | Read { k; buffer; off; len; eof } ->
-          Read { k = go <.> k; buffer; off; len; eof = go <.> eof }
-      | Error err -> Error (`Protocol err)
-    in
-    go (Value.encode (Context.encoder ctx) w v)
+    let encoder = Context.encoder ctx in
+    Value.encode encoder w v
+    |> apply
+         ~bind_ret:(fun () -> k ctx)
+         ~bind_err:(fun err -> Error (`Protocol err))
 
   let send :
       type a.
@@ -131,15 +140,11 @@ struct
       (Context.t -> a -> ('b, [> `Protocol of error ]) t) ->
       ('b, [> `Protocol of error ]) t =
    fun ctx w k ->
-    let rec go : (a, 'err) t -> ('b, [> `Protocol of error ]) t = function
-      | Read { k; buffer; off; len; eof } ->
-          Read { k = go <.> k; buffer; off; len; eof = go <.> eof }
-      | Write { k; buffer; off; len } ->
-          Write { k = go <.> k; buffer; off; len }
-      | Return v -> k ctx v
-      | Error err -> Error (`Protocol err)
-    in
-    go (Value.decode (Context.decoder ctx) w)
+    let decoder = Context.decoder ctx in
+    Value.decode decoder w
+    |> apply
+         ~bind_ret:(fun v -> k ctx v)
+         ~bind_err:(fun e -> Error (`Protocol e))
 
   let recv : type a. Context.t -> a Value.recv -> (a, [> `Protocol of error ]) t
       =
