@@ -22,7 +22,7 @@ module type CONTEXT = sig
   val decoder : t -> decoder
 end
 
-module type S = sig
+module type VALUE = sig
   type 'a send
   type 'a recv
   type error
@@ -69,7 +69,7 @@ end
 
 module Scheduler
     (Context : CONTEXT)
-    (Value : S
+    (Value : VALUE
                with type encoder = Context.encoder
                 and type decoder = Context.decoder) =
 struct
