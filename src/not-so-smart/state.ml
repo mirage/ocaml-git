@@ -76,21 +76,15 @@ struct
   type error = Value.error
 
   let bind : ('a, 'err) t -> f:('a -> ('b, 'err) t) -> ('b, 'err) t =
-    let rec aux ~f m =
+    let rec bind' m ~f =
       match m with
       | Return v -> f v
-      | Read { k; off; len; buffer; eof } ->
-          Read { k = aux ~f <.> k; off; len; buffer; eof = aux ~f <.> eof }
-      | Write { k; off; len; buffer } ->
-          Write { k = aux ~f <.> k; off; len; buffer }
       | Error _ as err -> err
+      | Read ({ k; eof; _ } as rd) ->
+          Read { rd with k = bind' ~f <.> k; eof = bind' ~f <.> eof }
+      | Write ({ k; _ } as wr) -> Write { wr with k = bind' ~f <.> k }
     in
-    fun m ~f ->
-      match m with
-      | Return v -> f v
-      | Error _ as err -> err
-      | Read _ -> aux ~f m
-      | Write _ -> aux ~f m
+    bind'
 
   let ( let* ) m f = bind m ~f
   let ( >>= ) m f = bind m ~f
@@ -98,15 +92,14 @@ struct
   let fail error = Error error
 
   let reword_error f x =
-    let rec go = function
-      | Read { k; buffer; off; len; eof } ->
-          Read { k = go <.> k; buffer; off; len; eof = go <.> eof }
-      | Write { k; buffer; off; len } ->
-          Write { k = go <.> k; buffer; off; len }
-      | Return v -> Return v
+    let rec map_error = function
+      | Return _ as r -> r
       | Error err -> Error (f err)
+      | Read ({ k; eof; _ } as rd) ->
+          Read { rd with k = map_error <.> k; eof = map_error <.> eof }
+      | Write ({ k; _ } as wr) -> Write { wr with k = map_error <.> k }
     in
-    go x
+    map_error x
 
   let encode :
       type a.
