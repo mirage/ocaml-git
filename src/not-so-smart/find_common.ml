@@ -15,11 +15,11 @@ type ('a, 's) raise = exn -> ('a, 's) io
 let io_buffer_size = 65536
 
 let run :
-    type f s.
+    type fl s.
     s scheduler ->
     ('a, s) raise ->
-    (f, 'error, s) flow ->
-    f ->
+    (fl, 'error, s) flow ->
+    fl ->
     ('res, [ `Protocol of Smart.error ]) Smart.t ->
     ('res, s) io =
  fun { bind; return } raise { recv; send; pp_error } flow fiber ->
