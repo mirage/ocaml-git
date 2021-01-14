@@ -1,9 +1,9 @@
 open Sigs
 
 let ( <.> ) f g x = f (g x)
-let src = Logs.Src.create "find-common"
 
-module Log = (val Logs.src_log src : Logs.LOG)
+module Log = (val let src = Logs.Src.create "find-common" in
+                  Logs.src_log src : Logs.LOG)
 
 let _initial_flush = 16
 let _max_in_vain = 256
