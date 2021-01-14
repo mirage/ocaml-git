@@ -76,22 +76,26 @@ module Value = struct
 
   let decode : type a. decoder -> a recv -> (a, [> Decoder.error ]) State.t =
    fun decoder w ->
-    let rec go = function
+    let rec transl :
+        (a, [> Protocol.Decoder.error ]) Decoder.state ->
+        (a, [> Decoder.error ]) State.t = function
       | Decoder.Done v -> State.Return v
       | Read { buffer; off; len; continue; eof } ->
-          State.Read { k = go <.> continue; buffer; off; len; eof = go <.> eof }
+          State.Read
+            { k = transl <.> continue; buffer; off; len; eof = transl <.> eof }
       | Error { error; _ } -> State.Error error
     in
-    let open Protocol.Decoder in
-    match w with
-    | Advertised_refs -> go (decode_advertised_refs decoder)
-    | Result -> go (decode_result decoder)
-    | Recv_pack { side_band; push_pack; push_stdout; push_stderr } ->
-        go (decode_pack ~side_band ~push_pack ~push_stdout ~push_stderr decoder)
-    | Ack -> go (decode_negotiation decoder)
-    | Status -> go (decode_status decoder)
-    | Shallows -> go (decode_shallows decoder)
-    | Packet trim -> go (decode_packet ~trim decoder)
+    transl
+      (let open Protocol.Decoder in
+      match w with
+      | Advertised_refs -> decode_advertised_refs decoder
+      | Result -> decode_result decoder
+      | Recv_pack { side_band; push_pack; push_stdout; push_stderr } ->
+          decode_pack ~side_band ~push_pack ~push_stdout ~push_stderr decoder
+      | Ack -> decode_negotiation decoder
+      | Status -> decode_status decoder
+      | Shallows -> decode_shallows decoder
+      | Packet trim -> decode_packet ~trim decoder)
 end
 
 type ('a, 'err) t = ('a, 'err) State.t =
