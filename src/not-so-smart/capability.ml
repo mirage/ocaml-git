@@ -1,5 +1,3 @@
-open Stdlib
-
 type t =
   [ `Multi_ack
   | `Multi_ack_detailed

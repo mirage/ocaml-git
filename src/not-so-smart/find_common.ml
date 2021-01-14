@@ -1,5 +1,4 @@
 open Sigs
-open Stdlib
 
 let ( <.> ) f g x = f (g x)
 let src = Logs.Src.create "find-common"
