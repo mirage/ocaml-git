@@ -39,12 +39,12 @@ struct
         pp_error = Flow.pp_error;
       }
 
-  let push ?(prelude = true) ~capabilities:caps cmds ~host path flow store
-      access push_cfg pack =
+  let push ?(uses_git_transport = true) ~capabilities:caps cmds ~host path flow
+      store access push_cfg pack =
     let fiber ctx =
       let open Smart in
       let* () =
-        if prelude then
+        if uses_git_transport then
           send ctx proto_request
             (Proto_request.receive_pack ~host ~version:1 path)
         else return ()

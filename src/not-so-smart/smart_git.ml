@@ -554,12 +554,12 @@ struct
     Lwt.async fiber;
     stream
 
-  let push ?prelude ~ctx ~capabilities path cmds endpoint store access push_cfg
-      pack =
+  let push ?uses_git_transport ~ctx ~capabilities path cmds endpoint store
+      access push_cfg pack =
     let open Lwt.Infix in
     Mimic.resolve ctx >>? fun flow ->
-    Push.push ?prelude ~capabilities cmds ~host:endpoint path (Flow.make flow)
-      store access push_cfg pack
+    Push.push ?uses_git_transport ~capabilities cmds ~host:endpoint path
+      (Flow.make flow) store access push_cfg pack
     >>= fun () ->
     Mimic.close flow >>= fun () -> Lwt.return_ok ()
 
@@ -568,12 +568,15 @@ struct
     let open Rresult in
     match version, edn.Endpoint.scheme with
     | `V1, ((`Git | `SSH _) as scheme) ->
-        let prelude = match scheme with `Git -> true | `SSH _ -> false in
+        let uses_git_transport =
+          match scheme with `Git -> true | `SSH _ -> false
+        in
         let host = edn.host in
         let path = edn.path in
         let push_cfg = Nss.Push.configuration () in
         let run () =
-          push ~prelude ~ctx ~capabilities path cmds host store access push_cfg
+          push ~uses_git_transport ~ctx ~capabilities path cmds host store
+            access push_cfg
             (pack ~light_load ~heavy_load)
         in
         Lwt.catch run (function
