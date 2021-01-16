@@ -183,6 +183,11 @@ let delete_should_be_empty =
   let run path =
     let open Rresult in
     Bos.OS.Dir.with_current path @@ fun () ->
+    Bos.OS.Cmd.run Bos.Cmd.(v "git" % "config" % "user.name" % "test")
+    >>= fun () ->
+    Bos.OS.Cmd.run
+      Bos.Cmd.(v "git" % "config" % "user.email" % "pseudo@pseudo.invalid")
+    >>= fun () ->
     Bos.OS.Cmd.run Bos.Cmd.(v "git" % "commit" % "-m" % ".") >>= fun () ->
     load ~hash:SHA1 Fpath.(v ".git" / "index") >>= fun t ->
     (* XXX(dinosaure): [git] deletes [should-be-empty] into the index file **AND**
