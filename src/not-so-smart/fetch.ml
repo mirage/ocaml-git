@@ -29,9 +29,8 @@ module Make
 struct
   open Scheduler
 
-  let src = Logs.Src.create "fetch"
-
-  module Log = (val Logs.src_log src : Logs.LOG)
+  module Log = (val let src = Logs.Src.create "fetch" in
+                    Logs.src_log src : Logs.LOG)
 
   let ( >>= ) x f = IO.bind x f
   let return x = IO.return x
@@ -100,7 +99,8 @@ struct
     let ctx = Smart.Context.make capabilities in
     let negotiator = Neg.make ~compare:Uid.compare in
     Neg.tips sched access store negotiator |> prj >>= fun () ->
-    Neg.run sched fail io flow (prelude ctx) |> prj >>= fun (uids, refs) ->
+    Smart_flow.run sched fail io flow (prelude ctx) |> prj
+    >>= fun (uids, refs) ->
     let hex =
       { Neg.to_hex = Uid.to_hex; of_hex = Uid.of_hex; compare = Uid.compare }
     in
@@ -113,8 +113,8 @@ struct
         let pack ctx =
           let open Smart in
           let side_band =
-            Smart.Context.is_cap_shared `Side_band ctx
-            || Smart.Context.is_cap_shared `Side_band_64k ctx
+            Smart.Context.is_cap_shared ctx `Side_band
+            || Smart.Context.is_cap_shared ctx `Side_band_64k
           in
           recv ctx
             (recv_pack ~side_band ~push_stdout ~push_stderr ~push_pack:pack)
@@ -122,8 +122,8 @@ struct
         if res < 0 then Log.warn (fun m -> m "No common commits");
         let rec go () =
           Log.debug (fun m -> m "Read PACK file.");
-          Neg.run sched fail io flow (pack ctx) |> prj >>= fun continue ->
-          if continue then go () else return ()
+          Smart_flow.run sched fail io flow (pack ctx) |> prj
+          >>= fun continue -> if continue then go () else return ()
         in
         Log.debug (fun m -> m "Start to download PACK file.");
         go () >>= fun () -> return (List.combine refs uids)

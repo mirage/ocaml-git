@@ -11,7 +11,7 @@ module Make
     (Uid : UID)
     (Ref : REF) : sig
   val push :
-    ?prelude:bool ->
+    ?uses_git_transport:bool ->
     capabilities:Smart.Capability.t list ->
     [ `Create of Ref.t | `Delete of Ref.t | `Update of Ref.t * Ref.t ] list ->
     host:[ `Addr of Ipaddr.t | `Domain of [ `host ] Domain_name.t ] ->

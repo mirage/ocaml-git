@@ -1,7 +1,5 @@
 let () = Printexc.record_backtrace true
 
-open Stdlib
-
 let weights =
   Alcotest.test_case "weight" `Quick @@ fun () ->
   Alcotest.(check int) "0" (Carton.Dec.null :> int) 0;

@@ -1,7 +1,5 @@
 let ( <.> ) f g x = f (g x)
 
-open Stdlib
-
 module Advertised_refs = struct
   type ('uid, 'reference) t = {
     shallows : 'uid list;
@@ -859,12 +857,11 @@ module Encoder = struct
     in
     delayed_write_pkt k kdone encoder
 
-  let unsafe_encode_packet encoder ~packet =
-    let pos = encoder.pos in
-    encoder.pos <- encoder.pos + 4;
+  let unsafe_encode_packet ({ pos; payload; _ } as encoder) ~packet =
+    encoder.pos <- pos + 4;
     write encoder packet;
     let len = encoder.pos - pos in
-    Bytes.blit_string (Fmt.str "%04X" len) 0 encoder.payload pos 4
+    Bytes.blit_string (Fmt.str "%04X" len) 0 payload pos 4
 
   let write_command encoder = function
     | Commands.Create (uid, r) ->

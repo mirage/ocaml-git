@@ -1,5 +1,3 @@
-type nonrec ('a, 's) raise = ('a, 's) Find_common.raise
-
 type nonrec configuration = Find_common.configuration = {
   stateless : bool;
   mutable multi_ack : [ `None | `Some | `Detailed ];
@@ -15,6 +13,5 @@ type nonrec 'uid hex = 'uid Find_common.hex = {
 type 'uid negotiator = 'uid Default.t
 
 let make ~compare = Default.make ~compare
-let run = Find_common.run
 let find_common = Find_common.find_common
 let tips = Find_common.tips

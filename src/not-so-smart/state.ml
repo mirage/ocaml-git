@@ -20,10 +20,9 @@ module type CONTEXT = sig
   val pp : t Fmt.t
   val encoder : t -> encoder
   val decoder : t -> decoder
-  val is_cap_shared : Capability.t -> t -> bool
 end
 
-module type S = sig
+module type VALUE = sig
   type 'a send
   type 'a recv
   type error
@@ -62,7 +61,7 @@ module Context = struct
   let update ({ capabilities = client_side, _; _ } as t) server_side =
     t.capabilities <- client_side, server_side
 
-  let is_cap_shared capability t =
+  let is_cap_shared t capability =
     let client_side, server_side = t.capabilities in
     let a = List.exists (Capability.equal capability) client_side in
     a && List.exists (Capability.equal capability) server_side
@@ -70,28 +69,22 @@ end
 
 module Scheduler
     (Context : CONTEXT)
-    (Value : S
+    (Value : VALUE
                with type encoder = Context.encoder
                 and type decoder = Context.decoder) =
 struct
   type error = Value.error
 
   let bind : ('a, 'err) t -> f:('a -> ('b, 'err) t) -> ('b, 'err) t =
-    let rec aux ~f m =
+    let rec bind' m ~f =
       match m with
       | Return v -> f v
-      | Read { k; off; len; buffer; eof } ->
-          Read { k = aux ~f <.> k; off; len; buffer; eof = aux ~f <.> eof }
-      | Write { k; off; len; buffer } ->
-          Write { k = aux ~f <.> k; off; len; buffer }
       | Error _ as err -> err
+      | Read ({ k; eof; _ } as rd) ->
+          Read { rd with k = bind' ~f <.> k; eof = bind' ~f <.> eof }
+      | Write ({ k; _ } as wr) -> Write { wr with k = bind' ~f <.> k }
     in
-    fun m ~f ->
-      match m with
-      | Return v -> f v
-      | Error _ as err -> err
-      | Read _ -> aux ~f m
-      | Write _ -> aux ~f m
+    bind'
 
   let ( let* ) m f = bind m ~f
   let ( >>= ) m f = bind m ~f
@@ -99,15 +92,27 @@ struct
   let fail error = Error error
 
   let reword_error f x =
-    let rec go = function
-      | Read { k; buffer; off; len; eof } ->
-          Read { k = go <.> k; buffer; off; len; eof = go <.> eof }
-      | Write { k; buffer; off; len } ->
-          Write { k = go <.> k; buffer; off; len }
-      | Return v -> Return v
+    let rec map_error = function
+      | Return _ as r -> r
       | Error err -> Error (f err)
+      | Read ({ k; eof; _ } as rd) ->
+          Read { rd with k = map_error <.> k; eof = map_error <.> eof }
+      | Write ({ k; _ } as wr) -> Write { wr with k = map_error <.> k }
     in
-    go x
+    map_error x
+
+  (* Is slightly different from [m |> reword_error ~f >>= f1].
+     The places where [apply] used currently the alternative code above would be sufficient,
+     but that would end up in twice the number of function calls *)
+  let apply m ~bind_ret ~bind_err =
+    let rec apply' = function
+      | Return r -> bind_ret r
+      | Error err -> bind_err err
+      | Read ({ k; eof; _ } as rd) ->
+          Read { rd with k = apply' <.> k; eof = apply' <.> eof }
+      | Write ({ k; _ } as wr) -> Write { wr with k = apply' <.> k }
+    in
+    apply' m
 
   let encode :
       type a.
@@ -117,15 +122,11 @@ struct
       (Context.t -> ('b, [> `Protocol of error ]) t) ->
       ('b, [> `Protocol of error ]) t =
    fun ctx w v k ->
-    let rec go = function
-      | Return () -> k ctx
-      | Write { k; buffer; off; len } ->
-          Write { k = go <.> k; buffer; off; len }
-      | Read { k; buffer; off; len; eof } ->
-          Read { k = go <.> k; buffer; off; len; eof = go <.> eof }
-      | Error err -> Error (`Protocol err)
-    in
-    go (Value.encode (Context.encoder ctx) w v)
+    let encoder = Context.encoder ctx in
+    Value.encode encoder w v
+    |> apply
+         ~bind_ret:(fun () -> k ctx)
+         ~bind_err:(fun err -> Error (`Protocol err))
 
   let send :
       type a.
@@ -139,15 +140,11 @@ struct
       (Context.t -> a -> ('b, [> `Protocol of error ]) t) ->
       ('b, [> `Protocol of error ]) t =
    fun ctx w k ->
-    let rec go : (a, 'err) t -> ('b, [> `Protocol of error ]) t = function
-      | Read { k; buffer; off; len; eof } ->
-          Read { k = go <.> k; buffer; off; len; eof = go <.> eof }
-      | Write { k; buffer; off; len } ->
-          Write { k = go <.> k; buffer; off; len }
-      | Return v -> k ctx v
-      | Error err -> Error (`Protocol err)
-    in
-    go (Value.decode (Context.decoder ctx) w)
+    let decoder = Context.decoder ctx in
+    Value.decode decoder w
+    |> apply
+         ~bind_ret:(fun v -> k ctx v)
+         ~bind_err:(fun e -> Error (`Protocol e))
 
   let recv : type a. Context.t -> a Value.recv -> (a, [> `Protocol of error ]) t
       =

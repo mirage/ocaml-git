@@ -7,8 +7,6 @@
    In this context, [t] can stores only 2 objects. We should extend the
    implementation to be more general but the trade-off is bad. *)
 
-open Stdlib
-
 let src = Logs.Src.create "git-cstruct-append"
 
 module Log = (val Logs.src_log src : Logs.LOG)

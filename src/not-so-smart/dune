@@ -18,6 +18,12 @@
  (libraries fmt cstruct))
 
 (library
+ (name smart_flow)
+ (public_name git.nss.smart-flow)
+ (modules smart_flow)
+ (libraries cstruct fmt git.nss.sigs git.nss.smart logs))
+
+(library
  (name hkt)
  (public_name git.nss.hkt)
  (modules hkt)
@@ -27,7 +33,8 @@
  (name neg)
  (public_name git.nss.neg)
  (modules neg find_common default)
- (libraries stdlib-shims fmt rresult cstruct sigs logs psq smart))
+ (libraries stdlib-shims fmt rresult cstruct sigs logs psq smart
+   git.nss.smart-flow))
 
 (library
  (name pck)
@@ -39,7 +46,8 @@
  (name nss)
  (public_name git.nss)
  (modules nss fetch push)
- (libraries fmt result rresult logs ipaddr domain-name smart sigs neg pck))
+ (libraries fmt result rresult logs ipaddr domain-name smart sigs neg pck
+   git.nss.smart-flow))
 
 (library
  (name unixiz)
@@ -51,7 +59,7 @@
 (library
  (name smart_git)
  (public_name git.nss.git)
- (modules smart_git)
+ (modules smart_git smart_git_intf)
  (libraries mimic mirage-flow unixiz ipaddr decompress.de decompress.zl
    cstruct logs astring result rresult bigstringaf fmt emile lwt domain-name
    uri sigs smart pck nss digestif carton carton-lwt))
