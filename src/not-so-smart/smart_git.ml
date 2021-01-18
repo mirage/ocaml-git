@@ -7,8 +7,6 @@ module Verbose = struct
   let print () = Lwt.return_unit
 end
 
-let ( <.> ) f g x = f (g x)
-
 module Endpoint = struct
   type t = {
     scheme :
@@ -36,11 +34,10 @@ module Endpoint = struct
     | { scheme = `HTTPS _; path; host } ->
         Fmt.pf ppf "https://%a/%s" pp_host host path
 
-  let ( <|> ) a b =
-    match a, b with
-    | Ok a, _ -> Ok a
-    | Error _, Ok b -> Ok b
-    | Error err, _ -> Error err
+  let ( <||> ) a b =
+    match a with
+    | Ok _ -> a
+    | Error _ -> ( match b () with Ok _ as r -> r | Error _ -> a)
 
   let of_string str =
     let open Rresult in
@@ -81,10 +78,9 @@ module Endpoint = struct
       let uri = Uri.of_string x in
       let path = Uri.path uri in
       let host str =
-        Domain_name.of_string str
-        >>= Domain_name.host
-        >>| (fun x -> `Domain x)
-        <|> (Ipaddr.of_string str >>| fun x -> `Addr x)
+        (Domain_name.of_string str >>= Domain_name.host >>| fun x -> `Domain x)
+        <||> fun () ->
+        Ipaddr.of_string str >>| fun x -> `Addr x
       in
       match Uri.scheme uri, Uri.host uri with
       | Some "git", Some str ->
@@ -95,10 +91,9 @@ module Endpoint = struct
           host str >>= fun host -> R.ok { scheme = `HTTPS []; path; host }
       | _ -> R.error_msgf "invalid uri: %a" Uri.pp uri
     in
-    match parse_ssh str, parse_uri str with
-    | Ok edn, _ -> R.ok edn
-    | Error _, Ok edn -> R.ok edn
-    | Error _, Error _ -> R.error_msgf "Invalid endpoint: %s" str
+    parse_ssh str
+    <||> (fun () -> parse_uri str)
+    |> R.reword_error (fun _ -> R.msgf "Invalid endpoint: %s" str)
 
   let with_headers_if_http headers ({ scheme; _ } as edn) =
     match scheme with
@@ -538,7 +533,7 @@ struct
       go 0
     in
     encode_targets targets >>= fun () ->
-    let uid = Uid.((to_raw_string <.> get) !ctx) in
+    let uid = Uid.get !ctx |> Uid.to_raw_string in
     stream (Some uid);
     stream None;
     Lwt.return_unit
