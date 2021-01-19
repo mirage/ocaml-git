@@ -129,7 +129,7 @@ let negotiation_result = Result
 let commands = Commands
 
 let recv_pack ?(side_band = false) ?(push_stdout = ignore)
-    ?(push_stderr = ignore) ~push_pack =
+    ?(push_stderr = ignore) push_pack =
   Recv_pack { side_band; push_pack; push_stdout; push_stderr }
 
 let status = Status
