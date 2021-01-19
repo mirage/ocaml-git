@@ -218,7 +218,7 @@ val recv_pack :
   ?side_band:bool ->
   ?push_stdout:(string -> unit) ->
   ?push_stderr:(string -> unit) ->
-  push_pack:(string * int * int -> unit) ->
+  (string * int * int -> unit) ->
   bool recv
 
 val ack : string Negotiation.t recv
