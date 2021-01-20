@@ -111,12 +111,28 @@ type ('a, 'err) t = ('a, 'err) State.t =
   | Error of 'err
 
 module Context = struct
-  type t = State.Context.t
+  type capabilities = {
+    client_caps : Capability.t list;
+    server_caps : Capability.t list;
+  }
 
-  let make = State.Context.make
-  let update = State.Context.update
-  let is_cap_shared = State.Context.is_cap_shared
-  let capabilities = State.Context.capabilities
+  let pp_capabilities _ppf _v = ()
+
+  include State.Context
+
+  type nonrec t = capabilities t
+
+  let make ~client_caps = make { client_caps; server_caps = [] }
+  let pp ppf v = pp pp_capabilities ppf v
+  let capabilities ctx = context ctx
+
+  let replace_server_caps ctx caps =
+    update ~f:(fun ~old_ctx -> { old_ctx with server_caps = caps }) ctx
+
+  let is_cap_shared ctx cap =
+    let { client_caps; server_caps } = capabilities ctx in
+    let is_cap_in caps = List.exists (fun c -> Capability.equal c cap) caps in
+    is_cap_in client_caps && is_cap_in server_caps
 end
 
 include Witness
@@ -143,7 +159,7 @@ let send_pack ?(stateless = false) side_band =
 let packet ~trim = Packet trim
 let send_advertised_refs : _ send = Advertised_refs
 
-include State.Scheduler (State.Context) (Value)
+include State.Scheduler (Context) (Value)
 
 let pp_error ppf = function
   | #Protocol.Encoder.error as err -> Protocol.Encoder.pp_error ppf err
@@ -151,6 +167,6 @@ let pp_error ppf = function
 
 module Unsafe = struct
   let write context packet =
-    let encoder = State.Context.encoder context in
+    let encoder = Context.encoder context in
     Protocol.Encoder.unsafe_encode_packet encoder ~packet
 end
