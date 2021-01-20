@@ -36,35 +36,27 @@ end
 module Context = struct
   open Pkt_line
 
-  type t = {
+  type 'ctx t = {
     encoder : Encoder.encoder;
     decoder : Decoder.decoder;
-    mutable capabilities : Capability.t list * Capability.t list;
+    mutable ctx : 'ctx;
   }
 
   type encoder = Encoder.encoder
   type decoder = Decoder.decoder
 
-  let pp _ppf _t = ()
+  let pp _pp_ctx _ppf _t = ()
 
-  let make capabilities =
-    {
-      encoder = Encoder.create ();
-      decoder = Decoder.create ();
-      capabilities = capabilities, [];
-    }
+  let make ctx =
+    { encoder = Encoder.create (); decoder = Decoder.create (); ctx }
 
   let encoder { encoder; _ } = encoder
   let decoder { decoder; _ } = decoder
-  let capabilities { capabilities; _ } = capabilities
+  let context { ctx; _ } = ctx
 
-  let update ({ capabilities = client_side, _; _ } as t) server_side =
-    t.capabilities <- client_side, server_side
-
-  let is_cap_shared t capability =
-    let client_side, server_side = t.capabilities in
-    let a = List.exists (Capability.equal capability) client_side in
-    a && List.exists (Capability.equal capability) server_side
+  let update t ~(f : old_ctx:'ctx -> 'ctx) =
+    let new_ctx = f ~old_ctx:t.ctx in
+    t.ctx <- new_ctx
 end
 
 module Scheduler
