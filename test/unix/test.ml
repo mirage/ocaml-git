@@ -194,6 +194,37 @@ let git_init =
   | Ok (_, _) -> Alcotest.failf "Error for 'git symbolic-ref HEAD'"
   | Error err -> Alcotest.failf "%a" Store.pp_error err
 
+let pack_file =
+  Alcotest.test_case "pack-file" `Quick @@ fun store ->
+  let open Rresult in
+  let path = Store.root store in
+  let fiber =
+    let open Rresult in
+    R.join
+    <.> Bos.OS.Dir.with_current path @@ fun () ->
+        Bos.OS.Cmd.run Bos.Cmd.(v "git" % "gc")
+    (* XXX(dinosaure): to be sure that any Git objects are packed. *)
+  in
+  let () = Rresult.R.get_ok (fiber ()) in
+  let fiber () =
+    let open Lwt.Infix in
+    Store.v (Store.root store) >>? fun store ->
+    Store.mem store (Store.Value.Commit.digest Test.c1) >>= fun r0 ->
+    Store.mem store (Store.Value.Commit.digest Test.c2) >>= fun r1 ->
+    Store.mem store (Store.Value.Commit.digest Test.c3) >>= fun r2 ->
+    Store.mem store (Store.Value.Commit.digest Test.c4) >>= fun r3 ->
+    Store.mem store (Store.Value.Commit.digest Test.c5) >>= fun r4 ->
+    Alcotest.(check bool) "c1" r0 true;
+    Alcotest.(check bool) "c2" r1 true;
+    Alcotest.(check bool) "c3" r2 true;
+    Alcotest.(check bool) "c4" r3 true;
+    Alcotest.(check bool) "c5" r4 true;
+    Lwt.return_ok ()
+  in
+  match Lwt_main.run (fiber ()) with
+  | Ok () -> ()
+  | Error err -> Alcotest.failf "%a" Store.pp_error err
+
 open Cmdliner
 
 let store =
@@ -236,5 +267,5 @@ let () =
         [
           check_blobs_with_git; check_trees_with_git; check_commits_with_git;
           check_tags_with_git; check_references_with_git;
-        ] ); "packed-refs", [ packed_refs ];
+        ] ); "packed-refs", [ packed_refs ]; "pack", [ pack_file ];
     ]
