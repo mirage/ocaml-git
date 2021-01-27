@@ -639,6 +639,10 @@ module Make (Digestif : Digestif.S) = struct
     Bos.OS.Dir.set_default_tmp temp;
     Unix.mkdir ~path:true temp >>? fun _ ->
     Unix.mkdir ~path:true refs >>? fun _ ->
+    Reference_heap.atomic_wr refs Git.Reference.head
+      (Fmt.str "ref: %a\n" Git.Reference.pp Git.Reference.master)
+    |> Lwt.return
+    >>? fun _ ->
     Unix.mkdir ~path:true minor >>? fun _ ->
     Unix.mkdir ~path:true major >>? fun _ ->
     let open Lwt.Infix in
