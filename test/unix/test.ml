@@ -163,6 +163,37 @@ let packed_refs =
       Alcotest.(check Test.hash) "r2" v2 (Store.Value.Commit.digest Test.c2)
   | Error err -> Alcotest.failf "%a" Store.pp_error err
 
+let reference = Alcotest.testable Git.Reference.pp Git.Reference.equal
+
+let git_init =
+  Alcotest.test_case "init" `Quick @@ fun _store ->
+  let fiber root =
+    Store.v root >>? fun store ->
+    Store.Ref.read store Git.Reference.head >>? function
+    | Git.Reference.Ref v ->
+        Alcotest.(check reference) "head" v Git.Reference.master;
+        Lwt.return_ok ()
+    | v ->
+        Alcotest.failf "Invalid HEAD reference value: %a"
+          (Git.Reference.pp_contents ~pp:Store.Hash.pp)
+          v
+  in
+  let open Rresult in
+  match
+    Bos.OS.Dir.tmp "git-%s" >>= fun root ->
+    Lwt_main.run (fiber root) >>= fun () ->
+    ( Bos.OS.Dir.with_current root @@ fun () ->
+      Bos.OS.Cmd.run_out Bos.Cmd.(v "git" % "symbolic-ref" % "HEAD")
+      |> Bos.OS.Cmd.out_string ~trim:true )
+      ()
+    |> R.join
+  with
+  | Ok (v, (_, `Exited 0)) ->
+      let v = Git.Reference.v v in
+      Alcotest.(check reference) "head" v Git.Reference.master
+  | Ok (_, _) -> Alcotest.failf "Error for 'git symbolic-ref HEAD'"
+  | Error err -> Alcotest.failf "%a" Store.pp_error err
+
 open Cmdliner
 
 let store =
@@ -200,6 +231,7 @@ let () = Lwt_main.run run
 let () =
   Alcotest.run_with_args "git-unix" store
     [
+      "init", [ git_init ];
       ( "write",
         [
           check_blobs_with_git; check_trees_with_git; check_commits_with_git;

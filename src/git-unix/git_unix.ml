@@ -614,11 +614,10 @@ module Make (Digestif : Digestif.S) = struct
   let major_uid =
     {
       Git.Store.pck_major_uid_of_uid =
-        (fun root uid ->
-          Fpath.(root / Fmt.str "pack-%s.pack" (Digestif.to_hex uid)));
+        (fun _root uid ->
+          Fpath.v (Fmt.str "pack-%s.pack" (Digestif.to_hex uid)));
       Git.Store.idx_major_uid_of_uid =
-        (fun root uid ->
-          Fpath.(root / Fmt.str "pack-%s.idx" (Digestif.to_hex uid)));
+        (fun _root uid -> Fpath.v (Fmt.str "pack-%s.idx" (Digestif.to_hex uid)));
       Git.Store.uid_of_major_uid =
         (fun path ->
           let str = Fpath.basename (Fpath.rem_ext path) in
@@ -631,6 +630,7 @@ module Make (Digestif : Digestif.S) = struct
     let dotgit =
       match dotgit with Some v -> v | None -> Fpath.(root / ".git")
     in
+    Fmt.epr ">>> dotgit: %a.\n%!" Fpath.pp dotgit;
     let packed = Packed_refs.load ~of_hex:Hash.of_hex dotgit in
     let minor = Fpath.(dotgit / "objects") in
     let major = Fpath.(dotgit / "objects" / "pack") in
@@ -639,6 +639,10 @@ module Make (Digestif : Digestif.S) = struct
     Bos.OS.Dir.set_default_tmp temp;
     Unix.mkdir ~path:true temp >>? fun _ ->
     Unix.mkdir ~path:true refs >>? fun _ ->
+    Reference_heap.atomic_wr refs Git.Reference.head
+      (Fmt.str "ref: %a\n" Git.Reference.pp Git.Reference.master)
+    |> Lwt.return
+    >>? fun _ ->
     Unix.mkdir ~path:true minor >>? fun _ ->
     Unix.mkdir ~path:true major >>? fun _ ->
     let open Lwt.Infix in
