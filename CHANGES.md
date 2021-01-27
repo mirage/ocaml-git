@@ -1,3 +1,8 @@
+### 3.1.1 (2021-27-01) Paris - France
+
+- Fix `git-unix` and PACK files location (@dinosaure, #444, #443)
+- Initialise (as `git`) correctly (add an `HEAD` reference, at least) (@dinosaure, #443)
+
 ### 3.1.0 (2021-13-01) Paris - France
 
 - Handle IP address on the endpoint (@dinosaure, #436)
