@@ -202,9 +202,8 @@ let pack_file =
     let open Rresult in
     R.join
     <.> Bos.OS.Dir.with_current path @@ fun () ->
-        Bos.OS.Cmd.run Bos.Cmd.(v "git" % "gc" % "--prune=now")
-    (* XXX(dinosaure): to be sure that any Git objects are packed.
-     * XXX(dinosaure): --prune=now is only for windows... *)
+        Bos.OS.Cmd.run Bos.Cmd.(v "git" % "repack")
+    (* XXX(dinosaure): to be sure that any Git objects are packed. *)
   in
   let () = Rresult.R.get_ok (fiber ()) in
   let fiber () =
