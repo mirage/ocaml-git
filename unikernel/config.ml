@@ -49,13 +49,15 @@ let mimic_git_conf ~edn () =
        method module_name = "Git_mirage.Make"
        method! packages = Key.pure packages
        method name = "git_ctx"
-       method! connect _ modname _ =
-         Fmt.str
-           {|let ctx_git0 = %s.with_smart_git_endpoint (%a) %s.ctx in
-             let ctx_git1 = %s.with_resolv ctx_git0 in
-             Lwt.return ctx_git1|}
-           modname Key.serialize_call edn modname
-           modname
+       method! connect _ modname = function
+         | [ _; mimic ] ->
+           Fmt.str
+             {|let ctx_git0 = %s.with_smart_git_endpoint (%a) %s in
+               let ctx_git1 = %s.with_resolv ctx_git0 in
+               Lwt.return ctx_git1|}
+             modname Key.serialize_call edn mimic
+             modname
+         | _ -> Fmt.str "Lwt.return %s.ctx" modname
      end
 
 let mimic_git_impl ~edn stackv4 mimic_tcp =
