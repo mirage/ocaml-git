@@ -1,6 +1,6 @@
 (library
  (name carton)
- (modules carton dec enc higher h idx sigs zh)
+ (modules carton dec enc h idx sigs zh)
  (public_name carton)
  (libraries stdlib-shims ke duff bigarray-compat optint checkseum
    decompress.de decompress.zl bigstringaf psq fmt))
