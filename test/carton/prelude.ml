@@ -1,5 +1,3 @@
-module Bigarray = Bigarray_compat
-
 module Mutex = struct
   type 'a fiber = 'a
   type t = Mutex.t

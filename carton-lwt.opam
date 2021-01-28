@@ -19,6 +19,7 @@ depends: [
   "decompress" {>= "1.2.0"}
   "optint" {>= "0.0.4"}
   "bigstringaf"
+  "bigarray-compat" {with-test}
   "alcotest" {>= "1.2.3" & with-test}
   "alcotest-lwt" {>= "1.2.3" & with-test}
   "cstruct" {>= "6.0.0" & with-test}
@@ -27,7 +28,6 @@ depends: [
   "mirage-flow" {>= "2.0.1" & with-test}
   "result" {>= "1.5" & with-test}
   "rresult" {>= "0.6.0" & with-test}
-  "bigarray-compat" {>= "1.0.0" & with-test}
   "ke" {>= "0.4" & with-test}
   "base64" {>= "3.4.0" & with-test}
   "bos" {>= "0.2.0" & with-test}
@@ -35,7 +35,6 @@ depends: [
   "digestif" {>= "1.0.0" & with-test}
   "fpath" {>= "0.7.3" & with-test}
   "mmap" {>= "1.1.0" & with-test}
-  "stdlib-shims" {>= "0.1.0" & with-test}
 ]
 build: [
   ["dune" "build" "-p" name "-j" jobs]

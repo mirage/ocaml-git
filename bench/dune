@@ -1,7 +1,7 @@
 (executable
  (name bench_pack)
- (libraries bigstringaf mtime fmt decompress.de decompress.zl digestif.c
-   bigarray-compat carton unix)
+ (libraries bigstringaf bigarray-compat mtime fmt decompress.de decompress.zl
+   digestif.c carton unix)
  (foreign_stubs
   (language c)
   (names rdtsc)))

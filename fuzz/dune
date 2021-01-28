@@ -6,7 +6,7 @@
 (executable
  (name binary_search)
  (modules binary_search)
- (libraries crowbar bigstringaf carton))
+ (libraries crowbar bigarray-compat bigstringaf carton))
 
 (executable
  (name smart)
