@@ -41,7 +41,7 @@ module Make (Flow : Mirage_flow.S) = struct
           Lwt.return_ok (`Input len))
     else
       let len = min (Cstruct.len payload) (Ke.Rke.length flow.queue) in
-      Ke.Rke.N.keep_exn flow.queue ~blit:blit1 ~length:Cstruct.len payload;
+      Ke.Rke.N.keep_exn flow.queue ~blit:blit1 ~length:Cstruct.len ~len payload;
       Ke.Rke.N.shift_exn flow.queue len;
       Lwt.return_ok (`Input len)
 
