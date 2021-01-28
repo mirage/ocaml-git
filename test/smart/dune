@@ -1,7 +1,7 @@
 (executable
  (name test)
- (modules append fifo hTTP loopback lwt_backend lwt_io ref store_backend test
-   uid unix_backend)
+ (modules append fifo hTTP loopback lwt_backend ref store_backend test uid
+   unix_backend)
  (libraries mirage-flow mimic git.nss.unixiz git git-unix result curl.lwt
    mirage-crypto-rng.unix digestif digestif.c domain-name git.nss.git bos
    fpath bigarray-compat carton-lwt bigstringaf git.nss.sigs git.nss.hkt fmt
