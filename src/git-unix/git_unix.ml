@@ -14,7 +14,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Bigarray = Bigarray_compat
 open Lwt.Infix
 
 let ( >>? ) x f =

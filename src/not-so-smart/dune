@@ -8,8 +8,7 @@
  (name smart)
  (public_name git.nss.smart)
  (modules smart filter capability state protocol)
- (libraries git.nss.pkt-line stdlib-shims result rresult ipaddr domain-name
-   astring fmt))
+ (libraries git.nss.pkt-line result rresult ipaddr domain-name astring fmt))
 
 (library
  (name sigs)
@@ -33,8 +32,7 @@
  (name neg)
  (public_name git.nss.neg)
  (modules neg find_common default)
- (libraries stdlib-shims fmt rresult cstruct sigs logs psq smart
-   git.nss.smart-flow))
+ (libraries fmt rresult cstruct sigs logs psq smart git.nss.smart-flow))
 
 (library
  (name pck)
@@ -53,13 +51,13 @@
  (name unixiz)
  (public_name git.nss.unixiz)
  (modules unixiz)
- (libraries git.nss.sigs lwt result rresult fmt bigarray-compat mirage-flow
+ (libraries bigarray-compat git.nss.sigs lwt result rresult fmt mirage-flow
    ke cstruct))
 
 (library
  (name smart_git)
  (public_name git.nss.git)
  (modules smart_git smart_git_intf)
- (libraries mimic mirage-flow unixiz ipaddr decompress.de decompress.zl
-   cstruct logs astring result rresult bigstringaf fmt emile lwt domain-name
-   uri sigs smart pck nss digestif carton carton-lwt))
+ (libraries bigarray-compat mimic mirage-flow unixiz ipaddr decompress.de
+   decompress.zl cstruct logs astring result rresult bigstringaf fmt emile
+   lwt domain-name uri sigs smart pck nss digestif carton carton-lwt))

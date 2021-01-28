@@ -16,8 +16,8 @@ depends: [
   "dune" {>= "2.6.0"}
   "carton"
   "carton-lwt"
-  "bigarray-compat"
   "bigstringaf"
+  "bigarray-compat"
   "lwt"
   "fpath"
   "result"

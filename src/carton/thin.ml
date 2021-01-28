@@ -1,4 +1,3 @@
-module Bigarray = Bigarray_compat
 open Carton
 
 type ('uid, 's) light_load = 'uid -> (kind * int, 's) io

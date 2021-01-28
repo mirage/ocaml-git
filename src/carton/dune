@@ -2,12 +2,12 @@
  (name carton)
  (modules carton dec enc h idx sigs zh)
  (public_name carton)
- (libraries stdlib-shims ke duff bigarray-compat optint checkseum
-   decompress.de decompress.zl bigstringaf psq fmt))
+ (libraries ke duff optint checkseum decompress.de decompress.zl bigstringaf
+   bigarray-compat psq fmt))
 
 (library
  (name thin)
  (modules thin)
  (public_name carton.thin)
- (libraries optint checkseum decompress.de decompress.zl bigarray-compat
+ (libraries bigarray-compat optint checkseum decompress.de decompress.zl
    bigstringaf logs carton cstruct ke))

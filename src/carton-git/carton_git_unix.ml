@@ -1,5 +1,4 @@
 open Lwt.Infix
-module Bigarray = Bigarray_compat
 
 module Store = struct
   type 'a rd = < rd : unit ; .. > as 'a

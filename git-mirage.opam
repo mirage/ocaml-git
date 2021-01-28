@@ -7,7 +7,7 @@ homepage: "https://github.com/mirage/ocaml-git"
 doc: "https://mirage.github.io/ocaml-git/"
 bug-reports: "https://github.com/mirage/ocaml-git/issues"
 depends: [
-  "ocaml" {>= "4.07.0"}
+  "ocaml" {>= "4.08.0"}
   "dune" {>= "2.6.0"}
   "mimic"
   "mirage-stack"
@@ -31,7 +31,6 @@ depends: [
   "bigstringaf" {>= "0.7.0" & with-test}
   "cstruct" {>= "6.0.0" & with-test}
   "logs" {>= "0.7.0" & with-test}
-  "bigarray-compat" {>= "1.0.0" & with-test}
   "ke" {>= "0.4" & with-test}
 ]
 build: [

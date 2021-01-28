@@ -1,4 +1,3 @@
-module Bigarray = Bigarray_compat
 open Lwt.Infix
 
 type error = |

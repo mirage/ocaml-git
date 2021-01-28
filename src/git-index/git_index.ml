@@ -1,7 +1,5 @@
 [@@@warning "-32"]
 
-module Bigarray = Bigarray_compat
-
 let io_buffer_size = 65536
 
 type _ hash = SHA1 : Digestif.SHA1.t hash
