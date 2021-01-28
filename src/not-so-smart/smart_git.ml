@@ -102,6 +102,8 @@ module Endpoint = struct
     | `HTTPS _ -> { edn with scheme = `HTTPS headers }
 end
 
+let git_capabilities = Mimic.make ~name:"git-capabilities"
+
 module Make
     (Scheduler : Sigs.SCHED with type +'a s = 'a Lwt.t)
     (Pack : APPEND with type +'a fiber = 'a Lwt.t)
@@ -399,6 +401,12 @@ struct
           pusher None
     in
     let stream () = Lwt_stream.get stream in
+    let ctx = Mimic.add git_capabilities `Rd ctx in
+    (* XXX(dinosaure): such trick is only about SSH. Indeed, when we use SSH, we
+       should/must? know if we want to fetch or push. If we want to fetch, we
+       will call git-upload-pack. To be able to pass this information to the
+       "connect" function of SSH (whatever the implementation of SSH), we fill
+       the given [ctx] with [`Rd]. *)
     let run =
       match version, edn.scheme with
       | `V1, ((`Git | `SSH _) as scheme) ->
@@ -552,6 +560,8 @@ struct
   let push ?uses_git_transport ~ctx ~capabilities path cmds endpoint store
       access push_cfg pack =
     let open Lwt.Infix in
+    let ctx = Mimic.add git_capabilities `Wr ctx in
+    (* XXX(dinosaure): see [fetch]. *)
     Mimic.resolve ctx >>? fun flow ->
     Push.push ?uses_git_transport ~capabilities cmds ~host:endpoint path
       (Flow.make flow) store access push_cfg pack
