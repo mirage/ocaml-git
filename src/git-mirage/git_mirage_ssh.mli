@@ -37,12 +37,3 @@ module Make
   val ctx : Mimic.ctx
   val with_smart_git_endpoint : string -> Mimic.ctx -> Mimic.ctx
 end
-
-module Destruct (SSH : sig
-  type endpoint
-  type flow
-
-  val ssh_protocol : (endpoint, flow) Mimic.protocol
-end) : sig
-  val is : Mimic.flow -> bool
-end

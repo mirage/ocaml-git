@@ -139,15 +139,3 @@ struct
     | Ok { Smart_git.Endpoint.scheme = `SSH user; _ } -> with_user user ctx
     | _ -> ctx
 end
-
-module Destruct (SSH : sig
-  type endpoint
-  type flow
-
-  val ssh_protocol : (endpoint, flow) Mimic.protocol
-end) =
-struct
-  include (val Mimic.repr SSH.ssh_protocol)
-
-  let is = function T _ -> true | _ -> false
-end

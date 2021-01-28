@@ -71,6 +71,8 @@ module type SMART_GIT = sig
         adds [hdrs] to [edn] *)
   end
 
+  val git_capabilities : [ `Rd | `Wr ] Mimic.value
+
   module Make
       (Scheduler : Sigs.SCHED with type +'a s = 'a Lwt.t)
       (Pack : APPEND with type +'a fiber = 'a Lwt.t)
