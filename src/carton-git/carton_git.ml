@@ -15,7 +15,7 @@ module type STORE = sig
 
   val pp_error : error Fmt.t
   val create : mode:'a mode -> t -> uid -> ('a fd, error) result fiber
-  val map : t -> 'm rd fd -> pos:int64 -> int -> Bigstringaf.t fiber
+  val map : t -> 'm rd fd -> pos:int64 -> int -> Bigstringaf.t
   val close : t -> 'm fd -> (unit, error) result fiber
   val list : t -> uid list fiber
   val length : 'm fd -> int64 fiber
@@ -55,17 +55,10 @@ struct
   let ( >>? ) x f = x >>= function Ok x -> f x | Error _ as err -> return err
   let ( >>| ) x f = x >>= fun x -> return (f x)
 
-  let io =
-    let open Scheduler in
-    {
-      Carton.bind = (fun x f -> inj (prj x >>= fun x -> prj (f x)));
-      Carton.return = (fun x -> inj (return x));
-    }
-
   let idx (root : Store.t) acc path =
     Store.create ~mode:Store.Rd root path >>? fun fd ->
     Store.length fd >>= fun length ->
-    Store.map root fd ~pos:0L (Int64.to_int length) >>= fun payload ->
+    let payload = Store.map root fd ~pos:0L (Int64.to_int length) in
     Store.close root fd >>? fun () ->
     let idx =
       Carton.Dec.Idx.make payload ~uid_ln:Uid.length ~uid_rw:Uid.to_raw_string
@@ -138,15 +131,15 @@ struct
     return (Ok ())
 
   let with_resources root pack uid buffers =
-    let map fd ~pos len = Scheduler.inj (map root fd ~pos len) in
+    let map fd ~pos len = map root fd ~pos len in
     let pack = Carton.Dec.with_z buffers.z pack in
     let pack = Carton.Dec.with_allocate ~allocate:buffers.allocate pack in
     let pack = Carton.Dec.with_w buffers.w pack in
-    Carton.Dec.weight_of_uid io ~map pack ~weight:Carton.Dec.null uid
-    |> Scheduler.prj
-    >>= fun weight ->
+    let weight =
+      Carton.Dec.weight_of_uid ~map pack ~weight:Carton.Dec.null uid
+    in
     let raw = Carton.Dec.make_raw ~weight in
-    Carton.Dec.of_uid io ~map pack raw uid |> Scheduler.prj >>= fun v ->
+    let v = Carton.Dec.of_uid ~map pack raw uid in
     return v
 
   let get :

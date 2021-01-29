@@ -5,7 +5,7 @@ let map _ fd ~pos len =
   let payload =
     Mmap.V1.map_file fd ~pos Bigarray.char Bigarray.c_layout false [| len |]
   in
-  Lwt.return (Bigarray.array1_of_genarray payload)
+  Bigarray.array1_of_genarray payload
 
 let yield_map root fd ~pos len = map root fd ~pos len
 

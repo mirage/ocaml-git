@@ -25,7 +25,7 @@ module Dec = struct
       payload : Bigstringaf.t;
     }
 
-    and 'fd map = 'fd -> pos:int64 -> int -> Bigstringaf.t Lwt.t
+    and 'fd map = 'fd Carton.Dec.W.map
 
     let make fd = Carton.Dec.W.make fd
   end
@@ -69,49 +69,31 @@ module Dec = struct
    * about internal use. *)
 
   let weight_of_offset ~map t ~weight cursor =
-    let map fd ~pos len = inj (map fd ~pos len) in
-    prj (Carton.Dec.weight_of_offset lwt ~map t ~weight cursor)
+    Carton.Dec.weight_of_offset ~map t ~weight cursor
 
   let weight_of_uid ~map t ~weight uid =
-    let map fd ~pos len = inj (map fd ~pos len) in
-    prj (Carton.Dec.weight_of_uid lwt ~map t ~weight uid)
+    Carton.Dec.weight_of_uid ~map t ~weight uid
 
-  let of_offset ~map t raw ~cursor =
-    let map fd ~pos len = inj (map fd ~pos len) in
-    prj (Carton.Dec.of_offset lwt ~map t raw ~cursor)
-
-  let of_uid ~map t raw uid =
-    let map fd ~pos len = inj (map fd ~pos len) in
-    prj (Carton.Dec.of_uid lwt ~map t raw uid)
+  let of_offset ~map t raw ~cursor = Carton.Dec.of_offset ~map t raw ~cursor
+  let of_uid ~map t raw uid = Carton.Dec.of_uid ~map t raw uid
 
   type path = Carton.Dec.path
 
   let path_to_list path = Carton.Dec.path_to_list path
   let kind_of_path path = Carton.Dec.kind_of_path path
-
-  let path_of_offset ~map t ~cursor =
-    let map fd ~pos len = inj (map fd ~pos len) in
-    prj (Carton.Dec.path_of_offset lwt ~map t ~cursor)
-
-  let path_of_uid ~map t uid =
-    let map fd ~pos len = inj (map fd ~pos len) in
-    prj (Carton.Dec.path_of_uid lwt ~map t uid)
+  let path_of_offset ~map t ~cursor = Carton.Dec.path_of_offset ~map t ~cursor
+  let path_of_uid ~map t uid = Carton.Dec.path_of_uid ~map t uid
 
   let of_offset_with_path ~map t ~path raw ~cursor =
-    let map fd ~pos len = inj (map fd ~pos len) in
-    prj (Carton.Dec.of_offset_with_path lwt ~map t ~path raw ~cursor)
+    Carton.Dec.of_offset_with_path ~map t ~path raw ~cursor
 
   type 'uid digest = 'uid Carton.Dec.digest
 
   let uid_of_offset ~map ~digest t raw ~cursor =
-    let map fd ~pos len = inj (map fd ~pos len) in
-    prj (Carton.Dec.uid_of_offset lwt ~map ~digest t raw ~cursor)
+    Carton.Dec.uid_of_offset ~map ~digest t raw ~cursor
 
   let uid_of_offset_with_source ~map ~digest t ~kind raw ~depth ~cursor =
-    let map fd ~pos len = inj (map fd ~pos len) in
-    prj
-      (Carton.Dec.uid_of_offset_with_source lwt ~map ~digest t ~kind raw ~depth
-         ~cursor)
+    Carton.Dec.uid_of_offset_with_source ~map ~digest t ~kind raw ~depth ~cursor
 
   type 'uid oracle = 'uid Carton.Dec.oracle
 
@@ -119,7 +101,6 @@ module Dec = struct
     include Carton.Dec.Verify (Uid) (Lwt_scheduler) (Lwt_io)
 
     let verify ~threads ~map ~oracle t ~matrix =
-      let map fd ~pos len = inj (map fd ~pos len) in
       verify ~threads ~map ~oracle t ~matrix
   end
 

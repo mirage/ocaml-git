@@ -15,7 +15,7 @@ module type APPEND = sig
 
   val pp_error : error Fmt.t
   val create : mode:'a mode -> t -> uid -> ('a fd, error) result fiber
-  val map : t -> 'm rd fd -> pos:int64 -> int -> Bigstringaf.t fiber
+  val map : t -> 'm rd fd -> pos:int64 -> int -> Bigstringaf.t
   val append : t -> 'm wr fd -> string -> unit fiber
   val move : t -> src:uid -> dst:uid -> (unit, error) result fiber
   val close : t -> 'm fd -> (unit, error) result fiber

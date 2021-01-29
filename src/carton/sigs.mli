@@ -26,14 +26,6 @@ module type MUTEX = sig
   val unlock : t -> unit
 end
 
-module type FUTURE = sig
-  type +'a fiber
-  type 'a t
-
-  val wait : 'a t -> 'a fiber
-  val peek : 'a t -> 'a option
-end
-
 module type CONDITION = sig
   type +'a fiber
   type mutex
@@ -48,7 +40,6 @@ end
 module type IO = sig
   type +'a t
 
-  module Future : FUTURE with type 'a fiber = 'a t
   module Mutex : MUTEX with type 'a fiber = 'a t
 
   module Condition :
@@ -56,8 +47,9 @@ module type IO = sig
 
   val bind : 'a t -> ('a -> 'b t) -> 'b t
   val return : 'a -> 'a t
-  val nfork_map : 'a list -> f:('a -> 'b t) -> 'b Future.t list t
-  val all_unit : unit t list -> unit t
+  val detach : (unit -> 'a) -> 'a t
+  val parallel_map : f:('a -> 'b t) -> 'a list -> 'b list t
+  val parallel_iter : f:('a -> unit t) -> 'a list -> unit t
 end
 
 module Make (T : FUNCTOR) : SCHEDULER with type 'a s = 'a T.t

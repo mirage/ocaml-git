@@ -53,7 +53,7 @@ let test_trunk_mode =
   >>= fun () ->
   Gc.full_major ();
   with_fd ~mode:Rd
-    ~f:(fun fd _ -> Cstruct_append.map device fd ~pos:0L 12)
+    ~f:(fun fd _ -> Cstruct_append.map device fd ~pos:0L 12 |> Lwt.return)
     device a Bigstringaf.empty
   >>= fun v ->
   Gc.full_major ();
@@ -93,7 +93,7 @@ let test_three_contents =
   Gc.full_major ();
   with_fd ~mode:RdWr
     ~f:(fun fd str ->
-      Cstruct_append.map device fd ~pos:0L 3 >>= fun v ->
+      let v = Cstruct_append.map device fd ~pos:0L 3 in
       Alcotest.(check string) "contents" (Bigstringaf.to_string v) "";
       (* O_TRUNC *)
       Cstruct_append.append device fd str)

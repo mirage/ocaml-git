@@ -142,11 +142,11 @@ let append _ fd str =
 let map _ fd ~pos len =
   Log.debug (fun m -> m "map on fd(length:%d) ~pos:%Ld %d." fd.length pos len);
   let pos = Int64.to_int pos in
-  if pos > fd.length then Lwt.return Bigstringaf.empty
+  if pos > fd.length then Bigstringaf.empty
   else
     let len = min len (fd.length - pos) in
     let { Cstruct.buffer; off; _ } = fd.buffer in
-    Lwt.return (Bigstringaf.sub ~off:(off + pos) ~len buffer)
+    Bigstringaf.sub ~off:(off + pos) ~len buffer
 
 let close tbl fd =
   let result = Cstruct.sub fd.buffer 0 fd.length in

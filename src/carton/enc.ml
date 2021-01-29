@@ -398,11 +398,10 @@ struct
   let delta ~threads ~weight ~uid_ln entries =
     let mutex = { v = 0; m = IO.Mutex.create () } in
     let targets = Array.make (Array.length entries) None in
-    IO.nfork_map
+    IO.parallel_iter
       ~f:(fun load -> dispatcher ~load ~mutex ~entries ~targets)
       threads
-    >>= fun futures ->
-    IO.all_unit (List.map IO.Future.wait futures) >>= fun () ->
+    >>= fun () ->
     let targets = Array.map get targets in
     delta ~load:(List.hd threads) ~weight ~uid_ln targets >>= fun () ->
     return targets

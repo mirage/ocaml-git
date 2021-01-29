@@ -375,13 +375,13 @@ module Major_heap = struct
     in
     Lwt.catch process error
 
-  let map : t -> [> `Rd ] fd -> pos:int64 -> int -> Bigstringaf.t fiber =
+  let map : t -> [> `Rd ] fd -> pos:int64 -> int -> Bigstringaf.t =
    fun _ fd ~pos len ->
     let fd = Lwt_unix.unix_file_descr fd in
     let payload =
       Mmap.V1.map_file fd ~pos Bigarray.char Bigarray.c_layout false [| len |]
     in
-    Lwt.return (Bigarray.array1_of_genarray payload)
+    Bigarray.array1_of_genarray payload
 
   let close _ fd =
     let rec process () = Lwt_unix.close fd >>= fun () -> Lwt.return_ok ()
