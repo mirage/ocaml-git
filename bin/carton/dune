@@ -1,0 +1,6 @@
+(executable
+ (name verify_pack)
+ (public_name carton.verify-pack)
+ (package carton)
+ (libraries cmdliner bos result rresult fpath mmap decompress.de
+   decompress.zl bigarray-compat bigstringaf fmt carton fiber digestif.c))

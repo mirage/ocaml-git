@@ -521,7 +521,6 @@ let verify_bomb_pack () =
       ~uid_rw:Uid.of_raw_string (fun _ -> Alcotest.fail "Invalid call to IDX")
   in
   IO.run (Verify.verify ~threads:1 ~map ~oracle t ~matrix);
-  Fmt.epr ">>> End of verify.\n%!";
   Unix.close fd;
 
   let offsets =
@@ -758,9 +757,7 @@ let pack_bomb_pack () =
   in
 
   let output_bigstring ctx oc buf ~off ~len =
-    Fmt.epr "[+] %S.\n%!" (Bigstringaf.substring buf ~off ~len);
     let ctx = Uid.feed ctx buf ~off ~len in
-    Fmt.epr "[-] %a.\n%!" Uid.pp (Uid.get ctx);
     let s = Bigstringaf.substring buf ~off ~len in
     output_string oc s;
     (Us.inj <.> IO.return) ctx
@@ -800,9 +797,6 @@ let pack_bomb_pack () =
     >>= fun targets ->
     Carton.Enc.header_of_pack ~length:(Array.length targets) header 0 12;
     output_bigstring ctx oc header ~off:0 ~len:12 |> Us.prj >>= fun ctx ->
-    Fmt.epr ">>> @[<hov>%a@].\n%!"
-      Fmt.(Dump.array (using Carton.Enc.target_uid Uid.pp))
-      targets;
     let rec go ctx idx arr =
       if idx < Array.length arr then
         iter ctx arr.(idx) |> Us.prj >>= fun ctx -> go ctx (succ idx) arr
@@ -815,7 +809,6 @@ let pack_bomb_pack () =
   output_string oc (Uid.to_raw_string hash);
   close_out oc;
 
-  Fmt.epr ">>> hash of new.pack: %a.\n%!" Uid.pp hash;
   Alcotest.(check pass) "new.pack" () ();
   let res =
     let cmd = Bos.Cmd.(v "git" % "index-pack" % "new.pack") in

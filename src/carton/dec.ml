@@ -1571,7 +1571,6 @@ struct
       resolver ~map ~oracle t ~cursor
     in
     matrix.(oracle.where ~cursor) <- Resolved_base (cursor, uid, kind);
-    Fmt.epr ">>> %Ld resolved!\n%!" cursor;
     let rec go depth source = function
       | Leaf (cursor, uid) ->
           matrix.(oracle.where ~cursor) <-

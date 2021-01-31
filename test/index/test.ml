@@ -84,7 +84,6 @@ let blob_of_path path =
     Git.Blob.of_string contents
   else
     let ic = open_in_bin (Fpath.to_string path) in
-    Fmt.epr ">>> blob_of_path: %a.\n%!" Fpath.pp path;
     let ln = in_channel_length ic in
     let rs = Bytes.create ln in
     really_input ic rs 0 ln;

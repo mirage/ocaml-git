@@ -629,7 +629,6 @@ module Make (Digestif : Digestif.S) = struct
     let dotgit =
       match dotgit with Some v -> v | None -> Fpath.(root / ".git")
     in
-    Fmt.epr ">>> dotgit: %a.\n%!" Fpath.pp dotgit;
     let packed = Packed_refs.load ~of_hex:Hash.of_hex dotgit in
     let minor = Fpath.(dotgit / "objects") in
     let major = Fpath.(dotgit / "objects" / "pack") in
