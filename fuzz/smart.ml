@@ -131,6 +131,7 @@ let () =
         Digestif.SHA1.to_hex hash, refname, peeled)
       refs
   in
+  let shallows = if refs = [] then [] else shallows in
   let str = to_string (Smart.Advertised_refs.v1 ~shallows ~capabilities refs) in
   let res = of_string str in
   Crowbar.check_eq ~pp:Smart.Advertised_refs.pp

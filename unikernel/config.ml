@@ -196,6 +196,7 @@ let minigit =
     ~keys:[ Key.abstract remote; Key.abstract ssh_seed; Key.abstract ssh_auth ]
     ~packages:[ package "cohttp-mirage"; package "git-cohttp-mirage" ]
     (git
+    @-> pclock
     @-> time
     @-> console
     @-> resolver
@@ -211,6 +212,7 @@ let mimic ~edn ~kind ~seed ~auth stackv4 random mclock time =
   merge mssh mdns
 
 let stackv4 = generic_stackv4 default_network
+let pclock = default_posix_clock
 let mclock = default_monotonic_clock
 let time = default_time
 let random = default_random
@@ -222,5 +224,5 @@ let conduit = conduit_direct ~tls:true stackv4
 let mimic = mimic ~edn:remote ~kind:`Rsa ~seed:ssh_seed ~auth:ssh_auth
 
 let () =
-  register "minigit" ~packages:[]
-    [ minigit $ git $ time $ console $ resolver $ conduit $ mimic ]
+  register "minigit" ~packages:[ package "ptime" ]
+    [ minigit $ git $ pclock $ time $ console $ resolver $ conduit $ mimic ]

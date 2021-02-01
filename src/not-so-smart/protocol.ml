@@ -391,7 +391,7 @@ module Decoder = struct
               capabilities
           in
           junk_pkt decoder;
-          decode_shallows
+          return
             { Advertised_refs.capabilities; refs = []; version; shallows = [] }
             decoder
       | None -> fail decoder (`Invalid_advertised_ref (String.Sub.to_string v))
@@ -690,8 +690,13 @@ module Decoder = struct
     prompt_pkt commands decoder >>= fun commands ->
     return { Status.result; Status.commands } decoder
 
-  let decode_status decoder =
-    let sideband decoder =
+  (* XXX(dinosaure): even if we handle with and without sideband, currently the
+     default [decode_status] parse a sideband. On the Irmin side, sideband is
+     used in any case but we should improve [protocol.ml] and pass true
+     [sideband] value. *)
+
+  let decode_status ?(sideband = true) decoder =
+    let with_sideband decoder =
       let pkt = peek_pkt decoder in
       match String.Sub.head pkt with
       | Some '\001' ->
@@ -700,10 +705,21 @@ module Decoder = struct
           decode_status decoder' >>= fun res ->
           junk_pkt decoder;
           prompt_pkt (return res) decoder
-      | _ -> assert false
-      (* TODO *)
+      | Some _ -> assert false (* TODO *)
+      | None ->
+          junk_pkt decoder;
+          return { Status.result = Ok (); Status.commands = [] } decoder
     in
-    prompt_pkt sideband decoder
+    let without_sideband decoder =
+      let pkt = peek_pkt decoder in
+      if String.Sub.length pkt <> 0 then
+        fail decoder (`Invalid_command_result (String.Sub.to_string pkt))
+      else (
+        junk_pkt decoder;
+        return { Status.result = Ok (); Status.commands = [] } decoder)
+    in
+    if sideband then prompt_pkt with_sideband decoder
+    else prompt_pkt without_sideband decoder
 end
 
 module Encoder = struct
