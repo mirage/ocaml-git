@@ -180,7 +180,10 @@ module Decoder : sig
 
   val decode_negotiation : decoder -> (string Negotiation.t, [> error ]) state
   val decode_shallows : decoder -> (string Shallow.t list, [> error ]) state
-  val decode_status : decoder -> (string Status.t, [> error ]) state
+
+  val decode_status :
+    ?sideband:bool -> decoder -> (string Status.t, [> error ]) state
+
   val decode_packet : trim:bool -> decoder -> (string, [> error ]) state
 end
 
