@@ -68,25 +68,28 @@ let commands { bind; return } ~capabilities ~equal:equal_reference ~deref store
         deref store reference >>= function
         | Some uid -> return (Smart.Commands.create uid reference :: acc)
         | None -> return acc)
-    | `Delete reference ->
-        let uid, _, _ =
-          List.find
+    | `Delete reference -> (
+        match
+          List.find_opt
             (fun (_, reference', peeled) ->
               equal_reference reference reference' && peeled = false)
             have
-        in
-        return (Smart.Commands.delete uid reference :: acc)
+        with
+        | Some (uid, _, _) -> return (Smart.Commands.delete uid reference :: acc)
+        | None -> return acc)
     | `Update (local, remote) -> (
         deref store local >>= function
         | None -> return acc
-        | Some uid_new ->
-            let uid_old, _, _ =
-              List.find
+        | Some uid_new -> (
+            match
+              List.find_opt
                 (fun (_, reference', peeled) ->
                   equal_reference remote reference' && peeled = false)
                 have
-            in
-            return (Smart.Commands.update uid_old uid_new remote :: acc))
+            with
+            | Some (uid_old, _, _) ->
+                return (Smart.Commands.update uid_old uid_new remote :: acc)
+            | None -> return (Smart.Commands.create uid_new remote :: acc)))
   in
   let rec go a = function
     | [] -> return a

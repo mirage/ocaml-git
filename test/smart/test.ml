@@ -1617,6 +1617,39 @@ let test_partial_fetch_ssh () =
   | Error (#Mimic.error as err) -> Alcotest.failf "%a" Mimic.pp_error err
   | Error `Invalid_flow -> Alcotest.fail "Invalid flow"
 
+let make_one_commit path =
+  Bos.OS.Dir.with_current path @@ fun () ->
+  Bos.OS.File.write Fpath.(v "foo") "" >>= fun () ->
+  Bos.OS.Cmd.run Bos.Cmd.(v "git" % "add" % "foo") >>= fun () ->
+  Bos.OS.Cmd.run Bos.Cmd.(v "git" % "commit" % "-m" % ".") >>= fun () -> R.ok ()
+
+let test_push_empty () =
+  Alcotest_lwt.test_case "push to empty over ssh" `Quick @@ fun sw () ->
+  let open Lwt.Infix in
+  (* XXX(dinosaure): This test does not require SSH but the underlying process
+     is a call to [git-upload-pack]. We do the same without encryption. *)
+  let run () =
+    create_new_git_store sw >>= fun (_access, store0) ->
+    with_fifo "git-receive-pack-ic-%s" |> Lwt.return >>? fun ic_fifo ->
+    with_fifo "git-receive-pack-oc-%s" |> Lwt.return >>? fun oc_fifo ->
+    let process = run_git_receive_pack store0 ic_fifo oc_fifo in
+    process () >>= fun () ->
+    create_new_git_push_store sw >>= fun (access, store1) ->
+    let { path; _ } = store_prj store1 in
+    make_one_commit path () |> R.join |> Lwt.return >>? fun () ->
+    let capabilities = [ `Report_status; `Side_band_64k ] in
+    let ctx = ctx_with_fifo ic_fifo oc_fifo in
+    Smart_git.Endpoint.of_string "git@localhost:not-found.git" |> Lwt.return
+    >>? fun endpoint ->
+    Git.push ~ctx ~capabilities access store1 endpoint
+      [ `Update (Ref.v "refs/heads/master", Ref.v "refs/heads/master") ]
+  in
+  run () >>= function
+  | Ok () -> Lwt.return_unit
+  | Error (`Exn exn) -> Alcotest.failf "%s" (Printexc.to_string exn)
+  | Error (#Mimic.error as err) -> Alcotest.failf "%a" Mimic.pp_error err
+  | Error `Invalid_flow -> Alcotest.fail "Invalid flow"
+
 let update_testzone_1 store =
   let { path; _ } = store_prj store in
   let update =
@@ -1641,7 +1674,7 @@ let test =
           test_push_error (); test_fetch_empty (); test_negotiation ();
           test_ssh (); test_negotiation_ssh (); test_push_ssh ();
           test_negotiation_http (); test_partial_clone_ssh ();
-          test_partial_fetch_ssh (); test_sync_fetch ();
+          test_partial_fetch_ssh (); test_sync_fetch (); test_push_empty ();
         ] );
     ]
 
