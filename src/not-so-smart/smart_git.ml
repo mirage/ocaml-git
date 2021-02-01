@@ -164,14 +164,6 @@ struct
 
   module CartonSched = Carton.Make (Lwt)
 
-  let sched =
-    let open Lwt.Infix in
-    let open CartonSched in
-    {
-      Carton.bind = (fun x f -> inj (prj x >>= fun x -> prj (f x)));
-      Carton.return = (fun x -> inj (Lwt.return x));
-    }
-
   let finish_it t ~pack ~weight ~where offsets =
     let open Lwt.Infix in
     Pack.create ~mode:Pack.Rd t pack >>? fun fd ->
@@ -185,21 +177,19 @@ struct
       let max = Int64.sub weight pos in
       let len = min max (Int64.of_int len) in
       let len = Int64.to_int len in
-      CartonSched.inj (Pack.map t fd ~pos len)
+      Pack.map t fd ~pos len
     in
     let rec go entries = function
       | [] -> Lwt.return entries
       | (offset, crc) :: offsets ->
           Lwt.catch
             (fun () ->
-              Carton.Dec.weight_of_offset sched ~map pack
-                ~weight:Carton.Dec.null offset
-              |> CartonSched.prj
-              >>= fun weight ->
+              let weight =
+                Carton.Dec.weight_of_offset ~map pack ~weight:Carton.Dec.null
+                  offset
+              in
               let raw = Carton.Dec.make_raw ~weight in
-              Carton.Dec.of_offset sched ~map pack raw ~cursor:offset
-              |> CartonSched.prj
-              >>= fun v ->
+              let v = Carton.Dec.of_offset ~map pack raw ~cursor:offset in
               let kind = Carton.Dec.kind v in
               let raw = Carton.Dec.raw v in
               let len = Carton.Dec.len v in

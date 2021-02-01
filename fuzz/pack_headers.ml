@@ -11,14 +11,14 @@ let allocate bits = De.make_window ~bits
 let o = Bigstringaf.create De.io_buffer_size
 
 let map payload ~pos len =
-  if pos < 0L then Us.inj Bigstringaf.empty
+  if pos < 0L then Bigstringaf.empty
   else if pos >= Int64.of_int (Bigstringaf.length payload) then
-    Us.inj Bigstringaf.empty
+    Bigstringaf.empty
   else
     let max = Int64.sub (Int64.of_int (Bigstringaf.length payload)) pos in
     let len = min (Int64.of_int len) max in
     let len = Int64.to_int len in
-    Us.inj (Bigstringaf.sub payload ~off:(Int64.to_int pos) ~len)
+    Bigstringaf.sub payload ~off:(Int64.to_int pos) ~len
 
 let () =
   Crowbar.add_test ~name:"pack-headers never fails" Crowbar.[ int64; bytes ]
@@ -30,13 +30,12 @@ let () =
       (fun _ -> assert false)
   in
   let kind, length, _pos, _slice =
-    Us.prj
-      (Carton.Dec.header_of_entry unix ~map t pos
-         {
-           Carton.Dec.W.payload;
-           offset = pos;
-           length = Bigstringaf.length payload;
-         })
+    Carton.Dec.header_of_entry ~map t pos
+      {
+        Carton.Dec.W.payload;
+        offset = pos;
+        length = Bigstringaf.length payload;
+      }
   in
   ignore @@ (kind, length)
 
@@ -54,13 +53,8 @@ let () =
       (fun _ -> assert false)
   in
   let kind', length', _pos, _slice =
-    Us.prj
-      (Carton.Dec.header_of_entry unix ~map t 0L
-         {
-           Carton.Dec.W.payload;
-           offset = 0L;
-           length = Bigstringaf.length payload;
-         })
+    Carton.Dec.header_of_entry ~map t 0L
+      { Carton.Dec.W.payload; offset = 0L; length = Bigstringaf.length payload }
   in
   Crowbar.check_eq ~pp:Fmt.int kind kind';
   Crowbar.check_eq ~pp:Fmt.int length length'

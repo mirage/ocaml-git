@@ -16,8 +16,7 @@ let map fd ~pos len =
   let res =
     Unix.map_file fd ~pos Bigarray.char Bigarray.c_layout false [| len |]
   in
-  let res = Bigarray.array1_of_genarray res in
-  inj res
+  Bigarray.array1_of_genarray res
 
 let fd = Unix.openfile bomb_pack Unix.[ O_RDONLY ] 0o644
 let () = at_exit (fun () -> Unix.close fd)
@@ -27,7 +26,7 @@ let index =
 
   let fd = Unix.openfile bomb_idx Unix.[ O_RDONLY ] 0o644 in
   let st = Unix.fstat fd in
-  let payload = prj (map fd ~pos:0L st.Unix.st_size) in
+  let payload = map fd ~pos:0L st.Unix.st_size in
   Unix.close fd;
 
   let idx =
@@ -52,14 +51,12 @@ let uid_0 = Digestif.SHA1.of_hex "7af99c9e7d4768fa681f4fe4ff61259794cf719b"
 let uid_1 = Digestif.SHA1.of_hex "d9513477b01825130c48c4bebed114c4b2d50401"
 
 let load uid =
-  Carton.Dec.weight_of_uid scheduler ~map pack ~weight:Carton.Dec.null uid
-  >>= fun weight ->
+  let weight = Carton.Dec.weight_of_uid ~map pack ~weight:Carton.Dec.null uid in
   let raw = Carton.Dec.make_raw ~weight in
-  Carton.Dec.of_uid scheduler ~map pack raw uid >>= fun _ -> return ()
+  let _ = Carton.Dec.of_uid ~map pack raw uid in
+  return ()
 
-let fn_map =
-  Benchmark.V (fun () -> ignore (prj (map fd ~pos:10L (1024 * 1024))))
-
+let fn_map = Benchmark.V (fun () -> ignore (map fd ~pos:10L (1024 * 1024)))
 let fn_load_0 = Benchmark.V (fun () -> ignore (prj (load uid_0)))
 let fn_load_1 = Benchmark.V (fun () -> ignore (prj (load uid_1)))
 let s x = Mtime.Span.of_uint64_ns (Int64.mul (Int64.of_int x) 1_000_000_000L)

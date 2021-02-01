@@ -375,13 +375,13 @@ module Major_heap = struct
     in
     Lwt.catch process error
 
-  let map : t -> [> `Rd ] fd -> pos:int64 -> int -> Bigstringaf.t fiber =
+  let map : t -> [> `Rd ] fd -> pos:int64 -> int -> Bigstringaf.t =
    fun _ fd ~pos len ->
     let fd = Lwt_unix.unix_file_descr fd in
     let payload =
       Mmap.V1.map_file fd ~pos Bigarray.char Bigarray.c_layout false [| len |]
     in
-    Lwt.return (Bigarray.array1_of_genarray payload)
+    Bigarray.array1_of_genarray payload
 
   let close _ fd =
     let rec process () = Lwt_unix.close fd >>= fun () -> Lwt.return_ok ()
@@ -629,7 +629,6 @@ module Make (Digestif : Digestif.S) = struct
     let dotgit =
       match dotgit with Some v -> v | None -> Fpath.(root / ".git")
     in
-    Fmt.epr ">>> dotgit: %a.\n%!" Fpath.pp dotgit;
     let packed = Packed_refs.load ~of_hex:Hash.of_hex dotgit in
     let minor = Fpath.(dotgit / "objects") in
     let major = Fpath.(dotgit / "objects" / "pack") in

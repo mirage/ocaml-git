@@ -14,18 +14,6 @@ module Mutex = struct
   let unlock t = Lwt_mutex.unlock t
 end
 
-module Future = struct
-  type 'a fiber = 'a Lwt.t
-  type 'a t = 'a Lwt.t
-
-  let wait th = th
-
-  let peek th =
-    match Lwt.state th with
-    | Lwt.Sleep | Lwt.Fail _ -> None
-    | Lwt.Return v -> Some v
-end
-
 module Condition = struct
   type 'a fiber = 'a Lwt.t
   type mutex = Mutex.t
@@ -41,5 +29,13 @@ type 'a t = 'a Lwt.t
 
 let bind x f = Lwt.bind x f
 let return x = Lwt.return x
-let nfork_map l ~f = Lwt.return (List.rev (List.rev_map f l))
-let all_unit l = Lwt.join l
+let parallel_map ~f lst = Lwt_list.map_p f lst
+let parallel_iter ~f lst = Lwt_list.iter_p f lst
+
+let detach f =
+  let th, wk = Lwt.wait () in
+  Lwt.async (fun () ->
+      let res = f () in
+      Lwt.wakeup_later wk res;
+      Lwt.return_unit);
+  th

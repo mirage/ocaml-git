@@ -15,7 +15,7 @@ module type STORE = sig
 
   val pp_error : error Fmt.t
   val create : mode:'a mode -> t -> uid -> ('a fd, error) result fiber
-  val map : t -> 'm rd fd -> pos:int64 -> int -> Bigstringaf.t fiber
+  val map : t -> 'm rd fd -> pos:int64 -> int -> Bigstringaf.t
   val close : t -> 'm fd -> (unit, error) result fiber
   val list : t -> uid list fiber
   val length : 'm fd -> int64 fiber

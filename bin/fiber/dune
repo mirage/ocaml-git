@@ -1,0 +1,5 @@
+(library
+ (name fiber)
+ (flags
+  (:standard -thread))
+ (libraries fmt threads))

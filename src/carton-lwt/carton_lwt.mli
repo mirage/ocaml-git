@@ -16,7 +16,7 @@ module Dec : sig
       payload : Bigstringaf.t;
     }
 
-    and 'fd map = 'fd -> pos:int64 -> int -> Bigstringaf.t Lwt.t
+    and 'fd map = 'fd -> pos:int64 -> int -> Bigstringaf.t
 
     val make : 'fd -> 'fd t
   end
@@ -99,33 +99,23 @@ module Dec : sig
     ('fd, 'uid) t
 
   val weight_of_offset :
-    map:'fd W.map -> ('fd, 'uid) t -> weight:weight -> int64 -> weight Lwt.t
+    map:'fd W.map -> ('fd, 'uid) t -> weight:weight -> int64 -> weight
 
   val weight_of_uid :
-    map:'fd W.map -> ('fd, 'uid) t -> weight:weight -> 'uid -> weight Lwt.t
+    map:'fd W.map -> ('fd, 'uid) t -> weight:weight -> 'uid -> weight
 
-  val of_offset :
-    map:'fd W.map -> ('fd, 'uid) t -> raw -> cursor:int64 -> v Lwt.t
-
-  val of_uid : map:'fd W.map -> ('fd, 'uid) t -> raw -> 'uid -> v Lwt.t
+  val of_offset : map:'fd W.map -> ('fd, 'uid) t -> raw -> cursor:int64 -> v
+  val of_uid : map:'fd W.map -> ('fd, 'uid) t -> raw -> 'uid -> v
 
   type path = Carton.Dec.path
 
   val path_to_list : path -> int64 list
   val kind_of_path : path -> [ `A | `B | `C | `D ]
-
-  val path_of_offset :
-    map:'fd W.map -> ('fd, 'uid) t -> cursor:int64 -> path Lwt.t
-
-  val path_of_uid : map:'fd W.map -> ('fd, 'uid) t -> 'uid -> path Lwt.t
+  val path_of_offset : map:'fd W.map -> ('fd, 'uid) t -> cursor:int64 -> path
+  val path_of_uid : map:'fd W.map -> ('fd, 'uid) t -> 'uid -> path
 
   val of_offset_with_path :
-    map:'fd W.map ->
-    ('fd, 'uid) t ->
-    path:path ->
-    raw ->
-    cursor:int64 ->
-    v Lwt.t
+    map:'fd W.map -> ('fd, 'uid) t -> path:path -> raw -> cursor:int64 -> v
 
   type 'uid digest = 'uid Carton.Dec.digest
 
@@ -135,7 +125,7 @@ module Dec : sig
     ('fd, 'uid) t ->
     raw ->
     cursor:int64 ->
-    (Carton.kind * 'uid) Lwt.t
+    Carton.kind * 'uid
 
   val uid_of_offset_with_source :
     map:'fd W.map ->
@@ -145,7 +135,7 @@ module Dec : sig
     raw ->
     depth:int ->
     cursor:int64 ->
-    'uid Lwt.t
+    'uid
 
   type 'uid oracle = 'uid Carton.Dec.oracle
 
@@ -266,7 +256,7 @@ module Thin : sig
     type ('t, 'path, 'fd, 'error) fs = {
       create : 't -> 'path -> ('fd, 'error) result Lwt.t;
       append : 't -> 'fd -> string -> unit Lwt.t;
-      map : 't -> 'fd -> pos:int64 -> int -> Bigstringaf.t Lwt.t;
+      map : 't -> 'fd -> pos:int64 -> int -> Bigstringaf.t;
       close : 't -> 'fd -> (unit, 'error) result Lwt.t;
     }
 

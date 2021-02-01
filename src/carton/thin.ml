@@ -189,7 +189,7 @@ struct
   type ('t, 'path, 'fd, 'error) fs = {
     create : 't -> 'path -> ('fd, 'error) result IO.t;
     append : 't -> 'fd -> string -> unit IO.t;
-    map : 't -> 'fd -> pos:int64 -> int -> Bigstringaf.t IO.t;
+    map : 't -> 'fd -> pos:int64 -> int -> Bigstringaf.t;
     close : 't -> 'fd -> (unit, 'error) result IO.t;
   }
 
@@ -231,7 +231,7 @@ struct
     in
     let map fd ~pos len =
       let len = min len Int64.(to_int (sub weight pos)) in
-      Scheduler.inj (map t fd ~pos len)
+      map t fd ~pos len
     in
     Log.debug (fun m -> m "Start to verify incoming PACK file (second pass).");
     Verify.verify ~threads pack ~map ~oracle ~matrix >>= fun () ->
@@ -344,7 +344,7 @@ struct
       let max = Int64.sub top pos in
       let len = min max (Int64.mul 1024L 1024L) in
       let len = Int64.to_int len in
-      map t src ~pos len >>= fun raw ->
+      let raw = map t src ~pos len in
       append t fd (Bigstringaf.to_string raw) >>= fun () ->
       ctx := Uid.feed !ctx raw;
       cursor := Int64.add !cursor (Int64.of_int len);

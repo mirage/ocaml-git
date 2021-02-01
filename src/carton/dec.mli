@@ -43,14 +43,12 @@ module W : sig
 
   and slice = { offset : int64; length : int; payload : Bigstringaf.t }
 
-  and ('fd, 's) map = 'fd -> pos:int64 -> int -> (Bigstringaf.t, 's) io
+  and 'fd map = 'fd -> pos:int64 -> int -> Bigstringaf.t
 
   val length : int64
   val reset : 'fd t -> unit
   val make : 'fd -> 'fd t
-
-  val load :
-    's scheduler -> map:('fd, 's) map -> 'fd t -> int64 -> (slice option, 's) io
+  val load : map:'fd map -> 'fd t -> int64 -> slice option
 end
 
 type weight = private int
@@ -137,12 +135,11 @@ type ('fd, 'uid) t
 (**/*)
 
 val header_of_entry :
-  's scheduler ->
-  map:('fd, 's) W.map ->
+  map:'fd W.map ->
   ('fd, 'uid) t ->
   int64 ->
   W.slice ->
-  (int * int * int * W.slice, 's) io
+  int * int * int * W.slice
 
 (**/*)
 
@@ -257,13 +254,12 @@ val make :
 exception Cycle
 
 val weight_of_offset :
-  's scheduler ->
-  map:('fd, 's) W.map ->
+  map:'fd W.map ->
   ('fd, 'uid) t ->
   weight:weight ->
   ?visited:int64 list ->
   int64 ->
-  (weight, 's) io
+  weight
 (** [weight_of_offset sched ~map t ~weight offset] returns the [weight] of the
     given object available at [offset] into [t]. This function assumes:
 
@@ -281,13 +277,12 @@ val weight_of_offset :
     {i thin}-pack). *)
 
 val weight_of_uid :
-  's scheduler ->
-  map:('fd, 's) W.map ->
+  map:'fd W.map ->
   ('fd, 'uid) t ->
   weight:weight ->
   ?visited:int64 list ->
   'uid ->
-  (weight, 's) io
+  weight
 (** [weight_of_offset sched ~map t ~weight uid] returns the [weight] of the
     given object identified by [uid] into [t]. This function assumes the same
     assumption as {!weight_of_offset}.
@@ -298,18 +293,11 @@ val weight_of_uid :
     {b Note.} Despite {!weight_of_offset}, this function {b look-up} the object
     from the given reference. *)
 
-val length_of_offset :
-  's scheduler -> map:('fd, 's) W.map -> ('fd, 'uid) t -> int64 -> (int, 's) io
+val length_of_offset : map:'fd W.map -> ('fd, 'uid) t -> int64 -> int
 
 (** {3 Value of object.} *)
 
-val of_offset :
-  's scheduler ->
-  map:('fd, 's) W.map ->
-  ('fd, 'uid) t ->
-  raw ->
-  cursor:int64 ->
-  (v, 's) io
+val of_offset : map:'fd W.map -> ('fd, 'uid) t -> raw -> cursor:int64 -> v
 (** [of_offset sched ~map raw ~cursor] is the object at the offset [cursor] into
     [t]. The function is not {i tail-recursive}. It discovers at each step if
     the object depends on another one (see [OBJ_REF_DELTA] or [OBJ_OFS_DELTA]).
@@ -319,13 +307,7 @@ val of_offset :
     resource). [raw] (which should be created with the associated {!weight}
     given by {!weight_of_offset}) is enough to extract the object. *)
 
-val of_uid :
-  's scheduler ->
-  map:('fd, 's) W.map ->
-  ('fd, 'uid) t ->
-  raw ->
-  'uid ->
-  (v, 's) io
+val of_uid : map:'fd W.map -> ('fd, 'uid) t -> raw -> 'uid -> v
 (** As {!of_offset}, [of_uid sched ~map raw uid] is the object identified by
     [uid] into [t]. *)
 
@@ -354,12 +336,7 @@ val kind_of_path : path -> [ `A | `B | `C | `D ]
     [path]. An assumption exists about PACK format, a {i delta-chain} refers to
     several objects which must have the same type/kind. *)
 
-val path_of_offset :
-  's scheduler ->
-  map:('fd, 's) W.map ->
-  ('fd, 'uid) t ->
-  cursor:int64 ->
-  (path, 's) io
+val path_of_offset : map:'fd W.map -> ('fd, 'uid) t -> cursor:int64 -> path
 (** [path_of_offset sched ~map t ~cursor] is that {!path} of the given object
     available at [cursor].
 
@@ -371,8 +348,7 @@ val path_of_offset :
     PACKv2, an [OBJ_REF_DELTA] {i usually} points to an external object (see
     {i thin}-pack). *)
 
-val path_of_uid :
-  's scheduler -> map:('fd, 's) W.map -> ('fd, 'uid) t -> 'uid -> (path, 's) io
+val path_of_uid : map:'fd W.map -> ('fd, 'uid) t -> 'uid -> path
 (** [path_of_uid sched ~map t uid] is the {!path} of the given object identified
     by [uid] into [t].
 
@@ -383,13 +359,7 @@ val path_of_uid :
     from the given reference. *)
 
 val of_offset_with_path :
-  's scheduler ->
-  map:('fd, 's) W.map ->
-  ('fd, 'uid) t ->
-  path:path ->
-  raw ->
-  cursor:int64 ->
-  (v, 's) io
+  map:'fd W.map -> ('fd, 'uid) t -> path:path -> raw -> cursor:int64 -> v
 (** [of_offset_with_path sched ~map t ~path raw ~cursor] is the object available
     at [cursor] into [t]. This function is {i tail-recursive} and bound to the
     given [path]. *)
@@ -422,24 +392,22 @@ val of_offset_with_path :
 type 'uid digest = kind:kind -> ?off:int -> ?len:int -> Bigstringaf.t -> 'uid
 
 val uid_of_offset :
-  's scheduler ->
-  map:('fd, 's) W.map ->
+  map:'fd W.map ->
   digest:'uid digest ->
   ('fd, 'uid) t ->
   raw ->
   cursor:int64 ->
-  (kind * 'uid, 's) io
+  kind * 'uid
 
 val uid_of_offset_with_source :
-  's scheduler ->
-  map:('fd, 's) W.map ->
+  map:'fd W.map ->
   digest:'uid digest ->
   ('fd, 'uid) t ->
   kind:kind ->
   raw ->
   depth:int ->
   cursor:int64 ->
-  ('uid, 's) io
+  'uid
 
 type 'uid children = cursor:int64 -> uid:'uid -> int64 list
 type where = cursor:int64 -> int
@@ -480,7 +448,7 @@ module Verify
 
   val verify :
     threads:int ->
-    map:('fd, Scheduler.t) W.map ->
+    map:'fd W.map ->
     oracle:Uid.t oracle ->
     ('fd, Uid.t) t ->
     matrix:status array ->

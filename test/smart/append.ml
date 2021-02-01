@@ -27,7 +27,7 @@ let map _ fd ~pos len =
       (Lwt_unix.unix_file_descr fd)
       ~pos Bigarray.char Bigarray.c_layout false [| len |]
   in
-  Lwt.return (Bigarray.array1_of_genarray res)
+  Bigarray.array1_of_genarray res
 
 let append _ fd str =
   let rec go off len =

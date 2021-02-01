@@ -24,15 +24,22 @@ depends: [
   "logs"
   "bigstringaf"
   "bigarray-compat"
+  "bos"
+  "cmdliner" {>= "1.0.4"}
+  "digestif"
+  "fpath"
+  "mmap"
+  "result"
+  "rresult"
   "psq" {>= "0.2.0"}
   "fmt" {>= "0.8.7"}
-  "result" {with-test}
-  "rresult" {with-test}
-  "fpath" {with-test}
+  "result"
+  "rresult"
+  "fpath"
   "base64" {with-test & >= "3.0.0"}
-  "bos" {with-test}
-  "digestif" {with-test & >= "0.8.1"}
-  "mmap" {with-test}
+  "bos"
+  "digestif" {>= "0.8.1"}
+  "mmap"
   "base-unix" {with-test}
   "base-threads" {with-test}
   "alcotest" {with-test}

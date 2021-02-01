@@ -20,12 +20,6 @@ let src = Logs.Src.create "git.mem" ~doc:"logs git's memory back-end"
 module Log = (val Logs.src_log src : Logs.LOG)
 module Sched = Carton.Make (struct type 'a t = 'a end)
 
-let sched =
-  {
-    Carton.bind = (fun x f -> f (Sched.prj x));
-    Carton.return = (fun x -> Sched.inj x);
-  }
-
 type 'hash t = {
   values : ('hash, 'hash Value.t Lazy.t) Hashtbl.t;
   inflated : ('hash, [ `Commit | `Blob | `Tag | `Tree ] * Cstruct.t) Hashtbl.t;
@@ -51,7 +45,6 @@ let batch_write :
   let f uid offset = Hashtbl.add tbl uid offset in
   iter index ~f;
 
-  let map pack ~pos len = Sched.inj (map pack ~pos len) in
   let z = De.bigstring_create De.io_buffer_size in
   let w = De.make_window ~bits:15 in
   let allocate _ = w in
@@ -60,14 +53,10 @@ let batch_write :
   in
   let f uid offset =
     let weight =
-      Sched.prj
-        (Carton.Dec.weight_of_offset sched ~map pack ~weight:Carton.Dec.null
-           offset)
+      Carton.Dec.weight_of_offset ~map pack ~weight:Carton.Dec.null offset
     in
     let raw = Carton.Dec.make_raw ~weight in
-    let res =
-      Sched.prj (Carton.Dec.of_offset sched ~map pack raw ~cursor:offset)
-    in
+    let res = Carton.Dec.of_offset ~map pack raw ~cursor:offset in
     let inflated =
       Cstruct.of_bigarray (Carton.Dec.raw res) ~off:0 ~len:(Carton.Dec.len res)
     in
