@@ -1,4 +1,8 @@
-include Smart_git.HTTP
+module Client
+    (P : Mirage_clock.PCLOCK)
+    (R : Resolver_mirage.S)
+    (S : Conduit_mirage.S) : sig
+  include Smart_git.HTTP
 
-val conduit : Cohttp_mirage.Client.ctx Mimic.value
-val with_conduit : Cohttp_mirage.Client.ctx -> Mimic.ctx -> Mimic.ctx
+  val ctx : ?authenticator:X509.Authenticator.t -> R.t -> S.t -> Mimic.ctx
+end

@@ -2,4 +2,4 @@
  (name git_cohttp_mirage)
  (public_name git-cohttp-mirage)
  (libraries mimic lwt rresult result git.nss.git uri fmt cohttp cohttp-lwt
-   cohttp-mirage))
+   cohttp-mirage mirage-clock conduit-mirage x509))
