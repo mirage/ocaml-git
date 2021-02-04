@@ -9,8 +9,8 @@ module Make
 struct
   include Dns_client_mirage.Make (Random) (Time) (Mclock) (Stack)
 
-  let domain_name = Mimic.make ~name:"domain-name"
-  let with_domain_name v ctx = Mimic.add domain_name v ctx
+  let dns_domain_name = Mimic.make ~name:"domain-name"
+  let with_domain_name v ctx = Mimic.add dns_domain_name v ctx
 
   let with_resolv ctx =
     let open Lwt.Infix in
@@ -21,7 +21,7 @@ struct
       | _ -> Lwt.return_none
     in
     Mimic.(
-      fold TCP.tcp_ipaddr Fun.[ req TCP.tcp_stack; req domain_name ] ~k ctx)
+      fold TCP.tcp_ipaddr Fun.[ req TCP.tcp_stack; req dns_domain_name ] ~k ctx)
 
   let ctx = with_resolv Mimic.empty
 

@@ -15,10 +15,6 @@ module Make
       val tcp_stack : Stack.t Mimic.value
       val tcp_ipaddr : Ipaddr.V4.t Mimic.value
       val tcp_port : int Mimic.value
-    end) (Git : sig
-      val git_path : string Mimic.value
-      val git_capabilities : [ `Rd | `Wr ] Mimic.value
-      val git_scheme : [ `Git | `SSH | `HTTP | `HTTPS ] Mimic.value
     end)
     (Mclock : Mirage_clock.MCLOCK) : sig
   type nonrec endpoint = Stack.t endpoint

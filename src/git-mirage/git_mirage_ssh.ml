@@ -17,10 +17,6 @@ module Make
       val tcp_stack : Stack.t Mimic.value
       val tcp_ipaddr : Ipaddr.V4.t Mimic.value
       val tcp_port : int Mimic.value
-    end) (Git : sig
-      val git_path : string Mimic.value
-      val git_capabilities : [ `Rd | `Wr ] Mimic.value
-      val git_scheme : [ `Git | `SSH | `HTTP | `HTTPS ] Mimic.value
     end)
     (Mclock : Mirage_clock.MCLOCK) =
 struct
@@ -112,9 +108,9 @@ struct
         fold ssh_endpoint
           Fun.
             [
-              req Git.git_scheme; req TCP.tcp_endpoint; opt ssh_authenticator;
-              req ssh_user; req ssh_key; req Git.git_path;
-              dft Git.git_capabilities `Rd;
+              req Smart_git.git_scheme; req TCP.tcp_endpoint;
+              opt ssh_authenticator; req ssh_user; req ssh_key;
+              req Smart_git.git_path; req Smart_git.git_capabilities;
             ]
           ~k ctx)
     in
@@ -124,9 +120,10 @@ struct
         fold ssh_endpoint
           Fun.
             [
-              req Git.git_scheme; req TCP.tcp_stack; req TCP.tcp_ipaddr;
+              req Smart_git.git_scheme; req TCP.tcp_stack; req TCP.tcp_ipaddr;
               dft TCP.tcp_port 22; opt ssh_authenticator; req ssh_user;
-              req ssh_key; req Git.git_path; dft Git.git_capabilities `Rd;
+              req ssh_key; req Smart_git.git_path;
+              req Smart_git.git_capabilities;
             ]
           ~k ctx)
     in
