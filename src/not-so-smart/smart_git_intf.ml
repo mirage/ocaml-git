@@ -59,6 +59,7 @@ module type SMART_GIT = sig
         | `Git
         | `HTTP of (string * string) list
         | `HTTPS of (string * string) list ];
+      port : int option;
       path : string;
       host : [ `Addr of Ipaddr.t | `Domain of [ `host ] Domain_name.t ];
     }
@@ -69,11 +70,42 @@ module type SMART_GIT = sig
     val with_headers_if_http : (string * string) list -> t -> t
     (** [with_headers_if_http hdrs edn] if endpoint [edn] is [`HTTP]  or [`HTTPS]
         adds [hdrs] to [edn] *)
+
+    val to_ctx : t -> Mimic.ctx -> Mimic.ctx
   end
+
+  (** {3 Mimic values.}
+
+      When the user use an [Endpoint.t] to {!fetch} or {!push}, we fill the given Mimic's [ctx]
+      with some available informations such as:
+      - if we want to {!fetch} ([`Rd]) or {!push} ([`Wr])
+      - the scheme/protocol that the user would like to use ([git://], SSH or HTTP - with or without TLS)
+      - the path of the git repository
+      - the host (an IP adress or a domain name)
+      - the SSH user iff the user would like to use SSH
+      - the port that the user would like to use
+
+      From this informations, the {b end}-user can process them through the Mimic API (with {!Mimic.fold})
+      and describe how to create needed values to start {i a} protocol from them.
+
+      For example, if the user wants to use [mirage-tcpip] which needs an IP address and a port,
+      he is able to re-use/map/fold {!git_host} and {!git_port} to craft what [mirage-tcpip]
+      really needs.
+
+      Of course, such job is definitely outside the scope of [ocaml-git] and permits to us to be free
+      about protocol implementations. An example of the plumbing needed is able with [git-mirage] which
+      re-use these values to be able to start a [mirage-tcpip] connection, a [awa-ssh] connection
+      of a [cohttp] (with or without [ocaml-tls]) connection. *)
 
   val git_capabilities : [ `Rd | `Wr ] Mimic.value
   val git_scheme : [ `Git | `SSH | `HTTP | `HTTPS ] Mimic.value
   val git_path : string Mimic.value
+
+  val git_host :
+    [ `Addr of Ipaddr.t | `Domain of [ `host ] Domain_name.t ] Mimic.value
+
+  val git_ssh_user : string Mimic.value
+  val git_port : int Mimic.value
 
   module Make
       (Scheduler : Sigs.SCHED with type +'a s = 'a Lwt.t)

@@ -180,7 +180,7 @@ let of_smart_git_endpoint edn ctx =
     | `Addr v -> Mimic.add ipaddr v ctx
   in
   match edn with
-  | { Smart_git.Endpoint.scheme = `SSH v_user; path = v_path; host } ->
+  | { Smart_git.Endpoint.scheme = `SSH v_user; path = v_path; host; _ } ->
       ctx |> add_host host |> Mimic.add path v_path |> Mimic.add user v_user
   | { Smart_git.Endpoint.path = v_path; host; _ } ->
       ctx |> add_host host |> Mimic.add path v_path

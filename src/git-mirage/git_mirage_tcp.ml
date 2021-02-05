@@ -36,10 +36,34 @@ module Make (Stack : Mirage_stack.V4) = struct
     Mimic.register ~name:"mirage-tcpip" (module TCP)
 
   let tcp_ipaddr = Mimic.make ~name:"tcp-ipaddr"
-  let tcp_port = Mimic.make ~name:"tcp-port"
   let tcp_stack : Stack.t Mimic.value = Mimic.make ~name:"tcp-stack"
-  let with_port v ctx = Mimic.add tcp_port v ctx
-  let with_ipaddr v ctx = Mimic.add tcp_ipaddr v ctx
-  let with_stack v ctx = Mimic.add tcp_stack v ctx
-  let ctx = Mimic.empty
+  let with_stack stack ctx = Mimic.add tcp_stack stack ctx
+
+  let ctx =
+    let k_git scheme stack ipaddr port =
+      match scheme with
+      | `Git -> Lwt.return_some (stack, ipaddr, port)
+      | _ -> Lwt.return_none
+    in
+    let k_http scheme stack ipaddr port =
+      match scheme with
+      | `HTTP -> Lwt.return_some (stack, ipaddr, port)
+      | _ -> Lwt.return_none
+    in
+    let open Mimic in
+    Mimic.empty
+    |> fold tcp_endpoint
+         Fun.
+           [
+             req Smart_git.git_scheme; req tcp_stack; req tcp_ipaddr;
+             dft Smart_git.git_port 9418;
+           ]
+         ~k:k_git
+    |> fold tcp_endpoint
+         Fun.
+           [
+             req Smart_git.git_scheme; req tcp_stack; req tcp_ipaddr;
+             dft Smart_git.git_port 80;
+           ]
+         ~k:k_http
 end
