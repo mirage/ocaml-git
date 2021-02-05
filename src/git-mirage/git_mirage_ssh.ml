@@ -16,7 +16,6 @@ module Make
       val tcp_endpoint : (Stack.t * Ipaddr.V4.t * int) Mimic.value
       val tcp_stack : Stack.t Mimic.value
       val tcp_ipaddr : Ipaddr.V4.t Mimic.value
-      val tcp_port : int Mimic.value
     end)
     (Mclock : Mirage_clock.MCLOCK) =
 struct
@@ -68,9 +67,7 @@ struct
     Mimic.register ~name:"mirage-ssh" (module SSH)
 
   let ssh_authenticator = Mimic.make ~name:"ssh-authenticator"
-  let ssh_user = Mimic.make ~name:"ssh-user"
   let ssh_key = Mimic.make ~name:"ssh-key"
-  let with_user v ctx = Mimic.add ssh_user v ctx
 
   let with_authenticator v ctx =
     match Awa.Keys.authenticator_of_string v with
@@ -85,8 +82,8 @@ struct
     let v = Awa.Keys.of_seed `Ed25519 v in
     Mimic.add ssh_key v ctx
 
-  let with_resolv ctx =
-    let k scheme (stack, ipaddr, port) ssh_authenticator ssh_user ssh_key
+  let ctx =
+    let k0 scheme (stack, ipaddr, port) ssh_authenticator ssh_user ssh_key
         git_path git_capabilities =
       match scheme with
       | `SSH ->
@@ -103,36 +100,24 @@ struct
             }
       | _ -> Lwt.return_none
     in
-    let ctx =
-      Mimic.(
-        fold ssh_endpoint
-          Fun.
-            [
-              req Smart_git.git_scheme; req TCP.tcp_endpoint;
-              opt ssh_authenticator; req ssh_user; req ssh_key;
-              req Smart_git.git_path; req Smart_git.git_capabilities;
-            ]
-          ~k ctx)
-    in
-    let k scheme stack ipaddr port = k scheme (stack, ipaddr, port) in
-    let ctx =
-      Mimic.(
-        fold ssh_endpoint
-          Fun.
-            [
-              req Smart_git.git_scheme; req TCP.tcp_stack; req TCP.tcp_ipaddr;
-              dft TCP.tcp_port 22; opt ssh_authenticator; req ssh_user;
-              req ssh_key; req Smart_git.git_path;
-              req Smart_git.git_capabilities;
-            ]
-          ~k ctx)
-    in
-    ctx
-
-  let ctx = with_resolv Mimic.empty
-
-  let with_smart_git_endpoint edn ctx =
-    match Smart_git.Endpoint.of_string edn with
-    | Ok { Smart_git.Endpoint.scheme = `SSH user; _ } -> with_user user ctx
-    | _ -> ctx
+    let k1 scheme stack ipaddr port = k0 scheme (stack, ipaddr, port) in
+    let open Mimic in
+    Mimic.empty
+    |> fold ssh_endpoint
+         Fun.
+           [
+             req Smart_git.git_scheme; req TCP.tcp_endpoint;
+             opt ssh_authenticator; req Smart_git.git_ssh_user; req ssh_key;
+             req Smart_git.git_path; req Smart_git.git_capabilities;
+           ]
+         ~k:k0
+    |> fold ssh_endpoint
+         Fun.
+           [
+             req Smart_git.git_scheme; req TCP.tcp_stack; req TCP.tcp_ipaddr;
+             dft Smart_git.git_port 22; opt ssh_authenticator;
+             req Smart_git.git_ssh_user; req ssh_key; req Smart_git.git_path;
+             req Smart_git.git_capabilities;
+           ]
+         ~k:k1
 end

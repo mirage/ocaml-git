@@ -18,9 +18,3 @@
  (public_name git-mirage.dns)
  (libraries mimic git.nss.git domain-name lwt ipaddr mirage-random
    mirage-time mirage-clock mirage-protocols mirage-stack dns-client.mirage))
-
-(library
- (name git_mirage)
- (modules git_mirage)
- (public_name git-mirage)
- (libraries mimic git.nss.git ipaddr mirage-stack mirage-protocols lwt))

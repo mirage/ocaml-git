@@ -11,6 +11,7 @@ let test01 =
       {
         Smart_git.Endpoint.scheme = `SSH "git";
         host = `Domain v;
+        port = None;
         path = "mirage/ocaml.git";
       } ->
       Alcotest.(check domain_name) "github.com" v github_com
@@ -24,6 +25,7 @@ let test02 =
       {
         Smart_git.Endpoint.scheme = `SSH "git";
         host = `Addr v;
+        port = None;
         path = "mirage/ocaml.git";
       } ->
       Alcotest.(check ipaddr) "10.0.0.0" v private_network
@@ -37,6 +39,7 @@ let test03 =
       {
         Smart_git.Endpoint.scheme = `SSH "git";
         host = `Addr v;
+        port = None;
         path = "mirage/ocaml.git";
       } ->
       Alcotest.(check ipaddr) "10.0.0.0" v private_network
@@ -50,6 +53,7 @@ let test04 =
       {
         Smart_git.Endpoint.scheme = `Git;
         host = `Domain v;
+        port = None;
         path = "/mirage/ocaml.git";
       } ->
       Alcotest.(check domain_name) "github.com" v github_com
@@ -63,6 +67,7 @@ let test05 =
       {
         Smart_git.Endpoint.scheme = `HTTP [];
         host = `Domain v;
+        port = None;
         path = "/mirage/ocaml.git";
       } ->
       Alcotest.(check domain_name) "github.com" v github_com
@@ -76,6 +81,7 @@ let test06 =
       {
         Smart_git.Endpoint.scheme = `HTTP [];
         host = `Addr v;
+        port = None;
         path = "/mirage/ocaml.git";
       } ->
       Alcotest.(check ipaddr) "10.0.0.0" v private_network

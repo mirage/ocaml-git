@@ -3,35 +3,29 @@ module Make
     (Mclock : Mirage_clock.MCLOCK)
     (Time : Mirage_time.S)
     (Stack : Mirage_stack.V4) (TCP : sig
-      val tcp_stack : Stack.t Mimic.value
       val tcp_ipaddr : Ipaddr.V4.t Mimic.value
     end) =
 struct
+  open Lwt.Infix
   include Dns_client_mirage.Make (Random) (Time) (Mclock) (Stack)
 
-  let dns_domain_name = Mimic.make ~name:"domain-name"
-  let with_domain_name v ctx = Mimic.add dns_domain_name v ctx
+  let dns = Mimic.make ~name:"dns"
 
-  let with_resolv ctx =
-    let open Lwt.Infix in
-    let k stack domain_name =
-      let dns = create stack in
-      gethostbyname dns domain_name >>= function
-      | Ok ipv4 -> Lwt.return_some ipv4
-      | _ -> Lwt.return_none
+  let with_dns ?size ?nameserver ?timeout stack ctx =
+    let v = create ?size ?nameserver ?timeout stack in
+    Mimic.add dns v ctx
+
+  let ctx =
+    let k dns hostname =
+      match dns, hostname with
+      | _, `Addr (Ipaddr.V4 ipv4) -> Lwt.return_some ipv4
+      | _, `Addr (Ipaddr.V6 _) -> Lwt.return_none (* TODO *)
+      | None, `Domain _ -> Lwt.return_none
+      | Some dns, `Domain domain_name -> (
+          gethostbyname dns domain_name >>= function
+          | Ok ipv4 -> Lwt.return_some ipv4
+          | _ -> Lwt.return_none)
     in
-    Mimic.(
-      fold TCP.tcp_ipaddr Fun.[ req TCP.tcp_stack; req dns_domain_name ] ~k ctx)
-
-  let ctx = with_resolv Mimic.empty
-
-  let with_smart_git_endpoint edn ctx =
-    match Smart_git.Endpoint.of_string edn with
-    | Ok { Smart_git.Endpoint.host = `Domain host; _ } ->
-        with_domain_name host ctx
-    | Ok { Smart_git.Endpoint.host = `Addr (Ipaddr.V4 v); _ } ->
-        Mimic.add TCP.tcp_ipaddr v ctx
-    | Ok { Smart_git.Endpoint.host = `Addr (Ipaddr.V6 _); _ } ->
-        assert false (* TODO *)
-    | _ -> ctx
+    let open Mimic in
+    fold TCP.tcp_ipaddr Fun.[ opt dns; req Smart_git.git_host ] ~k Mimic.empty
 end

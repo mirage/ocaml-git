@@ -7,6 +7,13 @@ module Verbose = struct
   let print () = Lwt.return_unit
 end
 
+let git_capabilities = Mimic.make ~name:"git-capabilities"
+let git_scheme = Mimic.make ~name:"git-scheme"
+let git_path = Mimic.make ~name:"git-path"
+let git_host = Mimic.make ~name:"git-host"
+let git_ssh_user = Mimic.make ~name:"git-ssh-user"
+let git_port = Mimic.make ~name:"git-port"
+
 module Endpoint = struct
   type t = {
     scheme :
@@ -14,6 +21,7 @@ module Endpoint = struct
       | `Git
       | `HTTP of (string * string) list
       | `HTTPS of (string * string) list ];
+    port : int option;
     path : string;
     host : [ `Addr of Ipaddr.t | `Domain of [ `host ] Domain_name.t ];
   }
@@ -24,15 +32,19 @@ module Endpoint = struct
       | `Addr (Ipaddr.V6 v) -> Fmt.pf ppf "[IPv6:%a]" Ipaddr.V6.pp v
       | `Domain v -> Domain_name.pp ppf v
     in
+    let pp_port ppf = function
+      | Some port -> Fmt.pf ppf ":%d" port
+      | None -> ()
+    in
     match edn with
-    | { scheme = `SSH user; path; host } ->
+    | { scheme = `SSH user; path; host; _ } ->
         Fmt.pf ppf "%s@%a:%s" user pp_host host path
-    | { scheme = `Git; path; host } ->
-        Fmt.pf ppf "git://%a/%s" pp_host host path
-    | { scheme = `HTTP _; path; host } ->
-        Fmt.pf ppf "http://%a/%s" pp_host host path
-    | { scheme = `HTTPS _; path; host } ->
-        Fmt.pf ppf "https://%a/%s" pp_host host path
+    | { scheme = `Git; port; path; host } ->
+        Fmt.pf ppf "git://%a%a/%s" pp_host host pp_port port path
+    | { scheme = `HTTP _; path; port; host } ->
+        Fmt.pf ppf "http://%a%a/%s" pp_host host pp_port port path
+    | { scheme = `HTTPS _; path; port; host } ->
+        Fmt.pf ppf "https://%a%a/%s" pp_host host pp_port port path
 
   let ( <||> ) a b =
     match a with
@@ -71,7 +83,7 @@ module Endpoint = struct
           | `Addr (Emile.IPv4 v) -> R.ok (`Addr (Ipaddr.V4 v))
           | `Addr (Emile.IPv6 v) -> R.ok (`Addr (Ipaddr.V6 v))
           | v -> R.error_msgf "Invalid hostname: %a" Emile.pp_domain v)
-          >>= fun host -> R.ok { scheme = `SSH user; path; host }
+          >>= fun host -> R.ok { scheme = `SSH user; path; port = None; host }
       | _ -> R.error_msg "invalid pattern"
     in
     let parse_uri x =
@@ -82,13 +94,13 @@ module Endpoint = struct
         <||> fun () ->
         Ipaddr.of_string str >>| fun x -> `Addr x
       in
-      match Uri.scheme uri, Uri.host uri with
-      | Some "git", Some str ->
-          host str >>= fun host -> R.ok { scheme = `Git; path; host }
-      | Some "http", Some str ->
-          host str >>= fun host -> R.ok { scheme = `HTTP []; path; host }
-      | Some "https", Some str ->
-          host str >>= fun host -> R.ok { scheme = `HTTPS []; path; host }
+      match Uri.scheme uri, Uri.host uri, Uri.port uri with
+      | Some "git", Some str, port ->
+          host str >>= fun host -> R.ok { scheme = `Git; path; port; host }
+      | Some "http", Some str, port ->
+          host str >>= fun host -> R.ok { scheme = `HTTP []; path; port; host }
+      | Some "https", Some str, port ->
+          host str >>= fun host -> R.ok { scheme = `HTTPS []; path; port; host }
       | _ -> R.error_msgf "invalid uri: %a" Uri.pp uri
     in
     parse_ssh str
@@ -100,11 +112,25 @@ module Endpoint = struct
     | `SSH _ | `Git -> edn
     | `HTTP _ -> { edn with scheme = `HTTP headers }
     | `HTTPS _ -> { edn with scheme = `HTTPS headers }
-end
 
-let git_capabilities = Mimic.make ~name:"git-capabilities"
-let git_scheme = Mimic.make ~name:"git-scheme"
-let git_path = Mimic.make ~name:"git-path"
+  let to_ctx edn ctx =
+    let scheme =
+      match edn.scheme with
+      | `Git -> `Git
+      | `SSH _ -> `SSH
+      | `HTTP _ -> `HTTP
+      | `HTTPS _ -> `HTTPS
+    in
+    let ssh_user = match edn.scheme with `SSH user -> Some user | _ -> None in
+    ctx
+    |> Mimic.add git_scheme scheme
+    |> Mimic.add git_path edn.path
+    |> Mimic.add git_host edn.host
+    |> fun ctx ->
+    Option.fold ~none:ctx ~some:(fun v -> Mimic.add git_ssh_user v ctx) ssh_user
+    |> fun ctx ->
+    Option.fold ~none:ctx ~some:(fun v -> Mimic.add git_port v ctx) edn.port
+end
 
 module Make
     (Scheduler : Sigs.SCHED with type +'a s = 'a Lwt.t)
@@ -393,7 +419,7 @@ struct
           pusher None
     in
     let stream () = Lwt_stream.get stream in
-    let ctx = Mimic.add git_capabilities `Rd ctx in
+    let ctx = Mimic.add git_capabilities `Rd (Endpoint.to_ctx edn ctx) in
     (* XXX(dinosaure): such trick is only about SSH. Indeed, when we use SSH, we
        should/must? know if we want to fetch or push. If we want to fetch, we
        will call git-upload-pack. To be able to pass this information to the
@@ -552,7 +578,6 @@ struct
   let push ?uses_git_transport ~ctx ~capabilities path cmds endpoint store
       access push_cfg pack =
     let open Lwt.Infix in
-    let ctx = Mimic.add git_capabilities `Wr ctx in
     (* XXX(dinosaure): see [fetch]. *)
     Mimic.resolve ctx >>? fun flow ->
     Push.push ?uses_git_transport ~capabilities cmds ~host:endpoint path
@@ -562,6 +587,7 @@ struct
 
   let push ~ctx (access, light_load, heavy_load) store edn ?(version = `V1)
       ?(capabilities = default_capabilities) cmds =
+    let ctx = Mimic.add git_capabilities `Wr (Endpoint.to_ctx edn ctx) in
     let open Rresult in
     match version, edn.Endpoint.scheme with
     | `V1, ((`Git | `SSH _) as scheme) ->

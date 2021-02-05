@@ -5,10 +5,7 @@ module Make (Stack : Mirage_stack.V4) : sig
     (Stack.t * Ipaddr.V4.t * int, Stack.TCPV4.flow) Mimic.protocol
 
   val tcp_ipaddr : Ipaddr.V4.t Mimic.value
-  val tcp_port : int Mimic.value
   val tcp_stack : Stack.t Mimic.value
-  val with_port : int -> Mimic.ctx -> Mimic.ctx
-  val with_ipaddr : Ipaddr.V4.t -> Mimic.ctx -> Mimic.ctx
   val with_stack : Stack.t -> Mimic.ctx -> Mimic.ctx
   val ctx : Mimic.ctx
 end
