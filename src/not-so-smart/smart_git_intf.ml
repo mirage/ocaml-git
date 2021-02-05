@@ -72,6 +72,8 @@ module type SMART_GIT = sig
   end
 
   val git_capabilities : [ `Rd | `Wr ] Mimic.value
+  val git_scheme : [ `Git | `SSH | `HTTP | `HTTPS ] Mimic.value
+  val git_path : string Mimic.value
 
   module Make
       (Scheduler : Sigs.SCHED with type +'a s = 'a Lwt.t)

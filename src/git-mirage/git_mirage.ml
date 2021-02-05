@@ -6,12 +6,9 @@ module Make
       val tcp_endpoint : (Stack.t * Ipaddr.V4.t * int) Mimic.value
     end) =
 struct
-  let git_path = Mimic.make ~name:"git-path"
+  let git_path = Smart_git.git_path
   let git_capabilities = Smart_git.git_capabilities
-
-  (* XXX(dinosaure): keep the same dynamic identifier. *)
-
-  let git_scheme = Mimic.make ~name:"git-scheme"
+  let git_scheme = Smart_git.git_scheme
   let with_git_path v ctx = Mimic.add git_path v ctx
   let fetch ctx = Mimic.add git_capabilities `Rd ctx
   let push ctx = Mimic.add git_capabilities `Wr ctx

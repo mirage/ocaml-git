@@ -2,11 +2,6 @@ open Lwt.Infix
 
 module Make
     (Store : Git.S)
-    (Pclock : Mirage_clock.PCLOCK)
-    (Time : Mirage_time.S)
-    (Console : Mirage_console.S)
-    (Resolver : Resolver_lwt.S)
-    (Conduit : Conduit_mirage.S)
     (_ : sig end) =
 struct
   module Sync = Git.Mem.Sync (Store) (Git_cohttp_mirage)
@@ -25,48 +20,46 @@ struct
         | None -> None in
       Int64.of_float (Ptime.to_float_s ptime), tz }
 
-  let blob0 =
+  let empty_tree = Store.Value.(tree (Tree.v []))
+
+  let ( >>? ) = Lwt_result.bind
+
+  let commit ?parent ~tree:root ~author msg =
     let open Store.Value in
-    blob (Blob.of_string "")
-  let hash_blob0 = Store.Value.digest blob0
+    let parents = Option.fold ~none:[] ~some:(fun x -> [ x ]) parent in
+    commit (Commit.make ~parents ~tree:root ~author ~committer:author msg)
 
-  let tree0 =
-    let open Store.Value in
-    tree (Tree.v [ Tree.entry ~name:"foo" `Normal hash_blob0 ])
-  let hash_tree0 = Store.Value.digest tree0
-
-  let commit0 ~author =
-    let open Store.Value in
-    commit (Commit.make ~tree:hash_tree0 ~author ~committer:author ".")
-
-  let root_commit git =
-    let ( >>? ) x f = x >>= function
-      | Ok x -> f x | Error err -> Lwt.return_error err in
-    let author = author () in
-    Store.write git (commit0 ~author) >>? fun (hash, _) ->
-    Store.Ref.write git Git.Reference.master (Git.Reference.uid hash)
-
-  let failwith_store = function
+  let failwith pp = function
     | Ok v -> Lwt.return v
-    | Error err -> Fmt.failwith "%a" Store.pp_error err
+    | Error err -> Lwt.fail (Failure (Fmt.str "%a" pp err))
 
-  let failwith_sync = function
-    | Ok v -> Lwt.return v
-    | Error err -> Fmt.failwith "%a" Sync.pp_error err
+  let empty_commit git = function
+    | None ->
+      Store.write git empty_tree >>? fun (tree, _) ->
+      Store.write git (commit ~tree ~author:(author ()) ".") >>? fun (hash, _) ->
+      Store.Ref.write git Git.Reference.master (Git.Reference.uid hash)
+    | Some (_, _) ->
+      Store.Ref.resolve git Git.Reference.master >>= failwith Store.pp_error >>= fun hash ->
+      Store.read_exn git hash >>= fun obj ->
+      let[@warning "-8"] Git.Value.Commit parent = obj in
+      let tree = Store.Value.Commit.tree parent in
+      Store.write git (commit ~parent:hash ~tree ~author:(author ()) ".") >>? fun (hash, _) ->
+      Store.Ref.write git Git.Reference.master (Git.Reference.uid hash)
 
-  let start git _pclock time console resolver conduit ctx =
-    let ctx =
-      Git_cohttp_mirage.with_conduit
-        (Cohttp_mirage.Client.ctx resolver conduit)
-        ctx
-    in
+  let capabilities =
+    [ `Side_band_64k; `Multi_ack_detailed; `Ofs_delta; `Thin_pack; `Report_status ]
+
+  let start git ctx =
     let edn =
       match Smart_git.Endpoint.of_string (Key_gen.remote ()) with
       | Ok edn -> edn
       | Error (`Msg err) -> Fmt.failwith "%s" err in
-    root_commit git >>= failwith_store >>= fun () ->
-    let capabilities = [ `Side_band_64k ] in
-    Sync.push ~capabilities ~ctx edn git [ `Update (Git.Reference.master, Git.Reference.master) ] >>= failwith_sync >>= fun () ->
+    Sync.fetch ~capabilities ~ctx edn git ~deepen:(`Depth 1) `All
+    >>= failwith Sync.pp_error >>= empty_commit git
+    >>= failwith Store.pp_error >>= fun () ->
+    Sync.push ~capabilities ~ctx edn git
+      [ `Update (Git.Reference.master, Git.Reference.master) ]
+    >>= failwith Sync.pp_error >>= fun () ->
     Sync.fetch ~capabilities ~ctx edn git ~deepen:(`Depth 1) `All >>= function
     | Ok (Some (hash, references)) -> Lwt.return_unit
     | Ok None -> Lwt.return_unit

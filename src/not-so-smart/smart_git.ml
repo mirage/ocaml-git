@@ -103,6 +103,8 @@ module Endpoint = struct
 end
 
 let git_capabilities = Mimic.make ~name:"git-capabilities"
+let git_scheme = Mimic.make ~name:"git-scheme"
+let git_path = Mimic.make ~name:"git-path"
 
 module Make
     (Scheduler : Sigs.SCHED with type +'a s = 'a Lwt.t)
