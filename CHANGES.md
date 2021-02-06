@@ -1,3 +1,15 @@
+### 3.2.0 (2021-06-02) Saint-Malo - France
+
+- Fix windows support (@dinosaure, #445)
+- Remove `dune subst` (@dinosaure, @kit-ty-kate, #446)
+- Remove useless `Lwt_io` module intests (@dinosaure, @ulugbekna, #447)
+- Fix bug when we _unixiz_ a `Mirage_flow.S` (@dinosaure, #450)
+- Fix unikernel, the git functoria device must take properly the given `ctx` (@dinosaure, @hannesm, #452)
+- Unmonad `mmap` (see `carton`) (@dinosaure, #454)
+- Fix when we push first into a Git repository (@dinosaure, @hannesm, #455 & #456)
+- Improve a bit the unikernel example (@dinosaure, #458)
+- Improve the `git-mirage` support with `functoria` (@dinosaure, #459)
+
 ### 3.1.1 (2021-27-01) Paris - France
 
 - Fix `git-unix` and PACK files location (@dinosaure, #444, #443)
