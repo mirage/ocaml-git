@@ -29,6 +29,7 @@ module type VALUE = sig
   type encoder
   type decoder
 
+  val pp_error : error Fmt.t
   val encode : encoder -> 'a send -> 'a -> (unit, error) t
   val decode : decoder -> 'a recv -> ('a, error) t
 end
@@ -76,6 +77,8 @@ module Scheduler
                 and type decoder = Context.decoder) =
 struct
   type error = Value.error
+
+  let pp_error = Value.pp_error
 
   let bind : ('a, 'err) t -> f:('a -> ('b, 'err) t) -> ('b, 'err) t =
     let rec bind' m ~f =

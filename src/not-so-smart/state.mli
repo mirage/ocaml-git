@@ -28,6 +28,7 @@ module type VALUE = sig
   type encoder
   type decoder
 
+  val pp_error : error Fmt.t
   val encode : encoder -> 'a send -> 'a -> (unit, error) t
   val decode : decoder -> 'a recv -> ('a, error) t
 end
@@ -57,6 +58,7 @@ module Scheduler
                 and type decoder = Context.decoder) : sig
   type error = Value.error
 
+  val pp_error : error Fmt.t
   val return : 'v -> ('v, 'err) t
   val bind : ('a, 'err) t -> f:('a -> ('b, 'err) t) -> ('b, 'err) t
   val ( >>= ) : ('a, 'err) t -> ('a -> ('b, 'err) t) -> ('b, 'err) t

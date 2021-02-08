@@ -38,6 +38,12 @@ module Value = struct
   type encoder = Pkt_line.Encoder.encoder
   type decoder = Pkt_line.Decoder.decoder
 
+  let pp_error ppf = function
+    | #Proto_vals_v2.Encoder.error as err ->
+        Proto_vals_v2.Encoder.pp_error ppf err
+    | #Proto_vals_v2.Decoder.error as err ->
+        Proto_vals_v2.Decoder.pp_error ppf err
+
   let encode : type a. encoder -> a send -> a -> (unit, error) State.t =
    fun encoder w v ->
     let encoder_state =
@@ -78,9 +84,3 @@ module Value = struct
 end
 
 include State.Scheduler (Value)
-
-let pp_error ppf = function
-  | #Proto_vals_v2.Encoder.error as err ->
-      Proto_vals_v2.Encoder.pp_error ppf err
-  | #Proto_vals_v2.Decoder.error as err ->
-      Proto_vals_v2.Decoder.pp_error ppf err

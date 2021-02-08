@@ -50,6 +50,10 @@ module Value = struct
 
   type error = [ Protocol.Encoder.error | Protocol.Decoder.error ]
 
+  let pp_error ppf = function
+    | #Protocol.Encoder.error as err -> Protocol.Encoder.pp_error ppf err
+    | #Protocol.Decoder.error as err -> Protocol.Decoder.pp_error ppf err
+
   let encode :
       type a. encoder -> a send -> a -> (unit, [> Encoder.error ]) State.t =
    fun encoder w v ->
@@ -136,10 +140,6 @@ let packet ~trim = Packet trim
 let send_advertised_refs : _ send = Advertised_refs
 
 include State.Scheduler (Value)
-
-let pp_error ppf = function
-  | #Protocol.Encoder.error as err -> Protocol.Encoder.pp_error ppf err
-  | #Protocol.Decoder.error as err -> Protocol.Decoder.pp_error ppf err
 
 module Unsafe = struct
   let write context packet =

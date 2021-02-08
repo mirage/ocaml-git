@@ -61,8 +61,6 @@ let io_monad (type t) { bind; return } =
    with Smart.v1 and implement a state of the art synchronisation algorithm, I
    translated as is [fetch-pack.c:find_common] in OCaml. *)
 
-module Smart_flow = State_flow.Make (Smart)
-
 let tips (type t) scheduler access store negotiator =
   let open (val io_monad scheduler : Io_monad with type s = t) in
   access.locals store >>= fun ref_lst ->
@@ -76,13 +74,15 @@ let consume_shallow_list (type t) scheduler io flow cfg deepen { of_hex; _ } ctx
     =
   let open (val io_monad scheduler : Io_monad with type s = t) in
   if cfg.stateless && Option.is_some deepen then
-    Smart_flow.run scheduler raise io flow Smart.(recv ctx shallows)
+    State_flow.run scheduler raise Smart.pp_error io flow
+      Smart.(recv ctx shallows)
     >>| fun shallows -> List.map (Smart.Shallow.map ~f:of_hex) shallows
   else return []
 
 let handle_shallow (type t) scheduler io flow { of_hex; _ } access store ctx =
   let open (val io_monad scheduler : Io_monad with type s = t) in
-  Smart_flow.run scheduler raise io flow Smart.(recv ctx shallows)
+  State_flow.run scheduler raise Smart.pp_error io flow
+    Smart.(recv ctx shallows)
   >>= fun shallows ->
   let shallows = List.map (Smart.Shallow.map ~f:of_hex) shallows in
   fold_left_s shallows ~init:() ~f:(fun () -> function
@@ -115,13 +115,14 @@ let find_common (type t) scheduler io flow cfg
   >>= function
   | [] ->
       Log.debug (fun m -> m "Nothing to download.");
-      Smart_flow.run scheduler raise io flow Smart.(send ctx flush ())
+      State_flow.run scheduler raise Smart.pp_error io flow
+        Smart.(send ctx flush ())
       >>= fun () -> return `Close
   | (uid, _) :: others as refs ->
       Log.debug (fun m -> m "We want %d commit(s)." (List.length refs));
       access.shallowed store >>= fun shallowed ->
       let shallowed = List.map to_hex shallowed in
-      Smart_flow.run scheduler raise io flow
+      State_flow.run scheduler raise Smart.pp_error io flow
         Smart.(
           let uid = to_hex uid in
           let others = List.map (fun (uid, _) -> to_hex uid) others in
@@ -164,7 +165,8 @@ let find_common (type t) scheduler io flow cfg
                 m "count: %d, in-vain: %d, flush-at: %d.\n%!" !count !in_vain
                   !flush_at);
             if !flush_at <= !count then (
-              Smart_flow.run scheduler raise io flow Smart.(send ctx flush ())
+              State_flow.run scheduler raise Smart.pp_error io flow
+                Smart.(send ctx flush ())
               >>= fun () ->
               incr flushes;
               flush_at := next_flush stateless !count;
@@ -173,7 +175,8 @@ let find_common (type t) scheduler io flow cfg
                 consume_shallow_list scheduler io flow cfg None hex ctx
                 >>= fun _shallows ->
                 let rec loop () =
-                  Smart_flow.run scheduler raise io flow Smart.(recv ctx ack)
+                  State_flow.run scheduler raise Smart.pp_error io flow
+                    Smart.(recv ctx ack)
                   >>| Smart.Negotiation.map ~f:of_hex
                   >>= fun ack ->
                   match ack with
@@ -238,7 +241,7 @@ let find_common (type t) scheduler io flow cfg
       Log.debug (fun m ->
           m "Negotiation (got ready: %b, no-done: %b)." !got_ready no_done);
       (if (not !got_ready) || not no_done then
-       Smart_flow.run scheduler raise io flow
+       State_flow.run scheduler raise Smart.pp_error io flow
          Smart.(send ctx negotiation_done ())
       else return ())
       >>= fun () ->
@@ -247,14 +250,16 @@ let find_common (type t) scheduler io flow cfg
         incr flushes);
       (if (not !got_ready) || not no_done then (
        Log.debug (fun m -> m "Negotiation is done!");
-       Smart_flow.run scheduler raise io flow Smart.(recv ctx shallows)
+       State_flow.run scheduler raise Smart.pp_error io flow
+         Smart.(recv ctx shallows)
        >>= fun _shallows -> return ())
       else return ())
       >>= fun () ->
       let rec go () =
         if !flushes > 0 || cfg.multi_ack = `Some || cfg.multi_ack = `Detailed
         then (
-          Smart_flow.run scheduler raise io flow Smart.(recv ctx ack)
+          State_flow.run scheduler raise Smart.pp_error io flow
+            Smart.(recv ctx ack)
           >>| Smart.Negotiation.map ~f:of_hex
           >>= fun ack ->
           match ack with

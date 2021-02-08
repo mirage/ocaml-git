@@ -75,8 +75,6 @@ struct
         List.fold_left fold [] have |> List.split
 
   module V1 = struct
-    module Smart_flow = State_flow.Make (Smart)
-
     let fetch ?(uses_git_transport = false) ?(push_stdout = ignore)
         ?(push_stderr = ignore) ~capabilities ?deepen ?want:(refs = `None) ~host
         path flow store access fetch_cfg push_pack =
@@ -106,7 +104,7 @@ struct
 
       let ctx = Smart.Context.make ~client_caps in
 
-      Smart_flow.run sched io_raise io flow (prelude ctx) |> prj
+      State_flow.run sched io_raise Smart.pp_error io flow (prelude ctx) |> prj
       >>= fun (uids, refs) ->
       let hex =
         { Neg.to_hex = Uid.to_hex; of_hex = Uid.of_hex; compare = Uid.compare }
@@ -131,7 +129,9 @@ struct
           if res < 0 then Log.warn (fun m -> m "No common commits");
           let rec read_pack () =
             Log.debug (fun m -> m "Reading PACK file...");
-            Smart_flow.run sched io_raise io flow (recv_pack_state ctx) |> prj
+            State_flow.run sched io_raise Smart.pp_error io flow
+              (recv_pack_state ctx)
+            |> prj
             >>= fun should_continue ->
             if should_continue then read_pack () else return ()
           in
@@ -140,8 +140,6 @@ struct
   end
 
   module V2 = struct
-    module State_flow = State_flow.Make (Wire_proto_v2)
-
     let connect ?(uses_git_transport = false) ~host ~path ctx =
       let open Wire_proto_v2.Syntax in
       let return = Wire_proto_v2.return in
@@ -162,7 +160,9 @@ struct
         let* () = Wire_proto_v2.send ctx Flush () in
         Wire_proto_v2.return caps
       in
-      State_flow.run sched io_raise io flow (get_caps ctx) |> prj
+      State_flow.run sched io_raise Wire_proto_v2.pp_error io flow
+        (get_caps ctx)
+      |> prj
 
     let ls_refs_request ?(uses_git_transport = false) ~host ~path ctx flow req =
       let ls_refs_resp =
@@ -172,6 +172,7 @@ struct
         let* () = Wire_proto_v2.send ctx Ls_refs_req (`Client_caps caps, req) in
         Wire_proto_v2.recv ctx Ls_refs_res
       in
-      State_flow.run sched io_raise io flow ls_refs_resp |> prj
+      State_flow.run sched io_raise Wire_proto_v2.pp_error io flow ls_refs_resp
+      |> prj
   end
 end
