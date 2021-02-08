@@ -123,7 +123,7 @@ module type SMART_GIT = sig
       * Uid.t Carton_lwt.Thin.heavy_load ->
       (Uid.t, Uid.t * int ref * int64, 'g) Sigs.store ->
       Endpoint.t ->
-      ?version:[> `V1 ] ->
+      ?version:[> `V1 | `V2 ] ->
       ?capabilities:Smart.Capability.t list ->
       ?deepen:[ `Depth of int | `Timestamp of int64 ] ->
       [ `All | `Some of Ref.t list | `None ] ->
@@ -144,7 +144,7 @@ module type SMART_GIT = sig
       * Uid.t Carton_lwt.Thin.heavy_load ->
       (Uid.t, Uid.t Pck.t, 'g) Sigs.store ->
       Endpoint.t ->
-      ?version:[> `V1 ] ->
+      ?version:[> `V1 | `V2 ] ->
       ?capabilities:Smart.Capability.t list ->
       [ `Create of Ref.t | `Delete of Ref.t | `Update of Ref.t * Ref.t ] list ->
       (unit, ([> `Exn of exn | Mimic.error ] as 'err)) result Lwt.t

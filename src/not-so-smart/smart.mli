@@ -156,7 +156,7 @@ module Shallow : sig
   val map : f:('a -> 'b) -> 'a t -> 'b t
 end
 
-type ('a, 'err) t =
+type ('a, 'err) t = ('a, 'err) State.t =
   | Read of {
       buffer : bytes;
       off : int;
@@ -194,10 +194,15 @@ val pp_error : error Fmt.t
 module Context : sig
   type t
 
-  val make : Capability.t list -> t
-  val update : t -> Capability.t list -> unit
+  type capabilities = {
+    client_caps : Capability.t list;
+    server_caps : Capability.t list;
+  }
+
+  val make : client_caps:Capability.t list -> t
+  val capabilities : t -> capabilities
+  val replace_server_caps : t -> Capability.t list -> unit
   val is_cap_shared : t -> Capability.t -> bool
-  val capabilities : t -> Capability.t list * Capability.t list
 end
 
 type 'a send

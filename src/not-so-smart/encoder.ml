@@ -42,17 +42,14 @@ let flush k0 encoder =
     k1 0
   else k0 encoder
 
-let write encoder s =
-  let max = Bytes.length encoder.payload in
-  let go j l encoder =
-    let rem = max - encoder.pos in
-    let len = if l > rem then rem else l in
-    Bytes.blit_string s j encoder.payload encoder.pos len;
-    encoder.pos <- encoder.pos + len;
-    if len < l then leave_with encoder `No_enough_space
-  in
-  (* XXX(dinosaure): should never appear, but avoid continuation allocation. *)
-  go 0 (String.length s) encoder
+let write ({ pos; payload } as encoder) s =
+  let max = Bytes.length payload in
+  let s_len = String.length s in
+  let rem = max - pos in
+  let wr_n_bytes = min rem s_len in
+  Bytes.blit_string s 0 payload pos wr_n_bytes;
+  encoder.pos <- pos + wr_n_bytes;
+  if wr_n_bytes < s_len then leave_with encoder `No_enough_space
 
 let blit encoder ~buf ~off ~len =
   let max = Bytes.length encoder.payload in
