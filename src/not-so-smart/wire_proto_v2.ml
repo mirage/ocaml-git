@@ -18,31 +18,7 @@ module Witness = struct
     | Ls_refs_res : Proto_vals_v2.Ls_refs.response recv
 end
 
-(* TODO: copy of Smart.Context; remove duplication *)
-module Context = struct
-  type capabilities = {
-    client_caps : Capability.t list;
-    server_caps : Capability.t list;
-  }
-
-  let pp_capabilities _ppf _v = ()
-
-  include State.Context
-
-  type nonrec t = capabilities t
-
-  let make ~client_caps = make { client_caps; server_caps = [] }
-  let pp ppf v = pp pp_capabilities ppf v
-  let capabilities ctx = context ctx
-
-  let replace_server_caps ctx caps =
-    update ~f:(fun ~old_ctx -> { old_ctx with server_caps = caps }) ctx
-
-  let is_cap_shared ctx cap =
-    let { client_caps; server_caps } = capabilities ctx in
-    let is_cap_in caps = List.exists (fun c -> Capability.equal c cap) caps in
-    is_cap_in client_caps && is_cap_in server_caps
-end
+module Context = State.Context
 
 type ('a, 'err) t = ('a, 'err) State.t =
   | Read of {
@@ -102,7 +78,7 @@ module Value = struct
       | Ls_refs_res -> Proto_vals_v2.Decoder.decode_ls_refs_response decoder)
 end
 
-include State.Scheduler (Context) (Value)
+include State.Scheduler (Value)
 
 let pp_error ppf = function
   | #Proto_vals_v2.Encoder.error as err ->

@@ -44,7 +44,7 @@ module Make
       ?uses_git_transport:bool ->
       host:[ `host ] Domain_name.t ->
       path:string ->
-      Wire_proto_v2.Context.capabilities State.Context.t ->
+      State.Context.t ->
       Flow.t ->
       Wire_proto_v2.Proto_vals_v2.Ls_refs.request ->
       Wire_proto_v2.Proto_vals_v2.Ls_refs.response IO.t

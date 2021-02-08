@@ -110,31 +110,7 @@ type ('a, 'err) t = ('a, 'err) State.t =
   | Return of 'a
   | Error of 'err
 
-module Context = struct
-  type capabilities = {
-    client_caps : Capability.t list;
-    server_caps : Capability.t list;
-  }
-
-  let pp_capabilities _ppf _v = ()
-
-  include State.Context
-
-  type nonrec t = capabilities t
-
-  let make ~client_caps = make { client_caps; server_caps = [] }
-  let pp ppf v = pp pp_capabilities ppf v
-  let capabilities ctx = context ctx
-
-  let replace_server_caps ctx caps =
-    update ~f:(fun ~old_ctx -> { old_ctx with server_caps = caps }) ctx
-
-  let is_cap_shared ctx cap =
-    let { client_caps; server_caps } = capabilities ctx in
-    let is_cap_in caps = List.exists (fun c -> Capability.equal c cap) caps in
-    is_cap_in client_caps && is_cap_in server_caps
-end
-
+module Context = State.Context
 include Witness
 
 let proto_request = Proto_request
@@ -159,7 +135,7 @@ let send_pack ?(stateless = false) side_band =
 let packet ~trim = Packet trim
 let send_advertised_refs : _ send = Advertised_refs
 
-include State.Scheduler (Context) (Value)
+include State.Scheduler (Value)
 
 let pp_error ppf = function
   | #Protocol.Encoder.error as err -> Protocol.Encoder.pp_error ppf err

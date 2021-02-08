@@ -24,7 +24,7 @@ struct
       fl ->
       ('res, [ `Protocol of error ]) Read_write.t ->
       ('res, s) io =
-   fun scheduler io_raise _Flow flow state ->
+   fun scheduler io_raise flow_ops flow state ->
     let { bind; return } = scheduler in
     let ( >>= ) = bind in
 
@@ -45,7 +45,7 @@ struct
       | Read { k; buffer; off; len; eof } -> (
           let rd_n_bytes = min (Cstruct.len cbuff) len in
           Log.debug (fun m -> m "Start to read %d byte(s)." rd_n_bytes);
-          _Flow.recv flow (Cstruct.sub cbuff 0 rd_n_bytes) >>= function
+          flow_ops.recv flow (Cstruct.sub cbuff 0 rd_n_bytes) >>= function
           | Ok `End_of_flow ->
               Log.debug (fun m -> m "Got end of input.");
               unwrap (eof ())
@@ -54,20 +54,20 @@ struct
               Cstruct.blit_to_bytes cbuff 0 buffer off len;
               unwrap (k len)
           | Error err ->
-              Log.err (fun m -> m "Got an error: %a." _Flow.pp_error err);
-              failwithf "%a" _Flow.pp_error err)
+              Log.err (fun m -> m "Got an error: %a." flow_ops.pp_error err);
+              failwithf "%a" flow_ops.pp_error err)
       | Write { k; buffer; off; len } ->
-          (* TODO: Avoid writing by loop if we can;
-             otherwise, the loop writes once and terminates *)
+          (* TODO: almost always we can write in one go instead of calling a loop,
+                   so we should try writing and call loop if we aren't done *)
           let rec loop tmp =
             if Cstruct.is_empty tmp then unwrap (k len)
             else
-              _Flow.send flow tmp >>= function
+              flow_ops.send flow tmp >>= function
               | Ok shift ->
                   Log.debug (fun m ->
                       m "Wrote %d byte(s). %s" shift (Cstruct.to_string tmp));
                   loop (Cstruct.shift tmp shift)
-              | Error err -> failwithf "%a" _Flow.pp_error err
+              | Error err -> failwithf "%a" flow_ops.pp_error err
           in
           Cstruct.of_string buffer ~off ~len |> loop
     in

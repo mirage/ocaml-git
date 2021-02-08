@@ -34,33 +34,43 @@ module type VALUE = sig
 end
 
 module Context = struct
-  open Pkt_line
-
-  type 'ctx t = {
-    encoder : Encoder.encoder;
-    decoder : Decoder.decoder;
-    mutable ctx : 'ctx;
+  type capabilities = {
+    client_caps : Capability.t list;
+    server_caps : Capability.t list;
   }
 
-  type encoder = Encoder.encoder
-  type decoder = Decoder.decoder
+  type t = {
+    encoder : Pkt_line.Encoder.encoder;
+    decoder : Pkt_line.Decoder.decoder;
+    mutable capabilities : capabilities;
+  }
+
+  type encoder = Pkt_line.Encoder.encoder
+  type decoder = Pkt_line.Decoder.decoder
 
   let pp _pp_ctx _ppf _t = ()
 
-  let make ctx =
-    { encoder = Encoder.create (); decoder = Decoder.create (); ctx }
+  let make ~client_caps =
+    let capabilities = { client_caps; server_caps = [] } in
+    {
+      encoder = Pkt_line.Encoder.create ();
+      decoder = Pkt_line.Decoder.create ();
+      capabilities;
+    }
 
   let encoder { encoder; _ } = encoder
   let decoder { decoder; _ } = decoder
-  let context { ctx; _ } = ctx
+  let capabilities { capabilities; _ } = capabilities
 
-  let update t ~(f : old_ctx:'ctx -> 'ctx) =
-    let new_ctx = f ~old_ctx:t.ctx in
-    t.ctx <- new_ctx
+  let replace_server_caps ctx server_caps =
+    ctx.capabilities <- { ctx.capabilities with server_caps }
+
+  let is_cap_shared { capabilities = { client_caps; server_caps }; _ } cap =
+    let is_cap_in caps = List.exists (fun c -> Capability.equal c cap) caps in
+    is_cap_in client_caps && is_cap_in server_caps
 end
 
 module Scheduler
-    (Context : CONTEXT)
     (Value : VALUE
                with type encoder = Context.encoder
                 and type decoder = Context.decoder) =

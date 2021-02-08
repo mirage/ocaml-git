@@ -33,20 +33,25 @@ module type VALUE = sig
 end
 
 module Context : sig
-  type 'ctx t
+  type t
   type encoder = Pkt_line.Encoder.encoder
   type decoder = Pkt_line.Decoder.decoder
 
-  val pp : 'ctx Fmt.t -> 'ctx t Fmt.t
-  val encoder : 'ctx t -> encoder
-  val decoder : 'ctx t -> decoder
-  val make : 'ctx -> 'ctx t
-  val context : 'ctx t -> 'ctx
-  val update : 'ctx t -> f:(old_ctx:'ctx -> 'ctx) -> unit
+  type capabilities = {
+    client_caps : Capability.t list;
+    server_caps : Capability.t list;
+  }
+
+  val pp : Capability.t Fmt.t -> t Fmt.t
+  val make : client_caps:Capability.t list -> t
+  val encoder : t -> encoder
+  val decoder : t -> decoder
+  val capabilities : t -> capabilities
+  val replace_server_caps : t -> Capability.t list -> unit
+  val is_cap_shared : t -> Capability.t -> bool
 end
 
 module Scheduler
-    (Context : CONTEXT)
     (Value : VALUE
                with type encoder = Context.encoder
                 and type decoder = Context.decoder) : sig
