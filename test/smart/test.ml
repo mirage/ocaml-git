@@ -1273,9 +1273,7 @@ let run_git_receive_pack store ic oc =
     Bos.OS.Dir.with_current path @@ fun () ->
     let tee = Bos.Cmd.(v "tee" % Fpath.to_string ic) in
     let cat = Bos.Cmd.(v "cat" % Fpath.to_string oc) in
-    let git_receive_pack =
-      Bos.Cmd.(v "git-receive-pack" % Fpath.to_string path)
-    in
+    let git_receive_pack = Bos.Cmd.(v "git-receive-pack" % ".") in
     let pipe () =
       Bos.OS.Cmd.run
         Bos.Cmd.(
@@ -1626,8 +1624,6 @@ let make_one_commit path =
 let test_push_empty () =
   Alcotest_lwt.test_case "push to empty over ssh" `Quick @@ fun sw () ->
   let open Lwt.Infix in
-  (* XXX(dinosaure): This test does not require SSH but the underlying process
-     is a call to [git-upload-pack]. We do the same without encryption. *)
   let run () =
     create_new_git_store sw >>= fun (_access, store0) ->
     with_fifo "git-receive-pack-ic-%s" |> Lwt.return >>? fun ic_fifo ->
