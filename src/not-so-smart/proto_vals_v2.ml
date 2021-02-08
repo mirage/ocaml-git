@@ -1,5 +1,4 @@
 open Astring
-module Capability = Capability_v2
 
 module Proto_request = struct
   type t = {
@@ -132,7 +131,7 @@ module Extended_pkt_line_decoder = struct
     match read_pkt decoder with
     | Pkt (_, s0) when String.equal s0 s -> return () decoder
     | Pkt (_, s0) -> Fmt.failwith "expected: %s\nfound: %s\n" s s0
-    | _ -> raise @@ Invalid_argument "expected but didn't get a packet line"
+    | _ -> invalid_arg "expected but didn't get a packet line"
 
   let error { buffer; pos; _ } error = Error { error; buffer; committed = pos }
 

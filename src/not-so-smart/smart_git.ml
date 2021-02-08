@@ -412,6 +412,7 @@ struct
       ~idx =
     let open Rresult in
     let open Lwt.Infix in
+    let capabilities = Capability.filter_by ~protocol_v:version capabilities in
     let host = edn.Endpoint.host in
     let path = edn.path in
     let stream, pusher = Lwt_stream.create () in
@@ -593,6 +594,7 @@ struct
   let push ~ctx (access, light_load, heavy_load) store edn ?(version = `V1)
       ?(capabilities = default_capabilities) cmds =
     let ctx = Mimic.add git_capabilities `Wr (Endpoint.to_ctx edn ctx) in
+    let capabilities = Capability.filter_by ~protocol_v:version capabilities in
     let open Rresult in
     match version, edn.Endpoint.scheme with
     | `V1, ((`Git | `SSH _) as scheme) ->

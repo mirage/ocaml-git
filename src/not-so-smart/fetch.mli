@@ -38,7 +38,7 @@ module Make
       path:string ->
       Wire_proto_v2.Context.t ->
       Flow.t ->
-      Wire_proto_v2.Capability.t list IO.t
+      Capability.t list IO.t
 
     val ls_refs_request :
       ?uses_git_transport:bool ->

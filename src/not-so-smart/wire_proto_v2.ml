@@ -1,4 +1,3 @@
-module Capability = Capability_v2
 module Proto_vals_v2 = Proto_vals_v2
 
 module Witness = struct

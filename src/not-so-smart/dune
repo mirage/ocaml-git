@@ -13,22 +13,22 @@
 (library
  (name capability)
  (public_name git.nss.capability)
- (modules capability)
+ (modules capability capability_v1 capability_v2)
  (libraries astring fmt))
 
 (library
  (name smart)
  (public_name git.nss.smart)
  (modules smart filter protocol)
- (libraries git.nss.pkt-line git.nss.state capability result rresult ipaddr
-   domain-name astring fmt))
+ (libraries git.nss.pkt-line git.nss.state git.nss.capability result rresult
+   ipaddr domain-name astring fmt))
 
 (library
  (name wire_proto_v2)
  (public_name git.nss.wire-proto-v2)
- (modules capability_v2 proto_vals_v2 wire_proto_v2)
- (libraries astring domain-name emile fmt git.nss.pkt-line git.nss.sigs
-   git.nss.state logs mimic result rresult uri))
+ (modules proto_vals_v2 wire_proto_v2)
+ (libraries astring git.nss.capability domain-name emile fmt git.nss.pkt-line
+   git.nss.sigs git.nss.state logs mimic result rresult uri))
 
 (library
  (name sigs)

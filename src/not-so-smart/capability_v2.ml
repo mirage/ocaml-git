@@ -5,6 +5,12 @@ type t =
   | `Key_value of string * string
   | `Command_features of string * string list ]
 
+let pp ppf = function
+  | `Atom s -> Fmt.pf ppf "%s" s
+  | `Key_value (k, v) -> Fmt.pf ppf "%s=%s" k v
+  | `Command_features (s, s_lst) ->
+      Fmt.pf ppf "%s=%s" s (String.concat ~sep:" " s_lst)
+
 (* TODO: integrate better support for known capabilities and commands
    e.g., ls-refs, etc. *)
 let of_string s =
@@ -12,7 +18,7 @@ let of_string s =
   | None -> `Atom s
   | Some (k, v) -> (
       match String.cuts ?rev:None ?empty:None ~sep:" " v with
-      | [] -> raise @@ Invalid_argument s
+      | [] -> invalid_arg s
       | [ v ] -> `Key_value (k, v)
       | command :: features -> `Command_features (command, features))
 

@@ -33,7 +33,7 @@ module type S = sig
     ctx:Mimic.ctx ->
     Smart_git.Endpoint.t ->
     store ->
-    ?version:[> `V1 ] ->
+    ?version:[> `V1 | `V2 ] ->
     ?capabilities:Smart.Capability.t list ->
     ?deepen:[ `Depth of int | `Timestamp of int64 ] ->
     [ `All | `Some of (Reference.t * Reference.t) list | `None ] ->
@@ -43,7 +43,7 @@ module type S = sig
     ctx:Mimic.ctx ->
     Smart_git.Endpoint.t ->
     store ->
-    ?version:[> `V1 ] ->
+    ?version:[> `V1 | `V2 ] ->
     ?capabilities:Smart.Capability.t list ->
     [ `Create of Reference.t
     | `Delete of Reference.t
