@@ -13,9 +13,12 @@ let reporter ppf =
       k ()
     in
     let with_metadata header _tags k ppf fmt =
+      let path = Fpath.v (Unix.getcwd ()) in
       Format.kfprintf k ppf
-        ("%a[%a]: " ^^ fmt ^^ "\n%!")
+        ("%a[%a][%a]: " ^^ fmt ^^ "\n%!")
         Logs_fmt.pp_header (level, header)
+        Fmt.(styled `Blue string)
+        (Fpath.basename path)
         Fmt.(styled `Magenta string)
         (Logs.Src.name src)
     in
@@ -65,7 +68,7 @@ module Tmp_dirs = struct
   let are_valid = ref true
 end
 
-let () = at_exit (fun () -> if !Tmp_dirs.are_valid then Tmp_dirs.remove_all ())
+(* let () = at_exit (fun () -> if !Tmp_dirs.are_valid then Tmp_dirs.remove_all ()) *)
 
 let create_tmp_dir ?(mode = 0o700) ?prefix_path pat =
   let dir =
@@ -353,7 +356,7 @@ let create_new_git_push_store _sw =
     let open Rresult in
     (* XXX(dinosaure): a hook is already added by [Bos] to delete the
        directory. *)
-    Bos.OS.Dir.tmp "git-%s" >>= fun root ->
+    create_tmp_dir "git-%s" >>= fun root ->
     Bos.OS.Dir.with_current root
       (fun () -> Bos.OS.Cmd.run Bos.Cmd.(v "git" % "init"))
       ()
