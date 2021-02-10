@@ -732,13 +732,13 @@ module Encoder = struct
   let write_zero encoder = write encoder "\000"
   let write_new_line encoder = write encoder "\n"
 
-  let delayed_write_pkt k0 k1 encoder =
-    let pos = encoder.pos in
-    encoder.pos <- encoder.pos + 4;
+  let delayed_write_pkt k0 k1 ({ pos; payload } as encoder) =
+    (* leave space for pkt length: 4 bytes *)
+    encoder.pos <- pos + 4;
     k0 encoder;
     (* XXX(dinosaure): or [encoder.pos <- encoder.pos + 4]? *)
     let len = encoder.pos - pos in
-    Bytes.blit_string (Fmt.str "%04X" len) 0 encoder.payload pos 4;
+    Bytes.blit_string (Fmt.str "%04X" len) 0 payload pos 4;
     flush k1 encoder
 
   let kdone _encoder = Done
