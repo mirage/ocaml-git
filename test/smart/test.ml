@@ -1,9 +1,9 @@
+open Bos
 open Rresult
 open Lwt_backend
 open Store_backend
 
 (** logging: *)
-
 let () = Printexc.record_backtrace true
 
 let reporter ppf =
@@ -36,7 +36,18 @@ let ( >>? ) x f =
   let open Lwt.Infix in
   x >>= function Ok x -> f x | Error err -> Lwt.return_error err
 
+module Option = struct
+  include Option
+
+  let value_else o ~else_ = match o with Some v -> v | None -> else_ ()
+end
+
 (** conduit-related setup for tests: *)
+
+let pipe_value, pipe = Mimic.register ~name:"pipe" (module Pipe)
+
+let ctx_with_pipe ?cwd ?(env = [||]) ?(args = [||]) cmd =
+  Mimic.add pipe_value { cmd; args; env; cwd } Mimic.empty
 
 let fifo_value, fifo = Mimic.register ~name:"fifo" (module Fifo)
 let ctx_with_fifo ic oc = Mimic.add fifo_value (ic, oc) Mimic.empty
@@ -57,7 +68,7 @@ let ref_contents =
 
 (** to keep track of directories created by unit tests and clean them up afterwards *)
 module Tmp_dirs = struct
-  let rm_r dir = Bos.OS.Dir.delete ~recurse:true dir |> ignore
+  let rm_r dir = OS.Dir.delete ~recurse:true dir |> ignore
   let t = ref Fpath.Set.empty
   let add file = t := Fpath.Set.add file !t
 
@@ -71,11 +82,9 @@ end
 (* let () = at_exit (fun () -> if !Tmp_dirs.are_valid then Tmp_dirs.remove_all ()) *)
 
 let create_tmp_dir ?(mode = 0o700) ?prefix_path pat =
-  let dir =
-    match prefix_path with None -> Bos.OS.Dir.default_tmp () | Some d -> d
-  in
+  let dir = Option.value_else prefix_path ~else_:OS.Dir.default_tmp in
   let failed_too_many_times () =
-    Rresult.R.error_msgf
+    R.error_msgf
       "create temporary directory %s in %a: too many failing attempts"
       (Fmt.str pat "XXXXXX") Fpath.pp dir
   in
@@ -94,7 +103,7 @@ let create_tmp_dir ?(mode = 0o700) ?prefix_path pat =
       | Unix.Unix_error (Unix.EEXIST, _, _) -> loop (count - 1)
       | Unix.Unix_error (Unix.EINTR, _, _) -> loop count
       | Unix.Unix_error (e, _, _) ->
-          Rresult.R.error_msgf "create temporary directory %s in %a: %s"
+          R.error_msgf "create temporary directory %s in %a: %s"
             (Fmt.str pat "XXXXXX") Fpath.pp dir (Unix.error_message e)
   in
   match loop 10000 with
@@ -103,15 +112,60 @@ let create_tmp_dir ?(mode = 0o700) ?prefix_path pat =
       r
   | Error _ as e -> e
 
+(* XXX(dinosaure): FIFO "à la BOS".*)
+
+(** to keep track of named pipes (aka FIFOs) created by unit tests
+    and clean them up afterwards *)
+module Tmp_fifos = struct
+  let rec unlink fifo =
+    try Unix.unlink (Fpath.to_string fifo) with
+    | Unix.Unix_error (Unix.EINTR, _, _) -> unlink fifo
+    | Unix.Unix_error _ -> ()
+
+  let t = ref Fpath.Set.empty
+  let add fifo = t := Fpath.Set.add fifo !t
+  let unlink_all () = Fpath.Set.iter unlink !t
+end
+
+let () = at_exit Tmp_fifos.unlink_all
+
+let create_fifo_path mode dir pat =
+  let err () =
+    R.error_msgf "create temporary fifo %s in %a: too many failing attempts"
+      (Fmt.str pat "XXXXXX") Fpath.pp dir
+  in
+  let rec loop count =
+    if count < 0 then err ()
+    else
+      let file =
+        let rand = Random.bits () land 0xffffff in
+        Fpath.(dir / Fmt.str pat (Fmt.str "%06x" rand))
+      in
+      let sfile = Fpath.to_string file in
+      try
+        Unix.mkfifo sfile mode;
+        Ok file
+      with
+      | Unix.Unix_error (Unix.EEXIST, _, _) -> loop (count - 1)
+      | Unix.Unix_error (Unix.EINTR, _, _) -> loop count
+      | Unix.Unix_error (e, _, _) ->
+          R.error_msgf "create temporary fifo %a: %s" Fpath.pp file
+            (Unix.error_message e)
+  in
+  loop 10000
+
+let with_fifo ?(mode = 0o600) ?dir pat =
+  let dir = Option.value_else dir ~else_:OS.Dir.default_tmp in
+  create_fifo_path mode dir pat >>| fun file ->
+  Tmp_fifos.add file;
+  file
+
 let create_new_git_store _sw =
   let create () =
-    let open Rresult in
     (* XXX(dinosaure): a hook is already added by [Bos] to delete the
        directory. *)
     create_tmp_dir "git-%s" >>= fun root ->
-    Bos.OS.Dir.with_current root
-      (fun () -> Bos.OS.Cmd.run Bos.Cmd.(v "git" % "init"))
-      ()
+    OS.Dir.with_current root (fun () -> OS.Cmd.run Cmd.(v "git" % "init")) ()
     |> R.join
     >>= fun () ->
     let access = access lwt in
@@ -122,7 +176,7 @@ let create_new_git_store _sw =
   in
   match create () with
   | Ok res -> Lwt.return res
-  | Error err -> Fmt.failwith "%a" Rresult.R.pp_msg err
+  | Error err -> Fmt.failwith "%a" R.pp_msg err
 
 let empty_repository_fetch =
   [
@@ -253,8 +307,8 @@ let test_sync_fetch () =
         >|= store_err
         >>? fun () ->
         Smart_git.Endpoint.of_string "git://localhost/not-found.git"
+        |> bad_input_err
         |> Lwt.return
-        >|= bad_input_err
         >>? fun endpoint ->
         (* fetch HEAD and write it to refs/heads/master *)
         Sync.fetch ~ctx ~capabilities endpoint store
@@ -307,9 +361,9 @@ let test_empty_clone () =
         Fpath.(path / ".git" / "objects" / "pack") )
     in
     let ctx = ctx_with_payloads payloads in
-    Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp0 ->
-    Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp1 ->
-    Bos.OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
+    OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp0 ->
+    OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp1 ->
+    OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
     Smart_git.Endpoint.of_string "git://localhost/not-found.git" |> Lwt.return
     >>? fun endpoint ->
     Git.fetch ~ctx ~capabilities access store endpoint
@@ -336,9 +390,9 @@ let test_simple_clone () =
         Fpath.(path / ".git" / "objects" / "pack") )
     in
     let ctx = ctx_with_payloads payloads in
-    Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp0 ->
-    Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp1 ->
-    Bos.OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
+    OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp0 ->
+    OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp1 ->
+    OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
     Smart_git.Endpoint.of_string "git://localhost/not-found.git" |> Lwt.return
     >>? fun endpoint ->
     Git.fetch ~ctx ~capabilities access store endpoint `All pack index ~src:tmp0
@@ -353,13 +407,10 @@ let test_simple_clone () =
 
 let create_new_git_push_store _sw =
   let create () =
-    let open Rresult in
     (* XXX(dinosaure): a hook is already added by [Bos] to delete the
        directory. *)
     create_tmp_dir "git-%s" >>= fun root ->
-    Bos.OS.Dir.with_current root
-      (fun () -> Bos.OS.Cmd.run Bos.Cmd.(v "git" % "init"))
-      ()
+    OS.Dir.with_current root (fun () -> OS.Cmd.run Cmd.(v "git" % "init")) ()
     |> R.join
     >>= fun () ->
     let access =
@@ -381,30 +432,27 @@ let create_new_git_push_store _sw =
   in
   match create () with
   | Ok res -> Lwt.return res
-  | Error err -> Fmt.failwith "%a" Rresult.R.pp_msg err
+  | Error err -> Fmt.failwith "%a" R.pp_msg err
 
 let commit_foo store =
   let { path; _ } = store_prj store in
   let commit =
-    let open Rresult in
-    Bos.OS.Dir.with_current path @@ fun () ->
-    Bos.OS.Cmd.run Bos.Cmd.(v "git" % "config" % "user.name" % "test")
+    OS.Dir.with_current path @@ fun () ->
+    OS.Cmd.run Cmd.(v "git" % "config" % "user.name" % "test") >>= fun () ->
+    OS.Cmd.run Cmd.(v "git" % "config" % "user.email" % "pseudo@pseudo.invalid")
     >>= fun () ->
-    Bos.OS.Cmd.run
-      Bos.Cmd.(v "git" % "config" % "user.email" % "pseudo@pseudo.invalid")
-    >>= fun () ->
-    Bos.OS.File.write (Fpath.v "foo") "" >>= fun () ->
-    Bos.OS.Cmd.run Bos.Cmd.(v "git" % "add" % "foo") >>= fun () ->
-    Bos.OS.Cmd.run Bos.Cmd.(v "git" % "commit" % "-m" % ".") >>= fun () ->
+    OS.File.write (Fpath.v "foo") "" >>= fun () ->
+    OS.Cmd.run Cmd.(v "git" % "add" % "foo") >>= fun () ->
+    OS.Cmd.run Cmd.(v "git" % "commit" % "-m" % ".") >>= fun () ->
     let out =
-      Bos.OS.Cmd.run_out
-        Bos.Cmd.(v "git" % "show" % "-s" % "--pretty=format:%H" % "HEAD")
+      OS.Cmd.run_out
+        Cmd.(v "git" % "show" % "-s" % "--pretty=format:%H" % "HEAD")
     in
-    Bos.OS.Cmd.out_lines ~trim:true out
+    OS.Cmd.out_lines ~trim:true out
   in
-  match Rresult.R.join (commit ()) with
+  match R.join (commit ()) with
   | Ok (head :: _, _) -> Lwt.return_ok head
-  | Ok ([], _) -> Lwt.return_error (Rresult.R.msgf "[commit_foo]")
+  | Ok ([], _) -> Lwt.return_error (R.msgf "[commit_foo]")
   | Error err -> Lwt.return_error err
 
 let test_simple_push () =
@@ -506,9 +554,9 @@ let test_fetch_empty () =
         Fpath.(path / ".git" / "objects" / "pack") )
     in
     let ctx = ctx_with_payloads payloads in
-    Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp0 ->
-    Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp1 ->
-    Bos.OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
+    OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp0 ->
+    OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp1 ->
+    OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
     Smart_git.Endpoint.of_string "git://localhost/not-found.git" |> Lwt.return
     >>? fun endpoint ->
     Git.fetch ~ctx ~capabilities access store endpoint `All pack index ~src:tmp0
@@ -525,7 +573,7 @@ let test_fetch_empty () =
             / "pack"
             / Fmt.str "pack-%a.pack" Uid.pp uid)
         in
-        Bos.OS.Path.move tmp1 dst |> Lwt.return >>? fun () ->
+        OS.Path.move tmp1 dst |> Lwt.return >>? fun () ->
         let dst =
           Fpath.(
             path
@@ -534,15 +582,15 @@ let test_fetch_empty () =
             / "pack"
             / Fmt.str "pack-%a.idx" Uid.pp uid)
         in
-        Bos.OS.Path.move tmp2 dst |> Lwt.return >>? fun () ->
+        OS.Path.move tmp2 dst |> Lwt.return >>? fun () ->
         let update (refname, uid) =
-          Bos.OS.Dir.with_current path @@ fun () ->
-          Bos.OS.Cmd.run
-            Bos.Cmd.(
+          OS.Dir.with_current path @@ fun () ->
+          OS.Cmd.run
+            Cmd.(
               v "git" % "update-ref" % Ref.to_string refname % Uid.to_hex uid)
         in
         List.fold_right
-          (fun v -> function Ok a -> Rresult.R.join (update v a) | err -> err)
+          (fun v -> function Ok a -> R.join (update v a) | err -> err)
           refs (Ok ())
         |> Lwt.return
         >>? fun () ->
@@ -599,9 +647,9 @@ let test_fetch_empty () =
           ]
         in
         let ctx = ctx_with_payloads payloads in
-        Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp0 ->
-        Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp1 ->
-        Bos.OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
+        OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp0 ->
+        OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp1 ->
+        OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
         Smart_git.Endpoint.of_string "git://localhost/not-found.git"
         |> Lwt.return
         >>? fun endpoint ->
@@ -618,15 +666,15 @@ let test_fetch_empty () =
 let update_testzone_0 store =
   let { path; _ } = store_prj store in
   let update =
-    Bos.OS.Dir.with_current path @@ fun () ->
-    Bos.OS.Cmd.run
-      Bos.Cmd.(
+    OS.Dir.with_current path @@ fun () ->
+    OS.Cmd.run
+      Cmd.(
         v "git"
         % "update-ref"
         % "refs/heads/master"
         % "f08d64523257528980115942481d5ddd13d2c1ba")
   in
-  match Rresult.R.join (update ()) with
+  match R.join (update ()) with
   | Ok () -> Lwt.return_ok ()
   | Error err -> Lwt.return_error err
 
@@ -1030,21 +1078,21 @@ let test_negotiation () =
       ( Fpath.(path / ".git" / "objects" / "pack"),
         Fpath.(path / ".git" / "objects" / "pack") )
     in
-    Bos.OS.Path.link
+    OS.Path.link
       ~target:(Fpath.v "pack-testzone-0.pack")
       Fpath.(pack / "pack-4aae6e55c118eb1ab3d1e2cd5a7e4857faa23d4e.pack")
     |> Lwt.return
     >>? fun () ->
-    Bos.OS.Path.link
+    OS.Path.link
       ~target:(Fpath.v "pack-testzone-0.idx")
       Fpath.(pack / "pack-4aae6e55c118eb1ab3d1e2cd5a7e4857faa23d4e.idx")
     |> Lwt.return
     >>? fun () ->
     update_testzone_0 store >>? fun () ->
     let ctx = ctx_with_payloads payloads in
-    Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp0 ->
-    Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp1 ->
-    Bos.OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
+    OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp0 ->
+    OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp1 ->
+    OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
     Smart_git.Endpoint.of_string "git://localhost/not-found.git" |> Lwt.return
     >>? fun endpoint ->
     Git.fetch ~ctx ~capabilities access store endpoint `All pack index ~src:tmp0
@@ -1057,62 +1105,19 @@ let test_negotiation () =
   | Error (#Mimic.error as err) -> Alcotest.failf "%a" Mimic.pp_error err
   | Error `Invalid_flow -> Alcotest.fail "Invalid flow"
 
-(* XXX(dinosaure): FIFO "à la BOS".*)
-
-let rec unlink_fifo fifo =
-  try Unix.unlink (Fpath.to_string fifo) with
-  | Unix.Unix_error (Unix.EINTR, _, _) -> unlink_fifo fifo
-  | Unix.Unix_error _ -> ()
-
-let fifos = ref Fpath.Set.empty
-let fifos_add fifo = fifos := Fpath.Set.add fifo !fifos
-let unlink_fifos () = Fpath.Set.iter unlink_fifo !fifos
-let () = at_exit unlink_fifos
-
-let create_fifo_path mode dir pat =
-  let err () =
-    Rresult.R.error_msgf
-      "create temporary fifo %s in %a: too many failing attempts"
-      (Fmt.str pat "XXXXXX") Fpath.pp dir
-  in
-  let rec loop count =
-    if count < 0 then err ()
-    else
-      let file =
-        let rand = Random.bits () land 0xffffff in
-        Fpath.(dir / Fmt.str pat (Fmt.str "%06x" rand))
-      in
-      let sfile = Fpath.to_string file in
-      try Ok (file, Unix.mkfifo sfile mode) with
-      | Unix.Unix_error (Unix.EEXIST, _, _) -> loop (count - 1)
-      | Unix.Unix_error (Unix.EINTR, _, _) -> loop count
-      | Unix.Unix_error (e, _, _) ->
-          Rresult.R.error_msgf "create temporary fifo %a: %s" Fpath.pp file
-            (Unix.error_message e)
-  in
-  loop 10000
-
-let with_fifo ?(mode = 0o600) ?dir pat =
-  let dir = match dir with None -> Bos.OS.Dir.default_tmp () | Some d -> d in
-  create_fifo_path mode dir pat >>= fun (file, ()) ->
-  fifos_add file;
-  Ok file
-
 let ( <.> ) f g x = f (g x)
 
 let run_git_upload_pack ?(tmps_exit = true) store ic oc =
   let { path; _ } = store_prj store in
   let process =
-    Bos.OS.Dir.with_current path @@ fun () ->
-    let tee = Bos.Cmd.(v "tee" % Fpath.to_string ic) in
-    let cat = Bos.Cmd.(v "cat" % Fpath.to_string oc) in
-    let git_upload_pack =
-      Bos.Cmd.(v "git-upload-pack" % Fpath.to_string path)
-    in
+    OS.Dir.with_current path @@ fun () ->
+    let tee = Cmd.(v "tee" % Fpath.to_string ic) in
+    let cat = Cmd.(v "cat" % Fpath.to_string oc) in
+    let git_upload_pack = Cmd.(v "git-upload-pack" % Fpath.to_string path) in
     let pipe () =
-      Bos.OS.Cmd.run_out cat |> Bos.OS.Cmd.out_run_in >>= fun cat ->
-      Bos.OS.Cmd.run_io git_upload_pack cat |> Bos.OS.Cmd.out_run_in
-      >>= fun git -> Bos.OS.Cmd.run_in tee git
+      OS.Cmd.run_out cat |> OS.Cmd.out_run_in >>= fun cat ->
+      OS.Cmd.run_io git_upload_pack cat |> OS.Cmd.out_run_in >>= fun git ->
+      OS.Cmd.run_in tee git
     in
     match Unix.fork () with
     | 0 -> (
@@ -1126,7 +1131,7 @@ let run_git_upload_pack ?(tmps_exit = true) store ic oc =
         Logs.app (fun m -> m "git-upload-pack launched!");
         Lwt.return_unit
   in
-  Rresult.R.failwith_error_msg <.> process
+  R.failwith_error_msg <.> process
 
 let always v _ = v
 
@@ -1139,12 +1144,12 @@ let test_ssh () =
     create_new_git_store sw >>= fun (_access, store0) ->
     let { path; _ } = store_prj store0 in
     let pack = Fpath.(path / ".git" / "objects" / "pack") in
-    Bos.OS.Path.link
+    OS.Path.link
       ~target:(Fpath.v "pack-testzone-0.pack")
       Fpath.(pack / "pack-4aae6e55c118eb1ab3d1e2cd5a7e4857faa23d4e.pack")
     |> Lwt.return
     >>? fun () ->
-    Bos.OS.Path.link
+    OS.Path.link
       ~target:(Fpath.v "pack-testzone-0.idx")
       Fpath.(pack / "pack-4aae6e55c118eb1ab3d1e2cd5a7e4857faa23d4e.idx")
     |> Lwt.return
@@ -1168,9 +1173,9 @@ let test_ssh () =
     in
     let capabilities = [] in
     let ctx = ctx_with_fifo ic_fifo oc_fifo in
-    Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp0 ->
-    Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp1 ->
-    Bos.OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
+    OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp0 ->
+    OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp1 ->
+    OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
     Smart_git.Endpoint.of_string "git@localhost:not-found.git" |> Lwt.return
     >>? fun endpoint ->
     Logs.app (fun m -> m "Waiting git-upload-pack.");
@@ -1189,15 +1194,15 @@ let test_ssh () =
 let update_testzone_1 store =
   let { path; _ } = store_prj store in
   let update =
-    Bos.OS.Dir.with_current path @@ fun () ->
-    Bos.OS.Cmd.run
-      Bos.Cmd.(
+    OS.Dir.with_current path @@ fun () ->
+    OS.Cmd.run
+      Cmd.(
         v "git"
         % "update-ref"
         % "refs/heads/master"
         % "b88599cb4217c175110f6e2a810079d954524814")
   in
-  match Rresult.R.join (update ()) with
+  match R.join (update ()) with
   | Ok () -> Lwt.return_ok ()
   | Error err -> Lwt.return_error err
 
@@ -1210,12 +1215,12 @@ let test_negotiation_ssh () =
     create_new_git_store sw >>= fun (_access, store0) ->
     let { path; _ } = store_prj store0 in
     let pack = Fpath.(path / ".git" / "objects" / "pack") in
-    Bos.OS.Path.link
+    OS.Path.link
       ~target:(Fpath.v "pack-testzone-1.pack")
       Fpath.(pack / "pack-02e2924e51b624461d8ee6706a455c5ce1a6ad80.pack")
     |> Lwt.return
     >>? fun () ->
-    Bos.OS.Path.link
+    OS.Path.link
       ~target:(Fpath.v "pack-testzone-1.idx")
       Fpath.(pack / "pack-02e2924e51b624461d8ee6706a455c5ce1a6ad80.idx")
     |> Lwt.return
@@ -1237,12 +1242,12 @@ let test_negotiation_ssh () =
       ( Fpath.(path / ".git" / "objects" / "pack"),
         Fpath.(path / ".git" / "objects" / "pack") )
     in
-    Bos.OS.Path.link
+    OS.Path.link
       ~target:(Fpath.v "pack-testzone-0.pack")
       Fpath.(pack / "pack-4aae6e55c118eb1ab3d1e2cd5a7e4857faa23d4e.pack")
     |> Lwt.return
     >>? fun () ->
-    Bos.OS.Path.link
+    OS.Path.link
       ~target:(Fpath.v "pack-testzone-0.idx")
       Fpath.(pack / "pack-4aae6e55c118eb1ab3d1e2cd5a7e4857faa23d4e.idx")
     |> Lwt.return
@@ -1252,9 +1257,9 @@ let test_negotiation_ssh () =
       [ `Side_band_64k; `Multi_ack_detailed; `Thin_pack; `Ofs_delta ]
     in
     let ctx = ctx_with_fifo ic_fifo oc_fifo in
-    Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp0 ->
-    Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp1 ->
-    Bos.OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
+    OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp0 ->
+    OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp1 ->
+    OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
     Smart_git.Endpoint.of_string "git@localhost:not-found.git" |> Lwt.return
     >>? fun endpoint ->
     Logs.app (fun m -> m "Waiting git-upload-pack.");
@@ -1273,18 +1278,18 @@ let test_negotiation_ssh () =
 let run_git_receive_pack store ic oc =
   let { path; _ } = store_prj store in
   let process =
-    Bos.OS.Dir.with_current path @@ fun () ->
-    let tee = Bos.Cmd.(v "tee" % Fpath.to_string ic) in
-    let cat = Bos.Cmd.(v "cat" % Fpath.to_string oc) in
-    let git_receive_pack = Bos.Cmd.(v "git-receive-pack" % ".") in
+    OS.Dir.with_current path @@ fun () ->
+    let tee = Cmd.(v "tee" % Fpath.to_string ic) in
+    let cat = Cmd.(v "cat" % Fpath.to_string oc) in
+    let git_receive_pack = Cmd.(v "git-receive-pack" % ".") in
     let pipe () =
-      Bos.OS.Cmd.run
-        Bos.Cmd.(
+      OS.Cmd.run
+        Cmd.(
           v "git" % "config" % "--add" % "receive.denyCurrentBranch" % "ignore")
       >>= fun () ->
-      Bos.OS.Cmd.run_out cat |> Bos.OS.Cmd.out_run_in >>= fun cat ->
-      Bos.OS.Cmd.run_io git_receive_pack cat |> Bos.OS.Cmd.out_run_in
-      >>= fun git -> Bos.OS.Cmd.run_in tee git
+      OS.Cmd.run_out cat |> OS.Cmd.out_run_in >>= fun cat ->
+      OS.Cmd.run_io git_receive_pack cat |> OS.Cmd.out_run_in >>= fun git ->
+      OS.Cmd.run_in tee git
     in
     match Unix.fork () with
     | 0 -> (
@@ -1298,7 +1303,7 @@ let run_git_receive_pack store ic oc =
         Logs.app (fun m -> m "git-receive-pack launched!");
         Lwt.return_unit
   in
-  Rresult.R.failwith_error_msg <.> process
+  R.failwith_error_msg <.> process
 
 let test_push_ssh () =
   Alcotest_lwt.test_case "push over ssh" `Quick @@ fun sw () ->
@@ -1309,12 +1314,12 @@ let test_push_ssh () =
     create_new_git_store sw >>= fun (_access, store0) ->
     let { path; _ } = store_prj store0 in
     let pack = Fpath.(path / ".git" / "objects" / "pack") in
-    Bos.OS.Path.link
+    OS.Path.link
       ~target:(Fpath.v "pack-testzone-0.pack")
       Fpath.(pack / "pack-4aae6e55c118eb1ab3d1e2cd5a7e4857faa23d4e.pack")
     |> Lwt.return
     >>? fun () ->
-    Bos.OS.Path.link
+    OS.Path.link
       ~target:(Fpath.v "pack-testzone-0.idx")
       Fpath.(pack / "pack-4aae6e55c118eb1ab3d1e2cd5a7e4857faa23d4e.idx")
     |> Lwt.return
@@ -1327,12 +1332,12 @@ let test_push_ssh () =
     create_new_git_push_store sw >>= fun (access, store1) ->
     let { path; _ } = store_prj store1 in
     let pack = Fpath.(path / ".git" / "objects" / "pack") in
-    Bos.OS.Path.link
+    OS.Path.link
       ~target:(Fpath.v "pack-testzone-1.pack")
       Fpath.(pack / "pack-02e2924e51b624461d8ee6706a455c5ce1a6ad80.pack")
     |> Lwt.return
     >>? fun () ->
-    Bos.OS.Path.link
+    OS.Path.link
       ~target:(Fpath.v "pack-testzone-1.idx")
       Fpath.(pack / "pack-02e2924e51b624461d8ee6706a455c5ce1a6ad80.idx")
     |> Lwt.return
@@ -1351,14 +1356,12 @@ let test_push_ssh () =
   run () >>= function
   | Ok path -> (
       let run =
-        Bos.OS.Dir.with_current path @@ fun () ->
-        let cmd =
-          Bos.Cmd.(v "git" % "show-ref" % "--heads" % "master" % "-s")
-        in
-        let run = Bos.OS.Cmd.run_out cmd in
-        Bos.OS.Cmd.out_lines ~trim:true run
+        OS.Dir.with_current path @@ fun () ->
+        let cmd = Cmd.(v "git" % "show-ref" % "--heads" % "master" % "-s") in
+        let run = OS.Cmd.run_out cmd in
+        OS.Cmd.out_lines ~trim:true run
       in
-      match Rresult.R.join (run ()) with
+      match R.join (run ()) with
       | Ok ([ hash ], _) ->
           Alcotest.(check string)
             "push" hash "b88599cb4217c175110f6e2a810079d954524814";
@@ -1395,20 +1398,20 @@ let test_negotiation_http () =
       ( Fpath.(path / ".git" / "objects" / "pack"),
         Fpath.(path / ".git" / "objects" / "pack") )
     in
-    Bos.OS.Path.link
+    OS.Path.link
       ~target:(Fpath.v "pack-testzone-0.pack")
       Fpath.(pack / "pack-4aae6e55c118eb1ab3d1e2cd5a7e4857faa23d4e.pack")
     |> Lwt.return
     >>? fun () ->
-    Bos.OS.Path.link
+    OS.Path.link
       ~target:(Fpath.v "pack-testzone-0.idx")
       Fpath.(pack / "pack-4aae6e55c118eb1ab3d1e2cd5a7e4857faa23d4e.idx")
     |> Lwt.return
     >>? fun () ->
     update_testzone_0 store >>? fun () ->
-    Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp0 ->
-    Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp1 ->
-    Bos.OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
+    OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp0 ->
+    OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp1 ->
+    OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
     Smart_git.Endpoint.of_string "http://localhost/not-found.git" |> Lwt.return
     >>? fun endpoint ->
     let queue = Queue.create () in
@@ -1432,12 +1435,12 @@ let test_partial_clone_ssh () =
     create_new_git_store sw >>= fun (_access, store0) ->
     let { path; _ } = store_prj store0 in
     let pack = Fpath.(path / ".git" / "objects" / "pack") in
-    Bos.OS.Path.link
+    OS.Path.link
       ~target:(Fpath.v "pack-testzone-0.pack")
       Fpath.(pack / "pack-4aae6e55c118eb1ab3d1e2cd5a7e4857faa23d4e.pack")
     |> Lwt.return
     >>? fun () ->
-    Bos.OS.Path.link
+    OS.Path.link
       ~target:(Fpath.v "pack-testzone-0.idx")
       Fpath.(pack / "pack-4aae6e55c118eb1ab3d1e2cd5a7e4857faa23d4e.idx")
     |> Lwt.return
@@ -1461,9 +1464,9 @@ let test_partial_clone_ssh () =
     in
     let capabilities = [] in
     let ctx = ctx_with_fifo ic_fifo oc_fifo in
-    Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp0 ->
-    Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp1 ->
-    Bos.OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
+    OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp0 ->
+    OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp1 ->
+    OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
     Smart_git.Endpoint.of_string "git@localhost:not-found.git" |> Lwt.return
     >>? fun endpoint ->
     Logs.app (fun m -> m "Waiting git-upload-pack.");
@@ -1490,34 +1493,30 @@ let test_partial_fetch_ssh () =
   Alcotest_lwt.test_case "partial fetch" `Quick @@ fun sw () ->
   let open Lwt.Infix in
   let fill0 () =
-    let open Bos in
     create_new_git_store sw >>= fun (access, store) ->
     let { path; _ } = store_prj store in
     let fiber =
       let open Rresult in
       OS.Dir.with_current path @@ fun () ->
-      OS.Cmd.run Bos.Cmd.(v "git" % "config" % "user.name" % "test")
-      >>= fun () ->
+      OS.Cmd.run Cmd.(v "git" % "config" % "user.name" % "test") >>= fun () ->
       OS.Cmd.run
-        Bos.Cmd.(v "git" % "config" % "user.email" % "pseudo@pseudo.invalid")
+        Cmd.(v "git" % "config" % "user.email" % "pseudo@pseudo.invalid")
       >>= fun () ->
       OS.Cmd.run Cmd.(v "touch" % "foo") >>= fun () ->
       OS.Cmd.run Cmd.(v "git" % "add" % "foo") >>= fun () ->
       OS.Cmd.run Cmd.(v "git" % "commit" % "-m" % ".")
     in
-    (Lwt.return <.> Rresult.R.join) (fiber ()) >>? fun () ->
+    (Lwt.return <.> R.join) (fiber ()) >>? fun () ->
     Lwt.return_ok (access, store)
   in
   let fill1 store =
-    let open Bos in
     let { path; _ } = store_prj store in
     let fiber =
       let open Rresult in
       OS.Dir.with_current path @@ fun () ->
-      OS.Cmd.run Bos.Cmd.(v "git" % "config" % "user.name" % "test")
-      >>= fun () ->
+      OS.Cmd.run Cmd.(v "git" % "config" % "user.name" % "test") >>= fun () ->
       OS.Cmd.run
-        Bos.Cmd.(v "git" % "config" % "user.email" % "pseudo@pseudo.invalid")
+        Cmd.(v "git" % "config" % "user.email" % "pseudo@pseudo.invalid")
       >>= fun () ->
       OS.Cmd.run Cmd.(v "touch" % "bar") >>= fun () ->
       OS.Cmd.run Cmd.(v "git" % "add" % "bar") >>= fun () ->
@@ -1525,14 +1524,13 @@ let test_partial_fetch_ssh () =
       OS.Cmd.run Cmd.(v "git" % "rm" % "foo") >>= fun () ->
       OS.Cmd.run Cmd.(v "git" % "commit" % "-m" % ".")
     in
-    (Lwt.return <.> Rresult.R.join) (fiber ())
+    (Lwt.return <.> R.join) (fiber ())
   in
   let capabilities =
     [ `Side_band_64k; `Multi_ack_detailed; `Thin_pack; `Ofs_delta ]
   in
   let endpoint =
-    Rresult.R.get_ok
-      (Smart_git.Endpoint.of_string "git@localhost:not-found.git")
+    R.get_ok (Smart_git.Endpoint.of_string "git@localhost:not-found.git")
   in
   let run () =
     fill0 () >>? fun (_access, store0) ->
@@ -1542,9 +1540,9 @@ let test_partial_fetch_ssh () =
     process () >>= fun () ->
     create_new_git_store sw >>= fun (access, store1) ->
     let ctx = ctx_with_fifo ic_fifo oc_fifo in
-    Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp0 ->
-    Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp1 ->
-    Bos.OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
+    OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp0 ->
+    OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp1 ->
+    OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
     let pack, index =
       let { path; _ } = store_prj store1 in
       ( Fpath.(path / ".git" / "objects" / "pack"),
@@ -1567,7 +1565,7 @@ let test_partial_fetch_ssh () =
             / "pack"
             / Fmt.str "pack-%a.pack" Uid.pp uid)
         in
-        Bos.OS.Path.move tmp1 dst |> Lwt.return >>? fun () ->
+        OS.Path.move tmp1 dst |> Lwt.return >>? fun () ->
         let dst =
           Fpath.(
             path
@@ -1576,15 +1574,15 @@ let test_partial_fetch_ssh () =
             / "pack"
             / Fmt.str "pack-%a.idx" Uid.pp uid)
         in
-        Bos.OS.Path.move tmp2 dst |> Lwt.return >>? fun () ->
+        OS.Path.move tmp2 dst |> Lwt.return >>? fun () ->
         let update (refname, uid) =
-          Bos.OS.Dir.with_current path @@ fun () ->
-          Bos.OS.Cmd.run
-            Bos.Cmd.(
+          OS.Dir.with_current path @@ fun () ->
+          OS.Cmd.run
+            Cmd.(
               v "git" % "update-ref" % Ref.to_string refname % Uid.to_hex uid)
         in
         List.fold_right
-          (fun v -> function Ok a -> Rresult.R.join (update v a) | err -> err)
+          (fun v -> function Ok a -> R.join (update v a) | err -> err)
           refs (Ok ())
         |> Lwt.return
         >>? fun () ->
@@ -1596,9 +1594,9 @@ let test_partial_fetch_ssh () =
         in
         process () >>= fun () ->
         let ctx = ctx_with_fifo ic_fifo oc_fifo in
-        Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp0 ->
-        Bos.OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp1 ->
-        Bos.OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
+        OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp0 ->
+        OS.File.tmp "pack-%s.pack" |> Lwt.return >>? fun tmp1 ->
+        OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
         Logs.app (fun m -> m "Waiting git-upload-pack.");
         Logs.app (fun m -> m "Start to fetch repository with SSH.");
         Git.fetch ~ctx ~capabilities access store1 endpoint ~deepen:(`Depth 1)
@@ -1619,15 +1617,13 @@ let test_partial_fetch_ssh () =
   | Error `Invalid_flow -> Alcotest.fail "Invalid flow"
 
 let make_one_commit path =
-  Bos.OS.Dir.with_current path @@ fun () ->
-  Bos.OS.Cmd.run Bos.Cmd.(v "git" % "config" % "user.name" % "test")
+  OS.Dir.with_current path @@ fun () ->
+  OS.Cmd.run Cmd.(v "git" % "config" % "user.name" % "test") >>= fun () ->
+  OS.Cmd.run Cmd.(v "git" % "config" % "user.email" % "pseudo@peudo.invalid")
   >>= fun () ->
-  Bos.OS.Cmd.run
-    Bos.Cmd.(v "git" % "config" % "user.email" % "pseudo@peudo.invalid")
-  >>= fun () ->
-  Bos.OS.File.write Fpath.(v "foo") "" >>= fun () ->
-  Bos.OS.Cmd.run Bos.Cmd.(v "git" % "add" % "foo") >>= fun () ->
-  Bos.OS.Cmd.run Bos.Cmd.(v "git" % "commit" % "-m" % ".") >>= fun () -> R.ok ()
+  OS.File.write Fpath.(v "foo") "" >>= fun () ->
+  OS.Cmd.run Cmd.(v "git" % "add" % "foo") >>= fun () ->
+  OS.Cmd.run Cmd.(v "git" % "commit" % "-m" % ".") >>= fun () -> R.ok ()
 
 let test_push_empty () =
   Alcotest_lwt.test_case "push to empty over ssh" `Quick @@ fun sw () ->
@@ -1657,15 +1653,15 @@ let test_push_empty () =
 let update_testzone_1 store =
   let { path; _ } = store_prj store in
   let update =
-    Bos.OS.Dir.with_current path @@ fun () ->
-    Bos.OS.Cmd.run
-      Bos.Cmd.(
+    OS.Dir.with_current path @@ fun () ->
+    OS.Cmd.run
+      Cmd.(
         v "git"
         % "update-ref"
         % "refs/heads/master"
         % "b88599cb4217c175110f6e2a810079d954524814")
   in
-  match Rresult.R.join (update ()) with
+  match R.join (update ()) with
   | Ok () -> Lwt.return_ok ()
   | Error err -> Lwt.return_error err
 
@@ -1685,12 +1681,10 @@ let test =
 let tmp = "tmp"
 
 let () =
-  let open Rresult in
   let fiber =
-    Bos.OS.Dir.current () >>= fun current ->
-    Bos.OS.Dir.create Fpath.(current / tmp) >>= fun _ ->
-    R.ok Fpath.(current / tmp)
+    OS.Dir.current () >>= fun current ->
+    OS.Dir.create Fpath.(current / tmp) >>= fun _ -> R.ok Fpath.(current / tmp)
   in
   let tmp = R.failwith_error_msg fiber in
-  Bos.OS.Dir.set_default_tmp tmp;
+  OS.Dir.set_default_tmp tmp;
   Lwt_main.run test
