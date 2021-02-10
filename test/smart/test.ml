@@ -1620,6 +1620,11 @@ let test_partial_fetch_ssh () =
 
 let make_one_commit path =
   Bos.OS.Dir.with_current path @@ fun () ->
+  Bos.OS.Cmd.run Bos.Cmd.(v "git" % "config" % "user.name" % "test")
+  >>= fun () ->
+  Bos.OS.Cmd.run
+    Bos.Cmd.(v "git" % "config" % "user.email" % "pseudo@peudo.invalid")
+  >>= fun () ->
   Bos.OS.File.write Fpath.(v "foo") "" >>= fun () ->
   Bos.OS.Cmd.run Bos.Cmd.(v "git" % "add" % "foo") >>= fun () ->
   Bos.OS.Cmd.run Bos.Cmd.(v "git" % "commit" % "-m" % ".") >>= fun () -> R.ok ()
