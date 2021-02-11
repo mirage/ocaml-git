@@ -1,13 +1,27 @@
 (** Module for decoding Git pkt lines, as specified at
     https://github.com/git/git/blob/master/Documentation/technical/protocol-common.txt
 
+    We define a "packet line" (aka a "packet") as
+
+      |   4 bytes   || (enc-pkt-len)-4 |
+      [ enc-pkt-len ][   pkt-content   ]
+      |-------    pkt-len        ------|
+
+    Example: "0009done\n" where [enc-pkt-len = 4] and [pkt-content = "done"] given we
+    usually trim LF ("\n").
+
+    "Encoded" packet length, [enc-pkt-len], is the first 4 bytes in the packet
+    that encode the length of the packet in hex. It can have specific values of 0, 1, 2
+    to encode flush, delimiter, and message (response end) packets respectively.
+    Otherwise, it should be >= 4, i.e., 4 length bytes + the length of the packet content.
+
     In the docs, we define [min_pkt_len = 4] as in specs. *)
 
 type decoder = { buffer : bytes; mutable pos : int; mutable max : int }
 
 val io_buffer_size : int
 val create : unit -> decoder
-val decoder_from : string -> decoder
+val of_string : string -> decoder
 val end_of_input : decoder -> int
 
 type error =

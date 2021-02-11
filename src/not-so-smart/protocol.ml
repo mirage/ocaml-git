@@ -701,7 +701,7 @@ module Decoder = struct
       match String.Sub.head pkt with
       | Some '\001' ->
           let str = String.Sub.(to_string (tail pkt)) in
-          let decoder' = decoder_from str in
+          let decoder' = of_string str in
           decode_status decoder' >>= fun res ->
           junk_pkt decoder;
           prompt_pkt (return res) decoder

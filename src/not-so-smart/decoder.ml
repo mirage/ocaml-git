@@ -3,7 +3,7 @@ type decoder = { buffer : Bytes.t; mutable pos : int; mutable max : int }
 let io_buffer_size = 65536
 let create () = { buffer = Bytes.create io_buffer_size; pos = 0; max = 0 }
 
-let decoder_from x =
+let of_string x =
   let max = String.length x in
   let buffer = Bytes.of_string x in
   { buffer; pos = 0; max }
