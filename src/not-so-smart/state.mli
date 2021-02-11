@@ -33,19 +33,16 @@ module type VALUE = sig
 end
 
 module Context : sig
-  open Pkt_line
+  type 'ctx t
+  type encoder = Pkt_line.Encoder.encoder
+  type decoder = Pkt_line.Decoder.decoder
 
-  include
-    CONTEXT
-      with type encoder = Encoder.encoder
-       and type decoder = Decoder.decoder
-
-  val make : Capability.t list -> t
-  (** [make caps] creates [Context.t] with client's capabilities [caps] *)
-
-  val capabilities : t -> Capability.t list * Capability.t list
-  val update : t -> Capability.t list -> unit
-  val is_cap_shared : t -> Capability.t -> bool
+  val pp : 'ctx Fmt.t -> 'ctx t Fmt.t
+  val encoder : 'ctx t -> encoder
+  val decoder : 'ctx t -> decoder
+  val make : 'ctx -> 'ctx t
+  val context : 'ctx t -> 'ctx
+  val update : 'ctx t -> f:(old_ctx:'ctx -> 'ctx) -> unit
 end
 
 module Scheduler
