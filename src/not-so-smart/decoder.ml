@@ -53,6 +53,17 @@ exception Leave of error info
 
 let return (type v) (v : v) _ : (v, 'err) state = Done v
 
+let rec bind x ~f =
+  match x with
+  | Done v -> f v
+  | Read { buffer; off; len; continue; eof } ->
+      let continue len = bind (continue len) ~f in
+      let eof () = bind (eof ()) ~f in
+      Read { buffer; off; len; continue; eof }
+  | Error _ as err -> err
+
+let ( >>= ) x f = bind x ~f
+
 let safe :
     (decoder -> ('v, ([> error ] as 'err)) state) -> decoder -> ('v, 'err) state
     =
@@ -297,3 +308,7 @@ let peek_while_eol_or_space decoder =
   if !idx < end_of_input decoder && ((!chr = '\n' && !has_cr) || !chr = ' ')
   then decoder.buffer, decoder.pos, !idx + 1 - decoder.pos
   else leave_with decoder `Expected_eol_or_space
+
+let rec prompt_pkt ?strict k decoder =
+  if at_least_one_pkt decoder then k decoder
+  else prompt ?strict (prompt_pkt ?strict k) decoder

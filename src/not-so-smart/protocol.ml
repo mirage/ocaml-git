@@ -296,10 +296,6 @@ module Decoder = struct
         Fmt.pf ppf "Invalid result command (%S)" raw
     | `Unexpected_flush -> Fmt.string ppf "Unexpected flush"
 
-  let rec prompt_pkt ?strict k decoder =
-    if at_least_one_pkt decoder then k decoder
-    else prompt ?strict (prompt_pkt ?strict k) decoder
-
   let is_new_line = function '\n' -> true | _ -> false
 
   let peek_pkt ?(trim = true) decoder =
@@ -628,17 +624,6 @@ module Decoder = struct
       else assert false
     in
     prompt_pkt k decoder
-
-  let rec bind x ~f =
-    match x with
-    | Done v -> f v
-    | Read { buffer; off; len; continue; eof } ->
-        let continue len = bind (continue len) ~f in
-        let eof () = bind (eof ()) ~f in
-        Read { buffer; off; len; continue; eof }
-    | Error _ as err -> err
-
-  let ( >>= ) x f = bind x ~f
 
   let decode_status decoder =
     let command pkt =
