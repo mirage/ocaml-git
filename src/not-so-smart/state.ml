@@ -17,7 +17,7 @@ module type CONTEXT = sig
   type encoder
   type decoder
 
-  val pp : t Fmt.t
+  val pp : Capability.t Fmt.t -> t Fmt.t
   val encoder : t -> encoder
   val decoder : t -> decoder
 end
@@ -34,37 +34,40 @@ module type VALUE = sig
 end
 
 module Context = struct
-  open Pkt_line
-
-  type t = {
-    encoder : Encoder.encoder;
-    decoder : Decoder.decoder;
-    mutable capabilities : Capability.t list * Capability.t list;
+  type capabilities = {
+    client_caps : Capability.t list;
+    server_caps : Capability.t list;
   }
 
-  type encoder = Encoder.encoder
-  type decoder = Decoder.decoder
+  type t = {
+    encoder : Pkt_line.Encoder.encoder;
+    decoder : Pkt_line.Decoder.decoder;
+    mutable capabilities : capabilities;
+  }
 
-  let pp _ppf _t = ()
+  type encoder = Pkt_line.Encoder.encoder
+  type decoder = Pkt_line.Decoder.decoder
 
-  let make capabilities =
+  let pp _pp_ctx _ppf _t = ()
+
+  let make ~client_caps =
+    let capabilities = { client_caps; server_caps = [] } in
     {
-      encoder = Encoder.create ();
-      decoder = Decoder.create ();
-      capabilities = capabilities, [];
+      encoder = Pkt_line.Encoder.create ();
+      decoder = Pkt_line.Decoder.create ();
+      capabilities;
     }
 
   let encoder { encoder; _ } = encoder
   let decoder { decoder; _ } = decoder
   let capabilities { capabilities; _ } = capabilities
 
-  let update ({ capabilities = client_side, _; _ } as t) server_side =
-    t.capabilities <- client_side, server_side
+  let replace_server_caps ctx server_caps =
+    ctx.capabilities <- { ctx.capabilities with server_caps }
 
-  let is_cap_shared t capability =
-    let client_side, server_side = t.capabilities in
-    let a = List.exists (Capability.equal capability) client_side in
-    a && List.exists (Capability.equal capability) server_side
+  let is_cap_shared { capabilities = { client_caps; server_caps }; _ } cap =
+    let is_cap_in caps = List.exists (fun c -> Capability.equal c cap) caps in
+    is_cap_in client_caps && is_cap_in server_caps
 end
 
 module Scheduler
@@ -86,10 +89,13 @@ struct
     in
     bind'
 
-  let ( let* ) m f = bind m ~f
-  let ( >>= ) m f = bind m ~f
   let return v = Return v
   let fail error = Error error
+  let map m ~f = bind m ~f:(fun v -> return (f v))
+  let ( >>= ) m f = bind m ~f
+  let ( >|= ) m f = map m ~f
+  let ( let* ) m f = m >>= f
+  let ( let+ ) m f = m >|= f
 
   let reword_error f x =
     let rec map_error = function
@@ -151,4 +157,18 @@ struct
    fun ctx w -> decode ctx w (fun _ctx v -> Return v)
 
   let error_msgf fmt = Fmt.kstr (fun err -> Error (`Msg err)) fmt
+
+  module Infix = struct
+    let ( >>= ) = ( >>= )
+    let ( >|= ) = ( >|= )
+    let return = return
+    let fail = fail
+  end
+
+  module Syntax = struct
+    let ( let* ) = ( let* )
+    let ( let+ ) = ( let+ )
+    let return = return
+    let fail = fail
+  end
 end

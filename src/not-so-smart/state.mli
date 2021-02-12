@@ -16,7 +16,7 @@ module type CONTEXT = sig
   type encoder
   type decoder
 
-  val pp : t Fmt.t
+  val pp : Capability.t Fmt.t -> t Fmt.t
   val encoder : t -> encoder
   val decoder : t -> decoder
 end
@@ -33,18 +33,19 @@ module type VALUE = sig
 end
 
 module Context : sig
-  open Pkt_line
+  type capabilities = {
+    client_caps : Capability.t list;
+    server_caps : Capability.t list;
+  }
 
   include
     CONTEXT
-      with type encoder = Encoder.encoder
-       and type decoder = Decoder.decoder
+      with type encoder = Pkt_line.Encoder.encoder
+       and type decoder = Pkt_line.Decoder.decoder
 
-  val make : Capability.t list -> t
-  (** [make caps] creates [Context.t] with client's capabilities [caps] *)
-
-  val capabilities : t -> Capability.t list * Capability.t list
-  val update : t -> Capability.t list -> unit
+  val make : client_caps:Capability.t list -> t
+  val capabilities : t -> capabilities
+  val replace_server_caps : t -> Capability.t list -> unit
   val is_cap_shared : t -> Capability.t -> bool
 end
 
@@ -55,10 +56,13 @@ module Scheduler
                 and type decoder = Context.decoder) : sig
   type error = Value.error
 
-  val bind : ('a, 'err) t -> f:('a -> ('b, 'err) t) -> ('b, 'err) t
-  val ( let* ) : ('a, 'err) t -> ('a -> ('b, 'err) t) -> ('b, 'err) t
-  val ( >>= ) : ('a, 'err) t -> ('a -> ('b, 'err) t) -> ('b, 'err) t
   val return : 'v -> ('v, 'err) t
+  val bind : ('a, 'err) t -> f:('a -> ('b, 'err) t) -> ('b, 'err) t
+  val map : ('a, 'err) t -> f:('a -> 'b) -> ('b, 'err) t
+  val ( >>= ) : ('a, 'err) t -> ('a -> ('b, 'err) t) -> ('b, 'err) t
+  val ( >|= ) : ('a, 'err) t -> ('a -> 'b) -> ('b, 'err) t
+  val ( let* ) : ('a, 'err) t -> ('a -> ('b, 'err) t) -> ('b, 'err) t
+  val ( let+ ) : ('a, 'err) t -> ('a -> 'b) -> ('b, 'err) t
   val fail : 'err -> ('v, 'err) t
   val reword_error : ('err0 -> 'err1) -> ('v, 'err0) t -> ('v, 'err1) t
 
@@ -82,4 +86,18 @@ module Scheduler
 
   val error_msgf :
     ('a, Format.formatter, unit, ('b, [> `Msg of string ]) t) format4 -> 'a
+
+  module Infix : sig
+    val ( >>= ) : ('a, 'err) t -> ('a -> ('b, 'err) t) -> ('b, 'err) t
+    val ( >|= ) : ('a, 'err) t -> ('a -> 'b) -> ('b, 'err) t
+    val return : 'v -> ('v, 'err) t
+    val fail : 'err -> ('v, 'err) t
+  end
+
+  module Syntax : sig
+    val ( let* ) : ('a, 'err) t -> ('a -> ('b, 'err) t) -> ('b, 'err) t
+    val ( let+ ) : ('a, 'err) t -> ('a -> 'b) -> ('b, 'err) t
+    val return : 'v -> ('v, 'err) t
+    val fail : 'err -> ('v, 'err) t
+  end
 end

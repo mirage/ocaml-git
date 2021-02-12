@@ -113,8 +113,13 @@ type ('a, 'err) t = ('a, 'err) State.t =
 module Context = struct
   type t = State.Context.t
 
+  type capabilities = State.Context.capabilities = {
+    client_caps : Capability.t list;
+    server_caps : Capability.t list;
+  }
+
   let make = State.Context.make
-  let update = State.Context.update
+  let replace_server_caps = State.Context.replace_server_caps
   let is_cap_shared = State.Context.is_cap_shared
   let capabilities = State.Context.capabilities
 end

@@ -194,10 +194,15 @@ val pp_error : error Fmt.t
 module Context : sig
   type t
 
-  val make : Capability.t list -> t
-  val update : t -> Capability.t list -> unit
+  type capabilities = State.Context.capabilities = {
+    client_caps : Capability.t list;
+    server_caps : Capability.t list;
+  }
+
+  val make : client_caps:Capability.t list -> t
+  val replace_server_caps : t -> Capability.t list -> unit
   val is_cap_shared : t -> Capability.t -> bool
-  val capabilities : t -> Capability.t list * Capability.t list
+  val capabilities : t -> capabilities
 end
 
 type 'a send

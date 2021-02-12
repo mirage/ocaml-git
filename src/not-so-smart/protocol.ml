@@ -296,10 +296,6 @@ module Decoder = struct
         Fmt.pf ppf "Invalid result command (%S)" raw
     | `Unexpected_flush -> Fmt.string ppf "Unexpected flush"
 
-  let rec prompt_pkt ?strict k decoder =
-    if at_least_one_pkt decoder then k decoder
-    else prompt ?strict (prompt_pkt ?strict k) decoder
-
   let is_new_line = function '\n' -> true | _ -> false
 
   let peek_pkt ?(trim = true) decoder =
@@ -629,17 +625,6 @@ module Decoder = struct
     in
     prompt_pkt k decoder
 
-  let rec bind x ~f =
-    match x with
-    | Done v -> f v
-    | Read { buffer; off; len; continue; eof } ->
-        let continue len = bind (continue len) ~f in
-        let eof () = bind (eof ()) ~f in
-        Read { buffer; off; len; continue; eof }
-    | Error _ as err -> err
-
-  let ( >>= ) x f = bind x ~f
-
   let decode_status decoder =
     let command pkt =
       match String.Sub.cuts ~sep:v_space pkt with
@@ -701,7 +686,7 @@ module Decoder = struct
       match String.Sub.head pkt with
       | Some '\001' ->
           let str = String.Sub.(to_string (tail pkt)) in
-          let decoder' = decoder_from str in
+          let decoder' = of_string str in
           decode_status decoder' >>= fun res ->
           junk_pkt decoder;
           prompt_pkt (return res) decoder
@@ -732,13 +717,13 @@ module Encoder = struct
   let write_zero encoder = write encoder "\000"
   let write_new_line encoder = write encoder "\n"
 
-  let delayed_write_pkt k0 k1 encoder =
-    let pos = encoder.pos in
-    encoder.pos <- encoder.pos + 4;
+  let delayed_write_pkt k0 k1 ({ pos; payload } as encoder) =
+    (* leave space for pkt length: 4 bytes *)
+    encoder.pos <- pos + 4;
     k0 encoder;
     (* XXX(dinosaure): or [encoder.pos <- encoder.pos + 4]? *)
     let len = encoder.pos - pos in
-    Bytes.blit_string (Fmt.str "%04X" len) 0 encoder.payload pos 4;
+    Bytes.blit_string (Fmt.str "%04X" len) 0 payload pos 4;
     flush k1 encoder
 
   let kdone _encoder = Done
