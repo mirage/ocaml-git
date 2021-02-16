@@ -56,9 +56,8 @@ struct
     let ctx = Smart.Context.make ~client_caps in
     Smart_flow.run sched fail io flow (fiber ctx) |> prj
     >>= fun advertised_refs ->
-    Pck.commands sched
-      ~capabilities:(Smart.Advertised_refs.capabilities advertised_refs)
-      ~equal:Ref.equal ~deref:access.Sigs.deref store cmds
+    Pck.commands sched ~capabilities:client_caps ~equal:Ref.equal
+      ~deref:access.Sigs.deref store cmds
       (Smart.Advertised_refs.refs advertised_refs)
     |> prj
     >>= function
