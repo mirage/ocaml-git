@@ -2,7 +2,9 @@ open Lwt.Infix
 
 module Make
     (Store : Git.S)
-    (_ : sig end) =
+    (_ : sig end)
+    (Conduit : Conduit_mirage.S)
+    (Resolver : Resolver_lwt.S) =
 struct
   module Sync = Git.Mem.Sync (Store) (Git_cohttp_mirage)
 
@@ -49,7 +51,8 @@ struct
   let capabilities =
     [ `Side_band_64k; `Multi_ack_detailed; `Ofs_delta; `Thin_pack; `Report_status ]
 
-  let start git ctx =
+  let start git ctx conduit resolver =
+    let ctx = Git_cohttp_mirage.with_conduit (Cohttp_mirage.Client.ctx resolver conduit) ctx in
     let edn =
       match Smart_git.Endpoint.of_string (Key_gen.remote ()) with
       | Ok edn -> edn

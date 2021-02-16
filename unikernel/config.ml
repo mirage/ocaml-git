@@ -176,7 +176,7 @@ let minigit =
   foreign "Unikernel.Make"
     ~keys:[ Key.abstract remote; Key.abstract ssh_seed; Key.abstract ssh_auth ]
     ~packages:[ package "git-cohttp-mirage" ]
-    (git @-> mimic @-> job)
+    (git @-> mimic @-> conduit @-> resolver @-> job)
 
 let mimic ~kind ~seed ~auth stackv4 random mclock time =
   let mtcp = mimic_tcp_impl stackv4 in
@@ -191,7 +191,9 @@ let random = default_random
 let git = git_impl sha1
 let mimic = mimic ~kind:`Rsa ~seed:ssh_seed ~auth:ssh_auth
 let mimic = mimic stackv4 random mclock time
+let conduit = conduit_direct ~tls:true stackv4
+let resolver = resolver_dns stackv4
 
 let () =
   register "minigit" ~packages:[ package "ptime" ]
-    [ minigit $ git $ mimic ]
+    [ minigit $ git $ mimic $ conduit $ resolver ]
