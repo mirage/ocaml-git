@@ -335,8 +335,6 @@ module Decoder = struct
   let v_version = String.Sub.of_string "version"
   let v_nak = String.Sub.of_string "NAK"
   let v_ack = String.Sub.of_string "ACK"
-  let v_ok = String.Sub.of_string "ok"
-  let v_ng = String.Sub.of_string "ng"
 
   let decode_advertised_refs decoder =
     let decode_shallows advertised_refs decoder =
@@ -647,86 +645,80 @@ module Decoder = struct
     in
     prompt_pkt k decoder
 
-  let decode_status decoder =
-    let command pkt =
-      match String.Sub.cuts ~sep:v_space pkt with
-      | res :: reference :: rest -> (
-          match String.Sub.to_string res with
-          | "ok" -> Stdlib.Ok (Stdlib.Ok (String.Sub.to_string reference))
-          | "ng" ->
-              let err = String.Sub.(to_string (concat ~sep:v_space rest)) in
-              let reference = String.Sub.to_string reference in
-              Stdlib.Ok (Stdlib.Error (reference, err))
-          | _ ->
-              Stdlib.Error (`Invalid_command_result (String.Sub.to_string pkt)))
-      | _ -> Stdlib.Error (`Invalid_command_result (String.Sub.to_string pkt))
+  let decode_status ?(sideband = true) decoder =
+    let prompt_pkt =
+      match sideband with
+      | true ->
+          fun k decoder ->
+            let without_sideband decoder =
+              let pkt = peek_pkt ~trim:false decoder in
+              match String.Sub.head pkt with
+              | Some '\001' ->
+                  (* XXX(dinosaure): *!?*@?!* *)
+                  let str = String.Sub.(to_string (tail pkt)) in
+                  let decoder' = of_string str in
+                  k decoder' >>= fun res ->
+                  junk_pkt decoder;
+                  return res decoder
+              | Some _ -> assert false (* TODO *)
+              | None -> k decoder
+            in
+            prompt_pkt without_sideband decoder
+      | false -> fun k decoder -> prompt_pkt k decoder
+    in
+
+    let command decoder =
+      let pkt = peek_pkt decoder in
+      if String.Sub.length pkt = 0 then (
+        junk_pkt decoder;
+        return None decoder)
+      else
+        match String.Sub.cuts ~sep:v_space pkt with
+        | res :: reference :: rest -> (
+            match String.Sub.to_string res with
+            | "ok" ->
+                junk_pkt decoder;
+                return
+                  (Some (Stdlib.Ok (String.Sub.to_string reference)))
+                  decoder
+            | "ng" ->
+                let err = String.Sub.(to_string (concat ~sep:v_space rest)) in
+                let reference = String.Sub.to_string reference in
+                junk_pkt decoder;
+                return (Some (Stdlib.Error (reference, err))) decoder
+            | _ ->
+                fail decoder
+                  (`Invalid_command_result (String.Sub.to_string pkt)))
+        | _ -> fail decoder (`Invalid_command_result (String.Sub.to_string pkt))
     in
 
     let commands decoder =
       let rec go acc decoder =
-        let pkt = peek_pkt decoder in
-        if String.Sub.length pkt = 0 then return (List.rev acc) decoder
-        else if
-          String.Sub.is_prefix ~affix:v_ok pkt
-          || String.Sub.is_prefix ~affix:v_ng pkt
-        then
-          match command pkt with
-          | Ok x ->
-              junk_pkt decoder;
-              prompt_pkt (go (x :: acc)) decoder
-          | Error err -> fail decoder err
-        else fail decoder (`Invalid_command_result (String.Sub.to_string pkt))
+        prompt_pkt command decoder >>= function
+        | Some x -> go (x :: acc) decoder
+        | None -> return (List.rev acc) decoder
       in
-      prompt_pkt (go []) decoder
+      go [] decoder
     in
 
     let result decoder =
       let pkt = peek_pkt decoder in
       match String.Sub.cut ~sep:v_space pkt with
-      | None -> fail decoder (`Invalid_result (String.Sub.to_string pkt))
+      | None -> return (false, Stdlib.Ok ()) decoder
       | Some (_unpack, res) -> (
           match String.Sub.(to_string (trim res)) with
           | "ok" ->
               junk_pkt decoder;
-              return (Stdlib.Ok ()) decoder
+              return (true, Stdlib.Ok ()) decoder
           | err ->
               junk_pkt decoder;
-              return (Stdlib.Error err) decoder)
+              return (true, Stdlib.Error err) decoder)
     in
-    prompt_pkt result decoder >>= fun result ->
-    prompt_pkt commands decoder >>= fun commands ->
-    return { Status.result; Status.commands } decoder
-
-  (* XXX(dinosaure): even if we handle with and without sideband, currently the
-     default [decode_status] parse a sideband. On the Irmin side, sideband is
-     used in any case but we should improve [protocol.ml] and pass true
-     [sideband] value. *)
-
-  let decode_status ?(sideband = true) decoder =
-    let with_sideband decoder =
-      let pkt = peek_pkt decoder in
-      match String.Sub.head pkt with
-      | Some '\001' ->
-          let str = String.Sub.(to_string (tail pkt)) in
-          let decoder' = of_string str in
-          decode_status decoder' >>= fun res ->
-          junk_pkt decoder;
-          prompt_pkt (return res) decoder
-      | Some _ -> assert false (* TODO *)
-      | None ->
-          junk_pkt decoder;
-          return { Status.result = Ok (); Status.commands = [] } decoder
-    in
-    let without_sideband decoder =
-      let pkt = peek_pkt decoder in
-      if String.Sub.length pkt <> 0 then
-        fail decoder (`Invalid_command_result (String.Sub.to_string pkt))
-      else (
-        junk_pkt decoder;
-        return { Status.result = Ok (); Status.commands = [] } decoder)
-    in
-    if sideband then prompt_pkt with_sideband decoder
-    else prompt_pkt without_sideband decoder
+    prompt_pkt result decoder >>= function
+    | false, result -> return { Status.result; commands = [] } decoder
+    | true, result ->
+        commands decoder >>= fun commands ->
+        return { Status.result; Status.commands } decoder
 
   let decode_commands decoder =
     let rec rest_commands ({ Commands.commands = first, rest; _ } as res)
