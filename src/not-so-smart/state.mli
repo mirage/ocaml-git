@@ -44,6 +44,10 @@ module Context : sig
        and type decoder = Pkt_line.Decoder.decoder
 
   val make : client_caps:Capability.t list -> t
+
+  val with_decoder :
+    client_caps:Capability.t list -> Pkt_line.Decoder.decoder -> t
+
   val capabilities : t -> capabilities
   val replace_server_caps : t -> Capability.t list -> unit
   val is_cap_shared : t -> Capability.t -> bool

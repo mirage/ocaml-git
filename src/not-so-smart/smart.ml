@@ -29,6 +29,7 @@ module Witness = struct
     | Result : string Result.t recv
     | Status : string Status.t recv
     | Packet : bool -> string recv
+    | Commands : (string, string) Commands.t option recv
     | Recv_pack : {
         side_band : bool;
         push_pack : string * int * int -> unit;
@@ -90,6 +91,7 @@ module Value = struct
       match w with
       | Advertised_refs -> decode_advertised_refs decoder
       | Result -> decode_result decoder
+      | Commands -> decode_commands decoder
       | Recv_pack { side_band; push_pack; push_stdout; push_stderr } ->
           decode_pack ~side_band ~push_pack ~push_stdout ~push_stderr decoder
       | Ack -> decode_negotiation decoder
@@ -119,6 +121,7 @@ module Context = struct
   }
 
   let make = State.Context.make
+  let with_decoder = State.Context.with_decoder
   let replace_server_caps = State.Context.replace_server_caps
   let is_cap_shared = State.Context.is_cap_shared
   let capabilities = State.Context.capabilities
@@ -131,7 +134,7 @@ let advertised_refs = Advertised_refs
 let want = Want
 let negotiation_done = Done
 let negotiation_result = Result
-let commands = Commands
+let commands : _ send = Commands
 
 let recv_pack ?(side_band = false) ?(push_stdout = ignore)
     ?(push_stderr = ignore) push_pack =
@@ -147,6 +150,7 @@ let send_pack ?(stateless = false) side_band =
 
 let packet ~trim = Packet trim
 let send_advertised_refs : _ send = Advertised_refs
+let recv_commands : _ recv = Commands
 
 include State.Scheduler (State.Context) (Value)
 

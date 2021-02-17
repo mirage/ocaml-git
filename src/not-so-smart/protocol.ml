@@ -195,6 +195,26 @@ module Commands = struct
     commands : ('uid, 'ref) command * ('uid, 'ref) command list;
   }
 
+  let capabilities { capabilities; _ } = capabilities
+
+  let pp_command pp_uid pp_ref ppf = function
+    | Create (uid, r) ->
+        Fmt.pf ppf "@[<1>(Create@ @[<1>(%a,@ %a)@])@]" pp_uid uid pp_ref r
+    | Delete (uid, r) ->
+        Fmt.pf ppf "@[<1>(Delete@ @[<1>(%a,@ %a)@])@]" pp_uid uid pp_ref r
+    | Update (a, b, r) ->
+        Fmt.pf ppf "@[<1>(Update@ @[<1>(%a,@ %a,@ %a)@])@]" pp_uid a pp_uid b
+          pp_ref r
+
+  let pp pp_uid pp_ref ppf { capabilities; commands } =
+    Fmt.pf ppf "{ @[<hov>capabilities= @[<hov>%a@];@ commands= @[<hov>%a@];@] }"
+      Fmt.(Dump.list Capability.pp)
+      capabilities
+      Fmt.(
+        Dump.pair (pp_command pp_uid pp_ref)
+          Dump.(list (pp_command pp_uid pp_ref)))
+      commands
+
   let create uid reference = Create (uid, reference)
   let delete uid reference = Delete (uid, reference)
   let update a b reference = Update (a, b, reference)
@@ -279,6 +299,7 @@ module Decoder = struct
     | `Invalid_ack of string
     | `Invalid_result of string
     | `Invalid_command_result of string
+    | `Invalid_command of string
     | `Unexpected_flush
     | `Invalid_pkt_line ]
 
@@ -295,6 +316,7 @@ module Decoder = struct
     | `Invalid_command_result raw ->
         Fmt.pf ppf "Invalid result command (%S)" raw
     | `Unexpected_flush -> Fmt.string ppf "Unexpected flush"
+    | `Invalid_command cmd -> Fmt.pf ppf "Invalid command (%S)" cmd
 
   let is_new_line = function '\n' -> true | _ -> false
 
@@ -705,6 +727,79 @@ module Decoder = struct
     in
     if sideband then prompt_pkt with_sideband decoder
     else prompt_pkt without_sideband decoder
+
+  let decode_commands decoder =
+    let rec rest_commands ({ Commands.commands = first, rest; _ } as res)
+        decoder =
+      let pkt = peek_pkt decoder in
+      match String.Sub.cuts ~sep:v_space pkt with
+      | [ oid0; oid1; reference ] ->
+          let reference = String.Sub.to_string reference in
+          let commands =
+            match
+              String.Sub.for_all is_zero oid0, String.Sub.for_all is_zero oid1
+            with
+            | true, false ->
+                ( first,
+                  Commands.Create (String.Sub.to_string oid1, reference) :: rest
+                )
+            | false, true ->
+                ( first,
+                  Commands.Delete (String.Sub.to_string oid0, reference) :: rest
+                )
+            | false, false ->
+                ( first,
+                  Commands.Update
+                    ( String.Sub.to_string oid0,
+                      String.Sub.to_string oid1,
+                      reference )
+                  :: rest )
+            | _ -> assert false
+          in
+          junk_pkt decoder;
+          prompt_pkt (rest_commands { res with commands }) decoder
+      | _ -> return (Some res) decoder
+    in
+    let first_command decoder =
+      let pkt = peek_pkt decoder in
+      match String.Sub.cut ~sep:v_zero pkt with
+      | Some (cmd, capabilities) -> (
+          let capabilities = String.Sub.fields capabilities in
+          let capabilities =
+            List.map
+              (Capability.of_string <.> String.Sub.to_string)
+              capabilities
+          in
+          match String.Sub.cuts ~sep:v_space cmd with
+          | [ oid0; oid1; reference ] ->
+              let reference = String.Sub.to_string reference in
+              let commands =
+                match
+                  ( String.Sub.for_all is_zero oid0,
+                    String.Sub.for_all is_zero oid1 )
+                with
+                | true, false ->
+                    Commands.Create (String.Sub.to_string oid1, reference), []
+                | false, true ->
+                    Commands.Delete (String.Sub.to_string oid0, reference), []
+                | false, false ->
+                    ( Commands.Update
+                        ( String.Sub.to_string oid0,
+                          String.Sub.to_string oid1,
+                          reference ),
+                      [] )
+                | true, true -> assert false
+              in
+              junk_pkt decoder;
+              prompt_pkt
+                (rest_commands { Commands.capabilities; commands })
+                decoder
+          | _ -> fail decoder (`Invalid_command (String.Sub.to_string cmd)))
+      | None ->
+          junk_pkt decoder;
+          return None decoder
+    in
+    prompt_pkt first_command decoder
 end
 
 module Encoder = struct
