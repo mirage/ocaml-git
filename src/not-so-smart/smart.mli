@@ -236,7 +236,7 @@ val recv_pack :
 val recv_commands : (string, string) Commands.t option recv
 val ack : string Negotiation.t recv
 val shallows : string Shallow.t list recv
-val status : string Status.t recv
+val status : bool -> string Status.t recv
 val packet : trim:bool -> string recv
 val send_advertised_refs : (string, string) Advertised_refs.t send
 val bind : ('a, 'err) t -> f:('a -> ('b, 'err) t) -> ('b, 'err) t
