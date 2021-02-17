@@ -464,13 +464,19 @@ struct
             | `Domain v -> Domain_name.pp ppf v
             | `Addr v -> Ipaddr.pp ppf v
           in
+          let pp_port ppf = function
+            | Some port -> Fmt.pf ppf ":%d" port
+            | None -> ()
+          in
           let uri, headers =
             match scheme with
             | `HTTP headers ->
-                ( Uri.of_string (Fmt.str "http://%a%s.git" pp_host host path),
+                ( Uri.of_string
+                    (Fmt.str "http://%a%a%s" pp_host host pp_port edn.port path),
                   headers )
             | `HTTPS headers ->
-                ( Uri.of_string (Fmt.str "https://%a%s.git" pp_host host path),
+                ( Uri.of_string
+                    (Fmt.str "https://%a%a%s" pp_host host pp_port edn.port path),
                   headers )
           in
           let run () =
