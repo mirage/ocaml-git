@@ -1,7 +1,13 @@
 open Lwt.Infix
 
-type flow = { mutable i : Cstruct.t; mutable o : Cstruct.t; mutable c : bool }
-type endpoint = string list
+type flow = {
+  mutable i : Cstruct.t;
+  mutable o : Cstruct.t;
+  mutable c : bool;
+  push : Cstruct.t -> unit;
+}
+
+type endpoint = string list * (Cstruct.t -> unit)
 type error = |
 type write_error = [ `Closed ]
 
@@ -9,10 +15,10 @@ let pp_error : error Fmt.t = fun _ppf -> function _ -> .
 let closed_by_peer = "Closed by peer"
 let pp_write_error ppf = function `Closed -> Fmt.string ppf closed_by_peer
 
-let connect i =
+let connect (i, push) =
   let i = String.concat "" i in
   let i = Cstruct.of_string i in
-  Lwt.return_ok { i; o = Cstruct.create 0x1000; c = false }
+  Lwt.return_ok { i; o = Cstruct.create 0; c = false; push }
 
 let read flow =
   if Cstruct.len flow.i = 0 then (
@@ -45,4 +51,5 @@ let writev flow sstr =
 
 let close flow =
   flow.c <- true;
+  flow.push flow.o;
   Lwt.return ()

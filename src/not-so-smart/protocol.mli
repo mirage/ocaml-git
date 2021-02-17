@@ -107,6 +107,7 @@ module Commands : sig
   val create : 'uid -> 'ref -> ('uid, 'ref) command
   val delete : 'uid -> 'ref -> ('uid, 'ref) command
   val update : 'uid -> 'uid -> 'ref -> ('uid, 'ref) command
+  val capabilities : ('uid, 'ref) t -> Capability.t list
 
   val v :
     capabilities:Capability.t list ->
@@ -115,6 +116,7 @@ module Commands : sig
     ('uid, 'ref) t
 
   val commands : ('uid, 'ref) t -> ('uid, 'ref) command list
+  val pp : 'uid Fmt.t -> 'ref Fmt.t -> ('uid, 'ref) t Fmt.t
 
   val map :
     fuid:('uid0 -> 'uid1) ->
@@ -160,6 +162,7 @@ module Decoder : sig
     | `Invalid_ack of string
     | `Invalid_result of string
     | `Invalid_command_result of string
+    | `Invalid_command of string
     | `Unexpected_flush
     | `Invalid_pkt_line ]
 
@@ -185,6 +188,9 @@ module Decoder : sig
     ?sideband:bool -> decoder -> (string Status.t, [> error ]) state
 
   val decode_packet : trim:bool -> decoder -> (string, [> error ]) state
+
+  val decode_commands :
+    decoder -> ((string, string) Commands.t option, [> error ]) state
 end
 
 module Encoder : sig
