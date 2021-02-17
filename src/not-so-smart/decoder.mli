@@ -103,3 +103,7 @@ val prompt_pkt :
   (decoder -> ('a, ([> error ] as 'b)) state) ->
   decoder ->
   ('a, 'b) state
+
+(**/*)
+
+val pkt_len_unsafe : decoder -> int
