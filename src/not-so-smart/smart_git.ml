@@ -51,6 +51,13 @@ module Endpoint = struct
     | Ok _ -> a
     | Error _ -> ( match b () with Ok _ as r -> r | Error _ -> a)
 
+  let headers_from_uri uri =
+    match Uri.user uri, Uri.password uri with
+    | Some user, Some password ->
+        let raw = Base64.encode_exn (Fmt.str "%s:%s" user password) in
+        [ "Authorization", Fmt.str "Basic %s" raw ]
+    | _ -> []
+
   let of_string str =
     let open Rresult in
     let parse_ssh x =
@@ -98,9 +105,11 @@ module Endpoint = struct
       | Some "git", Some str, port ->
           host str >>= fun host -> R.ok { scheme = `Git; path; port; host }
       | Some "http", Some str, port ->
-          host str >>= fun host -> R.ok { scheme = `HTTP []; path; port; host }
+          host str >>= fun host ->
+          R.ok { scheme = `HTTP (headers_from_uri uri); path; port; host }
       | Some "https", Some str, port ->
-          host str >>= fun host -> R.ok { scheme = `HTTPS []; path; port; host }
+          host str >>= fun host ->
+          R.ok { scheme = `HTTPS (headers_from_uri uri); path; port; host }
       | _ -> R.error_msgf "invalid uri: %a" Uri.pp uri
     in
     parse_ssh str
