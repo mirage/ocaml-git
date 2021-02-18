@@ -38,14 +38,14 @@ struct
   let empty_commit git = function
     | None ->
       Store.write git empty_tree >>? fun (tree, _) ->
-      Store.write git (commit ~tree ~author:(author ()) ".") >>? fun (hash, _) ->
+      Store.write git (commit ~tree ~author:(author ()) None) >>? fun (hash, _) ->
       Store.Ref.write git Git.Reference.master (Git.Reference.uid hash)
     | Some (_, _) ->
       Store.Ref.resolve git Git.Reference.master >>= failwith Store.pp_error >>= fun hash ->
       Store.read_exn git hash >>= fun obj ->
       let[@warning "-8"] Git.Value.Commit parent = obj in
       let tree = Store.Value.Commit.tree parent in
-      Store.write git (commit ~parent:hash ~tree ~author:(author ()) ".") >>? fun (hash, _) ->
+      Store.write git (commit ~parent:hash ~tree ~author:(author ()) None) >>? fun (hash, _) ->
       Store.Ref.write git Git.Reference.master (Git.Reference.uid hash)
 
   let capabilities =
