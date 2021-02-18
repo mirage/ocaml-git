@@ -69,13 +69,13 @@ struct
   let c1 =
     Store.Value.Commit.make
       ~tree:(Store.Value.Tree.digest t2)
-      ~author:john_doe ~committer:john_doe "hello r1"
+      ~author:john_doe ~committer:john_doe (Some "hello r1")
 
   let c2 =
     Store.Value.Commit.make
       ~tree:(Store.Value.Tree.digest t4)
       ~parents:[ Store.Value.Commit.digest c1 ]
-      ~author:john_doe ~committer:john_doe "hello r1!"
+      ~author:john_doe ~committer:john_doe (Some "hello r1!")
 
   let c3 =
     Store.Value.Commit.make
@@ -98,7 +98,7 @@ struct
       ~parents:[ Store.Value.Commit.digest c3 ]
       ~author:thomas ~committer:thomas
       ~extra:[ "simple-key", [ "simple value" ] ]
-      "with extra-fields"
+      (Some "with extra-fields")
 
   let gpg =
     [
@@ -116,17 +116,18 @@ struct
     Store.Value.Commit.make
       ~tree:(Store.Value.Tree.digest t5)
       ~parents:[ Store.Value.Commit.digest c3 ]
-      ~author:thomas ~committer:thomas ~extra:[ "gpgsig", gpg ] "with GPG"
+      ~author:thomas ~committer:thomas ~extra:[ "gpgsig", gpg ]
+      (Some "with GPG")
 
   let tt1 =
     Store.Value.Tag.make
       (Store.Value.Commit.digest c1)
-      Git.Tag.Commit ~tag:"foo" ~tagger:john_doe "Ho yeah!"
+      Git.Tag.Commit ~tag:"foo" ~tagger:john_doe (Some "Ho yeah!")
 
   let tt2 =
     Store.Value.Tag.make
       (Store.Value.Commit.digest c2)
-      Git.Tag.Commit ~tag:"bar" ~tagger:john_doe "Haha!"
+      Git.Tag.Commit ~tag:"bar" ~tagger:john_doe (Some "Haha!")
 
   let r1 = Git.Reference.v "refs/origin/head"
   let r2 = Git.Reference.v "refs/upstream/head"

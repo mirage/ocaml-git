@@ -22,14 +22,14 @@ type 'hash t = {
   kind : kind;
   tag : string;
   tagger : User.t option;
-  message : string;
+  message : string option;
 }
 
 module type S = sig
   type hash
   type nonrec t = hash t
 
-  val make : hash -> kind -> ?tagger:User.t -> tag:string -> string -> t
+  val make : hash -> kind -> ?tagger:User.t -> tag:string -> string option -> t
   val format : t Encore.t
 
   include S.DIGEST with type t := t and type hash := hash
@@ -38,7 +38,7 @@ module type S = sig
   val length : t -> int64
   val obj : t -> hash
   val tag : t -> string
-  val message : t -> string
+  val message : t -> string option
   val kind : t -> kind
   val tagger : t -> User.t option
 end
@@ -62,7 +62,9 @@ module Make (Hash : S.HASH) = struct
        }"
       Hash.pp obj pp_kind kind tag
       (Fmt.hvbox (Fmt.option User.pp))
-      tagger (Fmt.hvbox Fmt.text) message
+      tagger
+      Fmt.(option (hvbox text))
+      message
 
   let string_of_kind = function
     | Commit -> "commit"
@@ -127,6 +129,14 @@ module Make (Hash : S.HASH) = struct
       let open Encore.Syntax in
       Encore.Bij.v ~fwd:(String.concat "") ~bwd:(fun x -> [ x ]) <$> rest
 
+    let rest =
+      let open Encore.Syntax in
+      let open Encore.Either in
+      let fwd = function L str -> Some str | R _ -> None in
+      let bwd = function Some str -> L str | None -> R "" in
+      map (Encore.Bij.v ~fwd ~bwd)
+        (peek ((Encore.Bij.char '\x0a' <$> any) *> rest) (const ""))
+
     let binding ?key value =
       let open Encore.Syntax in
       let value =
@@ -170,7 +180,7 @@ module Make (Hash : S.HASH) = struct
     + string t.tag
     + 1L
     + user_length
-    + string t.message
+    + match t.message with None -> 0L | Some str -> 1L + string str
 
   let digest value =
     Stream.digest

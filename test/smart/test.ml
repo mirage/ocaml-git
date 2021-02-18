@@ -1694,7 +1694,8 @@ let test_push_capabilities () =
   let tree0 = Git.Mem.Store.Value.(tree (Tree.v [])) in
   let commit0 root =
     Git.Mem.Store.Value.(
-      commit (Commit.make ~parents:[] ~tree:root ~author ~committer:author "."))
+      commit
+        (Commit.make ~parents:[] ~tree:root ~author ~committer:author (Some ".")))
   in
   let fiber =
     Git.Mem.Store.v (Fpath.v "/") >|= store_err >>? fun store ->
