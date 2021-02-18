@@ -63,7 +63,7 @@ struct
     {
       Git.User.name = "John Doe";
       email = "john@doe.org";
-      date = Random.int64 Int64.max_int, None;
+      date = Int64.of_int (Random.int (0x40000000 - 1)), None;
     }
 
   let c1 =
@@ -89,7 +89,7 @@ struct
     {
       Git.User.name = "Thomas Gazagnaire";
       email = "thomas@gazagnaire.org";
-      date = Random.int64 Int64.max_int, None;
+      date = Int64.of_int (Random.int (0x40000000 - 1)), None;
     }
 
   let c4 =
