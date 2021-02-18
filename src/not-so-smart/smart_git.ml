@@ -51,6 +51,13 @@ module Endpoint = struct
     | Ok _ -> a
     | Error _ -> ( match b () with Ok _ as r -> r | Error _ -> a)
 
+  let headers_from_uri uri =
+    match Uri.user uri, Uri.password uri with
+    | Some user, Some password ->
+        let raw = Base64.encode_exn (Fmt.str "%s:%s" user password) in
+        [ "Authorization", Fmt.str "Basic %s" raw ]
+    | _ -> []
+
   let of_string str =
     let open Rresult in
     let parse_ssh x =
@@ -98,9 +105,11 @@ module Endpoint = struct
       | Some "git", Some str, port ->
           host str >>= fun host -> R.ok { scheme = `Git; path; port; host }
       | Some "http", Some str, port ->
-          host str >>= fun host -> R.ok { scheme = `HTTP []; path; port; host }
+          host str >>= fun host ->
+          R.ok { scheme = `HTTP (headers_from_uri uri); path; port; host }
       | Some "https", Some str, port ->
-          host str >>= fun host -> R.ok { scheme = `HTTPS []; path; port; host }
+          host str >>= fun host ->
+          R.ok { scheme = `HTTPS (headers_from_uri uri); path; port; host }
       | _ -> R.error_msgf "invalid uri: %a" Uri.pp uri
     in
     parse_ssh str
@@ -455,13 +464,19 @@ struct
             | `Domain v -> Domain_name.pp ppf v
             | `Addr v -> Ipaddr.pp ppf v
           in
+          let pp_port ppf = function
+            | Some port -> Fmt.pf ppf ":%d" port
+            | None -> ()
+          in
           let uri, headers =
             match scheme with
             | `HTTP headers ->
-                ( Uri.of_string (Fmt.str "http://%a%s.git" pp_host host path),
+                ( Uri.of_string
+                    (Fmt.str "http://%a%a%s" pp_host host pp_port edn.port path),
                   headers )
             | `HTTPS headers ->
-                ( Uri.of_string (Fmt.str "https://%a%s.git" pp_host host path),
+                ( Uri.of_string
+                    (Fmt.str "https://%a%a%s" pp_host host pp_port edn.port path),
                   headers )
           in
           let run () =
@@ -585,8 +600,30 @@ struct
     >>= fun () ->
     Mimic.close flow >>= fun () -> Lwt.return_ok ()
 
+  module Push_http = Nss.Push.Make (Scheduler) (Lwt) (Flow_http) (Uid) (Ref)
+
+  let http_push ~capabilities ~ctx uri ?(headers = []) path cmds endpoint store
+      access push_cfg pack =
+    let open Rresult in
+    let open Lwt.Infix in
+    let uri0 = Fmt.str "%a/info/refs?service=git-receive-pack" Uri.pp uri in
+    let uri0 = Uri.of_string uri0 in
+    Log.debug (fun m -> m "GET %a" Uri.pp uri0);
+    HTTP.get ~ctx ~headers uri0 >|= R.reword_error (R.msgf "%a" HTTP.pp_error)
+    >>? fun (_resp, contents) ->
+    let uri1 = Fmt.str "%a/git-receive-pack" Uri.pp uri in
+    let uri1 = Uri.of_string uri1 in
+    let flow =
+      { Flow_http.ic = contents; pos = 0; oc = ""; uri = uri1; headers; ctx }
+    in
+    Push_http.push ~capabilities cmds ~host:endpoint path flow store access
+      push_cfg pack
+    >>= fun () -> Lwt.return_ok ()
+
   let push ~ctx (access, light_load, heavy_load) store edn ?(version = `V1)
       ?(capabilities = default_capabilities) cmds =
+    let host = edn.Endpoint.host in
+    let path = edn.path in
     let ctx = Mimic.add git_capabilities `Wr (Endpoint.to_ctx edn ctx) in
     let open Rresult in
     match version, edn.Endpoint.scheme with
@@ -594,12 +631,39 @@ struct
         let uses_git_transport =
           match scheme with `Git -> true | `SSH _ -> false
         in
-        let host = edn.host in
-        let path = edn.path in
         let push_cfg = Nss.Push.configuration () in
         let run () =
           push ~uses_git_transport ~ctx ~capabilities path cmds host store
             access push_cfg
+            (pack ~light_load ~heavy_load)
+        in
+        Lwt.catch run (function
+          | Failure err -> Lwt.return_error (R.msgf "%s" err)
+          | exn -> Lwt.return_error (`Exn exn))
+    | `V1, ((`HTTP _ | `HTTPS _) as scheme) ->
+        let push_cfg = Nss.Push.configuration ~stateless:true () in
+        let pp_host ppf = function
+          | `Domain v -> Domain_name.pp ppf v
+          | `Addr v -> Ipaddr.pp ppf v
+        in
+        let pp_port ppf = function
+          | Some port -> Fmt.pf ppf ":%d" port
+          | None -> ()
+        in
+        let uri, headers =
+          match scheme with
+          | `HTTP headers ->
+              ( Uri.of_string
+                  (Fmt.str "http://%a%a%s" pp_host host pp_port edn.port path),
+                headers )
+          | `HTTPS headers ->
+              ( Uri.of_string
+                  (Fmt.str "https://%a%a%s" pp_host host pp_port edn.port path),
+                headers )
+        in
+        let run () =
+          http_push ~ctx ~capabilities uri ~headers path cmds host store access
+            push_cfg
             (pack ~light_load ~heavy_load)
         in
         Lwt.catch run (function

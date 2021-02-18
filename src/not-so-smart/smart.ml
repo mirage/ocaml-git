@@ -27,7 +27,7 @@ module Witness = struct
   type 'a recv =
     | Advertised_refs : (string, string) Advertised_refs.t recv
     | Result : string Result.t recv
-    | Status : string Status.t recv
+    | Status : bool -> string Status.t recv
     | Packet : bool -> string recv
     | Commands : (string, string) Commands.t option recv
     | Recv_pack : {
@@ -95,7 +95,7 @@ module Value = struct
       | Recv_pack { side_band; push_pack; push_stdout; push_stderr } ->
           decode_pack ~side_band ~push_pack ~push_stdout ~push_stderr decoder
       | Ack -> decode_negotiation decoder
-      | Status -> decode_status decoder
+      | Status sideband -> decode_status ~sideband decoder
       | Shallows -> decode_shallows decoder
       | Packet trim -> decode_packet ~trim decoder)
 end
@@ -140,7 +140,7 @@ let recv_pack ?(side_band = false) ?(push_stdout = ignore)
     ?(push_stderr = ignore) push_pack =
   Recv_pack { side_band; push_pack; push_stdout; push_stderr }
 
-let status = Status
+let status sideband = Status sideband
 let flush = Flush
 let ack = Ack
 let shallows = Shallows

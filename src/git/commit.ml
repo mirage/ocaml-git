@@ -146,7 +146,7 @@ module Make (Hash : S.HASH) = struct
       <*> binding ~key:"author" user
       <*> binding ~key:"committer" user
       <*> rep0 extra
-      <*> rest
+      <*> (Encore.Bij.char '\x0a' <$> any) *> rest
 
     let format = Encore.Syntax.map Encore.Bij.(compose obj6 commit) t
   end
@@ -186,6 +186,7 @@ module Make (Hash : S.HASH) = struct
     + List.fold_left
         (fun acc (key, v) -> string key + 1L + values v + acc)
         0L t.extra
+    + 1L
     + string t.message
 
   let pp ppf { tree; parents; author; committer; extra; message } =
