@@ -21,7 +21,7 @@ type 'hash t = {
   author : User.t;
   committer : User.t;
   extra : (string * string list) list;
-  message : string;
+  message : string option;
 }
 
 module type S = sig
@@ -34,7 +34,7 @@ module type S = sig
     committer:User.t ->
     ?parents:hash list ->
     ?extra:(string * string list) list ->
-    string ->
+    string option ->
     t
 
   val format : t Encore.t
@@ -47,7 +47,7 @@ module type S = sig
   val tree : t -> hash
   val committer : t -> User.t
   val author : t -> User.t
-  val message : t -> string
+  val message : t -> string option
   val extra : t -> (string * string list) list
   val compare_by_date : t -> t -> int
 end
@@ -139,6 +139,14 @@ module Make (Hash : S.HASH) = struct
       | Some key -> const key <* (Encore.Bij.char ' ' <$> any) <*> value
       | None -> while1 is_not_sp <* (Encore.Bij.char ' ' <$> any) <*> value
 
+    let rest =
+      let open Encore.Syntax in
+      let open Encore.Either in
+      let fwd = function L str -> Some str | R _ -> None in
+      let bwd = function Some str -> L str | None -> R "" in
+      map (Encore.Bij.v ~fwd ~bwd)
+        (peek ((Encore.Bij.char '\x0a' <$> any) *> rest) (const ""))
+
     let t =
       let open Encore.Syntax in
       binding ~key:"tree" hex
@@ -146,7 +154,7 @@ module Make (Hash : S.HASH) = struct
       <*> binding ~key:"author" user
       <*> binding ~key:"committer" user
       <*> rep0 extra
-      <*> (Encore.Bij.char '\x0a' <$> any) *> rest
+      <*> rest
 
     let format = Encore.Syntax.map Encore.Bij.(compose obj6 commit) t
   end
@@ -186,8 +194,7 @@ module Make (Hash : S.HASH) = struct
     + List.fold_left
         (fun acc (key, v) -> string key + 1L + values v + acc)
         0L t.extra
-    + 1L
-    + string t.message
+    + match t.message with Some str -> 1L + string str | None -> 0L
 
   let pp ppf { tree; parents; author; committer; extra; message } =
     let chr =
@@ -201,7 +208,9 @@ module Make (Hash : S.HASH) = struct
       (Fmt.hvbox (Fmt.list ~sep:(Fmt.unit ";@ ") Hash.pp))
       parents (Fmt.hvbox User.pp) author (Fmt.hvbox User.pp) committer
       Fmt.(hvbox (Dump.list (Dump.pair string (Dump.list string))))
-      extra (Fmt.hvbox pp_message) message
+      extra
+      Fmt.(option (hvbox pp_message))
+      message
 
   let digest value =
     Stream.digest
