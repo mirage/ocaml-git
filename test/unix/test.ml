@@ -258,6 +258,11 @@ let empty_commit =
     let open Rresult in
     R.join
     <.> Bos.OS.Dir.with_current path @@ fun () ->
+        Bos.OS.Cmd.run Bos.Cmd.(v "git" % "config" % "user.name" % "test")
+        >>= fun () ->
+        Bos.OS.Cmd.run
+          Bos.Cmd.(v "git" % "config" % "user.email" % "pseudo@pseudo.invalid")
+        >>= fun () ->
         Bos.OS.Cmd.run
           Bos.Cmd.(v "git" % "commit" % "--allow-empty" % "-m" % ".")
   in
