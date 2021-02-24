@@ -1,8 +1,24 @@
 (executable
  (name test)
- (libraries ptime ptime.clock.os git digestif cmdliner rresult result
-   alcotest fpath lwt lwt.unix alcotest-lwt base64 bos git-unix fmt.tty
-   logs.fmt test_store))
+ (libraries
+  ptime
+  ptime.clock.os
+  git
+  digestif
+  cmdliner
+  rresult
+  result
+  alcotest
+  fpath
+  lwt
+  lwt.unix
+  alcotest-lwt
+  base64
+  bos
+  git-unix
+  fmt.tty
+  logs.fmt
+  test_store))
 
 (rule
  (alias runtest)

@@ -167,7 +167,8 @@ let second_pass fpath (hash, oracle, matrix) =
     Carton.Dec.make fd ~allocate ~z ~uid_ln:SHA1.length
       ~uid_rw:SHA1.of_raw_string never
   in
-  Verify.verify ~threads:(Fiber.get_concurrency ()) pack ~map ~oracle ~matrix
+  Verify.verify ~threads:(Fiber.get_concurrency ()) pack ~map ~oracle
+    ~verbose:ignore ~matrix
   >>= fun () ->
   match Array.for_all Verify.is_resolved matrix with
   | false -> return (R.error_msgf "Thin PACK file")
@@ -181,7 +182,7 @@ let pp_kind ppf = function
 
 let pp_delta ppf status =
   match Verify.source_of_status status with
-  | Some uid -> Fmt.pf ppf "%d %a" (Verify.depth_of_status status) SHA1.pp uid
+  | Some uid -> Fmt.pf ppf " %d %a" (Verify.depth_of_status status) SHA1.pp uid
   | None -> ()
 
 let verify_hash ~memory hash =
@@ -232,7 +233,7 @@ let verify ~verbose fpath hash length carbon matrix =
           | exception _ -> Hashtbl.replace chains depth 1);
           match Carton.Dec.Idx.find idx uid with
           | Some (_crc, offset') when offset = offset' ->
-              Fmt.pr "%a %a %d %d %Ld %a\n%!" SHA1.pp uid pp_kind kind
+              Fmt.pr "%a %a %d %d %Ld%a\n%!" SHA1.pp uid pp_kind kind
                 (size :> int)
                 size_in_pack offset pp_delta status
           | _ -> Fmt.failwith "Invalid PACK file"
@@ -268,7 +269,10 @@ let run ~verbose fpath =
   second_pass pack (hash, oracle, matrix) >>? fun (hash, matrix) ->
   verify ~verbose fpath hash length carbon matrix |> Scheduler.prj
 
-let run verbose fpath = Fiber.run (run ~verbose fpath)
+let run verbose fpath =
+  match Fiber.run (run ~verbose fpath) with
+  | Ok () -> `Ok 0
+  | Error (`Msg err) -> `Error (false, Fmt.str "%s." err)
 
 open Cmdliner
 
@@ -304,6 +308,7 @@ let cmd =
          pack file.";
     ]
   in
-  Term.(const run $ verbose $ fpath), Term.info "verify-pack" ~doc ~exits ~man
+  ( Term.(ret (const run $ verbose $ fpath)),
+    Term.info "verify-pack" ~doc ~exits ~man )
 
-let () = Term.(exit @@ eval cmd)
+let () = Term.(exit_status @@ eval cmd)

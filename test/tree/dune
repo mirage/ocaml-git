@@ -1,7 +1,18 @@
 (executable
  (name test)
- (libraries ke bigarray-compat bigstringaf rresult result angstrom encore
-   digestif.c base64 fmt git alcotest))
+ (libraries
+  ke
+  bigarray-compat
+  bigstringaf
+  rresult
+  result
+  angstrom
+  encore
+  digestif.c
+  base64
+  fmt
+  git
+  alcotest))
 
 (rule
  (alias runtest)

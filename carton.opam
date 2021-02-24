@@ -31,6 +31,7 @@ depends: [
   "mmap"
   "result"
   "rresult"
+  "hxd" {>= "0.3.0"}
   "psq" {>= "0.2.0"}
   "fmt" {>= "0.8.7"}
   "result"

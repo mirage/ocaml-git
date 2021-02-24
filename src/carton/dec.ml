@@ -1464,13 +1464,14 @@ struct
       type fd.
       map:fd W.map ->
       oracle:Uid.t oracle ->
+      verbose:(unit -> unit) ->
       (fd, Uid.t) t ->
       kind:kind ->
       raw ->
       depth:int ->
       cursors:int64 list ->
       Uid.t node list =
-   fun ~map ~oracle t ~kind raw ~depth ~cursors ->
+   fun ~map ~oracle ~verbose t ~kind raw ~depth ~cursors ->
     match cursors with
     | [] -> []
     | [ cursor ] -> (
@@ -1478,11 +1479,12 @@ struct
           uid_of_offset_with_source ~map ~digest:oracle.digest t ~kind raw
             ~depth ~cursor
         in
+        verbose ();
         match oracle.children ~cursor ~uid with
         | [] -> [ Leaf (cursor, uid) ]
         | cursors ->
             let nodes =
-              nodes_of_offsets ~map ~oracle t ~kind (flip raw)
+              nodes_of_offsets ~map ~oracle ~verbose t ~kind (flip raw)
                 ~depth:(succ depth) ~cursors
             in
             [ Node (cursor, uid, nodes) ])
@@ -1500,11 +1502,12 @@ struct
               uid_of_offset_with_source ~map ~digest:oracle.digest t ~kind raw
                 ~depth ~cursor
             in
+            verbose ();
             match oracle.children ~cursor ~uid with
             | [] -> res.(i) <- Leaf (cursor, uid)
             | cursors ->
                 let nodes =
-                  nodes_of_offsets ~map ~oracle t ~kind (flip raw)
+                  nodes_of_offsets ~map ~oracle ~verbose t ~kind (flip raw)
                     ~depth:(succ depth) ~cursors
                 in
                 Bigstringaf.blit source ~src_off:0 (get_source raw) ~dst_off:0
@@ -1533,10 +1536,11 @@ struct
       type fd.
       map:fd W.map ->
       oracle:Uid.t oracle ->
+      verbose:(unit -> unit) ->
       (fd, Uid.t) t ->
       cursor:int64 ->
       Uid.t tree =
-   fun ~map ~oracle t ~cursor ->
+   fun ~map ~oracle ~verbose t ~cursor ->
     let weight = weight_of_tree ~cursor oracle in
     let raw = make_raw ~weight in
     (* allocation *)
@@ -1554,7 +1558,8 @@ struct
           else raw
         in
         let nodes =
-          nodes_of_offsets ~map ~oracle t ~kind (flip raw) ~depth:1 ~cursors
+          nodes_of_offsets ~map ~oracle ~verbose t ~kind (flip raw) ~depth:1
+            ~cursors
         in
         Base (kind, cursor, uid, nodes)
 
@@ -1562,13 +1567,14 @@ struct
       type fd.
       map:fd W.map ->
       oracle:Uid.t oracle ->
+      verbose:(unit -> unit) ->
       (fd, Uid.t) t ->
       cursor:int64 ->
       matrix:status array ->
       unit =
-   fun ~map ~oracle t ~cursor ~matrix ->
+   fun ~map ~oracle ~verbose t ~cursor ~matrix ->
     let (Base (kind, cursor, uid, children)) =
-      resolver ~map ~oracle t ~cursor
+      resolver ~map ~oracle ~verbose t ~cursor
     in
     matrix.(oracle.where ~cursor) <- Resolved_base (cursor, uid, kind);
     let rec go depth source = function
@@ -1590,6 +1596,10 @@ struct
     | Unresolved_base _ | Unresolved_node -> false
     | Resolved_base _ | Resolved_node _ -> true
 
+  let is_base = function
+    | Unresolved_base _ | Resolved_base _ -> true
+    | _ -> false
+
   let unresolved_base ~cursor = Unresolved_base cursor
   let unresolved_node = Unresolved_node
 
@@ -1598,11 +1608,12 @@ struct
       i:int ->
       map:fd W.map ->
       oracle:Uid.t oracle ->
+      verbose:(unit -> unit) ->
       (fd, Uid.t) t ->
       matrix:status array ->
       mutex:m ->
       unit IO.t =
-   fun ~i:_ ~map ~oracle t ~matrix ~mutex ->
+   fun ~i:_ ~map ~oracle ~verbose t ~matrix ~mutex ->
     let rec go () =
       IO.Mutex.lock mutex.m >>= fun () ->
       while
@@ -1619,7 +1630,7 @@ struct
         IO.Mutex.unlock mutex.m;
         let[@warning "-8"] (Unresolved_base cursor) = matrix.(root) in
         (* XXX(dinosaure): Oh god, save me! *)
-        IO.detach (fun () -> update ~map ~oracle t ~cursor ~matrix)
+        IO.detach (fun () -> update ~map ~oracle ~verbose t ~cursor ~matrix)
         >>= fun () -> (go [@tailcall]) ()
     in
     go ()
@@ -1629,14 +1640,15 @@ struct
       threads:int ->
       map:fd W.map ->
       oracle:Uid.t oracle ->
+      verbose:(unit -> unit) ->
       (fd, Uid.t) t ->
       matrix:status array ->
       unit IO.t =
-   fun ~threads ~map ~oracle t0 ~matrix ->
+   fun ~threads ~map ~oracle ~verbose t0 ~matrix ->
     let mutex = { v = 0; m = IO.Mutex.create () } in
 
     IO.parallel_iter
-      ~f:(fun (i, t) -> dispatcher ~i ~map ~oracle t ~matrix ~mutex)
+      ~f:(fun (i, t) -> dispatcher ~i ~map ~oracle ~verbose t ~matrix ~mutex)
       (List.init threads (fun th ->
            let z =
              Bigstringaf.copy t0.tmp ~off:0 ~len:(Bigstringaf.length t0.tmp)

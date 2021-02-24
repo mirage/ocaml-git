@@ -2,19 +2,49 @@
  (name git_mirage_tcp)
  (modules git_mirage_tcp)
  (public_name git-mirage.tcp)
- (libraries git.nss.git mimic result fmt lwt mirage-flow ipaddr
-   mirage-protocols mirage-stack))
+ (libraries
+  git.nss.git
+  mimic
+  result
+  fmt
+  lwt
+  mirage-flow
+  ipaddr
+  mirage-protocols
+  mirage-stack))
 
 (library
  (name git_mirage_ssh)
  (modules git_mirage_ssh)
  (public_name git-mirage.ssh)
- (libraries git.nss.git mimic result rresult lwt fmt ipaddr mirage-protocols
-   mirage-stack mirage-flow mirage-clock awa awa-mirage))
+ (libraries
+  git.nss.git
+  mimic
+  result
+  rresult
+  lwt
+  fmt
+  ipaddr
+  mirage-protocols
+  mirage-stack
+  mirage-flow
+  mirage-clock
+  awa
+  awa-mirage))
 
 (library
  (name git_mirage_dns)
  (modules git_mirage_dns)
  (public_name git-mirage.dns)
- (libraries mimic git.nss.git domain-name lwt ipaddr mirage-random
-   mirage-time mirage-clock mirage-protocols mirage-stack dns-client.mirage))
+ (libraries
+  mimic
+  git.nss.git
+  domain-name
+  lwt
+  ipaddr
+  mirage-random
+  mirage-time
+  mirage-clock
+  mirage-protocols
+  mirage-stack
+  dns-client.mirage))

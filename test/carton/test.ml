@@ -266,7 +266,7 @@ let verify_empty_pack () =
       weight = (fun ~cursor:_ -> Alcotest.fail "Invalid call to [weight]");
     }
   in
-  IO.run (Verify.verify ~threads:1 ~map ~oracle t ~matrix:[||])
+  IO.run (Verify.verify ~threads:1 ~map ~oracle ~verbose:ignore t ~matrix:[||])
 
 module Idx = Carton.Dec.Idx.N (Uid)
 
@@ -520,7 +520,7 @@ let verify_bomb_pack () =
     Carton.Dec.make { fd; mx } ~z ~allocate ~uid_ln:Uid.length
       ~uid_rw:Uid.of_raw_string (fun _ -> Alcotest.fail "Invalid call to IDX")
   in
-  IO.run (Verify.verify ~threads:1 ~map ~oracle t ~matrix);
+  IO.run (Verify.verify ~threads:1 ~map ~oracle ~verbose:ignore t ~matrix);
   Unix.close fd;
 
   let offsets =
@@ -668,7 +668,7 @@ let unpack_bomb_pack () =
   in
 
   let oracle, matrix = first_pass () in
-  IO.run (Verify.verify ~threads:1 ~map ~oracle pack ~matrix);
+  IO.run (Verify.verify ~threads:1 ~map ~oracle ~verbose:ignore pack ~matrix);
   Alcotest.(check pass) "verify" () ();
   let unpack status =
     let cursor = Verify.offset_of_status status in

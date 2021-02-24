@@ -1,7 +1,22 @@
 (executable
  (name test)
- (libraries bigarray-compat mimic mirage-flow result rresult lwt lwt.unix
-   logs logs.fmt ke bigarray fmt.tty cstruct fmt alcotest alcotest-lwt))
+ (libraries
+  bigarray-compat
+  mimic
+  mirage-flow
+  result
+  rresult
+  lwt
+  lwt.unix
+  logs
+  logs.fmt
+  ke
+  bigarray
+  fmt.tty
+  cstruct
+  fmt
+  alcotest
+  alcotest-lwt))
 
 (rule
  (alias runtest)

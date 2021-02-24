@@ -438,6 +438,7 @@ module Verify
 
   val pp : Format.formatter -> status -> unit
   val is_resolved : status -> bool
+  val is_base : status -> bool
   val uid_of_status : status -> Uid.t
   val kind_of_status : status -> kind
   val depth_of_status : status -> int
@@ -450,6 +451,7 @@ module Verify
     threads:int ->
     map:'fd W.map ->
     oracle:Uid.t oracle ->
+    verbose:(unit -> unit) ->
     ('fd, Uid.t) t ->
     matrix:status array ->
     unit IO.t

@@ -1,7 +1,17 @@
 (executable
  (name test)
- (libraries fmt fmt.tty logs.cli logs.fmt lwt lwt.unix git alcotest-lwt
-   bigstringaf cstruct alcotest))
+ (libraries
+  fmt
+  fmt.tty
+  logs.cli
+  logs.fmt
+  lwt
+  lwt.unix
+  git
+  alcotest-lwt
+  bigstringaf
+  cstruct
+  alcotest))
 
 (rule
  (alias runtest)
