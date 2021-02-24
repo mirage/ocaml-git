@@ -38,6 +38,7 @@ module Witness = struct
       }
         -> bool recv
     | Ack : string Negotiation.t recv
+    | Flush : unit recv
     | Shallows : string Shallow.t list recv
 end
 
@@ -96,6 +97,7 @@ module Value = struct
           decode_pack ~side_band ~push_pack ~push_stdout ~push_stderr decoder
       | Ack -> decode_negotiation decoder
       | Status sideband -> decode_status ~sideband decoder
+      | Flush -> decode_flush decoder
       | Shallows -> decode_shallows decoder
       | Packet trim -> decode_packet ~trim decoder)
 end
@@ -140,8 +142,9 @@ let recv_pack ?(side_band = false) ?(push_stdout = ignore)
     ?(push_stderr = ignore) push_pack =
   Recv_pack { side_band; push_pack; push_stdout; push_stderr }
 
+let recv_flush : _ recv = Flush
 let status sideband = Status sideband
-let flush = Flush
+let flush : _ send = Flush
 let ack = Ack
 let shallows = Shallows
 

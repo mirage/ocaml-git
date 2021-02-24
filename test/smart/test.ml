@@ -1656,7 +1656,7 @@ let simple_push =
   [
     "008e0000000000000000000000000000000000000000 \
      refs/heads/master\000report-status delete-refs side-band-64k quiet atomic \
-     ofs-delta agent=git/2.27.0";
+     ofs-delta agent=git/2.27.0"; "0000";
   ]
 
 let capability = Alcotest.testable Smart.Capability.pp Smart.Capability.equal

@@ -134,7 +134,7 @@ end
 module Status : sig
   type 'ref t = private {
     result : (unit, string) result;
-    commands : ('ref, 'ref * string) result list;
+    commands : [ `FF of 'ref | `OK of 'ref | `ER of 'ref * string ] list;
   }
 
   val map : f:('a -> 'b) -> 'a t -> 'b t
@@ -163,8 +163,9 @@ module Decoder : sig
     | `Invalid_result of string
     | `Invalid_command_result of string
     | `Invalid_command of string
+    | `Unexpected_pkt_line of string
     | `Unexpected_flush
-    | `Invalid_pkt_line ]
+    | `Invalid_pkt_line of string ]
 
   val pp_error : error Fmt.t
 
@@ -183,6 +184,7 @@ module Decoder : sig
 
   val decode_negotiation : decoder -> (string Negotiation.t, [> error ]) state
   val decode_shallows : decoder -> (string Shallow.t list, [> error ]) state
+  val decode_flush : decoder -> (unit, [> error ]) state
 
   val decode_status :
     ?sideband:bool -> decoder -> (string Status.t, [> error ]) state

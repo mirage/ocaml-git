@@ -136,7 +136,7 @@ end
 module Status : sig
   type 'ref t = private {
     result : (unit, string) result;
-    commands : ('ref, 'ref * string) result list;
+    commands : [ `FF of 'ref | `OK of 'ref | `ER of 'ref * string ] list;
   }
 
   val map : f:('a -> 'b) -> 'a t -> 'b t
@@ -189,8 +189,9 @@ type error =
   | `Invalid_command_result of string
   | `Invalid_command of string
   | `No_enough_space
+  | `Unexpected_pkt_line of string
   | `Unexpected_flush
-  | `Invalid_pkt_line ]
+  | `Invalid_pkt_line of string ]
 
 val pp_error : error Fmt.t
 
@@ -233,6 +234,7 @@ val recv_pack :
   (string * int * int -> unit) ->
   bool recv
 
+val recv_flush : unit recv
 val recv_commands : (string, string) Commands.t option recv
 val ack : string Negotiation.t recv
 val shallows : string Shallow.t list recv

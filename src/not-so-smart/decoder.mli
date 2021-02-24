@@ -34,7 +34,7 @@ type error =
   | `Unexpected_end_of_input
   | `No_enough_space
   | `Assert_predicate of char -> bool
-  | `Invalid_pkt_line ]
+  | `Invalid_pkt_line of string ]
 
 val pp_error : error Fmt.t
 
