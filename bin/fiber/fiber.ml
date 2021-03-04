@@ -110,8 +110,7 @@ let worker pool =
       let res = pop pool.seq in
       pool.working_cnt <- pool.working_cnt + 1;
       Mutex.unlock pool.work_mutex;
-      ( try Option.iter (fun (Prgn (f, a)) -> f a) res;
-        with _exn -> () ) ;
+      (try Option.iter (fun (Prgn (f, a)) -> f a) res with _exn -> ());
       Mutex.lock pool.work_mutex;
       pool.working_cnt <- pool.working_cnt - 1;
       if (not pool.stop) && pool.working_cnt = 0 && is_empty pool.seq then
