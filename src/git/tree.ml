@@ -125,7 +125,8 @@ let value_of_entry = function
   | { name; _ } -> Contents name
 
 let v entries =
-  List.map (fun entry -> value_of_entry entry, entry) entries
+  List.rev_map (fun entry -> value_of_entry entry, entry) entries
+  |> List.rev
   |> List.sort (fun (a, _) (b, _) -> compare a b)
   |> List.map snd
 
