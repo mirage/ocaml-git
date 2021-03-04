@@ -29,7 +29,7 @@ let read flow =
     let len = min (Cstruct.len res) (Cstruct.len flow.i) in
     Cstruct.blit flow.i 0 res 0 len;
     flow.i <- Cstruct.shift flow.i len;
-    Lwt.return_ok (`Data res)
+    Lwt.return_ok (`Data (Cstruct.sub res 0 len))
 
 let ( <.> ) f g x = f (g x)
 

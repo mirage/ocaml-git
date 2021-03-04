@@ -241,16 +241,19 @@ end
 module Status = struct
   type 'ref t = {
     result : (unit, string) result;
-    commands : ('ref, 'ref * string) result list;
+    commands : [ `FF of 'ref | `OK of 'ref | `ER of 'ref * string ] list;
   }
 
+  let pp_commands pp_ref ppf = function
+    | `FF reference -> Fmt.pf ppf "fast-forward %a" pp_ref reference
+    | `OK reference -> Fmt.pf ppf "ok %a" pp_ref reference
+    | `ER (reference, err) -> Fmt.pf ppf "error on %a: %s" pp_ref reference err
+
   let pp ppf { result; commands } =
-    let ok_with_ref ppf ref = Fmt.pf ppf "%s:ok" ref in
-    let error_with_ref ppf (ref, err) = Fmt.pf ppf "%s:%s" ref err in
     Fmt.pf ppf "{ @[<hov>result= %a;@ commands= @[<hov>%a@];@] }"
       Fmt.(Dump.result ~ok:(const string "done") ~error:string)
       result
-      Fmt.(Dump.list (Dump.result ~ok:ok_with_ref ~error:error_with_ref))
+      Fmt.(Dump.list (pp_commands string))
       commands
 
   let to_result { result; _ } = result
@@ -258,8 +261,9 @@ module Status = struct
   let map ~f { result; commands } =
     let commands =
       let fold = function
-        | Ok ref -> Ok (f ref)
-        | Error (ref, err) -> Error (f ref, err)
+        | `FF ref -> `FF (f ref)
+        | `OK ref -> `OK (f ref)
+        | `ER (ref, err) -> `ER (f ref, err)
       in
       List.map fold commands
     in
@@ -271,17 +275,17 @@ module Status = struct
         | Ok (Commands.Create (_, ref))
         | Ok (Commands.Delete (_, ref))
         | Ok (Commands.Update (_, _, ref)) ->
-            Ok ref
+            `OK ref
         | Error
             ( ( Commands.Create (_, ref)
               | Commands.Delete (_, ref)
               | Commands.Update (_, _, ref) ),
               err ) ->
-            Error (ref, err)
+            `ER (ref, err)
       in
       List.map map cmds
     in
-    if List.exists Rresult.R.is_error commands then
+    if List.exists (function `ER _ -> true | _ -> false) commands then
       { result = Error err; commands }
     else { result = Ok (); commands }
 end
@@ -301,7 +305,8 @@ module Decoder = struct
     | `Invalid_command_result of string
     | `Invalid_command of string
     | `Unexpected_flush
-    | `Invalid_pkt_line ]
+    | `Unexpected_pkt_line of string
+    | `Invalid_pkt_line of string ]
 
   let pp_error ppf = function
     | #Pkt_line.Decoder.error as err -> Pkt_line.Decoder.pp_error ppf err
@@ -316,6 +321,7 @@ module Decoder = struct
     | `Invalid_command_result raw ->
         Fmt.pf ppf "Invalid result command (%S)" raw
     | `Unexpected_flush -> Fmt.string ppf "Unexpected flush"
+    | `Unexpected_pkt_line raw -> Fmt.pf ppf "Unexpected pkt-line (%S)" raw
     | `Invalid_command cmd -> Fmt.pf ppf "Invalid command (%S)" cmd
 
   let is_new_line = function '\n' -> true | _ -> false
@@ -407,9 +413,22 @@ module Decoder = struct
               capabilities
           in
           junk_pkt decoder;
-          return
-            { Advertised_refs.capabilities; refs = []; version; shallows = [] }
-            decoder
+          let k decoder =
+            let pkt = peek_pkt decoder in
+            if String.Sub.length pkt = 0 then (
+              junk_pkt decoder;
+              return
+                {
+                  Advertised_refs.capabilities;
+                  refs = [];
+                  version;
+                  shallows = [];
+                }
+                decoder)
+            else
+              fail decoder (`Invalid_advertised_ref (String.Sub.to_string pkt))
+          in
+          prompt_pkt k decoder
       | None -> fail decoder (`Invalid_advertised_ref (String.Sub.to_string v))
     in
 
@@ -645,58 +664,43 @@ module Decoder = struct
     in
     prompt_pkt k decoder
 
-  let decode_status ?(sideband = true) decoder =
-    let prompt_pkt =
-      match sideband with
-      | true ->
-          fun k decoder ->
-            let without_sideband decoder =
-              let pkt = peek_pkt ~trim:false decoder in
-              match String.Sub.head pkt with
-              | Some '\001' ->
-                  (* XXX(dinosaure): *!?*@?!* *)
-                  let str = String.Sub.(to_string (tail pkt)) in
-                  let decoder' = of_string str in
-                  k decoder' >>= fun res ->
-                  junk_pkt decoder;
-                  return res decoder
-              | Some _ -> assert false (* TODO *)
-              | None -> k decoder
-            in
-            prompt_pkt without_sideband decoder
-      | false -> fun k decoder -> prompt_pkt k decoder
+  let decode_flush decoder =
+    let k decoder =
+      let pkt = peek_pkt decoder in
+      if String.Sub.length pkt = 0 then return () decoder
+      else fail decoder (`Unexpected_pkt_line (String.Sub.to_string pkt))
     in
+    prompt_pkt k decoder
 
+  let decode_status decoder =
     let command decoder =
       let pkt = peek_pkt decoder in
-      if String.Sub.length pkt = 0 then (
-        junk_pkt decoder;
-        return None decoder)
+      if String.Sub.length pkt = 0 then Stdlib.Ok None
       else
         match String.Sub.cuts ~sep:v_space pkt with
         | res :: reference :: rest -> (
             match String.Sub.to_string res with
-            | "ok" ->
-                junk_pkt decoder;
-                return
-                  (Some (Stdlib.Ok (String.Sub.to_string reference)))
-                  decoder
+            | "ok" -> Stdlib.Ok (Some (`OK (String.Sub.to_string reference)))
             | "ng" ->
                 let err = String.Sub.(to_string (concat ~sep:v_space rest)) in
                 let reference = String.Sub.to_string reference in
-                junk_pkt decoder;
-                return (Some (Stdlib.Error (reference, err))) decoder
+                Stdlib.Ok (Some (`ER (reference, err)))
+            | "ff" -> Stdlib.Ok (Some (`FF (String.Sub.to_string reference)))
             | _ ->
-                fail decoder
+                Stdlib.Error
                   (`Invalid_command_result (String.Sub.to_string pkt)))
-        | _ -> fail decoder (`Invalid_command_result (String.Sub.to_string pkt))
+        | _ -> Stdlib.Error (`Invalid_command_result (String.Sub.to_string pkt))
     in
 
-    let commands decoder =
+    let commands res decoder =
       let rec go acc decoder =
-        prompt_pkt command decoder >>= function
-        | Some x -> go (x :: acc) decoder
-        | None -> return (List.rev acc) decoder
+        match command decoder with
+        | Ok (Some x) ->
+            junk_pkt decoder;
+            prompt_pkt (go (x :: acc)) decoder
+        | Ok None ->
+            return { Status.result = res; commands = List.rev acc } decoder
+        | Error err -> fail decoder err
       in
       go [] decoder
     in
@@ -704,21 +708,39 @@ module Decoder = struct
     let result decoder =
       let pkt = peek_pkt decoder in
       match String.Sub.cut ~sep:v_space pkt with
-      | None -> return (false, Stdlib.Ok ()) decoder
+      | None -> return { Status.result = Stdlib.Ok (); commands = [] } decoder
       | Some (_unpack, res) -> (
           match String.Sub.(to_string (trim res)) with
           | "ok" ->
               junk_pkt decoder;
-              return (true, Stdlib.Ok ()) decoder
+              prompt_pkt (commands (Stdlib.Ok ())) decoder
           | err ->
               junk_pkt decoder;
-              return (true, Stdlib.Error err) decoder)
+              prompt_pkt (commands (Stdlib.Error err)) decoder)
     in
-    prompt_pkt result decoder >>= function
-    | false, result -> return { Status.result; commands = [] } decoder
-    | true, result ->
-        commands decoder >>= fun commands ->
-        return { Status.result; Status.commands } decoder
+
+    prompt_pkt result decoder
+
+  let decode_status ?(sideband = true) decoder =
+    match sideband with
+    | true ->
+        let rec go buf decoder =
+          let pkt = peek_pkt ~trim:false decoder in
+          match String.Sub.head pkt with
+          | Some '\001' ->
+              let str = String.Sub.(to_string (tail pkt)) in
+              Buffer.add_string buf str;
+              junk_pkt decoder;
+              prompt_pkt (go buf) decoder
+          | Some _ ->
+              junk_pkt decoder;
+              prompt_pkt (go buf) decoder
+          | None ->
+              let decoder' = of_string (Buffer.contents buf) in
+              decode_status decoder'
+        in
+        prompt_pkt (go (Buffer.create 0x100)) decoder
+    | false -> decode_status decoder
 
   let decode_commands decoder =
     let rec rest_commands ({ Commands.commands = first, rest; _ } as res)
