@@ -314,6 +314,7 @@ let make_index_pack hash src dst resolveds =
   let oc, close =
     match src, dst with
     | `File fpath, None ->
+        (* XXX(dinosaure): infinite loop on [Fiber] if [open_out] raises an exception. *)
         open_out Fpath.(to_string (set_ext "idx" fpath)), close_out
     | _, Some fpath -> open_out Fpath.(to_string fpath), close_out
     | `Stdin, None -> stdout, ignore

@@ -91,7 +91,7 @@ let wait pool =
   Mutex.lock pool.work_mutex;
   let rec loop () =
     if
-      ((not pool.stop) && (pool.working_cnt <> 0 || not (is_empty pool.seq)))
+      ((not pool.stop) && pool.working_cnt <> 0 (* || not (is_empty pool.seq) *))
       || (pool.stop && pool.thread_cnt <> 0)
     then (
       Condition.wait pool.working_cond pool.work_mutex;
@@ -100,25 +100,29 @@ let wait pool =
   loop ();
   Mutex.unlock pool.work_mutex
 
+let counter = ref 0
+
+let rec loop pool =
+  Mutex.lock pool.work_mutex;
+  if pool.stop then raise Exit;
+  if is_empty pool.seq then Condition.wait pool.work_cond pool.work_mutex;
+  let res = pop pool.seq in
+  pool.working_cnt <- pool.working_cnt + 1;
+  Mutex.unlock pool.work_mutex;
+  (try Option.iter (fun (Prgn (f, a)) -> f a) res
+   with exn ->
+     Format.eprintf ">>> got an exception: %S." (Printexc.to_string exn);
+     raise exn);
+  Mutex.lock pool.work_mutex;
+  Option.iter (fun _ -> decr counter) res;
+  pool.working_cnt <- pool.working_cnt - 1;
+  if (not pool.stop) && pool.working_cnt = 0 && is_empty pool.seq then
+    Condition.signal pool.working_cond;
+  Mutex.unlock pool.work_mutex;
+  loop pool
+
 let worker pool =
-  let rec loop () =
-    Mutex.lock pool.work_mutex;
-    while is_empty pool.seq && not pool.stop do
-      Condition.wait pool.work_cond pool.work_mutex
-    done;
-    if not pool.stop then (
-      let res = pop pool.seq in
-      pool.working_cnt <- pool.working_cnt + 1;
-      Mutex.unlock pool.work_mutex;
-      (try Option.iter (fun (Prgn (f, a)) -> f a) res with _exn -> ());
-      Mutex.lock pool.work_mutex;
-      pool.working_cnt <- pool.working_cnt - 1;
-      if (not pool.stop) && pool.working_cnt = 0 && is_empty pool.seq then
-        Condition.signal pool.working_cond;
-      Mutex.unlock pool.work_mutex;
-      loop ())
-  in
-  loop ();
+  (try loop pool with Exit -> ());
   pool.thread_cnt <- pool.thread_cnt - 1;
   Condition.signal pool.working_cond;
   Mutex.unlock pool.work_mutex
@@ -166,7 +170,7 @@ let drop seq =
   let rec loop () = match pop seq with Some _ -> loop () | None -> () in
   loop ()
 
-let reset pool =
+let _reset pool =
   Mutex.lock pool.work_mutex;
   drop pool.seq;
   pool.stop <- true;
@@ -184,23 +188,31 @@ let pool = make ()
 let run fiber =
   let result = ref None in
   fiber (fun x -> result := Some x);
-  wait pool;
+  let rec loop pool =
+    wait pool;
+    Condition.broadcast pool.work_cond;
+    if !result = None then loop pool
+  in
+  loop pool;
   match !result with
   | Some x ->
-      reset pool;
+      (* reset pool; *)
       x
   | None -> failwith "Fiber.run"
 
 let detach prgn =
   let ivar = Ivar.create () in
+  let prgn =
+    Prgn
+      ( (fun ivar ->
+          let res = prgn () in
+          Ivar.fill ivar res),
+        ivar )
+  in
   Mutex.lock pool.work_mutex;
-  add pool.seq
-    (Prgn
-       ( (fun ivar ->
-           let res = prgn () in
-           Ivar.fill ivar res),
-         ivar ));
-  Condition.signal pool.work_cond;
+  add pool.seq prgn;
+  Condition.broadcast pool.work_cond;
+  incr counter;
   Mutex.unlock pool.work_mutex;
   Ivar.read ivar
 

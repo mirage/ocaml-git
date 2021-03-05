@@ -1628,10 +1628,11 @@ struct
         let root = mutex.v in
         mutex.v <- mutex.v + 1;
         IO.Mutex.unlock mutex.m;
-        let[@warning "-8"] (Unresolved_base cursor) = matrix.(root) in
-        (* XXX(dinosaure): Oh god, save me! *)
-        IO.detach (fun () -> update ~map ~oracle ~verbose t ~cursor ~matrix)
-        >>= fun () -> (go [@tailcall]) ()
+        match matrix.(root) with
+        | Unresolved_base cursor ->
+            IO.detach (fun () -> update ~map ~oracle ~verbose t ~cursor ~matrix)
+            >>= fun () -> (go [@tailcall]) ()
+        | _ -> assert false
     in
     go ()
 
