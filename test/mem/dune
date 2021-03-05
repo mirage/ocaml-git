@@ -1,7 +1,19 @@
 (executable
  (name test)
- (libraries cmdliner lwt lwt.unix alcotest-lwt result rresult fpath git
-   digestif base64 fmt.tty logs.fmt test_store))
+ (libraries
+  cmdliner
+  lwt
+  lwt.unix
+  alcotest-lwt
+  result
+  rresult
+  fpath
+  git
+  digestif
+  base64
+  fmt.tty
+  logs.fmt
+  test_store))
 
 (rule
  (alias runtest)

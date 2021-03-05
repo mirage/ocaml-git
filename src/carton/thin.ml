@@ -234,7 +234,8 @@ struct
       map t fd ~pos len
     in
     Log.debug (fun m -> m "Start to verify incoming PACK file (second pass).");
-    Verify.verify ~threads pack ~map ~oracle ~matrix >>= fun () ->
+    Verify.verify ~threads pack ~map ~oracle ~matrix ~verbose:ignore
+    >>= fun () ->
     Log.debug (fun m -> m "Second pass on incoming PACK file is done.");
     let offsets =
       Hashtbl.fold (fun k _ a -> k :: a) where []

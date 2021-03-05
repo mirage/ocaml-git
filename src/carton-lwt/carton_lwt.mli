@@ -156,6 +156,7 @@ module Dec : sig
       threads:int ->
       map:'fd W.map ->
       oracle:Uid.t oracle ->
+      verbose:(unit -> unit) ->
       ('fd, Uid.t) t ->
       matrix:status array ->
       unit Lwt.t

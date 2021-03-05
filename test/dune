@@ -1,4 +1,14 @@
 (library
  (name test_store)
- (libraries lwt lwt.unix result rresult astring digestif base64 git fmt
-   alcotest alcotest-lwt))
+ (libraries
+  lwt
+  lwt.unix
+  result
+  rresult
+  astring
+  digestif
+  base64
+  git
+  fmt
+  alcotest
+  alcotest-lwt))
