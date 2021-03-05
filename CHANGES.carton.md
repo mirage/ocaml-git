@@ -1,3 +1,12 @@
+### 0.3.0 (2021-05-03) Paris - France
+
+- Provides binaries to manipulate PACK files (@dinosaure, #475)
+  **breaking changes**
+  A transitive breaking changes from decompress.1.3.0 when
+  the compressor expects a `De.Lz77.window` instead of
+  `De.window`
+- Update to decompress.1.3.0 (@dinosaure, #477)
+
 ### 0.2.0 (2021-05-02) Saint-Malo - France
 
 - Unmonad `mmap` (@dinosaure, #454)
