@@ -1,3 +1,11 @@
+### 3.3.1 (2021-05-03) Paris - France
+
+- Fix tests on NixOS (@sternenseemann, #472)
+- Fix report status over git://, ssh:// and http(s):// with
+  side-band-64k and report-status capabilities (@dinosaure, @hannesm, #474)
+- Be sure that creation of a tree is tail-rec (@dinosaure, @zshipko, #476)
+- Update to decompress.1.3.0 (@dinosaure, #477)
+
 ### 3.3.0 (2021-17-02) Paris - France
 
 - Fix tests when we push to an empty repository (#462, @dinosaure, @ulugbekna)
