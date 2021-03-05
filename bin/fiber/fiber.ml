@@ -91,7 +91,7 @@ let wait pool =
   Mutex.lock pool.work_mutex;
   let rec loop () =
     if
-      ((not pool.stop) && pool.working_cnt <> 0)
+      ((not pool.stop) && (pool.working_cnt <> 0 || not (is_empty pool.seq)))
       || (pool.stop && pool.thread_cnt <> 0)
     then (
       Condition.wait pool.working_cond pool.work_mutex;
