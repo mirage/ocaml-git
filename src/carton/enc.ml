@@ -409,7 +409,7 @@ end
 
 module N : sig
   type encoder
-  type b = { i : Bigstringaf.t; q : De.Queue.t; w : De.window }
+  type b = { i : Bigstringaf.t; q : De.Queue.t; w : De.Lz77.window }
 
   val encoder :
     's scheduler -> b:b -> load:('uid, 's) load -> 'uid q -> (encoder, 's) io
@@ -417,7 +417,7 @@ module N : sig
   val encode : o:Bigstringaf.t -> encoder -> [ `Flush of encoder * int | `End ]
   val dst : encoder -> Bigstringaf.t -> int -> int -> encoder
 end = struct
-  type b = { i : Bigstringaf.t; q : De.Queue.t; w : De.window }
+  type b = { i : Bigstringaf.t; q : De.Queue.t; w : De.Lz77.window }
   type encoder = H of Zh.N.encoder | Z of Zl.Def.encoder
 
   let rec encode_zlib ~o encoder =
@@ -490,7 +490,13 @@ end = struct
 end
 
 type ('uid, 's) find = 'uid -> (int option, 's) io
-type b = { i : Bigstringaf.t; q : De.Queue.t; w : De.window; o : Bigstringaf.t }
+
+type b = {
+  i : Bigstringaf.t;
+  q : De.Queue.t;
+  w : De.Lz77.window;
+  o : Bigstringaf.t;
+}
 
 let encode_header ~o kind length =
   if length < 0 then invalid_arg "encode_header: length must be positive";
