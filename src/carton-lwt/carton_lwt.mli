@@ -221,7 +221,7 @@ module Enc : sig
     type b = Carton.Enc.N.b = {
       i : Bigstringaf.t;
       q : De.Queue.t;
-      w : De.window;
+      w : De.Lz77.window;
     }
 
     val encoder : b:b -> load:'uid load -> 'uid q -> encoder Lwt.t
@@ -232,7 +232,7 @@ module Enc : sig
   type b = Carton.Enc.b = {
     i : Bigstringaf.t;
     q : De.Queue.t;
-    w : De.window;
+    w : De.Lz77.window;
     o : Bigstringaf.t;
   }
 

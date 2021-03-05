@@ -69,7 +69,7 @@ end
 
 module N : sig
   type encoder
-  type b = { i : Bigstringaf.t; q : De.Queue.t; w : De.window }
+  type b = { i : Bigstringaf.t; q : De.Queue.t; w : De.Lz77.window }
 
   val encoder :
     's scheduler -> b:b -> load:('uid, 's) load -> 'uid q -> (encoder, 's) io
@@ -78,7 +78,12 @@ module N : sig
   val dst : encoder -> Bigstringaf.t -> int -> int -> encoder
 end
 
-type b = { i : Bigstringaf.t; q : De.Queue.t; w : De.window; o : Bigstringaf.t }
+type b = {
+  i : Bigstringaf.t;
+  q : De.Queue.t;
+  w : De.Lz77.window;
+  o : Bigstringaf.t;
+}
 
 val encode_header : o:Bigstringaf.t -> int -> int -> int
 val header_of_pack : length:int -> Bigstringaf.t -> int -> int -> unit

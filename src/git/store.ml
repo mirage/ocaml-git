@@ -139,6 +139,7 @@ struct
       let buffers =
         {
           window = De.make_window ~bits:15;
+          lz = De.Lz77.make_window ~bits:15;
           queue = De.Queue.create 0x1000;
           i = Bigstringaf.create De.io_buffer_size;
           o = Bigstringaf.create De.io_buffer_size;

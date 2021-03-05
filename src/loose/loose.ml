@@ -25,6 +25,7 @@ type ('t, 'brk, 'error, 's) store = {
 
 type buffers = {
   window : De.window;
+  lz : De.Lz77.window;
   queue : De.Queue.t;
   i : De.bigstring;
   o : De.bigstring;
@@ -47,7 +48,7 @@ module Make (Uid : UID) = struct
     let hdr = hdr ~buffer:buffers.hdr v in
     De.Queue.reset buffers.queue;
     let encoder =
-      Zl.Def.encoder `Manual `Manual ~q:buffers.queue ~w:buffers.window ~level:2
+      Zl.Def.encoder `Manual `Manual ~q:buffers.queue ~w:buffers.lz ~level:6
     in
     (* TODO(dinosaure): delete [rec], we should have only one [`Flush] and [`End]. *)
     let rec go encoder srcs dst =
@@ -101,7 +102,7 @@ module Make (Uid : UID) = struct
 
     De.Queue.reset buffers.queue;
     let encoder =
-      Zl.Def.encoder `Manual `Manual ~q:buffers.queue ~w:buffers.window ~level:2
+      Zl.Def.encoder `Manual `Manual ~q:buffers.queue ~w:buffers.lz ~level:6
     in
     let rec go ctx ((src, off, len) as payload) dsts encoder =
       match Zl.Def.encode encoder with

@@ -160,7 +160,7 @@ module Enc = struct
   type b = Carton.Enc.b = {
     i : Bigstringaf.t;
     q : De.Queue.t;
-    w : De.window;
+    w : De.Lz77.window;
     o : Bigstringaf.t;
   }
 

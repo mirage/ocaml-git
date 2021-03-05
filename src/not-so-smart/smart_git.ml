@@ -531,7 +531,7 @@ struct
         Carton.Enc.o = Bigstringaf.create De.io_buffer_size;
         Carton.Enc.i = Bigstringaf.create De.io_buffer_size;
         Carton.Enc.q = De.Queue.create 0x10000;
-        Carton.Enc.w = De.make_window ~bits:15;
+        Carton.Enc.w = De.Lz77.make_window ~bits:15;
       }
     in
     let ctx = ref Uid.empty in

@@ -24,6 +24,7 @@ type ('t, 'brk, 'error, 's) store = {
 
 type buffers = {
   window : De.window;
+  lz : De.Lz77.window;
   queue : De.Queue.t;
   i : De.bigstring;
   o : De.bigstring;
