@@ -1,0 +1,20 @@
+opam-version: "2.0"
+synopsis: "A package to use HTTP-based ocaml-git with MirageOS backend"
+maintainer: ["thomas@gazagnaire.org" "romain.calascibetta@gmail.com"]
+authors: "Thomas Gazagnaire"
+license: "ISC"
+homepage: "https://github.com/mirage/ocaml-git"
+doc: "https://mirage.github.io/ocaml-git/"
+bug-reports: "https://github.com/mirage/ocaml-git/issues"
+depends: [
+  "ocaml" {>= "4.08.0"}
+  "dune" {>= "2.8.0"}
+  "git" {= version}
+  "mimic"
+  "paf"
+]
+build: [
+  ["dune" "build" "-p" name "-j" jobs]
+  ["dune" "runtest" "-p" name "-j1" "--no-buffer"] {with-test}
+]
+dev-repo: "git+https://github.com/mirage/ocaml-git.git"

@@ -1,6 +1,6 @@
 type 'stack endpoint = {
   stack : 'stack;
-  ipaddr : Ipaddr.V4.t;
+  ipaddr : Ipaddr.t;
   port : int;
   authenticator : Awa.Keys.authenticator option;
   user : string;
@@ -10,10 +10,10 @@ type 'stack endpoint = {
 }
 
 module Make
-    (Stack : Mirage_stack.V4) (TCP : sig
-      val tcp_endpoint : (Stack.t * Ipaddr.V4.t * int) Mimic.value
+    (Stack : Mirage_stack.V4V6) (TCP : sig
+      val tcp_endpoint : (Stack.t * Ipaddr.t * int) Mimic.value
       val tcp_stack : Stack.t Mimic.value
-      val tcp_ipaddr : Ipaddr.V4.t Mimic.value
+      val tcp_ipaddr : Ipaddr.t Mimic.value
     end)
     (Mclock : Mirage_clock.MCLOCK) : sig
   type nonrec endpoint = Stack.t endpoint
