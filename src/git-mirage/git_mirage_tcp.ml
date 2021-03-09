@@ -1,10 +1,10 @@
 open Lwt.Infix
 
-module Make (Stack : Mirage_stack.V4) = struct
+module Make (Stack : Mirage_stack.V4V6) = struct
   module TCP = struct
-    include Stack.TCPV4
+    include Stack.TCP
 
-    type endpoint = Stack.t * Ipaddr.V4.t * int
+    type endpoint = Stack.t * Ipaddr.t * int
 
     type nonrec write_error =
       [ `Write of write_error | `Connect of error | `Closed ]
@@ -26,7 +26,7 @@ module Make (Stack : Mirage_stack.V4) = struct
 
     let connect : endpoint -> _ =
      fun (stack, ipaddr, port) ->
-      let stack = Stack.tcpv4 stack in
+      let stack = Stack.tcp stack in
       create_connection stack (ipaddr, port) >>= function
       | Ok _ as v -> Lwt.return v
       | Error err -> Lwt.return_error (`Connect err)

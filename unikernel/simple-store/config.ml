@@ -29,7 +29,7 @@ let mimic_tcp_conf =
   let packages = [ package "git-mirage" ~sublibs:[ "tcp" ] ] in
   impl @@ object
        inherit base_configurable
-       method ty = stackv4 @-> mimic
+       method ty = stackv4v6 @-> mimic
        method module_name = "Git_mirage_tcp.Make"
        method! packages = Key.pure packages
        method name = "tcp_ctx"
@@ -40,7 +40,7 @@ let mimic_tcp_conf =
          | _ -> assert false
      end
 
-let mimic_tcp_impl stackv4 = mimic_tcp_conf $ stackv4
+let mimic_tcp_impl stackv4v6 = mimic_tcp_conf $ stackv4v6
 
 let mimic_ssh_conf ~kind ~seed ~auth =
   let seed = Key.abstract seed in
@@ -48,7 +48,7 @@ let mimic_ssh_conf ~kind ~seed ~auth =
   let packages = [ package "git-mirage" ~sublibs:[ "ssh" ] ] in
   impl @@ object
        inherit base_configurable
-       method ty = stackv4 @-> mimic @-> mclock @-> mimic
+       method ty = stackv4v6 @-> mimic @-> mclock @-> mimic
        method! keys = [ seed; auth; ]
        method module_name = "Git_mirage_ssh.Make"
        method! packages = Key.pure packages
@@ -74,9 +74,9 @@ let mimic_ssh_conf ~kind ~seed ~auth =
          | _ -> assert false
      end
 
-let mimic_ssh_impl ~kind ~seed ~auth stackv4 mimic_git mclock =
+let mimic_ssh_impl ~kind ~seed ~auth stackv4v6 mimic_git mclock =
   mimic_ssh_conf ~kind ~seed ~auth
-  $ stackv4
+  $ stackv4v6
   $ mimic_git
   $ mclock
 
@@ -86,7 +86,7 @@ let mimic_dns_conf =
   let packages = [ package "git-mirage" ~sublibs:[ "dns" ] ] in
   impl @@ object
        inherit base_configurable
-       method ty = random @-> mclock @-> time @-> stackv4 @-> mimic @-> mimic
+       method ty = random @-> mclock @-> time @-> stackv4v6 @-> mimic @-> mimic
        method module_name = "Git_mirage_dns.Make"
        method! packages = Key.pure packages
        method name = "dns_ctx"
@@ -102,8 +102,8 @@ let mimic_dns_conf =
          | _ -> assert false
      end
 
-let mimic_dns_impl random mclock time stackv4 mimic_tcp =
-  mimic_dns_conf $ random $ mclock $ time $ stackv4 $ mimic_tcp
+let mimic_dns_impl random mclock time stackv4v6 mimic_tcp =
+  mimic_dns_conf $ random $ mclock $ time $ stackv4v6 $ mimic_tcp
 
 type hash = Hash
 
@@ -155,6 +155,46 @@ let git_conf ?path () =
 
 let git_impl ?path hash = git_conf ?path () $ hash
 
+type paf = Paf
+let paf = typ Paf
+
+let paf_conf () =
+  let packages = [ package "paf" ~sublibs:[ "mirage" ] ] in
+  impl @@ object
+    inherit base_configurable
+    method ty = time @-> stackv4v6 @-> paf
+    method module_name = "Paf_mirage.Make"
+    method! packages = Key.pure packages
+    method name = "paf"
+  end
+
+let paf_impl time stackv4v6 = paf_conf () $ time $ stackv4v6
+
+let mimic_paf_conf () =
+  let packages = [ package "git-paf" ] in
+  impl @@ object
+       inherit base_configurable
+       method ty = time @-> pclock @-> stackv4v6 @-> paf @-> mimic @-> mimic
+       method module_name = "Git_paf.Make"
+       method! packages = Key.pure packages
+       method name = "paf_ctx"
+       method! connect _ modname = function
+         | [ _; _; _; _; tcp_ctx; ] ->
+             Fmt.str
+               {ocaml|let paf_ctx00 = Mimic.merge %s %s.ctx in
+                      Lwt.return paf_ctx00|ocaml}
+               tcp_ctx modname
+         | _ -> assert false
+     end
+
+let mimic_paf_impl time pclock stackv4v6 paf mimic_tcp =
+  mimic_paf_conf ()
+  $ time
+  $ pclock
+  $ stackv4v6
+  $ paf
+  $ mimic_tcp
+
 (* User space *)
 
 let remote =
@@ -172,28 +212,44 @@ let ssh_auth =
   in
   Key.(create "ssh_auth" Arg.(opt (some string) None doc))
 
+let branch =
+  let doc = Key.Arg.info ~doc:"The Git remote branch." [ "branch" ] in
+  Key.(create "branch" Arg.(opt string "refs/heads/master" doc))
+
+let port =
+  let doc = Key.Arg.info ~doc:"The port where to listen." [ "p"; "port" ] in
+  Key.(create "port" Arg.(opt int 8080 doc))
+
 let minigit =
   foreign "Unikernel.Make"
-    ~keys:[ Key.abstract remote; Key.abstract ssh_seed; Key.abstract ssh_auth ]
-    ~packages:[ package "git-cohttp-mirage" ]
-    (git @-> mimic @-> conduit @-> resolver @-> job)
+    ~keys:[ Key.abstract remote
+          ; Key.abstract ssh_seed
+          ; Key.abstract ssh_auth
+          ; Key.abstract branch
+          ; Key.abstract port ]
+    (console @-> stackv4v6 @-> git @-> mimic @-> job)
 
-let mimic ~kind ~seed ~auth stackv4 random mclock time =
-  let mtcp = mimic_tcp_impl stackv4 in
-  let mdns = mimic_dns_impl random mclock time stackv4 mtcp in
-  let mssh = mimic_ssh_impl ~kind ~seed ~auth stackv4 mtcp mclock in
-  merge mssh mdns
+let mimic ~kind ~seed ~auth stackv4v6 random mclock pclock time paf =
+  let mtcp = mimic_tcp_impl stackv4v6 in
+  let mdns = mimic_dns_impl random mclock time stackv4v6 mtcp in
+  let mssh = mimic_ssh_impl ~kind ~seed ~auth stackv4v6 mtcp mclock in
+  let mpaf = mimic_paf_impl time pclock stackv4v6 paf mtcp in
+  merge mpaf (merge mssh mdns)
 
-let stackv4 = generic_stackv4 default_network
+let console = default_console
+let stackv4v6 = generic_stackv4v6 default_network
 let mclock = default_monotonic_clock
+let pclock = default_posix_clock
 let time = default_time
 let random = default_random
 let git = git_impl sha1
+let paf = paf_impl time stackv4v6
 let mimic = mimic ~kind:`Rsa ~seed:ssh_seed ~auth:ssh_auth
-let mimic = mimic stackv4 random mclock time
-let conduit = conduit_direct ~tls:true stackv4
-let resolver = resolver_dns stackv4
+let mimic = mimic stackv4v6 random mclock pclock time paf
 
 let () =
-  register "minigit" ~packages:[ package "ptime" ]
-    [ minigit $ git $ mimic $ conduit $ resolver ]
+  register "minigit" ~packages:[ package "ptime"
+                               ; package "paf" ~sublibs:[ "cohttp" ]
+                               ; package "hxd" ~sublibs:[ "core"; "string" ]
+                               ; package "git-paf" ]
+    [ minigit $ console $ stackv4v6 $ git $ mimic ]
