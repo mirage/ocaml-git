@@ -2,6 +2,8 @@
  (name git)
  (public_name git)
  (libraries
+  hxd.core
+  hxd.string
   bigarray-compat
   mimic
   rresult

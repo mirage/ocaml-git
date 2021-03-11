@@ -221,6 +221,7 @@ struct
     >>? function
     | `Empty -> Lwt.return_ok None
     | `Pack (uid, refs) ->
+        Log.debug (fun m -> m "Start to write many objects.");
         Store.batch_write t uid ~pck:(create_pack_stream ())
           ~idx:(create_idx_stream ())
         >|= Rresult.R.reword_error (fun err -> `Store err)

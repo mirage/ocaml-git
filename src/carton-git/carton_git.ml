@@ -14,7 +14,10 @@ module type STORE = sig
   type +'a fiber
 
   val pp_error : error Fmt.t
-  val create : mode:'a mode -> t -> uid -> ('a fd, error) result fiber
+
+  val create :
+    ?trunc:bool -> mode:'a mode -> t -> uid -> ('a fd, error) result fiber
+
   val map : t -> 'm rd fd -> pos:int64 -> int -> Bigstringaf.t
   val close : t -> 'm fd -> (unit, error) result fiber
   val list : t -> uid list fiber
@@ -56,7 +59,7 @@ struct
   let ( >>| ) x f = x >>= fun x -> return (f x)
 
   let idx (root : Store.t) acc path =
-    Store.create ~mode:Store.Rd root path >>? fun fd ->
+    Store.create ~trunc:false ~mode:Store.Rd root path >>? fun fd ->
     Store.length fd >>= fun length ->
     let payload = Store.map root fd ~pos:0L (Int64.to_int length) in
     Store.close root fd >>? fun () ->
@@ -67,7 +70,7 @@ struct
     return (Ok (idx :: acc))
 
   let pack (root : Store.t) acc (index, pack) =
-    Store.create ~mode:Store.Rd root pack >>? fun fd ->
+    Store.create ~trunc:false ~mode:Store.Rd root pack >>? fun fd ->
     Store.length fd >>= fun length ->
     let z = Bigstringaf.create De.io_buffer_size in
     let w = De.make_window ~bits:15 in

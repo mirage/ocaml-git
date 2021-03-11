@@ -377,11 +377,11 @@ struct
       | Some str -> Mj.append t.major fd str >>= fun () -> save stream fd
       | None -> Mj.close t.major fd
     in
-    Mj.create ~mode:Mj.Wr t.major mj_pck_uid
+    Mj.create ~trunc:true ~mode:Mj.Wr t.major mj_pck_uid
     >>? save pck
     >>? (fun () ->
-          Mj.create ~mode:Mj.Wr t.major mj_idx_uid >>? save idx >>? fun () ->
-          Pack.add t.major t.packs ~idx:mj_idx_uid mj_pck_uid)
+          Mj.create ~trunc:true ~mode:Mj.Wr t.major mj_idx_uid >>? save idx
+          >>? fun () -> Pack.add t.major t.packs ~idx:mj_idx_uid mj_pck_uid)
     >|= Rresult.R.reword_error (fun err -> `Major err)
 
   module Ref = struct

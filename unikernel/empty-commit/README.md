@@ -1,4 +1,4 @@
-## A simple MirageOS to fetch a Git repository
+## A simple MirageOS to fetch & push an empty commit to a Git repository
 
 ```sh
 $ mirage configure
@@ -6,6 +6,7 @@ $ mirage build
 $ ./minigit -r git://github.com/dinosaure/art
 $ ./minigit -r http://github.com/dinosaure/art
 $ ./minigit -r https://github.com/dinosaure/art
+$ ./minigit -r https://user:pass@github.com/dinosaure/art
 $ ./minigit --ssh-seed seed -r git@github.com:dinosaure/art
 ```
 
@@ -24,6 +25,9 @@ $ git fetch
 $ B=$(git show-ref -s HEAD)
 $ [ "$A" = "$B" ]
 ```
+
+NOTE: the option `--branch` exists if you want to push on something else than
+`refs/heads/master` (GitHub defaults new repositories to `refs/heads/main`).
 
 ### Run the unikernel
 

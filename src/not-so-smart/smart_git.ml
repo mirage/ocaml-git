@@ -160,8 +160,8 @@ struct
     Thin.
       {
         create =
-          (fun t path ->
-            Pack.create ~mode:Pack.RdWr t path
+          (fun ?trunc t path ->
+            Pack.create ?trunc ~mode:Pack.RdWr t path
             >|= R.reword_error (R.msgf "%a" Pack.pp_error));
         append = Pack.append;
         map = Pack.map;
@@ -203,7 +203,8 @@ struct
 
   let finish_it t ~pack ~weight ~where offsets =
     let open Lwt.Infix in
-    Pack.create ~mode:Pack.Rd t pack >>? fun fd ->
+    Log.debug (fun m -> m "Start to finish the canonicalized PACK file.");
+    Pack.create ~trunc:false ~mode:Pack.Rd t pack >>? fun fd ->
     let zl_buffer = De.bigstring_create De.io_buffer_size in
     let allocate bits = De.make_window ~bits in
     let pack =
@@ -221,6 +222,7 @@ struct
       | (offset, crc) :: offsets ->
           Lwt.catch
             (fun () ->
+              Log.debug (fun m -> m "Get object at %08Lx." offset);
               let weight =
                 Carton.Dec.weight_of_offset ~map pack ~weight:Carton.Dec.null
                   offset
@@ -249,7 +251,9 @@ struct
       (function
         | Failure err -> Lwt.return_error (R.msg err)
         | Invalid_argument err -> Lwt.return_error (R.msg err)
-        | exn -> Lwt.return_error (`Exn exn))
+        | exn ->
+            Printexc.print_backtrace stdout;
+            Lwt.return_error (`Exn exn))
     >>= function
     | Error _ as err -> Lwt.return err
     | Ok (_, [], [], entries, _weight, uid) ->
@@ -280,6 +284,7 @@ struct
         finish_it ~pack:dst ~weight ~where t unresolveds
         >|= R.reword_error (R.msgf "%a" Pack.pp_error)
         >>? fun entries'' ->
+        Log.debug (fun m -> m "PACK canonicalized.");
         let entries = List.rev_append entries' entries in
         let entries = List.rev_append entries'' entries in
         Lwt.return_ok (uid, Array.of_list entries)
@@ -291,7 +296,7 @@ struct
     let encoder = Enc.encoder `Manual ~pack entries in
     let buf = Bigstringaf.create De.io_buffer_size in
     Enc.dst encoder buf 0 (Bigstringaf.length buf);
-    Index.create ~mode:Index.Wr t dst >>? fun fd ->
+    Index.create ~trunc:true ~mode:Index.Wr t dst >>? fun fd ->
     let rec go = function
       | `Partial ->
           let len = Bigstringaf.length buf - Enc.dst_rem encoder in

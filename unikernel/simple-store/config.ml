@@ -212,10 +212,22 @@ let ssh_auth =
   in
   Key.(create "ssh_auth" Arg.(opt (some string) None doc))
 
+let branch =
+  let doc = Key.Arg.info ~doc:"The Git remote branch." [ "branch" ] in
+  Key.(create "branch" Arg.(opt string "refs/heads/master" doc))
+
+let port =
+  let doc = Key.Arg.info ~doc:"The port where to listen." [ "p"; "port" ] in
+  Key.(create "port" Arg.(opt int 8080 doc))
+
 let minigit =
   foreign "Unikernel.Make"
-    ~keys:[ Key.abstract remote; Key.abstract ssh_seed; Key.abstract ssh_auth ]
-    (git @-> mimic @-> job)
+    ~keys:[ Key.abstract remote
+          ; Key.abstract ssh_seed
+          ; Key.abstract ssh_auth
+          ; Key.abstract branch
+          ; Key.abstract port ]
+    (console @-> stackv4v6 @-> git @-> mimic @-> job)
 
 let mimic ~kind ~seed ~auth stackv4v6 random mclock pclock time paf =
   let mtcp = mimic_tcp_impl stackv4v6 in
@@ -224,6 +236,7 @@ let mimic ~kind ~seed ~auth stackv4v6 random mclock pclock time paf =
   let mpaf = mimic_paf_impl time pclock stackv4v6 paf mtcp in
   merge mpaf (merge mssh mdns)
 
+let console = default_console
 let stackv4v6 = generic_stackv4v6 default_network
 let mclock = default_monotonic_clock
 let pclock = default_posix_clock
@@ -237,5 +250,6 @@ let mimic = mimic stackv4v6 random mclock pclock time paf
 let () =
   register "minigit" ~packages:[ package "ptime"
                                ; package "paf" ~sublibs:[ "cohttp" ]
+                               ; package "hxd" ~sublibs:[ "core"; "string" ]
                                ; package "git-paf" ]
-    [ minigit $ git $ mimic ]
+    [ minigit $ console $ stackv4v6 $ git $ mimic ]

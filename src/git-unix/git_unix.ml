@@ -353,8 +353,10 @@ module Major_heap = struct
 
      A [mode] is better (to avoid duplicate) and safe. *)
 
-  let create : type a. mode:a mode -> t -> uid -> (a fd, error) result Lwt.t =
-   fun ~mode root path ->
+  let create :
+      type a.
+      ?trunc:bool -> mode:a mode -> t -> uid -> (a fd, error) result Lwt.t =
+   fun ?(trunc = true) ~mode root path ->
     let path = Fpath.(root // path) in
     let flags, perm =
       match mode with
@@ -362,12 +364,15 @@ module Major_heap = struct
       | Wr -> Unix.[ O_WRONLY; O_CREAT; O_APPEND ], 0o600
       | RdWr -> Unix.[ O_RDWR; O_CREAT; O_APPEND ], 0o600
     in
+    let flags = if trunc then Unix.O_TRUNC :: flags else flags in
     let rec process () =
       Lwt_unix.openfile (Fpath.to_string path) flags perm >>= fun fd ->
       Lwt.return_ok fd
     and error = function
       | Unix.Unix_error (Unix.ENOENT, _, _) | Unix.Unix_error (Unix.EACCES, _, _)
         ->
+          Printexc.print_backtrace stdout;
+          flush stdout;
           Log.err (fun m -> m "%a does not exists." Fpath.pp path);
           Lwt.return_error (`Not_found path)
       | Unix.Unix_error (Unix.EINTR, _, _) -> Lwt.catch process error

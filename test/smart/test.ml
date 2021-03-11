@@ -112,7 +112,7 @@ let create_tmp_dir ?(mode = 0o700) ?prefix_path pat =
       r
   | Error _ as e -> e
 
-(* XXX(dinosaure): FIFO "à la BOS".*)
+(* XXX(dinosaure): FIFO "à la BOS". *)
 
 (** to keep track of named pipes (aka FIFOs) created by unit tests
     and clean them up afterwards *)
@@ -286,11 +286,7 @@ let sync_err r = R.reword_error (fun e -> `Sync e) r
 let bad_input_err r = R.reword_error (fun e -> `Bad_input e) r
 
 let test_sync_fetch () =
-  Alcotest_lwt.test_case
-    "Sync.fetch fetches given remote ref and overwrites existing and \
-     non-existing local ref"
-    `Quick
-  @@ fun _switch () ->
+  Alcotest_lwt.test_case "set local ref" `Quick @@ fun _switch () ->
   let open Lwt.Infix in
   let module Sync = Git.Mem.Sync (Git.Mem.Store) (Git_cohttp_unix) in
   let capabilities = [ `Side_band_64k ] in
