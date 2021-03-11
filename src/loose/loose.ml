@@ -63,7 +63,15 @@ module Make (Uid : UID) = struct
           go encoder [] dst
       | _, `Flush encoder ->
           let len = Cstruct.len dst - Zl.Def.dst_rem encoder in
+          (* XXX(dinosaure): the [Zl] encoder assumes that, at least,
+           * we have 2 remaining bytes - when it wants to write 2 bytes
+           * per 2 bytes. This is the smallest requirement of [decompress]
+           * to deflate a flow. A case appears then [Cstruct.len dst = 1]
+           * and [len]/remaining bytes is [0]. In that case, a call
+           * to [Zl.Def.encode] does not change anything because it requires,
+           * at least, 2 bytes. [-1] protects us from this special situation. *)
           if len = Cstruct.len dst then Error `Non_atomic
+          else if len = 0 && Cstruct.len dst = 1 then Error `Non_atomic
           else
             let dst = Cstruct.shift dst len in
             go
