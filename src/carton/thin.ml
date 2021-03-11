@@ -187,7 +187,7 @@ struct
            uid ))
 
   type ('t, 'path, 'fd, 'error) fs = {
-    create : 't -> 'path -> ('fd, 'error) result IO.t;
+    create : ?trunc:bool -> 't -> 'path -> ('fd, 'error) result IO.t;
     append : 't -> 'fd -> string -> unit IO.t;
     map : 't -> 'fd -> pos:int64 -> int -> Bigstringaf.t;
     close : 't -> 'fd -> (unit, 'error) result IO.t;
@@ -212,7 +212,7 @@ struct
     let zl_buffer = De.bigstring_create De.io_buffer_size in
     let allocate bits = De.make_window ~bits in
     let weight = ref 0L in
-    create t path >>? fun fd ->
+    create ~trunc:true t path >>? fun fd ->
     let stream () =
       stream () >>= function
       | Some (buf, off, len) as res ->
@@ -296,7 +296,7 @@ struct
     let ctx = ref Uid.empty in
     let cursor = ref 0L in
     let light_load uid = Scheduler.prj (light_load uid) in
-    create t dst >>? fun fd ->
+    create ~trunc:true t dst >>? fun fd ->
     let header = Bigstringaf.create 12 in
     Carton.Enc.header_of_pack ~length:(n + List.length uids) header 0 12;
     let hdr = Bigstringaf.to_string header in
@@ -356,7 +356,7 @@ struct
         append t fd (Uid.to_raw_string uid) >>= fun () ->
         return (Ok (Int64.(add !cursor (of_int Uid.length)), uid))
     in
-    create t src >>? fun src ->
+    create ~trunc:false t src >>? fun src ->
     go src 12L >>? fun (weight, uid) ->
     close t fd >>? fun () -> return (Ok (shift, weight, uid, entries))
 end
