@@ -75,7 +75,8 @@ let commands { bind; return } ~capabilities ~equal:equal_reference ~deref store
               equal_reference reference reference' && peeled = false)
             have
         with
-        | Some (uid, _, _) -> return (Smart.Commands.delete uid reference :: acc)
+        | Some (uid, _, _) ->
+            return (Smart.Commands.delete uid reference :: acc)
         | None -> return acc)
     | `Update (local, remote) -> (
         deref store local >>= function

@@ -56,6 +56,7 @@ let batch_write :
       Carton.Dec.weight_of_offset ~map pack ~weight:Carton.Dec.null offset
     in
     let raw = Carton.Dec.make_raw ~weight in
+    Log.debug (fun m -> m "Unpack %08Lx from the given PACK file." offset);
     let res = Carton.Dec.of_offset ~map pack raw ~cursor:offset in
     let inflated =
       Cstruct.of_bigarray (Carton.Dec.raw res) ~off:0 ~len:(Carton.Dec.len res)
@@ -434,8 +435,10 @@ module Sync (Git_store : Minimal.S) (HTTP : Smart_git.HTTP) = struct
 
     type 'm fd = Idx.fd
 
-    let create : type a. mode:a mode -> t -> uid -> (a fd, error) result fiber =
-     fun ~mode:_ t uid -> create t uid
+    let create :
+        type a.
+        ?trunc:bool -> mode:a mode -> t -> uid -> (a fd, error) result fiber =
+     fun ?trunc:_ ~mode:_ t uid -> create t uid
 
     let move _ ~src:_ ~dst:_ = assert false
     let map _ _ ~pos:_ _ = assert false
@@ -464,6 +467,7 @@ module Sync (Git_store : Minimal.S) (HTTP : Smart_git.HTTP) = struct
 
   let fetch ?(push_stdout = ignore) ?(push_stderr = ignore) ~ctx edn store
       ?version ?capabilities ?deepen want =
+    let open Lwt.Infix in
     let t_idx = Carton.Dec.Idx.Device.device () in
     let t_pck = Cstruct_append.device () in
     let index = Carton.Dec.Idx.Device.create t_idx in
@@ -481,4 +485,8 @@ module Sync (Git_store : Minimal.S) (HTTP : Smart_git.HTTP) = struct
     fetch ~push_stdout ~push_stderr ~ctx edn store ?version ?capabilities
       ?deepen want ~src ~dst ~idx:index ~create_idx_stream ~create_pack_stream
       t_pck t_idx
+    >>= fun res ->
+    let _dst = Sys.opaque_identity dst in
+    let _src = Sys.opaque_identity src in
+    Lwt.return res
 end

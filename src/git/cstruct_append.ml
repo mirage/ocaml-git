@@ -43,15 +43,15 @@ let key tbl =
     Ephemeron.K1.set_key tbl.o0 value;
     Ephemeron.K1.set_data tbl.o0 (ref empty);
     tbl.which <- not tbl.which;
-    value)
+    ref value)
   else (
     Ephemeron.K1.set_key tbl.o1 value;
     Ephemeron.K1.set_data tbl.o1 (ref empty);
     tbl.which <- not tbl.which;
-    value)
+    ref value)
   [@@inline never]
 
-type uid = key ref
+type uid = key ref ref
 
 type 'a fd = {
   mutable buffer : Cstruct.t;
@@ -91,16 +91,16 @@ let enlarge fd more =
 
 (* XXX(dinosaure): use [Cstruct_cap]? I think we must prove capabilities
  * with [Refl]. *)
-let create ~mode:_ { o0; o1; _ } key =
+let create ?(trunc = true) ~mode:_ { o0; o1; _ } key =
   let which, value =
     let k0 =
       Option.fold ~none:false
-        ~some:(fun key' -> key == key')
+        ~some:(fun key' -> !key == key')
         (Ephemeron.K1.get_key o0)
     in
     let k1 =
       Option.fold ~none:false
-        ~some:(fun key' -> key == key')
+        ~some:(fun key' -> !key == key')
         (Ephemeron.K1.get_key o1)
     in
     assert (not (k0 && k1));
@@ -119,12 +119,14 @@ let create ~mode:_ { o0; o1; _ } key =
     else !value
   in
 
-  Log.debug (fun m -> m "Make a new file-descriptor (%b)." which);
+  Log.debug (fun m ->
+      m "Make a new file-descriptor (%b) (%d byte(s))." which
+        (Cstruct.len value));
   let fd =
     {
       buffer = value;
       capacity = Cstruct.len value;
-      length = 0 (* XXX(dinosaure): like Unix.O_TRUNC *);
+      length = (if trunc then 0 else Cstruct.len value);
       which;
     }
   in
@@ -136,60 +138,56 @@ let append _ fd str =
   if new_length > fd.capacity then enlarge fd len;
   Cstruct.blit_from_string str 0 fd.buffer fd.length len;
   fd.length <- new_length;
-  Log.debug (fun m -> m "Append + %d byte(s)." fd.length);
+  Log.debug (fun m -> m "Append on [%b] + %d byte(s)." fd.which fd.length);
   Lwt.return ()
 
 let map _ fd ~pos len =
-  Log.debug (fun m -> m "map on fd(length:%d) ~pos:%Ld %d." fd.length pos len);
+  Log.debug (fun m ->
+      m "map on fd[%b](length:%d) ~pos:%Ld %d." fd.which fd.length pos len);
   let pos = Int64.to_int pos in
-  if pos > fd.length then Bigstringaf.empty
+  if pos > Cstruct.len fd.buffer then Bigstringaf.empty
   else
-    let len = min len (fd.length - pos) in
+    let len = min len (Cstruct.len fd.buffer - pos) in
     let { Cstruct.buffer; off; _ } = fd.buffer in
     Bigstringaf.sub ~off:(off + pos) ~len buffer
 
 let close tbl fd =
   let result = Cstruct.sub fd.buffer 0 fd.length in
   Log.debug (fun m ->
-      m "Close the object into the cstruct-append heap (save %d bytes)."
-        fd.length);
-  (if fd.which then
-   match Ephemeron.K1.get_data tbl.o0 with
-   | Some value -> value := result
-   | None -> assert false
-  else
-    match Ephemeron.K1.get_data tbl.o1 with
-    | Some value -> value := result
-    | None -> assert false);
+      m
+        "Close the object into the cstruct-append heap (save %d bytes from \
+         [%b])."
+        fd.length fd.which);
+  if fd.which then Ephemeron.K1.set_data tbl.o0 (ref result)
+  else Ephemeron.K1.set_data tbl.o1 (ref result);
   Lwt.return_ok ()
 
 let move tbl ~src ~dst =
   Log.debug (fun m -> m "Start to move a key to another.");
   if src == dst then Lwt.return_ok ()
   else
-    match Ephemeron.K1.get_data tbl.o0, Ephemeron.K1.get_data tbl.o1 with
-    | Some v0, Some v1 ->
-        let k0 = Option.get (Ephemeron.K1.get_key tbl.o0) in
-        let k1 = Option.get (Ephemeron.K1.get_key tbl.o1) in
-        if src == k0 && dst == k1 then v1 := !v0
-        else if src == k1 && dst == k0 then v0 := !v1
-        else (
-          Log.err (fun m -> m "Given keys are wrong!");
-          assert false);
-        Lwt.return_ok ()
-    | _ ->
-        Log.err (fun m -> m "One object was deleted by the garbage collector.");
-        assert false
+    let k0 = Option.get (Ephemeron.K1.get_key tbl.o0) in
+    let k1 = Option.get (Ephemeron.K1.get_key tbl.o1) in
+    if !src == k0 && !dst == k1 then (
+      Log.debug (fun m -> m "Move from o0 to o1.");
+      Ephemeron.K1.blit_data tbl.o0 tbl.o1)
+    else if !src == k1 && !dst == k0 then (
+      Log.debug (fun m -> m "Move from o1 to o0.");
+      Ephemeron.K1.blit_data tbl.o1 tbl.o0)
+    else (
+      Log.err (fun m -> m "Given keys are wrong!");
+      assert false);
+    Lwt.return_ok ()
 
 let project tbl uid =
   if
     Option.fold ~none:false
-      ~some:(fun k -> k == uid)
+      ~some:(fun k -> k == !uid)
       (Ephemeron.K1.get_key tbl.o0)
   then !(Option.get (Ephemeron.K1.get_data tbl.o0))
   else if
     Option.fold ~none:false
-      ~some:(fun k -> k == uid)
+      ~some:(fun k -> k == !uid)
       (Ephemeron.K1.get_key tbl.o1)
   then !(Option.get (Ephemeron.K1.get_data tbl.o1))
-  else Cstruct.empty
+  else assert false

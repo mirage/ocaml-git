@@ -9,7 +9,7 @@ module Make
     (IO : IO with type 'a t = 'a Scheduler.s)
     (Uid : UID) : sig
   type ('t, 'path, 'fd, 'error) fs = {
-    create : 't -> 'path -> ('fd, 'error) result IO.t;
+    create : ?trunc:bool -> 't -> 'path -> ('fd, 'error) result IO.t;
     append : 't -> 'fd -> string -> unit IO.t;
     map : 't -> 'fd -> pos:int64 -> int -> Bigstringaf.t;
     close : 't -> 'fd -> (unit, 'error) result IO.t;

@@ -255,7 +255,7 @@ module Thin : sig
 
   module Make (Uid : Carton.UID) : sig
     type ('t, 'path, 'fd, 'error) fs = {
-      create : 't -> 'path -> ('fd, 'error) result Lwt.t;
+      create : ?trunc:bool -> 't -> 'path -> ('fd, 'error) result Lwt.t;
       append : 't -> 'fd -> string -> unit Lwt.t;
       map : 't -> 'fd -> pos:int64 -> int -> Bigstringaf.t;
       close : 't -> 'fd -> (unit, 'error) result Lwt.t;
