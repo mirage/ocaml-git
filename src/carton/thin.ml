@@ -283,6 +283,26 @@ struct
   type nonrec light_load = (Uid.t, Scheduler.t) light_load
   type nonrec heavy_load = (Uid.t, Scheduler.t) heavy_load
 
+  (* XXX(dinosaure): [fs = { create; append; ... }] has a argument about
+   * [trunc] to know if we want to write (and delete old contents) or simply
+   * read - and, in that case, keep contents.
+   *
+   * This argument was added to fix a problem about [Cstruct_append] which
+   * needs to know if we want to erase old contents or keep it and read it.
+   * However, on top of that, something else can help if we want to read or
+   * write. Capabilities exist at another level ([Rd], [Wr] and [RdWr]) and we
+   * should fallback them at this level. By this way, we can delete [trunc] and
+   * ensure that we write only new contents ([O_CREATE | O_TRUNC | O_APPEND])
+   * or read contents ([O_RDONLY]).
+   *
+   * Capabilities can not be applied at this level - at least, we can not
+   * constraint the ['fd] to be read-only or write-only - because we don't the
+   * high kind polymorphism for free.
+   *
+   * I'm not sure about a good solution on the API level and capabilities on
+   * this level. So we keep [trunc] for the moment but we should find a better
+   * solution, at least, on the API level, to decomplixify it. *)
+
   let canonicalize ~light_load ~heavy_load ~src ~dst t
       { create; append; close; map; _ } n uids weight =
     let b =
