@@ -1,3 +1,12 @@
+### 0.4.0 (2021-15-03) Paris - France
+
+- Handle `trunc` argument when we process a `thin` PACK file
+  **breaking changes**
+  An optional argument is added on the record which abstract the file-system.
+  It should be correctly handled by underlying implementation of the
+  file-system. It appears that, at top, we need to figure out such option,
+  specially for Git and `Cstruct_append` to correctly access to memories.
+
 ### 0.3.0 (2021-05-03) Paris - France
 
 - Provides binaries to manipulate PACK files (@dinosaure, #475)
