@@ -126,9 +126,9 @@ let value_of_entry = function
 
 let v entries =
   List.rev_map (fun entry -> value_of_entry entry, entry) entries
-  |> List.rev
   |> List.sort (fun (a, _) (b, _) -> compare a b)
-  |> List.map snd
+  |> List.rev_map snd
+  |> List.rev
 
 let remove ~name t =
   let c = Contents name and n = Node name in
