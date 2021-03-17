@@ -306,9 +306,19 @@ module Make (Hash : S.HASH) : S with type hash = Hash.t = struct
         in
         stream
     | v ->
+        (* XXX(dinosaure): [lazy] is used here to protect us about
+         * a possible exception raised by [Encore]. In most of our
+         * case and by /isomorphism/, we shoud **never** have such
+         * situation especially since [Encore] should takes care
+         * about that. However, I don't trust on myself and we have
+         * a possible leak of the [Encore.Bij.Bijection] exception.
+         *
+         * [lazy] is used here to be able to delay such path which
+         * should terminate in any way to a failure as [Fail]. *)
         let hash = digest v in
         Log.debug (fun m -> m "stream of %a." Hash.pp hash);
         let state =
+          Lazy.from_fun @@ fun () ->
           match v with
           | Commit v ->
               Encore.Lavoisier.emit v (Encore.to_lavoisier Commit.format)
@@ -318,14 +328,15 @@ module Make (Hash : S.HASH) : S with type hash = Hash.t = struct
         in
         let state = ref state in
         let stream () =
-          match !state with
+          match Lazy.force !state with
           | Encore.Lavoisier.Partial { buffer = str; off; len; continue } ->
               let str = String.sub str off len in
-              state := continue ~committed:len;
+              state := Lazy.from_fun (fun () -> continue ~committed:len);
               Lwt.return_some str
               (* XXX(dinosaure): replace by [(string * int * int)]. *)
           | Encore.Lavoisier.Done -> Lwt.return_none
           | Encore.Lavoisier.Fail -> Lwt.fail (Failure "Value.stream")
+          | exception _ -> Lwt.fail (Failure "Value.stream")
         in
         stream
 
