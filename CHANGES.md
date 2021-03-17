@@ -1,3 +1,9 @@
+### 3.3.2 (2021-15-03) Paris - France
+
+- Fix infinite loop when we don't have enough spaces for an
+  inflated output (#480, @dinosaure, @Ngoguey42)
+- Fix bug about ephemeron/`cstruct_append`/`O_TRUNC` (#481, @dinosaure)
+
 ### 3.3.1 (2021-05-03) Paris - France
 
 - Fix tests on NixOS (@sternenseemann, #472)
