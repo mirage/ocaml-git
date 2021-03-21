@@ -1,3 +1,7 @@
+### 3.3.3 (2021-21-03) Paris - France
+
+- Fix stack-overflow on tree objects (@zshipko, @dinosaure, #485)
+
 ### 3.3.2 (2021-15-03) Paris - France
 
 - Fix infinite loop when we don't have enough spaces for an
