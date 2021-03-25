@@ -20,7 +20,8 @@ module Endpoint = struct
       [ `SSH of string
       | `Git
       | `HTTP of (string * string) list
-      | `HTTPS of (string * string) list ];
+      | `HTTPS of (string * string) list
+      | `Scheme of string ];
     port : int option;
     path : string;
     host : [ `Addr of Ipaddr.t | `Domain of [ `host ] Domain_name.t ];
@@ -45,6 +46,8 @@ module Endpoint = struct
         Fmt.pf ppf "http://%a%a/%s" pp_host host pp_port port path
     | { scheme = `HTTPS _; path; port; host } ->
         Fmt.pf ppf "https://%a%a/%s" pp_host host pp_port port path
+    | { scheme = `Scheme scheme; path; port; host } ->
+        Fmt.pf ppf "%s://%a%a/%s" scheme pp_host host pp_port port path
 
   let ( <||> ) a b =
     match a with
@@ -110,6 +113,9 @@ module Endpoint = struct
       | Some "https", Some str, port ->
           host str >>= fun host ->
           R.ok { scheme = `HTTPS (headers_from_uri uri); path; port; host }
+      | Some scheme, Some str, port ->
+          host str >>= fun host ->
+          R.ok { scheme = `Scheme scheme; path; port; host }
       | _ -> R.error_msgf "invalid uri: %a" Uri.pp uri
     in
     parse_ssh str
@@ -118,7 +124,7 @@ module Endpoint = struct
 
   let with_headers_if_http headers ({ scheme; _ } as edn) =
     match scheme with
-    | `SSH _ | `Git -> edn
+    | `SSH _ | `Git | `Scheme _ -> edn
     | `HTTP _ -> { edn with scheme = `HTTP headers }
     | `HTTPS _ -> { edn with scheme = `HTTPS headers }
 
@@ -129,6 +135,7 @@ module Endpoint = struct
       | `SSH _ -> `SSH
       | `HTTP _ -> `HTTP
       | `HTTPS _ -> `HTTPS
+      | `Scheme scheme -> `Scheme scheme
     in
     let ssh_user = match edn.scheme with `SSH user -> Some user | _ -> None in
     ctx

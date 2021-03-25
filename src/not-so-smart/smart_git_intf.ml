@@ -61,7 +61,8 @@ module type SMART_GIT = sig
         [ `SSH of string
         | `Git
         | `HTTP of (string * string) list
-        | `HTTPS of (string * string) list ];
+        | `HTTPS of (string * string) list
+        | `Scheme of string ];
       port : int option;
       path : string;
       host : [ `Addr of Ipaddr.t | `Domain of [ `host ] Domain_name.t ];
@@ -101,7 +102,10 @@ module type SMART_GIT = sig
       of a [cohttp] (with or without [ocaml-tls]) connection. *)
 
   val git_capabilities : [ `Rd | `Wr ] Mimic.value
-  val git_scheme : [ `Git | `SSH | `HTTP | `HTTPS ] Mimic.value
+
+  val git_scheme :
+    [ `Git | `SSH | `HTTP | `HTTPS | `Scheme of string ] Mimic.value
+
   val git_path : string Mimic.value
 
   val git_host :
