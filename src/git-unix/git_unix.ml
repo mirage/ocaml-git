@@ -630,6 +630,15 @@ module Make (Digestif : Digestif.S) = struct
           | _ -> Fmt.invalid_arg "Invalid major uniq ID: %a" Fpath.pp path);
     }
 
+  let update_head refs =
+    match Reference_heap.atomic_rd refs Git.Reference.head with
+    | Error (`Not_found _) ->
+        Reference_heap.atomic_wr refs Git.Reference.head
+          (Fmt.str "ref: %a\n" Git.Reference.pp Git.Reference.master)
+        |> Lwt.return
+    | Ok _ -> Lwt.return_ok ()
+    | Error (`Msg _ as err) -> Lwt.return_error err
+
   let v ?dotgit root =
     let dotgit =
       match dotgit with Some v -> v | None -> Fpath.(root / ".git")
@@ -642,10 +651,7 @@ module Make (Digestif : Digestif.S) = struct
     Bos.OS.Dir.set_default_tmp temp;
     Unix.mkdir ~path:true temp >>? fun _ ->
     Unix.mkdir ~path:true refs >>? fun _ ->
-    Reference_heap.atomic_wr refs Git.Reference.head
-      (Fmt.str "ref: %a\n" Git.Reference.pp Git.Reference.master)
-    |> Lwt.return
-    >>? fun _ ->
+    update_head refs >>? fun _ ->
     Unix.mkdir ~path:true minor >>? fun _ ->
     Unix.mkdir ~path:true major >>? fun _ ->
     let open Lwt.Infix in
