@@ -49,6 +49,7 @@ depends: [
   "ca-certs-nss" {>= "3.60"}
   "tls" {>= "0.12.8"}
   "tls-mirage" {>= "0.12.8"}
+  "cohttp-lwt-unix" {with-test}
 ]
 build: [
   ["dune" "build" "-p" name "-j" jobs]
