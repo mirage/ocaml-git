@@ -2,9 +2,9 @@ Tests fetch command
   $ mkdir simple
   $ mkdir simple-clone
   $ cd simple
-  $ git config --global init.defaultBranch master
-  $ git config --global user.email "romain@mirage.io"
-  $ git config --global user.name "Romain Calascibetta"
+  $ git config init.defaultBranch master
+  $ git config user.email "romain@mirage.io"
+  $ git config user.name "Romain Calascibetta"
   $ git init
   Initialized empty Git repository in $TESTCASE_ROOT/simple/.git/
   $ git commit --allow-empty -q -m .
