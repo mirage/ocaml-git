@@ -1,11 +1,20 @@
 (library
  (name git_unix)
  (public_name git-unix)
- (modules git_unix packed_refs)
+ (modules git_unix git_unix_mimic packed_refs)
  (libraries
   bigarray-compat
+  ptime
+  ptime.clock.os
+  ipaddr.unix
+  ca-certs-nss
+  mirage-clock
   decompress.de
+  domain-name
+  tls
+  tls-mirage
   bos
+  mimic
   astring
   carton
   git.nss.smart
@@ -19,5 +28,8 @@
   mmap
   git
   logs.fmt
+  cstruct
+  mirage-flow
   lwt
-  lwt.unix))
+  lwt.unix
+  unix))

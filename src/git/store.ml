@@ -102,7 +102,7 @@ struct
     major : Mj.t;
     major_uid : (hash, Mj.uid, Mj.t) major;
     packs : (Mj.uid, < rd : unit > Mj.fd, Hash.t) Carton_git.t;
-    pools :
+    mutable pools :
       ((< rd : unit > Mj.fd * int64)
       * (< rd : unit > Mj.fd * int64) Carton_git.buffers Lwt_pool.t)
       list;
@@ -205,7 +205,9 @@ struct
   let read_inflated t hash =
     Log.debug (fun l -> l "Git.read %a" Hash.pp hash);
     Pack.get t.major ~resources:(resources t) t.packs hash >>= function
-    | Ok v -> Lwt.return_some v
+    | Ok v ->
+        Log.debug (fun l -> l "%a found." Hash.pp hash);
+        Lwt.return_some v
     | Error (`Msg _) -> Lwt.return_none
     | Error (`Not_found _) -> (
         Lwt_pool.use t.buffs @@ fun buffers ->
@@ -377,11 +379,25 @@ struct
       | Some str -> Mj.append t.major fd str >>= fun () -> save stream fd
       | None -> Mj.close t.major fd
     in
+    Log.debug (fun m -> m "Create a new pack file.");
     Mj.create ~trunc:true ~mode:Mj.Wr t.major mj_pck_uid
     >>? save pck
     >>? (fun () ->
           Mj.create ~trunc:true ~mode:Mj.Wr t.major mj_idx_uid >>? save idx
-          >>? fun () -> Pack.add t.major t.packs ~idx:mj_idx_uid mj_pck_uid)
+          >>? fun () ->
+          Log.debug (fun m -> m "Add a new PACK file.");
+          Pack.add t.major t.packs ~idx:mj_idx_uid mj_pck_uid >>? fun fd ->
+          let resource =
+            ( fd,
+              Lwt_pool.create 4 @@ fun () ->
+              let z = Bigstringaf.create De.io_buffer_size in
+              let w = De.make_window ~bits:15 in
+              let allocate _ = w in
+              let w = Carton.Dec.W.make fd in
+              Lwt.return { Carton_git.z; allocate; w } )
+          in
+          t.pools <- resource :: t.pools;
+          Lwt.return_ok ())
     >|= Rresult.R.reword_error (fun err -> `Major err)
 
   module Ref = struct

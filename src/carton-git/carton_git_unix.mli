@@ -21,7 +21,7 @@ end) : sig
     (Fpath.t, Lwt_unix.file_descr, Uid.t) t ->
     idx:Fpath.t ->
     Fpath.t ->
-    (unit, Store.error) result Lwt.t
+    (Lwt_unix.file_descr * int64, Store.error) result Lwt.t
 
   val get :
     Store.t ->

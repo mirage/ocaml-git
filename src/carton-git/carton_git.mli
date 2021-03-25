@@ -27,6 +27,7 @@ end
 module type IO = sig
   type +'a t
 
+  val catch : (unit -> 'a t) -> (exn -> 'a t) -> 'a t
   val bind : 'a t -> ('a -> 'b t) -> 'b t
   val return : 'a -> 'a t
 end
@@ -55,7 +56,7 @@ module Make
     (Store.uid, < rd : unit > Store.fd, Uid.t) t ->
     idx:Store.uid ->
     Store.uid ->
-    (unit, Store.error) result IO.t
+    (< rd : unit > Store.fd * int64, Store.error) result IO.t
 
   val get :
     Store.t ->
