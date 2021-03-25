@@ -83,6 +83,7 @@ let cfg = Mimic.make ~name:"cfg"
 let ctx =
   let open Mimic in
   let k0 = function
+    | `Name _ -> Lwt.return_none
     | `Addr ipaddr -> Lwt.return_some (Ipaddr_unix.to_inet_addr ipaddr)
     | `Domain domain_name -> (
         match Unix.gethostbyname (Domain_name.to_string domain_name) with

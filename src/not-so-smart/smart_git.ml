@@ -24,7 +24,10 @@ module Endpoint = struct
       | `Scheme of string ];
     port : int option;
     path : string;
-    host : [ `Addr of Ipaddr.t | `Domain of [ `host ] Domain_name.t ];
+    host :
+      [ `Addr of Ipaddr.t
+      | `Domain of [ `host ] Domain_name.t
+      | `Name of string ];
   }
 
   let pp ppf edn =
@@ -32,6 +35,7 @@ module Endpoint = struct
       | `Addr (Ipaddr.V4 v) -> Ipaddr.V4.pp ppf v
       | `Addr (Ipaddr.V6 v) -> Fmt.pf ppf "[IPv6:%a]" Ipaddr.V6.pp v
       | `Domain v -> Domain_name.pp ppf v
+      | `Name v -> Fmt.pf ppf "%s" v
     in
     let pp_port ppf = function
       | Some port -> Fmt.pf ppf ":%d" port
@@ -100,9 +104,10 @@ module Endpoint = struct
       let uri = Uri.of_string x in
       let path = Uri.path uri in
       let host str =
-        (Domain_name.of_string str >>= Domain_name.host >>| fun x -> `Domain x)
+        ( (Domain_name.of_string str >>= Domain_name.host >>| fun x -> `Domain x)
         <||> fun () ->
-        Ipaddr.of_string str >>| fun x -> `Addr x
+          Ipaddr.of_string str >>| fun x -> `Addr x )
+        <||> fun () -> R.ok (`Name x)
       in
       match Uri.scheme uri, Uri.host uri, Uri.port uri with
       | Some "git", Some str, port ->
@@ -336,6 +341,7 @@ struct
         let pp_host ppf = function
           | `Domain v -> Domain_name.pp ppf v
           | `Addr v -> Ipaddr.pp ppf v
+          | `Name v -> Fmt.string ppf v
         in
         Log.err (fun m -> m "%a not found" pp_host host);
         pack None;
@@ -448,10 +454,10 @@ struct
        the given [ctx] with [`Rd]. *)
     let run =
       match version, edn.scheme with
-      | `V1, ((`Git | `SSH _) as scheme) ->
+      | `V1, ((`Git | `SSH _ | `Scheme _) as scheme) ->
           let fetch_cfg = Nss.Fetch.configuration capabilities in
           let uses_git_transport =
-            match scheme with `Git -> true | `SSH _ -> false
+            match scheme with `Git -> true | `SSH _ | `Scheme _ -> false
           in
           let run () =
             Lwt.both
@@ -475,6 +481,7 @@ struct
           let pp_host ppf = function
             | `Domain v -> Domain_name.pp ppf v
             | `Addr v -> Ipaddr.pp ppf v
+            | `Name v -> Fmt.string ppf v
           in
           let pp_port ppf = function
             | Some port -> Fmt.pf ppf ":%d" port
@@ -639,9 +646,9 @@ struct
     let ctx = Mimic.add git_capabilities `Wr (Endpoint.to_ctx edn ctx) in
     let open Rresult in
     match version, edn.Endpoint.scheme with
-    | `V1, ((`Git | `SSH _) as scheme) ->
+    | `V1, ((`Git | `SSH _ | `Scheme _) as scheme) ->
         let uses_git_transport =
-          match scheme with `Git -> true | `SSH _ -> false
+          match scheme with `Git -> true | `SSH _ | `Scheme _ -> false
         in
         let push_cfg = Nss.Push.configuration () in
         let run () =
@@ -657,6 +664,7 @@ struct
         let pp_host ppf = function
           | `Domain v -> Domain_name.pp ppf v
           | `Addr v -> Ipaddr.pp ppf v
+          | `Name v -> Fmt.string ppf v
         in
         let pp_port ppf = function
           | Some port -> Fmt.pf ppf ":%d" port

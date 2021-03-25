@@ -65,7 +65,10 @@ module type SMART_GIT = sig
         | `Scheme of string ];
       port : int option;
       path : string;
-      host : [ `Addr of Ipaddr.t | `Domain of [ `host ] Domain_name.t ];
+      host :
+        [ `Addr of Ipaddr.t
+        | `Domain of [ `host ] Domain_name.t
+        | `Name of string ];
     }
 
     val pp : t Fmt.t
@@ -109,7 +112,8 @@ module type SMART_GIT = sig
   val git_path : string Mimic.value
 
   val git_host :
-    [ `Addr of Ipaddr.t | `Domain of [ `host ] Domain_name.t ] Mimic.value
+    [ `Addr of Ipaddr.t | `Domain of [ `host ] Domain_name.t | `Name of string ]
+    Mimic.value
 
   val git_ssh_user : string Mimic.value
   val git_port : int Mimic.value

@@ -1,0 +1,3 @@
+(cram
+ (package git-unix)
+ (deps %{bin:guit.fetch}))
