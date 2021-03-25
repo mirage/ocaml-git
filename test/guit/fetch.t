@@ -2,11 +2,11 @@ Tests fetch command
   $ mkdir simple
   $ mkdir simple-clone
   $ cd simple
+  $ git init 2> /dev/null
+  Initialized empty Git repository in $TESTCASE_ROOT/simple/.git/
   $ git config init.defaultBranch master
   $ git config user.email "romain@mirage.io"
   $ git config user.name "Romain Calascibetta"
-  $ git init
-  Initialized empty Git repository in $TESTCASE_ROOT/simple/.git/
   $ git commit --allow-empty -q -m .
   $ mkfifo pipe-ic
   $ mkfifo pipe-oc
