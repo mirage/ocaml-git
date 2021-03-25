@@ -149,7 +149,7 @@ struct
       Lwt.return buffers
     in
     let rs = refs in
-    Log.debug (fun m -> m "%d packed-refs added.\n%!" (List.length packed));
+    Log.debug (fun m -> m "%d packed-refs added." (List.length packed));
     let refs =
       {
         atomic_wr =
