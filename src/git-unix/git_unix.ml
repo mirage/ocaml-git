@@ -725,14 +725,19 @@ module Sync (Git_store : Git.S) (HTTP : Smart_git.HTTP) = struct
 
   let fetch ?(push_stdout = ignore) ?(push_stderr = ignore) ~ctx edn store
       ?version ?capabilities ?deepen want =
+    let ctx = Mimic.merge Git_unix_mimic.ctx ctx in
     let dotgit = Git_store.dotgit store in
     let temp = Fpath.(dotgit / "tmp") in
     tmp temp "pack-%s.pack" >>= fun src ->
     tmp temp "pack-%s.pack" >>= fun dst ->
     tmp temp "pack-%s.idx" >>= fun idx ->
-    let create_idx_stream () = stream_of_file idx in
-    let create_pack_stream () = stream_of_file dst in
+    let create_idx_stream () = stream_of_file Fpath.(temp // idx) in
+    let create_pack_stream () = stream_of_file Fpath.(temp // dst) in
     fetch ~push_stdout ~push_stderr ~ctx edn store ?version ?capabilities
       ?deepen want ~src ~dst ~idx ~create_idx_stream ~create_pack_stream temp
       temp
+
+  let push ~ctx edn store ?version ?capabilities cmds =
+    let ctx = Mimic.merge Git_unix_mimic.ctx ctx in
+    push ~ctx edn store ?version ?capabilities cmds
 end

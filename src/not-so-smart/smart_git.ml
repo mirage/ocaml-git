@@ -20,10 +20,14 @@ module Endpoint = struct
       [ `SSH of string
       | `Git
       | `HTTP of (string * string) list
-      | `HTTPS of (string * string) list ];
+      | `HTTPS of (string * string) list
+      | `Scheme of string ];
     port : int option;
     path : string;
-    host : [ `Addr of Ipaddr.t | `Domain of [ `host ] Domain_name.t ];
+    host :
+      [ `Addr of Ipaddr.t
+      | `Domain of [ `host ] Domain_name.t
+      | `Name of string ];
   }
 
   let pp ppf edn =
@@ -31,6 +35,7 @@ module Endpoint = struct
       | `Addr (Ipaddr.V4 v) -> Ipaddr.V4.pp ppf v
       | `Addr (Ipaddr.V6 v) -> Fmt.pf ppf "[IPv6:%a]" Ipaddr.V6.pp v
       | `Domain v -> Domain_name.pp ppf v
+      | `Name v -> Fmt.pf ppf "%s" v
     in
     let pp_port ppf = function
       | Some port -> Fmt.pf ppf ":%d" port
@@ -45,6 +50,8 @@ module Endpoint = struct
         Fmt.pf ppf "http://%a%a/%s" pp_host host pp_port port path
     | { scheme = `HTTPS _; path; port; host } ->
         Fmt.pf ppf "https://%a%a/%s" pp_host host pp_port port path
+    | { scheme = `Scheme scheme; path; port; host } ->
+        Fmt.pf ppf "%s://%a%a/%s" scheme pp_host host pp_port port path
 
   let ( <||> ) a b =
     match a with
@@ -97,9 +104,10 @@ module Endpoint = struct
       let uri = Uri.of_string x in
       let path = Uri.path uri in
       let host str =
-        (Domain_name.of_string str >>= Domain_name.host >>| fun x -> `Domain x)
+        ( (Domain_name.of_string str >>= Domain_name.host >>| fun x -> `Domain x)
         <||> fun () ->
-        Ipaddr.of_string str >>| fun x -> `Addr x
+          Ipaddr.of_string str >>| fun x -> `Addr x )
+        <||> fun () -> R.ok (`Name x)
       in
       match Uri.scheme uri, Uri.host uri, Uri.port uri with
       | Some "git", Some str, port ->
@@ -110,6 +118,9 @@ module Endpoint = struct
       | Some "https", Some str, port ->
           host str >>= fun host ->
           R.ok { scheme = `HTTPS (headers_from_uri uri); path; port; host }
+      | Some scheme, Some str, port ->
+          host str >>= fun host ->
+          R.ok { scheme = `Scheme scheme; path; port; host }
       | _ -> R.error_msgf "invalid uri: %a" Uri.pp uri
     in
     parse_ssh str
@@ -118,7 +129,7 @@ module Endpoint = struct
 
   let with_headers_if_http headers ({ scheme; _ } as edn) =
     match scheme with
-    | `SSH _ | `Git -> edn
+    | `SSH _ | `Git | `Scheme _ -> edn
     | `HTTP _ -> { edn with scheme = `HTTP headers }
     | `HTTPS _ -> { edn with scheme = `HTTPS headers }
 
@@ -129,6 +140,7 @@ module Endpoint = struct
       | `SSH _ -> `SSH
       | `HTTP _ -> `HTTP
       | `HTTPS _ -> `HTTPS
+      | `Scheme scheme -> `Scheme scheme
     in
     let ssh_user = match edn.scheme with `SSH user -> Some user | _ -> None in
     ctx
@@ -329,6 +341,7 @@ struct
         let pp_host ppf = function
           | `Domain v -> Domain_name.pp ppf v
           | `Addr v -> Ipaddr.pp ppf v
+          | `Name v -> Fmt.string ppf v
         in
         Log.err (fun m -> m "%a not found" pp_host host);
         pack None;
@@ -441,10 +454,10 @@ struct
        the given [ctx] with [`Rd]. *)
     let run =
       match version, edn.scheme with
-      | `V1, ((`Git | `SSH _) as scheme) ->
+      | `V1, ((`Git | `SSH _ | `Scheme _) as scheme) ->
           let fetch_cfg = Nss.Fetch.configuration capabilities in
           let uses_git_transport =
-            match scheme with `Git -> true | `SSH _ -> false
+            match scheme with `Git -> true | `SSH _ | `Scheme _ -> false
           in
           let run () =
             Lwt.both
@@ -468,6 +481,7 @@ struct
           let pp_host ppf = function
             | `Domain v -> Domain_name.pp ppf v
             | `Addr v -> Ipaddr.pp ppf v
+            | `Name v -> Fmt.string ppf v
           in
           let pp_port ppf = function
             | Some port -> Fmt.pf ppf ":%d" port
@@ -632,9 +646,9 @@ struct
     let ctx = Mimic.add git_capabilities `Wr (Endpoint.to_ctx edn ctx) in
     let open Rresult in
     match version, edn.Endpoint.scheme with
-    | `V1, ((`Git | `SSH _) as scheme) ->
+    | `V1, ((`Git | `SSH _ | `Scheme _) as scheme) ->
         let uses_git_transport =
-          match scheme with `Git -> true | `SSH _ -> false
+          match scheme with `Git -> true | `SSH _ | `Scheme _ -> false
         in
         let push_cfg = Nss.Push.configuration () in
         let run () =
@@ -650,6 +664,7 @@ struct
         let pp_host ppf = function
           | `Domain v -> Domain_name.pp ppf v
           | `Addr v -> Ipaddr.pp ppf v
+          | `Name v -> Fmt.string ppf v
         in
         let pp_port ppf = function
           | Some port -> Fmt.pf ppf ":%d" port

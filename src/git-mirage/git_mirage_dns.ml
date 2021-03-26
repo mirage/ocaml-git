@@ -18,6 +18,7 @@ struct
   let ctx =
     let k dns hostname =
       match dns, hostname with
+      | _, `Name _ -> Lwt.return_none
       | _, `Addr (Ipaddr.V4 ipv4) -> Lwt.return_some ipv4
       | _, `Addr (Ipaddr.V6 _) -> Lwt.return_none (* TODO *)
       | None, `Domain _ -> Lwt.return_none
