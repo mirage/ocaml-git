@@ -21,7 +21,7 @@ let load ~of_hex dotgit =
     close_in ic;
     Unix_scheduler.prj rs
   with exn ->
-    Log.warn (fun m ->
+    Log.debug (fun m ->
         m "Got an error when we tried to load the packed-refs: %S."
           (Printexc.to_string exn));
     []

@@ -48,7 +48,7 @@ let setup_logs style_renderer level ppf =
   Fmt_tty.setup_std_outputs ?style_renderer ();
   Logs.set_level level;
   Logs.set_reporter (reporter ppf);
-  let quiet = match style_renderer with Some _ -> false | None -> true in
+  let quiet = match level with Some _ -> false | None -> true in
   quiet, ppf
 
 type error = [ `Store of Store.error | `Sync of Sync.error ]
