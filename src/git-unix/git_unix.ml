@@ -649,8 +649,10 @@ module Make (Digestif : Digestif.S) = struct
     let temp = Fpath.(dotgit / "tmp") in
     let refs = dotgit in
     Bos.OS.Dir.set_default_tmp temp;
-    Unix.mkdir ~path:true temp >>? fun _ ->
     Unix.mkdir ~path:true refs >>? fun _ ->
+    Unix.mkdir ~path:true temp >>? fun _ ->
+    Unix.mkdir ~path:true Fpath.(refs / "refs" / "heads") >>? fun _ ->
+    Unix.mkdir ~path:true Fpath.(refs / "refs" / "tags") >>? fun _ ->
     update_head refs >>? fun _ ->
     Unix.mkdir ~path:true minor >>? fun _ ->
     Unix.mkdir ~path:true major >>? fun _ ->

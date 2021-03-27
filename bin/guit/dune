@@ -1,5 +1,6 @@
 (executable
  (name fetch)
+ (modules fetch)
  (package git-unix)
  (public_name guit.fetch)
  (libraries
@@ -24,3 +25,23 @@
   mimic
   git-unix
   git-cohttp-unix))
+
+(executable
+ (name v)
+ (modules v)
+ (package git-unix)
+ (public_name guit.v)
+ (libraries
+  result
+  fpath
+  cmdliner
+  mtime
+  mtime.clock.os
+  rresult
+  logs
+  logs.cli
+  fmt.tty
+  fmt.cli
+  lwt
+  lwt.unix
+  git-unix))
