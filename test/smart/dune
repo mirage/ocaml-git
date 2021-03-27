@@ -23,7 +23,6 @@
   git
   git-unix
   result
-  curl.lwt
   mirage-crypto-rng.unix
   digestif
   digestif.c
