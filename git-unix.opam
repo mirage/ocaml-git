@@ -32,7 +32,6 @@ depends: [
   "astring" {>= "0.8.5"}
   "awa"
   "cmdliner" {>= "1.0.4"}
-  "cohttp-lwt-unix" {>= "2.5.4"}
   "decompress" {>= "1.3.0"}
   "domain-name" {>= "0.3.0"}
   "ipaddr" {>= "5.0.1"}
@@ -48,7 +47,7 @@ depends: [
   "ca-certs-nss" {>= "3.60"}
   "tls" {>= "0.12.8"}
   "tls-mirage" {>= "0.12.8"}
-  "cohttp-lwt-unix"
+  "cohttp-lwt-unix" {with-test}
 ]
 build: [
   ["dune" "build" "-p" name "-j" jobs]
