@@ -46,7 +46,7 @@ let physical_equal =
 
 let loads =
   Alcotest.test_case "load" `Quick @@ fun () ->
-  let chunk = Int64.to_int Carton.Dec.W.length in
+  let chunk = 1024 * 1024 in
   let payload = Bigstringaf.create (chunk * 2) in
   randomize payload;
   let do_mmap = ref false in
@@ -60,7 +60,7 @@ let loads =
     do_mmap := true;
     Bigstringaf.sub payload ~off:(Int64.to_int pos) ~len
   in
-  let w = Carton.Dec.W.make payload in
+  let w = Carton.Dec.W.make ~sector:(Int64.of_int chunk) payload in
   let slice0 = Carton.Dec.W.load ~map w 0L in
   Alcotest.(check bool) "first load" (Option.is_some slice0) true;
   let slice0 = Option.get slice0 in

@@ -22,6 +22,8 @@ module Make (Digestif : Digestif.S) : sig
   val v : ?dotgit:Fpath.t -> Fpath.t -> (t, error) result Lwt.t
 end
 
+val ctx : Mimic.ctx
+
 module Sync (Store : Git.S) (HTTP : Smart_git.HTTP) :
   Git.Sync.S with type hash = Store.hash and type store = Store.t
 

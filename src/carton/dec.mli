@@ -45,9 +45,9 @@ module W : sig
 
   and 'fd map = 'fd -> pos:int64 -> int -> Bigstringaf.t
 
-  val length : int64
   val reset : 'fd t -> unit
-  val make : 'fd -> 'fd t
+  val make : ?sector:int64 -> 'fd -> 'fd t
+  val sector : 'fd t -> int64
   val load : map:'fd map -> 'fd t -> int64 -> slice option
 end
 
@@ -202,6 +202,7 @@ val depth : v -> int
 
 val make :
   'fd ->
+  ?sector:int64 ->
   z:Zl.bigstring ->
   allocate:(int -> Zl.window) ->
   uid_ln:int ->
