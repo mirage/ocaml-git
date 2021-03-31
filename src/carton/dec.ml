@@ -564,26 +564,32 @@ module Fp (Uid : UID) = struct
 end
 
 module W = struct
-  type 'fd t = { mutable cur : int; w : slice Weak.t; m : int; fd : 'fd }
+  type 'fd t = {
+    mutable cur : int;
+    w : slice Weak.t;
+    m : int;
+    fd : 'fd;
+    sector : int64;
+  }
 
   and slice = { offset : int64; length : int; payload : Bigstringaf.t }
 
   and 'fd map = 'fd -> pos:int64 -> int -> Bigstringaf.t
 
-  let make fd = { cur = 0; w = Weak.create (0xffff + 1); m = 0xffff; fd }
+  let make ?(sector = 4096L) fd =
+    { cur = 0; w = Weak.create (0xffff + 1); m = 0xffff; fd; sector }
+
   let reset { w; _ } = Weak.fill w 0 (Weak.length w) None
+  let sector { sector; _ } = sector
 
   (* XXX(dinosaure): memoization. *)
 
-  let window_length = Int64.mul 1024L 1024L
-  let length = window_length
-
   let heavy_load : type fd. map:fd map -> fd t -> int64 -> slice option =
    fun ~map t w ->
-    let pos = Int64.(div w window_length) in
-    let pos = Int64.(mul pos window_length) in
+    let pos = Int64.(div w t.sector) in
+    let pos = Int64.(mul pos t.sector) in
 
-    let payload = map t.fd ~pos (1024 * 1024) in
+    let payload = map t.fd ~pos (Int64.to_int t.sector) in
     let slice =
       Some { offset = pos; length = Bigstringaf.length payload; payload }
     in
@@ -633,14 +639,15 @@ let fd { ws = { W.fd; _ }; _ } = fd
 let make :
     type fd uid.
     fd ->
+    ?sector:int64 ->
     z:Bigstringaf.t ->
     allocate:(int -> Zl.window) ->
     uid_ln:int ->
     uid_rw:(string -> uid) ->
     (uid -> int64) ->
     (fd, uid) t =
- fun fd ~z ~allocate ~uid_ln ~uid_rw where ->
-  { ws = W.make fd; fd = where; uid_ln; uid_rw; tmp = z; allocate }
+ fun fd ?sector ~z ~allocate ~uid_ln ~uid_rw where ->
+  { ws = W.make ?sector fd; fd = where; uid_ln; uid_rw; tmp = z; allocate }
 
 type weight = int
 
