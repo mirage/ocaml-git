@@ -251,8 +251,8 @@ let digest_like_git ~kind ?(off = 0) ?len buf =
 let verify_empty_pack () =
   Alcotest.test_case "verify empty pack" `Quick @@ fun () ->
   let t =
-    Carton.Dec.make () ~z ~allocate ~uid_ln:Uid.length ~uid_rw:Uid.of_raw_string
-      (fun _ -> Alcotest.fail "Invalid call to IDX")
+    Carton.Dec.make () ~sector:512L ~z ~allocate ~uid_ln:Uid.length
+      ~uid_rw:Uid.of_raw_string (fun _ -> Alcotest.fail "Invalid call to IDX")
   in
   let map () ~pos length =
     let len = min length (Int64.to_int pos - String.length empty_pack) in

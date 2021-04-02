@@ -1662,8 +1662,12 @@ struct
              Bigstringaf.copy t0.tmp ~off:0 ~len:(Bigstringaf.length t0.tmp)
            in
            ( th,
-             { t0 with ws = W.make t0.ws.W.fd; tmp = z; allocate = t0.allocate }
-           )))
+             {
+               t0 with
+               ws = W.make ~sector:t0.ws.sector t0.ws.W.fd;
+               tmp = z;
+               allocate = t0.allocate;
+             } )))
 end
 
 module Ip
