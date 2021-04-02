@@ -23,6 +23,8 @@ module Make (Digestif : Digestif.S) : sig
 end
 
 val ctx : Mimic.ctx
+val inet_addr : Unix.inet_addr Mimic.value
+val tls : Tls.Config.client Mimic.value
 
 module Sync (Store : Git.S) (HTTP : Smart_git.HTTP) :
   Git.Sync.S with type hash = Store.hash and type store = Store.t
