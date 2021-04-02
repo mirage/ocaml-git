@@ -665,6 +665,8 @@ end
 module Store = Make (Digestif.SHA1)
 
 let ctx = Git_unix_mimic.ctx
+let inet_addr = Git_unix_mimic.inet_addr
+let tls = Git_unix_mimic.cfg
 
 module Sync (Git_store : Git.S) (HTTP : Smart_git.HTTP) = struct
   let src = Logs.Src.create "git-unix.sync" ~doc:"logs git-unix's sync event"
