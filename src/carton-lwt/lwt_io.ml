@@ -32,6 +32,8 @@ let return x = Lwt.return x
 let parallel_map ~f lst = Lwt_list.map_p f lst
 let parallel_iter ~f lst = Lwt_list.iter_p f lst
 
+(* XXX(dinosaure): provide the opportunity to use
+ * [Lwt_preemptive.detach]? *)
 let detach f =
   let th, wk = Lwt.wait () in
   Lwt.async (fun () ->

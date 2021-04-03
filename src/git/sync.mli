@@ -29,6 +29,7 @@ module type S = sig
   val fetch :
     ?push_stdout:(string -> unit) ->
     ?push_stderr:(string -> unit) ->
+    ?threads:int ->
     ctx:Mimic.ctx ->
     Smart_git.Endpoint.t ->
     store ->
@@ -52,7 +53,7 @@ module type S = sig
 end
 
 (** Creates a lower-level [Sync] functions [fetch] and [push] that are then
-        overridden by backend-specific implementations such as [Mem] and [Git_unix] *)
+    overridden by backend-specific implementations such as [Mem] and [Git_unix] *)
 module Make
     (Digestif : Digestif.S)
     (Pack : Smart_git.APPEND with type +'a fiber = 'a Lwt.t)
@@ -68,6 +69,7 @@ module Make
   val fetch :
     ?push_stdout:(string -> unit) ->
     ?push_stderr:(string -> unit) ->
+    ?threads:int ->
     ctx:Mimic.ctx ->
     Smart_git.Endpoint.t ->
     store ->
