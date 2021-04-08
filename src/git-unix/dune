@@ -27,6 +27,7 @@
   digestif
   mmap
   git
+  logs
   logs.fmt
   cstruct
   mirage-flow

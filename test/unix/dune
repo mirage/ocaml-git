@@ -16,7 +16,9 @@
   base64
   bos
   git-unix
+  fmt
   fmt.tty
+  logs
   logs.fmt
   test_store))
 
