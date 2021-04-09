@@ -9,6 +9,7 @@
   digestif.c
   astring
   fmt
+  fmt.tty
   fpath
   bos
   rresult

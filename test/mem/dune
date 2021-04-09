@@ -11,7 +11,9 @@
   git
   digestif
   base64
+  fmt
   fmt.tty
+  logs
   logs.fmt
   test_store))
 
