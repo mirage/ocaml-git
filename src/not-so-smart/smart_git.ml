@@ -253,13 +253,13 @@ struct
     go [] offsets >>= fun entries ->
     Pack.close t fd >>? fun () -> Lwt.return_ok entries
 
-  let run_pck ~light_load ~heavy_load stream t ~src ~dst =
+  let run_pck ?threads ~light_load ~heavy_load stream t ~src ~dst =
     let open Rresult in
     let open Lwt.Infix in
     Lwt.catch
       (fun () ->
         Log.debug (fun m -> m "Start to verify the given stream.");
-        Thin.verify ~digest ~threads:1 t src fs stream)
+        Thin.verify ~digest ?threads t src fs stream)
       (function
         | Failure err -> Lwt.return_error (R.msg err)
         | Invalid_argument err -> Lwt.return_error (R.msg err)
@@ -320,10 +320,10 @@ struct
     in
     go (Enc.encode encoder `Await) >>? fun () -> Index.close t fd
 
-  let run ~light_load ~heavy_load stream t_pck t_idx ~src ~dst ~idx =
+  let run ?threads ~light_load ~heavy_load stream t_pck t_idx ~src ~dst ~idx =
     let open Rresult in
     let open Lwt.Infix in
-    run_pck ~light_load ~heavy_load stream t_pck ~src ~dst
+    run_pck ?threads ~light_load ~heavy_load stream t_pck ~src ~dst
     >>? fun (pack, entries) ->
     run_idx t_idx ~dst:idx ~pack entries
     >|= R.reword_error (R.msgf "%a" Index.pp_error)
@@ -428,7 +428,7 @@ struct
       `Report_status;
     ]
 
-  let fetch ?(push_stdout = ignore) ?(push_stderr = ignore) ~ctx
+  let fetch ?(push_stdout = ignore) ?(push_stderr = ignore) ?threads ~ctx
       (access, light_load, heavy_load) store edn ?(version = `V1)
       ?(capabilities = default_capabilities) ?deepen want t_pck t_idx ~src ~dst
       ~idx =
@@ -464,7 +464,8 @@ struct
               (fetch_v1 ~push_stdout ~push_stderr ~uses_git_transport
                  ~capabilities path ~ctx ?deepen ~want host store access
                  fetch_cfg pusher_with_logging)
-              (run ~light_load ~heavy_load stream t_pck t_idx ~src ~dst ~idx)
+              (run ?threads ~light_load ~heavy_load stream t_pck t_idx ~src ~dst
+                 ~idx)
             >>= fun (refs, idx) ->
             match refs, idx with
             | Ok refs, Ok uid -> Lwt.return_ok (`Pack (uid, refs))

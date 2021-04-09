@@ -128,6 +128,7 @@ module type SMART_GIT = sig
     val fetch :
       ?push_stdout:(string -> unit) ->
       ?push_stderr:(string -> unit) ->
+      ?threads:int ->
       ctx:Mimic.ctx ->
       (Uid.t, _, Uid.t * int ref * int64, 'g, Scheduler.t) Sigs.access
       * Uid.t Carton_lwt.Thin.light_load
