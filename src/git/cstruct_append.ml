@@ -150,8 +150,6 @@ let map _ fd ~pos len =
     let len = min len (Cstruct.len fd.buffer - pos) in
     let { Cstruct.buffer; off; _ } = fd.buffer in
     let res = Bigstringaf.sub ~off:(off + pos) ~len buffer in
-    Log.debug (fun m ->
-        m "@[<hov>%a@]" (Hxd_string.pp Hxd.default) (Bigstringaf.to_string res));
     res
 
 let close tbl fd =
