@@ -95,7 +95,6 @@ let test_three_contents =
     ~f:(fun fd str ->
       let v = Cstruct_append.map device fd ~pos:0L 1 in
       Alcotest.(check string) "contents" (Bigstringaf.to_string v) "\x00";
-      (* O_TRUNC *)
       Cstruct_append.append device fd str)
     device c "lol"
   >>= fun () ->
