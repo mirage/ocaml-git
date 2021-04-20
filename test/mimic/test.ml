@@ -286,13 +286,26 @@ let test_priority =
     "res5" res5 (Ok (Int3.T 4));
   Lwt.return_unit
 
+let test_order_of_values =
+  let open Lwt.Infix in
+  Alcotest_lwt.test_case "recent values" `Quick @@ fun _sw () ->
+  let int_edn, int_protocol =
+    Mimic.register ~name:"int" (module Fake (struct type t = int end))
+  in
+  let ctx = Mimic.empty |> Mimic.add int_edn 5 |> Mimic.add int_edn 6 in
+  Mimic.resolve ctx >>= fun res ->
+  let module Int = (val Mimic.repr int_protocol) in
+  Alcotest.(check (result (flow int_protocol) mimic_error))
+    "res" res (Ok (Int.T 6));
+  Lwt.return_unit
+
 let fiber =
   Alcotest_lwt.run "mimic"
     [
       ( "mimic",
         [
           test_input_string; test_output_string; test_values; test_functions;
-          test_topological_sort; test_priority;
+          test_topological_sort; test_priority; test_order_of_values;
         ] );
     ]
 
