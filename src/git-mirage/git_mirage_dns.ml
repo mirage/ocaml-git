@@ -2,8 +2,8 @@ module Make
     (Random : Mirage_random.S)
     (Mclock : Mirage_clock.MCLOCK)
     (Time : Mirage_time.S)
-    (Stack : Mirage_stack.V4) (TCP : sig
-      val tcp_ipaddr : Ipaddr.V4.t Mimic.value
+    (Stack : Mirage_stack.V4V6) (TCP : sig
+      val tcp_ipaddr : Ipaddr.t Mimic.value
     end) =
 struct
   open Lwt.Infix
@@ -19,12 +19,11 @@ struct
     let k dns hostname =
       match dns, hostname with
       | _, `Name _ -> Lwt.return_none
-      | _, `Addr (Ipaddr.V4 ipv4) -> Lwt.return_some ipv4
-      | _, `Addr (Ipaddr.V6 _) -> Lwt.return_none (* TODO *)
+      | _, `Addr ipaddr -> Lwt.return_some ipaddr
       | None, `Domain _ -> Lwt.return_none
       | Some dns, `Domain domain_name -> (
           gethostbyname dns domain_name >>= function
-          | Ok ipv4 -> Lwt.return_some ipv4
+          | Ok ipv4 -> Lwt.return_some (Ipaddr.V4 ipv4)
           | _ -> Lwt.return_none)
     in
     let open Mimic in

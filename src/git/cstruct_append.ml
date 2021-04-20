@@ -149,7 +149,8 @@ let map _ fd ~pos len =
   else
     let len = min len (Cstruct.len fd.buffer - pos) in
     let { Cstruct.buffer; off; _ } = fd.buffer in
-    Bigstringaf.sub ~off:(off + pos) ~len buffer
+    let res = Bigstringaf.sub ~off:(off + pos) ~len buffer in
+    res
 
 let close tbl fd =
   let result = Cstruct.sub fd.buffer 0 fd.length in

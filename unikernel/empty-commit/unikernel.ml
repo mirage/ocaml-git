@@ -2,11 +2,11 @@ open Lwt.Infix
 
 module Make
     (Store : Git.S)
-    (_ : sig end)
-    (Conduit : Conduit_mirage.S)
-    (Resolver : Resolver_lwt.S) =
+    (_ : sig end) =
 struct
-  module Sync = Git.Mem.Sync (Store) (Git_cohttp_mirage)
+  module Sync = Git.Mem.Sync (Store) (Git_paf)
+
+  let main = lazy (Git.Reference.v (Key_gen.branch ()))
 
   let author () =
     { Git.User.name= "Romain Calascibetta"
@@ -39,20 +39,19 @@ struct
     | None ->
       Store.write git empty_tree >>? fun (tree, _) ->
       Store.write git (commit ~tree ~author:(author ()) None) >>? fun (hash, _) ->
-      Store.Ref.write git Git.Reference.master (Git.Reference.uid hash)
+      Store.Ref.write git (Lazy.force main) (Git.Reference.uid hash)
     | Some (_, _) ->
-      Store.Ref.resolve git Git.Reference.master >>= failwith Store.pp_error >>= fun hash ->
+      Store.Ref.resolve git (Lazy.force main) >>= failwith Store.pp_error >>= fun hash ->
       Store.read_exn git hash >>= fun obj ->
       let[@warning "-8"] Git.Value.Commit parent = obj in
       let tree = Store.Value.Commit.tree parent in
       Store.write git (commit ~parent:hash ~tree ~author:(author ()) None) >>? fun (hash, _) ->
-      Store.Ref.write git Git.Reference.master (Git.Reference.uid hash)
+      Store.Ref.write git (Lazy.force main) (Git.Reference.uid hash)
 
   let capabilities =
     [ `Side_band_64k; `Multi_ack_detailed; `Ofs_delta; `Thin_pack; `Report_status ]
 
-  let start git ctx conduit resolver =
-    let ctx = Git_cohttp_mirage.with_conduit (Cohttp_mirage.Client.ctx resolver conduit) ctx in
+  let start git ctx =
     let edn =
       match Smart_git.Endpoint.of_string (Key_gen.remote ()) with
       | Ok edn -> edn
@@ -61,7 +60,7 @@ struct
     >>= failwith Sync.pp_error >>= empty_commit git
     >>= failwith Store.pp_error >>= fun () ->
     Sync.push ~capabilities ~ctx edn git
-      [ `Update (Git.Reference.master, Git.Reference.master) ]
+      [ `Update (Lazy.force main, Lazy.force main) ]
     >>= failwith Sync.pp_error >>= fun () ->
     Sync.fetch ~capabilities ~ctx edn git ~deepen:(`Depth 1) `All >>= function
     | Ok (Some (hash, references)) -> Lwt.return_unit

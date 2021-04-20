@@ -2,7 +2,7 @@ open Lwt.Infix
 
 type 'stack endpoint = {
   stack : 'stack;
-  ipaddr : Ipaddr.V4.t;
+  ipaddr : Ipaddr.t;
   port : int;
   authenticator : Awa.Keys.authenticator option;
   user : string;
@@ -12,15 +12,15 @@ type 'stack endpoint = {
 }
 
 module Make
-    (Stack : Mirage_stack.V4) (TCP : sig
-      val tcp_endpoint : (Stack.t * Ipaddr.V4.t * int) Mimic.value
+    (Stack : Mirage_stack.V4V6) (TCP : sig
+      val tcp_endpoint : (Stack.t * Ipaddr.t * int) Mimic.value
       val tcp_stack : Stack.t Mimic.value
-      val tcp_ipaddr : Ipaddr.V4.t Mimic.value
+      val tcp_ipaddr : Ipaddr.t Mimic.value
     end)
     (Mclock : Mirage_clock.MCLOCK) =
 struct
   module SSH = struct
-    include Awa_mirage.Make (Stack.TCPV4) (Mclock)
+    include Awa_mirage.Make (Stack.TCP) (Mclock)
 
     type nonrec endpoint = Stack.t endpoint
 
@@ -44,13 +44,13 @@ struct
 
     let connect edn =
       let open Lwt.Infix in
-      let stack = Stack.tcpv4 edn.stack in
+      let stack = Stack.tcp edn.stack in
       let channel_request =
         match edn.capabilities with
         | `Rd -> Awa.Ssh.Exec (Fmt.str "git-upload-pack '%s'" edn.path)
         | `Wr -> Awa.Ssh.Exec (Fmt.str "git-receive-pack '%s'" edn.path)
       in
-      Stack.TCPV4.create_connection stack (edn.ipaddr, edn.port) >>= function
+      Stack.TCP.create_connection stack (edn.ipaddr, edn.port) >>= function
       | Error err -> Lwt.return_error (`Connect (`Read err))
       | Ok flow -> (
           client_of_flow ?authenticator:edn.authenticator ~user:edn.user edn.key

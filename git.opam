@@ -46,6 +46,7 @@ depends: [
   "cmdliner" {with-test}
   "base-unix" {with-test}
   "fpath"
+  "hxd" {>= "0.3.1"}
   "mirage-flow" {>= "2.0.1"}
   "domain-name" {>= "0.3.0"}
   "emile" {>= "1.1"}
