@@ -44,6 +44,7 @@ depends: [
   "ke" {>= "0.4" & with-test}
   "mirage-crypto-rng" {>= "0.8.8" & with-test}
   "ptime"
+  "mimic"
   "ca-certs-nss" {>= "3.60"}
   "tls" {>= "0.12.8"}
   "tls-mirage" {>= "0.12.8"}
