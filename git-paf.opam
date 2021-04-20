@@ -12,6 +12,20 @@ depends: [
   "git"
   "mimic"
   "paf" {>= "0.0.2"}
+  "ca-certs-nss"
+  "cohttp"
+  "cohttp-lwt"
+  "fmt"
+  "ipaddr"
+  "logs"
+  "lwt"
+  "mirage-clock"
+  "mirage-stack"
+  "mirage-time"
+  "result"
+  "rresult"
+  "tls" {>= "0.13.0"}
+  "uri"
 ]
 build: [
   ["dune" "build" "-p" name "-j" jobs]
