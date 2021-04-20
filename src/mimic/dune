@@ -1,9 +1,0 @@
-(library
- (name mimic)
- (public_name mimic)
- (modules hmap implicit mirage_protocol mimic)
- (libraries logs result rresult fmt mirage-flow lwt))
-
-(documentation
- (package mimic)
- (mld_files index))
