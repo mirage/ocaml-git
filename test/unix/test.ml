@@ -315,10 +315,24 @@ let store =
   let doc = "A git repository." in
   Arg.(value & opt store random & info [ "git" ] ~doc)
 
+let tmp = "tmp"
 let run = Test.test store
-let () = Lwt_main.run run
 
 let () =
+  let fiber =
+    let open Bos in
+    let open Rresult in
+    OS.Dir.current () >>= fun current ->
+    OS.Dir.create Fpath.(current / tmp) >>= fun _ -> R.ok Fpath.(current / tmp)
+  in
+  let tmp = Rresult.R.failwith_error_msg fiber in
+  Bos.OS.Dir.set_default_tmp tmp;
+
+  Lwt_main.run run;
+
+  (* XXX(dinosaure): completely weird... I don't have time to try
+     to find a better way to execute common tests and Unix-specific
+     tests. TODO! *)
   Alcotest.run_with_args "git-unix" store
     [
       "init", [ git_init ];

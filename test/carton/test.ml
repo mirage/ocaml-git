@@ -33,7 +33,7 @@ let () = Random.full_init seed
 
 open Prelude
 
-let failf fmt = Fmt.kstr Alcotest.fail fmt
+let failf fmt = Alcotest.failf fmt
 
 let bigstringaf =
   Alcotest.testable
@@ -1046,7 +1046,18 @@ let git_version =
       | Some version -> version
       | None -> Fmt.failwith "Impossible to parse the Git version: %s" str)
 
+let tmp = "tmp"
+
 let () =
+  let fiber =
+    let open Bos in
+    let open Rresult in
+    OS.Dir.current () >>= fun current ->
+    OS.Dir.create Fpath.(current / tmp) >>= fun _ -> R.ok Fpath.(current / tmp)
+  in
+  let tmp = Rresult.R.failwith_error_msg fiber in
+  Bos.OS.Dir.set_default_tmp tmp;
+
   Alcotest.run "carton"
     [
       "weights", [ weights ]; "loads", [ loads ];
