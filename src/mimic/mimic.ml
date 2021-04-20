@@ -237,7 +237,8 @@ and find : type a. a value -> ctx -> a option Lwt.t =
         | _, Val v :: _ -> Lwt.return_some v
         | Some _, Fun _ :: r -> go fold r
       in
-      go None lst
+      go None (List.rev lst)
+(* XXX(dinosaure): the most recent value. *)
 
 type edn = Edn : 'edn value * 'edn -> edn
 type fnu = Fun : 'edn value * ('k, 'edn option Lwt.t) Fun.args * 'k -> fnu
@@ -373,6 +374,7 @@ let resolve : ctx -> (flow, [> error ]) result Lwt.t =
   let rec go : edn list -> _ = function
     | [] -> Lwt.return_error `Not_found
     | Edn (k, v) :: r -> (
+        Log.debug (fun m -> m "Try to instantiate %a." pp_value k);
         flow_of_value k v >>= function
         | Ok _ as v -> Lwt.return v
         | Error _err -> go r)
@@ -380,6 +382,10 @@ let resolve : ctx -> (flow, [> error ]) result Lwt.t =
   resolve ctx >>= function
   | Ok lst ->
       let lst = List.stable_sort priority_compare lst in
+      Log.debug (fun m ->
+          m "List of endpoints: @[<hov>%a@]"
+            Fmt.(Dump.list (fun ppf (Edn (k, _)) -> pp_value ppf k))
+            lst);
       go lst
   | Error _ as err -> Lwt.return err
 
