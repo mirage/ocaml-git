@@ -54,13 +54,15 @@ struct
         pp_error = Flow.pp_error;
       }
 
+  let is_a_tag ref = List.exists (String.equal "tags") (Ref.segs ref)
+
   let references want have =
     match want with
     | `None -> [], []
     | `All ->
         List.fold_left
           (fun acc -> function
-            | uid, ref, false -> (uid, ref) :: acc
+            | uid, ref, false when not (is_a_tag ref) -> (uid, ref) :: acc
             | _ -> acc)
           [] have
         |> List.split

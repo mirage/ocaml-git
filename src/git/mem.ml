@@ -308,8 +308,6 @@ module Make (Digestif : Digestif.S) = struct
     (* TODO(dinosaure): do first-pass instead to store all into a [string]. *)
     flat pck (Buffer.create 0x100) >>= fun pck_contents ->
     flat idx (Buffer.create 0x100) >>= fun idx_contents ->
-    Log.debug (fun m ->
-        m "@[<hov>%a@]" (Hxd_string.pp Hxd.default) pck_contents);
     let index =
       Carton.Dec.Idx.make
         (Bigstringaf.of_string ~off:0

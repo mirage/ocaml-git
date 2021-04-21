@@ -64,6 +64,7 @@ module type REF = sig
   val v : string -> t
   val equal : t -> t -> bool
   val to_string : t -> string
+  val segs : t -> string list
 end
 
 module type FLOW = sig
