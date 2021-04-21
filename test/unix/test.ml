@@ -298,25 +298,7 @@ let store =
   let pp ppf store = Fpath.pp ppf (Store.root store) in
   Arg.conv (parser, pp)
 
-let random =
-  let create () =
-    let open Rresult in
-    Bos.OS.Dir.tmp "git-%s" >>= fun root ->
-    Bos.OS.Dir.with_current root
-      (fun () ->
-        Bos.OS.Cmd.run Bos.Cmd.(v "git" % "init") >>= fun () -> R.ok root)
-      ()
-  in
-  match Rresult.(R.join (create ())) with
-  | Ok v -> Rresult.R.get_ok (Lwt_main.run (Store.v v))
-  | Error err -> Fmt.failwith "%a" Rresult.R.pp_msg err
-
-let store =
-  let doc = "A git repository." in
-  Arg.(value & opt store random & info [ "git" ] ~doc)
-
 let tmp = "tmp"
-let run = Test.test store
 
 let () =
   let fiber =
@@ -328,7 +310,25 @@ let () =
   let tmp = Rresult.R.failwith_error_msg fiber in
   Bos.OS.Dir.set_default_tmp tmp;
 
-  Lwt_main.run run;
+  let random =
+    let create () =
+      let open Rresult in
+      Bos.OS.Dir.tmp "git-%s" >>= fun root ->
+      ( Bos.OS.Dir.with_current root @@ fun () ->
+        Bos.OS.Cmd.run Bos.Cmd.(v "git" % "init") >>= fun () -> R.ok root )
+        ()
+    in
+    match Rresult.(R.join (create ())) with
+    | Ok v -> Rresult.R.get_ok (Lwt_main.run (Store.v v))
+    | Error err -> Fmt.failwith "%a" Rresult.R.pp_msg err
+  in
+
+  let store =
+    let doc = "A git repository." in
+    Arg.(value & opt store random & info [ "git" ] ~doc)
+  in
+
+  Lwt_main.run (Test.test store);
 
   (* XXX(dinosaure): completely weird... I don't have time to try
      to find a better way to execute common tests and Unix-specific
