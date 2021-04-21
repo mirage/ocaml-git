@@ -1,3 +1,8 @@
+### 0.4.1 (2021-22-04) Paris - France
+
+- Add a `sector_size` argument when we make a PACK decoder
+  (@dinosaure, #493, #497)
+
 ### 0.4.0 (2021-15-03) Paris - France
 
 - Handle `trunc` argument when we process a `thin` PACK file
