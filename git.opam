@@ -60,3 +60,6 @@ build: [
   ["dune" "runtest" "-p" name] {with-test}
 ]
 dev-repo: "git+https://github.com/mirage/ocaml-git.git"
+pin-depends: [
+  [ "decompress.dev" "git+https://github.com/clecat/decompress.git#f66aee137083296877d0fa94e2078d54a4d5db58" ]
+]
