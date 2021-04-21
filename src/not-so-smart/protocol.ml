@@ -642,7 +642,7 @@ module Decoder = struct
     prompt_pkt (go []) decoder
 
   let decode_negotiation decoder =
-    let k decoder =
+    let rec k decoder =
       let pkt = peek_pkt decoder in
       if String.Sub.equal_bytes pkt v_nak then (
         junk_pkt decoder;
@@ -665,7 +665,9 @@ module Decoder = struct
             | "common" -> return (Negotiation.ACK_common uid) decoder
             | _ -> fail decoder (`Invalid_ack (String.Sub.to_string pkt)))
         | _ -> fail decoder (`Invalid_ack (String.Sub.to_string pkt))
-      else assert false
+      else (
+        junk_pkt decoder;
+        prompt_pkt k decoder)
     in
     prompt_pkt k decoder
 
