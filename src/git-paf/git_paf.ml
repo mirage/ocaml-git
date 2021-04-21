@@ -80,14 +80,11 @@ struct
       | _ -> Lwt.return_none
     in
     let k1 scheme host cfg stack ipaddr port =
-      Fmt.epr ">>> Try to instanticate a <tls-edn>.\n%!";
       match scheme, host with
       | `HTTPS, `Domain domain_name ->
           Lwt.return_some (Some domain_name, cfg, stack, ipaddr, port)
       | `HTTPS, _ -> Lwt.return_some (None, cfg, stack, ipaddr, port)
-      | _ ->
-          Fmt.epr ">>> The scheme is wrong.\n%!";
-          Lwt.return_none
+      | _ -> Lwt.return_none
     in
     Mimic.empty
     |> Mimic.add Paf_cohttp.sleep Time.sleep_ns
