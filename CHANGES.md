@@ -1,3 +1,23 @@
+### 3.4.0 (2021-22-04) Paris - France
+
+- Fix several issues on `git-unix` (@dinosaure, @sternenseemann, #488)
+- Fix set of references by `git-unix` (@dinosaure, @jnavila, #490, #489)
+- Remove dependency with `curl` (@dinosaure, #491)
+- Provide `Git_unix.ctx` (@dinosaure, #493)
+- Update the plumbing between `carton.0.4.1` and `git` (@dinosaure, #493)
+- Expose information used by `Git_unix` to start a connection (@dinosaure, #498)
+- Add missing `fmt` and `logs` on several `dune` files (@CraigFe, @dinosaure, #499)
+- Be able to pass threads argument when we fetch (@dinosaure, #500)
+- Fix documentation on `search.ml` (@dinosaure, #501)
+- Be compatible with `alcotest.1.4.0` (@dinosaure, #504)
+- Delete `mimic` from the distribution (now available on https://github.com/dinosaure/mimic)
+  (@dinosaure, #505)
+- Fix temporary directories on unix tests (@dinosaure, #506)
+- Use the `non-stream` API of `decompress` for _loose_ objects (@clecat, @dinosaure, #502)
+- Use `git-paf` and `paf.0.0.2` instead of CoHTTP (@dinosaure, #508)
+- Don't try to download tags implicitely (@dinosaure, #507)
+- Fix bug about negotiation over HTTP connection (@dinosaure, #507)
+
 ### 3.3.3 (2021-21-03) Paris - France
 
 - Fix stack-overflow on tree objects (@zshipko, @dinosaure, #485)
