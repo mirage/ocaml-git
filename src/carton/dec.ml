@@ -841,6 +841,19 @@ let rec weight_of_ref_delta :
     weight =
  fun ~map t ~weight ?(visited = []) ~cursor slice ->
   let uid, pos, slice = header_of_ref_delta ~map t cursor slice in
+  let len = Bigstringaf.length slice.W.payload - pos in
+  let pos, slice =
+    match len with
+    | 0 -> (
+        match
+          W.load ~map t.ws Int64.(add slice.W.offset (of_int slice.W.length))
+        with
+        | Some slice -> 0, slice
+        | None ->
+            Fmt.failwith "Reach end of pack (ask: %Ld, [weight_of_ref_delta])"
+              Int64.(add slice.W.offset (of_int slice.W.length)))
+    | _ -> pos, slice
+  in
   let weight =
     weight_of_delta ~map t ~weight
       ~cursor:Int64.(add slice.W.offset (of_int pos))
@@ -860,6 +873,19 @@ and weight_of_ofs_delta :
     weight =
  fun ~map t ~weight ?(visited = []) ~anchor ~cursor slice ->
   let base_offset, pos, slice = header_of_ofs_delta ~map t cursor slice in
+  let len = Bigstringaf.length slice.W.payload - pos in
+  let pos, slice =
+    match len with
+    | 0 -> (
+        match
+          W.load ~map t.ws Int64.(add slice.W.offset (of_int slice.W.length))
+        with
+        | Some slice -> 0, slice
+        | None ->
+            Fmt.failwith "Reach end of pack (ask: %Ld, [weight_of_ofs_delta])"
+              Int64.(add slice.W.offset (of_int slice.W.length)))
+    | _ -> pos, slice
+  in
   let weight =
     weight_of_delta ~map t ~weight
       ~cursor:Int64.(add slice.W.offset (of_int pos))
@@ -1050,6 +1076,19 @@ let rec of_ofs_delta :
     v =
  fun ~map t raw ~anchor ~cursor slice ->
   let base_offset, pos, slice = header_of_ofs_delta ~map t cursor slice in
+  let len = Bigstringaf.length slice.W.payload - pos in
+  let pos, slice =
+    match len with
+    | 0 -> (
+        match
+          W.load ~map t.ws Int64.(add slice.W.offset (of_int slice.W.length))
+        with
+        | Some slice -> 0, slice
+        | None ->
+            Fmt.failwith "Reach end of pack (ask: %Ld, [of_ofs_delta])"
+              Int64.(add slice.W.offset (of_int slice.W.length)))
+    | _ -> pos, slice
+  in
   let v =
     of_offset ~map t (flip raw) ~cursor:Int64.(sub anchor (of_int base_offset))
   in
@@ -1062,6 +1101,19 @@ and of_ref_delta :
     map:fd W.map -> (fd, uid) t -> raw -> cursor:int64 -> W.slice -> v =
  fun ~map t raw ~cursor slice ->
   let uid, pos, slice = header_of_ref_delta ~map t cursor slice in
+  let len = Bigstringaf.length slice.W.payload - pos in
+  let pos, slice =
+    match len with
+    | 0 -> (
+        match
+          W.load ~map t.ws Int64.(add slice.W.offset (of_int slice.W.length))
+        with
+        | Some slice -> 0, slice
+        | None ->
+            Fmt.failwith "Reach end of pack (ask: %Ld, [of_ref_delta])"
+              Int64.(add slice.W.offset (of_int slice.W.length)))
+    | _ -> pos, slice
+  in
   let v = of_uid ~map t (flip raw) uid in
   of_delta ~map t v.kind raw ~depth:(succ v.depth)
     ~cursor:Int64.(add slice.W.offset (of_int pos))
