@@ -1,3 +1,7 @@
+### 0.4.2 (2021-11-05) Paris - France
+
+- Fix stream of inflated contents on PACK entry (@dinosaure, @talex5, @emillon, #515, #514)
+
 ### 0.4.1 (2021-22-04) Paris - France
 
 - Add a `sector_size` argument when we make a PACK decoder
