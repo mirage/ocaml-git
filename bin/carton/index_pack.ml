@@ -284,7 +284,7 @@ let values_from_src = function
       let fd = Unix.openfile (Fpath.to_string fpath) Unix.[ O_RDONLY ] 0o644 in
       let max = (Unix.LargeFile.fstat fd).Unix.LargeFile.st_size in
       let map () ~pos len =
-        let len = Stdlib.min len Int64.(to_int (sub max pos)) in
+        let len = Stdlib.min len (Int64.to_int (Int64.sub max pos)) in
         let res =
           Mmap.V1.map_file fd ~pos Bigarray.char Bigarray.c_layout false
             [| len |]

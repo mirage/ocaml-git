@@ -152,7 +152,7 @@ let first_pass fpath =
       return (Ok (hash, oracle, matrix, length, carbon))
 
 let map ~max fd ~pos len =
-  let len = Stdlib.min len Int64.(to_int (sub max pos)) in
+  let len = Stdlib.min len (Int64.to_int (Int64.sub max pos)) in
   let res =
     Mmap.V1.map_file fd ~pos Bigarray.char Bigarray.c_layout false [| len |]
   in
