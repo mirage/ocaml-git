@@ -13,8 +13,6 @@ depends: [
   "mimic" {>= "0.0.3"}
   "paf" {>= "0.0.2"}
   "ca-certs-nss"
-  "cohttp"
-  "cohttp-lwt"
   "fmt"
   "ipaddr"
   "logs"
