@@ -13,8 +13,6 @@ depends: [
   "mimic" {>= "0.0.3"}
   "paf" {>= "0.0.2"}
   "ca-certs-nss"
-  "cohttp"
-  "cohttp-lwt"
   "fmt"
   "ipaddr"
   "logs"
@@ -26,6 +24,12 @@ depends: [
   "rresult"
   "tls" {>= "0.13.0"}
   "uri"
+  "bigarray-compat"
+  "bigstringaf"
+  "domain-name"
+  "httpaf"
+  "mirage-flow"
+  "tls-mirage"
 ]
 build: [
   ["dune" "build" "-p" name "-j" jobs]
