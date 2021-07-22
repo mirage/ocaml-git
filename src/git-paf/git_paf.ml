@@ -83,7 +83,7 @@ let with_redirects ?(max = 10) ~f uri =
   let rec go max uri =
     f uri >>= fun (resp, body) ->
     let status_code = Httpaf.Status.to_code resp.Httpaf.Response.status in
-    if status_code = 300 then (
+    if status_code / 100 = 3 then (
       Log.debug (fun m -> m "The request must be redirected.");
       match
         Option.map Uri.of_string
@@ -255,9 +255,7 @@ struct
             flow
   end
 
-  let tls_edn, _tls_protocol =
-    Mimic.register ~priority:10 ~name:"tls" (module TLS)
-
+  let tls_edn, _tls_protocol = Mimic.register ~name:"tls" (module TLS)
   let authenticator = Rresult.R.failwith_error_msg (Nss.authenticator ())
   let default_tls_cfg = Tls.Config.client ~authenticator ()
   let tls = Mimic.make ~name:"git-paf-tls"
