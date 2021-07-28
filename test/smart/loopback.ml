@@ -21,12 +21,12 @@ let connect (i, push) =
   Lwt.return_ok { i; o = Cstruct.create 0; c = false; push }
 
 let read flow =
-  if Cstruct.len flow.i = 0 then (
+  if Cstruct.length flow.i = 0 then (
     flow.c <- true;
     Lwt.return_ok `Eof)
   else
     let res = Cstruct.create 0x1000 in
-    let len = min (Cstruct.len res) (Cstruct.len flow.i) in
+    let len = min (Cstruct.length res) (Cstruct.length flow.i) in
     Cstruct.blit flow.i 0 res 0 len;
     flow.i <- Cstruct.shift flow.i len;
     Lwt.return_ok (`Data (Cstruct.sub res 0 len))

@@ -172,7 +172,7 @@ module Make (Digestif : Digestif.S) = struct
       Lwt.return_ok (hash, Int64.to_int (Value.length value)))
 
   let digest kind raw =
-    let len = Cstruct.len raw in
+    let len = Cstruct.length raw in
     let ctx = Hash.init () in
     let hdr =
       Fmt.str "%s %d\000%!"
@@ -450,11 +450,11 @@ module Sync (Git_store : Minimal.S) (HTTP : Smart_git.HTTP) = struct
     let stream, emitter = Lwt_stream.create () in
     let fill () =
       let rec go pos =
-        if pos = Cstruct.len payload then (
+        if pos = Cstruct.length payload then (
           emitter None;
           Lwt.return_unit)
         else
-          let len = min chunk (Cstruct.len payload - pos) in
+          let len = min chunk (Cstruct.length payload - pos) in
           let tmp = Bytes.create len in
           Cstruct.blit_to_bytes payload pos tmp 0 len;
           emitter (Some (Bytes.unsafe_to_string tmp));

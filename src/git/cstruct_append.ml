@@ -112,7 +112,7 @@ let create ?(trunc = true) ~mode:_ { o0; o1; _ } key =
   in
 
   let value =
-    if Cstruct.len !value < 1 then (
+    if Cstruct.length !value < 1 then (
       let v = Cstruct.create 1 in
       value := v;
       v)
@@ -121,12 +121,12 @@ let create ?(trunc = true) ~mode:_ { o0; o1; _ } key =
 
   Log.debug (fun m ->
       m "Make a new file-descriptor (%b) (%d byte(s))." which
-        (Cstruct.len value));
+        (Cstruct.length value));
   let fd =
     {
       buffer = value;
-      capacity = Cstruct.len value;
-      length = (if trunc then 0 else Cstruct.len value);
+      capacity = Cstruct.length value;
+      length = (if trunc then 0 else Cstruct.length value);
       which;
     }
   in
@@ -145,9 +145,9 @@ let map _ fd ~pos len =
   Log.debug (fun m ->
       m "map on fd[%b](length:%d) ~pos:%Ld %d." fd.which fd.length pos len);
   let pos = Int64.to_int pos in
-  if pos > Cstruct.len fd.buffer then Bigstringaf.empty
+  if pos > Cstruct.length fd.buffer then Bigstringaf.empty
   else
-    let len = min len (Cstruct.len fd.buffer - pos) in
+    let len = min len (Cstruct.length fd.buffer - pos) in
     let { Cstruct.buffer; off; _ } = fd.buffer in
     let res = Bigstringaf.sub ~off:(off + pos) ~len buffer in
     res
