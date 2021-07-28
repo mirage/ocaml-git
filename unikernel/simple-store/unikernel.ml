@@ -43,8 +43,8 @@ struct
         | Error err -> Lwt.return_error (`Msg (Fmt.str "%a" Stack.TCP.pp_error err))
         | Ok `Eof -> Lwt.return_ok `Close
         | Ok (`Data tmp) ->
-          let len = Cstruct.len tmp in
-          Ke.Rke.N.push queue ~blit ~length:Cstruct.len ~off:0 ~len tmp ;
+          let len = Cstruct.length tmp in
+          Ke.Rke.N.push queue ~blit ~length:Cstruct.length ~off:0 ~len tmp ;
           go () in
     go ()
 

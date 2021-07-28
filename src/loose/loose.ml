@@ -102,7 +102,7 @@ module Make (Uid : UID) = struct
     let encoder =
       Zl.Def.dst encoder buffers.o 0 (Bigstringaf.length buffers.o)
     in
-    go Uid.empty (Cstruct.to_string hdr, 0, Cstruct.len hdr) [] encoder
+    go Uid.empty (Cstruct.to_string hdr, 0, Cstruct.length hdr) [] encoder
     >>= fun (uid, vs) ->
     let len = List.fold_right (( + ) <.> Bigstringaf.length) vs 0 in
     (* XXX(dinosaure): shame! *)
@@ -119,7 +119,7 @@ module Make (Uid : UID) = struct
     | Ok (_, len) ->
         let raw = Cstruct.of_bigarray buffers.o ~off:0 ~len in
         let contents, kind, length = hdr raw in
-        if Int64.of_int (Cstruct.len contents) <> length then
+        if Int64.of_int (Cstruct.length contents) <> length then
           return (Error `Non_atomic)
         else return (Ok (Carton.Dec.v ~kind (Cstruct.to_bigarray contents)))
     | Error _ -> return (Error `Non_atomic)

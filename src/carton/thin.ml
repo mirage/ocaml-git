@@ -44,10 +44,10 @@ struct
           | None -> return filled)
       | src :: _ ->
           let src = Cstruct.of_bigarray src in
-          let len = min (Cstruct.len inputs) (Cstruct.len src) in
+          let len = min (Cstruct.length inputs) (Cstruct.length src) in
           Cstruct.blit src 0 inputs 0 len;
           Ke.Rke.N.shift_exn ke len;
-          if len < Cstruct.len inputs then
+          if len < Cstruct.length inputs then
             go (filled + len) (Cstruct.shift inputs len)
           else return (filled + len)
     in

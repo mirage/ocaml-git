@@ -21,7 +21,7 @@ let run :
   let failwithf fmt = Format.kasprintf (fun err -> raise (Failure err)) fmt in
   let rec go = function
     | Smart.Read { k; buffer; off; len; eof } -> (
-        let max = min (Cstruct.len tmp) len in
+        let max = min (Cstruct.length tmp) len in
         Log.debug (fun m -> m "Start to read %d byte(s)." max);
         recv flow (Cstruct.sub tmp 0 max) >>= function
         | Ok `End_of_flow ->
@@ -36,7 +36,7 @@ let run :
             failwithf "%a" pp_error err)
     | Smart.Write { k; buffer; off; len } ->
         let rec loop tmp =
-          if Cstruct.len tmp = 0 then go (k len)
+          if Cstruct.length tmp = 0 then go (k len)
           else
             send flow tmp >>= function
             | Ok shift -> loop (Cstruct.shift tmp shift)

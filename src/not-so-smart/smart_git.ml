@@ -380,7 +380,7 @@ struct
     let send t raw =
       let oc = t.oc ^ Cstruct.to_string raw in
       t.oc <- oc;
-      Lwt.return_ok (Cstruct.len raw)
+      Lwt.return_ok (Cstruct.length raw)
 
     let rec recv t raw =
       if t.pos = String.length t.ic then (
@@ -391,7 +391,7 @@ struct
         t.ic <- t.ic ^ contents;
         recv t raw)
       else
-        let len = min (String.length t.ic - t.pos) (Cstruct.len raw) in
+        let len = min (String.length t.ic - t.pos) (Cstruct.length raw) in
         Cstruct.blit_from_string t.ic t.pos raw 0 len;
         t.pos <- t.pos + len;
         Lwt.return_ok (`Input len)

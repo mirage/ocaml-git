@@ -26,7 +26,7 @@ external to_cstruct : t -> Cstruct.t = "%identity"
 
 let of_string x : t = Cstruct.of_string x
 let to_string (x : t) = Cstruct.to_string x
-let length : t -> int64 = fun t -> Int64.of_int (Cstruct.len t)
+let length : t -> int64 = fun t -> Int64.of_int (Cstruct.length t)
 let pp ppf blob = Fmt.string ppf (Cstruct.to_string blob)
 let equal = Cstruct.equal
 let compare = Cstruct.compare
@@ -55,7 +55,7 @@ module Make (Hash : S.HASH) = struct
 
   let of_string x : t = Cstruct.of_string x
   let to_string (x : t) = Cstruct.to_string x
-  let length : t -> int64 = fun t -> Int64.of_int (Cstruct.len t)
+  let length : t -> int64 = fun t -> Int64.of_int (Cstruct.length t)
 
   let digest cs =
     let ctx = Hash.init () in
