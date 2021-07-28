@@ -28,7 +28,7 @@ depends: [
   "logs"
   "lwt"
   "mimic"
-  "cstruct" {>= "5.0.0"}
+  "cstruct" {>= "6.0.0"}
   "angstrom" {>= "0.14.0"}
   "carton" {>= "0.4.0"}
   "carton-lwt" {>= "0.4.0"}
