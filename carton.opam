@@ -50,4 +50,5 @@ build: [
 dev-repo: "git+https://github.com/mirage/ocaml-git.git"
 pin-depends: [
   [ "decompress.dev" "git+https://github.com/mirage/decompress.git#7956097fc1159d6b801ddae4916b8eca64e372cd" ]
+  [ "checkseum.dev" "git+https://github.com/mirage/checkseum.git#b961b7eec31c6a470fe6383e6a8c378edae0d9cc" ]
 ]
