@@ -171,7 +171,13 @@ let find idx hash =
       let crc = get_int32_be idx.mp (crcs_offset + (n * 4)) in
       let off = get_int32_be idx.mp (values_offset + (n * 4)) in
 
-      Some (Optint.of_int32 crc, Int64.of_int32 off)
+      if Int32.logand off 0x80000000l <> 0l then
+        let off = Int32.to_int off land 0x7fffffff in
+        let off =
+          get_int64_be idx.mp (values_offset + (idx.n * 4) + (off * 8))
+        in
+        Some (Optint.of_int32 crc, off)
+      else Some (Optint.of_int32 crc, Int64.of_int32 off)
   | exception Not_found -> None
 
 let exists idx uid =
@@ -240,6 +246,7 @@ end = struct
     mutable o_pos : int;
     mutable o_max : int;
     t : bigstring;
+    q : int64 Queue.t;
     mutable t_pos : int;
     mutable t_max : int;
     mutable n : int;
@@ -357,11 +364,35 @@ end = struct
     Bigstringaf.blit_from_string uid ~src_off:0 s ~dst_off:j ~len:Uid.length;
     k e
 
+  let rec encode_big_offset e `Await =
+    let offset = Queue.pop e.q in
+    Fmt.epr ">>> ENCODE BIG OFFSET: %Lx\n%!" offset;
+    let k e =
+      if Queue.is_empty e.q then encode_trail e `Await
+      else encode_big_offset e `Await
+    in
+
+    let rem = o_rem e in
+
+    let s, j, k =
+      if rem < 8 then (
+        t_range e 7;
+        e.t, 0, t_flush k)
+      else
+        let j = e.o_pos in
+        e.o_pos <- e.o_pos + 8;
+        e.o, j, k
+    in
+
+    Bigstringaf.set_int64_be s j offset;
+    k e
+
   let rec encode_offset e `Await =
     let k e =
       if e.n + 1 == Array.length e.index then (
         e.n <- 0;
-        encode_trail e `Await)
+        if Queue.is_empty e.q then encode_trail e `Await
+        else encode_big_offset e `Await)
       else (
         e.n <- succ e.n;
         encode_offset e `Await)
@@ -378,8 +409,14 @@ end = struct
         e.o, j, k
     in
     let { offset; _ } = e.index.(e.n) in
-    Bigstringaf.set_int32_be s j (Int64.to_int32 offset);
-    k e
+    if Int64.shift_right_logical offset 31 <> 0L then (
+      let n = Queue.length e.q in
+      Queue.push offset e.q;
+      Bigstringaf.set_int32_be s j Int32.(logor 0x80000000l (of_int n));
+      k e)
+    else (
+      Bigstringaf.set_int32_be s j (Int64.to_int32 offset);
+      k e)
 
   let rec encode_crc e `Await =
     let k e =
@@ -504,6 +541,7 @@ end = struct
       o_pos;
       o_max;
       t = Bigstringaf.create Uid.length;
+      q = Queue.create ();
       t_pos = 1;
       t_max = 0;
       n = 0;

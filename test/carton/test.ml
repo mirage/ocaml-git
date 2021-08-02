@@ -1026,6 +1026,47 @@ let empty_stream () =
   | `Malformed _ -> Alcotest.(check pass) "no infinite loop" () ()
   | _ -> Alcotest.fail "Unexpected result of [decode]"
 
+let huge_pack () =
+  Alcotest.test_case "big offset" `Quick @@ fun () ->
+  let encoder =
+    Idx.encoder `Manual ~pack:(Uid.of_hex "")
+      [|
+        {
+          Carton.Dec.Idx.crc = Checkseum.Crc32.default;
+          offset = 0L;
+          uid = Uid.digest "foo";
+        };
+        {
+          Carton.Dec.Idx.crc = Checkseum.Crc32.default;
+          offset = Int64.(add (of_int32 Int32.max_int) 1L);
+          uid = Uid.digest "bar";
+        };
+      |]
+  in
+  Idx.dst encoder o 0 (Bigstringaf.length o);
+  let cur = ref 0 in
+  let rec go () =
+    match Idx.encode encoder `Await with
+    | `Partial ->
+        let pos = Bigstringaf.length o - !cur - Idx.dst_rem encoder in
+        Idx.dst encoder o pos (Bigstringaf.length o - pos);
+        cur := !cur + pos;
+        go ()
+    | `Ok -> Bigstringaf.sub o ~off:0 ~len:!cur
+  in
+  let idx =
+    Carton.Dec.Idx.make (go ()) ~uid_ln:Uid.length ~uid_rw:Uid.to_raw_string
+      ~uid_wr:Uid.of_raw_string
+  in
+  Alcotest.(check (option (pair optint int64)))
+    "foo, offset"
+    (Carton.Dec.Idx.find idx (Uid.digest "foo"))
+    (Some (Checkseum.Crc32.default, 0L));
+  Alcotest.(check (option (pair optint int64)))
+    "bar, big offset"
+    (Carton.Dec.Idx.find idx (Uid.digest "bar"))
+    (Some (Checkseum.Crc32.default, Int64.(add (of_int32 Int32.max_int) 1L)))
+
 let v1_9_0 =
   {
     Git_version.major = 1;
@@ -1065,7 +1106,7 @@ let () =
         [
           valid_empty_pack (); verify_empty_pack (); check_empty_index ();
           verify_bomb_pack (); first_entry_of_bomb_pack (); unpack_bomb_pack ();
-          decode_index_stream (); empty_stream ();
+          decode_index_stream (); empty_stream (); huge_pack ();
         ] );
       ( "encoder",
         [
