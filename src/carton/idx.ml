@@ -171,7 +171,13 @@ let find idx hash =
       let crc = get_int32_be idx.mp (crcs_offset + (n * 4)) in
       let off = get_int32_be idx.mp (values_offset + (n * 4)) in
 
-      Some (Optint.of_int32 crc, Int64.of_int32 off)
+      if Int32.logand off 0x80000000l <> 0l then
+        let off = Int32.to_int off land 0x7fffffff in
+        let off =
+          get_int64_be idx.mp (values_offset + (idx.n * 4) + (off * 8))
+        in
+        Some (Optint.of_int32 crc, off)
+      else Some (Optint.of_int32 crc, Int64.of_int32 off)
   | exception Not_found -> None
 
 let exists idx uid =
