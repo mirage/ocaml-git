@@ -1,3 +1,9 @@
+### 0.4.3 (2021-03-08) Paris - France
+
+- Use `Cstruct.length` instead of `Cstruct.len` (@dinosaure, #522)
+- Fix big endian support via `decompress` and `checkseum` (@dinosaure, @talex5, @tmcgilchrist, #523)
+- Handle huge PACK files (@dinosaure, @TheLortex, #526)
+
 ### 0.4.2 (2021-11-05) Paris - France
 
 - Fix stream of inflated contents on PACK entry (@dinosaure, @talex5, @emillon, #515, #514)
