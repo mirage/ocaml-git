@@ -65,11 +65,9 @@ module TLS = struct
   type endpoint =
     Tls.Config.client * [ `host ] Domain_name.t option * Unix.sockaddr
 
-  let connect (tls, domain_name, sockaddr) =
+  let connect (tls, host, sockaddr) =
     TCP.connect sockaddr >|= R.reword_error (fun err -> `Read err)
-    >>? fun flow ->
-    let host = Option.map Domain_name.to_string domain_name in
-    client_of_flow tls ?host flow
+    >>? fun flow -> client_of_flow tls ?host flow
 end
 
 module Nss = Ca_certs_nss.Make (Ptime_clock)

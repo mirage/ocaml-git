@@ -245,14 +245,11 @@ struct
       * Ipaddr.t
       * int
 
-    let connect (domain_name, cfg, stack, ipaddr, port) =
+    let connect (host, cfg, stack, ipaddr, port) =
       let t = Stack.tcp stack in
       Stack.TCP.create_connection t (ipaddr, port) >>= function
       | Error err -> Lwt.return_error (`Read err)
-      | Ok flow ->
-          client_of_flow cfg
-            ?host:(Option.map Domain_name.to_string domain_name)
-            flow
+      | Ok flow -> client_of_flow cfg ?host flow
   end
 
   let tls_edn, _tls_protocol = Mimic.register ~name:"tls" (module TLS)
