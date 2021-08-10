@@ -1,3 +1,10 @@
+### 3.5.0 (2021-09-08) Paris - France
+
+- Fix compilation of benchmarks (@dinosaure, #516)
+- Remove `paf.cohttp` dependency from MirageOS stack (@dinosaure, #519)
+- Use `Cstruct.length` instead of `Cstruct.len` (@dinosaure. #522)
+- Update to `tls.0.14.0` (@dinosaure, #529)
+
 ### 3.4.0 (2021-22-04) Paris - France
 
 - Fix several issues on `git-unix` (@dinosaure, @sternenseemann, #488)
