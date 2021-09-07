@@ -86,7 +86,7 @@ let mimic_dns_conf =
   let packages = [ package "git-mirage" ~sublibs:[ "dns" ] ] in
   impl @@ object
        inherit base_configurable
-       method ty = random @-> mclock @-> time @-> stackv4v6 @-> mimic @-> mimic
+       method ty = random @-> mclock @-> pclock @-> time @-> stackv4v6 @-> mimic @-> mimic
        method module_name = "Git_mirage_dns.Make"
        method! packages = Key.pure packages
        method name = "dns_ctx"
@@ -102,8 +102,8 @@ let mimic_dns_conf =
          | _ -> assert false
      end
 
-let mimic_dns_impl random mclock time stackv4v6 mimic_tcp =
-  mimic_dns_conf $ random $ mclock $ time $ stackv4v6 $ mimic_tcp
+let mimic_dns_impl random mclock pclock time stackv4v6 mimic_tcp =
+  mimic_dns_conf $ random $ mclock $ pclock $ time $ stackv4v6 $ mimic_tcp
 
 type hash = Hash
 
@@ -207,7 +207,7 @@ let minigit =
 
 let mimic ~kind ~seed ~auth stackv4v6 random mclock pclock time =
   let mtcp = mimic_tcp_impl stackv4v6 in
-  let mdns = mimic_dns_impl random mclock time stackv4v6 mtcp in
+  let mdns = mimic_dns_impl random mclock pclock time stackv4v6 mtcp in
   let mssh = mimic_ssh_impl ~kind ~seed ~auth stackv4v6 mtcp mclock in
   let mpaf = mimic_paf_impl time pclock stackv4v6 mtcp in
   merge mpaf (merge mssh mdns)

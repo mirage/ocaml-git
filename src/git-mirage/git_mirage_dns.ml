@@ -1,18 +1,19 @@
 module Make
     (Random : Mirage_random.S)
     (Mclock : Mirage_clock.MCLOCK)
+    (Pclock : Mirage_clock.PCLOCK)
     (Time : Mirage_time.S)
     (Stack : Mirage_stack.V4V6) (TCP : sig
       val tcp_ipaddr : Ipaddr.t Mimic.value
     end) =
 struct
   open Lwt.Infix
-  include Dns_client_mirage.Make (Random) (Time) (Mclock) (Stack)
+  include Dns_client_mirage.Make (Random) (Time) (Mclock) (Pclock) (Stack)
 
   let dns = Mimic.make ~name:"dns"
 
-  let with_dns ?size ?nameserver ?timeout stack ctx =
-    let v = create ?size ?nameserver ?timeout stack in
+  let with_dns ?size ?nameservers ?timeout stack ctx =
+    let v = create ?size ?nameservers ?timeout stack in
     Mimic.add dns v ctx
 
   let ctx =

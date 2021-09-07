@@ -14,7 +14,8 @@ depends: [
   "git" {= version}
   "awa"
   "awa-mirage"
-  "dns-client" {>= "5.0.0"}
+  "dns" {>= "6.0.0"}
+  "dns-client" {>= "6.0.0"}
   "domain-name" {>= "0.3.0"}
   "fmt" {>= "0.8.9"}
   "ipaddr" {>= "5.0.1"}
@@ -38,3 +39,8 @@ build: [
   ["dune" "runtest" "-p" name "-j" jobs "--no-buffer"] {with-test}
 ]
 dev-repo: "git+https://github.com/mirage/ocaml-git.git"
+
+pin-depends: [
+  [ "dns.dev" "git+https://github.com/mirage/ocaml-dns.git#eb8bac066cdc97e1a12bb1ccda854dd539092cf1" ]
+  [ "dns-client.dev" "git+https://github.com/mirage/ocaml-dns.git#eb8bac066cdc97e1a12bb1ccda854dd539092cf1" ]
+]
