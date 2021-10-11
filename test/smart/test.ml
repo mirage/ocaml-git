@@ -165,7 +165,11 @@ let create_new_git_store _sw =
     (* XXX(dinosaure): a hook is already added by [Bos] to delete the
        directory. *)
     create_tmp_dir "git-%s" >>= fun root ->
-    OS.Dir.with_current root (fun () -> OS.Cmd.run Cmd.(v "git" % "init")) ()
+    OS.Dir.with_current root
+      (fun () ->
+        OS.Cmd.run Cmd.(v "git" % "init") >>= fun () ->
+        OS.Cmd.run Cmd.(v "git" % "config" % "init.defaultBranch" % "master"))
+      ()
     |> R.join
     >>= fun () ->
     let access = access lwt in
@@ -407,7 +411,11 @@ let create_new_git_push_store _sw =
     (* XXX(dinosaure): a hook is already added by [Bos] to delete the
        directory. *)
     create_tmp_dir "git-%s" >>= fun root ->
-    OS.Dir.with_current root (fun () -> OS.Cmd.run Cmd.(v "git" % "init")) ()
+    OS.Dir.with_current root
+      (fun () ->
+        OS.Cmd.run Cmd.(v "git" % "init") >>= fun () ->
+        OS.Cmd.run Cmd.(v "git" % "config" % "init.defaultBranch" % "master"))
+      ()
     |> R.join
     >>= fun () ->
     let access =

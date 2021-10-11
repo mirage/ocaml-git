@@ -138,7 +138,10 @@ let empty_pack, uid_empty_pack =
       let dst = Fpath.(current / "pack-null") in
       ( Bos.OS.Dir.with_tmp "git-%s" @@ fun path ->
         Bos.OS.Dir.with_current path @@ fun () ->
-        Bos.OS.Cmd.run_status Bos.Cmd.(v "git" % "init") >>| fun _ ->
+        Bos.OS.Cmd.run_status Bos.Cmd.(v "git" % "init") >>= fun _ ->
+        Bos.OS.Cmd.run
+          Bos.Cmd.(v "git" % "config" % "init.defaultBranch" % "master")
+        >>| fun () ->
         let out = Bos.OS.Cmd.(run_io cmd in_null) in
         Bos.OS.Cmd.out_file dst out )
         ()
@@ -278,6 +281,9 @@ let empty_index, uid_empty_index =
     ( Bos.OS.Dir.with_tmp "git-%s" @@ fun path ->
       Bos.OS.Dir.with_current path @@ fun () ->
       Bos.OS.Cmd.run_status Bos.Cmd.(v "git" % "init") >>= fun _ ->
+      Bos.OS.Cmd.run
+        Bos.Cmd.(v "git" % "config" % "init.defaultBranch" % "master")
+      >>= fun () ->
       let cmd = Bos.Cmd.(v "git" % "pack-objects" % "-q" % "--stdout") in
       let out = Bos.OS.Cmd.(run_io cmd in_null) in
       Bos.OS.Cmd.out_run_in out >>= fun in_cmd ->
