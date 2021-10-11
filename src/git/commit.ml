@@ -205,7 +205,7 @@ module Make (Hash : S.HASH) = struct
       "{ @[<hov>tree = %a;@ parents = [ %a ];@ author = %a;@ committer = %a;@ \
        extra = %a;@ message = %a;@] }"
       (Fmt.hvbox Hash.pp) tree
-      (Fmt.hvbox (Fmt.list ~sep:(Fmt.unit ";@ ") Hash.pp))
+      (Fmt.hvbox (Fmt.list ~sep:(Fmt.any ";@ ") Hash.pp))
       parents (Fmt.hvbox User.pp) author (Fmt.hvbox User.pp) committer
       Fmt.(hvbox (Dump.list (Dump.pair string (Dump.list string))))
       extra
