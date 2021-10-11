@@ -445,7 +445,7 @@ struct
       match res with
       | Ok _ as v -> Lwt.return v
       | Error (`Not_found refname) ->
-          Log.err (fun m -> m "Reference %a not found." Reference.pp refname);
+          Log.warn (fun m -> m "Reference %a not found." Reference.pp refname);
           Lwt.return_error (`Reference_not_found refname)
 
     let resolve t refname =
