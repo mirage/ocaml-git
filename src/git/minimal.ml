@@ -16,19 +16,19 @@ module type S = sig
 
   val dotgit : t -> Fpath.t
   (** [dotgit state] returns the current [".git"] path used - eg. the default
-      [?dotgit] value of {!create} if the client does not notice a specific
+      [?dotgit] value of [v] if the client does not notice a specific
       value. *)
 
   val root : t -> Fpath.t
   (** [root state] returns the current path of the repository. eg. the default
-      value [?root] value of {!create} if the client does not notice a specific
+      value [?root] value of [v] if the client does not notice a specific
       value. *)
 
   (*
   val compression : t -> int
   (** [compression state] returns the current level of the compression used to
       write a Git object - eg. the default value [?compression] value of
-      {!create} if the client does not notice a specific value. *)
+      [v] if the client does not notice a specific value. *)
   *)
 
   val contents : t -> (hash * Value.t) list Lwt.t
@@ -48,7 +48,7 @@ module type S = sig
 
   val read_exn : t -> hash -> Value.t Lwt.t
   (** [read_exn state hash] is an alias of {!read} but raise an exception
-      (instead to return a {!result}) if the git object requested does not exist
+      (instead to return a [result]) if the git object requested does not exist
       or when we catch any others errors. *)
 
   val mem : t -> hash -> bool Lwt.t

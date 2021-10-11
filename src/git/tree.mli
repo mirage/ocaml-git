@@ -31,7 +31,7 @@ type perm =
 (** Type of type node. *)
 
 val equal_perm : perm -> perm -> bool
-(** The equal function for {!perm}. *)
+(** The equal function for {!type:perm}. *)
 
 type 'hash entry = { perm : perm; name : string; node : 'hash }
 (** Type of entry. It describes the name [name], the type [perm] and the
@@ -42,11 +42,11 @@ val entry : name:string -> perm -> 'hash -> 'hash entry
     {i mode} [perm]. *)
 
 val pp_entry : pp:'hash Fmt.t -> 'hash entry Fmt.t
-(** Pretty-printer of {!entry}. *)
+(** Pretty-printer of {!type:entry}. *)
 
 val equal_entry :
   equal:('hash -> 'hash -> bool) -> 'hash entry -> 'hash entry -> bool
-(** The equal function for {!entry}. *)
+(** The equal function for {!type:entry}. *)
 
 type 'hash t = private 'hash entry list
 (** Type of tree is a list of file names and modes along with refs to the
