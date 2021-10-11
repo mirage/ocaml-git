@@ -400,9 +400,9 @@ let parse_shallow ic () =
 
 let save_shallow oc lst =
   let ppf = Format.formatter_of_out_channel oc in
-  let str = Fmt.str "%a" Fmt.(list ~sep:(always "\n") Uid.pp) lst in
+  let str = Fmt.str "%a" Fmt.(list ~sep:(any "\n") Uid.pp) lst in
   Log.debug (fun m -> m "Want to save: %S." str);
-  Fmt.pf ppf "%a%!" Fmt.(list ~sep:(always "\n") Uid.pp) lst;
+  Fmt.pf ppf "%a%!" Fmt.(list ~sep:(any "\n") Uid.pp) lst;
   Rresult.R.ok ()
 
 let shallowed { Sigs.return; _ } store =

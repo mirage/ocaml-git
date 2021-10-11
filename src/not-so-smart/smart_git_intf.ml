@@ -83,9 +83,9 @@ module type SMART_GIT = sig
 
   (** {3 Mimic values.}
 
-      When the user use an [Endpoint.t] to {!fetch} or {!push}, we fill the given Mimic's [ctx]
+      When the user use an [Endpoint.t] to {!Make.fetch} or {!Make.push}, we fill the given Mimic's [ctx]
       with some available informations such as:
-      - if we want to {!fetch} ([`Rd]) or {!push} ([`Wr])
+      - if we want to {!Make.fetch} ([`Rd]) or {!Make.push} ([`Wr])
       - the scheme/protocol that the user would like to use ([git://], SSH or HTTP - with or without TLS)
       - the path of the git repository
       - the host (an IP adress or a domain name)

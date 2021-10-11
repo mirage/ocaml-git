@@ -129,9 +129,9 @@ module Proto_request = struct
       | `Name v, Some port -> Fmt.pf ppf "%s:%d" v port
     in
     Fmt.pf ppf "%a %s %a %a" pp_request_command request_command path
-      Fmt.(prefix (const string " host=") pp_host)
+      Fmt.(const string " host=" ++ pp_host)
       host
-      Fmt.(prefix (const string " version=") int)
+      Fmt.(const string " version=" ++ int)
       version
 end
 

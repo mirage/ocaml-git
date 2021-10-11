@@ -29,7 +29,7 @@
 
     Finally, this module respects the same API {!Minimal.S} and can handle PACK
     file - and, by this way, can be used on the Smart protocol. Obviously, some
-    ext. modules like {!Index} could not be used with this store (because thay
+    ext. modules like INDEX could not be used with this store (because thay
     interact with a file-system back-end). *)
 
 type 'hash t

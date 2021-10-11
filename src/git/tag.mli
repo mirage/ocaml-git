@@ -18,7 +18,7 @@
 (** A Git Tag object.
 
     A tag containing a reference pointing to another object, which can contain a
-    message just like a {!Commit}. It can also contain a (PGP) signature, in
+    message just like a {!module:Commit}. It can also contain a (PGP) signature, in
     which case it is called a "signed tag object". *)
 
 type kind = Blob | Commit | Tag | Tree

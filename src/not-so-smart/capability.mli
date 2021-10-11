@@ -50,7 +50,7 @@ type t =
         handle thin packs, but can ask the client not to use the feature by
         advertising the [`No_thin] capability. A client MUST NOT send a thin
         pack if the server advertises the [`No_thin] capability. *)
-  | `Side_band  (** See {!`Side_band_64k}. *)
+  | `Side_band  (** See [`Side_band_64k]. *)
   | `Side_band_64k
     (** This capability means that server can send, and client understand
         multiplexed progress reports and error into interleaved with the
