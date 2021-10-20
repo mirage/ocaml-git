@@ -39,8 +39,3 @@ build: [
   ["dune" "runtest" "-p" name "-j" jobs "--no-buffer"] {with-test}
 ]
 dev-repo: "git+https://github.com/mirage/ocaml-git.git"
-
-pin-depends: [
-  [ "dns.dev" "git+https://github.com/mirage/ocaml-dns.git#eb8bac066cdc97e1a12bb1ccda854dd539092cf1" ]
-  [ "dns-client.dev" "git+https://github.com/mirage/ocaml-dns.git#eb8bac066cdc97e1a12bb1ccda854dd539092cf1" ]
-]
