@@ -1,7 +1,6 @@
-version=0.19.0
-module-item-spacing=compact
+version=0.20.0
+profile=conventional
 break-struct=natural
 break-infix=fit-or-vertical
 parens-tuple=multi-line-only
-wrap-comments=false
 break-collection-expressions=wrap

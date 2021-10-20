@@ -117,7 +117,8 @@ struct
     Store.Value.Commit.make
       ~tree:(Store.Value.Tree.digest t5)
       ~parents:[ Store.Value.Commit.digest c3 ]
-      ~author:thomas ~committer:thomas ~extra:[ "gpgsig", gpg ]
+      ~author:thomas ~committer:thomas
+      ~extra:[ "gpgsig", gpg ]
       (Some "with GPG")
 
   let tt1 =
