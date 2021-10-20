@@ -1,3 +1,11 @@
+### 3.6.0 (2021-10-20) Paris - France
+
+- Fix the documentation (@dinosaure, #534)
+- Remove some output from Git when we initialize a Git repository (@dinosaure, #534)
+- Fix `fmt` deprecation functions (@dinosaure, #534)
+- Use a warning instead of an error when a reference does not exists (@zshipko, @dinosaure, #533)
+- Use the last version of `dns` (6.0.0) (@dinosaure, @hannesm, #531)
+
 ### 3.5.0 (2021-09-08) Paris - France
 
 - Fix compilation of benchmarks (@dinosaure, #516)
