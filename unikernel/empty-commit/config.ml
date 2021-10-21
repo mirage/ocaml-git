@@ -92,7 +92,7 @@ let mimic_dns_conf =
        method name = "dns_ctx"
        method! connect _ modname =
          function
-         | [ _; _; _; stack; tcp_ctx ] ->
+         | [ _; _; _; _; stack; tcp_ctx ] ->
              Fmt.str
                {ocaml|let dns_ctx00 = Mimic.merge %s %s.ctx in
                       let dns_ctx01 = %s.with_dns %s dns_ctx00 in
