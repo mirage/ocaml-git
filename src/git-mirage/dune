@@ -2,15 +2,7 @@
  (name git_mirage_tcp)
  (modules git_mirage_tcp)
  (public_name git-mirage.tcp)
- (libraries
-  git.nss.git
-  mimic
-  result
-  fmt
-  lwt
-  mirage-flow
-  ipaddr
-  mirage-stack))
+ (libraries git.nss.git mimic result fmt lwt mirage-flow ipaddr mirage-stack))
 
 (library
  (name git_mirage_ssh)
