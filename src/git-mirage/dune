@@ -10,7 +10,6 @@
   lwt
   mirage-flow
   ipaddr
-  mirage-protocols
   mirage-stack))
 
 (library
@@ -25,7 +24,6 @@
   lwt
   fmt
   ipaddr
-  mirage-protocols
   mirage-stack
   mirage-flow
   mirage-clock
@@ -45,7 +43,6 @@
   mirage-random
   mirage-time
   mirage-clock
-  mirage-protocols
   mirage-stack
   dns
   tls
