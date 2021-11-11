@@ -2,16 +2,7 @@
  (name git_mirage_tcp)
  (modules git_mirage_tcp)
  (public_name git-mirage.tcp)
- (libraries
-  git.nss.git
-  mimic
-  result
-  fmt
-  lwt
-  mirage-flow
-  ipaddr
-  mirage-protocols
-  mirage-stack))
+ (libraries git.nss.git mimic result fmt lwt mirage-flow ipaddr mirage-stack))
 
 (library
  (name git_mirage_ssh)
@@ -25,7 +16,6 @@
   lwt
   fmt
   ipaddr
-  mirage-protocols
   mirage-stack
   mirage-flow
   mirage-clock
@@ -45,7 +35,6 @@
   mirage-random
   mirage-time
   mirage-clock
-  mirage-protocols
   mirage-stack
   dns
   tls
