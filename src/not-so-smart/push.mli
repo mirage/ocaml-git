@@ -14,10 +14,7 @@ module Make
     ?uses_git_transport:bool ->
     capabilities:Smart.Capability.t list ->
     [ `Create of Ref.t | `Delete of Ref.t | `Update of Ref.t * Ref.t ] list ->
-    host:
-      [ `Addr of Ipaddr.t
-      | `Domain of [ `host ] Domain_name.t
-      | `Name of string ] ->
+    host:string ->
     string ->
     Flow.t ->
     (Uid.t, Uid.t Pck.t, 'git) store ->

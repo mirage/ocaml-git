@@ -58,8 +58,7 @@ module Make
     (Digestif : Digestif.S)
     (Pack : Smart_git.APPEND with type +'a fiber = 'a Lwt.t)
     (Index : Smart_git.APPEND with type +'a fiber = 'a Lwt.t)
-    (Store : Minimal.S with type hash = Digestif.t)
-    (HTTP : Smart_git.HTTP) : sig
+    (Store : Minimal.S with type hash = Digestif.t) : sig
   type hash = Digestif.t
   type store = Store.t
   type error = [ `Exn of exn | `Store of Store.error | Mimic.error ]

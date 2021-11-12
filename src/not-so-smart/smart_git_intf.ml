@@ -65,10 +65,7 @@ module type SMART_GIT = sig
         | `Scheme of string ];
       port : int option;
       path : string;
-      host :
-        [ `Addr of Ipaddr.t
-        | `Domain of [ `host ] Domain_name.t
-        | `Name of string ];
+      hostname : string;
     }
 
     val pp : t Fmt.t
@@ -104,25 +101,28 @@ module type SMART_GIT = sig
       re-use these values to be able to start a [mirage-tcpip] connection, a [awa-ssh] connection
       of a [cohttp] (with or without [ocaml-tls]) connection. *)
 
+  type handshake = uri0:Uri.t -> uri1:Uri.t -> Mimic.flow -> unit Lwt.t
+
   val git_capabilities : [ `Rd | `Wr ] Mimic.value
 
   val git_scheme :
     [ `Git | `SSH | `HTTP | `HTTPS | `Scheme of string ] Mimic.value
 
   val git_path : string Mimic.value
-
-  val git_host :
-    [ `Addr of Ipaddr.t | `Domain of [ `host ] Domain_name.t | `Name of string ]
-    Mimic.value
-
+  val git_hostname : string Mimic.value
   val git_ssh_user : string Mimic.value
   val git_port : int Mimic.value
+  val git_http_headers : (string * string) list Mimic.value
+
+  val git_transmission :
+    [ `Git | `Exec | `HTTP of Uri.t * handshake ] Mimic.value
+
+  val git_uri : Uri.t Mimic.value
 
   module Make
       (Scheduler : Sigs.SCHED with type +'a s = 'a Lwt.t)
       (Pack : APPEND with type +'a fiber = 'a Lwt.t)
       (Index : APPEND with type +'a fiber = 'a Lwt.t)
-      (HTTP : HTTP)
       (Uid : UID)
       (Ref : Sigs.REF) : sig
     val fetch :

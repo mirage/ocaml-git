@@ -12,11 +12,23 @@ depends: [
   "mimic"
   "mirage-stack"
   "git" {= version}
+  "git-paf" {= version}
   "awa"
   "awa-mirage"
   "dns" {>= "6.0.0"}
   "dns-client" {>= "6.0.0"}
   "tls"
+  "tls-mirage"
+  "mirage-protocols" {>= "5.0.0" & < "6.0.0"}
+  "uri"
+  "hex"
+  "happy-eyeballs-mirage" {>= "0.1.1"}
+  "happy-eyeballs" {>= "0.1.1"}
+  "ca-certs-nss"
+  "mirage-crypto"
+  "ptime"
+  "x509"
+  "cstruct"
   "domain-name" {>= "0.3.0"}
   "fmt" {>= "0.8.9"}
   "ipaddr" {>= "5.0.1"}
@@ -39,3 +51,7 @@ build: [
   ["dune" "runtest" "-p" name "-j" jobs "--no-buffer"] {with-test}
 ]
 dev-repo: "git+https://github.com/mirage/ocaml-git.git"
+pin-depends: [
+  [ "awa.dev" "git+https://github.com/mirage/awa-ssh.git#1ac4328852a200ef7077b901706c422b2c131862" ]
+  [ "awa-mirage.dev" "git+https://github.com/mirage/awa-ssh.git#1ac4328852a200ef7077b901706c422b2c131862" ]
+]

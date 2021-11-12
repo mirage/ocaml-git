@@ -1,9 +1,8 @@
 open Lwt.Infix
 
-type 'stack endpoint = {
-  stack : 'stack;
-  ipaddr : Ipaddr.t;
+type endpoint = {
   port : int;
+  hostname : string;
   authenticator : Awa.Keys.authenticator option;
   user : string;
   key : Awa.Hostkey.priv;
@@ -11,18 +10,29 @@ type 'stack endpoint = {
   capabilities : [ `Rd | `Wr ];
 }
 
-module Make
-    (Stack : Mirage_stack.V4V6) (TCP : sig
-      val tcp_endpoint : (Stack.t * Ipaddr.t * int) Mimic.value
-      val tcp_stack : Stack.t Mimic.value
-      val tcp_ipaddr : Ipaddr.t Mimic.value
-    end)
-    (Mclock : Mirage_clock.MCLOCK) =
-struct
-  module SSH = struct
-    include Awa_mirage.Make (Stack.TCP) (Mclock)
+let git_mirage_ssh_key = Mimic.make ~name:"git-mirage-ssh-key"
 
-    type nonrec endpoint = Stack.t endpoint
+let git_mirage_ssh_authenticator =
+  Mimic.make ~name:"git-mirage-ssh-authenticator"
+
+module type S = sig
+  val connect : Mimic.ctx -> Mimic.ctx Lwt.t
+
+  val with_optionnal_key :
+    ?authenticator:string -> key:string option -> Mimic.ctx -> Mimic.ctx Lwt.t
+
+  val ctx : Mimic.ctx
+end
+
+module Make
+    (Mclock : Mirage_clock.MCLOCK)
+    (TCP : Mirage_protocols.TCP)
+    (Happy_eyeballs : Git_mirage_happy_eyeballs.S with type flow = TCP.flow) :
+  S = struct
+  module SSH = struct
+    include Awa_mirage.Make (TCP) (Mclock)
+
+    type nonrec endpoint = Happy_eyeballs.t * endpoint
 
     type nonrec write_error =
       [ `Write of write_error | `Connect of error | `Closed ]
@@ -42,17 +52,17 @@ struct
       | Ok _ as v -> Lwt.return v
       | Error err -> Lwt.return_error (`Write err)
 
-    let connect edn =
+    let connect (happy_eyeballs, edn) =
       let open Lwt.Infix in
-      let stack = Stack.tcp edn.stack in
       let channel_request =
         match edn.capabilities with
         | `Rd -> Awa.Ssh.Exec (Fmt.str "git-upload-pack '%s'" edn.path)
         | `Wr -> Awa.Ssh.Exec (Fmt.str "git-receive-pack '%s'" edn.path)
       in
-      Stack.TCP.create_connection stack (edn.ipaddr, edn.port) >>= function
-      | Error err -> Lwt.return_error (`Connect (`Read err))
-      | Ok flow -> (
+      Happy_eyeballs.resolve happy_eyeballs edn.hostname [ edn.port ]
+      >>= function
+      | Error (`Msg err) -> Lwt.return_error (`Connect (`Msg err))
+      | Ok ((_ipaddr, _port), flow) -> (
           client_of_flow ?authenticator:edn.authenticator ~user:edn.user edn.key
             channel_request flow
           >>= function
@@ -60,64 +70,76 @@ struct
           | Ok _ as v -> Lwt.return v)
   end
 
-  type endpoint = SSH.endpoint
-  type flow = SSH.flow
+  let ssh_endpoint, _ssh_protocol = Mimic.register ~name:"ssh" (module SSH)
 
-  let ssh_endpoint, ssh_protocol =
-    Mimic.register ~name:"mirage-ssh" (module SSH)
-
-  let ssh_authenticator = Mimic.make ~name:"ssh-authenticator"
-  let ssh_key = Mimic.make ~name:"ssh-key"
-
-  let with_authenticator v ctx =
-    match Awa.Keys.authenticator_of_string v with
-    | Ok v -> Mimic.add ssh_authenticator v ctx
-    | Error msg -> failwith msg
-
-  let with_rsa_key v ctx =
-    let v = Awa.Keys.of_seed `Rsa v in
-    Mimic.add ssh_key v ctx
-
-  let with_ed25519_key v ctx =
-    let v = Awa.Keys.of_seed `Ed25519 v in
-    Mimic.add ssh_key v ctx
-
-  let ctx =
-    let k0 scheme (stack, ipaddr, port) ssh_authenticator ssh_user ssh_key
-        git_path git_capabilities =
-      match scheme with
-      | `SSH ->
-          Lwt.return_some
+  let connect ctx =
+    let edn = Mimic.make ~name:"ssh-endpoint" in
+    let k0 happy_eyeballs edn = Lwt.return_some (happy_eyeballs, edn) in
+    let k1 git_transmission git_scheme git_ssh_user git_hostname git_port
+        git_path git_capabilities git_mirage_ssh_key
+        git_mirage_ssh_authenticator =
+      match git_transmission, git_scheme with
+      | `Exec, `SSH ->
+          (* XXX(dinosaure): be sure that we don't want to initiate a wrong transmission protocol.
+           * be sure that [k2] is called by [mimic]. *)
+          let edn =
             {
-              stack;
-              ipaddr;
-              port;
-              authenticator = ssh_authenticator;
-              user = ssh_user;
-              key = ssh_key;
+              port = git_port;
+              hostname = git_hostname;
+              authenticator = git_mirage_ssh_authenticator;
+              user = git_ssh_user;
+              key = git_mirage_ssh_key;
               path = git_path;
               capabilities = git_capabilities;
             }
+          in
+          Lwt.return_some edn
       | _ -> Lwt.return_none
     in
-    let k1 scheme stack ipaddr port = k0 scheme (stack, ipaddr, port) in
-    let open Mimic in
-    Mimic.empty
-    |> fold ssh_endpoint
-         Fun.
-           [
-             req Smart_git.git_scheme; req TCP.tcp_endpoint;
-             opt ssh_authenticator; req Smart_git.git_ssh_user; req ssh_key;
-             req Smart_git.git_path; req Smart_git.git_capabilities;
-           ]
-         ~k:k0
-    |> fold ssh_endpoint
-         Fun.
-           [
-             req Smart_git.git_scheme; req TCP.tcp_stack; req TCP.tcp_ipaddr;
-             dft Smart_git.git_port 22; opt ssh_authenticator;
-             req Smart_git.git_ssh_user; req ssh_key; req Smart_git.git_path;
-             req Smart_git.git_capabilities;
-           ]
-         ~k:k1
+    let k2 git_scheme =
+      match git_scheme with
+      | `SSH -> Lwt.return_some `Exec
+      | _ -> Lwt.return_none
+    in
+    let ctx =
+      Mimic.fold ssh_endpoint
+        Mimic.Fun.[ req Happy_eyeballs.happy_eyeballs; req edn ]
+        ~k:k0 ctx
+    in
+    let ctx =
+      Mimic.fold edn
+        Mimic.Fun.
+          [
+            req Smart_git.git_transmission; req Smart_git.git_scheme;
+            req Smart_git.git_ssh_user; req Smart_git.git_hostname;
+            dft Smart_git.git_port 22; req Smart_git.git_path;
+            req Smart_git.git_capabilities; req git_mirage_ssh_key;
+            opt git_mirage_ssh_authenticator;
+          ]
+        ~k:k1 ctx
+    in
+    let ctx =
+      Mimic.fold Smart_git.git_transmission
+        Mimic.Fun.[ req Smart_git.git_scheme ]
+        ~k:k2 ctx
+    in
+    Lwt.return ctx
+
+  let with_optionnal_key ?authenticator ~key ctx =
+    let authenticator =
+      Option.map Awa.Keys.authenticator_of_string authenticator
+    in
+    let key = Option.map Awa.Keys.of_string key in
+    match authenticator, key with
+    | Some (Error err), _ | _, Some (Error (`Msg err)) -> failwith err
+    | Some (Ok authenticator), Some (Ok key) ->
+        let ctx = Mimic.add git_mirage_ssh_key key ctx in
+        let ctx = Mimic.add git_mirage_ssh_authenticator authenticator ctx in
+        Lwt.return ctx
+    | None, Some (Ok key) ->
+        let ctx = Mimic.add git_mirage_ssh_key key ctx in
+        Lwt.return ctx
+    | Some (Ok _), None | None, None -> Lwt.return ctx
+
+  let ctx = Mimic.empty
 end

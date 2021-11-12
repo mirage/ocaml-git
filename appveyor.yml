@@ -7,7 +7,7 @@ environment:
     FORK_BRANCH: master
     CYG_ROOT: C:\cygwin64
     OPAM_SWITCH: 4.08.1+mingw64c
-    PINS: "carton.dev:. carton-lwt.dev:. carton-git.dev:. git.dev:. git-cohttp.dev:. git-cohttp-unix.dev:. git-unix.dev:."
+    PINS: "carton.dev:. carton-lwt.dev:. carton-git.dev:. git.dev:. git-cohttp.dev:. git-cohttp-unix.dev:. git-mirage.dev:. git-paf.dev:. git-unix.dev:."
   matrix:
   - PACKAGE: "git.dev"
   - PACKAGE: "git-unix.dev"

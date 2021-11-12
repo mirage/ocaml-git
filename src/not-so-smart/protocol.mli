@@ -46,26 +46,8 @@ module Proto_request : sig
   type t
 
   val pp : t Fmt.t
-
-  val upload_pack :
-    host:
-      [ `Addr of Ipaddr.t
-      | `Domain of [ `host ] Domain_name.t
-      | `Name of string ] ->
-    ?port:int ->
-    ?version:int ->
-    string ->
-    t
-
-  val receive_pack :
-    host:
-      [ `Addr of Ipaddr.t
-      | `Domain of [ `host ] Domain_name.t
-      | `Name of string ] ->
-    ?port:int ->
-    ?version:int ->
-    string ->
-    t
+  val upload_pack : host:string -> ?port:int -> ?version:int -> string -> t
+  val receive_pack : host:string -> ?port:int -> ?version:int -> string -> t
 end
 
 module Want : sig

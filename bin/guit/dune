@@ -4,6 +4,7 @@
  (package git-unix)
  (public_name guit.fetch)
  (libraries
+  happy-eyeballs-lwt
   git
   git.nss.git
   logs
