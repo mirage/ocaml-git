@@ -33,7 +33,7 @@ depends: [
   "mirage-clock-unix"
   "astring" {>= "0.8.5"}
   "awa"
-  "mirage-protocols" {>= "5.0.0" & < "6.0.0"}
+  "mirage-protocols" {>= "7.0.0"}
   "mirage-time"
   "mirage-unix" {>= "4.0.0"}
   "cmdliner" {>= "1.0.4"}

@@ -101,7 +101,6 @@ module TCPV4V6 (Stack : Mirage_stack.V4V6) : sig
     Mirage_protocols.TCP
       with type t = Stack.TCP.t
        and type ipaddr = Ipaddr.t
-       and type ipinput = Stack.TCP.ipinput
        and type flow = Stack.TCP.flow
 
   val connect : Stack.t -> t Lwt.t

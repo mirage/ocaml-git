@@ -74,7 +74,6 @@ module TCP = struct
   }
 
   type t = |
-  type ipinput = Ipaddr.t
   type ipaddr = Ipaddr.t
 
   let disconnect _ = assert false
@@ -82,7 +81,9 @@ module TCP = struct
   let write_nodelay _ _ = assert false
   let writev_nodelay _ _ = assert false
   let create_connection ?keepalive:_ _ _ = assert false
-  let input _ ~listeners:_ = assert false
+  let input _ ~src:_ ~dst:_ _ = assert false
+  let listen _ = assert false
+  let unlisten _ = assert false
 end
 
 module FIFO = struct
