@@ -1,41 +1,79 @@
 (library
- (name git_mirage_tcp)
- (modules git_mirage_tcp)
- (public_name git-mirage.tcp)
- (libraries git.nss.git mimic result fmt lwt mirage-flow ipaddr mirage-stack))
+ (name git_mirage_happy_eyeballs)
+ (modules git_mirage_happy_eyeballs)
+ (public_name git-mirage.happy-eyeballs)
+ (libraries
+  dns
+  tls
+  domain-name
+  happy-eyeballs
+  happy-eyeballs-mirage
+  mirage-protocols
+  mirage-random
+  mirage-clock
+  mirage-stack
+  mirage-time
+  ipaddr
+  mimic
+  lwt))
 
 (library
  (name git_mirage_ssh)
  (modules git_mirage_ssh)
  (public_name git-mirage.ssh)
  (libraries
+  git-mirage.happy-eyeballs
   git.nss.git
   mimic
-  result
-  rresult
   lwt
   fmt
-  ipaddr
+  result
   mirage-stack
   mirage-flow
   mirage-clock
+  mirage-protocols
   awa
   awa-mirage))
 
 (library
- (name git_mirage_dns)
- (modules git_mirage_dns)
- (public_name git-mirage.dns)
+ (name git_mirage_tcp)
+ (modules git_mirage_tcp)
+ (public_name git-mirage.tcp)
  (libraries
-  mimic
+  git-mirage.happy-eyeballs
   git.nss.git
-  domain-name
+  mimic
   lwt
-  ipaddr
-  mirage-random
+  fmt
+  result
+  mirage-stack
+  mirage-flow
+  mirage-protocols))
+
+(library
+ (name git_mirage_http)
+ (modules git_mirage_http)
+ (public_name git-mirage.http)
+ (libraries
+  git-mirage.happy-eyeballs
+  git-paf
+  git.nss.git
+  mimic
+  lwt
+  fmt
+  tls
+  uri
+  hex
+  x509
+  mirage-crypto
+  tls-mirage
+  ptime
+  cstruct
+  result
+  ca-certs-nss
+  domain-name
+  mirage-stack
+  mirage-flow
   mirage-time
   mirage-clock
-  mirage-stack
-  dns
-  tls
-  dns-client.mirage))
+  mirage-protocols))

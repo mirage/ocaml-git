@@ -665,16 +665,12 @@ end
 module Store = Make (Digestif.SHA1)
 
 let ctx = Git_unix_mimic.ctx
-let inet_addr = Git_unix_mimic.inet_addr
-let tls = Git_unix_mimic.cfg
 
-module Sync (Git_store : Git.S) (HTTP : Smart_git.HTTP) = struct
+module Sync (Git_store : Git.S) = struct
   let src = Logs.Src.create "git-unix.sync" ~doc:"logs git-unix's sync event"
 
   module Log = (val Logs.src_log src : Logs.LOG)
-
-  include
-    Git.Sync.Make (Git_store.Hash) (Major_heap) (Major_heap) (Git_store) (HTTP)
+  include Git.Sync.Make (Git_store.Hash) (Major_heap) (Major_heap) (Git_store)
 
   let random_gen = lazy (Random.State.make_self_init ())
 
@@ -737,7 +733,6 @@ module Sync (Git_store : Git.S) (HTTP : Smart_git.HTTP) = struct
 
   let fetch ?(push_stdout = ignore) ?(push_stderr = ignore) ?threads ~ctx edn
       store ?version ?capabilities ?deepen want =
-    let ctx = Mimic.merge Git_unix_mimic.ctx ctx in
     let dotgit = Git_store.dotgit store in
     let temp = Fpath.(dotgit / "tmp") in
     tmp temp "pack-%s.pack" >>= fun src ->
@@ -750,6 +745,5 @@ module Sync (Git_store : Git.S) (HTTP : Smart_git.HTTP) = struct
       ~create_pack_stream temp temp
 
   let push ~ctx edn store ?version ?capabilities cmds =
-    let ctx = Mimic.merge Git_unix_mimic.ctx ctx in
     push ~ctx edn store ?version ?capabilities cmds
 end

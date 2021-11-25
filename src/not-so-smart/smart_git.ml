@@ -7,12 +7,21 @@ module Verbose = struct
   let print () = Lwt.return_unit
 end
 
+type handshake = uri0:Uri.t -> uri1:Uri.t -> Mimic.flow -> unit Lwt.t
+
 let git_capabilities = Mimic.make ~name:"git-capabilities"
 let git_scheme = Mimic.make ~name:"git-scheme"
 let git_path = Mimic.make ~name:"git-path"
-let git_host = Mimic.make ~name:"git-host"
+let git_hostname = Mimic.make ~name:"git-hostname"
 let git_ssh_user = Mimic.make ~name:"git-ssh-user"
 let git_port = Mimic.make ~name:"git-port"
+let git_http_headers = Mimic.make ~name:"git-http-headers"
+
+let git_transmission : [ `Git | `Exec | `HTTP of Uri.t * handshake ] Mimic.value
+    =
+  Mimic.make ~name:"git-transmission"
+
+let git_uri = Mimic.make ~name:"git-uri"
 
 module Endpoint = struct
   type t = {
@@ -24,39 +33,29 @@ module Endpoint = struct
       | `Scheme of string ];
     port : int option;
     path : string;
-    host :
-      [ `Addr of Ipaddr.t
-      | `Domain of [ `host ] Domain_name.t
-      | `Name of string ];
+    hostname : string;
   }
 
   let pp ppf edn =
-    let pp_host ppf = function
-      | `Addr (Ipaddr.V4 v) -> Ipaddr.V4.pp ppf v
-      | `Addr (Ipaddr.V6 v) -> Fmt.pf ppf "[IPv6:%a]" Ipaddr.V6.pp v
-      | `Domain v -> Domain_name.pp ppf v
-      | `Name v -> Fmt.pf ppf "%s" v
-    in
-    let pp_port ppf = function
-      | Some port -> Fmt.pf ppf ":%d" port
-      | None -> ()
-    in
     match edn with
-    | { scheme = `SSH user; path; host; _ } ->
-        Fmt.pf ppf "%s@%a:%s" user pp_host host path
-    | { scheme = `Git; port; path; host } ->
-        Fmt.pf ppf "git://%a%a/%s" pp_host host pp_port port path
-    | { scheme = `HTTP _; path; port; host } ->
-        Fmt.pf ppf "http://%a%a/%s" pp_host host pp_port port path
-    | { scheme = `HTTPS _; path; port; host } ->
-        Fmt.pf ppf "https://%a%a/%s" pp_host host pp_port port path
-    | { scheme = `Scheme scheme; path; port; host } ->
-        Fmt.pf ppf "%s://%a%a/%s" scheme pp_host host pp_port port path
-
-  let ( <||> ) a b =
-    match a with
-    | Ok _ -> a
-    | Error _ -> ( match b () with Ok _ as r -> r | Error _ -> a)
+    | { scheme = `SSH user; path; hostname; _ } ->
+        Fmt.pf ppf "%s@%s:%s" user hostname path
+    | { scheme = `Git; port; path; hostname } ->
+        Fmt.pf ppf "git://%s%a/%s" hostname
+          Fmt.(option (const string ":" ++ int))
+          port path
+    | { scheme = `HTTP _; path; port; hostname } ->
+        Fmt.pf ppf "http://%s%a/%s" hostname
+          Fmt.(option (const string ":" ++ int))
+          port path
+    | { scheme = `HTTPS _; path; port; hostname } ->
+        Fmt.pf ppf "https://%s%a/%s" hostname
+          Fmt.(option (const string ":" ++ int))
+          port path
+    | { scheme = `Scheme scheme; path; port; hostname } ->
+        Fmt.pf ppf "%s://%s%a/%s" scheme hostname
+          Fmt.(option (const string ":" ++ int))
+          port path
 
   let headers_from_uri uri =
     match Uri.user uri, Uri.password uri with
@@ -67,65 +66,50 @@ module Endpoint = struct
 
   let of_string str =
     let open Rresult in
-    let parse_ssh x =
-      let max = String.length x in
-      Emile.of_string_raw ~off:0 ~len:max x
+    let parse_ssh str =
+      let len = String.length str in
+      Emile.of_string_raw ~off:0 ~len str
       |> R.reword_error (R.msgf "%a" Emile.pp_error)
       >>= fun (consumed, m) ->
       match
-        Astring.String.cut ~sep:":" (String.sub x consumed (max - consumed))
+        Astring.String.cut ~sep:":" (String.sub str consumed (len - consumed))
       with
       | Some ("", path) ->
-          let user =
-            String.concat "."
-              (List.map
-                 (function `Atom x -> x | `String x -> Fmt.str "%S" x)
-                 m.Emile.local)
+          let local =
+            List.map
+              (function `Atom x -> x | `String x -> Fmt.str "%S" x)
+              m.Emile.local
           in
-          (match fst m.Emile.domain with
-          | `Domain vs -> (
-              match
-                ( Domain_name.(of_strings vs >>= host),
-                  Ipaddr.V4.of_string (String.concat "." vs) )
-              with
-              | _, Ok ipv4 -> R.ok (`Addr (Ipaddr.V4 ipv4))
-              | Ok v, _ -> R.ok (`Domain v)
-              | (Error _ as err), _ -> err)
-          | `Literal v ->
-              Domain_name.of_string v >>= Domain_name.host >>| fun v ->
-              `Domain v
-          | `Addr (Emile.IPv4 v) -> R.ok (`Addr (Ipaddr.V4 v))
-          | `Addr (Emile.IPv6 v) -> R.ok (`Addr (Ipaddr.V6 v))
-          | v -> R.error_msgf "Invalid hostname: %a" Emile.pp_domain v)
-          >>= fun host -> R.ok { scheme = `SSH user; path; port = None; host }
-      | _ -> R.error_msg "invalid pattern"
+          let user = String.concat "." local in
+          let hostname =
+            match fst m.Emile.domain with
+            | `Domain vs -> String.concat "." vs
+            | `Literal v -> v
+            | `Addr (Emile.IPv4 v) -> Ipaddr.V4.to_string v
+            | `Addr (Emile.IPv6 v) -> Ipaddr.V6.to_string v
+            | `Addr (Emile.Ext (k, v)) -> Fmt.str "%s:%s" k v
+          in
+          R.ok { scheme = `SSH user; path; port = None; hostname }
+      | _ -> R.error_msg "Invalid SSH pattern"
     in
-    let parse_uri x =
-      let uri = Uri.of_string x in
+    let parse_uri str =
+      let uri = Uri.of_string str in
       let path = Uri.path uri in
-      let host str =
-        ( (Domain_name.of_string str >>= Domain_name.host >>| fun x -> `Domain x)
-        <||> fun () ->
-          Ipaddr.of_string str >>| fun x -> `Addr x )
-        <||> fun () -> R.ok (`Name x)
-      in
       match Uri.scheme uri, Uri.host uri, Uri.port uri with
-      | Some "git", Some str, port ->
-          host str >>= fun host -> R.ok { scheme = `Git; path; port; host }
-      | Some "http", Some str, port ->
-          host str >>= fun host ->
-          R.ok { scheme = `HTTP (headers_from_uri uri); path; port; host }
-      | Some "https", Some str, port ->
-          host str >>= fun host ->
-          R.ok { scheme = `HTTPS (headers_from_uri uri); path; port; host }
-      | Some scheme, Some str, port ->
-          host str >>= fun host ->
-          R.ok { scheme = `Scheme scheme; path; port; host }
-      | _ -> R.error_msgf "invalid uri: %a" Uri.pp uri
+      | Some "git", Some hostname, port ->
+          R.ok { scheme = `Git; path; port; hostname }
+      | Some "http", Some hostname, port ->
+          R.ok { scheme = `HTTP (headers_from_uri uri); path; port; hostname }
+      | Some "https", Some hostname, port ->
+          R.ok { scheme = `HTTPS (headers_from_uri uri); path; port; hostname }
+      | Some scheme, Some hostname, port ->
+          R.ok { scheme = `Scheme scheme; path; port; hostname }
+      | _ -> R.error_msgf "Invalid uri: %a" Uri.pp uri
     in
-    parse_ssh str
-    <||> (fun () -> parse_uri str)
-    |> R.reword_error (fun _ -> R.msgf "Invalid endpoint: %s" str)
+    match parse_ssh str, parse_uri str with
+    | Ok v, _ -> Ok v
+    | _, Ok v -> Ok v
+    | Error _, Error _ -> R.error_msgf "Invalid endpoint: %s" str
 
   let with_headers_if_http headers ({ scheme; _ } as edn) =
     match scheme with
@@ -142,22 +126,49 @@ module Endpoint = struct
       | `HTTPS _ -> `HTTPS
       | `Scheme scheme -> `Scheme scheme
     in
+    let headers =
+      match edn.scheme with
+      | `HTTP headers | `HTTPS headers -> Some headers
+      | _ -> None
+    in
     let ssh_user = match edn.scheme with `SSH user -> Some user | _ -> None in
+    (* XXX(dinosaure): I don't like the reconstruction of the given [Uri.t] when we can miss some informations. *)
+    let uri =
+      match edn.scheme with
+      | `HTTP _ ->
+          Some
+            (Uri.of_string
+               (Fmt.str "http://%s%a/%s" edn.hostname
+                  Fmt.(option (const string ":" ++ int))
+                  edn.port edn.path))
+      | `HTTPS _ ->
+          Some
+            (Uri.of_string
+               (Fmt.str "https://%s%a/%s" edn.hostname
+                  Fmt.(option (const string ":" ++ int))
+                  edn.port edn.path))
+      | _ -> None
+    in
     ctx
     |> Mimic.add git_scheme scheme
     |> Mimic.add git_path edn.path
-    |> Mimic.add git_host edn.host
+    |> Mimic.add git_hostname edn.hostname
     |> fun ctx ->
     Option.fold ~none:ctx ~some:(fun v -> Mimic.add git_ssh_user v ctx) ssh_user
     |> fun ctx ->
     Option.fold ~none:ctx ~some:(fun v -> Mimic.add git_port v ctx) edn.port
+    |> fun ctx ->
+    Option.fold ~none:ctx ~some:(fun v -> Mimic.add git_uri v ctx) uri
+    |> fun ctx ->
+    Option.fold ~none:ctx
+      ~some:(fun v -> Mimic.add git_http_headers v ctx)
+      headers
 end
 
 module Make
     (Scheduler : Sigs.SCHED with type +'a s = 'a Lwt.t)
     (Pack : APPEND with type +'a fiber = 'a Lwt.t)
     (Index : APPEND with type +'a fiber = 'a Lwt.t)
-    (HTTP : HTTP)
     (Uid : UID)
     (Ref : Sigs.REF) =
 struct
@@ -334,93 +345,23 @@ struct
   module Push = Nss.Push.Make (Scheduler) (Lwt) (Flow) (Uid) (Ref)
 
   let fetch_v1 ?(uses_git_transport = false) ~push_stdout ~push_stderr
-      ~capabilities path ~ctx ?deepen ?want host store access fetch_cfg pack =
+      ~capabilities path flow ?deepen ?want hostname store access fetch_cfg pack
+      =
     let open Lwt.Infix in
-    Mimic.resolve ctx >>= function
-    | Error _ as err ->
-        let pp_host ppf = function
-          | `Domain v -> Domain_name.pp ppf v
-          | `Addr v -> Ipaddr.pp ppf v
-          | `Name v -> Fmt.string ppf v
-        in
-        Log.err (fun m -> m "%a not found" pp_host host);
-        pack None;
-        Lwt.return err
-    | Ok flow ->
-        Lwt.try_bind
-          (fun () ->
-            Fetch.fetch_v1 ~uses_git_transport ~push_stdout ~push_stderr
-              ~capabilities ?deepen ?want ~host path (Flow.make flow) store
-              access fetch_cfg (fun (payload, off, len) ->
-                let v = String.sub payload off len in
-                pack (Some (v, 0, len))))
-          (fun refs ->
-            pack None;
-            Mimic.close flow >>= fun () -> Lwt.return_ok refs)
-          (fun exn ->
-            pack None;
-            Mimic.close flow >>= fun () -> Lwt.fail exn)
-
-  module Flow_http = struct
-    type +'a fiber = 'a Lwt.t
-
-    type t = {
-      mutable ic : string;
-      mutable oc : string;
-      mutable pos : int;
-      uri : Uri.t;
-      headers : (string * string) list;
-      ctx : Mimic.ctx;
-    }
-
-    type error = [ `Msg of string ]
-
-    let pp_error = Rresult.R.pp_msg
-
-    let send t raw =
-      let oc = t.oc ^ Cstruct.to_string raw in
-      t.oc <- oc;
-      Lwt.return_ok (Cstruct.length raw)
-
-    let rec recv t raw =
-      if t.pos = String.length t.ic then (
-        let open Lwt.Infix in
-        (HTTP.post ~ctx:t.ctx ~headers:t.headers t.uri t.oc
-        >|= Rresult.(R.reword_error (R.msgf "%a" HTTP.pp_error)))
-        >>? fun (_resp, contents) ->
-        t.ic <- t.ic ^ contents;
-        recv t raw)
-      else
-        let len = min (String.length t.ic - t.pos) (Cstruct.length raw) in
-        Cstruct.blit_from_string t.ic t.pos raw 0 len;
-        t.pos <- t.pos + len;
-        Lwt.return_ok (`Input len)
-  end
-
-  module Fetch_http = Nss.Fetch.Make (Scheduler) (Lwt) (Flow_http) (Uid) (Ref)
-
-  let http_fetch_v1 ~push_stdout ~push_stderr ~capabilities ~ctx uri
-      ?(headers = []) endpoint path ?deepen ?want store access fetch_cfg pack =
-    let open Rresult in
-    let open Lwt.Infix in
-    let uri0 = Fmt.str "%a/info/refs?service=git-upload-pack" Uri.pp uri in
-    let uri0 = Uri.of_string uri0 in
-    Log.debug (fun m -> m "GET %a" Uri.pp uri0);
-    HTTP.get ~ctx ~headers uri0 >|= R.reword_error (R.msgf "%a" HTTP.pp_error)
-    >>? fun (_resp, contents) ->
-    let uri1 = Fmt.str "%a/git-upload-pack" Uri.pp uri in
-    let uri1 = Uri.of_string uri1 in
-    let flow =
-      { Flow_http.ic = contents; pos = 0; oc = ""; uri = uri1; headers; ctx }
-    in
-    Fetch_http.fetch_v1 ~push_stdout ~push_stderr ~capabilities ?deepen ?want
-      ~host:endpoint path flow store access fetch_cfg
-      (fun (payload, off, len) ->
+    Lwt.try_bind
+      (fun () ->
+        Fetch.fetch_v1 ~uses_git_transport ~push_stdout ~push_stderr
+          ~capabilities ?deepen ?want ~host:hostname path (Flow.make flow) store
+          access fetch_cfg
+        @@ fun (payload, off, len) ->
         let v = String.sub payload off len in
         pack (Some (v, 0, len)))
-    >>= fun refs ->
+      (fun refs ->
+        pack None;
+        Mimic.close flow >>= fun () -> Lwt.return_ok refs)
+    @@ fun exn ->
     pack None;
-    Lwt.return_ok refs
+    Mimic.close flow >>= fun () -> Lwt.fail exn
 
   let default_capabilities =
     [
@@ -428,14 +369,25 @@ struct
       `Report_status;
     ]
 
+  type transmission = [ `Git | `Exec ]
+
+  let rec get_transmission :
+      Mimic.edn list -> [ `Git | `Exec | `HTTP of Uri.t * handshake ] option =
+    function
+    | Mimic.Edn (k, v) :: r -> (
+        match Mimic.equal k git_transmission with
+        | Some Mimic.Refl -> Some v
+        | None -> get_transmission r)
+    | [] -> None
+
   let fetch ?(push_stdout = ignore) ?(push_stderr = ignore) ?threads ~ctx
       (access, light_load, heavy_load) store edn ?(version = `V1)
       ?(capabilities = default_capabilities) ?deepen want t_pck t_idx ~src ~dst
       ~idx =
     let open Rresult in
     let open Lwt.Infix in
-    let host = edn.Endpoint.host in
-    let path = edn.path in
+    let hostname = edn.Endpoint.hostname in
+    let path = edn.Endpoint.path in
     let stream, pusher = Lwt_stream.create () in
     let pusher_with_logging = function
       | Some (_, _, len) as v ->
@@ -447,22 +399,18 @@ struct
     in
     let stream () = Lwt_stream.get stream in
     let ctx = Mimic.add git_capabilities `Rd (Endpoint.to_ctx edn ctx) in
-    (* XXX(dinosaure): such trick is only about SSH. Indeed, when we use SSH, we
-       should/must? know if we want to fetch or push. If we want to fetch, we
-       will call git-upload-pack. To be able to pass this information to the
-       "connect" function of SSH (whatever the implementation of SSH), we fill
-       the given [ctx] with [`Rd]. *)
-    let run =
-      match version, edn.scheme with
-      | `V1, ((`Git | `SSH _ | `Scheme _) as scheme) ->
-          let fetch_cfg = Nss.Fetch.configuration capabilities in
-          let uses_git_transport =
-            match scheme with `Git -> true | `SSH _ | `Scheme _ -> false
-          in
-          let run () =
+    Lwt.catch (fun () ->
+        Mimic.unfold ctx >>? fun ress ->
+        Mimic.connect ress >>= fun flow ->
+        match flow, get_transmission ress, version with
+        | Ok flow, Some (#transmission as transmission), `V1 -> (
+            let fetch_cfg = Nss.Fetch.configuration capabilities in
+            let uses_git_transport =
+              match transmission with `Git -> true | `Exec -> false
+            in
             Lwt.both
               (fetch_v1 ~push_stdout ~push_stderr ~uses_git_transport
-                 ~capabilities path ~ctx ?deepen ~want host store access
+                 ~capabilities path flow ?deepen ~want hostname store access
                  fetch_cfg pusher_with_logging)
               (run ?threads ~light_load ~heavy_load stream t_pck t_idx ~src ~dst
                  ~idx)
@@ -471,53 +419,47 @@ struct
             | Ok refs, Ok uid -> Lwt.return_ok (`Pack (uid, refs))
             | (Error _ as err), _ -> Lwt.return err
             | Ok [], _ -> Lwt.return_ok `Empty
-            | Ok _refs, (Error _ as err) -> Lwt.return err
-          in
-          run
-      | `V1, ((`HTTP _ | `HTTPS _) as scheme) ->
-          Log.debug (fun m -> m "Start an HTTP transmission.");
-          let fetch_cfg =
-            Nss.Fetch.configuration ~stateless:true capabilities
-          in
-          let pp_host ppf = function
-            | `Domain v -> Domain_name.pp ppf v
-            | `Addr v -> Ipaddr.pp ppf v
-            | `Name v -> Fmt.string ppf v
-          in
-          let pp_port ppf = function
-            | Some port -> Fmt.pf ppf ":%d" port
-            | None -> ()
-          in
-          let uri, headers =
-            match scheme with
-            | `HTTP headers ->
-                ( Uri.of_string
-                    (Fmt.str "http://%a%a%s" pp_host host pp_port edn.port path),
-                  headers )
-            | `HTTPS headers ->
-                ( Uri.of_string
-                    (Fmt.str "https://%a%a%s" pp_host host pp_port edn.port path),
-                  headers )
-          in
-          let run () =
+            | Ok _refs, (Error _ as err) -> Lwt.return err)
+        | Ok flow, Some (`HTTP (uri, handshake)), `V1 -> (
+            let fetch_cfg =
+              Nss.Fetch.configuration ~stateless:true capabilities
+            in
+            let uri0 =
+              Fmt.str "%a/info/refs?service=git-upload-pack" Uri.pp uri
+              |> Uri.of_string
+            in
+            let uri1 =
+              Fmt.str "%a/git-upload-pack" Uri.pp uri |> Uri.of_string
+            in
             Lwt.both
-              (http_fetch_v1 ~push_stdout ~push_stderr ~capabilities ~ctx uri
-                 ~headers host path ?deepen ~want store access fetch_cfg
-                 pusher_with_logging)
+              ( handshake ~uri0 ~uri1 flow >>= fun () ->
+                fetch_v1 ~push_stdout ~push_stderr ~capabilities path flow
+                  ?deepen ~want hostname store access fetch_cfg
+                  pusher_with_logging )
               (run ~light_load ~heavy_load stream t_pck t_idx ~src ~dst ~idx)
             >>= fun (refs, idx) ->
             match refs, idx with
             | Ok refs, Ok uid -> Lwt.return_ok (`Pack (uid, refs))
             | (Error _ as err), _ -> Lwt.return err
             | Ok [], _ -> Lwt.return_ok `Empty
-            | Ok _refs, (Error _ as err) -> Lwt.return err
-          in
-          run
-      | _ -> assert false
-    in
-    Lwt.catch run (function
-      | Failure err -> Lwt.return_error (R.msg err)
-      | exn -> Lwt.return_error (`Exn exn))
+            | Ok _refs, (Error _ as err) -> Lwt.return err)
+        | Ok flow, Some _, _ ->
+            Log.err (fun m -> m "The protocol version is uninmplemented.");
+            Mimic.close flow >>= fun () ->
+            Lwt.return_error (`Msg "Version protocol unimplemented")
+        | Ok flow, None, _ ->
+            Log.err (fun m ->
+                m
+                  "A flow was allocated but we can not recognize the \
+                   transmission.");
+            Mimic.close flow >>= fun () ->
+            Lwt.return_error (`Msg "Unrecognized protocol")
+        | Error err, _, _ ->
+            Log.err (fun m -> m "The Git peer is not reachable.");
+            Lwt.return_error err)
+    @@ function
+    | Failure err -> Lwt.return_error (R.msg err)
+    | exn -> Lwt.return_error (`Exn exn)
 
   module Delta = Carton_lwt.Enc.Delta (Uid) (Verbose)
 
@@ -610,85 +552,60 @@ struct
     Lwt.async fiber;
     stream
 
-  let push ?uses_git_transport ~ctx ~capabilities path cmds endpoint store
+  let push_v1 ?uses_git_transport flow ~capabilities path cmds hostname store
       access push_cfg pack =
     let open Lwt.Infix in
-    (* XXX(dinosaure): see [fetch]. *)
-    Mimic.resolve ctx >>? fun flow ->
-    Push.push ?uses_git_transport ~capabilities cmds ~host:endpoint path
+    Push.push ?uses_git_transport ~capabilities cmds ~host:hostname path
       (Flow.make flow) store access push_cfg pack
     >>= fun () ->
     Mimic.close flow >>= fun () -> Lwt.return_ok ()
 
-  module Push_http = Nss.Push.Make (Scheduler) (Lwt) (Flow_http) (Uid) (Ref)
-
-  let http_push ~capabilities ~ctx uri ?(headers = []) path cmds endpoint store
-      access push_cfg pack =
-    let open Rresult in
-    let open Lwt.Infix in
-    let uri0 = Fmt.str "%a/info/refs?service=git-receive-pack" Uri.pp uri in
-    let uri0 = Uri.of_string uri0 in
-    Log.debug (fun m -> m "GET %a" Uri.pp uri0);
-    HTTP.get ~ctx ~headers uri0 >|= R.reword_error (R.msgf "%a" HTTP.pp_error)
-    >>? fun (_resp, contents) ->
-    let uri1 = Fmt.str "%a/git-receive-pack" Uri.pp uri in
-    let uri1 = Uri.of_string uri1 in
-    let flow =
-      { Flow_http.ic = contents; pos = 0; oc = ""; uri = uri1; headers; ctx }
-    in
-    Push_http.push ~capabilities cmds ~host:endpoint path flow store access
-      push_cfg pack
-    >>= fun () -> Lwt.return_ok ()
-
   let push ~ctx (access, light_load, heavy_load) store edn ?(version = `V1)
       ?(capabilities = default_capabilities) cmds =
-    let host = edn.Endpoint.host in
-    let path = edn.path in
-    let ctx = Mimic.add git_capabilities `Wr (Endpoint.to_ctx edn ctx) in
     let open Rresult in
-    match version, edn.Endpoint.scheme with
-    | `V1, ((`Git | `SSH _ | `Scheme _) as scheme) ->
-        let uses_git_transport =
-          match scheme with `Git -> true | `SSH _ | `Scheme _ -> false
-        in
-        let push_cfg = Nss.Push.configuration () in
-        let run () =
-          push ~uses_git_transport ~ctx ~capabilities path cmds host store
-            access push_cfg
-            (pack ~light_load ~heavy_load)
-        in
-        Lwt.catch run (function
-          | Failure err -> Lwt.return_error (R.msgf "%s" err)
-          | exn -> Lwt.return_error (`Exn exn))
-    | `V1, ((`HTTP _ | `HTTPS _) as scheme) ->
-        let push_cfg = Nss.Push.configuration ~stateless:true () in
-        let pp_host ppf = function
-          | `Domain v -> Domain_name.pp ppf v
-          | `Addr v -> Ipaddr.pp ppf v
-          | `Name v -> Fmt.string ppf v
-        in
-        let pp_port ppf = function
-          | Some port -> Fmt.pf ppf ":%d" port
-          | None -> ()
-        in
-        let uri, headers =
-          match scheme with
-          | `HTTP headers ->
-              ( Uri.of_string
-                  (Fmt.str "http://%a%a%s" pp_host host pp_port edn.port path),
-                headers )
-          | `HTTPS headers ->
-              ( Uri.of_string
-                  (Fmt.str "https://%a%a%s" pp_host host pp_port edn.port path),
-                headers )
-        in
-        let run () =
-          http_push ~ctx ~capabilities uri ~headers path cmds host store access
-            push_cfg
-            (pack ~light_load ~heavy_load)
-        in
-        Lwt.catch run (function
-          | Failure err -> Lwt.return_error (R.msgf "%s" err)
-          | exn -> Lwt.return_error (`Exn exn))
-    | _ -> assert false
+    let open Lwt.Infix in
+    let hostname = edn.Endpoint.hostname in
+    let path = edn.Endpoint.path in
+    let ctx = Mimic.add git_capabilities `Wr (Endpoint.to_ctx edn ctx) in
+    Lwt.catch (fun () ->
+        Mimic.unfold ctx >>? fun ress ->
+        Mimic.connect ress >>= fun res ->
+        match res, get_transmission ress, version with
+        | Ok flow, Some (#transmission as transmission), `V1 ->
+            let push_cfg = Nss.Push.configuration () in
+            let uses_git_transport =
+              match transmission with `Git -> true | `Exec -> false
+            in
+            push_v1 ~uses_git_transport flow ~capabilities path cmds hostname
+              store access push_cfg
+              (pack ~light_load ~heavy_load)
+        | Ok flow, Some (`HTTP (uri, handshake)), `V1 ->
+            let push_cfg = Nss.Push.configuration ~stateless:true () in
+            let uri0 =
+              Fmt.str "%a/info/refs?service=git-receive-pack" Uri.pp uri
+              |> Uri.of_string
+            in
+            let uri1 =
+              Fmt.str "%a/git-receive-pack" Uri.pp uri |> Uri.of_string
+            in
+            handshake ~uri0 ~uri1 flow >>= fun () ->
+            push_v1 flow ~capabilities path cmds hostname store access push_cfg
+              (pack ~light_load ~heavy_load)
+        | Ok flow, Some _, _ ->
+            Log.err (fun m -> m "The protocol version is uninmplemented.");
+            Mimic.close flow >>= fun () ->
+            Lwt.return_error (`Msg "Version protocol unimplemented")
+        | Ok flow, None, _ ->
+            Log.err (fun m ->
+                m
+                  "A flow was allocated but we can not recognize the \
+                   transmission.");
+            Mimic.close flow >>= fun () ->
+            Lwt.return_error (`Msg "Unrecognized protocol")
+        | Error err, _, _ ->
+            Log.err (fun m -> m "The Git peer is not reachable.");
+            Lwt.return_error err)
+    @@ function
+    | Failure err -> Lwt.return_error (R.msg err)
+    | exn -> Lwt.return_error (`Exn exn)
 end

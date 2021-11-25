@@ -53,5 +53,5 @@ module Store : sig
   val v : ?dotgit:Fpath.t -> Fpath.t -> (t, error) result Lwt.t
 end
 
-module Sync (Store : Minimal.S) (HTTP : Smart_git.HTTP) :
+module Sync (Store : Minimal.S) :
   Sync.S with type hash = Store.hash and type store = Store.t

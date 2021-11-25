@@ -9,7 +9,7 @@ module Make
     (Store : Git.S)
     (_ : sig end) =
 struct
-  module Sync = Git.Mem.Sync (Store) (Git_paf)
+  module Sync = Git.Mem.Sync (Store)
   module Search = Git.Search.Make (Store.Hash) (Store)
 
   let main = lazy (Git.Reference.v (Key_gen.branch ()))

@@ -57,8 +57,7 @@ module Make
     (Digestif : Digestif.S)
     (Pack : Smart_git.APPEND with type +'a fiber = 'a Lwt.t)
     (Index : Smart_git.APPEND with type +'a fiber = 'a Lwt.t)
-    (Store : Minimal.S with type hash = Digestif.t)
-    (HTTP : Smart_git.HTTP) =
+    (Store : Minimal.S with type hash = Digestif.t) =
 struct
   type hash = Digestif.t
   type store = Store.t
@@ -182,7 +181,7 @@ struct
         Lwt.return (Carton.Dec.v ~kind raw)
     | None -> Lwt.fail Not_found
 
-  include Smart_git.Make (Scheduler) (Pack) (Index) (HTTP) (Hash) (Reference)
+  include Smart_git.Make (Scheduler) (Pack) (Index) (Hash) (Reference)
 
   let ( >>? ) x f =
     x >>= function Ok x -> f x | Error err -> Lwt.return_error err

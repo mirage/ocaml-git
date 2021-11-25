@@ -25,85 +25,109 @@ let mimic_conf () =
 
 let merge ctx0 ctx1 = mimic_conf () $ ctx0 $ ctx1
 
-let mimic_tcp_conf =
+(* TODO(dinosaure): [timeout] and [timer interval]. *)
+let mimic_happy_eyeballs =
+  let packages = [ package "git-mirage" ~sublibs:[ "happy-eyeballs" ] ] in
+  impl @@ object
+       inherit base_configurable
+       method ty = random @-> time @-> mclock @-> pclock @-> stackv4v6 @-> mimic
+       method module_name = "Git_mirage_happy_eyeballs.Make"
+       method! packages = Key.pure packages
+       method name = "git_mirage_happy_eyeballs"
+       method! connect _ modname = function
+         | [ _random; _time; _mclock; _pclock; stackv4v6; ] ->
+           Fmt.str {ocaml|%s.connect %s|ocaml} modname stackv4v6
+         | _ -> assert false
+     end
+
+let mimic_tcp =
   let packages = [ package "git-mirage" ~sublibs:[ "tcp" ] ] in
   impl @@ object
        inherit base_configurable
-       method ty = stackv4v6 @-> mimic
+       method ty = tcpv4v6 @-> mimic @-> mimic
        method module_name = "Git_mirage_tcp.Make"
        method! packages = Key.pure packages
-       method name = "tcp_ctx"
+       method name = "git_mirage_tcp"
        method! connect _ modname = function
-         | [ stack ] ->
-           Fmt.str {ocaml|Lwt.return (%s.with_stack %s %s.ctx)|ocaml}
-             modname stack modname
+         | [ _tcpv4v6; ctx ] ->
+           Fmt.str {ocaml|%s.connect %s|ocaml}
+             modname ctx
          | _ -> assert false
      end
 
-let mimic_tcp_impl stackv4v6 = mimic_tcp_conf $ stackv4v6
-
-let mimic_ssh_conf ~kind ~seed ~auth =
-  let seed = Key.abstract seed in
-  let auth = Key.abstract auth in
+let mimic_ssh ?authenticator key =
   let packages = [ package "git-mirage" ~sublibs:[ "ssh" ] ] in
   impl @@ object
        inherit base_configurable
-       method ty = stackv4v6 @-> mimic @-> mclock @-> mimic
-       method! keys = [ seed; auth; ]
+       method ty = mclock @-> tcpv4v6 @-> mimic @-> mimic
+       method! keys = match authenticator with
+         | Some authenticator -> [ Key.abstract key; Key.abstract authenticator ]
+         | None -> [ Key.abstract key ]
        method module_name = "Git_mirage_ssh.Make"
        method! packages = Key.pure packages
-       method name = match kind with
-         | `Rsa -> "ssh_rsa_ctx"
-         | `Ed25519 -> "ssh_ed25519_ctx"
-       method! connect _ modname =
-         function
-         | [ _; tcp_ctx; _ ] ->
-             let with_key =
-               match kind with
-               | `Rsa -> "with_rsa_key"
-               | `Ed25519 -> "with_ed25519_key"
-             in
-             Fmt.str
-               {ocaml|let ssh_ctx00 = Mimic.merge %s %s.ctx in
-                      let ssh_ctx01 = Option.fold ~none:ssh_ctx00 ~some:(fun v -> %s.%s v ssh_ctx00) %a in
-                      let ssh_ctx02 = Option.fold ~none:ssh_ctx01 ~some:(fun v -> %s.with_authenticator v ssh_ctx01) %a in
-                      Lwt.return ssh_ctx02|ocaml}
-               tcp_ctx modname
-               modname with_key Key.serialize_call seed
-               modname Key.serialize_call auth
+       method name = "git_mirage_ssh"
+       method! connect _ modname = function
+         | [ _mclock; _tcpv4v6; ctx ] ->
+           ( match authenticator with
+           | None ->
+             Fmt.str {ocaml|%s.connect %s >>= %s.with_optionnal_key ~key:%a|ocaml}
+               modname ctx modname Key.serialize_call (Key.abstract key)
+           | Some authenticator ->
+             Fmt.str {ocaml|%s.connect %s >>= %s.with_optionnal_key ?authenticator:%a ~key:%a|ocaml}
+               modname ctx modname
+               Key.serialize_call (Key.abstract authenticator)
+               Key.serialize_call (Key.abstract key) )
          | _ -> assert false
      end
 
-let mimic_ssh_impl ~kind ~seed ~auth stackv4v6 mimic_git mclock =
-  mimic_ssh_conf ~kind ~seed ~auth
-  $ stackv4v6
-  $ mimic_git
-  $ mclock
-
-(* TODO(dinosaure): user-defined nameserver and port. *)
-
-let mimic_dns_conf =
-  let packages = [ package "git-mirage" ~sublibs:[ "dns" ] ] in
+let mimic_http ?tls_key_fingerprint ?tls_cert_fingerprint headers =
+  let packages = [ package "git-mirage" ~sublibs:[ "http" ] ] in
   impl @@ object
        inherit base_configurable
-       method ty = random @-> mclock @-> pclock @-> time @-> stackv4v6 @-> mimic @-> mimic
-       method module_name = "Git_mirage_dns.Make"
+       method ty = time @-> pclock @-> tcpv4v6 @-> mimic @-> mimic
+       method! keys = match tls_key_fingerprint, tls_cert_fingerprint with
+         | Some tls_key_fingerprint, None ->
+           let keys = match headers with Some headers -> [ Key.abstract headers ] | None -> [] in
+           [ Key.abstract tls_key_fingerprint ] @ keys
+         | None, Some tls_cert_fingerprint ->
+           let keys = match headers with Some headers -> [ Key.abstract headers ] | None -> [] in
+           [ Key.abstract tls_cert_fingerprint ] @ keys
+         | Some tls_key_fingerprint, Some tls_cert_fingerprint ->
+           let keys = match headers with Some headers -> [ Key.abstract headers ] | None -> [] in
+           [ Key.abstract tls_key_fingerprint; Key.abstract tls_cert_fingerprint ] @ keys
+         | None, None -> ( match headers with Some headers -> [ Key.abstract headers ] | None -> [] )
+       method module_name = "Git_mirage_http.Make"
        method! packages = Key.pure packages
-       method name = "dns_ctx"
-       method! connect _ modname =
-         function
-         | [ _; _; _; _; stack; tcp_ctx ] ->
-             Fmt.str
-               {ocaml|let dns_ctx00 = Mimic.merge %s %s.ctx in
-                      let dns_ctx01 = %s.with_dns %s dns_ctx00 in
-                      Lwt.return dns_ctx01|ocaml}
-               tcp_ctx modname
-               modname stack
+       method name = "git_mirage_http"
+       method! connect _ modname = function
+         | [ _time; _pclock; _tcpv4v6; ctx; ] ->
+           let serialize_headers ppf = function
+             | None -> ()
+             | Some headers -> Fmt.pf ppf "?headers:%a" Key.serialize_call (Key.abstract headers) in
+           ( match tls_key_fingerprint, tls_cert_fingerprint with
+           | Some tls_key_fingerprint, None ->
+             Fmt.str {ocaml|%s.connect %s >>= %s.with_optional_tls_config_and_headers ?tls_key_fingerprint:%a%a|ocaml}
+               modname ctx modname
+               Key.serialize_call (Key.abstract tls_key_fingerprint)
+               Fmt.((const string " ") ++ serialize_headers) headers
+           | None, Some tls_cert_fingerprint ->
+             Fmt.str {ocaml|%s.connect %s >>= %s.with_optional_tls_config_and_headers ?tls_cert_fingerprint:%a%a|ocaml}
+               modname ctx modname
+               Key.serialize_call (Key.abstract tls_cert_fingerprint)
+               Fmt.((const string " ") ++ serialize_headers) headers
+           | None, None ->
+             Fmt.str {ocaml|%s.connect %s >>= %s.with_optional_tls_config_and_headers%a|ocaml}
+               modname ctx modname
+               Fmt.((const string " ") ++ serialize_headers) headers
+           | Some tls_key_fingerprint, Some tls_cert_fingerprint ->
+             Fmt.str {ocaml|%s.connect %s >>= %s.with_optional_tls_config_and_headers
+                              ?tls_key_fingerprint:%a ?tls_cert_fingerprint:%a%a|ocaml}
+               modname ctx modname
+               Key.serialize_call (Key.abstract tls_key_fingerprint)
+               Key.serialize_call (Key.abstract tls_cert_fingerprint)
+               Fmt.((const string " ") ++ serialize_headers) headers )
          | _ -> assert false
      end
-
-let mimic_dns_impl random mclock pclock time stackv4v6 mimic_tcp =
-  mimic_dns_conf $ random $ mclock $ pclock $ time $ stackv4v6 $ mimic_tcp
 
 type hash = Hash
 
@@ -122,14 +146,12 @@ type git = Git
 
 let git = typ Git
 
-let git_conf ?path () =
-  let keys =
-    match path with Some path -> [ Key.abstract path ] | None -> []
-  in
+let git_impl path =
   impl @@ object
        inherit base_configurable
        method ty = hash @-> git
-       method! keys = keys
+       method! keys = match path with
+         | None -> [] | Some path -> [ Key.abstract path ]
        method module_name = "Git.Mem.Make"
        method! packages = Key.pure [ package "git"; package "digestif" ]
        method name = "git"
@@ -137,47 +159,32 @@ let git_conf ?path () =
          match path with
          | None ->
              Fmt.str
-               {|%s.v (Fpath.v ".") >>= function
-                 | Ok v -> Lwt.return v
-                 | Error err -> Fmt.failwith "%%a" %s.pp_error err|}
+               {ocaml|%s.v (Fpath.v ".") >>= function
+                      | Ok v -> Lwt.return v
+                      | Error err -> Fmt.failwith "%%a" %s.pp_error err|ocaml}
                modname modname
          | Some key ->
              Fmt.str
-               {|let res = match Option.map Fpath.of_string %a with
-                    | Some (Ok path) -> %s.v path
-                    | Some (Error (`Msg err)) -> failwith err
-                    | None -> %s.v (Fpath.v ".") in
-                  res >>= function
-                  | Ok v -> Lwt.return v
-                  | Error err -> Fmt.failwith "%%a" %s.pp_error err|}
+               {ocaml|( match Option.map Fpath.of_string %a with
+                      | Some (Ok path) -> %s.v path
+                      | Some (Error (`Msg err)) -> failwith err
+                      | None -> %s.v (Fpath.v ".") ) >>= function
+                      | Ok v -> Lwt.return v
+                      | Error err -> Fmt.failwith "%%a" %s.pp_error err|ocaml}
                Key.serialize_call (Key.abstract key) modname modname modname
      end
 
-let git_impl ?path hash = git_conf ?path () $ hash
-
-let mimic_paf_conf () =
-  let packages = [ package "git-paf" ] in
+let tcpv4v6_of_stackv4v6 =
   impl @@ object
        inherit base_configurable
-       method ty = time @-> pclock @-> stackv4v6 @-> mimic @-> mimic
-       method module_name = "Git_paf.Make"
-       method! packages = Key.pure packages
-       method name = "paf_ctx"
+       method ty = stackv4v6 @-> tcpv4v6
+       method module_name = "Git_mirage_happy_eyeballs.TCPV4V6"
+       method! packages = Key.pure [ package "git-mirage.happy-eyeballs" ]
+       method name = "tcpv4v6"
        method! connect _ modname = function
-         | [ _; _; _; tcp_ctx; ] ->
-             Fmt.str
-               {ocaml|let paf_ctx00 = Mimic.merge %s %s.ctx in
-                      Lwt.return paf_ctx00|ocaml}
-               tcp_ctx modname
+         | [ stackv4v6 ] -> Fmt.str {ocaml|%s.connect %s|ocaml} modname stackv4v6
          | _ -> assert false
      end
-
-let mimic_paf_impl time pclock stackv4v6 mimic_tcp =
-  mimic_paf_conf ()
-  $ time
-  $ pclock
-  $ stackv4v6
-  $ mimic_tcp
 
 (* User space *)
 
@@ -185,43 +192,51 @@ let remote =
   let doc = Key.Arg.info ~doc:"Remote Git repository." [ "r"; "remote" ] in
   Key.(create "remote" Arg.(required string doc))
 
-let ssh_seed =
-  let doc = Key.Arg.info ~doc:"Seed of the private SSH key." [ "ssh-seed" ] in
+let ssh_key =
+  let doc = Key.Arg.info ~doc:"The private SSH key." [ "ssh-key" ] in
   Key.(create "ssh_seed" Arg.(opt (some string) None doc))
 
-let ssh_auth =
-  let doc =
-    Key.Arg.info ~doc:"SSH public key of the remote Git endpoint."
-      [ "ssh-auth" ]
-  in
-  Key.(create "ssh_auth" Arg.(opt (some string) None doc))
+let ssh_authenticator =
+  let doc = Key.Arg.info ~doc:"SSH public key of the remote Git repository." [ "ssh-authenticator" ] in
+  Key.(create "ssh_authenticator" Arg.(opt (some string) None doc))
+
+let tls_key_fingerprint =
+  let doc = Key.Arg.info ~doc:"The fingerprint of the TLS key." [ "tls-key-fingerprint" ] in
+  Key.(create "tls_key_fingerprint" Arg.(opt (some string) None doc))
+
+let tls_cert_fingerprint =
+  let doc = Key.Arg.info ~doc:"The fingerprint of the TLS certificate." [ "tls-cert-fingerprint" ] in
+  Key.(create "tls_cert_fingerprint" Arg.(opt (some string) None doc))
 
 let branch =
-  let doc = Key.Arg.info ~doc:"The Git remote branch" [ "branch" ] in
+  let doc = Key.Arg.info ~doc:"The Git remote branch." [ "branch" ] in
   Key.(create "branch" Arg.(opt string "refs/heads/master" doc))
 
 let minigit =
   foreign "Unikernel.Make"
-    ~keys:[ Key.abstract remote; Key.abstract ssh_seed; Key.abstract ssh_auth; Key.abstract branch ]
+    ~keys:[ Key.abstract remote; Key.abstract branch ]
     (git @-> mimic @-> job)
 
-let mimic ~kind ~seed ~auth stackv4v6 random mclock pclock time =
-  let mtcp = mimic_tcp_impl stackv4v6 in
-  let mdns = mimic_dns_impl random mclock pclock time stackv4v6 mtcp in
-  let mssh = mimic_ssh_impl ~kind ~seed ~auth stackv4v6 mtcp mclock in
-  let mpaf = mimic_paf_impl time pclock stackv4v6 mtcp in
-  merge mpaf (merge mssh mdns)
+let mimic random stackv4v6 mclock pclock time =
+  let tcpv4v6 = tcpv4v6_of_stackv4v6 $ stackv4v6 in
+  let mhappy_eyeballs = mimic_happy_eyeballs $ random $ time $ mclock $ pclock $ stackv4v6 in
+  let mtcp  = mimic_tcp
+    $ tcpv4v6 $ mhappy_eyeballs in
+  let mssh  = mimic_ssh ~authenticator:ssh_authenticator ssh_key
+    $ mclock $ tcpv4v6 $ mhappy_eyeballs in
+  let mhttp = mimic_http ~tls_key_fingerprint ~tls_cert_fingerprint None
+    $ time $ pclock $ tcpv4v6 $ mhappy_eyeballs in
+  merge mhttp (merge mtcp mssh)
 
 let stackv4v6 = generic_stackv4v6 default_network
-let mclock = default_monotonic_clock
-let pclock = default_posix_clock
-let time = default_time
-let random = default_random
-let git = git_impl sha1
-let mimic = mimic ~kind:`Rsa ~seed:ssh_seed ~auth:ssh_auth
-let mimic = mimic stackv4v6 random mclock pclock time
+let mclock    = default_monotonic_clock
+let pclock    = default_posix_clock
+let time      = default_time
+let random    = default_random
+
+let git       = git_impl None $ sha1
+let mimic     = mimic random stackv4v6 mclock pclock time
 
 let () =
-  register "minigit" ~packages:[ package "ptime"
-                               ; package "git-paf" ]
+  register "minigit" ~packages:[ package "ptime" ]
     [ minigit $ git $ mimic ]

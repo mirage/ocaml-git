@@ -412,7 +412,7 @@ end
 
 module Store = Make (Digestif.SHA1)
 
-module Sync (Git_store : Minimal.S) (HTTP : Smart_git.HTTP) = struct
+module Sync (Git_store : Minimal.S) = struct
   let src = Logs.Src.create "git-mem.sync" ~doc:"logs git-mem's sync event"
 
   module Log = (val Logs.src_log src : Logs.LOG)
@@ -444,7 +444,7 @@ module Sync (Git_store : Minimal.S) (HTTP : Smart_git.HTTP) = struct
     let map _ _ ~pos:_ _ = assert false
   end
 
-  include Sync.Make (Git_store.Hash) (Cstruct_append) (Index) (Git_store) (HTTP)
+  include Sync.Make (Git_store.Hash) (Cstruct_append) (Index) (Git_store)
 
   let stream_of_cstruct ?(chunk = 0x1000) payload =
     let stream, emitter = Lwt_stream.create () in

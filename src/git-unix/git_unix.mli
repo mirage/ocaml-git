@@ -22,11 +22,9 @@ module Make (Digestif : Digestif.S) : sig
   val v : ?dotgit:Fpath.t -> Fpath.t -> (t, error) result Lwt.t
 end
 
-val ctx : Mimic.ctx
-val inet_addr : Unix.inet_addr Mimic.value
-val tls : Tls.Config.client Mimic.value
+val ctx : Happy_eyeballs_lwt.t -> Mimic.ctx Lwt.t
 
-module Sync (Store : Git.S) (HTTP : Smart_git.HTTP) :
+module Sync (Store : Git.S) :
   Git.Sync.S with type hash = Store.hash and type store = Store.t
 
 module Store : sig

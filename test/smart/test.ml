@@ -50,9 +50,19 @@ let ctx_with_pipe ?cwd ?(env = [||]) ?(args = [||]) cmd =
   Mimic.add pipe_value { cmd; args; env; cwd } Mimic.empty
 
 let fifo_value, fifo = Mimic.register ~name:"fifo" (module Fifo)
-let ctx_with_fifo ic oc = Mimic.add fifo_value (ic, oc) Mimic.empty
-let loopback_value, loopback = Mimic.register ~name:"loopback" (module Loopback)
-let ctx_with_payloads payloads = Mimic.add loopback_value payloads Mimic.empty
+
+let ctx_with_fifo ic oc =
+  Mimic.empty
+  |> Mimic.add fifo_value (ic, oc)
+  |> Mimic.add Smart_git.git_transmission `Exec
+
+let loopback_endpoint, loopback =
+  Mimic.register ~name:"loopback" (module Loopback)
+
+let ctx_with_payloads ?(transmission = `Git) payloads =
+  Mimic.empty
+  |> Mimic.add loopback_endpoint payloads
+  |> Mimic.add Smart_git.git_transmission transmission
 
 (** Alcotest setup for testing: *)
 let uid = Alcotest.testable Uid.pp Uid.equal
@@ -292,7 +302,7 @@ let bad_input_err r = R.reword_error (fun e -> `Bad_input e) r
 let test_sync_fetch () =
   Alcotest_lwt.test_case "set local ref" `Quick @@ fun _switch () ->
   let open Lwt.Infix in
-  let module Sync = Git.Mem.Sync (Git.Mem.Store) (Git_cohttp_unix) in
+  let module Sync = Git.Mem.Sync (Git.Mem.Store) in
   let capabilities = [ `Side_band_64k ] in
   let head = Git.Reference.v "HEAD" in
   let empty_branch = Git.Reference.v "refs/heads/empty" in
@@ -344,8 +354,7 @@ let test_sync_fetch () =
 
 (* XXX(dinosaure): [tmp] without systemic deletion of directories. *)
 
-module Git_sync =
-  Smart_git.Make (Scheduler) (Append) (Append) (HTTP) (Uid) (Ref)
+module Git_sync = Smart_git.Make (Scheduler) (Append) (Append) (Uid) (Ref)
 
 (* TODO(dinosaure): we don't check what we sent, we should check that. *)
 
@@ -1388,8 +1397,6 @@ let load_file filename =
   close_in ic;
   Bytes.unsafe_to_string rs
 
-let http_resolver queue = HTTP.set_payloads queue
-
 let test_negotiation_http () =
   Alcotest_lwt.test_case "fetch over http" `Quick @@ fun sw () ->
   let open Lwt.Infix in
@@ -1419,12 +1426,44 @@ let test_negotiation_http () =
     OS.File.tmp "pack-%s.idx" |> Lwt.return >>? fun tmp2 ->
     Smart_git.Endpoint.of_string "http://localhost/not-found.git" |> Lwt.return
     >>? fun endpoint ->
-    let queue = Queue.create () in
-    Queue.push (load_file "GET") queue;
-    Queue.push (load_file "POST") queue;
-    let () = http_resolver queue in
-    Git_sync.fetch ~ctx:Mimic.empty ~capabilities access store endpoint `All
-      pack index ~src:tmp0 ~dst:tmp1 ~idx:tmp2
+    let advertised_refs = load_file "GET" in
+    let clone = load_file "POST" in
+    let fake_http_edn, fake_http =
+      Mimic.register ~name:"fake-http" (module HTTP)
+    in
+    let handshake ~uri0:_ ~uri1:_ flow =
+      Fmt.epr ">>> HANDSHAKE\n%!";
+      let module M = (val Mimic.repr fake_http) in
+      match flow with
+      | M.T flow ->
+          flow.state <- Get;
+          Lwt.return_unit
+      | _ -> Lwt.return_unit
+    in
+    let k0 git_scheme git_transmission =
+      match git_scheme, git_transmission with
+      | (`HTTP | `HTTPS), `HTTP _ -> Lwt.return_some (advertised_refs, clone)
+      | _ -> Lwt.return_none
+    in
+    let k1 git_scheme =
+      match git_scheme with
+      | `HTTP | `HTTPS ->
+          Lwt.return_some
+            (`HTTP (Uri.of_string "http://localhost/not-found.git", handshake))
+      | _ -> Lwt.return_none
+    in
+    let ctx =
+      Mimic.fold fake_http_edn
+        Mimic.Fun.[ req Smart_git.git_scheme; req Smart_git.git_transmission ]
+        ~k:k0 Mimic.empty
+    in
+    let ctx =
+      Mimic.fold Smart_git.git_transmission
+        Mimic.Fun.[ req Smart_git.git_scheme ]
+        ~k:k1 ctx
+    in
+    Git_sync.fetch ~ctx ~capabilities access store endpoint `All pack index
+      ~src:tmp0 ~dst:tmp1 ~idx:tmp2
   in
   run () >>= function
   | Ok (`Pack _) -> Lwt.return_unit
@@ -1668,9 +1707,12 @@ let capability = Alcotest.testable Smart.Capability.pp Smart.Capability.equal
 let test_push_capabilities () =
   Alcotest_lwt.test_case "push capabilities" `Quick @@ fun _sw () ->
   let open Lwt.Infix in
-  let module Sync = Git.Mem.Sync (Git.Mem.Store) (Git_cohttp_unix) in
+  let module Sync = Git.Mem.Sync (Git.Mem.Store) in
   let output = ref None in
-  let ctx = ctx_with_payloads (simple_push, fun v -> output := Some v) in
+  let ctx =
+    ctx_with_payloads ~transmission:`Exec
+      (simple_push, fun v -> output := Some v)
+  in
   let capabilities =
     [
       `Side_band_64k; `Multi_ack_detailed; `Thin_pack; `Ofs_delta;
