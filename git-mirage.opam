@@ -52,6 +52,6 @@ build: [
 ]
 dev-repo: "git+https://github.com/mirage/ocaml-git.git"
 pin-depends: [
-  [ "awa.dev" "git+https://github.com/mirage/awa-ssh.git#1ac4328852a200ef7077b901706c422b2c131862" ]
-  [ "awa-mirage.dev" "git+https://github.com/mirage/awa-ssh.git#1ac4328852a200ef7077b901706c422b2c131862" ]
+  [ "awa.dev" "git+https://github.com/dinosaure/awa-ssh.git#efc256e7d3d391c3cad2db04295e9e7b3fe2fbad" ]
+  [ "awa-mirage.dev" "git+https://github.com/dinosaure/awa-ssh.git#efc256e7d3d391c3cad2db04295e9e7b3fe2fbad" ]
 ]
