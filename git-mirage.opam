@@ -19,7 +19,7 @@ depends: [
   "dns-client" {>= "6.0.0"}
   "tls"
   "tls-mirage"
-  "mirage-protocols" {>= "5.0.0" & < "6.0.0"}
+  "mirage-protocols" {>= "7.0.0"}
   "uri"
   "hex"
   "happy-eyeballs-mirage" {>= "0.1.1"}
