@@ -191,7 +191,7 @@ struct
       log console "Got an error from %a:%d: %s." Ipaddr.pp ipaddr port err
 
   let server console stack edn ctx git =
-    Stack.listen_tcp stack ~port:(Key_gen.port ()) (callback console edn ctx git) ;
+    Stack.TCP.listen (Stack.tcp stack) ~port:(Key_gen.port ()) (callback console edn ctx git) ;
     Stack.listen stack
 
   let failwith pp = function
