@@ -380,12 +380,12 @@ struct
     let hashes = random_hashes 500 in
     let hashes = Array.to_list hashes in
     let set = Store.Hash.Set.of_list hashes in
-    let append hash = Store.shallow store hash >>= Lwt_unix.yield in
+    let append hash = Store.shallow store hash >>= Lwt.pause in
     let rec verify _unit =
       Store.shallowed store >>= fun hashes' ->
       let set' = Store.Hash.Set.of_list hashes' in
       Alcotest.(check bool) "subset" (Store.Hash.Set.subset set' set) true;
-      if not (Store.Hash.Set.equal set' set) then Lwt_unix.yield () >>= verify
+      if not (Store.Hash.Set.equal set' set) then Lwt.pause () >>= verify
       else Lwt.return_unit
     in
     Lwt.both
