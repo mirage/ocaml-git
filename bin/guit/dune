@@ -8,6 +8,7 @@
   git
   git.nss.git
   logs
+  logs.fmt
   fmt
   mtime
   mtime.clock.os
@@ -40,6 +41,7 @@
   mtime.clock.os
   rresult
   logs
+  logs.fmt
   logs.cli
   fmt.tty
   fmt.cli

@@ -48,6 +48,7 @@
   cstruct
   uri
   fmt.tty
+  logs
   logs.fmt
   alcotest-lwt
   cohttp-lwt-unix
