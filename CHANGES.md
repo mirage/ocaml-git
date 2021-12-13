@@ -1,3 +1,11 @@
+### 3.7.0 (2021-12-12) Paris - France
+
+- Drop unneeded `mirage-protocols` dependency (@hannesm, #537)
+- Delete HTTP functor and use happy-eyeballs (@dinosaure, #539)
+- Be compatible with `mirage-protocols.7.0.0` (@dinosaure, #541)
+- Use `Lwt.pause` instead of `Lwt_unix.yield` (@dinosaure, #542)
+- Link with logs and `logs.fmt` (@MisterDA, #544)
+
 ### 3.6.0 (2021-10-20) Paris - France
 
 - Fix the documentation (@dinosaure, #534)
