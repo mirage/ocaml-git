@@ -70,7 +70,7 @@ module TCP = struct
   (* fake *)
   type listener = {
     process : flow -> unit Lwt.t;
-    keepalive : Mirage_protocols.Keepalive.t option;
+    keepalive : Tcpip.Tcp.Keepalive.t option;
   }
 
   type t = |
