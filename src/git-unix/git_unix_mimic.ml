@@ -180,4 +180,4 @@ let ctx happy_eyeballs =
       Mimic.Fun.[ req Smart_git.git_scheme ]
       ~k:k2 ctx
   in
-  Lwt.return ctx
+  C.with_optional_tls_config_and_headers ctx
