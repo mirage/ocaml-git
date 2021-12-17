@@ -28,7 +28,6 @@ depends: [
   "alcotest" {with-test & >= "1.1.0"}
   "alcotest-lwt" {with-test & >= "1.1.0"}
   "base64" {with-test & >= "3.0.0"}
-  "git-cohttp-unix" {= version}
   "mirage-clock"
   "mirage-clock-unix"
   "astring" {>= "0.8.5"}
@@ -52,7 +51,6 @@ depends: [
   "ca-certs-nss" {>= "3.60"}
   "tls" {>= "0.14.0"}
   "tls-mirage" {>= "0.14.0"}
-  "cohttp-lwt-unix" {with-test}
 ]
 build: [
   ["dune" "build" "-p" name "-j" jobs]
