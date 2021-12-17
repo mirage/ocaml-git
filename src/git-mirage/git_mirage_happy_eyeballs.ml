@@ -16,7 +16,7 @@ module Make
     (Time : Mirage_time.S)
     (Mclock : Mirage_clock.MCLOCK)
     (Pclock : Mirage_clock.PCLOCK)
-    (Stack : Mirage_stack.V4V6) : sig
+    (Stack : Tcpip.Stack.V4V6) : sig
   include S with type flow = Stack.TCP.flow
 
   module DNS : sig
@@ -96,9 +96,9 @@ end = struct
     Lwt.return (Mimic.add happy_eyeballs t Mimic.empty)
 end
 
-module TCPV4V6 (Stack : Mirage_stack.V4V6) : sig
+module TCPV4V6 (Stack : Tcpip.Stack.V4V6) : sig
   include
-    Mirage_protocols.TCP
+    Tcpip.Tcp.S
       with type t = Stack.TCP.t
        and type ipaddr = Ipaddr.t
        and type flow = Stack.TCP.flow

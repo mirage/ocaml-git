@@ -10,16 +10,14 @@ depends: [
   "ocaml" {>= "4.08.0"}
   "dune" {>= "2.8.0"}
   "mimic"
-  "mirage-stack"
   "git" {= version}
   "git-paf" {= version}
-  "awa"
-  "awa-mirage"
+  "awa" {>= "0.0.5"}
+  "awa-mirage" {>= "0.0.5"}
   "dns" {>= "6.0.0"}
   "dns-client" {>= "6.0.0"}
   "tls"
   "tls-mirage"
-  "mirage-protocols" {>= "7.0.0"}
   "uri"
   "hex"
   "happy-eyeballs-mirage" {>= "0.1.1"}
@@ -29,6 +27,7 @@ depends: [
   "ptime"
   "x509"
   "cstruct"
+  "tcpip" {>= "7.0.0"}
   "domain-name" {>= "0.3.0"}
   "fmt" {>= "0.8.9"}
   "ipaddr" {>= "5.0.1"}
@@ -52,6 +51,9 @@ build: [
 ]
 dev-repo: "git+https://github.com/mirage/ocaml-git.git"
 pin-depends: [
-  [ "awa.dev" "git+https://github.com/dinosaure/awa-ssh.git#efc256e7d3d391c3cad2db04295e9e7b3fe2fbad" ]
-  [ "awa-mirage.dev" "git+https://github.com/dinosaure/awa-ssh.git#efc256e7d3d391c3cad2db04295e9e7b3fe2fbad" ]
+  [ "dns.dev" "git+https://github.com/dinosaure/ocaml-dns.git#9f889b37a7d3d4023563b054ab1d5d61591febc6" ]
+  [ "dns-client.dev" "git+https://github.com/dinosaure/ocaml-dns.git#9f889b37a7d3d4023563b054ab1d5d61591febc6" ]
+  [ "happy-eyeballs.dev" "git+https://github.com/dinosaure/happy-eyeballs.git#92b0f7c85cc18aa7584cc291831fbf864fe81684" ]
+  [ "happy-eyeballs-lwt.dev" "git+https://github.com/dinosaure/happy-eyeballs.git#92b0f7c85cc18aa7584cc291831fbf864fe81684" ]
+  [ "happy-eyeballs-mirage.dev" "git+https://github.com/dinosaure/happy-eyeballs.git#92b0f7c85cc18aa7584cc291831fbf864fe81684" ]
 ]

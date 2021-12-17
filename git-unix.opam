@@ -32,8 +32,7 @@ depends: [
   "mirage-clock"
   "mirage-clock-unix"
   "astring" {>= "0.8.5"}
-  "awa"
-  "mirage-protocols" {>= "7.0.0"}
+  "awa" {>= "0.0.5"}
   "mirage-time"
   "mirage-unix" {>= "4.0.0"}
   "cmdliner" {>= "1.0.4"}
@@ -42,9 +41,9 @@ depends: [
   "ipaddr" {>= "5.0.1"}
   "mtime" {>= "1.2.0"}
   "ocamlfind" {>= "1.8.1"}
-  "tcpip" {>= "6.0.0"}
+  "tcpip" {>= "7.0.0"}
   "cstruct" {>= "6.0.0"}
-  "awa-mirage"
+  "awa-mirage" {>= "0.0.5"}
   "mirage-flow" {>= "2.0.1"}
   "ke" {>= "0.4" & with-test}
   "mirage-crypto-rng" {>= "0.8.8" & with-test}
@@ -60,3 +59,8 @@ build: [
   ["dune" "runtest" "-p" name "-j" jobs "--no-buffer"] {with-test}
 ]
 dev-repo: "git+https://github.com/mirage/ocaml-git.git"
+pin-depends: [
+  [ "happy-eyeballs.dev" "git+https://github.com/dinosaure/happy-eyeballs.git#92b0f7c85cc18aa7584cc291831fbf864fe81684" ]
+  [ "happy-eyeballs-lwt.dev" "git+https://github.com/dinosaure/happy-eyeballs.git#92b0f7c85cc18aa7584cc291831fbf864fe81684" ]
+  [ "happy-eyeballs-mirage.dev" "git+https://github.com/dinosaure/happy-eyeballs.git#92b0f7c85cc18aa7584cc291831fbf864fe81684" ]
+]

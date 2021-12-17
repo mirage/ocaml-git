@@ -3,5 +3,5 @@ module type S = sig
 end
 
 module Make
-    (TCP : Mirage_protocols.TCP)
+    (TCP : Tcpip.Tcp.S)
     (Happy_eyeballs : Git_mirage_happy_eyeballs.S with type flow = TCP.flow) : S

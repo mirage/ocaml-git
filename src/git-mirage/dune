@@ -8,10 +8,9 @@
   domain-name
   happy-eyeballs
   happy-eyeballs-mirage
-  mirage-protocols
   mirage-random
   mirage-clock
-  mirage-stack
+  tcpip
   mirage-time
   ipaddr
   mimic
@@ -28,10 +27,9 @@
   lwt
   fmt
   result
-  mirage-stack
+  tcpip
   mirage-flow
   mirage-clock
-  mirage-protocols
   awa
   awa-mirage))
 
@@ -46,9 +44,8 @@
   lwt
   fmt
   result
-  mirage-stack
-  mirage-flow
-  mirage-protocols))
+  tcpip
+  mirage-flow))
 
 (library
  (name git_mirage_http)
@@ -72,8 +69,7 @@
   result
   ca-certs-nss
   domain-name
-  mirage-stack
+  tcpip
   mirage-flow
   mirage-time
-  mirage-clock
-  mirage-protocols))
+  mirage-clock))

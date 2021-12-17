@@ -3,13 +3,13 @@
  (public_name git-unix)
  (modules git_unix git_unix_mimic packed_refs)
  (libraries
+  tcpip
   ipaddr
   git-mirage.tcp
   git-mirage.ssh
   git-mirage.http
   mirage-clock-unix
   mirage-unix
-  mirage-protocols
   mirage-time
   happy-eyeballs-lwt
   bigarray-compat

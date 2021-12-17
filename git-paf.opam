@@ -18,7 +18,7 @@ depends: [
   "logs"
   "lwt"
   "mirage-clock"
-  "mirage-stack"
+  "tcpip" {>= "7.0.0"}
   "mirage-time"
   "result"
   "rresult"
@@ -36,3 +36,6 @@ build: [
   ["dune" "runtest" "-p" name "-j" jobs "--no-buffer"] {with-test}
 ]
 dev-repo: "git+https://github.com/mirage/ocaml-git.git"
+pin-depends: [
+  [ "paf.dev" "git+https://github.com/dinosaure/paf-le-chien.git#4d1b07a4653f5c2694b6129fb90adb95c5b26122" ]
+]
