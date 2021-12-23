@@ -1,4 +1,6 @@
-module Us = Carton.Make (struct type 'a t = 'a end)
+module Us = Carton.Make (struct
+  type 'a t = 'a
+end)
 
 let unix =
   {

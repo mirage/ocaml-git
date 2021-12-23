@@ -281,8 +281,14 @@ let populate =
     Alcotest.(check (list string))
       "filenames" filenames
       [
-        "path0"; "path0sym"; "path2/file2"; "path2/file2sym"; "path3/file3";
-        "path3/file3sym"; "path3/subp3/file3"; "path3/subp3/file3sym";
+        "path0";
+        "path0sym";
+        "path2/file2";
+        "path2/file2sym";
+        "path3/file3";
+        "path3/file3sym";
+        "path3/subp3/file3";
+        "path3/subp3/file3sym";
       ];
     R.ok ()
   in
@@ -328,7 +334,8 @@ let () =
     [
       ( "index",
         [
-          empty; add_should_be_empty;
+          empty;
+          add_should_be_empty;
           write_tree
             (Digestif.SHA1.of_hex "7bb943559a305bdd6bdee2cef6e5df2413c3d30a");
           delete_should_be_empty;

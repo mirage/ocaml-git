@@ -1107,19 +1107,30 @@ let () =
 
   Alcotest.run "carton"
     [
-      "weights", [ weights ]; "loads", [ loads ];
+      "weights", [ weights ];
+      "loads", [ loads ];
       ( "decoder",
         [
-          valid_empty_pack (); verify_empty_pack (); check_empty_index ();
-          verify_bomb_pack (); first_entry_of_bomb_pack (); unpack_bomb_pack ();
-          decode_index_stream (); empty_stream (); huge_pack ();
+          valid_empty_pack ();
+          verify_empty_pack ();
+          check_empty_index ();
+          verify_bomb_pack ();
+          first_entry_of_bomb_pack ();
+          unpack_bomb_pack ();
+          decode_index_stream ();
+          empty_stream ();
+          huge_pack ();
         ] );
       ( "encoder",
         [
-          test_empty_pack (); index_of_empty_pack (); index_of_one_entry ();
+          test_empty_pack ();
+          index_of_empty_pack ();
+          index_of_one_entry ();
           (* XXX(dinosaure): it seems that a bug exists in Git (not ocaml-git)
              on git-index-pack until 1.9.0. *)
           (if Git_version.compare v1_9_0 git_version <= 0 then pack_bomb_pack ()
-          else fake_pack_bomb_pack ()); cycle ();
-        ] ); "lwt", [ Test_lwt.test_map_yield ];
+          else fake_pack_bomb_pack ());
+          cycle ();
+        ] );
+      "lwt", [ Test_lwt.test_map_yield ];
     ]

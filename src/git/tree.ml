@@ -183,7 +183,6 @@ module Make (Hash : S.HASH) : S with type hash = Hash.t = struct
   type hash = Hash.t
 
   type nonrec entry = hash entry
-
   and t = hash t
 
   let pp ppf t = pp ~pp:Hash.pp ppf t

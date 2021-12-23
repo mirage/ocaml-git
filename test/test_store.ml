@@ -57,7 +57,8 @@ struct
       [
         ( Astring.String.map replace_zero (random_string 256),
           `Normal,
-          Store.Value.Blob.digest v2 ); "a", `Dir, Store.Value.Tree.digest t2;
+          Store.Value.Blob.digest v2 );
+        "a", `Dir, Store.Value.Tree.digest t2;
       ]
 
   let john_doe =
@@ -110,14 +111,16 @@ struct
       "RPCv03yBx9vEAbTVe4kj1jS+FAcYHTyd+zqKio8kjLgL1KyjIO7GRsjRW1q+VLIX";
       "ZffaDvLU6hRdHhxxsZ6tA9sLWgfHv0Z+tgpafQrAJkwZc/zRpITA4U54xxEvrKaP";
       "BwpFgFK4IlgPC7h1ZxJMJyOL6R+dXpFTtY0vK7Apat886p+nbUJho/8Pn5OuVb8=";
-      "=DCpq"; "-----END PGP SIGNATURE-----";
+      "=DCpq";
+      "-----END PGP SIGNATURE-----";
     ]
 
   let c5 =
     Store.Value.Commit.make
       ~tree:(Store.Value.Tree.digest t5)
       ~parents:[ Store.Value.Commit.digest c3 ]
-      ~author:thomas ~committer:thomas ~extra:[ "gpgsig", gpg ]
+      ~author:thomas ~committer:thomas
+      ~extra:[ "gpgsig", gpg ]
       (Some "with GPG")
 
   let tt1 =
@@ -425,6 +428,7 @@ struct
         "write", [ test_blobs; test_trees; test_commits; test_tags ];
         "find", [ test_find_trees; test_find_commits; test_find_tags ];
         "reference", [ test_references; test_cycle; test_atomic ];
-        "search", [ test_search ]; "shallows", [ test_shallows ];
+        "search", [ test_search ];
+        "shallows", [ test_shallows ];
       ]
 end

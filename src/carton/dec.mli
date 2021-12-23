@@ -40,9 +40,7 @@ open Sigs
     the call by a simple internal table of {i weak pointers}. *)
 module W : sig
   type 'fd t
-
   and slice = { offset : int64; length : int; payload : Bigstringaf.t }
-
   and 'fd map = 'fd -> pos:int64 -> int -> Bigstringaf.t
 
   val reset : 'fd t -> unit

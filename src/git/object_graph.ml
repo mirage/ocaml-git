@@ -47,7 +47,8 @@ struct
     String.sub hex 0 8
 
   module C =
-    Graph.Imperative.Digraph.ConcreteBidirectionalLabeled (struct
+    Graph.Imperative.Digraph.ConcreteBidirectionalLabeled
+      (struct
         type t = hash * hash Value.t
 
         let compare (x, _) (y, _) = Hash.unsafe_compare x y
@@ -107,7 +108,11 @@ struct
   end)
 
   module T = Graph.Topological.Make (K)
-  module Search = struct include Search.Make (Hash) (Store) include Search end
+
+  module Search = struct
+    include Search.Make (Hash) (Store)
+    include Search
+  end
 
   let label = function
     | `Commit s -> "commit", s

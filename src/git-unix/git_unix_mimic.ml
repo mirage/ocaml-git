@@ -170,7 +170,8 @@ let ctx happy_eyeballs =
     Mimic.fold fifo_endpoint
       Mimic.Fun.
         [
-          req Smart_git.git_transmission; req Smart_git.git_scheme;
+          req Smart_git.git_transmission;
+          req Smart_git.git_scheme;
           req Smart_git.git_hostname;
         ]
       ~k:k1 ctx

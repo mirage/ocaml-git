@@ -573,7 +573,6 @@ module W = struct
   }
 
   and slice = { offset : int64; length : int; payload : Bigstringaf.t }
-
   and 'fd map = 'fd -> pos:int64 -> int -> Bigstringaf.t
 
   let make ?(sector = 4096L) fd =
@@ -1449,7 +1448,6 @@ let uid_of_offset_with_source :
       | _ -> assert false)
 
 type 'uid node = Node of int64 * 'uid * 'uid node list | Leaf of int64 * 'uid
-
 and 'uid tree = Base of kind * int64 * 'uid * 'uid node list
 
 type 'uid children = cursor:int64 -> uid:'uid -> int64 list

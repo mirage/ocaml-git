@@ -1,7 +1,8 @@
 open Lwt.Infix
 
 module type S = sig
-  val connect : Mimic.ctx -> Mimic.ctx Lwt.t val ctx : Mimic.ctx
+  val connect : Mimic.ctx -> Mimic.ctx Lwt.t
+  val ctx : Mimic.ctx
 end
 
 module Make
@@ -63,8 +64,10 @@ module Make
       Mimic.fold edn
         Mimic.Fun.
           [
-            req Smart_git.git_transmission; req Smart_git.git_scheme;
-            req Smart_git.git_hostname; dft Smart_git.git_port 9418;
+            req Smart_git.git_transmission;
+            req Smart_git.git_scheme;
+            req Smart_git.git_hostname;
+            dft Smart_git.git_port 9418;
           ]
         ~k:k1 ctx
     in

@@ -14,9 +14,7 @@ val make_entry :
 val length : 'uid entry -> int
 
 type 'uid q
-
 and 'uid p
-
 and 'uid patch
 
 type ('uid, 's) load = 'uid -> (Dec.v, 's) io

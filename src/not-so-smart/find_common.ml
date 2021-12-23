@@ -53,7 +53,8 @@ let io_monad (type t) { bind; return } =
         | [] -> return a
         | x :: r -> bind (f a x) (fun a' -> go a' r)
       in
-      go init l end : Io_monad
+      go init l
+  end : Io_monad
     with type s = t)
 
 (* XXX(dinosaure): this part is really **ugly**! But we must follow the same
