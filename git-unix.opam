@@ -12,7 +12,7 @@ depends: [
   "mmap" {>= "1.1.0"}
   "git" {= version}
   "git-mirage" {= version}
-  "happy-eyeballs-lwt" {>= "0.1.1"}
+  "happy-eyeballs-lwt" {>= "0.1.2"}
   "rresult"
   "result"
   "bigstringaf"
@@ -57,8 +57,3 @@ build: [
   ["dune" "runtest" "-p" name "-j" jobs "--no-buffer"] {with-test}
 ]
 dev-repo: "git+https://github.com/mirage/ocaml-git.git"
-pin-depends: [
-  [ "happy-eyeballs.dev" "git+https://github.com/dinosaure/happy-eyeballs.git#92b0f7c85cc18aa7584cc291831fbf864fe81684" ]
-  [ "happy-eyeballs-lwt.dev" "git+https://github.com/dinosaure/happy-eyeballs.git#92b0f7c85cc18aa7584cc291831fbf864fe81684" ]
-  [ "happy-eyeballs-mirage.dev" "git+https://github.com/dinosaure/happy-eyeballs.git#92b0f7c85cc18aa7584cc291831fbf864fe81684" ]
-]
