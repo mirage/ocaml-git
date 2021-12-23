@@ -50,9 +50,7 @@
   fmt.tty
   logs
   logs.fmt
-  alcotest-lwt
-  cohttp-lwt-unix
-  git-cohttp-unix))
+  alcotest-lwt))
 
 (executable
  (name test_edn)

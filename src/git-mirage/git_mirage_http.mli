@@ -17,5 +17,5 @@ end
 module Make
     (Time : Mirage_time.S)
     (Pclock : Mirage_clock.PCLOCK)
-    (TCP : Mirage_protocols.TCP)
+    (TCP : Tcpip.Tcp.S)
     (Happy_eyeballs : Git_mirage_happy_eyeballs.S with type flow = TCP.flow) : S

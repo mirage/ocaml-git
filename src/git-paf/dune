@@ -6,7 +6,7 @@
   uri
   mirage-time
   mirage-clock
-  mirage-stack
+  tcpip
   mirage-flow
   domain-name
   bigstringaf

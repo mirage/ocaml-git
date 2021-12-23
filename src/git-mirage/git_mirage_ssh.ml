@@ -26,7 +26,7 @@ end
 
 module Make
     (Mclock : Mirage_clock.MCLOCK)
-    (TCP : Mirage_protocols.TCP)
+    (TCP : Tcpip.Tcp.S)
     (Happy_eyeballs : Git_mirage_happy_eyeballs.S with type flow = TCP.flow) :
   S = struct
   module SSH = struct

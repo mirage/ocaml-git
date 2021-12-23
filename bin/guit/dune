@@ -25,8 +25,7 @@
   cmdliner
   rresult
   mimic
-  git-unix
-  git-cohttp-unix))
+  git-unix))
 
 (executable
  (name v)
