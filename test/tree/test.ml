@@ -62,7 +62,8 @@ let order =
   let lst =
     [
       Git.Tree.entry ~name:"foo.c" `Normal ();
-      Git.Tree.entry ~name:"foo" `Dir (); Git.Tree.entry ~name:"foo1" `Exec ();
+      Git.Tree.entry ~name:"foo" `Dir ();
+      Git.Tree.entry ~name:"foo1" `Exec ();
     ]
   in
   let r0 = Git.Tree.of_list lst in

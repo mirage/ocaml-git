@@ -112,7 +112,9 @@ let run =
     [
       ( "cstruct_append",
         [
-          test_simple_use; (* test_trunk_mode; *) test_two_contents;
+          test_simple_use;
+          (* test_trunk_mode; *)
+          test_two_contents;
           test_three_contents;
         ] );
     ]

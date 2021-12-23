@@ -1,4 +1,6 @@
-module Lwt_scheduler = Carton.Make (struct type +'a t = 'a Lwt.t end)
+module Lwt_scheduler = Carton.Make (struct
+  type +'a t = 'a Lwt.t
+end)
 
 type lwt = Lwt_scheduler.t
 

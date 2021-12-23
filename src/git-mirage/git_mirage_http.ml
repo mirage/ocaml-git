@@ -93,7 +93,8 @@ module Make
       Mimic.fold edn
         Mimic.Fun.
           [
-            req Git_paf.git_paf_scheme; req Git_paf.git_paf_hostname;
+            req Git_paf.git_paf_scheme;
+            req Git_paf.git_paf_hostname;
             dft Git_paf.git_paf_port 80;
           ]
         ~k:k1 ctx
@@ -118,7 +119,8 @@ module Make
       Mimic.fold edn
         Mimic.Fun.
           [
-            req Git_paf.git_paf_scheme; req Git_paf.git_paf_hostname;
+            req Git_paf.git_paf_scheme;
+            req Git_paf.git_paf_hostname;
             dft Git_paf.git_paf_port 443;
           ]
         ~k:k1 ctx
@@ -248,9 +250,12 @@ module Make
       Mimic.fold Smart_git.git_transmission
         Mimic.Fun.
           [
-            req Happy_eyeballs.happy_eyeballs; req Smart_git.git_scheme;
-            req Smart_git.git_uri; dft Smart_git.git_http_headers List.[];
-            dft git_mirage_http_headers List.[]; req git_mirage_http_tls_config;
+            req Happy_eyeballs.happy_eyeballs;
+            req Smart_git.git_scheme;
+            req Smart_git.git_uri;
+            dft Smart_git.git_http_headers List.[];
+            dft git_mirage_http_headers List.[];
+            req git_mirage_http_tls_config;
           ]
         ~k:k2 ctx
     in

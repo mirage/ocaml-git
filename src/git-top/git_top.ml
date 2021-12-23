@@ -22,10 +22,16 @@ let pp_index_entry = Git_index.Entry.pp ~pp_oid:Digestif.SHA1.pp
 
 let printers =
   [
-    "Git.User.pp"; "Git_top.Store.Value.pp"; "Git_top.Store.Value.Commit.pp";
-    "Git_top.Store.Value.Blob.pp"; "Git_top.Store.Value.Tree.pp";
-    "Git_top.Store.Value.Tag.pp"; "Git.Reference.pp"; "Git_top.pp_index_entry";
-    "Digestif.SHA1.pp"; "Git_top.Store.pp_error";
+    "Git.User.pp";
+    "Git_top.Store.Value.pp";
+    "Git_top.Store.Value.Commit.pp";
+    "Git_top.Store.Value.Blob.pp";
+    "Git_top.Store.Value.Tree.pp";
+    "Git_top.Store.Value.Tag.pp";
+    "Git.Reference.pp";
+    "Git_top.pp_index_entry";
+    "Digestif.SHA1.pp";
+    "Git_top.Store.pp_error";
   ]
 
 let eval_string ?(print_outcome = false) ?(err_formatter = Format.err_formatter)

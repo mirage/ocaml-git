@@ -3,7 +3,10 @@ let src =
     ~doc:"logs git-unix's packed-refs event"
 
 module Log = (val Logs.src_log src : Logs.LOG)
-module Unix_scheduler = Carton.Make (struct type 'a t = 'a end)
+
+module Unix_scheduler = Carton.Make (struct
+  type 'a t = 'a
+end)
 
 let scheduler =
   let open Unix_scheduler in

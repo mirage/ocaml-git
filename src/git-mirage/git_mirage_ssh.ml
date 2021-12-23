@@ -110,10 +110,14 @@ module Make
       Mimic.fold edn
         Mimic.Fun.
           [
-            req Smart_git.git_transmission; req Smart_git.git_scheme;
-            req Smart_git.git_ssh_user; req Smart_git.git_hostname;
-            dft Smart_git.git_port 22; req Smart_git.git_path;
-            req Smart_git.git_capabilities; req git_mirage_ssh_key;
+            req Smart_git.git_transmission;
+            req Smart_git.git_scheme;
+            req Smart_git.git_ssh_user;
+            req Smart_git.git_hostname;
+            dft Smart_git.git_port 22;
+            req Smart_git.git_path;
+            req Smart_git.git_capabilities;
+            req git_mirage_ssh_key;
             opt git_mirage_ssh_authenticator;
           ]
         ~k:k1 ctx

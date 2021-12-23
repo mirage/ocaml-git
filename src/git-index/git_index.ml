@@ -423,7 +423,8 @@ module Entry = struct
         let len = Varint.encode prefix_size ~off:0 to_remove in
         let prefix_size = Bigstringaf.sub prefix_size ~off:0 ~len in
         [
-          prelude; prefix_size;
+          prelude;
+          prefix_size;
           Bigstringaf.of_string ~off:common ~len:(ce.ce_length - common) a;
           padding;
         ]

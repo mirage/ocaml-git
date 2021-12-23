@@ -147,7 +147,6 @@ module M = struct
   }
 
   and ret = Await | Stop | End | Malformed of string
-
   and state = Header | Postprocess | Cmd | Cp of int | It of int
 
   let variable_length buf off top =

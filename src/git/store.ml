@@ -76,7 +76,10 @@ module Make
 struct
   module Hash = Hash.Make (Digestif)
   module Value = Value.Make (Hash)
-  module Caml_scheduler = Carton.Make (struct type 'a t = 'a end)
+
+  module Caml_scheduler = Carton.Make (struct
+    type 'a t = 'a
+  end)
 
   module Reference = struct
     type hash = Hash.t

@@ -499,7 +499,8 @@ let test_simple_push () =
         "\x6b\x20\x6f\x6b\x0a\x30\x30\x31\x39\x6f\x6b\x20\x72\x65\x66\x73"
         (* k ok.0019ok refs *);
         "\x2f\x68\x65\x61\x64\x73\x2f\x6d\x61\x73\x74\x65\x72\x0a\x30\x30"
-        (* /heads/master.00 *); "\x30\x30\x30\x30\x30\x30" (* 000000 *);
+        (* /heads/master.00 *);
+        "\x30\x30\x30\x30\x30\x30" (* 000000 *);
       ]
     in
     create_new_git_push_store sw >>= fun (access, store) ->
@@ -1699,7 +1700,8 @@ let simple_push =
   [
     "008e0000000000000000000000000000000000000000 \
      refs/heads/master\000report-status delete-refs side-band-64k quiet atomic \
-     ofs-delta agent=git/2.27.0"; "0000";
+     ofs-delta agent=git/2.27.0";
+    "0000";
   ]
 
 let capability = Alcotest.testable Smart.Capability.pp Smart.Capability.equal
@@ -1715,7 +1717,10 @@ let test_push_capabilities () =
   in
   let capabilities =
     [
-      `Side_band_64k; `Multi_ack_detailed; `Thin_pack; `Ofs_delta;
+      `Side_band_64k;
+      `Multi_ack_detailed;
+      `Thin_pack;
+      `Ofs_delta;
       `Agent "ocaml-git";
     ]
   in
@@ -1794,11 +1799,20 @@ let test =
     [
       ( "regression",
         [
-          test_empty_clone (); test_simple_clone (); test_simple_push ();
-          test_push_error (); test_fetch_empty (); test_negotiation ();
-          test_ssh (); test_negotiation_ssh (); test_push_ssh ();
-          test_negotiation_http (); test_partial_clone_ssh ();
-          test_partial_fetch_ssh (); test_sync_fetch (); test_push_empty ();
+          test_empty_clone ();
+          test_simple_clone ();
+          test_simple_push ();
+          test_push_error ();
+          test_fetch_empty ();
+          test_negotiation ();
+          test_ssh ();
+          test_negotiation_ssh ();
+          test_push_ssh ();
+          test_negotiation_http ();
+          test_partial_clone_ssh ();
+          test_partial_fetch_ssh ();
+          test_sync_fetch ();
+          test_push_empty ();
           test_push_capabilities ();
         ] );
     ]

@@ -365,7 +365,10 @@ struct
 
   let default_capabilities =
     [
-      `Side_band_64k; `Multi_ack_detailed; `Ofs_delta; `Thin_pack;
+      `Side_band_64k;
+      `Multi_ack_detailed;
+      `Ofs_delta;
+      `Thin_pack;
       `Report_status;
     ]
 

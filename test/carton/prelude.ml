@@ -32,7 +32,9 @@ module IO = struct
       match t.state with Full x -> k x | Empty q -> Queue.push k q
   end
 
-  module Future = struct let wait = Ivar.read end
+  module Future = struct
+    let wait = Ivar.read
+  end
 
   let fork f k =
     let ivar = Ivar.create () in
@@ -236,7 +238,9 @@ module IO = struct
         Future.wait future >>= fun x -> return (x :: r)
 end
 
-module Us = Carton.Make (struct type 'a t = 'a IO.t end)
+module Us = Carton.Make (struct
+  type 'a t = 'a IO.t
+end)
 
 let unix =
   let open IO in

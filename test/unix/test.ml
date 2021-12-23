@@ -341,7 +341,13 @@ let () =
       "init", [ git_init ];
       ( "write",
         [
-          check_blobs_with_git; check_trees_with_git; check_commits_with_git;
-          check_tags_with_git; check_references_with_git; empty_commit;
-        ] ); "packed-refs", [ packed_refs ]; "pack", [ pack_file ];
+          check_blobs_with_git;
+          check_trees_with_git;
+          check_commits_with_git;
+          check_tags_with_git;
+          check_references_with_git;
+          empty_commit;
+        ] );
+      "packed-refs", [ packed_refs ];
+      "pack", [ pack_file ];
     ]

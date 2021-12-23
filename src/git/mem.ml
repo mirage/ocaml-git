@@ -18,7 +18,10 @@
 let src = Logs.Src.create "git.mem" ~doc:"logs git's memory back-end"
 
 module Log = (val Logs.src_log src : Logs.LOG)
-module Sched = Carton.Make (struct type 'a t = 'a end)
+
+module Sched = Carton.Make (struct
+  type 'a t = 'a
+end)
 
 type 'hash t = {
   values : ('hash, 'hash Value.t Lazy.t) Hashtbl.t;
