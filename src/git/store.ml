@@ -221,23 +221,31 @@ struct
             | Ok v -> Lwt.return_some v
             | Error _ -> Lwt.return_none))
 
+  let decode_value (v : Carton.Dec.v) : (Value.t, [> `Msg of string ]) result =
+    let kind =
+      match Carton.Dec.kind v with
+      | `A -> `Commit
+      | `B -> `Tree
+      | `C -> `Blob
+      | `D -> `Tag
+    in
+    let raw =
+      Cstruct.of_bigarray (Carton.Dec.raw v) ~off:0 ~len:(Carton.Dec.len v)
+    in
+    Value.of_raw ~kind raw
+
+  let read_opt t hash =
+    read_inflated t hash >|= function
+    | None -> Ok None
+    | Some v -> decode_value v |> Result.map Option.some
+
   let read t hash =
-    read_inflated t hash >>= function
-    | None ->
+    read_opt t hash >|= function
+    | Ok (Some v) -> Ok v
+    | Ok None ->
         Log.err (fun m -> m "Object %a not found." Hash.pp hash);
-        Lwt.return_error (`Not_found hash)
-    | Some v ->
-        let kind =
-          match Carton.Dec.kind v with
-          | `A -> `Commit
-          | `B -> `Tree
-          | `C -> `Blob
-          | `D -> `Tag
-        in
-        let raw =
-          Cstruct.of_bigarray (Carton.Dec.raw v) ~off:0 ~len:(Carton.Dec.len v)
-        in
-        Lwt.return (Value.of_raw ~kind raw)
+        Error (`Not_found hash)
+    | Error _ as e -> e
 
   let read_exn t hash =
     read t hash >>= function
