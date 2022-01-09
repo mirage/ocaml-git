@@ -179,7 +179,7 @@ let tcpv4v6_of_stackv4v6 =
        inherit base_configurable
        method ty = stackv4v6 @-> tcpv4v6
        method module_name = "Git_mirage_happy_eyeballs.TCPV4V6"
-       method! packages = Key.pure [ package "git-mirage.happy-eyeballs" ]
+       method! packages = Key.pure [ package "git-mirage" ~sublibs:[ "happy-eyeballs" ] ]
        method name = "tcpv4v6"
        method! connect _ modname = function
          | [ stackv4v6 ] -> Fmt.str {ocaml|%s.connect %s|ocaml} modname stackv4v6
