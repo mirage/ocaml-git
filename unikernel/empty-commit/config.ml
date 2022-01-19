@@ -59,7 +59,7 @@ let mimic_ssh ?authenticator key =
   let packages = [ package "git-mirage" ~sublibs:[ "ssh" ] ] in
   impl @@ object
        inherit base_configurable
-       method ty = mclock @-> tcpv4v6 @-> mimic @-> mimic
+       method ty = mclock @-> time @-> tcpv4v6 @-> mimic @-> mimic
        method! keys = match authenticator with
          | Some authenticator -> [ Key.abstract key; Key.abstract authenticator ]
          | None -> [ Key.abstract key ]
@@ -67,7 +67,7 @@ let mimic_ssh ?authenticator key =
        method! packages = Key.pure packages
        method name = "git_mirage_ssh"
        method! connect _ modname = function
-         | [ _mclock; _tcpv4v6; ctx ] ->
+         | [ _mclock; _time; _tcpv4v6; ctx ] ->
            ( match authenticator with
            | None ->
              Fmt.str {ocaml|%s.connect %s >>= %s.with_optionnal_key ~key:%a|ocaml}
@@ -223,7 +223,7 @@ let mimic random stackv4v6 mclock pclock time =
   let mtcp  = mimic_tcp
     $ tcpv4v6 $ mhappy_eyeballs in
   let mssh  = mimic_ssh ~authenticator:ssh_authenticator ssh_key
-    $ mclock $ tcpv4v6 $ mhappy_eyeballs in
+    $ mclock $ time $ tcpv4v6 $ mhappy_eyeballs in
   let mhttp = mimic_http ~tls_key_fingerprint ~tls_cert_fingerprint None
     $ time $ pclock $ tcpv4v6 $ mhappy_eyeballs in
   merge mhttp (merge mtcp mssh)

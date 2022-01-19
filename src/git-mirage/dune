@@ -29,6 +29,7 @@
   result
   tcpip
   mirage-flow
+  mirage-time
   mirage-clock
   awa
   awa-mirage))

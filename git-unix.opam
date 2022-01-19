@@ -31,8 +31,8 @@ depends: [
   "mirage-clock"
   "mirage-clock-unix"
   "astring" {>= "0.8.5"}
-  "awa" {>= "0.0.5"}
-  "mirage-time"
+  "awa" {>= "0.1.0"}
+  "mirage-time" {>= "2.0.0"}
   "mirage-unix" {>= "4.0.0"}
   "cmdliner" {>= "1.0.4"}
   "decompress" {>= "1.4.0"}
@@ -42,7 +42,7 @@ depends: [
   "ocamlfind" {>= "1.8.1"}
   "tcpip" {>= "7.0.0"}
   "cstruct" {>= "6.0.0"}
-  "awa-mirage" {>= "0.0.5"}
+  "awa-mirage" {>= "0.1.0"}
   "mirage-flow" {>= "2.0.1"}
   "ke" {>= "0.4" & with-test}
   "mirage-crypto-rng" {>= "0.8.8" & with-test}

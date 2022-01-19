@@ -27,10 +27,11 @@ end
 module Make
     (Mclock : Mirage_clock.MCLOCK)
     (TCP : Tcpip.Tcp.S)
+    (Time : Mirage_time.S)
     (Happy_eyeballs : Git_mirage_happy_eyeballs.S with type flow = TCP.flow) :
   S = struct
   module SSH = struct
-    include Awa_mirage.Make (TCP) (Mclock)
+    include Awa_mirage.Make (TCP) (Time) (Mclock)
 
     type nonrec endpoint = Happy_eyeballs.t * endpoint
 
