@@ -2,7 +2,7 @@ Tests fetch command
   $ mkdir simple
   $ mkdir simple-clone
   $ cd simple
-  $ git init -q 2> /dev/null
+  $ git init -b master -q 2> /dev/null
   $ git config init.defaultBranch master
   $ git config user.email "romain@mirage.io"
   $ git config user.name "Romain Calascibetta"

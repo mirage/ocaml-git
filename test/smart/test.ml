@@ -177,7 +177,7 @@ let create_new_git_store _sw =
     create_tmp_dir "git-%s" >>= fun root ->
     OS.Dir.with_current root
       (fun () ->
-        OS.Cmd.run Cmd.(v "git" % "init") >>= fun () ->
+        OS.Cmd.run Cmd.(v "git" % "init" % "-b" % "master") >>= fun () ->
         OS.Cmd.run Cmd.(v "git" % "config" % "init.defaultBranch" % "master"))
       ()
     |> R.join
@@ -422,7 +422,7 @@ let create_new_git_push_store _sw =
     create_tmp_dir "git-%s" >>= fun root ->
     OS.Dir.with_current root
       (fun () ->
-        OS.Cmd.run Cmd.(v "git" % "init") >>= fun () ->
+        OS.Cmd.run Cmd.(v "git" % "init" % "-b" % "master") >>= fun () ->
         OS.Cmd.run Cmd.(v "git" % "config" % "init.defaultBranch" % "master"))
       ()
     |> R.join

@@ -315,7 +315,8 @@ let () =
       let open Rresult in
       Bos.OS.Dir.tmp "git-%s" >>= fun root ->
       ( Bos.OS.Dir.with_current root @@ fun () ->
-        Bos.OS.Cmd.run Bos.Cmd.(v "git" % "init") >>= fun () ->
+        Bos.OS.Cmd.run Bos.Cmd.(v "git" % "init" % "-b" % "master")
+        >>= fun () ->
         Bos.OS.Cmd.run
           Bos.Cmd.(v "git" % "config" % "init.defaultBranch" % "master")
         >>= fun () -> R.ok root )
