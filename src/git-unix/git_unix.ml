@@ -157,7 +157,6 @@ module Minor_heap (Digestif : Digestif.S) = struct
   module Log = (val Logs.src_log src : Logs.LOG)
 
   type t = Fpath.t (* [.git/objects] *)
-
   type uid = Digestif.t
   type error = [ `Not_found of Digestif.t | `Msg of string ]
 
@@ -327,7 +326,6 @@ module Major_heap = struct
   module Log = (val Logs.src_log src : Logs.LOG)
 
   type t = Fpath.t (* [.git/objects/pack] *)
-
   type uid = Fpath.t
   type 'a rd = < rd : unit ; .. > as 'a
   type 'a wr = < wr : unit ; .. > as 'a
@@ -509,7 +507,6 @@ module Reference_heap = struct
   (* XXX(dinosaure): ensure the atomicity. *)
 
   type t = Fpath.t (* [.git] *)
-
   type error = [ `Not_found of Git.Reference.t | `Msg of string ]
 
   let pp_error ppf = function
