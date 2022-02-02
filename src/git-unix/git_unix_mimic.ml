@@ -146,8 +146,8 @@ end
 let fifo_endpoint, _ = Mimic.register ~name:"fifo" (module FIFO)
 
 module A = Git_mirage_tcp.Make (TCP) (Happy_eyeballs)
-module B = Git_mirage_ssh.Make (Mclock) (TCP) (OS.Time) (Happy_eyeballs)
-module C = Git_mirage_http.Make (OS.Time) (Pclock) (TCP) (Happy_eyeballs)
+module B = Git_mirage_ssh.Make (Mclock) (TCP) (Unix_os.Time) (Happy_eyeballs)
+module C = Git_mirage_http.Make (Unix_os.Time) (Pclock) (TCP) (Happy_eyeballs)
 
 let ctx happy_eyeballs =
   let ctx =

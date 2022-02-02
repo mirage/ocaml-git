@@ -1,6 +1,7 @@
 (executable
  (name test)
  (libraries
+  git_version
   ptime
   ptime.clock.os
   git

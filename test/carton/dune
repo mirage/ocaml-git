@@ -3,6 +3,7 @@
  (flags
   (:standard -thread))
  (libraries
+  git_version
   lwt
   lwt.unix
   result
