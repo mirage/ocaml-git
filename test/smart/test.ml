@@ -6,6 +6,34 @@ open Store_backend
 (** logging: *)
 let () = Printexc.record_backtrace true
 
+let v2_35_0 =
+  {
+    Git_version.major = 2;
+    minor = 35;
+    patch = Some "0";
+    revision = None;
+    release_candidate = None;
+  }
+
+let git_version =
+  match
+    Bos.(
+      OS.Cmd.run_out Cmd.(v "git" % "--version") |> OS.Cmd.out_string ~trim:true)
+  with
+  | Error (`Msg err) -> failwith err
+  | Ok (str, _) -> (
+      match Git_version.parse str with
+      | Some version -> version
+      | None -> Fmt.failwith "Impossible to parse the Git version: %s" str)
+
+let git_init_with_branch branch =
+  let open Bos in
+  let open Rresult in
+  if Git_version.compare v2_35_0 git_version < 0 then
+    OS.Cmd.run Cmd.(v "git" % "init") >>= fun () ->
+    OS.Cmd.run Cmd.(v "git" % "config" % "init.defaultBranch" % branch)
+  else OS.Cmd.run Cmd.(v "git" % "init" % "-b" % branch)
+
 let reporter ppf =
   let report src level ~over k msgf =
     let k _ =
@@ -175,12 +203,7 @@ let create_new_git_store _sw =
     (* XXX(dinosaure): a hook is already added by [Bos] to delete the
        directory. *)
     create_tmp_dir "git-%s" >>= fun root ->
-    OS.Dir.with_current root
-      (fun () ->
-        OS.Cmd.run Cmd.(v "git" % "init" % "-b" % "master") >>= fun () ->
-        OS.Cmd.run Cmd.(v "git" % "config" % "init.defaultBranch" % "master"))
-      ()
-    |> R.join
+    OS.Dir.with_current root git_init_with_branch "master" |> R.join
     >>= fun () ->
     let access = access lwt in
     let light_load uid = lightly_load lwt root uid |> Scheduler.prj in
@@ -420,12 +443,7 @@ let create_new_git_push_store _sw =
     (* XXX(dinosaure): a hook is already added by [Bos] to delete the
        directory. *)
     create_tmp_dir "git-%s" >>= fun root ->
-    OS.Dir.with_current root
-      (fun () ->
-        OS.Cmd.run Cmd.(v "git" % "init" % "-b" % "master") >>= fun () ->
-        OS.Cmd.run Cmd.(v "git" % "config" % "init.defaultBranch" % "master"))
-      ()
-    |> R.join
+    OS.Dir.with_current root git_init_with_branch "master" |> R.join
     >>= fun () ->
     let access =
       Sigs.

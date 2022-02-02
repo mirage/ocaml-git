@@ -15,6 +15,34 @@ let reporter ppf =
   in
   { Logs.report }
 
+let v2_35_0 =
+  {
+    Git_version.major = 2;
+    minor = 35;
+    patch = Some "0";
+    revision = None;
+    release_candidate = None;
+  }
+
+let git_version =
+  match
+    Bos.(
+      OS.Cmd.run_out Cmd.(v "git" % "--version") |> OS.Cmd.out_string ~trim:true)
+  with
+  | Error (`Msg err) -> failwith err
+  | Ok (str, _) -> (
+      match Git_version.parse str with
+      | Some version -> version
+      | None -> Fmt.failwith "Impossible to parse the Git version: %s" str)
+
+let git_init_with_branch branch =
+  let open Bos in
+  let open Rresult in
+  if Git_version.compare v2_35_0 git_version < 0 then
+    OS.Cmd.run Cmd.(v "git" % "init") >>= fun () ->
+    OS.Cmd.run Cmd.(v "git" % "config" % "init.defaultBranch" % branch)
+  else OS.Cmd.run Cmd.(v "git" % "init" % "-b" % branch)
+
 let () = Fmt_tty.setup_std_outputs ~style_renderer:`Ansi_tty ~utf_8:true ()
 let () = Logs.set_reporter (reporter Fmt.stderr)
 let () = Logs.set_level ~all:true (Some Logs.Debug)
@@ -315,11 +343,7 @@ let () =
       let open Rresult in
       Bos.OS.Dir.tmp "git-%s" >>= fun root ->
       ( Bos.OS.Dir.with_current root @@ fun () ->
-        Bos.OS.Cmd.run Bos.Cmd.(v "git" % "init" % "-b" % "master")
-        >>= fun () ->
-        Bos.OS.Cmd.run
-          Bos.Cmd.(v "git" % "config" % "init.defaultBranch" % "master")
-        >>= fun () -> R.ok root )
+        git_init_with_branch "master" >>= fun () -> R.ok root )
         ()
     in
     match Rresult.(R.join (create ())) with
