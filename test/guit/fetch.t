@@ -2,8 +2,9 @@ Tests fetch command
   $ mkdir simple
   $ mkdir simple-clone
   $ cd simple
-  $ git init -b master -q 2> /dev/null
+  $ git init -q 2> /dev/null
   $ git config init.defaultBranch master
+  $ git checkout -b master -q
   $ git config user.email "romain@mirage.io"
   $ git config user.name "Romain Calascibetta"
   $ git commit --allow-empty -q -m .
