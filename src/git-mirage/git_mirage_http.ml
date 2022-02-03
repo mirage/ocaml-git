@@ -5,8 +5,7 @@ module type S = sig
 
   val with_optional_tls_config_and_headers :
     ?headers:(string * string) list ->
-    ?tls_key_fingerprint:string ->
-    ?tls_cert_fingerprint:string ->
+    ?authenticator:string ->
     Mimic.ctx ->
     Mimic.ctx Lwt.t
 
@@ -288,23 +287,40 @@ module Make
     in
     hash, fp
 
-  let with_optional_tls_config_and_headers ?headers ?tls_key_fingerprint
-      ?tls_cert_fingerprint ctx =
+  let with_optional_tls_config_and_headers ?headers ?authenticator ctx =
     let time () = Some (Ptime.v (Pclock.now_d_ps ())) in
+    let none ?ip:_ ~host:_ _ = Ok None in
     let authenticator =
-      match tls_key_fingerprint, tls_cert_fingerprint with
-      | None, None -> (
+      match authenticator with
+      | None -> (
           match NSS.authenticator () with
           | Ok authenticator -> authenticator
           | Error (`Msg err) -> failwith err)
-      | Some _, Some _ ->
-          failwith "You can not provide certificate and key fingerprint"
-      | Some fp, None ->
-          let hash, fingerprint = of_fp fp in
-          X509.Authenticator.server_cert_fingerprint ~time ~hash ~fingerprint
-      | None, Some fp ->
-          let hash, fingerprint = of_fp fp in
-          X509.Authenticator.server_key_fingerprint ~time ~hash ~fingerprint
+      | Some str -> (
+          match String.split_on_char ':' str with
+          | "key" :: tls_key_fingerprint ->
+              let tls_key_fingerprint = String.concat ":" tls_key_fingerprint in
+              let hash, fingerprint = of_fp tls_key_fingerprint in
+              X509.Authenticator.server_key_fingerprint ~time ~hash ~fingerprint
+          | "cert" :: tls_cert_fingerprint ->
+              let tls_cert_fingerprint =
+                String.concat ":" tls_cert_fingerprint
+              in
+              let hash, fingerprint = of_fp tls_cert_fingerprint in
+              X509.Authenticator.server_cert_fingerprint ~time ~hash
+                ~fingerprint
+          | "trust-anchor" :: certs ->
+              let certs = List.map Base64.decode certs in
+              let certs = List.map (Result.map Cstruct.of_string) certs in
+              let certs =
+                List.map
+                  (fun cert -> Result.bind cert X509.Certificate.decode_der)
+                  certs
+              in
+              let certs = List.filter_map Result.to_option certs in
+              X509.Authenticator.chain_of_trust ~time certs
+          | [ "none" ] -> none
+          | _ -> Fmt.failwith "Invalid TLS authenticator: %S" str)
     in
     let tls = Tls.Config.client ~authenticator () in
     let ctx = Mimic.add git_mirage_http_tls_config tls ctx in

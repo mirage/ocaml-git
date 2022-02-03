@@ -6,8 +6,7 @@ module type S = sig
 
   val with_optional_tls_config_and_headers :
     ?headers:(string * string) list ->
-    ?tls_key_fingerprint:string ->
-    ?tls_cert_fingerprint:string ->
+    ?authenticator:string ->
     Mimic.ctx ->
     Mimic.ctx Lwt.t
 

@@ -5,7 +5,7 @@ let ( >>? ) = Lwt_result.bind
 
 module Make
     (Console : Mirage_console.S)
-    (Stack : Mirage_stack.V4V6)
+    (Stack : Tcpip.Stack.V4V6)
     (Store : Git.S)
     (_ : sig end) =
 struct
