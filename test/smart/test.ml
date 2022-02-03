@@ -6,10 +6,10 @@ open Store_backend
 (** logging: *)
 let () = Printexc.record_backtrace true
 
-let v2_35_0 =
+let v2_28_0 =
   {
     Git_version.major = 2;
-    minor = 35;
+    minor = 28;
     patch = Some "0";
     revision = None;
     release_candidate = None;
@@ -29,7 +29,7 @@ let git_version =
 let git_init_with_branch branch =
   let open Bos in
   let open Rresult in
-  if Git_version.compare v2_35_0 git_version < 0 then
+  if Git_version.compare git_version v2_28_0 < 0 then
     OS.Cmd.run Cmd.(v "git" % "init") >>= fun () ->
     OS.Cmd.run Cmd.(v "git" % "config" % "init.defaultBranch" % branch)
   else OS.Cmd.run Cmd.(v "git" % "init" % "-b" % branch)
