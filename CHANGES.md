@@ -1,3 +1,10 @@
+### 3.8.0 (2022-02-03) Paris - France
+
+- Adapt `git-mirage` with `awa.0.1.0` (@hannesm, #553)
+- Support new version of `git` into tests (@dinosaure, #532, #554)
+- Provide `Store.read_opt` for finding Git object (@CraigFe, #551)
+- Unify `git-mirage-http` and `git-mirage-ssh` about the _authenticator_ (@dinosaure, @hannesm, #538, #555)
+
 ### 3.7.0 (2021-12-12) Paris - France
 
 - Drop unneeded `mirage-protocols` dependency (@hannesm, #537)
