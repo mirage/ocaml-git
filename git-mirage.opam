@@ -10,6 +10,7 @@ depends: [
   "ocaml" {>= "4.08.0"}
   "dune" {>= "2.8.0"}
   "mimic"
+  "base64" {>= "3.5.0"}
   "git" {= version}
   "git-paf" {= version}
   "awa" {>= "0.1.0"}
