@@ -53,6 +53,7 @@
  (modules git_mirage_http)
  (public_name git-mirage.http)
  (libraries
+  base64
   git-mirage.happy-eyeballs
   git-paf
   git.nss.git
