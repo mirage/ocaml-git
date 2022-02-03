@@ -1,12 +1,11 @@
 module type S = sig
   type t
   type hash
+  type decode_error := [ `Msg of string ]
 
   type error =
     private
-    [> `Not_found of hash
-    | `Reference_not_found of Reference.t
-    | `Msg of string ]
+    [> `Not_found of hash | `Reference_not_found of Reference.t | decode_error ]
 
   val pp_error : error Fmt.t
 
@@ -45,6 +44,11 @@ module type S = sig
   val read : t -> hash -> (Value.t, error) result Lwt.t
   (** [read state hash] can retrieve a git object from the current repository
       [state]. It de-serializes the git object to an OCaml value. *)
+
+  val read_opt : t -> hash -> (Value.t option, decode_error) result Lwt.t
+  (** [read_opt state hash] is like {!read} but does not return (or log) an
+      error if the git object referenced by [hash] cannot be retrieved from
+      [state]. *)
 
   val read_exn : t -> hash -> Value.t Lwt.t
   (** [read_exn state hash] is an alias of {!read} but raise an exception
