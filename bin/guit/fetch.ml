@@ -88,7 +88,7 @@ open Cmdliner
  * [--progress] <repository> <refspec>... *)
 
 let output =
-  let conv' =
+  let converter =
     let parse str =
       match str with
       | "stdout" -> Ok Fmt.stdout
@@ -104,7 +104,8 @@ let output =
     "Output of the progress status. Can take values 'stdout' (default) or \
      'stderr'."
   in
-  Arg.(value & opt conv' Fmt.stdout & info [ "output" ] ~doc ~docv:"<output>")
+  Arg.(
+    value & opt converter Fmt.stdout & info [ "output" ] ~doc ~docv:"<output>")
 
 let directory =
   let doc = "Indicate path to repository root containing '.git' folder" in
@@ -137,18 +138,22 @@ let references =
     & info ~doc ~docv:"<ref>" [])
 
 let setup_logs =
+  let docs = Manpage.s_common_options in
   Term.(
-    const setup_logs $ Fmt_cli.style_renderer () $ Logs_cli.level () $ output)
+    const setup_logs
+    $ Fmt_cli.style_renderer ~docs ()
+    $ Logs_cli.level ~docs ()
+    $ output)
 
 let main (quiet, _) references directory repository =
   match Lwt_main.run (main quiet references directory repository) with
-  | Ok () -> `Ok ()
-  | Error (#error as err) -> `Error (false, Fmt.str "%a." pp_error err)
+  | Ok () -> Ok ()
+  | Error (#error as err) -> Error (Fmt.str "%a." pp_error err)
 
 let command =
   let doc = "Fetch a Git repository." in
-  let exits = Term.default_exits in
-  ( Term.(ret (const main $ setup_logs $ references $ directory $ repository)),
-    Term.info "fetch" ~doc ~exits )
+  let info = Cmd.info "fetch" ~doc in
+  Cmd.v info
+    Term.(const main $ setup_logs $ references $ directory $ repository)
 
-let () = Term.(exit @@ eval command)
+let () = exit @@ Cmd.eval_result command

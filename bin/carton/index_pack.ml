@@ -350,8 +350,8 @@ let index_pack ?(verbose = false) src dst =
 
 let run verbose src dst =
   match (Fiber.run <.> prj) (index_pack ~verbose src dst) with
-  | Ok () -> `Ok 0
-  | Error (`Msg err) -> `Error (false, Fmt.str "%s." err)
+  | Ok () -> Ok ()
+  | Error (`Msg err) -> Error (Fmt.str "%s." err)
 
 open Cmdliner
 
@@ -388,16 +388,15 @@ let verbose =
 
 let cmd =
   let doc = "Build pack index for an packed archive." in
-  let exits = Term.default_exits in
   let man =
     [
       `S Manpage.s_description;
       `P
-        "Readss a packed archive (.pack) from a specified file (or standard \
+        "Reads a packed archive (.pack) from a specified file (or standard \
          input), and builds a pack index file (.idx) for it.";
     ]
   in
-  ( Term.(ret (const run $ verbose $ src $ dst)),
-    Term.info "index-pack" ~doc ~exits ~man )
+  let info = Cmd.info "index-pack" ~doc ~man in
+  Cmd.v info Term.(const run $ verbose $ src $ dst)
 
-let () = Term.(exit_status @@ eval cmd)
+let () = exit @@ Cmd.eval_result cmd

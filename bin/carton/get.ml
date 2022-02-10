@@ -117,8 +117,8 @@ let run hxd path info raw pack uid_or_offset =
 
 let run hxd path info raw pack uid_or_offset =
   match run hxd path info raw pack uid_or_offset with
-  | Ok () -> `Ok 0
-  | Error (`Msg err) -> `Error (false, Fmt.str "%s." err)
+  | Ok () -> Ok ()
+  | Error (`Msg err) -> Error (Fmt.str "%s." err)
 
 open Cmdliner
 
@@ -166,7 +166,6 @@ let uid_or_offset =
 
 let cmd =
   let doc = "Extract an object from a PACK file." in
-  let exits = Term.default_exits in
   let man =
     [
       `S Manpage.s_description;
@@ -175,15 +174,15 @@ let cmd =
          offset.";
     ]
   in
-  ( Term.(
-      ret
-        (const run
-        $ Hxd_cmdliner.cmd
-        $ with_path
-        $ with_info
-        $ raw
-        $ pack
-        $ uid_or_offset)),
-    Term.info "get" ~doc ~exits ~man )
+  let info = Cmd.info "get" ~doc ~man in
+  Cmd.v info
+    Term.(
+      const run
+      $ Hxd_cmdliner.cmd
+      $ with_path
+      $ with_info
+      $ raw
+      $ pack
+      $ uid_or_offset)
 
-let () = Term.(exit_status @@ eval cmd)
+let () = exit @@ Cmd.eval_result cmd

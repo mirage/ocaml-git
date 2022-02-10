@@ -65,8 +65,8 @@ let main quiet path =
 
 let main logs path =
   match Lwt_main.run (main logs path) with
-  | Ok () -> `Ok 0
-  | Error (`Msg err) -> `Error (false, Fmt.str "%s." err)
+  | Ok () -> Ok ()
+  | Error (`Msg err) -> Error (Fmt.str "%s." err)
 
 open Cmdliner
 
@@ -80,11 +80,13 @@ let directory =
     & info [ "r"; "root" ] ~doc ~docv:"<directory>")
 
 let setup_logs =
-  Term.(const setup_logs $ Fmt_cli.style_renderer () $ Logs_cli.level ())
+  let docs = Manpage.s_common_options in
+  Term.(
+    const setup_logs $ Fmt_cli.style_renderer ~docs () $ Logs_cli.level ~docs ())
 
 let command =
   let doc = "Make a Git repository." in
-  let exits = Term.default_exits in
-  Term.(ret (const main $ setup_logs $ directory)), Term.info "v" ~doc ~exits
+  let info = Cmd.info "v" ~doc in
+  Cmd.v info Term.(const main $ setup_logs $ directory)
 
-let () = Term.(exit @@ eval command)
+let () = exit @@ Cmd.eval_result command

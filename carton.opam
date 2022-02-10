@@ -23,8 +23,8 @@ depends: [
   "checkseum" {>= "0.3.2"}
   "logs"
   "bigarray-compat"
-  "cmdliner" {>= "1.0.4"}
-  "hxd" {>= "0.3.0"}
+  "cmdliner" {>= "1.1.0"}
+  "hxd" {>= "0.3.2"}
   "psq" {>= "0.2.0"}
   "fmt" {>= "0.8.9"}
   "result"
@@ -37,7 +37,7 @@ depends: [
   "base-unix" {with-test}
   "base-threads" {with-test}
   "alcotest" {with-test}
-  "crowbar" {with-test & >= "0.2"}
+  "crowbar" {with-test & >= "0.2.1"}
   "alcotest-lwt" {>= "1.2.3" & with-test}
   "lwt" {>= "5.3.0" & with-test}
   "ocamlfind" {>= "1.8.1" & with-test}

@@ -43,17 +43,17 @@ depends: [
   "alcotest" {with-test & >= "1.1.0"}
   "alcotest-lwt" {with-test & >= "1.1.0"}
   "mirage-crypto-rng" {with-test & >= "0.8.0"}
-  "cmdliner" {with-test}
+  "cmdliner" {with-test & >= "1.1.0"}
   "base-unix" {with-test}
   "fpath"
-  "hxd" {>= "0.3.1"}
+  "hxd" {>= "0.3.2"}
   "mirage-flow" {>= "2.0.1"}
   "domain-name" {>= "0.3.0"}
   "emile" {>= "1.1"}
   "ipaddr" {>= "5.0.1"}
   "psq" {>= "0.2.0"}
   "uri" {>= "4.1.0"}
-  "crowbar" {>= "0.2" & with-test}
+  "crowbar" {>= "0.2.1" & with-test}
 ]
 build: [
   ["dune" "build" "-p" name "-j" jobs]
