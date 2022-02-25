@@ -555,24 +555,28 @@ end = struct
   let encode e = e.k e
 end
 
+type file = File
+
+module Ephemeron = Ephemeron.K1.Make (struct
+  type t = file
+
+  let equal = ( = )
+  let hash = Hashtbl.hash
+end)
+
 module Device = struct
-  type 'uid value = Bigstringaf.t
-  type key = Key
-  type uid = key ref
-  type 'uid t = (key ref, 'uid value ref) Ephemeron.K1.t
+  type t = Bigstringaf.t ref Ephemeron.t
+  type uid = file
 
-  let device () = Ephemeron.K1.create ()
+  let device () = Ephemeron.create 1
 
-  let create tbl =
-    let key = ref Key in
-    Ephemeron.K1.set_key tbl key;
-    Ephemeron.K1.set_data tbl (ref Bigstringaf.empty);
-    key
+  let create device =
+    let file = File in
+    Ephemeron.add device file (ref Bigstringaf.empty);
+    file
+    [@@inline never]
 
-  let project tbl uid =
-    assert (Ephemeron.K1.get_key tbl = Some uid);
-    match Stdlib.Option.get (Ephemeron.K1.get_data tbl) with
-    | { contents = v } -> v
+  let project device file = !(Ephemeron.find device file)
 end
 
 module M (IO : sig
@@ -595,6 +599,7 @@ struct
     mutable buffer : Bigstringaf.t;
     mutable capacity : int;
     mutable length : int;
+    uid : Device.uid;
   }
 
   let enlarge fd more =
@@ -620,18 +625,22 @@ struct
     (* assert (old_length + more <= fd.capacity) ; *)
     ()
 
-  type t = Uid.t Device.t
+  type t = Device.t
   type uid = Device.uid
-  type error = [ `Already_computed ]
+  type error = |
 
-  let pp_error ppf = function
-    | `Already_computed -> Fmt.string ppf "IDX already computed"
+  let pp_error : error Fmt.t = fun _ppf -> function _ -> .
 
-  let create tbl uid =
-    assert (Ephemeron.K1.get_key tbl = Some uid);
-    (* Ephemeron.K1.set_data tbl (ref Bigstringaf.empty); *)
-    return
-      (Ok { buffer = Bigstringaf.create 0x1000; capacity = 0x1000; length = 0 })
+  let create device uid =
+    assert (Ephemeron.mem device uid);
+    IO.return
+      (Ok
+         {
+           uid;
+           buffer = Bigstringaf.create 0x1000;
+           capacity = 0x1000;
+           length = 0;
+         })
 
   let append _ fd str =
     let len = String.length str in
@@ -642,10 +651,9 @@ struct
     fd.length <- new_length;
     IO.return ()
 
-  let close tbl fd =
+  let close device fd =
     let result = Bigstringaf.sub fd.buffer ~off:0 ~len:fd.length in
-    (match Ephemeron.K1.get_data tbl with
-    | Some value -> value := result
-    | None -> assert false);
+    let v = Ephemeron.find device fd.uid in
+    v := result;
     IO.return (Ok ())
 end
