@@ -123,10 +123,7 @@ let cmd =
     `P "Report them to via e-mail to <mirageos-devel@lists.xenproject.org>, or
         on the issue tracker at <https://github.com/mirage/ocaml-cohttp/issues>";
   ] in
-  Term.(pure lwt_start_proxy $ port $ host $ verb),
-  Term.info "cohttp-proxy" ~version:"1.0.0" ~doc ~man
+  let info = Cmd.info "cohttp-proxy" ~version:"1.0.0" ~doc ~man in
+  Cmd.v info Term.(const lwt_start_proxy $ port $ host $ verb)
 
-let () =
-  match Term.eval cmd with
-  | `Error _ -> exit 1
-  | _ -> exit 0
+let () = exit @@ Cmd.eval cmd
