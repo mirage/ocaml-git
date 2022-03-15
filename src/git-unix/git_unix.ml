@@ -423,11 +423,15 @@ module Major_heap = struct
     let rec f path =
       Lwt.catch
         (fun () ->
-          Lwt_unix.unlink (Fpath.to_string path) >>= fun () ->
-          Lwt_unix.unlink (Fpath.to_string (Fpath.set_ext "idx" path)))
+          Lwt_unix.unlink Fpath.(to_string (root // path)) >>= fun () ->
+          Lwt_unix.unlink Fpath.(to_string (root // set_ext "idx" path)))
         (function
           | Unix.Unix_error (Unix.EINTR, _, _) -> f path
-          | _exn -> Lwt.return_unit)
+          | exn ->
+              Log.warn (fun m ->
+                  m "Got an error while deleting %a: %s" Fpath.pp path
+                    (Printexc.to_string exn));
+              Lwt.return_unit)
     in
     Lwt_list.iter_p f lst >>= Lwt.return_ok
 
