@@ -42,6 +42,7 @@
   logs
   logs.fmt
   logs.cli
+  fmt
   fmt.tty
   fmt.cli
   lwt
