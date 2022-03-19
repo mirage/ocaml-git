@@ -28,4 +28,5 @@
   carton
   carton-lwt
   carton-git
+  unix
   lwt.unix))

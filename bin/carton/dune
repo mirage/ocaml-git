@@ -17,6 +17,7 @@
   fmt
   carton
   fiber
+  unix
   digestif.c))
 
 (executable
@@ -43,6 +44,7 @@
   fmt
   carton
   fiber
+  unix
   digestif.c))
 
 (executable
@@ -67,6 +69,7 @@
   fmt
   carton
   fiber
+  unix
   digestif.c))
 
 (library

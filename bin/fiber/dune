@@ -2,4 +2,4 @@
  (name fiber)
  (flags
   (:standard -thread))
- (libraries fmt threads))
+ (libraries fmt threads unix))
