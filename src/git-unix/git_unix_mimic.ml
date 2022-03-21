@@ -7,7 +7,9 @@ module Happy_eyeballs = struct
   type flow = Lwt_unix.file_descr
 
   let happy_eyeballs = Mimic.make ~name:"happy-eyeballs-lwt"
-  let resolve = Happy_eyeballs_lwt.connect
+
+  let resolve t addr ports =
+    Happy_eyeballs_lwt.connect t addr ports >|= Rresult.R.open_error_msg
 end
 
 module TCP = struct

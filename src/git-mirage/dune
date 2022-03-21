@@ -1,27 +1,9 @@
 (library
- (name git_mirage_happy_eyeballs)
- (modules git_mirage_happy_eyeballs)
- (public_name git-mirage.happy-eyeballs)
- (libraries
-  dns
-  tls
-  domain-name
-  happy-eyeballs
-  happy-eyeballs-mirage
-  mirage-random
-  mirage-clock
-  tcpip
-  mirage-time
-  ipaddr
-  mimic
-  lwt))
-
-(library
  (name git_mirage_ssh)
  (modules git_mirage_ssh)
  (public_name git-mirage.ssh)
  (libraries
-  git-mirage.happy-eyeballs
+  mimic-happy-eyeballs
   git.nss.git
   mimic
   lwt
@@ -39,7 +21,7 @@
  (modules git_mirage_tcp)
  (public_name git-mirage.tcp)
  (libraries
-  git-mirage.happy-eyeballs
+  mimic-happy-eyeballs
   git.nss.git
   mimic
   lwt
@@ -54,7 +36,7 @@
  (public_name git-mirage.http)
  (libraries
   base64
-  git-mirage.happy-eyeballs
+  mimic-happy-eyeballs
   git-paf
   git.nss.git
   mimic

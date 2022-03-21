@@ -5,4 +5,4 @@ end
 
 module Make
     (TCP : Tcpip.Tcp.S)
-    (Happy_eyeballs : Git_mirage_happy_eyeballs.S with type flow = TCP.flow) : S
+    (Happy_eyeballs : Mimic_happy_eyeballs.S with type flow = TCP.flow) : S

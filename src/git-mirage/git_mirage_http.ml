@@ -19,8 +19,8 @@ module Make
     (Time : Mirage_time.S)
     (Pclock : Mirage_clock.PCLOCK)
     (TCP : Tcpip.Tcp.S)
-    (Happy_eyeballs : Git_mirage_happy_eyeballs.S with type flow = TCP.flow) :
-  S = struct
+    (Happy_eyeballs : Mimic_happy_eyeballs.S with type flow = TCP.flow) : S =
+struct
   module TCP = struct
     include TCP
 
