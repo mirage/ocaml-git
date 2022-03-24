@@ -1,3 +1,11 @@
+### 3.9.0 (2022-03-24) Paris - France
+
+- Fix `ocaml-git` with OCaml 5.00.0 (@dinosaure, @stedolan, #559)
+- Update binaries with `cmdliner.1.1.0` (@MisterDA, @dinosaure, #558)
+- Fix the `reset` function and properly delete PACK files (@dinosaure, @patricoferris, @dinakajoy, #561)
+- Fix dependencies of `guit` (@maiste, @dinosaure, #560)
+- Move the `happy-eyeballs` layer needed by MirageOS into `mimic.0.0.5` (@dinosaure, #563)
+
 ### 3.8.0 (2022-02-03) Paris - France
 
 - Adapt `git-mirage` with `awa.0.1.0` (@hannesm, #553)
