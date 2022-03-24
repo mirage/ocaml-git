@@ -10,7 +10,7 @@ depends: [
   "ocaml" {>= "4.08.0"}
   "dune" {>= "2.8.0"}
   "mimic"
-  "mimic-happy-eyeballs"
+  "mimic-happy-eyeballs" {>= "0.0.5"}
   "base64" {>= "3.5.0"}
   "git" {= version}
   "git-paf" {= version}
@@ -52,7 +52,3 @@ build: [
   ["dune" "runtest" "-p" name "-j" jobs "--no-buffer"] {with-test}
 ]
 dev-repo: "git+https://github.com/mirage/ocaml-git.git"
-pin-depends: [
-  [ "mimic.0.0.5" "git+https://github.com/dinosaure/mimic.git#8678a026715af9ada825b58366394e525485029d" ]
-  [ "mimic-happy-eyeballs.0.0.5" "git+https://github.com/dinosaure/mimic.git#8678a026715af9ada825b58366394e525485029d" ]
-]
