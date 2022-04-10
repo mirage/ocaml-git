@@ -6,7 +6,6 @@
    (= %{architecture} "x86_64")))
  (libraries
   bigstringaf
-  bigarray-compat
   mtime
   fmt
   decompress.de

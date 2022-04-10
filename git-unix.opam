@@ -9,19 +9,17 @@ bug-reports: "https://github.com/mirage/ocaml-git/issues"
 depends: [
   "ocaml" {>= "4.08.0"}
   "dune" {>= "2.8.0"}
-  "mmap" {>= "1.1.0"}
   "git" {= version}
   "git-mirage" {= version}
   "happy-eyeballs-lwt" {>= "0.1.2"}
   "rresult"
   "result"
-  "bigstringaf"
-  "bigarray-compat"
+  "bigstringaf" {>= "0.9.0"}
   "fmt" {>= "0.8.7"}
   "bos"
   "fpath"
   "uri" {with-test}
-  "digestif" {>= "0.8.1"}
+  "digestif" {>= "1.1.2"}
   "logs"
   "lwt"
   "base-unix"

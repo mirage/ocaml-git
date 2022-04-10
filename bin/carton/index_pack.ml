@@ -286,8 +286,7 @@ let values_from_src = function
       let map () ~pos len =
         let len = Stdlib.min len (Int64.to_int (Int64.sub max pos)) in
         let res =
-          Mmap.V1.map_file fd ~pos Bigarray.char Bigarray.c_layout false
-            [| len |]
+          Unix.map_file fd ~pos Bigarray.char Bigarray.c_layout false [| len |]
         in
         Bigarray.array1_of_genarray res
       in

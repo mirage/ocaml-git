@@ -24,7 +24,6 @@ depends: [
   "rresult"
   "tls" {>= "0.14.0"}
   "uri"
-  "bigarray-compat"
   "bigstringaf"
   "domain-name"
   "httpaf"

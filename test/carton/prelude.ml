@@ -4,7 +4,7 @@ let unix_map : fd Carton.Dec.W.map =
  fun fd ~pos len ->
   let payload =
     let len = min Int64.(to_int (sub fd.mx pos)) len in
-    Mmap.V1.map_file fd.fd ~pos Bigarray.char Bigarray.c_layout false [| len |]
+    Unix.map_file fd.fd ~pos Bigarray.char Bigarray.c_layout false [| len |]
   in
   Bigarray.array1_of_genarray payload
 

@@ -16,9 +16,9 @@ depends: [
   "dune" {>= "2.8.0"}
   "carton" {= version}
   "lwt"
-  "decompress" {>= "1.3.0"}
+  "decompress" {>= "1.4.3"}
   "optint" {>= "0.0.4"}
-  "bigstringaf" {>= "0.7.0"}
+  "bigstringaf" {>= "0.9.0"}
   "bigarray-compat" {with-test}
   "alcotest" {>= "1.2.3" & with-test}
   "alcotest-lwt" {>= "1.2.3" & with-test}
@@ -31,10 +31,9 @@ depends: [
   "ke" {>= "0.4" & with-test}
   "base64" {>= "3.4.0" & with-test}
   "bos" {>= "0.2.0" & with-test}
-  "checkseum" {>= "0.3.0" & with-test}
-  "digestif" {>= "1.0.0" & with-test}
+  "checkseum" {>= "0.3.3" & with-test}
+  "digestif" {>= "1.1.2" & with-test}
   "fpath" {>= "0.7.3" & with-test}
-  "mmap" {>= "1.1.0" & with-test}
 ]
 build: [
   ["dune" "build" "-p" name "-j" jobs]

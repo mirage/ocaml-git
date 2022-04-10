@@ -2,7 +2,6 @@
  (name test)
  (libraries
   ke
-  bigarray-compat
   bigstringaf
   rresult
   result

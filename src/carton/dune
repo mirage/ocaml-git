@@ -10,7 +10,6 @@
   decompress.de
   decompress.zl
   bigstringaf
-  bigarray-compat
   psq
   fmt))
 
@@ -19,7 +18,6 @@
  (modules thin)
  (public_name carton.thin)
  (libraries
-  bigarray-compat
   optint
   checkseum
   decompress.de

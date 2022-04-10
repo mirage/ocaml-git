@@ -2,15 +2,7 @@
  (name carton_git)
  (public_name carton-git)
  (modules carton_git)
- (libraries
-  logs
-  decompress.zl
-  lwt
-  decompress.de
-  bigstringaf
-  bigarray-compat
-  fmt
-  carton))
+ (libraries logs decompress.zl lwt decompress.de bigstringaf fmt carton))
 
 (library
  (name carton_git_unix)
@@ -19,9 +11,7 @@
  (libraries
   astring
   result
-  mmap
   bigstringaf
-  bigarray-compat
   fmt
   lwt
   fpath

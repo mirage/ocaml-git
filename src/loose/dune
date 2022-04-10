@@ -31,11 +31,9 @@
  (modules loose_git_unix)
  (libraries
   fmt
-  bigarray-compat
   bigstringaf
   result
   rresult
-  mmap
   fpath
   lwt
   lwt.unix
