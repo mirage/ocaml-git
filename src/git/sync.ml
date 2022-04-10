@@ -177,7 +177,7 @@ struct
           | `Blob -> `C
           | `Tag -> `D
         in
-        let raw = Bigstringaf.sub buffer ~off ~len in
+        let raw = Bigstringaf.copy buffer ~off ~len in
         Lwt.return (Carton.Dec.v ~kind raw)
     | None -> Lwt.fail Not_found
 
