@@ -6,6 +6,10 @@
 - Fix dependencies of `guit` (@maiste, @dinosaure, #560)
 - Move the `happy-eyeballs` layer needed by MirageOS into `mimic.0.0.5` (@dinosaure, #563)
 
+### 3.8.1 (2022-04-08) Paris - France
+
+- Fix the push process with a copy of illegal shared bigarray (@dinosaure, 5e5392f)
+
 ### 3.8.0 (2022-02-03) Paris - France
 
 - Adapt `git-mirage` with `awa.0.1.0` (@hannesm, #553)
