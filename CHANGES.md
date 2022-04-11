@@ -13,6 +13,10 @@
 - Provide `Store.read_opt` for finding Git object (@CraigFe, #551)
 - Unify `git-mirage-http` and `git-mirage-ssh` about the _authenticator_ (@dinosaure, @hannesm, #538, #555)
 
+### 3.7.1 (2022-04-07) Paris - France
+
+- Fix the push process with a copy of illegal shared bigarray (@dinosaure, 2aeb677)
+
 ### 3.7.0 (2021-12-12) Paris - France
 
 - Drop unneeded `mirage-protocols` dependency (@hannesm, #537)
