@@ -1,3 +1,7 @@
+### 0.4.4 (2022-04-11) Paris - France
+
+- Remove `bigarray-compat` and `mmap` dependencies (@dinosaure, @hannesm, #568)
+
 ### 0.4.3 (2021-03-08) Paris - France
 
 - Use `Cstruct.length` instead of `Cstruct.len` (@dinosaure, #522)
