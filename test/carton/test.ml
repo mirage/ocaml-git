@@ -994,8 +994,7 @@ let decode_index_stream () =
       let ic = Unix.openfile "git-bomb.idx" Unix.[ O_RDONLY ] 0o644 in
       let ln = (Unix.fstat ic).Unix.st_size in
       let mp =
-        Mmap.V1.map_file ic ~pos:0L Bigarray.char Bigarray.c_layout false
-          [| ln |]
+        Unix.map_file ic ~pos:0L Bigarray.char Bigarray.c_layout false [| ln |]
       in
       Unix.close ic;
 

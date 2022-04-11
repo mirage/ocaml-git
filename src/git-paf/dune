@@ -10,7 +10,6 @@
   mirage-flow
   domain-name
   bigstringaf
-  bigarray-compat
   result
   lwt
   fmt

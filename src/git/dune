@@ -4,7 +4,6 @@
  (libraries
   hxd.core
   hxd.string
-  bigarray-compat
   mimic
   rresult
   git.nss.sigs

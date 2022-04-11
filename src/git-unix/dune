@@ -12,7 +12,6 @@
   mirage-unix
   mirage-time
   happy-eyeballs-lwt
-  bigarray-compat
   ptime
   ptime.clock.os
   ipaddr.unix
@@ -34,7 +33,6 @@
   git.nss.git
   fpath
   digestif
-  mmap
   git
   logs
   logs.fmt

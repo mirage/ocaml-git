@@ -17,7 +17,6 @@
   git.nss.pkt-line
   ptime
   ptime.clock.os
-  bigarray-compat
   mirage-flow
   mimic
   git.nss.unixiz
@@ -43,7 +42,6 @@
   alcotest
   git.nss.smart
   lwt.unix
-  mmap
   astring
   lwt
   cstruct

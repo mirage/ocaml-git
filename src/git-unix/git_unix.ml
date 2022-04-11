@@ -214,8 +214,7 @@ module Minor_heap (Digestif : Digestif.S) = struct
         in
         let fd = Unix.openfile (Fpath.to_string path) Unix.[ O_RDONLY ] 0o400 in
         let rs =
-          Mmap.V1.map_file fd ~pos Bigarray.char Bigarray.c_layout false
-            [| len |]
+          Unix.map_file fd ~pos Bigarray.char Bigarray.c_layout false [| len |]
         in
         Unix.close fd;
         Lwt.return (Bigarray.array1_of_genarray rs)
@@ -384,7 +383,7 @@ module Major_heap = struct
    fun _ fd ~pos len ->
     let fd = Lwt_unix.unix_file_descr fd in
     let payload =
-      Mmap.V1.map_file fd ~pos Bigarray.char Bigarray.c_layout false [| len |]
+      Unix.map_file fd ~pos Bigarray.char Bigarray.c_layout false [| len |]
     in
     Bigarray.array1_of_genarray payload
 

@@ -61,16 +61,7 @@
  (name unixiz)
  (public_name git.nss.unixiz)
  (modules unixiz)
- (libraries
-  bigarray-compat
-  git.nss.sigs
-  lwt
-  result
-  rresult
-  fmt
-  mirage-flow
-  ke
-  cstruct))
+ (libraries git.nss.sigs lwt result rresult fmt mirage-flow ke cstruct))
 
 (library
  (name smart_git)
@@ -78,7 +69,6 @@
  (modules smart_git smart_git_intf)
  (libraries
   base64
-  bigarray-compat
   mimic
   mirage-flow
   unixiz

@@ -42,7 +42,7 @@ depends: [
   "rresult" {>= "0.6.0"}
   "alcotest" {>= "1.2.3" & with-test}
   "alcotest-lwt" {>= "1.2.3" & with-test}
-  "bigstringaf" {>= "0.7.0" & with-test}
+  "bigstringaf" {>= "0.9.0" & with-test}
   "cstruct" {>= "6.0.0" & with-test}
   "logs" {>= "0.7.0" & with-test}
   "ke" {>= "0.4" & with-test}

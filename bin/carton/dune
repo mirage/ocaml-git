@@ -9,10 +9,8 @@
   result
   rresult
   fpath
-  mmap
   decompress.de
   decompress.zl
-  bigarray-compat
   bigstringaf
   fmt
   carton
@@ -33,12 +31,10 @@
   result
   rresult
   fpath
-  mmap
   ke
   cstruct
   decompress.de
   decompress.zl
-  bigarray-compat
   bigstringaf
   fmt
   carton
@@ -59,10 +55,8 @@
   result
   rresult
   fpath
-  mmap
   decompress.de
   decompress.zl
-  bigarray-compat
   bigstringaf
   fmt
   carton

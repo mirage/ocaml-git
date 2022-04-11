@@ -154,7 +154,7 @@ let first_pass fpath =
 let map ~max fd ~pos len =
   let len = Stdlib.min len (Int64.to_int (Int64.sub max pos)) in
   let res =
-    Mmap.V1.map_file fd ~pos Bigarray.char Bigarray.c_layout false [| len |]
+    Unix.map_file fd ~pos Bigarray.char Bigarray.c_layout false [| len |]
   in
   Bigarray.array1_of_genarray res
 
@@ -199,7 +199,7 @@ let verify ~verbose fpath hash length carbon matrix =
   let fd = Unix.openfile (Fpath.to_string fpath) Unix.[ O_RDONLY ] 0o644 in
   let len = (Unix.fstat fd).Unix.st_size in
   let memory =
-    Mmap.V1.map_file fd ~pos:0L Bigarray.char Bigarray.c_layout false [| len |]
+    Unix.map_file fd ~pos:0L Bigarray.char Bigarray.c_layout false [| len |]
   in
   let memory = Bigarray.array1_of_genarray memory in
   Unix.close fd;

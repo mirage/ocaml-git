@@ -717,7 +717,7 @@ let load :
       let fd = Unix.openfile (Fpath.to_string path) Unix.[ O_RDONLY ] 0o600 in
       let stat = Unix.fstat fd in
       let mmap =
-        Mmap.V1.map_file fd ~pos:0L Bigarray.char Bigarray.c_layout false
+        Unix.map_file fd ~pos:0L Bigarray.char Bigarray.c_layout false
           [| stat.Unix.st_size |]
       in
       Unix.close fd;

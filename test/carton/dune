@@ -13,13 +13,11 @@
   decompress.zl
   optint
   fmt
-  bigarray-compat
   bigstringaf
   base64
   bos
   checkseum.c
   digestif.c
-  mmap
   unix
   threads
   carton

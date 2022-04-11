@@ -13,7 +13,7 @@ let load_idx fpath =
   let fd = Unix.openfile (Fpath.to_string fpath) Unix.[ O_RDONLY ] 0o644 in
   let ln = (Unix.fstat fd).Unix.st_size in
   let mp =
-    Mmap.V1.map_file fd ~pos:0L Bigarray.char Bigarray.c_layout false [| ln |]
+    Unix.map_file fd ~pos:0L Bigarray.char Bigarray.c_layout false [| ln |]
   in
   let mp = Bigarray.array1_of_genarray mp in
   Unix.close fd;
@@ -28,7 +28,7 @@ let map fd ~pos len =
   let len = min (Int64.sub max pos) (Int64.of_int len) in
   let len = Int64.to_int len in
   let res =
-    Mmap.V1.map_file fd ~pos Bigarray.char Bigarray.c_layout false [| len |]
+    Unix.map_file fd ~pos Bigarray.char Bigarray.c_layout false [| len |]
   in
   Bigarray.array1_of_genarray res
 

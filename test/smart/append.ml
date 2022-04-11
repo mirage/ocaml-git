@@ -27,7 +27,7 @@ let create ?(trunc = true) ~mode:_ t path =
 
 let map _ fd ~pos len =
   let res =
-    Mmap.V1.map_file
+    Unix.map_file
       (Lwt_unix.unix_file_descr fd)
       ~pos Bigarray.char Bigarray.c_layout false [| len |]
   in
