@@ -1,3 +1,8 @@
+### 3.9.1 (2022-04-11) Paris - France
+
+- Remove `bigarray-compat` package and `mmap` (@dinosaure, @hannesm)
+- Fix the push process with a copy of illegal shared bigarray (@dinosaure, #569)
+
 ### 3.9.0 (2022-03-24) Paris - France
 
 - Fix `ocaml-git` with OCaml 5.00.0 (@dinosaure, @stedolan, #559)
