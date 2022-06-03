@@ -10,4 +10,5 @@
   digestif
   fpath
   bigstringaf
+  unix
   git-unix))
