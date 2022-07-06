@@ -67,7 +67,7 @@ let main quiet (references : (Git.Reference.t * Git.Reference.t) list)
     (match directory with "" -> Sys.getcwd () | _ -> directory) |> Fpath.v
   in
   let ( >>? ) = Lwt_result.bind in
-  let ( >>! ) v f = Lwt_result.map_err f v in
+  let ( >>! ) v f = Lwt_result.map_error f v in
   Store.v root >>! store_err >>? fun store ->
   let push_stdout, push_stderr =
     match quiet with

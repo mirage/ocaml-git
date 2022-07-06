@@ -834,13 +834,11 @@ let cycle () =
   randomize b;
   let ea =
     Carton.Enc.make_entry ~kind:`A ~length:(Bigstringaf.length a)
-      ~delta:(Carton.Enc.From `B)
-      `A
+      ~delta:(Carton.Enc.From `B) `A
   in
   let eb =
     Carton.Enc.make_entry ~kind:`A ~length:(Bigstringaf.length b)
-      ~delta:(Carton.Enc.From `A)
-      `B
+      ~delta:(Carton.Enc.From `A) `B
   in
 
   let load = function

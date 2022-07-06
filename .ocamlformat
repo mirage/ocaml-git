@@ -1,4 +1,4 @@
-version=0.20.1
+version=0.22.4
 module-item-spacing=compact
 break-infix=fit-or-vertical
 parens-tuple=multi-line-only
