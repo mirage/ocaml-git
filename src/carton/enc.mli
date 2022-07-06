@@ -70,7 +70,12 @@ module N : sig
   type b = { i : Bigstringaf.t; q : De.Queue.t; w : De.Lz77.window }
 
   val encoder :
-    's scheduler -> b:b -> load:('uid, 's) load -> 'uid q -> (encoder, 's) io
+    's scheduler ->
+    ?level:int ->
+    b:b ->
+    load:('uid, 's) load ->
+    'uid q ->
+    (encoder, 's) io
 
   val encode : o:Bigstringaf.t -> encoder -> [ `Flush of encoder * int | `End ]
   val dst : encoder -> Bigstringaf.t -> int -> int -> encoder
@@ -88,6 +93,7 @@ val header_of_pack : length:int -> Bigstringaf.t -> int -> int -> unit
 
 val encode_target :
   's scheduler ->
+  ?level:int ->
   b:b ->
   find:('uid, 's) find ->
   load:('uid, 's) load ->
