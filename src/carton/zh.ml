@@ -73,7 +73,7 @@ end = struct
             encode_z { e with z }
         | d ->
             H.N.dst e.h e.t 0 (De.bigstring_length e.t);
-            encode_h e d)
+            encode_h { e with z } d)
 
   and encode_h e d =
     let v, d = match d with v :: d -> v, d | [] -> `End, [] in
