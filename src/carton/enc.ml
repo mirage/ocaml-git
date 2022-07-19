@@ -322,9 +322,11 @@ struct
         if j < 0 then return ()
         else
           match window.(j) with
-          | Some m -> (
-              try try_delta j m >>= fun () -> (go [@tailcall]) (pred j)
-              with Break -> return ())
+          | Some (m : Uid.t p) ->
+              if m.entry.uid <> target.entry.uid then
+                try try_delta j m >>= fun () -> (go [@tailcall]) (pred j)
+                with Break -> return ()
+              else return ()
           | None -> return ()
         (* TODO: check it! *)
       in
