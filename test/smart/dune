@@ -54,7 +54,7 @@
 (executable
  (name test_edn)
  (modules test_edn)
- (libraries alcotest fmt ipaddr domain-name git.nss.git))
+ (libraries alcotest fmt ipaddr domain-name git.nss.git mimic uri))
 
 (rule
  (alias runtest)
