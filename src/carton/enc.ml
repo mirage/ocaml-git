@@ -322,9 +322,11 @@ struct
         if j < 0 then return ()
         else
           match window.(j) with
-          | Some m -> (
-              try try_delta j m >>= fun () -> (go [@tailcall]) (pred j)
-              with Break -> return ())
+          | Some (m : Uid.t p) ->
+              if m.entry.uid <> target.entry.uid then
+                try try_delta j m >>= fun () -> (go [@tailcall]) (pred j)
+                with Break -> return ()
+              else return ()
           | None -> return ()
         (* TODO: check it! *)
       in
@@ -412,7 +414,12 @@ module N : sig
   type b = { i : Bigstringaf.t; q : De.Queue.t; w : De.Lz77.window }
 
   val encoder :
-    's scheduler -> b:b -> load:('uid, 's) load -> 'uid q -> (encoder, 's) io
+    's scheduler ->
+    ?level:int ->
+    b:b ->
+    load:('uid, 's) load ->
+    'uid q ->
+    (encoder, 's) io
 
   val encode : o:Bigstringaf.t -> encoder -> [ `Flush of encoder * int | `End ]
   val dst : encoder -> Bigstringaf.t -> int -> int -> encoder
@@ -459,8 +466,13 @@ end = struct
 
   let encoder :
       type s.
-      s scheduler -> b:b -> load:('uid, s) load -> 'uid q -> (encoder, s) io =
-   fun { bind; return } ~b ~load target ->
+      s scheduler ->
+      ?level:int ->
+      b:b ->
+      load:('uid, s) load ->
+      'uid q ->
+      (encoder, s) io =
+   fun { bind; return } ?(level = 4) ~b ~load target ->
     let ( >>= ) = bind in
 
     let load_if weak uid =
@@ -477,13 +489,13 @@ end = struct
         load_if target.v target.entry.uid >>= fun v ->
         let raw = Bigstringaf.sub ~off:0 ~len:(Dec.len v) (Dec.raw v) in
         let encoder =
-          Zh.N.encoder ~i:b.i ~q:b.q ~w:b.w ~source:source_length raw `Manual
-            hunks
+          Zh.N.encoder ~level ~i:b.i ~q:b.q ~w:b.w ~source:source_length raw
+            `Manual hunks
         in
         return (H encoder)
     | None ->
         load_if target.v target.entry.uid >>= fun v ->
-        let encoder = Zl.Def.encoder `Manual `Manual ~q:b.q ~w:b.w ~level:0 in
+        let encoder = Zl.Def.encoder `Manual `Manual ~q:b.q ~w:b.w ~level in
         let encoder = Zl.Def.src encoder (Dec.raw v) 0 (Dec.len v) in
 
         return (Z encoder)
@@ -534,6 +546,7 @@ let header_of_pack ~length buf off len =
 let encode_target :
     type s.
     s scheduler ->
+    ?level:int ->
     b:b ->
     find:('uid, s) find ->
     load:('uid, s) load ->
@@ -541,7 +554,7 @@ let encode_target :
     'uid q ->
     cursor:int ->
     (int * N.encoder, s) io =
- fun ({ bind; return } as s) ~b ~find ~load ~uid target ~cursor ->
+ fun ({ bind; return } as s) ?level ~b ~find ~load ~uid target ~cursor ->
   let ( >>= ) = bind in
 
   match target.patch with
@@ -549,7 +562,7 @@ let encode_target :
       let off =
         encode_header ~o:b.o (kind_to_int target.entry.kind) target.entry.length
       in
-      N.encoder s ~b:{ i = b.i; q = b.q; w = b.w } ~load target
+      N.encoder s ?level ~b:{ i = b.i; q = b.q; w = b.w } ~load target
       >>= fun encoder ->
       return (off, N.dst encoder b.o off (Bigstringaf.length b.o - off))
   | Some { source; source_length; hunks; _ } -> (
