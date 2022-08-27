@@ -45,11 +45,11 @@ module Endpoint = struct
           Fmt.(option (const string ":" ++ int))
           port path
     | { scheme = `HTTP _; path; port; hostname } ->
-        Fmt.pf ppf "http://%s%a/%s" hostname
+        Fmt.pf ppf "http://%s%a%s" hostname
           Fmt.(option (const string ":" ++ int))
           port path
     | { scheme = `HTTPS _; path; port; hostname } ->
-        Fmt.pf ppf "https://%s%a/%s" hostname
+        Fmt.pf ppf "https://%s%a%s" hostname
           Fmt.(option (const string ":" ++ int))
           port path
     | { scheme = `Scheme scheme; path; port; hostname } ->
@@ -138,13 +138,13 @@ module Endpoint = struct
       | `HTTP _ ->
           Some
             (Uri.of_string
-               (Fmt.str "http://%s%a/%s" edn.hostname
+               (Fmt.str "http://%s%a%s" edn.hostname
                   Fmt.(option (const string ":" ++ int))
                   edn.port edn.path))
       | `HTTPS _ ->
           Some
             (Uri.of_string
-               (Fmt.str "https://%s%a/%s" edn.hostname
+               (Fmt.str "https://%s%a%s" edn.hostname
                   Fmt.(option (const string ":" ++ int))
                   edn.port edn.path))
       | _ -> None
