@@ -123,6 +123,7 @@ module Fp (Uid : UID) : sig
   val number : decoder -> int
   val version : decoder -> int
   val count : decoder -> int
+  val ctx : decoder -> Uid.ctx
   val src_rem : decoder -> int
   val src : decoder -> Bigstringaf.t -> int -> int -> decoder
 end
