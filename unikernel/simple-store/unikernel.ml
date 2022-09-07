@@ -12,8 +12,6 @@ struct
   module Sync = Git.Mem.Sync (Store)
   module Search = Git.Search.Make (Store.Hash) (Store)
 
-  let main = lazy (Git.Reference.v (Key_gen.branch ()))
-
   let getline queue =
     let exists ~predicate queue =
       let pos = ref 0 and res = ref (-1) in
@@ -97,13 +95,13 @@ struct
         | None -> None in
       Int64.of_float (Ptime.to_float_s ptime), tz }
 
-  let insert git flow str = match Astring.String.cut ~sep:":" str with
+  let insert git branch flow str = match Astring.String.cut ~sep:":" str with
     | None -> writel flow "Invalid insert command."
     | Some (k, v) -> match Fpath.of_string k >>| Fpath.segs with
       | Error _ -> writel flow "Invalid key %S." k
       | Ok [] -> writel flow "Empty key."
       | Ok (_ :: _ as segs) ->
-        Store.Ref.resolve git (Lazy.force main) >>? fun root ->
+        Store.Ref.resolve git branch >>? fun root ->
         Store.write git Store.Value.(blob (Blob.of_string v)) >>? fun (hash, _) ->
         let rec go segs entry =
           extend git root segs entry >>? fun hash ->
@@ -119,7 +117,7 @@ struct
         let commit = Store.Value.Commit.make
           ~tree ~author ~committer:author (Some ".") in
         Store.write git (Store.Value.commit commit) >>? fun (hash, _) ->
-        Store.Ref.write git (Lazy.force main) (Git.Reference.uid hash)
+        Store.Ref.write git branch (Git.Reference.uid hash)
 
   let pp_type ppf = function
     | `Commit -> Format.fprintf ppf "commit"
@@ -127,12 +125,12 @@ struct
     | `Tag -> Format.fprintf ppf "tag"
     | `Tree -> Format.fprintf ppf "tree"
 
-  let lookup git flow k =
+  let lookup git branch flow k =
     match Fpath.of_string k with
     | Error _ ->
       writel flow "Invalid key %S." k
     | Ok k ->
-      Store.Ref.resolve git (Lazy.force main) >|= R.reword_error (R.msgf "%a" Store.pp_error) >>? fun hash ->
+      Store.Ref.resolve git branch >|= R.reword_error (R.msgf "%a" Store.pp_error) >>? fun hash ->
       Search.find git hash (`Commit (`Path (Fpath.segs k))) >>= function
       | None -> writel flow "%a not found." Fpath.pp k
       | Some hash -> Store.read_inflated git hash >>= function
@@ -150,27 +148,27 @@ struct
     | Ok None -> writel flow "Already up to date."
     | Error err -> writel flow "Got an error while fetching: %a." Sync.pp_error err
 
-  let push edn ctx git flow =
+  let push edn ctx git branch flow =
     Sync.push ~capabilities ~ctx edn git
-      [ `Update (Lazy.force main, Lazy.force main) ] >>= function
+      [ `Update (branch, branch) ] >>= function
     | Ok () -> writel flow "Contents pushed."
     | Error err -> writel flow "Got an error while pushing: %a." Sync.pp_error err
 
-  let callback edn ctx git flow =
+  let callback edn ctx git branch flow =
     let rec go queue flow =
       getline queue flow >>? function
       | `Close -> Stack.TCP.close flow >>= fun () -> Lwt.return_ok ()
       | `Line line -> match line, Astring.String.cut ~sep:" " line with
         | _, Some ("insert", v) ->
-          insert git flow v 
+          insert git branch flow v 
           >|= R.reword_error (R.msgf "%a" Store.pp_error)
           >>? fun () -> go queue flow
         | _, Some ("lookup", k) ->
-          lookup git flow k >>? fun () -> go queue flow
+          lookup git branch flow k >>? fun () -> go queue flow
         | "sync", None ->
           sync edn ctx git flow >>? fun () -> go queue flow
         | "push", None ->
-          push edn ctx git flow >>? fun () -> go queue flow
+          push edn ctx git branch flow >>? fun () -> go queue flow
         | "quit", None ->
           writel flow "Bye!" >>? fun () ->
           Stack.TCP.close flow >>= fun () -> Lwt.return_ok ()
@@ -182,16 +180,16 @@ struct
 
   let log console fmt = Format.kasprintf (Console.log console) fmt
 
-  let callback console edn ctx git flow =
+  let callback console edn ctx git branch flow =
     let ipaddr, port = Stack.TCP.dst flow in
-    callback edn ctx git flow >>= function
+    callback edn ctx git branch flow >>= function
     | Ok () -> Lwt.return_unit
     | Error (`Msg err) ->
       Stack.TCP.close flow >>= fun () ->
       log console "Got an error from %a:%d: %s." Ipaddr.pp ipaddr port err
 
-  let server console stack edn ctx git =
-    Stack.listen_tcp stack ~port:(Key_gen.port ()) (callback console edn ctx git) ;
+  let server console stack edn ctx git branch =
+    Stack.TCP.listen (Stack.tcp stack) ~port:(Key_gen.port ()) (callback console edn ctx git branch) ;
     Stack.listen stack
 
   let failwith pp = function
@@ -199,10 +197,13 @@ struct
     | Error err -> Fmt.failwith "%a" pp err
 
   let start console stack git ctx =
-    let edn =
-      match Smart_git.Endpoint.of_string (Key_gen.remote ()) with
-      | Ok edn -> edn
-      | Error (`Msg err) -> Fmt.failwith "%s" err in
+    let edn, branch = match String.split_on_char '#' (Key_gen.remote ()) with
+      | [ edn; branch ] ->
+        Rresult.R.failwith_error_msg (Smart_git.Endpoint.of_string edn),
+        Rresult.R.failwith_error_msg (Git.Reference.of_string branch)
+      | _ ->
+        Rresult.R.failwith_error_msg (Smart_git.Endpoint.of_string (Key_gen.remote ())),
+        Git.Reference.master in
     Sync.fetch ~capabilities ~ctx edn git ~deepen:(`Depth 1) `All
-    >>= failwith Sync.pp_error >>= fun _ -> server console stack edn ctx git
+    >>= failwith Sync.pp_error >>= fun _ -> server console stack edn ctx git branch
 end

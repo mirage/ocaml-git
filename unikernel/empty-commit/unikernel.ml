@@ -6,8 +6,6 @@ module Make
 struct
   module Sync = Git.Mem.Sync (Store)
 
-  let main = lazy (Git.Reference.v (Key_gen.branch ()))
-
   let author () =
     { Git.User.name= "Romain Calascibetta"
     ; email= "romain.calascibetta@gmail.com"
@@ -35,32 +33,35 @@ struct
     | Ok v -> Lwt.return v
     | Error err -> Lwt.fail (Failure (Fmt.str "%a" pp err))
 
-  let empty_commit git = function
+  let empty_commit branch git = function
     | None ->
       Store.write git empty_tree >>? fun (tree, _) ->
       Store.write git (commit ~tree ~author:(author ()) None) >>? fun (hash, _) ->
-      Store.Ref.write git (Lazy.force main) (Git.Reference.uid hash)
+      Store.Ref.write git branch (Git.Reference.uid hash)
     | Some (_, _) ->
-      Store.Ref.resolve git (Lazy.force main) >>= failwith Store.pp_error >>= fun hash ->
+      Store.Ref.resolve git branch >>= failwith Store.pp_error >>= fun hash ->
       Store.read_exn git hash >>= fun obj ->
       let[@warning "-8"] Git.Value.Commit parent = obj in
       let tree = Store.Value.Commit.tree parent in
       Store.write git (commit ~parent:hash ~tree ~author:(author ()) None) >>? fun (hash, _) ->
-      Store.Ref.write git (Lazy.force main) (Git.Reference.uid hash)
+      Store.Ref.write git branch (Git.Reference.uid hash)
 
   let capabilities =
     [ `Side_band_64k; `Multi_ack_detailed; `Ofs_delta; `Thin_pack; `Report_status ]
 
   let start git ctx =
-    let edn =
-      match Smart_git.Endpoint.of_string (Key_gen.remote ()) with
-      | Ok edn -> edn
-      | Error (`Msg err) -> Fmt.failwith "%s" err in
+    let edn, branch = match String.split_on_char '#' (Key_gen.remote ()) with
+      | [ edn; branch ] ->
+        Rresult.R.failwith_error_msg (Smart_git.Endpoint.of_string edn),
+        Rresult.R.failwith_error_msg (Git.Reference.of_string branch)
+      | _ ->
+        Rresult.R.failwith_error_msg (Smart_git.Endpoint.of_string (Key_gen.remote ())),
+        Git.Reference.master in
     Sync.fetch ~capabilities ~ctx edn git ~deepen:(`Depth 1) `All
-    >>= failwith Sync.pp_error >>= empty_commit git
+    >>= failwith Sync.pp_error >>= empty_commit branch git
     >>= failwith Store.pp_error >>= fun () ->
     Sync.push ~capabilities ~ctx edn git
-      [ `Update (Lazy.force main, Lazy.force main) ]
+      [ `Update (branch, branch) ]
     >>= failwith Sync.pp_error >>= fun () ->
     Sync.fetch ~capabilities ~ctx edn git ~deepen:(`Depth 1) `All >>= function
     | Ok (Some (hash, references)) -> Lwt.return_unit
