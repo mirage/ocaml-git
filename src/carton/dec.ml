@@ -94,6 +94,7 @@ module Fp (Uid : UID) = struct
   let src_rem = i_rem
   let eoi d = { d with i = Bigstringaf.empty; i_pos = 0; i_len = min_int }
   let malformedf fmt = Fmt.kstr (fun err -> `Malformed err) fmt
+  let ctx { ctx; _ } = ctx
 
   let src d s j l =
     if j < 0 || l < 0 || j + l > Bigstringaf.length s then
