@@ -40,10 +40,9 @@ module Make (Digestif : Digestif.S) : sig
   include Minimal.S with type hash = Digestif.t and type t := t
 
   val v : ?dotgit:Fpath.t -> Fpath.t -> (t, error) result Lwt.t
-  (** [create ?root ?dotgit ?compression ()] creates a new store represented by
-      the path [root] (default is ["."]), where the Git objects are located in
-      [dotgit] (default is [root / ".git"] and when Git objects are compressed
-      by the [level] (default is [4]). *)
+  (** [create ?dotgit root] creates a new store represented by the path [root]
+      (you can use [Fpath.v "."] as a sane default), where the Git objects are
+      located in [dotgit] (default is [root / ".git"]). *)
 end
 
 module Store : sig
