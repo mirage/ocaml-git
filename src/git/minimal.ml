@@ -86,7 +86,7 @@ module type S = sig
       git object [hash] which located in [path] (for example, if you iter on a
       commit, [path] should be ["."] - however, if you iter on a tree, [path]
       should be the directory path represented by your tree). For each git
-      objects, we notice the path [name] (derived from [path]) if the object is
+      object, we notice the path [name] (derived from [path]) if the object is
       a Blob or a Tree, the [length] or the git object (see {!size}), the [hash]
       and the [value].
 
@@ -94,16 +94,16 @@ module type S = sig
 
       - {!Value.Blob.t}: [f] is called only one time with the OCaml value of the
         {i blob}.
-      - {!Value.Tree.t}: [f] is called firstly with the Ocaml value of the
+      - {!Value.Tree.t}: [f] is called firstly with the OCaml value of the
         pointed {i tree} by the hash [hash]. Then, we {i iter} (and call [f] for
         each iteration) in the list of entries of the {i tree}. Finally, we
         retrieve recursively all sub-tree objects and do an ascending walk. [f]
         is never called more than one time for each hash.
       - {!Value.Commit.t}: [f] is called firstly with the OCaml value of the
-        pointed {i commit} by the hash [hash]. Then, it follozs recursively all
-        parents of the current commit, Finallym it starts a [fold] inside the
+        pointed {i commit} by the hash [hash]. Then, it follows recursively all
+        parents of the current commit, Finally, it starts a [fold] inside the
         pointed root {i tree} git object of each {i commit} previously
-        retrieved. [f] never called more than one time for each hash.
+        retrieved. [f] is never called more than one time for each hash.
       - {!Value.Tag.t}: [f] is called firstly with the OCaml value of the
         pointed {i tag} by the hash [hash]. Then, it follows the git object
         pointed by the {i tag}.
@@ -126,8 +126,8 @@ module type S = sig
         [reference] (available in the git repository [state]). *)
 
     val resolve : t -> Reference.t -> (hash, error) result Lwt.t
-    (** [resolve state reference] returns obj-id pointed at by [reference] (available in
-        the git repository [state]). *)
+    (** [resolve state reference] returns obj-id pointed at by [reference]
+        (available in the git repository [state]). *)
 
     val write :
       t -> Reference.t -> Reference.contents -> (unit, error) result Lwt.t
